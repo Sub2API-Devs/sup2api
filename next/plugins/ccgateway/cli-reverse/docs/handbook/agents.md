@@ -1,4 +1,6 @@
-# agents 子系统手册（Claude Code 2.1.316）
+# agents 子系统手册（Claude Code 2.1.318）
+
+> 2026-11-05 升级到 2.1.318：本篇写于 2.1.316，代码引用（声明 id、路径、名字）已按 2.1.318 阅读树逐条校验，行为描述没有逐条重新核对；316 → 318 的变化见 [`research/versions/CLAUDE-CODE-2.1.318-CHANGES.md`](../../research/versions/CLAUDE-CODE-2.1.318-CHANGES.md)。
 
 > 领域：`agents`（97 个重组模块，约 1,200 个顶层声明）。范围包括子代理与 fork、任务系统、团队/蜂群、协调者模式、SDK 控制协议、Remote Control（独立模式与 REPL 内桥）、远程会话查看、定时任务，以及若干挂在这个领域下的小模块（ultraplan、语音、后台维护等）。
 >
@@ -45,7 +47,7 @@ claude.ai/code ◄── Remote Control（bridge/*：独立 environment 轮询 �
 | `reconstructed/src/utils/teammate.js`、`teammateContext.ts`、`teammateMailbox.ts`、`inProcessTeammateHelpers.ts`、`agentSwarmsEnabled.ts` | teammate 身份、文件信箱协议、团队开关 |
 | `reconstructed/src/utils/swarm/*` | 团队文件、权限同步、pane 后端（tmux/iTerm2/in-process）、同进程 teammate 运行循环、派生、重连 |
 | `reconstructed/src/coordinator/coordinatorMode.js` | 协调者模式 |
-| `reconstructed/src/entrypoints/sdk/controlSchemas.js`、`coreSchemas.ts`、`uiControlSchemas.ts` | SDK schema（写作时 316 真正的 zod schema 还在 `_unattributed/` 的 `chunk-bwbq4xvm`，place-rest 后已放入 `entrypoints/sdk/`；见第 5 章） |
+| `reconstructed/src/entrypoints/sdk/controlSchemas.js`、`coreSchemas.ts`、`uiControlSchemas.ts` | SDK schema（写作时 316 真正的 zod schema 还在 `_unattributed/` 的 `chunk-7kayq7nc`，place-rest 后已放入 `entrypoints/sdk/`；见第 5 章） |
 | `reconstructed/src/bridge/*` | Remote Control：独立模式（environment 轮询）与 REPL 内 v2 桥 |
 | `reconstructed/src/remote/*`、`server/*`、`assistant/sessionHistory.ts` | 查看/驱动远程会话、`claude server` 直连、远程事件分页 |
 | `reconstructed/src/utils/cron*.js` | 定时任务（ScheduledTasks） |
@@ -67,7 +69,7 @@ Agent 工具本身在 tools 领域（`tools/AgentTool/*`，本领域只读引用
 
 `built-in` → `plugin` → `userSettings`（~/.claude/agents）→ `projectSettings`（附加目录的先、再按路径排序）→ `flagSettings`（--agents）→ `policySettings`（托管）。
 
-内置代理（`tools/AgentTool/loadAgentsDir.ts · getBuiltInAgents`（`chunk-e6aww6q8.js#lKe`））：
+内置代理（`tools/AgentTool/loadAgentsDir.ts · getBuiltInAgents`（`chunk-5xgkngpb.js#G5e`））：
 
 - 协调者模式下只返回协调者的 worker 代理（`getCoordinatorAgents`，见第 4 章）；`none` 时为空。
 - 默认：`general-purpose`；按开关追加 Explore、Claude（`CLAUDE_AGENT`）、Plan 相关两个、verification、`claude-code-guide`（SDK 入口 `sdk-ts/sdk-py/sdk-cli` 不加）。
@@ -112,7 +114,7 @@ tools/AgentTool/AgentTool.ts · AgentTool(agentInput…)
        结束 → completeAgentTask / failAgentRun / killAsyncAgent → enqueueAgentNotification
 ```
 
-最大派生深度：`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`，否则 GrowthBook `tengu_hazel_trellis`（默认 3），`getMaxSubagentSpawnDepth`（`chunk-k8xs47j2.js#OT`，`tools/AgentTool/spawnDepth.ts`）。深度来自 `utils/agentContext.ts · getAgentDepth`（主线程 0）。
+最大派生深度：`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`，否则 GrowthBook `tengu_hazel_trellis`（默认 3），`getMaxSubagentSpawnDepth`（`chunk-vm8fc2sr.js#GA`，`tools/AgentTool/spawnDepth.ts`）。深度来自 `utils/agentContext.ts · getAgentDepth`（主线程 0）。
 
 ### 1.3 子代理上下文（`createSubagentContext`）
 
@@ -149,7 +151,7 @@ fork 子代理"继承整个对话"：
 
 ### 1.5 结果回传：task-notification
 
-子代理结束时由 `tasks/LocalAgentTask/LocalAgentTask.ts · enqueueAgentNotification` 生成一条 `<task-notification>` 以 `mode: "task-notification"`、`priority: "next"` 进入消息队列，下一轮作为用户消息喂给属主（主线程或父代理）。XML 结构（`formatTaskNotification`，`chunk-gppkhxdv.js#bi`，`utils/xmlTags.ts`）：
+子代理结束时由 `tasks/LocalAgentTask/LocalAgentTask.ts · enqueueAgentNotification` 生成一条 `<task-notification>` 以 `mode: "task-notification"`、`priority: "next"` 进入消息队列，下一轮作为用户消息喂给属主（主线程或父代理）。XML 结构（`formatTaskNotification`，`chunk-ab36sake.js#Ui`，`utils/xmlTags.ts`）：
 
 ```xml
 <task-notification>
@@ -235,11 +237,11 @@ ID = 前缀 + 8 位 36 进制随机字符（`generateTaskId`，crypto.randomByte
 ### 2.4 通知
 
 - 子代理：1.5 节。
-- shell：`tasks/LocalShellTask/LocalShellTask.ts · backgroundTask` 在命令结束时写终态与 `terminal.summary`（`formatTaskTerminalSummary`："Background command "x" completed (exit code 0)" 等；Monitor 用 `formatMonitorTerminalSummary`），并调用 `finishLocalShellTask`（`chunk-e6aww6q8.js#Qpt`）生成通知（Monitor 不发）。
+- shell：`tasks/LocalShellTask/LocalShellTask.ts · backgroundTask` 在命令结束时写终态与 `terminal.summary`（`formatTaskTerminalSummary`："Background command "x" completed (exit code 0)" 等；Monitor 用 `formatMonitorTerminalSummary`），并调用 `finishLocalShellTask`（`chunk-5xgkngpb.js#P_t`）生成通知（Monitor 不发）。
 - 卡住检测：`startStallWatchdog` 发现输出停在交互式提示（`looksLikePrompt`）时，发一条带最后输出与 `INTERACTIVE_PROMPT_HINT` 的 task-notification。
 - 远程：`notifyRemoteReviewCompleted/Failed`、`getStatusText`；会话恢复时没有结束记录的后台任务由 `enqueueOrphanedTasksNotification` 汇总通知为 failed/stopped。
 - 队列中 task-notification 过多时 `collapseExcessTaskNotifications` 合并多余部分。
-- 终止事件 `emitTaskNotification(taskId, status, {toolUseId, summary, …})`：发 SDK `task_notification` 系统消息等（`chunk-aepeg2w5.js#ya`，`utils/task/taskNotifications.ts`）。
+- 终止事件 `emitTaskNotification(taskId, status, {toolUseId, summary, …})`：发 SDK `task_notification` 系统消息等（`chunk-exfmq47h.js#Oa`，`utils/task/taskNotifications.ts`）。
 
 ### 2.5 前台与后台
 
@@ -407,7 +409,7 @@ leader: 杀 pane / killInProcessTeammate → removeMemberByAgentId；会话结�
 ## 4. 协调者模式（coordinator）
 
 - 判定：`coordinator/coordinatorMode.ts · isCoordinatorMode` —— `CLAUDE_CODE_COORDINATOR_MODE` 为真，并且不处于某受限场景（除非 `CLAUDE_CODE_REMOTE`）。恢复会话时 `matchSessionMode(sessionMode)` 把 env 切到与会话记录一致，记 `tengu_coordinator_mode_switched`，返回"Entered/Exited coordinator mode to match resumed session."。
-- 内置代理：协调者模式下 `getBuiltInAgents` 只返回 worker 代理（`chunk-ncsga3m8`，现 `coordinator/workerAgent.ts`）：`tools: ["*"]`、`maxTurns: 500`、`permissionMode: "bubble"`；worker 系统提示词要求：只做被分配的事、改动后提交（不许 `git add .`）、可再分派（深度允许时）、auto 模式被拒时原样报告、输出给协调者（"What you did or found" + 一句 Summary）。
+- 内置代理：协调者模式下 `getBuiltInAgents` 只返回 worker 代理（`chunk-y397wfab`，现 `coordinator/workerAgent.ts`）：`tools: ["*"]`、`maxTurns: 500`、`permissionMode: "bubble"`；worker 系统提示词要求：只做被分配的事、改动后提交（不许 `git add .`）、可再分派（深度允许时）、auto 模式被拒时原样报告、输出给协调者（"What you did or found" + 一句 Summary）。
 - 系统提示词 `getCoordinatorSystemPrompt`：角色是"跨多个 worker 编排软件工程任务的协调者"；工具 Agent（派新 worker）、SendMessage（继续已有 worker）、TaskStop、Workflow（可用时）、Skill（只读加载）、PR 活动订阅、跨会话 peer（ListAgents/SendMessage）；模型参数规则（`CLAUDE_CODE_COORDINATOR_FORCE_WORKER_INHERIT_MODEL` 或 `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` 时忽略 model）；通讯工具模式下"裸文本不会到达用户，每轮必须以通讯工具结束"。
 - user context `getCoordinatorUserContext` → `workerToolsContext`：列 worker 可用工具（`CLAUDE_CODE_SIMPLE` 时只有 Bash/PowerShell/Read/Edit/Agent）、Artifact 交付规则、MCP 服务器名、scratchpad 目录、skill 指引（`CLAUDE_CODE_COORDINATOR_SKILL_GUIDANCE`）。
 - scratchpad：`isScratchpadEnabled`（GrowthBook `tengu_scratch`，或 Artifact 工具可用）。
@@ -432,7 +434,7 @@ stdin/stdout 上逐行 JSON（stream-json）。控制帧：
 {"type":"keep_alive"}                                     // 任一方随时可发
 ```
 
-316 的 zod 定义在 `chunk-bwbq4xvm`（约 780KB 的 schema 大 chunk；写作时在 `_unattributed/`，现已放入 `entrypoints/sdk/`）；`entrypoints/sdk/*.ts` 名下匹配到的多是发送/处理助手。协议表本身带方向标注（`var X4 = [g(schema, "client"|"agent"|"both", responseSchema), …]`），以下按它整理。
+316 的 zod 定义在 `chunk-7kayq7nc`（约 780KB 的 schema 大 chunk；写作时在 `_unattributed/`，现已放入 `entrypoints/sdk/`）；`entrypoints/sdk/*.ts` 名下匹配到的多是发送/处理助手。协议表本身带方向标注（`var X4 = [g(schema, "client"|"agent"|"both", responseSchema), …]`），以下按它整理。
 
 ### 5.2 control request 全表（98 种）
 
@@ -477,7 +479,7 @@ stdin/stdout 上逐行 JSON（stream-json）。控制帧：
 
 顶层 `type`：`assistant`、`user`、`result`、`stream_event`、`system`、`keep_alive`、`control_request/response/cancel_request`、`rate_limit_event`、`tool_progress`、`auth_status`、`tool_use_summary`、`prompt_suggestion`、`transcript_mirror`、`update_environment_variables`、`queued_notification`、`conversation_reset`、`bash_command`（不经模型与权限执行的 shell 命令）、`os_notification`、`session_notice`、`autocompact_state`、`active_goal`、`api_metrics`、`tombstone`、`command_lifecycle`、`compact_start/progress/end`、`thinking_progress`、`hint_clears`、`stream_mode`、`set_expanded_view`、`open_message_selector`、`ui_message`、`press` 等（`@internal` 标注的多为内部宿主使用）。
 
-`system` 子类型（56 种）：`init`、`status`、`compact_boundary`、`informational`、`api_retry`、`api_error`、`hook_started/progress/response`、`task_started/progress/updated/notification/summary`、`post_turn_summary`、`session_state_changed`、`session_title_changed`、`session_metadata`、`local_command_output`、`files_persisted`、`file_snapshot`、`file_attachments_missing`、`elicitation_complete`、`memory_saved`、`memory_recall`、`model_fallback`、`model_consent_fallback`、`model_refusal_fallback/no_fallback`、`notification`、`permission_denied`、`permission_check_status`、`permission_retry`、`plugin_install`、`stop_hook_summary`、`thinking`、`thinking_tokens`、`turn_duration`、`turn_preempted`、`turn_handoff_available`、`background_tasks_changed`、`agents_killed`、`commands_changed`、`cloud_session_delta`、`code_change_published`、`control_request_progress`、`dev_intent`、`feedback_draft_queued`、`inherited_asks_settled`、`instruction_size_warning`、`mirror_error`、`peer_message_hold`、`per_turn_effort_changed`、`scheduled_task_fire`、`vcs_state_changed`、`worker_shutting_down`、`away_summary`、`ui_focus/ui_invalidate/ui_log/ui_panes/ui_placed/ui_scroll/ui_status/ui_toast`、`upgrade_relay_marker`。`result` 的 subtype：`success`、`error_during_execution`、`error_max_turns`、`error_max_budget_usd`、`error_max_structured_output_retries`（-p 文本输出见 `writePrintResult`）。
+`system` 子类型（56 种）：`init`、`status`、`compact_boundary`、`informational`、`api_retry`、`api_error`、`hook_started/progress/response`、`task_started/progress/updated/notification/summary`、`post_turn_summary`、`session_state_changed`、`session_title_changed`、`session_metadata`、`local_command_output`、`files_persisted`、`file_snapshot`、`file_attachments_missing`、`elicitation_complete`、`memory_saved`、`memory_recall`、`model_fallback`、`model_consent_fallback`、`model_refusal_fallback/no_fallback`、`notification`、`permission_denied`、`permission_check_status`、`permission_retry`、`plugin_install`、`stop_hook_summary`、`thinking`、`thinking_tokens`、`turn_duration`、`turn_preempted`、`turn_handoff_available`、`background_tasks_changed`、`agents_killed`、`commands_changed`、`cloud_session_delta`、`code_change_published`、`control_request_progress`、`dev_intent`、`feedback_draft_queued`、`inherited_asks_settled`、`instruction_size_warning`、`mirror_error`、`peer_message_hold`、`per_turn_effort_changed`、`scheduled_task_fire`、`vcs_state_changed`、`worker_shutting_down`、`away_summary`、`ui_focus/ui_invalidate/ui_log/ui_panes/ui_placed/ui_scroll/ui_status/ui_toast`、`upgrade_relay_marker`。`result` 的 subtype：`success`、`error_during_execution`、`error_max_turns`、`error_max_budget_usd`、`error_max_structured_output_retries`（-p 文本输出见 `SDKResultErrorSchema`（`chunk-0h9p4sxp.js#B`），316 时叫 writePrintResult）。
 
 钩子事件消息受开关控制：`setAllHookEventsEnabled`；`CLAUDE_CODE_EMIT_USER_PROMPT_SUBMIT_HOOK_EVENTS`（读取后清除）开启 UserPromptSubmit 的开始/结束事件。钩子事件名共 33 个（`HOOK_EVENTS`），316 新增 `PostToolBatch`、`UserPromptExpansion`、`StopFailure`、`PreModelSwitch`、`PostModelSwitch`、`TeammateIdle`、`TaskCreated`、`TaskCompleted`、`DirectoryAdded`、`MessageDisplay` 等。
 
@@ -662,7 +664,7 @@ runBridgeLoop                                                     bridge/bridgeM
 
 ### 与 2.1.88 的差异（有代码证据）
 
-- **会话传输统一为 CCR v2**：旧版按 `secret.use_code_sessions` 在 v1（`buildSdkUrl` 生成 `ws://…/session-ingress`）与 v2 之间选择；316 的循环直接 `registerWorker` + `buildCCRv2SdkUrl`，`buildSdkUrl` 只剩一个本地主机名集合（`chunk-aepeg2w5.js#cF`）。
+- **会话传输统一为 CCR v2**：旧版按 `secret.use_code_sessions` 在 v1（`buildSdkUrl` 生成 `ws://…/session-ingress`）与 v2 之间选择；316 的循环直接 `registerWorker` + `buildCCRv2SdkUrl`，`buildSdkUrl` 只剩一个本地主机名集合（`chunk-exfmq47h.js#JN`）。
 - **新参数**：`--remote-control-session-name-prefix`、`--[no-]chrome`、`--allow-unattended-tool-calls`（需开关）、`--enable-live-preview/--preview-port`（解析但"not available in this build"）；**删除** `--session-timeout`（`sessionTimeoutMs` 在 316 无出现），`--sandbox/--no-sandbox` 改为明确报错。
 - **environment 生命周期**：新增 environment secret 续期（`computeSecretRenewAt`、`environment_secret_expires_in`）、environment 丢失自动重新注册（`tengu_bridge_env_reregister`）、`markEnvironmentOffline`、同目录重复服务检测（409 `bridge_folder_already_served`）。
 - **sessions watch**：新增 `GET /v1/code/sessions/watch` SSE 驱动的轮询调度（`watch_*` 配置、`tengu_bridge_watch_*` 事件）。
@@ -674,11 +676,11 @@ runBridgeLoop                                                     bridge/bridgeM
 
 ### 未解之处
 
-- 代号开关用途：`chunk-71c4j971.js#lPe`、`#eir`、`#f8r`、`#p8r`、`#D9o`、`#JTt`、`#L9o`、`#N9o`、`#lEn`、`#B9o`（只按调用方推断，置信度 0.45–0.5）。
-- `chunk-wbbfk060.js#Rr` 内部大量单字母局部（`$e`、`We`、`qe`、`Se`、`ke`、`_e`、`Ge` 等集合/映射）只命名了部分；会话超时/project thread park 逻辑未逐行梳理。
-- `chunk-b30925fy.js#dBn`、`#KIs` 常量组的确切语义（续期重试次数/间隔）为推断。
-- `chunk-wbbfk060.js#rs` 中 `rs/os/is/yr` 的用途为推断。
-- `chunk-4121qate.js#bx`（插件向下调用）、`chunk-tyg7f3ek.js#qP` 等误归属声明的完整语义未深挖。
+- 代号开关用途：`chunk-h3xdf7nq.js#FDe`、`#A_r`、`#Xao`、`#Jao`、`#wfs`、`#hMt`、`#Efs`、`#kfs`、`#$On`、`#Rfs`（只按调用方推断，置信度 0.45–0.5）。
+- `chunk-18851qev.js#xr` 内部大量单字母局部（`$e`、`We`、`qe`、`Se`、`ke`、`_e`、`Ge` 等集合/映射）只命名了部分；会话超时/project thread park 逻辑未逐行梳理。
+- `chunk-v3wm90pf.js#zYn`、`#k4s` 常量组的确切语义（续期重试次数/间隔）为推断。
+- `chunk-18851qev.js#ps` 中 `rs/os/is/yr` 的用途为推断。
+- `chunk-j8f885h1.js#px`（插件向下调用）、`chunk-0yw3taqg.js#GA` 等误归属声明的完整语义未深挖。
 
 ---
 
@@ -758,7 +760,7 @@ initReplBridge(options)                                   bridge/initReplBridge.
 
 服务端 v2 用 `cse_<id>`，v1 兼容层（归档、旧 API）用 `session_<id>`，裸 ID 相同。`bridge/sessionIdCompat.ts · toCompatSessionId`（cse→session）、`toInfraSessionId`（session→cse）、`sessionIdBody`（去前缀）、`inSessionIdCostumeOf`（按参考 ID 的前缀形式转换）；`assistant/sessionHistory.ts · buildSessionEndpoint` 在 v2 下走 `/v1/code/sessions/{cse_id}`，v1 下走 `/v1/sessions/{session_id}` 并加 `anthropic-beta: ccr-byoc-2025-07-29`、`x-organization-uuid`。是否启用前缀 shim 受 `tengu_bridge_repl_v2_cse_shim_enabled`（默认 true）控制（`isCseShimEnabled`，在 initReplBridge 开头注入）。
 
-#### 服务端控制请求（远端 → 本地，`chunk-1qpz7qcd.js#__i`）
+#### 服务端控制请求（远端 → 本地，`chunk-ck4jrdtf.js#vFi`）
 
 `initialize`、`set_model`、`set_max_thinking_tokens`、`set_permission_mode`、`rename_session`、`set_color`、`file_suggestions`、`read_file`、`get_workspace_diff`、`get_context_usage`、`get_usage`、`mcp_status`、`mcp_authenticate`、`mcp_oauth_callback_url`、`mcp_reconnect`、`mcp_set_servers`、`interrupt`、`apply_flag_settings`、`stop_task`、`background_tasks`、`cancel_async_message`、`side_question`、`fork_conversation`。
 
@@ -794,7 +796,7 @@ initReplBridge(options)                                   bridge/initReplBridge.
 - **`/bridge` 响应**：`{worker_jwt: string, expires_in: number, api_base_url: string, worker_epoch: number, mcp_config?}`；请求体可带 `expected_epoch`；409 体内 `expected_epoch`、`actual_epoch`。
 - **创建会话请求**：`{title, bridge: {}, tags?, session_grouping_id?, config: {cwd, model?, sources?, outcomes?, reuse_outcome_branches?}}`；响应 `session.id` 必须以 `cse_` 开头。
 - **失败对象**：`{terminal: true, reason: "grouping_rejected"|"request_rejected"|"malformed_response"|"invalid_session_id"|"untrusted_device"|"session_stale_relogin", status?, detail?, refusal?, source?}`；`{terminal: false, reason: "oauth_rejected"}`；瞬时失败为 `null`。
-- **untrusted_device 拒绝**（`readUntrustedDeviceRefusal`，`chunk-kgtpkbhq.js#zJ`）：`{kind: "token_refused"}`、`{kind: "signature_wanted", subReason: "served_call_unsigned"}`、`{kind: "unrecognized", subReason}`。
+- **untrusted_device 拒绝**（`readUntrustedDeviceRefusal`，`chunk-jc4qbkj6.js#MZ`）：`{kind: "token_refused"}`、`{kind: "signature_wanted", subReason: "served_call_unsigned"}`、`{kind: "unrecognized", subReason}`。
 - **入站帧**：`control_request {request_id, request: {subtype, …}}`、`control_response {response: {subtype: "success"|"error", request_id, response?|error?}}`、`control_cancel_request {request_id}`、`queued_notification {notification}`、`user {uuid, message, parent_tool_use_id, isReplay?}`。
 - **env-less 配置**（`DEFAULT_ENV_LESS_BRIDGE_CONFIG`）：init_retry_max_attempts 3、init_retry_base_delay_ms 500、init_retry_jitter_fraction 0.25、init_retry_max_delay_ms 4000、http_timeout_ms 10000、uuid_dedup_buffer_size 2000、heartbeat_interval_ms 20000、heartbeat_jitter_fraction 0.1、token_refresh_buffer_ms 300000、teardown_archive_timeout_ms 1500、connect_timeout_ms 15000、oauth_retry_max_attempts 3、oauth_retry_base_delay_ms 2000、min_version "0.0.0"。
 - **直连**：`connectResponseSchema {session_id, ws_url, work_dir?}`；WebSocket 上 NDJSON 帧。
@@ -862,11 +864,11 @@ GrowthBook（这几个模块里读到的；默认值在括号内）：
 
 ### 未解之处
 
-- `chunk-4cm44bmp.js#_Ks` 内大量单字母局部（`e`、`r`、`i`、`y`、`R`、`_`、`S` 等出现几十次）未逐一命名；状态机变量 `I`、`re`、`Be`、`Se`、`Me`、`ae` 的确切语义（已拆除/owner changed/恢复中/…）只做了推测，未写入命名表。
-- `chunk-cg2r2hy6.js#ji` 的 `D`（`pinSessionId(getSessionId())` 的结果，疑似"绑定会话键"）、`resolveOwnerCheckIdentity(...)`（`chunk-cg2r2hy6.js#tt`）的 server vouch 机制没有完全读懂。
+- `chunk-56msakfz.js#Wsi` 内大量单字母局部（`e`、`r`、`i`、`y`、`R`、`_`、`S` 等出现几十次）未逐一命名；状态机变量 `I`、`re`、`Be`、`Se`、`Me`、`ae` 的确切语义（已拆除/owner changed/恢复中/…）只做了推测，未写入命名表。
+- `chunk-66b9fbd5.js#zi` 的 `D`（`pinSessionId(getSessionId())` 的结果，疑似"绑定会话键"）、`resolveOwnerCheckIdentity(...)`（`chunk-66b9fbd5.js#nt`）的 server vouch 机制没有完全读懂。
 - `tengu_luminous_seal`、`tengu_amber_ferry`、`tengu_amber_relay` 等代号开关的具体作用未确认。
-- `chunk-1qpz7qcd.js#__i` 的 `side_question`、`fork_conversation` 分支细节没有展开（写作时该声明在 `_unattributed`，现为 `handleReplBridgeControlRequest`，`bridge/replControlHandler.ts`）。
-- `chunk-n4bsg1hp.js#Mn`（单个附件解析，11KB）只命名了函数，内部局部未命名。
+- `chunk-ck4jrdtf.js#vFi` 的 `side_question`、`fork_conversation` 分支细节没有展开（写作时该声明在 `_unattributed`，现为 `handleReplBridgeControlRequest`，`bridge/replControlHandler.ts`）。
+- `chunk-kd6y3qsy.js#xn`（单个附件解析，11KB）只命名了函数，内部局部未命名。
 
 ---
 
@@ -987,17 +989,17 @@ GrowthBook（本领域非 bridge 部分）：`tengu_amber_flint`（团队）、`
 
 ## 12. 未解之处
 
-- 写作时在 `_unattributed`、与本领域强相关、未在本领域命名的代码（place-rest 后均已落位）：服务端控制请求分派 `chunk-1qpz7qcd.js#__i`、SDK schema 大 chunk `chunk-bwbq4xvm.js`、`monitor_mcp/monitor_ws/mcp_task/auto_mode_scan` 的任务实现（`chunk-kxyd0g16`、`chunk-xf84t5b0`）、终止事件 `ya`（`chunk-aepeg2w5`）、task-notification 构造 `bi`（`chunk-gppkhxdv`）。
-- `chunk-e6aww6q8.js#wwt`（`getOwnToolSurface`）、`#ZBo` 的确切语义。
-- `utils/agentContext.ts` 下若干 AsyncLocalStorage 封装（`chunk-e6aww6q8.js#Pet`、`#q2e`、`chunk-s61vbvea.js#Cyn`、`chunk-tyg7f3ek.js#ip`、`chunk-7kr2r08r.js#Rn`）的用途只做了推测。
-- `chunk-18hwfzwa.js#tKo` 常量组（频率/冷却）用途未确认；`chunk-aat7wt0p.js#pLi`（token 序列匹配）用途未确认。
+- 写作时在 `_unattributed`、与本领域强相关、未在本领域命名的代码（place-rest 后均已落位）：服务端控制请求分派 `chunk-ck4jrdtf.js#vFi`、SDK schema 大 chunk `chunk-7kayq7nc.js`、`monitor_mcp/monitor_ws/mcp_task/auto_mode_scan` 的任务实现（`chunk-fmnbrxwy`、`chunk-cx778tm5`）、终止事件 `ya`（`chunk-exfmq47h`）、task-notification 构造 `bi`（`chunk-ab36sake`）。
+- `chunk-5xgkngpb.js#uRt`（`getOwnToolSurface`）、`#CXo` 的确切语义。
+- `utils/agentContext.ts` 下若干 AsyncLocalStorage 封装（`chunk-7kayq7nc.js#yNt`、`chunk-5xgkngpb.js#O5e`、`chunk-7jxyna5q.js#xCn`、`chunk-0yw3taqg.js#fg`、`chunk-yw5t5y3v.js#Mn`）的用途只做了推测。
+- `chunk-czq1j3j2.js#PYo` 常量组（频率/冷却）用途未确认；`chunk-za46rn2f.js#Y8i`（token 序列匹配）用途未确认。
 - 子代理 `runAgent` 内部（tools 领域）未逐行核对；本章 1.2 只描述到调用关系。
 - 第 6、7 章各自的未解之处见章内。
 
 ## 13. 引用校验结果
 
-校验时间 2026-11-04 06:40（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-05 17:32（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
-- 共检查 1374 处引用：名字 999/1003（另 4 个只在 2.1.88 中存在），路径 155/159（另 4 个只在 2.1.88 中存在），字面量 171/173（另 2 个只在 2.1.88 中存在），声明id 39/39；占位符与含空格的说明性文字 224 处未检查。
+- 共检查 1376 处引用：路径 159/163（另 4 个只在 2.1.88 中存在），名字 999/1003（另 4 个只在 2.1.88 中存在），字面量 168/170（另 2 个只在 2.1.88 中存在），声明id 40/40；占位符与含空格的说明性文字 224 处未检查。
 - 只在 2.1.88 中存在（删除项或旧名，预期如此）：`approve/reject`、`Ctrl-C/D`、`secret.use_code_sessions`、`--session-timeout`、`sessionTimeoutMs`、`bridge/replBridge.ts`、`initBridgeCore`、`startWorkPollLoop`、`companionMuted`
 - 未通过：0 处。

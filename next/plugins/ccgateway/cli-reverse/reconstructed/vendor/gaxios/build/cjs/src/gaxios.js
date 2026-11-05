@@ -1,8 +1,8 @@
 /**
  * gaxios/build/cjs/src/gaxios.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: gaxios@7.1.4
- * pieces: chunk-na3pph4p.js (1)
+ * pieces: chunk-e8d3a8an.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire, __toESM } from "../../../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_common } from "./common.js";
 import { require_retry } from "./retry.js";
 import { require_interceptor } from "./interceptor.js";
 
-//@ chunk-na3pph4p.js:10271-17413 cjs-fingerprint
+//@ chunk-e8d3a8an.js:10271-17413 cjs-fingerprint
 var require_gaxios = __commonJS(function (cjsExports) {
   var __importDefault =
     (cjsExports && cjsExports.__importDefault) ||

@@ -3,14 +3,14 @@
  *
  * 后台会话提示行：远程 worker 断开、前台远程任务、后台任务数量等提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/SessionBackgroundHint.tsx
- * pieces: chunk-18hwfzwa.js (7)
- * attribution: sole-consumer 2, affinity 1, fingerprint 2, layout 2
+ * pieces: chunk-czq1j3j2.js (6)
+ * attribution: sole-consumer 1, affinity 1, fingerprint 2, layout 2
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useAppStoreDirect, useAppState } from "../state/AppState.js";
-import { useSetVoiceState } from "../context/voice.js";
+import { useTaskFramework } from "../context/voice.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { useNotifications } from "../context/notifications.js";
 import { useState, useRef } from "../../vendor/react/cjs/react.production.js";
@@ -32,17 +32,15 @@ import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.re
 import { Box, Text } from "../ink/components/Text.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 
-//@ chunk-18hwfzwa.js:978630-978680 sole-consumer (2.1.88 match: _temp5, 1)
+//@ chunk-czq1j3j2.js:1012681-1012731 sole-consumer (2.1.88 match: _temp5, 1)
 function selectRemoteConnectionStatus_2(s) {
   return s.remoteConnectionStatus;
 }
-//@ chunk-18hwfzwa.js:978680-978732 sole-consumer
+//@ chunk-czq1j3j2.js:1012731-1012783 affinity
 function selectRemoteWorkerReportedGone(state) {
   return state.remoteWorkerReportedGone;
 }
-//@ chunk-18hwfzwa.js:978732-978748 affinity
-function noop_5() {}
-//@ chunk-18hwfzwa.js:978748-978833 fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-czq1j3j2.js:1012783-1012868 fingerprint (2.1.88 match: _temp2, 1)
 function markBackgroundTaskHintSeen(c) {
   return c.hasUsedBackgroundTask
     ? c
@@ -51,18 +49,18 @@ function markBackgroundTaskHintSeen(c) {
         hasUsedBackgroundTask: true,
       };
 }
-//@ chunk-18hwfzwa.js:978833-978881 layout
+//@ chunk-czq1j3j2.js:1012868-1012916 layout
 function selectRemoteForegroundTask(state) {
   return state.remoteForegroundTask;
 }
-//@ chunk-18hwfzwa.js:978881-978895 layout
+//@ chunk-czq1j3j2.js:1012916-1012930 layout
 var BACKGROUND_TASKS_TIMEOUT_MS = 15000;
-//@ chunk-18hwfzwa.js:978895-981168 fingerprint (2.1.88 match: SessionBackgroundHint, 0.451)
+//@ chunk-czq1j3j2.js:1012930-1015199 fingerprint (2.1.88 match: SessionBackgroundHint, 0.451)
 function SessionBackgroundHint(props) {
   let $ = useMemoCache(23);
   let { onBackgroundSession, isLoading } = props;
   let setAppState = useAppStoreDirect();
-  let appStateStore = useSetVoiceState();
+  let appStateStore = useTaskFramework();
   let { storageV5 } = useTheme_2();
   let { addNotification } = useNotifications();
   let [isDoublePressed, setIsDoublePressed] = useState(false);
@@ -72,12 +70,12 @@ function SessionBackgroundHint(props) {
   let remoteWorkerReportedGone = useAppState(selectRemoteWorkerReportedGone);
   if (isTasksDisabled && (remoteConnectionStatus !== "connected" || remoteWorkerReportedGone))
     setIsTasksDisabled(false);
-  let handleDoublePress = useDoublePress(setIsDoublePressed, onBackgroundSession, noop_5);
+  let doublePress = useDoublePress(setIsDoublePressed, onBackgroundSession);
   let handleBackground;
   if (
     $[0] !== addNotification ||
     $[1] !== setAppState ||
-    $[2] !== handleDoublePress ||
+    $[2] !== doublePress ||
     $[3] !== isLoading ||
     $[4] !== storageV5 ||
     $[5] !== appStateStore
@@ -125,11 +123,11 @@ function SessionBackgroundHint(props) {
             });
         }
         if (!getGlobalConfig().hasUsedBackgroundTask) saveGlobalConfig(markBackgroundTaskHintSeen, storageV5);
-      } else if (remoteCaps === null && isEnvTruthy("false") && isLoading) handleDoublePress();
+      } else if (remoteCaps === null && isEnvTruthy("false") && isLoading) doublePress();
     };
     $[0] = addNotification;
     $[1] = setAppState;
-    $[2] = handleDoublePress;
+    $[2] = doublePress;
     $[3] = isLoading;
     $[4] = storageV5;
     $[5] = appStateStore;

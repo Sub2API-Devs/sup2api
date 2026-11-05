@@ -3,9 +3,9 @@
  *
  * 不可见字符清除（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qg0af0yq.js (38)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gb7aq6sf.js (38)
  * attribution: placement 38
  */
 import { normalizeFullWidthSpace, truncateWithCount, takeLastChars } from "./stringUtils.js";
@@ -13,7 +13,7 @@ import { INVISIBLE_FORMAT_RANGES, stripCombiningRepeated } from "./sanitization.
 import { stripAnsi } from "./stripAnsi.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-qg0af0yq.js:957-1127 placement
+//@ chunk-gb7aq6sf.js:988-1158 placement
 var NON_PRINTABLE_ASCII_RE = /[^\t\n\x20-\x7e]/;
 var LETTER_RE = /^\p{L}$/u;
 var MARK_RE = /^\p{M}$/u;
@@ -21,7 +21,7 @@ var WHITE_SPACE_RE = /^\p{White_Space}$/u;
 var EMOJI_RE = /^[\p{Emoji}\p{Extended_Pictographic}]$/u;
 var EXTENDED_PICTOGRAPHIC_RE = /^\p{Extended_Pictographic}$/u;
 var MATH_SYMBOL_RE = /^\p{Sm}$/u;
-//@ chunk-qg0af0yq.js:1127-1233 placement
+//@ chunk-gb7aq6sf.js:1158-1264 placement
 function unicodePropertyClassRe(propertyName, scriptNames) {
   let joined = scriptNames
     .split(" ")
@@ -29,21 +29,21 @@ function unicodePropertyClassRe(propertyName, scriptNames) {
     .join("");
   return new RegExp(`^[${joined}]$`, "u");
 }
-//@ chunk-qg0af0yq.js:1233-1306 placement
+//@ chunk-gb7aq6sf.js:1264-1337 placement
 function scriptAndExtensionClass(scriptNames) {
   return {
     base: unicodePropertyClassRe("Script", scriptNames),
     mark: unicodePropertyClassRe("Script_Extensions", scriptNames),
   };
 }
-//@ chunk-qg0af0yq.js:1306-1342 placement
+//@ chunk-gb7aq6sf.js:1337-1373 placement
 function sameScriptRe(scriptClass) {
   return {
     base: scriptClass,
     mark: scriptClass,
   };
 }
-//@ chunk-qg0af0yq.js:1342-2273 placement
+//@ chunk-gb7aq6sf.js:1373-2304 placement
 /**
  * 判定不可见字符时使用的 RTL 语言的 base/mark 脚本正则组，以及若干特定脚本的判定正则集合。
  */
@@ -62,7 +62,7 @@ var EGYPTIAN_HIEROGLYPH_CLASS;
 var DUPLOYAN_SCRIPT_CLASS;
 var BRAHMI_SCRIPT_RE;
 var VERTICAL_ORIENTATION_SCRIPTS;
-deferInit("chunk-qg0af0yq.js:1342", () => {
+deferInit("chunk-gb7aq6sf.js:1373", () => {
   INVISIBLE_CHAR_SCRIPTS =
     /^[\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Samaritan}\p{Script=Mandaic}\p{Script=Adlam}\p{Script=Hanifi_Rohingya}\p{Script=Yezidi}]$/u;
   RTL_CONTEXT_SCRIPTS = /^[\p{Script=Arabic}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Hanifi_Rohingya}]$/u;
@@ -84,7 +84,7 @@ deferInit("chunk-qg0af0yq.js:1342", () => {
   BRAHMI_SCRIPT_RE = /^\p{Script=Brahmi}$/u;
   VERTICAL_ORIENTATION_SCRIPTS = /^[\p{Script=Myanmar}\p{Script=Phags_Pa}\p{Script=Manichaean}]$/u;
 });
-//@ chunk-qg0af0yq.js:2273-2691 placement
+//@ chunk-gb7aq6sf.js:2304-2722 placement
 /**
  * 判断码点是否为不可见字符：控制字符（除 Tab/换行）、软连字符、各类零宽/方向控制、变体选择符、BOM、韩文填充符、标签字符等。
  */
@@ -121,10 +121,10 @@ function isInvisibleCodePoint(codePoint) {
     (codePoint >= 917504 && codePoint <= 921599)
   );
 }
-//@ chunk-qg0af0yq.js:2691-2729 placement
+//@ chunk-gb7aq6sf.js:2722-2760 placement
 var ALLOWED_TAG_SEQUENCES = ["gbeng", "gbsct", "gbwls"];
 var MAX_TAG_SEQUENCE_LEN = 5;
-//@ chunk-qg0af0yq.js:2729-2944 placement
+//@ chunk-gb7aq6sf.js:2760-2975 placement
 /**
  * 匹配 Unicode 标签字符序列（U+E0061–E007A 后跟 U+E007F 结束），序列是允许的标签时返回结束位置，否则 −1。
  */
@@ -139,7 +139,7 @@ function matchTagSequenceEnd(codePoints, startIndex) {
   }
   return -1;
 }
-//@ chunk-qg0af0yq.js:2944-5079 placement
+//@ chunk-gb7aq6sf.js:2975-5109 placement
 function stripInvisibleChars_2(text) {
   let removedByClass = {
     tags: 0,
@@ -364,15 +364,15 @@ function stripInvisibleChars_2(text) {
     keptConditional,
   };
 }
-//@ chunk-qg0af0yq.js:5079-5146 placement
+//@ chunk-gb7aq6sf.js:5109-5176 placement
 function codePointMatches(pattern, codePoint) {
   return codePoint !== undefined && pattern.test(String.fromCodePoint(codePoint));
 }
-//@ chunk-qg0af0yq.js:5146-5184 placement
+//@ chunk-gb7aq6sf.js:5176-5214 placement
 function isLetterOfScript(scriptClass, codePoint) {
   return codePointMatches(LETTER_RE, codePoint) && codePointMatches(scriptClass, codePoint);
 }
-//@ chunk-qg0af0yq.js:5184-5413 placement
+//@ chunk-gb7aq6sf.js:5214-5443 placement
 function hasRtlContextAhead(scriptClass, text, startIndex) {
   for (let index = startIndex; index < text.length;) {
     let codePoint = text.codePointAt(index);
@@ -390,11 +390,11 @@ function hasRtlContextAhead(scriptClass, text, startIndex) {
   }
   return false;
 }
-//@ chunk-qg0af0yq.js:5413-5453 placement
+//@ chunk-gb7aq6sf.js:5443-5483 placement
 function scriptBucket(codePoint) {
   return codePoint === 1600 || codePointMatches(INVISIBLE_CHAR_SCRIPTS, codePoint);
 }
-//@ chunk-qg0af0yq.js:5453-5637 placement
+//@ chunk-gb7aq6sf.js:5483-5667 placement
 function joinerHasContext(history, codePoint) {
   let isLetter = codePointMatches(LETTER_RE, codePoint);
   if (!isLetter && !codePointMatches(DECIMAL_DIGIT_RE, codePoint)) return false;
@@ -409,7 +409,7 @@ function joinerHasContext(history, codePoint) {
   }
   return history.size >= RECENT_HISTORY_SIZE;
 }
-//@ chunk-qg0af0yq.js:5637-5718 placement
+//@ chunk-gb7aq6sf.js:5667-5748 placement
 function isLineBreakCodePoint(codePoint) {
   return (
     codePoint === 10 ||
@@ -421,9 +421,9 @@ function isLineBreakCodePoint(codePoint) {
     codePoint === 8233
   );
 }
-//@ chunk-qg0af0yq.js:5718-5727 placement
+//@ chunk-gb7aq6sf.js:5748-5757 placement
 var RECENT_HISTORY_SIZE = 16;
-//@ chunk-qg0af0yq.js:5727-5846 placement
+//@ chunk-gb7aq6sf.js:5757-5876 placement
 function pushRecentCodePoint(history, codePoint, isHidden) {
   history.ring[history.next] = codePoint;
   history.next = (history.next + 1) % RECENT_HISTORY_SIZE;
@@ -431,20 +431,20 @@ function pushRecentCodePoint(history, codePoint, isHidden) {
   history.lastWasHidden = isHidden;
   if (isHidden) history.keptConditional++;
 }
-//@ chunk-qg0af0yq.js:5846-5916 placement
+//@ chunk-gb7aq6sf.js:5876-5946 placement
 function recentAt(history, offset) {
   if (offset >= history.size) return;
   return history.ring[(history.next - 1 - offset + 2 * RECENT_HISTORY_SIZE) % RECENT_HISTORY_SIZE];
 }
-//@ chunk-qg0af0yq.js:5916-5979 placement
+//@ chunk-gb7aq6sf.js:5946-6009 placement
 function previousBaseMatches(history, pattern) {
   return history.size > 0 && !history.lastWasHidden && codePointMatches(pattern, recentAt(history, 0));
 }
-//@ chunk-qg0af0yq.js:5979-6013 placement
+//@ chunk-gb7aq6sf.js:6009-6043 placement
 function recentBaseMatchesNoSkip(history, scriptClasses) {
   return recentBaseMatches(history, scriptClasses, false);
 }
-//@ chunk-qg0af0yq.js:6013-6186 placement
+//@ chunk-gb7aq6sf.js:6043-6216 placement
 function recentBaseMatches(history, scriptClasses, matchBaseOnly) {
   if (history.lastWasHidden) return false;
   for (let idx = 0; idx < history.size; idx++) {
@@ -459,11 +459,11 @@ function recentBaseMatches(history, scriptClasses, matchBaseOnly) {
   }
   return false;
 }
-//@ chunk-qg0af0yq.js:6186-6235 placement
+//@ chunk-gb7aq6sf.js:6216-6265 placement
 function currentOrPreviousMatches(codePoint, pattern) {
   return codePoint !== undefined && !isInvisibleCodePoint(codePoint) && codePointMatches(pattern, codePoint);
 }
-//@ chunk-qg0af0yq.js:6235-6289 placement
+//@ chunk-gb7aq6sf.js:6265-6319 placement
 function previousMatchesScript(codePoint, scriptClass) {
   return (
     codePoint !== undefined &&
@@ -471,15 +471,15 @@ function previousMatchesScript(codePoint, scriptClass) {
     isLetterOfScript(scriptClass.base, codePoint)
   );
 }
-//@ chunk-qg0af0yq.js:6289-6332 placement
+//@ chunk-gb7aq6sf.js:6319-6362 placement
 function isEmojiModifier(codePoint) {
   return codePoint >= 127995 && codePoint <= 127999;
 }
-//@ chunk-qg0af0yq.js:6332-6383 placement
+//@ chunk-gb7aq6sf.js:6362-6413 placement
 function isKeycapBase(codePoint) {
   return (codePoint >= 48 && codePoint <= 57) || codePoint === 35 || codePoint === 42;
 }
-//@ chunk-qg0af0yq.js:6383-6578 placement
+//@ chunk-gb7aq6sf.js:6413-6608 placement
 function countLoneSurrogates(text) {
   let loneSurrogateCount = 0;
   for (let idx = 0; idx < text.length; idx++) {
@@ -492,7 +492,7 @@ function countLoneSurrogates(text) {
   }
   return loneSurrogateCount;
 }
-//@ chunk-qg0af0yq.js:6578-6874 placement
+//@ chunk-gb7aq6sf.js:6608-6904 placement
 function invisibleCategory(codePoint) {
   if (codePoint >= 917504 && codePoint <= 917631) return "tags";
   if (
@@ -514,7 +514,7 @@ function invisibleCategory(codePoint) {
     return "selectors";
   return "other";
 }
-//@ chunk-qg0af0yq.js:6874-7270 placement
+//@ chunk-gb7aq6sf.js:6904-7300 placement
 function formatInvisibleCharsRemoved(removedTotal, context = "review", confirmKey = "Enter") {
   let summary =
     removedTotal === 1 ? "Removed 1 invisible character" : `Removed ${removedTotal} invisible characters`;
@@ -531,27 +531,27 @@ function formatInvisibleCharsRemoved(removedTotal, context = "review", confirmKe
       return `${summary} from the pasted text`;
   }
 }
-//@ chunk-qg0af0yq.js:7270-7601 placement
+//@ chunk-gb7aq6sf.js:7300-7631 placement
 /**
  * 显示不安全字符正则（控制字符、方向覆盖、私用区与未分配码点），以及上下文相关的零宽字符正则（ZWJ/ZWNJ 只在不连接字母或表情时匹配）。
  */
-var DISPLAY_UNSAFE_CHARS_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DISPLAY_UNSAFE_CHARS_RE; // deferred: uses INVISIBLE_CHAR_CLASSES (./sanitization.js) of its import cycle while loading; runs once the cycle is complete
 var regExp;
-deferInit("chunk-qg0af0yq.js:7270", () => {
+deferInit("chunk-gb7aq6sf.js:7300", () => {
   DISPLAY_UNSAFE_CHARS_RE = /[\x00-\x1f\x7f-\x9f\u061c\u2028\u2029\u202a-\u202e\u2066-\u2069\p{Co}\p{Cn}]/gu;
   regExp = new RegExp(
     String.raw`[\u200b\u200e\u200f\u2800]|[${INVISIBLE_FORMAT_RANGES}\u{110bd}\u{110cd}](?!\p{Nd})|(?<![\p{L}\p{M}\p{Extended_Pictographic}\p{Emoji_Modifier}\ufe0f])[\u200c\u200d]|(?<!\p{M})[\u200c\u200d](?![\p{L}\p{M}\p{Extended_Pictographic}])`,
     "gu",
   );
 });
-//@ chunk-qg0af0yq.js:7601-7633 placement
+//@ chunk-gb7aq6sf.js:7631-7663 placement
 /**
  * 去掉文本中的不可见字符（保留合法连接符等）。
  */
 function stripInvisibleChars(text) {
   return stripCombiningRepeated(escapeDisplayUnsafeChars(text));
 }
-//@ chunk-qg0af0yq.js:7633-7817 placement
+//@ chunk-gb7aq6sf.js:7663-7846 placement
 /**
  * 把路径等文本转成安全显示形式：规范全角空格，把控制字符、双向控制、私用区、零宽等不可见字符替换为可见转义（与 stripInvisibleChars 的结果对照只替换被移除的字符）。
  */
@@ -569,23 +569,23 @@ function escapePathForDisplay(inputPath) {
     } else escaped += unicodeEscape(character);
   return escaped;
 }
-//@ chunk-qg0af0yq.js:7817-7827 placement
+//@ chunk-gb7aq6sf.js:7846-7856 placement
 var MAX_DISPLAY_PATH_CHARS = 160;
-//@ chunk-qg0af0yq.js:7827-7861 placement
+//@ chunk-gb7aq6sf.js:7856-7890 placement
 /**
  * 清理不可见字符并截断到展示宽度，用于展示路径。
  */
 function truncatePathForDisplay(path) {
   return truncateWithCount(stripInvisibleChars(path), MAX_DISPLAY_PATH_CHARS);
 }
-//@ chunk-qg0af0yq.js:7861-8022 placement
+//@ chunk-gb7aq6sf.js:7890-8051 placement
 /**
  * 路径在磁盘上的指向无法确定（链接或目录无法检查、链接不可解析）时的说明。
  */
 function unresolvablePathMessage(path) {
   return `Where ${truncatePathForDisplay(path)} leads on disk could not be determined (a link or directory on the way could not be examined, or the links do not resolve)`;
 }
-//@ chunk-qg0af0yq.js:8022-8137 placement
+//@ chunk-gb7aq6sf.js:8051-8166 placement
 /**
  * 过长路径只保留末尾若干字符显示，前面标注省略的字符数。
  */
@@ -595,7 +595,7 @@ function truncatePathForDisplay_2(path) {
   let tail = takeLastChars(stripped, MAX_DISPLAY_PATH_CHARS);
   return `[+${stripped.length - tail.length} chars] \u2026${tail}`;
 }
-//@ chunk-qg0af0yq.js:8137-8199 placement
+//@ chunk-gb7aq6sf.js:8166-8228 placement
 /**
  * 按行清理不可见字符后重新拼接。
  */
@@ -608,7 +608,7 @@ function stripInvisibleCharsMultiLine(details) {
     .map((line) => stripInvisibleChars(line)).join(`
 `);
 }
-//@ chunk-qg0af0yq.js:8199-8274 placement
+//@ chunk-gb7aq6sf.js:8228-8303 placement
 function escapeDisplayUnsafeChars(text) {
   let withoutAnsi = stripAnsi(text);
   return (withoutAnsi === text ? withoutAnsi : withoutAnsi + "\uFFFD").replace(
@@ -616,17 +616,17 @@ function escapeDisplayUnsafeChars(text) {
     "\uFFFD",
   );
 }
-//@ chunk-qg0af0yq.js:8274-8349 placement
+//@ chunk-gb7aq6sf.js:8303-8378 placement
 function unicodeEscape(character) {
   return `\\u{${character.codePointAt(0).toString(16).toUpperCase()}}`;
 }
 export {
+  unresolvablePathMessage,
   stripInvisibleChars,
   truncatePathForDisplay,
   truncatePathForDisplay_2,
-  unresolvablePathMessage,
-  formatInvisibleCharsRemoved,
   stripInvisibleChars_2,
+  formatInvisibleCharsRemoved,
   stripInvisibleCharsMultiLine,
   escapePathForDisplay,
   matchTagSequenceEnd,

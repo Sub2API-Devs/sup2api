@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：一条通知（来源、摘要、正文）；渲染通知列表结果。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ah34pb7m.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wjygkcr4.js (5)
  * attribution: placement 5
  */
 import { exceedsLineLimit } from "../../utils/terminal.js";
@@ -30,7 +30,7 @@ import { BACK_ARROW_GLYPH } from "../../constants/figures.js";
 import { stripControlChars } from "../../utils/stripControlChars.js";
 import { CtrlOToExpand } from "../../components/CtrlOToExpand.js";
 
-//@ chunk-ah34pb7m.js:33057-33141 placement
+//@ chunk-wjygkcr4.js:34022-34106 placement
 /**
  * 通知结果（错误文本或 JSON）超出终端行数时返回 true，用于折叠显示。
  */
@@ -38,7 +38,7 @@ function exceedsNotificationsLineLimit(result, { columns }) {
   if (result.error) return exceedsLineLimit(result.error, columns);
   return exceedsLineLimit(jsonStringify(result, null, 2), columns);
 }
-//@ chunk-ah34pb7m.js:33141-33657 placement
+//@ chunk-wjygkcr4.js:34106-34622 placement
 /**
  * 渲染通知列表结果。
  */
@@ -87,7 +87,7 @@ function renderNotificationsResult(result, progressMessages, { verbose }) {
     }),
   });
 }
-//@ chunk-ah34pb7m.js:33657-33895 placement
+//@ chunk-wjygkcr4.js:34622-34860 placement
 function renderNotificationItem(origin, content, verbose) {
   switch (origin) {
     case "github_webhook":
@@ -110,7 +110,7 @@ function renderNotificationItem(origin, content, verbose) {
     verbose,
   });
 }
-//@ chunk-ah34pb7m.js:33895-35109 placement
+//@ chunk-wjygkcr4.js:34860-36076 placement
 /**
  * 一条通知（来源、摘要、正文）。
  */
@@ -229,7 +229,7 @@ function NotificationItem(props) {
   } else itemBox = $[24];
   return itemBox;
 }
-//@ chunk-ah34pb7m.js:35109-35256 placement
+//@ chunk-wjygkcr4.js:36076-36223 placement
 function renderHttpStatusLine(result) {
   let lineCount =
     countCharInString(

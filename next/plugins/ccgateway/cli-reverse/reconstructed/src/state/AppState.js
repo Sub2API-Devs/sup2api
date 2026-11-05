@@ -3,10 +3,10 @@
  *
  * AppState 的 React 接入：AppStateProvider 创建 store，useAppState(selector)/useSetAppState/useAppStore 钩子。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/state/AppState.tsx
- * pieces: chunk-gq18jh8s.js (12), chunk-xe7zq1p4.js (8), chunk-yj65zw1g.js (1)
- * attribution: placement 16, fingerprint 2, layout 1, callgraph-witnessed 2
+ * pieces: chunk-77bb8s6j.js (1), chunk-swe0kb5q.js (8), chunk-t11pnrxp.js (12)
+ * attribution: callgraph-witnessed 2, placement 16, fingerprint 2, layout 1
  */
 import {
   init_react_production,
@@ -58,24 +58,24 @@ import { InputSelectionBridgeProvider } from "../ink/inputSelectionBridge.js";
 import { MailboxProvider } from "../context/mailbox.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-gq18jh8s.js:307-311 placement
+//@ chunk-t11pnrxp.js:307-311 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-gq18jh8s.js:307", () => {
+deferInit("chunk-t11pnrxp.js:307", () => {
   init_react_production();
 });
-//@ chunk-gq18jh8s.js:311-353 placement
+//@ chunk-t11pnrxp.js:311-353 placement
 /**
  * AppStateProvider 提供的 store 上下文。
  */
 var appStoreContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var sessionContext;
 var mcpConnectionsContext;
-deferInit("chunk-gq18jh8s.js:311", () => {
+deferInit("chunk-t11pnrxp.js:311", () => {
   appStoreContext = createContext(null);
   sessionContext = createContext(null);
   mcpConnectionsContext = createContext(null);
 });
-//@ chunk-gq18jh8s.js:353-491 placement
+//@ chunk-t11pnrxp.js:353-491 placement
 /**
  * 读取 AppState 中的 MCP 连接上下文，必须在 AppStateProvider 内使用。
  */
@@ -84,15 +84,15 @@ function useMcpConnections() {
   if (!value) throw ReferenceError("useMcpConnections cannot be called outside of an <AppStateProvider />");
   return value;
 }
-//@ chunk-gq18jh8s.js:491-508 placement
+//@ chunk-t11pnrxp.js:491-508 placement
 /**
  * AppState 的活动插件上下文。
  */
 var activePluginsContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-gq18jh8s.js:491", () => {
+deferInit("chunk-t11pnrxp.js:491", () => {
   activePluginsContext = createContext(null);
 });
-//@ chunk-gq18jh8s.js:508-644 placement
+//@ chunk-t11pnrxp.js:508-644 placement
 /**
  * 读取 AppState 中的活动插件上下文，必须在 AppStateProvider 内使用。
  */
@@ -101,7 +101,7 @@ function useActivePlugins() {
   if (!value) throw ReferenceError("useActivePlugins cannot be called outside of an <AppStateProvider />");
   return value;
 }
-//@ chunk-gq18jh8s.js:644-782 placement
+//@ chunk-t11pnrxp.js:644-782 placement
 /**
  * 读取 AppState 的会话上下文，必须在 AppStateProvider 内使用。
  */
@@ -110,7 +110,7 @@ function useAppStateSession() {
   if (!value) throw ReferenceError("useAppStateSession cannot be called outside of an <AppStateProvider />");
   return value;
 }
-//@ chunk-gq18jh8s.js:782-926 fingerprint (2.1.88 match: useAppStore, 1)
+//@ chunk-t11pnrxp.js:782-926 fingerprint (2.1.88 match: useAppStore, 1)
 /**
  * 取 AppStateProvider 提供的 store，不在 Provider 内时抛错。
  */
@@ -120,7 +120,7 @@ function useAppStore() {
     throw ReferenceError("useAppState/useSetAppState cannot be called outside of an <AppStateProvider />");
   return store;
 }
-//@ chunk-gq18jh8s.js:926-965 layout
+//@ chunk-t11pnrxp.js:926-965 layout
 /**
  * React hook：从 AppStateProvider 的 store 订阅 selector 选出的片段（useSyncExternalStore 语义），必须在 Provider 内调用。
  */
@@ -128,14 +128,14 @@ function useAppState(selector) {
   let appStore = useAppStore();
   return useStoreSelector(appStore, selector);
 }
-//@ chunk-gq18jh8s.js:965-999 callgraph-witnessed (2.1.88 match: useSetAppState, 1)
+//@ chunk-t11pnrxp.js:965-999 callgraph-witnessed (2.1.88 match: useSetAppState, 1)
 /**
  * 返回 store.setState，供组件更新 AppState。
  */
 function useSetAppState() {
   return useAppStore().setState;
 }
-//@ chunk-gq18jh8s.js:999-1058 placement
+//@ chunk-t11pnrxp.js:999-1058 placement
 /**
  * 返回稳定的 setState 包装（memo 化）。
  */
@@ -143,21 +143,21 @@ function useSetAppStateFn() {
   let appStore = useAppStore();
   return useMemo(() => mergeSlicePatch(appStore.setState), [appStore]);
 }
-//@ chunk-gq18jh8s.js:1058-1083 placement
+//@ chunk-t11pnrxp.js:1058-1083 placement
 /**
  * 直接返回 AppState store。
  */
 function useAppStoreDirect() {
   return useAppStore();
 }
-//@ chunk-gq18jh8s.js:1083-1118 placement
+//@ chunk-t11pnrxp.js:1083-1118 placement
 /**
  * 从 store 订阅 selector 选出的片段。
  */
 function useAppStateSlice(selector) {
   return useStoreSelector(useContext(appStoreContext), selector);
 }
-//@ chunk-yj65zw1g.js:1055-1203 callgraph-witnessed (2.1.88 match: useAppState, 1)
+//@ chunk-77bb8s6j.js:1055-1203 callgraph-witnessed (2.1.88 match: useAppState, 1)
 function useAppState_2(selector) {
   let $ = useMemoCache(3);
   let store = useVoiceStateStore();
@@ -171,12 +171,12 @@ function useAppState_2(selector) {
   let get = t0;
   return useSyncExternalStore(store.subscribe, get, get);
 }
-//@ chunk-xe7zq1p4.js:12465-12469 placement
+//@ chunk-swe0kb5q.js:12485-12489 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-xe7zq1p4.js:12465", () => {
+deferInit("chunk-swe0kb5q.js:12485", () => {
   init_react_production();
 });
-//@ chunk-xe7zq1p4.js:12469-12550 placement
+//@ chunk-swe0kb5q.js:12489-12570 placement
 /**
  * 设置变更时把设置同步进 AppState 的副作用。
  */
@@ -191,20 +191,20 @@ function useSettingsSyncEffect(apply) {
     [],
   );
 }
-//@ chunk-xe7zq1p4.js:12550-12554 placement
+//@ chunk-swe0kb5q.js:12570-12574 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-xe7zq1p4.js:12550", () => {
+deferInit("chunk-swe0kb5q.js:12570", () => {
   init_react_production();
 });
-//@ chunk-xe7zq1p4.js:12554-12570 placement
+//@ chunk-swe0kb5q.js:12574-12590 placement
 /**
  * 会话钩子注册表上下文。
  */
 var sessionHooksRegistryContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-xe7zq1p4.js:12554", () => {
+deferInit("chunk-swe0kb5q.js:12574", () => {
   sessionHooksRegistryContext = createContext(null);
 });
-//@ chunk-xe7zq1p4.js:12570-12713 placement
+//@ chunk-swe0kb5q.js:12590-12733 placement
 /**
  * 读取会话钩子注册表上下文，必须在 AppStateProvider 内使用。
  */
@@ -214,7 +214,7 @@ function useSessionHooksRegistry() {
     throw ReferenceError("useSessionHooksRegistry cannot be called outside of an <AppStateProvider />");
   return value;
 }
-//@ chunk-xe7zq1p4.js:12713-12793 placement (2.1.88 match: useTasksV2WithCollapseEffect, 1)
+//@ chunk-swe0kb5q.js:12733-12813 placement (2.1.88 match: useTasksV2WithCollapseEffect, 1)
 function useTasksV2WithCollapseEffect(state) {
   return state.expandedView === "tasks"
     ? {
@@ -223,17 +223,17 @@ function useTasksV2WithCollapseEffect(state) {
       }
     : state;
 }
-//@ chunk-xe7zq1p4.js:12793-12814 placement
+//@ chunk-swe0kb5q.js:12813-12834 placement
 /**
  * 惰性加载的 SessionRosterStore 构造器。
  */
 var providerNestedFlag; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var sessionRosterStoreClass;
-deferInit("chunk-xe7zq1p4.js:12793", () => {
+deferInit("chunk-swe0kb5q.js:12813", () => {
   providerNestedFlag = createContext(false);
   sessionRosterStoreClass = null;
 });
-//@ chunk-xe7zq1p4.js:12814-16717 fingerprint (2.1.88 match: AppStateProvider, 0.4)
+//@ chunk-swe0kb5q.js:12834-16737 fingerprint (2.1.88 match: AppStateProvider, 0.4)
 /**
  * 创建 AppState store（不可嵌套），监听设置变更并把设置同步进 AppState。
  */
@@ -585,16 +585,16 @@ function AppStateProvider(props) {
 }
 export {
   useAppState,
-  useAppStoreDirect,
   useSetAppState,
-  useAppStateSlice,
+  useAppStoreDirect,
   useAppStateSession,
-  useSetAppStateFn,
-  useActivePlugins,
-  useSessionHooksRegistry,
-  appStoreContext,
   useAppState_2,
+  useActivePlugins,
   useMcpConnections,
+  useAppStateSlice,
+  appStoreContext,
   useSettingsSyncEffect,
+  useSessionHooksRegistry,
+  useSetAppStateFn,
   AppStateProvider,
 };

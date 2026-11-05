@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：各"先询问"原因码的说明文本模板；远程审批未完成原因的简短说明等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7hje7pbr.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-92mx6522.js (4)
  * attribution: placement 4
  */
 
-//@ chunk-7hje7pbr.js:191-7634 placement
+//@ chunk-92mx6522.js:191-7634 placement
 /**
  * 各"先询问"原因码的说明文本模板。
  */
@@ -116,7 +116,7 @@ var ASK_FIRST_REASON_TEXTS = {
     }
   },
 };
-//@ chunk-7hje7pbr.js:7634-8334 placement
+//@ chunk-92mx6522.js:7634-8334 placement
 /**
  * 远程审批未完成的原因说明（无人回答、主机断开等）。
  */
@@ -146,12 +146,12 @@ function approvalTimeoutReason(name, toolName, reason, durationMs) {
       return `${name} ended the approval`;
   }
 }
-//@ chunk-7hje7pbr.js:8334-8419 placement
+//@ chunk-92mx6522.js:8334-8419 placement
 function formatTimeoutDuration(durationMs) {
   let rounded = Math.round(durationMs / 1000);
   return rounded >= 60 && rounded % 60 === 0 ? `${rounded / 60} min` : `${rounded} s`;
 }
-//@ chunk-7hje7pbr.js:8419-9222 placement
+//@ chunk-92mx6522.js:8419-9222 placement
 /**
  * 远程审批未完成原因的简短说明。
  */

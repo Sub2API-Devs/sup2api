@@ -3,9 +3,9 @@
  *
  * 有序列表项（编号 + 内容）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ui/OrderedListItem.tsx
- * pieces: chunk-p8fze0jh.js (2)
+ * pieces: chunk-s0v4e2v6.js (2)
  * attribution: callgraph-witnessed 1, fingerprint 1
  */
 import { createContext, useContext } from "../../../vendor/react/cjs/react.production.js";
@@ -17,14 +17,14 @@ import {
 import { Text, Box } from "../../ink/components/Text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-p8fze0jh.js:19189-19211 callgraph-witnessed (2.1.88 match: OrderedListItemContext, 1)
+//@ chunk-s0v4e2v6.js:20366-20388 callgraph-witnessed (2.1.88 match: OrderedListItemContext, 1)
 var OrderedListItemContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-p8fze0jh.js:19189", () => {
+deferInit("chunk-s0v4e2v6.js:20366", () => {
   OrderedListItemContext = createContext({
     marker: "",
   });
 });
-//@ chunk-p8fze0jh.js:19211-19527 fingerprint (2.1.88 match: OrderedListItem, 1)
+//@ chunk-s0v4e2v6.js:20388-20704 fingerprint (2.1.88 match: OrderedListItem, 1)
 function OrderedListItem(props) {
   let $ = useMemoCache(7);
   let { children } = props;

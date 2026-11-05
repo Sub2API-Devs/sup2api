@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 传输限长：HTTP 响应体/SSE 事件与 stdio 行缓冲上限。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8t8n4kdh.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sywnjtqb.js (10)
  * attribution: placement 10
  */
 import { MAX_STRUCTURED_RESULT_BYTES } from "./mcpCallConstants.js";
@@ -18,7 +18,7 @@ import { assertNotShuttingDown, trackOrphanStdioServer } from "./connectionLifec
 import { logForDebugging } from "../../utils/debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-8t8n4kdh.js:19954-20126 placement
+//@ chunk-sywnjtqb.js:21375-21547 placement
 /**
  * 超出上限时的说明（“所以 Claude Code 停止读取”）。
  */
@@ -27,8 +27,8 @@ var MAX_DECOMPRESSED_BODY_BYTES;
 var SSE_CONTENT_TYPE_RE;
 var MIN_LINE_CHARS;
 var COMPRESSION_ALIASES;
-var STOPPED_READING_NOTE;
-deferInit("chunk-8t8n4kdh.js:19954", () => {
+var STOPPED_READING_NOTE_2;
+deferInit("chunk-sywnjtqb.js:21375", () => {
   MCP_BODY_LIMIT = MAX_STRUCTURED_RESULT_BYTES;
   MAX_DECOMPRESSED_BODY_BYTES = 4 * MCP_BODY_LIMIT;
   SSE_CONTENT_TYPE_RE = /^\s*text\/event-stream\s*(?:;|$)/i;
@@ -38,22 +38,22 @@ deferInit("chunk-8t8n4kdh.js:19954", () => {
     ["x-gzip", "gzip"],
     ["deflate", "deflate"],
   ]);
-  STOPPED_READING_NOTE = "so Claude Code stopped reading it";
+  STOPPED_READING_NOTE_2 = "so Claude Code stopped reading it";
 });
-//@ chunk-8t8n4kdh.js:20126-20411 placement
-class HttpBodyOverflowError extends Error {
+//@ chunk-sywnjtqb.js:21547-21832 placement
+class HttpBodyOverflowError_2 extends Error {
   constructor(limitBytes, kind) {
     let rounded = Math.round(limitBytes / 1024 / 1024);
     super(
       (kind === "event"
         ? `sent more than ${rounded}MB in one event of an event stream (no blank line ended it)`
         : `sent a response larger than ${rounded}MB (counted after decompression)`) +
-        `, ${STOPPED_READING_NOTE}.`,
+        `, ${STOPPED_READING_NOTE_2}.`,
     );
     this.name = "HttpBodyOverflowError";
   }
 }
-//@ chunk-8t8n4kdh.js:20411-21096 placement
+//@ chunk-sywnjtqb.js:21832-22508 placement
 /**
  * 生成限制 MCP HTTP 响应的 TransformStream：累计字节超过总上限报 body 溢出；逐字节跟踪 SSE 行与事件边界，单个事件超过上限报 event 溢出；每 8ms 让出一次事件循环。
  */
@@ -72,7 +72,7 @@ function createSseLimitStream(maxEventBytes, maxBodyBytes) {
       }
       bodyBytes += chunk.length;
       if (bodyBytes > maxBodyBytes) {
-        controller.error(new HttpBodyOverflowError(maxBodyBytes, "body"));
+        controller.error(new HttpBodyOverflowError_2(maxBodyBytes, "body"));
         return;
       }
       if (bodyCapCoversEvents) {
@@ -113,14 +113,14 @@ function createSseLimitStream(maxEventBytes, maxBodyBytes) {
       }
       eventBytes = lastBlankIndex >= 0 ? chunk.length - 1 - lastBlankIndex : eventBytes + chunk.length;
       if (eventBytes > maxEventBytes) {
-        controller.error(new HttpBodyOverflowError(maxEventBytes, "event"));
+        controller.error(new HttpBodyOverflowError_2(maxEventBytes, "event"));
         return;
       }
       controller.enqueue(chunk);
     },
   });
 }
-//@ chunk-8t8n4kdh.js:21096-23130 placement
+//@ chunk-sywnjtqb.js:22508-24539 placement
 /**
  * 包装 MCP HTTP 传输的 fetch：限制单个 SSE 事件与响应体大小（解压后计），拒绝不支持的 Content-Encoding，超限抛 HttpBodyOverflowError。
  */
@@ -228,22 +228,22 @@ function createBoundedFetch(fetchFn, { refusesCodings = false } = {}) {
     return response_2;
   };
 }
-//@ chunk-8t8n4kdh.js:23130-23172 placement
+//@ chunk-sywnjtqb.js:24539-24581 placement
 /**
  * JSON-RPC 消息的基本键集合。
  */
 var JSONRPC_MESSAGE_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-8t8n4kdh.js:23130", () => {
+deferInit("chunk-sywnjtqb.js:24539", () => {
   JSONRPC_MESSAGE_KEYS = new Set(["jsonrpc", "id", "method"]);
 });
-//@ chunk-8t8n4kdh.js:23172-23326 placement
+//@ chunk-sywnjtqb.js:24581-24735 placement
 function isJsonRpcNotificationOrResponse(body) {
   if (body.includes('"id":') && body.includes('"method":')) return false;
   let fields = sliceTopLevelValues(body, JSONRPC_MESSAGE_KEYS);
   return fields?.get("jsonrpc") === '"2.0"' && fields.has("method") !== fields.has("id");
 }
-//@ chunk-8t8n4kdh.js:23326-23629 placement
-class StdoutOverflowError extends Error {
+//@ chunk-sywnjtqb.js:24735-25038 placement
+class StdoutOverflowError_2 extends Error {
   constructor(capBytes) {
     super(
       `wrote >${Math.round(capBytes / 1024 / 1024)}MB to stdout without a JSON-RPC message boundary. The server is likely writing logs or other non-protocol data to stdout instead of stderr. Disconnecting to prevent unbounded memory growth.`,
@@ -251,7 +251,7 @@ class StdoutOverflowError extends Error {
     this.name = "StdoutOverflowError";
   }
 }
-//@ chunk-8t8n4kdh.js:23629-24515 placement
+//@ chunk-sywnjtqb.js:25038-25924 placement
 class BoundedLineBuffer {
   capBytes;
   onOverflow;
@@ -271,7 +271,7 @@ class BoundedLineBuffer {
       this.chunks = [];
       this.byteLength = 0;
       this.overflowed = true;
-      this.onOverflow(new StdoutOverflowError(this.capBytes));
+      this.onOverflow(new StdoutOverflowError_2(this.capBytes));
       return;
     }
     this.chunks.push(chunk);
@@ -281,7 +281,7 @@ class BoundedLineBuffer {
     if (this.overflowed) {
       if (this.overflowThrown) return null;
       this.overflowThrown = true;
-      throw new StdoutOverflowError(this.capBytes);
+      throw new StdoutOverflowError_2(this.capBytes);
     }
     if (this.chunks.length === 0) return null;
     let last = this.chunks.at(-1);
@@ -302,11 +302,11 @@ class BoundedLineBuffer {
     this.byteLength = 0;
   }
 }
-//@ chunk-8t8n4kdh.js:24515-24547 placement
+//@ chunk-sywnjtqb.js:25924-25956 placement
 var SERVER_DISCOVER_PROBE = "server-discover-probe-";
-//@ chunk-8t8n4kdh.js:24547-25800 placement
+//@ chunk-sywnjtqb.js:25956-27209 placement
 let BoundedStdioClientTransport; // deferred: uses StdioClientTransport (../../../vendor/@modelcontextprotocol/client/dist/stdio.mjs) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8t8n4kdh.js:24547", () => {
+deferInit("chunk-sywnjtqb.js:25956", () => {
   BoundedStdioClientTransport = class BoundedStdioClientTransport extends StdioClientTransport {
     overflowError;
     answeredProbeLate = false;
@@ -374,10 +374,10 @@ deferInit("chunk-8t8n4kdh.js:24547", () => {
   };
 });
 export {
-  HttpBodyOverflowError,
+  HttpBodyOverflowError_2,
   createBoundedFetch,
   BoundedStdioClientTransport,
-  StdoutOverflowError,
+  StdoutOverflowError_2,
   MCP_BODY_LIMIT,
-  STOPPED_READING_NOTE,
+  STOPPED_READING_NOTE_2,
 };

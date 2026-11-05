@@ -3,10 +3,10 @@
  *
  * 并入已有模块：`claude plugin` 子命令的配置参数解析、结果输出与错误类。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/plugins/pluginCliCommands.ts
- * pieces: chunk-12wyw8h8.js (43)
- * attribution: placement 22, layout 15, fingerprint 5, callgraph-fingerprint 1
+ * pieces: chunk-h30gsc89.js (38), chunk-mbyxant6.js (7)
+ * attribution: placement 22, layout 17, fingerprint 5, callgraph-fingerprint 1
  */
 import { basename, join } from "path";
 import { createHash, randomUUID } from "crypto";
@@ -19,6 +19,7 @@ import {
   saveMcpServerUserConfig,
   loadMcpServerUserConfig,
 } from "../../utils/plugins/mcpbHandler.js";
+import { pathEscapeError } from "../../utils/plugins/pluginPathContainment.js";
 import { logForDebugging } from "../../utils/debug.js";
 import {
   errorMessage,
@@ -27,6 +28,7 @@ import {
   withTelemetryMessage,
   toError,
 } from "../../utils/errors.js";
+import { pluginErrorText } from "../../types/plugin.js";
 import { printableName, quotedPrintable, printableOrEmpty } from "../../utils/printableName.js";
 import { plural } from "../../utils/stringUtils.js";
 import { getOwn } from "../../utils/objectSafety.js";
@@ -55,7 +57,6 @@ import { runGitWithCeilingDirs } from "../../utils/gitSafeExec.js";
 import { execFileNoThrowWithCwd } from "../../utils/execFileNoThrow.js";
 import { gitExe } from "../../utils/git.js";
 import { GCS_SHA_MARKER_FILE, refreshPluginCaches } from "../../utils/plugins/cacheUtils.js";
-import { getUserBucket } from "../analytics/datadog.js";
 import { stripBom } from "../../utils/json.js";
 import { writeStdoutAndDrain, exitAfterAnalyticsFlush } from "../../cli/exit.js";
 import { escapeControlChars } from "../../utils/resultError.js";
@@ -77,6 +78,7 @@ import {
   pluginIdForTelemetry,
   buildPluginVersionShaField,
 } from "../../utils/telemetry/pluginTelemetry.js";
+import { waitForOAuthRefreshUntilDeadlineAtExit } from "../../utils/auth/oauthRefreshExitWait.js";
 import {
   stripInvisibleKeepNewlines,
   stripInvisibleKeepEmoji,
@@ -149,7 +151,7 @@ import { sanitizeVersion } from "../analytics/metadata.js";
 import { gracefulShutdown } from "../../utils/gracefulShutdown.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-12wyw8h8.js:1926-2128 placement
+//@ chunk-mbyxant6.js:669-873 placement
 function mcpbSourcesOf(marketplace) {
   let mcpServers = marketplace.manifest.mcpServers;
   let filtered = (
@@ -161,13 +163,18 @@ function mcpbSourcesOf(marketplace) {
     remoteCount: filtered.length - filtered_2.length,
   };
 }
-//@ chunk-12wyw8h8.js:2128-2624 placement
+//@ chunk-mbyxant6.js:873-1432 placement
 /**
  * 安装插件后读取其捆绑的 MCPB 服务器：并行加载每个本地包，收集需要配置的服务器（名称、配置 schema、已有配置），读不出的包单独列出。
  */
 async function readBundledServerConfigs(marketplace, local, storageV5) {
   let results = await Promise.all(
     local.map(async (spec) => {
+      if (await pathEscapeError(marketplace, spec, "mcp-servers"))
+        return {
+          spec,
+          result: undefined,
+        };
       try {
         let result = await loadMcpbFile(
           spec,
@@ -208,7 +215,17 @@ async function readBundledServerConfigs(marketplace, local, storageV5) {
     unreadable,
   };
 }
-//@ chunk-12wyw8h8.js:2624-2828 placement
+//@ chunk-mbyxant6.js:1432-1638 layout
+async function describeMcpbSourceError(plugin, mcpbPath) {
+  let bundleError = isLocalMcpbSource(mcpbPath)
+    ? await pathEscapeError(plugin, mcpbPath, "mcp-servers")
+    : undefined;
+  return (
+    bundleError &&
+    `${pluginErrorText(bundleError)}. This bundle can't be configured. If its path leads outside the plugin, the plugin's author needs to change it.`
+  );
+}
+//@ chunk-mbyxant6.js:1638-1844 placement
 function parseConfigPair(pair) {
   let index = pair.indexOf("=");
   if (index <= 0)
@@ -221,7 +238,7 @@ function parseConfigPair(pair) {
     raw: pair.slice(index + 1),
   };
 }
-//@ chunk-12wyw8h8.js:2828-4153 placement
+//@ chunk-mbyxant6.js:1844-3177 placement
 function splitPluginConfigArgs(configArgs, userConfig, bundles, bundleInfo) {
   let pluginPairs = [];
   let bundlePairs = new Map();
@@ -285,7 +302,7 @@ function splitPluginConfigArgs(configArgs, userConfig, bundles, bundleInfo) {
     bundlePairs,
   };
 }
-//@ chunk-12wyw8h8.js:4153-4622 placement
+//@ chunk-mbyxant6.js:3177-3648 placement
 /**
  * 生成"部分捆绑服务器无法用 --config 配置"的括注：读不出的本地包，以及启动时从 URL 拉取、只能在 Claude Code 里配置的远程包。
  */
@@ -302,7 +319,7 @@ function unconfigurableBundlesNote({ unreadable, remoteCount }) {
   let joined = notes.join("; ");
   return joined ? ` (${joined[0].toUpperCase()}${joined.slice(1)}.)` : "";
 }
-//@ chunk-12wyw8h8.js:4622-5188 placement
+//@ chunk-mbyxant6.js:3648-4215 placement
 /**
  * 检查捆绑 MCP 服务器的配置是否完整，不完整时返回提示：列出缺少的必填键或校验错误，并说明可用 --config KEY=VALUE 或在 /plugin 中配置。
  */
@@ -322,7 +339,7 @@ function missingConfigMessage(bundle, pluginId) {
       : `${validation.errors.map((error) => printableName(error)).join("; ")} \u2014 fix it with --config ${serverLabel}.KEY=VALUE`;
   return `MCP server "${quotedPrintable(bundle.serverName)}" needs configuration before it can start: ${fixHint}, or in Claude Code run /plugin, select "${quotedPrintable(pluginId)}" in the Installed tab, and choose Configure.`;
 }
-//@ chunk-12wyw8h8.js:5221-5296 placement
+//@ chunk-h30gsc89.js:2038-2113 placement
 function withSettingsWarning(message, scope) {
   let warning = settingsFileWarning(scope);
   return warning === null
@@ -330,7 +347,7 @@ function withSettingsWarning(message, scope) {
     : `${message}
 ${figures_default.warning} ${warning}`;
 }
-//@ chunk-12wyw8h8.js:5296-6136 placement
+//@ chunk-h30gsc89.js:2113-2953 placement
 function settingsFileWarning(scope) {
   try {
     if (scope === undefined || scope === "managed") return null;
@@ -363,9 +380,9 @@ function settingsFileWarning(scope) {
     return null;
   }
 }
-//@ chunk-12wyw8h8.js:6136-6616 placement
+//@ chunk-h30gsc89.js:2953-3433 placement
 let PluginOperationFailedError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-12wyw8h8.js:6136", () => {
+deferInit("chunk-h30gsc89.js:2953", () => {
   PluginOperationFailedError = class PluginOperationFailedError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -387,7 +404,7 @@ deferInit("chunk-12wyw8h8.js:6136", () => {
     }
   };
 });
-//@ chunk-12wyw8h8.js:6616-6832 placement
+//@ chunk-h30gsc89.js:3433-3648 placement
 function installConfirmationDigest(shown) {
   let digestParts =
     shown.kind === "command_source"
@@ -395,7 +412,7 @@ function installConfirmationDigest(shown) {
       : [shown.kind, shown.pluginId, shown.command, shown.archiveUrl, shown.catalogRevision];
   return createHash("sha256").update(jsonStringify(digestParts), "utf8").digest("hex");
 }
-//@ chunk-12wyw8h8.js:6832-6874 placement
+//@ chunk-h30gsc89.js:3648-3689 placement
 /**
  * 给安装确认对象补上 sha256 摘要。
  */
@@ -405,7 +422,7 @@ function withConfirmationDigest(shown) {
     sha256: installConfirmationDigest(shown),
   };
 }
-//@ chunk-12wyw8h8.js:6874-6945 placement
+//@ chunk-h30gsc89.js:3689-3760 placement
 /**
  * 补上 “确认命令是否匹配” 的标记。
  */
@@ -417,7 +434,7 @@ function withAcceptMatch(shown, acceptCommand) {
         acceptCommandMatched: matchesAcceptCommand(acceptCommand, shown),
       };
 }
-//@ chunk-12wyw8h8.js:6945-7087 placement
+//@ chunk-h30gsc89.js:3760-3900 placement
 async function entryHelperTarget(helper, pluginId, storageV5) {
   return {
     kind: "entry_helper",
@@ -427,7 +444,7 @@ async function entryHelperTarget(helper, pluginId, storageV5) {
     catalogRevision: await marketplaceRevision(pluginId, storageV5),
   };
 }
-//@ chunk-12wyw8h8.js:7087-7816 placement
+//@ chunk-h30gsc89.js:3900-4626 placement
 /**
  * 计算插件所在市场的版本标识，用于确认后的安装比对：git 检出取 HEAD 提交，GCS 种子取记录的摘要，settings 来源结合清单与来源内容的哈希，其余为清单哈希；无法确定时返回随机 unreadable 值。
  */
@@ -468,13 +485,13 @@ async function marketplaceRevision(pluginId, storageV5) {
       }
     }
     return entry.source.source === "settings"
-      ? `settings:${getUserBucket([await marketplaceManifestHash(installLocation), canonicalForm(entry.source)])}`
+      ? `settings:${hashUserId([await marketplaceManifestHash(installLocation), canonicalForm(entry.source)])}`
       : `sha256:${await marketplaceManifestHash(installLocation)}`;
   } catch {
     return unreadable;
   }
 }
-//@ chunk-12wyw8h8.js:7816-8193 placement
+//@ chunk-h30gsc89.js:4626-5002 placement
 /**
  * 计算插件市场清单的规范化哈希：读取 .claude-plugin/marketplace.json（或文件本身）与 package.json，键排序后取 sha256。
  */
@@ -505,7 +522,11 @@ async function marketplaceManifestHash(installLocation) {
     )
     .digest("hex");
 }
-//@ chunk-12wyw8h8.js:8261-8420 placement
+//@ chunk-h30gsc89.js:5002-5070 layout
+function hashUserId(userId) {
+  return createHash("sha256").update(jsonStringify(userId), "utf8").digest("hex");
+}
+//@ chunk-h30gsc89.js:5070-5229 placement
 function canonicalForm(value) {
   if (Array.isArray(value)) return ["[", ...value.map(canonicalForm)];
   if (value !== null && typeof value === "object")
@@ -517,7 +538,7 @@ function canonicalForm(value) {
     ];
   return value;
 }
-//@ chunk-12wyw8h8.js:8420-8486 placement
+//@ chunk-h30gsc89.js:5229-5294 placement
 /**
  * 判断确认命令是否与摘要匹配。
  */
@@ -526,7 +547,7 @@ function matchesAcceptCommand(acceptCommand, shown) {
     acceptCommand !== undefined && acceptCommand.trim().toLowerCase() === installConfirmationDigest(shown)
   );
 }
-//@ chunk-12wyw8h8.js:8486-8631 placement
+//@ chunk-h30gsc89.js:5294-5439 placement
 async function writePluginResult(result) {
   let output =
     result.failureCode !== undefined && UNCONFIRMED_INSTALL_CODES.has(result.failureCode)
@@ -546,12 +567,12 @@ async function writePluginResult(result) {
 `,
   );
 }
-//@ chunk-12wyw8h8.js:8631-8678 placement
+//@ chunk-h30gsc89.js:5439-5486 placement
 /**
  * 保存结果 nonce 的槽位。
  */
 var resultNonce; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-12wyw8h8.js:8631", () => {
+deferInit("chunk-h30gsc89.js:5439", () => {
   resultNonce = identity(
     {
       value: undefined,
@@ -561,21 +582,21 @@ deferInit("chunk-12wyw8h8.js:8631", () => {
     },
   );
 });
-//@ chunk-12wyw8h8.js:8678-8708 placement
+//@ chunk-h30gsc89.js:5486-5516 placement
 /**
  * 读取结果 nonce。
  */
 function readResultNonce() {
   return resultNonce.value;
 }
-//@ chunk-12wyw8h8.js:8708-8802 placement
+//@ chunk-h30gsc89.js:5516-5610 placement
 function readResultNonce_2() {
   resultNonce.value = env.CLAUDE_CODE_RESULT_NONCE || undefined;
   env.unset("CLAUDE_CODE_RESULT_NONCE");
 }
-//@ chunk-12wyw8h8.js:8802-8922 placement
+//@ chunk-h30gsc89.js:5610-5730 placement
 var UNCONFIRMED_INSTALL_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-12wyw8h8.js:8802", () => {
+deferInit("chunk-h30gsc89.js:5610", () => {
   UNCONFIRMED_INSTALL_CODES = new Set([
     "command_source_refused",
     "command_source_declined",
@@ -583,7 +604,7 @@ deferInit("chunk-12wyw8h8.js:8802", () => {
     "entry_helper_declined",
   ]);
 });
-//@ chunk-12wyw8h8.js:8922-9121 layout
+//@ chunk-h30gsc89.js:5730-5928 layout
 function getPluginCommandFailureCode(error, command) {
   if (error instanceof PluginOperationFailedError) return error.result.failureCode ?? "op_failed";
   if (error instanceof CommandSourceError && command === "update") {
@@ -593,7 +614,7 @@ function getPluginCommandFailureCode(error, command) {
   }
   return classifyPluginCommandError(error);
 }
-//@ chunk-12wyw8h8.js:9121-9248 layout
+//@ chunk-h30gsc89.js:5928-6055 layout
 /**
  * 把插件命令错误归类为遥测 failureCode（插件操作错误码、claudeai_*、error_*）。
  */
@@ -602,11 +623,11 @@ function classifyPluginCommandError(error) {
   if (error instanceof ClaudeAiMarketplaceError) return `claudeai_${error.code}`;
   return `error_${snakeCaseDashes(classifyPluginCommandError_2(error))}`;
 }
-//@ chunk-12wyw8h8.js:9248-9292 layout
+//@ chunk-h30gsc89.js:6055-6099 layout
 function snakeCaseDashes(text) {
   return text.replaceAll("-", "_");
 }
-//@ chunk-12wyw8h8.js:9292-10539 layout
+//@ chunk-h30gsc89.js:6099-7346 layout
 var FAILURE_CODE_CATEGORY = {
   invalid_plugin_id: "validation",
   plugin_folder_held: "validation",
@@ -639,14 +660,14 @@ var UNCLASSIFIED_COMMAND_FAILURE = {
   update: "claude plugin update failed with an unclassified error",
   prune: "claude plugin prune failed with an unclassified error",
 };
-//@ chunk-12wyw8h8.js:10539-10606 layout
+//@ chunk-h30gsc89.js:7346-7413 layout
 function appendLines(message, extraLines) {
   return extraLines.length === 0
     ? message
     : [message.trimEnd(), ...extraLines].join(`
 `);
 }
-//@ chunk-12wyw8h8.js:10606-12383 fingerprint (2.1.88 match: handlePluginCommandError, 0.387)
+//@ chunk-h30gsc89.js:7413-9247 fingerprint (2.1.88 match: handlePluginCommandError, 0.383)
 /**
  * CLI 插件子命令的统一错误处理：打 tengu_plugin_command_failed 遥测（命令、作用域、failureCode 分类），JSON 模式输出结构化结果，否则打印错误并以非零退出。
  */
@@ -659,6 +680,8 @@ async function handlePluginCommandError(
   aliasedId,
   extraLines = [],
 ) {
+  if (command === "install" && shownContext === undefined && process.stdout.isTTY)
+    waitForOAuthRefreshUntilDeadlineAtExit(false);
   let failureCode = error instanceof PluginOperationFailedError ? error.result.failureCode : undefined;
   let errorKind = classifyPluginCommandError_2(error);
   let category =
@@ -757,7 +780,7 @@ async function handlePluginCommandError(
   });
   return exitAfterAnalyticsFlush(1);
 }
-//@ chunk-12wyw8h8.js:12383-13252 layout
+//@ chunk-h30gsc89.js:9247-10116 layout
 function applyConfigFlags(pairs, configFields, prefix = "") {
   let values = {};
   for (let pair of pairs) {
@@ -797,7 +820,7 @@ function applyConfigFlags(pairs, configFields, prefix = "") {
     );
   return values;
 }
-//@ chunk-12wyw8h8.js:13252-14713 layout
+//@ chunk-h30gsc89.js:10116-11587 layout
 /**
  * claude plugin install --config key=value：安装后重新加载插件，按 manifest.userConfig 校验并保存这些选项。
  */
@@ -891,7 +914,7 @@ async function configurePluginFromFlags(pluginArg, configArgs, storageV5) {
   return notes.join(`
 `);
 }
-//@ chunk-12wyw8h8.js:14713-15879 layout
+//@ chunk-h30gsc89.js:11587-12752 layout
 /**
  * 安装 command 来源插件前展示将运行的命令并征得同意（-y/--yes 或 --accept-command）；策略禁用 command 来源时直接拒绝。
  */
@@ -959,7 +982,7 @@ async function confirmCommandSourceInstall(
         }
       : undefined;
 }
-//@ chunk-12wyw8h8.js:15879-16965 layout
+//@ chunk-h30gsc89.js:12752-13838 layout
 async function promptAcceptCommand({ yes = false, acceptCommand, shown, disclosure = "" }) {
   let isTTY = process.stdout.isTTY && process.stdin.isTTY;
   if (yes || (shown !== undefined && matchesAcceptCommand(acceptCommand, shown))) {
@@ -997,7 +1020,7 @@ async function promptAcceptCommand({ yes = false, acceptCommand, shown, disclosu
     ? "accepted"
     : "declined";
 }
-//@ chunk-12wyw8h8.js:16965-17513 layout
+//@ chunk-h30gsc89.js:13838-14385 layout
 /**
  * 解析 install 目标：补全市场名并取 marketplace 条目，供展示 command/headersHelper 披露。
  */
@@ -1031,7 +1054,7 @@ async function resolveInstallTarget(pluginArg, options = {}, storageV5) {
   });
   return answer === "accepted" ? helperSpec : answer;
 }
-//@ chunk-12wyw8h8.js:17513-18894 layout
+//@ chunk-h30gsc89.js:14385-15766 layout
 /**
  * 已安装插件的市场条目改成 command 来源时，检查并提示需要显式同意后再更新。
  */
@@ -1117,7 +1140,7 @@ async function checkCommandSourceSwitch(pluginArg, options = {}, storageV5) {
     storageV5,
   });
 }
-//@ chunk-12wyw8h8.js:18894-20371 callgraph-fingerprint (2.1.88 match: installPlugin, 0.272)
+//@ chunk-h30gsc89.js:15766-17243 callgraph-fingerprint (2.1.88 match: installPlugin, 0.273)
 /**
  * claude plugin install：调用 installPluginOp，打印结果与依赖/警告，记 tengu_plugin_installed_cli。
  */
@@ -1232,7 +1255,7 @@ async function installPlugin(
     );
   }
 }
-//@ chunk-12wyw8h8.js:20371-20524 layout
+//@ chunk-h30gsc89.js:17243-17396 layout
 async function findOrphanedAutoInstalls(scope, storageV5) {
   let projectPathForScope = getProjectPathForScope(scope);
   let { enabled, disabled } = await loadAllPluginsCacheOnly(isStorageV5Enabled() ? storageV5 : undefined);
@@ -1246,7 +1269,7 @@ async function findOrphanedAutoInstalls(scope, storageV5) {
     projectPathForScope,
   );
 }
-//@ chunk-12wyw8h8.js:20524-20975 layout
+//@ chunk-h30gsc89.js:17396-17847 layout
 /**
  * 把 CLI 参数里的插件名解析成实际插件 ID（别名、已安装副本），返回 {plugin, aliased}。
  */
@@ -1288,7 +1311,7 @@ async function resolvePluginArgument(
     aliased: false,
   };
 }
-//@ chunk-12wyw8h8.js:20975-22074 fingerprint (2.1.88 match: uninstallPlugin, 0.306)
+//@ chunk-h30gsc89.js:17847-18946 fingerprint (2.1.88 match: uninstallPlugin, 0.306)
 /**
  * claude plugin uninstall：解析插件名，调用 uninstallPluginOp，记 tengu_plugin_uninstalled_cli。
  */
@@ -1392,7 +1415,7 @@ ${pruneNote}`);
     );
   }
 }
-//@ chunk-12wyw8h8.js:22074-22244 layout
+//@ chunk-h30gsc89.js:18946-19116 layout
 /**
  * claude plugin prune：找出作用域内不再被任何插件依赖的自动安装（auto）插件并卸载（可 --dry-run）。
  */
@@ -1413,7 +1436,7 @@ async function prunePluginsCli(scope = "user", { dryRun = false, yes = false } =
     return handlePluginCommandError(error, "prune");
   }
 }
-//@ chunk-12wyw8h8.js:22244-23480 layout
+//@ chunk-h30gsc89.js:19116-20352 layout
 async function pruneOrphanedPlugins(orphanedAutoInstalls, scope, options, storageV5) {
   if (orphanedAutoInstalls.unloadable.length > 0)
     return `Skipped \u2014 cannot determine orphans: ${orphanedAutoInstalls.unloadable.map(stripInvisibleKeepEmoji).join(", ")} failed to load. Fix or uninstall, then retry.`;
@@ -1462,7 +1485,7 @@ Not a TTY \u2014 run \`claude plugin prune${scopeFlag} -y\` to remove.`;
   });
   return `Removed ${removed.length} auto-installed ${plural(removed.length, "plugin", "plugins")}: ${removed.map((pluginId) => stripInvisibleKeepEmoji(parsePluginIdentifier(pluginId).name)).join(", ")}`;
 }
-//@ chunk-12wyw8h8.js:23480-24055 fingerprint (2.1.88 match: disablePlugin, 0.565)
+//@ chunk-h30gsc89.js:20352-20927 fingerprint (2.1.88 match: disablePlugin, 0.565)
 /**
  * claude plugin disable：调用 disablePluginOp 并输出结果。
  */
@@ -1516,7 +1539,7 @@ async function disablePlugin(pluginArg, scope, storageV5, options = {}) {
     );
   }
 }
-//@ chunk-12wyw8h8.js:24055-24375 fingerprint (2.1.88 match: disableAllPlugins, 0.738)
+//@ chunk-h30gsc89.js:20927-21247 fingerprint (2.1.88 match: disableAllPlugins, 0.738)
 /**
  * claude plugin disable --all：禁用全部可禁用插件（组织要求的插件除外）。
  */
@@ -1543,7 +1566,7 @@ async function disableAllPlugins(storageV5, options = {}) {
     );
   }
 }
-//@ chunk-12wyw8h8.js:24375-26148 fingerprint (2.1.88 match: updatePluginCli, 0.378)
+//@ chunk-h30gsc89.js:21247-23019 fingerprint (2.1.88 match: updatePluginCli, 0.378)
 /**
  * claude plugin update：检查并更新插件（显式模式，处理 headersHelper/command 来源确认），输出版本变化。
  */
@@ -1694,4 +1717,5 @@ export {
   disablePlugin,
   updatePluginCli,
   readResultNonce_2,
+  describeMcpbSourceError,
 };

@@ -1,13 +1,13 @@
 /**
  * @opentelemetry/sdk-trace-base/build/src/Span.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-trace-base@2.2.0
- * pieces: chunk-9vvvg0d3.js (1)
+ * pieces: chunk-3wgj3rdg.js (1)
  * attribution: esm-fingerprint 1
  */
 import { import_api_3, import_core_5, import_error, EXCEPTION } from "../esm/enums.js";
 
-//@ chunk-9vvvg0d3.js:5947-10999 esm-fingerprint
+//@ chunk-3wgj3rdg.js:6319-11371 esm-fingerprint
 /**
  * OpenTelemetry Span 实现类（第三方代码误归到 filePersistence）。
  */

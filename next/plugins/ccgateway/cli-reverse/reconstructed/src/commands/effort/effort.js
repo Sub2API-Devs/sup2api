@@ -3,10 +3,10 @@
  *
  * 并入旧版已有路径：/effort 命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/effort/effort.tsx
- * pieces: chunk-3rwvzn82.js (2), chunk-kcvmr83c.js (17), chunk-mtkg11k6.js (1)
- * attribution: callgraph-witnessed 1, fingerprint 6, placement 8, layout 5
+ * pieces: chunk-1mh58gcg.js (1), chunk-5dqwe9kx.js (17), chunk-n2cdp9nk.js (2)
+ * attribution: placement 8, layout 5, fingerprint 6, callgraph-witnessed 1
  */
 import { getMainLoopModel } from "../../utils/model/model.js";
 import {
@@ -47,7 +47,7 @@ import { selectUltracode, EffortCommand } from "../../components/EffortSlider.js
 import { useMainLoopModel } from "../../hooks/useMainLoopModel.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 
-//@ chunk-kcvmr83c.js:518-858 placement
+//@ chunk-5dqwe9kx.js:518-858 placement
 /**
  * ultracode 功能的说明文本集合（开关帮助行与会话内开启提示）。
  */
@@ -59,11 +59,11 @@ var EFFORT_LEVEL_DESCRIPTIONS = {
   max: "Maximum capability with deepest reasoning (on supported models)",
 };
 var ULTRACODE_DESCRIPTION = "dynamic workflows on every task";
-//@ chunk-kcvmr83c.js:858-931 placement
+//@ chunk-5dqwe9kx.js:858-931 placement
 function AUTO_EFFORT_DESCRIPTION() {
   return "- auto: Use the default effort level for your model";
 }
-//@ chunk-kcvmr83c.js:931-1198 placement
+//@ chunk-5dqwe9kx.js:931-1198 placement
 function getEffortUsage() {
   let mainLoopModel = getMainLoopModel();
   let ultracodeAvailable = isUltracodeAvailable(mainLoopModel);
@@ -88,30 +88,30 @@ Ultracode (any effort level, this session only):
       : "")
   );
 }
-//@ chunk-kcvmr83c.js:1198-1293 layout
+//@ chunk-5dqwe9kx.js:1198-1293 layout
 function formatValidEffortOptions(model) {
   let allowedEffortLevels = getAllowedEffortLevels(model);
   let ultracodeHint = isUltracodeAvailable(model) ? ", ultracode [on|off]" : "";
   return `${allowedEffortLevels.join(", ")}, auto${ultracodeHint}`;
 }
-//@ chunk-kcvmr83c.js:1293-1382 fingerprint (2.1.88 match: ApplyEffortAndClose, 0.364)
+//@ chunk-5dqwe9kx.js:1293-1382 fingerprint (2.1.88 match: ApplyEffortAndClose, 0.364)
 function ApplyEffortAndClose({ effortUpdate }) {
   return (
     effortUpdate !== undefined && effortUpdate.ultracode === undefined && effortUpdate.value === undefined
   );
 }
-//@ chunk-kcvmr83c.js:1781-1821 placement
+//@ chunk-5dqwe9kx.js:1781-1821 placement
 /**
  * ultracode 开关是否可用（远程控制会话且某条件下）。
  */
 function isUltracodeToggleAvailable() {
   return getRemoteCaps() !== null && isRemoteControlChannelAvailable();
 }
-//@ chunk-kcvmr83c.js:1821-1880 placement
+//@ chunk-5dqwe9kx.js:1821-1880 placement
 function readUltracodeConfirmed(config) {
   return isUltracodeToggleAvailable() ? (config.ultracodeConfirmed ?? false) : undefined;
 }
-//@ chunk-kcvmr83c.js:1880-2188 placement
+//@ chunk-5dqwe9kx.js:1880-2188 placement
 /**
  * 远程会话中把 effort 等级转发给远端：不支持控制请求时走 apply_flag_settings 转发，否则发送控制请求设置 effortLevel，需要时再开启 ultracode。
  */
@@ -144,7 +144,7 @@ function forwardEffortToRemote(effortLevel, ultracodeConfirmed) {
     .catch(logError);
   return null;
 }
-//@ chunk-kcvmr83c.js:2188-3672 fingerprint (2.1.88 match: setEffortValue, 0.66)
+//@ chunk-5dqwe9kx.js:2188-3672 fingerprint (2.1.88 match: setEffortValue, 0.66)
 async function setEffortValue(effortLevel, state, shouldPersist, ultracodeConfirmed, options) {
   let model = getMainLoopModel();
   let level = typeof effortLevel === "string" ? clampEffortToCap(effortLevel, model) : effortLevel;
@@ -216,12 +216,12 @@ async function setEffortValue(effortLevel, state, shouldPersist, ultracodeConfir
     },
   };
 }
-//@ chunk-kcvmr83c.js:3672-3737 layout
+//@ chunk-5dqwe9kx.js:3672-3737 layout
 function effectiveEffortOverride(model) {
   let envOverride = getRemoteCaps() ? undefined : getEffortEnvOverride();
   return envOverride === null ? undefined : (envOverride ?? model);
 }
-//@ chunk-kcvmr83c.js:3737-3843 layout
+//@ chunk-5dqwe9kx.js:3737-3843 layout
 /**
  * 判断是否把 effort 保存为默认值：要求以默认值方式设置，且等级有变化或模型带有可沿用的 effort。
  */
@@ -231,7 +231,7 @@ function shouldSaveEffortDefault({ asDefault, levelChanged, chosen, model }) {
     (levelChanged || effectiveEffortOverride(chosen) !== undefined || carriedEffortOnly(model) === undefined)
   );
 }
-//@ chunk-kcvmr83c.js:3843-4201 fingerprint (2.1.88 match: showCurrentEffort, 0.571)
+//@ chunk-5dqwe9kx.js:3843-4201 fingerprint (2.1.88 match: showCurrentEffort, 0.571)
 function showCurrentEffort(currentLevel, model, ultracode) {
   let ultracodeSuffix = isUltracodeActive(ultracode, model) ? " \xB7 Ultracode on" : "";
   let effectiveValue = effectiveEffortOverride(currentLevel);
@@ -254,7 +254,7 @@ function showCurrentEffort(currentLevel, model, ultracode) {
     message: `Current effort level: ${effortValueToString(effectiveValue)} (${description})${ultracodeSuffix}`,
   };
 }
-//@ chunk-kcvmr83c.js:4201-4979 fingerprint (2.1.88 match: unsetEffortLevel, 0.605)
+//@ chunk-5dqwe9kx.js:4201-4979 fingerprint (2.1.88 match: unsetEffortLevel, 0.605)
 async function unsetEffortLevel(state, shouldPersist, ultracodeConfirmed, options) {
   ultracodeConfirmed?.({
     value: undefined,
@@ -295,7 +295,7 @@ async function unsetEffortLevel(state, shouldPersist, ultracodeConfirmed, option
     },
   };
 }
-//@ chunk-kcvmr83c.js:4979-5617 layout
+//@ chunk-5dqwe9kx.js:4979-5617 layout
 function setUltracode(ultracodeArg, state, options) {
   let mainLoopModel = getMainLoopModel();
   if (ultracodeArg && !isUltracodeAvailable())
@@ -332,14 +332,14 @@ function setUltracode(ultracodeArg, state, options) {
     },
   };
 }
-//@ chunk-kcvmr83c.js:5617-5758 layout
+//@ chunk-5dqwe9kx.js:5617-5758 layout
 function parseUltracodeArg(normalized) {
   let [first, second, ...rest] = normalized.split(/\s+/);
   if (first !== "ultracode" || rest.length > 0) return;
   if (second === undefined || second === "on") return true;
   return second === "off" ? false : undefined;
 }
-//@ chunk-kcvmr83c.js:5758-5988 fingerprint (2.1.88 match: executeEffort, 0.503)
+//@ chunk-5dqwe9kx.js:5758-5988 fingerprint (2.1.88 match: executeEffort, 0.503)
 async function executeEffort(state, shouldPersist, ultracodeConfirmed = true, options, appState) {
   let normalized = state.toLowerCase();
   if (getEffortEnvOverride_2(state))
@@ -353,7 +353,7 @@ async function executeEffort(state, shouldPersist, ultracodeConfirmed = true, op
     };
   return setEffortValue(effortLevel, shouldPersist, ultracodeConfirmed, options, appState);
 }
-//@ chunk-kcvmr83c.js:5988-6565 placement
+//@ chunk-5dqwe9kx.js:5988-6565 placement
 async function applyEffortCommand(state, shouldPersist, setAppState, ultracodeConfirmed = true, appState) {
   let succeeded = false;
   let result = null;
@@ -399,7 +399,7 @@ async function applyEffortCommand(state, shouldPersist, setAppState, ultracodeCo
     });
   return outcome;
 }
-//@ chunk-mtkg11k6.js:3663-4202 placement
+//@ chunk-1mh58gcg.js:3971-4510 placement
 /**
  * /effort 命令：help 显示用法，current/status 显示当前等级，无参数显示可选等级，否则解析等级（含 auto、ultracode on/off）并应用。
  */
@@ -443,7 +443,7 @@ async function effortCommandCall(args, context) {
     ).message,
   };
 }
-//@ chunk-3rwvzn82.js:14905-14998 callgraph-witnessed (2.1.88 match: ShowCurrentEffort, 1)
+//@ chunk-n2cdp9nk.js:16055-16148 callgraph-witnessed (2.1.88 match: ShowCurrentEffort, 1)
 function ShowCurrentEffort(t0) {
   let { onDone } = t0;
   let currentLevel = useQueuedMessageText();
@@ -453,7 +453,7 @@ function ShowCurrentEffort(t0) {
   onDone(message);
   return null;
 }
-//@ chunk-3rwvzn82.js:32635-32873 fingerprint (2.1.88 match: call, 0.89)
+//@ chunk-n2cdp9nk.js:33778-34016 fingerprint (2.1.88 match: call, 0.889)
 /**
  * /effort 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -480,6 +480,6 @@ export {
   isUltracodeToggleAvailable,
   shouldSaveEffortDefault,
   ULTRACODE_DESCRIPTION,
-  call,
   effortCommandCall,
+  call,
 };

@@ -1,8 +1,8 @@
 /**
  * @aws-crypto/sha256-js/build/module/jsSha256.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-crypto/sha256-js@5.2.0
- * pieces: chunk-cdckcchh.js (2)
+ * pieces: chunk-er1d5ga0.js (2)
  * attribution: esm-fingerprint 2
  */
 import { RawSha256 } from "./RawSha256.js";
@@ -11,7 +11,7 @@ import { convertToBuffer } from "../../../util/build/convertToBuffer.js";
 import { __awaiter, __generator } from "../../../../tslib/tslib.es6.mjs";
 import { SHA256_BLOCK_SIZE } from "./constants.js";
 
-//@ chunk-cdckcchh.js:2960-3736 esm-fingerprint
+//@ chunk-er1d5ga0.js:2960-3736 esm-fingerprint
 /**
  * 第三方 HMAC/SHA-256 封装（secret 存在时为 HMAC）。应归 vendor。
  */
@@ -62,7 +62,7 @@ var Sha256 = (function () {
   };
   return Sha256;
 })();
-//@ chunk-cdckcchh.js:3736-3861 esm-fingerprint
+//@ chunk-er1d5ga0.js:3736-3861 esm-fingerprint
 /**
  * HMAC 密钥规整到块大小（长密钥先哈希）。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：code-review 技能的清理类审查角度（复用、简化、效率）提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hantmvxa.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ne2890fx.js (2)
  * attribution: placement 2
  */
 import { STAGES } from "../../components/tasks/RemoteSessionDetailDialog.js";
@@ -22,7 +22,7 @@ import {
 } from "./reviewAngles.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hantmvxa.js:68578-76198 placement
+//@ chunk-ne2890fx.js:68752-76372 placement
 /**
  * 代码评审的清理类角度（Reuse、removed-behavior、cross-file 等）与最小化评审提示词。
  */
@@ -35,7 +35,7 @@ var REVIEW_ANGLE_E;
 var REVIEW_MINIMAL_PROMPT;
 var REVIEW_ANGLE_H;
 var REVIEW_ANGLE_I;
-deferInit("chunk-hantmvxa.js:68578", () => {
+deferInit("chunk-ne2890fx.js:68752", () => {
   REVIEW_REUSE_ANGLE = `### Reuse
 
 The angles above hunt for bugs; this one and the next two hunt for cleanup in
@@ -217,13 +217,13 @@ the list. If nothing new, return nothing from this phase \u2014 do not pad.
 ${REVIEW_REMOVED_BEHAVIOR_ANGLE(promptBuilder, 15)(findingCap)}`;
   REVIEW_ANGLE_I = REVIEW_ANGLE_H;
 });
-//@ chunk-hantmvxa.js:76198-77878 placement
+//@ chunk-ne2890fx.js:76372-78052 placement
 /**
  * 代码评审的最小提示词：单次 diff 审阅 + 指定阶段数，用于小改动快速评审。
  */
 var buildMinimalReviewPrompt; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MINIMAL_REVIEW_PROMPT;
-deferInit("chunk-hantmvxa.js:76198", () => {
+deferInit("chunk-ne2890fx.js:76372", () => {
   buildMinimalReviewPrompt = (
     findingCap = 15,
   ) => `\`minimal prompt \u2192 single careful diff pass \u2192 ${STAGES(findingCap)}\`

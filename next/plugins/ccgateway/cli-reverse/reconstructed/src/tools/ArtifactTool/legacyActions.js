@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：旧版动作兼容
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p98twse2.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s321jzex.js (7)
  * attribution: placement 7
  */
 import { STALE_GUARD_CONTENT_HEADER_LINE_RE, ArtifactInputError } from "./constants.js";
@@ -33,7 +33,7 @@ import { formatRuleForDisplay } from "./permissions/artifactPermissionRules.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum, lit } from "../../services/analytics/safeMetadata.js";
 
-//@ chunk-p98twse2.js:21411-22170 placement
+//@ chunk-s321jzex.js:21435-22194 placement
 /**
  * 把旧动作名（upload_asset、read_file、list_files、describe_type、copy_from 等）改写为新拼法（publish asset:true、read path、list scope 等）的替换规则。
  */
@@ -50,7 +50,7 @@ var LEGACY_ACTION_RESPELLINGS = [
   [/`asset_id`/g, "`path` (the asset id)"],
   [/\basset_id\b/g, "path (the asset id)"],
 ];
-//@ chunk-p98twse2.js:22170-22300 placement
+//@ chunk-s321jzex.js:22194-22324 placement
 function respellLegacyActions(message) {
   let match = STALE_GUARD_CONTENT_HEADER_LINE_RE.exec(message);
   let cutIndex = match === null ? message.length : match.index;
@@ -58,13 +58,13 @@ function respellLegacyActions(message) {
   for (let [pattern, replacement] of LEGACY_ACTION_RESPELLINGS) sliced = sliced.replace(pattern, replacement);
   return sliced + message.slice(cutIndex);
 }
-//@ chunk-p98twse2.js:22300-22404 placement
+//@ chunk-s321jzex.js:22324-22428 placement
 function omitAction(input) {
   if (typeof input !== "object" || input === null || !("action" in input)) return input;
   let { action, ...rest } = input;
   return rest;
 }
-//@ chunk-p98twse2.js:22404-22487 placement
+//@ chunk-s321jzex.js:22428-22511 placement
 /**
  * 把旧动作相关的拒绝文案改写后返回。
  */
@@ -76,7 +76,7 @@ function respellLegacyDenial(decision) {
       }
     : decision;
 }
-//@ chunk-p98twse2.js:22487-23430 placement
+//@ chunk-s321jzex.js:22511-23454 placement
 /**
  * 旧版工具集中不可用动作的说明文案（删整个 Artifact、读/删资源、按路径读文件、读类型详情、复制资源），以及额外允许的输入键 body。
  */
@@ -95,7 +95,7 @@ var LEGACY_ACTION_UNAVAILABLE = {
     "copying another artifact's assets (`from_url`) is not available in this session \u2014 `asset: true` here takes a local `file_path` to upload",
 };
 var LEGACY_EXTRA_KEYS = new Set(["body"]);
-//@ chunk-p98twse2.js:23430-23583 placement
+//@ chunk-s321jzex.js:23454-23607 placement
 function legacyActionRefusal(action) {
   let name = action ?? "publish";
   if (zodEnumFieldIncludes(inputSchema().shape.action, name)) return null;
@@ -103,7 +103,7 @@ function legacyActionRefusal(action) {
     ? LEGACY_ACTION_UNAVAILABLE[name]
     : `action "${name}" is not available in this session`;
 }
-//@ chunk-p98twse2.js:23583-26618 placement
+//@ chunk-s321jzex.js:23607-26642 placement
 function adaptLegacyArtifactTool(artifactToolCore, toolCore = {}) {
   let isSplit = isArtifactToolsetSplit;
   let core = artifactToolCore;

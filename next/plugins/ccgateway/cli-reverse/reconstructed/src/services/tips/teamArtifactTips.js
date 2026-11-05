@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。团队 Artifact 提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vjr65ep9.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-byepptkv.js (12)
  * attribution: placement 12
  */
 import {
@@ -26,11 +26,11 @@ import { is1PEventLoggingEnabled } from "../analytics/firstPartyEventLogger.js";
 import { logFeatureOk } from "../analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vjr65ep9.js:504-558 placement
+//@ chunk-byepptkv.js:537-591 placement
 var TEAM_ARTIFACT_DIRS = [".claude/skills", ".claude/commands"];
 var MAX_TEAM_ARTIFACT_OVERFLOW = 3;
 var TEAM_ARTIFACT_HISTORY_LIMIT = 100;
-//@ chunk-vjr65ep9.js:558-981 placement
+//@ chunk-byepptkv.js:591-1014 placement
 /**
  * 解析 .claude/ 下的团队产物路径：skills/<名>/SKILL.md 为技能，commands/…/*.md（或 …/skill.md）为命令（子目录用冒号连接）；其他返回 null。
  */
@@ -64,7 +64,7 @@ function parseTeamArtifactPath(relativePath) {
       return null;
   }
 }
-//@ chunk-vjr65ep9.js:981-2549 placement
+//@ chunk-byepptkv.js:1014-2582 placement
 class TeamArtifactScanner {
   inFlight = undefined;
   resolved = undefined;
@@ -180,22 +180,22 @@ class TeamArtifactScanner {
     return artifacts;
   }
 }
-//@ chunk-vjr65ep9.js:2549-2573 placement
+//@ chunk-byepptkv.js:2582-2606 placement
 /**
  * 按会话保存的团队产物扫描器。
  */
 var teamArtifactScannerSlots; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-vjr65ep9.js:2549", () => {
+deferInit("chunk-byepptkv.js:2582", () => {
   teamArtifactScannerSlots = new SessionRootSlot(() => new TeamArtifactScanner());
 });
-//@ chunk-vjr65ep9.js:2573-2611 placement
+//@ chunk-byepptkv.js:2606-2644 placement
 /**
  * 查找某技能/命令的队友作者（团队 artifact 提示用）。
  */
 function teammateAuthorOfSkill(session, storageV5) {
   return teamArtifactScannerSlots.of(session).get(storageV5);
 }
-//@ chunk-vjr65ep9.js:2611-2734 placement
+//@ chunk-byepptkv.js:2644-2767 placement
 /**
  * 团队 artifact 提示开启时，查找项目设置中某技能/命令的队友作者，否则返回 null。
  */
@@ -204,7 +204,7 @@ function getTeammateAuthor(session, source, path) {
     return null;
   return teamArtifactScannerSlots.of(session).teammateAuthorOf(path);
 }
-//@ chunk-vjr65ep9.js:2734-2863 placement
+//@ chunk-byepptkv.js:2767-2896 placement
 /**
  * 判断是否有未看过的团队 artifact（开启一方事件日志时顺便后台刷新列表）。
  */
@@ -213,7 +213,7 @@ function hasUnseenTeamArtifacts(session, storageV5) {
   if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_tussock_oriole", false)) return false;
   return getCurrentProjectConfig().hasUnseenTeamArtifacts === true;
 }
-//@ chunk-vjr65ep9.js:2863-3032 placement
+//@ chunk-byepptkv.js:2896-3065 placement
 /**
  * 列出不是当前用户创建且尚未看过的团队技能/命令。
  */
@@ -223,7 +223,7 @@ async function listUnseenTeamArtifacts(session, storageV5) {
   let seenPaths = new Set(getCurrentProjectConfig().seenTeamArtifactPaths ?? []);
   return artifacts.filter((artifact) => !artifact.byCurrentUser && !seenPaths.has(artifact.path));
 }
-//@ chunk-vjr65ep9.js:3032-3389 placement
+//@ chunk-byepptkv.js:3065-3422 placement
 /**
  * 把队友新增的技能/命令路径记为已看过（保留最近若干条）并清除"有未看团队产物"标记，无变化时不写配置。
  */
@@ -251,7 +251,7 @@ async function markTeamArtifactsSeen(session, storageV5) {
     };
   }, storageV5);
 }
-//@ chunk-vjr65ep9.js:3389-3606 placement
+//@ chunk-byepptkv.js:3422-3639 placement
 /**
  * 团队 artifact 提示展示时打点（技能、命令数量与超出显示的数量）。
  */
@@ -268,7 +268,7 @@ function logTeamArtifactTipShown(artifacts) {
     overflow_count: Math.max(0, artifacts.length - MAX_TEAM_ARTIFACT_OVERFLOW),
   });
 }
-//@ chunk-vjr65ep9.js:3606-3738 placement
+//@ chunk-byepptkv.js:3639-3771 placement
 /**
  * 生成使用项目设置中技能/命令时的归因字段：是否是通过团队提示发现的。
  */
@@ -280,7 +280,7 @@ function getTeamTipAttribution(source, skillName) {
     ),
   };
 }
-//@ chunk-vjr65ep9.js:3738-4038 placement
+//@ chunk-byepptkv.js:3771-4071 placement
 /**
  * 生成"团队新增"提示：列出队友新增的若干技能/命令（/名 (作者)），超出部分写"plus N more"。
  */
@@ -294,11 +294,11 @@ function formatTeamArtifactTip(artifacts) {
   return `New from your team: ${joined}${remainingCount > 0 ? `, plus ${remainingCount} more` : ""}`;
 }
 export {
-  getTeammateAuthor,
-  getTeamTipAttribution,
   listUnseenTeamArtifacts,
   logTeamArtifactTipShown,
   markTeamArtifactsSeen,
   formatTeamArtifactTip,
   hasUnseenTeamArtifacts,
+  getTeamTipAttribution,
+  getTeammateAuthor,
 };

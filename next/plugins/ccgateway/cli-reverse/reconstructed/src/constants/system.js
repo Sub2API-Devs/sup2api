@@ -3,10 +3,10 @@
  *
  * 系统提示词前缀与请求归属：三条身份行（CLI / Agent SDK 内的 CLI / Agent SDK 代理）及其选择 getCLISyspromptPrefix；计费归属头 x-anthropic-billing-header 文本（cc_version=版本.指纹、cc_entrypoint、cch、cc_prompt_id 等）及其开关；请求入口名（entrypoint）改写。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/constants/system.ts
- * pieces: chunk-3b05zaw0.js (17), chunk-w5ndchqs.js (3)
- * attribution: placement 3, callgraph-witnessed 1, layout 12, fingerprint 3, affinity 1
+ * pieces: chunk-7pwjpdkw.js (3), chunk-h5e9c4sr.js (17)
+ * attribution: fingerprint 3, layout 12, placement 3, callgraph-witnessed 1, affinity 1
  */
 import {
   isGatewayAuthPinned,
@@ -37,7 +37,7 @@ import { CLAUDE_AI_INFERENCE_SCOPE } from "./oauth.js";
 import { isEnvDefinedFalsy } from "../utils/envUtils.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3b05zaw0.js:529-600 placement
+//@ chunk-h5e9c4sr.js:530-601 placement
 /**
  * 网关计费头字段的条件之一：会话固定在网关（未 unpin）、JWT/ANTHROPIC_AUTH_TOKEN 的 aud 指向网关，或网关地址已确认。
  */
@@ -48,20 +48,20 @@ function hasGatewayIdentity(gatewayAuth) {
     noteGatewaySettled()
   );
 }
-//@ chunk-3b05zaw0.js:600-743 placement
+//@ chunk-h5e9c4sr.js:601-753 placement
 /**
  * 允许写进 cc_project_src 的项目来源（harness/user/project/local/flag/managed/admin_default）；Mns 为 claude_proj_ 项目 id 正则。
  */
 var ATTRIBUTION_PROJECT_SOURCES = ["harness", "user", "project", "local", "flag", "managed", "admin_default"];
-var ATTRIBUTION_PROJECT_ID_RE = /^claude_proj_(?:staging_|local_)?01[1-9A-HJ-NP-Za-km-z]{22}$/;
-//@ chunk-3b05zaw0.js:743-786 placement
+var ATTRIBUTION_PROJECT_ID_RE = /^(?:claude_proj|chan)_(?:staging_|local_)?01[1-9A-HJ-NP-Za-km-z]{22}$/;
+//@ chunk-h5e9c4sr.js:753-796 placement
 /**
  * 订阅用户且归属头可发（第一方直连、非远程、未关）。
  */
 function isSubscriberAttributionEligible(agentContext) {
   return agentContext.isSubscriber && canSendSubscriberAttribution();
 }
-//@ chunk-3b05zaw0.js:786-2921 callgraph-witnessed (2.1.88 match: getAttributionHeader, 0.295)
+//@ chunk-h5e9c4sr.js:796-2932 callgraph-witnessed (2.1.88 match: getAttributionHeader, 0.295)
 /**
  * 生成计费归属头文本 "x-anthropic-billing-header: cc_version=<版本>.<3位指纹>; cc_entrypoint=<入口>;"，按条件追加 cch=00000（第一方 OAuth 或 vertex，发送前由原生层替换）、cc_workload、cc_is_subagent、cc_prev_req、cc_prompt_id、cc_turn_origin、cc_prompt_index/cc_turn_index、cc_gateway、cc_project、cc_prev_msg 等字段；CLAUDE_CODE_ATTRIBUTION_HEADER 为假值时返回空串。
  */
@@ -82,10 +82,10 @@ function getAttributionHeader(
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION
@@ -165,12 +165,12 @@ function getAttributionHeader(
   logForDebugging(`attribution header ${header}`);
   return header;
 }
-//@ chunk-3b05zaw0.js:2921-2944 layout
+//@ chunk-h5e9c4sr.js:2932-2955 layout
 /**
  * "local_projects" 请求入口名。
  */
 var LOCAL_PROJECTS_ENTRYPOINT = "local_projects";
-//@ chunk-3b05zaw0.js:2944-3002 layout
+//@ chunk-h5e9c4sr.js:2955-3014 layout
 /**
  * 未设请求入口时把请求入口改成 local_projects。
  */
@@ -179,14 +179,14 @@ function useLocalProjectsEntrypoint() {
   setEntrypointOnRequests(LOCAL_PROJECTS_ENTRYPOINT);
   return true;
 }
-//@ chunk-3b05zaw0.js:3002-3041 layout
+//@ chunk-h5e9c4sr.js:3014-3054 layout
 /**
  * 撤销 local_projects 请求入口。
  */
 function clearLocalProjectsEntrypoint() {
   if (getEntrypointOnRequests() === LOCAL_PROJECTS_ENTRYPOINT) setEntrypointOnRequests(undefined);
 }
-//@ chunk-3b05zaw0.js:3041-3139 layout
+//@ chunk-h5e9c4sr.js:3054-3153 layout
 /**
  * CLAUDE_CODE_ENTRYPOINT=sdk-cli 且未设请求入口时改用另一入口名（ywr）。
  */
@@ -195,12 +195,12 @@ function applySdkCliEntrypointOverride() {
   setEntrypointOnRequests(CLI_ENTRYPOINT);
   return true;
 }
-//@ chunk-3b05zaw0.js:3139-3165 layout
+//@ chunk-h5e9c4sr.js:3153-3179 layout
 /**
  * "claude-desktop-3p"。
  */
 var CLAUDE_DESKTOP_3P_ENTRYPOINT = "claude-desktop-3p";
-//@ chunk-3b05zaw0.js:3165-3952 layout
+//@ chunk-h5e9c4sr.js:3179-3967 layout
 /**
  * 读 CLAUDE_CODE_ENTRYPOINT_ON_REQUESTS（仅当入口为 claude-desktop-3p，名字合法且非保留）作为请求上报的入口名，读后清除该变量。
  */
@@ -239,7 +239,7 @@ function applyEntrypointOnRequestsEnv() {
   }
   setEntrypointOnRequests(CLAUDE_CODE_ENTRYPOINT_ON_REQUESTS);
 }
-//@ chunk-3b05zaw0.js:3952-4036 layout
+//@ chunk-h5e9c4sr.js:3967-4051 layout
 /**
  * Anthropic 认证开启且 OAuth scope 含 user:inference。
  */
@@ -248,7 +248,7 @@ function hasInferenceScope(tokenScope) {
     tokenScope.anthropicAuthEnabled && Boolean(tokenScope.oauthScopes?.includes(CLAUDE_AI_INFERENCE_SCOPE))
   );
 }
-//@ chunk-3b05zaw0.js:4036-4164 layout
+//@ chunk-h5e9c4sr.js:4051-4179 layout
 /**
  * 订阅用户用 OAuth access token（authToken），否则用 apiKey。
  */
@@ -263,14 +263,14 @@ function getAuthCredentialsForClient(auth) {
     authToken: null,
   };
 }
-//@ chunk-3b05zaw0.js:4164-4242 layout
+//@ chunk-h5e9c4sr.js:4179-4257 layout
 /**
  * 整数且在 [min, 1e7] 内（用于 prompt/turn 序号校验）。
  */
 function isIntInRange(value, min) {
   return typeof value === "number" && Number.isInteger(value) && value >= min && value <= 1e7;
 }
-//@ chunk-3b05zaw0.js:4242-4314 layout
+//@ chunk-h5e9c4sr.js:4257-4329 layout
 /**
  * 第一方、默认 base URL、未设 ANTHROPIC_UNIX_SOCKET。
  */
@@ -279,29 +279,29 @@ function isFirstPartyDirectApi() {
     getAPIProvider() === "firstParty" && isActualFirstPartyAnthropicBaseUrl() && !env.ANTHROPIC_UNIX_SOCKET
   );
 }
-//@ chunk-3b05zaw0.js:4314-4367 layout
+//@ chunk-h5e9c4sr.js:4329-4382 layout
 /**
  * 第一方直连、非远程、归属头未关闭。
  */
 function canSendSubscriberAttribution() {
   return isFirstPartyDirectApi() && !env.CLAUDE_CODE_REMOTE && !isAttributionHeaderDisabled();
 }
-//@ chunk-3b05zaw0.js:4367-4434 fingerprint (2.1.88 match: isAttributionHeaderEnabled, 1)
+//@ chunk-h5e9c4sr.js:4382-4449 fingerprint (2.1.88 match: isAttributionHeaderEnabled, 1)
 /**
  * CLAUDE_CODE_ATTRIBUTION_HEADER 为假值（0/false/no/off）。旧版名 isAttributionHeaderEnabled 语义相反。
  */
 function isAttributionHeaderDisabled() {
   return isEnvDefinedFalsy(process.env.CLAUDE_CODE_ATTRIBUTION_HEADER);
 }
-//@ chunk-3b05zaw0.js:4434-4451 affinity
+//@ chunk-h5e9c4sr.js:4449-4466 affinity
 /**
  * 归属项目来源白名单的 Set。
  */
 var ATTRIBUTION_PROJECT_SOURCE_SET; // deferred: uses ATTRIBUTION_PROJECT_SOURCES of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-3b05zaw0.js:4434", () => {
+deferInit("chunk-h5e9c4sr.js:4449", () => {
   ATTRIBUTION_PROJECT_SOURCE_SET = new Set(ATTRIBUTION_PROJECT_SOURCES);
 });
-//@ chunk-w5ndchqs.js:2709-2972 fingerprint (2.1.88 match: DEFAULT_PREFIX, 0.5)
+//@ chunk-7pwjpdkw.js:2905-3169 fingerprint (2.1.88 match: DEFAULT_PREFIX, 0.5)
 /**
  * 身份行（system 第 2 块）："You are Claude Code, Anthropic's official CLI for Claude."；Ue 为 Agent SDK 内运行的 CLI 版本，Ie 为 "You are a Claude agent, built on Anthropic's Claude Agent SDK."；J 为三者集合。
  */
@@ -310,7 +310,7 @@ var AGENT_SDK_CLAUDE_CODE_PRESET_PREFIX;
 var AGENT_SDK_PREFIX;
 var CLI_SYSPROMPT_PREFIXES;
 var CLI_SYSPROMPT_PREFIX_SET;
-deferInit("chunk-w5ndchqs.js:2709", () => {
+deferInit("chunk-7pwjpdkw.js:2905", () => {
   DEFAULT_PREFIX = "You are Claude Code, Anthropic's official CLI for Claude.";
   AGENT_SDK_CLAUDE_CODE_PRESET_PREFIX =
     "You are Claude Code, Anthropic's official CLI for Claude, running within the Claude Agent SDK.";
@@ -318,14 +318,14 @@ deferInit("chunk-w5ndchqs.js:2709", () => {
   CLI_SYSPROMPT_PREFIXES = [DEFAULT_PREFIX, AGENT_SDK_CLAUDE_CODE_PRESET_PREFIX, AGENT_SDK_PREFIX];
   CLI_SYSPROMPT_PREFIX_SET = new Set(CLI_SYSPROMPT_PREFIXES);
 });
-//@ chunk-w5ndchqs.js:2972-3004 layout
+//@ chunk-7pwjpdkw.js:3169-3202 layout
 /**
  * 文本是否为三条身份行之一。
  */
 function isCliSyspromptPrefix(text) {
   return CLI_SYSPROMPT_PREFIX_SET.has(text);
 }
-//@ chunk-w5ndchqs.js:3004-3172 fingerprint (2.1.88 match: getCLISyspromptPrefix, 0.887)
+//@ chunk-7pwjpdkw.js:3202-3370 fingerprint (2.1.88 match: getCLISyspromptPrefix, 0.889)
 /**
  * 选择身份行：vertex 恒为 CLI 行；有录制值用录制值；非交互（-p/SDK）时有 --append-system-prompt 用 "running within the Claude Agent SDK" 行，否则用 "Claude agent, built on … Agent SDK" 行；交互用 CLI 行。
  */
@@ -339,16 +339,16 @@ function getCLISyspromptPrefix(options) {
   return DEFAULT_PREFIX;
 }
 export {
-  useLocalProjectsEntrypoint,
-  applyEntrypointOnRequestsEnv,
   getAttributionHeader,
   getCLISyspromptPrefix,
-  isCliSyspromptPrefix,
   hasInferenceScope,
-  getAuthCredentialsForClient,
+  applySdkCliEntrypointOverride,
+  useLocalProjectsEntrypoint,
+  applyEntrypointOnRequestsEnv,
+  isCliSyspromptPrefix,
   CLI_SYSPROMPT_PREFIX_SET,
   clearLocalProjectsEntrypoint,
+  getAuthCredentialsForClient,
   isSubscriberAttributionEligible,
   ATTRIBUTION_PROJECT_ID_RE,
-  applySdkCliEntrypointOverride,
 };

@@ -3,23 +3,23 @@
  *
  * 2.1.316 新增：钩子匹配器
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (5)
  * attribution: placement 5
  */
 import { SPLIT_TOOL_PARENT, SPLIT_TOOL_BY_ACTION } from "../../tools/ArtifactTool/constants.js";
 import { MONITOR } from "../../tools/MonitorTool/constants.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 
-//@ chunk-e6aww6q8.js:823360-823418 placement
+//@ chunk-5xgkngpb.js:834976-835034 placement
 /**
  * 查工具名的父工具映射（如 MCP 子工具归到父工具）。
  */
 function splitToolParentOf(toolName) {
   return Object.hasOwn(SPLIT_TOOL_PARENT, toolName) ? SPLIT_TOOL_PARENT[toolName] : undefined;
 }
-//@ chunk-e6aww6q8.js:823418-823552 placement
+//@ chunk-5xgkngpb.js:835034-835168 placement
 /**
  * 按 action 把工具名映射到具体动作工具。
  */
@@ -29,7 +29,7 @@ function splitToolByAction(toolName, input) {
   let byAction = SPLIT_TOOL_BY_ACTION[toolName];
   return typeof action === "string" && Object.hasOwn(byAction, action) ? byAction[action] : undefined;
 }
-//@ chunk-e6aww6q8.js:823552-823682 placement
+//@ chunk-5xgkngpb.js:835168-835298 placement (2.1.88 match: extractBashToolsFromMessages, 1)
 function getCommandField(input) {
   return typeof input === "object" &&
     input !== null &&
@@ -39,7 +39,7 @@ function getCommandField(input) {
     ? input.command
     : undefined;
 }
-//@ chunk-e6aww6q8.js:823682-823871 placement
+//@ chunk-5xgkngpb.js:835298-835487 placement
 function getCommandAndDescription(toolInput) {
   let commandField = getCommandField(toolInput);
   if (commandField === undefined) return;
@@ -55,7 +55,7 @@ function getCommandAndDescription(toolInput) {
         command: commandField,
       };
 }
-//@ chunk-e6aww6q8.js:823871-823929 placement
+//@ chunk-5xgkngpb.js:835487-835545 placement
 /**
  * Monitor 工具带命令字段时视为 Bash 工具名。
  */

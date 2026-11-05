@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：运行结束原因（单次运行限额、预等待闩锁、立即中断）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (9)
  * attribution: placement 9
  */
 import { currentSurfaceBinding } from "../../plugins/functionHooks/surfaceBinding.js";
 import {
-  commandsConsumedSignal,
-  receiptQueuedProbe,
-  inFlightDrainProbe,
+  commandsConsumed,
+  entryHold,
+  heldByHold,
   getCommandQueue,
   isMainAgentCommand,
 } from "../../utils/messageQueueManager.js";
@@ -27,15 +27,16 @@ import { turnStepSlot } from "../../query/turnHooks.js";
 import { runIgnoringAbort } from "../../plugins/functionHooks/dispatch/dispatchScope.js";
 import { isHandedOffPersonTurn } from "./turnGate.js";
 import { notePromptOrigin } from "../../utils/processUserInput/promptOrigin.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { isAbortError } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
 import { hasReachedBudget } from "../../cost-tracker.js";
 import { isHandedOffBatch, batchUuids, isResumedTurnBatch } from "./userFrameIntake.js";
+import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { isTerminalShutdown } from "../../utils/terminalShutdown.js";
 import { userAbortReason } from "../../utils/abortController.js";
 
-//@ chunk-tyg7f3ek.js:303151-305608 placement
+//@ chunk-0yw3taqg.js:332781-335238 placement
 /**
  * print 一次性运行的结束原因跟踪：宿主结束输入、--max-budget-usd、--max-turns 等。
  */
@@ -47,15 +48,15 @@ class OneShotRunLimits {
   isHostHeard = false;
   isHostsOwnTurn = false;
   isOneShotShape;
-  unwatch = commandsConsumedSignal.subscribe((uuids) => this.tookIn(uuids));
+  unwatch = commandsConsumed.subscribe((uuids) => this.tookIn(uuids));
   constructor(limits) {
     this.limits = limits;
     holdReasonSlot.set(() => this.reached());
     CANCELLED_COMMAND_STATE.set(() => this.taken());
     MODEL_SWITCH_STATE_CLEARER.set(() => this.giveBackHeld());
     turnStepSlot.set(() => this.spawnedTurnTaken());
-    receiptQueuedProbe.set(cancelQueuedAutoInput);
-    inFlightDrainProbe.set(countHeldCommands);
+    entryHold.set(cancelQueuedAutoInput);
+    heldByHold.set(countHeldCommands);
   }
   turnStarted(uuids) {
     runIgnoringAbort(() => {
@@ -122,7 +123,7 @@ class OneShotRunLimits {
     });
   }
   tally(uuids) {
-    this.asks += count(uuids, isHostAskedTurn);
+    this.asks += countWhere(uuids, isHostAskedTurn);
     this.isHostHeard ||= uuids.some(isHostRelevantTurn);
     if (uuids.some(isOwnWordTurn) || uuids.some(isHandedOffPersonTurn)) this.turns = 0;
   }
@@ -157,7 +158,7 @@ class OneShotRunLimits {
   inputOver() {
     let { inputClosed, endSessionRequested, turnUnderWay } = this.limits.drain;
     let queued = [...this.limits.frameIntake.parkedCommands(), ...getCommandQueue()];
-    let askCount = this.asks + count(queued, isHostAskedTurn);
+    let askCount = this.asks + countWhere(queued, isHostAskedTurn);
     let hostHeard = this.isHostHeard || queued.some(isHostRelevantTurn);
     let inputDone = this.limits.isRemoteInput()
       ? this.isOneShotShape === false
@@ -181,29 +182,29 @@ class OneShotRunLimits {
         : undefined;
   }
 }
-//@ chunk-tyg7f3ek.js:305608-305617 placement
+//@ chunk-0yw3taqg.js:335238-335247 placement
 var MIN_REMOTE_INPUT_MESSAGES = 2;
-//@ chunk-tyg7f3ek.js:305617-305656 placement
+//@ chunk-0yw3taqg.js:335247-335286 placement
 function isHostAskedTurn(command) {
   return command.hostAsked === true;
 }
-//@ chunk-tyg7f3ek.js:305656-305693 placement
+//@ chunk-0yw3taqg.js:335286-335323 placement
 function isOwnWordTurn(command) {
   return command.ownWord === true;
 }
-//@ chunk-tyg7f3ek.js:305693-305728 placement
+//@ chunk-0yw3taqg.js:335323-335358 placement
 function isHostRelevantTurn(command) {
   return isHostAskedTurn(command) || isOwnWordTurn(command);
 }
-//@ chunk-tyg7f3ek.js:305728-305774 placement
+//@ chunk-0yw3taqg.js:335358-335404 placement
 function isAimedAtTurn(aim, batch) {
   return isHandedOffBatch(batch) || aim.names(batchUuids(batch));
 }
-//@ chunk-tyg7f3ek.js:305774-305814 placement
+//@ chunk-0yw3taqg.js:335404-335444 placement
 function shouldPrewaitIntent(aim, batch) {
   return isAimedAtTurn(aim, batch) || !isResumedTurnBatch(batch);
 }
-//@ chunk-tyg7f3ek.js:305814-309435 placement
+//@ chunk-0yw3taqg.js:335444-339504 placement
 /**
  * print 主循环的"预等待门闩"：在轮次开始前暂存意图批次、处理打断/停止与待答权限。
  */
@@ -216,33 +217,30 @@ class PrewaitLatch {
   doomedOnlyAsWork = new Set();
   answersToStartAborted = new WeakSet();
   messageQueue;
+  heldAheadOfTheQueue;
   commandLacksUserIntent;
   unsubscribeRemovals;
-  constructor({ messageQueue, commandLacksUserIntent }) {
+  constructor({ messageQueue, heldAheadOfTheQueue, commandLacksUserIntent }) {
     this.messageQueue = messageQueue;
+    this.heldAheadOfTheQueue = heldAheadOfTheQueue;
     this.commandLacksUserIntent = commandLacksUserIntent;
     this.unsubscribeRemovals = messageQueue.subscribeToRemovals(() => this.clearIfNothingPending());
   }
   interruptBeforeArm(aim) {
     if (aim !== undefined) return this.latchForWorkReachedBy(aim);
-    if (!(
-      this.intentDispatchPendingPreArm ||
-      this.messageQueue.getCommandQueue().some((queued) => this.isUserIntent(queued))
-    ))
+    if (!(this.intentDispatchPendingPreArm || this.waiting(true).some((queued) => this.isUserIntent(queued))))
       return false;
     this.interruptBeforeTurnArmed = true;
     this.latchedWhileBatchParked = this.intentDispatchPendingPreArm;
     this.doomedOnlyAsWork.clear();
-    this.latchDoomedCommands = new WeakSet(
-      this.messageQueue.getCommandQueue().filter((queued) => this.isUserIntent(queued)),
-    );
+    this.latchDoomedCommands = new WeakSet(this.waiting(true).filter((queued) => this.isUserIntent(queued)));
     return true;
   }
   latchForWorkReachedBy(aim) {
     let intentPending = this.intentDispatchPendingPreArm && shouldPrewaitIntent(aim, this.parkedBatch);
-    let filtered = this.messageQueue
-      .getCommandQueue()
-      .filter((queued) => this.isUserIntent(queued) && shouldPrewaitIntent(aim, [queued]));
+    let filtered = this.waiting(true).filter(
+      (queued) => this.isUserIntent(queued) && shouldPrewaitIntent(aim, [queued]),
+    );
     if (!intentPending && filtered.length === 0) return false;
     this.interruptBeforeTurnArmed = true;
     this.latchedWhileBatchParked ||= intentPending;
@@ -262,6 +260,20 @@ class PrewaitLatch {
       [...this.messageQueue.getCommandQueue(), ...this.parkedBatch].filter((queued) => queued.uuid === uuid),
     );
   }
+  heldCommandQueued(heldCommand) {
+    if (this.latchDoomedCommands?.delete(heldCommand) !== true) return;
+    let wasDoomedOnlyAsWork = this.doomedOnlyAsWork.delete(heldCommand);
+    for (let queued of [...this.messageQueue.getCommandQueue(), ...this.parkedBatch])
+      if (
+        heldCommand.uuid !== undefined
+          ? queued.uuid === heldCommand.uuid
+          : heldCommand.frameTiming !== undefined && queued.frameTiming === heldCommand.frameTiming
+      ) {
+        this.latchDoomedCommands.add(queued);
+        if (wasDoomedOnlyAsWork) this.doomedOnlyAsWork.add(queued);
+      }
+    logFeatureOk("headless_interrupt_held_message");
+  }
   pendingAnswersFor(aim, cancelQueued) {
     return [
       ...this.parkedIntentBatch(),
@@ -274,9 +286,7 @@ class PrewaitLatch {
     );
   }
   namesQueuedWork(aim) {
-    return this.messageQueue
-      .getCommandQueue()
-      .some((queued) => this.isUserIntent(queued) && isAimedAtTurn(aim, [queued]));
+    return this.waiting(true).some((queued) => this.isUserIntent(queued) && isAimedAtTurn(aim, [queued]));
   }
   get stopLatched() {
     return this.interruptBeforeTurnArmed;
@@ -347,9 +357,7 @@ class PrewaitLatch {
       !this.intentDispatchPendingPreArm &&
       !(
         latchDoomedCommands !== null &&
-        this.messageQueue
-          .getCommandQueue()
-          .some((queued) => latchDoomedCommands.has(queued) && this.isUserIntent(queued))
+        this.waiting(false).some((queued) => latchDoomedCommands.has(queued) && this.isUserIntent(queued))
       )
     )
       this.reset();
@@ -357,11 +365,14 @@ class PrewaitLatch {
   dispose() {
     this.unsubscribeRemovals();
   }
+  waiting(includeHeld) {
+    return [...this.messageQueue.getCommandQueue(), ...this.heldAheadOfTheQueue(includeHeld)];
+  }
   isUserIntent(queued) {
     return isMainAgentCommand(queued) && !this.commandLacksUserIntent(queued);
   }
 }
-//@ chunk-tyg7f3ek.js:309435-309636 placement
+//@ chunk-0yw3taqg.js:339504-339705 placement
 function interruptOnNowPriority({ messageQueue, drain }) {
   return messageQueue.subscribe(() => {
     if (

@@ -1,19 +1,16 @@
 /**
  * @modelcontextprotocol/client/dist/ajvProvider-BIwGVY6G.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/client@2.0.0
- * pieces: chunk-n332mrkv.js (26), chunk-r1g76qsy.js (2)
+ * pieces: chunk-fra0jg2y.js (26), chunk-qq5knpkd.js (2)
  * attribution: esm-layout 8, esm-fingerprint 9, layout 7, affinity 4
  */
 import { Ajv2020, formatsPlugin, DRAFT_2020_12_URIS, ajvModule } from "../../../ajv-formats/dist/formats.js";
 import { require_equal } from "../../../ajv/dist/runtime/equal.js";
 import { validateValidationSchema } from "./cfWorkerProvider-l7BFVI5n.mjs";
-import { deferInit, beginDeferredInits, runDeferredInits } from "../../../../runtime/deferred-init.js";
+import { deferInit, runDeferredInits } from "../../../../runtime/deferred-init.js";
 
-// This module is the first evaluated of an import cycle of 2 modules closed by ./cfWorkerProvider-l7BFVI5n.mjs;
-// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
-beginDeferredInits("vendor/@modelcontextprotocol/client/dist/cfWorkerProvider-l7BFVI5n.mjs");
-//@ chunk-r1g76qsy.js:255842-255955 esm-fingerprint
+//@ chunk-qq5knpkd.js:260247-260360 esm-fingerprint
 function createAjv2020() {
   let ajv = new Ajv2020.Ajv2020({
     strict: false,
@@ -24,7 +21,7 @@ function createAjv2020() {
   formatsPlugin(ajv);
   return ajv;
 }
-//@ chunk-r1g76qsy.js:255955-256668 esm-fingerprint
+//@ chunk-qq5knpkd.js:260360-261073 esm-fingerprint
 var AjvJsonSchemaValidator = class {
   _ajv;
   _userAjv;
@@ -67,7 +64,7 @@ var AjvJsonSchemaValidator = class {
   }
 };
 var Ajv = ajvModule.Ajv;
-//@ chunk-n332mrkv.js:228-1961 esm-layout
+//@ chunk-fra0jg2y.js:228-1961 esm-layout
 var metaSchemaCheck = validateMetaSchema;
 var metaSchema2020 = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -148,7 +145,7 @@ var metaSchema2020 = {
     },
   },
 };
-//@ chunk-n332mrkv.js:1961-2923 esm-fingerprint
+//@ chunk-fra0jg2y.js:1961-2923 esm-fingerprint
 var coreMetaSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://json-schema.org/draft/2020-12/meta/core",
@@ -213,10 +210,10 @@ var coreMetaSchema = {
     },
   },
 };
-//@ chunk-n332mrkv.js:2923-3006 layout
+//@ chunk-fra0jg2y.js:2923-3006 layout
 var regExp = new RegExp("^[^#]*#?$", "u");
 var regExp_2 = new RegExp("^[A-Za-z_][-A-Za-z0-9._]*$", "u");
-//@ chunk-n332mrkv.js:3006-8156 layout
+//@ chunk-fra0jg2y.js:3006-8156 layout
 function validateCoreSchema(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
@@ -619,9 +616,9 @@ function validateCoreSchema(
   validateCoreSchema.errors = vErrors;
   return errorsCount === 0;
 }
-//@ chunk-n332mrkv.js:8156-8316 layout
+//@ chunk-fra0jg2y.js:8156-8316 layout
 // deferred: uses validateCoreSchema of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-n332mrkv.js:8156", () => {
+deferInit("chunk-fra0jg2y.js:8156", () => {
   validateCoreSchema.evaluated = {
     props: {
       $id: true,
@@ -638,7 +635,7 @@ deferInit("chunk-n332mrkv.js:8156", () => {
     dynamicItems: false,
   };
 });
-//@ chunk-n332mrkv.js:8316-9367 esm-fingerprint
+//@ chunk-fra0jg2y.js:8316-9367 esm-fingerprint
 var applicatorMetaSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://json-schema.org/draft/2020-12/meta/applicator",
@@ -720,7 +717,7 @@ var applicatorMetaSchema = {
     },
   },
 };
-//@ chunk-n332mrkv.js:9367-10508 layout
+//@ chunk-fra0jg2y.js:9367-10508 layout
 function validateSchemaArray(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
@@ -813,16 +810,16 @@ function validateSchemaArray(
   validateSchemaArray.errors = vErrors;
   return errorsCount === 0;
 }
-//@ chunk-n332mrkv.js:10508-10563 layout
+//@ chunk-fra0jg2y.js:10508-10563 layout
 // deferred: uses validateSchemaArray of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-n332mrkv.js:10508", () => {
+deferInit("chunk-fra0jg2y.js:10508", () => {
   validateSchemaArray.evaluated = {
     items: true,
     dynamicProps: false,
     dynamicItems: false,
   };
 });
-//@ chunk-n332mrkv.js:10563-20346 layout
+//@ chunk-fra0jg2y.js:10563-20346 layout
 function validateApplicatorSchema(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
@@ -1599,9 +1596,9 @@ function validateApplicatorSchema(
   validateApplicatorSchema.errors = vErrors;
   return errorsCount === 0;
 }
-//@ chunk-n332mrkv.js:20346-20588 layout
+//@ chunk-fra0jg2y.js:20346-20588 layout
 // deferred: uses validateApplicatorSchema of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-n332mrkv.js:20346", () => {
+deferInit("chunk-fra0jg2y.js:20346", () => {
   validateApplicatorSchema.evaluated = {
     props: {
       prefixItems: true,
@@ -1624,7 +1621,7 @@ deferInit("chunk-n332mrkv.js:20346", () => {
     dynamicItems: false,
   };
 });
-//@ chunk-n332mrkv.js:20588-20986 esm-fingerprint
+//@ chunk-fra0jg2y.js:20588-20986 esm-fingerprint
 var unevaluatedMetaSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://json-schema.org/draft/2020-12/meta/unevaluated",
@@ -1643,7 +1640,7 @@ var unevaluatedMetaSchema = {
     },
   },
 };
-//@ chunk-n332mrkv.js:20986-22855 esm-layout
+//@ chunk-fra0jg2y.js:20986-22855 esm-layout
 function validateUnevaluatedSchema(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
@@ -1772,9 +1769,9 @@ function validateUnevaluatedSchema(
   validateUnevaluatedSchema.errors = vErrors;
   return errorsCount === 0;
 }
-//@ chunk-n332mrkv.js:22855-22954 esm-layout
+//@ chunk-fra0jg2y.js:22855-22954 esm-layout
 // deferred: uses validateUnevaluatedSchema of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-n332mrkv.js:22855", () => {
+deferInit("chunk-fra0jg2y.js:22855", () => {
   validateUnevaluatedSchema.evaluated = {
     props: {
       unevaluatedItems: true,
@@ -1784,7 +1781,7 @@ deferInit("chunk-n332mrkv.js:22855", () => {
     dynamicItems: false,
   };
 });
-//@ chunk-n332mrkv.js:22954-24545 esm-fingerprint
+//@ chunk-fra0jg2y.js:22954-24545 esm-fingerprint
 var validationMetaSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://json-schema.org/draft/2020-12/meta/validation",
@@ -1899,12 +1896,12 @@ var validationMetaSchema = {
 var simpleTypes = {
   enum: ["array", "boolean", "integer", "null", "number", "object", "string"],
 };
-//@ chunk-n332mrkv.js:24545-24566 esm-layout
+//@ chunk-fra0jg2y.js:24545-24566 esm-layout
 var require_ajv; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-n332mrkv.js:24545", () => {
+deferInit("chunk-fra0jg2y.js:24545", () => {
   require_ajv = require_equal().default;
 });
-//@ chunk-n332mrkv.js:36244-36750 esm-fingerprint
+//@ chunk-fra0jg2y.js:36244-36750 esm-fingerprint
 var metaDataMetaSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://json-schema.org/draft/2020-12/meta/meta-data",
@@ -1940,7 +1937,7 @@ var metaDataMetaSchema = {
     },
   },
 };
-//@ chunk-n332mrkv.js:36750-38764 esm-layout
+//@ chunk-fra0jg2y.js:36750-38764 esm-layout
 function validateMetaDataSchema(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
@@ -2091,9 +2088,9 @@ function validateMetaDataSchema(
   validateMetaDataSchema.errors = errors;
   return errorsCount === 0;
 }
-//@ chunk-n332mrkv.js:38764-38904 esm-layout
+//@ chunk-fra0jg2y.js:38764-38904 esm-layout
 // deferred: uses validateMetaDataSchema of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-n332mrkv.js:38764", () => {
+deferInit("chunk-fra0jg2y.js:38764", () => {
   validateMetaDataSchema.evaluated = {
     props: {
       title: true,
@@ -2108,7 +2105,7 @@ deferInit("chunk-n332mrkv.js:38764", () => {
     dynamicItems: false,
   };
 });
-//@ chunk-n332mrkv.js:38904-39261 esm-fingerprint
+//@ chunk-fra0jg2y.js:38904-39261 esm-fingerprint
 var formatAnnotationMetaSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://json-schema.org/draft/2020-12/meta/format-annotation",
@@ -2124,7 +2121,7 @@ var formatAnnotationMetaSchema = {
     },
   },
 };
-//@ chunk-n332mrkv.js:39261-39959 esm-layout
+//@ chunk-fra0jg2y.js:39261-39959 esm-layout
 function validateFormatAnnotationSchema(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
@@ -2172,9 +2169,9 @@ function validateFormatAnnotationSchema(
   validateFormatAnnotationSchema.errors = errors;
   return errorsCount === 0;
 }
-//@ chunk-n332mrkv.js:39959-40023 esm-layout
+//@ chunk-fra0jg2y.js:39959-40023 esm-layout
 // deferred: uses validateFormatAnnotationSchema of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-n332mrkv.js:39959", () => {
+deferInit("chunk-fra0jg2y.js:39959", () => {
   validateFormatAnnotationSchema.evaluated = {
     props: {
       format: true,
@@ -2183,7 +2180,7 @@ deferInit("chunk-n332mrkv.js:39959", () => {
     dynamicItems: false,
   };
 });
-//@ chunk-n332mrkv.js:40023-40416 esm-fingerprint
+//@ chunk-fra0jg2y.js:40023-40416 esm-fingerprint
 var contentMetaSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://json-schema.org/draft/2020-12/meta/content",
@@ -2205,7 +2202,7 @@ var contentMetaSchema = {
     },
   },
 };
-//@ chunk-n332mrkv.js:40416-42121 affinity
+//@ chunk-fra0jg2y.js:40416-42121 affinity
 function validateContentSchema(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
@@ -2324,9 +2321,9 @@ function validateContentSchema(
   validateContentSchema.errors = vErrors;
   return errorsCount === 0;
 }
-//@ chunk-n332mrkv.js:42121-42231 affinity
+//@ chunk-fra0jg2y.js:42121-42231 affinity
 // deferred: uses validateContentSchema of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-n332mrkv.js:42121", () => {
+deferInit("chunk-fra0jg2y.js:42121", () => {
   validateContentSchema.evaluated = {
     props: {
       contentEncoding: true,
@@ -2337,7 +2334,7 @@ deferInit("chunk-n332mrkv.js:42121", () => {
     dynamicItems: false,
   };
 });
-//@ chunk-n332mrkv.js:42231-48153 affinity
+//@ chunk-fra0jg2y.js:42231-48153 affinity
 function validateMetaSchema(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
@@ -2808,9 +2805,9 @@ function validateMetaSchema(
   validateMetaSchema.errors = vErrors;
   return errorsCount === 0;
 }
-//@ chunk-n332mrkv.js:48153-49040 affinity
+//@ chunk-fra0jg2y.js:48153-49040 affinity
 // deferred: uses validateMetaSchema of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-n332mrkv.js:48153", () => {
+deferInit("chunk-fra0jg2y.js:48153", () => {
   validateMetaSchema.evaluated = {
     props: {
       definitions: true,
@@ -2882,5 +2879,6 @@ deferInit("chunk-n332mrkv.js:48153", () => {
 
 // The import cycle this module closes (2 modules) is complete: run the load-time work its statements
 // marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("vendor/@modelcontextprotocol/client/dist/ajvProvider-BIwGVY6G.mjs");
 runDeferredInits("worker:vendor/@modelcontextprotocol/client/dist/ajvProvider-BIwGVY6G.mjs");
 export { AjvJsonSchemaValidator, validationMetaSchema, simpleTypes, require_ajv, metaSchemaCheck };

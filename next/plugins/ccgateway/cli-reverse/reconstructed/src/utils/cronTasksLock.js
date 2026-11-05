@@ -3,9 +3,9 @@
  *
  * 定时任务调度锁（.claude/scheduled_tasks.lock）：同一项目只允许一个会话触发持久化任务，支持同会话换进程接管与陈旧锁回收
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/cronTasksLock.ts
- * pieces: chunk-hnzqng4j.js (7)
+ * pieces: chunk-75adsf9v.js (7)
  * attribution: fingerprint 4, layout 1, file-local 1, placement 1
  */
 import { join, dirname } from "path";
@@ -23,7 +23,7 @@ import { ownProcStart, isSameProcessAsync } from "./processIdentity.js";
 import { logForDebugging } from "./debug.js";
 import { isProcessRunning } from "./genericProcessUtils.js";
 
-//@ chunk-hnzqng4j.js:3042-3163 fingerprint (2.1.88 match: LOCK_FILE_REL, 0.741)
+//@ chunk-75adsf9v.js:3043-3164 fingerprint (2.1.88 match: LOCK_FILE_REL, 0.746)
 /**
  * 锁文件相对路径 .claude/scheduled_tasks.lock 与锁内容 schema {sessionId, pid, procStart?, acquiredAt}。
  */
@@ -36,11 +36,11 @@ var schedulerLockSchema = DoctorLazy(() =>
     acquiredAt: numberSchema(),
   }),
 );
-//@ chunk-hnzqng4j.js:3163-3199 layout
+//@ chunk-75adsf9v.js:3164-3200 layout
 function getLockPath(dir) {
   return join(dir ?? getProjectRoot(), LOCK_FILE_REL);
 }
-//@ chunk-hnzqng4j.js:3199-3329 file-local
+//@ chunk-75adsf9v.js:3200-3330 file-local
 /**
  * 读取并校验锁文件，失败返回 undefined。
  */
@@ -54,7 +54,7 @@ async function readLock(dir) {
   let result = schedulerLockSchema().safeParse(safeParseJSON(raw, false));
   return result.success ? result.data : undefined;
 }
-//@ chunk-hnzqng4j.js:3329-3598 fingerprint (2.1.88 match: tryCreateExclusive, 1)
+//@ chunk-75adsf9v.js:3330-3599 fingerprint (2.1.88 match: tryCreateExclusive, 1)
 /**
  * 以 wx 独占方式创建锁文件（目录不存在时先建），已存在返回 false。
  */
@@ -86,7 +86,7 @@ async function tryCreateExclusive(lock, dir) {
     throw e;
   }
 }
-//@ chunk-hnzqng4j.js:3598-3687 placement (2.1.88 match: unregisterAgentForeground, 0.595)
+//@ chunk-75adsf9v.js:3599-3688 placement (2.1.88 match: unregisterAgentForeground, 0.596)
 /**
  * 为调度锁登记一次性退出清理（进程退出时 releaseSchedulerLock）。实际属于 utils/cronTasksLock.ts。
  */
@@ -96,7 +96,7 @@ function registerSchedulerLockCleanup(lockState, options) {
     await releaseSchedulerLock(lockState, options);
   });
 }
-//@ chunk-hnzqng4j.js:3687-4453 fingerprint (2.1.88 match: tryAcquireSchedulerLock, 0.924)
+//@ chunk-75adsf9v.js:3688-4454 fingerprint (2.1.88 match: tryAcquireSchedulerLock, 0.923)
 /**
  * 抢调度锁：独占创建成功即持有；同会话不同 PID 时改写为本进程；持有者进程仍在且身份匹配则失败（记录占用者）；否则视为陈旧锁删除后重试。持有时登记退出清理。
  */
@@ -147,7 +147,7 @@ async function tryAcquireSchedulerLock(lockState, options) {
   }
   return false;
 }
-//@ chunk-hnzqng4j.js:4453-4668 fingerprint (2.1.88 match: releaseSchedulerLock, 0.914)
+//@ chunk-75adsf9v.js:4454-4669 fingerprint (2.1.88 match: releaseSchedulerLock, 0.914)
 /**
  * 释放调度锁：只有锁属于本会话时才删除。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：停止后台会话。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8vcdnkwr.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-m2t4w81y.js (2)
  * attribution: placement 2
  */
 import { env } from "../env.js";
@@ -25,14 +25,14 @@ import { daemonDetachApc } from "../../services/daemon/leaseProtocol.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { gracefulShutdown } from "../gracefulShutdown.js";
 
-//@ chunk-8vcdnkwr.js:570-607 placement
+//@ chunk-m2t4w81y.js:570-607 placement
 /**
  * 返回后台任务的目录（环境变量 CLAUDE_JOB_DIR）。
  */
 function jobDir() {
   return env.CLAUDE_JOB_DIR;
 }
-//@ chunk-8vcdnkwr.js:607-1141 placement
+//@ chunk-m2t4w81y.js:607-1141 placement
 /**
  * 停止当前后台会话：记录 tengu_bg_agent_action（stop），取消待定的 loop 唤醒；在后台会话中把未结束的任务状态写为 stopped 后再退出。
  */

@@ -3,9 +3,9 @@
  *
  * 进度条（block/shade 字符填充，读屏标签）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/design-system/ProgressBar.tsx
- * pieces: chunk-7tjtztz1.js (2)
+ * pieces: chunk-rf2d2hdc.js (2)
  * attribution: sole-consumer 1, fingerprint 1
  */
 import { terminalDetector } from "../../ink/terminalColorSupport.js";
@@ -18,7 +18,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
 
-//@ chunk-7tjtztz1.js:406-841 sole-consumer
+//@ chunk-rf2d2hdc.js:406-841 sole-consumer
 /**
  * 进度条使用的字符集：部分块字符和几种填充/空白样式（按终端是否有渲染缺陷选择）。
  */
@@ -60,7 +60,7 @@ var renderBlockBar = (ratio, width) => {
   }
   return segments.join("");
 };
-//@ chunk-7tjtztz1.js:841-1732 fingerprint (2.1.88 match: ProgressBar, 0.457)
+//@ chunk-rf2d2hdc.js:841-1732 fingerprint (2.1.88 match: ProgressBar, 0.458)
 function ProgressBar(props) {
   let $ = useMemoCache(17);
   let { ratio: inputRatio, width, fillColor, emptyColor, variant } = props;

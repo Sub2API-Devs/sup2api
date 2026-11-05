@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。目录访问权限请求。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (18), chunk-1aq4fchs.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0758th4x.js (3), chunk-czq1j3j2.js (18)
  * attribution: placement 21
  */
 import { __export, MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
@@ -37,7 +37,7 @@ import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { Byline } from "../design-system/Byline.js";
 import { Dialog } from "../design-system/Dialog.js";
 import {
-  useInputRefusalWindow,
+  useRecentInputWithin,
   useRefusalTracker,
   useMountTime,
   settleKey,
@@ -48,52 +48,57 @@ import { PermissionDialog_2 } from "./PermissionDialog.js";
 import { ConfirmSelect } from "../design-system/ConfirmSelect.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1aq4fchs.js:227-238 placement
-var FolderAccessPermissionRequestNamespace_2 = {};
-//@ chunk-1aq4fchs.js:238-287 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1aq4fchs.js:238", () => {
-  __export(FolderAccessPermissionRequestNamespace_2, {
-    MAX_CARD_FILES: () => MAX_CARD_FILES,
-    default: () => FolderAccessPermissionRequestNamespace_2,
-  });
-});
-//@ chunk-1aq4fchs.js:287-298 placement
-var MAX_CARD_FILES = 20;
-//@ chunk-18hwfzwa.js:36516-36526 placement
+//@ chunk-0758th4x.js:227-238 placement
 var FolderAccessPermissionRequestNamespace = {};
-//@ chunk-18hwfzwa.js:36526-36567 placement
+//@ chunk-0758th4x.js:238-287 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:36526", () => {
+deferInit("chunk-0758th4x.js:238", () => {
   __export(FolderAccessPermissionRequestNamespace, {
-    cardRows: () => cardRows,
+    MAX_CARD_FILES: () => MAX_CARD_FILES,
     default: () => FolderAccessPermissionRequestNamespace,
   });
 });
-//@ chunk-18hwfzwa.js:36567-36577 placement
-var FolderAccessPermissionRequestNamespace2 = {};
-//@ chunk-18hwfzwa.js:36577-36623 placement
+//@ chunk-0758th4x.js:287-298 placement
+var MAX_CARD_FILES = 20;
+//@ chunk-czq1j3j2.js:38077-38087 placement
+var FolderAccessPermissionRequestNamespace_2 = {};
+//@ chunk-czq1j3j2.js:38087-38128 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:36577", () => {
+deferInit("chunk-czq1j3j2.js:38087", () => {
+  __export(FolderAccessPermissionRequestNamespace_2, {
+    cardRows: () => cardRows,
+    default: () => FolderAccessPermissionRequestNamespace_2,
+  });
+});
+//@ chunk-czq1j3j2.js:38128-38138 placement
+var FolderAccessPermissionRequestNamespace2 = {};
+//@ chunk-czq1j3j2.js:38138-38184 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:38138", () => {
   __export(FolderAccessPermissionRequestNamespace2, {
     MIN_CARD_ROWS: () => MIN_CARD_ROWS,
     default: () => FolderAccessPermissionRequestNamespace2,
   });
 });
-//@ chunk-18hwfzwa.js:1359828-1359832 placement
+//@ chunk-czq1j3j2.js:1368847-1368851 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1359828", () => {
+deferInit("chunk-czq1j3j2.js:1368847", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1359832-1359905 placement
+//@ chunk-czq1j3j2.js:1382630-1382634 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1382630", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1382634-1382707 placement
 var cardRows = (lines, columns) =>
   lines.flatMap((line) =>
     wrapText(line, Math.max(1, columns - MAX_CARD_ACTIONS), "wrap").split(`
 `),
   );
-//@ chunk-18hwfzwa.js:1359905-1359915 placement
+//@ chunk-czq1j3j2.js:1382707-1382717 placement
 var MIN_CARD_ROWS = 2;
-//@ chunk-18hwfzwa.js:1359915-1359995 placement (2.1.88 match: _temp2, 1)
+//@ chunk-czq1j3j2.js:1382717-1382797 placement (2.1.88 match: _temp2, 1)
 function renderFileCardLine(line_0, i_1) {
   return jsxProd_default(
     Text,
@@ -104,7 +109,7 @@ function renderFileCardLine(line_0, i_1) {
     `${i_1} ${line_0}`,
   );
 }
-//@ chunk-18hwfzwa.js:1359995-1360090 placement
+//@ chunk-czq1j3j2.js:1382797-1382892 placement
 function renderFileItemValue(value, index) {
   return jsxProd_default(
     Text,
@@ -116,7 +121,7 @@ function renderFileItemValue(value, index) {
     `${index} ${value}`,
   );
 }
-//@ chunk-18hwfzwa.js:1360090-1361295 placement
+//@ chunk-czq1j3j2.js:1382892-1384095 placement
 function FolderListingCard(props) {
   let $ = useMemoCache(25);
   let { card } = props;
@@ -132,11 +137,11 @@ function FolderListingCard(props) {
   let flexDirection;
   let lineElements;
   if ($[0] !== max || $[1] !== card.lines || $[2] !== terminalSize.columns) {
-    wrappedLines = FolderAccessPermissionRequestNamespace.cardRows(card.lines, terminalSize.columns);
+    wrappedLines = FolderAccessPermissionRequestNamespace_2.cardRows(card.lines, terminalSize.columns);
     let fitsInMax = wrappedLines.length <= max;
     visibleLines = fitsInMax ? wrappedLines : wrappedLines.slice(0, max - 1);
     maxValueCount = Math.min(
-      FolderAccessPermissionRequestNamespace_2.MAX_CARD_FILES,
+      FolderAccessPermissionRequestNamespace.MAX_CARD_FILES,
       Math.max(0, max - wrappedLines.length),
     );
     containerComponent = Box;
@@ -218,7 +223,7 @@ function FolderListingCard(props) {
   } else cardElement = $[24];
   return cardElement;
 }
-//@ chunk-18hwfzwa.js:1361295-1361358 placement
+//@ chunk-czq1j3j2.js:1384095-1384158 placement
 function renderOrderedListItem(label, index) {
   return jsxProd_default(
     OrderedListWithItem.Item,
@@ -228,7 +233,7 @@ function renderOrderedListItem(label, index) {
     `${index} ${label}`,
   );
 }
-//@ chunk-18hwfzwa.js:1361358-1362390 placement
+//@ chunk-czq1j3j2.js:1384158-1385190 placement
 function FolderListingView(props) {
   let $ = useMemoCache(15);
   let terminalSize = useTerminalSize();
@@ -305,11 +310,11 @@ function FolderListingView(props) {
   } else dialogElement = $[14];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1362390-1364203 placement
+//@ chunk-czq1j3j2.js:1385190-1387003 placement
 function FolderAccessPermissionRequest(props) {
   let $ = useMemoCache(19);
   let [view, setView] = useState("question");
-  let inputRefusalWindow = useInputRefusalWindow();
+  let isRecentInput = useRecentInputWithin();
   let refusalTracker = useRefusalTracker();
   let openedAt = useMountTime();
   let { remountKey } = settleKey(refusalTracker.epoch);
@@ -327,13 +332,13 @@ function FolderAccessPermissionRequest(props) {
   let bindings = moreBindings;
   let isCardUnreadable = props.payload.card === undefined;
   let refuseInput;
-  if ($[1] !== inputRefusalWindow || $[2] !== refusalTracker) {
+  if ($[1] !== isRecentInput || $[2] !== refusalTracker) {
     refuseInput = function shouldRefuseInput() {
-      let isRefused = inputRefusalWindow() || refusalTracker.refusedWithin();
+      let isRefused = isRecentInput() || refusalTracker.refusedWithin();
       if (isRefused) refusalTracker.noteRefused();
       return isRefused;
     };
-    $[1] = inputRefusalWindow;
+    $[1] = isRecentInput;
     $[2] = refusalTracker;
     $[3] = refuseInput;
   } else refuseInput = $[3];
@@ -446,31 +451,26 @@ function FolderAccessPermissionRequest(props) {
   } else content = $[18];
   return content;
 }
-//@ chunk-18hwfzwa.js:1364236-1364240 placement
+//@ chunk-czq1j3j2.js:1387036-1387040 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1364236", () => {
+deferInit("chunk-czq1j3j2.js:1387036", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1364240-1364244 placement
+//@ chunk-czq1j3j2.js:1387040-1387044 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1364240", () => {
+deferInit("chunk-czq1j3j2.js:1387040", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1364244-1364248 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1364244", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1364248-1364265 placement
+//@ chunk-czq1j3j2.js:1387048-1387065 placement
 var exitCleanupCallbackRef; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1364248", () => {
+deferInit("chunk-czq1j3j2.js:1387048", () => {
   exitCleanupCallbackRef = createContext(null);
 });
-//@ chunk-18hwfzwa.js:1364265-1364313 placement
+//@ chunk-czq1j3j2.js:1387065-1387113 placement
 function useExitCleanup() {
   let exitCleanup = useContext(exitCleanupCallbackRef);
   useLayoutEffect(() => {
     exitCleanup?.();
   }, [exitCleanup]);
 }
-export { useExitCleanup, exitCleanupCallbackRef, FolderAccessPermissionRequest, MAX_CARD_FILES };
+export { MAX_CARD_FILES, useExitCleanup, exitCleanupCallbackRef, FolderAccessPermissionRequest };

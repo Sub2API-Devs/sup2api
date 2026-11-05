@@ -3,10 +3,10 @@
  *
  * 后台作业状态与时间线（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wd9kxbpn.js (24)
- * attribution: placement 24
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-aep4jqr7.js (1), chunk-rytc8e8q.js (25)
+ * attribution: placement 24, layout 2
  */
 import { appendFile } from "fs/promises";
 import { join } from "path";
@@ -40,7 +40,6 @@ import { env } from "../../utils/env.js";
 import { logEvent } from "../analytics/index.js";
 import { isLeaseSource } from "../daemon/leaseProtocol.js";
 import { truncateCodePoints } from "../../utils/stringUtils.js";
-import { SYSTEM_REMINDER_CLOSE } from "../../utils/transcriptSearch.js";
 import { isLocalCommandMarkup } from "../../utils/messages/localCommandTags.js";
 import { inputStartsWithMatchingCommand } from "../../commands.js";
 import { classifyJobCleanliness, runJobClassification } from "./jobClassifier.js";
@@ -53,11 +52,11 @@ import { formatStorageError, isAbsentParentError } from "../../utils/storage/sto
 import { getInFlightSnapshot } from "../daemon/sessionCron.js";
 import { isSessionActive } from "../../utils/sessionActivity.js";
 
-//@ chunk-wd9kxbpn.js:12835-13102 placement
+//@ chunk-aep4jqr7.js:303-571 placement
 /**
  * 生成工具活动的简短描述（问题、描述或回退文本），去掉密钥并压缩空白、截断。
  */
-function describeToolActivity(input, fallbackText) {
+function toolUseStatusLine(input, fallbackText) {
   let question =
     Array.isArray(input?.questions) && typeof input.questions[0]?.question === "string"
       ? input.questions[0].question
@@ -69,7 +68,7 @@ function describeToolActivity(input, fallbackText) {
     ? truncateWithEllipsis(redactSecrets(verbText).replace(/\s+/g, " ").trim(), MAX_HEADLINE_LENGTH)
     : "";
 }
-//@ chunk-wd9kxbpn.js:13102-13199 placement
+//@ chunk-rytc8e8q.js:14052-14149 placement
 async function writeStateAndBroadcast(jobDir, state, patch, storageV5) {
   await writeStateAtomic(jobDir, state, storageV5);
   if (Object.keys(patch).length > 0)
@@ -78,14 +77,14 @@ async function writeStateAndBroadcast(jobDir, state, patch, storageV5) {
       patch,
     });
 }
-//@ chunk-wd9kxbpn.js:13199-13245 placement
+//@ chunk-rytc8e8q.js:14149-14195 placement
 /**
  * 导出函数 `setPendingStructuredResult`：参数 e。
  */
 function setPendingStructuredResult(pendingStructuredResult) {
   currentSessionStatusState().pendingStructuredResult = pendingStructuredResult;
 }
-//@ chunk-wd9kxbpn.js:13245-13768 placement
+//@ chunk-rytc8e8q.js:14195-14718 placement
 /**
  * 创建后台作业分类器的运行时状态（上次状态、累积输出、意图、在途分类、最近请求、桥写入链、中途 LLM 节流等）。
  */
@@ -118,7 +117,7 @@ function createJobClassifierState(options = {}) {
     lastResult: null,
   };
 }
-//@ chunk-wd9kxbpn.js:13768-13822 placement
+//@ chunk-rytc8e8q.js:14718-14772 placement
 /**
  * 后台分类器的节流参数：默认 15 s、REPL 5 s、两次分类最短间隔 8 s、最大年龄 240 s、禁用思考时预算 2048、缓存 1 万条。
  */
@@ -128,7 +127,7 @@ var MIN_CLASSIFY_INTERVAL_MS = 8000;
 var MAX_CLASSIFY_AGE_MS = 240000;
 var DISABLED_THINKING_BUDGET = 2048;
 var MAX_CACHED_CLASSIFICATIONS = 1e4;
-//@ chunk-wd9kxbpn.js:13822-13944 placement
+//@ chunk-rytc8e8q.js:14772-14894 placement
 /**
  * 读取后台分类器配置开关（默认用小模型、关闭思考、轮中去抖 60 秒）。
  */
@@ -139,7 +138,7 @@ function getBgClassifierConfig() {
     midTurnLlmDebounceMs: 60000,
   });
 }
-//@ chunk-wd9kxbpn.js:13944-14054 placement
+//@ chunk-rytc8e8q.js:14894-15004 placement
 /**
  * 读取开关中的线程回顾提示词，为空时用默认值。
  */
@@ -153,15 +152,19 @@ function getThreadRecapPrompt(defaultPrompt) {
     ? featureValue_CACHED_MAY_BE_STALE
     : defaultPrompt;
 }
-//@ chunk-wd9kxbpn.js:14054-14108 placement
+//@ chunk-rytc8e8q.js:15004-15058 placement
 function isShimmeringFireflyEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_shimmering_firefly", false);
 }
-//@ chunk-wd9kxbpn.js:14108-14158 placement
+//@ chunk-rytc8e8q.js:15058-15108 placement
 function isVelvetyAuroraEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_velvety_aurora", true);
 }
-//@ chunk-wd9kxbpn.js:14158-14321 placement
+//@ chunk-rytc8e8q.js:15108-15159 layout
+function isJigglyLollipopOn() {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_jiggly_lollipop", false);
+}
+//@ chunk-rytc8e8q.js:15159-15322 placement
 /**
  * 选择后台分类器模型：Projects 用配置或默认 Sonnet（受组织策略约束），否则用小模型或主模型。
  */
@@ -177,13 +180,13 @@ function getClassifierModel(projectsRecap = false) {
   if (getBgClassifierConfig()?.useSmallFastModel) return getSmallFastModel();
   return classifierFlagshipRerouteTarget(getMainLoopModel());
 }
-//@ chunk-wd9kxbpn.js:14321-14420 placement
+//@ chunk-rytc8e8q.js:15322-15421 placement
 function thinkingBudgetFor(classifierModel) {
   if (modelRejectsDisabledThinking(classifierModel)) return [undefined, DISABLED_THINKING_BUDGET];
   if (getBgClassifierConfig()?.disableThinking) return [false, 0];
   return [undefined, DISABLED_THINKING_BUDGET];
 }
-//@ chunk-wd9kxbpn.js:14420-14566 placement
+//@ chunk-rytc8e8q.js:15421-15567 placement
 function isResumeLaunch() {
   return process.argv.some(
     (arg) =>
@@ -195,19 +198,19 @@ function isResumeLaunch() {
       arg.startsWith("-r="),
   );
 }
-//@ chunk-wd9kxbpn.js:14566-14635 placement
+//@ chunk-rytc8e8q.js:15567-15636 placement
 function surfaceFlags(surfaces) {
   let flags = {};
   for (let surface of surfaces) flags[`surface_${surface}`] = true;
   return flags;
 }
-//@ chunk-wd9kxbpn.js:14635-14703 placement
+//@ chunk-rytc8e8q.js:15636-15704 placement
 function agentKindForDispatch(agentDefinition) {
   return agentDefinition === undefined || agentDefinition.agentType === "bg"
     ? lit("bg")
     : agentTypeForAnalyticsFromDefinition(agentDefinition);
 }
-//@ chunk-wd9kxbpn.js:14703-14959 placement
+//@ chunk-rytc8e8q.js:15704-15960 placement
 /**
  * 后台会话首次派发代理时上报 tengu_bg_agent_dispatch（代理与来源），每个任务只报一次。
  */
@@ -228,13 +231,13 @@ function logBgAgentDispatch(classifier, agentDefinition, surfaces) {
     ...surfaceFlags(surfaces),
   });
 }
-//@ chunk-wd9kxbpn.js:14959-15089 placement
+//@ chunk-rytc8e8q.js:15960-16090 placement
 function captureJobIntent(classifier, prompt) {
   if (classifier.capturedIntent || !prompt) return classifier.capturedIntent;
-  classifier.capturedIntent = truncateCodePoints(redactAndTruncate(SYSTEM_REMINDER_CLOSE(prompt), 1000), 500);
+  classifier.capturedIntent = truncateCodePoints(redactAndTruncate(stripReminderPrefix(prompt), 1000), 500);
   return classifier.capturedIntent;
 }
-//@ chunk-wd9kxbpn.js:15089-15358 placement
+//@ chunk-rytc8e8q.js:16090-16359 placement
 function findLastUserPrompt(messages) {
   let last = messages.findLast(
     (message) =>
@@ -247,20 +250,25 @@ function findLastUserPrompt(messages) {
   );
   return last?.type === "user" && typeof last.message.content === "string" ? last.message.content : undefined;
 }
-//@ chunk-wd9kxbpn.js:15358-15515 placement
+//@ chunk-rytc8e8q.js:16359-16516 placement
 function captureLatestAsk(classifier, askText) {
   if (!askText) return;
   let lastCapturedAsk = classifier.lastCapturedAsk;
   if (lastCapturedAsk?.text !== askText) {
     lastCapturedAsk = {
       text: askText,
-      latestAsk: truncateCodePoints(redactAndTruncate(SYSTEM_REMINDER_CLOSE(askText), 600), 300),
+      latestAsk: truncateCodePoints(redactAndTruncate(stripReminderPrefix(askText), 600), 300),
     };
     classifier.lastCapturedAsk = lastCapturedAsk;
   }
   classifier.latestAsk = lastCapturedAsk.latestAsk;
 }
-//@ chunk-wd9kxbpn.js:15608-15801 placement
+//@ chunk-rytc8e8q.js:16516-16609 layout
+function stripReminderPrefix(text) {
+  let index = text.lastIndexOf("</system-reminder>");
+  return (index >= 0 ? text.slice(index + 18) : text).trim();
+}
+//@ chunk-rytc8e8q.js:16609-16802 placement
 function kickJobOnTurnStart(classifier, jobId, bridgeJob) {
   classifyJobCleanliness(classifier);
   disarmStartupWedgeWatchdog();
@@ -272,7 +280,7 @@ function kickJobOnTurnStart(classifier, jobId, bridgeJob) {
     .catch(logJobWriteError);
   syncPermissionNeeds(classifier, jobId);
 }
-//@ chunk-wd9kxbpn.js:15801-16069 placement
+//@ chunk-rytc8e8q.js:16802-17070 placement
 /**
  * 作为后台任务运行时，把当前的权限需求串行同步到 bridge。
  */
@@ -291,7 +299,7 @@ function syncPermissionNeeds(classifier, jobId) {
       });
     });
 }
-//@ chunk-wd9kxbpn.js:16069-16367 placement
+//@ chunk-rytc8e8q.js:17070-17368 placement
 function maybeClassifyJob(classifier, jobId, agentDefinition, messages, sessions, asks, surfaces) {
   if (isActingAsBgJob() && !classifier.kicked) {
     classifier.kicked = true;
@@ -323,7 +331,7 @@ function maybeClassifyJob(classifier, jobId, agentDefinition, messages, sessions
     false,
   ).catch(logJobWriteError);
 }
-//@ chunk-wd9kxbpn.js:16367-16742 placement
+//@ chunk-rytc8e8q.js:17368-17743 placement
 function appendJobTimeline(storageV5, jobId, record) {
   let line =
     jsonStringify(record) +
@@ -361,7 +369,7 @@ function appendJobTimeline(storageV5, jobId, record) {
   }
   appendFile(join(getJobDir(jobId), "timeline.jsonl"), line, "utf-8").catch(logJobWriteError);
 }
-//@ chunk-wd9kxbpn.js:16742-17412 placement
+//@ chunk-rytc8e8q.js:17743-18413 placement
 /**
  * 回合开始或用户输入时把作业置为 active：清除需要处理的提示与阻塞，用户文本不同于意图时作为新 detail 写入并追加时间线。
  */
@@ -379,7 +387,7 @@ async function markJobActive(jobId, { userText, isTurnStart }, storageV5, lastBr
   )
     return;
   let iso = new Date().toISOString();
-  let headline = userText ? redactSecrets(SYSTEM_REMINDER_CLOSE(userText)).replace(/\s+/g, " ").trim() : "";
+  let headline = userText ? redactSecrets(stripReminderPrefix(userText)).replace(/\s+/g, " ").trim() : "";
   let any = [jobState.intent, jobState.initialPrompt].some(
     (existing) => !!existing && redactSecrets(existing).replace(/\s+/g, " ").trim() === headline,
   );
@@ -416,7 +424,7 @@ async function markJobActive(jobId, { userText, isTurnStart }, storageV5, lastBr
       text: "",
     });
 }
-//@ chunk-wd9kxbpn.js:17412-18162 placement
+//@ chunk-rytc8e8q.js:18413-19163 placement
 /**
  * 根据当前权限请求把作业置为 blocked（写入 needs/overlay/questions），或在请求消失时恢复为 active/idle；读两次状态以避免覆盖更新。
  */
@@ -478,11 +486,12 @@ export {
   getClassifierModel,
   thinkingBudgetFor,
   logBgAgentDispatch,
-  describeToolActivity,
+  toolUseStatusLine,
   getBgClassifierConfig,
   DEFAULT_THROTTLE_MS,
   MAX_CLASSIFY_AGE_MS,
   MIN_CLASSIFY_INTERVAL_MS,
+  isJigglyLollipopOn,
   agentKindForDispatch,
   surfaceFlags,
   isVelvetyAuroraEnabled,

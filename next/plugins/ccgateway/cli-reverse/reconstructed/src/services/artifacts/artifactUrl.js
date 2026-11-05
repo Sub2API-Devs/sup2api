@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：claude.ai 链接解析与非 artifact 链接的说明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jv307fw4.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-m0ks5273.js (9)
  * attribution: placement 9
  */
 import {
@@ -23,7 +23,7 @@ import { getPathsForNetworkScreen } from "../../utils/fsOperations.js";
 import { VERSION_MAX_ENTRIES } from "./publishInstanceFiles.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-jv307fw4.js:1750-2215 placement
+//@ chunk-m0ks5273.js:1760-2225 placement
 /**
  * claude.ai 链接族的分类表：chat/share/task/cowork/project/design/settings/api 各自是否需要 id，以及族到展示名的映射。
  */
@@ -74,7 +74,7 @@ var FAMILY_DISPLAY_NAMES = {
   epitaxy: "session",
   project: "project",
 };
-//@ chunk-jv307fw4.js:2215-2856 placement
+//@ chunk-m0ks5273.js:2225-2866 placement
 function classifyClaudeAiPath(parts) {
   let [family, sub, rest] = parts;
   if (family === undefined) return "other";
@@ -95,7 +95,7 @@ function classifyClaudeAiPath(parts) {
   if (urlFamily === undefined || (urlFamily.needsId && sub === undefined)) return "other";
   return urlFamily.family;
 }
-//@ chunk-jv307fw4.js:2856-3186 placement
+//@ chunk-m0ks5273.js:2866-3196 placement
 /**
  * 解析 claude.ai 链接，识别 artifact/frame 参数、环境与链接族（chat/share/project/design…）。
  */
@@ -126,7 +126,7 @@ function parseArtifactUrl(input) {
           },
   };
 }
-//@ chunk-jv307fw4.js:3186-4752 placement
+//@ chunk-m0ks5273.js:3196-4762 placement
 /**
  * 用户传入的不是 artifact URL 时，生成说明（是哪种 claude.ai 链接、该如何改用 artifact 自身 URL）。
  */
@@ -165,7 +165,7 @@ function explainNonArtifactUrl(input, options = {}) {
     )} as \`${options.field ?? "url"}\`.`;
   return `${lead} pass the artifact's ${artifactLinkShapeHint()} link (action: "list" shows them).`;
 }
-//@ chunk-jv307fw4.js:4841-5012 placement
+//@ chunk-m0ks5273.js:4851-5022 placement
 async function readExactBytes(stream, length) {
   let buffer = Buffer.alloc(length + 1);
   let offset = 0;
@@ -176,21 +176,21 @@ async function readExactBytes(stream, length) {
   }
   return offset === length ? buffer.subarray(0, length) : null;
 }
-//@ chunk-jv307fw4.js:5143-5186 placement
+//@ chunk-m0ks5273.js:5153-5196 placement
 function isProtectedPath(path) {
   return isNonWslUncPath(path) || isNetworkMountPath(path) || classifyHomeMount(path);
 }
-//@ chunk-jv307fw4.js:5186-5270 placement
+//@ chunk-m0ks5273.js:5196-5280 placement
 function pathTouchesProtected(url) {
   if (isProtectedPath(url)) return true;
   let { paths, vetted } = getPathsForNetworkScreen(url);
   return !vetted || paths.some(isProtectedPath);
 }
-//@ chunk-jv307fw4.js:5270-5312 placement
+//@ chunk-m0ks5273.js:5280-5322 placement
 function classifyArtifactUrl(url) {
   return isNonWslUncPath(url) || isNetworkMountPath(url) || classifyHomeMount(url);
 }
-//@ chunk-jv307fw4.js:5312-5349 placement
+//@ chunk-m0ks5273.js:5322-5359 placement
 /**
  * 发布路径长度上限 512 与单个 URL 段 255 字符。
  */
@@ -198,7 +198,7 @@ var MAX_PUBLISHED_PATH_LENGTH; // deferred: uses XML_CONTENT_TYPES (./publishIns
 var MAX_URL_SEGMENT_CHARS;
 var MAX_VERSION_INDEX;
 var MAX_SEGMENT_WITH_SLASH;
-deferInit("chunk-jv307fw4.js:5312", () => {
+deferInit("chunk-m0ks5273.js:5322", () => {
   MAX_PUBLISHED_PATH_LENGTH = 512;
   MAX_URL_SEGMENT_CHARS = 255;
   MAX_VERSION_INDEX = VERSION_MAX_ENTRIES - 1;
@@ -210,9 +210,9 @@ export {
   MAX_SEGMENT_WITH_SLASH,
   pathTouchesProtected,
   readExactBytes,
-  isProtectedPath,
-  parseArtifactUrl,
   MAX_VERSION_INDEX,
   explainNonArtifactUrl,
+  isProtectedPath,
   classifyArtifactUrl,
+  parseArtifactUrl,
 };

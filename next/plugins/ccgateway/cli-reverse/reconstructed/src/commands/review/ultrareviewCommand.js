@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：ultrareview 命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/review/ultrareviewCommand.tsx
- * pieces: chunk-0eepcc6r.js (2), chunk-tyg7f3ek.js (1), chunk-yxg7c7n7.js (1)
+ * pieces: chunk-0yw3taqg.js (1), chunk-1nx5c9rq.js (2), chunk-nm4wy193.js (1)
  * attribution: placement 4
  */
 import {
@@ -43,7 +43,7 @@ import { isGithubDotCom } from "../../utils/git/githubUrl.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { UltrareviewLaunchDialog } from "./UltrareviewLaunchDialog.js";
 
-//@ chunk-yxg7c7n7.js:11976-12863 placement
+//@ chunk-nm4wy193.js:13152-14039 placement
 /**
  * /ultrareview 命令：解析参数后无界面运行审查。
  */
@@ -92,7 +92,7 @@ var runUltrareviewCommand = async (args, context, invokedName) => {
       };
   }
 };
-//@ chunk-tyg7f3ek.js:624510-624966 placement
+//@ chunk-0yw3taqg.js:666619-667075 placement
 /**
  * 把 /ultrareview 的启动结果转成 transcript 消息：命令行本身 + stdout（已启动）或 stderr（未启动，附 actionUrl）。needs-confirm 时不写。
  */
@@ -125,7 +125,7 @@ More: ${result.actionUrl}`
     }),
   ];
 }
-//@ chunk-0eepcc6r.js:19899-20591 placement
+//@ chunk-1nx5c9rq.js:21075-21767 placement
 async function launchUltrareview({
   scope,
   context,
@@ -179,7 +179,7 @@ async function launchUltrareview({
       },
     );
 }
-//@ chunk-0eepcc6r.js:20591-22662 placement
+//@ chunk-1nx5c9rq.js:21767-23837 placement
 /**
  * /ultrareview 命令定义：需要 allow_remote_sessions，在云会话中运行
  */
@@ -291,4 +291,4 @@ var call = async (onDone, context, args, invokedName) => {
       });
   }
 };
-export { buildUltrareviewMessages, call, runUltrareviewCommand };
+export { buildUltrareviewMessages, runUltrareviewCommand, call };

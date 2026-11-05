@@ -1,15 +1,15 @@
 /**
  * @bufbuild/protobuf/dist/cjs/wire/text-format.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @bufbuild/protobuf@2.12.1
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-require-graph 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_descriptors } from "../descriptors.js";
 import { require_proto_int64 } from "../../commonjs/proto-int64.js";
 
-//@ chunk-fq0cr76a.js:361746-364098 cjs-require-graph
+//@ chunk-qg41pqt6.js:362313-364665 cjs-require-graph
 var require_text_format = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
@@ -63,7 +63,7 @@ var require_text_format = __commonJS(function (cjsExports) {
     }
   }
   function unescapeBytesDefaultValue(str) {
-    let b_2 = [];
+    let b = [];
     let input = {
       tail: str,
       c: "",
@@ -88,25 +88,25 @@ var require_text_format = __commonJS(function (cjsExports) {
           if (input.next())
             switch (input.c) {
               case "\\":
-                b_2.push(input.c.charCodeAt(0));
+                b.push(input.c.charCodeAt(0));
                 break;
               case "b":
-                b_2.push(8);
+                b.push(8);
                 break;
               case "f":
-                b_2.push(12);
+                b.push(12);
                 break;
               case "n":
-                b_2.push(10);
+                b.push(10);
                 break;
               case "r":
-                b_2.push(13);
+                b.push(13);
                 break;
               case "t":
-                b_2.push(9);
+                b.push(9);
                 break;
               case "v":
-                b_2.push(11);
+                b.push(11);
                 break;
               case "0":
               case "1":
@@ -121,7 +121,7 @@ var require_text_format = __commonJS(function (cjsExports) {
                 if (t === false) return false;
                 let n = parseInt(digits + t, 8);
                 if (Number.isNaN(n)) return false;
-                b_2.push(n);
+                b.push(n);
                 break;
               }
               case "x": {
@@ -130,7 +130,7 @@ var require_text_format = __commonJS(function (cjsExports) {
                 if (t === false) return false;
                 let n = parseInt(digits + t, 16);
                 if (Number.isNaN(n)) return false;
-                b_2.push(n);
+                b.push(n);
                 break;
               }
               case "u": {
@@ -141,7 +141,7 @@ var require_text_format = __commonJS(function (cjsExports) {
                 if (Number.isNaN(n)) return false;
                 let chunk = new Uint8Array(4);
                 new DataView(chunk.buffer).setInt32(0, n, true);
-                b_2.push(chunk[0], chunk[1], chunk[2], chunk[3]);
+                b.push(chunk[0], chunk[1], chunk[2], chunk[3]);
                 break;
               }
               case "U": {
@@ -153,15 +153,15 @@ var require_text_format = __commonJS(function (cjsExports) {
                 let view = new DataView(chunk.buffer);
                 view.setInt32(0, tc.lo, true);
                 view.setInt32(4, tc.hi, true);
-                b_2.push(chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6], chunk[7]);
+                b.push(chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6], chunk[7]);
                 break;
               }
             }
           break;
         default:
-          b_2.push(input.c.charCodeAt(0));
+          b.push(input.c.charCodeAt(0));
       }
-    return new Uint8Array(b_2);
+    return new Uint8Array(b);
   }
 });
 export { require_text_format };

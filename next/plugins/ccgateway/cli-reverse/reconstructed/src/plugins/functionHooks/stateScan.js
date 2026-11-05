@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：扫描 $ 的一次使用（$.noun.event 调用、记录 env/命令/状态）；扫描把 $ 传给命名函数的调用等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bfnfj4kx.js (41)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6sf70a86.js (41)
  * attribution: placement 41
  */
 import {
@@ -55,7 +55,7 @@ import {
 import { isAbovePrepend, tiersBeneath, readBundledScan, readBundledFiles } from "./builtinHooksModule.js";
 import { importResolverCache } from "./moduleLoader.js";
 
-//@ chunk-bfnfj4kx.js:39347-39545 placement (2.1.88 match: createEmptyToolCounts, 0.474)
+//@ chunk-6sf70a86.js:39391-39589 placement (2.1.88 match: createEmptyToolCounts, 0.472)
 /**
  * 有 stateReads/stateWrites 时按键排序输出 {reads, writes}，否则 undefined。旧版名 createEmptyToolCounts 为错配。
  */
@@ -70,7 +70,7 @@ function summarizeStateAccess(scan) {
       }
     : undefined;
 }
-//@ chunk-bfnfj4kx.js:51666-52255 placement
+//@ chunk-6sf70a86.js:51711-52300 placement
 /**
  * 把标识符解析为 const 绑定（拒绝参数遮蔽）。
  */
@@ -97,7 +97,7 @@ function resolveConstBinding(identifier, { consts, names, climbs, program, refus
         scope,
       };
 }
-//@ chunk-bfnfj4kx.js:52255-52349 placement
+//@ chunk-6sf70a86.js:52300-52394 placement
 /**
  * 区间内的状态使用
  */
@@ -105,7 +105,7 @@ var stateUsesBetween = ({ placed, starts }, scope) =>
   placed
     .slice(import_sortedIndex(starts, scope.start), import_sortedIndex(starts, scope.end))
     .toSorted((useA, useB) => useA.at - useB.at);
-//@ chunk-bfnfj4kx.js:52349-52978 placement
+//@ chunk-6sf70a86.js:52394-53023 placement
 /**
  * 读取状态常量的定义。
  */
@@ -127,7 +127,7 @@ function readStateConst({ read, binding }, { consts, names, parentOf, refuse }, 
   let first = stateUsesBetween(consts.apart(name)(stateFacts), scope).at(0);
   return first !== undefined && (found === undefined || first.at < found.at) ? first.use : found?.use;
 }
-//@ chunk-bfnfj4kx.js:52978-53560 placement
+//@ chunk-6sf70a86.js:53023-53605 placement
 /**
  * 沿 const 链追踪表达式。
  */
@@ -179,7 +179,7 @@ function followConstChain(node, scanned, seen = new Set()) {
   }
   return found;
 }
-//@ chunk-bfnfj4kx.js:53560-54187 placement
+//@ chunk-6sf70a86.js:53605-54232 placement
 /**
  * 解析状态键对象（plugin、key）。
  */
@@ -208,7 +208,7 @@ function resolveStateKeyObject(node, context, seen = new Set()) {
   );
   return mapped.every((resolved) => resolved !== undefined) ? mapped.flat() : undefined;
 }
-//@ chunk-bfnfj4kx.js:54187-54739 placement
+//@ chunk-6sf70a86.js:54232-54785 placement
 /**
  * 扫描一次状态 API 调用并记录。
  */
@@ -238,7 +238,7 @@ function scanStateCall(call, spelling, { refuse, scanned, libraryHelper }) {
     consts,
   };
 }
-//@ chunk-bfnfj4kx.js:54739-57339 placement
+//@ chunk-6sf70a86.js:54785-57385 placement
 /**
  * 扫描 $ 的一次使用（$.noun.event 调用、记录 env/命令/状态）。
  */
@@ -350,9 +350,9 @@ function scanDollarUse(
   }
   throw refuse(target, `the value of next(e) at engine.create is ${describeDollarUse(parent, target)}`);
 }
-//@ chunk-bfnfj4kx.js:57339-57362 placement
+//@ chunk-6sf70a86.js:57385-57408 placement
 var ENGINE_CREATE = "engine.create";
-//@ chunk-bfnfj4kx.js:57362-57569 placement
+//@ chunk-6sf70a86.js:57408-57615 placement
 function scanDollarAliases(declared, aliases, context) {
   let { refuse } = context;
   for (let { name, declaration, origin } of aliases) {
@@ -362,7 +362,7 @@ function scanDollarAliases(declared, aliases, context) {
     for (let reference of findReferences(declared, name)) scanDollarUse(reference, origin, context);
   }
 }
-//@ chunk-bfnfj4kx.js:57569-58240 placement
+//@ chunk-6sf70a86.js:57615-58286 placement
 /**
  * 检查持有 $ 的函数（禁止 arguments、rest 参数）。
  */
@@ -400,12 +400,12 @@ function checkFunctionHoldingDollar(declared, paramIndex, context) {
     },
   );
 }
-//@ chunk-bfnfj4kx.js:58240-58299 placement
+//@ chunk-6sf70a86.js:58286-58345 placement
 /**
  * 找展开参数
  */
 var findSpreadArg = (call) => call.arguments.find((argument) => argument.type === "SpreadElement");
-//@ chunk-bfnfj4kx.js:58299-59872 placement
+//@ chunk-6sf70a86.js:58345-59918 placement
 /**
  * 扫描把 $ 传给命名函数的调用。
  */
@@ -476,7 +476,7 @@ function scanDollarHolders(state, linked = state.linked) {
   };
   return checkHandoff;
 }
-//@ chunk-bfnfj4kx.js:59872-60525 placement
+//@ chunk-6sf70a86.js:59918-60571 placement
 /**
  * 检查状态常量定义合法。
  */
@@ -498,7 +498,7 @@ function checkStateConsts(state) {
       );
   }
 }
-//@ chunk-bfnfj4kx.js:60525-61578 placement
+//@ chunk-6sf70a86.js:60571-61624 placement
 /**
  * 收集库调用（read/update/atom 等）。
  */
@@ -547,7 +547,7 @@ function collectLibraryCalls(scan) {
       if (helper === "update") scan.calls.add("state.set");
     });
 }
-//@ chunk-bfnfj4kx.js:61578-62007 placement
+//@ chunk-6sf70a86.js:61624-62053 placement
 /**
  * 检查调用必须作为语句或返回值使用。
  */
@@ -567,14 +567,14 @@ function checkCallStatement({ call, scanned, what, holder }) {
       `the value of ${what} is kept (assigned, passed, read, or returned from a nested function); it takes .catch(handler) where it is called and nothing else`,
     );
 }
-//@ chunk-bfnfj4kx.js:62007-62119 placement
+//@ chunk-6sf70a86.js:62053-62165 placement
 function functionNameInfo(fn) {
   return {
     argumentsRead: fn.type === "ArrowFunctionExpression" ? [] : findReferences(fn, "arguments", "own"),
     names: collectIdentifierUses(fn),
   };
 }
-//@ chunk-bfnfj4kx.js:62119-62230 placement
+//@ chunk-6sf70a86.js:62165-62276 placement
 function holderNamesOf(scan, fn) {
   let cached = scan.holderNames.get(fn);
   if (cached !== undefined) return cached;
@@ -582,7 +582,7 @@ function holderNamesOf(scan, fn) {
   scan.holderNames.set(fn, info);
   return info;
 }
-//@ chunk-bfnfj4kx.js:62230-63114 placement
+//@ chunk-6sf70a86.js:62276-63160 placement
 /**
  * 解析注册的 hook 函数（函数表达式或标识符）。
  */
@@ -618,7 +618,7 @@ function resolveHookFunction(state, { fn, what, event, engineCreate }) {
     engineCreate: scan.registered.get(resolved.fn)?.engineCreate === true || engineCreate,
   });
 }
-//@ chunk-bfnfj4kx.js:63114-64260 placement
+//@ chunk-6sf70a86.js:63160-64306 placement
 /**
  * 扫描 on("<event>") 调用的使用方式。
  */
@@ -682,7 +682,7 @@ function scanOnCall(state, { call, event, onName, holder }) {
     holder,
   });
 }
-//@ chunk-bfnfj4kx.js:64260-64915 placement
+//@ chunk-6sf70a86.js:64306-64961 placement
 /**
  * 解析 on() 参数（事件、匹配器、hook）。
  */
@@ -714,7 +714,7 @@ function parseOnArguments(call, refuse, onName) {
     matcher: restArgs.length === 2 ? restArgs[0] : undefined,
   };
 }
-//@ chunk-bfnfj4kx.js:64915-65464 placement
+//@ chunk-6sf70a86.js:64961-65510 placement
 /**
  * 扫描一次事件注册。
  */
@@ -752,7 +752,7 @@ function scanRegistration(context, registration) {
     event,
   });
 }
-//@ chunk-bfnfj4kx.js:65464-66874 placement
+//@ chunk-6sf70a86.js:65510-66920 placement
 /**
  * 扫描持有 $ 的函数体。
  */
@@ -827,7 +827,7 @@ function scanHolder(state, holder, paramIndex) {
     );
   }
 }
-//@ chunk-bfnfj4kx.js:66874-67482 placement
+//@ chunk-6sf70a86.js:66920-67528 placement
 /**
  * 创建扫描状态（hooks、注册、调用、env 读写等集合）。
  */
@@ -870,7 +870,7 @@ var createScanState = (graph, pluginName, register) => ({
   holders: new Map(),
   holderNames: new Map(),
 });
-//@ chunk-bfnfj4kx.js:67482-67582 placement
+//@ chunk-6sf70a86.js:67528-67628 placement
 function findExportDeclaration(linked, name) {
   for (let statement of linked.scanned.program.body) {
     let found = checkExportDeclaration(linked, statement, name);
@@ -878,7 +878,7 @@ function findExportDeclaration(linked, name) {
   }
   return;
 }
-//@ chunk-bfnfj4kx.js:67582-68023 placement
+//@ chunk-6sf70a86.js:67628-68069 placement
 /**
  * 找到导出的 register 函数。
  */
@@ -898,13 +898,13 @@ function findExportedRegister(linked, name, hint = "") {
     );
   throw refuse(undefined, `no export named ${label}${hint}`);
 }
-//@ chunk-bfnfj4kx.js:68023-68101 placement
+//@ chunk-6sf70a86.js:68069-68147 placement
 /**
  * 必须导出 register
  */
 var requireExportedRegister = (linked) =>
   findExportedRegister(linked, "register", " (export function register(on, options) {...})");
-//@ chunk-bfnfj4kx.js:68101-68213 placement
+//@ chunk-6sf70a86.js:68147-68259 placement
 function scanFromEntry(graph, pluginName) {
   let entryFile = requireLinkedFile(
     {
@@ -925,7 +925,7 @@ function scanFromEntry(graph, pluginName) {
   );
   return scanState;
 }
-//@ chunk-bfnfj4kx.js:68213-68718 placement
+//@ chunk-6sf70a86.js:68259-68764 placement
 /**
  * 检查 next 参数的解构形式。
  */
@@ -943,7 +943,7 @@ function checkNextDestructure(pattern, { refuse }) {
       );
   }
 }
-//@ chunk-bfnfj4kx.js:68718-69543 placement
+//@ chunk-6sf70a86.js:68764-69589 placement
 /**
  * 检查 next.to 调用。
  */
@@ -973,7 +973,7 @@ function checkNextTo(member, { refuse, parentOf, recordTo }) {
   recordTo(tier);
   return parent;
 }
-//@ chunk-bfnfj4kx.js:69543-70824 placement
+//@ chunk-6sf70a86.js:69589-70870 placement
 /**
  * 扫描 hook 的 next 参数用法。
  */
@@ -1034,7 +1034,7 @@ function scanNextParam({ fn, next: nextParam, engineCreate }, context) {
       );
   }
 }
-//@ chunk-bfnfj4kx.js:70824-71804 placement
+//@ chunk-6sf70a86.js:70870-71850 placement
 /**
  * 扫描 hook 函数参数（e、$、next）。
  */
@@ -1094,7 +1094,7 @@ function scanHookParams(fn, engineCreate, context) {
     );
   scanDollarAliases(fn, dollarNames, innerContext);
 }
-//@ chunk-bfnfj4kx.js:71804-72289 placement
+//@ chunk-6sf70a86.js:71850-72335 placement
 /**
  * 扫描全部注册的 hooks。
  */
@@ -1132,7 +1132,7 @@ function scanRegistrations(graph, pluginName) {
   checkStateConsts(scan);
   return scan;
 }
-//@ chunk-bfnfj4kx.js:72289-72742 placement
+//@ chunk-6sf70a86.js:72335-72788 placement
 /**
  * 描述表达式类型（用于报错）。
  */
@@ -1158,12 +1158,12 @@ function describeExpression(node) {
       return `a ${node.type}`;
   }
 }
-//@ chunk-bfnfj4kx.js:72742-72977 placement
+//@ chunk-6sf70a86.js:72788-73023 placement
 var TELEMETRY_TO_HINT = ({ onName, event }) =>
   '"to" is a string literal, or a list of them, from ' +
   CORE_SOURCES.map((source) => `"${source}"`).join(", ") +
   `, written in the call, so the streams a module's hooks stand on can be listed: ${onName}("${event}", { to: "collector" }, hook)`;
-//@ chunk-bfnfj4kx.js:72977-73426 placement
+//@ chunk-6sf70a86.js:73023-73472 placement
 /**
  * 读取 on() 的目的地列表。
  */
@@ -1189,7 +1189,7 @@ function readDestinations(value, facts) {
     return literal;
   });
 }
-//@ chunk-bfnfj4kx.js:73426-74234 placement
+//@ chunk-6sf70a86.js:73472-74280 placement
 /**
  * 读取 on() 的匹配器参数。
  */
@@ -1231,7 +1231,7 @@ function readMatcher(matcher, facts) {
       );
   }
 }
-//@ chunk-bfnfj4kx.js:74234-74516 placement
+//@ chunk-6sf70a86.js:74280-74562 placement
 /**
  * 列出模块中遥测钩子所站的流（anthropic/collector）。
  */
@@ -1249,7 +1249,7 @@ function collectTelemetryDestinations(scan) {
   );
   return CORE_SOURCES.filter((source) => destinations.has(source));
 }
-//@ chunk-bfnfj4kx.js:74516-75019 placement
+//@ chunk-6sf70a86.js:74562-75065 placement
 /**
  * 扫描整个 hooks 模块，产出 hooks、calls、nextTo、env、状态等清单。
  */
@@ -1292,7 +1292,7 @@ function scanHooksModule(graph, pluginName) {
     }),
   };
 }
-//@ chunk-bfnfj4kx.js:75019-75119 placement
+//@ chunk-6sf70a86.js:75065-75165 placement
 /**
  * 按模块图摘要缓存 hooks 模块扫描结果。
  */
@@ -1304,7 +1304,7 @@ function scanHooksModuleCached(graph, pluginName) {
   importResolverCache.set(digest, scan);
   return scan;
 }
-//@ chunk-bfnfj4kx.js:75119-75173 placement
+//@ chunk-6sf70a86.js:75165-75219 placement
 /**
  * 打包模块信息
  */
@@ -1313,4 +1313,4 @@ var bundledModuleInfo = (moduleName, builtin, pluginName) => ({
   scan: readBundledScan(builtin, pluginName),
   files: readBundledFiles(builtin),
 });
-export { bundledModuleInfo, scanRegistrations, scanHooksModuleCached };
+export { scanRegistrations, scanHooksModuleCached, bundledModuleInfo };

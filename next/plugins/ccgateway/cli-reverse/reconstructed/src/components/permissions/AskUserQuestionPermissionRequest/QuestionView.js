@@ -3,9 +3,9 @@
  *
  * 单问题视图：选项列表 + "Other / Type something" 自由输入。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/AskUserQuestionPermissionRequest/QuestionView.tsx
- * pieces: chunk-18hwfzwa.js (4)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: callgraph-fingerprint 1, sole-consumer 1, fingerprint 2
  */
 import { replaceLineBreaks } from "../../../utils/permissions/approvalPayloadSerialization.js";
@@ -42,11 +42,11 @@ import { SelectMultiAccessible } from "../../CustomSelect/SelectMulti.js";
 import { ModelSelector } from "../../agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "../../CustomSelect/select.js";
 
-//@ chunk-18hwfzwa.js:1287012-1287066 callgraph-fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:1312804-1312858 callgraph-fingerprint (2.1.88 match: _temp, 1)
 function selectToolPermissionContextMode(s) {
   return s.toolPermissionContext.mode;
 }
-//@ chunk-18hwfzwa.js:1287066-1287178 sole-consumer
+//@ chunk-czq1j3j2.js:1312858-1312970 sole-consumer
 function toSelectOption(option) {
   return {
     type: "text",
@@ -55,13 +55,13 @@ function toSelectOption(option) {
     description: replaceLineBreaks(option.displayDescription),
   };
 }
-//@ chunk-18hwfzwa.js:1287222-1287263 fingerprint (2.1.88 match: _temp4, 1)
+//@ chunk-czq1j3j2.js:1313014-1313055 fingerprint (2.1.88 match: _temp4, 1)
 function isNotOtherOption(v) {
   return v !== "__other__";
 }
-//@ chunk-18hwfzwa.js:1287263-1293852 fingerprint (2.1.88 match: QuestionView, 0.754)
+//@ chunk-czq1j3j2.js:1313055-1319811 fingerprint (2.1.88 match: QuestionView, 0.749)
 function QuestionView(props) {
-  let $ = useMemoCache(76);
+  let $ = useMemoCache(80);
   let {
     wouldTakeAnswer,
     question,
@@ -70,6 +70,7 @@ function QuestionView(props) {
     answers,
     questionStates,
     hideSubmitTab,
+    hideOtherRow,
     planFilePath,
     minContentWidth,
     onUpdateQuestionState,
@@ -86,6 +87,7 @@ function QuestionView(props) {
     onRemoveImage,
   } = props;
   let hideSubmitTab_2 = hideSubmitTab === undefined ? false : hideSubmitTab;
+  let hideOther = hideOtherRow === undefined ? false : hideOtherRow;
   let isPlanMode = useAppState(selectToolPermissionContextMode) === "plan";
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let [isFooterFocused, setIsFooterFocused] = useState(false);
@@ -129,9 +131,14 @@ function QuestionView(props) {
   let blurFooterHandler = blurFooter;
   let deferredPasteForwarding = useDeferredPasteForwarding(!isFooterFocused);
   let onPaste;
-  if ($[5] !== canPasteImage || $[6] !== deferredPasteForwarding || $[7] !== isFooterFocused) {
+  if (
+    $[5] !== canPasteImage ||
+    $[6] !== hideOther ||
+    $[7] !== deferredPasteForwarding ||
+    $[8] !== isFooterFocused
+  ) {
     onPaste = (event) => {
-      if (!isFooterFocused || !isForwardablePaste(event, canPasteImage)) {
+      if (hideOther || !isFooterFocused || !isForwardablePaste(event, canPasteImage)) {
         return;
       }
       event.preventDefault();
@@ -139,20 +146,21 @@ function QuestionView(props) {
       setIsFooterFocused(false);
     };
     $[5] = canPasteImage;
-    $[6] = deferredPasteForwarding;
-    $[7] = isFooterFocused;
-    $[8] = onPaste;
-  } else onPaste = $[8];
+    $[6] = hideOther;
+    $[7] = deferredPasteForwarding;
+    $[8] = isFooterFocused;
+    $[9] = onPaste;
+  } else onPaste = $[9];
   let onPaste_2 = onPaste;
-  let chatRowNumber = question.options.length + 1 + 1;
+  let chatRowNumber = question.options.length + (hideOther ? 1 : 2);
   let onKeyDown;
   if (
-    $[9] !== chatRowNumber ||
-    $[10] !== isFooterFocused ||
-    $[11] !== isEditorValue ||
-    $[12] !== isScreenReaderEnabled ||
-    $[13] !== onCancel ||
-    $[14] !== onRespondToClaude
+    $[10] !== chatRowNumber ||
+    $[11] !== isFooterFocused ||
+    $[12] !== isEditorValue ||
+    $[13] !== isScreenReaderEnabled ||
+    $[14] !== onCancel ||
+    $[15] !== onRespondToClaude
   ) {
     onKeyDown = (e) => {
       if (!isFooterFocused) {
@@ -181,14 +189,14 @@ function QuestionView(props) {
         onCancel();
       }
     };
-    $[9] = chatRowNumber;
-    $[10] = isFooterFocused;
-    $[11] = isEditorValue;
-    $[12] = isScreenReaderEnabled;
-    $[13] = onCancel;
-    $[14] = onRespondToClaude;
-    $[15] = onKeyDown;
-  } else onKeyDown = $[15];
+    $[10] = chatRowNumber;
+    $[11] = isFooterFocused;
+    $[12] = isEditorValue;
+    $[13] = isScreenReaderEnabled;
+    $[14] = onCancel;
+    $[15] = onRespondToClaude;
+    $[16] = onKeyDown;
+  } else onKeyDown = $[16];
   let onKeyDown_2 = onKeyDown;
   let textOptions = question.options.map(toSelectOption);
   let key = question.key;
@@ -196,10 +204,10 @@ function QuestionView(props) {
   let lastTypedRef = useRef(null);
   let onOpenEditor;
   if (
-    $[16] !== onUpdateQuestionState ||
-    $[17] !== question.multiSelect ||
-    $[18] !== key ||
-    $[19] !== wouldTakeAnswer
+    $[17] !== onUpdateQuestionState ||
+    $[18] !== question.multiSelect ||
+    $[19] !== key ||
+    $[20] !== wouldTakeAnswer
   ) {
     onOpenEditor = async (currentValue, setValue) => {
       if (!wouldTakeAnswer()) {
@@ -221,33 +229,33 @@ function QuestionView(props) {
         );
       }
     };
-    $[16] = onUpdateQuestionState;
-    $[17] = question.multiSelect;
-    $[18] = key;
-    $[19] = wouldTakeAnswer;
-    $[20] = onOpenEditor;
-  } else onOpenEditor = $[20];
+    $[17] = onUpdateQuestionState;
+    $[18] = question.multiSelect;
+    $[19] = key;
+    $[20] = wouldTakeAnswer;
+    $[21] = onOpenEditor;
+  } else onOpenEditor = $[21];
   let onOpenEditor_2 = onOpenEditor;
   const placeholder = question.multiSelect ? "Type something" : "Type something.";
   const initialValue = questionState?.textInputValue ?? "";
   let vimEditing;
-  if ($[21] !== editorMode || $[22] !== takesEscape) {
+  if ($[22] !== editorMode || $[23] !== takesEscape) {
     vimEditing = editorMode
       ? {
           takesEscape,
           onStateChange: setVimState,
         }
       : undefined;
-    $[21] = editorMode;
-    $[22] = takesEscape;
-    $[23] = vimEditing;
-  } else vimEditing = $[23];
+    $[22] = editorMode;
+    $[23] = takesEscape;
+    $[24] = vimEditing;
+  } else vimEditing = $[24];
   let onChange;
   if (
-    $[24] !== onUpdateQuestionState ||
-    $[25] !== question.multiSelect ||
-    $[26] !== key ||
-    $[27] !== wouldTakeAnswer
+    $[25] !== onUpdateQuestionState ||
+    $[26] !== question.multiSelect ||
+    $[27] !== key ||
+    $[28] !== wouldTakeAnswer
   ) {
     onChange = (value) => {
       if (!wouldTakeAnswer()) {
@@ -265,14 +273,14 @@ function QuestionView(props) {
         question.multiSelect ?? false,
       );
     };
-    $[24] = onUpdateQuestionState;
-    $[25] = question.multiSelect;
-    $[26] = key;
-    $[27] = wouldTakeAnswer;
-    $[28] = onChange;
-  } else onChange = $[28];
+    $[25] = onUpdateQuestionState;
+    $[26] = question.multiSelect;
+    $[27] = key;
+    $[28] = wouldTakeAnswer;
+    $[29] = onChange;
+  } else onChange = $[29];
   let otherOption;
-  if ($[29] !== initialValue || $[30] !== vimEditing || $[31] !== onChange || $[32] !== placeholder) {
+  if ($[30] !== placeholder || $[31] !== initialValue || $[32] !== vimEditing || $[33] !== onChange) {
     otherOption = {
       type: "input",
       value: "__other__",
@@ -283,15 +291,15 @@ function QuestionView(props) {
       vimEditing,
       onChange,
     };
-    $[29] = initialValue;
-    $[30] = vimEditing;
-    $[31] = onChange;
-    $[32] = placeholder;
-    $[33] = otherOption;
-  } else otherOption = $[33];
-  let otherOption_2 = otherOption;
+    $[30] = placeholder;
+    $[31] = initialValue;
+    $[32] = vimEditing;
+    $[33] = onChange;
+    $[34] = otherOption;
+  } else otherOption = $[34];
+  let otherOptionElement = otherOption;
   let chatOption;
-  if ($[34] !== isScreenReaderEnabled || $[35] !== question.multiSelect) {
+  if ($[35] !== isScreenReaderEnabled || $[36] !== question.multiSelect) {
     chatOption =
       isScreenReaderEnabled && !question.multiSelect
         ? [
@@ -302,30 +310,37 @@ function QuestionView(props) {
             },
           ]
         : [];
-    $[34] = isScreenReaderEnabled;
-    $[35] = question.multiSelect;
-    $[36] = chatOption;
-  } else chatOption = $[36];
+    $[35] = isScreenReaderEnabled;
+    $[36] = question.multiSelect;
+    $[37] = chatOption;
+  } else chatOption = $[37];
   let chatOption_2 = chatOption;
-  let options = [...textOptions, otherOption_2, ...chatOption_2];
+  let otherOptions;
+  if ($[38] !== hideOther || $[39] !== otherOptionElement) {
+    otherOptions = hideOther ? [] : [otherOptionElement];
+    $[38] = hideOther;
+    $[39] = otherOptionElement;
+    $[40] = otherOptions;
+  } else otherOptions = $[40];
+  let options = [...textOptions, ...otherOptions, ...chatOption_2];
   if (!question.multiSelect && question.options.some(hasOptionPreview) && !isScreenReaderEnabled) {
     let previewView;
     if (
-      $[37] !== answers ||
-      $[38] !== currentQuestionIndex ||
-      $[39] !== hideSubmitTab_2 ||
-      $[40] !== minContentWidth ||
-      $[41] !== onAnswer ||
-      $[42] !== onCancel ||
-      $[43] !== onRespondToClaude ||
-      $[44] !== onTabNext ||
-      $[45] !== onTabPrev ||
-      $[46] !== onTextInputFocus ||
-      $[47] !== onUpdateQuestionState ||
-      $[48] !== question ||
-      $[49] !== questionStates ||
-      $[50] !== questions ||
-      $[51] !== wouldTakeAnswer
+      $[41] !== answers ||
+      $[42] !== currentQuestionIndex ||
+      $[43] !== hideSubmitTab_2 ||
+      $[44] !== minContentWidth ||
+      $[45] !== onAnswer ||
+      $[46] !== onCancel ||
+      $[47] !== onRespondToClaude ||
+      $[48] !== onTabNext ||
+      $[49] !== onTabPrev ||
+      $[50] !== onTextInputFocus ||
+      $[51] !== onUpdateQuestionState ||
+      $[52] !== question ||
+      $[53] !== questionStates ||
+      $[54] !== questions ||
+      $[55] !== wouldTakeAnswer
     ) {
       previewView = jsxProd_default(PreviewQuestionView, {
         wouldTakeAnswer,
@@ -344,27 +359,27 @@ function QuestionView(props) {
         onTabNext,
         onRespondToClaude,
       });
-      $[37] = answers;
-      $[38] = currentQuestionIndex;
-      $[39] = hideSubmitTab_2;
-      $[40] = minContentWidth;
-      $[41] = onAnswer;
-      $[42] = onCancel;
-      $[43] = onRespondToClaude;
-      $[44] = onTabNext;
-      $[45] = onTabPrev;
-      $[46] = onTextInputFocus;
-      $[47] = onUpdateQuestionState;
-      $[48] = question;
-      $[49] = questionStates;
-      $[50] = questions;
-      $[51] = wouldTakeAnswer;
-      $[52] = previewView;
-    } else previewView = $[52];
+      $[41] = answers;
+      $[42] = currentQuestionIndex;
+      $[43] = hideSubmitTab_2;
+      $[44] = minContentWidth;
+      $[45] = onAnswer;
+      $[46] = onCancel;
+      $[47] = onRespondToClaude;
+      $[48] = onTabNext;
+      $[49] = onTabPrev;
+      $[50] = onTextInputFocus;
+      $[51] = onUpdateQuestionState;
+      $[52] = question;
+      $[53] = questionStates;
+      $[54] = questions;
+      $[55] = wouldTakeAnswer;
+      $[56] = previewView;
+    } else previewView = $[56];
     return previewView;
   }
   let planBar;
-  if ($[53] !== isPlanMode || $[54] !== planFilePath) {
+  if ($[57] !== isPlanMode || $[58] !== planFilePath) {
     planBar =
       isPlanMode &&
       planFilePath &&
@@ -386,23 +401,23 @@ function QuestionView(props) {
           }),
         ],
       });
-    $[53] = isPlanMode;
-    $[54] = planFilePath;
-    $[55] = planBar;
-  } else planBar = $[55];
+    $[57] = isPlanMode;
+    $[58] = planFilePath;
+    $[59] = planBar;
+  } else planBar = $[59];
   let topDivider;
-  if ($[56] === MEMO_CACHE_SENTINEL) {
+  if ($[60] === MEMO_CACHE_SENTINEL) {
     topDivider = jsxProd_default(Divider, {
       color: "inactive",
     });
-    $[56] = topDivider;
-  } else topDivider = $[56];
+    $[60] = topDivider;
+  } else topDivider = $[60];
   let navBar;
   if (
-    $[57] !== answers ||
-    $[58] !== currentQuestionIndex ||
-    $[59] !== hideSubmitTab_2 ||
-    $[60] !== questions
+    $[61] !== answers ||
+    $[62] !== currentQuestionIndex ||
+    $[63] !== hideSubmitTab_2 ||
+    $[64] !== questions
   ) {
     navBar = jsxProd_default(QuestionNavigationBar, {
       questions,
@@ -410,14 +425,14 @@ function QuestionView(props) {
       answers,
       hideSubmitTab: hideSubmitTab_2,
     });
-    $[57] = answers;
-    $[58] = currentQuestionIndex;
-    $[59] = hideSubmitTab_2;
-    $[60] = questions;
-    $[61] = navBar;
-  } else navBar = $[61];
+    $[61] = answers;
+    $[62] = currentQuestionIndex;
+    $[63] = hideSubmitTab_2;
+    $[64] = questions;
+    $[65] = navBar;
+  } else navBar = $[65];
   let children;
-  if ($[62] !== question.displayBody || $[63] !== question.displayQuestion.text) {
+  if ($[66] !== question.displayBody || $[67] !== question.displayQuestion.text) {
     children =
       question.displayBody.length === 0
         ? jsxProd_default(PermissionRequestTitle, {
@@ -436,29 +451,29 @@ function QuestionView(props) {
               }),
             ],
           });
-    $[62] = question.displayBody;
-    $[63] = question.displayQuestion.text;
-    $[64] = children;
-  } else children = $[64];
+    $[66] = question.displayBody;
+    $[67] = question.displayQuestion.text;
+    $[68] = children;
+  } else children = $[68];
   let questionBlock;
-  if ($[65] !== question.displayQuestion.needsGutter || $[66] !== children) {
+  if ($[69] !== question.displayQuestion.needsGutter || $[70] !== children) {
     questionBlock = jsxProd_default(Blockquote, {
       multiline: question.displayQuestion.needsGutter,
       children,
     });
-    $[65] = question.displayQuestion.needsGutter;
-    $[66] = children;
-    $[67] = questionBlock;
-  } else questionBlock = $[67];
+    $[69] = question.displayQuestion.needsGutter;
+    $[70] = children;
+    $[71] = questionBlock;
+  } else questionBlock = $[71];
   let footerHints;
   if (
-    $[68] !== chatRowNumber ||
-    $[69] !== isFooterFocused ||
-    $[70] !== isEditorValue ||
-    $[71] !== isScreenReaderEnabled ||
-    $[72] !== vimState ||
-    $[73] !== takesEscape ||
-    $[74] !== questions
+    $[72] !== chatRowNumber ||
+    $[73] !== isFooterFocused ||
+    $[74] !== isEditorValue ||
+    $[75] !== isScreenReaderEnabled ||
+    $[76] !== vimState ||
+    $[77] !== takesEscape ||
+    $[78] !== questions
   ) {
     footerHints =
       !isScreenReaderEnabled &&
@@ -531,15 +546,15 @@ function QuestionView(props) {
           }),
         ],
       });
-    $[68] = chatRowNumber;
-    $[69] = isFooterFocused;
-    $[70] = isEditorValue;
-    $[71] = isScreenReaderEnabled;
-    $[72] = vimState;
-    $[73] = takesEscape;
-    $[74] = questions;
-    $[75] = footerHints;
-  } else footerHints = $[75];
+    $[72] = chatRowNumber;
+    $[73] = isFooterFocused;
+    $[74] = isEditorValue;
+    $[75] = isScreenReaderEnabled;
+    $[76] = vimState;
+    $[77] = takesEscape;
+    $[78] = questions;
+    $[79] = footerHints;
+  } else footerHints = $[79];
   return jsxProd_default_2(Box, {
     flexDirection: "column",
     marginTop: 0,

@@ -3,12 +3,12 @@
  *
  * /config 设置页（Config 标签）：可切换的全部设置项（主题、编辑器模式、通知、自动压缩、verbose、模型、输出样式、语言等），远程会话下说明作用范围。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Settings/Config.tsx
- * pieces: chunk-6f92z7de.js (1), chunk-9h8dr0qb.js (20)
+ * pieces: chunk-j6tt9nsa.js (20), chunk-vpdjbfty.js (1)
  * attribution: placement 15, layout 3, fingerprint 2, sole-consumer 1
  */
-import { OUTPUT_STYLE_CONFIG, DEFAULT as DEFAULT_2 } from "../../constants/outputStyles.js";
+import { OUTPUT_STYLE_CONFIG, DEFAULT_2 } from "../../constants/outputStyles.js";
 import { fromSanitizer_SANITIZER_OUTPUT_ONLY, lit, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
@@ -63,7 +63,7 @@ import {
   FORWARD_SETTINGS_ERRORS,
   CONFIG_SAVE_FAILED,
 } from "../../commands/config/configSettings.js";
-import { getInitialSettings_2, updateSettingsForSource } from "../../utils/settings/settings.js";
+import { getInitialSettings, updateSettingsForSource } from "../../utils/settings/settings.js";
 import { getFeedbackDraftsSetting } from "../../services/feedbackDrafts.js";
 import {
   isAutoContinueEnabled,
@@ -83,7 +83,7 @@ import { useSearchInput } from "../../hooks/useSearchInput.js";
 import { hasAccessToIDEExtensionDiffFeature } from "../../utils/ide.js";
 import { env } from "../../utils/env.js";
 import { resolveSetting } from "../../utils/settings/userIntentSettings.js";
-import { isEligibleForOverageCreditGrant } from "../LogoV2/OverageCreditUpsell.js";
+import { workflowsUsableNow, workflowSizeDisplay } from "../../utils/workflows/workflowGates.js";
 import { hasWorkflowSizeSetting } from "../../utils/workflowSizeGuideline.js";
 import { isArtifactConfigToggleable } from "../../services/artifacts/artifactToolGates.js";
 import { isRemoteToolServingOnForSettings } from "../../services/remoteTools/servingGates.js";
@@ -114,7 +114,7 @@ import { isSettingsMovedToConfig } from "../../commands/createMovedToConfigComma
 import { PANE_WIDTH_RESERVE, PANE_PADDING_X, PANE_PADDING } from "../design-system/Pane.js";
 import { shortHash } from "../../utils/shortHash.js";
 import { sequential } from "../../utils/sequential.js";
-import { isAntBuild, getSafeModeExitHint, getClaudeConfigDir } from "../../utils/envUtils.js";
+import { isAntBuild, getSafeModeExitHint } from "../../utils/envUtils.js";
 import { tailOfId } from "../../utils/auth/lockHolderLiveness.js";
 import { useKeybinding } from "../../keybindings/useKeybinding.js";
 import { stripPrefix } from "../../utils/stringUtils.js";
@@ -138,6 +138,7 @@ import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
 import { ModelPicker } from "../ModelPicker.js";
 import { RemoteHomeSettingsDialog } from "../RemoteHomeSettingsDialog.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { OutputStylePicker } from "../OutputStylePicker.js";
 import { noteSystemPromptSectionInvalidation } from "../../bootstrap/state.js";
 import { LanguagePicker } from "../LanguagePicker.js";
@@ -151,10 +152,9 @@ import { isKairosInputNeededPushEnabled } from "../../tools/PushNotificationTool
 import { SearchBox } from "../SearchBox.js";
 import { cellText } from "../CustomSelect/selectTable.js";
 import { permissionModeTitle } from "../../utils/permissions/PermissionMode.js";
-import { workflowSizeDisplay } from "../../utils/workflows/workflowGates.js";
 import { deferInit, runDeferredInits } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6f92z7de.js:265-326 placement
+//@ chunk-vpdjbfty.js:266-328 placement
 /**
  * 函数 markCustomSetting（未知键标 custom）；位于「/config 设置页（Config 标签）：可切换的全部设置项（主题、编辑器模式、通知、自动压缩、verbose、模型、输出样式、语言等），远程会话下说明作用范围」模块。
  */
@@ -163,7 +163,7 @@ function markCustomSetting(value) {
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(value)
     : lit("custom");
 }
-//@ chunk-9h8dr0qb.js:12815-13132 placement
+//@ chunk-j6tt9nsa.js:12786-13103 placement
 function renderMobileNotice() {
   let $ = useMemoCache(1);
   if (useSyncExternalStore(onReachabilityChange, getReachability, noop_4)?.has_active_channel !== false) {
@@ -190,7 +190,7 @@ function renderMobileNotice() {
   } else textElement = $[0];
   return textElement;
 }
-//@ chunk-9h8dr0qb.js:13132-13703 placement
+//@ chunk-j6tt9nsa.js:13103-13674 placement
 /**
  * 设置页分组标题（外观、模型与输出、显示、输入与控制、连接、插件、高级、实验、内部）。
  */
@@ -228,11 +228,11 @@ var MOVED_TO_SETTINGS_FIELDS = [
   },
 ];
 var MOVED_TO_SETTINGS_IDS = new Set(MOVED_TO_SETTINGS_FIELDS.map((fieldDefs) => fieldDefs.id));
-//@ chunk-9h8dr0qb.js:13703-13735 placement
+//@ chunk-j6tt9nsa.js:13674-13706 placement
 function isMovedToSettings(settingId) {
   return MOVED_TO_SETTINGS_IDS.has(settingId);
 }
-//@ chunk-9h8dr0qb.js:13735-13830 placement
+//@ chunk-j6tt9nsa.js:13706-13801 placement
 function sectionTitleWithNote(title, settingId) {
   return title === "Advanced" && isMovedToSettings(settingId)
     ? {
@@ -243,14 +243,14 @@ function sectionTitleWithNote(title, settingId) {
         name: title,
       };
 }
-//@ chunk-9h8dr0qb.js:13830-15061 placement
+//@ chunk-j6tt9nsa.js:13801-15038 placement
 /**
  * 各分组包含的设置键。
  */
 var CONFIG_SECTION_KEYS; // deferred: uses CONFIG_SECTION_TITLES of its import cycle while loading; runs once the cycle is complete
 var settingToSectionMap;
 var settingOrderMap;
-deferInit("chunk-9h8dr0qb.js:13830", () => {
+deferInit("chunk-j6tt9nsa.js:13801", () => {
   CONFIG_SECTION_KEYS = {
     Appearance: ["theme", "language", "reduceMotion"],
     "Model & output": [
@@ -312,6 +312,7 @@ deferInit("chunk-9h8dr0qb.js:13830", () => {
       ...[],
       "snipEnabled",
       "snipDebug",
+      ...[],
       "doneMeansMerged",
       "autoUploadSessions",
       "autoAddRemoteControlDaemonWorker",
@@ -327,28 +328,28 @@ deferInit("chunk-9h8dr0qb.js:13830", () => {
     ),
   );
 });
-//@ chunk-9h8dr0qb.js:15061-15099 placement
+//@ chunk-j6tt9nsa.js:15038-15076 placement
 function isNestedSettingKey(key) {
   return key.includes(".");
 }
-//@ chunk-9h8dr0qb.js:15099-15161 placement
+//@ chunk-j6tt9nsa.js:15076-15138 placement
 function sectionForSetting(key) {
   return settingToSectionMap.get(key) ?? (isNestedSettingKey(key) ? "Plugins" : "Advanced");
 }
-//@ chunk-9h8dr0qb.js:15161-15230 placement
+//@ chunk-j6tt9nsa.js:15138-15207 placement
 var PLUGINS_SECTION_ORDER; // deferred: uses CONFIG_SECTION_TITLES of its import cycle while loading; runs once the cycle is complete
 var ADVANCED_SECTION_ORDER;
-deferInit("chunk-9h8dr0qb.js:15161", () => {
+deferInit("chunk-j6tt9nsa.js:15138", () => {
   PLUGINS_SECTION_ORDER = CONFIG_SECTION_TITLES.indexOf("Plugins") * 1000;
   ADVANCED_SECTION_ORDER = CONFIG_SECTION_TITLES.indexOf("Advanced") * 1000 + 999;
 });
-//@ chunk-9h8dr0qb.js:15230-15277 placement
+//@ chunk-j6tt9nsa.js:15207-15254 placement
 function settingSortKey(key) {
   return (
     settingOrderMap.get(key) ?? (isNestedSettingKey(key) ? PLUGINS_SECTION_ORDER : ADVANCED_SECTION_ORDER)
   );
 }
-//@ chunk-9h8dr0qb.js:15277-15419 placement
+//@ chunk-j6tt9nsa.js:15254-15396 placement
 function sortSettingsByOrder(items) {
   return items
     .map((item, index) => ({
@@ -361,26 +362,26 @@ function sortSettingsByOrder(items) {
     })
     .map(({ item }) => item);
 }
-//@ chunk-9h8dr0qb.js:15419-15563 placement
+//@ chunk-j6tt9nsa.js:15396-15540 placement
 var SETTING_ID_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SETTING_VALUE_ID_RE;
 var FIXED_VALUE_LABELS;
-deferInit("chunk-9h8dr0qb.js:15419", () => {
+deferInit("chunk-j6tt9nsa.js:15396", () => {
   SETTING_ID_RE = /^[a-z][A-Za-z0-9]{0,63}$/;
   SETTING_VALUE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
   FIXED_VALUE_LABELS = new Set(["Allowed", "Not allowed", "Switch automatically", "Ask each time", ...[]]);
 });
-//@ chunk-9h8dr0qb.js:15563-15621 placement
+//@ chunk-j6tt9nsa.js:15540-15598 placement
 function markSettingIdSafe(id) {
   return SETTING_ID_RE.test(id) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(id) : lit("nonconforming");
 }
-//@ chunk-9h8dr0qb.js:15621-15690 placement
+//@ chunk-j6tt9nsa.js:15598-15667 placement
 function markSettingValueSafe(value) {
   return SETTING_VALUE_ID_RE.test(value) || FIXED_VALUE_LABELS.has(value)
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(value)
     : lit("nonconforming");
 }
-//@ chunk-9h8dr0qb.js:15690-15898 placement
+//@ chunk-j6tt9nsa.js:15667-15875 placement
 function truncateToWidth(searchQuery, maxWidth) {
   if (bunStringWidth(searchQuery) <= maxWidth) return searchQuery;
   let max = Math.max(1, maxWidth - 1);
@@ -396,11 +397,11 @@ function truncateToWidth(searchQuery, maxWidth) {
   }
   return searchQuery.slice(0, index) + "\u2026";
 }
-//@ chunk-9h8dr0qb.js:15898-15950 layout
+//@ chunk-j6tt9nsa.js:15875-15927 layout
 function settingIdsKey(items) {
   return items.map((item) => item.id).join("\x00");
 }
-//@ chunk-9h8dr0qb.js:15950-16100 layout
+//@ chunk-j6tt9nsa.js:15927-16077 layout
 function sameSettingLabels(current, prev) {
   if (current.size !== prev.size) return false;
   for (let [id, labelInfo] of current) {
@@ -414,11 +415,11 @@ function sameSettingLabels(current, prev) {
   }
   return true;
 }
-//@ chunk-9h8dr0qb.js:16100-16144 layout
+//@ chunk-j6tt9nsa.js:16077-16121 layout
 function stopClickPropagation(event) {
   event.stopImmediatePropagation();
 }
-//@ chunk-9h8dr0qb.js:16144-41746 fingerprint (2.1.88 match: Config, 0.475)
+//@ chunk-j6tt9nsa.js:16121-41689 fingerprint (2.1.88 match: Config, 0.474)
 /**
  * /config 主体：可搜索的设置列表，布尔项回车切换、枚举项左右切换（主题、编辑器模式 normal/vim、通知方式、自动压缩、显示回合耗时、自动复制、减少动画、输出样式、模型、语言等），修改写入对应 settings 并记录事件。
  */
@@ -449,12 +450,12 @@ function Config({
   let [globalConfig, setGlobalConfig] = useState(getEffectiveConfigValues);
   let globalConfigRef = useRef(globalConfig);
   let [settingsData, setSettingsData] = useState(() => ({
-    ...getInitialSettings_2(),
+    ...getInitialSettings(),
     ...remoteForwardedSettings(),
     feedbackDrafts: getFeedbackDraftsSetting(),
     autoContinueAtUsageLimit: isAutoContinueEnabled(),
   }));
-  let initialSettingsRef = useRef(getInitialSettings_2());
+  let initialSettingsRef = useRef(getInitialSettings());
   let [outputStyle, setOutputStyle] = useState(settingsData?.outputStyle || DEFAULT_2);
   let outputStyleRef = useRef(outputStyle);
   let [externalIncludesApproved, setExternalIncludesApproved] = useState(
@@ -558,7 +559,7 @@ function Config({
   let setting = resolveSetting("disableWorkflows", false);
   let setting_2 = resolveSetting("enableWorkflows", false);
   let workflowsToggleable =
-    isEligibleForOverageCreditGrant() &&
+    workflowsUsableNow() &&
     (setting.value !== true || setting.source === "userSettings") &&
     (setting_2.source === "default" || setting_2.source === "userSettings");
   let workflowSizeGuidelineToggleable = !hasWorkflowSizeSetting();
@@ -1163,7 +1164,6 @@ function Config({
             ? nextValue
             : setting.options[nextIndex],
         );
-        return;
       }
     },
     [
@@ -1466,7 +1466,6 @@ function Config({
                   ? `Custom themes are disabled in safe mode \u2014 ${getSafeModeExitHint()} to load them${parseCustomThemeRef(themeSetting) ? `. Your saved theme "${parseCustomThemeRef(themeSetting)}" is a custom theme; selecting a preset here replaces it` : ""}`
                   : "",
                 hideEscToCancel: true,
-                skipExitHandling: true,
               }),
               jsxProd_default(Box, {
                 children: jsxProd_default(Text, {
@@ -1923,10 +1922,10 @@ function Config({
                                     "report the issue at https://github.com/anthropics/claude-code/issues",
                                   PACKAGE_URL: "@anthropic-ai/claude-code",
                                   README_URL: "https://code.claude.com/docs/en/overview",
-                                  VERSION: "2.1.316",
+                                  VERSION: "2.1.318",
                                   FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                                  BUILD_TIME: "2026-10-30T23:28:13Z",
-                                  GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                                  BUILD_TIME: "2026-11-03T18:52:53Z",
+                                  GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                                   HOOKS_WORKER_URL:
                                     import.meta.dir +
                                     "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
@@ -1947,11 +1946,11 @@ function Config({
                                                 "report the issue at https://github.com/anthropics/claude-code/issues",
                                               PACKAGE_URL: "@anthropic-ai/claude-code",
                                               README_URL: "https://code.claude.com/docs/en/overview",
-                                              VERSION: "2.1.316",
+                                              VERSION: "2.1.318",
                                               FEEDBACK_CHANNEL:
                                                 "https://github.com/anthropics/claude-code/issues",
-                                              BUILD_TIME: "2026-10-30T23:28:13Z",
-                                              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                                              BUILD_TIME: "2026-11-03T18:52:53Z",
+                                              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                                               HOOKS_WORKER_URL:
                                                 import.meta.dir +
                                                 "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
@@ -2189,7 +2188,7 @@ function Config({
                                 }),
   });
 }
-//@ chunk-9h8dr0qb.js:41746-42307 fingerprint (2.1.88 match: THEME_LABELS, 0.713)
+//@ chunk-j6tt9nsa.js:41689-42250 fingerprint (2.1.88 match: THEME_LABELS, 0.713)
 /**
  * /config 里设置值的显示文案：thinking 中途切换警告、主题选项名、通知渠道名。
  */
@@ -2214,7 +2213,7 @@ var NOTIF_CHANNEL_LABELS = {
   iterm2_with_bell: "iTerm2 w/ Bell",
   notifications_disabled: "Disabled",
 };
-//@ chunk-9h8dr0qb.js:42307-42590 sole-consumer
+//@ chunk-j6tt9nsa.js:42250-42533 sole-consumer
 function formatSettingValue(setting, value, fieldDef, isColumnView) {
   if (isColumnView && setting.id === "switchModelsOnFlag") return SWITCH_MODEL_LABELS[value] ?? value;
   if (setting.id === "theme") return THEME_LABELS[value] ?? value;
@@ -2228,4 +2227,4 @@ function formatSettingValue(setting, value, fieldDef, isColumnView) {
 // The import cycle this module closes (2 modules) is complete: run the load-time work its statements
 // marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
 runDeferredInits("src/components/Settings/Config.js");
-export { markCustomSetting, renderMobileNotice, Config };
+export { renderMobileNotice, Config, markCustomSetting };

@@ -3,9 +3,9 @@
  *
  * /privacy-settings 实现：Grove 训练数据开关
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/privacy-settings/privacy-settings.tsx
- * pieces: chunk-p3x5wbde.js (2)
+ * pieces: chunk-60vwwtr1.js (2)
  * attribution: fingerprint 2
  */
 import {
@@ -18,7 +18,7 @@ import { lit } from "../../services/analytics/safeMetadata.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { PrivacySettingsDialog, GroveDialog } from "../../components/grove/Grove.js";
 
-//@ chunk-p3x5wbde.js:13680-13891 fingerprint (2.1.88 match: FALLBACK_MESSAGE, 0.667)
+//@ chunk-60vwwtr1.js:14829-15040 fingerprint (2.1.88 match: FALLBACK_MESSAGE, 0.667)
 /**
  * FALLBACK_MESSAGE：同旧版。
  */
@@ -26,7 +26,7 @@ var FALLBACK_MESSAGE =
   "Review and manage your privacy settings at https://claude.ai/settings/data-privacy-controls";
 var FETCH_FAILED_MESSAGE =
   "Unable to fetch your privacy settings at this time. Check https://claude.ai/settings/data-privacy-controls";
-//@ chunk-p3x5wbde.js:13891-14861 fingerprint (2.1.88 match: call, 0.847)
+//@ chunk-60vwwtr1.js:15040-16012 fingerprint (2.1.88 match: call, 0.847)
 /**
  * /privacy-settings 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

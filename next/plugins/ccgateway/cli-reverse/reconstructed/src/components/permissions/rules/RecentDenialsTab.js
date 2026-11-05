@@ -3,9 +3,9 @@
  *
  * 最近被 auto 模式拦截的命令列表。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/rules/RecentDenialsTab.tsx
- * pieces: chunk-p2qwpk2k.js (11)
+ * pieces: chunk-h5wy8vq5.js (11)
  * attribution: placement 7, layout 2, fingerprint 1, sole-consumer 1
  */
 import {
@@ -51,18 +51,18 @@ import { DiffFrame } from "../../FileEditToolDiff.js";
 import { formatHiddenRowsHint } from "../BashPermissionRequest/commandDisplay.js";
 import { formatShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
 
-//@ chunk-p2qwpk2k.js:25922-25926 placement
+//@ chunk-h5wy8vq5.js:27043-27047 placement
 init_react_production();
-//@ chunk-p2qwpk2k.js:25926-25954 placement
+//@ chunk-h5wy8vq5.js:27047-27075 placement
 var MAX_DENIAL_ROWS = 8;
 var MAX_DENIAL_TEXT = 200;
 var MIN_DECISION_COLUMN = 80;
 var MAX_DENIAL_LINES = 14;
-//@ chunk-p2qwpk2k.js:25954-26017 placement
+//@ chunk-h5wy8vq5.js:27075-27138 placement
 function hasNoVisibleToken(text) {
   return !text.replace(INVISIBLE_SYMBOL_RE, " ").split(/\s+/).some(hasVisibleText);
 }
-//@ chunk-p2qwpk2k.js:26017-26608 placement
+//@ chunk-h5wy8vq5.js:27138-27729 placement
 function RecentDenialRow(denial, cache) {
   let cached = cache.get(denial);
   if (cached !== undefined) return cached;
@@ -103,15 +103,15 @@ function RecentDenialRow(denial, cache) {
   cache.set(denial, row);
   return row;
 }
-//@ chunk-p2qwpk2k.js:26608-26646 placement
+//@ chunk-h5wy8vq5.js:27729-27767 placement
 function quotedReason(denial, index) {
   return RecentDenialRow(denial, index).quote;
 }
-//@ chunk-p2qwpk2k.js:26646-26684 placement
+//@ chunk-h5wy8vq5.js:27767-27805 placement
 function shortDenialLabel(denial, index) {
   return RecentDenialRow(denial, index).label;
 }
-//@ chunk-p2qwpk2k.js:26684-26977 placement
+//@ chunk-h5wy8vq5.js:27805-28097 placement
 function formatDenialCommand(command) {
   let serialized = serializeApprovalPayload(command, {
     maxUnits: MAX_PAYLOAD_UNITS,
@@ -132,18 +132,18 @@ function formatDenialCommand(command) {
     ),
   };
 }
-//@ chunk-p2qwpk2k.js:26977-27038 layout
+//@ chunk-h5wy8vq5.js:28097-28158 layout
 function notApprovableHereText(reason) {
   return `This row can't be approved here: ${reason}`;
 }
-//@ chunk-p2qwpk2k.js:27038-27115 layout
+//@ chunk-h5wy8vq5.js:28158-28235 layout
 function withoutId(ids, id) {
   if (!ids.has(id)) return ids;
   let next = new Set(ids);
   next.delete(id);
   return next;
 }
-//@ chunk-p2qwpk2k.js:27115-27860 fingerprint (2.1.88 match: RecentDenialsTab, 0.316)
+//@ chunk-h5wy8vq5.js:28235-28980 fingerprint (2.1.88 match: RecentDenialsTab, 0.316)
 function RecentDenialsTab(props) {
   let $ = useMemoCache(15);
   let { onHeaderFocusChange, onStateChange, isMidTurn } = props;
@@ -216,7 +216,7 @@ function RecentDenialsTab(props) {
   } else recentDenialsListElement = $[14];
   return recentDenialsListElement;
 }
-//@ chunk-p2qwpk2k.js:27860-32506 sole-consumer
+//@ chunk-h5wy8vq5.js:28980-33626 sole-consumer
 /**
  * 最近 auto 模式拒绝列表：可标记批准（空格）或重试（r），按终端尺寸裁剪显示，聚焦项展开命令全文，状态通过 onStateChange 上报；终端缩小时清除标记。
  */

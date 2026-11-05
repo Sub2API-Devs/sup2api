@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：房间消息发送
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (6)
  * attribution: placement 6
  */
 import {
@@ -37,28 +37,28 @@ import {
   canonicalTargetOrPlaceholder,
 } from "../../../services/artifacts/artifactPeople.js";
 import { urlSubPathError } from "../permissions/dbWriteInputs.js";
-import { parseSessionArtifactUrl } from "../../../services/artifacts/orgScope.js";
+import { validateSessionArtifactUrl } from "../../../services/artifacts/orgScope.js";
 import { isPlainObject } from "../../../utils/isPlainObject.js";
 import { plural } from "../../../utils/stringUtils.js";
 import { sanitizeDisplayText } from "../../../services/artifacts/capabilityDeclaration.js";
 
-//@ chunk-8wvtd8sr.js:227997-228058 placement
+//@ chunk-xzmy9dn4.js:230218-230279 placement
 /**
  * 判断 Artifact 房间是否可用（跳过原因为空）。
  */
 function isArtifactRoomAvailable(publishContext) {
   return null?.artifactRoomSkipReason(publishContext) === null;
 }
-//@ chunk-8wvtd8sr.js:228058-228135 placement
+//@ chunk-xzmy9dn4.js:230279-230356 placement
 /**
  * 本构建未编译房间功能时抛出错误。
  */
 function throwRoomsNotCompiled() {
   throw Error("artifact rooms are not compiled into this build");
 }
-//@ chunk-8wvtd8sr.js:228135-228147 placement
+//@ chunk-xzmy9dn4.js:230356-230368 placement
 var ARTIFACT_ROOMS_MODULE = null;
-//@ chunk-8wvtd8sr.js:228147-228273 placement
+//@ chunk-xzmy9dn4.js:230368-230494 placement
 /**
  * 从 room_send 输入中取出 topic（字符串）与 data。
  */
@@ -70,7 +70,7 @@ function roomMessageParts(input) {
     data,
   };
 }
-//@ chunk-8wvtd8sr.js:228273-228371 placement
+//@ chunk-xzmy9dn4.js:230494-230592 placement
 /**
  * 校验房间 topic，非法时返回占位串。
  */
@@ -79,7 +79,7 @@ function roomTopicOrInvalid(topic, formatTopic = (value) => value) {
     ? formatTopic(topic)
     : "(invalid topic)";
 }
-//@ chunk-8wvtd8sr.js:228371-235149 placement
+//@ chunk-xzmy9dn4.js:230592-237371 placement
 /**
  * room_send 动作处理器。
  */
@@ -183,12 +183,12 @@ var ARTIFACT_ROOM_SEND_ACTION_HANDLER = {
         };
       let urlError = urlSubPathError(url);
       if (urlError) return urlError;
-      let sessionArtifactUrl = parseSessionArtifactUrl(url);
-      if (!sessionArtifactUrl.ok)
+      let artifactCheck = validateSessionArtifactUrl(url);
+      if (!artifactCheck.ok)
         return {
           result: false,
-          message: sessionArtifactUrl.message,
-          errorCode: sessionArtifactUrl.errorCode,
+          message: artifactCheck.message,
+          errorCode: artifactCheck.errorCode,
         };
       let { topic, data } = roomMessageParts(input);
       if (topic === undefined)
@@ -204,7 +204,7 @@ var ARTIFACT_ROOM_SEND_ACTION_HANDLER = {
           errorCode: 8,
         };
       let roomsModule = throwRoomsNotCompiled();
-      let roomCap = roomsModule.artifactRoomSendCap(sessionArtifactUrl.parsed.slug);
+      let roomCap = roomsModule.artifactRoomSendCap(artifactCheck.parsed.slug);
       let validation = roomsModule.validateRoomSend(topic, data, roomCap);
       if (!validation.ok)
         return {
@@ -354,9 +354,9 @@ var ARTIFACT_ROOM_SEND_ACTION_HANDLER_2 = {
   },
 };
 export {
-  ARTIFACT_ROOM_SEND_ACTION_HANDLER,
-  ARTIFACT_ROOM_SEND_ACTION_HANDLER_2,
   isArtifactRoomAvailable,
   roomTopicOrInvalid,
   roomMessageParts,
+  ARTIFACT_ROOM_SEND_ACTION_HANDLER,
+  ARTIFACT_ROOM_SEND_ACTION_HANDLER_2,
 };

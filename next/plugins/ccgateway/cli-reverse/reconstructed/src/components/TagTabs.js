@@ -3,9 +3,9 @@
  *
  * 标签页切换条（会话列表的标签过滤，All 标签与截断）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/TagTabs.tsx
- * pieces: chunk-8ayegty4.js (1), chunk-ca06bv0t.js (1), chunk-gda5w2fs.js (1)
+ * pieces: chunk-ap4nnw1y.js (1), chunk-c07v1qz9.js (1), chunk-s4mtq5zk.js (1)
  * attribution: fingerprint 3
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -14,7 +14,7 @@ import { Text } from "../ink/components/Text.js";
 import { isFromPluginDirectory, displayTextOrRaw } from "../utils/plugins/pluginDisplayMetadata.js";
 import { OFFICIAL_MARKETPLACE_DISPLAY } from "../utils/plugins/officialMarketplaceNames.js";
 
-//@ chunk-gda5w2fs.js:4096-4556 fingerprint (2.1.88 match: truncateTag, 0.699)
+//@ chunk-ap4nnw1y.js:4230-4690 fingerprint (2.1.88 match: truncateTag, 0.699)
 function truncateTag(pattern) {
   if (!pattern.includes(pattern.charAt(0), 1))
     return (text, startIndex, endIndex) => {
@@ -38,7 +38,7 @@ function truncateTag(pattern) {
     return -1;
   };
 }
-//@ chunk-8ayegty4.js:296-631 fingerprint (2.1.88 match: TagTabs, 0.381)
+//@ chunk-c07v1qz9.js:296-631 fingerprint (2.1.88 match: TagTabs, 0.382)
 function TagTabs(props) {
   let $ = useMemoCache(7);
   let { children, color, textColor, padded, bold, wrap } = props;
@@ -70,7 +70,7 @@ function TagTabs(props) {
   } else element = $[6];
   return element;
 }
-//@ chunk-ca06bv0t.js:8675-9094 fingerprint (2.1.88 match: ALL_TAB_LABEL, 0.497)
+//@ chunk-s4mtq5zk.js:8678-9097 fingerprint (2.1.88 match: ALL_TAB_LABEL, 0.536)
 function ALL_TAB_LABEL(plugins) {
   let marketplaceCounts = new Map();
   let officialMarketplaceName;

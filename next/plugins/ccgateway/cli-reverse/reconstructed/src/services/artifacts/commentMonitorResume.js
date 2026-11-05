@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：恢复会话时重新开启 Artifact 评论监视（自动回复），并在失败时给出原因与操作建议
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sfjpx19.js (32)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nh1pvp1m.js (32)
  * attribution: placement 32
  */
 import { open } from "fs/promises";
@@ -45,7 +45,7 @@ import { isConsentUiKind } from "./comments/repliesConsent.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   takeUnattendedReplies,
   formatAutoReplyNotice,
@@ -58,7 +58,7 @@ import { getSessionId } from "../../bootstrap/state.js";
 import { isProcessRunning } from "../../utils/genericProcessUtils.js";
 import { provenSameProcessAsync } from "../../utils/processIdentity.js";
 import { isAutoreactArmed } from "./comments/postReply.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import { hiddenBuiltInArtifactTool, isBuiltInArtifactHiddenForMcp } from "./artifactsMcpTools.js";
 import { hasReplyAllowRule } from "./comments/autoreactGates.js";
 import { derivePublishContextFrom, mainObservedArtifactVersion } from "./readObservation.js";
@@ -67,7 +67,7 @@ import { isArtifactReadOnlySurface } from "./artifactToolGates.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { isArtifactsAvailable } from "./artifactAvailability.js";
 
-//@ chunk-0sfjpx19.js:91945-92607 placement
+//@ chunk-nh1pvp1m.js:86911-87573 placement
 async function readCommentMonitorLogTail(path) {
   let { path: path_2, sessionId, fromByte, baseline } = path;
   let maxAppendedBytes = path.maxAppendedBytes ?? MAX_ARTIFACT_COMMENT_TRANSCRIPT_BYTES;
@@ -118,7 +118,7 @@ async function readCommentMonitorLogTail(path) {
   }
   return readCommentMonitorIntent(read);
 }
-//@ chunk-0sfjpx19.js:92607-92744 placement
+//@ chunk-nh1pvp1m.js:87573-87710 placement
 function isCommentMonitorNotification(sessionId, targetSessionId) {
   return (
     typeof targetSessionId === "object" &&
@@ -129,9 +129,9 @@ function isCommentMonitorNotification(sessionId, targetSessionId) {
     targetSessionId.sessionId === sessionId
   );
 }
-//@ chunk-0sfjpx19.js:92744-92793 placement
+//@ chunk-nh1pvp1m.js:87710-87759 placement
 var watchLimitText = `past the limit of ${REFUSED_CAPACITY_HINT} watched at once`;
-//@ chunk-0sfjpx19.js:92793-94278 placement
+//@ chunk-nh1pvp1m.js:87759-89244 placement
 function formatAutoReplyNotResumedShort(artifactName, url, { backgroundSession, liveHolder, jobStamped }) {
   let summary = `Automatic replies didn't resume for ${artifactName}`;
   let openPrefix = backgroundSession ? "open this session and " : "";
@@ -165,7 +165,7 @@ function formatAutoReplyNotResumedShort(artifactName, url, { backgroundSession, 
       return `${summary} \xB7 ${openPrefix}publish it again`;
   }
 }
-//@ chunk-0sfjpx19.js:94278-94832 placement
+//@ chunk-nh1pvp1m.js:89244-89798 placement
 function formatAutoReplyNotResumedList(names, ui, reason) {
   let more = names.length - 1;
   let listText = `${names[0] ?? "these Artifacts"}${more > 0 ? ` and ${more} more` : ""}`;
@@ -183,14 +183,14 @@ function formatAutoReplyNotResumedList(names, ui, reason) {
       return `Automatic replies didn't resume here for ${listText} \xB7 this conversation is also open in ${holderElsewhereText(reason)}; ${describeCloseHolders(reason)} first, then publish again here`;
   }
 }
-//@ chunk-0sfjpx19.js:94832-95047 placement
+//@ chunk-nh1pvp1m.js:89798-90013 placement
 function describeCloseHolders(holder) {
   let others = holder?.others ?? 0;
   if (holder?.surface === "background")
     return `stop that agent with \`claude agents\`${others > 0 ? ` and close the other ${plural(others, "session")}` : ""}`;
   return others > 0 ? "close those sessions" : "close that session";
 }
-//@ chunk-0sfjpx19.js:95047-99325 placement
+//@ chunk-nh1pvp1m.js:90013-94291 placement
 /**
  * 生成"自动回复未恢复"的说明（repl/短格式，指导重新发布或让 Claude 再监视）。
  */
@@ -264,7 +264,7 @@ function formatAutoReplyNotResumed(
       return formatRepublishHint(artifactName, "it couldn't restart in this session", backgroundSession);
   }
 }
-//@ chunk-0sfjpx19.js:99325-99849 placement
+//@ chunk-nh1pvp1m.js:94291-94815 placement
 function describeMonitorHolder(liveHolder, jobStamped, ui) {
   let others = liveHolder?.others ?? 0;
   let label = ui === "host" ? "artifact" : "Artifact";
@@ -278,11 +278,11 @@ function describeMonitorHolder(liveHolder, jobStamped, ui) {
     ? `${closeVerb}, then publish the ${label} again here to move the replies.`
     : `${closeVerb} and resume again here to move the replies, or ${keepClause}.`;
 }
-//@ chunk-0sfjpx19.js:99849-100051 placement
+//@ chunk-nh1pvp1m.js:94815-95017 placement
 function formatRepublishHint(url, reason, backgroundSession) {
   return `Artifact comment monitor for ${url} didn't resume: ${reason}. ${backgroundSession ? "Open this session and publish the Artifact again" : "Publish the Artifact again"} to turn automatic replies back on.`;
 }
-//@ chunk-0sfjpx19.js:100051-100213 placement
+//@ chunk-nh1pvp1m.js:95017-95179 placement
 function summarizeResumeLosses(entries) {
   return {
     countsAsLoss: entries.some((countsAsLoss) => countsAsLoss.stale !== true),
@@ -292,7 +292,7 @@ function summarizeResumeLosses(entries) {
     })),
   };
 }
-//@ chunk-0sfjpx19.js:100213-100532 placement
+//@ chunk-nh1pvp1m.js:95179-95498 placement
 /**
  * 从会话记录里找出最近引用的 artifact（不是目标 slug 时）：在 frameUrls 里匹配同 slug 的链接，返回 slug、查看链接与已读版本；无版本时只认附件路径。
  */
@@ -314,20 +314,20 @@ function findAttachedArtifactRef(state, startupSlug) {
   }
   return null;
 }
-//@ chunk-0sfjpx19.js:100532-100675 placement
+//@ chunk-nh1pvp1m.js:95498-95641 placement
 function formatNotResumedPrefix(text) {
   let sliced = text.slice(0, 2);
   let offset = text.length - sliced.length;
   return `Automatic replies were not resumed for ${sliced.join(", ")}${offset > 0 ? ` and ${offset} more` : ""}`;
 }
-//@ chunk-0sfjpx19.js:100675-101053 placement
+//@ chunk-nh1pvp1m.js:95641-96019 placement
 function describeUnprovableResume(urls, reason = "unprovable", ui = "repl") {
   if (ui === "replShort") return formatAutoReplyNotResumedList(urls, reason);
   return reason === "watch_cap"
     ? `${formatNotResumedPrefix(urls)}: this session can watch at most ${REFUSED_CAPACITY_HINT} artifacts at once. Publish one of these again to turn its replies back on. If that's refused too, ask Claude to stop watching one first.`
     : `${formatNotResumedPrefix(urls)}. Ask Claude to watch one of these, or publish it again, to turn its replies back on.`;
 }
-//@ chunk-0sfjpx19.js:101053-101307 placement
+//@ chunk-nh1pvp1m.js:96019-96273 placement
 /**
  * 会话内切换对话后评论监听不会恢复的提示：列出 artifact，建议重新发布或让 Claude 重新监听（短格式时只给列表）。
  */
@@ -335,7 +335,7 @@ function describeNotResumedAfterSwitch(url, ui = "repl") {
   if (ui === "replShort") return formatAutoReplyNotResumedList(url, "switched");
   return `${formatNotResumedPrefix(url)} \u2014 switching conversations inside a session doesn't bring comment monitors back. Publish the Artifact again, or ask Claude to watch it, to turn its replies back on.`;
 }
-//@ chunk-0sfjpx19.js:101307-101535 placement
+//@ chunk-nh1pvp1m.js:96273-96501 placement
 /**
  * 会话保存的监听状态不完整、自动回复未恢复的提示（短格式时只给列表）。
  */
@@ -343,7 +343,7 @@ function describeNotResumedIncomplete(url, ui = "repl") {
   if (ui === "replShort") return formatAutoReplyNotResumedList(url, "incomplete");
   return `${formatNotResumedPrefix(url)}: this conversation's saved watch state was incomplete. Ask Claude to watch one of these; replies come back with the next publish after that.`;
 }
-//@ chunk-0sfjpx19.js:101535-102325 placement
+//@ chunk-nh1pvp1m.js:96501-97291 placement
 function describeHeldMonitor(liveHolder, ui, reason = "repl") {
   if (reason === "replShort") return formatAutoReplyNotResumedList(liveHolder, "held", ui);
   let others = ui?.others ?? 0;
@@ -364,11 +364,11 @@ function describeHeldMonitor(liveHolder, ui, reason = "repl") {
         : "close that session";
   return `${formatNotResumedPrefix(liveHolder)} in this conversation \u2014 ${detail}. ${hint}; ${closeHint} first, then publish the ${reason === "host" ? "artifact" : "Artifact"} again here to move them.`;
 }
-//@ chunk-0sfjpx19.js:102325-102405 placement
+//@ chunk-nh1pvp1m.js:97291-97371 placement
 function heldReasonOrFallback(reason, holderEntry) {
   return heldReasonFor(reason, holderEntry) ?? (holderEntry === "unknown" ? "holder_unknown" : "unavailable");
 }
-//@ chunk-0sfjpx19.js:102405-102896 placement
+//@ chunk-nh1pvp1m.js:97371-97862 placement
 function classifyMonitorHold(reason, info) {
   let payload =
     reason === "held_by_live_session"
@@ -393,37 +393,37 @@ function classifyMonitorHold(reason, info) {
     ...(info.liveHolder !== undefined && getHolderTelemetry(info.liveHolder, info.now)),
   });
 }
-//@ chunk-0sfjpx19.js:102896-102991 placement
+//@ chunk-nh1pvp1m.js:97862-97957 placement
 function heldReasonFor(reason, fallback) {
   if (fallback === "live") return "held_by_live_session";
   return reason === "bg" ? "held_by_job" : null;
 }
-//@ chunk-0sfjpx19.js:102991-103069 placement
+//@ chunk-nh1pvp1m.js:97957-98035 placement
 function resumeNotice(urls, verdict, liveHolderNote, ui = "repl") {
   return verdict === "live"
     ? describeHeldMonitor(urls, liveHolderNote, ui)
     : describeUnprovableResume(urls, "unprovable", ui);
 }
-//@ chunk-0sfjpx19.js:103069-103122 placement
+//@ chunk-nh1pvp1m.js:98035-98088 placement
 /**
  * 导出函数 `otherArmedSlugs`：参数 e, n，返回 listOtherArmedSlugs(e, {}).filter((r) => !n(r))。
  */
 function otherArmedSlugs(excludeSlug, isAutoReactWired) {
   return listOtherArmedSlugs(excludeSlug, {}).filter((slug) => !isAutoReactWired(slug));
 }
-//@ chunk-0sfjpx19.js:103122-103283 placement
+//@ chunk-nh1pvp1m.js:98088-98249 placement
 function getCommentsUnavailableReason(context) {
   if (context.tool === undefined || context.commentVerbsInSchema !== true) return "comments_unavailable";
   if (context.autoReactEnabled === false) return "auto_replies_disabled";
   return null;
 }
-//@ chunk-0sfjpx19.js:103283-103385 placement
+//@ chunk-nh1pvp1m.js:98249-98351 placement
 function getResumeIssueLevel(reason) {
   return reason === "stop_latched" || reason === "recorded_stop" || reason === "arm_in_flight"
     ? "notice"
     : "warning";
 }
-//@ chunk-0sfjpx19.js:103385-103569 placement
+//@ chunk-nh1pvp1m.js:98351-98535 placement
 function findResumeTarget(frameState, startupSlug, intent) {
   let candidate =
     findAttachedArtifactRef(frameState, startupSlug) ?? findLatestArmedSlug(frameState, startupSlug, intent);
@@ -439,7 +439,7 @@ function findResumeTarget(frameState, startupSlug, intent) {
       }
     : null;
 }
-//@ chunk-0sfjpx19.js:103569-103775 placement
+//@ chunk-nh1pvp1m.js:98535-98741 placement
 function listOtherArmedSlugs(intent, options) {
   return [...intent]
     .filter(
@@ -453,7 +453,7 @@ function listOtherArmedSlugs(intent, options) {
     .sort(([, a], [, b]) => b.writtenAtMs - a.writtenAtMs)
     .map(([slug]) => slug);
 }
-//@ chunk-0sfjpx19.js:103775-104077 placement
+//@ chunk-nh1pvp1m.js:98741-99043 placement
 /**
  * 在评论监控记录中找出最近写入、未被持有且不是当前 artifact 的已布防 slug，用于恢复会话时提示。
  */
@@ -480,7 +480,7 @@ function findLatestArmedSlug(frameState, startupSlug, intent) {
         }),
       };
 }
-//@ chunk-0sfjpx19.js:104077-104978 placement
+//@ chunk-nh1pvp1m.js:99043-99944 placement
 function describeWsOpenOutcome(outcome) {
   let { slug, url, record } = outcome;
   (outcome.arm ?? maybeSubscribeFrameLive)({
@@ -521,7 +521,7 @@ function describeWsOpenOutcome(outcome) {
     },
   );
 }
-//@ chunk-0sfjpx19.js:104978-108279 placement
+//@ chunk-nh1pvp1m.js:99944-103253 placement
 /**
  * 决定恢复时为哪个 Artifact 重新武装评论监视（记录不完整、已停止、被其他会话持有）。
  */
@@ -715,7 +715,7 @@ function planCommentMonitorRearm(request) {
     }).catch(() => {});
   armOthers(true);
 }
-//@ chunk-0sfjpx19.js:108279-108400 placement
+//@ chunk-nh1pvp1m.js:103253-103374 placement
 /**
  * 恢复会话时重新开启评论监听，异常只记日志不抛出。
  */
@@ -729,7 +729,7 @@ function rearmOnResumeSafe(host, options, hooks) {
     logError(error);
   }
 }
-//@ chunk-0sfjpx19.js:108400-116982 placement
+//@ chunk-nh1pvp1m.js:103374-111956 placement
 /**
  * 恢复时重新订阅 Artifact 评论（frame-live），记录结果并通知（约 8.5 KB）。
  */
@@ -784,7 +784,7 @@ function rearmCommentMonitorsOnResume(ctx, host, hooks) {
     });
   };
   let reportOtherHeldSlugs = (when, excludeSlugs = new Set()) => {
-    let sessionHeldCount = count([...sessionHolderSlugs], (slug) => !excludeSlugs.has(slug));
+    let sessionHeldCount = countWhere([...sessionHolderSlugs], (slug) => !excludeSlugs.has(slug));
     let filtered = [...jobHolderSlugs].filter((slug) => !excludeSlugs.has(slug));
     if (holderVerdict !== "none" && sessionHeldCount > 0)
       reportHold(
@@ -962,7 +962,7 @@ function rearmCommentMonitorsOnResume(ctx, host, hooks) {
           jobHolderVerdicts = await host.jobHolderVerdicts(intent, storageV5, Date.now());
           intent = dropGoneHolders(intent, jobHolderVerdicts);
           recountHolders();
-          let goneCount = count([...jobHolderVerdicts.values()], (verdict) => verdict === "gone");
+          let goneCount = countWhere([...jobHolderVerdicts.values()], (verdict) => verdict === "gone");
           if (goneCount > 0)
             logFeatureOk("artifact_live_subscribe", {
               job_holder_gone: goneCount,
@@ -1045,7 +1045,7 @@ function rearmCommentMonitorsOnResume(ctx, host, hooks) {
         host.mayRequestTakeover()
       )
         if (
-          toolUseContext.options.tools.some((tool) => toolMatchesName(tool, ARTIFACT_TOOL_NAME)) &&
+          toolUseContext.options.tools.some((tool) => matchesToolName(tool, ARTIFACT_TOOL_NAME)) &&
           host.commentsGateOpen() &&
           isCommentWakeEnabled()
         ) {
@@ -1077,7 +1077,7 @@ function rearmCommentMonitorsOnResume(ctx, host, hooks) {
       let commentsGateOpen = shouldRearm ? host.commentsGateOpen : undefined;
       let autoReactOn;
       if (shouldRearm) autoReactOn = isCommentWakeEnabled();
-      let found = toolUseContext.options.tools.find((tool) => toolMatchesName(tool, ARTIFACT_TOOL_NAME));
+      let found = toolUseContext.options.tools.find((tool) => matchesToolName(tool, ARTIFACT_TOOL_NAME));
       let builtInFallback = hiddenBuiltInArtifactTool();
       let tool =
         found ??
@@ -1322,7 +1322,7 @@ function rearmCommentMonitorsOnResume(ctx, host, hooks) {
       });
     });
 }
-//@ chunk-0sfjpx19.js:116982-118512 placement
+//@ chunk-nh1pvp1m.js:111956-113486 placement
 function rearmHeadlessCommentMonitors(request) {
   {
     let { hostInitialized, getAppState, deps } = request;
@@ -1426,16 +1426,16 @@ function rearmHeadlessCommentMonitors(request) {
     );
   }
 }
-//@ chunk-0sfjpx19.js:118512-118583 placement
+//@ chunk-nh1pvp1m.js:113486-113557 placement
 function uiKind(ui) {
   return ui.ui === "repl" && ui.shortNotices() ? "replShort" : ui.ui;
 }
 export {
+  rearmHeadlessCommentMonitors,
   describeNotResumedIncomplete,
   otherArmedSlugs,
   classifyMonitorHold,
   describeHeldMonitor,
   describeNotResumedAfterSwitch,
   rearmOnResumeSafe,
-  rearmHeadlessCommentMonitors,
 };

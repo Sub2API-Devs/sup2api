@@ -3,13 +3,13 @@
  *
  * 输入补全：斜杠命令、命令参数、@ 文件/agent/MCP 资源、bash 命令与路径、emoji、/resume 会话等建议的生成、导航与接受。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useTypeahead.tsx
- * pieces: chunk-18hwfzwa.js (27)
+ * pieces: chunk-czq1j3j2.js (27)
  * attribution: placement 2, sole-consumer 4, affinity 1, fingerprint 10, file-local 2, layout 8
  */
 import {
-  isCommandMetadata,
+  isCommandMetadata_2,
   isCommandInput,
   findMidInputSlashCommand,
   getFilteredCommandSuggestions,
@@ -58,7 +58,7 @@ import { useKeybindingContext, useRegisterKeybindingContext } from "../keybindin
 import { useIsFullscreen } from "../ink/renderModeContext.js";
 import { isSuggestionNavEnabled } from "../utils/accessibility/screenReader.js";
 import { createDialFailureLatch } from "../services/mcp/dialFailureLatch.js";
-import { resolveTeamName, suggestPeerMentions } from "../utils/peerAddressing.js";
+import { resolvePeerAddressFromState, suggestPeerMentions } from "../utils/peerAddressing.js";
 import { mcpTemplateCompletions } from "../utils/suggestions/mcpTemplateCompletion.js";
 import { generateUnifiedSuggestions } from "./unifiedSuggestions.js";
 import {
@@ -97,20 +97,20 @@ import { logError } from "../utils/log.js";
 import { needsShiftWorkaround } from "./useTextInput.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:558864-559060 placement (2.1.88 match: toolMatchesName, 0.66)
+//@ chunk-czq1j3j2.js:579545-579741 placement (2.1.88 match: toolMatchesName, 0.66)
 /**
  * （旧版名 toolMatchesName 是错配）typeahead 里判断 "/xxx" 输入是否匹配候选命令：按命令元数据的 name、命令名和别名做模糊匹配，非命令候选直接通过。
  */
 function commandMatchesTypeaheadQuery(query, suggestions) {
   let first = suggestions[0];
   if (!first) return false;
-  if (!isCommandMetadata(first.metadata)) return true;
+  if (!isCommandMetadata_2(first.metadata)) return true;
   let query_2 = query.slice(1).toLowerCase().trim();
   if (query_2 === "") return true;
   let metadata = first.metadata;
   return matchesCommandWords(query_2, [metadata.name, getCommandName(metadata), ...(metadata.aliases ?? [])]);
 }
-//@ chunk-18hwfzwa.js:559060-559299 sole-consumer
+//@ chunk-czq1j3j2.js:579741-579980 sole-consumer
 function isPluginHiddenCommand(text, commands) {
   let trimmed = text.trimEnd();
   let wantedName = /^\/\S+$/.test(trimmed) ? trimmed.slice(1).toLowerCase() : "";
@@ -127,7 +127,7 @@ function isPluginHiddenCommand(text, commands) {
     )
   );
 }
-//@ chunk-18hwfzwa.js:559299-559458 sole-consumer
+//@ chunk-czq1j3j2.js:579980-580139 sole-consumer
 function isUniqueCommandMatch(text, suggestions, index) {
   if (!/^\/\S+$/.test(text)) return false;
   let lower = text.slice(1).toLowerCase();
@@ -136,9 +136,9 @@ function isUniqueCommandMatch(text, suggestions, index) {
     suggestions.every((suggestion, i) => i === index || !getSuggestionMatchKeys(suggestion).includes(lower))
   );
 }
-//@ chunk-18hwfzwa.js:559458-559688 sole-consumer
+//@ chunk-czq1j3j2.js:580139-580369 sole-consumer
 function getSuggestionMatchKeys(suggestion) {
-  if (!suggestion || !isCommandMetadata(suggestion.metadata)) return [];
+  if (!suggestion || !isCommandMetadata_2(suggestion.metadata)) return [];
   let metadata = suggestion.metadata;
   let commandName = metadata.isMcp
     ? stripSuffix(getCommandName(metadata), " (MCP)")
@@ -151,7 +151,7 @@ function getSuggestionMatchKeys(suggestion) {
     commandName.slice(commandName.lastIndexOf(":") + 1),
   ].map((key) => key.toLowerCase());
 }
-//@ chunk-18hwfzwa.js:615267-615680 sole-consumer
+//@ chunk-czq1j3j2.js:635948-636361 sole-consumer
 var AT_TOKEN_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var WORD_CHAR_RE;
 var AT_TOKEN_WITH_SYMBOL_RE;
@@ -161,7 +161,7 @@ var regExp_3;
 var HASH_TOKEN_RE;
 var COLON_TOKEN_RE;
 var CLOSED_COLON_TOKEN_RE;
-deferInit("chunk-18hwfzwa.js:615267", () => {
+deferInit("chunk-czq1j3j2.js:635948", () => {
   AT_TOKEN_RE = /^@[\p{L}\p{N}\p{M}_\-./\\()[\]~:]*/u;
   WORD_CHAR_RE = /^[\p{L}\p{N}\p{M}_\-./\\()[\]~:]+/u;
   AT_TOKEN_WITH_SYMBOL_RE = /(@[\p{L}\p{N}\p{M}_\-./\\()[\]~:]*|[\p{L}\p{N}\p{M}_\-./\\()[\]~:]+)$/u;
@@ -175,7 +175,7 @@ deferInit("chunk-18hwfzwa.js:615267", () => {
   COLON_TOKEN_RE = /(^|\s):([a-z0-9_+-]{2,})$/;
   CLOSED_COLON_TOKEN_RE = /(^|\s):([a-z0-9_+-]+):$/;
 });
-//@ chunk-18hwfzwa.js:615680-615841 affinity
+//@ chunk-czq1j3j2.js:636361-636522 affinity
 function isPrefixInsertion(query, previous, cursorOffset) {
   if (previous === undefined) return false;
   let insertedLength = query.length - previous.length;
@@ -187,7 +187,7 @@ function isPrefixInsertion(query, previous, cursorOffset) {
     /^[a-z0-9_+-]*:$/.test(query.slice(insertStart, cursorOffset))
   );
 }
-//@ chunk-18hwfzwa.js:615841-615946 fingerprint (2.1.88 match: isPathMetadata, 1)
+//@ chunk-czq1j3j2.js:636522-636627 fingerprint (2.1.88 match: isPathMetadata, 1)
 /**
  * 是否为 {type: "file"|"directory"} 路径元数据对象。
  */
@@ -199,7 +199,7 @@ function isPathMetadata(metadata) {
     (metadata.type === "directory" || metadata.type === "file")
   );
 }
-//@ chunk-18hwfzwa.js:615946-616089 file-local
+//@ chunk-czq1j3j2.js:636627-636770 file-local
 function getPreservedSelection(prevSuggestions, prevSelection, newSuggestions) {
   if (newSuggestions.length === 0) return -1;
   if (prevSelection < 0) return 0;
@@ -208,25 +208,25 @@ function getPreservedSelection(prevSuggestions, prevSelection, newSuggestions) {
   let newIndex = newSuggestions.findIndex((item) => item.id === prevSelectedItem.id);
   return newIndex >= 0 ? newIndex : 0;
 }
-//@ chunk-18hwfzwa.js:616089-616194 fingerprint (2.1.88 match: buildResumeInputFromSuggestion, 1)
+//@ chunk-czq1j3j2.js:636770-636875 fingerprint (2.1.88 match: buildResumeInputFromSuggestion, 1)
 function buildResumeInputFromSuggestion(suggestion) {
   let metadata = suggestion.metadata;
   return metadata?.sessionId ? `/resume ${metadata.sessionId}` : `/resume ${suggestion.displayText}`;
 }
-//@ chunk-18hwfzwa.js:616194-616367 layout
+//@ chunk-czq1j3j2.js:636875-637048 layout
 function findSelectedSuggestionIndex(prev, suggestions, suggestionType) {
   if (prev.suggestionType !== suggestionType || prev.selectedSuggestion < 0) return -1;
   let id = prev.suggestions[prev.selectedSuggestion]?.id;
   return id === undefined ? -1 : suggestions.findIndex((item) => item.id === id);
 }
-//@ chunk-18hwfzwa.js:616367-616462 layout
+//@ chunk-czq1j3j2.js:637048-637143 layout
 function withArrowedSuggestionId(state) {
   return {
     ...state,
     arrowedSuggestionId: state.suggestions[state.selectedSuggestion]?.id ?? null,
   };
 }
-//@ chunk-18hwfzwa.js:616462-616638 layout
+//@ chunk-czq1j3j2.js:637143-637319 layout
 function preserveArrowedSuggestion(previous, next) {
   let arrowedSuggestionId = previous.arrowedSuggestionId;
   return arrowedSuggestionId != null &&
@@ -239,7 +239,7 @@ function preserveArrowedSuggestion(previous, next) {
       }
     : next;
 }
-//@ chunk-18hwfzwa.js:616638-616797 layout
+//@ chunk-czq1j3j2.js:637319-637478 layout
 function logSuggestionNavUsed(host, id, state) {
   if (getArrowedSuggestionId(state) === null) return;
   let sessionState = loggedSessionState.of(host);
@@ -247,18 +247,18 @@ function logSuggestionNavUsed(host, id, state) {
   sessionState.lastLoggedSessionId = id;
   logEvent("tengu_ax_sr_suggestion_nav_used", {});
 }
-//@ chunk-18hwfzwa.js:616797-616832 layout
+//@ chunk-czq1j3j2.js:637478-637513 layout
 function createEmptyAutocompleteStore() {
   return createAutocompleteStore(createStore(EMPTY_AUTOCOMPLETE_STATE_2));
 }
-//@ chunk-18hwfzwa.js:616832-616928 layout
+//@ chunk-czq1j3j2.js:637513-637609 layout
 var EMPTY_AUTOCOMPLETE_STATE_2 = {
   suggestions: [],
   selectedSuggestion: -1,
   suggestionType: "none",
   commandArgumentHint: undefined,
 };
-//@ chunk-18hwfzwa.js:616928-617178 layout
+//@ chunk-czq1j3j2.js:637609-637859 layout
 function normalizeEmptySuggestions(state) {
   return state.suggestions.length === 0 &&
     state.selectedSuggestion === -1 &&
@@ -271,13 +271,13 @@ function normalizeEmptySuggestions(state) {
     ? state
     : EMPTY_AUTOCOMPLETE_STATE_2;
 }
-//@ chunk-18hwfzwa.js:617178-617320 fingerprint (2.1.88 match: extractSearchToken, 1)
+//@ chunk-czq1j3j2.js:637859-638001 fingerprint (2.1.88 match: extractSearchToken, 1)
 function extractSearchToken(completionToken) {
   if (completionToken.isQuoted) return stripSuffix(completionToken.token.slice(2), '"');
   else if (completionToken.token.startsWith("@")) return completionToken.token.substring(1);
   else return completionToken.token;
 }
-//@ chunk-18hwfzwa.js:617320-617556 fingerprint (2.1.88 match: formatReplacementValue, 1)
+//@ chunk-czq1j3j2.js:638001-638237 fingerprint (2.1.88 match: formatReplacementValue, 1)
 function formatReplacementValue(options) {
   let { displayText, mode, hasAtPrefix, needsQuotes, isQuoted, isComplete } = options;
   let space = isComplete ? " " : "";
@@ -286,7 +286,7 @@ function formatReplacementValue(options) {
   else if (hasAtPrefix) return mode === "bash" ? `${displayText}${space}` : `@${displayText}${space}`;
   else return displayText;
 }
-//@ chunk-18hwfzwa.js:617556-617794 fingerprint (2.1.88 match: applyShellSuggestion, 1)
+//@ chunk-czq1j3j2.js:638237-638475 fingerprint (2.1.88 match: applyShellSuggestion, 1)
 function applyShellSuggestion(
   suggestion,
   input,
@@ -304,17 +304,17 @@ function applyShellSuggestion(
   onInputChange(newInput);
   setCursorOffset(tokenStart + replacementText.length);
 }
-//@ chunk-18hwfzwa.js:617794-617884 layout
+//@ chunk-czq1j3j2.js:638475-638565 layout
 var AT_MENTION_TOKEN_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TEAM_NAME_CACHE_MS;
-deferInit("chunk-18hwfzwa.js:617794", () => {
+deferInit("chunk-czq1j3j2.js:638475", () => {
   AT_MENTION_TOKEN_RE = new RegExp(
     String.raw`(^|${WORD_BOUNDARY_PATTERN})@([\p{L}\p{N}\p{M}\u200C\u200D_-]*)$`,
     "u",
   );
   TEAM_NAME_CACHE_MS = 5000;
 });
-//@ chunk-18hwfzwa.js:617884-618116 placement (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:638565-638797 placement (2.1.88 match: _temp, 1)
 function isCursorInTriggerToken(suggestion, input, cursorOffset, triggerRegex, setValue, setCursorOffset) {
   let match = input.slice(0, cursorOffset).match(triggerRegex);
   if (!match || match.index === undefined) return false;
@@ -325,7 +325,7 @@ function isCursorInTriggerToken(suggestion, input, cursorOffset, triggerRegex, s
   setCursorOffset(sliced.length + suggestion.displayText.length + 1);
   return true;
 }
-//@ chunk-18hwfzwa.js:618116-618319 fingerprint (2.1.88 match: generateBashSuggestions, 1)
+//@ chunk-czq1j3j2.js:638797-639000 fingerprint (2.1.88 match: generateBashSuggestions, 1)
 /**
  * bash 模式补全：调用 shell completion，失败记 tengu_shell_completion_failed。
  */
@@ -341,7 +341,7 @@ async function generateBashSuggestions(shellCompletionAbort, host, input, cursor
     return [];
   }
 }
-//@ chunk-18hwfzwa.js:618319-618462 fingerprint (2.1.88 match: applyDirectorySuggestion, 1)
+//@ chunk-czq1j3j2.js:639000-639143 fingerprint (2.1.88 match: applyDirectorySuggestion, 1)
 function applyDirectorySuggestion(input, suggestionId, tokenStartPos, tokenLength, isDirectory) {
   let suffix = isDirectory ? "/" : " ";
   let before = input.slice(0, tokenStartPos);
@@ -352,7 +352,7 @@ function applyDirectorySuggestion(input, suggestionId, tokenStartPos, tokenLengt
     cursorPos: before.length + replacement.length,
   };
 }
-//@ chunk-18hwfzwa.js:618462-619115 fingerprint (2.1.88 match: extractCompletionToken, 1)
+//@ chunk-czq1j3j2.js:639143-639796 fingerprint (2.1.88 match: extractCompletionToken, 1)
 function extractCompletionToken(text, cursorPos, includeAtSymbol = false) {
   if (!text) return null;
   let textBeforeCursor = text.substring(0, cursorPos);
@@ -396,7 +396,7 @@ function extractCompletionToken(text, cursorPos, includeAtSymbol = false) {
     isQuoted: false,
   };
 }
-//@ chunk-18hwfzwa.js:619115-619274 fingerprint (2.1.88 match: extractCommandNameAndArgs, 1)
+//@ chunk-czq1j3j2.js:639796-639955 fingerprint (2.1.88 match: extractCommandNameAndArgs, 1)
 function extractCommandNameAndArgs(value) {
   if (isCommandInput(value)) {
     let spaceIndex = value.indexOf(" ");
@@ -412,11 +412,11 @@ function extractCommandNameAndArgs(value) {
   }
   return null;
 }
-//@ chunk-18hwfzwa.js:619274-619336 file-local
+//@ chunk-czq1j3j2.js:639955-640017 file-local
 function hasCommandWithArguments(isAtEndWithWhitespace, value) {
   return !isAtEndWithWhitespace && value.includes(" ") && !value.endsWith(" ");
 }
-//@ chunk-18hwfzwa.js:619336-642027 fingerprint (2.1.88 match: useTypeahead, 0.697)
+//@ chunk-czq1j3j2.js:640017-662708 fingerprint (2.1.88 match: useTypeahead, 0.697)
 /**
  * 补全核心：根据光标前的 token 判定触发类型——"/" 命令与命令参数、"@" 文件/目录/agent/MCP 资源、bash 模式下的命令/路径/变量（shell completion）、":" emoji、/resume 会话标题；生成建议写入 suggestionsStore，处理 autocomplete:accept/dismiss/next/previous 与 Tab 补全，接受后改写 draft 的 value 与光标。
  */
@@ -574,7 +574,7 @@ function useTypeahead({
     let previousState = stateRef.current;
     if (previousState.loading || Date.now() - previousState.at < TEAM_NAME_CACHE_MS) return;
     previousState.loading = true;
-    resolveTeamName(session, store.getState(), {
+    resolvePeerAddressFromState(session, store.getState(), {
       storageV5,
     }).then(
       (roster) => {

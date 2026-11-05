@@ -1,18 +1,18 @@
 /**
  * @typespec/ts-http-runtime/dist/esm/pipelineRequest.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
- * pieces: chunk-mrx6y2r5.js (4)
+ * pieces: chunk-b5df2wx1.js (4)
  * attribution: esm-layout 3, esm-fingerprint 1
  */
 import { randomUUID } from "crypto";
 import { HttpHeadersImpl } from "./httpHeaders.js";
 
-//@ chunk-mrx6y2r5.js:30845-30877 esm-layout
+//@ chunk-b5df2wx1.js:30845-30877 esm-layout
 function createHttpHeaders(rawHeaders) {
   return new HttpHeadersImpl(rawHeaders);
 }
-//@ chunk-mrx6y2r5.js:30914-31111 esm-layout
+//@ chunk-b5df2wx1.js:30914-31111 esm-layout
 var globalCrypto;
 var getRandomUUID =
   typeof ((globalCrypto = globalThis === null || globalThis === undefined ? undefined : globalThis.crypto) ===
@@ -21,11 +21,11 @@ var getRandomUUID =
     : globalCrypto.randomUUID) === "function"
     ? globalThis.crypto.randomUUID.bind(globalThis.crypto)
     : randomUUID;
-//@ chunk-mrx6y2r5.js:31111-31137 esm-layout
+//@ chunk-b5df2wx1.js:31111-31137 esm-layout
 function getRequestUuid() {
   return getRandomUUID();
 }
-//@ chunk-mrx6y2r5.js:31137-32039 esm-fingerprint
+//@ chunk-b5df2wx1.js:31137-32039 esm-fingerprint
 class PipelineRequestImpl {
   constructor(options) {
     var _a;

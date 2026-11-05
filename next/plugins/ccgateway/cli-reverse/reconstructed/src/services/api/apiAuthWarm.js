@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：回合开始前预热 API 认证。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xx1vmpsq.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pwdsqzsj.js (6)
  * attribution: placement 6
  */
 import { identity } from "../../utils/identity.js";
@@ -44,7 +44,7 @@ import { logFeatureOk, logFeatureSad, logFeatureBad } from "../analytics/feature
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-xx1vmpsq.js:32409-32616 placement
+//@ chunk-pwdsqzsj.js:32999-33206 placement
 /**
  * 回合前预热 API 认证的常量与共享状态：3 s 超时、60 s 退避、2 s 宽限，以及在途去重与事件信号。
  */
@@ -55,7 +55,7 @@ var AUTH_WARM_OWNER_GRACE_MS;
 var AUTH_WARM_LAPSE_DELAY_MS;
 var authWarmState;
 var authWarmEvents;
-deferInit("chunk-xx1vmpsq.js:32409", () => {
+deferInit("chunk-pwdsqzsj.js:32999", () => {
   API_AUTH_WARM_TIMEOUT_MS = 3000;
   AUTH_WARM_TIMEOUT_TEXT = "auth warm timed out";
   AUTH_WARM_BACKOFF_MS = 60000;
@@ -76,7 +76,7 @@ deferInit("chunk-xx1vmpsq.js:32409", () => {
   );
   authWarmEvents = createSignal();
 });
-//@ chunk-xx1vmpsq.js:32616-32750 placement
+//@ chunk-pwdsqzsj.js:33206-33340 placement
 function emitAuthWarmReported(report) {
   try {
     authWarmEvents.emit(report);
@@ -86,12 +86,12 @@ function emitAuthWarmReported(report) {
     );
   }
 }
-//@ chunk-xx1vmpsq.js:32750-32809 placement
+//@ chunk-pwdsqzsj.js:33340-33399 placement
 function runScheduledWarm(credentials, storageV5) {
   authWarmState.scheduled = undefined;
   maybeWarmApiAuth(credentials, storageV5, "lapse_timer");
 }
-//@ chunk-xx1vmpsq.js:32809-33519 placement
+//@ chunk-pwdsqzsj.js:33399-34109 placement
 /**
  * 回合开始前按需预热 API 认证（/v1/me）：第一方/网关、退避与在途去重，结果供后续请求使用。
  */
@@ -159,7 +159,7 @@ function maybeWarmApiAuth(credentials, storageV5, trigger = "turn_start") {
     logForDebugging(`[apiAuthWarm] gate check threw, no warm: ${errorMessage(error)}`);
   }
 }
-//@ chunk-xx1vmpsq.js:33519-34645 placement
+//@ chunk-pwdsqzsj.js:34109-35235 placement
 async function warmApiAuth(sentAt, elapsedSinceFullCheck, trigger, credentials, storageV5) {
   let startTime = performance.now();
   let abortSignal = AbortSignal.timeout(API_AUTH_WARM_TIMEOUT_MS);
@@ -238,14 +238,15 @@ async function warmApiAuth(sentAt, elapsedSinceFullCheck, trigger, credentials, 
     logFeatureBad("api_auth_warm", failureKind, featureProps);
   }
 }
-//@ chunk-xx1vmpsq.js:34645-34727 placement
+//@ chunk-pwdsqzsj.js:35235-35335 placement
 var authWarmNoticeStateSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-xx1vmpsq.js:34645", () => {
+deferInit("chunk-pwdsqzsj.js:35235", () => {
   authWarmNoticeStateSlot = new SessionRootSlot(() => ({
     noticed: false,
     countedClear: false,
     countedStop: false,
     countedNotice: false,
+    countedHostOff: false,
   }));
 });
 export { authWarmNoticeStateSlot, maybeWarmApiAuth };

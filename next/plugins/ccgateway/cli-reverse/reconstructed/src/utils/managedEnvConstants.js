@@ -3,13 +3,13 @@
  *
  * 环境变量名单：提供方/宿主托管变量、安全变量 SAFE_ENV_VARS、会执行命令的危险设置、代理与 TLS 变量、AWS 凭证变量。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/managedEnvConstants.ts
- * pieces: chunk-dcmhvw5a.js (30)
+ * pieces: chunk-z20c443b.js (30)
  * attribution: placement 10, fingerprint 3, layout 16, file-local 1
  */
 import { isEnvDefinedFalsy, isEnvTruthy } from "./envUtils.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import {
   GIT_LOCATION_ENV_VARS,
   GIT_ENV_VARS_TO_CLEAR,
@@ -18,10 +18,11 @@ import {
 } from "./git/gitSafeEnv.js";
 import { caCertEnvVars, caCertEnvVarList, checkValueChars } from "./settings/managedSettingsKeys.js";
 import { TLS_ENV_VARS as TLS_ENV_VARS_2 } from "./tlsEnv.js";
+import { CLAUDE_CODE_EXPERIMENTAL_CODE_MODE } from "../constants/codeMode.js";
 import { envFlagTruthyOrFalsy } from "./settings/marketplaceSettingsAliases.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:354350-354759 placement
+//@ chunk-z20c443b.js:352524-352933 placement
 /**
  * 各工具的代理环境变量列表。
  */
@@ -45,7 +46,7 @@ var PROXY_ENV_VARS = [
   "FSSPEC_GCS",
   "JAVA_TOOL_OPTIONS",
 ];
-//@ chunk-dcmhvw5a.js:354759-355716 placement
+//@ chunk-z20c443b.js:352933-353890 placement
 /**
  * 提供商选择环境变量与格式检查。
  */
@@ -57,7 +58,7 @@ var OTEL_EXPORTER_OTLP;
 var OTEL_DETAIL_VARS;
 var OTEL_EXPORTER_PREFIXES;
 var DANGEROUS_ENV_SCOPE_SOURCES;
-deferInit("chunk-dcmhvw5a.js:354759", () => {
+deferInit("chunk-z20c443b.js:352933", () => {
   PROVIDER_ENV_VARS = /^$|[=\x00-\x1f\x7f-\x9f]/;
   PROVIDER_SELECTION_ENV_VARS = [
     "CLAUDE_CODE_USE_BEDROCK",
@@ -97,21 +98,21 @@ deferInit("chunk-dcmhvw5a.js:354759", () => {
   OTEL_EXPORTER_PREFIXES = [OTEL_EXPORTER_OTLP, `ANT_${OTEL_EXPORTER_OTLP}`];
   DANGEROUS_ENV_SCOPE_SOURCES = new Set(["projectSettings", "localSettings"]);
 });
-//@ chunk-dcmhvw5a.js:355716-355749 placement
+//@ chunk-z20c443b.js:353890-353923 placement
 /**
  * 是否为危险环境变量。
  */
 function isDangerousEnvVar(envName) {
   return DANGEROUS_ENV_SCOPE_SOURCES.has(envName);
 }
-//@ chunk-dcmhvw5a.js:355749-357615 placement
+//@ chunk-z20c443b.js:353923-355789 placement
 /**
  * OpenTelemetry 环境变量列表。
  */
 var OTEL_ENV_VARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var OTEL_PROMPT_LOG_VARS;
 var OTEL_EXPORTER_MODE_VARS;
-deferInit("chunk-dcmhvw5a.js:355749", () => {
+deferInit("chunk-z20c443b.js:353923", () => {
   OTEL_ENV_VARS = [
     "OTEL_EXPORTER_OTLP_ENDPOINT",
     "OTEL_EXPORTER_OTLP_HEADERS",
@@ -165,7 +166,7 @@ deferInit("chunk-dcmhvw5a.js:355749", () => {
   OTEL_PROMPT_LOG_VARS = new Set(["OTEL_LOG_USER_PROMPTS", "OTEL_LOG_TOOL_CONTENT", "OTEL_LOG_TOOL_DETAILS"]);
   OTEL_EXPORTER_MODE_VARS = new Set(["OTEL_LOGS_EXPORTER", "OTEL_METRICS_EXPORTER", "OTEL_TRACES_EXPORTER"]);
 });
-//@ chunk-dcmhvw5a.js:357615-357885 placement
+//@ chunk-z20c443b.js:355789-356059 placement
 /**
  * 环境变量是否为“关闭”值（falsy 或 none）且未在其他来源中定义。
  */
@@ -183,13 +184,13 @@ function isDisablingTelemetryEnv(envName, value, getEffectiveEnv) {
     return false;
   return !Object.keys(getEffectiveEnv()).some((key) => key.toUpperCase() === envName);
 }
-//@ chunk-dcmhvw5a.js:357885-358419 placement
+//@ chunk-z20c443b.js:356059-356593 placement
 /**
  * 各 helper 依赖的环境变量。
  */
 var HELPER_ENV_VARS; // deferred: uses PROVIDER_ENV_VARS of its import cycle while loading; runs once the cycle is complete
 var MEMORY_API_ENV_VARS;
-deferInit("chunk-dcmhvw5a.js:357885", () => {
+deferInit("chunk-z20c443b.js:356059", () => {
   HELPER_ENV_VARS = {
     apiKeyHelper: ["ANTHROPIC_BASE_URL", "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL"],
     awsAuthRefresh: [
@@ -213,14 +214,14 @@ deferInit("chunk-dcmhvw5a.js:357885", () => {
   };
   MEMORY_API_ENV_VARS = ["CLAUDE_CODE_MEMORY_API_BASE_URL", "CLAUDE_CODE_MEMORY_API_TOKEN"];
 });
-//@ chunk-dcmhvw5a.js:358419-358457 placement
+//@ chunk-z20c443b.js:356593-356631 placement
 /**
  * 是否为 helper 环境变量。
  */
 function isHelperEnvVar(envName) {
   return MEMORY_API_ENV_VARS.includes(envName);
 }
-//@ chunk-dcmhvw5a.js:358457-362835 fingerprint (2.1.88 match: PROVIDER_MANAGED_ENV_VARS, 0.448)
+//@ chunk-z20c443b.js:356631-361009 fingerprint (2.1.88 match: PROVIDER_MANAGED_ENV_VARS, 0.448)
 /**
  * 宿主/提供方托管相关的环境变量名单（artifact 服务地址、base URL、提供方开关等），宿主托管提供方时从设置 env 中剥离。
  */
@@ -238,7 +239,7 @@ var HOST_SERVICE_BASE_URL_VARS;
 var AUTH_TOKEN_ENV_VARS;
 var HOST_HANDLED_ENV_VARS;
 var HOST_ONLY_ENV_VARS;
-deferInit("chunk-dcmhvw5a.js:358457", () => {
+deferInit("chunk-z20c443b.js:356631", () => {
   ARTIFACT_PROVIDER_ENV_VARS = [
     "CLAUDE_CODE_ARTIFACTS_API_BASE_URL",
     "CLAUDE_CODE_ARTIFACTS_API_TOKEN",
@@ -295,7 +296,7 @@ deferInit("chunk-dcmhvw5a.js:358457", () => {
       companions: ["CLAUDE_CODE_SKIP_MANTLE_AUTH", "ANTHROPIC_CUSTOM_HEADERS"],
     },
   ];
-  PROVIDER_ENDPOINT_COMPANION_VARS = uniq(
+  PROVIDER_ENDPOINT_COMPANION_VARS = normalizeCaseForComparison_2(
     PROVIDER_ENDPOINT_PAIRS.flatMap((pair) => [pair.endpoint, ...pair.companions]),
   );
   PROVIDER_CREDENTIAL_ENV_VARS = [
@@ -400,12 +401,12 @@ deferInit("chunk-dcmhvw5a.js:358457", () => {
     "GOOGLE_CLOUD_PROJECT",
   ];
 });
-//@ chunk-dcmhvw5a.js:362835-362921 layout
+//@ chunk-z20c443b.js:361009-361095 layout
 function stripHostManagedEnv(envSlice, env) {
   for (let envName of HOST_HANDLED_ENV_VARS) delete envSlice[envName];
   for (let envName of HOST_ONLY_ENV_VARS) if (!env?.[envName]) delete envSlice[envName];
 }
-//@ chunk-dcmhvw5a.js:362921-363902 layout
+//@ chunk-z20c443b.js:361095-362076 layout
 /**
  * 与云凭据、元数据、模型选择、证书等相关的宿主托管环境变量集合，以及其前缀规则。
  */
@@ -414,7 +415,7 @@ var GCE_METADATA_ENV_VARS;
 var HOST_MANAGED_ENV_SET;
 var VERTEX_REGION_PREFIX;
 var AWS_ENDPOINT_PREFIX;
-deferInit("chunk-dcmhvw5a.js:362921", () => {
+deferInit("chunk-z20c443b.js:361095", () => {
   AWS_CREDENTIAL_ENV_VARS = [
     "AWS_CONTAINER_CREDENTIALS_FULL_URI",
     "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
@@ -461,7 +462,7 @@ deferInit("chunk-dcmhvw5a.js:362921", () => {
   VERTEX_REGION_PREFIX = ["VERTEX_REGION_CLAUDE_"];
   AWS_ENDPOINT_PREFIX = ["AWS_ENDPOINT_URL"];
 });
-//@ chunk-dcmhvw5a.js:363902-364020 file-local
+//@ chunk-z20c443b.js:362076-362194 file-local
 function isProviderManagedEnvVar(key) {
   let upper = key.toUpperCase();
   return (
@@ -470,19 +471,19 @@ function isProviderManagedEnvVar(key) {
     AWS_ENDPOINT_PREFIX.some((prefix) => upper.startsWith(prefix))
   );
 }
-//@ chunk-dcmhvw5a.js:364020-364052 layout
+//@ chunk-z20c443b.js:362194-362226 layout
 var AWS_PROFILE_ENV; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dcmhvw5a.js:364020", () => {
+deferInit("chunk-z20c443b.js:362194", () => {
   AWS_PROFILE_ENV = new Set(["AWS_PROFILE"]);
 });
-//@ chunk-dcmhvw5a.js:364052-364099 layout
+//@ chunk-z20c443b.js:362226-362273 layout
 /**
  * 判断是否为 AWS_PROFILE 环境变量。
  */
 function isAwsProfileEnvVar(envName) {
   return AWS_PROFILE_ENV.has(envName.toUpperCase());
 }
-//@ chunk-dcmhvw5a.js:364099-364423 layout
+//@ chunk-z20c443b.js:362273-362597 layout
 /**
  * TLS/代理透传与 Node/npm 代理相关的环境变量集合。
  */
@@ -490,7 +491,7 @@ var TLS_PROXY_PASSTHROUGH_ENV_VARS; // deferred: has load-time effects after a d
 var NPM_PROXY_ENV_VARS;
 var GIT_LOCATION_ENV_SET;
 var PROXY_ENV_VAR_SET;
-deferInit("chunk-dcmhvw5a.js:364099", () => {
+deferInit("chunk-z20c443b.js:362273", () => {
   TLS_PROXY_PASSTHROUGH_ENV_VARS = ["SSL_CERT_FILE", "SSL_CERT_DIR", "ALL_PROXY"];
   NPM_PROXY_ENV_VARS = ["NPM_CONFIG_HTTPS_PROXY", "NPM_CONFIG_HTTP_PROXY", "NPM_CONFIG_PROXY"];
   GIT_LOCATION_ENV_SET = new Set(GIT_LOCATION_ENV_VARS);
@@ -506,14 +507,14 @@ deferInit("chunk-dcmhvw5a.js:364099", () => {
     "NPM_CONFIG_HTTPS_PROXY",
   ]);
 });
-//@ chunk-dcmhvw5a.js:364423-364470 layout
+//@ chunk-z20c443b.js:362597-362644 layout
 function isProxyEnvVar(envName) {
   return PROXY_ENV_VAR_SET.has(envName.toUpperCase());
 }
-//@ chunk-dcmhvw5a.js:364470-364655 layout
-var filtered; // deferred: uses CA_CERT_ENV_VARS_2 (./settings/managedSettingsKeys.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:364470", () => {
-  filtered = uniq([
+//@ chunk-z20c443b.js:362644-362829 layout
+var filtered; // deferred: uses normalizeCaseForComparison_2 (./permissions/filesystem.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-z20c443b.js:362644", () => {
+  filtered = normalizeCaseForComparison_2([
     ...caCertEnvVars,
     ...Object.keys(caCertEnvVarList),
     ...PROXY_ENV_VARS.map((envName) => envName.toUpperCase()),
@@ -524,7 +525,7 @@ deferInit("chunk-dcmhvw5a.js:364470", () => {
       envName !== "NODE_EXTRA_CA_CERTS" && envName !== "JAVA_TOOL_OPTIONS" && !PROXY_ENV_VAR_SET.has(envName),
   );
 });
-//@ chunk-dcmhvw5a.js:364655-364733 layout
+//@ chunk-z20c443b.js:362829-362907 layout
 /**
  * 判断变量是否与 trace 或证书相关（名单命中或 TLS/网络前缀）。
  */
@@ -533,13 +534,13 @@ function isTraceOrCertEnvVar(envName) {
     filtered.includes(envName.toUpperCase()) || GIT_TRANSPORT_ENV_RE.test(envName) || regExp_7.test(envName)
   );
 }
-//@ chunk-dcmhvw5a.js:364733-365160 layout
+//@ chunk-z20c443b.js:362907-363334 layout
 /**
  * TLS 与客户端证书相关的环境变量集合。
  */
 var TLS_ENV_VARS; // deferred: uses filtered of its import cycle while loading; runs once the cycle is complete
 var TLS_CERT_ENV_VARS;
-deferInit("chunk-dcmhvw5a.js:364733", () => {
+deferInit("chunk-z20c443b.js:362907", () => {
   TLS_ENV_VARS = new Set([
     "CLAUDE_CODE_CLIENT_CERT",
     "CLAUDE_CODE_CLIENT_KEY",
@@ -559,16 +560,16 @@ deferInit("chunk-dcmhvw5a.js:364733", () => {
     "NODE_TLS_REJECT_UNAUTHORIZED",
   ];
 });
-//@ chunk-dcmhvw5a.js:365160-365215 layout
+//@ chunk-z20c443b.js:363334-363389 layout
 function isTlsOrCertEnvVar(envName) {
   return TLS_ENV_VARS.has(envName.toUpperCase()) || isTraceOrCertEnvVar(envName);
 }
-//@ chunk-dcmhvw5a.js:365215-365503 layout
+//@ chunk-z20c443b.js:363389-363677 layout
 /**
  * 代理、TLS 与证书相关的环境变量。
  */
 var NETWORK_ENV_VARS; // deferred: uses TLS_PROXY_PASSTHROUGH_ENV_VARS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:365215", () => {
+deferInit("chunk-z20c443b.js:363389", () => {
   NETWORK_ENV_VARS = [
     "HTTPS_PROXY",
     "HTTP_PROXY",
@@ -585,7 +586,7 @@ deferInit("chunk-dcmhvw5a.js:365215", () => {
     ...TLS_ENV_VARS_2,
   ];
 });
-//@ chunk-dcmhvw5a.js:365503-365571 layout
+//@ chunk-z20c443b.js:363677-363745 layout
 /**
  * 判断变量是否为网络/代理/TLS 类环境变量。
  */
@@ -594,13 +595,13 @@ function isNetworkEnvVar(envName) {
     isProxyEnvVar(envName) || isTlsOrCertEnvVar(envName) || NETWORK_ENV_VARS.includes(envName.toUpperCase())
   );
 }
-//@ chunk-dcmhvw5a.js:365571-365676 layout
+//@ chunk-z20c443b.js:363745-363850 layout
 var HOST_MANAGED_MARKER_ENV_VARS = [
   "ANTHROPIC_UNIX_SOCKET",
   "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
   "CLAUDE_CODE_HOST_AUTH_ENV_VAR",
 ];
-//@ chunk-dcmhvw5a.js:365676-365803 layout
+//@ chunk-z20c443b.js:363850-363977 layout
 function isHostManagedEnvironment(env) {
   return (
     !!env.ANTHROPIC_UNIX_SOCKET ||
@@ -608,7 +609,7 @@ function isHostManagedEnvironment(env) {
     !!env.CLAUDE_CODE_HOST_AUTH_ENV_VAR
   );
 }
-//@ chunk-dcmhvw5a.js:365803-366176 layout
+//@ chunk-z20c443b.js:363977-364350 layout
 function getHostManagedProviderConflicts(env) {
   if (!isEnvTruthy(env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST)) return [];
   let any = BEDROCK_FAMILY_ENV_VARS.some((envName) => isEnvTruthy(env[envName]));
@@ -628,7 +629,7 @@ function getHostManagedProviderConflicts(env) {
     "CLAUDE_CODE_HOST_CREDS_FILE",
   ].filter((name) => !!name);
 }
-//@ chunk-dcmhvw5a.js:366176-366285 layout
+//@ chunk-z20c443b.js:364350-364459 layout
 function getHostAuthEnvVar(env) {
   let CLAUDE_CODE_HOST_AUTH_ENV_VAR = env.CLAUDE_CODE_HOST_AUTH_ENV_VAR;
   if (
@@ -639,7 +640,7 @@ function getHostAuthEnvVar(env) {
     return;
   return CLAUDE_CODE_HOST_AUTH_ENV_VAR;
 }
-//@ chunk-dcmhvw5a.js:366285-374714 fingerprint (2.1.88 match: SAFE_ENV_VARS, 0.459)
+//@ chunk-z20c443b.js:364459-372964 fingerprint (2.1.88 match: SAFE_ENV_VARS, 0.456)
 /**
  * 会执行命令的危险 shell/沙箱设置项清单（apiKeyHelper、statusLine、sandbox 相关项等），以及安全环境变量名单。
  */
@@ -651,7 +652,7 @@ var SAFE_ENV_VARS;
 var PRIVACY_ENV_VARS;
 var BETA_TRACING_ENV_VARS;
 var UNSAFE_HEADER_NAME_RE;
-deferInit("chunk-dcmhvw5a.js:366285", () => {
+deferInit("chunk-z20c443b.js:364459", () => {
   DANGEROUS_SHELL_SETTINGS_LIST = [
     "apiKeyHelper",
     "awsAuthRefresh",
@@ -902,6 +903,8 @@ deferInit("chunk-dcmhvw5a.js:366285", () => {
   ]);
   PRIVACY_ENV_VARS = new Set([
     "API_FORCE_IDLE_TIMEOUT",
+    "CLAUDE_CODE_DISABLE_AGENT_PROGRESS_SUMMARIES",
+    "CLAUDE_CODE_DISABLE_MCP_TASKS",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
     "CLAUDE_CODE_DISABLE_RESPONSE_COMPARISON",
     "CLAUDE_CODE_DISABLE_ULTRATHINK",
@@ -910,11 +913,15 @@ deferInit("chunk-dcmhvw5a.js:366285", () => {
     "DISABLE_TELEMETRY",
     "DO_NOT_TRACK",
   ]);
-  BETA_TRACING_ENV_VARS = new Set([...[], "ENABLE_BETA_TRACING_DETAILED", "OTEL_LOG_RAW_API_BODIES"]);
+  BETA_TRACING_ENV_VARS = new Set([
+    CLAUDE_CODE_EXPERIMENTAL_CODE_MODE,
+    "ENABLE_BETA_TRACING_DETAILED",
+    "OTEL_LOG_RAW_API_BODIES",
+  ]);
   UNSAFE_HEADER_NAME_RE =
     /auth|key|token|cookie|secret|credential|session|signature|passw|jwt|assertion|cert|oidc|org|tenant|account|project|workspace|user|email|identity|principal|consumer|client|host|url|base|target|upstream|endpoint|proxy|forward|route|fallback|override|apigw|x-goog-|l5d-|bypass|guardrail|amz|x-ms-|azureml|extra-parameters|envoy|helicone|litellm|cf-aig|cf-access|beta|version/;
 });
-//@ chunk-dcmhvw5a.js:374714-374935 placement
+//@ chunk-z20c443b.js:372964-373185 placement
 /**
  * ANTHROPIC_CUSTOM_HEADERS 是否含不安全头
  */
@@ -931,9 +938,9 @@ function hasUnsafeCustomHeaders(headerLines) {
     );
   });
 }
-//@ chunk-dcmhvw5a.js:374935-374974 placement
+//@ chunk-z20c443b.js:373185-373224 placement
 var HTTP_TOKEN_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
-//@ chunk-dcmhvw5a.js:374974-375080 placement
+//@ chunk-z20c443b.js:373224-373330 placement
 function isProtectedEnvVar(envName, value) {
   let name = envName.toUpperCase();
   return (
@@ -942,32 +949,47 @@ function isProtectedEnvVar(envName, value) {
     (name === "ANTHROPIC_CUSTOM_HEADERS" && !hasUnsafeCustomHeaders(value))
   );
 }
-//@ chunk-dcmhvw5a.js:500702-500782 fingerprint (2.1.88 match: DANGEROUS_SHELL_SETTINGS, 0.787)
+//@ chunk-z20c443b.js:499528-499608 fingerprint (2.1.88 match: DANGEROUS_SHELL_SETTINGS, 0.787)
 var DANGEROUS_SHELL_SETTINGS = ["apiKeyHelper", "awsAuthRefresh", "awsCredentialExport", "gcpAuthRefresh"];
 export {
   isProtectedEnvVar,
-  getHostAuthEnvVar,
-  isDangerousEnvVar,
-  OAUTH_ENV_VARS,
-  TLS_CERT_ENV_VARS,
-  PROVIDER_SELECTION_ENV_VARS,
   PROVIDER_CREDENTIAL_ENV_VARS,
-  TOKEN_FD_ENV_VARS,
-  HOST_SERVICE_BASE_URL_VARS,
   BASE_URL_ENV_VARS,
   HOST_MANAGED_MARKER_ENV_VARS,
+  PROVIDER_SELECTION_ENV_VARS,
   AUTH_TOKEN_ENV_VARS,
   isHelperEnvVar,
   getHostManagedProviderConflicts,
-  VERTEX_REGION_PREFIX,
-  isHostManagedEnvironment,
+  TLS_CERT_ENV_VARS,
+  getHostAuthEnvVar,
+  TOKEN_FD_ENV_VARS,
   stripHostManagedEnv,
-  PROVIDER_ENDPOINT_COMPANION_VARS,
+  PROVIDER_ENV_VARS,
+  isDangerousEnvVar,
+  isDisablingTelemetryEnv,
+  PRIVACY_ENV_VARS,
+  isNetworkEnvVar,
+  isProviderManagedEnvVar,
+  isAwsProfileEnvVar,
+  isProxyEnvVar,
+  isTlsOrCertEnvVar,
+  OTEL_ENV_VARS,
+  OAUTH_ENV_VARS,
+  OTEL_EXPORTER_OTLP,
+  OTEL_EXPORTER_PREFIXES,
+  OTEL_DETAIL_VARS,
+  PROXY_ENV_VARS,
+  GCE_METADATA_ENV_VARS,
+  MODEL_SELECTION_ENV_VARS,
+  isHostManagedEnvironment,
   PROVIDER_ENDPOINT_PAIRS,
+  CUSTOM_MODEL_OPTION_VARS,
+  PROVIDER_ENDPOINT_COMPANION_VARS,
+  isTraceOrCertEnvVar,
+  VERTEX_REGION_PREFIX,
   SKIP_AUTH_ENV_VARS,
   HOST_ONLY_ENV_VARS,
-  PROVIDER_ENV_VARS,
-  PRIVACY_ENV_VARS,
+  HOST_SERVICE_BASE_URL_VARS,
   BETA_TRACING_ENV_VARS,
   DANGEROUS_SHELL_SETTINGS_LIST,
   SANDBOX_BINARY_SETTINGS,
@@ -975,21 +997,6 @@ export {
   SANDBOX_NETWORK_MODE_VALUES,
   NETWORK_ENV_VARS,
   AWS_CREDENTIAL_ENV_VARS,
-  GCE_METADATA_ENV_VARS,
-  MODEL_SELECTION_ENV_VARS,
-  CUSTOM_MODEL_OPTION_VARS,
   DANGEROUS_SHELL_SETTINGS,
-  OTEL_EXPORTER_PREFIXES,
-  OTEL_DETAIL_VARS,
   HELPER_ENV_VARS,
-  OTEL_ENV_VARS,
-  isDisablingTelemetryEnv,
-  isNetworkEnvVar,
-  isProviderManagedEnvVar,
-  isAwsProfileEnvVar,
-  isProxyEnvVar,
-  isTlsOrCertEnvVar,
-  OTEL_EXPORTER_OTLP,
-  PROXY_ENV_VARS,
-  isTraceOrCertEnvVar,
 };

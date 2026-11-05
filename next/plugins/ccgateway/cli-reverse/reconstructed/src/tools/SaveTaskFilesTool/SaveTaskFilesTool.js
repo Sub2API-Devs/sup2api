@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。SaveTaskFiles 工具：保存任务文件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-h33h7b0z.js (30)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wq3g2p61.js (30)
  * attribution: placement 30
  */
 import { join } from "path";
@@ -41,8 +41,10 @@ import {
   getFeatureValue_CACHED_MAY_BE_STALE,
 } from "../../services/analytics/growthbook.js";
 import { toolResultsDirFor_2 } from "../../utils/toolResultStorage.js";
+import { enforcesGrants } from "../../services/mcp/serverIdentity.js";
+import { CLAUDEAI_SERVER_PREFIX } from "../../services/mcp/normalization.js";
 
-//@ chunk-h33h7b0z.js:5596-5823 placement
+//@ chunk-wq3g2p61.js:6095-6322 placement
 /**
  * SaveTaskFiles 的常量：每次最多保存文件数、询问文案长度上限、列出文件数上限、全部任务文件总额度（4 GiB）、每个列表记录文件数上限、记住的任务列表数上限、不可信提示，以及按会话保存的任务文件列表。
  */
@@ -58,7 +60,7 @@ var taskFileListsBySession = new SessionRootSlot(() => ({
   lists: new Map(),
   known: new Map(),
 }));
-//@ chunk-h33h7b0z.js:5823-6185 placement
+//@ chunk-wq3g2p61.js:6322-6684 placement
 /**
  * 从任务结果的 structuredContent 中解析文件列表（file_id 格式、名称、非负大小），按 id 去重并限制条数。
  */
@@ -89,7 +91,7 @@ function parseTaskFilesMeta(structuredContent) {
   }
   return [...byFileId.values()];
 }
-//@ chunk-h33h7b0z.js:6185-6440 placement
+//@ chunk-wq3g2p61.js:6684-6939 placement
 function rememberTaskFiles(session, taskId, files) {
   let { lists, known } = taskFileListsBySession.of(session);
   let mapped = files.map((file) => known.get(file.fileId) ?? file);
@@ -104,7 +106,7 @@ function rememberTaskFiles(session, taskId, files) {
   for (let list of lists.values()) for (let file of list) known.set(file.fileId, file);
   return mapped;
 }
-//@ chunk-h33h7b0z.js:6440-7082 placement
+//@ chunk-wq3g2p61.js:6939-7582 placement
 /**
  * 在 get_task 结果后追加任务文件列表说明：每个文件的名称、大小、id 与 save_as，超出部分汇总，并告诉模型如何调用 SaveTaskFiles 保存。
  */
@@ -123,7 +125,7 @@ function describeTaskFilesNote(files, toolName) {
   ].join(`
 `);
 }
-//@ chunk-h33h7b0z.js:7082-8906 placement
+//@ chunk-wq3g2p61.js:7582-9407 placement
 function validateSaveTaskFiles(saveTaskFilesInput, session, savePlace) {
   let mapped = saveTaskFilesInput.files.map((file) => file.file_id);
   if (
@@ -212,7 +214,7 @@ function validateSaveTaskFiles(saveTaskFilesInput, session, savePlace) {
         };
   return saveRequest;
 }
-//@ chunk-h33h7b0z.js:8906-9368 placement
+//@ chunk-wq3g2p61.js:9407-9871 placement
 /**
  * 保存任务文件的权限询问描述：文件数、任务 id、保存位置（本机工具结果目录或本聊天容器内的文件夹）、同名加编号，以及每个文件的名称与大小。
  */
@@ -224,7 +226,7 @@ function describeSaveAsk(saveRequest) {
   });
   return `Save ${fileCountText} of task ${truncatedEscaped(saveRequest.taskId)} to ${shortenPathForList(saveRequest.place.kind === "here" ? join(saveRequest.place.toolResultsDir, TASK_FILE_CONSTANTS) : saveRequest.place.host.folder)}${saveRequest.place.kind === "elsewhere" ? " in this chat's container" : ""} (a name already in use there gets a number added): ${mapped.join("; ")}.`;
 }
-//@ chunk-h33h7b0z.js:9368-11067 placement
+//@ chunk-wq3g2p61.js:9871-11570 placement
 var SAVE_FAILURE_REASONS = {
   no_container: "this chat's container could not be found or reached; saving it again may work",
   container_unreachable: "this chat's container could not be reached; saving it again may work",
@@ -250,21 +252,21 @@ var SAVE_FAILURE_REASONS = {
     "the sign-in this chat's container was given has expired; a container started later gets a new one",
   write_failed: "it could not be written to this chat's container",
 };
-//@ chunk-h33h7b0z.js:11067-11224 placement
+//@ chunk-wq3g2p61.js:11570-11727 placement
 function saveFailureReasonText(failure) {
   if (Object.hasOwn(SAVE_FAILURE_REASONS, failure.code)) return SAVE_FAILURE_REASONS[failure.code];
   return isKnownSaveErrorCode(failure)
     ? saveFailureText(failure)
     : `this chat's container gave a reason this version does not recognize (${failure.code})`;
 }
-//@ chunk-h33h7b0z.js:11224-11266 placement
+//@ chunk-wq3g2p61.js:11727-11769 placement
 /**
  * 判断错误码是否在已知列表里。
  */
 function isKnownSaveErrorCode(failure) {
   return keys.includes(failure.code);
 }
-//@ chunk-h33h7b0z.js:11266-12760 placement
+//@ chunk-wq3g2p61.js:11769-13263 placement
 function saveFailureText(failure) {
   switch (failure.code) {
     case "too_large":
@@ -303,7 +305,7 @@ function saveFailureText(failure) {
       return "this client's API address is not https";
   }
 }
-//@ chunk-h33h7b0z.js:12760-13462 placement
+//@ chunk-wq3g2p61.js:13263-13965 placement
 async function saveTaskFilesResult(saveRequest, toolContext) {
   let lines = [];
   let savedCount = 0;
@@ -350,7 +352,7 @@ async function saveTaskFilesResult(saveRequest, toolContext) {
     .join(`
 `);
 }
-//@ chunk-h33h7b0z.js:13462-14721 placement
+//@ chunk-wq3g2p61.js:13965-15224 placement
 /**
  * save_task_files 的参数说明（task_id 与文件清单）。
  */
@@ -363,7 +365,7 @@ var SAVE_TASK_FILES_FIELD_DESCRIPTIONS = {
   here: `Save files that a task produced to this computer. ${SAVE_TASK_FILES_USAGE_TEXT} Each file is saved in this session's task-files folder under that name, with a number added if the name is taken; nothing is overwritten. The person is asked to approve every call. The answer says where each file was saved, or why it was not.`,
   elsewhere: `Save files that a task produced into this chat's container, where this session's shell commands and file tools work. ${SAVE_TASK_FILES_USAGE_TEXT} Each file is saved in this chat's task-files folder in the container under that name, with a number added if the name is taken; nothing is overwritten. A saved file stays while the chat's container keeps its disk, so a later turn may find it gone. The person is asked to approve every call. The answer says where each file was saved, or why it was not.`,
 };
-//@ chunk-h33h7b0z.js:14721-15553 placement
+//@ chunk-wq3g2p61.js:15224-16056 placement
 function saveTaskFilesInputSchema(savePlaceKind) {
   return {
     name: SAVE_TASK_FILES_TOOL_NAME,
@@ -413,7 +415,7 @@ function saveTaskFilesInputSchema(savePlaceKind) {
     },
   };
 }
-//@ chunk-h33h7b0z.js:15553-15730 placement
+//@ chunk-wq3g2p61.js:16056-16233 placement
 function isLocalToolboxServer(client) {
   return (
     ((client.config.type === "claudeai-proxy" && client.config.scope === "claudeai") ||
@@ -424,7 +426,7 @@ function isLocalToolboxServer(client) {
     !isDiskless()
   );
 }
-//@ chunk-h33h7b0z.js:15730-15814 placement
+//@ chunk-wq3g2p61.js:16233-16317 placement
 /**
  * 决定任务文件保存到哪里（here、elsewhere 或 undefined）。
  */
@@ -436,7 +438,7 @@ function taskFileSaveLocation(client) {
     ? "elsewhere"
     : undefined;
 }
-//@ chunk-h33h7b0z.js:15814-16092 placement
+//@ chunk-wq3g2p61.js:16317-16595 placement
 /**
  * 决定任务文件保存到哪里：本机直连工具箱服务器时存到会话工具结果目录（here）；无盘会话时交给宿主文件夹（elsewhere，附带可用状态检查）；否则不可保存。
  */
@@ -461,19 +463,19 @@ function resolveSavePlace(client, session) {
       _() ? "switched_off" : !isBootHeldServer(host, client) ? "entry_dropped" : host.refusal(),
   };
 }
-//@ chunk-h33h7b0z.js:16092-16135 placement
+//@ chunk-wq3g2p61.js:16595-16638 placement
 function _() {
   return (
     !getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SERENE_FROG, false) ||
     (isDiskless() && !getFeatureValue_CACHED_MAY_BE_STALE(TENGU_ABUNDANT_SQUID, false))
   );
 }
-//@ chunk-h33h7b0z.js:16135-16182 placement
+//@ chunk-wq3g2p61.js:16638-16685 placement
 /**
  * “任务文件保存已关闭”的提示文本。
  */
 var SAVE_DISABLED_TEXT = "saving a task's files is switched off.";
-//@ chunk-h33h7b0z.js:16182-16596 placement
+//@ chunk-wq3g2p61.js:16685-17099 placement
 /**
  * 严格解析 SaveTaskFiles 输入：只允许 task_id 与 files，每个文件只允许 file_id/save_as/bytes 且类型正确；不合法返回 undefined。
  */
@@ -510,26 +512,26 @@ function parseSaveTaskFilesInput(rawInput) {
     files: fileList,
   };
 }
-//@ chunk-h33h7b0z.js:16596-16660 placement
+//@ chunk-wq3g2p61.js:17099-17163 placement
 /**
  * 判断对象的所有键都在给定列表里。
  */
 function hasOnlyKeys(value, allowedKeys) {
   return Object.keys(value).every((key) => allowedKeys.includes(key));
 }
-//@ chunk-h33h7b0z.js:16660-16668 placement
+//@ chunk-wq3g2p61.js:17163-17171 placement
 /**
  * 结果里逐个列出的文件数上限（3）。
  */
 var MAX_LISTED_SAVED_FILES = 3;
-//@ chunk-h33h7b0z.js:16668-16714 placement
+//@ chunk-wq3g2p61.js:17171-17217 placement
 /**
  * 构造“没有文件被保存”的结果文本。
  */
 function noFileSavedText(reason) {
   return `No file was saved: ${reason}`;
 }
-//@ chunk-h33h7b0z.js:16714-18051 placement
+//@ chunk-wq3g2p61.js:17217-18556 placement
 function SaveTaskFilesTool(client, savePlaceKind) {
   return {
     backgrounding: "never",
@@ -621,7 +623,7 @@ function SaveTaskFilesTool(client, savePlaceKind) {
     },
   };
 }
-//@ chunk-h33h7b0z.js:18051-18341 placement
+//@ chunk-wq3g2p61.js:18556-18846 placement
 async function callSaveTaskFiles(client, input, callOptions) {
   if (_()) {
     logFeatureBad("managed_agents_task_file_save", "switched_off");
@@ -647,7 +649,7 @@ async function callSaveTaskFiles(client, input, callOptions) {
     data: await saveTaskFilesResult(validation, callOptions),
   };
 }
-//@ chunk-h33h7b0z.js:18341-18801 placement
+//@ chunk-wq3g2p61.js:18846-19335 placement
 /**
  * 当工具箱 MCP 服务器的 get_task 声明了 taskFileIds 元数据且开关 TENGU_SERENE_FROG 打开时，把 SaveTaskFiles 工具组合进该服务器的工具列表（按权限配置，可能被阻止）。
  */
@@ -663,8 +665,10 @@ function installSaveTaskFilesTool(tools, state) {
     return;
   let savePlace = taskFileSaveLocation(state.client);
   if (savePlace === undefined || !getFeatureValue_SESSION_PINNED(TENGU_SERENE_FROG, false)) return;
+  let prefixToolName = enforcesGrants() ? CLAUDEAI_SERVER_PREFIX : (toolName) => toolName;
   for (let idx = tools.length - 1; idx >= 0; idx--)
-    if (tools[idx]?.mcpInfo?.toolName === SAVE_TASK_FILES_TOOL_NAME) tools.splice(idx, 1);
+    if (prefixToolName(tools[idx]?.mcpInfo?.toolName ?? "") === SAVE_TASK_FILES_TOOL_NAME)
+      tools.splice(idx, 1);
   let permission = stricterPermission(
     saveTaskFilesPermission(state.client),
     found.mcpInfo?.effectiveMaxPermission,
@@ -679,9 +683,9 @@ function installSaveTaskFilesTool(tools, state) {
   weakMap.set(state.client, composedTool.name);
   tools.push(composedTool);
 }
-//@ chunk-h33h7b0z.js:18801-18819 placement
+//@ chunk-wq3g2p61.js:19335-19353 placement
 var weakMap = new WeakMap();
-//@ chunk-h33h7b0z.js:18819-19240 placement
+//@ chunk-wq3g2p61.js:19353-19774 placement
 /**
  * 包装获取任务的 MCP 调用：若该客户端支持保存任务文件，从结果中解析文件列表并在结果文本后附上"本任务的文件"说明。
  */
@@ -721,19 +725,19 @@ ${note}`,
         };
   };
 }
-//@ chunk-h33h7b0z.js:19240-19367 placement
+//@ chunk-wq3g2p61.js:19774-19901 placement
 function saveTaskFilesPermission(client) {
   let { config } = client;
   return config.type === "claudeai-proxy" || config.type === "http" || config.type === "sse"
     ? config.toolPermissions?.[SAVE_TASK_FILES_TOOL_NAME]
     : undefined;
 }
-//@ chunk-h33h7b0z.js:19367-19406 placement
+//@ chunk-wq3g2p61.js:19901-19940 placement
 /**
  * 权限等级的排序（blocked < ask < allow）。
  */
 var PERMISSION_RANK = ["blocked", "ask", "allow", undefined];
-//@ chunk-h33h7b0z.js:19406-19461 placement
+//@ chunk-wq3g2p61.js:19940-19995 placement
 /**
  * 取两个权限里更严格的一个。
  */

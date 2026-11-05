@@ -3,22 +3,23 @@
  *
  * 2.1.316 新增：工作流运行列表/详情视图（键盘导航、控制按钮）；云端工作流对话框等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wnym76ss.js (27)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0p9n1dy7.js (1), chunk-czq1j3j2.js (25), chunk-w8d47f3d.js (1)
  * attribution: placement 27
  */
+import { countWhere } from "../../utils/collections.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { useRegisterOverlay } from "../../context/overlayContext.js";
+import { readWorkflowSnapshot } from "../../services/workflow/snapshots.js";
 import {
-  init_react_production,
   useState,
   suspenseTypeExport,
   use,
   useRef,
   useEffect,
+  init_react_production,
 } from "../../../vendor/react/cjs/react.production.js";
-import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
-import { useRegisterOverlay } from "../../context/overlayContext.js";
-import { readWorkflowSnapshot } from "../../services/workflow/snapshots.js";
 import { MEMO_CACHE_SENTINEL, EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   jsxProd_default,
@@ -29,78 +30,100 @@ import { KeyboardShortcutHint } from "../../components/design-system/KeyboardSho
 import { WorkerBadge } from "../../components/permissions/WorkerBadge.js";
 import { Dialog } from "../../components/design-system/Dialog.js";
 import { useAppState } from "../../state/AppState.js";
-import { useSetVoiceState } from "../../context/voice.js";
+import { useTaskFramework } from "../../context/voice.js";
 import {
-  killWorkflowTask,
-  pauseWorkflowTask,
-  skipWorkflowAgent,
-  retryWorkflowAgent,
+  killWorkflowTask as killWorkflowTask_2,
+  pauseWorkflowTask as pauseWorkflowTask_2,
+  skipWorkflowAgent as skipWorkflowAgent_2,
+  retryWorkflowAgent as retryWorkflowAgent_2,
 } from "../../tasks/LocalWorkflowTask/LocalWorkflowTask.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
-import { WorkflowDetailDialog } from "../../components/workflows/WorkflowDetailDialog.js";
+import { WorkflowDetailDialog as WorkflowDetailDialog_2 } from "../../components/workflows/WorkflowDetailDialog.js";
 import { parseWorkflowScript } from "../../services/workflows/workflowScriptMeta.js";
 import { slugifyWorkflowName } from "../../services/workflow/scriptFile.js";
 import { WorkflowSaveDialog } from "../../components/workflows/WorkflowSaveDialog.js";
-import { count } from "../../utils/collections.js";
 import { Text } from "../../ink/components/Text.js";
 import { HintText } from "../../components/design-system/HintText.js";
 import { OrderedListWithItem } from "../../components/CustomSelect/selectTable.js";
 import { formatDuration, formatTokens } from "../../utils/format.js";
 import { plural } from "../../utils/stringUtils.js";
 import { StatusIcon } from "../../components/design-system/StatusIcon.js";
+import { SnapshotCache } from "../../remote/remoteSessionEvents.js";
 import { useNotifications } from "../../context/notifications.js";
-import { parseWorkflowProgressList } from "../../remote/remoteSessionEvents.js";
 import { useNowTicker } from "../../components/StatusNotices.js";
-import { isRemoteControlChannelAvailable, getRemoteCaps } from "../../remote/remoteMode.js";
-import { sanitizeDisplayText, MAX_TITLE_LENGTH } from "../../utils/resultError.js";
-import { errorMessage } from "../../utils/errors.js";
+import { canStopRemoteWorkflow, stopRemoteWorkflow } from "../../components/CoordinatorAgentStatus.js";
+import { getRemoteCaps } from "../../remote/remoteMode.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-wnym76ss.js:15138-15142 placement
-init_react_production();
-//@ chunk-wnym76ss.js:15142-15146 placement
-init_react_production();
-//@ chunk-wnym76ss.js:15146-15169 placement
+//@ chunk-0p9n1dy7.js:20544-20997 placement
+/**
+ * 把云端工作流记录转换成 local_workflow 任务对象。
+ */
+function cloudWorkflowToTask(workflow, progress, stoppedAt) {
+  let isStopped = stoppedAt !== undefined && workflow.status === "running";
+  return {
+    id: workflow.id,
+    type: "local_workflow",
+    description: workflow.description || "Dynamic workflow",
+    status: isStopped ? "killed" : workflow.status,
+    startTime: workflow.startTime,
+    endTime: isStopped ? stoppedAt : workflow.endTime,
+    outputFile: "",
+    outputOffset: 0,
+    notified: true,
+    script: "",
+    prompt: "",
+    workflowName: workflow.workflowName,
+    workflowProgress: progress,
+    progressVersion: 0,
+    agentCount: countWhere(progress, (entry) => entry.type === "workflow_agent"),
+    totalTokens: workflow.totalTokens,
+    totalToolCalls: workflow.totalToolCalls,
+    logs: [],
+  };
+}
+//@ chunk-czq1j3j2.js:791025-791049 placement
 function emptyArrayOnError() {
   return [];
 }
-//@ chunk-wnym76ss.js:15169-15199 placement
-function selectTasks(state) {
+//@ chunk-czq1j3j2.js:791049-791082 placement
+function selectTasks_3(state) {
   return state.tasks;
 }
-//@ chunk-wnym76ss.js:15199-15249 placement
+//@ chunk-czq1j3j2.js:791082-791133 placement
 function isLocalWorkflowTask(task) {
   return task.type === "local_workflow";
 }
-//@ chunk-wnym76ss.js:15249-15289 placement
+//@ chunk-czq1j3j2.js:791133-791174 placement
 function workflowRunIdOf(run) {
   return run.workflowRunId;
 }
-//@ chunk-wnym76ss.js:15289-15314 placement
-function truthy(_) {
-  return !!_;
+//@ chunk-czq1j3j2.js:791174-791202 placement
+function truthy(value) {
+  return !!value;
 }
-//@ chunk-wnym76ss.js:15314-15359 placement
+//@ chunk-czq1j3j2.js:791202-791252 placement
 function snapshotToRun(snapshot) {
   return {
     task: workflowSnapshotToTask(snapshot),
     snapshot,
   };
 }
-//@ chunk-wnym76ss.js:15359-15389 placement
+//@ chunk-czq1j3j2.js:791252-791285 placement
 function taskToRun(task) {
   return {
     task,
   };
 }
-//@ chunk-wnym76ss.js:15389-15447 placement (2.1.88 match: getTotalDuration, 0.658)
+//@ chunk-czq1j3j2.js:791285-791348 placement (2.1.88 match: getTotalDuration, 0.657)
 function getTotalDuration(first, second) {
   return second.task.startTime - first.task.startTime;
 }
-//@ chunk-wnym76ss.js:15447-15497 placement
+//@ chunk-czq1j3j2.js:791348-791399 placement
 function isRunningItem(item) {
   return item.task.status === "running";
 }
-//@ chunk-wnym76ss.js:15497-16077 placement
+//@ chunk-czq1j3j2.js:791399-791980 placement
 /**
  * 把工作流运行快照转换成 local_workflow 任务对象。
  */
@@ -134,13 +157,13 @@ function workflowSnapshotToTask(snapshot) {
     error: snapshot.error,
   };
 }
-//@ chunk-wnym76ss.js:16077-16151 placement
+//@ chunk-czq1j3j2.js:791980-792054 placement
 function dismissWorkflowsDialog(onDone) {
   onDone("Dynamic workflows dialog dismissed", {
     display: "system",
   });
 }
-//@ chunk-wnym76ss.js:16151-16948 placement
+//@ chunk-czq1j3j2.js:792054-792931 placement
 /**
  * /workflows 历史对话框：加载本会话的动态工作流历史。
  */
@@ -216,7 +239,7 @@ function WorkflowHistoryDialog(props) {
   } else listElement = $[14];
   return listElement;
 }
-//@ chunk-wnym76ss.js:16948-17788 placement
+//@ chunk-czq1j3j2.js:792931-793849 placement
 /**
  * 合并快照与当前任务，渲染动态工作流列表。
  */
@@ -224,8 +247,8 @@ function WorkflowHistoryList(props) {
   let $ = useMemoCache(11);
   let { snapshotsPromise, onDone, promptVisibleBelow } = props;
   let snapshots = use(snapshotsPromise);
-  let appState = useAppState(selectTasks);
-  let taskStore = useSetVoiceState();
+  let appState = useAppState(selectTasks_3);
+  let taskStore = useTaskFramework();
   let runs;
   if ($[0] !== snapshots || $[1] !== appState) {
     let filtered = Object.values(appState ?? {}).filter(isLocalWorkflowTask);
@@ -249,10 +272,10 @@ function WorkflowHistoryList(props) {
             metaMessages: [message],
           }),
         ...(status === "running" && {
-          onKill: () => killWorkflowTask(id, taskStore, "user"),
-          onPause: () => pauseWorkflowTask(id, taskStore),
-          onSkipAgent: (agentId) => skipWorkflowAgent(id, agentId, taskStore),
-          onRetryAgent: (agentId) => retryWorkflowAgent(id, agentId, taskStore),
+          onKill: () => killWorkflowTask_2(id, taskStore, "user"),
+          onPause: () => pauseWorkflowTask_2(id, taskStore),
+          onSkipAgent: (agentId) => skipWorkflowAgent_2(id, agentId, taskStore),
+          onRetryAgent: (agentId) => retryWorkflowAgent_2(id, agentId, taskStore),
         }),
       };
     };
@@ -277,37 +300,57 @@ function WorkflowHistoryList(props) {
   } else listElement = $[10];
   return listElement;
 }
-//@ chunk-wnym76ss.js:17788-22212 placement
+//@ chunk-czq1j3j2.js:793849-798877 placement
 /**
  * 工作流运行列表/详情视图（键盘导航、控制按钮）。
  */
 function WorkflowRunList(props) {
-  let $ = useMemoCache(78);
-  let { runs, controlsFor, emptyText, keepsListOfOne, listNote, now, onDone, promptVisibleBelow } = props;
+  let $ = useMemoCache(81);
+  let {
+    runs,
+    controlsFor,
+    emptyText,
+    initialRunId,
+    keepsListOfOne,
+    listNote,
+    now,
+    onDone,
+    promptVisibleBelow,
+  } = props;
   let keepsList = keepsListOfOne === undefined ? false : keepsListOfOne;
   let initialView;
-  if ($[0] !== runs[0] || $[1] !== runs.length) {
-    initialView = () =>
-      runs.length === 1
+  if ($[0] !== initialRunId || $[1] !== runs) {
+    initialView = () => {
+      let initialRun =
+        runs.find((run) => run.task.id === initialRunId) ?? (runs.length === 1 ? runs[0] : undefined);
+      return initialRun
         ? {
             mode: "detail",
-            itemId: runs[0].task.id,
+            itemId: initialRun.task.id,
             isFromList: false,
           }
         : {
             mode: "list",
           };
-    $[0] = runs[0];
-    $[1] = runs.length;
+    };
+    $[0] = initialRunId;
+    $[1] = runs;
     $[2] = initialView;
   } else initialView = $[2];
   let [view, setView] = useState(initialView);
   let [selectedIndex, setSelectedIndex] = useState(0);
-  let [selectedId, setSelectedId] = useState();
+  let initialSelectedId;
+  if ($[3] !== initialRunId || $[4] !== runs) {
+    initialSelectedId = () => (runs.some((run) => run.task.id === initialRunId) ? initialRunId : undefined);
+    $[3] = initialRunId;
+    $[4] = runs;
+    $[5] = initialSelectedId;
+  } else initialSelectedId = $[5];
+  let [selectedId, setSelectedId] = useState(initialSelectedId);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let singleRun = runs.length === 1 && !keepsList ? runs[0] : undefined;
   let effectiveView;
-  if ($[3] !== singleRun || $[4] !== view) {
+  if ($[6] !== singleRun || $[7] !== view) {
     effectiveView =
       view.mode === "list" && singleRun
         ? {
@@ -316,18 +359,18 @@ function WorkflowRunList(props) {
             isFromList: false,
           }
         : view;
-    $[3] = singleRun;
-    $[4] = view;
-    $[5] = effectiveView;
-  } else effectiveView = $[5];
+    $[6] = singleRun;
+    $[7] = view;
+    $[8] = effectiveView;
+  } else effectiveView = $[8];
   let activeView = effectiveView;
   if (activeView !== view) setView(activeView);
   let matchRun;
-  if ($[6] !== selectedId) {
+  if ($[9] !== selectedId) {
     matchRun = (run) => run.task.id === selectedId;
-    $[6] = selectedId;
-    $[7] = matchRun;
-  } else matchRun = $[7];
+    $[9] = selectedId;
+    $[10] = matchRun;
+  } else matchRun = $[10];
   let index = runs.findIndex(matchRun);
   let currentIndex = index < 0 ? Math.min(selectedIndex, runs.length - 1) : index;
   let currentRun = runs[currentIndex];
@@ -338,11 +381,11 @@ function WorkflowRunList(props) {
   }
   let handleBack;
   if (
-    $[8] !== keepsList ||
-    $[9] !== runs.length ||
-    $[10] !== onDone ||
-    $[11] !== activeView.isFromList ||
-    $[12] !== activeView.mode
+    $[11] !== keepsList ||
+    $[12] !== runs.length ||
+    $[13] !== onDone ||
+    $[14] !== activeView.isFromList ||
+    $[15] !== activeView.mode
   ) {
     handleBack = () => {
       let isFromList = keepsList && activeView.mode === "detail" && activeView.isFromList;
@@ -355,33 +398,33 @@ function WorkflowRunList(props) {
         mode: "list",
       });
     };
-    $[8] = keepsList;
-    $[9] = runs.length;
-    $[10] = onDone;
-    $[11] = activeView.isFromList;
-    $[12] = activeView.mode;
-    $[13] = handleBack;
-  } else handleBack = $[13];
+    $[11] = keepsList;
+    $[12] = runs.length;
+    $[13] = onDone;
+    $[14] = activeView.isFromList;
+    $[15] = activeView.mode;
+    $[16] = handleBack;
+  } else handleBack = $[16];
   let onBack = handleBack;
   if (activeView.mode === "detail") {
     let detailElement;
     let detailResult;
     if (
-      $[14] !== controlsFor ||
-      $[15] !== onBack ||
-      $[16] !== runs ||
-      $[17] !== onDone ||
-      $[18] !== promptVisibleBelow ||
-      $[19] !== activeView.itemId
+      $[17] !== controlsFor ||
+      $[18] !== onBack ||
+      $[19] !== runs ||
+      $[20] !== onDone ||
+      $[21] !== promptVisibleBelow ||
+      $[22] !== activeView.itemId
     ) {
       detailResult = EARLY_RETURN_SENTINEL;
-      $o: {
+      Fo: {
         let matchItem;
-        if ($[22] !== activeView.itemId) {
+        if ($[25] !== activeView.itemId) {
           matchItem = (run) => run.task.id === activeView.itemId;
-          $[22] = activeView.itemId;
-          $[23] = matchItem;
-        } else matchItem = $[23];
+          $[25] = activeView.itemId;
+          $[26] = matchItem;
+        } else matchItem = $[26];
         let found = runs.find(matchItem);
         if (!found) {
           detailResult =
@@ -390,21 +433,21 @@ function WorkflowRunList(props) {
             }),
             setResetFlag(true),
             null);
-          break $o;
+          break Fo;
         }
         let onDone_2;
-        if ($[24] !== onDone) {
+        if ($[27] !== onDone) {
           onDone_2 = (message) =>
             message
               ? onDone(message, {
                   display: "system",
                 })
               : onDone();
-          $[24] = onDone;
-          $[25] = onDone_2;
-        } else onDone_2 = $[25];
+          $[27] = onDone;
+          $[28] = onDone_2;
+        } else onDone_2 = $[28];
         detailElement = jsxProd_default(
-          WorkflowDetailDialog,
+          WorkflowDetailDialog_2,
           {
             workflow: found.task,
             onDone: onDone_2,
@@ -415,17 +458,17 @@ function WorkflowRunList(props) {
           found.task.id,
         );
       }
-      $[14] = controlsFor;
-      $[15] = onBack;
-      $[16] = runs;
-      $[17] = onDone;
-      $[18] = promptVisibleBelow;
-      $[19] = activeView.itemId;
-      $[20] = detailElement;
-      $[21] = detailResult;
+      $[17] = controlsFor;
+      $[18] = onBack;
+      $[19] = runs;
+      $[20] = onDone;
+      $[21] = promptVisibleBelow;
+      $[22] = activeView.itemId;
+      $[23] = detailElement;
+      $[24] = detailResult;
     } else {
-      detailElement = $[20];
-      detailResult = $[21];
+      detailElement = $[23];
+      detailResult = $[24];
     }
     if (detailResult !== EARLY_RETURN_SENTINEL) return detailResult;
     return detailElement;
@@ -434,15 +477,15 @@ function WorkflowRunList(props) {
     let detailRun;
     let defaultName;
     let detailResult;
-    if ($[26] !== runs || $[27] !== activeView.itemId) {
+    if ($[29] !== runs || $[30] !== activeView.itemId) {
       detailResult = EARLY_RETURN_SENTINEL;
-      ae: {
+      or: {
         let matchItem;
-        if ($[31] !== activeView.itemId) {
+        if ($[34] !== activeView.itemId) {
           matchItem = (run) => run.task.id === activeView.itemId;
-          $[31] = activeView.itemId;
-          $[32] = matchItem;
-        } else matchItem = $[32];
+          $[34] = activeView.itemId;
+          $[35] = matchItem;
+        } else matchItem = $[35];
         detailRun = runs.find(matchItem);
         if (!detailRun || detailRun.task.script.length === 0) {
           detailResult =
@@ -450,27 +493,27 @@ function WorkflowRunList(props) {
               mode: "list",
             }),
             null);
-          break ae;
+          break or;
         }
         let workflowScript = parseWorkflowScript(detailRun.task.script);
         defaultName = !("error" in workflowScript)
           ? workflowScript.meta.name
           : slugifyWorkflowName(detailRun.task.summary ?? detailRun.task.description);
       }
-      $[26] = runs;
-      $[27] = activeView.itemId;
-      $[28] = detailRun;
-      $[29] = defaultName;
-      $[30] = detailResult;
+      $[29] = runs;
+      $[30] = activeView.itemId;
+      $[31] = detailRun;
+      $[32] = defaultName;
+      $[33] = detailResult;
     } else {
-      detailRun = $[28];
-      defaultName = $[29];
-      detailResult = $[30];
+      detailRun = $[31];
+      defaultName = $[32];
+      detailResult = $[33];
     }
     if (detailResult !== EARLY_RETURN_SENTINEL) return detailResult;
     let defaultName_2 = defaultName;
     let onDone_2;
-    if ($[33] !== onDone) {
+    if ($[36] !== onDone) {
       onDone_2 = (saveMessage) => {
         if (saveMessage)
           onDone(saveMessage, {
@@ -481,45 +524,45 @@ function WorkflowRunList(props) {
             mode: "list",
           });
       };
-      $[33] = onDone;
-      $[34] = onDone_2;
-    } else onDone_2 = $[34];
+      $[36] = onDone;
+      $[37] = onDone_2;
+    } else onDone_2 = $[37];
     let saveDialogElement;
-    if ($[35] !== defaultName_2 || $[36] !== detailRun.task.script || $[37] !== onDone_2) {
+    if ($[38] !== defaultName_2 || $[39] !== detailRun.task.script || $[40] !== onDone_2) {
       saveDialogElement = jsxProd_default(WorkflowSaveDialog, {
         script: detailRun.task.script,
         defaultName: defaultName_2,
         onDone: onDone_2,
       });
-      $[35] = defaultName_2;
-      $[36] = detailRun.task.script;
-      $[37] = onDone_2;
-      $[38] = saveDialogElement;
-    } else saveDialogElement = $[38];
+      $[38] = defaultName_2;
+      $[39] = detailRun.task.script;
+      $[40] = onDone_2;
+      $[41] = saveDialogElement;
+    } else saveDialogElement = $[41];
     return saveDialogElement;
   }
-  let runningCount = count(runs, isRunningItem);
+  let runningCount = countWhere(runs, isRunningItem);
   let completedCount = runs.length - runningCount;
   let onCancelCached;
-  if ($[39] !== onDone) {
+  if ($[42] !== onDone) {
     onCancelCached = () => dismissWorkflowsDialog(onDone);
-    $[39] = onDone;
-    $[40] = onCancelCached;
-  } else onCancelCached = $[40];
+    $[42] = onDone;
+    $[43] = onCancelCached;
+  } else onCancelCached = $[43];
   let onCancel = onCancelCached;
   let killHandlerCached;
-  if ($[41] !== controlsFor) {
+  if ($[44] !== controlsFor) {
     killHandlerCached = (item) => {
       let { task } = item;
       return task.status === "running" ? controlsFor(task).onKill : undefined;
     };
-    $[41] = controlsFor;
-    $[42] = killHandlerCached;
-  } else killHandlerCached = $[42];
+    $[44] = controlsFor;
+    $[45] = killHandlerCached;
+  } else killHandlerCached = $[45];
   let killHandlerFor = killHandlerCached;
   let showHints = runs.length > 0 && !isScreenReaderEnabled;
   let subtitle;
-  if ($[43] !== completedCount || $[44] !== listNote || $[45] !== runs.length || $[46] !== runningCount) {
+  if ($[46] !== completedCount || $[47] !== listNote || $[48] !== runs.length || $[49] !== runningCount) {
     subtitle =
       runs.length === 0
         ? undefined
@@ -534,36 +577,36 @@ function WorkflowRunList(props) {
                 ],
               }),
           });
-    $[43] = completedCount;
-    $[44] = listNote;
-    $[45] = runs.length;
-    $[46] = runningCount;
-    $[47] = subtitle;
-  } else subtitle = $[47];
-  let upDownHint;
-  if ($[48] !== showHints) {
-    upDownHint =
+    $[46] = completedCount;
+    $[47] = listNote;
+    $[48] = runs.length;
+    $[49] = runningCount;
+    $[50] = subtitle;
+  } else subtitle = $[50];
+  let selectHint;
+  if ($[51] !== showHints) {
+    selectHint =
       showHints &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: ["up", "down"],
         action: "select",
       });
-    $[48] = showHints;
-    $[49] = upDownHint;
-  } else upDownHint = $[49];
-  let enterHint;
-  if ($[50] !== showHints) {
-    enterHint =
+    $[51] = showHints;
+    $[52] = selectHint;
+  } else selectHint = $[52];
+  let viewHint;
+  if ($[53] !== showHints) {
+    viewHint =
       showHints &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: "enter",
         action: "view",
       });
-    $[50] = showHints;
-    $[51] = enterHint;
-  } else enterHint = $[51];
+    $[53] = showHints;
+    $[54] = viewHint;
+  } else viewHint = $[54];
   let stopHint;
-  if ($[52] !== currentRun || $[53] !== showHints || $[54] !== killHandlerFor) {
+  if ($[55] !== currentRun || $[56] !== showHints || $[57] !== killHandlerFor) {
     stopHint =
       showHints &&
       currentRun &&
@@ -572,13 +615,13 @@ function WorkflowRunList(props) {
         chord: "x",
         action: "stop",
       });
-    $[52] = currentRun;
-    $[53] = showHints;
-    $[54] = killHandlerFor;
-    $[55] = stopHint;
-  } else stopHint = $[55];
+    $[55] = currentRun;
+    $[56] = showHints;
+    $[57] = killHandlerFor;
+    $[58] = stopHint;
+  } else stopHint = $[58];
   let saveHint;
-  if ($[56] !== currentRun || $[57] !== showHints) {
+  if ($[59] !== currentRun || $[60] !== showHints) {
     saveHint =
       showHints &&
       currentRun &&
@@ -587,38 +630,38 @@ function WorkflowRunList(props) {
         chord: "s",
         action: "save",
       });
-    $[56] = currentRun;
-    $[57] = showHints;
-    $[58] = saveHint;
-  } else saveHint = $[58];
+    $[59] = currentRun;
+    $[60] = showHints;
+    $[61] = saveHint;
+  } else saveHint = $[61];
   let escapeHint;
-  if ($[59] === MEMO_CACHE_SENTINEL) {
+  if ($[62] === MEMO_CACHE_SENTINEL) {
     escapeHint = jsxProd_default(KeyboardShortcutHint, {
       chord: "escape",
       action: "close",
     });
-    $[59] = escapeHint;
-  } else escapeHint = $[59];
+    $[62] = escapeHint;
+  } else escapeHint = $[62];
   let inputGuide;
-  if ($[60] !== enterHint || $[61] !== stopHint || $[62] !== saveHint || $[63] !== upDownHint) {
+  if ($[63] !== selectHint || $[64] !== viewHint || $[65] !== stopHint || $[66] !== saveHint) {
     inputGuide = jsxProd_default_2(Byline, {
-      children: [upDownHint, enterHint, stopHint, saveHint, escapeHint],
+      children: [selectHint, viewHint, stopHint, saveHint, escapeHint],
     });
-    $[60] = enterHint;
-    $[61] = stopHint;
-    $[62] = saveHint;
-    $[63] = upDownHint;
-    $[64] = inputGuide;
-  } else inputGuide = $[64];
+    $[63] = selectHint;
+    $[64] = viewHint;
+    $[65] = stopHint;
+    $[66] = saveHint;
+    $[67] = inputGuide;
+  } else inputGuide = $[67];
   let children;
   if (
-    $[65] !== emptyText ||
-    $[66] !== currentIndex ||
-    $[67] !== selectedId ||
-    $[68] !== resetFlag ||
-    $[69] !== runs ||
-    $[70] !== now ||
-    $[71] !== killHandlerFor
+    $[68] !== emptyText ||
+    $[69] !== currentIndex ||
+    $[70] !== selectedId ||
+    $[71] !== resetFlag ||
+    $[72] !== runs ||
+    $[73] !== now ||
+    $[74] !== killHandlerFor
   ) {
     children =
       runs.length === 0
@@ -675,17 +718,17 @@ function WorkflowRunList(props) {
               ),
             ),
           });
-    $[65] = emptyText;
-    $[66] = currentIndex;
-    $[67] = selectedId;
-    $[68] = resetFlag;
-    $[69] = runs;
-    $[70] = now;
-    $[71] = killHandlerFor;
-    $[72] = children;
-  } else children = $[72];
+    $[68] = emptyText;
+    $[69] = currentIndex;
+    $[70] = selectedId;
+    $[71] = resetFlag;
+    $[72] = runs;
+    $[73] = now;
+    $[74] = killHandlerFor;
+    $[75] = children;
+  } else children = $[75];
   let dialogElement;
-  if ($[73] !== onCancel || $[74] !== inputGuide || $[75] !== children || $[76] !== subtitle) {
+  if ($[76] !== onCancel || $[77] !== inputGuide || $[78] !== children || $[79] !== subtitle) {
     dialogElement = jsxProd_default(Dialog, {
       title: "Dynamic workflows",
       subtitle,
@@ -694,15 +737,15 @@ function WorkflowRunList(props) {
       inputGuide,
       children,
     });
-    $[73] = onCancel;
-    $[74] = inputGuide;
-    $[75] = children;
-    $[76] = subtitle;
-    $[77] = dialogElement;
-  } else dialogElement = $[77];
+    $[76] = onCancel;
+    $[77] = inputGuide;
+    $[78] = children;
+    $[79] = subtitle;
+    $[80] = dialogElement;
+  } else dialogElement = $[80];
   return dialogElement;
 }
-//@ chunk-wnym76ss.js:22212-22531 placement
+//@ chunk-czq1j3j2.js:798877-799200 placement
 /**
  * 生成一条工作流运行的显示行（名称、状态图标、耗时、令牌）。
  */
@@ -719,61 +762,64 @@ function workflowRunRow({ task, snapshot }, now) {
     ],
   };
 }
-//@ chunk-wnym76ss.js:22531-22776 placement
-var WORKFLOW_STATUS_ICONS = {
-  pending: jsxProd_default(StatusIcon, {
-    status: "pending",
-  }),
-  running: jsxProd_default(StatusIcon, {
-    status: "running",
-  }),
-  paused: jsxProd_default(StatusIcon, {
-    status: "off",
-    "aria-label": "paused:",
-  }),
-  completed: jsxProd_default(StatusIcon, {
-    status: "success",
-  }),
-  failed: jsxProd_default(StatusIcon, {
-    status: "error",
-  }),
-  killed: jsxProd_default(StatusIcon, {
-    status: "error",
-    "aria-label": "stopped:",
-  }),
-};
-//@ chunk-wnym76ss.js:22776-22821 placement
+//@ chunk-czq1j3j2.js:799200-799446 placement
+var WORKFLOW_STATUS_ICONS; // deferred: uses StatusIcon (../../components/design-system/StatusIcon.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-czq1j3j2.js:799200", () => {
+  WORKFLOW_STATUS_ICONS = {
+    pending: jsxProd_default(StatusIcon, {
+      status: "pending",
+    }),
+    running: jsxProd_default(StatusIcon, {
+      status: "running",
+    }),
+    paused: jsxProd_default(StatusIcon, {
+      status: "off",
+      "aria-label": "paused:",
+    }),
+    completed: jsxProd_default(StatusIcon, {
+      status: "success",
+    }),
+    failed: jsxProd_default(StatusIcon, {
+      status: "error",
+    }),
+    killed: jsxProd_default(StatusIcon, {
+      status: "error",
+      "aria-label": "stopped:",
+    }),
+  };
+});
+//@ chunk-czq1j3j2.js:799446-799492 placement
 function selectRemoteWorkflowRuns(state) {
   return state.remoteWorkflowRuns;
 }
-//@ chunk-wnym76ss.js:22821-22872 placement
+//@ chunk-czq1j3j2.js:799492-799544 placement
 function selectRemoteWorkerGone(state) {
   return state.remoteWorkerReportedGone;
 }
-//@ chunk-wnym76ss.js:22872-22905 placement
+//@ chunk-czq1j3j2.js:799544-799574 placement
 function newWeakMap() {
-  return new WeakMap();
+  return new SnapshotCache();
 }
-//@ chunk-wnym76ss.js:22905-22934 placement
+//@ chunk-czq1j3j2.js:799574-799604 placement
 function runIdOf(run) {
   return run.id;
 }
-//@ chunk-wnym76ss.js:22934-22996 placement
+//@ chunk-czq1j3j2.js:799604-799667 placement
 function sortByStartTimeDesc(runA, runB) {
   return runB.task.startTime - runA.task.startTime;
 }
-//@ chunk-wnym76ss.js:22996-23055 placement
+//@ chunk-czq1j3j2.js:799667-799727 placement
 function isRunningRun(run) {
   let { task } = run;
   return task.status === "running";
 }
-//@ chunk-wnym76ss.js:23055-25610 placement
+//@ chunk-czq1j3j2.js:799727-802344 placement
 /**
  * 云端工作流对话框。
  */
 function CloudWorkflowsDialog(props) {
-  let $ = useMemoCache(36);
-  let { onDone, promptVisibleBelow } = props;
+  let $ = useMemoCache(38);
+  let { initialRunId, onDone, promptVisibleBelow } = props;
   useRegisterOverlay("cloud-workflows-dialog");
   let appState = useAppState(selectRemoteWorkflowRuns);
   let appState_2 = useAppState(selectRemoteWorkerGone);
@@ -859,10 +905,8 @@ function CloudWorkflowsDialog(props) {
     if ($[17] !== progressCacheRef) {
       toRunCached = (entry) => {
         let { run, stopped } = entry;
-        let progress = progressCacheRef.get(run.wireProgress) ?? parseWorkflowProgressList(run.wireProgress);
-        progressCacheRef.set(run.wireProgress, progress);
         return {
-          task: cloudWorkflowToTask(run, progress, stopped),
+          task: cloudWorkflowToTask(run, progressCacheRef.of(run.wireProgress), stopped),
         };
       };
       $[17] = progressCacheRef;
@@ -876,23 +920,19 @@ function CloudWorkflowsDialog(props) {
     $[11] = stoppedAtMap;
     $[12] = runs;
   } else runs = $[12];
-  let taskRuns = runs;
-  let any = taskRuns.some(isRunningRun);
+  let sortedRuns = runs;
+  let any = sortedRuns.some(isRunningRun);
   let now = useNowTicker(any ? 1000 : null);
   let canStopCached;
   if ($[19] !== appState_2) {
-    canStopCached = isRemoteControlChannelAvailable() && !appState_2;
+    canStopCached = canStopRemoteWorkflow(appState_2);
     $[19] = appState_2;
     $[20] = canStopCached;
   } else canStopCached = $[20];
   let canStop = canStopCached;
   let stopTaskCached;
-  if ($[21] !== addNotification || $[22] !== onDone || $[23] !== appState) {
+  if ($[21] !== addNotification || $[22] !== initialRunId || $[23] !== onDone || $[24] !== appState) {
     stopTaskCached = function handleStopTask(taskId) {
-      let remoteCaps = getRemoteCaps();
-      if (!remoteCaps) {
-        return;
-      }
       setStoppingIds((ids) => new Set(ids).add(taskId));
       let found = appState.find((run) => run.id === taskId);
       if (found !== undefined)
@@ -902,31 +942,19 @@ function CloudWorkflowsDialog(props) {
             at: Date.now(),
           }),
         );
-      remoteCaps
-        .sendControlRequest({
-          subtype: "stop_task",
-          task_id: taskId,
+      stopRemoteWorkflow(taskId, (stopResult) => {
+        if (isMountedRef.current && initialRunId === undefined) {
+          onDone(stopResult.text, {
+            display: "system",
+          });
+          return;
+        }
+        addNotification(stopResult);
+        if (isMountedRef.current) onDone();
+      })
+        .then((cleanupResult) => {
+          if (cleanupResult) setStoppedAtMap((previous) => new Map(previous).set(taskId, Date.now()));
         })
-        .then(
-          () => setStoppedAtMap((previous) => new Map(previous).set(taskId, Date.now())),
-          (error) => {
-            let errorText = `Couldn't stop the workflow: ${sanitizeDisplayText(errorMessage(error), {
-              maxCodeUnits: MAX_TITLE_LENGTH,
-            })}`;
-            if (isMountedRef.current)
-              onDone(errorText, {
-                display: "system",
-              });
-            else
-              addNotification({
-                key: "cloud-workflow-stop",
-                kind: "feedback",
-                text: errorText,
-                color: "error",
-                priority: "immediate",
-              });
-          },
-        )
         .finally(() =>
           setStoppingIds((ids) => {
             let nextIds = new Set(ids);
@@ -936,13 +964,14 @@ function CloudWorkflowsDialog(props) {
         );
     };
     $[21] = addNotification;
-    $[22] = onDone;
-    $[23] = appState;
-    $[24] = stopTaskCached;
-  } else stopTaskCached = $[24];
+    $[22] = initialRunId;
+    $[23] = onDone;
+    $[24] = appState;
+    $[25] = stopTaskCached;
+  } else stopTaskCached = $[25];
   let stopTask = stopTaskCached;
   let controlsFor;
-  if ($[25] !== canStop || $[26] !== stopTask || $[27] !== stoppingIds) {
+  if ($[26] !== canStop || $[27] !== stopTask || $[28] !== stoppingIds) {
     controlsFor = (task) => {
       let { id, status } = task;
       return canStop && status === "running" && !stoppingIds.has(id)
@@ -951,71 +980,57 @@ function CloudWorkflowsDialog(props) {
           }
         : {};
     };
-    $[25] = canStop;
-    $[26] = stopTask;
-    $[27] = stoppingIds;
-    $[28] = controlsFor;
-  } else controlsFor = $[28];
+    $[26] = canStop;
+    $[27] = stopTask;
+    $[28] = stoppingIds;
+    $[29] = controlsFor;
+  } else controlsFor = $[29];
   const listNote =
     appState_2 && any ? "The cloud session may have stopped, and its workflows too" : undefined;
   let runListElement;
   if (
-    $[29] !== now ||
-    $[30] !== onDone ||
-    $[31] !== promptVisibleBelow ||
-    $[32] !== taskRuns ||
-    $[33] !== controlsFor ||
-    $[34] !== listNote
+    $[30] !== initialRunId ||
+    $[31] !== now ||
+    $[32] !== onDone ||
+    $[33] !== promptVisibleBelow ||
+    $[34] !== sortedRuns ||
+    $[35] !== controlsFor ||
+    $[36] !== listNote
   ) {
     runListElement = jsxProd_default(WorkflowRunList, {
-      runs: taskRuns,
+      runs: sortedRuns,
       controlsFor,
       emptyText:
         "No dynamic workflows to show. Runs that ended before this terminal attached may not be listed.",
+      initialRunId,
       keepsListOfOne: true,
       listNote,
       now,
       onDone,
       promptVisibleBelow,
     });
-    $[29] = now;
-    $[30] = onDone;
-    $[31] = promptVisibleBelow;
-    $[32] = taskRuns;
-    $[33] = controlsFor;
-    $[34] = listNote;
-    $[35] = runListElement;
-  } else runListElement = $[35];
+    $[30] = initialRunId;
+    $[31] = now;
+    $[32] = onDone;
+    $[33] = promptVisibleBelow;
+    $[34] = sortedRuns;
+    $[35] = controlsFor;
+    $[36] = listNote;
+    $[37] = runListElement;
+  } else runListElement = $[37];
   return runListElement;
 }
-//@ chunk-wnym76ss.js:25610-26062 placement
-/**
- * 把云端工作流记录转换成 local_workflow 任务对象。
- */
-function cloudWorkflowToTask(run, progress, stopped) {
-  let isStopped = stopped !== undefined && run.status === "running";
-  return {
-    id: run.id,
-    type: "local_workflow",
-    description: run.description || "Dynamic workflow",
-    status: isStopped ? "killed" : run.status,
-    startTime: run.startTime,
-    endTime: isStopped ? stopped : run.endTime,
-    outputFile: "",
-    outputOffset: 0,
-    notified: true,
-    script: "",
-    prompt: "",
-    workflowName: run.workflowName,
-    workflowProgress: progress,
-    progressVersion: 0,
-    agentCount: count(progress, (entry) => entry.type === "workflow_agent"),
-    totalTokens: run.totalTokens,
-    totalToolCalls: run.totalToolCalls,
-    logs: [],
-  };
-}
-//@ chunk-wnym76ss.js:26062-26235 placement
+//@ chunk-czq1j3j2.js:1865350-1865354 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1865350", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1869921-1869925 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1869921", () => {
+  init_react_production();
+});
+//@ chunk-w8d47f3d.js:15955-16129 placement
 /**
  * /workflows 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -1031,4 +1046,4 @@ async function callWorkflowsCommand(onDone, context) {
     promptVisibleBelow: context.isMidTurn === true,
   });
 }
-export { callWorkflowsCommand };
+export { cloudWorkflowToTask, CloudWorkflowsDialog, callWorkflowsCommand };

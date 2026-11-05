@@ -3,20 +3,20 @@
  *
  * protobuf 生成代码：google.protobuf.Timestamp 与 Date 互转。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/types/generated/google/protobuf/timestamp.ts
- * pieces: chunk-aepeg2w5.js (3)
+ * pieces: chunk-exfmq47h.js (3)
  * attribution: fingerprint 2, file-last-pair 1
  */
 
-//@ chunk-aepeg2w5.js:660137-660177 fingerprint (2.1.88 match: createBaseTimestamp, 1)
+//@ chunk-exfmq47h.js:672743-672783 fingerprint (2.1.88 match: createBaseTimestamp, 1)
 function createBaseTimestamp() {
   return {
     seconds: 0,
     nanos: 0,
   };
 }
-//@ chunk-aepeg2w5.js:660177-660556 fingerprint (2.1.88 match: Timestamp, 1)
+//@ chunk-exfmq47h.js:672783-673162 fingerprint (2.1.88 match: Timestamp, 1)
 var Timestamp = {
   fromJSON(object) {
     return {
@@ -40,7 +40,7 @@ var Timestamp = {
     return message;
   },
 };
-//@ chunk-aepeg2w5.js:660556-660599 file-last-pair
+//@ chunk-exfmq47h.js:673162-673205 file-last-pair
 function isSet_3(value) {
   return value !== null && value !== undefined;
 }

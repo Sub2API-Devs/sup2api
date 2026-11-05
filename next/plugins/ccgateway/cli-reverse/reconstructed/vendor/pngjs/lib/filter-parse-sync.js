@@ -1,15 +1,15 @@
 /**
  * pngjs/lib/filter-parse-sync.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: pngjs@5.0.0
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_sync_reader } from "./sync-reader.js";
 import { require_filter_parse } from "./filter-parse.js";
 
-//@ chunk-spjgqa4y.js:46188-46406 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:46188-46406 cjs-fingerprint
 var require_filter_parse_sync = __commonJS(function (cjsExports) {
   var SyncReader = require_sync_reader();
   var Filter = require_filter_parse();

@@ -1,11 +1,11 @@
 /**
  * @anthropic-ai/sdk/internal/qs/formats.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (1)
+ * pieces: chunk-vn3g7zt8.js (1)
  * attribution: esm-fingerprint 1
  */
-//@ chunk-hwmsct5x.js:19086-19193 esm-fingerprint
+//@ chunk-vn3g7zt8.js:19454-19561 esm-fingerprint
 var default_format = "RFC3986";
 var default_formatter = (v) => String(v);
 var formatters = {

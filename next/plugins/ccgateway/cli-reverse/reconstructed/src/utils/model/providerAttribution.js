@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：提供方与模型设置来源归因
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3wek6r2k.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hjswk319.js (14)
  * attribution: placement 14
  */
 import { executeConfigChangeHooks, hasBlockingResult } from "../hooks.js";
@@ -37,7 +37,7 @@ import { resetSkillSyncState } from "../../services/skillsSync/skillsSync.js";
 import { logError } from "../log.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3wek6r2k.js:71354-71436 placement
+//@ chunk-hjswk319.js:70753-70835 placement
 function configChangeBlocker(session, storageV5, credentials) {
   return (change, filePath) =>
     executeConfigChangeHooks(session, change, filePath, {
@@ -45,7 +45,7 @@ function configChangeBlocker(session, storageV5, credentials) {
       credentials,
     }).then(hasBlockingResult);
 }
-//@ chunk-3wek6r2k.js:71436-71894 placement
+//@ chunk-hjswk319.js:70835-71293 placement
 function providerEnvAttribution({ eligible, reason, machineTiers, launchEnv, flagEnv, servedEnv, liveEnv }) {
   if (eligible === undefined) return "undecided";
   if (eligible) return "not_applicable";
@@ -62,7 +62,7 @@ function providerEnvAttribution({ eligible, reason, machineTiers, launchEnv, fla
   if (servedEnv !== undefined && matcher(servedEnv)) return "served_settings";
   return matcher(liveEnv) ? "settings_file" : "not_attributed";
 }
-//@ chunk-3wek6r2k.js:71894-72431 placement
+//@ chunk-hjswk319.js:71293-71830 placement
 function providerEnvMatcher(reason) {
   switch (reason) {
     case "third_party_provider":
@@ -87,7 +87,7 @@ function providerEnvMatcher(reason) {
       return;
   }
 }
-//@ chunk-3wek6r2k.js:72431-72809 placement
+//@ chunk-hjswk319.js:71830-72209 placement
 function machineProviderEnv() {
   let everyMachineAdminTierSettings = getEveryMachineAdminTierSettings();
   let liveEnv = {};
@@ -110,11 +110,11 @@ function machineProviderEnv() {
     ),
   };
 }
-//@ chunk-3wek6r2k.js:72809-72832 placement
+//@ chunk-hjswk319.js:72209-72232 placement
 function isProviderAttributionEnabled() {
   return false;
 }
-//@ chunk-3wek6r2k.js:72832-73499 placement
+//@ chunk-hjswk319.js:72232-72899 placement
 function forcedRefreshAttribution({ author, forcedRefreshFromMachine }) {
   if (!forcedRefreshFromMachine) return;
   switch (author) {
@@ -132,12 +132,12 @@ function forcedRefreshAttribution({ author, forcedRefreshFromMachine }) {
       return;
   }
 }
-//@ chunk-3wek6r2k.js:73499-73546 placement
+//@ chunk-hjswk319.js:72899-72946 placement
 function machineForcedRefresh() {
   if (!isProviderAttributionEnabled()) return;
   return forcedRefreshAttribution(machineProviderEnv());
 }
-//@ chunk-3wek6r2k.js:73546-74062 placement
+//@ chunk-hjswk319.js:72946-73462 placement
 function modelDefinitionSource(mainLoopModel) {
   let canonicalName = getCanonicalName(mainLoopModel, {
     identity: true,
@@ -164,7 +164,7 @@ function modelDefinitionSource(mainLoopModel) {
     return "gateway_discovery";
   return "unrecognized";
 }
-//@ chunk-3wek6r2k.js:74062-74172 placement (2.1.88 match: getClientSurface, 0.78)
+//@ chunk-hjswk319.js:73462-73572 placement (2.1.88 match: getClientSurface, 0.779)
 function getClientSurface() {
   let initialModelSettingLayer = getInitialModelSettingLayer();
   switch (initialModelSettingLayer) {
@@ -177,7 +177,7 @@ function getClientSurface() {
       return initialModelSettingLayer;
   }
 }
-//@ chunk-3wek6r2k.js:74172-74336 placement
+//@ chunk-hjswk319.js:73572-73736 placement
 function getModelPickSource() {
   if (env.CLAUDE_CODE_SESSION_KIND === "bg" || isTeammate()) return "forwarded_pick";
   switch (getEntrypointKind()) {
@@ -188,7 +188,7 @@ function getModelPickSource() {
       return "cli_flag";
   }
 }
-//@ chunk-3wek6r2k.js:74336-74634 placement
+//@ chunk-hjswk319.js:73736-74034 placement
 function modelSettingSource() {
   switch (resolveDefaultMainLoopModelSetting().attribution) {
     case "org":
@@ -207,22 +207,22 @@ function modelSettingSource() {
       return "default";
   }
 }
-//@ chunk-3wek6r2k.js:74634-74721 placement
+//@ chunk-hjswk319.js:74034-74121 placement
 function modelAttributionFields() {
   return {
     model_definition_source: fromEnum(modelDefinitionSource(getMainLoopModel())),
     model_setting_source: fromEnum(getClientSurface()),
   };
 }
-//@ chunk-3wek6r2k.js:74721-74815 placement
+//@ chunk-hjswk319.js:74121-74215 placement
 var RESUME_MODEL_ATTRIBUTION; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3wek6r2k.js:74721", () => {
+deferInit("chunk-hjswk319.js:74121", () => {
   RESUME_MODEL_ATTRIBUTION = {
     model_definition_source: lit("omitted_resume"),
     model_setting_source: lit("omitted_resume"),
   };
 });
-//@ chunk-3wek6r2k.js:74815-74928 placement
+//@ chunk-hjswk319.js:74215-74328 placement
 function onSkillsSyncVetoChange() {
   return onPolicyVerdictChanged(() => {
     let skillsSyncVetoed = getSkillsSyncVetoed();

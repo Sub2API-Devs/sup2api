@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：SendFeedback 工具 schema 与实现；SendFeedback 工具说明。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kxyd0g16.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fmnbrxwy.js (7)
  * attribution: placement 7
  */
 import { fromNumber, fromEnum, fromEnumOpt } from "../../services/analytics/safeMetadata.js";
@@ -39,20 +39,21 @@ import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { isFeedbackDraftsEnabled } from "../../services/feedbackDrafts.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { getSessionId, getLastMainRequestId } from "../../bootstrap/state.js";
-import { uniq, count } from "../../utils/collections.js";
-import { SYNTHETIC_MODEL } from "../../constants/messages.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
+import { SYNTHETIC_MODEL } from "../../utils/messages.js";
 import { getRuntimeMainLoopModel } from "../../utils/model/planModeModel.js";
 import { doesMostRecentAssistantMessageExceed200k } from "../../utils/tokens.js";
 import { resolveEffortValue } from "../../utils/effort.js";
 import { getCwd } from "../../utils/cwd.js";
 import { env } from "../../utils/env.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
+import { countWhere } from "../../utils/collections.js";
 import { enqueueTaskNotification } from "../../utils/task/taskNotifications.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:78544-78566 placement
+//@ chunk-fmnbrxwy.js:93258-93280 placement
 var SENDFEEDBACK = "SendFeedback";
-//@ chunk-kxyd0g16.js:78566-82345 placement
+//@ chunk-fmnbrxwy.js:93280-97059 placement
 /**
  * SendFeedback 的提示词：哪些时机该起草反馈。
  */
@@ -81,12 +82,12 @@ Constraints:
 - Do not include secrets or credentials. Refer to people by role ("a teammate", "the PR reviewer"), never by name, email address, or chat/user ID. This applies inside quoted user words too: replace a name or handle with a bracketed role (e.g. "[a teammate]") and keep the rest verbatim. Do not include customer-facing channel or DM IDs, or excerpts of customer content. Session, request, and run IDs, timestamps, repo/PR numbers, and file paths (written relative to the working directory, or ~-prefixed, not absolute paths under the user's home) remain the right evidence.
 - If the issue looks like a security vulnerability: describe the class of problem, never a working exploit or step-by-step extraction path.
 - Draft only at the natural moments listed above, and at most one draft per distinct issue; never re-draft the same issue in a session.`;
-//@ chunk-kxyd0g16.js:82345-82354 placement
+//@ chunk-fmnbrxwy.js:97059-97068 placement
 /**
  * 反馈里附带最近消息的条数（3）。
  */
 var MAX_FEEDBACK_SNIPPETS = 3;
-//@ chunk-kxyd0g16.js:82354-82429 placement
+//@ chunk-fmnbrxwy.js:97068-97143 placement
 /**
  * 把 effort 值转成字符串（数字转字符串，其余原样）。
  */
@@ -94,7 +95,7 @@ function serializeEffort(effortValue) {
   if (effortValue === undefined) return;
   return typeof effortValue === "number" ? String(effortValue) : effortValue;
 }
-//@ chunk-kxyd0g16.js:82429-82503 placement
+//@ chunk-fmnbrxwy.js:97143-97217 placement
 /**
  * 把 effort 值转成枚举（数字走 fromNumber）。
  */
@@ -102,24 +103,24 @@ function enumerateEffort(effortValue) {
   if (effortValue === undefined) return;
   return typeof effortValue === "number" ? fromNumber(effortValue) : fromEnum(effortValue);
 }
-//@ chunk-kxyd0g16.js:82503-82670 placement (2.1.88 match: countToolCallsSince, 1)
+//@ chunk-fmnbrxwy.js:97217-97384 placement
 function countAgentToolUses(messages) {
-  let toolCallCount = 0;
+  let count = 0;
   for (let message of messages) {
     if (message.type !== "assistant") continue;
     for (let input of message.message.content)
-      if (input.type === "tool_use" && (input.name === AGENT || input.name === TASK)) toolCallCount++;
+      if (input.type === "tool_use" && (input.name === AGENT || input.name === TASK)) count++;
   }
-  return toolCallCount;
+  return count;
 }
-//@ chunk-kxyd0g16.js:82670-88049 placement
+//@ chunk-fmnbrxwy.js:97384-102763 placement
 /**
  * SendFeedback 的输入 schema（类型、标题、详情等）与输出 schema（success/message），以及工具定义。
  */
 var SendFeedbackInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var sendFeedbackOutputSchema;
 var SendFeedbackTool;
-deferInit("chunk-kxyd0g16.js:82670", () => {
+deferInit("chunk-fmnbrxwy.js:97384", () => {
   SendFeedbackInputSchema = DoctorLazy(() =>
     zodStrictObject({
       type: _enum(FEEDBACK_TYPES).describe("What kind of feedback this is."),
@@ -222,7 +223,7 @@ deferInit("chunk-kxyd0g16.js:82670", () => {
           let requestIdsInOrder = lastMainRequestId
             ? [...assistantRequestIds, lastMainRequestId]
             : assistantRequestIds;
-          let uniqueRequestIds = uniq(requestIdsInOrder);
+          let uniqueRequestIds = normalizeCaseForComparison_2(requestIdsInOrder);
           let requestIds = uniqueRequestIds.slice(-MAX_FEEDBACK_SNIPPETS);
           let size = new Set(
             messages.flatMap((message) =>
@@ -234,7 +235,10 @@ deferInit("chunk-kxyd0g16.js:82670", () => {
                 : [],
             ),
           ).size;
-          let assistantTurnCount = Math.max(uniqueRequestIds.length, uniq(mainRequestIds).length + size);
+          let assistantTurnCount = Math.max(
+            uniqueRequestIds.length,
+            normalizeCaseForComparison_2(mainRequestIds).length + size,
+          );
           let mode = toolContext.permissions().mode;
           let runtimeMainLoopModel = getRuntimeMainLoopModel({
             permissionMode: mode,
@@ -261,10 +265,10 @@ deferInit("chunk-kxyd0g16.js:82670", () => {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION,
@@ -290,7 +294,7 @@ deferInit("chunk-kxyd0g16.js:82670", () => {
               },
             };
           }
-          let evictedCount = count(
+          let evictedCount = countWhere(
             saveResult.evicted,
             (evictedDraft) => evictedDraft.source_session_id === sessionId,
           );

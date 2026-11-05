@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。WebSocket 监视任务。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xf84t5b0.js (36)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cx778tm5.js (36)
  * attribution: placement 36
  */
 import { getTaskRunState } from "../../utils/task/taskNotifications.js";
@@ -31,14 +31,14 @@ import { escapeXml_2 as escapeXml } from "../../utils/confusables.js";
 import { plural } from "../../utils/stringUtils.js";
 import {
   enqueuePendingNotification,
-  removeQueuedByFilter,
+  removeByFilter,
   getCommandQueue,
 } from "../../utils/messageQueueManager.js";
 import { stopMonitorTask } from "../MonitorTask/monitorDelivery.js";
 import { clearAutoReactNoticePending } from "../../services/artifacts/shareEntries.js";
 import { stoppedAfterAutoActionsNotice } from "../../tools/ArtifactTool/artifactNotices.js";
 
-//@ chunk-xf84t5b0.js:12774-12885 placement (2.1.88 match: requestTeammateShutdown, 1)
+//@ chunk-cx778tm5.js:12827-12938 placement (2.1.88 match: requestTeammateShutdown, 1)
 /**
  * 对属于某代理、满足谓词且运行中的任务逐个执行回调（用于代理退出时清理其任务）。
  */
@@ -46,33 +46,33 @@ function forEachRunningTaskOwnedBy(agentId, taskRegistry, predicate, callback) {
   for (let [key, task] of Object.entries(taskRegistry.all()))
     if (predicate(task) && task.agentId === agentId && task.status === "running") callback(key, taskRegistry);
 }
-//@ chunk-xf84t5b0.js:12885-12960 placement
+//@ chunk-cx778tm5.js:12938-13013 placement
 /**
  * 监视任务会记录的活动类别。
  */
 var MONITOR_WS_ACTIVITY_KINDS = ["publish", "attach", "watch", "resume", "session_resume", "mcp_write"];
-//@ chunk-xf84t5b0.js:12960-13047 placement
+//@ chunk-cx778tm5.js:13013-13100 placement
 /**
  * 判断对象是否为 monitor_ws 任务。
  */
 function isMonitorWsTask(value) {
   return typeof value === "object" && value !== null && "type" in value && value.type === "monitor_ws";
 }
-//@ chunk-xf84t5b0.js:13047-13094 placement
+//@ chunk-cx778tm5.js:13100-13147 placement
 /**
  * 记下某任务对应的 WebSocket。
  */
 function rememberMonitorSocket(taskId, socket) {
   getTaskRunState().monitorSockets.set(taskId, socket);
 }
-//@ chunk-xf84t5b0.js:13094-13150 placement
+//@ chunk-cx778tm5.js:13147-13203 placement
 /**
  * 判断某任务当前的 WebSocket 是否就是给定实例。
  */
 function isSameMonitorSocket(taskId, socket) {
   return getTaskRunState().monitorSockets.get(taskId) === socket;
 }
-//@ chunk-xf84t5b0.js:13150-13313 placement
+//@ chunk-cx778tm5.js:13203-13366 placement
 function isAutoReactArmedTask(task, isAutoreactArmed, options) {
   return (
     isMonitorWsTask(task) &&
@@ -83,14 +83,14 @@ function isAutoReactArmedTask(task, isAutoreactArmed, options) {
       !(task.autoReactSlug !== undefined && isSlugStoppedAnywhere(task.autoReactSlug)))
   );
 }
-//@ chunk-xf84t5b0.js:13313-13379 placement
+//@ chunk-cx778tm5.js:13366-13432 placement
 /**
  * 判断该监视任务是否已被自动反应武装。
  */
 function isAutoReactArmedMonitorTask(task) {
   return isAutoReactArmedTask(task, () => getLiveState().autoReact.enabledMemo === true);
 }
-//@ chunk-xf84t5b0.js:13379-13462 placement
+//@ chunk-cx778tm5.js:13432-13515 placement
 /**
  * 该任务的 WebSocket 是否仍在连接中或已打开。
  */
@@ -98,10 +98,10 @@ function isMonitorSocketOpen(id) {
   let socket = getTaskRunState().monitorSockets.get(id);
   return socket !== undefined && socket.readyState <= 1;
 }
-//@ chunk-xf84t5b0.js:13462-13484 placement
+//@ chunk-cx778tm5.js:13515-13537 placement
 var STALE_MONITOR_GRACE_MS = 300000;
 var STALE_MONITOR_TTL_MS = SUMMON_STATE_TTL_MS + STALE_MONITOR_GRACE_MS;
-//@ chunk-xf84t5b0.js:13484-13702 placement
+//@ chunk-cx778tm5.js:13537-13755 placement
 function isMonitorWsTaskLive(task, nowMs = Date.now()) {
   let supervisor =
     task.frameLive === undefined ? undefined : getLiveState().live.supervisors.get(task.frameLive.slug);
@@ -113,7 +113,7 @@ function isMonitorWsTaskLive(task, nowMs = Date.now()) {
   let expMs = supervisor?.lease?.expMs;
   return expMs === undefined || nowMs <= expMs + STALE_MONITOR_GRACE_MS;
 }
-//@ chunk-xf84t5b0.js:13702-13787 placement
+//@ chunk-cx778tm5.js:13755-13840 placement
 /**
  * 该任务的 WebSocket 是否已打开。
  */
@@ -121,7 +121,7 @@ function isMonitorSocketOpenNow(taskId) {
   let socket = getTaskRunState().monitorSockets.get(taskId);
   return socket !== undefined && socket.readyState === 1;
 }
-//@ chunk-xf84t5b0.js:13787-13942 placement
+//@ chunk-cx778tm5.js:13840-13995 placement
 var MonitorWsTask = {
   name: "MonitorWsTask",
   type: "monitor_ws",
@@ -139,42 +139,42 @@ var MonitorWsTask = {
     );
   },
 };
-//@ chunk-xf84t5b0.js:13942-13991 placement
+//@ chunk-cx778tm5.js:13995-14044 placement
 /**
  * 注册「用户停止实时帧」的监听器。
  */
 function setFrameLiveUserStopObserver(frameLiveUserStopObserver) {
   getTaskRunState().frameLiveUserStopObserver = frameLiveUserStopObserver;
 }
-//@ chunk-xf84t5b0.js:13991-14041 placement
+//@ chunk-cx778tm5.js:14044-14094 placement
 /**
  * 注册自动反应的人类回合监听器。
  */
 function setAutoReactHumanTurnObserver(autoReactHumanTurnObserver) {
   getTaskRunState().autoReactHumanTurnObserver = autoReactHumanTurnObserver;
 }
-//@ chunk-xf84t5b0.js:14041-14093 placement
+//@ chunk-cx778tm5.js:14094-14146 placement
 /**
  * 注册 artifact 在场停止的监听器。
  */
 function setArtifactPresenceStopObserver(artifactPresenceStopObserver) {
   getTaskRunState().artifactPresenceStopObserver = artifactPresenceStopObserver;
 }
-//@ chunk-xf84t5b0.js:14093-14149 placement
+//@ chunk-cx778tm5.js:14146-14202 placement
 /**
  * 停止时让 artifact room 停止监听该任务。
  */
 function leaveArtifactRoomOnStop(slug) {
   getTaskRunState().artifactRoomStopObserver?.leave(slug);
 }
-//@ chunk-xf84t5b0.js:14149-14192 placement
+//@ chunk-cx778tm5.js:14202-14245 placement
 /**
  * 当前 artifact 连接数。
  */
 function activeArtifactConnections() {
   return currentRoom()?.conns.size ?? 0;
 }
-//@ chunk-xf84t5b0.js:14192-15182 placement
+//@ chunk-cx778tm5.js:14245-15235 placement
 function leaveArtifactRooms(target) {
   let room = currentRoom();
   let disposedCount = getTaskRunState().artifactRoomStopObserver?.disposeAll() ?? 0;
@@ -207,14 +207,14 @@ function leaveArtifactRooms(target) {
   else enqueuePendingNotification(notification);
   return disposedCount;
 }
-//@ chunk-xf84t5b0.js:15182-15237 placement
+//@ chunk-cx778tm5.js:15235-15290 placement
 /**
  * 注册自动反应「有意停止」的监听器。
  */
 function setAutoReactDeliberateStopObserver(autoReactDeliberateStopObserver) {
   getTaskRunState().autoReactDeliberateStopObserver = autoReactDeliberateStopObserver;
 }
-//@ chunk-xf84t5b0.js:15237-16228 placement
+//@ chunk-cx778tm5.js:15290-16281 placement
 function stopMonitorWsTasks(taskId, registry, options) {
   let task = registry.all()[taskId];
   if (isMonitorWsTask(task) && task.autoReactArmed === true) {
@@ -265,7 +265,7 @@ function stopMonitorWsTasks(taskId, registry, options) {
     },
   });
 }
-//@ chunk-xf84t5b0.js:16228-16265 placement
+//@ chunk-cx778tm5.js:16281-16318 placement
 /**
  * 停止某 slug 的自动反应：清唤醒定时器、bump 纪元并停掉。
  */
@@ -274,14 +274,14 @@ function stopAutoReactForSlugNow(slug) {
   bumpSlugEpoch(slug);
   stopAutoReactForSlug(slug);
 }
-//@ chunk-xf84t5b0.js:16265-16528 placement
+//@ chunk-cx778tm5.js:16318-16581 placement
 function stopAutoReactForSlug(slug) {
   stopSummonWakes(slug);
   getTaskRunState().autoReactDeliberateStopObserver?.(slug);
   emitSummonArm(getLiveState().live, slug);
   let coalesced = flushCoalescedNotices(slug);
   getTaskRunState().artifactRoomStopObserver?.leave(slug);
-  let removed = removeQueuedByFilter(
+  let removed = removeByFilter(
     (queuedCommands) =>
       queuedCommands.origin?.kind === "task-notification" &&
       queuedCommands.origin.slug === slug &&
@@ -293,11 +293,11 @@ function stopAutoReactForSlug(slug) {
     clearAutoReactNoticePending(slug);
   artifactWatchStopNotice(0, coalesced);
 }
-//@ chunk-xf84t5b0.js:16528-16597 placement
+//@ chunk-cx778tm5.js:16581-16650 placement
 function isArtifactAutoReactSlug(source) {
   return source === "artifact-auto-react" || source === "artifact-room";
 }
-//@ chunk-xf84t5b0.js:16597-16881 placement
+//@ chunk-cx778tm5.js:16650-16934 placement
 function collectCoalescedArtifactNotices(notifications, into) {
   for (let notification of notifications) {
     let origin = notification.origin;
@@ -316,7 +316,7 @@ function collectCoalescedArtifactNotices(notifications, into) {
       });
   }
 }
-//@ chunk-xf84t5b0.js:16881-19273 placement
+//@ chunk-cx778tm5.js:16934-19326 placement
 function artifactWatchStopNotice(count, discardRecords = [], options) {
   if (count <= 0 && discardRecords.length === 0) return;
   let builtInArtifactHiddenForMcp = getLiveState().builtInArtifactHiddenForMcp;
@@ -390,20 +390,20 @@ ${escapeXml(
     },
   });
 }
-//@ chunk-xf84t5b0.js:19273-19373 placement
+//@ chunk-cx778tm5.js:19326-19426 placement
 function isArtifactAutoReactNotification(notification) {
   return (
     notification.origin?.kind === "task-notification" && notification.origin.source === "artifact-auto-react"
   );
 }
-//@ chunk-xf84t5b0.js:19373-19454 placement (2.1.88 match: processQueuedCommands, 1)
+//@ chunk-cx778tm5.js:19426-19507 placement (2.1.88 match: processQueuedCommands, 1)
 function processQueuedCommands(queuedCommands) {
   return (
     queuedCommands.origin?.kind === "task-notification" &&
     isArtifactAutoReactSlug(queuedCommands.origin.source)
   );
 }
-//@ chunk-xf84t5b0.js:19454-19732 placement
+//@ chunk-cx778tm5.js:19507-19785 placement
 function drainQueuedTaskNotifications(target, options) {
   let coalesced = flushCoalescedNotices();
   for (let notice of coalesced) clearAutoReactNoticePending(notice.slug);
@@ -420,7 +420,7 @@ function drainQueuedTaskNotifications(target, options) {
   declineSweptHandOffs(removed);
   return coalesced;
 }
-//@ chunk-xf84t5b0.js:19732-20036 placement
+//@ chunk-cx778tm5.js:19785-20089 placement
 /**
  * 清除已无对应任务的自动反应待处理通知，返回清除数量。
  */
@@ -440,7 +440,7 @@ function clearOrphanedAutoReactNotices(shouldKeep = () => false) {
   }
   return clearedCount;
 }
-//@ chunk-xf84t5b0.js:20036-20105 placement
+//@ chunk-cx778tm5.js:20089-20158 placement
 /**
  * 分区通知结果的空值（披露、过期行、监视生命周期）。
  */
@@ -451,7 +451,7 @@ function emptyPartitionedNotifications() {
     watchLifecycle: [],
   };
 }
-//@ chunk-xf84t5b0.js:20105-20412 placement
+//@ chunk-cx778tm5.js:20158-20465 placement
 /**
  * 把停止相关的任务通知按来源分为说明披露与过期行等类别。
  */
@@ -468,7 +468,7 @@ function partitionStopNotifications(notifications) {
   }
   return partitioned;
 }
-//@ chunk-xf84t5b0.js:20412-20593 placement
+//@ chunk-cx778tm5.js:20465-20646 placement
 function isNonDurableStopDisclosure(disclosure) {
   return (
     disclosure.origin?.kind === "task-notification" &&
@@ -477,7 +477,7 @@ function isNonDurableStopDisclosure(disclosure) {
     disclosure.origin.carriesDiscardRecord !== true
   );
 }
-//@ chunk-xf84t5b0.js:20593-20668 placement
+//@ chunk-cx778tm5.js:20646-20721 placement
 /**
  * 用户解除自动反应后，丢弃不可持久的停止披露。
  */
@@ -485,7 +485,7 @@ function dropNonDurableStopDisclosures(store) {
   if (!getLiveState().autoReact.userDisarmed) return;
   store.removeByFilter(isNonDurableStopDisclosure);
 }
-//@ chunk-xf84t5b0.js:20668-21006 placement
+//@ chunk-cx778tm5.js:20721-21059 placement
 /**
  * 把停止通知重新排入队列，用户已解除自动反应时丢弃相应披露。
  */
@@ -500,7 +500,7 @@ function requeueStopNotifications(queue, partitioned, clearedCount) {
   for (let notification of partitioned.staleRows) queue.enqueuePendingNotification(notification);
   for (let notification of partitioned.watchLifecycle) queue.enqueuePendingNotification(notification);
 }
-//@ chunk-xf84t5b0.js:21006-21109 placement
+//@ chunk-cx778tm5.js:21059-21162 placement
 function closeAllMonitorSockets() {
   for (let [taskId, socket] of getTaskRunState().monitorSockets) {
     try {
@@ -509,7 +509,7 @@ function closeAllMonitorSockets() {
     getTaskRunState().monitorSockets.delete(taskId);
   }
 }
-//@ chunk-xf84t5b0.js:21109-21140 placement
+//@ chunk-cx778tm5.js:21162-21193 placement
 /**
  * 停止某归属者名下正在运行的监视任务。
  */
@@ -517,21 +517,24 @@ function stopOwnedMonitorTasks(agentId, taskRegistry) {
   forEachRunningTaskOwnedBy(agentId, taskRegistry, isMonitorWsTask, stopMonitorWsTasks);
 }
 export {
-  stopOwnedMonitorTasks,
-  isMonitorSocketOpenNow,
-  processQueuedCommands,
-  artifactWatchStopNotice,
   drainQueuedTaskNotifications,
-  activeArtifactConnections,
+  artifactWatchStopNotice,
+  requeueStopNotifications,
   emptyPartitionedNotifications,
   partitionStopNotifications,
-  leaveArtifactRooms,
-  dropNonDurableStopDisclosures,
-  requeueStopNotifications,
-  stopMonitorWsTasks,
+  isMonitorSocketOpenNow,
   isAutoReactArmedMonitorTask,
   isMonitorWsTask,
+  stopMonitorWsTasks,
   isMonitorWsTaskLive,
+  processQueuedCommands,
+  activeArtifactConnections,
+  leaveArtifactRooms,
+  dropNonDurableStopDisclosures,
+  isSameMonitorSocket,
+  rememberMonitorSocket,
+  MonitorWsTask,
+  stopOwnedMonitorTasks,
   isAutoReactArmedTask,
   clearOrphanedAutoReactNotices,
   closeAllMonitorSockets,
@@ -542,8 +545,5 @@ export {
   stopAutoReactForSlugNow,
   stopAutoReactForSlug,
   MONITOR_WS_ACTIVITY_KINDS,
-  isSameMonitorSocket,
-  rememberMonitorSocket,
-  MonitorWsTask,
   leaveArtifactRoomOnStop,
 };

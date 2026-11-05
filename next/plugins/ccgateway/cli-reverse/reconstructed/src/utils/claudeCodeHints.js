@@ -3,9 +3,9 @@
  *
  * 解析并剥离命令输出中的 <claude-code-hint .../> 标签（如插件安装建议）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/claudeCodeHints.ts
- * pieces: chunk-e6aww6q8.js (4), chunk-fym4r1th.js (11)
+ * pieces: chunk-5xgkngpb.js (4), chunk-wrq65rh8.js (11)
  * attribution: placement 4, callgraph-fingerprint 3, fingerprint 1, layout 7
  */
 import { logForDebugging } from "./debug.js";
@@ -18,7 +18,7 @@ import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { pluginIdHash } from "./telemetry/pluginTelemetry.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-fym4r1th.js:7769-8004 callgraph-fingerprint (2.1.88 match: SUPPORTED_TYPES, 0.501)
+//@ chunk-wrq65rh8.js:8363-8598 callgraph-fingerprint (2.1.88 match: SUPPORTED_TYPES, 0.501)
 /**
  * 支持的 hint 载荷类型（目前只有 plugin）。
  */
@@ -29,7 +29,7 @@ var MAX_HINT_CHARS;
 var PLUGIN_NAME_AT_RE;
 var HTML_ATTRIBUTE_RE;
 var CLAUDE_CODE_HINT_TAG;
-deferInit("chunk-fym4r1th.js:7769", () => {
+deferInit("chunk-wrq65rh8.js:8363", () => {
   SUPPORTED_HINT_VERSIONS = new Set([1]);
   HINT_PAYLOAD_KINDS = new Set(["plugin"]);
   STANDALONE_HINT_RE = /^[ \t]*<claude-code-hint[ \t][^>\r\n]*\/>[ \t]*$/;
@@ -38,7 +38,7 @@ deferInit("chunk-fym4r1th.js:7769", () => {
   HTML_ATTRIBUTE_RE = /(\w+)=(?:"([^"]*)"|([^\s/>]+))/g;
   CLAUDE_CODE_HINT_TAG = "<claude-code-hint";
 });
-//@ chunk-fym4r1th.js:8004-8697 fingerprint (2.1.88 match: extractClaudeCodeHints, 0.722)
+//@ chunk-wrq65rh8.js:8598-9291 fingerprint (2.1.88 match: extractClaudeCodeHints, 0.721)
 function extractClaudeCodeHints_2(output, command) {
   if (!output.includes(CLAUDE_CODE_HINT_TAG))
     return {
@@ -92,7 +92,7 @@ function extractClaudeCodeHints_2(output, command) {
     stripped: collapsed,
   };
 }
-//@ chunk-fym4r1th.js:8697-8777 layout
+//@ chunk-wrq65rh8.js:9291-9371 layout
 /**
  * 去掉命令输出中的 <claude-code-hint .../> 行并把三个以上连续空行压成两个。
  */
@@ -105,7 +105,7 @@ function stripClaudeCodeHints(text) {
 `,
   );
 }
-//@ chunk-fym4r1th.js:8777-8851 layout
+//@ chunk-wrq65rh8.js:9371-9445 layout
 /**
  * 一行是否是完整的 claude-code-hint 自闭合标签（长度不超过 1024）。
  */
@@ -113,7 +113,7 @@ function isClaudeCodeHintLine(line) {
   if (line.length > MAX_HINT_CHARS || !line.includes(CLAUDE_CODE_HINT_TAG)) return false;
   return STANDALONE_HINT_RE.test(line);
 }
-//@ chunk-fym4r1th.js:8851-8952 layout
+//@ chunk-wrq65rh8.js:9445-9546 layout
 function removeClaudeCodeHintLines(text) {
   if (!text.includes(CLAUDE_CODE_HINT_TAG)) return text;
   return text
@@ -124,15 +124,15 @@ function removeClaudeCodeHintLines(text) {
     .filter((line) => !isClaudeCodeHintLine(line.trim())).join(`
 `);
 }
-//@ chunk-fym4r1th.js:8952-8988 layout
+//@ chunk-wrq65rh8.js:9546-9582 layout
 function isSpaceOrTab(char) {
   return char === 32 || char === 9;
 }
-//@ chunk-fym4r1th.js:8988-9029 layout
+//@ chunk-wrq65rh8.js:9582-9623 layout
 function isLineOrParagraphSeparator(char) {
   return char === 8232 || char === 8233;
 }
-//@ chunk-fym4r1th.js:9029-9462 layout
+//@ chunk-wrq65rh8.js:9623-10056 layout
 function findClaudeCodeHintTags(text) {
   let tags = [];
   let index = text.indexOf(CLAUDE_CODE_HINT_TAG);
@@ -170,7 +170,7 @@ function findClaudeCodeHintTags(text) {
   }
   return tags;
 }
-//@ chunk-fym4r1th.js:9462-9876 layout
+//@ chunk-wrq65rh8.js:10056-10470 layout
 /**
  * 扫描文本中的 claude-code-hint 标签（插件安装提示等），返回去掉这些行后的文本，可选收集解析出的提示。
  */
@@ -212,19 +212,19 @@ function extractClaudeCodeHints(text, onMatch) {
   }
   return output + text.slice(lastEnd);
 }
-//@ chunk-fym4r1th.js:9876-9960 callgraph-fingerprint (2.1.88 match: parseAttrs, 1)
+//@ chunk-wrq65rh8.js:10470-10554 callgraph-fingerprint (2.1.88 match: parseAttrs, 1)
 function parseAttrs(tagBody) {
   let attrs = {};
   for (let m of tagBody.matchAll(HTML_ATTRIBUTE_RE)) attrs[m[1]] = m[2] ?? m[3] ?? "";
   return attrs;
 }
-//@ chunk-fym4r1th.js:9960-10036 callgraph-fingerprint (2.1.88 match: firstCommandToken, 1)
+//@ chunk-wrq65rh8.js:10554-10630 callgraph-fingerprint (2.1.88 match: firstCommandToken, 1)
 function firstCommandToken(command) {
   let trimmed = command.trim();
   let spaceIdx = trimmed.search(/\s/);
   return spaceIdx === -1 ? trimmed : trimmed.slice(0, spaceIdx);
 }
-//@ chunk-e6aww6q8.js:3033300-3033456 placement
+//@ chunk-5xgkngpb.js:3109587-3109743 placement
 /**
  * 从命令输出中提取并剥离 claude-code-hint 标签：记录首次看到的插件提示，主线程时提交待处理提示；返回剥离后的输出。
  */
@@ -236,7 +236,7 @@ function consumeClaudeCodeHints(output, { command, pendingHint, isMainThread, su
   }
   return stripped;
 }
-//@ chunk-e6aww6q8.js:3033456-3033720 placement
+//@ chunk-5xgkngpb.js:3109743-3110007 placement
 function logPluginHintSeen(pluginId, surface) {
   if (isFirstPartyTelemetryBlocked()) return;
   let { seenHintPluginIds } = getPluginRegistry();
@@ -255,14 +255,14 @@ function logPluginHintSeen(pluginId, surface) {
         }),
   });
 }
-//@ chunk-e6aww6q8.js:3033973-3033997 placement
+//@ chunk-5xgkngpb.js:3110260-3110284 placement
 /**
  * 恒为 false 的 hint 开关。
  */
 function alwaysFalseHintGate() {
   return false;
 }
-//@ chunk-e6aww6q8.js:3033997-3034093 placement
+//@ chunk-5xgkngpb.js:3110284-3110380 placement
 /**
  * 匹配 msg_ 开头的消息 id。
  */
@@ -270,12 +270,13 @@ var MESSAGE_ID_RE = /^msg_[A-Za-z0-9_]{1,64}$/;
 var TOOL_USE_ID_RE = /^toolu_[A-Za-z0-9_-]{1,64}$/;
 var SAFE_ID_TOKEN_RE = /^[A-Za-z0-9-]{1,64}$/;
 export {
-  removeClaudeCodeHintLines,
   consumeClaudeCodeHints,
-  stripClaudeCodeHints,
+  removeClaudeCodeHintLines,
   alwaysFalseHintGate,
   MESSAGE_ID_RE,
   TOOL_USE_ID_RE,
   SAFE_ID_TOKEN_RE,
+  stripClaudeCodeHints,
   isClaudeCodeHintLine,
+  extractClaudeCodeHints_2,
 };

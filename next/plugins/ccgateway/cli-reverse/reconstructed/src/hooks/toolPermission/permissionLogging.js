@@ -3,9 +3,9 @@
  *
  * 权限决策日志：批准/拒绝事件（config/classifier/hook/user）、代码编辑工具属性、OTEL tool_decision。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/toolPermission/permissionLogging.ts
- * pieces: chunk-e6aww6q8.js (15)
+ * pieces: chunk-5xgkngpb.js (15)
  * attribution: placement 2, fingerprint 7, file-local 1, layout 5
  */
 import {
@@ -44,7 +44,7 @@ import { logOTelEvent } from "../../utils/telemetry/events.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { toExternalPermissionMode } from "../../utils/permissions/PermissionMode.js";
 
-//@ chunk-e6aww6q8.js:993627-993733 placement
+//@ chunk-5xgkngpb.js:1007392-1007498 placement
 /**
  * 生成权限日志的 MCP 工具字段（非 MCP 工具返回空；出错记录日志并返回空）。
  */
@@ -57,7 +57,7 @@ function mcpToolLogFields(tool, mcpClients) {
     return {};
   }
 }
-//@ chunk-e6aww6q8.js:993733-994061 placement
+//@ chunk-5xgkngpb.js:1007498-1007827 placement
 /**
  * 生成权限日志中的 MCP 工具字段：服务器类型、可记录的基础 URL、readOnlyHint，以及（服务器可记录时）工具名细节。
  */
@@ -87,13 +87,13 @@ function describeMcpToolForLog(tool, mcpClients) {
     ...mcpToolAnalyticsFields(tool.name, isLoggable),
   };
 }
-//@ chunk-e6aww6q8.js:3760835-3760875 fingerprint (2.1.88 match: CODE_EDITING_TOOLS, 1)
+//@ chunk-5xgkngpb.js:3856619-3856659 fingerprint (2.1.88 match: CODE_EDITING_TOOLS, 1)
 var CODE_EDITING_TOOLS = ["Edit", "Write", "NotebookEdit"];
-//@ chunk-e6aww6q8.js:3760875-3760914 file-local
+//@ chunk-5xgkngpb.js:3856659-3856698 file-local
 function isCodeEditingTool(toolName) {
   return CODE_EDITING_TOOLS.includes(toolName);
 }
-//@ chunk-e6aww6q8.js:3760914-3761121 fingerprint (2.1.88 match: buildCodeEditToolAttributes, 1)
+//@ chunk-5xgkngpb.js:3856698-3856905 fingerprint (2.1.88 match: buildCodeEditToolAttributes, 1)
 async function buildCodeEditToolAttributes(tool, input, decision, source) {
   let language;
   if (tool.getPath && input) {
@@ -112,7 +112,7 @@ async function buildCodeEditToolAttributes(tool, input, decision, source) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3761121-3761383 fingerprint (2.1.88 match: sourceToString, 1)
+//@ chunk-5xgkngpb.js:3856905-3857167 fingerprint (2.1.88 match: sourceToString, 1)
 function sourceToString(source) {
   if (source.type === "classifier") return "classifier";
   switch (source.type) {
@@ -128,7 +128,7 @@ function sourceToString(source) {
       return "unknown";
   }
 }
-//@ chunk-e6aww6q8.js:3761704-3761889 fingerprint (2.1.88 match: baseMetadata, 0.921)
+//@ chunk-5xgkngpb.js:3857488-3857673 fingerprint (2.1.88 match: baseMetadata, 0.922)
 function baseMetadata(tool, messageId, waitMs, mcpClients) {
   return {
     messageID: sanitizeMarkName(messageId),
@@ -141,7 +141,7 @@ function baseMetadata(tool, messageId, waitMs, mcpClients) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3761889-3762233 layout
+//@ chunk-5xgkngpb.js:3857673-3858017 layout
 /**
  * Bash/PowerShell 命令的破坏性分类遥测字段：破坏类别、目标范围、git 破坏目标与权限模式。
  */
@@ -167,7 +167,7 @@ function destructiveCommandFields(tool, input, permissionMode) {
     permission_mode: fromEnum(permissionMode),
   };
 }
-//@ chunk-e6aww6q8.js:3762233-3762841 fingerprint (2.1.88 match: logApprovalEvent, 0.825)
+//@ chunk-5xgkngpb.js:3858017-3858625 fingerprint (2.1.88 match: logApprovalEvent, 0.824)
 function logApprovalEvent(tool, messageId, source, waitMs, extraFields, mcpClients, promptFields) {
   if (source === "config") {
     logEvent("tengu_tool_use_granted_in_config", {
@@ -212,7 +212,7 @@ function logApprovalEvent(tool, messageId, source, waitMs, extraFields, mcpClien
       break;
   }
 }
-//@ chunk-e6aww6q8.js:3762841-3763211 fingerprint (2.1.88 match: logRejectionEvent, 0.763)
+//@ chunk-5xgkngpb.js:3858625-3858995 fingerprint (2.1.88 match: logRejectionEvent, 0.762)
 function logRejectionEvent(tool, messageId, source, waitMs, extraFields, mcpClients, promptFields) {
   if (source === "config") {
     logEvent("tengu_tool_use_denied_in_config", {
@@ -236,14 +236,14 @@ function logRejectionEvent(tool, messageId, source, waitMs, extraFields, mcpClie
   });
   logFeatureOk(source.type === "hook" ? "permission_auto_deny_hook" : "permission_user_deny");
 }
-//@ chunk-e6aww6q8.js:3763211-3763279 layout
+//@ chunk-5xgkngpb.js:3858995-3859063 layout
 function sdkPermissionPromptFields(toolUseID) {
   return {
     toolUseID: sanitizeMarkName(toolUseID),
     promptSurface: lit_2("sdk_host"),
   };
 }
-//@ chunk-e6aww6q8.js:3763279-3763572 layout
+//@ chunk-5xgkngpb.js:3859063-3859356 layout
 /**
  * 记录 tengu_tool_use_show_permission_request 事件：工具基础元数据、决策原因类型、权限模式、发起 agent 类型等。
  */
@@ -261,7 +261,7 @@ function logPermissionRequestShown(logContext, type) {
     });
   } catch {}
 }
-//@ chunk-e6aww6q8.js:3763572-3764214 layout
+//@ chunk-5xgkngpb.js:3859356-3859998 layout
 /**
  * 把权限结果（宿主回答、回合中止、hook、复查）映射为 {decision, source}，宿主允许时判断是否为永久规则。
  */
@@ -319,7 +319,7 @@ function permissionOutcomeSource(outcome, appliedAllowUpdates) {
       };
   }
 }
-//@ chunk-e6aww6q8.js:3764214-3764485 layout
+//@ chunk-5xgkngpb.js:3859998-3860273 layout
 /**
  * 记录权限决定事件：计算等待时长与来源，按接受/拒绝分别记批准或拒绝事件。
  */
@@ -352,7 +352,7 @@ function logPermissionDecision(logContext, outcome, shownAtMs) {
       );
   } catch {}
 }
-//@ chunk-e6aww6q8.js:3764485-3765505 fingerprint (2.1.88 match: logPermissionDecision, 0.585)
+//@ chunk-5xgkngpb.js:3860273-3861297 fingerprint (2.1.88 match: logPermissionDecision, 0.596)
 /**
  * 记录一次权限决策：批准/拒绝事件、来源（config/classifier/hook/user_permanent/user_temporary/user_abort）、OTEL tool_decision。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Windows shell 启动器
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (5)
  * attribution: placement 5
  */
 import { win32 } from "path";
@@ -17,7 +17,7 @@ import { waitForWindowsChild } from "../auth/lockHolderLiveness.js";
 import { logForDebugging } from "../debug.js";
 import { execFileNoThrowWithCwd } from "../execFileNoThrow.js";
 
-//@ chunk-e6aww6q8.js:3073846-3074226 placement
+//@ chunk-5xgkngpb.js:3159783-3160163 placement
 /**
  * Windows shell 启动器常量：GrowthBook 开关名、启动脚本文本变量、路径/长度/代码页上限、PowerShell 调用串与 spawn 选项。
  */
@@ -34,7 +34,7 @@ var DETACHED_LAUNCHER_SPAWN_OPTIONS = {
   stdio: ["ignore", "ignore", "ignore"],
   windowsVerbatimArguments: true,
 };
-//@ chunk-e6aww6q8.js:3074226-3074996 placement
+//@ chunk-5xgkngpb.js:3160163-3160933 placement
 /**
  * 解析 Windows shell 启动器路径并做安全检查。
  */
@@ -101,7 +101,7 @@ function resolveWindowsShellLauncher({ powershellPath, script, outputPath, cwd }
     },
   };
 }
-//@ chunk-e6aww6q8.js:3074996-3075405 placement
+//@ chunk-5xgkngpb.js:3160933-3161342 placement
 /**
  * 解析可用的 Windows shell 启动器：可被环境变量或功能开关关闭；解析失败或 cmd 探测不可用时记录原因并返回 undefined，否则返回启动配置。
  */
@@ -127,7 +127,7 @@ async function resolveUsableWindowsLauncher(binShell, hostState) {
   }
   return windowsShellLauncher.launch;
 }
-//@ chunk-e6aww6q8.js:3075405-3075687 placement
+//@ chunk-5xgkngpb.js:3161342-3161624 placement
 /**
  * 通过 Windows 启动器 pid 查找实际的 PowerShell 子进程 pid，找不到时保留启动器 pid。
  */
@@ -148,7 +148,7 @@ async function resolveShellPidFromLauncher(parentPid, binShell) {
   }
   return childPid;
 }
-//@ chunk-e6aww6q8.js:3075687-3075996 placement
+//@ chunk-5xgkngpb.js:3161624-3161933 placement
 /**
  * 用 "/d /c exit 0" 探测启动器 cmd 是否可用（有超时），不可用时记录并返回 cmd_probe_timeout 或 cmd_unavailable。
  */

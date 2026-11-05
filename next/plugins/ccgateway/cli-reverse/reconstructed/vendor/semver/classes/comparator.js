@@ -1,8 +1,8 @@
 /**
  * semver/classes/comparator.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: semver@7.7.3..7.7.4
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -13,7 +13,7 @@ import { require_debug } from "../internal/debug.js";
 import { require_semver } from "./semver.js";
 import { require_range } from "./range.js";
 
-//@ chunk-bwbq4xvm.js:19771-21678 cjs-fingerprint
+//@ chunk-7kayq7nc.js:19854-21761 cjs-fingerprint
 var require_comparator = __commonJS(function (cjsExports, cjsModule) {
   var ANY = Symbol("SemVer ANY");
   class Comparator {

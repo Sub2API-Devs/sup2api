@@ -3,9 +3,9 @@
  *
  * 文件操作事件：路径与内容哈希后上报
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/fileOperationAnalytics.ts
- * pieces: chunk-e6aww6q8.js (5)
+ * pieces: chunk-5xgkngpb.js (5)
  * attribution: callgraph-fingerprint 2, placement 1, layout 1, fingerprint 1
  */
 import { createHash } from "crypto";
@@ -14,26 +14,26 @@ import { fromSanitizer_SANITIZER_OUTPUT_ONLY, fromEnum } from "../services/analy
 import { logEvent } from "../services/analytics/index.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1399553-1399630 callgraph-fingerprint (2.1.88 match: hashFilePath, 1)
+//@ chunk-5xgkngpb.js:1399024-1399101 callgraph-fingerprint (2.1.88 match: hashFilePath, 1)
 function hashFilePath(filePath) {
   return fromSanitizer_SANITIZER_OUTPUT_ONLY(
     createHash("sha256").update(filePath).digest("hex").slice(0, 16),
   );
 }
-//@ chunk-e6aww6q8.js:1399630-1399695 callgraph-fingerprint (2.1.88 match: hashFileContent, 1)
+//@ chunk-5xgkngpb.js:1399101-1399166 callgraph-fingerprint (2.1.88 match: hashFileContent, 1)
 function hashFileContent(content) {
   return fromSanitizer_SANITIZER_OUTPUT_ONLY(createHash("sha256").update(content).digest("hex"));
 }
-//@ chunk-e6aww6q8.js:1399695-1399869 placement (2.1.88 match: registerSimplifySkill, 0.379)
+//@ chunk-5xgkngpb.js:1399166-1399340 placement (2.1.88 match: registerSimplifySkill, 0.379)
 var MAX_HASHED_CONTENT_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SHADOWABLE_BUILTIN_SKILL_NAMES;
 var USER_SKILL_PATH_RE;
-deferInit("chunk-e6aww6q8.js:1399695", () => {
+deferInit("chunk-5xgkngpb.js:1399166", () => {
   MAX_HASHED_CONTENT_BYTES = 102400;
   SHADOWABLE_BUILTIN_SKILL_NAMES = new Set(["verify", "pr", "commit", "code-review", "simplify", "go"]);
   USER_SKILL_PATH_RE = /[/\\]\.claude[/\\](?:skills[/\\]([^/\\]+)[/\\]SKILL\.md|commands[/\\]([^/\\]+)\.md)$/;
 });
-//@ chunk-e6aww6q8.js:1399869-1400111 layout
+//@ chunk-5xgkngpb.js:1399340-1399582 layout
 function skillFileMetadata(filePath, homeDir = homedir()) {
   let match = USER_SKILL_PATH_RE.exec(filePath);
   if (match?.index === undefined) return {};
@@ -47,7 +47,7 @@ function skillFileMetadata(filePath, homeDir = homedir()) {
     skill_file_scope: fromEnum(homeDir.length > 0 && sliced === homeDir ? "user" : "project"),
   };
 }
-//@ chunk-e6aww6q8.js:1400111-1400523 fingerprint (2.1.88 match: logFileOperation, 0.771)
+//@ chunk-5xgkngpb.js:1399582-1399994 fingerprint (2.1.88 match: logFileOperation, 0.771)
 /**
  * 记文件操作事件：操作、工具、路径哈希、内容哈希（不超过上限时）、类型，以及技能文件名等元数据。
  */

@@ -3,10 +3,10 @@
  *
  * ShutdownCoordinator：信号/未捕获异常处理与有序退出（终端复位、恢复提示、清理回调、SessionEnd 钩子、遥测刷出、stdout 排空、强制退出兜底）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/gracefulShutdown.ts
- * pieces: chunk-e6aww6q8.js (31), chunk-x6v6jz2y.js (1)
- * attribution: fingerprint 3, placement 29
+ * pieces: chunk-5xgkngpb.js (33), chunk-emhzq435.js (1)
+ * attribution: fingerprint 3, placement 31
  */
 import { writeSync } from "fs";
 import { types } from "util";
@@ -45,6 +45,9 @@ import { noopContainerCleanup } from "./teleport/containerSync.js";
 import { sessionIdExists, getCurrentSessionTitle } from "./sessionStorage.js";
 import { worktreeResumeHint } from "./worktreeResumeHint.js";
 import { getCurrentWorktreeSession } from "./worktree.js";
+import { isOn } from "./codeMode/accepted.js";
+import { getPlatform } from "./platform.js";
+import { CLAUDE_CODE_EXPERIMENTAL_CODE_MODE } from "../constants/codeMode.js";
 import { onExit } from "../../vendor/signal-exit/dist/mjs/index.js";
 import { logForDiagnosticsNoPII, flushDiagnosticLogs } from "./diagLogs.js";
 import {
@@ -53,6 +56,10 @@ import {
   drainStdoutBeforeExit,
   getStdoutDrainBudgetMs,
 } from "./process.js";
+import {
+  waitForOAuthRefreshUntilDeadlineAtExit,
+  beginExitWaitingForOAuthRefreshLast,
+} from "./auth/oauthRefreshExitWait.js";
 import { env } from "./env.js";
 import { isHttp2TransportError } from "./shutdown/http2Recovery.js";
 import { errorTelemetryFields } from "./accessibility/screenReader.js";
@@ -77,6 +84,7 @@ import { profileReport } from "./startupProfiler.js";
 import { endMaintenanceAndForget } from "../services/api/cacheKeepalive.js";
 import {
   waitForOAuthRefreshLocksReleased,
+  oauthRefreshExitCapMs,
   OAUTH_REFRESH_EXIT_WAIT_CAP_MS,
   waitForInFlightOAuthRefresh,
 } from "./auth.js";
@@ -93,7 +101,7 @@ import { TerminalModes } from "../ink/terminalModes.js";
 import { CLEAR_TERMINAL_TITLE } from "../ink/termio/osc.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:244110-244207 fingerprint (2.1.88 match: gracefulShutdown, 0.464)
+//@ chunk-5xgkngpb.js:244886-244983 fingerprint (2.1.88 match: gracefulShutdown, 0.465)
 function gracefulShutdown_2(scope, lastRequestId) {
   if (!lastRequestId) return;
   logEvent("tengu_cache_eviction_hint", {
@@ -101,11 +109,11 @@ function gracefulShutdown_2(scope, lastRequestId) {
     last_request_id: sanitizeMarkName(lastRequestId),
   });
 }
-//@ chunk-e6aww6q8.js:270819-270864 placement
+//@ chunk-5xgkngpb.js:270103-270148 placement
 function cleanupTerminalModes() {
   getTerminalHooks()?.cleanupTerminalModes();
 }
-//@ chunk-e6aww6q8.js:270864-270916 placement
+//@ chunk-5xgkngpb.js:270148-270200 placement
 function emitExitMessage(message) {
   try {
     cleanupTerminalModes();
@@ -117,7 +125,7 @@ ${stripControlChars_3(message)}
     );
   } catch {}
 }
-//@ chunk-e6aww6q8.js:270916-271004 placement
+//@ chunk-5xgkngpb.js:270200-270288 placement
 var MAX_UNCAUGHT_BEFORE_FORCED_EXIT = 10;
 var UNCAUGHT_WINDOW_MS = 5000;
 var RECENT_UNCAUGHT_KEEP = 3;
@@ -128,7 +136,7 @@ var STARTUP_MOUNT_GRACE_MS = 1e4;
 var EXIT_HANDOFF_FAILSAFE_MS = 15000;
 var STDOUT_DRAIN_EXTRA_MS = 1500;
 var DEFAULT_CLEANUP_BUDGET_MS = 600000;
-//@ chunk-e6aww6q8.js:271004-271050 placement
+//@ chunk-5xgkngpb.js:270288-270334 placement
 function writeShutdownNotice(message) {
   try {
     writeSync(
@@ -138,7 +146,7 @@ function writeShutdownNotice(message) {
     );
   } catch {}
 }
-//@ chunk-e6aww6q8.js:271050-283131 placement
+//@ chunk-5xgkngpb.js:270334-283030 placement
 /**
  * ShutdownCoordinator：进程唯一的退出协调者。install 注册 SIGINT/SIGTERM/SIGHUP、uncaughtException、unhandledRejection；shutdown 依次：恢复终端、打印 resume 提示、运行清理回调（有超时）、SessionEnd 钩子、flush 分析与遥测、等 OAuth 刷新、排空 stdout，最后强制退出（带 failsafe 定时器）。
  */
@@ -146,12 +154,14 @@ class ShutdownCoordinator {
   installed = false;
   handles = {};
   resumeHintPrinted = false;
+  resumeHintLaunchFlags = undefined;
   cloudHintLead;
   resumeHintOmitsWorktree = false;
   worktreeRemoval = undefined;
   interruptWorktreeRemoval = undefined;
   worktreeRemovalIgnoresHangup = false;
   worktreeRemovalSignalsInstalled = false;
+  shortenOAuthRefreshWait = undefined;
   printModeSignalHandlersRegistered = false;
   ownsControllingTerminal = false;
   uncaughtCount = 0;
@@ -198,7 +208,7 @@ claude --cloud ${repoSlug}
         let sessionId = getSessionId();
         if (!sessionIdExists(sessionId)) return;
         let worktreeName = this.resumeHintOmitsWorktree ? null : getResumeHintWorktreeName();
-        let { advice, command, arg, worktree } = worktreeResumeHint({
+        let { advice, command, arg, flags, worktree } = worktreeResumeHint({
           sessionId,
           worktree: worktreeName
             ? {
@@ -207,9 +217,16 @@ claude --cloud ${repoSlug}
               }
             : undefined,
           columns: process.stdout.columns,
-          envAssignment: undefined,
+          envAssignment:
+            isOn() && getPlatform() !== "windows" ? `${CLAUDE_CODE_EXPERIMENTAL_CODE_MODE}=1` : undefined,
+          launchFlags: this.resumeHintLaunchFlags,
         });
-        let extraLines = [];
+        let extraLines =
+          isOn() && getPlatform() === "windows"
+            ? [
+                `This session resumes only with the environment variable ${CLAUDE_CODE_EXPERIMENTAL_CODE_MODE} equal to 1`,
+              ]
+            : [];
         writeSync(
           1,
           sequential.dim(
@@ -223,6 +240,7 @@ claude --cloud ${repoSlug}
           title: fromEnum(getCurrentSessionTitle(sessionId) ? "left_out" : "absent"),
           worktree: fromEnum(worktree),
           advice: advice.length > 0,
+          flags,
         });
       } catch {}
   }
@@ -248,6 +266,12 @@ claude --cloud ${repoSlug}
   setCloudResumeHintLead(cloudHintLead) {
     this.cloudHintLead = cloudHintLead;
   }
+  setResumeHintLaunchFlags(resumeHintLaunchFlags) {
+    this.resumeHintLaunchFlags = resumeHintLaunchFlags;
+  }
+  getResumeHintLaunchFlags() {
+    return this.resumeHintLaunchFlags;
+  }
   markOwnsControllingTerminal() {
     this.ownsControllingTerminal = true;
   }
@@ -266,6 +290,7 @@ claude --cloud ${repoSlug}
         signal: "SIGINT",
       });
       markStdoutDrainExternallyClocked();
+      waitForOAuthRefreshUntilDeadlineAtExit(false);
       this.shutdown(0);
     });
     process.on("SIGTERM", () => {
@@ -319,6 +344,7 @@ claude --cloud ${repoSlug}
         signal: `${signalName}_${codePart}`,
       });
       markStdoutDrainExternallyClocked();
+      waitForOAuthRefreshUntilDeadlineAtExit(false);
       this.shutdown(0);
     });
     process.on("uncaughtException", (error) => {
@@ -651,6 +677,8 @@ claude --cloud ${repoSlug}
   }
   async shutdown(exitCode = 0, reason = "other", options) {
     if (this.shutdownInProgress) {
+      waitForOAuthRefreshUntilDeadlineAtExit(false);
+      this.shortenOAuthRefreshWait?.();
       if (options?.removeWorktree && options.removeWorktree !== this.worktreeRemoval)
         logForDebugging(`Worktree ${options.removeWorktree.path} kept: a shutdown was already under way`, {
           level: "warn",
@@ -735,7 +763,8 @@ claude --cloud ${repoSlug}
         await withDeadline(drainPreExitFlushes_2(), flushWaitMs);
       }
     } catch {}
-    let noHeldRefresh = await this.waitForHeldOAuthRefresh(exitCode);
+    let noHeldRefresh =
+      beginExitWaitingForOAuthRefreshLast() || (await this.waitForHeldOAuthRefresh(exitCode));
     await drainRegisteredWriteQueues();
     await flushAnalyticsSinks();
     if (noHeldRefresh && waitForOAuthRefreshLocksReleased() !== null) {
@@ -774,15 +803,20 @@ claude --cloud ${repoSlug}
   }
   async waitForHeldOAuthRefresh(exitCode) {
     if (waitForOAuthRefreshLocksReleased() === null) return true;
+    let credential = exitCode === 0 ? oauthRefreshExitCapMs() : OAUTH_REFRESH_EXIT_WAIT_CAP_MS;
     if (this.failsafeFiresAtMs !== undefined)
-      this.armShutdownFailsafe(
-        Math.max(0, this.failsafeFiresAtMs - Date.now()) + OAUTH_REFRESH_EXIT_WAIT_CAP_MS,
-        exitCode,
-      );
-    return waitForInFlightOAuthRefresh(OAUTH_REFRESH_EXIT_WAIT_CAP_MS);
+      this.armShutdownFailsafe(Math.max(0, this.failsafeFiresAtMs - Date.now()) + credential, exitCode);
+    let waitResult = waitForInFlightOAuthRefresh(credential);
+    if (credential === OAUTH_REFRESH_EXIT_WAIT_CAP_MS) return waitResult;
+    let now = Date.now();
+    let deferred = Promise.withResolvers();
+    this.shortenOAuthRefreshWait = () => {
+      setTimeout(deferred.resolve, now + OAUTH_REFRESH_EXIT_WAIT_CAP_MS - Date.now(), false);
+    };
+    return Promise.race([waitResult, deferred.promise]);
   }
 }
-//@ chunk-e6aww6q8.js:283131-283872 placement
+//@ chunk-5xgkngpb.js:283030-283774 placement
 function serializeShutdownError(error) {
   let untrusted = isUntrustedObject(error);
   if (!(!untrusted && error instanceof Error)) {
@@ -826,7 +860,7 @@ function serializeShutdownError(error) {
     isHostError: true,
   };
 }
-//@ chunk-e6aww6q8.js:283872-284072 placement
+//@ chunk-5xgkngpb.js:283774-283974 placement
 function ownDataString(object, key) {
   if (object === null || typeof object !== "object") return;
   if (isUntrustedObject_2(object)) return;
@@ -840,7 +874,7 @@ function ownDataString(object, key) {
     ? descriptor.value
     : undefined;
 }
-//@ chunk-e6aww6q8.js:284072-284338 placement
+//@ chunk-5xgkngpb.js:283974-284240 placement
 function protoDataString(object, key) {
   if (object === null || typeof object !== "object") return;
   let current = object;
@@ -856,7 +890,7 @@ function protoDataString(object, key) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:284338-284544 placement
+//@ chunk-5xgkngpb.js:284240-284446 placement
 function isMcpConnectionClosed(error) {
   try {
     if (!(error instanceof Error)) return false;
@@ -870,7 +904,7 @@ function isMcpConnectionClosed(error) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:284544-284639 placement
+//@ chunk-5xgkngpb.js:284446-284541 placement
 function emitScrollTelemetrySummary() {
   try {
     if (getIsInteractive() && hasScrollActivity())
@@ -880,107 +914,121 @@ function emitScrollTelemetrySummary() {
       });
   } catch {}
 }
-//@ chunk-e6aww6q8.js:284639-284745 placement
+//@ chunk-5xgkngpb.js:284541-284647 placement
 async function flushAnalyticsSinks() {
   try {
     let { flushAnalyticsSinks } = await import("../services/analytics/flushSinks.js");
     await flushAnalyticsSinks();
   } catch {}
 }
-//@ chunk-e6aww6q8.js:284745-284809 fingerprint (2.1.88 match: CleanupTimeoutError, 1)
+//@ chunk-5xgkngpb.js:284647-284711 fingerprint (2.1.88 match: CleanupTimeoutError, 1)
 class CleanupTimeoutError extends Error {
   constructor() {
     super("Cleanup timeout");
   }
 }
-//@ chunk-e6aww6q8.js:284809-284901 placement
+//@ chunk-5xgkngpb.js:284711-284803 placement
 function hostErrorMessageFields(serialized) {
   if (!serialized.error_message) return {};
   return {
     error_message_hash: shortHash(serialized.error_message),
   };
 }
-//@ chunk-e6aww6q8.js:284901-285029 placement
+//@ chunk-5xgkngpb.js:284803-284931 placement
 function sanitizeErrorName(serialized) {
   if (!serialized.isHostError)
     return serialized.error_name === "string" ? lit_2("string") : lit_2("non-error");
   return sanitizeClassName(serialized.error_name) ?? lit_2("Error");
 }
-//@ chunk-e6aww6q8.js:285029-285056 placement
+//@ chunk-5xgkngpb.js:284931-284958 placement
 var shutdownCoordinators; // deferred: uses ShutdownCoordinator of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:285029", () => {
+deferInit("chunk-5xgkngpb.js:284931", () => {
   shutdownCoordinators = new HostScoped(() => new ShutdownCoordinator());
 });
-//@ chunk-e6aww6q8.js:285056-285085 placement
+//@ chunk-5xgkngpb.js:284958-284987 placement
 function currentShutdownCoordinator() {
   return onProcessRootHost(shutdownCoordinators);
 }
-//@ chunk-e6aww6q8.js:285085-285117 placement
+//@ chunk-5xgkngpb.js:284987-285019 placement
 /**
  * setupGracefulShutdown：安装信号与异常处理（init 时调用）。
  */
 function setupGracefulShutdown(handles) {
   currentShutdownCoordinator().install(handles);
 }
-//@ chunk-e6aww6q8.js:285117-285158 placement (2.1.88 match: isChromeExtensionInstalledPortable, 1)
+//@ chunk-5xgkngpb.js:285019-285060 placement (2.1.88 match: isChromeExtensionInstalledPortable, 1)
 function areShutdownHandlersInstalled() {
   return currentShutdownCoordinator().isInstalled();
 }
-//@ chunk-e6aww6q8.js:285158-285218 placement
+//@ chunk-5xgkngpb.js:285060-285120 placement
 function markPrintModeSignalHandlersRegistered() {
   currentShutdownCoordinator().markPrintModeSignalHandlersRegistered();
 }
-//@ chunk-e6aww6q8.js:285218-285268 placement
+//@ chunk-5xgkngpb.js:285120-285170 placement
 function markOwnsControllingTerminal() {
   currentShutdownCoordinator().markOwnsControllingTerminal();
 }
-//@ chunk-e6aww6q8.js:285268-285315 placement
+//@ chunk-5xgkngpb.js:285170-285217 placement
 function setCloudResumeHintLead(lead) {
   currentShutdownCoordinator().setCloudResumeHintLead(lead);
 }
-//@ chunk-e6aww6q8.js:285315-285364 placement
+//@ chunk-5xgkngpb.js:285217-285266 placement
+/**
+ * 把重启提示用的启动参数写进 ShutdownCoordinator。
+ */
+function setResumeHintLaunchFlags(flags) {
+  currentShutdownCoordinator().setResumeHintLaunchFlags(flags);
+}
+//@ chunk-5xgkngpb.js:285266-285320 placement
+/**
+ * 取重启提示用的启动参数（关闭时用于拼「再次启动」命令）。
+ */
+function getResumeHintLaunchFlags() {
+  return currentShutdownCoordinator().getResumeHintLaunchFlags();
+}
+//@ chunk-5xgkngpb.js:285320-285369 placement
 function markStartupActionStarted(expectsUiMount) {
   currentShutdownCoordinator().markStartupActionStarted(expectsUiMount);
 }
-//@ chunk-e6aww6q8.js:285364-285414 placement
+//@ chunk-5xgkngpb.js:285369-285419 placement
 function exitIfStartupNeverMounted(detail) {
   currentShutdownCoordinator().exitIfStartupNeverMounted(detail);
 }
-//@ chunk-e6aww6q8.js:285414-285477 placement (2.1.88 match: shutdown1PEventLogging, 0.371)
+//@ chunk-5xgkngpb.js:285419-285482 placement (2.1.88 match: shutdown1PEventLogging, 0.371)
 /**
  * 退出时 flush 并关闭 1P 事件日志 provider。
  */
 async function gracefulShutdown(exitCode = 0, reason = "other", options) {
   return currentShutdownCoordinator().shutdown(exitCode, reason, options);
 }
-//@ chunk-e6aww6q8.js:285477-285527 placement
+//@ chunk-5xgkngpb.js:285482-285532 placement
 /**
  * gracefulShutdownSync：同步退出路径。
  */
 function gracefulShutdownSync(exitCode = 0, reason = "other") {
   currentShutdownCoordinator().shutdownSync(exitCode, reason);
 }
-//@ chunk-e6aww6q8.js:285527-285570 placement
+//@ chunk-5xgkngpb.js:285532-285575 placement
 function isShuttingDown() {
   return currentShutdownCoordinator().isShuttingDown();
 }
-//@ chunk-e6aww6q8.js:285570-285606 placement
+//@ chunk-5xgkngpb.js:285575-285611 placement
 function claimShutdown() {
   currentShutdownCoordinator().claimShutdown();
 }
-//@ chunk-e6aww6q8.js:285606-285649 placement
+//@ chunk-5xgkngpb.js:285611-285654 placement
 function releaseShutdownClaim() {
   currentShutdownCoordinator().releaseShutdownClaim();
 }
-//@ chunk-e6aww6q8.js:285649-285707 placement
+//@ chunk-5xgkngpb.js:285654-285712 placement
 function registerBeforeInteractiveShutdown(fn) {
   currentShutdownCoordinator().registerBeforeInteractiveShutdown(fn);
 }
-//@ chunk-e6aww6q8.js:285707-285760 placement
+//@ chunk-5xgkngpb.js:285712-285765 placement
 function clearBeforeInteractiveShutdown() {
   currentShutdownCoordinator().clearBeforeInteractiveShutdown();
 }
-//@ chunk-x6v6jz2y.js:2704-3042 fingerprint (2.1.88 match: cleanupTerminalModes, 0.629)
+//@ chunk-emhzq435.js:2642-2980 fingerprint (2.1.88 match: cleanupTerminalModes, 0.628)
 /**
  * 退出时恢复终端模式：关闭鼠标/焦点报告、离开备用屏幕、卸载 Ink、排空 stdin。
  */
@@ -1005,21 +1053,23 @@ export {
   isShuttingDown,
   gracefulShutdownSync,
   gracefulShutdown,
+  markPrintModeSignalHandlersRegistered,
+  emitExitMessage,
+  shutdownCoordinators,
+  protoDataString,
   flushAnalyticsSinks,
   areShutdownHandlersInstalled,
   markStartupActionStarted,
   claimShutdown,
-  emitExitMessage,
-  cleanupTerminalModes,
-  registerBeforeInteractiveShutdown,
-  markPrintModeSignalHandlersRegistered,
-  shutdownCoordinators,
-  setupGracefulShutdown,
   gracefulShutdown_2,
   markOwnsControllingTerminal,
-  emitScrollTelemetrySummary,
-  protoDataString,
+  setResumeHintLaunchFlags,
+  cleanupTerminalModes,
+  registerBeforeInteractiveShutdown,
   cleanupTerminalModes_2,
+  setupGracefulShutdown,
+  emitScrollTelemetrySummary,
+  getResumeHintLaunchFlags,
   EXIT_HANDOFF_FAILSAFE_MS,
   HTTP2_RECOVERY_CAP,
   HTTP2_RECOVERY_WINDOW_MS,

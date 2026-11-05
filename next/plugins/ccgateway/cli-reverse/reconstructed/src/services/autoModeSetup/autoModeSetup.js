@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自动模式（auto mode）设置流程
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-x7tj0522.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g0yn4ng4.js (10)
  * attribution: placement 10
  */
 import {
@@ -47,19 +47,19 @@ import {
   checkAutoModeEntries,
   AUTO_MODE_DECISION_KINDS,
 } from "./applySetup.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { DEFAULTS_PLACEHOLDER } from "../../utils/permissions/autoModeRulesPrompt.js";
-import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
+import { parseRuleString } from "../../utils/permissions/permissionRuleParser.js";
 import { isDangerousPermissionRule } from "../../utils/permissions/permissionSetup.js";
 import { plural } from "../../utils/stringUtils.js";
 import { getDefaultExternalAutoModeRules } from "../../utils/permissions/yoloClassifier.js";
 
-//@ chunk-x7tj0522.js:901-964 placement
+//@ chunk-g0yn4ng4.js:901-964 placement
 /**
  * 表示刷新令牌已不可用的认证错误码集合（no_refresh_token、known_dead_refresh_token）。
  */
 var REFRESH_TOKEN_DEAD_ERRORS = new Set(["no_refresh_token", "known_dead_refresh_token"]);
-//@ chunk-x7tj0522.js:964-1402 placement
+//@ chunk-g0yn4ng4.js:964-1402 placement
 /**
  * /auto-mode-setup 前检查登录：非 Anthropic 认证或自定义认证头时放行；有 claude.ai 登录时检查是否过期且刷新失败；有 API key/apiKeyHelper/令牌环境变量也放行；否则返回 login_expired 或 not_logged_in。
  */
@@ -88,7 +88,7 @@ async function checkAutoModeSetupLogin({ credentials, storageV5 }) {
   if (key !== null || source === "apiKeyHelper" || effectiveAuthTokenEnv()) return "ok";
   return (await isOAuthRefreshKnownDeadAsync(credentials)) ? "login_expired" : "not_logged_in";
 }
-//@ chunk-x7tj0522.js:1402-1797 placement
+//@ chunk-g0yn4ng4.js:1402-1797 placement
 /**
  * /auto-mode-setup 需要登录时的提示：登录已过期无法续期，或尚未登录。
  */
@@ -97,7 +97,7 @@ function autoModeSetupLoginMessage(status) {
     ? "Auto-mode setup needs a signed-in account to scan your environment, and this session\u2019s login has expired and couldn\u2019t be renewed. Run /login to sign in again, then re-run /auto-mode-setup."
     : "Auto-mode setup needs a signed-in account to scan your environment, and this session isn\u2019t signed in. Run /login, then re-run /auto-mode-setup.";
 }
-//@ chunk-x7tj0522.js:1797-3303 placement
+//@ chunk-g0yn4ng4.js:1797-3303 placement
 /**
  * 自动模式设置提案相关常量：作用范围、模型输出提案的 zod 结构（environment/allow/soft_deny/hard_deny/移除的 permissions.allow/notes），以及 JSON 解析失败时让模型重发的提示。
  */
@@ -131,7 +131,7 @@ var MAX_PROPOSAL_CHARS = 28672;
 var PROPOSAL_REPAIR_PROMPT =
   "Please fix up the formatting of this incorrect JSON: your previous reply could not be parsed as a proposal. Re-emit the same proposal as a single raw JSON object with exactly the six required keys (environment, allow, soft_deny, hard_deny, remove_from_permissions_allow, notes), each an " +
   "array of strings \u2014 no surrounding prose, no code fence, no other keys.";
-//@ chunk-x7tj0522.js:3303-6093 placement
+//@ chunk-g0yn4ng4.js:3303-6093 placement
 /**
  * 自动模式设置：收集仓库与环境信息，调用模型生成自动模式规则提案。
  */
@@ -326,7 +326,7 @@ async function proposeAutoModeSetup(
     gathered: gatheredReport,
   };
 }
-//@ chunk-x7tj0522.js:6093-7405 placement
+//@ chunk-g0yn4ng4.js:6093-7405 placement
 /**
  * 解析并校验模型给出的自动模式提案：清洗各列表、丢弃过宽的危险 allow 规则并在 notes 里说明、校验 autoMode 块与 notes，只剩 $defaults 的列表清空。
  */
@@ -348,7 +348,7 @@ function parseAutoModeProposal(text) {
     soft_deny: cleanList(parsed.data.soft_deny),
     hard_deny: cleanList(parsed.data.hard_deny),
     notes: cleanList(parsed.data.notes),
-    remove_from_permissions_allow: uniq(
+    remove_from_permissions_allow: normalizeCaseForComparison_2(
       parsed.data.remove_from_permissions_allow.filter((rule) => isNonBlank(stripVariationSelectors(rule))),
     ),
   };
@@ -357,7 +357,7 @@ function parseAutoModeProposal(text) {
     proposal.allow = proposal.allow.filter((rule) => {
       if (rule === DEFAULTS_PLACEHOLDER) return true;
       if (rule.length > MAX_RULE_ENTRY_CHARS) return true;
-      let { toolName, ruleContent } = permissionRuleValueFromString(rule);
+      let { toolName, ruleContent } = parseRuleString(rule);
       return !isDangerousPermissionRule(toolName, ruleContent);
     });
   let droppedUnsafe = allowCountBefore - proposal.allow.length;
@@ -404,7 +404,7 @@ function parseAutoModeProposal(text) {
     droppedUnsafeAllowCount: droppedUnsafe,
   };
 }
-//@ chunk-x7tj0522.js:7405-7777 placement
+//@ chunk-g0yn4ng4.js:7405-7777 placement
 /**
  * 校验自动模式设置提案中要删除的 permissions.allow 规则都在扫描标记过的列表里，否则返回 unknown_removal 错误。
  */
@@ -428,7 +428,7 @@ function checkRemovalsWereFlagged(removeFromPermissionsAllow, gatheredReport) {
   }
   return null;
 }
-//@ chunk-x7tj0522.js:7777-7959 placement
+//@ chunk-g0yn4ng4.js:7777-7959 placement
 function flaggedAllowSections(gatheredReport) {
   let sections = [];
   for (let heading of [IGNORED_ALLOW_ENTRIES_HEADING, DESTRUCTIVE_ALLOW_ENTRIES_HEADING]) {
@@ -442,7 +442,7 @@ ${heading}
   }
   return sections;
 }
-//@ chunk-x7tj0522.js:7959-15707 placement
+//@ chunk-g0yn4ng4.js:7959-15707 placement
 /**
  * 自动模式设置提案的提示词（按订阅类型、仓库特征给出倾向）。
  */
@@ -597,7 +597,7 @@ you want to keep." (a status observation, not a follow-up offer).
 ${joined}
 `;
 }
-//@ chunk-x7tj0522.js:15707-16005 placement
+//@ chunk-g0yn4ng4.js:15707-16005 placement
 function proposalJsonSchema() {
   let stringArraySchema = {
     type: "array",

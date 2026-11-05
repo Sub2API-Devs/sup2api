@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。MCP 工具 inputSchema 校验与 tools/list 记忆。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1dth5azr.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-n6f7qd6s.js (12)
  * attribution: placement 11
  */
 import { logForDebugging } from "../../utils/debug.js";
@@ -30,10 +30,10 @@ import { bunHashOf } from "../../utils/pastedContent.js";
 import { isServerIdentityActive } from "./serverIdentity.js";
 import { logFeatureOk } from "../analytics/featureTelemetry.js";
 
-//@ chunk-1dth5azr.js:4740-4795 esm-fingerprint (moved: shares a binding it assigns)
+//@ chunk-n6f7qd6s.js:4741-4796 esm-fingerprint (moved: shares a binding it assigns)
 var DRAFT_2020_12_SCHEMA_ID = "https://json-schema.org/draft/2020-12/schema";
 var draft202012MetaValidator;
-//@ chunk-1dth5azr.js:4795-5114 placement
+//@ chunk-n6f7qd6s.js:4796-5115 placement
 function loadDraft202012MetaValidator() {
   if (draft202012MetaValidator === undefined) {
     try {
@@ -54,27 +54,27 @@ function loadDraft202012MetaValidator() {
   }
   return draft202012MetaValidator;
 }
-//@ chunk-1dth5azr.js:5114-5136 placement
+//@ chunk-n6f7qd6s.js:5115-5137 placement
 /**
  * 恒返回 false 的占位判断。
  */
 function alwaysFalse() {
   return false;
 }
-//@ chunk-1dth5azr.js:5136-5265 placement
+//@ chunk-n6f7qd6s.js:5137-5266 placement
 function invalidPropertyName(schema) {
   if (!isPlainObject(schema) || !isPlainObject(schema.properties)) return null;
   for (let key of Object.keys(schema.properties)) if (!SAFE_SCHEMA_KEY_RE.test(key)) return key;
   return null;
 }
-//@ chunk-1dth5azr.js:5265-5299 placement
+//@ chunk-n6f7qd6s.js:5266-5300 placement
 /**
  * 校验工具输入 schema 是否合法。
  */
 function validateToolSchema(schema) {
   return validateToolInputSchema(loadDraft202012MetaValidator, schema, alwaysFalse());
 }
-//@ chunk-1dth5azr.js:5299-6032 placement
+//@ chunk-n6f7qd6s.js:5300-6033 placement
 function validateToolInputSchema(getValidator, schema, stripDialect) {
   let badKey = invalidPropertyName(schema);
   if (badKey !== null)
@@ -134,20 +134,20 @@ function validateToolInputSchema(getValidator, schema, stripDialect) {
     };
   }
 }
-//@ chunk-1dth5azr.js:6032-6056 placement
+//@ chunk-n6f7qd6s.js:6033-6057 placement
 /**
  * 工具列表序列化的最大字节数（1 MiB）。
  */
 var VALIDATOR_TTL_MS = 3600000;
 var MAX_LISTING_BYTES = 1048576;
-//@ chunk-1dth5azr.js:6056-6129 placement
+//@ chunk-n6f7qd6s.js:6057-6130 placement
 /**
  * 是否跳过未变化的工具重新列举。
  */
 function isUnchangedRelistSkipOn() {
   return env.CLAUDE_CODE_MCP_SKIP_UNCHANGED_RELIST === true && isRemoteManagedEnvironment();
 }
-//@ chunk-1dth5azr.js:6129-7220 placement
+//@ chunk-n6f7qd6s.js:6130-7231 placement
 function listToolsWithMemo(client, tools, epoch, round, getOptions) {
   if (!isRemoteManagedEnvironment()) return;
   let cliOwnedState = getCliOwnedState();
@@ -159,6 +159,7 @@ function listToolsWithMemo(client, tools, epoch, round, getOptions) {
   let built = memo.built;
   memo.built = undefined;
   memo.buildsUnderWay += 1;
+  if (!isUnchangedRelistSkipOn()) return;
   let filteredTools = filterRemoteRepoTools(client.config, tools);
   let listingSanitizer = createListingSanitizer(MAX_LISTING_BYTES);
   if (!filteredTools.every((tool) => listingSanitizer(tool))) return;
@@ -195,7 +196,6 @@ function listToolsWithMemo(client, tools, epoch, round, getOptions) {
     !unchanged ||
     built.tools === undefined ||
     filteredTools.length === 0 ||
-    !isUnchangedRelistSkipOn() ||
     isServerIdentityActive() ||
     Date.now() - built.builtAtMs >= VALIDATOR_TTL_MS
   )
@@ -221,7 +221,7 @@ function listToolsWithMemo(client, tools, epoch, round, getOptions) {
     reuse: built.tools,
   };
 }
-//@ chunk-1dth5azr.js:7220-7674 placement
+//@ chunk-n6f7qd6s.js:7231-7685 placement
 /**
  * 工具列表构建结束后记录结论，并在没有并发构建、输入未变时保存构建结果供复用。
  */
@@ -252,7 +252,7 @@ function settleToolListingMemo(client, result, tools, round) {
     droppedTools: client.droppedTools,
   };
 }
-//@ chunk-1dth5azr.js:7674-7773 placement
+//@ chunk-n6f7qd6s.js:7685-7784 placement
 /**
  * 取该服务器的工具列举判定信息。
  */
@@ -263,7 +263,7 @@ function toolListingVerdict(newTools) {
     ...getCliOwnedState().toolListingVerdicts.get(newTools),
   };
 }
-//@ chunk-1dth5azr.js:7773-7871 placement (2.1.88 match: findChromeClient, 0.783)
+//@ chunk-n6f7qd6s.js:7784-7882 placement (2.1.88 match: findChromeClient, 0.783)
 function isSameConnectedClient(a, b) {
   return a === b || (a?.type === "connected" && b?.type === "connected" && a.client === b.client);
 }
@@ -271,7 +271,7 @@ export {
   isSameConnectedClient,
   listToolsWithMemo,
   settleToolListingMemo,
+  validateToolSchema,
   isUnchangedRelistSkipOn,
   toolListingVerdict,
-  validateToolSchema,
 };

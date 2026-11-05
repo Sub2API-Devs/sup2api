@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：mcp serve 文件类调用：读写文件字节、放置文件，以及输入 schema 注册。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wy9dbk5f.js (21)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xrwmcqkn.js (21)
  * attribution: placement 21
  */
 import { posix } from "path";
@@ -68,17 +68,30 @@ import {
   LISTPROJECTCOMMANDS,
   listProjectCommands,
 } from "../remoteTools/commandRendering.js";
-import { RUNPLUGINHOOK, RUNPLUGINHOOKIF } from "../remoteTools/runPluginHook.js";
-import { call_2 } from "../../commands/feedback/feedback.js";
+import {
+  RUNPLUGINHOOK,
+  runCommandHook,
+  RUNPLUGINHOOKIF,
+  RUNPLUGINHTTPHOOK,
+  isHTTPConfig as isHTTPConfig_2,
+} from "../remoteTools/runPluginHook.js";
 import {
   LISTPROJECTHOOKS,
-  serveListProjectHooks,
+  loadHookSnapshot,
   RUNPROJECTHOOK,
-  serveRunProjectHook,
+  runHook,
+  RUNPROJECTHTTPHOOK,
+  isHTTPConfig,
+  RUNPROJECTMODELHOOK,
+  runPromptHook,
+  RUNPROJECTMCPHOOK,
+  runMcpToolHook,
   RUNMANAGEDHOOK,
   serveRunManagedHook,
   RUNSKILLHOOK,
   serveRunSkillHook,
+  JUDGEHOOKCONDITION,
+  judgeHookCondition,
 } from "./hookCalls.js";
 import { LISTPROJECTAGENTS, serveListProjectAgents } from "./projectAgents.js";
 import {
@@ -120,11 +133,11 @@ import { SAFE_WRITE_FLAGS } from "../../skills/bundledSkills.js";
 import { retryFsOp } from "../../utils/atomicPublishWrite.js";
 import { READ_LIMITS } from "../../utils/fsBoundRead.js";
 import { linkIntoHome } from "../../utils/filePersistence/homeFilePublish.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import { findIntermediateUncJunctionAsync, getFsImplementation } from "../../utils/fsOperations.js";
 
-//@ chunk-wy9dbk5f.js:53234-54010 placement
+//@ chunk-xrwmcqkn.js:49059-49835 placement
 /**
  * 放置文件结果的 schema。
  */
@@ -180,7 +193,7 @@ var placeFilesResultSchema = DoctorLazy(() =>
     stops_for_gone_caller: booleanSchema().optional(),
   }),
 );
-//@ chunk-wy9dbk5f.js:54010-54116 placement
+//@ chunk-xrwmcqkn.js:49835-49941 placement
 function isPlaceableFileName(fileName) {
   return (
     fileName !== "." &&
@@ -190,7 +203,7 @@ function isPlaceableFileName(fileName) {
     Buffer.byteLength(fileName) <= 255
   );
 }
-//@ chunk-wy9dbk5f.js:54116-57151 placement
+//@ chunk-xrwmcqkn.js:49941-53223 placement
 /**
  * PlaceFiles 输入/输出结构，以及 mcp serve 调用名 → 处理函数的总表（文件读写、附件、技能/钩子/命令渲染、项目上下文、MCP 中继、任务文件上传下载等）。
  */
@@ -250,6 +263,19 @@ var SERVED_CALL_HANDLERS = new Map([
         },
       ),
   ],
+  [
+    "NoteSavedUploads",
+    async (hookArgs) =>
+      (await import("../../utils/noteSavedUploadsHere.lazy.js")).noteSavedUploadsHere(
+        hookArgs,
+        isPlaceableFileName,
+      ),
+  ],
+  [
+    "RemoveDeletedUploads",
+    async (event) =>
+      (await import("../../utils/noteSavedUploadsHere.lazy.js")).removeDeletedUploadsHere(event),
+  ],
   [FILESUGGESTIONS, serveFileSuggestions],
   [READFILEFORREMOTE, serveReadFileForRemote],
   [LISTDIRECTORYFORREMOTE, serveListDirectory],
@@ -259,12 +285,17 @@ var SERVED_CALL_HANDLERS = new Map([
   [STOP_BACKGROUND_COMMAND_CALL, stopBackgroundCommand],
   [MOVE_RUNNING_COMMAND_CALL, moveRunningCommand],
   [PLUGIN_COMMAND_OPS, serveListPluginCommands],
-  [RUNPLUGINHOOK, call_2],
-  [RUNPLUGINHOOKIF, call_2],
-  [LISTPROJECTHOOKS, serveListProjectHooks],
-  [RUNPROJECTHOOK, serveRunProjectHook],
+  [RUNPLUGINHOOK, runCommandHook],
+  [RUNPLUGINHOOKIF, runCommandHook],
+  [RUNPLUGINHTTPHOOK, isHTTPConfig_2],
+  [LISTPROJECTHOOKS, loadHookSnapshot],
+  [RUNPROJECTHOOK, runHook],
+  [RUNPROJECTHTTPHOOK, isHTTPConfig],
+  [RUNPROJECTMODELHOOK, runPromptHook],
+  [RUNPROJECTMCPHOOK, runMcpToolHook],
   [RUNMANAGEDHOOK, serveRunManagedHook],
   [RUNSKILLHOOK, serveRunSkillHook],
+  [JUDGEHOOKCONDITION, judgeHookCondition],
   [RENDERPLUGINCOMMAND, renderPluginEntry],
   [RENDERPINNEDPLUGINCOMMAND, renderPluginEntry],
   [SKILL_RENDER_OPS, serveReadSkill],
@@ -403,7 +434,7 @@ var FILE_CALL_FAILURE_EVENTS = new Map([
   [READ_CALLS_CALL, "read_calls_failed"],
   [LISTDIRECTORYFORREMOTE, "list_directory_failed"],
 ]);
-//@ chunk-wy9dbk5f.js:57151-57305 placement
+//@ chunk-xrwmcqkn.js:53223-53377 placement
 async function countedUnlessRepeated(event, run) {
   let failureEvent = FILE_CALL_FAILURE_EVENTS.get(event);
   if (failureEvent === undefined) return withFeatureTelemetry("mcp_serve_file_call", run);
@@ -414,7 +445,7 @@ async function countedUnlessRepeated(event, run) {
     throw error;
   }
 }
-//@ chunk-wy9dbk5f.js:57305-57440 placement
+//@ chunk-xrwmcqkn.js:53377-53512 placement
 async function resolveLocalFilePath(path) {
   let candidatePath = absoluteLocalPathSchema().parse(path);
   await assertNoNetworkJunction(candidatePath);
@@ -422,7 +453,7 @@ async function resolveLocalFilePath(path) {
   if (isUntouchableSpelling(realPath)) throw Error("must be an absolute local path");
   return realPath;
 }
-//@ chunk-wy9dbk5f.js:57440-57488 placement
+//@ chunk-xrwmcqkn.js:53512-53560 placement
 /**
  * 解析真实路径，失败返回 undefined。
  */
@@ -431,7 +462,7 @@ function tryRealpath(filePath) {
     return;
   });
 }
-//@ chunk-wy9dbk5f.js:57488-57936 placement
+//@ chunk-xrwmcqkn.js:53560-54008 placement
 async function serveReadFileBytes(input, signal) {
   let { path, offset, length } = readFileBytesInputSchema().parse(input);
   let expectedPath = await resolveLocalFilePath(path);
@@ -454,7 +485,7 @@ async function serveReadFileBytes(input, signal) {
     await handle.close();
   }
 }
-//@ chunk-wy9dbk5f.js:57936-59643 placement
+//@ chunk-xrwmcqkn.js:54008-55715 placement
 async function serveWriteFileBytes(input, signal, { callerGone }) {
   let request = writeFileBytesInputSchema().parse(input);
   let isFirstPart = request.offset === 0;
@@ -564,7 +595,7 @@ async function serveWriteFileBytes(input, signal, { callerGone }) {
     },
   };
 }
-//@ chunk-wy9dbk5f.js:59643-59809 placement
+//@ chunk-xrwmcqkn.js:55715-55881 placement
 async function linkUnlessFileExists(stagedPath, targetPath) {
   if (
     await link(stagedPath, targetPath).then(
@@ -585,7 +616,7 @@ async function linkUnlessFileExists(stagedPath, targetPath) {
   await retryFsOp(stagedPath, targetPath);
   return true;
 }
-//@ chunk-wy9dbk5f.js:59809-60294 placement
+//@ chunk-xrwmcqkn.js:55881-56366 placement
 /**
  * 逐级创建下载目录（0700，仅 Linux），并确认每级都是本用户拥有的真实目录。
  */
@@ -609,7 +640,7 @@ async function makeDownloadFolders(directories) {
     if (stats.uid !== getuid()) throw Error("one of the folders to write into belongs to another user");
   }
 }
-//@ chunk-wy9dbk5f.js:60294-60888 placement
+//@ chunk-xrwmcqkn.js:56366-56960 placement
 /**
  * 把流写入目录下的临时暂存文件，校验未被替换后依次尝试链接到候选文件名，返回放置的路径；最后删除暂存文件。
  */
@@ -646,7 +677,7 @@ async function placeStreamedFile(directory, fileNames, source, signal) {
     }).catch(() => {});
   }
 }
-//@ chunk-wy9dbk5f.js:60888-60959 placement
+//@ chunk-xrwmcqkn.js:56960-57031 placement
 /**
  * 放置文件的输入 schema。
  */
@@ -659,7 +690,7 @@ var placeFilesInputSchema = DoctorLazy(() =>
     }),
   }),
 );
-//@ chunk-wy9dbk5f.js:60959-61175 placement
+//@ chunk-xrwmcqkn.js:57031-57247 placement
 async function removeStagedArchive(input) {
   let parsed = placeFilesInputSchema().safeParse(input);
   if (!parsed.success) return;
@@ -671,7 +702,7 @@ async function removeStagedArchive(input) {
     });
   } catch {}
 }
-//@ chunk-wy9dbk5f.js:61175-63032 placement
+//@ chunk-xrwmcqkn.js:57247-59104 placement
 async function servePlaceFiles(input, signal) {
   let parsed = placeFilesInputSchema_2().safeParse(input);
   if (!parsed.success) {
@@ -746,7 +777,7 @@ async function servePlaceFiles(input, signal) {
       mapped[fileIndex] = true;
     }
     return {
-      summary: `placed ${count(mapped, Boolean)} of ${files.length} files${keepExisting ? `, and left ${count(mapped_2, Boolean)} already there` : ""}`,
+      summary: `placed ${countWhere(mapped, Boolean)} of ${files.length} files${keepExisting ? `, and left ${countWhere(mapped_2, Boolean)} already there` : ""}`,
       output: {
         placed: mapped,
         limits,
@@ -766,7 +797,7 @@ async function servePlaceFiles(input, signal) {
         }).catch(() => {});
   }
 }
-//@ chunk-wy9dbk5f.js:63032-63991 placement
+//@ chunk-xrwmcqkn.js:59104-60063 placement
 /**
  * 从归档中按偏移读出一个文件，解压并校验大小与 SHA-256，写入暂存文件并设置权限，返回暂存路径与 dev:ino 身份。
  */
@@ -819,7 +850,7 @@ async function extractArchiveEntry(archiveHandle, path, writeId, file) {
     await handle.close();
   }
 }
-//@ chunk-wy9dbk5f.js:63991-64304 placement
+//@ chunk-xrwmcqkn.js:60063-60376 placement
 function fileErrorMessage(error) {
   switch (error instanceof Error && "code" in error ? error.code : undefined) {
     case "ENOSPC":
@@ -833,13 +864,13 @@ function fileErrorMessage(error) {
       return Error("a file could not be staged");
   }
 }
-//@ chunk-wy9dbk5f.js:64304-64407 placement
+//@ chunk-xrwmcqkn.js:60376-60479 placement
 async function realLocalPath(inputPath) {
   let resolvedPath = await realpath(inputPath);
   if (isUntouchableSpelling(resolvedPath)) throw Error("must be an absolute local path");
   return resolvedPath;
 }
-//@ chunk-wy9dbk5f.js:64407-64558 placement
+//@ chunk-xrwmcqkn.js:60479-60630 placement
 async function assertNoNetworkJunction(inputPath) {
   if (
     (await findIntermediateUncJunctionAsync(getFsImplementation(), inputPath, {
@@ -849,7 +880,7 @@ async function assertNoNetworkJunction(inputPath) {
   )
     throw Error("must be an absolute local path");
 }
-//@ chunk-wy9dbk5f.js:64558-64928 placement
+//@ chunk-xrwmcqkn.js:60630-61000 placement
 /**
  * 以 O_DIRECTORY|O_NOFOLLOW 打开目录并核对 /proc/self/fd 路径未变，返回可 await using 的 /proc/self/fd 路径句柄。
  */
@@ -872,13 +903,13 @@ async function openHeldDirectory(directory, options = {}) {
     [Symbol.asyncDispose]: () => handle.close(),
   };
 }
-//@ chunk-wy9dbk5f.js:64928-65065 placement
+//@ chunk-xrwmcqkn.js:61000-61137 placement
 async function assertFdPath(handle, expectedPath) {
   let actualPath = await readlink(`/proc/self/fd/${handle.fd}`);
   if (actualPath !== expectedPath || isUntouchableSpelling(actualPath))
     throw Error("the path changed while it was being opened");
 }
-//@ chunk-wy9dbk5f.js:65138-65247 placement
+//@ chunk-xrwmcqkn.js:61210-61319 placement
 function base64DecodedLength(bytes) {
   if (bytes.length % 4 !== 0) return -1;
   let paddingBytes = bytes.endsWith("==") ? 2 : bytes.endsWith("=") ? 1 : 0;

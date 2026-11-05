@@ -3,11 +3,12 @@
  *
  * 2.1.316 新增。页脚状态段（任务、PR、桥接等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (29)
  * attribution: placement 29
  */
+import { init_react_production, useMemo } from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../state/AppState.js";
 import { selectRemoteSessionUrl_2 } from "../../commands/session/session.js";
@@ -38,7 +39,7 @@ import {
   STANDALONE_SYMBOL_PATTERN,
   BLANK_LOOKALIKE_RE,
   INVISIBLE_SYMBOL_RE,
-  regExp as regExp_6,
+  regExp as regExp_7,
   COMBINING_MARK_RE,
 } from "../../utils/emojiPatterns.js";
 import { cleanForDisplay } from "../../utils/stringUtils.js";
@@ -47,7 +48,6 @@ import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { useHasRenderHooks } from "../pluginUi/render/RenderInstance.js";
 import { useIdeConnectionStatus } from "../../hooks/useIdeConnectionStatus.js";
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
-import { useMemo, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { IdeStatusIndicator } from "../IdeStatusIndicator.js";
 import { sequential } from "../../utils/sequential.js";
 import { truncateToWidth } from "../../utils/format.js";
@@ -55,23 +55,28 @@ import { EDITOR_MODES } from "../../utils/configConstants.js";
 import { checkHasTrustDialogAccepted } from "../../utils/config.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:795209-795259 placement (2.1.88 match: _temp5, 1)
+//@ chunk-czq1j3j2.js:818286-818290 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:818286", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:827828-827878 placement (2.1.88 match: _temp5, 1)
 function selectRemoteConnectionStatus(s) {
   return s.remoteConnectionStatus;
 }
-//@ chunk-18hwfzwa.js:795259-795295 placement
+//@ chunk-czq1j3j2.js:827878-827914 placement
 function selectPrStatus(state) {
   return state.prStatus;
 }
-//@ chunk-18hwfzwa.js:795295-795334 placement
+//@ chunk-czq1j3j2.js:827914-827953 placement
 function selectPrNeedsAuth(state) {
   return state.prNeedsAuth;
 }
-//@ chunk-18hwfzwa.js:795334-795379 placement
+//@ chunk-czq1j3j2.js:827953-827998 placement
 function selectSlackTagConnected_2(state) {
   return state.slackTagConnected;
 }
-//@ chunk-18hwfzwa.js:795379-795615 placement
+//@ chunk-czq1j3j2.js:827998-828234 placement
 function ideStatusSuffix(appState) {
   switch (appState) {
     case "reconnecting":
@@ -92,7 +97,7 @@ function ideStatusSuffix(appState) {
       };
   }
 }
-//@ chunk-18hwfzwa.js:795615-797818 placement
+//@ chunk-czq1j3j2.js:828234-830438 placement
 function FooterStatusLine(props) {
   let $ = useMemoCache(42);
   let { debug, bridgeSelected, modeLabels } = props;
@@ -300,7 +305,7 @@ function FooterStatusLine(props) {
   } else statusRow = $[41];
   return statusRow;
 }
-//@ chunk-18hwfzwa.js:797818-797942 placement
+//@ chunk-czq1j3j2.js:830438-830562 placement
 function PermissionPromptPendingText() {
   let $ = useMemoCache(1);
   let hipaaElement;
@@ -314,7 +319,7 @@ function PermissionPromptPendingText() {
   } else hipaaElement = $[0];
   return hipaaElement;
 }
-//@ chunk-18hwfzwa.js:797942-798349 placement
+//@ chunk-czq1j3j2.js:830562-830969 placement
 /**
  * 页脚中显示会话模式（以 & 连接）的组件，通过动作键渲染钩子挂载，可加前导分隔点。
  */
@@ -353,7 +358,7 @@ var SessionModesText = (props) => {
   } else renderHook = $[4];
   return actionKeysNamespace.useRenderHook(renderInput, renderHook);
 };
-//@ chunk-18hwfzwa.js:798349-798827 placement
+//@ chunk-czq1j3j2.js:830969-831447 placement
 function FooterOpenSelected(props) {
   let $ = useMemoCache(9);
   let { status, bridgeSelected } = props;
@@ -399,22 +404,22 @@ function FooterOpenSelected(props) {
   } else rowElement = $[8];
   return rowElement;
 }
-//@ chunk-18hwfzwa.js:798827-798873 placement (2.1.88 match: SEP_WIDTH, 1)
+//@ chunk-czq1j3j2.js:831447-831493 placement (2.1.88 match: SEP_WIDTH, 1)
 var DOWN_ARROW_PREFIX; // deferred: uses BLACK_CIRCLE (../../constants/figures.js) of its import cycle while loading; runs once the cycle is complete
 var DOWN_ARROW_PREFIX_WIDTH;
 var SEPARATOR_WIDTH;
-deferInit("chunk-18hwfzwa.js:798827", () => {
+deferInit("chunk-czq1j3j2.js:831447", () => {
   DOWN_ARROW_PREFIX = `${DOWN_ARROW} `;
   DOWN_ARROW_PREFIX_WIDTH = bunStringWidth(DOWN_ARROW_PREFIX);
   SEPARATOR_WIDTH = bunStringWidth(" \xB7 ");
 });
-//@ chunk-18hwfzwa.js:798873-798958 placement
+//@ chunk-czq1j3j2.js:831493-831578 placement
 function rowTotalWidth(segments) {
   let total = 0;
   for (let segment of segments) total += segment.width;
   return total + Math.max(0, segments.length - 1) * SEPARATOR_WIDTH;
 }
-//@ chunk-18hwfzwa.js:799024-799102 placement
+//@ chunk-czq1j3j2.js:831644-831722 placement
 function footerStatusStyle(isMatched, colorless, color) {
   if (!isMatched) return DEFAULT_MATCH_TEXT_STYLE;
   return colorless
@@ -425,7 +430,7 @@ function footerStatusStyle(isMatched, colorless, color) {
         inverse: true,
       };
 }
-//@ chunk-18hwfzwa.js:799102-799620 placement
+//@ chunk-czq1j3j2.js:831722-832240 placement
 /**
  * 页脚状态行：可选的前导符号（按下时变亮）加分隔排列的段，单行截断。
  */
@@ -476,19 +481,19 @@ function FooterStatusRow(props) {
   } else rowElement = $[10];
   return rowElement;
 }
-//@ chunk-18hwfzwa.js:799620-799716 placement
+//@ chunk-czq1j3j2.js:832240-832336 placement
 var PRINTABLE_SYMBOL_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var regExp_4;
-deferInit("chunk-18hwfzwa.js:799620", () => {
+deferInit("chunk-czq1j3j2.js:832240", () => {
   PRINTABLE_SYMBOL_RE = /^[\u0021-\u007E\u00A2\u00A3\u00A5\u20AC]+$/u;
   regExp_4 = new RegExp(`(?:${STANDALONE_SYMBOL_PATTERN}\\p{M}*)+`, "gu");
 });
-//@ chunk-18hwfzwa.js:799716-799954 placement
+//@ chunk-czq1j3j2.js:832336-832574 placement
 function normalizeIdeSelectionLabel(label) {
   return cleanForDisplay(
     label.replace(BLANK_LOOKALIKE_RE, " ").replace(INVISIBLE_SYMBOL_RE, " ").replace(/\s+/gu, " "),
   )
-    .replace(regExp_6, (match, lead) => (PRINTABLE_SYMBOL_RE.test(match.slice(lead.length)) ? match : lead))
+    .replace(regExp_7, (match, lead) => (PRINTABLE_SYMBOL_RE.test(match.slice(lead.length)) ? match : lead))
     .replace(COMBINING_MARK_RE, "$1")
     .replace(regExp_4, (match, offset, text) =>
       isSpaceOrOutOfRange(text, offset - 1) || isSpaceOrOutOfRange(text, offset + match.length) ? "" : match,
@@ -496,11 +501,11 @@ function normalizeIdeSelectionLabel(label) {
     .replace(/\s+/gu, " ")
     .trim();
 }
-//@ chunk-18hwfzwa.js:799954-800008 placement
+//@ chunk-czq1j3j2.js:832574-832628 placement
 function isSpaceOrOutOfRange(text, index) {
   return index < 0 || index >= text.length || text[index] === " ";
 }
-//@ chunk-18hwfzwa.js:800008-800408 placement
+//@ chunk-czq1j3j2.js:832628-833028 placement
 /**
  * 页脚状态段的常量：文件名宽度上下限、Bridge/IDE 各连接状态的颜色与后缀文案。
  */
@@ -530,7 +535,7 @@ var IDE_STATUS_SUFFIXES = {
   reconnecting: " \xB7 reconnecting\u2026",
   disconnected: " \xB7 disconnected",
 };
-//@ chunk-18hwfzwa.js:800408-801898 placement
+//@ chunk-czq1j3j2.js:833028-834519 placement
 function FooterIndicators({ width, chrome, initialMcpClients, bridgeSelected, ideSelectionSelected }) {
   let mergedClients = useMergedClients(
     initialMcpClients,
@@ -658,7 +663,7 @@ function FooterIndicators({ width, chrome, initialMcpClients, bridgeSelected, id
     ],
   });
 }
-//@ chunk-18hwfzwa.js:801898-802132 placement
+//@ chunk-czq1j3j2.js:834519-834753 placement
 function withIdeSelectionSegment(leading, selection, trailing, columns) {
   let availableWidth = columns - rowTotalWidth([leading, ...trailing]) - SEPARATOR_WIDTH;
   let labelText =
@@ -682,44 +687,39 @@ function withIdeSelectionSegment(leading, selection, trailing, columns) {
   };
   return [leading, segment, ...trailing];
 }
-//@ chunk-18hwfzwa.js:802132-802136 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:802132", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:802136-802190 placement
+//@ chunk-czq1j3j2.js:834757-834811 placement
 function selectToolPermissionContextMode4(state) {
   return state.toolPermissionContext.mode;
 }
-//@ chunk-18hwfzwa.js:802190-802268 placement
+//@ chunk-czq1j3j2.js:834811-834889 placement
 function selectToolPermissionContextAdditionalWorkingDirectories(state) {
   return state.toolPermissionContext.additionalWorkingDirectories;
 }
-//@ chunk-18hwfzwa.js:802268-802308 placement
+//@ chunk-czq1j3j2.js:834889-834929 placement
 function selectFastMode_2(state) {
   return state.fastMode ?? false;
 }
-//@ chunk-18hwfzwa.js:802308-802351 placement
+//@ chunk-czq1j3j2.js:834929-834972 placement
 function selectThinkingEnabled(state) {
   return state.thinkingEnabled;
 }
-//@ chunk-18hwfzwa.js:802351-802387 placement
+//@ chunk-czq1j3j2.js:834972-835008 placement
 function selectPrStatus2(state) {
   return state.prStatus;
 }
-//@ chunk-18hwfzwa.js:802387-802432 placement
+//@ chunk-czq1j3j2.js:835008-835053 placement
 function selectRemoteSessionName(state) {
   return state.remoteSessionName;
 }
-//@ chunk-18hwfzwa.js:802432-802459 placement
+//@ chunk-czq1j3j2.js:835053-835081 placement
 function getEditorModes() {
   return EDITOR_MODES();
 }
-//@ chunk-18hwfzwa.js:802459-802486 placement
+//@ chunk-czq1j3j2.js:835081-835108 placement
 function isProjectTrustAccepted() {
   return checkHasTrustDialogAccepted();
 }
-//@ chunk-18hwfzwa.js:802486-802616 placement
+//@ chunk-czq1j3j2.js:835108-835238 placement
 function capStatuslineIssueCount(state) {
   return state.setupIssues.statuslineIssueCount === 1
     ? state

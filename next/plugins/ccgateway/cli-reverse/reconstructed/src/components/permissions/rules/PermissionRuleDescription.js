@@ -3,12 +3,15 @@
  *
  * 权限规则的人类可读描述。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/rules/PermissionRuleDescription.tsx
- * pieces: chunk-mjpqa6jt.js (1), chunk-p2qwpk2k.js (2)
- * attribution: placement 2, callgraph-witnessed 1
+ * pieces: chunk-69br0ssk.js (1), chunk-h5wy8vq5.js (2)
+ * attribution: placement 2, callgraph-fingerprint 1
  */
 import { BASH_TOOL_NAME } from "../../../tools/BashTool/toolName.js";
+import { permissionRuleValueFromString as permissionRuleValueFromString_2 } from "../../../utils/sandbox/sandbox-adapter.js";
+import { describeWildcardHint } from "../../../utils/permissions/legacyWildcardRules.js";
+import { permissionRuleValueFromString } from "../../../utils/permissions/permissionRuleParser.js";
 import { init_react_production } from "../../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { EARLY_RETURN_SENTINEL } from "../../../../runtime/bun-runtime.js";
@@ -19,7 +22,7 @@ import {
 } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { consentRowLabel } from "../consentRows.js";
 
-//@ chunk-mjpqa6jt.js:227-617 placement
+//@ chunk-69br0ssk.js:303-754 placement
 /**
  * 生成权限规则的可读描述片段 {prefix, emphasis, suffix}：Bash 规则区分任意命令/前缀/精确命令，无内容的规则描述为"任意使用该工具"，其余返回 null。
  */
@@ -39,6 +42,10 @@ function describeRuleShape(ruleValue) {
       emphasis: ruleValue.ruleContent,
     };
   }
+  if (permissionRuleValueFromString_2(ruleValue))
+    return {
+      prefix: `This rule ${describeWildcardHint(permissionRuleValueFromString(ruleValue), ruleValue.toolName)}`,
+    };
   if (!ruleValue.ruleContent)
     return {
       prefix: "Any use of the ",
@@ -47,9 +54,9 @@ function describeRuleShape(ruleValue) {
     };
   return null;
 }
-//@ chunk-p2qwpk2k.js:20255-20259 placement
+//@ chunk-h5wy8vq5.js:21374-21378 placement
 init_react_production();
-//@ chunk-p2qwpk2k.js:21751-22240 callgraph-witnessed (2.1.88 match: PermissionRuleDescription, 0.302)
+//@ chunk-h5wy8vq5.js:22870-23359 callgraph-fingerprint (2.1.88 match: PermissionRuleDescription, 0.302)
 function PermissionRuleDescription(props) {
   let $ = useMemoCache(13);
   let { ruleValue } = props;
@@ -61,11 +68,11 @@ function PermissionRuleDescription(props) {
   let ruleResult;
   if ($[0] !== ruleValue) {
     ruleResult = EARLY_RETURN_SENTINEL;
-    c: {
+    h: {
       detailElement = describeRuleShape(ruleValue);
       if (!detailElement) {
         ruleResult = null;
-        break c;
+        break h;
       }
       labelElement = Text;
       dimColor = true;
@@ -114,4 +121,4 @@ function PermissionRuleDescription(props) {
   } else labelElementElement = $[12];
   return labelElementElement;
 }
-export { describeRuleShape, PermissionRuleDescription };
+export { PermissionRuleDescription, describeRuleShape };

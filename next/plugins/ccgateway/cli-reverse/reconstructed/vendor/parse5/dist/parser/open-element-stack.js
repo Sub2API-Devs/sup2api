@@ -1,14 +1,14 @@
 /**
  * parse5/dist/parser/open-element-stack.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: parse5@7.2.0..7.2.1
- * pieces: chunk-6ja29j2n.js (2)
+ * pieces: chunk-p9ac6cnb.js (2)
  * attribution: esm-fingerprint 2
  */
 import { TAG_ID, HEADING_ELEMENTS } from "../common/html.js";
 import { NAMESPACES } from "../../lib/common/html.js";
 
-//@ chunk-6ja29j2n.js:117020-117587 esm-fingerprint
+//@ chunk-p9ac6cnb.js:117020-117587 esm-fingerprint
 var IMPLICIT_END_TAG_REQUIRED = new Set([
   TAG_ID.DD,
   TAG_ID.DT,
@@ -58,7 +58,7 @@ var TABLE_ROW_CONTEXT = new Set([TAG_ID.TR, TAG_ID.TEMPLATE, TAG_ID.HTML]);
 var TABLE_BODY_CONTEXT = new Set([TAG_ID.TBODY, TAG_ID.TFOOT, TAG_ID.THEAD, TAG_ID.TEMPLATE, TAG_ID.HTML]);
 var TABLE_CONTEXT = new Set([TAG_ID.TABLE, TAG_ID.TEMPLATE, TAG_ID.HTML]);
 var TABLE_CELLS = new Set([TAG_ID.TD, TAG_ID.TH]);
-//@ chunk-6ja29j2n.js:117587-122132 esm-fingerprint
+//@ chunk-p9ac6cnb.js:117587-122132 esm-fingerprint
 class OpenElementStack {
   get currentTmplContentOrNode() {
     return this._isInTemplate() ? this.treeAdapter.getTemplateContent(this.current) : this.current;

@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/bedrock-sdk/AWS_restJson1.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/bedrock-sdk@0.33.7..0.34.3
- * pieces: chunk-h87x8cg3.js (3)
+ * pieces: chunk-b8zxeazh.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
 import { __toESM } from "../../../runtime/bun-runtime.js";
@@ -18,12 +18,12 @@ import {
   ValidationException,
 } from "../../@aws-sdk/client-bedrock-runtime/dist-cjs/index.js";
 
-//@ chunk-h87x8cg3.js:3110-3141 esm-layout
+//@ chunk-b8zxeazh.js:3110-3141 esm-layout
 var import_credential_provider_web_identity = __toESM(base64Module(), 1);
 var import_fetch_http_handler_2 = __toESM(require_fetch_http_handler(), 1);
-//@ chunk-h87x8cg3.js:3141-3158 esm-layout
+//@ chunk-b8zxeazh.js:3141-3158 esm-layout
 var import_client = __toESM(require_client(), 1);
-//@ chunk-h87x8cg3.js:3158-5935 esm-fingerprint
+//@ chunk-b8zxeazh.js:3158-5935 esm-fingerprint
 var de_InternalServerExceptionRes = async (parsedOutput, context) => {
   let contents = import_client.map({});
   let data = parsedOutput.body;

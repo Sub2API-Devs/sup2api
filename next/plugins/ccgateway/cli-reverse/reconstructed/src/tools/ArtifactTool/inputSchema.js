@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：输入 schema
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p98twse2.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s321jzex.js (17)
  * attribution: placement 17
  */
 import { ARTIFACT_LIST_SCOPES } from "../../services/artifacts/listArtifacts.js";
@@ -47,14 +47,14 @@ import { READ_DB_OPERATIONS, WRITE_DB_OPERATIONS, STR_REPLACE } from "../../serv
 import { ARTIFACT_PERMISSION_LIMITS } from "./permissions/artifactPermissionRules.js";
 import { previewEngineKind } from "../../services/artifactPreview/browserDiscovery.js";
 
-//@ chunk-p98twse2.js:1102-1127 placement
+//@ chunk-s321jzex.js:1102-1127 placement
 /**
  * 惰性注入的 live 路径/上限/提示句子模块与拼句函数。
  */
 var CORE_FILES_LIVE_MODULE = null;
 var HANDLERS_LIMITS_MODULE = null;
 var HANDLERS_CLAUSE_MODULE = null;
-//@ chunk-p98twse2.js:1127-1224 placement
+//@ chunk-s321jzex.js:1127-1224 placement
 /**
  * 把若干句子拼成一句（首字母大写并以句号结尾）。
  */
@@ -62,10 +62,10 @@ function joinSentence(parts, separator = ", and ") {
   let joined = parts.join(separator);
   return joined === "" ? "" : ` ${joined[0].toUpperCase()}${joined.slice(1)}.`;
 }
-//@ chunk-p98twse2.js:1224-1455 placement
+//@ chunk-s321jzex.js:1224-1455 placement
 var PREFLIGHT_RESERVED_CLAUSE =
   " `preflight.js` at the artifact root is reserved: it runs against open pages when Claude publishes updates, and it must be a JavaScript module of at most 8 KiB whose default export is a function, or the publish is refused.";
-//@ chunk-p98twse2.js:1455-1813 placement
+//@ chunk-s321jzex.js:1455-1813 placement
 /**
  * 按开关组合出 Artifact 工具可用的动作名：基础 publish/list/read，再按 live-edit、room、删除/资源、open、pin、endpoints、quickstart、share 开关追加。
  */
@@ -81,14 +81,14 @@ function artifactActionNames(gates) {
   if (gates.shareOn) names.push("share");
   return names;
 }
-//@ chunk-p98twse2.js:1813-1923 placement
+//@ chunk-s321jzex.js:1813-1923 placement
 function listScopes(gates) {
   let scopes = [...ARTIFACT_LIST_SCOPES, "types"];
   if (gates.multiFileOn) scopes.push("files");
   if (gates.assetsOn) scopes.push("assets");
   return scopes;
 }
-//@ chunk-p98twse2.js:1923-2167 placement
+//@ chunk-s321jzex.js:1923-2167 placement
 function actionDescription(gates) {
   return `One of ${artifactActionNames(gates)
     .map((name) => `'${name}'`)
@@ -96,7 +96,7 @@ function actionDescription(gates) {
       ", ",
     )}. Omitting it means 'publish'. **Calls** in the description says what each one does and takes, except as noted here.${gates.handlersOn && HANDLERS_CLAUSE_MODULE ? HANDLERS_CLAUSE_MODULE.HANDLERS_CLAUSE : ""}${gates.versionsOn ? VERSIONS_CLAUSE : ""}`;
 }
-//@ chunk-p98twse2.js:2167-2262 placement
+//@ chunk-s321jzex.js:2167-2262 placement
 /**
  * 按替换表改写字段描述。
  */
@@ -105,7 +105,7 @@ function rewriteFieldDescription(schema, replacements) {
   for (let [pattern, replacement] of replacements) description = description.replace(pattern, replacement);
   return schema.describe(description);
 }
-//@ chunk-p98twse2.js:2262-14801 placement
+//@ chunk-s321jzex.js:2262-14825 placement
 function buildArtifactInputSchema(gates, fields) {
   let shape = fields.shape;
   let pick = (...names) =>
@@ -203,6 +203,7 @@ function buildArtifactInputSchema(gates, fields) {
     limit: shape.limit.describe(
       `list only: the maximum number of artifacts to return (default ${DEFAULT_LIST_LIMIT}).`,
     ),
+    page_token: shape.page_token,
     scope: _enum(listScopes(gates))
       .optional()
       .describe(
@@ -356,14 +357,14 @@ function buildArtifactInputSchema(gates, fields) {
     }),
   });
 }
-//@ chunk-p98twse2.js:14801-14828 placement
+//@ chunk-s321jzex.js:14825-14852 placement
 /**
  * 惰性构建 Artifact 工具的输入 schema。
  */
 var artifactInputSchemaLazy = DoctorLazy(() =>
   buildArtifactInputSchema(artifactSchemaGates(), inputSchema()),
 );
-//@ chunk-p98twse2.js:14828-14908 placement
+//@ chunk-s321jzex.js:14852-14932 placement
 /**
  * 列出 schema 里以旧动作别名形式出现的动作名。
  */
@@ -371,7 +372,7 @@ function legacyActionNamesInSchema(schema) {
   let action = schema.shape.action;
   return Object.keys(ADDON_OF_LEGACY_ACTION).filter((key) => zodEnumFieldIncludes(action, key));
 }
-//@ chunk-p98twse2.js:14908-15014 placement
+//@ chunk-s321jzex.js:14932-15038 placement
 function dataFieldNames() {
   return [
     ...Object.keys(dbFieldSchemas(true)),
@@ -381,7 +382,7 @@ function dataFieldNames() {
     "out_dir",
   ];
 }
-//@ chunk-p98twse2.js:15014-15255 placement
+//@ chunk-s321jzex.js:15038-15279 placement
 function withLegacyActions(gates, legacySchema, baseSchema) {
   let legacyNames = legacyActionNamesInSchema(legacySchema);
   if (legacyNames.length === 0) return baseSchema;
@@ -399,14 +400,14 @@ function withLegacyActions(gates, legacySchema, baseSchema) {
       .describe(baseSchema.shape.action.description ?? ""),
   });
 }
-//@ chunk-p98twse2.js:15255-15286 placement
+//@ chunk-s321jzex.js:15279-15310 placement
 /**
  * 带旧动作别名的 Artifact 输入 schema。
  */
 var artifactInputSchemaWithLegacyActions = DoctorLazy(() =>
   withLegacyActions(artifactSchemaGates(), inputSchema(), artifactInputSchemaLazy()),
 );
-//@ chunk-p98twse2.js:15286-16828 placement
+//@ chunk-s321jzex.js:15310-16852 placement
 /**
  * Artifact 评论子工具的输入 schema：action（read/reply/resolve/watch）、url、thread_id、text、cursor、acknowledge_duplicate、on，以及按开关加入 replies 与 live 文件 path。
  */
@@ -448,7 +449,7 @@ function commentsInputSchema(gates, baseSchema) {
       }),
   });
 }
-//@ chunk-p98twse2.js:16828-19765 placement
+//@ chunk-s321jzex.js:16852-19789 placement
 function buildDataActionInputSchema(schema) {
   let shape = schema.shape;
   let hasStrReplace = "old_str" in shape;
@@ -519,7 +520,7 @@ function buildDataActionInputSchema(schema) {
     as_level: rewriteFieldDescription(fields.as_level, [["read_db and write_db only: act", "Act"]]),
   });
 }
-//@ chunk-p98twse2.js:19765-20369 placement
+//@ chunk-s321jzex.js:19789-20393 placement
 /**
  * verify/preview 子工具的输入 schema：按开关提供 verify（url）与 preview（file_path，非仿真时还有 widths/themes）。
  */
@@ -559,7 +560,7 @@ function verifyPreviewInputSchema(gates) {
       }),
   });
 }
-//@ chunk-p98twse2.js:20369-20437 placement
+//@ chunk-s321jzex.js:20393-20461 placement
 /**
  * 评论动作的输入 schema（惰性）。
  */

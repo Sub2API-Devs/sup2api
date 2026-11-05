@@ -1,13 +1,13 @@
 /**
  * jose/dist/node/esm/lib/invalid_key_input.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (4), chunk-5h78gfwc.js (2)
- * attribution: esm-layout 1, esm-fingerprint 5
+ * pieces: chunk-0f6azspv.js (2), chunk-pd6th42n.js (4)
+ * attribution: esm-fingerprint 5, esm-layout 1
  */
 
-//@ chunk-5h78gfwc.js:4387-4811 esm-fingerprint
-function message_2(msg, actual, ...types) {
+//@ chunk-0f6azspv.js:4387-4811 esm-fingerprint
+function message(msg, actual, ...types) {
   types = types.filter(Boolean);
   if (types.length > 2) {
     let last = types.pop();
@@ -21,13 +21,13 @@ function message_2(msg, actual, ...types) {
   }
   return msg;
 }
-//@ chunk-5h78gfwc.js:4811-4917 esm-fingerprint
-var message_3 = (actual, ...types) => message_2("Key must be ", actual, ...types);
-var withAlg = (alg, actual, ...types) => message_2(`Key for the ${alg} algorithm must be `, actual, ...types);
-//@ chunk-2tyrgda4.js:6891-6904 esm-layout
+//@ chunk-0f6azspv.js:4811-4917 esm-fingerprint
+var message_2 = (actual, ...types) => message("Key must be ", actual, ...types);
+var withAlg = (alg, actual, ...types) => message(`Key for the ${alg} algorithm must be `, actual, ...types);
+//@ chunk-pd6th42n.js:6891-6904 esm-layout
 var noop = () => {};
-//@ chunk-2tyrgda4.js:6904-7322 esm-fingerprint
-function message(msg, actual, ...types) {
+//@ chunk-pd6th42n.js:6904-7322 esm-fingerprint
+function message_3(msg, actual, ...types) {
   if (types.length > 2) {
     let last = types.pop();
     msg += `one of type ${types.join(", ")}, or ${last}.`;
@@ -41,10 +41,10 @@ function message(msg, actual, ...types) {
   }
   return msg;
 }
-//@ chunk-2tyrgda4.js:7322-7400 esm-fingerprint
+//@ chunk-pd6th42n.js:7322-7400 esm-fingerprint
 function keyTypeError(alg, actual, ...expected) {
-  return message(`Key for the ${alg} algorithm must be `, actual, ...expected);
+  return message_3(`Key for the ${alg} algorithm must be `, actual, ...expected);
 }
-//@ chunk-2tyrgda4.js:7400-7442 esm-fingerprint
-var keyMustBeTypeError = (actual, ...expected) => message("Key must be ", actual, ...expected);
-export { message_3, keyMustBeTypeError, noop, keyTypeError, withAlg };
+//@ chunk-pd6th42n.js:7400-7442 esm-fingerprint
+var keyMustBeTypeError = (actual, ...expected) => message_3("Key must be ", actual, ...expected);
+export { message_2, noop, withAlg, keyMustBeTypeError, keyTypeError };

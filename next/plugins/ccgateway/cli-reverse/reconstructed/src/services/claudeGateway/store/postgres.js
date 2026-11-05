@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关 Postgres 存储
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (9)
  * attribution: placement 9
  */
 import { gatewayLog } from "../../gateway/gatewayBanner.js";
@@ -14,20 +14,20 @@ import { runGatewayMigrations } from "./migrations.js";
 import { errorMessage } from "../../../utils/errors.js";
 import { claimOnce } from "../../api/verificationRequired.js";
 
-//@ chunk-1ny7cxrt.js:1514980-1515048 placement
+//@ chunk-1hnjmk23.js:1431885-1431953 placement
 /**
  * 取连接串里的 sslMode 选项（没有返回 undefined）。
  */
 function getSslMode(pool) {
   return "sslMode" in pool.options ? pool.options.sslMode : undefined;
 }
-//@ chunk-1ny7cxrt.js:1515048-1515074 placement
+//@ chunk-1hnjmk23.js:1431953-1431979 placement
 /**
  * 清理过期审计/身份数据的定时间隔（1 小时）。
  */
 var KV_SWEEP_INTERVAL_MS = 30000;
 var RETENTION_SWEEP_INTERVAL_MS = 3600000;
-//@ chunk-1ny7cxrt.js:1515074-1517664 placement
+//@ chunk-1hnjmk23.js:1431979-1434569 placement
 async function openGatewayPostgres(postgresUrl, options) {
   if (typeof Bun === "undefined") throw Error("claude gateway requires the native binary");
   let isActive = false;
@@ -151,7 +151,7 @@ async function openGatewayPostgres(postgresUrl, options) {
     },
   };
 }
-//@ chunk-1ny7cxrt.js:1517664-1517862 placement
+//@ chunk-1hnjmk23.js:1434569-1434767 placement
 /**
  * Postgres 版本低于 11 时的警告文本。
  */
@@ -160,7 +160,7 @@ function postgresVersionWarning(version) {
   let floored = Math.floor(version / 1e4);
   return `Postgres ${floored} is below the supported floor (11) \u2014 upgrade; PostgreSQL ${floored} is past upstream end-of-life`;
 }
-//@ chunk-1ny7cxrt.js:1517862-1517895 placement
+//@ chunk-1hnjmk23.js:1434767-1434800 placement
 /**
  * 每批清理/查询的行数上限（10000）。
  */
@@ -168,7 +168,7 @@ var DEFAULT_SPEND_RETENTION_MONTHS = 13;
 var DEFAULT_IDENTITY_RETENTION_DAYS = 90;
 var DEFAULT_AUDIT_RETENTION_DAYS = 365;
 var SWEEP_BATCH_ROWS = 1e4;
-//@ chunk-1ny7cxrt.js:1517895-1518415 placement
+//@ chunk-1hnjmk23.js:1434800-1435320 placement
 /**
  * 删除过期 kv 行；只读库时提示无法写入。
  */
@@ -184,13 +184,13 @@ function sweepExpiredKv(sql, isPrimary) {
     }
   });
 }
-//@ chunk-1ny7cxrt.js:1518415-1519761 placement
+//@ chunk-1hnjmk23.js:1435320-1437314 placement
 /**
  * 按保留期分批删除过期的审计、花费、共享花费与主体身份记录。
  */
 function sweepRetention(sql, options, isActive = () => true) {
   let runSweep = (table, deleteBatch) =>
-    void (async () => {
+    (async () => {
       for (let j = 0; j < 50 && isActive(); j++)
         if (
           (
@@ -242,8 +242,29 @@ function sweepRetention(sql, options, isActive = () => true) {
       )) AND updated_at < now() - make_interval(days => ${identityRetentionDays})
       RETURNING 1`,
   );
+  runSweep(
+    "principal_groups",
+    (days) => days`DELETE FROM principal_groups WHERE ctid = ANY(ARRAY(
+        SELECT ctid FROM principal_groups
+        WHERE day < to_char(
+          now() AT TIME ZONE 'UTC' - make_interval(days => ${identityRetentionDays}),
+          'YYYY-MM-DD')
+        LIMIT ${SWEEP_BATCH_ROWS}
+      )) RETURNING 1`,
+  ).then(() =>
+    runSweep(
+      "principal_groups",
+      (days) => days`DELETE FROM principal_groups WHERE ctid = ANY(ARRAY(
+          SELECT g.ctid FROM principal_groups g
+          WHERE g.day < to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD')
+            AND NOT EXISTS (
+              SELECT 1 FROM principal_emails e WHERE e.principal = g.principal)
+          LIMIT ${SWEEP_BATCH_ROWS}
+        )) RETURNING 1`,
+    ),
+  );
 }
-//@ chunk-1ny7cxrt.js:1519761-1520090 placement
+//@ chunk-1hnjmk23.js:1437314-1437643 placement
 /**
  * 清理失败日志（缺少 DELETE 权限时只警告一次）。
  */
@@ -258,7 +279,7 @@ function reportSweepFailure(key, error) {
   }
   gatewayLog("warn", `${key} cleanup failed: ${errorMessage(error)}`);
 }
-//@ chunk-1ny7cxrt.js:1520090-1520257 placement
+//@ chunk-1hnjmk23.js:1437643-1437810 placement
 /**
  * 取 Postgres 错误码（errno 或 code）。
  */
@@ -269,4 +290,4 @@ function pgErrorCode(error) {
   }
   return;
 }
-export { openGatewayPostgres };
+export { pgErrorCode, openGatewayPostgres };

@@ -3,9 +3,9 @@
  *
  * /sandbox 实现：沙箱开关与自动放行设置
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/sandbox-toggle/sandbox-toggle.tsx
- * pieces: chunk-55w3ydvj.js (1)
+ * pieces: chunk-y07105e8.js (1)
  * attribution: fingerprint 1
  */
 import { relative } from "path";
@@ -25,7 +25,7 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { SandboxSettings } from "../../components/sandbox/SandboxSettings.js";
 import { getCwdState } from "../../bootstrap/state.js";
 
-//@ chunk-55w3ydvj.js:30440-32799 fingerprint (2.1.88 match: call, 0.739)
+//@ chunk-y07105e8.js:31615-33974 fingerprint (2.1.88 match: call, 0.739)
 /**
  * /sandbox 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

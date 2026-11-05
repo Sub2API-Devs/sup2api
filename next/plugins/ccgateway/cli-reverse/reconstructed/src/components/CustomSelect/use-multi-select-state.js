@@ -3,9 +3,9 @@
  *
  * 多选状态 hook（选中集合、提交、Esc 取消）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CustomSelect/use-multi-select-state.ts
- * pieces: chunk-nq7jz8ya.js (3)
+ * pieces: chunk-jqr4ms5p.js (3)
  * attribution: placement 2, fingerprint 1
  */
 import { isDeepStrictEqual } from "util";
@@ -16,17 +16,17 @@ import { useRegisterOverlay } from "../../context/overlayContext.js";
 import { normalizeFullWidthDigits_2, replaceIdeographicSpace } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-nq7jz8ya.js:608-612 placement
+//@ chunk-jqr4ms5p.js:609-613 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-nq7jz8ya.js:608", () => {
+deferInit("chunk-jqr4ms5p.js:609", () => {
   init_react_production();
 });
-//@ chunk-nq7jz8ya.js:612-616 placement
+//@ chunk-jqr4ms5p.js:613-617 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-nq7jz8ya.js:612", () => {
+deferInit("chunk-jqr4ms5p.js:613", () => {
   init_react_production();
 });
-//@ chunk-nq7jz8ya.js:658-3281 fingerprint (2.1.88 match: useMultiSelectState, 0.639)
+//@ chunk-jqr4ms5p.js:659-3283 fingerprint (2.1.88 match: useMultiSelectState, 0.638)
 function useMultiSelectState({
   isDisabled = false,
   visibleOptionCount = 5,

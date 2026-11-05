@@ -3,11 +3,12 @@
  *
  * 2.1.316 新增：/send-to-project 参数解析。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2ygwbyvf.js (9)
- * attribution: placement 9
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-d6ed5cww.js (10)
+ * attribution: placement 10
  */
+import { stripNonPrintable } from "../../utils/truncateGraphemes.js";
 import { printableName } from "../../utils/printableName.js";
 import { TARGET_PROJECT_ROWS_MAX } from "../../components/projects/continueInProjectsTargetRequest.js";
 import {
@@ -18,9 +19,16 @@ import {
   projectNotTargetReason,
 } from "../../services/projects/channelApi.js";
 import { parseProjectReference } from "../../services/projects/disclosure.js";
-import { stripNonPrintable } from "../../utils/truncateGraphemes.js";
 
-//@ chunk-2ygwbyvf.js:356-911 placement
+//@ chunk-d6ed5cww.js:356-433 placement
+/**
+ * 由提示生成项目名，空时用 “Untitled project”。
+ */
+function cleanProjectName(name) {
+  let trimmed = stripNonPrintable(printableName(name, 80)).trim();
+  return trimmed !== "" ? trimmed : "Untitled project";
+}
+//@ chunk-d6ed5cww.js:433-988 placement
 /**
  * 把 /send-to-project 参数问题（flag：--project 已废弃；quotes：名字引号不对；link：不是 Claude Project 链接）转成提示文字。
  */
@@ -34,7 +42,7 @@ function describeProjectArgProblem(problem) {
       return "That link is not a Claude Project\u2019s. Use the project\u2019s name in double quotes or its id, or run /send-to-project alone and pick the project.";
   }
 }
-//@ chunk-2ygwbyvf.js:911-1378 placement
+//@ chunk-d6ed5cww.js:988-1455 placement
 /**
  * 按名字找项目失败时的提示：多个同名项目（ambiguous）或没有同名的个人项目（列表被截断时注明只看了最近 N 个）。
  */
@@ -43,12 +51,12 @@ function describeProjectNameMiss(name, projectByName, truncated) {
     ? `More than one of your Claude Projects is named \u201C${printableName(projectByName.name, 80)}\u201D. ${"Run /send-to-project alone to pick the project."}`
     : `None of your ${truncated ? `${TARGET_PROJECT_ROWS_MAX} most recently active ` : ""}personal projects is named \u201C${printableName(name.trim(), 80)}\u201D. A project that is shared, paused or archived can\u2019t be named here, and a message can\u2019t open with a double quote. ${"Run /send-to-project alone to pick the project."}`;
 }
-//@ chunk-2ygwbyvf.js:1378-1399 placement
+//@ chunk-d6ed5cww.js:1455-1476 placement
 /**
  * /send-to-project 参数里项目名开头的双引号（含中文引号）匹配正则。
  */
 var LEADING_QUOTE_PATTERN = /^["\u201C]/;
-//@ chunk-2ygwbyvf.js:1399-2024 placement
+//@ chunk-d6ed5cww.js:1476-2101 placement
 /**
  * 解析 /send-to-project 参数：开头双引号里的项目名、项目 id 或项目链接，其余部分作为附言；旧 --project、引号不配对、非项目链接返回 problem；都不是时整个参数作为附言。
  */
@@ -96,7 +104,7 @@ function parseSendToProjectArgs(args) {
         note: args,
       };
 }
-//@ chunk-2ygwbyvf.js:2024-2183 placement
+//@ chunk-d6ed5cww.js:2101-2260 placement
 /**
  * 按规范化名字（以及用户输入过的名字）建立 名字 → 项目列表 的索引。
  */
@@ -109,7 +117,7 @@ function indexProjectsByName(projects, typedNames) {
   }
   return byName;
 }
-//@ chunk-2ygwbyvf.js:2183-2339 placement
+//@ chunk-d6ed5cww.js:2260-2416 placement
 /**
  * 在名字索引里查项目：none、ambiguous（多个同名）或 match。
  */
@@ -129,9 +137,9 @@ function lookupProjectByName(name, byName) {
         project: first,
       };
 }
-//@ chunk-2ygwbyvf.js:2339-2364 placement
+//@ chunk-d6ed5cww.js:2416-2441 placement
 var MAX_CHANNEL_PAGES = Math.ceil(TARGET_PROJECT_ROWS_MAX / CHANNEL_LIST_PAGE_SIZE);
-//@ chunk-2ygwbyvf.js:2364-2721 placement
+//@ chunk-d6ed5cww.js:2441-2798 placement
 /**
  * 分页拉取个人 Claude Projects 频道（有页数上限），过滤掉不适用的频道，按活跃度排序截取前 N 个；返回项目、是否截断、id → 规范名映射。
  */
@@ -161,7 +169,7 @@ async function listPersonalProjects(signal, credentials) {
     typedNames,
   };
 }
-//@ chunk-2ygwbyvf.js:2721-2809 placement
+//@ chunk-d6ed5cww.js:2798-2886 placement
 function sortProjectsByRecency(projects) {
   return projects.toSorted((left, right) => (right.lastMessageAtMs ?? -1) - (left.lastMessageAtMs ?? -1));
 }
@@ -172,5 +180,6 @@ export {
   lookupProjectByName,
   indexProjectsByName,
   describeProjectNameMiss,
+  cleanProjectName,
   LEADING_QUOTE_PATTERN,
 };

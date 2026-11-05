@@ -3,9 +3,9 @@
  *
  * 沿用旧版路径：是否显示快速模式图标提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/useShowFastIconHint.ts
- * pieces: chunk-18hwfzwa.js (3)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: placement 3
  */
 import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
@@ -14,14 +14,14 @@ import { packageManagerAutoUpdaterSlot } from "../PackageManagerAutoUpdater.js";
 import { useHost } from "../../context/session.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:922094-922098 placement
+//@ chunk-czq1j3j2.js:897932-897936 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:922094", () => {
+deferInit("chunk-czq1j3j2.js:897932", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:922098-922111 placement
+//@ chunk-czq1j3j2.js:955003-955016 placement
 var FAST_ICON_HINT_MS = 5000;
-//@ chunk-18hwfzwa.js:922111-922318 placement
+//@ chunk-czq1j3j2.js:955016-955223 placement
 function useShowFastIconHint(showFastIcon) {
   let [showHint, setShowHint] = useState(false);
   let clock = useClock();

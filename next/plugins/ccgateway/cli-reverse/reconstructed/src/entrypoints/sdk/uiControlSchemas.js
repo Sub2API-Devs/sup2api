@@ -3,35 +3,33 @@
  *
  * 2.1.316 新增：UI 控制协议 schema（ui_attach/ui_render/ui_press/ui_panes/ui_prompt_* 等），宿主据此驱动无头界面。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bwbq4xvm.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: placement 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   objectSchema,
-  numberSchema,
-  booleanSchema,
-  _enum,
-  stringSchema,
   literal,
-  array,
+  stringSchema,
+  _enum,
+  booleanSchema,
+  union,
   lazy,
   record,
+  numberSchema,
+  array,
   unknown,
   discriminatedUnion,
   zodStrictObject,
-  union,
 } from "../../../vendor/zod/v4/classic/schemas.js";
+import { LAUNCHER_END_REASONS } from "../../utils/auth/launcherHostLogin.js";
+import { PaneIdSchema } from "./coreSchemas.js";
 import {
-  RenderElementKinds,
-  SDKButtonMessageSchema,
   SDKCanUseToolCanUseToolMessageSchema,
   SDKHookCallbackHookCallbackMessageSchema,
   SDKMcpMessageMcpMessageMessageSchema,
-  SDKOauthTokenRefreshOauthTokenRefreshMessageSchema,
-  SDKHostAuthTokenRefreshHostAuthTokenRefreshMessageSchema,
   SDKElicitationElicitationMessageSchema,
   SDKRequestUserDialogRequestUserDialogMessageSchema,
   SDKRemoteToolCallRemoteToolCallMessageSchema,
@@ -86,7 +84,6 @@ import {
   SDKClaimSessionClaimSessionMessageSchema,
   SDKRegisterDeviceHooksRegisterDeviceHooksMessageSchema,
   SDKUploadDeviceHookTemplateUploadDeviceHookTemplateMessageSchema,
-  SDKMessageRatedMessageRatedMessageSchema,
   SDKStopTaskStopTaskMessageSchema,
   SDKStartShellTaskStartShellTaskMessageSchema,
   SDKBackgroundTasksBackgroundTasksMessageSchema,
@@ -102,14 +99,24 @@ import {
   SDKListPermissionRulesListPermissionRulesMessageSchema,
   SDKMcpReadResourceMcpReadResourceMessageSchema,
 } from "./controlSchemas.js";
-import { PaneIdSchema } from "./coreSchemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bwbq4xvm.js:709920-760324 placement
+//@ chunk-7kayq7nc.js:745337-808729 placement
 /**
  * UI 控制协议 schema（一个 var 语句）：ui_attach/detach、ui_render、ui_press、客户端模块与故障、输入/选择、窗格 show/focus/close/scroll/focus、ui_copy 与 composer 读写/绘制/建议、选区读取，以及控制请求总联合（循环发起的请求、客户端驱动的请求、全部请求）。首个绑定是 ui_render 的基准计时标记。
  */
-var UiRenderTimingSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var SDKOauthTokenRefreshOauthTokenRefreshMessageSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var OAuthTokenRefreshResponseSchema;
+var SDKHostAuthTokenRefreshHostAuthTokenRefreshMessageSchema;
+var HostAuthTokenRefreshResponseSchema;
+var SDKMessageRatedMessageRatedMessageSchema;
+var MessageRatedResponseSchema;
+var RenderElementKinds;
+var RenderChildSchema;
+var HoverStyleSchema;
+var ElementPressHandlerSchema;
+var SDKButtonMessageSchema;
+var UiRenderTimingSchema;
 var UiViewportSchema;
 var UiOnScreenRangeSchema;
 var UiRemoteSurfaceSchema;
@@ -157,6 +164,8 @@ var SDKUiFocusUiFocusMessageSchema;
 var UiFocusResponseSchema;
 var UI_CLIENT_ANSWERABLE_REQUESTS;
 var UI_CLIENT_ANSWERABLE_REQUEST_COUNT;
+var MAX_KEYED_ELEMENTS;
+var MAX_DRAWS_PER_ELEMENT;
 var UiClientAnswerableRequestSchema;
 var UI_TEXT_MAX_CHARS;
 var SDKUiCopyUiCopyMessageSchema;
@@ -181,7 +190,264 @@ var UiPromptAutocompleteResponseSchema;
 var SDKLoopControlRequestSchema;
 var SDKClientControlRequestSchema;
 var SDKControlRequestInnerSchema;
-deferInit("chunk-bwbq4xvm.js:709920", () => {
+deferInit("chunk-7kayq7nc.js:745337", () => {
+  SDKOauthTokenRefreshOauthTokenRefreshMessageSchema = DoctorLazy(() =>
+    objectSchema({
+      subtype: literal("oauth_token_refresh"),
+      kind: literal("sessions")
+        .optional()
+        .describe(
+          "Which host-handed bearer the CLI asks for. Absent: the claude.ai sign-in token (the only meaning hosts that predate the field know). 'sessions': the second token that authorizes the cloud-sessions API, which a host that set CLAUDE_CODE_SDK_HAS_SESSIONS_OAUTH_REFRESH answers; it must belong to the same account and organization as the sign-in token.",
+        ),
+    }).describe(
+      "@internal Request from the CLI subprocess to the SDK host for a fresh OAuth access token: after a 401 with no local refresh token, or, with kind, when the CLI first needs that bearer.",
+    ),
+  );
+  OAuthTokenRefreshResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      accessToken: stringSchema().nullable(),
+      reason: _enum(LAUNCHER_END_REASONS)
+        .optional()
+        .catch(undefined)
+        .describe(
+          "Why the host returned no token (only meaningful when accessToken is null). Absent from hosts that do not say. Null, unknown or malformed values degrade to undefined at parse time (the enum carries `.catch`), so a reason can never cost a delivered token and values can be added without a version bump.",
+        ),
+    }).describe(
+      "@internal Fresh OAuth access token returned by the SDK host getOAuthToken callback, or null when the host has no token available.",
+    ),
+  );
+  SDKHostAuthTokenRefreshHostAuthTokenRefreshMessageSchema = DoctorLazy(() =>
+    objectSchema({
+      subtype: literal("host_auth_token_refresh"),
+    }).describe(
+      "@internal Request from the CLI subprocess to the SDK host for a fresh provider credential after a 401 or an AWS / Google Cloud credential failure when the host owns the credential (Cowork 3P).",
+    ),
+  );
+  HostAuthTokenRefreshResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      authToken: stringSchema().nullable(),
+      materialUnchanged: booleanSchema().optional(),
+    }).describe(
+      "@internal Fresh provider bearer token returned by the SDK host getHostAuthToken callback, or null if the credential was refreshed out-of-band. materialUnchanged is only consulted when authToken is null (out-of-band delivery) \u2014 true tells the CLI to fast-fail instead of backing off. A local AWS / Google Cloud credential-chain failure in the CLI is capped at two retries whatever the reply.",
+    ),
+  );
+  SDKMessageRatedMessageRatedMessageSchema = DoctorLazy(() =>
+    objectSchema({
+      subtype: literal("message_rated"),
+      messageUuid: stringSchema().describe("UUID of the assistant message being rated."),
+      sentiment: _enum(["positive", "negative"]).describe(
+        "User rating: positive (thumbs up) or negative (thumbs down).",
+      ),
+      surface: _enum(["tool_use", "assistant_text"])
+        .optional()
+        .describe("Which in-conversation surface the rating came from. If omitted, logged as tool_use."),
+      cleared: booleanSchema()
+        .optional()
+        .describe("True when the caller is un-rating a message (clicking the same control a second time)."),
+    }).describe(
+      "@internal Records a per-message thumbs up/down rating. Logs tengu_message_rated with the same shape as the in-conversation rating controls so Desktop / IDE callers can surface their own native thumbs UI.",
+    ),
+  );
+  MessageRatedResponseSchema = DoctorLazy(() =>
+    objectSchema({}).describe("@internal Empty response for message_rated."),
+  );
+  RenderElementKinds = DoctorLazy(() =>
+    _enum([
+      "AskUserQuestion",
+      "UserMessage",
+      "AssistantMessage",
+      "ToolUse",
+      "ToolResult",
+      "ToolGroup",
+      "ToolProgress",
+      "CommandOutput",
+      "Spinner",
+      "TurnDuration",
+      "InfoNotice",
+      "SessionMode",
+      "PromptHint",
+      "AbovePrompt",
+      "Pane",
+      "Placed",
+      "Backdrop",
+    ]).describe(
+      "@internal A component a plugin may draw through `ui.render`: one name per render site of the hooks engine (src/plugins/functionHooks/types/render/render-component.ts).",
+    ),
+  );
+  RenderChildSchema = DoctorLazy(() =>
+    union([stringSchema(), lazy(() => SDKButtonMessageSchema())]).describe(
+      "@internal One child of a render element: a string inside Text (or Box, where the engine wraps it in a Text), or a nested element.",
+    ),
+  );
+  HoverStyleSchema = DoctorLazy(() =>
+    record(stringSchema(), union([stringSchema(), numberSchema(), booleanSchema()])).describe(
+      "@internal Style overrides the surface applies while the pointer is over the nearest keyed Box above the element, or over any member of the hover group `scope` names (a string of the drawing plugin's; two plugins never share a group): a Box's `borderStyle`, `borderColor`, `borderDimColor`, `backgroundColor`, `display` (\"flex\", revealing a Box drawn \"none\") and the offsets of a placed Box; a Text's or a Button label's colors and styles. Plain data the engine validated; nothing that moves a sibling.",
+    ),
+  );
+  ElementPressHandlerSchema = DoctorLazy(() =>
+    objectSchema({
+      plugin: stringSchema(),
+      handle: numberSchema().int(),
+    }).describe(
+      "@internal Where the element's handler lives: the plugin whose hook drew it and the handle its environment keeps the closure under, stamped by the engine as the tree left that hook. What a ui_press, ui_input or ui_select names the element by; a redraw that changed anything hands out new handles.",
+    ),
+  );
+  SDKButtonMessageSchema = DoctorLazy(() =>
+    union([
+      objectSchema({
+        type: _enum(["Box", "Text", "div", "span", "b"]),
+        props: record(stringSchema(), union([stringSchema(), numberSchema(), booleanSchema()]))
+          .optional()
+          .describe(
+            '@internal Layout props on Box (`key` makes it a hover scope; `position` "absolute" with integer `top`/`left`/`right`/`bottom` cell offsets places it over its surroundings, out of the flow), color and style props on Text (with `size`, `weight`, `mono` and `tabular`, which each surface draws its own way; `bold` is true for a `semibold` or `bold` weight, and a `bold: true` with no weight also carries `weight: "semibold"`), spacing on Box in cells (on `desktop` and `mobile` also a step name, `xs` to `xl`), a `style` declaration string on div/span/b; the allowlisted subset the engine validated before the tree crossed.',
+          ),
+        hover: HoverStyleSchema().optional(),
+        group: objectSchema({
+          plugin: stringSchema(),
+        })
+          .optional()
+          .describe(
+            "@internal Whose hover group `hover.scope` names: the plugin whose hook drew the element; present only with a `scope`.",
+          ),
+        part: objectSchema({
+          plugin: stringSchema(),
+        })
+          .optional()
+          .describe(
+            "@internal Whose part of the drawing starts at this Box or Text: set by the engine on each ui.render hook's returned root, so a surface can tell one mod's drawing from another's. A hook's own mark is kept, another plugin's at most as often as next(e) handed it, and an engine node (core's drawing) carries none. A hook above may change what a part holds, so the mark does not prove who wrote it.",
+          ),
+        children: array(lazy(() => RenderChildSchema())).optional(),
+      }),
+      objectSchema({
+        type: literal("Button"),
+        props: objectSchema({
+          key: stringSchema(),
+          label: stringSchema(),
+          hotkey: stringSchema().optional(),
+          action: stringSchema().optional(),
+          plain: literal(true).optional(),
+          dimColor: booleanSchema().optional(),
+          variant: _enum(["primary", "secondary"]).optional(),
+          role: _enum(["dismiss"]).optional(),
+          autoFocus: literal(true).optional(),
+        }).describe(
+          "@internal A button: `label` its text, `key` its address (what `ui.press` carries as `element`). `hotkey` (one digit or lowercase letter) presses it while the plugin's site holds the keyboard; `action` names an engine keybinding action whose chord presses it from the prompt; `plain` draws it without chrome (`hotkey: label`, or the label alone); `dimColor` dims the label at rest; `variant` `primary` marks the main action of several, drawn as the surface draws the one to press, while `secondary` and absent are the default look (carried as the plugin wrote it, never filled in; `plain` wins over it); `role` `dismiss` marks the Button that closes its site, a drawing hint only (the terminal draws it as without; a desktop its native close control, the label its accessible name; carried as written, never filled in); `autoFocus` starts the site's focus ring here. A press is a ui_press naming `press.plugin` and `press.handle`. `children`, when present and not empty, are drawn in the label's place, all of them one pressable: strings and Text elements only; `label` then names the control, and is what a surface that draws no children draws.",
+        ),
+        press: ElementPressHandlerSchema(),
+        hover: HoverStyleSchema().optional(),
+        children: array(lazy(() => RenderChildSchema())).optional(),
+      }),
+      objectSchema({
+        type: literal("Input"),
+        props: objectSchema({
+          key: stringSchema(),
+          label: stringSchema().optional(),
+          placeholder: stringSchema().optional(),
+          value: stringSchema().optional(),
+          submitLabel: stringSchema().optional(),
+          rows: numberSchema().int().min(1).optional(),
+          autoFocus: literal(true).optional(),
+        }).describe(
+          "@internal A text field: `label` before it, `placeholder` dim while empty, `value` the text it holds when drawn, `submitLabel` what Enter does, `autoFocus` as a Button's. Absent `rows`, or at 1, one line; from 2 a field of several lines drawn that many rows tall, its lines joined by `\\n` in `value` and in every ui_input, where Enter still submits and Shift+Enter types the newline. The surface keeps the text the person types; each change is a ui_input of kind `change`, Enter one of kind `submit`, naming `press.plugin` and `press.handle`; no children.",
+        ),
+        press: ElementPressHandlerSchema(),
+      }),
+      objectSchema({
+        type: literal("Select"),
+        props: objectSchema({
+          key: stringSchema(),
+          label: stringSchema().optional(),
+          options: array(
+            objectSchema({
+              value: stringSchema(),
+              label: stringSchema().optional(),
+            }),
+          ),
+          value: stringSchema().optional(),
+          autoFocus: literal(true).optional(),
+        }).describe(
+          "@internal A one-of-several picker: `options` in the order drawn (at least one, values unique, each drawn as its `label`, else its `value`), `value` the one selected when drawn, `label` before it, `autoFocus` as a Button's. A pick is a ui_select carrying the option's `value` and naming `press.plugin` and `press.handle`; no children.",
+        ),
+        press: ElementPressHandlerSchema(),
+      }),
+      objectSchema({
+        type: literal("Link"),
+        props: objectSchema({
+          href: stringSchema(),
+          label: stringSchema().optional(),
+        }).describe(
+          "@internal A hyperlink: `href` is https (or http://localhost), bounded and free of control characters as the engine validated it; the children are the text drawn (absent them the label, absent both the URL). A remote surface draws an anchor that opens outside the app.",
+        ),
+        children: array(lazy(() => RenderChildSchema())).optional(),
+      }),
+      objectSchema({
+        type: literal("Code"),
+        props: objectSchema({
+          source: stringSchema(),
+          language: stringSchema().optional(),
+          path: stringSchema().optional(),
+          startLine: numberSchema().int().optional(),
+          format: _enum(["source", "diff"]).optional(),
+          wrap: _enum(["wrap", "truncate-end"]).optional(),
+        }).describe(
+          '@internal Source code the surface draws with its own highlighter: `language` a highlight.js id or alias, else inferred from `path` (never read); `startLine` numbers a line gutter; under `format: "diff"` `source` is unified-diff hunks the engine checked parse; `wrap` is `wrap` (the default) or `truncate-end`, which cuts long lines with an ellipsis. `source` is bounded and free of control characters as the engine validated it; no children.',
+        ),
+      }),
+      objectSchema({
+        type: literal("Markdown"),
+        props: objectSchema({
+          key: stringSchema().optional(),
+          text: stringSchema(),
+          dimColor: booleanSchema().optional(),
+          pressableLinks: array(stringSchema()).optional(),
+        }).describe(
+          "@internal A block of markdown the surface draws as it draws an assistant reply (its own renderer, links, tables, code fences), dim when `dimColor`; `text` is bounded and free of control characters as the engine validated it; no children. A link whose URL scheme is not https, http or file is drawn as text, never clickable (the plugin must not choose the URL handler a click reaches). With `press` the plugin answers its links: a plain click on one (any, or one `pressableLinks` names) is a ui_press carrying `href`, and the surface does not open it; `key` is then present, the address `ui.press` carries as `element`.",
+        ),
+        press: objectSchema({
+          plugin: stringSchema(),
+          handle: numberSchema().int(),
+        }).optional(),
+      }),
+      objectSchema({
+        type: literal("Client"),
+        props: objectSchema({
+          key: stringSchema(),
+          module: stringSchema(),
+          props: unknown().optional(),
+          width: union([numberSchema(), stringSchema()]).optional(),
+          height: union([numberSchema(), stringSchema()]).optional(),
+          flexGrow: numberSchema().optional(),
+        }).describe(
+          "@internal A region one of the plugin's surface modules draws locally: `module` is that module's path under the plugin's folder (`hooks/board.tsx`, what ui_client_module lists it by), `key` addresses the instance (what `ui.message` carries as `element`), `props` is plain data the engine bounded, `width`/`height`/`flexGrow` size it as a Box. `client.plugin` says whose surface module. Carried as data: a surface without a surface-module runtime draws nothing for it; no children.",
+        ),
+        client: objectSchema({
+          plugin: stringSchema(),
+        }),
+      }),
+      objectSchema({
+        type: literal("Svg"),
+        props: objectSchema({
+          source: stringSchema(),
+          alt: stringSchema(),
+          width: numberSchema().optional(),
+          height: numberSchema().optional(),
+          isInteractive: booleanSchema().optional(),
+        }).describe(
+          "@internal A vector leaf of the desktop and mobile surfaces: `source` is SVG markup the surface draws in an isolated box (the desktop an image, or a sandboxed frame when `isInteractive`; the mobile app a sandboxed web view), `alt` what it says. Bounded by the engine (128 KiB of source, 4096 px) before it crossed; no children.",
+        ),
+      }),
+      objectSchema({
+        type: literal("engine"),
+        ref: numberSchema()
+          .int()
+          .describe(
+            "@internal Which drawing of the engine-owned component sits here: 0 draws the original props; any other ref names the props the ui_render response carries.",
+          ),
+      }),
+    ]).describe(
+      "@internal A plain-data tree a `ui.render` hook returned, as the hooks engine validated it: Box, Text, div, span or b with children, a Button, Input or Select leaf carrying the `press` that names its handler, a Link with its text, a Code leaf, a Markdown leaf, a Client leaf (a surface-module region, carried as data; never on mobile), an Svg leaf (desktop and mobile; never the terminal), or an engine node the surface draws itself (src/plugins/functionHooks/types/element/render-element.ts).",
+    ),
+  );
   UiRenderTimingSchema = DoctorLazy(() =>
     objectSchema({
       seq: numberSchema().int(),
@@ -243,6 +509,12 @@ deferInit("chunk-bwbq4xvm.js:709920", () => {
         .optional()
         .describe(
           "@internal The engine's requests this client answers on a plugin's behalf: `ui_copy` (its clipboard), `ui_prompt_read` / `ui_prompt_fill` / `ui_prompt_paint` / `ui_prompt_suggest` (its composer), `ui_read_selection` (what the person has selected in its page). The engine sends each only to a client that named it; a client that never names any (or names `[]`) is never asked, so `$.ui.copy` to its surface answers `no-clipboard`, the prompt calls the empty box / false and `$.ui.selection` nothing, as before. On a repeated ui_attach a given list (including `[]`) replaces the earlier one and an absent field keeps it: send `[]` to stop answering.",
+        ),
+      draws: array(stringSchema().max(MAX_DRAWS_PER_ELEMENT))
+        .max(MAX_KEYED_ELEMENTS)
+        .optional()
+        .describe(
+          "@internal What this client draws beyond what every client of its surface draws: `Backdrop` (the session's backdrop, drawn behind the whole conversation; only a `desktop` or `mobile` client's word counts), `Input` and `Select` (on `mobile`: a client that does not name one is sent an empty Box in its place, as is an ask with no `client_id`, since no attach can name its default id). Held per client like `answers`: a later `ui_attach` under the same id that names it replaces it, and it leaves with the client. A name this version does not know, or one said twice, is ignored, so a newer client keeps its attach; a list of more than 16 names, or a name of more than 64 characters, is refused with the attach. Absent: a client still attached, or one put back, keeps what it said, and a first attach draws none. Empty, or nothing known in it: none, and `$.ui.backdrop` answers that nothing draws it.",
         ),
     }).describe(
       "@internal A remote surface joins the session: the engine adds the client to its roster of attached surfaces and raises `session.attach` for it (`$.session.surfaces()` then lists the surface). Idempotent per client_id. A client that never sends it is attached by its first ui_render, under `<surface>:default`; every client still attached detaches when the session ends.",
@@ -903,6 +1175,8 @@ deferInit("chunk-bwbq4xvm.js:709920", () => {
     "ui_read_selection",
   ];
   UI_CLIENT_ANSWERABLE_REQUEST_COUNT = UI_CLIENT_ANSWERABLE_REQUESTS.length;
+  MAX_KEYED_ELEMENTS = 16;
+  MAX_DRAWS_PER_ELEMENT = 64;
   UiClientAnswerableRequestSchema = DoctorLazy(() =>
     _enum(UI_CLIENT_ANSWERABLE_REQUESTS).describe(
       "@internal A request the engine may send a remote client on a plugin's behalf, which the client says it answers when it attaches.",
@@ -1403,53 +1677,60 @@ deferInit("chunk-bwbq4xvm.js:709920", () => {
   );
 });
 export {
+  UiCopyResponseSchema,
+  UiPromptReadResponseSchema,
+  UiPromptFillResponseSchema,
+  UiPromptPaintResponseSchema,
+  UiPromptSuggestResponseSchema,
+  UiReadSelectionResponseSchema,
   SDKUiAttachUiAttachMessageSchema,
-  UiAttachResponseSchema,
+  UiClientAnswerableRequestSchema,
   SDKUiDetachUiDetachMessageSchema,
-  UiDetachResponseSchema,
   SDKUiRenderUiRenderMessageSchema,
-  UiRenderResponseSchema,
   SDKUiPressUiPressMessageSchema,
-  UiPressResponseSchema,
+  SDKUiInputUiInputMessageSchema,
+  SDKUiPromptEditUiPromptEditMessageSchema,
+  SDKUiPromptAutocompleteUiPromptAutocompleteMessageSchema,
+  SDKUiSelectUiSelectMessageSchema,
+  SDKUiPanesUiPanesMessageSchema,
+  SDKUiPaneShowUiPaneShowMessageSchema,
+  SDKUiPaneFocusUiPaneFocusMessageSchema,
+  SDKUiCloseUiCloseMessageSchema,
+  SDKUiScrollUiScrollMessageSchema,
+  SDKUiFocusUiFocusMessageSchema,
   SDKUiClientModuleUiClientModuleMessageSchema,
-  UiClientModuleResponseSchema,
   SDKUiClientPressUiClientPressMessageSchema,
-  UiClientPressResponseSchema,
   SDKUiMessageUiMessageMessageSchema,
+  SDKMessageRatedMessageRatedMessageSchema,
+  OAuthTokenRefreshResponseSchema,
+  HostAuthTokenRefreshResponseSchema,
+  MessageRatedResponseSchema,
+  SDKOauthTokenRefreshOauthTokenRefreshMessageSchema,
+  SDKHostAuthTokenRefreshHostAuthTokenRefreshMessageSchema,
+  UiAttachResponseSchema,
+  UiDetachResponseSchema,
+  UiRenderResponseSchema,
+  UiPressResponseSchema,
+  UiClientModuleResponseSchema,
+  UiClientPressResponseSchema,
   UiMessageResponseSchema,
   SDKUiClientFaultUiClientFaultMessageSchema,
   UiClientFaultResponseSchema,
-  SDKUiInputUiInputMessageSchema,
   UiInputResponseSchema,
-  SDKUiSelectUiSelectMessageSchema,
   UiSelectResponseSchema,
-  SDKUiPanesUiPanesMessageSchema,
-  SDKUiPaneShowUiPaneShowMessageSchema,
   UiPaneShowResponseSchema,
-  SDKUiPaneFocusUiPaneFocusMessageSchema,
   UiPaneFocusResponseSchema,
-  SDKUiCloseUiCloseMessageSchema,
   UiCloseResponseSchema,
-  SDKUiScrollUiScrollMessageSchema,
   UiScrollResponseSchema,
-  SDKUiFocusUiFocusMessageSchema,
   UiFocusResponseSchema,
-  SDKUiPromptEditUiPromptEditMessageSchema,
   UiPromptEditResponseSchema,
-  SDKUiPromptAutocompleteUiPromptAutocompleteMessageSchema,
   UiPromptAutocompleteResponseSchema,
   SDKUiCopyUiCopyMessageSchema,
-  UiCopyResponseSchema,
   SDKUiPromptReadUiPromptReadMessageSchema,
-  UiPromptReadResponseSchema,
   SDKUiPromptFillUiPromptFillMessageSchema,
-  UiPromptFillResponseSchema,
   SDKUiPromptPaintUiPromptPaintMessageSchema,
-  UiPromptPaintResponseSchema,
   SDKUiPromptSuggestUiPromptSuggestMessageSchema,
-  UiPromptSuggestResponseSchema,
   SDKUiReadSelectionUiReadSelectionMessageSchema,
-  UiReadSelectionResponseSchema,
   SDKControlRequestInnerSchema,
-  UiClientAnswerableRequestSchema,
+  RenderElementKinds,
 };

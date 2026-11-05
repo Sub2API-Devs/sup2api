@@ -3,9 +3,9 @@
  *
  * 输入框 kill ring（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vqdzctzh.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-btba9y9h.js (9)
  * attribution: placement 9
  */
 import {
@@ -17,9 +17,9 @@ import {
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 
-//@ chunk-vqdzctzh.js:304-308 placement
+//@ chunk-btba9y9h.js:304-308 placement
 init_react_production();
-//@ chunk-vqdzctzh.js:308-348 placement
+//@ chunk-btba9y9h.js:308-348 placement
 var MAX_KILL_RING_SIZE = 10;
 var INITIAL_KILL_RING_STATE = {
   ring: [],
@@ -27,7 +27,7 @@ var INITIAL_KILL_RING_STATE = {
     type: "idle",
   },
 };
-//@ chunk-vqdzctzh.js:348-1065 placement
+//@ chunk-btba9y9h.js:348-1065 placement
 function killRingReducer(state, action) {
   switch (action.type) {
     case "kill": {
@@ -93,14 +93,14 @@ function killRingReducer(state, action) {
       };
   }
 }
-//@ chunk-vqdzctzh.js:1065-1102 placement
+//@ chunk-btba9y9h.js:1065-1102 placement
 /**
  * 取 kill ring 顶部的一项（空时返回空串）。
  */
 function topOfKillRing(state) {
   return state.ring[0] ?? "";
 }
-//@ chunk-vqdzctzh.js:1102-1281 placement
+//@ chunk-btba9y9h.js:1102-1281 placement
 /**
  * Yank-pop：在刚粘贴的位置换成 kill ring 中的下一项，不可用时为 null。
  */
@@ -114,7 +114,7 @@ function nextYankPop(state) {
     length,
   };
 }
-//@ chunk-vqdzctzh.js:1281-1356 placement (2.1.88 match: getOrBind, 0.668)
+//@ chunk-btba9y9h.js:1281-1356 placement (2.1.88 match: getOrBind, 0.67)
 /**
  * 最小 reducer 容器：{state, dispatch(action)}。
  */
@@ -129,9 +129,9 @@ function createReducerStore() {
     },
   };
 }
-//@ chunk-vqdzctzh.js:1356-1371 placement
+//@ chunk-btba9y9h.js:1356-1371 placement
 var killRingContext = createContext(null);
-//@ chunk-vqdzctzh.js:1371-1609 placement
+//@ chunk-btba9y9h.js:1371-1609 placement
 /**
  * 提供 kill ring 存储的 React Provider（可传入外部句柄，否则自建）。
  */
@@ -158,7 +158,7 @@ function KillRingProvider(props) {
   } else element = $[4];
   return element;
 }
-//@ chunk-vqdzctzh.js:1609-1785 placement
+//@ chunk-btba9y9h.js:1609-1785 placement
 function useKillRing() {
   let context = useContext(killRingContext);
   if (!context) {

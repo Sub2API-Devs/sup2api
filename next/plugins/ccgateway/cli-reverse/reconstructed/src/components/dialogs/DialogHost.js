@@ -3,11 +3,19 @@
  *
  * 2.1.316 新增。REPL 统一对话框宿主。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (21)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (21)
  * attribution: placement 19, affinity 1, sole-consumer 1
  */
+import {
+  init_react_production,
+  useLayoutEffect,
+  useState,
+  useRef,
+  useContext,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { topBlockingDialog, NON_BLOCKING_DIALOG_KINDS } from "../../screens/replDialogState.js";
 import {
   topAutoDialog,
@@ -23,12 +31,13 @@ import { DIALOG_REGISTRY, useHasBlockingDialog } from "./registry.js";
 import { DIALOG_KIND_META, dialogLayout, dialogNotification, dialogCueBehindDraft } from "./dialogKinds.js";
 import { useRenderMode } from "../../ink/renderModeContext.js";
 import { useAutoDialogKind, getActiveBottomSurface, sessionStore } from "../../screens/repl/storeHooks.js";
-import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
 import {
+  useRecentInputStamp,
   RECENT_INPUT_GUARD_MS_2,
   INPUT_SETTLE_MS,
   isWithinRecentInput,
 } from "../../hooks/useRecentInputGuard.js";
+import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -36,14 +45,6 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { permissionTitleRef, useOnFirstReveal } from "../permissions/PermissionRequestTitle.js";
 import { Text } from "../../ink/components/Text.js";
-import {
-  useLayoutEffect,
-  useState,
-  useRef,
-  useContext,
-  useEffect,
-  init_react_production,
-} from "../../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { endAnnouncementHold } from "../../utils/accessibility/screenReader.js";
 import { useInputClock, nodeRowRange, nodeScreenBox } from "../../ink/components/Input.js";
@@ -63,29 +64,39 @@ import { CHROME_ROWS } from "../../ink/outputReplay.js";
 import { WORKFLOW_PROGRESS_LIMITS } from "../workflow/WorkflowProgress.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1445523-1445557 placement
+//@ chunk-czq1j3j2.js:1484013-1484017 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1484013", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1486071-1486075 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1486071", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1486408-1486442 placement
 function isNull(value) {
   return value === null;
 }
-//@ chunk-18hwfzwa.js:1445557-1445596 placement
+//@ chunk-czq1j3j2.js:1486442-1486481 placement
 function topBlockingOrAutoDialog(state) {
   return topBlockingDialog(state) ?? topAutoDialog(state);
 }
-//@ chunk-18hwfzwa.js:1445596-1445628 placement
+//@ chunk-czq1j3j2.js:1486481-1486513 placement
 function selectOpen2(state) {
   return state.open;
 }
-//@ chunk-18hwfzwa.js:1445628-1445714 placement
+//@ chunk-czq1j3j2.js:1486513-1486599 placement
 function notifyAutoDenyPresence(input, key) {
   if (!key.wheelUp && !key.wheelDown) uiSignals.autoDenyPresence.emit();
   return false;
 }
-//@ chunk-18hwfzwa.js:1445714-1447866 placement
+//@ chunk-czq1j3j2.js:1486599-1488813 placement
 /**
  * 对话框宿主：按 dialogStore 中打开的对话框与 DIALOG_REGISTRY 渲染，处理 inline/fullscreen 变体、草稿遮挡时延迟显示、首次显示时响铃通知。
  */
 function DialogHost(props) {
-  let $ = useMemoCache(38);
+  let $ = useMemoCache(39);
   let { transport, variant, components, meta, scrollRegion } = props;
   let variantValue = variant === undefined ? "inline" : variant;
   let components_2 = components === undefined ? DIALOG_REGISTRY : components;
@@ -116,6 +127,7 @@ function DialogHost(props) {
   let suppressedAutoDialogs = useSuppressedAutoDialogs(autoDialogKind, hidden);
   let activeRequest = showAutoDialog ? autoDialogKind : showUserDialog ? topUserDialog : null;
   let inputReleaseTiming = useInputReleaseTiming(activeRequest?.id ?? "");
+  let shownDrawnAt = useRecentInputStamp(activeRequest?.shownAt ?? 0);
   let { displacedAt } = inputReleaseTiming;
   let timeout = useTimeout(RECENT_INPUT_GUARD_MS_2, displacedAt);
   let isInputSettled = displacedAt === 0 || timeout;
@@ -222,8 +234,9 @@ function DialogHost(props) {
     $[27] !== componentMap ||
     $[28] !== scrollRegion ||
     $[29] !== showFrame ||
-    $[30] !== variantValue ||
-    $[31] !== activeRequest
+    $[30] !== shownDrawnAt ||
+    $[31] !== variantValue ||
+    $[32] !== activeRequest
   ) {
     frameElement =
       showFrame &&
@@ -235,6 +248,7 @@ function DialogHost(props) {
           components: components_2,
           notification: dialogNotification(componentMap, activeRequest),
           hostShown: inputReleaseTiming,
+          shownDrawnAt,
           scrollRegion,
         },
         activeRequest.id,
@@ -244,24 +258,25 @@ function DialogHost(props) {
     $[27] = componentMap;
     $[28] = scrollRegion;
     $[29] = showFrame;
-    $[30] = variantValue;
-    $[31] = activeRequest;
-    $[32] = frameElement;
-  } else frameElement = $[32];
+    $[30] = shownDrawnAt;
+    $[31] = variantValue;
+    $[32] = activeRequest;
+    $[33] = frameElement;
+  } else frameElement = $[33];
   let hostElement;
-  if ($[33] !== mapped || $[34] !== bellElement_2 || $[35] !== bell || $[36] !== frameElement) {
+  if ($[34] !== mapped || $[35] !== bellElement_2 || $[36] !== bell || $[37] !== frameElement) {
     hostElement = jsxProd_default_2(Fragment, {
       children: [bell, mapped, bellElement_2, frameElement],
     });
-    $[33] = mapped;
-    $[34] = bellElement_2;
-    $[35] = bell;
-    $[36] = frameElement;
-    $[37] = hostElement;
-  } else hostElement = $[37];
+    $[34] = mapped;
+    $[35] = bellElement_2;
+    $[36] = bell;
+    $[37] = frameElement;
+    $[38] = hostElement;
+  } else hostElement = $[38];
   return hostElement;
 }
-//@ chunk-18hwfzwa.js:1447866-1448155 placement
+//@ chunk-czq1j3j2.js:1488813-1489102 placement
 function useHiddenDialogReason() {
   let $ = useMemoCache(5);
   let hidden = useDialogSelector(topBlockingOrAutoDialog);
@@ -297,7 +312,7 @@ function useHiddenDialogReason() {
     }
   }
 }
-//@ chunk-18hwfzwa.js:1448155-1448609 placement
+//@ chunk-czq1j3j2.js:1489102-1489556 placement
 /**
  * 有用户对话框时返回空列表；否则列出被抑制的自动对话框（非用户触发、非当前顶层与指定排除项）。
  */
@@ -345,17 +360,17 @@ function useSuppressedAutoDialogs(autoDialogKind, hidden) {
   } else suppressed = $[7];
   return suppressed;
 }
-//@ chunk-18hwfzwa.js:1448609-1448805 placement
+//@ chunk-czq1j3j2.js:1489556-1489752 placement
 var QUESTION_WAITING_NOTICE =
   "Claude has a question for you \u2014 it shows once you send or clear what you're typing.";
 var SUGGESTION_WAITING_NOTICE =
   "Claude has a suggestion for you \u2014 it shows once you send or clear what you're typing.";
-//@ chunk-18hwfzwa.js:1448805-1449346 placement
+//@ chunk-czq1j3j2.js:1489752-1490395 placement
 /**
  * 跟踪底部输入区占用状态：输入结束时记录释放时间与宽限期（有未发送草稿用更长宽限），输入内容被替换时记录时间，返回给对话框判断何时可以弹出。
  */
 function useInputReleaseTiming(requestId) {
-  let $ = useMemoCache(5);
+  let $ = useMemoCache(7);
   let activeSurface = getActiveBottomSurface();
   let draftStore = sessionStore();
   let [lastSurface, setLastSurface] = useState(activeSurface);
@@ -386,21 +401,33 @@ function useInputReleaseTiming(requestId) {
     setLastValue(requestId);
     if (lastValue !== "" && requestId !== "") setDisplacedAt(Date.now());
   }
+  let releaseDrawnAt = useRecentInputStamp(release.at);
+  let displaceDrawnAt = useRecentInputStamp(displacedAt);
   let result;
-  if ($[1] !== displacedAt || $[2] !== release.at || $[3] !== release.graceMs) {
+  if (
+    $[1] !== displaceDrawnAt ||
+    $[2] !== displacedAt ||
+    $[3] !== releaseDrawnAt ||
+    $[4] !== release.at ||
+    $[5] !== release.graceMs
+  ) {
     result = {
       releasedAt: release.at,
       releaseGraceMs: release.graceMs,
       displacedAt,
+      releaseDrawnAt,
+      displaceDrawnAt,
     };
-    $[1] = displacedAt;
-    $[2] = release.at;
-    $[3] = release.graceMs;
-    $[4] = result;
-  } else result = $[4];
+    $[1] = displaceDrawnAt;
+    $[2] = displacedAt;
+    $[3] = releaseDrawnAt;
+    $[4] = release.at;
+    $[5] = release.graceMs;
+    $[6] = result;
+  } else result = $[6];
   return result;
 }
-//@ chunk-18hwfzwa.js:1449346-1449713 placement
+//@ chunk-czq1j3j2.js:1490395-1490724 placement
 /**
  * 按对话框外层无边框无内边距的纵向容器偏移，修正可见行范围。
  */
@@ -410,8 +437,7 @@ function offsetVisibleRows(range, node) {
   while (
     current?.yogaNode &&
     current.style.flexDirection === "column" &&
-    current.yogaNode.getComputedBorder(1) === 0 &&
-    current.yogaNode.getComputedPadding(1) === 0
+    current.yogaNode.getComputedBorder(1) === 0
   ) {
     let found = current.childNodes.find((childNode) => childNode.yogaNode !== undefined);
     if (!found?.yogaNode) break;
@@ -427,7 +453,7 @@ function offsetVisibleRows(range, node) {
         of: range.of - offsetRows,
       };
 }
-//@ chunk-18hwfzwa.js:1449713-1449800 placement
+//@ chunk-czq1j3j2.js:1490724-1490811 placement
 function isScrollAtEnd(range, viewportRows) {
   return (
     range !== null &&
@@ -435,10 +461,10 @@ function isScrollAtEnd(range, viewportRows) {
     range.last - range.first + 1 >= Math.min(range.of, viewportRows)
   );
 }
-//@ chunk-18hwfzwa.js:1449800-1452498 placement
+//@ chunk-czq1j3j2.js:1490811-1493592 placement
 function DialogFrame(props) {
-  let $ = useMemoCache(33);
-  let { variant, request, components, notification, hostShown, scrollRegion } = props;
+  let $ = useMemoCache(34);
+  let { variant, request, components, notification, hostShown, shownDrawnAt, scrollRegion } = props;
   let dialogStore = useDialogStore();
   let inputClock = useInputClock();
   let boxRef = useRef(null);
@@ -497,7 +523,8 @@ function DialogFrame(props) {
     $[6] !== inputClock ||
     $[7] !== request.id ||
     $[8] !== request.payload ||
-    $[9] !== scrollRegion
+    $[9] !== scrollRegion ||
+    $[10] !== shownDrawnAt
   ) {
     wouldTakeAnswerCached = function wouldTakeAnswer() {
       let found = dialogStore.getState().open.find((entry) => entry.id === request.id);
@@ -507,7 +534,7 @@ function DialogFrame(props) {
       if (found.payload !== request.payload) {
         return false;
       }
-      if (isWithinRecentInput(inputClock, found.shownAt ?? 0)) {
+      if (isWithinRecentInput(inputClock, shownDrawnAt(found.shownAt ?? 0))) {
         return false;
       }
       if (found.userInvoked) {
@@ -545,10 +572,10 @@ function DialogFrame(props) {
       if (isRecentlyRevealed && sourceEvent instanceof KeyboardEvent && !isEscapeKey)
         revealedAtRef.current = Date.now();
       return !(
-        isWithinRecentInput(inputClock, hostShown.displacedAt) ||
+        isWithinRecentInput(inputClock, hostShown.displaceDrawnAt(hostShown.displacedAt)) ||
         isWithinRecentInput(
           inputClock,
-          hostShown.releasedAt,
+          hostShown.releaseDrawnAt(hostShown.releasedAt),
           isEscapeKey ? RECENT_INPUT_GUARD_MS_2 : hostShown.releaseGraceMs,
         ) ||
         isRecentlyRevealed
@@ -560,35 +587,36 @@ function DialogFrame(props) {
     $[7] = request.id;
     $[8] = request.payload;
     $[9] = scrollRegion;
-    $[10] = wouldTakeAnswerCached;
-  } else wouldTakeAnswerCached = $[10];
+    $[10] = shownDrawnAt;
+    $[11] = wouldTakeAnswerCached;
+  } else wouldTakeAnswerCached = $[11];
   let wouldTakeAnswer = wouldTakeAnswerCached;
   if (!DialogComponent) {
     dialogStore.dismiss(request.id);
     return null;
   }
   let firstRevealHook;
-  if ($[11] !== request.onFirstReveal) {
+  if ($[12] !== request.onFirstReveal) {
     firstRevealHook =
       request.onFirstReveal !== undefined &&
       jsxProd_default(OnFirstRevealHook, {
         onFirstReveal: request.onFirstReveal,
       });
-    $[11] = request.onFirstReveal;
-    $[12] = firstRevealHook;
-  } else firstRevealHook = $[12];
+    $[12] = request.onFirstReveal;
+    $[13] = firstRevealHook;
+  } else firstRevealHook = $[13];
   let bellNotificationElement;
-  if ($[13] !== notification) {
+  if ($[14] !== notification) {
     bellNotificationElement =
       notification !== undefined &&
       jsxProd_default(DialogBell, {
         notification,
       });
-    $[13] = notification;
-    $[14] = bellNotificationElement;
-  } else bellNotificationElement = $[14];
+    $[14] = notification;
+    $[15] = bellNotificationElement;
+  } else bellNotificationElement = $[15];
   let answer;
-  if ($[15] !== dialogStore || $[16] !== request.id || $[17] !== wouldTakeAnswer) {
+  if ($[16] !== dialogStore || $[17] !== request.id || $[18] !== wouldTakeAnswer) {
     answer = (value) => {
       if (!wouldTakeAnswer()) {
         return false;
@@ -596,35 +624,35 @@ function DialogFrame(props) {
       dialogStore.answer(request.id, value);
       return true;
     };
-    $[15] = dialogStore;
-    $[16] = request.id;
-    $[17] = wouldTakeAnswer;
-    $[18] = answer;
-  } else answer = $[18];
+    $[16] = dialogStore;
+    $[17] = request.id;
+    $[18] = wouldTakeAnswer;
+    $[19] = answer;
+  } else answer = $[19];
   let dialogElement;
   if (
-    $[19] !== DialogComponent ||
-    $[20] !== request.payload ||
-    $[21] !== answer ||
-    $[22] !== wouldTakeAnswer
+    $[20] !== DialogComponent ||
+    $[21] !== request.payload ||
+    $[22] !== answer ||
+    $[23] !== wouldTakeAnswer
   ) {
     dialogElement = jsxProd_default(DialogComponent, {
       payload: request.payload,
       wouldTakeAnswer,
       answer,
     });
-    $[19] = DialogComponent;
-    $[20] = request.payload;
-    $[21] = answer;
-    $[22] = wouldTakeAnswer;
-    $[23] = dialogElement;
-  } else dialogElement = $[23];
+    $[20] = DialogComponent;
+    $[21] = request.payload;
+    $[22] = answer;
+    $[23] = wouldTakeAnswer;
+    $[24] = dialogElement;
+  } else dialogElement = $[24];
   let scrollColumnElement;
   if (
-    $[24] !== request.id ||
-    $[25] !== reserve ||
-    $[26] !== bellNotificationElement ||
-    $[27] !== dialogElement
+    $[25] !== request.id ||
+    $[26] !== reserve ||
+    $[27] !== bellNotificationElement ||
+    $[28] !== dialogElement
   ) {
     scrollColumnElement = jsxProd_default_2(
       ScrollColumn,
@@ -635,32 +663,32 @@ function DialogFrame(props) {
       },
       request.id,
     );
-    $[24] = request.id;
-    $[25] = reserve;
-    $[26] = bellNotificationElement;
-    $[27] = dialogElement;
-    $[28] = scrollColumnElement;
-  } else scrollColumnElement = $[28];
+    $[25] = request.id;
+    $[26] = reserve;
+    $[27] = bellNotificationElement;
+    $[28] = dialogElement;
+    $[29] = scrollColumnElement;
+  } else scrollColumnElement = $[29];
   let titledElement;
-  if ($[29] !== request.id || $[30] !== firstRevealHook || $[31] !== scrollColumnElement) {
+  if ($[30] !== request.id || $[31] !== firstRevealHook || $[32] !== scrollColumnElement) {
     titledElement = jsxProd_default_2(permissionTitleRef, {
       value: request.id,
       children: [firstRevealHook, scrollColumnElement],
     });
-    $[29] = request.id;
-    $[30] = firstRevealHook;
-    $[31] = scrollColumnElement;
-    $[32] = titledElement;
-  } else titledElement = $[32];
+    $[30] = request.id;
+    $[31] = firstRevealHook;
+    $[32] = scrollColumnElement;
+    $[33] = titledElement;
+  } else titledElement = $[33];
   return titledElement;
 }
-//@ chunk-18hwfzwa.js:1452498-1452573 placement
+//@ chunk-czq1j3j2.js:1493592-1493667 placement
 function OnFirstRevealHook(props) {
   let { onFirstReveal } = props;
   useOnFirstReveal("on-first-reveal", onFirstReveal);
   return null;
 }
-//@ chunk-18hwfzwa.js:1452573-1452718 placement
+//@ chunk-czq1j3j2.js:1493667-1493812 placement
 function DialogBell(props) {
   let $ = useMemoCache(1);
   let { notification } = props;
@@ -676,9 +704,9 @@ function DialogBell(props) {
   useOnFirstReveal("bell", screenReaderBell, addBellOptions);
   return null;
 }
-//@ chunk-18hwfzwa.js:1452718-1452744 affinity
+//@ chunk-czq1j3j2.js:1493812-1493838 affinity
 var BURIED_IDLE_CUE = "buried-idle-cue";
-//@ chunk-18hwfzwa.js:1452744-1452925 sole-consumer
+//@ chunk-czq1j3j2.js:1493838-1494019 sole-consumer
 function BuriedPermissionCue(props) {
   let $ = useMemoCache(3);
   let { requestId, notification } = props;
@@ -693,7 +721,7 @@ function BuriedPermissionCue(props) {
   usePermissionPromptNotification(notification, revealCue);
   return null;
 }
-//@ chunk-18hwfzwa.js:1452984-1453225 placement
+//@ chunk-czq1j3j2.js:1494078-1494319 placement
 function useLogDialogSuppressed(enabled) {
   let $ = useMemoCache(5);
   let hasAutoDialog = useHasAutoDialog();
@@ -721,7 +749,7 @@ function useLogDialogSuppressed(enabled) {
   }
   useEffect(logSuppressed, logDeps);
 }
-//@ chunk-18hwfzwa.js:1453225-1453828 placement
+//@ chunk-czq1j3j2.js:1494319-1494922 placement
 /**
  * 把外部对话框来源（SDK/桥接）接到对话框存储：订阅打开/取消/更新，关闭时回复结果或取消；卸载时把未答复的全部取消。
  */
@@ -790,19 +818,9 @@ function useExternalDialogBridge(source) {
   }
   useEffect(bridgeEffect, bridgeDeps);
 }
-//@ chunk-18hwfzwa.js:1453828-1453970 placement
+//@ chunk-czq1j3j2.js:1494922-1495064 placement
 function dialogReservedRows({ variant, fullscreen, decstbm, promptShown, rows }) {
   if (fullscreen) return variant === "inline" ? Math.floor(rows / 2) : 0;
   return (decstbm ? CHROME_ROWS : SCROLL_COLUMN_MIN_ROWS) + (promptShown ? WORKFLOW_PROGRESS_LIMITS : 0);
 }
-//@ chunk-18hwfzwa.js:1453970-1453974 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1453970", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1453974-1453978 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1453974", () => {
-  init_react_production();
-});
 export { useExternalDialogBridge, DialogHost };

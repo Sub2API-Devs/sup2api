@@ -3,16 +3,16 @@
  *
  * 并发会话登记：<配置目录>/sessions/<pid>.json 记录会话状态与名称，FleetView 心跳与后台/daemon 会话判断。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/concurrentSessions.ts
- * pieces: chunk-6cc2zqkz.js (1), chunk-aepeg2w5.js (67), chunk-e7z1g8a9.js (1)
+ * pieces: chunk-4ht4pcp0.js (1), chunk-exfmq47h.js (67), chunk-p21mddyh.js (1)
  * attribution: fingerprint 4, placement 65
  */
 import { join, basename, sep } from "path";
 import { writeFile, unlink, mkdir, chmod, readFile, lstat, readdir } from "fs/promises";
 import { statSync, unlinkSync } from "fs";
 import { homedir } from "os";
-import { getClaudeConfigDir, isEnvTruthy } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { getWorktreeSessionState } from "./worktree.js";
 import { getPlatform } from "./platform.js";
 import { REPLY_ACROSS_DEFAULT_DIRS } from "./peerAddress.js";
@@ -34,6 +34,7 @@ import {
 } from "../bootstrap/state.js";
 import { env, udsEnv } from "./env.js";
 import { envDynamicProbe } from "./envDynamic.js";
+import { isEnvTruthy } from "./envUtils.js";
 import {
   looksLikeFullHostProcessTable,
   getProcessStartTimeAsync,
@@ -70,81 +71,81 @@ import { execFileNoThrow } from "./execFileNoThrow.js";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e7z1g8a9.js:4175-4216 fingerprint (2.1.88 match: getSessionsDir, 1)
+//@ chunk-p21mddyh.js:4177-4218 fingerprint (2.1.88 match: getSessionsDir, 1)
 function getSessionsDir() {
   return join(getClaudeConfigDir(), "sessions");
 }
-//@ chunk-aepeg2w5.js:836002-836057 placement
+//@ chunk-exfmq47h.js:858337-858392 placement
 /**
  * 读取恢复提示里的 worktree 名。
  */
 function getResumeHintWorktreeName() {
   return getWorktreeSessionState().getResumeHintWorktreeName();
 }
-//@ chunk-aepeg2w5.js:836057-836107 placement
+//@ chunk-exfmq47h.js:858392-858442 placement
 /**
  * 清除恢复提示中的 worktree 名。
  */
 function clearResumeHintWorktree() {
   getWorktreeSessionState().clearResumeHintWorktreeName();
 }
-//@ chunk-aepeg2w5.js:836107-836152 placement
+//@ chunk-exfmq47h.js:858442-858487 placement
 /**
  * 本会话是否曾在 worktree 中。
  */
 function hasBeenInWorktree() {
   return getWorktreeSessionState().hasBeenInWorktree;
 }
-//@ chunk-aepeg2w5.js:836152-836189 placement
+//@ chunk-exfmq47h.js:858487-858524 placement
 /**
  * 后台接管状态。
  */
 function getBgTakeover() {
   return getWorktreeSessionState().bgTakeover;
 }
-//@ chunk-aepeg2w5.js:836189-836250 placement
+//@ chunk-exfmq47h.js:858524-858585 placement
 /**
  * 记录某 agent 已派生（用于隔离证据）。
  */
 function recordSpawnedAgentIsolation(evidence) {
   getWorktreeSessionState().agentIsolationEvidence.recordSpawned(evidence);
 }
-//@ chunk-aepeg2w5.js:836250-836316 placement
+//@ chunk-exfmq47h.js:858585-858651 placement
 /**
  * 该 agent 是否在隔离环境派生过。
  */
 function wasAgentSpawnedIsolated(agentId) {
   return getWorktreeSessionState().agentIsolationEvidence.spawned.has(agentId);
 }
-//@ chunk-aepeg2w5.js:836316-836384 placement
+//@ chunk-exfmq47h.js:858651-858719 placement
 /**
  * 记录某 agent 已被干净移除。
  */
 function recordCleanlyRemovedAgent(agentId) {
   getWorktreeSessionState().agentIsolationEvidence.recordCleanlyRemoved(agentId);
 }
-//@ chunk-aepeg2w5.js:836384-836457 placement
+//@ chunk-exfmq47h.js:858719-858792 placement
 /**
  * 该 agent 是否被干净移除过。
  */
 function wasAgentCleanlyRemoved(agentId) {
   return getWorktreeSessionState().agentIsolationEvidence.cleanlyRemoved.has(agentId);
 }
-//@ chunk-aepeg2w5.js:836457-836513 placement
+//@ chunk-exfmq47h.js:858792-858848 placement
 /**
  * 判断该 cwd 是否已标记为无法做 agent 隔离。
  */
 function isIsolationUnavailableForCwd(cwd) {
   return getWorktreeSessionState().isolationUnavailableCwd === cwd;
 }
-//@ chunk-aepeg2w5.js:836513-836562 placement
+//@ chunk-exfmq47h.js:858848-858897 placement
 /**
  * 标记某 cwd 无法做 agent 隔离。
  */
 function markIsolationUnavailableForCwd(cwd) {
   getWorktreeSessionState().markIsolationUnavailable(cwd);
 }
-//@ chunk-aepeg2w5.js:836562-836640 placement
+//@ chunk-exfmq47h.js:858897-858975 placement
 /**
  * 会话保留的历史名称数上限（8）。
  */
@@ -155,12 +156,12 @@ var SESSION_NAME_FRESH_MS = 1e4;
 var PEER_PROTOCOL = 1;
 var NOTIFY_IDLE_PEER_FEATURE = "notify_idle";
 var ARTIFACT_YIELD_PEER_FEATURE = "artifact_yield";
-//@ chunk-aepeg2w5.js:836640-836745 placement
+//@ chunk-exfmq47h.js:858975-859080 placement
 function supportsPeerPid() {
   if (getPlatform() === "windows") return false;
   return typeof Bun !== "undefined" && typeof Bun.ant?.getPeerPid === "function";
 }
-//@ chunk-aepeg2w5.js:836745-836792 placement
+//@ chunk-exfmq47h.js:859080-859127 placement
 /**
  * 本节点支持的 peer 特性列表（notify_idle、artifact_yield 等）。
  */
@@ -171,9 +172,9 @@ function peerFeatures() {
     ARTIFACT_YIELD_PEER_FEATURE,
   ];
 }
-//@ chunk-aepeg2w5.js:836792-837003 placement
+//@ chunk-exfmq47h.js:859127-859338 placement
 var sessionRecordSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:836792", () => {
+deferInit("chunk-exfmq47h.js:859127", () => {
   sessionRecordSchema = DoctorLazy(() =>
     create({
       pid: create_3(),
@@ -187,7 +188,7 @@ deferInit("chunk-aepeg2w5.js:836792", () => {
     }),
   );
 });
-//@ chunk-aepeg2w5.js:837003-839326 placement
+//@ chunk-exfmq47h.js:859338-861661 placement
 /**
  * 会话注册状态（异常退出扫描、pid 文件写链、注册名、旧名）。
  */
@@ -316,79 +317,79 @@ class SessionRegistryState {
     return looksLikeFullHostProcessTable();
   }
 }
-//@ chunk-aepeg2w5.js:839326-839351 placement
+//@ chunk-exfmq47h.js:861661-861686 placement
 /**
  * 按宿主隔离的会话登记状态。
  */
 var sessionRegistryByHost; // deferred: uses SessionRegistryState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:839326", () => {
+deferInit("chunk-exfmq47h.js:861661", () => {
   sessionRegistryByHost = new HostScoped(() => new SessionRegistryState());
 });
-//@ chunk-aepeg2w5.js:839351-839388 placement
+//@ chunk-exfmq47h.js:861686-861723 placement
 function getSessionRegistryState() {
   return sessionRegistryByHost.of(getRootSession().host);
 }
-//@ chunk-aepeg2w5.js:839388-839425 placement
+//@ chunk-exfmq47h.js:861723-861760 placement
 function getHeldSessionNames() {
   return getSessionRegistryState().heldNames;
 }
-//@ chunk-aepeg2w5.js:839425-839466 placement
+//@ chunk-exfmq47h.js:861760-861801 placement
 function getRegisteredSessionName() {
   return getSessionRegistryState().registeredName;
 }
-//@ chunk-aepeg2w5.js:839466-839545 placement
+//@ chunk-exfmq47h.js:861801-861880 placement
 function whenSessionRegistered() {
   let sessionRegistryState = getSessionRegistryState();
   return sessionRegistryState.registration ?? Promise.resolve(sessionRegistryState.registered);
 }
-//@ chunk-aepeg2w5.js:839545-839655 placement (2.1.88 match: envSessionKind, 1)
+//@ chunk-exfmq47h.js:861880-861990 placement (2.1.88 match: envSessionKind, 1)
 function envSessionKind() {
   let k = env.CLAUDE_CODE_SESSION_KIND;
   if (k === "bg" || k === "daemon" || k === "daemon-worker") return k;
   return;
 }
-//@ chunk-aepeg2w5.js:839655-839688 placement
+//@ chunk-exfmq47h.js:861990-862023 placement
 function isBgSession() {
   return envSessionKind() === "bg";
 }
-//@ chunk-aepeg2w5.js:839688-839735 placement
+//@ chunk-exfmq47h.js:862023-862070 placement
 function isUnattendedInteractiveSession() {
   return isReplBridgeActive() || isBgSession() || getTeammateAgentId() !== undefined;
 }
-//@ chunk-aepeg2w5.js:839735-839768 placement
+//@ chunk-exfmq47h.js:862070-862103 placement
 function isUnattendedBgSession() {
   return isBgSession() && !getAttacherCaps();
 }
-//@ chunk-aepeg2w5.js:839768-839807 placement
+//@ chunk-exfmq47h.js:862103-862142 placement
 function isActingAsBgJob() {
   return isBgSession() || getBgTakeover() !== null;
 }
-//@ chunk-aepeg2w5.js:839807-839859 placement
+//@ chunk-exfmq47h.js:862142-862194 placement
 function getBgJobDir() {
   return getBgTakeover()?.jobDir ?? env.CLAUDE_JOB_DIR;
 }
-//@ chunk-aepeg2w5.js:839859-839912 placement
+//@ chunk-exfmq47h.js:862194-862247 placement
 function isDaemonBgWorker() {
   return env.CLAUDE_BG_BACKEND === "daemon";
 }
-//@ chunk-aepeg2w5.js:839912-839950 placement
+//@ chunk-exfmq47h.js:862247-862285 placement
 /**
  * fleetview 心跳的过期时间（5 秒）。
  */
 var FLEETVIEW_HEARTBEAT_FILE = ".fleetview-heartbeat";
 var FLEETVIEW_HEARTBEAT_STALE_MS = 5000;
-//@ chunk-aepeg2w5.js:839950-839986 placement
+//@ chunk-exfmq47h.js:862285-862321 placement
 function getHeartbeatKey() {
   return STORAGE_SPACES.session(FLEETVIEW_HEARTBEAT_FILE);
 }
-//@ chunk-aepeg2w5.js:839986-840041 placement
+//@ chunk-exfmq47h.js:862321-862376 placement
 /**
  * 并发会话 pid 文件的存储键 sessions/<pid>.json（<配置目录>/sessions/ 下记录每个运行中会话的状态）。
  */
 function getPidFileKey() {
   return STORAGE_SPACES.session(`${process.pid}.json`);
 }
-//@ chunk-aepeg2w5.js:840041-840365 placement
+//@ chunk-exfmq47h.js:862376-862700 placement
 async function touchFleetViewHeartbeat(storageV5) {
   if (storageV5) {
     try {
@@ -408,7 +409,7 @@ async function touchFleetViewHeartbeat(storageV5) {
     await writeFile(join(getSessionsDir(), FLEETVIEW_HEARTBEAT_FILE), String(Date.now()));
   } catch {}
 }
-//@ chunk-aepeg2w5.js:840365-840467 placement
+//@ chunk-exfmq47h.js:862700-862802 placement
 async function clearFleetViewHeartbeat(storageV5) {
   if (storageV5) {
     try {
@@ -420,17 +421,17 @@ async function clearFleetViewHeartbeat(storageV5) {
     await unlink(join(getSessionsDir(), FLEETVIEW_HEARTBEAT_FILE));
   } catch {}
 }
-//@ chunk-aepeg2w5.js:840467-840479 placement
+//@ chunk-exfmq47h.js:862802-862814 placement
 /**
  * 被监视会话缓存的有效期（1 秒）。
  */
 var WATCHED_CACHE_TTL_MS = 1000;
-//@ chunk-aepeg2w5.js:840479-840553 placement
+//@ chunk-exfmq47h.js:862814-862888 placement
 function getWatchedCacheIfFresh(sessionRegistryState, nowMs) {
   let { watchedCache } = sessionRegistryState;
   return watchedCache && nowMs - watchedCache.at < WATCHED_CACHE_TTL_MS ? watchedCache.value : undefined;
 }
-//@ chunk-aepeg2w5.js:840553-840797 placement
+//@ chunk-exfmq47h.js:862888-863132 placement
 function isBeingWatched() {
   let sessionRegistryState = getSessionRegistryState();
   let now = Date.now();
@@ -450,7 +451,7 @@ function isBeingWatched() {
   });
   return watched;
 }
-//@ chunk-aepeg2w5.js:840797-841217 placement
+//@ chunk-exfmq47h.js:863132-863552 placement
 async function isBeingWatchedV5(storageV5) {
   let sessionRegistryState = getSessionRegistryState();
   let now = Date.now();
@@ -475,14 +476,14 @@ async function isBeingWatchedV5(storageV5) {
     });
   return watched;
 }
-//@ chunk-aepeg2w5.js:841217-841280 placement
+//@ chunk-exfmq47h.js:863552-863615 placement
 function registerSession(storageV5) {
   let sessionRegistryState = getSessionRegistryState();
   let registration = registerSession_2(sessionRegistryState, storageV5);
   sessionRegistryState.registration = registration;
   return registration;
 }
-//@ chunk-aepeg2w5.js:841280-843999 fingerprint (2.1.88 match: registerSession, 0.359)
+//@ chunk-exfmq47h.js:863615-866334 fingerprint (2.1.88 match: registerSession, 0.359)
 async function registerSession_2(sessionRegistryState, storageV5) {
   if (!shouldRegisterPidFile()) return false;
   let deferred = Promise.withResolvers();
@@ -539,10 +540,10 @@ async function registerSession_2(sessionRegistryState, storageV5) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
@@ -640,7 +641,7 @@ async function registerSession_2(sessionRegistryState, storageV5) {
     deferred.resolve();
   }
 }
-//@ chunk-aepeg2w5.js:843999-844740 fingerprint (2.1.88 match: updatePidFile, 0.503)
+//@ chunk-exfmq47h.js:866334-867075 fingerprint (2.1.88 match: updatePidFile, 0.502)
 async function updatePidFile(patch, storageV5) {
   let pidFile = join(getSessionsDir(), `${process.pid}.json`);
   let sessionRegistryState = getSessionRegistryState();
@@ -699,7 +700,7 @@ async function updatePidFile(patch, storageV5) {
   );
   return writeChain;
 }
-//@ chunk-aepeg2w5.js:844740-845205 placement
+//@ chunk-exfmq47h.js:867075-867540 placement
 async function updateSessionName(name, storageV5, source = "user", givenAtLaunch) {
   if (!name) return false;
   let sessionRegistryState = getSessionRegistryState();
@@ -725,16 +726,16 @@ async function updateSessionName(name, storageV5, source = "user", givenAtLaunch
     );
   return writeResult;
 }
-//@ chunk-aepeg2w5.js:845205-845284 placement
+//@ chunk-exfmq47h.js:867540-867619 placement
 function ownDesktopHostSessionId() {
   if (!isTopHostSession() || isClaudecodeSession()) return;
   return isValidLocalTaskId(env.CLAUDE_CODE_HOST_SESSION_ID);
 }
-//@ chunk-aepeg2w5.js:845284-845329 placement
+//@ chunk-exfmq47h.js:867619-867664 placement
 function shouldRegisterPidFile() {
   return !isDiskless() && getAgentId() == null && !isNestedInteractiveClaudeSession();
 }
-//@ chunk-aepeg2w5.js:845329-845737 placement
+//@ chunk-exfmq47h.js:867664-868072 placement
 async function adoptSuppliedSessionTitle(title, storageV5) {
   let sanitizedTitle = sanitizeSessionTitle(title);
   await whenSessionRegistered();
@@ -763,7 +764,7 @@ async function adoptSuppliedSessionTitle(title, storageV5) {
   }
   return applied;
 }
-//@ chunk-aepeg2w5.js:845737-845818 placement
+//@ chunk-exfmq47h.js:868072-868153 placement
 async function updateSessionMessagingSocketPath(messagingSocketPath, storageV5) {
   await updatePidFile(
     {
@@ -773,7 +774,7 @@ async function updateSessionMessagingSocketPath(messagingSocketPath, storageV5) 
     storageV5,
   );
 }
-//@ chunk-aepeg2w5.js:845818-845874 placement (2.1.88 match: updateSessionBridgeId, 1)
+//@ chunk-exfmq47h.js:868153-868209 placement (2.1.88 match: updateSessionBridgeId, 1)
 async function updateSessionBridgeId(bridgeSessionId, storageV5) {
   await updatePidFile(
     {
@@ -782,7 +783,7 @@ async function updateSessionBridgeId(bridgeSessionId, storageV5) {
     storageV5,
   );
 }
-//@ chunk-aepeg2w5.js:845874-845947 placement
+//@ chunk-exfmq47h.js:868209-868282 placement
 async function markSessionParked(parkedJobId, storageV5) {
   await updatePidFile(
     {
@@ -792,7 +793,7 @@ async function markSessionParked(parkedJobId, storageV5) {
     storageV5,
   );
 }
-//@ chunk-aepeg2w5.js:845947-846023 placement
+//@ chunk-exfmq47h.js:868282-868358 placement
 async function clearSessionParked(storageV5) {
   await updatePidFile(
     {
@@ -802,7 +803,7 @@ async function clearSessionParked(storageV5) {
     storageV5,
   );
 }
-//@ chunk-aepeg2w5.js:846023-846212 placement
+//@ chunk-exfmq47h.js:868358-868547 placement
 function updateSessionConvertedSkillsAsk(value, storageV5) {
   let sessionRegistryState = getSessionRegistryState();
   sessionRegistryState.asksForConvertedSkills = value;
@@ -816,7 +817,7 @@ function updateSessionConvertedSkillsAsk(value, storageV5) {
     if (updated) sessionRegistryState.asksForConvertedSkillsOnRecord = value;
   });
 }
-//@ chunk-aepeg2w5.js:846212-846419 placement
+//@ chunk-exfmq47h.js:868547-868754 placement
 /**
  * 更新本会话 pid 文件（status、updatedAt 等）。
  */
@@ -840,14 +841,14 @@ async function updateSessionActivity(activity, storageV5) {
   if (becameBusy && writeResult) stopSpareClaimPoll(registry);
   return writeResult || !shouldRegisterPidFile();
 }
-//@ chunk-aepeg2w5.js:846419-846519 placement
+//@ chunk-exfmq47h.js:868754-868854 placement
 function stopSpareClaimPoll(registry) {
   if (registry.spareClaimPoll !== undefined) {
     clearInterval(registry.spareClaimPoll);
     registry.spareClaimPoll = undefined;
   }
 }
-//@ chunk-aepeg2w5.js:846519-846617 placement
+//@ chunk-exfmq47h.js:868854-868952 placement
 /**
  * 清除 pid 文件里的“备用”标记。
  */
@@ -861,7 +862,7 @@ async function clearSpareClaim(storageV5) {
     storageV5,
   );
 }
-//@ chunk-aepeg2w5.js:846617-846906 placement
+//@ chunk-exfmq47h.js:868952-869241 placement
 async function jobStateExists(storageV5) {
   let jobDirPath = getBgJobDir();
   if (!jobDirPath) return false;
@@ -884,12 +885,12 @@ async function jobStateExists(storageV5) {
     return !isENOENT(error);
   }
 }
-//@ chunk-aepeg2w5.js:846906-846918 placement
+//@ chunk-exfmq47h.js:869241-869253 placement
 /**
  * 轮询备用认领的间隔（1 秒）。
  */
 var SPARE_CLAIM_POLL_MS = 1000;
-//@ chunk-aepeg2w5.js:846918-847046 placement
+//@ chunk-exfmq47h.js:869253-869381 placement
 function startSpareClaimPoll(storageV5) {
   let sessionRegistryState = getSessionRegistryState();
   let state = {
@@ -900,7 +901,7 @@ function startSpareClaimPoll(storageV5) {
   sessionRegistryState.spareClaimPoll = setInterval(pollSpareClaim, SPARE_CLAIM_POLL_MS, state);
   sessionRegistryState.spareClaimPoll.unref();
 }
-//@ chunk-aepeg2w5.js:847046-847242 placement
+//@ chunk-exfmq47h.js:869381-869577 placement
 function pollSpareClaim(claimState) {
   if (claimState.clearing || claimState.registry.spareClaimPoll === undefined) return;
   claimState.clearing = true;
@@ -913,7 +914,7 @@ function pollSpareClaim(claimState) {
       claimState.clearing = false;
     });
 }
-//@ chunk-aepeg2w5.js:847242-847497 placement
+//@ chunk-exfmq47h.js:869577-869832 placement
 async function readSessionRecord(storageV5, fileName) {
   try {
     let readResult = await storageV5.read([
@@ -930,7 +931,7 @@ async function readSessionRecord(storageV5, fileName) {
     return null;
   }
 }
-//@ chunk-aepeg2w5.js:847497-847605 placement
+//@ chunk-exfmq47h.js:869832-869940 placement
 async function deleteSessionRecord(storageV5, sessionId) {
   try {
     let deleteResult = await storageV5.delete(STORAGE_SPACES.session(sessionId));
@@ -939,7 +940,7 @@ async function deleteSessionRecord(storageV5, sessionId) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:847605-847745 placement
+//@ chunk-exfmq47h.js:869940-870080 placement
 async function authenticateSessionPeer(storageV5) {
   return authenticatePeer(storageV5, {
     partialOnCap: true,
@@ -954,18 +955,18 @@ async function authenticateSessionPeer(storageV5) {
       ),
   });
 }
-//@ chunk-aepeg2w5.js:847745-847799 placement
+//@ chunk-exfmq47h.js:870080-870134 placement
 function isRegistrySweepPermitted() {
   return getSessionRegistryState().isRegistrySweepPermitted();
 }
-//@ chunk-aepeg2w5.js:847799-847868 placement
+//@ chunk-exfmq47h.js:870134-870203 placement
 /**
  * 判断是否为 Windows 平台下的 POSIX 风格路径（如 /c/...）。
  */
 function isPosixPathOnWindows(cwd) {
   return getPlatform() === "windows" && cwd !== undefined && cwd.startsWith("/");
 }
-//@ chunk-aepeg2w5.js:847868-848115 placement
+//@ chunk-exfmq47h.js:870203-870450 placement
 async function reapKeysOfReapedRecord(sessionsDir, pid, pidDomain, storageV5) {
   if (isStorageV5Enabled() && storageV5 !== undefined) {
     let files = await authenticateSessionPeer(storageV5);
@@ -988,7 +989,7 @@ async function reapKeysOfReapedRecord(sessionsDir, pid, pidDomain, storageV5) {
     unlink(join(sessionsDir, fileName)).catch(() => {}),
   );
 }
-//@ chunk-aepeg2w5.js:848115-848335 placement
+//@ chunk-exfmq47h.js:870450-870670 placement
 async function removeStaleSessionFiles(files, sessionsDir, pid, pidDomain, removeFile) {
   let prefix = `${pid}.`;
   await Promise.all(
@@ -1001,7 +1002,7 @@ async function removeStaleSessionFiles(files, sessionsDir, pid, pidDomain, remov
     }),
   );
 }
-//@ chunk-aepeg2w5.js:848335-848656 placement
+//@ chunk-exfmq47h.js:870670-870991 placement
 function mayReapRecordFromThisDomain(record, pidDomain, peerDomains = []) {
   let platform = getPlatform();
   let isNonInteractive = !getIsInteractive();
@@ -1024,7 +1025,7 @@ function mayReapRecordFromThisDomain(record, pidDomain, peerDomains = []) {
       return true;
   }
 }
-//@ chunk-aepeg2w5.js:848656-851082 placement
+//@ chunk-exfmq47h.js:870991-873417 placement
 async function countConcurrentSessions(storageV5) {
   let sessionsDir = getSessionsDir();
   let entries;
@@ -1130,10 +1131,10 @@ async function countConcurrentSessions(storageV5) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION,
@@ -1162,9 +1163,9 @@ async function countConcurrentSessions(storageV5) {
   if (sweepPermitted) sessionRegistryState.setUncleanExitsScanned(true);
   return liveCount;
 }
-//@ chunk-aepeg2w5.js:851082-851136 placement
+//@ chunk-exfmq47h.js:873417-873471 placement
 var TMUX_LOCATION_RE = /^[A-Za-z0-9_.-]{1,64}:@?\d{1,6}\.%?\d{1,6}$/;
-//@ chunk-aepeg2w5.js:851136-851362 placement
+//@ chunk-exfmq47h.js:873471-873697 placement
 /**
  * 读当前 tmux 窗格标识
  */
@@ -1181,19 +1182,19 @@ async function getTmuxPaneId() {
   );
   return code === 0 ? stdout.trim() : undefined;
 }
-//@ chunk-aepeg2w5.js:851362-851418 placement
+//@ chunk-exfmq47h.js:873697-873753 placement
 /**
  * 按会话根缓存的 tmux 查询结果。
  */
 var TMUX_QUERY_TIMEOUT_MS; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
 var tmuxQueryCacheByRoot;
 var ANSI_ESCAPE_RE;
-deferInit("chunk-aepeg2w5.js:851362", () => {
+deferInit("chunk-exfmq47h.js:873697", () => {
   TMUX_QUERY_TIMEOUT_MS = 1000;
   tmuxQueryCacheByRoot = new SessionRootSlot(() => new Map());
   ANSI_ESCAPE_RE = /\x1b\[[0-9;]*m/g;
 });
-//@ chunk-6cc2zqkz.js:5352-5496 fingerprint (2.1.88 match: countConcurrentSessions, 0.372)
+//@ chunk-4ht4pcp0.js:5539-5684 fingerprint (2.1.88 match: countConcurrentSessions, 0.372)
 async function countConcurrentSessions_2() {
   return {
     pid: process.pid,
@@ -1208,52 +1209,52 @@ async function countConcurrentSessions_2() {
 export {
   isBgSession,
   isUnattendedInteractiveSession,
-  recordSpawnedAgentIsolation,
-  recordCleanlyRemovedAgent,
   envSessionKind,
   getRegisteredSessionName,
-  isRegistrySweepPermitted,
-  wasAgentCleanlyRemoved,
-  wasAgentSpawnedIsolated,
-  getBgJobDir,
-  isActingAsBgJob,
-  isDaemonBgWorker,
-  clearResumeHintWorktree,
-  clearSessionParked,
-  markSessionParked,
-  getBgTakeover,
-  isUnattendedBgSession,
-  ARTIFACT_YIELD_PEER_FEATURE,
   adoptSuppliedSessionTitle,
-  updateSessionName,
+  isUnattendedBgSession,
+  FORMER_NAME_HINT_TTL_MS,
   updateSessionActivity,
+  ARTIFACT_YIELD_PEER_FEATURE,
+  getBgTakeover,
+  countConcurrentSessions_2,
+  isActingAsBgJob,
+  getBgJobDir,
+  isDaemonBgWorker,
+  hasBeenInWorktree,
+  getResumeHintWorktreeName,
+  isIsolationUnavailableForCwd,
+  countConcurrentSessions,
+  markIsolationUnavailableForCwd,
+  clearResumeHintWorktree,
+  whenSessionRegistered,
+  updateSessionName,
+  recordSpawnedAgentIsolation,
+  touchFleetViewHeartbeat,
+  clearFleetViewHeartbeat,
+  PEER_PROTOCOL,
+  TMUX_LOCATION_RE,
   getSessionRegistryState,
   registerSession,
-  countConcurrentSessions,
+  clearSessionParked,
+  markSessionParked,
+  isRegistrySweepPermitted,
+  NOTIFY_IDLE_PEER_FEATURE,
+  TMUX_QUERY_TIMEOUT_MS,
+  tmuxQueryCacheByRoot,
+  updateSessionConvertedSkillsAsk,
   ANSI_ESCAPE_RE,
-  FORMER_NAME_HINT_TTL_MS,
-  updateSessionBridgeId,
+  recordCleanlyRemovedAgent,
   MAX_FORMER_NAMES,
   ownDesktopHostSessionId,
   getSessionsDir,
   reapKeysOfReapedRecord,
   mayReapRecordFromThisDomain,
-  countConcurrentSessions_2,
-  NOTIFY_IDLE_PEER_FEATURE,
-  whenSessionRegistered,
-  touchFleetViewHeartbeat,
-  clearFleetViewHeartbeat,
-  PEER_PROTOCOL,
-  TMUX_LOCATION_RE,
-  markIsolationUnavailableForCwd,
-  TMUX_QUERY_TIMEOUT_MS,
-  tmuxQueryCacheByRoot,
-  hasBeenInWorktree,
-  getResumeHintWorktreeName,
-  isIsolationUnavailableForCwd,
-  updateSessionConvertedSkillsAsk,
   isBeingWatched,
   isBeingWatchedV5,
+  wasAgentCleanlyRemoved,
+  wasAgentSpawnedIsolated,
+  updateSessionBridgeId,
   getHeldSessionNames,
   updateSessionMessagingSocketPath,
 };

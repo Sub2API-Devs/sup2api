@@ -3,9 +3,9 @@
  *
  * 后台 shell/monitor 任务详情：输出尾部、运行时间、停止。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/tasks/ShellDetailDialog.tsx
- * pieces: chunk-18hwfzwa.js (5)
+ * pieces: chunk-czq1j3j2.js (5)
  * attribution: placement 1, fingerprint 4
  */
 import {
@@ -25,8 +25,8 @@ import { tailOutputOfTask } from "../../utils/task/diskOutput.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useInterval } from "../../ink/components/Input.js";
-import { useConfirmationKeys } from "../ConfirmationPrompt.js";
-import { truncateToWidth, formatDuration, formatFileSize } from "../../utils/format.js";
+import { useElapsedTicker, useConfirmationKeys } from "../ConfirmationPrompt.js";
+import { truncateToWidth, formatFileSize } from "../../utils/format.js";
 import { TaskDetailFooterHints } from "./taskStatusUtils.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { FlexDirectionRow } from "../design-system/Table.js";
@@ -35,12 +35,12 @@ import { FocusColumn } from "../design-system/FocusColumn.js";
 import { HintText } from "../design-system/HintText.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:721881-721885 placement
+//@ chunk-czq1j3j2.js:712892-712896 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:721881", () => {
+deferInit("chunk-czq1j3j2.js:712892", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:721885-721954 fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-czq1j3j2.js:742628-742697 fingerprint (2.1.88 match: _temp2, 1)
 function renderOutputLine(line_0, i_1) {
   return jsxProd_default(
     Text,
@@ -51,7 +51,7 @@ function renderOutputLine(line_0, i_1) {
     i_1,
   );
 }
-//@ chunk-18hwfzwa.js:721954-722090 fingerprint (2.1.88 match: getTaskOutput, 1)
+//@ chunk-czq1j3j2.js:742697-742833 fingerprint (2.1.88 match: getTaskOutput, 1)
 async function getTaskOutput(shell) {
   try {
     let result = await tailOutputOfTask(shell.id);
@@ -66,12 +66,12 @@ async function getTaskOutput(shell) {
     };
   }
 }
-//@ chunk-18hwfzwa.js:722090-725128 fingerprint (2.1.88 match: ShellDetailDialog, 0.637)
+//@ chunk-czq1j3j2.js:742833-745761 fingerprint (2.1.88 match: ShellDetailDialog, 0.63)
 /**
  * 后台 shell / monitor 详情：命令、运行时长、输出尾部（截断行数），可停止。
  */
 function ShellDetailDialog(props) {
-  let $ = useMemoCache(51);
+  let $ = useMemoCache(47);
   let { shell, onDone, onKillShell, onBack } = props;
   let { columns } = useTerminalSize();
   let t1;
@@ -89,6 +89,13 @@ function ShellDetailDialog(props) {
     $[3] = refreshOutput;
   } else refreshOutput = $[3];
   useInterval(refreshOutput, shell.status === "running" ? 1000 : null);
+  let elapsedTicker = useElapsedTicker(
+    shell.startTime,
+    shell.status === "running",
+    1000,
+    shell.totalPausedMs ?? 0,
+    shell.endTime,
+  );
   let t4;
   if ($[4] !== onDone) {
     t4 = () =>
@@ -190,83 +197,70 @@ function ShellDetailDialog(props) {
     $[18] = shell.status;
     $[19] = t12;
   } else t12 = $[19];
-  let t13;
+  let runtimeLabel;
   if ($[20] === MEMO_CACHE_SENTINEL) {
-    t13 = jsxProd_default(Fragment, {
+    runtimeLabel = jsxProd_default(Fragment, {
       children: "Runtime:",
     });
-    $[20] = t13;
-  } else t13 = $[20];
-  let t14;
-  if ($[21] !== shell.endTime) {
-    t14 = shell.endTime ?? Date.now();
-    $[21] = shell.endTime;
-    $[22] = t14;
-  } else t14 = $[22];
-  const t15 = t14 - shell.startTime;
-  let t16;
-  if ($[23] !== t15) {
-    t16 = formatDuration(t15);
-    $[23] = t15;
-    $[24] = t16;
-  } else t16 = $[24];
-  let t17;
-  if ($[25] !== t16) {
-    t17 = jsxProd_default_2(FlexDirectionRow.Row, {
-      children: [t13, t16],
+    $[20] = runtimeLabel;
+  } else runtimeLabel = $[20];
+  let runtimeRow;
+  if ($[21] !== elapsedTicker) {
+    runtimeRow = jsxProd_default_2(FlexDirectionRow.Row, {
+      children: [runtimeLabel, elapsedTicker],
     });
-    $[25] = t16;
-    $[26] = t17;
-  } else t17 = $[26];
+    $[21] = elapsedTicker;
+    $[22] = runtimeRow;
+  } else runtimeRow = $[22];
   const children = isMonitor ? "Script:" : "Command:";
   let t19;
-  if ($[27] !== children) {
+  if ($[23] !== children) {
     t19 = jsxProd_default(Fragment, {
       children,
     });
-    $[27] = children;
-    $[28] = t19;
-  } else t19 = $[28];
+    $[23] = children;
+    $[24] = t19;
+  } else t19 = $[24];
   let t20;
-  if ($[29] !== displayCommand || $[30] !== t19) {
+  if ($[25] !== displayCommand || $[26] !== t19) {
     t20 = jsxProd_default_2(FlexDirectionRow.Row, {
       children: [t19, displayCommand],
     });
-    $[29] = displayCommand;
-    $[30] = t19;
-    $[31] = t20;
-  } else t20 = $[31];
+    $[25] = displayCommand;
+    $[26] = t19;
+    $[27] = t20;
+  } else t20 = $[27];
   let t21;
-  if ($[32] !== forceWidth || $[33] !== t12 || $[34] !== t17 || $[35] !== t20) {
+  if ($[28] !== forceWidth || $[29] !== t12 || $[30] !== runtimeRow || $[31] !== t20) {
     t21 = jsxProd_default_2(FlexDirectionRow, {
       columns: columns_2,
       forceWidth,
-      children: [t12, t17, t20],
+      children: [t12, runtimeRow, t20],
     });
-    $[32] = forceWidth;
-    $[33] = t12;
-    $[34] = t17;
-    $[35] = t20;
-    $[36] = t21;
-  } else t21 = $[36];
+    $[28] = forceWidth;
+    $[29] = t12;
+    $[30] = runtimeRow;
+    $[31] = t20;
+    $[32] = t21;
+  } else t21 = $[32];
   let t22;
-  if ($[37] === MEMO_CACHE_SENTINEL) {
+  if ($[33] === MEMO_CACHE_SENTINEL) {
     t22 = jsxProd_default(Text, {
       bold: true,
       children: "Output:",
     });
-    $[37] = t22;
-  } else t22 = $[37];
+    $[33] = t22;
+  } else t22 = $[33];
   let fallback;
-  if ($[38] === MEMO_CACHE_SENTINEL) {
+  if ($[34] === MEMO_CACHE_SENTINEL) {
     fallback = jsxProd_default(Text, {
       dimColor: true,
       children: "Loading output\u2026",
     });
-    $[38] = fallback;
-  } else fallback = $[38];
+    $[34] = fallback;
+  } else fallback = $[34];
   let t24;
-  if ($[39] !== columns || $[40] !== deferredOutputPromise) {
+  if ($[35] !== columns || $[36] !== deferredOutputPromise) {
     t24 = jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
@@ -280,12 +274,12 @@ function ShellDetailDialog(props) {
         }),
       ],
     });
-    $[39] = columns;
-    $[40] = deferredOutputPromise;
-    $[41] = t24;
-  } else t24 = $[41];
+    $[35] = columns;
+    $[36] = deferredOutputPromise;
+    $[37] = t24;
+  } else t24 = $[37];
   let children_2;
-  if ($[42] !== handleClose || $[43] !== inputGuide || $[44] !== t21 || $[45] !== t24 || $[46] !== title) {
+  if ($[38] !== handleClose || $[39] !== inputGuide || $[40] !== t21 || $[41] !== t24 || $[42] !== title) {
     children_2 = jsxProd_default_2(Dialog, {
       title,
       onCancel: handleClose,
@@ -293,26 +287,26 @@ function ShellDetailDialog(props) {
       inputGuide,
       children: [t21, t24],
     });
-    $[42] = handleClose;
-    $[43] = inputGuide;
-    $[44] = t21;
-    $[45] = t24;
-    $[46] = title;
-    $[47] = children_2;
-  } else children_2 = $[47];
+    $[38] = handleClose;
+    $[39] = inputGuide;
+    $[40] = t21;
+    $[41] = t24;
+    $[42] = title;
+    $[43] = children_2;
+  } else children_2 = $[43];
   let t26;
-  if ($[48] !== handleKeyDown || $[49] !== children_2) {
+  if ($[44] !== handleKeyDown || $[45] !== children_2) {
     t26 = jsxProd_default(FocusColumn, {
       onKeyDown: handleKeyDown,
       children: children_2,
     });
-    $[48] = handleKeyDown;
-    $[49] = children_2;
-    $[50] = t26;
-  } else t26 = $[50];
+    $[44] = handleKeyDown;
+    $[45] = children_2;
+    $[46] = t26;
+  } else t26 = $[46];
   return t26;
 }
-//@ chunk-18hwfzwa.js:725128-726327 fingerprint (2.1.88 match: ShellOutputContent, 0.835)
+//@ chunk-czq1j3j2.js:745761-746961 fingerprint (2.1.88 match: ShellOutputContent, 0.835)
 function ShellOutputContent(props) {
   let $ = useMemoCache(19);
   let { outputPromise, columns } = props;

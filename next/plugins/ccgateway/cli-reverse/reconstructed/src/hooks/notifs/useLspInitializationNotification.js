@@ -3,9 +3,9 @@
  *
  * LSP 初始化失败通知（LSP error: …）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/notifs/useLspInitializationNotification.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-7nse75qx.js (1)
+ * pieces: chunk-a8hqqf13.js (1), chunk-czq1j3j2.js (1)
  * attribution: fingerprint 2
  */
 import { isCoordinatorEnvSet } from "../../coordinator/coordinatorMode.js";
@@ -17,13 +17,13 @@ import { getIsScrollDraining } from "../../bootstrap/state.js";
 import { getInitializationStatus, getLspServerManager } from "../../services/lsp/manager.js";
 import { startClockInterval } from "../../ink/components/Input.js";
 
-//@ chunk-7nse75qx.js:634-743 fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-a8hqqf13.js:635-744 fingerprint (2.1.88 match: _temp2, 1)
 function pluginErrorKey(pluginError) {
   return pluginError.type === "generic-error"
     ? `generic-error:${pluginError.source}:${pluginError.error}`
     : `${pluginError.type}:${pluginError.source}`;
 }
-//@ chunk-18hwfzwa.js:1764183-1765355 fingerprint (2.1.88 match: useLspInitializationNotification, 0.551)
+//@ chunk-czq1j3j2.js:1811444-1812616 fingerprint (2.1.88 match: useLspInitializationNotification, 0.551)
 /**
  * 启动通知"lsp-initialization"：每 5 秒检查 LSP 管理器与各服务器状态，把初始化失败和服务器错误写进插件错误列表（去重）并更新 setupIssues.lspFailedCount；全部就绪后停止轮询。
  */
@@ -113,4 +113,4 @@ var lspInitializationNoticeSpec = {
     };
   },
 };
-export { lspInitializationNoticeSpec, pluginErrorKey };
+export { pluginErrorKey, lspInitializationNoticeSpec };

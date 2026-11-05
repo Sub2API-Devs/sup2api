@@ -3,10 +3,10 @@
  *
  * 并入已有模块：MCP 服务器配置 schema（stdio、sse、http 等）；托管设置中的 MCP 服务器 schema（只允许 http/sse URL）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/types.ts
- * pieces: chunk-21ppfwx8.js (1), chunk-5aas12zq.js (2), chunk-dcmhvw5a.js (17), chunk-x8dej8aq.js (1)
- * attribution: fingerprint 5, affinity 1, layout 1, placement 14
+ * pieces: chunk-5hddsdew.js (1), chunk-6vxyfwtv.js (2), chunk-bym3dfgj.js (1), chunk-z20c443b.js (16)
+ * attribution: fingerprint 4, affinity 1, layout 1, placement 14
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
@@ -35,52 +35,44 @@ import { hasStoredOAuthToken } from "../../utils/auth.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:65746-65872 fingerprint (2.1.88 match: ConfigScopeSchema, 0.885)
+//@ chunk-z20c443b.js:65804-65930 fingerprint (2.1.88 match: ConfigScopeSchema, 0.885)
 /**
  * ConfigScopeSchema：MCP 配置作用域枚举 local/user/project/dynamic/enterprise/claudeai/managed/agent；MANAGED_CONFIG_SCOPES = enterprise、managed。
  */
 var ConfigScopeSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MANAGED_CONFIG_SCOPES;
-deferInit("chunk-dcmhvw5a.js:65746", () => {
+deferInit("chunk-z20c443b.js:65804", () => {
   ConfigScopeSchema = DoctorLazy(() =>
     _enum(["local", "user", "project", "dynamic", "enterprise", "claudeai", "managed", "agent"]),
   );
   MANAGED_CONFIG_SCOPES = ["enterprise", "managed"];
 });
-//@ chunk-dcmhvw5a.js:65872-65910 layout
+//@ chunk-z20c443b.js:65930-65968 layout
 /**
  * isManagedConfigScope：作用域是 enterprise 或 managed。
  */
 function isManagedConfigScope(scope) {
   return MANAGED_CONFIG_SCOPES.includes(scope);
 }
-//@ chunk-dcmhvw5a.js:65910-65971 fingerprint (2.1.88 match: TransportSchema, 0.945)
-/**
- * TransportSchema：stdio/sse/sse-ide/http/ws/sdk。
- */
-var TransportSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:65910", () => {
-  TransportSchema = DoctorLazy(() => _enum(["stdio", "sse", "sse-ide", "http", "ws", "sdk"]));
-});
-//@ chunk-dcmhvw5a.js:65971-66033 placement
+//@ chunk-z20c443b.js:65968-66030 placement
 /**
  * 是否为 sdk/IDE 类型的 MCP 服务器。
  */
 function isIdeOrSdkType(type) {
   return type === "sdk" || type === "sse-ide" || type === "ws-ide";
 }
-//@ chunk-dcmhvw5a.js:66033-66059 placement
+//@ chunk-z20c443b.js:66030-66056 placement
 var SERVER_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
-//@ chunk-dcmhvw5a.js:66059-66114 placement
+//@ chunk-z20c443b.js:66056-66111 placement
 function isValidServerId(id) {
   return typeof id === "string" && SERVER_ID_PATTERN.test(id);
 }
-//@ chunk-dcmhvw5a.js:66114-66336 placement
+//@ chunk-z20c443b.js:66111-66333 placement
 var ServerRoleSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var PositiveIntSchema;
 var MAX_REQUEST_TIMEOUT_MS;
 var RequestTimeoutHintSchema;
-deferInit("chunk-dcmhvw5a.js:66114", () => {
+deferInit("chunk-z20c443b.js:66111", () => {
   ServerRoleSchema = DoctorLazy(() => literal("comms").optional().catch(undefined));
   PositiveIntSchema = DoctorLazy(() => numberSchema().int().positive());
   MAX_REQUEST_TIMEOUT_MS = 300000;
@@ -93,7 +85,7 @@ deferInit("chunk-dcmhvw5a.js:66114", () => {
       .describe("@internal CCR backend wire hint; folded into timeout at parse."),
   );
 });
-//@ chunk-dcmhvw5a.js:66336-66451 placement
+//@ chunk-z20c443b.js:66333-66448 placement
 function foldRequestTimeout({ request_timeout_ms: requestTimeoutMs, ...rest }) {
   return {
     ...rest,
@@ -103,7 +95,7 @@ function foldRequestTimeout({ request_timeout_ms: requestTimeoutMs, ...rest }) {
       }),
   };
 }
-//@ chunk-dcmhvw5a.js:66451-68467 placement
+//@ chunk-z20c443b.js:66448-68546 placement
 /**
  * 匹配控制字符的正则（转义用）。
  */
@@ -122,7 +114,7 @@ var MANAGED_FORBIDDEN_FIELDS;
 var MANAGED_ALLOWED_TYPES;
 var CONTROL_CHAR_PATTERN;
 var CONTROL_CHAR_ESCAPE_RE;
-deferInit("chunk-dcmhvw5a.js:66451", () => {
+deferInit("chunk-z20c443b.js:66448", () => {
   McpStdioServerConfigSchema = DoctorLazy(() =>
     objectSchema({
       type: literal("stdio").optional(),
@@ -178,6 +170,7 @@ deferInit("chunk-dcmhvw5a.js:66451", () => {
       request_timeout_ms: RequestTimeoutHintSchema(),
       tools: array(McpToolPolicySchema()).optional(),
       alwaysLoad: booleanSchema().optional(),
+      displayName: stringSchema().optional().catch(undefined),
       bareElicitationCapability: booleanSchema().optional(),
       discoveryCache: booleanSchema().optional(),
       role: ServerRoleSchema(),
@@ -218,6 +211,7 @@ deferInit("chunk-dcmhvw5a.js:66451", () => {
       request_timeout_ms: RequestTimeoutHintSchema(),
       tools: array(McpToolPolicySchema()).optional(),
       alwaysLoad: booleanSchema().optional(),
+      displayName: stringSchema().optional().catch(undefined),
       bareElicitationCapability: booleanSchema().optional(),
       discoveryCache: booleanSchema().optional(),
       role: ServerRoleSchema(),
@@ -229,13 +223,13 @@ deferInit("chunk-dcmhvw5a.js:66451", () => {
   CONTROL_CHAR_PATTERN = /[\p{Cc}\p{Cf}\u2028\u2029]/u;
   CONTROL_CHAR_ESCAPE_RE = /[\p{Cc}\p{Cf}\u2028\u2029]/gu;
 });
-//@ chunk-dcmhvw5a.js:68467-68559 placement
+//@ chunk-z20c443b.js:68546-68638 placement
 function isValidServerName(name) {
   return (
     /^[A-Za-z0-9_-]+$/.test(name) && !isPrototypeKey(name) && name !== "constructor" && name !== "prototype"
   );
 }
-//@ chunk-dcmhvw5a.js:68559-68657 placement
+//@ chunk-z20c443b.js:68638-68736 placement
 function isHttpsUrl(url) {
   try {
     let parsed = new URL(url);
@@ -244,7 +238,7 @@ function isHttpsUrl(url) {
     return false;
   }
 }
-//@ chunk-dcmhvw5a.js:68657-68942 placement
+//@ chunk-z20c443b.js:68736-69021 placement
 function flattenEntries(value, prefix = "", depth = 0) {
   if (typeof value === "string") return [[prefix, value, false]];
   if (depth > 4 || value === null || typeof value !== "object") return [];
@@ -257,13 +251,13 @@ function flattenEntries(value, prefix = "", depth = 0) {
     return [[path, key, true], ...flattenEntries(value, path, depth + 1)];
   });
 }
-//@ chunk-dcmhvw5a.js:68942-70193 placement
+//@ chunk-z20c443b.js:69021-70271 placement
 /**
  * 托管设置中的 MCP 服务器 schema（只允许 http/sse URL）。
  */
 var ManagedMcpServerSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MANAGED_MCP_SERVERS_SHAPE_MESSAGE;
-deferInit("chunk-dcmhvw5a.js:68942", () => {
+deferInit("chunk-z20c443b.js:69021", () => {
   ManagedMcpServerSchema = DoctorLazy(() =>
     record(stringSchema(), unknown())
       .check((ctx) => {
@@ -302,7 +296,7 @@ deferInit("chunk-dcmhvw5a.js:68942", () => {
   );
   MANAGED_MCP_SERVERS_SHAPE_MESSAGE = `"managedMcpServers" must be an object keyed by server name (the .mcp.json mcpServers shape; Claude Desktop's array form of its same-named key is not accepted here: use the server name as the key and "type" instead of "transport"). No managed MCP servers are installed from it until it is fixed.`;
 });
-//@ chunk-dcmhvw5a.js:70193-70577 placement
+//@ chunk-z20c443b.js:70271-70655 placement
 /**
  * 解析托管 MCP 服务器表，报告无效项。
  */
@@ -331,7 +325,7 @@ function parseManagedMcpServers(value, onError) {
   }
   return servers;
 }
-//@ chunk-dcmhvw5a.js:70577-71595 placement
+//@ chunk-z20c443b.js:70655-71702 placement
 /**
  * ws/sdk 服务器配置 schema。
  */
@@ -340,7 +334,7 @@ var McpSdkServerConfigSchema;
 var ToolPermissionValueSchema;
 var McpClaudeAIProxyServerConfigSchema;
 var McpServerConfigSchema;
-deferInit("chunk-dcmhvw5a.js:70577", () => {
+deferInit("chunk-z20c443b.js:70655", () => {
   McpWebSocketServerConfigSchema = DoctorLazy(() =>
     objectSchema({
       type: literal("ws"),
@@ -371,6 +365,7 @@ deferInit("chunk-dcmhvw5a.js:70577", () => {
       url: UrlStringSchema(),
       id: stringSchema().regex(SERVER_ID_PATTERN),
       displayName: stringSchema().optional(),
+      urlReportable: booleanSchema().optional(),
       iconUrl: stringSchema().optional(),
       timeout: PositiveIntSchema().optional(),
       alwaysLoad: booleanSchema().optional(),
@@ -397,7 +392,7 @@ deferInit("chunk-dcmhvw5a.js:70577", () => {
     ]),
   );
 });
-//@ chunk-dcmhvw5a.js:71595-71693 placement
+//@ chunk-z20c443b.js:71702-71800 placement
 /**
  * 生成工具的 mcpInfo。
  */
@@ -408,21 +403,21 @@ function getMcpInfoFromConnection(connection) {
     pluginSource: connection.config.pluginSource,
   };
 }
-//@ chunk-dcmhvw5a.js:71693-71740 placement
+//@ chunk-z20c443b.js:71800-71847 placement
 /**
  * 配置是否来自插件。
  */
 function isPluginServerConfig(config) {
   return config?.pluginSource !== undefined;
 }
-//@ chunk-21ppfwx8.js:22724-22803 fingerprint (2.1.88 match: McpWebSocketServerConfigSchema, 0.375)
+//@ chunk-5hddsdew.js:22760-22839 fingerprint (2.1.88 match: McpWebSocketServerConfigSchema, 0.375)
 /**
  * hasHeadersHelper：配置带非空 headersHelper。
  */
 function hasHeadersHelper(config) {
   return typeof config.headersHelper === "string" && config.headersHelper !== "";
 }
-//@ chunk-x8dej8aq.js:1829-2251 fingerprint (2.1.88 match: McpJsonConfigSchema, 0.407)
+//@ chunk-bym3dfgj.js:1831-2253 fingerprint (2.1.88 match: McpJsonConfigSchema, 0.407)
 /**
  * mightHaveMcpServers：任一作用域有服务器、需要显示自动连接对话框、插件可能提供 MCP 或插件加载出错时返回 true（宁可多判），用于决定是否初始化 MCP。
  */
@@ -451,11 +446,11 @@ async function mightHaveMcpServers(storageV5) {
   }
   return hasStoredOAuthToken();
 }
-//@ chunk-5aas12zq.js:41509-41600 affinity
+//@ chunk-6vxyfwtv.js:41796-41887 affinity
 function isPositiveSafeInteger(value) {
   return typeof value === "number" && Number.isInteger(value) && value > 0 && value < 9223372036854776000;
 }
-//@ chunk-5aas12zq.js:41600-41940 fingerprint (2.1.88 match: McpOAuthConfigSchema, 0.468)
+//@ chunk-6vxyfwtv.js:41887-42227 fingerprint (2.1.88 match: McpOAuthConfigSchema, 0.468)
 /**
  * isValidMcpOAuthConfig：clientId、callbackPort、authServerMetadataUrl（须 https）、scopes、xaa 的形状校验。
  */
@@ -472,28 +467,28 @@ function isValidMcpOAuthConfig(oauth) {
   );
 }
 export {
-  isIdeOrSdkType,
-  McpStdioServerConfigSchema,
-  McpSSEServerConfigSchema,
-  McpHTTPServerConfigSchema,
-  McpWebSocketServerConfigSchema,
-  McpSdkServerConfigSchema,
-  McpClaudeAIProxyServerConfigSchema,
-  isManagedConfigScope,
-  isValidServerId,
-  McpServerConfigSchema,
-  MANAGED_CONFIG_SCOPES,
   ToolPermissionValueSchema,
   isPluginServerConfig,
-  ConfigScopeSchema,
+  isManagedConfigScope,
   getMcpInfoFromConnection,
   hasHeadersHelper,
+  McpStdioServerConfigSchema,
+  McpHTTPServerConfigSchema,
+  McpSSEServerConfigSchema,
+  McpWebSocketServerConfigSchema,
+  McpServerConfigSchema,
+  isIdeOrSdkType,
+  McpSdkServerConfigSchema,
+  McpClaudeAIProxyServerConfigSchema,
+  isValidServerId,
+  MANAGED_CONFIG_SCOPES,
+  ConfigScopeSchema,
   isPositiveSafeInteger,
   isValidMcpOAuthConfig,
+  mightHaveMcpServers,
+  foldRequestTimeout,
   isValidServerName,
   ManagedMcpServerSchema,
   MANAGED_MCP_SERVERS_SHAPE_MESSAGE,
   parseManagedMcpServers,
-  mightHaveMcpServers,
-  foldRequestTimeout,
 };

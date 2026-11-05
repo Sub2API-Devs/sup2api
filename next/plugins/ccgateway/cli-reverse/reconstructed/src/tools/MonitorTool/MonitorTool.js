@@ -3,9 +3,9 @@
  *
  * Monitor 工具（沙箱检查、界面）（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b91jfdd4.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-dew2fy99.js (14)
  * attribution: placement 14
  */
 import { isIP } from "net";
@@ -52,7 +52,7 @@ import { wholeBashRuleVerdict } from "../../utils/permissions/filterToolsByDenyR
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 import { MONITOR } from "./constants.js";
 import {
-  bashToolHasPermissionTwoPass,
+  bashPermissionWithTextFallback,
   denyCrashedCheckUnderCommandClamp,
   denyForBashCommandClamp,
 } from "../BashTool/bashPermissions.js";
@@ -94,10 +94,10 @@ import { hasBackgroundBashStopAfterReply } from "../AgentTool/backgroundGates.js
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-b91jfdd4.js:9609-9788 placement
+//@ chunk-dew2fy99.js:9708-9887 placement
 var monitorInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var boundedMonitorInputSchema;
-deferInit("chunk-b91jfdd4.js:9609", () => {
+deferInit("chunk-dew2fy99.js:9708", () => {
   monitorInputSchema = DoctorLazy(() =>
     zodStrictObject({
       ...persistentMonitorInputFields(),
@@ -116,16 +116,16 @@ deferInit("chunk-b91jfdd4.js:9609", () => {
       .refine(hasNoConflictingNetworkLists, ALLOWED_DOMAINS_COMMAND_ONLY),
   );
 });
-//@ chunk-b91jfdd4.js:9788-9825 placement
+//@ chunk-dew2fy99.js:9887-9924 placement
 /**
  * 按是否允许持久监视返回 Monitor 的输入 schema。
  */
 function monitorToolInputSchema() {
   return isMonitorPersistentAllowed() ? boundedMonitorInputSchema() : monitorInputSchema();
 }
-//@ chunk-b91jfdd4.js:9825-10080 placement
+//@ chunk-dew2fy99.js:9924-10179 placement
 var remoteMonitorInputSchema_2; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-b91jfdd4.js:9825", () => {
+deferInit("chunk-dew2fy99.js:9924", () => {
   remoteMonitorInputSchema_2 = DoctorLazy(() => {
     let baseFields = boundedMonitorInputFields();
     let maxTimeoutMs = monitorMaxTimeoutMs();
@@ -138,7 +138,7 @@ deferInit("chunk-b91jfdd4.js:9825", () => {
     });
   });
 });
-//@ chunk-b91jfdd4.js:10080-10146 placement
+//@ chunk-dew2fy99.js:10179-10245 placement
 /**
  * 无盘会话下返回远程 Monitor 的输入 schema（非对象时 undefined）。
  */
@@ -147,16 +147,16 @@ function remoteMonitorInputSchema() {
   let schema = toolInputJsonSchema(remoteMonitorInputSchema_2());
   return isObjectSchema(schema) ? schema : undefined;
 }
-//@ chunk-b91jfdd4.js:10146-10186 placement
+//@ chunk-dew2fy99.js:10245-10285 placement
 /**
  * 判断 schema 是否为对象类型。
  */
 function isObjectSchema(schema) {
   return schema.type === "object";
 }
-//@ chunk-b91jfdd4.js:10186-10435 placement
+//@ chunk-dew2fy99.js:10285-10534 placement
 var monitorOutputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-b91jfdd4.js:10186", () => {
+deferInit("chunk-dew2fy99.js:10285", () => {
   monitorOutputSchema = DoctorLazy(() =>
     objectSchema({
       taskId: stringSchema().describe("ID of the background monitor task."),
@@ -167,20 +167,20 @@ deferInit("chunk-b91jfdd4.js:10186", () => {
     }),
   );
 });
-//@ chunk-b91jfdd4.js:10435-10587 placement
+//@ chunk-dew2fy99.js:10534-10686 placement
 function assertAgentNotStopping(monitorToolContext) {
   let agentId = currentAgentId(monitorToolContext);
   if (agentId !== undefined && isAgentStopPending(agentId))
     throw Error("This agent has been stopped and its stop is still completing; it cannot start monitors.");
 }
-//@ chunk-b91jfdd4.js:10587-10954 placement
+//@ chunk-dew2fy99.js:10686-11053 placement
 /**
  * Monitor 权限：先看整条 Bash 规则的裁决，再按 Bash 两轮权限检查（暂停沙箱自动放行）；ask 时带上命中的 ask 规则。
  */
 async function checkMonitorPermission(input, shellPermission) {
   let ruleVerdict = wholeBashRuleVerdict(getToolPermissionContext(shellPermission), MONITOR);
   if (ruleVerdict?.verdict.behavior === "deny") return ruleVerdict.verdict;
-  let bashVerdict = await bashToolHasPermissionTwoPass(
+  let bashVerdict = await bashPermissionWithTextFallback(
     {
       ...input,
       command: input.command,
@@ -205,7 +205,7 @@ async function checkMonitorPermission(input, shellPermission) {
   }
   return ruleVerdict.verdict;
 }
-//@ chunk-b91jfdd4.js:10954-11220 placement
+//@ chunk-dew2fy99.js:11053-11319 placement
 async function validateMonitorSandbox(input) {
   if (input.command === undefined)
     return {
@@ -231,7 +231,7 @@ async function validateMonitorSandbox(input) {
     }
   );
 }
-//@ chunk-b91jfdd4.js:11220-13006 placement
+//@ chunk-dew2fy99.js:11319-13105 placement
 async function checkMonitorSandbox(command, input, bounded, taskRegistry, parentMessage) {
   let { description, timeout_ms: timeoutMs, persistent } = input;
   let { abortController, toolUseId, taskRegistry: taskRegistry_2 } = taskRegistry;
@@ -357,7 +357,7 @@ async function checkMonitorSandbox(command, input, bounded, taskRegistry, parent
     },
   };
 }
-//@ chunk-b91jfdd4.js:13006-13434 placement
+//@ chunk-dew2fy99.js:13105-13533 placement
 function wsEgressDenyReason(url) {
   let policyReason = policyDeniedReason("allow_web_fetch", "Arbitrary-URL egress", "is");
   if (policyReason !== null)
@@ -384,7 +384,7 @@ function wsEgressDenyReason(url) {
     };
   return null;
 }
-//@ chunk-b91jfdd4.js:13434-13993 placement
+//@ chunk-dew2fy99.js:13533-14092 placement
 function checkMonitorWebSocketAllowed(wsRequest) {
   let denyReason = wsEgressDenyReason(wsRequest.url);
   if (denyReason !== null)
@@ -414,7 +414,7 @@ function checkMonitorWebSocketAllowed(wsRequest) {
     suggestions: [],
   };
 }
-//@ chunk-b91jfdd4.js:13993-14632 placement
+//@ chunk-dew2fy99.js:14092-14731 placement
 /**
  * 为 Monitor 后台命令构造惰性上下文：大多数字段透传，abortController/toolUseId 改用监控自身的信号与调用 id。
  */
@@ -472,14 +472,14 @@ function buildMonitorToolContext(parentContext, monitorScope) {
     },
   };
 }
-//@ chunk-b91jfdd4.js:14632-16920 placement
+//@ chunk-dew2fy99.js:14731-17019 placement
 /**
  * Monitor 工具的完整定义对象。
  */
 var MonitorToolUI; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
 var MONITOR_TOOL_DEFINITION;
 var MonitorTool;
-deferInit("chunk-b91jfdd4.js:14632", () => {
+deferInit("chunk-dew2fy99.js:14731", () => {
   MonitorToolUI = {
     name: MONITOR,
     enablesCodeExecution: true,

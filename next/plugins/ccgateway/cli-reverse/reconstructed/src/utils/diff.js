@@ -3,20 +3,20 @@
  *
  * 结构化 patch 生成、行号平移、增删行统计与 tengu_file_changed 事件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/diff.ts
- * pieces: chunk-6zvepy0r.js (15)
+ * pieces: chunk-n0hwmqka.js (15)
  * attribution: placement 10, fingerprint 4, layout 1
  */
 import { countCharInString } from "./stringUtils.js";
-import { count } from "./collections.js";
+import { countWhere } from "./collections.js";
 import { addToTotalLinesChanged, getLocCounter } from "../bootstrap/state.js";
 import { maskModelIdIfRelayed } from "./telemetry/otlpRelay.js";
 import { logEvent } from "../services/analytics/index.js";
 import { structuredPatch } from "../../vendor/diff/libesm/patch/create.js";
 import { convertLeadingTabsToSpaces } from "./file.js";
 
-//@ chunk-6zvepy0r.js:1397-1522 placement
+//@ chunk-n0hwmqka.js:1396-1521 placement
 function splitLinesKeepEol(text) {
   let lines = [];
   let lineStart = 0;
@@ -32,7 +32,7 @@ function splitLinesKeepEol(text) {
   }
   return lines;
 }
-//@ chunk-6zvepy0r.js:1522-1641 placement
+//@ chunk-n0hwmqka.js:1521-1640 placement
 function pushDiffRun(result, kind, count) {
   let lastIndex = result.kinds.length - 1;
   if (kind !== 0 && result.kinds[lastIndex] === kind) result.counts[lastIndex] += count;
@@ -41,7 +41,7 @@ function pushDiffRun(result, kind, count) {
     result.counts.push(count);
   }
 }
-//@ chunk-6zvepy0r.js:1641-2464 placement
+//@ chunk-n0hwmqka.js:1640-2463 placement
 function myersDiff(oldIds, newIds, deadlineMs, maxSearchSteps) {
   let oldLength = oldIds.length;
   let newLength = newIds.length;
@@ -111,7 +111,7 @@ function myersDiff(oldIds, newIds, deadlineMs, maxSearchSteps) {
   }
   return;
 }
-//@ chunk-6zvepy0r.js:2464-2606 placement
+//@ chunk-n0hwmqka.js:2463-2605 placement
 function traceMyersPath(uint8Array, traceSteps, traceBounds, traceLength, endDiagonal) {
   let uint8Array_2 = new Uint8Array(traceLength);
   let diagonal = endDiagonal;
@@ -123,7 +123,7 @@ function traceMyersPath(uint8Array, traceSteps, traceBounds, traceLength, endDia
   }
   return uint8Array_2;
 }
-//@ chunk-6zvepy0r.js:2606-2815 placement
+//@ chunk-n0hwmqka.js:2605-2814 placement
 function buildDiffRuns(oldIds, newIds, moves) {
   let runs = {
     kinds: [],
@@ -153,7 +153,7 @@ function buildDiffRuns(oldIds, newIds, moves) {
   }
   return runs;
 }
-//@ chunk-6zvepy0r.js:2815-3219 placement
+//@ chunk-n0hwmqka.js:2814-3218 placement
 /**
  * 去掉公共后缀后，若两侧没有共同元素则直接生成"全删+全增"的差异（受步数上限限制）；有共同元素时返回 "search" 表示需要完整搜索。
  */
@@ -169,10 +169,10 @@ function trySimpleDiff(oldIds, newIds, alphabetSize, maxSearchSteps) {
   let newMidLength = newIds.length - suffixLength;
   let uint8Array = new Uint8Array(alphabetSize);
   for (let lineId of newIds) uint8Array[lineId] = 1;
-  for (let idx = 0; idx < oldMidLength; idx++) if (uint8Array[oldIds[idx]]) return "search";
+  for (let j = 0; j < oldMidLength; j++) if (uint8Array[oldIds[j]]) return "search";
   uint8Array.fill(0);
   for (let lineId of oldIds) uint8Array[lineId] = 1;
-  for (let idx = 0; idx < newMidLength; idx++) if (uint8Array[newIds[idx]]) return "search";
+  for (let j = 0; j < newMidLength; j++) if (uint8Array[newIds[j]]) return "search";
   if (oldMidLength * newMidLength > maxSearchSteps) return;
   let runs = {
     kinds: [],
@@ -183,7 +183,7 @@ function trySimpleDiff(oldIds, newIds, alphabetSize, maxSearchSteps) {
   if (suffixLength > 0) pushDiffRun(runs, 0, suffixLength);
   return runs;
 }
-//@ chunk-6zvepy0r.js:3219-3931 placement
+//@ chunk-n0hwmqka.js:3218-3930 placement
 function formatUnifiedDiff(runs, oldLines, newLines, context) {
   let hunks = [];
   let hunkOldStart = 0;
@@ -192,34 +192,33 @@ function formatUnifiedDiff(runs, oldLines, newLines, context) {
   let oldLineNo = 1;
   let newLineNo = 1;
   let runCount = runs.kinds.length + 1;
-  for (let idx = 0; idx < runCount; idx++) {
-    let kind = runs.kinds[idx] ?? 0;
-    let count = runs.counts[idx] ?? 0;
+  for (let j = 0; j < runCount; j++) {
+    let kind = runs.kinds[j] ?? 0;
+    let count = runs.counts[j] ?? 0;
     if (kind !== 0) {
       if (!hunkOldStart) {
         hunkOldStart = oldLineNo;
         hunkNewStart = newLineNo;
-        if (idx > 0 && context > 0) {
-          let min = Math.min(context, runs.counts[idx - 1]);
-          for (let idx = newLineNo - 1 - min; idx < newLineNo - 1; idx++) hunkLines.push(" " + newLines[idx]);
+        if (j > 0 && context > 0) {
+          let min = Math.min(context, runs.counts[j - 1]);
+          for (let j = newLineNo - 1 - min; j < newLineNo - 1; j++) hunkLines.push(" " + newLines[j]);
           hunkOldStart -= min;
           hunkNewStart -= min;
         }
       }
       if (kind === 1) {
-        for (let idx = newLineNo - 1; idx < newLineNo - 1 + count; idx++) hunkLines.push("+" + newLines[idx]);
+        for (let j = newLineNo - 1; j < newLineNo - 1 + count; j++) hunkLines.push("+" + newLines[j]);
         newLineNo += count;
       } else {
-        for (let idx = oldLineNo - 1; idx < oldLineNo - 1 + count; idx++) hunkLines.push("-" + oldLines[idx]);
+        for (let j = oldLineNo - 1; j < oldLineNo - 1 + count; j++) hunkLines.push("-" + oldLines[j]);
         oldLineNo += count;
       }
       continue;
     }
     if (hunkOldStart) {
-      let isLastRun = count <= context * 2 && idx < runCount - 2;
+      let isLastRun = count <= context * 2 && j < runCount - 2;
       let trailingContext = isLastRun ? count : Math.min(count, context);
-      for (let idx = newLineNo - 1; idx < newLineNo - 1 + trailingContext; idx++)
-        hunkLines.push(" " + newLines[idx]);
+      for (let j = newLineNo - 1; j < newLineNo - 1 + trailingContext; j++) hunkLines.push(" " + newLines[j]);
       if (!isLastRun) {
         hunks.push({
           oldStart: hunkOldStart,
@@ -249,7 +248,7 @@ function formatUnifiedDiff(runs, oldLines, newLines, context) {
   }
   return hunks;
 }
-//@ chunk-6zvepy0r.js:3931-4539 placement
+//@ chunk-n0hwmqka.js:3930-4538 placement
 /**
  * 逐行计算两段文本的统一差异：剥离公共前后缀、把行映射为整数 id，先尝试简单情况，否则在时间与步数限制内运行 Myers 算法；超时或超限返回 undefined，否则按上下文行数格式化输出。
  */
@@ -295,13 +294,13 @@ function computeUnifiedDiff(oldText, newText, { context, timeout, maxSearchSteps
   }
   return formatUnifiedDiff(runs, oldLines, newLines, context);
 }
-//@ chunk-6zvepy0r.js:4539-4558 placement
+//@ chunk-n0hwmqka.js:4538-4557 placement
 /**
  * 生成差异时的上下文行数（3）。
  */
 var DIFF_CONTEXT_LINES = 3;
 var DIFF_TIMEOUT_MS = 5000;
-//@ chunk-6zvepy0r.js:4558-4666 fingerprint (2.1.88 match: adjustHunkLineNumbers, 1)
+//@ chunk-n0hwmqka.js:4557-4665 fingerprint (2.1.88 match: adjustHunkLineNumbers, 1)
 /**
  * 把 hunks 的 oldStart/newStart 统一平移 offset。
  */
@@ -313,7 +312,7 @@ function adjustHunkLineNumbers(hunks, offset) {
     newStart: hunk.newStart + offset,
   }));
 }
-//@ chunk-6zvepy0r.js:4666-5013 fingerprint (2.1.88 match: countLinesChanged, 0.838)
+//@ chunk-n0hwmqka.js:4665-5012 fingerprint (2.1.88 match: countLinesChanged, 0.838)
 /**
  * 统计 patch 的增删行数（新建文件时按内容行数），用于 tengu_file_changed 等。
  */
@@ -336,8 +335,14 @@ function countLinesChanged(patch, modelId, fallbackAdditions, fallbackRemovals) 
         ) + 1
       : 0;
   } else {
-    numAdditions = patch.reduce((acc, hunk) => acc + count(hunk.lines, (line) => line.startsWith("+")), 0);
-    numRemovals = patch.reduce((acc, hunk) => acc + count(hunk.lines, (line) => line.startsWith("-")), 0);
+    numAdditions = patch.reduce(
+      (acc, hunk) => acc + countWhere(hunk.lines, (line) => line.startsWith("+")),
+      0,
+    );
+    numRemovals = patch.reduce(
+      (acc, hunk) => acc + countWhere(hunk.lines, (line) => line.startsWith("-")),
+      0,
+    );
   }
   addToTotalLinesChanged(numAdditions, numRemovals);
   getLocCounter()?.add(numAdditions, {
@@ -353,14 +358,14 @@ function countLinesChanged(patch, modelId, fallbackAdditions, fallbackRemovals) 
     lines_removed: numRemovals,
   };
 }
-//@ chunk-6zvepy0r.js:5013-5066 layout
+//@ chunk-n0hwmqka.js:5012-5065 layout
 /**
  * 记 tengu_file_changed 事件（参数同 countLinesChanged）。
  */
 function logFileChanged(...args) {
   logEvent("tengu_file_changed", countLinesChanged(...args));
 }
-//@ chunk-6zvepy0r.js:5066-5360 fingerprint (2.1.88 match: getPatchFromContents, 0.8)
+//@ chunk-n0hwmqka.js:5065-5359 fingerprint (2.1.88 match: getPatchFromContents, 0.8)
 /**
  * 由新旧内容生成结构化 patch：工具结果用快速 diff（带超时），显示用 structuredPatch；可忽略空白、单 hunk、制表符转空格。
  */
@@ -388,7 +393,7 @@ function getPatchFromContents({
   if (!hunks) return [];
   return convertTabs ? convertHunkLeadingTabs(hunks) : hunks;
 }
-//@ chunk-6zvepy0r.js:5360-5693 fingerprint (2.1.88 match: getPatchForDisplay, 0.963)
+//@ chunk-n0hwmqka.js:5359-5692 fingerprint (2.1.88 match: getPatchForDisplay, 0.963)
 /**
  * 对原内容依次应用编辑后生成用于显示的 patch。
  */
@@ -414,7 +419,7 @@ function getPatchForDisplay({ filePath, fileContents, edits, ignoreWhitespace = 
   if (!result) return [];
   return convertHunkLeadingTabs(result.hunks);
 }
-//@ chunk-6zvepy0r.js:5693-5790 placement
+//@ chunk-n0hwmqka.js:5692-5789 placement
 /**
  * hunk 每行内容的行首制表符转为空格。
  */
@@ -425,12 +430,12 @@ function convertHunkLeadingTabs(hunks) {
   }));
 }
 export {
-  getPatchForDisplay,
   DIFF_CONTEXT_LINES,
   adjustHunkLineNumbers,
+  getPatchForDisplay,
+  logFileChanged,
   getPatchFromContents,
+  countLinesChanged,
   DIFF_TIMEOUT_MS,
   convertHunkLeadingTabs,
-  logFileChanged,
-  countLinesChanged,
 };

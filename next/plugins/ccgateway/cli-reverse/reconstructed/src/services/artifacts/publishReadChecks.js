@@ -3,10 +3,10 @@
  *
  * Artifact 发布读权限与路径检查（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0wdgqhcf.js (21)
- * attribution: placement 21
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1dbza2qv.js (22)
+ * attribution: placement 21, layout 1
  */
 import { dirname, isAbsolute, sep } from "path";
 import { lstatSync } from "fs";
@@ -18,7 +18,7 @@ import {
   READ_PATH_PROBE,
   pathInAllowedWorkingPath,
   symlinkLanding,
-  getResolvedWorkingDirPaths,
+  getCountedWorkingDirPaths,
   isScratchpadPath,
   pathInWorkingPath,
 } from "../../utils/permissions/filesystem.js";
@@ -29,8 +29,8 @@ import {
 } from "./publishSource.js";
 import {
   getDenyRuleForTool,
-  getAskRuleForTool,
-  getAskRules,
+  findAskRuleForTool,
+  askedBashRules,
   toolMatchesRule,
 } from "../../utils/permissions/permissions.js";
 import {
@@ -39,6 +39,7 @@ import {
   probeSymlink,
 } from "../../tools/ArtifactTool/actions/uploadAsset.js";
 import { env } from "../../utils/env.js";
+import { isThroughOutputsLink } from "../../utils/readFileInRange.js";
 import { isDifferentPath } from "../../utils/path.js";
 import { truncatePathMiddle } from "../../utils/format.js";
 import {
@@ -79,10 +80,10 @@ import { getLiveState } from "../liveReplica/liveReplica.js";
 import { meIdCooldown } from "./artifactDb.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0wdgqhcf.js:45344-45362 placement
+//@ chunk-1dbza2qv.js:46666-46684 placement
 var MAX_READ_CHECK_PATH_CHARS = 4096;
 var MAX_READ_CHECK_DEPTH = 32;
-//@ chunk-0wdgqhcf.js:45362-45617 placement
+//@ chunk-1dbza2qv.js:46684-46939 placement
 /**
  * 沿路径向上逐级检查读取权限：遇到非 ask 决定即停（working-dir 原因视为可放行），安全类 ask 则继续上溯；路径过长或层数用尽返回 true。
  */
@@ -102,7 +103,7 @@ function isAskOnlyForWorkingDir(path, options) {
   }
   return true;
 }
-//@ chunk-0wdgqhcf.js:45617-46028 placement
+//@ chunk-1dbza2qv.js:46939-47350 placement
 /**
  * 读取权限因"不在工作目录"而询问时，若真实路径属于本会话的聊天附件目录，改为允许（并标记按目录暂存）；同时传递路径固定信息。
  */
@@ -137,7 +138,7 @@ function allowChatAttachmentRead(read, path, resolved, localUploadPath, pin) {
     pin: pin_2,
   };
 }
-//@ chunk-0wdgqhcf.js:46028-47226 placement
+//@ chunk-1dbza2qv.js:47350-48614 placement
 function checkPublishReadPermission(
   tool,
   path,
@@ -171,7 +172,7 @@ function checkPublishReadPermission(
         },
       },
     };
-  let askRuleForTool = getAskRuleForTool(toolPermissionContext, READ_PATH_PROBE);
+  let bareReadAsk = findAskRuleForTool(toolPermissionContext, READ_PATH_PROBE);
   let outsideWorkingDir = pathInAllowedWorkingPath(realPath, toolPermissionContext, [realPath]);
   let denyRule =
     pinInfo.kind === "resolved" && pinInfo.real !== realPath
@@ -187,7 +188,7 @@ function checkPublishReadPermission(
       },
     };
   let identity = pin ?? (pinInfo.kind === "resolved" ? statFileIdentity(pinInfo.real) : undefined);
-  let readAsks = read.behavior === "ask" || denyRule?.behavior === "ask" || askRuleForTool !== null;
+  let readAsks = read.behavior === "ask" || denyRule?.behavior === "ask" || bareReadAsk !== null;
   let hardLinked = identity?.linked === true;
   if ((readAsks || hardLinked) && env.CLAUDE_CODE_EVAL_CONFINED)
     return {
@@ -211,10 +212,11 @@ function checkPublishReadPermission(
       isAskOnlyForWorkingDir(realPath, toolPermissionContext)) ||
     askedOnlyForDir;
   let flaggedResolvesOutside = outsideWorkingDir && askedOnlyForDir;
+  let throughHostOutputsLink = pinInfo.kind === "resolved" && isThroughOutputsLink(realPath, pinInfo.real);
   return {
     mode: toolPermissionContext.mode,
     read,
-    bareReadAsk: askRuleForTool,
+    bareReadAsk,
     spelledInside: outsideWorkingDir,
     pinRead: denyRule,
     sourcePin: identity,
@@ -222,18 +224,20 @@ function checkPublishReadPermission(
     hardLinked,
     flaggedOutside,
     flaggedResolvesOutside,
-    resolvesElsewhere: pinInfo.kind === "resolved" && isDifferentPath(realPath, pinInfo.real),
+    resolvesElsewhere:
+      pinInfo.kind === "resolved" && isDifferentPath(realPath, pinInfo.real) && !throughHostOutputsLink,
+    throughHostOutputsLink,
     stagedUpload: stagedByDirectory === true,
   };
 }
-//@ chunk-0wdgqhcf.js:47226-47295 placement
+//@ chunk-1dbza2qv.js:48614-48683 placement
 /**
  * 导出函数 `needsReadAsk`：参数 e, t，返回 e.readAsks || e.hardLinked || e.stagedUpload || t。
  */
 function needsReadAsk(flags, extraAsk) {
   return flags.readAsks || flags.hardLinked || flags.stagedUpload || extraAsk;
 }
-//@ chunk-0wdgqhcf.js:47295-48208 placement
+//@ chunk-1dbza2qv.js:48683-49596 placement
 function describePublishPath(toolUseContext, info) {
   let { read, pinRead, bareReadAsk, spelledInside, hardLinked, flaggedOutside, flaggedResolvesOutside } =
     info;
@@ -279,7 +283,7 @@ function describePublishPath(toolUseContext, info) {
     readRule,
   };
 }
-//@ chunk-0wdgqhcf.js:48208-49069 placement
+//@ chunk-1dbza2qv.js:49596-50457 placement
 function readPublishFile(path, realPath, toolPermissionContext, resolved, toolUseContext, fieldInfo) {
   let localUploadPath = getToolPermissionContext(toolUseContext);
   let { read } = allowChatAttachmentRead(
@@ -292,7 +296,7 @@ function readPublishFile(path, realPath, toolPermissionContext, resolved, toolUs
   if (
     read.behavior !== "allow" ||
     getDenyRuleForTool(localUploadPath, READ_PATH_PROBE) !== null ||
-    getAskRuleForTool(localUploadPath, READ_PATH_PROBE) !== null
+    findAskRuleForTool(localUploadPath, READ_PATH_PROBE) !== null
   )
     return {
       result: true,
@@ -357,14 +361,14 @@ function readPublishFile(path, realPath, toolPermissionContext, resolved, toolUs
     result: true,
   };
 }
-//@ chunk-0wdgqhcf.js:49069-49315 placement
+//@ chunk-1dbza2qv.js:50457-50703 placement
 /**
  * 页面过大时的错误说明（实际大小与上限 MB），建议把大的内联资源移出。
  */
 function describeTooLargePage(bytes) {
   return `too large: ${Math.ceil(bytes / 1024 / 1024)}MB (max ${MAX_ARTIFACT_BYTES / 1024 / 1024}MB). Shrink the page \u2014 move large inline assets (base64 images, embedded datasets) out of it or split the content across several artifacts \u2014 then retry.`;
 }
-//@ chunk-0wdgqhcf.js:49315-49770 placement
+//@ chunk-1dbza2qv.js:50703-51158 placement
 function findNulByte(field, text) {
   let index = text.indexOf("\x00");
   if (index === -1) return;
@@ -373,18 +377,28 @@ function findNulByte(field, text) {
   let location = `line ${lines.length}, column ${(lines.at(-1) ?? "").length + 1}`;
   return `${jsonStringify(field)} contains a NUL (\\u0000) byte at ${location}: it was published, but browsers turn that byte into U+FFFD (\uFFFD), and in script code outside a string literal that is a syntax error that stops the whole script \u2014 remove it (or write the escape \\u0000 if the character is meant) and publish again.`;
 }
-//@ chunk-0wdgqhcf.js:49815-49855 placement
+//@ chunk-1dbza2qv.js:51203-51242 placement
 /**
  * 导出函数 `classifierGated`：参数 e，返回 sse(getAutoModeClassifierRole(e)) || br()。
  */
 function classifierGated(mode) {
   return isArbiterRole(getAutoModeClassifierRole(mode)) || alwaysFalseReadChecks();
 }
-//@ chunk-0wdgqhcf.js:49855-49878 placement
+//@ chunk-1dbza2qv.js:51242-51366 layout
+function isSpelledInsidePin(spelling, toolPermissionContext) {
+  return (
+    !spelling.unresolved &&
+    spelling.spellings.every(
+      (spelling_2) => spelling_2 === spelling.requested || spelling_2 === spelling.landing,
+    ) &&
+    isThroughOutputsLink(spelling.requested, spelling.landing, toolPermissionContext)
+  );
+}
+//@ chunk-1dbza2qv.js:51366-51389 placement
 function alwaysFalseReadChecks() {
   return false;
 }
-//@ chunk-0wdgqhcf.js:49878-49954 placement
+//@ chunk-1dbza2qv.js:51389-51465 placement
 function quotedSurfaceText(surfaceText) {
   let folded = foldClassifierCodePhrases(
     withEdgeBlanksMarked(
@@ -397,7 +411,7 @@ function quotedSurfaceText(surfaceText) {
   );
   return `"${spacedFromClosingQuote(folded)}"`;
 }
-//@ chunk-0wdgqhcf.js:49954-50416 placement
+//@ chunk-1dbza2qv.js:51465-51927 placement
 /**
  * 为发布文件路径生成提示标注：解析到的真实路径、符号链接、硬链接，以及位于上传目录/工作目录之外/无法确定位置。
  */
@@ -420,7 +434,7 @@ function describePathAnnotations(path) {
   notes.push(...describePathLocation(path).map((note) => `[${note}]`));
   return notes.length === 0 ? "" : ` ${notes.join(" ")}`;
 }
-//@ chunk-0wdgqhcf.js:50416-50590 placement
+//@ chunk-1dbza2qv.js:51927-52101 placement
 function describePathLocation(path) {
   try {
     if (isVerifiedAttachment(path)) return ["in this session's uploads folder"];
@@ -429,19 +443,19 @@ function describePathLocation(path) {
     return ["location not determined"];
   }
 }
-//@ chunk-0wdgqhcf.js:50590-50655 placement
+//@ chunk-1dbza2qv.js:52101-52166 placement
 /**
  * 导出常量或表 `MAX_HOSTS`：值为 32, Vjn = 8, bn = new Set(["ENOENT", "ENOTDIR", "ENAMETOOLONG"])。
  */
 var MAX_HOSTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_ANCHORS;
 var MISSING_PATH_ERRNOS;
-deferInit("chunk-0wdgqhcf.js:50590", () => {
+deferInit("chunk-1dbza2qv.js:52101", () => {
   MAX_HOSTS = 32;
   MAX_ANCHORS = 8;
   MISSING_PATH_ERRNOS = new Set(["ENOENT", "ENOTDIR", "ENAMETOOLONG"]);
 });
-//@ chunk-0wdgqhcf.js:50655-51498 placement
+//@ chunk-1dbza2qv.js:52166-53009 placement
 function checkWindowsPathSpelling(pathText, options = {}) {
   let notes = [];
   let caseSensitive = false;
@@ -495,7 +509,7 @@ function checkWindowsPathSpelling(pathText, options = {}) {
     state,
   };
 }
-//@ chunk-0wdgqhcf.js:51498-51778 placement
+//@ chunk-1dbza2qv.js:53009-53289 placement
 /**
  * 为写入目标路径生成提示标注：经链接解析到的位置、是否在工作目录之外，无法确定时注明。
  */
@@ -510,9 +524,9 @@ function describeDestinationAnnotations(path, label = "destination") {
     return ` [${label} location not determined]`;
   }
 }
-//@ chunk-0wdgqhcf.js:51778-51913 placement
+//@ chunk-1dbza2qv.js:53289-53424 placement
 function isWithinWorkingDirs(path) {
-  let flattened = [getOriginalCwd(), ...getAnnouncedDirectories()].flatMap(getResolvedWorkingDirPaths);
+  let flattened = [getOriginalCwd(), ...getAnnouncedDirectories()].flatMap(getCountedWorkingDirPaths);
   return getPathsForPermissionCheck(path).every(
     (candidate) =>
       isScratchpadPath(candidate) ||
@@ -524,9 +538,9 @@ function isWithinWorkingDirs(path) {
       ),
   );
 }
-//@ chunk-0wdgqhcf.js:51913-51966 placement
+//@ chunk-1dbza2qv.js:53424-53477 placement
 var ARTIFACT_TOOL_RULES; // deferred: uses ARTIFACT_TOOL_NAME (../../tools/ArtifactTool/constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0wdgqhcf.js:51913", () => {
+deferInit("chunk-1dbza2qv.js:53424", () => {
   ARTIFACT_TOOL_RULES = [
     {
       name: ARTIFACT_TOOL_NAME,
@@ -537,7 +551,7 @@ deferInit("chunk-0wdgqhcf.js:51913", () => {
     },
   ];
 });
-//@ chunk-0wdgqhcf.js:51966-52587 placement
+//@ chunk-1dbza2qv.js:53477-54098 placement
 function runPublishToolCheck(toolUseContext, isArbiter, skip, message, reason) {
   if (
     skip ||
@@ -550,7 +564,7 @@ function runPublishToolCheck(toolUseContext, isArbiter, skip, message, reason) {
   try {
     let toolPermissionContext = getToolPermissionContext(toolUseContext);
     if (
-      getAskRules(toolPermissionContext).some((rule) =>
+      askedBashRules(toolPermissionContext).some((rule) =>
         ARTIFACT_TOOL_RULES.some((toolRule) => toolMatchesRule(toolPermissionContext, toolRule, rule)),
       ) ||
       ARTIFACT_TOOL_RULES.some((toolRule) =>
@@ -588,7 +602,7 @@ function runPublishToolCheck(toolUseContext, isArbiter, skip, message, reason) {
     },
   };
 }
-//@ chunk-0wdgqhcf.js:52760-53181 placement
+//@ chunk-1dbza2qv.js:54271-54692 placement
 /**
  * 说明批量写入会如何执行：服务端不支持批量时逐条按顺序写（中途失败保留已写部分；带版本锁的批量会整体拒绝），否则全有或全无。
  */
@@ -602,6 +616,7 @@ function describeBatchWriteSemantics(host, isAsk = false) {
 export {
   describeTooLargePage,
   readPublishFile,
+  isSpelledInsidePin,
   classifierGated,
   checkPublishReadPermission,
   describePublishPath,
@@ -609,8 +624,8 @@ export {
   describeBatchWriteSemantics,
   describeDestinationAnnotations,
   describePathAnnotations,
-  needsReadAsk,
   MAX_ANCHORS,
+  needsReadAsk,
   checkWindowsPathSpelling,
   MAX_HOSTS,
   findNulByte,

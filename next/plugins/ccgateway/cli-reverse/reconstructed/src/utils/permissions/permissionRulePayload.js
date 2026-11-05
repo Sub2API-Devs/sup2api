@@ -3,9 +3,9 @@
  *
  * 权限规则载荷（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sfy7bm1n.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gg17c06d.js (18)
  * attribution: placement 18
  */
 import { HostScoped } from "../hostScoped.js";
@@ -26,9 +26,9 @@ import {
   hasWildcard,
   canonicalToolName,
   matchRulePattern,
-  permissionRuleValueFromString,
+  permissionRuleValueFromString as permissionRuleValueFromString_2,
+  parseRuleString,
 } from "./permissionRuleParser.js";
-import { formatPermissionRule } from "./disallowedToolsFlag.js";
 import { getToolNameForPermissionCheck as getToolNameForPermissionCheck_2 } from "../../services/mcp/mcpStringUtils.js";
 import { peekSessionFeatureValues } from "../../bootstrap/sessionFeatureValues.js";
 import { marketplaceSuffix, normalizePluginId } from "../plugins/pluginIdentifier.js";
@@ -36,18 +36,18 @@ import { SYNCED } from "../telemetry/pluginTelemetry.js";
 import { isTopHostSession } from "../sessionShape.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-sfy7bm1n.js:1377-1477 placement
+//@ chunk-gg17c06d.js:1559-1661 placement
 var BOT_PROTECTED_TENGU_ATOMIC_MAGPIE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NON_PERSISTED_RULE_SOURCES;
 var webRestrictedProcessFlag;
-deferInit("chunk-sfy7bm1n.js:1377", () => {
+deferInit("chunk-gg17c06d.js:1559", () => {
   BOT_PROTECTED_TENGU_ATOMIC_MAGPIE = "bot_protected_tengu_atomic_magpie";
   NON_PERSISTED_RULE_SOURCES = new Set(["session", "cliArg"]);
   webRestrictedProcessFlag = new HostScoped(() => ({
     value: false,
   }));
 });
-//@ chunk-sfy7bm1n.js:1477-1576 placement (2.1.88 match: getServerUrl, 1)
+//@ chunk-gg17c06d.js:1661-1760 placement (2.1.88 match: getServerUrl, 1)
 function getServerUrl(serverName, config) {
   if (
     serverName === HEARTHBOT &&
@@ -58,13 +58,13 @@ function getServerUrl(serverName, config) {
   )
     onProcessRootHost(webRestrictedProcessFlag).value = true;
 }
-//@ chunk-sfy7bm1n.js:1576-1744 placement
+//@ chunk-gg17c06d.js:1760-1929 placement
 /**
  * 中继（Projects/根宿主）会话中 WebFetch/WebSearch 是否受限：除非 tengu_atomic_magpie 来自载荷且 GrowthBook 未用非默认主机。
  */
-function isWebToolRestrictedInRelay(name) {
+function isWebToolRestrictedInRelay(toolName) {
   if (
-    (name !== WEBFETCH && name !== WEBSEARCH) ||
+    (toolName !== WEBFETCH && toolName !== WEBSEARCH) ||
     !(
       onProcessRootHost(webRestrictedProcessFlag).value ||
       env.CLAUDE_CODE_PROJECTS_SESSION ||
@@ -79,29 +79,29 @@ function isWebToolRestrictedInRelay(name) {
     !hasGrowthBookUsedNonDefaultHost()
   );
 }
-//@ chunk-sfy7bm1n.js:1744-1863 placement
-function matchesRestrictedWebRule(pattern) {
-  let isBroad = typeof pattern !== "string";
-  let hasWildcardPattern = !isBroad && hasWildcard(pattern);
+//@ chunk-gg17c06d.js:1929-2048 placement
+function matchesRestrictedWebRule(toolName) {
+  let isBroad = typeof toolName !== "string";
+  let hasWildcardPattern = !isBroad && hasWildcard(toolName);
   return [WEBFETCH, WEBSEARCH].some(
     (webToolName) =>
-      (isBroad || hasWildcardPattern || canonicalToolName(pattern) === webToolName) &&
+      (isBroad || hasWildcardPattern || canonicalToolName(toolName) === webToolName) &&
       isWebToolRestrictedInRelay(webToolName) &&
-      (!hasWildcardPattern || matchRulePattern(pattern, webToolName)),
+      (!hasWildcardPattern || matchRulePattern(toolName, webToolName)),
   );
 }
-//@ chunk-sfy7bm1n.js:1863-1903 placement
+//@ chunk-gg17c06d.js:2048-2089 placement
 /**
  * isRestrictedNonSessionRule：非会话来源的受限规则。
  */
 function isRestrictedNonSessionRule(source, toolName) {
   return !NON_PERSISTED_RULE_SOURCES.has(source) && isWebToolRestrictedInRelay(toolName);
 }
-//@ chunk-sfy7bm1n.js:1903-1940 placement
+//@ chunk-gg17c06d.js:2089-2126 placement
 function isWebToolRestrictedInThisSession() {
   return isWebToolRestrictedInRelay(WEBFETCH) || isWebToolRestrictedInRelay(WEBSEARCH);
 }
-//@ chunk-sfy7bm1n.js:1940-2305 placement
+//@ chunk-gg17c06d.js:2126-2491 placement
 /**
  * 权限更新是否格式不合法：非对象，或规则类更新的 rules 不是数组、条目缺 toolName 或 ruleContent 非字符串。
  */
@@ -122,7 +122,7 @@ function isMalformedRuleUpdate(update) {
     )
   );
 }
-//@ chunk-sfy7bm1n.js:2305-3000 placement
+//@ chunk-gg17c06d.js:2491-3186 placement
 function applyPermissionRulePayload(update, isRestrictedTool, toolPermissionContext) {
   if ((update.type !== "removeRules" && update.type !== "replaceRules") || update.behavior === "allow")
     return;
@@ -144,13 +144,14 @@ function applyPermissionRulePayload(update, isRestrictedTool, toolPermissionCont
         : toolPermissionContext.alwaysAskRules) ?? {};
     let rawRules = Object.hasOwn(ruleTables, update.destination) ? ruleTables[update.destination] : undefined;
     let existingRules = Array.isArray(rawRules) ? rawRules : [];
-    let ruleKey = (ruleString) => formatPermissionRule(permissionRuleValueFromString(ruleString));
-    let incomingKeys = new Set(update.rules.map((rule) => ruleKey(formatPermissionRule(rule))));
+    let ruleKey = (ruleString) => permissionRuleValueFromString_2(parseRuleString(ruleString));
+    let incomingKeys = new Set(update.rules.map((rule) => ruleKey(permissionRuleValueFromString_2(rule))));
     let filtered = existingRules
-      .map((rawRule) => permissionRuleValueFromString(rawRule))
+      .map((rawRule) => parseRuleString(rawRule))
       .filter(
         (value) =>
-          isRestrictedTool(value.toolName) && !incomingKeys.has(ruleKey(formatPermissionRule(value))),
+          isRestrictedTool(value.toolName) &&
+          !incomingKeys.has(ruleKey(permissionRuleValueFromString_2(value))),
       );
     return filtered.length === 0
       ? undefined
@@ -172,7 +173,7 @@ function applyPermissionRulePayload(update, isRestrictedTool, toolPermissionCont
         },
       ];
 }
-//@ chunk-sfy7bm1n.js:3000-3053 placement
+//@ chunk-gg17c06d.js:3186-3239 placement
 /**
  * filterPermissionUpdatePayload：过滤权限更新载荷中的受限 Web 工具。
  */
@@ -180,7 +181,7 @@ function filterPermissionUpdatePayload(updates, toolPermissionContext) {
   if (!isWebToolRestrictedInThisSession()) return updates;
   return filterRestrictedAllowUpdates(updates, matchesRestrictedWebRule, toolPermissionContext);
 }
-//@ chunk-sfy7bm1n.js:3053-3387 placement
+//@ chunk-gg17c06d.js:3239-3573 placement
 /**
  * 过滤权限更新：丢弃格式不合法的更新，应用规则载荷转换，并从 allow 规则中去掉受限工具；无变化时返回原数组。
  */
@@ -212,7 +213,7 @@ function filterRestrictedAllowUpdates(updates, isRestrictedTool, toolPermissionC
   });
   return changed ? flattened : updates;
 }
-//@ chunk-sfy7bm1n.js:3387-3657 placement
+//@ chunk-gg17c06d.js:3573-3843 placement
 /**
  * 为 WebSearch 建议整工具规则，为 WebFetch 建议 domain:主机名 规则（URL 无效或含 * 时不建议）。
  */
@@ -236,7 +237,7 @@ function suggestWebToolRule(tool, input) {
     return;
   }
 }
-//@ chunk-sfy7bm1n.js:3657-4204 placement
+//@ chunk-gg17c06d.js:3843-4390 placement
 function normalizePermissionUpdate(updates, suggestedRule, toolPermissionContext) {
   if (!isWebToolRestrictedInThisSession()) return updates;
   let changed = false;
@@ -286,23 +287,23 @@ function normalizePermissionUpdate(updates, suggestedRule, toolPermissionContext
   });
   return changed ? flattened : updates;
 }
-//@ chunk-sfy7bm1n.js:4204-4231 placement
+//@ chunk-gg17c06d.js:5206-5234 placement
 var TENGU_STEADY_FINCH = "tengu_steady_finch";
-//@ chunk-sfy7bm1n.js:4231-4296 placement
+//@ chunk-gg17c06d.js:5234-5299 placement
 /**
  * areSkillsConvertedAsPlugins：技能是否被当作插件处理。
  */
 function areSkillsConvertedAsPlugins() {
   return steadyFinchEnabled() || peekSessionFeatureValues()?.convertedSkillsAsPlugins === true;
 }
-//@ chunk-sfy7bm1n.js:4296-4331 placement
+//@ chunk-gg17c06d.js:5299-5335 placement
 /**
  * steadyFinchEnabled：技能转插件开关。
  */
 function steadyFinchEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_STEADY_FINCH, false) === true;
 }
-//@ chunk-sfy7bm1n.js:4331-4386 placement
+//@ chunk-gg17c06d.js:5335-5390 placement
 /**
  * isSyncedMarketplacePlugin：已同步市场里的插件 id。
  */
@@ -313,14 +314,14 @@ function isSyncedMarketplacePlugin(pluginId) {
     areSkillsConvertedAsPlugins()
   );
 }
-//@ chunk-sfy7bm1n.js:4386-4431 placement
+//@ chunk-gg17c06d.js:5390-5435 placement
 /**
  * isSkillPluginSurfaceEnabled：技能插件表面是否生效。
  */
 function isSkillPluginSurfaceEnabled(topHost) {
   return isTopHostSession() || (!topHost && areSkillsConvertedAsPlugins() && !isCcsTenant());
 }
-//@ chunk-sfy7bm1n.js:4431-4464 placement
+//@ chunk-gg17c06d.js:5435-5468 placement
 /**
  * isTopHostSkillPluginSession：顶层宿主会话且技能转插件开启。
  */
@@ -331,13 +332,13 @@ export {
   isRestrictedNonSessionRule,
   isSkillPluginSurfaceEnabled,
   isWebToolRestrictedInRelay,
+  getServerUrl,
   normalizePermissionUpdate,
+  suggestWebToolRule,
+  filterPermissionUpdatePayload,
   isSyncedMarketplacePlugin,
   areSkillsConvertedAsPlugins,
-  getServerUrl,
-  filterPermissionUpdatePayload,
-  suggestWebToolRule,
+  isTopHostSkillPluginSession,
   steadyFinchEnabled,
   filterRestrictedAllowUpdates,
-  isTopHostSkillPluginSession,
 };

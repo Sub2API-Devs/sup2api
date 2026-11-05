@@ -3,28 +3,23 @@
  *
  * 2.1.316 新增：URL 权限规则
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (7)
- * attribution: placement 7
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (9)
+ * attribution: placement 7, layout 2
  */
-import { typeNameMatchKey, typeNameWithoutQuotes } from "../../../services/artifacts/artifactTypes.js";
-import {
-  filterRulesMatchingUrls,
-  getDenyRules,
-  getAskRules,
-  toolMatchesRule,
-} from "../../../utils/permissions/permissions.js";
+import { typeNameWithoutQuotes, typeNameMatchKey } from "../../../services/artifacts/artifactTypes.js";
+import { deniedBashRules, askedBashRules, toolMatchesRule } from "../../../utils/permissions/permissions.js";
 import { hasWildcard } from "../../../utils/permissions/permissionRuleParser.js";
 import { parseArtifactUrlInput } from "../constants.js";
 import { getShareEntry, entryContentByOthers } from "../../../services/artifacts/shareEntries.js";
 
-//@ chunk-8wvtd8sr.js:94022-94119 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-xzmy9dn4.js:94354-94451 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function parseTypePrefixedValue(data) {
   let index = data.indexOf(":");
   return index > 0 && data.slice(0, index).trim() === "type" ? data.slice(index + 1) : undefined;
 }
-//@ chunk-8wvtd8sr.js:94119-94302 placement (2.1.88 match: urlPatternToRegex, 1)
+//@ chunk-xzmy9dn4.js:94451-94634 placement (2.1.88 match: urlPatternToRegex, 1)
 function matchesWildcardPattern(ruleContent, agentType) {
   let keys = typeRuleMatchKeys(ruleContent);
   if (keys === undefined) return false;
@@ -34,14 +29,32 @@ function matchesWildcardPattern(ruleContent, agentType) {
   );
   return agentType.some((value) => value !== "" && regExp.test(value));
 }
-//@ chunk-8wvtd8sr.js:94519-94579 placement
+//@ chunk-xzmy9dn4.js:94634-94766 layout (2.1.88 match: getDenyRuleForAgent, 1)
+/**
+ * URL 类规则的精确域名：解析带类型前缀的规则内容，取出不含通配的域名；属于 WebFetch/浏览器类工具的规则族，误归入本模块。
+ */
+function getRuleExactDomain(askTypeRule) {
+  let typePrefixedValue = parseTypePrefixedValue(askTypeRule.ruleValue.ruleContent ?? "");
+  let domain = typePrefixedValue === undefined ? undefined : typeNameWithoutQuotes(typePrefixedValue);
+  return domain === undefined || domain === "" || domain.includes("*") ? undefined : domain;
+}
+//@ chunk-xzmy9dn4.js:94766-94851 layout (2.1.88 match: getDenyRuleForAgent, 1)
+/**
+ * 取该工具的 URL 规则中与给定 URL 匹配的那些；属于 WebFetch/浏览器类工具的规则族。
+ */
+function filterRulesMatchingUrls(context, agentToolName, agentType, agentType_2) {
+  return getUrlRulesForTool(context, agentToolName, agentType_2).filter((rule) =>
+    matchesWildcardPattern(rule.ruleValue.ruleContent ?? "", agentType),
+  );
+}
+//@ chunk-xzmy9dn4.js:94851-94911 placement
 function getDenyAndAskUrlRules(context, agentToolName) {
   return [
     ...getUrlRulesForTool(context, agentToolName, "deny"),
     ...getUrlRulesForTool(context, agentToolName, "ask"),
   ];
 }
-//@ chunk-8wvtd8sr.js:94579-94740 placement
+//@ chunk-xzmy9dn4.js:94911-95072 placement
 function findTypeRule(toolPermissionContext, tool, input, behavior) {
   let typeName = typeof input === "object" && input !== null ? input.type : undefined;
   if (typeof typeName !== "string") return null;
@@ -50,9 +63,9 @@ function findTypeRule(toolPermissionContext, tool, input, behavior) {
     ? null
     : (filterRulesMatchingUrls(toolPermissionContext, tool, [matchKey], behavior)[0] ?? null);
 }
-//@ chunk-8wvtd8sr.js:94740-94912 placement (2.1.88 match: getDenyRuleForAgent, 1)
+//@ chunk-xzmy9dn4.js:95072-95244 placement (2.1.88 match: getDenyRuleForAgent, 1)
 function getUrlRulesForTool(context, agentToolName, agentType) {
-  return (agentType === "deny" ? getDenyRules(context) : getAskRules(context)).filter(
+  return (agentType === "deny" ? deniedBashRules(context) : askedBashRules(context)).filter(
     (rule) =>
       rule.ruleValue.ruleContent !== undefined &&
       typeRuleMatchKeys(rule.ruleValue.ruleContent) !== undefined &&
@@ -60,14 +73,14 @@ function getUrlRulesForTool(context, agentToolName, agentType) {
       toolMatchesRule(context, agentToolName, rule),
   );
 }
-//@ chunk-8wvtd8sr.js:94912-95033 placement
+//@ chunk-xzmy9dn4.js:95244-95365 placement
 function typeRuleMatchKeys(ruleContent) {
   let typePrefixedValue = parseTypePrefixedValue(ruleContent);
   if (typePrefixedValue === undefined) return;
   let mapped = typeNameWithoutQuotes(typePrefixedValue).split("*").map(typeNameMatchKey);
   return mapped.length === 1 && mapped[0] === "" ? undefined : mapped;
 }
-//@ chunk-8wvtd8sr.js:95033-95118 placement
+//@ chunk-xzmy9dn4.js:95365-95450 placement
 /**
  * 判断 Artifact 链接是否指向他人共享的内容。
  */
@@ -77,10 +90,10 @@ function isUrlOfOthersContent(url) {
   return shareEntry !== undefined && entryContentByOthers(shareEntry);
 }
 export {
-  parseTypePrefixedValue,
-  getUrlRulesForTool,
-  matchesWildcardPattern,
   isUrlOfOthersContent,
   findTypeRule,
   getDenyAndAskUrlRules,
+  getRuleExactDomain,
+  filterRulesMatchingUrls,
+  matchesWildcardPattern,
 };

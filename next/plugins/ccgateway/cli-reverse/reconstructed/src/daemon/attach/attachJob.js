@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：附加到后台会话的 PTY：转发输入输出、处理窗口大小、分离键与遥测；收集终端能力信息（mux、ssh、超链接等）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vrr64ez0.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bjxz9pt3.js (11)
  * attribution: placement 11
  */
 import { randomUUID } from "crypto";
@@ -70,7 +70,7 @@ import { getSystemTheme } from "../../utils/systemTheme.js";
 import { firstLineOf } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrr64ez0.js:10911-11318 placement
+//@ chunk-bjxz9pt3.js:10946-11353 placement
 /**
  * 分离快捷键相关的字节常量。
  */
@@ -93,7 +93,7 @@ var buffer_8;
 var buffer_9;
 var buffer_10;
 var CURSOR_HIDE_DELAY_MS;
-deferInit("chunk-vrr64ez0.js:10911", () => {
+deferInit("chunk-bjxz9pt3.js:10946", () => {
   DETACH_KEYS = 2;
   CTRL_Z_BYTE = 26;
   DETACH_BYTE_NL = 100;
@@ -114,14 +114,14 @@ deferInit("chunk-vrr64ez0.js:10911", () => {
   buffer_10 = Buffer.from("\x1B[?9001", "ascii");
   CURSOR_HIDE_DELAY_MS = 100;
 });
-//@ chunk-vrr64ez0.js:11318-11407 placement (2.1.88 match: hasPrefix, 1)
+//@ chunk-bjxz9pt3.js:11353-11442 placement (2.1.88 match: hasPrefix, 1)
 function hasPrefix(src, start, prefix) {
   return (
     src.length - start >= prefix.length &&
     src.compare(prefix, 0, prefix.length, start, start + prefix.length) === 0
   );
 }
-//@ chunk-vrr64ez0.js:11407-11748 placement
+//@ chunk-bjxz9pt3.js:11442-11783 placement
 /**
  * 匹配 CSI 形式的按键序列。
  */
@@ -152,7 +152,7 @@ function matchCsiKey(bytes, start, letter) {
   if (bytes[pos] !== 59 || bytes[pos + 1] !== 53 || bytes[pos + 2] !== 117) return 0;
   return (param > 127 && modifier >= 0 ? modifier : param) === letter ? pos + 3 - start : 0;
 }
-//@ chunk-vrr64ez0.js:11748-11907 placement
+//@ chunk-bjxz9pt3.js:11783-11942 placement
 function suffixPrefixOverlap(a, b) {
   let min = Math.min(a.length, b.length - 1);
   e: for (let length = min; length > 0; length--) {
@@ -162,12 +162,12 @@ function suffixPrefixOverlap(a, b) {
   }
   return 0;
 }
-//@ chunk-vrr64ez0.js:11907-11929 placement
+//@ chunk-bjxz9pt3.js:11942-11964 placement
 var EMPTY_BUFFER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrr64ez0.js:11907", () => {
+deferInit("chunk-bjxz9pt3.js:11942", () => {
   EMPTY_BUFFER = Buffer.alloc(0);
 });
-//@ chunk-vrr64ez0.js:11929-12251 placement
+//@ chunk-bjxz9pt3.js:11964-12286 placement
 /**
  * 在输入字节中查找分离键。
  */
@@ -209,7 +209,7 @@ function scanForDetachKey(bytes, prefixArmed) {
     prefixArmed,
   };
 }
-//@ chunk-vrr64ez0.js:12251-12610 placement
+//@ chunk-bjxz9pt3.js:12286-12645 placement
 /**
  * 等待用户按下分离键。
  */
@@ -248,11 +248,11 @@ function waitForDetachKey(stdin) {
     },
   };
 }
-//@ chunk-vrr64ez0.js:12610-12650 placement
+//@ chunk-bjxz9pt3.js:12645-12685 placement
 function containsInterruptKey(bytes) {
   return scanForDetachKey(bytes, false).matched;
 }
-//@ chunk-vrr64ez0.js:12650-25318 placement
+//@ chunk-bjxz9pt3.js:12685-25354 placement
 /**
  * 附加到后台会话的 PTY：转发输入输出、处理窗口大小、分离键与遥测。
  */
@@ -343,10 +343,10 @@ async function attachToJob(short, options = {}) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -967,10 +967,10 @@ async function attachToJob(short, options = {}) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION;
@@ -1048,7 +1048,7 @@ async function attachToJob(short, options = {}) {
   });
   return promise;
 }
-//@ chunk-vrr64ez0.js:25318-25777 placement
+//@ chunk-bjxz9pt3.js:25354-25813 placement
 /**
  * 收集终端能力信息（mux、ssh、超链接等）。
  */
@@ -1075,7 +1075,7 @@ function terminalCapabilities() {
     }),
   };
 }
-//@ chunk-vrr64ez0.js:25777-25863 placement
+//@ chunk-bjxz9pt3.js:25813-25899 placement
 function parseSwitchTarget(target) {
   return CLOUD_SESSION_ID_RE.test(target)
     ? {
@@ -1087,4 +1087,4 @@ function parseSwitchTarget(target) {
         short: target,
       };
 }
-export { parseSwitchTarget, attachToJob, containsInterruptKey, waitForDetachKey };
+export { waitForDetachKey, containsInterruptKey, attachToJob, parseSwitchTarget };

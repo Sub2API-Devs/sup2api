@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。转发来的权限对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (14)
  * attribution: placement 14
  */
 import { relative } from "path";
@@ -54,12 +54,12 @@ import { stripNonPrintable } from "../utils/truncateGraphemes.js";
 import { stripAnsi } from "../utils/stripAnsi.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:226114-226118 placement
+//@ chunk-czq1j3j2.js:231153-231157 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:226114", () => {
+deferInit("chunk-czq1j3j2.js:231153", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:226118-226480 placement
+//@ chunk-czq1j3j2.js:231157-231519 placement
 /**
  * 转发来的权限请求无法在本终端展示时的三段文案：概括、短版、等待用户按 esc 的完整版。
  */
@@ -69,17 +69,17 @@ var REMOTE_PERMISSION_UNSHOWABLE_SHORT =
   "The session asked a permission question that this terminal cannot show.";
 var REMOTE_PERMISSION_UNSHOWABLE_WAITING =
   "The remote session is waiting for an answer to a permission question that this terminal cannot show. Nothing else can answer it. Press esc to stop the turn.";
-//@ chunk-18hwfzwa.js:226480-226568 placement
+//@ chunk-czq1j3j2.js:231519-231607 placement
 function getStubToolForForwardedPermission(toolName, toolRegistry) {
   let resolvedName = typeof toolName === "string" ? toolName : INVALID_TOOL_NAME_TEXT;
   let tool = findTool(toolRegistry, resolvedName);
   if (tool) return tool;
   return makeStubToolForPermissionUI(resolvedName);
 }
-//@ chunk-18hwfzwa.js:226568-226591 placement
+//@ chunk-czq1j3j2.js:231607-231630 placement
 var MAX_PREVIEW_PARAM_LENGTH = 200000;
 var MAX_PREVIEW_PARAM_ENTRIES = 1e4;
-//@ chunk-18hwfzwa.js:226591-227988 placement
+//@ chunk-czq1j3j2.js:231630-233027 placement
 function makeStubToolForPermissionUI(toolName) {
   function throwStubCalled(method) {
     throw Error(
@@ -139,7 +139,7 @@ function makeStubToolForPermissionUI(toolName) {
     },
   };
 }
-//@ chunk-18hwfzwa.js:228022-229560 placement
+//@ chunk-czq1j3j2.js:233061-234599 placement
 /**
  * 把云会话/远端 worker 发来的 can_use_tool 请求还原成本地权限对话框：找到同名工具或生成 stub 工具，渲染参数，无法渲染时提示 "deny unless expected"。
  */
@@ -252,11 +252,11 @@ async function buildForwardedPermissionDialog(args) {
     descriptor: buildPermissionPromptPayload(withRacer),
   };
 }
-//@ chunk-18hwfzwa.js:229560-229598 placement
+//@ chunk-czq1j3j2.js:234599-234637 placement
 function isFileWriteOrEditTool(tool) {
   return tool === FileWriteTool || tool === FileEditTool;
 }
-//@ chunk-18hwfzwa.js:229598-229892 placement
+//@ chunk-czq1j3j2.js:234637-234931 placement
 function lookupForwardedTool(args) {
   if (args.lookup === undefined || !hasHostField(args.input) || !isViolinWoodEnabledCached()) return;
   try {
@@ -282,7 +282,7 @@ function lookupForwardedTool(args) {
     };
   }
 }
-//@ chunk-18hwfzwa.js:229892-230676 placement
+//@ chunk-czq1j3j2.js:234931-235715 placement
 async function localPreviewForHeldCall(args) {
   let expandedPath = expandPath(args.filePath, String(args.startCwd));
   let localArgs = {
@@ -344,7 +344,7 @@ async function localPreviewForHeldCall(args) {
     };
   }
 }
-//@ chunk-18hwfzwa.js:230676-230819 placement
+//@ chunk-czq1j3j2.js:235715-235858 placement
 function logServedPreview(tool, outcome) {
   logEvent("tengu_remote_tool_served_preview", {
     tool: sanitizeToolNameForAnalytics(tool.name),
@@ -352,9 +352,9 @@ function logServedPreview(tool, outcome) {
     reason: fromEnumOpt(outcome.preview === "remote" ? outcome.reason : undefined),
   });
 }
-//@ chunk-18hwfzwa.js:230819-230831 placement
+//@ chunk-czq1j3j2.js:235858-235870 placement
 var REMOTE_READ_FILE_TIMEOUT_MS = 1e4;
-//@ chunk-18hwfzwa.js:230831-231263 placement
+//@ chunk-czq1j3j2.js:235870-236302 placement
 async function readRemoteFileForPreview(toolInputPath) {
   if (!hasRemoteCap("fileRead")) return;
   try {
@@ -381,11 +381,11 @@ async function readRemoteFileForPreview(toolInputPath) {
     return;
   }
 }
-//@ chunk-18hwfzwa.js:231263-231302 placement
+//@ chunk-czq1j3j2.js:236302-236341 placement
 function isPermissionRuleSource(source) {
   return PERMISSION_RULE_SOURCES.includes(source);
 }
-//@ chunk-18hwfzwa.js:231302-231334 placement
+//@ chunk-czq1j3j2.js:236341-236373 placement
 function toPrintablePermissionText(text) {
   return stripNonPrintable(stripAnsi(text));
 }

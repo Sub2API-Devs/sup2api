@@ -3,9 +3,9 @@
  *
  * 钩子 UI 按压、提交等交互分发（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (29)
  * attribution: placement 29
  */
 import { USER_REJECTED_TOOL_USE, isToolDenial, INTERRUPTION_TEXT_PREFIXES } from "../../../utils/messages.js";
@@ -25,23 +25,24 @@ import { reportChainFailure } from "../dispatch/chain.js";
 import { hookMembersFor } from "../hookDispatch.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:627912-628172 placement (2.1.88 match: _temp4, 0.682)
+//@ chunk-7jxyna5q.js:549556-549816 placement (2.1.88 match: yieldMissingToolResultBlocks, 0.755)
 /**
  * user 消息首块是否为拒绝/中断类错误 tool_result。
  */
-function isInterruptedCall(pm_1) {
-  if (pm_1?.type !== "user") return false;
-  let first = pm_1.message.content.at(0);
+function isInterruptedCall(result) {
+  if (result?.type !== "user") return false;
+  let first = result.message.content.at(0);
   if (first?.type !== "tool_result" || first.is_error !== true) return false;
   let content = first.content;
-  if (pm_1.toolUseResult === USER_REJECTED_TOOL_USE) return isToolDenial(content, pm_1, USER_REJECTED_KIND);
+  if (result.toolUseResult === USER_REJECTED_TOOL_USE)
+    return isToolDenial(content, result, USER_REJECTED_KIND);
   return (
     typeof content === "string" &&
-    isToolDenial(content, pm_1, INTERRUPTED_TOOL_STATUSES) &&
+    isToolDenial(content, result, INTERRUPTED_TOOL_STATUSES) &&
     INTERRUPTION_TEXT_PREFIXES.some((prefix) => content.startsWith(prefix))
   );
 }
-//@ chunk-s61vbvea.js:628172-628508 placement
+//@ chunk-7jxyna5q.js:549816-550152 placement
 /**
  * 为插件按键登记宿主侧运行器（负数句柄），支持查询、释放与遗忘。
  */
@@ -70,20 +71,20 @@ function createHeldRunners() {
     count: () => [...runnersByPlugin.values()].reduce((acc, runners) => acc + runners.size, 0),
   };
 }
-//@ chunk-s61vbvea.js:628508-628524 placement
+//@ chunk-7jxyna5q.js:550152-550168 placement
 /**
  * 负数
  */
 var isNegative = (handle) => handle < 0;
-//@ chunk-s61vbvea.js:628524-628537 placement
+//@ chunk-7jxyna5q.js:550168-550181 placement
 /**
  * 扣留的处理器
  */
 var heldRunners; // deferred: uses createHeldRunners of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:628524", () => {
+deferInit("chunk-7jxyna5q.js:550168", () => {
   heldRunners = createHeldRunners();
 });
-//@ chunk-s61vbvea.js:628537-628929 placement
+//@ chunk-7jxyna5q.js:550181-550573 placement
 /**
  * ui.press 链上的插件处理器：插件未加载时报错，宿主运行器或模块 press 处理按键后继续下层。
  */
@@ -109,7 +110,7 @@ var createPressHandler = (held, event, store, bottom) => ({
     return bottom(request);
   },
 });
-//@ chunk-s61vbvea.js:628929-629031 placement
+//@ chunk-7jxyna5q.js:550573-550675 placement
 /**
  * 按插件名提供各自的串行执行队列。
  */
@@ -123,7 +124,7 @@ function createPerPluginQueues() {
     return serialQueue;
   };
 }
-//@ chunk-s61vbvea.js:629031-629315 placement
+//@ chunk-7jxyna5q.js:550675-550959 placement
 /**
  * 释放插件不再画出的按键句柄（宿主运行器与模块侧）。
  */
@@ -140,7 +141,7 @@ function releasePresses(pluginName, handles, site) {
   }
   found.releasePresses(filtered);
 }
-//@ chunk-s61vbvea.js:629315-629774 placement
+//@ chunk-7jxyna5q.js:550959-551418 placement
 /**
  * 记录一次渲染中各插件画出的可按元素，宿主化句柄并释放旧的，返回句柄映射后的树。
  */
@@ -182,7 +183,7 @@ function hostDrawnPresses(tree, drawn) {
   }
   return mapPressHandles(tree, (pluginName, handle) => handlesByPlugin.get(pluginName)?.get(handle));
 }
-//@ chunk-s61vbvea.js:629774-629925 placement
+//@ chunk-7jxyna5q.js:551418-551569 placement
 var toUiInputEvent = ({ held, surface, kind, value }) => ({
   plugin: held.plugin,
   element: held.element,
@@ -192,27 +193,27 @@ var toUiInputEvent = ({ held, surface, kind, value }) => ({
   kind,
   value,
 });
-//@ chunk-s61vbvea.js:629925-629937 placement
+//@ chunk-7jxyna5q.js:551569-551581 placement
 /**
  * 各插件输入队列
  */
 var inputQueues; // deferred: uses createPerPluginQueues of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:629925", () => {
+deferInit("chunk-7jxyna5q.js:551569", () => {
   inputQueues = createPerPluginQueues();
 });
-//@ chunk-s61vbvea.js:629937-629959 placement
+//@ chunk-7jxyna5q.js:551581-551603 placement
 /**
  * ui.input 站点规则
  */
 var UI_INPUT_RULES; // deferred: uses UI_ENV_SITE_RULES (../sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:629937", () => {
+deferInit("chunk-7jxyna5q.js:551581", () => {
   UI_INPUT_RULES = UI_ENV_SITE_RULES["ui.input"];
 });
-//@ chunk-s61vbvea.js:629959-630076 placement
+//@ chunk-7jxyna5q.js:551603-551720 placement
 var isPressHeld = ({ plugin, handle, element }) =>
   moveToCloudTrash.heldPress(plugin, handle, element) !== undefined ||
   (element !== undefined && moveToCloudTrash.hostedButtonsOf(plugin, element).length > 0);
-//@ chunk-s61vbvea.js:630076-630182 placement
+//@ chunk-7jxyna5q.js:551720-551826 placement
 function normalizeHref(href) {
   let candidate = /^www\./i.test(href) ? `http://${href}` : (fileUrlToPath(href) ?? href);
   try {
@@ -221,7 +222,7 @@ function normalizeHref(href) {
     return candidate;
   }
 }
-//@ chunk-s61vbvea.js:630182-630265 placement
+//@ chunk-7jxyna5q.js:551826-551909 placement
 /**
  * 链接在允许列表
  */
@@ -230,7 +231,7 @@ function hrefInList(href, pressableLinks) {
   let normalized = normalizeHref(href);
   return pressableLinks.some((allowed) => normalizeHref(allowed) === normalized);
 }
-//@ chunk-s61vbvea.js:630265-630409 placement
+//@ chunk-7jxyna5q.js:551909-552053 placement
 var toUiPressEvent = (held, surface, link) => ({
   plugin: held.plugin,
   element: held.element,
@@ -243,15 +244,15 @@ var toUiPressEvent = (held, surface, link) => ({
     },
   }),
 });
-//@ chunk-s61vbvea.js:630409-630431 placement
+//@ chunk-7jxyna5q.js:552053-552075 placement
 /**
  * ui.press 站点规则
  */
 var UI_PRESS_RULES; // deferred: uses UI_ENV_SITE_RULES (../sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:630409", () => {
+deferInit("chunk-7jxyna5q.js:552053", () => {
   UI_PRESS_RULES = UI_ENV_SITE_RULES["ui.press"];
 });
-//@ chunk-s61vbvea.js:630431-630734 placement
+//@ chunk-7jxyna5q.js:552075-552378 placement
 /**
  * 新旧渲染树对比：释放旧树中有而新树中没有的按键句柄。
  */
@@ -278,7 +279,7 @@ function releaseDroppedPresses(previousTree, nextTree, site) {
     );
   }
 }
-//@ chunk-s61vbvea.js:630734-630858 placement
+//@ chunk-7jxyna5q.js:552378-552502 placement
 /**
  * 释放树中所有插件的按键句柄。
  */
@@ -288,7 +289,7 @@ function releaseAllPresses(tree, site) {
     byPlugin.set(plugin, [...(byPlugin.get(plugin) ?? []), handle]);
   for (let [pluginName, handles] of byPlugin) releasePresses(pluginName, handles, site);
 }
-//@ chunk-s61vbvea.js:630858-631645 placement
+//@ chunk-7jxyna5q.js:552502-553292 placement
 async function pressHeldElement(request) {
   let gestureAt = getAsyncStoreS61();
   let { event, tag, plugin, handle, element, component, surface } = request;
@@ -337,7 +338,7 @@ async function pressHeldElement(request) {
   );
   return outcome;
 }
-//@ chunk-s61vbvea.js:631645-631804 placement
+//@ chunk-7jxyna5q.js:553292-553451 placement
 var dispatchUiInput = ({ kind, value, ...rest }) =>
   pressHeldElement({
     ...rest,
@@ -353,7 +354,7 @@ var dispatchUiInput = ({ kind, value, ...rest }) =>
         value,
       }),
   });
-//@ chunk-s61vbvea.js:631804-631941 placement
+//@ chunk-7jxyna5q.js:553451-553588 placement
 var toUiSelectEvent = ({ held, surface, value }) => ({
   plugin: held.plugin,
   element: held.element,
@@ -362,15 +363,15 @@ var toUiSelectEvent = ({ held, surface, value }) => ({
   surface,
   value,
 });
-//@ chunk-s61vbvea.js:631941-631964 placement
+//@ chunk-7jxyna5q.js:553588-553611 placement
 /**
  * ui.select 站点规则
  */
 var UI_SELECT_RULES; // deferred: uses UI_ENV_SITE_RULES (../sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:631941", () => {
+deferInit("chunk-7jxyna5q.js:553588", () => {
   UI_SELECT_RULES = UI_ENV_SITE_RULES["ui.select"];
 });
-//@ chunk-s61vbvea.js:631964-632158 placement
+//@ chunk-7jxyna5q.js:553611-553805 placement
 var dispatchUiSelect = ({ value, ...rest }) =>
   pressHeldElement({
     ...rest,
@@ -386,24 +387,24 @@ var dispatchUiSelect = ({ value, ...rest }) =>
       }),
     admits: (held) => held.options === undefined || held.options.includes(value),
   });
-//@ chunk-s61vbvea.js:632158-632184 placement
+//@ chunk-7jxyna5q.js:553805-553831 placement
 /**
  * 在 async store 里执行
  */
 var runInAsyncStore = (store, fn) => asyncStoreS61.run(store, fn);
-//@ chunk-s61vbvea.js:632184-632296 placement
+//@ chunk-7jxyna5q.js:553831-553943 placement
 function runQueuedPress(held, queueFor, run) {
   let startTime = performance.now();
   return isPressHeld(held)
     ? queueFor(held.plugin)(() => runInAsyncStore(startTime, () => run(held)))
     : Promise.resolve(undefined);
 }
-//@ chunk-s61vbvea.js:632296-632321 placement
+//@ chunk-7jxyna5q.js:553943-553968 placement
 /**
  * 排队分发输入
  */
 var dispatchInputQueued = (request) => runQueuedPress(request, inputQueues, dispatchUiInput);
-//@ chunk-s61vbvea.js:632321-633113 placement
+//@ chunk-7jxyna5q.js:553968-554760 placement
 async function handleUiPress({ plugin, handle, element, surface, link, pagePress }) {
   let startTime = performance.now();
   let held = moveToCloudTrash.heldPress(plugin, handle, element);
@@ -444,34 +445,34 @@ async function handleUiPress({ plugin, handle, element, surface, link, pagePress
   );
   return outcome;
 }
-//@ chunk-s61vbvea.js:633113-633125 placement
+//@ chunk-7jxyna5q.js:554760-554772 placement
 /**
  * 各插件选择队列
  */
 var selectQueues; // deferred: uses createPerPluginQueues of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:633113", () => {
+deferInit("chunk-7jxyna5q.js:554760", () => {
   selectQueues = createPerPluginQueues();
 });
-//@ chunk-s61vbvea.js:633125-633150 placement
+//@ chunk-7jxyna5q.js:554772-554797 placement
 /**
  * 排队分发选择
  */
 var dispatchSelectQueued = (request) => runQueuedPress(request, selectQueues, dispatchUiSelect);
 export {
-  dispatchInputQueued,
-  releasePresses,
-  handleUiPress,
-  dispatchSelectQueued,
-  hrefInList,
+  isInterruptedCall,
   heldRunners,
   hostDrawnPresses,
-  isInterruptedCall,
   releaseAllPresses,
   releaseDroppedPresses,
+  handleUiPress,
+  dispatchInputQueued,
+  dispatchSelectQueued,
   createPerPluginQueues,
   UI_PRESS_RULES,
   inputQueues,
   UI_INPUT_RULES,
   selectQueues,
   UI_SELECT_RULES,
+  releasePresses,
+  hrefInList,
 };

@@ -1,13 +1,13 @@
 /**
  * @azure/core-util/dist/esm/createAbortablePromise.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/core-util@1.14.0
- * pieces: chunk-mrx6y2r5.js (1)
+ * pieces: chunk-b5df2wx1.js (1)
  * attribution: esm-fingerprint 1
  */
 import { AbortError } from "../../../abort-controller/AbortError.js";
 
-//@ chunk-mrx6y2r5.js:55968-56444 esm-fingerprint
+//@ chunk-b5df2wx1.js:55968-56444 esm-fingerprint
 function createAbortablePromise(buildPromise, options) {
   let { cleanupBeforeAbort, abortSignal, abortErrorMsg } =
     options !== null && options !== undefined ? options : {};

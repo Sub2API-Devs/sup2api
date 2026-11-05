@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：仓库与代理遥测属性
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p52gp8zk.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a0xc6evk.js (13)
  * attribution: placement 13
  */
 import { HostScoped } from "../hostScoped.js";
@@ -25,7 +25,7 @@ import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_api } from "../../../vendor/@opentelemetry/api/build/src/index.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-p52gp8zk.js:2099-2559 placement
+//@ chunk-a0xc6evk.js:3024-3484 placement
 /**
  * OTel 指标默认包含项开关表与 VCS 语义属性名、常用托管域名与 7999 端口 SSH 模式。
  */
@@ -52,15 +52,15 @@ var otelMetricsIncludeDefaults = [
 ];
 var GITEA_COM = "gitea.com";
 var VCS_ATTRIBUTE_NAMES = /^ssh:\/\/[^/?#]*:7999(?=[/?#]|$)/i;
-//@ chunk-p52gp8zk.js:4749-4804 placement
+//@ chunk-a0xc6evk.js:5710-5765 placement
 var repositoryAttributesByHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-p52gp8zk.js:4749", () => {
+deferInit("chunk-a0xc6evk.js:5710", () => {
   repositoryAttributesByHost = new HostScoped(() => ({
     settled: undefined,
     attributes: undefined,
   }));
 });
-//@ chunk-p52gp8zk.js:4804-4943 placement
+//@ chunk-a0xc6evk.js:5765-5904 placement
 function repositoryAttributesPromise() {
   let state = repositoryAttributesByHost.of(getRootSession().host);
   if (state.settled === undefined && !isRemoteSessionAvailable())
@@ -71,7 +71,7 @@ function repositoryAttributesPromise() {
       .catch(logError);
   return state;
 }
-//@ chunk-p52gp8zk.js:4943-5727 placement
+//@ chunk-a0xc6evk.js:5904-6688 placement
 function repositoryUrlAttribute(remoteUrlForBridge) {
   let queryIndex = remoteUrlForBridge.search(/[?#]/);
   if (queryIndex >= 0 && remoteUrlForBridge.includes("@", queryIndex)) return;
@@ -126,7 +126,7 @@ function repositoryUrlAttribute(remoteUrlForBridge) {
     }),
   };
 }
-//@ chunk-p52gp8zk.js:5727-5816 placement
+//@ chunk-a0xc6evk.js:6688-6777 placement
 function commitAttributes({ commitId, branch }) {
   return {
     [VCS_REF_HEAD_REVISION]: commitId,
@@ -136,7 +136,7 @@ function commitAttributes({ commitId, branch }) {
     }),
   };
 }
-//@ chunk-p52gp8zk.js:5816-5938 placement
+//@ chunk-a0xc6evk.js:6777-6899 placement
 async function initRepositoryAttributes() {
   if (
     isOtelMetricsAttributeEnabled("OTEL_METRICS_INCLUDE_REPOSITORY") &&
@@ -144,15 +144,15 @@ async function initRepositoryAttributes() {
   )
     await repositoryAttributesPromise().settled;
 }
-//@ chunk-p52gp8zk.js:5938-5987 placement
+//@ chunk-a0xc6evk.js:6899-6948 placement
 var remoteSessionStateByHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-p52gp8zk.js:5938", () => {
+deferInit("chunk-a0xc6evk.js:6899", () => {
   remoteSessionStateByHost = new HostScoped(() => ({
     token: undefined,
     identity: null,
   }));
 });
-//@ chunk-p52gp8zk.js:5987-6446 placement
+//@ chunk-a0xc6evk.js:6948-7407 placement
 function remoteSessionAttributes() {
   if (!env.CLAUDE_CODE_REMOTE_SESSION_ID) return null;
   let sessionIngressAuthToken = getSessionIngressAuthToken();
@@ -171,28 +171,28 @@ function remoteSessionAttributes() {
     emailAddress: nonEmpty(payload.account_email) ?? nonEmpty(act.email),
   });
 }
-//@ chunk-p52gp8zk.js:6446-6622 placement
+//@ chunk-a0xc6evk.js:7407-7583 placement
 var AGENT_ID_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var HEX4;
 var UUID_PATTERN;
 var regExp;
-deferInit("chunk-p52gp8zk.js:6446", () => {
+deferInit("chunk-a0xc6evk.js:7407", () => {
   AGENT_ID_RE = /^a(?:[\w-]{1,63}-)?([0-9a-f]{16})$/;
   HEX4 = String.raw`[0-9a-f]{4}`;
   UUID_PATTERN = String.raw`[0-9a-f]{8}-${HEX4}-${HEX4}-${HEX4}-[0-9a-f]{12}`;
   regExp = new RegExp(String.raw`^(?:hook-agent-)?${UUID_PATTERN}$`);
 });
-//@ chunk-p52gp8zk.js:6622-6697 placement
+//@ chunk-a0xc6evk.js:7583-7658 placement
 function relayedAgentId(agentId) {
   let match = AGENT_ID_RE.exec(agentId);
   let fallback = regExp.test(agentId) ? agentId : undefined;
   return match ? `a${match[1]}` : fallback;
 }
-//@ chunk-p52gp8zk.js:6697-6733 placement
+//@ chunk-a0xc6evk.js:7658-7694 placement
 function relayedId(value) {
   return isTracesRelayed() ? relayedAgentId(value) : value;
 }
-//@ chunk-p52gp8zk.js:6733-6884 placement
+//@ chunk-a0xc6evk.js:7694-7845 placement
 function agentAttributes(agentContext) {
   if (!agentContext || isMainAgent(agentContext)) return {};
   let agentId = relayedAgentId(agentContext.agentId);
@@ -206,15 +206,14 @@ function agentAttributes(agentContext) {
     }),
   };
 }
-//@ chunk-p52gp8zk.js:6884-6901 placement
+//@ chunk-a0xc6evk.js:7845-7862 placement
 var otelApi_3; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-p52gp8zk.js:6884", () => {
+deferInit("chunk-a0xc6evk.js:7845", () => {
   otelApi_3 = __toESM(require_api(), 1);
 });
 export {
   relayedId,
   agentAttributes,
-  initRepositoryAttributes,
   commitAttributes,
   OTEL_METRICS_INCLUDE_DEFAULTS,
   VCS_REPOSITORY_URL_FULL,
@@ -222,4 +221,5 @@ export {
   otelMetricsIncludeDefaults,
   remoteSessionAttributes,
   otelApi_3,
+  initRepositoryAttributes,
 };

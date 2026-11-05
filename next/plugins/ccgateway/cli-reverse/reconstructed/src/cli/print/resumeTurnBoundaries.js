@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：--resume-drops-turn 等恢复时按声明的轮次截断转录、判定可见消息与轮末上下文用量估计
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sfjpx19.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nh1pvp1m.js (23)
  * attribution: placement 23
  */
 import { __export } from "../../../runtime/bun-runtime.js";
@@ -28,9 +28,10 @@ import {
   APPROVAL_UNANSWERED_MESSAGE,
   REJECT_MESSAGE,
   REJECT_MESSAGE_AFTER_RUN,
+  SYNTHETIC_MODEL,
+  NO_RESPONSE_REQUESTED,
   isInterruptionOnlyMessage,
 } from "../../utils/messages.js";
-import { SYNTHETIC_MODEL, NO_RESPONSE_REQUESTED } from "../../constants/messages.js";
 import { CRON_CREATE_TOOL_NAME, CRON_DELETE_TOOL_NAME } from "../../tools/ScheduleCronTool/prompt.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { hasPollEventsAttachmentSince } from "../../utils/pollEvents.js";
@@ -57,27 +58,27 @@ import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../services/analy
 import { enqueueTaskNotification as enqueueTaskNotification_2 } from "../../utils/task/taskNotifications.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0sfjpx19.js:5974-5985 placement
+//@ chunk-nh1pvp1m.js:6018-6029 placement
 /**
  * 回合边界模块的导出容器（挂 createTurnEventTail 与 default）。
  */
 var TURN_BOUNDARIES_MODULE_EXPORTS = {};
-//@ chunk-0sfjpx19.js:5985-6039 placement
+//@ chunk-nh1pvp1m.js:6029-6083 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0sfjpx19.js:5985", () => {
+deferInit("chunk-nh1pvp1m.js:6029", () => {
   __export(TURN_BOUNDARIES_MODULE_EXPORTS, {
     createTurnEventTail: () => describeDroppedNotes,
     default: () => TURN_BOUNDARIES_MODULE_EXPORTS,
   });
 });
-//@ chunk-0sfjpx19.js:6039-8394 placement
+//@ chunk-nh1pvp1m.js:6083-8516 placement
 /**
  * 常量与可截断附件类型集合：--resume-drops-turn 拒绝提示前缀。
  */
 var RESUME_DROPS_TURN_REJECTED_PREFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var FURNITURE_ATTACHMENT_TYPES;
 var NON_FURNITURE_ATTACHMENT_TYPES;
-deferInit("chunk-0sfjpx19.js:6039", () => {
+deferInit("chunk-nh1pvp1m.js:6083", () => {
   RESUME_DROPS_TURN_REJECTED_PREFIX = "Resume rejected by --resume-drops-turn:";
   FURNITURE_ATTACHMENT_TYPES = new Set([
     "agent_listing_delta",
@@ -99,6 +100,7 @@ deferInit("chunk-0sfjpx19.js:6039", () => {
     "critical_system_reminder",
     "date_change",
     "thread_state",
+    "widget_context_hint",
     "prefix_delta",
     "deferred_tools_delta",
     "diagnostics",
@@ -152,6 +154,7 @@ deferInit("chunk-0sfjpx19.js:6039", () => {
     "coordinator_context",
     "context_sections",
     "project_doc_reads",
+    "message_pdf_reads",
     "date",
     "instructions",
     "prompt_snapshot",
@@ -186,7 +189,7 @@ deferInit("chunk-0sfjpx19.js:6039", () => {
     "ultra_effort_enter",
     "ultra_effort_exit",
     "ultrathink_effort",
-    ...[],
+    "repl_mcp_needs_auth",
     "workflow_keyword_request",
     "workflow_size_guideline_change",
     "remote_session_change",
@@ -196,10 +199,11 @@ deferInit("chunk-0sfjpx19.js:6039", () => {
     "inlined_image_paths",
     "mcp_resource",
     "project_doc_reads",
+    "message_pdf_reads",
     "structured_output",
   ]);
 });
-//@ chunk-0sfjpx19.js:8394-8683 placement
+//@ chunk-nh1pvp1m.js:8516-8805 placement
 function isTurnOpeningMessage(message) {
   if (message.type === "user")
     return (
@@ -218,15 +222,15 @@ function isTurnOpeningMessage(message) {
       FURNITURE_ATTACHMENT_TYPES.has(message.attachment.type))
   );
 }
-//@ chunk-0sfjpx19.js:8683-8769 placement
+//@ chunk-nh1pvp1m.js:8805-8891 placement
 function isSessionCronCarryAttachment(entry) {
   return entry.type === "attachment" && entry.attachment.type === "session_cron_carry";
 }
-//@ chunk-0sfjpx19.js:8769-8804 placement
+//@ chunk-nh1pvp1m.js:8891-8926 placement
 function startsTurnSegment(entry) {
   return isSessionCronCarryAttachment(entry) || isTurnOpeningMessage(entry);
 }
-//@ chunk-0sfjpx19.js:8804-8985 placement
+//@ chunk-nh1pvp1m.js:8926-9107 placement
 function isAllInvisibleMeta(entries) {
   return entries.every((entry) => {
     if (!startsTurnSegment(entry) || isEmptyThreadAskMarker(entry)) return false;
@@ -235,13 +239,13 @@ function isAllInvisibleMeta(entries) {
     return frame.frame === "invisible" && frame.reason === "meta-without-provenance";
   });
 }
-//@ chunk-0sfjpx19.js:8985-9087 placement
+//@ chunk-nh1pvp1m.js:9107-9209 placement
 function isHumanOrAutoContinuation(entry) {
   return (
     entry.origin === undefined || entry.origin.kind === "human" || entry.origin.kind === "auto-continuation"
   );
 }
-//@ chunk-0sfjpx19.js:9087-9332 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-nh1pvp1m.js:9209-9454 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 用户消息是否就是"[Request interrupted by user]"（或 for tool use）中断标记。
  */
@@ -260,7 +264,7 @@ function isInterruptMarkerMessage(message) {
     (block.text === INTERRUPT_MESSAGE || block.text === INTERRUPT_MESSAGE_FOR_TOOL_USE)
   );
 }
-//@ chunk-0sfjpx19.js:9332-9627 placement
+//@ chunk-nh1pvp1m.js:9454-9749 placement
 /**
  * 用户消息是否全部是框架合成的 is_error tool_result（中断、拒绝等固定文本）。
  */
@@ -282,9 +286,9 @@ function isSyntheticToolErrorMessage(message) {
     return SYNTHETIC_TOOL_ERROR_TEXTS.has(block.content);
   });
 }
-//@ chunk-0sfjpx19.js:9627-9727 placement
+//@ chunk-nh1pvp1m.js:9749-9849 placement
 var SYNTHETIC_TOOL_ERROR_TEXTS; // deferred: uses INTERRUPT_MESSAGE (../../utils/messages.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0sfjpx19.js:9627", () => {
+deferInit("chunk-nh1pvp1m.js:9749", () => {
   SYNTHETIC_TOOL_ERROR_TEXTS = new Set([
     INTERRUPT_MESSAGE,
     AGENT_CALL_PROCESS_STOPPED,
@@ -306,7 +310,7 @@ deferInit("chunk-0sfjpx19.js:9627", () => {
     REJECT_MESSAGE_AFTER_RUN + MEMORY_CORRECTION_HINT,
   ]);
 });
-//@ chunk-0sfjpx19.js:9727-9940 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-nh1pvp1m.js:9849-10062 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 是否是合成（<synthetic> 模型）的 "No response requested." assistant 消息。
  */
@@ -324,24 +328,24 @@ function isNoResponseRequestedMessage(message) {
     content[0].text === NO_RESPONSE_REQUESTED
   );
 }
-//@ chunk-0sfjpx19.js:9940-10096 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince(entry) {
+//@ chunk-nh1pvp1m.js:10062-10218 placement
+function isCronAssignmentRow(entry) {
   return (
     entry.type === "assistant" &&
     Array.isArray(entry.message.content) &&
     entry.message.content.some(
-      (block) =>
-        block?.type === "tool_use" &&
-        (block.name === CRON_CREATE_TOOL_NAME || block.name === CRON_DELETE_TOOL_NAME),
+      (contentBlock) =>
+        contentBlock?.type === "tool_use" &&
+        (contentBlock.name === CRON_CREATE_TOOL_NAME || contentBlock.name === CRON_DELETE_TOOL_NAME),
     )
   );
 }
-//@ chunk-0sfjpx19.js:10096-10226 placement
+//@ chunk-nh1pvp1m.js:10218-10348 placement
 function describeTranscriptEntry(entry, index) {
   let attachmentSuffix = entry.type === "attachment" ? ` (${entry.attachment.type})` : "";
   return `entry ${index} [type=${entry.type}${attachmentSuffix}, uuid=${entry.uuid}]`;
 }
-//@ chunk-0sfjpx19.js:10226-12029 placement
+//@ chunk-nh1pvp1m.js:10348-12151 placement
 /**
  * 校验声明的轮次 id（UUID）并找出该轮在转录中的范围，用于丢弃最后一轮后恢复。
  */
@@ -408,7 +412,7 @@ function findDeclaredTurnRange(messages, resumeDropsTurn) {
           };
         if (
           message.attachment.type === "session_cron_carry" &&
-          !messages.slice(index + 1, j).some(countToolCallsSince)
+          !messages.slice(index + 1, j).some(isCronAssignmentRow)
         ) {
           carry = message;
           continue;
@@ -454,9 +458,9 @@ function findDeclaredTurnRange(messages, resumeDropsTurn) {
   }
   return ok();
 }
-//@ chunk-0sfjpx19.js:12029-12041 placement
+//@ chunk-nh1pvp1m.js:39695-39707 placement
 var CONTEXT_ESTIMATE_WAIT_MS = 2000;
-//@ chunk-0sfjpx19.js:12041-12349 placement
+//@ chunk-nh1pvp1m.js:39707-40015 placement
 /**
  * 估算恢复后上下文用量：取最近一次 API 用量的输入 token（含缓存创建/读取），结合模型的自动压缩窗口，以首条压缩边界（或传入的重置边界）为起点。
  */
@@ -482,7 +486,7 @@ function estimateResumeContextUsage({ messages, model, autoCompactWindow, resetB
     }),
   };
 }
-//@ chunk-0sfjpx19.js:12349-14936 placement
+//@ chunk-nh1pvp1m.js:40015-42602 placement
 /**
  * 轮末上下文用量估计的上报器：实测优先，估计超时则标记。
  */
@@ -637,7 +641,7 @@ class ContextUsageEstimateReporter {
     );
   }
 }
-//@ chunk-0sfjpx19.js:14936-15092 placement
+//@ chunk-nh1pvp1m.js:42602-42758 placement
 /**
  * 创建上下文用量上报器：估算后通过 notifyMetadataChanged 上报 context_usage，可在任意时刻或轮次结束时上报。
  */
@@ -652,21 +656,21 @@ function createContextUsageReporter(sessionState, readInputs, readTail) {
     reportAtTurnEnd: () => reporter.reportAtTurnEnd(readInputs, readTail),
   };
 }
-//@ chunk-0sfjpx19.js:15092-15155 placement
+//@ chunk-nh1pvp1m.js:42758-42821 placement
 function tailDescriptor(messages) {
   return {
     length: messages.length,
     lastUuid: messages.at(-1)?.uuid,
   };
 }
-//@ chunk-0sfjpx19.js:15155-15251 placement
+//@ chunk-nh1pvp1m.js:42821-42917 placement
 function coversTail(messages, estimatedAt) {
   return (
     messages.length >= estimatedAt.length &&
     (estimatedAt.length === 0 || messages.at(estimatedAt.length - 1)?.uuid === estimatedAt.lastUuid)
   );
 }
-//@ chunk-0sfjpx19.js:15251-15753 placement
+//@ chunk-nh1pvp1m.js:42917-43419 placement
 function logBridgeAttachmentsMissing(messageUuid, sentCount, missingFiles) {
   if (!missingFiles?.length) return;
   let byUuid = new Map();
@@ -697,7 +701,7 @@ function logBridgeAttachmentsMissing(messageUuid, sentCount, missingFiles) {
       : logFeatureBad("bridge_attachment_missing_event", "threw", fields),
   );
 }
-//@ chunk-0sfjpx19.js:15753-15811 placement
+//@ chunk-nh1pvp1m.js:43419-43477 placement
 function runAndLogFailure(fn) {
   try {
     fn();
@@ -708,12 +712,12 @@ function runAndLogFailure(fn) {
   }
 }
 export {
-  isInterruptMarkerMessage,
-  ContextUsageEstimateReporter,
-  TURN_BOUNDARIES_MODULE_EXPORTS,
   createContextUsageReporter,
   logBridgeAttachmentsMissing,
   findDeclaredTurnRange,
   RESUME_DROPS_TURN_REJECTED_PREFIX,
   isAllInvisibleMeta,
+  ContextUsageEstimateReporter,
+  TURN_BOUNDARIES_MODULE_EXPORTS,
+  isInterruptMarkerMessage,
 };

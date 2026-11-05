@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Artifact 操作经 MCP 线路发送（pin/unpin/publish/list），回答不确定时报 McpDoubtfulAnswerError
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5nrcp6t7.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-57tfkp5n.js (16)
  * attribution: placement 16
  */
 import { pickAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
@@ -42,7 +42,7 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { isCancel } from "../../../vendor/axios/dist/esm/axios.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-5nrcp6t7.js:4144-4315 placement
+//@ chunk-57tfkp5n.js:4146-4317 placement
 /**
  * artifact MCP 线路常量：广告 TTL 5 分钟、tools/list 超时 5 s/1 s、调用超时 5 s、响应体上限 1 MB 与帧客户端请求头名单。
  */
@@ -58,7 +58,7 @@ var FRAME_CLIENT_HEADERS = [
   "X-Frame-Client-Version",
   "X-Frame-Session-Id",
 ];
-//@ chunk-5nrcp6t7.js:4315-4485 placement
+//@ chunk-57tfkp5n.js:4317-4487 placement
 function toMcpWireRequestOptions(options) {
   let { recoverOAuth401, headers, ...rest } = options;
   return {
@@ -70,7 +70,7 @@ function toMcpWireRequestOptions(options) {
     },
   };
 }
-//@ chunk-5nrcp6t7.js:4485-6258 placement
+//@ chunk-57tfkp5n.js:4487-6260 placement
 /**
  * Artifact 操作对应的 MCP 行工具名与参数映射。
  */
@@ -84,7 +84,7 @@ var PASS_THROUGH_FIELDS;
 var DROPPED_CALL_FIELDS;
 var PUBLISH_FIELD_RENAMES;
 var publishArguments;
-deferInit("chunk-5nrcp6t7.js:4485", () => {
+deferInit("chunk-57tfkp5n.js:4487", () => {
   MCP_ROW_TOOL_NAMES = ["pin_artifact", "unpin_artifact", "publish_version", "list_artifacts", "list_types"];
   ROW_TOOL_TELEMETRY = {
     pin_artifact: "artifact_mcp_wire_pin",
@@ -175,7 +175,7 @@ deferInit("chunk-5nrcp6t7.js:4485", () => {
         };
   };
 });
-//@ chunk-5nrcp6t7.js:6258-6510 placement
+//@ chunk-57tfkp5n.js:6260-6512 placement
 /**
  * 把 URL 查询参数按映射表填进 MCP 调用的 arguments/mark；遇到未知参数、重复参数或非法 limit 返回 "query"（表示不能走 MCP 线路）。
  */
@@ -189,7 +189,7 @@ function parseQueryIntoArgs(query, args, options) {
   }
   return options;
 }
-//@ chunk-5nrcp6t7.js:6510-6629 placement
+//@ chunk-57tfkp5n.js:6512-6631 placement
 function getStructuredContentWith(response, reads) {
   let result = isPlainObject(response) ? response.result : undefined;
   let structuredContent = isPlainObject(result) ? result.structuredContent : undefined;
@@ -197,7 +197,7 @@ function getStructuredContentWith(response, reads) {
     ? structuredContent
     : undefined;
 }
-//@ chunk-5nrcp6t7.js:6629-8004 placement
+//@ chunk-57tfkp5n.js:6631-8006 placement
 /**
  * 可经 MCP 线路发送的 Artifact HTTP 路由表（pin/unpin、直接发布、列出 artifact/类型/类型实例），每项给出对应 MCP 工具名与参数转换；以及 MCP 响应中 _meta 路由状态、错误与 tools/list 广告的 schema。
  */
@@ -205,7 +205,7 @@ var MCP_WIRE_ROUTES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) o
 var MCP_ROUTE_META_SCHEMA;
 var MCP_CALL_RESPONSE_SCHEMA;
 var MCP_TOOLS_LIST_SCHEMA;
-deferInit("chunk-5nrcp6t7.js:6629", () => {
+deferInit("chunk-57tfkp5n.js:6631", () => {
   MCP_WIRE_ROUTES = [
     {
       method: "POST",
@@ -338,7 +338,7 @@ deferInit("chunk-5nrcp6t7.js:6629", () => {
     }),
   );
 });
-//@ chunk-5nrcp6t7.js:8004-8161 placement
+//@ chunk-57tfkp5n.js:8006-8163 placement
 class McpDoubtfulAnswerError extends Error {
   status;
   constructor(status) {
@@ -347,19 +347,19 @@ class McpDoubtfulAnswerError extends Error {
     this.name = "McpDoubtfulAnswerError";
   }
 }
-//@ chunk-5nrcp6t7.js:8161-8207 placement
+//@ chunk-57tfkp5n.js:8163-8209 placement
 var JSONRPC_PROTOCOL_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-5nrcp6t7.js:8161", () => {
+deferInit("chunk-57tfkp5n.js:8163", () => {
   JSONRPC_PROTOCOL_ERROR_CODES = new Set([-32700, -32600, -32601, -32602]);
 });
-//@ chunk-5nrcp6t7.js:8207-8399 placement
+//@ chunk-57tfkp5n.js:8209-8401 placement
 function mcpRowFor(method, path) {
   if (env.CLAUDE_CODE_REMOTE || env.CLAUDE_CODE_REMOTE_SESSION_ID) return null;
   let found = MCP_WIRE_ROUTES.find((route) => route.method === method && route.route.test(path));
   if (found === undefined) return null;
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VALIANT_LANTERN, false) === true ? found : null;
 }
-//@ chunk-5nrcp6t7.js:8399-8466 placement
+//@ chunk-57tfkp5n.js:8401-8468 placement
 function cacheAdvert(advert, state) {
   state.mcpAdvert = {
     tools: advert,
@@ -367,14 +367,14 @@ function cacheAdvert(advert, state) {
   };
   return advert;
 }
-//@ chunk-5nrcp6t7.js:8466-8491 placement
+//@ chunk-57tfkp5n.js:8468-8493 placement
 var EMPTY_TOOL_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EMPTY_TOOL_SET_ALT;
-deferInit("chunk-5nrcp6t7.js:8466", () => {
+deferInit("chunk-57tfkp5n.js:8468", () => {
   EMPTY_TOOL_SET = new Set();
   EMPTY_TOOL_SET_ALT = new Set();
 });
-//@ chunk-5nrcp6t7.js:8491-8814 placement
+//@ chunk-57tfkp5n.js:8493-8816 placement
 /**
  * 返回 MCP 线路广告的可用工具集合：缓存未过期直接用；否则发起（或复用在途的）tools/list 查询，需要时在短期限内等待结果。
  */
@@ -397,7 +397,7 @@ async function getMcpAdvertisedTools(requestOptions, cache, waitForAnswer) {
   if (!waitForAnswer || mcpAdvert?.tools.size === 0) return mcpAdvert?.tools ?? EMPTY_TOOL_SET;
   return (await mcpAdvertAsked.soon) ?? EMPTY_TOOL_SET_ALT;
 }
-//@ chunk-5nrcp6t7.js:8814-9741 placement
+//@ chunk-57tfkp5n.js:8816-9743 placement
 /**
  * 向 Artifact MCP 端点发 tools/list，解析出广告了路由 _meta 的工具名（以及 名字#路由 变体），打点成功/失败/过慢并写回缓存。
  */
@@ -465,16 +465,16 @@ async function fetchMcpAdvertisedTools(requestOptions, cache) {
     cache,
   );
 }
-//@ chunk-5nrcp6t7.js:9741-9792 placement
+//@ chunk-57tfkp5n.js:9743-9794 placement
 function parseJsonObject(text) {
   let parsed = safeParseJSON(text, false);
   return isPlainObject(parsed) ? parsed : undefined;
 }
-//@ chunk-5nrcp6t7.js:9792-9863 placement
+//@ chunk-57tfkp5n.js:9794-9865 placement
 function refusalReason(verdict) {
   return isPlainObject(verdict) && typeof verdict.reason === "string" ? verdict.reason : undefined;
 }
-//@ chunk-5nrcp6t7.js:9863-12638 placement
+//@ chunk-57tfkp5n.js:9865-12640 placement
 /**
  * 经 MCP 线路发送 Artifact 操作（pin/unpin/publish/list），处理不可承载的请求与模糊回答。
  */
@@ -659,4 +659,4 @@ async function sendOverMcp(context, path, body, requestOptions, onEncoding) {
   });
   return toResult(status, text, headers);
 }
-export { McpDoubtfulAnswerError, FRAME_CLIENT_HEADERS, mcpRowFor, sendOverMcp, MCP_ROW_TOOL_NAMES };
+export { McpDoubtfulAnswerError, mcpRowFor, sendOverMcp, FRAME_CLIENT_HEADERS, MCP_ROW_TOOL_NAMES };

@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：Claude in Chrome 浏览器工具输入结构与提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2x56e6nv.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yr8n7evv.js (6)
  * attribution: placement 6
  */
-//@ chunk-2x56e6nv.js:191-260 placement
+//@ chunk-yr8n7evv.js:191-260 placement
 /**
  * 选择浏览器的超时（10 秒）。
  */
@@ -19,7 +19,7 @@ var BROWSER_ACTION_SETTLE_MS = 3000;
 var BROWSER_LONG_TIMEOUT_MS = 150000;
 var BROWSER_MAX_TIMEOUT_MS = 270000;
 var MAX_WAIT_SECONDS = 10;
-//@ chunk-2x56e6nv.js:260-714 placement
+//@ chunk-yr8n7evv.js:260-714 placement
 /**
  * 浏览器工具 schema 的版本号（0.1）。
  */
@@ -44,25 +44,25 @@ var CHROME_RESULT_SIZE_META = Object.freeze({
 });
 var CHOOSE_BROWSER_OPTION_LABEL =
   "Open a confirmation screen in every connected Chrome extension and let me select the right one there.";
-//@ chunk-2x56e6nv.js:714-789 placement
+//@ chunk-yr8n7evv.js:714-789 placement
 /**
  * 把 ask 工具名包装成 “the X tool”（未提供时用泛称）。
  */
 function askToolLabel(askToolName) {
   return askToolName ? `the ${askToolName} tool` : "your ask-user tool (if available)";
 }
-//@ chunk-2x56e6nv.js:789-1441 placement
+//@ chunk-yr8n7evv.js:789-1441 placement
 function browserPreflightInstruction(askUserToolName) {
   return (
     `Before any browser action, you MUST call ${askToolLabel(askUserToolName)} with a question listing EVERY connected browser as a separate option (use the display name as the label, and include the deviceId in parentheses), plus one final option labeled exactly: "${CHOOSE_BROWSER_OPTION_LABEL}" Do not skip any connected browser and do not pick one yourself. If the user picks a specific browser, call select_browser with that browser's deviceId. ` +
     "If the user picks the final option, call switch_browser \u2014 this sends a confirmation prompt to every connected Chrome extension and waits for the user to click Connect in the one they want; it also lets them name that browser."
   );
 }
-//@ chunk-2x56e6nv.js:1441-2044 placement
+//@ chunk-yr8n7evv.js:1441-2044 placement
 function browserSelectionNote(askToolName) {
   return `You do not need to call this before using the browser: when one browser is connected, or one was already chosen for this session, browser tools just work. Only if a browser tool reports that several browsers are connected and none is selected, or the user asks to change browsers, ask with ${askToolLabel(askToolName)}: one option per connected browser, the ones on this computer first (display name as the label, deviceId in parentheses), plus a final option labeled exactly: "${CHOOSE_BROWSER_OPTION_LABEL}" Then call select_browser with the chosen deviceId, or switch_browser for the final option. Never pick one yourself.`;
 }
-//@ chunk-2x56e6nv.js:2044-28994 placement
+//@ chunk-yr8n7evv.js:2044-28994 placement
 /**
  * Chrome 文件上传：单文件 schema（data/name/mimeType）、上传说明与 10 MB 总大小提示、客户端输入 schema（paths/ref/tabId）、代理侧输入 schema（含 files）、file_upload 工具定义，以及全部浏览器工具定义列表。
  */
@@ -755,16 +755,16 @@ var BROWSER_TOOLS = [
 ];
 export {
   CHROME_INPUT_APPROVED_TOOL_NAMES,
+  BROWSER_ACTION_SETTLE_MS,
+  BROWSER_TOOL_TIMEOUT_MS,
   BROWSER_TOOLS,
   BRIDGE_EXCLUDED_TOOL_NAMES,
   browserSelectionNote,
-  BROWSER_TOOL_TIMEOUT_MS,
+  browserPreflightInstruction,
   BROWSER_LONG_TIMEOUT_MS,
   BROWSER_MAX_TIMEOUT_MS,
   BROWSER_SELECT_TIMEOUT_MS,
   BROWSER_REGISTER_TIMEOUT_MS,
-  BROWSER_ACTION_SETTLE_MS,
-  browserPreflightInstruction,
   BROWSER_TOOL_INPUT_SCHEMAS,
   FILE_UPLOAD_PROXY_INPUT_SCHEMA,
   FILE_UPLOAD_PROXY_TOOL,

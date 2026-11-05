@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增。云 worker 入站事件：客户端行追赶、入站通道分类、事件流定义。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-z4g2ta8k.js (42)
- * attribution: placement 42
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1kk50rk6.js (42)
+ * attribution: placement 40, layout 2
  */
-import { URL as As } from "url";
+import { URL as Ls } from "url";
 import { withDeadline } from "../../utils/sleep.js";
 import {
   initializeGrowthBook,
@@ -28,6 +28,7 @@ import { logError } from "../../utils/log.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { dropRetractedMessages_2 as dropRetractedMessages } from "../../utils/transcript/deserialize.js";
 import { sessionIdBody } from "../../bridge/sessionIdCompat.js";
+import { isNotEmptyMessage } from "../../utils/messages.js";
 import { normalizeMessage } from "../../utils/queryHelpers.js";
 import { stripMemoryTagsFromBlocks } from "../../services/orgMemory/promptIndex.js";
 import { stripSystemReminders } from "../../components/messageActions.js";
@@ -79,17 +80,24 @@ import {
 import { resolvedRowsMode, isSunnyAnchorOff } from "../../services/projects/threadRows.js";
 import { sanitizeAddressPart } from "../../utils/swarm/teammateIds.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
-import { cloudBrowserTurnId, pickTurnIdForRelay } from "../../services/mcp/ccrTurnId.js";
+import {
+  cloudBrowserTurnId,
+  pickTurnIdForRelay,
+  commonProgramUseCaseId,
+} from "../../services/mcp/ccrTurnId.js";
 import { isCoworkWithRemote } from "../../utils/sessionShape.js";
 import { getMcpClientsFromAccessor } from "../../bootstrap/state.js";
 import { toScopedConfig, isRemoteBrowserModeFloorOn } from "../../utils/permissions/remoteBrowser.js";
-import { identity } from "../../utils/identity.js";
+import { ensureFreshGrowthBook } from "./turnHandoff.js";
 import { resolveAndPrepend } from "../../bridge/inboundAttachments.js";
 import { MOSSY_SQUID_GATE } from "../../services/api/withRetry.js";
+import { identity } from "../../utils/identity.js";
 import { isScheduledTriggerOrigin } from "../../utils/turnOrigin.js";
 import { logForDebugging } from "../../utils/debug.js";
+import { DESKTOP_APP } from "../../services/artifacts/comments/commentNotifications.js";
+import { peerOriginHeader } from "../../utils/peerMessageHeaders.js";
 import { isTextNotTyped } from "../../entrypoints/sdk/coreSchemas.js";
-import { getTransportForUrl } from "../transports/transportUtils.js";
+import { httpUrlFromWs } from "../transports/transportUtils.js";
 import { SSETransport } from "../transports/SSETransport.js";
 import { DoctorLazy } from "../handlers/util.js";
 import {
@@ -102,9 +110,9 @@ import {
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-z4g2ta8k.js:48124-48136 placement
+//@ chunk-1kk50rk6.js:51083-51095 placement
 var INGRESS_READINESS_TIMEOUT_MS = 2000;
-//@ chunk-z4g2ta8k.js:48136-48291 placement
+//@ chunk-1kk50rk6.js:51095-51250 placement
 /**
  * 构造入站消息的就绪检查对象：中继行已加载标志、带超时的特性开关加载，以及是否存在 MessageDisplay 钩子。
  */
@@ -121,7 +129,7 @@ function createIngressReadiness(session, appState, rowsLoaded) {
       dispatchClassicEvent("MessageDisplay"),
   };
 }
-//@ chunk-z4g2ta8k.js:48291-50891 placement
+//@ chunk-1kk50rk6.js:51250-53858 placement
 async function catchUpClientRows(ccrClient, { flagsLoaded, hasDisplayHooks, rowsLoaded }) {
   try {
     let spans = await ccrClient.clientRowsOwedByEarlierWorkers(flagsLoaded);
@@ -185,7 +193,8 @@ async function catchUpClientRows(ccrClient, { flagsLoaded, hasDisplayHooks, rows
           .filter((row) => !loaded.has(row.uuid)),
       );
       let { rows: rows_3, leftOut } = selectRowsToResend(spans, rows, (row) => {
-        if (!retracted.has(row) || isHiddenFromCatchUp(row) || seen.has(row)) return false;
+        if (!retracted.has(row) || isHiddenFromCatchUp(row) || seen.has(row) || !isNotEmptyMessage(row))
+          return false;
         return row.type === "assistant" && (shownAsStored === "" || row.shownAsStoredIn !== shownAsStored)
           ? "nor_any_after_it"
           : true;
@@ -255,7 +264,7 @@ async function catchUpClientRows(ccrClient, { flagsLoaded, hasDisplayHooks, rows
     ccrClient.setDisplayHooksProbe(hasDisplayHooks);
   }
 }
-//@ chunk-z4g2ta8k.js:50891-51099 placement
+//@ chunk-1kk50rk6.js:53858-54066 placement
 /**
  * 判断入站消息类型是否不在本地直接处理的集合中（user、bash_command、control_response 等以外）。
  */
@@ -270,7 +279,7 @@ function isUnhandledIngressType(frame) {
     frame.type !== "control_request"
   );
 }
-//@ chunk-z4g2ta8k.js:51099-51290 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-1kk50rk6.js:54066-54257 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 内容是否含格式不对的文本块（非对象、text 不是字符串等）。
  */
@@ -289,7 +298,7 @@ function hasMalformedTextBlocks(data) {
       ))
   );
 }
-//@ chunk-z4g2ta8k.js:51290-51412 placement
+//@ chunk-1kk50rk6.js:54257-54379 placement
 /**
  * 取入站用户消息的内容：需要清理且非受信来源时去掉 system-reminder 并清理文本块，否则原样返回。
  */
@@ -302,7 +311,7 @@ function ingressPromptContent(frame, shouldEscape, skip) {
       ? sanitizeTextBlocks(content)
       : content;
 }
-//@ chunk-z4g2ta8k.js:51412-51467 placement
+//@ chunk-1kk50rk6.js:54379-54434 placement
 /**
  * 入站提示内容转义：未开启或已转义时原样返回，否则按来源转义插件标签。
  */
@@ -310,7 +319,7 @@ function escapePromptUnlessDisabled(content, shouldEscape, skip, inboundOrigin) 
   if (!shouldEscape || skip) return content;
   return escapePluginTags(content, inboundOrigin);
 }
-//@ chunk-z4g2ta8k.js:51467-52157 placement
+//@ chunk-1kk50rk6.js:54434-55124 placement
 /**
  * 把会话通道上收到的用户帧转成外部事件记录：内容格式不对、来自对等方或不满足"会话通道真人输入"条件时返回 null；非对等/Slack 点名的消息还会附上粘贴内容。
  */
@@ -362,7 +371,7 @@ function sessionChannelPromptRecord(event) {
     record = buildExternalEventRecord(record, event.pasted_content, event.inline_pastes);
   return lastTextBlockText(record);
 }
-//@ chunk-z4g2ta8k.js:52157-52221 placement
+//@ chunk-1kk50rk6.js:55124-55188 placement
 /**
  * 先取入站提示内容再做插件标签转义的组合入口。
  */
@@ -374,7 +383,7 @@ function escapedIngressPrompt(frame, shouldEscape, skip) {
     frame.inbound_origin,
   );
 }
-//@ chunk-z4g2ta8k.js:52221-52434 placement
+//@ chunk-1kk50rk6.js:55188-55401 placement
 /**
  * 判断入站消息是否是会话收件箱的唤醒事件（开关开启时解析外部事件唤醒），是则返回唤醒对象。
  */
@@ -391,7 +400,7 @@ function resolveInboxWakeFor(sessionId, kind, record) {
   }
   return;
 }
-//@ chunk-z4g2ta8k.js:52434-52619 placement
+//@ chunk-1kk50rk6.js:55401-55586 placement
 /**
  * 提取 Projects 中继消息的元数据：中继消息 id、校验过的中继行与线程时间戳。
  */
@@ -416,7 +425,7 @@ function relayMessageMeta(frame, origin) {
     }),
   };
 }
-//@ chunk-z4g2ta8k.js:52619-52956 placement
+//@ chunk-1kk50rk6.js:55586-55923 placement
 /**
  * 记录 Projects 中继入站的特性状态：开关关闭或无中继 id、中继行被拒，或成功（id、行与附注数量）。
  */
@@ -442,7 +451,7 @@ function logProjectsRelayAdmission(frame, origin, rows) {
     note_count: relayPrompt ? 1 : 0,
   });
 }
-//@ chunk-z4g2ta8k.js:52956-53223 placement
+//@ chunk-1kk50rk6.js:55923-56190 placement
 function describeIngressOrigin(
   frame,
   clientPlatform,
@@ -474,9 +483,9 @@ function describeIngressOrigin(
   }
   return;
 }
-//@ chunk-z4g2ta8k.js:53223-53235 placement
+//@ chunk-1kk50rk6.js:56190-56202 placement
 var GROWTHBOOK_SETTLE_BUDGET_MS = 2000;
-//@ chunk-z4g2ta8k.js:53235-53647 placement
+//@ chunk-1kk50rk6.js:56202-56614 placement
 /**
  * 等 GrowthBook 初始化（带截止时间），拿到的特性不新鲜时在剩余时间内再刷新一次；仍不新鲜时记诊断日志 cli_user_frame_flag_settle，返回是否已就绪。
  */
@@ -513,41 +522,32 @@ async function awaitGrowthBookSettled(context) {
     }));
   return fresh;
 }
-//@ chunk-z4g2ta8k.js:53647-53705 placement
+//@ chunk-1kk50rk6.js:56614-56672 placement
 var TRIGGER_FIRE_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-z4g2ta8k.js:53647", () => {
+deferInit("chunk-1kk50rk6.js:56614", () => {
   TRIGGER_FIRE_REASONS = new Set(["scheduled", "retry", "catch_up", "manual"]);
 });
-//@ chunk-z4g2ta8k.js:53705-53808 placement
+//@ chunk-1kk50rk6.js:56672-56775 placement
 function isServerDeliveredOrigin(frame) {
   return (
     frame.inbound_origin === undefined ||
     (frame.inbound_origin === "trigger_fire" && TRIGGER_FIRE_REASONS.has(triggerFireReasonOf(frame) ?? ""))
   );
 }
-//@ chunk-z4g2ta8k.js:53808-53939 placement
-/**
- * 为云端浏览器回合准备入站消息：标记是否由服务器投递，以及会话是否持有云浏览器 MCP。
- */
-function prepareCloudBrowserTurn(frame, { deliveredByServer }) {
-  return cloudBrowserTurnId(frame, {
-    deliveredByServer: deliveredByServer && isServerDeliveredOrigin(frame),
+//@ chunk-1kk50rk6.js:56775-56977 layout
+function withCloudBrowserTurnId(message, isServerDelivered) {
+  return cloudBrowserTurnId(message, {
+    deliveredByServer:
+      isServerDelivered.isRemoteIO &&
+      !isServerDelivered.isLocallyPrepended &&
+      !isServerDelivered.isRelayHuman &&
+      isServerDelivered.peerFrom === undefined &&
+      !isServerDelivered.isCrossSession &&
+      isServerDeliveredOrigin(message),
     holdsCloudBrowser: () => isCoworkWithRemote() && (getMcpClientsFromAccessor() ?? []).some(toScopedConfig),
   });
 }
-//@ chunk-z4g2ta8k.js:53939-53991 placement
-var TURN_RUNNING_STATE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-z4g2ta8k.js:53939", () => {
-  TURN_RUNNING_STATE = identity(
-    {
-      running: undefined,
-    },
-    (state) => {
-      state.running = undefined;
-    },
-  );
-});
-//@ chunk-z4g2ta8k.js:53991-54619 placement
+//@ chunk-1kk50rk6.js:56977-57506 placement
 /**
  * 判断是否给云浏览器回合发 turn id：下限开关已开直接放行；GrowthBook 未启用拒绝；否则等特性稳定后再判，仍未稳定时在后台刷新并记 flags_unsettled。
  */
@@ -583,23 +583,14 @@ async function admitCloudBrowserTurnId(context) {
       flagSettleMs,
     };
   }
-  if (TURN_RUNNING_STATE.running === undefined) {
-    let refresh = refreshGrowthBookFeatures()
-      .catch(() => {
-        return;
-      })
-      .finally(() => {
-        if (TURN_RUNNING_STATE.running === refresh) TURN_RUNNING_STATE.running = undefined;
-      });
-    TURN_RUNNING_STATE.running = refresh;
-  }
+  ensureFreshGrowthBook().catch(() => {});
   logFeatureSad("ccr_cloud_browser_turn_id", "flags_unsettled");
   return {
     admitted: false,
     flagSettleMs,
   };
 }
-//@ chunk-z4g2ta8k.js:54619-55433 placement
+//@ chunk-1kk50rk6.js:57506-58320 placement
 async function classifyInboundLane(frame, fields) {
   let flagsSettled = isHearthOrigin(fields.inboundOrigin)
     ? await awaitGrowthBookSettled({
@@ -661,11 +652,11 @@ async function classifyInboundLane(frame, fields) {
     },
   };
 }
-//@ chunk-z4g2ta8k.js:55433-55496 placement
+//@ chunk-1kk50rk6.js:58320-58383 placement
 function teammateSenderOf(origin, meta) {
   return origin ? (origin.kind === "peer" ? origin.from : undefined) : getTeammateMessageSender(meta);
 }
-//@ chunk-z4g2ta8k.js:55496-55602 placement
+//@ chunk-1kk50rk6.js:58383-58489 placement
 /**
  * 判断入站帧是否来自人类用户（非对等会话转发，按入站来源、远程 IO 与客户端平台判断）。
  */
@@ -680,7 +671,7 @@ function isHumanIngressFrame(frame, fields) {
     )
   );
 }
-//@ chunk-z4g2ta8k.js:55602-55776 placement
+//@ chunk-1kk50rk6.js:58489-58851 placement
 /**
  * 人类用户入站帧中取出被撤回的文件 uuid 列表。
  */
@@ -691,10 +682,15 @@ function withdrawnFileUuidsOf(frame, fields) {
         withdrawnFileUuids: withdrawnFileUuids.filter(
           (withdrawnFileUuid) => typeof withdrawnFileUuid === "string",
         ),
+        hidePicturesWithNoFileIdBefore:
+          "hide_pictures_with_no_file_id_before" in frame &&
+          typeof frame.hide_pictures_with_no_file_id_before === "string"
+            ? Date.parse(frame.hide_pictures_with_no_file_id_before) || 0
+            : 0,
       }
     : {};
 }
-//@ chunk-z4g2ta8k.js:55776-56091 placement
+//@ chunk-1kk50rk6.js:58851-59166 placement
 /**
  * 判断一条入站用户消息是否算真人发起的新回合：排除本地前置、对等方、元消息、客户端合成、召唤种子、非 user 发起者，远程 IO 下还要求不是合成消息且来源可信。
  */
@@ -713,7 +709,7 @@ function isUserTypedTurn(frame, fields) {
       : !hasNonHumanOrigin(frame.origin, frame.isSynthetic))
   );
 }
-//@ chunk-z4g2ta8k.js:56091-56162 placement
+//@ chunk-1kk50rk6.js:59166-59237 placement
 /**
  * 把入站附件与文件解析后前置到用户帧（isHumanIngressFrame 决定是否需要人工提示）。
  */
@@ -730,17 +726,17 @@ function prependIngressFiles(frame, second, third, fourth, fifth, sixth, seventh
     namedByIdHash,
   );
 }
-//@ chunk-z4g2ta8k.js:56162-56288 placement
+//@ chunk-1kk50rk6.js:59237-59363 placement
 function nonPeerOriginOf(origin, frame, peerFrom) {
   let refined = refineInboundOrigin(origin, frame.client_platform, frame.inbound_origin);
   if (!peerFrom && refined?.kind === "human" && hasNonHumanOrigin(frame.origin, false)) return;
   return refined;
 }
-//@ chunk-z4g2ta8k.js:56288-56311 placement
+//@ chunk-1kk50rk6.js:59363-59386 placement
 function isMossySquidGateForceOff() {
   return false;
 }
-//@ chunk-z4g2ta8k.js:56311-56390 placement
+//@ chunk-1kk50rk6.js:59386-59465 placement
 function isSyntheticTriggerReleaseEnabled() {
   if (isMossySquidGateForceOff())
     return getFeatureValue_CACHED_MAY_BE_STALE(MOSSY_SQUID_GATE, false) === true;
@@ -750,7 +746,7 @@ function isSyntheticTriggerReleaseEnabled() {
     getAllGrowthBookFeatures()[MOSSY_SQUID_GATE] === true
   );
 }
-//@ chunk-z4g2ta8k.js:56390-56472 placement
+//@ chunk-1kk50rk6.js:59465-59547 placement
 /**
  * 判断是否为合成请求帧且 origin 属于触发器来源（且 GrowthBook 可用、未强制关）。
  */
@@ -762,9 +758,9 @@ function isSyntheticTriggerFrame(frame) {
     !isMossySquidGateForceOff()
   );
 }
-//@ chunk-z4g2ta8k.js:56472-56520 placement
+//@ chunk-1kk50rk6.js:59547-59595 placement
 var TAKEN_PROMISE_HOLDER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-z4g2ta8k.js:56472", () => {
+deferInit("chunk-1kk50rk6.js:59547", () => {
   TAKEN_PROMISE_HOLDER = identity(
     {
       taken: undefined,
@@ -774,7 +770,7 @@ deferInit("chunk-z4g2ta8k.js:56472", () => {
     },
   );
 });
-//@ chunk-z4g2ta8k.js:56520-56578 placement
+//@ chunk-1kk50rk6.js:59595-59653 placement
 /**
  * 一次性取 promise：第一次调用时执行并缓存，之后返回同一 promise（失败归一为 undefined）。
  */
@@ -783,14 +779,14 @@ function takeOnce(start) {
     return;
   }));
 }
-//@ chunk-z4g2ta8k.js:56578-56884 placement
+//@ chunk-1kk50rk6.js:59653-59959 placement
 /**
  * 触发器 origin 到任务通知类型的映射表。
  */
 var UNCLASSIFIED_ORIGIN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SCHEDULED_TRIGGER_ORIGIN;
 var TRIGGER_ORIGIN_KINDS;
-deferInit("chunk-z4g2ta8k.js:56578", () => {
+deferInit("chunk-1kk50rk6.js:59653", () => {
   UNCLASSIFIED_ORIGIN = Object.freeze({
     kind: "unclassified",
   });
@@ -810,7 +806,7 @@ deferInit("chunk-z4g2ta8k.js:56578", () => {
     delivery: undefined,
   };
 });
-//@ chunk-z4g2ta8k.js:56884-57186 placement
+//@ chunk-1kk50rk6.js:59959-60261 placement
 /**
  * 对合成消息的发送方分类：无、人、投递、其他子类型、未担保的定时触发、定时触发的提示或其旁带消息。
  */
@@ -824,7 +820,7 @@ function classifySyntheticSender(frame, origin, peerFrom) {
     ? "fired-prompt"
     : "beside-a-fire";
 }
-//@ chunk-z4g2ta8k.js:57186-57424 placement
+//@ chunk-1kk50rk6.js:60261-60499 placement
 function syntheticFrameOrigin(kind, origin) {
   if (kind === "fired-prompt" || kind === "beside-a-fire") {
     let releaseOn = isSyntheticTriggerReleaseEnabled();
@@ -836,7 +832,7 @@ function syntheticFrameOrigin(kind, origin) {
   let mapped = TRIGGER_ORIGIN_KINDS[kind];
   return mapped === "as classified" ? origin : mapped;
 }
-//@ chunk-z4g2ta8k.js:57424-57655 placement
+//@ chunk-1kk50rk6.js:60499-60802 placement
 /**
  * 解析入站消息的各种来源：入站来源、对等发送方、非对等来源与排队命令的来源。
  */
@@ -849,25 +845,47 @@ function resolveIngressOrigins(frame, meta, isRemoteIO, peerFrom, flagsSettled, 
       (isRemoteIO
         ? humanOriginWhenNotSynthetic(frame.client_platform, frame.inbound_origin)
         : resolveIngressOrigin(frame.origin, false)));
+  let originFields =
+    isRemoteIO || frame.client_platform !== DESKTOP_APP ? undefined : peerOriginHeader(frame.origin, meta);
   return {
     ingressOrigin,
-    peerFrom: teammateSenderOf(ingressOrigin, meta),
+    peerFrom: teammateSenderOf(ingressOrigin, meta) ?? originFields?.from,
+    hostPeer: originFields,
     nonPeerOrigin: nonPeer,
     queuedOrigin,
   };
 }
-//@ chunk-z4g2ta8k.js:57655-57745 placement
+//@ chunk-1kk50rk6.js:60802-60892 placement
 /**
  * 取入站帧的 initiator（非空字符串时返回，否则 undefined）。
  */
 function initiatorOfFrame(frame) {
   return typeof frame.initiator === "string" && frame.initiator !== "" ? frame.initiator : undefined;
 }
-//@ chunk-z4g2ta8k.js:57745-58301 placement
+//@ chunk-1kk50rk6.js:60892-61196 layout
+function isPlainUserMessageEnvelope(message) {
+  return (
+    [message.origin, message.inbound_origin, message.client_platform].every(
+      (field) => field === undefined || field === null,
+    ) &&
+    [
+      message.isSynthetic,
+      message.is_meta,
+      message.client_composed,
+      message.seeded_summon,
+      message.text_not_typed,
+    ].every((field) => field === undefined || field === null || field === false) &&
+    (message.initiator === undefined ||
+      message.initiator === null ||
+      message.initiator === "" ||
+      message.initiator === "user")
+  );
+}
+//@ chunk-1kk50rk6.js:61196-61946 placement
 /**
  * 计算入站消息提交时的附加标志：客户端合成/召唤或非真人来源时跳过附件；本地真人键入标记 localStdinOrigin；真人消息带 requeueIfInterruptedWithinMs。
  */
-function ingressSubmitFlags({ message, isRemoteIO, isRelayHuman, queuedOrigin, nonPeerOrigin }) {
+function ingressSubmitFlags({ message, isRemoteIO, isRelayHuman, queuedOrigin, nonPeerOrigin, foreignWord }) {
   let skipAttachments =
     message.client_composed === true ||
     message.seeded_summon === true ||
@@ -890,6 +908,15 @@ function ingressSubmitFlags({ message, isRemoteIO, isRelayHuman, queuedOrigin, n
     typedByHuman && !message.isSynthetic
       ? clampRequeueWindowMs(message.requeue_if_interrupted_within_ms)
       : undefined;
+  let programUseCaseId = commonProgramUseCaseId(message, {
+    ownerTyped:
+      isRemoteIO &&
+      typedByHuman &&
+      !message.isSynthetic &&
+      message.historical !== true &&
+      !isClaudeCodeCliPlatform(message.client_platform) &&
+      foreignWord === undefined,
+  });
   return {
     ...(skipAttachments && {
       skipAttachments: true,
@@ -901,9 +928,15 @@ function ingressSubmitFlags({ message, isRemoteIO, isRelayHuman, queuedOrigin, n
     ...(requeueWithinMs !== undefined && {
       requeueIfInterruptedWithinMs: requeueWithinMs,
     }),
+    ...(programUseCaseId !== undefined && {
+      ccrProgramUseCaseId: programUseCaseId,
+    }),
+    ...(message.seeded_summon === true && {
+      quotesOthers: true,
+    }),
   };
 }
-//@ chunk-z4g2ta8k.js:58301-58393 placement
+//@ chunk-1kk50rk6.js:61946-62038 placement
 /**
  * 判断入站帧是否由人类撰写：已标记、client_composed 或非键入文本、邮件人类来源。
  */
@@ -915,7 +948,7 @@ function isHumanComposedFrame(frame, peerFrom) {
     frame.inbound_origin === EMAIL_HUMAN
   );
 }
-//@ chunk-z4g2ta8k.js:58393-58485 placement
+//@ chunk-1kk50rk6.js:62038-62130 placement
 function clampRequeueWindowMs(requeueIfInterruptedWithinMs) {
   return typeof requeueIfInterruptedWithinMs === "number" &&
     Number.isInteger(requeueIfInterruptedWithinMs) &&
@@ -923,13 +956,13 @@ function clampRequeueWindowMs(requeueIfInterruptedWithinMs) {
     ? Math.min(requeueIfInterruptedWithinMs, 1e4)
     : undefined;
 }
-//@ chunk-z4g2ta8k.js:58512-58649 placement
+//@ chunk-1kk50rk6.js:62157-62294 placement
 function createWorkerEventsTransport(url, headers = {}, options = {}) {
-  let transportForUrl = getTransportForUrl(new As(url.href));
-  transportForUrl.pathname = transportForUrl.pathname.replace(/\/$/, "") + "/worker/events/stream";
-  return new SSETransport(transportForUrl, headers, options);
+  let timeoutMs = httpUrlFromWs(new Ls(url.href));
+  timeoutMs.pathname = timeoutMs.pathname.replace(/\/$/, "") + "/worker/events/stream";
+  return new SSETransport(timeoutMs, headers, options);
 }
-//@ chunk-z4g2ta8k.js:58649-59551 placement
+//@ chunk-1kk50rk6.js:62294-63196 placement
 /**
  * worker 事件流常量：hello 超时与重拨上限、续期/批处理/心跳节奏、心跳被拒状态、socket 超时、消息体上限与预留、事件路径种类，以及 hello/ack/event 帧的 zod schema。
  */
@@ -948,7 +981,7 @@ var MESSAGE_BYTES_RESERVE;
 var WORKER_EVENT_PATH_KINDS;
 var workerEventFrameSchema;
 var sequenceNumReplySchema;
-deferInit("chunk-z4g2ta8k.js:58649", () => {
+deferInit("chunk-1kk50rk6.js:62294", () => {
   WORKER_EVENT_STREAMS = /^(?:client|server)_(?:no_context_takeover|max_window_bits(?:=\d+)?)$/;
   HELLO_TIMEOUT_MS = 5000;
   MAX_DIALS_WITHOUT_HELLO = 2;
@@ -1013,13 +1046,14 @@ export {
   logProjectsRelayAdmission,
   initiatorOfFrame,
   isHumanComposedFrame,
-  prepareCloudBrowserTurn,
+  isHumanIngressFrame,
+  withCloudBrowserTurnId,
   admitCloudBrowserTurnId,
   escapePromptUnlessDisabled,
   withdrawnFileUuidsOf,
+  isPlainUserMessageEnvelope,
   ingressSubmitFlags,
   hasMalformedTextBlocks,
-  isHumanIngressFrame,
   prependIngressFiles,
   DEFAULT_MAX_MESSAGE_BYTES,
   MESSAGE_BYTES_RESERVE,

@@ -3,10 +3,10 @@
  *
  * CCR 容器上游代理初始化：读令牌文件描述符、起中继、设置 HTTPS_PROXY/NO_PROXY/CA 包与 gh 替身环境
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/upstreamproxy/upstreamproxy.ts
- * pieces: chunk-1k6d6j2b.js (1), chunk-awy329vy.js (68), chunk-hm0ce8vc.js (1)
- * attribution: placement 67, fingerprint 3
+ * pieces: chunk-9knfmvrf.js (68), chunk-asf5gh8x.js (1), chunk-nxvwrdvj.js (1)
+ * attribution: fingerprint 3, placement 67
  */
 import { join, delimiter, parse } from "path";
 import { homedir, tmpdir } from "os";
@@ -41,7 +41,7 @@ import { setAgentProxyEndpoint } from "../utils/agentProxy/agentProxyState.js";
 import { HostScoped } from "../utils/hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { env, scanPathForExecutables } from "../utils/env.js";
-import { isEnvTruthy, getClaudeConfigDir } from "../utils/envUtils.js";
+import { isEnvTruthy } from "../utils/envUtils.js";
 import {
   AGENT_PROXY_STANDALONE_RELAY_MODE,
   isAgentProxyStandaloneActive,
@@ -52,6 +52,7 @@ import { isHttpMcpServeInvocation } from "../entrypoints/mcpServeArgs.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { getSessionIngressAuthToken } from "../utils/sessionIngressAuth.js";
 import { disableCoreDumps } from "../utils/processHardening.js";
+import { getClaudeConfigDir } from "../utils/markdownConfigLoader.js";
 import { withoutBlockedCerts } from "../utils/caCerts.js";
 import { isEssentialTrafficOnly } from "../utils/privacyLevel.js";
 import { recordPhase } from "../utils/startupTiming.js";
@@ -102,7 +103,7 @@ import { cgroupSpawnOptions } from "../utils/toolCgroup.js";
 import { getProxyFetchOptions } from "../utils/proxy.js";
 import { isTransientError } from "../utils/fsSafety/hardenedRead.js";
 
-//@ chunk-1k6d6j2b.js:263-2319 placement
+//@ chunk-nxvwrdvj.js:263-2319 placement
 /**
  * 生成 gh 包装脚本片段：已有用户令牌、非 github.com 主机或仓库/origin 指向其他主机时直接执行原 gh，否则继续走代理。
  */
@@ -169,11 +170,11 @@ fi
 `
   );
 }
-//@ chunk-hm0ce8vc.js:54310-54413 fingerprint (2.1.88 match: SYSTEM_CA_BUNDLE, 0.658)
+//@ chunk-asf5gh8x.js:56235-56338 fingerprint (2.1.88 match: SYSTEM_CA_BUNDLE, 0.658)
 var SYSTEM_CA_BUNDLE = ["/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt"];
 var MAX_SYSTEM_CA_BYTES = 1048576;
 var MAX_CA_TOTAL_BYTES = 8388608;
-//@ chunk-awy329vy.js:2175-2300 fingerprint (2.1.88 match: NO_PROXY_LIST, 0.446)
+//@ chunk-9knfmvrf.js:2184-2309 fingerprint (2.1.88 match: NO_PROXY_LIST, 0.446)
 var NO_PROXY_LIST = [
   "registry.npmjs.org",
   "jsr.io",
@@ -183,7 +184,7 @@ var NO_PROXY_LIST = [
   "index.crates.io",
   "proxy.golang.org",
 ];
-//@ chunk-awy329vy.js:60056-61021 placement
+//@ chunk-9knfmvrf.js:70595-71560 placement
 /**
  * 常见系统 CA 包的路径列表。
  */
@@ -247,7 +248,7 @@ var NO_PROXY_LOCAL_ONLY = [
   "100.64.0.0/10",
 ].join(",");
 var NO_PROXY_ANT_ONLY = ["169.254.0.0/16", ".svc.cluster.local", "*.svc.cluster.local"].join(",");
-//@ chunk-awy329vy.js:61021-61316 placement
+//@ chunk-9knfmvrf.js:71560-71855 placement
 class AgentProxyRuntime {
   state = {
     enabled: false,
@@ -274,16 +275,16 @@ class AgentProxyRuntime {
     this.relay = undefined;
   }
 }
-//@ chunk-awy329vy.js:61316-61342 placement
+//@ chunk-9knfmvrf.js:71855-71881 placement
 var agentProxies = new HostScoped(() => new AgentProxyRuntime());
-//@ chunk-awy329vy.js:61342-61380 placement
+//@ chunk-9knfmvrf.js:71881-71919 placement
 /**
  * 取出当前宿主的 agent 代理状态。
  */
 function getAgentProxyState() {
   return agentProxies.of(getRootSession().host);
 }
-//@ chunk-awy329vy.js:61380-65296 placement
+//@ chunk-9knfmvrf.js:71919-75893 placement
 /**
  * agent 代理初始化：读取并清除 CCR_AGENT_PROXY_* 环境变量，决定中继模式、包含主机、CA 监视等。
  */
@@ -295,6 +296,7 @@ async function initAgentProxy(opts) {
   let CCR_AGENT_PROXY_INCLUDE_HOSTS = env.CCR_AGENT_PROXY_INCLUDE_HOSTS;
   let CCR_AGENT_PROXY_RECEIVE_GATE_DISABLED = env.CCR_AGENT_PROXY_RECEIVE_GATE_DISABLED;
   let CCR_AGENT_PROXY_UPLOAD_GATE_DISABLED = env.CCR_AGENT_PROXY_UPLOAD_GATE_DISABLED;
+  let maxBusyTunnels = env.CCR_AGENT_PROXY_MAX_BUSY_TUNNELS;
   let CCR_AGENT_PROXY_NO_PROXY_LOCAL_ONLY = env.CCR_AGENT_PROXY_NO_PROXY_LOCAL_ONLY;
   let CCR_AGENT_PROXY_CA_WATCH_ENABLED = env.CCR_AGENT_PROXY_CA_WATCH_ENABLED;
   let CCR_AGENT_PROXY_CA_CERT_B64 = env.CCR_AGENT_PROXY_CA_CERT_B64;
@@ -455,6 +457,7 @@ ${customerCa}`
     bundleCoversEveryHost: filteredSystemCa !== "",
     receiveGateDisabled: Boolean(CCR_AGENT_PROXY_RECEIVE_GATE_DISABLED),
     uploadGateDisabled: Boolean(CCR_AGENT_PROXY_UPLOAD_GATE_DISABLED),
+    maxBusyTunnels,
     caWatchEnabled: Boolean(CCR_AGENT_PROXY_CA_WATCH_ENABLED),
     pathProbes: scanOptions,
     installedClisScan,
@@ -482,7 +485,7 @@ ${customerCa}`
   }
   return agentProxyState.state;
 }
-//@ chunk-awy329vy.js:65296-65631 placement
+//@ chunk-9knfmvrf.js:75893-76228 placement
 /**
  * 代理 GitHub TLS 设置失败的说明，以及后台重试的最大间隔与判定耗尽的时长。
  */
@@ -490,7 +493,7 @@ var GITHUB_TLS_FAILED_TEXT =
   "Anthropic-managed GitHub access through this session's proxy could not be set up: git and gh fail TLS verification against github.com. Never disable TLS verification or edit the git config file named by $GIT_CONFIG_GLOBAL to get past it; tell the user that GitHub access is not available in this session.";
 var MAX_RETRY_DELAY_MS = 300000;
 var RETRY_BAD_AFTER_MS = 3600000;
-//@ chunk-awy329vy.js:65631-65729 placement
+//@ chunk-9knfmvrf.js:76228-76326 placement
 /**
  * 代理运行代次不符、已启用或正在清理时返回 “exit”。
  */
@@ -498,11 +501,11 @@ function shouldExitAgentProxy(runtime, generation) {
   if (runtime.generation !== generation || runtime.state.enabled || isCleanupStarted()) return "exit";
   return isShuttingDown() ? "defer" : null;
 }
-//@ chunk-awy329vy.js:65729-65780 placement
+//@ chunk-9knfmvrf.js:76326-76377 placement
 function backgroundRetryDelayMs(attempt, maxAttempts) {
   return Math.min(getRetryDelay(attempt - 1, maxAttempts, MAX_RETRY_DELAY_MS), MAX_RETRY_DELAY_MS);
 }
-//@ chunk-awy329vy.js:65780-66461 placement
+//@ chunk-9knfmvrf.js:76377-77058 placement
 /**
  * 代理初始化失败后在后台持续重试：每次按退避等待，世代变更则退出或延后；超过时限仍失败时记一次"耗尽"遥测但继续重试，直到成功或致命错误。
  */
@@ -542,7 +545,7 @@ async function retryAgentProxyInBackground(context, lastResult) {
     }
   }
 }
-//@ chunk-awy329vy.js:66461-71701 placement
+//@ chunk-9knfmvrf.js:77058-82371 placement
 /**
  * 启动 agent 代理：读取 CCR_AGENT_PROXY_* 环境变量，启动本地中继、写入 CA 信任与 git 配置。
  */
@@ -561,6 +564,7 @@ async function bringUpAgentProxy(plan, attempt) {
     bundleCoversEveryHost,
     receiveGateDisabled,
     uploadGateDisabled,
+    maxBusyTunnels,
     caWatchEnabled,
     pathProbes,
     installedClisScan,
@@ -671,6 +675,11 @@ async function bringUpAgentProxy(plan, attempt) {
         ...(uploadGateDisabled && {
           sendPauseAfterPendingBytes: 1 / 0,
           sendStallTimeoutMs: 1 / 0,
+        }),
+      },
+      tunnelGateLimits: {
+        ...(maxBusyTunnels !== undefined && {
+          maxBusyTunnels,
         }),
       },
       statusProvider: async () => {
@@ -905,7 +914,7 @@ async function bringUpAgentProxy(plan, attempt) {
     };
   }
 }
-//@ chunk-awy329vy.js:71701-71876 placement
+//@ chunk-9knfmvrf.js:82371-82546 placement
 function ghStandinConfig(config) {
   return config.ghStandin
     ? proxyPromptVariant({
@@ -916,7 +925,7 @@ function ghStandinConfig(config) {
       })
     : undefined;
 }
-//@ chunk-awy329vy.js:71876-72598 placement
+//@ chunk-9knfmvrf.js:82546-83268 placement
 async function configureGovernedGit(state, caBundlePath, options, selective, budgetOptions) {
   let anyFailure = false;
   let [gitConfigWritten, ghShim] = await Promise.all([
@@ -956,7 +965,7 @@ async function configureGovernedGit(state, caBundlePath, options, selective, bud
     });
   return gitConfigWritten;
 }
-//@ chunk-awy329vy.js:72598-73271 placement
+//@ chunk-9knfmvrf.js:83268-83941 placement
 /**
  * 由代理注入凭证的命令行工具（gh、aws、gcloud/bq/gsutil）：各自的真实凭证环境变量与替换成占位标记的变量。
  */
@@ -998,11 +1007,11 @@ var CREDENTIAL_PLACEHOLDER_CLIS = [
 ];
 var PLACEHOLDER_CREDENTIAL_KEYS = CREDENTIAL_PLACEHOLDER_CLIS.flatMap((cli) => Object.keys(cli.placeholders));
 var CA_POLL_INTERVAL_MS = 1000;
-//@ chunk-awy329vy.js:73271-73316 placement
+//@ chunk-9knfmvrf.js:83941-83986 placement
 function readToken(path) {
   return inheritedByChildren(path)?.trim() || undefined;
 }
-//@ chunk-awy329vy.js:73316-73520 placement
+//@ chunk-9knfmvrf.js:83986-84190 placement
 function getRunningRelayForGit() {
   let state = getAgentProxyState().state;
   if (
@@ -1019,7 +1028,7 @@ function getRunningRelayForGit() {
     caBundlePath: state.caBundlePath,
   };
 }
-//@ chunk-awy329vy.js:73520-74962 placement (2.1.88 match: getUpstreamProxyEnv, 0.377)
+//@ chunk-9knfmvrf.js:84190-85632 placement (2.1.88 match: getUpstreamProxyEnv, 0.377)
 /**
  * getAgentProxyEnv：代理启用时给子进程的环境变量（HTTPS_PROXY/NO_PROXY、CA 包相关变量、JAVA_TOOL_OPTIONS、gh shim 的 PATH 等）。
  */
@@ -1084,7 +1093,7 @@ function getAgentProxyEnv() {
   if (state.ghShimDir) envVars.PATH = [readToken("PATH"), state.ghShimDir].filter(Boolean).join(delimiter);
   return envVars;
 }
-//@ chunk-awy329vy.js:74962-75043 placement
+//@ chunk-9knfmvrf.js:85632-85713 placement
 /**
  * 代理启用且使用 gh 替身时返回 gh shim 目录。
  */
@@ -1092,15 +1101,15 @@ function getGhStandinDir() {
   let state = getAgentProxyState().state;
   return state.enabled && state.ghStandin ? state.ghShimDir : undefined;
 }
-//@ chunk-awy329vy.js:75043-75145 placement
+//@ chunk-9knfmvrf.js:85713-85815 placement
 function isGovernedGitArmed() {
   return Boolean(env.CLAUDE_CODE_AGENT_PROXY_GIT_CONFIG || env.CLAUDE_CODE_AGENT_PROXY_GH_SHIM);
 }
-//@ chunk-awy329vy.js:75145-75332 placement
+//@ chunk-9knfmvrf.js:85815-86002 placement
 var GIT_CONFIG_BLOCK_BEGIN = "# >>> claude agent-proxy governed-git (auto-generated; do not edit) >>>";
 var GIT_CONFIG_BLOCK_END = "# <<< claude agent-proxy governed-git <<<";
 var GIT_CREDENTIAL_QUIT_HELPER = '"!f() { case $1 in get) echo quit=true ;; esac; }; f"';
-//@ chunk-awy329vy.js:75332-75764 placement
+//@ chunk-9knfmvrf.js:86002-86434 placement
 function getGovernedGitHosts() {
   let CLAUDE_CODE_AGENT_PROXY_GIT_HOSTS = env.CLAUDE_CODE_AGENT_PROXY_GIT_HOSTS;
   if (!CLAUDE_CODE_AGENT_PROXY_GIT_HOSTS || CLAUDE_CODE_AGENT_PROXY_GIT_HOSTS.trim() === "")
@@ -1127,7 +1136,7 @@ function getGovernedGitHosts() {
     );
   return hosts;
 }
-//@ chunk-awy329vy.js:75764-77142 placement
+//@ chunk-9knfmvrf.js:86434-87812 placement
 /**
  * 写入受治理 git 的全局配置块（代理、CA、凭证助手）。
  */
@@ -1224,7 +1233,7 @@ async function writeGovernedGitConfig(state, caBundlePath) {
   );
   return true;
 }
-//@ chunk-awy329vy.js:77142-77319 placement
+//@ chunk-9knfmvrf.js:87812-87989 placement
 async function findOnPath(name, skipDir) {
   let parts = (env.PATH ?? "").split(delimiter);
   for (let dir of parts) {
@@ -1237,7 +1246,7 @@ async function findOnPath(name, skipDir) {
   }
   return;
 }
-//@ chunk-awy329vy.js:77319-77829 placement
+//@ chunk-9knfmvrf.js:87989-88499 placement
 async function withTimeBudget(label, operation, { budgetMs, caSource }) {
   let timeoutMessage = `${label} timed out`;
   let startTime = performance.now();
@@ -1274,7 +1283,7 @@ async function withTimeBudget(label, operation, { budgetMs, caSource }) {
     eventLoopLagMonitor.stop();
   }
 }
-//@ chunk-awy329vy.js:77829-78185 placement
+//@ chunk-9knfmvrf.js:88499-88855 placement
 async function sweepInstalledClis(budgetOptions) {
   let found = new Set();
   let probeResult = await withTimeBudget(
@@ -1294,12 +1303,12 @@ async function sweepInstalledClis(budgetOptions) {
   }
   return PROXIED_CLIS.filter((cli) => found.has(cli));
 }
-//@ chunk-awy329vy.js:78185-78287 placement
+//@ chunk-9knfmvrf.js:88855-88957 placement
 var MAX_SHIM_BYTES = 65536;
 var GH_SHIM_HEADER = `#!/bin/sh
 # claude agent-proxy governed-git gh shim (auto-generated; per-session).
 `;
-//@ chunk-awy329vy.js:78287-78554 placement
+//@ chunk-9knfmvrf.js:88957-89224 placement
 async function readGhShim(shimPath) {
   try {
     await using handle = await open(shimPath, readOnlyNoFollowFlags());
@@ -1316,12 +1325,12 @@ async function readGhShim(shimPath) {
     return "";
   }
 }
-//@ chunk-awy329vy.js:78554-78632 placement
+//@ chunk-9knfmvrf.js:89224-89302 placement
 function urlHostMatches(requestedHost, apiBase) {
   let hostname = URL.parse(githubApiBase(apiBase))?.hostname;
   return hostname !== undefined && hostMatchesSelectiveList(requestedHost, hostname);
 }
-//@ chunk-awy329vy.js:78632-78941 placement
+//@ chunk-9knfmvrf.js:89302-89611 placement
 async function isJqInstalled(skipDir, budgetOptions) {
   let probeResult = await withTimeBudget("jq PATH probe", () => findOnPath("jq", skipDir), budgetOptions);
   if ("failure" in probeResult) {
@@ -1337,7 +1346,7 @@ async function isJqInstalled(skipDir, budgetOptions) {
   }
   return probeResult.value === undefined;
 }
-//@ chunk-awy329vy.js:78941-79100 placement
+//@ chunk-9knfmvrf.js:89611-89770 placement
 function removeGhShimLater(shimPath, expectedText, removeParentDirs) {
   registerCleanup(async () => {
     if ((await readGhShim(shimPath)) !== expectedText) return;
@@ -1350,7 +1359,7 @@ function removeGhShimLater(shimPath, expectedText, removeParentDirs) {
     }
   });
 }
-//@ chunk-awy329vy.js:79100-82708 placement
+//@ chunk-9knfmvrf.js:89770-93378 placement
 /**
  * 为 agent 代理安装 gh 垫片（gh shim），没有 gh 时提供替身。
  */
@@ -1542,15 +1551,15 @@ exec '${ghPath}' "$@"
     noJq: false,
   };
 }
-//@ chunk-awy329vy.js:82708-82761 placement
+//@ chunk-9knfmvrf.js:93378-93431 placement
 function gitConfigCountUnset() {
   return readToken("GIT_CONFIG_COUNT") === undefined;
 }
-//@ chunk-awy329vy.js:82761-82843 placement
+//@ chunk-9knfmvrf.js:93431-93513 placement
 function sshAuthUnset() {
   return readToken("SSH_AUTH_SOCK") === undefined && readToken("GIT_SSH_COMMAND") === undefined;
 }
-//@ chunk-awy329vy.js:82843-83944 placement
+//@ chunk-9knfmvrf.js:93513-94614 placement
 function describeProxyForPrompt(caBundlePath, readmePath) {
   let state = getAgentProxyState().state;
   if (state.governedGitTools) {
@@ -1575,13 +1584,13 @@ function describeProxyForPrompt(caBundlePath, readmePath) {
     installedClis,
   };
 }
-//@ chunk-awy329vy.js:83944-84146 placement
+//@ chunk-9knfmvrf.js:94614-94816 placement
 var GIT_CONFIG_CONFLICT_PATTERNS = [
   ["git_http_proxy_configured", /^http\.(.+\.)?proxy$/m],
   ["git_ssl_cainfo_configured", /^http\.(.+\.)?sslcainfo$/m],
   ["git_https_to_ssh_insteadof_configured", /^url\.(git@|ssh:\/\/).*\.insteadof$/m],
 ];
-//@ chunk-awy329vy.js:84146-84255 placement
+//@ chunk-9knfmvrf.js:94816-94925 placement
 function getGitProbeCwd() {
   let root = parse(tmpdir()).root;
   try {
@@ -1592,7 +1601,7 @@ function getGitProbeCwd() {
     return root;
   }
 }
-//@ chunk-awy329vy.js:84255-84538 placement
+//@ chunk-9knfmvrf.js:94925-95208 placement
 async function readGlobalGitConfigKeys() {
   let conflictKeys = new Set();
   let results = await Promise.all(
@@ -1611,7 +1620,7 @@ async function readGlobalGitConfigKeys() {
   }
   return [...conflictKeys];
 }
-//@ chunk-awy329vy.js:84538-89559 placement
+//@ chunk-9knfmvrf.js:95208-100744 placement
 /**
  * 生成写给模型/用户看的 agent 代理说明文档（本地代理地址、CA 位置、快速诊断步骤）。
  */
@@ -1678,6 +1687,16 @@ or route around it \u2014 report the blocked host.
 Note: curl hides response bodies on failed CONNECTs; the status endpoint
 records the reason.
 
+### 429 / 503 from the proxy
+
+Too many connections or requests went through the proxy, or the egress proxy
+was busy. The proxy can hold a connection for about a minute before it refuses
+it, so a tool with a short timeout of its own may report only a timeout. Run
+fewer downloads or requests at once, then retry. connectsWaitingForTunnel and
+openTunnels in the status output show the load. busyTunnels includes idle
+connections until one has to wait, so alone it does not show load, and it can
+pass maxBusyTunnels.
+
 ### "connection reset" / "unexpected disconnect" / "RPC failed" mid-transfer
 
 Once a tunnel is up the proxy cannot send an error response, so a connection
@@ -1719,7 +1738,7 @@ If a tool still cannot work through the proxy, report it so the policy or
 tooling can be fixed.
 `;
 }
-//@ chunk-awy329vy.js:89559-89817 placement
+//@ chunk-9knfmvrf.js:100744-101002 placement
 async function readTokenFile(path) {
   try {
     return {
@@ -1741,7 +1760,7 @@ async function readTokenFile(path) {
     };
   }
 }
-//@ chunk-awy329vy.js:89817-89903 placement
+//@ chunk-9knfmvrf.js:101002-101088 placement
 /**
  * 在常见路径中找系统 CA 包（/etc/ssl/certs/ca-certificates.crt 等），返回其内容。
  */
@@ -1752,9 +1771,9 @@ async function findSystemCaBundle(paths = SYSTEM_CA_BUNDLE_PATHS) {
     } catch {}
   return "";
 }
-//@ chunk-awy329vy.js:89903-89918 placement
+//@ chunk-9knfmvrf.js:101088-101103 placement
 var MAX_CA_BUNDLE_BYTES_2 = 1048576;
-//@ chunk-awy329vy.js:89918-90625 placement
+//@ chunk-9knfmvrf.js:101103-101810 placement
 async function foldCustomerCaBundles(systemBundle, systemBundlePath) {
   let seenPaths = new Set();
   let foldedCerts = [];
@@ -1810,7 +1829,7 @@ ${certBlock}`;
 `)
   );
 }
-//@ chunk-awy329vy.js:90625-90902 placement
+//@ chunk-9knfmvrf.js:101810-102087 placement
 var SYSTEM_TRUST_STORES = [
   {
     dir: "/usr/local/share/ca-certificates",
@@ -1826,7 +1845,7 @@ var SYSTEM_TRUST_STORES = [
   },
 ];
 var SYSTEM_TRUST_TIMEOUT_MS = 1e4;
-//@ chunk-awy329vy.js:90902-91211 placement
+//@ chunk-9knfmvrf.js:102087-102396 placement
 function carryJavaTrustStore(state, prevState) {
   if (prevState.javaTrustStorePath && prevState.javaTrustStoreType) {
     state.javaTrustStorePath = prevState.javaTrustStorePath;
@@ -1839,7 +1858,7 @@ function carryJavaTrustStore(state, prevState) {
     state.javaTrustStoreType = undefined;
   }
 }
-//@ chunk-awy329vy.js:91211-94075 placement
+//@ chunk-9knfmvrf.js:102396-105263 placement
 /**
  * 安装/刷新系统 CA 信任（处理已有证书与 -2 链接、记录安装结果）。
  */
@@ -2033,17 +2052,17 @@ async function installIntoSystemTrust(
   if (storeEntries.length > 0) logFeatureSad("agent_proxy_system_trust", "unavailable", failureFields);
   return anyFailure ? "failed" : "no_store";
 }
-//@ chunk-awy329vy.js:94075-94180 placement
+//@ chunk-9knfmvrf.js:105263-105368 placement
 function describeReadState(readResult, referenceText) {
   if (readResult.state === "read") return compareCaBundles(readResult.text, referenceText);
   return readResult.state === "failed" ? "read_failed" : readResult.state;
 }
-//@ chunk-awy329vy.js:94180-94244 placement
+//@ chunk-9knfmvrf.js:105368-105432 placement
 function firstCertificateLine(certificateText) {
   return `${firstPemCertAfterDifferent(certificateText) ?? certificateText.match(PEM_CERT_BLOCK_RE)?.[0] ?? certificateText.trimEnd()}
 `;
 }
-//@ chunk-awy329vy.js:94244-94299 placement
+//@ chunk-9knfmvrf.js:105432-105487 placement
 function isParsableCertificate(pem) {
   try {
     new X509Certificate(pem);
@@ -2052,7 +2071,7 @@ function isParsableCertificate(pem) {
     return false;
   }
 }
-//@ chunk-awy329vy.js:94299-94642 placement
+//@ chunk-9knfmvrf.js:105487-105830 placement
 var MAX_CA_RESPONSE_BYTES = 65536;
 var CA_BUNDLE_PROBLEM_MESSAGES = {
   oversized: "ca-cert response is larger than any certificate bundle",
@@ -2061,7 +2080,7 @@ var CA_BUNDLE_PROBLEM_MESSAGES = {
   stray_marker:
     "ca-cert response has PEM framing outside its certificates (truncated, or not a certificate bundle)",
 };
-//@ chunk-awy329vy.js:94642-94937 placement
+//@ chunk-9knfmvrf.js:105830-106125 placement
 /**
  * 校验 CA 响应：大小上限、至少一张可解析证书、无多余 PEM 标记。
  */
@@ -2092,7 +2111,7 @@ function validateCaBundle(bundleText) {
     bundle: bundleText,
   };
 }
-//@ chunk-awy329vy.js:94937-95018 placement
+//@ chunk-9knfmvrf.js:106125-106206 placement
 /**
  * 系统信任库是否已包含给定 PEM 里的全部证书。
  */
@@ -2100,7 +2119,7 @@ function systemStoreHasCa(systemCa, caText) {
   let match = caText.match(PEM_CERT_BLOCK_RE);
   return match !== null && match.every((certBlock) => systemCa.includes(certBlock));
 }
-//@ chunk-awy329vy.js:95018-95209 fingerprint (2.1.88 match: downloadCaBundle, 0.321)
+//@ chunk-9knfmvrf.js:106206-106397 fingerprint (2.1.88 match: downloadCaBundle, 0.321)
 function reportCaFailure(result, caSource) {
   if (result.outcome === "retry") return result;
   logForDebugging(`[agent-proxy] ${result.detail}; proxy disabled`, {
@@ -2111,12 +2130,12 @@ function reportCaFailure(result, caSource) {
   });
   return result;
 }
-//@ chunk-awy329vy.js:95209-95222 placement
+//@ chunk-9knfmvrf.js:106397-106410 placement
 /**
  * 读取 CA 文件时的大小上限（64 KiB）。
  */
 var MAX_CA_FILE_READ_BYTES = 65536;
-//@ chunk-awy329vy.js:95222-95547 placement
+//@ chunk-9knfmvrf.js:106410-106735 placement
 function decodeCaCertEnv(value) {
   let trimmed = value.trim();
   if (trimmed === "")
@@ -2147,26 +2166,26 @@ function decodeCaCertEnv(value) {
       }
     : caBundle;
 }
-//@ chunk-awy329vy.js:95547-95572 placement
+//@ chunk-9knfmvrf.js:106735-106760 placement
 /**
  * 安装信任库时的最多尝试次数（3）。
  */
 var CA_INSTALL_MAX_ATTEMPTS = 3;
 var DEFAULT_CA_WATCH_INTERVAL_MS = 3600000;
 var CA_INSTALL_RETRIES = 3;
-//@ chunk-awy329vy.js:95572-95626 placement
+//@ chunk-9knfmvrf.js:106760-106814 placement
 /**
  * 返回系统信任 CA 包文件路径。
  */
 function systemTrustCaPath(caBundlePath) {
   return join(caBundlePath, "..", "system-trust.ca.pem");
 }
-//@ chunk-awy329vy.js:95626-95660 placement
+//@ chunk-9knfmvrf.js:106814-106848 placement
 /**
  * 匹配 NSS 与 Java 信任库相关的失败码。
  */
 var NSS_OR_JAVA_FAILURE_RE = /^(nss_|java_truststore_)/;
-//@ chunk-awy329vy.js:95660-95747 placement
+//@ chunk-9knfmvrf.js:106848-106935 placement
 /**
  * 代理 CA 文件与给定内容是否一致。
  */
@@ -2175,7 +2194,7 @@ async function matchesAgentProxyCa(caBundlePath, caText) {
     (await compareBundleWithFile(join(caBundlePath, "..", "agent-proxy-ca.crt"), caText)) !== "different"
   );
 }
-//@ chunk-awy329vy.js:95747-95809 placement
+//@ chunk-9knfmvrf.js:106935-106997 placement
 /**
  * 安装失败或有信任库未生效时返回 true。
  */
@@ -2185,7 +2204,7 @@ function hasTrustStoreFailure(systemTrustOutcome, failureCodes) {
     failureCodes.some((failureCode) => NSS_OR_JAVA_FAILURE_RE.test(failureCode))
   );
 }
-//@ chunk-awy329vy.js:95809-95966 placement
+//@ chunk-9knfmvrf.js:106997-107154 placement
 function installCaIntoSystemTrust(plan, caText, recordPath, caller, onSettled, systemCa = plan.systemCa) {
   return installIntoSystemTrust(caText, plan.opts?.systemTrustTargets ?? SYSTEM_TRUST_STORES, {
     systemCa,
@@ -2198,7 +2217,7 @@ function installCaIntoSystemTrust(plan, caText, recordPath, caller, onSettled, s
       return outcome;
     });
 }
-//@ chunk-awy329vy.js:95966-98306 placement
+//@ chunk-9knfmvrf.js:107154-109494 placement
 async function reconcileAgentProxyCa(
   plan,
   runtimeState,
@@ -2218,11 +2237,11 @@ async function reconcileAgentProxyCa(
   let now = Date.now();
   let retryLogged = false;
   let fetchResult;
-  for (let idx = 1; ; idx++) {
-    if (idx > 1) {
+  for (let j = 1; ; j++) {
+    if (j > 1) {
       let retryableResult = fetchResult?.outcome === "retry" ? fetchResult : undefined;
       await sleep(
-        opts?.retryDelayMs?.(idx) ?? backgroundRetryDelayMs(idx, retryableResult?.retryAfter ?? null),
+        opts?.retryDelayMs?.(j) ?? backgroundRetryDelayMs(j, retryableResult?.retryAfter ?? null),
         undefined,
         {
           unref: true,
@@ -2240,14 +2259,14 @@ async function reconcileAgentProxyCa(
     });
     if (fetchResult.outcome !== "retry") break;
     onInstallSettled();
-    if (deferredInstall && idx >= CA_INSTALL_MAX_ATTEMPTS) {
+    if (deferredInstall && j >= CA_INSTALL_MAX_ATTEMPTS) {
       if (runtime.state !== runtimeState) return;
       await runInstall(previousCa);
     }
     if (!retryLogged && Date.now() - now >= (opts?.retryBadAfterMs ?? RETRY_BAD_AFTER_MS)) {
       retryLogged = true;
       logForDebugging(
-        `[agent-proxy] CA reconcile: ${fetchResult.detail}; still failing after ${idx} attempts, retrying anyway`,
+        `[agent-proxy] CA reconcile: ${fetchResult.detail}; still failing after ${j} attempts, retrying anyway`,
         {
           level: "warn",
         },
@@ -2336,7 +2355,7 @@ async function reconcileAgentProxyCa(
       logFeatureSad("agent_proxy_ca_reconcile", "tool_trust_rebuild_threw");
     });
 }
-//@ chunk-awy329vy.js:98306-99268 placement
+//@ chunk-9knfmvrf.js:109494-110456 placement
 function rebuildToolTrustOnCaChange(plan, runtimeState, trust, caText) {
   let { runtime, caBundlePath, opts } = plan;
   let recordPath = systemTrustCaPath(caBundlePath);
@@ -2392,7 +2411,7 @@ function rebuildToolTrustOnCaChange(plan, runtimeState, trust, caText) {
   trust.toolTrust = toolTrustPromise;
   return toolTrustPromise;
 }
-//@ chunk-awy329vy.js:99268-100753 placement
+//@ chunk-9knfmvrf.js:110456-111941 placement
 async function watchAgentProxyCa(
   plan,
   runtimeState,
@@ -2475,7 +2494,7 @@ async function watchAgentProxyCa(
     await rebuildToolTrustOnCaChange(plan, runtimeState, trust, ccrCaCert.ccrCa);
   }
 }
-//@ chunk-awy329vy.js:100753-101403 placement
+//@ chunk-9knfmvrf.js:111941-112591 placement
 /**
  * 从会话代理取 CA 证书：在预算时间内多次尝试，5xx/408/429 或证书无效时重试，其他非 2xx 为致命错误，成功返回证书包。
  */
@@ -2525,7 +2544,7 @@ async function fetchCcrCaCert(baseUrl, { budgetMs, tries, viaStandaloneProxy = f
     retryAfter,
   };
 }
-//@ chunk-awy329vy.js:101403-101670 placement
+//@ chunk-9knfmvrf.js:112591-112858 placement
 async function writeCaBundle(localCa, ccrCa, caBundlePath) {
   try {
     await mkdir(join(caBundlePath, ".."), {
@@ -2550,7 +2569,7 @@ async function writeCaBundle(localCa, ccrCa, caBundlePath) {
     outcome: "ok",
   };
 }
-//@ chunk-awy329vy.js:101670-101961 placement
+//@ chunk-9knfmvrf.js:112858-113149 placement
 async function writeAwsConfigOnce(configPath) {
   try {
     await mkdir(join(configPath, ".."), {
@@ -2578,14 +2597,14 @@ s3 =
     );
   }
 }
-//@ chunk-awy329vy.js:101961-102006 placement
+//@ chunk-9knfmvrf.js:113149-113194 placement
 /**
  * 生成本机代理地址 http://127.0.0.1:<port>。
  */
 function loopbackProxyUrl(port) {
   return `http://127.0.0.1:${port}`;
 }
-//@ chunk-awy329vy.js:102006-102038 placement
+//@ chunk-9knfmvrf.js:113194-113226 placement
 /**
  * 用换行连接两段文本。
  */
@@ -2598,10 +2617,10 @@ function joinWithNewline(left, right) {
   );
 }
 export {
+  PLACEHOLDER_CREDENTIAL_KEYS,
   SYSTEM_CA_BUNDLE,
   MAX_SYSTEM_CA_BYTES,
   MAX_CA_TOTAL_BYTES,
-  PLACEHOLDER_CREDENTIAL_KEYS,
   NO_PROXY_ANT_ONLY,
   NO_PROXY_COMMON,
   NO_PROXY_EMBEDDED,

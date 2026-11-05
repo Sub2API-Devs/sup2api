@@ -3,11 +3,12 @@
  *
  * 后台云会话资格检查（eval 限制、组织策略、登录、git 仓库与远端、GitHub App/账号连接）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/background/remote/remoteSession.ts
- * pieces: chunk-8nz8g4ca.js (1), chunk-e6aww6q8.js (16)
- * attribution: placement 16, fingerprint 1
+ * pieces: chunk-2azvgb86.js (4), chunk-5xgkngpb.js (14), chunk-srs15anp.js (1)
+ * attribution: placement 17, fingerprint 1, layout 1
  */
+import { getOriginalCwd, getRootSession } from "../../../bootstrap/state.js";
 import { env } from "../../env.js";
 import { isPolicyAllowed as isPolicyAllowed_3 } from "../../../services/policyLimits/policyEvidence.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../../services/analytics/featureTelemetry.js";
@@ -31,13 +32,49 @@ import { isGithubDotCom } from "../../git/githubUrl.js";
 import { getRemoteSessionUrl } from "../../../constants/product.js";
 import { createSignal } from "../../signal.js";
 import { HostScoped } from "../../hostScoped.js";
-import { getRootSession, getOriginalCwd } from "../../../bootstrap/state.js";
 import { sessionIdBody } from "../../../bridge/sessionIdCompat.js";
 import { getRemoteCaps } from "../../../remote/remoteMode.js";
 import { getStoredOauthAccountInfo } from "../../auth.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1775166-1776430 fingerprint (2.1.88 match: checkBackgroundRemoteSessionEligibility, 0.664)
+//@ chunk-2azvgb86.js:227-272 placement
+/**
+ * 工作区受信任时返回远程会话。
+ */
+function isInMonorepoWorkingCopyByFiles() {
+  return noRemoteSession(getOriginalCwd(), {
+    ifTrusted: true,
+  });
+}
+//@ chunk-2azvgb86.js:272-309 placement
+/**
+ * 占位实现，恒返回 false（不返回远程会话）。
+ */
+function noRemoteSession(originalCwd, { ifTrusted }) {
+  return false;
+}
+//@ chunk-2azvgb86.js:309-342 placement
+/**
+ * 占位实现：按文件判定是否在 monorepo 工作副本里，恒返回 null。
+ */
+async function workingCopyForTeleport() {
+  return null;
+}
+//@ chunk-2azvgb86.js:342-364 placement
+/**
+ * 占位实现，恒返回 undefined（无展示用会话状态）。
+ */
+function workingCopyMovingLine() {
+  return;
+}
+//@ chunk-5xgkngpb.js:168460-168484 placement
+/**
+ * 占位实现，恒返回 false。
+ */
+function alwaysFalsePlaceholder() {
+  return false;
+}
+//@ chunk-5xgkngpb.js:1852254-1853518 fingerprint (2.1.88 match: checkBackgroundRemoteSessionEligibility, 0.663)
 /**
  * 依次检查：CLAUDE_CODE_EVAL_CONFINED、策略 allow_remote_sessions、登录状态、是否在 git 仓库、是否有 GitHub 远端（允许 bundle 时可跳过）、GitHub App/账号连接；返回错误列表并记 bg_remote_eligibility_check。
  */
@@ -129,7 +166,7 @@ async function checkBackgroundRemoteSessionEligibility({
   else logFeatureBad("bg_remote_eligibility_check", errors[0].type);
   return errors;
 }
-//@ chunk-e6aww6q8.js:1804021-1804095 placement
+//@ chunk-5xgkngpb.js:1881014-1881088 placement
 /**
  * 构造远程会话的 URL（带上 SESSION_INGRESS_URL）。
  */
@@ -138,21 +175,18 @@ function remoteSessionUrl(sessionId) {
     from: "cli",
   });
 }
-//@ chunk-e6aww6q8.js:1804095-1804119 placement
-/**
- * 占位实现，恒返回 false。
- */
-function alwaysFalsePlaceholder() {
+//@ chunk-5xgkngpb.js:1881088-1881112 layout
+function isRemoteSessionDisabled() {
   return false;
 }
-//@ chunk-e6aww6q8.js:1804156-1804179 placement
+//@ chunk-5xgkngpb.js:1881149-1881172 placement
 /**
  * 占位实现，恒返回 undefined。
  */
 function stubSessionTeam(tags) {
   return;
 }
-//@ chunk-e6aww6q8.js:1804179-1804327 placement
+//@ chunk-5xgkngpb.js:1881172-1881320 placement
 class RemoteSessionTeamState {
   known = new Map();
   teamReadsUnderWay = new Map();
@@ -162,22 +196,22 @@ class RemoteSessionTeamState {
   teamNameAskedAs = new Map();
   changed = createSignal();
 }
-//@ chunk-e6aww6q8.js:1804327-1804354 placement
+//@ chunk-5xgkngpb.js:1881320-1881347 placement
 /**
  * 按宿主隔离的远程会话团队状态缓存。
  */
 var remoteSessionTeamByHost; // deferred: uses RemoteSessionTeamState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1804327", () => {
+deferInit("chunk-5xgkngpb.js:1881320", () => {
   remoteSessionTeamByHost = new HostScoped(() => new RemoteSessionTeamState());
 });
-//@ chunk-e6aww6q8.js:1804354-1804392 placement
+//@ chunk-5xgkngpb.js:1881347-1881386 placement
 /**
  * 取出当前宿主的远程会话团队状态。
  */
 function getRemoteSessionTeamState() {
   return remoteSessionTeamByHost.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:1804392-1804488 placement
+//@ chunk-5xgkngpb.js:1881386-1881483 placement
 /**
  * 记录某会话所属的团队并通知变更。
  */
@@ -189,7 +223,7 @@ function recordRemoteSessionTeam(sessionId, tags) {
     remoteSessionTeamState.changed.emit();
   }
 }
-//@ chunk-e6aww6q8.js:1804488-1804600 placement
+//@ chunk-5xgkngpb.js:1881483-1881596 placement
 /**
  * 当前会话的账号键（与给定团队一致时返回）。
  */
@@ -199,7 +233,7 @@ function sessionAccountKeyOrUndefined(team) {
     return;
   return `${sessionIdBody(sessionId)} ${accountAndOrgKey()}`;
 }
-//@ chunk-e6aww6q8.js:1804600-1804683 placement
+//@ chunk-5xgkngpb.js:1881596-1881679 placement
 /**
  * 账号与组织的组合键。
  */
@@ -207,14 +241,14 @@ function accountAndOrgKey() {
   let storedOauthAccountInfo = getStoredOauthAccountInfo();
   return `${storedOauthAccountInfo?.accountUuid ?? ""} ${storedOauthAccountInfo?.organizationUuid ?? ""}`;
 }
-//@ chunk-e6aww6q8.js:1804683-1804721 placement
+//@ chunk-5xgkngpb.js:1881679-1881717 placement
 /**
  * 当前会话的团队键（个人）。
  */
 function currentSessionTeamKey() {
   return sessionAccountKeyOrUndefined("personal");
 }
-//@ chunk-e6aww6q8.js:1804721-1804883 placement
+//@ chunk-5xgkngpb.js:1881717-1881881 placement
 /**
  * 返回当前会话所属的团队（个人或团队），未知时 undefined。
  */
@@ -227,37 +261,14 @@ function sessionTeamOrUndefined() {
     ? undefined
     : getRemoteSessionTeamState().known.get(sessionIdBody(sessionId));
 }
-//@ chunk-e6aww6q8.js:1804883-1804932 placement
+//@ chunk-5xgkngpb.js:1881881-1881931 placement
 /**
  * 订阅远程会话团队状态的变更。
  */
 function onSessionTeamChanged(listener) {
   return getRemoteSessionTeamState().changed.subscribe(listener);
 }
-//@ chunk-e6aww6q8.js:1804982-1805029 placement
-/**
- * 工作区受信任时返回远程会话。
- */
-function remoteSessionIfTrusted() {
-  return noRemoteSession(getOriginalCwd(), {
-    ifTrusted: true,
-  });
-}
-//@ chunk-e6aww6q8.js:1805029-1805068 placement
-/**
- * 占位实现，恒返回 false（不返回远程会话）。
- */
-function noRemoteSession(originalCwd, { ifTrusted }) {
-  return false;
-}
-//@ chunk-e6aww6q8.js:1805068-1805090 placement
-/**
- * 占位实现，恒返回 undefined（无展示用会话状态）。
- */
-function noDisplaySessionStatus() {
-  return;
-}
-//@ chunk-8nz8g4ca.js:191-608 placement
+//@ chunk-srs15anp.js:191-608 placement
 /**
  * 把远程会话状态映射为展示用状态（已归档、失败、需要操作、空闲等）。
  */
@@ -285,14 +296,16 @@ function toDisplaySessionStatus(session) {
   }
 }
 export {
-  checkBackgroundRemoteSessionEligibility,
-  remoteSessionUrl,
+  isRemoteSessionDisabled,
   alwaysFalsePlaceholder,
+  remoteSessionUrl,
+  checkBackgroundRemoteSessionEligibility,
+  isInMonorepoWorkingCopyByFiles,
+  workingCopyMovingLine,
+  toDisplaySessionStatus,
   onSessionTeamChanged,
   sessionTeamOrUndefined,
   currentSessionTeamKey,
-  toDisplaySessionStatus,
   recordRemoteSessionTeam,
-  remoteSessionIfTrusted,
-  noDisplaySessionStatus,
+  workingCopyForTeleport,
 };

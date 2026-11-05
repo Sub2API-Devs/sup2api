@@ -3,9 +3,9 @@
  *
  * "Memory consolidation"（dream）后台任务详情。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/tasks/DreamDetailDialog.tsx
- * pieces: chunk-18hwfzwa.js (4)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: file-local 1, fingerprint 2, layout 1
  */
 import {
@@ -22,11 +22,11 @@ import { Dialog } from "../design-system/Dialog.js";
 import { TaskDetailFooterHints } from "./taskStatusUtils.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-18hwfzwa.js:700976-701013 file-local
+//@ chunk-czq1j3j2.js:721714-721751 file-local
 function hasTurnText(t) {
   return t.text !== "";
 }
-//@ chunk-18hwfzwa.js:701013-701228 fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-czq1j3j2.js:721751-721966 fingerprint (2.1.88 match: _temp2, 1)
 function renderDreamTurn(turn, i) {
   return jsxProd_default_2(
     Box,
@@ -47,9 +47,9 @@ function renderDreamTurn(turn, i) {
     i,
   );
 }
-//@ chunk-18hwfzwa.js:701228-701238 layout
+//@ chunk-czq1j3j2.js:721966-721976 layout
 var MAX_VISIBLE_TURNS = 6;
-//@ chunk-18hwfzwa.js:701238-704222 fingerprint (2.1.88 match: DreamDetailDialog, 0.639)
+//@ chunk-czq1j3j2.js:721976-724962 fingerprint (2.1.88 match: DreamDetailDialog, 0.638)
 /**
  * 记忆整理（dream）任务详情：涉及的会话与文件数、当前步骤与工具活动。
  */

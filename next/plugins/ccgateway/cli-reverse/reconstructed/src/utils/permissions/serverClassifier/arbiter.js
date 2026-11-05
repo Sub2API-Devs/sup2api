@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：服务端分类器裁决
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (48)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (4), chunk-nt9amew5.js (44)
  * attribution: placement 48
  */
 import { fromEnum, fromEnumOpt } from "../../../services/analytics/safeMetadata.js";
@@ -36,8 +36,9 @@ import {
   isVividCrayonOn,
 } from "./flags.js";
 import { isThirdPartyServerClassifierRefused, getStickyBetas } from "../../../bootstrap/state.js";
-import { getAPIProvider, isClaudePlatformProvider } from "../../model/providers.js";
+import { logEventTo1P } from "./context.js";
 import { canSendFirstPartyBetas, isHipaaOrg, BETA_DANGEROUS_TOOL_USE } from "../../betas.js";
+import { getAPIProvider, isClaudePlatformProvider } from "../../model/providers.js";
 import { env } from "../../env.js";
 import { isEnvTruthy } from "../../envUtils.js";
 import { withHostEnvRestored_2 } from "../../settings/hostEnvWrites.js";
@@ -45,21 +46,19 @@ import { getAdminTierEnvValue } from "../../settings/settings.js";
 import { holdsNoServedSettings } from "../../../services/remoteManagedSettings/remoteSettingsCache.js";
 import { getEligibilityMemo } from "../../../services/remoteManagedSettings/remoteSettingsState.js";
 import { isPolicyLimitsCacheMissing } from "../../../services/policyLimits/policyVerdicts.js";
-import {
-  isBetaRejected as isBetaRejected_2,
-  deepEqualIgnoringUndefined,
-} from "../../../bootstrap/stateSlices.js";
+import { mayReplScriptsRun } from "../../codeMode.js";
+import { isBetaRejected, deepEqualIgnoringUndefined } from "../../../bootstrap/stateSlices.js";
 import { stripAnsi } from "../../stripAnsi.js";
 import { stripSuffixNumber } from "../../../services/api/toolDefinitionShape.js";
 import { clone } from "../../slowOperations.js";
 import { inputAsWrittenSymbol } from "../../messageKinds.js";
-import { isPlainObject as isPlainObject_5 } from "../../isPlainObject.js";
+import { isPlainObject } from "../../isPlainObject.js";
 import { firstLineOf } from "../../stringUtils.js";
 import { BASH_TOOL_NAME } from "../../../tools/BashTool/toolName.js";
 import { MONITOR } from "../../../tools/MonitorTool/constants.js";
 import { POWERSHELL_TOOL_NAME } from "../../../tools/PowerShellTool/toolName.js";
 import { classifyAllShellEnabled, requiresClassifierForHookAllow } from "../permissionSetup.js";
-import { FILE_EDIT_TOOL_NAME } from "../../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../../tools/FileWriteTool/prompt.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../../../tools/NotebookEditTool/constants.js";
 import { SERVER_CLASSIFIER_NO_EXPLANATION_REASON } from "../../../types/permissions.js";
@@ -67,21 +66,21 @@ import { isPlainModeAtRequest, getToolPermissionContext } from "../toolPermissio
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics/growthbook.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1033954-1034005 placement (2.1.88 match: countTokensWithAPI, 0.658)
+//@ chunk-nt9amew5.js:27095-27146 placement (2.1.88 match: countTokensWithAPI, 0.66)
 /**
  * 自动模式服务端分类器角色（off/arbiter/arbiterWithLocalFallback）。旧版名 countTokensWithAPI 为错配，归错文件。
  */
 function getAutoModeClassifierRole(mode, { peek = false } = {}) {
   return checkServerClassifierEligibility(mode, peek).role;
 }
-//@ chunk-e6aww6q8.js:1034005-1034045 placement
+//@ chunk-nt9amew5.js:27146-27186 placement
 /**
  * serverClassifierOffReason：服务端分类器不启用的原因。
  */
 function serverClassifierOffReason(mode) {
   return checkServerClassifierEligibility(mode).offReason;
 }
-//@ chunk-e6aww6q8.js:1034045-1034190 placement
+//@ chunk-nt9amew5.js:27186-27331 placement
 /**
  * 把服务端分类器资格判断结果转成遥测字段（角色与关闭原因）。
  */
@@ -97,7 +96,7 @@ function getServerClassifierRoleTelemetry(mode) {
     return {};
   }
 }
-//@ chunk-e6aww6q8.js:1034190-1034817 placement
+//@ chunk-nt9amew5.js:27331-27943 placement
 function checkServerClassifierEligibility(mode, peek = false) {
   if (!isAutoClassifierActive(mode))
     return {
@@ -120,7 +119,7 @@ function checkServerClassifierEligibility(mode, peek = false) {
         ? "refused_latch"
         : neverTrue()
           ? "batch_file_tools"
-          : getAPIProvider() === "firstParty" && isIridescentCrystalOn()
+          : logEventTo1P() && isIridescentCrystalOn()
             ? "kill_switch"
             : undefined;
     return offReason === undefined
@@ -158,7 +157,7 @@ function checkServerClassifierEligibility(mode, peek = false) {
     offReason: firstPartyOffReason,
   };
 }
-//@ chunk-e6aww6q8.js:1034817-1035178 placement
+//@ chunk-nt9amew5.js:27943-28296 placement
 /**
  * 当前提供方能否使用服务端分类器：第一方看能否发 beta 或搁置开关；第三方在宿主托管、显式开启且未禁用实验 beta 时可用（HIPAA 除外）。
  */
@@ -174,7 +173,7 @@ function canUseServerClassifier({ peek = false } = {}) {
     case "thirdParty": {
       let apiProvider = getAPIProvider();
       if (
-        apiProvider === "firstParty" &&
+        logEventTo1P() &&
         env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST &&
         getUserServerClassifierSwitch() === true &&
         isEnvTruthy(withHostEnvRestored_2(() => env.CLAUDE_CODE_AUTO_MODE_SERVER)) &&
@@ -189,14 +188,14 @@ function canUseServerClassifier({ peek = false } = {}) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:1035178-1035247 placement
+//@ chunk-nt9amew5.js:28296-28364 placement
 /**
  * isArbiterRole：角色为 arbiter 或 arbiterWithLocalFallback。
  */
 function isArbiterRole(autoModeClassifierRole) {
   return autoModeClassifierRole === "arbiter" || autoModeClassifierRole === "arbiterWithLocalFallback";
 }
-//@ chunk-e6aww6q8.js:1035247-1035424 placement
+//@ chunk-nt9amew5.js:28364-28561 placement
 function isServerClassifierActive(mode, autoModeClassifierRole, { handoffReview = false } = {}) {
   if (!isAutoClassifierActive(mode)) return false;
   if (
@@ -205,6 +204,7 @@ function isServerClassifierActive(mode, autoModeClassifierRole, { handoffReview 
     })
   )
     return true;
+  if (mayReplScriptsRun()) return false;
   if (!isWiseOrigamiOn()) return false;
   if (autoModeClassifierRole !== "off") return true;
   return (
@@ -212,35 +212,35 @@ function isServerClassifierActive(mode, autoModeClassifierRole, { handoffReview 
     (getClassifierProviderKind() === "thirdParty" || autoModeContextEnabled())
   );
 }
-//@ chunk-e6aww6q8.js:1035424-1035484 placement
+//@ chunk-nt9amew5.js:28561-28622 placement
 /**
  * isArbiterWithFallbackActive：auto 下按 arbiterWithLocalFallback 启用。
  */
 function isArbiterWithFallbackActive() {
   return isServerClassifierActive("auto", "arbiterWithLocalFallback");
 }
-//@ chunk-e6aww6q8.js:1035484-1035519 placement
+//@ chunk-nt9amew5.js:28622-28658 placement
 /**
  * isServerClassifierOff：该角色下服务端分类器为 off。
  */
 function isServerClassifierOff(mode) {
   return isServerClassifierActive(mode, "off");
 }
-//@ chunk-e6aww6q8.js:1035519-1035566 placement
+//@ chunk-nt9amew5.js:28658-28705 placement
 /**
  * isAutoModeClassified：auto 启用且分类器角色非 off。
  */
 function isAutoModeClassified() {
   return isAutoModeActive() && getAutoModeClassifierRole("auto") !== "off";
 }
-//@ chunk-e6aww6q8.js:1035566-1035618 placement
+//@ chunk-nt9amew5.js:28705-28757 placement
 /**
  * isServerArbiterActive：开关开且角色为 arbiter。
  */
 function isServerArbiterActive() {
   return isCopperTrellisOn() && getAutoModeClassifierRole("auto") === "arbiter";
 }
-//@ chunk-e6aww6q8.js:1035618-1035676 placement
+//@ chunk-nt9amew5.js:28757-28814 placement
 /**
  * canAttachServerClassifierBeta：需要附加分类器 beta 头。
  */
@@ -250,17 +250,17 @@ function canAttachServerClassifierBeta(mode) {
       getAutoModeClassifierRole(mode, {
         peek: true,
       }),
-    ) && !isBetaRejected_2(getStickyBetas(), BETA_DANGEROUS_TOOL_USE)
+    ) && !isBetaRejected(getStickyBetas(), BETA_DANGEROUS_TOOL_USE)
   );
 }
-//@ chunk-e6aww6q8.js:1035676-1035764 placement
+//@ chunk-nt9amew5.js:28814-28900 placement
 /**
  * SERVER_CLASSIFIER_LABEL：服务端分类器的显示标签；SERVER_CLASSIFIER_NOTE_LIMIT：分类器说明的长度上限；SERVER_CLASSIFIER_NOTE_TAIL：分类器说明的结尾片段（同一声明共 3 个绑定）。
  */
 var SERVER_CLASSIFIER_LABEL = "The server-side auto mode classifier";
 var SERVER_CLASSIFIER_NOTE_LIMIT = 2000;
 var SERVER_CLASSIFIER_NOTE_TAIL = ". If you have other tasks";
-//@ chunk-e6aww6q8.js:1035764-1035938 placement
+//@ chunk-nt9amew5.js:28900-29072 placement
 function sanitizeServerExplanation(explanation) {
   if (explanation === undefined) return;
   let trimmed = stripAnsi(explanation)
@@ -270,9 +270,9 @@ function sanitizeServerExplanation(explanation) {
   let index = trimmed.indexOf(SERVER_CLASSIFIER_NOTE_TAIL);
   return index === -1 ? trimmed : trimmed.slice(0, index).trim();
 }
-//@ chunk-e6aww6q8.js:1035938-1035987 placement
+//@ chunk-nt9amew5.js:29072-29121 placement
 var SERVER_CALL_UNAVAILABLE_INPUT_TOO_LONG = "server_call_unavailable_input_too_long";
-//@ chunk-e6aww6q8.js:1035987-1036137 placement
+//@ chunk-nt9amew5.js:29121-29270 placement
 function getCallVerdictStatus(verdict, toolUseID) {
   if (verdict.kind !== "per_call") return;
   let status = verdict.statuses.get(toolUseID);
@@ -280,7 +280,7 @@ function getCallVerdictStatus(verdict, toolUseID) {
   let baseId = stripSuffixNumber(toolUseID);
   return baseId === undefined ? undefined : verdict.statuses.get(baseId);
 }
-//@ chunk-e6aww6q8.js:1036137-1036213 placement
+//@ chunk-nt9amew5.js:29270-29345 placement
 /**
  * noVerdictReasonFor：未判定时给出原因。
  */
@@ -288,14 +288,14 @@ function noVerdictReasonFor(verdict, toolUseID) {
   let callVerdictStatus = getCallVerdictStatus(verdict, toolUseID);
   return callVerdictStatus?.type === "evaluated" ? undefined : getNoVerdictReason(verdict, callVerdictStatus);
 }
-//@ chunk-e6aww6q8.js:1036213-1036293 placement
+//@ chunk-nt9amew5.js:29345-29425 placement
 /**
  * isServerNotRequestedReason：服务端未请求或输入被改写的失败原因。
  */
 function isServerNotRequestedReason(reason) {
   return reason === "server_not_requested" || reason === "server_input_rewritten";
 }
-//@ chunk-e6aww6q8.js:1036293-1036366 placement
+//@ chunk-nt9amew5.js:29425-29498 placement
 /**
  * isInputRewrittenWithFallbackOff：输入被改写且回退关闭。
  */
@@ -306,7 +306,7 @@ function isInputRewrittenWithFallbackOff(errorKind) {
     isQuietLanternOn()
   );
 }
-//@ chunk-e6aww6q8.js:1036366-1036530 placement
+//@ chunk-nt9amew5.js:29498-29663 placement
 function shouldFallBackToLocalEarly(role, verdict) {
   return (
     role === "arbiterWithLocalFallback" &&
@@ -316,7 +316,7 @@ function shouldFallBackToLocalEarly(role, verdict) {
           (verdict.why === "server_input_rewritten" && getServerClassifierFallbackMode() === "off"))))
   );
 }
-//@ chunk-e6aww6q8.js:1036530-1036979 placement
+//@ chunk-nt9amew5.js:29663-30109 placement
 /**
  * 按分类器角色判断是否回退到本地分类器：arbiter 仅在无结果/不支持时；带本地回退的角色在服务端不可用、无结果或该调用不可用时回退。
  */
@@ -337,7 +337,7 @@ function shouldFallBackToLocal(role, verdict, toolUseID, { outsideAutoMode = fal
   if (callVerdictStatus === undefined) return true;
   return callVerdictStatus.type === "unavailable" && callVerdictStatus.reason !== "truncated";
 }
-//@ chunk-e6aww6q8.js:1036979-1037251 placement
+//@ chunk-nt9amew5.js:30109-30378 placement
 function getNoVerdictReason(verdict, callVerdictStatus) {
   if (verdict.kind === "none") return verdict.why;
   if (callVerdictStatus === undefined) return "server_no_result";
@@ -350,7 +350,7 @@ function getNoVerdictReason(verdict, callVerdictStatus) {
       return "server_unrecognized_result";
   }
 }
-//@ chunk-e6aww6q8.js:1037251-1037570 placement
+//@ chunk-nt9amew5.js:30378-30695 placement
 /**
  * 取服务端分类器结果：输入被改写、未持有结果或未请求时返回 kind=none 及原因。
  */
@@ -370,7 +370,7 @@ function getUnheldServerResults(assistantMessage) {
         : "server_not_requested",
   });
 }
-//@ chunk-e6aww6q8.js:1037570-1037999 placement
+//@ chunk-nt9amew5.js:30695-31118 placement
 /**
  * 等待某调用的服务端分类结果；输入被改写或该调用的结论已被别的调用作废时返回 server_input_rewritten。
  */
@@ -401,26 +401,27 @@ function awaitServerVerdict(assistantMessage, toolUseID, requireSent = true) {
       : verdicts;
   });
 }
-//@ chunk-e6aww6q8.js:1037999-1038071 placement
+//@ chunk-nt9amew5.js:31118-31188 placement
 function isNotFlaggedVerdict(status) {
   return status?.type === "evaluated" && status.outcome === "not_flagged";
 }
-//@ chunk-e6aww6q8.js:1038071-1038179 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince_6(messages, sinceUuid) {
-  let baseId = stripSuffixNumber(sinceUuid);
-  return messages.message.content.some(
-    (block) => block.type === "tool_use" && (block.id === sinceUuid || block.id === baseId),
+//@ chunk-nt9amew5.js:31188-31297 placement
+function mentionsToolUseId(assistantMessage, toolUseID) {
+  let baseId = stripSuffixNumber(toolUseID);
+  return assistantMessage.message.content.some(
+    (contentBlock) =>
+      contentBlock.type === "tool_use" && (contentBlock.id === toolUseID || contentBlock.id === baseId),
   );
 }
-//@ chunk-e6aww6q8.js:1038179-1038238 placement
+//@ chunk-nt9amew5.js:31297-31358 placement
 function isClassifierTargetToolUse(assistantMessage, toolUseID, clientRequestedToolUseId) {
   return (
     assistantMessage.isVirtual !== true &&
     clientRequestedToolUseId !== toolUseID &&
-    countToolCallsSince_6(assistantMessage, toolUseID)
+    mentionsToolUseId(assistantMessage, toolUseID)
   );
 }
-//@ chunk-e6aww6q8.js:1038238-1038315 placement
+//@ chunk-nt9amew5.js:31358-31434 placement
 /**
  * cloneIfServerResults：有服务端结果时克隆输入。
  */
@@ -429,14 +430,14 @@ function cloneIfServerResults(assistantMessage, value) {
     ? undefined
     : clone(value);
 }
-//@ chunk-e6aww6q8.js:1038315-1038361 placement
+//@ chunk-nt9amew5.js:31434-31480 placement
 /**
  * lacksServerResult：没有服务端结果。
  */
 function lacksServerResult(previous, next) {
   return previous === undefined || !deepEqualIgnoringUndefined(next, previous);
 }
-//@ chunk-e6aww6q8.js:1038361-1038591 placement
+//@ chunk-nt9amew5.js:31480-31710 placement
 function buildInputRewriteFields(rewrite, shape, keptVerdict) {
   if (rewrite === undefined) return {};
   return {
@@ -453,7 +454,7 @@ function buildInputRewriteFields(rewrite, shape, keptVerdict) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1038591-1039693 placement
+//@ chunk-nt9amew5.js:31710-32777 placement
 /**
  * 对服务端分类器的裁决做最终判定（同批调用未审、已清除等）。
  */
@@ -465,7 +466,7 @@ async function applyServerClassifierVerdict(
   toolUses,
 ) {
   let result = asClassifierResult(assistantMessage.serverClassifierResults);
-  if (result === undefined || !countToolCallsSince_6(assistantMessage, toolUseID)) return assistantMessage;
+  if (result === undefined || !mentionsToolUseId(assistantMessage, toolUseID)) return assistantMessage;
   let siblingsAgree =
     !result.isVoidedByAnotherCall(toolUseID) &&
     toolUses !== undefined &&
@@ -483,7 +484,7 @@ async function applyServerClassifierVerdict(
   result.noteRewriteCause(cause);
   result.noteRewrittenCall(
     toolUseID,
-    getServerClassifierFallbackMode() !== "off" ? countToolCallsSince_7(toolUses) : undefined,
+    getServerClassifierFallbackMode() !== "off" ? toolUseIdSet(toolUses) : undefined,
   );
   let message = {
     ...assistantMessage.message,
@@ -532,10 +533,10 @@ async function applyServerClassifierVerdict(
     },
   };
 }
-//@ chunk-e6aww6q8.js:1039693-1039930 placement
+//@ chunk-nt9amew5.js:32777-33013 placement
 function compareBashCommandInputs(toolUseBlock, rewrittenInput) {
   let command =
-    toolUseBlock?.type === "tool_use" && isPlainObject_5(toolUseBlock.input)
+    toolUseBlock?.type === "tool_use" && isPlainObject(toolUseBlock.input)
       ? toolUseBlock.input.command
       : undefined;
   let command_2 = rewrittenInput.command;
@@ -544,17 +545,19 @@ function compareBashCommandInputs(toolUseBlock, rewrittenInput) {
   if (command_2.endsWith(command)) return "prefix";
   return command_2.includes(command) ? "contains" : "other";
 }
-//@ chunk-e6aww6q8.js:1039930-1040058 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince_7(toolUses) {
+//@ chunk-nt9amew5.js:33013-33140 placement
+function toolUseIdSet(toolUses) {
   return toolUses === undefined
     ? undefined
     : new Set(
         toolUses.flatMap((assistantMessage) =>
-          assistantMessage.message.content.flatMap((block) => (block.type === "tool_use" ? [block.id] : [])),
+          assistantMessage.message.content.flatMap((contentBlock) =>
+            contentBlock.type === "tool_use" ? [contentBlock.id] : [],
+          ),
         ),
       );
 }
-//@ chunk-e6aww6q8.js:1040058-1040453 placement
+//@ chunk-nt9amew5.js:33140-33535 placement
 /**
  * 描述服务端分类后调用输入被改写的情况：原因（工具链或钩子）、来源、是否全由本地代码改写，以及 keep_local 模式下的附加判断。
  */
@@ -578,7 +581,7 @@ function describeInputRewrite(hookRewrite, chainRewrite, classifiesAll, shellOrF
     written: hookRewrite.written,
   };
 }
-//@ chunk-e6aww6q8.js:1040453-1040701 placement
+//@ chunk-nt9amew5.js:33535-33782 placement
 function classifyRewriteSource(source) {
   switch (source === undefined ? undefined : firstLineOf(source, ":")) {
     case "settings":
@@ -597,35 +600,35 @@ function classifyRewriteSource(source) {
       return "unknown";
   }
 }
-//@ chunk-e6aww6q8.js:1040701-1040809 placement
+//@ chunk-nt9amew5.js:33782-33888 placement
 function summarizeRewriteSources(sources) {
   let kinds = new Set(sources.map(classifyRewriteSource));
   if (kinds.size === 0) return "unknown";
   return kinds.size === 1 ? [...kinds][0] : "mixed";
 }
-//@ chunk-e6aww6q8.js:1040809-1040837 placement
-var SHELL_TOOL_NAMES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1040809", () => {
-  SHELL_TOOL_NAMES_2 = new Set([BASH_TOOL_NAME, MONITOR, POWERSHELL_TOOL_NAME]);
+//@ chunk-nt9amew5.js:33888-33915 placement
+var SHELL_TOOL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-nt9amew5.js:33888", () => {
+  SHELL_TOOL_NAMES = new Set([BASH_TOOL_NAME, MONITOR, POWERSHELL_TOOL_NAME]);
 });
-//@ chunk-e6aww6q8.js:1040837-1040878 placement
+//@ chunk-nt9amew5.js:33915-33955 placement
 /**
  * isShellToolClassified：shell 工具且分类器启用。
  */
 function isShellToolClassified(name) {
-  return SHELL_TOOL_NAMES_2.has(name) && classifyAllShellEnabled();
+  return SHELL_TOOL_NAMES.has(name) && classifyAllShellEnabled();
 }
-//@ chunk-e6aww6q8.js:1040878-1040913 placement
-var SHELL_AND_FILE_TOOL_NAMES; // deferred: uses SHELL_TOOL_NAMES_2 of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1040878", () => {
+//@ chunk-nt9amew5.js:33955-33988 placement
+var SHELL_AND_FILE_TOOL_NAMES; // deferred: uses SHELL_TOOL_NAMES of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-nt9amew5.js:33955", () => {
   SHELL_AND_FILE_TOOL_NAMES = new Set([
-    ...SHELL_TOOL_NAMES_2,
-    FILE_EDIT_TOOL_NAME,
+    ...SHELL_TOOL_NAMES,
+    EDIT,
     FILE_WRITE_TOOL_NAME,
     NOTEBOOK_EDIT_TOOL_NAME,
   ]);
 });
-//@ chunk-e6aww6q8.js:1040913-1040995 placement
+//@ chunk-nt9amew5.js:33988-34069 placement
 /**
  * isShellOrFileToolForClassifier：非 MCP 的 shell/文件工具。
  */
@@ -637,7 +640,7 @@ function isShellOrFileToolForClassifier(tool) {
     !requiresClassifierForHookAllow(tool)
   );
 }
-//@ chunk-e6aww6q8.js:1040995-1041090 placement
+//@ chunk-nt9amew5.js:34069-34164 placement
 function keepsLocalClassifierVerdict(rewrite) {
   return (
     getServerClassifierFallbackMode() === "keep_local" &&
@@ -646,7 +649,7 @@ function keepsLocalClassifierVerdict(rewrite) {
     !rewrite.classifiesAll
   );
 }
-//@ chunk-e6aww6q8.js:1041090-1041347 placement
+//@ chunk-nt9amew5.js:34164-34420 placement
 function getRewriteLostVerdictNote(assistantMessage, reason) {
   if (reason !== "server_input_rewritten") return;
   if (assistantMessage.serverClassifierInputRewritten !== true)
@@ -661,7 +664,7 @@ function getRewriteLostVerdictNote(assistantMessage, reason) {
     }
   );
 }
-//@ chunk-e6aww6q8.js:1041347-1041551 placement
+//@ chunk-nt9amew5.js:34420-34621 placement
 /**
  * 把某调用的服务端结果概括为 verdict（含是否带解释）或 no_verdict（含原因码）。
  */
@@ -680,7 +683,7 @@ function summarizeServerVerdict(verdict, toolUseID) {
       (sanitizeServerExplanation(callVerdictStatus.explanation)?.length ?? 0) > 0,
   };
 }
-//@ chunk-e6aww6q8.js:1041551-1042315 placement
+//@ chunk-nt9amew5.js:34621-35384 placement
 function classifyServerVerdict(verdict, toolUseID, fallback) {
   let callVerdictStatus = getCallVerdictStatus(verdict, toolUseID);
   if (callVerdictStatus?.type !== "evaluated") {
@@ -727,9 +730,9 @@ function classifyServerVerdict(verdict, toolUseID, fallback) {
       : "Not flagged by the server-side auto mode classifier",
   };
 }
-//@ chunk-e6aww6q8.js:1042315-1042347 placement
+//@ chunk-5xgkngpb.js:1037171-1037203 placement
 var TENGU_FLICKERING_RAIN = "tengu_flickering_rain";
-//@ chunk-e6aww6q8.js:1308790-1309037 placement
+//@ chunk-5xgkngpb.js:1307715-1307962 placement
 function getPermissionModeAtRequestForArbiter(assistantMessage, toolUseID, context) {
   let permissionModeAtRequest = assistantMessage.permissionModeAtRequest;
   if (
@@ -748,14 +751,14 @@ function getPermissionModeAtRequestForArbiter(assistantMessage, toolUseID, conte
     ? permissionModeAtRequest
     : undefined;
 }
-//@ chunk-e6aww6q8.js:1309037-1309071 placement
+//@ chunk-5xgkngpb.js:1307962-1307996 placement
 /**
  * alwaysTrueFlag：恒 true 的开关值。
  */
 function alwaysTrueFlag() {
   return ALWAYS_TRUE_FLAG().value;
 }
-//@ chunk-e6aww6q8.js:1309071-1309117 placement
+//@ chunk-5xgkngpb.js:1307996-1308042 placement
 function ALWAYS_TRUE_FLAG() {
   return {
     value: true,
@@ -763,14 +766,11 @@ function ALWAYS_TRUE_FLAG() {
   };
 }
 export {
-  canAttachServerClassifierBeta,
   getAutoModeClassifierRole,
-  awaitServerVerdict,
-  summarizeServerVerdict,
-  classifyServerVerdict,
   SERVER_CLASSIFIER_LABEL,
   isClassifierTargetToolUse,
   getPermissionModeAtRequestForArbiter,
+  awaitServerVerdict,
   alwaysTrueFlag,
   isArbiterRole,
   serverClassifierOffReason,
@@ -778,22 +778,25 @@ export {
   shouldFallBackToLocal,
   noVerdictReasonFor,
   isServerNotRequestedReason,
+  classifyServerVerdict,
   isInputRewrittenWithFallbackOff,
-  countToolCallsSince_6,
+  mentionsToolUseId,
   getRewriteLostVerdictNote,
   SERVER_CALL_UNAVAILABLE_INPUT_TOO_LONG,
-  getServerClassifierRoleTelemetry,
-  isServerClassifierOff,
+  summarizeServerVerdict,
   canUseServerClassifier,
   isArbiterWithFallbackActive,
+  isServerClassifierOff,
+  canAttachServerClassifierBeta,
+  getServerClassifierRoleTelemetry,
+  isAutoModeClassified,
+  isServerArbiterActive,
+  TENGU_FLICKERING_RAIN,
   cloneIfServerResults,
   lacksServerResult,
   describeInputRewrite,
   isShellToolClassified,
   isShellOrFileToolForClassifier,
   applyServerClassifierVerdict,
-  TENGU_FLICKERING_RAIN,
-  isServerArbiterActive,
-  isAutoModeClassified,
   checkServerClassifierEligibility,
 };

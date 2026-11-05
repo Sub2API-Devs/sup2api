@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。准备设备绑定器：签 session_bind、tool_host_link、tool_host_resume 等载荷，失败时以未绑定继续。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ehqcegwt.js (26)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-zrdjahwf.js (26)
  * attribution: placement 26
  */
 import { normalizeUuidOrNull } from "../utils/agentId.js";
@@ -13,10 +13,10 @@ import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   errorMessage,
 } from "../utils/errors.js";
-import { uniq } from "../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../utils/permissions/filesystem.js";
 import { primeWindowsProfileDirs } from "../services/remoteTools/windowsProfileDirs.js";
 import { launchedFromHome } from "../services/remoteTools/servingGates.js";
-import { err, ok } from "../utils/resultError.js";
+import { err as err_2, ok } from "../utils/resultError.js";
 import { isDeviceBindingAllowed } from "./deviceBindingPolicy.js";
 import { resolveDeviceBindingRecord, getHostAccountUuid } from "./deviceBindingRecord.js";
 import { isViolinWoodEnabled } from "../services/analytics/violinGates.js";
@@ -36,14 +36,14 @@ import { logForDebugging } from "../utils/debug.js";
 import { launchLocationFacts } from "../services/remoteTools/launchLocation.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ehqcegwt.js:703-780 placement
+//@ chunk-zrdjahwf.js:703-780 placement
 var DEVICE_REGISTRY_KID_PREFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var buffer;
-deferInit("chunk-ehqcegwt.js:703", () => {
+deferInit("chunk-zrdjahwf.js:703", () => {
   DEVICE_REGISTRY_KID_PREFIX = "creg_";
   buffer = Buffer.from("anthropic.ccr.create_session_bind.v1", "utf8");
 });
-//@ chunk-ehqcegwt.js:780-928 placement
+//@ chunk-zrdjahwf.js:780-928 placement
 function uuidToBytes(uuid) {
   if (!normalizeUuidOrNull(uuid))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -52,7 +52,7 @@ function uuidToBytes(uuid) {
     );
   return Buffer.from(uuid.replace(/-/g, ""), "hex");
 }
-//@ chunk-ehqcegwt.js:928-1099 placement
+//@ chunk-zrdjahwf.js:928-1099 placement
 /**
  * session_bind 签名载荷编码
  */
@@ -66,7 +66,7 @@ function encodeSessionBindPayload(orgUuid, accountUuid, deviceUuid, issuedAtMs) 
   payload.writeBigUInt64BE(BigInt(issuedAtMs), offset);
   return payload;
 }
-//@ chunk-ehqcegwt.js:1099-1316 placement
+//@ chunk-zrdjahwf.js:1099-1316 placement
 /**
  * 用设备密钥签 session_bind，返回 kid/签名/时间
  */
@@ -85,14 +85,14 @@ async function signSessionBind(orgUuid, accountUuid, deviceUuid, key) {
     },
   };
 }
-//@ chunk-ehqcegwt.js:1316-1415 placement
+//@ chunk-zrdjahwf.js:1316-1415 placement
 var buffer_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DEVICE_UUID_BIND_PLACEHOLDER;
-deferInit("chunk-ehqcegwt.js:1316", () => {
+deferInit("chunk-zrdjahwf.js:1316", () => {
   buffer_2 = Buffer.from("anthropic.ccr.session_bind.v1", "utf8");
   DEVICE_UUID_BIND_PLACEHOLDER = "00000000-0000-0000-0000-000000000000";
 });
-//@ chunk-ehqcegwt.js:1415-1716 placement
+//@ chunk-zrdjahwf.js:1415-1716 placement
 /**
  * create_session_bind 签名载荷的二进制编码
  */
@@ -115,7 +115,7 @@ function encodeCreateSessionBindPayload({
   payload.writeBigUInt64BE(BigInt(issuedAtMs), offset);
   return payload;
 }
-//@ chunk-ehqcegwt.js:1716-2038 placement
+//@ chunk-zrdjahwf.js:1716-2038 placement
 async function signSessionLateLink({ orgUuid, accountUuid, sessionUuid, deviceUUID, key, now = Date.now }) {
   let issuedAtMs = now();
   let signature = await key.sign(
@@ -135,24 +135,24 @@ async function signSessionLateLink({ orgUuid, accountUuid, sessionUuid, deviceUU
     issuedAt: new Date(issuedAtMs).toISOString(),
   };
 }
-//@ chunk-ehqcegwt.js:2038-2181 placement
+//@ chunk-zrdjahwf.js:2038-2181 placement
 var buffer_3; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var buffer_4;
 var TOOL_HOST_NAME_PATTERN;
 var MAX_TOOL_HOST_LINKS;
-deferInit("chunk-ehqcegwt.js:2038", () => {
+deferInit("chunk-zrdjahwf.js:2038", () => {
   buffer_3 = Buffer.from("anthropic.ccr.tool_host_link.v1", "utf8");
   buffer_4 = Buffer.from("anthropic.ccr.tool_host_link.v2", "utf8");
   TOOL_HOST_NAME_PATTERN = /^[a-z0-9_.]{1,48}$/;
   MAX_TOOL_HOST_LINKS = 8;
 });
-//@ chunk-ehqcegwt.js:2181-2245 placement
+//@ chunk-zrdjahwf.js:2181-2245 placement
 function encodeToolHostLinkPayloadV1(header) {
   return Buffer.concat([buffer_3, ...encodeToolHostLinkHeader(header), u64be(header.issuedAtMs)]);
 }
-//@ chunk-ehqcegwt.js:2245-2392 placement
+//@ chunk-zrdjahwf.js:2245-2392 placement
 function canonicalLinkCapabilities(names) {
-  let sorted = uniq(names).sort();
+  let sorted = normalizeCaseForComparison_2(names).sort();
   return names.length >= 1 &&
     names.length <= MAX_TOOL_HOST_LINKS &&
     names.every((name) => TOOL_HOST_NAME_PATTERN.test(name)) &&
@@ -161,7 +161,7 @@ function canonicalLinkCapabilities(names) {
     ? sorted
     : undefined;
 }
-//@ chunk-ehqcegwt.js:2392-2717 placement
+//@ chunk-zrdjahwf.js:2392-2717 placement
 /**
  * tool_host_link 签名载荷编码（能力名 1-8 个）
  */
@@ -182,7 +182,7 @@ function encodeToolHostLinkPayload(header, names) {
     u64be(header.issuedAtMs),
   ]);
 }
-//@ chunk-ehqcegwt.js:2717-3060 placement
+//@ chunk-zrdjahwf.js:2717-3060 placement
 async function signToolHostLink({
   orgUuid,
   accountUuid,
@@ -214,12 +214,12 @@ async function signToolHostLink({
     issuedAt: new Date(issuedAtMs).toISOString(),
   };
 }
-//@ chunk-ehqcegwt.js:3060-3122 placement
+//@ chunk-zrdjahwf.js:3060-3122 placement
 var buffer_5; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ehqcegwt.js:3060", () => {
+deferInit("chunk-zrdjahwf.js:3060", () => {
   buffer_5 = Buffer.from("anthropic.ccr.tool_host_resume.v1", "utf8");
 });
-//@ chunk-ehqcegwt.js:3122-3374 placement
+//@ chunk-zrdjahwf.js:3122-3374 placement
 /**
  * tool_host_resume 签名载荷编码（nonce 1-65535 字节）
  */
@@ -238,7 +238,7 @@ function encodeToolHostResumePayload(header, nonce) {
     u64be(header.issuedAtMs),
   ]);
 }
-//@ chunk-ehqcegwt.js:3374-3604 placement
+//@ chunk-zrdjahwf.js:3374-3604 placement
 async function signToolHostResume({ deviceUUID, nonce, key, now = Date.now, ...linkFields }) {
   let issuedAtMs = now();
   let signature = await key.sign(
@@ -258,51 +258,51 @@ async function signToolHostResume({ deviceUUID, nonce, key, now = Date.now, ...l
     issuedAt: new Date(issuedAtMs).toISOString(),
   };
 }
-//@ chunk-ehqcegwt.js:3604-3644 placement
+//@ chunk-zrdjahwf.js:3604-3644 placement
 async function hasTrustedDeviceToken() {
   return (await trustedDeviceToken()).ok;
 }
-//@ chunk-ehqcegwt.js:3644-3749 placement
+//@ chunk-zrdjahwf.js:3644-3749 placement
 async function trustedDeviceToken() {
   let { trustedDeviceTokenForBind } = await import("./trustedDevice.js");
   return trustedDeviceTokenForBind(undefined);
 }
-//@ chunk-ehqcegwt.js:3749-4304 placement
+//@ chunk-zrdjahwf.js:3749-4304 placement
 async function localBindIdentity(options) {
   if (options.launchedFromHome === undefined) await primeWindowsProfileDirs();
-  if ((options.launchedFromHome ?? launchedFromHome)()) return err("launched_from_home");
+  if ((options.launchedFromHome ?? launchedFromHome)()) return err_2("launched_from_home");
   let egressAllowed;
   try {
     egressAllowed = (options.isEgressAllowed ?? isDeviceBindingAllowed)();
   } catch {
     egressAllowed = false;
   }
-  if (!egressAllowed) return err("egress");
+  if (!egressAllowed) return err_2("egress");
   let deviceBindingRecord = resolveDeviceBindingRecord({
     storedAccountUuid: options.accountUuid,
     hostAccountUuid: await (options.getHostAccountUuid
       ? options.getHostAccountUuid()
       : getHostAccountUuid(options.credentials)),
   });
-  if (deviceBindingRecord.status === "missing") return err("account");
-  if (deviceBindingRecord.status === "mismatch") return err("account_mismatch");
+  if (deviceBindingRecord.status === "missing") return err_2("account");
+  if (deviceBindingRecord.status === "mismatch") return err_2("account_mismatch");
   return (await (options.hasDeviceProof ?? hasTrustedDeviceToken)().catch(() => false))
     ? ok({
         accountUuid: deviceBindingRecord.accountUuid,
         source: deviceBindingRecord.source,
       })
-    : err("no_device_proof");
+    : err_2("no_device_proof");
 }
-//@ chunk-ehqcegwt.js:4304-5555 placement
+//@ chunk-zrdjahwf.js:4304-5555 placement
 /**
  * 准备设备绑定器：签 session_bind、tool_host_link、tool_host_resume 等载荷，失败时以未绑定继续。
  */
 async function prepareDeviceBinder(options) {
   let isEnabled = options.isEnabled ?? isViolinWoodEnabled;
   try {
-    if (!(await isEnabled())) return err("gate");
+    if (!(await isEnabled())) return err_2("gate");
   } catch (error) {
-    return err(continueUnboundAfterBindFailure("gate", error));
+    return err_2(continueUnboundAfterBindFailure("gate", error));
   }
   let deviceProofError = "no_device_proof";
   let identity = await localBindIdentity({
@@ -317,7 +317,7 @@ async function prepareDeviceBinder(options) {
   });
   if (!identity.ok) {
     let skipResult = skipDeviceBindWithTelemetry(identity.error);
-    return identity.error === "no_device_proof" ? err(deviceProofError) : skipResult;
+    return identity.error === "no_device_proof" ? err_2(deviceProofError) : skipResult;
   }
   logEvent("tengu_device_bind_account", {
     source: fromEnum(identity.value.source),
@@ -334,11 +334,11 @@ async function prepareDeviceBinder(options) {
       );
     } catch (error) {
       if (!(error instanceof DeviceKeyRefusedError) || options.confirmReenroll === undefined || reenrollTried)
-        return err(continueUnboundAfterBindFailure("register", error));
+        return err_2(continueUnboundAfterBindFailure("register", error));
       reenrollTried = true;
       return (await askReenrollDevice(options.confirmReenroll))
         ? reenrollThen(error.refusedPublicKey)
-        : err(continueUnboundAfterBindFailure("register", error));
+        : err_2(continueUnboundAfterBindFailure("register", error));
     }
   };
   let reenrollThen = async (refusedPublicKey) => {
@@ -351,7 +351,7 @@ async function prepareDeviceBinder(options) {
         ),
       );
     } catch (error) {
-      return err(continueUnboundAfterBindFailure("register", error));
+      return err_2(continueUnboundAfterBindFailure("register", error));
     }
   };
   let bindWith = async (relearn) => {
@@ -387,7 +387,7 @@ async function prepareDeviceBinder(options) {
   };
   return bindWith(false);
 }
-//@ chunk-ehqcegwt.js:5555-5941 placement
+//@ chunk-zrdjahwf.js:5555-5941 placement
 /**
  * tool-host link 载荷公共头（org/account/session/device/work/env）
  */
@@ -410,27 +410,27 @@ function encodeToolHostLinkHeader({ orgUuid, accountUuid, sessionUuid, deviceUui
     buffer_2,
   ];
 }
-//@ chunk-ehqcegwt.js:5941-6005 placement
+//@ chunk-zrdjahwf.js:5941-6005 placement
 function _(value) {
   let buffer = Buffer.alloc(2);
   buffer.writeUInt16BE(value);
   return buffer;
 }
-//@ chunk-ehqcegwt.js:6005-6080 placement
+//@ chunk-zrdjahwf.js:6005-6080 placement
 function u64be(issuedAtMs) {
   let buffer = Buffer.alloc(8);
   buffer.writeBigUInt64BE(BigInt(issuedAtMs));
   return buffer;
 }
-//@ chunk-ehqcegwt.js:6080-6162 placement
+//@ chunk-zrdjahwf.js:6080-6162 placement
 function skipDeviceBindWithTelemetry(error) {
   logEvent("tengu_device_bind_skipped", {
     reason: fromEnum(error),
     ...launchLocationFacts(error),
   });
-  return err(error);
+  return err_2(error);
 }
-//@ chunk-ehqcegwt.js:6162-6428 placement
+//@ chunk-zrdjahwf.js:6162-6428 placement
 /**
  * 询问是否重新注册本机并记 tengu_device_reenroll
  */
@@ -453,14 +453,14 @@ async function askReenrollDevice(confirmReenroll) {
     return false;
   }
 }
-//@ chunk-ehqcegwt.js:6428-6498 placement
+//@ chunk-zrdjahwf.js:6428-6498 placement
 function deviceBindErrorClass(error) {
   return (
     (error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS && error.errorClass) ||
     "unexpected_error"
   );
 }
-//@ chunk-ehqcegwt.js:6498-6963 placement
+//@ chunk-zrdjahwf.js:6498-6963 placement
 /**
  * 设备绑定失败时记遥测并以未绑定继续
  */
@@ -491,12 +491,12 @@ function continueUnboundAfterBindFailure(phase, error) {
           : phase;
 }
 export {
-  DEVICE_REGISTRY_KID_PREFIX,
   localBindIdentity,
   canonicalLinkCapabilities,
   signSessionLateLink,
   signToolHostLink,
   signToolHostResume,
   uuidToBytes,
+  DEVICE_REGISTRY_KID_PREFIX,
   prepareDeviceBinder,
 };

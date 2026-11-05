@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：收集托管设置中生效的限制；描述值中的问题字符等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (17)
  * attribution: placement 17
  */
 import { withConfusables } from "../sanitization.js";
@@ -29,18 +29,18 @@ import { AWS_CREDENTIAL_ENV_NAMES, PARENT_PAIR_SUPPRESSOR_SENTINEL } from "./set
 import { countCodePointsInString } from "../../../vendor/@modelcontextprotocol/client/dist/cfWorkerProvider-l7BFVI5n.mjs";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:348365-348414 placement
+//@ chunk-z20c443b.js:346325-346374 placement
 var MAX_CONFUSABLE_SETTING_LENGTH; // deferred: uses withConfusables (../sanitization.js) of its import cycle while loading; runs once the cycle is complete
 var regExp_6;
-deferInit("chunk-dcmhvw5a.js:348365", () => {
+deferInit("chunk-z20c443b.js:346325", () => {
   MAX_CONFUSABLE_SETTING_LENGTH = 65536;
   regExp_6 = new RegExp(`[${withConfusables("<")}]`, "gu");
 });
-//@ chunk-dcmhvw5a.js:348414-348461 placement
+//@ chunk-z20c443b.js:346374-346421 placement
 function hasNoConfusables(text) {
   return isAcceptableRuleText(text) && text.search(regExp_6) === -1;
 }
-//@ chunk-dcmhvw5a.js:348461-349059 placement
+//@ chunk-z20c443b.js:346421-347019 placement
 /**
  * 统计各类权限规则数量。
  */
@@ -90,14 +90,14 @@ function summarizePermissionRules(autoMode) {
     mended,
   };
 }
-//@ chunk-dcmhvw5a.js:349059-349156 placement
+//@ chunk-z20c443b.js:347019-347136 placement
 var HOOK_DISABLE_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var AWS_PAIR_FIELDS;
-deferInit("chunk-dcmhvw5a.js:349059", () => {
-  HOOK_DISABLE_KEYS = new Set(["disableAllHooks"]);
+deferInit("chunk-z20c443b.js:347019", () => {
+  HOOK_DISABLE_KEYS = new Set(["disableAllHooks", "disableReplyCheck"]);
   AWS_PAIR_FIELDS = ["accessKeyIdVar", "secretAccessKeyVar", "sessionTokenVar"];
 });
-//@ chunk-dcmhvw5a.js:349156-350801 placement
+//@ chunk-z20c443b.js:347136-348781 placement
 /**
  * 收集托管设置中生效的限制。
  */
@@ -185,14 +185,14 @@ function collectManagedRestrictions(doc) {
   }
   return Object.keys(out).length > 0 ? out : null;
 }
-//@ chunk-dcmhvw5a.js:350801-350922 placement
+//@ chunk-z20c443b.js:348781-348902 placement
 function pickDefinedKeys(doc, keys) {
   if (!doc) return;
   let out = {};
   for (let key of keys) if (doc[key] !== undefined) out[key] = doc[key];
   return Object.keys(out).length > 0 ? out : undefined;
 }
-//@ chunk-dcmhvw5a.js:350922-351272 placement
+//@ chunk-z20c443b.js:348902-349252 placement
 /**
  * 只认托管来源的设置键。
  */
@@ -213,7 +213,7 @@ var MANAGED_ONLY_KEYS_2 = [
   "deniedModels",
   "allowedProviders",
 ];
-//@ chunk-dcmhvw5a.js:351272-351653 placement
+//@ chunk-z20c443b.js:349252-349633 placement
 /**
  * CA 证书相关环境变量。
  */
@@ -240,7 +240,7 @@ var caCertEnvVarList = {
   UV_NATIVE_TLS: "true",
   DENO_TLS_CA_STORE: "system,mozilla",
 };
-//@ chunk-dcmhvw5a.js:351653-352112 placement
+//@ chunk-z20c443b.js:349633-350092 placement
 /**
  * 找出值中的换行或不可见字符位置。
  */
@@ -285,7 +285,7 @@ function findUnsafeChar(text, { maxLength }) {
     };
   return null;
 }
-//@ chunk-dcmhvw5a.js:352112-352457 placement
+//@ chunk-z20c443b.js:350092-350437 placement
 /**
  * 检查值首尾与内部的特殊字符。
  */
@@ -316,7 +316,7 @@ function checkValueChars(text) {
   }
   return null;
 }
-//@ chunk-dcmhvw5a.js:352629-353285 placement
+//@ chunk-z20c443b.js:350609-351265 placement
 /**
  * 描述值中的问题字符。
  */
@@ -338,7 +338,7 @@ function describeUnsafeValue(found, { length, lineCount }) {
       return `it is ${found.length} characters long (limit ${found.maxLength})`;
   }
 }
-//@ chunk-dcmhvw5a.js:353285-353871 placement
+//@ chunk-z20c443b.js:351265-351851 placement
 /**
  * 描述特殊码点（BOM、零宽字符等）。
  */
@@ -373,11 +373,11 @@ function describeCodePoint(codePoint) {
       return codePoint >= 55296 && codePoint <= 57343 ? "an unpaired UTF-16 surrogate" : null;
   }
 }
-//@ chunk-dcmhvw5a.js:353871-353944 placement
+//@ chunk-z20c443b.js:351851-351924 placement
 function unicodeEscapeLabel(code) {
   return `U+${code.toString(16).toUpperCase().padStart(4, "0")}`;
 }
-//@ chunk-dcmhvw5a.js:353944-354047 placement
+//@ chunk-z20c443b.js:351924-352027 placement
 function firstLineBreakIndex(text) {
   let index = text.indexOf(`
 `);
@@ -385,27 +385,27 @@ function firstLineBreakIndex(text) {
   if (index === -1) return index_2;
   return index_2 === -1 ? index : Math.min(index, index_2);
 }
-//@ chunk-dcmhvw5a.js:354047-354099 placement
+//@ chunk-z20c443b.js:352027-352079 placement
 function isAsciiWhitespaceCode(code) {
   return code === 9 || code === 32 || code === 10 || code === 13;
 }
-//@ chunk-dcmhvw5a.js:354099-354157 placement (2.1.88 match: needsWidthCompensation, 1)
+//@ chunk-z20c443b.js:352079-352137 placement (2.1.88 match: needsWidthCompensation, 1)
 function codePointAtOrUnit(text, index) {
   return text.codePointAt(index) ?? text.charCodeAt(index);
 }
-//@ chunk-dcmhvw5a.js:354313-354350 placement
+//@ chunk-z20c443b.js:352293-352330 placement
 function countUtf16CodePoints(text) {
   return countCodePointsInString(text, text.length);
 }
 export {
+  caCertEnvVars,
+  caCertEnvVarList,
   countUtf16CodePoints,
   findUnsafeChar,
   describeUnsafeValue,
-  caCertEnvVars,
-  caCertEnvVarList,
   CA_CERT_ENV_VARS_2,
   CA_CERT_ENV_VARS,
-  checkValueChars,
   collectManagedRestrictions,
+  checkValueChars,
   summarizePermissionRules,
 };

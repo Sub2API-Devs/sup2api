@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：环境变化附件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (9)
  * attribution: placement 9
  */
 import { isRemoteCowork } from "../entrypointKinds.js";
@@ -32,8 +32,8 @@ import {
   outputStyleAttachmentSchema,
   languagePreferenceSchema,
 } from "../../constants/prompts.js";
-import { getOutputStyleConfig, hasCustomOutputStyle, DEFAULT } from "../../constants/outputStyles.js";
-import { getInitialSettings_2 } from "../settings/settings.js";
+import { getOutputStyleConfig, hasCustomOutputStyle, DEFAULT_2 } from "../../constants/outputStyles.js";
+import { getInitialSettings } from "../settings/settings.js";
 import { isSkillOverridesUnread, proactivityAttachments } from "../proactivity.js";
 import {
   changedSettingValue,
@@ -44,7 +44,7 @@ import {
 import { getRuntimeModelSwitchAnnouncements } from "../model/model.js";
 import { maybe } from "../attachments.js";
 
-//@ chunk-e6aww6q8.js:3329793-3329885 placement
+//@ chunk-5xgkngpb.js:3415550-3415642 placement
 /**
  * 远端协作且未禁用时，是否预取 artifact 打开。
  */
@@ -52,14 +52,14 @@ function shouldPrefetchArtifactOpening() {
   if (!isRemoteCowork() || env.CLAUDE_CODE_ARTIFACT_OPENING_PREFETCH === false) return false;
   return shouldPrefetchArtifactOpening_2();
 }
-//@ chunk-e6aww6q8.js:3331460-3331522 placement
+//@ chunk-5xgkngpb.js:3417473-3417535 placement
 /**
  * 是否应发出环境变化附件（非 fork、非隔离上下文）。
  */
 function shouldEmitEnvironmentChanges(options) {
   return !simpleModeEnv() && !options.bareFork && !options.isolatedContext;
 }
-//@ chunk-e6aww6q8.js:3331522-3331687 placement
+//@ chunk-5xgkngpb.js:3417535-3417700 placement
 function shouldSendEnvironmentAttachments(toolUseContext) {
   if (!shouldEmitEnvironmentChanges(toolUseContext.options)) return false;
   let { agentContext } = toolUseContext;
@@ -71,7 +71,7 @@ function shouldSendEnvironmentAttachments(toolUseContext) {
       return agentContext.isMainSession === true;
   }
 }
-//@ chunk-e6aww6q8.js:3331687-3331744 placement
+//@ chunk-5xgkngpb.js:3417700-3417757 placement
 /**
  * 内置 gh 可用性变化的附件字段。
  */
@@ -85,7 +85,7 @@ var AGENT_PROXY_CHANGE = [
     field: "agentProxy",
   },
 ];
-//@ chunk-e6aww6q8.js:3331744-3332617 placement
+//@ chunk-5xgkngpb.js:3417757-3418633 placement
 /**
  * 检测工作目录出现或消失，生成环境变化附件。
  */
@@ -155,7 +155,7 @@ async function detectEnvironmentDirectoryChange(toolUseContext, messages) {
         },
       ];
 }
-//@ chunk-e6aww6q8.js:3332617-3333467 placement
+//@ chunk-5xgkngpb.js:3418633-3419484 placement
 /**
  * 压缩后重新生成环境附件：有当前快照时按需重发快照及目录/gh/代理变化；否则取最新或最近可读的快照（不保留工作目录时去掉 worktree/git 信息并记录目录变更），保留部分已含完整块时不重复发送。
  */
@@ -235,7 +235,7 @@ function getPostCompactEnvironmentAttachments(messages, keptMessages, keepWorkin
       : []),
   ];
 }
-//@ chunk-e6aww6q8.js:3333681-3333747 placement
+//@ chunk-5xgkngpb.js:3419698-3419764 placement
 /**
  * 模型身份变化时返回模型附件（已记录过则不返回）。
  */
@@ -244,7 +244,7 @@ function modelAttachmentIfNew(messages, messages_2) {
   let lastModelAttachment = getLastModelAttachment(messages);
   return lastModelAttachment ? [lastModelAttachment] : [];
 }
-//@ chunk-e6aww6q8.js:3333747-3334155 placement
+//@ chunk-5xgkngpb.js:3419764-3420172 placement
 /**
  * 当输出样式或语言偏好相对历史消息中最近一次发送的值发生变化时，生成 output_style_instructions / language 附件。
  */
@@ -258,9 +258,9 @@ async function getOutputStyleAndLanguageAttachments(toolUseContext, messages) {
         prompt: outputStyleConfig.prompt,
       }
     : null;
-  let language = getInitialSettings_2().language || null;
+  let language = getInitialSettings().language || null;
   let styleChange =
-    (!outputStyleConfig && (hasCustomOutputStyle() !== DEFAULT || isSkillOverridesUnread())) ||
+    (!outputStyleConfig && (hasCustomOutputStyle() !== DEFAULT_2 || isSkillOverridesUnread())) ||
     !outputStyleAttachmentSchema().safeParse(outputStyleValue).success
       ? undefined
       : changedSettingValue(
@@ -295,7 +295,7 @@ async function getOutputStyleAndLanguageAttachments(toolUseContext, messages) {
       : []),
   ];
 }
-//@ chunk-e6aww6q8.js:3334155-3334304 placement
+//@ chunk-5xgkngpb.js:3420172-3420321 placement
 /**
  * 并行生成环境变化相关附件：目录变化、运行时模型切换、输出样式/语言与主动性提示。
  */
@@ -314,11 +314,11 @@ async function getEnvironmentChangeAttachments(toolUseContext, messages) {
   ).flat();
 }
 export {
-  shouldEmitEnvironmentChanges,
   getEnvironmentChangeAttachments,
-  getPostCompactEnvironmentAttachments,
-  modelAttachmentIfNew,
   shouldPrefetchArtifactOpening,
   detectEnvironmentDirectoryChange,
   getOutputStyleAndLanguageAttachments,
+  shouldEmitEnvironmentChanges,
+  getPostCompactEnvironmentAttachments,
+  modelAttachmentIfNew,
 };

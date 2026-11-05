@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：插件 $.ui 接口（focus、press、resolve 等）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (56)
- * attribution: placement 56
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (57)
+ * attribution: placement 56, layout 1
  */
 import { randomUUID } from "crypto";
 import { identity as identity_2 } from "../../utils/identity.js";
@@ -47,10 +47,16 @@ import {
 import { truncateUiLog } from "./hooksWorkerClient.js";
 import { HooksError } from "./hooksErrors.js";
 import { isTerminalShutdown } from "../../utils/terminalShutdown.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3993711-3993767 placement
+//@ chunk-5xgkngpb.js:3502696-3502716 placement
+/**
+ * 发给界面宿主的请求（复制、读选区、读写提示等）默认超时 5 秒。
+ */
+var MEMORY_SERVER_MAX = 50;
+var UI_HOST_REQUEST_TIMEOUT_MS = 5000;
+//@ chunk-5xgkngpb.js:4099163-4099219 placement
 /**
  * 选区对象
  */
@@ -63,7 +69,7 @@ var selectionValue = (text, requestId) =>
         text,
         requestId,
       };
-//@ chunk-e6aww6q8.js:3993767-3993841 placement
+//@ chunk-5xgkngpb.js:4099219-4099293 placement
 /**
  * 空则 undefined
  */
@@ -72,7 +78,7 @@ function emptyOrSelection(text, requestId) {
     ? undefined
     : selectionValue(text, requestId === "" ? undefined : requestId);
 }
-//@ chunk-e6aww6q8.js:3993841-3993892 placement
+//@ chunk-5xgkngpb.js:4099293-4099344 placement
 /**
  * 选区结果
  */
@@ -80,12 +86,12 @@ var selectionResult = (text, requestId) => ({
   selection: emptyOrSelection(text, requestId),
   cause: undefined,
 });
-//@ chunk-e6aww6q8.js:3993892-3993944 placement
+//@ chunk-5xgkngpb.js:4099344-4099396 placement
 /**
  * 当前请求者
  */
 var currentRequester; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3993892", () => {
+deferInit("chunk-5xgkngpb.js:4099344", () => {
   currentRequester = identity_2(
     {
       current: undefined,
@@ -95,12 +101,12 @@ deferInit("chunk-e6aww6q8.js:3993892", () => {
     },
   );
 });
-//@ chunk-e6aww6q8.js:3993944-3993972 placement
+//@ chunk-5xgkngpb.js:4099396-4099424 placement
 /**
  * 非终端界面
  */
 var isNonTerminalSurface = (surface) => surface !== "terminal";
-//@ chunk-e6aww6q8.js:3993972-3994035 placement
+//@ chunk-5xgkngpb.js:4099424-4099487 placement
 /**
  * 请求者客户端
  */
@@ -111,7 +117,7 @@ var requesterClient = (requester, clientId, surface) => ({
     surface,
   },
 });
-//@ chunk-e6aww6q8.js:3994035-3994198 placement
+//@ chunk-5xgkngpb.js:4099487-4099650 placement
 var answeringClientsOf = (requester, api, surface) =>
   clientRegistry.list().flatMap((client) => {
     let { clientId, surface: surface_2 } = client;
@@ -122,12 +128,12 @@ var answeringClientsOf = (requester, api, surface) =>
       ? [requesterClient(requester, clientId, surface_2)]
       : [];
   });
-//@ chunk-e6aww6q8.js:3994198-3994233 placement
+//@ chunk-5xgkngpb.js:4099650-4099685 placement
 /**
  * 能回答的客户端
  */
 var answeringClients = (api, surface) => answeringClientsOf(currentRequester.current, api, surface);
-//@ chunk-e6aww6q8.js:3994233-3994431 placement
+//@ chunk-5xgkngpb.js:4099685-4099883 placement
 /**
  * 按当前请求者的可达范围列出能回答某能力的远程客户端：first 只取第一个，否则把静默客户端排到后面。
  */
@@ -140,7 +146,7 @@ function reachableClients(api, surface) {
     ? clients.filter((client) => client === clients[0])
     : clients.toSorted((a, b) => silenceRank(a) - silenceRank(b));
 }
-//@ chunk-e6aww6q8.js:3994431-3994659 placement
+//@ chunk-5xgkngpb.js:4099883-4100111 placement
 /**
  * 依次询问能回答某能力的客户端，第一个给出结果的记为 heard 并返回；不回答的记为 missed。
  */
@@ -159,12 +165,12 @@ async function askClientsInTurn(api, ask, surface) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:3994659-3994670 placement
+//@ chunk-5xgkngpb.js:4100111-4100122 placement
 /**
  * 1e6
  */
 var MAX_COPY_CHARS = 1e6;
-//@ chunk-e6aww6q8.js:3994670-3994936 placement
+//@ chunk-5xgkngpb.js:4100122-4100388 placement
 /**
  * $.ui.copy 交给远程客户端复制：超过 1e6 字符不发送，返回是否复制成功；没有客户端时返回 undefined。
  */
@@ -189,18 +195,15 @@ async function copyViaRemoteClient(surface, plugin, text) {
     )) === true
   );
 }
-//@ chunk-e6aww6q8.js:3994936-3995037 placement
+//@ chunk-5xgkngpb.js:4100388-4100489 placement
 async function requireSelection(selectionPromise) {
   let result = await selectionPromise;
   if (result.selection === undefined) throw Error("nothing selected");
   return result;
 }
-//@ chunk-e6aww6q8.js:3995037-3995050 placement
-/**
- * 发给界面宿主的请求（复制、读选区、读写提示等）默认超时 5 秒。
- */
-var UI_HOST_REQUEST_TIMEOUT_MS = 5000;
-//@ chunk-e6aww6q8.js:3995050-3995128 placement
+//@ chunk-5xgkngpb.js:4100489-4100502 layout
+var BACKDROP_CLEAR_DELAY_MS = 5000;
+//@ chunk-5xgkngpb.js:4100502-4100580 placement
 /**
  * 设置当前请求者
  */
@@ -210,7 +213,7 @@ function withCurrentRequester(requester) {
     if (currentRequester.current === requester) currentRequester.current = undefined;
   };
 }
-//@ chunk-e6aww6q8.js:3995128-3995299 placement
+//@ chunk-5xgkngpb.js:4100580-4100751 placement
 function selectionReadCause(results) {
   let filtered = results.map((entry) => entry.cause).filter((cause) => cause !== "not_asked");
   let included = filtered.includes("parse_failed");
@@ -220,7 +223,7 @@ function selectionReadCause(results) {
       ? "parse_failed"
       : (filtered.at(0) ?? "not_asked");
 }
-//@ chunk-e6aww6q8.js:3995299-3995529 placement
+//@ chunk-5xgkngpb.js:4100751-4100981 placement
 function logSelectionReadOutcome(results) {
   let cause = selectionReadCause(results);
   if (cause === undefined) {
@@ -233,7 +236,7 @@ function logSelectionReadOutcome(results) {
   }
   if (cause !== "not_asked") logFeatureSad("plugin_function_hooks_selection_read", cause);
 }
-//@ chunk-e6aww6q8.js:3995529-3996887 placement
+//@ chunk-5xgkngpb.js:4100981-4102344 placement
 /**
  * headless 模式下的输入框代理：read/write/paint/forget/propose 优先交给远程客户端（ui_prompt_* 能力），没有则用本地实现。
  */
@@ -336,7 +339,7 @@ function createRemotePromptBox(localBox) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3996887-3996929 placement
+//@ chunk-5xgkngpb.js:4102344-4102386 placement
 /**
  * 只有原因的失败结果
  */
@@ -344,7 +347,7 @@ var causeOnlyResult = (cause) => ({
   selection: undefined,
   cause,
 });
-//@ chunk-e6aww6q8.js:3996929-3997125 placement
+//@ chunk-5xgkngpb.js:4102386-4102582 placement
 async function readFirstSelection(reads) {
   let mapped = reads.map((read) => read.catch(() => causeOnlyResult("aborted")));
   let selected = await Promise.any(mapped.map(requireSelection)).catch(() => {
@@ -357,7 +360,7 @@ async function readFirstSelection(reads) {
   logSelectionReadOutcome([selected]);
   return selected.selection;
 }
-//@ chunk-e6aww6q8.js:3997125-3997226 placement
+//@ chunk-5xgkngpb.js:4102582-4102683 placement
 /**
  * headless 模式下的选区读取器：并行询问所有能读选区的客户端，取第一个有选区的结果。
  */
@@ -367,12 +370,12 @@ var createRemoteSelectionReader = () => ({
       answeringClients("ui_read_selection").map((client) => client.requester.readSelection(client.client)),
     ),
 });
-//@ chunk-e6aww6q8.js:3997226-3997242 placement
+//@ chunk-5xgkngpb.js:4102683-4102699 placement
 /**
  * 1048576
  */
 var MAX_UI_VALUE_BYTES = 1048576;
-//@ chunk-e6aww6q8.js:3997242-3997993 placement
+//@ chunk-5xgkngpb.js:4102699-4103450 placement
 async function uiCopyForPlugin(args, caller) {
   let { text, surface } = args;
   if (!(surface !== undefined && attachedSurfaces().includes(surface))) {
@@ -417,7 +420,7 @@ async function uiCopyForPlugin(args, caller) {
         reason: "no-clipboard",
       };
 }
-//@ chunk-e6aww6q8.js:3997993-3998073 placement
+//@ chunk-5xgkngpb.js:4103450-4103530 placement
 /**
  * 补默认界面
  */
@@ -430,7 +433,7 @@ function withDefaultSurface(args, context) {
         surface,
       };
 }
-//@ chunk-e6aww6q8.js:3998073-3998188 placement
+//@ chunk-5xgkngpb.js:4103530-4103645 placement
 function placedRowResult(row, reason) {
   if (reason === undefined)
     return {
@@ -443,17 +446,17 @@ function placedRowResult(row, reason) {
     reason,
   };
 }
-//@ chunk-e6aww6q8.js:3998188-3998226 placement
+//@ chunk-5xgkngpb.js:4103645-4103683 placement
 /**
  * 订阅放置事件
  */
 var subscribePlaced = (listener) => getPluginRegistry().placed.subscribe(listener);
-//@ chunk-e6aww6q8.js:3998226-3998238 placement
+//@ chunk-5xgkngpb.js:4103683-4103695 placement
 /**
  * 500
  */
 var PLACED_EVENT_BUDGET_MS = 500;
-//@ chunk-e6aww6q8.js:3998276-3998411 placement
+//@ chunk-5xgkngpb.js:4103733-4103868 placement
 var createPlacedRowMessage = (row, plugin) => ({
   type: "system",
   subtype: "placed",
@@ -464,13 +467,13 @@ var createPlacedRowMessage = (row, plugin) => ({
   timestamp: new Date().toISOString(),
   uuid: randomUUID(),
 });
-//@ chunk-e6aww6q8.js:3998411-3998487 placement
+//@ chunk-5xgkngpb.js:4103868-4103944 placement
 /**
  * 取 placed 系统事件
  */
 var placedEvents = (rows) =>
   rows.flatMap((row) => (row.type === "system" && row.subtype === "placed" ? [row] : []));
-//@ chunk-e6aww6q8.js:3998487-3999070 placement
+//@ chunk-5xgkngpb.js:4103944-4104527 placement
 async function uiPlaceRowForPlugin(row, caller, site) {
   let conversation = currentSurfaceBinding()?.conversation?.();
   if (conversation === undefined) {
@@ -497,7 +500,7 @@ async function uiPlaceRowForPlugin(row, caller, site) {
   else logFeatureSad("plugin_function_hooks_place", "undrawn");
   return placedRowResult(row_3, site);
 }
-//@ chunk-e6aww6q8.js:3999070-3999346 placement
+//@ chunk-5xgkngpb.js:4104527-4104803 placement
 /**
  * 列出会话中插件放置的行（插件、id、request_id 与之前最后一条用户/助手消息 uuid）。
  */
@@ -519,12 +522,12 @@ function listPlacedRows() {
   }
   return placed;
 }
-//@ chunk-e6aww6q8.js:3999346-3999359 placement
+//@ chunk-5xgkngpb.js:4104803-4104816 placement
 /**
  * 3000
  */
 var FOCUS_WAIT_MS = 3000;
-//@ chunk-e6aww6q8.js:3999359-3999561 placement
+//@ chunk-5xgkngpb.js:4104816-4105018 placement
 /**
  * 校验 $.ui.focus 参数：需要非空的 requestId 与 key。
  */
@@ -535,7 +538,7 @@ function checkUiFocusArgs(args) {
     ? undefined
     : "takes { requestId, key } (which of its sites, and the element it drew there, by key)";
 }
-//@ chunk-e6aww6q8.js:3999561-3999794 placement
+//@ chunk-5xgkngpb.js:4105018-4105251 placement
 function pluginFocusSiteOf(args, caller) {
   let { requestId } = args;
   let { plugin } = caller;
@@ -551,7 +554,7 @@ function pluginFocusSiteOf(args, caller) {
         requestId,
       };
 }
-//@ chunk-e6aww6q8.js:3999794-4000193 placement
+//@ chunk-5xgkngpb.js:4105251-4105650 placement
 /**
  * 判断焦点目标是否已就绪（站点存在、持有键盘或面板已显示）。
  */
@@ -585,7 +588,7 @@ function isFocusSettled(args, caller) {
     heldSite.hasElement(caller.plugin, args.key)
   );
 }
-//@ chunk-e6aww6q8.js:4000193-4000730 placement
+//@ chunk-5xgkngpb.js:4105650-4106187 placement
 /**
  * 运行 ui.focus 钩子链（等待 hooks 重生），无钩子时直接提交焦点移动，记录结果。
  */
@@ -627,18 +630,18 @@ function dispatchUiFocus(request) {
             : commitFocus(answer),
       ).then(report);
 }
-//@ chunk-e6aww6q8.js:4000730-4000783 placement
+//@ chunk-5xgkngpb.js:4106187-4106240 placement
 /**
  * 焦点站点绘制表
  */
 var focusSiteDraws; // deferred: uses getPluginRegistry (../../utils/plugins/pluginLoadState.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4000730", () => {
+deferInit("chunk-5xgkngpb.js:4106187", () => {
   focusSiteDraws = identity_2(
     () => getPluginRegistry().focusSiteDraws,
     (registry) => registry().clear(),
   );
 });
-//@ chunk-e6aww6q8.js:4000783-4000992 placement
+//@ chunk-5xgkngpb.js:4106240-4106449 placement
 async function sleepUntilChanged(isSettled, signal, timeoutMs) {
   let abortController = new AbortController();
   function abortIfSettled() {
@@ -656,7 +659,7 @@ async function sleepUntilChanged(isSettled, signal, timeoutMs) {
     releasePanes();
   }
 }
-//@ chunk-e6aww6q8.js:4000992-4001122 placement
+//@ chunk-5xgkngpb.js:4106449-4106579 placement
 async function waitForCondition(isSettled, signal, timeoutMs = FOCUS_WAIT_MS) {
   let deadline = Date.now() + timeoutMs;
   while (!isSettled() && signal?.aborted !== true) {
@@ -665,7 +668,7 @@ async function waitForCondition(isSettled, signal, timeoutMs = FOCUS_WAIT_MS) {
     await sleepUntilChanged(isSettled, signal, remaining);
   }
 }
-//@ chunk-e6aww6q8.js:4001122-4001660 placement
+//@ chunk-5xgkngpb.js:4106579-4107117 placement
 /**
  * $.ui.focus 实现：等待站点稳定后，校验站点属于插件、持有键盘且画有该 key 的元素，再经 ui.focus 链移动焦点。
  */
@@ -705,28 +708,28 @@ async function uiFocusOp(args, caller, timeoutMs) {
     signal: caller.signal,
   });
 }
-//@ chunk-e6aww6q8.js:4001660-4001722 placement
+//@ chunk-5xgkngpb.js:4107117-4107179 placement
 /**
  * 包装处理器，跳过指定键
  */
 var wrapActHandlers = (session, handlers, kept = []) =>
   import_mapValues(handlers, (handler, name) => (kept.includes(name) ? handler : () => session.act(handler)));
-//@ chunk-e6aww6q8.js:4001722-4001733 placement
+//@ chunk-5xgkngpb.js:4107179-4107190 placement
 /**
  * 64
  */
 var MAX_FOCUS_KEYS = 64;
-//@ chunk-e6aww6q8.js:4001733-4001737 placement
+//@ chunk-5xgkngpb.js:4107190-4107194 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4001733", () => {
+deferInit("chunk-5xgkngpb.js:4107190", () => {
   init_react_production();
 });
-//@ chunk-e6aww6q8.js:4001737-4001777 placement
+//@ chunk-5xgkngpb.js:4107194-4107234 placement
 /**
  * 取值或 null
  */
 var pickOrNull = (focusables, index) => (index === null ? null : (focusables[index] ?? null));
-//@ chunk-e6aww6q8.js:4001777-4001850 placement
+//@ chunk-5xgkngpb.js:4107234-4107307 placement
 /**
  * 记录拒绝但不抛
  */
@@ -737,7 +740,7 @@ var logRejection = (label, promise) =>
     });
     return;
   });
-//@ chunk-e6aww6q8.js:4001850-4004104 placement
+//@ chunk-5xgkngpb.js:4107307-4109570 placement
 /**
  * 插件 $.ui.focus：把焦点移到插件元素；焦点已变化或元素不存在时说明原因。
  */
@@ -914,14 +917,14 @@ function uiFocusForPlugin(props) {
     [act, moveByPerson, forget],
   );
 }
-//@ chunk-e6aww6q8.js:4004104-4004165 placement
+//@ chunk-5xgkngpb.js:4109570-4109631 placement
 /**
  * $.ui.log 写调试日志
  */
 function logUiLogToDebug(plugin, text) {
   logForDebugging(`[${plugin}] $.ui.log (to debug): ${truncateUiLog(text)}`);
 }
-//@ chunk-e6aww6q8.js:4004165-4004321 placement
+//@ chunk-5xgkngpb.js:4109631-4109787 placement
 /**
  * 设置插件 UI 日志的接收函数，并把积压的日志以 "again" 重放；返回解除函数。
  */
@@ -935,7 +938,7 @@ function setUiLogSink(sink) {
     if (pluginRegistry.uiLogSink === sink) pluginRegistry.uiLogSink = null;
   };
 }
-//@ chunk-e6aww6q8.js:4004321-4004452 placement
+//@ chunk-5xgkngpb.js:4109787-4109918 placement
 /**
  * $.ui.log 的 to 只能是 "transcript" 或 "debug"。
  */
@@ -944,7 +947,7 @@ function checkUiLogTarget(target) {
     ? undefined
     : `to is "transcript" or "debug" (got ${JSON.stringify(target)})`;
 }
-//@ chunk-e6aww6q8.js:4004452-4004581 placement
+//@ chunk-5xgkngpb.js:4109918-4110047 placement
 /**
  * 校验 $.ui.notify 参数：text 合法，title 若给出须为字符串。
  */
@@ -953,7 +956,7 @@ function checkUiNotifyArgs(args) {
   let isTitleValid = title === undefined || typeof title === "string";
   return checkTextArg(args?.text) ?? (isTitleValid ? undefined : "title is a string, when given");
 }
-//@ chunk-e6aww6q8.js:4004581-4004975 placement
+//@ chunk-5xgkngpb.js:4110047-4110441 placement
 /**
  * 把通知通道结果映射为 $.ui.notify 返回值（发送渠道或未发送原因）。
  */
@@ -988,7 +991,7 @@ function notifyOutcome(outcome, plugin) {
       throw new HooksError(`${plugin}: $.ui.notify: the channel's write failed`);
   }
 }
-//@ chunk-e6aww6q8.js:4004975-4005275 placement
+//@ chunk-5xgkngpb.js:4110441-4110741 placement
 /**
  * $.ui.notify：通过终端通知通道（iTerm2、kitty、ghostty、响铃等）发送插件通知，返回是否发送及渠道或原因。
  */
@@ -1013,7 +1016,7 @@ async function uiNotifyOp(args, caller) {
   );
   return result;
 }
-//@ chunk-e6aww6q8.js:4005275-4005323 placement
+//@ chunk-5xgkngpb.js:4110741-4110789 placement
 /**
  * 补默认标题
  */
@@ -1021,24 +1024,24 @@ var withDefaultTitle = (args, caller) => ({
   ...args,
   title: args.title || caller.plugin,
 });
-//@ chunk-e6aww6q8.js:4005323-4005336 placement
+//@ chunk-5xgkngpb.js:4110789-4110802 placement
 /**
  * 3000
  */
 var VIEW_WAIT_MS = 3000;
-//@ chunk-e6aww6q8.js:4007709-4008030 placement
+//@ chunk-5xgkngpb.js:4113175-4113496 placement
 /**
  * 校验 $.ui.view 参数：只允许 {agentId}（非空字符串）或 {}（主对话）。
  */
 function checkUiViewArgs(args) {
-  return isPlainObject_5(args) &&
+  return isPlainObject_6(args) &&
     Object.prototype.toString.call(args) === "[object Object]" &&
     Reflect.ownKeys(args).every((key) => key === "agentId") &&
     (!("agentId" in args) || (typeof args.agentId === "string" && args.agentId !== ""))
     ? undefined
     : "takes { agentId } (whose transcript the main view shows, by its id in $.agent.list()) or {} for the main conversation";
 }
-//@ chunk-e6aww6q8.js:4008030-4008720 placement
+//@ chunk-5xgkngpb.js:4113496-4114186 placement
 async function uiViewForPlugin(args, caller) {
   let view = currentSurfaceBinding()?.view;
   if (!view)
@@ -1086,21 +1089,19 @@ async function uiViewForPlugin(args, caller) {
   }
 }
 export {
-  uiFocusForPlugin,
-  wrapActHandlers,
-  pickOrNull,
-  setUiLogSink,
-  VIEW_WAIT_MS,
-  logRejection,
   createRemotePromptBox,
   createRemoteSelectionReader,
   withCurrentRequester,
-  UI_HOST_REQUEST_TIMEOUT_MS,
+  BACKDROP_CLEAR_DELAY_MS,
   causeOnlyResult,
   selectionResult,
+  setUiLogSink,
   listPlacedRows,
   subscribePlaced,
-  selectionValue,
+  focusSiteDraws,
+  dispatchUiFocus,
+  UI_HOST_REQUEST_TIMEOUT_MS,
+  MEMORY_SERVER_MAX,
   checkUiLogTarget,
   logUiLogToDebug,
   uiPlaceRowForPlugin,
@@ -1113,6 +1114,10 @@ export {
   checkUiNotifyArgs,
   withDefaultTitle,
   uiNotifyOp,
-  focusSiteDraws,
-  dispatchUiFocus,
+  VIEW_WAIT_MS,
+  uiFocusForPlugin,
+  wrapActHandlers,
+  pickOrNull,
+  logRejection,
+  selectionValue,
 };

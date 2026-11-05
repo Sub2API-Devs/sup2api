@@ -3,9 +3,9 @@
  *
  * 等待会话附件文件到达（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (12)
  * attribution: placement 12
  */
 import { arrivingInboundFileRegistry } from "../bootstrap/state.js";
@@ -15,7 +15,7 @@ import { logFeatureOk, logFeatureSad } from "../services/analytics/featureTeleme
 import { logForDiagnosticsNoPII } from "../utils/diagLogs.js";
 import { logError } from "../utils/log.js";
 
-//@ chunk-s61vbvea.js:594290-594342 placement
+//@ chunk-7jxyna5q.js:511677-511729 placement
 /**
  * 等待会话附件文件到达的超时（默认 10 分钟）与结果码表（cleared=1、timed_out=2、aborted=3，用于埋点）。
  */
@@ -25,7 +25,7 @@ var ATTACHMENT_WAIT_OUTCOME_CODES = {
   timed_out: 2,
   aborted: 3,
 };
-//@ chunk-s61vbvea.js:594342-594417 placement
+//@ chunk-7jxyna5q.js:511729-511804 placement
 /**
  * 是否有附件文件仍在到达：串行队列或旁路队列任一还有待到达项（且对应队列未放弃等待）。
  */
@@ -35,15 +35,15 @@ function areAttachmentFilesArriving() {
     hasInlineArrivals(registry, registry.gaveUpOn) || hasBesideArrivals(registry, registry.gaveUpOnBeside)
   );
 }
-//@ chunk-s61vbvea.js:594417-594491 placement
+//@ chunk-7jxyna5q.js:511804-511878 placement
 function hasInlineArrivals(registry, gaveUpOn) {
   return registry.messagesArriving > registry.besideLine && registry.lastInLine !== gaveUpOn;
 }
-//@ chunk-s61vbvea.js:594491-594552 placement
+//@ chunk-7jxyna5q.js:511878-511939 placement
 function hasBesideArrivals(registry, gaveUpOnBeside) {
   return registry.besideLine > 0 && registry.lastBesideLine !== gaveUpOnBeside;
 }
-//@ chunk-s61vbvea.js:594552-594682 placement
+//@ chunk-7jxyna5q.js:511939-512069 placement
 /**
  * 判断某路径是否仍在"到达中"的入站附件集合里（串行队列或旁路队列），对应队列已放弃等待时不算。
  */
@@ -54,7 +54,7 @@ function isInboundFileArriving(filename) {
     (hasBesideArrivals(registry, registry.gaveUpOnBeside) && registry.pathsArrivingBeside.has(filename))
   );
 }
-//@ chunk-s61vbvea.js:594682-594884 placement
+//@ chunk-7jxyna5q.js:512069-512271 placement
 /**
  * （归属疑误：bridge 附件同步）把一批到达中的文件消息排进串行队列并计数。
  */
@@ -74,7 +74,7 @@ function enqueueArrivingFileMessage(promise, paths = []) {
     });
   return chained;
 }
-//@ chunk-s61vbvea.js:594884-595177 placement
+//@ chunk-7jxyna5q.js:512271-512564 placement
 /**
  * 在旁路（并行）队列里执行一次文件到达任务：回调里上报的路径记入 pathsArrivingBeside，任务结束后计数减一并移除这些路径。
  */
@@ -105,11 +105,11 @@ function runBesideArrivingFiles(runWithArrivals) {
     });
   return arrivals;
 }
-//@ chunk-s61vbvea.js:595177-595234 placement
+//@ chunk-7jxyna5q.js:512564-512621 placement
 function incrementPathCounts(counts, paths) {
   for (let path of paths) counts.set(path, (counts.get(path) ?? 0) + 1);
 }
-//@ chunk-s61vbvea.js:595234-595323 placement
+//@ chunk-7jxyna5q.js:512621-512710 placement
 function decrementPathCounts(counts, paths) {
   for (let path of paths) {
     let count = counts.get(path) ?? 0;
@@ -117,14 +117,14 @@ function decrementPathCounts(counts, paths) {
     else counts.delete(path);
   }
 }
-//@ chunk-s61vbvea.js:595323-595364 placement
+//@ chunk-7jxyna5q.js:512710-512751 placement
 /**
  * 旁路队列（beside 行）是否仍有未到达的附件文件。
  */
 function hasBesideArrivingFiles() {
   return arrivingInboundFileRegistry().besideLine > 0;
 }
-//@ chunk-s61vbvea.js:595364-595450 placement
+//@ chunk-7jxyna5q.js:512751-512837 placement
 /**
  * 串行队列中最后一个仍在到达的消息 id；没有时返回 undefined。
  */
@@ -132,7 +132,7 @@ function lastInlineArrivingMessageId() {
   let registry = arrivingInboundFileRegistry();
   return registry.messagesArriving > registry.besideLine ? registry.lastInLine : undefined;
 }
-//@ chunk-s61vbvea.js:595450-596669 placement
+//@ chunk-7jxyna5q.js:512837-514060 placement
 /**
  * 等待会话附件文件到达，返回 cleared/aborted/expired/files_arriving 等结果
  */
@@ -206,11 +206,11 @@ async function waitForAttachmentFiles(
 }
 export {
   hasBesideArrivingFiles,
-  areAttachmentFilesArriving,
-  waitForAttachmentFiles,
-  isInboundFileArriving,
   ATTACHMENT_FILES_WAIT_TIMEOUT_MS,
   lastInlineArrivingMessageId,
   enqueueArrivingFileMessage,
   runBesideArrivingFiles,
+  areAttachmentFilesArriving,
+  waitForAttachmentFiles,
+  isInboundFileArriving,
 };

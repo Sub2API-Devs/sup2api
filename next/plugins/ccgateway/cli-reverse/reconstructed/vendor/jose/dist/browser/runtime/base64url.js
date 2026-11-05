@@ -1,24 +1,24 @@
 /**
  * jose/dist/browser/runtime/base64url.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (3)
+ * pieces: chunk-pd6th42n.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
 import { __esm } from "../../../../../runtime/bun-runtime.js";
 import { init_buffer_utils_2 } from "../../webapi/lib/buffer_utils.js";
 
-//@ chunk-2tyrgda4.js:1175-1197 esm-layout
+//@ chunk-pd6th42n.js:1175-1197 esm-layout
 var encoder;
 var decoder;
 var UINT32_RANGE = 4294967296;
-//@ chunk-2tyrgda4.js:1197-1254 esm-layout
+//@ chunk-pd6th42n.js:1197-1254 esm-layout
 var init_base64url = __esm(() => {
   init_buffer_utils_2();
   encoder = new TextEncoder();
   decoder = new TextDecoder();
 });
-//@ chunk-2tyrgda4.js:1254-1828 esm-fingerprint
+//@ chunk-pd6th42n.js:1254-1828 esm-fingerprint
 var encodeBase64 = (input) => {
   let unencoded = input;
   if (typeof unencoded === "string") unencoded = encoder.encode(unencoded);
@@ -35,7 +35,7 @@ var decodeBase64 = (encoded) => {
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes;
 };
-var decode = (input) => {
+var decode_2 = (input) => {
   let encoded = input;
   if (encoded instanceof Uint8Array) encoded = decoder.decode(encoded);
   encoded = encoded.replace(/-/g, "+").replace(/_/g, "/").replace(/\s/g, "");
@@ -45,4 +45,4 @@ var decode = (input) => {
     throw TypeError("The input to be decoded is not correctly encoded.");
   }
 };
-export { encoder, UINT32_RANGE, init_base64url, encode, decode, decoder };
+export { init_base64url, encode, decoder, decode_2, encoder, UINT32_RANGE };

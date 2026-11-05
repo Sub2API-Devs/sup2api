@@ -3,9 +3,9 @@
  *
  * 记忆库错误类（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-82kqcve8.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a2q0x549.js (6)
  * attribution: placement 6
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -13,17 +13,17 @@ import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { MEMORY_ID_PATTERN } from "../../utils/taggedId.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:37477-37518 placement
+//@ chunk-a2q0x549.js:38643-38684 placement
 /**
  * 单个记忆内容的字节上限（102400）。
  */
 var memoryIdSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_CONTENT_BYTES;
-deferInit("chunk-82kqcve8.js:37477", () => {
+deferInit("chunk-a2q0x549.js:38643", () => {
   memoryIdSchema = DoctorLazy(() => stringSchema().regex(MEMORY_ID_PATTERN));
   MAX_CONTENT_BYTES = 102400;
 });
-//@ chunk-82kqcve8.js:37518-37799 placement
+//@ chunk-a2q0x549.js:38684-38965 placement
 class MemoryConflictError extends Error {
   path;
   expected;
@@ -40,7 +40,7 @@ class MemoryConflictError extends Error {
     this.name = "ConflictError";
   }
 }
-//@ chunk-82kqcve8.js:37799-37936 placement
+//@ chunk-a2q0x549.js:38965-39102 placement
 class MemoryNotFoundError extends Error {
   path;
   kind;
@@ -51,7 +51,7 @@ class MemoryNotFoundError extends Error {
     this.name = "NotFoundError";
   }
 }
-//@ chunk-82kqcve8.js:37936-38069 placement
+//@ chunk-a2q0x549.js:39102-39235 placement
 class MemoryUnavailableError extends Error {
   cause;
   retryAfterMs;
@@ -62,12 +62,12 @@ class MemoryUnavailableError extends Error {
     this.name = "UnavailableError";
   }
 }
-//@ chunk-82kqcve8.js:38069-38092 placement
+//@ chunk-a2q0x549.js:39235-39258 placement
 /**
  * 记忆同步状态目录名 .memory-sync。
  */
 var MEMORY_SYNC_DIR = ".memory-sync";
-//@ chunk-82kqcve8.js:38092-38209 placement
+//@ chunk-a2q0x549.js:39258-39375 placement
 class MemoryPermanentError extends Error {
   reason;
   constructor(reason, message) {
@@ -77,11 +77,11 @@ class MemoryPermanentError extends Error {
   }
 }
 export {
-  MemoryPermanentError,
-  MemoryUnavailableError,
   memoryIdSchema,
-  MemoryNotFoundError,
-  MemoryConflictError,
   MAX_CONTENT_BYTES,
   MEMORY_SYNC_DIR,
+  MemoryPermanentError,
+  MemoryUnavailableError,
+  MemoryNotFoundError,
+  MemoryConflictError,
 };

@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增。MCP 入站检查：在 fetch 响应（JSON 或 SSE）中检查 tools/call 结果，必要时替换为占位结果。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ma4kr1qn.js (11)
- * attribution: placement 11
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qdrjj20r.js (12)
+ * attribution: placement 11, layout 1
  */
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
@@ -16,26 +16,26 @@ import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
 import { createParser } from "../../../vendor/eventsource-parser/dist/index.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ma4kr1qn.js:416-438 placement
+//@ chunk-qdrjj20r.js:416-438 placement
 /**
  * 按宿主保存的入站门状态。
  */
 var inboundDoorState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ma4kr1qn.js:416", () => {
+deferInit("chunk-qdrjj20r.js:416", () => {
   inboundDoorState = new HostScoped(() => ({}));
 });
-//@ chunk-ma4kr1qn.js:438-473 placement
+//@ chunk-qdrjj20r.js:438-473 placement
 /**
  * 取当前宿主的入站门状态。
  */
 function getInboundDoorState() {
   return inboundDoorState.of(getRootSession().host);
 }
-//@ chunk-ma4kr1qn.js:473-513 placement
+//@ chunk-qdrjj20r.js:473-512 placement
 function hasMcpInboundDoor() {
   return getInboundDoorState().door !== undefined;
 }
-//@ chunk-ma4kr1qn.js:513-582 placement
+//@ chunk-qdrjj20r.js:512-589 placement
 /**
  * 判定“简短错误”的字符数（1024）。
  */
@@ -48,7 +48,8 @@ var MAX_BUFFER_CHARS = 65536;
 var MAX_SENT_IDS = 128;
 var SHORT_ERROR_MEMBERS = 16;
 var SHORT_ERROR_CHARS = 1024;
-//@ chunk-ma4kr1qn.js:582-2985 placement
+var MIN_TURN_MEMBER_COUNT = 65536;
+//@ chunk-qdrjj20r.js:589-3046 placement
 /**
  * MCP 入站检查：在 fetch 响应（JSON 或 SSE）中检查 tools/call 结果，必要时替换为占位结果。
  */
@@ -209,6 +210,9 @@ function mcpInboundDoorOnFetch() {
       if (judged !== message) forgetId(idKey);
       return judged;
     },
+    turnFor(member, ofArray) {
+      return member >= MIN_TURN_MEMBER_COUNT ? door.turnForText?.(ofArray, url) : undefined;
+    },
   });
   return {
     noteRequests(body) {
@@ -249,24 +253,24 @@ function mcpInboundDoorOnFetch() {
     },
   };
 }
-//@ chunk-ma4kr1qn.js:2985-3020 placement
+//@ chunk-qdrjj20r.js:3046-3081 placement
 /**
  * 探测 JSON 成员数时的上限（8）。
  */
 var ESSENTIAL_MESSAGE_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PROBE_MEMBERS;
-deferInit("chunk-ma4kr1qn.js:2985", () => {
+deferInit("chunk-qdrjj20r.js:3046", () => {
   ESSENTIAL_MESSAGE_KEYS = new Set(["id", "method"]);
   PROBE_MEMBERS = 8;
 });
-//@ chunk-ma4kr1qn.js:3020-3066 placement
+//@ chunk-qdrjj20r.js:3081-3127 placement
 /**
  * 去掉开头的 BOM。
  */
 function stripBom(text) {
   return text.replace(/^\uFEFF+/, "");
 }
-//@ chunk-ma4kr1qn.js:3066-3111 placement
+//@ chunk-qdrjj20r.js:3127-3172 placement
 /**
  * 尝试解析 JSON，失败返回 undefined。
  */
@@ -277,38 +281,51 @@ function tryParseJson(text) {
     return;
   }
 }
-//@ chunk-ma4kr1qn.js:3111-3198 placement
+//@ chunk-qdrjj20r.js:3172-3231 layout
+function tryEnqueue(controller, chunk) {
+  try {
+    controller.enqueue(chunk);
+    return true;
+  } catch {
+    return false;
+  }
+}
+//@ chunk-qdrjj20r.js:3231-3312 placement
 /**
  * 把结果写入流（可指定替换内容）。
  */
 function enqueueBody(controller, chunks, readInstead) {
   for (let chunk of readInstead === undefined ? chunks : [new TextEncoder().encode(readInstead)])
-    controller.enqueue(chunk);
+    tryEnqueue(controller, chunk);
 }
-//@ chunk-ma4kr1qn.js:3198-3878 placement
+//@ chunk-qdrjj20r.js:3312-4111 placement
 /**
  * JSON 响应体的入站检查
  */
-function jsonInboundDoor({ read, chargeUnasked, judge }) {
+function jsonInboundDoor({ read, chargeUnasked, judge, turnFor }) {
   let chunks = [];
+  let pending = 0;
   return new TransformStream({
     transform(chunk) {
       chunks.push(chunk);
+      pending += chunk.length;
     },
-    flush(controller) {
+    async flush(controller) {
+      await turnFor(pending, "reading");
       let result = read(stripBom(new TextDecoder().decode(Buffer.concat(chunks))));
       if ("standIn" in result) {
-        controller.enqueue(new TextEncoder().encode(jsonStringify(result.standIn ?? null)));
+        tryEnqueue(controller, new TextEncoder().encode(jsonStringify(result.standIn ?? null)));
         return;
       }
       let { sent, size, readInstead } = result;
       if (typeof sent !== "object" || sent === null) {
+        await turnFor(pending, "handingOn");
         enqueueBody(controller, chunks, readInstead);
         return;
       }
       if (Array.isArray(sent)) chargeUnasked(size);
       if (Array.isArray(sent) && sent.length > MAX_SENT_IDS) {
-        controller.enqueue(new TextEncoder().encode("null"));
+        tryEnqueue(controller, new TextEncoder().encode("null"));
         return;
       }
       let judged;
@@ -327,93 +344,123 @@ function jsonInboundDoor({ read, chargeUnasked, judge }) {
         unchanged = judged === sent;
       }
       if (unchanged) {
+        await turnFor(pending, "handingOn");
         enqueueBody(controller, chunks, readInstead);
         return;
       }
-      controller.enqueue(new TextEncoder().encode(jsonStringify(judged ?? null)));
+      let bytes = new TextEncoder().encode(jsonStringify(judged ?? null));
+      await turnFor(bytes.length, "handingOn");
+      tryEnqueue(controller, bytes);
     },
   });
 }
-//@ chunk-ma4kr1qn.js:3878-4643 placement
+//@ chunk-qdrjj20r.js:4111-5252 placement
 /**
  * SSE 响应流的入站检查
  */
-function sseInboundDoor({ read, judge }) {
+function sseInboundDoor({ read, judge, turnFor }) {
   let textDecoder = new TextDecoder();
   let textEncoder = new TextEncoder();
-  let output = "";
+  let decoder = [];
   let parser = createParser({
     onRetry(retryMs) {
-      output += `retry: ${retryMs}
-
-`;
+      decoder.push(retryMs);
     },
-    onEvent({ id, event, data }) {
-      let eventName = event;
-      let payload = data;
-      if (data !== "" && (eventName === undefined || eventName === "message")) {
-        let result = read(stripBom(data));
-        let sent = "standIn" in result ? undefined : result.sent;
-        let judged =
-          "standIn" in result
-            ? result.standIn
-            : sent === undefined
-              ? undefined
-              : judge(sent, result.size, false);
-        if (!("standIn" in result) && sent === undefined) payload = "!";
-        else if (judged === undefined) {
-          eventName = "dropped";
-          payload = "";
-        } else if (judged !== sent) payload = jsonStringify(judged);
-        else
-          payload = (("standIn" in result ? undefined : result.readInstead) ?? data).replaceAll(
-            `
-`,
-            " ",
-          );
-      } else if (data.length > MAX_BUFFER_CHARS) payload = "";
-      output +=
-        (eventName === undefined
-          ? ""
-          : `event: ${eventName}
-`) +
-        (id === undefined
-          ? ""
-          : `id: ${id}
-`) +
-        payload
-          .split(
-            `
-`,
-          )
-          .map(
-            (line) => `data: ${line}
-`,
-          )
-          .join("") +
-        `
-`;
+    onEvent(event) {
+      decoder.push(event);
     },
   });
-  let flushBuffer = (controller) => {
-    if (output !== "") {
-      controller.enqueue(textEncoder.encode(output));
-      output = "";
+  let data = ({ id, event, data }) => {
+    let eventName = event;
+    let payload = data;
+    if (data !== "" && (eventName === undefined || eventName === "message")) {
+      let result = read(stripBom(data));
+      let sent = "standIn" in result ? undefined : result.sent;
+      let judged =
+        "standIn" in result
+          ? result.standIn
+          : sent === undefined
+            ? undefined
+            : judge(sent, result.size, false);
+      if (!("standIn" in result) && sent === undefined) payload = "!";
+      else if (judged === undefined) {
+        eventName = "dropped";
+        payload = "";
+      } else if (judged !== sent) payload = jsonStringify(judged);
+      else
+        payload = (("standIn" in result ? undefined : result.readInstead) ?? data).replaceAll(
+          `
+`,
+          " ",
+        );
+    } else if (data.length > MAX_BUFFER_CHARS) payload = "";
+    return (
+      (eventName === undefined
+        ? ""
+        : `event: ${eventName}
+`) +
+      (id === undefined
+        ? ""
+        : `id: ${id}
+`) +
+      payload
+        .split(
+          `
+`,
+        )
+        .map(
+          (line) => `data: ${line}
+`,
+        )
+        .join("") +
+      `
+`
+    );
+  };
+  let queued = async (controller) => {
+    let out = decoder;
+    decoder = [];
+    let queued = "";
+    for (let buffer of out) {
+      if (typeof buffer === "number") {
+        queued += `retry: ${buffer}
+
+`;
+        continue;
+      }
+      let event =
+        buffer.event === undefined || buffer.event === "message"
+          ? turnFor(buffer.data.length, "reading")
+          : undefined;
+      if (event !== undefined) {
+        if (queued !== "" && !tryEnqueue(controller, textEncoder.encode(queued))) return;
+        queued = "";
+        await event;
+      }
+      let gate = data(buffer);
+      queued += gate;
+      let written = turnFor(gate.length, "handingOn");
+      if (written !== undefined) {
+        await written;
+        if (!tryEnqueue(controller, textEncoder.encode(queued))) return;
+        queued = "";
+      }
     }
+    if (queued !== "") tryEnqueue(controller, textEncoder.encode(queued));
   };
   return new TransformStream({
-    transform(chunk, controller) {
+    async transform(chunk, controller) {
       parser.feed(
         textDecoder.decode(chunk, {
           stream: true,
         }),
       );
-      flushBuffer(controller);
+      await queued(controller);
     },
-    flush(controller) {
+    async flush(controller) {
       parser.feed(textDecoder.decode());
-      flushBuffer(controller);
+      await queued(controller);
     },
   });
 }
-export { mcpInboundDoorOnFetch, hasMcpInboundDoor, MAX_NESTING_PARSED };
+export { hasMcpInboundDoor, MAX_NESTING_PARSED, mcpInboundDoorOnFetch };

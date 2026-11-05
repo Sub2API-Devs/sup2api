@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Claude Design 同步审批对话框
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-98n6ge4d.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-zevfa8jm.js (18)
  * attribution: placement 18
  */
 import { isAbsolute } from "path";
@@ -24,11 +24,11 @@ import {
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { wrapAnsi } from "../../ink/wrapAnsi.js";
 import { countCharInString, plural } from "../../utils/stringUtils.js";
-import { uniq } from "../../utils/collections.js";
-import { normalizePlanPath, hasGlobChars } from "../mcp/designPlanGate.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
+import { normalizePattern, hasGlobChars } from "../mcp/designPlanGate.js";
 import { STANDALONE_DESIGN_CLOSING_NOTICE } from "../../tools/DesignSyncTool/DesignSyncTool.js";
 
-//@ chunk-98n6ge4d.js:9063-9550 placement
+//@ chunk-zevfa8jm.js:9686-10174 placement
 /**
  * Design 同步审批对话框的提示文字、宽度上限，以及 finalize_plan 与 create_project 的输入结构。
  */
@@ -53,7 +53,7 @@ var CREATE_PROJECT_INPUT_SCHEMA = DoctorLazy(() =>
     name: stringSchema(),
   }),
 );
-//@ chunk-98n6ge4d.js:9550-9637 placement
+//@ chunk-zevfa8jm.js:10174-10261 placement
 /**
  * 把文本整理成可展示的标签（长度、可见字符、可疑内容都过关才返回）。
  */
@@ -62,7 +62,7 @@ function labelIfShowable(label, maxWidth) {
   let display = listLabel(label);
   return bunStringWidth(display) <= maxWidth ? display : undefined;
 }
-//@ chunk-98n6ge4d.js:9637-9791 placement
+//@ chunk-zevfa8jm.js:10261-10415 placement
 function revealWhitespace(text) {
   return text.replace(/[\s\u2423\u2039]/gu, (char) =>
     char === " "
@@ -70,7 +70,7 @@ function revealWhitespace(text) {
       : `\u2039U+${char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}\u203A`,
   );
 }
-//@ chunk-98n6ge4d.js:9791-9844 placement
+//@ chunk-zevfa8jm.js:10415-10468 placement
 /**
  * 先去长度上限再走 q 的版本。
  */
@@ -79,7 +79,7 @@ function labelIfShowableLong(label, maxWidth) {
     ? undefined
     : labelIfShowable(revealWhitespace(label), maxWidth);
 }
-//@ chunk-98n6ge4d.js:9844-10130 placement
+//@ chunk-zevfa8jm.js:10468-10754 placement
 function formatPathList(paths) {
   let joined = paths.join(", ");
   if (joined.length > MAX_DISPLAY_UNITS || bunStringWidth(joined) > MAX_DIALOG_WIDTH) return;
@@ -94,7 +94,7 @@ function formatPathList(paths) {
     whole: hiddenCount === 0,
   };
 }
-//@ chunk-98n6ge4d.js:10130-10422 placement
+//@ chunk-zevfa8jm.js:10754-11046 placement
 function fitsDialog(lines, { minColumns = 60, maxRows = 12 } = {}) {
   let mapped = lines.map((line) => displayField(line).text);
   if (
@@ -122,13 +122,13 @@ function fitsDialog(lines, { minColumns = 60, maxRows = 12 } = {}) {
   }
   return true;
 }
-//@ chunk-98n6ge4d.js:10422-10438 placement
+//@ chunk-zevfa8jm.js:11046-11062 placement
 /**
  * 审批对话框的最小列数（34）。
  */
 var MAX_NAME_COLUMNS = 50;
 var MIN_DIALOG_COLUMNS = 34;
-//@ chunk-98n6ge4d.js:10438-10492 placement
+//@ chunk-zevfa8jm.js:11062-11116 placement
 /**
  * 多行内容能否放进审批对话框（最小列数、最多 11 行）。
  */
@@ -138,13 +138,13 @@ function fitsApprovalText(lines) {
     maxRows: 11,
   });
 }
-//@ chunk-98n6ge4d.js:10492-10639 placement
+//@ chunk-zevfa8jm.js:11116-11264 placement
 function uploadPlanTitle(plan) {
   let hasWrites = (plan.writes?.length ?? 0) > 0;
   let hasDeletes = (plan.deletes?.length ?? 0) > 0;
   return `${hasWrites && hasDeletes ? "Upload and delete" : hasDeletes ? "Delete" : "Upload"} design system files`;
 }
-//@ chunk-98n6ge4d.js:10639-10738 placement
+//@ chunk-zevfa8jm.js:11264-11364 placement
 /**
  * 生成 “From folder / To project” 两行。
  */
@@ -154,12 +154,12 @@ function buildSyncTargetLines(target) {
     `To project: ${labelIfShowableLong(target.projectId, 48) ?? UNSHOWABLE_NAME}`,
   ];
 }
-//@ chunk-98n6ge4d.js:10738-11336 placement
+//@ chunk-zevfa8jm.js:11364-11963 placement
 /**
  * 为审批对话框生成文件变更描述的候选（按完整列表、匹配模式、仅计数逐级简化），每个候选标明是否列全。
  */
 function describeFileChanges(verb, paths) {
-  let filtered = uniq(paths.map(normalizePlanPath)).filter((path) => path !== "");
+  let filtered = normalizeCaseForComparison_2(paths.map(normalizePattern)).filter((path) => path !== "");
   let paths_2 = filtered.filter((path) => !hasGlobChars(path));
   let paths_3 = filtered.filter(hasGlobChars);
   let literalList = formatPathList(paths_2);
@@ -203,7 +203,7 @@ function describeFileChanges(verb, paths) {
       : []),
   ];
 }
-//@ chunk-98n6ge4d.js:11336-11494 placement
+//@ chunk-zevfa8jm.js:11963-12121 placement
 function createProjectLines(projectSummary, maxWidth) {
   return [
     `Name: ${labelIfShowable(projectSummary, maxWidth) ?? labelIfShowableLong(projectSummary, 1 / 0) ?? UNSHOWABLE_NAME}`,
@@ -211,19 +211,19 @@ function createProjectLines(projectSummary, maxWidth) {
     STANDALONE_DESIGN_CLOSING_NOTICE,
   ];
 }
-//@ chunk-98n6ge4d.js:11494-11554 placement
+//@ chunk-zevfa8jm.js:12121-12181 placement
 /**
  * 创建 Design 项目时询问用户的固定问题。
  */
 var CREATE_PROJECT_QUESTION = "Create a design system project on claude.ai/design?";
-//@ chunk-98n6ge4d.js:11554-11594 placement
+//@ chunk-zevfa8jm.js:12181-12221 placement
 /**
  * 名称是否足够短可以被展示。
  */
 function isShowableName(name) {
   return labelIfShowableLong(name, 1 / 0) !== undefined;
 }
-//@ chunk-98n6ge4d.js:11594-12288 placement
+//@ chunk-zevfa8jm.js:12221-12918 placement
 /**
  * 为 Claude Design 同步构造审批问题：finalize_plan 列出上传/删除的文件（选能放进对话框的最详细版本），create_project 显示项目名与可见性说明；放不下时返回 undefined。
  */
@@ -273,7 +273,7 @@ function buildSyncApprovalQuestion(input, notice) {
   }
   return;
 }
-//@ chunk-98n6ge4d.js:12288-12545 placement
+//@ chunk-zevfa8jm.js:12918-13176 placement
 function syncApprovalSummary(input) {
   let plan = FINALIZE_PLAN_INPUT_SCHEMA().safeParse(input).data;
   if (plan !== undefined)
@@ -288,7 +288,7 @@ function syncApprovalSummary(input) {
   }
   return;
 }
-//@ chunk-98n6ge4d.js:12545-12710 placement
+//@ chunk-zevfa8jm.js:13176-13342 placement
 function syncApprovalLines(plan) {
   let [deleteChanges, uploadChanges] = [
     describeFileChanges("Delete", plan.deletes)[0],
@@ -301,7 +301,7 @@ function syncApprovalLines(plan) {
     ...((deleteChanges?.whole ?? true) && (uploadChanges?.whole ?? true) ? [] : [UNLISTED_FILES_HINT]),
   ];
 }
-//@ chunk-98n6ge4d.js:12710-12747 placement
+//@ chunk-zevfa8jm.js:13342-13379 placement
 /**
  * 创建项目问题的完整正文（问题 + 项目信息行）。
  */

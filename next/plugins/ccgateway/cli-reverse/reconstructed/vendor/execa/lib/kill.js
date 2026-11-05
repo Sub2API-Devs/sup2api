@@ -1,14 +1,14 @@
 /**
  * execa/lib/kill.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: execa@8.0.1
- * pieces: chunk-m4p5zn6n.js (1)
+ * pieces: chunk-t889g22j.js (1)
  * attribution: esm-layout 1
  */
 import os from "os";
 import { onExit } from "../../signal-exit/dist/mjs/index.js";
 
-//@ chunk-m4p5zn6n.js:19164-20307 esm-layout
+//@ chunk-t889g22j.js:19163-20306 esm-layout
 var DEFAULT_FORCE_KILL_TIMEOUT = 5000;
 var spawnedKill = (kill, signal = "SIGTERM", options = {}) => {
   let killResult = kill(signal);

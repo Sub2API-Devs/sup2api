@@ -3,18 +3,26 @@
  *
  * 2.1.316 新增：基于 Bash 解析器的只读命令判定（served shell 行、settings 文件写入、simctl 等应用操作、cd/pushd 处理）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-whwptcwy.js (31)
- * attribution: placement 31
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9mrb3qx9.js (32)
+ * attribution: placement 31, layout 1
  */
 import { join, basename, isAbsolute, resolve } from "path";
 import { homedir } from "os";
 import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
-import { runWithRuleOff } from "../../utils/bash/bashReadingFlags.js";
+import { runWithRuleOff, withSturdyLanternOff } from "../../utils/bash/bashReadingFlags.js";
+import {
+  withReExpansionIfNeeded,
+  needsReExpansionRun,
+  isGuardOff,
+  runGuarded,
+  runWithGuardOff,
+} from "../../utils/bash/bashParserFlags.js";
 import {
   parseForSecurity,
   parseForSecurityFromAst,
+  failsSubstitutionTextCheck,
   isExecInfluencingVar as isExecInfluencingVar_2,
   EVAL_LIKE_BUILTINS,
   ZSH_DANGEROUS_BUILTINS,
@@ -45,10 +53,10 @@ import {
   settingsDirectoryWords,
   normalizeCaseForComparison,
   checkPathSafetyForAutoEdit,
+  normalizeCaseForComparison_2,
 } from "../../utils/permissions/filesystem.js";
 import { tildify } from "../../utils/path.js";
 import { urlPatternToRegex } from "../../utils/stringUtils.js";
-import { isGuardOff, runGuarded, runWithGuardOff } from "../../utils/bash/bashParserFlags.js";
 import { getWriteTargetsForAstCommand, stripWrappersFromArgvForPaths } from "./pathValidation.js";
 import { unwrapCommandArgv } from "./bashPermissions.js";
 import { shellQuoteArgs } from "../../utils/bash/bashPipeCommand.js";
@@ -57,12 +65,11 @@ import { getEmptyToolPermissionContext } from "../../Tool.js";
 import { expandTildeWithHome } from "../../utils/networkPaths.js";
 import { getPlatform } from "../../utils/platform.js";
 import { getPathsForPermissionCheck } from "../../utils/fsOperations.js";
-import { uniq } from "../../utils/collections.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-whwptcwy.js:1083-1111 placement
+//@ chunk-9mrb3qx9.js:1132-1160 placement
 var TENGU_VIOLIN_LINING = "tengu_violin_lining";
-//@ chunk-whwptcwy.js:1111-1149 placement
+//@ chunk-9mrb3qx9.js:1160-1198 placement
 /**
  * 读取 tengu_violin_lining 开关：只读判定时是否用安全解析器解析命令。
  */
@@ -71,50 +78,61 @@ function useSecurityParser() {
     safe: true,
   });
 }
-//@ chunk-whwptcwy.js:1149-1405 placement
+//@ chunk-9mrb3qx9.js:1198-1474 placement
 /**
  * 解析命令（解析器放弃时标为 too-complex）。
  */
 async function parseShellCommand(command) {
-  return runWithRuleOff(async () => {
-    if (!useSecurityParser()) return parseForSecurity(command);
-    let commandRaw = await parseCommandRaw(command);
-    if (commandRaw === PARSE_ABORTED && command.trim() !== "")
-      return {
-        kind: "too-complex",
-        reason: "the parser gave up on the command",
-      };
-    return commandRaw === null
-      ? {
-          kind: "simple",
-          commands: [],
-          bareAssignmentNames: [],
-        }
-      : parseForSecurityFromAst(command, commandRaw);
-  });
+  return runWithRuleOff(() =>
+    withSturdyLanternOff(() =>
+      withReExpansionIfNeeded(command, async () => {
+        if (!useSecurityParser()) return parseForSecurity(command);
+        let commandRaw = await parseCommandRaw(command);
+        if (commandRaw === PARSE_ABORTED && command.trim() !== "")
+          return {
+            kind: "too-complex",
+            reason: "the parser gave up on the command",
+          };
+        return commandRaw === null
+          ? {
+              kind: "simple",
+              commands: [],
+              bareAssignmentNames: [],
+            }
+          : parseForSecurityFromAst(command, commandRaw);
+      }),
+    ),
+  );
 }
-//@ chunk-whwptcwy.js:1505-1542 placement
+//@ chunk-9mrb3qx9.js:1474-1548 layout
+async function readOnlyShellCheck(command) {
+  let commandText = await parseCommandRaw(command);
+  return (
+    commandText !== null && commandText !== PARSE_ABORTED && failsSubstitutionTextCheck(command, commandText)
+  );
+}
+//@ chunk-9mrb3qx9.js:1648-1685 placement
 /**
  * 上报命令文本的长度上限（16）与扫描步数上限（64），超出分别记为 unknown / uncertain。
  */
 var MAX_REPORTED_COMMAND_CHARS = 16;
 var MAX_ENV_SCAN_STEPS = 64;
 var TENGU_NIFTY_PINE = "tengu_nifty_pine";
-//@ chunk-whwptcwy.js:1542-1595 placement
+//@ chunk-9mrb3qx9.js:1685-1738 placement
 /**
  * 判断变量是否影响命令执行（被判定工具当作输入）。
  */
 function isExecInfluencingVar(name) {
   return isExecInfluencingVar_2(name) || name === "PWD" || name === "OLDPWD";
 }
-//@ chunk-whwptcwy.js:1595-1663 placement
+//@ chunk-9mrb3qx9.js:1738-1806 placement
 /**
  * 排除 LANG/LANGUAGE/LC_* 后，变量是否仍影响执行。
  */
 function isNonLocaleExecInfluencingVar(name) {
   return !/^(?:LANG|LANGUAGE|LC_[A-Z]+)$/i.test(name) && isExecInfluencingVar(name);
 }
-//@ chunk-whwptcwy.js:1663-1845 placement (2.1.88 match: DECLARATION_COMMANDS, 0.701)
+//@ chunk-9mrb3qx9.js:1806-1988 placement (2.1.88 match: DECLARATION_COMMANDS, 0.701)
 /**
  * 声明命令集合、可执行代码的命令集合（eval 类、zsh 危险内建、shell 程序、包装命令、xargs、parallel），Claude 配置目录下的敏感文件名（.config.json、.credentials.json、.device-keys.json），以及开关名 tengu_toasty_hammock。属只读命令判定的辅助模块。
  */
@@ -122,7 +140,7 @@ var DECLARATION_COMMANDS; // deferred: uses EVAL_LIKE_BUILTINS (../../utils/bash
 var EXEC_CAPABLE_COMMANDS;
 var CLAUDE_HOME_SECRET_FILE_NAMES;
 var TENGU_TOASTY_HAMMOCK;
-deferInit("chunk-whwptcwy.js:1663", () => {
+deferInit("chunk-9mrb3qx9.js:1806", () => {
   DECLARATION_COMMANDS = new Set(["export", "declare", "typeset", "readonly", "local", "unset"]);
   EXEC_CAPABLE_COMMANDS = new Set([
     ...EVAL_LIKE_BUILTINS,
@@ -136,14 +154,14 @@ deferInit("chunk-whwptcwy.js:1663", () => {
   CLAUDE_HOME_SECRET_FILE_NAMES = [LEGACY_CONFIG_JSON, CREDENTIALS_FILE_NAME, DEVICE_KEYS_FILE_NAME];
   TENGU_TOASTY_HAMMOCK = "tengu_toasty_hammock";
 });
-//@ chunk-whwptcwy.js:1845-1917 placement
+//@ chunk-9mrb3qx9.js:1988-2060 placement
 /**
  * 判断词是否为 [、[[ 或只含安全字符，可作为命令名/参数。
  */
 function isPlainCommandWord(word) {
   return word === "[" || word === "[[" || /^[A-Za-z0-9_.+:~/-]+$/.test(word);
 }
-//@ chunk-whwptcwy.js:1917-2286 placement
+//@ chunk-9mrb3qx9.js:2060-2429 placement
 async function shouldBypassAskForReadOnly(tool, input, result, cwd) {
   let isPersonOnly =
     result.behavior === "ask" &&
@@ -161,7 +179,7 @@ async function shouldBypassAskForReadOnly(tool, input, result, cwd) {
   if (isPersonOnly) return "settings";
   return result.behavior === "ask" && SAFETY_CHECK_FIELDS(result) ? "uncertain" : "none";
 }
-//@ chunk-whwptcwy.js:2286-2464 placement
+//@ chunk-9mrb3qx9.js:2429-2606 placement
 /**
  * 判断托管服务的命令行是否会写入受保护路径（Bash/PowerShell 且非只读）。
  */
@@ -180,7 +198,7 @@ async function servedLineTouchesProtectedPath(tool, input, result, allowReadOnly
     (await isReadOnlyCommand(command))
   );
 }
-//@ chunk-whwptcwy.js:2464-2710 placement
+//@ chunk-9mrb3qx9.js:2606-2852 placement
 /**
  * 判断托管服务的命令是否会写入（PowerShell 按解析结果，其他用工具的 isReadOnly）。
  */
@@ -199,7 +217,7 @@ async function isServedLineWriting(tool, input, result) {
     return true;
   }
 }
-//@ chunk-whwptcwy.js:2710-2842 placement
+//@ chunk-9mrb3qx9.js:2852-2984 placement
 /**
  * 列出受保护的设置与密钥文件路径，以及全局 OAuth 配置文件名。
  */
@@ -214,7 +232,7 @@ function getProtectedSettingsPaths() {
     globalConfigNames: OAUTH_GLOBAL_FILE_SUFFIXES.map((suffix) => `.claude${suffix}.json`),
   };
 }
-//@ chunk-whwptcwy.js:2842-3109 placement
+//@ chunk-9mrb3qx9.js:2984-3251 placement
 /**
  * 一组常量：simctl/open/defaults 的子命令、形如 a.b.claude 的 bundle id 正则、以及判断命令含危险 shell 语法的正则。
  */
@@ -222,7 +240,7 @@ var SIMCTL_APP_VERBS; // deferred: has load-time effects after a deferred statem
 var CLAUDE_APP_BUNDLE_ID_RE;
 var regExp;
 var DANGEROUS_SHELL_SYNTAX_RE;
-deferInit("chunk-whwptcwy.js:2842", () => {
+deferInit("chunk-9mrb3qx9.js:2984", () => {
   SIMCTL_APP_VERBS = {
     simctl: ["launch", "terminate", "uninstall", "get_app_container", "appinfo", "privacy"],
     open: ["-b"],
@@ -232,7 +250,7 @@ deferInit("chunk-whwptcwy.js:2842", () => {
   regExp = new RegExp(`^${CLAUDE_APP_BUNDLE_ID_RE}$`, "i");
   DANGEROUS_SHELL_SYNTAX_RE = /[|`\\(]|\$[{_]|\$BASH|<<|\bfunction\b/;
 });
-//@ chunk-whwptcwy.js:3109-4253 placement
+//@ chunk-9mrb3qx9.js:3251-4402 placement
 /**
  * 判断命令是否只读（简单命令、无赋值、目标不是设置文件）。
  */
@@ -240,7 +258,11 @@ async function isReadOnlyCommand(command) {
   if (DANGEROUS_SHELL_SYNTAX_RE.test(command)) return false;
   try {
     let shellCommand = await parseShellCommand(command);
-    if (shellCommand.kind !== "simple" || shellCommand.bareAssignmentNames.some(isExecInfluencingVar))
+    if (
+      shellCommand.kind !== "simple" ||
+      shellCommand.bareAssignmentNames.some(isExecInfluencingVar) ||
+      needsReExpansionRun(command)
+    )
       return false;
     let appIds = [];
     let command_2 = command.replace(
@@ -311,7 +333,7 @@ async function isReadOnlyCommand(command) {
     return false;
   }
 }
-//@ chunk-whwptcwy.js:4253-5072 placement
+//@ chunk-9mrb3qx9.js:4402-5220 placement
 function touchesProtectedPath(input, mode) {
   let command = input.command;
   if (typeof command !== "string") return true;
@@ -359,14 +381,14 @@ function touchesProtectedPath(input, mode) {
     );
   });
 }
-//@ chunk-whwptcwy.js:5072-5159 placement
+//@ chunk-9mrb3qx9.js:5220-5307 placement
 /**
  * 规整命令文本以便按路径匹配：NFKC、去掉引号、按平台替换反斜杠。
  */
 function normalizeForPathMatch(text, separator) {
   return normalizeCaseForComparison(text.normalize("NFKC")).replace(/['"`]/g, "").replaceAll("\\", separator);
 }
-//@ chunk-whwptcwy.js:5159-5520 placement
+//@ chunk-9mrb3qx9.js:5307-5668 placement
 function SAFETY_CHECK_FIELDS(result) {
   let decisionReason = result.decisionReason;
   if (decisionReason?.type === "subcommandResults") {
@@ -381,7 +403,7 @@ function SAFETY_CHECK_FIELDS(result) {
     return isServedUnplaceableCircuitBreaker(decisionReason) || result.blockedPath === undefined;
   return decisionReason.type === "other";
 }
-//@ chunk-whwptcwy.js:5520-6876 placement
+//@ chunk-9mrb3qx9.js:5668-7046 placement
 /**
  * 对 served shell 行做只读检查（检查抛错时视为不确定）。
  */
@@ -395,7 +417,10 @@ async function classifyServedShellLine(command, cwd, includeCopySources = false)
       ? "settings"
       : "uncertain";
   let isUncertain =
-    parsed.bareAssignmentNames.some(isExecInfluencingVar) || parsed.laterLoopPassesDiffer === true;
+    parsed.bareAssignmentNames.some(isExecInfluencingVar) ||
+    parsed.laterLoopPassesDiffer === true ||
+    needsReExpansionRun(command) ||
+    (await readOnlyShellCheck(command));
   let currentDirs = [cwd];
   let dirsResolved = true;
   let hasUnknownCd = false;
@@ -474,17 +499,17 @@ async function classifyServedShellLine(command, cwd, includeCopySources = false)
   if (isUncertain || (includeCopySources && !(copiesSettings && allCommandsKnown))) return "uncertain";
   return "none";
 }
-//@ chunk-whwptcwy.js:6876-6948 placement
+//@ chunk-9mrb3qx9.js:7046-7118 placement
 /**
  * 影响工作目录的变量集合与 cd 类选项正则；有它们时不能沿用原 cwd 判断。
  */
 var CWD_INFLUENCING_VARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CD_FLAG_RE;
-deferInit("chunk-whwptcwy.js:6876", () => {
+deferInit("chunk-9mrb3qx9.js:7046", () => {
   CWD_INFLUENCING_VARS = new Set(["HOME", "CDPATH", "PWD", "OLDPWD"]);
   CD_FLAG_RE = /^-[^-]*[CD]|^--chd/;
 });
-//@ chunk-whwptcwy.js:6948-7778 placement
+//@ chunk-9mrb3qx9.js:7118-7948 placement
 async function classifyCommandForSandbox(command, cwd) {
   let shellCommand = await parseShellCommand(command);
   if (shellCommand.kind !== "simple" || shellCommand.hasLoop !== false) return "unparsed";
@@ -538,7 +563,7 @@ async function classifyCommandForSandbox(command, cwd) {
   }
   return entries;
 }
-//@ chunk-whwptcwy.js:7778-7928 placement
+//@ chunk-9mrb3qx9.js:7948-8098 placement
 function getArgPathVariants(arg) {
   return [
     arg,
@@ -553,7 +578,7 @@ function getArgPathVariants(arg) {
       : []),
   ];
 }
-//@ chunk-whwptcwy.js:7928-8543 placement
+//@ chunk-9mrb3qx9.js:8098-8713 placement
 function describeSubcommandResults(command) {
   let [program, ...args] = command.argv;
   if (program === undefined)
@@ -601,7 +626,7 @@ function describeSubcommandResults(command) {
           EXEC_CAPABLE_COMMANDS.has(baseName))),
   };
 }
-//@ chunk-whwptcwy.js:8543-8704 placement (2.1.88 match: spawnScriptArgs, 0.635)
+//@ chunk-9mrb3qx9.js:8713-8874 placement (2.1.88 match: spawnScriptArgs, 0.637)
 function hasPlaceholderInArgs(simple) {
   let [program, ...args] = simple.argv;
   return (
@@ -614,7 +639,7 @@ function hasPlaceholderInArgs(simple) {
       }))
   );
 }
-//@ chunk-whwptcwy.js:8704-8993 placement
+//@ chunk-9mrb3qx9.js:8874-9163 placement
 function classifyWriteTarget(path, cwd) {
   let validation = validatePath(path, cwd, getEmptyToolPermissionContext(), "write");
   if (validation.allowed) return "none";
@@ -625,7 +650,7 @@ function classifyWriteTarget(path, cwd) {
   if (validation.decisionReason?.type !== "other") return "none";
   return isHostPersonOnlyPath(path, cwd) ? "settings" : "uncertain";
 }
-//@ chunk-whwptcwy.js:8993-9117 placement
+//@ chunk-9mrb3qx9.js:9163-9287 placement
 function isServedUnplaceablePath(copySource, cwd) {
   let validation = validatePath(copySource, cwd, getEmptyToolPermissionContext(), "write");
   return (
@@ -634,7 +659,7 @@ function isServedUnplaceablePath(copySource, cwd) {
     isServedUnplaceableCircuitBreaker(validation.decisionReason)
   );
 }
-//@ chunk-whwptcwy.js:9117-9224 placement
+//@ chunk-9mrb3qx9.js:9287-9394 placement
 /**
  * 判断路径是否只允许宿主用户本人编辑（命中仅限本人的安全熔断）。
  */
@@ -646,7 +671,7 @@ function isHostPersonOnlyPath(path, cwd) {
   let safety = checkPathSafetyForAutoEdit(resolved, [resolved]);
   return !safety.safe && isHostPersonOnlyCircuitBreaker(safety);
 }
-//@ chunk-whwptcwy.js:9224-9705 placement
+//@ chunk-9mrb3qx9.js:9394-9875 placement
 function resolveDirectoryChange(simple, dirs) {
   let [commandName, ...args] = simple.argv;
   if (commandName === "popd") return "unknown";
@@ -678,7 +703,7 @@ function resolveDirectoryChange(simple, dirs) {
   let resolvedDirs = isAbsolute(expanded) ? [expanded] : dirs.map((dir) => resolve(dir, expanded));
   return cappedPathList(dirs, [...resolvedDirs, ...resolvedDirs.flatMap(additionalPermissionPaths)]);
 }
-//@ chunk-whwptcwy.js:9705-10028 placement
+//@ chunk-9mrb3qx9.js:9875-10198 placement
 function isDirectoryChangeCommand(simple) {
   let [commandName, ...args] = simple.argv;
   if (commandName !== "cd" && commandName !== "chdir" && commandName !== "pushd") return true;
@@ -706,7 +731,7 @@ function isDirectoryChangeCommand(simple) {
   }
   return operands.length < 2 && (operands[0] === undefined || !/^[+-]\d+$/.test(operands[0]));
 }
-//@ chunk-whwptcwy.js:10028-10146 placement
+//@ chunk-9mrb3qx9.js:10198-10316 placement
 function hasDotDotAfterSegment(path) {
   let sawSegment = false;
   for (let segment of path.split(/[\\/]/))
@@ -715,7 +740,7 @@ function hasDotDotAfterSegment(path) {
     } else if (segment !== "" && segment !== ".") sawSegment = true;
   return false;
 }
-//@ chunk-whwptcwy.js:10146-10213 placement
+//@ chunk-9mrb3qx9.js:10316-10383 placement
 /**
  * 取命令涉及的其他权限路径（排除路径本身），用于把路径规则也应用到这些路径上。
  */
@@ -726,23 +751,24 @@ function additionalPermissionPaths(path) {
     return [];
   }
 }
-//@ chunk-whwptcwy.js:10213-10281 placement
+//@ chunk-9mrb3qx9.js:10383-10451 placement
 /**
  * 合并路径列表去重，数量超过上限时返回 “unknown”，避免路径检查泄漏。
  */
 function cappedPathList(dirs, extra) {
-  let paths = uniq([...dirs, ...extra]);
+  let paths = normalizeCaseForComparison_2([...dirs, ...extra]);
   return paths.length > MAX_REPORTED_COMMAND_CHARS ? "unknown" : paths;
 }
 export {
   useSecurityParser,
-  shouldBypassAskForReadOnly,
-  servedLineTouchesProtectedPath,
-  touchesProtectedPath,
   parseShellCommand,
+  readOnlyShellCheck,
+  touchesProtectedPath,
   isReadOnlyCommand,
   classifyCommandForSandbox,
   getProtectedSettingsPaths,
   isHostPersonOnlyPath,
+  shouldBypassAskForReadOnly,
   isServedLineWriting,
+  servedLineTouchesProtectedPath,
 };

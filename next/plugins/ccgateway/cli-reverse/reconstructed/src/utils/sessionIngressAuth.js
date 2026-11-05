@@ -3,9 +3,9 @@
  *
  * 远程会话 ingress 令牌与认证头（环境变量或文件描述符）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sessionIngressAuth.ts
- * pieces: chunk-vv0zxx69.js (6)
+ * pieces: chunk-ja0weedh.js (6)
  * attribution: callgraph-witnessed 1, layout 2, fingerprint 2, placement 1
  */
 import {
@@ -16,7 +16,7 @@ import {
 import { getSessionIngressToken, setSessionIngressToken } from "../bootstrap/state.js";
 import { configureApiKeyHeaders } from "../services/api/client.js";
 
-//@ chunk-vv0zxx69.js:277-532 callgraph-witnessed (2.1.88 match: getTokenFromFileDescriptor, 0.22)
+//@ chunk-ja0weedh.js:277-532 callgraph-witnessed (2.1.88 match: getTokenFromFileDescriptor, 0.22)
 function getTokenFromFileDescriptor() {
   return getCredentialFromFd({
     envVar: "CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR",
@@ -29,7 +29,7 @@ function getTokenFromFileDescriptor() {
     skipInReviewOrigin: true,
   });
 }
-//@ chunk-vv0zxx69.js:532-864 layout
+//@ chunk-ja0weedh.js:532-864 layout
 /**
  * 未设置会话访问令牌时，从文件描述符或约定路径读取会话入口令牌并缓存（审核来源跳过）。
  */
@@ -47,7 +47,7 @@ async function loadSessionIngressToken(credentials) {
     skipInReviewOrigin: true,
   });
 }
-//@ chunk-vv0zxx69.js:864-954 fingerprint (2.1.88 match: getSessionIngressAuthToken, 1)
+//@ chunk-ja0weedh.js:864-954 fingerprint (2.1.88 match: getSessionIngressAuthToken, 1)
 /**
  * 远程会话 ingress 令牌：CLAUDE_CODE_SESSION_ACCESS_TOKEN 或 CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR 指向的文件描述符。
  */
@@ -56,11 +56,11 @@ function getSessionIngressAuthToken() {
   if (envToken) return envToken;
   return getTokenFromFileDescriptor();
 }
-//@ chunk-vv0zxx69.js:954-988 layout
+//@ chunk-ja0weedh.js:954-988 layout
 function hasSessionIngressAuthToken() {
   return getSessionIngressAuthToken() !== null;
 }
-//@ chunk-vv0zxx69.js:988-1191 fingerprint (2.1.88 match: getSessionIngressAuthHeaders, 0.906)
+//@ chunk-ja0weedh.js:988-1191 fingerprint (2.1.88 match: getSessionIngressAuthHeaders, 0.906)
 /**
  * ingress 请求头：sk-ant-sid 会话密钥用 Cookie sessionKey=，否则 Bearer，附 X-Organization-Uuid。
  */
@@ -77,14 +77,14 @@ function getSessionIngressAuthHeaders() {
   }
   return configureApiKeyHeaders(token);
 }
-//@ chunk-vv0zxx69.js:1249-1312 placement (2.1.88 match: getSessionIngressAuthToken, 1)
+//@ chunk-ja0weedh.js:1249-1312 placement (2.1.88 match: getSessionIngressAuthToken, 1)
 function getSessionIngressAuthToken_2(token) {
   process.env.CLAUDE_CODE_SESSION_ACCESS_TOKEN = token;
 }
 export {
-  hasSessionIngressAuthToken,
   getSessionIngressAuthToken,
   getSessionIngressAuthHeaders,
-  loadSessionIngressToken,
   getSessionIngressAuthToken_2,
+  hasSessionIngressAuthToken,
+  loadSessionIngressToken,
 };

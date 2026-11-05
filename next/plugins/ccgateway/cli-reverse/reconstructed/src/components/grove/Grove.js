@@ -3,10 +3,10 @@
  *
  * Grove（消费者条款/隐私政策更新）对话框：接受并选择是否允许用于模型训练，以及隐私设置对话框；混入 auto 模式推荐。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/grove/Grove.tsx
- * pieces: chunk-18hwfzwa.js (2), chunk-fggt3ccb.js (7)
- * attribution: affinity 1, callgraph-witnessed 1, placement 1, fingerprint 4, facade-exports 2
+ * pieces: chunk-s5vjj9j3.js (7)
+ * attribution: placement 1, fingerprint 4, facade-exports 2
  */
 import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { logEvent } from "../../services/analytics/index.js";
@@ -34,29 +34,14 @@ import { useDialogKeybindings } from "../../keybindings/dialogKeyHints.js";
 import { Dialog } from "../design-system/Dialog.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 import { FocusColumn } from "../design-system/FocusColumn.js";
-import { useOnFirstReveal } from "../permissions/PermissionRequestTitle.js";
-import { useGlobalExitKeybindings } from "../../keybindings/useKeybinding.js";
-import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
-import { useRefusableAnswer } from "../../hooks/useRefusableAnswer.js";
-import { useInputClock } from "../../ink/components/Input.js";
-import { useRefusalTracker } from "../CustomSelect/selectTypeahead.js";
-import { isWithinRecentInput } from "../../hooks/useRecentInputGuard.js";
-import { stableEmptyObject } from "../../utils/stableEmptyObject.js";
-import { permissionModeIndicator } from "../../utils/permissions/PermissionMode.js";
-import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
-import { PermissionDialog_2 } from "../permissions/PermissionDialog.js";
-import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fggt3ccb.js:722-726 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fggt3ccb.js:722", () => {
-  init_react_production();
-});
-//@ chunk-fggt3ccb.js:726-784 fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-s5vjj9j3.js:724-728 placement
+init_react_production();
+//@ chunk-s5vjj9j3.js:728-786 fingerprint (2.1.88 match: _temp2, 1)
 function logGrovePrivacyViewed() {
   logEvent("tengu_grove_privacy_settings_viewed", {});
 }
-//@ chunk-fggt3ccb.js:784-1076 fingerprint (2.1.88 match: NEW_TERMS_ASCII, 0.508)
+//@ chunk-s5vjj9j3.js:786-1078 fingerprint (2.1.88 match: NEW_TERMS_ASCII, 0.508)
 var NEW_TERMS_ASCII_ART = ` _____________
  |          \\  \\
  | NEW TERMS \\__\\
@@ -72,7 +57,7 @@ var ACCEPT_OPT_OUT_OPTION = {
   label: "Accept terms \xB7 Help improve our AI models: OFF",
   value: "accept_opt_out",
 };
-//@ chunk-fggt3ccb.js:1076-2606 fingerprint (2.1.88 match: GracePeriodContentBody, 0.417)
+//@ chunk-s5vjj9j3.js:1078-2609 fingerprint (2.1.88 match: GracePeriodContentBody, 0.417)
 function GracePeriodContentBody() {
   let $ = useMemoCache(9);
   let t0;
@@ -203,7 +188,7 @@ function GracePeriodContentBody() {
   } else t8 = $[8];
   return t8;
 }
-//@ chunk-fggt3ccb.js:2606-3961 fingerprint (2.1.88 match: PostGracePeriodContentBody, 0.462)
+//@ chunk-s5vjj9j3.js:2609-3965 fingerprint (2.1.88 match: PostGracePeriodContentBody, 0.462)
 function PostGracePeriodContentBody() {
   let $ = useMemoCache(7);
   let t0;
@@ -304,7 +289,7 @@ function PostGracePeriodContentBody() {
   } else t6 = $[6];
   return t6;
 }
-//@ chunk-fggt3ccb.js:3961-8183 facade-exports (2.1.88 match: GroveDialog, 0.687)
+//@ chunk-s5vjj9j3.js:3965-8184 facade-exports (2.1.88 match: GroveDialog, 0.687)
 /**
  * 条款更新对话框：宽限期内可接受新条款、选择是否允许用于训练（accept_opt_in/opt_out），宽限期后必须选择；记录 tengu_grove_policy_*。
  */
@@ -369,7 +354,7 @@ function GroveDialog(props) {
   let t3;
   if ($[7] !== credentials || $[8] !== groveConfig?.notice_is_grace_period || $[9] !== onDone) {
     t3 = async function onChange(value) {
-      ee: switch (value) {
+      Z: switch (value) {
         case "accept_opt_in": {
           let optedIn =
             (await updateGroveSettings(true, credentials, {
@@ -383,7 +368,7 @@ function GroveDialog(props) {
             setOptInFailed(true);
             return;
           }
-          break ee;
+          break Z;
         }
         case "accept_opt_out": {
           await updateGroveSettings(false, credentials);
@@ -391,13 +376,13 @@ function GroveDialog(props) {
             state: false,
             dismissable: groveConfig?.notice_is_grace_period,
           });
-          break ee;
+          break Z;
         }
         case "defer": {
           logEvent("tengu_grove_policy_dismissed", {
             state: true,
           });
-          break ee;
+          break Z;
         }
         case "escape": {
           logEvent("tengu_grove_policy_escaped", {});
@@ -656,7 +641,7 @@ function GroveDialog(props) {
   } else t14 = $[51];
   return t14;
 }
-//@ chunk-fggt3ccb.js:8183-10093 facade-exports (2.1.88 match: PrivacySettingsDialog, 0.431)
+//@ chunk-s5vjj9j3.js:8184-10087 facade-exports (2.1.88 match: PrivacySettingsDialog, 0.431)
 function PrivacySettingsDialog(props) {
   let $ = useMemoCache(27);
   let { settings, domainExcluded, lockedByClaudeScience, onDone } = props;
@@ -835,198 +820,4 @@ function PrivacySettingsDialog(props) {
   } else t8 = $[26];
   return t8;
 }
-//@ chunk-18hwfzwa.js:1098349-1098382 affinity
-function getNudgeOpenedAtMs() {
-  return Date.now();
-}
-//@ chunk-18hwfzwa.js:1098382-1100666 callgraph-witnessed (2.1.88 match: _temp, 0.203)
-/**
- * 询问是否把 auto 模式设为默认权限模式的对话框；上报 tengu_auto_default_nudge_shown，带输入防抖拒绝。
- */
-function AutoModeDefaultNudgeDialog(exitState) {
-  let $ = useMemoCache(32);
-  let { currentMode, onDone } = exitState;
-  let logImpression;
-  if ($[0] !== currentMode) {
-    logImpression = () => {
-      logEvent("tengu_auto_default_nudge_shown", {
-        current_mode: fromEnum(currentMode),
-      });
-    };
-    $[0] = currentMode;
-    $[1] = logImpression;
-  } else logImpression = $[1];
-  useOnFirstReveal("impression", logImpression);
-  let globalExitKeybindings = useGlobalExitKeybindings();
-  let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let refusableAnswer = useRefusableAnswer(onDone);
-  let inputClock = useInputClock();
-  let [openedAtMs] = useState(getNudgeOpenedAtMs);
-  let { refusedWithin, noteRefused } = useRefusalTracker();
-  let shouldRefuse;
-  if ($[2] !== inputClock || $[3] !== openedAtMs || $[4] !== noteRefused || $[5] !== refusedWithin) {
-    shouldRefuse = () => {
-      if (isWithinRecentInput(inputClock, openedAtMs) || refusedWithin()) {
-        noteRefused();
-        return true;
-      }
-      return false;
-    };
-    $[2] = inputClock;
-    $[3] = openedAtMs;
-    $[4] = noteRefused;
-    $[5] = refusedWithin;
-    $[6] = shouldRefuse;
-  } else shouldRefuse = $[6];
-  let shouldRefuse_2 = shouldRefuse;
-  let handleAnswer;
-  if ($[7] !== shouldRefuse_2 || $[8] !== refusableAnswer) {
-    handleAnswer = function handleAnswer(value) {
-      if (shouldRefuse_2()) {
-        refusableAnswer.refuse(value);
-        return;
-      }
-      refusableAnswer.answer(value);
-    };
-    $[7] = shouldRefuse_2;
-    $[8] = refusableAnswer;
-    $[9] = handleAnswer;
-  } else handleAnswer = $[9];
-  let choose = handleAnswer;
-  let emptyHintProps;
-  if ($[10] === MEMO_CACHE_SENTINEL) {
-    emptyHintProps = stableEmptyObject(false);
-    $[10] = emptyHintProps;
-  } else emptyHintProps = $[10];
-  let emptyHintProps_2 = emptyHintProps;
-  let explainerBox;
-  if ($[11] === MEMO_CACHE_SENTINEL) {
-    explainerBox = jsxProd_default(Box, {
-      marginBottom: 1,
-      flexDirection: "column",
-      children: jsxProd_default(Text, {
-        children:
-          "Auto mode lets Claude handle permission prompts automatically. Claude checks each tool call for risky actions and prompt injection before executing, runs the ones it assesses as lower-risk, and blocks the rest.",
-      }),
-    });
-    $[11] = explainerBox;
-  } else explainerBox = $[11];
-  const attempts = refusableAnswer.attempts;
-  const defaultFocusValue = refusableAnswer.refused ?? undefined;
-  let acceptOption;
-  if ($[12] === MEMO_CACHE_SENTINEL) {
-    acceptOption = {
-      label: "Yes, set auto mode as my default permission mode",
-      value: "accept",
-    };
-    $[12] = acceptOption;
-  } else acceptOption = $[12];
-  let modeLabel;
-  if ($[13] !== currentMode) {
-    modeLabel = permissionModeIndicator(currentMode);
-    $[13] = currentMode;
-    $[14] = modeLabel;
-  } else modeLabel = $[14];
-  const label = `No, keep ${modeLabel}`;
-  let options;
-  if ($[15] !== label) {
-    options = [
-      acceptOption,
-      {
-        label,
-        value: "decline",
-      },
-    ];
-    $[15] = label;
-    $[16] = options;
-  } else options = $[16];
-  let onCancel;
-  if ($[17] !== choose) {
-    onCancel = () => choose("decline");
-    $[17] = choose;
-    $[18] = onCancel;
-  } else onCancel = $[18];
-  let selectorBox;
-  if (
-    $[19] !== choose ||
-    $[20] !== shouldRefuse_2 ||
-    $[21] !== refusableAnswer.attempts ||
-    $[22] !== options ||
-    $[23] !== onCancel ||
-    $[24] !== defaultFocusValue
-  ) {
-    selectorBox = jsxProd_default(Box, {
-      children: jsxProd_default(
-        ModelSelector,
-        {
-          defaultFocusValue,
-          hideIndexes: true,
-          refuseInput: shouldRefuse_2,
-          options,
-          onChange: choose,
-          onCancel,
-        },
-        attempts,
-      ),
-    });
-    $[19] = choose;
-    $[20] = shouldRefuse_2;
-    $[21] = refusableAnswer.attempts;
-    $[22] = options;
-    $[23] = onCancel;
-    $[24] = defaultFocusValue;
-    $[25] = selectorBox;
-  } else selectorBox = $[25];
-  let exitHint;
-  if ($[26] !== globalExitKeybindings || $[27] !== isScreenReaderEnabled) {
-    exitHint =
-      false &&
-      (!isScreenReaderEnabled || globalExitKeybindings.pending) &&
-      jsxProd_default(Box, {
-        marginTop: 1,
-        children: jsxProd_default(Text, {
-          dimColor: true,
-          italic: true,
-          children: globalExitKeybindings.pending
-            ? `Press ${globalExitKeybindings.keyName} again to exit`
-            : jsxProd_default_2(Byline, {
-                children: [
-                  jsxProd_default(KeyboardShortcutHint, {
-                    chord: "enter",
-                    action: "confirm",
-                    ...emptyHintProps_2,
-                  }),
-                  jsxProd_default(ConfigurableShortcutHint, {
-                    action: "select:cancel",
-                    context: "Select",
-                    fallback: "Esc",
-                    description: "cancel",
-                    ...emptyHintProps_2,
-                  }),
-                ],
-              }),
-        }),
-      });
-    $[26] = globalExitKeybindings;
-    $[27] = isScreenReaderEnabled;
-    $[28] = exitHint;
-  } else exitHint = $[28];
-  let dialog;
-  if ($[29] !== selectorBox || $[30] !== exitHint) {
-    dialog = jsxProd_default(PermissionDialog_2, {
-      title: "Make auto mode your default permission mode?",
-      children: jsxProd_default_2(Box, {
-        flexDirection: "column",
-        paddingX: false ? 0 : 2,
-        paddingTop: 1,
-        paddingBottom: false ? 0 : 1,
-        children: [explainerBox, selectorBox, exitHint],
-      }),
-    });
-    $[29] = selectorBox;
-    $[30] = exitHint;
-    $[31] = dialog;
-  } else dialog = $[31];
-  return dialog;
-}
-export { AutoModeDefaultNudgeDialog, PrivacySettingsDialog, GroveDialog };
+export { PrivacySettingsDialog, GroveDialog };

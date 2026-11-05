@@ -1,15 +1,15 @@
 /**
  * es-toolkit/dist/promise/withTimeout.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: es-toolkit@1.53.1
- * pieces: chunk-ad2e1aj6.js (1)
+ * pieces: chunk-nvm0wye1.js (1)
  * attribution: esm-fingerprint 1
  */
 import { createAbortController } from "../../../../src/utils/abortController.js";
 import { sleep } from "../../../../src/utils/sleep.js";
 import { RESULT_NOTE_MAX_CHARS } from "../../../../src/remote/tools/serve/resultShaping.js";
 
-//@ chunk-ad2e1aj6.js:29436-29729 esm-fingerprint
+//@ chunk-nvm0wye1.js:29778-30071 esm-fingerprint
 async function withTimeout(signal, signal_2) {
   let abortController = createAbortController();
   let promise = new Promise((resolve) => {

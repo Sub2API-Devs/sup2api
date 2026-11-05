@@ -3,17 +3,17 @@
  *
  * 子代理详情视图；本模块实际内容为安装/验证流程（initial/installing/verifying/success），疑似匹配错误。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/agents/AgentDetail.tsx
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: callgraph-fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { useState, useEffect, useRef } from "../../../vendor/react/cjs/react.production.js";
 import { useInputClock } from "../../ink/components/Input.js";
-import { useInputRefusalWindow, useRefusalTracker } from "../CustomSelect/selectTypeahead.js";
-import { isWithinRecentInput } from "../../hooks/useRecentInputGuard.js";
+import { useRecentInputStamp, isWithinRecentInput } from "../../hooks/useRecentInputGuard.js";
+import { useRecentInputWithin, useRefusalTracker } from "../CustomSelect/selectTypeahead.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   detectPythonPackageManager,
@@ -42,9 +42,9 @@ import { AgentNavigationFooter } from "./AgentNavigationFooter.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { Pane } from "../design-system/Pane.js";
 
-//@ chunk-18hwfzwa.js:1259603-1264443 callgraph-fingerprint (2.1.88 match: AgentDetail, 0.23)
+//@ chunk-czq1j3j2.js:1285358-1290236 callgraph-fingerprint (2.1.88 match: AgentDetail, 0.23)
 function AgentDetail(props) {
-  let $ = useMemoCache(92);
+  let $ = useMemoCache(93);
   let { onDone, tmuxAvailable, wouldTakeAnswer } = props;
   let { storageV5 } = useTheme_2();
   let [phase, setPhase] = useState("initial");
@@ -57,115 +57,113 @@ function AgentDetail(props) {
     setLastPhase(phase);
     setPhaseChangedAt(Date.now());
   }
-  let inputRefusalWindow = useInputRefusalWindow();
+  let usePhaseStamp = useRecentInputStamp(phaseChangedAt);
+  let recentInput = useRecentInputWithin();
   let { refusedWithin, noteRefused } = useRefusalTracker();
   let hasRecentInputCached;
-  if ($[0] !== inputClock || $[1] !== phaseChangedAt) {
-    hasRecentInputCached = () => phaseChangedAt !== 0 && isWithinRecentInput(inputClock, phaseChangedAt);
+  if ($[0] !== inputClock || $[1] !== usePhaseStamp || $[2] !== phaseChangedAt) {
+    hasRecentInputCached = () =>
+      phaseChangedAt !== 0 && isWithinRecentInput(inputClock, usePhaseStamp(phaseChangedAt));
     $[0] = inputClock;
-    $[1] = phaseChangedAt;
-    $[2] = hasRecentInputCached;
-  } else hasRecentInputCached = $[2];
+    $[1] = usePhaseStamp;
+    $[2] = phaseChangedAt;
+    $[3] = hasRecentInputCached;
+  } else hasRecentInputCached = $[3];
   let hasRecentInput = hasRecentInputCached;
   let refuseInputCached;
-  if (
-    $[3] !== inputRefusalWindow ||
-    $[4] !== noteRefused ||
-    $[5] !== refusedWithin ||
-    $[6] !== hasRecentInput
-  ) {
+  if ($[4] !== recentInput || $[5] !== noteRefused || $[6] !== refusedWithin || $[7] !== hasRecentInput) {
     refuseInputCached = function shouldRefuseInput() {
-      if (inputRefusalWindow() || hasRecentInput() || refusedWithin()) {
+      if (recentInput() || hasRecentInput() || refusedWithin()) {
         noteRefused();
         return true;
       }
       return false;
     };
-    $[3] = inputRefusalWindow;
-    $[4] = noteRefused;
-    $[5] = refusedWithin;
-    $[6] = hasRecentInput;
-    $[7] = refuseInputCached;
-  } else refuseInputCached = $[7];
+    $[4] = recentInput;
+    $[5] = noteRefused;
+    $[6] = refusedWithin;
+    $[7] = hasRecentInput;
+    $[8] = refuseInputCached;
+  } else refuseInputCached = $[8];
   let refuseInput = refuseInputCached;
   let detectManagerEffect;
   let detectManagerDeps;
-  if ($[8] === MEMO_CACHE_SENTINEL) {
+  if ($[9] === MEMO_CACHE_SENTINEL) {
     detectManagerEffect = () => {
       detectPythonPackageManager().then((pythonPackageManager) => {
         setPackageManager(pythonPackageManager);
       });
     };
     detectManagerDeps = [];
-    $[8] = detectManagerEffect;
-    $[9] = detectManagerDeps;
+    $[9] = detectManagerEffect;
+    $[10] = detectManagerDeps;
   } else {
-    detectManagerEffect = $[8];
-    detectManagerDeps = $[9];
+    detectManagerEffect = $[9];
+    detectManagerDeps = $[10];
   }
   useEffect(detectManagerEffect, detectManagerDeps);
   let installStartedRef = useRef(false);
   let cancelledRef = useRef(false);
   let detectingRef = useRef(false);
   let unmountEffect;
-  if ($[10] === MEMO_CACHE_SENTINEL) {
+  if ($[11] === MEMO_CACHE_SENTINEL) {
     unmountEffect = () => {
       installStartedRef.current = false;
     };
-    $[10] = unmountEffect;
-  } else unmountEffect = $[10];
+    $[11] = unmountEffect;
+  } else unmountEffect = $[11];
   useEffect(unmountEffect);
   let cancelHandlerCached;
   if (
-    $[11] !== inputRefusalWindow ||
-    $[12] !== noteRefused ||
-    $[13] !== onDone ||
-    $[14] !== refusedWithin ||
-    $[15] !== hasRecentInput
+    $[12] !== recentInput ||
+    $[13] !== noteRefused ||
+    $[14] !== onDone ||
+    $[15] !== refusedWithin ||
+    $[16] !== hasRecentInput
   ) {
     cancelHandlerCached = () => {
-      if (inputRefusalWindow() || hasRecentInput() || refusedWithin()) {
+      if (recentInput() || hasRecentInput() || refusedWithin()) {
         noteRefused();
         return;
       }
       if (onDone("cancelled")) cancelledRef.current = true;
     };
-    $[11] = inputRefusalWindow;
-    $[12] = noteRefused;
-    $[13] = onDone;
-    $[14] = refusedWithin;
-    $[15] = hasRecentInput;
-    $[16] = cancelHandlerCached;
-  } else cancelHandlerCached = $[16];
+    $[12] = recentInput;
+    $[13] = noteRefused;
+    $[14] = onDone;
+    $[15] = refusedWithin;
+    $[16] = hasRecentInput;
+    $[17] = cancelHandlerCached;
+  } else cancelHandlerCached = $[17];
   let onCancel = cancelHandlerCached;
   const isActive = phase !== "installing" && phase !== "verifying" && phase !== "success";
   let cancelKeybindingOptions;
-  if ($[17] !== isActive) {
+  if ($[18] !== isActive) {
     cancelKeybindingOptions = {
       context: "Confirmation",
       isActive,
     };
-    $[17] = isActive;
-    $[18] = cancelKeybindingOptions;
-  } else cancelKeybindingOptions = $[18];
+    $[18] = isActive;
+    $[19] = cancelKeybindingOptions;
+  } else cancelKeybindingOptions = $[19];
   useKeybinding("confirm:no", onCancel, cancelKeybindingOptions);
   let finishInstalled;
-  if ($[19] !== onDone) {
+  if ($[20] !== onDone) {
     finishInstalled = () => {
       cancelledRef.current = true;
       onDone("installed");
     };
-    $[19] = onDone;
-    $[20] = finishInstalled;
-  } else finishInstalled = $[20];
+    $[20] = onDone;
+    $[21] = finishInstalled;
+  } else finishInstalled = $[21];
   useTimeout(finishInstalled, phase === "success" ? 1500 : null);
   let verifyHandlerCached;
   if (
-    $[21] !== noteRefused ||
-    $[22] !== refusedWithin ||
-    $[23] !== hasRecentInput ||
-    $[24] !== storageV5 ||
-    $[25] !== wouldTakeAnswer
+    $[22] !== noteRefused ||
+    $[23] !== refusedWithin ||
+    $[24] !== hasRecentInput ||
+    $[25] !== storageV5 ||
+    $[26] !== wouldTakeAnswer
   ) {
     verifyHandlerCached = function handleVerify() {
       if (hasRecentInput() || refusedWithin()) {
@@ -190,38 +188,38 @@ function AgentDetail(props) {
         }
       });
     };
-    $[21] = noteRefused;
-    $[22] = refusedWithin;
-    $[23] = hasRecentInput;
-    $[24] = storageV5;
-    $[25] = wouldTakeAnswer;
-    $[26] = verifyHandlerCached;
-  } else verifyHandlerCached = $[26];
+    $[22] = noteRefused;
+    $[23] = refusedWithin;
+    $[24] = hasRecentInput;
+    $[25] = storageV5;
+    $[26] = wouldTakeAnswer;
+    $[27] = verifyHandlerCached;
+  } else verifyHandlerCached = $[27];
   let onVerify = verifyHandlerCached;
   let keyDownHandlerCached;
-  if ($[27] !== onVerify || $[28] !== phase) {
+  if ($[28] !== onVerify || $[29] !== phase) {
     keyDownHandlerCached = function handleKeyDown(event) {
       if (phase === "api-instructions" && event.key === "return") {
         event.preventDefault();
         onVerify();
       }
     };
-    $[27] = onVerify;
-    $[28] = phase;
-    $[29] = keyDownHandlerCached;
-  } else keyDownHandlerCached = $[29];
+    $[28] = onVerify;
+    $[29] = phase;
+    $[30] = keyDownHandlerCached;
+  } else keyDownHandlerCached = $[30];
   let onKeyDown = keyDownHandlerCached;
   let installHandlerCached;
   if (
-    $[30] !== inputRefusalWindow ||
-    $[31] !== noteRefused ||
-    $[32] !== packageManager ||
-    $[33] !== refusedWithin ||
-    $[34] !== hasRecentInput ||
-    $[35] !== wouldTakeAnswer
+    $[31] !== recentInput ||
+    $[32] !== noteRefused ||
+    $[33] !== packageManager ||
+    $[34] !== refusedWithin ||
+    $[35] !== hasRecentInput ||
+    $[36] !== wouldTakeAnswer
   ) {
     installHandlerCached = async function handleInstall() {
-      if (inputRefusalWindow() || hasRecentInput() || refusedWithin()) {
+      if (recentInput() || hasRecentInput() || refusedWithin()) {
         noteRefused();
         return;
       }
@@ -255,27 +253,27 @@ function AgentDetail(props) {
         setPhase("install-failed");
       }
     };
-    $[30] = inputRefusalWindow;
-    $[31] = noteRefused;
-    $[32] = packageManager;
-    $[33] = refusedWithin;
-    $[34] = hasRecentInput;
-    $[35] = wouldTakeAnswer;
-    $[36] = installHandlerCached;
-  } else installHandlerCached = $[36];
+    $[31] = recentInput;
+    $[32] = noteRefused;
+    $[33] = packageManager;
+    $[34] = refusedWithin;
+    $[35] = hasRecentInput;
+    $[36] = wouldTakeAnswer;
+    $[37] = installHandlerCached;
+  } else installHandlerCached = $[37];
   let onInstall = installHandlerCached;
   let useTmuxHandlerCached;
   if (
-    $[37] !== inputRefusalWindow ||
-    $[38] !== noteRefused ||
-    $[39] !== onDone ||
-    $[40] !== refusedWithin ||
-    $[41] !== hasRecentInput ||
-    $[42] !== storageV5 ||
-    $[43] !== wouldTakeAnswer
+    $[38] !== recentInput ||
+    $[39] !== noteRefused ||
+    $[40] !== onDone ||
+    $[41] !== refusedWithin ||
+    $[42] !== hasRecentInput ||
+    $[43] !== storageV5 ||
+    $[44] !== wouldTakeAnswer
   ) {
     useTmuxHandlerCached = function handleUseTmux() {
-      if (inputRefusalWindow() || hasRecentInput() || refusedWithin()) {
+      if (recentInput() || hasRecentInput() || refusedWithin()) {
         noteRefused();
         return;
       }
@@ -290,34 +288,34 @@ function AgentDetail(props) {
       cancelledRef.current = true;
       onDone("use-tmux");
     };
-    $[37] = inputRefusalWindow;
-    $[38] = noteRefused;
-    $[39] = onDone;
-    $[40] = refusedWithin;
-    $[41] = hasRecentInput;
-    $[42] = storageV5;
-    $[43] = wouldTakeAnswer;
-    $[44] = useTmuxHandlerCached;
-  } else useTmuxHandlerCached = $[44];
+    $[38] = recentInput;
+    $[39] = noteRefused;
+    $[40] = onDone;
+    $[41] = refusedWithin;
+    $[42] = hasRecentInput;
+    $[43] = storageV5;
+    $[44] = wouldTakeAnswer;
+    $[45] = useTmuxHandlerCached;
+  } else useTmuxHandlerCached = $[45];
   let onUseTmux = useTmuxHandlerCached;
   let titleElement;
-  if ($[45] === MEMO_CACHE_SENTINEL) {
+  if ($[46] === MEMO_CACHE_SENTINEL) {
     titleElement = jsxProd_default(Text, {
       bold: true,
       color: "permission",
       children: "iTerm2 Split Pane Setup",
     });
-    $[45] = titleElement;
-  } else titleElement = $[45];
+    $[46] = titleElement;
+  } else titleElement = $[46];
   let installPromptElement;
   if (
-    $[46] !== onCancel ||
-    $[47] !== onInstall ||
-    $[48] !== onUseTmux ||
-    $[49] !== packageManager ||
-    $[50] !== refuseInput ||
-    $[51] !== phase ||
-    $[52] !== tmuxAvailable
+    $[47] !== onCancel ||
+    $[48] !== onInstall ||
+    $[49] !== onUseTmux ||
+    $[50] !== packageManager ||
+    $[51] !== refuseInput ||
+    $[52] !== phase ||
+    $[53] !== tmuxAvailable
   ) {
     installPromptElement =
       phase === "initial" &&
@@ -329,36 +327,36 @@ function AgentDetail(props) {
         onUseTmux,
         onCancel,
       });
-    $[46] = onCancel;
-    $[47] = onInstall;
-    $[48] = onUseTmux;
-    $[49] = packageManager;
-    $[50] = refuseInput;
-    $[51] = phase;
-    $[52] = tmuxAvailable;
-    $[53] = installPromptElement;
-  } else installPromptElement = $[53];
+    $[47] = onCancel;
+    $[48] = onInstall;
+    $[49] = onUseTmux;
+    $[50] = packageManager;
+    $[51] = refuseInput;
+    $[52] = phase;
+    $[53] = tmuxAvailable;
+    $[54] = installPromptElement;
+  } else installPromptElement = $[54];
   let installingElement;
-  if ($[54] !== packageManager || $[55] !== phase) {
+  if ($[55] !== packageManager || $[56] !== phase) {
     installingElement =
       phase === "installing" &&
       jsxProd_default(It2Installing, {
         packageManager,
       });
-    $[54] = packageManager;
-    $[55] = phase;
-    $[56] = installingElement;
-  } else installingElement = $[56];
+    $[55] = packageManager;
+    $[56] = phase;
+    $[57] = installingElement;
+  } else installingElement = $[57];
   let installFailedElement;
   if (
-    $[57] !== errorText ||
-    $[58] !== onCancel ||
-    $[59] !== onInstall ||
-    $[60] !== onUseTmux ||
-    $[61] !== packageManager ||
-    $[62] !== refuseInput ||
-    $[63] !== phase ||
-    $[64] !== tmuxAvailable
+    $[58] !== errorText ||
+    $[59] !== onCancel ||
+    $[60] !== onInstall ||
+    $[61] !== onUseTmux ||
+    $[62] !== packageManager ||
+    $[63] !== refuseInput ||
+    $[64] !== phase ||
+    $[65] !== tmuxAvailable
   ) {
     installFailedElement =
       phase === "install-failed" &&
@@ -371,43 +369,43 @@ function AgentDetail(props) {
         onUseTmux,
         onCancel,
       });
-    $[57] = errorText;
-    $[58] = onCancel;
-    $[59] = onInstall;
-    $[60] = onUseTmux;
-    $[61] = packageManager;
-    $[62] = refuseInput;
-    $[63] = phase;
-    $[64] = tmuxAvailable;
-    $[65] = installFailedElement;
-  } else installFailedElement = $[65];
+    $[58] = errorText;
+    $[59] = onCancel;
+    $[60] = onInstall;
+    $[61] = onUseTmux;
+    $[62] = packageManager;
+    $[63] = refuseInput;
+    $[64] = phase;
+    $[65] = tmuxAvailable;
+    $[66] = installFailedElement;
+  } else installFailedElement = $[66];
   let apiInstructionsElement;
-  if ($[66] !== phase) {
+  if ($[67] !== phase) {
     apiInstructionsElement = phase === "api-instructions" && jsxProd_default(It2InstalledSuccess, {});
-    $[66] = phase;
-    $[67] = apiInstructionsElement;
-  } else apiInstructionsElement = $[67];
+    $[67] = phase;
+    $[68] = apiInstructionsElement;
+  } else apiInstructionsElement = $[68];
   let verifyingElement;
-  if ($[68] !== phase) {
+  if ($[69] !== phase) {
     verifyingElement = phase === "verifying" && jsxProd_default(It2Verifying, {});
-    $[68] = phase;
-    $[69] = verifyingElement;
-  } else verifyingElement = $[69];
+    $[69] = phase;
+    $[70] = verifyingElement;
+  } else verifyingElement = $[70];
   let readyElement;
-  if ($[70] !== phase) {
+  if ($[71] !== phase) {
     readyElement = phase === "success" && jsxProd_default(It2SplitPaneReady, {});
-    $[70] = phase;
-    $[71] = readyElement;
-  } else readyElement = $[71];
+    $[71] = phase;
+    $[72] = readyElement;
+  } else readyElement = $[72];
   let errorElement;
   if (
-    $[72] !== errorText ||
-    $[73] !== onCancel ||
-    $[74] !== onUseTmux ||
-    $[75] !== onVerify ||
-    $[76] !== refuseInput ||
-    $[77] !== phase ||
-    $[78] !== tmuxAvailable
+    $[73] !== errorText ||
+    $[74] !== onCancel ||
+    $[75] !== onUseTmux ||
+    $[76] !== onVerify ||
+    $[77] !== refuseInput ||
+    $[78] !== phase ||
+    $[79] !== tmuxAvailable
   ) {
     errorElement =
       phase === "failed" &&
@@ -419,17 +417,17 @@ function AgentDetail(props) {
         onUseTmux,
         onCancel,
       });
-    $[72] = errorText;
-    $[73] = onCancel;
-    $[74] = onUseTmux;
-    $[75] = onVerify;
-    $[76] = refuseInput;
-    $[77] = phase;
-    $[78] = tmuxAvailable;
-    $[79] = errorElement;
-  } else errorElement = $[79];
+    $[73] = errorText;
+    $[74] = onCancel;
+    $[75] = onUseTmux;
+    $[76] = onVerify;
+    $[77] = refuseInput;
+    $[78] = phase;
+    $[79] = tmuxAvailable;
+    $[80] = errorElement;
+  } else errorElement = $[80];
   let footerElement;
-  if ($[80] !== phase) {
+  if ($[81] !== phase) {
     footerElement =
       phase !== "installing" &&
       phase !== "verifying" &&
@@ -440,20 +438,20 @@ function AgentDetail(props) {
           action: "cancel",
         }),
       });
-    $[80] = phase;
-    $[81] = footerElement;
-  } else footerElement = $[81];
+    $[81] = phase;
+    $[82] = footerElement;
+  } else footerElement = $[82];
   let paneElement;
   if (
-    $[82] !== onKeyDown ||
-    $[83] !== installPromptElement ||
-    $[84] !== installingElement ||
-    $[85] !== installFailedElement ||
-    $[86] !== apiInstructionsElement ||
-    $[87] !== verifyingElement ||
-    $[88] !== readyElement ||
-    $[89] !== errorElement ||
-    $[90] !== footerElement
+    $[83] !== onKeyDown ||
+    $[84] !== installPromptElement ||
+    $[85] !== installingElement ||
+    $[86] !== installFailedElement ||
+    $[87] !== apiInstructionsElement ||
+    $[88] !== verifyingElement ||
+    $[89] !== readyElement ||
+    $[90] !== errorElement ||
+    $[91] !== footerElement
   ) {
     paneElement = jsxProd_default(Pane, {
       color: "permission",
@@ -477,17 +475,17 @@ function AgentDetail(props) {
         ],
       }),
     });
-    $[82] = onKeyDown;
-    $[83] = installPromptElement;
-    $[84] = installingElement;
-    $[85] = installFailedElement;
-    $[86] = apiInstructionsElement;
-    $[87] = verifyingElement;
-    $[88] = readyElement;
-    $[89] = errorElement;
-    $[90] = footerElement;
-    $[91] = paneElement;
-  } else paneElement = $[91];
+    $[83] = onKeyDown;
+    $[84] = installPromptElement;
+    $[85] = installingElement;
+    $[86] = installFailedElement;
+    $[87] = apiInstructionsElement;
+    $[88] = verifyingElement;
+    $[89] = readyElement;
+    $[90] = errorElement;
+    $[91] = footerElement;
+    $[92] = paneElement;
+  } else paneElement = $[92];
   return paneElement;
 }
 export { AgentDetail };

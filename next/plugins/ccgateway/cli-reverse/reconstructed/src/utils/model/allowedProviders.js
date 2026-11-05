@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：生成提供商被阻止的原因与修复说明；生成环境变量覆盖被阻止的说明等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (49)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (49)
  * attribution: placement 49
  */
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../errors.js";
@@ -43,12 +43,12 @@ import { stripControlChars } from "../settings/writeQueues.js";
 import { isGatewayLoginForced } from "../auth.js";
 import { cleanForDisplay, plural } from "../stringUtils.js";
 import { API_PROVIDER_KINDS } from "../permissions/autoModeRulesPrompt.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:258220-258348 placement
+//@ chunk-exfmq47h.js:267734-267862 placement
 let ProviderNotAllowedError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:258220", () => {
+deferInit("chunk-exfmq47h.js:267734", () => {
   ProviderNotAllowedError = class ProviderNotAllowedError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -58,20 +58,20 @@ deferInit("chunk-aepeg2w5.js:258220", () => {
     }
   };
 });
-//@ chunk-aepeg2w5.js:258348-258441 placement
+//@ chunk-exfmq47h.js:267862-267955 placement
 var providerPolicyState = {
   wifProfileBaseUrlInUse: undefined,
   settleRemotePolicy: undefined,
   signInMandateRefusal: undefined,
 };
-//@ chunk-aepeg2w5.js:258441-258484 placement
+//@ chunk-exfmq47h.js:267955-267998 placement
 /**
  * 记录 WIF 配置的 base URL 是否在用。
  */
 function setWifProfileBaseUrlInUse(wifProfileBaseUrlInUse) {
   providerPolicyState.wifProfileBaseUrlInUse = wifProfileBaseUrlInUse;
 }
-//@ chunk-aepeg2w5.js:258484-258557 placement
+//@ chunk-exfmq47h.js:267998-268071 placement
 /**
  * 安装远程策略结算函数与登录强制拒绝说明。
  */
@@ -79,14 +79,14 @@ function setRemotePolicySettler(settleRemotePolicy, noteStoredLoginSurface) {
   providerPolicyState.settleRemotePolicy = settleRemotePolicy;
   if (noteStoredLoginSurface) providerPolicyState.signInMandateRefusal = noteStoredLoginSurface;
 }
-//@ chunk-aepeg2w5.js:258557-258610 placement
+//@ chunk-exfmq47h.js:268071-268124 placement
 /**
  * 等待远程策略结算完成。
  */
 async function settleRemotePolicy() {
   await providerPolicyState.settleRemotePolicy?.();
 }
-//@ chunk-aepeg2w5.js:258610-258817 placement
+//@ chunk-exfmq47h.js:268124-268278 placement
 /**
  * 远程策略限制提供商且只因端点被拒时，重新检查允许的提供商。
  */
@@ -94,11 +94,9 @@ async function recheckAllowedProviderEndpoint(model) {
   let { settings, servedSnapshot } = getRemotePolicyTierWithKind();
   if (settings?.allowedProviders === undefined || servedSnapshot || isRemoteManagedSettingsVerified()) return;
   if (hasAllowedProvidersPolicy()) return;
-  let check = checkAllowedProvider(model);
-  if (check !== undefined && check.refused.every((refusal) => refusal.reason === "endpoint"))
-    await settleRemotePolicy();
+  if (checkAllowedProvider(model) !== undefined) await settleRemotePolicy();
 }
-//@ chunk-aepeg2w5.js:258817-258986 placement
+//@ chunk-exfmq47h.js:268278-268447 placement
 /**
  * 托管设置 allowedProviders（机器与槽位取交集）。
  */
@@ -110,9 +108,9 @@ function getAllowedProviders() {
   if (allowedProviders_2 === undefined) return allowedProviders;
   return allowedProviders.filter((allowedProvider) => allowedProviders_2.includes(allowedProvider));
 }
-//@ chunk-aepeg2w5.js:258986-259038 placement
+//@ chunk-exfmq47h.js:268447-268499 placement
 var policyMachineCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:258986", () => {
+deferInit("chunk-exfmq47h.js:268447", () => {
   policyMachineCache = identity_2(
     {
       current: undefined,
@@ -122,7 +120,7 @@ deferInit("chunk-aepeg2w5.js:258986", () => {
     },
   );
 });
-//@ chunk-aepeg2w5.js:259038-259194 placement
+//@ chunk-exfmq47h.js:268499-268656 placement
 /**
  * 返回当前托管策略槽与机器级管理策略（缓存）。
  */
@@ -139,17 +137,17 @@ function getPolicySlots() {
     slot: settingsForSource,
   };
 }
-//@ chunk-aepeg2w5.js:259194-259411 placement
+//@ chunk-exfmq47h.js:268656-268873 placement
 function describePinSource() {
   return hasAllowedProvidersPolicy()
     ? "this machine's managed settings (MDM or managed-settings.json: a machine source carries an allowedProviders list, so only its env can pin here)"
     : "the same managed source that sets the list";
 }
-//@ chunk-aepeg2w5.js:259411-259480 placement
+//@ chunk-exfmq47h.js:268873-268942 placement
 function hasAllowedProvidersPolicy(machineAdminPolicyTiers = getMachineAdminPolicyTiers()) {
   return machineAdminPolicyTiers.some((tier) => tier.allowedProviders !== undefined);
 }
-//@ chunk-aepeg2w5.js:259480-259558 placement
+//@ chunk-exfmq47h.js:268942-269020 placement
 function endpointPinEntry(variable, value) {
   return value
     ? [
@@ -162,7 +160,7 @@ function endpointPinEntry(variable, value) {
       ]
     : [];
 }
-//@ chunk-aepeg2w5.js:259558-259684 placement
+//@ chunk-exfmq47h.js:269020-269146 placement
 function getFirstPartyProtocol(url) {
   try {
     let parsed = new URL(url);
@@ -172,14 +170,14 @@ function getFirstPartyProtocol(url) {
     return;
   }
 }
-//@ chunk-aepeg2w5.js:259684-259724 placement
+//@ chunk-exfmq47h.js:269146-269186 placement
 /**
  * 判断端点是否为 https。
  */
 function isHttpsEndpoint(url) {
   return getFirstPartyProtocol(url) === "https:";
 }
-//@ chunk-aepeg2w5.js:259724-259886 placement
+//@ chunk-exfmq47h.js:269186-269348 placement
 function getUnixSocketOverrides() {
   return env.ANTHROPIC_UNIX_SOCKET
     ? [
@@ -192,7 +190,7 @@ function getUnixSocketOverrides() {
       ]
     : [];
 }
-//@ chunk-aepeg2w5.js:259886-260891 placement
+//@ chunk-exfmq47h.js:269348-270353 placement
 /**
  * 列出改变 API 目标的环境变量覆盖。
  */
@@ -252,7 +250,7 @@ function providerOverrides(baseUrl, dispatch = "inference") {
     });
   return overrides;
 }
-//@ chunk-aepeg2w5.js:260891-261175 placement
+//@ chunk-exfmq47h.js:270353-270637 placement
 function getGatewayOverrides() {
   let gatewayAuth = getGatewayAuth();
   if (!gatewayAuth || isGatewayLoginUrl(gatewayAuth.url)) return [];
@@ -272,14 +270,14 @@ function getGatewayOverrides() {
     },
   ];
 }
-//@ chunk-aepeg2w5.js:261175-261230 placement
+//@ chunk-exfmq47h.js:270637-270693 placement
 /**
  * 判断给定 URL 是否就是托管策略指定的强制登录网关。
  */
 function isGatewayLoginUrl(url) {
   return sameGatewayUrl(getMachineAdminPolicyTier()?.forceLoginGatewayUrl, url);
 }
-//@ chunk-aepeg2w5.js:261230-261305 placement
+//@ chunk-exfmq47h.js:270693-270768 placement
 /**
  * 规范化后比较两个网关 URL 是否相同。
  */
@@ -291,7 +289,7 @@ function sameGatewayUrl(forceLoginGatewayUrl, url) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:261305-261443 placement
+//@ chunk-exfmq47h.js:270768-270906 placement
 function getThirdPartyEndpointOverrides(provider) {
   return providerEndpointOverrides(provider, envVarOrUndefined).map((entry) => ({
     variable: entry.variable,
@@ -300,12 +298,12 @@ function getThirdPartyEndpointOverrides(provider) {
     pinVariables: [entry.variable],
   }));
 }
-//@ chunk-aepeg2w5.js:261443-261520 placement
+//@ chunk-exfmq47h.js:270906-270983 placement
 function envVarOrUndefined(variable) {
   let value = env[variable];
   return value === undefined || value === "" || value === false ? undefined : String(value);
 }
-//@ chunk-aepeg2w5.js:261520-261679 placement
+//@ chunk-exfmq47h.js:270983-271142 placement
 function getProviderOverrides(provider, baseUrl, dispatch = "inference") {
   let unixSocketOverrides = getUnixSocketOverrides();
   switch (provider) {
@@ -317,13 +315,13 @@ function getProviderOverrides(provider, baseUrl, dispatch = "inference") {
       return [...unixSocketOverrides, ...getThirdPartyEndpointOverrides(provider)];
   }
 }
-//@ chunk-aepeg2w5.js:261679-261856 placement
+//@ chunk-exfmq47h.js:271142-271319 placement
 function isCustomEndpointOverride(override, dispatch) {
   if (override.variable === "ANTHROPIC_UNIX_SOCKET") return false;
   if (override.envKey?.startsWith("AWS_ENDPOINT_URL")) return false;
   return override.envKey !== "CLAUDE_CODE_API_BASE_URL" || dispatch === "files";
 }
-//@ chunk-aepeg2w5.js:261856-262043 placement
+//@ chunk-exfmq47h.js:271319-271506 placement
 function describeProviderIdentity(provider, baseUrl, dispatch = "inference") {
   let providerOverrides = getProviderOverrides(provider, baseUrl, dispatch);
   let isCustom =
@@ -340,7 +338,7 @@ function describeProviderIdentity(provider, baseUrl, dispatch = "inference") {
     dispatch,
   };
 }
-//@ chunk-aepeg2w5.js:262043-262218 placement
+//@ chunk-exfmq47h.js:271506-271681 placement
 function getAllowedProviderPins() {
   let settingsForSource = getSettingsForSource("policySettings");
   let verified = isRemoteManagedSettingsVerified();
@@ -355,9 +353,9 @@ function getAllowedProviderPins() {
   };
   return pins;
 }
-//@ chunk-aepeg2w5.js:262218-262270 placement
+//@ chunk-exfmq47h.js:271681-271733 placement
 var allowedProvidersDiagnosticsCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:262218", () => {
+deferInit("chunk-exfmq47h.js:271681", () => {
   allowedProvidersDiagnosticsCache = identity_2(
     {
       current: undefined,
@@ -367,7 +365,7 @@ deferInit("chunk-aepeg2w5.js:262218", () => {
     },
   );
 });
-//@ chunk-aepeg2w5.js:262270-262685 placement
+//@ chunk-exfmq47h.js:271733-272147 placement
 /**
  * allowedProviders 诊断。
  */
@@ -401,7 +399,7 @@ function allowedProvidersDiagnostic() {
     addPinValues(pins, isPlainObject_2(parentManagedSettings.env) ? parentManagedSettings.env : undefined);
   return pins;
 }
-//@ chunk-aepeg2w5.js:262685-262815 placement
+//@ chunk-exfmq47h.js:272147-272277 placement
 function addPinValues(pins, env) {
   for (let [key, value] of Object.entries(env ?? {}))
     if (typeof value === "string") {
@@ -410,7 +408,7 @@ function addPinValues(pins, env) {
       pins.set(key, values);
     }
 }
-//@ chunk-aepeg2w5.js:262815-262962 placement
+//@ chunk-exfmq47h.js:272277-272424 placement
 function isOverridePinned(override) {
   let allowedProviderPins = getAllowedProviderPins();
   if (allowedProviderPins === undefined) return false;
@@ -419,7 +417,7 @@ function isOverridePinned(override) {
     [...(allowedProviderPins.get(pinVariable) ?? [])].some(matchesValue),
   );
 }
-//@ chunk-aepeg2w5.js:262962-263371 placement
+//@ chunk-exfmq47h.js:272424-272833 placement
 /**
  * 检查当前提供商是否在 allowedProviders 中。
  */
@@ -455,17 +453,17 @@ function checkAllowedProvider(provider = getAPIProvider(), baseUrl, dispatch) {
     message: adminProviderNotes(refused, allowedProviders),
   };
 }
-//@ chunk-aepeg2w5.js:263371-263526 placement
+//@ chunk-exfmq47h.js:272833-272988 placement
 var POLICY_UNREADABLE_MESSAGE =
   "Unable to read managed policy settings, which may restrict the API providers this machine may use (allowedProviders). Contact your administrator.";
-//@ chunk-aepeg2w5.js:263526-263571 placement
+//@ chunk-exfmq47h.js:272988-273033 placement
 /**
  * 当前提供商被阻止时的消息。
  */
 function providerBlockedMessage(provider) {
   return policyUnreadableMessage() ?? checkAllowedProvider(provider)?.message;
 }
-//@ chunk-aepeg2w5.js:263571-263613 placement
+//@ chunk-exfmq47h.js:273033-273075 placement
 /**
  * 策略不可读时返回提示，否则返回 undefined。
  */
@@ -474,7 +472,7 @@ function policyUnreadableMessage() {
     ? POLICY_UNREADABLE_MESSAGE
     : undefined;
 }
-//@ chunk-aepeg2w5.js:263613-263719 placement
+//@ chunk-exfmq47h.js:273075-273181 placement
 function policyLoadFailureRefuses() {
   let now = Date.now();
   if (now - policyFailureCache.failedAt < 60000) return true;
@@ -483,9 +481,9 @@ function policyLoadFailureRefuses() {
   policyFailureCache.failedAt = refuses ? now : 0;
   return refuses;
 }
-//@ chunk-aepeg2w5.js:263719-263763 placement
+//@ chunk-exfmq47h.js:273181-273225 placement
 var policyFailureCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:263719", () => {
+deferInit("chunk-exfmq47h.js:273181", () => {
   policyFailureCache = identity_2(
     {
       failedAt: 0,
@@ -495,7 +493,7 @@ deferInit("chunk-aepeg2w5.js:263719", () => {
     },
   );
 });
-//@ chunk-aepeg2w5.js:263763-263883 placement
+//@ chunk-exfmq47h.js:273225-273345 placement
 /**
  * 提供商不被允许时抛错。
  */
@@ -505,7 +503,7 @@ function assertProviderAllowed(provider, baseUrl, dispatch = "inference") {
   let check = checkAllowedProvider(provider, baseUrl, dispatch);
   if (check !== undefined) throw new ProviderNotAllowedError(check.message);
 }
-//@ chunk-aepeg2w5.js:263883-264468 placement
+//@ chunk-exfmq47h.js:273345-273930 placement
 /**
  * 托管策略不可读时网关服务器不启动的消息。
  */
@@ -521,7 +519,7 @@ function gatewayServerBlockedMessage() {
 `);
   return;
 }
-//@ chunk-aepeg2w5.js:264468-264834 placement
+//@ chunk-exfmq47h.js:273930-274296 placement
 /**
  * 环境变量在哪些设置文件中设置。
  */
@@ -551,7 +549,7 @@ function envVarOrigin(envKey) {
     shell: !!env[envKey] && !managed && sources.length === 0,
   };
 }
-//@ chunk-aepeg2w5.js:264834-265499 placement
+//@ chunk-exfmq47h.js:274296-274961 placement
 /**
  * 各提供商的配置提示。
  */
@@ -567,7 +565,7 @@ var PROVIDER_SETUP_HINTS = {
   gateway:
     'the Cloud gateway: start claude on a machine whose policy requires the gateway sign-in (forceLoginMethod "gateway") and sign in with /login',
 };
-//@ chunk-aepeg2w5.js:265499-270845 placement
+//@ chunk-exfmq47h.js:274961-280307 placement
 /**
  * 生成提供商被阻止的原因与修复说明。
  */
@@ -727,7 +725,7 @@ function describeProviderBlock(refusal, refusedProviders) {
       : [`add "${name}" to allowedProviders to permit it.`],
   };
 }
-//@ chunk-aepeg2w5.js:270845-273085 placement
+//@ chunk-exfmq47h.js:280307-282547 placement
 /**
  * 生成环境变量覆盖被阻止的说明。
  */
@@ -782,11 +780,11 @@ function describeOverrideBlock(finding, override, allowedProviders) {
         ],
   };
 }
-//@ chunk-aepeg2w5.js:273085-273150 placement
+//@ chunk-exfmq47h.js:282547-282612 placement
 function providerDisplayName(provider) {
   return provider === "firstParty" ? "the Anthropic API" : THIRD_PARTY_PROVIDER_LABELS[provider];
 }
-//@ chunk-aepeg2w5.js:273150-273258 placement
+//@ chunk-exfmq47h.js:282612-282720 placement
 function getThirdPartyProviderInfo(provider) {
   switch (provider) {
     case "firstParty":
@@ -799,7 +797,7 @@ function getThirdPartyProviderInfo(provider) {
       };
   }
 }
-//@ chunk-aepeg2w5.js:273258-273477 placement
+//@ chunk-exfmq47h.js:282720-282939 placement
 function describeEnvSource(origin) {
   if (origin.managed) return " in your organization's managed settings";
   let sources = [
@@ -808,13 +806,13 @@ function describeEnvSource(origin) {
   ];
   return sources.length > 0 ? ` in ${sources.join(" and ")}` : "";
 }
-//@ chunk-aepeg2w5.js:273477-273592 placement
+//@ chunk-exfmq47h.js:282939-283054 placement
 function describeRemovalHint(origin) {
   return origin.files.length > 0
     ? ` (remove it from ${origin.files.join(", ")}${origin.shell ? " and your shell" : ""})`
     : "";
 }
-//@ chunk-aepeg2w5.js:273592-273689 placement
+//@ chunk-exfmq47h.js:283054-283151 placement
 function endpointHostLabel(url) {
   try {
     return url ? new URL(url).host : "a custom endpoint";
@@ -822,7 +820,7 @@ function endpointHostLabel(url) {
     return "a custom endpoint";
   }
 }
-//@ chunk-aepeg2w5.js:273689-273828 placement
+//@ chunk-exfmq47h.js:283151-283290 placement
 function describeEndpoint(url) {
   try {
     if (!url) return "a custom endpoint";
@@ -832,7 +830,7 @@ function describeEndpoint(url) {
     return "a custom endpoint";
   }
 }
-//@ chunk-aepeg2w5.js:273828-273995 placement
+//@ chunk-exfmq47h.js:283290-283457 placement
 function countAllowedProviderErrors() {
   let filtered = getPolicySettingsLoadErrors().filter(
     (error) => typeof error.path === "string" && error.path.startsWith("allowedProviders["),
@@ -845,7 +843,7 @@ function countAllowedProviderErrors() {
     }),
   };
 }
-//@ chunk-aepeg2w5.js:273995-274904 placement
+//@ chunk-exfmq47h.js:283457-284366 placement
 /**
  * 管理员 allowedProviders 配置问题提示。
  */
@@ -868,8 +866,8 @@ function adminProviderNotes(blocks, refusedProviders) {
       ...unknownEntryNotes,
     ].join(`
 `);
-  let steps = uniq(mapped.flatMap((describedBlock) => describedBlock.steps));
-  let adminNotes = uniq(mapped.flatMap((adminBlock) => adminBlock.admin));
+  let steps = normalizeCaseForComparison_2(mapped.flatMap((describedBlock) => describedBlock.steps));
+  let adminNotes = normalizeCaseForComparison_2(mapped.flatMap((adminBlock) => adminBlock.admin));
   return [
     `Your organization's managed settings allow Claude Code to use: ${refusedProviders.map(allowedProviderLabel).join(", ")}.`,
     joined,
@@ -881,18 +879,18 @@ function adminProviderNotes(blocks, refusedProviders) {
 `);
 }
 export {
+  providerBlockedMessage,
+  gatewayServerBlockedMessage,
+  ProviderNotAllowedError,
   getAllowedProviders,
   checkAllowedProvider,
   policyUnreadableMessage,
   recheckAllowedProviderEndpoint,
   setWifProfileBaseUrlInUse,
-  providerBlockedMessage,
-  gatewayServerBlockedMessage,
-  ProviderNotAllowedError,
+  assertProviderAllowed,
   setRemotePolicySettler,
   sameGatewayUrl,
   isGatewayLoginUrl,
-  assertProviderAllowed,
   getPolicySlots,
   isHttpsEndpoint,
   settleRemotePolicy,

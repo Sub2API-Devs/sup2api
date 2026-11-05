@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：模拟器 look
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (15)
  * attribution: placement 15
  */
 import { join, isAbsolute, relative, sep } from "path";
@@ -25,7 +25,7 @@ import { ensureToolResultsDir, writeToolResultFile } from "../../../utils/toolRe
 import { jsonParse } from "../../../utils/slowOperations.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-8wvtd8sr.js:160191-160482 placement
+//@ chunk-xzmy9dn4.js:162373-162664 placement
 /**
  * 查看器仿真"看一眼"的常量：python 路径、需要的技能文件、下载/look 超时与宽限、图片数/大小上限、标记/错误/提纲截断长度、停止前缀、路径长度上限、协议版本、合约版本正则、PNG 文件头。
  */
@@ -48,7 +48,7 @@ var MAX_LOOK_PATH_CHARS;
 var LOOK_FORMAT_VERSION;
 var CONTRACT_VERSION_RE;
 var buffer;
-deferInit("chunk-8wvtd8sr.js:160191", () => {
+deferInit("chunk-xzmy9dn4.js:162373", () => {
   SYSTEM_PYTHON3 = "/usr/bin/python3";
   SCRIPTS_AUTO_LOOK_PY = "scripts/auto_look.py";
   LOOK_SKILL_FILES = ["SKILL.md", "look-node.md"];
@@ -69,7 +69,7 @@ deferInit("chunk-8wvtd8sr.js:160191", () => {
   CONTRACT_VERSION_RE = /^\d{1,4}\.\d{1,4}\.\d{1,4}$/;
   buffer = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 });
-//@ chunk-8wvtd8sr.js:160482-161683 placement
+//@ chunk-xzmy9dn4.js:162664-163865 placement
 /**
  * 用 artifact 查看器仿真看一眼页面：先运行 bootstrap 脚本下载查看器（超时/失败/停止分别处理），再运行 auto_look.py look，解析输出，
  * 读取并校验每张 PNG 截图（必须在工作目录内）转成 JPEG 保存。返回 {kind:"looked", pictures, marks, errors, outline} 或 failed/stopped。
@@ -172,7 +172,7 @@ async function runEmulatorLook(target, options) {
     outline: parsed.outline,
   };
 }
-//@ chunk-8wvtd8sr.js:161683-161757 placement
+//@ chunk-xzmy9dn4.js:163865-163939 placement
 /**
  * 取第一个落在挂载目录内的路径问题。
  */
@@ -183,7 +183,7 @@ function firstInsideMountProblem(paths) {
   }
   return;
 }
-//@ chunk-8wvtd8sr.js:161757-162116 placement
+//@ chunk-xzmy9dn4.js:163939-164298 placement
 /**
  * 生成模拟器预览的命令行参数：页面模式为 --source，类型模式为 --type-files/--project/--contract；路径须为绝对路径、长度受限且无控制字符。
  */
@@ -202,7 +202,7 @@ function lookTargetArgs(target) {
     ? ["--type-files", target.typeFiles, "--project", target.project, "--contract", target.contract]
     : undefined;
 }
-//@ chunk-8wvtd8sr.js:162116-162787 placement
+//@ chunk-xzmy9dn4.js:164298-164969 placement
 /**
  * 以 -I 运行系统 python3 脚本（干净环境、无控制终端、cwd 为 /），附加超出 timeout 的宽限截止与中断；返回 {code, stdout, stderr, timedOut}。
  */
@@ -251,7 +251,7 @@ async function runPythonScript(exec, args, timeoutMs, signal, { readStderr }) {
     timedOut: errorText.timedOut === true,
   };
 }
-//@ chunk-8wvtd8sr.js:162787-162893 placement
+//@ chunk-xzmy9dn4.js:164969-165075 placement
 function stoppedReasonFromStderr(stderr) {
   let found = stderr
     .split(
@@ -262,13 +262,13 @@ function stoppedReasonFromStderr(stderr) {
     .find((line) => line.startsWith(EMULATOR_STOPPED_LINE_PREFIX));
   return found === undefined ? undefined : truncateCodePointsWithEllipsis(found, STOPPED_REASON_MAX_CHARS);
 }
-//@ chunk-8wvtd8sr.js:162893-163027 placement
+//@ chunk-xzmy9dn4.js:165075-165209 placement
 function parseWorkDir(text) {
   let line = lastNonEmptyLine(text);
   let workDir = line !== null && typeof line === "object" && "workDir" in line ? line.workDir : undefined;
   return typeof workDir === "string" && isAbsolute(workDir) ? workDir : undefined;
 }
-//@ chunk-8wvtd8sr.js:163027-163529 placement
+//@ chunk-xzmy9dn4.js:165209-165711 placement
 /**
  * 解析 look 的单行 JSON 输出：校验格式版本与字段形状（图片 1–4 张、marks/errors 数组、outline 字符串），截断各项后返回，否则返回失败原因码。
  */
@@ -305,7 +305,7 @@ function parseLookOutput(stdout) {
     outline: truncateCodePointsWithEllipsis(outline, LOOK_OUTLINE_MAX_CHARS),
   };
 }
-//@ chunk-8wvtd8sr.js:163529-164483 placement
+//@ chunk-xzmy9dn4.js:165711-166665 placement
 /**
  * 读取 look 产出的截图：必须在工作目录内（realpath 与 /proc fd 双重核对）、普通非空文件、不超过大小上限且为 PNG；返回内容或失败原因码。
  */
@@ -333,9 +333,9 @@ async function readLookPicture(picturePath, workDir) {
   let bytes;
   try {
     bytes = await open(realPicture, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-    let platform = getPlatform();
+    let handle = getPlatform();
     if (
-      (platform === "linux" || platform === "wsl") &&
+      (handle === "linux" || handle === "wsl") &&
       (await readlink(`/proc/self/fd/${bytes.fd}`)) !== realPicture
     )
       return "picture_outside_work_dir";
@@ -359,7 +359,7 @@ async function readLookPicture(picturePath, workDir) {
     await bytes?.close().catch(() => {});
   }
 }
-//@ chunk-8wvtd8sr.js:164483-164676 placement
+//@ chunk-xzmy9dn4.js:166665-166858 placement
 async function saveLookPicture(buffer, options, index) {
   try {
     let { jpeg } = await encodePreviewJpeg(buffer);
@@ -374,7 +374,7 @@ async function saveLookPicture(buffer, options, index) {
     return;
   }
 }
-//@ chunk-8wvtd8sr.js:164676-164774 placement
+//@ chunk-xzmy9dn4.js:166858-166956 placement
 /**
  * 取文本中最后一个非空行。
  */
@@ -388,7 +388,7 @@ function lastNonEmptyLine(text) {
     .find((line) => line.trim() !== "");
   return line === undefined ? null : parseJsonOrNull(line);
 }
-//@ chunk-8wvtd8sr.js:164774-164825 placement
+//@ chunk-xzmy9dn4.js:166956-167007 placement
 /**
  * 解析 JSON，失败返回 null。
  */
@@ -399,14 +399,14 @@ function parseJsonOrNull(line) {
     return null;
   }
 }
-//@ chunk-8wvtd8sr.js:164825-164899 placement
+//@ chunk-xzmy9dn4.js:167007-167081 placement
 /**
  * 判断值是否是元素全为字符串的数组。
  */
 function isStringArray(value) {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
-//@ chunk-8wvtd8sr.js:164899-164988 placement
+//@ chunk-xzmy9dn4.js:167081-167170 placement
 /**
  * 判断路径是否严格位于另一目录之下。
  */
@@ -419,7 +419,7 @@ function isStrictlyUnder(picturePath, basePath) {
     !isAbsolute(relativePath)
   );
 }
-//@ chunk-8wvtd8sr.js:164988-165072 placement
+//@ chunk-xzmy9dn4.js:167170-167254 placement
 /**
  * 按码点截断文本并在截断处加省略号。
  */

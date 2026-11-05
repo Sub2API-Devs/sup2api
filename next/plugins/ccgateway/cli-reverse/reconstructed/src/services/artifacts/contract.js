@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：获取 frame 契约与定义
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-06y4szbn.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-51jy8ztq.js (5)
  * attribution: placement 5
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -26,7 +26,7 @@ import { errorMessage } from "../../utils/errors.js";
 import { logProxyDenial } from "../../utils/sandbox/proxyDenial.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-06y4szbn.js:42449-42833 placement
+//@ chunk-51jy8ztq.js:44699-45083 placement
 /**
  * artifact 页面契约 schema（版本、能力列表、claude/core 能力与 features 映射）与读取参数。
  */
@@ -37,7 +37,7 @@ var MAX_CONTRACT_PROMPT_BYTES;
 var CONTRACT_FETCH_TIMEOUT_MS;
 var X_CONTRACT_MISSING_CAPS;
 var MAX_CONTRACT_VERSION_BYTES;
-deferInit("chunk-06y4szbn.js:42449", () => {
+deferInit("chunk-51jy8ztq.js:44699", () => {
   contractSchema = DoctorLazy(() =>
     objectSchema({
       version: stringSchema().regex(CONTRACT_VERSION_REGEX),
@@ -62,7 +62,7 @@ deferInit("chunk-06y4szbn.js:42449", () => {
   X_CONTRACT_MISSING_CAPS = "x-contract-missing-caps";
   MAX_CONTRACT_VERSION_BYTES = 16384;
 });
-//@ chunk-06y4szbn.js:42833-43730 placement
+//@ chunk-51jy8ztq.js:45083-45980 placement
 /**
  * 读取 /api/frame/contract/latest 或指定版本的 artifact 页面契约（版本与能力名），区分传输/认证/客户端策略错误。
  */
@@ -128,7 +128,7 @@ async function getFrameContract(path, options, overrides) {
     }),
   };
 }
-//@ chunk-06y4szbn.js:43730-44066 placement
+//@ chunk-51jy8ztq.js:45980-46316 placement
 async function resolveContract(request) {
   if (request.version !== undefined && !CONTRACT_VERSION_REGEX.test(request.version))
     return {
@@ -148,7 +148,7 @@ async function resolveContract(request) {
     };
   return parsed.data;
 }
-//@ chunk-06y4szbn.js:44066-44442 placement
+//@ chunk-51jy8ztq.js:46316-46692 placement
 async function fetchContractDefs(request, options, overrides) {
   if (!CONTRACT_VERSION_REGEX.test(request) || !CAPABILITY_NAME_REGEX.test(options))
     return {
@@ -169,7 +169,7 @@ async function fetchContractDefs(request, options, overrides) {
     dts: frameContract.body,
   };
 }
-//@ chunk-06y4szbn.js:44442-44928 placement
+//@ chunk-51jy8ztq.js:46692-47178 placement
 async function fetchContractPrompt(version, options) {
   if (!CONTRACT_VERSION_REGEX.test(version))
     return {

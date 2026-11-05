@@ -3,9 +3,9 @@
  *
  * bridge pointer 文件（~/.claude/projects/<目录>/bridge-pointer.json）：记录当前目录的 environment/会话以便 --continue 和崩溃恢复，读写清除、过期判定、跨 worktree 查找
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/bridgePointer.ts
- * pieces: chunk-7snpqrde.js (16)
+ * pieces: chunk-f9wdj71r.js (16)
  * attribution: facade-exports 11, layout 3, fingerprint 1, sole-consumer 1
  */
 import { join, dirname } from "path";
@@ -31,13 +31,12 @@ import { formatStorageError } from "../utils/storage/storageErrors.js";
 import { writeFileAtomic } from "../utils/atomicPublishWrite.js";
 import { getWorktreePathsPortable } from "../utils/getWorktreePathsPortable.js";
 import { isENOENT } from "../utils/errors.js";
-import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-7snpqrde.js:724-758 facade-exports
+//@ chunk-f9wdj71r.js:724-758 facade-exports
 var MAX_POINTER_WORKTREE_FANOUT = 50;
 var BRIDGE_POINTER_TTL_MS = 14400000;
 var POINTER_PERSISTED_STAMP_FRESH_MS = 604800000;
-//@ chunk-7snpqrde.js:758-833 layout
+//@ chunk-f9wdj71r.js:758-833 layout
 function hasFreshPersistedThreadSessions(ids, persistedAt, now) {
   return (
     isBridgeRcChildRestartResumeEnabled() &&
@@ -46,7 +45,7 @@ function hasFreshPersistedThreadSessions(ids, persistedAt, now) {
     isPersistedStampFresh(persistedAt, now, POINTER_PERSISTED_STAMP_FRESH_MS)
   );
 }
-//@ chunk-7snpqrde.js:833-959 facade-exports
+//@ chunk-f9wdj71r.js:833-959 facade-exports
 function freshProjectThreadSessionIds(pointer, now) {
   return hasFreshPersistedThreadSessions(
     pointer.projectThreadSessionIds,
@@ -56,7 +55,7 @@ function freshProjectThreadSessionIds(pointer, now) {
     ? pointer.projectThreadSessionIds
     : undefined;
 }
-//@ chunk-7snpqrde.js:959-1103 facade-exports
+//@ chunk-f9wdj71r.js:959-1103 facade-exports
 function freshParkedProjectThreadSessionIds(pointer, now) {
   return hasFreshPersistedThreadSessions(
     pointer.parkedProjectThreadSessionIds,
@@ -66,7 +65,7 @@ function freshParkedProjectThreadSessionIds(pointer, now) {
     ? (pointer.parkedProjectThreadSessionIds ?? [])
     : [];
 }
-//@ chunk-7snpqrde.js:1103-1207 layout
+//@ chunk-f9wdj71r.js:1103-1207 layout
 function getBridgePointerTtlMs(pointer, options, now) {
   if (
     options?.projectThreadResume &&
@@ -76,49 +75,44 @@ function getBridgePointerTtlMs(pointer, options, now) {
     return POINTER_PERSISTED_STAMP_FRESH_MS;
   return BRIDGE_POINTER_TTL_MS;
 }
-//@ chunk-7snpqrde.js:1207-1231 facade-exports
+//@ chunk-f9wdj71r.js:1207-1231 facade-exports
 var PERSISTED_SESSION_RESUME_WINDOW_MS = 900000;
 var PERSISTED_STAMP_SKEW_TOLERANCE_MS = 120000;
-//@ chunk-7snpqrde.js:1231-1273 facade-exports
+//@ chunk-f9wdj71r.js:1231-1273 facade-exports
 function isPersistedStampFresh(stampAt, now, windowMs) {
   return now - stampAt <= windowMs && stampAt - now <= PERSISTED_STAMP_SKEW_TOLERANCE_MS;
 }
-//@ chunk-7snpqrde.js:1273-1857 facade-exports (2.1.88 match: BridgePointerSchema, 0.417)
+//@ chunk-f9wdj71r.js:1273-1857 facade-exports (2.1.88 match: BridgePointerSchema, 0.416)
 /**
  * pointer schema：sessionId、environmentId、source（standalone/repl）、pid、procStart、activeSessionIds 及项目线程会话相关字段（数组上限 64）。
  */
-var MAX_POINTER_ACTIVE_SESSION_IDS; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-var safeIdSchema;
-var bridgePointerSchema;
-deferInit("chunk-7snpqrde.js:1273", () => {
-  MAX_POINTER_ACTIVE_SESSION_IDS = 64;
-  safeIdSchema = DoctorLazy(() => stringSchema().max(256).refine(isSafeBridgeId));
-  bridgePointerSchema = DoctorLazy(() =>
-    objectSchema({
-      sessionId: union([literal(""), safeIdSchema()]),
-      environmentId: safeIdSchema(),
-      source: _enum(["standalone", "repl"]),
-      pid: numberSchema().optional(),
-      procStart: stringSchema().optional(),
-      activeSessionIds: array(safeIdSchema()).max(MAX_POINTER_ACTIVE_SESSION_IDS).optional(),
-      activeSessionIdsPersistedAt: numberSchema().int().min(0).max(8640000000000000).optional(),
-      projectThreadSessionIds: array(safeIdSchema()).max(MAX_POINTER_ACTIVE_SESSION_IDS).optional(),
-      parkedProjectThreadSessionIds: array(safeIdSchema()).max(MAX_POINTER_ACTIVE_SESSION_IDS).optional(),
-      parkedProjectThreadSessionIdsPersistedAt: numberSchema().int().min(0).max(8640000000000000).optional(),
-      projectThreadSessionIdsPersistedAt: numberSchema().int().min(0).max(8640000000000000).optional(),
-    }),
-  );
-});
-//@ chunk-7snpqrde.js:1857-1914 fingerprint (2.1.88 match: getBridgePointerPath, 1)
+var MAX_POINTER_ACTIVE_SESSION_IDS = 64;
+var safeIdSchema = DoctorLazy(() => stringSchema().max(256).refine(isSafeBridgeId));
+var bridgePointerSchema = DoctorLazy(() =>
+  objectSchema({
+    sessionId: union([literal(""), safeIdSchema()]),
+    environmentId: safeIdSchema(),
+    source: _enum(["standalone", "repl"]),
+    pid: numberSchema().optional(),
+    procStart: stringSchema().optional(),
+    activeSessionIds: array(safeIdSchema()).max(MAX_POINTER_ACTIVE_SESSION_IDS).optional(),
+    activeSessionIdsPersistedAt: numberSchema().int().min(0).max(8640000000000000).optional(),
+    projectThreadSessionIds: array(safeIdSchema()).max(MAX_POINTER_ACTIVE_SESSION_IDS).optional(),
+    parkedProjectThreadSessionIds: array(safeIdSchema()).max(MAX_POINTER_ACTIVE_SESSION_IDS).optional(),
+    parkedProjectThreadSessionIdsPersistedAt: numberSchema().int().min(0).max(8640000000000000).optional(),
+    projectThreadSessionIdsPersistedAt: numberSchema().int().min(0).max(8640000000000000).optional(),
+  }),
+);
+//@ chunk-f9wdj71r.js:1857-1914 fingerprint (2.1.88 match: getBridgePointerPath, 1)
 function getBridgePointerPath(dir) {
   return join(getProjectsDir(), getProjectKey(dir), "bridge-pointer.json");
 }
-//@ chunk-7snpqrde.js:1914-1978 layout
+//@ chunk-f9wdj71r.js:1914-1978 layout
 function bridgePointerStoreKey(dir) {
   let projectKey = getProjectKey(dir);
   return isValidKeySegment(projectKey) ? STORAGE_SPACES.bridgePointer(projectKey) : null;
 }
-//@ chunk-7snpqrde.js:1978-2419 facade-exports (2.1.88 match: writeBridgePointer, 0.924)
+//@ chunk-f9wdj71r.js:1978-2419 facade-exports (2.1.88 match: writeBridgePointer, 0.923)
 async function writeBridgePointer(dir, pointer, storageV5) {
   let path = getBridgePointerPath(dir);
   let storeKey = isStorageV5Enabled() && storageV5 !== undefined ? bridgePointerStoreKey(dir) : null;
@@ -149,7 +143,7 @@ async function writeBridgePointer(dir, pointer, storageV5) {
     return false;
   }
 }
-//@ chunk-7snpqrde.js:2419-2487 facade-exports
+//@ chunk-f9wdj71r.js:2419-2487 facade-exports
 /**
  * 串行化 pointer 写入的队列。
  */
@@ -160,7 +154,7 @@ function createBridgePointerWriteQueue() {
     return resolved;
   };
 }
-//@ chunk-7snpqrde.js:2487-3097 facade-exports (2.1.88 match: readBridgePointer, 0.564)
+//@ chunk-f9wdj71r.js:2487-3097 facade-exports (2.1.88 match: readBridgePointer, 0.564)
 /**
  * 读 pointer：schema 不符或 mtime 超过保留期（按 source/项目线程计算）时清除并返回 null；返回值附 ageMs。
  */
@@ -203,7 +197,7 @@ async function readBridgePointer(dir, options, storageV5) {
     ageMs,
   };
 }
-//@ chunk-7snpqrde.js:3097-3639 facade-exports (2.1.88 match: readBridgePointerAcrossWorktrees, 1)
+//@ chunk-f9wdj71r.js:3097-3639 facade-exports (2.1.88 match: readBridgePointerAcrossWorktrees, 1)
 async function readBridgePointerAcrossWorktrees(dir, storageV5, options) {
   let here = await readBridgePointer(dir, options, storageV5);
   if (here)
@@ -241,7 +235,7 @@ async function readBridgePointerAcrossWorktrees(dir, storageV5, options) {
     );
   return freshest;
 }
-//@ chunk-7snpqrde.js:3639-3994 facade-exports (2.1.88 match: clearBridgePointer, 0.859)
+//@ chunk-f9wdj71r.js:3639-3994 facade-exports (2.1.88 match: clearBridgePointer, 0.86)
 async function clearBridgePointer(dir, storageV5) {
   let path = getBridgePointerPath(dir);
   let storeKey = storageV5 ? bridgePointerStoreKey(dir) : null;
@@ -265,7 +259,7 @@ async function clearBridgePointer(dir, storageV5) {
       });
   }
 }
-//@ chunk-7snpqrde.js:3994-4044 sole-consumer
+//@ chunk-f9wdj71r.js:3994-4044 sole-consumer
 function parseBridgePointerJson(text) {
   try {
     return jsonParse(text);

@@ -1,6 +1,7 @@
 # bootstrap 领域手册：启动、命令行、全局状态、安装与退出
 
-> 适用版本：Claude Code 2.1.316（Bun 1.4.4 单文件构建，BUILD_TIME 2026-10-30T23:28:13Z，GIT_SHA cd7ceb459c…）。
+> 适用版本：Claude Code 2.1.318（Bun 1.4.4 单文件构建，BUILD_TIME 2026-11-03T18:52:53Z，GIT_SHA ca1fa9dea6…）。
+> 2026-11-05 升级到 2.1.318：本篇写于 2.1.316，代码引用（声明 id、路径、名字）已按 2.1.318 阅读树逐条校验，行为描述没有逐条重新核对；316 → 318 的变化见 [`research/versions/CLAUDE-CODE-2.1.318-CHANGES.md`](../../research/versions/CLAUDE-CODE-2.1.318-CHANGES.md)。
 > 依据：`original/` 代码。文中 `chunk-xxxx#名` 是声明 id（压缩名），括号里是本领域给的语义名（`naming/semantic-bootstrap.jsonl`）。重组路径以 `reconstructed/src/<模块路径>` 为准。
 
 ## 1. 概述
@@ -29,15 +30,15 @@ bootstrap 领域负责从进程启动到“开始一轮对话”之前的全部�
 | 模块 | 关键声明 |
 |---|---|
 | `cli.js`（入口，未切分；应归 `entrypoints/cli.tsx`） | `#qe` cliMain、`#fe` hasOnlyDebugFlags、`#me` checkCwdReadable、`#he` hasDesktopFlag、`#Je` extractDispatchDefaults |
-| `main.tsx` | `chunk-shkzs7rp.js#Gu` main、`#Ln` applyClientTypeAndEarlySettings、`#fi` run、`#_i` runInteractiveSession、`#Si` runOnboardingAndSetupScreens；`chunk-cjydagjy.js#Lks` buildCliProgram（commander 树）、`#ro` runPreparedHeadless、`#ao` runAllMigrations、`#$t` runMigrations；`chunk-3wek6r2k.js#KSo` prepareSession |
-| `setup.ts` | `chunk-fhdzwff4.js#Nt` setup |
-| `entrypoints/init.ts` | `chunk-vbtpanx5.js#GEo` init（memoize 包装）、`#Q` initImpl |
-| `replLauncher.tsx`（写作时在 `_unattributed`，现已归入本文件） | `launchSessionRepl`（`chunk-19arrzdw.js#aLt`）、`launchRepl`（`#MLi`）：launchRepl，渲染 AppRoot + REPL |
-| `cli/print.ts` | `chunk-tyg7f3ek.js#e8e` runHeadless、`#$z` 流式主循环（导出名 `_runHeadlessStreamingForTesting`） |
-| `cli/structuredIO.ts` | `chunk-na0b3c5q.js#NTe` StructuredIO 类 |
-| `cli/remoteIO.ts` | `chunk-z4g2ta8k.js#Q$` RemoteIO 类 |
-| `utils/gracefulShutdown.ts` | `chunk-e6aww6q8.js#X9s` ShutdownCoordinator、`#er` gracefulShutdown、`#hi` gracefulShutdownSync、`#dzo` setupGracefulShutdown |
-| `bootstrap/state.ts` | `chunk-ndmse9kj.js#t` currentSession、`#y` defaultRootSession、`#ze` buildSessionObject、`#Oe` HostState、`#tt` SessionScoped、`#W` HostScoped，外加约 430 个访问器 |
+| `main.tsx` | `chunk-nhaxap13.js#um` main、`#qn` applyClientTypeAndEarlySettings、`#Rr` run、`#br` runInteractiveSession、`#Dr` runOnboardingAndSetupScreens；`chunk-h61dq9nz.js#F1s` buildCliProgram（commander 树）、`#ao` runPreparedHeadless、`#mo` runAllMigrations、`#Jt` runMigrations；`chunk-hjswk319.js#QLo` prepareSession |
+| `setup.ts` | `chunk-ag1kt2k5.js#Lt` setup |
+| `entrypoints/init.ts` | `chunk-fxk1e28j.js#dNo` init（memoize 包装）、`#Q` initImpl |
+| `replLauncher.tsx`（写作时在 `_unattributed`，现已归入本文件） | `launchSessionRepl`（`chunk-pfe3pddp.js#MBt`）、`launchRepl`（`chunk-pfe3pddp.js#h9i`）：launchRepl，渲染 AppRoot + REPL |
+| `cli/print.ts` | `chunk-0yw3taqg.js#bot` runHeadless、`#$Y` 流式主循环（导出名 `_runHeadlessStreamingForTesting`） |
+| `cli/structuredIO.ts` | `chunk-1m58gz0q.js#Yxe` StructuredIO 类 |
+| `cli/remoteIO.ts` | `chunk-1kk50rk6.js#FU` RemoteIO 类 |
+| `utils/gracefulShutdown.ts` | `chunk-5xgkngpb.js#Hhi` ShutdownCoordinator、`#er` gracefulShutdown、`#ea` gracefulShutdownSync、`#$Zo` setupGracefulShutdown |
+| `bootstrap/state.ts` | `chunk-5ythzcas.js#t` currentSession、`#y` defaultRootSession、`#Ye` buildSessionObject、`#Ie` HostState、`chunk-r4yj9pae.js#Je` SessionScoped、`#W` HostScoped，外加约 430 个访问器 |
 
 ## 3. 启动序列
 
@@ -70,12 +71,12 @@ cli.js 顶层
 `#qe`（cliMain）依次检查下列条件，命中就直接处理并返回，不加载主模块：
 
 1. **代理令牌守卫**：设置了 `CCR_AGENT_PROXY_TOKEN_FILE_DESCRIPTOR` 却没有 `--session-tunnel` 时拒绝。
-2. **`--gh-standin`**：gh 替身模式（`parseGhStandinArgs`（`chunk-6p9kc8f6.js#Ibi`））。
+2. **`--gh-standin`**：gh 替身模式（`parseGhStandinArgs`（`chunk-pnaj1q5d.js#NUi`））。
 3. **`--runner-declares=`**：记下 runner 声明，之后由 adoptRunnerDeclaration 采用。
-4. **`--handle-uri`**：先校验参数（`validateHandleUriArgs`（`chunk-9vb6sa16.js#Jur`））。
+4. **`--handle-uri`**：先校验参数（`validateHandleUriArgs`（`chunk-23jq4b96.js#xkr`））。
 5. **`CLAUDE_CODE_REMOTE_SESSION_ORIGIN`=`review`**：守卫检查。
 6. **启动调优**：noteProcessStartTuning、startGarbageCollectionCount，并安装 argv 读取器。
-7. **`--version`/`-v`/`-V`**：打印 `2.1.316 (Claude Code)`；加 `--verbose` 时再打 Commit SHA 和构建时间。实测只读 11 个环境变量（verify.md 7.1）。
+7. **`--version`/`-v`/`-V`**：打印 `2.1.318 (Claude Code)`；加 `--verbose` 时再打 Commit SHA 和构建时间。实测只读 11 个环境变量（verify.md 7.1）。
 8. **cwd 与早期设置**：
    - 检查 cwd 可读（`#me`），然后 adoptRunnerDeclaration，打点 `profileCheckpoint("cli_entry")`。
    - `CLAUDE_CODE_HOVER_REST` 存在时调用 pinStorageV5FromEnv（受 `tengu_hover_rest` 控制）。
@@ -85,7 +86,7 @@ cli.js 顶层
    - `--claude-in-chrome-mcp`、`--chrome-native-host`。
    - `--daemon-worker`、`--bg-pty-host`、`--bg-spare`、`--preload`。
 10. **远程控制**：`remote-control` / `rc` / `remote` / `sync` / `bridge`。
-11. **`daemon`**：参数由 `getDaemonArgs`（`chunk-spfbd54s.js#Tbi`） 解析。
+11. **`daemon`**：参数由 `getDaemonArgs`（`chunk-svdpxfd7.js#IUi`） 解析。
 12. **后台会话动词**：`attach` / `logs` / `stop`(`kill`) / `respawn` / `rm`，以及 `--bg` / `--background`。由 fleet 开关和 `tengu_sable_orrery` 控制。
 13. **agents 视图**：`claude agents …`，参数由 `WRt` parseAgentsViewArgs 解析，进入 mountFleetViewWithComposerBack，受 `tengu_noble_wozniak` 控制。
 14. **`self-hosted-runner`**：子命令 orchestrator / setup / doctor / code-sign / decode-token。
@@ -99,7 +100,7 @@ cli.js 顶层
 
 `#fe`（hasOnlyDebugFlags）判断 argv 是否只含调试标志。2.1.88 的 isDebugToStdErr 是误配。
 
-### 3.3 init()（`entrypoints/init.ts`，chunk-vbtpanx5#GEo / #Q）
+### 3.3 init()（`entrypoints/init.ts`，chunk-fxk1e28j.js#dNo / #Q）
 
 init 是 memoize 包装，同一进程只执行一次。步骤如下：
 
@@ -111,13 +112,13 @@ init 是 memoize 包装，同一进程只执行一次。步骤如下：
    - 初始化 1P 事件日志；
    - `configureGlobalMTLS()`，再 `configureGlobalAgents()`（代理）。
 5. 预取托管配置，`preconnectAnthropicApi()` 预建 TLS 连接。
-6. `CLAUDE_CODE_REMOTE` 为真时调用 `initAgentProxy()`（`upstreamproxy/upstreamproxy.ts`，`chunk-awy329vy.js#yGi`），设置 `HTTPS_PROXY`、`NO_PROXY`、CA 包和 gh 替身。
+6. `CLAUDE_CODE_REMOTE` 为真时调用 `initAgentProxy()`（`upstreamproxy/upstreamproxy.ts`，`chunk-9knfmvrf.js#vsa`），设置 `HTTPS_PROXY`、`NO_PROXY`、CA 包和 gh 替身。
 7. Windows 上检查 shell，准备 scratchpad 目录。
 8. 错误处理：遇到 `ConfigParseError` 时，交互模式显示 InvalidConfig 对话框，非交互模式打印错误后退出。
 
 第一方模式下，启动时会访问 `/api/claude_code/policy_limits` 和 `/api/claude_code/settings`，各 1 次，失败后再按指数退避重试 5 次（见 verify.md 7.2）。
 
-### 3.4 setup()（`setup.ts`，chunk-fhdzwff4#Nt）
+### 3.4 setup()（`setup.ts`，chunk-ag1kt2k5.js#Lt）
 
 按顺序执行：
 
@@ -128,7 +129,7 @@ init 是 memoize 包装，同一进程只执行一次。步骤如下：
 5. 恢复 iTerm2 / Terminal.app 的终端设置备份。
 6. chdir 到工作目录；对钩子配置做快照（防止会话中途被篡改）；启动文件监视。
 7. 处理 `--worktree`（可选创建 tmux 会话）。
-8. `lockCurrentVersion`（`chunk-zw17mz74.js#bCe`，原生安装的 PID 锁），然后预取插件钩子。
+8. `lockCurrentVersion`（`chunk-e5z7dpjd.js#DIe`，原生安装的 PID 锁），然后预取插件钩子。
 9. 发送 `tengu_started` 事件。
 
 ### 3.5 交互与 print 的分叉
@@ -144,15 +145,15 @@ init 是 memoize 包装，同一进程只执行一次。步骤如下：
   - 依次显示引导/信任/API key 确认等设置屏（`Si`，以及 `interactiveHelpers.tsx` 的 showSetupScreens/setupSteps）。
   - 处理 `--continue` / `--resume` / `--teleport` / `--from-pr`。
   - 调用 launchRepl，渲染 `<AppRoot><REPL/></AppRoot>`。
-  - 托管设置未就绪时显示 “Loading your organization's managed settings…”（`chunk-7fw14qgv.js#Kji`）。
+  - 托管设置未就绪时显示 “Loading your organization's managed settings…”（`chunk-yq5f910z.js#zra`）。
 - **headless 模式**（`ro` → `e8e`）：
   - 校验 `--output-format` / `--input-format` 的组合。
-  - 等待显式 `--mcp-config` 服务器（`t8e`）。
+  - 等待显式 `--mcp-config` 服务器（`explicitMcpConfigRequestsWait`（`chunk-0yw3taqg.js#Tot`））。
   - 用 `--agent` 选择主线程代理（`dU`）。
   - 建立 StructuredIO 或 RemoteIO，进入流式主循环 `$z`。
   - 结束时写入 result，并退出（见第 5 节）。
 
-## 4. commander 命令树（chunk-cjydagjy#Lks buildCliProgram）
+## 4. commander 命令树（chunk-h61dq9nz.js#F1s buildCliProgram）
 
 根命令有 133 个选项，类别和例子如下：
 
@@ -194,7 +195,7 @@ init 是 memoize 包装，同一进程只执行一次。步骤如下：
   - `purge`，以及旧名 `project purge`（隐藏）。
 - **内部（隐藏）**：
   - `gateway`、`edit-hook`；
-  - `edit-permission-rules`、`edit-memory-settings`、`edit-skill-overrides`、`edit-sandbox-settings`、`design-login`、`edit-chrome-settings`、`drop-worktree-registrations`（定义在 `chunk-bm6cnxej.js#Myo`）；
+  - `edit-permission-rules`、`edit-memory-settings`、`edit-skill-overrides`、`edit-sandbox-settings`、`design-login`、`edit-chrome-settings`、`drop-worktree-registrations`（定义在 `chunk-jxaw0ykc.js#_Do`）；
   - `APPLY_PROJECT_SETTINGS`。
 - **只出现在 help 里的动词**：后台动词 attach / logs / stop(kill) / respawn / rm 在 help 里列出，实际由 cli.js 快速路径执行。
 
@@ -210,7 +211,7 @@ init 是 memoize 包装，同一进程只执行一次。步骤如下：
 
 主要消息类型：
 
-- **`system/init`**（构造在 `chunk-gr407tas`），字段：
+- **`system/init`**（构造在 `chunk-cy40qdce`），字段：
   - `cwd`、`session_id`、`tools`、`mcp_servers`（元素 `{name, status, source?}`）、`model`、`permissionMode`；
   - `slash_commands`、`terminal_slash_commands`（可选）、`apiKeySource`、`betas`；
   - `claude_code_version`、`output_style`、`agents`、`skills`、`plugins`、插件错误。
@@ -228,7 +229,7 @@ init 是 memoize 包装，同一进程只执行一次。步骤如下：
   - 以及 result 文本或结构化输出。
 - **`control_request` / `control_response`**：双向控制协议。
 
-### 5.2 输入（StructuredIO，chunk-na0b3c5q#NTe）
+### 5.2 输入（StructuredIO，chunk-1m58gz0q.js#Yxe）
 
 `--input-format stream-json` 时逐行读取 stdin。`processLine` 按 `type` 分派：
 
@@ -238,7 +239,7 @@ init 是 memoize 包装，同一进程只执行一次。步骤如下：
 - `control_request`：交给 print 的处理器。
 - `user` / `assistant` / `system`：作为输入消息排队。
 
-CLI 也会主动向宿主发 `control_request`，见 5.3。`--sdk-url` 时换成 RemoteIO（chunk-z4g2ta8k#Q$）：
+CLI 也会主动向宿主发 `control_request`，见 5.3。`--sdk-url` 时换成 RemoteIO（chunk-1kk50rk6.js#FU）：
 
 - 传输由 transportUtils 按 URL 选择：WebSocket，或 Hybrid（SSE 收 + POST 发）。
 - 云会话下另有 CCRClient 处理注册、心跳和事件上报，WorkerStateUploader 上传 worker 状态。
@@ -262,7 +263,7 @@ CLI 也会主动向宿主发 `control_request`，见 5.3。`--sdk-url` 时换成
 | 反馈 | submit_feedback、submit_survey_feedback、message_rated、side_question、ultrareview_launch |
 | 设备 | register_device_hooks、upload_device_hook_template、remote_tools_announce |
 
-云端会话还有一张路由表 `chunk-3wek6r2k.js#yc`，对每个子类型决定 forward / local / reject。表里还有：
+云端会话还有一张路由表 `chunk-hjswk319.js#bc`，对每个子类型决定 forward / local / reject。表里还有：
 
 - 2.1.88 原有的 set_max_thinking_tokens、mcp_toggle、mcp_reconnect、get_context_usage、stop_task、generate_session_title；
 - get_session_cost、list_models、get_usage、get_binary_version、background_tasks、get_task_output、send_task_message、rename_session、set_color、mcp_read_resource 等。
@@ -280,15 +281,15 @@ CLI 也会主动向宿主发 `control_request`，见 5.3。`--sdk-url` 时换成
 
 信号退出时的退出码由 ShutdownCoordinator 决定（见第 9 节）。
 
-## 6. 全局状态 bootstrap/state.ts（chunk-ndmse9kj）
+## 6. 全局状态 bootstrap/state.ts（chunk-5ythzcas）
 
 ### 6.1 结构
 
 2.1.88 的 state.ts 是一个大 `STATE` 对象。316 改成两层：
 
 - **会话层**：
-  - `currentSession()`（`#t`）先看 AsyncLocalStorage 覆盖（子代理/teammate 通过 `setSessionOverridesGetter`（`chunk-ndmse9kj.js#mYi`）注入取值函数），没有覆盖就返回 `defaultRootSession`（`#y`）。
-  - 会话对象由 `forkSessionWithProject`（`chunk-ndmse9kj.js#ze`）构造。根会话与 fork（withProject）共享各子存储。
+  - `currentSession()`（`#t`）先看 AsyncLocalStorage 覆盖（子代理/teammate 通过 `setSessionOverridesGetter`（`chunk-5ythzcas.js#lpa`）注入取值函数），没有覆盖就返回 `defaultRootSession`（`#y`）。
+  - 会话对象由 `forkSessionWithProject`（`chunk-5ythzcas.js#Ye`）构造。根会话与 fork（withProject）共享各子存储。
   - `SessionScoped`（`#tt`）是以 `session.root` 为键的 WeakMap 槽位。
 - **进程层**：`HostState`（`#Oe`）持有 13 个进程级存储；`HostScoped`（`#W`）是进程级单例槽位，`ds` 用来取值。
 
@@ -302,7 +303,7 @@ CLI 也会主动向宿主发 `control_request`，见 5.3。`--sdk-url` 时换成
 
 | 存储 | 类 | 主要内容 |
 |---|---|---|
-| costLedger | `j` | totalCostUSD、API/工具时长、行数增减、modelUsage、safetyStops；费用保存/恢复（`registerSessionCostSaver`、`setCostStateForRestore`、`resetCostState`：`chunk-ndmse9kj.js#YSs`、`chunk-ndmse9kj.js#tws`、`chunk-ndmse9kj.js#Pft`） |
+| costLedger | `j` | totalCostUSD、API/工具时长、行数增减、modelUsage、safetyStops；费用保存/恢复（`registerSessionCostSaver`、`setCostStateForRestore`、`resetCostState`：`chunk-5ythzcas.js#M$s`、`chunk-5ythzcas.js#F$s`、`chunk-5ythzcas.js#pbt`） |
 | requestJournal | `z` | lastAPIRequest、lastAPIRequestMessages、promptId/promptIndex、分类器请求、压缩前响应 |
 | sessionFlags | `Z` | 本会话一次性标志：引导/LSP 推荐已显示、信任已接受、退出计划模式附件等（66 个方法） |
 | sessionScratch | `ee` | planSlug 缓存、vim 状态、代理颜色、本会话创建的团队/窗格、待处理分支链接 |
@@ -317,7 +318,7 @@ CLI 也会主动向宿主发 `control_request`，见 5.3。`--sdk-url` 时换成
 | identity | `ie` | mainAgentId、projectDir |
 | 其他 | | conversationLatches（`U`，粘性 beta、ATIS 锁存）、precompute（`oe`）、btwHistory（`he`）、pendingHint（`ge`）、writePermissionStash（`me`）、outsideReadPrompt（`se`）、pluginsSync（`de`）、promptSuggestion（`ue`）、sessionRefsGate（`ce`）、workflowUsageConsent（`ae`）、usageCreditsOnlyModelConsentSlots（`q`）、engineStore（`re`）、ccrRecap（`le`）、autonomousLoopPreamble（`pe`）、observers（`D`） |
 
-会话的 `project` 字段包含 originalCwd、projectRoot、cwd。三者分别由 `setOriginalCwd`（`chunk-ndmse9kj.js#nM`）、`setProjectRoot`（`chunk-ndmse9kj.js#jMe`）、`setCwdState`（`chunk-ndmse9kj.js#Tft`） 修改，`setSessionProject`（`chunk-ndmse9kj.js#pLn`）一次合并修改。读取 `getCwdState`（`chunk-ndmse9kj.js#dT`） 时如果没有 project，抛出 NoProjectDirectoryError。
+会话的 `project` 字段包含 originalCwd、projectRoot、cwd。三者分别由 `setOriginalCwd`（`chunk-5ythzcas.js#BD`）、`setProjectRoot`（`chunk-5ythzcas.js#INe`）、`setCwdState`（`chunk-5ythzcas.js#lbt`） 修改，`setSessionProject`（`chunk-5ythzcas.js#rGn`）一次合并修改。读取 `getCwdState`（`chunk-5ythzcas.js#wA`） 时如果没有 project，抛出 NoProjectDirectoryError。
 
 ### 6.3 进程级存储（HostState）
 
@@ -339,12 +340,12 @@ CLI 也会主动向宿主发 `control_request`，见 5.3。`--sdk-url` 时换成
 
 ## 7. 配置迁移
 
-迁移版本 `CURRENT_MIGRATION_VERSION`（`chunk-cjydagjy.js#Ne`）为 **14**，2.1.88 为 11。
+迁移版本 `CURRENT_MIGRATION_VERSION`（`chunk-h61dq9nz.js#Ue`）为 **14**，2.1.88 为 11。
 
 `runMigrations`（`#$t`）的规则：
 
 - 全局配置 `migrationVersion` 已等于 14 时直接返回。
-- `CLAUDE_CODE_CCR_SKIP_FRESH_MIGRATIONS` 为真、在 CCR 中、且配置是全新的（`shouldSkipFreshMigrations`（`chunk-cjydagjy.js#xo`））时，直接写入版本 14 和各完成标记，不跑迁移。
+- `CLAUDE_CODE_CCR_SKIP_FRESH_MIGRATIONS` 为真、在 CCR 中、且配置是全新的（`shouldSkipFreshMigrations`（`chunk-h61dq9nz.js#Vo`））时，直接写入版本 14 和各完成标记，不跑迁移。
 - 其余情况按下列顺序执行。任何一个写设置的迁移失败，就跳过版本号更新（日志写 “Skipping migrationVersion bump…”），下次启动整组重跑。
 
 | 顺序 | 迁移 | 说明 |
@@ -381,28 +382,28 @@ CLI 也会主动向宿主发 `control_request`，见 5.3。`--sdk-url` 时换成
 
 - **native**：原生安装器（`utils/nativeInstaller/*`）。
   - 下载源是 `https://downloads.claude.ai/claude-code-releases`，读清单（`manifest.zst.json`），校验 sha256 和签名。
-  - 版本解析见 `chunk-zw17mz74.js#L6n`，会拒绝 99.99.* 测试版本。
+  - 版本解析见 `chunk-e5z7dpjd.js#Err`，会拒绝 99.99.* 测试版本。
   - 下载 120 秒无数据就超时（`$un`）。
   - 先写到 staging，再校验（`Fun`），之后切换启动器符号链接并清理旧版本。
   - 运行中的版本由 `pidLock.ts` 的 PID 锁保护。
   - 迁移到原生安装后，会卸载全局 npm 包（`cleanupNpmInstallations`），并删除 shell 配置里的 alias（`cleanupShellAliases`）。
 - **npm-global / npm-local**：
   - 用 `npm view @anthropic-ai/claude-code@stable|latest` 查版本，再 `npm install -g`；
-  - 先检查全局前缀是否可写（`checkGlobalInstallPermissions`，`chunk-6zvphrsz.js#VKs`）。
+  - 先检查全局前缀是否可写（`checkGlobalInstallPermissions`，`chunk-wzyv38y8.js#Eii`）。
 - **package-manager**：只提示用户用对应的包管理器升级。
 
 ### 8.2 自动更新（utils/autoUpdater.ts）
 
-- **节流**：5 分钟内检查过就跳过（`isAutoUpdateCheckThrottled`，`chunk-6zvphrsz.js#Lbt`）。锁文件是 `~/.claude/.update.lock`，5 分钟过期。
-- **版本上限**：GrowthBook `tengu_max_version_config`，读 `external` 和 `external_message` 字段。当前版本高于上限时强制降级（`getMaxVersion`、`set`、`getMaxVersionMessage`：`chunk-6zvphrsz.js#B6n`、`chunk-6zvphrsz.js#KKs`）。
+- **节流**：5 分钟内检查过就跳过（`isAutoUpdateCheckThrottled`，`chunk-wzyv38y8.js#hAt`）。锁文件是 `~/.claude/.update.lock`，5 分钟过期。
+- **版本上限**：GrowthBook `tengu_max_version_config`，读 `external` 和 `external_message` 字段。当前版本高于上限时强制降级（`getMaxVersion`、`set`、`getMaxVersionMessage`：`chunk-wzyv38y8.js#xrr`、`chunk-wzyv38y8.js#wii`）。
 - **canary 通道**：`tengu_canary`。
-- **跳过版本**：`shouldSkipVersion`（`chunk-6zvphrsz.js#iet`）。
+- **跳过版本**：`shouldSkipVersion`（`chunk-wzyv38y8.js#Tit`）。
 - **关闭**：设置 `DISABLE_AUTOUPDATER`，或设置文件中 `autoUpdates=false`（旧值由迁移 1 转换）。
 - **doctor**（`utils/doctorDiagnostic.ts`）检查：安装类型、多重安装、PATH 与别名、ripgrep、自动更新权限、包管理器，以及上下文警告（`utils/doctorContextWarnings.ts`）。
 
 ## 9. 优雅退出与清理
 
-### 9.1 ShutdownCoordinator（chunk-e6aww6q8#X9s）
+### 9.1 ShutdownCoordinator（chunk-5xgkngpb.js#Hhi）
 
 - **`install()`**（由 setupGracefulShutdown 调用）注册以下处理器：
   - SIGINT、SIGTERM、SIGHUP；
@@ -415,17 +416,17 @@ CLI 也会主动向宿主发 `control_request`，见 5.3。`--sdk-url` 时换成
   5. 刷出分析事件与 1P 日志，等待 OAuth 写盘。
   6. 排空 stdout：预算从 2 秒起，按积压字节最多 30 秒（`utils/process.ts` 的 `lco`、`aco`）。
   7. forceExit，并设置失效保险定时器，防止进程挂住。
-- **导出函数**：`gracefulShutdown`（`er`，异步）、`gracefulShutdownSync`（`hi`，触发后立即返回）、`setupGracefulShutdown`（`chunk-e6aww6q8.js#dzo`）。2.1.88 的 shutdown1PEventLogging 是误配。
+- **导出函数**：`gracefulShutdown`（`er`，异步）、`gracefulShutdownSync`（`hi`，触发后立即返回）、`setupGracefulShutdown`（`chunk-5xgkngpb.js#$Zo`）。2.1.88 的 shutdown1PEventLogging 是误配。
 
-`utils/process.ts` 负责处理 stdout/stderr 断管（EPIPE/EIO），出错时销毁流而不让进程崩溃（`handleStreamGoneErrors`、`registerProcessIOErrorHandlers`、`handleEPIPE`：`chunk-j3nx1xyn.js#dke`、`chunk-j3nx1xyn.js#Abs`、`chunk-24t3dkzb.js#KUn`），并统计丢弃的 stderr 消息数。
+`utils/process.ts` 负责处理 stdout/stderr 断管（EPIPE/EIO），出错时销毁流而不让进程崩溃（`handleStreamGoneErrors`、`registerProcessIOErrorHandlers`、`handleEPIPE`：`chunk-ndcj3jv5.js#mRe`、`chunk-ndcj3jv5.js#lNs`、`chunk-xd1cb3xs.js#tYn`），并统计丢弃的 stderr 消息数。
 
 `cli/exit.ts` 提供两个出口：`cliError`（`hn`，打印后退出 1）和 `cliOk`（打印后退出 0）。
 
 ### 9.2 清理（utils/cleanup.ts）
 
 - **按保留期清理**：后台按 `cleanupPeriodDays`（默认 30）清理过期的会话记录、日志、粘贴/图片缓存、文件历史、旧原生版本等。
-- **节流标记**：用 `~/.claude/.last-cleanup` 节流；该标记异常时修复，并上报 `tengu_cleanup_throttle_marker`（`healRefusedSentinelLeaf`，`chunk-23fm9f0d.js#XOo`）。
-- **staging 标记**：每个进程删除一次过期 1 天的 staging 标记（`.npm-cache-cleanup`、`.version-cleanup` 等，`reapStaleHousekeepingStagingFiles`，`chunk-23fm9f0d.js#JOo`）。
+- **节流标记**：用 `~/.claude/.last-cleanup` 节流；该标记异常时修复，并上报 `tengu_cleanup_throttle_marker`（`healRefusedSentinelLeaf`，`chunk-pc3x100t.js#C2o`）。
+- **staging 标记**：每个进程删除一次过期 1 天的 staging 标记（`.npm-cache-cleanup`、`.version-cleanup` 等，`reapStaleHousekeepingStagingFiles`，`chunk-pc3x100t.js#R2o`）。
 - **并发**：后台清理由 HostState.backgroundHousekeeping 认领，同一进程只执行一次。
 
 ## 10. 上游代理（upstreamproxy/）
@@ -433,8 +434,8 @@ CLI 也会主动向宿主发 `control_request`，见 5.3。`--sdk-url` 时换成
 CCR 云容器里，代理令牌通过文件描述符传入（`CCR_AGENT_PROXY_TOKEN_FILE_DESCRIPTOR`）。`initAgentProxy` 的步骤：
 
 1. 在本地启动中继（`relay.ts`），把 CONNECT 隧道经 WebSocket 转发到 CCR 代理。
-2. 设置 `HTTPS_PROXY`/`HTTP_PROXY`/`NO_PROXY`，写出合并后的 CA 包（系统 CA 来自 `findSystemCaBundle`（`chunk-awy329vy.js#JLs`），再加 CCR CA）。
-3. 准备 gh 替身目录（`getGhStandinDir`，`chunk-awy329vy.js#SGi`），供子进程 `gh` 走代理认证。
+2. 设置 `HTTPS_PROXY`/`HTTP_PROXY`/`NO_PROXY`，写出合并后的 CA 包（系统 CA 来自 `findSystemCaBundle`（`chunk-9knfmvrf.js#S6s`），再加 CCR CA）。
+3. 准备 gh 替身目录（`getGhStandinDir`，`chunk-9knfmvrf.js#Asa`），供子进程 `gh` 走代理认证。
 
 另有 `CCR_AGENT_PROXY_RELAY_MODE` 独立中继模式，由 init 的第 2 步进入。
 
@@ -486,18 +487,18 @@ CCR 云容器里，代理令牌通过文件描述符传入（`CCR_AGENT_PROXY_TO
 
 ## 13. 未解之处
 
-- `chunk-aepeg2w5.js#GY`、`#Xg`、`#$Y`，以及 `chunk-z4g2ta8k.js#uo` 中的 Xn、Qn、co 与 `chunk-z4g2ta8k.js#mo` 中的 _o（均在 `cli/remoteIO.ts`）：多声明符 var，未命名，含义不确定。
-- `chunk-19arrzdw.js#aLt`/`#MLi`（replLauncher）写作时不在本领域模块清单里（在 `_unattributed`），只作了说明，没有命名；现为 `replLauncher.ts` 的 `launchSessionRepl`/`launchRepl`。
-- `chunk-x4gcvpxy.js#dOs`：被归到 nativeInstaller；2.1.88 的名字 detectHomebrew 不符，实际行为与 macOS 后台进程路径/TCC 有关，待 agents 或 bridge 领域确认。
-- `chunk-21ppfwx8.js#Eii`：下载插件归档，被误归到 nativeInstaller/download.ts。
-- `chunk-aepeg2w5.js#exn`、`#ras`：Chrome MCP 与 MCP 配置校验，被归到 print.ts，可疑。
+- `chunk-1kk50rk6.js#rr`（`CONTROL_SUBTYPE_TO_CAPABILITY`、`CAPABILITY_NAMES`、`CAPABILITY_ANSWER_WORDING`、`UI_OTHER`、`FIRST_STREAM_POLICY_TIMEOUT_MS`）与 `#Ao`（`PERMISSION_WITHDRAWN_MESSAGE`、`MAX_VOUCHED_MODEL_REQUEST_IDS`）（均在 `cli/remoteIO.ts`）：多声明符 var，写作时未命名；316 时的 Xn/Qn/co 现已在 `#rr` 内按作用命名，`#_o` 为 `tagUiSurfaceFloorAndSender`。
+- `chunk-pfe3pddp.js#MBt`/`#h9i`（replLauncher）写作时不在本领域模块清单里（在 `_unattributed`），只作了说明，没有命名；现为 `replLauncher.ts` 的 `launchSessionRepl`/`launchRepl`。
+- `chunk-gvr4gxa7.js#iqs`：被归到 nativeInstaller；2.1.88 的名字 detectHomebrew 不符，实际行为与 macOS 后台进程路径/TCC 有关，待 agents 或 bridge 领域确认。
+- `chunk-5hddsdew.js#SCi`：下载插件归档，被误归到 nativeInstaller/download.ts。
+- `chunk-exfmq47h.js#j$n`、`#lTs`：Chrome MCP 与 MCP 配置校验，被归到 print.ts，可疑。
 - 部分 sessionFlags 和 requestLatches 访问器只有规则生成的说明（“读/写当前会话 … 上的 X()”），没有逐个确认调用方的语义。
 - `tengu_quizzical_giraffe`、`tengu_typed_treasure`、`tengu_iterative_aurora`、`tengu_humming_waterfall` 的具体业务含义没有逐一追到调用方。
 
 ## 14. 引用校验结果
 
-校验时间 2026-11-04 06:40（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-05 17:32（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
-- 共检查 525 处引用：路径 65/65，字面量 181/181，声明id 84/84，名字 194/195（另 1 个只在 2.1.88 中存在）；占位符与含空格的说明性文字 113 处未检查。
+- 共检查 534 处引用：路径 66/66，字面量 181/181，声明id 84/84，名字 202/203（另 1 个只在 2.1.88 中存在）；占位符与含空格的说明性文字 113 处未检查。
 - 只在 2.1.88 中存在（删除项或旧名，预期如此）：`WRt`
 - 未通过：0 处。

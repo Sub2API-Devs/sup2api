@@ -3,9 +3,9 @@
  *
  * 输入框内联的历史搜索行（"search prompts:" / "no matching prompt:"）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/HistorySearchInput.tsx
- * pieces: chunk-18hwfzwa.js (2)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: file-last-pair 1, fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -18,9 +18,9 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { TextInput } from "../TextInput.js";
 
-//@ chunk-18hwfzwa.js:813854-813870 file-last-pair
+//@ chunk-czq1j3j2.js:846578-846594 file-last-pair
 function noop_4() {}
-//@ chunk-18hwfzwa.js:813870-814630 fingerprint (2.1.88 match: HistorySearchInput, 0.91)
+//@ chunk-czq1j3j2.js:846594-847354 fingerprint (2.1.88 match: HistorySearchInput, 0.91)
 function HistorySearchInput(props) {
   let $ = useMemoCache(13);
   let { value, onChange, historyFailedMatch } = props;

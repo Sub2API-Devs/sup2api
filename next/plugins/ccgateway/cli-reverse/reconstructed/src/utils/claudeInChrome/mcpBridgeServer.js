@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Chrome 桥接 MCP 服务器
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3ewc7v9f.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-akxtr9vf.js (4)
  * attribution: placement 4
  */
 import { BROWSER_TOOLS, BRIDGE_EXCLUDED_TOOL_NAMES, browserSelectionNote } from "./browserToolSchemas.js";
@@ -18,14 +18,14 @@ import {
 } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/types.js";
 import { handleChromeToolCall, parseTabsContextResult } from "./chromeMcpServer.js";
 
-//@ chunk-3ewc7v9f.js:534-625 placement
+//@ chunk-akxtr9vf.js:535-626 placement
 /**
  * 按会话 id 记住的标签组 id（用于权限询问的作用域）。
  */
 var tabGroupIdBySessionId = new Map();
 var FRONTLOADEDTABGROUPID = "frontLoadedTabGroupId";
 var _ = [FRONTLOADEDTABGROUPID, "isBridgeTimeout", "isFrontLoadBoundExceeded"];
-//@ chunk-3ewc7v9f.js:625-738 placement
+//@ chunk-akxtr9vf.js:626-739 placement
 function exposedChromeTools(host) {
   return BROWSER_TOOLS.filter(
     (tool) =>
@@ -33,7 +33,7 @@ function exposedChromeTools(host) {
       !host.excludedTools?.has(tool.name),
   );
 }
-//@ chunk-3ewc7v9f.js:738-812 placement
+//@ chunk-akxtr9vf.js:739-813 placement
 /**
  * 按宿主能力创建 Chrome 桥接客户端、本机连接池或 socket 客户端。
  */
@@ -44,7 +44,7 @@ function createChromeSocketClient(host) {
       ? createLocalChromeBridgePool(host)
       : createChromeSocketClient_2(host);
 }
-//@ chunk-3ewc7v9f.js:812-1922 placement
+//@ chunk-akxtr9vf.js:813-1924 placement
 function createChromeBridgeMcpServer(host, bridge) {
   let { serverName, logger } = host;
   let bridge_2 = bridge ?? createChromeSocketClient(host);

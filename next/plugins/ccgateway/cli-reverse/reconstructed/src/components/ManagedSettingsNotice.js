@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：托管设置提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s4skx7fa.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-dnyjne07.js (2)
  * attribution: placement 2
  */
 import {
@@ -13,13 +13,13 @@ import {
   computeRemoteSettingsEligibility,
 } from "../services/cloudSessions/eligibility.js";
 
-//@ chunk-s4skx7fa.js:231-369 placement
+//@ chunk-dnyjne07.js:231-369 placement
 /**
  * 组织托管设置的提示文案（由 IT 管理员集中管理）。
  */
 var MANAGED_SETTINGS_NOTICE =
   "Your organization may apply global configuration to Claude Code. These settings are centrally managed by your IT administrator.";
-//@ chunk-s4skx7fa.js:369-400 placement
+//@ chunk-dnyjne07.js:369-401 placement
 /**
  * 函数 managedSettingsUrl（托管设置提示链接）。
  */

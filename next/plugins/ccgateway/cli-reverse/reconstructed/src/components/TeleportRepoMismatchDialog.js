@@ -3,9 +3,9 @@
  *
  * teleport 时当前仓库不匹配，选择其他路径。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/TeleportRepoMismatchDialog.tsx
- * pieces: chunk-s1ks86z4.js (3)
+ * pieces: chunk-th6qsjd3.js (3)
  * attribution: sole-consumer 2, fingerprint 1
  */
 import { init_react_production, useState } from "../../vendor/react/cjs/react.production.js";
@@ -23,9 +23,9 @@ import { ErrorText } from "./ErrorText.js";
 import { Spinner } from "./Spinner.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-s1ks86z4.js:14448-14452 sole-consumer
+//@ chunk-th6qsjd3.js:15625-15629 sole-consumer
 init_react_production();
-//@ chunk-s1ks86z4.js:14452-14500 sole-consumer
+//@ chunk-th6qsjd3.js:15629-15677 sole-consumer
 function renderRepoItem(path) {
   return jsxProd_default(
     OrderedListWithItem.Item,
@@ -35,7 +35,7 @@ function renderRepoItem(path) {
     path,
   );
 }
-//@ chunk-s1ks86z4.js:14500-15718 fingerprint (2.1.88 match: TeleportRepoMismatchDialog, 0.688)
+//@ chunk-th6qsjd3.js:15677-16896 fingerprint (2.1.88 match: TeleportRepoMismatchDialog, 0.688)
 function TeleportRepoMismatchDialog(props) {
   let $ = useMemoCache(15);
   let { targetRepo, initialPaths, onSelectPath, onCancel, storageV5 } = props;

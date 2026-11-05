@@ -3,33 +3,35 @@
  *
  * 读取拦截（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-82kqcve8.js (10)
- * attribution: placement 10
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a2q0x549.js (13)
+ * attribution: placement 12, layout 1
  */
-import { dirname } from "path";
+import { dirname as dirname_2, resolve } from "path";
 import { isSettingEnabledInSources } from "../../services/orgMemory/promptIndex.js";
 import { identity as identity_2 } from "../identity.js";
 import { isCcsTenant } from "../../bootstrap/state.js";
+import { isFullyQualifiedPath, containsPathTraversal, expandPathOrNull } from "../path.js";
 import { settingsGrantsConfined, repoResidentSettingSources } from "./permissionsLoader.js";
 import { getSettingsForSource } from "../settings/settings.js";
-import { isFullyQualifiedPath, containsPathTraversal, expandPathOrNull } from "../path.js";
 import { isUntouchableSpelling } from "../networkPaths.js";
-import { arraysEqual, uniq } from "../collections.js";
+import { arraysEqual } from "../collections.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { logForDebugging } from "../debug.js";
+import { normalizeCaseForComparison_2 } from "./filesystem.js";
+import { identity } from "../pathClassification.js";
 import { getAutoMemPathSettingSource, hasNoAutoMemPath } from "../../memdir/paths.js";
 import { invalidateMemorySections } from "../focusMode.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:124030-124094 placement
+//@ chunk-a2q0x549.js:121490-121554 placement
 function hasBlockReadsOutsideWorkingDirectories() {
   return isSettingEnabledInSources("blockReadsOutsideWorkingDirectories");
 }
-//@ chunk-82kqcve8.js:124094-124134 placement
+//@ chunk-a2q0x549.js:121554-121594 placement
 var writeBlockCachedState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-82kqcve8.js:124094", () => {
+deferInit("chunk-a2q0x549.js:121554", () => {
   writeBlockCachedState = identity_2(
     {
       value: false,
@@ -39,15 +41,22 @@ deferInit("chunk-82kqcve8.js:124094", () => {
     },
   );
 });
-//@ chunk-82kqcve8.js:124134-124236 placement
+//@ chunk-a2q0x549.js:121594-121696 placement
 function isWriteBlockOn() {
   if (isCcsTenant()) return false;
   writeBlockCachedState.value ||= isSettingEnabledInSources("blockWritesOutsideWorkingDirectories");
   return writeBlockCachedState.value;
 }
-//@ chunk-82kqcve8.js:124236-124276 placement
+//@ chunk-a2q0x549.js:121696-121801 layout
+function normalizeReadPath(inputPath) {
+  if (!isFullyQualifiedPath(inputPath) || containsPathTraversal(inputPath) || inputPath.trim() !== inputPath)
+    return null;
+  let expanded = expandPathOrNull(inputPath);
+  return expanded === null || expandPathOrNull(expanded) !== expanded ? null : expanded;
+}
+//@ chunk-a2q0x549.js:121801-121841 placement
 var readBlockExemptCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-82kqcve8.js:124236", () => {
+deferInit("chunk-a2q0x549.js:121801", () => {
   readBlockExemptCache = identity_2(
     {
       value: [],
@@ -57,24 +66,15 @@ deferInit("chunk-82kqcve8.js:124236", () => {
     },
   );
 });
-//@ chunk-82kqcve8.js:124276-124951 placement
+//@ chunk-a2q0x549.js:121841-122468 placement
 function readBlockExemptPathsInSettings() {
   if (isCcsTenant() || settingsGrantsConfined()) return [];
   let blockReadsExemptPaths = getSettingsForSource("flagSettings")?.permissions?.blockReadsExemptPaths ?? [];
   let flattened = blockReadsExemptPaths.flatMap((blockReadsExemptPath) => {
-    if (
-      !isFullyQualifiedPath(blockReadsExemptPath) ||
-      isUntouchableSpelling(blockReadsExemptPath) ||
-      containsPathTraversal(blockReadsExemptPath) ||
-      blockReadsExemptPath.trim() !== blockReadsExemptPath
-    )
-      return [];
-    let expandedPath = expandPathOrNull(blockReadsExemptPath);
-    return expandedPath === null ||
-      expandPathOrNull(expandedPath) !== expandedPath ||
-      dirname(expandedPath) === expandedPath
-      ? []
-      : [expandedPath];
+    let expandedPath = isUntouchableSpelling(blockReadsExemptPath)
+      ? null
+      : normalizeReadPath(blockReadsExemptPath);
+    return expandedPath === null || dirname_2(expandedPath) === expandedPath ? [] : [expandedPath];
   });
   if (!arraysEqual(blockReadsExemptPaths, readBlockExemptCache.value)) {
     readBlockExemptCache.value = blockReadsExemptPaths;
@@ -89,18 +89,51 @@ function readBlockExemptPathsInSettings() {
       );
     }
   }
-  return uniq(flattened);
+  return normalizeCaseForComparison_2(flattened);
 }
-//@ chunk-82kqcve8.js:124951-125015 placement
+//@ chunk-a2q0x549.js:122468-122508 placement
+var reportedWorkingDirectories; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-a2q0x549.js:122468", () => {
+  reportedWorkingDirectories = identity_2(
+    {
+      value: [],
+    },
+    (state) => {
+      state.value = [];
+    },
+  );
+});
+//@ chunk-a2q0x549.js:122508-123017 placement
+/**
+ * 读 flagSettings 的 permissions.workingDirectoriesAsGiven，校验规范形态，忽略的条目告警，结果缓存进 sl。
+ */
+function workingDirectoriesAsGivenInSettings() {
+  if (isCcsTenant()) return [];
+  let given = getSettingsForSource("flagSettings")?.permissions?.workingDirectoriesAsGiven ?? [];
+  let flattened = given.flatMap((given) => {
+    let normalized = normalizeReadPath(given);
+    return normalized !== null && resolve(normalized) === identity(given) ? [normalized] : [];
+  });
+  if (flattened.length < given.length && !arraysEqual(given, reportedWorkingDirectories.value))
+    logForDebugging(
+      `permissions.workingDirectoriesAsGiven: ignored ${given.length - flattened.length} of ${given.length} entries; each must be an absolute path spelled exactly as the working directory is passed, normalized, with no ".." segment and, unless it is a root, no separator at its end`,
+      {
+        level: "warn",
+      },
+    );
+  reportedWorkingDirectories.value = given;
+  return normalizeCaseForComparison_2(flattened);
+}
+//@ chunk-a2q0x549.js:123017-123081 placement
 function isAutoMemPathFromRepoSettings() {
   let autoMemPathSettingSource = getAutoMemPathSettingSource();
   return (
     autoMemPathSettingSource !== undefined && repoResidentSettingSources().includes(autoMemPathSettingSource)
   );
 }
-//@ chunk-82kqcve8.js:125015-125055 placement
+//@ chunk-a2q0x549.js:123081-123121 placement
 var readBlockAppliedState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-82kqcve8.js:125015", () => {
+deferInit("chunk-a2q0x549.js:123081", () => {
   readBlockAppliedState = identity_2(
     {
       value: false,
@@ -110,27 +143,28 @@ deferInit("chunk-82kqcve8.js:125015", () => {
     },
   );
 });
-//@ chunk-82kqcve8.js:125055-125088 placement
+//@ chunk-a2q0x549.js:123121-123154 placement
 function markReadBlockApplied() {
   readBlockAppliedState.value = true;
   invalidateMemorySections();
 }
-//@ chunk-82kqcve8.js:125088-125151 placement
+//@ chunk-a2q0x549.js:123154-123217 placement
 function isReadBlockOn() {
   if (!readBlockAppliedState.value && hasBlockReadsOutsideWorkingDirectories())
     readBlockAppliedState.value = true;
   return readBlockAppliedState.value;
 }
-//@ chunk-82kqcve8.js:125151-125195 placement
+//@ chunk-a2q0x549.js:123217-123261 placement
 function isAutoMemReadFenced() {
   return isReadBlockOn() && (hasNoAutoMemPath() || isAutoMemPathFromRepoSettings());
 }
 export {
+  hasBlockReadsOutsideWorkingDirectories,
   markReadBlockApplied,
+  isWriteBlockOn,
+  readBlockExemptPathsInSettings,
   isReadBlockOn,
+  workingDirectoriesAsGivenInSettings,
   isAutoMemPathFromRepoSettings,
   isAutoMemReadFenced,
-  readBlockExemptPathsInSettings,
-  isWriteBlockOn,
-  hasBlockReadsOutsideWorkingDirectories,
 };

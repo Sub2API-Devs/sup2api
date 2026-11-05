@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件遥测名（官方/第三方判定，读不到市场目录时按第三方记录）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-g8nydygk.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mbyxant6.js (2)
  * attribution: placement 2
  */
 import {
@@ -24,7 +24,7 @@ import { lit } from "../../services/analytics/safeMetadata.js";
 import { THIRD_PARTY } from "../../services/analytics/metadata.js";
 import { getBuiltinPlugin } from "../../plugins/builtinPlugins.js";
 
-//@ chunk-g8nydygk.js:503-956 placement
+//@ chunk-mbyxant6.js:4215-4668 placement
 /**
  * 插件遥测字段（官方插件确认存在，否则名字记为第三方）。
  */
@@ -56,7 +56,7 @@ async function pluginTelemetryFields(pluginIdRaw, managedNames, storage) {
     }),
   };
 }
-//@ chunk-g8nydygk.js:956-1063 placement
+//@ chunk-mbyxant6.js:4668-4775 placement
 async function pluginExists(pluginId, name, marketplace, storage) {
   if (isKnownOfficialPluginName(name, marketplace)) return true;
   if (marketplace === BUILTIN) return getBuiltinPlugin(name) !== undefined;

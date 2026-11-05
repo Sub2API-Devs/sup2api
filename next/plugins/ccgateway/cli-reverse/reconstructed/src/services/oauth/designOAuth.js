@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Design 服务 OAuth 登录与令牌刷新
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8genbs31.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-71ydz5km.js (12)
  * attribution: placement 12
  */
 import { getSecureStorage } from "../../utils/secureStorage/index.js";
@@ -24,7 +24,7 @@ import { env } from "../../utils/env.js";
 import { OAuthService } from "./index.js";
 import { AuthCodeRefusedError } from "./auth-code-listener.js";
 
-//@ chunk-8genbs31.js:609-773 placement
+//@ chunk-71ydz5km.js:609-773 placement
 async function readDesignOAuth(key) {
   try {
     return (await getSecureStorage().readAsync(key))?.designOauth ?? null;
@@ -35,7 +35,7 @@ async function readDesignOAuth(key) {
     return null;
   }
 }
-//@ chunk-8genbs31.js:773-1085 placement
+//@ chunk-71ydz5km.js:773-1085 placement
 async function writeDesignOAuth(designOauth, options) {
   try {
     let raced = false;
@@ -65,7 +65,7 @@ async function writeDesignOAuth(designOauth, options) {
     };
   }
 }
-//@ chunk-8genbs31.js:1085-1311 placement
+//@ chunk-71ydz5km.js:1085-1311 placement
 async function clearDesignOAuthIf(shouldClear) {
   try {
     await getSecureStorage().mutate((store) => {
@@ -83,18 +83,18 @@ async function clearDesignOAuthIf(shouldClear) {
     });
   }
 }
-//@ chunk-8genbs31.js:1311-1346 placement
+//@ chunk-71ydz5km.js:1311-1346 placement
 /**
  * Design OAuth 刷新用的文件锁名。
  */
 var DESIGN_OAUTH_REFRESH_LOCK = ".design_oauth_refresh.lock";
-//@ chunk-8genbs31.js:1346-1446 placement
+//@ chunk-71ydz5km.js:1346-1446 placement
 async function readStoredDesignOAuth() {
   let secureStorage = getSecureStorage();
   secureStorage.invalidateCache?.();
   return (await secureStorage.readAsync())?.designOauth ?? null;
 }
-//@ chunk-8genbs31.js:1446-4170 placement
+//@ chunk-71ydz5km.js:1446-4170 placement
 /**
  * 获取 Design 服务的 OAuth 访问令牌，必要时刷新；未登录时返回需要登录。
  */
@@ -265,15 +265,15 @@ async function getDesignAccessToken(credentials) {
     };
   }
 }
-//@ chunk-8genbs31.js:4170-4252 placement
+//@ chunk-71ydz5km.js:4170-4252 placement
 function designOAuthClientId() {
   return env.CLAUDE_CODE_DESIGN_OAUTH_CLIENT_ID ?? getOauthConfig().DESIGN_CLIENT_ID;
 }
-//@ chunk-8genbs31.js:4252-4304 placement
+//@ chunk-71ydz5km.js:4252-4304 placement
 function isDesignOAuthConfigured() {
   return !designOAuthClientId().startsWith("00000000-");
 }
-//@ chunk-8genbs31.js:4304-4983 placement
+//@ chunk-71ydz5km.js:4304-4983 placement
 async function refreshDesignToken(tokenResponse, clientId) {
   let filtered = DESIGN_OAUTH_SCOPES.filter((scope) => !tokenResponse.scopes.includes(scope));
   if (filtered.length > 0) {
@@ -304,16 +304,16 @@ async function refreshDesignToken(tokenResponse, clientId) {
     },
   };
 }
-//@ chunk-8genbs31.js:4983-5048 placement
+//@ chunk-71ydz5km.js:4983-5048 placement
 function isRemoteEnvironment() {
   return env.isSSH() || env.CLAUDE_CODE_REMOTE === true || getIsRemoteMode();
 }
-//@ chunk-8genbs31.js:5048-5061 placement
+//@ chunk-71ydz5km.js:5048-5061 placement
 /**
  * Design 登录流程的等待上限（5 分钟）。
  */
 var DESIGN_LOGIN_TIMEOUT_MS = 300000;
-//@ chunk-8genbs31.js:5061-7261 placement
+//@ chunk-71ydz5km.js:5061-7261 placement
 /**
  * 执行 Design OAuth 登录流程（本地回调或手动粘贴授权码），保存令牌。
  */
@@ -455,12 +455,12 @@ async function runDesignLogin(signal, options) {
   }
 }
 export {
-  getDesignAccessToken,
   readDesignOAuth,
-  runDesignLogin,
   isDesignOAuthConfigured,
+  runDesignLogin,
   isRemoteEnvironment,
   designOAuthClientId,
   refreshDesignToken,
   writeDesignOAuth,
+  getDesignAccessToken,
 };

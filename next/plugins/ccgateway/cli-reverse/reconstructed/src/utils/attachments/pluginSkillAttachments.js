@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件技能附件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (8)
  * attribution: placement 8
  */
 import {
@@ -26,20 +26,20 @@ import {
   hasSyncedSkillPrefix,
 } from "../../skills/syncedSkills.js";
 import { normalizedSkillToolName } from "../../tools/SkillTool/skillToolNames.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3252567-3252635 placement
+//@ chunk-5xgkngpb.js:3337197-3337265 placement
 /**
  * 允许使用本地插件技能的会话入口（cli）。
  */
 var CLI_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EXCLUDED_MARKETPLACES;
-deferInit("chunk-e6aww6q8.js:3252567", () => {
+deferInit("chunk-5xgkngpb.js:3337197", () => {
   CLI_ENTRYPOINTS = new Set(["cli"]);
   EXCLUDED_MARKETPLACES = new Set(["local-desktop-app-uploads"]);
 });
-//@ chunk-e6aww6q8.js:3252635-3252973 placement
+//@ chunk-5xgkngpb.js:3337265-3337603 placement
 /**
  * 判断插件技能是否来自第三方 marketplace（非保留名、非 claude.ai 前缀、不在排除表），且会话入口在允许集合内、使用默认插件目录。
  */
@@ -61,7 +61,7 @@ function isListablePluginSkill(skill) {
   if (sessionEntrypoint === undefined || !CLI_ENTRYPOINTS.has(sessionEntrypoint)) return false;
   return isUsingDefaultPluginsDirectory();
 }
-//@ chunk-e6aww6q8.js:3252973-3253214 placement
+//@ chunk-5xgkngpb.js:3337603-3337844 placement
 /**
  * 判断技能来源是否可信（非插件、账号技能、官方或保留 marketplace、非默认插件目录）。
  */
@@ -84,7 +84,7 @@ function isTrustedSkillSource(skill) {
     !isUsingDefaultPluginsDirectory()
   );
 }
-//@ chunk-e6aww6q8.js:3253214-3253288 placement
+//@ chunk-5xgkngpb.js:3337844-3337918 placement
 /**
  * 技能在列表里展示的全部别名：可列出时只给同步技能别名，否则再并入插件别名。
  */
@@ -95,18 +95,18 @@ function skillAliasesForList(skill) {
     ...syncedSkillAliases_2(skill),
   ];
 }
-//@ chunk-e6aww6q8.js:3253288-3253387 placement
+//@ chunk-5xgkngpb.js:3337918-3338017 placement
 /**
  * 去掉自身名后的其他技能别名，没有则返回 undefined。
  */
 function otherSkillAliases(skill) {
   let primaryName = normalizedSkillToolName(skill.name);
-  let filtered = uniq(skillAliasesForList(skill).map(normalizedSkillToolName)).filter(
+  let filtered = normalizeCaseForComparison_2(skillAliasesForList(skill).map(normalizedSkillToolName)).filter(
     (alias) => alias !== primaryName,
   );
   return filtered.length ? filtered : undefined;
 }
-//@ chunk-e6aww6q8.js:3253387-3253525 placement
+//@ chunk-5xgkngpb.js:3338017-3338155 placement
 /**
  * 解析技能权限规则：去掉前导 /，以 :* 或空格 * 结尾时视为前缀规则。
  */
@@ -121,7 +121,7 @@ function parseSkillPermissionRule(rule) {
         name: normalizedRule,
       };
 }
-//@ chunk-e6aww6q8.js:3253525-3253613 placement
+//@ chunk-5xgkngpb.js:3338155-3338243 placement
 /**
  * 判断技能名是否匹配某条技能权限规则（前缀规则用前缀比较）。
  */
@@ -129,7 +129,7 @@ function skillMatchesPermissionRule(rule, skillName) {
   let { name: ruleName, prefix } = parseSkillPermissionRule(rule);
   return ruleName === skillName || (prefix !== undefined && skillName.startsWith(prefix));
 }
-//@ chunk-e6aww6q8.js:3253613-3253818 placement
+//@ chunk-5xgkngpb.js:3338243-3338448 placement
 /**
  * 判断技能名是否匹配权限规则（前缀规则需考虑同步技能前缀）。
  */

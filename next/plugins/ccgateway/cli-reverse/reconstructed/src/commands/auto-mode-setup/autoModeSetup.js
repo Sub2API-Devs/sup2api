@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：/auto-mode-setup：后台扫描环境、提出 auto mode 规则并写入设置的对话框与命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4cndz99e.js (9), chunk-m8444q1d.js (18)
- * attribution: placement 27
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8x5p2wd7.js (19), chunk-vqqyj99a.js (9)
+ * attribution: affinity 1, placement 27
  */
 import { isAbsolute, resolve, relative } from "path";
 import { createHash } from "crypto";
@@ -24,8 +24,9 @@ import { isNetworkHomePath } from "../../services/autoModeSetup/homeRepoScan.js"
 import { isAttachmentReadDeniedOrThrown } from "../../utils/attachments/fileAttachments.js";
 import { readFileGuarded } from "../../utils/fsSafety/guardedFileRead.js";
 import { applyAutoModeSettings, AutoModeSetupWriteError } from "../../services/autoModeSetup/applySetup.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
+import { emitTaskNotification } from "../../utils/task/taskNotifications.js";
 import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { logEvent } from "../../services/analytics/index.js";
@@ -66,7 +67,6 @@ import {
 } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
 import { registerAutoModeScanTask, findRunningAutoModeScanTask } from "../../tasks/AutoModeScanTask.js";
-import { failDreamTask } from "../../tasks/DreamTask/DreamTask.js";
 import {
   autoModeSetupReviewDialogDef,
   AUTO_MODE_SETUP_FLAGGED_DIALOG,
@@ -74,7 +74,7 @@ import {
 import { onceExport } from "../../../vendor/lodash-es/once.js";
 import { autoModeConfigSchema, getSettingsForSourceForUpkeep } from "../../utils/settings/settings.js";
 
-//@ chunk-4cndz99e.js:12143-13494 placement
+//@ chunk-vqqyj99a.js:13291-14642 placement
 /**
  * /auto-mode-setup 文本命令入口：解析参数（含 --request-id）后执行 propose/apply，结果以 JSON 文本返回并回显 requestId。
  */
@@ -100,7 +100,7 @@ var callAutoModeSetup = async (args, context) => {
     autoModeSetupCommandArgs.requestId,
   );
 };
-//@ chunk-4cndz99e.js:13494-17408 placement
+//@ chunk-vqqyj99a.js:14642-18556 placement
 /**
  * 处理 propose/apply-file：读取提议（读拒绝、大小、哈希不符、解析失败）并写入设置（约 4 KB）。
  */
@@ -297,7 +297,7 @@ async function runAutoModeSetup(autoModeSetupCommandArgs, context) {
     };
   }
 }
-//@ chunk-4cndz99e.js:17408-17600 placement
+//@ chunk-vqqyj99a.js:18556-18748 placement
 /**
  * 判断路径（含 realpath）是否位于系统临时目录或 Claude 配置目录之下，用于限制 --apply-file 可读取的提议文件位置。
  */
@@ -316,7 +316,7 @@ async function isUnderTempOrConfigDir(path) {
   }
   return false;
 }
-//@ chunk-4cndz99e.js:17600-18021 placement
+//@ chunk-vqqyj99a.js:18748-19169 placement
 function parseRequestIdArg(arg) {
   let match = arg.match(/^--request-id(?:=|\s+(?!--))(\S+)\s*/);
   if (!match) {
@@ -344,7 +344,7 @@ ${AUTO_MODE_SETUP_USAGE}`,
     requestId,
   };
 }
-//@ chunk-4cndz99e.js:18021-18203 placement
+//@ chunk-vqqyj99a.js:19169-19351 placement
 function parseAutoModeSetupCommandArgs(argv) {
   let requestIdArg = parseRequestIdArg(argv.trim());
   if (!requestIdArg.ok)
@@ -361,7 +361,7 @@ function parseAutoModeSetupCommandArgs(argv) {
         requestId: requestIdArg.requestId,
       };
 }
-//@ chunk-4cndz99e.js:18203-21448 placement
+//@ chunk-vqqyj99a.js:19351-22596 placement
 /**
  * 解析 /auto-mode-setup 参数（--request-id、--expect-sha256、--propose 等）。
  */
@@ -527,17 +527,17 @@ ${AUTO_MODE_SETUP_USAGE}`,
     },
   };
 }
-//@ chunk-4cndz99e.js:21448-21556 placement
+//@ chunk-vqqyj99a.js:22596-22704 placement
 function stripMatchingQuotes(value) {
   return (value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))
     ? value.slice(1, -1)
     : value;
 }
-//@ chunk-4cndz99e.js:21556-21598 placement
+//@ chunk-vqqyj99a.js:22704-22746 placement
 function findInList(needle, list) {
   return list.find((item) => item === needle);
 }
-//@ chunk-4cndz99e.js:21598-21690 placement
+//@ chunk-vqqyj99a.js:22746-22838 placement
 function textResultWithRequestId(result, requestId) {
   let withRequestId =
     requestId === undefined
@@ -551,9 +551,32 @@ function textResultWithRequestId(result, requestId) {
     value: jsonStringify(withRequestId, null, 2),
   };
 }
-//@ chunk-m8444q1d.js:15604-15608 placement
+//@ chunk-8x5p2wd7.js:16576-16781 affinity
+/**
+ * 把运行中的 dream 任务置为给定终态（failed 等）并发 ambient 通知。
+ */
+function failTaskAndNotify(taskId, taskRegistry, status) {
+  let didFail = false;
+  taskRegistry.update(taskId, (task) => {
+    if (task.status !== "running") return task;
+    didFail = true;
+    return {
+      ...task,
+      status,
+      endTime: Date.now(),
+      notified: true,
+      abortController: undefined,
+    };
+  });
+  if (didFail)
+    emitTaskNotification(taskId, status, {
+      skipTranscript: true,
+      ambient: true,
+    });
+}
+//@ chunk-8x5p2wd7.js:16781-16785 placement
 init_react_production();
-//@ chunk-m8444q1d.js:15608-15791 placement (2.1.88 match: autoModeConfigHandler, 0.842)
+//@ chunk-8x5p2wd7.js:16785-16968 placement (2.1.88 match: autoModeConfigHandler, 0.842)
 function autoModeConfigHandler(props) {
   return {
     environment: props.environment,
@@ -568,7 +591,7 @@ function autoModeConfigHandler(props) {
     }),
   };
 }
-//@ chunk-m8444q1d.js:15791-16525 placement
+//@ chunk-8x5p2wd7.js:16968-17702 placement
 function savedToMessage(settings, state) {
   return (
     `Saved to ${settings.filePath} (${settings.autoModeKeysWritten.join(", ")}` +
@@ -592,7 +615,7 @@ ${settings.warnings.join(`
       : "")
   );
 }
-//@ chunk-m8444q1d.js:16525-16782 placement
+//@ chunk-8x5p2wd7.js:17702-17958 placement
 function initialAutoModeSetupState(hasExisting = false) {
   return {
     step: hasExisting ? "existing" : "confirm",
@@ -609,7 +632,7 @@ function initialAutoModeSetupState(hasExisting = false) {
     resolution: "none",
   };
 }
-//@ chunk-m8444q1d.js:16782-17524 placement
+//@ chunk-8x5p2wd7.js:17958-18700 placement
 /**
  * auto 模式环境配置向导的标题与说明文案常量。
  */
@@ -663,7 +686,7 @@ var SCREEN_READER_READ_OPTIONS = [
     label: "Neither \u2014 just this project and sessions",
   },
 ];
-//@ chunk-m8444q1d.js:17524-17661 placement
+//@ chunk-8x5p2wd7.js:18700-18837 placement
 function depthToReadScopes(paths) {
   switch (paths) {
     case "both":
@@ -676,7 +699,7 @@ function depthToReadScopes(paths) {
       return [];
   }
 }
-//@ chunk-m8444q1d.js:17661-21975 placement
+//@ chunk-8x5p2wd7.js:18837-23151 placement
 /**
  * /auto-mode-setup 对话框（2.1.316 新增）：后台扫描环境、提出 auto mode 规则建议，用户确认后写入设置。
  */
@@ -982,7 +1005,7 @@ function AutoModeSetupDialog({
     }),
   });
 }
-//@ chunk-m8444q1d.js:21975-22144 placement
+//@ chunk-8x5p2wd7.js:23151-23320 placement
 function AutoModeSetupIntroDialog(props) {
   let $ = useMemoCache(4);
   if (useIsScreenReaderEnabled()) {
@@ -1006,7 +1029,7 @@ function AutoModeSetupIntroDialog(props) {
   } else footer = $[3];
   return footer;
 }
-//@ chunk-m8444q1d.js:22144-23065 placement
+//@ chunk-8x5p2wd7.js:23320-24241 placement
 /**
  * auto-mode-setup 的确认对话框：姿态选择 + 可选读取项开关 + 页脚，确认后继续。
  */
@@ -1100,7 +1123,7 @@ function AutoModeSetupConfirmDialog({ persisted, cancel, footer, onContinue, isF
     ],
   });
 }
-//@ chunk-m8444q1d.js:23065-23638 placement
+//@ chunk-8x5p2wd7.js:24241-24816 placement
 /**
  * 屏幕阅读器模式下的向导介绍对话框：记录最近确认时间，选择姿态与读取范围后继续。
  */
@@ -1156,7 +1179,7 @@ function ScreenReaderIntroDialog({ persisted, cancel, onContinue }) {
     ],
   });
 }
-//@ chunk-m8444q1d.js:23638-23878 placement
+//@ chunk-8x5p2wd7.js:24816-25056 placement
 function WorkerBadgeWithEscape(props) {
   let $ = useMemoCache(4);
   let { message, subtitle, onEscape } = props;
@@ -1180,7 +1203,7 @@ function WorkerBadgeWithEscape(props) {
   } else confirmElement = $[3];
   return confirmElement;
 }
-//@ chunk-m8444q1d.js:23878-24118 placement
+//@ chunk-8x5p2wd7.js:25056-25296 placement
 function logAutoModeSetupResolved(taskId, outcome, mode) {
   logEvent("tengu_auto_mode_setup_wizard_resolved", {
     choice: fromEnum(taskId),
@@ -1193,11 +1216,11 @@ function logAutoModeSetupResolved(taskId, outcome, mode) {
   else if (taskId === "error") logFeatureBad("auto_mode_setup_wizard", outcome);
   else logFeatureSad("auto_mode_setup_wizard", taskId);
 }
-//@ chunk-m8444q1d.js:24118-24145 placement
+//@ chunk-8x5p2wd7.js:25296-25323 placement
 function isAutoModeSetupInFlight() {
   return getBackgroundAutoModeSetupInFlight();
 }
-//@ chunk-m8444q1d.js:24145-24480 placement
+//@ chunk-8x5p2wd7.js:25323-25658 placement
 /**
  * 后台运行 /auto-mode-setup 扫描：设置进行中标志，出错时追加警告系统消息、记录错误与遥测，最后清除标志。
  */
@@ -1223,7 +1246,7 @@ async function runAutoModeSetupInBackground(props) {
     setBackgroundAutoModeSetupInFlight(false);
   }
 }
-//@ chunk-m8444q1d.js:24480-24626 placement
+//@ chunk-8x5p2wd7.js:25658-25804 placement
 async function runAutoModeScanTask(task) {
   let { taskRegistry } = task;
   let abortController = new AbortController();
@@ -1235,10 +1258,10 @@ async function runAutoModeScanTask(task) {
   try {
     await runAutoModeScanInBackground(task, taskId, abortController);
   } finally {
-    failDreamTask(taskId, taskRegistry, "failed");
+    failTaskAndNotify(taskId, taskRegistry, "failed");
   }
 }
-//@ chunk-m8444q1d.js:24626-26551 placement
+//@ chunk-8x5p2wd7.js:25804-27729 placement
 async function runAutoModeScanInBackground(context, taskId, abortController) {
   let {
     taskRegistry,
@@ -1274,7 +1297,7 @@ async function runAutoModeScanInBackground(context, taskId, abortController) {
       logAutoModeSetupResolved("cancel", "background_scan");
       return;
     }
-    failDreamTask(taskId, taskRegistry, "failed");
+    failTaskAndNotify(taskId, taskRegistry, "failed");
     appendSystemMessage?.(createSystemMessage(`Auto-mode setup scan failed: ${proposal.reason}`, "warning"));
     logAutoModeSetupResolved("error", "background_scan");
     return;
@@ -1283,7 +1306,7 @@ async function runAutoModeScanInBackground(context, taskId, abortController) {
     logAutoModeSetupResolved("cancel", "background_scan");
     return;
   }
-  failDreamTask(taskId, taskRegistry, "completed");
+  failTaskAndNotify(taskId, taskRegistry, "completed");
   let review = await requestDialog(
     autoModeSetupReviewDialogDef,
     {
@@ -1374,7 +1397,7 @@ Note: removing the flagged permissions.allow entries failed: ${errorMessage(erro
   appendSystemMessage?.(createSystemMessage(savedToMessage(applied, counts), "notice"));
   logAutoModeSetupResolved("saved", "background", context.mode);
 }
-//@ chunk-m8444q1d.js:26551-28197 placement
+//@ chunk-8x5p2wd7.js:27729-29374 placement
 /**
  * /auto-mode-setup 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -1479,7 +1502,7 @@ var autoModeSetupCommand = async (onDone, context, args) => {
     },
   });
 };
-//@ chunk-m8444q1d.js:28197-28414 placement
+//@ chunk-8x5p2wd7.js:29374-29591 placement
 function hasExistingAutoModeConfig() {
   let parsed = autoModeConfigSchema().safeParse(getSettingsForSourceForUpkeep("userSettings")?.autoMode);
   if (!parsed.success) return false;
@@ -1492,10 +1515,10 @@ function hasExistingAutoModeConfig() {
   );
 }
 export {
-  autoModeSetupCommand,
-  hasExistingAutoModeConfig,
   callAutoModeSetup,
   parseRequestIdArg,
   isUnderTempOrConfigDir,
   parseAutoModeSetupCommandArgs,
+  autoModeSetupCommand,
+  hasExistingAutoModeConfig,
 };

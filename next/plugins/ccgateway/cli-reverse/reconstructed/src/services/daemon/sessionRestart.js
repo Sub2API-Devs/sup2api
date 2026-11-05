@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：后台会话重启
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-89ebz077.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-v6a0t823.js (3)
  * attribution: placement 3
  */
-//@ chunk-89ebz077.js:11038-11476 placement
+//@ chunk-v6a0t823.js:11106-11544 placement
 /**
  * 后台会话自动重启相关常量：续跑提示词、重启窗口与次数、退避，以及会话 ID 被占用的提示。
  */
@@ -22,14 +22,14 @@ var STABLE_RUN_MS = 60000;
 var MAX_RESTART_DETAIL = 200;
 var SESSION_ID_TAKEN_NOTICE =
   "session ID already belongs to another conversation \u2014 open again to start with a new ID";
-//@ chunk-89ebz077.js:11476-11562 placement
+//@ chunk-v6a0t823.js:11544-11630 placement
 /**
  * 工作目录不存在或不可访问时的原因文案。
  */
 function cwdGoneReason(cwd) {
   return `working directory no longer exists or is not accessible: ${cwd}`;
 }
-//@ chunk-89ebz077.js:11562-11865 placement
+//@ chunk-v6a0t823.js:11630-11933 placement
 /**
  * 后台会话轮询与认领的时间常量、关键版本标记、可后台任务类型与若干上限。
  */
@@ -58,6 +58,8 @@ var DRAINABLE_TASK_KINDS = [
 var MAX_UPGRADE_WAIT_MS = 3600000;
 var MAX_STATUS_DETAIL = 4096;
 export {
+  cwdGoneReason,
+  MIN_POLL_MS,
   DRAINABLE_TASK_KINDS,
   MIN_UPGRADE_RELEASE,
   MAX_UPGRADE_WAIT_MS,
@@ -65,7 +67,6 @@ export {
   MIN_ADOPT_RELEASE,
   IDLE_RETIRE_MS,
   MAX_AUTO_RESTARTS,
-  MIN_POLL_MS,
   POLL_INTERVAL_MS,
   MAX_RESTART_DETAIL,
   MAX_STATUS_DETAIL,
@@ -76,6 +77,5 @@ export {
   RESTART_BACKOFF_MS,
   MAX_RESTART_BACKOFF_MS,
   SESSION_ID_TAKEN_NOTICE,
-  cwdGoneReason,
   ATTACH_TIMEOUT_MS,
 };

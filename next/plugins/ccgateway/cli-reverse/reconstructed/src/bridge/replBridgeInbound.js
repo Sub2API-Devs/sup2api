@@ -3,12 +3,14 @@
  *
  * 2.1.316 新增。REPL 接收桥接入站消息（用户消息、附件、控制回应）并转入提示队列。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (13)
  * attribution: placement 13
  */
 import { randomUUID } from "crypto";
+import { init_react_production, useEffect } from "../../vendor/react/cjs/react.production.js";
+import { recordEarlierToolsUnknown } from "../services/compact/keptTools.js";
 import {
   extractInboundMetadata,
   classifyInboundOrigin,
@@ -37,6 +39,7 @@ import { originFromBridgeMetadata } from "../utils/messageOrigin.js";
 import { stripPeerMessageBody } from "../utils/peerMessageHeaders.js";
 import { hasVerifiedSlackHumanTurn, hasSlackLaterNotification } from "../cli/print/rewindStandIn.js";
 import { textNotTypedFlags } from "../utils/messageQueueManager.js";
+import { isUltrathinkPrompt } from "../utils/messages/ultrathinkPaste.js";
 import { inheritedAttributionKey } from "../utils/turnAttributionKey.js";
 import { mainAgentId, recordSubmitTime } from "../bootstrap/state.js";
 import { noteHumanTakeover } from "../services/quotaAutoResume/quotaAutoResume.js";
@@ -70,12 +73,16 @@ import { getEndedByModel } from "../tasks/endedByModel.js";
 import { logEvent } from "../services/analytics/index.js";
 import { useHost } from "../context/session.js";
 import { useRenderMode } from "../ink/renderModeContext.js";
-import { useEffect, init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { isBgSession } from "../utils/concurrentSessions.js";
 import { registerRendezvousRunner } from "../services/daemon/rendezvous.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1611905-1614466 placement
+//@ chunk-czq1j3j2.js:1610359-1610363 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1610359", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1655977-1658578 placement
 async function handleBridgeInbound(
   queue,
   frame,
@@ -88,6 +95,7 @@ async function handleBridgeInbound(
 ) {
   let { prior, release } = queue.takeInboundEnqueueTurn();
   try {
+    recordEarlierToolsUnknown(frame);
     let inboundMetadata = extractInboundMetadata(frame);
     if (!inboundMetadata) return;
     let { uuid } = inboundMetadata;
@@ -179,6 +187,9 @@ async function handleBridgeInbound(
           origin: refinedOrigin,
         }),
         ...textNotTypedFlags(frame, resolved),
+        ...(isUltrathinkPrompt(frame) && {
+          ultrathinkTyped: true,
+        }),
         ...(refinedOrigin !== undefined &&
           !isHumanOrAutoContinuation(refinedOrigin) && {
             skipAttachments: true,
@@ -244,7 +255,7 @@ async function handleBridgeInbound(
     prior.then(release, release);
   }
 }
-//@ chunk-18hwfzwa.js:1614466-1614774 placement
+//@ chunk-czq1j3j2.js:1658578-1658886 placement
 /**
  * 处理桥接端发来的权限模式切换：先 guardPermissionModeChange 校验，通过后用 transitionPermissionMode 更新 toolPermissionContext 并在下一轮事件循环通知订阅者。
  */
@@ -271,7 +282,7 @@ function applyBridgePermissionModeChange(requestedMode, store, setAppState) {
     ok: true,
   };
 }
-//@ chunk-18hwfzwa.js:1614774-1615404 placement
+//@ chunk-czq1j3j2.js:1658886-1659562 placement
 /**
  * 构造桥接的权限请求回调：sendRequest 发 can_use_tool 控制请求（附显示名、建议、阻塞路径等），sendResponse/cancelRequest/onResponse 管理控制响应与待决处理器。
  */
@@ -288,6 +299,8 @@ function createBridgePermissionCallbacks(bridge, pendingHandlers) {
       requiresInteraction,
       toolKind,
       extraRequestFields,
+      plugin,
+      suppressAlwaysAllowRule,
     ) {
       bridge.sendControlRequest({
         type: "control_request",
@@ -310,6 +323,8 @@ function createBridgePermissionCallbacks(bridge, pendingHandlers) {
             tool_kind: toolKind,
           }),
           ...extraRequestFields,
+          plugin,
+          suppress_always_allow_rule: suppressAlwaysAllowRule,
         },
       });
     },
@@ -341,7 +356,7 @@ function createBridgePermissionCallbacks(bridge, pendingHandlers) {
     },
   };
 }
-//@ chunk-18hwfzwa.js:1615404-1615783 placement
+//@ chunk-czq1j3j2.js:1659562-1659941 placement
 /**
  * 构造桥接的用户对话框回调：sendRequest 发 request_user_dialog 控制请求，supportsKind 判断对端支持的对话框种类。
  */
@@ -379,7 +394,7 @@ function createBridgeDialogCallbacks(bridge, pendingHandlers, supportedKinds) {
     },
   };
 }
-//@ chunk-18hwfzwa.js:1615783-1616217 placement
+//@ chunk-czq1j3j2.js:1659941-1660375 placement
 /**
  * 有 CLAUDE_JOB_DIR 时，把作业状态文件里的 bridgeSession* 字段全部清掉（重新读一次再原子写回），出错只记日志。
  */
@@ -410,7 +425,7 @@ async function clearBridgeSessionFromJobState(fsOps) {
     logJobWriteError(error);
   }
 }
-//@ chunk-18hwfzwa.js:1616217-1616892 placement
+//@ chunk-czq1j3j2.js:1660375-1661050 placement
 /**
  * 把当前桥接会话信息（会话 id、仅出站、分组、归属账号/组织、禁止回填历史）写进作业状态文件；值未变化时不写，会话 id 不变时保留 bridgeSessionSeq。
  */
@@ -457,7 +472,7 @@ async function persistBridgeSessionToJobState(
     logJobWriteError(error);
   }
 }
-//@ chunk-18hwfzwa.js:1616892-1617525 placement
+//@ chunk-czq1j3j2.js:1661050-1661683 placement
 /**
  * 为桥接端的 context usage 请求收集上下文占用数据：动态加载 collectContextData，带上当前会话、消息、工具、MCP 客户端和系统提示词设置。
  */
@@ -495,16 +510,16 @@ async function collectBridgeContextUsage(
     detail: request?.detail,
   });
 }
-//@ chunk-18hwfzwa.js:1617525-1617578 placement
+//@ chunk-czq1j3j2.js:1661683-1661736 placement
 var BRIDGE_IMMEDIATE_COMMAND_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1617525", () => {
+deferInit("chunk-czq1j3j2.js:1661683", () => {
   BRIDGE_IMMEDIATE_COMMAND_NAMES = new Set(["effort", "model", "rename", "usage"]);
 });
-//@ chunk-18hwfzwa.js:1617578-1617634 placement
+//@ chunk-czq1j3j2.js:1661736-1661792 placement
 function isBridgeImmediateCommandsEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_humming_locket", true) !== false;
 }
-//@ chunk-18hwfzwa.js:1617634-1617919 placement
+//@ chunk-czq1j3j2.js:1661792-1662077 placement
 /**
  * 判断桥接送来的文本是否是可立即执行的斜杠命令：命令必须存在、已启用、不被模型结束状态阻止，且在 BRIDGE_SAFE_COMMANDS 与即时命令白名单中。返回解析结果或 null。
  */
@@ -528,7 +543,7 @@ function resolveBridgeImmediateCommand(text, commands, renderMode, endedByModel)
     return null;
   return bridgeImmediateCommand;
 }
-//@ chunk-18hwfzwa.js:1617919-1618267 placement
+//@ chunk-czq1j3j2.js:1662077-1662425 placement
 /**
  * 后台会话且有活动回合时，把桥接文本当作即时斜杠命令执行（记 tengu_immediate_command_executed），成功返回 true。
  */
@@ -556,7 +571,7 @@ function tryRunBridgeImmediateCommand(text, { turn, scope, store, transport }, r
   );
   return true;
 }
-//@ chunk-18hwfzwa.js:1618267-1618465 placement
+//@ chunk-czq1j3j2.js:1662425-1662623 placement
 /**
  * React hook：后台会话中注册桥接即时命令处理器（每宿主一个），卸载时注销。
  */
@@ -580,13 +595,7 @@ function useBridgeImmediateCommands({ turn, scope, store, transport }) {
     return () => registerRendezvousRunner(host, null);
   }, [host, turn, scope, store, transport, renderMode]);
 }
-//@ chunk-18hwfzwa.js:1618465-1618469 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1618465", () => {
-  init_react_production();
-});
 export {
-  useBridgeImmediateCommands,
   clearBridgeSessionFromJobState,
   handleBridgeInbound,
   persistBridgeSessionToJobState,
@@ -594,4 +603,5 @@ export {
   createBridgePermissionCallbacks,
   createBridgeDialogCallbacks,
   collectBridgeContextUsage,
+  useBridgeImmediateCommands,
 };

@@ -3,25 +3,25 @@
  *
  * /voice 实现：解析模式参数并切换语音输入（allow_voice_mode）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/voice/voice.ts
- * pieces: chunk-vrdyygyr.js (3)
+ * pieces: chunk-xe2139jk.js (3)
  * attribution: sole-consumer 1, affinity 1, fingerprint 1
  */
 import { isVoiceModeAvailable } from "../../voice/voiceModeEnabled.js";
 import { isAnthropicAuthEnabled } from "../../utils/auth.js";
 import { policyDeniedReason } from "../../services/policyLimits/policyEvidence.js";
 import { logOrgPolicyDenied } from "../../services/policyLimits/orgPolicyDeniedEvent.js";
-import { getInitialSettings_2, updateSettingsForSource } from "../../utils/settings/settings.js";
+import { getInitialSettings, updateSettingsForSource } from "../../utils/settings/settings.js";
 import { useVoiceEnabled } from "../../hooks/useVoiceEnabled.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { getShortcutDisplay } from "../../keybindings/shortcutFormat.js";
 import { normalizeLanguageForSTT } from "../../hooks/useVoice.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 
-//@ chunk-vrdyygyr.js:3685-3693 sole-consumer
+//@ chunk-xe2139jk.js:3993-4001 sole-consumer
 var MAX_HINT_SHOWS = 2;
-//@ chunk-vrdyygyr.js:3693-3814 affinity
+//@ chunk-xe2139jk.js:4001-4122 affinity
 /**
  * parseVoiceArg：hold|tap|off|invalid。
  */
@@ -31,7 +31,7 @@ function parseVoiceArg(arg) {
   if (lower === "hold" || lower === "tap" || lower === "off") return lower;
   return "invalid";
 }
-//@ chunk-vrdyygyr.js:3814-6440 fingerprint (2.1.88 match: call, 0.705)
+//@ chunk-xe2139jk.js:4122-6748 fingerprint (2.1.88 match: call, 0.706)
 /**
  * /voice 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -55,7 +55,7 @@ var call = async (args, context) => {
       value: "Voice mode is not available.",
     };
   }
-  let currentSettings = getInitialSettings_2();
+  let currentSettings = getInitialSettings();
   let voiceEnabled = useVoiceEnabled(currentSettings);
   let voiceArg = parseVoiceArg(args);
   if (voiceArg === "invalid")

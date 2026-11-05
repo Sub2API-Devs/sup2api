@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。进程启动时依据 tengu_hover_rest 固定是否使用 v5 存储后端；配置目录在启动后变化则不再交接。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-256aw479.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-r2adbyns.js (4)
  * attribution: placement 4
  */
 import { env } from "../env.js";
@@ -13,7 +13,7 @@ import { isStorageV5Enabled, pinStorageV5Flag } from "../hoverRest.js";
 import { getClaudeConfigDirOrNull, isSameConfigDir } from "../envUtils.js";
 import { logForDebugging } from "../debug.js";
 
-//@ chunk-256aw479.js:340-487 placement
+//@ chunk-r2adbyns.js:340-487 placement
 function pinStorageV5FromEnv(createBackend = tryCreateV5Backend) {
   let CLAUDE_CODE_HOVER_REST = env.CLAUDE_CODE_HOVER_REST;
   if (CLAUDE_CODE_HOVER_REST === undefined) return;
@@ -23,7 +23,7 @@ function pinStorageV5FromEnv(createBackend = tryCreateV5Backend) {
     configHome: getClaudeConfigDirOrNull(),
   };
 }
-//@ chunk-256aw479.js:487-965 placement
+//@ chunk-r2adbyns.js:487-965 placement
 /**
  * 进程启动时依据 tengu_hover_rest 固定是否使用 v5 存储后端；配置目录在启动后变化则不再交接。
  */
@@ -44,7 +44,7 @@ function adoptStorageV5EnvPin(pin) {
   }
   return backend;
 }
-//@ chunk-256aw479.js:965-1253 placement
+//@ chunk-r2adbyns.js:965-1253 placement
 function recordHoverRestDecision(value) {
   if (typeof value !== "boolean")
     logForDebugging(`tengu_hover_rest served a ${typeof value}, not a boolean; treating it as off`, {
@@ -60,7 +60,7 @@ function recordHoverRestDecision(value) {
     );
   return decision;
 }
-//@ chunk-256aw479.js:1253-1290 placement
+//@ chunk-r2adbyns.js:1253-1290 placement
 function tryCreateV5Backend() {
   if (!isStorageV5Enabled()) return;
   return;

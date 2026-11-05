@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/mux-proxy.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (3)
+ * pieces: chunk-qg41pqt6.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
 import { join } from "path";
@@ -16,20 +16,22 @@ import { closeAfterFlush } from "./tls-terminate-proxy.js";
 import { listenInRange } from "./sandbox-manager.js";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-fq0cr76a.js:703511-703545 esm-layout
+//@ chunk-qg41pqt6.js:704095-704134 esm-layout
 var SOCKS_FIRST_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DEFAULT_FIRST_BYTE_TIMEOUT_MS;
+var MAX_PORT_ATTEMPTS;
 var backendSeq;
-deferInit("chunk-fq0cr76a.js:703511", () => {
+deferInit("chunk-qg41pqt6.js:704095", () => {
   SOCKS_FIRST_BYTES = new Set([4, 5]);
   DEFAULT_FIRST_BYTE_TIMEOUT_MS = 1e4;
+  MAX_PORT_ATTEMPTS = 8;
   backendSeq = 0;
 });
-//@ chunk-fq0cr76a.js:703545-703628 esm-fingerprint
+//@ chunk-qg41pqt6.js:704134-704217 esm-fingerprint
 function unixSocketPath() {
   return join(tmpdir(), `srt-mux-${process.pid}-${(backendSeq++).toString(36)}.sock`);
 }
-//@ chunk-fq0cr76a.js:703628-705566 esm-fingerprint
+//@ chunk-qg41pqt6.js:704217-707223 esm-fingerprint
 function createMuxProxyServer(opts) {
   let firstByteTimeoutMs = opts.firstByteTimeoutMs ?? DEFAULT_FIRST_BYTE_TIMEOUT_MS;
   let isWindows = getPlatform_2() === "windows";
@@ -71,7 +73,7 @@ mux backend dial failed (${code})
     client.pipe(upstream);
     upstream.pipe(client);
   }
-  let server = createServer_5((client) => {
+  let handleClientConnection = (client) => {
     openSockets.add(client);
     client.once("close", () => openSockets.delete(client));
     client.on("error", (err) => logForDebugging_2(`mux: client socket error: ${err.message}`));
@@ -91,12 +93,68 @@ mux backend dial failed (${code})
       if (SOCKS_FIRST_BYTES.has(peek[0])) opts.handleSocksConnection(client);
       else dispatchHttp(client);
     });
-  });
+  };
+  let server = createServer_5(handleClientConnection);
+  let server_2 = createServer_5(handleClientConnection);
+  function listenOnIpv6(port) {
+    return new Promise((resolve) => {
+      let onErrorHandler = (error) => {
+        server_2.removeListener("listening", onListeningHandler);
+        resolve(error.code ?? "unknown");
+      };
+      let onListeningHandler = () => {
+        server_2.removeListener("error", onErrorHandler);
+        resolve(undefined);
+      };
+      server_2.once("error", onErrorHandler);
+      server_2.once("listening", onListeningHandler);
+      server_2.listen({
+        host: "::1",
+        port,
+        ipv6Only: true,
+      });
+    });
+  }
   return {
-    server,
     getPort() {
       let addr = server.address();
       return addr && typeof addr === "object" ? addr.port : undefined;
+    },
+    async listenFrontEnd(range) {
+      let reservedPorts = backendTcpPort !== undefined ? [backendTcpPort] : [];
+      let exclude = new Set(reservedPorts);
+      for (let remainingAttempts = MAX_PORT_ATTEMPTS; ;) {
+        try {
+          await listenInRange(server, (port) => server.listen(port, "127.0.0.1"), range, exclude);
+        } catch (error) {
+          if (range === undefined || exclude.size === reservedPorts.length) throw error;
+          exclude = new Set(reservedPorts);
+          remainingAttempts = 1;
+          continue;
+        }
+        let port = server.address().port;
+        let ipv6Error = await listenOnIpv6(port);
+        if (ipv6Error === undefined) return port;
+        if (ipv6Error === "EADDRNOTAVAIL" || ipv6Error === "EAFNOSUPPORT") {
+          logForDebugging_2(
+            `mux: this machine has no [::1] (${ipv6Error}), so nobody can listen there: listening on 127.0.0.1:${port} only`,
+          );
+          return port;
+        }
+        if (--remainingAttempts === 0) {
+          logForDebugging_2(
+            `mux: could not listen on [::1] at any port tried (last error ${ipv6Error}), so listening on 127.0.0.1:${port} only: a client that dials localhost:${port} may reach another program`,
+            {
+              level: "error",
+            },
+          );
+          return port;
+        }
+        logForDebugging_2(`mux: could not listen on [::1]:${port} (${ipv6Error}), trying another port`);
+        exclude.add(port);
+        for (let openSocket of openSockets) openSocket.destroy();
+        await new Promise((resolve) => server.close(() => resolve()));
+      }
     },
     async listenHttpBackend() {
       if (!isWindows) {
@@ -127,7 +185,9 @@ mux backend dial failed (${code})
     async close() {
       for (let s of openSockets) s.destroy();
       openSockets.clear();
-      await new Promise((resolve) => server.close(() => resolve()));
+      await Promise.all(
+        [server, server_2].map((netServer) => new Promise((resolve) => netServer.close(() => resolve()))),
+      );
       await new Promise((resolve) => opts.httpServer.close(() => resolve()));
       if (backendSocketPath) {
         await unlink(backendSocketPath).catch(() => {});
@@ -145,6 +205,7 @@ mux backend dial failed (${code})
     },
     unref() {
       server.unref();
+      server_2.unref();
       opts.httpServer.unref();
     },
   };

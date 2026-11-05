@@ -3,12 +3,20 @@
  *
  * WSL 路径与 gitdir（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-82kqcve8.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a2q0x549.js (17)
  * attribution: placement 17
  */
-import { join, relative, sep, isAbsolute, posix, resolve, dirname } from "path";
+import {
+  join as join_2,
+  relative as relative_2,
+  sep as sep_2,
+  isAbsolute as isAbsolute_2,
+  posix,
+  resolve,
+  dirname as dirname_2,
+} from "path";
 import { homedir } from "os";
 import { opendir, open } from "fs/promises";
 import { identity } from "./pathClassification.js";
@@ -28,13 +36,13 @@ import { logError } from "./log.js";
 import { readPositionIsUnsafe, pointerFileIsSuspect, rawPointerPathIsUnsafe } from "./git/gitFilesystem.js";
 import { isNetworkMountRoot, isOnForeignMount } from "./networkPaths.js";
 
-//@ chunk-82kqcve8.js:174786-174804 placement
+//@ chunk-a2q0x549.js:171989-172007 placement
 var MAX_DIR_ENTRIES = 32;
 var MAX_GITDIR_READ_BYTES = 4096;
-//@ chunk-82kqcve8.js:174804-175416 placement
+//@ chunk-a2q0x549.js:172007-172619 placement
 async function resolveWslGitDir(repoDir) {
-  let worktreesDir = join(repoDir, ".git", "worktrees");
-  let dirNamesBounded = await readDirNamesBounded(worktreesDir, join(repoDir, ".git"));
+  let worktreesDir = join_2(repoDir, ".git", "worktrees");
+  let dirNamesBounded = await readDirNamesBounded(worktreesDir, join_2(repoDir, ".git"));
   if (dirNamesBounded.length === 0) return [];
   let realRoot = await realpathOrNull(repoDir);
   if (realRoot === null) return [];
@@ -48,7 +56,7 @@ async function resolveWslGitDir(repoDir) {
     realHome === null || realHome === homeIdentity ? [homeIdentity] : [homeIdentity, realHome];
   let results = await Promise.all(
     dirNamesBounded.map((dirName) =>
-      readGitdirFile(join(worktreesDir, dirName), join(realWorktreesDir, dirName)),
+      readGitdirFile(join_2(worktreesDir, dirName), join_2(realWorktreesDir, dirName)),
     ),
   );
   let gitDirs = [];
@@ -77,43 +85,43 @@ async function resolveWslGitDir(repoDir) {
   }
   return gitDirs;
 }
-//@ chunk-82kqcve8.js:175416-175496 placement
+//@ chunk-a2q0x549.js:172619-172699 placement
 function isCanonicalGitRoot(path) {
   if (findGitRootRecheckingNegative(path) === path) return true;
   getGitRepoCache().rootByPath.delete(path);
   return findGitRoot(path) === path;
 }
-//@ chunk-82kqcve8.js:175496-175599 placement
+//@ chunk-a2q0x549.js:172699-172802 placement
 function canonicalGitRootFresh(path) {
   let canonicalGitRoot = findCanonicalGitRoot(path);
   if (canonicalGitRoot !== null && canonicalGitRoot !== path) return canonicalGitRoot;
   getGitRepoCache().canonicalRootByRoot.delete(path);
   return findCanonicalGitRoot(path);
 }
-//@ chunk-82kqcve8.js:175599-175622 placement
+//@ chunk-a2q0x549.js:172802-172825 placement
 function isCaseFoldingActive() {
   return false;
 }
-//@ chunk-82kqcve8.js:175622-175694 placement
+//@ chunk-a2q0x549.js:172825-172897 placement
 function foldForPlatform(kind) {
   if (kind === "windows_on_wsl") return foldCaseSimple;
   return isCaseFoldingActive() ? foldCaseBasic : (value) => value;
 }
-//@ chunk-82kqcve8.js:175694-175836 placement
+//@ chunk-a2q0x549.js:172897-173039 placement
 function isPathInside(childPath, parentPath) {
   let caseFolding = isCaseFoldingActive();
   let foldedChild = caseFolding ? foldCaseBasic(childPath) : childPath;
   let foldedParent = caseFolding ? foldCaseBasic(parentPath) : parentPath;
   if (foldedChild === foldedParent) return true;
-  let relativePath = relative(foldedChild, foldedParent);
+  let relativePath = relative_2(foldedChild, foldedParent);
   return (
     relativePath !== "" &&
     relativePath !== ".." &&
-    !relativePath.startsWith(`..${sep}`) &&
-    !isAbsolute(relativePath)
+    !relativePath.startsWith(`..${sep_2}`) &&
+    !isAbsolute_2(relativePath)
   );
 }
-//@ chunk-82kqcve8.js:175836-176222 placement
+//@ chunk-a2q0x549.js:173039-173425 placement
 /**
  * 用户目录下不应作为挂载或同步目标的敏感子目录（Library、AppData、开始菜单、PowerShell 配置目录、bin 等，支持 OneDrive* 通配）。
  */
@@ -137,7 +145,7 @@ var PROFILE_SENSITIVE_DIRS = [
   ["OneDrive*", "Documents", "WindowsPowerShell"],
   ["bin"],
 ];
-//@ chunk-82kqcve8.js:176222-176433 placement
+//@ chunk-a2q0x549.js:173425-173636 placement
 /**
  * 判断路径是否位于用户目录本身或其敏感子目录（含点开头目录）之内。
  */
@@ -154,7 +162,7 @@ function isUnderSensitiveProfileDir(path, roots, kind = "platform") {
     );
   });
 }
-//@ chunk-82kqcve8.js:176433-176582 placement
+//@ chunk-a2q0x549.js:173636-173785 placement
 /**
  * 判断路径是否是用户目录下某个敏感子目录的上级。
  */
@@ -168,11 +176,11 @@ function isAncestorOfSensitiveProfileDir(path, roots, kind = "platform") {
     );
   });
 }
-//@ chunk-82kqcve8.js:176582-176641 placement
+//@ chunk-a2q0x549.js:173785-173844 placement
 function segmentsUnderAnyRoot(path, roots, kind, test) {
   return roots.some((root) => relativeSegmentsUnder(path, root, kind).some(test));
 }
-//@ chunk-82kqcve8.js:176641-177068 placement
+//@ chunk-a2q0x549.js:173844-174271 placement
 /**
  * 计算路径相对用户目录的各种分段形式（WSL 访问 Windows 时兼顾 /mnt 与盘符写法），不在其下时为空。
  */
@@ -195,13 +203,13 @@ function relativeSegmentsUnder(childPath, parentPath, platformKind) {
   }
   if (!isPathInside(parentPath, childPath)) return [];
   let caseFolding = isCaseFoldingActive();
-  let relativePath = relative(
+  let relativePath = relative_2(
     caseFolding ? foldCaseBasic(parentPath) : parentPath,
     caseFolding ? foldCaseBasic(childPath) : childPath,
   );
-  return [relativePath === "" ? [] : relativePath.split(sep)];
+  return [relativePath === "" ? [] : relativePath.split(sep_2)];
 }
-//@ chunk-82kqcve8.js:177068-177247 placement
+//@ chunk-a2q0x549.js:174271-174450 placement
 function matchesProfileSegment(segment, pattern, kind) {
   if (kind === "windows_on_wsl" && isDosShortNameFolded(segment)) return true;
   let fold = foldForPlatform(kind);
@@ -210,7 +218,7 @@ function matchesProfileSegment(segment, pattern, kind) {
   let foldedSegment = fold(segment);
   return foldedSegment === foldedPrefix || foldedSegment.startsWith(`${foldedPrefix} - `);
 }
-//@ chunk-82kqcve8.js:177247-177316 placement
+//@ chunk-a2q0x549.js:174450-174519 placement
 function homeDirOrNull() {
   try {
     let home = homedir();
@@ -219,7 +227,7 @@ function homeDirOrNull() {
     return null;
   }
 }
-//@ chunk-82kqcve8.js:177316-177412 placement
+//@ chunk-a2q0x549.js:174519-174615 placement
 async function realpathOrNull(path) {
   try {
     return identity(await getFsImplementation().realpath(path));
@@ -228,7 +236,7 @@ async function realpathOrNull(path) {
     return null;
   }
 }
-//@ chunk-82kqcve8.js:177412-177665 placement
+//@ chunk-a2q0x549.js:174615-174868 placement
 async function readDirNamesBounded(dir, anchor) {
   if (readPositionIsUnsafe(dir, anchor)) return [];
   try {
@@ -248,9 +256,9 @@ async function readDirNamesBounded(dir, anchor) {
     return [];
   }
 }
-//@ chunk-82kqcve8.js:177665-178073 placement
+//@ chunk-a2q0x549.js:174868-175276 placement
 async function readGitdirFile(adminDir, worktreePath) {
-  let gitdirPath = join(adminDir, "gitdir");
+  let gitdirPath = join_2(adminDir, "gitdir");
   if (pointerFileIsSuspect(gitdirPath, adminDir)) return null;
   let pointerText;
   try {
@@ -280,6 +288,6 @@ async function readGitdirFile(adminDir, worktreePath) {
     (isOnForeignMount(pointerText, worktreePath) || rawPointerPathIsUnsafe(pointerText, worktreePath))
   )
     return null;
-  return identity(dirname(resolve(worktreePath, pointerText)));
+  return identity(dirname_2(resolve(worktreePath, pointerText)));
 }
 export { resolveWslGitDir, isUnderSensitiveProfileDir, isAncestorOfSensitiveProfileDir };

@@ -3,10 +3,10 @@
  *
  * 云会话（ultraplan/ultrareview）详情：阶段流水线、计划审阅、终止会话。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/tasks/RemoteSessionDetailDialog.tsx
- * pieces: chunk-18hwfzwa.js (12), chunk-azz22fvc.js (1), chunk-hantmvxa.js (1)
- * attribution: placement 2, fingerprint 10, layout 1, callgraph-fingerprint 1
+ * pieces: chunk-czq1j3j2.js (12), chunk-h6gkxbpm.js (1), chunk-ne2890fx.js (1)
+ * attribution: placement 3, fingerprint 9, layout 1, callgraph-fingerprint 1
  */
 import { plural } from "../../utils/stringUtils.js";
 import { isFilePersistenceEnabled } from "../../utils/filePersistence/filePersistence.js";
@@ -43,7 +43,7 @@ import { formatReviewStageCounts, RemoteSessionProgress } from "./RemoteSessionP
 import { Byline } from "../design-system/Byline.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { normalizeMessages, EMPTY_LOOKUPS } from "../../utils/messages.js";
-import { toInternalMessages } from "../../utils/messages/mappers.js";
+import { sdkMessagesToInternal } from "../../utils/messages/mappers.js";
 import { teleportResumeCodeSession } from "../../utils/teleport.js";
 import { errorMessage } from "../../utils/errors.js";
 import { FocusColumn } from "../design-system/FocusColumn.js";
@@ -51,29 +51,29 @@ import { TranscriptModeProvider } from "../messages/transcriptModeContext.js";
 import { agentProgressSelector } from "../../tools/AgentTool/UI.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hantmvxa.js:57940-58017 fingerprint (2.1.88 match: STAGES, 0.317)
+//@ chunk-ne2890fx.js:58114-58191 fingerprint (2.1.88 match: STAGES, 0.314)
 function STAGES(maxFindings) {
   return maxFindings === "all" ? "all findings" : `\u2264${maxFindings} ${plural(maxFindings, "finding")}`;
 }
-//@ chunk-azz22fvc.js:1568-1635 fingerprint (2.1.88 match: AGENT_VERB, 0.384)
-function AGENT_VERB(agentId) {
+//@ chunk-h6gkxbpm.js:1533-1600 placement
+function agentId(agentId) {
   return (
     agentId.length > 0 &&
     isFilePersistenceEnabled() &&
     (filesPlacedByNameRead() !== "done" || hasConflictingPlacedFile(agentId))
   );
 }
-//@ chunk-18hwfzwa.js:708595-708599 placement
+//@ chunk-czq1j3j2.js:702898-702902 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:708595", () => {
+deferInit("chunk-czq1j3j2.js:702898", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:708599-708603 placement
+//@ chunk-czq1j3j2.js:707417-707421 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:708599", () => {
+deferInit("chunk-czq1j3j2.js:707417", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:708603-709181 fingerprint (2.1.88 match: formatToolUseSummary, 0.898)
+//@ chunk-czq1j3j2.js:729346-729924 fingerprint (2.1.88 match: formatToolUseSummary, 0.898)
 function formatToolUseSummary(name, input, maxWidth) {
   if (name === EXITPLANMODE_2) return "Review the plan in your browser";
   if (!input || typeof input !== "object") return name;
@@ -99,7 +99,7 @@ function formatToolUseSummary(name, input, maxWidth) {
     }
   return name;
 }
-//@ chunk-18hwfzwa.js:709181-709285 fingerprint (2.1.88 match: PHASE_LABEL, 0.819)
+//@ chunk-czq1j3j2.js:729924-730028 fingerprint (2.1.88 match: PHASE_LABEL, 0.82)
 var ULTRAPLAN_STATUS_LABELS = {
   needs_input: "input required",
   plan_ready: "ready",
@@ -108,7 +108,7 @@ var ULTRAPLAN_STATUS_SHORT = {
   needs_input: "waiting",
   plan_ready: "done",
 };
-//@ chunk-18hwfzwa.js:709285-713110 fingerprint (2.1.88 match: UltraplanSessionDetail, 0.62)
+//@ chunk-czq1j3j2.js:730028-733853 fingerprint (2.1.88 match: UltraplanSessionDetail, 0.627)
 function UltraplanSessionDetail(props) {
   let $ = useMemoCache(74);
   let { session, onDone, onBack, onKill } = props;
@@ -431,7 +431,7 @@ function UltraplanSessionDetail(props) {
   } else t26 = $[73];
   return t26;
 }
-//@ chunk-18hwfzwa.js:713110-714091 layout
+//@ chunk-czq1j3j2.js:733853-734834 layout
 /**
  * "停止 ultraplan？"确认对话框：终止云会话（可选同时丢弃计划），防止重复触发。
  */
@@ -517,14 +517,14 @@ function StopUltraplanConfirm(props) {
   } else dialogElement = $[14];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:714091-714198 fingerprint (2.1.88 match: STAGE_LABELS, 0.772)
+//@ chunk-czq1j3j2.js:734834-734941 fingerprint (2.1.88 match: STAGE_LABELS, 0.772)
 var REVIEW_STAGES = ["finding", "verifying", "synthesizing"];
 var REVIEW_STAGE_LABELS = {
   finding: "Find",
   verifying: "Verify",
   synthesizing: "Dedupe",
 };
-//@ chunk-18hwfzwa.js:714198-715118 fingerprint (2.1.88 match: StagePipeline, 0.627)
+//@ chunk-czq1j3j2.js:734941-735861 fingerprint (2.1.88 match: StagePipeline, 0.627)
 function StagePipeline(props) {
   let $ = useMemoCache(15);
   let { stage, completed, hasProgress } = props;
@@ -617,7 +617,7 @@ function StagePipeline(props) {
   } else t6 = $[14];
   return t6;
 }
-//@ chunk-18hwfzwa.js:715118-715405 fingerprint (2.1.88 match: reviewCountsLine, 1)
+//@ chunk-czq1j3j2.js:735861-736148 fingerprint (2.1.88 match: reviewCountsLine, 1)
 function reviewCountsLine(session) {
   let reviewProgress = session.reviewProgress;
   if (!reviewProgress) return session.status === "completed" ? "done" : "setting up";
@@ -630,7 +630,7 @@ function reviewCountsLine(session) {
   }
   return formatReviewStageCounts(reviewProgress.stage, reviewProgress.bugsFound, verified, refuted);
 }
-//@ chunk-18hwfzwa.js:715405-716385 callgraph-fingerprint (2.1.88 match: _temp, 0.156)
+//@ chunk-czq1j3j2.js:736148-737128 callgraph-fingerprint (2.1.88 match: _temp, 0.156)
 /**
  * "停止 ultrareview？"确认对话框：归档云会话、停止本地跟踪并丢弃已有发现。
  */
@@ -714,7 +714,7 @@ function StopUltrareviewConfirm(exitState) {
   } else dialogElement = $[9];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:716385-719172 fingerprint (2.1.88 match: ReviewSessionDetail, 0.743)
+//@ chunk-czq1j3j2.js:737128-739915 fingerprint (2.1.88 match: ReviewSessionDetail, 0.743)
 function ReviewSessionDetail(props) {
   let $ = useMemoCache(50);
   let { session, onDone, onBack, onKill } = props;
@@ -793,14 +793,14 @@ function ReviewSessionDetail(props) {
   let handleChange;
   if ($[12] !== goBackOrClose || $[13] !== handleClose) {
     handleChange = (action) => {
-      oo: switch (action) {
+      eo: switch (action) {
         case "stop": {
           setConfirmingStop(true);
-          break oo;
+          break eo;
         }
         case "back": {
           goBackOrClose();
-          break oo;
+          break eo;
         }
         case "dismiss": {
           handleClose();
@@ -955,7 +955,7 @@ function ReviewSessionDetail(props) {
   } else t20 = $[49];
   return t20;
 }
-//@ chunk-18hwfzwa.js:719172-721881 fingerprint (2.1.88 match: RemoteSessionDetailDialog, 0.679)
+//@ chunk-czq1j3j2.js:739915-742624 fingerprint (2.1.88 match: RemoteSessionDetailDialog, 0.679)
 /**
  * 云会话详情：ultraplan 显示阶段与计划审阅（在浏览器中查看），ultrareview 显示发现/验证计数，可终止或归档会话。
  */
@@ -966,7 +966,7 @@ function RemoteSessionDetailDialog({ session, tools, commands, verbose, onDone, 
   let tail = sessionLog?.tail;
   let lastMessages = useMemo(() => {
     if (session.isUltraplan || session.isRemoteReview || !tail) return [];
-    return normalizeMessages(toInternalMessages(tail))
+    return normalizeMessages(sdkMessagesToInternal(tail))
       .filter((message) => message.type !== "progress")
       .slice(-3);
   }, [session.isUltraplan, session.isRemoteReview, tail]);
@@ -1202,4 +1202,4 @@ function RemoteSessionDetailDialog({ session, tools, commands, verbose, onDone, 
     }),
   });
 }
-export { StopUltrareviewConfirm, RemoteSessionDetailDialog, STAGES, AGENT_VERB };
+export { agentId, StopUltrareviewConfirm, RemoteSessionDetailDialog, STAGES };

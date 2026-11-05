@@ -3,18 +3,18 @@
  *
  * 2.1.316 新增。远程工具的路径映射。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-gqez588q.js (31)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yrtkt28g.js (31)
  * attribution: placement 31
  */
 import path, { win32, posix } from "path";
 import { isDeepStrictEqual } from "util";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { identityMap } from "../../remote/tools/protocolConstants.js";
 import { HOST_TOOL_INPUT_FIELD } from "../../bridge/deviceRegistration.js";
 import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
@@ -25,18 +25,12 @@ import { normalizeCaseForComparison } from "../../utils/permissions/filesystem.j
 import { isSystemVolumePath } from "../../utils/permissions/protectedDirs.js";
 import { foldCase_2 } from "../../utils/networkPaths.js";
 
-//@ chunk-gqez588q.js:611-645 placement
+//@ chunk-yrtkt28g.js:644-678 placement
 /**
  * 输入含路径、在远程执行前需要路径映射的工具集合。
  */
-var PATH_SENSITIVE_TOOLS = new Set([
-  BASH_TOOL_NAME,
-  POWERSHELL_TOOL_NAME,
-  FILE_READ_TOOL_NAME,
-  FILE_WRITE_TOOL_NAME,
-  FILE_EDIT_TOOL_NAME,
-]);
-//@ chunk-gqez588q.js:645-696 placement
+var PATH_SENSITIVE_TOOLS = new Set([BASH_TOOL_NAME, POWERSHELL_TOOL_NAME, READ, FILE_WRITE_TOOL_NAME, EDIT]);
+//@ chunk-yrtkt28g.js:678-729 placement
 /**
  * 默认的路径服务策略。
  */
@@ -44,7 +38,7 @@ var DEFAULT_SERVING_POLICY = {
   approvalAttested: false,
   modeDecidedByHost: false,
 };
-//@ chunk-gqez588q.js:696-1060 placement
+//@ chunk-yrtkt28g.js:729-1093 placement
 /**
  * 合并两份服务策略，取更严格的一方（沙箱必需、禁止后台、固定 cwd、清除凭证环境变量、较小的超时上限）。
  */
@@ -60,12 +54,12 @@ function mergeServingPolicy(base, override) {
     maxTimeoutMs: minTimeout(base.maxTimeoutMs, override.maxTimeoutMs),
   };
 }
-//@ chunk-gqez588q.js:1060-1139 placement
+//@ chunk-yrtkt28g.js:1093-1172 placement
 function minTimeout(maxTimeoutMs, maxTimeoutMs_2) {
   if (maxTimeoutMs_2 === undefined || maxTimeoutMs_2 <= 0) return maxTimeoutMs;
   return maxTimeoutMs === undefined ? maxTimeoutMs_2 : Math.min(maxTimeoutMs, maxTimeoutMs_2);
 }
-//@ chunk-gqez588q.js:1139-1266 placement
+//@ chunk-yrtkt28g.js:1172-1299 placement
 /**
  * 远程调用路径映射常量：禁止嵌套远程执行的拒绝文字、模拟 sed 编辑键、字段改名缓存。
  */
@@ -73,14 +67,14 @@ var NESTED_REMOTE_REFUSAL =
   "nested remote execution is not supported: a served call cannot name another machine.";
 var SIMULATED_SED_EDIT_KEY = "_simulatedSedEdit";
 var renamedFieldCache = new Map();
-//@ chunk-gqez588q.js:1266-1290 placement
+//@ chunk-yrtkt28g.js:1299-1323 placement
 /**
  * 按字段名缓存的改名映射。
  */
 function renamedFieldCacheMap() {
   return renamedFieldCache;
 }
-//@ chunk-gqez588q.js:1290-1457 placement
+//@ chunk-yrtkt28g.js:1323-1490 placement
 /**
  * 按映射表把输入字段改名（去掉与新名冲突的原字段）。
  */
@@ -93,7 +87,7 @@ function renameInputFields(input, renameMap) {
       .map(([key, value]) => [renameMap.get(key) ?? key, value]),
   );
 }
-//@ chunk-gqez588q.js:1457-1572 placement
+//@ chunk-yrtkt28g.js:1490-1605 placement
 /**
  * 把输出中的字段名按映射表改回原名。
  */
@@ -102,7 +96,7 @@ function unrenameOutputFields(output, wireArguments) {
   let originalName = new Map([...wireArguments].map(([original, renamed]) => [renamed, original]));
   return identityMap(output, (value, key) => originalName.get(key) ?? key);
 }
-//@ chunk-gqez588q.js:1572-1682 placement
+//@ chunk-yrtkt28g.js:1605-1715 placement
 /**
  * 去掉值等于目标机器名的目标字段，剩余为空时返回 undefined。
  */
@@ -112,7 +106,7 @@ function stripTargetField(input, targetName) {
     input[HOST_TOOL_INPUT_FIELD] === targetName ? omitAlias(input, [HOST_TOOL_INPUT_FIELD]) : input;
   return Object.keys(stripped).length === 0 ? undefined : stripped;
 }
-//@ chunk-gqez588q.js:1682-1808 placement
+//@ chunk-yrtkt28g.js:1715-1841 placement
 /**
  * 输入里带有目标字段（嵌套远程）或不支持的字段时返回拒绝说明。
  */
@@ -126,14 +120,14 @@ function unsupportedFieldRefusal(input, fields, targetName) {
         targetName,
       });
 }
-//@ chunk-gqez588q.js:1808-1850 placement
+//@ chunk-yrtkt28g.js:1841-1883 placement
 /**
  * 去掉编辑专用键后的输入副本。
  */
 function withoutEditKeys(input, extraKeys) {
   return omitAlias(input, [SIMULATED_SED_EDIT_KEY, ...extraKeys]);
 }
-//@ chunk-gqez588q.js:1850-1961 placement
+//@ chunk-yrtkt28g.js:1883-1994 placement
 /**
  * 只保留第二个对象中在第一个对象里也存在的键。
  */
@@ -144,12 +138,12 @@ function pickKnownFields(evaluatedInput, source) {
       .map((key) => [key, source[key]]),
   );
 }
-//@ chunk-gqez588q.js:2085-2373 placement
+//@ chunk-yrtkt28g.js:2118-2406 placement
 /**
  * 远程写/编辑文件前，从本地读取记录中取出该文件（映射到同步目录后）的完整读取基线。
  */
 function readBaselineForRemoteWrite(context) {
-  if (context.tool.name !== FILE_WRITE_TOOL_NAME && context.tool.name !== FILE_EDIT_TOOL_NAME) return;
+  if (context.tool.name !== FILE_WRITE_TOOL_NAME && context.tool.name !== EDIT) return;
   let filePath = context.input.file_path;
   if (typeof filePath !== "string" || isNotebookPath(filePath)) return;
   let localPath = mirroredLocalPath(filePath, context.description, context.sessionDir());
@@ -159,7 +153,7 @@ function readBaselineForRemoteWrite(context) {
     ? fileState.readBaseline
     : undefined;
 }
-//@ chunk-gqez588q.js:2373-2757 placement
+//@ chunk-yrtkt28g.js:2406-2790 placement
 /**
  * 把远程机器上的绝对路径（含 ~）映射到本会话同步目录下的对应路径，仅当该机器项目为双向/仅上传同步且路径位于同步根内时。
  */
@@ -181,7 +175,7 @@ function mirroredLocalPath(remotePath, description, sessionDir, pathImpl = path)
   let joined = posix.join(sessionDir, ...relativePath.split(pathLib.sep));
   return isContainedRelative(pathImpl, pathImpl.relative(sessionDir, joined)) ? joined : undefined;
 }
-//@ chunk-gqez588q.js:2757-2886 placement
+//@ chunk-yrtkt28g.js:2790-2919 placement
 function syncRootOf(description, pathLib) {
   return description.sync_root !== undefined &&
     pathLib.isAbsolute(description.sync_root) &&
@@ -189,18 +183,18 @@ function syncRootOf(description, pathLib) {
     ? description.sync_root
     : description.working_dir;
 }
-//@ chunk-gqez588q.js:2886-2960 placement
+//@ chunk-yrtkt28g.js:2919-2993 placement
 function isContainedRelative(pathLib, relativePath) {
   return (
     relativePath !== "" && relativePath.split(pathLib.sep)[0] !== ".." && !pathLib.isAbsolute(relativePath)
   );
 }
-//@ chunk-gqez588q.js:2960-3022 placement
+//@ chunk-yrtkt28g.js:2993-3055 placement
 function isPathWithin(pathLib, syncRoot, workingDir) {
   let relativePath = pathLib.relative(syncRoot, workingDir);
   return relativePath === "" || isContainedRelative(pathLib, relativePath);
 }
-//@ chunk-gqez588q.js:3022-3138 placement
+//@ chunk-yrtkt28g.js:3055-3171 placement
 /**
  * 比较两组输入在规范化与默认值意义下是否相同。
  */
@@ -214,21 +208,21 @@ function sameInputsModuloDefaults(left, right, platform) {
     ) && definedEntries(right).every(([key, value]) => left[key] !== undefined || value === false)
   );
 }
-//@ chunk-gqez588q.js:3138-3235 placement
+//@ chunk-yrtkt28g.js:3171-3268 placement
 function normalizeFileInput(key, value, platform) {
   return key === "file_path" && typeof value === "string" && platform === "darwin"
     ? value.normalize("NFC")
     : value;
 }
-//@ chunk-gqez588q.js:3235-3301 placement
+//@ chunk-yrtkt28g.js:3268-3334 placement
 function definedEntries(object) {
   return Object.entries(object).filter(([, value]) => value !== undefined);
 }
-//@ chunk-gqez588q.js:3301-3338 placement (2.1.88 match: getUnameSR, 0.793)
+//@ chunk-yrtkt28g.js:3334-3371 placement (2.1.88 match: getUnameSR, 0.793)
 function getUnameSR(platform) {
   return platform === "win32" ? win32 : posix;
 }
-//@ chunk-gqez588q.js:3338-3764 placement
+//@ chunk-yrtkt28g.js:3371-3797 placement
 /**
  * 从机器描述中提取路径事实：工作目录、主目录、镜像目录、平台，以及副本来源目录。
  */
@@ -259,7 +253,7 @@ function remoteDirFacts(description) {
       }
     : undefined;
 }
-//@ chunk-gqez588q.js:3764-4003 placement
+//@ chunk-yrtkt28g.js:3797-4036 placement
 /**
  * 判断远程目录类别：无公布目录、Windows 机器、Windows 会话或位于公布目录中。
  */
@@ -282,7 +276,7 @@ function remoteDirKind(description) {
         dir: facts.workingDir,
       };
 }
-//@ chunk-gqez588q.js:4003-4123 placement
+//@ chunk-yrtkt28g.js:4036-4156 placement
 /**
  * 把输入的 file_path 解析为远程机器上的绝对路径。
  */
@@ -297,7 +291,7 @@ function resolveRemoteFilePathInput(input, dirFacts) {
         file_path: remotePath,
       };
 }
-//@ chunk-gqez588q.js:4123-4456 placement
+//@ chunk-yrtkt28g.js:4156-4489 placement
 /**
  * 解析远程路径：处理 ~、空路径与相对路径，Windows 上拒绝其他盘符的相对路径。
  */
@@ -314,17 +308,17 @@ function resolveRemotePath(path, dirFacts) {
     ? undefined
     : unameSR.resolve(dirFacts.workingDir, normalized);
 }
-//@ chunk-gqez588q.js:4456-4527 placement
+//@ chunk-yrtkt28g.js:4489-4560 placement
 function driveLetterOf(pathText) {
   let match = /^[a-z]:/i.exec(pathText);
   return match === null ? undefined : normalizeCaseForComparison(match[0]);
 }
-//@ chunk-gqez588q.js:4527-4667 placement
+//@ chunk-yrtkt28g.js:4560-4700 placement
 function normalizeWin32DevicePath(path, workingDir) {
   let replaced = path.replace(/^\\\\[?.]\\UNC\\/i, "\\\\").replace(/^\\\\[?.]\\(?=[a-z]:)/i, "");
   return /^\\(?!\\)/.test(replaced) ? win32.resolve(workingDir, replaced) : replaced;
 }
-//@ chunk-gqez588q.js:4667-4898 placement
+//@ chunk-yrtkt28g.js:4700-4931 placement
 function stripMacVolumePrefix(path, volumeName) {
   let parts = isSystemVolumePath(path).split("/");
   if (foldCase_2(parts[1] ?? "") === "volumes" && foldCase_2(parts[2] ?? "") === volumeName)
@@ -333,7 +327,7 @@ function stripMacVolumePrefix(path, volumeName) {
     ? ["", "private", ...parts.slice(1)].join("/")
     : parts.join("/");
 }
-//@ chunk-gqez588q.js:4898-5023 placement
+//@ chunk-yrtkt28g.js:4931-5056 placement
 function macPathVariants(path) {
   let stripped = stripMacVolumePrefix(path, "macintosh hd");
   let [firstSegment, volumeSegment = ""] = stripped.split("/").slice(1, 3).map(foldCase_2);
@@ -341,16 +335,19 @@ function macPathVariants(path) {
     ? [stripped, stripMacVolumePrefix(stripped, volumeSegment)]
     : [stripped];
 }
-//@ chunk-gqez588q.js:5023-5144 placement
+//@ chunk-yrtkt28g.js:5056-5177 placement
 function stripProcRoot(path) {
   let match = /^\/proc\/(?:self|thread-self)\/root(?=\/|$)/.exec(path);
   return match === null ? path : stripProcRoot(path.slice(match[0].length) || "/");
 }
-//@ chunk-gqez588q.js:5144-5204 placement
+//@ chunk-yrtkt28g.js:5177-5237 placement
 function normalizeWin32DrivePath(path, unameSR) {
   return unameSR === win32 && /^\/[a-z]\//i.test(path) ? posixPathToWindowsPath(path) : path;
 }
 export {
+  PATH_SENSITIVE_TOOLS,
+  DEFAULT_SERVING_POLICY,
+  resolveRemoteFilePathInput,
   unsupportedFieldRefusal,
   withoutEditKeys,
   stripTargetField,
@@ -360,13 +357,6 @@ export {
   unrenameOutputFields,
   renamedFieldCacheMap,
   mergeServingPolicy,
-  DEFAULT_SERVING_POLICY,
-  remoteDirKind,
-  remoteDirFacts,
-  resolveRemoteFilePathInput,
-  readBaselineForRemoteWrite,
-  sameInputsModuloDefaults,
-  PATH_SENSITIVE_TOOLS,
   normalizeWin32DevicePath,
   macPathVariants,
   stripProcRoot,
@@ -374,4 +364,8 @@ export {
   normalizeWin32DrivePath,
   resolveRemotePath,
   driveLetterOf,
+  remoteDirKind,
+  remoteDirFacts,
+  readBaselineForRemoteWrite,
+  sameInputsModuloDefaults,
 };

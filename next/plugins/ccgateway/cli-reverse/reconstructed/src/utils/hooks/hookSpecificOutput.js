@@ -3,9 +3,9 @@
  *
  * hookSpecificOutput 解析（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (16)
  * attribution: placement 16
  */
 import { isDeepStrictEqual } from "util";
@@ -23,10 +23,10 @@ import { clipDisplayText } from "../resultError.js";
 import { ASKUSERQUESTION } from "../../tools/AskUserQuestionTool/prompt.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:310452-310547 placement
+//@ chunk-7jxyna5q.js:234996-235091 placement
 var permissionDecisionSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var permissionRuleUpdateSchema;
-deferInit("chunk-s61vbvea.js:310452", () => {
+deferInit("chunk-7jxyna5q.js:234996", () => {
   permissionDecisionSchema = DoctorLazy(() => _enum(["allow", "deny", "ask"]));
   permissionRuleUpdateSchema = DoctorLazy(() =>
     objectSchema({
@@ -35,13 +35,13 @@ deferInit("chunk-s61vbvea.js:310452", () => {
     }),
   );
 });
-//@ chunk-s61vbvea.js:310547-311057 placement
+//@ chunk-7jxyna5q.js:235091-235601 placement
 /**
  * 权限更新目标与权限更新操作（添加/替换/删除规则、设置模式等）的 schema。
  */
 var permissionUpdateDestinationSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var permissionUpdateSchema;
-deferInit("chunk-s61vbvea.js:310547", () => {
+deferInit("chunk-7jxyna5q.js:235091", () => {
   permissionUpdateDestinationSchema = DoctorLazy(() =>
     _enum(["userSettings", "projectSettings", "localSettings", "session", "cliArg"]),
   );
@@ -83,7 +83,7 @@ deferInit("chunk-s61vbvea.js:310547", () => {
     ]),
   );
 });
-//@ chunk-s61vbvea.js:311099-311310 placement
+//@ chunk-7jxyna5q.js:235643-235854 placement
 var HOOK_TEXT_FIELD_LIMITS = {
   reason: 2000,
   stopReason: 2000,
@@ -99,7 +99,7 @@ var HOOK_TEXT_FIELD_MAX_LINES = {
   additionalContext: MAX_ADDITIONAL_CONTEXT_CHARS,
   permissionDecisionReason: 20,
 };
-//@ chunk-s61vbvea.js:311310-311375 placement
+//@ chunk-7jxyna5q.js:235854-235919 placement
 /**
  * 按字符数与行数上限裁剪钩子文本。
  */
@@ -109,12 +109,12 @@ function clipHookText(text, maxCodeUnits, maxLines = MAX_ADDITIONAL_CONTEXT_CHAR
     maxLines,
   });
 }
-//@ chunk-s61vbvea.js:311375-311418 placement
+//@ chunk-7jxyna5q.js:235919-235962 placement
 function isAskUserQuestionTool(toolName) {
   if (toolName === ASKUSERQUESTION) return true;
   return false;
 }
-//@ chunk-s61vbvea.js:311418-312014 placement
+//@ chunk-7jxyna5q.js:235962-236558 placement
 /**
  * 提示"你自己的钩子试图修改工具输入但被拒绝"等三条固定文案（工具输入、提问答案、Slack 消息）。
  */
@@ -124,7 +124,7 @@ var ANSWER_CHANGE_REFUSED_TEXT =
   "A hook from your own Claude Code files tried to change your answer to Claude's question. Claude read your answer as you gave it.";
 var SLACK_MESSAGE_CHANGE_REFUSED_TEXT =
   "A hook from your own Claude Code files tried to change the Slack messages Claude read. Claude read them unchanged.";
-//@ chunk-s61vbvea.js:312014-312204 placement
+//@ chunk-7jxyna5q.js:236558-236748 placement
 function clipHookTextField(state, field, value) {
   if (typeof value !== "string") return;
   if (state.options.personal === true) return value;
@@ -136,11 +136,11 @@ function clipHookTextField(state, field, value) {
   if (truncated) state.report.truncated.push(field);
   return text.trim() === "" ? undefined : text;
 }
-//@ chunk-s61vbvea.js:312204-312284 placement
+//@ chunk-7jxyna5q.js:236748-236828 placement
 function markDroppedField(state, field, dropped) {
   if (dropped && !state.report.dropped.includes(field)) state.report.dropped.push(field);
 }
-//@ chunk-s61vbvea.js:312284-312416 placement
+//@ chunk-7jxyna5q.js:236828-236960 placement
 function additionalContextOutput(state, hookEventName, output) {
   let text = clipHookTextField(state, "additionalContext", output.additionalContext);
   return {
@@ -150,7 +150,7 @@ function additionalContextOutput(state, hookEventName, output) {
     }),
   };
 }
-//@ chunk-s61vbvea.js:312416-314632 placement
+//@ chunk-7jxyna5q.js:236960-239176 placement
 function parsePreToolUseOutput(state, output, eventName) {
   if (output.hookEventName !== eventName) {
     markDroppedField(state, "hookSpecificOutput_event_mismatch", true);
@@ -266,12 +266,12 @@ function parsePreToolUseOutput(state, output, eventName) {
         : refuseUnsupportedHookEvent(state);
   }
 }
-//@ chunk-s61vbvea.js:314632-314702 placement
+//@ chunk-7jxyna5q.js:239176-239246 placement
 function refuseUnsupportedHookEvent(state) {
   markDroppedField(state, "hookSpecificOutput_unsupported_event", true);
   return;
 }
-//@ chunk-s61vbvea.js:314702-316104 placement
+//@ chunk-7jxyna5q.js:239246-240648 placement
 function parsePermissionRequestOutput(state, output) {
   switch (output.hookEventName) {
     case "PermissionRequest": {
@@ -351,7 +351,7 @@ function parsePermissionRequestOutput(state, output) {
       return refuseUnsupportedHookEvent(state);
   }
 }
-//@ chunk-s61vbvea.js:316104-317233 placement
+//@ chunk-7jxyna5q.js:240648-241777 placement
 function parseHookJsonOutput(output, hookEvent, options = {}) {
   let state = {
     report: {
@@ -422,7 +422,7 @@ function parseHookJsonOutput(output, hookEvent, options = {}) {
     report: state.report,
   };
 }
-//@ chunk-s61vbvea.js:317233-317538 placement
+//@ chunk-7jxyna5q.js:241777-242082 placement
 /**
  * 判断 hook 输出是否要求阻止（decision 为 block、continue 为 false 或权限 deny）。
  */
@@ -438,7 +438,7 @@ function isBlockingHookOutput(output) {
     (hookSpecificOutput.permissionDecision === "deny" || hookSpecificOutput.permissionDecision === "ask")
   );
 }
-//@ chunk-s61vbvea.js:317538-317770 placement
+//@ chunk-7jxyna5q.js:242082-242314 placement
 function isAskOnlyHookOutput(answer) {
   if (isDenyingHookOutput(answer) || ("continue" in answer && answer.continue === false)) return false;
   let hookSpecificOutput = "hookSpecificOutput" in answer ? answer.hookSpecificOutput : undefined;
@@ -450,7 +450,7 @@ function isAskOnlyHookOutput(answer) {
     hookSpecificOutput.permissionDecision === "ask"
   );
 }
-//@ chunk-s61vbvea.js:317770-318000 placement
+//@ chunk-7jxyna5q.js:242314-242544 placement
 function isDenyingHookOutput(output) {
   if ("decision" in output && output.decision === "block") return true;
   let hookSpecificOutput = "hookSpecificOutput" in output ? output.hookSpecificOutput : undefined;

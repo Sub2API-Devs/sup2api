@@ -3,11 +3,16 @@
  *
  * 2.1.316 新增：等待 MCP 服务器连接完成的工具
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (11), chunk-qaeygs3y.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (11), chunk-d1yj4cpy.js (2)
  * attribution: placement 13
  */
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import {
+  isCodeModeOnlyToolsEnabled,
+  willHideCodeModeOnlyTools,
+} from "../RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, array, stringSchema, booleanSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getMcpClientsFromAccessor, getRootSession } from "../../bootstrap/state.js";
@@ -15,13 +20,13 @@ import { HostScoped } from "../../utils/hostScoped.js";
 import { createSignal } from "../../utils/signal.js";
 import {
   isToolSearchEnabledOptimistic,
-  modelSupportsToolReference,
+  supportsToolReferenceOrPelican,
   isVertexModelWithoutToolSearch,
 } from "../../utils/toolSearch.js";
 import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
-import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
+import { CLAUDEAI_SERVER_PREFIX } from "../../services/mcp/normalization.js";
 import { internalKey } from "../../services/mcp/serverIdentity.js";
 import { sleep } from "../../utils/sleep.js";
 import { isUnconfiguredFailure } from "../../services/mcp/redactMcpErrors.js";
@@ -33,9 +38,9 @@ import { isHiddenReplyServer, appToolServerUnavailableText } from "../../service
 import { isArtifactMountMode } from "../../services/artifacts/artifactMount.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-qaeygs3y.js:191-218 placement
+//@ chunk-d1yj4cpy.js:263-290 placement
 var WAITFORMCPSERVERS = "WaitForMcpServers";
-//@ chunk-qaeygs3y.js:218-949 placement
+//@ chunk-d1yj4cpy.js:290-1433 placement
 /**
  * WaitForMcpServers 工具的提示词：等待仍在连接的 MCP 服务器，就绪后其工具会出现在工具列表中，无需征求用户确认。
  */
@@ -46,26 +51,35 @@ function waitForMcpServersPrompt() {
     "it to wait for all pending servers (once none is pending, a call without",
     "`servers` reports any server that failed to connect or is not configured).",
     "",
-    ...[
-      "If the user's request needs tools from a still-connecting server, call this",
-      "tool to wait for it. Once it connects, its tools will be added to your tool",
-      "list and you can use them directly. Returns ready=true when servers are",
-      "ready, ready=false if they failed to connect, need authentication, or are",
-      "disabled.",
-    ],
+    ...(codeModeAccepted() && isCodeModeOnlyToolsEnabled()
+      ? [
+          "If the user's request needs tools from a still-connecting server, call this",
+          "tool to wait for it. Once it connects, its tools become callable inside",
+          "the REPL environment (this surface routes MCP tools through the REPL",
+          "rather than advertising them as top-level tools). Returns ready=true when",
+          "servers are ready, ready=false if they failed to connect, need",
+          "authentication, or are disabled.",
+        ]
+      : [
+          "If the user's request needs tools from a still-connecting server, call this",
+          "tool to wait for it. Once it connects, its tools will be added to your tool",
+          "list and you can use them directly. Returns ready=true when servers are",
+          "ready, ready=false if they failed to connect, need authentication, or are",
+          "disabled.",
+        ]),
     "",
     "You do not need to ask the user for confirmation to use this tool.",
   ].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:2499615-2499917 placement
+//@ chunk-5xgkngpb.js:2540915-2541246 placement
 /**
  * WaitForMcpServers 工具的等待超时与输入/输出 schema（等待的服务器名单；就绪、已连接、缓存、失败、待定、需认证、禁用、未配置、未知）。
  */
 var MCP_WAIT_TIMEOUT_MS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var waitForMcpInputSchema;
 var waitForMcpOutputSchema;
-deferInit("chunk-e6aww6q8.js:2499615", () => {
+deferInit("chunk-5xgkngpb.js:2540915", () => {
   MCP_WAIT_TIMEOUT_MS = 5000;
   waitForMcpInputSchema = DoctorLazy(() =>
     objectSchema({
@@ -82,37 +96,39 @@ deferInit("chunk-e6aww6q8.js:2499615", () => {
       needsAuth: array(stringSchema()),
       disabled: array(stringSchema()),
       unconfigured: array(stringSchema()).optional(),
-      ...{},
+      ...{
+        codeModeRouted: booleanSchema().optional(),
+      },
       unknown: array(stringSchema()),
     }),
   );
 });
-//@ chunk-e6aww6q8.js:2499917-2499991 placement
+//@ chunk-5xgkngpb.js:2541246-2541320 placement
 /**
  * 返回仍处于连接中状态的 MCP 服务器名。
  */
 function pendingMcpServerNames(setDeclared) {
   return setDeclared.filter((declared) => declared.type === "pending").map((servers) => servers.name);
 }
-//@ chunk-e6aww6q8.js:2499991-2500036 placement
+//@ chunk-5xgkngpb.js:2541320-2541365 placement
 /**
  * 判断当前是否有连接中的 MCP 服务器。
  */
 function hasPendingMcpClients() {
   return pendingMcpServerNames(getMcpClientsFromAccessor() ?? []).length > 0;
 }
-//@ chunk-e6aww6q8.js:2500036-2500084 placement
+//@ chunk-5xgkngpb.js:2541365-2541413 placement
 /**
  * 按宿主记录“已声明等待 MCP 服务器”的状态与变更信号。
  */
 var declaredByHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:2500036", () => {
+deferInit("chunk-5xgkngpb.js:2541365", () => {
   declaredByHost = new HostScoped(() => ({
     declared: false,
     changed: createSignal(),
   }));
 });
-//@ chunk-e6aww6q8.js:2500084-2500173 placement
+//@ chunk-5xgkngpb.js:2541413-2541502 placement
 /**
  * 设置某宿主的已声明状态并通知变更。
  */
@@ -122,53 +138,53 @@ function setDeclaredByHost(session, declared) {
   state.declared = declared;
   state.changed.emit();
 }
-//@ chunk-e6aww6q8.js:2500173-2500205 placement
+//@ chunk-5xgkngpb.js:2541502-2541534 placement
 /**
  * 标记当前宿主已声明。
  */
 function markDeclared() {
   setDeclaredByHost(getRootSession().host, true);
 }
-//@ chunk-e6aww6q8.js:2500205-2500253 placement
+//@ chunk-5xgkngpb.js:2541534-2541582 placement
 /**
  * 当前宿主是否已声明等待。
  */
 function isDeclared() {
   return declaredByHost.of(getRootSession().host).declared;
 }
-//@ chunk-e6aww6q8.js:2500253-2500279 placement
+//@ chunk-5xgkngpb.js:2541582-2541608 placement
 /**
  * 清除某宿主的已声明状态。
  */
 function clearDeclared(session) {
   setDeclaredByHost(session, false);
 }
-//@ chunk-e6aww6q8.js:2500279-2500340 placement
+//@ chunk-5xgkngpb.js:2541608-2541669 placement
 /**
  * 订阅已声明状态的变更。
  */
 function onDeclaredChange(refreshOnNextMicrotask) {
   return declaredByHost.of(getRootSession().host).changed.subscribe(refreshOnNextMicrotask);
 }
-//@ chunk-e6aww6q8.js:2500340-2500426 placement
+//@ chunk-5xgkngpb.js:2541669-2541755 placement
 /**
  * 工具搜索可用（且非旧 Vertex 模型）时关闭该工具，否则有连接中的 MCP 服务器或已声明时启用。
  */
 function isWaitForMcpServersEnabled(mainLoopModel, mcpClients) {
   if (
     isToolSearchEnabledOptimistic() &&
-    modelSupportsToolReference(mainLoopModel) &&
+    supportsToolReferenceOrPelican(mainLoopModel) &&
     !isVertexModelWithoutToolSearch(getCanonicalName(mainLoopModel))
   )
     return false;
   return pendingMcpServerNames(mcpClients).length > 0 || isDeclared();
 }
-//@ chunk-e6aww6q8.js:2500426-2503901 placement
+//@ chunk-5xgkngpb.js:2541755-2545560 placement
 /**
  * WaitForMcpServers 工具：isEnabled=Lmr —— 工具搜索可用（Oh 且模型支持 tool_reference 且非 Vertex 旧模型）时关闭；否则有连接中的 MCP 服务器（或 ftt()）时启用，用来等待它们就绪。getTools 只在工具搜索相关条件下追加它。
  */
 var WaitForMcpServersTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2500426", () => {
+deferInit("chunk-5xgkngpb.js:2541755", () => {
   WaitForMcpServersTool = buildTool({
     isEnabled() {
       return isWaitForMcpServersEnabled(getMainLoopModel(), getMcpClientsFromAccessor() ?? []);
@@ -205,14 +221,15 @@ deferInit("chunk-e6aww6q8.js:2500426", () => {
               ? pendingNames
               : clients.filter((client) => client.type === "failed").map((client) => client.name);
           let requestedKeys = new Set(
-            requestedNames.map((serverName) => normalizeNameForMCP(internalKey(serverName))),
+            requestedNames.map((serverName) => CLAUDEAI_SERVER_PREFIX(internalKey(serverName))),
           );
           let matchingClients = () =>
             toolContext
               .mcpClients()
               .filter(
                 (client) =>
-                  requestedNames.includes(client.name) || requestedKeys.has(normalizeNameForMCP(client.name)),
+                  requestedNames.includes(client.name) ||
+                  requestedKeys.has(CLAUDEAI_SERVER_PREFIX(client.name)),
               );
           let now = Date.now();
           let deadlineMs = now + MCP_WAIT_TIMEOUT_MS;
@@ -254,11 +271,11 @@ deferInit("chunk-e6aww6q8.js:2500426", () => {
                 break;
               default:
             }
-          let matchedKeys = new Set(matchedClients.map((client) => normalizeNameForMCP(client.name)));
+          let matchedKeys = new Set(matchedClients.map((client) => CLAUDEAI_SERVER_PREFIX(client.name)));
           let filtered = requestedNames.filter(
             (requestedName) =>
-              !matchedKeys.has(normalizeNameForMCP(requestedName)) &&
-              !matchedKeys.has(normalizeNameForMCP(internalKey(requestedName))),
+              !matchedKeys.has(CLAUDEAI_SERVER_PREFIX(requestedName)) &&
+              !matchedKeys.has(CLAUDEAI_SERVER_PREFIX(internalKey(requestedName))),
           );
           let ready =
             stillPending.length === 0 &&
@@ -306,7 +323,10 @@ deferInit("chunk-e6aww6q8.js:2500426", () => {
               disabled,
               unconfigured,
               unknown: filtered,
-              ...false,
+              ...(codeModeAccepted() &&
+                willHideCodeModeOnlyTools(toolContext.tools) && {
+                  codeModeRouted: true,
+                }),
             },
           };
         },
@@ -327,10 +347,14 @@ deferInit("chunk-e6aww6q8.js:2500426", () => {
       let filtered_3 = [
         `ready: ${result.ready}`,
         result.connected.length
-          ? `Connected (their tools are now available \u2014 call them directly): ${result.connected.join(", ")}`
+          ? codeModeAccepted() && result.codeModeRouted
+            ? `Connected (their tools are now callable inside the REPL environment \u2014 not as top-level tools): ${result.connected.join(", ")}`
+            : `Connected (their tools are now available \u2014 call them directly): ${result.connected.join(", ")}`
           : "",
         result.cached?.length
-          ? `Cached (their tools are available now; connects on first call): ${result.cached.join(", ")}`
+          ? codeModeAccepted() && result.codeModeRouted
+            ? `Cached (their tools are callable inside the REPL environment now; connects on first call): ${result.cached.join(", ")}`
+            : `Cached (their tools are available now; connects on first call): ${result.cached.join(", ")}`
           : "",
         filtered.length ? `Failed to connect: ${filtered.join(", ")}` : "",
         result.stillPending.length
@@ -366,10 +390,10 @@ deferInit("chunk-e6aww6q8.js:2500426", () => {
 });
 export {
   WAITFORMCPSERVERS,
-  onDeclaredChange,
-  isDeclared,
-  clearDeclared,
   markDeclared,
+  isDeclared,
   WaitForMcpServersTool,
   hasPendingMcpClients,
+  clearDeclared,
+  onDeclaredChange,
 };

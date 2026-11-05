@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：ultrareview 结果回贴：拉取云端审查结论并发布到 PR，处理结论未就绪/不可用等情况
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (8)
  * attribution: placement 8
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -24,7 +24,7 @@ import { truncateToLength } from "../../utils/stringUtils.js";
 import { connectGithubUrl } from "../../services/cloudSessions/webSetup.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1767764-1768324 placement
+//@ chunk-5xgkngpb.js:1844853-1845413 placement
 /**
  * 调用 /v1/code/github/post-review-comment 发布审查评论，网络错误单独归类。
  */
@@ -39,7 +39,7 @@ var postCommentReplySchema;
 var postCommentErrorSchema;
 var FINDINGS_MANUAL_POST_HINT;
 var CHECK_CONNECTION_HINT;
-deferInit("chunk-e6aww6q8.js:1767764", () => {
+deferInit("chunk-5xgkngpb.js:1844853", () => {
   postReviewComment = "/v1/code/github/post-review-comment";
   POST_REVIEW_COMMENT_TIMEOUT_MS = 60000;
   ULTRAVIEW_POST_TOTAL_BUDGET_MS = 90000;
@@ -74,7 +74,7 @@ deferInit("chunk-e6aww6q8.js:1767764", () => {
   CHECK_CONNECTION_HINT =
     "Check the pull request before posting by hand \u2014 if the request got through, the comment may still appear.";
 });
-//@ chunk-e6aww6q8.js:1768324-1768965 placement
+//@ chunk-5xgkngpb.js:1845413-1846054 placement
 async function waitForUltrareviewPost(sessionId, credentials) {
   if (!isUltrareviewPostEnabled())
     return notPostedResult({
@@ -117,7 +117,7 @@ async function waitForUltrareviewPost(sessionId, credentials) {
     alreadyPosted: postResult.alreadyPosted,
   };
 }
-//@ chunk-e6aww6q8.js:1768965-1769969 placement
+//@ chunk-5xgkngpb.js:1846054-1847058 placement
 /**
  * 把 ultrareview 回贴时的认证失败（未登录、登录被拒、数据驻留限制）归类为原因码。
  */
@@ -187,12 +187,12 @@ async function classifyUltrareviewAuthFailure(sessionId, signal, credentials) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:1769969-1770047 placement
+//@ chunk-5xgkngpb.js:1847058-1847136 placement
 function postErrorOfBody(body) {
   let parsed = postCommentErrorSchema().safeParse(body);
   return parsed.success ? parsed.data.error : undefined;
 }
-//@ chunk-e6aww6q8.js:1770047-1770859 placement
+//@ chunk-5xgkngpb.js:1847136-1847948 placement
 /**
  * 把 ultrareview 回贴结果码转成给用户的说明。
  */
@@ -237,7 +237,7 @@ function describeUltrareviewPostOutcome(httpStatus, errorBody) {
       return httpStatus >= 500 ? "unavailable" : "unexpected_response";
   }
 }
-//@ chunk-e6aww6q8.js:1770859-1771288 placement
+//@ chunk-5xgkngpb.js:1847948-1848376 placement
 /**
  * 结果未发布到 PR 时上报并返回原因。
  */
@@ -267,7 +267,7 @@ function notPostedResult({ kind, status, serverMessage }) {
     ),
   };
 }
-//@ chunk-e6aww6q8.js:1771288-1775153 placement
+//@ chunk-5xgkngpb.js:1848376-1852241 placement
 /**
  * 把云端 ultrareview 的审查结论回贴到 PR；结论未就绪、路径不保留结论、非 PR 审查等情况各给出说明。
  */
@@ -327,9 +327,9 @@ function postUltrareviewFindings(kind, status, detail) {
       return `The post took too long to confirm, so the findings are here without a confirmed post. ${CHECK_CONNECTION_HINT}`;
   }
 }
-//@ chunk-e6aww6q8.js:1775153-1775166 placement
+//@ chunk-5xgkngpb.js:1852241-1852254 placement
 /**
  * ultrareview 投递结果轮询间隔 1000ms。
  */
 var POST_POLL_MS = 1000;
-export { POST_POLL_MS, waitForUltrareviewPost };
+export { waitForUltrareviewPost, POST_POLL_MS };

@@ -3,10 +3,10 @@
  *
  * 通用 Select 组件：单选列表，布局 compact/compact-vertical/expanded、数字快捷键、可输入选项、描述两栏、分页视口。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CustomSelect/select.tsx
- * pieces: chunk-8jypjjdf.js (2), chunk-ag5x7vhf.js (1), chunk-ey2qag4x.js (16), chunk-r68xwcze.js (44)
- * attribution: placement 50, fingerprint 4, layout 8, file-local 1
+ * pieces: chunk-hnxhr3bs.js (1), chunk-p1yqn9ds.js (15), chunk-tvbhy3tn.js (2), chunk-yz6x5v95.js (44)
+ * attribution: fingerprint 4, placement 49, layout 8, file-local 1
  */
 import {
   init_react_production,
@@ -28,7 +28,7 @@ import { useScrollViewportSize, useHasScrollViewport } from "../ScrollViewportCo
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useSelectState_2 } from "./use-select-state.js";
 import { useStrayClickGuard, useIsWithinStrayWindow } from "./strayClickGuard.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { useSelectInput, usePasteIntoInputOption } from "./use-select-input.js";
 import { useFocusOnMount } from "../../hooks/useFocusOnMount.js";
 import {
@@ -68,7 +68,7 @@ import { UP_ARROW, DOWN_ARROW, HEAVY_VERTICAL_BAR_GLYPH } from "../../constants/
 import { AlternateScreenContext } from "../../ink/components/AlternateScreen.js";
 import { APP_CONTEXT } from "../../../vendor/convert-to-spaces/dist/index.js";
 import { TREE_GLYPHS } from "../../../vendor/chart.js/dist/chart.js";
-import { NoSelect, useHasFocus, useFocus, useMeasured } from "../../ink/components/Input.js";
+import { NoSelect, isFocusedIn, useFocus, useMeasured } from "../../ink/components/Input.js";
 import { Decorative, useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { clamp } from "../../ink/screen.js";
 import { useLatestState } from "./option-map.js";
@@ -82,12 +82,12 @@ import { ListItem } from "../design-system/ListItem.js";
 import { isOrderedListItem, metaTexts } from "./selectTable.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ey2qag4x.js:43084-43088 placement
+//@ chunk-p1yqn9ds.js:42705-42709 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ey2qag4x.js:43084", () => {
+deferInit("chunk-p1yqn9ds.js:42705", () => {
   init_react_production();
 });
-//@ chunk-ey2qag4x.js:43088-43459 placement
+//@ chunk-p1yqn9ds.js:42709-43080 placement
 /**
  * 选择列表的鼠标滚轮处理（选项未全部可见时滚动）。
  */
@@ -121,61 +121,54 @@ function useSelectWheel({
     },
   };
 }
-//@ chunk-ey2qag4x.js:43459-43500 layout (2.1.88 match: _temp7, 1)
+//@ chunk-p1yqn9ds.js:43080-43121 layout (2.1.88 match: _temp7, 1)
 function isInputOption(opt) {
   return opt.type === "input";
 }
-//@ chunk-ey2qag4x.js:43500-43538 file-local
+//@ chunk-p1yqn9ds.js:43121-43159 file-local
 function hasDescription(opt) {
   return opt.description;
 }
-//@ chunk-ey2qag4x.js:43538-43579 layout (2.1.88 match: _temp, 1)
+//@ chunk-p1yqn9ds.js:43159-43200 layout (2.1.88 match: _temp, 1)
 function isImagePaste(c) {
   return c.type === "image";
 }
-//@ chunk-ey2qag4x.js:43579-43620 layout (2.1.88 match: _temp, 1)
+//@ chunk-p1yqn9ds.js:43200-43241 layout (2.1.88 match: _temp, 1)
 function isImagePaste_2(c) {
   return c.type === "image";
 }
-//@ chunk-ey2qag4x.js:43620-43650 layout
-function boldTextStyle() {
-  return {
-    bold: true,
-  };
-}
-//@ chunk-ey2qag4x.js:43650-43691 layout (2.1.88 match: _temp, 1)
+//@ chunk-p1yqn9ds.js:43241-43282 layout (2.1.88 match: _temp, 1)
 function isImagePaste_3(c) {
   return c.type === "image";
 }
-//@ chunk-ey2qag4x.js:43691-43732 layout (2.1.88 match: _temp, 1)
+//@ chunk-p1yqn9ds.js:43282-43323 layout (2.1.88 match: _temp, 1)
 function isImagePaste_4(c) {
   return c.type === "image";
 }
-//@ chunk-ey2qag4x.js:43732-43773 layout (2.1.88 match: _temp, 1)
+//@ chunk-p1yqn9ds.js:43323-43364 layout (2.1.88 match: _temp, 1)
 function isImagePaste_5(c) {
   return c.type === "image";
 }
-//@ chunk-ey2qag4x.js:43773-43807 placement
+//@ chunk-p1yqn9ds.js:43364-43398 placement
 /**
  * 选择列表"尚未提交选择"的哨兵值。
  */
 var NO_COMMITTED_ROW; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ey2qag4x.js:43773", () => {
+deferInit("chunk-p1yqn9ds.js:43364", () => {
   NO_COMMITTED_ROW = Symbol("NO_COMMITTED_ROW");
 });
-//@ chunk-ey2qag4x.js:44614-57659 fingerprint (2.1.88 match: Select, 0.772)
+//@ chunk-p1yqn9ds.js:44205-60697 fingerprint (2.1.88 match: Select, 0.76)
 /**
  * 通用单选：按 layout 渲染选项（可带描述、两栏、数字前缀），useSelectState 管理焦点与视口，支持 input 类型选项（就地编辑）、onFocus/onChange/onCancel。
  */
 function Select_2(props) {
-  let $ = useMemoCache(89);
+  let $ = useMemoCache(239);
   let {
     isDisabled,
     hideIndexes,
     disablePrintableKeybindings,
     visibleOptionCount,
     hiddenBelowUnit,
-    highlightText,
     options,
     columnSizingOptions,
     defaultValue,
@@ -269,7 +262,7 @@ function Select_2(props) {
     visibleCountProp,
     useVerticalLayout ? "compact-vertical" : layoutMode,
   );
-  let t11;
+  let selectStateArgs;
   if (
     $[7] !== defaultFocusValue ||
     $[8] !== defaultValue ||
@@ -280,7 +273,7 @@ function Select_2(props) {
     $[13] !== selectedValue ||
     $[14] !== visibleOptionCount_2
   ) {
-    t11 = {
+    selectStateArgs = {
       visibleOptionCount: visibleOptionCount_2,
       options,
       defaultValue,
@@ -298,9 +291,9 @@ function Select_2(props) {
     $[12] = options;
     $[13] = selectedValue;
     $[14] = visibleOptionCount_2;
-    $[15] = t11;
-  } else t11 = $[15];
-  let state = useSelectState_2(t11);
+    $[15] = selectStateArgs;
+  } else selectStateArgs = $[15];
+  let state = useSelectState_2(selectStateArgs);
   let [isEntryFocused, setIsEntryFocused] = useState(true);
   let strayClickGuard = useStrayClickGuard();
   let shouldDropWheel = useIsWithinStrayWindow();
@@ -335,7 +328,7 @@ function Select_2(props) {
   if ($[22] !== pastedContents) {
     onEnterImageSelection = () => {
       if (pastedContents && Object.values(pastedContents).some(isImagePaste)) {
-        let imageCount = count(Object.values(pastedContents), isImagePaste_2);
+        let imageCount = countWhere(Object.values(pastedContents), isImagePaste_2);
         setImagesSelected(true);
         setSelectedImageIndex(imageCount - 1);
         return true;
@@ -372,7 +365,6 @@ function Select_2(props) {
       disableSelection: disableSelection_2,
       state,
       options,
-      isMultiSelect: false,
       onUpFromFirstItem,
       onDownFromLastItem,
       onInputModeToggle,
@@ -417,7 +409,7 @@ function Select_2(props) {
   let onPaste = usePasteIntoInputOption(hiddenBelowElement);
   let wheelOptions = useRef(null);
   useFocusOnMount(wheelOptions, !isDisabledFlag);
-  let styles = {
+  let containerProps = {
     container: () => ({
       flexDirection: "column",
       ref: wheelOptions,
@@ -432,7 +424,6 @@ function Select_2(props) {
             onBlur: () => setIsEntryFocused(false),
           }),
     }),
-    highlightedText: boldTextStyle,
   };
   let hiddenBelow;
   if (
@@ -494,299 +485,477 @@ function Select_2(props) {
       $[56] = t18;
     } else t18 = $[56];
     let maxIndexWidth = t18;
-    return jsxProd_default(WindowedRowsBox, {
-      container: styles.container(),
-      rows,
-      hiddenBelow: hiddenBelow_2,
-      children: state.visibleOptions.map((option, index) => {
-        let isFirstVisibleOption = option.index === state.visibleFromIndex;
-        let isLastVisibleOption = option.index === state.visibleToIndex - 1;
-        let areMoreOptionsBelow = state.visibleToIndex < options.length;
-        let areMoreOptionsAbove = state.visibleFromIndex > 0;
-        let i = state.visibleFromIndex + index + 1;
-        let isFocused = !isDisabledFlag && state.focusedValue === option.value;
-        let isSelected = state.value === option.value;
-        if (option.type === "input") {
-          let inputValue = inputValues.has(option.value)
-            ? inputValues.get(option.value)
-            : option.initialValue || "";
-          return jsxProd_default(
-            SelectInputOption,
-            {
-              option,
-              onClick: makeClickHandler(option),
-              hoverStyle,
-              isFocused,
-              isSelected,
-              shouldShowDownArrow: areMoreOptionsBelow && isLastVisibleOption,
-              shouldShowUpArrow: areMoreOptionsAbove && isFirstVisibleOption,
-              maxIndexWidth,
-              index: i,
-              hideIndex: hideIndexesFlag,
-              extraChromeWidth,
-              inputValue,
-              onInputChange: (value) => {
-                setInputValues((prev) => {
-                  let next = new Map(prev);
-                  next.set(option.value, value);
-                  return next;
-                });
-              },
-              onSubmit: (value) => {
-                let hasImageAttachments =
-                  pastedContents && Object.values(pastedContents).some(isImagePaste_3);
-                if (value.trim() || hasImageAttachments || option.allowEmptySubmitToCancel)
-                  onChange?.(option.value);
-                else if (!option.ignoreEmptySubmit) onCancel?.();
-              },
-              onExit: onCancel,
-              layout: "expanded",
-              showLabel: inlineDescriptionsFlag,
-              onOpenEditor,
-              resetCursorOnUpdate: option.resetCursorOnUpdate,
-              canPasteImage,
-              onImagePaste,
-              pastedContents,
-              onRemoveImage,
-              imagesSelected,
-              selectedImageIndex,
-              onImagesSelectedChange: setImagesSelected,
-              onSelectedImageIndexChange: setSelectedImageIndex,
-            },
-            String(option.value),
-          );
-        }
-        let label = option.label;
-        if (typeof option.label === "string" && highlightText && option.label.includes(highlightText)) {
-          let labelText = option.label;
-          let index = labelText.indexOf(highlightText);
-          label = jsxProd_default_2(Fragment, {
-            children: [
-              labelText.slice(0, index),
-              jsxProd_default(Text, {
-                ...styles.highlightedText(),
-                children: highlightText,
-              }),
-              labelText.slice(index + highlightText.length),
-            ],
-          });
-        }
-        let isOptionDisabled = option.disabled === true;
-        let optionColor = isOptionDisabled
-          ? undefined
-          : isSelected
-            ? "success"
-            : isFocused
-              ? "suggestion"
-              : undefined;
-        return jsxProd_default_2(
-          Box,
-          {
-            flexDirection: "column",
-            flexShrink: 0,
-            children: [
-              jsxProd_default(SelectOption, {
+    const container = containerProps.container();
+    let children;
+    if (
+      $[57] !== canPasteImage ||
+      $[58] !== makeClickHandler ||
+      $[59] !== hideIndexesFlag ||
+      $[60] !== hoverStyle ||
+      $[61] !== imagesSelected ||
+      $[62] !== inlineDescriptionsFlag ||
+      $[63] !== extraChromeWidth ||
+      $[64] !== inputValues ||
+      $[65] !== isDisabledFlag ||
+      $[66] !== maxIndexWidth ||
+      $[67] !== onCancel ||
+      $[68] !== onChange ||
+      $[69] !== onImagePaste ||
+      $[70] !== onOpenEditor ||
+      $[71] !== onRemoveImage ||
+      $[72] !== options.length ||
+      $[73] !== pastedContents ||
+      $[74] !== selectedImageIndex ||
+      $[75] !== state.focusedValue ||
+      $[76] !== state.value ||
+      $[77] !== state.visibleFromIndex ||
+      $[78] !== state.visibleOptions ||
+      $[79] !== state.visibleToIndex
+    ) {
+      let renderOption;
+      if (
+        $[81] !== canPasteImage ||
+        $[82] !== makeClickHandler ||
+        $[83] !== hideIndexesFlag ||
+        $[84] !== hoverStyle ||
+        $[85] !== imagesSelected ||
+        $[86] !== inlineDescriptionsFlag ||
+        $[87] !== extraChromeWidth ||
+        $[88] !== inputValues ||
+        $[89] !== isDisabledFlag ||
+        $[90] !== maxIndexWidth ||
+        $[91] !== onCancel ||
+        $[92] !== onChange ||
+        $[93] !== onImagePaste ||
+        $[94] !== onOpenEditor ||
+        $[95] !== onRemoveImage ||
+        $[96] !== options.length ||
+        $[97] !== pastedContents ||
+        $[98] !== selectedImageIndex ||
+        $[99] !== state.focusedValue ||
+        $[100] !== state.value ||
+        $[101] !== state.visibleFromIndex ||
+        $[102] !== state.visibleToIndex
+      ) {
+        renderOption = (option, index) => {
+          let isFirstVisibleOption = option.index === state.visibleFromIndex;
+          let isLastVisibleOption = option.index === state.visibleToIndex - 1;
+          let areMoreOptionsBelow = state.visibleToIndex < options.length;
+          let areMoreOptionsAbove = state.visibleFromIndex > 0;
+          let i = state.visibleFromIndex + index + 1;
+          let isFocused = !isDisabledFlag && state.focusedValue === option.value;
+          let isSelected = state.value === option.value;
+          if (option.type === "input") {
+            let inputValue = inputValues.has(option.value)
+              ? inputValues.get(option.value)
+              : option.initialValue || "";
+            return jsxProd_default(
+              SelectInputOption,
+              {
+                option,
+                onClick: makeClickHandler(option),
+                hoverStyle,
                 isFocused,
                 isSelected,
                 shouldShowDownArrow: areMoreOptionsBelow && isLastVisibleOption,
                 shouldShowUpArrow: areMoreOptionsAbove && isFirstVisibleOption,
-                onClick: makeClickHandler(option),
-                hoverStyle,
-                children: jsxProd_default(Text, {
-                  dimColor: isOptionDisabled,
-                  color: optionColor,
-                  children: label,
-                }),
-              }),
-              option.description &&
-                jsxProd_default(Box, {
-                  paddingLeft: 2,
+                maxIndexWidth,
+                index: i,
+                hideIndex: hideIndexesFlag,
+                extraChromeWidth,
+                inputValue,
+                onInputChange: (value) => {
+                  setInputValues((prev) => {
+                    let next = new Map(prev);
+                    next.set(option.value, value);
+                    return next;
+                  });
+                },
+                onSubmit: (value) => {
+                  let hasImageAttachments =
+                    pastedContents && Object.values(pastedContents).some(isImagePaste_3);
+                  if (value.trim() || hasImageAttachments || option.allowEmptySubmitToCancel)
+                    onChange?.(option.value);
+                  else if (!option.ignoreEmptySubmit) onCancel?.();
+                },
+                onExit: onCancel,
+                layout: "expanded",
+                showLabel: inlineDescriptionsFlag,
+                onOpenEditor,
+                resetCursorOnUpdate: option.resetCursorOnUpdate,
+                canPasteImage,
+                onImagePaste,
+                pastedContents,
+                onRemoveImage,
+                imagesSelected,
+                selectedImageIndex,
+                onImagesSelectedChange: setImagesSelected,
+                onSelectedImageIndexChange: setSelectedImageIndex,
+              },
+              String(option.value),
+            );
+          }
+          let label = option.label;
+          let isDisabledOption = option.disabled === true;
+          let optionColor = isDisabledOption
+            ? undefined
+            : isSelected
+              ? "success"
+              : isFocused
+                ? "suggestion"
+                : undefined;
+          return jsxProd_default_2(
+            Box,
+            {
+              flexDirection: "column",
+              flexShrink: 0,
+              children: [
+                jsxProd_default(SelectOption, {
+                  isFocused,
+                  isSelected,
+                  shouldShowDownArrow: areMoreOptionsBelow && isLastVisibleOption,
+                  shouldShowUpArrow: areMoreOptionsAbove && isFirstVisibleOption,
+                  onClick: makeClickHandler(option),
+                  hoverStyle,
                   children: jsxProd_default(Text, {
-                    dimColor: isOptionDisabled || option.dimDescription !== false,
+                    dimColor: isDisabledOption,
                     color: optionColor,
-                    children: jsxProd_default(Ansi, {
-                      children: option.description,
-                    }),
+                    children: label,
                   }),
                 }),
-              jsxProd_default(Text, {
-                children: " ",
-              }),
-            ],
-          },
-          String(option.value),
-        );
-      }),
+                option.description &&
+                  jsxProd_default(Box, {
+                    paddingLeft: 2,
+                    children: jsxProd_default(Text, {
+                      dimColor: isDisabledOption || option.dimDescription !== false,
+                      color: optionColor,
+                      children: jsxProd_default(Ansi, {
+                        children: option.description,
+                      }),
+                    }),
+                  }),
+                jsxProd_default(Text, {
+                  children: " ",
+                }),
+              ],
+            },
+            String(option.value),
+          );
+        };
+        $[81] = canPasteImage;
+        $[82] = makeClickHandler;
+        $[83] = hideIndexesFlag;
+        $[84] = hoverStyle;
+        $[85] = imagesSelected;
+        $[86] = inlineDescriptionsFlag;
+        $[87] = extraChromeWidth;
+        $[88] = inputValues;
+        $[89] = isDisabledFlag;
+        $[90] = maxIndexWidth;
+        $[91] = onCancel;
+        $[92] = onChange;
+        $[93] = onImagePaste;
+        $[94] = onOpenEditor;
+        $[95] = onRemoveImage;
+        $[96] = options.length;
+        $[97] = pastedContents;
+        $[98] = selectedImageIndex;
+        $[99] = state.focusedValue;
+        $[100] = state.value;
+        $[101] = state.visibleFromIndex;
+        $[102] = state.visibleToIndex;
+        $[103] = renderOption;
+      } else renderOption = $[103];
+      children = state.visibleOptions.map(renderOption);
+      $[57] = canPasteImage;
+      $[58] = makeClickHandler;
+      $[59] = hideIndexesFlag;
+      $[60] = hoverStyle;
+      $[61] = imagesSelected;
+      $[62] = inlineDescriptionsFlag;
+      $[63] = extraChromeWidth;
+      $[64] = inputValues;
+      $[65] = isDisabledFlag;
+      $[66] = maxIndexWidth;
+      $[67] = onCancel;
+      $[68] = onChange;
+      $[69] = onImagePaste;
+      $[70] = onOpenEditor;
+      $[71] = onRemoveImage;
+      $[72] = options.length;
+      $[73] = pastedContents;
+      $[74] = selectedImageIndex;
+      $[75] = state.focusedValue;
+      $[76] = state.value;
+      $[77] = state.visibleFromIndex;
+      $[78] = state.visibleOptions;
+      $[79] = state.visibleToIndex;
+      $[80] = children;
+    } else children = $[80];
+    return jsxProd_default(WindowedRowsBox, {
+      container,
+      rows,
+      hiddenBelow: hiddenBelow_2,
+      children,
     });
   }
   if (layoutMode === "compact-vertical") {
     let t18;
-    if ($[57] !== hideIndexesFlag || $[58] !== state.options) {
+    if ($[104] !== hideIndexesFlag || $[105] !== state.options) {
       t18 = hideIndexesFlag ? 0 : state.options.length.toString().length;
-      $[57] = hideIndexesFlag;
-      $[58] = state.options;
-      $[59] = t18;
-    } else t18 = $[59];
-    let maxIndexWidth = t18;
-    return jsxProd_default(WindowedRowsBox, {
-      container: styles.container(),
-      rows,
-      hiddenBelow: hiddenBelow_2,
-      children: state.visibleOptions.map((option, index) => {
-        let isFirstVisibleOption = option.index === state.visibleFromIndex;
-        let isLastVisibleOption = option.index === state.visibleToIndex - 1;
-        let areMoreOptionsBelow = state.visibleToIndex < options.length;
-        let areMoreOptionsAbove = state.visibleFromIndex > 0;
-        let i_0 = state.visibleFromIndex + index + 1;
-        let isFocused = !isDisabledFlag && state.focusedValue === option.value;
-        let isSelected = state.value === option.value;
-        if (option.type === "input") {
-          let inputValue = inputValues.has(option.value)
-            ? inputValues.get(option.value)
-            : option.initialValue || "";
-          return jsxProd_default(
-            SelectInputOption,
-            {
-              option,
-              onClick: makeClickHandler(option),
-              hoverStyle,
-              isFocused,
-              isSelected,
-              shouldShowDownArrow: areMoreOptionsBelow && isLastVisibleOption,
-              shouldShowUpArrow: areMoreOptionsAbove && isFirstVisibleOption,
-              maxIndexWidth,
-              index: i_0,
-              hideIndex: hideIndexesFlag,
-              extraChromeWidth,
-              inputValue,
-              onInputChange: (value) => {
-                setInputValues((prev) => {
-                  let next = new Map(prev);
-                  next.set(option.value, value);
-                  return next;
-                });
-              },
-              onSubmit: (value) => {
-                let hasImageAttachments =
-                  pastedContents && Object.values(pastedContents).some(isImagePaste_4);
-                if (value.trim() || hasImageAttachments || option.allowEmptySubmitToCancel)
-                  onChange?.(option.value);
-                else if (!option.ignoreEmptySubmit) onCancel?.();
-              },
-              onExit: onCancel,
-              layout: "compact",
-              showLabel: inlineDescriptionsFlag,
-              onOpenEditor,
-              resetCursorOnUpdate: option.resetCursorOnUpdate,
-              canPasteImage,
-              onImagePaste,
-              pastedContents,
-              onRemoveImage,
-              imagesSelected,
-              selectedImageIndex,
-              onImagesSelectedChange: setImagesSelected,
-              onSelectedImageIndexChange: setSelectedImageIndex,
-            },
-            String(option.value),
-          );
-        }
-        let label = option.label;
-        if (typeof option.label === "string" && highlightText && option.label.includes(highlightText)) {
-          let labelText = option.label;
-          let index = labelText.indexOf(highlightText);
-          label = jsxProd_default_2(Fragment, {
-            children: [
-              labelText.slice(0, index),
-              jsxProd_default(Text, {
-                ...styles.highlightedText(),
-                children: highlightText,
-              }),
-              labelText.slice(index + highlightText.length),
-            ],
-          });
-        }
-        let isOptionDisabled = option.disabled === true;
-        return jsxProd_default_2(
-          Box,
-          {
-            flexDirection: "column",
-            flexShrink: 0,
-            children: [
-              jsxProd_default(SelectOption, {
+      $[104] = hideIndexesFlag;
+      $[105] = state.options;
+      $[106] = t18;
+    } else t18 = $[106];
+    let indexWidth = t18;
+    const container = containerProps.container();
+    let children;
+    if (
+      $[107] !== canPasteImage ||
+      $[108] !== makeClickHandler ||
+      $[109] !== hideIndexesFlag ||
+      $[110] !== hoverStyle ||
+      $[111] !== imagesSelected ||
+      $[112] !== inlineDescriptionsFlag ||
+      $[113] !== extraChromeWidth ||
+      $[114] !== inputValues ||
+      $[115] !== isDisabledFlag ||
+      $[116] !== indexWidth ||
+      $[117] !== onCancel ||
+      $[118] !== onChange ||
+      $[119] !== onImagePaste ||
+      $[120] !== onOpenEditor ||
+      $[121] !== onRemoveImage ||
+      $[122] !== options.length ||
+      $[123] !== pastedContents ||
+      $[124] !== selectedImageIndex ||
+      $[125] !== state.focusedValue ||
+      $[126] !== state.value ||
+      $[127] !== state.visibleFromIndex ||
+      $[128] !== state.visibleOptions ||
+      $[129] !== state.visibleToIndex
+    ) {
+      let renderOption_2;
+      if (
+        $[131] !== canPasteImage ||
+        $[132] !== makeClickHandler ||
+        $[133] !== hideIndexesFlag ||
+        $[134] !== hoverStyle ||
+        $[135] !== imagesSelected ||
+        $[136] !== inlineDescriptionsFlag ||
+        $[137] !== extraChromeWidth ||
+        $[138] !== inputValues ||
+        $[139] !== isDisabledFlag ||
+        $[140] !== indexWidth ||
+        $[141] !== onCancel ||
+        $[142] !== onChange ||
+        $[143] !== onImagePaste ||
+        $[144] !== onOpenEditor ||
+        $[145] !== onRemoveImage ||
+        $[146] !== options.length ||
+        $[147] !== pastedContents ||
+        $[148] !== selectedImageIndex ||
+        $[149] !== state.focusedValue ||
+        $[150] !== state.value ||
+        $[151] !== state.visibleFromIndex ||
+        $[152] !== state.visibleToIndex
+      ) {
+        renderOption_2 = (option, index) => {
+          let isFirstVisibleOption = option.index === state.visibleFromIndex;
+          let isLastVisibleOption = option.index === state.visibleToIndex - 1;
+          let areMoreOptionsBelow = state.visibleToIndex < options.length;
+          let areMoreOptionsAbove = state.visibleFromIndex > 0;
+          let i_0 = state.visibleFromIndex + index + 1;
+          let isFocused = !isDisabledFlag && state.focusedValue === option.value;
+          let isSelected = state.value === option.value;
+          if (option.type === "input") {
+            let inputValue = inputValues.has(option.value)
+              ? inputValues.get(option.value)
+              : option.initialValue || "";
+            return jsxProd_default(
+              SelectInputOption,
+              {
+                option,
+                onClick: makeClickHandler(option),
+                hoverStyle,
                 isFocused,
                 isSelected,
                 shouldShowDownArrow: areMoreOptionsBelow && isLastVisibleOption,
                 shouldShowUpArrow: areMoreOptionsAbove && isFirstVisibleOption,
-                onClick: makeClickHandler(option),
-                hoverStyle,
-                children: jsxProd_default_2(Fragment, {
-                  children: [
-                    !hideIndexesFlag &&
+                maxIndexWidth: indexWidth,
+                index: i_0,
+                hideIndex: hideIndexesFlag,
+                extraChromeWidth,
+                inputValue,
+                onInputChange: (value) => {
+                  setInputValues((prev) => {
+                    let next = new Map(prev);
+                    next.set(option.value, value);
+                    return next;
+                  });
+                },
+                onSubmit: (value) => {
+                  let hasImageAttachments =
+                    pastedContents && Object.values(pastedContents).some(isImagePaste_4);
+                  if (value.trim() || hasImageAttachments || option.allowEmptySubmitToCancel)
+                    onChange?.(option.value);
+                  else if (!option.ignoreEmptySubmit) onCancel?.();
+                },
+                onExit: onCancel,
+                layout: "compact",
+                showLabel: inlineDescriptionsFlag,
+                onOpenEditor,
+                resetCursorOnUpdate: option.resetCursorOnUpdate,
+                canPasteImage,
+                onImagePaste,
+                pastedContents,
+                onRemoveImage,
+                imagesSelected,
+                selectedImageIndex,
+                onImagesSelectedChange: setImagesSelected,
+                onSelectedImageIndexChange: setSelectedImageIndex,
+              },
+              String(option.value),
+            );
+          }
+          let label_0 = option.label;
+          let isDisabledOption_2 = option.disabled === true;
+          return jsxProd_default_2(
+            Box,
+            {
+              flexDirection: "column",
+              flexShrink: 0,
+              children: [
+                jsxProd_default(SelectOption, {
+                  isFocused,
+                  isSelected,
+                  shouldShowDownArrow: areMoreOptionsBelow && isLastVisibleOption,
+                  shouldShowUpArrow: areMoreOptionsAbove && isFirstVisibleOption,
+                  onClick: makeClickHandler(option),
+                  hoverStyle,
+                  children: jsxProd_default_2(Fragment, {
+                    children: [
+                      !hideIndexesFlag &&
+                        jsxProd_default(Text, {
+                          dimColor: true,
+                          children: `${i_0}.`.padEnd(indexWidth + 1),
+                        }),
                       jsxProd_default(Text, {
-                        dimColor: true,
-                        children: `${i_0}.`.padEnd(maxIndexWidth + 1),
+                        dimColor: isDisabledOption_2,
+                        color: isDisabledOption_2
+                          ? undefined
+                          : isSelected
+                            ? "success"
+                            : isFocused
+                              ? "suggestion"
+                              : undefined,
+                        children: label_0,
                       }),
-                    jsxProd_default(Text, {
-                      dimColor: isOptionDisabled,
-                      color: isOptionDisabled
+                    ],
+                  }),
+                }),
+                option.description &&
+                  jsxProd_default(Box, {
+                    paddingLeft: hideIndexesFlag ? 4 : indexWidth + 4,
+                    children: jsxProd_default(Text, {
+                      dimColor: isDisabledOption_2 || option.dimDescription !== false,
+                      color: isDisabledOption_2
                         ? undefined
                         : isSelected
                           ? "success"
                           : isFocused
                             ? "suggestion"
                             : undefined,
-                      children: label,
-                    }),
-                  ],
-                }),
-              }),
-              option.description &&
-                jsxProd_default(Box, {
-                  paddingLeft: hideIndexesFlag ? 4 : maxIndexWidth + 4,
-                  children: jsxProd_default(Text, {
-                    dimColor: isOptionDisabled || option.dimDescription !== false,
-                    color: isOptionDisabled
-                      ? undefined
-                      : isSelected
-                        ? "success"
-                        : isFocused
-                          ? "suggestion"
-                          : undefined,
-                    children: jsxProd_default(Ansi, {
-                      children: option.description,
+                      children: jsxProd_default(Ansi, {
+                        children: option.description,
+                      }),
                     }),
                   }),
-                }),
-            ],
-          },
-          String(option.value),
-        );
-      }),
+              ],
+            },
+            String(option.value),
+          );
+        };
+        $[131] = canPasteImage;
+        $[132] = makeClickHandler;
+        $[133] = hideIndexesFlag;
+        $[134] = hoverStyle;
+        $[135] = imagesSelected;
+        $[136] = inlineDescriptionsFlag;
+        $[137] = extraChromeWidth;
+        $[138] = inputValues;
+        $[139] = isDisabledFlag;
+        $[140] = indexWidth;
+        $[141] = onCancel;
+        $[142] = onChange;
+        $[143] = onImagePaste;
+        $[144] = onOpenEditor;
+        $[145] = onRemoveImage;
+        $[146] = options.length;
+        $[147] = pastedContents;
+        $[148] = selectedImageIndex;
+        $[149] = state.focusedValue;
+        $[150] = state.value;
+        $[151] = state.visibleFromIndex;
+        $[152] = state.visibleToIndex;
+        $[153] = renderOption_2;
+      } else renderOption_2 = $[153];
+      children = state.visibleOptions.map(renderOption_2);
+      $[107] = canPasteImage;
+      $[108] = makeClickHandler;
+      $[109] = hideIndexesFlag;
+      $[110] = hoverStyle;
+      $[111] = imagesSelected;
+      $[112] = inlineDescriptionsFlag;
+      $[113] = extraChromeWidth;
+      $[114] = inputValues;
+      $[115] = isDisabledFlag;
+      $[116] = indexWidth;
+      $[117] = onCancel;
+      $[118] = onChange;
+      $[119] = onImagePaste;
+      $[120] = onOpenEditor;
+      $[121] = onRemoveImage;
+      $[122] = options.length;
+      $[123] = pastedContents;
+      $[124] = selectedImageIndex;
+      $[125] = state.focusedValue;
+      $[126] = state.value;
+      $[127] = state.visibleFromIndex;
+      $[128] = state.visibleOptions;
+      $[129] = state.visibleToIndex;
+      $[130] = children;
+    } else children = $[130];
+    return jsxProd_default(WindowedRowsBox, {
+      container,
+      rows,
+      hiddenBelow: hiddenBelow_2,
+      children,
     });
   }
   let indexWidthCached;
-  if ($[60] !== sizingOptions || $[61] !== hideIndexesFlag) {
+  if ($[154] !== sizingOptions || $[155] !== hideIndexesFlag) {
     indexWidthCached = hideIndexesFlag ? 0 : sizingOptions.length.toString().length;
-    $[60] = sizingOptions;
-    $[61] = hideIndexesFlag;
-    $[62] = indexWidthCached;
-  } else indexWidthCached = $[62];
+    $[154] = sizingOptions;
+    $[155] = hideIndexesFlag;
+    $[156] = indexWidthCached;
+  } else indexWidthCached = $[156];
   let indexWidth = indexWidthCached;
   if (useVerticalLayout) {
     let indexColumnWidth;
     let maxRowWidth;
     if (
-      $[63] !== columns ||
-      $[64] !== sizingOptions ||
-      $[65] !== hideIndexesFlag ||
-      $[66] !== indexWidth ||
-      $[67] !== state.value
+      $[157] !== columns ||
+      $[158] !== sizingOptions ||
+      $[159] !== hideIndexesFlag ||
+      $[160] !== indexWidth ||
+      $[161] !== state.value
     ) {
       indexColumnWidth = hideIndexesFlag ? 0 : indexWidth + 2;
       let labelColumnWidthCached;
-      if ($[70] !== sizingOptions || $[71] !== indexColumnWidth || $[72] !== state.value) {
+      if ($[164] !== sizingOptions || $[165] !== indexColumnWidth || $[166] !== state.value) {
         let measureRowWidth;
-        if ($[74] !== indexColumnWidth || $[75] !== state.value) {
+        if ($[168] !== indexColumnWidth || $[169] !== state.value) {
           measureRowWidth = (option) => {
             if (option.type === "input") {
               return 0;
@@ -794,79 +963,87 @@ function Select_2(props) {
             let selectionPad = state.value === option.value ? 2 : 0;
             return 2 + indexColumnWidth + bunStringWidth(reactNodeText(option.label)) + selectionPad;
           };
-          $[74] = indexColumnWidth;
-          $[75] = state.value;
-          $[76] = measureRowWidth;
-        } else measureRowWidth = $[76];
+          $[168] = indexColumnWidth;
+          $[169] = state.value;
+          $[170] = measureRowWidth;
+        } else measureRowWidth = $[170];
         labelColumnWidthCached = Math.max(...sizingOptions.map(measureRowWidth));
-        $[70] = sizingOptions;
-        $[71] = indexColumnWidth;
-        $[72] = state.value;
-        $[73] = labelColumnWidthCached;
-      } else labelColumnWidthCached = $[73];
+        $[164] = sizingOptions;
+        $[165] = indexColumnWidth;
+        $[166] = state.value;
+        $[167] = labelColumnWidthCached;
+      } else labelColumnWidthCached = $[167];
       maxRowWidth = Math.min(labelColumnWidthCached, Math.floor(columns * MAX_WIDTH_RATIO));
-      $[63] = columns;
-      $[64] = sizingOptions;
-      $[65] = hideIndexesFlag;
-      $[66] = indexWidth;
-      $[67] = state.value;
-      $[68] = indexColumnWidth;
-      $[69] = maxRowWidth;
+      $[157] = columns;
+      $[158] = sizingOptions;
+      $[159] = hideIndexesFlag;
+      $[160] = indexWidth;
+      $[161] = state.value;
+      $[162] = indexColumnWidth;
+      $[163] = maxRowWidth;
     } else {
-      indexColumnWidth = $[68];
-      maxRowWidth = $[69];
+      indexColumnWidth = $[162];
+      maxRowWidth = $[163];
     }
-    let optionData = state.visibleOptions.map((option, index) => {
-      let isFirstVisibleOption = option.index === state.visibleFromIndex;
-      let isLastVisibleOption = option.index === state.visibleToIndex - 1;
-      let areMoreOptionsBelow = state.visibleToIndex < options.length;
-      let areMoreOptionsAbove = state.visibleFromIndex > 0;
-      let i_1 = state.visibleFromIndex + index + 1;
-      let isFocused = !isDisabledFlag && state.focusedValue === option.value;
-      let isSelected = state.value === option.value;
-      let isOptionDisabled = option.disabled === true;
-      let selectionPad_2 = isSelected ? 2 : 0;
-      let labelText = reactNodeText(option.label);
-      let label_1 = option.label;
-      let labelBudget = maxRowWidth - 2 - indexColumnWidth - selectionPad_2;
-      if (bunStringWidth(labelText) > labelBudget) {
-        labelText = truncateToWidth(labelText, labelBudget);
-        label_1 = labelText;
-      }
-      if (typeof label_1 === "string" && highlightText && label_1.includes(highlightText)) {
-        let labelText = label_1;
-        let idx = labelText.indexOf(highlightText);
-        label_1 = jsxProd_default_2(Fragment, {
-          children: [
-            labelText.slice(0, idx),
-            jsxProd_default(Text, {
-              ...styles.highlightedText(),
-              children: highlightText,
-            }),
-            labelText.slice(idx + highlightText.length),
-          ],
-        });
-      }
-      return {
-        option,
-        index: i_1,
-        label: label_1,
-        labelWidth: 2 + indexColumnWidth + bunStringWidth(labelText) + selectionPad_2,
-        isFocused,
-        isSelected,
-        isOptionDisabled,
-        shouldShowDownArrow: areMoreOptionsBelow && isLastVisibleOption,
-        shouldShowUpArrow: areMoreOptionsAbove && isFirstVisibleOption,
+    let renderOption_3;
+    if (
+      $[171] !== indexColumnWidth ||
+      $[172] !== isDisabledFlag ||
+      $[173] !== maxRowWidth ||
+      $[174] !== options.length ||
+      $[175] !== state.focusedValue ||
+      $[176] !== state.value ||
+      $[177] !== state.visibleFromIndex ||
+      $[178] !== state.visibleToIndex
+    ) {
+      renderOption_3 = (option, index) => {
+        let isFirstVisibleOption = option.index === state.visibleFromIndex;
+        let isLastVisibleOption = option.index === state.visibleToIndex - 1;
+        let areMoreOptionsBelow = state.visibleToIndex < options.length;
+        let areMoreOptionsAbove = state.visibleFromIndex > 0;
+        let i_1 = state.visibleFromIndex + index + 1;
+        let isFocused = !isDisabledFlag && state.focusedValue === option.value;
+        let isSelected = state.value === option.value;
+        let isOptionDisabled = option.disabled === true;
+        let selectionPad_2 = isSelected ? 2 : 0;
+        let labelText = reactNodeText(option.label);
+        let label_1 = option.label;
+        let labelBudget = maxRowWidth - 2 - indexColumnWidth - selectionPad_2;
+        if (bunStringWidth(labelText) > labelBudget) {
+          labelText = truncateToWidth(labelText, labelBudget);
+          label_1 = labelText;
+        }
+        return {
+          option,
+          index: i_1,
+          label: label_1,
+          labelWidth: 2 + indexColumnWidth + bunStringWidth(labelText) + selectionPad_2,
+          isFocused,
+          isSelected,
+          isOptionDisabled,
+          shouldShowDownArrow: areMoreOptionsBelow && isLastVisibleOption,
+          shouldShowUpArrow: areMoreOptionsAbove && isFirstVisibleOption,
+        };
       };
-    });
-    const container = styles.container();
+      $[171] = indexColumnWidth;
+      $[172] = isDisabledFlag;
+      $[173] = maxRowWidth;
+      $[174] = options.length;
+      $[175] = state.focusedValue;
+      $[176] = state.value;
+      $[177] = state.visibleFromIndex;
+      $[178] = state.visibleToIndex;
+      $[179] = renderOption_3;
+    } else renderOption_3 = $[179];
+    let mapped = state.visibleOptions.map(renderOption_3);
+    const container = containerProps.container();
     let renderRow;
     if (
-      $[77] !== makeClickHandler ||
-      $[78] !== hideIndexesFlag ||
-      $[79] !== hoverStyle ||
-      $[80] !== indexWidth ||
-      $[81] !== maxRowWidth
+      $[180] !== makeClickHandler ||
+      $[181] !== hideIndexesFlag ||
+      $[182] !== hoverStyle ||
+      $[183] !== indexWidth ||
+      $[184] !== maxRowWidth
     ) {
       renderRow = (data) => {
         if (data.option.type === "input") {
@@ -947,174 +1124,262 @@ function Select_2(props) {
           String(data.option.value),
         );
       };
-      $[77] = makeClickHandler;
-      $[78] = hideIndexesFlag;
-      $[79] = hoverStyle;
-      $[80] = indexWidth;
-      $[81] = maxRowWidth;
-      $[82] = renderRow;
-    } else renderRow = $[82];
+      $[180] = makeClickHandler;
+      $[181] = hideIndexesFlag;
+      $[182] = hoverStyle;
+      $[183] = indexWidth;
+      $[184] = maxRowWidth;
+      $[185] = renderRow;
+    } else renderRow = $[185];
     return jsxProd_default(WindowedRowsBox, {
       container,
       rows,
       hiddenBelow: hiddenBelow_2,
-      children: optionData.map(renderRow),
+      children: mapped.map(renderRow),
     });
   }
   const RowsBoxComponent = WindowedRowsBox;
-  const container = styles.container();
-  const children = state.visibleOptions.map((option, index) => {
-    if (option.type === "input") {
-      let inputValue = inputValues.has(option.value)
-        ? inputValues.get(option.value)
-        : option.initialValue || "";
-      let isFirstVisibleOption = option.index === state.visibleFromIndex;
-      let isLastVisibleOption = option.index === state.visibleToIndex - 1;
-      let areMoreOptionsBelow = state.visibleToIndex < options.length;
-      let areMoreOptionsAbove = state.visibleFromIndex > 0;
-      let i_2 = state.visibleFromIndex + index + 1;
-      let isFocused = !isDisabledFlag && state.focusedValue === option.value;
-      let isSelected = state.value === option.value;
-      return jsxProd_default(
-        SelectInputOption,
-        {
-          option,
-          onClick: makeClickHandler(option),
-          hoverStyle,
-          isFocused,
-          isSelected,
-          shouldShowDownArrow: areMoreOptionsBelow && isLastVisibleOption,
-          shouldShowUpArrow: areMoreOptionsAbove && isFirstVisibleOption,
-          maxIndexWidth: indexWidth,
-          index: i_2,
-          hideIndex: hideIndexesFlag,
-          extraChromeWidth,
-          inputValue,
-          onInputChange: (value) => {
-            setInputValues((prev) => {
-              let next = new Map(prev);
-              next.set(option.value, value);
-              return next;
-            });
-          },
-          onSubmit: (value) => {
-            let hasImageAttachments = pastedContents && Object.values(pastedContents).some(isImagePaste_5);
-            if (value.trim() || hasImageAttachments || option.allowEmptySubmitToCancel)
-              onChange?.(option.value);
-            else if (!option.ignoreEmptySubmit) onCancel?.();
-          },
-          onExit: onCancel,
-          layout: "compact",
-          showLabel: inlineDescriptionsFlag,
-          onOpenEditor,
-          resetCursorOnUpdate: option.resetCursorOnUpdate,
-          canPasteImage,
-          onImagePaste,
-          pastedContents,
-          onRemoveImage,
-          imagesSelected,
-          selectedImageIndex,
-          onImagesSelectedChange: setImagesSelected,
-          onSelectedImageIndexChange: setSelectedImageIndex,
-        },
-        String(option.value),
-      );
-    }
-    let label = option.label;
-    if (typeof option.label === "string" && highlightText && option.label.includes(highlightText)) {
-      let labelText = option.label;
-      let index = labelText.indexOf(highlightText);
-      label = jsxProd_default_2(Fragment, {
-        children: [
-          labelText.slice(0, index),
-          jsxProd_default(Text, {
-            ...styles.highlightedText(),
-            children: highlightText,
-          }),
-          labelText.slice(index + highlightText.length),
-        ],
-      });
-    }
-    let isFirstVisibleOption = option.index === state.visibleFromIndex;
-    let isLastVisibleOption = option.index === state.visibleToIndex - 1;
-    let areMoreOptionsBelow = state.visibleToIndex < options.length;
-    let areMoreOptionsAbove = state.visibleFromIndex > 0;
-    let i_3 = state.visibleFromIndex + index + 1;
-    let isFocused = !isDisabledFlag && state.focusedValue === option.value;
-    let isSelected = state.value === option.value;
-    let isOptionDisabled = option.disabled === true;
-    return jsxProd_default_2(
-      SelectOption,
-      {
-        isFocused,
-        isSelected,
-        shouldShowDownArrow: areMoreOptionsBelow && isLastVisibleOption,
-        shouldShowUpArrow: areMoreOptionsAbove && isFirstVisibleOption,
-        onClick: makeClickHandler(option),
-        hoverStyle,
-        children: [
-          jsxProd_default_2(Box, {
-            flexDirection: "row",
-            flexShrink: 0,
+  const container = containerProps.container();
+  let children;
+  if (
+    $[186] !== canPasteImage ||
+    $[187] !== makeClickHandler ||
+    $[188] !== hideIndexesFlag ||
+    $[189] !== hoverStyle ||
+    $[190] !== imagesSelected ||
+    $[191] !== inlineDescriptionsFlag ||
+    $[192] !== extraChromeWidth ||
+    $[193] !== inputValues ||
+    $[194] !== isDisabledFlag ||
+    $[195] !== indexWidth ||
+    $[196] !== onCancel ||
+    $[197] !== onChange ||
+    $[198] !== onImagePaste ||
+    $[199] !== onOpenEditor ||
+    $[200] !== onRemoveImage ||
+    $[201] !== options.length ||
+    $[202] !== pastedContents ||
+    $[203] !== selectedImageIndex ||
+    $[204] !== state.focusedValue ||
+    $[205] !== state.value ||
+    $[206] !== state.visibleFromIndex ||
+    $[207] !== state.visibleOptions ||
+    $[208] !== state.visibleToIndex
+  ) {
+    let renderOption_4;
+    if (
+      $[210] !== canPasteImage ||
+      $[211] !== makeClickHandler ||
+      $[212] !== hideIndexesFlag ||
+      $[213] !== hoverStyle ||
+      $[214] !== imagesSelected ||
+      $[215] !== inlineDescriptionsFlag ||
+      $[216] !== extraChromeWidth ||
+      $[217] !== inputValues ||
+      $[218] !== isDisabledFlag ||
+      $[219] !== indexWidth ||
+      $[220] !== onCancel ||
+      $[221] !== onChange ||
+      $[222] !== onImagePaste ||
+      $[223] !== onOpenEditor ||
+      $[224] !== onRemoveImage ||
+      $[225] !== options.length ||
+      $[226] !== pastedContents ||
+      $[227] !== selectedImageIndex ||
+      $[228] !== state.focusedValue ||
+      $[229] !== state.value ||
+      $[230] !== state.visibleFromIndex ||
+      $[231] !== state.visibleToIndex
+    ) {
+      renderOption_4 = (option, index) => {
+        if (option.type === "input") {
+          let inputValue = inputValues.has(option.value)
+            ? inputValues.get(option.value)
+            : option.initialValue || "";
+          let isFirstVisibleOption = option.index === state.visibleFromIndex;
+          let isLastVisibleOption = option.index === state.visibleToIndex - 1;
+          let areMoreOptionsBelow = state.visibleToIndex < options.length;
+          let areMoreOptionsAbove = state.visibleFromIndex > 0;
+          let i_2 = state.visibleFromIndex + index + 1;
+          let isFocused = !isDisabledFlag && state.focusedValue === option.value;
+          let isSelected = state.value === option.value;
+          return jsxProd_default(
+            SelectInputOption,
+            {
+              option,
+              onClick: makeClickHandler(option),
+              hoverStyle,
+              isFocused,
+              isSelected,
+              shouldShowDownArrow: areMoreOptionsBelow && isLastVisibleOption,
+              shouldShowUpArrow: areMoreOptionsAbove && isFirstVisibleOption,
+              maxIndexWidth: indexWidth,
+              index: i_2,
+              hideIndex: hideIndexesFlag,
+              extraChromeWidth,
+              inputValue,
+              onInputChange: (value) => {
+                setInputValues((prev) => {
+                  let next = new Map(prev);
+                  next.set(option.value, value);
+                  return next;
+                });
+              },
+              onSubmit: (value) => {
+                let hasImageAttachments =
+                  pastedContents && Object.values(pastedContents).some(isImagePaste_5);
+                if (value.trim() || hasImageAttachments || option.allowEmptySubmitToCancel)
+                  onChange?.(option.value);
+                else if (!option.ignoreEmptySubmit) onCancel?.();
+              },
+              onExit: onCancel,
+              layout: "compact",
+              showLabel: inlineDescriptionsFlag,
+              onOpenEditor,
+              resetCursorOnUpdate: option.resetCursorOnUpdate,
+              canPasteImage,
+              onImagePaste,
+              pastedContents,
+              onRemoveImage,
+              imagesSelected,
+              selectedImageIndex,
+              onImagesSelectedChange: setImagesSelected,
+              onSelectedImageIndexChange: setSelectedImageIndex,
+            },
+            String(option.value),
+          );
+        }
+        let label = option.label;
+        let isFirstVisible = option.index === state.visibleFromIndex;
+        let isLastVisibleOption = option.index === state.visibleToIndex - 1;
+        let areMoreOptionsBelow = state.visibleToIndex < options.length;
+        let areMoreOptionsAbove = state.visibleFromIndex > 0;
+        let i_3 = state.visibleFromIndex + index + 1;
+        let isFocused = !isDisabledFlag && state.focusedValue === option.value;
+        let isSelected = state.value === option.value;
+        let isOptionDisabled = option.disabled === true;
+        return jsxProd_default_2(
+          SelectOption,
+          {
+            isFocused,
+            isSelected,
+            shouldShowDownArrow: areMoreOptionsBelow && isLastVisibleOption,
+            shouldShowUpArrow: areMoreOptionsAbove && isFirstVisible,
+            onClick: makeClickHandler(option),
+            hoverStyle,
             children: [
-              !hideIndexesFlag &&
-                jsxProd_default(Text, {
-                  dimColor: true,
-                  children: `${i_3}.`.padEnd(indexWidth + 2),
-                }),
-              jsxProd_default_2(Text, {
-                dimColor: isOptionDisabled,
-                color: isOptionDisabled
-                  ? undefined
-                  : isSelected
-                    ? "success"
-                    : isFocused
-                      ? "suggestion"
-                      : undefined,
+              jsxProd_default_2(Box, {
+                flexDirection: "row",
+                flexShrink: 0,
                 children: [
-                  label,
-                  inlineDescriptionsFlag &&
-                    option.description &&
-                    jsxProd_default_2(Text, {
-                      dimColor: isOptionDisabled || option.dimDescription !== false,
-                      children: [" ", option.description],
+                  !hideIndexesFlag &&
+                    jsxProd_default(Text, {
+                      dimColor: true,
+                      children: `${i_3}.`.padEnd(indexWidth + 2),
                     }),
+                  jsxProd_default_2(Text, {
+                    dimColor: isOptionDisabled,
+                    color: isOptionDisabled
+                      ? undefined
+                      : isSelected
+                        ? "success"
+                        : isFocused
+                          ? "suggestion"
+                          : undefined,
+                    children: [
+                      label,
+                      inlineDescriptionsFlag &&
+                        option.description &&
+                        jsxProd_default_2(Text, {
+                          dimColor: isOptionDisabled || option.dimDescription !== false,
+                          children: [" ", option.description],
+                        }),
+                    ],
+                  }),
                 ],
               }),
-            ],
-          }),
-          !inlineDescriptionsFlag &&
-            option.description &&
-            jsxProd_default(Box, {
-              flexShrink: 99,
-              marginLeft: 2,
-              children: jsxProd_default(Text, {
-                wrap: "wrap-trim",
-                dimColor: isOptionDisabled || option.dimDescription !== false,
-                color: isOptionDisabled
-                  ? undefined
-                  : isSelected
-                    ? "success"
-                    : isFocused
-                      ? "suggestion"
-                      : undefined,
-                children: jsxProd_default(Ansi, {
-                  children: option.description,
+              !inlineDescriptionsFlag &&
+                option.description &&
+                jsxProd_default(Box, {
+                  flexShrink: 99,
+                  marginLeft: 2,
+                  children: jsxProd_default(Text, {
+                    wrap: "wrap-trim",
+                    dimColor: isOptionDisabled || option.dimDescription !== false,
+                    color: isOptionDisabled
+                      ? undefined
+                      : isSelected
+                        ? "success"
+                        : isFocused
+                          ? "suggestion"
+                          : undefined,
+                    children: jsxProd_default(Ansi, {
+                      children: option.description,
+                    }),
+                  }),
                 }),
-              }),
-            }),
-        ],
-      },
-      String(option.value),
-    );
-  });
+            ],
+          },
+          String(option.value),
+        );
+      };
+      $[210] = canPasteImage;
+      $[211] = makeClickHandler;
+      $[212] = hideIndexesFlag;
+      $[213] = hoverStyle;
+      $[214] = imagesSelected;
+      $[215] = inlineDescriptionsFlag;
+      $[216] = extraChromeWidth;
+      $[217] = inputValues;
+      $[218] = isDisabledFlag;
+      $[219] = indexWidth;
+      $[220] = onCancel;
+      $[221] = onChange;
+      $[222] = onImagePaste;
+      $[223] = onOpenEditor;
+      $[224] = onRemoveImage;
+      $[225] = options.length;
+      $[226] = pastedContents;
+      $[227] = selectedImageIndex;
+      $[228] = state.focusedValue;
+      $[229] = state.value;
+      $[230] = state.visibleFromIndex;
+      $[231] = state.visibleToIndex;
+      $[232] = renderOption_4;
+    } else renderOption_4 = $[232];
+    children = state.visibleOptions.map(renderOption_4);
+    $[186] = canPasteImage;
+    $[187] = makeClickHandler;
+    $[188] = hideIndexesFlag;
+    $[189] = hoverStyle;
+    $[190] = imagesSelected;
+    $[191] = inlineDescriptionsFlag;
+    $[192] = extraChromeWidth;
+    $[193] = inputValues;
+    $[194] = isDisabledFlag;
+    $[195] = indexWidth;
+    $[196] = onCancel;
+    $[197] = onChange;
+    $[198] = onImagePaste;
+    $[199] = onOpenEditor;
+    $[200] = onRemoveImage;
+    $[201] = options.length;
+    $[202] = pastedContents;
+    $[203] = selectedImageIndex;
+    $[204] = state.focusedValue;
+    $[205] = state.value;
+    $[206] = state.visibleFromIndex;
+    $[207] = state.visibleOptions;
+    $[208] = state.visibleToIndex;
+    $[209] = children;
+  } else children = $[209];
   let selectElement;
   if (
-    $[83] !== RowsBoxComponent ||
-    $[84] !== hiddenBelow_2 ||
-    $[85] !== rows ||
-    $[86] !== container ||
-    $[87] !== children
+    $[233] !== RowsBoxComponent ||
+    $[234] !== hiddenBelow_2 ||
+    $[235] !== rows ||
+    $[236] !== container ||
+    $[237] !== children
   ) {
     selectElement = jsxProd_default(RowsBoxComponent, {
       container,
@@ -1122,22 +1387,22 @@ function Select_2(props) {
       hiddenBelow: hiddenBelow_2,
       children,
     });
-    $[83] = RowsBoxComponent;
-    $[84] = hiddenBelow_2;
-    $[85] = rows;
-    $[86] = container;
-    $[87] = children;
-    $[88] = selectElement;
-  } else selectElement = $[88];
+    $[233] = RowsBoxComponent;
+    $[234] = hiddenBelow_2;
+    $[235] = rows;
+    $[236] = container;
+    $[237] = children;
+    $[238] = selectElement;
+  } else selectElement = $[238];
   return selectElement;
 }
-//@ chunk-ey2qag4x.js:57659-57676 layout
+//@ chunk-p1yqn9ds.js:60697-60714 layout
 /**
  * 菜单垂直装饰预留 8 行与最大宽度比例 0.6。
  */
 var MENU_VERTICAL_CHROME_ROWS = 8;
 var MAX_WIDTH_RATIO = 0.6;
-//@ chunk-ey2qag4x.js:57676-57834 placement
+//@ chunk-p1yqn9ds.js:60714-60872 placement
 /**
  * 按终端行数与布局（expanded 每项 3 行、compact 1 行、其他 2 行）算最多可见选项数，不超过 t。
  */
@@ -1148,7 +1413,7 @@ function fitVisibleOptionCount(optionCount, density) {
   let max = Math.max(1, Math.floor((rows - MENU_VERTICAL_CHROME_ROWS) / rowsPerOption));
   return Math.min(optionCount, max);
 }
-//@ chunk-ey2qag4x.js:57834-58108 placement
+//@ chunk-p1yqn9ds.js:60872-61146 placement
 function WindowedRowsBox(props) {
   let $ = useMemoCache(7);
   let { container, rows, hiddenBelow, children } = props;
@@ -1175,7 +1440,7 @@ function WindowedRowsBox(props) {
   } else box = $[6];
   return box;
 }
-//@ chunk-ey2qag4x.js:58108-59296 placement
+//@ chunk-p1yqn9ds.js:61146-62334 placement
 /**
  * 选择列表的一行（焦点、上下箭头、点击与悬停样式）。
  */
@@ -1293,12 +1558,12 @@ function SelectOptionRow(props) {
   } else rowElement = $[23];
   return rowElement;
 }
-//@ chunk-8jypjjdf.js:1309-1313 placement
+//@ chunk-tvbhy3tn.js:1310-1314 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-8jypjjdf.js:1309", () => {
+deferInit("chunk-tvbhy3tn.js:1310", () => {
   init_react_production();
 });
-//@ chunk-8jypjjdf.js:1313-1642 fingerprint (2.1.88 match: TwoColumnRow, 0.736)
+//@ chunk-tvbhy3tn.js:1314-1643 fingerprint (2.1.88 match: TwoColumnRow, 0.735)
 function TwoColumnRow(t0) {
   let $ = useMemoCache(10);
   let active;
@@ -1340,7 +1605,7 @@ function TwoColumnRow(t0) {
   } else t2 = $[9];
   return t2;
 }
-//@ chunk-ag5x7vhf.js:86912-87298 fingerprint (2.1.88 match: _temp4, 0.641)
+//@ chunk-hnxhr3bs.js:86397-86783 fingerprint (2.1.88 match: _temp4, 0.642)
 /**
  * "自动模式成为默认"的状态提示组件：显示标题、说明与链接，并在显示时记为已读。
  */
@@ -1355,21 +1620,21 @@ function AutoModeDefaultNotice() {
   } else store = $[1];
   useNoticeImpression(AUTO_MODE_DEFAULT, store);
   let titleText;
-  let _;
+  let bodyText;
   if ($[2] === MEMO_CACHE_SENTINEL) {
     titleText = jsxProd_default(Text, {
       bold: true,
       children: AUTO_DEFAULT_NOTICE_TITLE,
     });
-    _ = jsxProd_default(Text, {
+    bodyText = jsxProd_default(Text, {
       dimColor: true,
       children: AUTO_DEFAULT_NOTICE_BODY,
     });
     $[2] = titleText;
-    $[3] = _;
+    $[3] = bodyText;
   } else {
     titleText = $[2];
-    _ = $[3];
+    bodyText = $[3];
   }
   let noticeBox;
   if ($[4] === MEMO_CACHE_SENTINEL) {
@@ -1377,7 +1642,7 @@ function AutoModeDefaultNotice() {
       flexDirection: "column",
       children: [
         titleText,
-        _,
+        bodyText,
         jsxProd_default(Text, {
           dimColor: true,
           children: jsxProd_default(Link, {
@@ -1392,105 +1657,105 @@ function AutoModeDefaultNotice() {
   } else noticeBox = $[4];
   return noticeBox;
 }
-//@ chunk-r68xwcze.js:1089-1093 placement
+//@ chunk-yz6x5v95.js:1156-1160 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r68xwcze.js:1089", () => {
+deferInit("chunk-yz6x5v95.js:1156", () => {
   init_react_production();
 });
-//@ chunk-r68xwcze.js:1093-1097 placement
+//@ chunk-yz6x5v95.js:1160-1164 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r68xwcze.js:1093", () => {
+deferInit("chunk-yz6x5v95.js:1160", () => {
   init_react_production();
 });
-//@ chunk-r68xwcze.js:1097-1101 placement
+//@ chunk-yz6x5v95.js:1164-1168 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r68xwcze.js:1097", () => {
+deferInit("chunk-yz6x5v95.js:1164", () => {
   init_react_production();
 });
-//@ chunk-r68xwcze.js:1101-1105 placement
+//@ chunk-yz6x5v95.js:1168-1172 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r68xwcze.js:1101", () => {
+deferInit("chunk-yz6x5v95.js:1168", () => {
   init_react_production();
 });
-//@ chunk-r68xwcze.js:1105-1134 placement
+//@ chunk-yz6x5v95.js:1172-1201 placement
 var MULTI_CLICK_MIN_MS = 150;
 var MULTI_CLICK_MAX_MS_2 = 400;
 var CLICK_TIME_SLOP_MS = 60;
 var CLICK_CELL_SLOP = 1;
-//@ chunk-r68xwcze.js:1134-1211 placement (2.1.88 match: comparePoints, 0.803)
+//@ chunk-yz6x5v95.js:1201-1278 placement (2.1.88 match: comparePoints, 0.803)
 function isNearPoint(a, b) {
   return Math.abs(b.col - a.col) <= CLICK_CELL_SLOP && Math.abs(b.row - a.row) <= CLICK_CELL_SLOP;
 }
-//@ chunk-r68xwcze.js:1211-2584 placement
-function ScrollArrowButton({ children, paddingX = 0, onPress, repeat = false }) {
+//@ chunk-yz6x5v95.js:1278-2652 layout
+function PressableRow({ children, paddingX = 0, onPress, repeat = false }) {
   let clock = useClock();
   let strayClickGuard = useStrayClickGuard();
   let backgroundMode = userMessageBackgroundMode();
   let [isHovered, setIsHovered] = useState(false);
   let [isPressed, setIsPressed] = useState(false);
-  let pressRef = useRef(null);
-  let [repeatRefState, setRepeatRefState] = useState(null);
-  let clickTimerRef = useRef(null);
-  useEffect(() => () => clickTimerRef.current?.(), []);
+  let pressStart = useRef(null);
+  let [pendingClick, setPendingClick] = useState(null);
+  let clickTimer = useRef(null);
+  useEffect(() => () => clickTimer.current?.(), []);
   let isPressable = onPress !== undefined;
-  if (!isPressable && (isHovered || isPressed || repeatRefState !== null)) {
+  if (!isPressable && (isHovered || isPressed || pendingClick !== null)) {
     setIsHovered(false);
     setIsPressed(false);
-    setRepeatRefState(null);
+    setPendingClick(null);
   }
   useEffect(() => {
-    if (!isPressable) pressRef.current = null;
+    if (!isPressable) pressStart.current = null;
   }, [isPressable]);
-  let fireRepeat = useEffectEvent((pressState) => {
-    let currentPress = pressRef.current;
-    if (currentPress !== pressState) return;
-    currentPress.hasActed = true;
+  let repeatPress = useEffectEvent((click) => {
+    let press = pressStart.current;
+    if (press !== click) return;
+    press.hasActed = true;
     onPress?.({
-      row: currentPress.row,
+      row: press.row,
     });
   });
   useEffect(() => {
-    if (repeatRefState === null) return;
-    let timer = clock.setTimeout(function repeatTick() {
-      fireRepeat(repeatRefState);
-      timer = clock.setTimeout(repeatTick, CLICK_TIME_SLOP_MS);
+    if (pendingClick === null) return;
+    let repeatTimer = clock.setTimeout(function repeatTick() {
+      repeatPress(pendingClick);
+      repeatTimer = clock.setTimeout(repeatTick, CLICK_TIME_SLOP_MS);
     }, MULTI_CLICK_MAX_MS_2);
-    return () => timer();
-  }, [repeatRefState, clock]);
+    return () => repeatTimer();
+  }, [pendingClick, clock]);
   function handleClick(event) {
     event.stopImmediatePropagation();
-    if (clickTimerRef.current !== null || strayClickGuard(event)) return;
+    if (clickTimer.current !== null || strayClickGuard(event)) return;
     event.endClickChain();
     setIsPressed(true);
-    clickTimerRef.current = clock.setTimeout(() => {
-      clickTimerRef.current = null;
+    clickTimer.current = clock.setTimeout(() => {
+      clickTimer.current = null;
       setIsPressed(false);
       onPress?.(event);
     }, MULTI_CLICK_MIN_MS);
   }
-  function handleMouseEvent(event) {
+  function handlePointer(event) {
     if (event.type === "down" && event.button === 0) {
-      let press = {
+      let pressStart_2 = {
         col: event.col,
         row: event.row,
         hasActed: false,
       };
-      pressRef.current = press;
+      pressStart.current = pressStart_2;
       setIsPressed(true);
-      setRepeatRefState(press);
+      setPendingClick(pressStart_2);
     } else if (event.type === "up") {
-      let press = pressRef.current;
-      pressRef.current = null;
+      let press = pressStart.current;
+      pressStart.current = null;
       setIsPressed(false);
-      setRepeatRefState(null);
+      setPendingClick(null);
       if (press !== null && !press.hasActed && !event.isUnreported && isNearPoint(press, event))
         onPress?.({
           row: press.row,
         });
     }
   }
-  let isInverse = backgroundMode === "inverse";
-  let backgroundColor = isInverse
+  let isInverseBackground = backgroundMode === "inverse";
+  let backgroundColor = isInverseBackground
     ? undefined
     : isPressed
       ? "text"
@@ -1504,19 +1769,19 @@ function ScrollArrowButton({ children, paddingX = 0, onPress, repeat = false }) 
     alignSelf: "flex-start",
     backgroundColor,
     onClick: isPressable && !repeat ? handleClick : undefined,
-    onPointer: isPressable && repeat ? handleMouseEvent : undefined,
+    onPointer: isPressable && repeat ? handlePointer : undefined,
     onMouseEnter: isPressable ? () => setIsHovered(true) : undefined,
     onMouseLeave: isPressable ? () => setIsHovered(false) : undefined,
     hoverFollowsPaint: isPressable,
     noSelect: true,
     children: [
       jsxProd_default(Text, {
-        color: isPressed && !isInverse ? "inverseText" : undefined,
+        color: isPressed && !isInverseBackground ? "inverseText" : undefined,
         dimColor: !isPressed,
-        inverse: isPressed && isInverse,
+        inverse: isPressed && isInverseBackground,
         wrap: "truncate-end",
         children:
-          isHovered && !isPressed && isInverse
+          isHovered && !isPressed && isInverseBackground
             ? jsxProd_default_2(Fragment, {
                 children: [
                   jsxProd_default(Text, {
@@ -1537,9 +1802,9 @@ function ScrollArrowButton({ children, paddingX = 0, onPress, repeat = false }) 
     ],
   });
 }
-//@ chunk-r68xwcze.js:2584-2596 placement
+//@ chunk-yz6x5v95.js:2652-2664 placement
 var HIGHLIGHT_REFRESH_MS = 1000;
-//@ chunk-r68xwcze.js:2596-2877 placement
+//@ chunk-yz6x5v95.js:2664-2945 placement
 function useStrayClickFilter() {
   let $ = useMemoCache(2);
   let clock = useClock();
@@ -1572,63 +1837,73 @@ function useStrayClickFilter() {
   let [filter] = useState(factory);
   return filter;
 }
-//@ chunk-r68xwcze.js:2877-2896 placement
+//@ chunk-yz6x5v95.js:2945-2964 placement
 /**
  * 恒为 false 的焦点 context（没有真实焦点时的默认值）。
  */
 var NO_FOCUS_CONTEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r68xwcze.js:2877", () => {
+deferInit("chunk-yz6x5v95.js:2945", () => {
   NO_FOCUS_CONTEXT = createContext(() => false);
 });
-//@ chunk-r68xwcze.js:2896-3162 placement
+//@ chunk-yz6x5v95.js:2964-3336 placement
 function MoreItemsIndicator(props) {
-  let $ = useMemoCache(3);
+  let $ = useMemoCache(6);
   let { direction, count, onPress } = props;
   if (count <= 0) {
     return null;
   }
-  const children = `${direction === "above" ? UP_ARROW : DOWN_ARROW} ${count} more`;
-  let indicator;
+  let arrow = direction === "above" ? UP_ARROW : DOWN_ARROW;
+  const ariaLabel = `${count} more ${direction}`;
+  const children = `${arrow} ${count} more`;
+  let children_2;
   if ($[0] !== onPress || $[1] !== children) {
-    indicator = jsxProd_default(Box, {
-      paddingLeft: 1,
-      children: jsxProd_default(ScrollArrowButton, {
-        paddingX: 1,
-        onPress,
-        children,
-      }),
+    children_2 = jsxProd_default(PressableRow, {
+      paddingX: 1,
+      onPress,
+      children,
     });
     $[0] = onPress;
     $[1] = children;
-    $[2] = indicator;
-  } else indicator = $[2];
+    $[2] = children_2;
+  } else children_2 = $[2];
+  let indicator;
+  if ($[3] !== ariaLabel || $[4] !== children_2) {
+    indicator = jsxProd_default(Box, {
+      paddingLeft: 1,
+      "aria-label": ariaLabel,
+      children: children_2,
+    });
+    $[3] = ariaLabel;
+    $[4] = children_2;
+    $[5] = indicator;
+  } else indicator = $[5];
   return indicator;
 }
-//@ chunk-r68xwcze.js:3162-3166 placement
+//@ chunk-yz6x5v95.js:3336-3340 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r68xwcze.js:3162", () => {
+deferInit("chunk-yz6x5v95.js:3336", () => {
   init_react_production();
 });
-//@ chunk-r68xwcze.js:3166-3170 placement
+//@ chunk-yz6x5v95.js:3340-3344 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r68xwcze.js:3166", () => {
+deferInit("chunk-yz6x5v95.js:3340", () => {
   init_react_production();
 });
-//@ chunk-r68xwcze.js:3170-3270 placement
+//@ chunk-yz6x5v95.js:3344-3444 placement
 function useHoverTrackingEnabled() {
   let alternateScreen = useContext(AlternateScreenContext);
   let { subscribeHoverTracked, isHoverTracked } = useContext(APP_CONTEXT);
   let hoverTracked = useSyncExternalStore(subscribeHoverTracked, isHoverTracked);
   return alternateScreen ?? hoverTracked;
 }
-//@ chunk-r68xwcze.js:3270-3274 placement
+//@ chunk-yz6x5v95.js:3444-3448 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r68xwcze.js:3270", () => {
+deferInit("chunk-yz6x5v95.js:3444", () => {
   init_react_production();
 });
-//@ chunk-r68xwcze.js:3274-3283 placement
+//@ chunk-yz6x5v95.js:3448-3457 placement
 var MIN_SCROLLBAR_ROWS = 5;
-//@ chunk-r68xwcze.js:3283-6052 placement
+//@ chunk-yz6x5v95.js:3457-6222 placement
 /**
  * 列表滚动条（偏移、可见数、点击/拖动滚动）。
  */
@@ -1764,7 +2039,7 @@ function ScrollBar(props) {
   if ($[16] !== hasArrows || $[17] !== offset || $[18] !== onScrollBy) {
     upArrowElement =
       hasArrows &&
-      jsxProd_default(ScrollArrowButton, {
+      jsxProd_default(PressableRow, {
         repeat: true,
         onPress: onScrollBy && offset > 0 ? () => onScrollBy(-1) : undefined,
         children: UP_ARROW,
@@ -1860,7 +2135,7 @@ function ScrollBar(props) {
   ) {
     downArrowElement =
       hasArrows &&
-      jsxProd_default(ScrollArrowButton, {
+      jsxProd_default(PressableRow, {
         repeat: true,
         onPress: onScrollBy && offset < total - visible ? () => onScrollBy(1) : undefined,
         children: DOWN_ARROW,
@@ -1888,7 +2163,7 @@ function ScrollBar(props) {
   } else scrollBarElement = $[49];
   return scrollBarElement;
 }
-//@ chunk-r68xwcze.js:6052-6302 placement
+//@ chunk-yz6x5v95.js:6222-6472 placement
 function computeScrollThumb({ offset, visible, total, height }) {
   let thumbSize = clamp(Math.round((visible / total) * height), 1, Math.max(1, height - 1));
   let slack = height - thumbSize;
@@ -1914,7 +2189,7 @@ function computeScrollThumb({ offset, visible, total, height }) {
     size: thumbSize,
   };
 }
-//@ chunk-r68xwcze.js:6302-6509 placement
+//@ chunk-yz6x5v95.js:6472-6679 placement
 function scrollOffsetFromThumbTop({ top, visible, total, height }) {
   let { size } = computeScrollThumb({
     offset: 0,
@@ -1930,7 +2205,7 @@ function scrollOffsetFromThumbTop({ top, visible, total, height }) {
   if (maxOffset < 2) return rounded;
   return clamp(rounded, 1, maxOffset - 1);
 }
-//@ chunk-r68xwcze.js:6509-6572 placement
+//@ chunk-yz6x5v95.js:6679-6742 placement
 function repeatCharLines(pipe, count) {
   return Array.from(
     {
@@ -1940,7 +2215,7 @@ function repeatCharLines(pipe, count) {
   ).join(`
 `);
 }
-//@ chunk-r68xwcze.js:6572-7150 placement
+//@ chunk-yz6x5v95.js:6742-7320 placement
 function SelectRow(props) {
   let $ = useMemoCache(12);
   let { bar, height, children } = props;
@@ -2002,26 +2277,22 @@ function SelectRow(props) {
   } else row = $[11];
   return row;
 }
-//@ chunk-r68xwcze.js:7150-7154 placement
+//@ chunk-yz6x5v95.js:7320-7324 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r68xwcze.js:7150", () => {
+deferInit("chunk-yz6x5v95.js:7320", () => {
   init_react_production();
 });
-//@ chunk-r68xwcze.js:7154-7158 placement
+//@ chunk-yz6x5v95.js:7324-7328 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r68xwcze.js:7154", () => {
+deferInit("chunk-yz6x5v95.js:7324", () => {
   init_react_production();
 });
-//@ chunk-r68xwcze.js:7158-7320 placement
+//@ chunk-yz6x5v95.js:7328-7460 placement
 /**
  * 按聚焦下标、总数、窗口高度（及可选锚点）算可见窗口 [windowStart, windowEnd) 以及上下各隐藏多少项。
  */
-function computeScrollWindow(anchor, count, visible, preferredStart = null) {
-  let start = clamp(
-    preferredStart === null ? anchor - visible + 1 : clamp(preferredStart, anchor - visible + 1, anchor),
-    0,
-    Math.max(0, count - visible),
-  );
+function computeScrollWindow(anchor, count, visible) {
+  let start = clamp(anchor - visible + 1, 0, Math.max(0, count - visible));
   let min = Math.min(start + visible, count);
   return {
     windowStart: start,
@@ -2030,12 +2301,12 @@ function computeScrollWindow(anchor, count, visible, preferredStart = null) {
     moreBelow: count - min,
   };
 }
-//@ chunk-r68xwcze.js:7320-7335 placement
+//@ chunk-yz6x5v95.js:7460-7475 placement
 var EMPTY_HEADINGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r68xwcze.js:7320", () => {
+deferInit("chunk-yz6x5v95.js:7460", () => {
   EMPTY_HEADINGS = new Set();
 });
-//@ chunk-r68xwcze.js:7335-9252 placement
+//@ chunk-yz6x5v95.js:7475-9388 placement
 function useLineScroll({
   lineCount,
   visibleCount,
@@ -2184,7 +2455,7 @@ function useLineScroll({
     },
   };
 }
-//@ chunk-r68xwcze.js:9252-12200 placement
+//@ chunk-yz6x5v95.js:9388-12332 placement
 /**
  * 管理选择列表光标、可见窗口、行高与分组标题。
  */
@@ -2217,7 +2488,7 @@ function useSelectCursor({
       resetKey,
     };
   });
-  let hasFocus = useHasFocus(containerRef);
+  let hovered = isFocusedIn(containerRef);
   let { focusDirection } = useFocus();
   let isDisabledNow = isDisabledValue(isDisabled);
   function resolveState(state) {
@@ -2340,7 +2611,7 @@ function useSelectCursor({
     ),
     {
       context: keybindingContext,
-      isActive: hasFocus && !isDisabledNow && count > 0,
+      isActive: hovered && !isDisabledNow && count > 0,
     },
   );
   MessageActionsKeybindings(
@@ -2349,7 +2620,7 @@ function useSelectCursor({
     },
     {
       context: keybindingContext,
-      isActive: hasFocus && !isDisabledNow && count > 0 && onAccept !== undefined,
+      isActive: hovered && !isDisabledNow && count > 0 && onAccept !== undefined,
     },
   );
   let hasBindingContext = useKeybindingContext() !== null;
@@ -2400,7 +2671,7 @@ function useSelectCursor({
     moreAbove: lineToRow[lineScroll.windowStart] ?? 0,
     moreBelow: count - (lineToRow[lineScroll.windowEnd] ?? count),
     isCursor: (index) => index === cursor && count > 0,
-    hasFocus,
+    hasFocus: hovered,
     scrollBar: {
       ...lineScroll.bar,
       onScrollTo: isDisabledNow ? undefined : lineScroll.bar.onScrollTo,
@@ -2417,41 +2688,41 @@ function useSelectCursor({
     },
   };
 }
-//@ chunk-r68xwcze.js:12200-12255 placement
+//@ chunk-yz6x5v95.js:12332-12387 placement
 /**
  * 把 isDisabled 属性定为布尔：函数则调用，true 即视为禁用。
  */
 function isDisabledValue(isDisabled) {
   return typeof isDisabled === "function" ? isDisabled() : isDisabled === true;
 }
-//@ chunk-r68xwcze.js:12255-12296 placement
+//@ chunk-yz6x5v95.js:12387-12428 placement
 function labelValueOption(label, value) {
   return {
     label,
     value,
   };
 }
-//@ chunk-r68xwcze.js:12296-12326 placement
+//@ chunk-yz6x5v95.js:12428-12458 placement
 function addNumbers(a, b) {
   return a + b;
 }
-//@ chunk-r68xwcze.js:12326-12350 placement
+//@ chunk-yz6x5v95.js:12458-12482 placement
 var MIN_MENU_ROWS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MIN_MENU_ROWS_HALF;
 var MENU_OPEN_CONTEXT;
-deferInit("chunk-r68xwcze.js:12326", () => {
+deferInit("chunk-yz6x5v95.js:12458", () => {
   MIN_MENU_ROWS = 3;
   MIN_MENU_ROWS_HALF = 7;
   MENU_OPEN_CONTEXT = createContext(false);
 });
-//@ chunk-r68xwcze.js:12350-12378 placement
+//@ chunk-yz6x5v95.js:12482-12510 placement
 /**
  * 当前菜单是否处于展开态（读 Eo context）。
  */
 function isMenuOpen() {
   return useContext(MENU_OPEN_CONTEXT);
 }
-//@ chunk-r68xwcze.js:12378-13751 placement
+//@ chunk-yz6x5v95.js:12510-13883 placement
 function SelectGroup(props) {
   let $ = useMemoCache(27);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
@@ -2580,7 +2851,7 @@ function SelectGroup(props) {
   } else stateElement = $[26];
   return stateElement;
 }
-//@ chunk-r68xwcze.js:13751-15571 placement
+//@ chunk-yz6x5v95.js:13883-15700 placement
 function SelectContainer(props) {
   let $ = useMemoCache(21);
   let scrollColumnContext = useScrollColumnContext();
@@ -2720,7 +2991,7 @@ function SelectContainer(props) {
   } else containerElement = $[20];
   return containerElement;
 }
-//@ chunk-r68xwcze.js:15571-18622 placement
+//@ chunk-yz6x5v95.js:15700-18746 placement
 /**
  * 选择列表的状态与按键处理（默认焦点、禁用项、选择）。
  */
@@ -2969,7 +3240,7 @@ function useSelectState({
     }),
   });
 }
-//@ chunk-r68xwcze.js:18622-18732 placement
+//@ chunk-yz6x5v95.js:18746-18857 placement
 function SelectGroupItem(props) {
   let $ = useMemoCache(2);
   let { children } = props;
@@ -2983,7 +3254,7 @@ function SelectGroupItem(props) {
   } else fragment = $[1];
   return fragment;
 }
-//@ chunk-r68xwcze.js:18732-18842 placement
+//@ chunk-yz6x5v95.js:18857-18968 placement
 function SelectGroupHeading(props) {
   let $ = useMemoCache(2);
   let { children } = props;
@@ -2997,32 +3268,32 @@ function SelectGroupHeading(props) {
   } else fragment = $[1];
   return fragment;
 }
-//@ chunk-r68xwcze.js:18842-18883 placement
+//@ chunk-yz6x5v95.js:18968-19009 placement
 function isGroupHeading(child) {
   return isValidElement_default(child) && child.type === SelectGroupHeading;
 }
-//@ chunk-r68xwcze.js:18883-18974 placement
+//@ chunk-yz6x5v95.js:19009-19100 placement
 function optionLineCount(child) {
   let lines = groupItemProps(child)?.lines ?? 1;
   return Number.isFinite(lines) ? Math.max(1, Math.trunc(lines)) : 1;
 }
-//@ chunk-r68xwcze.js:18974-19030 placement
+//@ chunk-yz6x5v95.js:19100-19156 placement
 function groupItemProps(child) {
   return isValidElement_default(child) && child.type === SelectGroupItem ? child.props : undefined;
 }
-//@ chunk-r68xwcze.js:19030-19076 placement
+//@ chunk-yz6x5v95.js:19156-19202 placement
 var merged; // deferred: uses SelectGroup of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-r68xwcze.js:19030", () => {
+deferInit("chunk-yz6x5v95.js:19156", () => {
   merged = Object.assign(SelectGroup, {
     Item: SelectGroupItem,
     Heading: SelectGroupHeading,
   });
 });
-//@ chunk-r68xwcze.js:19076-19105 placement
+//@ chunk-yz6x5v95.js:19202-19231 placement
 function newSet() {
   return new Set();
 }
-//@ chunk-r68xwcze.js:19105-19202 placement
+//@ chunk-yz6x5v95.js:19231-19328 placement
 function cursorIndexFor(item) {
   if (!isOrderedListItem(item)) {
     return 0;
@@ -3032,26 +3303,26 @@ function cursorIndexFor(item) {
     ? maxStatusIconWidth()
     : bunStringWidth(reactNodeText(icon));
 }
-//@ chunk-r68xwcze.js:19202-19250 fingerprint (2.1.88 match: getTextContent, 0.673)
+//@ chunk-yz6x5v95.js:19328-19376 fingerprint (2.1.88 match: getTextContent, 0.673)
 function getTextContent(node) {
   return metaTexts(node.props.meta).length > 0;
 }
 export {
-  NO_COMMITTED_ROW,
   MoreItemsIndicator,
-  ScrollArrowButton,
-  computeScrollWindow,
-  AutoModeDefaultNotice,
+  TwoColumnRow,
+  NO_COMMITTED_ROW,
   merged,
   isMenuOpen,
+  computeScrollWindow,
   fitVisibleOptionCount,
-  TwoColumnRow,
-  SelectRow,
-  Select_2,
+  PressableRow,
+  AutoModeDefaultNotice,
+  MAX_WIDTH_RATIO,
   useSelectWheel,
   isDisabledValue,
   NO_FOCUS_CONTEXT,
-  MAX_WIDTH_RATIO,
+  Select_2,
+  SelectRow,
   newSet,
   cursorIndexFor,
   getTextContent,

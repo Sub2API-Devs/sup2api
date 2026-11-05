@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：/explain-usage 的提示：附上用量统计请模型解释并画图；汇总会话各部分的令牌用量（输入、缓存、输出）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bk5ntezz.js (10)
- * attribution: placement 10
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-njn19rdk.js (11)
+ * attribution: placement 10, layout 1
  */
 import { CLAUDE_IN_CHROME_MCP_SERVER_NAME } from "../../utils/claudeInChrome/common.js";
-import { AGENT } from "../../tools/AgentTool/constants.js";
+import { AGENT, TASK } from "../../tools/AgentTool/constants.js";
 import { WEBSEARCH } from "../../tools/WebSearchTool/prompt.js";
 import { WEBFETCH } from "../../tools/WebFetchTool/prompt.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
@@ -18,43 +18,27 @@ import {
   roughTokenCountEstimationForBlock,
 } from "../../services/tokenEstimation.js";
 import { isObjectBlock } from "../../utils/toolResultStorage.js";
-import { SYNTHETIC_MODEL } from "../../constants/messages.js";
-import { normalizeToolNameForTranscript } from "../../services/tools/toolExecution.js";
+import { SYNTHETIC_MODEL } from "../../utils/messages.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
+import { mcpInfoFromString } from "../../services/mcp/mcpStringUtils.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bk5ntezz.js:985-1134 placement
-var CACHE_WRITE_COST_FACTOR; // deferred: uses AGENT (../../tools/AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
-var CACHE_READ_COST_FACTOR;
-var OUTPUT_COST_FACTOR;
-var MAX_DISTINCT_TOOLS;
-var MAX_USAGE_NAME_CHARS;
-var INSTRUCTIONS;
-var PERSON;
-var CLAUDE;
-var SUMMARY;
-var OTHER;
-var CLAUDE_IN_CHROME_TOOL_PREFIX;
-var MCP_CONTAINER;
-var ALWAYS_LISTED_TOOLS;
-deferInit("chunk-bk5ntezz.js:985", () => {
-  CACHE_WRITE_COST_FACTOR = 2;
-  CACHE_READ_COST_FACTOR = 0.1;
-  OUTPUT_COST_FACTOR = 5;
-  MAX_DISTINCT_TOOLS = 30;
-  MAX_USAGE_NAME_CHARS = 64;
-  INSTRUCTIONS = "instructions";
-  PERSON = "person";
-  CLAUDE = "claude";
-  SUMMARY = "summary";
-  OTHER = "other";
-  CLAUDE_IN_CHROME_TOOL_PREFIX = `mcp__${CLAUDE_IN_CHROME_MCP_SERVER_NAME}`;
-  MCP_CONTAINER = "mcp__container";
-  ALWAYS_LISTED_TOOLS = new Set([AGENT, WEBSEARCH, WEBFETCH, CLAUDE_IN_CHROME_TOOL_PREFIX, MCP_CONTAINER]);
-});
-//@ chunk-bk5ntezz.js:1134-2658 placement
+//@ chunk-njn19rdk.js:1125-1274 placement
+var CACHE_WRITE_COST_FACTOR = 2;
+var CACHE_READ_COST_FACTOR = 0.1;
+var OUTPUT_COST_FACTOR = 5;
+var MAX_DISTINCT_TOOLS = 30;
+var MAX_USAGE_NAME_CHARS = 64;
+var INSTRUCTIONS = "instructions";
+var PERSON = "person";
+var CLAUDE = "claude";
+var SUMMARY = "summary";
+var OTHER = "other";
+var CLAUDE_IN_CHROME_TOOL_PREFIX = `mcp__${CLAUDE_IN_CHROME_MCP_SERVER_NAME}`;
+var MCP_CONTAINER = "mcp__container";
+var ALWAYS_LISTED_TOOLS = new Set([AGENT, WEBSEARCH, WEBFETCH, CLAUDE_IN_CHROME_TOOL_PREFIX, MCP_CONTAINER]);
+//@ chunk-njn19rdk.js:1274-2798 placement
 /**
  * 汇总会话各部分的令牌用量（输入、缓存、输出）。
  */
@@ -162,7 +146,7 @@ function summarizeTokenUsage(messages) {
       })),
   };
 }
-//@ chunk-bk5ntezz.js:2658-2877 placement
+//@ chunk-njn19rdk.js:2798-3017 placement
 function attributeInputTokens(target, toolMap, otherMap, { input, cacheWrite, cacheRead }) {
   let totalTokens = input + cacheWrite + cacheRead;
   let attributed = sumMapValues(toolMap) + sumMapValues(otherMap);
@@ -185,7 +169,7 @@ function attributeInputTokens(target, toolMap, otherMap, { input, cacheWrite, ca
     );
   }
 }
-//@ chunk-bk5ntezz.js:2877-3120 placement
+//@ chunk-njn19rdk.js:3017-3260 placement
 function parseMessageUsage(usage) {
   if (typeof usage !== "object" || usage === null) return;
   let {
@@ -209,14 +193,25 @@ function parseMessageUsage(usage) {
       }
     : undefined;
 }
-//@ chunk-bk5ntezz.js:3120-3179 placement
+//@ chunk-njn19rdk.js:3260-3319 placement
 /**
  * 是否为非负安全整数。
  */
 function isNonNegativeSafeInteger(value) {
   return Number.isSafeInteger(value) && Number(value) >= 0;
 }
-//@ chunk-bk5ntezz.js:3346-3422 placement
+//@ chunk-njn19rdk.js:3319-3486 layout (2.1.88 match: findMcpServerConnection, 1)
+/**
+ * 规范化工具名用于记录：Task→Agent，MCP 工具缩成 mcp__<server>，非法字符换成 _，与保留词（instructions/person/claude/summary/other）冲突时加 _。
+ */
+function normalizeToolNameForTranscript(toolName) {
+  if (toolName === TASK) return AGENT;
+  let sliced = toolName.slice(0, MAX_USAGE_NAME_CHARS);
+  let serverName = mcpInfoFromString(sliced)?.serverName;
+  let replaced = (serverName === undefined ? sliced : `mcp__${serverName}`).replace(/[^\w.:-]/g, "_");
+  return [INSTRUCTIONS, PERSON, CLAUDE, SUMMARY, OTHER].includes(replaced) ? `${replaced}_` : replaced;
+}
+//@ chunk-njn19rdk.js:3486-3562 placement
 /**
  * 估算内容块 token，失败时记第一次错误并计一次。
  */
@@ -229,14 +224,14 @@ function estimateBlockTokensSafe(block, errors) {
     return 0;
   }
 }
-//@ chunk-bk5ntezz.js:3422-3465 placement
+//@ chunk-njn19rdk.js:3562-3605 placement
 /**
  * 把计数累加进 Map。
  */
 function addToMapCount(map, key, count) {
   map.set(key, (map.get(key) ?? 0) + count);
 }
-//@ chunk-bk5ntezz.js:3465-3525 placement
+//@ chunk-njn19rdk.js:3605-3665 placement
 /**
  * 求和 Map 里的值。
  */
@@ -245,7 +240,7 @@ function sumMapValues(map) {
   for (let value of map.values()) total += value;
   return total;
 }
-//@ chunk-bk5ntezz.js:3525-3613 placement
+//@ chunk-njn19rdk.js:3665-3753 placement
 /**
  * 按占比把计数分摊到各键。
  */
@@ -257,7 +252,7 @@ function distributeCount(target, weights, amount, fallbackKey) {
   }
   for (let [key, weight] of weights) addToMapCount(target, key, amount * (weight / weightTotal));
 }
-//@ chunk-bk5ntezz.js:3613-6208 placement
+//@ chunk-njn19rdk.js:3753-6348 placement
 /**
  * /explain-usage 的提示：附上用量统计请模型解释并画图。
  */
@@ -303,4 +298,4 @@ Make one simple chart, adding \`percent\` up into a few groups: Claude's instruc
 
 Then give the totals in a line, and explain the chart briefly in everyday words without technical jargon \u2014 a few short bullet points, not paragraphs. Close with these caveats, briefly: ${caveats.join("; ")}.`;
 }
-export { MAX_USAGE_NAME_CHARS, INSTRUCTIONS, PERSON, CLAUDE, SUMMARY, OTHER, measuredPrompt };
+export { measuredPrompt };

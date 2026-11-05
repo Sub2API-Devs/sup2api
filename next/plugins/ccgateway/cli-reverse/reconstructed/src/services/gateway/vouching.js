@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：获取网关证书指纹（Bun 版本限制）；验证网关主机（https、担保或允许列表）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (14)
  * attribution: placement 14
  */
 import { connect, checkServerIdentity } from "tls";
@@ -46,7 +46,7 @@ import { getSecureStorage } from "../../utils/secureStorage/index.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { ipInCidr } from "../../utils/cidr.js";
 
-//@ chunk-aepeg2w5.js:251301-252330 placement
+//@ chunk-exfmq47h.js:260815-261844 placement
 /**
  * 由担保部署确认网关主机（[gateway] 日志）。
  */
@@ -93,7 +93,7 @@ async function checkVoucher(voucherHost, hostname, timeoutMs, voucherState, help
     );
   return true;
 }
-//@ chunk-aepeg2w5.js:252330-253577 placement
+//@ chunk-exfmq47h.js:261844-263091 placement
 /**
  * 验证网关主机（https、担保或允许列表）。
  */
@@ -205,7 +205,7 @@ async function verifyGatewayHost(
     );
   }
 }
-//@ chunk-aepeg2w5.js:253577-254870 placement
+//@ chunk-exfmq47h.js:263091-264384 placement
 /**
  * 获取网关证书指纹（Bun 版本限制）。
  */
@@ -294,7 +294,7 @@ async function fetchGatewayCertificate(url, timeout = 1e4, network, options) {
     });
   });
 }
-//@ chunk-aepeg2w5.js:254870-255578 placement
+//@ chunk-exfmq47h.js:264384-265092 placement
 /**
  * 通过 HTTP(S) 代理 CONNECT 到网关。
  */
@@ -342,13 +342,13 @@ function connectThroughProxy(usableProxyUrl, hostname, port, timeout = 1e4) {
     request.end();
   });
 }
-//@ chunk-aepeg2w5.js:255578-255732 placement
+//@ chunk-exfmq47h.js:265092-265246 placement
 /**
  * 网关 TLS 固定存储被拒/不可读的消息。
  */
 var PIN_STORE_SYMLINK_MESSAGE = "gateway TLS pin store refused: the credentials file is a symlink";
 var PIN_STORE_UNREADABLE_MESSAGE = "gateway TLS pin store unreadable: the credentials file could not be read";
-//@ chunk-aepeg2w5.js:255732-256136 placement
+//@ chunk-exfmq47h.js:265246-265650 placement
 /**
  * 读取保存的网关信任记录（证书固定）。
  */
@@ -376,12 +376,12 @@ async function readGatewayTrust(hostKey, credentials) {
   }
   return;
 }
-//@ chunk-aepeg2w5.js:256136-256188 placement
+//@ chunk-exfmq47h.js:265650-265702 placement
 /**
  * 网关主机解析到公网地址时的错误文案。
  */
 var PUBLIC_ADDRESS_MODEL_MESSAGE = "gateway host resolved to a public address";
-//@ chunk-aepeg2w5.js:256188-256671 placement
+//@ chunk-exfmq47h.js:265702-266185 placement
 /**
  * 创建带证书固定的 HTTPS agent。
  */
@@ -424,7 +424,7 @@ function createPinnedAgent(url, network) {
   }
   return agent;
 }
-//@ chunk-aepeg2w5.js:256671-256927 placement
+//@ chunk-exfmq47h.js:266185-266441 placement
 function privateOnlyLookup(network) {
   return function (hostname, options, callback) {
     lookup(
@@ -451,12 +451,12 @@ function privateOnlyLookup(network) {
     );
   };
 }
-//@ chunk-aepeg2w5.js:256927-256999 placement
+//@ chunk-exfmq47h.js:266441-266513 placement
 /**
  * 网关 TLS 证书与固定指纹不符时的错误文案。
  */
 var PIN_MISMATCH_MESSAGE = "gateway TLS certificate does not match the pinned fingerprint";
-//@ chunk-aepeg2w5.js:256999-257375 placement
+//@ chunk-exfmq47h.js:266513-266889 placement
 /**
  * 从错误中取证书固定不匹配信息。
  */
@@ -477,7 +477,7 @@ function pinMismatchFromError(error) {
       };
   return;
 }
-//@ chunk-aepeg2w5.js:257375-257733 placement
+//@ chunk-exfmq47h.js:266889-267247 placement
 /**
  * 证书固定的 TLS 选项（校验指纹）。
  */
@@ -508,7 +508,7 @@ function pinnedTlsOptions(fingerprint, url, requireVerification = false) {
     },
   });
 }
-//@ chunk-aepeg2w5.js:257733-258015 placement
+//@ chunk-exfmq47h.js:267247-267529 placement
 /**
  * 按信任记录生成固定证书的 agent（经 HTTPS 代理时不能固定并记录）。
  */
@@ -525,7 +525,7 @@ function pinnedAgentFor(credentials, url, allowAll = false) {
   }
   return pinnedTlsOptions(credentials, url, allowAll);
 }
-//@ chunk-aepeg2w5.js:258015-258220 placement
+//@ chunk-exfmq47h.js:267529-267734 placement
 /**
  * 把网关 TLS 固定写入安全存储。
  */
@@ -554,6 +554,6 @@ export {
   PIN_MISMATCH_MESSAGE,
   pinMismatchFromError,
   PUBLIC_ADDRESS_MODEL_MESSAGE,
-  saveGatewayTlsPin,
   checkVoucher,
+  saveGatewayTlsPin,
 };

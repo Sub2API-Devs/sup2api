@@ -3,13 +3,13 @@
  *
  * sink 紧急开关动态配置名 tengu_frond_boric。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/analytics/sinkKillswitch.ts
- * pieces: chunk-aepeg2w5.js (1)
+ * pieces: chunk-exfmq47h.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-aepeg2w5.js:894682-894709 fingerprint (2.1.88 match: SINK_KILLSWITCH_CONFIG_NAME, 1)
+//@ chunk-exfmq47h.js:917576-917603 fingerprint (2.1.88 match: SINK_KILLSWITCH_CONFIG_NAME, 1)
 /**
  * sink killswitch 动态配置名 tengu_frond_boric（{datadog: bool, firstParty: bool}）。
  */

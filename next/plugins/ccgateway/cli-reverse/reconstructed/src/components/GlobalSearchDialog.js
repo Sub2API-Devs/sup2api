@@ -3,9 +3,9 @@
  *
  * 全局搜索/主题保存对话框（GlobalSearchDialog），并含按 slug 去重的命名辅助。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/GlobalSearchDialog.tsx
- * pieces: chunk-3s4dbk22.js (9), chunk-axmbhcjg.js (1)
+ * pieces: chunk-fx2xa8vr.js (9), chunk-vb7ng9fr.js (1)
  * attribution: sole-consumer 8, callgraph-fingerprint 1, fingerprint 1
  */
 import { sep } from "path";
@@ -21,9 +21,10 @@ import {
 import { Text, Box } from "../ink/components/Text.js";
 import { useTheme_2, useCustomThemes } from "./design-system/ThemeProvider.js";
 import { stableEmptyObject } from "../utils/stableEmptyObject.js";
-import { getTheme, isValidThemeColor } from "../utils/theme.js";
+import { getTheme } from "../utils/theme.js";
 import { saveCustomTheme, customThemeRef, getThemesDir, slugify } from "../utils/customThemes.js";
 import { logForDebugging } from "../utils/debug.js";
+import { isValidThemeColor } from "../utils/ink.js";
 import { omitAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { useKeybinding } from "../keybindings/useKeybinding.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
@@ -36,7 +37,7 @@ import { ParenHint } from "./diff/DiffDetailView.js";
 import { FuzzyPicker } from "./design-system/FuzzyPicker.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-axmbhcjg.js:28422-28530 fingerprint (2.1.88 match: matchKey, 0.685)
+//@ chunk-vb7ng9fr.js:28457-28565 fingerprint (2.1.88 match: matchKey, 0.685)
 function matchKey(text, startLine) {
   let lines = text.split(`
 `);
@@ -50,34 +51,31 @@ function matchKey(text, startLine) {
         line: startLine + offset + 1,
       };
 }
-//@ chunk-3s4dbk22.js:15006-15010 sole-consumer
+//@ chunk-fx2xa8vr.js:16182-16186 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3s4dbk22.js:15006", () => {
+deferInit("chunk-fx2xa8vr.js:16182", () => {
   init_react_production();
 });
-//@ chunk-3s4dbk22.js:15010-15014 sole-consumer
+//@ chunk-fx2xa8vr.js:16186-16190 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3s4dbk22.js:15010", () => {
+deferInit("chunk-fx2xa8vr.js:16186", () => {
   init_react_production();
 });
-//@ chunk-3s4dbk22.js:15042-15065 sole-consumer
+//@ chunk-fx2xa8vr.js:16218-16241 sole-consumer
 function returnFalse() {
   return false;
 }
-//@ chunk-3s4dbk22.js:15065-15091 sole-consumer
+//@ chunk-fx2xa8vr.js:16241-16267 sole-consumer
 function identity(value) {
   return value;
 }
-//@ chunk-3s4dbk22.js:15091-15138 sole-consumer
+//@ chunk-fx2xa8vr.js:16267-16314 sole-consumer
 function noColorNamedText(name) {
   return `No color named "${name}"`;
 }
-//@ chunk-3s4dbk22.js:15138-15153 sole-consumer
-var DOUBLE_WIDTH; // deferred: uses VERTICAL_LEFT_BAR_GLYPH (../constants/figures.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-3s4dbk22.js:15138", () => {
-  DOUBLE_WIDTH = FULL_BLOCK_GLYPH + FULL_BLOCK_GLYPH;
-});
-//@ chunk-3s4dbk22.js:15153-15270 sole-consumer
+//@ chunk-fx2xa8vr.js:16314-16329 sole-consumer
+var DOUBLE_WIDTH = FULL_BLOCK_GLYPH + FULL_BLOCK_GLYPH;
+//@ chunk-fx2xa8vr.js:16329-16446 sole-consumer
 function ColorSwatch(props) {
   let $ = useMemoCache(2);
   let { value: color } = props;
@@ -92,7 +90,7 @@ function ColorSwatch(props) {
   } else swatch = $[1];
   return swatch;
 }
-//@ chunk-3s4dbk22.js:15270-23369 callgraph-fingerprint (2.1.88 match: GlobalSearchDialog, 0.218)
+//@ chunk-fx2xa8vr.js:16446-24545 callgraph-fingerprint (2.1.88 match: GlobalSearchDialog, 0.218)
 function GlobalSearchDialog(props) {
   let $ = useMemoCache(165);
   let { initial, defaultBase, onDone, onPick, onCancel } = props;
@@ -843,7 +841,7 @@ function GlobalSearchDialog(props) {
   } else picker = $[164];
   return picker;
 }
-//@ chunk-3s4dbk22.js:23369-23515 sole-consumer
+//@ chunk-fx2xa8vr.js:24545-24691 sole-consumer
 function uniqueSlug(base, customThemes) {
   let slug = slugify(base);
   if (!customThemes.some((theme) => theme.slug === slug)) return slug;

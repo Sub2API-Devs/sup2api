@@ -1,0 +1,11 @@
+{"file":"chunk-5ythzcas.js","key":"@59384","name":"wrapUpOffered","source":"semantic","confidence":0.98,"note":"lead 318: replaceWrapUpOffered(e){this.#j=e}，2.1.318 新增的一对；carry 把 entrypoint 放到了这里（fix-moved-params 未修：316 没有这个方法）"}
+{"file":"chunk-5ythzcas.js","key":"@71757","name":"choices","source":"semantic","confidence":0.95,"note":"lead 318: replaceProgramUseCaseChoices(e){this.#m=e}，2.1.318 新增"}
+{"file":"chunk-5ythzcas.js","key":"@22968","name":"getTenantClients","source":"semantic","confidence":0.95,"note":"lead 318: registerTenantClients(e){this.#n=e}，之后以 (this.#t??this.#n)?.() 调用，是取客户端的函数"}
+{"file":"chunk-5ythzcas.js","key":"@59607","name":"isLimited","source":"semantic","confidence":0.95,"note":"lead 318: replaceCcrSessionLimited(e){this.#W=e}，2.1.318 新增"}
+{"file":"chunk-k8ag9amq.js","key":"@4761","name":"signInKey","source":"semantic","confidence":0.95,"note":"lead 318: lapsedSignInKey(e){return this.lapsedCcrSignIns.has(e)?e:void 0}"}
+{"file":"chunk-k8ag9amq.js","key":"@4825","name":"lapsedKey","source":"semantic","confidence":0.95,"note":"lead 318: restoreLapsed(e,n){if(e===n)this.lapsedCcrSignIns.add(n)}，第一个参数是先前记下的失效登录键"}
+{"file":"chunk-03tec5k5.js","key":"@32616","name":"queryOptions","source":"semantic","confidence":0.9,"note":"lead 318: g8e(e) 读 e.agentId、e.stickyBetas，是查询选项"}
+{"file":"chunk-5xgkngpb.js","key":"@647712","name":"errorCode","source":"semantic","confidence":0.9,"note":"lead 318: Ewn(e) 返回 {cause:'local', reason:`…(${e??'unknown error'})`, step:'move_in', code:e}"}
+{"file":"chunk-je0zymfm.js","key":"@3153","name":"particleIndex","source":"semantic","confidence":0.85,"note":"lead 318: 循环下标，生成 m 个下落粒子"}
+{"file":"chunk-rmva59md.js","key":"@4440","name":"fileA","source":"semantic","confidence":0.9,"note":"lead 318: sortHookEnvFiles 比较器的第一个文件名"}
+{"file":"chunk-rmva59md.js","key":"@4442","name":"fileB","source":"semantic","confidence":0.9,"note":"lead 318: sortHookEnvFiles 比较器的第二个文件名"}

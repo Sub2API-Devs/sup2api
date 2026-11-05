@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。额度概览。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (7)
  * attribution: placement 7
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
@@ -32,7 +32,7 @@ import { percentOfBase, discountPercentOfPay, selectBonusPct } from "./creditOff
 import { logCreditOfferShown } from "../../services/usageCreditOffers.js";
 import { useEffect } from "../../../vendor/react/cjs/react.production.js";
 
-//@ chunk-18hwfzwa.js:1146666-1147575 placement
+//@ chunk-czq1j3j2.js:1177448-1178357 placement
 function promoCreditExpiry(balance, startDate) {
   if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_juniper_bassoon", false)) return null;
   let earliest = null;
@@ -82,7 +82,7 @@ function promoCreditExpiry(balance, startDate) {
     urgent: false,
   };
 }
-//@ chunk-18hwfzwa.js:1147575-1147774 placement
+//@ chunk-czq1j3j2.js:1178357-1178556 placement
 /**
  * 开关开启且月数有效时，返回"用量额度有效期 N 个月"的说明与了解更多链接。
  */
@@ -91,7 +91,7 @@ function getCreditsValidityNote(validityMonths) {
   if (validityMonths === null || !Number.isInteger(validityMonths) || validityMonths <= 0) return null;
   return `Usage credits are valid for ${validityMonths} ${validityMonths === 1 ? "month" : "months"}. Learn more: ${EXTRA_USAGE_SUPPORT_URL}`;
 }
-//@ chunk-18hwfzwa.js:1147774-1151352 placement
+//@ chunk-czq1j3j2.js:1178556-1182134 placement
 /**
  * UsageCreditsOverview：用量额度概览界面。
  */
@@ -356,12 +356,12 @@ function UsageCreditsOverview(props) {
   } else dialogElement = $[60];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1151352-1151441 placement
+//@ chunk-czq1j3j2.js:1182134-1182223 placement
 function isOfferDriftError(error) {
   let errorCodeFromAxios = readErrorCodeFromAxios(error);
   return errorCodeFromAxios === "discount_price_drift" || errorCodeFromAxios === "bundle_offer_drift";
 }
-//@ chunk-18hwfzwa.js:1151441-1151553 placement
+//@ chunk-czq1j3j2.js:1182223-1182335 placement
 /**
  * 生成用量额度优惠的遥测字段（类型、实验组、标题百分比）。
  */
@@ -374,7 +374,7 @@ function getOfferAnalytics(offer) {
         offer_headline_pct: offer.headlinePct,
       };
 }
-//@ chunk-18hwfzwa.js:1151553-1151729 placement
+//@ chunk-czq1j3j2.js:1182335-1182511 placement
 function getOfferDialogHeader(offer) {
   if (offer === null) return null;
   let offerStrings = promoOfferStrings();
@@ -388,7 +388,7 @@ function getOfferDialogHeader(offer) {
     ) ?? null
   );
 }
-//@ chunk-18hwfzwa.js:1151729-1154884 placement
+//@ chunk-czq1j3j2.js:1182511-1185666 placement
 /**
  * 额度包选择器。
  */

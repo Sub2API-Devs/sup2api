@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：poll-event 投递处理（批次校验、SDK 宿主命令、插件重载、远程 MCP 任务）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (35)
- * attribution: placement 35
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (36)
+ * attribution: placement 35, layout 1
  */
 import { isAbsolute, resolve } from "path";
 import { randomUUID } from "crypto";
@@ -34,7 +34,7 @@ import {
   withFeatureTelemetry,
 } from "../../services/analytics/featureTelemetry.js";
 import { toExternalPermissionMode } from "../../utils/permissions/PermissionMode.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   executeUserPromptSubmitHooksForSession,
   getUserPromptSubmitHookBlockingMessage,
@@ -100,14 +100,15 @@ import {
   SDKUiMessageUiMessageMessageSchema,
 } from "../../entrypoints/sdk/uiControlSchemas.js";
 import { render } from "../../plugins/functionHooks/ui/renderBridge.js";
+import { clientRegistry, blockInputsOnMobile, isInputLike } from "../../plugins/functionHooks/panes.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { defaultScopeKey, raiseSessionAttach } from "../../plugins/functionHooks/sessionEvents.js";
-import { MESSAGE_COMPONENT_NAMES } from "../../plugins/functionHooks/sites/uiSites.js";
+import { MESSAGE_COMPONENT_NAMES, hasBackdropSurface } from "../../plugins/functionHooks/sites/uiSites.js";
 import { pruneDetachedClients, paneStateFields } from "./remoteComposer.js";
 import { attachPaneClient, isClientAttached, updatePaneSurface } from "./pluginUiPanes.js";
 import { vscodeHookRegistrationInFlight, hasRenderHookingSite } from "../sdkMcpManifests.js";
-import { DESKTOP } from "../../plugins/functionHooks/ui/desktopSurface.js";
-import { clientRegistry } from "../../plugins/functionHooks/panes.js";
+import { backdropInstanceOf, BACKDROP } from "../../plugins/functionHooks/sessionApi.js";
+import { CLIENT_SURFACE } from "../../plugins/functionHooks/ui/desktopSurface.js";
 import { logError } from "../../utils/log.js";
 import { setBoundedRecent } from "../remoteIO/servedCalls.js";
 import {
@@ -124,7 +125,7 @@ import { runToolUse, hasTypeField } from "../../services/tools/toolExecution.js"
 import { createAssistantMessage, extractTextContent_2 } from "../../utils/messages.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:550209-553442 placement
+//@ chunk-0yw3taqg.js:593011-596244 placement
 /**
  * 处理 SDK poll_event 请求：校验 kind/事件/授权/大小与权限模式（仅 auto），按组盖章入队唤醒模型。
  */
@@ -167,7 +168,7 @@ function handlePollEvent(request, context) {
     return;
   }
   let queuedCount =
-    count(context.messageQueue.getCommandQueueSnapshot(), isPollEventMode) +
+    countWhere(context.messageQueue.getCommandQueueSnapshot(), isPollEventMode) +
     context.messageQueue.pollEventAdmissionsPending();
   if (queuedCount + validated.length > POLL_KIND_DEFAULT_TIMEOUT_MS) {
     logFeatureBad("poll_event_delivery", "queue_cap_peek");
@@ -285,11 +286,11 @@ function handlePollEvent(request, context) {
     })
     .catch((error) => logHandlerFailure(context.redactsPersistedLane(), "poll_event", error));
 }
-//@ chunk-tyg7f3ek.js:553442-553454 placement
+//@ chunk-0yw3taqg.js:596244-596256 placement
 var MAX_SENDER_ID_BYTES = 1024;
-//@ chunk-tyg7f3ek.js:553454-553625 placement
+//@ chunk-0yw3taqg.js:596256-596427 placement
 var pollEventBatchSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:553454", () => {
+deferInit("chunk-0yw3taqg.js:596256", () => {
   pollEventBatchSchema = DoctorLazy(() =>
     array(
       zodStrictObject({
@@ -308,7 +309,7 @@ deferInit("chunk-tyg7f3ek.js:553454", () => {
       .max(MAX_POLL_EVENTS_PER_BATCH),
   );
 });
-//@ chunk-tyg7f3ek.js:553625-554437 placement
+//@ chunk-0yw3taqg.js:596427-597239 placement
 function validatePollEventFields(request) {
   let { kind, event } = request;
   let { authority, sender_id: senderId, sender_text: senderText } = request;
@@ -349,7 +350,7 @@ function validatePollEventFields(request) {
     },
   ];
 }
-//@ chunk-tyg7f3ek.js:554437-555432 placement
+//@ chunk-0yw3taqg.js:597239-598234 placement
 function validatePollEventGroup(event) {
   if (!isValidPollEventKind(event.kind)) {
     logFeatureBad("poll_event_delivery", "invalid_kind");
@@ -388,7 +389,7 @@ function validatePollEventGroup(event) {
     stampedBytes: Buffer.byteLength(event.element, "utf8") + envelopeLengthFor("element"),
   };
 }
-//@ chunk-tyg7f3ek.js:555432-556550 placement
+//@ chunk-0yw3taqg.js:598234-599352 placement
 function validatePollEventBatch(group) {
   if (!isValidPollEventKind(group.kind)) {
     logFeatureBad("poll_event_delivery", "invalid_kind");
@@ -453,7 +454,7 @@ function validatePollEventBatch(group) {
     stampedBytes,
   };
 }
-//@ chunk-tyg7f3ek.js:556550-556852 placement
+//@ chunk-0yw3taqg.js:599352-599654 placement
 function ackPollEventRow({ row, rowsInFlight, tearingDown, ack, flushSessionStorage, reply }) {
   if (row === undefined)
     return {
@@ -475,11 +476,11 @@ function ackPollEventRow({ row, rowsInFlight, tearingDown, ack, flushSessionStor
     },
   };
 }
-//@ chunk-tyg7f3ek.js:556852-556891 placement
+//@ chunk-0yw3taqg.js:599654-599693 placement
 function ackPollEventRowOnce(row, rowsInFlight, ack) {
   if (rowsInFlight.delete(row)) ack(row);
 }
-//@ chunk-tyg7f3ek.js:556940-558008 placement
+//@ chunk-0yw3taqg.js:599742-600810 placement
 /**
  * reload_plugins 的 add_plugins：仅本机连接可用，按命令/参数安装并加载插件。
  */
@@ -543,7 +544,7 @@ async function handleReloadPluginsAddPlugins({ addPlugins, fromOffMachine }) {
     restore,
   };
 }
-//@ chunk-tyg7f3ek.js:558008-558189 placement
+//@ chunk-0yw3taqg.js:600810-600991 placement
 function listSkillsForSdk(skillToolCommands, commands, commands_2) {
   let isFolderAlias = folderNameAliasCheck();
   let commandLookup = buildCommandLookup(commands_2);
@@ -562,7 +563,7 @@ function listSkillsForSdk(skillToolCommands, commands, commands_2) {
     }),
   };
 }
-//@ chunk-tyg7f3ek.js:558189-558345 placement
+//@ chunk-0yw3taqg.js:600991-601147 placement
 var faultAddress = (fault) => ({
   address: {
     plugin: fault.plugin,
@@ -576,13 +577,13 @@ var faultAddress = (fault) => ({
     reason: fault.reason,
   },
 });
-//@ chunk-tyg7f3ek.js:558345-558493 placement
+//@ chunk-0yw3taqg.js:601147-601295 placement
 function describeClientFault(error) {
   let [issue] = error.issues;
   if (issue === undefined) return "ui_client_fault: malformed";
   return `ui_client_fault: ${issue.path.join(".") || "request"}: ` + issue.message;
 }
-//@ chunk-tyg7f3ek.js:558493-558638 placement
+//@ chunk-0yw3taqg.js:601295-601440 placement
 async function handleClientFault(request) {
   let parsed = SDKUiClientFaultUiClientFaultMessageSchema().safeParse(request);
   if (!parsed.success) throw new WireSafeControlError(describeClientFault(parsed.error));
@@ -590,9 +591,11 @@ async function handleClientFault(request) {
     handled: (await render.clientFault(faultAddress(parsed.data))) !== undefined,
   };
 }
-//@ chunk-tyg7f3ek.js:558638-558651 placement
+//@ chunk-0yw3taqg.js:601440-601488 placement
+var findSurfaceClient = (clientId) => clientRegistry.list().find((client) => client.clientId === clientId);
+//@ chunk-0yw3taqg.js:601488-601501 placement
 var MAX_TOOL_OUTPUT_CHARS = 65536;
-//@ chunk-tyg7f3ek.js:558651-558747 placement
+//@ chunk-0yw3taqg.js:601501-601596 placement
 function truncateToolOutput(props) {
   let output = props.output;
   return typeof output !== "string" || output.length <= MAX_TOOL_OUTPUT_CHARS
@@ -602,7 +605,7 @@ function truncateToolOutput(props) {
         output: truncateToLength(output, MAX_TOOL_OUTPUT_CHARS),
       };
 }
-//@ chunk-tyg7f3ek.js:558747-558861 placement
+//@ chunk-0yw3taqg.js:601596-601710 placement
 function withToolUseId(component, toolUseId, props) {
   return (component !== "ToolUse" && component !== "ToolResult") || typeof props.tool_use_id === "string"
     ? props
@@ -611,9 +614,9 @@ function withToolUseId(component, toolUseId, props) {
         tool_use_id: toolUseId,
       };
 }
-//@ chunk-tyg7f3ek.js:558861-558901 placement
+//@ chunk-0yw3taqg.js:601710-601750 placement
 var surfaceClientId = (request) => request.client_id ?? defaultScopeKey(request.surface);
-//@ chunk-tyg7f3ek.js:558901-559030 placement
+//@ chunk-0yw3taqg.js:601750-601879 placement
 function paneTarget(request, clientId) {
   let { component } = request;
   return component === "Pane" || component === "AbovePrompt"
@@ -624,7 +627,18 @@ function paneTarget(request, clientId) {
       }
     : undefined;
 }
-//@ chunk-tyg7f3ek.js:559030-559208 placement
+//@ chunk-0yw3taqg.js:601879-601965 layout
+var STATIC_BACKDROP_RENDER = {
+  props: {},
+  rewritten: false,
+  tree: {
+    type: "engine",
+    ref: 0,
+  },
+  clientModules: {},
+  drawnBy: [],
+};
+//@ chunk-0yw3taqg.js:601965-602143 placement
 function uiRenderProps(request) {
   let propsWithTool = withToolUseId(
     request.component,
@@ -646,7 +660,7 @@ function uiRenderProps(request) {
       }
     : propsWithTool;
 }
-//@ chunk-tyg7f3ek.js:559208-560243 placement
+//@ chunk-0yw3taqg.js:602143-603587 placement
 /**
  * 为远程客户端（IDE/网页）渲染插件 UI 面板：加入名册、按视口生成树并回传。
  */
@@ -662,6 +676,7 @@ async function renderPluginSurface(options, roster) {
       }),
     },
     answers: undefined,
+    draws: undefined,
     declares: false,
     by,
   });
@@ -671,6 +686,7 @@ async function renderPluginSurface(options, roster) {
   let pushes = roster.paneRosterPushes();
   pruneDetachedClients();
   if (joined.isPutBack) roster.tellPaneRoster(pushes);
+  if (!joined.wasOnRoster && hasBackdropSurface(request.surface)) roster.tellBackdrop();
   let pane = paneTarget(request, clientId);
   if (pane !== undefined)
     attachPaneClient({
@@ -685,25 +701,39 @@ async function renderPluginSurface(options, roster) {
     });
   await import("../../plugins/functionHooks/ui/BOOLEAN_PROPS.lazy.js");
   await vscodeHookRegistrationInFlight(request.surface);
-  let rendered = await render.run({
-    surface: request.surface,
-    component: request.component,
-    requestId: request.instance_id,
-    ...(request.viewport !== undefined && {
-      viewport: request.viewport,
-    }),
-    props: uiRenderProps(request),
-  });
+  let drawnDesktopClients =
+    request.component === "Backdrop"
+      ? (await import("../../plugins/functionHooks/ui/CLIENT_SURFACE.lazy.js")).drawnDesktopClients
+      : undefined;
+  let reusedRows =
+    request.component === "Backdrop" && hasBackdropSurface(request.surface)
+      ? backdropInstanceOf(request.instance_id)
+      : undefined;
+  let isStaticBackdrop = request.component === "Backdrop" && reusedRows === undefined;
+  if (isStaticBackdrop && request.surface === "desktop" && request.instance_id === BACKDROP)
+    drawnDesktopClients?.record(drawnDesktopClients.begin("Backdrop", request.instance_id), []);
+  let rendered = isStaticBackdrop
+    ? STATIC_BACKDROP_RENDER
+    : await render.run({
+        surface: request.surface,
+        component: request.component,
+        requestId: request.instance_id,
+        ...(request.viewport !== undefined && {
+          viewport: request.viewport,
+        }),
+        props: reusedRows ?? uiRenderProps(request),
+      });
   if (signal?.aborted) return;
   if (roster.isRemoteTransport() && !isClientAttached(clientId)) return;
+  let tree = blockInputsOnMobile(rendered.tree, request.surface, findSurfaceClient(clientId)?.draws);
   if (pane !== undefined)
     updatePaneSurface({
       ...pane,
-      tree: rendered.tree,
+      tree,
     });
   let hasClientModules = Object.keys(rendered.clientModules).length > 0;
   return {
-    tree: rendered.tree,
+    tree,
     props: rendered.props,
     rewritten: rendered.rewritten,
     hooked: hasRenderHookingSite(request.component, request.surface),
@@ -716,7 +746,7 @@ async function renderPluginSurface(options, roster) {
     }),
   };
 }
-//@ chunk-tyg7f3ek.js:560243-560365 placement
+//@ chunk-0yw3taqg.js:603587-603709 placement
 var MAX_UI_RETRIES = 3;
 var isOnRoster = (roster, request) =>
   roster === undefined ||
@@ -726,7 +756,7 @@ var isOnRoster = (roster, request) =>
       entry.component === request.component &&
       entry.requestId === request.instance_id,
   );
-//@ chunk-tyg7f3ek.js:560365-560938 placement
+//@ chunk-0yw3taqg.js:603709-604282 placement
 async function renderPluginSurfaceWithRetry(request, by, roster) {
   let clientId = surfaceClientId(request);
   let overtaken = false;
@@ -769,14 +799,14 @@ async function renderPluginSurfaceWithRetry(request, by, roster) {
     unsubscribe();
   }
 }
-//@ chunk-tyg7f3ek.js:560938-561005 placement
+//@ chunk-0yw3taqg.js:604282-604349 placement
 var DESKTOP_UI_EVENT_SUBTYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tyg7f3ek.js:560938", () => {
+deferInit("chunk-0yw3taqg.js:604282", () => {
   DESKTOP_UI_EVENT_SUBTYPES = new Set(["ui_client_press", "ui_message", "ui_client_fault"]);
 });
-//@ chunk-tyg7f3ek.js:561005-561119 placement
+//@ chunk-0yw3taqg.js:604349-604463 placement
 var sdkUiMessageSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:561005", () => {
+deferInit("chunk-0yw3taqg.js:604349", () => {
   sdkUiMessageSchema = DoctorLazy(() =>
     discriminatedUnion("subtype", [
       SDKUiPressUiPressMessageSchema(),
@@ -796,12 +826,12 @@ deferInit("chunk-tyg7f3ek.js:561005", () => {
     ]),
   );
 });
-//@ chunk-tyg7f3ek.js:561119-561425 placement
+//@ chunk-0yw3taqg.js:604463-604769 placement
 function parseSurfaceRequest(payload, resolveSurface) {
   let parsed = sdkUiMessageSchema().safeParse(payload);
   if (!parsed.success) return;
   let clientId = "client_id" in parsed.data ? parsed.data.client_id : undefined;
-  let desktopSurface = DESKTOP_UI_EVENT_SUBTYPES.has(parsed.data.subtype) ? DESKTOP : undefined;
+  let desktopSurface = DESKTOP_UI_EVENT_SUBTYPES.has(parsed.data.subtype) ? CLIENT_SURFACE : undefined;
   let surface = "surface" in parsed.data ? parsed.data.surface : desktopSurface;
   let defaultSurface = surface !== undefined ? defaultScopeKey(surface) : undefined;
   let resolvedClientId = clientId ?? defaultSurface;
@@ -813,9 +843,7 @@ function parseSurfaceRequest(payload, resolveSurface) {
       }
     : undefined;
 }
-//@ chunk-tyg7f3ek.js:561425-561473 placement
-var findSurfaceClient = (clientId) => clientRegistry.list().find((client) => client.clientId === clientId);
-//@ chunk-tyg7f3ek.js:561473-561577 placement
+//@ chunk-0yw3taqg.js:604769-604873 placement
 function noteSurfaceClientHeard(payload) {
   try {
     let surfaceRequest = parseSurfaceRequest(payload, (clientId) => findSurfaceClient(clientId)?.surface);
@@ -824,9 +852,9 @@ function noteSurfaceClientHeard(payload) {
     logError(toError(error));
   }
 }
-//@ chunk-tyg7f3ek.js:561577-561587 placement
+//@ chunk-0yw3taqg.js:604873-604883 placement
 var MAX_RECENT_SURFACE_DECLARATIONS = 64;
-//@ chunk-tyg7f3ek.js:561587-562827 placement
+//@ chunk-0yw3taqg.js:604883-606484 placement
 function createSurfaceDeclarationTracker(host, senderStands) {
   let declarations = new Map();
   function remember(clientId, declaredBy) {
@@ -852,8 +880,11 @@ function createSurfaceDeclarationTracker(host, senderStands) {
   }
   function join(joinArgs) {
     let clients = clientRegistry.list();
-    let any = clients.some((client) => client.clientId === joinArgs.client.clientId);
-    let previous = any ? undefined : trusted(joinArgs.client.clientId);
+    let found = clients.find((client) => client.clientId === joinArgs.client.clientId);
+    let alreadyListed = found !== undefined;
+    let previous = alreadyListed ? undefined : trusted(joinArgs.client.clientId);
+    let draws = (found ?? previous?.declared)?.draws;
+    let isMobileSurface = joinArgs.client.surface === "mobile";
     let viewport = joinArgs.client.viewport ?? previous?.declared.viewport;
     let stands = host.senderStands(joinArgs.by);
     let attaching = stands
@@ -866,20 +897,29 @@ function createSurfaceDeclarationTracker(host, senderStands) {
             }),
           },
           joinArgs.answers ?? previous?.declared.answers,
+          joinArgs.draws ?? previous?.declared.draws,
         )
       : Promise.resolve(false);
     let declaredBy = joinArgs.declares ? undefined : previous?.declaredBy;
-    let alreadyListed = any && !joinArgs.declares;
+    let alreadyListed_2 = alreadyListed && !joinArgs.declares;
     let canDeclare =
-      !alreadyListed &&
+      !alreadyListed_2 &&
       senderStands(joinArgs.client.clientId, joinArgs.by) &&
       (declaredBy === undefined || senderStands(joinArgs.client.clientId, declaredBy));
-    let isAdmitted = alreadyListed ? stands : canDeclare;
-    let firstSeen = !any && !declarations.has(joinArgs.client.clientId);
+    let isAdmitted = alreadyListed_2 ? stands : canDeclare;
+    let firstSeen = !alreadyListed && !declarations.has(joinArgs.client.clientId);
     if (isAdmitted && (joinArgs.declares || firstSeen)) remember(joinArgs.client.clientId, joinArgs.by);
+    if (isMobileSurface && isAdmitted && joinArgs.declares)
+      if ((joinArgs.draws ?? draws)?.some(isInputLike) === true)
+        logFeatureOk("plugin_function_hooks_mobile_fields");
+      else logFeatureSad("plugin_function_hooks_mobile_fields", "none_named");
     return {
       isAdmitted,
-      wasOnRoster: any,
+      wasOnRoster: alreadyListed,
+      hasNewField:
+        (found ?? previous) !== undefined &&
+        isMobileSurface &&
+        joinArgs.draws?.some((draw) => isInputLike(draw) && draws?.includes(draw) !== true) === true,
       isPutBack: isAdmitted && previous !== undefined,
       isFirstClient: clients.length === 0,
       attaching,
@@ -899,6 +939,7 @@ function createSurfaceDeclarationTracker(host, senderStands) {
       let joined = join({
         client: surfaceRequest,
         answers: undefined,
+        draws: undefined,
         declares: false,
         by: request,
       });
@@ -914,7 +955,7 @@ function createSurfaceDeclarationTracker(host, senderStands) {
     forget: (clientId) => void declarations.delete(clientId),
   };
 }
-//@ chunk-tyg7f3ek.js:562827-563051 placement
+//@ chunk-0yw3taqg.js:606484-606708 placement
 function applyPermissionModeChange(request, toolPermissionContext) {
   let guarded = guardPermissionModeChange(request.mode, toolPermissionContext);
   if (!guarded.ok) return guarded;
@@ -937,9 +978,9 @@ function applyPermissionModeChange(request, toolPermissionContext) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:563088-563122 placement
+//@ chunk-0yw3taqg.js:606745-606779 placement
 var ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
-//@ chunk-tyg7f3ek.js:563122-564218 placement
+//@ chunk-0yw3taqg.js:606779-607875 placement
 class RemoteMcpTaskTracker {
   #t = new Map();
   #n = new Set();
@@ -992,7 +1033,7 @@ class RemoteMcpTaskTracker {
     return result;
   }
 }
-//@ chunk-tyg7f3ek.js:564218-566023 placement
+//@ chunk-0yw3taqg.js:607875-609683 placement
 /**
  * SDK 宿主请求在本机执行命令（command/args/cwd/env 校验），返回输出。
  */
@@ -1094,11 +1135,11 @@ async function runSdkHostCommand(request, canUseTool, context) {
     );
   return result;
 }
-//@ chunk-tyg7f3ek.js:566023-566112 placement (2.1.88 match: singleQuoteForEval, 1)
+//@ chunk-0yw3taqg.js:609683-609772 placement (2.1.88 match: singleQuoteForEval, 1)
 function shellQuoteIfNeeded(s) {
   return /^[A-Za-z0-9_./:@+,-]+$/.test(s) ? s : `'${s.replaceAll("'", `'"'"'`)}'`;
 }
-//@ chunk-tyg7f3ek.js:566112-566123 placement
+//@ chunk-0yw3taqg.js:609772-609783 placement
 var MCP_STATUS_POLL_MS = 100;
 export {
   RemoteMcpTaskTracker,

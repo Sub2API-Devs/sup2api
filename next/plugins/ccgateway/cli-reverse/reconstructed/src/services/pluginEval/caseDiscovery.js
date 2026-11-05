@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 用例发现：从目标目录向下扫描套件与用例（case.yaml / prompt.md），检查符号链接、.git 与信任
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (55)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (55)
  * attribution: placement 55
  */
 import { default as path_2 } from "path";
@@ -23,7 +23,7 @@ import {
   writeFile,
   rm as rm_2,
 } from "fs/promises";
-import os_2, { tmpdir } from "os";
+import os, { tmpdir } from "os";
 import { constants } from "fs";
 import {
   isInsideConsentRoot,
@@ -67,11 +67,11 @@ import { isNetworkMountRoot_2, isNetworkRelatedPath } from "../../utils/networkP
 import { parseYaml } from "../../utils/yaml.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { isUncOrDeviceSpelling } from "../../utils/fsJunctions.js";
 import { enumeratePluginMcpServers } from "./mocks/pluginMcpEnumeration.js";
 
-//@ chunk-qchp9vrd.js:75370-75527 placement (2.1.88 match: BASH_LIST_COMMANDS, 0.768)
+//@ chunk-af1hzzme.js:76710-76867 placement (2.1.88 match: BASH_LIST_COMMANDS, 0.768)
 /**
  * （切分错误，属插件评测）按 "模式:目录" 缓存插件目录的属主/权限检查结果；已信任时直接 true。
  */
@@ -85,7 +85,7 @@ function getCachedPluginDirVerdict(dir, state, mode = "tree") {
   }
   return verdict;
 }
-//@ chunk-qchp9vrd.js:75527-76060 placement
+//@ chunk-af1hzzme.js:76867-77400 placement
 async function checkPluginDirTrust(pluginDir, state, mode) {
   if (typeof process.getuid !== "function") return true;
   await groupNamespaceInfo(state);
@@ -122,7 +122,7 @@ async function checkPluginDirTrust(pluginDir, state, mode) {
     mode,
   );
 }
-//@ chunk-qchp9vrd.js:76060-76139 placement
+//@ chunk-af1hzzme.js:77400-77479 placement
 /**
  * 遍历目录的总预算（20000）。
  */
@@ -133,13 +133,13 @@ var GIT_OBJECT_DIR_NAMES = new Set(["objects", "lfs"]);
 var MAX_GIT_OBJECTS = 200000;
 var MAX_GIT_OBJECT_NESTING = 8;
 var MAX_WALK_DIRECTORIES = 20000;
-//@ chunk-qchp9vrd.js:76139-76300 placement
+//@ chunk-af1hzzme.js:77479-77640 placement
 function getGroupWritableHint(targetKind) {
   return targetKind === "tree"
     ? "chmod -R g-w it, or run from / name the plugin directory"
     : "chmod -R g-w it, or pass --eval-dir to name the directory yourself";
 }
-//@ chunk-qchp9vrd.js:76300-76484 placement
+//@ chunk-af1hzzme.js:77640-77824 placement
 function isNestedModulesPath(root, target) {
   if (root === null) return false;
   let relativePath = path_2.relative(root, target);
@@ -150,14 +150,14 @@ function isNestedModulesPath(root, target) {
     parts.every((part, partIndex) => (partIndex % 2 === 0 ? part.toLowerCase() === "modules" : part !== ""))
   );
 }
-//@ chunk-qchp9vrd.js:76484-76531 placement
+//@ chunk-af1hzzme.js:77824-77871 placement
 /**
  * 判断目录名是否为 .git（忽略大小写）。
  */
 function isGitDir(name) {
   return name.toLowerCase() === ".git";
 }
-//@ chunk-qchp9vrd.js:76531-78920 placement
+//@ chunk-af1hzzme.js:77871-80260 placement
 /**
  * 检查目录树能否完整检查（不可读目录、条目/层级上限、.git 对象库大小）。
  */
@@ -287,7 +287,7 @@ async function examineTreeLimits(rootPath, limits) {
     entries: entries.concat(gitObjectEntries),
   };
 }
-//@ chunk-qchp9vrd.js:78920-79022 placement
+//@ chunk-af1hzzme.js:80260-80362 placement
 function getCachedRootRealpath(root, state) {
   let real = state.rootRealpaths.get(root);
   if (real === undefined) {
@@ -296,14 +296,14 @@ function getCachedRootRealpath(root, state) {
   }
   return real;
 }
-//@ chunk-qchp9vrd.js:79022-79080 placement
+//@ chunk-af1hzzme.js:80362-80420 placement
 /**
  * 判断路径是否为目录。
  */
 async function isDirectory(entry, joinedPath) {
   return (await getFileKind(entry, joinedPath, "dir")) === "dir";
 }
-//@ chunk-qchp9vrd.js:79080-79266 placement
+//@ chunk-af1hzzme.js:80420-80606 placement
 async function probeEntriesInBatches(pluginDir, entries, state, mode) {
   for (let start = 0; start < entries.length; start += 64) {
     let manifestEntries = entries.slice(start, start + 64);
@@ -318,7 +318,7 @@ async function probeEntriesInBatches(pluginDir, entries, state, mode) {
   }
   return true;
 }
-//@ chunk-qchp9vrd.js:79266-80000 placement
+//@ chunk-af1hzzme.js:80606-81340 placement
 async function probeManifestDir(rootPath, manifestEntries, statsByPath, trust, targetKind) {
   for (let [manifestPath, [joinedPath, expectedKind]] of manifestEntries.entries()) {
     let statsOrError = statsByPath[manifestPath];
@@ -355,7 +355,7 @@ async function probeManifestDir(rootPath, manifestEntries, statsByPath, trust, t
   }
   return true;
 }
-//@ chunk-qchp9vrd.js:80000-81464 placement
+//@ chunk-af1hzzme.js:81340-82804 placement
 async function checkSymlinkInTree(linkPath, rootPath, trust) {
   let crossesGitDir = (fromPath, toPath) =>
     (toPath === fromPath || toEvalPathError(fromPath, toPath)) &&
@@ -411,14 +411,14 @@ async function checkSymlinkInTree(linkPath, rootPath, trust) {
   if (crossesGitDir(rootRealpath, linkRealpath)) return "is a symlink into repository metadata";
   return null;
 }
-//@ chunk-qchp9vrd.js:81464-81544 placement
+//@ chunk-af1hzzme.js:82804-82884 placement
 /**
  * 是否能在目标处创建临时目录（判断可写）。
  */
 async function canMakeTempDir(dirPath, cache) {
   return typeof process.getuid === "function" && (await makeTempModeProbeDir(dirPath, cache));
 }
-//@ chunk-qchp9vrd.js:81544-81693 placement
+//@ chunk-af1hzzme.js:82884-83033 placement
 async function checkWritableByOthers(path, probeDir, state, label) {
   await groupNamespaceInfo(state);
   let ownership = checkEntryOwnership(path, state);
@@ -427,7 +427,7 @@ async function checkWritableByOthers(path, probeDir, state, label) {
     ? undefined
     : ownership;
 }
-//@ chunk-qchp9vrd.js:81693-82799 placement
+//@ chunk-af1hzzme.js:83033-84139 placement
 async function makeTempModeProbeDir(probePath, cache, dirPathHint, stats) {
   let probeStats;
   if (stats !== undefined) probeStats = stats;
@@ -494,12 +494,12 @@ async function makeTempModeProbeDir(probePath, cache, dirPathHint, stats) {
   cache.modesByDevice.set(dev, true);
   return true;
 }
-//@ chunk-qchp9vrd.js:82941-82989 placement
+//@ chunk-af1hzzme.js:84281-84329 placement
 /**
  * 打开目录所用标志（只读、目录、不跟随链接）。
  */
 var DIR_OPEN_FLAGS = constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW;
-//@ chunk-qchp9vrd.js:82989-83652 placement
+//@ chunk-af1hzzme.js:84329-84992 placement
 async function detectPlatformFlavor(dirPath, { harnessOwned = false } = {}) {
   if (getPlatform() === "windows") return;
   let canRepairModes = harnessOwned || getPlatform() === "linux" || getPlatform() === "wsl";
@@ -560,14 +560,14 @@ async function detectPlatformFlavor(dirPath, { harnessOwned = false } = {}) {
       harnessOwned,
     });
 }
-//@ chunk-qchp9vrd.js:83652-83680 placement
+//@ chunk-af1hzzme.js:84992-85020 placement
 /**
  * 目录遍历的总预算（100000）。
  */
 var MAX_CASE_FILE_BYTES = 1048576;
 var MAX_ROUTE_DEPTH = 16;
 var MAX_WALK_BUDGET = 1e5;
-//@ chunk-qchp9vrd.js:83680-86039 placement
+//@ chunk-af1hzzme.js:85020-87391 placement
 /**
  * 从目标出发发现评测用例：处理指向父目录的符号链接、不可检查路径等。
  */
@@ -758,7 +758,7 @@ async function discoverEvalCases(rootPath, filter = {}, options = {}) {
     suite: evalSubdir,
   };
 }
-//@ chunk-qchp9vrd.js:86039-86190 placement
+//@ chunk-af1hzzme.js:87391-87542 placement
 function matchesCaseFilter(caseSpec, filter) {
   if (filter.caseGlob && !urlPatternToRegex(filter.caseGlob, caseSpec.name)) return false;
   if (filter.tags && filter.tags.length > 0) {
@@ -766,7 +766,7 @@ function matchesCaseFilter(caseSpec, filter) {
   }
   return true;
 }
-//@ chunk-qchp9vrd.js:86190-86318 placement (2.1.88 match: urlPatternToRegex, 1)
+//@ chunk-af1hzzme.js:87542-87670 placement (2.1.88 match: urlPatternToRegex, 1)
 function urlPatternToRegex(caseGlob, name) {
   return new RegExp(
     `^${caseGlob
@@ -775,7 +775,7 @@ function urlPatternToRegex(caseGlob, name) {
       .replace(/\?/g, ".")}$`,
   ).test(name);
 }
-//@ chunk-qchp9vrd.js:86318-88019 placement
+//@ chunk-af1hzzme.js:87670-89371 placement
 async function checkCaseInUntrustedFolder(
   caseSpec,
   caseFile,
@@ -867,18 +867,18 @@ async function checkCaseInUntrustedFolder(
     evalDirSegments,
   };
 }
-//@ chunk-qchp9vrd.js:88019-88196 placement
+//@ chunk-af1hzzme.js:89371-89548 placement
 function describeNearestPluginNotLoaded(name, pluginDir, trust) {
   return `case ${formatGuardValueJson(name)}: the nearest plugin, ${escapeNonAscii(pluginDir)}, is not loaded: ${reasonFor(pluginDir, trust)} (fix its ownership/modes, or name that plugin directory itself as the target).`;
 }
-//@ chunk-qchp9vrd.js:88196-88235 placement
+//@ chunk-af1hzzme.js:89548-89587 placement
 /**
  * 判断路径是否就是或在目标目录内。
  */
 function isSameOrInside(path, rootPath) {
   return path === rootPath || toEvalPathError(rootPath, path);
 }
-//@ chunk-qchp9vrd.js:88235-88295 placement
+//@ chunk-af1hzzme.js:89587-89647 placement
 /**
  * 把路径限制在目标目录内（解析真实路径后比较）。
  */
@@ -886,7 +886,7 @@ async function resolveTargetWithin(target, state) {
   let cwd = await realCwd(state);
   return isSameOrInside(target, cwd) ? cwd : target;
 }
-//@ chunk-qchp9vrd.js:88295-88364 placement
+//@ chunk-af1hzzme.js:89647-89716 placement
 /**
  * 取缓存的工作目录真实路径。
  */
@@ -894,7 +894,7 @@ function realCwd(cache) {
   cache.realCwd ??= realpath(getCwd()).catch(() => getCwd());
   return cache.realCwd;
 }
-//@ chunk-qchp9vrd.js:88364-90572 placement
+//@ chunk-af1hzzme.js:89716-91925 placement
 /**
  * 解析用例引用的路径，拒绝穿出目录树或指向其他主机的链接。
  */
@@ -1044,11 +1044,11 @@ async function resolveCaseTargetPath(paths, root, frameRoot) {
   }
   return plugins;
 }
-//@ chunk-qchp9vrd.js:90572-90636 placement
+//@ chunk-af1hzzme.js:91925-91989 placement
 async function findNearestSkillFolder(startDir, stopDir, state, maxUp = 32) {
   return (await probeSkillFolders(startDir, stopDir, state, maxUp)).nearest;
 }
-//@ chunk-qchp9vrd.js:90636-91125 placement
+//@ chunk-af1hzzme.js:91989-92478 placement
 async function probeSkillFolders(startDir, stopDir, cache, maxHops = 32) {
   let hasSkill = (dir) => {
     let probe = cache.skillFolderProbes.get(dir);
@@ -1081,7 +1081,7 @@ async function probeSkillFolders(startDir, stopDir, cache, maxHops = 32) {
   }
   return result(nearestSkillDir);
 }
-//@ chunk-qchp9vrd.js:91125-91329 placement
+//@ chunk-af1hzzme.js:92478-92682 placement
 async function hasClaudePluginDir(dir) {
   try {
     let dirStats = await lstat(path_2.join(dir, ".claude-plugin"));
@@ -1092,7 +1092,7 @@ async function hasClaudePluginDir(dir) {
   }
   return pathExistsLstat(path_2.join(dir, ".claude-plugin", "plugin.json"));
 }
-//@ chunk-qchp9vrd.js:91329-91399 placement
+//@ chunk-af1hzzme.js:92682-92752 placement
 async function pathExistsLstat(filePath) {
   try {
     await lstat(filePath);
@@ -1101,12 +1101,12 @@ async function pathExistsLstat(filePath) {
     return !isNotFoundErrno_3(error);
   }
 }
-//@ chunk-qchp9vrd.js:91399-91460 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-af1hzzme.js:92752-92813 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isNotFoundErrno_3(realCandidate) {
   let code = getErrnoCode(realCandidate);
   return code === "ENOENT" || code === "ENOTDIR";
 }
-//@ chunk-qchp9vrd.js:91460-91776 placement
+//@ chunk-af1hzzme.js:92813-93129 placement
 async function parseCaseYamlFile(caseFilePath) {
   let textFile = await readTextFile(caseFilePath, MAX_CASE_FILE_BYTES, "case.yaml");
   if (textFile === null) return null;
@@ -1123,19 +1123,19 @@ async function parseCaseYamlFile(caseFilePath) {
   if (typeof parsed !== "object" || Array.isArray(parsed)) throw Error("case.yaml must be a YAML object");
   return parsed;
 }
-//@ chunk-qchp9vrd.js:91776-91809 placement (2.1.88 match: loadMagicDocsPrompt, 0.476)
+//@ chunk-af1hzzme.js:93129-93162 placement (2.1.88 match: loadMagicDocsPrompt, 0.476)
 var MAGIC_DOCS_PROMPT_FILES = ["case.yaml", "prompt.md"];
-//@ chunk-qchp9vrd.js:91809-91846 placement
+//@ chunk-af1hzzme.js:93162-93199 placement
 function isMagicDocsPromptFile(basename) {
   return MAGIC_DOCS_PROMPT_FILES.includes(basename);
 }
-//@ chunk-qchp9vrd.js:91846-91970 placement
+//@ chunk-af1hzzme.js:93199-93323 placement
 async function realpathKeepingPromptFile(targetPath) {
   if (!isMagicDocsPromptFile(path_2.basename(targetPath))) return realpath(targetPath);
   await lstat(targetPath);
   return path_2.join(await realpath(path_2.dirname(targetPath)), path_2.basename(targetPath));
 }
-//@ chunk-qchp9vrd.js:91970-92345 placement
+//@ chunk-af1hzzme.js:93323-93698 placement
 async function describeUnexaminable(targetPath) {
   let segments = [];
   for (let current = targetPath; ; current = path_2.dirname(current)) {
@@ -1174,7 +1174,7 @@ async function describeUnexaminable(targetPath) {
     ancestorReals,
   };
 }
-//@ chunk-qchp9vrd.js:92345-92574 placement
+//@ chunk-af1hzzme.js:93698-93927 placement
 /**
  * 解析评测用的插件目录：最近的技能目录可信则采用，否则拒绝；没有时按其他方式查找。
  */
@@ -1200,7 +1200,7 @@ async function resolvePluginDir(pluginDir, state, mode = "tree") {
         };
   return resolveParentPluginDir(pluginDir, state, mode, targetWithin);
 }
-//@ chunk-qchp9vrd.js:92574-92923 placement
+//@ chunk-af1hzzme.js:93927-94276 placement
 /**
  * 从目标的上一级向上查找最近的插件目录；目标或插件目录不可信时只给出名称，否则按缓存的目录判定结果采纳或拒绝。
  */
@@ -1232,7 +1232,7 @@ async function resolveParentPluginDir(pluginDir, state, mode = "tree", targetWit
         namedOnly: null,
       };
 }
-//@ chunk-qchp9vrd.js:92923-93046 placement
+//@ chunk-af1hzzme.js:94276-94399 placement
 async function resolveEvalSubdir(rootPath, evalDirSegments) {
   try {
     await checkRepoAuthoredPath(rootPath, evalDirSegments.join(path_2.sep), "eval directory");
@@ -1241,7 +1241,7 @@ async function resolveEvalSubdir(rootPath, evalDirSegments) {
     return null;
   }
 }
-//@ chunk-qchp9vrd.js:93046-93304 placement
+//@ chunk-af1hzzme.js:94399-94657 placement
 async function relativeSegmentsWithin(root, target) {
   let ancestors = [];
   for (let dir = target; ; dir = path_2.dirname(dir)) {
@@ -1259,7 +1259,7 @@ async function relativeSegmentsWithin(root, target) {
   }
   return null;
 }
-//@ chunk-qchp9vrd.js:93304-93750 placement
+//@ chunk-af1hzzme.js:94657-95103 placement
 /**
  * 在大小写不敏感的文件系统上把路径各段改成磁盘上的实际大小写（仅当两种写法指向同一 inode 时替换）。
  */
@@ -1296,14 +1296,14 @@ async function canonicalizeSegmentCase(baseDir, segments, expectedSegments) {
   }
   return sliced;
 }
-//@ chunk-qchp9vrd.js:93750-93808 placement
+//@ chunk-af1hzzme.js:95103-95161 placement
 /**
  * 把路径按分隔符拆成非空段。
  */
 function pathSegments(filePath) {
   return filePath.split(path_2.sep).filter((segment) => segment !== "");
 }
-//@ chunk-qchp9vrd.js:93808-94884 placement
+//@ chunk-af1hzzme.js:95161-96237 placement
 async function compareCaseNames(
   targetPath,
   expectedSegments,
@@ -1389,7 +1389,7 @@ async function compareCaseNames(
     skipped,
   };
 }
-//@ chunk-qchp9vrd.js:94884-98795 placement
+//@ chunk-af1hzzme.js:96237-100148 placement
 /**
  * 扫描套件目录（嵌套层级上限、.git 等），收集用例。
  */
@@ -1587,7 +1587,7 @@ async function scanSuiteDirectory(dirPath, dirReal, caseDirs, depth, isSuiteRout
     walkState.onRoute.delete(routeKey);
   }
 }
-//@ chunk-qchp9vrd.js:98795-98855 placement
+//@ chunk-af1hzzme.js:100148-100208 placement
 /**
  * 临时 git 仓库的最小 config 内容。
  */
@@ -1595,9 +1595,9 @@ var GIT_DIR_CONFIG = `[core]
 	repositoryformatversion = 0
 	bare = false
 `;
-//@ chunk-qchp9vrd.js:98855-99860 placement
+//@ chunk-af1hzzme.js:100208-101213 placement
 async function createEvalTempDir() {
-  let baseDir = getPlatform() === "macos" ? "/tmp" : os_2.tmpdir();
+  let baseDir = getPlatform() === "macos" ? "/tmp" : os.tmpdir();
   let prefix = getPlatform() === "macos" ? "e-" : "claude-eval-";
   let root = await realpath(await mkdtemp(path_2.join(baseDir, prefix)));
   let joined = path_2.join(root, "config");
@@ -1672,13 +1672,13 @@ async function createEvalTempDir() {
     },
   };
 }
-//@ chunk-qchp9vrd.js:99860-99942 placement
+//@ chunk-af1hzzme.js:101213-101295 placement
 /**
  * “越出目录树的链接”标签。
  */
 var UNINSPECTABLE_LABEL = "a component that could not be inspected";
 var ESCAPING_LINK_LABEL = "a link that leaves the tree";
-//@ chunk-qchp9vrd.js:99942-100486 placement
+//@ chunk-af1hzzme.js:101295-101839 placement
 async function checkAutomounterPath(
   baseDir,
   relativePath,
@@ -1726,7 +1726,7 @@ async function checkAutomounterPath(
   }
   return null;
 }
-//@ chunk-qchp9vrd.js:100486-100620 placement
+//@ chunk-af1hzzme.js:101839-101973 placement
 function escapesAfterDescent(path) {
   let descended = false;
   for (let part of path.replace(/\\/g, "/").split("/"))
@@ -1735,14 +1735,14 @@ function escapesAfterDescent(path) {
     } else if (part !== "" && part !== ".") descended = true;
   return false;
 }
-//@ chunk-qchp9vrd.js:100620-100676 placement
+//@ chunk-af1hzzme.js:101973-102029 placement
 /**
  * 描述特殊路径（网络共享等）。
  */
 function describeSpecialPath(linkTarget) {
   return isUncOrDeviceSpelling(linkTarget) ? "a network share path" : null;
 }
-//@ chunk-qchp9vrd.js:100676-100978 placement
+//@ chunk-af1hzzme.js:102029-102331 placement
 /**
  * 判断目录是否像插件评测套件：路径须为仓库内文件，存在套件文件或任一子目录（最多 64 个）含 case.yaml。
  */
@@ -1768,7 +1768,7 @@ async function looksLikeEvalSuite(parentDir, name) {
     } catch {}
   return false;
 }
-//@ chunk-qchp9vrd.js:100978-101068 placement
+//@ chunk-af1hzzme.js:102331-102421 placement
 /**
  * 目录里是否有魔法文档提示文件。
  */
@@ -1780,7 +1780,7 @@ async function hasMagicDocsPromptFile(dirPath) {
     } catch {}
   return false;
 }
-//@ chunk-qchp9vrd.js:101143-101262 placement
+//@ chunk-af1hzzme.js:102496-102615 placement
 class UnenumerablePluginError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   unenumerable;
   constructor(unenumerable, message, telemetryMessage) {
@@ -1789,7 +1789,7 @@ class UnenumerablePluginError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_
     this.name = "UnenumerablePluginError";
   }
 }
-//@ chunk-qchp9vrd.js:101262-101446 placement
+//@ chunk-af1hzzme.js:102615-102799 placement
 /**
  * 汇总多个插件的 MCP 服务器（无法枚举的插件记录到列表中）。
  */

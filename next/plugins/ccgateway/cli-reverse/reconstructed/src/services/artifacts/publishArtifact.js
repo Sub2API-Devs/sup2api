@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：发布 artifact 页面的主流程（部署重试、失败分类、槽位预留）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-06y4szbn.js (45)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-51jy8ztq.js (45)
  * attribution: placement 45
  */
 import { randomUUID } from "crypto";
@@ -75,8 +75,9 @@ import { getLiveState } from "../liveReplica/liveReplica.js";
 import { resolveContract, CONTRACT_FETCH_TIMEOUT_MS } from "./contract.js";
 import { saveRosterToConfig, slackConnectorName } from "./capabilityRoster.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
-import { count, uniq } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { sanitizeConnectorName, isDeclarableServer, isPlainObjectConnector } from "./connectorNames.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { plural } from "../../utils/stringUtils.js";
 import { MAX_SANITIZED_TEXT, MAX_LISTED_MCP_SERVERS } from "./textSanitize.js";
@@ -127,7 +128,7 @@ import { publishReadDeadlineS } from "./framePublish.js";
 import { isTransportError } from "../http/externalHttp.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-06y4szbn.js:75207-91694 placement
+//@ chunk-51jy8ztq.js:77459-93950 placement
 /**
  * 发布 artifact 页面的主流程：准备页面、能力与契约、预留、上传（直连或中继）、处理冲突/限流/日上限/缩略图并记录本方发布。
  */
@@ -286,9 +287,9 @@ async function publishArtifactPage(body, input, relayOnly) {
         });
     }
     if (!mcpResult.ok) {
-      let hostUnavailableCount = count(mcpResult.malformed, (item) => item.kind === "host_unavailable");
-      let unknownToolsCount = count(mcpResult.malformed, (item) => item.kind === "unknown_tools");
-      let opaqueIdCount = count(
+      let hostUnavailableCount = countWhere(mcpResult.malformed, (item) => item.kind === "host_unavailable");
+      let unknownToolsCount = countWhere(mcpResult.malformed, (item) => item.kind === "unknown_tools");
+      let opaqueIdCount = countWhere(
         mcpResult.malformed,
         (item) =>
           item.kind === "opaque_id" ||
@@ -297,7 +298,7 @@ async function publishArtifactPage(body, input, relayOnly) {
           item.kind === "connector_as_host" ||
           item.kind === "undeclarable_name",
       );
-      let firstPartyCollisionCount = count(
+      let firstPartyCollisionCount = countWhere(
         mcpResult.malformed,
         (item) => item.kind === "local_server_as_first_party",
       );
@@ -338,7 +339,7 @@ async function publishArtifactPage(body, input, relayOnly) {
         let listed = capListForDisplay(mcpResult.unresolved, 8, (name) => `"${sanitizeConnectorName(name)}"`);
         let filtered = connectorNames.filter(isDeclarableServer);
         let knownList = capListForDisplay(
-          uniq(filtered.map((conn) => conn.server)),
+          normalizeCaseForComparison_2(filtered.map((conn) => conn.server)),
           8,
           (name) => `"${sanitizeConnectorName(name)}"`,
         );
@@ -354,7 +355,7 @@ async function publishArtifactPage(body, input, relayOnly) {
       }
       if (mcpResult.internal.length > 0) {
         let names = capListForDisplay(
-          uniq(mcpResult.internal),
+          normalizeCaseForComparison_2(mcpResult.internal),
           8,
           (name) => `"${sanitizeConnectorName(name)}"`,
         );
@@ -816,7 +817,7 @@ async function publishArtifactPage(body, input, relayOnly) {
     ),
   );
 }
-//@ chunk-06y4szbn.js:91694-92307 placement
+//@ chunk-51jy8ztq.js:93950-94563 placement
 async function reservePublishSlot(credentials, signal, busyWaitMs, busyWaitBudget) {
   if (signal?.aborted) return;
   try {
@@ -862,7 +863,7 @@ async function reservePublishSlot(credentials, signal, busyWaitMs, busyWaitBudge
   }
   return;
 }
-//@ chunk-06y4szbn.js:92307-92909 placement
+//@ chunk-51jy8ztq.js:94563-95165 placement
 async function retryWithoutThumbnail(input, publishOnce) {
   let result = await publishOnce(input);
   if (
@@ -898,13 +899,13 @@ async function retryWithoutThumbnail(input, publishOnce) {
       }
     : retryResult;
 }
-//@ chunk-06y4szbn.js:92909-93022 placement
+//@ chunk-51jy8ztq.js:95165-95278 placement
 function surfacedViaForEntrypoint() {
   if (getEntrypointKind() === "claude-vscode") return "epitaxy_pane";
   if (isHostEntrypoint()) return "desktop_pane";
   return "terminal_link";
 }
-//@ chunk-06y4szbn.js:93022-93456 placement
+//@ chunk-51jy8ztq.js:95278-95712 placement
 async function trackFrameEvent(eventName, properties) {
   try {
     let res = await frameApi.post(
@@ -934,7 +935,7 @@ async function trackFrameEvent(eventName, properties) {
     logForDebugging(`[artifact] /track failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
-//@ chunk-06y4szbn.js:93456-93901 placement
+//@ chunk-51jy8ztq.js:95712-96157 placement
 /**
  * 每日发布上限错误的两个代码（frame_daily_publish_cap_reached / frame_daily_push_cap_reached）、schema 与两种计划文案，以及 publish 429 前缀与剩余次数响应头。
  */
@@ -944,7 +945,7 @@ var dailyCapErrorSchema;
 var DAILY_CAP_TEXTS;
 var PUBLISH_CAP_FRAME;
 var X_FRAME_PUSH_REMAINING;
-deferInit("chunk-06y4szbn.js:93456", () => {
+deferInit("chunk-51jy8ztq.js:95712", () => {
   DAILY_CAP_CODES = ["frame_daily_publish_cap_reached", "frame_daily_push_cap_reached"];
   DAILY_CAP_KINDS = {
     frame_daily_publish_cap_reached: "daily_new",
@@ -963,22 +964,22 @@ deferInit("chunk-06y4szbn.js:93456", () => {
   PUBLISH_CAP_FRAME = "publish 429: ";
   X_FRAME_PUSH_REMAINING = "x-frame-push-remaining";
 });
-//@ chunk-06y4szbn.js:93901-93997 placement
+//@ chunk-51jy8ztq.js:96157-96253 placement
 function parseIntHeader(value) {
   let text = typeof value === "string" ? value.trim() : "";
   return /^\d{1,9}$/.test(text) ? Number(text) : undefined;
 }
-//@ chunk-06y4szbn.js:93997-94116 placement
+//@ chunk-51jy8ztq.js:96253-96372 placement
 function dailyPublishResetEpochSeconds(now = Date.now()) {
   let date = new Date(now);
   return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1) / 1000;
 }
-//@ chunk-06y4szbn.js:94116-94226 placement
+//@ chunk-51jy8ztq.js:96372-96482 placement
 function dailyResetFromHeader(date) {
   let ms = typeof date === "string" ? Date.parse(date) : Number.NaN;
   return dailyPublishResetEpochSeconds(Number.isFinite(ms) ? ms : Date.now());
 }
-//@ chunk-06y4szbn.js:94226-94390 placement
+//@ chunk-51jy8ztq.js:96482-96646 placement
 function dailyCapNotice(body) {
   let parsed = dailyCapErrorSchema().safeParse(body);
   if (!parsed.success) return;
@@ -990,7 +991,7 @@ function dailyCapNotice(body) {
     message: `${PUBLISH_CAP_FRAME}${text}`,
   };
 }
-//@ chunk-06y4szbn.js:94390-94425 placement
+//@ chunk-51jy8ztq.js:96646-96681 placement
 /**
  * 发布重试参数：503 最多 3 次、退避基数 5 s、retry-after 上限 20 s、可接受 30 s 内的值。
  */
@@ -998,16 +999,16 @@ var MAX_503_RETRIES = 3;
 var RETRY_BASE_MS = 5000;
 var MAX_RETRY_AFTER_MS = 20000;
 var MAX_RETRY_AFTER_ACCEPT_MS = 30000;
-//@ chunk-06y4szbn.js:94425-94480 placement
+//@ chunk-51jy8ztq.js:96681-96736 placement
 function retryDelayMs(headerValue) {
   let delayMs = parseRetryAfterMs(headerValue) ?? 2000;
   return delayMs <= MAX_RETRY_AFTER_ACCEPT_MS ? delayMs : undefined;
 }
-//@ chunk-06y4szbn.js:94480-94525 placement
+//@ chunk-51jy8ztq.js:96736-96781 placement
 function retryAfterDelay(headerValue) {
   return Math.min(parseRetryAfterMs(headerValue) ?? DEFAULT_RETRY_AFTER_MS, MAX_RETRY_AFTER_MS);
 }
-//@ chunk-06y4szbn.js:94525-94673 placement
+//@ chunk-51jy8ztq.js:96781-96929 placement
 function backoffMs(attempt, retryAfterHeader) {
   let rounded = Math.round(
     backoffDelayMs({
@@ -1022,7 +1023,7 @@ function backoffMs(attempt, retryAfterHeader) {
   let retryAfterMs = parseRetryAfterMs(retryAfterHeader) ?? 0;
   return Math.min(Math.max(retryAfterMs, rounded), MAX_RETRY_AFTER_MS);
 }
-//@ chunk-06y4szbn.js:94673-94758 placement
+//@ chunk-51jy8ztq.js:96929-97014 placement
 class PublishError extends Error {
   startedAtMs;
   constructor(message, startedAtMs, options) {
@@ -1030,14 +1031,14 @@ class PublishError extends Error {
     this.startedAtMs = startedAtMs;
   }
 }
-//@ chunk-06y4szbn.js:94758-94779 placement
+//@ chunk-51jy8ztq.js:97014-97035 placement
 let PublishTransportError; // deferred: uses PublishError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-06y4szbn.js:94758", () => {
+deferInit("chunk-51jy8ztq.js:97014", () => {
   PublishTransportError = class PublishTransportError extends PublishError {};
 });
-//@ chunk-06y4szbn.js:94779-94874 placement
+//@ chunk-51jy8ztq.js:97035-97130 placement
 let PublishRefusedError; // deferred: uses PublishError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-06y4szbn.js:94779", () => {
+deferInit("chunk-51jy8ztq.js:97035", () => {
   PublishRefusedError = class PublishRefusedError extends PublishError {
     seen;
     resent;
@@ -1048,11 +1049,11 @@ deferInit("chunk-06y4szbn.js:94779", () => {
     }
   };
 });
-//@ chunk-06y4szbn.js:94874-94925 placement
+//@ chunk-51jy8ztq.js:97130-97181 placement
 function hasSeenTransportError(error) {
   return error.seen !== undefined && isStalledUpload(error.seen);
 }
-//@ chunk-06y4szbn.js:94925-95203 placement
+//@ chunk-51jy8ztq.js:97181-97459 placement
 function trackUploadBytes(input) {
   let jsonBytes = 0;
   let wireBytes = 0;
@@ -1067,7 +1068,7 @@ function trackUploadBytes(input) {
       input.gzip_fallback_status ??= publishInput.gzip_fallback_status;
   };
 }
-//@ chunk-06y4szbn.js:95203-95459 placement
+//@ chunk-51jy8ztq.js:97459-97715 placement
 function deployQuery(path, params) {
   let parts = [
     ...(path.attemptId === undefined ? [] : [`attempt_id=${path.attemptId}`]),
@@ -1076,7 +1077,7 @@ function deployQuery(path, params) {
   ];
   return parts.length === 0 ? "/api/frame/deploy/direct" : `/api/frame/deploy/direct?${parts.join("&")}`;
 }
-//@ chunk-06y4szbn.js:95459-95847 placement
+//@ chunk-51jy8ztq.js:97715-98103 placement
 async function resendAfterTornBody(post, error, publishError) {
   let seen = {
     ...getTransportErrorProps(error.cause, error.startedAtMs),
@@ -1098,18 +1099,18 @@ async function resendAfterTornBody(post, error, publishError) {
     });
   }
 }
-//@ chunk-06y4szbn.js:95847-95864 placement
+//@ chunk-51jy8ztq.js:98103-98120 placement
 var MAX_SETTLING_RETRIES = 2;
 var DEFAULT_RETRY_AFTER_MS = 2000;
-//@ chunk-06y4szbn.js:95864-95953 placement
+//@ chunk-51jy8ztq.js:98120-98209 placement
 function isPublishSettling(res) {
   return res.ok && res.fromFrame && res.status === 409 && refusalReasonOf(res.data) === "publish_settling";
 }
-//@ chunk-06y4szbn.js:95953-96038 placement
+//@ chunk-51jy8ztq.js:98209-98294 placement
 function isReplayedResponse(res) {
   return typeof res === "object" && res !== null && "replayed" in res && res.replayed === true;
 }
-//@ chunk-06y4szbn.js:96038-97033 placement
+//@ chunk-51jy8ztq.js:98294-99289 placement
 async function classifyPublishFailure(post, error, failureError, signal) {
   let seen = {
     ...getTransportErrorProps(error.cause, error.startedAtMs),
@@ -1172,7 +1173,7 @@ async function classifyPublishFailure(post, error, failureError, signal) {
     });
   }
 }
-//@ chunk-06y4szbn.js:97033-97220 placement
+//@ chunk-51jy8ztq.js:99289-99476 placement
 function isRetryablePublishResponse(res) {
   if (!res.ok || res.status === 408 || res.status === 499) return true;
   if (res.status === 429) return dailyCapNotice(res.data) === undefined;
@@ -1182,12 +1183,12 @@ function isRetryablePublishResponse(res) {
     refusalReasonOf(res.data) !== "render_busy"
   );
 }
-//@ chunk-06y4szbn.js:97220-97241 placement
+//@ chunk-51jy8ztq.js:99476-99497 placement
 let PublishFailedError; // deferred: uses PublishError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-06y4szbn.js:97220", () => {
+deferInit("chunk-51jy8ztq.js:99476", () => {
   PublishFailedError = class PublishFailedError extends PublishError {};
 });
-//@ chunk-06y4szbn.js:97241-97409 placement
+//@ chunk-51jy8ztq.js:99497-99665 placement
 async function withPublishTiming(post) {
   let startTime = performance.now();
   try {
@@ -1199,7 +1200,7 @@ async function withPublishTiming(post) {
     });
   }
 }
-//@ chunk-06y4szbn.js:97409-97588 placement
+//@ chunk-51jy8ztq.js:99665-99844 placement
 function publishErrorTelemetry(error, telemetry) {
   return error instanceof PublishError
     ? {
@@ -1214,7 +1215,7 @@ function publishErrorTelemetry(error, telemetry) {
       }
     : getTransportErrorProps(error, telemetry);
 }
-//@ chunk-06y4szbn.js:97588-98050 placement
+//@ chunk-51jy8ztq.js:99844-100306 placement
 async function postDeploy(
   path,
   body,
@@ -1262,7 +1263,7 @@ async function postDeploy(
   onSeen(undefined);
   return res;
 }
-//@ chunk-06y4szbn.js:98050-98484 placement
+//@ chunk-51jy8ztq.js:100306-100740 placement
 function relayOnlyRefusalReason(body) {
   if (body.slug !== undefined || body.baseVersion !== undefined) return "names an existing artifact";
   if (body.force === true) return "sets force";
@@ -1277,14 +1278,14 @@ function relayOnlyRefusalReason(body) {
     return "makes or changes a live file";
   return;
 }
-//@ chunk-06y4szbn.js:98484-98553 placement
+//@ chunk-51jy8ztq.js:100740-100809 placement
 function isRelayOnlyUnsendable(path) {
   return (
     isRemoteManagedEnvironment() &&
     (plannedRoute("POST", path, "only") !== "relay" || !isAccountIngressToken())
   );
 }
-//@ chunk-06y4szbn.js:98553-98868 placement
+//@ chunk-51jy8ztq.js:100809-101124 placement
 function relayOnlyUnsentResult(path) {
   logFeatureBad("artifact_publish", "relay_only_unsent", path);
   return {
@@ -1294,15 +1295,15 @@ function relayOnlyUnsentResult(path) {
     notCarried: true,
   };
 }
-//@ chunk-06y4szbn.js:98868-98942 placement
+//@ chunk-51jy8ztq.js:101124-101198 placement
 function publishCancelledResult() {
   return publishError("publish cancelled \u2014 nothing was published.");
 }
-//@ chunk-06y4szbn.js:98942-99006 placement
+//@ chunk-51jy8ztq.js:101198-101262 placement
 function isRelayOnlyCancelled(error) {
   return error instanceof Error && error.cause instanceof RelayOnlyCancelledError;
 }
-//@ chunk-06y4szbn.js:99006-99174 placement
+//@ chunk-51jy8ztq.js:101262-101430 placement
 class RelayOnlyUnsentError extends Error {
   constructor(
     message = "this request never reached the artifact server: the session gateway did not carry it",
@@ -1311,9 +1312,9 @@ class RelayOnlyUnsentError extends Error {
     this.name = "RelayOnlyUnsentError";
   }
 }
-//@ chunk-06y4szbn.js:99174-99348 placement
+//@ chunk-51jy8ztq.js:101430-101604 placement
 let RelayOnlyCancelledError; // deferred: uses RelayOnlyUnsentError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-06y4szbn.js:99174", () => {
+deferInit("chunk-51jy8ztq.js:101430", () => {
   RelayOnlyCancelledError = class RelayOnlyCancelledError extends RelayOnlyUnsentError {
     constructor() {
       super("this request was not sent again: the publish was cancelled while the session gateway was busy");
@@ -1321,9 +1322,9 @@ deferInit("chunk-06y4szbn.js:99174", () => {
     }
   };
 });
-//@ chunk-06y4szbn.js:99348-99361 placement
+//@ chunk-51jy8ztq.js:101604-101617 placement
 var RELAY_ONLY_BUSY_WAIT_MAX_MS = 5000;
-//@ chunk-06y4szbn.js:99361-99723 placement
+//@ chunk-51jy8ztq.js:101617-101979 placement
 async function postRelayOnlyWithBusyWait(path, body, options, busyWait, signal) {
   for (let retried = false; ; retried = true) {
     if (isRelayOnlyUnsendable(path)) throw new RelayOnlyUnsentError();
@@ -1341,11 +1342,11 @@ async function postRelayOnlyWithBusyWait(path, body, options, busyWait, signal) 
     if (signal?.aborted) throw new RelayOnlyCancelledError();
   }
 }
-//@ chunk-06y4szbn.js:99723-99761 placement
+//@ chunk-51jy8ztq.js:101979-102017 placement
 function tailFloorMs(options) {
   return (publishReadDeadlineS(options) + 30) * 1000;
 }
-//@ chunk-06y4szbn.js:99761-102357 placement
+//@ chunk-51jy8ztq.js:102017-104613 placement
 /**
  * 发送部署请求并在断流/5xx/中继忙时有限重试（同一 attempt_id，必要时新连接重发）。
  */
@@ -1548,7 +1549,7 @@ async function deployWithRetry(
     }
   }
 }
-//@ chunk-06y4szbn.js:102357-102721 placement
+//@ chunk-51jy8ztq.js:104613-104977 placement
 function droppedFieldOn400(input, error) {
   if (!(error.ok && error.fromFrame && error.status === 400)) return;
   let text = formatFrameErrorBody(error.data);
@@ -1563,7 +1564,7 @@ function droppedFieldOn400(input, error) {
     return "icon";
   return;
 }
-//@ chunk-06y4szbn.js:102721-102876 placement
+//@ chunk-51jy8ztq.js:104977-105132 placement
 function withoutField(input, field) {
   switch (field) {
     case "deadline":
@@ -1583,17 +1584,18 @@ function withoutField(input, field) {
       };
   }
 }
-//@ chunk-06y4szbn.js:102876-103001 placement
+//@ chunk-51jy8ztq.js:105132-105257 placement
 function wrongArtifactAnswer() {
   return outcomeUnknownMessage(
     "the server answered for a different artifact than the one targeted, so its answer was not adopted",
   );
 }
-//@ chunk-06y4szbn.js:103001-103080 placement
+//@ chunk-51jy8ztq.js:105257-105336 placement
 function malformedDeployResponse() {
   return outcomeUnknownMessage("deploy returned an incomplete or malformed response");
 }
 export {
+  dailyPublishResetEpochSeconds,
   publishArtifactPage,
   trackUploadBytes,
   deployWithRetry,
@@ -1618,9 +1620,8 @@ export {
   dailyCapNotice,
   withPublishTiming,
   postRelayOnlyWithBusyWait,
-  dailyPublishResetEpochSeconds,
+  RELAY_ONLY_BUSY_WAIT_MAX_MS,
   PUBLISH_CAP_FRAME,
   surfacedViaForEntrypoint,
   trackFrameEvent,
-  RELAY_ONLY_BUSY_WAIT_MAX_MS,
 };

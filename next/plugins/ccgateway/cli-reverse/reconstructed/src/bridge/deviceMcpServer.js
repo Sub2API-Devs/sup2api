@@ -3,9 +3,9 @@
  *
  * 设备桥 MCP 服务器：工具调用分发、跨会话拒绝、identify 工具（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-zethn0a3.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-m4y440zq.js (8)
  * attribution: placement 8
  */
 import {
@@ -24,10 +24,10 @@ import { lit } from "../services/analytics/safeMetadata.js";
 import { unattestedSenderMessage } from "../services/remoteTools/hostRefusals.js";
 import { getPlatform } from "../utils/platform.js";
 
-//@ chunk-zethn0a3.js:3750-3797 placement
+//@ chunk-m4y440zq.js:4059-4106 placement
 var CLAUDE_CODE_DEVICE = "claude-code-device";
 var GET_DEVICE_INFO = "get_device_info";
-//@ chunk-zethn0a3.js:3797-4007 placement (2.1.88 match: renderToolUseMessage, 0.513)
+//@ chunk-m4y440zq.js:4106-4316 placement (2.1.88 match: renderToolUseMessage, 0.513)
 /**
  * 从工具输入拆出 session_id，其余字段作为 toolArgs。
  */
@@ -43,11 +43,11 @@ function renderToolUseMessage(input) {
     toolArgs,
   };
 }
-//@ chunk-zethn0a3.js:4007-4040 placement
+//@ chunk-m4y440zq.js:4316-4349 placement
 function parseJsonRpcMessage(message) {
   return JSONRPCMessageSchema.parse(message);
 }
-//@ chunk-zethn0a3.js:4040-4980 placement
+//@ chunk-m4y440zq.js:4349-5290 placement
 /**
  * 设备 MCP 服务器的工具调用分发；未知工具报错
  */
@@ -130,7 +130,7 @@ function handleDeviceToolCall(bridge) {
     },
   };
 }
-//@ chunk-zethn0a3.js:4980-5715 placement
+//@ chunk-m4y440zq.js:5290-6025 placement
 /**
  * 拒绝声明的会话与本设备所服务会话不一致的调用并上报 tengu_device_tool_refused
  */
@@ -153,7 +153,7 @@ function refuseCrossSessionDeviceCall(tool, sessionId, sessionId_2) {
     isError: true,
   };
 }
-//@ chunk-zethn0a3.js:5715-6078 placement
+//@ chunk-m4y440zq.js:6025-6388 placement
 /**
  * 设备桥工具调用被拒：发送方不满足可信设备策略时记日志与 tengu_device_tool_refused 事件，返回 isError 的文本结果（含状态 status）。
  */
@@ -180,9 +180,9 @@ function refuseUntrustedDeviceToolCall(tool, attestation) {
     isError: true,
   };
 }
-//@ chunk-zethn0a3.js:6078-6155 placement
+//@ chunk-m4y440zq.js:6388-6465 placement
 var DEVICE_IDLE_NOTICE = "This machine is attached but does not run commands for this session.";
-//@ chunk-zethn0a3.js:6155-7024 placement
+//@ chunk-m4y440zq.js:6465-7334 placement
 /**
  * 返回本设备运行环境信息（平台、架构）的 identify 工具定义
  */

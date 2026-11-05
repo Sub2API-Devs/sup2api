@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：转发给后台会话的带值 CLI 标志集合（--model、--permission-mode、--settings 等）及可变参标志；去掉 argv 中已转发的标志（含 --flag=value 形式），保留 -- 之后的内容等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-nwzhqrkg.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-n6r4p63b.js (22)
  * attribution: placement 22
  */
 import { join, resolve, isAbsolute, sep, relative } from "path";
@@ -15,12 +15,13 @@ import {
   CUSTOM_MODEL_OPTION_VARS,
   PROVIDER_SELECTION_ENV_VARS,
 } from "../utils/managedEnvConstants.js";
-import { getClaudeConfigDir, isEnvTruthy } from "../utils/envUtils.js";
+import { getClaudeConfigDir } from "../utils/markdownConfigLoader.js";
 import { tmpdir, claudeTempDirName } from "../utils/tempDir.js";
 import { env } from "../utils/env.js";
 import { foldCaseBasic } from "../utils/pathIdentity.js";
 import { identity } from "../utils/pathClassification.js";
 import { getPlatform } from "../utils/platform.js";
+import { isEnvTruthy } from "../utils/envUtils.js";
 import {
   describeEnvEntryName,
   filterInvalidEnvEntries,
@@ -30,7 +31,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { stripLongPathPrefixes } from "../utils/windowsUncPaths.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-nwzhqrkg.js:681-3226 placement
+//@ chunk-n6r4p63b.js:681-3226 placement
 /**
  * 转发给后台会话的带值 CLI 标志集合（--model、--permission-mode、--settings 等）及可变参标志。
  */
@@ -44,7 +45,7 @@ var SUBAGENT_MODEL_ENV_NAMES;
 var BACKGROUND_ALLOWED_ENV_NAMES;
 var PATH_VALUED_ENV_NAMES;
 var CLAUDE_SECURESTORAGE_CONFIG_DIR;
-deferInit("chunk-nwzhqrkg.js:681", () => {
+deferInit("chunk-n6r4p63b.js:681", () => {
   FORWARDED_VALUE_FLAGS = new Set([
     "--model",
     "-m",
@@ -183,7 +184,7 @@ deferInit("chunk-nwzhqrkg.js:681", () => {
   ]);
   CLAUDE_SECURESTORAGE_CONFIG_DIR = "CLAUDE_SECURESTORAGE_CONFIG_DIR";
 });
-//@ chunk-nwzhqrkg.js:3226-3470 placement
+//@ chunk-n6r4p63b.js:3226-3470 placement
 function jobAllowedRoots(envName) {
   let claudeConfigDir = getClaudeConfigDir();
   let roots = [
@@ -205,15 +206,15 @@ function jobAllowedRoots(envName) {
     } catch {}
   return roots;
 }
-//@ chunk-nwzhqrkg.js:3470-3504 placement
+//@ chunk-n6r4p63b.js:3470-3504 placement
 function normalizeResolvedPath(path) {
   return foldCaseBasic(identity(resolve(path)));
 }
-//@ chunk-nwzhqrkg.js:3504-3583 placement
+//@ chunk-n6r4p63b.js:3504-3583 placement
 function isAbsoluteOnPlatform(path) {
   return getPlatform() === "windows" ? /^([A-Za-z]:[\\/]|[\\/]{2})/.test(path) : isAbsolute(path);
 }
-//@ chunk-nwzhqrkg.js:3583-4013 placement
+//@ chunk-n6r4p63b.js:3583-4013 placement
 /**
  * 校验转发给后台会话的路径型环境变量：必须是完整路径且不在 Claude 临时目录。
  */
@@ -230,7 +231,7 @@ function checkForwardedPath(envName, value) {
   }
   return;
 }
-//@ chunk-nwzhqrkg.js:4013-4118 placement
+//@ chunk-n6r4p63b.js:4013-4118 placement
 /**
  * 把转发给后台任务的环境变量中表示路径的条目按给定目录解析为绝对路径，其余原样保留。
  */
@@ -241,7 +242,7 @@ function resolveForwardedEnvPaths(providerEnv, cwd) {
       value !== "" && PATH_VALUED_ENV_NAMES.has(key) ? resolve(cwd, expandAwsHomePath(key, value)) : value;
   return resolved;
 }
-//@ chunk-nwzhqrkg.js:4118-4234 placement
+//@ chunk-n6r4p63b.js:4118-4234 placement
 function expandAwsHomePath(name, value) {
   if (!name.startsWith("AWS_") || !value.startsWith("~/")) return value;
   try {
@@ -250,10 +251,10 @@ function expandAwsHomePath(name, value) {
     return value;
   }
 }
-//@ chunk-nwzhqrkg.js:4234-4389 placement
+//@ chunk-n6r4p63b.js:4234-4398 placement
 var PROJECT_ID_RE =
-  /^\s*(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|claude_proj_(?:staging_|local_)?01[1-9A-HJ-NP-Za-km-z]{22})\s*$/;
-//@ chunk-nwzhqrkg.js:4389-4898 placement
+  /^\s*(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|(?:claude_proj|chan)_(?:staging_|local_)?01[1-9A-HJ-NP-Za-km-z]{22})\s*$/;
+//@ chunk-n6r4p63b.js:4398-4907 placement
 /**
  * 过滤要带给后台会话的环境变量，返回保留项与被丢弃项（附原因）。
  */
@@ -282,7 +283,7 @@ function filterBackgroundEnv(env) {
   );
   return Object.keys(kept).length > 0 ? kept : undefined;
 }
-//@ chunk-nwzhqrkg.js:4898-5086 placement
+//@ chunk-n6r4p63b.js:4907-5095 placement
 /**
  * 过滤可转发的环境变量，被丢弃的条目逐个记录警告日志（名称经转义、附原因）。
  */
@@ -300,7 +301,7 @@ function keepForwardableEnv(env, origin) {
   });
   return kept;
 }
-//@ chunk-nwzhqrkg.js:5086-5669 placement
+//@ chunk-n6r4p63b.js:5095-5678 placement
 /**
  * 把 argv 分成可转发的标志与其余参数。
  */
@@ -341,7 +342,7 @@ function splitForwardableArgs(args) {
     );
   return groupFlagArgs(normalizeForwardedFlags(forwarded));
 }
-//@ chunk-nwzhqrkg.js:5669-5939 placement
+//@ chunk-n6r4p63b.js:5678-5948 placement
 function normalizeForwardedFlags(args) {
   let out = [];
   for (let j = 0; j < args.length; j++) {
@@ -362,7 +363,7 @@ function normalizeForwardedFlags(args) {
   }
   return out;
 }
-//@ chunk-nwzhqrkg.js:5939-6393 placement
+//@ chunk-n6r4p63b.js:5948-6402 placement
 /**
  * 把 argv 按标志分组（标志与其值放在一起，可变参标志吞掉后续值）。
  */
@@ -397,7 +398,7 @@ function groupFlagArgs(args) {
     .filter((group, index) => (lastIndexByName.get(group.name) ?? index) === index)
     .flatMap((group) => group.toks);
 }
-//@ chunk-nwzhqrkg.js:6393-6621 placement
+//@ chunk-n6r4p63b.js:6402-6630 placement
 /**
  * 若 --dangerously-skip-permissions 之后又出现 --permission-mode，则去掉前者（后者优先）。
  */
@@ -408,7 +409,7 @@ function dropOverriddenSkipPermissions(args) {
     ? args.filter((arg) => arg !== "--dangerously-skip-permissions")
     : [...args];
 }
-//@ chunk-nwzhqrkg.js:6621-6786 placement
+//@ chunk-n6r4p63b.js:6630-6795 placement
 /**
  * 把 --dangerously-skip-permissions 移到参数列表末尾。
  */
@@ -417,7 +418,7 @@ function moveSkipPermissionsLast(args) {
     ? [...args.filter((arg) => arg !== "--dangerously-skip-permissions"), "--dangerously-skip-permissions"]
     : [...args];
 }
-//@ chunk-nwzhqrkg.js:6786-7714 placement
+//@ chunk-n6r4p63b.js:6795-7723 placement
 /**
  * 去掉 argv 中已转发的标志（含 --flag=value 形式），保留 -- 之后的内容。
  */
@@ -485,9 +486,9 @@ function stripForwardedFlags(args) {
   }
   return out;
 }
-//@ chunk-nwzhqrkg.js:7714-7849 placement
+//@ chunk-n6r4p63b.js:7723-7858 placement
 var PROMPT_TEXT_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-nwzhqrkg.js:7714", () => {
+deferInit("chunk-n6r4p63b.js:7723", () => {
   PROMPT_TEXT_FLAGS = new Set([
     "--system-prompt",
     "--append-system-prompt",
@@ -497,32 +498,32 @@ deferInit("chunk-nwzhqrkg.js:7714", () => {
     "-n",
   ]);
 });
-//@ chunk-nwzhqrkg.js:7849-7889 placement
+//@ chunk-n6r4p63b.js:7858-7898 placement
 function stripPathPrefixUnlessPrompt(flagName, value) {
   return PROMPT_TEXT_FLAGS.has(flagName) ? value : stripLongPathPrefixes(value);
 }
-//@ chunk-nwzhqrkg.js:7889-7957 placement
+//@ chunk-n6r4p63b.js:7898-7966 placement
 /**
  * 转发参数解析用的标志集合：-r/--resume 为带值标志，-c/-p/-h/-v 为单字母标志。
  */
 var RESUME_VALUE_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SINGLE_LETTER_FLAGS;
-deferInit("chunk-nwzhqrkg.js:7889", () => {
+deferInit("chunk-n6r4p63b.js:7898", () => {
   RESUME_VALUE_FLAGS = new Set(["-r", "--resume"]);
   SINGLE_LETTER_FLAGS = new Set(["-c", "-p", "-h", "-v"]);
 });
-//@ chunk-nwzhqrkg.js:7957-8008 placement
+//@ chunk-n6r4p63b.js:7966-8017 placement
 function looksLikeFlag_2(arg) {
   return arg.length > 1 && arg.startsWith("-");
 }
-//@ chunk-nwzhqrkg.js:8008-8097 placement
+//@ chunk-n6r4p63b.js:8017-8106 placement
 /**
  * 确保参数里带 --reply-on-resume。
  */
 function withReplyOnResume(args) {
   return args.includes("--reply-on-resume") ? [...args] : [...args, "--reply-on-resume"];
 }
-//@ chunk-nwzhqrkg.js:8097-8159 placement
+//@ chunk-n6r4p63b.js:8106-8168 placement
 /**
  * 去掉参数里的 --reply-on-resume。
  */
@@ -531,14 +532,12 @@ function withoutReplyOnResume(flags) {
 }
 export {
   splitForwardableArgs,
+  moveSkipPermissionsLast,
   stripForwardedFlags,
-  SUBAGENT_MODEL_ENV_NAMES,
-  withoutReplyOnResume,
   dropOverriddenSkipPermissions,
   filterBackgroundEnv,
   keepForwardableEnv,
   resolveForwardedEnvPaths,
-  moveSkipPermissionsLast,
   BOOLEAN_FORWARDED_FLAGS,
   FORWARDED_VALUE_FLAGS,
   SINGLE_LETTER_FLAGS,
@@ -546,5 +545,7 @@ export {
   VARIADIC_FORWARDED_FLAGS,
   BACKGROUND_ALLOWED_ENV_NAMES,
   ENV_FORCE_PASSTHROUGH_NAMES,
+  withoutReplyOnResume,
   withReplyOnResume,
+  SUBAGENT_MODEL_ENV_NAMES,
 };

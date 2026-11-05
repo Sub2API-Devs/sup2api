@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：带超时的 Promise（BoundedTimeoutError）与文件系统操作卡住检测
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jhr3szt9.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-646wnty1.js (4)
  * attribution: placement 4
  */
 
-//@ chunk-jhr3szt9.js:191-348 placement
+//@ chunk-646wnty1.js:191-348 placement
 class BoundedTimeoutError extends Error {
   label;
   timeoutMs;
@@ -20,7 +20,7 @@ class BoundedTimeoutError extends Error {
     this.name = "BoundedTimeoutError";
   }
 }
-//@ chunk-jhr3szt9.js:348-554 placement
+//@ chunk-646wnty1.js:348-554 placement
 /**
  * 给 Promise 加超时：超时抛 BoundedTimeoutError（延迟上限 2^31−1 毫秒），结束后清除定时器并吞掉原 Promise 的后续拒绝。
  */
@@ -42,12 +42,12 @@ async function withBoundedTimeout(promise, timeoutMs, label) {
     promise.catch(() => {});
   }
 }
-//@ chunk-jhr3szt9.js:554-567 placement
+//@ chunk-646wnty1.js:554-567 placement
 /**
  * 单次文件系统操作的超时（5 秒）。
  */
 var FS_OP_TIMEOUT_MS = 5000;
-//@ chunk-jhr3szt9.js:567-659 placement
+//@ chunk-646wnty1.js:567-659 placement
 /**
  * 给文件系统操作套上超时与 “runner:stuck” 提示。
  */

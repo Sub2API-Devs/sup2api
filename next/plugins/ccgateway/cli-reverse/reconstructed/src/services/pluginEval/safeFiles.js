@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 的安全文件读写（拒绝符号链接、lstat 与 open 之间被替换）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (4)
  * attribution: placement 4
  */
 import path from "path";
@@ -13,7 +13,7 @@ import { lstat, open, readlink, unlink } from "fs/promises";
 import { constants } from "fs";
 import { getCwd } from "../../utils/cwd.js";
 import { checkRepoAuthoredPath } from "../../cli/handlers/pluginEval/mockGuards.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   isENOENT,
@@ -23,7 +23,7 @@ import { getPlatform } from "../../utils/platform.js";
 import { escapeNonAscii } from "../../utils/resultError.js";
 import { platformNoFollowFlags } from "../../utils/platformTargets.js";
 
-//@ chunk-qchp9vrd.js:109492-109573 placement
+//@ chunk-af1hzzme.js:110845-110926 placement (2.1.88 match: renderToolResultMessage, 0.489)
 /**
  * 以当前目录为基准检查路径是否属于仓库内容。
  */
@@ -34,7 +34,7 @@ function checkRepoAuthoredPathFromCwd(target, extraTrustedRoots = []) {
     ...extraTrustedRoots,
   ]);
 }
-//@ chunk-qchp9vrd.js:109702-112323 placement
+//@ chunk-af1hzzme.js:111055-113676 placement
 /**
  * 以不跟随链接方式打开普通文件，检测打开过程中被替换。
  */
@@ -206,7 +206,7 @@ async function openRegularFileSafely(filePath, mode, label) {
     throw error;
   }
 }
-//@ chunk-qchp9vrd.js:112323-112502 placement (2.1.88 match: getFileIdentity, 0.865)
+//@ chunk-af1hzzme.js:113676-113855 placement (2.1.88 match: getFileIdentity, 0.864)
 async function getFileIdentity(filePath, identity) {
   if (identity.ino === 0n) return;
   let stats = await lstat(filePath, {
@@ -215,7 +215,7 @@ async function getFileIdentity(filePath, identity) {
   if (stats !== null && !stats.isSymbolicLink() && stats.ino === identity.ino && stats.dev === identity.dev)
     await unlink(filePath).catch(() => {});
 }
-//@ chunk-qchp9vrd.js:112502-112515 placement
+//@ chunk-af1hzzme.js:113855-113868 placement
 /**
  * 读取文件身份的超时（30000 毫秒）。
  */

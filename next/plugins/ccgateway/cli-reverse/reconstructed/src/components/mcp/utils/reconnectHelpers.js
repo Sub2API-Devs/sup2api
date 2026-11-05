@@ -3,9 +3,9 @@
  *
  * MCP 重连结果/错误的统一提示文案。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/mcp/utils/reconnectHelpers.tsx
- * pieces: chunk-8433gxg0.js (7)
+ * pieces: chunk-7mjfz2bd.js (7)
  * attribution: placement 5, fingerprint 2
  */
 import { describeMcpServerOrigin, redactMcpErrorDetail } from "../../../services/mcp/mcpServerOrigin.js";
@@ -19,12 +19,12 @@ import { sanitizeTelemetryString } from "../../../utils/sanitization.js";
 import { errorMessage, WireSafeControlError } from "../../../utils/errors.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-8433gxg0.js:348-707 placement
+//@ chunk-7mjfz2bd.js:381-740 placement
 /**
  * 有专门文案的 MCP 错误码集合；其余错误码按原样（或 HTTP 状态）显示。
  */
 var DESCRIBED_MCP_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-8433gxg0.js:348", () => {
+deferInit("chunk-7mjfz2bd.js:381", () => {
   DESCRIBED_MCP_ERROR_CODES = new Set([
     "INVALID_CONFIG",
     "UNCONFIGURED",
@@ -44,7 +44,7 @@ deferInit("chunk-8433gxg0.js:348", () => {
     "SHUTTING_DOWN",
   ]);
 });
-//@ chunk-8433gxg0.js:707-952 placement
+//@ chunk-7mjfz2bd.js:740-985 placement
 function describeMcpServerError(client) {
   let origin = describeMcpServerOrigin(client.name, client.config, {
     detail: "origin",
@@ -59,7 +59,7 @@ function describeMcpServerError(client) {
   }
   return client.error !== undefined ? redact(client.error) : "";
 }
-//@ chunk-8433gxg0.js:952-1068 placement
+//@ chunk-7mjfz2bd.js:985-1101 placement
 /**
  * 错误码显示：“23” 为请求超时，100–599 为 “HTTP xxx”，其余原样。
  */
@@ -71,7 +71,7 @@ function formatMcpErrorCode(errorCode) {
       ? `HTTP ${errorCode}`
       : errorCode;
 }
-//@ chunk-8433gxg0.js:1068-1343 placement
+//@ chunk-7mjfz2bd.js:1101-1376 placement
 /**
  * mcp 健康检查的错误文本：拼接错误码、错误与显示细节并对敏感信息脱敏。
  */
@@ -93,7 +93,7 @@ function formatMcpHealthError(client) {
   let combined = displayDetail ? `${baseError} ${displayDetail}`.trim() : baseError;
   return combined === "" ? combined : sanitize(combined);
 }
-//@ chunk-8433gxg0.js:1343-2737 fingerprint (2.1.88 match: handleReconnectResult, 0.557)
+//@ chunk-7mjfz2bd.js:1376-2770 fingerprint (2.1.88 match: handleReconnectResult, 0.556)
 function handleReconnectResult(result, name, options, detail) {
   switch (result.client.type) {
     case "connected":
@@ -157,7 +157,7 @@ function handleReconnectResult(result, name, options, detail) {
       };
   }
 }
-//@ chunk-8433gxg0.js:2737-3053 fingerprint (2.1.88 match: handleReconnectError, 0.443)
+//@ chunk-7mjfz2bd.js:2770-3086 fingerprint (2.1.88 match: handleReconnectError, 0.443)
 function handleReconnectError(error, name, options) {
   let errorMessage_2 = options.config
     ? redactMcpErrorDetail(name, options.config, errorMessage(error))
@@ -172,7 +172,7 @@ function handleReconnectError(error, name, options) {
   }
   return `Error reconnecting to ${normalizeServerNameShort(name)}: ${normalizeMcpServerName(errorMessage_2)}`;
 }
-//@ chunk-8433gxg0.js:3053-3379 placement
+//@ chunk-7mjfz2bd.js:3086-3412 placement
 function formatMcpOperationFailure(error, name, action, options) {
   let detail = options.config
     ? redactMcpErrorDetail(name, options.config, errorMessage(error))

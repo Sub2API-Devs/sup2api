@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增。命令参数建议。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: placement 3
  */
 
-//@ chunk-18hwfzwa.js:550092-550115 placement
+//@ chunk-czq1j3j2.js:570778-570801 placement
 var COMMAND_ARG = "command-arg-";
-//@ chunk-18hwfzwa.js:550115-550716 placement
+//@ chunk-czq1j3j2.js:570801-571402 placement
 async function commandArgSuggestions(input, getArgumentCompletions, storageV5) {
   let index = input.indexOf(" ");
   if (!input.startsWith("/") || index === -1) return [];
@@ -38,16 +38,16 @@ async function commandArgSuggestions(input, getArgumentCompletions, storageV5) {
     };
   });
 }
-//@ chunk-18hwfzwa.js:550787-550848 placement
+//@ chunk-czq1j3j2.js:571473-571534 placement
 var DIR_ARG_COMMANDS = new Set(["add-dir", "cd"]);
 var COMMAND_SUGGESTIONS_TTL_MS = 15000;
 var FAILED_SCAN_TTL_MS = 2500;
 var SHELL_HISTORY_TTL_MS = 5000;
 export {
+  DIR_ARG_COMMANDS,
   SHELL_HISTORY_TTL_MS,
   COMMAND_SUGGESTIONS_TTL_MS,
   FAILED_SCAN_TTL_MS,
-  DIR_ARG_COMMANDS,
   commandArgSuggestions,
   COMMAND_ARG,
 };

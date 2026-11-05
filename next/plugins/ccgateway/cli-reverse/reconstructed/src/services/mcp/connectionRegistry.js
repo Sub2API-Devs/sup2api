@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。MCP 连接注册表。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-z1n5m6nf.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h44h5gdv.js (19)
  * attribution: placement 19
  */
 import { primeDiscoveryCacheFlag } from "./elicitationDialogs.js";
@@ -29,7 +29,7 @@ import { isSameConnectedClient } from "./toolSchemaValidation.js";
 import { deleteDiscoveryCache } from "./discoveryCache.js";
 import { ElicitRequestSchema } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/types.js";
 
-//@ chunk-z1n5m6nf.js:85309-85372 placement
+//@ chunk-h44h5gdv.js:86955-87018 placement
 /**
  * 为 v1 客户端安装发现缓存所需的解析器：协议时代解析器固定返回 legacy，若尚未设置账号解析器则装上默认的。旧版/自动名 isLegacyProtocolEra 与行为不符。（v1）
  */
@@ -39,7 +39,7 @@ function isLegacyProtocolEra() {
   if (hasAccountResolver()) return;
   setAccountResolver(oauthAccountIdentity);
 }
-//@ chunk-z1n5m6nf.js:85372-85409 placement
+//@ chunk-h44h5gdv.js:87018-87056 placement
 /**
  * 注册 ensureConnectedClient 实现（旧副本）。
  */
@@ -47,7 +47,7 @@ function primeEnsureConnectedClient() {
   if (getEnsureConnectedClient()) return;
   setEnsureConnectedClient(connectMcpServer);
 }
-//@ chunk-z1n5m6nf.js:85409-85505 placement
+//@ chunk-h44h5gdv.js:87056-87152 placement
 /**
  * 发出“缓存行被采纳”的信号（旧副本）。
  */
@@ -58,7 +58,7 @@ function emitCachedAdoptSignal(name, config) {
     logMCPDebug(name, `cached-row adopt subscriber threw: ${errorMessage(error)}`);
   }
 }
-//@ chunk-z1n5m6nf.js:85505-85741 placement
+//@ chunk-h44h5gdv.js:87152-87388 placement
 function recordCachedDialFailureV1(failure, ownStrike) {
   if (ownStrike) logFeatureSad("mcp_discovery_cache", "lazy_dial_failed");
   getConnectionCache().settledCachedDialFailures.set(serverCacheKey(failure.name, failure.config), {
@@ -71,7 +71,7 @@ function recordCachedDialFailureV1(failure, ownStrike) {
     logMCPDebug(failure.name, `cached-row dial-failed subscriber threw: ${errorMessage(error)}`);
   }
 }
-//@ chunk-z1n5m6nf.js:85741-85837 placement
+//@ chunk-h44h5gdv.js:87388-87484 placement
 /**
  * 取出并删除已结算的缓存拨号失败（旧副本）。
  */
@@ -82,7 +82,7 @@ function takeSettledCachedDialFailure(name, config) {
   settledCachedDialFailures.delete(cacheKey);
   return failure;
 }
-//@ chunk-z1n5m6nf.js:85837-85931 placement
+//@ chunk-h44h5gdv.js:87484-87578 placement
 /**
  * 缓存失败是否已被清理（旧副本）。
  */
@@ -90,7 +90,7 @@ async function hasClearedCachedFailure(name, config) {
   let dial = connectToServer_2.cache?.get?.(serverCacheKey(name, config));
   return dial !== undefined && (await settleDialOrUndefined(dial)) === undefined;
 }
-//@ chunk-z1n5m6nf.js:85931-86185 placement
+//@ chunk-h44h5gdv.js:87578-87832 placement
 function refuseCachedRowV1(name, config, reason) {
   let cacheKey = serverCacheKey(name, config);
   if (getConnectionCache().refusedCachedRows.has(cacheKey)) return;
@@ -111,7 +111,7 @@ function refuseCachedRowV1(name, config, reason) {
     false,
   );
 }
-//@ chunk-z1n5m6nf.js:86185-86352 placement
+//@ chunk-h44h5gdv.js:87832-87999 placement
 /**
  * 判断服务器是否有已连接且没有正在后台刷新的连接（v1 副本）。
  */
@@ -122,7 +122,7 @@ async function hasLiveConnection_2(name, config) {
   if ((await settleDialOrUndefined(dial))?.type !== "connected") return false;
   return !getCliOwnedState().swrRefreshDialsInFlight.has(dial);
 }
-//@ chunk-z1n5m6nf.js:86352-86547 placement
+//@ chunk-h44h5gdv.js:87999-88194 placement
 /**
  * 服务时清除失败的连接记忆（v1 副本）。
  */
@@ -135,7 +135,7 @@ async function evictStaleFailedConnectMemoForServe(name, config) {
   if (getConnectionCache().connections.get(cacheKey) === dial)
     getConnectionCache().connections.delete(cacheKey);
 }
-//@ chunk-z1n5m6nf.js:86547-86603 placement
+//@ chunk-h44h5gdv.js:88194-88250 placement
 /**
  * 把一次 MCP 连接尝试结算成“已连接或 undefined”：超时固定 0（withDeadline(dial.catch(()=>undefined),0)），不会等待。
  */
@@ -147,7 +147,7 @@ async function settleDialOrUndefined(dial) {
     0,
   );
 }
-//@ chunk-z1n5m6nf.js:86603-86688 placement
+//@ chunk-h44h5gdv.js:88250-88335 placement
 /**
  * 取某服务器已缓存的连接结果。
  */
@@ -155,7 +155,7 @@ async function getCachedConnectResult(name, config) {
   let dial = connectToServer_2.cache?.get?.(serverCacheKey(name, config));
   return dial === undefined ? undefined : settleDialOrUndefined(dial);
 }
-//@ chunk-z1n5m6nf.js:86688-86849 placement
+//@ chunk-h44h5gdv.js:88335-88496 placement
 function clearConnectionCachesV1(cacheKey) {
   getConnectionCache().connections.delete(cacheKey);
   getConnectionCache().toolLists.delete(cacheKey);
@@ -163,11 +163,11 @@ function clearConnectionCachesV1(cacheKey) {
   getConnectionCache().resourceTemplateLists.delete(cacheKey);
   getConnectionCache().commandLists.delete(cacheKey);
 }
-//@ chunk-z1n5m6nf.js:86849-87228 placement
+//@ chunk-h44h5gdv.js:88496-88875 placement
 /**
  * 清除服务器的连接缓存，有活动调用时保留连接（v1 副本）。
  */
-async function clearServerCache_4(name, config, options) {
+async function clearServerCache_3(name, config, options) {
   isLegacyProtocolEra();
   let cacheKey = serverCacheKey(name, config);
   let dial = getConnectionCache().connections.get(cacheKey);
@@ -191,7 +191,7 @@ async function clearServerCache_4(name, config, options) {
   }
   clearConnectionCachesV1(cacheKey);
 }
-//@ chunk-z1n5m6nf.js:87228-87435 placement
+//@ chunk-h44h5gdv.js:88875-89082 placement
 /**
  * 解除连接的 onclose 并关闭连接，必要时清理连接记忆（v1 副本）。
  */
@@ -211,7 +211,7 @@ function detachAndCloseConnection_2(connection) {
   }
   return connection.cleanup().catch(() => {});
 }
-//@ chunk-z1n5m6nf.js:87435-87630 placement
+//@ chunk-h44h5gdv.js:89082-89277 placement
 /**
  * 在后台丢弃服务器连接并关闭（v1 副本）。
  */
@@ -231,7 +231,7 @@ function disposeServerConnectionDetached(name, config, expectedDial) {
       () => {},
     );
 }
-//@ chunk-z1n5m6nf.js:87630-87673 placement
+//@ chunk-h44h5gdv.js:89277-89320 placement
 /**
  * 清理服务器缓存并删除发现缓存（旧副本）。
  */
@@ -239,7 +239,7 @@ async function clearDiscoveryForServer_2(name, config) {
   isLegacyProtocolEra();
   await deleteDiscoveryCache(name, config);
 }
-//@ chunk-z1n5m6nf.js:87673-87941 placement
+//@ chunk-h44h5gdv.js:89320-89588 placement
 /**
  * 丢弃已结束且未连接的连接记忆（v1 副本）。
  */
@@ -258,7 +258,7 @@ async function discardMemoizedConnectResult(name, config) {
   getConnectionCache().connections.delete(cacheKey);
   return true;
 }
-//@ chunk-z1n5m6nf.js:87941-88048 placement
+//@ chunk-h44h5gdv.js:89588-89695 placement
 /**
  * 清除服务器的资源与资源模板列表缓存（v1 副本）。
  */
@@ -267,7 +267,7 @@ function invalidateMcpResourceListCaches(server) {
   getConnectionCache().resourceLists.delete(cacheKey);
   getConnectionCache().resourceTemplateLists.delete(cacheKey);
 }
-//@ chunk-z1n5m6nf.js:88048-88103 placement
+//@ chunk-h44h5gdv.js:89695-89750 placement
 /**
  * 给客户端设置 elicitation 请求处理器。
  */
@@ -277,7 +277,7 @@ function setElicitationHandler(server, handler) {
 export {
   primeEnsureConnectedClient,
   clearDiscoveryForServer_2,
-  clearServerCache_4,
+  clearServerCache_3,
   detachAndCloseConnection_2,
   isLegacyProtocolEra,
   hasLiveConnection_2,

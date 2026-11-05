@@ -3,12 +3,12 @@
  *
  * /status 命令对象
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/status/index.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:1736007-1736196 fingerprint (2.1.88 match: status, 0.833)
+//@ chunk-5xgkngpb.js:1811458-1811647 fingerprint (2.1.88 match: status, 0.833)
 /**
  * /status 命令对象（local-jsx）；描述：Show Claude Code status including version, model, account, API connectivity, and tool statuses；实现 chunk-gwbvvmmk.js 的 o。
  */
@@ -22,5 +22,5 @@ var statusCommandDefinition = {
     ink: true,
   },
 };
-var statusCommand = statusCommandDefinition;
-export { statusCommand };
+var statusCommandAlias = statusCommandDefinition;
+export { statusCommandAlias };

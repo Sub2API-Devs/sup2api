@@ -3,14 +3,13 @@
  *
  * 当前分支 PR 状态轮询（初始状态）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/usePrStatus.ts
- * pieces: chunk-18hwfzwa.js (12), chunk-qgpgvvwv.js (1)
- * attribution: placement 12, fingerprint 1
+ * pieces: chunk-84xc132a.js (1), chunk-czq1j3j2.js (12)
+ * attribution: fingerprint 1, placement 12
  */
 import { watch } from "fs";
 import { getPrStatusColor } from "../components/PrBadge.js";
-import { HistorySearchInput } from "../components/PromptInput/HistorySearchInput.js";
 import {
   init_react_production,
   useState,
@@ -18,11 +17,12 @@ import {
   useMemo,
   useSyncExternalStore,
 } from "../../vendor/react/cjs/react.production.js";
+import { HistorySearchInput } from "../components/PromptInput/HistorySearchInput.js";
 import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import { isBgSession } from "../utils/concurrentSessions.js";
 import { isRemoteSessionAvailable } from "../remote/remoteMode.js";
 import { getOwnJobShortId, getJobDir, readJobState } from "../services/daemon/jobState.js";
-import { ANY_CONTROL_CHAR_RE } from "../utils/stringUtils.js";
+import { ANY_CONTROL_CHAR_RE, plural } from "../utils/stringUtils.js";
 import { isValidKeySegment } from "../utils/storage/storageSpaces.js";
 import { watchJobStateFile } from "../utils/background/jobStateNameSync.js";
 import { logForDebugging } from "../utils/debug.js";
@@ -41,12 +41,12 @@ import { useAppState } from "../state/AppState.js";
 import { MAX_UNKEYED_FOOTER_LINKS } from "../components/PromptInput/footerLinks.js";
 import { stringSchema, objectSchema, literal } from "../../vendor/zod/v4/classic/schemas.js";
 import { createSignal } from "../utils/signal.js";
-import { fromEnum, lit as lit_2 } from "../services/analytics/safeMetadata.js";
-import { env } from "../utils/env.js";
 import { logEvent } from "../services/analytics/index.js";
+import { env } from "../utils/env.js";
 import { logError } from "../utils/log.js";
-import { logFeatureBad, logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
+import { logFeatureSad, logFeatureBad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
+import { fromEnum, lit as lit_2 } from "../services/analytics/safeMetadata.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { useClock } from "../ink/components/ClockContext.js";
@@ -56,7 +56,7 @@ import { getLastInteractionTime } from "../bootstrap/state.js";
 import { getPrStatus, currentPrStatusFetcher } from "../utils/ghPrStatus.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-qgpgvvwv.js:624-808 fingerprint (2.1.88 match: INITIAL_STATE, 0.568)
+//@ chunk-84xc132a.js:625-809 fingerprint (2.1.88 match: INITIAL_STATE, 0.568)
 function INITIAL_STATE(reference, url) {
   if (!reference || !url) return null;
   let isCrOnly = reference.kind === "cr" && false;
@@ -69,14 +69,29 @@ function INITIAL_STATE(reference, url) {
     color: getPrStatusColor(reference.reviewState),
   };
 }
-//@ chunk-18hwfzwa.js:814630-814642 placement
-var HistorySearchInputRef = HistorySearchInput;
-//@ chunk-18hwfzwa.js:814642-814646 placement
+//@ chunk-czq1j3j2.js:838345-838349 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:814642", () => {
+deferInit("chunk-czq1j3j2.js:838345", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:814675-815319 placement
+//@ chunk-czq1j3j2.js:838349-838353 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:838349", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:839704-839708 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:839704", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:842758-842762 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:842758", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:847354-847366 placement
+var HistorySearchInputRef = HistorySearchInput;
+//@ chunk-czq1j3j2.js:847399-848043 placement
 function useBgSessionPr() {
   let [pr, setPr] = useState(null);
   let storageV5 = useTheme_2().storageV5;
@@ -121,7 +136,7 @@ function useBgSessionPr() {
   }, [storageV5]);
   return pr;
 }
-//@ chunk-18hwfzwa.js:815319-816131 placement
+//@ chunk-czq1j3j2.js:848043-848856 placement
 function FooterLink(props) {
   let $ = useMemoCache(17);
   let { link } = props;
@@ -192,12 +207,7 @@ function FooterLink(props) {
   } else linkElement = $[16];
   return linkElement;
 }
-//@ chunk-18hwfzwa.js:816131-816135 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:816131", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:816135-816302 placement
+//@ chunk-czq1j3j2.js:848860-849027 placement
 function useFooterLinks(options) {
   let links = useAppState((appState) => appState.footerLinks);
   let excludeKeyed = options?.excludeKeyed === true;
@@ -208,12 +218,7 @@ function useFooterLinks(options) {
       : filtered.slice(0, MAX_UNKEYED_FOOTER_LINKS);
   }, [links, excludeKeyed]);
 }
-//@ chunk-18hwfzwa.js:816302-816306 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:816302", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:816306-816399 placement
+//@ chunk-czq1j3j2.js:849031-849124 placement
 var PR_POLL_SLOW_MS = 4000;
 var PR_INTERACTION_CACHE_MS = 3600000;
 var PR_NOT_MODIFIED_RESET_MS = 60000;
@@ -224,22 +229,22 @@ var EMPTY_PR_STATUS_STATE = {
   needsAuth: false,
   lastUpdated: 0,
 };
-//@ chunk-18hwfzwa.js:816399-819009 placement
+//@ chunk-czq1j3j2.js:849124-851734 placement
 class PrStatusPoller {
   #e;
   #t;
   #o = EMPTY_PR_STATUS_STATE;
   #n = createSignal();
-  #s = 0;
-  #r = false;
-  #c = null;
+  #r = 0;
+  #s = false;
+  #l = null;
   #i = 0;
   #a = false;
-  #l = null;
+  #c = null;
   #d = 0;
-  #m = 0;
-  #p = -1;
   #u = 0;
+  #p = -1;
+  #m = 0;
   constructor(deps, clock) {
     this.#e = deps;
     this.#t = clock;
@@ -247,23 +252,23 @@ class PrStatusPoller {
   getSnapshot = () => this.#o;
   subscribe = (fn) => {
     let unsubscribe = this.#n.subscribe(fn);
-    this.#s++;
-    if (!this.#r) this.#f();
+    this.#r++;
+    if (!this.#s) this.#f();
     let unsubscribed = false;
     return () => {
       if (unsubscribed) return;
       unsubscribed = true;
       unsubscribe();
-      this.#s--;
-      if (this.#s === 0) this.#S();
+      this.#r--;
+      if (this.#r === 0) this.#S();
     };
   };
   setInputs(inputs) {
     let prev = this.#t;
     this.#t = inputs;
-    if (!this.#r) return;
+    if (!this.#s) return;
     if (inputs.enabled && !prev.enabled) {
-      this.#m = 0;
+      this.#u = 0;
       this.#e.shared.pollerNotModifiedStreak = 0;
     }
     if (
@@ -274,21 +279,21 @@ class PrStatusPoller {
       this.#h();
   }
   #f() {
-    this.#r = true;
+    this.#s = true;
     this.#a = false;
-    this.#c = this.#e.shared.bump.subscribe(() => {
+    this.#l = this.#e.shared.bump.subscribe(() => {
       if (this.#e.shared.pollerDisabled) return;
-      this.#m = 0;
+      this.#u = 0;
       this.#d = 0;
       this.#h();
     });
     this.#g();
   }
   #S() {
-    this.#r = false;
+    this.#s = false;
     this.#a = false;
-    this.#c?.();
-    this.#c = null;
+    this.#l?.();
+    this.#l = null;
     this.#b();
   }
   #h() {
@@ -305,16 +310,16 @@ class PrStatusPoller {
     if (this.#d === 0) return false;
     this.#e.shared.pollerNotModifiedStreak = 0;
     if (this.#e.now() - this.#d >= PR_NOT_MODIFIED_RESET_MS) {
-      this.#m = 0;
+      this.#u = 0;
       this.#d = 0;
     }
     return true;
   }
   #b() {
     this.#i++;
-    if (this.#l) {
-      this.#l();
-      this.#l = null;
+    if (this.#c) {
+      this.#c();
+      this.#c = null;
     }
   }
   #g() {
@@ -323,15 +328,15 @@ class PrStatusPoller {
     if (this.#e.shared.pollerDisabled) return;
     let state = this.#i;
     this.#p = -1;
-    this.#u = this.#e.now();
+    this.#m = this.#e.now();
     let streak = this.#w(true);
     let elapsedMs = this.#e.now() - this.#d;
     if (elapsedMs >= streak) this.#C(state);
     else this.#v(state, streak - elapsedMs);
   }
   #v(status, notModified) {
-    this.#l = this.#e.setTimeout(() => {
-      this.#l = null;
+    this.#c = this.#e.setTimeout(() => {
+      this.#c = null;
       this.#C(status);
     }, notModified);
   }
@@ -342,7 +347,7 @@ class PrStatusPoller {
     return computePrPollIntervalMs(
       this.#t.focused,
       this.#e.now() - this.#e.getLastInteractionTime(),
-      setStreak ? 0 : this.#m,
+      setStreak ? 0 : this.#u,
       this.#e.shared.pollerNotModifiedStreak,
     );
   }
@@ -352,8 +357,8 @@ class PrStatusPoller {
     let lastInteractionTime = this.#e.getLastInteractionTime();
     if (this.#p !== lastInteractionTime) {
       this.#p = lastInteractionTime;
-      this.#u = now();
-    } else if (now() - this.#u >= PR_INTERACTION_CACHE_MS) return;
+      this.#m = now();
+    } else if (now() - this.#m >= PR_INTERACTION_CACHE_MS) return;
     let start = now();
     let result;
     try {
@@ -375,7 +380,7 @@ class PrStatusPoller {
       timedOut = notModified;
       nextAt = rest;
     }
-    this.#m = statusText ? 1 : nextAt === null ? this.#m + 1 : 0;
+    this.#u = statusText ? 1 : nextAt === null ? this.#u + 1 : 0;
     shared.pollerBadStreak = isFetchFailed ? shared.pollerBadStreak + 1 : 0;
     shared.pollerNotModifiedStreak = timedOut ? shared.pollerNotModifiedStreak + 1 : 0;
     this.#x(nextAt, statusText);
@@ -417,7 +422,7 @@ class PrStatusPoller {
     }
   }
 }
-//@ chunk-18hwfzwa.js:819009-819222 placement
+//@ chunk-czq1j3j2.js:851734-851947 placement
 /**
  * 根据空闲时长、连续未变化次数等计算 PR 状态轮询间隔（90 秒到 30 分钟，取各项最大值）。
  */
@@ -434,7 +439,7 @@ function computePrPollIntervalMs(focused, baseMs, streak, pollerNotModifiedStrea
           : 300000;
   return Math.max(interval, backoffMs, jittered, focused ? 0 : PR_STALE_MS);
 }
-//@ chunk-18hwfzwa.js:819222-819564 placement
+//@ chunk-czq1j3j2.js:851947-852289 placement
 /**
  * 创建并订阅 PrStatusPoller：按加载状态、启用开关与终端焦点调整轮询，返回当前分支 PR 状态快照。
  */
@@ -468,9 +473,4 @@ function usePrStatus(isLoading, enabled = true) {
   }, [poller, isLoading, enabled, terminalFocus]);
   return useSyncExternalStore(poller.subscribe, poller.getSnapshot);
 }
-//@ chunk-18hwfzwa.js:819564-819568 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:819564", () => {
-  init_react_production();
-});
 export { usePrStatus, useBgSessionPr, INITIAL_STATE, HistorySearchInputRef, useFooterLinks, FooterLink };

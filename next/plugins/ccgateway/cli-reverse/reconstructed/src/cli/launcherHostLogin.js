@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：等待启动器主机登录完成；是否在启动时向启动器主机请求登录等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cjydagjy.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h61dq9nz.js (5)
  * attribution: placement 5
  */
 import { randomUUID } from "crypto";
@@ -44,10 +44,10 @@ import { jsonParse } from "../utils/slowOperations.js";
 import { stripBom } from "../utils/json.js";
 import { controlSuccessResponse } from "./print.js";
 import { getVersionReport } from "./earlyArgs.js";
-import { OAuthTokenRefreshResponseSchema } from "../entrypoints/sdk/controlSchemas.js";
+import { OAuthTokenRefreshResponseSchema } from "../entrypoints/sdk/uiControlSchemas.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-cjydagjy.js:33261-33361 placement
+//@ chunk-h61dq9nz.js:35098-35198 placement
 /**
  * 从配置表里去掉名字在排除集合里的项，以及来源插件被显式禁用（enabledPlugins[pluginSource] === false）的项。
  */
@@ -58,13 +58,13 @@ function omitExcludedOrPluginDisabled(servers, skip, settings) {
       !skip.has(server) && (name.pluginSource === undefined || settings[name.pluginSource] !== false),
   );
 }
-//@ chunk-cjydagjy.js:33398-33638 placement
+//@ chunk-h61dq9nz.js:35235-35475 placement
 var LAUNCHER_LOGIN_ANSWER_TIMEOUT_MS; // deferred: uses DoctorLazy (./handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var LAUNCHER_LOGIN_TOTAL_BUDGET_MS;
 var LAUNCHER_LOGIN_RETRY_MIN_MS;
 var controlResponseFrameSchema;
 var getBinaryVersionRequestSchema;
-deferInit("chunk-cjydagjy.js:33398", () => {
+deferInit("chunk-h61dq9nz.js:35235", () => {
   LAUNCHER_LOGIN_ANSWER_TIMEOUT_MS = 8000;
   LAUNCHER_LOGIN_TOTAL_BUDGET_MS = 30000;
   LAUNCHER_LOGIN_RETRY_MIN_MS = 2000;
@@ -88,7 +88,7 @@ deferInit("chunk-cjydagjy.js:33398", () => {
     }),
   );
 });
-//@ chunk-cjydagjy.js:33638-34602 placement
+//@ chunk-h61dq9nz.js:35475-36439 placement
 /**
  * 是否在启动时向启动器主机请求登录。
  */
@@ -145,7 +145,7 @@ function shouldAskLauncherHostLogin(options) {
     return false;
   });
 }
-//@ chunk-cjydagjy.js:34602-36049 placement
+//@ chunk-h61dq9nz.js:36439-37886 placement
 /**
  * 等待启动器主机登录完成。
  */
@@ -248,7 +248,7 @@ async function awaitLauncherHostLogin(openStdin) {
     pending?.();
   }
 }
-//@ chunk-cjydagjy.js:36049-36599 placement
+//@ chunk-h61dq9nz.js:37886-38436 placement
 /**
  * 输入是否为 get_binary_version 控制请求。
  */

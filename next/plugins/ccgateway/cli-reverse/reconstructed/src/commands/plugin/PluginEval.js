@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。/plugin eval：读取技能 evals/ 中的查询，跑触发测试并输出报告。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vrb44rx7.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wb51jffc.js (7)
  * attribution: placement 7
  */
 import { readdir, readFile } from "fs/promises";
@@ -18,7 +18,7 @@ import { stripBom as stripBom_2 } from "../../utils/remoteFileState.js";
 import { FRONTMATTER_REGEX } from "../../utils/frontmatterParser.js";
 import { parseYaml } from "../../utils/yaml.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useRef, useEffect, init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -27,14 +27,14 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { Box, Text } from "../../ink/components/Text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrb44rx7.js:97309-97386 placement (2.1.88 match: getToolUseSummary, 0.537)
+//@ chunk-wb51jffc.js:97132-97209 placement (2.1.88 match: getToolUseSummary, 0.537)
 /**
  * 触发判定 schema（{query, should_trigger}）与上限常量；与 WebSearch UI 关系不明。
  */
 var MIN_EVAL_QUERIES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var evalQuerySchema;
 var noEvalRunner;
-deferInit("chunk-vrb44rx7.js:97309", () => {
+deferInit("chunk-wb51jffc.js:97132", () => {
   MIN_EVAL_QUERIES = 5;
   evalQuerySchema = DoctorLazy(() =>
     objectSchema({
@@ -44,7 +44,7 @@ deferInit("chunk-vrb44rx7.js:97309", () => {
   );
   noEvalRunner = async () => null;
 });
-//@ chunk-vrb44rx7.js:97386-98463 placement
+//@ chunk-wb51jffc.js:97209-98286 placement
 /**
  * 读取 evals/*.md 的 query/should_trigger
  */
@@ -113,7 +113,7 @@ async function loadEvalQueries(dir) {
     warnings,
   };
 }
-//@ chunk-vrb44rx7.js:98463-98700 placement
+//@ chunk-wb51jffc.js:98286-98523 placement
 /**
  * 读 SKILL.md frontmatter 的 description
  */
@@ -128,7 +128,7 @@ async function readSkillDescription(skill) {
   } catch {}
   return "";
 }
-//@ chunk-vrb44rx7.js:98700-99647 placement
+//@ chunk-wb51jffc.js:98523-99470 placement
 /**
  * 对 evals/ 中每条查询跑触发测试
  */
@@ -184,12 +184,12 @@ async function runSkillTriggerEvals(target, signal, noEvalRunner) {
     queries,
     warnings,
     triggerResults: results,
-    passCount: count(results, (result) => result.verdict === "pass"),
-    failCount: count(results, (result) => result.verdict === "fail"),
-    skippedCount: count(results, (result) => result.verdict === "skipped"),
+    passCount: countWhere(results, (result) => result.verdict === "pass"),
+    failCount: countWhere(results, (result) => result.verdict === "fail"),
+    skippedCount: countWhere(results, (result) => result.verdict === "skipped"),
   };
 }
-//@ chunk-vrb44rx7.js:99647-100690 placement
+//@ chunk-wb51jffc.js:99470-100513 placement
 /**
  * 格式化插件评测报告
  */
@@ -230,7 +230,7 @@ function formatEvalReport(report) {
   return lines.join(`
 `);
 }
-//@ chunk-vrb44rx7.js:100690-101918 placement
+//@ chunk-wb51jffc.js:100513-101741 placement
 /**
  * /plugin eval 的运行组件
  */
@@ -317,9 +317,9 @@ ${figures_default.tick} Evaluation passed`;
   } else footer = $[5];
   return footer;
 }
-//@ chunk-vrb44rx7.js:101918-101922 placement
+//@ chunk-wb51jffc.js:101741-101745 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:101918", () => {
+deferInit("chunk-wb51jffc.js:101741", () => {
   init_react_production();
 });
 export { PluginEvalRunner };

@@ -3,10 +3,10 @@
  *
  * 用户身份数据：邮箱、git 邮箱、遥测/GrowthBook 用的核心用户数据。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/user.ts
- * pieces: chunk-4pc1m5n9.js (1), chunk-aepeg2w5.js (1), chunk-e6aww6q8.js (1)
- * attribution: callgraph-fingerprint 1, fingerprint 2
+ * pieces: chunk-5xgkngpb.js (2), chunk-a28agxjs.js (1), chunk-exfmq47h.js (1)
+ * attribution: fingerprint 2, callgraph-fingerprint 2
  */
 import { memoizeAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { getOrCreateUserID, getGlobalConfig } from "./config.js";
@@ -15,6 +15,7 @@ import {
   getRateLimitTier,
   getAuthenticatedAccountInfo,
   getOauthAccountInfo,
+  isAnthropicAuthEnabled,
   getStoredOauthAccountInfo,
 } from "./auth.js";
 import { isDiskless, getSessionId, getAuthenticatedAccountEpoch } from "../bootstrap/state.js";
@@ -24,7 +25,7 @@ import { isEnvTruthy } from "./envUtils.js";
 import { readGitConfigValue } from "./git.js";
 import { getWIFAccountInfo } from "./wifProfile.js";
 
-//@ chunk-aepeg2w5.js:627885-629737 fingerprint (2.1.88 match: getCoreUserData, 0.614)
+//@ chunk-exfmq47h.js:640413-642265 fingerprint (2.1.88 match: getCoreUserData, 0.614)
 /**
  * 组装遥测/GrowthBook 用的核心用户数据：deviceId、sessionId、email、appVersion、platform、组织/账户 UUID、订阅类型、GitHub Actions 元数据等。
  */
@@ -66,10 +67,10 @@ class getCoreUserData {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -117,18 +118,26 @@ class getCoreUserData {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:98782-98843 fingerprint (2.1.88 match: getGitEmail, 0.394)
+//@ chunk-5xgkngpb.js:101587-101648 fingerprint (2.1.88 match: getGitEmail, 0.393)
 /**
  * git config user.email。
  */
 function getGitEmail(args) {
   return args.shell === undefined && args.osVersion === undefined;
 }
-//@ chunk-4pc1m5n9.js:12383-12619 callgraph-fingerprint (2.1.88 match: getEmail, 0.255)
+//@ chunk-5xgkngpb.js:792889-793009 callgraph-fingerprint (2.1.88 match: getEmail, 0.272)
+function getEmail() {
+  if (env.ANTHROPIC_UNIX_SOCKET) return;
+  return (
+    getOauthAccountInfo()?.emailAddress ??
+    (isDiskless() && isAnthropicAuthEnabled() ? env.CLAUDE_CODE_USER_EMAIL : undefined)
+  );
+}
+//@ chunk-a28agxjs.js:12392-12628 callgraph-fingerprint (2.1.88 match: getEmailAsync, 0.252)
 /**
  * 当前用户邮箱：oauthAccount.emailAddress，或 env 提供的值。
  */
-function getEmail() {
+function getEmailAsync() {
   let oauthAccount = getWIFAccountInfo();
   let storedOauthAccountInfo = getStoredOauthAccountInfo();
   return oauthAccount?.organizationUuid &&
@@ -142,4 +151,4 @@ function getEmail() {
       }
     : undefined;
 }
-export { getGitEmail, getEmail, getCoreUserData };
+export { getGitEmail, getEmail, getEmailAsync, getCoreUserData };

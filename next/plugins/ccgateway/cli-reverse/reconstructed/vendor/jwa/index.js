@@ -1,8 +1,8 @@
 /**
  * jwa/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jwa@2.0.1
- * pieces: chunk-82d8c88w.js (1)
+ * pieces: chunk-ww3dkdtg.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_safe_buffer } from "../safe-buffer/index.js";
 import { require_ecdsa_sig_formatter } from "../ecdsa-sig-formatter/src/ecdsa-sig-formatter.js";
 import { require_buffer_equal_constant_time } from "../buffer-equal-constant-time/index.js";
 
-//@ chunk-82d8c88w.js:4461-7580 cjs-fingerprint
+//@ chunk-ww3dkdtg.js:4461-7580 cjs-fingerprint
 var require_jwa = __commonJS(function (cjsExports, cjsModule) {
   var BufferCtor = require_safe_buffer().Buffer;
   var cryptoModule = importMetaRequire("crypto");

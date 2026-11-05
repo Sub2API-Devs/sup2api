@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工作流脚本语法错误说明；解析工作流脚本：提取 export const meta 并校验，限制大小等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fx1j35nr.js (26)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h3b88qs5.js (26)
  * attribution: placement 26
  */
 import { MAX_SCRIPT_FILE_BYTES } from "../workflow/scriptFile.js";
@@ -13,7 +13,7 @@ import { require_acorn } from "../../../vendor/acorn/dist/acorn.js";
 import { repeatString } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fx1j35nr.js:300-715 placement
+//@ chunk-h3b88qs5.js:300-715 placement
 /**
  * 解析脚本 meta 用的正则与禁止键。
  */
@@ -25,7 +25,7 @@ var IDENTIFIER_CONTINUATION_REGEX;
 var NUMBER_LITERAL_REGEX;
 var ESCAPE_SEQUENCE_REGEX;
 var SIMPLE_ESCAPE_MAP;
-deferInit("chunk-fx1j35nr.js:300", () => {
+deferInit("chunk-h3b88qs5.js:300", () => {
   META_PARSE_PATTERNS = new Set(["__proto__", "constructor", "prototype"]);
   SKIP_WHITESPACE_AND_COMMENTS =
     /(?:\s|\/\/[^\n\r\u2028\u2029]*(?:[\n\r\u2028\u2029]|$)|\/\*[^*]*\*+(?:[^/*][^*]*\*+)*\/)*/y;
@@ -47,7 +47,7 @@ deferInit("chunk-fx1j35nr.js:300", () => {
     ["v", "\v"],
   ]);
 });
-//@ chunk-fx1j35nr.js:715-784 placement
+//@ chunk-h3b88qs5.js:715-784 placement
 /**
  * 尝试解析当前位置的对象字面量，失败返回 undefined。
  */
@@ -59,7 +59,7 @@ function tryParseObjectLiteral(text, start) {
     return;
   }
 }
-//@ chunk-fx1j35nr.js:784-965 placement
+//@ chunk-h3b88qs5.js:784-965 placement
 function metaStatementEnd(text, end) {
   let next = skipTrivia(text, end);
   if (text[next] === ";") return next + 1;
@@ -69,7 +69,7 @@ function metaStatementEnd(text, end) {
   if (identifier === undefined || identifier === "in" || identifier === "instanceof") return;
   return end;
 }
-//@ chunk-fx1j35nr.js:965-1026 placement
+//@ chunk-h3b88qs5.js:965-1026 placement
 /**
  * 跳过空白与注释，返回新的位置。
  */
@@ -77,7 +77,7 @@ function skipTrivia(text, position) {
   SKIP_WHITESPACE_AND_COMMENTS.lastIndex = position;
   return SKIP_WHITESPACE_AND_COMMENTS.exec(text) ? SKIP_WHITESPACE_AND_COMMENTS.lastIndex : position;
 }
-//@ chunk-fx1j35nr.js:1026-1117 placement
+//@ chunk-h3b88qs5.js:1026-1117 placement
 /**
  * 读取一个标识符；后面紧跟标识符字符时视为失败。
  */
@@ -87,7 +87,7 @@ function readIdentifier(text, start) {
   if (!match || isIdentifierContinuation(text, start + match[0].length)) return;
   return match[0];
 }
-//@ chunk-fx1j35nr.js:1117-1196 placement
+//@ chunk-h3b88qs5.js:1117-1196 placement
 /**
  * 判断该位置字符是否属于标识符（含非 ASCII）。
  */
@@ -95,7 +95,7 @@ function isIdentifierContinuation(text, index) {
   let char = text[index];
   return char !== undefined && (IDENTIFIER_CONTINUATION_REGEX.test(char) || char.charCodeAt(0) > 127);
 }
-//@ chunk-fx1j35nr.js:1196-1562 placement
+//@ chunk-h3b88qs5.js:1196-1562 placement
 /**
  * 解析 meta 中的 JSON 风格值。
  */
@@ -143,7 +143,7 @@ function parseMetaValue(text, start) {
       return;
   }
 }
-//@ chunk-fx1j35nr.js:1562-1692 placement
+//@ chunk-h3b88qs5.js:1562-1692 placement
 function parseObjectLiteral(text, start) {
   let delimitedList = parseDelimitedList(text, start, "}", parseObjectEntry);
   if (!delimitedList) return;
@@ -154,7 +154,7 @@ function parseObjectLiteral(text, start) {
     end: delimitedList.end,
   };
 }
-//@ chunk-fx1j35nr.js:1692-1946 placement
+//@ chunk-h3b88qs5.js:1692-1946 placement
 function parseObjectEntry(text, start) {
   let firstChar = text[start];
   let keyLiteral;
@@ -180,7 +180,7 @@ function parseObjectEntry(text, start) {
     }
   );
 }
-//@ chunk-fx1j35nr.js:1946-2170 placement
+//@ chunk-h3b88qs5.js:1946-2170 placement
 function parseDelimitedList(text, start, closeChar, parseItem) {
   let items = [];
   let position = start + 1;
@@ -206,7 +206,7 @@ function parseDelimitedList(text, start, closeChar, parseItem) {
     position = item.end;
   }
 }
-//@ chunk-fx1j35nr.js:2170-2311 placement
+//@ chunk-h3b88qs5.js:2170-2311 placement
 function parseNumberLiteral(text, start) {
   NUMBER_LITERAL_REGEX.lastIndex = start;
   let match = NUMBER_LITERAL_REGEX.exec(text);
@@ -218,7 +218,7 @@ function parseNumberLiteral(text, start) {
     end,
   };
 }
-//@ chunk-fx1j35nr.js:2311-2651 placement
+//@ chunk-h3b88qs5.js:2311-2651 placement
 /**
  * 解析字符串字面量（含转义）。
  */
@@ -262,7 +262,7 @@ function parseStringLiteral(text, start) {
   }
   return;
 }
-//@ chunk-fx1j35nr.js:2651-3141 placement
+//@ chunk-h3b88qs5.js:2651-3141 placement
 /**
  * 解析转义序列。
  */
@@ -311,12 +311,12 @@ function parseEscape(text, start) {
     end: start + 2,
   };
 }
-//@ chunk-fx1j35nr.js:3141-3213 placement
+//@ chunk-h3b88qs5.js:3141-3213 placement
 var regExp; // deferred: uses META_PARSE_PATTERNS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fx1j35nr.js:3141", () => {
+deferInit("chunk-h3b88qs5.js:3141", () => {
   regExp = new RegExp(`^${SKIP_WHITESPACE_AND_COMMENTS.source}export\\s+const\\s+meta\\s*=\\s*(?=\\{)`);
 });
-//@ chunk-fx1j35nr.js:3213-4046 placement
+//@ chunk-h3b88qs5.js:3213-4046 placement
 /**
  * 解析工作流脚本：提取 export const meta 并校验，限制大小。
  */
@@ -377,7 +377,7 @@ function parseWorkflowScript(script, { validateBody = true, maxBytes = MAX_SCRIP
     scriptBody: trimScriptBody(script, firstStatement.end),
   };
 }
-//@ chunk-fx1j35nr.js:4046-4116 placement
+//@ chunk-h3b88qs5.js:4046-4116 placement
 /**
  * 去掉脚本正文开头的分号与空行。
  */
@@ -387,16 +387,16 @@ function trimScriptBody(script, bodyStart) {
     .replace(/^[;\s]*\n/, "")
     .trimStart();
 }
-//@ chunk-fx1j35nr.js:4116-4157 placement
+//@ chunk-h3b88qs5.js:4116-4157 placement
 /**
  * 脚本能解析出 meta 即视为合法。
  */
 function isValidWorkflowScript(script) {
   return !("error" in parseWorkflowScript(script));
 }
-//@ chunk-fx1j35nr.js:4157-4166 placement
+//@ chunk-h3b88qs5.js:4157-4166 placement
 var SNIPPET_CONTEXT_CHARS = 80;
-//@ chunk-fx1j35nr.js:4166-5023 placement
+//@ chunk-h3b88qs5.js:4166-5023 placement
 /**
  * 工作流脚本语法错误说明。
  */
@@ -425,7 +425,7 @@ ${caretLine}
 
 ${"Workflow scripts must be plain JavaScript \u2014 common causes are TypeScript syntax (type annotations, interfaces, generics) and broken string quoting or escaping."}`;
 }
-//@ chunk-fx1j35nr.js:5023-5222 placement
+//@ chunk-h3b88qs5.js:5023-5222 placement
 function hasSyntaxLocation(error) {
   if (typeof error !== "object" || error === null || !("loc" in error)) return false;
   let loc = error.loc;
@@ -438,7 +438,7 @@ function hasSyntaxLocation(error) {
     typeof loc.column === "number"
   );
 }
-//@ chunk-fx1j35nr.js:5222-5470 placement
+//@ chunk-h3b88qs5.js:5222-5470 placement
 function isExportConstMeta(statement) {
   let declaration = statement.declaration;
   if (!declaration || declaration.type !== "VariableDeclaration") return false;
@@ -450,7 +450,7 @@ function isExportConstMeta(statement) {
     declarator.init?.type === "ObjectExpression"
   );
 }
-//@ chunk-fx1j35nr.js:5470-6182 placement
+//@ chunk-h3b88qs5.js:5470-6182 placement
 /**
  * 静态求值 meta AST 节点。
  */
@@ -485,7 +485,7 @@ function evaluateMetaNode(node) {
       throw Error(`non-literal node type in meta: ${node.type}`);
   }
 }
-//@ chunk-fx1j35nr.js:6182-6506 placement
+//@ chunk-h3b88qs5.js:6182-6506 placement
 /**
  * 静态求值 meta 对象。
  */
@@ -500,7 +500,7 @@ function evaluateMetaObject(node) {
   }
   return obj;
 }
-//@ chunk-fx1j35nr.js:6506-6765 placement
+//@ chunk-h3b88qs5.js:6506-6765 placement
 function metaPropertyKey(propNode) {
   let keyName;
   if (propNode.key.type === "Identifier") keyName = propNode.key.name;
@@ -509,7 +509,7 @@ function metaPropertyKey(propNode) {
   if (META_PARSE_PATTERNS.has(keyName)) throw Error(`reserved key name not allowed in meta: ${keyName}`);
   return keyName;
 }
-//@ chunk-fx1j35nr.js:6765-7194 placement
+//@ chunk-h3b88qs5.js:6765-7194 placement
 /**
  * 校验 meta 字段（name、description 等）。
  */
@@ -537,7 +537,7 @@ function validateWorkflowMeta(meta) {
     },
   };
 }
-//@ chunk-fx1j35nr.js:7194-7471 placement
+//@ chunk-h3b88qs5.js:7194-7471 placement
 function parseMetaPhases(phases) {
   if (!Array.isArray(phases)) return;
   let phaseItems = [];

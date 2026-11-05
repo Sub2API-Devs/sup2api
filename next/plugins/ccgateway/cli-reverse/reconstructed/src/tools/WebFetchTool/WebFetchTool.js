@@ -3,10 +3,10 @@
  *
  * WebFetch 工具：权限（含 artifact 读取规则）、去重/失败记忆、抓取与重定向/错误文本、次级模型摘要；并混入通用权限建议构造函数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/WebFetchTool/WebFetchTool.ts
- * pieces: chunk-e6aww6q8.js (20)
- * attribution: sole-consumer 6, fingerprint 1, affinity 4, file-local 1, layout 6, facade-exports 2
+ * pieces: chunk-5xgkngpb.js (21)
+ * attribution: sole-consumer 7, fingerprint 2, affinity 4, file-local 1, layout 5, facade-exports 2
  */
 import {
   WEBFETCH,
@@ -32,6 +32,7 @@ import {
   WebFetchCache,
   upgradeToHttps,
   getURLMarkdownContent,
+  serverClearedUrl,
   siteAnswerAsValue,
   SiteAnswerError,
   applyPromptToMarkdown,
@@ -40,6 +41,10 @@ import {
 } from "./utils.js";
 import { AbortError as AbortError_2, errorMessage } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
+import {
+  getFeatureValue_SESSION_PINNED,
+  getFeatureValue_CACHED_MAY_BE_STALE,
+} from "../../services/analytics/growthbook.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   zodStrictObject,
@@ -51,10 +56,10 @@ import {
 import { coercedNumberSchema } from "../ArtifactTool/publishEdits.js";
 import {
   getContentRulesMapForTool,
-  getAskRuleForTool,
+  findAskRuleForTool,
   getDenyRuleForTool,
-  getDenyRules,
-  getAskRules,
+  deniedBashRules,
+  askedBashRules,
   toolMatchesRule,
 } from "../../utils/permissions/permissions.js";
 import { lookupDomainRule } from "../../utils/wildcardMapLookup.js";
@@ -65,12 +70,11 @@ import { parsedToolInputOrNull } from "../../utils/filePathValidation.js";
 import { env } from "../../utils/env.js";
 import { isPolicyAllowed as isPolicyAllowed_3 } from "../../services/policyLimits/policyEvidence.js";
 import { shouldUseCcrWebFetchProxy, canFetchViaCcrWorker } from "./ccrWorkerFetch.js";
-import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFlag.js";
+import { permissionRuleValueFromString as permissionRuleValueFromString_2 } from "../../utils/permissions/permissionRuleParser.js";
 import { inputToPermissionRuleContent } from "../../components/permissions/WebFetchPermissionRequest/WebFetchPermissionRequest.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { hasReservedArtifactKey } from "../ArtifactTool/reservedKeys.js";
 import { getCurrentAuthSurface } from "../../services/analytics/authOutcomeTelemetry.js";
-import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { WebFetchHistory, MAX_PROMPT_HASHES_PER_URL } from "./fetchHistory.js";
 import { bunHashOf } from "../../utils/pastedContent.js";
 import { lit as lit_2, fromEnum } from "../../services/analytics/safeMetadata.js";
@@ -89,11 +93,11 @@ import { detachedCallSlots } from "../../services/tools/detachedToolCalls.js";
 import { findToolByName } from "../../Tool.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2179237-2179338 sole-consumer
+//@ chunk-5xgkngpb.js:2232905-2233006 sole-consumer
 function mediaTypeOf(contentType) {
   return /^[\w!#$&^.+-]{1,64}\/[\w!#$&^.+-]{1,64}/.exec(contentType)?.[0] ?? "unknown content type";
 }
-//@ chunk-e6aww6q8.js:2179338-2179380 sole-consumer
+//@ chunk-5xgkngpb.js:2233006-2233048 sole-consumer
 /**
  * 触发次级模型概括的最小字符数（8000）。
  */
@@ -101,7 +105,7 @@ var MIN_SUMMARIZE_CHARS = 8000;
 var MAX_REDIRECT_URL_CHARS = 1000;
 var MAX_REDIRECT_HOSTNAME_CHARS = 255;
 var CACHE_ENTRY_TTL_MS = 3600000;
-//@ chunk-e6aww6q8.js:2179380-2181746 sole-consumer
+//@ chunk-5xgkngpb.js:2233048-2235415 sole-consumer
 /**
  * 生成 WebFetch 返回给模型的文本：标明 URL、状态码、类型与长度，正文包在不可信内容标签里；过长时截断，并用次级模型概括剩余部分（失败则注明未读），同时附上版权报告规则（预批准域名除外）。
  */
@@ -186,14 +190,18 @@ ${reportingRulesNote}<${FETCHED_WEB_CONTENT}>
 ${neutralizeConfusableTags(FETCHED_WEB_CONTENT, shownText)}
 </${FETCHED_WEB_CONTENT}>`;
 }
-//@ chunk-e6aww6q8.js:2181746-2181842 sole-consumer
+//@ chunk-5xgkngpb.js:2235415-2235465 sole-consumer
+function tenguEventualAho() {
+  return getFeatureValue_SESSION_PINNED("tengu_eventual_aho", false);
+}
+//@ chunk-5xgkngpb.js:2235465-2235561 sole-consumer
 /**
  * 生成“继续读取可带 offset 再调用 WebFetch”的提示文本。
  */
 function buildReadOnHint(offsetHint) {
   return ` \u2014 to read on, call ${WEBFETCH} again with the same url and offset: ${offsetHint}`;
 }
-//@ chunk-e6aww6q8.js:2181842-2182169 sole-consumer
+//@ chunk-5xgkngpb.js:2235561-2235888 sole-consumer
 /**
  * HTTP 错误时返回给模型的说明文本：状态码、Retry-After，并建议对需要认证的 URL 改用 gh 或 MCP 抓取工具。
  */
@@ -207,10 +215,10 @@ Retry-After: ${fetched.retryAfter}`
 
 The response body was not retrieved. If this URL requires authentication, use an authenticated tool (e.g. \`gh\` for GitHub, or an MCP-provided fetch tool) instead of WebFetch.`;
 }
-//@ chunk-e6aww6q8.js:2182169-2182965 fingerprint (2.1.88 match: outputSchema, 0.707)
+//@ chunk-5xgkngpb.js:2235888-2236797 fingerprint (2.1.88 match: outputSchema, 0.659)
 var webFetchInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var webFetchOutputSchema;
-deferInit("chunk-e6aww6q8.js:2182169", () => {
+deferInit("chunk-5xgkngpb.js:2235888", () => {
   webFetchInputSchema = DoctorLazy(() =>
     zodStrictObject({
       url: stringSchema().url().describe("The URL to fetch content from"),
@@ -228,6 +236,9 @@ deferInit("chunk-e6aww6q8.js:2182169", () => {
       result: stringSchema().describe("Processed result from applying the prompt to the content"),
       durationMs: numberSchema().describe("Time taken to fetch and process the content"),
       url: stringSchema().describe("The URL that was fetched"),
+      citable: literal(true)
+        .optional()
+        .describe("@internal The model may get the result as a search result that it can cite."),
       artifactRead: objectSchema({
         slug: stringSchema(),
         ver: stringSchema().optional(),
@@ -236,19 +247,19 @@ deferInit("chunk-e6aww6q8.js:2182169", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:2183156-2183246 affinity
+//@ chunk-5xgkngpb.js:2236988-2237078 affinity
 /**
  * 按行为（allow/deny/ask）取 WebFetch 规则，对候选键（域名等）逐个匹配，返回第一条命中的规则。
  */
 function findWebFetchRuleForUrl(tool, permissionState, ruleContents) {
-  let rules = getContentRulesMapForTool(tool, WebFetchTool, permissionState);
+  let contentRulesMapForTool = getContentRulesMapForTool(tool, WebFetchTool, permissionState);
   for (let ruleContent of ruleContents) {
-    let domainRule = lookupDomainRule(rules, ruleContent);
+    let domainRule = lookupDomainRule(contentRulesMapForTool, ruleContent);
     if (domainRule) return domainRule;
   }
   return;
 }
-//@ chunk-e6aww6q8.js:2183246-2183365 file-local
+//@ chunk-5xgkngpb.js:2237078-2237197 file-local
 /**
  * 把基础规则内容与每个 artifact URL 的 `domain:主机名` 合并去重，用于 deny/ask 规则匹配。
  */
@@ -260,12 +271,12 @@ function withArtifactDomainRuleContents(ruleContent, artifactUrls) {
   }
   return contents;
 }
-//@ chunk-e6aww6q8.js:2183365-2183424 layout
+//@ chunk-5xgkngpb.js:2237197-2237256 layout
 function getWebFetchToolUseSummary(input) {
   if (!input?.url) return null;
   return truncate(input.url, MAX_DESCRIPTION_CHARS);
 }
-//@ chunk-e6aww6q8.js:2183424-2184188 layout
+//@ chunk-5xgkngpb.js:2237256-2238020 layout
 /**
  * 把工具实例上下文 e 与单次调用上下文 n 合成只读 getter 视图；artifactRead 额外带上本次的 abort signal 与文件读取限制。
  */
@@ -327,12 +338,12 @@ function makeWebFetchCallContext(toolContext, callContext) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:2184188-2201287 facade-exports (2.1.88 match: WebFetchTool, 0.246)
+//@ chunk-5xgkngpb.js:2238020-2255670 facade-exports (2.1.88 match: WebFetchTool, 0.24)
 /**
  * WebFetch 工具定义（name "WebFetch"，ruleContentField "url"，shouldDefer，只读、可并发，backgrounding "detach"）。create(ctx) 返回 checkPermissions/validateInput/call：权限先处理 claude.ai artifact URL 的专用读规则与跨组织/他人 artifact 确认，再按 deny→ask→allow 规则、预批准主机（CLAUDE_CODE_EVAL_CONFINED 时不预批准）决定。call 依次处理：同 URL+prompt 去重提示、近期失败提示、抓取（缓存/CCR 代理/直连）、重定向与 HTTP 错误文本、子代理原文模式、预批准 markdown 直出、否则用次级模型按 prompt 摘要。
  */
 var WebFetchTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2184188", () => {
+deferInit("chunk-5xgkngpb.js:2238020", () => {
   WebFetchTool = buildTool({
     name: WEBFETCH,
     ruleContentField: WEB_FETCH_RULE_CONTENT_FIELD,
@@ -390,6 +401,7 @@ deferInit("chunk-e6aww6q8.js:2184188", () => {
         await getArtifactFetchRoute(tools, null),
         leanPrompt,
         shouldUseCcrWebFetchProxy(),
+        tenguEventualAho(),
       );
     },
     create(toolContext) {
@@ -428,7 +440,7 @@ deferInit("chunk-e6aww6q8.js:2184188", () => {
             let permissionState = ctx.permissions();
             let denyByRule = (denyRule) => ({
               behavior: "deny",
-              message: `Fetching this artifact is blocked by your ${refusalEcho(denyRule.ruleValue.toolName)} deny rule (${refusalEcho(formatPermissionRule(denyRule.ruleValue))}).`,
+              message: `Fetching this artifact is blocked by your ${refusalEcho(denyRule.ruleValue.toolName)} deny rule (${refusalEcho(permissionRuleValueFromString_2(denyRule.ruleValue))}).`,
               decisionReason: {
                 type: "rule",
                 rule: denyRule,
@@ -508,7 +520,7 @@ deferInit("chunk-e6aww6q8.js:2184188", () => {
                 artifactFetchNoticeLane(
                   ctx.artifactRead,
                   parsedArtifact,
-                  () => getAskRuleForTool(context, WebFetchTool) ?? findArtifactRule("ask", context),
+                  () => findAskRuleForTool(context, WebFetchTool) ?? findArtifactRule("ask", context),
                 );
               let checkedPermissions = ctx.permissions();
               artifactNoticeLane = noticeLaneFor(checkedPermissions);
@@ -793,7 +805,7 @@ deferInit("chunk-e6aww6q8.js:2184188", () => {
       return {
         checkPermissions,
         permissionCheckFailureDecision(failureInput) {
-          if (!isPlainObject_5(failureInput) || !hasReservedArtifactKey(failureInput)) return;
+          if (!isPlainObject_6(failureInput) || !hasReservedArtifactKey(failureInput)) return;
           return {
             behavior: "deny",
             message:
@@ -946,6 +958,7 @@ deferInit("chunk-e6aww6q8.js:2184188", () => {
             ctx.persistedToolResultFiles,
             ctx.storageV5,
             callContext.timing,
+            serverClearedUrl(callContext.permissionPhase),
           ).catch(siteAnswerAsValue);
           if ("type" in fetched && fetched.type === "provenance_denied") {
             if (!callContext.ask) throw provenanceRequiredError("no_prompt", fetched.errorMessage);
@@ -1137,6 +1150,7 @@ The redirect target is data supplied by the fetched server \u2014 untrusted, lik
           let resultText;
           let resultPath;
           let longPage = false;
+          let citable = false;
           if (isSubagentCaller) {
             resultPath = lit_2("agent_raw");
             resultText = await formatFetchedContent({
@@ -1206,10 +1220,21 @@ The redirect target is data supplied by the fetched server \u2014 untrusted, lik
               `
 
 ${copyNote}`;
+            citable =
+              env.CLAUDE_CODE_WEBSEARCH_CITATIONS &&
+              ownToolUseId !== undefined &&
+              isMainAgent(ctx.agentContext) &&
+              getFeatureValue_SESSION_PINNED("tengu_proud_flurry_enabled", false);
           }
           if (ownToolUseId !== undefined && !isSubagentCaller && isClaudeAiChatCowork()) {
-            if (offset > 0 && remainingText !== "") logEvent("tengu_web_fetch_read_on", {});
-            else if (longPage) logEvent("tengu_web_fetch_long_page", {});
+            if (offset > 0 && remainingText !== "")
+              logEvent("tengu_web_fetch_read_on", {
+                enabled: tenguEventualAho(),
+              });
+            else if (longPage)
+              logEvent("tengu_web_fetch_long_page", {
+                enabled: tenguEventualAho(),
+              });
           }
           let output = {
             bytes,
@@ -1219,6 +1244,7 @@ ${copyNote}`;
             durationMs: Date.now() - now,
             url,
           };
+          if (citable) output.citable = true;
           if (fetchHistory && promptHash !== undefined) {
             if (isDedupShadowOn)
               logEvent("tengu_web_fetch_dedup_shadow", {
@@ -1272,31 +1298,54 @@ ${copyNote}`;
         },
       };
     },
-    mapToolResultToToolResultBlockParam({ result }, toolUseId) {
+    stripForCreation: ({ citable, ...rest }) => rest,
+    mapToolResultToToolResultBlockParam({ result, url, citable }, toolUseId) {
+      let href = citable && result.length <= OUTPUT_SIZE_LIMITS ? URL.parse(url)?.href : undefined;
+      let chunks = href
+        ? (result.match(/[\s\S]{1,499}(?:\n|$)|[\s\S]{1,499}\s|[\s\S]{500}/gu) ?? []).filter((chunk) =>
+            /[^\s\x1c-\x1f\x85]/.test(chunk),
+          )
+        : [];
       return {
         tool_use_id: toolUseId,
         type: "tool_result",
-        content: result,
+        content:
+          href && chunks.length > 0
+            ? [
+                {
+                  type: "search_result",
+                  source: href,
+                  title: href,
+                  content: chunks.map((text) => ({
+                    type: "text",
+                    text,
+                  })),
+                  citations: {
+                    enabled: true,
+                  },
+                },
+              ]
+            : result,
       };
     },
   });
 });
-//@ chunk-e6aww6q8.js:2201287-2201482 layout (2.1.88 match: getDenyRuleForAgent, 1)
+//@ chunk-5xgkngpb.js:2255670-2255865 layout (2.1.88 match: getDenyRuleForAgent, 1)
 function findRuleForAnyToolName(context, toolNames, behavior) {
   for (let toolName of toolNames) {
     let rule =
-      behavior === "deny" ? getDenyRuleForTool(context, toolName) : getAskRuleForTool(context, toolName);
+      behavior === "deny" ? getDenyRuleForTool(context, toolName) : findAskRuleForTool(context, toolName);
     if (rule !== null) return rule;
   }
   return (
-    (behavior === "deny" ? getDenyRules(context) : getAskRules(context)).find(
+    (behavior === "deny" ? deniedBashRules(context) : askedBashRules(context)).find(
       (rule) =>
         rule.ruleValue.ruleContent !== undefined &&
         toolNames.some((toolName) => toolMatchesRule(context, toolName, rule)),
     ) ?? null
   );
 }
-//@ chunk-e6aww6q8.js:2201482-2201659 layout (2.1.88 match: getToolNameForPermissionCheck, 1)
+//@ chunk-5xgkngpb.js:2255865-2256042 layout (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck_2(permissionState, mcpToolNames, includeAskRules) {
   if (permissionState === null) return false;
   let mapped = mcpToolNames.map((mcpToolName) => ({
@@ -1306,16 +1355,17 @@ function getToolNameForPermissionCheck_2(permissionState, mcpToolNames, includeA
       toolName: mcpToolName,
     },
   }));
-  return [...getDenyRules(permissionState), ...(includeAskRules ? getAskRules(permissionState) : [])].some(
-    (rule) => mapped.some((tool) => toolMatchesRule(permissionState, tool, rule)),
-  );
+  return [
+    ...deniedBashRules(permissionState),
+    ...(includeAskRules ? askedBashRules(permissionState) : []),
+  ].some((rule) => mapped.some((tool) => toolMatchesRule(permissionState, tool, rule)));
 }
-//@ chunk-e6aww6q8.js:2201659-2201739 layout
+//@ chunk-5xgkngpb.js:2256042-2256122 layout
 function throwIfAskLetGo(toolUseId, session, errorMessage) {
   if (toolUseId !== undefined && detachedCallSlots.of(session).wasLetGo(toolUseId))
     throw provenanceRequiredError("no_prompt", errorMessage);
 }
-//@ chunk-e6aww6q8.js:2201739-2201862 layout (2.1.88 match: buildSuggestions, 1)
+//@ chunk-5xgkngpb.js:2256122-2256245 fingerprint (2.1.88 match: buildSuggestions, 1)
 /**
  * WebFetch 权限对话框的"总是允许"建议：写到 localSettings 的 WebFetch(<ruleContent>) allow 规则。
  */
@@ -1334,14 +1384,14 @@ function buildWebFetchAllowSuggestions(ruleContent) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:2201862-2201921 facade-exports
+//@ chunk-5xgkngpb.js:2256245-2256304 facade-exports
 /**
  * 当前工具集是否有任何 artifact 读取途径（Cin 返回值不是 "none"）；WebFetch 只在可读时才走 artifact 权限分支。
  */
 async function isArtifactFetchEnabled(tools, permissionState, ctx) {
   return (await getArtifactFetchRoute(tools, permissionState, ctx)) !== "none";
 }
-//@ chunk-e6aww6q8.js:2201921-2202642 affinity
+//@ chunk-5xgkngpb.js:2256304-2257028 affinity
 /**
  * 决定 Artifact URL 的抓取路线：none、artifact-tool、artifacts-mcp 或 web，取决于 Artifact 工具/MCP 是否在池中、是否被拒绝、是否只读表面。
  */
@@ -1365,7 +1415,7 @@ async function getArtifactFetchRoute(tools, permissionState, ctx) {
       let builtInTool = {
         name: artifactToolName,
       };
-      return [...getDenyRules(permissionState), ...getAskRules(permissionState)].some((rule) =>
+      return [...deniedBashRules(permissionState), ...askedBashRules(permissionState)].some((rule) =>
         toolMatchesRule(permissionState, builtInTool, rule),
       );
     };
@@ -1389,7 +1439,7 @@ async function getArtifactFetchRoute(tools, permissionState, ctx) {
   }
   return "none";
 }
-//@ chunk-e6aww6q8.js:2202642-2202789 affinity
+//@ chunk-5xgkngpb.js:2257028-2257175 affinity
 /**
  * Artifact 抓取开启时解析 Artifact URL，否则 null。
  */
@@ -1400,7 +1450,7 @@ async function parseArtifactUrlIfEnabled(input, ctx) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:2202789-2203095 affinity
+//@ chunk-5xgkngpb.js:2257175-2257481 affinity
 /**
  * 会话 Artifact 文件功能开启时，把 Artifact URL 映射到本地文件路径。
  */
@@ -1418,7 +1468,7 @@ async function getLocalArtifactFilePath(url) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:2203095-2206709 sole-consumer
+//@ chunk-5xgkngpb.js:2257481-2261161 sole-consumer
 /**
  * WebFetch 的 Artifact 分支：解析 URL、检查权限与 MCP 替代、读取内容并清理信封标签，被拒时给出引导文案。
  */
@@ -1432,6 +1482,7 @@ async function fetchArtifactUrl(url, prompt, ctx, startedAt, messageId) {
       ARTIFACT_TOOL_NAME,
       refusalEcho,
       scrubArtifactEnvelopeTags,
+      WEBFETCH_TYPE_INSTRUCTIONS_MAX_CHARS,
     } = await import("../ArtifactTool/AMPERSAND_FORMS.lazy.js");
     let canonicalUrl = canonicalizeArtifactUrlInput(url);
     let artifactUrlIfEnabled = await parseArtifactUrlIfEnabled(canonicalUrl, ctx);
@@ -1486,7 +1537,7 @@ async function fetchArtifactUrl(url, prompt, ctx, startedAt, messageId) {
       return (
         (behavior === "deny"
           ? getDenyRuleForTool(permissions, WebFetchTool)
-          : getAskRuleForTool(permissions, WebFetchTool)) ??
+          : findAskRuleForTool(permissions, WebFetchTool)) ??
         artifactCallReadRule(permissions, artifactUrlIfEnabled, url, behavior, {
           action: "read",
           ...(readFields && {
@@ -1517,7 +1568,7 @@ async function fetchArtifactUrl(url, prompt, ctx, startedAt, messageId) {
       );
     };
     let denyResult = (rule) => {
-      let blockedMessage = `${artifactViewerUrlFor(artifactUrlIfEnabled)} was not fetched: reading this artifact is blocked by your ${refusalEcho(rule.ruleValue.toolName)} deny rule (${refusalEcho(formatPermissionRule(rule.ruleValue))}).`;
+      let blockedMessage = `${artifactViewerUrlFor(artifactUrlIfEnabled)} was not fetched: reading this artifact is blocked by your ${refusalEcho(rule.ruleValue.toolName)} deny rule (${refusalEcho(permissionRuleValueFromString_2(rule.ruleValue))}).`;
       return {
         data: {
           bytes: Buffer.byteLength(blockedMessage),
@@ -1576,6 +1627,7 @@ async function fetchArtifactUrl(url, prompt, ctx, startedAt, messageId) {
     let readOutcome = await readArtifactForModel({
       parsedArtifact: artifactUrlIfEnabled,
       inlineThreshold: OUTPUT_SIZE_LIMITS,
+      instructionsMaxChars: WEBFETCH_TYPE_INSTRUCTIONS_MAX_CHARS,
       url,
       prompt,
       context: readContext,

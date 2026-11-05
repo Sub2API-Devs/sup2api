@@ -3,20 +3,20 @@
  *
  * 2.1.316 新增。prompt.change 插件钩子桥接。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (8)
  * attribution: placement 8
  */
 import { hasModuleHookingSite } from "../../plugins/hooksModules/loadedModuleFilters.js";
 import { NO_CORE_AT_CHAIN_BOTTOM } from "../../plugins/functionHooks/eventCatalog.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { tellOnce } from "../../plugins/functionHooks/ui/renderNotices.js";
 import { errorMessage } from "../../utils/errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1807723-1807785 placement
+//@ chunk-czq1j3j2.js:1855702-1855764 placement
 function hasPromptChangeHookingSite() {
   try {
     return hasModuleHookingSite("prompt.change");
@@ -24,38 +24,38 @@ function hasPromptChangeHookingSite() {
     return false;
   }
 }
-//@ chunk-18hwfzwa.js:1807785-1807823 placement
+//@ chunk-czq1j3j2.js:1855764-1855802 placement
 var clearedPromptOrigin; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1807785", () => {
+deferInit("chunk-czq1j3j2.js:1855764", () => {
   clearedPromptOrigin = Object.freeze({
     kind: "clear",
   });
 });
-//@ chunk-18hwfzwa.js:1807823-1807862 placement
+//@ chunk-czq1j3j2.js:1855802-1855841 placement
 var enginePromptOrigin; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1807823", () => {
+deferInit("chunk-czq1j3j2.js:1855802", () => {
   enginePromptOrigin = Object.freeze({
     kind: "engine",
   });
 });
-//@ chunk-18hwfzwa.js:1807862-1807995 placement
+//@ chunk-czq1j3j2.js:1855841-1855974 placement
 function promptChangeOrigin(change, fallbackOrigin) {
   let defaultOrigin = change.after === "" ? clearedPromptOrigin : enginePromptOrigin;
   let origin = change.origin;
   if (origin === undefined || origin.kind === "composer") return defaultOrigin;
   return origin.kind === "landing" ? (fallbackOrigin ?? defaultOrigin) : origin;
 }
-//@ chunk-18hwfzwa.js:1807995-1808005 placement
+//@ chunk-czq1j3j2.js:1855974-1855984 placement
 var MAX_STALLED_PLUGINS = 8;
-//@ chunk-18hwfzwa.js:1808005-1808064 placement
+//@ chunk-czq1j3j2.js:1855984-1856043 placement
 function raiseCorePromptChange(change, signal) {
   return NO_CORE_AT_CHAIN_BOTTOM("prompt.change", {
     signal,
   })(change);
 }
-//@ chunk-18hwfzwa.js:1808064-1808313 placement
+//@ chunk-czq1j3j2.js:1856043-1856292 placement
 function warnPromptChangeStalled(owners) {
-  let joined = uniq(owners).toSorted().join(", ");
+  let joined = normalizeCaseForComparison_2(owners).toSorted().join(", ");
   let message = `prompt.change: ${owners.length} dispatches in a row for fills by ${joined}; not raised again until the box changes another way`;
   logForDebugging(message, {
     level: "warn",
@@ -66,7 +66,7 @@ function warnPromptChangeStalled(owners) {
     text: message,
   });
 }
-//@ chunk-18hwfzwa.js:1808313-1809318 placement
+//@ chunk-czq1j3j2.js:1856292-1857297 placement
 function raisePromptChange(readPrompt, options = {}) {
   let raise = options.raise ?? raiseCorePromptChange;
   let later = options.later ?? queueMicrotask;

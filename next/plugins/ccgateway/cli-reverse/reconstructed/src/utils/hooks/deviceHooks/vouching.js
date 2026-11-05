@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：钩子担保（vouching）判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mthxbav8.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4z1ntdgk.js (10)
  * attribution: placement 10
  */
 import { basename, resolve, delimiter } from "path";
@@ -63,10 +63,10 @@ import { parseDeviceHookId } from "../deviceHookId.js";
 import { computeContentHash } from "../../commitAttribution.js";
 import { sanitizeDisplayText } from "../../resultError.js";
 import { DEVICE_HOOK_DEFAULT_S } from "../deviceHookForwarder.js";
-import { uniq } from "../../collections.js";
+import { normalizeCaseForComparison_2 } from "../../permissions/filesystem.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-mthxbav8.js:22078-45449 placement
+//@ chunk-4z1ntdgk.js:22565-45998 placement
 /**
  * 为钩子建立担保（vouching）：比对本地钩子与模板摘要、超时、事件，决定能否代用户在设备上执行。
  */
@@ -380,10 +380,9 @@ function createHookVouching(deps) {
       kind: hook.type,
     };
     let analysis = hook.type === "command" ? deps.parseTarget(hook) : null;
-    let localLabel = hookDisplayHost(hook, analysis);
     let labels = {
-      local: localLabel,
-      wire: hookWireLabel(hook, localLabel, state),
+      local: hookDisplayHost(hook, analysis),
+      wire: hookWireLabel(hook, analysis, state),
     };
     if (isPastDeadline(request)) {
       noteOnce(
@@ -895,6 +894,8 @@ function createHookVouching(deps) {
               )}${filtered.length > 3 ? ", \u2026" : ""}); a tool installed only there is "not found" for them.`,
             "debug",
           );
+        let interpreter =
+          analysis?.kind === "script" && analysis.interpreter !== null ? analysis.interpreter : undefined;
         let program =
           vouched.hook.type !== "command"
             ? undefined
@@ -902,9 +903,7 @@ function createHookVouching(deps) {
               ? vouched.hook.command.includes("/")
                 ? undefined
                 : vouched.hook.command
-              : analysis?.kind === "script" && analysis.interpreter !== null
-                ? analysis.interpreter
-                : undefined;
+              : interpreter;
         if (program !== undefined) {
           if ((await deps.resolveProgram(program, runEnv.extra.PATH ?? "", reachRoots)) === "in_reach") {
             noteOnce(
@@ -915,7 +914,7 @@ function createHookVouching(deps) {
             let answer = permissionDecisionOutput(
               event,
               labels.wire,
-              `not run \u2014 ${program} on ${state.displayName} leads to a file the cloud session can write`,
+              `not run \u2014 ${program === interpreter ? program : "its program"} on ${state.displayName} leads to a file the cloud session can write`,
             );
             return {
               answer,
@@ -989,6 +988,7 @@ function createHookVouching(deps) {
             : interpretHookResult(runResult, {
                 event,
                 label: labels.wire,
+                localLabel: labels.local,
                 timedOut,
                 timeoutMs: min,
                 timeoutFailsClosed: state.timeoutFailsClosed,
@@ -1413,7 +1413,7 @@ function createHookVouching(deps) {
     inFlight: () => inFlight.size,
   };
 }
-//@ chunk-mthxbav8.js:45449-45866 placement
+//@ chunk-4z1ntdgk.js:45998-46415 placement
 function vouchedOutput(entry, input, defaultShell) {
   if (typeof input !== "object" || input === null) return null;
   let hook = entry.local.hook;
@@ -1432,7 +1432,7 @@ function vouchedOutput(entry, input, defaultShell) {
     key: `${entry.local.event}\x00${invocationKey}\x00${hookKey}`,
   };
 }
-//@ chunk-mthxbav8.js:45866-46317 placement
+//@ chunk-4z1ntdgk.js:46415-46852 placement
 function vouchPreToolUse(entry, state, deps, reason = "in_hand") {
   let hook = entry.local.hook;
   if (entry.local.event !== "PreToolUse" || (hook.type !== "command" && hook.type !== "http")) return {};
@@ -1440,16 +1440,15 @@ function vouchPreToolUse(entry, state, deps, reason = "in_hand") {
   try {
     analysis = hook.type === "command" ? deps.parseTarget(hook) : null;
   } catch {}
-  let hostLabel = hookDisplayHost(hook, analysis);
   return permissionDecisionOutput(
     "PreToolUse",
-    hookWireLabel(hook, hostLabel, state),
+    hookWireLabel(hook, analysis, state),
     reason === "too_large"
       ? `not run \u2014 the event was too large to judge on ${state.displayName}; retry with less`
       : `not run \u2014 ${state.displayName} has too many hook requests from the cloud session in hand at once; retry`,
   );
 }
-//@ chunk-mthxbav8.js:46317-46428 placement (2.1.88 match: isToolReferenceWithName, 0.848)
+//@ chunk-4z1ntdgk.js:46852-46963 placement (2.1.88 match: isToolReferenceWithName, 0.847)
 function formatToolNameSuffix(obj) {
   return "tool_name" in obj && typeof obj.tool_name === "string"
     ? `:${sanitizeDisplayText(obj.tool_name, {
@@ -1457,7 +1456,7 @@ function formatToolNameSuffix(obj) {
       })}`
     : "";
 }
-//@ chunk-mthxbav8.js:46428-46600 placement
+//@ chunk-4z1ntdgk.js:46963-47135 placement
 function hasVouchedContext(answer) {
   if (isBlockingHookOutput(answer) || "async" in answer) return false;
   let hookSpecificOutput = answer.hookSpecificOutput;
@@ -1468,15 +1467,15 @@ function hasVouchedContext(answer) {
       hookSpecificOutput.additionalContext !== undefined)
   );
 }
-//@ chunk-mthxbav8.js:46600-46634 placement
+//@ chunk-4z1ntdgk.js:47135-47169 placement
 function deviceHookTimeoutMs(event) {
   return DEVICE_HOOK_DEFAULT_S[event] * 1000;
 }
-//@ chunk-mthxbav8.js:46634-46792 placement
+//@ chunk-4z1ntdgk.js:47169-47327 placement
 var PATH_LIKE_ENV_RE =
   /^(?:PATH|CDPATH|PYTHONPATH|PYTHONHOME|NODE_PATH|RUBYLIB|PERL5LIB|PERLLIB|GEM_PATH|GEM_HOME|CLASSPATH|LD_LIBRARY_PATH|DYLD_\w+)$/;
 var UNPLACEABLE_MARKER = "\x00unplaceable";
-//@ chunk-mthxbav8.js:46792-48253 placement
+//@ chunk-4z1ntdgk.js:47327-48788 placement
 function tokenizeCommandLine(commandLine, { home, launchDir }) {
   let words = [];
   let raw = "";
@@ -1547,7 +1546,7 @@ function tokenizeCommandLine(commandLine, { home, launchDir }) {
                 ? [`${launchDir}/${entry}`]
                 : [],
       );
-      return uniq([...pathLikeEnv, ...flattened]);
+      return normalizeCaseForComparison_2([...pathLikeEnv, ...flattened]);
     }
     let text_2 = text;
     if (home !== undefined && home !== "") {
@@ -1562,11 +1561,11 @@ function tokenizeCommandLine(commandLine, { home, launchDir }) {
     return hasSlash(text_2) ? [`${launchDir}/${text_2}`] : [];
   });
 }
-//@ chunk-mthxbav8.js:48253-48303 placement
+//@ chunk-4z1ntdgk.js:48788-48838 placement
 function anyPathMatches(commandLine, roots) {
   return roots.some((root) => isReachableOrSamePath(normalizeCommandForPlatform(commandLine), root));
 }
-//@ chunk-mthxbav8.js:48363-49944 placement
+//@ chunk-4z1ntdgk.js:48898-50479 placement
 /**
  * 命令包装器名单（env/nice/timeout/sudo/xargs 等），以及各包装器的带值选项与可超时包装器集合。
  */
@@ -1574,7 +1573,7 @@ var COMMAND_WRAPPERS_2; // deferred: has load-time effects after a deferred stat
 var COMMAND_WRAPPERS;
 var WRAPPER_VALUE_OPTIONS;
 var WRAPPERS_WITH_TIMEOUT;
-deferInit("chunk-mthxbav8.js:48363", () => {
+deferInit("chunk-4z1ntdgk.js:48898", () => {
   COMMAND_WRAPPERS_2 = new Set([
     "env",
     "nice",

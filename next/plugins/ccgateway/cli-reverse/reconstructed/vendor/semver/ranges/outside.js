@@ -1,8 +1,8 @@
 /**
  * semver/ranges/outside.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: semver@7.7.3..7.7.4
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -12,7 +12,7 @@ import { require_range } from "../classes/range.js";
 import { require_satisfies } from "../functions/satisfies.js";
 import { require_eq, require_eq_2, require_eq_6, require_eq_5 } from "../functions/eq.js";
 
-//@ chunk-bwbq4xvm.js:23083-23793 cjs-fingerprint
+//@ chunk-7kayq7nc.js:23166-23876 cjs-fingerprint
 var require_outside = __commonJS(function (cjsExports, cjsModule) {
   var SemVer = require_semver();
   var Comparator = require_comparator();

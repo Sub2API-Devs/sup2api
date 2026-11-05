@@ -3,9 +3,9 @@
  *
  * 并入已有模块：选择下一个模型回退阶段；统计排队提交的类型与等待时间等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/postSamplingHooks.ts
- * pieces: chunk-ha3km179.js (19)
+ * pieces: chunk-w3ch4xq2.js (19)
  * attribution: placement 18, fingerprint 1
  */
 import { collapseSmallPastedBlocks, formatImageRef, logEntryToHistoryEntry } from "../../history.js";
@@ -22,7 +22,7 @@ import { getRootSession } from "../../bootstrap/state.js";
 import { toError } from "../errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ha3km179.js:54310-54505 placement
+//@ chunk-w3ch4xq2.js:58799-58994 placement
 /**
  * 把小粘贴块展开后重建提交内容。
  */
@@ -38,7 +38,7 @@ function withExpandedPastes(logEntry, entry) {
     ...collapsed.pastedContents,
   });
 }
-//@ chunk-ha3km179.js:54505-54550 placement
+//@ chunk-w3ch4xq2.js:58994-59039 placement
 /**
  * 上报排队提交统计（异常吞掉）。
  */
@@ -49,7 +49,7 @@ function reportQueuedSubmissions(submissions, delivery) {
     logError(error);
   }
 }
-//@ chunk-ha3km179.js:54550-55130 placement
+//@ chunk-w3ch4xq2.js:59039-59619 placement
 /**
  * 统计排队提交的类型与等待时间。
  */
@@ -85,11 +85,11 @@ function reportQueuedSubmissionsUnsafe(submissions, delivery) {
     wait_ms: now - earliest,
   });
 }
-//@ chunk-ha3km179.js:55130-55162 placement
+//@ chunk-w3ch4xq2.js:59619-59651 placement
 function canonicalModelName(model) {
   return getCanonicalName(parseUserSpecifiedModel(model));
 }
-//@ chunk-ha3km179.js:55162-55416 placement
+//@ chunk-w3ch4xq2.js:59651-59905 placement
 /**
  * 判断当前主循环模型是否为自动模式模型或默认模型（用于回退提示）。
  */
@@ -108,7 +108,7 @@ function automaticModelFallbackInfo({ userModel, permissionMode, exceeds200kToke
     defaultModel: model_2,
   };
 }
-//@ chunk-ha3km179.js:55416-55473 placement
+//@ chunk-w3ch4xq2.js:59905-59962 placement
 /**
  * 初始的"拒绝回退"回合状态（未进入、无游标、无待发通知）。
  */
@@ -117,7 +117,7 @@ var INITIAL_REJECTION_EPISODE = {
   cursor: undefined,
   pendingNotice: undefined,
 };
-//@ chunk-ha3km179.js:55473-56111 placement
+//@ chunk-w3ch4xq2.js:59962-60600 placement
 /**
  * 选择下一个模型回退阶段。
  */
@@ -164,14 +164,14 @@ function nextFallbackStage(refusalCascadeState, attemptModel, refusalCascadeReso
     },
   };
 }
-//@ chunk-ha3km179.js:56111-56158 placement
+//@ chunk-w3ch4xq2.js:60600-60647 placement
 /**
  * 判断该次路由是否为链式（fallback chain）。
  */
 function isChainRouteMatch(event) {
   return event.routeMatched === "chain";
 }
-//@ chunk-ha3km179.js:56158-56727 placement
+//@ chunk-w3ch4xq2.js:60647-61216 placement
 /**
  * 记录模型回退尝试。
  */
@@ -210,7 +210,7 @@ function recordFallbackAttempt(refusalCascadeState, event, switchModelsOnFlagSet
     cursor,
   };
 }
-//@ chunk-ha3km179.js:56727-57286 placement
+//@ chunk-w3ch4xq2.js:61216-61865 placement
 /**
  * 记录回退通知（来源与服务模型）。
  */
@@ -228,13 +228,16 @@ function recordFallbackNotice(refusalCascadeState, event) {
       ],
       refusedUserMessageUuid: pendingNotice?.refusedUserMessageUuid ?? event.refusedUserMessageUuid,
       apiRefusalCategory: pendingNotice ? pendingNotice.apiRefusalCategory : event.apiRefusalCategory,
+      apiRefusalCyberVerification: pendingNotice
+        ? pendingNotice.apiRefusalCyberVerification
+        : event.apiRefusalCyberVerification,
       sawCyberRefusal: pendingNotice?.sawCyberRefusal === true || event.apiRefusalCategory === "cyber",
       requestId: pendingNotice ? pendingNotice.requestId : event.requestId,
       provisionalFlushUuid: undefined,
     },
   };
 }
-//@ chunk-ha3km179.js:57286-57476 placement
+//@ chunk-w3ch4xq2.js:61865-62055 placement
 /**
  * 取待发通知并打上临时刷新 uuid（避免重复）。
  */
@@ -256,7 +259,7 @@ function takePendingNotice(refusalCascadeState, provisionalFlushUuid) {
     },
   };
 }
-//@ chunk-ha3km179.js:57476-57615 placement
+//@ chunk-w3ch4xq2.js:62055-62194 placement
 function takeFallbackNotice(refusalCascadeState) {
   let pendingNotice = refusalCascadeState.pendingNotice;
   return {
@@ -270,7 +273,7 @@ function takeFallbackNotice(refusalCascadeState) {
     },
   };
 }
-//@ chunk-ha3km179.js:57615-57664 placement
+//@ chunk-w3ch4xq2.js:62194-62243 placement
 /**
  * 清空待发通知。
  */
@@ -280,43 +283,43 @@ function clearPendingNotice(refusalCascadeState) {
     pendingNotice: undefined,
   };
 }
-//@ chunk-ha3km179.js:57664-57688 placement
+//@ chunk-w3ch4xq2.js:62243-62267 placement
 /**
  * 返回初始的拒绝回退状态。
  */
 function initialRejectionEpisode() {
   return INITIAL_REJECTION_EPISODE;
 }
-//@ chunk-ha3km179.js:57688-57717 placement
+//@ chunk-w3ch4xq2.js:62267-62296 placement
 /**
  * 判断 e 是否不小于 n。
  */
 function atLeast(refusalFallbacksUsed, minimum) {
   return refusalFallbacksUsed >= minimum;
 }
-//@ chunk-ha3km179.js:57717-57767 placement
+//@ chunk-w3ch4xq2.js:62296-62346 placement
 class PostSamplingHookRegistry {
   hooks = [];
   register(hook) {
     this.hooks.push(hook);
   }
 }
-//@ chunk-ha3km179.js:57767-57792 placement
+//@ chunk-w3ch4xq2.js:62346-62371 placement
 /**
  * 宿主隔离的 post-sampling 钩子注册表。
  */
 var postSamplingHookRegistry; // deferred: uses PostSamplingHookRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ha3km179.js:57767", () => {
+deferInit("chunk-w3ch4xq2.js:62346", () => {
   postSamplingHookRegistry = new HostScoped(() => new PostSamplingHookRegistry());
 });
-//@ chunk-ha3km179.js:57792-57836 placement
+//@ chunk-w3ch4xq2.js:62371-62415 placement
 /**
  * 把 post-sampling 钩子注册到当前宿主的注册表。
  */
 function registerPostSamplingHook(hook) {
   postSamplingHookRegistry.of(getRootSession().host).register(hook);
 }
-//@ chunk-ha3km179.js:57836-58036 fingerprint (2.1.88 match: executePostSamplingHooks, 0.923)
+//@ chunk-w3ch4xq2.js:62415-62615 fingerprint (2.1.88 match: executePostSamplingHooks, 0.923)
 async function executePostSamplingHooks(
   messages,
   systemPrompt,
@@ -341,9 +344,9 @@ async function executePostSamplingHooks(
     }
 }
 export {
-  withExpandedPastes,
   registerPostSamplingHook,
   reportQueuedSubmissions,
+  withExpandedPastes,
   automaticModelFallbackInfo,
   INITIAL_REJECTION_EPISODE,
   takePendingNotice,

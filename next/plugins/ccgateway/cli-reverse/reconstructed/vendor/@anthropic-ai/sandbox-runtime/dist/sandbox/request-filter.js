@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/request-filter.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (33)
+ * pieces: chunk-qg41pqt6.js (33)
  * attribution: esm-fingerprint 31, esm-layout 2
  */
 import { PassThrough, Readable } from "stream";
@@ -14,16 +14,16 @@ import { sanitizeDenialReason } from "./sandbox-violation-store.js";
 import { isResolvedAddressDeniedError } from "./resolved-address-guard.js";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-fq0cr76a.js:654888-654989 esm-fingerprint
+//@ chunk-qg41pqt6.js:655395-655496 esm-fingerprint
 var BODYLESS_METHODS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ECHO_METHODS;
 var DEFAULT_DENY_REASON;
-deferInit("chunk-fq0cr76a.js:654888", () => {
+deferInit("chunk-qg41pqt6.js:655395", () => {
   BODYLESS_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
   ECHO_METHODS = new Set(["TRACE", "TRACK"]);
   DEFAULT_DENY_REASON = "denied by sandbox policy";
 });
-//@ chunk-fq0cr76a.js:654989-655161 esm-fingerprint
+//@ chunk-qg41pqt6.js:655496-655668 esm-fingerprint
 function destroyAfterResponse(req, res) {
   if (res.destroyed) {
     req.destroy();
@@ -38,7 +38,7 @@ function destroyAfterResponse(req, res) {
     if (!res.writableFinished) req.destroy();
   });
 }
-//@ chunk-fq0cr76a.js:655161-656511 esm-fingerprint
+//@ chunk-qg41pqt6.js:655668-657033 esm-fingerprint
 async function decideAndRespond(
   filterRequest,
   req,
@@ -162,7 +162,7 @@ async function decideAndRespond(
   endDeniedBody(req, res, forUpstream, shim);
   return null;
 }
-//@ chunk-fq0cr76a.js:656511-656608 esm-fingerprint
+//@ chunk-qg41pqt6.js:657033-657130 esm-fingerprint
 function endDeniedBody(req, res, forUpstream, shim) {
   if (shim !== undefined) {
     req.unpipe(shim);
@@ -172,7 +172,7 @@ function endDeniedBody(req, res, forUpstream, shim) {
   if (forUpstream !== req) forUpstream.destroy();
   destroyAfterResponse(req, res);
 }
-//@ chunk-fq0cr76a.js:656608-656891 esm-fingerprint
+//@ chunk-qg41pqt6.js:657130-657413 esm-fingerprint
 function unshownBodyProbe(req, branch) {
   let answer;
   let probe = async () => {
@@ -190,11 +190,11 @@ function unshownBodyProbe(req, branch) {
   };
   return () => answer ?? (answer = probe());
 }
-//@ chunk-fq0cr76a.js:656891-657079 esm-layout
+//@ chunk-qg41pqt6.js:657413-657601 esm-layout
 var PLAINTEXT_HEADER_SET_REASON =
   "the allow decision sets headers, and headers are not set on plain-HTTP requests unless plaintext header sets are enabled; nothing was forwarded";
 var HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
-//@ chunk-fq0cr76a.js:657079-658193 esm-fingerprint
+//@ chunk-qg41pqt6.js:657601-658715 esm-fingerprint
 function malformedDecisionReason(decision) {
   if (typeof decision !== "object" || decision === null) return "not an object";
   let d = decision;
@@ -227,7 +227,7 @@ function malformedDecisionReason(decision) {
   }
   return;
 }
-//@ chunk-fq0cr76a.js:658193-658307 esm-fingerprint
+//@ chunk-qg41pqt6.js:658715-658829 esm-fingerprint
 function isValidHeaderValue(value) {
   for (let i = 0; i < value.length; i++) {
     let code = value.charCodeAt(i);
@@ -235,7 +235,7 @@ function isValidHeaderValue(value) {
   }
   return true;
 }
-//@ chunk-fq0cr76a.js:658307-658468 esm-fingerprint
+//@ chunk-qg41pqt6.js:658829-658990 esm-fingerprint
 function deny(res, decision, denyHeader) {
   let status = decision.status;
   let status_2 =
@@ -252,7 +252,7 @@ function deny(res, decision, denyHeader) {
     status_2,
   );
 }
-//@ chunk-fq0cr76a.js:658468-658718 esm-fingerprint
+//@ chunk-qg41pqt6.js:658990-659240 esm-fingerprint
 /**
  * 把 WebSocket URL（或相对路径）换成对应的 HTTP POST URL。
  */
@@ -267,11 +267,11 @@ function normalizeRequestTarget(raw, method) {
   if (url.protocol !== "http:" && url.protocol !== "https:") return;
   return `${url.pathname.replace(/^\/{2,}/, "/")}${url.search}`;
 }
-//@ chunk-fq0cr76a.js:658718-659048 esm-fingerprint
+//@ chunk-qg41pqt6.js:659240-659570 esm-fingerprint
 var MALFORMED_TARGET = "malformed request-target";
 var AMBIGUOUS_TARGET = `ambiguous request-target: as spelled and normalized it names different paths (a dot segment, leading slashes or "\\"); nothing was forwarded (network.ambiguousRequestTarget in the sandbox's configuration is "refuse")`;
 var percentEncoded = (text) => Buffer.from(text).toString("hex").toUpperCase().replace(/../g, "%$&");
-//@ chunk-fq0cr76a.js:659048-659597 esm-fingerprint
+//@ chunk-qg41pqt6.js:659570-660119 esm-fingerprint
 function readRequestTarget(raw, method, mode) {
   let target = raw.replace(/#.*/s, "");
   let ascii = target.replace(/[^\0-\x7f]+/g, percentEncoded);
@@ -299,7 +299,7 @@ function readRequestTarget(raw, method, mode) {
     refusal: forwarded === undefined ? AMBIGUOUS_TARGET : undefined,
   };
 }
-//@ chunk-fq0cr76a.js:659597-659720 esm-fingerprint
+//@ chunk-qg41pqt6.js:660119-660242 esm-fingerprint
 function respondRefusedTarget(res, refusal = MALFORMED_TARGET, mark) {
   logForDebugging_2(`[proxy] ${refusal}`, {
     level: "warn",
@@ -312,9 +312,9 @@ function respondRefusedTarget(res, refusal = MALFORMED_TARGET, mark) {
   );
   return refusal;
 }
-//@ chunk-fq0cr76a.js:659720-659731 esm-layout
+//@ chunk-qg41pqt6.js:660242-660253 esm-layout
 var MAX_REPORTED_TARGET_LENGTH = 200;
-//@ chunk-fq0cr76a.js:659731-660741 esm-fingerprint
+//@ chunk-qg41pqt6.js:660253-661263 esm-fingerprint
 function refuseUnparsedRequest(err, socket, mayAnswer, mark = DEFAULT_DENY_TAG) {
   let { code, rawPacket, bytesParsed } = err;
   if (typeof code !== "string" || !code.startsWith("HPE_") || code === "HPE_INVALID_EOF_STATE") {
@@ -364,7 +364,7 @@ ${refused.reason}
   setTimeout(() => socket.destroy(), 1000).unref?.();
   return refused;
 }
-//@ chunk-fq0cr76a.js:660741-661070 esm-fingerprint
+//@ chunk-qg41pqt6.js:661263-661592 esm-fingerprint
 function requestTargetAsSpelled(raw, { absolute = false } = {}) {
   let target = raw;
   if (absolute) {
@@ -381,13 +381,13 @@ function requestTargetAsSpelled(raw, { absolute = false } = {}) {
   }
   return target;
 }
-//@ chunk-fq0cr76a.js:661070-661129 esm-fingerprint
+//@ chunk-qg41pqt6.js:661592-661651 esm-fingerprint
 function foldHeaderName(name) {
   return name.toLowerCase().replace(/[_.]/g, "-");
 }
-//@ chunk-fq0cr76a.js:661129-661261 esm-fingerprint
+//@ chunk-qg41pqt6.js:661651-661783 esm-fingerprint
 var UNSETTABLE_HEADERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fq0cr76a.js:661129", () => {
+deferInit("chunk-qg41pqt6.js:661651", () => {
   UNSETTABLE_HEADERS = new Set([
     "host",
     "connection",
@@ -400,14 +400,14 @@ deferInit("chunk-fq0cr76a.js:661129", () => {
     "content-length",
   ]);
 });
-//@ chunk-fq0cr76a.js:661261-661397 esm-fingerprint
+//@ chunk-qg41pqt6.js:661783-661919 esm-fingerprint
 function removeHeadersFolded(headers, names) {
   let drop = new Set();
   for (let n of names) drop.add(foldHeaderName(n));
   if (drop.size === 0) return;
   for (let k of Object.keys(headers)) if (drop.has(foldHeaderName(k))) delete headers[k];
 }
-//@ chunk-fq0cr76a.js:661397-661753 esm-fingerprint
+//@ chunk-qg41pqt6.js:661919-662275 esm-fingerprint
 function applyHeaderEdits(headers, decision) {
   let sets = new Map();
   for (let [name, value] of decision.setHeaders ?? []) {
@@ -425,7 +425,7 @@ function applyHeaderEdits(headers, decision) {
   for (let { name, values } of sets.values())
     if (values.length > 0) headers[name] = values.length === 1 ? values[0] : values;
 }
-//@ chunk-fq0cr76a.js:661753-661941 esm-fingerprint
+//@ chunk-qg41pqt6.js:662275-662463 esm-fingerprint
 /**
  * invokeRequestFilterOnResponse：调用 request-filter 插件的 onResponse 回调（参数拷贝），同步或异步异常都只记日志。
  */
@@ -440,24 +440,24 @@ function invokeRequestFilterOnResponse(decision, status, headers) {
     logRequestFilterError(err);
   }
 }
-//@ chunk-fq0cr76a.js:661941-662021 esm-fingerprint
+//@ chunk-qg41pqt6.js:662463-662543 esm-fingerprint
 function isThenable(value) {
   return typeof value === "object" && value !== null && typeof value.then === "function";
 }
-//@ chunk-fq0cr76a.js:662021-662119 esm-fingerprint
+//@ chunk-qg41pqt6.js:662543-662641 esm-fingerprint
 function logRequestFilterError(err) {
   logForDebugging_2(`[request-filter] onResponse failed: ${err?.message ?? String(err)}`, {
     level: "error",
   });
 }
-//@ chunk-fq0cr76a.js:662119-662228 esm-fingerprint
+//@ chunk-qg41pqt6.js:662641-662750 esm-fingerprint
 function hostHeaderValues(rawHeaders) {
   let out = [];
   for (let i = 0; i + 1 < rawHeaders.length; i += 2)
     if (rawHeaders[i].toLowerCase() === "host") out.push(rawHeaders[i + 1]);
   return out;
 }
-//@ chunk-fq0cr76a.js:662228-662615 esm-fingerprint
+//@ chunk-qg41pqt6.js:662750-663137 esm-fingerprint
 function hostMismatch(hostHeaders, serverName, target, requestTargetAuthority) {
   let want = target.hostname.toLowerCase();
   if (serverName !== undefined && serverName.toLowerCase() !== want)
@@ -469,13 +469,13 @@ function hostMismatch(hostHeaders, serverName, target, requestTargetAuthority) {
   if (!namesTarget(hostHeaders[0], want, target)) return "Host header does not match the request target";
   return;
 }
-//@ chunk-fq0cr76a.js:662615-662761 esm-fingerprint
+//@ chunk-qg41pqt6.js:663137-663283 esm-fingerprint
 function namesTarget(authority, want, target) {
   let parsed = hostAndPort(authority);
   if (parsed === undefined || parsed.host.toLowerCase() !== want) return false;
   return parsed.port === "" ? target.port === target.defaultPort : parsed.port === String(target.port);
 }
-//@ chunk-fq0cr76a.js:662761-663103 esm-fingerprint
+//@ chunk-qg41pqt6.js:663283-663625 esm-fingerprint
 function hostAndPort(h_2) {
   let host = h_2;
   let rest = "";
@@ -505,13 +505,13 @@ function hostAndPort(h_2) {
     port,
   };
 }
-//@ chunk-fq0cr76a.js:663103-663139 esm-fingerprint
+//@ chunk-qg41pqt6.js:663625-663661 esm-fingerprint
 var DEFAULT_DENY_TAG = "blocked-by-sandbox-runtime";
-//@ chunk-fq0cr76a.js:663139-663218 esm-fingerprint
+//@ chunk-qg41pqt6.js:663661-663740 esm-fingerprint
 function denyMarkHeader(mark) {
   return typeof mark === "string" ? ["X-Proxy-Error", mark] : [mark.name, mark.value];
 }
-//@ chunk-fq0cr76a.js:663218-663377 esm-fingerprint
+//@ chunk-qg41pqt6.js:663740-663899 esm-fingerprint
 function rawDenied(reason, tag = DEFAULT_DENY_TAG, phrase = "Forbidden") {
   let [name, value] = denyMarkHeader(tag);
   return (
@@ -522,7 +522,7 @@ ${name}: ${value}\r
 ` + reason
   );
 }
-//@ chunk-fq0cr76a.js:663377-663572 esm-fingerprint
+//@ chunk-qg41pqt6.js:663899-664094 esm-fingerprint
 function respondDenied(res, reason, tag = DEFAULT_DENY_TAG, status = 403) {
   logForDebugging_2(`[proxy] deny: ${reason}`);
   if (res.headersSent || res.destroyed) {
@@ -542,7 +542,7 @@ function respondDenied(res, reason, tag = DEFAULT_DENY_TAG, status = 403) {
     ),
   );
 }
-//@ chunk-fq0cr76a.js:663572-663779 esm-fingerprint
+//@ chunk-qg41pqt6.js:664094-664301 esm-fingerprint
 function respondUpstreamError(res, err, denyHeader) {
   if (isResolvedAddressDeniedError(err))
     respondDenied(
@@ -562,7 +562,7 @@ function respondUpstreamError(res, err, denyHeader) {
     res.end("Bad Gateway");
   } else res.destroy();
 }
-//@ chunk-fq0cr76a.js:663779-663954 esm-fingerprint
+//@ chunk-qg41pqt6.js:664301-664476 esm-fingerprint
 function incomingHeaders(req) {
   let h_2 = new Headers();
   for (let [k, v] of Object.entries(req.headers)) {

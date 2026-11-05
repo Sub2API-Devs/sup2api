@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：磁盘满警告
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 2
  */
 import { join, dirname } from "path";
@@ -13,14 +13,14 @@ import { statfs } from "fs/promises";
 import { tmpdir, claudeTempDirName } from "../tempDir.js";
 import { probeTaskOutputWrite } from "../task/diskOutput.js";
 
-//@ chunk-e6aww6q8.js:257536-257760 placement
+//@ chunk-5xgkngpb.js:256816-257040 placement
 /**
  * 磁盘空间不足时的建议文本（释放空间或设置 CLAUDE_CODE_TMPDIR）与相关时间常量。
  */
 var DISK_FULL_ADVICE =
   "Free space on that volume, or restart Claude Code with CLAUDE_CODE_TMPDIR set to a directory on another one, then retry. If this is the user's own computer, tell them before deleting anything to make room.";
 var DISK_SPACE_CHECK_INTERVAL_MS = 5000;
-//@ chunk-e6aww6q8.js:257760-259223 placement
+//@ chunk-5xgkngpb.js:257040-258503 placement
 /**
  * 磁盘已满时给出警告，说明命令输出可能丢失或被截断。
  */
@@ -50,4 +50,4 @@ async function buildDiskFullWarning(path, outputLost) {
     return `Disk full: a test write beside this command's output file, on the volume holding ${tempDir} (Claude Code's temporary directory), failed with ENOSPC (the volume, or the user's quota on it, has no space left), ${tailClause} ${DISK_FULL_ADVICE}`;
   return null;
 }
-export { DISK_SPACE_CHECK_INTERVAL_MS, buildDiskFullWarning, DISK_FULL_ADVICE };
+export { DISK_FULL_ADVICE, DISK_SPACE_CHECK_INTERVAL_MS, buildDiskFullWarning };

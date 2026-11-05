@@ -3,9 +3,9 @@
  *
  * 函数钩子分发作用域（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (10)
  * attribution: placement 10
  */
 import { AsyncLocalStorage } from "async_hooks";
@@ -13,7 +13,7 @@ import { isAbortError } from "../../../utils/errors.js";
 import { logError } from "../../../utils/log.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:198898-198946 placement
+//@ chunk-7jxyna5q.js:204392-204440 placement
 /**
  * 执行并忽略中止错误
  */
@@ -24,7 +24,7 @@ function runIgnoringAbort(fn) {
     if (!isAbortError(error)) logError(error);
   }
 }
-//@ chunk-s61vbvea.js:198946-199106 placement
+//@ chunk-7jxyna5q.js:204440-204600 placement
 /**
  * 为一次 UI 渲染分发建立绘制记录：实例键、实例描述、插件列表、进行中标记与读到的状态版本表。
  */
@@ -39,7 +39,7 @@ var createDrawingScope = (instanceKey, { surface, component, requestId }, plugin
   isInFlight: true,
   versionsRead: new Map(),
 });
-//@ chunk-s61vbvea.js:199106-199194 placement
+//@ chunk-7jxyna5q.js:204600-204688 placement
 /**
  * 结束作用域
  */
@@ -49,15 +49,15 @@ function endScope(holder) {
     holder.scope.values = undefined;
   }
 }
-//@ chunk-s61vbvea.js:199243-199257 placement
+//@ chunk-7jxyna5q.js:204737-204751 placement
 /**
  * 分发作用域 ALS
  */
 var dispatchScopeStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:199243", () => {
+deferInit("chunk-7jxyna5q.js:204737", () => {
   dispatchScopeStorage = new AsyncLocalStorage();
 });
-//@ chunk-s61vbvea.js:199257-199319 placement
+//@ chunk-7jxyna5q.js:204751-204813 placement
 /**
  * 取未结束的作用域
  */
@@ -65,7 +65,7 @@ function currentScope() {
   let scope = dispatchScopeStorage.getStore();
   return scope?.isEnded ? undefined : scope;
 }
-//@ chunk-s61vbvea.js:199319-199354 placement
+//@ chunk-7jxyna5q.js:204813-204848 placement
 /**
  * 新建作用域
  */
@@ -73,7 +73,7 @@ var newScope = (base = {}) => ({
   ...base,
   isEnded: false,
 });
-//@ chunk-s61vbvea.js:199354-199448 placement
+//@ chunk-7jxyna5q.js:204848-204942 placement
 /**
  * 取或建作用域
  */
@@ -85,17 +85,17 @@ function scopeOf(scopeHolder) {
     });
   return scopeHolder.scope;
 }
-//@ chunk-s61vbvea.js:199448-199481 placement
+//@ chunk-7jxyna5q.js:204942-204975 placement
 /**
  * 在作用域里执行
  */
 var runInScope = (scope, fn) => (scope ? dispatchScopeStorage.run(scope, fn) : fn());
-//@ chunk-s61vbvea.js:199530-199544 placement
+//@ chunk-7jxyna5q.js:205024-205038 placement
 var asyncStoreS61; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:199530", () => {
+deferInit("chunk-7jxyna5q.js:205024", () => {
   asyncStoreS61 = new AsyncLocalStorage();
 });
-//@ chunk-s61vbvea.js:199544-199570 placement (2.1.88 match: getAgentContext, 1)
+//@ chunk-7jxyna5q.js:205038-205064 placement
 /**
  * 取一个 AsyncLocalStorage 的当前值，用途未确认。
  */

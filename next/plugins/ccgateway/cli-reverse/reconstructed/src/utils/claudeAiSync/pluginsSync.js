@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：claude.ai 插件同步轮次
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (65)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (65)
  * attribution: placement 65
  */
 import { join, basename, relative, dirname } from "path";
-import { lstat, rm as rm_2, rename, lutimes, readdir, rmdir } from "fs/promises";
+import { lstat, rm, rename, lutimes, readdir, rmdir } from "fs/promises";
 import { monitorEventLoopDelay } from "perf_hooks";
-import { getClaudeConfigDir } from "../envUtils.js";
+import { getClaudeConfigDir } from "../markdownConfigLoader.js";
 import {
   SKILLS_SYNCED_STAGING,
   SYNCED_MANIFEST_FILE,
@@ -32,7 +32,7 @@ import {
 import {
   checkSyncOwnedRoot,
   readSyncMarker,
-  checkSyncRoots,
+  moveRootToTrashOk,
   toPosixLabelPath,
   SyncOwnedRootRefusedError,
   touchExclusive,
@@ -42,7 +42,7 @@ import {
   downloadFailure,
   extractFailure,
   isDirConflictErrno,
-  buildLocalPlacementFailure,
+  moveInFailure,
   LOCAL_PLACEMENT_FAILURE,
   verifySyncRoot,
   hasSyncMarker,
@@ -143,35 +143,35 @@ import { tildify } from "../path.js";
 import { isPluginVersionInUse } from "../plugins/inUseMarkers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:647465-647498 placement
+//@ chunk-5xgkngpb.js:657890-657923 placement
 /**
  * 同步插件的根目录（配置目录下的插件同步根）。
  */
 function syncedPluginsRoot() {
   return join(getClaudeConfigDir(), SKILLS_SYNCED_STAGING);
 }
-//@ chunk-e6aww6q8.js:647498-647532 placement
+//@ chunk-5xgkngpb.js:657923-657957 placement
 /**
  * 某插件桶在同步根下的目录。
  */
 function syncedPluginBucketDir(bucketId) {
   return join(syncedPluginsRoot(), bucketId);
 }
-//@ chunk-e6aww6q8.js:647532-647563 placement
+//@ chunk-5xgkngpb.js:657957-657988 placement
 /**
  * 某根目录下同步清单文件的路径。
  */
 function syncedManifestPath(root) {
   return join(root, SYNCED_MANIFEST_FILE);
 }
-//@ chunk-e6aww6q8.js:647563-647597 placement
+//@ chunk-5xgkngpb.js:657988-658022 placement
 /**
  * 插件同步使用的回收区目录。
  */
 function pluginsTrashRoot() {
   return join(getClaudeConfigDir(), PLUGINS_SYNC_DIR);
 }
-//@ chunk-e6aww6q8.js:647597-647710 placement
+//@ chunk-5xgkngpb.js:658022-658135 placement
 function checkPluginsSyncRoot(root) {
   return checkSyncOwnedRoot({
     root,
@@ -182,7 +182,7 @@ function checkPluginsSyncRoot(root) {
     },
   });
 }
-//@ chunk-e6aww6q8.js:647710-647806 placement
+//@ chunk-5xgkngpb.js:658135-658231 placement
 /**
  * 插件同步轮开始前准备桶目录（隔离未标记目录、校验根、建标记）。
  */
@@ -191,7 +191,7 @@ function ensurePluginsBucketRoot(rootSession, bucket) {
   pluginsSync.ensureBucketRoot ??= serializeCalls(preparePluginsBucket);
   return pluginsSync.ensureBucketRoot(bucket);
 }
-//@ chunk-e6aww6q8.js:647806-648326 placement
+//@ chunk-5xgkngpb.js:658231-658751 placement
 /**
  * 插件同步轮开始前准备桶目录：未标记但存在的目录先隔离到回收区；校验同步根；标记文件不可读时拒绝；最后创建标记。
  */
@@ -204,7 +204,7 @@ async function preparePluginsBucket(bucketId) {
       (stats) => stats.isDirectory(),
       () => false,
     )) &&
-    (await checkSyncRoots({
+    (await moveRootToTrashOk({
       dir: bucketDir,
       trashRoot: pluginsTrashRoot(),
       configHome: getClaudeConfigDir(),
@@ -227,13 +227,13 @@ async function preparePluginsBucket(bucketId) {
   }
   await touchExclusive(syncedPluginsRoot(), bucketId);
 }
-//@ chunk-e6aww6q8.js:648326-648875 placement
+//@ chunk-5xgkngpb.js:658751-659300 placement
 /**
  * 已同步插件清单行（ID、名称、版本、更新时间、市场信息、代数等）与清单文件的 schema。
  */
 var syncedPluginRowSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var pluginsManifestSchema;
-deferInit("chunk-e6aww6q8.js:648326", () => {
+deferInit("chunk-5xgkngpb.js:658751", () => {
   syncedPluginRowSchema = DoctorLazy(() =>
     looseObject({
       pluginId: stringSchema(),
@@ -258,7 +258,7 @@ deferInit("chunk-e6aww6q8.js:648326", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:648875-648984 placement
+//@ chunk-5xgkngpb.js:659300-659409 placement
 async function isManifestReadableOrAbsent(rootGuard) {
   if ((await readPluginsManifest(rootGuard)) !== null) return true;
   return lstat(syncedManifestPath(rootGuard.root)).then(
@@ -266,7 +266,7 @@ async function isManifestReadableOrAbsent(rootGuard) {
     (error) => getErrnoCode(error) === "ENOENT",
   );
 }
-//@ chunk-e6aww6q8.js:648984-649370 placement
+//@ chunk-5xgkngpb.js:659409-659795 placement
 /**
  * 读取插件同步清单（首次读取失败时记诊断），解析插件行、过期目录与已应用列表 ID。
  */
@@ -294,7 +294,7 @@ async function readPluginsManifest(guard) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:649370-649868 placement
+//@ chunk-5xgkngpb.js:659795-660293 placement
 /**
  * 写入插件同步清单：校验根，合并旧清单字段与新内容，按新顺序排列插件行，合并过期目录，可选沿用已应用列表 ID。
  */
@@ -336,28 +336,28 @@ async function writePluginsManifest(guard, manifest, options) {
     ),
   );
 }
-//@ chunk-e6aww6q8.js:649868-649921 placement
+//@ chunk-5xgkngpb.js:660293-660346 placement
 /**
  * 插件替换时按进程 pid 使用的临时目录。
  */
 function pluginReplaceTmpDir(root) {
   return join(root, TRASH_SUBDIR, String(process.pid));
 }
-//@ chunk-e6aww6q8.js:649921-649954 placement
+//@ chunk-5xgkngpb.js:660346-660379 placement
 /**
  * 某同步插件项在桶里的目录路径。
  */
 function syncedItemDir(root, itemName) {
   return syncedItemPath(itemName, root);
 }
-//@ chunk-e6aww6q8.js:649954-650008 placement
+//@ chunk-5xgkngpb.js:660379-660433 placement
 /**
  * 同步插件项的安装路径（按代数区分）。
  */
 function itemInstallPath(root, item) {
   return syncedItemPathForGeneration(item.name, item.generation ?? 1, root);
 }
-//@ chunk-e6aww6q8.js:650008-650069 placement
+//@ chunk-5xgkngpb.js:660433-660494 placement
 /**
  * 同步插件项的目录名，取不到时退回插件原名。
  */
@@ -368,7 +368,7 @@ function itemDirName(root, item) {
     return item.name;
   }
 }
-//@ chunk-e6aww6q8.js:650069-650858 placement
+//@ chunk-5xgkngpb.js:660494-661283 placement
 async function writeSyncedPluginSidecar(root, row) {
   let { pluginId } = row;
   let sidecarPath;
@@ -381,14 +381,14 @@ async function writeSyncedPluginSidecar(root, row) {
     let stats = await lstat(sidecarPath).catch(() => null);
     if (stats !== null && !stats.isFile())
       if (stats.isDirectory())
-        await checkSyncRoots({
+        await moveRootToTrashOk({
           dir: sidecarPath,
           trashRoot: pluginsTrashRoot(),
           configHome: getClaudeConfigDir(),
           failureEvent: "plugins_sync_trash_move_failed",
         });
       else
-        await rm_2(sidecarPath, {
+        await rm(sidecarPath, {
           force: true,
         });
     if (isServerPluginId(pluginId)) {
@@ -412,7 +412,7 @@ async function writeSyncedPluginSidecar(root, row) {
       await writeFileAtomic_2(sidecarPath, sidecarJson);
     } else {
       logForDiagnosticsNoPII("warn", "plugins_sync_sidecar_invalid_id");
-      await rm_2(sidecarPath, {
+      await rm(sidecarPath, {
         force: true,
       });
     }
@@ -420,7 +420,7 @@ async function writeSyncedPluginSidecar(root, row) {
     logForDiagnosticsNoPII("warn", "plugins_sync_sidecar_write_failed");
   }
 }
-//@ chunk-e6aww6q8.js:650858-651091 placement
+//@ chunk-5xgkngpb.js:661283-661516 placement
 async function reconcilePluginSidecars(rootGuard, rows) {
   if (!(await rootGuard.guard.verify())) return;
   let rowsByInstallPath = new Map();
@@ -441,7 +441,7 @@ async function reconcilePluginSidecars(rootGuard, rows) {
     ),
   );
 }
-//@ chunk-e6aww6q8.js:651091-651188 placement
+//@ chunk-5xgkngpb.js:661516-661613 placement
 /**
  * 判断两个同步插件项是否指向同一目录（含大小写不敏感比较）。
  */
@@ -453,7 +453,7 @@ async function sameSyncedItem(root, item, path) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:651188-651357 placement
+//@ chunk-5xgkngpb.js:661613-661782 placement
 function toSyncedPluginRow(plugin) {
   return {
     pluginId: plugin.id,
@@ -464,7 +464,7 @@ function toSyncedPluginRow(plugin) {
     requestedVersion: plugin.version || undefined,
   };
 }
-//@ chunk-e6aww6q8.js:651357-651584 placement
+//@ chunk-5xgkngpb.js:661782-662009 placement
 function collectOfficialAttestations(entries) {
   let attestations = new Map();
   for (let entry of entries)
@@ -482,7 +482,7 @@ function collectOfficialAttestations(entries) {
       });
   return attestations;
 }
-//@ chunk-e6aww6q8.js:651584-651731 placement
+//@ chunk-5xgkngpb.js:662009-662156 placement
 function carryMarketplaceInfo(row, info) {
   return {
     ...row,
@@ -491,7 +491,7 @@ function carryMarketplaceInfo(row, info) {
     marketplaceKind: info.marketplaceKind,
   };
 }
-//@ chunk-e6aww6q8.js:651731-651907 placement
+//@ chunk-5xgkngpb.js:662156-662332 placement
 function planPluginDownloads(root, listedRows, plugins) {
   return planSyncDownloads(listedRows, plugins, {
     idOf: (plugin) => plugin.pluginId,
@@ -501,7 +501,7 @@ function planPluginDownloads(root, listedRows, plugins) {
     carry: carryMarketplaceInfo,
   });
 }
-//@ chunk-e6aww6q8.js:651907-651988 placement
+//@ chunk-5xgkngpb.js:662332-662413 placement
 /**
  * 同步插件项的唯一键（插件 id + 目录名）。
  */
@@ -512,14 +512,14 @@ function syncedItemKey(root, plugin) {
     return "";
   }
 }
-//@ chunk-e6aww6q8.js:651988-652035 placement
+//@ chunk-5xgkngpb.js:662413-662460 placement
 /**
  * 复用标记落盘的子目录名（converted-skills）。
  */
 function reuseStampVariant(convertedSkills) {
   return convertedSkills ? "converted-skills" : "";
 }
-//@ chunk-e6aww6q8.js:652035-652110 placement
+//@ chunk-5xgkngpb.js:662460-662535 placement
 /**
  * 已应用清单 id 的附加字段构造。
  */
@@ -530,13 +530,13 @@ function appliedListIdsField(convertedSkills, listed, rows) {
       }
     : {};
 }
-//@ chunk-e6aww6q8.js:652110-652240 placement
+//@ chunk-5xgkngpb.js:662535-662665 placement
 function sameIdSet(appliedListIds, otherIds) {
   if (appliedListIds === undefined || otherIds === undefined) return appliedListIds === otherIds;
   let otherSet = new Set(otherIds);
   return new Set(appliedListIds).size === otherSet.size && appliedListIds.every((id) => otherSet.has(id));
 }
-//@ chunk-e6aww6q8.js:652240-652323 placement
+//@ chunk-5xgkngpb.js:662665-662748 placement
 /**
  * 复用标记里是否列出了该变体。
  */
@@ -545,7 +545,7 @@ async function isReuseStampListed(root, convertedSkills) {
     ((await readReuseStamp(root))?.listedFor.includes(reuseStampVariant(true)) === true) === convertedSkills
   );
 }
-//@ chunk-e6aww6q8.js:652323-652425 placement
+//@ chunk-5xgkngpb.js:662748-662850 placement
 function createPluginsRootGuard(root) {
   return freshRootState({
     root: () => root,
@@ -554,14 +554,14 @@ function createPluginsRootGuard(root) {
     event: "plugins_sync_root_refused",
   });
 }
-//@ chunk-e6aww6q8.js:652425-652486 placement
+//@ chunk-5xgkngpb.js:662850-662911 placement
 /**
  * 校验同步根守卫，失败时返回拒绝结果。
  */
 async function verifyGuardOrRefused(pluginsRootGuard) {
   return (await pluginsRootGuard.guard.verify()) ? null : ROOT_REFUSED_RESULT;
 }
-//@ chunk-e6aww6q8.js:652486-652556 placement
+//@ chunk-5xgkngpb.js:662911-662981 placement
 /**
  * 同步根被拒时抛出错误。
  */
@@ -569,7 +569,7 @@ function assertSyncRootAllowed(rootGuard) {
   let refusedReason = rootGuard.guard.refusedReason();
   if (refusedReason !== null) throw rootRefusedError(refusedReason);
 }
-//@ chunk-e6aww6q8.js:652556-652749 placement
+//@ chunk-5xgkngpb.js:662981-663174 placement
 function getDownloadSizeTelemetry(stats) {
   return stats.zipBytes === 0
     ? {}
@@ -578,12 +578,12 @@ function getDownloadSizeTelemetry(stats) {
         approx_downloaded_bytes_anthropic_catalog: Number(stats.anthropicCatalogZipBytes.toPrecision(2)),
       };
 }
-//@ chunk-e6aww6q8.js:652749-652760 placement
+//@ chunk-5xgkngpb.js:663174-663185 placement
 /**
  * 把同步插件提升为正式安装时的最多尝试次数（16）。
  */
 var MAX_PROMOTE_ATTEMPTS = 16;
-//@ chunk-e6aww6q8.js:652760-655170 placement
+//@ chunk-5xgkngpb.js:663185-665598 placement
 /**
  * 把下载好的同步插件提升为正式安装，处理占位目录冲突。
  */
@@ -615,7 +615,7 @@ async function promoteSyncedPlugin(pluginsSync, pluginsRootGuard, item, prev, st
       let root_2 = unzipResult.root;
       let guardResult = await verifyGuardOrRefused(pluginsRootGuard);
       if (guardResult !== null) return guardResult;
-      await rm_2(join(root_2, IN_USE_MARKER_FILE), {
+      await rm(join(root_2, IN_USE_MARKER_FILE), {
         recursive: true,
         force: true,
       });
@@ -640,7 +640,7 @@ async function promoteSyncedPlugin(pluginsSync, pluginsRootGuard, item, prev, st
                 code: errnoCode ?? "unknown",
                 restored: false,
               });
-              return buildLocalPlacementFailure(errnoCode);
+              return moveInFailure(errnoCode);
             }
           }
         }
@@ -665,7 +665,7 @@ async function promoteSyncedPlugin(pluginsSync, pluginsRootGuard, item, prev, st
             code: errnoCode ?? "unknown",
             restored: false,
           });
-          return buildLocalPlacementFailure(errnoCode);
+          return moveInFailure(errnoCode);
         }
       }
       let alreadySame = prev !== undefined && (await sameSyncedItem(root, prev, liveDir));
@@ -694,7 +694,7 @@ async function promoteSyncedPlugin(pluginsSync, pluginsRootGuard, item, prev, st
           return LOCAL_PLACEMENT_FAILURE;
         }
       } else if (
-        !(await checkSyncRoots({
+        !(await moveRootToTrashOk({
           dir: liveDir,
           trashRoot: pluginsTrashRoot(),
           configHome: getClaudeConfigDir(),
@@ -716,11 +716,11 @@ async function promoteSyncedPlugin(pluginsSync, pluginsRootGuard, item, prev, st
           code: getErrnoCode(error) ?? "unknown",
           restored,
         });
-        return buildLocalPlacementFailure(getErrnoCode(error));
+        return moveInFailure(getErrnoCode(error));
       }
       if (oldCopyPath !== undefined)
         pluginsSync.pendingTrashRemovals.push(
-          rm_2(oldCopyPath, {
+          rm(oldCopyPath, {
             recursive: true,
             force: true,
           }).catch(() => {}),
@@ -734,7 +734,7 @@ async function promoteSyncedPlugin(pluginsSync, pluginsRootGuard, item, prev, st
     }
   } finally {
     releaseSemaphore?.();
-    await rm_2(zipPath, {
+    await rm(zipPath, {
       force: true,
     }).catch(() => {});
     if (
@@ -752,18 +752,18 @@ async function promoteSyncedPlugin(pluginsSync, pluginsRootGuard, item, prev, st
         },
       ).catch(() => null)) === "real"
     )
-      await rm_2(replaceDir, {
+      await rm(replaceDir, {
         recursive: true,
         force: true,
       }).catch(() => {});
   }
 }
-//@ chunk-e6aww6q8.js:655170-655182 placement
+//@ chunk-5xgkngpb.js:665598-665610 placement
 /**
  * 提升失败后的重试间隔（500 毫秒）。
  */
 var PROMOTE_RETRY_SLEEP_MS = 500;
-//@ chunk-e6aww6q8.js:655182-655337 placement
+//@ chunk-5xgkngpb.js:665610-665765 placement
 async function promotePluginWithRetry(
   pluginsSync,
   pluginsRootGuard,
@@ -789,7 +789,7 @@ async function promotePluginWithRetry(
     return promoteSyncedPlugin(pluginsSync, pluginsRootGuard, item, prev, stats, credentials, semaphore);
   }
 }
-//@ chunk-e6aww6q8.js:655337-655542 placement
+//@ chunk-5xgkngpb.js:665765-665970 placement
 function recordSyncError_2(pluginsSync, item, errorType, reason) {
   let source = `${item.name}@${SYNCED}`;
   pluginsSync.syncErrors.push(
@@ -809,7 +809,7 @@ function recordSyncError_2(pluginsSync, item, errorType, reason) {
         },
   );
 }
-//@ chunk-e6aww6q8.js:655542-655615 placement
+//@ chunk-5xgkngpb.js:665970-666043 placement
 /**
  * 记录一轮插件同步的结论（仅 datadog 遥测允许时）。
  */
@@ -818,7 +818,7 @@ function recordPluginsSyncRound(host, outcome) {
     .of(host.host)
     .markPluginsSyncRound(outcome, () => isRemoteManagedEnvironment() && isDatadogAllowed());
 }
-//@ chunk-e6aww6q8.js:655615-666154 placement
+//@ chunk-5xgkngpb.js:666043-676591 placement
 /**
  * 执行一轮 claude.ai 插件同步：拉取目录、安装/更新/移除并记录遥测。
  */
@@ -1101,7 +1101,7 @@ async function runPluginsSyncRound(session, credentials, { startup = false } = {
     let rowDirNames = getRowDirNames(root, plugins);
     await Promise.all(pluginsSync.pendingTrashRemovals.splice(0));
     if ((await verifyGuardOrRefused(pluginsRootGuard_2)) === null)
-      await rm_2(pluginReplaceTmpDir(root), {
+      await rm(pluginReplaceTmpDir(root), {
         recursive: true,
         force: true,
       }).catch(() => {});
@@ -1455,7 +1455,7 @@ async function runPluginsSyncRound(session, credentials, { startup = false } = {
             },
           ).catch(() => null)) === "real"
         )
-          await rm_2(replaceDir, {
+          await rm(replaceDir, {
             recursive: true,
             force: true,
           }).catch(() => {});
@@ -1466,7 +1466,7 @@ async function runPluginsSyncRound(session, credentials, { startup = false } = {
   }
   return changesLanded;
 }
-//@ chunk-e6aww6q8.js:666154-666372 placement
+//@ chunk-5xgkngpb.js:676591-676809 placement
 function getDownloadTimingTelemetry(stats) {
   return {
     ...getDownloadSizeTelemetry(stats),
@@ -1476,7 +1476,7 @@ function getDownloadTimingTelemetry(stats) {
     extract_ms_max: Math.max(0, ...stats.extractMs),
   };
 }
-//@ chunk-e6aww6q8.js:666372-666704 placement
+//@ chunk-5xgkngpb.js:676809-677141 placement
 /**
  * 从清单登记已同步插件目录与认证信息（可先对齐 sidecar）；根被拒时按关闭失败处理并清空。
  */
@@ -1498,14 +1498,14 @@ async function registerSyncedPluginDirs(rootGuard, { reconcileSidecars }) {
   }
   setSyncedPluginDirs(dirs_2, attestations, dirToPluginIdMap(dirs));
 }
-//@ chunk-e6aww6q8.js:666704-666765 placement
+//@ chunk-5xgkngpb.js:677141-677202 placement
 /**
  * 列出已同步插件的目录。
  */
 async function listSyncedPluginDirsOnly(storageV5) {
   return (await listSyncedPluginDirs(storageV5)).map(({ dir }) => dir);
 }
-//@ chunk-e6aww6q8.js:666765-666910 placement
+//@ chunk-5xgkngpb.js:677202-677347 placement
 async function listSyncedPluginDirs(storageV5) {
   let syncedPluginsState = await readSyncedPluginsState(storageV5);
   return syncedPluginsState?.manifest
@@ -1515,7 +1515,7 @@ async function listSyncedPluginDirs(storageV5) {
       }))
     : [];
 }
-//@ chunk-e6aww6q8.js:666910-667237 placement
+//@ chunk-5xgkngpb.js:677347-677674 placement
 /**
  * 在已同步插件中找出给定 ID 中实际存在目录的那些；无法判断时返回 null。
  */
@@ -1536,7 +1536,7 @@ async function findInstalledSyncedPlugins(storageV5, candidateIds) {
   if (results.includes(null)) return null;
   return new Set(filtered.flatMap(({ row }, entryIndex) => (results[entryIndex] ? [row.pluginId] : [])));
 }
-//@ chunk-e6aww6q8.js:667237-667378 placement
+//@ chunk-5xgkngpb.js:677674-677815 placement
 /**
  * 已应用的插件列表是否与清单中的插件一致。
  */
@@ -1550,7 +1550,7 @@ async function isAppliedListCurrent(storageV5) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:667378-667518 placement
+//@ chunk-5xgkngpb.js:677815-677955 placement
 async function readSyncedPluginsState(storageV5) {
   if (isDiskless()) return null;
   let storageV5_2 = await getSyncBucket(storageV5);
@@ -1560,7 +1560,7 @@ async function readSyncedPluginsState(storageV5) {
   }
   return readBucketState(storageV5_2);
 }
-//@ chunk-e6aww6q8.js:667518-667883 placement
+//@ chunk-5xgkngpb.js:677955-678320 placement
 /**
  * 读取插件同步桶状态：同步根与回收根都校验通过且桶有标记时返回根与清单，否则 null。
  */
@@ -1599,7 +1599,7 @@ async function readBucketState(storageV5) {
     manifest: await readPluginsManifest(createPluginsRootGuard(root)),
   };
 }
-//@ chunk-e6aww6q8.js:667883-668076 placement
+//@ chunk-5xgkngpb.js:678320-678513 placement
 async function getRegisteredSyncedDirs(storageV5) {
   let syncedPluginDirs = getSyncedPluginDirs();
   if (syncedPluginDirs.length === 0) return syncedPluginDirs;
@@ -1613,7 +1613,7 @@ async function getRegisteredSyncedDirs(storageV5) {
     ? syncedPluginDirs
     : null;
 }
-//@ chunk-e6aww6q8.js:668076-668207 placement
+//@ chunk-5xgkngpb.js:678513-678644 placement
 /**
  * 尚未登记时，读取同步插件目录并登记目录及其插件 id。
  */
@@ -1626,7 +1626,7 @@ async function ensureSyncedPluginDirsRegistered() {
     new Map(dirs.map(({ dir, pluginId }) => [dir, pluginId])),
   );
 }
-//@ chunk-e6aww6q8.js:668207-668635 placement
+//@ chunk-5xgkngpb.js:678644-679072 placement
 /**
  * 删除已同步插件目录：保留拼写不删；正在使用或有在线会话时推迟；否则移入回收区并删除元数据文件。返回是否已删除。
  */
@@ -1647,19 +1647,19 @@ async function removeSyncedPluginDir(root, dirName, classifyLive, rowDirNames) {
     logForDiagnosticsNoPII("info", "plugins_sync_removal_deferred_live_session");
     return false;
   }
-  let removed = await checkSyncRoots({
+  let removed = await moveRootToTrashOk({
     dir: dirPath,
     trashRoot: pluginsTrashRoot(),
     configHome: getClaudeConfigDir(),
     failureEvent: "plugins_sync_trash_move_failed",
   });
   if (removed)
-    await rm_2(dirPath + PLUGIN_META_SUFFIX, {
+    await rm(dirPath + PLUGIN_META_SUFFIX, {
       force: true,
     }).catch(() => {});
   return removed;
 }
-//@ chunk-e6aww6q8.js:668635-668775 placement
+//@ chunk-5xgkngpb.js:679072-679212 placement
 async function isPluginDirInUse(dirName) {
   return isPluginVersionInUse(dirName, {
     refusedCountsAsLive: false,
@@ -1669,7 +1669,7 @@ async function isPluginDirInUse(dirName) {
     return true;
   });
 }
-//@ chunk-e6aww6q8.js:668775-668840 placement
+//@ chunk-5xgkngpb.js:679212-679277 placement
 /**
  * 目录是否属于仍登记、正在使用的插件。
  */
@@ -1679,7 +1679,7 @@ async function isRegisteredLivePluginDir(dirName, dirPath, rowDirNames) {
     (await isPluginDirInUse(dirName))
   );
 }
-//@ chunk-e6aww6q8.js:668840-669339 placement
+//@ chunk-5xgkngpb.js:679277-679784 placement
 /**
  * 记录最近一次完整列表（每个插件的目录集合与待删除目录），用于后续清理已下架的插件目录。
  */
@@ -1713,7 +1713,7 @@ function recordCompleteList(pluginsSync, syncBucket, root, listResult) {
     removalOwed: hooksRemoved ? new Set() : delistedDirs,
   };
 }
-//@ chunk-e6aww6q8.js:669339-669449 placement
+//@ chunk-5xgkngpb.js:679784-679894 placement
 function getRowDirNames(root, plugins) {
   return new Set(
     plugins.flatMap(({ name }) => {
@@ -1733,7 +1733,7 @@ function getRowDirNames(root, plugins) {
     }),
   );
 }
-//@ chunk-e6aww6q8.js:669449-669572 placement
+//@ chunk-5xgkngpb.js:679894-680017 placement
 async function removeStaleDirs(root, dirNames, classifyLive, rowDirNames) {
   let removedDirs = new Set();
   for (let dirName of dirNames) {
@@ -1742,7 +1742,7 @@ async function removeStaleDirs(root, dirNames, classifyLive, rowDirNames) {
   }
   return removedDirs;
 }
-//@ chunk-e6aww6q8.js:669572-670106 placement
+//@ chunk-5xgkngpb.js:680017-680551 placement
 /**
  * 列出插件同步根下的桶：带标记的桶、无关的杂项与标记不可读的目录。
  */
@@ -1786,12 +1786,12 @@ async function listPluginBuckets() {
     unreadable,
   };
 }
-//@ chunk-e6aww6q8.js:670106-670334 placement
+//@ chunk-5xgkngpb.js:680551-680779 placement
 async function trashStrayEntries(strays) {
   let count = 0;
   for (let strayName of strays)
     if (
-      await checkSyncRoots({
+      await moveRootToTrashOk({
         dir: join(syncedPluginsRoot(), strayName),
         trashRoot: pluginsTrashRoot(),
         configHome: getClaudeConfigDir(),
@@ -1805,7 +1805,7 @@ async function trashStrayEntries(strays) {
     });
   return count;
 }
-//@ chunk-e6aww6q8.js:670334-670424 placement
+//@ chunk-5xgkngpb.js:680779-680869 placement
 /**
  * 清理多余（已下架）的插件桶目录。
  */
@@ -1813,7 +1813,7 @@ async function trashStrayPluginBuckets() {
   let bucketScan = await listPluginBuckets();
   if (bucketScan !== null && bucketScan.strays.length > 0) await trashStrayEntries(bucketScan.strays);
 }
-//@ chunk-e6aww6q8.js:670424-670520 placement
+//@ chunk-5xgkngpb.js:680869-680965 placement
 /**
  * 读取某桶的同步守卫与清单（无清单返回 null）。
  */
@@ -1827,7 +1827,7 @@ async function readBucketRound(bucket) {
         manifest: pluginsManifest,
       };
 }
-//@ chunk-e6aww6q8.js:670520-671618 placement
+//@ chunk-5xgkngpb.js:680965-682070 placement
 /**
  * 同步闸门关闭时清理已同步的插件，延迟到不在使用时执行。
  */
@@ -1844,15 +1844,15 @@ async function pruneSyncedPluginsForClosedGate() {
   let retained = 0;
   for (let bucket of bucketScan.buckets) {
     let bucketDir = syncedPluginBucketDir(bucket);
-    await rm_2(join(bucketDir, MARKETPLACES_JSON_FILE), {
+    await rm(join(bucketDir, MARKETPLACES_JSON_FILE), {
       force: true,
     }).catch(() => {});
     for (let fileName of await readdir(bucketDir).catch(() => []))
       if (isClaudeAiMarketplaceFile(fileName))
-        await rm_2(join(bucketDir, fileName), {
+        await rm(join(bucketDir, fileName), {
           force: true,
         }).catch(() => {});
-    await rm_2(lastCompleteRoundPath(bucketDir), {
+    await rm(lastCompleteRoundPath(bucketDir), {
       force: true,
     }).catch(() => {});
     let bucketRound = await readBucketRound(bucket);
@@ -1884,7 +1884,7 @@ async function pruneSyncedPluginsForClosedGate() {
         },
       ).catch(() => {});
     } else {
-      await rm_2(syncedManifestPath(root), {
+      await rm(syncedManifestPath(root), {
         force: true,
       }).catch(() => {});
       await rmdir(root).then(
@@ -1901,7 +1901,7 @@ async function pruneSyncedPluginsForClosedGate() {
   });
   return movedCount > 0;
 }
-//@ chunk-e6aww6q8.js:671618-672275 placement
+//@ chunk-5xgkngpb.js:682070-682727 placement
 /**
  * 处理各桶清单中推迟的过期目录删除：能删的删掉并更新清单，记录完成与保留数。
  */
@@ -1951,7 +1951,7 @@ async function completeDeferredRemovals() {
   });
   return true;
 }
-//@ chunk-e6aww6q8.js:672275-673261 placement
+//@ chunk-5xgkngpb.js:682727-683713 placement
 async function trashOrphanSyncedPluginDirs(pluginsRootGuard, plugins, removalsDeferredHere) {
   if (!(await pluginsRootGuard.guard.verify())) return 0;
   let root = pluginsRootGuard.root;
@@ -2016,7 +2016,7 @@ async function trashOrphanSyncedPluginDirs(pluginsRootGuard, plugins, removalsDe
   for (let dirName of mapped) {
     if (await isRegisteredLivePluginDir(join(root, dirName), dirName, rowDirNames)) continue;
     if (
-      await checkSyncRoots({
+      await moveRootToTrashOk({
         dir: join(root, dirName),
         trashRoot: pluginsTrashRoot(),
         configHome: getClaudeConfigDir(),
@@ -2024,7 +2024,7 @@ async function trashOrphanSyncedPluginDirs(pluginsRootGuard, plugins, removalsDe
       })
     ) {
       trashedCount++;
-      await rm_2(join(root, dirName) + PLUGIN_META_SUFFIX, {
+      await rm(join(root, dirName) + PLUGIN_META_SUFFIX, {
         force: true,
       }).catch(() => {});
     }
@@ -2035,14 +2035,14 @@ async function trashOrphanSyncedPluginDirs(pluginsRootGuard, plugins, removalsDe
     });
   return trashedCount;
 }
-//@ chunk-e6aww6q8.js:673261-673312 placement
+//@ chunk-5xgkngpb.js:683713-683764 placement
 /**
  * 把清单行映射为目录列表。
  */
 function manifestRowDirs(root, plugins) {
   return mapRowsToDirs(root, plugins).map(({ dir }) => dir);
 }
-//@ chunk-e6aww6q8.js:673312-673472 placement
+//@ chunk-5xgkngpb.js:683764-683924 placement
 function mapRowsToDirs(root, plugins) {
   let byDir = new Map();
   for (let plugin of plugins) {
@@ -2061,7 +2061,7 @@ function mapRowsToDirs(root, plugins) {
   }
   return Array.from(byDir.values());
 }
-//@ chunk-e6aww6q8.js:673472-673719 placement
+//@ chunk-5xgkngpb.js:683924-684171 placement
 function registerDirsWithAttestations(root, rows, attestations, newHere = new Set()) {
   let dirs = mapRowsToDirs(root, rows);
   let dirAttestations = new Map();
@@ -2080,7 +2080,7 @@ function registerDirsWithAttestations(root, rows, attestations, newHere = new Se
     dirToPluginIdMap(dirs),
   );
 }
-//@ chunk-e6aww6q8.js:673719-673790 placement
+//@ chunk-5xgkngpb.js:684171-684242 placement
 /**
  * 目录 → 插件 id 的映射，用于登记已同步目录。
  */
@@ -2088,16 +2088,16 @@ function dirToPluginIdMap(rows) {
   return new Map(rows.map(({ dir, row }) => [dir, row.pluginId]));
 }
 export {
-  isAppliedListCurrent,
-  pruneSyncedPluginsForClosedGate,
-  completeDeferredRemovals,
-  ensureSyncedPluginDirsRegistered,
   listSyncedPluginDirsOnly,
   getRegisteredSyncedDirs,
   listSyncedPluginDirs,
   syncedPluginsRoot,
+  runPluginsSyncRound,
   syncedPluginBucketDir,
   ensurePluginsBucketRoot,
-  runPluginsSyncRound,
+  ensureSyncedPluginDirsRegistered,
+  pruneSyncedPluginsForClosedGate,
+  isAppliedListCurrent,
+  completeDeferredRemovals,
   findInstalledSyncedPlugins,
 };

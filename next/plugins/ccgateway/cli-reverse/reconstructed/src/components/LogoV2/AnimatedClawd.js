@@ -3,12 +3,12 @@
  *
  * Clawd 吉祥物入场/待机动画：姿态帧序列、首次启动判定（CLAUDE_CODE_FORCE_FIRST_LAUNCH）与 lastClawdEntranceVersion 记录。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/LogoV2/AnimatedClawd.tsx
- * pieces: chunk-ag5x7vhf.js (14)
+ * pieces: chunk-hnxhr3bs.js (14)
  * attribution: fingerprint 2, layout 11, callgraph-witnessed 1
  */
-import { isPoseSpec, normalizePose, Clawd, chalkForChart } from "./Clawd.js";
+import { isPoseSpec, normalizePose, Clawd, notAppleTerminal } from "./Clawd.js";
 import { antEnv } from "../../utils/env.js";
 import { isSemverString } from "../../utils/model/modelCatalog/catalogCapabilities.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
@@ -22,12 +22,12 @@ import {
 import { Box, Text } from "../../ink/components/Text.js";
 import { Decorative, useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { isReducedMotion } from "../Spinner/spinnerFlags.js";
-import { getInitialSettings_2 } from "../../utils/settings/settings.js";
+import { getInitialSettings } from "../../utils/settings/settings.js";
 import { useState, useEffectEvent, useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:48678-48727 fingerprint (2.1.88 match: hold, 1)
+//@ chunk-hnxhr3bs.js:48132-48181 fingerprint (2.1.88 match: hold, 1)
 var CLAWD_MIN_OFFSET = 3;
 var CLAWD_BASE_WIDTH = 9;
 var CLAWD_FRAME_WIDTH = 60;
@@ -35,7 +35,7 @@ var DEFAULT_CLAWD_FRAME = {
   pose: "default",
   offset: 0,
 };
-//@ chunk-ag5x7vhf.js:48727-48824 layout
+//@ chunk-hnxhr3bs.js:48181-48278 layout
 function poofFrames() {
   return [
     {
@@ -50,7 +50,7 @@ function poofFrames() {
     },
   ];
 }
-//@ chunk-ag5x7vhf.js:48824-48951 layout
+//@ chunk-hnxhr3bs.js:48278-48405 layout
 function repeatPoseFrames(pose, count, { offset = 0, x, poof, shadow } = {}) {
   return Array.from(
     {
@@ -65,7 +65,7 @@ function repeatPoseFrames(pose, count, { offset = 0, x, poof, shadow } = {}) {
     }),
   );
 }
-//@ chunk-ag5x7vhf.js:48951-49019 layout
+//@ chunk-hnxhr3bs.js:48405-48473 layout
 function turnFrames(facings, shadow) {
   return facings.flatMap((facing) =>
     repeatPoseFrames(
@@ -79,7 +79,7 @@ function turnFrames(facings, shadow) {
     ),
   );
 }
-//@ chunk-ag5x7vhf.js:49019-49081 layout
+//@ chunk-hnxhr3bs.js:48473-48535 layout
 function pose(eyes, arms = "down", feet = "both") {
   return {
     eyes,
@@ -87,7 +87,7 @@ function pose(eyes, arms = "down", feet = "both") {
     feet,
   };
 }
-//@ chunk-ag5x7vhf.js:49081-51755 layout
+//@ chunk-hnxhr3bs.js:48535-51209 layout
 /**
  * Clawd 动画帧序列表：每种动画（jump/look/celebrate/skip/spin/peekaboo/drop/waddle/peek/wink/boop/tap/sneeze/turn/coin-hop）是若干 {pose, offset, x, poof, shadow} 帧；CLAWD_ANIMATIONS 按名字索引，CLAWD_ANIMATION_NAMES 列出顺序。
  */
@@ -111,7 +111,7 @@ var COIN_HOP_FRAMES;
 var CLAWD_ANIMATIONS;
 var CLAWD_ANIMATION_NAMES;
 var IN_PLACE_ANIMATION_NAMES;
-deferInit("chunk-ag5x7vhf.js:49081", () => {
+deferInit("chunk-hnxhr3bs.js:48535", () => {
   JUMP_FRAMES = [
     ...poofFrames(),
     ...repeatPoseFrames("arms-up", 3),
@@ -337,7 +337,7 @@ deferInit("chunk-ag5x7vhf.js:49081", () => {
     (name) => (CLAWD_ANIMATIONS[name][0]?.x ?? 0) === 0,
   );
 });
-//@ chunk-ag5x7vhf.js:51755-51954 layout
+//@ chunk-hnxhr3bs.js:51209-51408 layout
 /**
  * 不允许移动时，过滤掉首帧/任意帧带特殊姿态或首帧是静止睁眼原位的动画，只留下适合入场的动画名；允许时原样返回。
  */
@@ -353,7 +353,7 @@ function filterEntranceAnimations(animations, chalkOk) {
     );
   });
 }
-//@ chunk-ag5x7vhf.js:51954-52141 layout
+//@ chunk-hnxhr3bs.js:51408-51595 layout
 function withLeadInFrames(name, delayMs) {
   let frames = CLAWD_ANIMATIONS[name];
   let first = frames[0];
@@ -371,7 +371,7 @@ function withLeadInFrames(name, delayMs) {
     ...frames,
   ];
 }
-//@ chunk-ag5x7vhf.js:52141-52296 layout
+//@ chunk-hnxhr3bs.js:51595-51750 layout
 /**
  * 读 CLAUDE_CODE_FORCE_FIRST_LAUNCH：是 semver 时按该版本当作上次见过的版本；为真值时当作从未见过；未设置或假值返回 undefined。
  */
@@ -388,17 +388,17 @@ function getForcedFirstLaunch() {
       }
     : undefined;
 }
-//@ chunk-ag5x7vhf.js:52296-52873 layout
+//@ chunk-hnxhr3bs.js:51750-52327 layout
 function isNewerClawdEntranceVersion(
   entranceVersion,
   appVersion = {
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
-    VERSION: "2.1.316",
+    VERSION: "2.1.318",
     FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-    BUILD_TIME: "2026-10-30T23:28:13Z",
-    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
     HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
     DD_SOURCEMAP_GROUP: "default",
   }.VERSION,
@@ -411,7 +411,7 @@ function isNewerClawdEntranceVersion(
     return true;
   }
 }
-//@ chunk-ag5x7vhf.js:52873-53447 layout
+//@ chunk-hnxhr3bs.js:52327-52901 layout
 /**
  * 若当前版本比 lastClawdEntranceVersion 新，返回把它更新为当前版本（2.1.316）的新配置，否则原样返回。
  */
@@ -423,17 +423,17 @@ function markClawdEntranceSeen(config) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
       }
     : config;
 }
-//@ chunk-ag5x7vhf.js:53447-53567 layout
+//@ chunk-hnxhr3bs.js:52901-53021 layout
 var POOF_GLYPHS = {
   dot: "\xB7",
   wave: "~",
@@ -449,7 +449,7 @@ var SHADOW_GLYPHS = {
   },
 };
 var nextFrameIndex = (index) => index + 1;
-//@ chunk-ag5x7vhf.js:53567-55252 callgraph-witnessed (2.1.88 match: AnimatedClawd, 0.3)
+//@ chunk-hnxhr3bs.js:53021-54707 callgraph-witnessed (2.1.88 match: AnimatedClawd, 0.3)
 function AnimatedClawd(props) {
   let $ = useMemoCache(28);
   let options;
@@ -593,13 +593,13 @@ function AnimatedClawd(props) {
   } else clawd = $[27];
   return clawd;
 }
-//@ chunk-ag5x7vhf.js:55252-56868 fingerprint (2.1.88 match: useClawdAnimation, 0.646)
+//@ chunk-hnxhr3bs.js:54707-56323 fingerprint (2.1.88 match: useClawdAnimation, 0.646)
 function useClawdAnimation(autoplay, name, delayMs, onComplete) {
   let $ = useMemoCache(40);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let isReduced;
   if ($[0] !== isScreenReaderEnabled) {
-    isReduced = () => isReducedMotion(getInitialSettings_2().prefersReducedMotion) || isScreenReaderEnabled;
+    isReduced = () => isReducedMotion(getInitialSettings().prefersReducedMotion) || isScreenReaderEnabled;
     $[0] = isScreenReaderEnabled;
     $[1] = isReduced;
   } else isReduced = $[1];
@@ -647,7 +647,7 @@ function useClawdAnimation(autoplay, name, delayMs, onComplete) {
       if (autoplay || reducedMotion || frameIndex !== -1 || !canClickRef.current) {
         return;
       }
-      let entranceNames = filterEntranceAnimations(IN_PLACE_ANIMATION_NAMES, chalkForChart());
+      let entranceNames = filterEntranceAnimations(IN_PLACE_ANIMATION_NAMES, notAppleTerminal());
       setFrames(CLAWD_ANIMATIONS[entranceNames[Math.floor(Math.random() * entranceNames.length)]]);
       setFrameIndex(0);
     };

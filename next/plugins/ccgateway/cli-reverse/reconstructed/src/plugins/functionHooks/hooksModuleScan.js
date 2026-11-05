@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：静态扫描 hooks 模块源码的 import/export，判断其引用的 $ 能力
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (19)
- * attribution: placement 19
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (20)
+ * attribution: placement 19, layout 1
  */
 import { relative, sep } from "path";
 import {
@@ -28,7 +28,7 @@ import {
   bareImportError,
 } from "./moduleLoader.js";
 
-//@ chunk-e6aww6q8.js:736889-737029 placement
+//@ chunk-5xgkngpb.js:747416-747556 placement
 /**
  * 扫描图里任一文件是否使用动态 import()。
  */
@@ -44,7 +44,7 @@ function hasDynamicImport(graph) {
     );
   return found;
 }
-//@ chunk-e6aww6q8.js:737029-737608 placement
+//@ chunk-5xgkngpb.js:747556-748135 placement
 function scanDefaultExport(program, declaration, name) {
   let seen = new Set();
   for (let statement of program.body) {
@@ -73,7 +73,7 @@ function scanDefaultExport(program, declaration, name) {
   }
   return seen;
 }
-//@ chunk-e6aww6q8.js:737608-738706 placement
+//@ chunk-5xgkngpb.js:748135-749237 placement
 /**
  * 静态扫描 hooks 模块的 import/export 声明，找出它引用的 $ 能力。
  */
@@ -129,7 +129,7 @@ function scanHooksModuleImports(graph, file) {
     }
   return assignees;
 }
-//@ chunk-e6aww6q8.js:738706-739383 placement
+//@ chunk-5xgkngpb.js:749237-749918 placement
 function scanCallExpressions(graph) {
   let name = new Map();
   let file = new Map();
@@ -167,7 +167,7 @@ function scanCallExpressions(graph) {
   }
   return secondDefaults;
 }
-//@ chunk-e6aww6q8.js:739383-739551 placement
+//@ chunk-5xgkngpb.js:749918-750086 placement
 /**
  * 判断 on(...) 调用是否紧跟 .catch 成员访问。
  */
@@ -181,7 +181,7 @@ function isCatchMember(graph, linked) {
     file.property.name === "catch"
   );
 }
-//@ chunk-e6aww6q8.js:739551-739862 placement
+//@ chunk-5xgkngpb.js:750086-750397 placement
 /**
  * 判断钩子函数是否可能使用第三个参数（next）或 eval（无法静态确定时视为可能）。
  */
@@ -200,7 +200,7 @@ function mayRewriteNext(linked, node) {
     findReferences(local, "eval").length > 0
   );
 }
-//@ chunk-e6aww6q8.js:739862-740163 placement
+//@ chunk-5xgkngpb.js:750397-750698 placement
 /**
  * 判断 command.run 注册是否只针对本插件登记的命令且不会把事件传下去。
  */
@@ -220,7 +220,7 @@ function isOwnCommandRunHook(member, registration, registeredCommands) {
     hooksCall.every((arg) => registeredCommands.has(arg))
   );
 }
-//@ chunk-e6aww6q8.js:740163-740645 placement
+//@ chunk-5xgkngpb.js:750698-751183 placement
 /**
  * 判断某名字的读取点是顶层 const 声明还是某注册的 matcher 位置。
  */
@@ -250,7 +250,7 @@ function classifyMatcherHolder(graph, scanned, node) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:740645-741127 placement
+//@ chunk-5xgkngpb.js:751183-751668 placement
 /**
  * 生成"名字是否只被用作 matcher（密封）"的递归判断（带缓存与环检测）。
  */
@@ -283,7 +283,7 @@ function createSealedNameChecker(graph, isSealedHolder) {
   }
   return isSealedName;
 }
-//@ chunk-e6aww6q8.js:741127-741699 placement
+//@ chunk-5xgkngpb.js:751668-752242 placement
 /**
  * 汇总扫描到的注册：注册描述、ui.render 的字面 matcher、catch 与 command.run 自有命令信息。
  */
@@ -325,7 +325,7 @@ function collectRegistrationFacts(graph) {
     catchReads,
   };
 }
-//@ chunk-e6aww6q8.js:741699-741818 placement
+//@ chunk-5xgkngpb.js:752242-752361 placement
 /**
  * 列出只经由辅助函数间接发生的 $ 调用（按调用名排序）。
  */
@@ -335,7 +335,7 @@ function collectHelperCalls(graph, secondGraph) {
   for (let [from, secondVia] of via) if (!direct.has(from)) calls.set(from, [...secondVia].sort());
   return calls;
 }
-//@ chunk-e6aww6q8.js:741818-742025 placement
+//@ chunk-5xgkngpb.js:752361-752568 placement
 /**
  * 插件校验用：加载 hooks 模块图并返回扫描结果、注册、ui.render matcher、catch 信息与辅助调用。
  */
@@ -352,7 +352,7 @@ async function scanHooksModuleForValidation(modulePath, pluginRoot, pluginName) 
     helperCalls: collectHelperCalls(graph, pluginName),
   };
 }
-//@ chunk-e6aww6q8.js:742025-742275 placement
+//@ chunk-5xgkngpb.js:752568-752818 placement
 /**
  * 把模块图转成加载结果：入口源码、其余链接文件、链接关系与扫描结果。
  */
@@ -373,7 +373,7 @@ var toModuleLoadResult = (modulePath, loaded, extra) => ({
   ),
   scan: scanHooksModuleCached(loaded.graph, extra),
 });
-//@ chunk-e6aww6q8.js:742275-742468 placement
+//@ chunk-5xgkngpb.js:752818-753011 placement
 /**
  * 列出模块图里入口之外的文件（含源码）及所有链接关系。
  */
@@ -392,7 +392,7 @@ var listLinkedFiles = (graph, thirdGraph) => ({
     })),
   ),
 });
-//@ chunk-e6aww6q8.js:742468-742594 placement
+//@ chunk-5xgkngpb.js:753011-753137 placement
 /**
  * 扫描 hooks 模块：有构建内置的扫描结果则直接用，否则加载模块图并扫描。
  */
@@ -411,7 +411,7 @@ async function scanHooksModule(modulePath, pluginRoot, pluginName) {
         scan: sealed,
       };
 }
-//@ chunk-e6aww6q8.js:742684-742851 placement
+//@ chunk-5xgkngpb.js:753227-753394 placement
 /**
  * 为密封插件创建模块解析器：只从给定文本表里取源码，找不到时报错。
  */
@@ -426,7 +426,7 @@ var createSealedResolver = (pluginRoot, pluginName, texts) => async (specifier, 
   }
   throw bareImportError(pluginName, specifier, relative(pluginRoot, fromFile) || fromFile);
 };
-//@ chunk-e6aww6q8.js:742851-743173 placement
+//@ chunk-5xgkngpb.js:753394-753716 placement
 /**
  * 用密封文本（组织下发的插件）构建模块图并扫描，入口不在文本表中时报错。
  */
@@ -450,7 +450,10 @@ async function scanSealedHooksModule(options) {
     options.pluginName,
   );
 }
-//@ chunk-e6aww6q8.js:743173-743529 placement
+//@ chunk-5xgkngpb.js:753716-753762 layout
+var getHooksModuleScan = async (modulePath, pluginRoot, pluginName) =>
+  (await scanHooksModule(modulePath, pluginRoot, pluginName)).scan;
+//@ chunk-5xgkngpb.js:753762-754118 placement
 /**
  * 非内置插件的遥测钩子落在 anthropic 流上时返回拒绝说明（应指定 to: "collector"）。
  */
@@ -458,7 +461,7 @@ function telemetryStreamRefusal(scan, ctx) {
   if (!(!ctx.isBuiltin && scan.telemetry?.includes(ANTHROPIC) === true)) return;
   return `its hooks stand on the telemetry stream "${ANTHROPIC}" (a matcher names it, or a telemetry hook names no "to" and so stands on every stream), which is for the plugins built into the CLI; name the collector on each telemetry hook: on("telemetry.log", { to: "collector" }, hook)`;
 }
-//@ chunk-e6aww6q8.js:743529-743601 placement
+//@ chunk-5xgkngpb.js:754118-754190 placement
 /**
  * 遥测引用摘要
  */
@@ -473,4 +476,5 @@ export {
   listLinkedFiles,
   scanHooksModule,
   scanSealedHooksModule,
+  getHooksModuleScan,
 };

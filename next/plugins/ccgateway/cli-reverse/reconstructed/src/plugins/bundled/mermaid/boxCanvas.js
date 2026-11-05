@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：mermaid 插件用的字符画布（可画文本与带圆角、样式、链接的方框）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-yb0ajcmt.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q80fh8vc.js (3)
  * attribution: placement 3
  */
 import { segmentGraphemesWithWidth, linkCells, textDisplayWidth } from "../../../ink/graphemeCells.js";
 
-//@ chunk-yb0ajcmt.js:8392-8549 placement (2.1.88 match: styledCharsWithGraphemeClustering, 0.365)
+//@ chunk-q80fh8vc.js:8700-8857 placement (2.1.88 match: styledCharsWithGraphemeClustering, 0.365)
 function createBoxCanvas(chars, stylePool) {
   let size = chars * stylePool;
   return {
@@ -24,7 +24,7 @@ function createBoxCanvas(chars, stylePool) {
     }),
   };
 }
-//@ chunk-yb0ajcmt.js:9141-9443 placement (2.1.88 match: unionRect, 0.809)
+//@ chunk-q80fh8vc.js:9449-9751 placement (2.1.88 match: unionRect, 0.809)
 function drawCanvasText(canvas, at, text) {
   if (at.y < 0 || at.y >= canvas.height) return;
   let x = at.x;
@@ -40,7 +40,7 @@ function drawCanvasText(canvas, at, text) {
     x += grapheme.width;
   }
 }
-//@ chunk-yb0ajcmt.js:9443-9934 placement (2.1.88 match: clearRegion, 0.37)
+//@ chunk-q80fh8vc.js:9751-10242 placement (2.1.88 match: clearRegion, 0.37)
 function drawCanvasBox(boxCanvas, box, lines, isRounded) {
   let right = box.x + box.width - 1;
   let bottom = box.y + box.height - 1;

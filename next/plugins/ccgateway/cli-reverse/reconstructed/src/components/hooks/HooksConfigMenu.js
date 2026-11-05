@@ -3,10 +3,10 @@
  *
  * /hooks 菜单：按事件 → 匹配器 → hook 三级浏览已配置的 hooks（只读，提示编辑 settings.json），区分来源与远程会话可用性。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/hooks/HooksConfigMenu.tsx
- * pieces: chunk-bajxb7bf.js (10)
- * attribution: sole-consumer 5, callgraph-fingerprint 1, file-local 2, affinity 1, fingerprint 1
+ * pieces: chunk-5tpnqyt5.js (10)
+ * attribution: fingerprint 3, callgraph-fingerprint 1, file-local 2, sole-consumer 3, affinity 1
  */
 import { getSettings_DEPRECATED, getSettingsForSource } from "../../utils/settings/settings.js";
 import { hasAnyPluginHook, SelectHookMode } from "./SelectHookMode.js";
@@ -31,7 +31,7 @@ import {
   hooksForSourceAndEvent,
 } from "../../utils/hooks/hooksConfigManager.js";
 import { useKeybinding } from "../../keybindings/useKeybinding.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { plural } from "../../utils/stringUtils.js";
 import {
   jsxProd_default,
@@ -57,46 +57,46 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { SelectMatcherMode } from "./SelectMatcherMode.js";
 import { ViewHookMode } from "./ViewHookMode.js";
 
-//@ chunk-bajxb7bf.js:48218-48310 sole-consumer (2.1.88 match: _temp, 1)
+//@ chunk-5tpnqyt5.js:49717-49809 fingerprint (2.1.88 match: _temp, 1)
 function areAllHooksDisabled() {
   return (
     getSettings_DEPRECATED()?.disableAllHooks === true &&
     getSettingsForSource("policySettings")?.disableAllHooks === true
   );
 }
-//@ chunk-bajxb7bf.js:48310-48380 sole-consumer (2.1.88 match: _temp2, 1)
+//@ chunk-5tpnqyt5.js:49809-49879 fingerprint (2.1.88 match: _temp2, 1)
 function areOnlyManagedHooksAllowed() {
   return getSettingsForSource("policySettings")?.allowManagedHooksOnly === true;
 }
-//@ chunk-bajxb7bf.js:48380-48410 callgraph-fingerprint (2.1.88 match: _temp3, 1)
+//@ chunk-5tpnqyt5.js:49879-49909 callgraph-fingerprint (2.1.88 match: _temp3, 1)
 function selectMcp(s) {
   return s.mcp;
 }
-//@ chunk-bajxb7bf.js:48410-48441 file-local
+//@ chunk-5tpnqyt5.js:49909-49940 file-local
 function hookName(tool) {
   return tool.name;
 }
-//@ chunk-bajxb7bf.js:48441-48480 file-local
+//@ chunk-5tpnqyt5.js:49940-49979 file-local
 function sumWithCount(sum, hooks) {
   return sum + hooks.length;
 }
-//@ chunk-bajxb7bf.js:48563-48613 sole-consumer
+//@ chunk-5tpnqyt5.js:50062-50112 sole-consumer
 function hasPluginHook(hooksByEvent) {
   return Object.values(hooksByEvent).some(hasAnyPluginHook);
 }
-//@ chunk-bajxb7bf.js:48613-48654 sole-consumer
+//@ chunk-5tpnqyt5.js:50112-50153 sole-consumer
 function isHereHook(hook) {
   return hook.where === "here";
 }
-//@ chunk-bajxb7bf.js:48654-48696 sole-consumer
+//@ chunk-5tpnqyt5.js:50153-50195 sole-consumer
 function isCloudHook(hook) {
   return hook.where === "cloud";
 }
-//@ chunk-bajxb7bf.js:48696-48728 affinity
+//@ chunk-5tpnqyt5.js:50195-50227 affinity
 function hookLabel(hook) {
   return hook.label;
 }
-//@ chunk-bajxb7bf.js:48728-57815 fingerprint (2.1.88 match: HooksConfigMenu, 0.495)
+//@ chunk-5tpnqyt5.js:50227-59314 fingerprint (2.1.88 match: HooksConfigMenu, 0.495)
 /**
  * /hooks 菜单：选择事件 → 匹配器 → hook → 详情；hooks 来自 user/project/local/policy/插件/会话，远程会话中标注哪些不会运行；只读，提示通过编辑 settings.json 或让 Claude 修改。
  */
@@ -382,7 +382,7 @@ function HooksConfigMenu(props) {
                   : {
                       mode: "cloud-consent",
                       offer: {
-                        forwarded: count(summary.rows, isHereHook),
+                        forwarded: countWhere(summary.rows, isHereHook),
                         templateNames: summary.rows.filter(isCloudHook).map(hookLabel),
                       },
                       ...((summary.consent === "accepted" || summary.consent === "declined") && {

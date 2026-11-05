@@ -3,22 +3,22 @@
  *
  * 2.1.316 新增：打开 Artifact 前检查可访问性（未发布、其他组织、公开外部）及说明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-nfdb9b3q.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b7m46xj6.js (3)
  * attribution: placement 3
  */
-import { fetchArtifactBootWithProbe } from "./boot.js";
-import { isNeverPublished, isOtherOrg } from "./orgScope.js";
+import { fetchBoot } from "./boot.js";
+import { isArtifactNeverPublished, isArtifactInOtherOrg } from "./orgScope.js";
 import { sanitizeDisplayTitle } from "../../utils/textNormalize.js";
 import { ownedVerdict, deriveShareRole } from "./shareEntries.js";
 
-//@ chunk-nfdb9b3q.js:310-869 placement
+//@ chunk-b7m46xj6.js:310-869 placement
 /**
  * 打开 artifact 前探测其 boot：区分从未发布/未找到、其他组织、其他失败、组织外公开；成功时返回标题与是否本人所有。
  */
 async function probeArtifactForOpen(target, feature, signal, credentials) {
-  let boot = await fetchArtifactBootWithProbe(target, feature, signal, {
+  let boot = await fetchBoot(target, feature, signal, {
     gatePublicRead: false,
     credentials,
   });
@@ -26,9 +26,9 @@ async function probeArtifactForOpen(target, feature, signal, credentials) {
     if (boot.errorCode === "boot_404")
       return {
         ok: false,
-        reason: isNeverPublished(boot) ? "never_published" : "not_found",
+        reason: isArtifactNeverPublished(boot) ? "never_published" : "not_found",
       };
-    if (isOtherOrg(boot))
+    if (isArtifactInOtherOrg(boot))
       return {
         ok: false,
         reason: "other_org",
@@ -61,12 +61,12 @@ async function probeArtifactForOpen(target, feature, signal, credentials) {
     }),
   };
 }
-//@ chunk-nfdb9b3q.js:869-883 placement
+//@ chunk-b7m46xj6.js:869-883 placement
 /**
  * 导出常量或表 `OPEN_PROBE_TIMEOUT_MS`：值为 15000。
  */
 var OPEN_PROBE_TIMEOUT_MS = 15000;
-//@ chunk-nfdb9b3q.js:883-1518 placement
+//@ chunk-b7m46xj6.js:883-1518 placement
 /**
  * 把打开 artifact 失败的原因转成给用户的提示（组织外公开、其他组织、从未发布、未找到、检查失败可重试）。
  */

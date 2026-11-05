@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：不开 worker 时在主线程内运行 hooks 模块的宿主
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (43)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (43)
  * attribution: placement 43
  */
 import {
@@ -65,7 +65,7 @@ import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { forgetMcpServerFor } from "./mcpServerHooks.js";
 import { forgetMcpConnectsFor } from "./mcpApi.js";
 import { forgetSessionStartCall } from "./promptApi.js";
-import { uiStatusOp } from "./sessionApi.js";
+import { uiStatusOp, clearBackdropFor } from "./sessionApi.js";
 import { closePluginPanes } from "./panes.js";
 import { stateAtomKey, CORE_ORIGIN } from "./eventPatterns.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
@@ -85,7 +85,7 @@ import { hasModuleHookingSite } from "../hooksModules/loadedModuleFilters.js";
 import { onConfigHookReleased } from "./configApi.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4037205-4041759 placement
+//@ chunk-5xgkngpb.js:4143036-4147594 placement
 /**
  * 在主线程内（不开 worker）运行 hooks 模块：实现 next()、next.to()、结果与流式块的传递。
  */
@@ -404,7 +404,7 @@ function createSameThreadHost(host, options) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:4041759-4041983 placement
+//@ chunk-5xgkngpb.js:4147594-4147818 placement
 /**
  * 在主线程创建 hooks 沙箱宿主（不使用 worker），结果需可克隆。
  */
@@ -425,7 +425,7 @@ var createSameThreadEnvironmentHost = (host) => {
     createEnvironment: createHooksEnvironment,
   });
 };
-//@ chunk-e6aww6q8.js:4041983-4042127 placement
+//@ chunk-5xgkngpb.js:4147818-4147962 placement
 function endOpStreams(host, environmentId) {
   let keyPrefix = environmentId === undefined ? "" : `${environmentId}:`;
   for (let [streamKey, stream] of host.opStreams)
@@ -436,7 +436,7 @@ function endOpStreams(host, environmentId) {
       });
     }
 }
-//@ chunk-e6aww6q8.js:4042127-4042282 placement
+//@ chunk-5xgkngpb.js:4147962-4148117 placement
 /**
  * 中止某环境所有进行中的宿主操作并关闭其流（环境卸载时）。
  */
@@ -448,7 +448,7 @@ function abortEnvironmentOps(state, environmentId, pluginName) {
     }
   endOpStreams(state, environmentId);
 }
-//@ chunk-e6aww6q8.js:4042282-4042365 placement
+//@ chunk-5xgkngpb.js:4148117-4148200 placement
 /**
  * 停掉心跳并清状态
  */
@@ -457,7 +457,7 @@ function stopHeartbeat(state) {
   state.heartbeat = undefined;
   state.awaitingPong = undefined;
 }
-//@ chunk-e6aww6q8.js:4042365-4042594 placement
+//@ chunk-5xgkngpb.js:4148200-4148429 placement
 /**
  * 宿主是否完全空闲（无欠的 pong、无进行中分发/调用/按键/解析/加载/构建/flush）。
  */
@@ -473,7 +473,7 @@ function isHostIdle(state) {
     state.pendingFlushes.size === 0
   );
 }
-//@ chunk-e6aww6q8.js:4042594-4042869 placement
+//@ chunk-5xgkngpb.js:4148429-4148704 placement
 /**
  * 向 hooks worker 发送一帧（worker 已死则丢弃并记日志），next_* 帧计入该分发的已应答数。
  */
@@ -491,7 +491,7 @@ function postToWorker(state, frame) {
       : undefined;
   if (inFlightEntry !== undefined) inFlightEntry.answersSent += 1;
 }
-//@ chunk-e6aww6q8.js:4042869-4042960 placement
+//@ chunk-5xgkngpb.js:4148704-4148795 placement
 /**
  * 累计等待时长
  */
@@ -502,7 +502,7 @@ function addWaitedTime(state, fromTs, toTs) {
     state.waitedUntil = toTs;
   }
 }
-//@ chunk-e6aww6q8.js:4042960-4043062 placement
+//@ chunk-5xgkngpb.js:4148795-4148897 placement
 /**
  * 补发错过的心跳。
  */
@@ -511,7 +511,7 @@ function catchUpHeartbeat(state, now) {
   if (state.heartbeat !== undefined && now - expectedBeat >= state.heartbeatMs)
     addWaitedTime(state, expectedBeat, now);
 }
-//@ chunk-e6aww6q8.js:4043062-4043613 placement
+//@ chunk-5xgkngpb.js:4148897-4149450 placement
 /**
  * 生成 worker 重生遥测字段：原因、证据、所处阶段、worker 年龄、未回心跳数、欠的分发/加载/构建、死亡与罢工次数。
  */
@@ -539,7 +539,7 @@ function workerCrashTelemetry(state, cause, evidence) {
     strikes: host.state.unattributedCrashes + (hasEvidence ? 0 : 1),
   };
 }
-//@ chunk-e6aww6q8.js:4043613-4044287 placement
+//@ chunk-5xgkngpb.js:4149450-4150128 placement
 /**
  * 扣留表：记录各 $ 名词被哪些插件扣留（按顺序），支持 withhold/lift/end，refuser 求拒绝者，suppressed 给出当前被压制的名词。
  */
@@ -589,7 +589,7 @@ function createWithholdingTable({ table, endedBy, order }) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:4044287-4044404 placement
+//@ chunk-5xgkngpb.js:4150128-4150245 placement
 /**
  * 从接口描述的 withheldBy 中去掉指定插件。
  */
@@ -603,7 +603,7 @@ function dropWithholders(entry, removed) {
         withheldBy: kept,
       };
 }
-//@ chunk-e6aww6q8.js:4044404-4044601 placement
+//@ chunk-5xgkngpb.js:4150245-4150442 placement
 /**
  * 重置宿主的上次折叠表、结束者、所有者与扣留状态。
  */
@@ -620,7 +620,7 @@ function resetWithholdings(state) {
   });
   state.refusalsLogged.clear();
 }
-//@ chunk-e6aww6q8.js:4044601-4044766 placement
+//@ chunk-5xgkngpb.js:4150442-4150607 placement
 function forgetChangedRefusals(state, before, after) {
   for (let key of Object.keys(before))
     if (!Object.hasOwn(after, key) || after[key] !== before[key]) {
@@ -628,7 +628,7 @@ function forgetChangedRefusals(state, before, after) {
         if (logged.endsWith(`:${key}`)) state.refusalsLogged.delete(logged);
     }
 }
-//@ chunk-e6aww6q8.js:4044766-4045016 placement
+//@ chunk-5xgkngpb.js:4150607-4150857 placement
 var publishRenderInterfaces = (state) =>
   setRenderInterfaces([
     ...Object.entries(state.lastTable)
@@ -644,7 +644,7 @@ var publishRenderInterfaces = (state) =>
       suppressedBy: value,
     })),
   ]);
-//@ chunk-e6aww6q8.js:4045016-4045226 placement
+//@ chunk-5xgkngpb.js:4150857-4151067 placement
 /**
  * 记录一次 engine.create 折叠结果（表、结束者、所有者），重建扣留表并发布渲染接口。
  */
@@ -661,19 +661,19 @@ function recordFoldResult(state, folded) {
   forgetChangedRefusals(state, before, state.withheld.suppressed());
   publishRenderInterfaces(state);
 }
-//@ chunk-e6aww6q8.js:4045226-4045271 placement
+//@ chunk-5xgkngpb.js:4151067-4151112 placement
 /**
  * 某插件扣留的 $ 名词
  */
 function withheldNounsByPlugin(nouns) {
   return nouns && nouns.length ? import_baseUniq(nouns) : [];
 }
-//@ chunk-e6aww6q8.js:4045271-4045283 placement
+//@ chunk-5xgkngpb.js:4151112-4151124 placement
 /**
  * 同上别名
  */
 var withheldNounsAlias = withheldNounsByPlugin;
-//@ chunk-e6aww6q8.js:4045283-4045427 placement
+//@ chunk-5xgkngpb.js:4151124-4151268 placement
 /**
  * 列出某插件当前扣留的 $ 名词（折叠表中与额外记录）。
  */
@@ -684,7 +684,7 @@ var withheldNounsOf = (state, pluginName) =>
       .map(([key]) => key),
     ...(state.withholdings.get(pluginName) ?? []),
   ]);
-//@ chunk-e6aww6q8.js:4045427-4046096 placement
+//@ chunk-5xgkngpb.js:4151268-4151937 placement
 function reportWorkerCrashWithholdings(state, crashedPlugins) {
   let before = state.withheld.suppressed();
   for (let pluginName of crashedPlugins) {
@@ -712,7 +712,7 @@ function reportWorkerCrashWithholdings(state, crashedPlugins) {
   forgetChangedRefusals(state, before, state.withheld.suppressed());
   publishRenderInterfaces(state);
 }
-//@ chunk-e6aww6q8.js:4046096-4046518 placement
+//@ chunk-5xgkngpb.js:4151937-4152359 placement
 /**
  * 解除一组插件的扣留与所有权（卸载或拒绝时），更新折叠表并发布。
  */
@@ -737,18 +737,18 @@ function liftWithholdings(state, plugins) {
   forgetChangedRefusals(state, before, state.withheld.suppressed());
   publishRenderInterfaces(state);
 }
-//@ chunk-e6aww6q8.js:4046518-4046628 placement
+//@ chunk-5xgkngpb.js:4152359-4152469 placement
 var envCallsOf = (scan) => [
   ...(scan.env?.reads ?? []).map((name) => `env.get:${name}`),
   ...(scan.env?.writes ?? []).map((name) => `env.set:${name}`),
 ];
-//@ chunk-e6aww6q8.js:4046628-4046701 placement
+//@ chunk-5xgkngpb.js:4152469-4152542 placement
 /**
  * 崩溃或仍有扣留
  */
 var isCrashedOrWithholding = (pluginName, host) =>
   host.state.crashedWithholders.has(pluginName) || withheldNounsOf(host.state, pluginName).length > 0;
-//@ chunk-e6aww6q8.js:4046701-4046781 placement
+//@ chunk-5xgkngpb.js:4152542-4152622 placement
 /**
  * 追加插件名
  */
@@ -756,7 +756,7 @@ function withPluginName(state, pluginName) {
   let names = [...state.knownArgs.keys()];
   return names.includes(pluginName) ? names : [...names, pluginName];
 }
-//@ chunk-e6aww6q8.js:4046781-4046862 placement
+//@ chunk-5xgkngpb.js:4152622-4152703 placement
 /**
  * 递增代次
  */
@@ -764,12 +764,12 @@ function bumpGeneration(environmentKey, host) {
   let state = host.state;
   state.generations.set(environmentKey, (state.generations.get(environmentKey) ?? 0) + 1);
 }
-//@ chunk-e6aww6q8.js:4046862-4046901 placement
+//@ chunk-5xgkngpb.js:4152703-4152742 placement
 /**
  * 已知参数列表
  */
 var knownArgList = (state) => [...state.knownArgs.values()];
-//@ chunk-e6aww6q8.js:4046901-4047365 placement
+//@ chunk-5xgkngpb.js:4152742-4153213 placement
 /**
  * 宿主遗忘一个插件：清理已知参数、MCP、命令、代理、状态、面板等登记；非密封插件记录"模块未加载"的选项失败。
  */
@@ -788,6 +788,7 @@ function forgetPlugin(pluginName, host) {
   state.unloadedSteps.delete(pluginName);
   uiStatusOp(undefined, pluginName);
   closePluginPanes(pluginName);
+  clearBackdropFor(pluginName);
   if (knownPlugin === undefined) state.optionsReloadFailures.delete(pluginName);
   else if (!state.optionsReloadFailures.has(pluginName))
     state.optionsReloadFailures.set(pluginName, {
@@ -796,7 +797,7 @@ function forgetPlugin(pluginName, host) {
       error: new HooksError(`${pluginName}: its hooks module is not loaded`),
     });
 }
-//@ chunk-e6aww6q8.js:4047365-4047448 placement
+//@ chunk-5xgkngpb.js:4153213-4153296 placement
 /**
  * 记录插件参数
  */
@@ -804,7 +805,7 @@ function setKnownArgs(state, args) {
   state.knownArgs.delete(args.pluginName);
   state.knownArgs.set(args.pluginName, args);
 }
-//@ chunk-e6aww6q8.js:4047448-4047728 placement
+//@ chunk-5xgkngpb.js:4153296-4153576 placement
 /**
  * 按新折叠表更新各名词的扣留记录。
  */
@@ -820,12 +821,12 @@ function updateWithholdingRecords(state, table, plugins) {
     else state.withholdings.set(pluginName, new Set([...filtered, ...mapped]));
   }
 }
-//@ chunk-e6aww6q8.js:4047728-4047864 placement
+//@ chunk-5xgkngpb.js:4153576-4153712 placement
 function stateCallsOf(scan) {
   let labelReads = (prefix, atoms = []) => atoms.map((atom) => `${prefix}:${stateAtomKey(atom)}`);
   return [...labelReads("state.get", scan.state?.reads), ...labelReads("state.set", scan.state?.writes)];
 }
-//@ chunk-e6aww6q8.js:4047864-4048114 placement
+//@ chunk-5xgkngpb.js:4153712-4153962 placement
 /**
  * 把已加载模块的名字、层级、事件、调用（含 next.to、env、state）与代号发布给渲染层。
  */
@@ -844,7 +845,7 @@ var publishRenderPlugins = (host) =>
       generation: host.state.generations.get(loadedModule.name) ?? 0,
     })),
   );
-//@ chunk-e6aww6q8.js:4048114-4048558 placement
+//@ chunk-5xgkngpb.js:4153962-4154406 placement
 /**
  * 重新折叠时的基线：核心方法表加上次折叠表中除去指定插件后的部分。
  */
@@ -869,13 +870,13 @@ function foldBaseWithout_2(state, removed, order) {
     order,
   };
 }
-//@ chunk-e6aww6q8.js:4048558-4048602 placement
+//@ chunk-5xgkngpb.js:4154406-4154450 placement
 /**
  * 去掉该插件的折叠基线
  */
 var foldBaseWithout = (state, pluginName) =>
   foldBaseWithout_2(state, new Set([pluginName]), withPluginName(state, pluginName));
-//@ chunk-e6aww6q8.js:4048602-4048847 placement
+//@ chunk-5xgkngpb.js:4154450-4154695 placement
 /**
  * 记录重新折叠的结果，并找出未知插件的所有权。
  */
@@ -890,7 +891,7 @@ function recordRefoldResult(state, folded) {
   if (crashed.size > 0) reportWorkerCrashWithholdings(state, crashed);
   if (reloadable.size > 0) liftWithholdings(state, reloadable);
 }
-//@ chunk-e6aww6q8.js:4048847-4048924 placement
+//@ chunk-5xgkngpb.js:4154695-4154772 placement
 /**
  * 上次折叠摘要
  */
@@ -899,7 +900,7 @@ var lastFoldSummary = (state) => ({
   endedBy: state.lastEndedBy,
   owners: state.lastOwners,
 });
-//@ chunk-e6aww6q8.js:4048924-4049231 placement
+//@ chunk-5xgkngpb.js:4154772-4155079 placement
 /**
  * 计算 worker 重生后的折叠基线（去掉扣留者中已不存在的插件）。
  */
@@ -923,7 +924,7 @@ function foldBaseForRespawn(host, respawned) {
     beneath,
   };
 }
-//@ chunk-e6aww6q8.js:4049231-4049424 placement
+//@ chunk-5xgkngpb.js:4155079-4155272 placement
 /**
  * 从共享心跳戳中读出正在执行的插件（调用栈或当前环境）。
  */
@@ -942,7 +943,7 @@ function stackedPluginOf(state) {
     .map((environmentId) => names.get(environmentId))
     .find((pluginName) => pluginName !== undefined);
 }
-//@ chunk-e6aww6q8.js:4049424-4049526 placement
+//@ chunk-5xgkngpb.js:4155272-4155374 placement
 /**
  * 列出某插件捕获的进行中分发。
  */
@@ -952,7 +953,7 @@ var catchingDispatchesOf = (host, plugin) =>
       hasToolSite(entry.event) &&
       entry.caughtBy.some((environmentId) => host.names.get(environmentId) === plugin),
   );
-//@ chunk-e6aww6q8.js:4049526-4049742 placement
+//@ chunk-5xgkngpb.js:4155374-4155590 placement
 /**
  * 关闭某环境的消息端口，结算其待 flush 请求。
  */
@@ -970,7 +971,7 @@ function closeEnvironmentPort(state, environmentId) {
     port.close();
   }
 }
-//@ chunk-e6aww6q8.js:4049742-4050203 placement
+//@ chunk-5xgkngpb.js:4155590-4156051 placement
 /**
  * 标记 worker 已死：中止全部进行中的分发与调用、拒绝所有待处理请求、中止宿主操作并关闭所有端口。
  */
@@ -995,7 +996,7 @@ function markWorkerDead(state, reason) {
   endOpStreams(state);
   for (let key of [...state.ports.keys()]) closeEnvironmentPort(state, key);
 }
-//@ chunk-e6aww6q8.js:4050203-4050230 placement
+//@ chunk-5xgkngpb.js:4156051-4156078 placement
 /**
  * 失效工具描述等缓存
  */
@@ -1003,12 +1004,12 @@ function invalidateDescribeCaches() {
   invalidateToolDescriptions_2();
   forget();
 }
-//@ chunk-e6aww6q8.js:4050230-4050340 placement
+//@ chunk-5xgkngpb.js:4156078-4156188 placement
 /**
  * $.ui.invalidate 可失效的缓存：prompt.section、prompt.context、prompt.attachment、tool.describe。
  */
 var UI_INVALIDATORS; // deferred: uses invalidatePromptSections (./promptComposition.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4050230", () => {
+deferInit("chunk-5xgkngpb.js:4156078", () => {
   UI_INVALIDATORS = {
     "prompt.section": invalidatePromptSections,
     "prompt.context": invalidatePromptContext,
@@ -1019,7 +1020,7 @@ deferInit("chunk-e6aww6q8.js:4050230", () => {
     },
   };
 });
-//@ chunk-e6aww6q8.js:4050340-4050417 placement
+//@ chunk-5xgkngpb.js:4156188-4156265 placement
 /**
  * 失效全部钩子相关缓存
  */

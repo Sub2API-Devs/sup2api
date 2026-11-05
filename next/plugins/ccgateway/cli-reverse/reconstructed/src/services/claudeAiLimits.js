@@ -3,10 +3,10 @@
  *
  * claude.ai 订阅额度状态：从 anthropic-ratelimit-unified-* 响应头计算当前额度（状态、重置时间、overage、各窗口利用率）、早期预警（按窗口利用率与时间进度）、过期状态清理，以及配额探测请求。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/claudeAiLimits.ts
- * pieces: chunk-0h4e7gnq.js (6), chunk-aepeg2w5.js (9), chunk-w5ndchqs.js (75)
- * attribution: fingerprint 10, affinity 3, placement 60, sole-consumer 1, layout 13, file-local 2, callgraph-witnessed 1
+ * pieces: chunk-7pwjpdkw.js (75), chunk-exfmq47h.js (9), chunk-frs14hy1.js (7)
+ * attribution: placement 60, fingerprint 11, layout 16, file-local 2, callgraph-witnessed 1, sole-consumer 1
  */
 import { HostScoped } from "../utils/hostScoped.js";
 import { MockRateLimitState } from "./mockRateLimits.js";
@@ -29,6 +29,7 @@ import { mainAgentContext } from "../utils/agentContext.js";
 import { getModelBetas, betasRequestParam } from "../utils/betas.js";
 import { toProviderWireModelId } from "../utils/model/model.js";
 import { getAPIMetadata } from "./api/claude.js";
+import { programUseCaseBody } from "../utils/programUseCase.js";
 import { isLowPriorityActive, handleLowPriorityResponseHeaders } from "./lowPriority/lowPriorityMode.js";
 import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
 import { WRAP_UP_UTILIZATION_THRESHOLD } from "./usageLimitGrace.js";
@@ -51,54 +52,57 @@ import {
 } from "../utils/planTiers.js";
 import { isExtraUsageOutOfCredits } from "./api/errors.js";
 import { getBareCheckModel } from "../utils/model/smallFastModel.js";
+import { stripMemoryTagsFromBlocks } from "./orgMemory/promptIndex.js";
+import { EXITPLANMODE_2 } from "../tools/ExitPlanModeTool/constants.js";
+import { isDisklessSession, notePlanFileForgotten, getPlanFilePath, getPlan } from "../utils/plans.js";
 import { pickByHelper } from "../utils/git/gitSafeEnv.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:279315-279407 placement
+//@ chunk-exfmq47h.js:288938-289030 placement
 /**
  * 付费计划“额外用量”帮助文章链接。
  */
 var EXTRA_USAGE_HELP_URL =
   "https://support.claude.com/en/articles/12429409-extra-usage-for-paid-claude-plans";
-//@ chunk-aepeg2w5.js:279407-279574 placement
+//@ chunk-exfmq47h.js:289030-289197 placement
 /**
  * 支持文章（12429409）链接常量。
  */
 var USAGE_SETTINGS_URL = "https://claude.ai/settings/usage?from=cc_cli_limit_message";
 var HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE = "https://claude.ai/admin-settings/usage";
 var EXTRA_USAGE_SUPPORT_URL = "https://support.claude.com/en/articles/12429409";
-//@ chunk-aepeg2w5.js:279574-279587 placement
+//@ chunk-exfmq47h.js:289197-289210 placement
 var MAX = "max";
-//@ chunk-aepeg2w5.js:288283-288308 sole-consumer
+//@ chunk-exfmq47h.js:297906-297931 sole-consumer
 /**
  * 按 host 存放的 MockRateLimitState 单例槽。
  */
 var mockRateLimitStateSlot; // deferred: uses MockRateLimitState (./mockRateLimits.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:288283", () => {
+deferInit("chunk-exfmq47h.js:297906", () => {
   mockRateLimitStateSlot = new HostScoped(() => new MockRateLimitState());
 });
-//@ chunk-aepeg2w5.js:288308-288345 placement
+//@ chunk-exfmq47h.js:297931-297968 placement
 /**
  * 取当前宿主的限速模拟状态槽（mockRateLimitStateSlot）。
  */
 function getMockRateLimitState() {
   return mockRateLimitStateSlot.of(getRootSession().host);
 }
-//@ chunk-aepeg2w5.js:288345-288372 placement
+//@ chunk-exfmq47h.js:297968-297995 placement
 /**
  * 限速模拟关闭时的占位实现，永远返回 null。
  */
 function getDisabledMockRateLimitState() {
   return null;
 }
-//@ chunk-aepeg2w5.js:288372-288437 placement
+//@ chunk-exfmq47h.js:297995-298060 placement
 function checkQuotaStatus() {
   let mockRateLimitState = getMockRateLimitState();
   mockRateLimitState.enabled;
   return null;
   return mockRateLimitState.headers;
 }
-//@ chunk-aepeg2w5.js:288437-288684 placement
+//@ chunk-exfmq47h.js:298060-298307 placement
 /**
  * 用模拟的配额状态覆盖响应头中的统一限额字段（无模拟状态时原样返回）。
  */
@@ -113,14 +117,14 @@ function applyMockQuotaHeaders(init) {
   });
   return headers;
 }
-//@ chunk-aepeg2w5.js:288684-288708 placement
+//@ chunk-exfmq47h.js:298307-298331 placement
 /**
  * 限额模拟（外部构建恒为 false）。
  */
 function isRateLimitMockingEnabled() {
   return false;
 }
-//@ chunk-w5ndchqs.js:6185-6282 placement
+//@ chunk-7pwjpdkw.js:6386-6483 placement
 /**
  * 从响应头读使用率：转数字、夹到 0–1，非法值按 0。
  */
@@ -128,12 +132,12 @@ function readUtilizationHeader(headers, name) {
   let value = Number(headers.get(name) ?? 0);
   return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
 }
-//@ chunk-w5ndchqs.js:6282-6386 placement
+//@ chunk-7pwjpdkw.js:6483-6587 placement
 function futureResetHeader(headers, name, nowMs) {
   let seconds = Number(headers.get(name) ?? NaN);
   return Number.isFinite(seconds) && seconds * 1000 > nowMs ? Math.round(seconds) : undefined;
 }
-//@ chunk-w5ndchqs.js:6386-7016 placement
+//@ chunk-7pwjpdkw.js:6587-7217 placement
 /**
  * 解析 anthropic-ratelimit-unified-* 响应头（status、5h/7d 利用率与重置时间、grace 窗口），得到限额快照。
  */
@@ -174,7 +178,7 @@ function parseUnifiedRateLimitHeaders(headers, nowMs) {
     covered: extraUsageStatus !== undefined || headers.get(OVERAGE_IN_USE_HEADER) === "true",
   };
 }
-//@ chunk-w5ndchqs.js:7016-8336 placement
+//@ chunk-7pwjpdkw.js:7217-8537 placement
 /**
  * 额度宽限期"收尾"状态：当前所处区间（zone）、本轮提示是否已放置、子代理提示节流。
  */
@@ -244,19 +248,19 @@ class WrapUpState {
     return this.getZone(nowMs) !== null && !this.covered;
   }
 }
-//@ chunk-w5ndchqs.js:8336-8384 placement
+//@ chunk-7pwjpdkw.js:8537-8585 placement
 function maybeMockRateLimitHeaders(headers) {
   if (isRateLimitMockingEnabled()) return applyMockQuotaHeaders(headers);
   return headers;
 }
-//@ chunk-w5ndchqs.js:8384-8434 placement
+//@ chunk-7pwjpdkw.js:8585-8635 placement
 /**
  * 是否应展示限额相关界面：Claude.ai 订阅、网关提供方或限速模拟开启时成立。
  */
 function isLimitsDisplayEnabled(flag) {
   return flag || getAPIProvider() === "gateway" || isRateLimitMockingEnabled();
 }
-//@ chunk-w5ndchqs.js:20162-20352 fingerprint (2.1.88 match: RATE_LIMIT_DISPLAY_NAMES, 0.705)
+//@ chunk-7pwjpdkw.js:20316-20506 fingerprint (2.1.88 match: RATE_LIMIT_DISPLAY_NAMES, 0.705)
 /**
  * 限额类型显示名：five_hour→"5-hour limit"、seven_day→"weekly limit"、seven_day_opus/sonnet、seven_day_overage_included→"Fable limit"、overage→"usage credit limit"。
  */
@@ -268,7 +272,7 @@ var RATE_LIMIT_DISPLAY_NAMES = {
   seven_day_overage_included: "Fable limit",
   overage: "usage credit limit",
 };
-//@ chunk-w5ndchqs.js:27877-28134 fingerprint (2.1.88 match: EARLY_WARNING_CONFIGS, 1)
+//@ chunk-7pwjpdkw.js:28036-28293 fingerprint (2.1.88 match: EARLY_WARNING_CONFIGS, 1)
 /**
  * 时间相对早期预警配置：5 小时窗口利用率 ≥90% 且时间进度 ≤72%；7 天窗口 75%/60%、50%/35%…
  */
@@ -302,14 +306,14 @@ var EARLY_WARNING_CONFIGS = [
     ],
   },
 ];
-//@ chunk-w5ndchqs.js:28134-28170 layout
+//@ chunk-7pwjpdkw.js:28293-28329 layout
 /**
  * 限额类型显示名，未知类型原样返回。
  */
 function getRateLimitDisplayName(type) {
   return getOwn(RATE_LIMIT_DISPLAY_NAMES, type) || type;
 }
-//@ chunk-w5ndchqs.js:28170-28256 file-local
+//@ chunk-7pwjpdkw.js:28329-28415 file-local
 /**
  * 窗口已过时间占比（0–1）。
  */
@@ -319,7 +323,7 @@ function computeTimeProgress(resetsAt, windowSeconds) {
   let elapsed = nowSeconds - windowStart;
   return Math.max(0, Math.min(1, elapsed / windowSeconds));
 }
-//@ chunk-w5ndchqs.js:28256-28821 layout
+//@ chunk-7pwjpdkw.js:28415-28980 layout
 /**
  * 从 429 响应头构造被拒额度状态（rateLimitType、overage 状态/重置、禁用原因、范围、低优先级提议）。
  */
@@ -345,7 +349,7 @@ function extractQuotaStatusFromErrorHeaders(error) {
   Object.assign(limits, parseLowPriorityOffer(error.headers));
   return limits;
 }
-//@ chunk-w5ndchqs.js:28821-29006 layout
+//@ chunk-7pwjpdkw.js:28980-29165 layout
 /**
  * 低优先级（等待额度恢复）提议头：offer、retry-after 秒、最大等待秒。
  */
@@ -364,7 +368,7 @@ function parseLowPriorityOffer(headers) {
     }),
   };
 }
-//@ chunk-w5ndchqs.js:29006-29124 fingerprint (2.1.88 match: EARLY_WARNING_CLAIM_MAP, 0.608)
+//@ chunk-7pwjpdkw.js:29165-29283 fingerprint (2.1.88 match: EARLY_WARNING_CLAIM_MAP, 0.608)
 /**
  * 窗口类型 → 头名缩写（5h/7d/7d_oi/overage）；Qt=30 分钟。
  */
@@ -375,21 +379,21 @@ var UNIFIED_WINDOW_HEADER_KEYS = [
   ["overage", "overage"],
 ];
 var EARLY_WARNING_COOLDOWN_MS = 1800000;
-//@ chunk-w5ndchqs.js:29124-29176 layout
+//@ chunk-7pwjpdkw.js:29283-29335 layout
 /**
  * GrowthBook tengu_sharded_moonbeam（默认开）。
  */
 function isShardedQuotaEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_sharded_moonbeam", true);
 }
-//@ chunk-w5ndchqs.js:29176-29225 layout
+//@ chunk-7pwjpdkw.js:29335-29384 layout
 /**
  * GrowthBook tengu_valiant_finch（默认关）。
  */
 function isValiantFinchEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_valiant_finch", false);
 }
-//@ chunk-w5ndchqs.js:29225-29318 layout
+//@ chunk-7pwjpdkw.js:29384-29477 layout
 /**
  * 头值转数字（空/非数返回 undefined）。
  */
@@ -398,7 +402,7 @@ function parseHeaderNumber(raw) {
   let value = Number(raw);
   return Number.isFinite(value) ? value : undefined;
 }
-//@ chunk-w5ndchqs.js:29318-29851 fingerprint (2.1.88 match: getHeaderBasedEarlyWarning, 0.678)
+//@ chunk-7pwjpdkw.js:29477-30010 fingerprint (2.1.88 match: getHeaderBasedEarlyWarning, 0.678)
 /**
  * 解析各窗口 anthropic-ratelimit-unified-{5h,7d,7d_oi,overage}-{utilization,reset,surpassed-threshold,status} 头为读数表。
  */
@@ -439,12 +443,12 @@ function getHeaderBasedEarlyWarning(headers) {
   }
   return readings;
 }
-//@ chunk-w5ndchqs.js:29851-29899 layout
+//@ chunk-7pwjpdkw.js:30010-30058 layout
 /**
  * allowed/allowed_warning/rejected。
  */
 var UNIFIED_STATUS_VALUES = ["allowed", "allowed_warning", "rejected"];
-//@ chunk-w5ndchqs.js:29899-30063 layout
+//@ chunk-7pwjpdkw.js:30058-30222 layout
 /**
  * 只保留有 utilization 与 resets_at 的窗口读数。
  */
@@ -460,21 +464,21 @@ function pickWindowReadings(readings) {
   }
   return result;
 }
-//@ chunk-w5ndchqs.js:30063-30173 layout
+//@ chunk-7pwjpdkw.js:30222-30332 layout
 /**
  * 读数指纹 "利用率@重置:状态:阈值"，用于去重。
  */
 function readingFingerprint(reading, limits) {
   return `${Math.round(reading.utilization * 100)}@${reading.resets_at}:${limits?.status}:${limits?.surpassedThreshold}`;
 }
-//@ chunk-w5ndchqs.js:30173-30269 layout
+//@ chunk-7pwjpdkw.js:30332-30428 layout
 /**
  * 读数的 utilization 与 resets_at 都是有限数。
  */
 function isValidUtilization(reading) {
   return reading !== undefined && Number.isFinite(reading.utilization) && Number.isFinite(reading.resets_at);
 }
-//@ chunk-w5ndchqs.js:30269-30367 layout
+//@ chunk-7pwjpdkw.js:30428-30526 layout
 /**
  * 读数有阈值或完整利用率信息。
  */
@@ -484,7 +488,7 @@ function hasReadingSignal(reading) {
     (reading.utilization !== undefined && reading.resets_at !== undefined)
   );
 }
-//@ chunk-w5ndchqs.js:30367-30645 fingerprint (2.1.88 match: makeTestQuery, 0.93)
+//@ chunk-7pwjpdkw.js:30526-30814 fingerprint (2.1.88 match: makeTestQuery, 0.93)
 /**
  * 配额探测：发一次 max_tokens=1 的 "quota" 请求以获取限额响应头。
  */
@@ -511,6 +515,7 @@ async function makeTestQuery(model, credentials, signal) {
         messages,
         metadata: getAPIMetadata(),
         ...betasRequestParam(betas),
+        ...programUseCaseBody(betas),
       },
       {
         signal,
@@ -518,14 +523,14 @@ async function makeTestQuery(model, credentials, signal) {
     )
     .asResponse();
 }
-//@ chunk-w5ndchqs.js:30645-30687 layout
+//@ chunk-7pwjpdkw.js:30814-30856 layout
 /**
  * 执行一次配额探测请求。
  */
 async function runQuotaProbe(model, credentials, signal) {
   await makeTestQuery(model, credentials, signal);
 }
-//@ chunk-w5ndchqs.js:30687-31000 file-local
+//@ chunk-7pwjpdkw.js:30856-31169 file-local
 /**
  * 响应头里有 surpassed-threshold 的窗口直接作为预警（allowed_warning）。
  */
@@ -546,7 +551,7 @@ function extractRawUtilization(headers, unifiedRateLimitFallbackAvailable, skipF
   }
   return null;
 }
-//@ chunk-w5ndchqs.js:31000-31370 fingerprint (2.1.88 match: getTimeRelativeEarlyWarning, 0.722)
+//@ chunk-7pwjpdkw.js:31169-31539 fingerprint (2.1.88 match: getTimeRelativeEarlyWarning, 0.723)
 /**
  * 按配置判断某窗口利用率是否超过对应时间进度的阈值。
  */
@@ -566,7 +571,7 @@ function getTimeRelativeEarlyWarning(headers, config, unifiedRateLimitFallbackAv
     isUsingOverage: false,
   };
 }
-//@ chunk-w5ndchqs.js:31370-31528 callgraph-witnessed (2.1.88 match: getEarlyWarningFromHeaders, 0)
+//@ chunk-7pwjpdkw.js:31539-31697 callgraph-witnessed (2.1.88 match: getEarlyWarningFromHeaders, 0)
 /**
  * 早期预警：先看服务器阈值头，再按时间相对配置（Fable 场景跳过 5 小时窗口）。
  */
@@ -581,7 +586,7 @@ function getEarlyWarningFromHeaders(headers, unifiedRateLimitFallbackAvailable) 
   }
   return null;
 }
-//@ chunk-w5ndchqs.js:31528-32905 fingerprint (2.1.88 match: computeNewLimitsFromHeaders, 0.744)
+//@ chunk-7pwjpdkw.js:31697-33112 fingerprint (2.1.88 match: computeNewLimitsFromHeaders, 0.721)
 /**
  * 从 anthropic-ratelimit-unified-* 头计算额度：status、reset、fallback、representative-claim、overage-status/reset/disabled-reason/scope、upgrade-paths、月度/频道利用率、宽限；附带早期预警与各窗口读数。
  */
@@ -659,13 +664,14 @@ function computeNewLimitsFromHeaders(headers, graceActive) {
     ...lowPriorityOffer,
   };
   let headerBasedEarlyWarning = getHeaderBasedEarlyWarning(headers);
+  if (overageScope === "group_pool") delete headerBasedEarlyWarning.overage;
   return {
     base: parsedLimits,
     own: withEarlyWarning(parsedLimits, headerBasedEarlyWarning),
     readings: headerBasedEarlyWarning,
   };
 }
-//@ chunk-w5ndchqs.js:32905-33037 layout
+//@ chunk-7pwjpdkw.js:33112-33244 layout
 /**
  * allowed 状态时叠加早期预警信息。
  */
@@ -674,14 +680,14 @@ function withEarlyWarning(previous, headers) {
   let limits = getEarlyWarningFromHeaders(headers, previous.unifiedRateLimitFallbackAvailable);
   return limits ? carryOverageFields(limits, previous.upgradePaths, previous) : previous;
 }
-//@ chunk-w5ndchqs.js:33037-33073 placement
+//@ chunk-7pwjpdkw.js:33244-33280 placement
 /**
  * 用响应头重算限额并写回“自有”部分（宽限期结束前后合并超额字段）。
  */
 function refreshLimitsFromHeaders(headers, model) {
   return computeNewLimitsFromHeaders(headers, model).own;
 }
-//@ chunk-w5ndchqs.js:33073-33580 placement
+//@ chunk-7pwjpdkw.js:33280-33787 placement
 /**
  * 把超额（overage）相关字段与升级路径合并到限额状态中（宽限期内不带超额状态字段）。
  */
@@ -716,7 +722,7 @@ function carryOverageFields(limits, upgradePaths, previous) {
     }),
   };
 }
-//@ chunk-w5ndchqs.js:33674-33808 placement
+//@ chunk-7pwjpdkw.js:33881-34015 placement
 function toAllowedLimits(currentLimits) {
   let { resetsAt, rateLimitType, utilization, surpassedThreshold, upgradePaths, ...rest } = currentLimits;
   return {
@@ -724,7 +730,7 @@ function toAllowedLimits(currentLimits) {
     status: "allowed",
   };
 }
-//@ chunk-w5ndchqs.js:33808-34257 placement
+//@ chunk-7pwjpdkw.js:34015-34464 placement
 function creditsRequiredDetails(error) {
   let details = error.error?.error?.details;
   if (details?.error_code !== "credits_required") return {};
@@ -741,7 +747,7 @@ function creditsRequiredDetails(error) {
     }),
   };
 }
-//@ chunk-w5ndchqs.js:34257-34371 placement
+//@ chunk-7pwjpdkw.js:34464-34578 placement
 function cacheExtraUsageDisabledReason(reason, storageV5) {
   if (getGlobalConfig().cachedExtraUsageDisabledReason !== reason)
     saveGlobalConfig(
@@ -752,7 +758,7 @@ function cacheExtraUsageDisabledReason(reason, storageV5) {
       storageV5,
     );
 }
-//@ chunk-w5ndchqs.js:34371-34489 fingerprint (2.1.88 match: cacheExtraUsageDisabledReason, 0.61)
+//@ chunk-7pwjpdkw.js:34578-34696 fingerprint (2.1.88 match: cacheExtraUsageDisabledReason, 0.61)
 /**
  * 缓存 overage-disabled-reason（网关模式除外）。
  */
@@ -763,7 +769,7 @@ function cacheExtraUsageDisabledReason_2(headers, storage) {
     storage,
   );
 }
-//@ chunk-w5ndchqs.js:37636-37763 placement
+//@ chunk-7pwjpdkw.js:37843-37970 placement
 function earlyWarningThresholdFor(rateLimitTier) {
   switch (rateLimitTier) {
     case "default_claude_max_5x":
@@ -774,7 +780,7 @@ function earlyWarningThresholdFor(rateLimitTier) {
       return WRAP_UP_UTILIZATION_THRESHOLD;
   }
 }
-//@ chunk-w5ndchqs.js:37763-47376 placement
+//@ chunk-7pwjpdkw.js:37970-47619 placement
 /**
  * claude.ai 订阅额度的进程级跟踪器：当前限额状态、窗口利用率、宽限期、超额使用、额度拒绝事件与订阅者通知（tengu_claudeai_limits_status_changed）。
  */
@@ -998,10 +1004,10 @@ class ClaudeAiLimitsTracker {
     this.limitsObserved = limitsObserved;
     this.statusChanged.emit(limits);
   }
-  async probeQuotaStatus(model, credentials, storageV5) {
+  async probeQuotaStatus(model, credentials, storageV5, limits) {
     if (isEssentialTrafficOnly()) return null;
     if (!isLimitsDisplayEnabled(isClaudeAISubscriber())) return null;
-    if (getIsNonInteractiveSession()) return null;
+    if (getIsNonInteractiveSession() && !limits?.probeInNonInteractiveSession) return null;
     let accountEpoch = this.accountEpoch;
     try {
       let testQuery = await makeTestQuery(model, credentials);
@@ -1255,31 +1261,31 @@ class ClaudeAiLimitsTracker {
     }
   }
 }
-//@ chunk-w5ndchqs.js:47376-47389 placement
+//@ chunk-7pwjpdkw.js:47619-47632 placement
 var claudeAiLimits; // deferred: uses ClaudeAiLimitsTracker of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-w5ndchqs.js:47376", () => {
+deferInit("chunk-7pwjpdkw.js:47619", () => {
   claudeAiLimits = new ClaudeAiLimitsTracker();
 });
-//@ chunk-w5ndchqs.js:47389-47426 placement
+//@ chunk-7pwjpdkw.js:47632-47669 placement
 function getCurrentLimits() {
   return claudeAiLimits.currentLimits;
 }
-//@ chunk-w5ndchqs.js:47426-47468 placement
+//@ chunk-7pwjpdkw.js:47669-47711 placement
 function getRawUtilization() {
   return liveWindowsOf(claudeAiLimits.rawUtilization);
 }
-//@ chunk-w5ndchqs.js:47468-47508 placement
+//@ chunk-7pwjpdkw.js:47711-47751 placement
 function getRawWindowLevels() {
   return claudeAiLimits.rawWindowLevels;
 }
-//@ chunk-w5ndchqs.js:47508-47625 placement
+//@ chunk-7pwjpdkw.js:47751-47868 placement
 function hasSurpassedThreshold(rateLimitType) {
   return (
     claudeAiLimits.rawWindowLevels[rateLimitType]?.surpassedThreshold ??
     claudeAiLimits.currentWindows(Date.now())[rateLimitType]?.surpassedThreshold
   );
 }
-//@ chunk-w5ndchqs.js:47625-47776 placement
+//@ chunk-7pwjpdkw.js:47868-48019 placement
 /**
  * 取当前各统一限额窗口的使用率与重置时间。
  */
@@ -1296,7 +1302,7 @@ function currentUsageWindows() {
   }
   return live;
 }
-//@ chunk-w5ndchqs.js:47776-47879 placement
+//@ chunk-7pwjpdkw.js:48019-48122 placement
 function liveWindowsOf(rawUtilization) {
   let now = Date.now();
   let live = {};
@@ -1306,7 +1312,7 @@ function liveWindowsOf(rawUtilization) {
   }
   return live;
 }
-//@ chunk-w5ndchqs.js:47879-47966 placement
+//@ chunk-7pwjpdkw.js:48122-48209 placement
 /**
  * 判断一条使用率观测是否可用于当前窗口：resets_at 在 now 之后一年内。
  */
@@ -1315,67 +1321,67 @@ function isUtilizationEntryUsable(entry, nowMs) {
   let maxSeconds = nowSeconds + 31536000;
   return isValidUtilization(entry) && entry.resets_at > nowSeconds && entry.resets_at < maxSeconds;
 }
-//@ chunk-w5ndchqs.js:47966-48002 placement
+//@ chunk-7pwjpdkw.js:48209-48245 placement
 function getLimitsAccountEpoch() {
   return claudeAiLimits.accountEpoch;
 }
-//@ chunk-w5ndchqs.js:48002-48041 placement
+//@ chunk-7pwjpdkw.js:48245-48284 placement
 function areLimitsObserved() {
   return claudeAiLimits.limitsObserved;
 }
-//@ chunk-w5ndchqs.js:48041-48092 placement
+//@ chunk-7pwjpdkw.js:48284-48335 placement
 function lastLimitsObservationAt() {
   return claudeAiLimits.lastAppliedObservationAtMs;
 }
-//@ chunk-w5ndchqs.js:48092-48144 placement
+//@ chunk-7pwjpdkw.js:48335-48387 placement
 function onLimitsStatusChanged(listener) {
   return claudeAiLimits.statusChanged.subscribe(listener);
 }
-//@ chunk-w5ndchqs.js:48144-48195 placement
+//@ chunk-7pwjpdkw.js:48387-48438 placement
 function onOverageInUse(listener) {
   return claudeAiLimits.overageInUse.subscribe(listener);
 }
-//@ chunk-w5ndchqs.js:48195-48247 placement
+//@ chunk-7pwjpdkw.js:48438-48490 placement
 function onQuotaRejected(listener) {
   return claudeAiLimits.quotaRejected.subscribe(listener);
 }
-//@ chunk-w5ndchqs.js:48247-48295 placement
+//@ chunk-7pwjpdkw.js:48490-48538 placement
 function beginUsageLimitWait(wait) {
   return claudeAiLimits.beginUsageLimitWait(wait);
 }
-//@ chunk-w5ndchqs.js:48295-48339 placement
+//@ chunk-7pwjpdkw.js:48538-48582 placement
 function usageLimitWaits() {
   return [...claudeAiLimits.usageLimitWaits];
 }
-//@ chunk-w5ndchqs.js:48339-48400 placement
+//@ chunk-7pwjpdkw.js:48582-48643 placement
 function onUsageLimitWaitsChanged(listener) {
   return claudeAiLimits.usageLimitWaitsChanged.subscribe(listener);
 }
-//@ chunk-w5ndchqs.js:48400-48438 placement
+//@ chunk-7pwjpdkw.js:48643-48681 placement
 function resetCurrentLimits() {
   claudeAiLimits.resetCurrentLimits();
 }
-//@ chunk-w5ndchqs.js:48438-48477 placement
+//@ chunk-7pwjpdkw.js:48681-48720 placement
 function forgetHeldWindows(windowKey) {
   claudeAiLimits.forgetHeldWindows(windowKey);
 }
-//@ chunk-w5ndchqs.js:48477-48515 placement
+//@ chunk-7pwjpdkw.js:48720-48758 placement
 function emitLimitsStatusChange(limits) {
   claudeAiLimits.emitStatusChange(limits);
 }
-//@ chunk-w5ndchqs.js:48515-48554 placement
+//@ chunk-7pwjpdkw.js:48758-48797 placement
 function restoreLimits(limits, limitsObserved) {
   claudeAiLimits.restoreLimits(limits, limitsObserved);
 }
-//@ chunk-w5ndchqs.js:48554-48614 placement
+//@ chunk-7pwjpdkw.js:48797-48857 placement
 async function probeQuotaStatusAtStart(credentials, signal) {
   await claudeAiLimits.probeQuotaStatus(getBareCheckModel(), credentials, signal);
 }
-//@ chunk-w5ndchqs.js:48614-48667 placement
-function probeQuotaStatus(mainLoopModel, credentials, storageV5) {
-  return claudeAiLimits.probeQuotaStatus(mainLoopModel, credentials, storageV5);
+//@ chunk-7pwjpdkw.js:48857-48914 placement
+function probeQuotaStatus(source, force, storageV5, options) {
+  return claudeAiLimits.probeQuotaStatus(source, force, storageV5, options);
 }
-//@ chunk-w5ndchqs.js:48667-48759 placement
+//@ chunk-7pwjpdkw.js:48914-49006 placement
 function extractQuotaStatusFromHeaders(
   headers,
   model,
@@ -1393,7 +1399,7 @@ function extractQuotaStatusFromHeaders(
     storageV5,
   );
 }
-//@ chunk-w5ndchqs.js:48759-48835 placement
+//@ chunk-7pwjpdkw.js:49006-49082 placement
 function extractQuotaStatusFromError(
   error,
   requestRouteKind,
@@ -1403,7 +1409,7 @@ function extractQuotaStatusFromError(
 ) {
   claudeAiLimits.extractQuotaStatusFromError(error, requestRouteKind, nowMs, limitsAccountEpoch, storageV5);
 }
-//@ chunk-w5ndchqs.js:48918-48976 affinity (2.1.88 match: extractQuotaStatusFromError, 1)
+//@ chunk-7pwjpdkw.js:49165-49223 fingerprint (2.1.88 match: extractQuotaStatusFromError, 1)
 /**
  * 构造 rejected 额度状态（合并错误里的字段）。旧版名错配。
  */
@@ -1414,38 +1420,38 @@ function buildRejectedLimits(limits, error) {
     ...creditsRequiredDetails(error),
   };
 }
-//@ chunk-w5ndchqs.js:48976-49011 placement
+//@ chunk-7pwjpdkw.js:49223-49258 placement
 function resetGraceState() {
   claudeAiLimits.resetGraceState();
 }
-//@ chunk-w5ndchqs.js:49011-49056 placement
+//@ chunk-7pwjpdkw.js:49258-49303 placement
 function resetNearLimitWrapUpState() {
   claudeAiLimits.resetNearLimitWrapUpState();
 }
-//@ chunk-w5ndchqs.js:49056-49130 placement
+//@ chunk-7pwjpdkw.js:49303-49377 placement
 function extractGraceStatusFromHeaders(headers, model, nowMs = Date.now(), accountEpoch) {
   claudeAiLimits.extractGraceStatusFromHeaders(headers, model, nowMs, accountEpoch);
 }
-//@ chunk-w5ndchqs.js:49130-49172 placement
+//@ chunk-7pwjpdkw.js:49377-49419 placement
 function wrapUpOnMainTurnStart() {
   claudeAiLimits.wrapUp.onMainTurnStart();
 }
-//@ chunk-w5ndchqs.js:49172-49218 placement
+//@ chunk-7pwjpdkw.js:49419-49465 placement
 function takeWrapUpTurnNote() {
   return claudeAiLimits.wrapUp.takeTurnNote();
 }
-//@ chunk-w5ndchqs.js:49218-49264 placement
+//@ chunk-7pwjpdkw.js:49465-49511 placement
 function markWrapUpStartNotePlaced() {
   claudeAiLimits.wrapUp.markStartNotePlaced();
 }
-//@ chunk-w5ndchqs.js:49264-49331 placement
+//@ chunk-7pwjpdkw.js:49511-49578 placement
 /**
  * 宽限期结束后是否应继续（按 continueAfterWrapUpAt 判定）。
  */
 function shouldContinueAfterWrapUp(limits = Date.now()) {
   return claudeAiLimits.wrapUp.continueAfterWrapUpAt(limits);
 }
-//@ chunk-w5ndchqs.js:49331-49498 placement
+//@ chunk-7pwjpdkw.js:49578-49745 placement
 function emitStatusChange(limits = Date.now()) {
   let wrapUpLimit = shouldContinueAfterWrapUp(limits);
   return wrapUpLimit === null
@@ -1457,26 +1463,26 @@ function emitStatusChange(limits = Date.now()) {
         unifiedRateLimitFallbackAvailable: false,
       };
 }
-//@ chunk-w5ndchqs.js:49498-49547 placement
+//@ chunk-7pwjpdkw.js:49745-49794 placement
 function isSubagentWrapUpNoteDue() {
   return claudeAiLimits.wrapUp.subagentNoteDue();
 }
-//@ chunk-w5ndchqs.js:49547-49588 placement
+//@ chunk-7pwjpdkw.js:49794-49835 placement
 function getWrapUpZone() {
   return claudeAiLimits.wrapUp.getZone();
 }
-//@ chunk-w5ndchqs.js:49588-49648 placement
+//@ chunk-7pwjpdkw.js:49835-49895 placement
 function consumeNearLimitWrapUpHint() {
   return claudeAiLimits.consumePendingNearLimitWrapUpHint();
 }
-//@ chunk-w5ndchqs.js:49648-49769 placement
+//@ chunk-7pwjpdkw.js:49895-50016 placement
 function overageScopeHeader(headers) {
   let scope = headers?.get?.(OVERAGE_SCOPE_HEADER);
   if (scope === "service" || scope === "channel" || scope === "group_pool" || scope === "organization")
     return scope;
   return;
 }
-//@ chunk-0h4e7gnq.js:48384-48429 fingerprint (2.1.88 match: currentLimits, 0.823)
+//@ chunk-frs14hy1.js:54357-54402 fingerprint (2.1.88 match: currentLimits, 0.822)
 /**
  * 默认额度状态 {status:"allowed", isUsingOverage:false}。
  */
@@ -1484,7 +1490,7 @@ var currentLimits = {
   status: "allowed",
   isUsingOverage: false,
 };
-//@ chunk-0h4e7gnq.js:48429-48567 fingerprint (2.1.88 match: extractQuotaStatusFromHeaders, 0.677)
+//@ chunk-frs14hy1.js:54402-54540 fingerprint (2.1.88 match: extractQuotaStatusFromHeaders, 0.676)
 /**
  * 额度状态是否为"完全正常"（allowed、无重置时间、未用 overage、无宽限）。
  */
@@ -1497,7 +1503,7 @@ function extractQuotaStatusFromHeaders_2(headers) {
     headers.rateLimitGraceActive !== true
   );
 }
-//@ chunk-0h4e7gnq.js:48567-49100 affinity
+//@ chunk-frs14hy1.js:54540-55073 layout
 /**
  * 额度状态的重置时间已过则清回默认（clear），overage 重置时间已过则剥离 overage 字段（overage_strip）。
  */
@@ -1532,7 +1538,7 @@ function expireStaleLimits(limits, nowSeconds = Date.now() / 1000) {
     degradation: "none",
   };
 }
-//@ chunk-0h4e7gnq.js:49100-49182 affinity
+//@ chunk-frs14hy1.js:55073-55155 layout
 /**
  * 取限额窗口列表最后一项的当前状态（Sd）。
  */
@@ -1540,14 +1546,42 @@ function getLatestLimitStatus(limitsList, nowSeconds = Date.now() / 1000) {
   let limits = limitsList.at(-1);
   return limits === undefined ? undefined : expireStaleLimits(limits, nowSeconds);
 }
-//@ chunk-0h4e7gnq.js:49444-49499 placement
+//@ chunk-frs14hy1.js:55155-55417 layout
+/**
+ * 给 SDK 的 assistant message：去内部块，ExitPlanMode 的 tool_use 输入补上计划文本。
+ */
+function latestUsageAt(message) {
+  let content = message.message.content;
+  if (!Array.isArray(content)) return message.message;
+  let content_2 = stripMemoryTagsFromBlocks(content).map((content) => {
+    if (content.type !== "tool_use") return content;
+    if (content.name === EXITPLANMODE_2 && !isDisklessSession()) {
+      notePlanFileForgotten(getPlanFilePath());
+      let plan = getPlan();
+      if (plan)
+        return {
+          ...content,
+          input: {
+            ...content.input,
+            plan,
+          },
+        };
+    }
+    return content;
+  });
+  return {
+    ...message.message,
+    content: content_2,
+  };
+}
+//@ chunk-frs14hy1.js:55417-55472 placement
 /**
  * 对象非空时原样返回，空对象返回 undefined。
  */
 function nonEmptyObjectOrUndefined(obj) {
   return Object.keys(obj).length > 0 ? obj : undefined;
 }
-//@ chunk-0h4e7gnq.js:49499-49711 placement
+//@ chunk-frs14hy1.js:55472-55684 placement
 function dropExpiredWindows(limits, nowSeconds) {
   let { unifiedWindows, ...rest } = limits;
   if (unifiedWindows === undefined) return limits;
@@ -1565,31 +1599,8 @@ function dropExpiredWindows(limits, nowSeconds) {
       };
 }
 export {
-  getLimitsAccountEpoch,
-  getLatestLimitStatus,
-  extractQuotaStatusFromHeaders_2,
   getCurrentLimits,
-  areLimitsObserved,
-  emitLimitsStatusChange,
-  nonEmptyObjectOrUndefined,
-  HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE,
-  USAGE_SETTINGS_URL,
-  isValidUtilization,
-  getWrapUpZone,
-  getRawUtilization,
-  getRawWindowLevels,
-  onLimitsStatusChanged,
-  getMockRateLimitState,
-  MAX,
-  currentLimits,
-  getRateLimitDisplayName,
-  lastLimitsObservationAt,
-  EXTRA_USAGE_HELP_URL,
-  EXTRA_USAGE_SUPPORT_URL,
-  onOverageInUse,
-  hasSurpassedThreshold,
-  isRateLimitMockingEnabled,
-  currentUsageWindows,
+  getLimitsAccountEpoch,
   extractQuotaStatusFromHeaders,
   extractQuotaStatusFromError,
   beginUsageLimitWait,
@@ -1597,29 +1608,53 @@ export {
   maybeMockRateLimitHeaders,
   buildRejectedLimits,
   refreshLimitsFromHeaders,
-  probeQuotaStatusAtStart,
-  emitStatusChange,
-  probeQuotaStatus,
+  HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE,
+  USAGE_SETTINGS_URL,
+  getLatestLimitStatus,
+  extractQuotaStatusFromHeaders_2,
+  areLimitsObserved,
+  emitLimitsStatusChange,
+  onLimitsStatusChanged,
   onQuotaRejected,
+  probeQuotaStatus,
+  onUsageLimitWaitsChanged,
+  usageLimitWaits,
   forgetHeldWindows,
-  resetGraceState,
-  resetNearLimitWrapUpState,
-  resetCurrentLimits,
+  emitStatusChange,
+  getRateLimitDisplayName,
+  getMockRateLimitState,
+  MAX,
+  isLimitsDisplayEnabled,
+  extractQuotaStatusFromErrorHeaders,
+  creditsRequiredDetails,
+  getRawUtilization,
+  cacheExtraUsageDisabledReason,
+  runQuotaProbe,
+  lastLimitsObservationAt,
   RATE_LIMIT_DISPLAY_NAMES,
   isSubagentWrapUpNoteDue,
   wrapUpOnMainTurnStart,
   takeWrapUpTurnNote,
   markWrapUpStartNotePlaced,
+  getWrapUpZone,
   consumeNearLimitWrapUpHint,
-  isLimitsDisplayEnabled,
-  extractQuotaStatusFromErrorHeaders,
-  creditsRequiredDetails,
-  cacheExtraUsageDisabledReason,
-  runQuotaProbe,
-  restoreLimits,
-  onUsageLimitWaitsChanged,
-  usageLimitWaits,
+  isRateLimitMockingEnabled,
   getDisabledMockRateLimitState,
   checkQuotaStatus,
+  currentUsageWindows,
+  nonEmptyObjectOrUndefined,
+  latestUsageAt,
   claudeAiLimits,
+  resetGraceState,
+  resetNearLimitWrapUpState,
+  resetCurrentLimits,
+  probeQuotaStatusAtStart,
+  currentLimits,
+  EXTRA_USAGE_HELP_URL,
+  EXTRA_USAGE_SUPPORT_URL,
+  onOverageInUse,
+  hasSurpassedThreshold,
+  isValidUtilization,
+  getRawWindowLevels,
+  restoreLimits,
 };

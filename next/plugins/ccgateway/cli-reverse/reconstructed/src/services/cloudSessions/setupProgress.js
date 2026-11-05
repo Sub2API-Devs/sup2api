@@ -3,18 +3,20 @@
  *
  * 2.1.316 新增：把云会话准备事件应用到进度状态（重新开始、标记失败等）；更新单个准备步骤的状态与标签等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tp07j3pd.js (26)
- * attribution: placement 26
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qqnmjrpr.js (27)
+ * attribution: placement 26, layout 1
  */
 import { sanitizeDisplayText, tailLines } from "../../utils/resultError.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
-import { SYNTHETIC_MODEL } from "../../constants/messages.js";
-import { uniq, arraysEqual } from "../../utils/collections.js";
+import { SYNTHETIC_MODEL } from "../../utils/messages.js";
+import { isKnownForwardedMessageType } from "../../cli/headlessCloud/streamFilter.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
+import { arraysEqual } from "../../utils/collections.js";
 import { formatDurationCoarse } from "../../utils/format.js";
 
-//@ chunk-tp07j3pd.js:376-449 placement
+//@ chunk-qqnmjrpr.js:831-904 placement
 /**
  * 清洗主机相关展示文本（上限 512）。
  */
@@ -25,7 +27,7 @@ function sanitizeHostText(hostText) {
       })
     : undefined;
 }
-//@ chunk-tp07j3pd.js:449-494 placement
+//@ chunk-qqnmjrpr.js:904-949 placement
 /**
  * 清洗短主机文本（上限 64）。
  */
@@ -34,15 +36,16 @@ function sanitizeShortHostText(hostText) {
     maxCodeUnits: 64,
   });
 }
-//@ chunk-tp07j3pd.js:494-525 placement
+//@ chunk-qqnmjrpr.js:949-1007 placement
 /**
  * DNS 结果缓存与解析限制常量（标签数、TTL 等）。
  */
 var MAX_EXPECTED_STEPS = 32;
+var STARTING_TEXT = "Starting Claude Code";
 var DNS_ERROR_CACHE_MS = 1000;
 var DNS_POSITIVE_CACHE_MS = 86400000;
 var MAX_DNS_TAIL_LINES = 5;
-//@ chunk-tp07j3pd.js:525-613 placement
+//@ chunk-qqnmjrpr.js:1007-1095 placement
 /**
  * 取 DNS 响应文本的最后若干行（失败返回 undefined）。
  */
@@ -51,14 +54,14 @@ function tailOfDnsResponse(output) {
   let tailLinesText = tailLines(output, MAX_DNS_TAIL_LINES);
   return tailLinesText.length === 0 ? undefined : tailLinesText;
 }
-//@ chunk-tp07j3pd.js:613-758 placement
+//@ chunk-qqnmjrpr.js:1095-1240 placement
 function parseSafeInteger(value) {
   if (typeof value === "number") return Number.isSafeInteger(value) ? value : undefined;
   return typeof value === "string" && /^-?\d{1,15}$/.test(value) ? Number(value) : undefined;
 }
-//@ chunk-tp07j3pd.js:758-771 placement
+//@ chunk-qqnmjrpr.js:1240-1253 placement
 var STALE_AFTER_MS = 300000;
-//@ chunk-tp07j3pd.js:771-895 placement (2.1.88 match: isBlockedV4, 0.697)
+//@ chunk-qqnmjrpr.js:1253-1377 placement (2.1.88 match: isBlockedV4, 0.697)
 /**
  * 时间戳是否早于 5 分钟前。旧版名 isBlockedV4 配错（与 SSRF 无关）。
  */
@@ -68,25 +71,25 @@ function isStaleTimestamp(frame, now) {
   let timestamp_2 = Date.parse(timestamp);
   return !Number.isNaN(timestamp_2) && now - timestamp_2 > STALE_AFTER_MS;
 }
-//@ chunk-tp07j3pd.js:895-949 placement
+//@ chunk-qqnmjrpr.js:1377-1431 placement
 /**
  * 云会话启动的四个步骤：provision、clone、setup_script、start_cc。
  */
 var SETUP_STEPS = ["provision", "clone", "setup_script", "start_cc"];
-//@ chunk-tp07j3pd.js:949-986 placement
+//@ chunk-qqnmjrpr.js:1431-1468 placement
 /**
  * 判断事件里的步骤 id 是否属于四个已知步骤。
  */
 function isSetupStep(id) {
   return SETUP_STEPS.includes(id);
 }
-//@ chunk-tp07j3pd.js:986-1005 placement
+//@ chunk-qqnmjrpr.js:1468-1487 placement
 /**
  * 时间戳下限的余量（5 秒）。
  */
 var TIMESTAMP_SKEW_MS = 60000;
 var MIN_TIMESTAMP_MS = 5000;
-//@ chunk-tp07j3pd.js:1005-1151 placement
+//@ chunk-qqnmjrpr.js:1487-1633 placement
 function isLiveFrameTimestamp(frame, now, startedAt) {
   let timestamp = frame.data?.timestamp;
   if (typeof timestamp !== "string") return false;
@@ -97,7 +100,7 @@ function isLiveFrameTimestamp(frame, now, startedAt) {
     timestamp_2 >= startedAt - MIN_TIMESTAMP_MS
   );
 }
-//@ chunk-tp07j3pd.js:1151-1374 placement
+//@ chunk-qqnmjrpr.js:1633-1856 placement
 /**
  * 新建云会话准备进度状态（步骤列表、模式、来源、计数）。
  */
@@ -119,7 +122,7 @@ function createSetupProgress(startedAt, { wake }) {
     queuedCount: 0,
   };
 }
-//@ chunk-tp07j3pd.js:1374-1535 placement
+//@ chunk-qqnmjrpr.js:1856-2017 placement
 function readSetupStepFields(frame) {
   let extra = frame.data?.extra;
   return {
@@ -127,28 +130,31 @@ function readSetupStepFields(frame) {
     stepStatus: typeof extra?.step_status === "string" ? extra.step_status : null,
   };
 }
-//@ chunk-tp07j3pd.js:1535-1914 placement
+//@ chunk-qqnmjrpr.js:2106-2422 placement
 /**
  * 判断一帧消息对准备进度显示的意义（notice/实时内容等）。
  */
-function classifySetupFrame(progress, request) {
-  if (progress === null || !progress.hasStructuredSteps || progress.terminal) return null;
-  switch (request.type) {
+function classifySetupFrame(event) {
+  switch (event.type) {
     case "system":
-      return request.subtype === "init_milestone" || request.subtype === "informational" ? "notice" : null;
+      return event.subtype === "init_milestone" || event.subtype === "informational" ? "notice" : null;
     case "assistant":
-      return request.isApiErrorMessage === true &&
-        isPlainObject(request.message) &&
-        request.message.model === SYNTHETIC_MODEL
+      return event.isApiErrorMessage === true &&
+        isPlainObject(event.message) &&
+        event.message.model === SYNTHETIC_MODEL
         ? "notice"
         : null;
     case "result":
-      return isPlainObject(request.runner_exit) && "phase" in request.runner_exit ? "failed" : null;
+      return isPlainObject(event.runner_exit) && "phase" in event.runner_exit ? "failed" : null;
     default:
       return null;
   }
 }
-//@ chunk-tp07j3pd.js:1914-2182 placement
+//@ chunk-qqnmjrpr.js:2422-2470 layout
+function isTerminalWithoutStep(event) {
+  return isKnownForwardedMessageType(event.type) && classifySetupFrame(event) === null;
+}
+//@ chunk-qqnmjrpr.js:2470-2738 placement
 function markCurrentStepFailed(progress, completedAt) {
   let targetStep =
     progress.steps.findLast((step) => step.status === "running") ??
@@ -168,7 +174,7 @@ function markCurrentStepFailed(progress, completedAt) {
     ),
   };
 }
-//@ chunk-tp07j3pd.js:2182-3588 placement
+//@ chunk-qqnmjrpr.js:2738-4144 placement
 /**
  * 把云会话准备事件应用到进度状态（重新开始、标记失败等）。
  */
@@ -238,7 +244,7 @@ function applySetupEvent(state, event, line, now, timing) {
       setupScriptDurationMs: safeInteger,
     };
   if (typeof extra?.expected_steps === "string") {
-    let sliced = uniq(
+    let sliced = normalizeCaseForComparison_2(
       extra.expected_steps
         .split(",")
         .map((entry) => sanitizeShortHostText(entry))
@@ -284,7 +290,7 @@ function applySetupEvent(state, event, line, now, timing) {
   }
   return nextState;
 }
-//@ chunk-tp07j3pd.js:3588-4922 placement
+//@ chunk-qqnmjrpr.js:4144-5478 placement
 /**
  * 更新单个准备步骤的状态与标签。
  */
@@ -385,7 +391,7 @@ function updateSetupStep(state, { stepId, stepStatus, extra, line, now }) {
   if (stepKey === "start_cc" && stepStatus === "completed") nextState = completeSetupProgress(nextState, now);
   return nextState;
 }
-//@ chunk-tp07j3pd.js:4922-5211 placement
+//@ chunk-qqnmjrpr.js:5478-5767 placement
 function completeSetupProgress(progress, completedAt) {
   if (progress.terminal) return progress;
   let completedMode = completedSetupMode(progress);
@@ -412,7 +418,7 @@ function completeSetupProgress(progress, completedAt) {
     hadLiveCycle: progress.hadLiveCycle || progress.sawLiveFrame,
   };
 }
-//@ chunk-tp07j3pd.js:5211-5518 placement
+//@ chunk-qqnmjrpr.js:5767-6074 placement
 /**
  * 由会话模式与准备来源推断完成方式（resume/restored/new）。
  */
@@ -437,7 +443,7 @@ function completedSetupMode(progress) {
       return "new";
   }
 }
-//@ chunk-tp07j3pd.js:5518-6181 placement
+//@ chunk-qqnmjrpr.js:6074-6718 placement
 /**
  * 生成准备步骤的显示文字（创建/恢复容器、克隆、安装脚本、启动 CC）。
  */
@@ -457,12 +463,12 @@ function setupStepLabel(step, fallbackMode) {
       if (isCompleted) return mode === "restored" ? "Restored from snapshot" : "Ran setup script";
       return "Running setup script";
     case "start_cc":
-      return isCompleted ? "Started Claude Code" : "Starting Claude Code";
+      return isCompleted ? "Started Claude Code" : STARTING_TEXT;
     default:
       return step.label || step.id;
   }
 }
-//@ chunk-tp07j3pd.js:6181-6448 placement
+//@ chunk-qqnmjrpr.js:6718-6985 placement
 function setupHeadline(mode, failed = false) {
   if (failed) return mode === "resume" ? "Cloud session didn't resume" : "Cloud session didn't start";
   switch (mode) {
@@ -474,7 +480,7 @@ function setupHeadline(mode, failed = false) {
       return "Restored from snapshot of setup script";
   }
 }
-//@ chunk-tp07j3pd.js:6448-6883 placement
+//@ chunk-qqnmjrpr.js:6985-7420 placement
 /**
  * 步骤附注（恢复时节省的时间、进行中的进度）。
  */
@@ -494,7 +500,7 @@ function setupStepAnnotation(appState, step, fallbackMode) {
       return "";
   }
 }
-//@ chunk-tp07j3pd.js:6883-7101 placement
+//@ chunk-qqnmjrpr.js:7420-7638 placement
 function currentSetupLabel(progress) {
   let sessionMode = progress.terminal ? null : progress.sessionMode;
   let mode = completedSetupMode({
@@ -505,7 +511,7 @@ function currentSetupLabel(progress) {
   let last = progress.steps.findLast((step) => step.status === "running");
   return (last && setupStepLabel(last, mode)) || setupHeadline(mode);
 }
-//@ chunk-tp07j3pd.js:7101-7370 placement
+//@ chunk-qqnmjrpr.js:7638-7907 placement
 function setupReadySummary(progress) {
   let mode = completedSetupMode(progress);
   let elapsedMs = (progress.completedAt ?? progress.startedAt) - progress.startedAt;
@@ -519,7 +525,7 @@ function setupReadySummary(progress) {
       return `Remote session ready in ${duration} \xB7 restored from snapshot`;
   }
 }
-//@ chunk-tp07j3pd.js:7370-7617 placement
+//@ chunk-qqnmjrpr.js:7907-8154 placement
 function stepDurationSuffix(step, now) {
   if (step.startedAt === undefined) return "";
   if (step.status === "completed")
@@ -529,7 +535,7 @@ function stepDurationSuffix(step, now) {
   let max = Math.max(0, now - step.startedAt);
   return step.status === "running" && max >= 5000 ? ` (${Math.round(max / 1000)}s)` : "";
 }
-//@ chunk-tp07j3pd.js:7617-7771 placement
+//@ chunk-qqnmjrpr.js:8154-8308 placement
 function formatSetupDuration(ms) {
   if (ms < 1e4) return `${(Math.max(ms, 100) / 1000).toFixed(1)}s`;
   let rounded = Math.round(ms / 1000);
@@ -537,19 +543,21 @@ function formatSetupDuration(ms) {
   return `${Math.floor(rounded / 60)}m ${rounded % 60}s`;
 }
 export {
+  readSetupStepFields,
+  classifySetupFrame,
+  stepDurationSuffix,
+  setupHeadline,
+  completedSetupMode,
+  setupStepLabel,
+  setupStepAnnotation,
+  STARTING_TEXT,
   setupReadySummary,
   completeSetupProgress,
   isStaleTimestamp,
   createSetupProgress,
   applySetupEvent,
   currentSetupLabel,
-  classifySetupFrame,
   markCurrentStepFailed,
-  readSetupStepFields,
+  isTerminalWithoutStep,
   isSetupStep,
-  setupStepLabel,
-  completedSetupMode,
-  setupHeadline,
-  setupStepAnnotation,
-  stepDurationSuffix,
 };

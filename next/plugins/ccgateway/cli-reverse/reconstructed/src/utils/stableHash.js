@@ -3,17 +3,17 @@
  *
  * 2.1.316 新增：稳定哈希
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ay9hyszk.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-p68axnzw.js (4)
  * attribution: placement 4
  */
 import { createHash } from "crypto";
 import { jsonStringify, jsonParse } from "./slowOperations.js";
 
-//@ chunk-ay9hyszk.js:508-517 placement
+//@ chunk-p68axnzw.js:508-517 placement
 var MAX_SORT_DEPTH = 32;
-//@ chunk-ay9hyszk.js:517-608 placement
+//@ chunk-p68axnzw.js:517-608 placement
 /**
  * 稳定哈希：sha256(salt \0 JSON(键排序后的值))。
  */
@@ -24,7 +24,7 @@ function stableHashWithSalt(text, salt) {
     .update(jsonStringify(sortKeysDeep(salt)))
     .digest("hex");
 }
-//@ chunk-ay9hyszk.js:608-836 placement
+//@ chunk-p68axnzw.js:608-836 placement
 function sortKeysDeep(value, depth = 0) {
   if (depth > MAX_SORT_DEPTH) return value;
   if (Array.isArray(value)) return value.map((item) => sortKeysDeep(item, depth + 1));
@@ -36,7 +36,7 @@ function sortKeysDeep(value, depth = 0) {
     );
   return value;
 }
-//@ chunk-ay9hyszk.js:836-884 placement
+//@ chunk-p68axnzw.js:836-884 placement
 /**
  * 先 JSON 往返再计算稳定哈希。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：服务端分类器开关
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (38)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (1), chunk-nt9amew5.js (37)
  * attribution: placement 38
  */
 import { getSessionFeatureValues } from "../../../bootstrap/sessionFeatureValues.js";
@@ -29,9 +29,9 @@ import { isDiskless } from "../../../bootstrap/state.js";
 import { getProxyUrl } from "../../proxy.js";
 import { logFeatureBad } from "../../../services/analytics/featureTelemetry.js";
 
-//@ chunk-e6aww6q8.js:1023016-1023048 placement
+//@ chunk-nt9amew5.js:16525-16556 placement
 var TENGU_SMOOTH_CHIPMUNK = "tengu_smooth_chipmunk";
-//@ chunk-e6aww6q8.js:1023048-1023139 placement
+//@ chunk-nt9amew5.js:16556-16645 placement
 /**
  * autoModeContextEnabled：取并缓存 auto 模式上下文开关。
  */
@@ -40,43 +40,43 @@ function autoModeContextEnabled() {
   sessionFeatureValues.autoModeContextEnabled ??= smoothChipmunkDefault();
   return sessionFeatureValues.autoModeContextEnabled;
 }
-//@ chunk-e6aww6q8.js:1023139-1023196 placement
+//@ chunk-nt9amew5.js:16645-16700 placement
 /**
  * cachedAutoModeContextEnabled：auto 模式上下文开关（缓存）。
  */
 function cachedAutoModeContextEnabled() {
   return getSessionFeatureValues().autoModeContextEnabled ?? smoothChipmunkDefault();
 }
-//@ chunk-e6aww6q8.js:1023196-1023218 placement
+//@ chunk-nt9amew5.js:16700-16721 placement
 function noOverride() {
   return;
 }
-//@ chunk-e6aww6q8.js:1023218-1023253 placement
+//@ chunk-nt9amew5.js:16721-16755 placement
 var TENGU_IRIDESCENT_CRYSTAL = "tengu_iridescent_crystal";
-//@ chunk-e6aww6q8.js:1023253-1023284 placement
+//@ chunk-nt9amew5.js:16755-16786 placement
 /**
  * isIridescentCrystalOn：开关 tengu_iridescent_crystal。
  */
 function isIridescentCrystalOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_IRIDESCENT_CRYSTAL, false);
 }
-//@ chunk-e6aww6q8.js:1023284-1023334 placement
+//@ chunk-nt9amew5.js:16786-16835 placement
 /**
  * isQuietLanternOn：开关 tengu_quiet_lantern。
  */
 function isQuietLanternOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_quiet_lantern", true);
 }
-//@ chunk-e6aww6q8.js:1023334-1023365 placement
+//@ chunk-nt9amew5.js:16835-16865 placement
 var TENGU_COPPER_TRELLIS = "tengu_copper_trellis";
-//@ chunk-e6aww6q8.js:1023365-1023397 placement
+//@ chunk-nt9amew5.js:16865-16896 placement
 /**
  * isCopperTrellisOn：开关 tengu_copper_trellis。
  */
 function isCopperTrellisOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_COPPER_TRELLIS, false);
 }
-//@ chunk-e6aww6q8.js:1023397-1023538 placement
+//@ chunk-nt9amew5.js:16896-17039 placement
 function getServerClassifierFallbackMode() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_FOAMY_PELICAN, "off");
   if (
@@ -87,54 +87,54 @@ function getServerClassifierFallbackMode() {
     return isLocalClassifierSwitchedOff() ? "deny_all" : "off";
   return featureValue_CACHED_MAY_BE_STALE === "keep_local" ? "keep_local" : "deny_all";
 }
-//@ chunk-e6aww6q8.js:1023538-1023567 placement
+//@ chunk-nt9amew5.js:17039-17067 placement
 var TENGU_VIVID_CRAYON = "tengu_vivid_crayon";
-//@ chunk-e6aww6q8.js:1023567-1023599 placement
+//@ chunk-nt9amew5.js:17067-17097 placement
 /**
  * isVividCrayonOn：开关 tengu_vivid_crayon。
  */
 function isVividCrayonOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VIVID_CRAYON, true);
 }
-//@ chunk-e6aww6q8.js:1023599-1023628 placement
+//@ chunk-nt9amew5.js:17097-17125 placement
 var TENGU_HAZEL_PLOVER = "tengu_hazel_plover";
-//@ chunk-e6aww6q8.js:1023628-1023665 placement
+//@ chunk-nt9amew5.js:17125-17161 placement
 /**
  * isHazelPloverOn：开关 tengu_hazel_plover。
  */
 function isHazelPloverOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_HAZEL_PLOVER, false) === true;
 }
-//@ chunk-e6aww6q8.js:1023665-1023695 placement
+//@ chunk-nt9amew5.js:17161-17190 placement
 var TENGU_MERRY_POPCORN = "tengu_merry_popcorn";
-//@ chunk-e6aww6q8.js:1023695-1023727 placement
+//@ chunk-nt9amew5.js:17190-17221 placement
 /**
  * isMerryPopcornOn：开关 tengu_merry_popcorn。
  */
 function isMerryPopcornOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MERRY_POPCORN, true);
 }
-//@ chunk-e6aww6q8.js:1023727-1023756 placement
+//@ chunk-nt9amew5.js:17221-17249 placement
 var TENGU_WISE_ORIGAMI = "tengu_wise_origami";
-//@ chunk-e6aww6q8.js:1023756-1023788 placement
+//@ chunk-nt9amew5.js:17249-17279 placement
 /**
  * isWiseOrigamiOn：开关 tengu_wise_origami。
  */
 function isWiseOrigamiOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_WISE_ORIGAMI, false);
 }
-//@ chunk-e6aww6q8.js:1023788-1023821 placement
+//@ chunk-nt9amew5.js:17279-17311 placement
 var TENGU_BRIGHT_DRAGONFLY = "tengu_bright_dragonfly";
-//@ chunk-e6aww6q8.js:1023821-1023931 placement
+//@ chunk-nt9amew5.js:17311-17420 placement
 function isFirstPartyEndpoint() {
   if (env.ANTHROPIC_UNIX_SOCKET !== undefined) return env.CLAUDE_CODE_ENTRYPOINT === "ssh-remote";
   return isFirstPartyAnthropicBaseUrl();
 }
-//@ chunk-e6aww6q8.js:1023931-1023974 placement
+//@ chunk-nt9amew5.js:17420-17460 placement
 function isFirstPartyEndpointHost() {
   return isFirstPartyEndpoint() && (assumesFirstPartyBaseUrl() || isFirstPartyBaseUrl());
 }
-//@ chunk-e6aww6q8.js:1023974-1024293 placement
+//@ chunk-nt9amew5.js:17460-17779 placement
 /**
  * 第一方提供方下按 tengu_bright_dragonfly 判断本地分类器是否关闭（交接审阅时只看含 handoffs 的取值）；策略缓存缺失或实验 beta 被禁用时为 false。
  */
@@ -160,7 +160,7 @@ function isLocalClassifierSwitchedOff({ handoffReview = false } = {}) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:1024293-1024491 placement
+//@ chunk-nt9amew5.js:17779-17977 placement
 function isThirdPartyServerClassifierEnabled() {
   let sessionFeatureValues = getSessionFeatureValues();
   sessionFeatureValues.thirdPartyServerClassifierEnabled ??=
@@ -168,14 +168,14 @@ function isThirdPartyServerClassifierEnabled() {
     !(env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS && !env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST);
   return sessionFeatureValues.thirdPartyServerClassifierEnabled;
 }
-//@ chunk-e6aww6q8.js:1024491-1024628 placement
+//@ chunk-nt9amew5.js:17977-18114 placement
 function getUserServerClassifierSwitch() {
   let sessionFeatureValues = getSessionFeatureValues();
   if (sessionFeatureValues.userServerClassifierSwitch === undefined)
     sessionFeatureValues.userServerClassifierSwitch = envServerClassifierSwitch();
   return sessionFeatureValues.userServerClassifierSwitch;
 }
-//@ chunk-e6aww6q8.js:1024628-1024707 placement
+//@ chunk-nt9amew5.js:18114-18191 placement
 /**
  * userServerClassifierSwitch：用户的服务端分类器开关。
  */
@@ -183,18 +183,18 @@ function userServerClassifierSwitch() {
   let userServerClassifierSwitch = getSessionFeatureValues().userServerClassifierSwitch;
   return userServerClassifierSwitch === undefined ? envServerClassifierSwitch() : userServerClassifierSwitch;
 }
-//@ chunk-e6aww6q8.js:1024707-1024788 placement
+//@ chunk-nt9amew5.js:18191-18271 placement
 function envServerClassifierSwitch() {
   let CLAUDE_CODE_AUTO_MODE_SERVER = env.CLAUDE_CODE_AUTO_MODE_SERVER;
   return CLAUDE_CODE_AUTO_MODE_SERVER === undefined ? null : isEnvTruthy(CLAUDE_CODE_AUTO_MODE_SERVER);
 }
-//@ chunk-e6aww6q8.js:1024788-1024827 placement
+//@ chunk-nt9amew5.js:18271-18307 placement
 function smoothChipmunkDefault() {
   return noOverride() ?? getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SMOOTH_CHIPMUNK, true);
 }
-//@ chunk-e6aww6q8.js:1024827-1024858 placement
+//@ chunk-nt9amew5.js:18307-18337 placement
 var TENGU_VALIANT_SPHINX = "tengu_valiant_sphinx";
-//@ chunk-e6aww6q8.js:1024858-1024927 placement
+//@ chunk-nt9amew5.js:18337-18405 placement
 /**
  * isValiantSphinxOn：开关 tengu_valiant_sphinx（出错按开）。
  */
@@ -206,13 +206,13 @@ function isValiantSphinxOn() {
     return true;
   }
 }
-//@ chunk-e6aww6q8.js:1024927-1024959 placement
+//@ chunk-nt9amew5.js:18405-18436 placement
 var TENGU_DRIFTING_VALLEY = "tengu_drifting_valley";
-//@ chunk-e6aww6q8.js:1024959-1024991 placement
+//@ chunk-nt9amew5.js:18436-18466 placement
 function isDriftingValleyOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_DRIFTING_VALLEY, false);
 }
-//@ chunk-e6aww6q8.js:1024991-1025412 placement
+//@ chunk-nt9amew5.js:18466-18886 placement
 /**
  * 判断是否把"禁用实验 beta"开关搁置以便使用服务端分类器（直连第一方、用户未关闭、策略缓存存在等）；结果缓存，peek 时不写缓存。
  */
@@ -243,7 +243,7 @@ function isBetasSwitchSetAside({ peek = false } = {}) {
   if (!peek) sessionFeatureValues.betasSwitchSetAside = setAside;
   return setAside;
 }
-//@ chunk-e6aww6q8.js:1025412-1025650 placement
+//@ chunk-nt9amew5.js:18886-19123 placement
 function getApiRouteKind() {
   if (isDiskless()) return;
   try {
@@ -256,11 +256,39 @@ function getApiRouteKind() {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:1025650-1026000 placement
+//@ chunk-nt9amew5.js:19123-19146 placement
+/**
+ * neverTrue：恒 false 占位。
+ */
+function neverTrue() {
+  return false;
+}
+//@ chunk-nt9amew5.js:19146-19217 placement
+/**
+ * setTimeoutWithCancel：定时器并返回取消函数；TIMER_MARGIN_MS：定时器余量（同一声明共 2 个绑定）。
+ */
+var setTimeoutWithCancel = (fn, delayMs) => {
+  let timer = setTimeout(fn, delayMs);
+  return () => clearTimeout(timer);
+};
+var TIMER_MARGIN_MS = 10;
+//@ chunk-nt9amew5.js:19217-19250 placement
+/**
+ * agentIdOrMain：缺省为 main 的 agent id。
+ */
+function agentIdOrMain(agentId) {
+  return agentId ?? "main";
+}
+//@ chunk-nt9amew5.js:19250-19260 placement
+/**
+ * ENABLE_CLASSIFIER_DEFAULT：分类器默认启用标志。
+ */
+var ENABLE_CLASSIFIER_DEFAULT = true;
+//@ chunk-5xgkngpb.js:1036820-1037171 placement
 /**
  * 本地分类器被关闭或该侧调用在 tengu_radiant_fern 列表中时视为已退役（每种记一次日志）；调用方豁免时返回 false。
  */
-function isClassifierSideCallRetired(sideCallName, alwaysFalseLocal) {
+function isClassifierSideCallRetired(sideCallName, hasCodeModeBeenUsed) {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_radiant_fern", []);
   let localSwitchedOff = isLocalClassifierSwitchedOff();
   if (
@@ -269,7 +297,7 @@ function isClassifierSideCallRetired(sideCallName, alwaysFalseLocal) {
       (Array.isArray(featureValue_CACHED_MAY_BE_STALE) &&
         featureValue_CACHED_MAY_BE_STALE.includes(sideCallName))
     ) ||
-    alwaysFalseLocal?.() === true
+    hasCodeModeBeenUsed?.() === true
   )
     return false;
   let sessionFeatureValues = getSessionFeatureValues();
@@ -288,36 +316,7 @@ function isClassifierSideCallRetired(sideCallName, alwaysFalseLocal) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:1026000-1026024 placement
-/**
- * neverTrue：恒 false 占位。
- */
-function neverTrue() {
-  return false;
-}
-//@ chunk-e6aww6q8.js:1026024-1026095 placement
-/**
- * setTimeoutWithCancel：定时器并返回取消函数；TIMER_MARGIN_MS：定时器余量（同一声明共 2 个绑定）。
- */
-var setTimeoutWithCancel = (fn, delayMs) => {
-  let timer = setTimeout(fn, delayMs);
-  return () => clearTimeout(timer);
-};
-var TIMER_MARGIN_MS = 10;
-//@ chunk-e6aww6q8.js:1026095-1026127 placement
-/**
- * agentIdOrMain：缺省为 main 的 agent id。
- */
-function agentIdOrMain(agentId) {
-  return agentId ?? "main";
-}
-//@ chunk-e6aww6q8.js:1026127-1026138 placement
-/**
- * ENABLE_CLASSIFIER_DEFAULT：分类器默认启用标志。
- */
-var ENABLE_CLASSIFIER_DEFAULT = true;
 export {
-  TIMER_MARGIN_MS,
   isLocalClassifierSwitchedOff,
   getServerClassifierFallbackMode,
   getUserServerClassifierSwitch,
@@ -326,10 +325,7 @@ export {
   isBetasSwitchSetAside,
   isMerryPopcornOn,
   isCopperTrellisOn,
-  isClassifierSideCallRetired,
-  ENABLE_CLASSIFIER_DEFAULT,
-  setTimeoutWithCancel,
-  userServerClassifierSwitch,
+  TIMER_MARGIN_MS,
   isFirstPartyEndpoint,
   isThirdPartyServerClassifierEnabled,
   neverTrue,
@@ -339,6 +335,10 @@ export {
   isWiseOrigamiOn,
   isQuietLanternOn,
   isVividCrayonOn,
+  isClassifierSideCallRetired,
+  ENABLE_CLASSIFIER_DEFAULT,
+  setTimeoutWithCancel,
+  userServerClassifierSwitch,
   isHazelPloverOn,
   isValiantSphinxOn,
 };

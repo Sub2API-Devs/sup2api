@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Unicode 易混淆字符表与提示词注入防护用的标签/标记清洗正则（antml、system-reminder 等的变体）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p5akk6be.js (48)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-72da5r6r.js (48)
  * attribution: placement 48
  */
 import { truncateToLength } from "./stringUtils.js";
@@ -20,12 +20,12 @@ import { escapeInvisibleChars, toUnicodeEscapes } from "./resultError.js";
 import { HTML_ENTITY_RE, HTML_ENTITY_MAP } from "../../vendor/es-toolkit/dist/string/unescape.mjs";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-p5akk6be.js:284-23659 placement
+//@ chunk-72da5r6r.js:316-23691 placement
 /**
  * 每个拉丁字母的全角、数学字母、带圈、西里尔/希腊形近字符表（约 23 KB）。
  */
 var LATIN_CONFUSABLES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-p5akk6be.js:284", () => {
+deferInit("chunk-72da5r6r.js:316", () => {
   LATIN_CONFUSABLES = new Map([
     [
       "a",
@@ -133,11 +133,11 @@ deferInit("chunk-p5akk6be.js:284", () => {
     ],
   ]);
 });
-//@ chunk-p5akk6be.js:23659-23753 placement (2.1.88 match: escapeXml, 1)
+//@ chunk-72da5r6r.js:23691-23785 placement (2.1.88 match: escapeXml, 1)
 function escapeXml_2(s) {
   return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
-//@ chunk-p5akk6be.js:23753-23831 placement
+//@ chunk-72da5r6r.js:23785-23863 placement
 /**
  * XML 转义并按上限截断。
  */
@@ -146,7 +146,7 @@ function escapeXmlTruncated(text, maxLength, formatSuffix) {
   if (escaped.length <= maxLength) return escaped;
   return escapeXml_2(truncateBeforeEscape(text, maxLength, formatSuffix));
 }
-//@ chunk-p5akk6be.js:23831-24090 placement
+//@ chunk-72da5r6r.js:23863-24121 placement
 /**
  * 截断文本使其 XML 转义后的长度不超过上限，末尾加截断提示（默认“… [truncated]”）。
  */
@@ -165,7 +165,7 @@ function truncateBeforeEscape(text, maxLength, formatSuffix) {
     }
   }
 }
-//@ chunk-p5akk6be.js:24168-25745 placement
+//@ chunk-72da5r6r.js:24199-25776 placement
 /**
  * 斜杠类形近字符到 “/” 的映射。
  */
@@ -185,7 +185,7 @@ var CONNECTOR_CHAR_CLASS;
 var CONNECTOR_CHAR_RE;
 var TAG_SCRUB_CLASSES;
 var TAG_BRACKET_CLASSES;
-deferInit("chunk-p5akk6be.js:24168", () => {
+deferInit("chunk-72da5r6r.js:24199", () => {
   INVISIBLE_CHAR_CLASSES =
     "\\u00ad\\u034f\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u115f\\u1160\\u17b4\\u17b5\\u180b-\\u180f\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\u3164\\ufe00-\\ufe0f\\ufeff\\uffa0\\ufff0-\\ufffb\\u{110bd}\\u{110cd}\\u{13430}-\\u{1343f}\\u{1bca0}-\\u{1bca3}\\u{1d173}-\\u{1d17a}\\u{16fe4}\\u{e0000}-\\u{e0fff}";
   CONFUSABLE_SLASH_MAP = new Map([
@@ -230,42 +230,42 @@ deferInit("chunk-p5akk6be.js:24168", () => {
     slash: TAG_SCRUB_CLASSES.slash,
   };
 });
-//@ chunk-p5akk6be.js:25745-25786 placement
+//@ chunk-72da5r6r.js:25776-25817 placement
 /**
  * 返回不可见字符的全局正则。
  */
 function invisiblePatternAccessor() {
   return TAG_SCRUB_CLASSES.invisiblePattern;
 }
-//@ chunk-p5akk6be.js:25786-25834 placement
+//@ chunk-72da5r6r.js:25817-25865 placement
 function stripInvisibleChars(text) {
   return escapeInvisibleChars(text).replace(invisiblePatternAccessor(), toUnicodeEscapes);
 }
-//@ chunk-p5akk6be.js:25834-25884 placement
+//@ chunk-72da5r6r.js:25865-25915 placement
 /**
  * 生成带前瞻捕获的反向引用片段。
  */
 function lookaheadCapture(charClass, captureIndex) {
   return `(?=([${charClass}]*))(?:\\${captureIndex})`;
 }
-//@ chunk-p5akk6be.js:25884-25918 placement
+//@ chunk-72da5r6r.js:25915-25949 placement
 /**
  * 生成“匹配任意填充字符”的捕获片段。
  */
 function fillerCapture(captureIndex) {
   return lookaheadCapture(FILLER_CHAR_CLASS, captureIndex);
 }
-//@ chunk-p5akk6be.js:25918-25938 placement
+//@ chunk-72da5r6r.js:25949-25969 placement
 /**
  * 标签正则的缓存表。
  */
 var tagRegexCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_TAG_REGEX_CACHE;
-deferInit("chunk-p5akk6be.js:25918", () => {
+deferInit("chunk-72da5r6r.js:25949", () => {
   tagRegexCache = new Map();
   MAX_TAG_REGEX_CACHE = 64;
 });
-//@ chunk-p5akk6be.js:25938-26144 placement
+//@ chunk-72da5r6r.js:25969-26175 placement
 function getTagRegex(tagName, closeOnly) {
   let cacheKey = `${closeOnly ? "/" : ""}${tagName}`;
   let cached = tagRegexCache.get(cacheKey);
@@ -281,7 +281,7 @@ function getTagRegex(tagName, closeOnly) {
   tagRegexCache.set(cacheKey, tagRegex);
   return tagRegex;
 }
-//@ chunk-p5akk6be.js:26144-26463 placement
+//@ chunk-72da5r6r.js:26175-26494 placement
 /**
  * 构造匹配某些标签名（含易混淆字符与填充字符变体，可只匹配闭合标签）开头的全局 Unicode 正则。
  */
@@ -297,33 +297,33 @@ function buildTagRegex({ tags, closeOnly, fillerClass, spell, tail }) {
   let tailPart = tail === undefined ? WORD_END_PATTERN : `${fillerCapture(++captureCount)}${tail}`;
   return new RegExp(`[${open}](?!\\\\)(?=${leadCapture}(?:${mapped.join("|")})${tailPart})`, "giu");
 }
-//@ chunk-p5akk6be.js:26463-26513 placement
+//@ chunk-72da5r6r.js:26494-26544 placement
 /**
  * 把闭合标签的开头转义（只匹配闭合形式）。
  */
 function scrubCloseTag(tagName, text) {
   return text.replace(getTagRegex(tagName, true), "<\\");
 }
-//@ chunk-p5akk6be.js:26513-26563 placement
+//@ chunk-72da5r6r.js:26544-26594 placement
 /**
  * 把起始标签的开头转义。
  */
 function scrubOpenTag(tagName, text) {
   return text.replace(getTagRegex(tagName, false), "<\\");
 }
-//@ chunk-p5akk6be.js:26563-26632 placement
+//@ chunk-72da5r6r.js:26594-26663 placement
 /**
  * 用形近字符表把字符折叠成 ASCII 对应字符。
  */
 function foldLookalikeChars(text) {
   return text.replace(TAG_SCRUB_CLASSES.lookalikePattern, (char) => CONFUSABLE_SLASH_MAP.get(char) ?? char);
 }
-//@ chunk-p5akk6be.js:26632-26638 placement
+//@ chunk-72da5r6r.js:26663-26669 placement
 /**
  * 形近字符长度查表（支持双字符组合），首次使用时构建。
  */
 var confusableLengthTable;
-//@ chunk-p5akk6be.js:26638-26876 placement
+//@ chunk-72da5r6r.js:26669-26907 placement
 /**
  * 统计文本中易混淆字符的个数（支持双字符组合）。
  */
@@ -345,13 +345,13 @@ function countConfusables(text) {
   }
   return count;
 }
-//@ chunk-p5akk6be.js:26876-28927 placement
+//@ chunk-72da5r6r.js:26907-28958 placement
 /**
  * 形近字符映射表（西里尔、希腊、小型大写、Cherokee、Lisu、Coptic 等 → ASCII 字母）；nu 是加入大写形式后的表和匹配正则。
  */
 var CONFUSABLE_CHAR_MAP; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CONFUSABLE_CHAR_TABLE;
-deferInit("chunk-p5akk6be.js:26876", () => {
+deferInit("chunk-72da5r6r.js:26907", () => {
   CONFUSABLE_CHAR_MAP = {
     "\u0430": "a",
     "\u0435": "e",
@@ -509,7 +509,7 @@ deferInit("chunk-p5akk6be.js:26876", () => {
     };
   })();
 });
-//@ chunk-p5akk6be.js:28927-29024 placement (2.1.88 match: COMMAND_SUBSTITUTION_PATTERNS, 0.602)
+//@ chunk-72da5r6r.js:28958-29055 placement (2.1.88 match: COMMAND_SUBSTITUTION_PATTERNS, 0.602)
 /**
  * 把字符串中的形近 Unicode 字符折叠成 ASCII（前后各折叠一次，中间做规范化并去附加符号），用于防同形字绕过。
  */
@@ -518,18 +518,18 @@ function foldConfusableCharacters(text) {
   let fold = (value) => value.replace(pattern, (char) => table[char] ?? char);
   return fold(normalizeNfkc(normalizeAndStripMarks(fold(text))));
 }
-//@ chunk-p5akk6be.js:29024-29076 placement
+//@ chunk-72da5r6r.js:29055-29107 placement
 function normalizeAndStripMarks(text) {
   return nfkdNormalize(text).replace(/\p{M}+/gu, "");
 }
-//@ chunk-p5akk6be.js:29076-29113 placement
+//@ chunk-72da5r6r.js:29107-29144 placement
 var ABCDEFGHIJKLMNOPQRSTUVWXYZ = "abcdefghijklmnopqrstuvwxyz";
-//@ chunk-p5akk6be.js:29113-29248 placement
+//@ chunk-72da5r6r.js:29144-29279 placement
 function latinLetterConfusableClass(letter) {
   if (!/^[a-z]$/.test(letter)) throw Error("latinLetterConfusableClass: expected one ASCII lowercase letter");
   return LATIN_CONFUSABLES.get(letter) ?? letter;
 }
-//@ chunk-p5akk6be.js:29248-29593 placement
+//@ chunk-72da5r6r.js:29279-29624 placement
 /**
  * 生成匹配某标签名所有易混淆拼写形式的正则。
  */
@@ -552,21 +552,21 @@ function confusableTagScrubPattern(tags, tags_2) {
     }),
   });
 }
-//@ chunk-p5akk6be.js:29593-29624 placement
+//@ chunk-72da5r6r.js:29624-29655 placement
 /**
  * 生成“反斜杠 + 字符”的转义前缀。
  */
 function escapedCharPrefix(char) {
   return `${char}\\`;
 }
-//@ chunk-p5akk6be.js:29624-29666 placement (2.1.88 match: CHANNEL_TAG, 1)
+//@ chunk-72da5r6r.js:29655-29697 placement (2.1.88 match: CHANNEL_TAG, 1)
 /**
  * 生成匹配 channel 标签（带 source 属性）的扫描器。旧版名 CHANNEL_TAG 为错配。
  */
 function buildChannelTagMatcher() {
   return confusableTagScrubPattern(["channel"], channelSourceAttrPattern);
 }
-//@ chunk-p5akk6be.js:29666-29876 placement
+//@ chunk-72da5r6r.js:29697-29907 placement
 /**
  * channel 标签 source 属性的正则片段。
  */
@@ -579,13 +579,13 @@ function channelSourceAttrPattern({
 }) {
   return `(?:(?![${name}])|(?<=[${BOUNDARY_FILLER_CLASSES}][${FILLER_CHAR_CLASS}]*))${span(120)}(?<![\\w-])${assign("source")}`;
 }
-//@ chunk-p5akk6be.js:29876-29892 placement
+//@ chunk-72da5r6r.js:29907-29923 placement
 var ANTML = "antml";
-//@ chunk-p5akk6be.js:29892-29946 placement
+//@ chunk-72da5r6r.js:29923-29977 placement
 function buildAntmlTagPattern() {
   return confusableTagScrubPattern([ANTML], ({ colon }) => `[${colon}]`);
 }
-//@ chunk-p5akk6be.js:29946-30310 placement
+//@ chunk-72da5r6r.js:29977-30341 placement
 /**
  * 全角私用区字符的基准码点（U+E000）。
  */
@@ -609,7 +609,7 @@ var foldedCharCache;
 var MAX_FOLDED_CHAR_CACHE;
 var uint8Array;
 var confusableReverseIndex;
-deferInit("chunk-p5akk6be.js:29946", () => {
+deferInit("chunk-72da5r6r.js:29977", () => {
   NON_ASCII_PATTERN = /[\u0080-\u{10ffff}]/u;
   regExp = new RegExp(`[${TAG_SCRUB_CLASSES.open}]`, "u");
   regExp_2 = new RegExp(`[${DASH_CHAR_CLASS}]`, "gu");
@@ -630,15 +630,15 @@ deferInit("chunk-p5akk6be.js:29946", () => {
   MAX_FOLDED_CHAR_CACHE = 32768;
   uint8Array = new Uint8Array(4352);
 });
-//@ chunk-p5akk6be.js:30310-30370 placement (2.1.88 match: normalizeFullWidthDigits, 1)
+//@ chunk-72da5r6r.js:30341-30401 placement (2.1.88 match: normalizeFullWidthDigits, 1)
 function normalizeFullWidthDigits(input) {
   return String.fromCharCode(PRIVATE_USE_BASE + input.charCodeAt(0));
 }
-//@ chunk-p5akk6be.js:30370-30430 placement (2.1.88 match: normalizeFullWidthDigits, 1)
+//@ chunk-72da5r6r.js:30401-30461 placement (2.1.88 match: normalizeFullWidthDigits, 1)
 function normalizeFullWidthDigits_2(input) {
   return String.fromCharCode(PRIVATE_USE_PAIR_BASE + input.charCodeAt(0));
 }
-//@ chunk-p5akk6be.js:30430-30538 placement
+//@ chunk-72da5r6r.js:30461-30569 placement
 function neutralizeCharCached(char) {
   let cached = foldedCharCache.get(char);
   if (cached !== undefined) return cached;
@@ -647,7 +647,7 @@ function neutralizeCharCached(char) {
   foldedCharCache.set(char, neutralized);
   return neutralized;
 }
-//@ chunk-p5akk6be.js:30538-31165 placement
+//@ chunk-72da5r6r.js:30569-31196 placement
 function neutralizeSpecialChar(char) {
   let codePoint = char.codePointAt(0);
   let current = char;
@@ -695,7 +695,7 @@ function neutralizeSpecialChar(char) {
   }
   return current;
 }
-//@ chunk-p5akk6be.js:31165-31301 placement
+//@ chunk-72da5r6r.js:31196-31332 placement
 function classifyCodeBlock(block) {
   let codePoint = 1;
   for (let max = Math.max(block << 8, 128); max < (block + 1) << 8; max++) {
@@ -708,7 +708,7 @@ function classifyCodeBlock(block) {
   uint8Array[block] = codePoint;
   return codePoint;
 }
-//@ chunk-p5akk6be.js:31301-31596 placement
+//@ chunk-72da5r6r.js:31332-31627 placement
 function buildTagCharClass(tag) {
   if (/^[a-z0-9]$/.test(tag)) {
     let flattened = MULTI_CHAR_TAG_PIECES.flatMap((pieces, index) =>
@@ -720,7 +720,7 @@ function buildTagCharClass(tag) {
     return `[_\\-${normalizeFullWidthDigits("_")}${normalizeFullWidthDigits("-")}${normalizeFullWidthDigits_2("_")}${normalizeFullWidthDigits_2("-")}${FOLDED_HIGH_MARK}]`;
   throw Error("createTagFormScrub: tag names are lowercase [a-z0-9_-]");
 }
-//@ chunk-p5akk6be.js:31596-31974 placement
+//@ chunk-72da5r6r.js:31627-32005 placement
 function buildTagScrubPattern({ tags, tail }) {
   let { open, close, filler } = TAG_SCRUB_CLASSES;
   let captureCount = 0;
@@ -744,7 +744,7 @@ function buildTagScrubPattern({ tags, tail }) {
         })}`;
   return new RegExp(`[${open}](?!\\\\)(?=[${filler}]*?(?:${mapped.join("|")})${assignment})`, "giu");
 }
-//@ chunk-p5akk6be.js:31974-32180 placement
+//@ chunk-72da5r6r.js:32005-32211 placement
 /**
  * 构造标签中和器：找出文本中给定伪 XML 标签的开头位置（考虑同形字符），neutralize 时把 '<' 改成 '<\' 以免被当作系统标签。
  */
@@ -765,7 +765,7 @@ function createTagNeutralizer(specs) {
     },
   };
 }
-//@ chunk-p5akk6be.js:32180-32690 placement
+//@ chunk-72da5r6r.js:32211-32721 placement
 /**
  * 把文本中的易混淆非 ASCII 字符替换为中性读法（按 256 码位块缓存是否需要处理），返回替换后的读法与把读法偏移映射回原文偏移的函数。
  */
@@ -808,11 +808,11 @@ function neutralizeConfusables(text) {
     },
   };
 }
-//@ chunk-p5akk6be.js:32690-32742 placement
+//@ chunk-72da5r6r.js:32721-32773 placement
 function codePointLength(text, offset) {
   return text.codePointAt(offset) > 65535 ? 2 : 1;
 }
-//@ chunk-p5akk6be.js:32742-32951 placement
+//@ chunk-72da5r6r.js:32773-32982 placement
 /**
  * 返回文本中匹配任一标签模式的开头偏移（必要时先把非 ASCII 同形字符映射回 ASCII 再匹配）。
  */
@@ -826,7 +826,7 @@ function findTagOpenerOffsets(text, specs) {
       offsets.add(reading ? reading.offsetInText(match.index) : match.index);
   return [...offsets].sort((left, right) => left - right);
 }
-//@ chunk-p5akk6be.js:32951-33598 placement
+//@ chunk-72da5r6r.js:32982-33630 placement
 /**
  * 右方括号类形近字符。
  */
@@ -838,7 +838,7 @@ var SEPARATOR_CHAR_CLASS;
 var DASH_OR_SEPARATOR_CLASS;
 var LONG_VOWEL_AND_BLANK_CHARS;
 var MAX_FILLER_DEPTH;
-deferInit("chunk-p5akk6be.js:32951", () => {
+deferInit("chunk-72da5r6r.js:32982", () => {
   OPEN_BRACKET_CHARS =
     "\\[\\uff3b\\ufe47\\u27e6\\u301a\\u2045\\u298b\\u298d\\u298f\\u3010\\u3014\\ufe5d\\u3016\\u3018\\u2772\\u27ec\\ufe17\\ufe39\\ufe3b";
   CLOSE_BRACKET_CHARS =
@@ -850,14 +850,14 @@ deferInit("chunk-p5akk6be.js:32951", () => {
   LONG_VOWEL_AND_BLANK_CHARS = "\\u30fc\\uff70\\u115f\\u1160\\u3164\\uffa0";
   MAX_FILLER_DEPTH = 4;
 });
-//@ chunk-p5akk6be.js:33598-33711 placement
+//@ chunk-72da5r6r.js:33630-33744 placement
 function buildEscapedCharPattern(char) {
   let filler = `[${NEWLINE_OR_EXTRA_SPACE_CLASS}]*`;
   let escaped = "";
   for (let i = 0; i < MAX_FILLER_DEPTH; i++) escaped = `(?:[${DASH_OR_SEPARATOR_CLASS}]${filler}${escaped})?`;
   return `(?=(${filler}${escaped}))(?:\\${char})`;
 }
-//@ chunk-p5akk6be.js:33711-33906 placement
+//@ chunk-72da5r6r.js:33744-33939 placement
 /**
  * 前导文本匹配模式与 LEAD_* 标记符号，用于识别标签前的上下文。
  */
@@ -865,13 +865,13 @@ var LEAD_TAIL_PATTERN; // deferred: uses OPEN_BRACKET_CHARS of its import cycle 
 var LEAD_HEX_ID;
 var LEAD_SPAN;
 var LEAD_OPEN_END;
-deferInit("chunk-p5akk6be.js:33711", () => {
+deferInit("chunk-72da5r6r.js:33744", () => {
   LEAD_TAIL_PATTERN = `[^${OPEN_BRACKET_CHARS}${CLOSE_BRACKET_CHARS}\\r\\n]{0,119}?(?:(?![${LONG_VOWEL_AND_BLANK_CHARS}])[\\p{L}\\p{N}]|(?![${CLOSE_BRACKET_CHARS}])["')\\u2019\\u201d\\uff09\\p{Pe}\\p{Pf}])`;
   LEAD_HEX_ID = Symbol("LEAD_HEX_ID");
   LEAD_SPAN = Symbol("LEAD_SPAN");
   LEAD_OPEN_END = Symbol("LEAD_OPEN_END");
 });
-//@ chunk-p5akk6be.js:33906-34979 placement
+//@ chunk-72da5r6r.js:33939-35013 placement
 function buildLeadMarkerPattern(markers) {
   let captureCount = 0;
   let escapedChar = () => buildEscapedCharPattern(++captureCount);
@@ -929,7 +929,7 @@ function buildLeadMarkerPattern(markers) {
   });
   return new RegExp(`[${OPEN_BRACKET_CHARS}](?!\\\\)(?=${fillerPart}(?:${mapped.join("|")}))`, "giu");
 }
-//@ chunk-p5akk6be.js:34979-35215 placement
+//@ chunk-72da5r6r.js:35013-35249 placement
 /**
  * 把文本中伪造的（易混淆拼写的）标签中和掉。
  */
@@ -949,17 +949,17 @@ function neutralizeConfusableTags(text, tagNames) {
     })
     .join("<");
 }
-//@ chunk-p5akk6be.js:35280-35330 placement
+//@ chunk-72da5r6r.js:35314-35364 placement
 function unescapeHtmlEntities(text) {
   return text.replace(HTML_ENTITY_RE, (entity) => HTML_ENTITY_MAP[entity] ?? entity);
 }
-//@ chunk-p5akk6be.js:35330-35403 placement
+//@ chunk-72da5r6r.js:35364-35437 placement
 /**
  * 匹配基本 HTML 实体（amp/lt/gt/quot/apos）的正则。
  */
 var BASIC_HTML_ENTITY_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var BASIC_HTML_ENTITY_MAP;
-deferInit("chunk-p5akk6be.js:35330", () => {
+deferInit("chunk-72da5r6r.js:35364", () => {
   BASIC_HTML_ENTITY_RE = /&(?:amp|lt|gt|quot|apos);/g;
   BASIC_HTML_ENTITY_MAP = {
     ...HTML_ENTITY_MAP,
@@ -967,7 +967,7 @@ deferInit("chunk-p5akk6be.js:35330", () => {
     "&apos;": "'",
   };
 });
-//@ chunk-p5akk6be.js:35403-35454 placement
+//@ chunk-72da5r6r.js:35437-35488 placement
 /**
  * 解码基本 HTML 实体（未知实体原样保留）。
  */
@@ -975,18 +975,32 @@ function unescapeBasicHtmlEntities(text) {
   return text.replace(BASIC_HTML_ENTITY_RE, (entity) => BASIC_HTML_ENTITY_MAP[entity] ?? entity);
 }
 export {
-  TAG_BRACKET_CLASSES,
-  lookaheadCapture,
   escapeXml_2,
+  FILLER_CHAR_CLASS,
+  confusableTagScrubPattern,
+  createTagNeutralizer,
+  foldConfusableCharacters,
+  scrubCloseTag,
+  neutralizeConfusableTags,
   foldLookalikeChars,
   countConfusables,
-  scrubCloseTag,
   unescapeHtmlEntities,
-  INVISIBLE_CHAR_CLASSES,
+  escapeXmlTruncated,
+  escapedCharPrefix,
+  unescapeBasicHtmlEntities,
+  ABCDEFGHIJKLMNOPQRSTUVWXYZ,
   latinLetterConfusableClass,
+  ANTML,
+  TAG_BRACKET_CLASSES,
+  OPEN_BRACKET_CHARS,
+  INVISIBLE_CHAR_CLASSES,
+  scrubOpenTag,
   codePointLength,
+  CONNECTOR_CHAR_CLASS,
+  COLON_CHAR_CLASS,
+  invisiblePatternAccessor,
+  stripInvisibleChars,
   WORD_CHARS_CLASS,
-  confusableTagScrubPattern,
   EXTRA_SPACE_CHARS,
   LEAD_HEX_ID,
   LEAD_SPAN,
@@ -995,22 +1009,8 @@ export {
   buildChannelTagMatcher,
   buildAntmlTagPattern,
   DASH_CHAR_CLASS,
-  neutralizeConfusableTags,
-  unescapeBasicHtmlEntities,
-  foldConfusableCharacters,
-  escapedCharPrefix,
-  escapeXmlTruncated,
-  ABCDEFGHIJKLMNOPQRSTUVWXYZ,
-  ANTML,
-  OPEN_BRACKET_CHARS,
-  createTagNeutralizer,
-  channelSourceAttrPattern,
-  FILLER_CHAR_CLASS,
   truncateBeforeEscape,
-  invisiblePatternAccessor,
-  stripInvisibleChars,
+  lookaheadCapture,
   fillerCapture,
-  COLON_CHAR_CLASS,
-  CONNECTOR_CHAR_CLASS,
-  scrubOpenTag,
+  channelSourceAttrPattern,
 };

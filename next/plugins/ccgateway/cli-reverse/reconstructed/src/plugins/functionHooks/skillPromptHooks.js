@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：skill.prompt 事件钩子
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (8)
  * attribution: placement 8
  */
 import { textPassthroughEvent } from "./coreHandlers.js";
@@ -20,7 +20,7 @@ import { joinTextBlocks } from "./sessionReceive.js";
 import { NO_CORE_AT_CHAIN_BOTTOM } from "./eventCatalog.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:76168-76221 placement
+//@ chunk-5xgkngpb.js:78718-78771 placement
 /**
  * 技能 frontmatter 问题结果
  */
@@ -28,7 +28,7 @@ var skillProblemResult = (frontmatterProblem) => ({
   frontmatter: {},
   frontmatterProblem,
 });
-//@ chunk-e6aww6q8.js:76221-76414 placement
+//@ chunk-5xgkngpb.js:78771-78964 placement
 /**
  * 技能来源：插件命令为 plugin，同步技能为 syncedSkills，内置/打包为 built-in，否则取 source。
  */
@@ -43,7 +43,7 @@ function skillSourceOf(command) {
       return command.source;
   }
 }
-//@ chunk-e6aww6q8.js:76414-76620 placement
+//@ chunk-5xgkngpb.js:78964-79170 placement
 function skillProvenance(command) {
   let prompt = command?.type === "prompt" ? command : undefined;
   let pluginName = prompt?.pluginInfo?.pluginManifest.name;
@@ -58,15 +58,15 @@ function skillProvenance(command) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:76620-76647 placement
+//@ chunk-5xgkngpb.js:79170-79197 placement
 /**
  * skill.prompt 事件
  */
 var SKILL_PROMPT_EVENT; // deferred: uses textPassthroughEvent (./coreHandlers.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:76620", () => {
+deferInit("chunk-5xgkngpb.js:79170", () => {
   SKILL_PROMPT_EVENT = textPassthroughEvent("skill.prompt");
 });
-//@ chunk-e6aww6q8.js:76647-77155 placement
+//@ chunk-5xgkngpb.js:79197-79705 placement
 /**
  * 为 skill.prompt 准备技能 frontmatter 的纯数据副本；无法复制或有问题时给空对象并说明原因。
  */
@@ -97,7 +97,7 @@ function skillFrontmatterFor(skillName, command) {
   });
   return skillProblemResult(frontmatterProblem);
 }
-//@ chunk-e6aww6q8.js:77155-77401 placement
+//@ chunk-5xgkngpb.js:79705-79951 placement
 /**
  * 有 skill.prompt 钩子时让钩子改写技能提示文本（保留非文本块），否则原样返回。
  */
@@ -132,7 +132,7 @@ async function applySkillPromptHooks(skillName, promptForCommand, command) {
         ...promptForCommand.filter((block) => block.type !== "text"),
       ];
 }
-//@ chunk-e6aww6q8.js:77401-77479 placement
+//@ chunk-5xgkngpb.js:79951-80029 placement
 /**
  * 合法日期或当前时间
  */
@@ -140,9 +140,9 @@ function safeDate(loggedAt) {
   let date = new Date(loggedAt);
   return Number.isNaN(date.getTime()) ? new Date() : date;
 }
-//@ chunk-e6aww6q8.js:77479-77514 placement
+//@ chunk-5xgkngpb.js:80029-80064 placement
 /**
  * Array.from 包装
  */
 var toArrayLike = (value) => Array.from(Object(value));
-export { applySkillPromptHooks, toArrayLike, safeDate, SKILL_PROMPT_EVENT, skillSourceOf };
+export { toArrayLike, safeDate, SKILL_PROMPT_EVENT, applySkillPromptHooks, skillSourceOf };

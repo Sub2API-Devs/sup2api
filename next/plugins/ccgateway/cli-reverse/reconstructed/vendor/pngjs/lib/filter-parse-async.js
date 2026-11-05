@@ -1,15 +1,15 @@
 /**
  * pngjs/lib/filter-parse-async.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: pngjs@5.0.0
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_chunkstream } from "./chunkstream.js";
 import { require_filter_parse } from "./filter-parse.js";
 
-//@ chunk-spjgqa4y.js:25954-26249 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:25954-26249 cjs-fingerprint
 var require_filter_parse_async = __commonJS(function (cjsExports, cjsModule) {
   var util = importMetaRequire("util");
   var ChunkStream = require_chunkstream();

@@ -1,15 +1,15 @@
 /**
  * @typespec/ts-http-runtime/dist/esm/logger/logger.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
- * pieces: chunk-mrx6y2r5.js (6)
+ * pieces: chunk-b5df2wx1.js (6)
  * attribution: esm-layout 3, esm-fingerprint 3
  */
 import { debugObj } from "./debug.js";
 
-//@ chunk-mrx6y2r5.js:25443-25453 esm-layout
+//@ chunk-b5df2wx1.js:25443-25453 esm-layout
 var debugObj_default = debugObj;
-//@ chunk-mrx6y2r5.js:25453-25545 esm-fingerprint
+//@ chunk-b5df2wx1.js:25453-25545 esm-fingerprint
 var TYPESPEC_RUNTIME_LOG_LEVELS = ["verbose", "info", "warning", "error"];
 var levelMap = {
   verbose: 400,
@@ -17,17 +17,17 @@ var levelMap = {
   warning: 200,
   error: 100,
 };
-//@ chunk-mrx6y2r5.js:25545-25590 esm-layout
+//@ chunk-b5df2wx1.js:25545-25590 esm-layout
 function patchLogMethod(parent, child) {
   child.log = (...args) => {
     parent.log(...args);
   };
 }
-//@ chunk-mrx6y2r5.js:25590-25627 esm-layout
+//@ chunk-b5df2wx1.js:25590-25627 esm-layout
 function isTypeSpecRuntimeLogLevel(level) {
   return TYPESPEC_RUNTIME_LOG_LEVELS.includes(level);
 }
-//@ chunk-mrx6y2r5.js:25627-26536 esm-fingerprint
+//@ chunk-b5df2wx1.js:25627-26536 esm-fingerprint
 function createLoggerContext(options) {
   let registeredLoggers = new Set();
   let logLevelFromEnv =
@@ -88,7 +88,7 @@ function createLoggerContext(options) {
     logger: clientLogger,
   };
 }
-//@ chunk-mrx6y2r5.js:26536-26638 esm-fingerprint
+//@ chunk-b5df2wx1.js:26536-26638 esm-fingerprint
 var context = createLoggerContext({
   logLevelEnvVarName: "TYPESPEC_RUNTIME_LOG_LEVEL",
   namespace: "typeSpecRuntime",

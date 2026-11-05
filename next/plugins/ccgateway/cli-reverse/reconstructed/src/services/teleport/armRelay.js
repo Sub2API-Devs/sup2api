@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：teleport 中继准备
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-rr1dnehg.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2yn1payk.js (9)
  * attribution: placement 9
  */
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
@@ -39,7 +39,7 @@ import {
 import { tailFile } from "../../utils/fsOperations.js";
 import { registerCleanup } from "../../utils/cleanupRegistry.js";
 
-//@ chunk-rr1dnehg.js:1854-1938 placement
+//@ chunk-2yn1payk.js:1854-1938 placement
 function recordTeleportArmVerdict(verdict) {
   logForDiagnosticsNoPII(
     verdict.outcome === "refused" ? "warn" : "info",
@@ -47,9 +47,9 @@ function recordTeleportArmVerdict(verdict) {
     verdict,
   );
 }
-//@ chunk-rr1dnehg.js:1938-1953 placement
+//@ chunk-2yn1payk.js:1938-1953 placement
 var MAX_SEED_TRANSCRIPT_BYTES = 67108864;
-//@ chunk-rr1dnehg.js:1953-2050 placement
+//@ chunk-2yn1payk.js:1953-2050 placement
 /**
  * 解析一行种子转录，返回符合 schema 的对象或 null。
  */
@@ -62,7 +62,7 @@ function parseSeedLine(line) {
     return null;
   }
 }
-//@ chunk-rr1dnehg.js:2050-2676 placement
+//@ chunk-2yn1payk.js:2050-2676 placement
 /**
  * 从种子 transcript 倒序找 teleport 标记行并据此装配提示缓存中继。
  */
@@ -100,7 +100,7 @@ function armRelayFromSeed({ rawSeedLines, liveMessages, ingressOrigin, remoteSes
     remoteSessionId,
   });
 }
-//@ chunk-rr1dnehg.js:2676-3855 placement
+//@ chunk-2yn1payk.js:2676-3855 placement
 function armRelayFromMarker({ markerLineUuid, markerContent, liveMessages, ingressOrigin, remoteSessionId }) {
   if (getTeleportCacheState().status !== "inactive") return NOT_INACTIVE_RESULT;
   let relayMarker = parseRelayMarker(markerContent);
@@ -157,7 +157,7 @@ function armRelayFromMarker({ markerLineUuid, markerContent, liveMessages, ingre
     armed: true,
   };
 }
-//@ chunk-rr1dnehg.js:3855-4186 placement
+//@ chunk-2yn1payk.js:3855-4186 placement
 function noteTeleportBootUnreached(stage, holdOpen) {
   noteRelayBootSettled();
   if (!teleportRelayCarrierPresent()) {
@@ -182,7 +182,7 @@ function noteTeleportBootUnreached(stage, holdOpen) {
     },
   );
 }
-//@ chunk-rr1dnehg.js:4186-4954 placement
+//@ chunk-2yn1payk.js:4186-4954 placement
 /**
  * 读取种子 transcript 尾部（优先存储后端，链接文件被拒，其余回退读文件）。
  */
@@ -227,7 +227,7 @@ async function readSeedTranscriptTail(sessionId, storage) {
   let { content } = await tailFile(transcriptPathForSession, MAX_SEED_TRANSCRIPT_BYTES);
   return content;
 }
-//@ chunk-rr1dnehg.js:4954-5841 placement
+//@ chunk-2yn1payk.js:4954-5841 placement
 async function bootTeleportFromTranscript(sessionId, liveMessages, storage, holdOpen) {
   try {
     let teleportRelayEnvConfig = getTeleportRelayEnvConfig();
@@ -290,7 +290,7 @@ async function bootTeleportFromTranscript(sessionId, liveMessages, storage, hold
     noteRelayBootSettled();
   }
 }
-//@ chunk-rr1dnehg.js:5841-5982 placement
+//@ chunk-2yn1payk.js:5841-5982 placement
 /**
  * 启动时未装配中继：保留判定窗口，等待交接时再装配。
  */

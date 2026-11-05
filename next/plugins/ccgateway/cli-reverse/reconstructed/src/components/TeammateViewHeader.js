@@ -3,11 +3,12 @@
  *
  * 查看队友会话时的顶部标题栏（"Viewing <agent>"，Esc 返回）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/TeammateViewHeader.tsx
- * pieces: chunk-18hwfzwa.js (4)
- * attribution: file-last-pair 1, fingerprint 1, placement 2
+ * pieces: chunk-czq1j3j2.js (4)
+ * attribution: placement 2, file-last-pair 1, fingerprint 1
  */
+import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { getViewedTeammateTask_2 as getViewedTeammateTask_2_2 } from "../state/selectors.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../state/AppState.js";
@@ -20,14 +21,23 @@ import {
 import { Text, Box } from "../ink/components/Text.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { FreezeWhenOffscreen } from "./FreezeWhenOffscreen.js";
-import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1444271-1444303 file-last-pair
+//@ chunk-czq1j3j2.js:1472884-1472888 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1472884", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1482670-1482674 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1482670", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1485156-1485188 file-last-pair
 function selectViewedTeammateTask(s) {
   return getViewedTeammateTask_2_2(s);
 }
-//@ chunk-18hwfzwa.js:1444303-1445186 fingerprint (2.1.88 match: TeammateViewHeader, 0.454)
+//@ chunk-czq1j3j2.js:1485188-1486071 fingerprint (2.1.88 match: TeammateViewHeader, 0.455)
 function TeammateViewHeader() {
   let $ = useMemoCache(14);
   let viewedTeammate = useAppState(selectViewedTeammateTask);
@@ -108,14 +118,4 @@ function TeammateViewHeader() {
   } else t6 = $[13];
   return t6;
 }
-//@ chunk-18hwfzwa.js:1445186-1445190 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1445186", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1445190-1445194 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1445190", () => {
-  init_react_production();
-});
 export { TeammateViewHeader };

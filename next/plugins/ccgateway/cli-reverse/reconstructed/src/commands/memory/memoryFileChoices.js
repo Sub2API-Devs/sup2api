@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：/memory 的文件选项。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tx768c80.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-aaz9jamn.js (10)
  * attribution: placement 10
  */
 import { join } from "path";
 import { findGitRoot } from "../../utils/git.js";
-import { getClaudeConfigDir, getSafeModeExitHint } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { isManagedOrVirtualPath } from "../../utils/claudemd.js";
 import { getDisplayPath } from "../../utils/file.js";
 import { repeatString } from "../../utils/stringUtils.js";
@@ -22,13 +22,14 @@ import {
   getMemorySyncPolicyState,
 } from "../../services/accountMemory/memoryContext.js";
 import { isEligibleDecisionSurface } from "../../services/orgMemory/orgMemoryDecision.js";
+import { getSafeModeExitHint } from "../../utils/envUtils.js";
 import { formatRelativeTimeAgo } from "../../utils/format.js";
 
-//@ chunk-tx768c80.js:567-601 placement
+//@ chunk-aaz9jamn.js:568-602 placement
 function isInGitRepo(cwd) {
   return findGitRoot(cwd) !== null;
 }
-//@ chunk-tx768c80.js:601-1568 placement
+//@ chunk-aaz9jamn.js:602-1569 placement
 /**
  * 生成 /memory 的文件选项：已有记忆文件（排除自动记忆）加上缺失的用户/项目 CLAUDE.md，按导入层级缩进，标出类型、标签与说明。
  */
@@ -109,7 +110,7 @@ function buildMemoryFileChoices(memoryFiles, cwd, indent = "  ") {
     };
   });
 }
-//@ chunk-tx768c80.js:1568-1765 placement
+//@ chunk-aaz9jamn.js:1569-1767 placement
 /**
  * /memory 的自动记忆文件夹选项，团队记忆可用时加上团队记忆文件夹。
  */
@@ -131,7 +132,7 @@ function getAutoMemoryChoices() {
     });
   return choices;
 }
-//@ chunk-tx768c80.js:1765-1965 placement
+//@ chunk-aaz9jamn.js:1767-1967 placement
 /**
  * 为声明了 memory 的代理生成"打开代理记忆"选项。
  */
@@ -147,7 +148,7 @@ function getAgentMemoryChoices(activeAgents, normalize = (value) => value) {
       });
   return choices;
 }
-//@ chunk-tx768c80.js:1965-2134 placement
+//@ chunk-aaz9jamn.js:1967-2136 placement
 /**
  * 记忆同步开关状态：open/pending 直接返回，账号或本地关闭时取同意状态（拒绝视为 closed）。
  */
@@ -160,26 +161,26 @@ function getMemorySyncState() {
   }
   return "closed";
 }
-//@ chunk-tx768c80.js:2134-2162 placement
+//@ chunk-aaz9jamn.js:2136-2164 placement
 /**
  * 自动记忆开关的显示状态（由 J4e 计算当前模型/安全模式/组织策略）。
  */
 function autoMemoryToggleState() {
   return isEligibleDecisionSurface();
 }
-//@ chunk-tx768c80.js:2162-2186 placement
+//@ chunk-aaz9jamn.js:2164-2188 placement
 /**
  * 恒返回 false 的占位判断（记忆文件选项的一个构建期开关）。
  */
 function alwaysFalse() {
   return false;
 }
-//@ chunk-tx768c80.js:2186-2263 placement
+//@ chunk-aaz9jamn.js:2188-2265 placement
 /**
  * "can't be turned on here; use a session started outside Claude Code"：自动记忆在此会话无法开启的说明。
  */
 var CANNOT_ENABLE_HERE_DETAIL = "can't be turned on here; use a session started outside Claude Code";
-//@ chunk-tx768c80.js:2263-2630 placement
+//@ chunk-aaz9jamn.js:2265-2632 placement
 /**
  * 自动记忆开关的显示状态：当前模型不支持、安全模式、组织不允许开启或正常 on/off。
  */
@@ -212,7 +213,7 @@ function describeAutoMemoryToggle({ enabled, modelDisabled, safeMode, raiseAllow
     toggleable: !modelDisabled,
   };
 }
-//@ chunk-tx768c80.js:2630-3073 placement
+//@ chunk-aaz9jamn.js:2632-3075 placement
 /**
  * 记忆整理（dream）开关的显示状态：自动记忆关闭、被挂起、组织不允许，或显示运行中/上次运行时间。
  */

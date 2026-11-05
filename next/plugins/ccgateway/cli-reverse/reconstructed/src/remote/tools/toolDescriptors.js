@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：通告工具描述的解析与清洗、服务调用请求构建
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-g54kbxqw.js (13)
- * attribution: placement 13
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4z1ntdgk.js (7), chunk-k0v80sg8.js (13)
+ * attribution: sole-consumer 6, placement 13, layout 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
@@ -28,8 +28,9 @@ import {
   CALLER_FIELDS,
   callIdSchema,
   MAX_SINCE_MS,
-  REMOTE_TOOL_CALL_META,
   parseRemoteToolRequest,
+  REMOTE_TOOL_CALL_META,
+  MAX_RESULT_BYTES,
 } from "./protocolSchemas.js";
 import {
   byteLengthOf,
@@ -42,15 +43,20 @@ import {
   envelopeOf,
 } from "./callResults.js";
 import { toolHostSchema } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
-import { uniq } from "../../utils/collections.js";
-import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
+import { CLAUDEAI_SERVER_PREFIX } from "../../services/mcp/normalization.js";
 import { recursivelySanitizeUnicode } from "../../utils/sanitization.js";
 import { joinDescription } from "./inputSchemaFlatten.js";
 import { MAX_MCP_RESULT_CHARS } from "../../constants/outputLimits.js";
 import { SAFE_ID_PATTERN, MAX_INT32, SERVER_VERDICT_KEY } from "./protocolConstants.js";
+import { isPlainObject } from "../../utils/objectUtils.js";
+import { judgeCallClaim } from "../../services/mcpServe/callClaims.js";
+import { buildRemoteCallEnvelope, REQUEST_REAUTHORED } from "./reauthoredRequest.js";
+import { logError } from "../../utils/log.js";
+import { withTelemetryMessage, toError } from "../../utils/errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-g54kbxqw.js:24641-25605 placement
+//@ chunk-k0v80sg8.js:23390-24353 placement
 /**
  * 远程工具描述符的上限与 schema：最多 16 个工具、passthrough 名 256、描述 2048/4096、schema 64 KB 且深度 16，以及 served/passthrough 两种描述符的字段定义。
  */
@@ -71,7 +77,7 @@ var MAX_ANNOTATION_TITLE_CHARS;
 var servedToolDescriptorSchema;
 var hostEpochRequiredSchema;
 var toolHostAdvertSchema;
-deferInit("chunk-g54kbxqw.js:24641", () => {
+deferInit("chunk-k0v80sg8.js:23390", () => {
   TOOL_DESCRIPTOR_LIMITS = 16;
   MAX_PASSTHROUGH_TOOLS = 256;
   MAX_PASSTHROUGH_NAME_CHARS = 4 * MAX_PASSTHROUGH_TOOLS;
@@ -139,7 +145,7 @@ deferInit("chunk-g54kbxqw.js:24641", () => {
     }),
   );
 });
-//@ chunk-g54kbxqw.js:25605-26273 placement
+//@ chunk-k0v80sg8.js:24353-25029 placement
 function parseAnnouncedTools(value, limits) {
   let parsed = toolHostAdvertSchema().safeParse(value);
   if (!parsed.success) return;
@@ -174,22 +180,22 @@ function parseAnnouncedTools(value, limits) {
     host: sanitizeDeep(parsed.data.host),
     tools: tools_2,
     passthrough,
-    plumbing: uniq(sanitizeDeep(parsed.data.plumbing)).filter((line) => line !== ""),
+    plumbing: normalizeCaseForComparison_2(sanitizeDeep(parsed.data.plumbing)).filter((line) => line !== ""),
     ignored: tools,
   };
 }
-//@ chunk-g54kbxqw.js:26273-26380 placement
+//@ chunk-k0v80sg8.js:25029-25136 placement
 function isValidAnnouncedToolName(name, limits) {
   let index = name.indexOf("__");
   return (
-    normalizeNameForMCP(name) === name &&
+    CLAUDEAI_SERVER_PREFIX(name) === name &&
     name.length <= MAX_PREFIXED_TOOL_NAME_CHARS &&
     index > 0 &&
     index + 2 < name.length &&
     limits.admitsName(name)
   );
 }
-//@ chunk-g54kbxqw.js:26380-26876 placement
+//@ chunk-k0v80sg8.js:25136-25631 placement
 function toDeclaredTool(tool, limits) {
   let copy = {
     ...tool,
@@ -212,7 +218,7 @@ function toDeclaredTool(tool, limits) {
         description: joinDescription(judged.normalized.note, copy.description),
       };
 }
-//@ chunk-g54kbxqw.js:26876-27122 placement
+//@ chunk-k0v80sg8.js:25631-25877 placement
 function sanitizeAnnouncedTool(tool) {
   return {
     name: sanitizeDeep(tool.name),
@@ -226,7 +232,7 @@ function sanitizeAnnouncedTool(tool) {
     }),
   };
 }
-//@ chunk-g54kbxqw.js:27122-27783 placement
+//@ chunk-k0v80sg8.js:25877-26537 placement
 function sanitizeToolAnnotations(tool) {
   let title =
     tool.annotations?.title !== undefined
@@ -276,9 +282,9 @@ function sanitizeToolAnnotations(tool) {
     }),
   };
 }
-//@ chunk-g54kbxqw.js:27783-28014 placement
+//@ chunk-k0v80sg8.js:26537-26764 placement
 var servedCallRequestSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-g54kbxqw.js:27783", () => {
+deferInit("chunk-k0v80sg8.js:26537", () => {
   servedCallRequestSchema = DoctorLazy(() =>
     objectSchema({
       instance_id: stringSchema().regex(SAFE_ID_PATTERN),
@@ -292,30 +298,30 @@ deferInit("chunk-g54kbxqw.js:27783", () => {
     }),
   );
 });
-//@ chunk-g54kbxqw.js:28014-28292 placement
-function parseServedCallRequest(request) {
+//@ chunk-k0v80sg8.js:26764-27047 layout
+function sanitizeServedCall(request, parseRequest = parseRemoteToolRequest) {
   let parsed = servedCallRequestSchema().safeParse(request);
   if (!parsed.success) return;
   let { envelope, input, host, name, ...rest } = parsed.data;
-  let { [REMOTE_TOOL_CALL_META]: callMeta, ...restInput } = input;
+  let { [REMOTE_TOOL_CALL_META]: remoteMeta, ...toolInput } = input;
   let sanitizedName = sanitizeDeep(name);
   if (sanitizedName === "") return;
-  let remoteToolRequest = parseRemoteToolRequest(envelope);
+  let requestParse = parseRequest(envelope, rest);
   return {
     ...rest,
     host: clipText(host, REMOTE_TOOL_FIELD_LIMITS),
     name: sanitizedName,
-    input: restInput,
+    input: toolInput,
     request:
-      remoteToolRequest.ok && remoteToolRequest.value.call_id !== rest.tool_use_id
+      requestParse.ok && requestParse.value.call_id !== rest.tool_use_id
         ? {
             ok: false,
             why: "malformed",
           }
-        : remoteToolRequest,
+        : requestParse,
   };
 }
-//@ chunk-g54kbxqw.js:28292-28618 placement
+//@ chunk-k0v80sg8.js:27047-27373 placement
 function buildServedCallRequest({
   instanceId,
   host,
@@ -346,9 +352,9 @@ function buildServedCallRequest({
     deadline_ms: clampToMaxPageSize(deadlineMs),
   };
 }
-//@ chunk-g54kbxqw.js:28618-28806 placement
+//@ chunk-k0v80sg8.js:27373-27558 placement
 var plumbingRequestSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-g54kbxqw.js:28618", () => {
+deferInit("chunk-k0v80sg8.js:27373", () => {
   plumbingRequestSchema = DoctorLazy(() =>
     objectSchema({
       instance_id: stringSchema().regex(SAFE_ID_PATTERN),
@@ -360,7 +366,7 @@ deferInit("chunk-g54kbxqw.js:28618", () => {
     }),
   );
 });
-//@ chunk-g54kbxqw.js:28806-28951 placement
+//@ chunk-k0v80sg8.js:27558-27702 placement
 function parseMachineAdvert(request) {
   let parsed = plumbingRequestSchema().safeParse(request);
   let name = parsed.success ? sanitizeDeep(parsed.data.name) : "";
@@ -372,7 +378,7 @@ function parseMachineAdvert(request) {
       }
     : undefined;
 }
-//@ chunk-g54kbxqw.js:28951-29129 placement
+//@ chunk-k0v80sg8.js:27702-27879 placement
 function buildPlumbingRequest({ instanceId, host, name, args, issuedAt, deadlineMs }) {
   return {
     instance_id: instanceId,
@@ -383,7 +389,7 @@ function buildPlumbingRequest({ instanceId, host, name, args, issuedAt, deadline
     deadline_ms: clampToMaxPageSize(deadlineMs),
   };
 }
-//@ chunk-g54kbxqw.js:29129-29325 placement
+//@ chunk-k0v80sg8.js:27879-28074 placement
 function readCallResult(result) {
   let record = asPlainRecord(result);
   if (!record)
@@ -400,16 +406,128 @@ function readCallResult(result) {
     envelope: readResultEnvelope(envelopeOf(record.structuredContent) ?? envelopeOf(record._meta)),
   };
 }
+//@ chunk-4z1ntdgk.js:160931-161008 sole-consumer
+var ENVELOPE_FIELDS = ["v", "op", "call_id", "expires_in_ms", "caller", "read_baseline"];
+var MAX_METRICS_DEPTH = 1000;
+//@ chunk-4z1ntdgk.js:161008-161076 sole-consumer
+function refuseSharedRequest(sharedRequestRefusal) {
+  return {
+    ok: false,
+    why: "malformed",
+    sharedRequestRefusal,
+  };
+}
+//@ chunk-4z1ntdgk.js:161076-161129 sole-consumer
+function isEnvelopeShaped(value) {
+  return isPlainObject(value) && Object.hasOwn(value, "step");
+}
+//@ chunk-4z1ntdgk.js:161129-161238 sole-consumer
+function measureSharedRequest(request) {
+  let jsonText = {
+    toolInput: request.input,
+    envelope: request.envelope,
+  };
+  return withinDepth(jsonText, MAX_METRICS_DEPTH) ? byteLengthOf(jsonText) : Number.POSITIVE_INFINITY;
+}
+//@ chunk-4z1ntdgk.js:161238-161675 sole-consumer
+function resolveClaim(claim, rest) {
+  let claimKind = judgeCallClaim(claim, "compared_elsewhere", "attached_computer");
+  switch (claimKind.kind) {
+    case "requested":
+    case "declined": {
+      let parsedCall = buildRemoteCallEnvelope(claimKind.request, rest);
+      return parsedCall.ok
+        ? {
+            ...parsedCall,
+            kind: "call",
+          }
+        : refuseSharedRequest({
+            what: "malformed",
+          });
+    }
+    case "not_honoured":
+      return refuseSharedRequest({
+        what: "not_honoured",
+        part: claimKind.part,
+      });
+    case "too_large":
+    case "malformed":
+      return refuseSharedRequest({
+        what: claimKind.kind,
+      });
+    case "session_too_old":
+    case "daemon_too_old":
+    case "unlisted_restriction_on":
+      return refuseSharedRequest({
+        what: "malformed",
+      });
+    default:
+      return claimKind;
+  }
+}
+//@ chunk-4z1ntdgk.js:161675-161873 placement
+function parseServedCallRequest(request, modeStamp) {
+  let isRerequested = modeStamp === REQUEST_REAUTHORED;
+  if (!isPlainObject(request)) return isRerequested ? undefined : sanitizeServedCall(request);
+  if (!isRerequested && !isEnvelopeShaped(request.envelope)) return sanitizeServedCall(request);
+  let arrivedBytes = isRerequested ? measureSharedRequest(request) : undefined;
+  let rest = sanitizeServedCall(request, (envelope, which) =>
+    resolveSharedRequest(envelope, which, modeStamp, arrivedBytes),
+  );
+  return (
+    rest && {
+      ...rest,
+      sharedRequest: {
+        arrivedBytes,
+      },
+    }
+  );
+}
+//@ chunk-4z1ntdgk.js:161873-162247 sole-consumer
+function resolveSharedRequest(claim, rest, modeStamp, arrivedBytes) {
+  if (!isEnvelopeShaped(claim))
+    return refuseSharedRequest({
+      what: "no_step",
+    });
+  if (ENVELOPE_FIELDS.some((field) => Object.hasOwn(claim, field)))
+    return refuseSharedRequest({
+      what: "both_formats",
+    });
+  if (modeStamp !== REQUEST_REAUTHORED)
+    return refuseSharedRequest({
+      what: "unmarked",
+    });
+  if (arrivedBytes === undefined || arrivedBytes > MAX_RESULT_BYTES)
+    return refuseSharedRequest({
+      what: "too_large",
+    });
+  try {
+    return resolveClaim(claim, {
+      ...rest,
+      gate_mark: modeStamp,
+    });
+  } catch (error) {
+    logError(
+      withTelemetryMessage(
+        toError(error),
+        "reading a ToolHost permission request from a cloud session threw",
+      ),
+    );
+    return refuseSharedRequest({
+      what: "malformed",
+    });
+  }
+}
 export {
   readCallResult,
-  buildPlumbingRequest,
-  buildServedCallRequest,
   MAX_INPUT_SCHEMA_DEPTH,
-  parseServedCallRequest,
-  parseMachineAdvert,
   MAX_RESULT_SIZE_HINT,
   parseAnnouncedTools,
+  parseServedCallRequest,
+  parseMachineAdvert,
   MAX_PREFIXED_TOOL_NAME_CHARS,
   MAX_PASSTHROUGH_TOOLS,
   MAX_TOOL_DESCRIPTION_CHARS,
+  buildPlumbingRequest,
+  buildServedCallRequest,
 };

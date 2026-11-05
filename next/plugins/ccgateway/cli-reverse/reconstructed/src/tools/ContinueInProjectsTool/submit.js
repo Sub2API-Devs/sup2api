@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：Continue in Projects 提交
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dz3q485w.js (24)
- * attribution: placement 24
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jndyh8cy.js (25)
+ * attribution: placement 24, layout 1
  */
 import {
   ChannelApiError,
@@ -66,9 +66,15 @@ import {
   getFeatureValue_CACHED_MAY_BE_STALE,
   getFeatureValue_SESSION_PINNED,
 } from "../../services/analytics/growthbook.js";
-import { getIsRemoteMode, getSessionId } from "../../bootstrap/state.js";
+import {
+  getIsRemoteMode,
+  getIsNonInteractiveSession,
+  getPermissionPromptToolName,
+  getSessionId,
+} from "../../bootstrap/state.js";
 import { env } from "../../utils/env.js";
 import { isRemoteControlOfferable } from "../../bridge/bridgeGates.js";
+import { hasPermissionPromptTool } from "../../utils/permissions/permissionPromptHost.js";
 import {
   readHistorySuppressionFromDisk,
   isRemoteEgressSuppressedFor,
@@ -80,30 +86,31 @@ import {
   getSdkHostedBridgeHandle,
   getPeerBridgeIdentity,
 } from "../../bridge/replBridgeHandle.js";
+import { isVsCodeTopSession } from "../../utils/sessionShape.js";
 import { deferInit, runDeferredInits } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dz3q485w.js:57967-58057 placement
+//@ chunk-jndyh8cy.js:45866-45956 placement
 /**
  * 用逗号与 and 连接列表（“a, b and c”）。
  */
 function joinWithAnd_2(parts) {
   return parts.length <= 1 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
 }
-//@ chunk-dz3q485w.js:58057-58105 placement
+//@ chunk-jndyh8cy.js:45956-46004 placement
 /**
  * 判断审批来源是否为 pane 或 desktop。
  */
 function isPaneOrDesktopVia(approvedVia) {
   return approvedVia === "pane" || approvedVia === "desktop";
 }
-//@ chunk-dz3q485w.js:58105-58146 placement
+//@ chunk-jndyh8cy.js:46004-46045 placement
 /**
  * 判断状态为 new 且来源为 pane/desktop。
  */
 function isNewViaPaneOrDesktop(mode, approvedVia) {
   return mode === "new" && isPaneOrDesktopVia(approvedVia);
 }
-//@ chunk-dz3q485w.js:58146-58238 placement
+//@ chunk-jndyh8cy.js:46045-46137 placement (2.1.88 match: detectMagicDocHeader, 0.655)
 /**
  * 去掉展示用的 icon、color、instructions 字段。
  */
@@ -112,14 +119,14 @@ function stripPresentationFields(proposal, mode, approvedVia) {
   let { icon, color, instructions, ...rest } = proposal;
   return rest;
 }
-//@ chunk-dz3q485w.js:58238-58297 placement
+//@ chunk-jndyh8cy.js:46137-46196 placement
 /**
  * 提取提交失败的原因文本（渠道错误用 detail，其余截断）。
  */
 function submitErrorDetail(error) {
   return error instanceof ChannelApiError ? error.detail : printableName(errorMessage(error), 300);
 }
-//@ chunk-dz3q485w.js:58297-58435 placement
+//@ chunk-jndyh8cy.js:46196-46334 placement
 /**
  * 提交设置卡失败时可退回手工交接的原因。
  */
@@ -131,14 +138,14 @@ var FALLBACK_SUBMIT_REASONS = new Set([
   "request_failed",
   "bad_response",
 ]);
-//@ chunk-dz3q485w.js:58435-58505 placement
+//@ chunk-jndyh8cy.js:46334-46404 placement
 /**
  * 把提交失败原因归一到已知值（status_xxx 直接保留）。
  */
 function normalizeSubmitReason(reason) {
   return FALLBACK_SUBMIT_REASONS.has(reason) || /^status_\d{3}$/.test(reason) ? reason : "refused";
 }
-//@ chunk-dz3q485w.js:58505-58936 placement
+//@ chunk-jndyh8cy.js:46404-46835 placement
 /**
  * 提交错误分类（是否可重试、是否可能已提交）。
  */
@@ -173,7 +180,7 @@ function classifySubmitError(error) {
     detail: submitErrorDetail(error),
   };
 }
-//@ chunk-dz3q485w.js:58936-60886 placement
+//@ chunk-jndyh8cy.js:46835-48785 placement
 /**
  * 带重试地向项目频道提交设置卡；可能已提交时不再交接，返回 submitted/uncertain/fallback 与说明。
  */
@@ -268,7 +275,7 @@ async function submitSetupCard(submitInput) {
     threadsOnCard: threadCount,
   };
 }
-//@ chunk-dz3q485w.js:60886-68162 placement
+//@ chunk-jndyh8cy.js:48785-56065 placement
 /**
  * Continue in Projects 提交：创建或复用项目、上传仓库简报与记忆、返回链接。
  */
@@ -650,20 +657,20 @@ async function submitProjectSetup(setupInput) {
     },
   };
 }
-//@ chunk-dz3q485w.js:68162-68208 placement
+//@ chunk-jndyh8cy.js:56065-56111 placement
 /**
  * 源会话 id 的最大长度（100）。
  */
 var HOST_WRITES = "host_writes";
 var HOST_OUTCOME = "host_outcome";
 var MAX_SESSION_ID_CHARS = 100;
-//@ chunk-dz3q485w.js:68208-68653 placement
+//@ chunk-jndyh8cy.js:56111-56556 placement
 /**
  * 项目上下文与发送结果 schema。
  */
 var PROJECT_CONTEXT_SCHEMA; // deferred: uses HOST_WRITES of its import cycle while loading; runs once the cycle is complete
 var SEND_RESULT_SCHEMA;
-deferInit("chunk-dz3q485w.js:68208", () => {
+deferInit("chunk-jndyh8cy.js:56111", () => {
   PROJECT_CONTEXT_SCHEMA = DoctorLazy(() =>
     zodStrictObject({
       version: literal(1),
@@ -690,7 +697,7 @@ deferInit("chunk-dz3q485w.js:68208", () => {
     }),
   );
 });
-//@ chunk-dz3q485w.js:68653-68720 placement
+//@ chunk-jndyh8cy.js:56556-56623 placement
 /**
  * 是否可提供远程会话（非仅必需流量、首方、Claude.ai 订阅者、策略允许）。
  */
@@ -702,28 +709,28 @@ function canOfferRemoteSessions() {
     isPolicyAllowed("allow_remote_sessions")
   );
 }
-//@ chunk-dz3q485w.js:68720-68780 placement
+//@ chunk-jndyh8cy.js:56623-56683 placement
 /**
  * 读取 tengu_amber_tributary_dotterel 开关。
  */
 function remoteSessionsFeatureOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_tributary_dotterel", false);
 }
-//@ chunk-dz3q485w.js:68780-68842 placement
+//@ chunk-jndyh8cy.js:56683-56745 placement
 /**
  * 读取会话固定的 tengu_amber_tributary_sandpiper 开关。
  */
 function sendToProjectFeatureOn() {
   return getFeatureValue_SESSION_PINNED("tengu_amber_tributary_sandpiper", false);
 }
-//@ chunk-dz3q485w.js:68842-68877 placement
+//@ chunk-jndyh8cy.js:56745-56780 placement
 /**
  * “发送到项目”功能是否启用（取决于两个开关）。
  */
 function sendToProjectEnabled() {
   return !alwaysFalseRemoteGate() && !sendToProjectFeatureOn();
 }
-//@ chunk-dz3q485w.js:68877-68956 placement
+//@ chunk-jndyh8cy.js:56780-56878 placement
 /**
  * 是否提供“发送到项目”功能（含远程模式与 Remote Control 可用性）。
  */
@@ -731,25 +738,29 @@ function canOfferSendToProject() {
   return (
     !getIsRemoteMode() &&
     canOfferRemoteSessions() &&
-    (alwaysFalseRemoteGate() ? false : !env.CLAUDE_CODE_REMOTE && isRemoteControlOfferable()) &&
+    (alwaysFalseRemoteGate()
+      ? false
+      : !env.CLAUDE_CODE_REMOTE &&
+        isRemoteControlOfferable() &&
+        (!getIsNonInteractiveSession() || hasPermissionPromptTool(getPermissionPromptToolName()))) &&
     remoteSessionsFeatureOn()
   );
 }
-//@ chunk-dz3q485w.js:68956-68980 placement
+//@ chunk-jndyh8cy.js:56878-56902 placement
 /**
  * 恒为 false 的开关。
  */
 function alwaysFalseGate() {
   return false;
 }
-//@ chunk-dz3q485w.js:68980-69004 placement
+//@ chunk-jndyh8cy.js:56902-56926 placement
 /**
  * 恒为 false 的远程开关。
  */
 function alwaysFalseRemoteGate() {
   return false;
 }
-//@ chunk-dz3q485w.js:69004-69074 placement
+//@ chunk-jndyh8cy.js:56926-56996 placement
 /**
  * 读取当前会话的 Remote Control 连接状态（none/withheld/connected）。
  */
@@ -757,7 +768,7 @@ async function remoteControlState(sessionRoot, storage) {
   let historySuppressionFromDisk = await readHistorySuppressionFromDisk(storage);
   return isRemoteEgressSuppressedFor(sessionRoot) ? "suppressed" : historySuppressionFromDisk;
 }
-//@ chunk-dz3q485w.js:69074-69409 placement
+//@ chunk-jndyh8cy.js:56996-57331 placement
 /**
  * 当前会话的 Remote Control 连接状态（none/withheld/connected）。
  */
@@ -790,7 +801,7 @@ function remoteControlLink() {
     sessionId: compatSessionId,
   };
 }
-//@ chunk-dz3q485w.js:69409-69652 placement
+//@ chunk-jndyh8cy.js:57331-57574 placement
 /**
  * 检查对话能否经 Remote Control 发送给项目（含历史抑制扫描）。
  */
@@ -811,7 +822,7 @@ async function checkConversationSendable(storageV5) {
         kind: "unverified",
       };
 }
-//@ chunk-dz3q485w.js:69652-69827 placement
+//@ chunk-jndyh8cy.js:57574-57749 placement
 /**
  * 交接前等待 Remote Control 上传完成。
  */
@@ -825,7 +836,11 @@ async function settleBridgeUploads() {
     });
   }
 }
-//@ chunk-dz3q485w.js:69827-70470 placement
+//@ chunk-jndyh8cy.js:57749-57780 layout
+function submitPlan(isInteractive) {
+  return isInteractive || isVsCodeTopSession();
+}
+//@ chunk-jndyh8cy.js:57780-59107 placement
 /**
  * Remote Control 不可用（none/withheld/unverified）的说明文本。
  */
@@ -833,6 +848,14 @@ function remoteControlRefusalText(link, isInteractive) {
   switch (link.kind) {
     case "none":
       return `This session is not connected to Remote Control, so a project would have no session to read. Turn Remote Control on${isInteractive ? " (/remote-control)" : ""}, then run /send-to-project again.`;
+    case "declined":
+      return "Remote Control stays off, so nothing was sent: a project reads this session through it. Run /send-to-project again to turn it on.";
+    case "failed":
+      return "Remote Control was turned on but could not connect, so nothing was sent. The Remote Control warning in this session says why, and /send-to-project can run again once it connects.";
+    case "timed_out":
+      return "Remote Control was turned on but is still connecting, so nothing was sent. Run /send-to-project again in a moment.";
+    case "account_changed":
+      return "The signed-in account changed while /send-to-project was asking, so Remote Control stays off and nothing was sent. Run /send-to-project again under this account.";
     case "withheld":
       return "This conversation is kept off its Remote Control session, so it cannot be sent to a project from this session. Copy what you need from here and paste it into the project yourself.";
     case "unverified":
@@ -844,18 +867,19 @@ function remoteControlRefusalText(link, isInteractive) {
 // marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
 runDeferredInits("src/tools/ContinueInProjectsTool/submit.js");
 export {
-  stripPresentationFields,
-  joinWithAnd_2,
   sendToProjectEnabled,
   canOfferSendToProject,
   alwaysFalseRemoteGate,
   checkConversationSendable,
   remoteControlRefusalText,
+  submitPlan,
+  stripPresentationFields,
+  joinWithAnd_2,
+  isNewViaPaneOrDesktop,
   sendToProjectFeatureOn,
   HOST_WRITES,
   HOST_OUTCOME,
   settleBridgeUploads,
   submitProjectSetup,
-  isNewViaPaneOrDesktop,
   alwaysFalseGate,
 };

@@ -3,9 +3,9 @@
  *
  * # 记忆输入回显（<user-memory-input>），附随机确认语 "Got it./Noted."。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserMemoryInputMessage.tsx
- * pieces: chunk-ah34pb7m.js (1)
+ * pieces: chunk-wjygkcr4.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -19,7 +19,7 @@ import {
 import { Text, Box } from "../../ink/components/Text.js";
 import { MessageResponse } from "../MessageResponse.js";
 
-//@ chunk-ah34pb7m.js:112131-112874 fingerprint (2.1.88 match: UserMemoryInputMessage, 0.684)
+//@ chunk-wjygkcr4.js:113821-114564 fingerprint (2.1.88 match: UserMemoryInputMessage, 0.684)
 function UserMemoryInputMessage(props) {
   let $ = useMemoCache(10);
   let { text, addMargin } = props;

@@ -3,18 +3,17 @@
  *
  * 2.1.316 新增：托管设置遥测汇总
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-151tygw9.js (20)
- * attribution: placement 20
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-405cd95w.js (21)
+ * attribution: affinity 1, placement 20
  */
 import { getAllBaseToolsFromRegistry } from "../../Tool.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
 import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
 import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
-import { REDACTED_PLACEHOLDER } from "../teamMemorySync/secretScanner.js";
-import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
+import { parseRuleString } from "../../utils/permissions/permissionRuleParser.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { getSettingsSchemaForDocument } from "../../utils/settings/types.js";
 import {
@@ -41,7 +40,9 @@ import { logOTelEvent } from "../../utils/telemetry/events.js";
 import { settingsChangeDetector } from "../../utils/settings/changeDetector.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-151tygw9.js:7062-7386 placement
+//@ chunk-405cd95w.js:7162-7181 affinity
+var REDACTED_PLACEHOLDER = "[REDACTED]";
+//@ chunk-405cd95w.js:7181-7505 placement
 function unwrapZodSchema(schema) {
   let current = schema;
   for (let idx = 0; current && idx < 32; idx++) {
@@ -68,14 +69,14 @@ function unwrapZodSchema(schema) {
   }
   return;
 }
-//@ chunk-151tygw9.js:7386-7529 placement
+//@ chunk-405cd95w.js:7505-7648 placement
 function resolveUnionBranch(schema, value) {
   let resolved = unwrapZodSchema(schema);
   if (resolved?._zod.def.type !== "union") return resolved;
   let schema_2 = resolved._zod.def.options?.find((option) => option.safeParse(value).success);
   return schema_2 && resolveUnionBranch(schema_2, value);
 }
-//@ chunk-151tygw9.js:7529-7611 placement
+//@ chunk-405cd95w.js:7648-7730 placement
 /**
  * 判断 zod schema 是否有具体类型（不是 unknown/any），遥测里才值得展开。
  */
@@ -83,7 +84,7 @@ function hasConcreteZodType(schema) {
   let typeName = schema?._zod.def.type;
   return typeName !== undefined && typeName !== "unknown" && typeName !== "any";
 }
-//@ chunk-151tygw9.js:7611-7693 placement
+//@ chunk-405cd95w.js:7730-7812 placement
 /**
  * 取联合类型分支中数组的 element schema（遥测按元素脱敏用）。
  */
@@ -91,7 +92,7 @@ function unionArrayElementSchema(schema, value) {
   let def = resolveUnionBranch(schema, value)?._zod.def;
   return def?.type === "array" ? def.element : undefined;
 }
-//@ chunk-151tygw9.js:7693-8004 placement
+//@ chunk-405cd95w.js:7812-8123 placement
 function matchesSchemaType(schema, value) {
   let def = unwrapZodSchema(schema)?._zod.def;
   switch (def?.type) {
@@ -109,14 +110,14 @@ function matchesSchemaType(schema, value) {
       return false;
   }
 }
-//@ chunk-151tygw9.js:8004-8118 placement
+//@ chunk-405cd95w.js:8123-8237 placement
 var PERMISSION_RULE_PATHS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MCP_TOOL_NAME_RE;
-deferInit("chunk-151tygw9.js:8004", () => {
+deferInit("chunk-405cd95w.js:8123", () => {
   PERMISSION_RULE_PATHS = new Set(["permissions.allow", "permissions.deny", "permissions.ask"]);
   MCP_TOOL_NAME_RE = /^mcp__[\w-]+(?:__(?:[\w.-]+|\*))?$/;
 });
-//@ chunk-151tygw9.js:8118-8216 placement
+//@ chunk-405cd95w.js:8237-8335 placement
 /**
  * 当前所有注册工具名与别名的集合（遥测里识别工具名用）。
  */
@@ -129,16 +130,16 @@ function knownToolNameSet() {
     GREP_TOOL_NAME,
   ]);
 }
-//@ chunk-151tygw9.js:8216-8370 placement
+//@ chunk-405cd95w.js:8335-8489 placement
 function redactPermissionRule(rule, knownTools) {
   if (typeof rule !== "string") return REDACTED_PLACEHOLDER;
-  let { toolName, ruleContent } = permissionRuleValueFromString(rule);
+  let { toolName, ruleContent } = parseRuleString(rule);
   if (!(knownTools.has(toolName) || MCP_TOOL_NAME_RE.test(toolName))) return REDACTED_PLACEHOLDER;
   return ruleContent === undefined ? toolName : `${toolName}(${REDACTED_PLACEHOLDER})`;
 }
-//@ chunk-151tygw9.js:8370-8404 placement
+//@ chunk-405cd95w.js:8489-8523 placement
 var SANDBOX_IGNOREVIOLATIONS = "sandbox.ignoreViolations";
-//@ chunk-151tygw9.js:8404-8716 placement
+//@ chunk-405cd95w.js:8523-8835 placement
 function schemaKeysOf(value, schema) {
   let def = resolveUnionBranch(schema, value)?._zod.def;
   if (def?.type === "object" && def.shape) {
@@ -154,15 +155,15 @@ function schemaKeysOf(value, schema) {
       .map((key) => [key, valueType]);
   return;
 }
-//@ chunk-151tygw9.js:8716-8799 placement
+//@ chunk-405cd95w.js:8835-8918 placement
 var SENSITIVE_NUMERIC_SETTING_PATHS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-151tygw9.js:8716", () => {
+deferInit("chunk-405cd95w.js:8835", () => {
   SENSITIVE_NUMERIC_SETTING_PATHS = new Set([
     "sandbox.network.httpProxyPort",
     "sandbox.network.socksProxyPort",
   ]);
 });
-//@ chunk-151tygw9.js:8799-9295 placement (2.1.88 match: isInBundledMode, 0.822)
+//@ chunk-405cd95w.js:8918-9414 placement (2.1.88 match: isInBundledMode, 0.823)
 function telemetrySafeValue(value, schema, path, knownTools) {
   switch (typeof value) {
     case "string":
@@ -202,9 +203,9 @@ function telemetrySafeValue(value, schema, path, knownTools) {
     ]),
   );
 }
-//@ chunk-151tygw9.js:9295-9306 placement
+//@ chunk-405cd95w.js:9414-9425 placement
 var MAX_TELEMETRY_CONTENT_BYTES = 8192;
-//@ chunk-151tygw9.js:9306-9527 placement
+//@ chunk-405cd95w.js:9425-9646 placement
 function safeSettingsContent(settingsForSource) {
   let json = jsonStringify(
     telemetrySafeValue(
@@ -231,7 +232,7 @@ function safeSettingsContent(settingsForSource) {
     truncated: true,
   };
 }
-//@ chunk-151tygw9.js:9527-10142 placement
+//@ chunk-405cd95w.js:9646-10261 placement
 /**
  * 汇总当前生效的托管设置来源与键值（只记录安全的值）用于遥测。
  */
@@ -262,7 +263,7 @@ function managedSettingsSummary(trigger) {
   }
   return fields;
 }
-//@ chunk-151tygw9.js:10142-10306 placement
+//@ chunk-405cd95w.js:10261-10425 placement
 function logEmitFailure(error) {
   let errorName = error instanceof Error ? error.constructor.name : typeof error;
   logError(
@@ -272,7 +273,7 @@ function logEmitFailure(error) {
     ),
   );
 }
-//@ chunk-151tygw9.js:10306-10532 placement
+//@ chunk-405cd95w.js:10425-10650 placement
 function isManagedSettingsLoggingEnabled() {
   let OTEL_LOG_MANAGED_SETTINGS = getAppliedGlobalConfigEnv()?.OTEL_LOG_MANAGED_SETTINGS;
   for (let source of getEnabledSettingSources()) {
@@ -289,14 +290,14 @@ function isManagedSettingsLoggingEnabled() {
         : env.OTEL_LOG_MANAGED_SETTINGS),
   );
 }
-//@ chunk-151tygw9.js:10532-10649 placement
+//@ chunk-405cd95w.js:10650-10767 placement
 function dropHashFields(fields, keepHash) {
   if (!keepHash) {
     delete fields["managed_settings.resolved_sha256"];
     delete fields["managed_settings.helper.script_sha256"];
   }
 }
-//@ chunk-151tygw9.js:10649-11133 placement
+//@ chunk-405cd95w.js:10767-11251 placement
 function createManagedSettingsReporter() {
   let started = false;
   let lastPayload = null;
@@ -331,7 +332,7 @@ function createManagedSettingsReporter() {
   started = true;
   return unsubscribe;
 }
-//@ chunk-151tygw9.js:11133-11259 placement
+//@ chunk-405cd95w.js:11251-11377 placement
 function logManagedSettingsRefused(errorType) {
   try {
     let fields = managedSettingsSummary("refused");
@@ -344,4 +345,4 @@ function logManagedSettingsRefused(errorType) {
     logEmitFailure(error);
   }
 }
-export { createManagedSettingsReporter, logManagedSettingsRefused };
+export { logManagedSettingsRefused, createManagedSettingsReporter };

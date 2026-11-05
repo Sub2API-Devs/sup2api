@@ -3,9 +3,9 @@
  *
  * 查找 pwsh/powershell 可执行文件（含 snap 与 Windows 常见位置）并缓存，判断 core/desktop 版本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/shell/powershellDetection.ts
- * pieces: chunk-e2fknt7w.js (11), chunk-q8cqcff6.js (1)
+ * pieces: chunk-2214fejy.js (11), chunk-5fn9rb8r.js (1)
  * attribution: file-local 1, layout 8, fingerprint 2, placement 1
  */
 import { stat, readlink, realpath } from "fs/promises";
@@ -17,7 +17,7 @@ import { whichAsync, bunWhichOnPath } from "../which.js";
 import { env } from "../env.js";
 import { shellPaths } from "./shellPaths.js";
 
-//@ chunk-q8cqcff6.js:21180-21468 placement
+//@ chunk-5fn9rb8r.js:21439-21727 placement
 var POWERSHELL_NONINTERACTIVE_ARGS = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass"];
 var WINDOWS_ROOT_DIR = "C:\\Windows";
 var PROGRAM_FILES_DIR = "C:\\Program Files";
@@ -29,7 +29,7 @@ var POWERSHELL_EXE_CANDIDATES = [
   `${PROGRAM_FILES_DIR}\\PowerShell\\7-preview\\pwsh.exe`,
   `${WINDOWS_POWERSHELL_DIR}\\powershell.exe`,
 ];
-//@ chunk-e2fknt7w.js:1573-1652 file-local
+//@ chunk-2214fejy.js:1340-1419 file-local
 async function probePath(p) {
   try {
     return (await stat(p)).isFile() ? p : null;
@@ -37,7 +37,7 @@ async function probePath(p) {
     return null;
   }
 }
-//@ chunk-e2fknt7w.js:1652-1727 layout
+//@ chunk-2214fejy.js:1419-1494 layout
 /**
  * readlink 后再检查目标是否为文件（Windows 应用执行别名 pwsh.exe）。
  */
@@ -50,7 +50,7 @@ async function probeAppExecLink(linkPath) {
   }
   return probePath(targetPath);
 }
-//@ chunk-e2fknt7w.js:1727-2791 fingerprint (2.1.88 match: findPowerShell, 0.39)
+//@ chunk-2214fejy.js:1494-2558 fingerprint (2.1.88 match: findPowerShell, 0.39)
 /**
  * 查找 PowerShell：diskless 返回 null；先 pwsh（Linux snap 版换成 /opt/microsoft 或 /usr/bin 下的直装版），Windows 再查 Program Files、WindowsApps、.dotnet/tools，最后回退 powershell 5（含 System32 固定路径）。
  */
@@ -105,11 +105,11 @@ async function findPowerShell(envPaths) {
   }
   return null;
 }
-//@ chunk-e2fknt7w.js:2791-2856 layout
+//@ chunk-2214fejy.js:2558-2623 layout
 async function findExecutableOnPath(name, envPaths) {
   return envPaths === undefined ? whichAsync(name) : bunWhichOnPath(name, envPaths.path ?? "");
 }
-//@ chunk-e2fknt7w.js:2856-2997 layout
+//@ chunk-2214fejy.js:2623-2764 layout
 /**
  * 读取探测 PowerShell 所需的 Windows 环境变量：PATH、ProgramFiles、LOCALAPPDATA、USERPROFILE、SYSTEMROOT。
  */
@@ -122,7 +122,7 @@ function getWindowsEnvPaths() {
     systemRoot: env.SYSTEMROOT,
   };
 }
-//@ chunk-e2fknt7w.js:2997-3136 layout
+//@ chunk-2214fejy.js:2764-2903 layout
 /**
  * 按给定环境变量集合查找 PowerShell 并缓存到宿主状态 organizationsPowerShellPath。
  */
@@ -132,7 +132,7 @@ function findPowerShellForEnv(envPaths) {
   hostState.organizationsPowerShellPath ??= findPowerShell(envPaths);
   return hostState.organizationsPowerShellPath;
 }
-//@ chunk-e2fknt7w.js:3136-3379 layout
+//@ chunk-2214fejy.js:2903-3146 layout
 /**
  * 缓存的 PowerShell 路径 Promise（宿主状态 powerShellPath），完成后写 resolvedPowerShellPath。
  */
@@ -149,16 +149,16 @@ function getCachedPowerShellPath() {
   }
   return hostState.powerShellPath;
 }
-//@ chunk-e2fknt7w.js:3379-3430 layout
+//@ chunk-2214fejy.js:3146-3197 layout
 function getResolvedPowerShellPath() {
   return shellPaths().resolvedPowerShellPath;
 }
-//@ chunk-e2fknt7w.js:3430-3488 layout
+//@ chunk-2214fejy.js:3197-3255 layout
 async function getPowerShellEditionAsync() {
   let path = await getCachedPowerShellPath();
   return path ? powerShellEditionFromPath(path) : null;
 }
-//@ chunk-e2fknt7w.js:3488-3550 layout
+//@ chunk-2214fejy.js:3255-3317 layout
 /**
  * 返回已解析 PowerShell 的版本类别（按路径区分 pwsh 与 Windows PowerShell）；未解析成路径时原样返回状态值。
  */
@@ -166,7 +166,7 @@ function getResolvedPowerShellEdition() {
   let path = getResolvedPowerShellPath();
   return typeof path === "string" ? powerShellEditionFromPath(path) : path;
 }
-//@ chunk-e2fknt7w.js:3550-3656 fingerprint (2.1.88 match: getPowerShellEdition, 1)
+//@ chunk-2214fejy.js:3317-3423 fingerprint (2.1.88 match: getPowerShellEdition, 1)
 function powerShellEditionFromPath(path) {
   return path
     .split(/[/\\]/)
@@ -178,16 +178,16 @@ function powerShellEditionFromPath(path) {
 }
 export {
   getCachedPowerShellPath,
-  findPowerShellForEnv,
-  getWindowsEnvPaths,
-  getPowerShellEditionAsync,
-  getResolvedPowerShellEdition,
   POWERSHELL_EXE_CANDIDATES,
-  getResolvedPowerShellPath,
   PROGRAM_FILES_DIR,
   WINDOWS_POWERSHELL_DIR,
   SYSTEM32_DIR,
   WINDOWS_ROOT_DIR,
   CMD_EXE_PATH,
   POWERSHELL_NONINTERACTIVE_ARGS,
+  findPowerShellForEnv,
+  getWindowsEnvPaths,
+  getPowerShellEditionAsync,
+  getResolvedPowerShellEdition,
+  getResolvedPowerShellPath,
 };

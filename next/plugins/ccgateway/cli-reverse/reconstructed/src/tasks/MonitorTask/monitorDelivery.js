@@ -3,18 +3,18 @@
  *
  * 2.1.316 新增（门面模块 createMonitorDelivery）。监视任务的结果投递。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xf84t5b0.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cx778tm5.js (13)
  * attribution: placement 13
  */
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { getCommandQueue, enqueuePendingNotification } from "../../utils/messageQueueManager.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { logError } from "../../utils/log.js";
 import { BUCKET_CAPACITY, TOKEN_REFILL_MS, createTokenBucket } from "../../utils/tokenBucket.js";
-import { enqueueTaskNotification, removeKeepaliveReason } from "../../utils/task/framework.js";
+import { taskNotificationDelivery, removeKeepaliveReason } from "../../utils/task/framework.js";
 import { isAgentPushNotificationEnabled } from "../../tools/PushNotificationTool/prompt.js";
 import { PUSHNOTIFICATION } from "../../tools/PushNotificationTool/constants.js";
 import { EVENT, MONITOR_EVENT_QUOTED_PREFIX } from "../../constants/xml.js";
@@ -33,9 +33,9 @@ import { isClaudeCodeHintLine } from "../../utils/claudeCodeHints.js";
 import { emitTaskNotification } from "../../utils/task/taskNotifications.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-xf84t5b0.js:7647-7661 placement
+//@ chunk-cx778tm5.js:7648-7662 placement
 var SUSTAINED_SUPPRESSION_KILL_MS = 30000;
-//@ chunk-xf84t5b0.js:7661-9407 placement
+//@ chunk-cx778tm5.js:7662-9408 placement
 function createMonitorDelivery(options) {
   let { description, agentId, taskRef } = options;
   let now = options.now ?? Date.now;
@@ -52,7 +52,7 @@ function createMonitorDelivery(options) {
     isClosed = true;
     try {
       let countQueued = (kind) =>
-        count(
+        countWhere(
           getCommandQueue(),
           ({ monitorEvent }) => monitorEvent?.kind === kind && monitorEvent.watchId === taskRef.id,
         );
@@ -169,20 +169,20 @@ function createMonitorDelivery(options) {
     },
   };
 }
-//@ chunk-xf84t5b0.js:9407-9562 placement
+//@ chunk-cx778tm5.js:9408-9563 placement
 function eventsSuppressedNotice(count) {
   return `[${count} events suppressed \u2014 output rate too high. Consider using TaskStop to restart this monitor with a more selective filter.]`;
 }
-//@ chunk-xf84t5b0.js:9562-9617 placement (2.1.88 match: resolveAgentModelDisplay, 0.752)
+//@ chunk-cx778tm5.js:9563-9618 placement (2.1.88 match: resolveAgentModelDisplay, 0.752)
 /**
  * 入队任务通知，turnAttribution=inherit。
  */
 function enqueueShellTerminalNotification(agent) {
-  enqueuePendingNotification(enqueueTaskNotification(agent), {
+  enqueuePendingNotification(taskNotificationDelivery(agent), {
     turnAttribution: "inherit",
   });
 }
-//@ chunk-xf84t5b0.js:9617-9651 placement
+//@ chunk-cx778tm5.js:9618-9652 placement
 /**
  * 监视事件文本的行长与总长上限、去抖时间与累积上限。
  */
@@ -190,7 +190,7 @@ var MAX_LINE_CHARS = 500;
 var MAX_JOINED_LINE_CHARS = 3000;
 var DEBOUNCE_MS = 200;
 var MAX_ACCUMULATED_CHARS = 1048576;
-//@ chunk-xf84t5b0.js:9651-9842 placement
+//@ chunk-cx778tm5.js:9652-9843 placement
 function formatMonitorEvent(text, isHousekeeping = false) {
   let pushHint =
     !isHousekeeping && isAgentPushNotificationEnabled()
@@ -200,17 +200,17 @@ If this event is something the user would act on now, send a ${PUSHNOTIFICATION}
   return `
 <${EVENT}>${escapeXml(text)}</${EVENT}>${pushHint}`;
 }
-//@ chunk-xf84t5b0.js:9842-10024 placement
+//@ chunk-cx778tm5.js:9843-10025 placement
 var MONITOR_STATUS_LINE_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var pendingHousekeepingTasks;
 var monitorKeptFor;
-deferInit("chunk-xf84t5b0.js:9842", () => {
+deferInit("chunk-cx778tm5.js:9843", () => {
   MONITOR_STATUS_LINE_RE =
     /^\[(?:Monitor (?:stopped|timed out|expired)|WebSocket (?:closed|error|upgrade rejected): |Dropped \d+-byte frame )/;
   pendingHousekeepingTasks = identity(new Set(), (pendingHousekeeping) => pendingHousekeeping.clear());
   monitorKeptFor = identity(new Map(), (keptFor) => keptFor.clear());
 });
-//@ chunk-xf84t5b0.js:10024-10168 placement
+//@ chunk-cx778tm5.js:10025-10169 placement
 function recordMonitorPlugin(taskId, taskRegistry, taskRegistry_2) {
   let hookCallerOrScheduler = getHookCallerOrScheduler(taskRegistry);
   if (hookCallerOrScheduler === undefined) return;
@@ -220,7 +220,7 @@ function recordMonitorPlugin(taskId, taskRegistry, taskRegistry_2) {
   }
   monitorKeptFor.set(taskId, hookCallerOrScheduler);
 }
-//@ chunk-xf84t5b0.js:10168-10850 placement
+//@ chunk-cx778tm5.js:10169-10903 placement
 function enqueueMonitorEvent(description, text, taskId, options) {
   let isMainAgent = (options?.agentId ?? mainAgentId()) === mainAgentId();
   let keptFor =
@@ -265,6 +265,9 @@ function enqueueMonitorEvent(description, text, taskId, options) {
       skipAttachments: true,
       priority: "next",
       agentId: options?.agentId ?? mainAgentId(),
+      ...(options?.toolsUsed !== undefined && {
+        toolsUsed: options.toolsUsed,
+      }),
       ...(keptFor !== undefined && {
         scheduledByPlugin: keptFor,
       }),
@@ -280,7 +283,7 @@ function enqueueMonitorEvent(description, text, taskId, options) {
     },
   );
 }
-//@ chunk-xf84t5b0.js:10850-11151 placement
+//@ chunk-cx778tm5.js:10903-11204 placement
 function enqueueForeignStopNotification(notice) {
   let { taskId, toolUseId, description, ownerAgentId, stopperAgentId } = notice;
   let summary = `Task "${description}" was stopped by ${sessionLabel(stopperAgentId)}`;
@@ -298,7 +301,7 @@ function enqueueForeignStopNotification(notice) {
     taskId,
   });
 }
-//@ chunk-xf84t5b0.js:11151-11585 placement
+//@ chunk-cx778tm5.js:11204-11638 placement
 function enqueueUserStopNotification(notice) {
   let { taskId, toolUseId, description, source, outputFile, note } = notice;
   let baseSummary =
@@ -321,7 +324,7 @@ function enqueueUserStopNotification(notice) {
     taskId,
   });
 }
-//@ chunk-xf84t5b0.js:11585-12242 placement
+//@ chunk-cx778tm5.js:11638-12295 placement
 function createStreamLineBatcher(
   emit,
   schedule = (callback) => {
@@ -382,7 +385,7 @@ function createStreamLineBatcher(
     drain: () => drainLines(true),
   };
 }
-//@ chunk-xf84t5b0.js:12242-12774 placement
+//@ chunk-cx778tm5.js:12295-12827 placement
 /**
  * 停止运行中的监视任务：更新状态与结束信息、清除超时、移除保活原因，并（非静默时）入队停止事件与任务通知。
  */
@@ -422,12 +425,12 @@ function stopMonitorTask(taskId, registry, options) {
   }
 }
 export {
+  stopMonitorTask,
   enqueueMonitorEvent,
   createStreamLineBatcher,
   enqueueShellTerminalNotification,
   recordMonitorPlugin,
   createMonitorDelivery,
-  stopMonitorTask,
   enqueueForeignStopNotification,
   enqueueUserStopNotification,
   SUSTAINED_SUPPRESSION_KILL_MS,

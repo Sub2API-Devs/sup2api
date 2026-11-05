@@ -3,17 +3,17 @@
  *
  * memoizeWithTTL（过期后台刷新）与 memoizeWithLRU
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/memoize.ts
- * pieces: chunk-02nm3ce0.js (7)
- * attribution: fingerprint 2, placement 5
+ * pieces: chunk-yneawn9n.js (7)
+ * attribution: fingerprint 1, layout 1, placement 5
  */
 import { jsonStringify } from "./slowOperations.js";
 import { logForDebugging } from "./debug.js";
 import { LRUCache } from "../../vendor/lru-cache/dist/esm/index.min.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-02nm3ce0.js:17038-17853 fingerprint (2.1.88 match: memoizeWithTTL, 0.683)
+//@ chunk-yneawn9n.js:264-1079 fingerprint (2.1.88 match: memoizeWithTTL, 0.683)
 /**
  * 带 TTL 的 memoize：过期后返回旧值并后台刷新。
  */
@@ -82,7 +82,7 @@ function memoizeWithTTL(fn, ttl = 300000, shouldRefresh) {
   };
   return memoized;
 }
-//@ chunk-02nm3ce0.js:17853-18135 fingerprint (2.1.88 match: memoizeWithLRU, 1)
+//@ chunk-yneawn9n.js:1079-1361 layout (2.1.88 match: memoizeWithLRU, 1)
 /**
  * 带 LRU 容量上限的 memoize。
  */
@@ -108,15 +108,15 @@ function memoizeWithLRU(f, cacheFn, maxCacheSize = 100) {
   };
   return memoized;
 }
-//@ chunk-02nm3ce0.js:18135-18149 placement
+//@ chunk-yneawn9n.js:1361-1375 placement
 /**
  * 需要保留键的缓存集合（清理时不清这些）。
  */
 var retainedCacheKeys; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-02nm3ce0.js:18135", () => {
+deferInit("chunk-yneawn9n.js:1361", () => {
   retainedCacheKeys = new Set();
 });
-//@ chunk-02nm3ce0.js:18149-18182 placement
+//@ chunk-yneawn9n.js:1375-1408 placement
 /**
  * 把对象登记为"保留键"缓存并返回它。
  */
@@ -124,7 +124,7 @@ function retainCacheKey(key) {
   retainedCacheKeys.add(key);
   return key;
 }
-//@ chunk-02nm3ce0.js:18182-18306 placement
+//@ chunk-yneawn9n.js:1408-1532 placement
 /**
  * 清空 Map 缓存，但保留指定键的条目。
  */
@@ -137,12 +137,12 @@ function retainCacheKeys(cache, keepKeys) {
   cache.clear();
   for (let [key, value] of keptEntries) cache.set(key, value);
 }
-//@ chunk-02nm3ce0.js:18306-18316 placement
+//@ chunk-yneawn9n.js:1532-1542 placement
 /**
  * LRU 缓存默认容量。
  */
 var DEFAULT_LRU_MAX_SIZE = 128;
-//@ chunk-02nm3ce0.js:18316-18579 placement
+//@ chunk-yneawn9n.js:1542-1805 placement
 function memoizeWithTTLAsync(fn, keyFn, options) {
   let maxSize = options?.maxSize ?? DEFAULT_LRU_MAX_SIZE;
   let cache = new Map();
@@ -162,12 +162,4 @@ function memoizeWithTTLAsync(fn, keyFn, options) {
   memoized.cache = cache;
   return memoized;
 }
-export {
-  retainedCacheKeys,
-  DEFAULT_LRU_MAX_SIZE,
-  memoizeWithLRU,
-  memoizeWithTTL,
-  retainCacheKeys,
-  memoizeWithTTLAsync,
-  retainCacheKey,
-};
+export { retainCacheKeys, memoizeWithLRU, memoizeWithTTL, retainCacheKey, memoizeWithTTLAsync };

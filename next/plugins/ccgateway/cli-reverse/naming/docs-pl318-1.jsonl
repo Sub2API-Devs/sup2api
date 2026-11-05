@@ -1,0 +1,336 @@
+{"id":"chunk-n51jggtb.js#Na","doc":"自动模式脚本检查的批量阈值：未检查脚本满 20 个或累计 20000 字符即触发一次检查；检查被判定为不可用后 30 秒内不再重试。"}
+{"id":"chunk-n51jggtb.js#Wn","doc":"脚本检查队列：把自动模式尚未审批的脚本攒起来，达到阈值后交给分类器一次性判断，并给每个脚本分别记录允许/阻止状态与随行说明。"}
+{"id":"chunk-n51jggtb.js#Fa","doc":"把权限判定结果（allow/ask/deny）折算成脚本状态：allowed / atLimit / none / blocked，供脚本队列决定能否与正在运行的调用并跑。"}
+{"id":"chunk-n51jggtb.js#zn","doc":"生成脚本被分类器或 API 转义监控阻止时的模型可见说明，含受牵连的其他脚本数量与先后顺序。"}
+{"id":"chunk-n51jggtb.js#ja","doc":"把一个 REPL 中按顺序启动的多个脚本拼成一次检查输入，超过一个时加上随机标记与序号注释以便回溯。"}
+{"id":"chunk-n51jggtb.js#Ba","doc":"给等待中的检查 Promise 套上 abort 信号，abort 时以 AbortError 拒绝。"}
+{"id":"chunk-n51jggtb.js#fo","doc":"脚本生命周期的常量钩子：后继脚本是否已启动恒为真，脚本是否已返回恒为假（当前实现）。"}
+{"id":"chunk-n51jggtb.js#mo","doc":"给运行记录标上启动顺序号，供“后继脚本已启动”判断使用。"}
+{"id":"chunk-n51jggtb.js#ho","doc":"判断给定记录是否比当前最新的启动顺序更新。"}
+{"id":"chunk-n51jggtb.js#Ut","doc":"异步 settle 单次输出预算：按结果上限算出字节额度并预留截断说明的长度，超出时追加“输出被截断”提示。"}
+{"id":"chunk-n51jggtb.js#go","doc":"按标记分配预算，把 settle 的日志行与其他部分按比例裁剪到总预算内。"}
+{"id":"chunk-n51jggtb.js#Qt","doc":"按 UTF-8 边界二分截断单个文本片段到给定字节数，并拼接截断说明。"}
+{"id":"chunk-n51jggtb.js#yo","doc":"把 settle 结果里的文本与 base64 图片/PDF 拆开；超过预算时把正文写入工具结果文件并改回文件引用。"}
+{"id":"chunk-n51jggtb.js#Ua","doc":"把 hook 扣留的输出压成一行摘要（最多 1000 字符再压到 200）。"}
+{"id":"chunk-n51jggtb.js#Wa","doc":"\"its reason was withheld with the output\" 常量，用于 hook 扣留时补的说明。"}
+{"id":"chunk-n51jggtb.js#gn","doc":"为 hook_stopped_continuation 附件补上“原因随输出一起被扣留”的说明。"}
+{"id":"chunk-n51jggtb.js#Kn","doc":"异步 settle 的投递主流程：先跑 PostToolUse hook，再按扣留/失败/重写组装消息并排队交给会话。"}
+{"id":"chunk-n51jggtb.js#Gn","doc":"从 settle 记录里取出 eval 编号与取整后的耗时。"}
+{"id":"chunk-n51jggtb.js#Ga","doc":"把 settle 记录整理成 typed 消息（status/text 或 log/result/error 分段）并做预算截断。"}
+{"id":"chunk-n51jggtb.js#Ka","doc":"日志批量刷出与 settle 预算的数值常量（250 ms 间隔、2000 ms 窗口、200 行、32768 字节）。"}
+{"id":"chunk-n51jggtb.js#wo","doc":"日志行缓冲：按行数与字节数聚合后一次性提交，带最短间隔与最大等待窗口。"}
+{"id":"chunk-n51jggtb.js#bo","doc":"生成“late output from eval #N”提示行，放在迟到输出之前。"}
+{"id":"chunk-n51jggtb.js#So","doc":"带超时的 settle 闸门：open/taken/closed 三态，超时后以 undefined 放行。"}
+{"id":"chunk-n51jggtb.js#yn","doc":"定时器包装：按单调时钟重算间隔，首次触发误差过大时改用下一轮常量重排。"}
+{"id":"chunk-n51jggtb.js#Xn","doc":"溢出文件读取的大小上限与“bash 输出不可用”前缀常量。"}
+{"id":"chunk-n51jggtb.js#nn","doc":"判断值是否是达到溢出下限的字节数。"}
+{"id":"chunk-n51jggtb.js#Yn","doc":"\"output\" 属性名常量。"}
+{"id":"chunk-n51jggtb.js#Co","doc":"沙箱内失败后重试的命令结果前后缀文案。"}
+{"id":"chunk-n51jggtb.js#ol","doc":"拼出“在沙箱外重试过”的说明，并附上第一次运行报告的违规内容。"}
+{"id":"chunk-n51jggtb.js#sl","doc":"从工具结果里提取 unsandboxedRetry 与其 violation。"}
+{"id":"chunk-n51jggtb.js#xt","doc":"安全地读出对象上某个字符串属性。"}
+{"id":"chunk-n51jggtb.js#Jn","doc":"把持久化输出文件读回内存：校验是工具结果目录里的普通单链文件，再按预算读取并截断。"}
+{"id":"chunk-n51jggtb.js#al","doc":"只读打开工具结果文件：拒绝目录穿越、软链接路径、非单链文件，返回句柄与大小。"}
+{"id":"chunk-n51jggtb.js#ll","doc":"逐级比对两条路径的目录 inode，判断 projects 目录下的子目录与解析后的真实路径是否同一个目录。"}
+{"id":"chunk-n51jggtb.js#Po","doc":"判断结果是否带 persistedOutputPath。"}
+{"id":"chunk-n51jggtb.js#Ao","doc":"读出 persistedOutputSize（数字）。"}
+{"id":"chunk-n51jggtb.js#xo","doc":"判断 persistedOutputSize 是否达到溢出下限。"}
+{"id":"chunk-n51jggtb.js#Qn","doc":"hook 改写了 stdout 时，把结果标成已截断/已被 hook 改写，并按需标上 spillFileCut。"}
+{"id":"chunk-n51jggtb.js#dl","doc":"命令未在超时内结束时给模型的说明：超时来源、后台任务号、输出文件路径，以及“不要重复启动”。"}
+{"id":"chunk-n51jggtb.js#ul","doc":"生成“输出过大/超过留存上限”的说明并给出已保存的文件路径。"}
+{"id":"chunk-n51jggtb.js#_o","doc":"命令回显的最大字符数。"}
+{"id":"chunk-n51jggtb.js#Mo","doc":"汇总一个 shell 结果的统计事实（字符数、溢出、被 hook 改写、是否读回等），供说明文本使用。"}
+{"id":"chunk-n51jggtb.js#er","doc":"生成 shell 结果被裁剪时的完整说明：区分被 hook 改写、未读回、被拒读、超上限等情形。"}
+{"id":"chunk-n51jggtb.js#bn","doc":"把 shell 工具结果整理成 REPL 可见的 stdout/stderr/exitCode/text 结构，处理后台任务、被中断、退出码与溢出说明。"}
+{"id":"chunk-n51jggtb.js#Io","doc":"把结果格式化成 ShellError 文本。"}
+{"id":"chunk-n51jggtb.js#No","doc":"惰性加载 shell 结果模块。"}
+{"id":"chunk-n51jggtb.js#Sn","doc":"从定时器/命令结果里安全取出 \"output\" 内容。"}
+{"id":"chunk-n51jggtb.js#Ro","doc":"把字符串转小写（用于大小写不敏感比对）。"}
+{"id":"chunk-n51jggtb.js#tr","doc":"把内层调用的结果改写成“已剥离”形态，并附上远端工具结果。"}
+{"id":"chunk-n51jggtb.js#nr","doc":"判断工具是否是当前模式下需要隐藏的 Bash/PowerShell 工具。"}
+{"id":"chunk-n51jggtb.js#En","doc":"计算 REPL 里可用的工具集：内置工具与允许的外部工具合并去重。"}
+{"id":"chunk-n51jggtb.js#Wt","doc":"MCP 工具错误的名字常量。"}
+{"id":"chunk-n51jggtb.js#rn","doc":"MCP 工具调用失败时抛出的错误，携带工具名、消息与（JSON 时）解析后的 body。"}
+{"id":"chunk-n51jggtb.js#Tn","doc":"MCP 工具错误是否按抛出处理的开关。"}
+{"id":"chunk-n51jggtb.js#cl","doc":"生成 dts 里 tools 全局的声明块与说明。"}
+{"id":"chunk-n51jggtb.js#pl","doc":"REPL 的 shell 超时说明原文。"}
+{"id":"chunk-n51jggtb.js#hl","doc":"把 shell 超时说明替换成 REPL 语境下的版本，并删掉沙箱重试字段。"}
+{"id":"chunk-n51jggtb.js#Do","doc":"拼出 REPL 脚本全局的 TypeScript 声明块（按 bash/powershell 与同步/异步通道取对应 prelude）。"}
+{"id":"chunk-n51jggtb.js#$o","doc":"提示词里的扩展示例：用一次脚本同时搜索定义与调用方再编辑。"}
+{"id":"chunk-n51jggtb.js#jt","doc":"JSON Schema 打印的限额与白名单常量（文档字符数、schema 数、允许的键）。"}
+{"id":"chunk-n51jggtb.js#sr","doc":"枚举 REPL 可调用的非 MCP 工具，附上各自的输入 schema。"}
+{"id":"chunk-n51jggtb.js#jo","doc":"把工具与 schema 生成 `interface Tools {…}`。"}
+{"id":"chunk-n51jggtb.js#ir","doc":"在字符与 schema 预算内打印一个 schema 的类型。"}
+{"id":"chunk-n51jggtb.js#vl","doc":"计算工具列表的指纹（TD + sha256 前 16 位），用于提示词缓存。"}
+{"id":"chunk-n51jggtb.js#@43719","doc":"注册提示词指纹计算钩子。"}
+{"id":"chunk-n51jggtb.js#Ol","doc":"取工具的 JSON Schema，并去掉 run_in_background 字段。"}
+{"id":"chunk-n51jggtb.js#Pl","doc":"收集 $defs 与 definitions 引用表。"}
+{"id":"chunk-n51jggtb.js#It","doc":"取对象的自有属性值。"}
+{"id":"chunk-n51jggtb.js#Bo","doc":"类型打印超限时抛出的哨兵错误。"}
+{"id":"chunk-n51jggtb.js#zt","doc":"扣减剩余字符额度，不足时抛出哨兵。"}
+{"id":"chunk-n51jggtb.js#Yt","doc":"打印数组并把长度计入额度。"}
+{"id":"chunk-n51jggtb.js#Fo","doc":"估算字面量的打印长度。"}
+{"id":"chunk-n51jggtb.js#kn","doc":"把 JSON Schema 递归打印成 TypeScript 类型，处理 $ref、anyOf/oneOf/allOf、enum 与嵌套深度。"}
+{"id":"chunk-n51jggtb.js#rr","doc":"判断 schema 是否带可打印的类型关键字。"}
+{"id":"chunk-n51jggtb.js#_n","doc":"压缩并截断 schema 的 description，把 ``` 换成 ''' 并转义 */。"}
+{"id":"chunk-n51jggtb.js#or","doc":"schema 打印超限时的降级：只保留 description 或 true。"}
+{"id":"chunk-n51jggtb.js#Ot","doc":"判断值是否为非数组对象。"}
+{"id":"chunk-n51jggtb.js#Ho","doc":"REPL 工具的主提示词：用法、全局、输出与等待方式、声明块，按 Code Mode / 传统模式分支。"}
+{"id":"chunk-n51jggtb.js#Al","doc":"Code Mode 下“脚本如何跑”的提示词段落（派发、detached、输出到达顺序）。"}
+{"id":"chunk-n51jggtb.js#xl","doc":"MCP 服务器列表的提示词前缀长度上限。"}
+{"id":"chunk-n51jggtb.js#Vo","doc":"工具的一句话描述，按是否 Code Mode 切换。"}
+{"id":"chunk-n51jggtb.js#Uo","doc":"按 agentId 与 evalId 记录运行中的脚本文档，结束时清理。"}
+{"id":"chunk-n51jggtb.js#Wo","doc":"脚本被中断时的哨兵名与其 AbortError 实例。"}
+{"id":"chunk-n51jggtb.js#Ml","doc":"判断 abort 信号的原因是否为脚本中断。"}
+{"id":"chunk-n51jggtb.js#Ll","doc":"脚本已结束而残留代码仍在调用工具时的各种说明文本。"}
+{"id":"chunk-n51jggtb.js#ar","doc":"按 abort 原因选择残留代码说明。"}
+{"id":"chunk-n51jggtb.js#Dl","doc":"栈帧引用的限额常量。"}
+{"id":"chunk-n51jggtb.js#ur","doc":"按脚本源码指纹算出虚拟行号偏移。"}
+{"id":"chunk-n51jggtb.js#Xo","doc":"从错误栈里找出指向脚本源码的行，摘出对应语句作为“抛出于此”的说明。"}
+{"id":"chunk-n51jggtb.js#Ko","doc":"把字符串截断到给定长度并加省略号。"}
+{"id":"chunk-n51jggtb.js#cr","doc":"__replStep 插桩用的标识与代码片段常量。"}
+{"id":"chunk-n51jggtb.js#pr","doc":"插桩的额外常量。"}
+{"id":"chunk-n51jggtb.js#Cn","doc":"返回固定 300000000（步数预算）。"}
+{"id":"chunk-n51jggtb.js#Vl","doc":"\"bun:wrap\" 常量名。"}
+{"id":"chunk-n51jggtb.js#Ht","doc":"带位置的插桩错误类型。"}
+{"id":"chunk-n51jggtb.js#qt","doc":"解析脚本为 AST，把语法错误转成带行号列的定位错误。"}
+{"id":"chunk-n51jggtb.js#Qo","doc":"在 AST 上插入 __replStep() 调用：函数体加计步、顶层包一层快照，并校验保留名与 with 块。"}
+{"id":"chunk-n51jggtb.js#Wl","doc":"识别“var 声明 + 末尾表达式”的老式 REPL 返回写法。"}
+{"id":"chunk-n51jggtb.js#es","doc":"存放 Promise 替换说明的 WeakMap。"}
+{"id":"chunk-n51jggtb.js#_t","doc":"把错误登记进 WeakMap 后返回该错误。"}
+{"id":"chunk-n51jggtb.js#fr","doc":"Promise 被当字符串拼接时的提示原文。"}
+{"id":"chunk-n51jggtb.js#ts","doc":"把 TypeError 映射成“Promise 未 await”的说明。"}
+{"id":"chunk-n51jggtb.js#ns","doc":"脚本停止原因的各类前缀文案（语法错误、被中断、被 TaskStop/Claude Code 停止、语法不支持等）。"}
+{"id":"chunk-n51jggtb.js#ds","doc":"超时停止的说明，注明不含工具调用耗时。"}
+{"id":"chunk-n51jggtb.js#us","doc":"“某个调用可能卡住”的说明。"}
+{"id":"chunk-n51jggtb.js#cs","doc":"达到调用上限时的说明。"}
+{"id":"chunk-n51jggtb.js#ps","doc":"达到上限时按等待中的调用生成说明。"}
+{"id":"chunk-n51jggtb.js#mr","doc":"把等待中的调用名拼成“a、b 和 c”形式的列表。"}
+{"id":"chunk-n51jggtb.js#fs","doc":"把毫秒数格式化成秒。"}
+{"id":"chunk-n51jggtb.js#zl","doc":"Bun.Transpiler 的配置（js、replMode、关闭 macro）与其缓存。"}
+{"id":"chunk-n51jggtb.js#Gl","doc":"取（或建立并缓存）REPL 专用的 Bun.Transpiler。"}
+{"id":"chunk-n51jggtb.js#ms","doc":"脚本编译入口：先扫描 import，再 transformSync，最后做插桩；失败时抛出带定位的解析错误。"}
+{"id":"chunk-n51jggtb.js#hr","doc":"解析错误里最多报告的条数。"}
+{"id":"chunk-n51jggtb.js#wr","doc":"脚本解析失败的 ReplParseError 类型。"}
+{"id":"chunk-n51jggtb.js#hs","doc":"检查脚本是否覆盖了已有全局：收集声明与赋值目标，产出冲突名单。"}
+{"id":"chunk-n51jggtb.js#gs","doc":"覆盖全局时抛出的 ReplGlobalOverwrite 错误，列出被覆盖的名字。"}
+{"id":"chunk-n51jggtb.js#Xl","doc":"把解析错误整理成模型可读的多段说明（含模板串、三引号等常见坑的提示）。"}
+{"id":"chunk-n51jggtb.js#Yl","doc":"import / require 各语法类别的展示名映射。"}
+{"id":"chunk-n51jggtb.js#ql","doc":"遇到 import/require 时抛出“vm 上下文已封闭、只能用工具全局”的错误。"}
+{"id":"chunk-n51jggtb.js#ys","doc":"从内容对象里取出 value 字段。"}
+{"id":"chunk-n51jggtb.js#Jl","doc":"找到最后一个函数/静态块/Program 节点，用于定位函数体。"}
+{"id":"chunk-n51jggtb.js#on","doc":"按 key 取出或新建 Set（用于作用域收集）。"}
+{"id":"chunk-n51jggtb.js#yr","doc":"校验名字不在当前作用域内时，记录名字与作用域链。"}
+{"id":"chunk-n51jggtb.js#Lt","doc":"递归收集解构模式里出现的标识符名。"}
+{"id":"chunk-n51jggtb.js#br","doc":"生成“base64 字符已移出结果”的标记，替换图片/PDF 的 base64 负载。"}
+{"id":"chunk-n51jggtb.js#an","doc":"把 Read 的图片/PDF/多页结果里的 base64 换成大小标记。"}
+{"id":"chunk-n51jggtb.js#xn","doc":"判断内容块是否为受支持的 base64 图片。"}
+{"id":"chunk-n51jggtb.js#Mn","doc":"判断一个页面项是否带可用 base64 与 mediaType。"}
+{"id":"chunk-n51jggtb.js#Ss","doc":"判断工具名是否属于 REPL 内置工具集。"}
+{"id":"chunk-n51jggtb.js#ws","doc":"取工具自带的超时，否则用给定默认值。"}
+{"id":"chunk-n51jggtb.js#Sr","doc":"按工具类型算出内层调用超时：shell 取上下限夹逼，Code Mode 下部分工具不限，内置工具固定 10 秒。"}
+{"id":"chunk-n51jggtb.js#Nt","doc":"返回是否处于 Code Mode。"}
+{"id":"chunk-n51jggtb.js#Es","doc":"把工具集合与内置工具集合并成新 Set。"}
+{"id":"chunk-n51jggtb.js#Ts","doc":"给工具打遥测用的类别标签（mcp_tool / skill_tool / other_tool）。"}
+{"id":"chunk-n51jggtb.js#In","doc":"运行中脚本状态容器：经典通道表、上次上报的 running/text、监听标记与 toolUseId。"}
+{"id":"chunk-n51jggtb.js#Tr","doc":"运行中脚本上报的总开关（恒为假）。"}
+{"id":"chunk-n51jggtb.js#kr","doc":"开始监听运行中脚本变化并触发首次上报。"}
+{"id":"chunk-n51jggtb.js#ks","doc":"登记一个运行中脚本并在结束时注销，返回清理函数。"}
+{"id":"chunk-n51jggtb.js#Ql","doc":"计算当前是否仍有脚本在跑以及要上报的文本。"}
+{"id":"chunk-n51jggtb.js#ed","doc":"“没有脚本在跑”的空状态常量。"}
+{"id":"chunk-n51jggtb.js#Er","doc":"把运行中脚本状态变化作为 tool_progress 事件上报，内容不变时跳过。"}
+{"id":"chunk-n51jggtb.js#_s","doc":"running.prelude 资源引用。"}
+{"id":"chunk-n51jggtb.js#Rs","doc":"running prelude 的导出别名。"}
+{"id":"chunk-n51jggtb.js#vs","doc":"file.prelude 资源引用。"}
+{"id":"chunk-n51jggtb.js#dn","doc":"新建读取探查槽（pending 标记 + 已探查集合）。"}
+{"id":"chunk-n51jggtb.js#Os","doc":"把 Edit 的 replace_all 说法改写成 REPL 的 {all: true} 说法。"}
+{"id":"chunk-n51jggtb.js#Ps","doc":"统计子串出现次数。"}
+{"id":"chunk-n51jggtb.js#As","doc":"file prelude 的导出别名。"}
+{"id":"chunk-n51jggtb.js#rd","doc":"PreToolUse hook 超时/无决定的说明原文（tengu_patient_lamport 开关）。"}
+{"id":"chunk-n51jggtb.js#sd","doc":"决定是否给出 hook 超时建议：observer-gate 或开关打开时的不同文案。"}
+{"id":"chunk-n51jggtb.js#Ms","doc":"安装 hook 超时建议。"}
+{"id":"chunk-n51jggtb.js#ad","doc":"searchTools/describeTool 的限额常量。"}
+{"id":"chunk-n51jggtb.js#Rr","doc":"构造 searchTools/describeTool 两个发现辅助函数，并转发 repl_tool_call 进度。"}
+{"id":"chunk-n51jggtb.js#pd","doc":"打印工具输入 schema 摘要，放不下时附上“用 describeTool 看全部”的提示。"}
+{"id":"chunk-n51jggtb.js#fd","doc":"去空白后做单行化处理。"}
+{"id":"chunk-n51jggtb.js#_r","doc":"截断字符串用于列表展示。"}
+{"id":"chunk-n51jggtb.js#Is","doc":"当工具的调用名与真名不同时给出 call 字段。"}
+{"id":"chunk-n51jggtb.js#Ds","doc":"team.prelude 资源引用。"}
+{"id":"chunk-n51jggtb.js#hd","doc":"子上下文名与状态的限额常量。"}
+{"id":"chunk-n51jggtb.js#Ln","doc":"上下文报告被安全审查否决时的说明，附带 contexts.<name> 写法。"}
+{"id":"chunk-n51jggtb.js#Bs","doc":"lead 角色的空 team 实现（spawn/view/tail 的空版本）。"}
+{"id":"chunk-n51jggtb.js#Hs","doc":"校验子上下文名字：格式、保留名、本会话内不可重名。"}
+{"id":"chunk-n51jggtb.js#Us","doc":"team prelude 的导出别名。"}
+{"id":"chunk-n51jggtb.js#wd","doc":"把任务状态映射为显示用的 ready/idle/stepping/failed/released。"}
+{"id":"chunk-n51jggtb.js#bd","doc":"判断任务是否还在进行（pending/running/finalizing）。"}
+{"id":"chunk-n51jggtb.js#Sd","doc":"取上下文报告正文，交给上层展示。"}
+{"id":"chunk-n51jggtb.js#zs","doc":"算上下文报告的扣留状态（flagged/pending/send/withheld）。"}
+{"id":"chunk-n51jggtb.js#Pr","doc":"报告不可见时的各种占位说明。"}
+{"id":"chunk-n51jggtb.js#Ed","doc":"把 usage 汇总成 input/output token 数。"}
+{"id":"chunk-n51jggtb.js#Td","doc":"组装上下文的一行状态（状态、正文、费用）。"}
+{"id":"chunk-n51jggtb.js#Ws","doc":"从 transcript 里摘出最近若干条助手文本与工具调用作为 tail() 结果。"}
+{"id":"chunk-n51jggtb.js#kd","doc":"在等待预算内执行一次调用，并按是否已有回应决定收尾。"}
+{"id":"chunk-n51jggtb.js#Gs","doc":"实现 contexts API：spawn/view/tail/whenSettled 等子上下文操作。"}
+{"id":"chunk-n51jggtb.js#xr","doc":"UnwritableArgumentsError 的名字常量。"}
+{"id":"chunk-n51jggtb.js#Mr","doc":"参数无法写成 JSON 时抛出的错误。"}
+{"id":"chunk-n51jggtb.js#Ys","doc":"不可写参数拒绝的开关。"}
+{"id":"chunk-n51jggtb.js#_d","doc":"不可写参数检查的深度/大小阈值。"}
+{"id":"chunk-n51jggtb.js#Ir","doc":"找出是哪个参数不可写（逐项检查顶层键）。"}
+{"id":"chunk-n51jggtb.js#Pd","doc":"把值包 16 层做深度探测。"}
+{"id":"chunk-n51jggtb.js#Ks","doc":"判断值失败的原因（过大/过深/bigint/循环/未知）。"}
+{"id":"chunk-n51jggtb.js#qs","doc":"按失败原因生成“因为参数不可写所以未调用”的说明。"}
+{"id":"chunk-n51jggtb.js#Js","doc":"按并发额度发放调用令牌，abort 时一次性放行。"}
+{"id":"chunk-n51jggtb.js#ei","doc":"取出并清空 outstanding 槽。"}
+{"id":"chunk-n51jggtb.js#ti","doc":"取出并清空 facts 槽。"}
+{"id":"chunk-n51jggtb.js#Nn","doc":"超时哨兵 Symbol。"}
+{"id":"chunk-n51jggtb.js#Lr","doc":"给 Promise 套上超时，超时返回哨兵。"}
+{"id":"chunk-n51jggtb.js#Zs","doc":"探查目录可否进入（超时/不存在/权限），Windows 上跳过可执行位检查。"}
+{"id":"chunk-n51jggtb.js#Md","doc":"生成目录读取失败的说明文本。"}
+{"id":"chunk-n51jggtb.js#ni","doc":"在预算内逐个逻辑目录做探查，任一处失败即给出说明。"}
+{"id":"chunk-n51jggtb.js#Nr","doc":"取出危险删除熔断的理由。"}
+{"id":"chunk-n51jggtb.js#ri","doc":"编译命令里的变量引用与导出一致性，判断是否只是“换路径也照样危险”的情形并给出说明。"}
+{"id":"chunk-n51jggtb.js#ii","doc":"保存可序列化副本的 WeakMap。"}
+{"id":"chunk-n51jggtb.js#$r","doc":"建立冻结的空原型副本并登记。"}
+{"id":"chunk-n51jggtb.js#ai","doc":"取出登记过的副本。"}
+{"id":"chunk-n51jggtb.js#Fr","doc":"判断值里是否有超过上限的数组。"}
+{"id":"chunk-n51jggtb.js#oi","doc":"可序列化判定的规模阈值。"}
+{"id":"chunk-n51jggtb.js#jr","doc":"判定值能否安全写成 JSON（原型、访问器、循环、bigint、键数等），能则返回序列化串。"}
+{"id":"chunk-n51jggtb.js#ci","doc":"列出可参与 hook 的已加载模块。"}
+{"id":"chunk-n51jggtb.js#pi","doc":"判断该工具的调用是否需要走插件 tool.call hook。"}
+{"id":"chunk-n51jggtb.js#fi","doc":"hook 参数规模阈值（1000 层 / 1e5 个值）。"}
+{"id":"chunk-n51jggtb.js#hi","doc":"参数对 hook 过深过大时的说明；否则试拷贝一次。"}
+{"id":"chunk-n51jggtb.js#Dd","doc":"迭代检查参数深度与值个数是否超限。"}
+{"id":"chunk-n51jggtb.js#gi","doc":"tracker：把内层调用进度整理成 start/executing/close 与提交记录。"}
+{"id":"chunk-n51jggtb.js#yi","doc":"通过插件 tool.call hook 运行一次内层调用，处理拒绝、结果扣留与输出形状校验。"}
+{"id":"chunk-n51jggtb.js#$d","doc":"派生一个带上层 abort 的子 AbortController。"}
+{"id":"chunk-n51jggtb.js#jd","doc":"从提交记录里取最后一条有值的提交。"}
+{"id":"chunk-n51jggtb.js#li","doc":"取出内层调用提交里的 data。"}
+{"id":"chunk-n51jggtb.js#di","doc":"把内层调用的失败整理成错误文本。"}
+{"id":"chunk-n51jggtb.js#Bd","doc":"按工具的剥离钩子处理结果（创建/存储两种）。"}
+{"id":"chunk-n51jggtb.js#Br","doc":"执行回调并吞掉异常（记录日志）。"}
+{"id":"chunk-n51jggtb.js#Hd","doc":"允许出现在顶层 schema 的关键字白名单。"}
+{"id":"chunk-n51jggtb.js#wi","doc":"列出 schema 声明的参数名并补上 required 项。"}
+{"id":"chunk-n51jggtb.js#bi","doc":"找出调用里 schema 未声明的参数（仅在 schema 封闭且扁平时）。"}
+{"id":"chunk-n51jggtb.js#Si","doc":"生成“MCP 工具不声明这些参数”的说明并列出可用参数。"}
+{"id":"chunk-n51jggtb.js#Ei","doc":"MCP 未声明参数拒绝的开关。"}
+{"id":"chunk-n51jggtb.js#Ud","doc":"把错误包成 {error} 返回。"}
+{"id":"chunk-n51jggtb.js#Ti","doc":"去掉命令前的主机前缀。"}
+{"id":"chunk-n51jggtb.js#$n","doc":"内层调用标记常量与需要特殊处理的内置工具集合。"}
+{"id":"chunk-n51jggtb.js#ki","doc":"判断当前是否按沙箱方式执行（未放宽）。"}
+{"id":"chunk-n51jggtb.js#zd","doc":"从 stderr 里截出 <sandbox_violations> 内容。"}
+{"id":"chunk-n51jggtb.js#_i","doc":"为 REPL 内的每个工具建立可调用的包装函数（含别名）。"}
+{"id":"chunk-n51jggtb.js#Ri","doc":"只保留名字与调用名一致或有别名的工具。"}
+{"id":"chunk-n51jggtb.js#Gd","doc":"内层调用的权限授权主流程：校验输入、跑 hook、走 canUseTool、返回允许/拒绝。"}
+{"id":"chunk-n51jggtb.js#Kd","doc":"把权限判定更新过的输入合并回原输入（保留原 file_path）。"}
+{"id":"chunk-n51jggtb.js#Vr","doc":"“Claude 已结束会话所以没跑”的说明。"}
+{"id":"chunk-n51jggtb.js#Ur","doc":"判断会话的 agent 是否已经停止接收调用。"}
+{"id":"chunk-n51jggtb.js#vi","doc":"内层工具调用的完整执行体：进度上报、参数校验、沙箱重试、hook、执行、结果读回与错误处理。"}
+{"id":"chunk-n51jggtb.js#Xd","doc":"把父消息裁成只剩本次 tool_use 块。"}
+{"id":"chunk-n51jggtb.js#qd","doc":"控制台环的限额常量（2000 行、1 MiB、1 MiB 单行截断）。"}
+{"id":"chunk-n51jggtb.js#cn","doc":"把超长文本按头尾保留方式截断并标注省略字数。"}
+{"id":"chunk-n51jggtb.js#Qd","doc":"把一条 console 输出压进环形缓冲，超出容量时从头丢弃。"}
+{"id":"chunk-n51jggtb.js#eu","doc":"取环里最后 n 行，前部省略时标注行数。"}
+{"id":"chunk-n51jggtb.js#tu","doc":"控制台总字节上限与 VM 上下文 id 基数。"}
+{"id":"chunk-n51jggtb.js#nu","doc":"构造 VM 内的 console 对象（stdout/stderr 分流、迟到输出旁路、50 MB 截断）。"}
+{"id":"chunk-n51jggtb.js#Di","doc":"被钉死全局的错误集合。"}
+{"id":"chunk-n51jggtb.js#qr","doc":"REPL 代码把受管全局改成不可配置时抛出的 VMContextPoisonedError。"}
+{"id":"chunk-n51jggtb.js#Jr","doc":"判断错误是否为 VM 上下文污染。"}
+{"id":"chunk-n51jggtb.js#et","doc":"在 VM 全局上定义可写属性，失败时抛污染错误。"}
+{"id":"chunk-n51jggtb.js#Gr","doc":"把对象原型置空并删除 constructor/prototype，防止逃逸。"}
+{"id":"chunk-n51jggtb.js#Fi","doc":"REPL 内 import() 的固定拒绝函数与其错误字段白名单。"}
+{"id":"chunk-n51jggtb.js#ou","doc":"VM 侧密封器：把宿主值安全重建为 VM 领值（typed array/Map/Set/Date/Error 等），并暴露 stringify/toStr 等。"}
+{"id":"chunk-n51jggtb.js#su","doc":"安全读取自有属性值。"}
+{"id":"chunk-n51jggtb.js#ji","doc":"装配 VM 全局：console/self/log、工具包装、searchTools/describeTool、定时器与 atob/btoa。"}
+{"id":"chunk-n51jggtb.js#jn","doc":"Read/Write 的名字常量。"}
+{"id":"chunk-n51jggtb.js#iu","doc":"VM 内的 shell/文件/上下文全局实现：$、read、write、edit、sleep、spawnContext 等。"}
+{"id":"chunk-n51jggtb.js#xi","doc":"单引号 shell 转义。"}
+{"id":"chunk-n51jggtb.js#Hi","doc":"设置会话 cwd 与步数预算并启动计步。"}
+{"id":"chunk-n51jggtb.js#Ui","doc":"在当前调用上运行并把结果深度解密封。"}
+{"id":"chunk-n51jggtb.js#Zr","doc":"建立 REPL VM 上下文：引擎检查、全局快照、console 环、计步器与状态容器。"}
+{"id":"chunk-n51jggtb.js#Wi","doc":"为一次脚本运行建立调用上下文对象。"}
+{"id":"chunk-n51jggtb.js#au","doc":"安装步数 shim（__replStep 的 VM 侧实现）。"}
+{"id":"chunk-n51jggtb.js#Qr","doc":"为一次运行重置步数额度并通知订阅者。"}
+{"id":"chunk-n51jggtb.js#Vt","doc":"步数状态 WeakMap。"}
+{"id":"chunk-n51jggtb.js#Hn","doc":"启动新的一轮步数额度。"}
+{"id":"chunk-n51jggtb.js#Mi","doc":"换主时转移步数归属。"}
+{"id":"chunk-n51jggtb.js#Gi","doc":"订阅步数轮次开始事件。"}
+{"id":"chunk-n51jggtb.js#eo","doc":"把累计的停因计数归到宿主。"}
+{"id":"chunk-n51jggtb.js#Ki","doc":"取出并清零步数停止计数。"}
+{"id":"chunk-n51jggtb.js#Xi","doc":"停止哨兵集合与 Promise 链深度上限。"}
+{"id":"chunk-n51jggtb.js#du","doc":"安装未处理拒绝的过滤器，识别步数/墙钟停止与被弃置的 Promise。"}
+{"id":"chunk-n51jggtb.js#uu","doc":"沿原型链判断是否为脚本留下的 Promise。"}
+{"id":"chunk-n51jggtb.js#cu","doc":"安装 VM 侧的计步器（按步长发放额度并读时钟）。"}
+{"id":"chunk-n51jggtb.js#qi","doc":"在墙钟内同步执行脚本，超时转成模型可读的说明。"}
+{"id":"chunk-n51jggtb.js#Ji","doc":"把调用与 abort 信号绑定，abort 时标记取消。"}
+{"id":"chunk-n51jggtb.js#Gt","doc":"返回一个永不 settle 的 Promise。"}
+{"id":"chunk-n51jggtb.js#Kr","doc":"取消后让调用结果一直挂起。"}
+{"id":"chunk-n51jggtb.js#Xr","doc":"执行前检查调用上限与残留代码状态，超限时抛出可读错误。"}
+{"id":"chunk-n51jggtb.js#Zi","doc":"包一层在途调用计数与开始/结束事件。"}
+{"id":"chunk-n51jggtb.js#Qi","doc":"从工具列表里滤掉 REPL 自身。"}
+{"id":"chunk-n51jggtb.js#ea","doc":"建立一次脚本调用的运行时状态对象。"}
+{"id":"chunk-n51jggtb.js#Yr","doc":"预置 VM 上下文的缓存变量。"}
+{"id":"chunk-n51jggtb.js#pu","doc":"惰性建立预置 VM 上下文。"}
+{"id":"chunk-n51jggtb.js#Pt","doc":"在给定上下文中执行代码（带 importModuleDynamically）。"}
+{"id":"chunk-n51jggtb.js#fu","doc":"把 evals 控制器包成惰性 list/abort。"}
+{"id":"chunk-n51jggtb.js#ta","doc":"去掉输入对象里值为 undefined/symbol 的键。"}
+{"id":"chunk-n51jggtb.js#na","doc":"抽查脚本里“拼写完整”的 shell 命令集合，用于判断额外检查是否必要。"}
+{"id":"chunk-n51jggtb.js#hu","doc":"REPL 工具的输入与输出 schema（含 code/description/timeout 与 stdout/images 等字段说明）。"}
+{"id":"chunk-n51jggtb.js#ro","doc":"把任意返回值渲染成文本：字符串原样、命令结果取其 output、普通对象走 inspect。"}
+{"id":"chunk-n51jggtb.js#Oa","doc":"把 {名: 字符串} 对象渲染成 key: 值 的多行文本。"}
+{"id":"chunk-n51jggtb.js#Ca","doc":"inspect 的数组长度与省略标记常量。"}
+{"id":"chunk-n51jggtb.js#oa","doc":"按预算脱敏字符串内部（Code Mode 下）。"}
+{"id":"chunk-n51jggtb.js#oo","doc":"按深度复制可安全 inspect 的普通对象，越界时用占位符。"}
+{"id":"chunk-n51jggtb.js#sa","doc":"把内层调用记录还原成虚拟的 tool_use / tool_result 消息，供界面展示。"}
+{"id":"chunk-n51jggtb.js#wu","doc":"结果过大时把 toolUseResult 换成“未保留”占位并标记已剥离。"}
+{"id":"chunk-n51jggtb.js#bu","doc":"按 file.content 或 cells 计算结果字节数。"}
+{"id":"chunk-n51jggtb.js#ia","doc":"把结果里的 error 转成展示用虚拟消息。"}
+{"id":"chunk-n51jggtb.js#aa","doc":"按停止发起方（人/其他）生成虚拟消息。"}
+{"id":"chunk-n51jggtb.js#pn","doc":"构造“已停止”的虚拟 tool_result 消息。"}
+{"id":"chunk-n51jggtb.js#Pa","doc":"当结果带 error 时生成单条虚拟消息。"}
+{"id":"chunk-n51jggtb.js#PS","doc":"向核心注册 eval 工具用到的 seams（工具集读取与结果剥离）。"}
+{"id":"chunk-n51jggtb.js#Eu","doc":"给工具名做展示分类（MCP/skill/tool）。"}
+{"id":"chunk-n51jggtb.js#la","doc":"列出仍在等待的调用及其等待时长。"}
+{"id":"chunk-n51jggtb.js#Tu","doc":"按卡住时的调用形态归类（nothing/shellCall/call）。"}
+{"id":"chunk-n51jggtb.js#ku","doc":"墙钟超时的长说明：区分调用在沙箱里跑过、被 hook 重跑、shell 调用等情形。"}
+{"id":"chunk-n51jggtb.js#ca","doc":"把内层调用的进度事件合并进调用状态表。"}
+{"id":"chunk-n51jggtb.js#_u","doc":"收集内层 Read/MCP 调用带回的图片（含超限计数与失败页）。"}
+{"id":"chunk-n51jggtb.js#Ru","doc":"生成“某页图片无法处理”的说明。"}
+{"id":"chunk-n51jggtb.js#so","doc":"每结果图片/失败页的数量上限与文件/错误文本截断长度。"}
+{"id":"chunk-n51jggtb.js#Cu","doc":"收集内层 Read 带回的 PDF 文档（含超限计数）。"}
+{"id":"chunk-n51jggtb.js#ao","doc":"每结果 PDF 数量上限。"}
+{"id":"chunk-n51jggtb.js#pa","doc":"取出 ReadNotifications 调用的结果文本。"}
+{"id":"chunk-n51jggtb.js#to","doc":"REPL 结果的最大字符数。"}
+{"id":"chunk-n51jggtb.js#Pu","doc":"VM 上下文被污染时统一处理：重置上下文并抛出“重跑”错误。"}
+{"id":"chunk-n51jggtb.js#fa","doc":"剥离结果里的图片/文档字段并做头尾截断。"}
+{"id":"chunk-n51jggtb.js#Au","doc":"结果仅含文本时返回原值，否则去掉块字段。"}
+{"id":"chunk-n51jggtb.js#xu","doc":"把被剥掉的图片/文档字段补回（用于重映射）。"}
+{"id":"chunk-n51jggtb.js#Mu","doc":"异步 eval 分发：拒绝超深度、派发脚本、收集迟到输出并返回收据或结果。"}
+{"id":"chunk-n51jggtb.js#Aa","doc":"工具摘要的 utf16le 编码缓存。"}
+{"id":"chunk-n51jggtb.js#ma","doc":"把多行描述压成首行并标注“多行取首行”。"}
+{"id":"chunk-n51jggtb.js#co","doc":"EvalTool 工具定义本体（名称、提示词、schema、权限、结果映射）。"}
+{"id":"chunk-n51jggtb.js#Iu","doc":"判断当前是否走异步 eval 通道。"}
+{"id":"chunk-n51jggtb.js#ha","doc":"包装 PostToolUse hook 处理，扣留时清空输出并置 withheld。"}
+{"id":"chunk-n51jggtb.js#Lu","doc":"跑异步 settle 的 PostToolUse hook 并校验输出形状。"}
+{"id":"chunk-n51jggtb.js#Nu","doc":"判断停止是否由用户/拒绝引起并带上各调用状态。"}
+{"id":"chunk-n51jggtb.js#Du","doc":"按停止来源生成中断错误。"}
+{"id":"chunk-n51jggtb.js#$u","doc":"把内层调用状态列表化成可展示的 stoppedBy 明细。"}
+{"id":"chunk-n51jggtb.js#ga","doc":"生成脚本结束但仍有未 await 调用的说明。"}
+{"id":"chunk-n51jggtb.js#ya","doc":"统计满足条件的调用数量。"}
+{"id":"chunk-n51jggtb.js#Fu","doc":"把 background_hint 类进度事件转成 keyOnly 形态。"}
+{"id":"chunk-n51jggtb.js#wa","doc":"脚本运行主流程：超时、看门狗、内层调用、结果收集与错误归类。"}
+{"id":"chunk-n51jggtb.js#Sa","doc":"收集脚本实际执行过的工具名（含委派）。"}
+{"id":"chunk-n51jggtb.js#xa","doc":"把结果整理成 log/stderr/error/result 的分段。"}
+{"id":"chunk-n51jggtb.js#po","doc":"把结果渲染成 <repl-output> 元素（Code Mode 下）。"}
+{"id":"chunk-n51jggtb.js#ju","doc":"把结果渲染成 stdout:/stderr:/error:/result: 文本（非 Code Mode）。"}
+{"id":"chunk-n51jggtb.js#Ma","doc":"把值渲染成展示文本，Code Mode 下带脱敏。"}
+{"id":"chunk-n51jggtb.js#lo","doc":"字符串原样否则走渲染。"}
+{"id":"chunk-n51jggtb.js#Bu","doc":"长值按预算截断并注明原值仍在 REPL 里。"}
+{"id":"chunk-n51jggtb.js#Xt","doc":"按 token 预算截断并统计已省略字数。"}
+{"id":"chunk-n51jggtb.js#Vn","doc":"按 0.6 比例算头部保留长度。"}
+{"id":"chunk-n51jggtb.js#Hu","doc":"把消息块渲染，渲染失败时退化成纯文本。"}
+{"id":"chunk-n51jggtb.js#Uu","doc":"墙钟计时器：在途调用为空时暂停计时，恢复时补计。"}
+{"id":"chunk-n51jggtb.js#Wu","doc":"可暂停的墙钟定时器实现。"}
+{"id":"chunk-n51jggtb.js#zu","doc":"看门狗的基础延时与倍数。"}
+{"id":"chunk-n51jggtb.js#Ku","doc":"按工具自身超时排看门狗（倍数 + 基础延时，超过上限则不用）。"}
+{"id":"chunk-n51jggtb.js#Ea","doc":"把累积的新消息与上下文层取出。"}
+{"id":"chunk-n51jggtb.js#Xu","doc":"脚本开始时记录概要（当前为空实现）。"}

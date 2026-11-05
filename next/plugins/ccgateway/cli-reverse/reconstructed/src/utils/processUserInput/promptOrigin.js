@@ -3,13 +3,14 @@
  *
  * 2.1.316 新增：提示词来源判定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xx1vmpsq.js (4)
- * attribution: placement 4
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pwdsqzsj.js (6)
+ * attribution: placement 4, layout 2
  */
 import { hasSeededComment } from "../../services/feedback/feedbackBundle.js";
 import { isTeammateMessageText } from "../messages.js";
+import { TEAMMATE_MESSAGE } from "../../constants/xml.js";
 import { isHumanOrUnset } from "../messageProvenance.js";
 import { runIgnoringAbort } from "../../plugins/functionHooks/dispatch/dispatchScope.js";
 import {
@@ -19,7 +20,7 @@ import {
 } from "../../plugins/functionHooks/inputHold.js";
 import { currentSurfaceBinding } from "../../plugins/functionHooks/surfaceBinding.js";
 
-//@ chunk-xx1vmpsq.js:30208-30358 placement
+//@ chunk-pwdsqzsj.js:30586-30736 placement
 function promptOriginKind(content) {
   if (hasSeededComment(content)) return "seeded-comment";
   return (Array.isArray(content) ? content.map(textOf) : [content]).some(
@@ -28,16 +29,35 @@ function promptOriginKind(content) {
     ? "teammate-reply"
     : undefined;
 }
-//@ chunk-xx1vmpsq.js:30358-30436 placement
+//@ chunk-pwdsqzsj.js:30736-30868 layout
+function promptOriginOfContent(value) {
+  return promptOriginKind(
+    Array.isArray(value)
+      ? value.map((block) =>
+          typeof block === "object" && block !== null && "text" in block
+            ? {
+                ...block,
+                text: unescapeTeammateTag(block.text),
+              }
+            : block,
+        )
+      : unescapeTeammateTag(value),
+  );
+}
+//@ chunk-pwdsqzsj.js:30868-30946 layout
+function unescapeTeammateTag(text) {
+  return typeof text === "string" ? text.replaceAll(`<\\${TEAMMATE_MESSAGE}`, `<${TEAMMATE_MESSAGE}`) : text;
+}
+//@ chunk-pwdsqzsj.js:30946-31024 placement
 function textOf(block) {
   return typeof block === "object" && block !== null && "text" in block ? block.text : undefined;
 }
-//@ chunk-xx1vmpsq.js:30436-30498 placement
+//@ chunk-pwdsqzsj.js:31024-31086 placement
 function isUserTypedPrompt(content, origin, isHidden) {
   let isPlainText = !isHidden && promptOriginKind(content) === undefined;
   return isHumanOrUnset(origin) && isPlainText;
 }
-//@ chunk-xx1vmpsq.js:30498-30826 placement
+//@ chunk-pwdsqzsj.js:31086-31416 placement
 /**
  * 记录提示是否由人亲自输入（排除中继、外来与已发送过的），据此更新输入暂扣状态。
  */
@@ -60,4 +80,4 @@ var notePromptOrigin = (note) =>
       clearHeldInputAndReason();
     else if (!isStopped && shouldRelease) releaseHeldInput();
   });
-export { promptOriginKind, notePromptOrigin, isUserTypedPrompt };
+export { promptOriginOfContent, promptOriginKind, isUserTypedPrompt, notePromptOrigin };

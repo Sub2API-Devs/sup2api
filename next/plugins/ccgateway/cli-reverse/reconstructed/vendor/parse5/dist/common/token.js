@@ -1,14 +1,14 @@
 /**
  * parse5/dist/common/token.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: parse5@7.2.0..7.2.1
- * pieces: chunk-6ja29j2n.js (3)
+ * pieces: chunk-p9ac6cnb.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
 
-//@ chunk-6ja29j2n.js:8620-8626 esm-layout
+//@ chunk-p9ac6cnb.js:8620-8626 esm-layout
 var TokenType;
-//@ chunk-6ja29j2n.js:8626-8925 esm-fingerprint
+//@ chunk-p9ac6cnb.js:8626-8925 esm-fingerprint
 (function (TokenType) {
   TokenType[(TokenType.CHARACTER = 0)] = "CHARACTER";
   TokenType[(TokenType.NULL_CHARACTER = 1)] = "NULL_CHARACTER";
@@ -20,7 +20,7 @@ var TokenType;
   TokenType[(TokenType.EOF = 7)] = "EOF";
   TokenType[(TokenType.HIBERNATION = 8)] = "HIBERNATION";
 })(TokenType || (TokenType = {}));
-//@ chunk-6ja29j2n.js:8925-9036 esm-fingerprint
+//@ chunk-p9ac6cnb.js:8925-9036 esm-fingerprint
 function getTokenAttr(token, attrName) {
   for (let i = token.attrs.length - 1; i >= 0; i--)
     if (token.attrs[i].name === attrName) return token.attrs[i].value;

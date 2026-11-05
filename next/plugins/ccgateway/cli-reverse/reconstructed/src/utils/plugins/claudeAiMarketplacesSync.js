@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：claude.ai 账号插件市场同步
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3wek6r2k.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hjswk319.js (4)
  * attribution: placement 4
  */
 import { getAccountPluginsSyncEnabled } from "../../bootstrap/state.js";
@@ -35,7 +35,7 @@ import { shouldAllowManagedPermissionRulesOnly } from "../permissions/permission
 import { logForDebugging } from "../debug.js";
 import { errorMessage } from "../errors.js";
 
-//@ chunk-3wek6r2k.js:74928-75063 placement
+//@ chunk-hjswk319.js:74328-74463 placement
 class MarketplacesSyncFailed extends Error {
   code;
   constructor(code) {
@@ -44,7 +44,7 @@ class MarketplacesSyncFailed extends Error {
     this.name = "MarketplacesSyncFailed";
   }
 }
-//@ chunk-3wek6r2k.js:75063-75306 placement
+//@ chunk-hjswk319.js:74463-74706 placement
 /**
  * 把 claude.ai 账号插件市场同步到本地（开关与条件满足时），带遥测。
  */
@@ -66,7 +66,7 @@ async function syncClaudeAiMarketplaces(rootSession, credentials, accountCredent
     return false;
   }
 }
-//@ chunk-3wek6r2k.js:75306-75714 placement
+//@ chunk-hjswk319.js:74706-75114 placement
 async function syncAccountMarketplaces(credentials, accountCredentials) {
   try {
     let entries = Object.entries(await readClaudeAiMarketplaceRegistry());
@@ -95,7 +95,7 @@ async function syncAccountMarketplaces(credentials, accountCredentials) {
     logError(error);
   }
 }
-//@ chunk-3wek6r2k.js:75714-76896 placement
+//@ chunk-hjswk319.js:75114-76296 placement
 async function resolveAccountMarketplaceBucket(rootSession, credentials) {
   let syncBucket = await getSyncBucket(credentials);
   if (syncBucket === null) throw new MarketplacesSyncFailed("bucket_unresolved");

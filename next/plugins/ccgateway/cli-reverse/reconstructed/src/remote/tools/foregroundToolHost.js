@@ -3,9 +3,9 @@
  *
  * 前台工具宿主状态与控制（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qh5wq2v1.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b1j59scg.js (12)
  * attribution: placement 12
  */
 import {
@@ -35,7 +35,7 @@ import { sequential } from "../../utils/sequential.js";
 import { WARNING_GLYPH } from "../../constants/figures.js";
 import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 
-//@ chunk-qh5wq2v1.js:12181-12397 placement
+//@ chunk-b1j59scg.js:13358-13574 placement
 function isUnattendedServingFlagOn() {
   try {
     let { value: flagValue, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
@@ -56,7 +56,7 @@ function isUnattendedServingFlagOn() {
     return false;
   }
 }
-//@ chunk-qh5wq2v1.js:12397-12628 placement
+//@ chunk-b1j59scg.js:13574-13805 placement
 function isUnattendedServingFlagOnOptimistic() {
   try {
     let { value: flagValue, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
@@ -78,7 +78,7 @@ function isUnattendedServingFlagOnOptimistic() {
     return false;
   }
 }
-//@ chunk-qh5wq2v1.js:12628-14028 placement
+//@ chunk-b1j59scg.js:13805-15205 placement
 /**
  * 远程工具调用被本机拒绝时，各拒绝码（denied_by_rule、hook_blocked、ask_expired、queue_full 等）对应的英文原因短句，用于前台宿主状态行。
  */
@@ -112,7 +112,7 @@ var REFUSAL_CODE_REASONS = {
   invalid_request: "the request was malformed",
   unsupported_protocol: "the session and this computer speak different protocol versions",
 };
-//@ chunk-qh5wq2v1.js:14028-18291 placement
+//@ chunk-b1j59scg.js:15205-19468 placement
 /**
  * 前台工具宿主的状态行文本（云会话连接、断开、重连）
  */
@@ -328,7 +328,7 @@ function ForegroundToolHostStatus(options) {
     },
   };
 }
-//@ chunk-qh5wq2v1.js:18291-18843 placement
+//@ chunk-b1j59scg.js:19468-20020 placement
 /**
  * 前台工具宿主的状态横幅文案：无人值守执行、Remote Control 使用当前文件夹等。
  */
@@ -338,15 +338,15 @@ var ASK_FIRST_SERVING_BANNER =
   "Your cloud sessions can use this folder while Remote Control runs. Commands that need approval ask in the cloud session first.";
 var UNATTENDED_SERVING_HOWTO =
   'To let cloud sessions in auto mode run commands here without asking, turn on "Unattended commands from cloud sessions on this computer" in /config in claude, or pick a mode in /sandbox in claude in this folder, then start this command again with --allow-unattended-tool-calls.';
-//@ chunk-qh5wq2v1.js:18843-18869 placement
+//@ chunk-b1j59scg.js:20020-20046 placement
 function emptyStatusText(context, lacks) {
   return "";
 }
-//@ chunk-qh5wq2v1.js:18869-18895 placement
+//@ chunk-b1j59scg.js:20046-20072 placement
 function cloudFolderUseStatusText(context, state) {
   return "";
 }
-//@ chunk-qh5wq2v1.js:18895-20405 placement
+//@ chunk-b1j59scg.js:20072-21582 placement
 /**
  * 云会话能否使用本文件夹的状态说明文案（检查中、设置关闭 auto 模式等原因）。
  */
@@ -399,7 +399,7 @@ var SANDBOX_POSTURE_HINTS = {
     next: "see /sandbox in claude (Config).",
   },
 };
-//@ chunk-qh5wq2v1.js:20405-22125 placement
+//@ chunk-b1j59scg.js:21582-23354 placement
 function describeRemoteToolsOffReason(reason, folderState) {
   let detail;
   switch (reason) {
@@ -442,7 +442,8 @@ function describeRemoteToolsOffReason(reason, folderState) {
       detail = "it is in a repository that is never offered";
       break;
     case "not_git_checkout":
-      detail = "it is missing or cannot be opened, or its `.git` is not a plain file or folder";
+      detail =
+        "it is missing or cannot be opened, its `.git` is not a plain file or folder, or it is part of a bare repository or a `.git` folder";
       break;
     case "other_sign_in":
       detail = "this run's environment signs in or sends its traffic somewhere else";
@@ -462,7 +463,7 @@ function describeRemoteToolsOffReason(reason, folderState) {
     }[folderState]
   }: ${detail}.`;
 }
-//@ chunk-qh5wq2v1.js:22125-22743 placement
+//@ chunk-b1j59scg.js:23354-23972 placement
 /**
  * 把前台工具宿主事件（started/refused/ended 等）转成一行英文状态文本；status/stopping 与本机主动停止不显示。
  */
@@ -487,7 +488,7 @@ function describeToolHostEvent(event, verbose) {
         : `A cloud session could not connect${verbosityHint}.`;
   }
 }
-//@ chunk-qh5wq2v1.js:22743-28316 placement
+//@ chunk-b1j59scg.js:23972-29546 placement
 /**
  * 前台工具宿主控制：特性开关、广告、门控状态
  */
@@ -901,7 +902,7 @@ async function useForegroundToolHost({
     },
   };
 }
-//@ chunk-qh5wq2v1.js:28316-28340 placement
+//@ chunk-b1j59scg.js:29546-29570 placement
 function alwaysFalseToolHost(state) {
   return false;
 }

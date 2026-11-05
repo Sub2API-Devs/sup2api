@@ -1,14 +1,14 @@
 /**
  * @azure/identity/dist/esm/regionalAuthority.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/identity@4.10.1
- * pieces: chunk-mrx6y2r5.js (3)
+ * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
 
-//@ chunk-mrx6y2r5.js:290526-290533 esm-layout
+//@ chunk-b5df2wx1.js:290526-290533 esm-layout
 var RegionalAuthority;
-//@ chunk-mrx6y2r5.js:290533-292141 esm-fingerprint
+//@ chunk-b5df2wx1.js:290533-292141 esm-fingerprint
 (function (RegionalAuthority) {
   RegionalAuthority.AutoDiscoverRegion = "AutoDiscoverRegion";
   RegionalAuthority.USWest = "westus";
@@ -64,7 +64,7 @@ var RegionalAuthority;
   RegionalAuthority.GovernmentUSDodEast = "usdodeast";
   RegionalAuthority.GovernmentUSDodCentral = "usdodcentral";
 })(RegionalAuthority || (RegionalAuthority = {}));
-//@ chunk-mrx6y2r5.js:292141-292419 esm-fingerprint
+//@ chunk-b5df2wx1.js:292141-292419 esm-fingerprint
 function calculateRegionalAuthority(regionalAuthority) {
   var _a;
   var _b;

@@ -3,57 +3,57 @@
  *
  * 2.1.316 新增：随 claude.ai 同步/隐藏的斜杠命令名单
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5hsd6qen.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sq9ffh11.js (9)
  * attribution: placement 9
  */
 import { SETTINGS_CACHE_STORE_SLOT } from "../../bootstrap/stateSlices.js";
 import { getRootSession } from "../../bootstrap/state.js";
 
-//@ chunk-5hsd6qen.js:277-315 placement
+//@ chunk-sq9ffh11.js:277-315 placement
 /**
  * commandSyncNameState：按宿主保存的斜杠命令名单状态。
  */
 function commandSyncNameState() {
   return SETTINGS_CACHE_STORE_SLOT.of(getRootSession().host);
 }
-//@ chunk-5hsd6qen.js:315-356 placement
+//@ chunk-sq9ffh11.js:315-356 placement
 /**
  * mergedCommandNames：合并后的斜杠命令名单。
  */
 function mergedCommandNames() {
   return commandSyncNameState().mergedSettings;
 }
-//@ chunk-5hsd6qen.js:356-393 placement
+//@ chunk-sq9ffh11.js:356-393 placement
 /**
  * invalidateCommandNames：使命令名单缓存失效。
  */
 function invalidateCommandNames(source) {
   commandSyncNameState().invalidateAll(source);
 }
-//@ chunk-5hsd6qen.js:393-431 placement
+//@ chunk-sq9ffh11.js:393-431 placement
 /**
  * pluginCommandBase：插件命令名前缀。
  */
 function pluginCommandBase() {
   return commandSyncNameState().pluginBase;
 }
-//@ chunk-5hsd6qen.js:431-469 placement
+//@ chunk-sq9ffh11.js:431-469 placement
 /**
  * setPluginCommandBase：设置插件命令名前缀。
  */
 function setPluginCommandBase(settings) {
   commandSyncNameState().setPluginBase(settings);
 }
-//@ chunk-5hsd6qen.js:469-507 placement
+//@ chunk-sq9ffh11.js:469-507 placement
 /**
  * clearPluginCommandBase：清空插件命令名前缀。
  */
 function clearPluginCommandBase() {
   commandSyncNameState().clearPluginBase();
 }
-//@ chunk-5hsd6qen.js:507-2957 placement
+//@ chunk-sq9ffh11.js:507-2994 placement
 /**
  * 斜杠命令名单（claude.ai 同步、配置类命令等）。
  */
@@ -92,12 +92,14 @@ var COMMAND_NAME_SOURCES = {
   permissions: "config",
   plan: "config",
   plugin: "config",
+  project: "config",
   powerup: "config",
   "privacy-settings": "config",
   "pro-trial-expired": "config",
   "rate-limit-options": "config",
   "remote-control": "config",
   "remote-env": "config",
+  "use-case": "config",
   sandbox: "config",
   "scroll-speed": "config",
   "setup-bedrock": "config",
@@ -189,7 +191,7 @@ var COMMAND_NAME_SOURCES = {
   ultrareview: "agent",
   workflows: "agent",
 };
-//@ chunk-5hsd6qen.js:2957-3035 placement
+//@ chunk-sq9ffh11.js:2994-3072 placement
 /**
  * commandKindOf：取命令来源分类（prompt 视为 skill）。
  */
@@ -197,7 +199,7 @@ function commandKindOf(command) {
   if (command.type === "prompt") return "skill";
   return COMMAND_NAME_SOURCES[command.name] ?? "action";
 }
-//@ chunk-5hsd6qen.js:3035-3444 placement
+//@ chunk-sq9ffh11.js:3072-3481 placement
 function isBuiltinCommandSource(command) {
   if (command.type !== "prompt") return "builtin";
   if (command.loadedFrom === "syncedSkills") return "synced";
@@ -223,13 +225,13 @@ function isBuiltinCommandSource(command) {
   }
 }
 export {
-  mergedCommandNames,
-  commandSyncNameState,
-  CLAUDE_AI_SYNC_LABEL,
   invalidateCommandNames,
-  isBuiltinCommandSource,
-  commandKindOf,
+  CLAUDE_AI_SYNC_LABEL,
+  commandSyncNameState,
+  mergedCommandNames,
   pluginCommandBase,
   clearPluginCommandBase,
   setPluginCommandBase,
+  isBuiltinCommandSource,
+  commandKindOf,
 };

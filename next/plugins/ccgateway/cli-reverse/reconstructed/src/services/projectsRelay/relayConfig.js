@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：提取消息的中继回合标记（Slack 人工、项目用户、邮件发件人等）；中继消息行 schema（作者类型、角色等）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (16)
  * attribution: placement 16
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -21,7 +21,7 @@ import { isCliOwnedConfig } from "../mcp/cliOwnedClients.js";
 import { isCcrUrlWithoutCredentials } from "../mcp/ccrMcpUrls.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:597533-597971 placement
+//@ chunk-exfmq47h.js:610017-610455 placement
 /**
  * 提取消息的中继回合标记（Slack 人工、项目用户、邮件发件人等）。
  */
@@ -36,15 +36,15 @@ function relayTurnFlags(message) {
   if (message.hearthRelayThreadTs !== undefined) flags.hearthRelayThreadTs = message.hearthRelayThreadTs;
   return flags;
 }
-//@ chunk-aepeg2w5.js:597971-598023 placement
+//@ chunk-exfmq47h.js:610455-610507 placement
 /**
  * 属于中继来源的种类名（projects-relay、session-inbox）。
  */
 var RELAY_SOURCE_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:597971", () => {
+deferInit("chunk-exfmq47h.js:610455", () => {
   RELAY_SOURCE_KINDS = new Set(["projects-relay", "session-inbox"]);
 });
-//@ chunk-aepeg2w5.js:598023-598121 placement
+//@ chunk-exfmq47h.js:610507-610605 placement
 /**
  * 给指定 uuid 的用户消息打上中继回合标记。
  */
@@ -53,14 +53,14 @@ function attachRelayTurnFlags(messages, turnId, message) {
   for (let message of messages)
     if (message.type === "user" && message.uuid === turnId) Object.assign(message, flags);
 }
-//@ chunk-aepeg2w5.js:598121-598192 placement
+//@ chunk-exfmq47h.js:610605-610676 placement
 /**
  * 中继消息 id 的格式与批量上限。
  */
 var ANTHROPIC_HEARTH_ROWS = "anthropic/hearth.rows";
 var RELAY_MESSAGE_ID_REGEX = /^cmsg_[A-Za-z0-9_-]{1,128}$/;
 var MAX_RELAY_MESSAGE_IDS = 8;
-//@ chunk-aepeg2w5.js:598192-598406 placement
+//@ chunk-exfmq47h.js:610676-610890 placement
 /**
  * 解析 relay_message_ids。
  */
@@ -86,12 +86,12 @@ function parseRelayMessageIds(message) {
   }
   return ids;
 }
-//@ chunk-aepeg2w5.js:598406-598811 placement
+//@ chunk-exfmq47h.js:610890-611295 placement
 /**
  * 中继消息行 schema（作者类型、角色等）。
  */
 var RelayRowSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:598406", () => {
+deferInit("chunk-exfmq47h.js:610890", () => {
   RelayRowSchema = DoctorLazy(() =>
     objectSchema({
       id: stringSchema().regex(RELAY_MESSAGE_ID_REGEX),
@@ -111,7 +111,7 @@ deferInit("chunk-aepeg2w5.js:598406", () => {
     }),
   );
 });
-//@ chunk-aepeg2w5.js:598811-599005 placement
+//@ chunk-exfmq47h.js:611295-611489 placement
 /**
  * 中继作者是否为在场的人（owner/member）。
  */
@@ -127,12 +127,12 @@ function isHumanRelayAuthor(row) {
       return false;
   }
 }
-//@ chunk-aepeg2w5.js:599005-599043 placement
+//@ chunk-exfmq47h.js:611489-611527 placement
 var relayRowsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:599005", () => {
+deferInit("chunk-exfmq47h.js:611489", () => {
   relayRowsSchema = DoctorLazy(() => array(RelayRowSchema()).min(1).max(MAX_RELAY_MESSAGE_IDS));
 });
-//@ chunk-aepeg2w5.js:599043-599221 placement
+//@ chunk-exfmq47h.js:611527-611705 placement
 /**
  * 解析消息的 relay_rows：id 必须在给定集合内且不重复，否则返回 undefined。
  */
@@ -147,7 +147,7 @@ function parseRelayRows(message, relayMessageIds) {
   }
   return parsed.data;
 }
-//@ chunk-aepeg2w5.js:599221-599310 placement
+//@ chunk-exfmq47h.js:611705-611794 placement
 /**
  * 取合法的中继线程时间戳，非法返回 undefined。
  */
@@ -157,9 +157,9 @@ function relayThreadTsOf(message) {
     ? relayThreadTs
     : undefined;
 }
-//@ chunk-aepeg2w5.js:599310-599346 placement
+//@ chunk-exfmq47h.js:611794-611830 placement
 var COORDINATOR_RELAY_PREFIX = '<relay from="coordinator" ';
-//@ chunk-aepeg2w5.js:599346-599519 placement
+//@ chunk-exfmq47h.js:611830-612003 placement
 /**
  * 是否为中继注入的提示。
  */
@@ -174,7 +174,7 @@ function isRelayPrompt(message) {
     content.startsWith(COORDINATOR_RELAY_PREFIX)
   );
 }
-//@ chunk-aepeg2w5.js:599519-599645 placement
+//@ chunk-exfmq47h.js:612003-612129 placement
 /**
  * 为消息设置 Hearth 中继元数据（消息 id、行、线程 ts）。
  */
@@ -185,7 +185,7 @@ function setHearthRelayMetadata(messages, turnId, { messageIds, rows, threadTs }
     hearthRelayThreadTs: threadTs,
   });
 }
-//@ chunk-aepeg2w5.js:599645-599792 placement
+//@ chunk-exfmq47h.js:612129-612276 placement
 /**
  * 判断 MCP 服务器是否为 Hearthbot 中继（动态作用域、不带凭据的 CCR URL）。
  */
@@ -199,14 +199,14 @@ function isHearthbotRelayServer(server) {
     isCcrUrlWithoutCredentials(server.config.url)
   );
 }
-//@ chunk-aepeg2w5.js:599792-599832 placement
+//@ chunk-exfmq47h.js:612276-612316 placement
 /**
  * 是否有中继来源。
  */
 function hasRelaySource(servers) {
   return (servers ?? []).some(isHearthbotRelayServer);
 }
-//@ chunk-aepeg2w5.js:599832-600042 placement
+//@ chunk-exfmq47h.js:612316-612526 placement
 /**
  * 中继来源类型名（mcp_send_message、slack、teams、hearth 等）。
  */
@@ -222,29 +222,29 @@ var DISCORD_HUMAN = "discord_human";
 var SLACK_OWNER_PING = "slack_owner_ping";
 var WEB_HUMAN = "web_human";
 export {
-  isHearthbotRelayServer,
   HEARTH_AGENT,
+  isHearthbotRelayServer,
   setHearthRelayMetadata,
   relayTurnFlags,
-  RELAY_SOURCE_KINDS_2,
-  isHumanRelayAuthor,
-  SLACK_BOT,
-  RelayRowSchema,
-  hasRelaySource,
-  OWNER_RELAY,
+  relayThreadTsOf,
+  parseRelayMessageIds,
+  isRelayPrompt,
+  parseRelayRows,
   HEARTH_HUMAN,
   attachRelayTurnFlags,
+  isHumanRelayAuthor,
   WEB_HUMAN,
+  hasRelaySource,
+  SLACK_BOT,
   RELAY_SOURCE_KINDS,
+  RELAY_SOURCE_KINDS_2,
+  OWNER_RELAY,
   SLACK_HUMAN,
   TEAMS_HUMAN,
   AMB_HUMAN,
   DISCORD_HUMAN,
   SLACK_OWNER_PING,
+  RelayRowSchema,
   RELAY_MESSAGE_ID_REGEX,
   ANTHROPIC_HEARTH_ROWS,
-  relayThreadTsOf,
-  parseRelayMessageIds,
-  isRelayPrompt,
-  parseRelayRows,
 };

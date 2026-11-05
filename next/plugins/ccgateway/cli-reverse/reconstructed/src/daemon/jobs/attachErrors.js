@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：附加结束时上报遥测（交互是否到达、耗时）；附加/控制错误码与提示文本等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vrr64ez0.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bjxz9pt3.js (5)
  * attribution: placement 5
  */
 import { KICKED_ATTACH_CODE, SUPERVISOR_DETACH_CODE, BG_PROTO } from "../../services/daemon/leaseProtocol.js";
@@ -14,7 +14,7 @@ import { fromEnum, fromEnumOpt } from "../../services/analytics/safeMetadata.js"
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { controlRequest } from "../../services/daemon/controlClient.js";
 
-//@ chunk-vrr64ez0.js:9089-9464 placement
+//@ chunk-bjxz9pt3.js:9124-9499 placement
 /**
  * 附加/控制错误码与提示文本。
  */
@@ -39,11 +39,11 @@ var ATTACH_ERROR_CODES = {
   EHOSTDEAD: "ehostdead",
   ESKEW: "eskew",
 };
-//@ chunk-vrr64ez0.js:9464-9527 placement
+//@ chunk-bjxz9pt3.js:9499-9562 placement
 function attachErrorCode(code) {
   return Object.hasOwn(ATTACH_ERROR_CODES, code) ? ATTACH_ERROR_CODES[code] : "unknown_code";
 }
-//@ chunk-vrr64ez0.js:9527-9891 placement
+//@ chunk-bjxz9pt3.js:9562-9926 placement
 /**
  * 从错误文本分类附加失败原因。
  */
@@ -58,7 +58,7 @@ function classifyAttachError(code) {
   if (SUPERVISOR_DETACH_CODE.test(code)) return "unknown_code";
   return "worker_detach";
 }
-//@ chunk-vrr64ez0.js:9891-10803 placement
+//@ chunk-bjxz9pt3.js:9926-10838 placement
 /**
  * 附加结束时上报遥测（交互是否到达、耗时）。
  */
@@ -93,7 +93,7 @@ function reportAttachTelemetry(markers, outcome, failureClass) {
     attach_censored: isCensored ? true : undefined,
   });
 }
-//@ chunk-vrr64ez0.js:10803-10911 placement
+//@ chunk-bjxz9pt3.js:10838-10946 placement
 /**
  * 向守护进程询问短 id 对应的后台会话是否存在，明确不存在时为真。
  */

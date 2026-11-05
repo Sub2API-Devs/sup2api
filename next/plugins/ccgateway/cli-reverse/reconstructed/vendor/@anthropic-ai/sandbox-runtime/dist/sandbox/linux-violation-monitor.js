@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/linux-violation-monitor.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: esm-fingerprint 1
  */
 import { mkdtempSync, rmSync } from "fs";
@@ -15,7 +15,7 @@ import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 import { decodeSandboxedCommand, MAX_ENCODED_COMMAND_BYTES } from "./sandbox-utils.js";
 import { shouldIgnoreViolation } from "./sandbox-violation-store.js";
 
-//@ chunk-fq0cr76a.js:776092-777559 esm-fingerprint
+//@ chunk-qg41pqt6.js:777822-779316 esm-fingerprint
 function startLinuxSandboxViolationMonitor(callback, opts) {
   let { allowWritePaths, denyWritePaths, ignoreViolations, resolveCommandText } = opts;
   let sockDir = mkdtempSync(join(tmpdir(), "srt-obs-"));

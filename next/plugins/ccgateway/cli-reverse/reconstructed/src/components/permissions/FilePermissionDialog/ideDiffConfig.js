@@ -3,19 +3,19 @@
  *
  * IDE diff 配置：单个编辑的 diff 描述。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/FilePermissionDialog/ideDiffConfig.ts
- * pieces: chunk-s67vc0kc.js (2)
+ * pieces: chunk-e0skvs33.js (2)
  * attribution: placement 1, fingerprint 1
  */
 
-//@ chunk-s67vc0kc.js:1066-1196 placement (2.1.88 match: UNDERLINE_STYLES, 0.497)
+//@ chunk-e0skvs33.js:1067-1197 placement (2.1.88 match: UNDERLINE_STYLES, 0.495)
 function quoteKind(char) {
   if (char === "'" || (char >= "\u2018" && char <= "\u201B")) return "single";
   if (char === '"' || (char >= "\u201C" && char <= "\u201E")) return "double";
   return null;
 }
-//@ chunk-s67vc0kc.js:1196-1510 fingerprint (2.1.88 match: createSingleEditDiffConfig, 0.38)
+//@ chunk-e0skvs33.js:1197-1511 fingerprint (2.1.88 match: createSingleEditDiffConfig, 0.376)
 function createSingleEditDiffConfig(text) {
   let out = "";
   let openQuote = null;

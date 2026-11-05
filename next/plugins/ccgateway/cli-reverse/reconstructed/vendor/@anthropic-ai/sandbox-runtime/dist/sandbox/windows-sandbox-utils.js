@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/windows-sandbox-utils.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (106)
+ * pieces: chunk-qg41pqt6.js (106)
  * attribution: esm-fingerprint 90, esm-layout 16
  */
 import * as pathModule_2 from "path";
@@ -42,7 +42,7 @@ import {
 import { literalReadings } from "./path-entries.js";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-fq0cr76a.js:777773-777887 esm-fingerprint
+//@ chunk-qg41pqt6.js:779530-779644 esm-fingerprint
 class WindowsSandboxError extends Error {
   constructor(code, message, subcommand) {
     super(message);
@@ -51,12 +51,12 @@ class WindowsSandboxError extends Error {
     this.subcommand = subcommand;
   }
 }
-//@ chunk-fq0cr76a.js:777887-778382 esm-fingerprint
+//@ chunk-qg41pqt6.js:779644-780139 esm-fingerprint
 var DEFAULT_WINDOWS_PROXY_PORT_RANGE = [60080, 60089];
 var WINDOWS_LOOPBACK_PROBE_PORT = 1;
 var WINDOWS_ALLOW_LOOPBACK_EFFECT = `Loopback is open: sandboxed commands can connect to every TCP and UDP port on localhost (127.0.0.0/8 and ::1; port ${WINDOWS_LOOPBACK_PROBE_PORT} alone stays blocked, so the sandbox can check its own fence). Every service listening on localhost is reachable from them, and any local forwarder (a DNS stub, a SOCKS or HTTP proxy, a VPN or security agent, a tunnel) reachable there gives them a way off the machine that the network restrictions do not cover.`;
 var PWSH_FLAGS = ["-NoProfile", "-Command"];
-//@ chunk-fq0cr76a.js:778382-779710 esm-fingerprint
+//@ chunk-qg41pqt6.js:780139-781467 esm-fingerprint
 function parseWindowsBinShell(raw) {
   let systemRoot = process.env.SystemRoot ?? "C:\\Windows";
   let cmdDefault = {
@@ -128,24 +128,24 @@ function parseWindowsBinShell(raw) {
       );
   }
 }
-//@ chunk-fq0cr76a.js:779710-779793 esm-fingerprint
+//@ chunk-qg41pqt6.js:781467-781550 esm-fingerprint
 function repoRoot() {
   let here = pathModule_2.dirname(fileURLToPath(import.meta.url));
   return pathModule_2.resolve(here, "..", "..");
 }
-//@ chunk-fq0cr76a.js:779793-779891 esm-fingerprint
+//@ chunk-qg41pqt6.js:781550-781648 esm-fingerprint
 var nodeArchToDir; // deferred: uses repoRoot of its import cycle while loading; runs once the cycle is complete
 var joined;
-deferInit("chunk-fq0cr76a.js:779793", () => {
+deferInit("chunk-qg41pqt6.js:781550", () => {
   nodeArchToDir = {
     x64: "x64",
     arm64: "arm64",
   };
   joined = pathModule_2.join(repoRoot(), "vendor", "srt-win", nodeArchToDir.x64 ?? "x64", "srt-win.exe");
 });
-//@ chunk-fq0cr76a.js:779891-779910 esm-fingerprint
+//@ chunk-qg41pqt6.js:781648-781667 esm-fingerprint
 var SRT_WIN_DISPATCH_ARG1 = "--srt-win";
-//@ chunk-fq0cr76a.js:779910-780278 esm-fingerprint
+//@ chunk-qg41pqt6.js:781667-782035 esm-fingerprint
 function resolveSrtWin(cfg) {
   if (cfg?.path === undefined)
     throw new WindowsSandboxError(
@@ -162,7 +162,7 @@ function resolveSrtWin(cfg) {
     prependArgs: [SRT_WIN_DISPATCH_ARG1],
   };
 }
-//@ chunk-fq0cr76a.js:780278-780855 esm-fingerprint
+//@ chunk-qg41pqt6.js:782035-782612 esm-fingerprint
 function runSrtWin(args, opts = {}) {
   let { exe, prependArgs } = opts.srtWin ?? resolveSrtWin();
   let r = spawnSync(exe, [...prependArgs, ...args], {
@@ -197,12 +197,12 @@ function runSrtWin(args, opts = {}) {
     stderr: (r.stderr ?? "").trim(),
   };
 }
-//@ chunk-fq0cr76a.js:780855-780865 esm-layout
+//@ chunk-qg41pqt6.js:782612-782622 esm-layout
 var SRT_WIN_EXIT_PROFILE_BUSY = 25;
-//@ chunk-fq0cr76a.js:780865-780881 esm-layout
+//@ chunk-qg41pqt6.js:782622-782638 esm-layout
 var SRT_WIN_EXIT_HELD_BY_OTHERS = 22;
 var SRT_WIN_EXIT_GRANT_BLOCKED = 24;
-//@ chunk-fq0cr76a.js:780881-781302 esm-fingerprint
+//@ chunk-qg41pqt6.js:782638-783059 esm-fingerprint
 function describeWindowsHolder(h) {
   let who = `process ${String(h.pid)}`;
   let at = String(h.path);
@@ -222,7 +222,7 @@ function describeWindowsHolder(h) {
       return `${who} holds ${String(h.kind)} on ${at}`;
   }
 }
-//@ chunk-fq0cr76a.js:781302-781501 esm-fingerprint
+//@ chunk-qg41pqt6.js:783059-783258 esm-fingerprint
 function describeWindowsHolders(stdout) {
   let held = [];
   try {
@@ -233,7 +233,7 @@ function describeWindowsHolders(stdout) {
   if (held.length > said.length) said.push(`${held.length - said.length} more`);
   return said.join("; ");
 }
-//@ chunk-fq0cr76a.js:781501-782365 esm-layout
+//@ chunk-qg41pqt6.js:783258-784122 esm-layout
 function throwIfRefusedBesideOthers(args, status, stdout) {
   if (status === SRT_WIN_EXIT_PROFILE_BUSY)
     throw new WindowsSandboxError(
@@ -256,7 +256,7 @@ function throwIfRefusedBesideOthers(args, status, stdout) {
     args[0],
   );
 }
-//@ chunk-fq0cr76a.js:782365-783090 esm-fingerprint
+//@ chunk-qg41pqt6.js:784122-784847 esm-fingerprint
 function runSrtWinAsync(args, opts = {}) {
   let { exe, prependArgs } = opts.srtWin ?? resolveSrtWin();
   let timeoutMs = opts.timeoutMs ?? 15000;
@@ -311,7 +311,7 @@ function runSrtWinAsync(args, opts = {}) {
     });
   });
 }
-//@ chunk-fq0cr76a.js:783090-783399 esm-fingerprint
+//@ chunk-qg41pqt6.js:784847-785156 esm-fingerprint
 function parseSrtWinJson(args, r_2) {
   if (r_2.status !== 0)
     throw new WindowsSandboxError(
@@ -329,15 +329,15 @@ function parseSrtWinJson(args, r_2) {
     );
   }
 }
-//@ chunk-fq0cr76a.js:783399-783437 esm-layout
+//@ chunk-qg41pqt6.js:785156-785194 esm-layout
 function runSrtWinJson(args, opts) {
   return parseSrtWinJson(args, runSrtWin(args, opts));
 }
-//@ chunk-fq0cr76a.js:783437-783487 esm-layout
+//@ chunk-qg41pqt6.js:785194-785244 esm-layout
 async function runSrtWinJsonAsync(args, opts) {
   return parseSrtWinJson(args, await runSrtWinAsync(args, opts));
 }
-//@ chunk-fq0cr76a.js:783487-783733 esm-fingerprint
+//@ chunk-qg41pqt6.js:785244-785490 esm-fingerprint
 function runSrtWinJsonAllowFail(args, opts) {
   let args_2 = runSrtWin(args, opts);
   let json;
@@ -356,13 +356,13 @@ function runSrtWinJsonAllowFail(args, opts) {
     stderr: args_2.stderr,
   };
 }
-//@ chunk-fq0cr76a.js:783733-783813 esm-fingerprint
+//@ chunk-qg41pqt6.js:785490-785570 esm-fingerprint
 function wfpStatusArgs(sublayerGuid) {
   let args = ["wfp", "status"];
   if (sublayerGuid) args.push("--sublayer-guid", sublayerGuid);
   return args;
 }
-//@ chunk-fq0cr76a.js:783813-784007 esm-fingerprint
+//@ chunk-qg41pqt6.js:785570-785764 esm-fingerprint
 function mapWfpStatus(raw) {
   return {
     state: raw.state,
@@ -379,7 +379,7 @@ function mapWfpStatus(raw) {
     }),
   };
 }
-//@ chunk-fq0cr76a.js:784007-784214 esm-fingerprint
+//@ chunk-qg41pqt6.js:785764-785971 esm-fingerprint
 var WINDOWS_SRT_WIN_CAPABILITIES = {
   profileDenyExpansion: "profile-deny-expansion",
   keptGrantHolders: "kept-grant-holders",
@@ -387,24 +387,24 @@ var WINDOWS_SRT_WIN_CAPABILITIES = {
   readDenyExcept: "read-deny-except",
   execHolder: "exec-holder",
 };
-//@ chunk-fq0cr76a.js:784214-784280 esm-fingerprint
+//@ chunk-qg41pqt6.js:785971-786037 esm-fingerprint
 function missingWindowsSrtWinCapability(capabilities) {
   return Object.values(WINDOWS_SRT_WIN_CAPABILITIES).find((c) => !capabilities.includes(c));
 }
-//@ chunk-fq0cr76a.js:784280-784357 esm-fingerprint
+//@ chunk-qg41pqt6.js:786037-786114 esm-fingerprint
 function capabilityList(v) {
   return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
 }
-//@ chunk-fq0cr76a.js:784357-784664 esm-layout
+//@ chunk-qg41pqt6.js:786114-786421 esm-layout
 function windowsSrtWinOutdatedError(capability, why) {
   return new WindowsSandboxError(
     "srt_win_outdated",
     `The srt-win in use is older than this library: it does not report the capability '${capability}', which ${why}. Update srt-win (the one shipped with the program embedding this library, or the package's own) to a build that matches the library. Nothing was granted.`,
   );
 }
-//@ chunk-fq0cr76a.js:784664-784713 esm-fingerprint
+//@ chunk-qg41pqt6.js:786421-786470 esm-fingerprint
 var SECLOGON_STATES = ["ok", "disabled", "missing", "cannot-read"];
-//@ chunk-fq0cr76a.js:784713-785925 esm-fingerprint
+//@ chunk-qg41pqt6.js:786470-787682 esm-fingerprint
 function mapUserStatus(raw) {
   return {
     provisioned: raw.user.exists,
@@ -462,21 +462,21 @@ function mapUserStatus(raw) {
       }),
   };
 }
-//@ chunk-fq0cr76a.js:785925-786273 esm-layout
+//@ chunk-qg41pqt6.js:787682-788030 esm-layout
 function seclogonDisabledMessage(seclogonState) {
   return seclogonState === "missing"
     ? "The Windows Secondary Logon service (seclogon) is not present on this machine; the sandbox cannot start without it."
     : "The Windows Secondary Logon service (seclogon) is disabled; an administrator must set its startup type to Manual (`sc.exe config seclogon start= demand`). The sandbox cannot start without it.";
 }
-//@ chunk-fq0cr76a.js:786273-786283 esm-layout
+//@ chunk-qg41pqt6.js:788030-788040 esm-layout
 var SRT_WIN_EXIT_SECLOGON_DISABLED = 18;
-//@ chunk-fq0cr76a.js:786283-786391 esm-fingerprint
+//@ chunk-qg41pqt6.js:788040-788148 esm-fingerprint
 function seclogonDisabledFrom(r_2, subcommand) {
   if (r_2.status !== SRT_WIN_EXIT_SECLOGON_DISABLED) return;
   let e = parseSrtWinLaunchError(r_2.stderr, subcommand);
   return e?.code === "seclogon_disabled" ? e : undefined;
 }
-//@ chunk-fq0cr76a.js:786391-786566 esm-fingerprint
+//@ chunk-qg41pqt6.js:788148-788323 esm-fingerprint
 async function checkWindowsSandboxStatusAsync(opts = {}) {
   let args = ["status"];
   if (opts.sublayerGuid) args.push("--sublayer-guid", opts.sublayerGuid);
@@ -488,7 +488,7 @@ async function checkWindowsSandboxStatusAsync(opts = {}) {
     wfp: mapWfpStatus(raw.wfp),
   };
 }
-//@ chunk-fq0cr76a.js:786566-786636 esm-fingerprint
+//@ chunk-qg41pqt6.js:788323-788393 esm-fingerprint
 function getWindowsWfpStatus(opts = {}) {
   return mapWfpStatus(
     runSrtWinJson(wfpStatusArgs(opts.sublayerGuid), {
@@ -496,7 +496,7 @@ function getWindowsWfpStatus(opts = {}) {
     }),
   );
 }
-//@ chunk-fq0cr76a.js:786636-786718 esm-fingerprint
+//@ chunk-qg41pqt6.js:788393-788475 esm-fingerprint
 async function getWindowsWfpStatusAsync(opts = {}) {
   return mapWfpStatus(
     await runSrtWinJsonAsync(wfpStatusArgs(opts.sublayerGuid), {
@@ -504,7 +504,7 @@ async function getWindowsWfpStatusAsync(opts = {}) {
     }),
   );
 }
-//@ chunk-fq0cr76a.js:786718-787031 esm-fingerprint
+//@ chunk-qg41pqt6.js:788475-788788 esm-fingerprint
 function windowsInstallFlags(ctx, force) {
   let [lo, hi] = ctx.proxyPortRange ?? DEFAULT_WINDOWS_PROXY_PORT_RANGE;
   let [defLo, defHi] = DEFAULT_WINDOWS_PROXY_PORT_RANGE;
@@ -516,22 +516,22 @@ function windowsInstallFlags(ctx, force) {
     (force ? " --force" : "")
   );
 }
-//@ chunk-fq0cr76a.js:787031-787100 esm-fingerprint
+//@ chunk-qg41pqt6.js:788788-788857 esm-fingerprint
 function windowsInstallCommand(ctx, force) {
   return "npx sandbox-runtime windows-install" + windowsInstallFlags(ctx, force);
 }
-//@ chunk-fq0cr76a.js:787100-787177 esm-fingerprint
+//@ chunk-qg41pqt6.js:788857-788934 esm-fingerprint
 function rejectsAllowLoopback(r) {
   return /unexpected argument '--allow-loopback'/.test(r.stderr);
 }
-//@ chunk-fq0cr76a.js:787177-787415 esm-layout
+//@ chunk-qg41pqt6.js:788934-789172 esm-layout
 function srtWinTooOld(stderr) {
   return new WindowsSandboxError(
     "srt_win_too_old",
     `srt-win is too old for network.allowLocalBinding: it does not know \`--allow-loopback\`. Update srt-win (and re-run the install with it), or unset network.allowLocalBinding. (${stderr.trim()})`,
   );
 }
-//@ chunk-fq0cr76a.js:787415-788158 esm-layout
+//@ chunk-qg41pqt6.js:789172-789915 esm-layout
 var WFP_RESIDUAL_TEXT = {
   "anonymous-egress":
     "a connect to an off-loopback destination made while impersonating the anonymous token is not blocked (no filter is keyed on that token; a sandboxed process that puts it on a thread before creating a socket is not fenced)",
@@ -542,11 +542,11 @@ var WFP_RESIDUAL_TEXT = {
   "lowered-integrity-unprobed":
     "a lowered-integrity copy of the sandbox token could not be set up on this machine, so no connect under it was observed",
 };
-//@ chunk-fq0cr76a.js:788158-788223 esm-fingerprint
+//@ chunk-qg41pqt6.js:789915-789980 esm-fingerprint
 function isWfpResidual(s) {
   return Object.prototype.hasOwnProperty.call(WFP_RESIDUAL_TEXT, s);
 }
-//@ chunk-fq0cr76a.js:788223-791487 esm-fingerprint
+//@ chunk-qg41pqt6.js:789980-793244 esm-fingerprint
 function interpretWindowsWfpVerify(r_2, install = {}) {
   let raw;
   try {
@@ -643,7 +643,7 @@ function interpretWindowsWfpVerify(r_2, install = {}) {
     warnings,
   };
 }
-//@ chunk-fq0cr76a.js:791487-792540 esm-fingerprint
+//@ chunk-qg41pqt6.js:793244-794297 esm-fingerprint
 async function verifyWindowsWfpEgress(opts = {}) {
   let target = opts.target;
   let server;
@@ -686,8 +686,8 @@ async function verifyWindowsWfpEgress(opts = {}) {
       sandboxUser: opts.sandboxUser,
       allowLoopback: opts.allowLoopback,
     });
-    for (let w of result.warnings)
-      logForDebugging_2(`[Sandbox Windows] ${w}`, {
+    for (let warning of result.warnings)
+      logForDebugging_2(`[Sandbox Windows] ${warning}`, {
         level: "warn",
       });
     return result;
@@ -695,7 +695,7 @@ async function verifyWindowsWfpEgress(opts = {}) {
     server?.close();
   }
 }
-//@ chunk-fq0cr76a.js:792540-792609 esm-fingerprint
+//@ chunk-qg41pqt6.js:794297-794366 esm-fingerprint
 function getWindowsSandboxUserStatus(opts = {}) {
   return mapUserStatus(
     runSrtWinJson(["user", "status"], {
@@ -703,7 +703,7 @@ function getWindowsSandboxUserStatus(opts = {}) {
     }),
   );
 }
-//@ chunk-fq0cr76a.js:792609-792691 esm-fingerprint
+//@ chunk-qg41pqt6.js:794366-794448 esm-fingerprint
 async function getWindowsSandboxUserStatusAsync(opts = {}) {
   return mapUserStatus(
     await runSrtWinJsonAsync(["user", "status"], {
@@ -711,7 +711,7 @@ async function getWindowsSandboxUserStatusAsync(opts = {}) {
     }),
   );
 }
-//@ chunk-fq0cr76a.js:792691-792797 esm-fingerprint
+//@ chunk-qg41pqt6.js:794448-794554 esm-fingerprint
 async function windowsTrustCaAsync(caCertPath, opts = {}) {
   let args = await runSrtWinAsync(["user", "trust-ca", caCertPath], {
     timeoutMs: 60000,
@@ -719,7 +719,7 @@ async function windowsTrustCaAsync(caCertPath, opts = {}) {
   });
   checkTrustCaResult(caCertPath, args);
 }
-//@ chunk-fq0cr76a.js:792797-793052 esm-fingerprint
+//@ chunk-qg41pqt6.js:794554-794809 esm-fingerprint
 function checkTrustCaResult(caCertPath, r_2) {
   logForDebugging_2(`[Sandbox Windows] user trust-ca exit=${r_2.status}: ${r_2.stderr || r_2.stdout}`);
   let seclogon = seclogonDisabledFrom(r_2, "user");
@@ -730,13 +730,13 @@ function checkTrustCaResult(caCertPath, r_2) {
       `srt-win user trust-ca '${caCertPath}' failed (exit ${r_2.status}): ${r_2.stderr || r_2.stdout}`,
     );
 }
-//@ chunk-fq0cr76a.js:793052-793182 esm-fingerprint
+//@ chunk-qg41pqt6.js:794809-794939 esm-fingerprint
 function windowsStateDir() {
   let programData = process.env.ProgramData;
   if (!programData) throw Error("ProgramData is not set");
   return pathModule_2.win32.join(programData, "sandbox-runtime");
 }
-//@ chunk-fq0cr76a.js:793182-795427 esm-fingerprint
+//@ chunk-qg41pqt6.js:794939-797223 esm-fingerprint
 async function ensurePersistentWindowsCa(opts = {}) {
   let status =
     opts.status ??
@@ -861,13 +861,13 @@ async function ensurePersistentWindowsCa(opts = {}) {
   };
   return await finish(certPem, keyPem, thumbprint, true);
 }
-//@ chunk-fq0cr76a.js:795427-795441 esm-fingerprint
+//@ chunk-qg41pqt6.js:797223-797237 esm-fingerprint
 var INSTALL_TIMEOUT_MS = 120000;
-//@ chunk-fq0cr76a.js:795441-795479 esm-fingerprint
+//@ chunk-qg41pqt6.js:797237-797275 esm-fingerprint
 function installTimeoutMs(opts) {
   return opts.timeoutMs ?? INSTALL_TIMEOUT_MS;
 }
-//@ chunk-fq0cr76a.js:795479-795808 esm-fingerprint
+//@ chunk-qg41pqt6.js:797275-797604 esm-fingerprint
 function installArgs(opts) {
   let args = ["install"];
   if (opts.sublayerGuid) args.push("--sublayer-guid", opts.sublayerGuid);
@@ -878,7 +878,7 @@ function installArgs(opts) {
   if (opts.force) args.push("--force");
   return args;
 }
-//@ chunk-fq0cr76a.js:795808-796035 esm-fingerprint
+//@ chunk-qg41pqt6.js:797604-797831 esm-fingerprint
 function remapInstallTimeout(error) {
   if (error instanceof WindowsSandboxError && error.code === "srt_win_timeout")
     throw new WindowsSandboxError(
@@ -888,7 +888,7 @@ function remapInstallTimeout(error) {
     );
   throw error;
 }
-//@ chunk-fq0cr76a.js:796035-796957 esm-fingerprint
+//@ chunk-qg41pqt6.js:797831-798753 esm-fingerprint
 function throwOnInstallFailure(r) {
   logForDebugging_2(`[Sandbox Windows] install exit=${r.status}: ${r.stderr || r.stdout}`);
   if (r.status === 0 || r.status === 10) return;
@@ -919,7 +919,7 @@ function throwOnInstallFailure(r) {
       throw new WindowsSandboxError("install_failed", `srt-win install failed (exit ${r.status}): ${out}`);
   }
 }
-//@ chunk-fq0cr76a.js:796957-797387 esm-fingerprint
+//@ chunk-qg41pqt6.js:798753-799183 esm-fingerprint
 async function installWindowsSandboxAsync(opts = {}) {
   let srtWin = opts.srtWin ?? resolveSrtWin();
   let result;
@@ -962,12 +962,12 @@ async function installWindowsSandboxAsync(opts = {}) {
     throwInstallProfileGrantFailure(e);
   }
 }
-//@ chunk-fq0cr76a.js:797387-797438 esm-fingerprint
+//@ chunk-qg41pqt6.js:799183-799234 esm-fingerprint
 var WINDOWS_SERVICE_ACCOUNT_SIDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fq0cr76a.js:797387", () => {
+deferInit("chunk-qg41pqt6.js:799183", () => {
   WINDOWS_SERVICE_ACCOUNT_SIDS = new Set(["S-1-5-18", "S-1-5-19", "S-1-5-20"]);
 });
-//@ chunk-fq0cr76a.js:797438-798181 esm-layout
+//@ chunk-qg41pqt6.js:799234-799977 esm-layout
 function windowsProfileGrantSkipReason(user, opts = {}) {
   if (opts.skipProfileGrant) return "skipProfileGrant was set";
   let how =
@@ -980,7 +980,7 @@ function windowsProfileGrantSkipReason(user, opts = {}) {
     return `the install ran as ${user.realUserSid} in a session that belongs to ${user.sessionUserSid}; granting would open the installing account's profile, not the session owner's; ${how}`;
   return;
 }
-//@ chunk-fq0cr76a.js:798181-798259 esm-fingerprint
+//@ chunk-qg41pqt6.js:799977-800055 esm-fingerprint
 function installProfileGrantSkip(opts, user) {
   let reason = windowsProfileGrantSkipReason(user, opts);
   return reason === undefined
@@ -990,11 +990,11 @@ function installProfileGrantSkip(opts, user) {
         reason,
       };
 }
-//@ chunk-fq0cr76a.js:798259-798743 esm-layout
+//@ chunk-qg41pqt6.js:800055-800539 esm-layout
 function windowsProfileGrantNotice(profileDir) {
   return `Making ${profileDir} readable to sandboxed commands on this machine, except the excluded credential stores (SSH and GPG keys, cloud and browser sign-ins, password managers, registry hives). Readable files include package-manager configuration that can hold feed tokens: .npmrc, pip.ini, NuGet.Config, Maven settings.xml, gradle.properties, .gitconfig. Skip with --skip-profile-grant (skipProfileGrant); undo with \`srt-win profile forget\` (forgetWindowsProfileRead()).`;
 }
-//@ chunk-fq0cr76a.js:798743-798872 esm-fingerprint
+//@ chunk-qg41pqt6.js:800539-800668 esm-fingerprint
 function installProfileGrantOptions(opts, srtWin) {
   return {
     exclude: opts.profileExclude,
@@ -1003,7 +1003,7 @@ function installProfileGrantOptions(opts, srtWin) {
     srtWin,
   };
 }
-//@ chunk-fq0cr76a.js:798872-799483 esm-fingerprint
+//@ chunk-qg41pqt6.js:800668-801279 esm-fingerprint
 function throwInstallProfileGrantFailure(error) {
   let cause = error;
   if (
@@ -1023,7 +1023,7 @@ No session starts until it is complete. Run the install again, or grantWindowsPr
     "profile",
   );
 }
-//@ chunk-fq0cr76a.js:799483-799931 esm-fingerprint
+//@ chunk-qg41pqt6.js:801279-801727 esm-fingerprint
 function uninstallWindowsSandbox(opts = {}) {
   let args = ["uninstall"];
   if (opts.sublayerGuid) args.push("--sublayer-guid", opts.sublayerGuid);
@@ -1045,7 +1045,7 @@ function uninstallWindowsSandbox(opts = {}) {
     );
   return {};
 }
-//@ chunk-fq0cr76a.js:799931-800550 esm-fingerprint
+//@ chunk-qg41pqt6.js:801727-802346 esm-fingerprint
 function expandWindowsFsPaths(patterns, opts) {
   let out = new Set();
   for (let entry of patterns) {
@@ -1101,16 +1101,16 @@ function expandWindowsFsPaths(patterns, opts) {
   }
   return [...out];
 }
-//@ chunk-fq0cr76a.js:800550-800620 esm-fingerprint
+//@ chunk-qg41pqt6.js:802346-802416 esm-fingerprint
 function isUnprobedWindowsPath(p) {
   return isUncPath(p) || /^[\\/]{2}[?.][\\/](?![a-z]:)/i.test(p);
 }
-//@ chunk-fq0cr76a.js:800620-800684 esm-fingerprint
+//@ chunk-qg41pqt6.js:802416-802480 esm-fingerprint
 function isNotFoundErrorCode(error) {
   let code = error?.code;
   return code === "ENOENT" || code === "ENOTDIR";
 }
-//@ chunk-fq0cr76a.js:800684-800873 esm-fingerprint
+//@ chunk-qg41pqt6.js:802480-802669 esm-fingerprint
 function resolveWindowsPath(p) {
   if (isUnprobedWindowsPath(p))
     return {
@@ -1132,11 +1132,11 @@ function resolveWindowsPath(p) {
         };
   }
 }
-//@ chunk-fq0cr76a.js:800873-800907 esm-layout
+//@ chunk-qg41pqt6.js:802669-802703 esm-layout
 function windowsPathKey(p) {
   return windowsPathKeyOf(p, resolveWindowsPath(p));
 }
-//@ chunk-fq0cr76a.js:800907-801028 esm-fingerprint
+//@ chunk-qg41pqt6.js:802703-802824 esm-fingerprint
 function windowsPathKeyOf(p, resolved) {
   return normalizeCaseForComparison(
     pathModule_2.win32
@@ -1145,7 +1145,7 @@ function windowsPathKeyOf(p, resolved) {
       .replace(/\/+$/, ""),
   );
 }
-//@ chunk-fq0cr76a.js:801028-801158 esm-fingerprint
+//@ chunk-qg41pqt6.js:802824-802954 esm-fingerprint
 function coveringWindowsPath(dirs) {
   let keys = dirs.map(windowsPathKey);
   return (p) => {
@@ -1155,7 +1155,7 @@ function coveringWindowsPath(dirs) {
     return covering < 0 ? undefined : dirs[covering];
   };
 }
-//@ chunk-fq0cr76a.js:801158-801455 esm-fingerprint
+//@ chunk-qg41pqt6.js:802954-803251 esm-fingerprint
 function windowsGrantsBeneathDenies(grants, denies) {
   if (grants.length === 0 || denies.length === 0) return [];
   let denyKeys = denies.map(windowsPathKey);
@@ -1172,7 +1172,7 @@ function windowsGrantsBeneathDenies(grants, denies) {
   }
   return [...out.values()];
 }
-//@ chunk-fq0cr76a.js:801455-802192 esm-fingerprint
+//@ chunk-qg41pqt6.js:803251-803988 esm-fingerprint
 function rankWindowsFsAccess(lists) {
   let credentialDenyOver = coveringWindowsPath(lists.credentialDeny);
   let writeDenyOver = coveringWindowsPath(lists.denyWrite);
@@ -1213,11 +1213,11 @@ function rankWindowsFsAccess(lists) {
     denyWrite: [...new Set([...lists.denyWrite, ...heldWrite.filter((p) => writeDenyOver(p) !== undefined)])],
   };
 }
-//@ chunk-fq0cr76a.js:802192-802227 esm-fingerprint
+//@ chunk-qg41pqt6.js:803988-804023 esm-fingerprint
 function parseWindowsSandboxError(stderr) {
   return parseSrtWinLaunchError(stderr, "exec");
 }
-//@ chunk-fq0cr76a.js:802227-803141 esm-fingerprint
+//@ chunk-qg41pqt6.js:804023-804937 esm-fingerprint
 function parseSrtWinLaunchError(stderr, subcommand) {
   for (let line of stderr.split(/\r?\n/)) {
     let t = line.trim();
@@ -1270,9 +1270,9 @@ function parseSrtWinLaunchError(stderr, subcommand) {
   }
   return;
 }
-//@ chunk-fq0cr76a.js:803141-803231 esm-fingerprint
+//@ chunk-qg41pqt6.js:804937-805027 esm-fingerprint
 var WINDOWS_ACL_GRANT_RELEASED_STATUSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fq0cr76a.js:803141", () => {
+deferInit("chunk-qg41pqt6.js:804937", () => {
   WINDOWS_ACL_GRANT_RELEASED_STATUSES = new Set([
     "revoked",
     "stillHeld",
@@ -1283,7 +1283,7 @@ deferInit("chunk-fq0cr76a.js:803141", () => {
     "missing",
   ]);
 });
-//@ chunk-fq0cr76a.js:803231-803478 esm-fingerprint
+//@ chunk-qg41pqt6.js:805027-805274 esm-fingerprint
 function windowsAclGrantReleased(o) {
   if (typeof o !== "object" || o === null) return false;
   let { path: p, status } = o;
@@ -1297,7 +1297,7 @@ function windowsAclGrantReleased(o) {
     return e.code === "ENOENT";
   }
 }
-//@ chunk-fq0cr76a.js:803478-803943 esm-fingerprint
+//@ chunk-qg41pqt6.js:805274-805739 esm-fingerprint
 function restoreWindowsAcl(opts) {
   let holder = opts.holderPid ?? process.pid;
   try {
@@ -1323,11 +1323,11 @@ function restoreWindowsAcl(opts) {
     return;
   }
 }
-//@ chunk-fq0cr76a.js:803943-804041 esm-fingerprint
+//@ chunk-qg41pqt6.js:805739-805837 esm-fingerprint
 function allowProfileExclusionArgs(opts) {
   return (opts.allowProfileExclusions ?? []).flatMap((p) => ["--allow-profile-exclusion", p]);
 }
-//@ chunk-fq0cr76a.js:804041-804616 esm-fingerprint
+//@ chunk-qg41pqt6.js:805837-806412 esm-fingerprint
 async function grantWindowsAclPersistent(opts) {
   let holder = opts.holderPid ?? process.pid;
   let stdin = JSON.stringify({
@@ -1362,7 +1362,7 @@ async function grantWindowsAclPersistent(opts) {
         `: ${r.stderr || r.stdout}`,
     );
 }
-//@ chunk-fq0cr76a.js:804616-805058 esm-fingerprint
+//@ chunk-qg41pqt6.js:806412-806854 esm-fingerprint
 function revokeWindowsAclChecked(opts) {
   let holder = opts.holderPid ?? process.pid;
   let result;
@@ -1393,7 +1393,7 @@ function revokeWindowsAclChecked(opts) {
   }
   return result;
 }
-//@ chunk-fq0cr76a.js:805058-805255 esm-fingerprint
+//@ chunk-qg41pqt6.js:806854-807051 esm-fingerprint
 function windowsAclRevokeResult(exitedZero, json, stderr) {
   let outcomes = Array.isArray(json) ? json : undefined;
   let unreleased = (outcomes ?? []).filter((o) => !windowsAclGrantReleased(o));
@@ -1404,12 +1404,12 @@ function windowsAclRevokeResult(exitedZero, json, stderr) {
     detail: stderr.trim() || undefined,
   };
 }
-//@ chunk-fq0cr76a.js:805255-805488 esm-fingerprint
+//@ chunk-qg41pqt6.js:807051-807284 esm-fingerprint
 var PROFILE_GRANT_STATES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PROFILE_PATH_KINDS;
 var WINDOWS_PROFILE_READ_ENV_VARS;
 var WINDOWS_PROFILE_RECORD_VERSION;
-deferInit("chunk-fq0cr76a.js:805255", () => {
+deferInit("chunk-qg41pqt6.js:807051", () => {
   PROFILE_GRANT_STATES = new Set(["none", "current", "outdated", "incomplete", "unknown"]);
   PROFILE_PATH_KINDS = new Set(["container", "granted", "file", "denied"]);
   WINDOWS_PROFILE_READ_ENV_VARS = [
@@ -1422,11 +1422,11 @@ deferInit("chunk-fq0cr76a.js:805255", () => {
   ];
   WINDOWS_PROFILE_RECORD_VERSION = 1;
 });
-//@ chunk-fq0cr76a.js:805488-805579 esm-fingerprint
+//@ chunk-qg41pqt6.js:807284-807375 esm-fingerprint
 function stringList(v) {
   return Array.isArray(v) && v.every((x) => typeof x === "string" && x !== "") ? v : undefined;
 }
-//@ chunk-fq0cr76a.js:805579-805930 esm-fingerprint
+//@ chunk-qg41pqt6.js:807375-807726 esm-fingerprint
 function profileStatusProblem(raw) {
   if (raw.record_version !== WINDOWS_PROFILE_RECORD_VERSION)
     return `srt-win reports record format ${JSON.stringify(raw.record_version)}; this library reads format ${WINDOWS_PROFILE_RECORD_VERSION}`;
@@ -1435,7 +1435,7 @@ function profileStatusProblem(raw) {
   if (!stringList(raw.ungranted_only)) return "the recorded grant carries no list of ungranted directories";
   return;
 }
-//@ chunk-fq0cr76a.js:805930-806753 esm-fingerprint
+//@ chunk-qg41pqt6.js:807726-808549 esm-fingerprint
 function mapProfileStatus(raw) {
   let state = PROFILE_GRANT_STATES.has(raw.state ?? "") ? raw.state : "unknown";
   let reason = raw.reason;
@@ -1482,7 +1482,7 @@ function mapProfileStatus(raw) {
     }),
   };
 }
-//@ chunk-fq0cr76a.js:806753-806925 esm-fingerprint
+//@ chunk-qg41pqt6.js:808549-808721 esm-fingerprint
 function getWindowsProfileReadStatus(opts = {}) {
   let args = ["profile", "status"];
   if (opts.paths) args.push("--paths");
@@ -1493,7 +1493,7 @@ function getWindowsProfileReadStatus(opts = {}) {
   if (raw.state === "in_progress") throwIfRefusedBesideOthers(args, SRT_WIN_EXIT_PROFILE_BUSY, "");
   return mapProfileStatus(raw);
 }
-//@ chunk-fq0cr76a.js:806925-807110 esm-fingerprint
+//@ chunk-qg41pqt6.js:808721-808906 esm-fingerprint
 async function getWindowsProfileReadStatusAsync(opts = {}) {
   let args = ["profile", "status"];
   if (opts.paths) args.push("--paths");
@@ -1504,9 +1504,9 @@ async function getWindowsProfileReadStatusAsync(opts = {}) {
   if (raw.state === "in_progress") throwIfRefusedBesideOthers(args, SRT_WIN_EXIT_PROFILE_BUSY, "");
   return mapProfileStatus(raw);
 }
-//@ chunk-fq0cr76a.js:807110-807125 esm-layout
+//@ chunk-qg41pqt6.js:808906-808921 esm-layout
 var PROFILE_GRANT_TIMEOUT_MS = 1800000;
-//@ chunk-fq0cr76a.js:807125-807541 esm-fingerprint
+//@ chunk-qg41pqt6.js:808921-809337 esm-fingerprint
 function grantItems(v) {
   return Array.isArray(v)
     ? v.flatMap((i) => {
@@ -1534,7 +1534,7 @@ function grantItems(v) {
       })
     : [];
 }
-//@ chunk-fq0cr76a.js:807541-808509 esm-fingerprint
+//@ chunk-qg41pqt6.js:809337-810310 esm-fingerprint
 async function grantWindowsProfileRead(opts = {}) {
   let { exe, prependArgs } = opts.srtWin ?? resolveSrtWin();
   let args = profileGrantArgs(opts);
@@ -1600,14 +1600,14 @@ async function grantWindowsProfileRead(opts = {}) {
   });
   return profileGrantResult(args, r);
 }
-//@ chunk-fq0cr76a.js:808509-808669 esm-fingerprint
+//@ chunk-qg41pqt6.js:810310-810470 esm-fingerprint
 function profileGrantArgs(opts) {
   let args = ["profile", "grant", "--json"];
   for (let e of opts.exclude ?? []) args.push("--exclude", e);
   if (opts.replaceExclusions) args.push("--replace-excludes");
   return args;
 }
-//@ chunk-fq0cr76a.js:808669-809336 esm-fingerprint
+//@ chunk-qg41pqt6.js:810470-811137 esm-fingerprint
 function profileGrantResult(args, r_2) {
   logForDebugging_2(`[Sandbox Windows] profile grant exit=${r_2.status}: ${r_2.stderr.slice(-2000)}`);
   if (r_2.status !== 0)
@@ -1637,7 +1637,7 @@ function profileGrantResult(args, r_2) {
     elapsedMs: raw.elapsed_ms,
   };
 }
-//@ chunk-fq0cr76a.js:809336-809457 esm-fingerprint
+//@ chunk-qg41pqt6.js:811137-811258 esm-fingerprint
 async function forgetWindowsProfileReadAsync(opts = {}) {
   let r = await runSrtWinAsync(["profile", "forget", "--json"], {
     timeoutMs: opts.timeoutMs ?? PROFILE_GRANT_TIMEOUT_MS,
@@ -1645,7 +1645,7 @@ async function forgetWindowsProfileReadAsync(opts = {}) {
   });
   profileForgetResult(r);
 }
-//@ chunk-fq0cr76a.js:809457-809728 esm-fingerprint
+//@ chunk-qg41pqt6.js:811258-811529 esm-fingerprint
 function profileForgetResult(r) {
   logForDebugging_2(`[Sandbox Windows] profile forget exit=${r.status}: ${r.stderr || r.stdout}`);
   if (r.status !== 0)
@@ -1655,17 +1655,17 @@ function profileForgetResult(r) {
       "profile",
     );
 }
-//@ chunk-fq0cr76a.js:809728-809808 esm-fingerprint
+//@ chunk-qg41pqt6.js:811529-811609 esm-fingerprint
 function profilePathKey(p) {
   return stripExtendedPathPrefix(p).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 }
-//@ chunk-fq0cr76a.js:809808-809912 esm-fingerprint
+//@ chunk-qg41pqt6.js:811609-811713 esm-fingerprint
 function exclusionComponentMatches(pattern, name) {
   if (pattern === "*") return true;
   if (pattern.endsWith("*")) return name.startsWith(pattern.slice(0, -1));
   return pattern === name;
 }
-//@ chunk-fq0cr76a.js:809912-810414 esm-fingerprint
+//@ chunk-qg41pqt6.js:811713-812215 esm-fingerprint
 function exclusionMatchedBeneath(dir, rest, top = true) {
   if (rest.length === 0) return "match";
   let entries;
@@ -1697,7 +1697,7 @@ function exclusionMatchedBeneath(dir, rest, top = true) {
   }
   return unexamined ?? "none";
 }
-//@ chunk-fq0cr76a.js:810414-811659 esm-fingerprint
+//@ chunk-qg41pqt6.js:812215-813471 esm-fingerprint
 function windowsProfileExclusionConflicts(paths, grant, opts = {}) {
   if (paths.length === 0) return [];
   let access = opts.write ? "write" : "read";
@@ -1770,9 +1770,9 @@ function windowsProfileExclusionConflicts(paths, grant, opts = {}) {
   }
   return out;
 }
-//@ chunk-fq0cr76a.js:811659-811692 esm-fingerprint
+//@ chunk-qg41pqt6.js:813471-813504 esm-fingerprint
 var WINDOWS_LOOPBACK_NO_PROXY = "localhost,127.0.0.1,::1";
-//@ chunk-fq0cr76a.js:811692-813329 esm-fingerprint
+//@ chunk-qg41pqt6.js:813504-815141 esm-fingerprint
 function wrapCommandWithSandboxWindows(p) {
   let { exe, prependArgs } = p.srtWin ?? resolveSrtWin();
   let generated = envListToObject(
@@ -1838,7 +1838,7 @@ function wrapCommandWithSandboxWindows(p) {
     env,
   };
 }
-//@ chunk-fq0cr76a.js:813329-813427 esm-fingerprint
+//@ chunk-qg41pqt6.js:815141-815239 esm-fingerprint
 var WINDOWS_PROXY_NAME_SPELLING = [
   "http_proxy",
   "https_proxy",
@@ -1848,7 +1848,7 @@ var WINDOWS_PROXY_NAME_SPELLING = [
   "grpc_proxy",
   "RSYNC_PROXY",
 ];
-//@ chunk-fq0cr76a.js:813427-813645 esm-fingerprint
+//@ chunk-qg41pqt6.js:815239-815457 esm-fingerprint
 function mergeWindowsEnv(...layers) {
   let byName = new Map();
   for (let layer of layers)
@@ -1860,7 +1860,7 @@ function mergeWindowsEnv(...layers) {
     }
   return Object.fromEntries(byName.values());
 }
-//@ chunk-fq0cr76a.js:813645-813763 esm-fingerprint
+//@ chunk-qg41pqt6.js:815457-815575 esm-fingerprint
 function envListToObject(list) {
   let out = {};
   for (let entry of list) {
@@ -1870,7 +1870,7 @@ function envListToObject(list) {
   }
   return out;
 }
-//@ chunk-fq0cr76a.js:813763-814516 esm-layout
+//@ chunk-qg41pqt6.js:815575-816328 esm-layout
 function windowsSetupVersionMismatch(us, sublayerGuid) {
   if (us.setupVersion === undefined || us.markerVersion === us.setupVersion) return;
   if (us.markerVersion !== undefined && us.markerVersion > us.setupVersion) {
@@ -1892,7 +1892,7 @@ Nothing is granted or run until then.`;
     "Nothing is granted or run until then."
   );
 }
-//@ chunk-fq0cr76a.js:814516-814675 esm-fingerprint
+//@ chunk-qg41pqt6.js:816328-816487 esm-fingerprint
 function windowsInstallCommandLines(flags) {
   return (
     `  npx sandbox-runtime windows-install${flags}
@@ -1902,7 +1902,7 @@ function windowsInstallCommandLines(flags) {
 `
   );
 }
-//@ chunk-fq0cr76a.js:814675-814935 esm-layout
+//@ chunk-qg41pqt6.js:816487-816747 esm-layout
 function windowsInstallInstructions(install, force = false) {
   return (
     `Windows sandbox needs a one-time install (one UAC prompt):
@@ -1920,7 +1920,7 @@ function windowsInstallInstructions(install, force = false) {
     "No logout is needed: the WFP filter keys on the dedicated `srt-sandbox` user's SID, so your network is unaffected."
   );
 }
-//@ chunk-fq0cr76a.js:814935-815036 esm-fingerprint
+//@ chunk-qg41pqt6.js:816747-816848 esm-fingerprint
 function settle(fn) {
   try {
     return {
@@ -1934,7 +1934,7 @@ function settle(fn) {
     };
   }
 }
-//@ chunk-fq0cr76a.js:815036-816931 esm-fingerprint
+//@ chunk-qg41pqt6.js:816848-818743 esm-fingerprint
 function interpretDependencyProbes(install, user, getWfp) {
   let { sublayerGuid, allowLoopback } = install;
   let errors = [];
@@ -2007,7 +2007,7 @@ function interpretDependencyProbes(install, user, getWfp) {
   } else if (fenced && ws.allowLoopback) warnings.push(WINDOWS_ALLOW_LOOPBACK_EFFECT);
   return result();
 }
-//@ chunk-fq0cr76a.js:816931-817165 esm-fingerprint
+//@ chunk-qg41pqt6.js:818743-818977 esm-fingerprint
 function checkWindowsDependencies(opts = {}) {
   let srtWin;
   try {
@@ -2035,7 +2035,7 @@ function checkWindowsDependencies(opts = {}) {
       ),
   );
 }
-//@ chunk-fq0cr76a.js:817165-817431 esm-fingerprint
+//@ chunk-qg41pqt6.js:818977-819243 esm-fingerprint
 async function checkWindowsDependenciesAsync(opts = {}) {
   let srtWin;
   try {
@@ -2060,17 +2060,19 @@ async function checkWindowsDependenciesAsync(opts = {}) {
 }
 export {
   checkWindowsSandboxStatusAsync,
-  windowsSetupVersionMismatch,
-  WINDOWS_ALLOW_LOOPBACK_EFFECT,
-  installWindowsSandboxAsync,
+  forgetWindowsProfileReadAsync,
   WindowsSandboxError,
-  ensurePersistentWindowsCa,
+  uninstallWindowsSandbox,
+  WINDOWS_LOOPBACK_PROBE_PORT,
   windowsStateDir,
   parseWindowsSandboxError,
   getWindowsSandboxUserStatusAsync,
   expandWindowsFsPaths,
-  WINDOWS_LOOPBACK_PROBE_PORT,
   getWindowsProfileReadStatusAsync,
+  windowsSetupVersionMismatch,
+  WINDOWS_ALLOW_LOOPBACK_EFFECT,
+  installWindowsSandboxAsync,
+  ensurePersistentWindowsCa,
   missingWindowsSrtWinCapability,
   getWindowsProfileReadStatus,
   windowsSrtWinOutdatedError,
@@ -2088,6 +2090,4 @@ export {
   windowsGrantsBeneathDenies,
   parseWindowsBinShell,
   SRT_WIN_DISPATCH_ARG1,
-  forgetWindowsProfileReadAsync,
-  uninstallWindowsSandbox,
 };

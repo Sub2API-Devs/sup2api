@@ -3,10 +3,10 @@
  *
  * LogUpdate：把新帧与上一帧逐行逐格 diff 成 Patch 列表（光标移动、样式切换、超链接、清行、滚动区域提示）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/log-update.ts
- * pieces: chunk-bzr73sfg.js (12)
- * attribution: fingerprint 10, callgraph-witnessed 2
+ * pieces: chunk-2avr6cej.js (12), chunk-n6w10qzg.js (1)
+ * attribution: fingerprint 11, callgraph-witnessed 2
  */
 import {
   eraseToEndOfLine,
@@ -30,20 +30,21 @@ import { LINK_END, link } from "./termio/osc.js";
 import { logForDebugging } from "../utils/debug.js";
 import { bunStringWidth } from "./stringWidth.js";
 import { repeatString } from "../utils/stringUtils.js";
+import { jsonStringify } from "../utils/slowOperations.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bzr73sfg.js:253719-253776 fingerprint (2.1.88 match: renderFrame, 0.771)
+//@ chunk-2avr6cej.js:253395-253452 fingerprint (2.1.88 match: renderFrame, 0.77)
 /**
  * 帧内容高度是否已达到/超过视口高度（主屏模式下内容会进入回滚区）。
  */
 function isFrameOverflowing(frame) {
   return frame.screen.height >= frame.viewport.height;
 }
-//@ chunk-bzr73sfg.js:258955-259050 fingerprint (2.1.88 match: CARRIAGE_RETURN, 0.73)
+//@ chunk-2avr6cej.js:258631-258726 fingerprint (2.1.88 match: CARRIAGE_RETURN, 0.732)
 var CARRIAGE_RETURN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NEWLINE;
 var ERASE_TO_EOL_PATCH;
-deferInit("chunk-bzr73sfg.js:258955", () => {
+deferInit("chunk-2avr6cej.js:258631", () => {
   CARRIAGE_RETURN = {
     type: "carriageReturn",
   };
@@ -57,25 +58,20 @@ deferInit("chunk-bzr73sfg.js:258955", () => {
     content: eraseToEndOfLine(),
   };
 });
-//@ chunk-bzr73sfg.js:259050-263509 fingerprint (2.1.88 match: LogUpdate, 0.962)
+//@ chunk-2avr6cej.js:258726-263090 fingerprint (2.1.88 match: LogUpdate, 0.961)
 /**
  * 增量输出：render(prev, next, altScreen, decstbmAllowed) 比较两帧屏幕，产出 Patch 列表（stdout 文字、styleStr、hyperlink、cursorMove/cursorTo、clear、clearTerminal…）。非 TTY 时整帧输出；视口变小/宽度变化/内容缩到视口以内等情况整屏重置（clearTerminal，会闪）；有 scrollHint 且允许 DECSTBM 时先用滚动区域把旧帧行上移/下移再 diff；diff 时跳过宽字符占位格，行尾空白用 EL 清除；改动落在已滚入回滚区的行上时只能整屏重置。慢于 50ms 记日志。
  */
 class LogUpdate {
   options;
-  state;
   constructor(options) {
     this.options = options;
-    this.state = {
-      previousOutput: "",
-    };
   }
   renderPreviousOutput_DEPRECATED(prevFrame) {
     if (!this.options.isTTY) return [NEWLINE];
     return this.getRenderOpsForDone(prevFrame);
   }
   reset() {
-    this.state.previousOutput = "";
     this.forceReset = false;
     this.scrolledOutRows = new WeakMap();
   }
@@ -129,7 +125,6 @@ class LogUpdate {
     ];
   }
   getRenderOpsForDone(prev) {
-    this.state.previousOutput = "";
     if (!prev.cursor.visible)
       return [
         {
@@ -380,7 +375,7 @@ class LogUpdate {
     return scrollPatch.length > 0 ? [...scrollPatch, ...screen.diff] : screen.diff;
   }
 }
-//@ chunk-bzr73sfg.js:263509-263592 fingerprint (2.1.88 match: transitionHyperlink, 1)
+//@ chunk-2avr6cej.js:263090-263173 fingerprint (2.1.88 match: transitionHyperlink, 1)
 /**
  * 超链接切换：目标与当前不同时追加 hyperlink 补丁（OSC 8），返回新的当前链接。
  */
@@ -394,7 +389,7 @@ function transitionHyperlink(diff, current, target) {
   }
   return current;
 }
-//@ chunk-bzr73sfg.js:263592-263692 fingerprint (2.1.88 match: transitionStyle, 1)
+//@ chunk-2avr6cej.js:263173-263273 fingerprint (2.1.88 match: transitionStyle, 1)
 /**
  * 样式切换：追加 StylePool.transition 给出的 SGR 串，返回目标 styleId。
  */
@@ -407,7 +402,7 @@ function transitionStyle(diff, stylePool, currentId, targetId) {
     });
   return targetId;
 }
-//@ chunk-bzr73sfg.js:263692-263781 callgraph-witnessed (2.1.88 match: readLine, 1)
+//@ chunk-2avr6cej.js:263273-263362 callgraph-witnessed (2.1.88 match: readLine, 1)
 /**
  * 读屏幕一行的纯文本（去尾部空白），用于整屏重置的调试信息。
  */
@@ -416,7 +411,7 @@ function readLine(screen, y) {
   for (let x = 0; x < screen.width; x++) line += charInCellAt(screen, x, y) ?? " ";
   return line.trimEnd();
 }
-//@ chunk-bzr73sfg.js:263781-264043 fingerprint (2.1.88 match: fullResetSequence_CAUSES_FLICKER, 0.766)
+//@ chunk-2avr6cej.js:263362-263624 fingerprint (2.1.88 match: fullResetSequence_CAUSES_FLICKER, 0.766)
 /**
  * 整屏重置：先发 clearTerminal（带原因 resize/offscreen/clear），再从 startY 起完整重画帧（主屏时只画最后一屏可见部分）。会闪烁，尽量避免。
  */
@@ -443,7 +438,7 @@ function fullResetSequence_CAUSES_FLICKER(frame, reason, stylePool, altScreen, s
     ...screen.diff,
   ];
 }
-//@ chunk-bzr73sfg.js:264043-264620 fingerprint (2.1.88 match: renderFrameSlice, 1)
+//@ chunk-2avr6cej.js:263624-264201 fingerprint (2.1.88 match: renderFrameSlice, 1)
 /**
  * 把帧的 [startY,endY) 行完整写进虚拟屏幕：逐格移动光标、切换链接与样式、写字符（跳过空白），每行结束复位样式并换行。
  */
@@ -496,7 +491,7 @@ function renderFrameSlice(screen, frame, startY, endY, stylePool) {
   transitionHyperlink(screen.diff, currentHyperlink, undefined);
   return screen;
 }
-//@ chunk-bzr73sfg.js:264620-265125 fingerprint (2.1.88 match: writeCellWithStyleStr, 1)
+//@ chunk-2avr6cej.js:264201-264706 fingerprint (2.1.88 match: writeCellWithStyleStr, 1)
 /**
  * 写一个格：宽字符放不下行尾则放弃；终端可能把某些 emoji（U+1FA70–1FAFF、带 VS16 的序列）算成 1 列时，先在后一列写空格占位、写完再 cursorTo 回正确列（宽度补偿）；更新虚拟光标。
  */
@@ -544,7 +539,7 @@ function writeCellWithStyleStr(screen, cell, styleStr) {
   } else screen.cursor.x = cursorX + glyphWidth;
   return true;
 }
-//@ chunk-bzr73sfg.js:265125-265309 callgraph-witnessed (2.1.88 match: moveCursorTo, 0.545)
+//@ chunk-2avr6cej.js:264706-264890 callgraph-witnessed (2.1.88 match: moveCursorTo, 0.545)
 /**
  * 把虚拟光标移到 (x,y)：换行或光标在行尾时用 CR + 相对移动，同一行用 CHA（cursorTo）。
  */
@@ -565,7 +560,7 @@ function moveCursorTo(screen, targetX, targetY) {
   cursor.x = targetX;
   cursor.y = targetY;
 }
-//@ chunk-bzr73sfg.js:265309-265513 fingerprint (2.1.88 match: needsWidthCompensation, 1)
+//@ chunk-2avr6cej.js:264890-265094 fingerprint (2.1.88 match: needsWidthCompensation, 1)
 /**
  * 该字符是否需要宽度补偿（终端与 Unicode 宽度表可能不一致的 emoji：Symbols and Pictographs Extended-A、带 U+FE0F 的序列）。
  */
@@ -578,7 +573,7 @@ function needsWidthCompensation(char) {
   }
   return false;
 }
-//@ chunk-bzr73sfg.js:265513-265713 fingerprint (2.1.88 match: VirtualScreen, 0.916)
+//@ chunk-2avr6cej.js:265094-265294 fingerprint (2.1.88 match: VirtualScreen, 0.917)
 /**
  * 虚拟屏幕：记录光标位置和累计的 Patch；txn(fn) 以当前光标为输入，追加补丁并移动光标。
  */
@@ -599,4 +594,21 @@ class VirtualScreen {
     this.cursor.y += next.dy;
   }
 }
-export { LogUpdate, isFrameOverflowing };
+//@ chunk-n6w10qzg.js:6866-7074 fingerprint (2.1.88 match: NEWLINE, 1)
+function NEWLINE_2(toolUseResult) {
+  if (toolUseResult === undefined || toolUseResult === null) return "";
+  if (typeof toolUseResult === "string") return toolUseResult;
+  if (
+    typeof toolUseResult === "object" &&
+    "stdout" in toolUseResult &&
+    typeof toolUseResult.stdout === "string" &&
+    toolUseResult.stdout !== ""
+  )
+    return toolUseResult.stdout;
+  try {
+    return jsonStringify(toolUseResult);
+  } catch {
+    return "";
+  }
+}
+export { LogUpdate, isFrameOverflowing, NEWLINE_2 };

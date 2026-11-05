@@ -3,9 +3,9 @@
  *
  * 已发布模型目录缓存（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s93zf4b4.js (28)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7nvdrrtw.js (28)
  * attribution: placement 28
  */
 import { join } from "path";
@@ -62,13 +62,13 @@ import { env } from "../env.js";
 import { isDiskless } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s93zf4b4.js:788-998 placement
+//@ chunk-7nvdrrtw.js:788-998 placement
 var CACHE_VERSION; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var CATALOG_TTL_MS;
 var TTL_JITTER;
 var CATALOG_SOURCES;
 var cachedCatalogSchema;
-deferInit("chunk-s93zf4b4.js:788", () => {
+deferInit("chunk-7nvdrrtw.js:788", () => {
   CACHE_VERSION = 2;
   CATALOG_TTL_MS = 3600000;
   TTL_JITTER = 0.1;
@@ -87,23 +87,23 @@ deferInit("chunk-s93zf4b4.js:788", () => {
     }),
   );
 });
-//@ chunk-s93zf4b4.js:998-1051 placement
+//@ chunk-7nvdrrtw.js:998-1051 placement
 /**
  * 某作用域的已发布目录缓存文件路径。
  */
 function publishedCatalogCachePath(cacheKey) {
   return join(modelCatalogCacheDir(), `published-${cacheKey}.json`);
 }
-//@ chunk-s93zf4b4.js:1051-1098 placement
+//@ chunk-7nvdrrtw.js:1051-1098 placement
 function publishedCatalogByKey() {
   return getProviderState().publishedCatalogByKey;
 }
-//@ chunk-s93zf4b4.js:1098-1119 placement
+//@ chunk-7nvdrrtw.js:1098-1119 placement
 var MAX_CACHE_FILE_BYTES; // deferred: uses CATALOG_SCHEMA_VERSION (./modelCatalog/servedCatalog.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s93zf4b4.js:1098", () => {
+deferInit("chunk-7nvdrrtw.js:1098", () => {
   MAX_CACHE_FILE_BYTES = CATALOG_SCHEMA * 3 + MAX_DOCUMENT_CHARS + 4096;
 });
-//@ chunk-s93zf4b4.js:1119-1575 placement
+//@ chunk-7nvdrrtw.js:1119-1575 placement
 async function readPublishedCatalogCache(cacheKey) {
   let cached = publishedCatalogByKey().get(cacheKey);
   if (cached !== undefined) return cached ?? undefined;
@@ -133,7 +133,7 @@ async function readPublishedCatalogCache(cacheKey) {
   });
   return parsed.data;
 }
-//@ chunk-s93zf4b4.js:1575-1651 placement
+//@ chunk-7nvdrrtw.js:1575-1651 placement
 /**
  * 清除某作用域的已发布目录缓存（内存与磁盘）。
  */
@@ -143,14 +143,14 @@ async function clearPublishedCatalogCache(cacheKey) {
     await maskStorage().delete(publishedCatalogCachePath(cacheKey));
   } catch {}
 }
-//@ chunk-s93zf4b4.js:1651-1683 placement
+//@ chunk-7nvdrrtw.js:1651-1683 placement
 /**
  * 只清内存中的缓存条目。
  */
 function forgetPublishedCatalogCache(cacheKey) {
   publishedCatalogByKey().set(cacheKey, null);
 }
-//@ chunk-s93zf4b4.js:1683-1881 placement
+//@ chunk-7nvdrrtw.js:1683-1881 placement
 async function writePublishedCatalogCache(cacheKey, entry) {
   await storePublishedCatalog(cacheKey, entry, {
     verified: true,
@@ -163,7 +163,7 @@ async function writePublishedCatalogCache(cacheKey, entry) {
     logForDebugging(`[publishedCatalog] cache write failed: ${getErrnoCode(error) ?? "unknown"}`);
   }
 }
-//@ chunk-s93zf4b4.js:1881-2008 placement
+//@ chunk-7nvdrrtw.js:1881-2008 placement
 /**
  * 保存已发布目录缓存条目，验证过且非托管根时登记各界面，并应用目录。
  */
@@ -173,7 +173,7 @@ async function storePublishedCatalog(cacheKey, entry, { verified }) {
     for (let surface of getDocumentSurfaces(entry.document)) registerPublicIds(surface);
   await applyPublishedCatalog(entry.document);
 }
-//@ chunk-s93zf4b4.js:2008-2111 placement
+//@ chunk-7nvdrrtw.js:2008-2111 placement
 /**
  * 应用已发布目录文档：注册各界面目录并加入遮盖 id。
  */
@@ -184,7 +184,7 @@ async function applyPublishedCatalog(catalogDocument) {
     new Set(documentSurfaces.flatMap((documentSurface) => [...getMaskedIdSet(documentSurface)])),
   );
 }
-//@ chunk-s93zf4b4.js:2111-2222 placement
+//@ chunk-7nvdrrtw.js:2111-2222 placement
 function getDocumentSurfaces(catalogDocument) {
   return SURFACE_NAMES.flatMap((surfaceName) => {
     let rawSurface = catalogDocument.surfaces[surfaceName];
@@ -192,7 +192,7 @@ function getDocumentSurfaces(catalogDocument) {
     return surface === null ? [] : [surface];
   });
 }
-//@ chunk-s93zf4b4.js:2222-2496 placement
+//@ chunk-7nvdrrtw.js:2222-2496 placement
 /**
  * 构建已发布目录缓存条目（版本、获取时间、带抖动的过期时间、原始字节与签名）。
  */
@@ -220,7 +220,7 @@ function buildCacheEntry({
     document: catalogDocument,
   };
 }
-//@ chunk-s93zf4b4.js:2496-2581 placement
+//@ chunk-7nvdrrtw.js:2496-2581 placement
 /**
  * 给缓存条目补上抓取时间与带抖动的过期时间。
  */
@@ -231,12 +231,12 @@ function withCacheTimestamps(entry, now = Date.now(), random = Math.random()) {
     staleAt: computeStaleAt(now, random),
   };
 }
-//@ chunk-s93zf4b4.js:2581-2640 placement
+//@ chunk-7nvdrrtw.js:2581-2640 placement
 function computeStaleAt(now, random) {
   let jitter = 1 + TTL_JITTER * (2 * random - 1);
   return now + Math.round(CATALOG_TTL_MS * jitter);
 }
-//@ chunk-s93zf4b4.js:2640-2717 placement
+//@ chunk-7nvdrrtw.js:2640-2717 placement
 /**
  * 判断目录文档本身是否已过期。
  */
@@ -244,7 +244,7 @@ function isDocumentExpired(entry, now = Date.now()) {
   let isoTimestamp = parseIsoTimestamp(entry.expires_at);
   return isoTimestamp !== undefined && now >= isoTimestamp;
 }
-//@ chunk-s93zf4b4.js:2717-2839 placement
+//@ chunk-7nvdrrtw.js:2717-2839 placement
 /**
  * 判断缓存条目是否过期（时间异常、到期或文档自身过期）。
  */
@@ -257,7 +257,7 @@ function isCacheEntryStale(entry, now = Date.now()) {
     isDocumentExpired(entry.document, now)
   );
 }
-//@ chunk-s93zf4b4.js:2839-2966 placement
+//@ chunk-7nvdrrtw.js:2839-2966 placement
 /**
  * 计算已发布目录的阻止原因（必要流量门可在特定情况下跳过）。
  */
@@ -271,18 +271,18 @@ function getPublishedCatalogBlock() {
   }
   return mapCatalogEligibility(eligibility);
 }
-//@ chunk-s93zf4b4.js:2966-3051 placement
+//@ chunk-7nvdrrtw.js:2966-3051 placement
 /**
  * 判断是否为"fallback 来源且用 key 认证"的目录。
  */
 function isKeyAuthFallbackSource(source) {
   return source.source === "fallback" && source.credential !== undefined && isKeyAuthKind(source.credential);
 }
-//@ chunk-s93zf4b4.js:3051-3092 placement
+//@ chunk-7nvdrrtw.js:3051-3092 placement
 function isKeyAuthCatalogSource(source) {
   return source !== null && isKeyAuthKind(catalogAuthKind(source));
 }
-//@ chunk-s93zf4b4.js:3092-3192 placement
+//@ chunk-7nvdrrtw.js:3092-3192 placement
 function isKeyAuthKind(authKind) {
   switch (authKind) {
     case "oauth":
@@ -293,7 +293,7 @@ function isKeyAuthKind(authKind) {
       return true;
   }
 }
-//@ chunk-s93zf4b4.js:3192-3584 placement
+//@ chunk-7nvdrrtw.js:3192-3584 placement
 /**
  * 把服务端目录资格结果映射为已发布目录的阻止原因：环境关闭/bare/必要流量/socket/策略原样返回，非第一方再细分，非 claude.ai 认证看策略，无组织/账号时由服务端目录接管。
  */
@@ -319,7 +319,7 @@ function mapCatalogEligibility(eligibility) {
       return "served_applies";
   }
 }
-//@ chunk-s93zf4b4.js:3584-3860 placement
+//@ chunk-7nvdrrtw.js:3584-3860 placement
 function getProviderCatalogBlock() {
   let apiProvider = getAPIProvider();
   if (apiProvider === "gateway") return "cloud_gateway";
@@ -335,36 +335,36 @@ function getProviderCatalogBlock() {
   if (isThirdPartyBackend(apiProvider) && !isModelCatalogEnvOn(apiProvider)) return "release_off";
   return null;
 }
-//@ chunk-s93zf4b4.js:3860-3886 placement
+//@ chunk-7nvdrrtw.js:3860-3886 placement
 function includeUnsupportedCatalogFlag() {
   return includeUnsupportedDefault();
 }
-//@ chunk-s93zf4b4.js:3886-3958 placement
+//@ chunk-7nvdrrtw.js:3886-3958 placement
 function isModelCatalogEnvOn(apiProvider) {
   return thirdPartyBackends().includes(apiProvider) || isEnvTruthy(env.CLAUDE_CODE_MODEL_CATALOG);
 }
-//@ chunk-s93zf4b4.js:3958-3993 placement
+//@ chunk-7nvdrrtw.js:3958-3993 placement
 /**
  * 判断已发布目录是否被策略阻断。
  */
 function isPublishedCatalogBlocked() {
   return getPublishedCatalogBlock() === null;
 }
-//@ chunk-s93zf4b4.js:3993-4052 placement
+//@ chunk-7nvdrrtw.js:3993-4052 placement
 /**
  * 判断已发布目录是否可用（第一方、非无盘、策略未关）。
  */
 function isPublishedCatalogUsable() {
   return isFirstPartyApiBackend() && !isDiskless() && delegatedQuailMode("published") !== "off";
 }
-//@ chunk-s93zf4b4.js:4052-4112 placement
+//@ chunk-7nvdrrtw.js:4052-4112 placement
 /**
  * 取模型目录来源模式（published 或 primary）。
  */
 function catalogSourceMode() {
   return isFirstPartyProvider() || isClaudePlatformProvider() ? delegatedQuailMode("published") : "primary";
 }
-//@ chunk-s93zf4b4.js:4112-4162 placement
+//@ chunk-7nvdrrtw.js:4112-4162 placement
 /**
  * 取已发布目录的阻断模式判定。
  */

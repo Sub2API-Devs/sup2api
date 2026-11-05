@@ -3,10 +3,10 @@
  *
  * 并入旧版已有路径：SDK 消息适配。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/remote/sdkMessageAdapter.ts
- * pieces: chunk-0h4e7gnq.js (12), chunk-3xdfvx0n.js (18), chunk-kj4ctmv0.js (1)
- * attribution: fingerprint 5, affinity 4, placement 9, callgraph-fingerprint 1, layout 12
+ * pieces: chunk-0p9n1dy7.js (18), chunk-frs14hy1.js (12), chunk-rrnsdthq.js (1)
+ * attribution: placement 9, callgraph-fingerprint 1, layout 12, fingerprint 5, affinity 4
  */
 import { randomUUID } from "crypto";
 import {
@@ -20,10 +20,10 @@ import {
   nonExecutionKindOf,
 } from "../utils/messages/mappers.js";
 import { isProbeWrittenValue } from "../utils/model/thirdPartyModelDefaults.js";
-import { normalizeAgentIdOrNull } from "../utils/agentId.js";
+import { normalizeAgentIdOrNull, normalizeUuidOrNull } from "../utils/agentId.js";
 import { logForDebugging, createAttachmentMessage_2 as createAttachmentMessage } from "../utils/debug.js";
 import { stripAnsi } from "../utils/stripAnsi.js";
-import { readWorkerEpoch, capFrameDepth } from "./wireFrameShape.js";
+import { readWorkerEpoch, capFrameDepth, isRequestingStatus } from "./wireFrameShape.js";
 import {
   sanitizeDisplayText,
   MARKDOWN_BREAK_RE,
@@ -45,6 +45,7 @@ import {
   emitLimitsStatusChange,
 } from "../services/claudeAiLimits.js";
 import { logError } from "../utils/log.js";
+import { parseStartRefusal, START_REFUSAL_NOTICE, describeStartRefusal } from "./startRefusalNotice.js";
 import {
   createUserMessage,
   INTERRUPT_MESSAGE,
@@ -57,12 +58,12 @@ import { buildRefusalMessage } from "../services/api/safeguardMessages.js";
 import { machineLabelForMessage } from "../bridge/deviceRegistration.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-0h4e7gnq.js:14624-14668 fingerprint (2.1.88 match: convertStreamEvent, 1)
+//@ chunk-frs14hy1.js:18366-18410 fingerprint (2.1.88 match: convertStreamEvent, 1)
 var convertStreamEvent = (msg) => ({
   type: "stream_event",
   event: msg,
 });
-//@ chunk-0h4e7gnq.js:14668-14779 affinity
+//@ chunk-frs14hy1.js:18410-18521 affinity
 var inputJsonDeltaEvent = (event) =>
   convertStreamEvent({
     type: "content_block_delta",
@@ -72,7 +73,7 @@ var inputJsonDeltaEvent = (event) =>
       partial_json: event.json,
     },
   });
-//@ chunk-0h4e7gnq.js:14779-14876 affinity
+//@ chunk-frs14hy1.js:18521-18618 affinity
 var textDeltaEvent = (event) =>
   convertStreamEvent({
     type: "content_block_delta",
@@ -82,7 +83,7 @@ var textDeltaEvent = (event) =>
       text: event.text,
     },
   });
-//@ chunk-0h4e7gnq.js:14876-15003 affinity
+//@ chunk-frs14hy1.js:18618-18745 affinity
 var thinkingDeltaEvent = (event) =>
   convertStreamEvent({
     type: "content_block_delta",
@@ -93,7 +94,7 @@ var thinkingDeltaEvent = (event) =>
       estimated_tokens: null,
     },
   });
-//@ chunk-0h4e7gnq.js:15003-15132 affinity
+//@ chunk-frs14hy1.js:18745-18874 affinity
 function deltaEventForKind(delta) {
   switch (delta.kind) {
     case "text":
@@ -106,7 +107,7 @@ function deltaEventForKind(delta) {
       return textDeltaEvent(delta);
   }
 }
-//@ chunk-0h4e7gnq.js:38969-39244 fingerprint (2.1.88 match: convertCompactBoundaryMessage, 0.876)
+//@ chunk-frs14hy1.js:44554-44829 fingerprint (2.1.88 match: convertCompactBoundaryMessage, 0.876)
 /**
  * 把 SDK compact_boundary 消息转成本地"Conversation compacted"系统消息。
  */
@@ -124,7 +125,7 @@ function convertCompactBoundaryMessage(msg) {
     timestamp: new Date().toISOString(),
   };
 }
-//@ chunk-0h4e7gnq.js:39244-39932 placement
+//@ chunk-frs14hy1.js:44829-45626 placement
 /**
  * SDK model_refusal_fallback 事件转为内部 system 消息。
  */
@@ -144,6 +145,9 @@ function createRefusalFallbackMessage(frame) {
     requestId: frame.request_id,
     apiRefusalCategory: frame.api_refusal_category,
     apiRefusalExplanation: frame.api_refusal_explanation,
+    ...(frame.api_refusal_cyber_verification !== undefined && {
+      apiRefusalCyberVerification: frame.api_refusal_cyber_verification,
+    }),
     ...(frame.saw_cyber_refusal && {
       sawCyberRefusal: true,
     }),
@@ -161,7 +165,7 @@ function createRefusalFallbackMessage(frame) {
     timestamp: new Date().toISOString(),
   };
 }
-//@ chunk-0h4e7gnq.js:39932-40292 placement
+//@ chunk-frs14hy1.js:45626-45986 placement
 /**
  * SDK model_refusal_no_fallback 事件转为内部 system 消息。
  */
@@ -181,7 +185,7 @@ function createRefusalNoFallbackMessage(frame) {
     timestamp: new Date().toISOString(),
   };
 }
-//@ chunk-0h4e7gnq.js:40526-40882 placement
+//@ chunk-frs14hy1.js:46220-46576 placement
 /**
  * SDK model_consent_fallback 事件转为内部 system 消息。
  */
@@ -201,7 +205,7 @@ function createConsentFallbackMessage(frame) {
     timestamp: new Date().toISOString(),
   };
 }
-//@ chunk-0h4e7gnq.js:46697-46808 placement (2.1.88 match: createToolUseSummaryMessage, 0.751)
+//@ chunk-frs14hy1.js:52670-52781 placement (2.1.88 match: createToolUseSummaryMessage, 0.751)
 function createToolUseSummaryMessage(frame) {
   return {
     type: "tool_use_summary",
@@ -209,7 +213,7 @@ function createToolUseSummaryMessage(frame) {
     preceding_tool_use_ids: frame.precedingToolUseIds,
   };
 }
-//@ chunk-0h4e7gnq.js:46808-46946 placement
+//@ chunk-frs14hy1.js:52781-52919 placement
 /**
  * 把限额事件转成 SDK 的 rate limit 信息（状态、重置时间、类型、是否用超额）。
  */
@@ -221,7 +225,7 @@ function toRateLimitInfo(rateLimitInfo) {
     isUsingOverage: rateLimitInfo.isUsingOverage ?? false,
   };
 }
-//@ chunk-0h4e7gnq.js:47070-48384 placement
+//@ chunk-frs14hy1.js:53043-54357 placement
 /**
  * 把内部限流状态转成 SDK rate_limit 事件的载荷：status、是否有统一限流回退、升级路径，以及存在时才带上的重置时间、类型、用量、超额状态/范围/周期用量、错误码、能否购买额度等字段（limitScope 输出为 overageScope）。
  */
@@ -286,7 +290,7 @@ function toSdkRateLimitInfo(limits, { unifiedRateLimitFallbackAvailable, upgrade
     }),
   };
 }
-//@ chunk-kj4ctmv0.js:447-582 placement
+//@ chunk-rrnsdthq.js:447-582 placement
 function convertToolProgressMessage(msg) {
   let launchedAgentId =
     msg.type === "system" && msg.subtype === "informational" ? msg.launchedAgentId : undefined;
@@ -294,9 +298,9 @@ function convertToolProgressMessage(msg) {
     ? launchedAgentId
     : undefined;
 }
-//@ chunk-3xdfvx0n.js:1283-1294 placement
+//@ chunk-0p9n1dy7.js:1367-1378 placement
 var cloudMemoryToolUseIdsReader = null;
-//@ chunk-3xdfvx0n.js:1294-1545 placement
+//@ chunk-0p9n1dy7.js:1378-1629 placement
 function isControlFrame(parsed) {
   return (
     parsed.type !== "control_request" &&
@@ -310,7 +314,7 @@ function isControlFrame(parsed) {
     )
   );
 }
-//@ chunk-3xdfvx0n.js:1545-2223 callgraph-fingerprint (2.1.88 match: convertAssistantMessage, 0.199)
+//@ chunk-0p9n1dy7.js:1629-2307 callgraph-fingerprint (2.1.88 match: convertAssistantMessage, 0.198)
 /**
  * SDK assistant → 本地 assistant 消息（remoteSourced，带 API 错误字段、verification_required 改写、云记忆工具 ID）。
  */
@@ -357,7 +361,7 @@ function convertAssistantMessage(msg) {
     }),
   };
 }
-//@ chunk-3xdfvx0n.js:2223-2321 layout
+//@ chunk-0p9n1dy7.js:2307-2405 layout
 function convertStreamEventFrame(frame) {
   return {
     type: "stream_event",
@@ -367,7 +371,7 @@ function convertStreamEventFrame(frame) {
     }),
   };
 }
-//@ chunk-3xdfvx0n.js:2321-2501 layout
+//@ chunk-0p9n1dy7.js:2405-2585 layout
 function ensureFrameUuid(uuid) {
   let candidateUuid = uuid;
   if (typeof candidateUuid === "string" && candidateUuid !== "" && uuid !== undefined) return uuid;
@@ -376,7 +380,7 @@ function ensureFrameUuid(uuid) {
   });
   return randomUUID();
 }
-//@ chunk-3xdfvx0n.js:2501-2664 layout
+//@ chunk-0p9n1dy7.js:2585-2748 layout
 function hasStringContent(frame) {
   if (typeof frame.content === "string") return true;
   logForDebugging(`[sdkMessageAdapter] Dropping ${frame.subtype} frame whose content is not a string`, {
@@ -384,7 +388,7 @@ function hasStringContent(frame) {
   });
   return false;
 }
-//@ chunk-3xdfvx0n.js:2664-2821 layout
+//@ chunk-0p9n1dy7.js:2748-2905 layout
 /**
  * 过滤远程错误文本：去掉 [ede_diagnostic] / [session_crash] 诊断标记行。
  */
@@ -397,7 +401,7 @@ function filterDisplayableErrors(errors) {
       !entry.startsWith("[session_crash]"),
   );
 }
-//@ chunk-3xdfvx0n.js:2821-3356 fingerprint (2.1.88 match: convertResultMessage, 0.662)
+//@ chunk-0p9n1dy7.js:2905-3440 fingerprint (2.1.88 match: convertResultMessage, 0.661)
 /**
  * 非 success 的 result → warning 级 informational（errors 拼接，去掉诊断前缀）；success → "Session completed successfully"。
  */
@@ -430,7 +434,7 @@ function convertResultMessage(msg) {
     timestamp: new Date().toISOString(),
   };
 }
-//@ chunk-3xdfvx0n.js:3356-3613 fingerprint (2.1.88 match: convertStatusMessage, 1)
+//@ chunk-0p9n1dy7.js:3440-3697 fingerprint (2.1.88 match: convertStatusMessage, 1)
 function convertStatusMessage(msg) {
   let status = msg.status;
   if (typeof status !== "string" || status === "") return null;
@@ -443,7 +447,7 @@ function convertStatusMessage(msg) {
     timestamp: new Date().toISOString(),
   };
 }
-//@ chunk-3xdfvx0n.js:3613-3997 layout (2.1.88 match: convertCompactBoundaryMessage, 0.821)
+//@ chunk-0p9n1dy7.js:3697-4081 layout (2.1.88 match: convertCompactBoundaryMessage, 0.821)
 /**
  * system/compact_boundary 帧 → 本地 compact_boundary（缺 compact_metadata 丢弃）。
  */
@@ -466,7 +470,7 @@ function convertRemoteCompactBoundary(msg) {
     remoteSourced: true,
   };
 }
-//@ chunk-3xdfvx0n.js:3997-5748 layout
+//@ chunk-0p9n1dy7.js:4081-5832 layout
 /**
  * 校验并提取 init 帧：model、cwd、slash_commands、skills、plugins、mcp_servers、tools、workerEpoch（字段类型不对时记日志忽略）。
  */
@@ -549,7 +553,7 @@ function parseInitFrame(frame) {
     workerEpoch: readWorkerEpoch(frame),
   };
 }
-//@ chunk-3xdfvx0n.js:5748-6237 layout
+//@ chunk-0p9n1dy7.js:5832-6321 layout
 /**
  * 解析远程 init/状态帧中的目标（active goal）状态。
  */
@@ -580,10 +584,10 @@ function parseGoalState(goal) {
     }),
   };
 }
-//@ chunk-3xdfvx0n.js:6237-6364 layout
+//@ chunk-0p9n1dy7.js:6321-6449 layout
 var AUTOCOMPACT_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var AUTOCOMPACT_SOURCE_SET;
-deferInit("chunk-3xdfvx0n.js:6237", () => {
+deferInit("chunk-0p9n1dy7.js:6321", () => {
   AUTOCOMPACT_SOURCES = {
     env: true,
     settings: true,
@@ -595,7 +599,7 @@ deferInit("chunk-3xdfvx0n.js:6237", () => {
   };
   AUTOCOMPACT_SOURCE_SET = new Set(Object.keys(AUTOCOMPACT_SOURCES));
 });
-//@ chunk-3xdfvx0n.js:6364-6897 layout
+//@ chunk-0p9n1dy7.js:6449-6983 layout
 /**
  * 解析远程 autocompact 状态帧，格式不对时丢弃并记 remote_autocompact_frame_drop。
  */
@@ -625,7 +629,7 @@ function parseAutocompactState(frame) {
     source: frame.source,
   };
 }
-//@ chunk-3xdfvx0n.js:6897-7297 layout
+//@ chunk-0p9n1dy7.js:6983-7383 layout
 /**
  * 采用远程会话的自动压缩状态到 AppState.remoteAutocompactState（变化时记 tengu_remote_autocompact_state_adopted）。
  */
@@ -663,13 +667,13 @@ function adoptRemoteAutocompactState(setAppState, frame, via) {
     source: fromEnum(autocompactState.source),
   });
 }
-//@ chunk-3xdfvx0n.js:7297-7359 layout
+//@ chunk-0p9n1dy7.js:7383-7445 layout
 var shallowEqualDefined = (next, currentLimits) =>
   import_sortedIndex_2(
     import_reject(next, (value) => value === undefined),
     import_reject(currentLimits, (value) => value === undefined),
   );
-//@ chunk-3xdfvx0n.js:7359-8660 layout
+//@ chunk-0p9n1dy7.js:7445-8746 layout
 /**
  * 远程速率限制采纳器：缓冲 rate_limit 帧，账户切换时丢弃，seed/history 来源的过期信息跳过，采纳时更新本地限额状态并记遥测。
  */
@@ -780,7 +784,7 @@ function createRemoteRateLimitAdopter(isEnabled, via) {
     },
   };
 }
-//@ chunk-3xdfvx0n.js:8660-13943 fingerprint (2.1.88 match: convertSDKMessage, 0.489)
+//@ chunk-0p9n1dy7.js:8746-14269 fingerprint (2.1.88 match: convertSDKMessage, 0.488)
 /**
  * SDK 消息总适配：control_* 忽略；assistant → message；user 中 tool_result → message，子代理/合成/普通文本按选项忽略或转换；stream_event；result（非 success）；system 的 status/compact_boundary/model_refusal_fallback/model_fallback/model_consent_fallback/informational/tool_host_result/local_command_output；env_manager_log；conversation_reset；其它忽略。
  */
@@ -788,6 +792,23 @@ function convertSDKMessage(msg, opts) {
   if (!capFrameDepth(msg))
     return {
       type: "ignored",
+    };
+  let refusalNotice = parseStartRefusal(msg);
+  if (refusalNotice === null && msg.type === START_REFUSAL_NOTICE)
+    return {
+      type: "ignored",
+    };
+  if (refusalNotice !== null)
+    return {
+      type: "message",
+      message: {
+        type: "system",
+        subtype: "informational",
+        content: describeStartRefusal(refusalNotice, opts?.sessionUrl, opts?.orgUuid),
+        level: "warning",
+        uuid: normalizeUuidOrNull(msg.uuid) ?? randomUUID(),
+        timestamp: new Date().toISOString(),
+      },
     };
   switch (msg.type) {
     case "control_request":
@@ -876,18 +897,18 @@ function convertSDKMessage(msg, opts) {
           };
     }
     case "system":
+      if (isRequestingStatus(msg))
+        return {
+          type: "stream_event",
+          event: {
+            type: "stream_request_start",
+          },
+        };
       if (msg.subtype === "init")
         return {
           type: "ignored",
         };
       if (msg.subtype === "status") {
-        if (msg.status === "requesting")
-          return {
-            type: "stream_event",
-            event: {
-              type: "stream_request_start",
-            },
-          };
         let statusMessage = convertStatusMessage(msg);
         return statusMessage
           ? {
@@ -1151,21 +1172,21 @@ function convertSDKMessage(msg, opts) {
   }
 }
 export {
-  convertStreamEvent,
-  deltaEventForKind,
-  toRateLimitInfo,
-  convertToolProgressMessage,
-  isControlFrame,
-  createRemoteRateLimitAdopter,
-  parseGoalState,
-  adoptRemoteAutocompactState,
-  convertSDKMessage,
-  parseInitFrame,
-  filterDisplayableErrors,
   createRefusalFallbackMessage,
-  createRefusalNoFallbackMessage,
   convertCompactBoundaryMessage,
   createConsentFallbackMessage,
+  createRefusalNoFallbackMessage,
+  parseGoalState,
   parseAutocompactState,
+  parseInitFrame,
+  convertSDKMessage,
+  isControlFrame,
+  createRemoteRateLimitAdopter,
+  adoptRemoteAutocompactState,
+  filterDisplayableErrors,
+  convertStreamEvent,
+  deltaEventForKind,
+  convertToolProgressMessage,
+  toRateLimitInfo,
   createToolUseSummaryMessage,
 };

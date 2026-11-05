@@ -3,10 +3,10 @@
  *
  * /feedback（/bug）：收集描述、可选附带会话记录，提交到 /api/claude_cli_feedback 并生成 GitHub issue 链接（模型生成标题）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Feedback.tsx
- * pieces: chunk-4121qate.js (1), chunk-hm0ce8vc.js (1), chunk-hwmsct5x.js (1), chunk-seqjkch8.js (13), chunk-xx1vmpsq.js (2)
- * attribution: fingerprint 8, placement 5, layout 3, sole-consumer 2
+ * pieces: chunk-asf5gh8x.js (1), chunk-hmaqgh0x.js (1), chunk-pwdsqzsj.js (2), chunk-vn3g7zt8.js (1), chunk-y656fhcx.js (13)
+ * attribution: fingerprint 8, sole-consumer 2, placement 5, layout 3
  */
 import { describeThrownValue, createSealedError } from "../plugins/functionHooks/vm/vmRealm.js";
 import { jsonStringify } from "../utils/slowOperations.js";
@@ -69,6 +69,8 @@ import { ModelSelector } from "./agents/ModelSelector.js";
 import { env } from "../utils/env.js";
 import { StatusIcon } from "./design-system/StatusIcon.js";
 import { truncateToLength, getFirstLine } from "../utils/stringUtils.js";
+import { isOn } from "../utils/codeMode/accepted.js";
+import { CODE_MODE_EXPERIMENTAL_LABEL } from "../constants/codeMode.js";
 import { queryHaikuWithFallback } from "../services/api/claude.js";
 import { asSystemPrompt } from "../utils/systemPromptType.js";
 import { mainAgentContext } from "../utils/agentContext.js";
@@ -77,11 +79,11 @@ import { logError } from "../utils/log.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-hwmsct5x.js:197534-197606 fingerprint (2.1.88 match: GITHUB_ISSUES_REPO_URL, 0.432)
+//@ chunk-vn3g7zt8.js:197924-197996 fingerprint (2.1.88 match: GITHUB_ISSUES_REPO_URL, 0.432)
 function GITHUB_ISSUES_REPO_URL() {
   return "https://github.com/anthropics/claude-code/issues";
 }
-//@ chunk-4121qate.js:62271-62421 fingerprint (2.1.88 match: sanitizeAndLogError, 0.507)
+//@ chunk-hmaqgh0x.js:13007-13157 fingerprint (2.1.88 match: sanitizeAndLogError, 0.504)
 function sanitizeAndLogError(err) {
   let wrapped = (...args) => {
     try {
@@ -94,18 +96,18 @@ function sanitizeAndLogError(err) {
   Object.setPrototypeOf(wrapped, null);
   return wrapped;
 }
-//@ chunk-hm0ce8vc.js:67174-67301 fingerprint (2.1.88 match: loadRawTranscriptJsonl, 0.519)
+//@ chunk-asf5gh8x.js:76841-76968 fingerprint (2.1.88 match: loadRawTranscriptJsonl, 0.519)
 function loadRawTranscriptJsonl(message) {
   let json = jsonStringify(message) ?? String(message);
   let byteLength = Buffer.byteLength(json, "utf8");
   return byteLength <= 200 ? json : `${json.slice(0, 200)}\u2026 (+${byteLength - 200} bytes)`;
 }
-//@ chunk-xx1vmpsq.js:18905-18966 sole-consumer
+//@ chunk-pwdsqzsj.js:19279-19340 sole-consumer
 function requestIdHeader(headers) {
   let requestId = headers?.["request-id"];
   return isSessionsToken(requestId) ? requestId : undefined;
 }
-//@ chunk-xx1vmpsq.js:18966-20766 fingerprint (2.1.88 match: submitFeedback, 0.33)
+//@ chunk-pwdsqzsj.js:19340-21140 fingerprint (2.1.88 match: submitFeedback, 0.33)
 /**
  * 提交反馈到 /api/claude_cli_feedback（检查策略 allow_product_feedback 与大小），返回 feedback ID。
  */
@@ -232,26 +234,27 @@ async function submitFeedback(draft, signal, sessionIdForMessage, credentials) {
     };
   }
 }
-//@ chunk-seqjkch8.js:1689-1693 placement
+//@ chunk-y656fhcx.js:1794-1798 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-seqjkch8.js:1689", () => {
+deferInit("chunk-y656fhcx.js:1794", () => {
   init_react_production();
 });
-//@ chunk-seqjkch8.js:1693-1697 placement
+//@ chunk-y656fhcx.js:1798-1802 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-seqjkch8.js:1693", () => {
+deferInit("chunk-y656fhcx.js:1798", () => {
   init_react_production();
 });
-//@ chunk-seqjkch8.js:1697-1701 placement
+//@ chunk-y656fhcx.js:1802-1806 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-seqjkch8.js:1697", () => {
+deferInit("chunk-y656fhcx.js:1802", () => {
   init_react_production();
 });
-//@ chunk-seqjkch8.js:1701-3098 placement
+//@ chunk-y656fhcx.js:1806-3225 placement
 /**
  * /feedback 的文案常量：记录范围说明与选项、记录缺失/不完整/过大的提示、post/bundle/share 三种模式的同意与提交文案。
  */
 var MAX_FEEDBACK_BODY_CHARS = 7250;
+var feedbackSubmitKeys = ["enter", "escape"];
 var MAX_ISSUE_TITLE_CHARS = 200;
 var TRANSCRIPT_SCOPE_DESCRIPTIONS = {
   session: "this session only",
@@ -301,7 +304,7 @@ var FEEDBACK_MODE_COPY = {
     submitting: "Uploading share\u2026",
   },
 };
-//@ chunk-seqjkch8.js:3098-3715 placement
+//@ chunk-y656fhcx.js:3225-3842 placement
 /**
  * 创建反馈提交状态存储（none/sending/delivered/saved/failed）；share 模式返回空操作版本，失败不会覆盖已送达或已保存的状态。
  */
@@ -368,7 +371,7 @@ function createFeedbackStatusStore(mode) {
     },
   };
 }
-//@ chunk-seqjkch8.js:3715-3773 layout
+//@ chunk-y656fhcx.js:3842-3900 layout
 async function runThenAbandon(handleCancel, tracker) {
   try {
     await handleCancel();
@@ -376,7 +379,7 @@ async function runThenAbandon(handleCancel, tracker) {
     tracker.abandon();
   }
 }
-//@ chunk-seqjkch8.js:3773-12089 fingerprint (2.1.88 match: Feedback, 0.317)
+//@ chunk-y656fhcx.js:3900-12490 fingerprint (2.1.88 match: Feedback, 0.313)
 /**
  * /feedback：输入描述 → 确认是否附带记录 → 提交（submitFeedback）→ 显示 feedback ID 与可打开的 GitHub issue 链接。
  */
@@ -397,7 +400,7 @@ function Feedback({
   let { storageV5, credentials } = useTheme_2();
   let sanitizedErrors = useHost();
   let [phase, setPhase] = useState("userInput");
-  let [cursorOffset, setCursorOffset] = useState(0);
+  let [tick, setTick] = useState(0);
   let [description, setDescription] = useState(initialDescription ?? "");
   let [feedbackId, setFeedbackId] = useState(null);
   let [bundlePath, setBundlePath] = useState(null);
@@ -441,7 +444,7 @@ function Feedback({
   let [issueBody, setIssueBody] = useState(null);
   let [transcriptScope, setTranscriptScope] = useState("session");
   let teammateTranscripts = useAppState((appState) => appState.transcripts);
-  let textInputColumns = useTerminalSize().columns - 4;
+  let columns = useTerminalSize().columns - 4;
   let emptyStub = nullStub();
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_lynx", false);
   let handleCancel = useCallback(async () => {
@@ -554,6 +557,12 @@ function Feedback({
     [handleCancel, statusStore],
   );
   let handleCancelKey = useCallback(() => {
+    if (activePhase === "done") {
+      onDone(undefined, {
+        display: "skip",
+      });
+      return;
+    }
     if (hasDeliveryStatus) {
       let snapshot = statusStore.getSnapshot();
       setStaleStatus((previous) => previous ?? snapshot);
@@ -562,7 +571,7 @@ function Feedback({
     onDone("Feedback / bug report cancelled", {
       display: "system",
     });
-  }, [onDone, abortController, statusStore, hasDeliveryStatus]);
+  }, [onDone, abortController, statusStore, hasDeliveryStatus, activePhase]);
   let finishDone = useCallback(() => {
     setPhase("done");
   }, []);
@@ -575,15 +584,16 @@ function Feedback({
     context: "Settings",
     isActive: activePhase === "userInput",
   });
-  let isDoneLocked = activePhase === "done" || (displayError && activePhase !== "userInput");
+  let isDoneLocked =
+    (activePhase === "done" && mode !== "share") || (displayError && activePhase !== "userInput");
   function handleKeyDown(event) {
     if (event.ctrl || event.meta) return;
     if (activePhase === "done") {
-      event.preventDefault();
       if (mode === "share") return;
+      event.preventDefault();
       if (!featureValue_CACHED_MAY_BE_STALE && event.key === "return" && issueBody) {
-        let issueUrl = createGitHubIssueUrl(shownFeedbackId ?? "", issueBody, description);
-        openValidatedUrlSucceeded(issueUrl);
+        let gitHubIssueUrl = createGitHubIssueUrl(shownFeedbackId ?? "", issueBody, description);
+        openValidatedUrlSucceeded(gitHubIssueUrl);
       }
       if (displayError)
         onDone("Error submitting feedback / bug report", {
@@ -629,7 +639,7 @@ function Feedback({
       title: "Submit feedback / bug report",
       onCancel: handleCancelKey,
       isCancelActive: activePhase !== "userInput" && !isDoneLocked,
-      hideInputGuide: activePhase === "done",
+      hideInputGuide: activePhase === "done" && mode !== "share",
       inputGuide:
         activePhase === "userInput"
           ? jsxProd_default_2(Byline, {
@@ -681,7 +691,27 @@ function Feedback({
                     }),
                   ],
                 })
-              : null,
+              : activePhase === "submitting"
+                ? jsxProd_default(ConfigurableShortcutHint, {
+                    action: "confirm:no",
+                    context: "Confirmation",
+                    fallback: "Esc",
+                    description: "cancel",
+                  })
+                : activePhase === "done"
+                  ? jsxProd_default_2(Byline, {
+                      children: [
+                        jsxProd_default(KeyboardShortcutHint, {
+                          chord: "c",
+                          action: "copy",
+                        }),
+                        jsxProd_default(KeyboardShortcutHint, {
+                          chord: feedbackSubmitKeys,
+                          action: "close",
+                        }),
+                      ],
+                    })
+                  : null,
       children: [
         activePhase === "userInput" &&
           jsxProd_default_2(Box, {
@@ -693,8 +723,8 @@ function Feedback({
               }),
               jsxProd_default(TextInput, {
                 value: description,
-                onChange: (value) => {
-                  setDescription(value);
+                onChange: (char) => {
+                  setDescription(char);
                   if (isErrorFinal && errorText === null && displayError !== null) {
                     setErrorText(displayError);
                     setIsPolicyError(true);
@@ -702,7 +732,7 @@ function Feedback({
                   setHasTyped(true);
                   if (displayError && !isErrorFinal) setErrorText(null);
                 },
-                columns: textInputColumns,
+                columns,
                 clearOnSubmit: false,
                 onSubmit: (submittedText) => {
                   if (isErrorFinal) return;
@@ -723,8 +753,8 @@ function Feedback({
                     });
                   }
                 },
-                cursorOffset,
-                onChangeCursorOffset: setCursorOffset,
+                cursorOffset: tick,
+                onChangeCursorOffset: setTick,
                 showCursor: true,
                 focus: true,
               }),
@@ -801,10 +831,10 @@ function Feedback({
                               "report the issue at https://github.com/anthropics/claude-code/issues",
                             PACKAGE_URL: "@anthropic-ai/claude-code",
                             README_URL: "https://code.claude.com/docs/en/overview",
-                            VERSION: "2.1.316",
+                            VERSION: "2.1.318",
                             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                            BUILD_TIME: "2026-10-30T23:28:13Z",
-                            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                            BUILD_TIME: "2026-11-03T18:52:53Z",
+                            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                             HOOKS_WORKER_URL:
                               import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                             DD_SOURCEMAP_GROUP: "default",
@@ -1043,34 +1073,41 @@ function Feedback({
     }),
   });
 }
-//@ chunk-seqjkch8.js:12089-13311 fingerprint (2.1.88 match: createGitHubIssueUrl, 0.585)
-function createGitHubIssueUrl(feedbackId, errorsText, description) {
+//@ chunk-y656fhcx.js:12490-13739 fingerprint (2.1.88 match: createGitHubIssueUrl, 0.562)
+function createGitHubIssueUrl(feedbackId, errorsText, title) {
   let shortTitle = truncateToLength(redactSecrets(errorsText), MAX_ISSUE_TITLE_CHARS);
-  let sanitizedTitle = redactSecrets(description);
+  let sanitizedTitle = redactSecrets(title);
   let emptyStub = nullStub();
   let errorSuffix = `${GITHUB_ISSUES_REPO_URL()}/new?title=${encodeURIComponent(shortTitle)}&labels=user-reported,bug&body=`;
   let errorsJson = encodeURIComponent(`**Bug Description**
 `);
-  let encodedPrefix = encodeURIComponent(`
+  let encodedPrefix = encodeURIComponent(
+    `
 
 **Environment Info**
 - Platform: ${env.platform}
 - Terminal: ${env.terminal}
 - Version: ${
-    {
-      ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-      PACKAGE_URL: "@anthropic-ai/claude-code",
-      README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
-      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-      HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-      DD_SOURCEMAP_GROUP: "default",
-    }.VERSION || "unknown"
-  }
-- Feedback ID: ${feedbackId}
-`);
+      {
+        ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+        PACKAGE_URL: "@anthropic-ai/claude-code",
+        README_URL: "https://code.claude.com/docs/en/overview",
+        VERSION: "2.1.318",
+        FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
+        HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+        DD_SOURCEMAP_GROUP: "default",
+      }.VERSION || "unknown"
+    }
+` +
+      (isOn()
+        ? `- ${CODE_MODE_EXPERIMENTAL_LABEL}: on
+`
+        : "") +
+      `- Feedback ID: ${feedbackId}
+`,
+  );
   let encodedSuffix = encodeURIComponent(sanitizedTitle);
   let remainingChars =
     MAX_FEEDBACK_BODY_CHARS - errorSuffix.length - errorsJson.length - encodedPrefix.length;
@@ -1090,7 +1127,7 @@ function createGitHubIssueUrl(feedbackId, errorsText, description) {
   }
   return errorSuffix + errorsJson + encodedSuffix + encodedPrefix;
 }
-//@ chunk-seqjkch8.js:13311-14915 fingerprint (2.1.88 match: generateTitle, 0.938)
+//@ chunk-y656fhcx.js:13739-15343 fingerprint (2.1.88 match: generateTitle, 0.938)
 /**
  * 用模型为公开 issue 生成简洁技术标题（不超过 80 字符），失败回落 "Bug Report"。
  */
@@ -1139,15 +1176,15 @@ async function generateTitle(description, abortSignal, credentials) {
     return createFallbackTitle(description);
   }
 }
-//@ chunk-seqjkch8.js:14915-15032 layout
+//@ chunk-y656fhcx.js:15343-15460 layout
 var REFUSAL_PREFIX_RE =
   /^(i can['\u2019]t|i cannot|i['\u2019]m unable|i am unable|i['\u2019]m sorry|i am sorry|i apologize|sorry,)/i;
-//@ chunk-seqjkch8.js:15032-15088 layout
+//@ chunk-y656fhcx.js:15460-15516 layout
 function isEmptyOrTemplate(title) {
   let trimmed = title.trim();
   return trimmed === "" || REFUSAL_PREFIX_RE.test(trimmed);
 }
-//@ chunk-seqjkch8.js:15088-15279 fingerprint (2.1.88 match: createFallbackTitle, 1)
+//@ chunk-y656fhcx.js:15516-15707 fingerprint (2.1.88 match: createFallbackTitle, 1)
 function createFallbackTitle(description) {
   let firstLine = getFirstLine(description);
   if (firstLine.length <= 60 && firstLine.length > 5) return firstLine;
@@ -1159,7 +1196,7 @@ function createFallbackTitle(description) {
   }
   return truncated.length < 10 ? "Bug Report" : truncated;
 }
-//@ chunk-seqjkch8.js:15279-15835 sole-consumer
+//@ chunk-y656fhcx.js:15707-16263 sole-consumer
 /**
  * 反馈确认页中的一行 git 元数据：分支、短提交号、远程地址、是否未同步与有无本地改动。
  */
@@ -1208,10 +1245,10 @@ function GitMetadataLine(props) {
   return content;
 }
 export {
-  sanitizeAndLogError,
-  createFeedbackStatusStore,
-  Feedback,
   submitFeedback,
   loadRawTranscriptJsonl,
+  sanitizeAndLogError,
   GITHUB_ISSUES_REPO_URL,
+  createFeedbackStatusStore,
+  Feedback,
 };

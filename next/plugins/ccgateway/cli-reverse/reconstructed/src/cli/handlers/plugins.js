@@ -3,10 +3,10 @@
  *
  * 并入旧版已有路径：plugin 子命令（init/validate/tag、从 marketplace 安装）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/handlers/plugins.ts
- * pieces: chunk-d4eg9at2.js (64), chunk-y5m1jrzk.js (2), chunk-z2kk8ttr.js (2)
- * attribution: placement 20, facade-exports 20, layout 18, fingerprint 2, sole-consumer 7, file-local 1
+ * pieces: chunk-6g88e2yt.js (2), chunk-jdfzheem.js (65), chunk-zde45n7x.js (2)
+ * attribution: placement 20, facade-exports 20, layout 19, fingerprint 2, affinity 1, file-local 1, sole-consumer 6
  */
 import { join, relative, resolve } from "path";
 import { shardedSnowflakeOff } from "../../utils/plugins/pluginGates.js";
@@ -127,7 +127,7 @@ import {
 } from "../../utils/plugins/validatePlugin.js";
 import { logError } from "../../utils/log.js";
 import { readmeAdviceFor, formatAdviceLines } from "../../services/plugins/pluginReadmeAdvice.js";
-import { renderAndRun, RenderOnceAndExit } from "../../utils/staticRender.js";
+import { renderAndRun_2 } from "../../interactiveHelpers.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -141,7 +141,7 @@ import {
   sameSourceAndName,
   sameSourceAndNameAlt,
 } from "../../services/plugins/pluginTag.js";
-import { renderAndRun_2 } from "../../interactiveHelpers.js";
+import { RenderOnceAndExit } from "../../utils/staticRender.js";
 import {
   pluginNameProblem,
   PLUGIN_COMPONENT_KINDS,
@@ -149,7 +149,7 @@ import {
   scaffoldPlugin,
 } from "./pluginScaffold.js";
 import { tildify } from "../../utils/path.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { gitUserName, getGitEmail } from "../../services/analytics/growthbook.js";
 import {
   SKILLS_DIR,
@@ -268,8 +268,8 @@ import {
 } from "../../utils/plugins/schemas.js";
 import { listReservedNameRefusals } from "../../utils/plugins/marketplaceSources.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { ResultMessages } from "../../utils/withResolvers.js";
 import { gracefulShutdown } from "../../utils/gracefulShutdown.js";
+import { SuccessLine } from "../../buddy/CompanionSprite.js";
 import { pluginTelemetryFields } from "../../utils/telemetry/pluginTelemetryName.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
@@ -293,7 +293,7 @@ import { validateMarketplaceInstallArgs } from "../../commands/plugin/parseArgs.
 import { classifyCommandSourceError } from "../../utils/plugins/headersHelper.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-y5m1jrzk.js:265-3494 placement
+//@ chunk-6g88e2yt.js:265-3494 placement
 /**
  * plugin 子命令表（init/validate/tag 等）。
  */
@@ -391,7 +391,7 @@ var PLUGIN_SUBCOMMANDS = {
     description: "Show a plugin's options and which are unset, or save values from stdin with --values-stdin",
   },
 };
-//@ chunk-y5m1jrzk.js:3494-3632 placement
+//@ chunk-6g88e2yt.js:3494-3632 placement
 /**
  * 列出当前可用的 plugin 子命令（按抢先体验开关过滤）。
  */
@@ -404,32 +404,32 @@ function listAvailablePluginSubcommands() {
     (subcommand) => subcommand.earlyAccess === undefined || flags[subcommand.earlyAccess],
   );
 }
-//@ chunk-d4eg9at2.js:2435-2439 placement
+//@ chunk-jdfzheem.js:2535-2539 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-d4eg9at2.js:2435", () => {
+deferInit("chunk-jdfzheem.js:2535", () => {
   init_react_production();
 });
-//@ chunk-d4eg9at2.js:2497-2549 placement
+//@ chunk-jdfzheem.js:2597-2649 placement
 var installedVersionOf = (version, installed) =>
   version === undefined ? undefined : installed?.manifest.version;
-//@ chunk-d4eg9at2.js:2549-2697 placement
+//@ chunk-jdfzheem.js:2649-2797 placement
 async function resolveLocalPluginFolder(pluginId, installed, options) {
   if (installed !== undefined) return installed.readFromFolderAt === undefined ? undefined : installed.path;
   let pluginSourceLocation = await resolvePluginSourceLocation(pluginId, options);
   return pluginSourceLocation.kind === "folder" ? pluginSourceLocation.path : undefined;
 }
-//@ chunk-d4eg9at2.js:2697-2815 placement
+//@ chunk-jdfzheem.js:2797-2915 placement
 async function resolvePluginVersions(paths, versionsByPath, options) {
   let results = await Promise.all(
     paths.map((path) => resolveLocalPluginFolder(path, versionsByPath.get(path), options)),
   );
   return new Map(paths.map((path, index) => [path, results[index]]));
 }
-//@ chunk-d4eg9at2.js:2815-2889 placement
+//@ chunk-jdfzheem.js:2915-2989 placement
 function displayVersion(version, installed, isFromPlugin) {
   return (isFromPlugin === undefined ? version : (installed?.manifest.version ?? version)) || "unknown";
 }
-//@ chunk-d4eg9at2.js:2889-2950 placement
+//@ chunk-jdfzheem.js:2989-3050 placement
 async function writeJsonLine(payload) {
   await writeStdoutAndDrain(
     escapeControlChars(
@@ -442,24 +442,24 @@ async function writeJsonLine(payload) {
 `,
   );
 }
-//@ chunk-d4eg9at2.js:2950-3029 placement
+//@ chunk-jdfzheem.js:3050-3129 placement
 function pluginErrorKind(error) {
   if (error instanceof MarketplaceError) return error.reason.kind;
   return getMarketplaceFailureCode(error) ?? classifyPluginCommandError(error);
 }
-//@ chunk-d4eg9at2.js:3029-3138 placement
+//@ chunk-jdfzheem.js:3129-3238 placement
 function declaredErrorLines(name, declaredInSettings) {
   return reservedMarketplaceNameMessage(name, {
     declaredInSettings,
   }).map((line, index) => `${index === 0 ? "    Error: " : "           "}${line}`);
 }
-//@ chunk-d4eg9at2.js:3138-3249 placement
+//@ chunk-jdfzheem.js:3238-3349 placement
 async function logPluginCommandFailure(eventName, error, code) {
   if (error instanceof CommandSourceError) await logFeatureSadAsync(eventName, "command_source_refused");
   else await logFeatureBadAsync(eventName, code);
   await flushAnalyticsBeforeExit();
 }
-//@ chunk-d4eg9at2.js:3249-3681 placement
+//@ chunk-jdfzheem.js:3349-3781 placement
 function marketplaceUpdateSummary(attempted, policyRefused, failed, skipped = 0, builtInSkipped = []) {
   let updatedCount = attempted - policyRefused.length - failed.length;
   let messages = [];
@@ -490,7 +490,7 @@ function marketplaceUpdateSummary(attempted, policyRefused, failed, skipped = 0,
     summary: pluginUpdateSummary(updatedCount, policyRefused.length, failed.length),
   };
 }
-//@ chunk-d4eg9at2.js:3681-4007 placement
+//@ chunk-jdfzheem.js:3781-4107 placement
 function pluginUpdateSummary(updatedCount, policyRefusedCount, failedCount) {
   let icon = marketplaceUpdateIcon({
     failedCount,
@@ -509,7 +509,7 @@ function pluginUpdateSummary(updatedCount, policyRefusedCount, failedCount) {
           : "No marketplaces needed updating";
   return icon === null ? text : `${icon} ${text}`;
 }
-//@ chunk-d4eg9at2.js:4007-4192 facade-exports (2.1.88 match: handleMarketplaceError, 0.768)
+//@ chunk-jdfzheem.js:4107-4292 facade-exports (2.1.88 match: handleMarketplaceError, 0.767)
 /**
  * 插件/市场命令出错的统一处理：策略拒绝打印 refused，其他错误记日志并以错误退出。
  */
@@ -525,7 +525,7 @@ function handleMarketplaceError(error, action) {
     stripInvisibleKeepNewlines(`${figures_default.cross} Failed to ${action}: ${errorMessage(error)}`),
   );
 }
-//@ chunk-d4eg9at2.js:4192-4321 layout
+//@ chunk-jdfzheem.js:4292-4421 layout
 async function reportOperationFailure(error, commandLine, jsonPayload, error_2 = error) {
   if (jsonPayload !== undefined)
     await writeJsonLine({
@@ -536,11 +536,11 @@ async function reportOperationFailure(error, commandLine, jsonPayload, error_2 =
     });
   return handleMarketplaceError(error, commandLine);
 }
-//@ chunk-d4eg9at2.js:4321-4378 layout
+//@ chunk-jdfzheem.js:4421-4478 layout
 function asMarketplaceError(error, maxChars = 300) {
   return error instanceof CommandSourceError ? error : printableName(errorMessage(error), maxChars);
 }
-//@ chunk-d4eg9at2.js:4378-4885 fingerprint (2.1.88 match: printValidationResult, 0.867)
+//@ chunk-jdfzheem.js:4478-4985 fingerprint (2.1.88 match: printValidationResult, 0.867)
 function printValidationResult(result) {
   let lines = [];
   if (result.errors.length > 0) {
@@ -571,10 +571,10 @@ function printValidationResult(result) {
   }
   return lines;
 }
-//@ chunk-d4eg9at2.js:4885-5108 layout
+//@ chunk-jdfzheem.js:4985-5208 layout
 var VALID_PLUGIN_DIR_SHAPES =
   "one with .claude-plugin/plugin.json, or one with no plugin.json and a skills/<name>/SKILL.md; a symbolic link in place of the folder, of skills, of <name> or of SKILL.md does not count, and SKILL.md must be a file";
-//@ chunk-d4eg9at2.js:5108-8930 facade-exports (2.1.88 match: pluginValidateHandler, 0.276)
+//@ chunk-jdfzheem.js:5208-9030 facade-exports (2.1.88 match: pluginValidateHandler, 0.276)
 /**
  * claude plugin validate：校验插件/市场目录结构与清单。
  */
@@ -735,7 +735,7 @@ async function pluginValidateHandler(getRoot, targetPath, options) {
   else if (noErrors && hasWarnings)
     lines.push(`${figures_default.cross} Validation failed (--strict treats warnings as errors)`);
   else lines.push(`${figures_default.cross} Validation failed`);
-  await renderAndRun(
+  await renderAndRun_2(
     await getRoot(),
     jsxProd_default(Text, {
       children: formatMessageLines(lines),
@@ -744,7 +744,7 @@ async function pluginValidateHandler(getRoot, targetPath, options) {
   await logOutcome();
   return exitAfterAnalyticsFlush(isSuccess ? 0 : 1);
 }
-//@ chunk-d4eg9at2.js:8930-10206 facade-exports
+//@ chunk-jdfzheem.js:9030-10306 facade-exports
 async function pluginTagHandler(getRoot, targetDir, options) {
   let prepared = await tagPluginRelease(targetDir ?? ".", {
     force: options.force,
@@ -754,7 +754,7 @@ async function pluginTagHandler(getRoot, targetDir, options) {
   if (!prepared.ok) {
     await logFeatureBadAsync("cli_plugin_tag", "cli_plugin_tag_prepare_failed");
     lines.push(`${figures_default.cross} ${prepared.error}`);
-    renderAndRun_2(getRoot, lines, 1);
+    renderAndRun(getRoot, lines, 1);
     return;
   }
   let { plan } = prepared;
@@ -776,7 +776,7 @@ async function pluginTagHandler(getRoot, targetDir, options) {
       `  git -C ${plan.gitRoot} tag ${force ? "-f " : ""}-a ${plan.tag} -m ${jsonStringify(message)}`,
       `  ${pushCommand}`,
     );
-    renderAndRun_2(getRoot, lines, 0);
+    renderAndRun(getRoot, lines, 0);
     return;
   }
   let pluginGitTag = await createPluginGitTag(plan, {
@@ -789,23 +789,34 @@ async function pluginTagHandler(getRoot, targetDir, options) {
   if (!pluginGitTag.ok) {
     await logFeatureBadAsync("cli_plugin_tag", "cli_plugin_tag_create_failed");
     lines.push(`${figures_default.cross} ${pluginGitTag.error}`);
-    renderAndRun_2(getRoot, lines, 1);
+    renderAndRun(getRoot, lines, 1);
     return;
   }
   await logFeatureOkAsync("cli_plugin_tag");
   lines.push(`${figures_default.tick} Created tag ${plan.tag}`);
   if (pluginGitTag.pushed) lines.push(`${figures_default.tick} Pushed to ${remote}`);
   else lines.push(`  Push with: ${pushCommand}`);
-  renderAndRun_2(getRoot, lines, 0);
+  renderAndRun(getRoot, lines, 0);
 }
-//@ chunk-d4eg9at2.js:10308-13016 facade-exports
+//@ chunk-jdfzheem.js:10306-10408 layout (2.1.88 match: renderAndRun, 1)
+function renderAndRun(root, message, exitCode) {
+  root.render(
+    jsxProd_default(RenderOnceAndExit, {
+      children: jsxProd_default(Text, {
+        children: formatMessageLines(message),
+      }),
+    }),
+  );
+  root.waitUntilExit().then(() => exitAfterAnalyticsFlush(exitCode));
+}
+//@ chunk-jdfzheem.js:10408-13116 facade-exports
 async function pluginInitHandler(getRoot, name, options, storage) {
   let lines = [];
   let nameProblem = pluginNameProblem(name);
   if (nameProblem) {
     await logFeatureBadAsync("cli_plugin_init", "invalid_name");
     lines.push(`${figures_default.cross} Invalid plugin name "${name}": ${nameProblem}`);
-    renderAndRun_2(getRoot, lines, 1);
+    renderAndRun(getRoot, lines, 1);
     return;
   }
   let components = [];
@@ -816,7 +827,7 @@ async function pluginInitHandler(getRoot, name, options, storage) {
       lines.push(
         `${figures_default.cross} Unknown --with component "${component}". Valid: ${PLUGIN_COMPONENT_KINDS.join(", ")}`,
       );
-      renderAndRun_2(getRoot, lines, 1);
+      renderAndRun(getRoot, lines, 1);
       return;
     }
   if (!areLocalPluginDirsAllowedByPolicy()) {
@@ -824,7 +835,7 @@ async function pluginInitHandler(getRoot, name, options, storage) {
     lines.push(
       `${figures_default.cross} ${localPluginDirsBlockedMessage(tildify(join(getClaudeConfigDir(), "skills")))}`,
     );
-    renderAndRun_2(getRoot, lines, 1);
+    renderAndRun(getRoot, lines, 1);
     return;
   }
   let skillsDir = join(getClaudeConfigDir(), "skills");
@@ -832,7 +843,7 @@ async function pluginInitHandler(getRoot, name, options, storage) {
   if (relative(skillsDir, resolve(pluginDir)).startsWith("..")) {
     await logFeatureBadAsync("cli_plugin_init", "invalid_name");
     lines.push(`${figures_default.cross} Plugin name "${name}" would write outside ${tildify(skillsDir)}`);
-    renderAndRun_2(getRoot, lines, 1);
+    renderAndRun(getRoot, lines, 1);
     return;
   }
   let authorName = options.author ?? (await gitUserName());
@@ -865,7 +876,7 @@ async function pluginInitHandler(getRoot, name, options, storage) {
     if (!scaffold.ok) {
       await logFeatureBadAsync("cli_plugin_init", "target_exists");
       lines.push(`${figures_default.cross} ${scaffold.error}`);
-      renderAndRun_2(getRoot, lines, 1);
+      renderAndRun(getRoot, lines, 1);
       return;
     }
     skippedFiles = scaffold.skipped;
@@ -873,7 +884,7 @@ async function pluginInitHandler(getRoot, name, options, storage) {
     await logFeatureBadAsync("cli_plugin_init", "write_failed");
     logError(error);
     lines.push(`${figures_default.cross} Failed to write scaffold: ${errorMessage(error)}`);
-    renderAndRun_2(getRoot, lines, 1);
+    renderAndRun(getRoot, lines, 1);
     return;
   }
   for (let file of skippedFiles) lines.push(`  kept existing ${file} (use --force to overwrite)`);
@@ -883,7 +894,7 @@ async function pluginInitHandler(getRoot, name, options, storage) {
   if (!result.success || result.warnings.length > 0) lines.push(...printValidationResult(result));
   if (!result.success) {
     await logFeatureBadAsync("cli_plugin_init", "self_validate_failed");
-    renderAndRun_2(getRoot, lines, 1);
+    renderAndRun(getRoot, lines, 1);
     return;
   }
   await logFeatureOkAsync("cli_plugin_init");
@@ -921,9 +932,9 @@ async function pluginInitHandler(getRoot, name, options, storage) {
   lines.push(
     `  ${disableCommand ? `Disable: ${disableCommand}. ` : "Disable: in /plugin. "}Remove: delete the directory.`,
   );
-  renderAndRun_2(getRoot, lines, 0);
+  renderAndRun(getRoot, lines, 0);
 }
-//@ chunk-d4eg9at2.js:13016-17670 facade-exports
+//@ chunk-jdfzheem.js:13116-17771 facade-exports
 async function pluginListHandler(getRoot, options, storageV5, storage) {
   if (options.cowork) setUseCoworkPlugins(true);
   isPluginCommandContext();
@@ -1172,7 +1183,7 @@ async function pluginListHandler(getRoot, options, storageV5, storage) {
   }
   for (let section of sections) lines.push(...pluginListHandler_2(section));
   let root = await getRoot();
-  await renderAndRun(
+  await renderAndRun_2(
     root,
     jsxProd_default(Text, {
       children: formatMessageLines(lines),
@@ -1180,7 +1191,7 @@ async function pluginListHandler(getRoot, options, storageV5, storage) {
   );
   await logFeatureOkAsync("cli_plugin_list");
 }
-//@ chunk-d4eg9at2.js:17670-17856 layout
+//@ chunk-jdfzheem.js:17771-17957 layout
 function MarketplaceResultLines(props) {
   let $ = useMemoCache(4);
   let { promise } = props;
@@ -1203,13 +1214,13 @@ function MarketplaceResultLines(props) {
   } else element = $[3];
   return element;
 }
-//@ chunk-d4eg9at2.js:17856-17941 facade-exports
+//@ chunk-jdfzheem.js:17957-18042 facade-exports
 /**
  * 市场来源格式错误提示文本。
  */
 var INVALID_MARKETPLACE_SOURCE_MESSAGE =
   "Invalid marketplace source format. Try: owner/repo, https://..., or ./path";
-//@ chunk-d4eg9at2.js:17941-22612 facade-exports (2.1.88 match: marketplaceAddHandler, 0.454)
+//@ chunk-jdfzheem.js:18042-22713 facade-exports (2.1.88 match: marketplaceAddHandler, 0.454)
 /**
  * claude plugin marketplace add：添加市场（owner/repo、URL 或路径），支持 --claudeai、--from-link、--resolve-only。
  */
@@ -1274,7 +1285,7 @@ async function marketplaceAddHandler(root, source, options, settings, credential
           refreshPluginCaches(settings, credentials);
         } else await persistPluginDirectoryChoice(true);
         await logFeatureOkAsync("cli_marketplace_add");
-        await renderAndRun(
+        await renderAndRun_2(
           root,
           jsxProd_default_2(Text, {
             children: [
@@ -1485,7 +1496,7 @@ async function marketplaceAddHandler(root, source, options, settings, credential
   await root.waitUntilExit();
   await exitAfterAnalyticsFlush(0);
 }
-//@ chunk-d4eg9at2.js:22612-23270 layout
+//@ chunk-jdfzheem.js:22713-23371 layout
 async function lookupMarketplaceLink(link, settings) {
   let parsed;
   try {
@@ -1522,12 +1533,12 @@ async function lookupMarketplaceLink(link, settings) {
 `);
   await exitAfterAnalyticsFlush(0);
 }
-//@ chunk-d4eg9at2.js:23270-23337 facade-exports
+//@ chunk-jdfzheem.js:23371-23438 facade-exports
 async function linkMarketplaceInUse(source, settings) {
   if (!isSourceAllowedByPolicy(source)) return;
   return findMarketplaceBySourceLoose(await loadKnownMarketplacesWithDeclared(settings), source);
 }
-//@ chunk-d4eg9at2.js:23337-25089 layout
+//@ chunk-jdfzheem.js:23438-25190 layout
 /**
  * claude plugin marketplace add 的 claude.ai 分支：列出账号可用的 claude.ai 托管 marketplace，按名字找唯一一个（重名、被策略拦、不存在分别报错），添加后打印成功信息与安装提示；渲染为一次性 Ink 输出后退出。
  */
@@ -1600,7 +1611,7 @@ async function addClaudeAiMarketplaceCommand(ink, name, settings, credentials) {
   await ink.waitUntilExit();
   await exitAfterAnalyticsFlush(0);
 }
-//@ chunk-d4eg9at2.js:25089-25201 layout (2.1.88 match: readHeadAndTail, 0.802)
+//@ chunk-jdfzheem.js:25190-25302 layout (2.1.88 match: readHeadAndTail, 0.802)
 function readHeadAndTail(text) {
   return /^[A-Za-z0-9._/\\:~-]{1,200}$/.test(text)
     ? text
@@ -1609,13 +1620,13 @@ function readHeadAndTail(text) {
         tail: 80,
       }) || "\u201C\u201D";
 }
-//@ chunk-d4eg9at2.js:25201-25286 layout
+//@ chunk-jdfzheem.js:25302-25387 layout
 function displaySafeUrl(url) {
   return url === REDACTED_URL || /^[A-Za-z0-9._/\\:~@%+=&?,*-]{1,200}$/.test(url)
     ? url
     : readHeadAndTail(url);
 }
-//@ chunk-d4eg9at2.js:25286-28897 facade-exports (2.1.88 match: marketplaceListHandler, 0.405)
+//@ chunk-jdfzheem.js:25387-29000 facade-exports (2.1.88 match: marketplaceListHandler, 0.405)
 /**
  * claude plugin marketplace list。
  */
@@ -1824,10 +1835,10 @@ async function marketplaceListHandler(root, options, settings) {
     });
   }
   let renderRoot = await root();
-  await renderAndRun(renderRoot, view);
+  await renderAndRun_2(renderRoot, view);
   await logFeatureOkAsync("cli_marketplace_list");
 }
-//@ chunk-d4eg9at2.js:28897-30866 facade-exports (2.1.88 match: marketplaceRemoveHandler, 0.274)
+//@ chunk-jdfzheem.js:29000-30969 facade-exports (2.1.88 match: marketplaceRemoveHandler, 0.274)
 /**
  * claude plugin marketplace remove。
  */
@@ -1850,7 +1861,7 @@ async function marketplaceRemoveHandler(root, name, options, storage) {
         isOfficialMarketplaceName_2(name),
       )
     ) {
-      await renderAndRun(root, jsxProd_default(ManagedMarketplaceNotice, {}));
+      await renderAndRun_2(root, jsxProd_default(ManagedMarketplaceNotice, {}));
       await logFeatureOkAsync("cli_marketplace_remove");
       return;
     }
@@ -1885,7 +1896,7 @@ async function marketplaceRemoveHandler(root, name, options, storage) {
     );
     let blockedNotice = blockedPluginsNotice(outcome.disabledPluginIds, outcome.disabledReason);
     if (blockedNotice !== null) mapped.push(blockedNotice);
-    await renderAndRun(
+    await renderAndRun_2(
       root,
       jsxProd_default(Text, {
         children: formatMessageLines(mapped),
@@ -1896,7 +1907,7 @@ async function marketplaceRemoveHandler(root, name, options, storage) {
   if (outcome.kind === "plugin-directory-built-in") {
     let pluginDirectoryState = await getPluginDirectoryState();
     if (pluginDirectoryState === "blocked") {
-      await renderAndRun(root, jsxProd_default(ManagedMarketplaceNotice, {}));
+      await renderAndRun_2(root, jsxProd_default(ManagedMarketplaceNotice, {}));
       return;
     }
     if (officialState === "on" && pluginDirectoryState === "off")
@@ -1904,7 +1915,7 @@ async function marketplaceRemoveHandler(root, name, options, storage) {
         enabled: false,
         surface: "cli",
       });
-    await renderAndRun(
+    await renderAndRun_2(
       root,
       jsxProd_default_2(Text, {
         children: [
@@ -1943,14 +1954,14 @@ async function marketplaceRemoveHandler(root, name, options, storage) {
     return;
   }
   let lines = [`${figures_default.tick} ${summaryLine}`, ...uninstalledLines];
-  await renderAndRun(
+  await renderAndRun_2(
     root,
     jsxProd_default(Text, {
       children: formatMessageLines(lines),
     }),
   );
 }
-//@ chunk-d4eg9at2.js:30866-30961 sole-consumer
+//@ chunk-jdfzheem.js:30969-31064 layout
 function ManagedMarketplaceNotice() {
   let $ = useMemoCache(1);
   let element;
@@ -1962,7 +1973,50 @@ function ManagedMarketplaceNotice() {
   } else element = $[0];
   return element;
 }
-//@ chunk-d4eg9at2.js:31326-33318 facade-exports (2.1.88 match: marketplaceUpdateHandler, 0.472)
+//@ chunk-jdfzheem.js:31064-31429 layout
+function ResultMessages(props) {
+  let $ = useMemoCache(11);
+  let { promise } = props;
+  let { messages, summary } = use(promise);
+  let TextComponent;
+  let RenderOnceAndExitComponent;
+  let children;
+  if ($[0] !== messages || $[1] !== summary) {
+    let lines = [...messages, summary];
+    RenderOnceAndExitComponent = RenderOnceAndExit;
+    TextComponent = Text;
+    children = formatMessageLines(lines);
+    $[0] = messages;
+    $[1] = summary;
+    $[2] = TextComponent;
+    $[3] = RenderOnceAndExitComponent;
+    $[4] = children;
+  } else {
+    TextComponent = $[2];
+    RenderOnceAndExitComponent = $[3];
+    children = $[4];
+  }
+  let children_2;
+  if ($[5] !== TextComponent || $[6] !== children) {
+    children_2 = jsxProd_default(TextComponent, {
+      children,
+    });
+    $[5] = TextComponent;
+    $[6] = children;
+    $[7] = children_2;
+  } else children_2 = $[7];
+  let element;
+  if ($[8] !== RenderOnceAndExitComponent || $[9] !== children_2) {
+    element = jsxProd_default(RenderOnceAndExitComponent, {
+      children: children_2,
+    });
+    $[8] = RenderOnceAndExitComponent;
+    $[9] = children_2;
+    $[10] = element;
+  } else element = $[10];
+  return element;
+}
+//@ chunk-jdfzheem.js:31429-33421 facade-exports (2.1.88 match: marketplaceUpdateHandler, 0.464)
 /**
  * claude plugin marketplace update。
  */
@@ -2034,7 +2088,7 @@ async function marketplaceUpdateHandler(root, name, options, storage) {
     }
     let marketplaceNames = Object.keys(known);
     if (marketplaceNames.length === 0) {
-      await renderAndRun(
+      await renderAndRun_2(
         root,
         jsxProd_default(Text, {
           children: "No marketplaces configured",
@@ -2090,34 +2144,11 @@ async function marketplaceUpdateHandler(root, name, options, storage) {
   await root.waitUntilExit();
   await exitAfterAnalyticsFlush(exitCode);
 }
-//@ chunk-d4eg9at2.js:33318-33518 layout
-function SuccessLine(props) {
-  let $ = useMemoCache(4);
-  let { promise } = props;
-  let text = use(promise);
-  let clean;
-  if ($[0] !== text) {
-    clean = stripInvisibleKeepNewlines(text);
-    $[0] = text;
-    $[1] = clean;
-  } else clean = $[1];
-  let element;
-  if ($[2] !== clean) {
-    element = jsxProd_default(RenderOnceAndExit, {
-      children: jsxProd_default_2(Text, {
-        children: [figures_default.tick, " ", clean],
-      }),
-    });
-    $[2] = clean;
-    $[3] = element;
-  } else element = $[3];
-  return element;
-}
-//@ chunk-d4eg9at2.js:33518-33561 layout
+//@ chunk-jdfzheem.js:33621-33664 affinity
 function isValidInstallScope(scope) {
   return VALID_INSTALLABLE_SCOPES.some((scopeName) => scopeName === scope);
 }
-//@ chunk-d4eg9at2.js:33561-33752 facade-exports (2.1.88 match: pluginInstallHandler, 0.744)
+//@ chunk-jdfzheem.js:33664-33855 facade-exports (2.1.88 match: pluginInstallHandler, 0.744)
 /**
  * 校验 --scope（默认 user；--cowork 只能 user），非法时退出。
  */
@@ -2128,7 +2159,7 @@ function requireInstallableScope(options) {
     cliError(`Invalid scope: ${scope}. Must be one of: ${VALID_INSTALLABLE_SCOPES.join(", ")}.`);
   return scope;
 }
-//@ chunk-d4eg9at2.js:33752-34003 file-local
+//@ chunk-jdfzheem.js:33855-34106 file-local
 function pluginEnableHandler_2(options) {
   let scope;
   if (options.scope) {
@@ -2141,7 +2172,7 @@ function pluginEnableHandler_2(options) {
   if (options.cowork && scope === undefined) scope = "user";
   return scope;
 }
-//@ chunk-d4eg9at2.js:34142-36170 facade-exports
+//@ chunk-jdfzheem.js:34245-36274 facade-exports
 async function pluginInstallHandler(root, spec, options, storageV5) {
   if (options.cowork) setUseCoworkPlugins(true);
   let scope = requireInstallableScope(options);
@@ -2211,7 +2242,7 @@ async function pluginInstallHandler(root, spec, options, storageV5) {
     logFeatureSad("cli_plugin_install", "command_source_declined");
     if (options.json) await failWith("command_source_declined", "Aborted.");
     else
-      await renderAndRun(
+      await renderAndRun_2(
         await root(),
         jsxProd_default(Text, {
           children: "Aborted.",
@@ -2248,7 +2279,7 @@ async function pluginInstallHandler(root, spec, options, storageV5) {
         "Aborted \u2014 the command was not run.",
       );
     else
-      await renderAndRun(
+      await renderAndRun_2(
         await root(),
         jsxProd_default(Text, {
           children: "Aborted \u2014 the command was not run.",
@@ -2305,7 +2336,7 @@ async function pluginInstallHandler(root, spec, options, storageV5) {
   await renderRoot.waitUntilExit();
   await gracefulShutdown(0);
 }
-//@ chunk-d4eg9at2.js:36170-36520 facade-exports (2.1.88 match: pluginUninstallHandler, 0.343)
+//@ chunk-jdfzheem.js:36274-36624 facade-exports (2.1.88 match: pluginUninstallHandler, 0.343)
 /**
  * claude plugin uninstall：卸载插件（--keep-data、--prune、--json）。
  */
@@ -2318,7 +2349,7 @@ async function pluginUninstallHandler(getRoot, plugin, options, storage) {
     json: options.json,
   });
   if (!options.json)
-    await renderAndRun(
+    await renderAndRun_2(
       await getRoot(),
       jsxProd_default(Text, {
         children: stripInvisibleKeepNewlines(options.prune ? result : `${figures_default.tick} ${result}`),
@@ -2327,7 +2358,7 @@ async function pluginUninstallHandler(getRoot, plugin, options, storage) {
   await logFeatureOkAsync("cli_plugin_uninstall");
   await exitAfterAnalyticsFlush(0);
 }
-//@ chunk-d4eg9at2.js:36520-36768 facade-exports
+//@ chunk-jdfzheem.js:36624-36872 facade-exports
 async function pluginPruneHandler(getRoot, options, storage) {
   if (options.cowork) setUseCoworkPlugins(true);
   let scope = requireInstallableScope(options);
@@ -2343,7 +2374,7 @@ async function pluginPruneHandler(getRoot, options, storage) {
     },
     storage,
   );
-  await renderAndRun(
+  await renderAndRun_2(
     getRoot,
     jsxProd_default(Text, {
       children: stripInvisibleKeepNewlines(result),
@@ -2352,7 +2383,7 @@ async function pluginPruneHandler(getRoot, options, storage) {
   await logFeatureOkAsync("cli_plugin_prune");
   await exitAfterAnalyticsFlush(0);
 }
-//@ chunk-d4eg9at2.js:36768-37499 facade-exports (2.1.88 match: enablePlugin, 0.424)
+//@ chunk-jdfzheem.js:36872-37603 facade-exports (2.1.88 match: enablePlugin, 0.424)
 async function pluginEnableHandler(getRoot, plugin, options, storage) {
   if (options.cowork) setUseCoworkPlugins(true);
   let scope = pluginEnableHandler_2(options);
@@ -2395,7 +2426,7 @@ async function pluginEnableHandler(getRoot, plugin, options, storage) {
       message: stripInvisibleKeepNewlines(note),
     });
   else
-    await renderAndRun(
+    await renderAndRun_2(
       await getRoot(),
       jsxProd_default_2(Text, {
         children: [figures_default.tick, " ", stripInvisibleKeepNewlines(note)],
@@ -2413,7 +2444,7 @@ async function pluginEnableHandler(getRoot, plugin, options, storage) {
   await logFeatureOkAsync("cli_plugin_enable");
   await exitAfterAnalyticsFlush(0);
 }
-//@ chunk-d4eg9at2.js:37499-38038 facade-exports (2.1.88 match: pluginDisableHandler, 0.651)
+//@ chunk-jdfzheem.js:37603-38142 facade-exports (2.1.88 match: pluginDisableHandler, 0.65)
 /**
  * claude plugin disable：禁用单个或 --all 全部插件。
  */
@@ -2439,7 +2470,7 @@ async function pluginDisableHandler(getRoot, plugin, options, storage) {
     });
   }
   if (!options.json)
-    await renderAndRun(
+    await renderAndRun_2(
       await getRoot(),
       jsxProd_default(Text, {
         children: stripInvisibleKeepNewlines(scope),
@@ -2448,7 +2479,7 @@ async function pluginDisableHandler(getRoot, plugin, options, storage) {
   await logFeatureOkAsync("cli_plugin_disable");
   await exitAfterAnalyticsFlush(0);
 }
-//@ chunk-d4eg9at2.js:38038-38432 facade-exports (2.1.88 match: pluginUpdateHandler, 0.778)
+//@ chunk-jdfzheem.js:38142-38536 facade-exports (2.1.88 match: pluginUpdateHandler, 0.778)
 /**
  * claude plugin update：按作用域更新插件。
  */
@@ -2474,7 +2505,7 @@ async function pluginUpdateHandler(root, options, storage) {
     storage,
   );
 }
-//@ chunk-d4eg9at2.js:38432-42348 facade-exports
+//@ chunk-jdfzheem.js:38536-42452 facade-exports
 /**
  * claude plugin details <name>：插件清单、组件与 token 开销估算。
  */
@@ -2631,7 +2662,7 @@ async function pluginDetailsHandler(getRoot, target, options, storage, credentia
     lines.push("  Token counts are estimates and may differ from actual usage.");
   }
   let root = await getRoot();
-  await renderAndRun(
+  await renderAndRun_2(
     root,
     jsxProd_default(Text, {
       children: formatMessageLines(lines),
@@ -2640,12 +2671,12 @@ async function pluginDetailsHandler(getRoot, target, options, storage, credentia
   if (tokenEstimate) await logFeatureOkAsync("cli_plugin_details");
   else await logFeatureSadAsync("cli_plugin_details", "count_tokens_unreachable");
 }
-//@ chunk-d4eg9at2.js:42348-42494 layout
+//@ chunk-jdfzheem.js:42452-42598 layout
 async function finishPluginDetails(getRoot, json, message, reason) {
   let clean = stripInvisibleKeepNewlines(message);
   if (json) printCliError(clean);
   else
-    await renderAndRun(
+    await renderAndRun_2(
       await getRoot(),
       jsxProd_default(Text, {
         children: clean,
@@ -2654,21 +2685,21 @@ async function finishPluginDetails(getRoot, json, message, reason) {
   await logFeatureBadAsync("cli_plugin_details", reason);
   return json ? cliErrorAfterAnalyticsFlush() : exitAfterAnalyticsFlush(1);
 }
-//@ chunk-d4eg9at2.js:42494-42536 layout
+//@ chunk-jdfzheem.js:42598-42640 layout
 function formatMessageLines(lines) {
   return lines.map(stripInvisibleKeepEmoji).join(`
 `);
 }
-//@ chunk-d4eg9at2.js:42536-42615 layout
+//@ chunk-jdfzheem.js:42640-42719 layout
 function printPluginWarnings(marketplaceConfig) {
   for (let { message } of listReservedNameRefusals(marketplaceConfig))
     console.error(`${figures_default.warning} ${message}`);
 }
-//@ chunk-d4eg9at2.js:42615-42653 layout
+//@ chunk-jdfzheem.js:42719-42757 layout
 function printJson(value) {
   return escapeControlChars(jsonStringify(value, null, 2));
 }
-//@ chunk-d4eg9at2.js:42653-42920 layout
+//@ chunk-jdfzheem.js:42757-43024 layout
 function filterInventoryBySource(marketplace, inventory) {
   let isFromMarketplace = (plugin) => marketplaceOf(plugin.source) === marketplace;
   let filtered = inventory.plugins.filter(isFromMarketplace);
@@ -2686,7 +2717,7 @@ function filterInventoryBySource(marketplace, inventory) {
     ),
   };
 }
-//@ chunk-d4eg9at2.js:42920-43027 layout
+//@ chunk-jdfzheem.js:43024-43131 layout
 function hasInventoryRows(options) {
   return (
     options.plugins.length > 0 ||
@@ -2694,7 +2725,7 @@ function hasInventoryRows(options) {
     options.standaloneWarningRows.length > 0
   );
 }
-//@ chunk-d4eg9at2.js:43027-43872 fingerprint (2.1.88 match: pluginListHandler, 0.486)
+//@ chunk-jdfzheem.js:43131-43976 fingerprint (2.1.88 match: pluginListHandler, 0.486)
 function pluginListHandler_2(options) {
   if (!hasInventoryRows(options)) return [];
   let { standaloneErrorRows, standaloneWarningRows } = options;
@@ -2731,7 +2762,7 @@ function pluginListHandler_2(options) {
     );
   return allLoadedPlugins;
 }
-//@ chunk-d4eg9at2.js:43872-43939 sole-consumer
+//@ chunk-jdfzheem.js:43976-44043 sole-consumer
 function toValidationIssue({ path, message }) {
   return {
     path,
@@ -2739,7 +2770,7 @@ function toValidationIssue({ path, message }) {
     code: null,
   };
 }
-//@ chunk-d4eg9at2.js:43939-44176 sole-consumer
+//@ chunk-jdfzheem.js:44043-44280 sole-consumer
 function toValidationFileJson(result) {
   return {
     file: result.filePath,
@@ -2755,7 +2786,7 @@ function toValidationFileJson(result) {
     })),
   };
 }
-//@ chunk-d4eg9at2.js:44176-44350 sole-consumer
+//@ chunk-jdfzheem.js:44280-44454 sole-consumer
 function buildValidateJsonOutput(target, summary, advice, directory) {
   return {
     success: summary.success,
@@ -2767,7 +2798,7 @@ function buildValidateJsonOutput(target, summary, advice, directory) {
     directory,
   };
 }
-//@ chunk-d4eg9at2.js:44350-45266 sole-consumer
+//@ chunk-jdfzheem.js:44454-45370 sole-consumer
 /**
  * 把插件错误/警告对象压成 JSON 列表里的 detail：type 加上 plugin、marketplace、依赖、服务器名、组件、路径、URL、related（遮蔽者/改名/阻塞者）等能识别的字段。
  */
@@ -2817,7 +2848,7 @@ function pluginIssueDetail(issue) {
   if (related !== undefined) detail.related = related;
   return detail;
 }
-//@ chunk-d4eg9at2.js:45266-46214 sole-consumer
+//@ chunk-jdfzheem.js:45370-46318 sole-consumer
 /**
  * 生成 claude plugin list --json 的条目：每个已装插件的 id、版本、作用域、启用状态、安装路径、MCP 服务器、错误与提示（文字与 detail）；另加独立的错误行与警告行。
  */
@@ -2870,13 +2901,13 @@ async function buildPluginListJson(listing, credentials) {
     });
   return rows;
 }
-//@ chunk-d4eg9at2.js:46302-46342 placement
+//@ chunk-jdfzheem.js:46406-46446 placement
 function cleanOptionTitle(fallbackTitle, command) {
   return stripInvisibleKeepEmoji(command?.title || fallbackTitle);
 }
-//@ chunk-d4eg9at2.js:46342-46413 placement
+//@ chunk-jdfzheem.js:46446-46517 placement
 let OptionParseError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-d4eg9at2.js:46342", () => {
+deferInit("chunk-jdfzheem.js:46446", () => {
   OptionParseError = class OptionParseError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -2887,7 +2918,7 @@ deferInit("chunk-d4eg9at2.js:46342", () => {
     }
   };
 });
-//@ chunk-d4eg9at2.js:46413-46592 placement
+//@ chunk-jdfzheem.js:46517-46696 placement
 /**
  * 把输入校验为"值全是字符串的普通对象"并复制到无原型对象；不是对象或有非字符串值时返回 undefined。
  */
@@ -2900,13 +2931,13 @@ function parseStringRecord(value) {
   }
   return record;
 }
-//@ chunk-d4eg9at2.js:46592-46615 placement
+//@ chunk-jdfzheem.js:46696-46719 placement
 /**
  * plugin configure --values-stdin 读取上限 256 KB
  */
 var MAX_VALUES_STDIN_BYTES = 262144;
 var MAX_OPTION_VALUE_BYTES = 65536;
-//@ chunk-d4eg9at2.js:46615-46781 placement (2.1.88 match: getOptions, 0.609)
+//@ chunk-jdfzheem.js:46719-46885 placement (2.1.88 match: getOptions, 0.607)
 async function getOptions() {
   process.stdin.setEncoding("utf8");
   let text = "";
@@ -2918,7 +2949,7 @@ async function getOptions() {
   }
   return text;
 }
-//@ chunk-d4eg9at2.js:46781-48268 layout
+//@ chunk-jdfzheem.js:46885-48371 layout
 /**
  * claude plugin configure：校验每个选项已在 userConfig 声明、单行且不超过 64 KB、必填不为空、布尔/数字格式正确，再按 schema 校验后保存，返回改动的键。
  */
@@ -3000,11 +3031,11 @@ async function configurePluginOptions(plugin, values, scope, credentials) {
   await savePluginOptions(pluginId, finalValues, userConfig, scope, credentials);
   return keys;
 }
-//@ chunk-d4eg9at2.js:48268-48337 layout
+//@ chunk-jdfzheem.js:48371-48440 layout
 function redactSubstrings(secrets, text) {
   return secrets.reduce((acc, secret) => acc.split(secret).join("\u2026"), text);
 }
-//@ chunk-d4eg9at2.js:48337-51461 facade-exports
+//@ chunk-jdfzheem.js:48440-51564 facade-exports
 async function pluginConfigureHandler(target, options, scope, credentials) {
   if (options.cowork) setUseCoworkPlugins(true);
   isPluginCommandContext();
@@ -3203,11 +3234,11 @@ async function pluginConfigureHandler(target, options, scope, credentials) {
   );
   await exitAfterAnalyticsFlush(0);
 }
-//@ chunk-d4eg9at2.js:51461-51520 sole-consumer
+//@ chunk-jdfzheem.js:51564-51623 sole-consumer
 function configuredMcpServers(servers) {
   return import_mapValues(servers, (server) => omitAlias(server, "configuredCommand"));
 }
-//@ chunk-z2kk8ttr.js:15018-15898 placement
+//@ chunk-zde45n7x.js:16222-17102 placement
 /**
  * plugin install --marketplace 相关的帮助文本与辅助：添加市场/从市场安装的提示、市场源非法与需要裸插件名的说明、"市场已添加"注记、保留名判定与错误构造、日志与 error_ 前缀剥离。
  */
@@ -3222,7 +3253,7 @@ var reservedMarketplaceNameError;
 var formatLines;
 var logMarketplaceAdded;
 var stripErrorPrefix;
-deferInit("chunk-z2kk8ttr.js:15018", () => {
+deferInit("chunk-zde45n7x.js:16222", () => {
   PLUGIN_INSTALL_MARKETPLACE_USAGE = "claude plugin install <plugin> --marketplace <source>";
   PLUGIN_ADD_MARKETPLACE_HELP = "add marketplace";
   PLUGIN_INSTALL_FROM_MARKETPLACE_HELP = "install from marketplace";
@@ -3254,7 +3285,7 @@ deferInit("chunk-z2kk8ttr.js:15018", () => {
     });
   stripErrorPrefix = (text) => text.replace(/^error_/, "");
 });
-//@ chunk-z2kk8ttr.js:15898-17176 placement
+//@ chunk-zde45n7x.js:17102-18380 placement
 async function pluginInstallFromMarketplace(
   marketplaceName,
   { plugins, marketplaceSource, options },
@@ -3349,9 +3380,8 @@ async function pluginInstallFromMarketplace(
   );
 }
 export {
-  formatMessageLines,
-  PLUGIN_SUBCOMMANDS,
   listAvailablePluginSubcommands,
+  PLUGIN_SUBCOMMANDS,
   INVALID_MARKETPLACE_SOURCE_MESSAGE,
   handleMarketplaceError,
   linkMarketplaceInUse,

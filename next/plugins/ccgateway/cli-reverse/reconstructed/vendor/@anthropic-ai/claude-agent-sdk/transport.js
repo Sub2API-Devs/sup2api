@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/claude-agent-sdk/transport.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/claude-agent-sdk/transport.js
- * pieces: chunk-y805ph4h.js (25)
+ * pieces: chunk-tp1gh0pb.js (25)
  * attribution: placement 25
  */
 import { spawn } from "child_process";
@@ -12,7 +12,7 @@ import { existsSync } from "fs";
 import { DoctorLazy } from "../../../src/cli/handlers/util.js";
 import { objectSchema, stringSchema } from "../../zod/v4/classic/schemas.js";
 import { isPlainObject } from "../../../src/utils/objectUtils.js";
-import { uniq } from "../../../src/utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../src/utils/permissions/filesystem.js";
 import { jsonParse, jsonStringify, alwaysTrue } from "../../../src/utils/slowOperations.js";
 import { logForDebugging } from "../../../src/utils/debug.js";
 import { isWellFormedString, takeLastChars } from "../../../src/utils/stringUtils.js";
@@ -34,7 +34,7 @@ import { getDebugFilePath } from "./transcriptMirror.js";
 import { HookConfigError } from "../../../src/schemas/hooks.js";
 import { inspectToolsList, describeToolsListIssues } from "../../../src/services/mcp/serverIdentity.js";
 
-//@ chunk-y805ph4h.js:5498-5594 placement
+//@ chunk-tp1gh0pb.js:5736-5832 placement
 var sessionInputMessageSchema = DoctorLazy(() =>
   objectSchema({
     session_id: stringSchema(),
@@ -43,12 +43,12 @@ var sessionInputMessageSchema = DoctorLazy(() =>
     session_key: stringSchema().optional(),
   }),
 );
-//@ chunk-y805ph4h.js:6155-6227 placement
+//@ chunk-tp1gh0pb.js:6393-6465 placement
 function isJsonSettingsString(settings) {
   let trimmed = settings.trim();
   return trimmed.startsWith("{") && trimmed.endsWith("}");
 }
-//@ chunk-y805ph4h.js:6227-6493 placement
+//@ chunk-tp1gh0pb.js:6465-6731 placement
 var CONCAT_ARRAY_SANDBOX_KEYS = new Set([
   "filesystem.denyRead",
   "filesystem.denyWrite",
@@ -59,7 +59,7 @@ var CONCAT_ARRAY_SANDBOX_KEYS = new Set([
 var OPAQUE_SANDBOX_KEYS = new Set(["ripgrep", "network.tlsTerminate"]);
 var FORBIDDEN_MERGE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 var PROXY_PORT_KEYS = ["httpProxyPort", "socksProxyPort"];
-//@ chunk-y805ph4h.js:6493-6798 placement
+//@ chunk-tp1gh0pb.js:6731-7036 placement
 function mergeSandboxSettings(target, source, prefix = "") {
   let merged = isPlainObject(target)
     ? {
@@ -71,14 +71,14 @@ function mergeSandboxSettings(target, source, prefix = "") {
     let fullKey = prefix ? `${prefix}.${key}` : key;
     let existing = Object.hasOwn(merged, key) ? merged[key] : undefined;
     if (CONCAT_ARRAY_SANDBOX_KEYS.has(fullKey) && Array.isArray(existing) && Array.isArray(value))
-      merged[key] = uniq([...existing, ...value]);
+      merged[key] = normalizeCaseForComparison_2([...existing, ...value]);
     else if (isPlainObject(existing) && isPlainObject(value) && !OPAQUE_SANDBOX_KEYS.has(fullKey))
       merged[key] = mergeSandboxSettings(existing, value, fullKey);
     else merged[key] = value;
   }
   return merged;
 }
-//@ chunk-y805ph4h.js:6798-7567 placement
+//@ chunk-tp1gh0pb.js:7036-7805 placement
 function applySandboxToArgs(options, source) {
   let result = {
     ...options,
@@ -125,16 +125,16 @@ function applySandboxToArgs(options, source) {
   });
   return result;
 }
-//@ chunk-y805ph4h.js:7567-7629 placement
+//@ chunk-tp1gh0pb.js:7805-7867 placement
 var EXIT_DRAIN_TIMEOUT_MS = 2000;
 var STDERR_TAIL_MAX_CHARS = 2048;
 var SDK_EXIT_AFTER_STDERR_DRAINED = "sdk-exit-after-stderr-drained";
 var STDERR_DRAIN_GRACE_MS = 200;
-//@ chunk-y805ph4h.js:7629-7667 placement
+//@ chunk-tp1gh0pb.js:7867-7905 placement
 function mapExitEventName(eventName) {
   return eventName === "exit" ? SDK_EXIT_AFTER_STDERR_DRAINED : eventName;
 }
-//@ chunk-y805ph4h.js:7667-8011 placement
+//@ chunk-tp1gh0pb.js:7905-8249 placement
 class ProcessRegistry {
   #e = new Set();
   #t = false;
@@ -164,10 +164,10 @@ class ProcessRegistry {
     this.#e.clear();
   }
 }
-//@ chunk-y805ph4h.js:8011-8062 placement
+//@ chunk-tp1gh0pb.js:8249-8300 placement
 var processRegistry = new ProcessRegistry();
 var INVALID_SKILL_NAME_CHARS = /[(),\u0000-\u001f\u007f-\u009f]/;
-//@ chunk-y805ph4h.js:8062-10030 placement
+//@ chunk-tp1gh0pb.js:8300-10268 placement
 function validateSkillName(skill) {
   if (typeof skill !== "string" || skill.trim() === "") throw Error("Skill names must be non-empty strings.");
   if (!isWellFormedString(skill))
@@ -208,7 +208,7 @@ function validateSkillName(skill) {
     );
   return skill;
 }
-//@ chunk-y805ph4h.js:10030-22612 placement
+//@ chunk-tp1gh0pb.js:10268-22908 placement
 /**
  * Agent SDK 的 ProcessTransport：以子进程方式启动 Claude Code（stream-json 输入输出），负责参数/环境组装、stdin 写入、stdout 行解析与进程退出处理。
  */
@@ -284,6 +284,7 @@ class ProcessTransport {
   }
   spawnLocalProcess(spawnOptions) {
     let { command, args, cwd, env, signal } = spawnOptions;
+    let startTime = performance.now();
     let child = spawn(command, args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
@@ -291,9 +292,12 @@ class ProcessTransport {
       env,
       windowsHide: true,
     });
+    let spawnSyncMs = performance.now() - startTime;
     if (child.pid !== undefined && this.options.onProcessSpawned)
       try {
-        this.options.onProcessSpawned(child.pid);
+        this.options.onProcessSpawned(child.pid, {
+          spawnSyncMs,
+        });
       } catch (error) {
         appendTaskOutput_2(`onProcessSpawned threw: ${errorMessage(error)}`);
       }
@@ -821,11 +825,11 @@ class ProcessTransport {
     });
   }
 }
-//@ chunk-y805ph4h.js:22612-22694 placement
+//@ chunk-tp1gh0pb.js:22908-22990 placement
 function isJavaScriptFile(pathToClaudeCodeExecutable) {
   return ![".js", ".mjs", ".tsx", ".ts", ".jsx"].some((file) => pathToClaudeCodeExecutable.endsWith(file));
 }
-//@ chunk-y805ph4h.js:22694-23678 placement
+//@ chunk-tp1gh0pb.js:22990-23974 placement
 function describeExecutableLaunchFailure(pathToClaudeCodeExecutable, isNativeBinary) {
   let displayPath = isNativeBinary ? "native binary" : "executable";
   let kind = redactSecrets(pathToClaudeCodeExecutable);
@@ -845,47 +849,47 @@ function describeExecutableLaunchFailure(pathToClaudeCodeExecutable, isNativeBin
     errorClass: "executable_not_found",
   };
 }
-//@ chunk-y805ph4h.js:23678-23736 placement
+//@ chunk-tp1gh0pb.js:23974-24032 placement
 function formatErrnoSuffix(error) {
   let code = sanitizeErrnoForTelemetry(error);
   return code === undefined ? "" : ` (${code})`;
 }
-//@ chunk-y805ph4h.js:23736-23886 placement
+//@ chunk-tp1gh0pb.js:24032-24182 placement
 function processAbortedError() {
   return withTelemetryFacts(new HookConfigError("Claude Code process aborted by user"), {
     telemetryMessage: "Claude Code process aborted by user",
     errorClass: "aborted",
   });
 }
-//@ chunk-y805ph4h.js:23886-24000 placement
+//@ chunk-tp1gh0pb.js:24182-24296 placement
 function operationAbortedError() {
   return withTelemetryFacts(new HookConfigError("Operation aborted"), {
     telemetryMessage: "Operation aborted",
     errorClass: "aborted",
   });
 }
-//@ chunk-y805ph4h.js:24000-24102 placement
+//@ chunk-tp1gh0pb.js:24296-24398 placement
 function getStringFact(exitError, key) {
   let value = Object.hasOwn(exitError, key) ? Reflect.get(exitError, key) : undefined;
   return typeof value === "string" ? value : undefined;
 }
-//@ chunk-y805ph4h.js:24102-24220 placement
+//@ chunk-tp1gh0pb.js:24398-24516 placement
 function getExitCode(exitError) {
   let exitCode = Object.hasOwn(exitError, "exitCode") ? Reflect.get(exitError, "exitCode") : undefined;
   return typeof exitCode === "number" ? exitCode : undefined;
 }
-//@ chunk-y805ph4h.js:24220-24285 placement
+//@ chunk-tp1gh0pb.js:24516-24581 placement
 function hasUnref(stderr) {
   return typeof Reflect.get(stderr, "unref") === "function";
 }
-//@ chunk-y805ph4h.js:24318-24358 placement
+//@ chunk-tp1gh0pb.js:24614-24654 placement
 var SDK_PACKAGE_NAME = "@anthropic-ai/claude-agent-sdk";
-//@ chunk-y805ph4h.js:24358-24511 placement
+//@ chunk-tp1gh0pb.js:24654-24807 placement
 function prefersMusl() {
   let report = typeof process.report?.getReport === "function" ? process.report.getReport() : null;
   return report != null && report.header?.glibcVersionRuntime === undefined;
 }
-//@ chunk-y805ph4h.js:24511-24935 placement
+//@ chunk-tp1gh0pb.js:24807-25231 placement
 function resolveNativeCliPath(resolve, options = {}) {
   let platform = options.platform ?? "linux";
   let arch = options.arch ?? "x64";
@@ -909,18 +913,19 @@ function resolveNativeCliPath(resolve, options = {}) {
     } catch {}
   return null;
 }
-//@ chunk-y805ph4h.js:24935-25223 placement
+//@ chunk-tp1gh0pb.js:25231-25519 placement
 function assertDialogKindsHandled({ supportedDialogKinds, onUserDialog }) {
   if (supportedDialogKinds !== undefined && supportedDialogKinds.length > 0 && !onUserDialog)
     throw Error(
       "supportedDialogKinds requires an onUserDialog callback -- declaring dialog kinds without a handler would park dialogs nothing can answer. Provide onUserDialog, or omit supportedDialogKinds.",
     );
 }
-//@ chunk-y805ph4h.js:25223-25298 placement
+//@ chunk-tp1gh0pb.js:25547-25671 placement
 var MANIFEST_CAPTURE_TIMEOUT_MS = 250;
+var PROMPT_HOLD_SUBTYPES = new Set(["interrupt", "cancel_async_message"]);
 var SDK_MANIFEST_CAPTURE = "sdk-manifest-capture:";
 var suppressControlResponse = Symbol("suppressControlResponse");
-//@ chunk-y805ph4h.js:25298-25477 placement
+//@ chunk-tp1gh0pb.js:25671-25850 placement
 function logIgnoredMcpServerFields(serverName, serverConfig, ignored) {
   for (let ignoredField of ignored) {
     let issues = ignoredField === "tools" ? inspectToolsList(serverConfig) : undefined;
@@ -932,11 +937,12 @@ function logIgnoredMcpServerFields(serverName, serverConfig, ignored) {
   }
 }
 export {
-  suppressControlResponse,
-  SDK_MANIFEST_CAPTURE,
-  MANIFEST_CAPTURE_TIMEOUT_MS,
-  logIgnoredMcpServerFields,
   assertDialogKindsHandled,
   resolveNativeCliPath,
   ProcessTransport,
+  suppressControlResponse,
+  SDK_MANIFEST_CAPTURE,
+  MANIFEST_CAPTURE_TIMEOUT_MS,
+  PROMPT_HOLD_SUBTYPES,
+  logIgnoredMcpServerFields,
 };

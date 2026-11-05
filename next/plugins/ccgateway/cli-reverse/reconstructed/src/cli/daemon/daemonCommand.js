@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：claude daemon 子命令：add/remove/list、scheduled（定时任务）与 remote-control 服务器管理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7904g3ks.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9cmf95m3.js (17)
  * attribution: placement 17
  */
 import { basename, resolve } from "path";
@@ -22,7 +22,7 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { normalizePermissionModeAlias, PERMISSION_MODE_MANUAL_ALIAS } from "../../types/permissions.js";
 import { getCwd } from "../../utils/cwd.js";
 import { parseScheduleInput } from "../../utils/cron.js";
-import { tryAcquireComputerUseLock } from "../../utils/daemon/daemonLock.js";
+import { servedFoldersOfLiveServer } from "../../utils/daemon/daemonLock.js";
 import { isViolinVarnishOn } from "../../services/remoteTools/backgroundCommands.js";
 import {
   removeRemoteControlDir,
@@ -37,7 +37,7 @@ import { logFeatureOkAsync, logFeatureBadAsync } from "../../services/analytics/
 import { exitAfterAnalyticsFlush } from "../exit.js";
 import { daemonJsonPath } from "../../services/daemon/paths.js";
 
-//@ chunk-7904g3ks.js:4615-4657 placement
+//@ chunk-9cmf95m3.js:4979-5021 placement
 function printLine(line) {
   process.stdout.write(
     line +
@@ -45,7 +45,7 @@ function printLine(line) {
 `,
   );
 }
-//@ chunk-7904g3ks.js:4657-4699 placement
+//@ chunk-9cmf95m3.js:5021-5063 placement
 function printErrLine(line) {
   process.stderr.write(
     line +
@@ -53,12 +53,12 @@ function printErrLine(line) {
 `,
   );
 }
-//@ chunk-7904g3ks.js:4699-4734 placement
+//@ chunk-9cmf95m3.js:5063-5098 placement
 function failWithError(message) {
   printErrLine(message);
   process.exit(1);
 }
-//@ chunk-7904g3ks.js:4734-5602 placement
+//@ chunk-9cmf95m3.js:5098-5966 placement
 function parseDaemonArgs(group, argv) {
   let removeTarget;
   let flags = new Map();
@@ -98,20 +98,20 @@ function parseDaemonArgs(group, argv) {
     json,
   };
 }
-//@ chunk-7904g3ks.js:5602-5747 placement
+//@ chunk-9cmf95m3.js:5966-6111 placement
 async function warnDaemonServiceNotInstalled() {
   if (!(await daemonServiceStatus()))
     failWithError(
       "daemon service is not installed (service install is disabled in this version; the daemon runs on demand)",
     );
 }
-//@ chunk-7904g3ks.js:5747-5826 placement
+//@ chunk-9cmf95m3.js:6111-6190 placement
 async function readDaemonConfig(group, options) {
   let jsonConfigFile = await readJsonConfigFile(group, options);
   if (!jsonConfigFile.ok) failWithError(jsonConfigFile.error);
   return jsonConfigFile.config;
 }
-//@ chunk-7904g3ks.js:5914-6064 placement
+//@ chunk-9cmf95m3.js:6278-6428 placement
 function attachServingTools(entries, servedShells) {
   return entries.map((entry) => {
     let sessions =
@@ -126,11 +126,11 @@ function attachServingTools(entries, servedShells) {
         };
   });
 }
-//@ chunk-7904g3ks.js:6064-6103 placement
+//@ chunk-9cmf95m3.js:6428-6467 placement
 function printServingTools(servedShells) {
   for (let line of servingToolsLines(servedShells)) printLine(line);
 }
-//@ chunk-7904g3ks.js:6103-6410 placement
+//@ chunk-9cmf95m3.js:6467-6774 placement
 async function DAEMON_ENTRY_KINDS(group, options) {
   let daemonConfig = await readDaemonConfig(group, options);
   let entries = [];
@@ -153,7 +153,7 @@ async function DAEMON_ENTRY_KINDS(group, options) {
     });
   return entries;
 }
-//@ chunk-7904g3ks.js:6410-6847 placement
+//@ chunk-9cmf95m3.js:6774-7211 placement
 function formatDaemonEntries(entries) {
   if (entries.length === 0) {
     printLine("(no entries)");
@@ -178,7 +178,7 @@ function formatDaemonEntries(entries) {
   printLine(mapped_2.map((width) => "-".repeat(width)).join("  "));
   for (let row of mapped) printLine(formatRow(row));
 }
-//@ chunk-7904g3ks.js:6847-8608 placement
+//@ chunk-9cmf95m3.js:7211-8972 placement
 /**
  * claude daemon scheduled list/remove/add（--prompt、--cron、--model、--permission-mode）。
  */
@@ -264,7 +264,7 @@ async function handleScheduledCommand(daemonArgs, group, options) {
   if (found) printLine(`updated scheduled task '${id}'`);
   else printLine(`added scheduled task '${id}'`);
 }
-//@ chunk-7904g3ks.js:8608-8810 placement
+//@ chunk-9cmf95m3.js:8972-9174 placement
 function slugifyTaskName(dir, prompt) {
   let slug = (text) =>
     text
@@ -276,11 +276,11 @@ function slugifyTaskName(dir, prompt) {
   let promptSlug = slug(prompt.split(/\s+/).slice(0, 4).join(" "));
   return [dirSlug, promptSlug].filter(Boolean).join("-") || "task";
 }
-//@ chunk-7904g3ks.js:8810-10207 placement
+//@ chunk-9cmf95m3.js:9174-10571 placement
 async function handleRemoteControlCommand(daemonArgs, group, options) {
   if (daemonArgs.action === "list") {
     let remoteControl = (await readDaemonConfig(group, options)).remoteControl ?? [];
-    let servedShells = await tryAcquireComputerUseLock(options);
+    let servedShells = await servedFoldersOfLiveServer(options);
     if (daemonArgs.json) {
       printLine(jsonStringify(attachServingTools(remoteControl, servedShells), null, 2));
       return;
@@ -306,7 +306,7 @@ async function handleRemoteControlCommand(daemonArgs, group, options) {
         .filter((entry) => entry.kind === "remote-control")
         .map((entry) => entry.dir);
       let sliced = mapped.slice(Math.max(0, mapped.indexOf(entry)));
-      let servedShells = await tryAcquireComputerUseLock(options);
+      let servedShells = await servedFoldersOfLiveServer(options);
       let { servedBackgroundShellsIn } = await import("../../remote/tools/serve/servedBackgroundShells.js");
       runningShellCount = await servedBackgroundShellsIn(
         servedShells.map((shell) => shell.dir).filter((dir) => sliced.includes(dir)),
@@ -349,7 +349,7 @@ async function handleRemoteControlCommand(daemonArgs, group, options) {
   );
   printLine(`${result} remote-control server for ${dir}`);
 }
-//@ chunk-7904g3ks.js:10207-10604 placement
+//@ chunk-9cmf95m3.js:10571-10968 placement
 async function resolveRemoteControlServer(removeTarget, group, options) {
   let remoteControl = (await readDaemonConfig(group, options)).remoteControl ?? [];
   let filtered = remoteControl.filter((entry) => (entry.name ?? basename(entry.dir)) === removeTarget);
@@ -366,7 +366,7 @@ async function resolveRemoteControlServer(removeTarget, group, options) {
   if (pathMatches.length >= 1) return pathMatches[0].dir;
   failWithError(`no remote-control server matched '${removeTarget}'`);
 }
-//@ chunk-7904g3ks.js:10604-11921 placement
+//@ chunk-9cmf95m3.js:10968-12285 placement
 async function handleStopShell(args) {
   let { SERVED_BACKGROUND_SHELL_ID, lookUpServedBackgroundShell, stopServedBackgroundShell } =
     await import("../../remote/tools/serve/servedBackgroundShells.js");
@@ -409,10 +409,10 @@ async function handleStopShell(args) {
   }
   return exitAfterAnalyticsFlush(stopResult === "stopped" ? 0 : 1);
 }
-//@ chunk-7904g3ks.js:11921-12026 placement
+//@ chunk-9cmf95m3.js:12285-12390 placement
 async function printDaemonList(isJson, configPath = daemonJsonPath(), options) {
   let entries = await DAEMON_ENTRY_KINDS(configPath, options);
-  let servedShells = await tryAcquireComputerUseLock(options);
+  let servedShells = await servedFoldersOfLiveServer(options);
   if (isJson) {
     printLine(jsonStringify(attachServingTools(entries, servedShells), null, 2));
     return;
@@ -420,7 +420,7 @@ async function printDaemonList(isJson, configPath = daemonJsonPath(), options) {
   formatDaemonEntries(entries);
   printServingTools(servedShells);
 }
-//@ chunk-7904g3ks.js:12026-12194 placement
+//@ chunk-9cmf95m3.js:12390-12558 placement
 async function runDaemonSubcommand(subcommand, group, configPath = daemonJsonPath(), options) {
   if (subcommand === "remote-control" && group[0] === "stop-shell" && isViolinVarnishOn())
     return handleStopShell(group.slice(1));

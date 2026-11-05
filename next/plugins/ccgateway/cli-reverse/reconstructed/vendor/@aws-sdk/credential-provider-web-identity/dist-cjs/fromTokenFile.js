@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/credential-provider-web-identity/dist-cjs/fromTokenFile.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/credential-provider-web-identity@3.936.0
- * pieces: chunk-2pe5kgjj.js (1)
+ * pieces: chunk-z5f8ea78.js (1)
  * attribution: esm-fingerprint 1
  */
 import { readFileSync } from "fs";
@@ -13,7 +13,7 @@ import {
   import_client,
 } from "./fromWebToken.js";
 
-//@ chunk-2pe5kgjj.js:1050-1694 esm-fingerprint
+//@ chunk-z5f8ea78.js:1050-1694 esm-fingerprint
 var ENV_TOKEN_FILE = "AWS_WEB_IDENTITY_TOKEN_FILE";
 var ENV_ROLE_ARN = "AWS_ROLE_ARN";
 var ENV_ROLE_SESSION_NAME = "AWS_ROLE_SESSION_NAME";

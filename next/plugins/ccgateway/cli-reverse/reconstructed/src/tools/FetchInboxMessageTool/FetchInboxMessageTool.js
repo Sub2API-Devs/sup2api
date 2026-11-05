@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：FetchInboxMessage 工具：读取关联线程中继来的收件箱消息；FetchInboxMessage 工具输入/输出 schema等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-psktkvhp.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7332cmqy.js (9)
  * attribution: placement 9
  */
 import { backoffDelayMs, sleep } from "../../utils/sleep.js";
@@ -24,7 +24,7 @@ import {
   foldSenderDisplayBrackets,
 } from "../../bridge/sessionInbox.js";
 import { serverHasAnyTool, HEARTH_REPLY_TOOL, HEARTH_REPLY_TOOL_ALT } from "../../services/mcp/ccrMetaMcp.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import {
   FETCH_INBOX_MESSAGE_TOOL_NAME,
   fetchInboxMessageDescription,
@@ -49,14 +49,14 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/gr
 import { logEvent } from "../../services/analytics/index.js";
 import { ownerInboxNoticeFileId } from "../../utils/externalEventWake.js";
 
-//@ chunk-psktkvhp.js:5548-5576 placement
+//@ chunk-7332cmqy.js:5663-5691 placement
 /**
  * 收件箱拉取退避的基数（5 秒）、上限（20 秒）与重置时长（5 分钟）。
  */
 var INBOX_BACKOFF_BASE_MS = 5000;
 var INBOX_BACKOFF_CAP_MS = 20000;
 var INBOX_BACKOFF_RESET_MS = 300000;
-//@ chunk-psktkvhp.js:5576-5957 placement
+//@ chunk-7332cmqy.js:5691-6072 placement
 /**
  * 收件箱拉取的退避状态。
  */
@@ -84,12 +84,12 @@ class InboxFetchBackoff {
     this.waitMs = 0;
   }
 }
-//@ chunk-psktkvhp.js:5957-5981 placement
+//@ chunk-7332cmqy.js:6072-6096 placement
 /**
  * 按会话根保存的收件箱拉取退避状态。
  */
 var inboxBackoffByRoot = new SessionRootSlot(() => new InboxFetchBackoff());
-//@ chunk-psktkvhp.js:5981-6453 placement
+//@ chunk-7332cmqy.js:6096-6568 placement
 /**
  * FetchInboxMessage 的输出 schema（ok、消息各字段与 reason）。
  */
@@ -116,23 +116,23 @@ var fetchInboxOutputSchema = DoctorLazy(() =>
     reason: stringSchema().optional(),
   }),
 );
-//@ chunk-psktkvhp.js:6453-6507 placement
+//@ chunk-7332cmqy.js:6568-6622 placement
 /**
  * 判断该收件箱工具是否属于项目范围（关联线程的 project 来源）。
  */
 function inboxMessageScope(tools) {
   return serverHasAnyTool(tools, [HEARTH_REPLY_TOOL, HEARTH_REPLY_TOOL_ALT]) ? "project" : undefined;
 }
-//@ chunk-psktkvhp.js:6507-6568 placement
+//@ chunk-7332cmqy.js:6622-6682 placement
 /**
  * 项目范围时为工具名加 "IP:" 前缀（用于提示与描述）。
  */
 function inboxSurfaceCacheKeyBit(tool, tools) {
-  return toolMatchesName(tool, FETCH_INBOX_MESSAGE_TOOL_NAME) && inboxMessageScope(tools) === "project"
+  return matchesToolName(tool, FETCH_INBOX_MESSAGE_TOOL_NAME) && inboxMessageScope(tools) === "project"
     ? "IP:"
     : "";
 }
-//@ chunk-psktkvhp.js:6568-11598 placement
+//@ chunk-7332cmqy.js:6682-11710 placement
 /**
  * FetchInboxMessage 工具：读取关联线程中继来的收件箱消息。
  */
@@ -365,7 +365,7 @@ var FetchInboxMessageTool_2 = buildTool({
 `);
   },
 });
-//@ chunk-psktkvhp.js:11598-11804 placement (2.1.88 match: buildTranscriptEntries, 0.777)
+//@ chunk-7332cmqy.js:11710-11916 placement (2.1.88 match: buildTranscriptEntries, 0.902)
 function buildTranscriptEntries(message, fileId) {
   switch (message.type) {
     case "user":
@@ -379,7 +379,7 @@ function buildTranscriptEntries(message, fileId) {
       return false;
   }
 }
-//@ chunk-psktkvhp.js:11804-11922 placement
+//@ chunk-7332cmqy.js:11916-12034 placement
 function mentionsInboxNoticeFile(delivery, content, fileId) {
   return (
     typeof content === "string"

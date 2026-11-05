@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：解析并安全检查要注册的目录（网络路径、可疑拼写、目录类型）；检查目录是否可注册（非当前目录、未重复、在范围内）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2tyecnjj.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-swr800mt.js (10)
  * attribution: placement 10
  */
 import { isAbsolute } from "path";
@@ -23,7 +23,7 @@ import { expandPath } from "../../utils/path.js";
 import { vetPathSpellingsOrChain, pathVettingReason } from "../../utils/permissions/pathVetting.js";
 import { sanitizeTelemetryString } from "../../utils/sanitization.js";
 
-//@ chunk-2tyecnjj.js:542-969 placement
+//@ chunk-swr800mt.js:576-1003 placement
 /**
  * register_repo_root 各错误码的语气分类。
  */
@@ -43,15 +43,15 @@ var REGISTER_REPO_ROOT_ERROR_TONES = {
   screened_unvettable_chain: "bad_reported",
   screened_link_text_climbs: "bad_reported",
 };
-//@ chunk-2tyecnjj.js:969-1005 placement
+//@ chunk-swr800mt.js:1003-1039 placement
 function screenedReason(reason) {
   return `screened_${reason}`;
 }
-//@ chunk-2tyecnjj.js:1005-1047 placement
+//@ chunk-swr800mt.js:1039-1081 placement
 function isKnownRepoRootErrorCode(errorClass) {
   return Object.hasOwn(REGISTER_REPO_ROOT_ERROR_TONES, errorClass);
 }
-//@ chunk-2tyecnjj.js:1047-1217 placement
+//@ chunk-swr800mt.js:1081-1251 placement
 /**
  * 从错误中取 register_repo_root 错误码。
  */
@@ -67,7 +67,7 @@ function registerRepoRootErrorClass(error) {
     return;
   }
 }
-//@ chunk-2tyecnjj.js:1217-1802 placement
+//@ chunk-swr800mt.js:1251-1836 placement
 /**
  * 检查目录是否可注册（非当前目录、未重复、在范围内）。
  */
@@ -104,7 +104,7 @@ function checkRepoRootScope(candidatePath, originalCwd, cliArgRoots, registeredP
     allowed: true,
   };
 }
-//@ chunk-2tyecnjj.js:1802-2042 placement
+//@ chunk-swr800mt.js:1836-2078 placement
 async function resolveRepoRootPaths(additionalWorkingDirectories) {
   return Promise.all(
     [...additionalWorkingDirectories.values()].map(async (workingDirEntry) => {
@@ -123,7 +123,7 @@ async function resolveRepoRootPaths(additionalWorkingDirectories) {
     }),
   );
 }
-//@ chunk-2tyecnjj.js:2042-2170 placement
+//@ chunk-swr800mt.js:2078-2206 placement
 async function checkIsDirectory(targetPath) {
   return (await stat(targetPath)).isDirectory()
     ? {
@@ -135,7 +135,7 @@ async function checkIsDirectory(targetPath) {
         reason: "is not a directory",
       };
 }
-//@ chunk-2tyecnjj.js:2170-2750 placement
+//@ chunk-swr800mt.js:2206-2786 placement
 /**
  * 被拒路径（NT 命名空间、UNC、自动挂载等）的遥测消息。
  */
@@ -148,7 +148,7 @@ var SCREENED_PATH_MESSAGES = {
   link_text_climbs:
     'register_repo_root: path through a symlink whose target has ".." past its leading "../" segments rejected',
 };
-//@ chunk-2tyecnjj.js:2750-4026 placement
+//@ chunk-swr800mt.js:2786-4062 placement
 /**
  * 解析并安全检查要注册的目录（网络路径、可疑拼写、目录类型）。
  */
@@ -212,7 +212,7 @@ async function resolveRepoRootCandidate(targetPath, getPermissionContext, origin
     );
   return resolvedPath;
 }
-//@ chunk-2tyecnjj.js:4026-4372 placement
+//@ chunk-swr800mt.js:4062-4408 placement
 /**
  * 注册额外工作目录（RegisterRepoRoot 工具的核心）。
  */
@@ -238,7 +238,7 @@ async function registerRepoRoot(targetPath, getPermissionContext, originalCwd) {
 export {
   registerRepoRoot,
   registerRepoRootErrorClass,
-  checkRepoRootScope,
   REGISTER_REPO_ROOT_ERROR_TONES,
   resolveRepoRootCandidate,
+  checkRepoRootScope,
 };

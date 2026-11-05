@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。MCP 资源模板补全。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: placement 2
  */
 import { isMcpAppResource } from "../../services/mcp/toolNameLimits.js";
@@ -20,7 +20,7 @@ import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.j
 import { logForDebugging } from "../debug.js";
 import { errorMessage } from "../errors.js";
 
-//@ chunk-18hwfzwa.js:613736-615188 placement
+//@ chunk-czq1j3j2.js:634417-635869 placement
 async function mcpTemplateCompletions(input, templatesByServer, clients, healthTracker) {
   let index = input.indexOf(":");
   if (index === -1) return null;
@@ -97,7 +97,7 @@ async function mcpTemplateCompletions(input, templatesByServer, clients, healthT
     };
   });
 }
-//@ chunk-18hwfzwa.js:615188-615267 placement
+//@ chunk-czq1j3j2.js:635869-635948 placement
 function atMentionReplacement(text, partial) {
   if (text.includes(" ")) return partial ? `@"${text}` : `@"${text}"`;
   return `@${text}`;

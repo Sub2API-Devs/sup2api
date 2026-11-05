@@ -3,32 +3,32 @@
  *
  * 2.1.316 新增：技能缺失时附带插件加载失败说明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-a5k9jscj.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6kmb8me5.js (6)
  * attribution: placement 6
  */
 import { isDependencyError } from "../../utils/plugins/marketplaceNames.js";
 import { hasMarketplaceAlias, marketplaceOf } from "../../utils/plugins/pluginIdentifier.js";
 import { directoryPluginFallbackName } from "../../utils/plugins/pluginLoader.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-a5k9jscj.js:1907-1987 placement
+//@ chunk-6kmb8me5.js:2118-2198 placement
 /**
  * 视为插件加载错误的设置来源（userSettings、policySettings）。
  */
 var PLUGIN_ERROR_SETTINGS_SCOPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PLUGIN_ERROR_ALL_SCOPES;
-deferInit("chunk-a5k9jscj.js:1907", () => {
+deferInit("chunk-6kmb8me5.js:2118", () => {
   PLUGIN_ERROR_SETTINGS_SCOPES = new Set(["userSettings", "policySettings"]);
   PLUGIN_ERROR_ALL_SCOPES = new Set([...PLUGIN_ERROR_SETTINGS_SCOPES, "session"]);
 });
-//@ chunk-a5k9jscj.js:1987-2031 placement
+//@ chunk-6kmb8me5.js:2198-2243 placement
 function isMarketplacePluginError(error) {
   return isDependencyError(error) || hasMarketplaceAlias(error.source);
 }
-//@ chunk-a5k9jscj.js:2031-2190 placement
+//@ chunk-6kmb8me5.js:2243-2402 placement
 function pluginNameOfError(error) {
   switch (error.type) {
     case "generic-error":
@@ -39,14 +39,14 @@ function pluginNameOfError(error) {
       return;
   }
 }
-//@ chunk-a5k9jscj.js:2190-2376 placement
+//@ chunk-6kmb8me5.js:2402-2588 placement
 var PLUGIN_LOAD_ERROR_LABELS = {
   "path-not-found": "path not found",
   "manifest-validation-error": "manifest invalid",
   "dependency-unsatisfied": "unmet dependency",
   "dependency-version-unsatisfied": "unmet dependency",
 };
-//@ chunk-a5k9jscj.js:2376-2638 placement
+//@ chunk-6kmb8me5.js:2588-2850 placement
 function describePluginLoadErrors(errors) {
   return errors.flatMap((error) => {
     let category = PLUGIN_LOAD_ERROR_LABELS[error.type] ?? "load error";
@@ -71,7 +71,7 @@ function describePluginLoadErrors(errors) {
       : [];
   });
 }
-//@ chunk-a5k9jscj.js:2638-3304 placement
+//@ chunk-6kmb8me5.js:2850-3516 placement
 /**
  * 技能找不到时，若对应插件加载失败，附上失败原因说明。
  */
@@ -86,7 +86,7 @@ function pluginLoadFailureNote(skillName, errors, loadedPlugins) {
       : loadErrors.find((loadError) => loadError.names.includes(pluginPrefix));
   if (matchingError !== undefined)
     return `The plugin "${pluginPrefix}" did not load in this session (${matchingError.category}): tell the user the plugin could not be loaded here, not that the skill is not installed.`;
-  let joined = uniq(loadErrors.map((loadError) => loadError.category)).join(", ");
+  let joined = normalizeCaseForComparison_2(loadErrors.map((loadError) => loadError.category)).join(", ");
   return `${loadErrors.length === 1 ? `1 plugin did not load in this session (${joined}); if this skill belongs to it` : `${loadErrors.length} plugins did not load in this session (${joined}); if this skill belongs to one of them`}, tell the user its plugin could not be loaded here, not that the skill is not installed.`;
 }
 export { isMarketplacePluginError, pluginNameOfError, pluginLoadFailureNote };

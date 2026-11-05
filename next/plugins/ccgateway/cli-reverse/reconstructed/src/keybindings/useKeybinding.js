@@ -3,9 +3,9 @@
  *
  * 已有模块；g2 补充放置门面声明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/keybindings/useKeybinding.ts
- * pieces: chunk-1kwgxcw6.js (2), chunk-yzt83vwd.js (2)
+ * pieces: chunk-2nf232h2.js (2), chunk-p762h6ag.js (2)
  * attribution: placement 2, callgraph-witnessed 1, fingerprint 1
  */
 import {
@@ -20,12 +20,12 @@ import { useExitOnCtrlCD } from "../hooks/useExitOnCtrlCD.js";
 import { MessageActionsKeybindings } from "../components/messageActions.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-yzt83vwd.js:356-360 placement
+//@ chunk-p762h6ag.js:356-360 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-yzt83vwd.js:356", () => {
+deferInit("chunk-p762h6ag.js:356", () => {
   init_react_production();
 });
-//@ chunk-yzt83vwd.js:360-598 fingerprint (2.1.88 match: useKeybinding, 0.408)
+//@ chunk-p762h6ag.js:360-598 fingerprint (2.1.88 match: useKeybinding, 0.407)
 /**
  * 注册一个动作处理器（默认 Global 上下文）；处理器存在引用里，换函数不用重新注册。
  */
@@ -48,12 +48,12 @@ function useKeybinding(action, handler, options = {}) {
     });
   }, [action, context, keybindingContext, isActive, handlerRef]);
 }
-//@ chunk-1kwgxcw6.js:532-536 placement
+//@ chunk-2nf232h2.js:532-536 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1kwgxcw6.js:532", () => {
+deferInit("chunk-2nf232h2.js:532", () => {
   init_react_production();
 });
-//@ chunk-1kwgxcw6.js:536-710 callgraph-witnessed (2.1.88 match: useKeybindings, 0.168)
+//@ chunk-2nf232h2.js:536-710 callgraph-witnessed (2.1.88 match: useKeybindings, 0.168)
 /**
  * 把 app:interrupt / app:exit 绑到 Ctrl+C/Ctrl+D 双击退出逻辑（Global 上下文），返回退出提示状态。
  */
@@ -72,4 +72,4 @@ function useGlobalExitKeybindings(shouldIntercept, exitOverride, isActive = true
   });
   return exitState;
 }
-export { useGlobalExitKeybindings, useKeybinding };
+export { useKeybinding, useGlobalExitKeybindings };

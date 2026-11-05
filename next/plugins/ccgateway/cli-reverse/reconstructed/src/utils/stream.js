@@ -3,13 +3,13 @@
  *
  * 简单的单消费者异步队列 Stream：enqueue/error/done，只能迭代一次。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/stream.ts
- * pieces: chunk-63641kq7.js (1)
+ * pieces: chunk-jd53r7dh.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-63641kq7.js:6066-7195 fingerprint (2.1.88 match: Stream, 0.897)
+//@ chunk-jd53r7dh.js:5253-6451 fingerprint (2.1.88 match: Stream, 0.864)
 /**
  * Stream：push 式异步迭代器（queue + 挂起的 read promise），done() 结束，error() 抛给消费者，return() 时调用回调。
  */
@@ -48,6 +48,9 @@ class Stream {
       this.readResolve = resolve;
       this.readReject = reject;
     });
+  }
+  get readerIsWaiting() {
+    return this.readResolve !== undefined && !this.isDone;
   }
   enqueue(value) {
     if (this.readResolve) {

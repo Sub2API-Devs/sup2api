@@ -1,13 +1,13 @@
 /**
  * @anthropic-ai/sdk/internal/uploads.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (8)
+ * pieces: chunk-vn3g7zt8.js (8)
  * attribution: esm-fingerprint 7, esm-layout 1
  */
 import { ReadableStreamFrom } from "./shims.mjs";
 
-//@ chunk-hwmsct5x.js:39341-39666 esm-fingerprint
+//@ chunk-vn3g7zt8.js:39712-40037 esm-fingerprint
 var checkFileSupport = () => {
   if (typeof File === "undefined") {
     let { process: processModule } = globalThis;
@@ -22,12 +22,12 @@ var checkFileSupport = () => {
     );
   }
 };
-//@ chunk-hwmsct5x.js:39666-39729 esm-fingerprint
+//@ chunk-vn3g7zt8.js:40037-40100 esm-fingerprint
 function makeFile(fileBits, fileName, options) {
   checkFileSupport();
   return new File(fileBits, fileName ?? "unknown_file", options);
 }
-//@ chunk-hwmsct5x.js:39729-39991 esm-fingerprint
+//@ chunk-vn3g7zt8.js:40100-40362 esm-fingerprint
 function getName(value, stripPath) {
   let val =
     (typeof value === "object" &&
@@ -39,16 +39,16 @@ function getName(value, stripPath) {
     "";
   return stripPath ? val.split(/[\\/]/).pop() || undefined : val;
 }
-//@ chunk-hwmsct5x.js:39991-40077 esm-fingerprint
+//@ chunk-vn3g7zt8.js:40362-40448 esm-fingerprint
 var isAsyncIterable = (value) =>
   value != null && typeof value === "object" && typeof value[Symbol.asyncIterator] === "function";
-//@ chunk-hwmsct5x.js:40077-40151 esm-layout
+//@ chunk-vn3g7zt8.js:40448-40522 esm-layout
 var withUploadBody = async (opts, fetchImpl, stripFilenames = true) => ({
   ...opts,
   body: await createForm(opts.body, fetchImpl, stripFilenames),
 });
 var supportsFormDataMap = new WeakMap();
-//@ chunk-hwmsct5x.js:40151-40429 esm-fingerprint
+//@ chunk-vn3g7zt8.js:40522-40800 esm-fingerprint
 function supportsFormData(fetchObject) {
   let fetcher = typeof fetchObject === "function" ? fetchObject : fetchObject.fetch;
   let cached = supportsFormDataMap.get(fetcher);
@@ -66,7 +66,7 @@ function supportsFormData(fetchObject) {
   supportsFormDataMap.set(fetcher, promise);
   return promise;
 }
-//@ chunk-hwmsct5x.js:40429-40683 esm-fingerprint
+//@ chunk-vn3g7zt8.js:40800-41054 esm-fingerprint
 var createForm = async (body, fetchImpl, stripFilenames = true) => {
   if (!(await supportsFormData(fetchImpl)))
     throw TypeError(
@@ -78,7 +78,7 @@ var createForm = async (body, fetchImpl, stripFilenames = true) => {
   );
   return form;
 };
-//@ chunk-hwmsct5x.js:40683-41841 esm-fingerprint
+//@ chunk-vn3g7zt8.js:41054-42212 esm-fingerprint
 var addFormValue = async (form, key, value, stripFilenames) => {
   if (value === undefined) return;
   if (value == null)

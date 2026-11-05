@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：Claude Test 内置插件的函数钩子能力清单（scan：用到的 hooks 与 calls），CommonJS 数据模块
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ae5g0zb5.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mhn0amzz.js (1)
  * attribution: placement 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-ae5g0zb5.js:13304-24040 placement
+//@ chunk-mhn0amzz.js:14544-25280 placement
 /**
  * Claude Test 插件声明的函数钩子能力清单（hooks: command.run、skill.prompt、tool.call、ui.render；calls: agent.list、fs.read、mcp.call 等）。
  */

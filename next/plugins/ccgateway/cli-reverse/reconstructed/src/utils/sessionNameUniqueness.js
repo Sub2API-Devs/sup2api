@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。恢复会话时重新声明会话名；名字被本机其他活会话占用时改名并通知通信过的会话。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-897ngh1d.js (27)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-metqe8pz.js (27)
  * attribution: placement 27
  */
 import { slugifySessionName } from "./sessionAddresses.js";
@@ -31,10 +31,10 @@ import { isCrossSessionMessagingEnabled } from "./crossSessionMessagingGate.js";
 import { fragmentForLog } from "./udsMessaging/peerGuard.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-897ngh1d.js:699-713 placement
+//@ chunk-metqe8pz.js:698-712 placement
 var MAX_NAME_SUFFIX_LENGTH = 16;
 var MAX_SESSION_NAME_LENGTH = 64;
-//@ chunk-897ngh1d.js:713-868 placement
+//@ chunk-metqe8pz.js:712-867 placement
 /**
  * 哪个会话先启动
  */
@@ -45,7 +45,7 @@ function startedEarlier(a, b) {
   if (procStart !== procStart_2) return procStart < procStart_2;
   return a.pid < b.pid;
 }
-//@ chunk-897ngh1d.js:868-973 placement
+//@ chunk-metqe8pz.js:867-972 placement
 function otherSessionsNamed(slug, live, pid) {
   return live.filter(
     (session) =>
@@ -55,13 +55,13 @@ function otherSessionsNamed(slug, live, pid) {
       slugifySessionName(session.name) === slug,
   );
 }
-//@ chunk-897ngh1d.js:973-1051 placement
+//@ chunk-metqe8pz.js:972-1050 placement
 function liveNameSet(live) {
   return new Set(
     live.flatMap((session) => (session.name === undefined ? [] : [slugifySessionName(session.name)])),
   );
 }
-//@ chunk-897ngh1d.js:1051-1242 placement
+//@ chunk-metqe8pz.js:1050-1240 placement
 /**
  * 生成不冲突的带后缀名字
  */
@@ -77,7 +77,7 @@ function pickUniqueSuffixName(suffixBase, taken, slug = randomWordSlug) {
     if (!taken.has(slugifySessionName(candidate))) return candidate;
   }
 }
-//@ chunk-897ngh1d.js:1242-1620 placement
+//@ chunk-metqe8pz.js:1240-1618 placement
 /**
  * 判定保留、改名或让出会话名
  */
@@ -117,7 +117,7 @@ function decideSessionName(request) {
     holders: blockers,
   };
 }
-//@ chunk-897ngh1d.js:1620-2248 placement
+//@ chunk-metqe8pz.js:1618-2246 placement
 /**
  * 会话命名状态
  */
@@ -155,16 +155,16 @@ class SessionNamingState {
     this.hasAdopter = false;
   }
 }
-//@ chunk-897ngh1d.js:2248-2271 placement
+//@ chunk-metqe8pz.js:2246-2269 placement
 var sessionNamingStateSlot; // deferred: uses SessionNamingState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-897ngh1d.js:2248", () => {
+deferInit("chunk-metqe8pz.js:2246", () => {
   sessionNamingStateSlot = new HostScoped(() => new SessionNamingState());
 });
-//@ chunk-897ngh1d.js:2271-2307 placement
+//@ chunk-metqe8pz.js:2269-2305 placement
 function getSessionNamingState() {
   return sessionNamingStateSlot.of(getRootSession().host);
 }
-//@ chunk-897ngh1d.js:2307-2439 placement
+//@ chunk-metqe8pz.js:2305-2437 placement
 function getUserTypedSessionName() {
   let registeredSessionName = getRegisteredSessionName();
   return registeredSessionName !== undefined &&
@@ -173,27 +173,27 @@ function getUserTypedSessionName() {
     ? registeredSessionName.name
     : undefined;
 }
-//@ chunk-897ngh1d.js:2439-2489 placement
+//@ chunk-metqe8pz.js:2437-2487 placement
 function noteVettedCorrespondent(from, verifiedPeerPid, verifiedPeerProcStart) {
   getSessionNamingState().noteCorrespondent(from, verifiedPeerPid, verifiedPeerProcStart);
 }
-//@ chunk-897ngh1d.js:2489-2563 placement
+//@ chunk-metqe8pz.js:2487-2561 placement
 function takePendingYield() {
   let sessionNamingState = getSessionNamingState();
   let pendingYield = sessionNamingState.pendingYield;
   sessionNamingState.pendingYield = undefined;
   return pendingYield;
 }
-//@ chunk-897ngh1d.js:2563-2603 placement
+//@ chunk-metqe8pz.js:2561-2601 placement
 var sessionNamingProviders = {
   whenRegistered: whenSessionRegistered,
   listLive: listAllLiveSessions,
 };
-//@ chunk-897ngh1d.js:2603-2661 placement
+//@ chunk-metqe8pz.js:2601-2659 placement
 function sessionNameUniquenessEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_session_name_uniqueness", true);
 }
-//@ chunk-897ngh1d.js:2661-3496 placement
+//@ chunk-metqe8pz.js:2659-3494 placement
 async function claimUniqueSessionName(
   desiredName,
   moment,
@@ -271,7 +271,7 @@ async function claimUniqueSessionName(
     };
   }
 }
-//@ chunk-897ngh1d.js:3496-3724 placement
+//@ chunk-metqe8pz.js:3494-3721 placement
 /**
  * 是否为派生名
  */
@@ -285,7 +285,7 @@ function derivedNameMatch(desiredName, session) {
   let truncated = truncateToLength(base, MAX_SEED_NAME_CHARS - split.suffix.length - 1);
   return split.base.toLowerCase() === truncated.toLowerCase() ? registered : undefined;
 }
-//@ chunk-897ngh1d.js:3724-3916 placement
+//@ chunk-metqe8pz.js:3721-3913 placement
 /**
  * 拆出名字后缀
  */
@@ -300,7 +300,7 @@ function splitNameSuffix(name) {
       }
     : undefined;
 }
-//@ chunk-897ngh1d.js:3916-4055 placement
+//@ chunk-metqe8pz.js:3913-4052 placement
 function settledYieldFor(desiredName, name) {
   if (!sessionNameUniquenessEnabled()) return;
   let lastYield = getSessionNamingState().lastYield;
@@ -312,7 +312,7 @@ function settledYieldFor(desiredName, name) {
     ? name
     : undefined;
 }
-//@ chunk-897ngh1d.js:4055-4118 placement
+//@ chunk-metqe8pz.js:4052-4115 placement
 function isRegisteredSessionName(name) {
   let registeredSessionName = getRegisteredSessionName();
   return (
@@ -320,17 +320,17 @@ function isRegisteredSessionName(name) {
     slugifySessionName(registeredSessionName.name) === slugifySessionName(name)
   );
 }
-//@ chunk-897ngh1d.js:4118-4150 placement
+//@ chunk-metqe8pz.js:4115-4147 placement
 function baseNameOfSuffixed(name) {
   return splitNameSuffix(name)?.base;
 }
-//@ chunk-897ngh1d.js:4150-4161 placement
+//@ chunk-metqe8pz.js:4147-4158 placement
 var SESSION_NAME_REGISTRY_TTL_MS = 3000;
-//@ chunk-897ngh1d.js:4161-4199 placement
+//@ chunk-metqe8pz.js:4158-4196 placement
 function _(fn) {
   setTimeout(fn, SESSION_NAME_REGISTRY_TTL_MS).unref();
 }
-//@ chunk-897ngh1d.js:4199-4766 placement
+//@ chunk-metqe8pz.js:4196-4763 placement
 async function claimSessionNameAtStartup(request) {
   let { sessionNameArg, interactive, writeName, onRenamed, deps } = request;
   let scheduleRecheck = request.scheduleRecheck ?? _;
@@ -355,7 +355,7 @@ async function claimSessionNameAtStartup(request) {
   };
   await check(registeredSessionName.name, false);
 }
-//@ chunk-897ngh1d.js:4766-5023 placement
+//@ chunk-metqe8pz.js:4763-5020 placement
 function scheduleSettledRecheck(request) {
   let { name, onYield, deps } = request;
   let suffixBase = request.suffixBase ?? name;
@@ -369,7 +369,7 @@ function scheduleSettledRecheck(request) {
     })();
   });
 }
-//@ chunk-897ngh1d.js:5023-5267 placement
+//@ chunk-metqe8pz.js:5020-5264 placement
 function renameSupersededDuringScan(registeredSessionName, baseName, name) {
   let registeredSessionName_2 = getRegisteredSessionName();
   if (
@@ -393,7 +393,7 @@ function renameSupersededDuringScan(registeredSessionName, baseName, name) {
     return;
   return registeredSessionName_2;
 }
-//@ chunk-897ngh1d.js:5267-6241 placement
+//@ chunk-metqe8pz.js:5264-6238 placement
 /**
  * 恢复会话时重新声明会话名；名字被本机其他活会话占用时改名并通知通信过的会话。
  */
@@ -460,7 +460,7 @@ async function reclaimSessionNameOnResume(title, storageV5, options = {}) {
   if (claim.name === registeredSessionName?.name) return;
   getSessionNamingState().announceYield(claim.name, sanitizedTitle);
 }
-//@ chunk-897ngh1d.js:6241-7062 placement
+//@ chunk-metqe8pz.js:6238-7059 placement
 async function notifyCorrespondentsOfRename(
   formerName,
   newName,
@@ -523,15 +523,15 @@ async function notifyCorrespondentsOfRename(
   );
 }
 export {
-  reclaimSessionNameOnResume,
   settledYieldFor,
-  noteVettedCorrespondent,
-  getSessionNamingState,
-  takePendingYield,
-  claimSessionNameAtStartup,
   getUserTypedSessionName,
+  reclaimSessionNameOnResume,
+  getSessionNamingState,
   claimUniqueSessionName,
   renameSupersededDuringScan,
   scheduleSettledRecheck,
   notifyCorrespondentsOfRename,
+  claimSessionNameAtStartup,
+  takePendingYield,
+  noteVettedCorrespondent,
 };

@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/credential-provider-http/dist-cjs/fromHttp/requestHelpers.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/credential-provider-http@3.936.0..3.972.41
- * pieces: chunk-0c72454j.js (3)
+ * pieces: chunk-48h98ags.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
 import { __toESM } from "../../../../../runtime/bun-runtime.js";
@@ -11,12 +11,12 @@ import { require_protocol_http } from "../../../../@smithy/protocol-http/dist-cj
 import { require_client } from "../../../../@smithy/core/dist-cjs/submodules/client/index.js";
 import { require_util_stream } from "../../../../@smithy/util-stream/dist-cjs/index.js";
 
-//@ chunk-0c72454j.js:1266-1315 esm-layout
+//@ chunk-48h98ags.js:1266-1315 esm-layout
 var config_1 = __toESM(require_property_provider());
 var import_protocol_http = __toESM(require_protocol_http());
 var import_client_2 = __toESM(require_client());
 var serde_2 = __toESM(require_util_stream());
-//@ chunk-0c72454j.js:1315-1525 esm-fingerprint
+//@ chunk-48h98ags.js:1315-1525 esm-fingerprint
 function createGetRequest(url) {
   return new import_protocol_http.HttpRequest({
     protocol: url.protocol,
@@ -30,7 +30,7 @@ function createGetRequest(url) {
     fragment: url.hash,
   });
 }
-//@ chunk-0c72454j.js:1525-2461 esm-fingerprint
+//@ chunk-48h98ags.js:1525-2461 esm-fingerprint
 async function getCredentials(response, logger) {
   let str = await serde_2.sdkStreamMixin(response.body).transformToString();
   if (response.statusCode === 200) {

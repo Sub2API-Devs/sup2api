@@ -3,9 +3,9 @@
  *
  * 钩子站点规则：提示词装饰与光标（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (8)
  * attribution: placement 8
  */
 import { checkPinnedKeys, restoreMissingKeys_2, checkResultObject } from "./siteRules.js";
@@ -23,7 +23,7 @@ import {
 import { checkedListLength } from "../dispatch/valueSizing.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:108493-108671 placement
+//@ chunk-j8f885h1.js:89099-89277 placement
 /**
  * 校验 origin 未改动且 text 是字符串。
  */
@@ -32,7 +32,7 @@ function checkPromptOriginAndText(passed, received) {
     return "a changed origin (the engine set it; next(e) passes it on)";
   return typeof passed.text === "string" ? undefined : "no { text } (a string)";
 }
-//@ chunk-4121qate.js:108671-108961 placement
+//@ chunk-j8f885h1.js:89277-89567 placement
 /**
  * 输入框类站点规则工厂（prompt.fill/suggest 等）：恢复 origin 与指定字段，校验参数，结果须含布尔字段 o。
  */
@@ -56,13 +56,13 @@ var createPromptBoxSite = (
     typeof result[resultField] === "boolean" ? undefined : `no { ${resultField} } (true or false)`,
   ),
 });
-//@ chunk-4121qate.js:108961-109038 placement
+//@ chunk-j8f885h1.js:89567-89644 placement
 /**
  * 段落模式校验
  */
 var promptSectionModeError = (args) =>
   isPromptSectionMode(args.mode) ? undefined : `a mode that is not one of ${PROMPT_SECTION_MODES.join(", ")}`;
-//@ chunk-4121qate.js:113028-113510 placement
+//@ chunk-j8f885h1.js:93634-94116 placement
 /**
  * 校验提示词装饰段 { start, end }（UTF-16 偏移）
  */
@@ -82,7 +82,7 @@ function checkDecorationRun(run) {
   }
   return;
 }
-//@ chunk-4121qate.js:113510-113731 placement
+//@ chunk-j8f885h1.js:94116-94337 placement
 function checkDecorations(decorations) {
   if (decorations === undefined) return;
   if (!Array.isArray(decorations)) return "decorations must be an array of { start, end } runs";
@@ -94,14 +94,14 @@ function checkDecorations(decorations) {
   }
   return;
 }
-//@ chunk-4121qate.js:113731-113821 placement
+//@ chunk-j8f885h1.js:94337-94427 placement
 /**
  * 光标必须整数
  */
 function checkCursorInteger(cursor) {
   return cursor === undefined || Number.isInteger(cursor) ? undefined : "cursor must be an integer";
 }
-//@ chunk-4121qate.js:113821-113942 placement
+//@ chunk-j8f885h1.js:94427-94548 placement
 /**
  * prompt.fill 结果：仅保留下层给出过的拒绝原因。
  */
@@ -116,12 +116,12 @@ function keepFillRefusal(result, answers) {
       }
     : rest;
 }
-//@ chunk-4121qate.js:113942-114078 placement
+//@ chunk-j8f885h1.js:94548-94684 placement
 /**
  * prompt.fill 站点规则：恢复 mode，校验文本、装饰段与光标，结果为 isFilled。
  */
 var PROMPT_FILL_SITE; // deferred: uses createPromptBoxSite of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:113942", () => {
+deferInit("chunk-j8f885h1.js:94548", () => {
   PROMPT_FILL_SITE = {
     ...createPromptBoxSite("prompt.fill", "isFilled", {
       restored: ["mode"],
@@ -132,11 +132,11 @@ deferInit("chunk-4121qate.js:113942", () => {
   };
 });
 export {
+  checkDecorations,
+  checkCursorInteger,
   PROMPT_FILL_SITE,
   createPromptBoxSite,
   checkPromptOriginAndText,
   promptSectionModeError,
   keepFillRefusal,
-  checkDecorations,
-  checkCursorInteger,
 };

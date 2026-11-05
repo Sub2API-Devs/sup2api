@@ -3,21 +3,22 @@
  *
  * 2.1.316 新增：managed agents CLI 命令守卫钩子
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e5gvqyfh.js (7)
- * attribution: placement 7
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b628tq8y.js (8)
+ * attribution: placement 7, affinity 1
  */
 import { getRegisteredHooks, registerHookCallbacks } from "../../bootstrap/state.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
 import { MONITOR } from "../../tools/MonitorTool/constants.js";
-import { parseForSecurity, checkSemantics } from "../bash/ast.js";
+import { withSturdyLanternOff } from "../bash/bashReadingFlags.js";
+import { withReExpansionIfNeeded, needsReExpansionRun } from "../bash/bashParserFlags.js";
+import { parseForSecurity, failsSubstitutionTextCheck, checkSemantics } from "../bash/ast.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum, lit } from "../../services/analytics/safeMetadata.js";
-import { PreToolUseHookSpecificOutputSchema_2 } from "../../entrypoints/sdk/coreSchemas.js";
 
-//@ chunk-e5gvqyfh.js:2685-6425 placement
+//@ chunk-b628tq8y.js:2968-6710 placement
 /**
  * VERSION_ARG_PATTERN：--version 的十进制整数值；ANT_WORD_PATTERN：命令里出现 ant（大小写不敏感）；STAGED_ID_PATTERN：staging/vrtx/bdrk 前缀的 ID（同一声明共 19 个绑定）。
  */
@@ -55,7 +56,7 @@ var managedAgentsCommandGuardHook = {
   internal: true,
 };
 var managedAgentsSkillFilesCache;
-//@ chunk-e5gvqyfh.js:6425-6567 placement
+//@ chunk-b628tq8y.js:6710-6852 placement
 /**
  * 若尚未注册，则为 Bash/PowerShell/Monitor 注册 managed agents 命令守卫 PreToolUse 钩子。
  */
@@ -75,7 +76,7 @@ function registerManagedAgentsCommandGuard() {
     ],
   });
 }
-//@ chunk-e5gvqyfh.js:6567-9476 placement
+//@ chunk-b628tq8y.js:6852-9900 placement
 /**
  * PreToolUse 钩子：检查 Bash 中的 managed agents CLI 命令参数格式，阻止可疑调用。
  */
@@ -89,9 +90,14 @@ async function guardManagedAgentsCommand(hookInput) {
   if (typeof command !== "string") return {};
   let shell = hookInput.tool_name === POWERSHELL_TOOL_NAME ? "powershell" : "bash";
   let replaced = command.replace(QUOTE_CHARS_PATTERN, "");
-  let parsed = shell === "bash" ? await parseForSecurity(command) : undefined;
-  let isAmbiguous =
+  let parsed =
+    shell === "bash"
+      ? await withSturdyLanternOff(() => withReExpansionIfNeeded(command, () => parseForSecurity(command)))
+      : undefined;
+  let skillsPathPresent = needsReExpansionRun(command);
+  let commandShapeSuspicious =
     parsed?.kind !== "simple" ||
+    (parsed.tree !== undefined && failsSubstitutionTextCheck(command, parsed.tree)) ||
     ANT_WORD_PATTERN.test(replaced) ||
     parsed.commands.some(({ argv }) => argv.some((arg) => /(?:^|\/)ant(?:\.exe)?$/i.test(arg)));
   let joinedArgv = parsed?.kind === "simple" ? parsed.commands.flatMap(({ argv }) => argv).join(" ") : "";
@@ -110,6 +116,7 @@ async function guardManagedAgentsCommand(hookInput) {
   let localIds =
     hasLocalId &&
     parsed?.kind === "simple" &&
+    !skillsPathPresent &&
     !/\$\(|`|<<|[<>]\(/.test(command) &&
     checkSemantics(parsed.commands).ok &&
     parsed.bareAssignmentNames.length === 0 &&
@@ -137,12 +144,20 @@ async function guardManagedAgentsCommand(hookInput) {
     mapped.every((variant) => (variant.match(LOCAL_ID_PATTERN) ?? []).length === localIds.length);
   let hasStagedId =
     mapped.some((variant) => STAGED_ID_PATTERN.test(variant)) || STAGED_ID_PATTERN.test(joinedArgv);
+  let stagedIdWithPrefix =
+    skillsPathPresent &&
+    mapped.some(
+      (variant) => STAGED_ID_PATTERN.test(variant) || (variant.match(LOCAL_ID_PATTERN) ?? []).length > 0,
+    );
   if (
     (hasStagedId || (hasLocalId && !allIdsFullForm)) &&
-    (isAmbiguous ||
-      (await hasNestedDoLoop(parsed, {
-        left: MAX_NESTED_DO_DEPTH,
-      })))
+    (commandShapeSuspicious ||
+      stagedIdWithPrefix ||
+      (await withReExpansionIfNeeded(command, () =>
+        hasNestedDoLoop(parsed, {
+          left: MAX_NESTED_DO_DEPTH,
+        }),
+      )))
   ) {
     logEvent("tengu_claude_api_ant_command_refused", {
       shell: fromEnum(shell),
@@ -153,7 +168,7 @@ async function guardManagedAgentsCommand(hookInput) {
       (await loadManagedAgentsSkillFiles().catch(() => [])).some(({ transform }) =>
         replaced.includes(transform),
       );
-    return PreToolUseHookSpecificOutputSchema_2(
+    return denyHookOutput(
       hasStagedId
         ? STAGED_ID_REFUSED_MESSAGE
         : matchesSkillTransform
@@ -183,6 +198,7 @@ async function guardManagedAgentsCommand(hookInput) {
     let sliced = parsed.commands.slice(0, -1);
     let strippedArgs = splitQuotedArgs(command.replace(LEADING_CD_CHAIN_PATTERN, ""));
     argv =
+      !skillsPathPresent &&
       filtered.length === 1 &&
       parsed.bareAssignmentNames.length === 0 &&
       parsed.hasLoop === false &&
@@ -235,14 +251,12 @@ async function guardManagedAgentsCommand(hookInput) {
     shell: fromEnum(shell),
     cause: isLocalId ? lit("local_id") : lit("managed_agents_secure_command_changed"),
   });
-  return PreToolUseHookSpecificOutputSchema_2(
-    isLocalId ? MANAGED_AGENTS_SECURE_LOCAL_ID_MESSAGE : MALFORMED_ANT_COMMAND_MESSAGE,
-  );
+  return denyHookOutput(isLocalId ? MANAGED_AGENTS_SECURE_LOCAL_ID_MESSAGE : MALFORMED_ANT_COMMAND_MESSAGE);
 }
-//@ chunk-e5gvqyfh.js:9476-9801 placement
+//@ chunk-b628tq8y.js:9900-10225 placement
 async function loadManagedAgentsSkillFiles() {
   if (managedAgentsSkillFilesCache === undefined) {
-    let { SKILL_FILES } = await import("../../skills/bundled/SKILL_FILES_2.lazy.js");
+    let { SKILL_FILES } = await import("../../skills/bundled/SKILL_FILES_3.lazy.js");
     managedAgentsSkillFilesCache = (SKILL_FILES["shared/managed-agents-secure.md"] ?? "")
       .split(
         `
@@ -265,7 +279,7 @@ async function loadManagedAgentsSkillFiles() {
   }
   return managedAgentsSkillFilesCache;
 }
-//@ chunk-e5gvqyfh.js:9801-10022 placement
+//@ chunk-b628tq8y.js:10225-10446 placement
 async function hasNestedDoLoop(parsed, budget) {
   if (parsed?.kind !== "simple" || parsed.laterLoopPassesDiffer === true) return true;
   for (let arg of parsed.commands.flatMap(({ argv }) => argv))
@@ -277,11 +291,11 @@ async function hasNestedDoLoop(parsed, budget) {
       return true;
   return false;
 }
-//@ chunk-e5gvqyfh.js:10022-10085 placement
+//@ chunk-b628tq8y.js:10446-10510 placement
 function hasLoopNode(node) {
   return LOOP_NODE_TYPES.has(node.type) || node.children.some((child) => hasLoopNode(child));
 }
-//@ chunk-e5gvqyfh.js:10085-10272 placement
+//@ chunk-b628tq8y.js:10510-10697 placement
 function splitQuotedArgs(text) {
   let replaced = text.replace(/^[ \t\n]+|[ \t\n]+$/g, "");
   if (
@@ -291,5 +305,15 @@ function splitQuotedArgs(text) {
   return [...replaced.matchAll(new RegExp(QUOTED_ARG_TOKEN_PATTERN, "g"))].map(
     (match) => match[1] ?? match[2] ?? "",
   );
+}
+//@ chunk-b628tq8y.js:10697-10820 affinity
+function denyHookOutput(permissionDecisionReason) {
+  return {
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason,
+    },
+  };
 }
 export { registerManagedAgentsCommandGuard };

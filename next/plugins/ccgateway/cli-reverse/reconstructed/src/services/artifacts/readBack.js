@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：发布后回读与 base href 说明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-06y4szbn.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-51jy8ztq.js (12)
  * attribution: placement 12
  */
 import {
@@ -27,7 +27,7 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { ARTIFACT_MAX_RESULT_SIZE_CHARS } from "../../tools/ArtifactTool/constants.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-06y4szbn.js:61435-61691 placement
+//@ chunk-51jy8ztq.js:63687-63943 placement
 function storedDeclFromWire(wire) {
   let parsed = contractInputSchema().safeParse(wire);
   if (!parsed.success) {
@@ -46,7 +46,7 @@ function storedDeclFromWire(wire) {
     }),
   };
 }
-//@ chunk-06y4szbn.js:61691-62400 placement
+//@ chunk-51jy8ztq.js:63943-64652 placement
 async function readFrameDecl(slug, signal, credentials) {
   let startTime = performance.now();
   try {
@@ -92,7 +92,7 @@ async function readFrameDecl(slug, signal, credentials) {
     };
   }
 }
-//@ chunk-06y4szbn.js:62400-62830 placement
+//@ chunk-51jy8ztq.js:64652-65082 placement
 async function readBackAfterPublish(published, slug, credentials, signal) {
   let result = await published;
   if (result.err !== null || slug === undefined || result.readBackEchoed) return result;
@@ -124,7 +124,7 @@ async function readBackAfterPublish(published, slug, credentials, signal) {
     },
   };
 }
-//@ chunk-06y4szbn.js:62830-63392 placement
+//@ chunk-51jy8ztq.js:65082-65644 placement
 function readBaseHref(html) {
   let spaceRe = /[\t\n\f\r ]/;
   let tagOutsideComments = findTagOutsideComments(html, BASE_TAG_RE, 0);
@@ -165,16 +165,16 @@ function readBaseHref(html) {
   }
   return;
 }
-//@ chunk-06y4szbn.js:63392-63443 placement
+//@ chunk-51jy8ztq.js:65644-65695 placement
 var HAS_SCHEME_OR_ROOT_RE = /^[\f ]*(?:[a-zA-Z][a-zA-Z0-9+.-]*:|[/\\])/;
-//@ chunk-06y4szbn.js:63443-63560 placement
+//@ chunk-51jy8ztq.js:65695-65812 placement
 function hasSuspiciousBaseHref(html) {
   let baseHref = readBaseHref(html);
   if (baseHref === undefined) return false;
   let replaced = baseHref.replace(/[\t\n\r]/g, "");
   return replaced.includes("&") || HAS_SCHEME_OR_ROOT_RE.test(replaced);
 }
-//@ chunk-06y4szbn.js:63560-64245 placement
+//@ chunk-51jy8ztq.js:65812-66497 placement
 /**
  * <base href> 指向 artifact 之外时的两段说明（含 files 的内联版与单页版）。
  */
@@ -182,7 +182,7 @@ var BASE_HREF_TEXT =
   "This page's <base href> points outside the artifact \u2014 at another site, or at the site root. Artifact hosting serves only the artifact's own folder and refuses a base on another site, so relative references won't resolve through it \u2014 remove the tag and publish those files alongside the page (`files`), referenced by relative path.";
 var BASE_HREF_OUTSIDE_TEXT_SINGLE =
   "This page's <base href> points outside the artifact \u2014 at another site, or at the site root. Artifact hosting serves only the artifact's own folder and refuses a base on another site, so relative references won't resolve through it \u2014 remove the tag and make those references work without it (inline what the page needs).";
-//@ chunk-06y4szbn.js:64245-64552 placement
+//@ chunk-51jy8ztq.js:66497-66804 placement
 function detectBom(content) {
   let text =
     typeof content === "string" ? content.slice(0, 16384) : content.subarray(0, 16384).toString("utf8");
@@ -196,7 +196,7 @@ function detectBom(content) {
   }
   return /^<!doctype html[\s>]/i.test(text.slice(bomLen, bomLen + 16));
 }
-//@ chunk-06y4szbn.js:64552-64796 placement
+//@ chunk-51jy8ztq.js:66804-67048 placement
 function notLivePathsResult(installationHealthDiagnostics, diagnostics) {
   if (installationHealthDiagnostics.err !== null) return installationHealthDiagnostics;
   let pages = listReadBackHtmlPaths(diagnostics).filter(
@@ -211,7 +211,7 @@ function notLivePathsResult(installationHealthDiagnostics, diagnostics) {
     warnings: [...(installationHealthDiagnostics.warnings ?? []), describePages(pages)],
   };
 }
-//@ chunk-06y4szbn.js:64796-64926 placement
+//@ chunk-51jy8ztq.js:67048-67178 placement
 function listReadBackHtmlPaths(diagnostics) {
   return diagnostics
     .filter(
@@ -223,7 +223,7 @@ function listReadBackHtmlPaths(diagnostics) {
     )
     .map((path) => path.path);
 }
-//@ chunk-06y4szbn.js:64926-65501 placement
+//@ chunk-51jy8ztq.js:67178-67753 placement
 function describePages(pages) {
   let mapped = pages.slice(0, 3).map((page) => jsonStringify(page));
   let more = pages.length - mapped.length;
@@ -231,25 +231,25 @@ function describePages(pages) {
   let single = pages.length === 1;
   return `files: ${list} ${single ? "has" : "have"} no <!doctype html> \u2014 supporting HTML pages are served exactly as written (only the page itself is wrapped in the skeleton), so if ${single ? "it is a page" : "they are pages"} people open, start ${single ? "it" : "each"} with a doctype, charset and viewport meta and its base styles and publish again (a fragment the page fetches and inserts can stay as written); as published ${single ? "it renders" : "they render"} in quirks mode.`;
 }
-//@ chunk-06y4szbn.js:65613-65657 placement
+//@ chunk-51jy8ztq.js:67865-67909 placement
 /**
  * 发布后回读的限额：最多 8 项、占结果大小上限的 7 成。
  */
 var READ_BACK_LIMITS; // deferred: uses ARTIFACT_SLUG_RE (../../tools/ArtifactTool/constants.js) of its import cycle while loading; runs once the cycle is complete
 var READ_BACK_SIZE_RATIO;
 var floored;
-deferInit("chunk-06y4szbn.js:65613", () => {
+deferInit("chunk-51jy8ztq.js:67865", () => {
   READ_BACK_LIMITS = 8;
   READ_BACK_SIZE_RATIO = 0.7;
   floored = Math.floor((ARTIFACT_MAX_RESULT_SIZE_CHARS * READ_BACK_SIZE_RATIO) / (READ_BACK_LIMITS * 2));
 });
 export {
+  readFrameDecl,
   READ_BACK_LIMITS,
   floored,
   hasSuspiciousBaseHref,
   BASE_HREF_TEXT,
   BASE_HREF_OUTSIDE_TEXT_SINGLE,
-  readFrameDecl,
   readBackAfterPublish,
   notLivePathsResult,
   storedDeclFromWire,

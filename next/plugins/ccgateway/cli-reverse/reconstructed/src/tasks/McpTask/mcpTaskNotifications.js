@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 任务通知：内容转文本、恢复任务、状态消息。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ta5f9qat.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cddhernx.js (10)
  * attribution: placement 10
  */
 import { deleteMcpTaskMetadata, listTaskMetadata } from "../../services/mcp/mcpTasks.js";
@@ -34,7 +34,7 @@ import { formatTaskNotification } from "../../utils/xmlTags.js";
 import { isMcpTasksEnabled } from "../../services/mcp/mcpTaskWorker.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 
-//@ chunk-ta5f9qat.js:12063-12170 placement
+//@ chunk-cddhernx.js:13210-13317 placement
 async function removeMcpTaskMetadataSafe(taskId, storageV5) {
   try {
     await (storageV5 ? deleteMcpTaskMetadata(taskId, storageV5) : deleteMcpTaskMetadata(taskId));
@@ -42,7 +42,7 @@ async function removeMcpTaskMetadataSafe(taskId, storageV5) {
     logForDebugging(`removeMcpTaskMetadata failed: ${String(error)}`);
   }
 }
-//@ chunk-ta5f9qat.js:12170-12507 placement
+//@ chunk-cddhernx.js:13317-13654 placement
 /**
  * MCP 任务二进制内容块的 schema：data、source（base64）或 resource.blob 三种形状。
  */
@@ -83,7 +83,7 @@ var resourceLinkSchema = DoctorLazy(() =>
     description: create_2().optional(),
   }),
 );
-//@ chunk-ta5f9qat.js:12507-13641 placement
+//@ chunk-cddhernx.js:13654-14787 placement
 async function mcpContentToNotificationText(
   content,
   session,
@@ -154,12 +154,12 @@ async function mcpContentToNotificationText(
     };
   }
 }
-//@ chunk-ta5f9qat.js:13641-13653 placement
+//@ chunk-cddhernx.js:14787-14799 placement
 /**
  * 单条 MCP 事件文本上限。
  */
 var MAX_MCP_EVENT_CHARS = 80000;
-//@ chunk-ta5f9qat.js:13653-13778 placement
+//@ chunk-cddhernx.js:14799-14924 placement
 function isMultiLineWithinWidth(text) {
   let lineStart = 0;
   let lineCount = 0;
@@ -175,7 +175,7 @@ function isMultiLineWithinWidth(text) {
     lineStart = index + 1;
   }
 }
-//@ chunk-ta5f9qat.js:13778-15441 placement
+//@ chunk-cddhernx.js:14924-16587 placement
 /**
  * 把 MCP 任务结果中的一个内容块转为通知文本：文本原样，资源/资源链接给出描述，图片等二进制块按预算解码后写入磁盘并返回保存说明（过大、超预算、非法 base64 或写盘失败时返回对应提示）；同时返回写入字节数。
  */
@@ -285,13 +285,13 @@ async function contentBlockToText(block, persistBudget, session) {
     };
   }
 }
-//@ chunk-ta5f9qat.js:15441-15513 placement
+//@ chunk-cddhernx.js:16587-16659 placement
 /**
  * MCP 状态消息长度上限与不可见字符清理。
  */
 var MAX_MCP_STATUS_CHARS = 1e4;
 var INVISIBLE_CHARS_RUN_REGEX = /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\p{Variation_Selector}]+/gu;
-//@ chunk-ta5f9qat.js:15513-15668 placement
+//@ chunk-cddhernx.js:16659-16813 placement
 function boundMcpStatusMessage(statusMessage) {
   if (statusMessage === undefined) return;
   let trimmed = statusMessage.replace(INVISIBLE_CHARS_RUN_REGEX, " ").replace(/ {2,}/g, " ").trim();
@@ -300,7 +300,7 @@ function boundMcpStatusMessage(statusMessage) {
     ? `${truncateToLength(trimmed, MAX_MCP_STATUS_CHARS)}\u2026 [truncated]`
     : trimmed;
 }
-//@ chunk-ta5f9qat.js:15668-16158 placement
+//@ chunk-cddhernx.js:16813-17303 placement
 function buildMcpTaskNotification(event) {
   let labelText = sanitizeTaskLabel(event.mcpTaskId);
   let summary = `MCP task ${LABEL_PATTERN.test(labelText) ? labelText : shortTaskLabel(event.mcpTaskId)} (${mcpTaskKey(event.serverName, event.toolName)}) ${event.status}.`;
@@ -328,7 +328,7 @@ ${escapeXmlTruncated(body, getMaxMcpOutputChars() - hintBlock.length)}${hintBloc
 </result>`,
   });
 }
-//@ chunk-ta5f9qat.js:16158-16894 placement
+//@ chunk-cddhernx.js:17303-18039 placement
 async function restoreMcpTasks(session) {
   if (!isMcpTasksEnabled()) return;
   let records;

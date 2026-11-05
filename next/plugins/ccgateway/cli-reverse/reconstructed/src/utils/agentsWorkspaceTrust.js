@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Agents 视图启动时处理工作区信任（跳过/已信任/询问后重新发现项目技能插件）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pn8x1715.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5z1vsgd5.js (2)
  * attribution: placement 2
  */
 import { isDemoOrClaubbet } from "../plugins/functionHooks/policyGate.js";
@@ -16,7 +16,7 @@ import { setSessionTrustAccepted, getRootSession } from "../bootstrap/state.js";
 import { getCwd } from "./cwd.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 
-//@ chunk-pn8x1715.js:11897-11968 placement
+//@ chunk-5z1vsgd5.js:13045-13116 placement
 /**
  * 返回 Agents 视图启动时的工作区信任决定（skip/trusted/ask）。
  */
@@ -24,7 +24,7 @@ function agentsTrustDecision() {
   if (isDemoOrClaubbet()) return "skip";
   return checkHasTrustDialogAccepted() && !hasUngatedTrustSources() ? "trusted" : "ask";
 }
-//@ chunk-pn8x1715.js:11968-13094 placement
+//@ chunk-5z1vsgd5.js:13116-14242 placement
 /**
  * Agents 视图启动时处理工作区信任（跳过/已信任/询问后重新发现项目技能插件）。
  */
@@ -55,7 +55,7 @@ async function ensureAgentsWorkspaceTrust(ui, mode, storageV5) {
       let [{ runSteps }, { TrustDialog }, { getCommands }] = await Promise.all([
         import("./runSteps.js"),
         import("../components/TrustDialog/TrustDialog.js"),
-        import("../commands.js"),
+        import("../commands.lazy.js"),
       ]);
       let commands = await getCommands(getCwd(), storageV5).catch(() => []);
       await runSteps(

@@ -3,9 +3,9 @@
  *
  * 工具错误的兜底渲染："Tool execution failed"/InputValidationError 等，截断长错误。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FallbackToolUseErrorMessage.tsx
- * pieces: chunk-t1sz4atx.js (3)
+ * pieces: chunk-em44trrz.js (3)
  * attribution: placement 1, layout 1, fingerprint 1
  */
 import { isTextBlock, MAX_LINES_THRESHOLD } from "../utils/messages/textLineCount.js";
@@ -22,14 +22,14 @@ import {
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { OverflowHint } from "./CtrlOToExpand.js";
 
-//@ chunk-t1sz4atx.js:525-616 placement
+//@ chunk-em44trrz.js:525-616 placement
 /**
  * 函数 stripSandboxViolations（去掉 <sandbox_violations> 段）；位于「工具错误的兜底渲染："Tool execution failed"/InputValidationError 等，截断长错误」模块。
  */
 function stripSandboxViolations(stderr) {
   return stderr.replace(/<sandbox_violations>[\s\S]*?<\/sandbox_violations>/g, "");
 }
-//@ chunk-t1sz4atx.js:616-749 layout
+//@ chunk-em44trrz.js:616-749 layout
 function getToolErrorText(result) {
   let joined = result.flatMap((block) => {
     if (!isTextBlock(block)) return [];
@@ -39,7 +39,7 @@ function getToolErrorText(result) {
 `);
   return joined.trim() === "" ? undefined : joined;
 }
-//@ chunk-t1sz4atx.js:749-1997 fingerprint (2.1.88 match: FallbackToolUseErrorMessage, 0.731)
+//@ chunk-em44trrz.js:749-1997 fingerprint (2.1.88 match: FallbackToolUseErrorMessage, 0.742)
 /**
  * 工具错误兜底：字符串错误去掉 <tool_use_error> 标签，InputValidationError 显示 "Invalid tool parameters"，非 verbose 截断到若干行并提示 ctrl+o 展开。
  */

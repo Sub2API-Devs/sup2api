@@ -3,17 +3,11 @@
  *
  * 2.1.316 新增：服务端分类器上下文
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (34)
- * attribution: placement 34
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (27), chunk-nt9amew5.js (10)
+ * attribution: placement 35, layout 2
  */
-import { HostScoped } from "../../hostScoped.js";
-import { getRootSession } from "../../../bootstrap/state.js";
-import { antEnv } from "../../env.js";
-import { logError } from "../../log.js";
-import { toError } from "../../errors.js";
-import { createKeyedQueue } from "../../promiseQueue.js";
 import {
   MAX_ARTIFACT_SLUG_LENGTH,
   MAX_ARTIFACT_TEXT_LENGTH,
@@ -21,18 +15,153 @@ import {
   MAX_TOOL_USE_IDS,
 } from "./schemas.js";
 import { countCodePoints } from "../../stringUtils.js";
+import { HostScoped } from "../../hostScoped.js";
+import { getRootSession, markThirdPartyServerClassifierRefused } from "../../../bootstrap/state.js";
 import { parseClassifierRequest } from "../../messages/apiNormalization.js";
-import { uniq } from "../../collections.js";
+import { getAPIProvider, getAPIProviderForAnalytics } from "../../model/providers.js";
+import { isFirstPartyEndpoint } from "./flags.js";
+import { antEnv } from "../../env.js";
+import { logError } from "../../log.js";
+import { toError } from "../../errors.js";
+import { createKeyedQueue } from "../../promiseQueue.js";
+import { normalizeCaseForComparison_2 } from "../filesystem.js";
 import { wireName } from "../../../services/mcp/serverIdentity.js";
-import { jsonByteLength } from "./clamp.js";
+import { jsonByteLength as jsonByteLength_2 } from "./clamp.js";
 import { logEvent } from "../../../services/analytics/index.js";
 import { lit as lit_2 } from "../../../services/analytics/safeMetadata.js";
 import { logForDebugging } from "../../debug.js";
+import { isModelPermissionDeniedError, TENGU_SNUG_WALL } from "../../../services/api/withRetry.js";
+import { getApiErrorCode } from "../../../services/api/errorUtils.js";
+import { markBetaRejected } from "../../../bootstrap/stateSlices.js";
+import { BETA_DANGEROUS_TOOL_USE } from "../../betas.js";
+import { isArbiterWithFallbackActive } from "./arbiter.js";
+import { hashToolNames } from "../../model/modelCatalog/maskedIds.js";
+import { telemetrySafeModelName } from "../../model/telemetryModelName.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics/growthbook.js";
-import { TENGU_SNUG_WALL } from "../../../services/api/withRetry.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:129356-129404 placement
+//@ chunk-nt9amew5.js:3889-3950 placement
+/**
+ * fitsContextLimits：上下文行数与长度是否超限。
+ */
+function fitsContextLimits(artifacts) {
+  return (
+    artifacts.length <= MAX_ARTIFACT_SLUG_LENGTH &&
+    artifacts.every((artifactText) => countCodePoints(artifactText) <= MAX_ARTIFACT_TEXT_LENGTH)
+  );
+}
+//@ chunk-nt9amew5.js:11981-12351 placement
+/**
+ * 记录在途的服务端分类请求上下文，结算后把每个工具调用 id 映射到对应的 {request, context}。
+ */
+class ClassifierRequestHistory {
+  inFlight = new Map();
+  judged = new Map();
+  recordRequest(request, context) {
+    this.inFlight.set(request, context);
+  }
+  settleRequest(request, callIds) {
+    let context = this.inFlight.get(request);
+    if (context === undefined) return;
+    this.inFlight.delete(request);
+    let entry = {
+      request,
+      context,
+    };
+    for (let callId of callIds) this.judged.set(callId, entry);
+  }
+  forgetRequest(request) {
+    this.inFlight.delete(request);
+  }
+  historyFor(callId) {
+    return this.judged.get(callId);
+  }
+  reset() {
+    this.inFlight.clear();
+    this.judged.clear();
+  }
+}
+//@ chunk-nt9amew5.js:12351-12376 placement
+var classifierHistorySlot; // deferred: uses ClassifierRequestHistory of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-nt9amew5.js:12351", () => {
+  classifierHistorySlot = new HostScoped(() => new ClassifierRequestHistory());
+});
+//@ chunk-nt9amew5.js:12376-12412 placement
+function classifierHistory() {
+  return classifierHistorySlot.of(getRootSession().host);
+}
+//@ chunk-nt9amew5.js:12412-12453 placement
+/**
+ * recordClassifierRequest：记录分类请求。
+ */
+function recordClassifierRequest(key, entry) {
+  classifierHistory().recordRequest(key, entry);
+}
+//@ chunk-nt9amew5.js:12453-12493 placement
+/**
+ * settleClassifierRequest：结算分类请求。
+ */
+function settleClassifierRequest(key, outcome) {
+  classifierHistory().settleRequest(key, outcome);
+}
+//@ chunk-nt9amew5.js:12493-12529 placement
+/**
+ * forgetClassifierRequest：丢弃分类请求。
+ */
+function forgetClassifierRequest(key) {
+  classifierHistory().forgetRequest(key);
+}
+//@ chunk-nt9amew5.js:12529-12570 placement
+/**
+ * classifierHistoryFor：取某调用的历史。
+ */
+function classifierHistoryFor(toolUseId) {
+  return classifierHistory().historyFor(toolUseId);
+}
+//@ chunk-nt9amew5.js:12570-13154 placement
+/**
+ * 从用户消息的 serverClassifierContext 中收集先前请求的上下文，按请求分组并汇总对应的 tool_use_id（每组有上限）。
+ */
+function collectPriorServerContexts(messages) {
+  let groups = [];
+  let byRequest = new Map();
+  for (let message of messages) {
+    if (message.type !== "user") continue;
+    let serverClassifierContext = message.serverClassifierContext;
+    if (serverClassifierContext === undefined) continue;
+    let content = message.message.content;
+    if (!Array.isArray(content)) continue;
+    let filtered = content.filter(
+      (contentBlock) =>
+        typeof contentBlock === "object" && contentBlock !== null && contentBlock.type === "tool_result",
+    );
+    if (filtered.length !== 1) continue;
+    let toolUseId = filtered[0].tool_use_id;
+    if (typeof toolUseId !== "string" || toolUseId.length > MAX_CONTEXT_ENTRY_LENGTH) continue;
+    let parsed = parseClassifierRequest(serverClassifierContext);
+    if (parsed === undefined) continue;
+    let group = byRequest.get(parsed.request);
+    if (group === undefined) {
+      group = {
+        tool_use_ids: [],
+        context: parsed.context,
+      };
+      byRequest.set(parsed.request, group);
+      groups.push(group);
+    }
+    if (group.tool_use_ids.length < MAX_TOOL_USE_IDS && !group.tool_use_ids.includes(toolUseId))
+      group.tool_use_ids.push(toolUseId);
+  }
+  return groups;
+}
+//@ chunk-nt9amew5.js:27046-27095 placement (2.1.88 match: logEventTo1P, 1)
+/**
+ * 服务端分类器是否只在第一方且非代理下生效的判定。
+ */
+function logEventTo1P() {
+  return getAPIProvider() === "firstParty" && !isFirstPartyEndpoint();
+}
+//@ chunk-5xgkngpb.js:136105-136153 placement
 /**
  * metaJsonLine：生成 {meta} 的 JSON 行。
  */
@@ -41,7 +170,7 @@ function metaJsonLine(meta) {
     meta,
   });
 }
-//@ chunk-e6aww6q8.js:129404-129556 placement
+//@ chunk-5xgkngpb.js:136153-136305 placement
 class ServerClassifierContextLines {
   lines = new Map();
   record(key, lines) {
@@ -57,41 +186,41 @@ class ServerClassifierContextLines {
     this.lines.clear();
   }
 }
-//@ chunk-e6aww6q8.js:129556-129583 placement
+//@ chunk-5xgkngpb.js:136305-136332 placement
 var classifierContextLinesSlot; // deferred: uses ServerClassifierContextLines of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:129556", () => {
+deferInit("chunk-5xgkngpb.js:136305", () => {
   classifierContextLinesSlot = new HostScoped(() => new ServerClassifierContextLines());
 });
-//@ chunk-e6aww6q8.js:129583-129622 placement
+//@ chunk-5xgkngpb.js:136332-136371 placement
 function classifierContextLines() {
   return classifierContextLinesSlot.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:129622-129658 placement
+//@ chunk-5xgkngpb.js:136371-136407 placement
 /**
  * recordClassifierContext：记录分类器上下文中。
  */
 function recordClassifierContext(key, lines) {
   classifierContextLines().record(key, lines);
 }
-//@ chunk-e6aww6q8.js:129658-129690 placement
+//@ chunk-5xgkngpb.js:136407-136439 placement
 /**
  * forgetClassifierContext：丢弃分类器上下文行。
  */
 function forgetClassifierContext(toolUseId) {
   classifierContextLines().forget(toolUseId);
 }
-//@ chunk-e6aww6q8.js:129690-129730 placement
+//@ chunk-5xgkngpb.js:136439-136479 placement
 /**
  * classifierContextLinesFor：取某请求的上下文行。
  */
 function classifierContextLinesFor(key) {
   return classifierContextLines().linesFor(key);
 }
-//@ chunk-e6aww6q8.js:129730-129764 placement
+//@ chunk-5xgkngpb.js:136479-136513 placement
 function classifierOverlapEnabled() {
   return resolveClassifierOverlapFlag().value;
 }
-//@ chunk-e6aww6q8.js:129764-129900 placement
+//@ chunk-5xgkngpb.js:136513-136649 placement
 function resolveClassifierOverlapFlag() {
   let CLAUDE_CODE_AUTO_MODE_CLASSIFIER_OVERLAP = antEnv.CLAUDE_CODE_AUTO_MODE_CLASSIFIER_OVERLAP;
   if (CLAUDE_CODE_AUTO_MODE_CLASSIFIER_OVERLAP !== undefined)
@@ -104,14 +233,14 @@ function resolveClassifierOverlapFlag() {
     src: "default",
   };
 }
-//@ chunk-e6aww6q8.js:129900-129910 placement
+//@ chunk-5xgkngpb.js:136649-136659 placement
 var MAX_QUEUED_CLASSIFIER_SLOTS = 4;
-//@ chunk-e6aww6q8.js:129910-130256 placement
+//@ chunk-5xgkngpb.js:136659-137005 placement
 /**
  * 分类器结果提交的排队位：place 设定前序位置与放弃回调，runInTurn 等前序完成后执行并释放；未交接时 dispose 释放。
  */
 let CommitTurnSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:129910", () => {
+deferInit("chunk-5xgkngpb.js:136659", () => {
   CommitTurnSlot = class CommitTurnSlot {
     earlierPlaces;
     giveUpPlace;
@@ -141,12 +270,12 @@ deferInit("chunk-e6aww6q8.js:129910", () => {
     }
   };
 });
-//@ chunk-e6aww6q8.js:130256-130318 placement
+//@ chunk-5xgkngpb.js:137005-137067 placement
 var CLASSIFIER_QUEUE_NOOP_HOOKS = {
   transcriptStatePublished: () => {},
   stageOneDone: () => {},
 };
-//@ chunk-e6aww6q8.js:130318-132869 placement
+//@ chunk-5xgkngpb.js:137067-139620 placement
 /**
  * 分类器请求排队器：同一键默认串行；开启重叠时按"车道"并发，跟踪未发布、第一阶段中、已过第一阶段的请求，缓存前缀已热时允许有限并发，并记录已分类的调用 id。
  */
@@ -320,37 +449,37 @@ class ClassifierRequestQueue {
     this.classifiedCallIds.clear();
   }
 }
-//@ chunk-e6aww6q8.js:132869-132896 placement
+//@ chunk-5xgkngpb.js:139620-139647 placement
 var classifierRequestQueueSlot; // deferred: uses ClassifierRequestQueue of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:132869", () => {
+deferInit("chunk-5xgkngpb.js:139620", () => {
   classifierRequestQueueSlot = new HostScoped(() => new ClassifierRequestQueue());
 });
-//@ chunk-e6aww6q8.js:132896-132935 placement
+//@ chunk-5xgkngpb.js:139647-139686 placement
 function classifierRequestQueue() {
   return classifierRequestQueueSlot.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:132935-132987 placement
+//@ chunk-5xgkngpb.js:139686-139738 placement
 /**
  * enqueueClassifierRequest：入队分类器请求。
  */
 function enqueueClassifierRequest(key, run, telemetry, options) {
   return classifierRequestQueue().enqueue(key, run, telemetry, options);
 }
-//@ chunk-e6aww6q8.js:132987-133033 placement
+//@ chunk-5xgkngpb.js:139738-139784 placement
 /**
  * recordClassifiedCall：记录已分类的工具调用。
  */
 function recordClassifiedCall(id) {
   classifierRequestQueue().recordClassifiedCall(id);
 }
-//@ chunk-e6aww6q8.js:133033-133090 placement
+//@ chunk-5xgkngpb.js:139784-139841 placement
 /**
  * isClassifiedCall：该调用是否已分类。
  */
 function isClassifiedCall(call) {
   return classifierRequestQueue().isRecordedClassifiedCall(call);
 }
-//@ chunk-e6aww6q8.js:133090-133150 placement
+//@ chunk-5xgkngpb.js:139841-139901 placement
 function classifierOverlapEnabledSafe() {
   try {
     return classifierOverlapEnabled();
@@ -359,134 +488,20 @@ function classifierOverlapEnabledSafe() {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:133150-133187 placement
+//@ chunk-5xgkngpb.js:139901-139938 placement
 function callSafely(fn, payload) {
   try {
     fn?.(payload);
   } catch {}
 }
-//@ chunk-e6aww6q8.js:135297-135360 placement
-/**
- * fitsContextLimits：上下文行数与长度是否超限。
- */
-function fitsContextLimits(artifacts) {
-  return (
-    artifacts.length <= MAX_ARTIFACT_SLUG_LENGTH &&
-    artifacts.every((artifactText) => countCodePoints(artifactText) <= MAX_ARTIFACT_TEXT_LENGTH)
-  );
-}
-//@ chunk-e6aww6q8.js:143633-144004 placement
-/**
- * 记录在途的服务端分类请求上下文，结算后把每个工具调用 id 映射到对应的 {request, context}。
- */
-class ClassifierRequestHistory {
-  inFlight = new Map();
-  judged = new Map();
-  recordRequest(request, context) {
-    this.inFlight.set(request, context);
-  }
-  settleRequest(request, callIds) {
-    let context = this.inFlight.get(request);
-    if (context === undefined) return;
-    this.inFlight.delete(request);
-    let entry = {
-      request,
-      context,
-    };
-    for (let callId of callIds) this.judged.set(callId, entry);
-  }
-  forgetRequest(request) {
-    this.inFlight.delete(request);
-  }
-  historyFor(callId) {
-    return this.judged.get(callId);
-  }
-  reset() {
-    this.inFlight.clear();
-    this.judged.clear();
-  }
-}
-//@ chunk-e6aww6q8.js:144004-144031 placement
-var classifierHistorySlot; // deferred: uses ClassifierRequestHistory of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:144004", () => {
-  classifierHistorySlot = new HostScoped(() => new ClassifierRequestHistory());
-});
-//@ chunk-e6aww6q8.js:144031-144070 placement
-function classifierHistory() {
-  return classifierHistorySlot.of(getRootSession().host);
-}
-//@ chunk-e6aww6q8.js:144070-144113 placement
-/**
- * recordClassifierRequest：记录分类请求。
- */
-function recordClassifierRequest(key, entry) {
-  classifierHistory().recordRequest(key, entry);
-}
-//@ chunk-e6aww6q8.js:144113-144156 placement
-/**
- * settleClassifierRequest：结算分类请求。
- */
-function settleClassifierRequest(key, outcome) {
-  classifierHistory().settleRequest(key, outcome);
-}
-//@ chunk-e6aww6q8.js:144156-144195 placement
-/**
- * forgetClassifierRequest：丢弃分类请求。
- */
-function forgetClassifierRequest(key) {
-  classifierHistory().forgetRequest(key);
-}
-//@ chunk-e6aww6q8.js:144195-144238 placement
-/**
- * classifierHistoryFor：取某调用的历史。
- */
-function classifierHistoryFor(toolUseId) {
-  return classifierHistory().historyFor(toolUseId);
-}
-//@ chunk-e6aww6q8.js:144238-144825 placement
-/**
- * 从用户消息的 serverClassifierContext 中收集先前请求的上下文，按请求分组并汇总对应的 tool_use_id（每组有上限）。
- */
-function collectPriorServerContexts(messages) {
-  let groups = [];
-  let byRequest = new Map();
-  for (let message of messages) {
-    if (message.type !== "user") continue;
-    let serverClassifierContext = message.serverClassifierContext;
-    if (serverClassifierContext === undefined) continue;
-    let content = message.message.content;
-    if (!Array.isArray(content)) continue;
-    let filtered = content.filter(
-      (contentBlock) =>
-        typeof contentBlock === "object" && contentBlock !== null && contentBlock.type === "tool_result",
-    );
-    if (filtered.length !== 1) continue;
-    let toolUseId = filtered[0].tool_use_id;
-    if (typeof toolUseId !== "string" || toolUseId.length > MAX_CONTEXT_ENTRY_LENGTH) continue;
-    let parsed = parseClassifierRequest(serverClassifierContext);
-    if (parsed === undefined) continue;
-    let group = byRequest.get(parsed.request);
-    if (group === undefined) {
-      group = {
-        tool_use_ids: [],
-        context: parsed.context,
-      };
-      byRequest.set(parsed.request, group);
-      groups.push(group);
-    }
-    if (group.tool_use_ids.length < MAX_TOOL_USE_IDS && !group.tool_use_ids.includes(toolUseId))
-      group.tool_use_ids.push(toolUseId);
-  }
-  return groups;
-}
-//@ chunk-e6aww6q8.js:2512602-2512721 placement
+//@ chunk-5xgkngpb.js:2554838-2554957 placement
 var SERVER_CONTEXT_FIELD_MAX_BYTES = 256000;
 var SERVER_CONTEXT_MAX_BYTES = 1040000;
 var TOOL_HOST_ATTACHED = "tool_host_attached";
 var STRUCTURED_OUTPUT_IS_HANDBACK = "structured_output_is_handback";
 var JUDGE_ONLY_TOOLS = "judge_only_tools";
 var MAX_JUDGE_ONLY_TOOL_NAME_LENGTH = 200;
-//@ chunk-e6aww6q8.js:2512721-2512906 placement
+//@ chunk-5xgkngpb.js:2554957-2555142 placement
 function pickPriorTurnContext(context) {
   return {
     git_state: context.git_state,
@@ -499,7 +514,7 @@ function pickPriorTurnContext(context) {
     platform: context.platform,
   };
 }
-//@ chunk-e6aww6q8.js:2512906-2513380 placement
+//@ chunk-5xgkngpb.js:2555142-2555615 placement
 /**
  * 组装服务端分类器请求上下文：judge-only 工具名规整排序（名字过长则放弃），加上上一轮、系统提醒与文本来源；超过大小上限时记 tengu_auto_mode_context_withheld 并放弃。
  */
@@ -511,7 +526,7 @@ function buildServerClassifierRequestContext({
 }) {
   let judgeOnlyTools =
     autoModeServerContext.judgeOnlyTools &&
-    uniq([...autoModeServerContext.judgeOnlyTools].map(wireName)).sort();
+    normalizeCaseForComparison_2([...autoModeServerContext.judgeOnlyTools].map(wireName)).sort();
   if (
     judgeOnlyTools?.length === 0 ||
     judgeOnlyTools?.some((toolName) => toolName.length > MAX_JUDGE_ONLY_TOOL_NAME_LENGTH)
@@ -528,7 +543,7 @@ function buildServerClassifierRequestContext({
     judgeOnlyTools,
   );
   if (textProvenance !== undefined) serverClassifierContext.text_provenance = textProvenance;
-  let contextByteLength = jsonByteLength(serverClassifierContext);
+  let contextByteLength = jsonByteLength_2(serverClassifierContext);
   if (contextByteLength > SERVER_CONTEXT_MAX_BYTES) {
     logEvent("tengu_auto_mode_context_withheld", {
       reason: lit_2("field_over_ceiling"),
@@ -538,7 +553,7 @@ function buildServerClassifierRequestContext({
   }
   return serverClassifierContext;
 }
-//@ chunk-e6aww6q8.js:2513380-2515571 placement
+//@ chunk-5xgkngpb.js:2555615-2557819 placement
 /**
  * 构造发给服务端分类器的上下文（上一轮、浏览器标签、git 状态、系统提醒等）。
  */
@@ -596,7 +611,7 @@ function buildServerClassifierContext(
   let currentArtifacts = artifacts;
   let shedFields = [];
   let fits = () =>
-    jsonByteLength(
+    jsonByteLength_2(
       buildView(
         currentGitState,
         keepNavigation,
@@ -736,7 +751,7 @@ function buildServerClassifierContext(
     currentArtifacts,
     shedFields,
   );
-  if (jsonByteLength(builtContext) > SERVER_CONTEXT_FIELD_MAX_BYTES) {
+  if (jsonByteLength_2(builtContext) > SERVER_CONTEXT_FIELD_MAX_BYTES) {
     logForDebugging(
       `[server-classifier] the permission rule lists alone exceed the auto-mode context budget (${SERVER_CONTEXT_FIELD_MAX_BYTES} bytes): every variable part (git state, repository visibility, Chrome tabs, prior-turn history, system-reminder ids, artifact state) was left out of this request's classifier context \u2014 trim the deny/ask rules or settings.autoMode entries`,
       {
@@ -744,7 +759,7 @@ function buildServerClassifierContext(
       },
     );
     logEvent("tengu_auto_mode_context_static_over_budget", {
-      bytes: jsonByteLength(builtContext),
+      bytes: jsonByteLength_2(builtContext),
       deny_rules: context.rules.deny.length,
       ask_rules: context.rules.ask.length,
       auto_mode_entries: context.auto_mode.soft_deny.length + context.auto_mode.hard_deny.length,
@@ -752,7 +767,54 @@ function buildServerClassifierContext(
   }
   return builtContext;
 }
-//@ chunk-e6aww6q8.js:2515609-2515646 placement
+//@ chunk-5xgkngpb.js:2557819-2557974 layout
+function isBetaRejectionStatus(error) {
+  try {
+    switch (error.status) {
+      case 400:
+      case 422:
+        return true;
+      case 403:
+        return logEventTo1P() && !isModelPermissionDeniedError(error) && getApiErrorCode(error) === undefined;
+      default:
+        return false;
+    }
+  } catch (error) {
+    logError(error);
+    return false;
+  }
+}
+//@ chunk-5xgkngpb.js:2557974-2558632 layout
+function markBetaHeaderRejectedForever(conversation, resentAfter, model) {
+  try {
+    markBetaRejected(conversation, BETA_DANGEROUS_TOOL_USE);
+    let logsTo1P = logEventTo1P();
+    let thirdParty = logsTo1P && !isArbiterWithFallbackActive();
+    if (thirdParty) markThirdPartyServerClassifierRefused();
+    let [scopeText, restartHint] = thirdParty
+      ? ["Until Claude Code restarts", "restart Claude Code"]
+      : ["For the rest of this conversation", "start a new conversation (/clear)"];
+    let gatewayHint = logsTo1P
+      ? ` To keep the check, let the gateway pass that header and field, then ${restartHint}.`
+      : "";
+    logForDebugging(
+      `[server-classifier] a request was refused (HTTP ${resentAfter}) and answered when sent again without the dangerous-tool-use beta header and the safeguards field. ${scopeText}, neither is sent and auto mode does not ask the server to check actions.${gatewayHint}`,
+      {
+        level: "warn",
+      },
+    );
+    logEvent("tengu_beta_400_healed", {
+      beta: hashToolNames([BETA_DANGEROUS_TOOL_USE.header]),
+      model: telemetrySafeModelName(model),
+      provider: getAPIProviderForAnalytics(),
+      status: resentAfter,
+      unclaimed: true,
+    });
+  } catch (error) {
+    logError(error);
+  }
+}
+//@ chunk-5xgkngpb.js:2558670-2558707 placement
 /**
  * isSnugWallOn：开关 tengu_snug_wall。
  */
@@ -760,21 +822,24 @@ function isSnugWallOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SNUG_WALL, false) === true;
 }
 export {
-  classifierContextLinesFor,
-  isClassifiedCall,
-  classifierHistoryFor,
   CommitTurnSlot,
   enqueueClassifierRequest,
+  isBetaRejectionStatus,
+  markBetaHeaderRejectedForever,
   buildServerClassifierRequestContext,
   collectPriorServerContexts,
   recordClassifierRequest,
   pickPriorTurnContext,
+  classifierContextLinesFor,
+  isClassifiedCall,
+  classifierHistoryFor,
+  isSnugWallOn,
+  logEventTo1P,
   metaJsonLine,
   recordClassifierContext,
   recordClassifiedCall,
   forgetClassifierContext,
   fitsContextLimits,
-  isSnugWallOn,
   settleClassifierRequest,
   forgetClassifierRequest,
 };

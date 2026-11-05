@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：校验遥测属性值（有限数字、布尔或 Choice，拒绝自由文本）；校验 telemetry.mark 条目（feature、kind、reason、props）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4m46mxx9.js (42)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-08q4d92p.js (42)
  * attribution: placement 42
  */
 import { isTelemetryNotBlocked } from "./index.js";
 
-//@ chunk-4m46mxx9.js:6590-6808 placement
+//@ chunk-08q4d92p.js:6842-7060 placement
 /**
  * cc-plugin-telemetry 插件定义。
  */
@@ -20,7 +20,7 @@ var TELEMETRY_PLUGIN = {
     "Telemetry: a plugin logs an analytics event through $.telemetry.log or marks a feature's use through $.telemetry.mark, sent as first-party rows in batches",
   isAvailable: isTelemetryNotBlocked,
 };
-//@ chunk-4m46mxx9.js:6808-6952 placement
+//@ chunk-08q4d92p.js:7060-7204 placement (2.1.88 match: invalidateOverageCreditGrantCache, 0.668)
 /**
  * 账号与组织 uuid（都没有时 undefined）。
  */
@@ -32,7 +32,7 @@ function authIdentity(identity) {
       }
     : undefined;
 }
-//@ chunk-4m46mxx9.js:6952-7012 placement
+//@ chunk-08q4d92p.js:7204-7264 placement
 /**
  * 把属性编码成 base64 JSON
  */
@@ -43,7 +43,7 @@ var encodeProps = (event, rh) =>
       ...event.fields.props,
     }),
   );
-//@ chunk-4m46mxx9.js:7012-7408 placement
+//@ chunk-08q4d92p.js:7264-7660 placement
 /**
  * 把插件遥测事件转换为 ClaudeCodeInternalEvent 字段。
  */
@@ -65,15 +65,15 @@ var toInternalEvent = (event, ctx) => ({
   },
   additionalMetadata: encodeProps(event, ctx.context.remoteHash),
 });
-//@ chunk-4m46mxx9.js:7408-7468 placement
-var _ = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
-//@ chunk-4m46mxx9.js:7468-7640 placement
+//@ chunk-08q4d92p.js:7660-7720 placement
+var isPlainObjectValue = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+//@ chunk-08q4d92p.js:7720-7892 placement
 /**
  * 递归把对象键从 camelCase 转为 snake_case。
  */
 function toSnakeCaseKeys(value) {
   let isArray = Array.isArray(value);
-  let isObject = _(value);
+  let isObject = isPlainObjectValue(value);
   return isArray
     ? value.map(toSnakeCaseKeys)
     : isObject
@@ -85,7 +85,7 @@ function toSnakeCaseKeys(value) {
         )
       : value;
 }
-//@ chunk-4m46mxx9.js:7640-7753 placement
+//@ chunk-08q4d92p.js:7892-8005 placement
 /**
  * 序列化遥测事件批次（ClaudeCodeInternalEvent）。
  */
@@ -96,17 +96,17 @@ var serializeEventBatch = (events, ctx) =>
       event_data: toSnakeCaseKeys(toInternalEvent(event, ctx)),
     })),
   });
-//@ chunk-4m46mxx9.js:7753-7788 placement
+//@ chunk-08q4d92p.js:8005-8040 placement
 /**
  * 事件名格式
  */
 var EVENT_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
-//@ chunk-4m46mxx9.js:7788-7797 placement
+//@ chunk-08q4d92p.js:8040-8049 placement
 /**
  * 32
  */
 var MAX_PROPS = 32;
-//@ chunk-4m46mxx9.js:7797-7872 placement
+//@ chunk-08q4d92p.js:8049-8124 placement
 /**
  * 遥测校验错误
  */
@@ -114,7 +114,7 @@ var telemetryError = (what, kind = "log") =>
   Object.assign(Error(`$.telemetry.${kind}: ${what}`), {
     what,
   });
-//@ chunk-4m46mxx9.js:7872-8539 placement
+//@ chunk-08q4d92p.js:8124-8791 placement
 /**
  * 校验遥测属性值（有限数字、布尔或 Choice，拒绝自由文本）。
  */
@@ -129,7 +129,7 @@ function checkPropValue(key, value, kind = "log") {
       `props.${key}: free text is refused; a string is a Choice, { value, of: [...] }`,
       kind,
     );
-  if (!_(value) || !Array.isArray(value.of))
+  if (!isPlainObjectValue(value) || !Array.isArray(value.of))
     throw telemetryError(
       `props.${key}: a value is a finite number, a boolean, or a Choice, { value, of: [...] }`,
       kind,
@@ -145,22 +145,22 @@ function checkPropValue(key, value, kind = "log") {
     throw telemetryError(`props.${key}.value: one of the members of \`of\``, kind);
   return choice;
 }
-//@ chunk-4m46mxx9.js:8539-8548 placement
+//@ chunk-08q4d92p.js:8791-8800 placement
 /**
  * 16
  */
 var MAX_PROP_LIST_ITEMS = 16;
-//@ chunk-4m46mxx9.js:8548-8579 placement
+//@ chunk-08q4d92p.js:8800-8831 placement
 /**
  * snake_case 键名
  */
 var PROP_KEY_RE = /^[a-z][a-z0-9_]{0,63}$/;
-//@ chunk-4m46mxx9.js:8579-8853 placement
+//@ chunk-08q4d92p.js:8831-9105 placement
 /**
  * 校验 props：对象、键数上限、键为 snake_case、值合法。
  */
 function validateProps(props, kind) {
-  if (!_(props)) throw telemetryError("props: an object of properties by key", kind);
+  if (!isPlainObjectValue(props)) throw telemetryError("props: an object of properties by key", kind);
   let entries = Object.entries(props);
   if (entries.length > MAX_PROP_LIST_ITEMS)
     throw telemetryError(`props: at most ${MAX_PROP_LIST_ITEMS} properties`, kind);
@@ -171,11 +171,11 @@ function validateProps(props, kind) {
   }
   return out;
 }
-//@ chunk-4m46mxx9.js:8853-8868 placement
+//@ chunk-08q4d92p.js:9105-9120 placement
 var TENGU = "tengu_";
-//@ chunk-4m46mxx9.js:8868-8890 placement
+//@ chunk-08q4d92p.js:9120-9142 placement
 var TENGU_PLUGIN = "tengu_plugin_";
-//@ chunk-4m46mxx9.js:8890-8942 placement
+//@ chunk-08q4d92p.js:9142-9194 placement
 /**
  * 事件名加 tengu 前缀
  */
@@ -183,30 +183,30 @@ var withTenguPrefix = (event, props) => ({
   name: event.startsWith(TENGU) ? event : TENGU_PLUGIN + event,
   props,
 });
-//@ chunk-4m46mxx9.js:8942-9147 placement
+//@ chunk-08q4d92p.js:9194-9399 placement
 /**
  * 校验 telemetry.log 条目 {event, props}。
  */
 function validateLogEntry(entry) {
-  if (!_(entry)) throw telemetryError("takes one entry, { event, props? }");
+  if (!isPlainObjectValue(entry)) throw telemetryError("takes one entry, { event, props? }");
   let { event, props = {} } = entry;
   if (typeof event !== "string" || !PROP_KEY_RE.test(event))
     throw telemetryError("takes an event name, a snake_case token");
   return withTenguPrefix(event, validateProps(props, "log"));
 }
-//@ chunk-4m46mxx9.js:9147-9172 placement
+//@ chunk-08q4d92p.js:9399-9424 placement
 /**
  * ok/sad/bad
  */
 var DECISION_KINDS = ["ok", "sad", "bad"];
-//@ chunk-4m46mxx9.js:9172-9202 placement
+//@ chunk-08q4d92p.js:9424-9454 placement
 /**
  * 是否合法决定
  */
 var isDecisionKind = (kind) => DECISION_KINDS.some((knownKind) => knownKind === kind);
-//@ chunk-4m46mxx9.js:9202-9225 placement
+//@ chunk-08q4d92p.js:9454-9477 placement
 var TENGU_FEATURE = "tengu_feature_";
-//@ chunk-4m46mxx9.js:9225-9357 placement
+//@ chunk-08q4d92p.js:9477-9609 placement
 /**
  * mark 条目转为 tengu_feature_* 事件。
  */
@@ -224,12 +224,13 @@ var markToEvent = ({ kind, feature, reason, props }) => ({
           error_code: reason,
         },
 });
-//@ chunk-4m46mxx9.js:9357-9926 placement
+//@ chunk-08q4d92p.js:9609-10178 placement
 /**
  * 校验 telemetry.mark 条目（feature、kind、reason、props）。
  */
 function validateMarkEntry(entry) {
-  if (!_(entry)) throw telemetryError("takes one entry, { feature, kind, reason?, props? }", "mark");
+  if (!isPlainObjectValue(entry))
+    throw telemetryError("takes one entry, { feature, kind, reason?, props? }", "mark");
   let { feature, kind, reason, props = {} } = entry;
   if (typeof feature !== "string" || !PROP_KEY_RE.test(feature))
     throw telemetryError("takes a feature name, a snake_case token", "mark");
@@ -251,18 +252,18 @@ function validateMarkEntry(entry) {
     props: validateProps(props, "mark"),
   });
 }
-//@ chunk-4m46mxx9.js:9926-9988 placement
+//@ chunk-08q4d92p.js:10178-10240 placement
 /**
  * 事件日志批量上报地址
  */
 var EVENT_LOG_BATCH_URL = "https://api.anthropic.com/api/event_logging/v2/batch";
-//@ chunk-4m46mxx9.js:9988-10059 placement
+//@ chunk-08q4d92p.js:10240-10311 placement
 /**
  * 是否遥测拒绝错误
  */
 var isTelemetryDenyError = (error) =>
   error instanceof Error && "what" in error && typeof error.what === "string";
-//@ chunk-4m46mxx9.js:10059-10143 placement
+//@ chunk-08q4d92p.js:10311-10395 placement
 /**
  * 捕获拒绝错误转成 deny
  */
@@ -279,48 +280,48 @@ var settleDeny = (promise) =>
       throw error;
     },
   );
-//@ chunk-4m46mxx9.js:10143-10154 placement
+//@ chunk-08q4d92p.js:10395-10406 placement
 /**
  * 100
  */
 var MAX_BATCH_EVENTS = 100;
-//@ chunk-4m46mxx9.js:10154-10166 placement
+//@ chunk-08q4d92p.js:10406-10418 placement
 /**
  * 5000
  */
 var SEND_TIMEOUT_MS = 5000;
-//@ chunk-4m46mxx9.js:10166-10176 placement
+//@ chunk-08q4d92p.js:10418-10428 placement
 /**
  * 408
  */
 var HTTP_REQUEST_TIMEOUT = 408;
-//@ chunk-4m46mxx9.js:10176-10187 placement
+//@ chunk-08q4d92p.js:10428-10439 placement
 /**
  * 500
  */
 var RETRY_STATUS_MIN = 500;
-//@ chunk-4m46mxx9.js:10187-10198 placement
+//@ chunk-08q4d92p.js:10439-10450 placement
 /**
  * 429
  */
 var HTTP_TOO_MANY_REQUESTS = 429;
-//@ chunk-4m46mxx9.js:10198-10231 placement
+//@ chunk-08q4d92p.js:10450-10483 placement
 /**
  * 5xx/408/429 可重试
  */
 var isRetryableStatus = (status) =>
   status >= RETRY_STATUS_MIN || status === HTTP_REQUEST_TIMEOUT || status === HTTP_TOO_MANY_REQUESTS;
-//@ chunk-4m46mxx9.js:10231-10281 placement
+//@ chunk-08q4d92p.js:10483-10533 placement
 /**
  * 错误转字符串
  */
 var errorText = (error) => (error instanceof Error ? error.message : String(error));
-//@ chunk-4m46mxx9.js:10281-10292 placement
+//@ chunk-08q4d92p.js:10533-10544 placement
 /**
  * 500
  */
 var MAX_RETRY_AFTER_MS = 500;
-//@ chunk-4m46mxx9.js:10292-10463 placement
+//@ chunk-08q4d92p.js:10544-10715 placement
 var ENTRYPOINT_ALIASES = {
   "sdk-ts": "sdk-typescript",
   "sdk-py": "sdk-python",
@@ -329,11 +330,11 @@ var ENTRYPOINT_ALIASES = {
   "local-agent": "local-agent",
   "claude-desktop": "claude-desktop",
 };
-//@ chunk-4m46mxx9.js:10463-10493 placement
+//@ chunk-08q4d92p.js:10715-10745 placement
 var isNonEmpty = (value) => value !== undefined && value !== "";
-//@ chunk-4m46mxx9.js:10493-10567 placement (2.1.88 match: isEnvTruthy, 1)
+//@ chunk-08q4d92p.js:10745-10819 placement (2.1.88 match: isEnvTruthy, 1)
 var isEnvTruthy = (envVar) => ["1", "true", "yes", "on"].includes((envVar ?? "").trim().toLowerCase());
-//@ chunk-4m46mxx9.js:10567-10948 placement
+//@ chunk-08q4d92p.js:10819-11200 placement
 /**
  * 根据环境判断遥测是否关闭（测试、DISABLE_TELEMETRY、第三方提供商等）。
  */
@@ -360,7 +361,7 @@ function isTelemetryDisabled(env, config) {
   let hasCustomOauth = isNonEmpty(env.customOauthUrl?.trim());
   return isDisabled || isThirdParty || isGateway || hasCustomOauth;
 }
-//@ chunk-4m46mxx9.js:10948-11188 placement
+//@ chunk-08q4d92p.js:11200-11440 placement
 function resolveEntrypoint(env) {
   let isRemote =
     env.entrypoint === "remote" ||
@@ -372,7 +373,7 @@ function resolveEntrypoint(env) {
     ? "github-action"
     : (ENTRYPOINT_ALIASES[env.entrypoint ?? ""] ?? (isRemote ? "remote" : "cli"));
 }
-//@ chunk-4m46mxx9.js:11188-11276 placement
+//@ chunk-08q4d92p.js:11440-11528 placement
 /**
  * 从 claude-code-action/ 后取版本
  */
@@ -380,7 +381,7 @@ var githubActionVersion = (githubActionPath) =>
   githubActionPath?.includes("claude-code-action/")
     ? githubActionPath.split("claude-code-action/")[1]
     : undefined;
-//@ chunk-4m46mxx9.js:11276-11714 placement
+//@ chunk-08q4d92p.js:11528-11966 placement
 /**
  * 已知云开发环境/托管平台名单。
  */
@@ -420,7 +421,7 @@ var CLOUD_DEV_ENVIRONMENTS = [
   "kubernetes",
   "docker",
 ];
-//@ chunk-4m46mxx9.js:11714-11784 placement
+//@ chunk-08q4d92p.js:11966-12036 placement
 /**
  * 已知云开发环境名或 unknown-N
  */
@@ -463,7 +464,7 @@ export {
   isNonEmpty,
   isEnvTruthy,
   isDecisionKind,
-  _,
+  isPlainObjectValue,
   isTelemetryDenyError,
   isRetryableStatus,
   markToEvent,

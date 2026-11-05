@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：/loops 命令对象：管理循环任务
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: placement 1
  */
-//@ chunk-e6aww6q8.js:2028323-2028446 placement
+//@ chunk-5xgkngpb.js:2084140-2084263 placement
 /**
  * /loops 命令对象（local-jsx）；描述：List, create, and delete loops；isEnabled: ()=>!1；实现 chunk-wtfk012h.js 的 kt。
  */

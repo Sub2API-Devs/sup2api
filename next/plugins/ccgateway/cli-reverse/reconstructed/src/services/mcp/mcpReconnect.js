@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：MCP 身份（账号/组织）变化后重连受影响的服务器；带退避地重连单个 MCP 服务器（检查会话结束、配置变化）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fpvb8c85.js (21)
- * attribution: placement 21
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-svm0s7m8.js (22)
+ * attribution: placement 21, layout 1
  */
 import {
   MCP_SETTINGS_SCOPE_SET,
@@ -22,6 +22,7 @@ import {
   isRetryableConnectionFailure,
   refetchReasonTelemetry,
 } from "./utils.js";
+import { mcpAuthToolsFor, deleteNeedsAuthCache } from "./needsAuthCache.js";
 import { getMcpPrefix, isToolFromMcpServer } from "./mcpStringUtils.js";
 import { isPolicyBlockedFailure, mcpGateError } from "./mcpToggleMessages.js";
 import { withConfigScope } from "./mcpToolDecoration.js";
@@ -44,7 +45,6 @@ import {
 } from "./discoveryIdentity.js";
 import { omitKeys } from "../../utils/hooks/hookCommandResolution.js";
 import { isDiscoveryCacheOn, isUnresolved } from "./mcpAccountKey.js";
-import { deleteNeedsAuthCache, mcpAuthToolsFor } from "./needsAuthCache.js";
 import { getCliOwnedState } from "./cliOwnedClients.js";
 import { getMcpIdentitySnapshot, identityEpoch, isCurrentIdentityEpoch } from "./identityChange.js";
 import { deferredToolCache } from "../api/deferredToolsState.js";
@@ -82,14 +82,14 @@ import { lit } from "../analytics/safeMetadata.js";
 import { toolsListAheadTelemetry } from "./toolsListAhead.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fpvb8c85.js:1248-1317 placement
+//@ chunk-svm0s7m8.js:1248-1317 placement
 /**
  * 懒加载 MCP 客户端模块。
  */
 function mcpClientModule() {
   return require("./emitTripwireEvent.lazy.js").mcpClientModule();
 }
-//@ chunk-fpvb8c85.js:1317-1427 placement
+//@ chunk-svm0s7m8.js:1317-1427 placement
 /**
  * 解析重连使用的服务器配置：显式给出的优先，非设置作用域的现有配置次之，否则调用回调查找。
  */
@@ -98,15 +98,15 @@ function resolveReconnectConfig(serverName, configs, config, getMcpConfigByName)
   if (config && !MCP_SETTINGS_SCOPE_SET.has(config.scope)) return config;
   return getMcpConfigByName ? getMcpConfigByName(serverName) : (config ?? null);
 }
-//@ chunk-fpvb8c85.js:1427-1605 placement
+//@ chunk-svm0s7m8.js:1427-1605 placement
 /**
  * 在 MCP 状态中把服务器标记为禁用并移除其工具。
  */
-function markServerDisabled(dynamicMcpState, serverName) {
-  if (!dynamicMcpState.clients.some((client) => client.name === serverName)) return dynamicMcpState;
+function markServerDisabled(name, serverName) {
+  if (!name.clients.some((client) => client.name === serverName)) return name;
   return {
-    ...dynamicMcpState,
-    clients: dynamicMcpState.clients.map((client) =>
+    ...name,
+    clients: name.clients.map((client) =>
       client.name === serverName
         ? {
             name: serverName,
@@ -115,10 +115,19 @@ function markServerDisabled(dynamicMcpState, serverName) {
           }
         : client,
     ),
-    tools: filterCommandsByServer(dynamicMcpState.tools, serverName),
+    tools: filterCommandsByServer(name.tools, serverName),
   };
 }
-//@ chunk-fpvb8c85.js:1605-1787 placement
+//@ chunk-svm0s7m8.js:1605-1706 layout
+function withAuthTools(entry) {
+  return entry.client.type === "needs-auth"
+    ? {
+        ...entry,
+        tools: mcpAuthToolsFor(entry.client.name, entry.client.config),
+      }
+    : entry;
+}
+//@ chunk-svm0s7m8.js:1706-1888 placement
 /**
  * 取出某服务器在 MCP 状态中的工具、命令、资源与资源模板。
  */
@@ -131,7 +140,7 @@ function serverItemsOf(state, serverName) {
     resourceTemplates: state.resourceTemplates[serverName],
   };
 }
-//@ chunk-fpvb8c85.js:1787-1995 placement
+//@ chunk-svm0s7m8.js:1888-2096 placement
 /**
  * 计算重连结果应呈现的拒绝状态：托管策略拦截、用户禁用或其他拨号拦截原因。
  */
@@ -146,7 +155,7 @@ function refusalStateFor(serverName, client) {
     };
   return blockCause ? failedServerRefusal(serverName, client.config, blockCause) : undefined;
 }
-//@ chunk-fpvb8c85.js:1995-2064 placement
+//@ chunk-svm0s7m8.js:2096-2165 placement
 /**
  * 构造一个“失败 + 拒绝原因”的服务器结果。
  */
@@ -158,7 +167,7 @@ function failedServerRefusal(serverName, config, blockCause) {
     ...mcpGateError(blockCause, serverName, config),
   };
 }
-//@ chunk-fpvb8c85.js:2064-2160 placement
+//@ chunk-svm0s7m8.js:2165-2261 placement
 /**
  * 用传入配置修正重连结果（被拒时保留原客户端）。
  */
@@ -169,7 +178,7 @@ function reconcileConfig(existingRow, incoming) {
     ? incoming
     : applyMcpServerConfig(existingRow.config, incoming);
 }
-//@ chunk-fpvb8c85.js:2160-2487 placement
+//@ chunk-svm0s7m8.js:2261-2588 placement
 /**
  * 合并重连结果与传入配置（拒绝时保留原客户端）。
  */
@@ -197,7 +206,7 @@ function mergeReconnectResult(serverName, existingRow, params) {
       }
     : reconciled;
 }
-//@ chunk-fpvb8c85.js:2487-3946 placement
+//@ chunk-svm0s7m8.js:2588-4047 placement
 /**
  * 把重连结果写入 AppState/动态 MCP 状态，旧连接关闭。
  */
@@ -290,7 +299,7 @@ function applyMcpReconnect(handles, serverName, settlement) {
   });
   return outcome;
 }
-//@ chunk-fpvb8c85.js:3946-7840 placement
+//@ chunk-svm0s7m8.js:4047-7941 placement
 /**
  * MCP 身份（账号/组织）变化后重连受影响的服务器。
  */
@@ -530,7 +539,7 @@ function reconnectMcpOnIdentityChange(options) {
   cliOwnedState.headlessConnectorMountInFlight = allWork;
   return allWork;
 }
-//@ chunk-fpvb8c85.js:7840-8000 placement
+//@ chunk-svm0s7m8.js:7941-8101 placement
 /**
  * 判断重连结果是否需要提交到状态：客户端没变时不提交，跳过相同配置时也不提交。
  */
@@ -542,13 +551,13 @@ function shouldCommitReconnect(client, config, currentRow, isRunEnding) {
     serverCacheKey(client.name, currentRow.config) === serverCacheKey(client.name, config);
   return !isSameClient && (!isRunEnding || !slotMatches);
 }
-//@ chunk-fpvb8c85.js:8000-8017 placement
+//@ chunk-svm0s7m8.js:8101-8118 placement
 /**
  * 每轮等待时长（1000 毫秒）。
  */
 var MAX_UNSETTLED_DIALS = 5;
 var UNSETTLED_DIAL_SLEEP_MS = 1000;
-//@ chunk-fpvb8c85.js:8017-9190 placement
+//@ chunk-svm0s7m8.js:8118-9291 placement
 /**
  * 创建 MCP 断线重连的退避计算器。
  */
@@ -619,7 +628,7 @@ function createReconnectBackoff(deps) {
     }
   };
 }
-//@ chunk-fpvb8c85.js:9190-9235 placement
+//@ chunk-svm0s7m8.js:9291-9336 placement
 /**
  * 不阻止进程退出的 sleep。
  */
@@ -628,11 +637,11 @@ function unrefSleep(ms) {
     unref: true,
   });
 }
-//@ chunk-fpvb8c85.js:9235-9307 placement (2.1.88 match: isLocalMcpServer, 1)
+//@ chunk-svm0s7m8.js:9336-9408 placement (2.1.88 match: isLocalMcpServer, 1)
 function isLocalMcpServer(config) {
   return config.type !== undefined && config.type !== "stdio" && config.type !== "sdk";
 }
-//@ chunk-fpvb8c85.js:9307-12719 placement
+//@ chunk-svm0s7m8.js:9408-12820 placement
 /**
  * 带退避地重连单个 MCP 服务器（检查会话结束、配置变化）。
  */
@@ -889,19 +898,19 @@ async function reconnectMcpServer(
     );
   }
 }
-//@ chunk-fpvb8c85.js:12719-12738 placement
+//@ chunk-svm0s7m8.js:12820-12839 placement
 var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fpvb8c85.js:12719", () => {
+deferInit("chunk-svm0s7m8.js:12820", () => {
   weakMap = new WeakMap();
 });
-//@ chunk-fpvb8c85.js:12738-12771 placement
+//@ chunk-svm0s7m8.js:12839-12872 placement
 /**
  * 取某客户端待提交的重连记录。
  */
 function pendingReconnect(client) {
   return weakMap.get(client);
 }
-//@ chunk-fpvb8c85.js:12771-13469 placement
+//@ chunk-svm0s7m8.js:12872-13570 placement
 /**
  * 提交重连后的客户端（配置变化时放弃）。
  */
@@ -965,14 +974,14 @@ function commitMcpReconnect(handles, serverName, tools, config) {
     logMCPDebug(serverName, "A re-queried tool list was not applied: another server holds the name");
   return changed;
 }
-//@ chunk-fpvb8c85.js:13469-13512 placement
+//@ chunk-svm0s7m8.js:13570-13613 placement
 /**
  * 生成“提交重连”的回调。
  */
 function makeCommitReconnect(handles) {
   return (serverName, tools, config) => commitMcpReconnect(handles, serverName, tools, config);
 }
-//@ chunk-fpvb8c85.js:13512-14736 placement
+//@ chunk-svm0s7m8.js:13613-14837 placement
 /**
  * 监视已连接客户端的断开并触发重连。
  */
@@ -1043,12 +1052,13 @@ export {
   refusalStateFor,
   applyMcpReconnect,
   resolveReconnectConfig,
+  withAuthTools,
   reconnectMcpOnIdentityChange,
   watchMcpDisconnects,
   createReconnectBackoff,
   makeCommitReconnect,
   markServerDisabled,
-  pendingReconnect,
   serverItemsOf,
   shouldCommitReconnect,
+  pendingReconnect,
 };

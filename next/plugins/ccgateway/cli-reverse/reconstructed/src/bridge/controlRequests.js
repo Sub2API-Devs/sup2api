@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：control_request id 记账（入站/出站/elicitation/宿主询问）与服务端担保的设置类请求形状校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1qpz7qcd.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ck4jrdtf.js (23)
  * attribution: placement 23
  */
 import { logForDebugging } from "../utils/debug.js";
@@ -29,9 +29,9 @@ import { getSessionId } from "../bootstrap/state.js";
 import { getControlRequestId } from "../utils/controlMessageCompat.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-1qpz7qcd.js:906-917 placement
+//@ chunk-ck4jrdtf.js:975-986 placement
 var MAX_LIST_ITEMS = 32;
-//@ chunk-1qpz7qcd.js:917-1043 placement
+//@ chunk-ck4jrdtf.js:986-1112 placement
 /**
  * 过滤出非空、≤64 字符的字符串，最多 32 个。
  */
@@ -41,9 +41,9 @@ function sanitizeStringList(value) {
     .filter((item) => typeof item === "string" && item.length > 0 && item.length <= 64)
     .slice(0, 32);
 }
-//@ chunk-1qpz7qcd.js:1079-1092 placement
+//@ chunk-ck4jrdtf.js:1148-1161 placement
 var MAX_CONTROL_RESPONSE_BYTES = 8000;
-//@ chunk-1qpz7qcd.js:1092-1712 placement
+//@ chunk-ck4jrdtf.js:1161-1781 placement
 /**
  * 等待 set_model 的裁决 Promise，成功/失败分别回 control_response。
  */
@@ -98,34 +98,35 @@ async function respondToSetModelVerdict({ verdict, respond, inform }) {
     }),
   });
 }
-//@ chunk-1qpz7qcd.js:1712-1772 placement
+//@ chunk-ck4jrdtf.js:1781-1841 placement
 function errorTextLines(error) {
   return typeof error === "string"
     ? error.split(`
 `)
     : [""];
 }
-//@ chunk-1qpz7qcd.js:1772-1848 placement
+//@ chunk-ck4jrdtf.js:1841-1927 placement
 var LIVE_ONLY = "live_only";
+var MAX_LIVE_RESPONSE_BYTES = 57344;
 var LIVE_ONLY_TOO_LARGE_TEXT = "The reply is too large to be sent without storing it";
-//@ chunk-1qpz7qcd.js:1848-1892 placement
+//@ chunk-ck4jrdtf.js:1927-1971 placement
 function markLiveOnlyResponse(requestId, response) {
   return {
     ...controlSuccessResponse(requestId, response),
     [LIVE_ONLY]: true,
   };
 }
-//@ chunk-1qpz7qcd.js:1892-1954 placement
+//@ chunk-ck4jrdtf.js:1971-2033 placement
 function isLiveOnlyResponse(frame) {
   return frame.type === "control_response" && frame[LIVE_ONLY] === true;
 }
-//@ chunk-1qpz7qcd.js:1954-2019 placement
+//@ chunk-ck4jrdtf.js:2033-2098 placement
 function stripLiveOnlyMarker(riskColor) {
   if (!(LIVE_ONLY in riskColor)) return riskColor;
   let { [LIVE_ONLY]: marker, ...rest } = riskColor;
   return rest;
 }
-//@ chunk-1qpz7qcd.js:2019-2245 placement
+//@ chunk-ck4jrdtf.js:2098-2324 placement
 /**
  * 超过字节上限的 live-only control_response 替换成错误应答（"reply is too large"）。
  */
@@ -145,7 +146,7 @@ function capLiveOnlyResponseSize(frame, maxBytes) {
     },
   };
 }
-//@ chunk-1qpz7qcd.js:2245-2383 placement
+//@ chunk-ck4jrdtf.js:2324-2462 placement
 function parseOptionalToolUseId(toolUseId) {
   if (toolUseId == null || toolUseId === "")
     return {
@@ -161,13 +162,13 @@ function parseOptionalToolUseId(toolUseId) {
     valid: false,
   };
 }
-//@ chunk-1qpz7qcd.js:2383-2493 placement
+//@ chunk-ck4jrdtf.js:2462-2572 placement
 /**
  * background_tasks 控制请求里 tool_use_id 类型错误的提示文本。
  */
 var BACKGROUND_TASKS_DISABLED_MESSAGE = "Background tasks are disabled in this session.";
 var BACKGROUND_TASKS_TOOL_USE_ID_ERROR = "background_tasks: tool_use_id must be a string";
-//@ chunk-1qpz7qcd.js:2493-2700 placement
+//@ chunk-ck4jrdtf.js:2572-2779 placement
 /**
  * initialize 应答里去掉 agents/skills 的 path 与 pluginId 字段后再发给远端。
  */
@@ -183,17 +184,17 @@ function stripInitializeAgentPaths(payload) {
     },
   };
 }
-//@ chunk-1qpz7qcd.js:2700-2749 placement
+//@ chunk-ck4jrdtf.js:2779-2828 placement
 function isValidThinkingSettingsRequest(settings) {
   return thinkingSettingsSchema().safeParse(settings).success;
 }
-//@ chunk-1qpz7qcd.js:2749-3046 placement
+//@ chunk-ck4jrdtf.js:2828-3125 placement
 /**
  * set_max_thinking_tokens 控制请求的 thinking 设置校验 schema，以及校验失败时的完整错误文案。
  */
 var thinkingSettingsSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var THINKING_SETTINGS_INVALID_MESSAGE;
-deferInit("chunk-1qpz7qcd.js:2749", () => {
+deferInit("chunk-ck4jrdtf.js:2828", () => {
   thinkingSettingsSchema = DoctorLazy(() =>
     objectSchema({
       max_thinking_tokens: numberSchema()
@@ -205,9 +206,9 @@ deferInit("chunk-1qpz7qcd.js:2749", () => {
   );
   THINKING_SETTINGS_INVALID_MESSAGE = `set_max_thinking_tokens: max_thinking_tokens must be an integer or null and thinking_display must be ${THINKING_DISPLAY_MODES.map((mode) => `"${mode}"`).join(", ")}, or null`;
 });
-//@ chunk-1qpz7qcd.js:3046-3069 placement
+//@ chunk-ck4jrdtf.js:3125-3148 placement
 var DISPLAY_ONLY = "display_only";
-//@ chunk-1qpz7qcd.js:3069-3190 placement
+//@ chunk-ck4jrdtf.js:3148-3269 placement
 function isDisplayOnlyHistoricalMessage(message) {
   return (
     (message.type === "user" || message.type === "assistant" || message.type === "system") &&
@@ -215,14 +216,14 @@ function isDisplayOnlyHistoricalMessage(message) {
     message.display_only === true
   );
 }
-//@ chunk-1qpz7qcd.js:3190-3281 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-ck4jrdtf.js:3269-3360 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 是否是带字符串 type 字段的对象。
  */
 function hasStringType_3(data) {
   return data !== null && typeof data === "object" && "type" in data && typeof data.type === "string";
 }
-//@ chunk-1qpz7qcd.js:7139-7232 placement
+//@ chunk-ck4jrdtf.js:7624-7717 placement
 function markSyntheticControlResponse(response) {
   return response.response !== null && response.synthetic !== false
     ? {
@@ -232,14 +233,14 @@ function markSyntheticControlResponse(response) {
       }
     : response;
 }
-//@ chunk-1qpz7qcd.js:7232-7508 placement
+//@ chunk-ck4jrdtf.js:7717-7993 placement
 /**
  * side_question 控制请求的 zod schema（question + 可选历史问答）；同一声明还定义会话关闭提示文本与关闭时仍处理的只读子类型集合。
  */
 var SIDE_QUESTION_REQUEST_SCHEMA; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var SESSION_SHUTTING_DOWN_MESSAGE;
 var READ_ONLY_CONTROL_SUBTYPES;
-deferInit("chunk-1qpz7qcd.js:7232", () => {
+deferInit("chunk-ck4jrdtf.js:7717", () => {
   SIDE_QUESTION_REQUEST_SCHEMA = DoctorLazy(() =>
     objectSchema({
       question: stringSchema(),
@@ -263,7 +264,7 @@ deferInit("chunk-1qpz7qcd.js:7232", () => {
     "mcp_status",
   ]);
 });
-//@ chunk-1qpz7qcd.js:29975-30079 placement
+//@ chunk-ck4jrdtf.js:30478-30582 placement
 /**
  * 未签名事件被丢弃时生成合成助手消息（control_request 除外）；窗口超限用警告文本，否则用普通提示。
  */
@@ -274,12 +275,12 @@ function createUnsignedEventNotice(notice) {
     getSessionId(),
   );
 }
-//@ chunk-1qpz7qcd.js:30079-30367 placement
+//@ chunk-ck4jrdtf.js:30582-30870 placement
 /**
  * 会改变会话状态的 control_request 子类型集合（set_model、interrupt、mcp_reconnect、side_question 等），供 getControlRequestInfo 分类。
  */
 var MUTATING_CONTROL_SUBTYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1qpz7qcd.js:30079", () => {
+deferInit("chunk-ck4jrdtf.js:30582", () => {
   MUTATING_CONTROL_SUBTYPES = new Set([
     "set_model",
     "set_permission_mode",
@@ -298,34 +299,35 @@ deferInit("chunk-1qpz7qcd.js:30079", () => {
     "reload_plugins",
   ]);
 });
-//@ chunk-1qpz7qcd.js:30367-30432 placement
+//@ chunk-ck4jrdtf.js:30870-30935 placement
 function getControlRequestSubtype(message) {
   let controlRequestId = getControlRequestId(message);
   return typeof controlRequestId === "string" ? controlRequestId : undefined;
 }
 export {
+  MUTATING_CONTROL_SUBTYPES,
   getControlRequestSubtype,
   sanitizeStringList,
-  MAX_LIST_ITEMS,
-  isValidThinkingSettingsRequest,
-  THINKING_SETTINGS_INVALID_MESSAGE,
-  hasStringType_3,
   markLiveOnlyResponse,
   isDisplayOnlyHistoricalMessage,
   markSyntheticControlResponse,
-  BACKGROUND_TASKS_DISABLED_MESSAGE,
-  MUTATING_CONTROL_SUBTYPES,
+  stripLiveOnlyMarker,
+  MAX_CONTROL_RESPONSE_BYTES,
+  isValidThinkingSettingsRequest,
+  isLiveOnlyResponse,
+  hasStringType_3,
   READ_ONLY_CONTROL_SUBTYPES,
   SESSION_SHUTTING_DOWN_MESSAGE,
   respondToSetModelVerdict,
+  THINKING_SETTINGS_INVALID_MESSAGE,
   stripInitializeAgentPaths,
   parseOptionalToolUseId,
   BACKGROUND_TASKS_TOOL_USE_ID_ERROR,
+  BACKGROUND_TASKS_DISABLED_MESSAGE,
   SIDE_QUESTION_REQUEST_SCHEMA,
   createUnsignedEventNotice,
-  capLiveOnlyResponseSize,
-  isLiveOnlyResponse,
-  stripLiveOnlyMarker,
-  MAX_CONTROL_RESPONSE_BYTES,
   DISPLAY_ONLY,
+  MAX_LIVE_RESPONSE_BYTES,
+  capLiveOnlyResponseSize,
+  MAX_LIST_ITEMS,
 };

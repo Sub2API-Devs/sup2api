@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。立即发送排队消息。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (12)
  * attribution: placement 12
  */
 import { plural, collapseWhitespace, toWellFormedString } from "../../utils/stringUtils.js";
@@ -20,15 +20,15 @@ import { logEvent } from "../../services/analytics/index.js";
 import { fromEnumOpt, fromEnum, lit as lit_2 } from "../../services/analytics/safeMetadata.js";
 import { isQueuedSendNowEnabled, isSendNowKeyEnabled } from "../../components/PromptInput/promptFlags.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
-import { hasRefillableMainAgentCommand } from "../../utils/messageQueueManager.js";
+import { hasEditableMainThreadCommand } from "../../utils/messageQueueManager.js";
 
-//@ chunk-18hwfzwa.js:120283-120327 placement
+//@ chunk-czq1j3j2.js:121284-121328 placement
 function linesLabel(lineCount) {
   return `${lineCount} ${plural(lineCount, "line")}`;
 }
-//@ chunk-18hwfzwa.js:120327-120367 placement
+//@ chunk-czq1j3j2.js:121328-121368 placement
 var BIDI_CONTROL_RE = /[\u202A-\u202E\u2066-\u2069]/g;
-//@ chunk-18hwfzwa.js:120367-120490 placement
+//@ chunk-czq1j3j2.js:121368-121491 placement
 /**
  * IDE 选区文件名（取路径最后一段并清理）。
  */
@@ -38,16 +38,16 @@ function ideFileLabel(filePath) {
   let sliced = filePath.slice(slashIndex + 1);
   return collapseWhitespace(stripAnsiSequences(toWellFormedString(sliced)).replace(BIDI_CONTROL_RE, ""));
 }
-//@ chunk-18hwfzwa.js:120490-120521 placement
+//@ chunk-czq1j3j2.js:121491-121522 placement
 var SEND_NOW_HINT_KEY = "chat:sendNowHintPress";
-//@ chunk-18hwfzwa.js:120521-120620 placement
+//@ chunk-czq1j3j2.js:121522-121621 placement
 function hasSendNowBinding() {
   let bindings = useKeybindingContext()?.bindings ?? parseBindings(DEFAULT_BINDINGS);
   return isActionUnbound("chat:sendNow", "Chat", bindings)
     ? null
     : sendNowShortcut(bindings, supportsExtendedKeys());
 }
-//@ chunk-18hwfzwa.js:120620-120741 placement
+//@ chunk-czq1j3j2.js:121621-121742 placement
 /**
  * chat:sendNow 快捷键显示文本。
  */
@@ -58,11 +58,11 @@ function sendNowShortcut(uiSession, plainOnly) {
     actionChords.at(-1);
   return chord ? chordToString(chord) : "";
 }
-//@ chunk-18hwfzwa.js:120741-120821 placement
+//@ chunk-czq1j3j2.js:121742-121822 placement
 function hasShortcutKey(actionChord) {
   return actionChord.some((part) => part.super || (part.key === "enter" && (part.ctrl || part.shift)));
 }
-//@ chunk-18hwfzwa.js:1474487-1474644 placement (2.1.88 match: call, 0.304)
+//@ chunk-czq1j3j2.js:1515889-1516046 placement (2.1.88 match: call, 0.303)
 function call_4(onDone, context) {
   let { mainLoopModel, getAppState } = context;
   let effortLevelIfSupported = getEffortLevelIfSupported(mainLoopModel, resolveEffortLevel(getAppState()));
@@ -74,7 +74,7 @@ function call_4(onDone, context) {
     }),
   });
 }
-//@ chunk-18hwfzwa.js:1474644-1474862 placement
+//@ chunk-czq1j3j2.js:1516046-1516264 placement
 /**
  * 立即发送排队消息（打断当前回合）并记录遥测。
  */
@@ -91,7 +91,7 @@ function sendQueuedNow(turn) {
       return false;
   }
 }
-//@ chunk-18hwfzwa.js:1474862-1475195 placement
+//@ chunk-czq1j3j2.js:1516264-1516597 placement
 /**
  * 立即发送键：能不取消回合就直接投递，否则打断回合。
  */
@@ -113,15 +113,15 @@ function handleSendNowKey(turn) {
       return false;
   }
 }
-//@ chunk-18hwfzwa.js:1475195-1475284 placement
+//@ chunk-czq1j3j2.js:1516597-1516686 placement
 function canSendNow(input) {
   return (
     (input.mode ?? "prompt") === "prompt" &&
     input.turn.guard.isActive &&
-    hasRefillableMainAgentCommand(input.queue)
+    hasEditableMainThreadCommand(input.queue)
   );
 }
-//@ chunk-18hwfzwa.js:1475284-1475438 placement
+//@ chunk-czq1j3j2.js:1516686-1516840 placement
 /**
  * 有待发内容时打断运行中的回合，返回 cancelled/no_live_controller/nothing_to_send。
  */

@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：MCP 线上调用辅助（调用工具、读资源、通知、拦截）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aqt8xcjw.js (19)
- * attribution: placement 19
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cg0d4t7m.js (18)
+ * attribution: placement 18
  */
 import { hasMcpInboundDoor } from "./mcpInboundDoor.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
@@ -14,21 +14,23 @@ import { getOwn } from "../../utils/objectSafety.js";
 import { isComputerUseTool } from "../../utils/permissions/browserToolNames.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../utils/errors.js";
 import { HOSTED_DESKTOP_ONLY_MESSAGE } from "../../utils/computerUse/toolRendering.js";
-import { normalizeNameForMCP } from "./normalization.js";
+import { CLAUDEAI_SERVER_PREFIX } from "./normalization.js";
 import { REMOTE_BROWSER_SERVER_NAME } from "./remoteBrowserServer.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { McpStructuredContentNotReadError } from "./mcpResultErrors.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { looseObject } from "../../../vendor/zod/v4/classic/schemas.js";
 import { identityId2 } from "../../types/ids.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aqt8xcjw.js:558-628 placement
+//@ chunk-cg0d4t7m.js:593-696 placement
 /**
  * base64 字符串的正则。
  */
 var STRUCTURED_CONTENT_JSON_BASE64_KEY = "claude/structuredContentJsonBase64";
+var TOOLBOX_TEXT_BLOCKS_LEFT_OUT = "toolbox.text_blocks_left_out";
 var BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
-//@ chunk-aqt8xcjw.js:628-717 placement
+//@ chunk-cg0d4t7m.js:696-784 placement
 function isStructuredContentBase64Envelope(value) {
   return (
     hasMcpInboundDoor() &&
@@ -37,7 +39,7 @@ function isStructuredContentBase64Envelope(value) {
     Object.keys(value).length === 1
   );
 }
-//@ chunk-aqt8xcjw.js:717-871 placement (2.1.88 match: base64URLEncode, 1)
+//@ chunk-cg0d4t7m.js:784-938 placement (2.1.88 match: base64URLEncode, 1)
 function base64URLEncode(buffer) {
   if (!isStructuredContentBase64Envelope(buffer)) return;
   let encoded = buffer[STRUCTURED_CONTENT_JSON_BASE64_KEY];
@@ -45,9 +47,9 @@ function base64URLEncode(buffer) {
   let str = Buffer.from(encoded, "base64").toString("utf8");
   return str.trim() ? str : undefined;
 }
-//@ chunk-aqt8xcjw.js:871-1041 placement
+//@ chunk-cg0d4t7m.js:938-1108 placement
 var CORE_WIRE_METHODS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aqt8xcjw.js:871", () => {
+deferInit("chunk-cg0d4t7m.js:938", () => {
   CORE_WIRE_METHODS = new Set([
     "server/discover",
     "initialize",
@@ -59,7 +61,7 @@ deferInit("chunk-aqt8xcjw.js:871", () => {
     "notifications/roots/list_changed",
   ]);
 });
-//@ chunk-aqt8xcjw.js:1041-1146 placement
+//@ chunk-cg0d4t7m.js:1108-1213 placement
 function hostedDesktopRefusal_2(connection) {
   return isComputerUseTool({
     serverName: connection.name,
@@ -70,7 +72,7 @@ function hostedDesktopRefusal_2(connection) {
       )
     : undefined;
 }
-//@ chunk-aqt8xcjw.js:1146-1393 placement
+//@ chunk-cg0d4t7m.js:1213-1460 placement
 function guardTransportSend(connection, transport) {
   let refusal = hostedDesktopRefusal_2(connection);
   if (refusal === undefined) return;
@@ -85,9 +87,9 @@ function guardTransportSend(connection, transport) {
     return originalSend(message, ...rest);
   };
 }
-//@ chunk-aqt8xcjw.js:1393-1647 placement
+//@ chunk-cg0d4t7m.js:1460-1714 placement
 function remoteBrowserRefusal(connection) {
-  if (normalizeNameForMCP(connection.name) !== REMOTE_BROWSER_SERVER_NAME) return;
+  if (CLAUDEAI_SERVER_PREFIX(connection.name) !== REMOTE_BROWSER_SERVER_NAME) return;
   let browserMod = require("./mcpStringUtils.lazy.js");
   return browserMod.refusesRemoteBrowserCallOutsideChecks(connection.name)
     ? Promise.reject(
@@ -98,17 +100,22 @@ function remoteBrowserRefusal(connection) {
       )
     : undefined;
 }
-//@ chunk-aqt8xcjw.js:1647-1711 placement
+//@ chunk-cg0d4t7m.js:1714-1845 placement
 /**
  * 托管桌面环境下的拒绝（返回错误或 undefined）。
  */
 function hostedDesktopRefusal(connection, toolName) {
-  let refusal = hostedDesktopRefusal_2(connection) ?? undefined;
+  let refusal =
+    hostedDesktopRefusal_2(connection) ??
+    (codeModeAccepted()
+      ? require("../../utils/codeMode/inProcessBuiltinRefusal.lazy.js").inProcessBuiltinRefusal(
+          connection,
+          toolName,
+        )
+      : undefined);
   return refusal && Promise.reject(refusal);
 }
-//@ chunk-aqt8xcjw.js:1711-1748 placement
-var TOOLBOX_TEXT_BLOCKS_LEFT_OUT = "toolbox.text_blocks_left_out";
-//@ chunk-aqt8xcjw.js:1748-2362 placement
+//@ chunk-cg0d4t7m.js:1845-2459 placement
 /**
  * 调用 MCP 工具：先检查本地拒绝条件，再经 mcpClientModule 发出 tools/call。
  */
@@ -128,29 +135,29 @@ async function callMcpTool(connection, tool, args, offCriticalPath = false) {
     );
   return result;
 }
-//@ chunk-aqt8xcjw.js:2362-2474 placement
+//@ chunk-cg0d4t7m.js:2459-2571 placement
 function readMcpResource(connection, uri, options) {
   return (
     hostedDesktopRefusal(connection) ??
     require("./emitTripwireEvent.lazy.js").mcpClientModule().readResourceRaw(connection.client, uri, options)
   );
 }
-//@ chunk-aqt8xcjw.js:2474-2579 placement
+//@ chunk-cg0d4t7m.js:2571-2676 placement
 function listMcpTools(connection, requestOptions) {
   return (
     hostedDesktopRefusal(connection) ??
     require("./emitTripwireEvent.lazy.js").mcpClientModule().listToolsRaw(connection.client, requestOptions)
   );
 }
-//@ chunk-aqt8xcjw.js:2579-2599 placement
+//@ chunk-cg0d4t7m.js:2676-2696 placement
 /**
  * 空对象 schema（用于调用不带参数的请求）。
  */
 var emptyObjectSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aqt8xcjw.js:2579", () => {
+deferInit("chunk-cg0d4t7m.js:2676", () => {
   emptyObjectSchema = DoctorLazy(() => looseObject({}));
 });
-//@ chunk-aqt8xcjw.js:2599-2725 placement
+//@ chunk-cg0d4t7m.js:2696-2822 placement
 function sendMcpRequest(connection, request, options) {
   return (
     hostedDesktopRefusal(connection) ??
@@ -161,15 +168,15 @@ function sendMcpRequest(connection, request, options) {
     })
   );
 }
-//@ chunk-aqt8xcjw.js:2725-2818 placement
+//@ chunk-cg0d4t7m.js:2822-2915 placement
 function onMcpNotification(connection, schema, handler) {
   require("./emitTripwireEvent.lazy.js").mcpClientModule().onMcpNotification(connection, schema, handler);
 }
-//@ chunk-aqt8xcjw.js:2818-2859 placement
+//@ chunk-cg0d4t7m.js:2915-2956 placement
 function setMcpOnClose(connection, onclose) {
   identityId2(connection.client).onclose = onclose;
 }
-//@ chunk-aqt8xcjw.js:2859-2934 placement
+//@ chunk-cg0d4t7m.js:2956-3031 placement
 function addMcpOnClose(connection, onClose) {
   let client = identityId2(connection.client);
   let onclose = client.onclose;
@@ -178,26 +185,26 @@ function addMcpOnClose(connection, onClose) {
     onClose();
   };
 }
-//@ chunk-aqt8xcjw.js:2934-2994 placement
+//@ chunk-cg0d4t7m.js:3031-3091 placement
 function sendMcpNotification(client, notification) {
   return hostedDesktopRefusal(client) ?? identityId2(client.client).notification(notification);
 }
-//@ chunk-aqt8xcjw.js:2994-3052 placement
+//@ chunk-cg0d4t7m.js:3091-3149 placement
 function injectMcpMessage(connection, message) {
   identityId2(connection.client)?.transport?.onmessage?.(message);
 }
 export {
+  setMcpOnClose,
+  injectMcpMessage,
   onMcpNotification,
-  callMcpTool,
   guardTransportSend,
   hostedDesktopRefusal_2,
   base64URLEncode,
-  setMcpOnClose,
-  injectMcpMessage,
   listMcpTools,
   readMcpResource,
+  callMcpTool,
   isStructuredContentBase64Envelope,
-  addMcpOnClose,
   sendMcpNotification,
   sendMcpRequest,
+  addMcpOnClose,
 };

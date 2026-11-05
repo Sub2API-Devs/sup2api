@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。转录视图。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: placement 3
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -48,7 +48,7 @@ import { AgentWaitingMessages } from "../../components/PromptInput/WaitingMessag
 import { SandboxViolationExpandedView } from "../../components/SandboxViolationExpandedView.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:142030-142807 placement
+//@ chunk-czq1j3j2.js:143225-144002 placement
 function TranscriptModeHeader(props) {
   let $ = useMemoCache(12);
   let { showAllInTranscript, onToggleShowAll, onExit, messageCount, virtualScrollActive, searchBarOpen } =
@@ -107,12 +107,12 @@ function TranscriptModeHeader(props) {
   useKeybinding("transcript:exit", exitTranscript_2, exitKeybindingOptions);
   return null;
 }
-//@ chunk-18hwfzwa.js:142807-149068 placement
+//@ chunk-czq1j3j2.js:144002-150320 placement
 /**
  * 转录模式（ctrl+o）视图：虚拟滚动渲染全部消息，支持显示全部/退出快捷键，把转录写入临时文件 cc-transcript-*.txt 并用 $VISUAL/$EDITOR 打开。
  */
 function TranscriptView(props) {
-  let $ = useMemoCache(92);
+  let $ = useMemoCache(93);
   let {
     focused,
     tools,
@@ -535,7 +535,8 @@ function TranscriptView(props) {
     $[81] !== showSandboxViolations ||
     $[82] !== toolProgress ||
     $[83] !== searchActive ||
-    $[84] !== header
+    $[84] !== header ||
+    $[85] !== virtualScrollActive
   ) {
     bodyContent = scrollViewport
       ? jsxProd_default(FullscreenLayout, {
@@ -582,6 +583,7 @@ function TranscriptView(props) {
               : jsxProd_default(TranscriptModeFooter, {
                   showAllInTranscript: showAllMessages,
                   virtualScroll: true,
+                  helpKeyLive: virtualScrollActive,
                   status: statusText || undefined,
                   searchBadge:
                     query && matchCount > 0
@@ -607,6 +609,7 @@ function TranscriptView(props) {
             jsxProd_default(TranscriptModeFooter, {
               showAllInTranscript: showAllMessages,
               virtualScroll: false,
+              helpKeyLive: virtualScrollActive,
               suppressShowAll: dumpMode,
               status: statusText || undefined,
             }),
@@ -626,31 +629,32 @@ function TranscriptView(props) {
     $[82] = toolProgress;
     $[83] = searchActive;
     $[84] = header;
-    $[85] = bodyContent;
-  } else bodyContent = $[85];
+    $[85] = virtualScrollActive;
+    $[86] = bodyContent;
+  } else bodyContent = $[86];
   let view;
   if (
-    $[86] !== keybindingHandlers ||
-    $[87] !== modeHeader ||
-    $[88] !== bodyView ||
-    $[89] !== keyboardBox ||
-    $[90] !== bodyContent
+    $[87] !== keybindingHandlers ||
+    $[88] !== modeHeader ||
+    $[89] !== bodyView ||
+    $[90] !== keyboardBox ||
+    $[91] !== bodyContent
   ) {
     view = jsxProd_default_2(Fragment, {
       children: [keybindingHandlers, modeHeader, bodyView, keyboardBox, bodyContent],
     });
-    $[86] = keybindingHandlers;
-    $[87] = modeHeader;
-    $[88] = bodyView;
-    $[89] = keyboardBox;
-    $[90] = bodyContent;
-    $[91] = view;
-  } else view = $[91];
+    $[87] = keybindingHandlers;
+    $[88] = modeHeader;
+    $[89] = bodyView;
+    $[90] = keyboardBox;
+    $[91] = bodyContent;
+    $[92] = view;
+  } else view = $[92];
   return view;
 }
-//@ chunk-18hwfzwa.js:149068-149072 placement
+//@ chunk-czq1j3j2.js:150320-150324 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:149068", () => {
+deferInit("chunk-czq1j3j2.js:150320", () => {
   init_react_production();
 });
 export { TranscriptView };

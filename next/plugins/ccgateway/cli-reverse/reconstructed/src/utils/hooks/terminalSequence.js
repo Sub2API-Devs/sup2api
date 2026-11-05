@@ -3,23 +3,23 @@
  *
  * 2.1.316 新增：钩子输出中的终端序列处理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (5)
  * attribution: placement 5
  */
 import { BEL, ESC } from "../../ink/termio/ansi.js";
 import { wrapForMultiplexer, osc } from "../../ink/termio/osc.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:931772-931815 placement
+//@ chunk-5xgkngpb.js:942963-943006 placement
 var DANGEROUS_OSC_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_TERMINAL_SEQUENCE_CHARS;
-deferInit("chunk-e6aww6q8.js:931772", () => {
+deferInit("chunk-5xgkngpb.js:942963", () => {
   DANGEROUS_OSC_CODES = new Set([0, 1, 2, 9, 99, 777]);
   MAX_TERMINAL_SEQUENCE_CHARS = 4096;
 });
-//@ chunk-e6aww6q8.js:931815-931944 placement
+//@ chunk-5xgkngpb.js:943006-943135 placement
 function stripControlChars_2(text) {
   let result = "";
   for (let idx = 0; idx < text.length; idx++) {
@@ -28,12 +28,12 @@ function stripControlChars_2(text) {
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:931944-932058 placement
+//@ chunk-5xgkngpb.js:943135-943249 placement
 function isAllowedOsc9Payload(payload) {
   if (/^4;[0-4](;(100|\d{1,2})?)?$/.test(payload)) return true;
   return !/^[\s\u180e\u200b]*[+-]?\p{Nd}/u.test(payload);
 }
-//@ chunk-e6aww6q8.js:932058-932690 placement
+//@ chunk-5xgkngpb.js:943249-943885 placement
 function parseTerminalSequences(text) {
   if (text.length === 0) return null;
   if (Buffer.byteLength(text, "utf8") > MAX_TERMINAL_SEQUENCE_CHARS) return null;
@@ -85,7 +85,7 @@ function parseTerminalSequences(text) {
   }
   return sequences;
 }
-//@ chunk-e6aww6q8.js:932690-932812 placement
+//@ chunk-5xgkngpb.js:943885-944007 placement
 function renderTerminalSequences(text) {
   let terminalSequences = parseTerminalSequences(text);
   if (terminalSequences === null) return null;

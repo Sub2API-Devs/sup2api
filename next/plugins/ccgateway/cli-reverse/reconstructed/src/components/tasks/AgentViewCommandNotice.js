@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增。代理视图命令提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: placement 3
  */
 
-//@ chunk-18hwfzwa.js:769919-769954 placement
+//@ chunk-czq1j3j2.js:802344-802379 placement
 var AGENT_VIEW_COMMAND_NOTICE = "agent-view-command-notice";
-//@ chunk-18hwfzwa.js:769954-770485 placement
+//@ chunk-czq1j3j2.js:802379-802910 placement
 function AgentViewCommandNotice(command, { invokedAs, isTeammate }) {
   let viewKindLabel = isTeammate ? "teammate" : "agent";
   switch (command.name) {
@@ -43,7 +43,7 @@ function AgentViewCommandNotice(command, { invokedAs, isTeammate }) {
       return;
   }
 }
-//@ chunk-18hwfzwa.js:770485-770563 placement
+//@ chunk-czq1j3j2.js:802910-802988 placement
 function isSameAgentViewCommand(previousCommand, { input, taskId }) {
   return previousCommand !== null && previousCommand.input === input && previousCommand.taskId === taskId;
 }

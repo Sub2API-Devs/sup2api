@@ -1,8 +1,8 @@
 /**
  * default-browser/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: default-browser@5.5.1
- * pieces: chunk-20ppca50.js (2)
+ * pieces: chunk-j8hasev3.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { promisify } from "util";
@@ -12,10 +12,10 @@ import { defaultBrowserId } from "../default-browser-id/index.js";
 import { bundleName } from "../bundle-name/index.js";
 import { getWindowsDefaultBrowser } from "./windows.js";
 
-//@ chunk-20ppca50.js:4089-4176 esm-layout
+//@ chunk-j8hasev3.js:4089-4176 esm-layout
 var execFileAsync_4 = promisify(execFile);
 var titleize = (string) => string.toLowerCase().replaceAll(/(?:^|\s|-)\S/g, (x) => x.toUpperCase());
-//@ chunk-20ppca50.js:4176-4541 esm-fingerprint
+//@ chunk-j8hasev3.js:4176-4541 esm-fingerprint
 async function defaultBrowser() {
   if (E.platform === "darwin") {
     let id = await defaultBrowserId();

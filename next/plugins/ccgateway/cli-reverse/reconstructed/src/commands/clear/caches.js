@@ -3,9 +3,9 @@
  *
  * 清空对话时重置各类会话缓存（读文件状态、技能、命令缓存、teleport 缓存等）并触发 session_start 钩子
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/clear/caches.ts
- * pieces: chunk-7egnrh1d.js (1)
+ * pieces: chunk-abba4dz7.js (1)
  * attribution: facade-exports 1
  */
 import { clearSessionContextCaches } from "../../context.js";
@@ -45,15 +45,17 @@ import { resetAllLSPDiagnosticState } from "../../services/lsp/LSPDiagnosticRegi
 import { IdHolder } from "../../utils/idHolder.js";
 import { RecentItemsCache } from "../../utils/recentItemsCache.js";
 import { AwayEpisodeTracker } from "../../services/awayEpisodes.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import { logError } from "../../utils/log.js";
 
-//@ chunk-7egnrh1d.js:863-2075 facade-exports
+//@ chunk-abba4dz7.js:901-2296 facade-exports
 function clearSessionCaches(
   session,
   keptAgentIds = new Set(),
   setAppState,
   toolState,
   storageV5,
-  conversationOnly = false,
+  hasLiveAgents = false,
 ) {
   let hasPreserved = keptAgentIds.size > 0;
   clearSessionContextCaches(session);
@@ -75,7 +77,7 @@ function clearSessionCaches(
   clearWebSearchHistoryRejected(getStickyBetas());
   clearMediaItemCap(getStickyBetas());
   clearRefusedToolSchemas(getStickyBetas());
-  if (!conversationOnly) {
+  if (!hasLiveAgents) {
     invalidateToolDescriptions();
     clearDeclared(session.host);
   }
@@ -83,15 +85,15 @@ function clearSessionCaches(
   claudeMdAccessTrackerSlot.of(session).reset();
   promptCacheTrackers.of(session).clear();
   spawnStatsSlots.of(session).reset();
-  setAppState?.((state) => {
+  setAppState?.((_opts) => {
     if (
-      state.storedImagePaths.size === 0 &&
-      state.imageDescriptions.size === 0 &&
-      Object.keys(state.displayedMessageContent).length === 0
+      _opts.storedImagePaths.size === 0 &&
+      _opts.imageDescriptions.size === 0 &&
+      Object.keys(_opts.displayedMessageContent).length === 0
     )
-      return state;
+      return _opts;
     return {
-      ...state,
+      ..._opts,
       storedImagePaths: new Map(),
       imageDescriptions: new Map(),
       displayedMessageContent: {},
@@ -110,6 +112,13 @@ function clearSessionCaches(
     toolState.get(IdHolder).clear();
     toolState.get(RecentItemsCache).clear();
     toolState.get(AwayEpisodeTracker).clear();
+    if (codeModeAccepted())
+      import("../../utils/messageQueueManager.lazy.js")
+        .then(({ getProcessQueue }) => {
+          let { endMainThreadConversation } = require("../../utils/codeMode/replSessionEnd.js");
+          endMainThreadConversation(toolState, getProcessQueue(), "the conversation was cleared");
+        })
+        .catch(logError);
     import("../../tools/WebFetchTool/utils.js").then(({ WebFetchCache }) =>
       toolState.get(WebFetchCache).clear(),
     );

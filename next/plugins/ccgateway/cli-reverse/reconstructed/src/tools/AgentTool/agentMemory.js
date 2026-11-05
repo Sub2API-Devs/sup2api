@@ -3,12 +3,12 @@
  *
  * 代理持久记忆：user/project/local 三种 scope 的目录、路径判定与记忆提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/agentMemory.ts
- * pieces: chunk-82kqcve8.js (18)
+ * pieces: chunk-a2q0x549.js (18)
  * attribution: file-local 1, fingerprint 4, layout 11, callgraph-fingerprint 1, placement 1
  */
-import { join, sep, dirname, basename, normalize } from "path";
+import { join as join_2, sep as sep_2, dirname as dirname_2, basename, normalize as normalize_2 } from "path";
 import { sanitizePath } from "../../utils/sessionStoragePortable.js";
 import { storageRootFor } from "../../utils/settings/settingsStorage.js";
 import { getProjectRoot } from "../../bootstrap/state.js";
@@ -21,10 +21,10 @@ import { getFsImplementation, realpathExaminedSync } from "../../utils/fsOperati
 import { isENOENT, getErrnoCode } from "../../utils/errors.js";
 import { isProtectedDirPath } from "../../utils/permissions/protectedDirNames.js";
 import { ensureMemoryDirExists, buildMemoryPrompt, MEMORY_INDEX_FILENAME } from "../../memdir/memdir.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 
-//@ chunk-82kqcve8.js:152284-152365 file-local
+//@ chunk-a2q0x549.js:150367-150448 file-local
 /**
  * 代理类型名转为安全目录名（非 [A-Za-z0-9-_] 换成 -）。
  */
@@ -32,24 +32,24 @@ function sanitizeAgentTypeForPath(agentType) {
   let replaced = agentType.replace(/[^a-zA-Z0-9\-_]/g, "-");
   return replaced === "" ? "unknown" : replaced;
 }
-//@ chunk-82kqcve8.js:152365-152586 fingerprint (2.1.88 match: getLocalAgentMemoryDir, 1)
+//@ chunk-a2q0x549.js:150448-150669 fingerprint (2.1.88 match: getLocalAgentMemoryDir, 1)
 /**
  * local scope 的代理记忆目录。
  */
 function getLocalAgentMemoryDir(dirName) {
   if (process.env.CLAUDE_CODE_REMOTE_MEMORY_DIR)
     return (
-      join(
+      join_2(
         process.env.CLAUDE_CODE_REMOTE_MEMORY_DIR,
         "projects",
         sanitizePath(storageRootFor(getProjectRoot()) ?? getProjectRoot()),
         "agent-memory-local",
         dirName,
-      ) + sep
+      ) + sep_2
     );
-  return join(getCwd(), ".claude", "agent-memory-local", dirName) + sep;
+  return join_2(getCwd(), ".claude", "agent-memory-local", dirName) + sep_2;
 }
-//@ chunk-82kqcve8.js:152586-152760 fingerprint (2.1.88 match: getAgentMemoryDir, 1)
+//@ chunk-a2q0x549.js:150669-150843 fingerprint (2.1.88 match: getAgentMemoryDir, 1)
 /**
  * 代理持久记忆目录：project → <cwd>/.claude/agent-memory/<type>/，local → .claude/agent-memory-local/（或 CLAUDE_CODE_REMOTE_MEMORY_DIR 下），user → <记忆根>/agent-memory/<type>/。
  */
@@ -57,18 +57,18 @@ function getAgentMemoryDir(agentType, scope) {
   let dirName = sanitizeAgentTypeForPath(agentType);
   switch (scope) {
     case "project":
-      return join(getCwd(), ".claude", "agent-memory", dirName) + sep;
+      return join_2(getCwd(), ".claude", "agent-memory", dirName) + sep_2;
     case "local":
       return getLocalAgentMemoryDir(dirName);
     case "user":
-      return join(getMemoryBaseDir(), "agent-memory", dirName) + sep;
+      return join_2(getMemoryBaseDir(), "agent-memory", dirName) + sep_2;
   }
 }
-//@ chunk-82kqcve8.js:152760-152793 layout
+//@ chunk-a2q0x549.js:150843-150876 layout
 function isNonUserMemoryScope(scope) {
   return scope !== "user";
 }
-//@ chunk-82kqcve8.js:152793-153253 layout
+//@ chunk-a2q0x549.js:150876-151336 layout
 /**
  * 决定代理记忆目录的 MEMORY.md 入口如何读取：用户范围直接 follow；项目/本地范围在工作目录内或不存在时只读普通文件；指向工作目录外或无法解析时不读并记 tengu_agent_memory_entrypoint_skipped。
  */
@@ -87,7 +87,7 @@ function resolveMemoryEntrypointMode(scope, dir) {
   );
   return "none";
 }
-//@ chunk-82kqcve8.js:153253-153496 layout
+//@ chunk-a2q0x549.js:151336-151579 layout
 /**
  * 为回忆解析代理记忆目录：用户范围直接返回；项目/本地范围要求实路径仍在工作目录内（防软链逃逸），返回 {dir, regularFilesOnly:true, containedIn}，否则 null。
  */
@@ -110,12 +110,12 @@ async function resolveAgentMemoryDirForRecall(agentType, scope) {
     containedIn: resolvedMemoryDir,
   };
 }
-//@ chunk-82kqcve8.js:153496-153563 layout
+//@ chunk-a2q0x549.js:151579-151646 layout
 async function isRealpathWithin(path, containedIn) {
   let resolvedFilePath = await realpathForRecall(path);
   return resolvedFilePath !== null && isPathWithinDir(resolvedFilePath, containedIn);
 }
-//@ chunk-82kqcve8.js:153563-153736 layout
+//@ chunk-a2q0x549.js:151646-151819 layout
 async function realpathForRecall(path) {
   try {
     return await getFsImplementation()
@@ -126,17 +126,17 @@ async function realpathForRecall(path) {
     return null;
   }
 }
-//@ chunk-82kqcve8.js:153736-153783 layout
+//@ chunk-a2q0x549.js:151819-151866 layout
 function isPathWithinDir(path, dir) {
-  return path.startsWith(join(dir, sep));
+  return path.startsWith(join_2(dir, sep_2));
 }
-//@ chunk-82kqcve8.js:153783-153867 layout
+//@ chunk-a2q0x549.js:151866-151950 layout
 function resolveOnPermissionError(path, error) {
   let errnoCode = getErrnoCode(error);
   if (errnoCode !== "EPERM" && errnoCode !== "EACCES") throw error;
   return realpathExaminedSync(getFsImplementation(), path);
 }
-//@ chunk-82kqcve8.js:153867-154263 layout
+//@ chunk-a2q0x549.js:151950-152346 layout
 /**
  * 判断路径相对目录的位置：beneath（实路径在目录下）、absent（尚不存在但最近存在的祖先在目录下）、elsewhere、unresolved。
  */
@@ -164,19 +164,19 @@ function classifyPathAgainstDir(dir, cwd) {
   }
   let { existing, missing } = splitExistingPathPrefix(fsImplementation, path);
   try {
-    return isPathWithinDir(join(realpathExaminedSync(fsImplementation, existing), ...missing), resolvedCwd)
+    return isPathWithinDir(join_2(realpathExaminedSync(fsImplementation, existing), ...missing), resolvedCwd)
       ? "absent"
       : "elsewhere";
   } catch (error) {
     return isMissingOrNotDirError(error) ? "elsewhere" : "unresolved";
   }
 }
-//@ chunk-82kqcve8.js:154263-154398 layout
+//@ chunk-a2q0x549.js:152346-152481 layout
 function splitExistingPathPrefix(fs, path, missingParts = []) {
   try {
     fs.lstatSync(path);
   } catch (error) {
-    let parentPath = dirname(path);
+    let parentPath = dirname_2(path);
     if (isMissingOrNotDirError(error) && parentPath !== path)
       return splitExistingPathPrefix(fs, parentPath, [basename(path), ...missingParts]);
   }
@@ -185,48 +185,48 @@ function splitExistingPathPrefix(fs, path, missingParts = []) {
     missing: missingParts,
   };
 }
-//@ chunk-82kqcve8.js:154398-154443 layout (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-a2q0x549.js:152481-152526 layout (2.1.88 match: isRealPathWithinTeamDir, 1)
 /**
  * realpath 后判断是否在团队记忆目录内；团队目录尚不存在时视为在内。
  */
 function isMissingOrNotDirError(realCandidate) {
   return isENOENT(realCandidate) || getErrnoCode(realCandidate) === "ENOTDIR";
 }
-//@ chunk-82kqcve8.js:154443-154893 fingerprint (2.1.88 match: isAgentMemoryPath, 1)
+//@ chunk-a2q0x549.js:152526-152976 fingerprint (2.1.88 match: isAgentMemoryPath, 1)
 /**
  * 路径属于某个代理记忆目录时返回该记忆根前缀。
  */
 function isAgentMemoryPath(absolutePath) {
   let memoryBase = getMemoryBaseDirOrNull();
   if (memoryBase !== null) {
-    let projectMemoryPrefix = join(memoryBase, "agent-memory") + sep;
+    let projectMemoryPrefix = join_2(memoryBase, "agent-memory") + sep_2;
     if (absolutePath.startsWith(projectMemoryPrefix)) return projectMemoryPrefix;
   }
-  let localMemoryPrefix = join(getCwd(), ".claude", "agent-memory") + sep;
+  let localMemoryPrefix = join_2(getCwd(), ".claude", "agent-memory") + sep_2;
   if (absolutePath.startsWith(localMemoryPrefix)) return localMemoryPrefix;
   if (process.env.CLAUDE_CODE_REMOTE_MEMORY_DIR) {
-    let remoteProjectsPrefix = join(process.env.CLAUDE_CODE_REMOTE_MEMORY_DIR, "projects") + sep;
+    let remoteProjectsPrefix = join_2(process.env.CLAUDE_CODE_REMOTE_MEMORY_DIR, "projects") + sep_2;
     if (
-      absolutePath.includes(sep + "agent-memory-local" + sep) &&
+      absolutePath.includes(sep_2 + "agent-memory-local" + sep_2) &&
       absolutePath.startsWith(remoteProjectsPrefix)
     )
       return remoteProjectsPrefix;
     return null;
   }
-  let localAgentMemoryPrefix = join(getCwd(), ".claude", "agent-memory-local") + sep;
+  let localAgentMemoryPrefix = join_2(getCwd(), ".claude", "agent-memory-local") + sep_2;
   if (absolutePath.startsWith(localAgentMemoryPrefix)) return localAgentMemoryPrefix;
   return null;
 }
-//@ chunk-82kqcve8.js:154893-154956 layout
+//@ chunk-a2q0x549.js:152976-153039 layout
 /**
  * 路径位于代理记忆目录内部（权限系统据此放行记忆读写）。
  */
 function isInsideAgentMemoryDir(path) {
-  let absolutePath = normalize(path);
+  let absolutePath = normalize_2(path);
   let memoryRoot = isAgentMemoryPath(absolutePath);
   return memoryRoot !== null && !isProtectedDirPath(absolutePath, memoryRoot);
 }
-//@ chunk-82kqcve8.js:154956-155665 fingerprint (2.1.88 match: loadAgentMemoryPrompt, 0.929)
+//@ chunk-a2q0x549.js:153039-153748 fingerprint (2.1.88 match: loadAgentMemoryPrompt, 0.929)
 /**
  * 生成代理记忆提示词（Persistent Agent Memory）：按 scope 给出写作指引，必要时创建目录，附加 CLAUDE_COWORK_MEMORY_EXTRA_GUIDELINES。
  */
@@ -266,19 +266,19 @@ function loadAgentMemoryPrompt(agentType, scope, storageV5, primedAgentMemory) {
     storageV5,
   );
 }
-//@ chunk-82kqcve8.js:155665-155789 callgraph-fingerprint (2.1.88 match: getMemoryScopeDisplay, 0.358)
+//@ chunk-a2q0x549.js:153748-153872 callgraph-fingerprint (2.1.88 match: getMemoryScopeDisplay, 0.358)
 /**
  * user scope 且记忆根为默认位置时，返回记忆目录的显示信息。
  */
 function getMemoryScopeDisplay(agentType, memory) {
   if (
     memory !== "user" ||
-    join(getMemoryBaseDir(), "agent-memory") !== join(getClaudeConfigDir(), "agent-memory")
+    join_2(getMemoryBaseDir(), "agent-memory") !== join_2(getClaudeConfigDir(), "agent-memory")
   )
     return;
   return STORAGE_SPACES.agentMemory(sanitizeAgentTypeForPath(agentType), [MEMORY_INDEX_FILENAME]);
 }
-//@ chunk-82kqcve8.js:155789-156030 placement
+//@ chunk-a2q0x549.js:153872-154113 placement
 /**
  * 读取 agent 的记忆范围内容（自动记忆开启且 agent 配置了 memory 时），找不到时返回空串；与工作流脚本文件无关，疑似放错文件。
  */
@@ -293,10 +293,10 @@ async function readAgentMemoryScope(agent, storageV5) {
   return item !== undefined && item.found ? item.value : "";
 }
 export {
-  readAgentMemoryScope,
-  loadAgentMemoryPrompt,
   isInsideAgentMemoryDir,
   resolveAgentMemoryDirForRecall,
   isRealpathWithin,
+  readAgentMemoryScope,
+  loadAgentMemoryPrompt,
   getAgentMemoryDir,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：预热的后台备用进程（spare）池、Fleet 视图派发与后台会话重启（respawn）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bg51yd13.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gwh0qn2w.js (17)
  * attribution: placement 17
  */
 import { randomUUID } from "crypto";
@@ -98,19 +98,19 @@ import { hostManagedEntry } from "../../services/daemon/paths.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bg51yd13.js:77499-77535 placement (2.1.88 match: addSlowOperation, 0.33)
+//@ chunk-gwh0qn2w.js:77791-77827 placement (2.1.88 match: addSlowOperation, 0.329)
 var addSlowOperation = {
   name: "exec",
   description: "",
 };
-//@ chunk-bg51yd13.js:77535-77559 placement
+//@ chunk-gwh0qn2w.js:77827-77851 placement
 /**
  * 恒返回 true 的开关：Fleet 视图派发功能在本构建里视为开启。
  */
 function isFleetDispatchEnabled() {
   return true;
 }
-//@ chunk-bg51yd13.js:77559-78441 placement
+//@ chunk-gwh0qn2w.js:77851-78733 placement
 /**
  * Fleet 视图中派发任务：创建作业状态、启动会话。
  */
@@ -197,7 +197,7 @@ function dispatchFromFleetView(intent, requestedSessionId, cwd, storageV5) {
     })(),
   );
 }
-//@ chunk-bg51yd13.js:78441-78606 placement
+//@ chunk-gwh0qn2w.js:78733-78898 placement
 /**
  * 浅比较两个对象：同引用为真；任一为空为假；否则比较两边全部键的值是否严格相等。
  */
@@ -211,7 +211,7 @@ function shallowEqualRecords(defaults, other) {
   }
   return true;
 }
-//@ chunk-bg51yd13.js:78606-80725 placement
+//@ chunk-gwh0qn2w.js:78898-81017 placement
 /**
  * 维护一个预热的备用 claude 进程（参数/默认值变化时重启）。
  */
@@ -385,37 +385,37 @@ class BgSparePool {
       );
   }
 }
-//@ chunk-bg51yd13.js:80725-80750 placement
+//@ chunk-gwh0qn2w.js:81017-81042 placement
 var BG_SPARE_POOL_SLOT; // deferred: uses BgSparePool of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-bg51yd13.js:80725", () => {
+deferInit("chunk-gwh0qn2w.js:81017", () => {
   BG_SPARE_POOL_SLOT = new HostScoped(() => new BgSparePool());
 });
-//@ chunk-bg51yd13.js:80750-80787 placement
+//@ chunk-gwh0qn2w.js:81042-81079 placement
 function bgSparePool() {
   return BG_SPARE_POOL_SLOT.of(getRootSession().host);
 }
-//@ chunk-bg51yd13.js:80787-80820 placement
+//@ chunk-gwh0qn2w.js:81079-81112 placement
 /**
  * 从备用进程池取一个空闲 spare 句柄。
  */
 function takeSpareHandle() {
   return bgSparePool().spare;
 }
-//@ chunk-bg51yd13.js:80820-80854 placement
+//@ chunk-gwh0qn2w.js:81112-81146 placement
 /**
  * 把某个 spare 标记为已就绪（可被认领）。
  */
 function markSpareReady(sessionId) {
   bgSparePool().markReady(sessionId);
 }
-//@ chunk-bg51yd13.js:80854-80911 placement
+//@ chunk-gwh0qn2w.js:81146-81203 placement
 /**
  * 从 spare 池认领一个进程来启动会话，未命中时返回未命中结果。
  */
 function claimSpareFromPool(rootDir, immediate = false, dispatchDefaults, agentTemplates, storageV5) {
   return bgSparePool().ensure(rootDir, immediate, dispatchDefaults, agentTemplates, storageV5);
 }
-//@ chunk-bg51yd13.js:80911-82083 placement
+//@ chunk-gwh0qn2w.js:81203-82375 placement
 /**
  * 认领备用进程启动会话，未命中时记录原因并回退。
  */
@@ -493,21 +493,21 @@ async function claimSpare(intent, templateOverride, storage) {
     sessionId: spare.sessionId,
   };
 }
-//@ chunk-bg51yd13.js:82083-82122 placement
+//@ chunk-gwh0qn2w.js:82375-82414 placement
 /**
  * 丢弃某个 spare（不可用或已退出）。
  */
 function discardSpare(storageV5) {
   return bgSparePool().discard(storageV5);
 }
-//@ chunk-bg51yd13.js:82122-82153 placement
+//@ chunk-gwh0qn2w.js:82414-82445 placement
 /**
  * 退役某个 spare（不再复用）。
  */
 function retireSpare(storage) {
   bgSparePool().retire(storage);
 }
-//@ chunk-bg51yd13.js:82153-93057 placement
+//@ chunk-gwh0qn2w.js:82445-93353 placement
 /**
  * 重启后台会话（等待进行中的启动、迁移到可附着 PTY 等，约 11 KB）。
  */
@@ -1179,18 +1179,18 @@ ${options.initialPrompt}`
     state: nextState,
   };
 }
-//@ chunk-bg51yd13.js:93057-93114 placement
+//@ chunk-gwh0qn2w.js:93353-93410 placement
 function isSoftDispatchFailure(reason) {
   return reason === "gate_blocked" || reason === "cwd_gone";
 }
-//@ chunk-bg51yd13.js:93114-93163 placement
+//@ chunk-gwh0qn2w.js:93410-93459 placement
 var COPY_ON_CREATE_WRITE_OPTIONS = {
   precondition: {
     type: "ifAbsent",
   },
   mode: 438,
 };
-//@ chunk-bg51yd13.js:93163-93285 placement
+//@ chunk-gwh0qn2w.js:93459-93581 placement
 /**
  * 用存储后端算某键的 sha256 摘要（最多读 expected 长度字节），判断是否等于给定摘要。
  */

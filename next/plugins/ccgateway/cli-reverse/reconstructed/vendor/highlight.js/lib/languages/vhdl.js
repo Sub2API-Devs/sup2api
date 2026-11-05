@@ -1,13 +1,13 @@
 /**
  * highlight.js/lib/languages/vhdl.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: highlight.js@11.11.1
- * pieces: chunk-egr0twnb.js (1)
+ * pieces: chunk-636gp747.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-egr0twnb.js:518625-520619 cjs-fingerprint
+//@ chunk-636gp747.js:518625-520619 cjs-fingerprint
 var require_vhdl = __commonJS(function (cjsExports, cjsModule) {
   function vhdl(hljs) {
     let INTEGER_RE = "[eE][-+]?\\d(_|\\d)*";

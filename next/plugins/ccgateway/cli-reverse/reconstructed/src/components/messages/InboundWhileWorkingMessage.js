@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工作中收到的频道/同伴消息显示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e67761vs.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s3w8mq54.js (7)
  * attribution: placement 7
  */
 import { CHANNEL, CHANNEL_SOURCE_OPEN } from "../../constants/xml.js";
@@ -28,7 +28,7 @@ import { BriefTimestampNamespace } from "../../utils/formatBriefTimestamp.js";
 import { truncateToWidth } from "../../utils/format.js";
 import { BACK_ARROW_GLYPH } from "../../constants/figures.js";
 
-//@ chunk-e67761vs.js:13716-13898 placement
+//@ chunk-s3w8mq54.js:14864-15046 placement
 var regExp = new RegExp(`^<${CHANNEL}\\s+source="([^"]*)"([^>]*)>\\n?`);
 var INBOUND_MESSAGE_CLOSE_TAG = `</${CHANNEL}>`;
 var INBOUND_CLOSE_WITH_SPACE = `
@@ -48,12 +48,12 @@ ${externalSourceWarning(true)}${EXTERNAL_RESPONSE_HINT}`,
 
 ${externalSourceWarning(true)}`,
 ];
-//@ chunk-e67761vs.js:13898-13966 placement
+//@ chunk-s3w8mq54.js:15046-15114 placement
 function senderAfterColon(text) {
   let index = text.lastIndexOf(":");
   return index === -1 ? text : text.slice(index + 1);
 }
-//@ chunk-e67761vs.js:13966-14213 placement
+//@ chunk-s3w8mq54.js:15114-15361 placement
 function parseChannelMessage(text) {
   let lead = "";
   let rest = text;
@@ -76,9 +76,9 @@ function parseChannelMessage(text) {
     user: USER_ATTR_RE.exec(restText ?? "")?.[1],
   };
 }
-//@ chunk-e67761vs.js:14213-14222 placement
+//@ chunk-s3w8mq54.js:15361-15370 placement
 var MAX_INBOUND_TEXT = 60;
-//@ chunk-e67761vs.js:14222-15302 placement
+//@ chunk-s3w8mq54.js:15370-16450 placement
 /**
  * 工作中收到的外部消息（频道/同伴）在对话中的显示。
  */
@@ -183,7 +183,7 @@ function InboundWhileWorkingMessage(props) {
   } else inboundMessageBodyElement = $[17];
   return inboundMessageBodyElement;
 }
-//@ chunk-e67761vs.js:15302-16095 placement
+//@ chunk-s3w8mq54.js:16450-17243 placement
 function InboundMessageBody(props) {
   let $ = useMemoCache(19);
   let { addMargin, messageId, origin, isExpanded, followsSpeakerLabel, lead, content, serverName, userName } =
@@ -261,7 +261,7 @@ function InboundMessageBody(props) {
   } else bodyElement = $[18];
   return BriefTimestampNamespace.useUserMessageSite(bodyElement);
 }
-//@ chunk-e67761vs.js:16095-16796 placement
+//@ chunk-s3w8mq54.js:17243-17944 placement
 function ChannelMessageHeader(props) {
   let $ = useMemoCache(14);
   let { addMargin, followsSpeakerLabel, serverName, userName, body } = props;

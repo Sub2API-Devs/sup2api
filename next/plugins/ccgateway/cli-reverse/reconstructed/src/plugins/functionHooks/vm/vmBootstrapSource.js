@@ -3,13 +3,13 @@
  *
  * VM 启动源码字符串（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (6)
  * attribution: placement 6
  */
 
-//@ chunk-4121qate.js:9532-9651 placement
+//@ chunk-j8f885h1.js:9641-9760 placement
 /**
  * 元素构造器必须返回对象，否则抛 TypeError。
  */
@@ -18,7 +18,7 @@ function requireElement(element) {
     throw TypeError("the element constructor did not build an element");
   return element;
 }
-//@ chunk-4121qate.js:9651-9768 placement
+//@ chunk-j8f885h1.js:9760-9877 placement
 function createFunctionNameMarks() {
   let weakMap = new WeakMap();
   return {
@@ -29,12 +29,12 @@ function createFunctionNameMarks() {
     nameOf: (fn) => (typeof fn === "function" ? weakMap.get(fn) : undefined),
   };
 }
-//@ chunk-4121qate.js:9768-9781 placement
+//@ chunk-j8f885h1.js:9877-9890 placement
 /**
  * 函数名标记表
  */
 var functionNameMarks = createFunctionNameMarks();
-//@ chunk-4121qate.js:9803-29859 placement
+//@ chunk-j8f885h1.js:9912-29968 placement
 /**
  * 工作流/钩子 VM 的启动源码字符串（在隔离 realm 中求值）
  */
@@ -620,7 +620,7 @@ var VM_BOOTSTRAP_SOURCE = String.raw`(() => {
   }
   return { h, Fragment }
 })()`;
-//@ chunk-4121qate.js:29859-49522 placement
+//@ chunk-j8f885h1.js:29968-49631 placement
 var VM_PRELUDE_SOURCE = String.raw`(helpers => {
   const define = (name, value) =>
     Object.defineProperty(globalThis, name, {
@@ -1195,9 +1195,9 @@ var VM_PRELUDE_SOURCE = String.raw`(helpers => {
     },
   })
 })`;
-//@ chunk-4121qate.js:49522-49554 placement
+//@ chunk-j8f885h1.js:49631-49663 placement
 /**
  * 前置 'use strict'
  */
 var withUseStrict = (source) => `'use strict';${source}`;
-export { functionNameMarks, withUseStrict, VM_BOOTSTRAP_SOURCE, requireElement, VM_PRELUDE_SOURCE };
+export { withUseStrict, VM_BOOTSTRAP_SOURCE, functionNameMarks, requireElement, VM_PRELUDE_SOURCE };

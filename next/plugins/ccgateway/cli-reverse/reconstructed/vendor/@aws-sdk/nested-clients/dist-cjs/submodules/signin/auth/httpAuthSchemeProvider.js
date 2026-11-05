@@ -1,15 +1,15 @@
 /**
  * @aws-sdk/nested-clients/dist-cjs/submodules/signin/auth/httpAuthSchemeProvider.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-y366fgzk.js (1)
+ * pieces: chunk-csa0qt1j.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../../runtime/bun-runtime.js";
 import { require_core_2 } from "../../../../../core/dist-cjs/index.js";
 import { require_util_middleware } from "../../../../../../@smithy/util-middleware/dist-cjs/index.js";
 
-//@ chunk-y366fgzk.js:783-1795 cjs-fingerprint
+//@ chunk-csa0qt1j.js:783-1795 cjs-fingerprint
 var require_httpAuthSchemeProvider = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

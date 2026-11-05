@@ -3,9 +3,9 @@
  *
  * 搜索 MCP 连接器注册表的工具（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1kxhadxb.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xxyew49s.js (1)
  * attribution: placement 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -30,7 +30,7 @@ import { isRemoteFirstPartySession } from "../../utils/remoteSessionEnv.js";
 import { AbortError } from "../../utils/errors.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-1kxhadxb.js:4604-5692 placement
+//@ chunk-xxyew49s.js:4688-5960 placement
 /**
  * SearchMcpRegistry 的输入/输出 schema 与工具定义。
  */
@@ -49,6 +49,8 @@ var searchMcpRegistryOutputSchema = DoctorLazy(() =>
     message: stringSchema().optional(),
   }),
 );
+var CONNECTOR_SEARCH_PARTIAL_NOTE =
+  "This search covers only a part of the connector directory. A connector that is not in these results can still exist. The full connector directory is on claude.ai.";
 var SearchMcpRegistryTool_2 = buildTool({
   name: SEARCH_MCP_REGISTRY_TOOL_NAME,
   searchHint: "discover MCP connectors by keyword",
@@ -107,7 +109,14 @@ var SearchMcpRegistryTool_2 = buildTool({
     return {
       tool_use_id: toolUseId,
       type: "tool_result",
-      content: jsonStringify(result.opt_in_required ? result : result.results),
+      content: jsonStringify(
+        result.opt_in_required
+          ? result
+          : {
+              results: result.results,
+              note: CONNECTOR_SEARCH_PARTIAL_NOTE,
+            },
+      ),
     };
   },
   renderToolUseMessage(input) {

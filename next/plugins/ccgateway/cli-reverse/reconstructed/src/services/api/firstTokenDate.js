@@ -3,9 +3,9 @@
  *
  * 拉取组织首次使用 Claude Code 的日期（/api/organization/claude_code_first_token_date）并存入全局配置。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/firstTokenDate.ts
- * pieces: chunk-zbtr7f5k.js (1)
+ * pieces: chunk-de28gzhb.js (1)
  * attribution: fingerprint 1
  */
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
@@ -15,7 +15,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 import { isExpectedApiError, errorMessage } from "../../utils/errors.js";
 
-//@ chunk-zbtr7f5k.js:1393-2222 fingerprint (2.1.88 match: fetchAndStoreClaudeCodeFirstTokenDate, 0.475)
+//@ chunk-de28gzhb.js:1411-2240 fingerprint (2.1.88 match: fetchAndStoreClaudeCodeFirstTokenDate, 0.476)
 /**
  * 已有缓存则跳过；否则 GET /api/organization/claude_code_first_token_date，校验日期后写入全局配置 claudeCodeFirstTokenDate。
  */

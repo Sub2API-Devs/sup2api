@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。REPL 控制器：滚动固定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: placement 2
  */
 import { ReplayHandleSlot } from "../../ink/outputReplay.js";
@@ -18,20 +18,20 @@ import { createSignal } from "../../utils/signal.js";
 import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { EMPTY_DIVIDER_STATE } from "./MessageArea.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
-import { env } from "../../utils/env.js";
 import { logEvent } from "../../services/analytics/index.js";
+import { env } from "../../utils/env.js";
 import { logError } from "../../utils/log.js";
+import { logFeatureSad, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { errorMessage } from "../../utils/errors.js";
-import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { resolveSetting } from "../../utils/settings/userIntentSettings.js";
-import { logFeatureBad, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
+import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { isHumanTurn } from "../../utils/turnOrigin.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { computeUnseenDivider } from "../../components/FullscreenLayout.js";
 import { currentToolPermissionContext } from "../../utils/permissions/currentPermissionContext.js";
 
-//@ chunk-18hwfzwa.js:1463996-1467637 placement
+//@ chunk-czq1j3j2.js:1505338-1508979 placement
 /**
  * 滚动钉住：管理视口自动滚动、未读分隔线、“输入后钉回底部”的各种触发（typed/suggestion_accepted/ownSubmitLanded）。
  */
@@ -45,12 +45,12 @@ class ScrollPin {
   #t = createSignal();
   #o;
   #n = EMPTY_DIVIDER_STATE;
-  #s = null;
-  #r = -1;
-  #c = null;
+  #r = null;
+  #s = -1;
+  #l = null;
   #i = false;
   #a = null;
-  #l = null;
+  #c = null;
   #d = undefined;
   constructor(options) {
     this.#e = options;
@@ -62,7 +62,7 @@ class ScrollPin {
     return this.#n.dividerY;
   }
   setRenderedLength(length) {
-    this.#c = length;
+    this.#l = length;
   }
   dispose() {
     this.#o();
@@ -75,7 +75,7 @@ class ScrollPin {
       logForDebugging(
         `repinScroll(${reason}, force=${force}): yanking from scrollTop=${handle.getScrollTop()} (max=${Math.max(0, handle.getScrollHeight() - handle.getViewportHeight())})`,
       );
-    this.#m();
+    this.#u();
     handle?.scrollToBottom();
     this.#f();
     this.#i = false;
@@ -98,14 +98,14 @@ class ScrollPin {
       this.repin(false, `progressOrPanel\u2192${slotValue}`);
   }
   onUserScroll = (delta, cause) => {
-    this.#m();
+    this.#u();
     this.#e.awaySummary.markUserScrolled();
     this.#i = !delta;
     if (delta) this.#f();
-    else this.#u(cause);
+    else this.#m(cause);
   };
   onUserScrollWithoutDivider = (position) => {
-    this.#m();
+    this.#u();
     this.#i = !position;
   };
   reveal = async (rowKey, options) => {
@@ -121,16 +121,16 @@ class ScrollPin {
   releaseReveal = () => {
     this.revealRef.current?.release();
   };
-  #m() {
+  #u() {
     this.releaseReveal();
     this.#p();
   }
   #p() {
     this.#a = null;
-    this.#l = null;
+    this.#c = null;
   }
   jumpToNew = () => {
-    this.#m();
+    this.#u();
     this.viewport.handle?.scrollToBottom();
     this.#i = false;
   };
@@ -147,7 +147,7 @@ class ScrollPin {
       this.releaseReveal();
       this.#a ??= options && !isSticky ? scrollTop : autoScroll ? "bottom" : null;
       this.#i = true;
-      this.#l = top;
+      this.#c = top;
       handle.scrollTo(top);
       return true;
     }
@@ -164,53 +164,53 @@ class ScrollPin {
   };
   followDialog = (rowKey) => {
     let handle = this.viewport.handle;
-    if (this.#l === null || !handle || rowKey === undefined) return;
+    if (this.#c === null || !handle || rowKey === undefined) return;
     let scrollTop = handle.getScrollTop() + handle.getPendingDelta();
     let { top } = scrollTargetForRow(handle, rowKey);
-    if (scrollTop !== this.#l && scrollTop !== top) {
+    if (scrollTop !== this.#c && scrollTop !== top) {
       this.#p();
       return;
     }
-    this.#l = top;
+    this.#c = top;
     if (scrollTop !== top) handle.scrollTo(top);
   };
   onDialogLeft = () => {
     let restoreTarget = this.#a;
     this.#a = null;
-    this.#l = null;
+    this.#c = null;
     if (restoreTarget === "bottom") this.repin(true, "dialogLeft");
     else if (restoreTarget !== null) this.viewport.handle?.scrollTo(restoreTarget);
   };
-  #u(handle) {
+  #m(handle) {
     let max = Math.max(0, handle.getScrollHeight() - handle.getViewportHeight());
     if (handle.getScrollTop() + handle.getPendingDelta() >= max) return;
     if (this.#n.dividerY !== null) return;
-    this.#s = this.#c ?? this.#e.transcript.getSnapshot().length;
+    this.#r = this.#l ?? this.#e.transcript.getSnapshot().length;
     this.#h(handle.getScrollHeight(), this.#e.transcript.getSnapshot());
   }
   #f() {
     let dividerY = this.#n.dividerY;
     if (dividerY === null) return;
-    this.#s = null;
+    this.#r = null;
     this.#h(dividerY, this.#e.transcript.getSnapshot());
     queueMicrotask(() => {
-      if (this.#s === null) this.#h(null, this.#e.transcript.getSnapshot());
+      if (this.#r === null) this.#h(null, this.#e.transcript.getSnapshot());
     });
   }
   #S = () => {
-    if (this.#s === null) return;
+    if (this.#r === null) return;
     let snapshot = this.#e.transcript.getSnapshot();
-    if (snapshot.length < this.#s) {
-      this.#s = null;
+    if (snapshot.length < this.#r) {
+      this.#r = null;
       this.#h(null, snapshot);
       return;
     }
-    if (snapshot.length !== this.#r) this.#h(this.#n.dividerY, snapshot);
+    if (snapshot.length !== this.#s) this.#h(this.#n.dividerY, snapshot);
   };
   #h(dividerY, messages) {
-    this.#r = messages.length;
+    this.#s = messages.length;
     let current = this.#n;
-    let unseenDivider = computeUnseenDivider(messages, this.#s, currentToolPermissionContext());
+    let unseenDivider = computeUnseenDivider(messages, this.#r, currentToolPermissionContext());
     let unseenDivider_2 =
       unseenDivider?.firstUnseenUuid === current.unseenDivider?.firstUnseenUuid &&
       unseenDivider?.count === current.unseenDivider?.count
@@ -227,7 +227,7 @@ class ScrollPin {
     this.#t.emit();
   }
 }
-//@ chunk-18hwfzwa.js:1467637-1467792 placement
+//@ chunk-czq1j3j2.js:1508979-1509134 placement
 /**
  * 计算让某行区块可见的滚动位置与底部位置。
  */

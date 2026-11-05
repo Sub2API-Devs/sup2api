@@ -1,13 +1,13 @@
 /**
  * @aws-sdk/client-sts/dist-cjs/endpoint/ruleset.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/client-sts@3.936.0..3.939.0
- * pieces: chunk-a8ee6x44.js (1)
+ * pieces: chunk-brqnbz3r.js (1)
  * attribution: cjs-require-graph 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
-//@ chunk-a8ee6x44.js:2573-6233 cjs-require-graph
+//@ chunk-brqnbz3r.js:2573-6233 cjs-require-graph
 var require_ruleset = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

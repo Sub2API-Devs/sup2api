@@ -3,21 +3,21 @@
  *
  * stream-json 输出模式下拦截 process.stdout.write：非 JSON 行改写到 stderr 并加 [stdout-guard] 标记，保证 stdout 每行都是 JSON。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/streamJsonStdoutGuard.ts
- * pieces: chunk-tyg7f3ek.js (3)
+ * pieces: chunk-0yw3taqg.js (3)
  * attribution: fingerprint 2, file-local 1
  */
 import { jsonParse } from "./slowOperations.js";
 import { logForDebugging } from "./debug.js";
 import { registerCleanup } from "./cleanupRegistry.js";
 
-//@ chunk-tyg7f3ek.js:394375-394399 fingerprint (2.1.88 match: STDOUT_GUARD_MARKER, 1)
+//@ chunk-0yw3taqg.js:428120-428144 fingerprint (2.1.88 match: STDOUT_GUARD_MARKER, 1)
 /**
  * 被拦截行在 stderr 上的前缀 "[stdout-guard]"。
  */
 var STDOUT_GUARD_MARKER = "[stdout-guard]";
-//@ chunk-tyg7f3ek.js:394399-394475 file-local
+//@ chunk-0yw3taqg.js:428144-428220 file-local
 /**
  * 空行或可 JSON 解析的行。
  */
@@ -30,7 +30,7 @@ function isJsonLine(line) {
     return false;
   }
 }
-//@ chunk-tyg7f3ek.js:394475-395444 fingerprint (2.1.88 match: installStreamJsonStdoutGuard, 0.619)
+//@ chunk-0yw3taqg.js:428220-429189 fingerprint (2.1.88 match: installStreamJsonStdoutGuard, 0.619)
 /**
  * StdoutGuard：按行缓冲 stdout 写入，JSON 行原样输出，其余转 stderr；可卸载并冲刷缓冲。
  */

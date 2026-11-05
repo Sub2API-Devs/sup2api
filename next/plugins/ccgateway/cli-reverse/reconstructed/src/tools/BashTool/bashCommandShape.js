@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Bash 命令语法形状分析（替换、展开）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (10)
  * attribution: placement 10
  */
 import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
@@ -21,14 +21,14 @@ import {
   parseForSecurity,
 } from "../../utils/bash/ast.js";
 import { getParserModule } from "../../utils/bash/bashParser.js";
-import { runWithRuleOff } from "../../utils/bash/bashReadingFlags.js";
+import { runWithRuleOff, withSturdyLanternOff } from "../../utils/bash/bashReadingFlags.js";
 import {
   permissionRuleExtractPrefix,
   matchWildcardPattern,
 } from "../../utils/permissions/shellRuleMatching.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4759074-4759184 placement
+//@ chunk-5xgkngpb.js:4879313-4879423 placement
 /**
  * Bash 结果中后台运行相关的字段名（任务 id、输出路径、随最终回复结束、cwd 提示）。
  */
@@ -38,14 +38,14 @@ var BACKGROUND_OUTPUT_FIELDS = {
   backgroundEndsWithFinalResponse: true,
   backgroundCwdHint: true,
 };
-//@ chunk-e6aww6q8.js:4759184-4759230 placement
+//@ chunk-5xgkngpb.js:4879423-4879469 placement
 /**
  * 取出后台输出相关字段名列表，用于判定命令是否只触碰这些字段。
  */
 function getBackgroundOutputFieldNames(input) {
   return omitAlias(input, Object.keys(BACKGROUND_OUTPUT_FIELDS));
 }
-//@ chunk-e6aww6q8.js:4759230-4759889 placement
+//@ chunk-5xgkngpb.js:4879469-4880128 placement
 /**
  * Bash 命令形状分析常量：命令长度上限、分隔符节点类型、可忽略的节点类型与未处理的执行包装命令集合。
  */
@@ -54,7 +54,7 @@ var COMMAND_SEPARATORS;
 var TRIVIAL_NODE_TYPES;
 var STRUCTURAL_NODE_TYPES;
 var WRAPPER_COMMAND_NAMES_2;
-deferInit("chunk-e6aww6q8.js:4759230", () => {
+deferInit("chunk-5xgkngpb.js:4879469", () => {
   MAX_SHAPE_COMMAND_LENGTH = 1e4;
   COMMAND_SEPARATORS = new Set([
     "&&",
@@ -126,7 +126,7 @@ deferInit("chunk-e6aww6q8.js:4759230", () => {
     "nawk",
   ]);
 });
-//@ chunk-e6aww6q8.js:4759889-4760052 placement
+//@ chunk-5xgkngpb.js:4880128-4880291 placement
 function isWrapperCommandName(text) {
   let lower = text.slice(text.lastIndexOf("/") + 1).toLowerCase();
   return (
@@ -134,12 +134,12 @@ function isWrapperCommandName(text) {
     WRAPPER_COMMAND_NAMES_2.has(lower.replace(/\.(exe|bat|cmd|com)$/, "").replace(/(?<=[a-z])[\d.]+$/, ""))
   );
 }
-//@ chunk-e6aww6q8.js:4760052-4760281 placement
+//@ chunk-5xgkngpb.js:4880291-4880520 placement
 var STRING_PART_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EXPANSION_NODE_TYPES;
 var WORD_NODE_TYPES;
 var SAFE_WORD_RE;
-deferInit("chunk-e6aww6q8.js:4760052", () => {
+deferInit("chunk-5xgkngpb.js:4880291", () => {
   STRING_PART_TYPES = new Set(['"', "string_content", "command_substitution"]);
   EXPANSION_NODE_TYPES = new Set([
     "simple_expansion",
@@ -150,7 +150,7 @@ deferInit("chunk-e6aww6q8.js:4760052", () => {
   WORD_NODE_TYPES = new Set(["word", "string", "concatenation", "number"]);
   SAFE_WORD_RE = /^[\w./+-]+$/;
 });
-//@ chunk-e6aww6q8.js:4760281-4760517 placement
+//@ chunk-5xgkngpb.js:4880520-4880756 placement
 function isSingleSimpleCommand(children) {
   let filtered = children.filter((child) => !STRUCTURAL_NODE_TYPES.has(child.type));
   if (filtered.length !== 1 || filtered[0].type !== "command") return false;
@@ -160,7 +160,7 @@ function isSingleSimpleCommand(children) {
     if (!WORD_NODE_TYPES.has(argumentNode.type) && !EXPANSION_NODE_TYPES.has(argumentNode.type)) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:4760517-4760694 placement
+//@ chunk-5xgkngpb.js:4880756-4880933 placement
 function getLiteralText(node) {
   if (node.type === "string")
     return node.children
@@ -170,7 +170,7 @@ function getLiteralText(node) {
   if (node.type === "concatenation") return node.children.map(getLiteralText).join("");
   return node.text;
 }
-//@ chunk-e6aww6q8.js:4760694-4761738 placement
+//@ chunk-5xgkngpb.js:4880933-4881977 placement
 /**
  * 分析 Bash 命令语法树中的替换与展开，判断命令形状。
  */
@@ -241,20 +241,20 @@ function analyzeCommandShape(command) {
   visit(syntaxTree);
   return hasDynamicPart ? null : shapes;
 }
-//@ chunk-e6aww6q8.js:4761738-4761808 placement
+//@ chunk-5xgkngpb.js:4881977-4882047 placement
 /**
  * 规则相关性判定中视为“静态”的 AST 节点类型集合（命令替换、简单展开、字符串）。
  */
 var STATIC_NODE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4761738", () => {
+deferInit("chunk-5xgkngpb.js:4881977", () => {
   STATIC_NODE_TYPES = new Set(["command_substitution", "simple_expansion", "string"]);
 });
-//@ chunk-e6aww6q8.js:4761808-4762311 placement
+//@ chunk-5xgkngpb.js:4882047-4882559 placement
 /**
  * 为命令生成"规则是否可能与之相关"的判定函数：解析出各子命令（或分析命令形状），前缀规则按词前缀/xargs 包装匹配，通配规则按模式匹配；无法分析时一律相关。
  */
 async function buildRuleRelevanceFilter(command) {
-  let parsed = await runWithRuleOff(() => parseForSecurity(command));
+  let parsed = await runWithRuleOff(() => withSturdyLanternOff(() => parseForSecurity(command)));
   let shapes;
   let isShapeDerived = false;
   if (parsed.kind === "simple") shapes = parsed.commands.map((command) => command.argv.join(" "));
@@ -284,4 +284,4 @@ async function buildRuleRelevanceFilter(command) {
     });
   };
 }
-export { buildRuleRelevanceFilter, BACKGROUND_OUTPUT_FIELDS, getBackgroundOutputFieldNames };
+export { BACKGROUND_OUTPUT_FIELDS, getBackgroundOutputFieldNames, buildRuleRelevanceFilter };

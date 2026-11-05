@@ -3,36 +3,36 @@
  *
  * 2.1.316 新增：插件 contract 文件校验：自包含的轻量词法检查，禁止外部引用，提取名词与状态。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-85kmkm1x.js (32)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bfqsgtvj.js (32)
  * attribution: placement 32
  */
 import { transpileHooksSource } from "../../plugins/functionHooks/moduleLoader.js";
 import { errorMessage } from "../errors.js";
 import { getFirstLine, collapseWhitespace } from "../stringUtils.js";
 
-//@ chunk-85kmkm1x.js:1344-1470 placement
+//@ chunk-bfqsgtvj.js:1417-1543 placement
 function detectForbiddenComment(source) {
   let matches = /@ts-/i.test(source);
   let matches_2 = /\u2500\u2500 from plugin |\/\/\s*Skipped:/.test(source);
   return matches ? "@ts-" : matches_2 ? "framing" : undefined;
 }
-//@ chunk-85kmkm1x.js:1470-1520 placement
+//@ chunk-bfqsgtvj.js:1543-1593 placement
 var isPunctToken = (token, kind, ...texts) => token?.kind === kind && texts.includes(token.text);
-//@ chunk-85kmkm1x.js:1520-1611 placement
+//@ chunk-bfqsgtvj.js:1593-1684 placement
 function bracketDelta(token) {
   let opens = isPunctToken(token, "punct", "{", "(", "[");
   let closes = isPunctToken(token, "punct", "}", ")", "]");
   return opens ? 1 : closes ? -1 : 0;
 }
-//@ chunk-85kmkm1x.js:1611-1651 placement
+//@ chunk-bfqsgtvj.js:1684-1724 placement
 var makeToken = (kind, text, line) => ({
   kind,
   text,
   line,
 });
-//@ chunk-85kmkm1x.js:1651-1864 placement
+//@ chunk-bfqsgtvj.js:1724-1937 placement
 var lexBlockComment = (source, start, line) => {
   let index = source.indexOf("*/", start + 2);
   let closed = index !== -1;
@@ -52,7 +52,7 @@ var lexBlockComment = (source, start, line) => {
       }
     : result;
 };
-//@ chunk-85kmkm1x.js:1864-2092 placement
+//@ chunk-bfqsgtvj.js:1937-2165 placement
 var lexLineComment = (source, start, line) => {
   let newlineIndex = source.slice(start).search(/[\n\r\u2028\u2029]/);
   let end = newlineIndex === -1 ? source.length : start + newlineIndex;
@@ -74,7 +74,7 @@ var lexLineComment = (source, start, line) => {
         line,
       };
 };
-//@ chunk-85kmkm1x.js:2092-2346 placement
+//@ chunk-bfqsgtvj.js:2165-2419 placement
 var lexStringLiteral = (source, start, line) => {
   let quote = source[start] ?? "";
   let text = "";
@@ -105,7 +105,7 @@ var lexStringLiteral = (source, start, line) => {
         token: makeToken("stray", quote, line),
       };
 };
-//@ chunk-85kmkm1x.js:2346-2472 placement
+//@ chunk-bfqsgtvj.js:2419-2545 placement
 var lexWord = (source, start, line) => {
   let end = start + 1;
   while (end < source.length && /[\w$]/.test(source[end] ?? "")) end += 1;
@@ -115,7 +115,7 @@ var lexWord = (source, start, line) => {
     token: makeToken("word", source.slice(start, end), line),
   };
 };
-//@ chunk-85kmkm1x.js:2472-2610 placement
+//@ chunk-bfqsgtvj.js:2545-2683 placement
 function pickLexer(source, index) {
   let char = source[index] ?? "";
   let sliced = source.slice(index, index + 2);
@@ -130,7 +130,7 @@ function pickLexer(source, index) {
   let matches = /[\w$]/.test(char);
   return commentLexers[sliced] ?? stringLexers[char] ?? (matches ? lexWord : undefined);
 }
-//@ chunk-85kmkm1x.js:2610-3316 placement
+//@ chunk-bfqsgtvj.js:2683-3389 placement
 function tokenizeContractSource(source) {
   let tokens = [];
   let templateBraceStack = [];
@@ -194,9 +194,9 @@ function tokenizeContractSource(source) {
   if (inTemplate || templateBraceStack.length > 0) tokens.push(makeToken("stray", "`", templateStartLine));
   return tokens;
 }
-//@ chunk-85kmkm1x.js:3316-3351 placement
+//@ chunk-bfqsgtvj.js:3389-3424 placement
 var tokenWindow = (tokens, index) => [tokens[index], tokens[index + 1], tokens[index + 2]];
-//@ chunk-85kmkm1x.js:3351-3950 placement
+//@ chunk-bfqsgtvj.js:3424-4023 placement
 /**
  * global/嵌套 module/as namespace 等不允许的声明形式。
  */
@@ -223,7 +223,7 @@ function describeForbiddenAugmentation(tokens, index) {
             ? "`EngineInterface` takes members only, no `extends` or type parameters"
             : undefined;
 }
-//@ chunk-85kmkm1x.js:3950-4209 placement
+//@ chunk-bfqsgtvj.js:4023-4282 placement
 function findForbiddenAugmentations(tokens) {
   let problems = [];
   let depth = 0;
@@ -242,7 +242,7 @@ function findForbiddenAugmentations(tokens) {
   }
   return problems;
 }
-//@ chunk-85kmkm1x.js:4209-4373 placement
+//@ chunk-bfqsgtvj.js:4282-4446 placement
 function isInterfaceOpening(tokens, index, interfaceName) {
   let [first, second, third] = tokenWindow(tokens, index);
   return (
@@ -255,7 +255,7 @@ function isInterfaceOpening(tokens, index, interfaceName) {
     third.text === "{"
   );
 }
-//@ chunk-85kmkm1x.js:4373-4556 placement
+//@ chunk-bfqsgtvj.js:4446-4629 placement
 function findMatchingBrace(tokens, start) {
   let depth = 0;
   for (let index = start; index < tokens.length; index += 1) {
@@ -266,7 +266,7 @@ function findMatchingBrace(tokens, start) {
   }
   return tokens.length;
 }
-//@ chunk-85kmkm1x.js:4556-4961 placement
+//@ chunk-bfqsgtvj.js:4629-5034 placement
 /**
  * 块内顶层成员名。
  */
@@ -296,7 +296,7 @@ function listMemberNames(tokens, start) {
   }
   return names;
 }
-//@ chunk-85kmkm1x.js:4961-5133 placement
+//@ chunk-bfqsgtvj.js:5034-5206 placement
 function collectEngineNouns(tokens, blocks) {
   let nouns = new Set();
   for (let { start, end } of blocks)
@@ -307,7 +307,7 @@ function collectEngineNouns(tokens, blocks) {
     }
   return [...nouns];
 }
-//@ chunk-85kmkm1x.js:5133-5436 placement
+//@ chunk-bfqsgtvj.js:5206-5509 placement
 /**
  * 契约中像汇总框架或编译指令的行。
  */
@@ -322,7 +322,7 @@ var findFramingLines = (source) =>
           ]
         : [],
     );
-//@ chunk-85kmkm1x.js:5436-6108 placement
+//@ chunk-bfqsgtvj.js:5509-6181 placement
 function outsideReferenceProblems(tokens) {
   let problems = [];
   let reason =
@@ -359,9 +359,9 @@ function outsideReferenceProblems(tokens) {
   }
   return problems;
 }
-//@ chunk-85kmkm1x.js:6108-6183 placement
+//@ chunk-bfqsgtvj.js:6181-6256 placement
 var CONTROL_OR_INVISIBLE_RE = /[\p{Cc}\p{Cf}\p{Cs}\p{Default_Ignorable_Code_Point}\u2028\u2029]/u;
-//@ chunk-85kmkm1x.js:6183-6381 placement
+//@ chunk-bfqsgtvj.js:6256-6454 placement
 var findInvisibleCharLines = (source) =>
   source
     .split(
@@ -375,7 +375,7 @@ var findInvisibleCharLines = (source) =>
           ]
         : [],
     );
-//@ chunk-85kmkm1x.js:6381-6486 placement
+//@ chunk-bfqsgtvj.js:6454-6559 placement
 function checkParsesAsTypeScript(source) {
   try {
     transpileHooksSource("contract.d.ts", source);
@@ -384,7 +384,7 @@ function checkParsesAsTypeScript(source) {
     return `does not parse as TypeScript: ${errorMessage(error)}`;
   }
 }
-//@ chunk-85kmkm1x.js:6486-7022 placement
+//@ chunk-bfqsgtvj.js:6559-7095 placement
 /**
  * PluginState 中各插件声明的状态键。
  */
@@ -422,7 +422,7 @@ function collectPluginStateKeys(tokens, blocks) {
     keys: [...keys],
   }));
 }
-//@ chunk-85kmkm1x.js:7022-7218 placement
+//@ chunk-bfqsgtvj.js:7095-7291 placement
 function findRunnableCode(source) {
   let trimmed = transpileHooksSource("contract.ts", source)
     .replace(/^\s*export\s*\{\s*\};?\s*$/m, "")
@@ -432,7 +432,7 @@ function findRunnableCode(source) {
     ? []
     : [`the contract holds code that would run (\`${firstLine}\`); a contract is types only`];
 }
-//@ chunk-85kmkm1x.js:7218-7585 placement
+//@ chunk-bfqsgtvj.js:7291-7658 placement
 /**
  * class/const/function 等运行时声明。
  */
@@ -459,7 +459,7 @@ var findRuntimeDeclarations = (tokens) =>
       ? [`line ${token.line}: \`${token.text}\` declares something that runs; a contract holds types only`]
       : [];
   });
-//@ chunk-85kmkm1x.js:7585-8056 placement
+//@ chunk-bfqsgtvj.js:7658-8129 placement
 /**
  * 词法异常记号的说明。
  */
@@ -474,7 +474,7 @@ var STRAY_TOKEN_DESCRIPTIONS = {
   framing: "a comment that imitates the roll-up's banner or trailer",
   other: "a character outside plain ASCII (or a control character) in code",
 };
-//@ chunk-85kmkm1x.js:8056-8245 placement
+//@ chunk-bfqsgtvj.js:8129-8318 placement
 var describeStrayTokens = (tokens) =>
   tokens
     .filter((token) => token.kind === "stray")
@@ -484,9 +484,9 @@ var describeStrayTokens = (tokens) =>
         (STRAY_TOKEN_DESCRIPTIONS[token.text] ?? `\`${token.text}\``) +
         ": a type contract never holds one, so the check refuses it rather than read past it",
     );
-//@ chunk-85kmkm1x.js:8245-8266 placement
+//@ chunk-bfqsgtvj.js:8318-8339 placement
 var CLAUDE_CODE = "claude-code";
-//@ chunk-85kmkm1x.js:8266-9192 placement
+//@ chunk-bfqsgtvj.js:8339-9265 placement
 /**
  * 契约顶层语句的问题（错误的 module、declare、export 等）。
  */
@@ -527,7 +527,7 @@ function describeTopLevelProblem(tokens, index) {
             ? `a top-level \`${first?.text}\` without \`export\` would be global in a dependent's program; export it`
             : undefined;
 }
-//@ chunk-85kmkm1x.js:9192-9722 placement
+//@ chunk-bfqsgtvj.js:9265-9795 placement
 /**
  * 扫描顶层语句，返回问题与 declare module 块范围。
  */
@@ -569,7 +569,7 @@ function scanTopLevel(tokens) {
     blocks,
   };
 }
-//@ chunk-85kmkm1x.js:9722-9995 placement
+//@ chunk-bfqsgtvj.js:9795-10068 placement
 /**
  * 校验插件 contract 文件（2.1.316 新增）：自包含的轻量词法检查，禁止 import/require/外部引用，提取声明的名词与状态。
  */
@@ -599,7 +599,7 @@ function validatePluginContract(source) {
     state: collectPluginStateKeys(tokens_2, blocks),
   };
 }
-//@ chunk-85kmkm1x.js:10059-10112 placement
+//@ chunk-bfqsgtvj.js:10132-10185 placement
 /**
  * refusedContract：构造被拒的契约结果。
  */

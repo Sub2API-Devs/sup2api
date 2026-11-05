@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 连接器名称建议
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-99h01h55.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-chhd9p2w.js (7)
  * attribution: placement 7
  */
 import {
@@ -27,7 +27,7 @@ import { scrubArtifactEnvelopeTags, sweepAskCopy } from "../../tools/ArtifactToo
 import { truncateWithEscapes, sanitizeDisplayText } from "./capabilityDeclaration.js";
 import { truncateCodePoints } from "../../utils/stringUtils.js";
 
-//@ chunk-99h01h55.js:4051-4264 placement (2.1.88 match: getMcpPrefix, 1)
+//@ chunk-chhd9p2w.js:4104-4317 placement (2.1.88 match: getMcpPrefix, 1)
 /**
  * （归属疑误：通用显示名校验）字符串可原样作为可声明名（长度、字符集、非 mcp__ 前缀等）。
  */
@@ -47,7 +47,7 @@ function getMcpPrefix(serverName) {
     normalizeUuidOrNull(serverName) === null
   );
 }
-//@ chunk-99h01h55.js:4264-4523 placement
+//@ chunk-chhd9p2w.js:4317-4576 placement
 /**
  * （归属疑误：通用显示）把名字转成安全的引号显示形式，超长截断加省略号。
  */
@@ -68,7 +68,7 @@ function sanitizeConnectorName(name, options) {
   );
   return cut ? `${cleaned}\u2026` : cleaned;
 }
-//@ chunk-99h01h55.js:4523-4573 placement
+//@ chunk-chhd9p2w.js:4576-4626 placement
 /**
  * 导出函数 `sanitizeConnectorNameConnectors`：参数 e，返回 scrubArtifactEnvelopeTags( truncateCodePoints(e, MAX_NAME_LENGTH).replace(DISPLAY_UNSAFE_RE, escapeChar), )。
  */
@@ -77,16 +77,16 @@ function sanitizeConnectorNameConnectors(server) {
     truncateCodePoints(server, MAX_NAME_LENGTH).replace(DISPLAY_UNSAFE_RE, escapeChar),
   );
 }
-//@ chunk-99h01h55.js:4573-4629 placement
+//@ chunk-chhd9p2w.js:4626-4682 placement
 /**
  * 导出函数 `isDeclarableServer`：参数 e，返回 e.declarable !== !1 && getMcpPrefix(e.server)。
  */
 function isDeclarableServer(server) {
   return server.declarable !== false && getMcpPrefix(server.server);
 }
-//@ chunk-99h01h55.js:4629-4677 placement
+//@ chunk-chhd9p2w.js:4682-4730 placement
 var CONNECTOR_NAME_FIELDS = ["name", "connector", "id", "display_name"];
-//@ chunk-99h01h55.js:4677-4773 placement
+//@ chunk-chhd9p2w.js:4730-4826 placement
 function emptyConnectorResolution() {
   return {
     ok: false,
@@ -97,7 +97,7 @@ function emptyConnectorResolution() {
     serverCount: null,
   };
 }
-//@ chunk-99h01h55.js:4773-4844 placement
+//@ chunk-chhd9p2w.js:4826-4897 placement
 /**
  * 导出函数 `isPlainObjectConnector`：参数 e，返回 e !== null && typeof e === "object" && !Array.isArray(e); } export { sanitizeConnectorName, zit, k4, Vcr, G, Q…。
  */
@@ -105,11 +105,11 @@ function isPlainObjectConnector(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 export {
+  getMcpPrefix,
+  isPlainObjectConnector,
   sanitizeConnectorName,
   isDeclarableServer,
-  isPlainObjectConnector,
   sanitizeConnectorNameConnectors,
   emptyConnectorResolution,
   CONNECTOR_NAME_FIELDS,
-  getMcpPrefix,
 };

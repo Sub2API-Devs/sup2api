@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：组合本地、接管的、远程、待创建会话及 PR 状态，生成 Agents 视图全部行（分组、过滤、折叠）；把会话分成 needs/live/done 等带计数的桶等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-93kwxas0.js (49)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-avy0g5d4.js (49)
  * attribution: placement 49
  */
 import { isAbsolute } from "path";
@@ -50,7 +50,7 @@ import { sanitizeAttentionText } from "./sessionAttention.js";
 import { redactSecrets } from "../../services/teamMemorySync/secretScanner.js";
 import { DEFAULT_BG_AGENT_TEMPLATE } from "../../cli/bg/bgSpawnEnv.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
-import { splitGraphemes } from "../../utils/intl.js";
+import { splitGraphemes, countGraphemes } from "../../utils/intl.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import {
@@ -59,7 +59,6 @@ import {
   useLayoutEffect,
   fragmentTypeExport,
 } from "../../../vendor/react/cjs/react.production.js";
-import { countGraphemes } from "../../ink/output.js";
 import { BOXED_DIAMOND_GLYPH, BULLET_OPERATOR } from "../../constants/figures.js";
 import { MAX_DISPATCH_RETRIES } from "./fleetDispatch.js";
 import { getDefaultCharacters, spinnerFramesForTerminal } from "../Spinner/utils.js";
@@ -86,13 +85,13 @@ import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js"
 import { useAnimationFrame } from "../../ink/components/Input.js";
 import { SPINNER_DOT } from "../Spinner/SpinnerGlyph.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { isScreenReaderMode } from "../../utils/accessibility/screenReader.js";
 import { rankJobNameMatch } from "../../cli/bg/bgDispatch.js";
 import { hasDotDotSegment } from "../../utils/pathClassification.js";
 import { isNonWslUncPath, isNetworkRelatedPath } from "../../utils/networkPaths.js";
 
-//@ chunk-93kwxas0.js:72647-73045 placement
+//@ chunk-avy0g5d4.js:72701-73099 placement
 /**
  * 会话距上次更新的时长文字（活跃时为空）。
  */
@@ -116,7 +115,7 @@ function formatJobAge(job, nowMs) {
     mostSignificantOnly: true,
   });
 }
-//@ chunk-93kwxas0.js:73045-73153 placement
+//@ chunk-avy0g5d4.js:73099-73207 placement
 /**
  * 未来时间显示 “in X”，否则显示会话年龄。
  */
@@ -127,7 +126,7 @@ function formatJobAgeOrEta(job, etaMs, nowMs = Date.now()) {
     })}`;
   return formatJobAge(job, nowMs);
 }
-//@ chunk-93kwxas0.js:73153-73763 placement
+//@ chunk-avy0g5d4.js:73207-73817 placement
 /**
  * 会话显示标题：名称或意图摘要，当前/来源会话特殊标注。
  */
@@ -161,7 +160,7 @@ function getJobTitle(state, isCurrent = false, shortForm = false) {
   }
   return `${result}\u2026`;
 }
-//@ chunk-93kwxas0.js:73763-74583 placement
+//@ chunk-avy0g5d4.js:73817-74637 placement
 /**
  * 未命名会话自动生成标题的 hook。
  */
@@ -253,7 +252,7 @@ function useAutoTitle(label, hasName) {
   } else frame = $[11];
   return frame;
 }
-//@ chunk-93kwxas0.js:74583-74814 placement
+//@ chunk-avy0g5d4.js:74637-74868 placement
 /**
  * 标题替换动画的一帧：新标题前 k 个字素 + 旧标题剩余部分，补齐到两者最大宽度。
  */
@@ -275,7 +274,7 @@ function blendTitleAnimation(old, newTitle, step) {
     newLen: joined.length,
   };
 }
-//@ chunk-93kwxas0.js:74814-75065 placement
+//@ chunk-avy0g5d4.js:74868-75119 placement
 /**
  * 会话产物（PR/frame）列所需宽度。
  */
@@ -292,11 +291,11 @@ function artifactColumnWidth(state) {
     children.length > 1 ? `${children.length} ${BOXED_DIAMOND_GLYPH}` : BOXED_DIAMOND_GLYPH,
   );
 }
-//@ chunk-93kwxas0.js:75065-75113 placement
+//@ chunk-avy0g5d4.js:75119-75167 placement
 function hasSafeModeFlag(respawnFlags) {
   return respawnFlags.includes("--safe-mode");
 }
-//@ chunk-93kwxas0.js:75113-75402 placement
+//@ chunk-avy0g5d4.js:75167-75456 placement
 /**
  * 计算 Agents 行的列宽（年龄、标签、产物、详情）。
  */
@@ -318,23 +317,23 @@ function computeFleetColumnWidths(jobs, statusFor, initialJobId, columns, nowMs)
     detail,
   };
 }
-//@ chunk-93kwxas0.js:75402-75429 placement
+//@ chunk-avy0g5d4.js:75456-75483 placement
 function getSpinnerChars() {
   return getDefaultCharacters();
 }
-//@ chunk-93kwxas0.js:75429-75456 placement
+//@ chunk-avy0g5d4.js:75483-75510 placement
 function getLoopSpinnerChars() {
   return spinnerFramesForTerminal();
 }
-//@ chunk-93kwxas0.js:75456-75485 placement
+//@ chunk-avy0g5d4.js:75510-75539 placement
 function loopJobGlyph() {
   return getSpinnerChars()[4];
 }
-//@ chunk-93kwxas0.js:75485-75514 placement
+//@ chunk-avy0g5d4.js:75539-75568 placement
 function loopJobGlyphAlt() {
   return getSpinnerChars()[1];
 }
-//@ chunk-93kwxas0.js:75514-75918 placement
+//@ chunk-avy0g5d4.js:75568-75972 placement
 /**
  * 由活动与状态得出动词与颜色（Done/Failed/Stopped/Working…）。
  */
@@ -375,7 +374,7 @@ function activityVerb(activity, tempo, status, outcome) {
     dim: true,
   };
 }
-//@ chunk-93kwxas0.js:75918-76006 placement
+//@ chunk-avy0g5d4.js:75972-76060 placement
 function activityColors(state, activity, status) {
   let { color, dim } = activityVerb(activity, state.tempo, status, terminalOutcome(state.state));
   return {
@@ -383,12 +382,12 @@ function activityColors(state, activity, status) {
     dim,
   };
 }
-//@ chunk-93kwxas0.js:76006-76033 placement
+//@ chunk-avy0g5d4.js:76060-76087 placement
 var COLOR_PRIORITY = {
   error: 2,
   warning: 1,
 };
-//@ chunk-93kwxas0.js:76033-76176 placement
+//@ chunk-avy0g5d4.js:76087-76230 placement
 /**
  * 在会话与子项颜色中取优先级最高的颜色。
  */
@@ -405,15 +404,15 @@ function pickHighestPriorityColor(color, childRows) {
   }
   return bestColor;
 }
-//@ chunk-93kwxas0.js:76176-76219 placement
+//@ chunk-avy0g5d4.js:76230-76273 placement
 function isFrameRow(row) {
   return row.row.kind === "frame";
 }
-//@ chunk-93kwxas0.js:76219-76263 placement
+//@ chunk-avy0g5d4.js:76273-76317 placement
 function prKindOf(row) {
   return isGitLabMergeRequestUrl(row.href) ? "mr" : "pr";
 }
-//@ chunk-93kwxas0.js:76263-76369 placement
+//@ chunk-avy0g5d4.js:76317-76423 placement
 /**
  * 子项的 PR 号：从链接里解析，或 id 本身是数字。
  */
@@ -422,22 +421,22 @@ function prNumberOfChild(child) {
   if (prNumber !== null) return Number(prNumber);
   return /^\d+$/.test(child.id) ? Number(child.id) : undefined;
 }
-//@ chunk-93kwxas0.js:76369-76428 placement
+//@ chunk-avy0g5d4.js:76423-76482 placement
 function normalizePrStatusColor(status) {
   let prStatusColor = getPrStatusColor(status);
   return prStatusColor === "error" ? "warning" : prStatusColor;
 }
-//@ chunk-93kwxas0.js:76428-76465 placement
+//@ chunk-avy0g5d4.js:76482-76519 placement
 var PR_SORT_RANK = {
   error: 3,
   warning: 2,
   success: 1,
 };
-//@ chunk-93kwxas0.js:76465-76528 placement
+//@ chunk-avy0g5d4.js:76519-76582 placement
 function sortByRank(rows) {
   return [...rows].sort((left, right) => right.sortRank - left.sortRank);
 }
-//@ chunk-93kwxas0.js:76528-77217 placement
+//@ chunk-avy0g5d4.js:76582-77271 placement
 /**
  * PR 状态的显示片段（已合并/关闭、检查失败/进行/通过）。
  */
@@ -503,7 +502,7 @@ function prStatusSegments(status) {
     });
   return segments;
 }
-//@ chunk-93kwxas0.js:77217-77727 placement
+//@ chunk-avy0g5d4.js:77271-77781 placement
 /**
  * 生成会话的子行（frame、PR 链接及其状态）。
  */
@@ -542,9 +541,9 @@ function childFrameRows(children, statusByHref) {
     }),
   );
 }
-//@ chunk-93kwxas0.js:77727-77775 placement
+//@ chunk-avy0g5d4.js:77781-77829 placement
 var URL_RE = /https?:\/\/[^\s"'<>\\\u2026\x00-\x1f]+/;
-//@ chunk-93kwxas0.js:77775-78456 placement
+//@ chunk-avy0g5d4.js:77829-78510 placement
 /**
  * 渲染带 **粗体**、++强调++、代码和链接的单行文本。
  */
@@ -621,7 +620,7 @@ function InlineMarkup(props) {
   } else textNode = $[10];
   return textNode;
 }
-//@ chunk-93kwxas0.js:78456-78583 placement
+//@ chunk-avy0g5d4.js:78510-78637 placement
 /**
  * 行的无障碍前缀：“selected, pinned, 动词:”。
  */
@@ -631,7 +630,7 @@ function jobRowAriaLabel(activity, tempo, status, outcome, selected, pinned = fa
   let { word } = activityVerb(activity, tempo, status, outcome);
   return `${selectedPrefix}${pinnedPrefix}${word.toLowerCase()}:`;
 }
-//@ chunk-93kwxas0.js:78583-78723 placement
+//@ chunk-avy0g5d4.js:78637-78777 placement
 /**
  * 行首状态符号：非活跃时为点，忙碌/shell 时为空，循环任务和普通任务各有符号。
  */
@@ -641,7 +640,7 @@ function jobRowGlyph(state, muted, status) {
   if (isLoopJob(state)) return loopJobGlyphAlt();
   return loopJobGlyph();
 }
-//@ chunk-93kwxas0.js:78723-78895 placement
+//@ chunk-avy0g5d4.js:78777-78949 placement
 /**
  * Agents 视图的旋转指示帧；减少动态效果或读屏时为静态点。
  */
@@ -662,7 +661,7 @@ function useFleetSpinnerFrame() {
   let chars = spinnerChars;
   return chars[Math.floor(frame / 120) % chars.length];
 }
-//@ chunk-93kwxas0.js:78895-79070 placement
+//@ chunk-avy0g5d4.js:78949-79124 placement
 var FLEET_RECENT_WINDOW_MS = 172800000;
 var RECENT_LIST_GAP = 3;
 var PORCELAIN_GROUP_ROWS = 3;
@@ -678,7 +677,7 @@ var SIMPLE_BUCKET_KEYS = {
   live: "simple:live",
   done: "simple:done",
 };
-//@ chunk-93kwxas0.js:79070-79275 placement
+//@ chunk-avy0g5d4.js:79124-79329 placement
 /**
  * 会话归入 needs/live/done 中的哪个桶。
  */
@@ -690,7 +689,7 @@ function jobBucket_2(state, status) {
   if (state.tempo === "blocked" && state.needs && state.needs !== IDLE_NEEDS) return "needs";
   return "live";
 }
-//@ chunk-93kwxas0.js:79275-79429 placement
+//@ chunk-avy0g5d4.js:79329-79483 placement
 /**
  * 会话最近的有效时间戳（终止/首次终止/更新/创建）。
  */
@@ -702,7 +701,7 @@ function jobLatestTimestamp(state) {
     }
   return 0;
 }
-//@ chunk-93kwxas0.js:79429-79511 placement
+//@ chunk-avy0g5d4.js:79483-79565 placement
 function isDifferentDoneGroup(previous, nextGroup) {
   if (previous === undefined) return false;
   return !(
@@ -710,15 +709,15 @@ function isDifferentDoneGroup(previous, nextGroup) {
     simpleGroupOf(nextGroup) === SIMPLE_BUCKET_KEYS.done
   );
 }
-//@ chunk-93kwxas0.js:79511-79562 placement
+//@ chunk-avy0g5d4.js:79565-79616 placement
 function simpleGroupOf(group) {
   return group.group === SIMPLE_FINISHED ? SIMPLE_BUCKET_KEYS.done : group.group;
 }
-//@ chunk-93kwxas0.js:79562-79608 placement
+//@ chunk-avy0g5d4.js:79616-79662 placement
 function remainingRowsForTerminal(terminalRows, reserved) {
   return Math.max(0, terminalRows - RECENT_LIST_GAP - DONE_CAP_TITLE_ROWS - reserved);
 }
-//@ chunk-93kwxas0.js:79608-80705 placement
+//@ chunk-avy0g5d4.js:79662-80746 placement
 /**
  * 把会话分成 needs/live/done 等带计数的桶。
  */
@@ -780,11 +779,11 @@ function bucketJobs(jobs, { statusFor, now, fallbackOrigin, showFinishedEarlier,
     (needsCount + liveCount === 0 ? EMPTY_GROUP_ROWS : 0) +
     (doneRows.length > 0 ? 1 + FINISHED_SECTION_ROWS : 0);
   let doneCap = remainingRowsForTerminal(terminalRows, headerRows);
-  let oldCount = count(doneRows, (job) => now - jobLatestTimestamp(job.state) > FLEET_RECENT_WINDOW_MS);
+  let oldCount = countWhere(doneRows, (job) => now - jobLatestTimestamp(job.state) > FLEET_RECENT_WINDOW_MS);
   let max = Math.max(0, doneRows.length - oldCount - doneCap);
   let foldCount = showFinishedEarlier ? 0 : oldCount + max;
   let foldHidden = foldCount >= LIVE_GROUP_ROWS ? foldCount : 0;
-  let doneFoldHiddenFailed = count(
+  let doneFoldHiddenFailed = countWhere(
     doneRows.slice(doneRows.length - foldHidden),
     (job) => terminalOutcome(job.state.state) === "failure",
   );
@@ -802,14 +801,13 @@ function bucketJobs(jobs, { statusFor, now, fallbackOrigin, showFinishedEarlier,
     doneFoldHidden: foldHidden,
     doneFoldHiddenFailed,
     doneCap,
-    foldGroup: SIMPLE_FINISHED,
     runningCount: needsCount + liveCount,
     needsCount,
     workingCount,
     liveCount,
   };
 }
-//@ chunk-93kwxas0.js:80705-80972 placement
+//@ chunk-avy0g5d4.js:80746-81013 placement
 /**
  * 子任务进度：todo 完成数，或 agent/workflow 完成数。
  */
@@ -817,13 +815,13 @@ function fanProgressLabel(state) {
   let fan = state.fan ?? [];
   let filtered = fan.filter((item) => item.kind === "todo");
   if (filtered.length > 0)
-    return `${count(filtered, (item) => item.doneAt !== undefined)}/${filtered.length}`;
+    return `${countWhere(filtered, (item) => item.doneAt !== undefined)}/${filtered.length}`;
   let filtered_2 = fan.filter((item) => item.kind === "agent" || item.kind === "workflow");
   if (filtered_2.length > 0)
-    return `${count(filtered_2, (item) => item.doneAt !== undefined)}/${filtered_2.length} agents`;
+    return `${countWhere(filtered_2, (item) => item.doneAt !== undefined)}/${filtered_2.length} agents`;
   return;
 }
-//@ chunk-93kwxas0.js:80972-81074 placement
+//@ chunk-avy0g5d4.js:81013-81115 placement
 /**
  * “N tokens”，下行时带箭头。
  */
@@ -832,7 +830,7 @@ function formatTokenCount(tokens, withArrow) {
   let text = `${formatTokens(tokens)} tokens`;
   return withArrow ? `${figures_default.arrowDown} ${text}` : text;
 }
-//@ chunk-93kwxas0.js:81074-81330 placement
+//@ chunk-avy0g5d4.js:81115-81371 placement
 /**
  * 行的活动词与颜色：working 变暗，blocked 时区分 “Needs you” 与 “Idle”。
  */
@@ -857,7 +855,7 @@ function jobActivityDisplay(job, statusFor) {
         dim: true,
       };
 }
-//@ chunk-93kwxas0.js:81330-81418 placement
+//@ chunk-avy0g5d4.js:81371-81459 placement
 function jobAgeLabel(job, loopJobIds, loopKicks, nowMs) {
   return formatJobAgeOrEta(
     job,
@@ -865,11 +863,11 @@ function jobAgeLabel(job, loopJobIds, loopKicks, nowMs) {
     nowMs,
   );
 }
-//@ chunk-93kwxas0.js:81418-81481 placement
+//@ chunk-avy0g5d4.js:81459-81522 placement
 function jobTokenLabel(job, display) {
   return formatTokenCount(job.state.tokens, display.word === FLEET_BUCKET_LABELS.working);
 }
-//@ chunk-93kwxas0.js:81481-81851 placement
+//@ chunk-avy0g5d4.js:81522-81892 placement
 /**
  * 生成会话"需要你处理"的一行说明。
  */
@@ -885,11 +883,11 @@ function jobNeedsLine(job, display, status, columns) {
   let detail = job.state.detail;
   return detail && !isTerminalDetail(detail) ? truncate(jobPreviewText(job.state, detail)) : undefined;
 }
-//@ chunk-93kwxas0.js:81851-81909 placement
+//@ chunk-avy0g5d4.js:81892-81950 placement
 function groupCollapseKey(groupMode, group) {
   return group === "pinned" ? "pinned" : `${groupMode}:${group}`;
 }
-//@ chunk-93kwxas0.js:81909-82123 placement (2.1.88 match: prependModeCharacterToInput, 1)
+//@ chunk-avy0g5d4.js:81950-82164 placement (2.1.88 match: prependModeCharacterToInput, 1)
 function prependModeCharacterToInput(text, mode, jobs, cwdFilter) {
   let prNumber = mode === "bash" ? null : parsePrNumber(text);
   let prMatcher = prNumber ? prUrlMatcher(prNumber) : undefined;
@@ -902,7 +900,7 @@ function prependModeCharacterToInput(text, mode, jobs, cwdFilter) {
       : null;
   return matchesJob ? (jobs ?? []).find((job) => matchesCwd(job) && matchesJob(job.state))?.id : undefined;
 }
-//@ chunk-93kwxas0.js:82123-82217 placement
+//@ chunk-avy0g5d4.js:82164-82258 placement
 function parseDraftInput(query, mode, modeCharacterJobId, parseScope) {
   return modeCharacterJobId
     ? null
@@ -913,11 +911,11 @@ function parseDraftInput(query, mode, modeCharacterJobId, parseScope) {
         parseScope.routines,
       );
 }
-//@ chunk-93kwxas0.js:82217-82276 placement
+//@ chunk-avy0g5d4.js:82258-82317 placement
 function hasDispatchIntent(dispatch) {
   return !!(dispatch?.intent || dispatch?.routine || dispatch?.matched);
 }
-//@ chunk-93kwxas0.js:82276-82370 placement
+//@ chunk-avy0g5d4.js:82317-82411 placement
 function hasDispatchContent(dispatch) {
   return !!(
     dispatch &&
@@ -928,7 +926,7 @@ function hasDispatchContent(dispatch) {
       dispatch.exec !== undefined)
   );
 }
-//@ chunk-93kwxas0.js:82370-88328 placement
+//@ chunk-avy0g5d4.js:82411-88337 placement
 /**
  * 组合本地、接管的、远程、待创建会话及 PR 状态，生成 Agents 视图全部行（分组、过滤、折叠）。
  */
@@ -1129,9 +1127,9 @@ function buildFleetRows({
       doneFoldAt = earlierVisible.length >= doneCap + DONE_CAP_SLACK ? doneCap : 1 / 0;
   }
   let bandCounts = {
-    blocked: count(scopedJobs, (job) => jobTempo(job.state, liveStatus(job)) === "blocked"),
-    active: count(scopedJobs, (job) => jobTempo(job.state, liveStatus(job)) === "active"),
-    completed: count(scopedJobs, (job) => jobTempo(job.state, liveStatus(job)) === "completed"),
+    blocked: countWhere(scopedJobs, (job) => jobTempo(job.state, liveStatus(job)) === "blocked"),
+    active: countWhere(scopedJobs, (job) => jobTempo(job.state, liveStatus(job)) === "active"),
+    completed: countWhere(scopedJobs, (job) => jobTempo(job.state, liveStatus(job)) === "completed"),
   };
   let all = jobs_2.every((job) => job.id === initialJobId);
   let isOnboarding = !simpleView && byState && !query && all && !jobs_2[0]?.state.pinned;
@@ -1219,14 +1217,14 @@ function buildFleetRows({
   })();
   let enterIsNoop = !hasIntent && dispatch?.cwd !== undefined;
   let focusedIsPending = !!job && pendings.some((pending) => pending.id === job.id);
-  let focusedIsOrigin = !!job && job.id === initialJobId;
-  let runningCount = count(simpleWantsRemote ? [...localJobs, ...remoteJobs] : localJobs, (job) => {
+  let isFocusedRow = !!job && job.id === initialJobId;
+  let runningCount = countWhere(simpleWantsRemote ? [...localJobs, ...remoteJobs] : localJobs, (job) => {
     let bucket = jobBucket(job, prStatuses, liveStatus(job));
     return bucket === "blocked" || bucket === "working";
   });
   let enterLabel = hasIntent
     ? "create"
-    : focusedIsOrigin
+    : isFocusedRow
       ? "return"
       : job && isFailedSettledJob(job.state) && !heldInTerminal(job)
         ? "resume"
@@ -1245,7 +1243,6 @@ function buildFleetRows({
     queryIsFilter: isQueryOnly,
     hasNameFilter: nameFilter !== undefined,
     loopJobIds,
-    localJobs,
     scopedLocalJobs,
     scopedJobs,
     filtered: jobs_2,
@@ -1277,10 +1274,9 @@ function buildFleetRows({
     runningCount,
     enterLabel,
     focusedIsPending,
-    focusedIsOrigin,
   };
 }
-//@ chunk-93kwxas0.js:88328-88380 placement
+//@ chunk-avy0g5d4.js:88337-88389 placement
 function isDispatchablePath(cwd) {
   return isAbsolute(cwd) && !hasDotDotSegment(cwd) && !isNonWslUncPath(cwd) && !isNetworkRelatedPath(cwd);
 }

@@ -3,13 +3,17 @@
  *
  * 2.1.316 新增：plugin-authoring 技能的 scan_secrets 工具：分享 mod 前扫描文件夹中的密钥（读权限检查、合规开关、大小与链接限制）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jy3v56kg.js (52)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cm73gsrm.js (51), chunk-xjnnz630.js (1)
  * attribution: placement 51, sole-consumer 1
  */
+import { dirname, parse, join, basename, resolve } from "path";
 import { stat, lstat, readdir, open } from "fs/promises";
-import { join, basename, resolve } from "path";
+import { getPlatform } from "../../../utils/platform.js";
+import { readJunction } from "../../../utils/fsJunctions.js";
+import { realpathCacheEntry } from "../../../utils/permissions/protectedDirs.js";
+import { neverAllowsLocalWsl, isRealPathNonUnc } from "../../../utils/pathResolution.js";
 import { __commonJS, __export } from "../../../../runtime/bun-runtime.js";
 import {
   CLOUD_SURFACE_NOTE,
@@ -43,10 +47,8 @@ import { scanForSecrets_2 } from "../../../services/teamMemorySync/secretScanner
 import { isENOENT } from "../../../utils/errors.js";
 import { jsonParse, isSentinelInode } from "../../../utils/slowOperations.js";
 import { yieldToEventLoop } from "../../../native-ts/file-index/index.js";
-import { uniq } from "../../../utils/collections.js";
-import { getPlatform } from "../../../utils/platform.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
 import { readOnlyNoFollowFlags } from "../../../utils/platformTargets.js";
-import { readJunction } from "../../../utils/fsJunctions.js";
 import { GIT_LFS_POINTER_PREFIX } from "../../../utils/plugins/marketplaceGitCheckout.js";
 import { plural, urlPatternToRegex, cleanForDisplay, truncateWithCount } from "../../../utils/stringUtils.js";
 import { stripCombiningRepeated } from "../../../utils/sanitization.js";
@@ -71,18 +73,35 @@ import {
 import { childNameUnder } from "../../../plugins/functionHooks/devModsWatch.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../../services/analytics/featureTelemetry.js";
 import { policySettingsUnreadable } from "../../../utils/hooks/hooksConfigSnapshot.js";
-import { FILE_READ_TOOL_NAME } from "../../../tools/FileReadTool/constants.js";
+import { READ } from "../../../tools/FileReadTool/constants.js";
 import { isPolicyTier } from "../../../plugins/functionHooks/hookDispatch.js";
 import { getSettingsForSource } from "../../../utils/settings/settings.js";
 import { getPolicyAllowedSet } from "../../../utils/plugins/pluginPolicy.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-jy3v56kg.js:12745-12907 placement
+//@ chunk-xjnnz630.js:49428-49676 placement
+async function buildSecretScanResult(finding) {
+  if (getPlatform() !== "windows") return false;
+  let junction = await readJunction(finding);
+  switch (junction.kind) {
+    case "directory":
+      return false;
+    case "junction":
+    case "absent":
+      return true;
+    case "error": {
+      if (junction.code !== "EISDIR") return true;
+      let resolved = realpathCacheEntry(dirname(finding));
+      return resolved === null || neverAllowsLocalWsl(resolved) || !isRealPathNonUnc(parse(resolved).root);
+    }
+  }
+}
+//@ chunk-cm73gsrm.js:13899-14061 placement
 /**
  * plugin-authoring 内置插件声明的函数钩子能力清单。
  */
 var PLUGIN_AUTHORING_HOOK_SCAN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-jy3v56kg.js:12745", () => {
+deferInit("chunk-cm73gsrm.js:13899", () => {
   PLUGIN_AUTHORING_HOOK_SCAN = __commonJS(function (scanSecretsModule, scanSecretsExports) {
     scanSecretsExports.exports = {
       scan: {
@@ -93,14 +112,14 @@ deferInit("chunk-jy3v56kg.js:12745", () => {
     };
   });
 });
-//@ chunk-jy3v56kg.js:12907-12917 placement
+//@ chunk-cm73gsrm.js:14061-14071 placement
 /**
  * plugin-authoring 技能模块的导出表（分享面文案、技能名与描述、文件与提示词）。
  */
 var PLUGIN_AUTHORING_SKILL_MODULE = {};
-//@ chunk-jy3v56kg.js:12917-13502 placement
+//@ chunk-cm73gsrm.js:14071-14656 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-jy3v56kg.js:12917", () => {
+deferInit("chunk-cm73gsrm.js:14071", () => {
   __export(PLUGIN_AUTHORING_SKILL_MODULE, {
     CLOUD_SURFACE: () => CLOUD_SURFACE_NOTE,
     EXISTING_REMOTES_ONLY: () => GIT_PUSH_ONLY_SHARING_NOTE,
@@ -128,14 +147,14 @@ deferInit("chunk-jy3v56kg.js:12917", () => {
     skillPromptOf: () => buildPrompt,
   });
 });
-//@ chunk-jy3v56kg.js:13502-13511 placement
+//@ chunk-cm73gsrm.js:14656-14665 placement
 /**
  * scan_secrets 技能模块的导出表（工具名、spec、注册入口）。
  */
 var SECRET_SCAN_SKILL_MODULE = {};
-//@ chunk-jy3v56kg.js:13511-13655 placement
+//@ chunk-cm73gsrm.js:14665-14809 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-jy3v56kg.js:13511", () => {
+deferInit("chunk-cm73gsrm.js:14665", () => {
   __export(SECRET_SCAN_SKILL_MODULE, {
     SEND_FILE_TOOL: () => SENDUSERFILE,
     SKILL_NAME: () => PLUGIN_AUTHORING,
@@ -147,12 +166,12 @@ deferInit("chunk-jy3v56kg.js:13511", () => {
     registerHooks: () => registerSecretScanSkillHook,
   });
 });
-//@ chunk-jy3v56kg.js:13655-13671 placement
+//@ chunk-cm73gsrm.js:14809-14825 placement
 /**
  * 是否允许插件创作技能的 hooks 模块。
  */
 var isPluginAuthoringHooksAllowed = () => areHooksModulesAllowed();
-//@ chunk-jy3v56kg.js:13671-14565 placement
+//@ chunk-cm73gsrm.js:14825-15719 placement
 /**
  * scan_secrets 工具的名字、描述与输入 schema。
  */
@@ -175,11 +194,11 @@ var SCAN_SECRETS_TOOL_SPEC = {
     required: ["folder"],
   },
 };
-//@ chunk-jy3v56kg.js:14565-14604 placement
+//@ chunk-cm73gsrm.js:15719-15758 placement
 var SCAN_IT_LABEL = "Scan it";
 var CHECK_THEM_LABEL = "Check them";
 var PATH_LIST_CHUNK = 32;
-//@ chunk-jy3v56kg.js:14604-14678 placement
+//@ chunk-cm73gsrm.js:15758-15832 placement
 /**
  * 把文本结果包成工具结果（失败时带 isError）。
  */
@@ -193,12 +212,12 @@ function toolResultFromText(toolResult) {
         result: toolResult.text,
       };
 }
-//@ chunk-jy3v56kg.js:14678-14789 placement
+//@ chunk-cm73gsrm.js:15832-15943 placement
 var READ_UNAVAILABLE_REASON = "Read is not available in this session";
 var PERMISSION_CHECK_FAILED_REASON = "the secret scan could not check its permission";
 var MAX_CACHED_DECISIONS = 64;
 var MAX_SEEN_PATHS = 64;
-//@ chunk-jy3v56kg.js:14789-17540 placement
+//@ chunk-cm73gsrm.js:15943-18694 placement
 /**
  * 在 skill.prompt 中注入 scan_secrets 是否可用的说明（合规关闭、托管设置不可读等）。
  */
@@ -398,7 +417,7 @@ The secret scan tool is not available in this session: ` +
       },
     ).catch((error, refusal, handledError) => handledError(refusal));
 }
-//@ chunk-jy3v56kg.js:17540-20511 placement
+//@ chunk-cm73gsrm.js:18694-21665 placement
 /**
  * 检查扫描能否读取目标文件夹（权限规则、托管读钩子）。
  */
@@ -552,7 +571,7 @@ The scan reads each file in the folder and its subfolders, except .git, and repo
         answeredRule,
       };
 }
-//@ chunk-jy3v56kg.js:20511-20604 placement
+//@ chunk-cm73gsrm.js:21665-21758 placement
 /**
  * 记下已见路径，超过上限时逐出最早加入的。
  */
@@ -561,7 +580,7 @@ function rememberPath(toolUseId, toolUseId_2) {
   toolUseId.add(toolUseId_2);
   if (toolUseId.size > MAX_SEEN_PATHS) toolUseId.delete(toolUseId.values().next().value);
 }
-//@ chunk-jy3v56kg.js:20604-20679 placement
+//@ chunk-cm73gsrm.js:21758-21833 placement
 /**
  * 记下某路径的判定结果，超过缓存上限时逐出最早的。
  */
@@ -569,7 +588,7 @@ function rememberDecision(seenPaths, toolUseId, decision) {
   seenPaths.set(toolUseId, decision);
   if (seenPaths.size > MAX_CACHED_DECISIONS) seenPaths.delete(seenPaths.keys().next().value);
 }
-//@ chunk-jy3v56kg.js:20679-20979 placement
+//@ chunk-cm73gsrm.js:21833-22133 placement
 /**
  * 托管设置无法读取时说明「扫描不读文件」的两个文案。
  */
@@ -577,11 +596,11 @@ var MANAGED_READ_HOOK_NOTE =
   "your organization runs its own checks before files are read, and the scan can't run those checks, so it doesn't read files here.";
 var MANAGED_SETTINGS_UNREADABLE_NOTE =
   "your organization's managed settings could not be read, so the scan can't tell whether they check files before they're read, and it doesn't read files here.";
-//@ chunk-jy3v56kg.js:20979-21094 placement
+//@ chunk-cm73gsrm.js:22133-22248 placement
 function askNotPossibleRefusal(folder) {
   return `the permission settings ask before the scan reads ${folder}, and this session cannot ask anyone.`;
 }
-//@ chunk-jy3v56kg.js:21094-21598 placement
+//@ chunk-cm73gsrm.js:22248-22752 placement
 /**
  * 合规关闭扫描的原因文案与对应的简短版本。
  */
@@ -596,7 +615,7 @@ var SCAN_OFF_REASONS_SHORT = {
 };
 var TOOL_NOT_LISTED_REASON =
   "Claude Code did not list it, which usually means a permission rule or an organization's MCP server policy blocks it.";
-//@ chunk-jy3v56kg.js:21598-21752 placement
+//@ chunk-cm73gsrm.js:22752-22906 placement
 async function registerScanTool(host) {
   try {
     let { tool } = await host.tool.register(SCAN_SECRETS_TOOL_SPEC);
@@ -605,14 +624,14 @@ async function registerScanTool(host) {
     return describeNoBuiltinTools(error instanceof Error ? error.message : String(error));
   }
 }
-//@ chunk-jy3v56kg.js:21752-21839 placement
+//@ chunk-cm73gsrm.js:22906-22993 placement
 /**
  * 当前 MCP 工具列表里是否有该工具名。
  */
 async function isMcpToolListed(host, toolName) {
   return (await host.tool.list().catch(() => [])).some((listedTool) => listedTool.name === toolName);
 }
-//@ chunk-jy3v56kg.js:21839-22343 placement
+//@ chunk-cm73gsrm.js:22993-23497 placement
 function describeNoBuiltinTools(registrationError) {
   if (registrationError.includes("--bare"))
     return "this session runs with --bare, which takes no tools from built-in plugins.";
@@ -622,7 +641,7 @@ function describeNoBuiltinTools(registrationError) {
   if (registrationError.includes("no session is bound")) return "no session was running to add it to.";
   return `Claude Code refused to add it (${registrationError.replace(/^.*?\$\.tool\.register:\s*/s, "").replace(/[.\s]+$/, "")}).`;
 }
-//@ chunk-jy3v56kg.js:22343-22743 placement
+//@ chunk-cm73gsrm.js:23497-23897 placement
 /**
  * 构建不带扫描时注册 scan_secrets 的 skill 钩子：把一组恒等/恒假的 host 桩塞给 registerSecretScanSkillHook，使 skill 提示词仍能告诉模型“此会话无法扫描、不能分享”。
  */
@@ -658,7 +677,7 @@ function registerScanHooksWithoutScanning(reason) {
     scan: async () => failureResult("this build carries no scan."),
   });
 }
-//@ chunk-jy3v56kg.js:22843-23056 placement
+//@ chunk-cm73gsrm.js:23997-24210 placement
 /**
  * 扫描上限与检测用的常量：总字节、目录条目、插件清单、密钥正则、类型标签与占位符。
  */
@@ -670,7 +689,7 @@ var MAX_MANIFEST_BYTES = 1048576;
 var ANTHROPIC_KEY_IN_PATH_REGEX = /(?:^|[^A-Za-z0-9_-])sk-ant-[A-Za-z0-9_-]{40,}/;
 var ANTHROPIC_KEY_LABEL = "Anthropic Key";
 var SECRET_IN_NAME_PLACEHOLDER = "<name holding a secret>";
-//@ chunk-jy3v56kg.js:23056-23182 placement
+//@ chunk-cm73gsrm.js:24210-24336 placement
 function redactSecretsInPath(path, placeholder = SECRET_IN_NAME_PLACEHOLDER) {
   let joined = path
     .split(/([\\/])/)
@@ -680,22 +699,22 @@ function redactSecretsInPath(path, placeholder = SECRET_IN_NAME_PLACEHOLDER) {
     .join("");
   return scanForSecrets_2(joined).length > 0 ? placeholder : joined;
 }
-//@ chunk-jy3v56kg.js:23182-23243 placement
+//@ chunk-cm73gsrm.js:24336-24397 placement
 /**
  * 报告里展示路径前先脱敏，并把占位符还原成「含密钥的名字」。
  */
 function redactPathForReport(path) {
   return quoteForReport(redactSecretsInPath(path, "\x00")).replaceAll("\x00", SECRET_IN_NAME_PLACEHOLDER);
 }
-//@ chunk-jy3v56kg.js:23243-23511 placement
+//@ chunk-cm73gsrm.js:24397-24665 placement
 function quoteForReport(text) {
   let replaced = text.replaceAll("\x00", "_");
   if (/^[!-~](?:[ -~]*[!-~])?$/.test(replaced) && !/["\\:<>]/.test(replaced)) return text;
   return `"${[...text].map((char) => (char === "\x00" ? char : char === '"' || char === "\\" ? `\\${char}` : /[ -~]/.test(char) && char !== "<" && char !== ">" ? char : `\\u{${char.codePointAt(0).toString(16)}}`)).join("")}"`;
 }
-//@ chunk-jy3v56kg.js:23511-23527 placement
+//@ chunk-cm73gsrm.js:24665-24681 placement
 var REPLACEMENT_CHAR = "\uFFFD";
-//@ chunk-jy3v56kg.js:23527-25732 placement
+//@ chunk-cm73gsrm.js:24681-26886 placement
 /**
  * 收集要扫描的文件（拒绝 .git 内、不可读、超总大小、链接/硬链接/LFS 指针）。
  */
@@ -841,7 +860,10 @@ async function collectScanFiles(
         error: FOLDER_CHANGED_ERROR,
       };
   let flattened = [...scanFile.files.keys(), ...scanFile.skipped.keys()].flatMap((path) => {
-    let kinds = uniq([...(findingsByPath.get(path) ?? []), ...scanForSecrets_2(path)]);
+    let kinds = normalizeCaseForComparison_2([
+      ...(findingsByPath.get(path) ?? []),
+      ...scanForSecrets_2(path),
+    ]);
     return kinds.length > 0
       ? [
           {
@@ -873,7 +895,7 @@ async function collectScanFiles(
       }),
   };
 }
-//@ chunk-jy3v56kg.js:25732-26716 placement
+//@ chunk-cm73gsrm.js:26886-27870 placement
 async function readScanFileSafely(rootPath, rootIdentity) {
   let files = new Map();
   let skipped = new Map();
@@ -924,7 +946,7 @@ async function readScanFileSafely(rootPath, rootIdentity) {
           size: Number(stats.size),
         });
       else if (stats.isDirectory()) {
-        if (await scanDirectory(join(rootPath, relPath))) skipped.set(relPath, "link");
+        if (await buildSecretScanResult(join(rootPath, relPath))) skipped.set(relPath, "link");
         else {
           folderIds.set(relPath, {
             dev: stats.dev,
@@ -945,7 +967,7 @@ async function readScanFileSafely(rootPath, rootIdentity) {
     capped,
   };
 }
-//@ chunk-jy3v56kg.js:26716-26891 placement (2.1.88 match: getFileIdentity, 1)
+//@ chunk-cm73gsrm.js:27870-28045 placement (2.1.88 match: getFileIdentity, 1)
 async function getFileIdentity(rootPath, relPath, folderIds) {
   let folderId = folderIds.get(relPath);
   if (folderId === undefined) return true;
@@ -956,17 +978,17 @@ async function getFileIdentity(rootPath, relPath, folderIds) {
   });
   return stats?.isDirectory() === true && stats.dev === folderId.dev && stats.ino === folderId.ino;
 }
-//@ chunk-jy3v56kg.js:26891-26937 placement
+//@ chunk-cm73gsrm.js:28045-28091 placement
 var SCAN_SKIP_DIRS = [".mcpb-cache", ".claude-plugin/types"];
-//@ chunk-jy3v56kg.js:26937-27001 placement
+//@ chunk-cm73gsrm.js:28091-28155 placement
 function isSkippedScanDir(name) {
   return SCAN_SKIP_DIRS.some((skipDir) => name === skipDir || name.startsWith(`${skipDir}/`));
 }
-//@ chunk-jy3v56kg.js:27001-27048 placement
+//@ chunk-cm73gsrm.js:28155-28202 placement
 function isGitDir(name) {
   return name.toLowerCase() === ".git";
 }
-//@ chunk-jy3v56kg.js:27048-27580 placement
+//@ chunk-cm73gsrm.js:28202-28734 placement
 async function isWindowsReservedPath(filePath, stats) {
   if (getPlatform() === "windows") {
     let linkStats = await lstat(filePath, {
@@ -1010,12 +1032,12 @@ async function isWindowsReservedPath(filePath, stats) {
     });
   }
 }
-//@ chunk-jy3v56kg.js:27580-27634 placement
+//@ chunk-cm73gsrm.js:28734-28788 placement
 /**
  * 扫描期间文件夹发生变化的错误文案。
  */
 var FOLDER_CHANGED_ERROR = "the folder changed while it was being scanned";
-//@ chunk-jy3v56kg.js:27634-27763 placement (2.1.88 match: getFileIdentity, 1)
+//@ chunk-cm73gsrm.js:28788-28917 placement (2.1.88 match: getFileIdentity, 1)
 async function getFileIdentity_2(filePath) {
   let stats = await stat(filePath, {
     bigint: true,
@@ -1029,23 +1051,18 @@ async function getFileIdentity_2(filePath) {
         ino: stats.ino,
       };
 }
-//@ chunk-jy3v56kg.js:27763-27841 placement (2.1.88 match: getFileIdentity, 0.794)
+//@ chunk-cm73gsrm.js:28917-28995 placement (2.1.88 match: getFileIdentity, 0.795)
 async function getFileIdentity_3(filePath, name) {
   let stats = await getFileIdentity_2(filePath);
   return stats?.dev === name.dev && stats.ino === name.ino;
 }
-//@ chunk-jy3v56kg.js:27841-27929 placement (2.1.88 match: scanDirectory, 0.766)
-async function scanDirectory(dirPath) {
-  if (getPlatform() !== "windows") return false;
-  return (await readJunction(dirPath)).kind !== "directory";
-}
-//@ chunk-jy3v56kg.js:28144-28246 sole-consumer
+//@ chunk-cm73gsrm.js:29210-29312 sole-consumer
 function scanBufferForSecrets(buffer) {
   let str = buffer.toString("utf8");
   let findings = scanForSecrets_2(str);
   return findings.length === 0 && str.startsWith(GIT_LFS_POINTER_PREFIX) ? "lfs pointer" : findings;
 }
-//@ chunk-jy3v56kg.js:28246-29247 placement
+//@ chunk-cm73gsrm.js:29312-30313 placement
 /**
  * 报告用的上限与未扫描原因的说明文案（单数/复数两套）。
  */
@@ -1056,7 +1073,7 @@ var MAX_SECRET_KINDS_LISTED;
 var NOT_SCANNED_REASONS;
 var NOT_SCANNED_REASONS_PLURAL;
 var regExp;
-deferInit("chunk-jy3v56kg.js:28246", () => {
+deferInit("chunk-cm73gsrm.js:29312", () => {
   SCAN_MAX_LISTED = 100;
   MAX_LISTED_NOT_SCANNED = 30;
   MAX_REPORT_LINE_CHARS = 300;
@@ -1089,7 +1106,7 @@ deferInit("chunk-jy3v56kg.js:28246", () => {
     "gu",
   );
 });
-//@ chunk-jy3v56kg.js:29247-29578 placement
+//@ chunk-cm73gsrm.js:30313-30644 placement
 function truncateForReport(text, maxChars) {
   if (text.length <= maxChars) return text;
   let chars = text.match(regExp) ?? [];
@@ -1110,21 +1127,21 @@ function truncateForReport(text, maxChars) {
   let omittedChars = text.length - head.length - tail.length;
   return `${head}\u2026(${omittedChars} characters left out)\u2026${tail}`;
 }
-//@ chunk-jy3v56kg.js:29578-29680 placement
+//@ chunk-cm73gsrm.js:30644-30746 placement
 function sanitizeForReport(text, maxChars) {
   let path = cleanForDisplay(stripCombiningRepeated(text)).replace(/[<>]/g, (char) =>
     char === "<" ? "\\u{3c}" : "\\u{3e}",
   );
   return truncateForReport(redactSecretsInPath(path), maxChars);
 }
-//@ chunk-jy3v56kg.js:29680-29724 placement
+//@ chunk-cm73gsrm.js:30746-30790 placement
 /**
  * 脱敏、去重复组合字符并截断的错误文本。
  */
 function sanitizeErrorText(error) {
   return truncateWithCount(redactSecretsInPath(cleanForDisplay(stripCombiningRepeated(error))), 400);
 }
-//@ chunk-jy3v56kg.js:29724-31029 placement
+//@ chunk-cm73gsrm.js:30790-32095 placement
 function formatScanSkipped(path, scanResult) {
   let shownPath = sanitizeForReport(path, 200);
   if (!scanResult.ok)
@@ -1184,13 +1201,13 @@ function formatScanSkipped(path, scanResult) {
     isError: false,
   };
 }
-//@ chunk-jy3v56kg.js:31029-31138 placement
+//@ chunk-cm73gsrm.js:32095-32204 placement
 function summarizeSecretKinds(kinds) {
   let joined = kinds.slice(0, MAX_SECRET_KINDS_LISTED).join(", ");
   let omittedCount = kinds.length - MAX_SECRET_KINDS_LISTED;
   return omittedCount > 0 ? `${joined} and ${omittedCount} more ${plural(omittedCount, "kind")}` : joined;
 }
-//@ chunk-jy3v56kg.js:31138-31233 placement
+//@ chunk-cm73gsrm.js:32204-32299 placement
 /**
  * 拼出「路径 密钥种类: 说明」的一行（按长度上限截断）。
  */
@@ -1198,7 +1215,7 @@ function formatSecretFinding(finding, path, lineNumber) {
   let max = Math.max(40, MAX_REPORT_LINE_CHARS - lineNumber.length - finding.length - 3);
   return `${finding} ${truncateForReport(redactPathForReport(path), max)}: ${lineNumber}`;
 }
-//@ chunk-jy3v56kg.js:31233-31366 placement
+//@ chunk-cm73gsrm.js:32299-32432 placement
 function summarizeNotScannedReasons(paths) {
   let counts = new Map();
   for (let { reason } of paths) counts.set(reason, (counts.get(reason) ?? 0) + 1);
@@ -1206,7 +1223,7 @@ function summarizeNotScannedReasons(paths) {
     .map(([reason, count]) => `${count} ${NOT_SCANNED_REASONS_PLURAL[reason](count)}`)
     .join("; ");
 }
-//@ chunk-jy3v56kg.js:31495-31585 placement
+//@ chunk-cm73gsrm.js:32561-32651 placement
 /**
  * 扫描是否被合规设置关闭：命中 hipaa/zdr 污点为 tainted，策略未载入为 pending。
  */
@@ -1218,12 +1235,12 @@ function scanOffReason() {
       ? "pending"
       : undefined;
 }
-//@ chunk-jy3v56kg.js:31585-31752 placement
+//@ chunk-cm73gsrm.js:32651-32818 placement
 var PLUGIN_FILE_EXTENSION; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var lastPackagedModState;
 var stringOrStringArraySchema;
 var attachmentsResultSchema;
-deferInit("chunk-jy3v56kg.js:31585", () => {
+deferInit("chunk-cm73gsrm.js:32651", () => {
   PLUGIN_FILE_EXTENSION = ".plugin";
   lastPackagedModState = identity(createValueSlot(), (slot) => slot.set(undefined));
   stringOrStringArraySchema = DoctorLazy(() =>
@@ -1240,7 +1257,7 @@ deferInit("chunk-jy3v56kg.js:31585", () => {
     }),
   );
 });
-//@ chunk-jy3v56kg.js:31752-31812 placement
+//@ chunk-cm73gsrm.js:32818-32878 placement
 function noteLastPackagedMod(isClean, isClean_2) {
   lastPackagedModState.set({
     session: getSessionId(),
@@ -1248,11 +1265,11 @@ function noteLastPackagedMod(isClean, isClean_2) {
     isClean: isClean_2,
   });
 }
-//@ chunk-jy3v56kg.js:31812-31841 placement
+//@ chunk-cm73gsrm.js:32878-32907 placement
 function clearLastPackagedMod() {
   lastPackagedModState.set(undefined);
 }
-//@ chunk-jy3v56kg.js:31841-32633 placement
+//@ chunk-cm73gsrm.js:32907-33699 placement
 function recordPackageHandOver(files, result) {
   let folder = skillWatchStateByHost.get()?.folder;
   let parsedFiles = stringOrStringArraySchema().safeParse(files);
@@ -1295,7 +1312,7 @@ function recordPackageHandOver(files, result) {
     clearLastPackagedMod();
   }
 }
-//@ chunk-jy3v56kg.js:32633-33118 placement
+//@ chunk-cm73gsrm.js:33699-34184 placement
 function buildScanCheckHooks() {
   if (policySettingsUnreadable()) return "unreadable";
   if (
@@ -1303,7 +1320,7 @@ function buildScanCheckHooks() {
       hasModuleHookingSite(
         file,
         {
-          tool: FILE_READ_TOOL_NAME,
+          tool: READ,
         },
         getLoadedModulesForSite(file).filter((policyTool) => isPolicyTier(policyTool.name)),
       ),
@@ -1333,6 +1350,7 @@ function buildScanCheckHooks() {
     : undefined;
 }
 export {
+  buildSecretScanResult,
   REPLACEMENT_CHAR,
   ANTHROPIC_KEY_LABEL,
   ANTHROPIC_KEY_IN_PATH_REGEX,

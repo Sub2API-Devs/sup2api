@@ -3,32 +3,32 @@
  *
  * 2.1.316 新增：TaskUpdate 工具输入别名
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: placement 3
  */
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 
-//@ chunk-e6aww6q8.js:1778957-1779002 placement
+//@ chunk-5xgkngpb.js:1855927-1855972 placement
 /**
  * TaskUpdate 中任务 id 的别名字段（id、task_id）。
  */
 var TASK_ID_ALIASES = ["id", "task_id"];
 var ACTIVE_FORM_ALIASES = ["active_form"];
-//@ chunk-e6aww6q8.js:1779002-1779060 placement
+//@ chunk-5xgkngpb.js:1855972-1856030 placement
 /**
  * 判断值是非空字符串（去空白后）。
  */
 function isNonBlankString(value) {
   return typeof value === "string" && value.trim() !== "";
 }
-//@ chunk-e6aww6q8.js:1779060-1779327 placement
+//@ chunk-5xgkngpb.js:1856030-1856297 placement
 /**
  * 把别名字段改为 taskId/activeForm。
  */
 function normalizeTaskInputAliases(rawInput) {
-  if (!isPlainObject_5(rawInput)) return null;
+  if (!isPlainObject_6(rawInput)) return null;
   let appliedAliases = [];
   let input = {
     ...rawInput,

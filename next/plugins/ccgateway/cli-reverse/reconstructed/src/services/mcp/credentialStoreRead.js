@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 凭据存储读取
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cyj440je.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fmy4vc7c.js (6)
  * attribution: placement 6
  */
 import { getSecureStorage, primarySecureStoreKind } from "../../utils/secureStorage/index.js";
@@ -19,7 +19,7 @@ import { logMCPDebug } from "../../utils/log.js";
 import { McpCredentialStoreUnavailableError } from "./client.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-cyj440je.js:6430-6557 placement
+//@ chunk-fmy4vc7c.js:6808-6935 placement
 /**
  * 读取 MCP OAuth 令牌存储（可指定存储实例，读取失败返回 undefined）。
  */
@@ -28,11 +28,11 @@ async function readMcpOAuthStore(challenge) {
   let secureStorageForMcp = await readSecureStorageForMcp(challenge);
   return secureStorageForMcp === READ_FAILED ? undefined : secureStorageForMcp?.mcpOAuth;
 }
-//@ chunk-cyj440je.js:6557-6738 placement
+//@ chunk-fmy4vc7c.js:6935-7116 placement
 var FAILED_READ_RETRY_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EMPTY_READ_CACHE_MS;
 var credentialReadState;
-deferInit("chunk-cyj440je.js:6557", () => {
+deferInit("chunk-fmy4vc7c.js:6935", () => {
   FAILED_READ_RETRY_MS = 1000;
   EMPTY_READ_CACHE_MS = 30000;
   credentialReadState = new HostScoped(() => ({
@@ -49,14 +49,14 @@ deferInit("chunk-cyj440je.js:6557", () => {
     },
   }));
 });
-//@ chunk-cyj440je.js:6738-6799 placement
+//@ chunk-fmy4vc7c.js:7116-7177 placement
 /**
  * 判断读取结果是否为空（区别于 READ_FAILED）。
  */
 function isEmptyRead(data) {
   return data !== READ_FAILED && (!data || Object.keys(data).length === 0);
 }
-//@ chunk-cyj440je.js:6799-8093 placement
+//@ chunk-fmy4vc7c.js:7177-8472 placement
 /**
  * 为 MCP 读取安全存储：带服务器挑战信息时，凭据缺失且在非交互的钥匙串环境下会再做一次严格读取（读到太晚则让本次请求失败以便下次带上）；普通读取在内容为空时用严格读取复核，结果按失败/为空分别短暂缓存。
  */
@@ -126,7 +126,7 @@ async function readSecureStorageForMcp(challenge) {
   let inFlight = await readState.inFlight;
   return inFlight === READ_FAILED && !readState.seenPopulated ? data : inFlight;
 }
-//@ chunk-cyj440je.js:8093-8181 placement
+//@ chunk-fmy4vc7c.js:8472-8560 placement
 /**
  * 标记读取状态见过内容并递增代号。
  */
@@ -135,7 +135,7 @@ function markPopulated(readState) {
   readState.generation++;
   if (readState.verdict === "empty") readState.verdict = undefined;
 }
-//@ chunk-cyj440je.js:8181-8407 placement
+//@ chunk-fmy4vc7c.js:8560-8786 placement
 async function settleStrictRead(readState, strictReader) {
   try {
     let generation = readState.generation;

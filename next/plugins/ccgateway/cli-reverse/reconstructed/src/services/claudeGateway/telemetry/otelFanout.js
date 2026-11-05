@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：网关 OTEL 遥测扇出
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (4)
  * attribution: placement 4
  */
 import { createGoogleHeaderProvider } from "./googleAuth.js";
 import { gatewayLog } from "../../gateway/gatewayBanner.js";
 import { ssrfSafeFetch } from "../ssrfGuard.js";
 
-//@ chunk-1ny7cxrt.js:1452744-1452851 placement
+//@ chunk-1hnjmk23.js:1475672-1475779 placement
 /**
  * 用户是否属于管理员组。
  */
@@ -23,7 +23,7 @@ function isAdminGroupMember(groups, admin) {
     (groups ?? []).some((group) => admin.admin_groups.includes(group))
   );
 }
-//@ chunk-1ny7cxrt.js:1452851-1452948 placement
+//@ chunk-1hnjmk23.js:1475779-1475876 placement
 /**
  * 熔断持续毫秒数（30 秒）。
  */
@@ -35,14 +35,14 @@ var OTLP_PATH_KINDS = {
 var MAX_OTLP_INFLIGHT = 128;
 var OTLP_DEST_FAIL_THRESHOLD = 5;
 var OTLP_DEST_BREAKER_MS = 30000;
-//@ chunk-1ny7cxrt.js:1452948-1453017 placement
+//@ chunk-1hnjmk23.js:1475876-1475945 placement
 /**
  * 去掉 URL 里的 userinfo，用于日志输出。
  */
 function stripUrlCredentials(value) {
   return String(value).replace(/(\b\w+:\/\/)[^@/]+@/g, "$1");
 }
-//@ chunk-1ny7cxrt.js:1453017-1454873 placement
+//@ chunk-1hnjmk23.js:1475945-1477801 placement
 /**
  * OTLP 转发器：把客户端遥测并行转发到各目标（限并发、Google 认证、按目标熔断 30 秒）。
  */

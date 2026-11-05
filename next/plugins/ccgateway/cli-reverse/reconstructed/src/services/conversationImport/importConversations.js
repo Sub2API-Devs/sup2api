@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：导入 claude.ai 导出的对话（CLAUDE_IMPORT_CONVERSATIONS）：解析导出包、转换为转录、导入附件与 Artifact
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sdzpqjn8.js (40)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gma6wm57.js (40)
  * attribution: placement 39, layout 1
  */
 import { writeFile, mkdir, stat, readFile } from "fs/promises";
@@ -34,7 +34,7 @@ import { getRootSession } from "../../bootstrap/state.js";
 import { identityAgentId, hashAgentId } from "../../utils/agentId.js";
 import { applyPermissionRulesToPermissionContext } from "../../utils/permissions/permissions.js";
 import { loadAllPermissionRulesFromDisk } from "../../utils/permissions/permissionsLoader.js";
-import { commandQueueManager } from "../../utils/messageQueueManager.js";
+import { getProcessQueue } from "../../utils/messageQueueManager.js";
 import { mainAgentContext } from "../../utils/agentContext.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
 import { TOOL_CATALOG } from "../../tools.js";
@@ -69,14 +69,14 @@ import { logError } from "../../utils/log.js";
 import { setBgExitCause } from "../../utils/bgExitSidecars.js";
 import { stripControlChars } from "../../utils/settings/writeQueues.js";
 
-//@ chunk-sdzpqjn8.js:16789-16911 placement
+//@ chunk-gma6wm57.js:18002-18124 placement
 /**
  * 匹配音频/视频扩展名的正则（导入时不当作文本处理）。
  */
 var CLAUDE_AI_EXPORT_NAMESPACE = "5f3a2c5e-6b8f-4b27-9c0e-2d7f1a9b3c44";
 var SAFE_ID_RE = /^[a-zA-Z0-9_-]+$/;
 var AUDIO_VIDEO_EXT_RE = /\.(mp3|m4a|mp4|wav|ogg|oga|opus|flac|aac|webm)$/i;
-//@ chunk-sdzpqjn8.js:16911-17034 placement
+//@ chunk-gma6wm57.js:18124-18247 placement
 /**
  * 宽松数组 schema：非数组视为空，元素逐个校验，丢弃不合法的。
  */
@@ -90,7 +90,7 @@ function lenientArrayOf(schema) {
       }),
     );
 }
-//@ chunk-sdzpqjn8.js:17034-18087 placement
+//@ chunk-gma6wm57.js:18247-19300 placement
 /**
  * 导出摘要的 schema（账号、各对话/项目的条数）。
  */
@@ -193,21 +193,21 @@ var accountStatsSchema = DoctorLazy(() =>
     ),
   }),
 );
-//@ chunk-sdzpqjn8.js:18087-18144 placement
+//@ chunk-gma6wm57.js:19300-19357 placement
 /**
  * 把任意字符串清洗成安全文件名片段（非法字符换成 _）。
  */
 function sanitizeFilenameSegment(name) {
   return name.replace(/[^a-zA-Z0-9._-]+/g, "_");
 }
-//@ chunk-sdzpqjn8.js:18144-18193 placement
+//@ chunk-gma6wm57.js:19357-19406 placement
 /**
  * 安全文件名片段，最多 128 字符，空时用 "file"。
  */
 function safeFilenameSegment(name) {
   return sanitizeFilenameSegment(name).slice(0, 128) || "file";
 }
-//@ chunk-sdzpqjn8.js:18193-18516 placement
+//@ chunk-gma6wm57.js:19406-19729 placement
 function PROJECT_DOC_NAMES(name) {
   let replaced = normalizeCaseForComparison(name).replace(TRAILING_DOTS_OR_SPACES_RE, "");
   return replaced === "claude.md" ||
@@ -227,7 +227,7 @@ function PROJECT_DOC_NAMES(name) {
     ? `imported-${name}`
     : name;
 }
-//@ chunk-sdzpqjn8.js:18516-18586 placement
+//@ chunk-gma6wm57.js:19729-19799 placement
 /**
  * 在文件名里拼上 file_uuid（有值时）。
  */
@@ -236,7 +236,7 @@ function fileUuidFilename(fileUuid, suffix) {
     ? `${fileUuid}-${safeFilenameSegment(suffix)}`
     : fileUuid;
 }
-//@ chunk-sdzpqjn8.js:18586-18703 placement (2.1.88 match: tryCreateExclusive, 1)
+//@ chunk-gma6wm57.js:19799-19916 placement (2.1.88 match: tryCreateExclusive, 1)
 async function tryCreateExclusive(path, content) {
   return writeFile(path, content, {
     mode: 384,
@@ -249,7 +249,7 @@ async function tryCreateExclusive(path, content) {
     },
   );
 }
-//@ chunk-sdzpqjn8.js:18703-18774 placement
+//@ chunk-gma6wm57.js:19916-19987 placement
 /**
  * 非无盘会话时创建目录（权限 0700）。
  */
@@ -260,7 +260,7 @@ async function ensureDirUnlessDiskless(projectDir, diskless) {
     mode: 448,
   });
 }
-//@ chunk-sdzpqjn8.js:18774-18913 placement
+//@ chunk-gma6wm57.js:19987-20126 placement
 async function pathExists(path, storageRef) {
   if (storageRef) {
     let statResult = await storageRef.backend.statMeta(storageRef.key);
@@ -271,7 +271,7 @@ async function pathExists(path, storageRef) {
     () => false,
   );
 }
-//@ chunk-sdzpqjn8.js:18913-19384 placement
+//@ chunk-gma6wm57.js:20126-20597 placement
 async function appendImportedTranscript(dir, lines, storageRef) {
   if (storageRef && lines.length > 0) {
     if (await pathExists(dir, storageRef)) return false;
@@ -318,7 +318,7 @@ async function appendImportedTranscript(dir, lines, storageRef) {
     },
   );
 }
-//@ chunk-sdzpqjn8.js:19384-19474 placement
+//@ chunk-gma6wm57.js:20597-20687 placement
 /**
  * 取消息的正文文本（优先 content 里的 text 块，否则 message.text）。
  */
@@ -327,7 +327,7 @@ function messageText(content) {
     content.content.find((block) => block.type === "text" && block.text !== undefined)?.text ?? content.text
   );
 }
-//@ chunk-sdzpqjn8.js:19474-19646 placement
+//@ chunk-gma6wm57.js:20687-20859 placement
 function exportMessageText(message, prefixLines) {
   let text = messageText(message);
   let joined = message.attachments
@@ -349,7 +349,7 @@ ${attachment.extracted_content}
     joined
   );
 }
-//@ chunk-sdzpqjn8.js:19646-19761 placement
+//@ chunk-gma6wm57.js:20859-20974 placement
 /**
  * 标题扩展名最多保留的字符数（64）。
  */
@@ -364,7 +364,7 @@ var CHAR_TO_TOKEN_ESTIMATE = 64;
 var STR_REPLACE_PENALTY_DIVISOR = 100;
 var MAX_CODE_UNITS_IN_DROP = 200;
 var MAX_TITLE_EXTENSION_CHARS = 64;
-//@ chunk-sdzpqjn8.js:19761-19919 placement
+//@ chunk-gma6wm57.js:20974-21132 placement
 function replaceFirstText(content, oldStr, newStr) {
   if (newStr === undefined) return;
   if (content === undefined) return newStr;
@@ -373,14 +373,14 @@ function replaceFirstText(content, oldStr, newStr) {
   if (needle === "") return;
   return content.replace(needle, () => newStr);
 }
-//@ chunk-sdzpqjn8.js:19919-20093 placement
+//@ chunk-gma6wm57.js:21132-21306 placement
 function replaceUniqueText(content, oldStr, newStr) {
   if (content === undefined || oldStr === undefined || oldStr === "") return;
   let index = content.indexOf(oldStr);
   if (index === -1 || content.indexOf(oldStr, index + oldStr.length) !== -1) return;
   return content.slice(0, index) + (newStr ?? "") + content.slice(index + oldStr.length);
 }
-//@ chunk-sdzpqjn8.js:20093-20603 placement (2.1.88 match: EXTENSION_TO_LANGUAGE, 0.346)
+//@ chunk-gma6wm57.js:21306-21816 placement (2.1.88 match: EXTENSION_TO_LANGUAGE, 0.346)
 /**
  * 代码块语言名到文件扩展名的映射（导入对话时给代码工件取文件名），Qt 是这些扩展名加纯文本类扩展名的集合。
  */
@@ -431,7 +431,7 @@ var TEXT_ARTIFACT_EXTENSIONS = new Set([
   ".tsv",
   ".log",
 ]);
-//@ chunk-sdzpqjn8.js:20603-20916 layout
+//@ chunk-gma6wm57.js:21816-22129 layout
 /**
  * Artifact 类型对应的文件扩展名（html、jsx、md、svg、mmd，代码按语言，默认 .txt）。
  */
@@ -453,7 +453,7 @@ function artifactExtension(type, language) {
       return ".txt";
   }
 }
-//@ chunk-sdzpqjn8.js:20916-21044 placement
+//@ chunk-gma6wm57.js:22129-22257 placement
 function splitFileExtension(name) {
   let index = name.lastIndexOf(".");
   return index > 0 && index < name.length - 1
@@ -466,7 +466,7 @@ function splitFileExtension(name) {
         extension: "",
       };
 }
-//@ chunk-sdzpqjn8.js:21044-21431 placement
+//@ chunk-gma6wm57.js:22257-22644 placement
 function fileNameForArtifact(artifact) {
   let name = artifact.title.replace(TRAILING_DOTS_OR_SPACES_RE, "");
   let { stem, extension } =
@@ -490,7 +490,7 @@ function fileNameForArtifact(artifact) {
     extension,
   };
 }
-//@ chunk-sdzpqjn8.js:21431-21742 placement
+//@ chunk-gma6wm57.js:22644-22954 placement
 function MIME_TYPE_EXTENSIONS(type, language) {
   switch (type) {
     case "text/markdown":
@@ -511,11 +511,11 @@ function MIME_TYPE_EXTENSIONS(type, language) {
       return "";
   }
 }
-//@ chunk-sdzpqjn8.js:21742-21854 placement
+//@ chunk-gma6wm57.js:22954-23066 placement
 function artifactHeading(artifact) {
   return `**${artifact.kind === "file" ? "File" : "Artifact"}: ${artifact.title}**${artifact.version > 1 ? ` (v${artifact.version})` : ""}`;
 }
-//@ chunk-sdzpqjn8.js:21854-22102 placement
+//@ chunk-gma6wm57.js:23066-23313 placement
 function formatArtifactBlock(artifact) {
   let heading = artifactHeading(artifact);
   let extension =
@@ -537,19 +537,19 @@ ${artifact.content}`;
 
 ${fenceCodeBlock(artifactArg, extension)}`;
 }
-//@ chunk-sdzpqjn8.js:22102-22171 placement
+//@ chunk-gma6wm57.js:23313-23382 placement
 /**
  * 生成 “Artifact 已更新，最终版本见下” 的说明文本。
  */
 function artifactUpdatedText(artifact) {
   return `${artifactHeading(artifact)} \u2014 updated; final version below.`;
 }
-//@ chunk-sdzpqjn8.js:22171-22249 placement
+//@ chunk-gma6wm57.js:23382-23460 placement
 /**
  * Artifact 内容因体积超限未导入时插入的说明。
  */
 var ARTIFACT_CONTENT_OMITTED_TEXT = "_Artifact content from this point on was not imported (size limit)._";
-//@ chunk-sdzpqjn8.js:22249-22289 placement
+//@ chunk-gma6wm57.js:23460-23500 placement
 /**
  * 创建导入预算（已用字符与上限）。
  */
@@ -559,7 +559,7 @@ function createImportBudget(cap = DEFAULT_TOTAL_CHAR_CAP) {
     cap,
   };
 }
-//@ chunk-sdzpqjn8.js:22289-24883 placement
+//@ chunk-gma6wm57.js:23500-26096 placement
 /**
  * 把导出的消息树（parent_message_uuid）线性化并转换为转录消息，含 Artifact 更新。
  */
@@ -774,7 +774,7 @@ function convertExportMessages(
     editsFailed,
   };
 }
-//@ chunk-sdzpqjn8.js:24883-26453 placement
+//@ chunk-gma6wm57.js:26096-27666 placement
 /**
  * 导入导出包中的 Artifact 内容（功能关闭时跳过）。
  */
@@ -799,7 +799,7 @@ function importArtifactContent(file, cwd, storageV5) {
     toolPermissionContext,
   };
   return {
-    messageQueue: commandQueueManager(),
+    messageQueue: getProcessQueue(),
     session,
     agentContext: mainAgentContext(),
     options: {
@@ -870,7 +870,7 @@ function importArtifactContent(file, cwd, storageV5) {
     storageV5,
   };
 }
-//@ chunk-sdzpqjn8.js:26453-26692 placement
+//@ chunk-gma6wm57.js:27666-27905 placement
 function redactAttachmentPaths(fileAttachment, placeholder) {
   if (typeof fileAttachment.filename === "string") fileAttachment.filename = placeholder;
   if (typeof fileAttachment.displayPath === "string") fileAttachment.displayPath = placeholder;
@@ -879,7 +879,7 @@ function redactAttachmentPaths(fileAttachment, placeholder) {
   if (file && typeof file.filePath === "string") file.filePath = placeholder;
   if (content?.type === "pdf" && file && "base64" in file) delete file.base64;
 }
-//@ chunk-sdzpqjn8.js:26692-27042 placement
+//@ chunk-gma6wm57.js:27905-28255 placement
 async function logImportAttachment(toolUseContext, cwd, relPath, uuid, fileUuid, timestamp) {
   try {
     if (isAttachmentReadDeniedOrThrown(relPath, getToolPermissionContext(toolUseContext))) return null;
@@ -903,7 +903,7 @@ async function logImportAttachment(toolUseContext, cwd, relPath, uuid, fileUuid,
     return null;
   }
 }
-//@ chunk-sdzpqjn8.js:27042-27362 placement
+//@ chunk-gma6wm57.js:28255-28575 placement
 function buildToolResultMessage(written, uuid, timestamp) {
   return {
     type: "user",
@@ -928,7 +928,7 @@ function buildToolResultMessage(written, uuid, timestamp) {
     },
   };
 }
-//@ chunk-sdzpqjn8.js:27362-29147 placement
+//@ chunk-gma6wm57.js:28575-30360 placement
 /**
  * 转换一条导出消息（文本、附件、工具调用）为转录行。
  */
@@ -1082,7 +1082,7 @@ async function convertExportMessage(
     },
   };
 }
-//@ chunk-sdzpqjn8.js:29147-29236 placement
+//@ chunk-gma6wm57.js:30360-30449 placement
 /**
  * 解析时间戳字符串为毫秒数，非法返回 null。
  */
@@ -1090,7 +1090,7 @@ function parseTimestamp(value) {
   let ms = typeof value === "string" ? Date.parse(value) : NaN;
   return Number.isNaN(ms) ? null : ms;
 }
-//@ chunk-sdzpqjn8.js:29236-29335 placement
+//@ chunk-gma6wm57.js:30449-30548 placement
 /**
  * 项目的存储 slug：名称 slug 加 uuid，校验不过返回 null。
  */
@@ -1098,7 +1098,7 @@ function projectSlugId(project) {
   let slug = `${slugifyTaskName(project.name) || "project"}-${project.uuid}`;
   return SAFE_ID_RE.test(slug) && slug.length <= 200 ? slug : null;
 }
-//@ chunk-sdzpqjn8.js:29335-29620 placement
+//@ chunk-gma6wm57.js:30548-30833 placement
 function exportSummary(accountStats, conversations, projects, accountUuid) {
   let parsed = accountStatsSchema().safeParse(accountStats);
   if (parsed.success) return parsed.data;
@@ -1120,7 +1120,7 @@ function exportSummary(accountStats, conversations, projects, accountUuid) {
     ),
   };
 }
-//@ chunk-sdzpqjn8.js:29620-30157 placement
+//@ chunk-gma6wm57.js:30833-31370 placement
 function formatImportSummary(manifest, summary) {
   let problems = [];
   if (manifest.conversations.length !== summary.conversations + summary.skipped)
@@ -1136,12 +1136,12 @@ function formatImportSummary(manifest, summary) {
   if (reduced_2 !== summary.docs) problems.push(`docs: manifest=${reduced_2} imported=${summary.docs}`);
   return problems;
 }
-//@ chunk-sdzpqjn8.js:30157-30175 placement
+//@ chunk-gma6wm57.js:31370-31388 placement
 /**
  * 导出文件的最大字节数（1 GiB）。
  */
 var MAX_EXPORT_BYTES = 1073741824;
-//@ chunk-sdzpqjn8.js:30175-31263 placement
+//@ chunk-gma6wm57.js:31388-32476 placement
 async function readExportFile(exportPath) {
   let { size } = await stat(exportPath);
   if (size > MAX_EXPORT_BYTES) throw Error("export file exceeds MAX_EXPORT_BYTES");
@@ -1207,7 +1207,7 @@ async function readExportFile(exportPath) {
     files,
   };
 }
-//@ chunk-sdzpqjn8.js:31263-35092 placement
+//@ chunk-gma6wm57.js:32476-36311 placement
 /**
  * 读取导出文件、写入 projects/ 下的转录与 files/ 附件。
  */
@@ -1465,7 +1465,7 @@ _Saved to ${savedRel}_`;
   report.manifestDiff = formatImportSummary(exportFile.manifest, report);
   return report;
 }
-//@ chunk-sdzpqjn8.js:35092-36785 placement
+//@ chunk-gma6wm57.js:36311-38003 placement
 /**
  * 子命令入口（需 CLAUDE_IMPORT_CONVERSATIONS、--cwd、大小上限）。
  */

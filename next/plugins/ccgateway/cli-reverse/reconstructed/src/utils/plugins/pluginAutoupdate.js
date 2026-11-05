@@ -3,10 +3,10 @@
  *
  * 并入已有模块：插件自动更新。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/pluginAutoupdate.ts
- * pieces: chunk-0nv5pv9r.js (10), chunk-9tyqgtn4.js (1), chunk-e6aww6q8.js (1)
- * attribution: placement 9, callgraph-witnessed 1, fingerprint 2
+ * pieces: chunk-5xgkngpb.js (1), chunk-ads6w2ye.js (10), chunk-b08ck61p.js (1)
+ * attribution: fingerprint 2, placement 9, callgraph-witnessed 1
  */
 import { withClaudeAiMarketplaceLock, isClaudeAiMarketplaceSource } from "./claudeAiMarketplaces.js";
 import { getPluginRegistry } from "./pluginLoadState.js";
@@ -50,7 +50,7 @@ import {
 } from "./commandSource.js";
 import { marketplaceNameAnswerState } from "./marketplaceNames.js";
 import { checkEnabledPlugins } from "./pluginStartupCheck.js";
-import { uniq, count } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { claudeCommand } from "../worktreeResumeHint.js";
 import { printableName } from "../printableName.js";
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
@@ -60,10 +60,11 @@ import { logEvent } from "../../services/analytics/index.js";
 import { lit, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { shouldSkipPluginAutoupdate } from "../config.js";
 import { sleep } from "../sleep.js";
+import { countWhere } from "../collections.js";
 import { resolveMissingDependencies } from "./dependencyInstall.js";
 import { classifyPluginCommandError } from "../telemetry/pluginTelemetry.js";
 
-//@ chunk-e6aww6q8.js:693187-693320 fingerprint (2.1.88 match: getAutoUpdateEnabledMarketplaces, 1)
+//@ chunk-5xgkngpb.js:703659-703792 fingerprint (2.1.88 match: getAutoUpdateEnabledMarketplaces, 1)
 /**
  * 设置 known_marketplaces 中某市场的 autoUpdate（名字配错）。
  */
@@ -80,9 +81,9 @@ async function setMarketplaceAutoUpdateFlag(name, autoUpdate) {
     };
   });
 }
-//@ chunk-0nv5pv9r.js:1498-1511 placement
+//@ chunk-ads6w2ye.js:1498-1511 placement
 var AUTOUPDATE_NOTIFY_TTL_MS = 600000;
-//@ chunk-0nv5pv9r.js:1511-1845 placement
+//@ chunk-ads6w2ye.js:1511-1845 placement
 /**
  * 设置插件自动更新监听器；若已有暂存的通知（updated/blocked/reresolved/announce）则立即回调并清空。返回取消注册的函数。
  */
@@ -102,7 +103,7 @@ function onPluginsAutoUpdated(listener) {
     pluginRegistry.autoUpdateListener = null;
   };
 }
-//@ chunk-0nv5pv9r.js:1845-2222 placement
+//@ chunk-ads6w2ye.js:1845-2222 placement
 /**
  * 收集开启 autoUpdate、来源被策略允许的市场（小写名）；claude.ai 源需功能开启。 官方插件目录市场未注册但有已安装的官方插件时也加入。
  */
@@ -136,7 +137,7 @@ async function getAutoUpdateMarketplaces(storageV5) {
   }
   return names;
 }
-//@ chunk-0nv5pv9r.js:2222-4440 placement
+//@ chunk-ads6w2ye.js:2222-4440 placement
 async function updatePlugin(pluginId, installations, disabledSources, skipOptions, storage) {
   let updated = false;
   let failed = false;
@@ -251,7 +252,7 @@ async function updatePlugin(pluginId, installations, disabledSources, skipOption
     commandSourceSkipped,
   };
 }
-//@ chunk-0nv5pv9r.js:4440-5702 placement
+//@ chunk-ads6w2ye.js:4440-5702 placement
 /**
  * 对属于给定市场、未在排除集合、在当前项目有安装记录的插件并行调用 updatePlugin； 汇总 updated/blocked/失败数/跳过的命令源插件，以及插件目录插件的更新、失败、卡住、身份变化计数。
  */
@@ -340,7 +341,7 @@ async function updatePluginsInMarketplaces(
     directory: directoryStats,
   };
 }
-//@ chunk-0nv5pv9r.js:5702-8276 placement
+//@ chunk-ads6w2ye.js:5702-8276 placement
 /**
  * 遍历已安装插件，找出市场条目为 command 源的插件并登记；策略禁用或 tengu_plugin_command_source_refresh 关闭时只登记。 否则对已启用且未被策略阻止的插件重新执行命令源并更新，返回尝试数、命令源集合、updated/blocked 与失败数。
  */
@@ -410,7 +411,7 @@ async function reresolveCommandSourcedPlugins(storage) {
         let filtered = installations.filter((installation) => installation.sourceCommand !== acceptedCommand);
         if (filtered.length > 0) {
           let all = filtered.every((installation) => installation.sourceCommand === undefined);
-          let mapped = uniq(filtered.map((installation) => installation.scope))
+          let mapped = normalizeCaseForComparison_2(filtered.map((installation) => installation.scope))
             .map((scope) => claudeCommand("plugin update", pluginId, `--scope ${scope}`))
             .filter((command) => command !== null)
             .map((command) => `\`${command}\``);
@@ -458,7 +459,7 @@ async function reresolveCommandSourcedPlugins(storage) {
   }
   return result;
 }
-//@ chunk-0nv5pv9r.js:8276-8639 placement
+//@ chunk-ads6w2ye.js:8276-8639 placement
 /**
  * 通知自动更新结果；无监听器时合并暂存。
  */
@@ -470,14 +471,17 @@ function notifyPluginsAutoUpdated(updated, blocked, reresolved = [], { announce 
   else {
     let pendingAutoUpdateNotification = pluginRegistry.pendingAutoUpdateNotification;
     pluginRegistry.pendingAutoUpdateNotification = {
-      updated: uniq([...(pendingAutoUpdateNotification?.updated ?? []), ...updated]),
+      updated: normalizeCaseForComparison_2([...(pendingAutoUpdateNotification?.updated ?? []), ...updated]),
       blocked: [...(pendingAutoUpdateNotification?.blocked ?? []), ...blocked],
-      reresolved: uniq([...(pendingAutoUpdateNotification?.reresolved ?? []), ...reresolved]),
+      reresolved: normalizeCaseForComparison_2([
+        ...(pendingAutoUpdateNotification?.reresolved ?? []),
+        ...reresolved,
+      ]),
       announce: (pendingAutoUpdateNotification?.announce ?? false) || announce,
     };
   }
 }
-//@ chunk-0nv5pv9r.js:8639-8736 placement
+//@ chunk-ads6w2ye.js:8639-8736 placement
 function emptyAutoupdateStats() {
   return {
     attemptedCount: 0,
@@ -487,7 +491,7 @@ function emptyAutoupdateStats() {
     failedCount: 0,
   };
 }
-//@ chunk-0nv5pv9r.js:8736-9182 placement
+//@ chunk-ads6w2ye.js:8736-9182 placement
 /**
  * 命令源重解析只并发一次：需要时先等待组织设置；组织未答复且有命令源插件时把重跑登记到 organizationAsk； 有尝试时广播生产目录变化，并发出自动更新通知。
  */
@@ -514,7 +518,7 @@ function reresolveCommandSourcesOnce(storage) {
   })();
   return pluginRegistry.commandSourceReresolve;
 }
-//@ chunk-0nv5pv9r.js:9182-11937 callgraph-witnessed (2.1.88 match: autoUpdateMarketplacesAndPluginsInBackground, 0.183)
+//@ chunk-ads6w2ye.js:9182-11937 callgraph-witnessed (2.1.88 match: autoUpdateMarketplacesAndPluginsInBackground, 0.182)
 /**
  * 后台自动更新：刷新开启 autoUpdate 的市场（refreshMarketplaceDeduped），更新这些市场里已安装的插件、刷新 command 来源与插件目录插件，记 tengu_plugin_autoupdate_pass；自动更新器被禁用时跳过。
  */
@@ -590,11 +594,11 @@ function autoUpdateMarketplacesAndPluginsInBackground(storageV5) {
           }
         }),
       );
-      pluginStats.marketplace_refresh_failed = count(
+      pluginStats.marketplace_refresh_failed = countWhere(
         refreshResults,
         (result) => result.status === "fulfilled" && result.value === "failed",
       );
-      pluginStats.marketplace_refresh_policy_skipped = count(
+      pluginStats.marketplace_refresh_policy_skipped = countWhere(
         refreshResults,
         (result) => result.status === "fulfilled" && result.value === "policy",
       );
@@ -619,15 +623,15 @@ function autoUpdateMarketplacesAndPluginsInBackground(storageV5) {
         directory_update_stuck: directory.stuck,
         directory_identity_changed: directory.identityChanged,
       };
-      pluginStats.plugins_blocked_by_pin = count(
+      pluginStats.plugins_blocked_by_pin = countWhere(
         blocked,
         (entry) => entry.type === "autoupdate-blocked-by-pinner",
       );
-      pluginStats.plugins_helper_deferred = count(
+      pluginStats.plugins_helper_deferred = countWhere(
         blocked,
         (entry) => entry.type === "autoupdate-deferred-entry-helper",
       );
-      pluginStats.plugins_policy_blocked = count(
+      pluginStats.plugins_policy_blocked = countWhere(
         blocked,
         (entry) => entry.type === "autoupdate-disabled-by-policy",
       );
@@ -671,7 +675,7 @@ function autoUpdateMarketplacesAndPluginsInBackground(storageV5) {
     }
   })();
 }
-//@ chunk-9tyqgtn4.js:19012-19284 fingerprint (2.1.88 match: updatePluginsForMarketplaces, 0.673)
+//@ chunk-b08ck61p.js:19426-19698 fingerprint (2.1.88 match: updatePluginsForMarketplaces, 0.673)
 /**
  * 把一组插件目录批量构造成插件对象（不记遥测），汇总成功与错误。
  */
@@ -689,11 +693,11 @@ async function updatePluginsForMarketplaces(entries, storageV5) {
   };
 }
 export {
+  setMarketplaceAutoUpdateFlag,
   autoUpdateMarketplacesAndPluginsInBackground,
+  updatePluginsForMarketplaces,
   reresolveCommandSourcesOnce,
   onPluginsAutoUpdated,
-  updatePluginsForMarketplaces,
-  setMarketplaceAutoUpdateFlag,
   updatePluginsInMarketplaces,
   notifyPluginsAutoUpdated,
 };

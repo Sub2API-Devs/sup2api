@@ -1,14 +1,14 @@
 /**
  * parse5/lib/common/error-codes.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: parse5@7.2.0..7.2.1
- * pieces: chunk-6ja29j2n.js (2)
+ * pieces: chunk-p9ac6cnb.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 
-//@ chunk-6ja29j2n.js:1753-1759 esm-layout
+//@ chunk-p9ac6cnb.js:1753-1759 esm-layout
 var errors;
-//@ chunk-6ja29j2n.js:1759-5754 esm-fingerprint
+//@ chunk-p9ac6cnb.js:1759-5754 esm-fingerprint
 (function (errors) {
   errors.controlCharacterInInputStream = "control-character-in-input-stream";
   errors.noncharacterInInputStream = "noncharacter-in-input-stream";

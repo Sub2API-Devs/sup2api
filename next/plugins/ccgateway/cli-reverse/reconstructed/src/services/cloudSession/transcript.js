@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：云会话记录读取
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-yyv1m8fa.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6n97n7ky.js (2)
  * attribution: placement 2
  */
 import {
@@ -20,7 +20,7 @@ import { extractSessionFromResponse } from "../../utils/teleport/api.js";
 import { isPlainObject } from "../../utils/objectUtils.js";
 import { logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 
-//@ chunk-yyv1m8fa.js:3892-3934 placement
+//@ chunk-6n97n7ky.js:4200-4242 placement
 /**
  * 转写游标的最大字符数（2048）。
  */
@@ -29,7 +29,7 @@ var MAX_TRANSCRIPT_RESPONSE_BYTES = 16000000;
 var DEFAULT_TRANSCRIPT_TIMEOUT_MS = 20000;
 var MAX_SESSION_EXISTS_RESPONSE_BYTES = 1e6;
 var MAX_CURSOR_CHARS = 2048;
-//@ chunk-yyv1m8fa.js:3934-5265 placement
+//@ chunk-6n97n7ky.js:4242-5573 placement
 /**
  * 处理 SDK 的 get_cloud_session_transcript：校验会话 id 与游标，先确认云会话存在，再分页拉取 teleport-events（响应过大时把 limit 减半重试，403 记为拒绝），返回事件载荷与下一页游标；按结果打点。
  */

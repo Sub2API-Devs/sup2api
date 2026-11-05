@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/restart 可选的目标版本解析（latest/stable/指定版本）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (9)
  * attribution: placement 9
  */
 import { basename } from "path";
@@ -22,12 +22,12 @@ import {
 } from "../../services/analytics/growthbook.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2037905-2037923 placement
+//@ chunk-5xgkngpb.js:2093721-2093740 placement
 var installedVersionSemver; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:2037905", () => {
+deferInit("chunk-5xgkngpb.js:2093721", () => {
   installedVersionSemver = __toESM(require_semver_3(), 1);
 });
-//@ chunk-e6aww6q8.js:2037993-2038093 placement
+//@ chunk-5xgkngpb.js:2093810-2093911 placement
 /**
  * 读取启动命令链接指向的已安装版本名（不是合法版本号时返回 undefined）。
  */
@@ -39,9 +39,9 @@ function installedVersionName(requestedTarget) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2038093-2038133 placement
+//@ chunk-5xgkngpb.js:2093911-2093952 placement
 var INSTALLED_VERSION_CACHE; // deferred: uses resetInstalledVersionCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2038093", () => {
+deferInit("chunk-5xgkngpb.js:2093911", () => {
   INSTALLED_VERSION_CACHE = identity_2(
     {
       until: 0,
@@ -50,7 +50,7 @@ deferInit("chunk-e6aww6q8.js:2038093", () => {
     resetInstalledVersionCache,
   );
 });
-//@ chunk-e6aww6q8.js:2038133-2038238 placement
+//@ chunk-5xgkngpb.js:2093952-2094061 placement
 function cachedInstalledVersion() {
   let startTime = performance.now();
   if (startTime >= INSTALLED_VERSION_CACHE.until) {
@@ -59,14 +59,14 @@ function cachedInstalledVersion() {
   }
   return INSTALLED_VERSION_CACHE.version;
 }
-//@ chunk-e6aww6q8.js:2038238-2038264 placement
+//@ chunk-5xgkngpb.js:2094061-2094088 placement
 /**
  * 清空已安装版本缓存（until 置 0，下次读取重新探测）。
  */
 function resetInstalledVersionCache() {
   INSTALLED_VERSION_CACHE.until = 0;
 }
-//@ chunk-e6aww6q8.js:2038264-2038961 placement
+//@ chunk-5xgkngpb.js:2094088-2094787 placement
 /**
  * 判断重启目标版本相对当前版本（2.1.316）的关系：未知、相同、更新或更旧（附目标版本号）。
  */
@@ -77,10 +77,10 @@ function restartVersionTarget(requested) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -99,7 +99,7 @@ function restartVersionTarget(requested) {
     version: targetVersion,
   };
 }
-//@ chunk-e6aww6q8.js:2038961-2039630 placement
+//@ chunk-5xgkngpb.js:2094787-2095457 placement
 function resolveMaxVersionConfig(installedVersionName = cachedInstalledVersion) {
   let external = getDynamicConfig_CACHED_MAY_BE_STALE("tengu_max_version_config", {}).external;
   if (!external) return;
@@ -111,10 +111,10 @@ function resolveMaxVersionConfig(installedVersionName = cachedInstalledVersion) 
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION
@@ -128,17 +128,17 @@ function resolveMaxVersionConfig(installedVersionName = cachedInstalledVersion) 
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2039630-2039656 placement
+//@ chunk-5xgkngpb.js:2095457-2095484 placement
 var TENGU_FANCY_WAND = "tengu_fancy_wand";
-//@ chunk-e6aww6q8.js:2039656-2039698 placement
+//@ chunk-5xgkngpb.js:2095484-2095527 placement
 function isGrowthBookFreshOrOverridden() {
   return hasGrowthBookOverride(TENGU_FANCY_WAND) || (isGrowthBookEnabled() && hasFreshGrowthBookFeatures());
 }
 export {
-  isGrowthBookFreshOrOverridden,
-  resolveMaxVersionConfig,
-  TENGU_FANCY_WAND,
   restartVersionTarget,
-  installedVersionName,
   resetInstalledVersionCache,
+  resolveMaxVersionConfig,
+  installedVersionName,
+  isGrowthBookFreshOrOverridden,
+  TENGU_FANCY_WAND,
 };

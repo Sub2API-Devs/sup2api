@@ -3,9 +3,9 @@
  *
  * 用模型根据描述生成子代理定义（名称、描述、系统提示），支持取消与超时。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/agents/generateAgent.ts
- * pieces: chunk-eavynfj6.js (1)
+ * pieces: chunk-0df0kb9z.js (1)
  * attribution: fingerprint 1
  */
 import { queryModelWithoutStreaming } from "../../services/api/claude.js";
@@ -17,7 +17,7 @@ import { getStickyBetas } from "../../bootstrap/state.js";
 import { mainAgentContext } from "../../utils/agentContext.js";
 import { getEmptyToolPermissionContext } from "../../Tool.js";
 
-//@ chunk-eavynfj6.js:25822-26912 fingerprint (2.1.88 match: generateAgent, 0.37)
+//@ chunk-0df0kb9z.js:26980-28070 fingerprint (2.1.88 match: generateAgent, 0.379)
 /**
  * 根据用户描述调用模型生成子代理配置（identifier、whenToUse、systemPrompt），支持中止与超时。
  */

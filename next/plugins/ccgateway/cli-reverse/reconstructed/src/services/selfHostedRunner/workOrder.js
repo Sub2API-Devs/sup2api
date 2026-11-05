@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自托管 runner 的工单与轮询：日志转发、工单兑现错误、SSE 工作提示流
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hm0ce8vc.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-asf5gh8x.js (13)
  * attribution: placement 13
  */
 import { stat, open } from "fs/promises";
@@ -22,13 +22,14 @@ import { getProxyFetchOptions } from "../../utils/proxy.js";
 import { getTLSFetchOptions } from "../../utils/mtls.js";
 import { drainResponseBody, DEFAULT_DRAIN_TIMEOUT_MS } from "../../utils/http.js";
 import { errorMessage } from "../../utils/errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hm0ce8vc.js:213722-213733 placement
+//@ chunk-asf5gh8x.js:224792-224803 placement
 /**
  * 日志转发缓冲区保留行数（只转发最近若干行）。
  */
 var MAX_LOG_LINES_BUFFERED = 500;
-//@ chunk-hm0ce8vc.js:213733-214473 placement
+//@ chunk-asf5gh8x.js:224803-225543 placement
 async function forwardLogFile(options) {
   let { apiClient, apiBaseUrl, sessionId, sessionToken, workerEpoch } = options;
   let windowBytes = 262144;
@@ -69,7 +70,7 @@ async function forwardLogFile(options) {
   options.onDebug(`[runner:session] forwarded ${sliced.length} debug log lines to /worker/diagnostics`);
   return true;
 }
-//@ chunk-hm0ce8vc.js:214473-214555 placement
+//@ chunk-asf5gh8x.js:225543-225625 placement
 function makeInitMilestoneMessage(message) {
   return {
     type: "system",
@@ -78,7 +79,7 @@ function makeInitMilestoneMessage(message) {
     message,
   };
 }
-//@ chunk-hm0ce8vc.js:214555-214756 placement
+//@ chunk-asf5gh8x.js:225625-225826 placement
 function logEnvManager(stepId, status, content, extraFields) {
   return {
     type: "env_manager_log",
@@ -96,7 +97,7 @@ function logEnvManager(stepId, status, content, extraFields) {
     },
   };
 }
-//@ chunk-hm0ce8vc.js:214756-214886 placement
+//@ chunk-asf5gh8x.js:225826-225956 placement
 function logCloneStep(repo, phase, durationMs, extraFields) {
   return logEnvManager("clone", "completed", `${repo} ${phase} (${durationMs}ms)`, {
     ...extraFields,
@@ -105,24 +106,31 @@ function logCloneStep(repo, phase, durationMs, extraFields) {
     duration_ms: String(durationMs),
   });
 }
-//@ chunk-hm0ce8vc.js:214886-215506 placement
+//@ chunk-asf5gh8x.js:225956-226576 placement
 /**
  * 工单已被使用/被替代等服务器拒绝原因说明。
  */
-var WORK_ORDER_REJECTION_REASONS =
-  "this work order has already been used, or another runner already has its session";
-var WORK_ORDER_REJECTION_TEXT_BY_REASON = new Map([
-  ["already_registered", WORK_ORDER_REJECTION_REASONS],
-  ["standby_already_redeemed", WORK_ORDER_REJECTION_REASONS],
-  ["superseded", "this work order has been superseded, so this runner is not needed"],
-  ["session_paused", "the session is paused, so no runner is needed for it right now"],
-]);
-var MAX_WORK_ORDER_MESSAGE_CHARS = 1024;
-var WORK_ORDER_RESTART_EXPLANATION =
-  "See https://code.claude.com/docs/en/self-hosted-environments-deploy#troubleshooting";
-var WORK_ORDER_SINGLE_USE_TEXT =
-  "A work order is single-use and short-lived, so restarting this runner with the same one cannot help. A restarted runner needs a fresh work order, which comes only with a new spawn request.";
-//@ chunk-hm0ce8vc.js:215506-216618 placement
+var WORK_ORDER_REJECTION_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var WORK_ORDER_REJECTION_TEXT_BY_REASON;
+var MAX_WORK_ORDER_MESSAGE_CHARS;
+var WORK_ORDER_RESTART_EXPLANATION;
+var WORK_ORDER_SINGLE_USE_TEXT;
+deferInit("chunk-asf5gh8x.js:225956", () => {
+  WORK_ORDER_REJECTION_REASONS =
+    "this work order has already been used, or another runner already has its session";
+  WORK_ORDER_REJECTION_TEXT_BY_REASON = new Map([
+    ["already_registered", WORK_ORDER_REJECTION_REASONS],
+    ["standby_already_redeemed", WORK_ORDER_REJECTION_REASONS],
+    ["superseded", "this work order has been superseded, so this runner is not needed"],
+    ["session_paused", "the session is paused, so no runner is needed for it right now"],
+  ]);
+  MAX_WORK_ORDER_MESSAGE_CHARS = 1024;
+  WORK_ORDER_RESTART_EXPLANATION =
+    "See https://code.claude.com/docs/en/self-hosted-environments-deploy#troubleshooting";
+  WORK_ORDER_SINGLE_USE_TEXT =
+    "A work order is single-use and short-lived, so restarting this runner with the same one cannot help. A restarted runner needs a fresh work order, which comes only with a new spawn request.";
+});
+//@ chunk-asf5gh8x.js:226576-227688 placement
 /**
  * 描述服务器拒绝（HTTP 状态、令牌是否过期、--api-url、时钟偏差）。
  */
@@ -156,13 +164,13 @@ function describeServerAuthRejection(error, workOrderSecret) {
   else return null;
   return `RegisterRunner refused because ${reason}. ${WORK_ORDER_SINGLE_USE_TEXT} The environment secret is not at fault, so do not rotate it. ${WORK_ORDER_RESTART_EXPLANATION} ${serverLine}`;
 }
-//@ chunk-hm0ce8vc.js:216618-216714 placement
+//@ chunk-asf5gh8x.js:227688-227784 placement
 var POLL_WAKE_SOURCES = {
   POLL: "POLL_WAKE_SOURCE_POLL",
   SSE: "POLL_WAKE_SOURCE_SSE",
   LOCAL: "POLL_WAKE_SOURCE_LOCAL",
 };
-//@ chunk-hm0ce8vc.js:216714-217261 placement
+//@ chunk-asf5gh8x.js:227784-228331 placement
 /**
  * 轮询唤醒器：SSE、POLL、本地三种唤醒源。
  */
@@ -200,19 +208,19 @@ class PollWaker {
     return pending;
   }
 }
-//@ chunk-hm0ce8vc.js:217261-217298 placement
+//@ chunk-asf5gh8x.js:228331-228368 placement
 var MAX_SERVER_MESSAGE_CHARS = 200;
 var WORK_HINTS_BACKOFF_BASE_MS = 1000;
 var WORK_HINTS_BACKOFF_MAX_MS = 30000;
 var WORK_HINTS_CONNECT_TIMEOUT_MS = 45000;
-//@ chunk-hm0ce8vc.js:217298-217323 placement
+//@ chunk-asf5gh8x.js:228368-228393 placement
 /**
  * 中止工作提示流的请求。
  */
 function abortRequest(controller) {
   controller.abort();
 }
-//@ chunk-hm0ce8vc.js:217323-218339 placement
+//@ chunk-asf5gh8x.js:228393-229409 placement
 /**
  * 订阅 /v1/code/runners/self-hosted/runners/<id>/work-hints/stream SSE，收到 work_available 时唤醒轮询。
  */
@@ -272,7 +280,7 @@ function streamWorkHints(options) {
     close,
   };
 }
-//@ chunk-hm0ce8vc.js:218339-218854 placement
+//@ chunk-asf5gh8x.js:229409-229924 placement
 async function parseWorkHintEvent(body, onWake, controller) {
   let reader = body.getReader();
   let textDecoder = new TextDecoder();

@@ -3,13 +3,16 @@
  *
  * 插件加载管理：加载插件命令、agents、hooks、主题、技能并在出错时通知。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useManagePlugins.ts
- * pieces: chunk-18hwfzwa.js (5)
+ * pieces: chunk-czq1j3j2.js (5)
  * attribution: sole-consumer 4, fingerprint 1
  */
+import { join } from "path";
 import { isDeepStrictEqual } from "util";
 import { init_react_production, useCallback, useEffect } from "../../vendor/react/cjs/react.production.js";
+import { findSymlinkEscape } from "../utils/plugins/pluginPathContainment.js";
+import { logForDebugging } from "../utils/debug.js";
 import { readThemesFromPathAsync, getCustomThemeRegistry } from "../utils/customThemes.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { isCustomizationDisabled } from "../utils/settings/customizationDisabled.js";
@@ -29,7 +32,6 @@ import { loadPluginHooks } from "../utils/plugins/loadPluginHooks.js";
 import { extractMcpServersFromPlugins } from "../utils/plugins/mcpPluginIntegration.js";
 import { loadPluginLspServers, findLspExtensionConflicts } from "../utils/plugins/lspPluginIntegration.js";
 import { noReloadPlugins } from "../utils/plugins/refresh.js";
-import { logForDebugging } from "../utils/debug.js";
 import { toError, withTelemetryMessage } from "../utils/errors.js";
 import { logError } from "../utils/log.js";
 import { env } from "../utils/env.js";
@@ -39,32 +41,47 @@ import { reresolveCommandSourcesOnce } from "../utils/plugins/pluginAutoupdate.j
 import { marketplaceOf } from "../utils/plugins/pluginIdentifier.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:208743-208747 sole-consumer
+//@ chunk-czq1j3j2.js:213542-213546 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:208743", () => {
+deferInit("chunk-czq1j3j2.js:213542", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:208790-209096 sole-consumer
+//@ chunk-czq1j3j2.js:213619-214131 sole-consumer
 /**
  * 从插件声明的主题路径读取主题，并加上插件名前缀。
  */
 async function loadPluginThemes(plugins) {
   let themes = [];
   for (let plugin of plugins) {
-    let themeContext = {
+    let source = {
       plugin: plugin.name,
     };
     let themePrefix = `${plugin.name}:`;
+    let entriesAnchor = plugin.entriesAnchor;
+    let readThemeFile =
+      entriesAnchor === undefined
+        ? undefined
+        : async (themePath, themeName) => {
+            let symlinkEscape = await findSymlinkEscape(entriesAnchor, themePath, themeName);
+            if (symlinkEscape !== undefined)
+              logForDebugging(
+                `Plugin ${plugin.name}: did not read the theme ${join(themePath, themeName)}: ${symlinkEscape}`,
+                {
+                  level: "error",
+                },
+              );
+            return symlinkEscape !== undefined;
+          };
     if (plugin.themesPath)
-      themes.push(...(await readThemesFromPathAsync(plugin.themesPath, themeContext, themePrefix)));
+      themes.push(...(await readThemesFromPathAsync(plugin.themesPath, source, themePrefix, readThemeFile)));
     for (let themesPath of plugin.themesPaths ?? [])
-      themes.push(...(await readThemesFromPathAsync(themesPath, themeContext, themePrefix)));
+      themes.push(...(await readThemesFromPathAsync(themesPath, source, themePrefix, readThemeFile)));
   }
   getCustomThemeRegistry().addCustomThemeBases(themes);
   logFeatureOk("plugin_load_themes");
   return themes.sort((left, right) => left.name.localeCompare(right.name));
 }
-//@ chunk-18hwfzwa.js:209096-209253 sole-consumer
+//@ chunk-czq1j3j2.js:214131-214288 sole-consumer
 async function refreshPluginThemes(plugins) {
   if (isCustomizationDisabled("themes")) {
     getCustomThemeRegistry().pluginThemes.setState(() => []);
@@ -76,7 +93,7 @@ async function refreshPluginThemes(plugins) {
   );
   return pluginThemes;
 }
-//@ chunk-18hwfzwa.js:209253-213242 fingerprint (2.1.88 match: useManagePlugins, 0.853)
+//@ chunk-czq1j3j2.js:214288-218277 fingerprint (2.1.88 match: useManagePlugins, 0.853)
 /**
  * 加载已启用插件的命令、agents、hooks、输出样式、主题、技能并注入 AppState；失败时发 generic-error 通知。
  */
@@ -325,7 +342,7 @@ function useManagePlugins({ enabled = true } = {}) {
     });
   }, [enabled, needsRefresh, needsRefreshToLoad, addNotification, removeNotification]);
 }
-//@ chunk-18hwfzwa.js:213242-213490 sole-consumer
+//@ chunk-czq1j3j2.js:218277-218525 sole-consumer
 function countPluginsByMarketplaceKind(enabled) {
   let counts = {
     inline_count: 0,

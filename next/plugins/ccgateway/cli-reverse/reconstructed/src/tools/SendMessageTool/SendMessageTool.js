@@ -3,10 +3,10 @@
  *
  * SendMessage 工具：给子代理、队友、主会话、本机/云端其他会话发消息，结构化团队协议（关机、计划审批）与 notify_when_idle 订阅
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/SendMessageTool/SendMessageTool.ts
- * pieces: chunk-18hwfzwa.js (1), chunk-astf3mhy.js (80), chunk-e6aww6q8.js (15)
- * attribution: callgraph-fingerprint 1, placement 24, sole-consumer 16, affinity 1, fingerprint 9, layout 44, callgraph-witnessed 1
+ * pieces: chunk-5xgkngpb.js (15), chunk-czq1j3j2.js (1), chunk-knmkz0q8.js (83)
+ * attribution: placement 24, callgraph-fingerprint 1, sole-consumer 19, affinity 1, fingerprint 9, layout 44, callgraph-witnessed 1
  */
 import { randomUUID } from "crypto";
 import { getHostAgentPolicy } from "../../utils/hostAgentPolicy.js";
@@ -21,9 +21,15 @@ import { AGENT } from "../AgentTool/constants.js";
 import { parseAddress, isValidPipeOrPath, parsePeerAddress } from "../../utils/peerAddress.js";
 import { isTopHostSession } from "../../utils/sessionShape.js";
 import { LOCAL_TASK_ID_PATTERN } from "../../services/analytics/metadata.js";
-import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
-import { findToolByName, toolMatchesName } from "../../Tool.js";
-import { getPromptIndex, isDiskless, mainAgentId, isCcsTenant } from "../../bootstrap/state.js";
+import { CLAUDEAI_SERVER_PREFIX } from "../../services/mcp/normalization.js";
+import { findToolByName, matchesToolName } from "../../Tool.js";
+import {
+  getPromptIndex,
+  isDiskless,
+  getIsNonInteractiveSession,
+  mainAgentId,
+  isCcsTenant,
+} from "../../bootstrap/state.js";
 import {
   DEFAULT_PEER_GUARD_LIMITS_2,
   classifyPeerSendError,
@@ -119,6 +125,16 @@ import { PERMISSION_MODES } from "../../types/permissions.js";
 import { updateTeamFile, readTeamFileAsync } from "../../utils/swarm/teamHelpers.js";
 import { getCwd } from "../../utils/cwd.js";
 import { parseUserSpecifiedModel } from "../../utils/model/modelDisplay.js";
+import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
+import { isSendNowAndMellowMinskyOnce } from "../../components/PromptInput/promptFlags.js";
+import { isBackgroundTasksOff, hasBackgroundBashStopAfterReply } from "../AgentTool/backgroundGates.js";
+import { isPrintInputDone } from "../../tasks/LocalShellTask/backgroundNotices.js";
+import { areAttachmentsDisabled } from "../../utils/attachments.js";
+import { env } from "../../utils/env.js";
+import { isLocalAgent } from "../../state/teammateViewHelpers.js";
+import { LowLatencySubmitQueue } from "../../cli/print/lowLatencySubmit.js";
+import { makeAgentTurnFacade } from "../../screens/repl/promptQueue.js";
+import { plural, truncateToLength } from "../../utils/stringUtils.js";
 import {
   isCrossSessionMessagingEnabled,
   CROSS_SESSION_MESSAGING_DISABLED_MESSAGE,
@@ -132,6 +148,7 @@ import {
   clipTeammateText,
 } from "../../utils/swarm/teammateIds.js";
 import { MAX_HEADER_VALUE_LENGTH, lastPeerHopChain } from "../../utils/peerMessageHeaders.js";
+import { withUntrustedPreamble, isSillyShoreGateOn } from "../../utils/messages/untrustedArtifactContent.js";
 import {
   normalizeSendMessageInput,
   rememberRepair,
@@ -170,7 +187,6 @@ import {
   isResumedInlineRunError,
 } from "../AgentTool/resumeAgent.js";
 import { normalizeAgentIdOrNull, identityAgentId2 } from "../../utils/agentId.js";
-import { truncateToLength } from "../../utils/stringUtils.js";
 import { unreadableToolsLine, toolsUsedForSummary } from "../../utils/agentListing.js";
 import {
   isHandbackProvenanceEnabled,
@@ -183,7 +199,6 @@ import {
   formatResumedAgentResult,
   resumedAgentReport,
 } from "./resumedAgentResult.js";
-import { isSillyShoreGateOn } from "../../utils/messages/untrustedArtifactContent.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
 import { gracefulShutdown } from "../../utils/gracefulShutdown.js";
 import { teammateModeAfterPlan } from "../ExitPlanModeTool/planPreconditions.js";
@@ -210,7 +225,6 @@ import {
   describeRemoteSessionKind,
 } from "./crossSessionAddressing.js";
 import { getPeerBridgeIdentity, primePeerIdentityOwner } from "../../bridge/replBridgeHandle.js";
-import { env } from "../../utils/env.js";
 import { ownRemoteSessionId } from "../../utils/remoteSessionEnv.js";
 import { createQueueBusyCheck } from "../../utils/messageQueueIdle.js";
 import { forwardUserIntentEnv, freshTurnsForAgent } from "../../utils/messageProvenance.js";
@@ -262,57 +276,56 @@ import { isUnknownPluginSpawnedAgent } from "../AgentTool/pluginSpawnNote.js";
 import { pluginInputHoldReason } from "../../plugins/functionHooks/inputHold.js";
 import { runIgnoringAbort } from "../../plugins/functionHooks/dispatch/dispatchScope.js";
 import { toastStoppedOnce } from "../../plugins/functionHooks/apiCatalog.js";
-import { isLocalAgent } from "../../state/teammateViewHelpers.js";
-import { enqueueCommand } from "../../utils/messageQueueManager.js";
+import { enqueue } from "../../utils/messageQueueManager.js";
 import { clearWaitingNotice, sendMessageToAgent } from "../../tasks/LocalAgentTask/pendingMessages.js";
 import { promptIdForRequest } from "../../services/api/claude.js";
 import { isInProcessTeammateTask } from "../../tasks/InProcessTeammateTask/types.js";
+import { allPeerOrigins } from "../../services/mcp/ccrTurnId.js";
 import { isNetworkPath } from "../../utils/fsSafety/networkPathCheck.js";
-import { countGraphemes } from "../../ink/output.js";
-import { splitGraphemes } from "../../utils/intl.js";
+import { countGraphemes, splitGraphemes } from "../../utils/intl.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1498135-1498194 placement
+//@ chunk-5xgkngpb.js:1499784-1499843 placement
 /**
  * 宿主策略是否只允许把消息发给本会话的 agent。
  */
 function isMessagingLimitedToOwnAgents() {
   return getHostAgentPolicy().messagingBeyondOwnAgentsDisabled;
 }
-//@ chunk-e6aww6q8.js:1498194-1498458 placement
+//@ chunk-5xgkngpb.js:1499843-1500107 placement
 var SUBAGENT_ONLY_SEND_MESSAGE; // deferred: uses SENDMESSAGE (./constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1498194", () => {
+deferInit("chunk-5xgkngpb.js:1499843", () => {
   SUBAGENT_ONLY_SEND_MESSAGE = `Not sent. In this session ${SENDMESSAGE} carries only plain text, and only to agents of this session: an agent launched in it with the ${AGENT} tool or, from a subagent, "main". Set \`to\` to such an agent's name, to the agentId from its spawn result, or to "main".`;
 });
-//@ chunk-e6aww6q8.js:1498458-1498660 placement
+//@ chunk-5xgkngpb.js:1500107-1500309 placement
 function agentSettingsMissingMessage(agentId) {
   return `Not sent. This session has no saved settings for agent ${agentId} that it can read: the agent never ran here, or its settings were lost. Start a new agent if the work is still needed.`;
 }
-//@ chunk-e6aww6q8.js:1498660-1498821 placement
+//@ chunk-5xgkngpb.js:1500309-1500470 placement
 function agentSettingsUnreadableMessage(agentId) {
   return `Not sent. The saved settings of agent ${agentId} could not be read just now. Send the message again; start a new agent only if that fails too.`;
 }
-//@ chunk-e6aww6q8.js:1498821-1499289 placement
+//@ chunk-5xgkngpb.js:1500470-1500938 placement
 /**
  * SendMessage 不可用的结果文本：子代理被关闭发送或已停止，以及本轮启动/恢复/写入次数已用尽；提示把内容放在最终回复中。
  */
 var SEND_MESSAGE_SWITCHED_OFF; // deferred: uses SENDMESSAGE (./constants.js) of its import cycle while loading; runs once the cycle is complete
 var SEND_BUDGET_EXHAUSTED;
-deferInit("chunk-e6aww6q8.js:1498821", () => {
+deferInit("chunk-5xgkngpb.js:1500470", () => {
   SEND_MESSAGE_SWITCHED_OFF = `Not sent. You cannot use ${SENDMESSAGE} in this session: it is switched off for subagents, or you were stopped. Put what you need to pass on in your final response, which goes to whoever launched or resumed you.`;
   SEND_BUDGET_EXHAUSTED =
     "Not sent. This session's agents have launched, resumed and written as often as they may before the user next writes, or you can no longer send here. Put what you need to pass on in your final response, which goes to whoever launched or resumed you.";
 });
-//@ chunk-e6aww6q8.js:1499289-1499569 placement
+//@ chunk-5xgkngpb.js:1500938-1501218 placement
 function noRoomToResumeMessage(agentName) {
   return `Agent "${agentName}" was not resumed, and your message was not delivered: this session has no room for another agent now, or has started as many as it may between two messages from the user. Go on without it, or say in your final response what you needed from it.`;
 }
-//@ chunk-e6aww6q8.js:1499569-1499636 placement
+//@ chunk-5xgkngpb.js:1501218-1501285 placement
 /**
  * 只允许发给同会话 agent 时的拒绝原因。
  */
 var SAME_SESSION_ONLY_REASON = "a message here goes only to an agent of the same session";
-//@ chunk-e6aww6q8.js:1499636-1499789 placement
+//@ chunk-5xgkngpb.js:1501285-1501438 placement
 function checkHostSendTarget({ to, message }) {
   if (!isMessagingLimitedToOwnAgents()) return;
   return typeof message !== "string" ||
@@ -323,7 +336,7 @@ function checkHostSendTarget({ to, message }) {
     ? SUBAGENT_ONLY_SEND_MESSAGE
     : undefined;
 }
-//@ chunk-e6aww6q8.js:1499789-1499882 placement
+//@ chunk-5xgkngpb.js:1501438-1501531 placement
 /**
  * 判断该子代理是否允许发消息（策略关闭时一律允许）。
  */
@@ -335,7 +348,7 @@ function canSubagentSend(agentId) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:1499882-1499994 placement
+//@ chunk-5xgkngpb.js:1501531-1501643 placement
 function reserveResumeRoom(agentId) {
   if (!isMessagingLimitedToOwnAgents() || agentId === undefined) return () => {};
   try {
@@ -344,7 +357,7 @@ function reserveResumeRoom(agentId) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:1499994-1500097 placement
+//@ chunk-5xgkngpb.js:1501643-1501746 placement
 function maySendOneMore(agentId) {
   if (!isMessagingLimitedToOwnAgents()) return true;
   try {
@@ -353,7 +366,7 @@ function maySendOneMore(agentId) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:1500097-1500188 placement
+//@ chunk-5xgkngpb.js:1501746-1501837 placement
 /**
  * 判断该 agent 是否被人手动停止（异常时按已停止处理）。
  */
@@ -365,7 +378,7 @@ function isStoppedByPerson(agentId) {
     return true;
   }
 }
-//@ chunk-e6aww6q8.js:1500188-1500246 placement
+//@ chunk-5xgkngpb.js:1501837-1501895 placement
 /**
  * 执行回调并确保 finally 中清理。
  */
@@ -376,9 +389,9 @@ async function withCleanup(cleanup, body) {
     cleanup();
   }
 }
-//@ chunk-e6aww6q8.js:1500246-1500353 placement
+//@ chunk-5xgkngpb.js:1501895-1502002 placement
 var SUBAGENT_TARGET_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1500246", () => {
+deferInit("chunk-5xgkngpb.js:1501895", () => {
   SUBAGENT_TARGET_KINDS = new Set([
     "main",
     "agent-live",
@@ -388,7 +401,7 @@ deferInit("chunk-e6aww6q8.js:1500246", () => {
     "not-found",
   ]);
 });
-//@ chunk-e6aww6q8.js:1500353-1500565 placement
+//@ chunk-5xgkngpb.js:1502002-1502214 placement
 function checkHostResolvedTarget(resolvedRecipient) {
   let isSubagentTarget =
     SUBAGENT_TARGET_KINDS.has(resolvedRecipient.kind) ||
@@ -399,19 +412,19 @@ function checkHostResolvedTarget(resolvedRecipient) {
       resolvedRecipient.candidates.every(({ kind }) => kind === "subagent"));
   return isMessagingLimitedToOwnAgents() && !isSubagentTarget ? SUBAGENT_ONLY_SEND_MESSAGE : undefined;
 }
-//@ chunk-astf3mhy.js:14508-14570 placement
+//@ chunk-knmkz0q8.js:15716-15778 placement
 /**
  * 会话管理 MCP 的 send_message 工具完整名。
  */
-var SEND_MESSAGE; // deferred: uses normalizeNameForMCP (../../services/mcp/normalization.js) of its import cycle while loading; runs once the cycle is complete
+var SEND_MESSAGE; // deferred: uses SENDMESSAGE (./constants.js) of its import cycle while loading; runs once the cycle is complete
 var SESSION_SEND_MESSAGE_TOOL_NAME;
 var MAX_FORWARDS_PER_PROMPT;
-deferInit("chunk-astf3mhy.js:14508", () => {
+deferInit("chunk-knmkz0q8.js:15716", () => {
   SEND_MESSAGE = "send_message";
-  SESSION_SEND_MESSAGE_TOOL_NAME = `mcp__${normalizeNameForMCP(CCD_SESSION_MGMT)}__${normalizeNameForMCP(SEND_MESSAGE)}`;
+  SESSION_SEND_MESSAGE_TOOL_NAME = `mcp__${CLAUDEAI_SERVER_PREFIX(CCD_SESSION_MGMT)}__${CLAUDEAI_SERVER_PREFIX(SEND_MESSAGE)}`;
   MAX_FORWARDS_PER_PROMPT = 1000;
 });
-//@ chunk-astf3mhy.js:14570-14783 placement
+//@ chunk-knmkz0q8.js:15778-15991 placement
 function findDesktopSendTool(toolContext) {
   let { tools, toolAliases } = toolContext;
   let filtered = tools.filter(
@@ -425,7 +438,7 @@ function findDesktopSendTool(toolContext) {
     return;
   return desktopSendTool;
 }
-//@ chunk-astf3mhy.js:14783-14833 placement
+//@ chunk-knmkz0q8.js:15991-16041 placement
 /**
  * 记录已见过的提示序号与自转发次数（防止转发死循环）。
  */
@@ -433,7 +446,7 @@ class DesktopForwardState {
   promptIndexSeen = -1;
   forwardsSincePrompt = 0;
 }
-//@ chunk-astf3mhy.js:14833-15135 placement
+//@ chunk-knmkz0q8.js:16041-16343 placement
 /**
  * 解析 Claude Desktop 转发工具：不可用时返回 unavailable；同一提示内自转发次数超过上限时返回 loop-paused。
  */
@@ -459,7 +472,7 @@ function resolveDesktopForward(toolContext) {
     tool: desktopSendTool,
   };
 }
-//@ chunk-astf3mhy.js:15135-16537 placement
+//@ chunk-knmkz0q8.js:16343-17745 placement
 /**
  * 通过 Claude Desktop 的会话管理 SendMessage 工具转发消息：以合成的 tool_use 运行该工具（权限检查计时、钩子延迟处理），收集附件与结果，返回 sent/refused。
  */
@@ -550,7 +563,7 @@ async function forwardToDesktop({ tool, sessionId, message, toolUseContext, canU
         blockedWait,
       };
 }
-//@ chunk-astf3mhy.js:16537-16706 placement
+//@ chunk-knmkz0q8.js:17745-17914 placement
 function toolResultToText(result) {
   let { content } = result;
   if (typeof content === "string") return content.trim();
@@ -563,7 +576,7 @@ function toolResultToText(result) {
     )
     .trim();
 }
-//@ chunk-astf3mhy.js:16706-17125 placement
+//@ chunk-knmkz0q8.js:17914-18333 placement
 /**
  * 查找远程会话的 SendMessage MCP 工具：要求服务器唯一、工具唯一且与服务器配置一致、未隐藏，且功能开关开启，返回工具名。
  */
@@ -581,7 +594,7 @@ function findRemoteSendTool(tools, mcpClients, toolAliases) {
     )
       return;
     let mcpToolName = buildMcpToolName(CLAUDE_CODE_REMOTE, SEND_MESSAGE_2);
-    let filtered = tools.filter((tool) => toolMatchesName(tool, mcpToolName));
+    let filtered = tools.filter((tool) => matchesToolName(tool, mcpToolName));
     let mcpInfo = filtered[0]?.mcpInfo;
     if (
       filtered.length !== 1 ||
@@ -599,7 +612,7 @@ function findRemoteSendTool(tools, mcpClients, toolAliases) {
     return;
   }
 }
-//@ chunk-astf3mhy.js:17125-17218 placement
+//@ chunk-knmkz0q8.js:18333-18426 placement
 /**
  * 读取某 agent 的元数据，仅当它是进程内队友时返回。
  */
@@ -607,7 +620,7 @@ async function inProcessTeammateMetadata(agentId, storageV5) {
   let agentMetadata = await readAgentMetadata(agentId, storageV5);
   return agentMetadata?.taskKind === "in_process_teammate" ? agentMetadata : null;
 }
-//@ chunk-astf3mhy.js:17218-22929 placement
+//@ chunk-knmkz0q8.js:18426-24235 placement
 /**
  * 恢复进程内队友：校验团队与名字，加载其转录并规范化，按记录的自定义 agent 类型尝试恢复定义（不可派生或来源不可信时退化为基础工具并说明），运行恢复钩子后重新启动队友。
  */
@@ -787,6 +800,9 @@ async function resumeInProcessTeammate({
   let resumeContext = {
     ...toolUseContext,
     ...spawnProvenanceMarks.marks,
+    ...(typeof meta.pickedEffortModel === "string" && {
+      pickedEffortModel: meta.pickedEffortModel,
+    }),
   };
   let { spawnInProcessTeammate } = require("../../utils/swarm/spawnInProcess.js");
   let { startInProcessTeammate } = require("../../utils/swarm/inProcessRunner.js");
@@ -891,7 +907,75 @@ async function resumeInProcessTeammate({
     definitionNotice: restoreNote,
   };
 }
-//@ chunk-astf3mhy.js:22970-28389 sole-consumer
+//@ chunk-knmkz0q8.js:24272-24417 sole-consumer
+var unrefClock; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var deliveryForwardSlot;
+deferInit("chunk-knmkz0q8.js:24272", () => {
+  unrefClock = {
+    setTimeout(callback, delayMs) {
+      let timer = setTimeout(callback, delayMs);
+      timer.unref();
+      return () => clearTimeout(timer);
+    },
+  };
+  deliveryForwardSlot = new SessionRootSlot(() => ({
+    byRecipient: new Map(),
+    followed: new WeakMap(),
+  }));
+});
+//@ chunk-knmkz0q8.js:24417-25509 sole-consumer
+function forwardPendingMessageNow(agentId, agentId_2, { session, taskRegistry }, clock = unrefClock) {
+  let deliveryResult = null;
+  try {
+    if (
+      !isSendNowAndMellowMinskyOnce() ||
+      isBackgroundTasksOff() ||
+      isPrintInputDone() ||
+      hasBackgroundBashStopAfterReply() ||
+      areAttachmentsDisabled() ||
+      (getIsNonInteractiveSession() &&
+        (!env.CLAUDE_CODE_REMOTE || env.CLAUDE_CODE_CHILD_SESSION || env.CLAUDE_CODE_EXIT_AFTER_STOP_DELAY))
+    )
+      return "";
+    let task = taskRegistry.get(agentId);
+    let pendingMessage =
+      isLocalAgent(task) && !task.startedInForeground ? task.pendingMessages.at(-1) : undefined;
+    if (pendingMessage === undefined) return "";
+    for (let ancestorId = agentId_2; ancestorId !== undefined;) {
+      if (ancestorId === agentId) return "";
+      let ancestor = taskRegistry.get(ancestorId);
+      if (!isLocalAgent(ancestor) || ancestor.isBackgrounded) break;
+      ancestorId = ancestor.parentAgentId;
+    }
+    let { byRecipient, followed } = deliveryForwardSlot.of(session);
+    for (let [recipientId, delivery] of byRecipient)
+      if (taskRegistry.get(recipientId) === undefined) {
+        delivery.dispose();
+        byRecipient.delete(recipientId);
+      }
+    let forwarder = byRecipient.get(agentId);
+    if (forwarder === undefined) {
+      forwarder = new LowLatencySubmitQueue({
+        ...makeAgentTurnFacade(agentId, taskRegistry, followed),
+        session,
+        taskRegistry,
+        clock,
+        featureName: "send_message_delivery_forward",
+      });
+      byRecipient.set(agentId, forwarder);
+    }
+    followed.set(pendingMessage, randomUUID());
+    deliveryResult = forwarder.sendAgentMessageNow();
+  } catch (error) {
+    logError(error);
+    logFeatureBad("send_message_delivery_forward", "check_threw");
+  }
+  if (deliveryResult === null) return "";
+  return deliveryResult === 0
+    ? " Sending this moved nothing it is running to the background just now, so the message waits for that round unless something moves sooner."
+    : ` Moved ${deliveryResult} running ${plural(deliveryResult, "tool call")} to the background without stopping ${plural(deliveryResult, "it", "them")}, so that round no longer waits for ${plural(deliveryResult, "it", "them")}.`;
+}
+//@ chunk-knmkz0q8.js:25550-30969 sole-consumer
 /**
  * 生成 SendMessage 工具提示词：to 的取值表（子代理、主会话、跨会话 worker）、纯文本输出不可见、按名字寻址；启用跨会话时追加跨会话寻址、回复、notify_when_idle 与权限边界说明；团队模式下附旧版协议响应说明。
  */
@@ -943,7 +1027,7 @@ ${
 Your plain text output is NOT visible to other agents \u2014 to communicate, you MUST call this tool.${sessionOnly ? "" : " Messages from teammates are delivered automatically; you don't check an inbox."} Refer to agents by name \u2014 names keep working after an agent completes (a send resumes it from its transcript). Use the raw \`agentId\` (format \`a...-...\`) from its spawn result only when the agent has no name, or when a newer agent took the name (latest wins). When relaying, don't quote the original \u2014 it's already rendered to the user.${nameHintBlock}${includeProtocol && !sessionOnly ? '\n\n## Protocol responses (legacy)\n\nIf you receive a JSON message with `type: "shutdown_request"` or `type: "plan_approval_request"`, respond with the matching `_response` type \u2014 echo the `request_id`, set `approve` true/false:\n\n```json\n{"to": "team-lead", "message": {"type": "shutdown_response", "request_id": "...", "approve": true}}\n{"to": "researcher", "message": {"type": "plan_approval_response", "request_id": "...", "approve": false, "feedback": "add error handling"}}\n```\n\nApproving shutdown terminates your process. Rejecting plan sends the teammate back to revise. Don\'t originate `shutdown_request` unless asked. Don\'t send structured JSON status messages \u2014 report progress through your task tools if you have them, otherwise in plain prose.' : ""}
 `.trim();
 }
-//@ chunk-astf3mhy.js:28426-28889 sole-consumer
+//@ chunk-knmkz0q8.js:31006-31469 sole-consumer
 /**
  * 把 UDS 发送错误分类为遥测原因：socket 失效、忙、消息过大、发送方限速、目标无效等。
  */
@@ -972,7 +1056,7 @@ function classifyUdsSendError(error) {
   if (error instanceof Error && error.message.startsWith("Timed out sending")) return "timeout";
   return "other";
 }
-//@ chunk-astf3mhy.js:28889-29511 sole-consumer
+//@ chunk-knmkz0q8.js:31469-32091 sole-consumer
 /**
  * 记录 SendMessage 投递遥测：路由、耗时、错误/降级分类、等待、寻址方式与固定/改名/重启/身份冲突等标记。
  */
@@ -1026,11 +1110,11 @@ function logSendDelivery({
   else if (degradedClass !== undefined) logFeatureSad("send_message_delivery", degradedClass, logFields);
   else logFeatureOk("send_message_delivery", logFields);
 }
-//@ chunk-astf3mhy.js:29511-29655 sole-consumer
+//@ chunk-knmkz0q8.js:32091-32235 sole-consumer
 var NO_PERMISSION_CHECK_SUFFIX = "and no permission check can run here; nothing was sent.";
 var READDRESS_NOT_APPROVED_SUFFIX =
   "(a plugin hook readdressed this send) was not approved; nothing was sent.";
-//@ chunk-astf3mhy.js:29655-30548 sole-consumer
+//@ chunk-knmkz0q8.js:32235-33128 sole-consumer
 /**
  * 把文本消息交给插件 session.send 钩子：钩子可直接应答（送达/拒绝）、改写收件人或文本（经重新解析、校验与权限确认），然后投递并回报结果。
  */
@@ -1102,7 +1186,7 @@ async function sendThroughHooks(sendContext) {
   else delivering.refused(message);
   return delivered;
 }
-//@ chunk-astf3mhy.js:30548-30578 sole-consumer
+//@ chunk-knmkz0q8.js:33128-33158 sole-consumer
 /**
  * 构造 {data} 形式的工具结果。
  */
@@ -1111,7 +1195,7 @@ function sendDataResult(data) {
     data,
   };
 }
-//@ chunk-astf3mhy.js:30578-31504 sole-consumer
+//@ chunk-knmkz0q8.js:33158-34084 sole-consumer
 /**
  * 应用钩子对发送的改写：只改文本时沿用原批准；改收件人时重新解析校验并向用户请求权限，拒绝或无法确认时返回 refusal。
  */
@@ -1177,7 +1261,7 @@ async function applyHookRewrite(sendContext, send) {
       };
   }
 }
-//@ chunk-astf3mhy.js:31504-32180 sole-consumer
+//@ chunk-knmkz0q8.js:34084-34760 sole-consumer
 /**
  * 检查权限处理器对发送输入的改写：形状不被接受、收件人被改或消息被改为非文本时拒绝发送并说明，否则返回改写后的输入。
  */
@@ -1209,46 +1293,50 @@ function checkHandlerRewrite(input, updatedInput, reparse) {
         degradedClass: "handler_rewrite",
       };
 }
-//@ chunk-astf3mhy.js:32180-32251 sole-consumer
-var REQUEST_ID_EXTRA_CHARS; // deferred: uses MIN_ADDRESS_REF_LENGTH (../../utils/sessionAddresses.js) of its import cycle while loading; runs once the cycle is complete
+//@ chunk-knmkz0q8.js:34760-34831 sole-consumer
+var REQUEST_ID_EXTRA_CHARS; // deferred: uses HEADER_VALUE_CHARS (../../utils/peerMessageHeaders.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_REQUEST_ID_CHARS;
 var RECIPIENT_EXTRA_CHARS;
 var max;
 var SINGLE_LINE_RE;
-deferInit("chunk-astf3mhy.js:32180", () => {
+deferInit("chunk-knmkz0q8.js:34760", () => {
   REQUEST_ID_EXTRA_CHARS = 100;
   MAX_REQUEST_ID_CHARS = MAX_SEED_NAME_CHARS + REQUEST_ID_EXTRA_CHARS;
   RECIPIENT_EXTRA_CHARS = 2 + MAX_ADDRESS_REF_LENGTH + 1;
   max = Math.max(MAX_SEED_NAME_CHARS + RECIPIENT_EXTRA_CHARS, MAX_HEADER_VALUE_LENGTH);
   SINGLE_LINE_RE = /^[^\n\r]*$/u;
 });
-//@ chunk-astf3mhy.js:32251-32310 sole-consumer
+//@ chunk-knmkz0q8.js:34831-34900 sole-consumer
+function prefixCarriedMarkers(message, messages, task) {
+  return withUntrustedPreamble(messages, isLocalAgent(task) ? task.priorCarriedMarkers : undefined) + message;
+}
+//@ chunk-knmkz0q8.js:34900-34959 sole-consumer
 function maxLengthRegex(max) {
   return new RegExp(`^[\\s\\S]{0,${max}}$`, "u");
 }
-//@ chunk-astf3mhy.js:32310-32334 sole-consumer
+//@ chunk-knmkz0q8.js:34959-34983 sole-consumer
 var REQUEST_ID_LENGTH_RE; // deferred: uses maxLengthRegex of its import cycle while loading; runs once the cycle is complete
 var RECIPIENT_LENGTH_RE;
-deferInit("chunk-astf3mhy.js:32310", () => {
+deferInit("chunk-knmkz0q8.js:34959", () => {
   REQUEST_ID_LENGTH_RE = maxLengthRegex(MAX_REQUEST_ID_CHARS);
   RECIPIENT_LENGTH_RE = maxLengthRegex(max);
 });
-//@ chunk-astf3mhy.js:32334-32372 sole-consumer
+//@ chunk-knmkz0q8.js:34983-35021 sole-consumer
 function getToAndMessageFields(input) {
   return [input.to, input.message];
 }
-//@ chunk-astf3mhy.js:32372-32400 sole-consumer
+//@ chunk-knmkz0q8.js:35021-35049 sole-consumer
 function getToField(input) {
   return [input.to];
 }
-//@ chunk-astf3mhy.js:32400-32464 sole-consumer (2.1.88 match: extractMarkupText, 1)
+//@ chunk-knmkz0q8.js:35049-35113 sole-consumer (2.1.88 match: extractMarkupText, 1)
 /**
  * 对象是否带 kind 字段（误配名 extractMarkupText）。
  */
 function isRecordWithKind(contents) {
   return typeof contents === "object" && contents !== null && "kind" in contents;
 }
-//@ chunk-astf3mhy.js:32464-32571 sole-consumer
+//@ chunk-knmkz0q8.js:35113-35220 sole-consumer
 /**
  * coerceInput 后按当前 schema 重新解析 SendMessage 输入。
  */
@@ -1259,27 +1347,27 @@ function reparseSendMessageInput(rawInput) {
   let parsed = getSendMessageInputSchema().safeParse(normalized?.input ?? rawInput);
   return parsed.success ? parsed.data : undefined;
 }
-//@ chunk-astf3mhy.js:32571-32593 sole-consumer
+//@ chunk-knmkz0q8.js:35220-35242 sole-consumer
 /**
  * toolState 键：正在恢复的代理 id → 任务 Promise，避免并发重复恢复。
  */
 class OutboxDedupMap extends Map {}
-//@ chunk-astf3mhy.js:32593-32632 affinity
+//@ chunk-knmkz0q8.js:35242-35281 affinity
 function messageFieldSchema(description) {
   return union([plainMessageSchema(description), StructuredMessageSchema()]);
 }
-//@ chunk-astf3mhy.js:32632-32700 fingerprint (2.1.88 match: inputSchema, 0.61)
+//@ chunk-knmkz0q8.js:35281-35349 fingerprint (2.1.88 match: inputSchema, 0.61)
 function plainMessageSchema(descriptionText) {
   return stringSchema().describe(descriptionText ?? "Plain text message content");
 }
-//@ chunk-astf3mhy.js:32700-33558 fingerprint (2.1.88 match: StructuredMessage, 0.489)
+//@ chunk-knmkz0q8.js:35349-36207 fingerprint (2.1.88 match: StructuredMessage, 0.489)
 /**
  * 结构化消息 schema：shutdown_request{reason?} / shutdown_response{request_id, approve, reason?} / plan_approval_response{request_id, approve, feedback?}；及跨会话 message 字段说明与默认值。
  */
 var PLAIN_MESSAGE_DESCRIPTION; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var EMPTY_MESSAGE_DEFAULT;
 var StructuredMessageSchema;
-deferInit("chunk-astf3mhy.js:32700", () => {
+deferInit("chunk-knmkz0q8.js:35349", () => {
   PLAIN_MESSAGE_DESCRIPTION =
     "Plain text message content. The recipient's human sees only the FIRST LINE as a one-line preview until they expand it, so make the first line a " +
     "clear, self-contained sentence saying what this is about \u2014 not a greeting, " +
@@ -1318,7 +1406,7 @@ deferInit("chunk-astf3mhy.js:32700", () => {
     ]),
   );
 });
-//@ chunk-astf3mhy.js:33558-34775 layout
+//@ chunk-knmkz0q8.js:36207-37424 layout
 /**
  * 构造 SendMessage 输入 schema：to（单行、限长）、summary（≤200，超长截断）、message（纯文本或结构化），跨会话版本额外有 notify_when_idle。
  */
@@ -1350,7 +1438,7 @@ function buildSendMessageInputSchema(crossSession) {
     }),
   });
 }
-//@ chunk-astf3mhy.js:34775-35045 layout
+//@ chunk-knmkz0q8.js:37424-37694 layout
 /**
  * SendMessage 输入 schema 的五个变体（本地/跨会话 × 是否允许结构化，及仅本会话代理版本）。
  */
@@ -1359,7 +1447,7 @@ var crossSessionSendMessageSchema;
 var plainLocalSendMessageSchema;
 var plainCrossSessionSendMessageSchema;
 var ownAgentsOnlySendMessageSchema;
-deferInit("chunk-astf3mhy.js:34775", () => {
+deferInit("chunk-knmkz0q8.js:37424", () => {
   localSendMessageSchema = DoctorLazy(() => buildSendMessageInputSchema(false));
   crossSessionSendMessageSchema = DoctorLazy(() => buildSendMessageInputSchema(true));
   plainLocalSendMessageSchema = DoctorLazy(() =>
@@ -1380,7 +1468,7 @@ deferInit("chunk-astf3mhy.js:34775", () => {
     }),
   );
 });
-//@ chunk-astf3mhy.js:35045-35131 layout
+//@ chunk-knmkz0q8.js:37694-37780 layout
 /**
  * 选择 SendMessage 输入 schema：messagingBeyondOwnAgentsDisabled → 只能发本会话代理；跨会话开关（tengu_harbor_kite / CLAUDE_CODE_HARBOR_KITE）开 → 含 notify_when_idle 的跨会话版本；agent swarms 决定 message 能否为结构化对象。
  */
@@ -1390,7 +1478,7 @@ function getSendMessageInputSchema() {
     return isAgentSwarmsEnabled() ? crossSessionSendMessageSchema() : plainCrossSessionSendMessageSchema();
   return isAgentSwarmsEnabled() ? localSendMessageSchema() : plainLocalSendMessageSchema();
 }
-//@ chunk-astf3mhy.js:35131-35506 layout
+//@ chunk-knmkz0q8.js:37780-38155 layout
 /**
  * UDS（本机会话）发送失败原因映射为遥测 errorClass。
  */
@@ -1413,7 +1501,7 @@ function classifyUdsSendFailure(outcome) {
       return "subscription_cap";
   }
 }
-//@ chunk-astf3mhy.js:35506-35694 layout
+//@ chunk-knmkz0q8.js:38155-38343 layout
 /**
  * 记录 UDS 发送结果遥测。
  */
@@ -1430,7 +1518,7 @@ function emitUdsSendOutcome(outcome, emit, extra = {}) {
     ...extra,
   });
 }
-//@ chunk-astf3mhy.js:35694-35977 layout
+//@ chunk-knmkz0q8.js:38343-38626 layout
 /**
  * 跨会话发送时消息为空的处理：处理器改写、未订阅或主体被拒分别返回失败结果。
  */
@@ -1459,7 +1547,7 @@ function checkEmptyCrossSessionMessage({
   }
   return;
 }
-//@ chunk-astf3mhy.js:35977-36109 layout
+//@ chunk-knmkz0q8.js:38626-38758 layout
 /**
  * notify_when_idle 资格：只有主会话可以订阅；子代理/队友请求时标记 refusedForPrincipal。
  */
@@ -1472,16 +1560,16 @@ function getNotifyIdleEligibility(input, deps) {
     refusedForPrincipal,
   };
 }
-//@ chunk-astf3mhy.js:36109-36144 layout
+//@ chunk-knmkz0q8.js:38758-38793 layout
 var EMPTY_MESSAGE_ERROR = "message must not be empty";
-//@ chunk-astf3mhy.js:36144-36219 layout
+//@ chunk-knmkz0q8.js:38793-38868 layout
 /**
  * 记录“空闲订阅因身份被拒”的遥测事件。
  */
 function logIdleSubscribeRefused() {
   logFeatureSad("cross_session_notify_idle", "subscribe_refused_principal");
 }
-//@ chunk-astf3mhy.js:36219-36385 layout
+//@ chunk-knmkz0q8.js:38868-39034 layout
 /**
  * 消息被权限处理器清空（现为空、原始有内容或订阅）。
  */
@@ -1493,7 +1581,7 @@ function wasEmptiedByHandler(input, assistantMessage, toolUseId) {
     wasNotifyStrippedByHandler(input, assistantMessage, toolUseId)
   );
 }
-//@ chunk-astf3mhy.js:36385-36453 layout
+//@ chunk-knmkz0q8.js:39034-39102 layout
 /**
  * notify_when_idle 被权限处理器去掉。
  */
@@ -1503,14 +1591,14 @@ function wasNotifyStrippedByHandler(input, assistantMessage, toolUseId) {
     coerceBooleanString(getOriginalToolUseInput(assistantMessage, toolUseId)?.notify_when_idle) === true
   );
 }
-//@ chunk-astf3mhy.js:36453-36496 layout
+//@ chunk-knmkz0q8.js:39102-39145 layout
 /**
  * 判断输入是否要求 notify_when_idle，或该字段曾被权限处理器改写掉。
  */
 function wantsOrLostNotifyIdle(input, assistantMessage, toolUseId) {
   return wantsNotifyWhenIdle(input) || wasNotifyStrippedByHandler(input, assistantMessage, toolUseId);
 }
-//@ chunk-astf3mhy.js:36496-36907 layout
+//@ chunk-knmkz0q8.js:39145-39556 layout
 /**
  * 从发出的 assistant 消息里找到该 tool_use 的原始 message/notify_when_idle（判断权限处理器是否改写过）。
  */
@@ -1531,7 +1619,7 @@ function getOriginalToolUseInput(assistantMessage, toolUseId) {
     notify_when_idle: "notify_when_idle" in inputObject ? inputObject.notify_when_idle : undefined,
   };
 }
-//@ chunk-astf3mhy.js:36907-36964 layout
+//@ chunk-knmkz0q8.js:39556-39613 layout
 function emptyMessageResult(refusedForPrincipal) {
   return {
     data: {
@@ -1540,7 +1628,7 @@ function emptyMessageResult(refusedForPrincipal) {
     },
   };
 }
-//@ chunk-astf3mhy.js:36964-37052 layout
+//@ chunk-knmkz0q8.js:39613-39701 layout
 /**
  * 输入中 notify_when_idle 为真。
  */
@@ -1548,7 +1636,7 @@ function wantsNotifyWhenIdle(input) {
   if (!("notify_when_idle" in input)) return false;
   return coerceBooleanString(input.notify_when_idle) === true;
 }
-//@ chunk-astf3mhy.js:37052-37284 layout
+//@ chunk-knmkz0q8.js:39701-39933 layout
 /**
  * 提示消息已投递但未建立空闲订阅的说明。
  */
@@ -1556,14 +1644,14 @@ var NOTIFY_IDLE_SCOPE_ERROR =
   "notify_when_idle is only supported for Claude sessions on this machine in this release (not teammates, subagents, Remote Control or cloud sessions).";
 var IDLE_SUBSCRIBE_LOST_NOTE = `
 The message was delivered, but no idle subscription was made: ${NOTIFY_IDLE_SCOPE_ERROR}`;
-//@ chunk-astf3mhy.js:37284-37324 layout
+//@ chunk-knmkz0q8.js:39933-39973 layout
 /**
  * local_<uuid> 形式的本机桌面会话地址。
  */
 function isLocalSessionAddress(address) {
   return isTopHostSession() && LOCAL_TASK_ID_PATTERN.test(address);
 }
-//@ chunk-astf3mhy.js:37324-37862 layout
+//@ chunk-knmkz0q8.js:39973-40511 layout
 /**
  * 权限处理器清空或改写发送内容时返回的失败结果（未发送、未订阅空闲通知）。
  */
@@ -1588,7 +1676,7 @@ var NOTHING_TO_SEND_RESULT = {
       "A permission handler rewrote this call so that nothing was left to send or subscribe; nothing was sent.",
   },
 };
-//@ chunk-astf3mhy.js:37862-37942 layout
+//@ chunk-knmkz0q8.js:40511-40591 layout
 /**
  * 消息为空时记录遥测并返回“没有内容可发”的结果。
  */
@@ -1597,7 +1685,7 @@ function missingMessageResult(message, release) {
   release();
   return NOTHING_TO_SEND_RESULT;
 }
-//@ chunk-astf3mhy.js:37942-38531 layout
+//@ chunk-knmkz0q8.js:40591-41180 layout
 /**
  * 空闲订阅相关说明：消息未送达需重发、只有主对话能订阅 notify_when_idle、订阅被权限处理器移除等（含展示版）。
  */
@@ -1613,7 +1701,7 @@ var SUBSCRIPTION_STRIPPED_NOTE = `
 The message was delivered, but no idle subscription was made: a permission handler removed notify_when_idle from this call.`;
 var SUBSCRIPTION_STRIPPED_DISPLAY =
   "No idle subscription was made (a permission handler removed it from the call).";
-//@ chunk-astf3mhy.js:38531-38697 layout
+//@ chunk-knmkz0q8.js:41180-41346 layout
 function describeSkippedSubscription(refusedForPrincipal, input, assistantMessage, toolUseId) {
   if (refusedForPrincipal)
     return {
@@ -1629,7 +1717,7 @@ function describeSkippedSubscription(refusedForPrincipal, input, assistantMessag
   }
   return;
 }
-//@ chunk-astf3mhy.js:38697-39031 layout
+//@ chunk-knmkz0q8.js:41346-41680 layout
 /**
  * 说明为何也没有建立空闲订阅：非主对话、被权限处理器移除，或带消息时需消息送达后才订阅。
  */
@@ -1645,7 +1733,7 @@ Nothing was subscribed either: a permission handler removed notify_when_idle fro
 Nothing was subscribed either (when a message rides along, the idle subscription is only made after that message is delivered).`
     : "";
 }
-//@ chunk-astf3mhy.js:39031-39170 fingerprint (2.1.88 match: findTeammateColor, 1)
+//@ chunk-knmkz0q8.js:41680-41819 fingerprint (2.1.88 match: findTeammateColor, 1)
 /**
  * 在 teamContext 中按名字找队友颜色。
  */
@@ -1656,7 +1744,7 @@ function findTeammateColor(appState, name) {
     if ("name" in teammate && teammate.name === name) return teammate.color;
   return;
 }
-//@ chunk-astf3mhy.js:39170-39407 layout
+//@ chunk-knmkz0q8.js:41819-42056 layout
 /**
  * 确定 SendMessage 的发送者身份：队友用自己的 agentName；否则在名字注册表里找到代理 id 对应的名字并结合任务信息生成 {from, displayName}。
  */
@@ -1676,7 +1764,7 @@ function resolveSenderIdentity(deps, agentId) {
     }
   return reportSenderIdentity(agentId, agentName, resolverState.tasks[agentId]);
 }
-//@ chunk-astf3mhy.js:39407-39547 layout
+//@ chunk-knmkz0q8.js:42056-42196 layout
 var CANNOT_RECEIVE_RESULT = {
   data: {
     success: false,
@@ -1684,7 +1772,7 @@ var CANNOT_RECEIVE_RESULT = {
       "That agent cannot receive messages (it is a background observer, or its status could not be verified).",
   },
 };
-//@ chunk-astf3mhy.js:39547-39637 layout (2.1.88 match: isTeammateAgentContext, 0.828)
+//@ chunk-knmkz0q8.js:42196-42286 layout (2.1.88 match: isTeammateAgentContext, 0.829)
 /**
  * 消息发送者名字：有 agentId 时按代理解析，否则用当前代理名，teammate 用 "teammate"，否则 team-lead。
  */
@@ -1692,7 +1780,7 @@ function getMessageSenderName(toolUseContext) {
   if (toolUseContext.agentId) return resolveSenderIdentity(toolUseContext, toolUseContext.agentId).from;
   return getAgentName() || (isTeammate() ? "teammate" : TEAM_LEAD);
 }
-//@ chunk-astf3mhy.js:39637-42328 fingerprint (2.1.88 match: handleMessage, 0.316)
+//@ chunk-knmkz0q8.js:42286-44977 fingerprint (2.1.88 match: handleMessage, 0.316)
 /**
  * 把消息写入团队队友的邮箱：按名字/成员 id 解析团队成员（必要时读团队文件），写 mailbox 并返回 routing 信息；队友不存在时提示用 Agent({name}) 派生。
  */
@@ -1826,7 +1914,7 @@ async function handleMessage(recipientName, text, summary, deps, memberAgentId, 
     },
   };
 }
-//@ chunk-astf3mhy.js:42328-42851 layout
+//@ chunk-knmkz0q8.js:44977-45500 layout
 /**
  * 给运行中的进程内队友排队消息（写邮箱并唤醒）。
  */
@@ -1863,7 +1951,7 @@ async function queueToRunningTeammate(teammateTask, text, summary, deps, display
     },
   };
 }
-//@ chunk-astf3mhy.js:42851-43128 layout
+//@ chunk-knmkz0q8.js:45500-45777 layout
 /**
  * 判断停止的代理是队友还是子代理（任务表/转录元数据）。
  */
@@ -1874,7 +1962,7 @@ async function classifyStoppedAgentKind(agentId, deps) {
   if (typeof metadata?.agentType !== "string") return "unknown";
   return metadata.taskKind === undefined ? "subagent" : "teammate";
 }
-//@ chunk-astf3mhy.js:43128-43290 layout
+//@ chunk-knmkz0q8.js:45777-45939 layout
 /**
  * 恢复已停止代理失败的分类（not_reachable/still_stopping/no_transcript/resume_failed）。
  */
@@ -1884,14 +1972,14 @@ function classifyResumeError(error) {
   if (error instanceof ResumeAgentStateError) return "no_transcript";
   return "resume_failed";
 }
-//@ chunk-astf3mhy.js:43290-43328 layout
+//@ chunk-knmkz0q8.js:45939-45976 layout
 /**
  * 恢复 agent 时使用的短展示名（类 id 形式时截断）。
  */
 function shortAgentDisplayName(name) {
   return normalizeAgentIdOrNull(name) ? truncateToLength(name, 7) : name;
 }
-//@ chunk-astf3mhy.js:43328-43832 layout
+//@ chunk-knmkz0q8.js:45976-46481 layout
 /**
  * 被消息唤醒的子代理完成后，把其报告作为 inlineHandback 交回调用方。
  */
@@ -1929,7 +2017,7 @@ function buildInlineHandback(displayName, report, context) {
     },
   };
 }
-//@ chunk-astf3mhy.js:43832-44385 fingerprint (2.1.88 match: handleShutdownRequest, 0.722)
+//@ chunk-knmkz0q8.js:46481-47034 fingerprint (2.1.88 match: handleShutdownRequest, 0.722)
 /**
  * 向队友发送 shutdown_request（写邮箱，返回 request_id）。
  */
@@ -1975,7 +2063,7 @@ async function handleShutdownRequest(recipientName, agentName, reason, toolUseCo
     },
   };
 }
-//@ chunk-astf3mhy.js:44385-46236 fingerprint (2.1.88 match: handleShutdownApproval, 0.793)
+//@ chunk-knmkz0q8.js:47034-48885 fingerprint (2.1.88 match: handleShutdownApproval, 0.791)
 /**
  * 队友批准关机：向 team-lead 写确认，进程内队友中止自己的循环，pane 队友结束进程。只有队友身份能调用。
  */
@@ -2079,7 +2167,7 @@ async function handleShutdownApproval(requestId, context) {
     ...degradedExtra,
   };
 }
-//@ chunk-astf3mhy.js:46236-46688 fingerprint (2.1.88 match: handleShutdownRejection, 0.883)
+//@ chunk-knmkz0q8.js:48885-49337 fingerprint (2.1.88 match: handleShutdownRejection, 0.883)
 /**
  * 队友拒绝关机：向 team-lead 写拒绝消息（必须带 reason）。
  */
@@ -2120,7 +2208,7 @@ async function handleShutdownRejection(requestId, reason, deps) {
     },
   };
 }
-//@ chunk-astf3mhy.js:46688-46777 layout
+//@ chunk-knmkz0q8.js:49337-49426 layout
 /**
  * SendMessagePreconditionError：调用身份不满足（如非队友批准关机）。
  */
@@ -2130,7 +2218,7 @@ class SendMessagePreconditionError extends Error {
     this.name = "SendMessagePreconditionError";
   }
 }
-//@ chunk-astf3mhy.js:46777-47639 fingerprint (2.1.88 match: handlePlanApproval, 0.652)
+//@ chunk-knmkz0q8.js:49426-50288 fingerprint (2.1.88 match: handlePlanApproval, 0.652)
 /**
  * team-lead 批准队友的计划（plan_approval_response approve=true），写入队友邮箱。
  */
@@ -2186,7 +2274,7 @@ async function handlePlanApproval(recipientName, agentName, requestId, feedback,
     },
   };
 }
-//@ chunk-astf3mhy.js:47639-48281 fingerprint (2.1.88 match: handlePlanRejection, 0.827)
+//@ chunk-knmkz0q8.js:50288-50930 fingerprint (2.1.88 match: handlePlanRejection, 0.827)
 /**
  * team-lead 拒绝队友的计划并附反馈。
  */
@@ -2231,10 +2319,10 @@ async function handlePlanRejection(recipientName, agentName, requestId, feedback
     },
   };
 }
-//@ chunk-astf3mhy.js:48281-48513 layout
+//@ chunk-knmkz0q8.js:50930-51162 layout
 var CROSS_MACHINE_RESIDENCY_ERROR =
   "Cross-machine messaging is unavailable: it sends the message through Anthropic servers, which is not allowed on a third-party provider or with nonessential traffic disabled. Messages to sessions on this machine still work.";
-//@ chunk-astf3mhy.js:48513-48700 layout
+//@ chunk-knmkz0q8.js:51162-51349 layout
 /**
  * 跨机器消息不可用的原因文本（第三方 provider / 禁用非必要流量等）。
  */
@@ -2245,7 +2333,7 @@ function getCrossMachineUnavailableMessage(via) {
     ? CROSS_MACHINE_RESIDENCY_ERROR
     : `Cross-machine messaging is unavailable: ${remoteSendBlock.reason} Messages to sessions on this machine still work.`;
 }
-//@ chunk-astf3mhy.js:48700-48841 layout
+//@ chunk-knmkz0q8.js:51349-51490 layout
 /**
  * 本会话没有回信地址的原因（Remote Control 未连接 / 容器无地址）。
  */
@@ -2255,39 +2343,39 @@ function getReplyAddressProblem() {
     return ownRemoteSessionId() === undefined ? "no-container-address" : undefined;
   return "rc-disconnected";
 }
-//@ chunk-astf3mhy.js:48841-48955 layout
+//@ chunk-knmkz0q8.js:51490-51604 layout
 function describeReplyAddressProblem(problem) {
   return problem === "rc-disconnected"
     ? "Remote Control is not connected"
     : "this session has no reply address";
 }
-//@ chunk-astf3mhy.js:48955-49141 layout
+//@ chunk-knmkz0q8.js:51604-51790 layout
 function unnamedSessionNote(hasSessionName) {
   return env.CLAUDE_CODE_REMOTE === true && !hasSessionName && ownRemoteSessionId() !== undefined
     ? "; note: this session has no name yet, so the receiver can answer only by the address on the message, not by name"
     : "";
 }
-//@ chunk-astf3mhy.js:49141-49189 layout
+//@ chunk-knmkz0q8.js:51790-51838 layout
 /**
  * tengu_deep_feather：coerceInput 是否拆分字符串化的 JSON 输入。
  */
 function isDeepFeatherSplitEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_deep_feather", true);
 }
-//@ chunk-astf3mhy.js:49189-49237 layout
+//@ chunk-knmkz0q8.js:51838-51886 layout
 /**
  * 读取 tengu_jaunty_ember 开关。
  */
 function isJauntyEmberEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_jaunty_ember", false);
 }
-//@ chunk-astf3mhy.js:49237-49361 layout
+//@ chunk-knmkz0q8.js:51886-52010 layout
 function getQueueBusyCheck(deps) {
   return deps.agentId === undefined && deps.agentContext?.agentType === "main"
     ? createQueueBusyCheck(deps.messageQueue, deps.messages, deps.signal)
     : undefined;
 }
-//@ chunk-astf3mhy.js:49361-49596 layout
+//@ chunk-knmkz0q8.js:52010-52245 layout
 /**
  * CLAUDE_CODE_FORWARD_USER_INTENT 且 tengu_jaunty_ember 时，把主线程用户意图附件转发给被消息恢复的代理。
  */
@@ -2310,7 +2398,7 @@ function getFreshTurnsForAgent(deps, agentId) {
     liveMessages === undefined ? "snapshot" : "live",
   );
 }
-//@ chunk-astf3mhy.js:49596-50715 layout
+//@ chunk-knmkz0q8.js:52245-53364 layout
 /**
  * 把工具依赖（session/storage/agentId/taskRegistry/tools…）与本次调用（toolUseId/permissionPhase/signal）合成 getter 视图。
  */
@@ -2399,7 +2487,7 @@ function makeSendMessageDeps(deps, toolCall) {
     },
   };
 }
-//@ chunk-astf3mhy.js:50715-50923 layout
+//@ chunk-knmkz0q8.js:53364-53572 layout
 /**
  * 取出 deliver 需要的 parentMessage/ask/runEngine，缺失时抛错。
  */
@@ -2413,7 +2501,7 @@ function requireDispatchExecutor(toolCall) {
     runEngine,
   };
 }
-//@ chunk-astf3mhy.js:50923-51000 layout
+//@ chunk-knmkz0q8.js:53572-53649 layout
 /**
  * 删除 backfillObservableInput 加入的观测字段。
  */
@@ -2426,7 +2514,7 @@ function stripObservableFields(input) {
     }
   return removed;
 }
-//@ chunk-astf3mhy.js:51000-51130 layout
+//@ chunk-knmkz0q8.js:53649-53779 layout
 /**
  * 收件人类别：会话地址 / main / agentId / 名字。
  */
@@ -2436,12 +2524,12 @@ function classifyRecipientKind(recipient) {
   if (isAddressableSlug(recipient)) return "agent";
   return "name";
 }
-//@ chunk-astf3mhy.js:51130-95535 callgraph-witnessed (2.1.88 match: SendMessageTool, 0.177)
+//@ chunk-knmkz0q8.js:53779-98490 callgraph-witnessed (2.1.88 match: SendMessageTool, 0.176)
 /**
  * SendMessage 工具定义（shouldDefer，maxResultSizeChars 100000）：输入 schema 随策略/跨会话/agent swarms 开关变化；validateInput 拒绝广播 "*"、协议帧、带 @ 的收件人、空消息与不合法的结构化消息；checkPermissions 处理跨机器隔离（isolatePeerMachines）与 bridge 授权，auto 模式交分类器；call 先跑插件 message 钩子再 deliver，按解析出的收件人类型路由到主会话、活动/停止/被驱逐的子代理（恢复）、本机会话（UDS）、云端会话（bridge）、队友邮箱或结构化协议处理。
  */
 var SendMessageTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-astf3mhy.js:51130", () => {
+deferInit("chunk-knmkz0q8.js:53779", () => {
   SendMessageTool = buildTool({
     name: SENDMESSAGE,
     searchHint: "send messages to agent teammates",
@@ -3118,7 +3206,10 @@ ${handbackResultContent[0].text}`,
             let from = agentId ? resolveSenderIdentity(deps, agentId).from : undefined;
             let message =
               agentId !== undefined && from !== undefined
-                ? agentMessageTag(from, input.message)
+                ? agentMessageTag(
+                    from,
+                    prefixCarriedMarkers(input.message, deps.messages(), deps.taskRegistry.get(agentId)),
+                  )
                 : input.message;
             let senderNote = describeSubagentSender(agentId, from, {
               oneWay: false,
@@ -3271,7 +3362,12 @@ ${handbackResultContent[0].text}`,
               );
               if (missingResult !== undefined) return missingResult;
               let message_2 =
-                agentId !== undefined && from !== undefined ? agentMessageTag(from, message) : message;
+                agentId !== undefined && from !== undefined
+                  ? agentMessageTag(
+                      from,
+                      prefixCarriedMarkers(message, deps.messages(), deps.taskRegistry.get(agentId)),
+                    )
+                  : message;
               let problem = getReplyAddressProblem();
               let senderNote = describeSubagentSender(agentId, from, {
                 oneWay: problem !== undefined,
@@ -3369,7 +3465,10 @@ ${handbackResultContent[0].text}`,
               if (refusedForPrincipal) logIdleSubscribeRefused();
               let message =
                 agentId !== undefined && from !== undefined
-                  ? agentMessageTag(from, input.message)
+                  ? agentMessageTag(
+                      from,
+                      prefixCarriedMarkers(input.message, deps.messages(), deps.taskRegistry.get(agentId)),
+                    )
                   : input.message;
               let hasOwnSocket = ownMessagingSocket() !== undefined;
               let senderNote = describeSubagentSender(agentId, from, {
@@ -3555,7 +3654,7 @@ ${handbackResultContent[0].text}`,
               },
             };
           }
-          let any = deps.tools.some((tool) => toolMatchesName(tool, LISTAGENTS));
+          let any = deps.tools.some((tool) => matchesToolName(tool, LISTAGENTS));
           let listAgentsHint = any ? ` (${LISTAGENTS} lists them)` : "";
           if (
             resolvedRecipient.kind === "agent-live" ||
@@ -3981,10 +4080,12 @@ ${reboundHint}`,
               data: mailboxResult.data,
             };
           }
-          let messageBody =
+          let text =
             agentId !== undefined && from !== undefined
-              ? agentMessageTag(from, input.message)
+              ? prefixCarriedMarkers(input.message, deps.messages(), deps.taskRegistry.get(agentId))
               : input.message;
+          let messageBody =
+            agentId !== undefined && from !== undefined ? agentMessageTag(from, text) : input.message;
           let toolsUsed =
             agentId !== undefined && from !== undefined ? toolsUsedForSummary(deps.messages()) : [];
           let toolsUsedField =
@@ -4003,7 +4104,7 @@ ${reboundHint}`,
                   ...(senderName && {
                     name: senderName,
                   }),
-                  body: normalizeAgentMessageBody(input.message),
+                  body: normalizeAgentMessageBody(text),
                   ...(hookCaller !== undefined && {
                     plugin: hookCaller,
                   }),
@@ -4063,7 +4164,7 @@ ${reboundHint}`,
                   },
                 };
               }
-              enqueueCommand({
+              enqueue({
                 mode: "prompt",
                 agentId: mainAgentId(),
                 value: messageBody,
@@ -4083,11 +4184,9 @@ ${reboundHint}`,
               };
             }
             case "agent-live": {
-              let heldResult_2 =
-                deps.taskRegistry.get(resolvedRecipient.agentId)?.status === "running"
-                  ? undefined
-                  : heldResult("resume", agentNotResumedText);
-              if (heldResult_2 !== undefined) return heldResult_2;
+              let isRunning = deps.taskRegistry.get(resolvedRecipient.agentId)?.status === "running";
+              let resumeRefusal = isRunning ? undefined : heldResult("resume", agentNotResumedText);
+              if (resumeRefusal !== undefined) return resumeRefusal;
               if (agentId !== undefined && !maySendOneMore(agentId)) {
                 emitRouteTelemetry("in_process", undefined, {
                   degradedClass: "session_full",
@@ -4106,11 +4205,15 @@ ${reboundHint}`,
                 forwarded: getFreshTurnsForAgent(deps, resolvedRecipient.agentId),
                 ...toolsUsedField,
               });
+              let forwardNote =
+                isRunning && hookCaller === undefined && !isUnknownPluginSpawnedAgent(deps)
+                  ? forwardPendingMessageNow(resolvedRecipient.agentId, agentId, deps)
+                  : "";
               emitRouteTelemetry("in_process");
               return {
                 data: {
                   success: true,
-                  message: `Message queued for delivery to ${resolvedRecipient.agentName} at its next tool round.${isCcsTenant() ? "" : " If it finishes first, it is resumed with the message and notifies again, so wait for that notification before resending."}`,
+                  message: `Message queued for delivery to ${resolvedRecipient.agentName} at its next tool round.${forwardNote}${isCcsTenant() ? "" : " If it finishes first, it is resumed with the message and notifies again, so wait for that notification before resending."}`,
                   ...extraData,
                 },
               };
@@ -4273,7 +4376,7 @@ ${reboundHint}`,
                   if (heldResult_2 !== undefined) return heldResult_2;
                   let queueResult = await queueToRunningTeammate(
                     teammateTask,
-                    input.message,
+                    text,
                     input.summary,
                     deps,
                     resolvedRecipient.agentName,
@@ -4309,7 +4412,7 @@ ${reboundHint}`,
                   if (heldResult_2 !== undefined) return heldResult_2;
                   let queueResult = await queueToRunningTeammate(
                     teammateTask,
-                    input.message,
+                    text,
                     input.summary,
                     deps,
                     teammateTask.identity.agentName,
@@ -4341,7 +4444,7 @@ ${reboundHint}`,
                       if (heldResult_2 !== undefined) return heldResult_2;
                       let queueResult = await queueToRunningTeammate(
                         task,
-                        input.message,
+                        text,
                         input.summary,
                         deps,
                         resolvedRecipient.agentName,
@@ -4358,9 +4461,14 @@ ${reboundHint}`,
                     deferred.resolve(null);
                     return heldResult_2;
                   }
+                  allPeerOrigins([
+                    {
+                      origin: messageOrigin,
+                    },
+                  ]);
                   let resumeResult = await runEngine(resumeInProcessTeammate, {
                     resumableAgentId: agentId_2,
-                    prompt: input.message,
+                    prompt: text,
                     senderName: from,
                     meta: teammateMeta,
                     fallbackName: resolvedRecipient.agentName,
@@ -4762,7 +4870,10 @@ ${skippedSubscription.display}`
                 input_2 === input
                   ? messageBody
                   : agentId !== undefined && from !== undefined
-                    ? agentMessageTag(from, message)
+                    ? agentMessageTag(
+                        from,
+                        prefixCarriedMarkers(message, deps.messages(), deps.taskRegistry.get(agentId)),
+                      )
                     : message;
               let hasSessionName = getCurrentSessionOffBoxPeerName();
               let sendResult = await postInterClaudeMessage(
@@ -4857,7 +4968,7 @@ ${skippedSubscription.display}`
               if (heldResult_2 !== undefined) return heldResult_2;
               let { data: mailboxResult, errorClass } = await handleMessage(
                 resolvedRecipient.recipientName,
-                input.message,
+                text,
                 input.summary,
                 deps,
                 resolvedRecipient.memberAgentId,
@@ -4930,7 +5041,7 @@ ${skippedSubscription.display}`
     },
   });
 });
-//@ chunk-18hwfzwa.js:1670037-1670156 callgraph-fingerprint (2.1.88 match: handleBroadcast, 0.172)
+//@ chunk-czq1j3j2.js:1716074-1716193 callgraph-fingerprint (2.1.88 match: handleBroadcast, 0.173)
 /**
  * 发送者类别：进程内子代理 / 队友（带名字）/ 会话。
  */
@@ -4948,4 +5059,4 @@ function getSenderKind() {
     kind: "session",
   };
 }
-export { canSubagentSend, getSenderKind, isMessagingLimitedToOwnAgents, SendMessageTool };
+export { isMessagingLimitedToOwnAgents, canSubagentSend, getSenderKind, SendMessageTool };

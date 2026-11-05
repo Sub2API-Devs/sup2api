@@ -3,10 +3,10 @@
  *
  * 终端文本工具：按宽度换行、截断内容并显示 "+N more lines"。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/terminal.ts
- * pieces: chunk-ah34pb7m.js (1), chunk-bn7jsn5n.js (4)
- * attribution: fingerprint 2, affinity 1, layout 1, placement 1
+ * pieces: chunk-81c4jqdt.js (4), chunk-wjygkcr4.js (1)
+ * attribution: affinity 1, fingerprint 2, layout 1, placement 1
  */
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { sequential } from "./sequential.js";
@@ -18,10 +18,10 @@ import {
 } from "../components/messages/SystemNoticeMessage.js";
 import { truncateToLength } from "./stringUtils.js";
 
-//@ chunk-bn7jsn5n.js:635-648 affinity
+//@ chunk-81c4jqdt.js:635-648 affinity
 var MAX_TRUNCATION_LINES = 3;
 var MIN_WRAP_WIDTH = 10;
-//@ chunk-bn7jsn5n.js:648-1006 fingerprint (2.1.88 match: wrapText, 0.843)
+//@ chunk-81c4jqdt.js:648-1006 fingerprint (2.1.88 match: wrapText, 0.843)
 function wrapText(text, wrapWidth) {
   let lines = text.split(`
 `);
@@ -61,7 +61,7 @@ function wrapText(text, wrapWidth) {
     remainingLines: Math.max(0, remainingLines),
   };
 }
-//@ chunk-bn7jsn5n.js:1006-1372 layout (2.1.88 match: wrapText, 0.814)
+//@ chunk-81c4jqdt.js:1006-1372 layout (2.1.88 match: wrapText, 0.814)
 function wrapText_2(content, terminalWidth, suppressExpandHint = false) {
   let trimmedContent = content.trimEnd();
   if (!trimmedContent) return "";
@@ -96,7 +96,7 @@ function wrapText_2(content, terminalWidth, suppressExpandHint = false) {
   ].filter(Boolean).join(`
 `);
 }
-//@ chunk-bn7jsn5n.js:1372-1778 placement
+//@ chunk-81c4jqdt.js:1372-1778 placement
 /**
  * 文本按宽度换行后是否超过显示行数上限。
  */
@@ -134,7 +134,7 @@ function exceedsLineLimit(content, columns) {
   }
   return false;
 }
-//@ chunk-ah34pb7m.js:54284-54747 fingerprint (2.1.88 match: renderTruncatedContent, 0.433)
+//@ chunk-wjygkcr4.js:54901-55363 fingerprint (2.1.88 match: renderTruncatedContent, 0.433)
 function renderTruncatedContent(
   content,
   { maxChars = HOOK_FEEDBACK_MAX_WIDTH, maxLines = HOOK_FEEDBACK_MAX_LINES + 1, preserveLayout = false } = {},
@@ -163,4 +163,4 @@ function renderTruncatedContent(
     mapped.push(`\u2026 +${hiddenLineCount} more ${hiddenLineCount === 1 ? "line" : "lines"}`);
   return mapped;
 }
-export { exceedsLineLimit, renderTruncatedContent, wrapText_2 };
+export { exceedsLineLimit, wrapText_2, renderTruncatedContent };

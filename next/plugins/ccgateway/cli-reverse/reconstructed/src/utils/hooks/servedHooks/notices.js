@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：服务端钩子提示文案
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (18)
  * attribution: placement 18
  */
 
-//@ chunk-e6aww6q8.js:878616-879341 placement
+//@ chunk-5xgkngpb.js:889090-889815 placement
 /**
  * 服务端 hook 未运行原因的说明文本。
  */
@@ -24,11 +24,11 @@ var HOOK_NOT_RUN_REASONS = {
     "Claude cannot confirm that the folder it would start in lies outside the synced project, which the cloud session can rewrite",
   model_hook: "an agent or prompt hook cannot run for a call from a cloud session",
 };
-//@ chunk-e6aww6q8.js:879341-879479 placement
+//@ chunk-5xgkngpb.js:889815-889953 placement
 function hookNotRunNotice(agentKind, type, reasonCode) {
   return `A ${agentKind} ${type} hook on this machine was not run for this call: ${HOOK_NOT_RUN_REASONS[reasonCode]}. Its output is not part of this result.`;
 }
-//@ chunk-e6aww6q8.js:879479-881402 placement
+//@ chunk-5xgkngpb.js:889953-891876 placement
 /**
  * 服务端下发钩子的提示文案（跳过不安全的钩子、钩子在会话中被修改等）。
  */
@@ -54,24 +54,24 @@ var HOOK_NOT_RECORDED_QUESTION =
   "This project's command check is not the one recorded when this computer was attached, so it is not run. Approve this command?";
 var HOOK_CHANGED_QUESTION =
   "This project's command check changed since the last time this computer served this project, so it is not run this time. Approve this command? (If you approve, this computer also accepts the changed check and runs it for this project from the next session on.)";
-//@ chunk-e6aww6q8.js:881402-881817 placement
+//@ chunk-5xgkngpb.js:891876-892291 placement
 /**
  * 生成询问是否使用已更新 hook 脚本的提示。
  */
 function hookScriptChangedQuestion(previousVersion, currentVersion) {
   return `A script in this project checks each command before it runs. It changed since this computer last used it, for example after a project update (version ${previousVersion} \u2192 ${currentVersion}, not shown). Use the updated script? Yes: this command runs now, then the script runs in a read-only sandbox, can only block or question commands, and becomes the expected one. No: it is not run and each command asks you.`;
 }
-//@ chunk-e6aww6q8.js:881817-882002 placement
+//@ chunk-5xgkngpb.js:892291-892476 placement
 var HOOK_UPDATED_NOT_ACCEPTED_QUESTION =
   "This project's command check changed since the last time this computer served this project, and the updated one was not accepted here, so it is not run. Approve this command?";
-//@ chunk-e6aww6q8.js:882002-882060 placement
+//@ chunk-5xgkngpb.js:892476-892534 placement
 /**
  * 若文本以"钩子在磁盘上被修改"的问题结尾，返回最后一条问题。
  */
 function lastIfChangedQuestion(message, changedHookKeys) {
   return message.endsWith(HOOK_CHANGED_QUESTION) ? changedHookKeys?.at(-1) : undefined;
 }
-//@ chunk-e6aww6q8.js:882060-882166 placement
+//@ chunk-5xgkngpb.js:892534-892640 placement
 /**
  * 在问题列表中找出文本以其结尾的最后一条。
  */
@@ -81,7 +81,7 @@ function findLastMatchingQuestion(message, changedHookKeys, updatedAsks) {
     return question !== undefined && message.endsWith(question);
   });
 }
-//@ chunk-e6aww6q8.js:882166-882890 placement
+//@ chunk-5xgkngpb.js:892640-893364 placement
 /**
  * 钩子更新相关提示：接受更新后的检查、检查停止工作、本次会话跳过检查的说明与询问。
  */
@@ -94,14 +94,14 @@ var HOOK_STOPPED_WORKING_QUESTION =
 var SERVED_HOOK_SET_ASIDE = "served-hook-set-aside";
 var HOOK_SET_ASIDE_NOTICE =
   "You let a cloud session run commands without a project's command check for the rest of its session, after the check stopped working on changed files. The check is used again the next time this computer serves that project.";
-//@ chunk-e6aww6q8.js:882890-882948 placement
+//@ chunk-5xgkngpb.js:893364-893422 placement
 /**
  * 若文本以"检查已停止工作"的问题结尾，返回最后一条。
  */
 function lastIfStoppedQuestion(message, stoppedWorkingHookKeys) {
   return message.endsWith(HOOK_STOPPED_WORKING_QUESTION) ? stoppedWorkingHookKeys?.at(-1) : undefined;
 }
-//@ chunk-e6aww6q8.js:882948-883790 placement
+//@ chunk-5xgkngpb.js:893422-894264 placement
 /**
  * 项目命令检查与记录不一致时的说明：本次不运行，改为逐条询问。
  */
@@ -114,18 +114,18 @@ var HOOK_UPDATED_ACCEPTED_NOTE =
 var HOOK_WANTS_CONFIRM_QUESTION = "This project's command check wants you to confirm this command.";
 var HOOK_REWRITE_REFUSED_QUESTION =
   "This project's command check wanted to change this command, which it may not do for a cloud session. Approve the command as written?";
-//@ chunk-e6aww6q8.js:883790-883929 placement
+//@ chunk-5xgkngpb.js:894264-894403 placement
 function hookCheckUnfinishedQuestion(reason) {
   return `This project's command check couldn't finish on this computer (${reason}), so Claude needs your OK to run this command.`;
 }
-//@ chunk-e6aww6q8.js:883929-884166 placement
+//@ chunk-5xgkngpb.js:894403-894640 placement
 function hookBlockedMessage(checkLabel, reason, isStale) {
   let message = `A command check in this project (${checkLabel}) blocked this command: ${reason}`;
   return isStale
     ? `${message} (this computer is still using the check from before the project's files changed. Reconnect the computer to use the new one.)`
     : message;
 }
-//@ chunk-e6aww6q8.js:884166-884931 placement
+//@ chunk-5xgkngpb.js:894640-895405 placement
 /**
  * 项目 hook 未被本机用户接受时的说明。
  */
@@ -135,7 +135,7 @@ var HOOKS_SANDBOXED_NOTE =
   "Project command checks run in a read-only sandbox on this computer for this session.";
 var HOOK_CHANGED_ON_DISK_NOTE =
   "This project's command check changed on disk during this session (for example after a git checkout). This computer keeps using the version recorded when the session connected. The changed one is not run. The recorded version may be looser or stricter than the new one. The person is asked about the new one the next time this computer serves this project.";
-//@ chunk-e6aww6q8.js:884931-885138 placement
+//@ chunk-5xgkngpb.js:895405-895612 placement
 function hookCheckOutputNote(checkLabel, kind, text) {
   return `This project's command check (${checkLabel}) ${
     {
@@ -145,14 +145,14 @@ function hookCheckOutputNote(checkLabel, kind, text) {
     }[kind]
   }: ${text}`;
 }
-//@ chunk-e6aww6q8.js:885138-885470 placement
+//@ chunk-5xgkngpb.js:895612-895944 placement
 /**
  * 生成 hook 连续三次需要确认后不再运行的提示。
  */
 function hookStruckOutNotice(checkLabel) {
   return `This project's command check (${checkLabel}) needed the person's OK three times in a row on this computer, so it is not run again for this session and each command asks instead. If it could not finish there, make it work read-only (no writes outside $TMPDIR, no network, no tools installed under the home directory).`;
 }
-//@ chunk-e6aww6q8.js:885470-886048 placement
+//@ chunk-5xgkngpb.js:895944-896522 placement
 /**
  * 钩子报错与命令期间设置文件变化的提示文案，以及设置来源标签。
  */
@@ -166,7 +166,7 @@ var SETTINGS_SOURCE_LABELS = {
   managed: "the managed settings",
   launch: "the settings named when Claude Code was started",
 };
-//@ chunk-e6aww6q8.js:886048-886379 placement
+//@ chunk-5xgkngpb.js:896522-896853 placement
 /**
  * 生成命令运行期间本机设置文件变化的通知。
  */
@@ -176,7 +176,7 @@ function servedSettingsChangedNotice(tier, telling) {
     text: `A Claude Code settings file on this computer (${SETTINGS_SOURCE_LABELS[tier]}) changed while a command from your cloud session was running. The command may have changed it, or something else did: you, another program, or Claude Code itself. Check those settings before you go on.`,
   };
 }
-//@ chunk-e6aww6q8.js:886379-886845 placement
+//@ chunk-5xgkngpb.js:896853-897319 placement
 /**
  * 命令运行期间设置文件变化的说明及相关通知键。
  */
@@ -191,6 +191,22 @@ export {
   HOOK_NOT_RUN_QUESTIONS,
   hookNotRunNotice,
   READ_LIMIT_BLOCKED_QUESTION,
+  HOOK_NOT_RECORDED_QUESTION,
+  hookScriptChangedQuestion,
+  HOOK_CHANGED_QUESTION,
+  HOOK_UPDATED_NOT_ACCEPTED_QUESTION,
+  HOOK_CHANGED_ASKING_PERSON,
+  HOOK_CHANGED_ASKS_INSTEAD,
+  hookCheckOutputNote,
+  HOOK_REWRITE_REFUSED_QUESTION,
+  HOOK_WANTS_CONFIRM_QUESTION,
+  hookBlockedMessage,
+  hookCheckUnfinishedQuestion,
+  HOOK_CHANGED_ON_DISK_NOTE,
+  HOOK_UPDATED_ACCEPTED_NOTE,
+  HOOKS_SANDBOXED_NOTE,
+  HOOK_STOPPED_WORKING_QUESTION,
+  hookStruckOutNotice,
   HOOK_NOT_ACCEPTED_NOTICE,
   lastIfStoppedQuestion,
   SERVED_HOOK_NOTICES,
@@ -209,20 +225,4 @@ export {
   servedSettingsChangedNotice,
   SERVED_HOOK_ERROR_NOTICES,
   HOOK_ERRORED_NOTICE,
-  HOOK_NOT_RECORDED_QUESTION,
-  hookScriptChangedQuestion,
-  HOOK_CHANGED_QUESTION,
-  HOOK_UPDATED_NOT_ACCEPTED_QUESTION,
-  HOOK_CHANGED_ASKING_PERSON,
-  HOOK_CHANGED_ASKS_INSTEAD,
-  hookCheckOutputNote,
-  HOOK_REWRITE_REFUSED_QUESTION,
-  HOOK_WANTS_CONFIRM_QUESTION,
-  hookBlockedMessage,
-  hookCheckUnfinishedQuestion,
-  HOOK_CHANGED_ON_DISK_NOTE,
-  HOOK_UPDATED_ACCEPTED_NOTE,
-  HOOKS_SANDBOXED_NOTE,
-  HOOK_STOPPED_WORKING_QUESTION,
-  hookStruckOutNotice,
 };

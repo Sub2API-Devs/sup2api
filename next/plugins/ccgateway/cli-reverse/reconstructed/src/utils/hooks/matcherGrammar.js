@@ -3,33 +3,15 @@
  *
  * 钩子 matcher 语法（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4nwcj4sh.js (21)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-85qer80d.js (19), chunk-sr7jp7gh.js (2)
  * attribution: placement 21
  */
 import { isDiskless } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-4nwcj4sh.js:370-444 placement
-/**
- * 取 MCP 工具的有效权限上限（为 ask 时返回 ceiling）。
- */
-var mcpPermissionCeiling = (tool) =>
-  tool.mcpInfo?.effectiveMaxPermission === "ask"
-    ? {
-        ceiling: "ask",
-      }
-    : {};
-//@ chunk-4nwcj4sh.js:444-495 placement
-/**
- * 构造 matcher 的测试目标（工具名与权限上限）。
- */
-var matcherTestTarget = (tool) => ({
-  tool: tool.name,
-  ceiling: mcpPermissionCeiling(tool).ceiling,
-});
-//@ chunk-4nwcj4sh.js:495-558 placement
+//@ chunk-85qer80d.js:226-289 placement
 class MatcherGrammarError extends Error {
   kind;
   constructor(kind) {
@@ -37,7 +19,7 @@ class MatcherGrammarError extends Error {
     this.kind = kind;
   }
 }
-//@ chunk-4nwcj4sh.js:558-949 placement
+//@ chunk-85qer80d.js:289-680 placement
 /**
  * 匹配器语法使用的字符区间（数字、单词字符等）。
  */
@@ -54,7 +36,7 @@ var NAMED_CAPTURE_GROUP_RE;
 var MAX_MATCHER_NODES;
 var NFA_STATE_MULTIPLIER;
 var REGEX_META_CHARS;
-deferInit("chunk-4nwcj4sh.js:558", () => {
+deferInit("chunk-85qer80d.js:289", () => {
   DIGIT_RANGES = [[48, 57]];
   WORD_CHAR_RANGES = [
     [48, 57],
@@ -96,7 +78,7 @@ deferInit("chunk-4nwcj4sh.js:558", () => {
   NFA_STATE_MULTIPLIER = 6;
   REGEX_META_CHARS = "^$\\.*+?()[]{}|";
 });
-//@ chunk-4nwcj4sh.js:949-1066 placement
+//@ chunk-85qer80d.js:680-797 placement
 function inRanges(ranges, code) {
   let low = 0;
   let high = ranges.length;
@@ -107,7 +89,7 @@ function inRanges(ranges, code) {
   }
   return low < ranges.length && code >= ranges[low][0];
 }
-//@ chunk-4nwcj4sh.js:1066-1179 placement
+//@ chunk-85qer80d.js:797-910 placement
 function complementRanges(ranges) {
   let missing = [];
   let cursor = 0;
@@ -118,7 +100,7 @@ function complementRanges(ranges) {
   if (cursor <= 65535) missing.push([cursor, 65535]);
   return missing;
 }
-//@ chunk-4nwcj4sh.js:1179-1337 placement
+//@ chunk-85qer80d.js:910-1068 placement
 function mergeRanges(ranges) {
   let merged = [];
   for (let [start, end] of ranges.toSorted((a, b) => a[0] - b[0])) {
@@ -128,7 +110,7 @@ function mergeRanges(ranges) {
   }
   return merged;
 }
-//@ chunk-4nwcj4sh.js:1337-3450 placement
+//@ chunk-85qer80d.js:1068-3181 placement
 /**
  * 解析钩子 matcher 语法中的序列/二选一结构
  */
@@ -292,7 +274,7 @@ function parseMatcherSequence(pattern) {
   if (index < pattern.length) throw new MatcherGrammarError("other");
   return ast;
 }
-//@ chunk-4nwcj4sh.js:3450-3540 placement
+//@ chunk-85qer80d.js:3181-3271 placement
 var OPCODES = {
   match: 0,
   unit: 1,
@@ -305,11 +287,11 @@ var OPCODES = {
   notBoundary: 8,
   look: 9,
 };
-//@ chunk-4nwcj4sh.js:3540-3593 placement
+//@ chunk-85qer80d.js:3271-3324 placement
 function spendProgramRoom(room) {
   if (--room.left < 0) throw new MatcherGrammarError("too_large");
 }
-//@ chunk-4nwcj4sh.js:3593-3652 placement
+//@ chunk-85qer80d.js:3324-3383 placement
 function newProgram(room) {
   return {
     room,
@@ -319,7 +301,7 @@ function newProgram(room) {
     sets: [],
   };
 }
-//@ chunk-4nwcj4sh.js:3652-3751 placement
+//@ chunk-85qer80d.js:3383-3482 placement
 function emitOp(program, op, arg = 0, set) {
   spendProgramRoom(program.room);
   program.to.push(arg);
@@ -327,7 +309,7 @@ function emitOp(program, op, arg = 0, set) {
   program.sets.push(set);
   return program.ops.push(op) - 1;
 }
-//@ chunk-4nwcj4sh.js:3751-4788 placement
+//@ chunk-85qer80d.js:3482-4519 placement
 /**
  * 把匹配器语法树节点编译为匹配程序的指令（单元、集合、前瞻、分支等）。
  */
@@ -381,7 +363,7 @@ function compileMatcherNode(node, program, looks, reversed) {
     }
     case "repeat": {
       let loopStart = ops.length;
-      for (let j = 0; j < node.least; j++) {
+      for (let idx = 0; idx < node.least; idx++) {
         loopStart = ops.length;
         compileMatcherNode(node.item, program, looks, reversed);
       }
@@ -406,7 +388,7 @@ function compileMatcherNode(node, program, looks, reversed) {
     }
   }
 }
-//@ chunk-4nwcj4sh.js:4788-5571 placement
+//@ chunk-85qer80d.js:4519-5302 placement
 /**
  * 以 NFA 模拟的方式执行编译后的 matcher 程序：逐字符推进状态集合，处理单元、字符集、行首/行尾、词边界与环视结果，返回是否匹配（或为环视填充每个位置的匹配表）。
  */
@@ -468,7 +450,7 @@ function runMatcherProgram({ ops, to, other, sets }, input, looks, captures) {
     position += captures === undefined ? 1 : -1;
   }
 }
-//@ chunk-4nwcj4sh.js:5571-5808 placement
+//@ chunk-85qer80d.js:5302-5539 placement
 /**
  * 把解析后的 matcher 语法树编译为线性指令程序（类 Thompson NFA），环视子表达式先单独编译；返回逐位置模拟执行的 test 函数，保证线性时间匹配。
  */
@@ -492,7 +474,7 @@ function compileMatcher(matcherSequence, left) {
     return runMatcherProgram(program, input, lookResults);
   };
 }
-//@ chunk-4nwcj4sh.js:5808-5920 placement
+//@ chunk-85qer80d.js:5539-5651 placement
 function tryCompileMatcher(pattern) {
   try {
     let bound = NFA_STATE_MULTIPLIER * (pattern.length + 1);
@@ -504,29 +486,30 @@ function tryCompileMatcher(pattern) {
     throw error;
   }
 }
-//@ chunk-4nwcj4sh.js:5920-5981 placement
+//@ chunk-85qer80d.js:5651-5712 placement
 function compileMatcherSafe(pattern) {
   let result = tryCompileMatcher(pattern);
   return typeof result === "object" ? result : undefined;
 }
-//@ chunk-4nwcj4sh.js:5981-6018 placement
+//@ chunk-85qer80d.js:5712-5754 placement
 /**
  * matcher 语法限制常量：最大长度、目标字符上限、步数上限与集合大小上限。
  */
-var MAX_MATCHER_LENGTH = 2048;
-var MAX_MATCH_TARGET_CHARS = 512;
 var MAX_MATCHER_STEPS = 1024;
 var MAX_MATCHER_SET_SIZE = 16384;
-//@ chunk-4nwcj4sh.js:6018-6043 placement
+var MAX_MATCHER_LENGTH = MAX_MATCHER_SET_SIZE;
+var MAX_MATCH_TARGET_CHARS = 512;
+var MAX_UNREADABLE_MATCHER_CHARS = 2048;
+//@ chunk-85qer80d.js:5754-5779 placement
 /**
  * 云会话中无法测试某 matcher 时抛出的错误。
  */
 class MatcherUnsupportableError extends Error {}
-//@ chunk-4nwcj4sh.js:6043-6183 placement
+//@ chunk-85qer80d.js:5779-5935 placement
 function classifyUnreadableMatcher(pattern) {
-  if (pattern.length > MAX_MATCHER_LENGTH) return "too_long";
-  let compiled = compileMatcherSafe(pattern);
+  let compiled = pattern.length > MAX_MATCHER_LENGTH ? undefined : compileMatcherSafe(pattern);
   if (compiled !== undefined) return compiled;
+  if (pattern.length > MAX_UNREADABLE_MATCHER_CHARS) return "not_read";
   try {
     new RegExp(pattern);
     return "not_read";
@@ -534,7 +517,7 @@ function classifyUnreadableMatcher(pattern) {
     return "invalid";
   }
 }
-//@ chunk-4nwcj4sh.js:6183-6631 placement
+//@ chunk-85qer80d.js:5935-6382 placement
 function checkHookMatcherForCloud(pattern) {
   if (!isDiskless()) return new RegExp(pattern);
   let compiled = classifyUnreadableMatcher(pattern);
@@ -553,11 +536,29 @@ function checkHookMatcherForCloud(pattern) {
     },
   };
 }
+//@ chunk-sr7jp7gh.js:335-409 placement
+/**
+ * 取 MCP 工具的有效权限上限（为 ask 时返回 ceiling）。
+ */
+var mcpPermissionCeiling = (tool) =>
+  tool.mcpInfo?.effectiveMaxPermission === "ask"
+    ? {
+        ceiling: "ask",
+      }
+    : {};
+//@ chunk-sr7jp7gh.js:409-460 placement
+/**
+ * 构造 matcher 的测试目标（工具名与权限上限）。
+ */
+var matcherTestTarget = (tool) => ({
+  tool: tool.name,
+  ceiling: mcpPermissionCeiling(tool).ceiling,
+});
 export {
   matcherTestTarget,
-  MAX_MATCHER_SET_SIZE,
-  MAX_MATCHER_STEPS,
+  mcpPermissionCeiling,
   checkHookMatcherForCloud,
   MatcherUnsupportableError,
-  mcpPermissionCeiling,
+  MAX_MATCHER_SET_SIZE,
+  MAX_MATCHER_STEPS,
 };

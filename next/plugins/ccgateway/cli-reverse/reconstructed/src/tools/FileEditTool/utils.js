@@ -3,10 +3,10 @@
  *
  * 编辑匹配与 patch 工具：弯引号与 \uXXXX 宽松匹配、反净化、应用编辑、编辑等价判断（混有若干误归声明）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileEditTool/utils.ts
- * pieces: chunk-9br8f9tm.js (35), chunk-e6aww6q8.js (5)
- * attribution: sole-consumer 1, placement 10, fingerprint 9, layout 14, file-local 5, callgraph-witnessed 1
+ * pieces: chunk-5xgkngpb.js (5), chunk-cec8js9j.js (34), chunk-fmnbrxwy.js (1)
+ * attribution: placement 10, sole-consumer 1, fingerprint 10, layout 13, file-local 5, callgraph-witnessed 1
  */
 import { resolve, parse } from "path";
 import { HostScoped } from "../../utils/hostScoped.js";
@@ -15,6 +15,7 @@ import { getRootSession } from "../../bootstrap/state.js";
 import { env } from "../../utils/env.js";
 import { urlPatternToRegex, countCharInString } from "../../utils/stringUtils.js";
 import { logForDebugging } from "../../utils/debug.js";
+import { normalizeEdit } from "../../components/FileEditToolDiff.js";
 import { getPatchForDisplay, getPatchFromContents, DIFF_TIMEOUT_MS } from "../../utils/diff.js";
 import { FileStateError } from "./fileStateErrors.js";
 import { structuredPatch } from "../../../vendor/diff/libesm/patch/create.js";
@@ -26,22 +27,29 @@ import { expandPath } from "../../utils/path.js";
 import { isUncOrDevicePath, isDevicePrefixPath } from "../../utils/pathClassification.js";
 import { isWslUncPath, isNetworkOrSpecialPath } from "../../utils/networkPaths.js";
 import { isPathUnder } from "../../utils/pathPrefix.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
+import {
+  outputSizeLimits,
+  sanitizeSearchText,
+  MAX_RESULT_BYTES,
+  WEB_SEARCH_TIMEOUT_MS,
+  MAX_SNIPPET_CHARS,
+} from "../WebSearchTool/UI.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-9br8f9tm.js:1515-1538 sole-consumer
+//@ chunk-cec8js9j.js:1515-1538 sole-consumer
 /**
  * FileReadCache 的惰性单例。
  */
 var fileReadCache; // deferred: uses FileReadCache (../../utils/fileReadCache.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-9br8f9tm.js:1515", () => {
+deferInit("chunk-cec8js9j.js:1515", () => {
   fileReadCache = new HostScoped(() => new FileReadCache());
 });
-//@ chunk-9br8f9tm.js:1538-1603 placement
+//@ chunk-cec8js9j.js:1538-1603 placement
 /**
  * 从文件读取缓存里取内容。
  */
@@ -49,21 +57,21 @@ function readCachedFileContent(filePath) {
   let { content } = fileReadCache.of(getRootSession().host).readFile(filePath);
   return content;
 }
-//@ chunk-9br8f9tm.js:1645-1752 placement (2.1.88 match: getMemoryBaseDir, 0.773)
+//@ chunk-cec8js9j.js:1645-1752 placement (2.1.88 match: getMemoryBaseDir, 0.774)
 function getMemoryBaseDir() {
   let CLAUDE_CODE_REMOTE_MEMORY_DIR = env.CLAUDE_CODE_REMOTE_MEMORY_DIR;
   if (!CLAUDE_CODE_REMOTE_MEMORY_DIR) return;
   let resolvedDir = resolve(CLAUDE_CODE_REMOTE_MEMORY_DIR);
   return resolvedDir === parse(resolvedDir).root ? undefined : resolvedDir;
 }
-//@ chunk-9br8f9tm.js:1752-1797 placement
+//@ chunk-cec8js9j.js:1752-1797 placement
 /**
  * 判断路径是否为 Markdown（.md/.mdx）。
  */
 function isMarkdownPath(filePath) {
   return /\.(md|mdx)$/i.test(filePath);
 }
-//@ chunk-9br8f9tm.js:1797-1955 placement
+//@ chunk-cec8js9j.js:1797-1955 placement
 function stripTrailingWhitespace(str) {
   let lines = str.split(/(\r\n|\n|\r)/);
   let result = "";
@@ -75,7 +83,7 @@ function stripTrailingWhitespace(str) {
   }
   return result;
 }
-//@ chunk-9br8f9tm.js:1955-2326 fingerprint (2.1.88 match: DESANITIZATIONS, 0.979)
+//@ chunk-cec8js9j.js:1955-2326 fingerprint (2.1.88 match: DESANITIZATIONS, 0.979)
 /**
  * API 会把部分 XML 标签与 Human/Assistant 前缀净化成短形式；这里是反净化映射（<fnr> 到 <function_results> 等）。
  */
@@ -103,7 +111,7 @@ Human:`,
 
 Assistant:`,
 };
-//@ chunk-9br8f9tm.js:2326-2487 fingerprint (2.1.88 match: desanitizeMatchString, 1)
+//@ chunk-cec8js9j.js:2326-2487 fingerprint (2.1.88 match: desanitizeMatchString, 1)
 /**
  * 按 DESANITIZATIONS 把字符串反净化，返回结果与实际应用的替换列表。
  */
@@ -124,12 +132,12 @@ function desanitizeMatchString(matchString) {
     appliedReplacements,
   };
 }
-//@ chunk-9br8f9tm.js:2487-2535 layout
+//@ chunk-cec8js9j.js:2487-2535 layout
 var LEFT_SINGLE_CURLY_QUOTE = "\u2018";
 var RIGHT_SINGLE_CURLY_QUOTE = "\u2019";
 var LEFT_DOUBLE_CURLY_QUOTE = "\u201C";
 var RIGHT_DOUBLE_CURLY_QUOTE = "\u201D";
-//@ chunk-9br8f9tm.js:2535-2630 file-local
+//@ chunk-cec8js9j.js:2535-2630 file-local
 /**
  * 把弯引号（单/双，左/右）归一为直引号，用于宽松匹配 old_string。
  */
@@ -140,16 +148,16 @@ function normalizeQuotes(str) {
     .replaceAll(LEFT_DOUBLE_CURLY_QUOTE, '"')
     .replaceAll(RIGHT_DOUBLE_CURLY_QUOTE, '"');
 }
-//@ chunk-9br8f9tm.js:2630-2676 layout
+//@ chunk-cec8js9j.js:2630-2676 layout
 var UNICODE_ESCAPE_RE = /\\u[0-9a-fA-F]{4}/;
 var NON_ASCII_RE = /[\u0080-\uffff]/;
-//@ chunk-9br8f9tm.js:2676-2796 layout
+//@ chunk-cec8js9j.js:2676-2796 layout
 function decodeUnicodeEscapes(text) {
   return text.replace(/(\\\\)|\\u([0-9a-fA-F]{4})/g, (wholeMatch, escapedBackslash, hexDigits) =>
     escapedBackslash !== undefined ? wholeMatch : String.fromCharCode(parseInt(hexDigits, 16)),
   );
 }
-//@ chunk-9br8f9tm.js:2796-3000 layout
+//@ chunk-cec8js9j.js:2796-3000 layout
 function buildEscapedFormRegexSource(text) {
   let regexSource = "";
   for (let idx = 0; idx < text.length; idx++) {
@@ -162,19 +170,19 @@ function buildEscapedFormRegexSource(text) {
   }
   return regexSource;
 }
-//@ chunk-9br8f9tm.js:3000-3097 layout
+//@ chunk-cec8js9j.js:3000-3097 layout
 function escapedFormLength(text) {
   let nonAsciiCount = 0;
   for (let idx = 0; idx < text.length; idx++) if (text.charCodeAt(idx) >= 128) nonAsciiCount++;
   return text.length + 5 * nonAsciiCount;
 }
-//@ chunk-9br8f9tm.js:3097-3156 layout
+//@ chunk-cec8js9j.js:3097-3156 layout
 function countPrecedingBackslashes(text, index) {
   let count = 0;
   while (text[index - 1 - count] === "\\") count++;
   return count;
 }
-//@ chunk-9br8f9tm.js:3156-3672 layout
+//@ chunk-cec8js9j.js:3156-3672 layout
 function findEscapedFormInFile(oldString, fileContent) {
   if (countPrecedingBackslashes(oldString, oldString.length) % 2 === 1) return null;
   let nonAsciiOffsets = oldString[0] === "\\" ? [0] : [];
@@ -201,14 +209,14 @@ function findEscapedFormInFile(oldString, fileContent) {
     return null;
   }
 }
-//@ chunk-9br8f9tm.js:3672-3716 layout
+//@ chunk-cec8js9j.js:3672-3716 layout
 /**
  * 字符串是否含 \uXXXX 转义或非 ASCII 字符（决定匹配失败提示里是否提到转义互换）。
  */
 function hasUnicodeOrEscapes(oldString) {
   return UNICODE_ESCAPE_RE.test(oldString) || NON_ASCII_RE.test(oldString);
 }
-//@ chunk-9br8f9tm.js:3716-4222 layout
+//@ chunk-cec8js9j.js:3716-4222 layout
 /**
  * 若 old_string 以字符形式书写而文件里是 \uXXXX 形式（或反之），把 new_string 转成与文件一致的形式（十六进制大小写跟随文件）。
  */
@@ -245,7 +253,7 @@ function preserveEscapeStyle(oldString, matchedOldString, newString) {
     return decodeUnicodeEscapes(newString);
   return newString;
 }
-//@ chunk-9br8f9tm.js:4222-4485 callgraph-witnessed (2.1.88 match: findActualString, 1)
+//@ chunk-cec8js9j.js:4222-4485 callgraph-witnessed (2.1.88 match: findActualString, 1)
 /**
  * 在文件中定位 old_string 的实际文本：原样、弯引号归一、\uXXXX 解码、文件中的转义形式依次尝试；找不到返回 null。
  */
@@ -264,7 +272,7 @@ function findActualString(fileContent, searchString) {
   }
   return null;
 }
-//@ chunk-9br8f9tm.js:4485-4649 file-local
+//@ chunk-cec8js9j.js:4485-4649 file-local
 /**
  * 实际匹配到弯引号时，把 new_string 里的直引号按上下文换成对应弯引号（开/闭判断、字母间撇号）。
  */
@@ -280,7 +288,7 @@ function preserveQuoteStyle(oldString, actualOldString, newString) {
   if (hasSingleQuotes) result = applyCurlySingleQuotes(result);
   return result;
 }
-//@ chunk-9br8f9tm.js:4649-4795 layout
+//@ chunk-cec8js9j.js:4649-4795 layout
 /**
  * 判断位置 n 处的引号是否为开引号（前一个字符是空白、括号或破折号，或在开头）。
  */
@@ -301,7 +309,7 @@ function isOpeningContext(chars, index) {
     prev === "\u2013"
   );
 }
-//@ chunk-9br8f9tm.js:4795-4923 file-local
+//@ chunk-cec8js9j.js:4795-4923 file-local
 function applyCurlyDoubleQuotes(str) {
   let chars = [...str];
   let result = [];
@@ -311,7 +319,7 @@ function applyCurlyDoubleQuotes(str) {
     else result.push(chars[i]);
   return result.join("");
 }
-//@ chunk-9br8f9tm.js:4923-5190 file-local
+//@ chunk-cec8js9j.js:4923-5190 file-local
 function applyCurlySingleQuotes(str) {
   let chars = [...str];
   let result = [];
@@ -326,7 +334,7 @@ function applyCurlySingleQuotes(str) {
     } else result.push(chars[i]);
   return result.join("");
 }
-//@ chunk-9br8f9tm.js:5190-5370 file-local
+//@ chunk-cec8js9j.js:5190-5370 file-local
 /**
  * 对内容应用单个编辑；new_string 为空且 old_string 后紧跟换行时连同换行一起删除；replace_all 用 replaceAll。
  */
@@ -351,7 +359,7 @@ function applyEditToFile(originalContent, oldString, newString, replaceAll = fal
       )
     : replace(originalContent, oldString, newString);
 }
-//@ chunk-9br8f9tm.js:5370-5578 fingerprint (2.1.88 match: getPatchForEdit, 0.928)
+//@ chunk-cec8js9j.js:5370-5578 fingerprint (2.1.88 match: getPatchForEdit, 0.928)
 /**
  * 单个编辑的 patch：包成 edits 数组调用 getPatchForEdits。
  */
@@ -376,7 +384,7 @@ function getPatchForEdit({
     isForToolResult,
   });
 }
-//@ chunk-9br8f9tm.js:5578-5886 fingerprint (2.1.88 match: areFileEditsEquivalent, 0.713)
+//@ chunk-cec8js9j.js:5578-5886 fingerprint (2.1.88 match: areFileEditsEquivalent, 0.713)
 /**
  * 对文件内容应用一组编辑，返回 {patch, updatedFile}；空文件加空编辑时返回空 updatedFile 与"无变化" patch。
  */
@@ -408,17 +416,7 @@ function getPatchForEdits({ filePath, fileContents, edits, isForToolResult }) {
     updatedFile: updatedContent,
   };
 }
-//@ chunk-9br8f9tm.js:5886-5984 layout (2.1.88 match: normalizeEdit, 1)
-function normalizeEdit(fileContent, edit) {
-  return (
-    !fileContent &&
-    edit.length === 1 &&
-    edit[0] !== undefined &&
-    edit[0].old_string === "" &&
-    edit[0].new_string === ""
-  );
-}
-//@ chunk-9br8f9tm.js:5984-6498 fingerprint (2.1.88 match: getPatchForEdits, 0.75)
+//@ chunk-cec8js9j.js:5984-6498 fingerprint (2.1.88 match: getPatchForEdits, 0.75)
 /**
  * 依次应用编辑；若 old_string 落在之前某个 new_string 里、某个编辑未生效或整体无变化则抛错。
  */
@@ -444,9 +442,9 @@ function applyEditsToContent(fileContents, edit) {
     throw Error("Original and edited file match exactly. Failed to apply edit.");
   return originalContent;
 }
-//@ chunk-9br8f9tm.js:6498-6509 layout
+//@ chunk-cec8js9j.js:6498-6509 layout
 var DIFF_SNIPPET_MAX_BYTES = 8192;
-//@ chunk-9br8f9tm.js:6509-6977 fingerprint (2.1.88 match: getSnippetForTwoFileDiff, 0.887)
+//@ chunk-cec8js9j.js:6509-6977 fingerprint (2.1.88 match: getSnippetForTwoFileDiff, 0.886)
 /**
  * 两个文件内容的 diff 片段：8 行上下文、带行号、hunk 间用 "..." 分隔，超过 8192 字节时截断并附省略说明。
  */
@@ -489,7 +487,7 @@ function getSnippetForTwoFileDiff(fileAContents, fileBContents) {
 
 ... [${remaining} lines truncated] ...`;
 }
-//@ chunk-9br8f9tm.js:6977-7267 fingerprint (2.1.88 match: getEditsForPatch, 1)
+//@ chunk-cec8js9j.js:6977-7267 fingerprint (2.1.88 match: getEditsForPatch, 1)
 /**
  * 把结构化 patch 的 hunks 还原为 {old_string,new_string} 编辑列表。
  */
@@ -512,11 +510,11 @@ function getEditsForPatch(patch) {
     };
   });
 }
-//@ chunk-9br8f9tm.js:7267-7309 layout
+//@ chunk-cec8js9j.js:7267-7309 layout
 function isExpectedReadError(error) {
   return isPathAbsent(error) || isEISDIR(error) || isNotRegularFileError(error);
 }
-//@ chunk-9br8f9tm.js:7309-8243 fingerprint (2.1.88 match: normalizeFileEditInput, 0.738)
+//@ chunk-cec8js9j.js:7309-8243 fingerprint (2.1.88 match: normalizeFileEditInput, 0.738)
 /**
  * 归一化 Edit 输入：跳过 UNC/特殊路径；记忆目录下只清洗 new_string；否则读文件，old_string 不在文件中时尝试反净化 old/new_string。
  */
@@ -603,43 +601,30 @@ function normalizeFileEditInput({ file_path, edits }) {
     edits,
   };
 }
-//@ chunk-9br8f9tm.js:8243-8599 layout (2.1.88 match: getEditsForPatch, 0.884)
+//@ chunk-cec8js9j.js:8243-8430 layout
 /**
  * 两组编辑在同一原文上是否产生相同结果（都报错时比较错误文本）。
  */
-function areFileEditsEquivalent(edits1, edits2, fileContents) {
-  if (
-    edits1.length === edits2.length &&
-    edits1.every((edit1, index) => {
-      let edit2 = edits2[index];
-      return (
-        edit2 !== undefined &&
-        edit1.old_string === edit2.old_string &&
-        edit1.new_string === edit2.new_string &&
-        edit1.replace_all === edit2.replace_all
-      );
-    })
-  )
-    return true;
-  let result1 = null;
+function areFileEditsEquivalent(edits, edits_2, fileContents) {
+  let content1 = null;
   let error1 = null;
   let result2 = null;
   let error2 = null;
   try {
-    result1 = applyEditsToContent(fileContents, edits1);
+    content1 = applyEditsToContent(fileContents, edits);
   } catch (e) {
     error1 = errorMessage(e);
   }
   try {
-    result2 = applyEditsToContent(fileContents, edits2);
+    result2 = applyEditsToContent(fileContents, edits_2);
   } catch (e) {
     error2 = errorMessage(e);
   }
   if (error1 !== null && error2 !== null) return error1 === error2;
   if (error1 !== null || error2 !== null) return false;
-  return result1 === result2;
+  return content1 === result2;
 }
-//@ chunk-9br8f9tm.js:8599-8832 fingerprint (2.1.88 match: areFileEditsInputsEquivalent, 1)
+//@ chunk-cec8js9j.js:8430-8663 fingerprint (2.1.88 match: areFileEditsInputsEquivalent, 1)
 /**
  * 两个编辑输入是否逐字段完全相同（快速路径）。
  */
@@ -658,7 +643,7 @@ function areFileEditInputsIdentical(input1, input2) {
     })
   );
 }
-//@ chunk-9br8f9tm.js:8832-9089 placement
+//@ chunk-cec8js9j.js:8663-8920 placement (2.1.88 match: hasMemoryFileRead, 0.623)
 /**
  * 两个编辑输入是否等价：路径相同、字面相同，否则读当前文件比较两组编辑的应用结果（areFileEditsEquivalent）。
  */
@@ -679,12 +664,12 @@ function areFileEditsInputsEquivalent(input1, input2) {
     }
   return areFileEditsEquivalent(input1.edits, input2.edits, cachedContent);
 }
-//@ chunk-e6aww6q8.js:4645172-4645791 placement
+//@ chunk-5xgkngpb.js:4753757-4754376 placement
 /**
  * 把 replace_name/path/old_str 等别名改为标准字段。
  */
 function normalizeEditInputAliases(rawInput) {
-  if (!isPlainObject_5(rawInput)) return null;
+  if (!isPlainObject_6(rawInput)) return null;
   let normalizedInput = {
     ...rawInput,
   };
@@ -730,13 +715,13 @@ function normalizeEditInputAliases(rawInput) {
       }
     : null;
 }
-//@ chunk-e6aww6q8.js:4647900-4647926 placement
+//@ chunk-5xgkngpb.js:4756485-4756511 placement
 /**
  * 记录编辑指纹时文件的大小上限（4 MiB）。
  */
 var MAX_FINGERPRINT_FILE_CHARS = 4194304;
 var MAX_FINGERPRINT_EDIT_CHARS = 16384;
-//@ chunk-e6aww6q8.js:4647926-4648003 placement
+//@ chunk-5xgkngpb.js:4756511-4756588 placement
 /**
  * 开关与托管模式下记录一次编辑指纹。
  */
@@ -745,7 +730,7 @@ function maybeRecordEditFingerprint(fingerprintInput) {
     return;
   return recordEditFingerprint(fingerprintInput);
 }
-//@ chunk-e6aww6q8.js:4648003-4648565 placement
+//@ chunk-5xgkngpb.js:4756588-4757150 placement
 /**
  * 记录编辑结果的内容哈希（大小受限）。
  */
@@ -784,7 +769,7 @@ function recordEditFingerprint({ absoluteFilePath, output, originalFile, updated
     subagentFrameResultHolds: () => doesFileStillMatchHash(absoluteFilePath, contentHash),
   };
 }
-//@ chunk-e6aww6q8.js:4648565-4648659 placement
+//@ chunk-5xgkngpb.js:4757150-4757244 placement
 /**
  * 判断文件内容是否仍等于给定哈希（读不到视为不等）。
  */
@@ -796,23 +781,42 @@ async function doesFileStillMatchHash(absoluteFilePath, contentHash) {
     return false;
   }
 }
+//@ chunk-fmnbrxwy.js:53845-54034 fingerprint (2.1.88 match: getSnippet, 0.687)
+function getSnippet(results) {
+  let remainingBytes = outputSizeLimits;
+  return results.flatMap((result) => {
+    if (sanitizeSearchText(result.url, MAX_RESULT_BYTES) !== result.url) return [];
+    let snippet = sanitizeSearchText(result.snippet, Math.min(WEB_SEARCH_TIMEOUT_MS, remainingBytes));
+    remainingBytes -= snippet.length;
+    return [
+      {
+        title: sanitizeSearchText(result.title, MAX_SNIPPET_CHARS),
+        url: result.url,
+        ...(snippet && {
+          snippet,
+        }),
+      },
+    ];
+  });
+}
 export {
+  getPatchForEdit,
   findActualString,
-  preserveEscapeStyle,
   preserveQuoteStyle,
-  getMemoryBaseDir,
   getSnippetForTwoFileDiff,
   isMarkdownPath,
   stripTrailingWhitespace,
-  desanitizeMatchString,
   normalizeFileEditInput,
-  getPatchForEdit,
+  desanitizeMatchString,
+  getMemoryBaseDir,
   normalizeEditInputAliases,
   areFileEditInputsIdentical,
   areFileEditsInputsEquivalent,
   hasUnicodeOrEscapes,
+  preserveEscapeStyle,
   recordEditFingerprint,
   maybeRecordEditFingerprint,
+  getSnippet,
   getEditsForPatch,
   getPatchForEdits,
 };

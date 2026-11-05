@@ -1,11 +1,11 @@
 /**
  * execa/lib/promise.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: execa@8.0.1
- * pieces: chunk-m4p5zn6n.js (1)
+ * pieces: chunk-t889g22j.js (1)
  * attribution: esm-layout 1
  */
-//@ chunk-m4p5zn6n.js:25888-26318 esm-layout
+//@ chunk-t889g22j.js:25887-26317 esm-layout
 var nativePromisePrototype = (async () => {})().constructor.prototype;
 var descriptors = ["then", "catch", "finally"].map((property) => [
   property,

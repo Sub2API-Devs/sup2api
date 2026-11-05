@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/sandbox-config.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-ymy42xbh.js (3)
+ * pieces: chunk-031g4amx.js (3)
  * attribution: esm-fingerprint 3
  */
 import { isAbsolute, win32, posix } from "path";
@@ -34,7 +34,7 @@ import { custom } from "../../../../zod/v3/types.js";
 import { getPlatform } from "../utils/platform.js";
 import { containsGlobCharsForPlatform } from "./sandbox-utils.js";
 
-//@ chunk-ymy42xbh.js:427-23820 esm-fingerprint
+//@ chunk-031g4amx.js:427-23820 esm-fingerprint
 var domainPatternSchema = create_2().refine(isValidDomainPattern, {
   message: DOMAIN_PATTERN_MESSAGE,
 });
@@ -477,7 +477,7 @@ var SeccompConfigSchema = create({
       "Invoke apply-seccomp as a multicall binary that dispatches on the ARGV0 environment variable. When set, applyPath is used verbatim (no existence check) and the invocation inside bwrap is prefixed with ARGV0=<this value>. The caller is responsible for ensuring applyPath resolves inside the bwrap namespace and that the target binary implements the apply-seccomp interface when ARGV0 matches.",
     ),
 });
-//@ chunk-ymy42xbh.js:23820-24244 esm-fingerprint
+//@ chunk-031g4amx.js:23820-24244 esm-fingerprint
 function addInertSlashedDenyGlobIssue(value, path, ctx) {
   let onWindows = getPlatform() === "windows";
   let trailingSeparator = onWindows ? /[\\/]+$/ : /\/+$/;
@@ -490,7 +490,7 @@ function addInertSlashedDenyGlobIssue(value, path, ctx) {
     message: `Deny glob "${value}" ends in a separator, so as a pattern it can match no path. Write "${value.replace(trailingSeparator, "")}", which is also read as the path of that name where it exists, or add a "**" segment to match at any depth.`,
   });
 }
-//@ chunk-ymy42xbh.js:24244-32390 esm-fingerprint
+//@ chunk-031g4amx.js:24244-32390 esm-fingerprint
 var SandboxRuntimeConfigSchema = create({
   network: NetworkConfigSchema.describe("Network restrictions configuration"),
   filesystem: filesystemSchema.describe("Filesystem restrictions configuration"),

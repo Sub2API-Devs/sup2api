@@ -3,9 +3,9 @@
  *
  * 记忆挂载目录遍历与本地读写（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (32)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (32)
  * attribution: placement 32
  */
 import { readdir, stat, readFile, lstat, lutimes, mkdir, link, unlink, utimes, rmdir } from "fs/promises";
@@ -40,13 +40,13 @@ import { PathTraversalError } from "../../memdir/teamMemPaths.js";
 import { isNonRegularFailure, isNonRegularError } from "./pathScrub.js";
 import {
   writeIfMissing,
-  publishWriteAtomic,
+  filePath,
   PublishRefusedError,
   writeNewFile,
 } from "../../utils/atomicPublishWrite.js";
 import { openNoFollow_2 } from "../../utils/fsSafety/hardenedRead.js";
 
-//@ chunk-s61vbvea.js:106312-106691 placement
+//@ chunk-7jxyna5q.js:106599-106978 placement
 /**
  * 空库回执仍在磁盘且未拉取时，按基线状态删除回执；无法删除时抛错。
  */
@@ -65,7 +65,7 @@ async function removeEmptyStoreReceipt(store, storage) {
     );
   store.removedEmptyReceipt = true;
 }
-//@ chunk-s61vbvea.js:106691-106841 placement
+//@ chunk-7jxyna5q.js:106978-107128 placement
 function getV5MemoryContext(store, storageV5Config) {
   return isStorageV5Enabled() && storageV5Config !== undefined && store.v5MemoryBase !== undefined
     ? {
@@ -75,12 +75,12 @@ function getV5MemoryContext(store, storageV5Config) {
       }
     : undefined;
 }
-//@ chunk-s61vbvea.js:106841-106851 placement
+//@ chunk-7jxyna5q.js:107128-107138 placement
 /**
  * 分批处理的批大小（64）。
  */
 var SLICE_BATCH_SIZE = 64;
-//@ chunk-s61vbvea.js:106851-107424 placement
+//@ chunk-7jxyna5q.js:107138-107711 placement
 async function walkMountDirect(rootDir, excludeKey) {
   async function walk(dir, relDir) {
     let entries;
@@ -113,14 +113,14 @@ async function walkMountDirect(rootDir, excludeKey) {
   }
   return walk(rootDir, "");
 }
-//@ chunk-s61vbvea.js:107424-107550 placement
+//@ chunk-7jxyna5q.js:107711-107837 placement
 function throwMountWalkFailure(storageError) {
   throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
     `mount walk failed: ${formatStorageError(storageError)}`,
     "multi-store-sync: mount walk failed through the storage interface",
   );
 }
-//@ chunk-s61vbvea.js:107550-108889 placement
+//@ chunk-7jxyna5q.js:107837-109179 placement
 async function collectLocalMemoryEntries(
   mountDir,
   excludeKey,
@@ -237,14 +237,14 @@ async function collectLocalMemoryEntries(
     skippedOversizedPaths,
   };
 }
-//@ chunk-s61vbvea.js:108889-108948 placement
+//@ chunk-7jxyna5q.js:109179-109238 placement
 /**
  * 判断缓存里的哈希是否与新值不同。
  */
 function isHashChanged(walkHashes, key, sha256) {
   return walkHashes !== undefined && walkHashes.get(key)?.sha256 !== sha256;
 }
-//@ chunk-s61vbvea.js:108948-109146 placement
+//@ chunk-7jxyna5q.js:109238-109436 placement
 function readEntryContent(key, content, contentHash, walkHashes, skippedSecretPaths) {
   if (!isHashChanged(walkHashes, key, contentHash))
     return {
@@ -264,7 +264,7 @@ function readEntryContent(key, content, contentHash, walkHashes, skippedSecretPa
     content,
   };
 }
-//@ chunk-s61vbvea.js:109146-109259 placement
+//@ chunk-7jxyna5q.js:109436-109549 placement
 function getCachedEntry(walkHashes, key, mtimeMs, ctimeMs, size) {
   let cached = walkHashes.get(key);
   return cached !== undefined &&
@@ -274,7 +274,7 @@ function getCachedEntry(walkHashes, key, mtimeMs, ctimeMs, size) {
     ? cached.entry
     : undefined;
 }
-//@ chunk-s61vbvea.js:109259-109368 placement
+//@ chunk-7jxyna5q.js:109549-109658 placement
 function cacheEntry(walkHashes, key, mtimeMs, ctimeMs, size, sha256, now) {
   if (now - mtimeMs > MTIME_SETTLE_MS)
     walkHashes.set(key, {
@@ -287,14 +287,14 @@ function cacheEntry(walkHashes, key, mtimeMs, ctimeMs, size, sha256, now) {
     });
   else walkHashes.delete(key);
 }
-//@ chunk-s61vbvea.js:109368-109432 placement
+//@ chunk-7jxyna5q.js:109658-109722 placement
 /**
  * 删除目标里已不再出现的键。
  */
 function removeStaleKeys(walkHashes, liveKeys) {
   for (let key of walkHashes.keys()) if (!liveKeys.has(key)) walkHashes.delete(key);
 }
-//@ chunk-s61vbvea.js:109432-112702 placement
+//@ chunk-7jxyna5q.js:109722-112995 placement
 async function readStoreMountEntries(mountDir, excludeKey, options, walkHashes) {
   let entries = new Map();
   let diskPaths = new Set();
@@ -518,7 +518,7 @@ async function readStoreMountEntries(mountDir, excludeKey, options, walkHashes) 
     skippedOversizedPaths,
   };
 }
-//@ chunk-s61vbvea.js:112702-112879 placement
+//@ chunk-7jxyna5q.js:112995-113172 placement
 async function resolveMountPath(state, relPath) {
   let key = relPath.replace(/^\/+/, "");
   let storeKeyPath = await resolveStoreKeyPath(state, key);
@@ -526,7 +526,7 @@ async function resolveMountPath(state, relPath) {
     throw new PathTraversalError(`path escapes mount ${state.mountName}: ${relPath}`);
   return storeKeyPath;
 }
-//@ chunk-s61vbvea.js:112879-113026 placement
+//@ chunk-7jxyna5q.js:113172-113319 placement
 function getStorageKeyForPath(backend, state, mountPath) {
   if (backend === undefined || state.v5MemoryBase === undefined) return;
   let storageKey = storageKeyForMountPath(state.v5MemoryBase, state.mountDir, mountPath);
@@ -537,13 +537,13 @@ function getStorageKeyForPath(backend, state, mountPath) {
         key: storageKey,
       };
 }
-//@ chunk-s61vbvea.js:113026-113408 placement
+//@ chunk-7jxyna5q.js:113319-113701 placement
 /**
  * 通过存储 v5（可用时）或文件系统 stat 记忆库中的本地文件；存储报错时转为带 code 的错误。
  */
-async function statLocalEntry(backend, state, mountPath) {
-  let storageKeyForPath = getStorageKeyForPath(backend, state, mountPath);
-  if (storageKeyForPath === undefined) return stat(mountPath);
+async function statLocalEntry(backend, state, path) {
+  let storageKeyForPath = getStorageKeyForPath(backend, state, path);
+  if (storageKeyForPath === undefined) return stat(path);
   let meta = await storageKeyForPath.backend.statMeta(storageKeyForPath.key);
   if (!meta.ok)
     throw Object.assign(
@@ -567,7 +567,7 @@ async function statLocalEntry(backend, state, mountPath) {
     );
   return meta.value;
 }
-//@ chunk-s61vbvea.js:113408-113810 placement
+//@ chunk-7jxyna5q.js:113701-114103 placement
 async function readLocalEntry(backend, state, mountPath) {
   let storageKeyForPath = getStorageKeyForPath(backend, state, mountPath);
   if (storageKeyForPath === undefined) return readFile(mountPath, "utf8");
@@ -589,14 +589,14 @@ async function readLocalEntry(backend, state, mountPath) {
     });
   return item.value;
 }
-//@ chunk-s61vbvea.js:113810-113876 placement
+//@ chunk-7jxyna5q.js:114103-114169 placement
 /**
  * 判断条目是否已发布（或依据已失效）。
  */
 function isPublished(state) {
   return state.pulled || (state.invalidatedBasis ?? null) !== null;
 }
-//@ chunk-s61vbvea.js:113876-117036 placement
+//@ chunk-7jxyna5q.js:114169-117334 placement
 async function writeLocalEntry(state, relPath, content, updatedAt, storage) {
   let mountPath = await resolveMountPath(state, relPath);
   let publishFence = state.backend.publishFence;
@@ -735,7 +735,7 @@ async function writeLocalEntry(state, relPath, content, updatedAt, storage) {
         return "dropped";
       }
       try {
-        await publishWriteAtomic(mountPath, content, {
+        await filePath(mountPath, content, {
           ...writeOptions,
           ...(publishFence !== undefined && {
             beforePublish: () => publishFence.mayPublish(),
@@ -750,7 +750,7 @@ async function writeLocalEntry(state, relPath, content, updatedAt, storage) {
         let writeMarker =
           outcome === "partial" &&
           (await detectTornWrite(storage, state, mountPath, content)) === "tornPrefix"
-            ? () => publishWriteAtomic(mountPath, "", writeOptions)
+            ? () => filePath(mountPath, "", writeOptions)
             : outcome === "removed" && existingMode !== null
               ? () => writeNewFile(mountPath, "", existingMode)
               : null;
@@ -792,14 +792,14 @@ async function writeLocalEntry(state, relPath, content, updatedAt, storage) {
     await utimes(mountPath, date, date).catch(() => {});
   return "published";
 }
-//@ chunk-s61vbvea.js:117036-117092 placement
+//@ chunk-7jxyna5q.js:117334-117390 placement
 /**
  * 发布栅栏存在且允许发布。
  */
 async function canPublishFence(publishFence) {
   return (await fenceExists(publishFence)) && publishFence.mayPublish();
 }
-//@ chunk-s61vbvea.js:117092-117160 placement
+//@ chunk-7jxyna5q.js:117390-117458 placement
 /**
  * 判断栅栏文件是否存在。
  */
@@ -811,12 +811,12 @@ async function fenceExists(publishFence) {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:117160-117229 placement
+//@ chunk-7jxyna5q.js:117458-117527 placement
 async function dropPulledFile(store, key, startPath) {
   store.pullDropped.add(key);
   await removeEmptyParentDirs(store.mountDir, startPath);
 }
-//@ chunk-s61vbvea.js:117229-117395 placement (2.1.88 match: setCwdState, 1)
+//@ chunk-7jxyna5q.js:117527-117693 placement (2.1.88 match: setCwdState, 1)
 async function removeEmptyParentDirs(mountDir, startPath) {
   let normalized = resolve(mountDir).normalize("NFC");
   for (
@@ -830,21 +830,21 @@ async function removeEmptyParentDirs(mountDir, startPath) {
       return;
     }
 }
-//@ chunk-s61vbvea.js:117395-117453 placement
+//@ chunk-7jxyna5q.js:117693-117751 placement
 /**
  * 判断文件为空且修改时间已超过稳定期。
  */
 function isEmptyAndSettled(stats) {
   return stats.size === 0 && Date.now() - stats.mtimeMs > WRITE_SETTLE_MS;
 }
-//@ chunk-s61vbvea.js:117453-117536 placement
+//@ chunk-7jxyna5q.js:117751-117834 placement
 /**
  * 取错误里的 targetOutcome。
  */
 function targetOutcomeOf(error) {
   return error instanceof Error && "targetOutcome" in error ? error.targetOutcome : null;
 }
-//@ chunk-s61vbvea.js:117536-118234 placement
+//@ chunk-7jxyna5q.js:117834-118532 placement
 /**
  * 判断写入目标是否只写了一部分（现有内容是预期内容的真前缀）：返回 tornPrefix、absent 或 other。
  */
@@ -891,14 +891,14 @@ async function detectTornWrite(backend, state, mountPath, content) {
     return "other";
   }
 }
-//@ chunk-s61vbvea.js:118234-118299 placement
+//@ chunk-7jxyna5q.js:118532-118597 placement
 /**
  * 判断错误是否为“只写了一部分”。
  */
 function isPartialWriteFailure(error) {
   return error.code === "Failed" && targetOutcomeOf(error.cause) === "partial";
 }
-//@ chunk-s61vbvea.js:118299-118391 placement
+//@ chunk-7jxyna5q.js:118597-118689 placement
 /**
  * 判断本地文件是否被编辑过。
  */
@@ -910,7 +910,7 @@ async function isLocallyEditedFile(state, relPath, storage) {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:118391-118790 placement
+//@ chunk-7jxyna5q.js:118689-119088 placement
 /**
  * 判断记忆存储中的文件是否在本地被编辑过：对比拉取写入时间或创建时间；存储层不支持 stat 的叶子视为本地编辑。
  */
@@ -933,7 +933,7 @@ async function isLocallyEdited(state, relPath, storage) {
     return unstatable;
   }
 }
-//@ chunk-s61vbvea.js:118790-118962 placement
+//@ chunk-7jxyna5q.js:119088-119260 placement
 async function isLocalContentEqual(state, relPath, content, storage) {
   try {
     let mountPath = await resolveMountPath(state, relPath);
@@ -944,7 +944,7 @@ async function isLocalContentEqual(state, relPath, content, storage) {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:118962-119089 placement
+//@ chunk-7jxyna5q.js:119260-119387 placement
 async function recordPullWrite(state, relPath, sha256, storage) {
   try {
     let mountPath = await resolveMountPath(state, relPath);
@@ -955,7 +955,7 @@ async function recordPullWrite(state, relPath, sha256, storage) {
     });
   } catch {}
 }
-//@ chunk-s61vbvea.js:119089-119261 placement
+//@ chunk-7jxyna5q.js:119387-119559 placement
 function getEntryBaseline(state, entries, diskPaths, ref) {
   if (!diskPaths.has(ref.path))
     return {
@@ -969,7 +969,7 @@ function getEntryBaseline(state, entries, diskPaths, ref) {
     sha256: knownSha256 ?? EMPTY_CONTENT_HASH,
   };
 }
-//@ chunk-s61vbvea.js:119261-119754 placement
+//@ chunk-7jxyna5q.js:119559-120052 placement
 async function deleteLocalEntry(state, relPath, storage) {
   try {
     let mountPath = await resolveMountPath(state, relPath);
@@ -1004,6 +1004,7 @@ export {
   getV5MemoryContext,
   collectLocalMemoryEntries,
   removeEmptyStoreReceipt,
+  resolveMountPath,
   getEntryBaseline,
   isLocallyEditedFile,
   writeLocalEntry,
@@ -1011,6 +1012,5 @@ export {
   isPublished,
   deleteLocalEntry,
   isLocalContentEqual,
-  resolveMountPath,
   readLocalEntry,
 };

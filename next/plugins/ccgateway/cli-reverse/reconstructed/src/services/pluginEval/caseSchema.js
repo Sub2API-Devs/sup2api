@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 用例格式：case.yaml / prompt.md frontmatter / graders 的 zod 模式与解析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (19)
  * attribution: placement 19
  */
 import path from "path";
@@ -41,7 +41,7 @@ import { isSymlink, MAX_LAYERS } from "./mocks/mockResponders.js";
 import { getFileKind } from "../../utils/fileKind.js";
 import { deferInit, runDeferredInits } from "../../../runtime/deferred-init.js";
 
-//@ chunk-qchp9vrd.js:22013-22318 placement
+//@ chunk-af1hzzme.js:23353-23658 placement
 /**
  * grader 的初始模板。
  */
@@ -61,10 +61,10 @@ weight: 1
 
 TODO: describe what a successful response looks like
 `;
-//@ chunk-qchp9vrd.js:22318-22336 placement
+//@ chunk-af1hzzme.js:23658-23676 placement
 var CASE_SCHEMA_VERSION = 1;
 var DEFAULT_SCHEMA_VERSION = "1.1";
-//@ chunk-qchp9vrd.js:22336-22472 placement
+//@ chunk-af1hzzme.js:23676-23812 placement
 function graderInputSchema() {
   return create_16([
     create_26(["trace", "last_message", "files", "mock_calls"]),
@@ -76,16 +76,16 @@ function graderInputSchema() {
     ]),
   ]);
 }
-//@ chunk-qchp9vrd.js:22472-22529 placement
+//@ chunk-af1hzzme.js:23812-23869 placement
 function armSchema() {
   return create_26(["with-only", "both"]).optional();
 }
-//@ chunk-qchp9vrd.js:22529-23613 placement
+//@ chunk-af1hzzme.js:23869-24953 placement
 /**
  * 评分器定义模式（regex、last_message、文件、mock_calls、llm 等类型）。
  */
 var GraderSchema; // deferred: uses graderInputSchema of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-qchp9vrd.js:22529", () => {
+deferInit("chunk-af1hzzme.js:23869", () => {
   GraderSchema = DoctorLazy(() =>
     create_17("type", [
       create({
@@ -148,7 +148,7 @@ deferInit("chunk-qchp9vrd.js:22529", () => {
     ]),
   );
 });
-//@ chunk-qchp9vrd.js:23613-23744 placement
+//@ chunk-af1hzzme.js:24953-25084 placement
 function toolExpectationSchema() {
   return create_16([
     create_2().transform((tool) => ({
@@ -161,9 +161,9 @@ function toolExpectationSchema() {
     }).strict(),
   ]);
 }
-//@ chunk-qchp9vrd.js:23744-24686 placement
+//@ chunk-af1hzzme.js:25084-26026 placement
 var GradersListSchema; // deferred: uses GraderSchema of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-qchp9vrd.js:23744", () => {
+deferInit("chunk-af1hzzme.js:25084", () => {
   GradersListSchema = DoctorLazy(() =>
     create({
       schema_version: create_2(),
@@ -211,7 +211,7 @@ deferInit("chunk-qchp9vrd.js:23744", () => {
     }),
   );
 });
-//@ chunk-qchp9vrd.js:24686-26080 placement
+//@ chunk-af1hzzme.js:26026-27420 placement
 /**
  * 校验 case.yaml：必须是对象且含 schema_version 等字段。
  */
@@ -273,14 +273,14 @@ ${parsed.error.issues.map((issue) => `  ${issue.path.join(".") || "(root)"}: ${i
     case: parsed.data,
   };
 }
-//@ chunk-qchp9vrd.js:26080-26348 placement
+//@ chunk-af1hzzme.js:27420-27688 placement
 /**
  * 用例执行配置允许的键。
  */
 var MAX_CASE_FILE_BYTES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TOP_LEVEL_CASE_KEYS;
 var EXECUTION_CASE_KEYS;
-deferInit("chunk-qchp9vrd.js:26080", () => {
+deferInit("chunk-af1hzzme.js:27420", () => {
   MAX_CASE_FILE_BYTES_2 = 1048576;
   TOP_LEVEL_CASE_KEYS = new Set([
     "schema_version",
@@ -303,7 +303,7 @@ deferInit("chunk-qchp9vrd.js:26080", () => {
     "env",
   ]);
 });
-//@ chunk-qchp9vrd.js:26348-27561 placement
+//@ chunk-af1hzzme.js:27688-28901 placement
 /**
  * 解析 prompt.md 的 frontmatter（graders、未知键报错）。
  */
@@ -362,7 +362,7 @@ async function parsePromptMdCase(caseDir) {
     return null;
   return caseBody;
 }
-//@ chunk-qchp9vrd.js:27561-27993 placement
+//@ chunk-af1hzzme.js:28901-29333 placement
 function normalizeCaseObject(caseYamlFile, promptMdCase, caseDir) {
   let yamlCase = caseYamlFile ?? {
     schema_version: DEFAULT_SCHEMA_VERSION,
@@ -390,14 +390,14 @@ function normalizeCaseObject(caseYamlFile, promptMdCase, caseDir) {
     merged.graders = [...(Array.isArray(yamlCase.graders) ? yamlCase.graders : []), ...promptMdCase.graders];
   return merged;
 }
-//@ chunk-qchp9vrd.js:27993-28124 placement
+//@ chunk-af1hzzme.js:29333-29464 placement
 function concatArrays(disallowedTools, disallowedTools_2) {
   if (disallowedTools === undefined) return disallowedTools_2;
   if (disallowedTools_2 === undefined) return disallowedTools;
   if (!Array.isArray(disallowedTools)) return disallowedTools;
   return Array.isArray(disallowedTools_2) ? [...disallowedTools, ...disallowedTools_2] : disallowedTools_2;
 }
-//@ chunk-qchp9vrd.js:28124-28184 placement
+//@ chunk-af1hzzme.js:29464-29524 placement
 /**
  * 评分器类型到其条件字段名的映射。
  */
@@ -406,7 +406,7 @@ var GRADER_FIELD_BY_TYPE = {
   baseline: "criteria",
   regex: "pattern",
 };
-//@ chunk-qchp9vrd.js:28184-28316 placement
+//@ chunk-af1hzzme.js:29524-29656 placement
 function buildGraderEntry(name, frontmatter, body) {
   let entry = {
     name,
@@ -416,7 +416,7 @@ function buildGraderEntry(name, frontmatter, body) {
   if (bodyField && entry[bodyField] === undefined && body.length > 0) entry[bodyField] = body;
   return entry;
 }
-//@ chunk-qchp9vrd.js:28316-29028 placement
+//@ chunk-af1hzzme.js:29656-30368 placement
 /**
  * 解析 .md 的 YAML frontmatter（未闭合、YAML 错误报告）。
  */
@@ -461,14 +461,14 @@ function parseProseFrontmatter(text, filePath) {
     hadFrontmatter: true,
   };
 }
-//@ chunk-qchp9vrd.js:29028-29101 placement
+//@ chunk-af1hzzme.js:30368-30441 placement
 /**
  * 读取文本文件（跟随链接），失败返回 null。
  */
 async function readTextFile(baseDir, relativePath, label) {
   return (await readCaseFileFollowingLinks(baseDir, relativePath, label))?.toString("utf8") ?? null;
 }
-//@ chunk-qchp9vrd.js:29101-30193 placement
+//@ chunk-af1hzzme.js:30441-31533 placement
 /**
  * 读取用例文件，处理悬空符号链接与 Windows 差异。
  */
@@ -540,14 +540,14 @@ async function readCaseFileFollowingLinks(filePath, maxBytes, label) {
     await handle.close().catch(() => {});
   }
 }
-//@ chunk-qchp9vrd.js:30193-30242 placement
+//@ chunk-af1hzzme.js:31533-31582 placement
 /**
  * 读取用例的 prose 文件。
  */
 async function readProseCase(caseFilePath) {
   return readTextFile(caseFilePath, MAX_CASE_FILE_BYTES_2, "prose .md");
 }
-//@ chunk-qchp9vrd.js:30242-31046 placement
+//@ chunk-af1hzzme.js:31582-32386 placement
 /**
  * 加载 graders/ 目录下的评分器文件。
  */

@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：遮盖单个 URL（凭据、查询、可疑主机）；协议中夹杂空白等的伪装 URL等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cgr0tezp.js (50)
- * attribution: placement 47, layout 3
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2jb250pa.js (49)
+ * attribution: placement 47, affinity 2
  */
 import { repeatString, firstLineOf, truncateToLength } from "../stringUtils.js";
 import {
@@ -14,15 +14,16 @@ import {
   REDACT_WINDOW_CHARS,
   redactSecretTokens,
 } from "../../services/teamMemorySync/secretScanner.js";
-import { findSshUrlUserinfoSpans, parseUrlScheme, decodePercentRuns } from "./urlParsing.js";
+import { findSshUrlUserinfoSpans } from "./urlParsing.js";
+import { sshHostMismatch } from "../plugins/fetchTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-cgr0tezp.js:68247-68271 placement
+//@ chunk-2jb250pa.js:33303-33327 placement
 /**
  * URL 遮盖占位。
  */
 var REDACTED_URL = "[redacted URL]";
-//@ chunk-cgr0tezp.js:68271-68471 placement
+//@ chunk-2jb250pa.js:33327-33527 placement
 function decodeAuthorityEscapes(text) {
   let stripped = stripLeadingSpaceAndNewlines(text);
   if (!/%(?:40|3a|5c)/i.test(stripped)) return text;
@@ -31,21 +32,21 @@ function decodeAuthorityEscapes(text) {
     String.fromCharCode(parseInt(hex, 16)),
   );
 }
-//@ chunk-cgr0tezp.js:68471-68568 placement
+//@ chunk-2jb250pa.js:33527-33624 placement
 function redactUrlWithFallback(text, redact, fallback) {
   let redacted = redact(text);
   let decodedText = decodeAuthorityEscapes(text);
   if (redacted === fallback || decodedText === text) return redacted;
   return redacted !== null && decodeAuthorityEscapes(redacted) === redact(decodedText) ? redacted : fallback;
 }
-//@ chunk-cgr0tezp.js:68568-68605 placement
+//@ chunk-2jb250pa.js:33624-33661 placement
 /**
  * safeOriginUrlRedacted：安全来源 URL。
  */
 function safeOriginUrlRedacted(text) {
   return redactUrlWithFallback(text, safeOriginUrl, null);
 }
-//@ chunk-cgr0tezp.js:68605-68801 placement
+//@ chunk-2jb250pa.js:33661-33857 placement
 function safeOriginUrl(text) {
   try {
     let url = new URL(text);
@@ -66,12 +67,12 @@ function safeOriginUrl(text) {
     return null;
   }
 }
-//@ chunk-cgr0tezp.js:68801-68821 placement
+//@ chunk-2jb250pa.js:33857-33877 placement
 /**
  * URL_AUTHORITY_ESCAPE_RE：URL 权威部分需转义的字符。
  */
 var URL_AUTHORITY_ESCAPE_RE = /[@:]|\/\//;
-//@ chunk-cgr0tezp.js:68821-69066 placement
+//@ chunk-2jb250pa.js:33877-34122 placement
 /**
  * 显示用 URL（路径中的 @、: 与多斜杠转义）。
  */
@@ -86,7 +87,7 @@ function displaySafeUrl(text) {
     .replace(/\/{2,}/g, (run) => `/${repeatString("%2F", run.length - 1)}`);
   return `${protocol}//${host}${replaced}`;
 }
-//@ chunk-cgr0tezp.js:69066-69267 placement
+//@ chunk-2jb250pa.js:34122-34323 placement
 /**
  * 遮盖 ssh URL 与 :// 后的 userinfo。
  */
@@ -104,14 +105,14 @@ function redactSshUserinfo(text) {
       atOrEncoded === "@" ? "://" : "://[REDACTED]%40",
     );
 }
-//@ chunk-cgr0tezp.js:69267-69301 placement
+//@ chunk-2jb250pa.js:34323-34356 placement
 /**
  * 遮盖文本中的 URL。
  */
 function redactUrlsInText(text) {
   return redactUrlWithFallback(text, redactUrl, REDACTED_URL);
 }
-//@ chunk-cgr0tezp.js:69301-70041 placement
+//@ chunk-2jb250pa.js:34356-35093 placement
 /**
  * 遮盖单个 URL（凭据、查询、可疑主机）。
  */
@@ -165,16 +166,16 @@ function redactUrl(text) {
       : hostCandidate;
   }
 }
-//@ chunk-cgr0tezp.js:70041-70097 placement
+//@ chunk-2jb250pa.js:35093-35149 placement
 var WINDOWS_LOCAL_PATH_RE = /^(?:(?:file:\/\/)?[a-z]:(?:\\|\/(?!\/))|\\\\)/i;
-//@ chunk-cgr0tezp.js:70097-70131 placement
+//@ chunk-2jb250pa.js:35149-35183 placement
 /**
  * 遮盖 URL 查询部分。
  */
 function redactUrlQuery(text) {
   return redactUrlWithFallback(text, stripUrlQuery, REDACTED_URL);
 }
-//@ chunk-cgr0tezp.js:70131-70597 placement
+//@ chunk-2jb250pa.js:35183-35646 placement
 /**
  * 去掉 URL 查询（本地路径保留）。
  */
@@ -212,21 +213,21 @@ function stripUrlQuery(text) {
       : text,
   );
 }
-//@ chunk-cgr0tezp.js:70597-70632 placement
+//@ chunk-2jb250pa.js:35646-35681 placement
 /**
  * 遮盖 URL 并记录位置。
  */
 function redactUrlsTracked(text) {
   return ghIsDangerousCallback(text, redactUrlsInText(text));
 }
-//@ chunk-cgr0tezp.js:70632-70694 placement
+//@ chunk-2jb250pa.js:35681-35743 placement
 /**
  * 字符串全部替换。
  */
 function replaceAll(text, search, replacement) {
   return search === "" || search === replacement ? text : text.split(search).join(replacement);
 }
-//@ chunk-cgr0tezp.js:70694-70850 placement
+//@ chunk-2jb250pa.js:35743-35899 placement
 /**
  * 用已知 URL 遮盖文本。
  */
@@ -239,7 +240,7 @@ function redactKnownUrls(stderr, gitUrl) {
   }
   return redactUrlsInMessage(stderr);
 }
-//@ chunk-cgr0tezp.js:70850-71072 placement
+//@ chunk-2jb250pa.js:35899-36121 placement
 function urlVariants(url) {
   if (!url || !URL_BREAK_RE.test(url) || redactUrlQuery(url) === url) return [];
   let variants = [url];
@@ -251,7 +252,7 @@ function urlVariants(url) {
       variants.push(url.slice(0, urlAuthorityStart) + text.slice(atIndex + 1));
   return variants;
 }
-//@ chunk-cgr0tezp.js:71072-71397 placement
+//@ chunk-2jb250pa.js:36121-36446 placement
 /**
  * URL 是否含查询、片段或凭据。
  */
@@ -274,12 +275,12 @@ function hasSensitiveUrlParts(text) {
     (hasAuthority && (/https?$/i.test(scheme) || (!userinfo.includes("/") && isNotSshScheme(scheme))))
   );
 }
-//@ chunk-cgr0tezp.js:71397-71414 placement
+//@ chunk-2jb250pa.js:36446-36463 placement
 /**
  * COLON_RE：冒号或其编码。
  */
 var COLON_RE = /:|%3a/i;
-//@ chunk-cgr0tezp.js:71414-71539 placement
+//@ chunk-2jb250pa.js:36463-36588 placement
 function hasEncodedColonHost(url) {
   return (
     !url.hostname.startsWith("[") &&
@@ -287,11 +288,11 @@ function hasEncodedColonHost(url) {
     `${url.pathname}${url.search}${url.hash}`.includes("@")
   );
 }
-//@ chunk-cgr0tezp.js:71539-71573 placement
+//@ chunk-2jb250pa.js:36588-36622 placement
 function hasColon(text) {
   return COLON_RE.test(text);
 }
-//@ chunk-cgr0tezp.js:71573-72027 placement
+//@ chunk-2jb250pa.js:36622-37076 placement
 /**
  * 是否为 ssh/git 形式 URL。
  */
@@ -313,13 +314,13 @@ function isGitSshUrl(url) {
   let index_2 = replaced.lastIndexOf("@");
   return index_2 !== -1 && replaced.slice(0, index_2).includes(":");
 }
-//@ chunk-cgr0tezp.js:72027-72126 placement (2.1.88 match: ghIsDangerousCallback, 1)
+//@ chunk-2jb250pa.js:37076-37174 placement (2.1.88 match: ghIsDangerousCallback, 1)
 function isScpLikeRemote(text) {
   let index = text.indexOf(":");
   let index_2 = text.indexOf("/");
   return index > 0 && !text.includes("://") && (index_2 === -1 || index < index_2);
 }
-//@ chunk-cgr0tezp.js:72126-72410 placement (2.1.88 match: ghIsDangerousCallback, 1)
+//@ chunk-2jb250pa.js:37174-37455 placement (2.1.88 match: ghIsDangerousCallback, 1)
 function ghIsDangerousCallback(_rawCommand, args) {
   let isDangerous = (raw, replaced) => {
     let stripped = stripLeadingSpaceAndNewlines(raw);
@@ -337,7 +338,7 @@ function ghIsDangerousCallback(_rawCommand, args) {
     ? REDACTED_URL
     : args;
 }
-//@ chunk-cgr0tezp.js:72410-72956 placement
+//@ chunk-2jb250pa.js:37455-38000 placement
 /**
  * 协议中夹杂空白等的伪装 URL。
  */
@@ -356,7 +357,7 @@ function isObfuscatedSchemeUrl(text) {
   let pathPart = schemeMatch ? rest.slice(Math.max(rest.indexOf("/"), 0)) : "";
   return !authorityPattern.test(rest) || /(?:@|%40)(?:\[|%5b)/i.test(pathPart);
 }
-//@ chunk-cgr0tezp.js:72956-73019 placement
+//@ chunk-2jb250pa.js:38000-38063 placement
 function hasUrlHost(text) {
   try {
     return new URL(text).host !== "";
@@ -364,7 +365,7 @@ function hasUrlHost(text) {
     return false;
   }
 }
-//@ chunk-cgr0tezp.js:73019-73389 placement (2.1.88 match: ghIsDangerousCallback, 0.825)
+//@ chunk-2jb250pa.js:38063-38433 placement (2.1.88 match: ghIsDangerousCallback, 0.826)
 /**
  * 是否为 scp 风格地址（user@host:path）。
  */
@@ -389,11 +390,11 @@ function isScpStyleUrl(_rawCommand, args) {
   }
   return args !== _rawCommand && args !== REDACTED_URL && !args.startsWith(`${sliced_2}:`);
 }
-//@ chunk-cgr0tezp.js:73389-73424 placement
+//@ chunk-2jb250pa.js:38433-38468 placement
 function hasSensitiveUrlOrGitHubCallback(text) {
   return hasSensitiveUrlParts(text) || ghIsDangerousCallback_2(text);
 }
-//@ chunk-cgr0tezp.js:73424-73650 placement (2.1.88 match: ghIsDangerousCallback, 0.825)
+//@ chunk-2jb250pa.js:38468-38694 placement (2.1.88 match: ghIsDangerousCallback, 0.826)
 function ghIsDangerousCallback_2(text) {
   let replaced = text.replace(/^[\u0000-\u0020]+/, "");
   let index = replaced.indexOf("://");
@@ -405,23 +406,23 @@ function ghIsDangerousCallback_2(text) {
     (hasColon(rest.slice(0, index_2)) || (index !== -1 && isNotSshScheme(replaced.slice(0, index))))
   );
 }
-//@ chunk-cgr0tezp.js:73650-73711 placement
+//@ chunk-2jb250pa.js:38694-38755 placement
 function isNotSshScheme(scheme) {
   return !/^(?:ssh|git\+ssh|ssh\+git)$/i.test(scheme);
 }
-//@ chunk-cgr0tezp.js:73711-73790 placement
+//@ chunk-2jb250pa.js:38755-38834 placement
 /**
  * stripLeadingSpaceAndNewlines：去掉前导空白与换行。
  */
 function stripLeadingSpaceAndNewlines(text) {
   return text.replace(/^[\u0000-\u0020]+/, "").replace(/[\t\n\r]/g, "");
 }
-//@ chunk-cgr0tezp.js:73790-74046 placement
+//@ chunk-2jb250pa.js:38834-39090 placement
 var URL_PREFIX_BOUNDARY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var WEB_SCHEMES;
 var GIT_SCHEMES;
 var regExp_15;
-deferInit("chunk-cgr0tezp.js:73790", () => {
+deferInit("chunk-2jb250pa.js:38834", () => {
   URL_PREFIX_BOUNDARY = "(^|[^a-z0-9+.-]|%[0-9a-f]{2})";
   WEB_SCHEMES = "https?|wss?|ftps?";
   GIT_SCHEMES = "ssh\\+git|git\\+ssh|ssh|git";
@@ -430,7 +431,7 @@ deferInit("chunk-cgr0tezp.js:73790", () => {
     "i",
   );
 });
-//@ chunk-cgr0tezp.js:74046-74424 placement
+//@ chunk-2jb250pa.js:39090-39468 placement
 /**
  * 是否为文件类 URL。
  */
@@ -449,20 +450,20 @@ function isFileLikeUrl(text, { forDestination = false } = {}) {
     (replaced.includes("@", afterScheme) || /%40/i.test(firstLineOf(replaced.slice(afterScheme), "/")))
   );
 }
-//@ chunk-cgr0tezp.js:74424-74505 placement
+//@ chunk-2jb250pa.js:39468-39549 placement
 function hasBackslashUserinfo(text) {
   let stripped = stripLeadingSpaceAndNewlines(text);
   if (WINDOWS_LOCAL_PATH_RE.test(stripped) || /^file:/i.test(stripped)) return false;
   return hasBackslashUserinfo_2(text);
 }
-//@ chunk-cgr0tezp.js:74505-74623 placement
+//@ chunk-2jb250pa.js:39549-39667 placement
 function hasBackslashUserinfo_2(text) {
   let stripped = stripLeadingSpaceAndNewlines(text);
   let queryIndex = stripped.search(/[?#]/);
   let index = (queryIndex === -1 ? stripped : stripped.slice(0, queryIndex)).indexOf("\\");
   return index !== -1 && stripped.includes("@", index);
 }
-//@ chunk-cgr0tezp.js:74623-74843 layout
+//@ chunk-2jb250pa.js:39667-39887 affinity
 function hasBracketedSshHost(text) {
   let stripped = stripLeadingSpaceAndNewlines(text);
   let match = /(?:ssh|git\+ssh|ssh\+git|git):\/\//i.exec(stripped);
@@ -474,13 +475,7 @@ function hasBracketedSshHost(text) {
   let pathBreak = replaced.search(/[/?#]/);
   return pathBreak !== -1 && replaced.includes("@[", pathBreak);
 }
-//@ chunk-cgr0tezp.js:74843-75015 layout
-function sshHostMismatch(text, url) {
-  if (!/^(?:ssh|git|git\+ssh|ssh\+git):$/i.test(url.protocol)) return false;
-  let host = parseUrlScheme(stripLeadingSpaceAndNewlines(text))?.host;
-  return host !== undefined && host.toLowerCase() !== decodePercentRuns(url.hostname).toLowerCase();
-}
-//@ chunk-cgr0tezp.js:75015-75142 layout
+//@ chunk-2jb250pa.js:40059-40186 affinity
 /**
  * 判断 URL 是否指向受限目的地（多种检测的组合）。归属疑为通用 URL 安全工具。
  */
@@ -497,7 +492,7 @@ function isRestrictedDestination(text, parsedUrl) {
     (parsedUrl.protocol === "file:" && hasConfusableAuthority(text))
   );
 }
-//@ chunk-cgr0tezp.js:75142-75296 placement (2.1.88 match: normalizeUrl, 0.695)
+//@ chunk-2jb250pa.js:40186-40340 placement (2.1.88 match: normalizeUrl, 0.696)
 /**
  * 检测 URL 的反斜杠与 @ 混淆：反斜杠之后、@ 之前出现：或 %3a 视为可疑（浏览器与 URL 解析器会把它当成不同主机）。
  */
@@ -508,7 +503,7 @@ function hasConfusableAuthority(url) {
   let index_2 = text.lastIndexOf("@");
   return index !== -1 && index_2 > index && /:|%3a/i.test(text.slice(index, index_2));
 }
-//@ chunk-cgr0tezp.js:75296-75461 placement
+//@ chunk-2jb250pa.js:40340-40505 placement
 function isPlainPathLike(text) {
   return (
     /^[\w .+~@\\/-]*$/.test(text) &&
@@ -516,12 +511,12 @@ function isPlainPathLike(text) {
     !/(?:^|[^\\])@|@[^\\/ ]*(?:[/ ]|$)/.test(text)
   );
 }
-//@ chunk-cgr0tezp.js:75461-75562 placement (2.1.88 match: ghIsDangerousCallback, 1)
+//@ chunk-2jb250pa.js:40505-40606 placement (2.1.88 match: ghIsDangerousCallback, 1)
 function getUrlAuthorityStart(text) {
   let index = text.indexOf("://");
   return index !== -1 && /^[a-z][a-z0-9+.-]*$/i.test(text.slice(0, index)) ? index + 3 : 0;
 }
-//@ chunk-cgr0tezp.js:75562-75758 placement
+//@ chunk-2jb250pa.js:40606-40802 placement
 function userinfoEnd_2(text) {
   let index = text.indexOf("@");
   if (index === -1) return -1;
@@ -530,38 +525,38 @@ function userinfoEnd_2(text) {
   let index_2 = text.indexOf("/", index);
   return text.lastIndexOf("@", index_2 === -1 ? text.length : index_2);
 }
-//@ chunk-cgr0tezp.js:75758-75902 placement
+//@ chunk-2jb250pa.js:40802-40946 placement
 function hasNonHostPrefix(text, limit, stripPortSuffix) {
   let index = text.indexOf("/");
   if (index <= 0 || index > limit) return false;
   let replaced = text.slice(0, index).replace(/^\[[^\]]*\]/, "");
   return !hasColon(stripPortSuffix ? replaced.replace(/:\d+$/, "") : replaced);
 }
-//@ chunk-cgr0tezp.js:75902-76021 placement
+//@ chunk-2jb250pa.js:40946-41065 placement
 /**
  * 文本中 URL 的正则与分隔字符。
  */
 var URL_IN_TEXT_RE = /[a-z][a-z0-9+.-]{0,31}:\/\/[^\s'"`<>]+/gi;
 var URL_BREAK_RE = /[\s'"`<>]/;
 var URL_BREAK_DESCRIPTION = "whitespace, quotes, backticks or angle brackets";
-//@ chunk-cgr0tezp.js:76021-76080 placement
+//@ chunk-2jb250pa.js:41065-41124 placement
 /**
  * isPlainHttpUrl：普通 http(s) URL。
  */
 function isPlainHttpUrl(url) {
   return /^https?:\/\//i.test(url) && !URL_BREAK_RE.test(url);
 }
-//@ chunk-cgr0tezp.js:76080-76212 placement
+//@ chunk-2jb250pa.js:41124-41256 placement
 var AT_TOKEN_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var regExp_16;
-deferInit("chunk-cgr0tezp.js:76080", () => {
+deferInit("chunk-2jb250pa.js:41124", () => {
   AT_TOKEN_RE = /(^|[\s'"`<>])([^\s'"`<>]*(?:@|%40)[^\s'"`<>]*)/gi;
   regExp_16 = new RegExp(
     `${URL_PREFIX_BOUNDARY}(?:${WEB_SCHEMES}):(?!\\/\\/)|${URL_PREFIX_BOUNDARY}(?:${GIT_SCHEMES}):(?!\\/\\/)`,
     "gi",
   );
 });
-//@ chunk-cgr0tezp.js:76212-76547 placement
+//@ chunk-2jb250pa.js:41256-41591 placement
 /**
  * 找出 userinfo 结束位置。
  */
@@ -579,7 +574,7 @@ function userinfoEnd(text) {
   }
   return -1;
 }
-//@ chunk-cgr0tezp.js:76547-76692 placement
+//@ chunk-2jb250pa.js:41591-41736 placement
 /**
  * 遮盖消息中的 URL 与 userinfo。
  */
@@ -594,14 +589,14 @@ function redactUrlsInMessage(text) {
         : prefix + rest.slice(0, userinfoEndIndex) + redactUrlQuery(rest.slice(userinfoEndIndex));
     });
 }
-//@ chunk-cgr0tezp.js:76692-76785 placement
+//@ chunk-2jb250pa.js:41736-41829 placement
 function ruleApplies(redactRule, forDestination, text) {
   return (
     (forDestination || redactRule.redactOnly !== true) &&
     (redactRule.prefilter === undefined || redactRule.prefilter.test(text))
   );
 }
-//@ chunk-cgr0tezp.js:76785-76919 placement
+//@ chunk-2jb250pa.js:41829-41962 placement
 function redactTokensPrefix(text, startIndex) {
   for (let windowChars = startIndex + 2 * REDACT_WINDOW_CHARS; ; windowChars *= 2) {
     if (text.length <= windowChars) return redactSecretTokens(text);
@@ -611,20 +606,21 @@ function redactTokensPrefix(text, startIndex) {
   }
 }
 export {
-  ruleApplies,
-  redactTokensPrefix,
+  redactSshUserinfo,
+  redactUrlsTracked,
   redactUrlsInText,
-  safeOriginUrlRedacted,
   redactUrlsInMessage,
   redactKnownUrls,
   redactUrlQuery,
-  redactUrlsTracked,
   replaceAll,
   REDACTED_URL,
-  redactSshUserinfo,
+  ruleApplies,
+  redactTokensPrefix,
+  stripLeadingSpaceAndNewlines,
+  safeOriginUrlRedacted,
+  URL_BREAK_DESCRIPTION,
+  isPlainHttpUrl,
   COLON_RE,
   displaySafeUrl,
   URL_AUTHORITY_ESCAPE_RE,
-  URL_BREAK_DESCRIPTION,
-  isPlainHttpUrl,
 };

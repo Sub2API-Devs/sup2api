@@ -1,21 +1,21 @@
 /**
  * zod/v4/core/to-json-schema.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: zod@4.6.2
- * pieces: chunk-7vp249v4.js (14)
+ * pieces: chunk-m4y44r15.js (14)
  * attribution: esm-fingerprint 14
  */
 import { assignProp } from "./util.js";
 import { globalRegistry } from "./registries.js";
 
-//@ chunk-7vp249v4.js:56884-57024 esm-fingerprint
+//@ chunk-m4y44r15.js:56884-57024 esm-fingerprint
 function assignProps(target, ...sources) {
   for (let source of sources)
     for (let key of Reflect.ownKeys(source))
       if (Object.prototype.propertyIsEnumerable.call(source, key)) assignProp(target, key, source[key]);
   return target;
 }
-//@ chunk-7vp249v4.js:57024-57492 esm-fingerprint
+//@ chunk-m4y44r15.js:57024-57492 esm-fingerprint
 function initializeContext(params) {
   let target = params?.target ?? "draft-2020-12";
   if (target === "draft-4") target = "draft-04";
@@ -38,7 +38,7 @@ function initializeContext(params) {
     external: params?.external ?? undefined,
   };
 }
-//@ chunk-7vp249v4.js:57492-57724 esm-fingerprint
+//@ chunk-m4y44r15.js:57492-57724 esm-fingerprint
 function handleUnrepresentable(schema, ctx, json, params, message) {
   let result =
     typeof ctx.unrepresentable === "function"
@@ -53,7 +53,7 @@ function handleUnrepresentable(schema, ctx, json, params, message) {
   Object.assign(json, result);
   return true;
 }
-//@ chunk-7vp249v4.js:57724-58672 esm-fingerprint
+//@ chunk-m4y44r15.js:57724-58672 esm-fingerprint
 function processSchema(
   schema,
   ctx,
@@ -112,11 +112,11 @@ function processSchema(
   delete result.schema._prefault;
   return ctx.seen.get(schema).schema;
 }
-//@ chunk-7vp249v4.js:58672-58735 esm-fingerprint
+//@ chunk-m4y44r15.js:58672-58735 esm-fingerprint
 function encodeJSONPointerSegment(segment) {
   return segment.replace(/~/g, "~0").replace(/\//g, "~1");
 }
-//@ chunk-7vp249v4.js:58735-60319 esm-fingerprint
+//@ chunk-m4y44r15.js:58735-60319 esm-fingerprint
 function extractDefs(ctx, schema) {
   let root = ctx.seen.get(schema);
   if (!root) throw Error("Unprocessed schema. This is a bug in Zod.");
@@ -208,7 +208,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
   if (ctx.external) ctx.sharedDefsExtractedFor = ctx.external;
 }
-//@ chunk-7vp249v4.js:60319-60682 esm-fingerprint
+//@ chunk-m4y44r15.js:60319-60682 esm-fingerprint
 function compactTypeUnion(schema) {
   let options = schema.anyOf;
   if (!Array.isArray(options) || options.length === 0 || schema.type !== undefined) return;
@@ -227,16 +227,16 @@ function compactTypeUnion(schema) {
   delete schema.anyOf;
   schema.type = types.length === 1 ? types[0] : types;
 }
-//@ chunk-7vp249v4.js:60682-60775 esm-fingerprint
+//@ chunk-m4y44r15.js:60682-60775 esm-fingerprint
 var FOLDABLE_KEYS = new Set(["type", "properties", "required", "additionalProperties"]);
 var UNION_KEYS = ["oneOf", "anyOf"];
-//@ chunk-7vp249v4.js:60775-60920 esm-fingerprint
+//@ chunk-m4y44r15.js:60775-60920 esm-fingerprint
 function undeclaredConstraint(member) {
   let extra = member.additionalProperties;
   if (extra === undefined || extra === false || typeof extra !== "object" || extra === null) return null;
   return Object.keys(extra).length ? extra : null;
 }
-//@ chunk-7vp249v4.js:60920-61773 esm-fingerprint
+//@ chunk-m4y44r15.js:60920-61773 esm-fingerprint
 function foldObjects(members) {
   let objects = [];
   for (let member of members) {
@@ -286,7 +286,7 @@ function foldObjects(members) {
   }
   return folded;
 }
-//@ chunk-7vp249v4.js:61773-62174 esm-fingerprint
+//@ chunk-m4y44r15.js:61773-62174 esm-fingerprint
 function foldIntersection(json) {
   let allOf = json.allOf;
   if (!Array.isArray(allOf) || allOf.length < 2) return;
@@ -309,7 +309,7 @@ function foldIntersection(json) {
   delete json.allOf;
   assignProps(json, folded);
 }
-//@ chunk-7vp249v4.js:62174-64732 esm-fingerprint
+//@ chunk-m4y44r15.js:62174-64732 esm-fingerprint
 function finalize(ctx, schema) {
   let root = ctx.seen.get(schema);
   if (!root) throw Error("Unprocessed schema. This is a bug in Zod.");
@@ -429,7 +429,7 @@ function finalize(ctx, schema) {
     throw Error("Error converting schema to JSON.");
   }
 }
-//@ chunk-7vp249v4.js:64732-65672 esm-fingerprint
+//@ chunk-m4y44r15.js:64732-65672 esm-fingerprint
 function isTransforming(_schema, _ctx) {
   let ctx = _ctx ?? {
     seen: new Set(),
@@ -474,7 +474,7 @@ function isTransforming(_schema, _ctx) {
   }
   return false;
 }
-//@ chunk-7vp249v4.js:65672-65890 esm-fingerprint
+//@ chunk-m4y44r15.js:65672-65890 esm-fingerprint
 var createToJSONSchemaMethod =
   (schema, processors = {}) =>
   (params) => {

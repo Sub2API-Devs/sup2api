@@ -3,12 +3,30 @@
  *
  * 2.1.316 新增：print 模式的交互式提问与用户对话框注册表：SDK 对话框种类声明/恢复、待决对话框取消、被中断回合的恢复规划（车道选项、未完成工具调用、孤儿权限提示）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (34)
- * attribution: placement 34
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (35)
+ * attribution: placement 34, layout 1
  */
 import { stat } from "fs/promises";
+import { env } from "../../utils/env.js";
+import {
+  getRemoteFeatureGateState,
+  getRemoteFlagOverrideState,
+} from "../../utils/permissions/yoloClassifier.js";
+import { isClaudeAiChatRemote } from "../../utils/entrypointKinds.js";
+import {
+  TENGU_HUMBLE_BUMBLEBEE,
+  TENGU_SNUG_QUILL,
+  TENGU_SPLENDID_LYNX,
+  TENGU_MELLOW_RAINBOW,
+} from "../../services/api/withRetry.js";
+import { withDeadline } from "../../utils/sleep.js";
+import {
+  initializeGrowthBook,
+  refreshGrowthBookFeatures,
+  getFeatureValue_CACHED_MAY_BE_STALE,
+} from "../../services/analytics/growthbook.js";
 import { stringLength } from "../../../vendor/axios/dist/esm/axios.js";
 import {
   setSdkDialogHostActive,
@@ -23,7 +41,7 @@ import { MCP_URL_ELICITATION_DIALOG } from "../../services/mcp/elicitationDialog
 import { isSdkHostOrigin } from "./lowLatencySubmit.js";
 import { ENUM_PROMPT } from "../../components/nudges/nudgeIds.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
-import { isPromptModeQueuedCommand } from "../../utils/messageQueueManager.js";
+import { isQueuedUserPrompt } from "../../utils/messageQueueManager.js";
 import { dialogSourceOf } from "../../utils/teleport/sessionCreate.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { shortHash } from "../../utils/shortHash.js";
@@ -34,11 +52,6 @@ import { logForDebugging } from "../../utils/debug.js";
 import { hostedDesktopRefusal_2 } from "../../services/mcp/mcpWireUtils.js";
 import { isPersonOnlyPluginServer } from "../../plugins/bundled/claudeTest/userConfig.js";
 import { logMCPDebug, logError } from "../../utils/log.js";
-import {
-  getFeatureValue_CACHED_MAY_BE_STALE,
-  initializeGrowthBook,
-  refreshGrowthBookFeatures,
-} from "../../services/analytics/growthbook.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { getRequestTimingStore } from "../../services/tools/toolExecution.js";
@@ -53,12 +66,11 @@ import {
 import { isResumeTooOld, interruptedTurnResumePolicy } from "../../utils/conversationRecovery.js";
 import { hasPendingActions, hasRowsAfterTime, singlePendingAction } from "./wakeRouter.js";
 import { SYNC_ANSWER_TTL_MS } from "../../services/remoteTools/shellForwarding.js";
-import { deepEqualIgnoringUndefined } from "../../bootstrap/stateSlices.js";
 import {
   normalizeMessages,
   singleTextContent,
   isOnlySystemReminders,
-  isSyntheticApiErrorMessage,
+  isNoResponseRequestedMessage,
   isContextAppendMessage,
 } from "../../utils/messages.js";
 import { findLastUserPromptUuid, isPlainInterruptMarker } from "../../utils/transcript/deserialize.js";
@@ -67,27 +79,87 @@ import { isAbortError, errorMessage, getErrnoCode } from "../../utils/errors.js"
 import { isTranscriptLoadError } from "../../utils/transcript/transcriptFiles.js";
 import { findToolByName } from "../../Tool.js";
 import { describeUnsentServedCalls } from "./permissionAsks.js";
-import { env } from "../../utils/env.js";
-import {
-  getRemoteFeatureGateState,
-  getRemoteFlagOverrideState,
-} from "../../utils/permissions/yoloClassifier.js";
-import { TENGU_SNUG_QUILL, TENGU_SPLENDID_LYNX, TENGU_MELLOW_RAINBOW } from "../../services/api/withRetry.js";
-import { withDeadline } from "../../utils/sleep.js";
 import {
   findUnresolvedToolUseMessageRows,
   findUnresolvedToolUse,
   getTranscriptPath,
-  MAX_TRANSCRIPT_READ_BYTES,
   getTranscriptStorageKey,
   loadTranscriptFile,
   findUnresolvedToolUsesInTranscript,
   assistantMessageRowsInTranscript,
 } from "../../utils/sessionStorage.js";
 import { SKIP_PRECOMPACT_THRESHOLD } from "../../utils/sessionStoragePortable.js";
+import { MAX_TRANSCRIPT_READ_BYTES } from "../../services/api/tether.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
 
-//@ chunk-tyg7f3ek.js:378840-379702 placement
+//@ chunk-0yw3taqg.js:35608-35721 placement
+var TENGU_POLISHED_SALAMANDER = "tengu_polished_salamander";
+var TENGU_CCR_INHERITED_APPROVAL_KILLSWITCH = "tengu_ccr_inherited_approval_killswitch";
+var TENGU_MENDED_RIBBON = "tengu_mended_ribbon";
+var PARKED_PERMISSION_DEFAULT_WAIT_MS = 2000;
+//@ chunk-0yw3taqg.js:35721-35788 placement
+function parkedPermissionWaitMs() {
+  return env.CLAUDE_CODE_PARKED_PERMISSION_WAIT_MS ?? 2000;
+}
+//@ chunk-0yw3taqg.js:35788-35843 placement
+function isRemoteGateOn(gateName) {
+  try {
+    return getRemoteFeatureGateState(gateName) === "on";
+  } catch {
+    return false;
+  }
+}
+//@ chunk-0yw3taqg.js:35843-35878 layout
+function shouldLeadWithOldestCard() {
+  return isClaudeAiChatRemote() && isRemoteGateOn(TENGU_HUMBLE_BUMBLEBEE);
+}
+//@ chunk-0yw3taqg.js:35878-36433 placement
+/**
+ * 读取恢复被打断回合相关的环境变量与 GrowthBook 开关，返回续跑策略对象（resumeInterruptedTurn、answerGoesFirst、findsCardBehindNote 等）。
+ */
+function getResumeLaneOptions() {
+  return {
+    resumeInterruptedTurn: env.CLAUDE_CODE_RESUME_INTERRUPTED_TURN,
+    parkedStopRetires: env.CLAUDE_CODE_PARKED_STOP_RETIRES,
+    runsBeforeClear: env.CLAUDE_CODE_PARKED_RUN_BEFORE_CLEAR,
+    toleratesContextAppends: env.CLAUDE_CODE_RESUME_TOLERATES_CONTEXT_APPENDS,
+    answerWaitMs: parkedPermissionWaitMs(),
+    holdsParkedMessageOpen: () => isRemoteGateOn(TENGU_POLISHED_SALAMANDER),
+    answerGoesFirst: () => {
+      try {
+        let answerFlag = getRemoteFeatureGateState(TENGU_SNUG_QUILL);
+        if (answerFlag !== "on") return answerFlag;
+        let stopKeptFlag = getRemoteFeatureGateState(TENGU_SPLENDID_LYNX);
+        return stopKeptFlag === "off" ? "on_but_stop_kept_flag_off" : stopKeptFlag;
+      } catch {
+        return "off";
+      }
+    },
+    inheritedAnswerOff: () =>
+      readFlagWhenWarm(TENGU_CCR_INHERITED_APPROVAL_KILLSWITCH, getRemoteFeatureGateState),
+    findsCardBehindNote: () => readFlagWhenWarm(TENGU_MENDED_RIBBON, getRemoteFlagOverrideState),
+    holdsInputBehindPrompt: () => isRemoteGateOn(TENGU_MELLOW_RAINBOW),
+  };
+}
+//@ chunk-0yw3taqg.js:36433-36599 placement
+async function readFlagWhenWarm(flag, reader) {
+  try {
+    if (reader(flag) === "cold")
+      await withDeadline(
+        initializeGrowthBook()
+          .catch(() => null)
+          .then(() => (reader(flag) === "cold" ? refreshGrowthBookFeatures() : undefined))
+          .catch(() => {
+            return;
+          }),
+        PARKED_PERMISSION_DEFAULT_WAIT_MS,
+      );
+    return reader(flag);
+  } catch {
+    return "cold";
+  }
+}
+//@ chunk-0yw3taqg.js:413594-414456 placement
 function requestExceedsByteLimit(request, maxRequestBytes) {
   let byteCount = 0;
   let stack = [];
@@ -148,21 +220,21 @@ function requestExceedsByteLimit(request, maxRequestBytes) {
     hasPendingValue = true;
   }
 }
-//@ chunk-tyg7f3ek.js:380090-380142 placement
+//@ chunk-0yw3taqg.js:414844-414896 placement
 function mcpModulesChunk() {
   return require("../../services/mcp/emitTripwireEvent.lazy.js");
 }
-//@ chunk-tyg7f3ek.js:380142-380186 placement
+//@ chunk-0yw3taqg.js:414896-414940 placement
 function mcpClientModule_3() {
   return mcpModulesChunk().mcpClientModule();
 }
-//@ chunk-tyg7f3ek.js:380186-380242 placement
+//@ chunk-0yw3taqg.js:414940-414996 placement
 function mcpElicitationHandlerModule() {
   return mcpModulesChunk().mcpElicitationHandlerModule();
 }
-//@ chunk-tyg7f3ek.js:380242-380279 placement
+//@ chunk-0yw3taqg.js:414996-415033 placement
 var ANTHROPIC_PERMISSIONDISPLAY = "anthropic/permissionDisplay";
-//@ chunk-tyg7f3ek.js:380279-380480 placement
+//@ chunk-0yw3taqg.js:415033-415234 placement
 function readPermissionDisplayMeta(meta) {
   let displayMeta = meta?.[ANTHROPIC_PERMISSIONDISPLAY];
   if (displayMeta == null || typeof displayMeta !== "object") return;
@@ -174,7 +246,7 @@ function readPermissionDisplayMeta(meta) {
     description: readString("description"),
   };
 }
-//@ chunk-tyg7f3ek.js:380480-381503 placement
+//@ chunk-0yw3taqg.js:415234-416257 placement
 /**
  * 无界面模式的用户对话框处理器：MCP elicitation 转给 structuredIO.handleElicitation；SDK 宿主对话框先校验载荷，队列里已有提示时直接取消，否则发 requestUserDialog 并校验结果，失败时返回对话框默认值。
  */
@@ -201,7 +273,7 @@ function createSdkUserDialogHandler(structuredIO, commandQueue) {
         return dialog.default;
       }
       let dialogData = parsedPayload?.data ?? payload;
-      if (commandQueue.peek(isPromptModeQueuedCommand) !== undefined) {
+      if (commandQueue.peek(isQueuedUserPrompt) !== undefined) {
         let dialogSource = dialogSourceOf(dialog.kind, dialogData);
         logEvent("tengu_request_user_dialog_implicit_cancel", {
           dialog_kind: shortHash(dialog.kind),
@@ -227,7 +299,7 @@ function createSdkUserDialogHandler(structuredIO, commandQueue) {
     return dialog.default;
   };
 }
-//@ chunk-tyg7f3ek.js:381503-381631 placement
+//@ chunk-0yw3taqg.js:416257-416385 placement
 function declareSdkDialogKinds(kinds, attaching, sessionState) {
   let sanitizedKinds = sanitizeStringList(kinds);
   setSdkSupportedDialogKinds(sanitizedKinds, attaching ? "attach_time" : "create_time");
@@ -235,7 +307,7 @@ function declareSdkDialogKinds(kinds, attaching, sessionState) {
     declared_dialog_kinds: sanitizedKinds,
   });
 }
-//@ chunk-tyg7f3ek.js:381631-381902 placement
+//@ chunk-0yw3taqg.js:416385-416656 placement
 /**
  * 从上一工作进程的 internal.declared_dialog_kinds 恢复 SDK 声明的对话框种类（只在尚未声明时）。
  */
@@ -249,7 +321,7 @@ function restoreDeclaredDialogKinds(restoredState) {
   });
   logForDebugging(`restored ${sanitizedKinds.length} declared dialog kind(s) from prior worker epoch`);
 }
-//@ chunk-tyg7f3ek.js:381902-382043 placement
+//@ chunk-0yw3taqg.js:416656-416797 placement
 function cancelPendingUserDialogs(structuredIO, reason) {
   let cancelledCount = structuredIO.cancelPendingUserDialogs(REFUSAL_FALLBACK_DIALOG.kind, reason);
   if (cancelledCount > 0)
@@ -258,7 +330,7 @@ function cancelPendingUserDialogs(structuredIO, reason) {
       reason,
     });
 }
-//@ chunk-tyg7f3ek.js:382043-382290 placement
+//@ chunk-0yw3taqg.js:416797-417044 placement
 function cancelDialogsOnNewPrompt(structuredIO, unattendedRecord, isPersonPrompt, reason, closesAt) {
   if (!isPersonPrompt) {
     structuredIO.logDialogsLeftUp(reason);
@@ -274,14 +346,14 @@ function cancelDialogsOnNewPrompt(structuredIO, unattendedRecord, isPersonPrompt
       closes_on_new_prompt_at: closesAt,
     });
 }
-//@ chunk-tyg7f3ek.js:382290-382385 placement
+//@ chunk-0yw3taqg.js:417044-417139 placement
 var DISABLED_ELICITATION_LIMITS = {
   maxOutstanding: 1 / 0,
   maxAdmittedPerMinute: 1 / 0,
   maxRequestBytes: 1 / 0,
   completions: "forward",
 };
-//@ chunk-tyg7f3ek.js:382385-385935 placement
+//@ chunk-0yw3taqg.js:417139-420689 placement
 /**
  * 为已连接的非 SDK MCP 服务器注册 elicitation 处理：按并发上限、每提示次数（tengu_linear_quail）、每分钟次数、请求大小限流；先跑 Elicitation hooks，再转给 SDK 宿主；可转发完成通知。内置插件同名服务器一律取消。
  */
@@ -487,7 +559,7 @@ function createElicitationRegistrar({
     }
   };
 }
-//@ chunk-tyg7f3ek.js:385935-386167 placement
+//@ chunk-0yw3taqg.js:420689-420921 placement
 /**
  * 给一组活动调用看门狗挂上"全部结束即中止"的 AbortController 集合：包装 delete，集合清空且开关 tengu_misty_twilight 开时中止所有登记的控制器。
  */
@@ -505,7 +577,7 @@ function getWatchdogAbortSet(watchdogs, cache) {
   };
   return createdAbortSet;
 }
-//@ chunk-tyg7f3ek.js:386167-386700 placement
+//@ chunk-0yw3taqg.js:420921-421454 placement
 /**
  * 恢复会话时确定被打断的回合：先找上一工作进程记录、不在续跑链上的已服务调用（findOffChainServedCalls），没有再找"卡片在提示后"的情形；出错时退回 load 的中断状态。
  */
@@ -538,7 +610,7 @@ async function resolveResumeInterruption(options) {
     };
   }
 }
-//@ chunk-tyg7f3ek.js:386700-388620 placement
+//@ chunk-0yw3taqg.js:421454-423379 placement
 /**
  * 找出上一工作进程记录、未在 transcript 中得到结果的已服务调用，把它们视为被打断回合的工具调用，返回中断状态、离链工具名与已记录的 tool_use。
  */
@@ -636,7 +708,7 @@ async function findOffChainServedCalls(
     journaledToolUses: unresolvedByToolUse,
   };
 }
-//@ chunk-tyg7f3ek.js:388620-389771 placement
+//@ chunk-0yw3taqg.js:423379-424472 placement
 /**
  * 链末是重启续跑消息、外部 pending_action 与 transcript 里的 tool_use 一致时，把挂起的权限卡片视为被打断回合（ccr_card_behind_note）。
  */
@@ -676,16 +748,12 @@ async function findParkedCardBehindNote({ restored, load, chain, findUnresolved,
   let rejectReason =
     toolUse.name !== pendingAction?.tool_name
       ? "other_tool"
-      : !deepEqualIgnoringUndefined(toolUse.input, pendingAction.input)
-        ? "other_input"
-        : "isSidechain" in assistantMessage && assistantMessage.isSidechain === true
-          ? "sidechain"
-          : Date.now() - timestamp > SYNC_ANSWER_TTL_MS
-            ? "too_old"
-            : !(Date.parse(continuation.continuation.timestamp) > timestamp) ||
-                hasRowsAfterTime(chain, timestamp, isRestartContinuationOrQueuedRow)
-              ? "moved_on"
-              : undefined;
+      : "isSidechain" in assistantMessage && assistantMessage.isSidechain === true
+        ? "sidechain"
+        : !(Date.parse(continuation.continuation.timestamp) > timestamp) ||
+            hasRowsAfterTime(chain, timestamp, isRestartContinuationOrQueuedRow)
+          ? "moved_on"
+          : undefined;
   if (rejectReason !== undefined) {
     logFeatureBad("ccr_card_behind_note", rejectReason);
     return;
@@ -697,7 +765,7 @@ async function findParkedCardBehindNote({ restored, load, chain, findUnresolved,
     offChainToolNames: new Map([[pendingToolUseId, toolUse.name]]),
   };
 }
-//@ chunk-tyg7f3ek.js:389771-390027 placement
+//@ chunk-0yw3taqg.js:424472-424728 placement
 function buildInterruptedPromptState(chain, continuation) {
   let [interruptedMessage] = normalizeMessages([continuation.continuation]);
   let lastUserPromptUuid = findLastUserPromptUuid(chain.slice(0, continuation.continuationIndex + 1));
@@ -714,7 +782,7 @@ function buildInterruptedPromptState(chain, continuation) {
     }
   );
 }
-//@ chunk-tyg7f3ek.js:390027-390186 placement
+//@ chunk-0yw3taqg.js:424728-424887 placement
 function isRestartContinuationRow(message) {
   if (message.isMeta !== true || message.origin !== undefined || message.promptSource !== undefined)
     return false;
@@ -722,7 +790,7 @@ function isRestartContinuationRow(message) {
   let text = singleTextContent(message.message.content);
   return text !== undefined && isOnlySystemReminders(text);
 }
-//@ chunk-tyg7f3ek.js:390186-390301 placement
+//@ chunk-0yw3taqg.js:424887-425002 placement
 function isRestartContinuationOrQueuedRow(message) {
   return (
     isRestartContinuationRow(message) ||
@@ -732,7 +800,7 @@ function isRestartContinuationOrQueuedRow(message) {
       message.promptSource === undefined)
   );
 }
-//@ chunk-tyg7f3ek.js:390301-390570 placement
+//@ chunk-0yw3taqg.js:425002-425271 placement
 /**
  * 从消息链末尾往前找重启续跑消息：跳过合成 API 错误（记为 loaderSentinel）和不影响的条目，遇到不满足谓词的用户消息就放弃。
  */
@@ -741,7 +809,7 @@ function findTrailingRestartContinuation(chain, predicate) {
   for (let j = chain.length - 1; j >= 0; j--) {
     let row = chain[j];
     if (row.type === "assistant") {
-      if (isSyntheticApiErrorMessage(row)) {
+      if (isNoResponseRequestedMessage(row)) {
         loaderSentinel ??= row;
         continue;
       }
@@ -759,7 +827,7 @@ function findTrailingRestartContinuation(chain, predicate) {
   }
   return;
 }
-//@ chunk-tyg7f3ek.js:390570-390700 placement
+//@ chunk-0yw3taqg.js:425271-425401 placement
 function logResumeLookupFailure(what, error) {
   if (isAbortError(error) || isTranscriptLoadError(error)) {
     logForDebugging(`[print.ts] ${what} failed, the boot goes on without them: ${errorMessage(error)}`, {
@@ -769,7 +837,7 @@ function logResumeLookupFailure(what, error) {
   }
   logError(error);
 }
-//@ chunk-tyg7f3ek.js:390700-391234 placement
+//@ chunk-0yw3taqg.js:425401-425935 placement
 /**
  * 恢复时计算要接管的已服务调用（有对应 assistant 消息且仍可执行）以及从未发出的调用。
  */
@@ -813,7 +881,7 @@ async function planServedCallAdoption({
     journaledServedCalls: journaledCalls.length,
   };
 }
-//@ chunk-tyg7f3ek.js:391234-391897 placement
+//@ chunk-0yw3taqg.js:425935-426598 placement
 /**
  * 为接管的已服务调用构造 orphaned-permission 模式的队列提示：主调用（优先本地有工具的）作为允许的权限结果，其余作为 siblings，并附上未发出的调用说明。
  */
@@ -856,70 +924,7 @@ function buildOrphanedPermissionPrompt({ calls, tools, supersededToolNames, serv
     },
   };
 }
-//@ chunk-tyg7f3ek.js:391897-392010 placement
-var TENGU_POLISHED_SALAMANDER = "tengu_polished_salamander";
-var TENGU_CCR_INHERITED_APPROVAL_KILLSWITCH = "tengu_ccr_inherited_approval_killswitch";
-var TENGU_MENDED_RIBBON = "tengu_mended_ribbon";
-var PARKED_PERMISSION_DEFAULT_WAIT_MS = 2000;
-//@ chunk-tyg7f3ek.js:392010-392077 placement
-function parkedPermissionWaitMs() {
-  return env.CLAUDE_CODE_PARKED_PERMISSION_WAIT_MS ?? 2000;
-}
-//@ chunk-tyg7f3ek.js:392077-392132 placement
-function isRemoteGateOn(gateName) {
-  try {
-    return getRemoteFeatureGateState(gateName) === "on";
-  } catch {
-    return false;
-  }
-}
-//@ chunk-tyg7f3ek.js:392132-392687 placement
-/**
- * 读取恢复被打断回合相关的环境变量与 GrowthBook 开关，返回续跑策略对象（resumeInterruptedTurn、answerGoesFirst、findsCardBehindNote 等）。
- */
-function getResumeLaneOptions() {
-  return {
-    resumeInterruptedTurn: env.CLAUDE_CODE_RESUME_INTERRUPTED_TURN,
-    parkedStopRetires: env.CLAUDE_CODE_PARKED_STOP_RETIRES,
-    runsBeforeClear: env.CLAUDE_CODE_PARKED_RUN_BEFORE_CLEAR,
-    toleratesContextAppends: env.CLAUDE_CODE_RESUME_TOLERATES_CONTEXT_APPENDS,
-    answerWaitMs: parkedPermissionWaitMs(),
-    holdsParkedMessageOpen: () => isRemoteGateOn(TENGU_POLISHED_SALAMANDER),
-    answerGoesFirst: () => {
-      try {
-        let answerFlag = getRemoteFeatureGateState(TENGU_SNUG_QUILL);
-        if (answerFlag !== "on") return answerFlag;
-        let stopKeptFlag = getRemoteFeatureGateState(TENGU_SPLENDID_LYNX);
-        return stopKeptFlag === "off" ? "on_but_stop_kept_flag_off" : stopKeptFlag;
-      } catch {
-        return "off";
-      }
-    },
-    inheritedAnswerOff: () =>
-      readFlagWhenWarm(TENGU_CCR_INHERITED_APPROVAL_KILLSWITCH, getRemoteFeatureGateState),
-    findsCardBehindNote: () => readFlagWhenWarm(TENGU_MENDED_RIBBON, getRemoteFlagOverrideState),
-    holdsInputBehindPrompt: () => isRemoteGateOn(TENGU_MELLOW_RAINBOW),
-  };
-}
-//@ chunk-tyg7f3ek.js:392687-392853 placement
-async function readFlagWhenWarm(flag, reader) {
-  try {
-    if (reader(flag) === "cold")
-      await withDeadline(
-        initializeGrowthBook()
-          .catch(() => null)
-          .then(() => (reader(flag) === "cold" ? refreshGrowthBookFeatures() : undefined))
-          .catch(() => {
-            return;
-          }),
-        PARKED_PERMISSION_DEFAULT_WAIT_MS,
-      );
-    return reader(flag);
-  } catch {
-    return "cold";
-  }
-}
-//@ chunk-tyg7f3ek.js:392889-393202 placement
+//@ chunk-0yw3taqg.js:426634-426947 placement
 /**
  * 返回按 tool_use id 查找未决 tool_use 的函数：tengu_eager_pillow 开时返回消息行，否则返回持有消息；对上一 assistant 回合里被取代的调用会读全部分支。
  */
@@ -949,7 +954,7 @@ function createUnresolvedToolUseFinder({ supersededToolUseIds, tookOverAPrompt, 
     );
   };
 }
-//@ chunk-tyg7f3ek.js:393202-393281 placement
+//@ chunk-0yw3taqg.js:426947-427026 placement
 async function findUnresolvedToolUseAnywhere(toolUseId, storageV5) {
   return (
     (await findUnresolvedToolUse(toolUseId, storageV5)) ??
@@ -957,7 +962,7 @@ async function findUnresolvedToolUseAnywhere(toolUseId, storageV5) {
     null
   );
 }
-//@ chunk-tyg7f3ek.js:393281-393600 placement
+//@ chunk-0yw3taqg.js:427026-427345 placement
 /**
  * 在被修剪的分支上查找未解决的 tool_use（转录大小在范围内时才查找）。
  */
@@ -979,7 +984,7 @@ async function findUnresolvedToolUseOnAPrunedBranch(toolUseId, storageV5) {
     ? ((await readEveryBranch(toolUseId, storageV5, false))?.holder ?? null)
     : null;
 }
-//@ chunk-tyg7f3ek.js:393600-394275 placement
+//@ chunk-0yw3taqg.js:427345-428020 placement
 /**
  * 保留全部分支再读一次 transcript，查找未决的 tool_use；找到时可附带 assistant 消息行，失败返回 null。
  */
@@ -1023,7 +1028,7 @@ async function readEveryBranch(toolUseId, storageV5, withMessageRows) {
     return null;
   }
 }
-//@ chunk-tyg7f3ek.js:394275-394375 placement
+//@ chunk-0yw3taqg.js:428020-428120 placement
 function isTerminalTitleSuppressed() {
   return (
     (isEssentialTrafficOnly() || env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE) &&
@@ -1031,6 +1036,7 @@ function isTerminalTitleSuppressed() {
   );
 }
 export {
+  shouldLeadWithOldestCard,
   restoreDeclaredDialogKinds,
   getResumeLaneOptions,
   resolveResumeInterruption,
@@ -1046,4 +1052,5 @@ export {
   isTerminalTitleSuppressed,
   cancelDialogsOnNewPrompt,
   declareSdkDialogKinds,
+  TENGU_CCR_INHERITED_APPROVAL_KILLSWITCH,
 };

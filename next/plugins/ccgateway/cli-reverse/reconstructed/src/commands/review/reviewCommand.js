@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/code-review 主体：选择等级与模型，拼装分阶段多代理审查提示词并注册技能
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hantmvxa.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ne2890fx.js (9)
  * attribution: placement 9
  */
 import {
@@ -48,7 +48,7 @@ import { firstLineOf } from "../../utils/stringUtils.js";
 import { isGitLabMrTarget } from "../../utils/detectRepository.js";
 import { canSpawnReviewAgents, formatReviewOutput } from "./reviewAngles.js";
 import { logEvent } from "../../services/analytics/index.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
+import { fromEnum, fromEnumOpt } from "../../services/analytics/safeMetadata.js";
 import { ultrareviewProseTip } from "../../services/api/ultrareviewQuota.js";
 import { execFileNoThrow } from "../../utils/execFileNoThrow.js";
 import { gitExe } from "../../utils/git.js";
@@ -60,7 +60,7 @@ import { CODE_REVIEW } from "../../skills/bundled/bundledSkillNames.js";
 import { saveGlobalConfig } from "../../utils/config.js";
 import { isCoordinatorMode_2 } from "../../coordinator/coordinatorMode.js";
 
-//@ chunk-hantmvxa.js:85992-87082 placement
+//@ chunk-ne2890fx.js:86165-87255 placement
 function getReviewCommandDescription() {
   let ultraSuffix = isUltrareviewAvailable()
     ? `; ultra: deep multi-agent review in the cloud${isUltrareviewWithBridge() ? "" : " (requires claude.ai account access)"}`
@@ -70,17 +70,17 @@ function getReviewCommandDescription() {
     : "";
   return `Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's recipe covers them) at the effort level given first, before any target (${REVIEW_LEVELS.join("|")}: from few high-confidence findings to many, some uncertain${ultraSuffix}); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply them to the working tree after the review. Pass --max-findings <n> to report up to n findings, or --max-findings all for every finding. The choice stays until you pass --max-findings default.${postSuffix}`;
 }
-//@ chunk-hantmvxa.js:87082-87521 placement
+//@ chunk-ne2890fx.js:87255-87694 placement
 function getReviewWhenToUse() {
   return isUltrareviewAvailable()
     ? "Use the max or ultra level only when the user, or instructions such as CLAUDE.md or a skill, explicitly ask for one, never on your own judgment: they are the costliest reviews and start many reviewer subagents."
     : "Use the max level only when the user, or instructions such as CLAUDE.md or a skill, explicitly ask for it, never on your own judgment: it is the costliest level and starts many reviewer subagents.";
 }
-//@ chunk-hantmvxa.js:87521-87660 placement
+//@ chunk-ne2890fx.js:87694-87833 placement
 function reviewArgumentHint() {
   return `[${isUltrareviewAvailable() ? `${REVIEW_LEVELS.join("|")}|ultra` : REVIEW_LEVELS.join("|")}] [--fix] [--comment] [<pr#>|<branch>|<path>] [--max-findings <n>|all]`;
 }
-//@ chunk-hantmvxa.js:87660-89673 placement
+//@ chunk-ne2890fx.js:87833-89880 placement
 /**
  * /code-review 主体：解析参数、选择等级与模型、拼装分阶段多代理审查提示词（含发帖/修复/上限说明）。
  */
@@ -157,6 +157,7 @@ async function buildReviewPrompt(args, context) {
       ),
       routed_to_workflow: false,
       uses_report_findings_tool: hasReportTool,
+      report_findings_declared_by: fromEnumOpt(reportFindingsMode),
       has_fix: fix,
       has_comment: comment,
       has_target: target.length > 0,
@@ -204,7 +205,7 @@ ${ultraTip}`
     },
   ];
 }
-//@ chunk-hantmvxa.js:89673-90366 placement
+//@ chunk-ne2890fx.js:89880-90573 placement
 async function estimateFinderBudgetHint(model, reviewEffort, target, countDiffLinesFn) {
   if (!REVIEW_LEVEL_TABLE_BY_MODEL[normalizeReviewModelKey(model)][reviewEffort].finderBudgetHint)
     return {
@@ -234,7 +235,7 @@ async function estimateFinderBudgetHint(model, reviewEffort, target, countDiffLi
     budget: max,
   };
 }
-//@ chunk-hantmvxa.js:90366-91018 placement
+//@ chunk-ne2890fx.js:90573-91225 placement
 async function countDiffLines(target) {
   let range;
   if (!target) range = "@{upstream}...HEAD";
@@ -280,7 +281,7 @@ async function countDiffLines(target) {
     return;
   }
 }
-//@ chunk-hantmvxa.js:91018-91215 placement
+//@ chunk-ne2890fx.js:91225-91422 placement
 function resolveReviewEffort(reviewArgs, context) {
   let { explicit, ultraFallback } = reviewArgs;
   let levelGuess = ultraFallback ? "max" : (explicit ?? defaultReviewLevel(reviewArgs, context));
@@ -292,7 +293,7 @@ function resolveReviewEffort(reviewArgs, context) {
     : (levelGuess ?? getEffortValue(context));
   return resolvedEffort === undefined ? "medium" : normalizeEffortLevel(resolvedEffort);
 }
-//@ chunk-hantmvxa.js:91215-93966 placement
+//@ chunk-ne2890fx.js:91422-94173 placement
 function buildReviewPreamble({
   ultraFallback,
   fix,
@@ -389,7 +390,7 @@ function buildReviewPreamble({
   }
   return withPostNote("");
 }
-//@ chunk-hantmvxa.js:93966-95240 placement
+//@ chunk-ne2890fx.js:94173-95447 placement
 /**
  * 注册内置 code-review（/review、ultrareview 子命令）技能。
  */

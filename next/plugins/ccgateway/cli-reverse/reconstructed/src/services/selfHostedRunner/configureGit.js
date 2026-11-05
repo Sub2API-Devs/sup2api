@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。self-hosted runner 的 --configure-git：配置签名、代理凭据助手与 coauthor hook，并给出操作员 git 配置警告。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qcqdqsn4.js (34)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-k0vx09kc.js (34)
  * attribution: placement 34
  */
 import { promisify } from "util";
@@ -29,20 +29,20 @@ import { getProxyFetchOptions } from "../../utils/proxy.js";
 import { getTLSFetchOptions } from "../../utils/mtls.js";
 import { execFileNoThrow } from "../../utils/execFileNoThrow.js";
 
-//@ chunk-qcqdqsn4.js:702-745 placement
+//@ chunk-k0vx09kc.js:702-745 placement
 /**
  * 把 execFile 包装成 promise 版本，用于 git 与 API 调用。
  */
 var execFileAsync = promisify(execFile);
 var SAFE_GIT_KEY_REGEX = /^[a-zA-Z0-9_-]+$/;
 var MIN_GIT_VERSION = [2, 34];
-//@ chunk-qcqdqsn4.js:745-854 placement
+//@ chunk-k0vx09kc.js:745-854 placement
 function parseGitVersion(output) {
   let match = /git version (\d+)\.(\d+)/.exec(output);
   if (!match) return null;
   return [Number(match[1]), Number(match[2])];
 }
-//@ chunk-qcqdqsn4.js:854-949 placement
+//@ chunk-k0vx09kc.js:854-949 placement
 function isGitVersionSupported(output) {
   let gitVersion = parseGitVersion(output);
   if (gitVersion === null) return null;
@@ -50,7 +50,7 @@ function isGitVersionSupported(output) {
   let [minMajor, minMinor] = MIN_GIT_VERSION;
   return major > minMajor || (major === minMajor && minor >= minMinor);
 }
-//@ chunk-qcqdqsn4.js:949-2145 placement
+//@ chunk-k0vx09kc.js:949-2145 placement
 async function configureGitForSigning(options) {
   let stdout = (
     await execFileAsync("git", ["--version"], {
@@ -108,7 +108,7 @@ async function configureGitForSigning(options) {
         operatorHooksPath: hookInstall.existingHooksPath,
       };
 }
-//@ chunk-qcqdqsn4.js:2145-2287 placement
+//@ chunk-k0vx09kc.js:2145-2287 placement
 function codeSignWrapperScript(execPath) {
   return `#!/bin/sh
 BIN="$CLAUDE_RUNNER_CLAUDE_BIN"
@@ -116,7 +116,7 @@ BIN="$CLAUDE_RUNNER_CLAUDE_BIN"
 exec "$BIN" self-hosted-runner code-sign "$@"
 `;
 }
-//@ chunk-qcqdqsn4.js:2287-2437 placement
+//@ chunk-k0vx09kc.js:2287-2437 placement
 function codeSignArtifacts(baseDir, execPath) {
   let runnerDir = join(baseDir, ".runner");
   return [
@@ -132,11 +132,11 @@ function codeSignArtifacts(baseDir, execPath) {
     },
   ];
 }
-//@ chunk-qcqdqsn4.js:2437-2480 placement
+//@ chunk-k0vx09kc.js:2437-2480 placement
 function configureGitGovernedEntries(baseDir) {
   return configureGitOverlayEntries(join(baseDir, ".runner"));
 }
-//@ chunk-qcqdqsn4.js:2480-2785 placement
+//@ chunk-k0vx09kc.js:2480-2785 placement
 function configureGitOverlayEntries(runnerDir) {
   return [
     ["user.name", "Claude"],
@@ -150,7 +150,7 @@ function configureGitOverlayEntries(runnerDir) {
     ["core.hooksPath", join(runnerDir, "git-hooks")],
   ];
 }
-//@ chunk-qcqdqsn4.js:2785-3012 placement
+//@ chunk-k0vx09kc.js:2785-3012 placement
 function relocateConfigureGitArtifacts(artifacts, baseDir, targetDir) {
   let runnerPrefix = join(baseDir, ".runner") + sep;
   return artifacts.map((artifact) => {
@@ -162,7 +162,7 @@ function relocateConfigureGitArtifacts(artifacts, baseDir, targetDir) {
     };
   });
 }
-//@ chunk-qcqdqsn4.js:3012-3122 placement
+//@ chunk-k0vx09kc.js:3012-3122 placement
 async function readGitVersion() {
   try {
     let { stdout } = await execFileAsync("git", ["--version"], {
@@ -173,16 +173,16 @@ async function readGitVersion() {
     return "";
   }
 }
-//@ chunk-qcqdqsn4.js:3122-3247 placement
+//@ chunk-k0vx09kc.js:3122-3247 placement
 var GIT_PROXY_CRED_HELPER_CONTENT = `#!/bin/sh
 test "$1" = get || exit 0
 printf "username=unused\\npassword=%s\\n" "$CLAUDE_CODE_SESSION_ACCESS_TOKEN"
 `;
-//@ chunk-qcqdqsn4.js:3247-3302 placement
+//@ chunk-k0vx09kc.js:3247-3302 placement
 function gitProxyCredHelperPath(baseDir) {
   return join(baseDir, ".runner", "git-proxy-cred");
 }
-//@ chunk-qcqdqsn4.js:3302-3475 placement
+//@ chunk-k0vx09kc.js:3302-3475 placement
 function coauthorHookStubs(baseDir) {
   let hooksDir = join(baseDir, ".runner", "git-hooks");
   return [
@@ -196,7 +196,7 @@ function coauthorHookStubs(baseDir) {
     })),
   ];
 }
-//@ chunk-qcqdqsn4.js:3475-4214 placement
+//@ chunk-k0vx09kc.js:3475-4214 placement
 async function configureGitProxyCredential(options) {
   let replaced = options.apiBaseUrl.replace(/\/+$/, "");
   let apiHost;
@@ -230,7 +230,7 @@ async function configureGitProxyCredential(options) {
   );
   return replaced;
 }
-//@ chunk-qcqdqsn4.js:5148-5948 placement
+//@ chunk-k0vx09kc.js:5148-5948 placement
 /**
  * 读取 git --system 配置（含来源）
  */
@@ -279,7 +279,7 @@ async function readSystemGitConfig(envVars) {
     files,
   };
 }
-//@ chunk-qcqdqsn4.js:5948-6175 placement
+//@ chunk-k0vx09kc.js:5948-6175 placement
 /**
  * 路径可写或由当前用户拥有
  */
@@ -304,12 +304,12 @@ async function isWritableOrOwned(startPath) {
       return false;
     }
 }
-//@ chunk-qcqdqsn4.js:6175-6247 placement
+//@ chunk-k0vx09kc.js:6175-6247 placement
 var isWithinDir = (targetPath, baseDir) =>
   baseDir !== undefined &&
   baseDir !== "" &&
   (resolve(targetPath) === resolve(baseDir) || resolve(targetPath).startsWith(resolve(baseDir) + sep));
-//@ chunk-qcqdqsn4.js:6247-6933 placement
+//@ chunk-k0vx09kc.js:6247-6933 placement
 async function resolveHookGitPrograms(options) {
   let sessionReachable = options?.sessionReachable ?? isWritableOrOwned;
   let HOME = options?.env ? options.env.HOME : env.HOME;
@@ -370,7 +370,7 @@ async function resolveHookGitPrograms(options) {
     skipped: skippedPaths,
   };
 }
-//@ chunk-qcqdqsn4.js:6933-7061 placement
+//@ chunk-k0vx09kc.js:6933-7061 placement
 function isRunnerHooksDir(hooksPath, runnerHooksDir) {
   let normalizePath = (targetPath) => resolve(targetPath).replace(/[\\/]+$/, "");
   return (
@@ -378,7 +378,7 @@ function isRunnerHooksDir(hooksPath, runnerHooksDir) {
     normalizePath(hooksPath).endsWith(join(sep + ".runner", "git-hooks"))
   );
 }
-//@ chunk-qcqdqsn4.js:7061-8876 placement
+//@ chunk-k0vx09kc.js:7061-8876 placement
 async function readOperatorGitSnapshot(options) {
   let sessionReachable = options?.sessionReachable ?? isWritableOrOwned;
   let systemConfigFiles = options?.systemConfigFiles ?? readSystemGitConfig;
@@ -466,9 +466,9 @@ async function readOperatorGitSnapshot(options) {
   }
   return snapshot;
 }
-//@ chunk-qcqdqsn4.js:8876-8886 placement
+//@ chunk-k0vx09kc.js:8876-8886 placement
 var MAX_WRITABLE_CHAIN_HOPS = 32;
-//@ chunk-qcqdqsn4.js:8886-9149 placement
+//@ chunk-k0vx09kc.js:8886-9149 placement
 /**
  * 找目录中可被 runner 用户写的条目
  */
@@ -487,7 +487,7 @@ async function findWritableEntryIn(dirPath, sessionReachable) {
   }
   return;
 }
-//@ chunk-qcqdqsn4.js:9149-9928 placement
+//@ chunk-k0vx09kc.js:9149-9928 placement
 /**
  * 沿符号链接检查路径是否可被 runner 用户写
  */
@@ -532,9 +532,9 @@ async function describeWritableChain(
         : `resolves into ${quoteConfigValueForLog(dirname(currentPath))}, a directory that ${parentReason} (the target could be replaced)`;
   }
 }
-//@ chunk-qcqdqsn4.js:9928-9947 placement
+//@ chunk-k0vx09kc.js:9928-9947 placement
 var FORMAT_CHAR_RE = /^\p{Cf}$/u;
-//@ chunk-qcqdqsn4.js:9947-10170 placement (2.1.88 match: needsWidthCompensation, 0.79)
+//@ chunk-k0vx09kc.js:9947-10170 placement (2.1.88 match: needsWidthCompensation, 0.79)
 function quoteConfigValueForLog(char) {
   let jsonText = jsonStringify(char);
   let safeText = "";
@@ -547,7 +547,7 @@ function quoteConfigValueForLog(char) {
   }
   return safeText;
 }
-//@ chunk-qcqdqsn4.js:10170-13913 placement
+//@ chunk-k0vx09kc.js:10170-13913 placement
 /**
  * self-hosted runner 的 --configure-git：配置签名、代理凭据助手与 coauthor hook，并给出操作员 git 配置警告。
  */
@@ -600,7 +600,7 @@ function operatorGitSnapshotWarnings(
     );
   return warnings;
 }
-//@ chunk-qcqdqsn4.js:13913-14777 placement
+//@ chunk-k0vx09kc.js:13913-14777 placement
 /**
  * 安装 coauthor hook，已有 core.hooksPath 时拒绝
  */
@@ -649,7 +649,7 @@ async function installCoauthorHooks(baseDir, configTarget, onStatus) {
     installed: true,
   };
 }
-//@ chunk-qcqdqsn4.js:14777-15823 placement
+//@ chunk-k0vx09kc.js:14777-15823 placement
 /**
  * git 支持的 hook 名单
  */
@@ -700,11 +700,11 @@ if [ -n "$email" ]; then
 fi
 exit 0
 `;
-//@ chunk-qcqdqsn4.js:15823-15868 placement (2.1.88 match: shellQuote, 1)
+//@ chunk-k0vx09kc.js:15823-15868 placement (2.1.88 match: shellQuote, 1)
 function shellQuote(s) {
   return s.replace(/'/g, "'\\''");
 }
-//@ chunk-qcqdqsn4.js:15868-16328 placement
+//@ chunk-k0vx09kc.js:15868-16328 placement
 /**
  * 解析 ssh-keygen -Y sign 参数
  */
@@ -733,7 +733,7 @@ function parseSshKeygenSignArgs(argv) {
     keyFile,
   };
 }
-//@ chunk-qcqdqsn4.js:16328-18217 placement
+//@ chunk-k0vx09kc.js:16328-18217 placement
 /**
  * 为会话配置 git 代理凭据助手
  */
@@ -778,10 +778,10 @@ async function configureGitProxyCredentialUnchecked(sshKeygenSignArgs, options) 
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION
@@ -808,7 +808,7 @@ async function configureGitProxyCredentialUnchecked(sshKeygenSignArgs, options) 
   await writeFile(sigPath, body_2.signature);
   return sigPath;
 }
-//@ chunk-qcqdqsn4.js:18217-18422 placement
+//@ chunk-k0vx09kc.js:18217-18422 placement
 /**
  * 读取仓库对象格式 sha1/sha256
  */
@@ -821,11 +821,11 @@ async function readGitObjectFormat() {
   });
   return code === 0 && stdout.trim() === "sha256" ? "sha256" : "sha1";
 }
-//@ chunk-qcqdqsn4.js:18422-18481 placement
+//@ chunk-k0vx09kc.js:18422-18481 placement
 function truncateWithEllipsis(text, maxLength) {
   return text.length > maxLength ? text.slice(0, maxLength) + "\u2026" : text;
 }
-//@ chunk-qcqdqsn4.js:18481-18672 placement
+//@ chunk-k0vx09kc.js:18481-18672 placement
 async function selfHostedRunnerCodeSignMain(argv) {
   try {
     let sshKeygenSignArgs = parseSshKeygenSignArgs(argv);

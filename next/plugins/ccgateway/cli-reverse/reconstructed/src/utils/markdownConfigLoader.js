@@ -3,15 +3,15 @@
  *
  * 并入已有模块：markdown 配置加载。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/markdownConfigLoader.ts
- * pieces: chunk-2xm1rxms.js (1), chunk-e6aww6q8.js (15)
- * attribution: fingerprint 6, file-local 3, layout 6, sole-consumer 1
+ * pieces: chunk-2k62t388.js (1), chunk-5xgkngpb.js (14), chunk-b08ck61p.js (1)
+ * attribution: fingerprint 6, placement 9, sole-consumer 1
  */
-import { lstat, stat, realpath, readdir, readFile } from "fs/promises";
-import { dirname, sep, resolve as resolve_2, join } from "path";
+import { join, sep, resolve as resolve_2, dirname } from "path";
 import { homedir } from "os";
-import { isSentinelInode } from "./slowOperations.js";
+import { lstat, stat, realpath, readdir, readFile } from "fs/promises";
+import { memoizeByKey, getClaudeConfigHomeDir, getClaudeConfigDirOrNull, isEnvTruthy } from "./envUtils.js";
 import { splitRuleList } from "./permissions/disallowedToolsFlag.js";
 import {
   isDiskless,
@@ -24,16 +24,15 @@ import { nearestNonHomeRoot, storageRootFor } from "./settings/settingsStorage.j
 import { normalizePathForCompare } from "./file.js";
 import { isFsInaccessible, getErrnoCode, isPathAbsent } from "./errors.js";
 import { logForDebugging } from "./debug.js";
-import { findGitRoot, findCanonicalGitRoot } from "./git.js";
 import {
   isManagedFolderWritable,
   managedFolderCondition,
   filterUntrustedSkills,
 } from "../plugins/functionHooks/sites/promptContextSites.js";
 import { getOrCreate, getHostState, keyOrNull } from "./hostEnvironment.js";
-import { getClaudeConfigDirOrNull, isEnvTruthy } from "./envUtils.js";
 import { getManagedFilePath } from "./settings/managedPath.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
+import { isInGlobalClaudeFolder } from "../components/permissions/FilePermissionDialog/permissionOptions.js";
 import { isRestrictedToPluginOnly } from "./settings/pluginOnlyPolicy.js";
 import { isSettingSourceEnabled } from "./settings/constants.js";
 import { logEvent } from "../services/analytics/index.js";
@@ -44,38 +43,26 @@ import { readSmallFileChecked } from "./readSmallFile.js";
 import { parseFrontmatter } from "./frontmatterParser.js";
 import { readAllPages, DEFAULT_MAX_PAGES } from "./pagedRead.js";
 import { formatStorageError } from "./storage/storageErrors.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-2xm1rxms.js:37944-38224 fingerprint (2.1.88 match: getFileIdentity, 1)
-async function getFileIdentity_2(pathA, pathB) {
-  let [statsA, statsB, parentStatsB] = await Promise.all([
-    lstat(pathA, {
-      bigint: true,
-    }).catch(() => null),
-    lstat(pathB, {
-      bigint: true,
-    }).catch(() => null),
-    lstat(dirname(pathB), {
-      bigint: true,
-    }).catch(() => null),
-  ]);
-  return (
-    statsA !== null &&
-    statsB !== null &&
-    parentStatsB !== null &&
-    statsA.dev !== 0n &&
-    !isSentinelInode(statsA.ino) &&
-    statsA.dev === statsB.dev &&
-    statsA.ino === statsB.ino &&
-    !(parentStatsB.dev === statsB.dev && parentStatsB.ino === statsB.ino)
+//@ chunk-2k62t388.js:2508-2569 fingerprint (2.1.88 match: getProjectDirsUpToHome, 1)
+/**
+ * Claude 配置目录：$CLAUDE_CONFIG_DIR 或 ~/.claude，NFC 归一化，按 env 值缓存。
+ */
+var getClaudeConfigDir; // deferred: uses memoizeByKey (./envUtils.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-2k62t388.js:2508", () => {
+  getClaudeConfigDir = memoizeByKey(
+    () => (getClaudeConfigHomeDir() ?? join(homedir(), ".claude")).normalize("NFC"),
+    getClaudeConfigHomeDir,
   );
-}
-//@ chunk-e6aww6q8.js:797747-797837 fingerprint (2.1.88 match: CLAUDE_CONFIG_DIRECTORIES, 0.71)
+});
+//@ chunk-5xgkngpb.js:809072-809162 placement
 /**
  * markdown 配置文件单文件上限 1 MiB，及配置子目录清单 CLAUDE_CONFIG_DIRECTORIES：commands、agents、output-styles、skills、workflows、routines。
  */
 var MAX_MARKDOWN_FILE_BYTES = 1048576;
 var CLAUDE_CONFIG_DIRECTORIES = ["commands", "agents", "output-styles", "skills", "workflows", "routines"];
-//@ chunk-e6aww6q8.js:797837-798020 fingerprint (2.1.88 match: extractDescriptionFromMarkdown, 1)
+//@ chunk-5xgkngpb.js:809162-809345 fingerprint (2.1.88 match: extractDescriptionFromMarkdown, 1)
 /**
  * 从 markdown 正文取第一行非空文本作描述（去掉 # 标题符），超过 100 字符截断。
  */
@@ -91,7 +78,7 @@ function extractDescriptionFromMarkdown(content, defaultDescription = "Custom it
   }
   return defaultDescription;
 }
-//@ chunk-e6aww6q8.js:798020-798264 file-local
+//@ chunk-5xgkngpb.js:809345-809589 placement
 /**
  * 解析工具列表字段（字符串或数组），含 * 时返回 [*]，null 表示未设置。
  */
@@ -106,7 +93,7 @@ function parseToolListString(toolsValue) {
   if (parsedTools.includes("*")) return ["*"];
   return parsedTools;
 }
-//@ chunk-e6aww6q8.js:798264-798368 file-local
+//@ chunk-5xgkngpb.js:809589-809693 placement
 /**
  * 解析代理 frontmatter 的 tools：* 表示全部（返回 undefined），未设置返回 undefined。
  */
@@ -116,7 +103,7 @@ function parseAgentToolsFromFrontmatter(toolsValue) {
   if (parsed.includes("*")) return;
   return parsed;
 }
-//@ chunk-e6aww6q8.js:798368-798426 layout
+//@ chunk-5xgkngpb.js:809693-809751 placement
 /**
  * 解析 skill/命令的 allowed-tools，未设置返回 []。
  */
@@ -125,7 +112,7 @@ function parseSlashCommandToolsFromFrontmatter(toolsValue) {
   if (parsed === null) return [];
   return parsed;
 }
-//@ chunk-e6aww6q8.js:798426-798574 layout (2.1.88 match: getFileIdentity, 1)
+//@ chunk-5xgkngpb.js:809751-809898 placement (2.1.88 match: getFileIdentity, 1)
 /**
  * 返回文件的 dev:ino 身份字符串，用于去重；无盘会话或 inode 不可靠时返回 null。
  */
@@ -141,7 +128,7 @@ async function getFileIdentity(filePath) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:798574-798761 file-local
+//@ chunk-5xgkngpb.js:809898-810085 placement
 function resolveStopBoundary(cwd) {
   let cwdGitRoot = nearestNonHomeRoot(cwd);
   let startPath = getProjectRootOrNull();
@@ -155,7 +142,7 @@ function resolveStopBoundary(cwd) {
   if (nCwdGitRoot !== nSessionRoot && nCwdGitRoot.startsWith(nSessionRoot + sep)) return sessionGitRoot;
   return cwdGitRoot;
 }
-//@ chunk-e6aww6q8.js:798761-798867 layout
+//@ chunk-5xgkngpb.js:810085-810191 placement
 /**
  * 按 baseDir 路径深度排序。
  */
@@ -163,7 +150,7 @@ function compareByBaseDirDepth(entryA, entryB) {
   let depthOf = (baseDir) => (baseDir === undefined ? 1 / 0 : (baseDir.match(/[/\\]/g)?.length ?? 0));
   return depthOf(entryA.baseDir) - depthOf(entryB.baseDir);
 }
-//@ chunk-e6aww6q8.js:798867-799474 layout
+//@ chunk-5xgkngpb.js:810191-810802 placement
 /**
  * 从 cwd 向上到家目录收集存在的 .claude/<子目录>。
  */
@@ -217,18 +204,7 @@ async function getProjectDirsUpToHome(subdir, cwd) {
   }
   return existingDirs;
 }
-//@ chunk-e6aww6q8.js:799474-799688 layout (2.1.88 match: isInGlobalClaudeFolder, 1)
-function isInGlobalClaudeFolder(projectDirs, subdir, cwd) {
-  if (cwd === null || isDiskless() || getProjectConfigRoot() !== null) return;
-  let absolutePath = findGitRoot(cwd);
-  let normalizedAbsolutePath = findCanonicalGitRoot(cwd);
-  if (!absolutePath || !normalizedAbsolutePath || normalizedAbsolutePath === absolutePath) return;
-  let normalizedGlobalClaudeFolderPath = normalizePathForCompare(join(absolutePath, ".claude", subdir));
-  if (projectDirs.some((dir) => normalizePathForCompare(dir) === normalizedGlobalClaudeFolderPath)) return;
-  let canonicalClaudeDir = join(normalizedAbsolutePath, ".claude", subdir);
-  if (!projectDirs.includes(canonicalClaudeDir)) projectDirs.push(canonicalClaudeDir);
-}
-//@ chunk-e6aww6q8.js:799688-799791 layout
+//@ chunk-5xgkngpb.js:811016-811119 placement
 /**
  * 缓存某配置子目录的 markdown 加载结果。
  */
@@ -240,7 +216,7 @@ function loadMarkdownFilesCached(subdir, cwd, storage) {
     () => loadMarkdownFilesForSubdir(subdir, cwd, storage, managedFolderWritable),
   );
 }
-//@ chunk-e6aww6q8.js:799791-801646 fingerprint (2.1.88 match: loadMarkdownFilesForSubdir, 0.951)
+//@ chunk-5xgkngpb.js:811119-812977 fingerprint (2.1.88 match: loadMarkdownFilesForSubdir, 0.951)
 /**
  * 加载某个配置子目录（agents/commands/skills/output-styles…）的全部 markdown：managed、用户（可走 storageV5）、项目各级、--add-dir（仅 agents）四路并行，按 inode 去重，记 tengu_dir_search。
  */
@@ -257,7 +233,7 @@ async function loadMarkdownFilesForSubdir(subdir, cwd, storage, managedSettingsF
   );
   let additionalProjectDirs =
     subdir === "agents"
-      ? uniq(
+      ? normalizeCaseForComparison_2(
           await Promise.all(
             getAdditionalDirectoriesForClaudeMd().map(async (dir) => {
               let mainClaudeSubdir = join(resolve_2(dir), ".claude", subdir);
@@ -358,7 +334,7 @@ async function loadMarkdownFilesForSubdir(subdir, cwd, storage, managedSettingsF
   });
   return deduplicatedFiles;
 }
-//@ chunk-e6aww6q8.js:801646-802683 fingerprint (2.1.88 match: findMarkdownFilesNative, 1)
+//@ chunk-5xgkngpb.js:812977-814018 fingerprint (2.1.88 match: findMarkdownFilesNative, 1)
 /**
  * 不用 ripgrep 时的递归 .md 查找：跟随符号链接，按 dev:ino 防环，受 AbortSignal 限时。
  */
@@ -426,7 +402,7 @@ async function findMarkdownFilesNative(dir, signal) {
   await walk(dir);
   return files;
 }
-//@ chunk-e6aww6q8.js:802683-803802 fingerprint (2.1.88 match: loadMarkdownFiles, 0.551)
+//@ chunk-5xgkngpb.js:814018-815140 fingerprint (2.1.88 match: loadMarkdownFiles, 0.551)
 /**
  * 列出目录下全部 .md（ripgrep --files --follow 或原生遍历，3 秒超时），逐个读取并解析 frontmatter；超限或非常规文件跳过。
  */
@@ -506,7 +482,7 @@ async function loadMarkdownFiles(dir, storage) {
     )
   ).filter((file) => file !== null);
 }
-//@ chunk-e6aww6q8.js:803802-805209 sole-consumer
+//@ chunk-5xgkngpb.js:815140-816549 sole-consumer
 /**
  * storageV5 模式下列出 userConfigDir/<subdir> 的 .md 并读取解析；列举失败回退到原始扫描。
  */
@@ -610,16 +586,28 @@ async function loadMarkdownFilesV5(subdir, userDir, storage) {
     )
   ).filter((loadedFile) => loadedFile !== null);
 }
+//@ chunk-b08ck61p.js:22118-22202 fingerprint (2.1.88 match: CLAUDE_CONFIG_DIRECTORIES, 0.718)
+var CLAUDE_CONFIG_DIRECTORIES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-b08ck61p.js:22118", () => {
+  CLAUDE_CONFIG_DIRECTORIES_2 = new Set([
+    "commands",
+    "agents",
+    "skills",
+    "output-styles",
+    "themes",
+    "workflows",
+  ]);
+});
 export {
-  compareByBaseDirDepth,
-  loadMarkdownFilesCached,
-  parseAgentToolsFromFrontmatter,
-  parseSlashCommandToolsFromFrontmatter,
-  CLAUDE_CONFIG_DIRECTORIES,
+  getClaudeConfigDir,
   getProjectDirsUpToHome,
-  getFileIdentity_2,
-  MAX_MARKDOWN_FILE_BYTES,
+  loadMarkdownFilesCached,
   extractDescriptionFromMarkdown,
+  compareByBaseDirDepth,
+  parseSlashCommandToolsFromFrontmatter,
   loadMarkdownFiles,
-  isInGlobalClaudeFolder,
+  parseAgentToolsFromFrontmatter,
+  CLAUDE_CONFIG_DIRECTORIES,
+  MAX_MARKDOWN_FILE_BYTES,
+  CLAUDE_CONFIG_DIRECTORIES_2,
 };

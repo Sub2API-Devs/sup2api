@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件目录校验：目录名
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5aas12zq.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6vxyfwtv.js (11)
  * attribution: placement 9, layout 2
  */
 import * as pathModule from "path";
@@ -21,7 +21,7 @@ import { MAX_PATH_DISPLAY_CHARS, MAX_REPO_ROOT_PARENTS } from "./validatePluginD
 import { ONE_MIB } from "../schemas.js";
 import { countReadmeWords } from "./readmeAndListing.js";
 
-//@ chunk-5aas12zq.js:20183-20326 placement (2.1.88 match: getTopLevelPaths, 0.8)
+//@ chunk-6vxyfwtv.js:20447-20590 placement (2.1.88 match: getTopLevelPaths, 0.801)
 async function getTopLevelPaths(directoryPath, repositoryRoot, targetPath) {
   let currentPath = directoryPath;
   for (let segment of pathModule.relative(directoryPath, targetPath).split(pathModule.sep)) {
@@ -30,14 +30,14 @@ async function getTopLevelPaths(directoryPath, repositoryRoot, targetPath) {
   }
   return (await findAncestorMatching(targetPath, directoryPath)) ?? targetPath;
 }
-//@ chunk-5aas12zq.js:20326-20437 layout
+//@ chunk-6vxyfwtv.js:20590-20701 layout
 async function findAncestorMatching(startPath, stopPath) {
   for (let currentPath = startPath; ; currentPath = pathModule.dirname(currentPath)) {
     if (await isSymlinkPath(currentPath)) return currentPath;
     if (currentPath === stopPath || pathModule.dirname(currentPath) === currentPath) return;
   }
 }
-//@ chunk-5aas12zq.js:20437-20520 layout
+//@ chunk-6vxyfwtv.js:20701-20784 layout
 async function isSymlinkPath(filePath) {
   return (
     (
@@ -47,9 +47,9 @@ async function isSymlinkPath(filePath) {
     )?.isSymbolicLink() === true
   );
 }
-//@ chunk-5aas12zq.js:20520-20530 placement
+//@ chunk-6vxyfwtv.js:20784-20794 placement
 var MAX_DIRECTORY_NAME_LENGTH = 40;
-//@ chunk-5aas12zq.js:20530-20606 placement
+//@ chunk-6vxyfwtv.js:20794-20870 placement
 /**
  * realpathOrManual：Windows 交叉点手算，否则 realpath。
  */
@@ -60,7 +60,7 @@ async function realpathOrManual(filePath) {
         return;
       });
 }
-//@ chunk-5aas12zq.js:20606-21200 placement
+//@ chunk-6vxyfwtv.js:20870-21464 placement
 /**
  * 手动逐段解析 POSIX 路径中的符号链接（限跳数）。
  */
@@ -105,7 +105,7 @@ async function resolvePosixPathManually(inputPath) {
   }
   return currentPath;
 }
-//@ chunk-5aas12zq.js:21200-21345 placement
+//@ chunk-6vxyfwtv.js:21464-21609 placement
 function isPathInside(innerPath, outerPath) {
   if (innerPath === undefined || outerPath === undefined) return false;
   let relativePath = pathModule.relative(outerPath, innerPath);
@@ -116,13 +116,13 @@ function isPathInside(innerPath, outerPath) {
       !pathModule.isAbsolute(relativePath))
   );
 }
-//@ chunk-5aas12zq.js:21345-21393 placement
+//@ chunk-6vxyfwtv.js:21609-21657 placement
 function ensureTrailingDot(name) {
   return name.endsWith(".") ? name : `${name}.`;
 }
-//@ chunk-5aas12zq.js:21393-21473 placement
+//@ chunk-6vxyfwtv.js:21657-21737 placement
 var NAME_FORMAT_ISSUE_TEXT = "MANIFEST_NAME_FORMAT, MANIFEST_NAME_NOT_KEBAB and IDENTIFIER_NON_ASCII";
-//@ chunk-5aas12zq.js:21473-24163 placement
+//@ chunk-6vxyfwtv.js:21737-24427 placement
 function describeLinkedReadme(searchResult, folderName, listedName, readmeInfo) {
   if (searchResult === undefined) return [];
   if (searchResult.kind === "link" || searchResult.kind === "unresolved") {
@@ -171,7 +171,7 @@ function describeLinkedReadme(searchResult, folderName, listedName, readmeInfo) 
     `No repository root was found for this folder (the search looks for a .git folder or file in it and in up to ${MAX_REPO_ROOT_PARENTS} parents, and stops at a .git of any other kind), so the name the directory would list it under is not known.${uncheckedNote} Submitted as a sub-folder under its present name, ${quoteForDisplay(folderName)}, ${nameIssues.length === 0 ? "none of them would apply." : `it would draw: ${ensureTrailingDot(nameIssues.map((issue) => `${issue.code}: ${issue.message}`).join("; "))} Rename the folder, or add .claude-plugin/plugin.json with a valid "name".`}`,
   ];
 }
-//@ chunk-5aas12zq.js:24163-24411 placement
+//@ chunk-6vxyfwtv.js:24427-24675 placement
 async function readFirstDoc(rootDir, candidateNames, fromRepositoryRoot) {
   for (let candidateName of candidateNames) {
     let pluginFile = await readPluginFileSafe(rootDir, candidateName, ONE_MIB);

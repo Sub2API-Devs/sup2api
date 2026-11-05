@@ -3,9 +3,9 @@
  *
  * 本地命令输出（<local-command-stdout/stderr>）的缩进显示，含 fork/cloud launch 特殊内容。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserLocalCommandOutputMessage.tsx
- * pieces: chunk-ah34pb7m.js (16)
+ * pieces: chunk-wjygkcr4.js (16)
  * attribution: placement 10, fingerprint 3, layout 3
  */
 import { extractForkDirective } from "../../tools/AgentTool/forkSubagent.js";
@@ -19,10 +19,10 @@ import {
 import { Text, Box } from "../../ink/components/Text.js";
 import { CIRCLE_MARK_GLYPH, DIAMOND_GLYPH, FILLED_DIAMOND_GLYPH } from "../../constants/figures.js";
 import {
-  init_react_production,
   createContext,
   useContext,
   useState,
+  init_react_production,
 } from "../../../vendor/react/cjs/react.production.js";
 import { extractTag } from "../../utils/messages.js";
 import { unescapeHtmlEntities, escapeXml_2 as escapeXml } from "../../utils/confusables.js";
@@ -36,11 +36,11 @@ import { LOCAL_COMMAND_STDERR, LOCAL_COMMAND_STDOUT } from "../../constants/xml.
 import { actionKeysNamespace } from "../pluginUi/render/actionKeys.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:106929-106963 placement
+//@ chunk-wjygkcr4.js:108613-108647 placement
 function parseForkDirective(prompt) {
   return extractForkDirective(prompt, [""]);
 }
-//@ chunk-ah34pb7m.js:106963-107377 placement
+//@ chunk-wjygkcr4.js:108647-109061 placement
 /**
  * fork 指令行显示。
  */
@@ -82,29 +82,19 @@ function ForkDirectiveLine(props) {
   } else outputBox = $[5];
   return outputBox;
 }
-//@ chunk-ah34pb7m.js:107377-107381 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:107377", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:107381-107385 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:107381", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:107385-107402 placement
+//@ chunk-wjygkcr4.js:109069-109086 placement
 /**
  * 导出值：forkAttachControllerSlot（fork 会话附着控制器槽）；位于「本地命令输出（<local-command-stdout/stderr>）的缩进显示，含 fork/cloud launch 特殊内容」模块。
  */
 var forkAttachControllerSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:107385", () => {
+deferInit("chunk-wjygkcr4.js:109069", () => {
   forkAttachControllerSlot = createContext(null);
 });
-//@ chunk-ah34pb7m.js:107402-107431 placement
+//@ chunk-wjygkcr4.js:109086-109115 placement
 function useForkAttachController() {
   return useContext(forkAttachControllerSlot);
 }
-//@ chunk-ah34pb7m.js:107431-107864 fingerprint (2.1.88 match: UserLocalCommandOutputMessage, 0.671)
+//@ chunk-wjygkcr4.js:109115-109548 fingerprint (2.1.88 match: UserLocalCommandOutputMessage, 0.671)
 function UserLocalCommandOutputMessage(props) {
   let $ = useMemoCache(3);
   let { content, capProseWidth } = props;
@@ -146,7 +136,7 @@ function UserLocalCommandOutputMessage(props) {
   }
   return sections;
 }
-//@ chunk-ah34pb7m.js:107864-108595 fingerprint (2.1.88 match: IndentedContent, 0.422)
+//@ chunk-wjygkcr4.js:109548-110279 fingerprint (2.1.88 match: IndentedContent, 0.422)
 function IndentedContent(props) {
   let $ = useMemoCache(11);
   let { children, isError, capProseWidth } = props;
@@ -219,7 +209,7 @@ function IndentedContent(props) {
   } else t2 = $[10];
   return t2;
 }
-//@ chunk-ah34pb7m.js:108595-109049 layout
+//@ chunk-wjygkcr4.js:110279-110734 layout
 /**
  * 渲染 fork 标签文字：在分隔标记处拆开，前段与后段用不同样式显示（React 记忆化组件）。
  */
@@ -231,11 +221,11 @@ function ForkLabelText(props) {
   let text;
   if ($[0] !== children) {
     text = EARLY_RETURN_SENTINEL;
-    M: {
+    T: {
       childrenList = children.indexOf(CIRCLE_MARK_GLYPH);
       if (childrenList === -1) {
         text = children;
-        break M;
+        break T;
       }
       kind = children.slice(0, childrenList);
     }
@@ -275,14 +265,14 @@ function ForkLabelText(props) {
   } else fragmentElement = $[10];
   return fragmentElement;
 }
-//@ chunk-ah34pb7m.js:109049-109079 layout
+//@ chunk-wjygkcr4.js:110734-110764 layout
 var FORK_LINE_PREFIX; // deferred: uses bunStringWidth (../../ink/stringWidth.js) of its import cycle while loading; runs once the cycle is complete
 var FORK_LINE_PREFIX_WIDTH;
-deferInit("chunk-ah34pb7m.js:109049", () => {
+deferInit("chunk-wjygkcr4.js:110734", () => {
   FORK_LINE_PREFIX = "  \u23BF  ";
   FORK_LINE_PREFIX_WIDTH = bunStringWidth(FORK_LINE_PREFIX);
 });
-//@ chunk-ah34pb7m.js:109079-110340 layout
+//@ chunk-wjygkcr4.js:110764-112030 layout
 /**
  * fork 指令输出行：显示状态、名称/id 与附加标签；非后台会话且有 id 时可点击附着到该会话。
  */
@@ -418,7 +408,7 @@ function ForkedSessionLine(props) {
   } else boxElement = $[24];
   return boxElement;
 }
-//@ chunk-ah34pb7m.js:110340-111300 fingerprint (2.1.88 match: CloudLaunchContent, 0.849)
+//@ chunk-wjygkcr4.js:112030-112990 fingerprint (2.1.88 match: CloudLaunchContent, 0.849)
 function CloudLaunchContent(props) {
   let $ = useMemoCache(19);
   let { children } = props;
@@ -517,12 +507,12 @@ function CloudLaunchContent(props) {
   } else t7 = $[18];
   return t7;
 }
-//@ chunk-ah34pb7m.js:111300-111361 placement
+//@ chunk-wjygkcr4.js:112990-113051 placement
 function wrapLocalCommandOutput(text, isErrored) {
   let tagName = isErrored ? LOCAL_COMMAND_STDERR : LOCAL_COMMAND_STDOUT;
   return `<${tagName}>${escapeXml(text)}</${tagName}>`;
 }
-//@ chunk-ah34pb7m.js:111361-111932 placement
+//@ chunk-wjygkcr4.js:113051-113622 placement
 /**
  * 本地斜杠命令的输出显示（命令、参数、错误标记）。
  */
@@ -570,7 +560,7 @@ function LocalCommandOutput(props) {
   } else renderInputHandle = $[11];
   return actionKeysNamespace.useRenderHook(renderInput, renderInputHandle);
 }
-//@ chunk-ah34pb7m.js:111932-112127 placement
+//@ chunk-wjygkcr4.js:113622-113817 placement
 /**
  * 从文本中取 local-command-stdout/stderr：只有其中一个有内容时返回 {text, isErrored}，否则 undefined。
  */
@@ -591,16 +581,26 @@ function pickLocalCommandOutput(content) {
         isErrored: true,
       };
 }
-//@ chunk-ah34pb7m.js:112127-112131 placement
+//@ chunk-wjygkcr4.js:113817-113821 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:112127", () => {
+deferInit("chunk-wjygkcr4.js:113817", () => {
+  init_react_production();
+});
+//@ chunk-wjygkcr4.js:114862-114866 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:114862", () => {
+  init_react_production();
+});
+//@ chunk-wjygkcr4.js:115088-115092 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:115088", () => {
   init_react_production();
 });
 export {
-  forkAttachControllerSlot,
   LocalCommandOutput,
   wrapLocalCommandOutput,
   pickLocalCommandOutput,
+  forkAttachControllerSlot,
   parseForkDirective,
   ForkDirectiveLine,
   UserLocalCommandOutputMessage,

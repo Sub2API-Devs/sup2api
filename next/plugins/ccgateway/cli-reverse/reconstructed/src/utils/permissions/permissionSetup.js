@@ -3,24 +3,13 @@
  *
  * 权限上下文初始化（CLI 参数、settings 规则、额外目录、bypass/auto 可用性）、启动模式决策、模式切换（进出 plan/auto 时剥离与恢复危险规则）、auto 闸门校验与不可用原因、危险/宽泛规则检测。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/permissionSetup.ts
- * pieces: chunk-4p0ppc72.js (1), chunk-7kt7c7a3.js (1), chunk-9rkt9tdt.js (2), chunk-e6aww6q8.js (8), chunk-gz7b768t.js (1), chunk-kswt4qha.js (51), chunk-sfy7bm1n.js (20), chunk-tr0s0d0k.js (2), chunk-zfbhezv9.js (79)
- * attribution: fingerprint 9, facade-exports 64, layout 50, placement 34, callgraph-fingerprint 2, file-local 4, affinity 2
+ * pieces: chunk-1z536h0d.js (1), chunk-5xgkngpb.js (10), chunk-6d2p9h2d.js (2), chunk-b9gx6r6h.js (79), chunk-bc4jcw5z.js (51), chunk-c378z4w4.js (1), chunk-gg17c06d.js (20), chunk-qezsn2gc.js (2)
+ * attribution: fingerprint 7, facade-exports 64, placement 34, layout 53, affinity 2, callgraph-fingerprint 2, file-local 4
  */
 import { createHash } from "crypto";
 import { relative, resolve } from "path";
-import {
-  getFeatureValueWithSource_CACHED_MAY_BE_STALE,
-  PLUGIN_HOOKS_MODULES_GATE,
-  getFeatureValue_CACHED_MAY_BE_STALE,
-  getFeatureValue_SESSION_PINNED,
-  isGrowthBookEnabled,
-  isGrowthBookCacheEmpty,
-  getDynamicConfig_BLOCKS_ON_INIT,
-} from "../../services/analytics/growthbook.js";
-import { HOOKS_MODULES_DEFAULT } from "../../services/analytics/growthbookCredentials.js";
-import { logError } from "../log.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import {
   getRootSession,
@@ -47,6 +36,14 @@ import {
   carriedEffortForModel,
 } from "../effort.js";
 import {
+  getFeatureValueWithSource_CACHED_MAY_BE_STALE,
+  getFeatureValue_CACHED_MAY_BE_STALE,
+  isGrowthBookEnabled,
+  isGrowthBookCacheEmpty,
+  getDynamicConfig_BLOCKS_ON_INIT,
+  getFeatureValue_SESSION_PINNED,
+} from "../../services/analytics/growthbook.js";
+import {
   normalizePermissionModeAlias,
   parsePermissionMode,
   UNRECOGNIZED_PERMISSION_MODE_ERROR,
@@ -59,7 +56,7 @@ import { logEvent } from "../../services/analytics/index.js";
 import { isVsCodeTopSession } from "../sessionShape.js";
 import {
   getSettingsForSource,
-  getEffectiveSettingSource_2,
+  getEffectiveSettingSource,
   updateSettingsForSource,
   getFatalAdminPolicyLoadErrors,
   getPolicySettingsLoadErrors,
@@ -80,7 +77,7 @@ import { autoDefaultVerdictState } from "../../services/policyLimits/policyVerdi
 import { hasComplianceTaint } from "../../services/policyLimits/complianceTaints.js";
 import { isModelAllowed, getOrgModelDefaultUpdatedAt, getOrgModelDefault } from "../model/modelAllowlist.js";
 import { parseUserSpecifiedModel } from "../model/modelDisplay.js";
-import { getDefaultMainLoopModel } from "../model/modelFallback.js";
+import { getDefaultMainLoopModel, firstPartyNameToCanonical } from "../model/modelFallback.js";
 import { isServedCatalogActive } from "../model/modelCatalog/servedCatalog.js";
 import {
   getGlobalConfig,
@@ -94,7 +91,12 @@ import {
   stepDownRestrictedFamilyAliasPick,
 } from "../model/planModeModel.js";
 import { isWindowSilentDefaultPick } from "../model/defaultModel.js";
-import { isUnservedModelSpelling, getMainLoopModel, isAntInternalFastModelId } from "../model/model.js";
+import {
+  isUnservedModelSpelling,
+  toProviderWireModelId,
+  getMainLoopModel,
+  isAntInternalFastModelId,
+} from "../model/model.js";
 import { remoteAppendSystemPrompt } from "../settings/policyHelper/helperRemote.js";
 import {
   SETTING_SOURCES,
@@ -106,8 +108,10 @@ import {
 import { getEligibilityMemo } from "../../services/remoteManagedSettings/remoteSettingsState.js";
 import { getRemoteManagedSettingsSyncFromCache } from "../../services/remoteManagedSettings/remoteSettingsCache.js";
 import { isBgSession } from "../concurrentSessions.js";
-import { strippedCanonicalName } from "../model/canonicalModelName.js";
+import { strippedCanonicalName, getCanonicalName } from "../model/canonicalModelName.js";
+import { parseModelId, normalizeDottedVersion, isStandardVersion } from "../model/modelIds.js";
 import { fromEnumOpt, fromEnumArr, lit, fromEnum } from "../../services/analytics/safeMetadata.js";
+import { logError } from "../log.js";
 import { toError } from "../errors.js";
 import { env } from "../env.js";
 import { identity } from "../identity.js";
@@ -133,6 +137,7 @@ import {
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
 import {
   canonicalToolName,
+  parseRuleString,
   permissionRuleValueFromString,
   hasWildcard,
   legacyToolNamesFor,
@@ -140,6 +145,8 @@ import {
 import { AGENT } from "../../tools/AgentTool/constants.js";
 import { MONITOR } from "../../tools/MonitorTool/constants.js";
 import { isCoworkAny, getEntrypointKind } from "../entrypointKinds.js";
+import { contextKeyAccepted } from "../codeMode/accepted.js";
+import { REPL_TOOL_NAME } from "../../tools/REPLTool/constants.js";
 import { READMCPRESOURCETOOL } from "../../tools/ReadMcpResourceTool/prompt.js";
 import { READ_MCP_RESOURCE_DIR_TOOL_NAME } from "../../tools/ReadMcpResourceDirTool/prompt.js";
 import { defaultConfig, CLASSIFIER_FEATURE_DEFAULTS } from "./classifierModelConfig.js";
@@ -147,16 +154,16 @@ import { createSignal, createLazySignal } from "../signal.js";
 import { getCwdOrNull } from "../cwd.js";
 import { applyValidatedPermissionUpdate } from "./PermissionUpdate.js";
 import {
-  collectRulesFromSettings,
+  hasBashPermission,
   applyPermissionRulesToPermissionContext,
   getAllowRules,
-  getDenyRules,
-  getAskRules,
+  deniedBashRules,
+  askedBashRules,
 } from "./permissions.js";
-import { formatPermissionRule, NEGATION_PREFIX, splitRuleList } from "./disallowedToolsFlag.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { isPlainObject } from "../isPlainObject.js";
 import { isCertifiedCommandRule } from "../../tools/BashTool/certifiedCommands.js";
+import { normalizeRuleString, describeWildcardHint } from "./legacyWildcardRules.js";
 import {
   setProvisionalStartupMode,
   isAutoModeActive,
@@ -179,6 +186,7 @@ import {
   isCodeExecutionTool,
   presetExclusions,
 } from "../../services/mcp/redactMcpErrors.js";
+import { NEGATION_PREFIX, splitRuleList } from "./disallowedToolsFlag.js";
 import {
   defaultPresetToolNames,
   toolsRunningCodeAsBash,
@@ -194,7 +202,7 @@ import { safeResolvePath, getFsImplementation } from "../fsOperations.js";
 import { takeRelaunchBaselineMode, takeProactivityDecided } from "../proactivityRelaunch.js";
 import { isScrubEnabled } from "../subprocessEnv.js";
 import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2, holdWorkingDirectoriesAsGiven } from "./filesystem.js";
 import { ENTER_WORKTREE_TOOL_NAME } from "../../tools/EnterWorktreeTool/constants.js";
 import { EXIT_WORKTREE_TOOL_NAME } from "../../tools/ExitWorktreeTool/constants.js";
 import { validateWildcardToolName, validatePermissionRule } from "../settings/permissionValidation.js";
@@ -208,13 +216,14 @@ import {
 } from "./permissionsLoader.js";
 import { readBlockExemptPathsInSettings, isReadBlockOn, isWriteBlockOn } from "./readBlock.js";
 import { isActionSummaryEnabled } from "./actionSummary.js";
+import { permissionRuleValueFromString as permissionRuleValueFromString_2 } from "../sandbox/sandbox-adapter.js";
 import { expandPath } from "../path.js";
 import { validateDirectoryForWorkspace, addDirHelpMessage } from "../../commands/add-dir/validation.js";
 import { mappedDriveSpellings } from "../remoteEnvironment.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../../tools/NotebookEditTool/constants.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { capitalize } from "../stringUtils.js";
 import { getAutoModeModelSupport, modelSupportsAutoMode } from "../betas.js";
 import { isProactivityActive } from "../../Tool.js";
@@ -228,54 +237,39 @@ import {
 import { commandReachesSettings } from "../../remote/tools/serve/servedPathJudgement.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-7kt7c7a3.js:1223-1304 fingerprint (2.1.88 match: AUTO_MODE_ENABLED_DEFAULT, 1)
-/**
- * auto 模式 enabled 状态的来源是否为 disabled（读取失败记错误并返回 false）。
- */
-function AUTO_MODE_ENABLED_DEFAULT() {
-  try {
-    return (
-      getFeatureValueWithSource_CACHED_MAY_BE_STALE(PLUGIN_HOOKS_MODULES_GATE, HOOKS_MODULES_DEFAULT)
-        .source === "disabled"
-    );
-  } catch (error) {
-    logError(error);
-    return false;
-  }
-}
-//@ chunk-kswt4qha.js:1370-1403 placement
+//@ chunk-bc4jcw5z.js:1466-1499 placement
 var approvalLayerSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kswt4qha.js:1370", () => {
+deferInit("chunk-bc4jcw5z.js:1466", () => {
   approvalLayerSlot = new SessionRootSlot(() => ({
     layers: [],
   }));
 });
-//@ chunk-kswt4qha.js:1403-1448 placement
+//@ chunk-bc4jcw5z.js:1499-1544 placement
 /**
  * approvalLayers：当前会话的权限层。
  */
 function approvalLayers() {
   return approvalLayerSlot.peek(getRootSession())?.layers ?? [];
 }
-//@ chunk-kswt4qha.js:2947-3029 placement
+//@ chunk-bc4jcw5z.js:3043-3125 placement
 function proactivityModeFloor(proactivityLevel, mode) {
   if (mode === "auto" || (proactivityLevel === "proactive" && mode === "acceptEdits")) return mode;
   return;
 }
-//@ chunk-kswt4qha.js:3029-3066 placement
+//@ chunk-bc4jcw5z.js:3125-3162 placement
 /**
  * parseEffortOrKeyword：解析 effort 值或关键字。
  */
 function parseEffortOrKeyword(value) {
   return parseEffortValue(value) ?? resolveEffortKeyword(value);
 }
-//@ chunk-kswt4qha.js:3066-3207 callgraph-fingerprint (2.1.88 match: getAutoModeEnabledStateIfCached, 0.462)
+//@ chunk-bc4jcw5z.js:3162-3303 callgraph-fingerprint (2.1.88 match: getAutoModeEnabledStateIfCached, 0.463)
 function isAutoModeKillswitchServed() {
   let { value: config, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_auto_mode_config", {});
   if (config?.enabled !== "disabled") return false;
   return source === "override" || source === "payload";
 }
-//@ chunk-kswt4qha.js:3207-9146 fingerprint (2.1.88 match: initialPermissionModeFromCLI, 0.311)
+//@ chunk-bc4jcw5z.js:3303-9242 fingerprint (2.1.88 match: initialPermissionModeFromCLI, 0.311)
 /**
  * 纯函数决定启动模式：按 --dangerously-skip-permissions、--permission-mode、agent frontmatter、settings defaultMode（project/local 不能授予 bypass/auto，CCR 只允许 acceptEdits/plan/default/auto）、继承模式的顺序取第一个可用模式；都没有时满足条件可默认 auto；再按主动性档位覆盖。返回模式、通知、各种“等待策略结论”标志。
  */
@@ -576,25 +570,25 @@ function initialPermissionModeFromCLI_2(inputs) {
     autoStartWithheldForHipaaTaint: hipaaTaintWithheld,
   };
 }
-//@ chunk-kswt4qha.js:9146-9213 layout
+//@ chunk-bc4jcw5z.js:9242-9309 layout
 var ORG_DEFAULT_MODE_LABELS; // deferred: uses orgDefaultModeNotice of its import cycle while loading; runs once the cycle is complete
 var AUTO_NOT_ORG_DEFAULT_NOTICE;
-deferInit("chunk-kswt4qha.js:9146", () => {
+deferInit("chunk-bc4jcw5z.js:9242", () => {
   ORG_DEFAULT_MODE_LABELS = {
     auto: "Auto mode",
     acceptEdits: "Accept edits",
   };
   AUTO_NOT_ORG_DEFAULT_NOTICE = orgDefaultModeNotice("auto");
 });
-//@ chunk-kswt4qha.js:9213-9310 layout
+//@ chunk-bc4jcw5z.js:9309-9406 layout
 function orgDefaultModeNotice(mode) {
   return `${ORG_DEFAULT_MODE_LABELS[mode]} isn't the default for your organization \xB7 Shift+Tab to switch`;
 }
-//@ chunk-kswt4qha.js:9310-9423 layout
+//@ chunk-bc4jcw5z.js:9406-9519 layout
 function orgPolicyNotLoadedNotice(levelPickHeldForPendingVerdict) {
   return `${ORG_DEFAULT_MODE_LABELS[levelPickHeldForPendingVerdict]} didn't start: your organization's policy hasn't loaded \xB7 Shift+Tab to switch`;
 }
-//@ chunk-kswt4qha.js:9423-9497 layout
+//@ chunk-bc4jcw5z.js:9519-9593 layout
 /**
  * 主动性档位对应模式与当前不同时，返回 HIPAA 策略结论（taint/pending），否则 undefined。
  */
@@ -603,7 +597,7 @@ function getProactivityPolicyVerdict(proactivityLevel, mode, baselineMode) {
   if (floor === undefined || floor === baselineMode) return;
   return getHipaaPolicyVerdict();
 }
-//@ chunk-kswt4qha.js:9497-9622 layout
+//@ chunk-bc4jcw5z.js:9593-9718 layout
 /**
  * HIPAA 策略结论：已知 HIPAA 或曾见到不可得的 HIPAA 状态时为 taint，策略待定时为 pending。
  */
@@ -612,7 +606,7 @@ function getHipaaPolicyVerdict() {
   if (hasComplianceTaint("hipaa") || verdict === "unobtainable_seen_hipaa") return "taint";
   return verdict === "pending" ? "pending" : undefined;
 }
-//@ chunk-kswt4qha.js:9622-9776 layout
+//@ chunk-bc4jcw5z.js:9718-9872 layout
 /**
  * 启动参数解析：取 CLI 或 settings 的 fallbackModel 列表并规范化（与权限无关，属模型/启动选项解析）。
  */
@@ -623,7 +617,7 @@ function resolveFallbackModels(inputs) {
   if (rawFallbacks === undefined) return;
   return parseToolListFromCLI(rawFallbacks, isModelAllowed);
 }
-//@ chunk-kswt4qha.js:9776-9851 file-local
+//@ chunk-bc4jcw5z.js:9872-9947 file-local
 /**
  * 把逗号分隔字符串拆成去空白的非空项列表。
  */
@@ -633,7 +627,7 @@ function splitCommaList(baseTools) {
     .map((entry) => entry.trim())
     .filter((trimmed) => trimmed !== "");
 }
-//@ chunk-kswt4qha.js:9851-10130 file-local
+//@ chunk-bc4jcw5z.js:9947-10226 file-local
 function parseToolListFromCLI(baseTools, isModelAllowed) {
   let entries = typeof baseTools === "string" ? splitCommaList(baseTools) : baseTools;
   let seen = new Set();
@@ -652,9 +646,9 @@ function parseToolListFromCLI(baseTools, isModelAllowed) {
   }
   return result.length > 0 ? result : undefined;
 }
-//@ chunk-kswt4qha.js:10130-10139 layout
+//@ chunk-bc4jcw5z.js:10226-10235 layout
 var MAX_BODY_PARAM_STRINGS = 3;
-//@ chunk-kswt4qha.js:10139-10409 layout (2.1.88 match: settingSourceToConfigChangeSource, 0.89)
+//@ chunk-bc4jcw5z.js:10235-10505 layout (2.1.88 match: settingSourceToConfigChangeSource, 0.89)
 function settingSourceToConfigChangeSource(source) {
   switch (source) {
     case "userSettings":
@@ -671,7 +665,7 @@ function settingSourceToConfigChangeSource(source) {
       return "settings";
   }
 }
-//@ chunk-kswt4qha.js:10409-10642 layout
+//@ chunk-bc4jcw5z.js:10505-10738 layout
 function isUserConfiguredSource(source) {
   switch (source) {
     case "env":
@@ -688,7 +682,7 @@ function isUserConfiguredSource(source) {
       return false;
   }
 }
-//@ chunk-kswt4qha.js:10642-11612 layout
+//@ chunk-bc4jcw5z.js:10738-11708 layout
 /**
  * 应用组织默认模型：组织锁定模式下记录已见更新时间并按来源决定是否保留模型；普通模式下组织默认更新且覆盖用户选择时清掉用户设置里的 model，并记下已见时间。
  */
@@ -713,13 +707,13 @@ function applyOrgModelDefault(model, isExplicitModel, storage) {
         storage,
       );
     if (getOrgLockedDefaultModel() === null) return model;
-    let modelSource = model ? getEffectiveSettingSource_2("model") : null;
+    let modelSource = model ? getEffectiveSettingSource("model") : null;
     if (modelSource === "policySettings" || modelSource === "flagSettings") return model;
     return;
   }
   let orgDefault = getOrgModelDefault();
   if (!orgDefault || getBootstrapOrgDefaultEffect() === null) return model;
-  let modelSource = model ? getEffectiveSettingSource_2("model") : null;
+  let modelSource = model ? getEffectiveSettingSource("model") : null;
   if (modelSource === "policySettings" || modelSource === "flagSettings") return model;
   let included = getAllowedSettingSources().includes("userSettings");
   let lastSeenOrgDefaultUpdatedAt = getGlobalConfig().lastSeenOrgDefaultUpdatedAt;
@@ -758,7 +752,7 @@ function applyOrgModelDefault(model, isExplicitModel, storage) {
   } else if (shouldMarkSeen) markSeen();
   return model;
 }
-//@ chunk-kswt4qha.js:11612-12575 layout
+//@ chunk-bc4jcw5z.js:11708-12671 layout
 /**
  * 启动时解析主模型：CLI --model（default 取默认模型）> agent frontmatter 的 model > env ANTHROPIC_MODEL > settings.model，并记录来源；随后校验模型可用性（与权限无关，属模型解析）。
  */
@@ -788,7 +782,7 @@ function resolveStartupModel(inputs, storage) {
         applyOrgModelDefault(settings.model || undefined, cli.isNonInteractiveSession === true, storage) ||
         undefined;
       if (candidateModel !== undefined)
-        settingLayer = settingSourceToConfigChangeSource(getEffectiveSettingSource_2("model"));
+        settingLayer = settingSourceToConfigChangeSource(getEffectiveSettingSource("model"));
     }
     rawModelRequest = candidateModel;
   }
@@ -839,7 +833,7 @@ function resolveStartupModel(inputs, storage) {
     modelWithoutStartupOverride,
   };
 }
-//@ chunk-kswt4qha.js:12575-12719 layout
+//@ chunk-bc4jcw5z.js:12671-12815 layout
 /**
  * 启动参数解析：取 CLI 的 systemPrompt 与 appendSystemPrompt，并把额外的附加系统提示拼到 append 之后。
  */
@@ -858,7 +852,7 @@ ${remoteAppend}`
     appendSystemPrompt,
   };
 }
-//@ chunk-kswt4qha.js:12719-12797 layout
+//@ chunk-bc4jcw5z.js:12815-12893 layout
 /**
  * GrowthBook tengu_harbor_willow（默认开）或远端配置 meadow_lantern 为真时返回 true；用途是启动选项的一个特性闸门。
  */
@@ -868,38 +862,38 @@ function isHarborWillowEnabled() {
     getCachedClientDataStrict()?.meadow_lantern === true
   );
 }
-//@ chunk-kswt4qha.js:12797-12887 layout
+//@ chunk-bc4jcw5z.js:12893-12983 layout
 var orderedSettingSources; // deferred: uses SETTING_SOURCES (../settings/constants.js) of its import cycle while loading; runs once the cycle is complete
 var REVERSED_SETTING_SOURCES;
-deferInit("chunk-kswt4qha.js:12797", () => {
+deferInit("chunk-bc4jcw5z.js:12893", () => {
   orderedSettingSources = SETTING_SOURCES.filter(
     (source) => !REPO_DIR_SETTING_SOURCES.has(source),
   ).toReversed();
   REVERSED_SETTING_SOURCES = ["acceptEdits", "plan", "default", "auto"];
 });
-//@ chunk-kswt4qha.js:12887-12923 layout
+//@ chunk-bc4jcw5z.js:12983-13019 layout
 function isRemoteSupportedMode(mode) {
   return REVERSED_SETTING_SOURCES.includes(mode);
 }
-//@ chunk-kswt4qha.js:12923-12957 layout
+//@ chunk-bc4jcw5z.js:13019-13053 layout
 function enabledSettingSourcesReversed() {
   return orderedSettingSources.filter(isSettingSourceEnabled);
 }
-//@ chunk-kswt4qha.js:12957-13029 layout
+//@ chunk-bc4jcw5z.js:13053-13125 layout
 function isDefaultModeSetByTrustedSource(parsedMode) {
   return enabledSettingSourcesReversed().some(
     (source) => getSettingsForSource(source)?.permissions?.defaultMode === parsedMode,
   );
 }
-//@ chunk-kswt4qha.js:13029-13124 layout (2.1.88 match: isAutoModeDisabledBySettings, 1)
+//@ chunk-bc4jcw5z.js:13125-13220 layout (2.1.88 match: isAutoModeDisabledBySettings, 1)
 function isAutoModeDisabledBySettings_2(settings) {
   return settings.permissions?.disableAutoMode === "disable" || settings.disableAutoMode === "disable";
 }
-//@ chunk-kswt4qha.js:13124-13159 layout
+//@ chunk-bc4jcw5z.js:13220-13255 layout
 function canSeedAutoMode(settings) {
   return !isAutoModeDisabledBySettings_2(settings) && !isAutoModeKillswitchServed();
 }
-//@ chunk-kswt4qha.js:13159-13300 layout
+//@ chunk-bc4jcw5z.js:13255-13396 layout
 function isTrustedPlanDisplaced(settings) {
   return (
     enabledSettingSourcesReversed()
@@ -908,7 +902,7 @@ function isTrustedPlanDisplaced(settings) {
     normalizePermissionModeAlias(settings.permissions?.defaultMode) !== "plan"
   );
 }
-//@ chunk-kswt4qha.js:13300-13739 layout
+//@ chunk-bc4jcw5z.js:13396-13834 layout
 /**
  * 找出最后一个设置了 defaultMode 的设置层（auto 来自不可信层除外）；层不可读时返回 settings_unreadable，非 auto 默认返回 stored_default，否则 undefined。
  */
@@ -936,7 +930,7 @@ function getStoredDefaultModeBar() {
       ? "settings_unreadable"
       : "stored_default";
 }
-//@ chunk-kswt4qha.js:13739-13993 layout
+//@ chunk-bc4jcw5z.js:13834-14088 layout
 /**
  * auto 能否作为启动模式“种入”的因素：可种入（设置允许且非 scrub）、存储的 defaultMode 阻挡、用户另选了档位或继承模式、继承 plan 保持、可信 plan 被替换。
  */
@@ -950,14 +944,14 @@ function getAutoSeedFactors({ settings, scrubbed, typedLevel, carriedMode }) {
     trustedPlanDisplaced: isTrustedPlanDisplaced(settings),
   };
 }
-//@ chunk-kswt4qha.js:13993-14132 fingerprint (2.1.88 match: isDefaultPermissionModeAuto, 1)
+//@ chunk-bc4jcw5z.js:14088-14227 layout (2.1.88 match: isDefaultPermissionModeAuto, 1)
 function getSettingsDefaultMode(settings) {
   let mode = normalizePermissionModeAlias(settings.permissions?.defaultMode);
   if (mode == null || !isRemoteSupportedMode(mode)) return;
   if (mode !== "auto") return mode;
   return isDefaultModeSetByTrustedSource("auto") && canSeedAutoMode(settings) ? "auto" : undefined;
 }
-//@ chunk-kswt4qha.js:14132-14419 layout
+//@ chunk-bc4jcw5z.js:14227-14514 layout
 /**
  * 启动模式遥测：未显式指定模式/跳过权限/scrub 时记录 settings 的 defaultMode 与 effort。
  */
@@ -979,7 +973,7 @@ function getStartupModeTelemetry({
     effort: gateOn ? effort : undefined,
   };
 }
-//@ chunk-kswt4qha.js:14419-14596 layout
+//@ chunk-bc4jcw5z.js:14514-14691 layout
 /**
  * 远程会话的模式：发来的模式为 auto 时返回 undefined（另行处理），有则用之；否则取仓库设置的 defaultMode（须为远程支持的非 auto 模式），缺省 default。
  */
@@ -991,7 +985,7 @@ function resolveRemoteSessionMode({ sentMode, repositorySettings }) {
     ? modeOrUndefined
     : "default";
 }
-//@ chunk-kswt4qha.js:14596-15121 placement
+//@ chunk-bc4jcw5z.js:14691-15216 placement
 /**
  * 决定初始权限模式是否采用设置中的默认模式。
  */
@@ -1013,18 +1007,18 @@ function resolveSeedPermissionMode({ seed, settingsMode, sentMode, startsIn }) {
     level: "info",
   };
 }
-//@ chunk-kswt4qha.js:15121-15166 placement
+//@ chunk-bc4jcw5z.js:15216-15261 placement
 function parseModeOrUndefined(mode) {
   return mode === undefined ? undefined : parsePermissionMode(mode);
 }
-//@ chunk-kswt4qha.js:15166-15655 placement
+//@ chunk-bc4jcw5z.js:15261-15750 placement
 /**
  * 后台工作者使用 bypass 需要同意的说明。
  */
 var BYPASS_CONSENT_MESSAGE_2 =
   'bypass in a background worker needs consent recorded in your user settings \u2014 add "skipDangerousModePermissionPrompt": true to ~/.claude/settings.json (accepting the interactive disclaimer writes the same key, but that dialog is skipped while consent already exists in .claude/settings.local.json or via --settings, which does not count here). A launch with user settings off does not read that file: relaunch with them on';
 var BYPASS_CONSENT_MESSAGE = `Permission mode downgraded to default: ${BYPASS_CONSENT_MESSAGE_2}`;
-//@ chunk-kswt4qha.js:15655-15775 placement
+//@ chunk-bc4jcw5z.js:15750-15870 placement
 /**
  * 后台会话以 bypassPermissions 启动但未接受过绕过模式确认时返回 true。
  */
@@ -1034,7 +1028,7 @@ function isUnconsentedBgBypass(mode) {
     return !hasVouchedSkipDangerousModePermissionPrompt() && !getGlobalConfig().bypassPermissionsModeAccepted;
   return false;
 }
-//@ chunk-kswt4qha.js:15775-15913 placement
+//@ chunk-bc4jcw5z.js:15870-16008 placement
 function parseStartupPermissionMode(mode, killswitchActive, message) {
   let parsedMode = permissionModeFromString(mode);
   if (isUnconsentedBgBypass(parsedMode))
@@ -1052,18 +1046,7 @@ function parseStartupPermissionMode(mode, killswitchActive, message) {
     mode: parsedMode,
   };
 }
-//@ chunk-kswt4qha.js:15913-15971 placement
-/**
- * tengu_virtual_pancake 开关。
- */
-function isVirtualPancakeEnabled() {
-  return noExtraBodyParams() ?? getFeatureValue_SESSION_PINNED("tengu_virtual_pancake", false);
-}
-//@ chunk-kswt4qha.js:15971-15992 placement
-function noExtraBodyParams() {
-  return;
-}
-//@ chunk-kswt4qha.js:15992-16039 placement
+//@ chunk-bc4jcw5z.js:16008-16055 placement
 /**
  * 两个 effort 是否相同。
  */
@@ -1073,9 +1056,36 @@ function sameEffort(modelA, modelB) {
     strippedCanonicalName(parseUserSpecifiedModel(modelB))
   );
 }
-//@ chunk-kswt4qha.js:16039-16069 placement
+//@ chunk-bc4jcw5z.js:16055-16169 layout
+function isSameModelForRules(model, otherModel) {
+  let thisParts = modelParts(model);
+  let otherParts = modelParts(otherModel);
+  return (
+    thisParts.name === otherParts.name &&
+    (thisParts.date === undefined || otherParts.date === undefined || thisParts.date === otherParts.date)
+  );
+}
+//@ chunk-bc4jcw5z.js:16169-16328 layout
+function modelParts(model) {
+  let providerWireModelId = toProviderWireModelId(model);
+  let lower = providerWireModelId.toLowerCase();
+  let modelId = parseModelId(normalizeDottedVersion(lower));
+  let canonicalName = getCanonicalName(providerWireModelId, {
+    identity: true,
+    overridesMap: {},
+  });
+  if (isStandardVersion(modelId))
+    return {
+      name: canonicalName,
+      date: modelId.date,
+    };
+  return {
+    name: canonicalName === firstPartyNameToCanonical(providerWireModelId) ? lower : canonicalName,
+  };
+}
+//@ chunk-bc4jcw5z.js:16328-16358 placement
 var TENGU_LOGGIA_PASSAGE = "tengu_loggia_passage";
-//@ chunk-kswt4qha.js:16098-16362 placement
+//@ chunk-bc4jcw5z.js:16387-16651 placement
 /**
  * 判断拒绝回退时是否把已发送的 effort 带到回退模型：没发送、来自钩子、来自轮次层或被开关关闭时不带并说明原因。
  */
@@ -1104,7 +1114,7 @@ function getRefusedEffortCarry({ sent, turnEffort, hookEffortValue }) {
         carry: sent,
       };
 }
-//@ chunk-kswt4qha.js:16362-16480 placement
+//@ chunk-bc4jcw5z.js:16651-16769 placement
 /**
  * 把 effort 携带结果转成遥测字段。
  */
@@ -1114,7 +1124,7 @@ function refusedEffortTelemetryFields(refusedEffort) {
     refused_effort_withheld: fromEnumOpt(refusedEffort.carry === null ? refusedEffort.withheld : undefined),
   };
 }
-//@ chunk-kswt4qha.js:16480-16729 placement
+//@ chunk-bc4jcw5z.js:16769-17018 placement
 /**
  * 计算拒绝回退后的 effort：会话持有时只锁定携带值；否则取携带值或循环覆盖值，作为回退模型的循环 effort。
  */
@@ -1142,7 +1152,7 @@ function resolveRefusalFallbackEffort({
           },
   };
 }
-//@ chunk-kswt4qha.js:16843-17031 placement
+//@ chunk-bc4jcw5z.js:17132-17320 placement
 function getCarriedRefusalEffort(model) {
   let refusalFallbackModelLatch = getRefusalFallbackModelLatch();
   let mainLoopModelOverride = getMainLoopModelOverride();
@@ -1162,7 +1172,7 @@ function getCarriedRefusalEffort(model) {
     return;
   }
 }
-//@ chunk-kswt4qha.js:17031-17150 placement
+//@ chunk-bc4jcw5z.js:17320-17439 placement
 /**
  * 取本轮循环的 effort：有显式值时用（被开关关闭则 null）；延续主会话时取携带的拒绝回退 effort。
  */
@@ -1170,7 +1180,7 @@ function resolveLoopEffort({ loopEffort, continuesMainConversation }, model) {
   if (loopEffort !== undefined) return isEffortCarryDisabled() ? null : loopEffort;
   return (continuesMainConversation ? getCarriedRefusalEffort(model) : undefined) ?? null;
 }
-//@ chunk-kswt4qha.js:17150-17321 placement
+//@ chunk-bc4jcw5z.js:17439-17610 placement
 /**
  * 比较携带 effort 带与不带的结果，得出 moot/no_effect/clamped/applied_over_saved/applied。
  */
@@ -1179,7 +1189,7 @@ function classifyEffortCarryEffect({ carried, withIt, withoutIt, isSavedSetAside
   if (withIt !== carried) return "clamped";
   return isSavedSetAside ? "applied_over_saved" : "applied";
 }
-//@ chunk-kswt4qha.js:17443-17603 placement
+//@ chunk-bc4jcw5z.js:17732-17892 placement
 /**
  * 开关关闭或主模型已不是回退模型时释放携带的拒绝回退 effort。
  */
@@ -1194,7 +1204,7 @@ function releaseStaleRefusalEffortCarry() {
   )
     releaseRefusalFallbackCarriedEffort("model_change");
 }
-//@ chunk-kswt4qha.js:17603-17687 placement
+//@ chunk-bc4jcw5z.js:17892-17976 placement
 /**
  * 是否启用最大 effort 提醒。
  */
@@ -1203,14 +1213,14 @@ function isMaxEffortReminderEnabled() {
     env.CLAUDE_CODE_MAX_EFFORT_REMINDER ?? getFeatureValue_CACHED_MAY_BE_STALE("tengu_proud_clover", false)
   );
 }
-//@ chunk-kswt4qha.js:17711-17736 placement
+//@ chunk-bc4jcw5z.js:18000-18025 placement
 /**
  * 恒为 false（构建时裁掉的特殊 effort 关键字检查）。
  */
 function isReservedEffortKeyword(keyword) {
   return false;
 }
-//@ chunk-9rkt9tdt.js:227-374 fingerprint (2.1.88 match: isBypassPermissionsModeDisabled, 0.752)
+//@ chunk-qezsn2gc.js:227-374 fingerprint (2.1.88 match: isBypassPermissionsModeDisabled, 0.752)
 /**
  * settings.permissions.disableBypassPermissionsMode="disable" 时返回原因文字。
  */
@@ -1219,16 +1229,16 @@ function getBypassDisabledReason() {
     return "Bypass permissions mode was disabled by settings";
   return;
 }
-//@ chunk-9rkt9tdt.js:374-410 facade-exports
+//@ chunk-qezsn2gc.js:374-410 facade-exports
 function isBypassPermissionsModeDisabled() {
   return getBypassDisabledReason() !== undefined;
 }
-//@ chunk-sfy7bm1n.js:6520-6553 placement
+//@ chunk-gg17c06d.js:8530-8563 placement
 var clearedSeenSet; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-sfy7bm1n.js:6520", () => {
+deferInit("chunk-gg17c06d.js:8530", () => {
   clearedSeenSet = identity(new Set(), (seen) => seen.clear());
 });
-//@ chunk-sfy7bm1n.js:6553-6971 placement
+//@ chunk-gg17c06d.js:8563-8981 placement
 function warnMcpRuleMismatch(ruleValue, tool) {
   let toolName = ruleValue.toolName;
   if (clearedSeenSet.has(toolName)) return;
@@ -1242,28 +1252,28 @@ function warnMcpRuleMismatch(ruleValue, tool) {
     },
   );
 }
-//@ chunk-sfy7bm1n.js:6971-6999 placement
+//@ chunk-gg17c06d.js:8981-9009 placement
 var TENGU_GREEDY_SHORE = "tengu_greedy_shore";
-//@ chunk-sfy7bm1n.js:6999-7035 placement
+//@ chunk-gg17c06d.js:9009-9045 placement
 /**
  * greedyShoreEnabled：tengu_greedy_shore 开关。
  */
 function greedyShoreEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_GREEDY_SHORE, false) === true;
 }
-//@ chunk-sfy7bm1n.js:7035-7061 placement
+//@ chunk-gg17c06d.js:9045-9071 placement
 /**
  * mcpToolAliasSetSlot：按宿主保存的 MCP 工具别名集合。
  */
 var mcpToolAliasSetSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-sfy7bm1n.js:7035", () => {
+deferInit("chunk-gg17c06d.js:9045", () => {
   mcpToolAliasSetSlot = new HostScoped(() => new Set());
 });
-//@ chunk-sfy7bm1n.js:7061-7111 placement
+//@ chunk-gg17c06d.js:9071-9121 placement
 function addMcpToolAlias(serverName, toolNames) {
   for (let toolName of toolNames) mcpToolAliasSet().add(buildMcpToolName(serverName, toolName));
 }
-//@ chunk-sfy7bm1n.js:7111-7221 placement (2.1.88 match: getMcpPrefix, 1)
+//@ chunk-gg17c06d.js:9121-9233 placement (2.1.88 match: getMcpPrefix, 1)
 function getMcpPrefix(serverName) {
   if (!serverName.startsWith("mcp__")) return false;
   for (let alias of mcpToolAliasSet())
@@ -1276,18 +1286,18 @@ function getMcpPrefix(serverName) {
       return true;
   return false;
 }
-//@ chunk-sfy7bm1n.js:7221-7254 placement
+//@ chunk-gg17c06d.js:9233-9266 placement
 /**
  * hasMcpToolAliases：是否存在 MCP 工具别名。
  */
 function hasMcpToolAliases() {
   return mcpToolAliasSet().size > 0;
 }
-//@ chunk-sfy7bm1n.js:7254-7290 placement
+//@ chunk-gg17c06d.js:9266-9302 placement
 function mcpToolAliasSet() {
   return mcpToolAliasSetSlot.of(getRootSession().host);
 }
-//@ chunk-sfy7bm1n.js:7807-7922 facade-exports
+//@ chunk-gg17c06d.js:9819-9934 facade-exports
 /**
  * Bash 规则是否危险：整工具、空内容或全是空白/星号，或命中危险命令前缀表。
  */
@@ -1297,7 +1307,7 @@ function isDangerousBashPermission(toolName, ruleContent) {
   if (/^[\s*]+$/.test(ruleContent)) return true;
   return matchesDangerousCommandPrefix(ruleContent, DANGEROUS_BASH_RULE_PREFIXES);
 }
-//@ chunk-sfy7bm1n.js:7922-8705 layout
+//@ chunk-gg17c06d.js:9934-10717 layout
 /**
  * Bash 规则内容是否等价于“任意执行某危险前缀”：*、前缀本身、"前缀:*"/"前缀 *"/"前缀*"，或以前缀开头并以 * 结尾；网络/云命令只在子命令危险或含 $/` 时算；python -m 包名例外。
  */
@@ -1347,7 +1357,7 @@ function matchesDangerousCommandPrefix(ruleContent, prefixes) {
   }
   return false;
 }
-//@ chunk-sfy7bm1n.js:8705-9626 facade-exports (2.1.88 match: isDangerousPowerShellPermission, 0.906)
+//@ chunk-gg17c06d.js:10717-11638 facade-exports (2.1.88 match: isDangerousPowerShellPermission, 0.905)
 /**
  * PowerShell 规则是否危险：空/通配，或匹配 pwsh/cmd/iex/Invoke-Command/Start-Process/Add-Type/New-Object 等（含 .exe 形式）的前缀/通配形式。
  */
@@ -1405,15 +1415,15 @@ function isDangerousPowerShellPermission(toolName, ruleContent) {
   }
   return false;
 }
-//@ chunk-sfy7bm1n.js:9626-9662 facade-exports
+//@ chunk-gg17c06d.js:11638-11674 facade-exports
 function isDangerousTaskPermission(toolName, ruleContent) {
   return canonicalToolName(toolName) === AGENT;
 }
-//@ chunk-sfy7bm1n.js:9662-9691 layout
+//@ chunk-gg17c06d.js:11674-11703 layout
 function isMonitorTool(toolName) {
   return toolName === MONITOR;
 }
-//@ chunk-sfy7bm1n.js:9691-9822 layout
+//@ chunk-gg17c06d.js:11703-11834 layout
 class DangerVerdictCache {
   verdicts = new Map();
   lookup(key) {
@@ -1426,19 +1436,19 @@ class DangerVerdictCache {
     this.verdicts.clear();
   }
 }
-//@ chunk-sfy7bm1n.js:9822-9834 layout
+//@ chunk-gg17c06d.js:11834-11846 layout
 var dangerVerdictCache; // deferred: uses DangerVerdictCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-sfy7bm1n.js:9822", () => {
+deferInit("chunk-gg17c06d.js:11834", () => {
   dangerVerdictCache = new DangerVerdictCache();
 });
-//@ chunk-sfy7bm1n.js:9834-9868 layout
+//@ chunk-gg17c06d.js:11846-11880 layout
 /**
  * classifyAllShellEnabled：Cowork 或全部 shell 交分类器。
  */
 function classifyAllShellEnabled() {
   return isCoworkAny() || isAutoModeClassifyAllShellEnabled();
 }
-//@ chunk-sfy7bm1n.js:9868-10075 layout
+//@ chunk-gg17c06d.js:11880-12087 layout
 /**
  * 规则是否危险（带缓存）：Bash、PowerShell、Task 危险规则，或代码执行类工具、Artifact REPL 工具。
  */
@@ -1455,7 +1465,7 @@ function isDangerousPermissionRule(toolName, ruleContent) {
   dangerVerdictCache.remember(cacheKey, isDangerous);
   return isDangerous;
 }
-//@ chunk-sfy7bm1n.js:10075-10200 file-local
+//@ chunk-gg17c06d.js:12087-12249 layout
 /**
  * 工具是否属于“auto 下钩子 allow 也必须经分类器”的类别：MCP 工具，或在相关开关下的特定前缀工具、MCP 资源读取工具、危险工具。
  */
@@ -1463,7 +1473,7 @@ function requiresClassifierForHookAllow(tool) {
   let serverName = getToolNameForPermissionCheck_2(tool);
   return (
     getMcpPrefix(serverName) ||
-    false ||
+    (contextKeyAccepted() && tool.mcpInfo === undefined && tool.name === REPL_TOOL_NAME) ||
     (isCoworkAny() &&
       (serverName.startsWith(MCP_TOOL_PREFIX) ||
         ((tool.name === READMCPRESOURCETOOL || tool.name === READ_MCP_RESOURCE_DIR_TOOL_NAME) &&
@@ -1471,17 +1481,18 @@ function requiresClassifierForHookAllow(tool) {
         isDangerousPermissionRule(tool.name, undefined)))
   );
 }
-//@ chunk-sfy7bm1n.js:10200-10287 facade-exports
+//@ chunk-gg17c06d.js:12249-12362 facade-exports
 /**
  * 对分类器而言规则是否危险：在特定开关下 Bash/PowerShell 一律危险，MCP 工具一律危险，否则走 wYt。进入 auto 时据此剥离 allow 规则。
  */
 function isDangerousClassifierPermission(toolName, ruleContent) {
+  if (contextKeyAccepted() && toolName === REPL_TOOL_NAME) return true;
   if ((toolName === BASH_TOOL_NAME || toolName === POWERSHELL_TOOL_NAME) && classifyAllShellEnabled())
     return true;
   if (getMcpPrefix(toolName)) return true;
   return isDangerousPermissionRule(toolName, ruleContent);
 }
-//@ chunk-gz7b768t.js:1257-1346 fingerprint (2.1.88 match: getAutoModeEnabledState, 1)
+//@ chunk-c378z4w4.js:1257-1346 fingerprint (2.1.88 match: getAutoModeEnabledState, 1)
 /**
  * 读取 GrowthBook tengu_auto_mode_config，缺省返回冻结的空配置。
  */
@@ -1490,32 +1501,32 @@ function getAutoModeConfigOrDefault() {
   if (config !== defaultConfig) return config;
   return isGrowthBookEnabled() ? defaultConfig : CLASSIFIER_FEATURE_DEFAULTS;
 }
-//@ chunk-zfbhezv9.js:2071-2094 placement
+//@ chunk-b9gx6r6h.js:2285-2308 placement
 var permissionModeSignalSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-zfbhezv9.js:2071", () => {
+deferInit("chunk-b9gx6r6h.js:2285", () => {
   permissionModeSignalSlot = new HostScoped(() => createSignal());
 });
-//@ chunk-zfbhezv9.js:2094-2131 placement
+//@ chunk-b9gx6r6h.js:2308-2345 placement
 function hostPermissionModeSignal() {
   return permissionModeSignalSlot.of(getRootSession().host);
 }
-//@ chunk-zfbhezv9.js:2131-2145 placement
+//@ chunk-b9gx6r6h.js:2345-2359 placement
 /**
  * permissionModeSignal：权限模式变化的惰性信号。
  */
 var permissionModeSignal; // deferred: uses hostPermissionModeSignal of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-zfbhezv9.js:2131", () => {
+deferInit("chunk-b9gx6r6h.js:2345", () => {
   permissionModeSignal = createLazySignal(hostPermissionModeSignal);
 });
-//@ chunk-zfbhezv9.js:2145-2164 layout
+//@ chunk-b9gx6r6h.js:2359-2378 layout
 var BASE_TOOLS_PRESETS = ["default"];
-//@ chunk-zfbhezv9.js:2164-2241 layout
+//@ chunk-b9gx6r6h.js:2378-2456 file-local
 function getBaseToolsPreset(value) {
-  let lower = value.toLowerCase();
-  if (!BASE_TOOLS_PRESETS.includes(lower)) return null;
-  return lower;
+  let content = value.toLowerCase();
+  if (!BASE_TOOLS_PRESETS.includes(content)) return null;
+  return content;
 }
-//@ chunk-zfbhezv9.js:2278-2347 layout
+//@ chunk-b9gx6r6h.js:2493-2562 layout
 function sha256OfLines(lines) {
   return createHash("sha256")
     .update(
@@ -1524,7 +1535,7 @@ function sha256OfLines(lines) {
     )
     .digest("hex");
 }
-//@ chunk-zfbhezv9.js:2347-2469 file-local
+//@ chunk-b9gx6r6h.js:2562-2684 file-local
 /**
  * 规则来源的显示名：settings 层显示文件路径（相对 cwd 更短时用相对路径），其他来源原样。
  */
@@ -1539,7 +1550,7 @@ function formatPermissionSource(source) {
   }
   return source;
 }
-//@ chunk-zfbhezv9.js:2469-3011 facade-exports (2.1.88 match: findDangerousClassifierPermissions, 1)
+//@ chunk-b9gx6r6h.js:2684-3224 facade-exports (2.1.88 match: findDangerousClassifierPermissions, 1)
 /**
  * 找出会绕过 auto 分类器的危险 allow 规则（sme：Bash/PowerShell 整工具或解释器/网络前缀、MCP 等），含 --allowed-tools 的规则。
  */
@@ -1561,7 +1572,7 @@ function findDangerousClassifierPermissions(rules, cliAllowedTools) {
       });
     }
   for (let toolSpec of cliAllowedTools) {
-    let ruleValue = permissionRuleValueFromString(toolSpec);
+    let ruleValue = parseRuleString(toolSpec);
     if (isDangerousClassifierPermission(ruleValue.toolName, ruleValue.ruleContent))
       dangerous.push({
         ruleValue,
@@ -1574,13 +1585,13 @@ function findDangerousClassifierPermissions(rules, cliAllowedTools) {
   }
   return dangerous;
 }
-//@ chunk-zfbhezv9.js:3011-3100 facade-exports
+//@ chunk-b9gx6r6h.js:3224-3313 facade-exports
 /**
  * bypass 相关提示常量：后台会话未同意 bypass 能力的通知、--allow-dangerously-skip-permissions 被忽略的警告；ALL_DANGEROUS_COMMAND_PREFIXES 合并 Bash 危险前缀与其他两张表。
  */
 var BG_UNCONSENTED_BYPASS_CAPABILITY_NOTICE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ALL_DANGEROUS_COMMAND_PREFIXES;
-deferInit("chunk-zfbhezv9.js:3011", () => {
+deferInit("chunk-b9gx6r6h.js:3224", () => {
   BG_UNCONSENTED_BYPASS_CAPABILITY_NOTICE = `--allow-dangerously-skip-permissions ignored: ${BYPASS_CONSENT_MESSAGE_2}`;
   ALL_DANGEROUS_COMMAND_PREFIXES = [
     ...DANGEROUS_BASH_PATTERNS,
@@ -1588,15 +1599,15 @@ deferInit("chunk-zfbhezv9.js:3011", () => {
     ...CLUSTER_COMMAND_PREFIXES,
   ];
 });
-//@ chunk-zfbhezv9.js:3100-3152 layout
+//@ chunk-b9gx6r6h.js:3313-3365 layout
 function isBareOrStarContent(ruleContent) {
   return ruleContent === undefined || /^[\s*]+$/.test(ruleContent);
 }
-//@ chunk-zfbhezv9.js:3152-3176 layout
+//@ chunk-b9gx6r6h.js:3365-3389 layout
 function isAntOnlyDangerousContent(ruleContent) {
   return false;
 }
-//@ chunk-zfbhezv9.js:3176-3354 layout
+//@ chunk-b9gx6r6h.js:3389-3567 layout
 /**
  * 宽泛 shell 规则分类（遥测用）：powershell / bare / cluster / network / ace（任意代码执行）。
  */
@@ -1608,7 +1619,7 @@ function categorizeBroadShellRule(ruleValue) {
   if (matchesDangerousCommandPrefix(ruleContent, NETWORK_COMMAND_PREFIXES)) return "network";
   return "ace";
 }
-//@ chunk-zfbhezv9.js:3354-3584 facade-exports
+//@ chunk-b9gx6r6h.js:3567-3797 facade-exports
 function isOverlyBroadBashAllowRule(ruleValue, matchDangerousPrefix = false) {
   {
     let { APPIFACT_REPL_TOOL_NAME } = require("../../tools/AppifactReplTool/prompt.js");
@@ -1620,15 +1631,15 @@ function isOverlyBroadBashAllowRule(ruleValue, matchDangerousPrefix = false) {
     return true;
   return matchDangerousPrefix && matchesDangerousCommandPrefix(ruleContent, ALL_DANGEROUS_COMMAND_PREFIXES);
 }
-//@ chunk-zfbhezv9.js:3584-3646 layout
+//@ chunk-b9gx6r6h.js:3797-3859 layout
 function isBareBashRule(ruleValue) {
   return ruleValue.toolName === BASH_TOOL_NAME && ruleValue.ruleContent === undefined;
 }
-//@ chunk-zfbhezv9.js:3646-3703 facade-exports (2.1.88 match: isOverlyBroadBashAllowRule, 1)
+//@ chunk-b9gx6r6h.js:3859-3916 facade-exports (2.1.88 match: isOverlyBroadBashAllowRule, 1)
 function isOverlyBroadPowerShellAllowRule(ruleValue) {
   return ruleValue.toolName === POWERSHELL_TOOL_NAME && isBareOrStarContent(ruleValue.ruleContent);
 }
-//@ chunk-zfbhezv9.js:3703-3937 facade-exports
+//@ chunk-b9gx6r6h.js:3916-4150 facade-exports
 function isYoloEquivStripEnabledForEntrypoint() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     "tengu_ant_yolo_equiv_strip_config",
@@ -1640,7 +1651,7 @@ function isYoloEquivStripEnabledForEntrypoint() {
     return featureValue_CACHED_MAY_BE_STALE.includeEntrypoints.includes(CLAUDE_CODE_ENTRYPOINT);
   return !(featureValue_CACHED_MAY_BE_STALE.excludeEntrypoints ?? []).includes(CLAUDE_CODE_ENTRYPOINT);
 }
-//@ chunk-zfbhezv9.js:3937-4423 facade-exports (2.1.88 match: findDangerousClassifierPermissions, 1)
+//@ chunk-b9gx6r6h.js:4150-4636 facade-exports (2.1.88 match: findDangerousClassifierPermissions, 1)
 function findOverlyBroadBashPermissions(rules, cliAllowedTools, matchDangerousPrefix = false) {
   let dangerous = [];
   for (let rule of rules)
@@ -1654,7 +1665,7 @@ function findOverlyBroadBashPermissions(rules, cliAllowedTools, matchDangerousPr
         sourceDisplay: formatPermissionSource(rule.source),
       });
   for (let toolSpec of cliAllowedTools) {
-    let ruleValue = permissionRuleValueFromString(toolSpec);
+    let ruleValue = parseRuleString(toolSpec);
     if (isOverlyBroadBashAllowRule(ruleValue, matchDangerousPrefix))
       dangerous.push({
         ruleValue,
@@ -1667,7 +1678,7 @@ function findOverlyBroadBashPermissions(rules, cliAllowedTools, matchDangerousPr
   }
   return dangerous;
 }
-//@ chunk-zfbhezv9.js:4423-4748 facade-exports (2.1.88 match: findOverlyBroadBashPermissions, 1)
+//@ chunk-b9gx6r6h.js:4636-4961 facade-exports (2.1.88 match: findOverlyBroadBashPermissions, 1)
 function findOverlyBroadPowerShellPermissions(rules, cliAllowedTools) {
   let overlyBroad = [];
   for (let rule of rules)
@@ -1679,7 +1690,7 @@ function findOverlyBroadPowerShellPermissions(rules, cliAllowedTools) {
         sourceDisplay: formatPermissionSource(rule.source),
       });
   for (let toolSpec of cliAllowedTools) {
-    let parsed = permissionRuleValueFromString(toolSpec);
+    let parsed = parseRuleString(toolSpec);
     if (isOverlyBroadPowerShellAllowRule(parsed))
       overlyBroad.push({
         ruleValue: parsed,
@@ -1690,15 +1701,15 @@ function findOverlyBroadPowerShellPermissions(rules, cliAllowedTools) {
   }
   return overlyBroad;
 }
-//@ chunk-zfbhezv9.js:4748-4773 facade-exports
+//@ chunk-b9gx6r6h.js:4961-4986 facade-exports
 function overlyBroadShellAllowsStrippedByEverySession(context) {
   return [];
 }
-//@ chunk-zfbhezv9.js:4773-4839 layout
+//@ chunk-b9gx6r6h.js:4986-5052 layout
 function isRemovableRuleSource(source) {
   return EDITABLE_SETTING_SOURCES.includes(source) || source === "session" || source === "cliArg";
 }
-//@ chunk-zfbhezv9.js:4839-5085 facade-exports (2.1.88 match: removeDangerousPermissions, 1)
+//@ chunk-b9gx6r6h.js:5052-5298 facade-exports (2.1.88 match: removeDangerousPermissions, 1)
 /**
  * 按来源分组，用 removeRules 从上下文删掉给定的危险 allow 规则（默认只删可编辑层、session、cliArg）。
  */
@@ -1721,12 +1732,12 @@ function removeDangerousPermissions(context, permissions, includeReadOnlySources
     });
   return updatedContext;
 }
-//@ chunk-zfbhezv9.js:5085-5574 facade-exports (2.1.88 match: stripDangerousPermissionsForAutoMode, 0.965)
+//@ chunk-b9gx6r6h.js:5298-5787 facade-exports (2.1.88 match: stripDangerousPermissionsForAutoMode, 0.965)
 /**
  * 进入 auto（或 plan+auto）时剥离危险 allow 规则，并把它们按来源存入 strippedDangerousRules 以便退出时恢复。
  */
 function stripDangerousPermissionsForAutoMode(context) {
-  let rules = collectRulesFromSettings(context.alwaysAllowRules, "allow");
+  let rules = hasBashPermission(context.alwaysAllowRules, "allow");
   let dangerousPermissions = findDangerousClassifierPermissions(rules, []);
   if (dangerousPermissions.length === 0)
     return context.strippedDangerousRules !== undefined
@@ -1743,7 +1754,7 @@ function stripDangerousPermissionsForAutoMode(context) {
   for (let [key, value] of Object.entries(context.strippedDangerousRules ?? {}))
     if (value) stripped[key] = [...value];
   for (let perm of dangerousPermissions) {
-    let ruleString = formatPermissionRule(perm.ruleValue);
+    let ruleString = permissionRuleValueFromString(perm.ruleValue);
     let strippedForSource = (stripped[perm.source] ??= []);
     if (!strippedForSource.includes(ruleString)) strippedForSource.push(ruleString);
   }
@@ -1752,7 +1763,7 @@ function stripDangerousPermissionsForAutoMode(context) {
     strippedDangerousRules: stripped,
   };
 }
-//@ chunk-zfbhezv9.js:5574-6415 facade-exports
+//@ chunk-b9gx6r6h.js:5787-6627 facade-exports
 /**
  * 给权限上下文设置 toolAliases：tengu_sorted_zebra 打开时，对映射到 MCP 工具的危险工具别名登记为“会运行代码的 MCP 工具”，无法登记时告警（该工具的 allow 规则将绕过分类器）；最后按需重新剥离危险规则。
  */
@@ -1787,7 +1798,7 @@ function withToolAliases(toolPermissionContext, toolAliases, sdkServerNames = []
   }
   return withRulesSetAsideAgain(nextContext);
 }
-//@ chunk-zfbhezv9.js:6415-7160 facade-exports
+//@ chunk-b9gx6r6h.js:6627-7372 facade-exports
 /**
  * 登记 SDK 宿主声明的会运行代码的 MCP 工具（codeRunningMcpTools：服务器名 → 工具名列表），畸形项计数并告警；返回规范化后的映射。
  */
@@ -1820,7 +1831,7 @@ function declareSdkHostCodeRunningMcpTools(codeRunningMcpTools) {
   }
   return Object.fromEntries(toolsByServer);
 }
-//@ chunk-zfbhezv9.js:7160-7225 facade-exports (2.1.88 match: _temp3, 0.739)
+//@ chunk-b9gx6r6h.js:7372-7437 facade-exports (2.1.88 match: _temp3, 0.739)
 /**
  * 上下文已处于“剥离过危险规则”状态时，重新执行剥离（新规则加入后保持剥离）。
  */
@@ -1829,7 +1840,7 @@ function withRulesSetAsideAgain(state_1) {
     ? state_1
     : stripDangerousPermissionsForAutoMode(state_1);
 }
-//@ chunk-zfbhezv9.js:7225-7549 facade-exports (2.1.88 match: restoreDangerousPermissions, 0.868)
+//@ chunk-b9gx6r6h.js:7437-7777 facade-exports (2.1.88 match: restoreDangerousPermissions, 0.868)
 /**
  * 退出 auto 时把 strippedDangerousRules 里的规则加回（command 来源过滤掉 cBo 命中的项），并清空暂存。
  */
@@ -1837,14 +1848,16 @@ function restoreDangerousPermissions(context) {
   let stash = context.strippedDangerousRules;
   if (!stash) return context;
   let result = context;
-  for (let [key, value] of Object.entries(stash)) {
-    if (!value || value.length === 0) continue;
+  for (let [key, ruleStrings] of Object.entries(stash)) {
+    if (!ruleStrings || ruleStrings.length === 0) continue;
     let rules =
-      key === "command" ? value.filter((ruleString) => !isCertifiedCommandRule(ruleString)) : [...value];
+      key === "command"
+        ? ruleStrings.filter((ruleString) => !isCertifiedCommandRule(ruleString))
+        : [...ruleStrings];
     if (rules.length === 0) continue;
     result = applyValidatedPermissionUpdate(result, {
       type: "addRules",
-      rules: rules.map(permissionRuleValueFromString),
+      rules: rules.map((rule) => normalizeRuleString(rule, "allow")),
       behavior: "allow",
       destination: key,
     });
@@ -1854,7 +1867,7 @@ function restoreDangerousPermissions(context) {
     strippedDangerousRules: undefined,
   };
 }
-//@ chunk-zfbhezv9.js:7549-7816 facade-exports
+//@ chunk-b9gx6r6h.js:7777-8044 facade-exports
 /**
  * 重建上下文时保留旧上下文的模式状态（mode、prePlanMode、startupModeDecidedByProactivityLevel），allow 规则与暂存的危险规则只保留新上下文中仍存在的项。
  */
@@ -1869,7 +1882,7 @@ function undonePermissionContext(previous, next) {
       previous.strippedDangerousRules && intersectWithCurrentRules(previous.strippedDangerousRules, next),
   };
 }
-//@ chunk-zfbhezv9.js:7816-8135 layout
+//@ chunk-b9gx6r6h.js:8044-8363 layout
 function intersectWithCurrentRules(stripped, toolPermissionContext) {
   let reduced = Object.keys(stripped).reduce(
     (acc, key) => {
@@ -1893,7 +1906,7 @@ function intersectWithCurrentRules(stripped, toolPermissionContext) {
   );
   return reduced.dropped ? reduced.rules : stripped;
 }
-//@ chunk-zfbhezv9.js:8135-8678 facade-exports (2.1.88 match: transitionPermissionMode, 0.699)
+//@ chunk-b9gx6r6h.js:8363-8906 facade-exports (2.1.88 match: transitionPermissionMode, 0.698)
 /**
  * 模式切换的统一入口：记录切换事件；进入 plan 走 prepareContextForPlanMode；进入使用分类器的模式（auto）要求闸门开启并剥离危险规则，离开时恢复；离开 plan 时清掉 prePlanMode。
  */
@@ -1932,18 +1945,18 @@ function transitionPermissionMode(fromMode, toMode, context, trigger) {
     };
   return context;
 }
-//@ chunk-zfbhezv9.js:8678-8708 facade-exports
+//@ chunk-b9gx6r6h.js:8906-8936 facade-exports
 async function isBypassPermissionsDeniedOutsideSandbox() {
   return false;
 }
-//@ chunk-zfbhezv9.js:8708-8851 layout
+//@ chunk-b9gx6r6h.js:8936-9079 layout
 var AUTO_MODE_UNAVAILABLE_FEATURE_KEYS = {
   settings: "auto_mode_settings",
   "circuit-breaker": "auto_mode_circuit_breaker",
   "fast-mode": "auto_mode_fast_mode",
   model: "auto_mode_model",
 };
-//@ chunk-zfbhezv9.js:8851-9453 facade-exports (2.1.88 match: handleSetPermissionMode, 0.455)
+//@ chunk-b9gx6r6h.js:9079-9681 facade-exports (2.1.88 match: handleSetPermissionMode, 0.455)
 /**
  * 设置权限模式前的守卫：模式名非法、bypass 在 --restricted 下、被设置禁用或会话未以 --dangerously-skip-permissions 启动、auto 不可用时返回 {ok:false, error, code}。
  */
@@ -1984,7 +1997,7 @@ function guardPermissionModeChange(modeValue, toolPermissionContext) {
     mode: permissionMode,
   };
 }
-//@ chunk-zfbhezv9.js:9453-9612 facade-exports
+//@ chunk-b9gx6r6h.js:9681-9840 facade-exports
 /**
  * auto 不可用时的拒绝结果，错误文字与代码按不可用原因生成。
  */
@@ -1999,7 +2012,7 @@ function refuseAutoMode(autoModeUnavailableReason) {
       : "auto_mode_unavailable",
   };
 }
-//@ chunk-zfbhezv9.js:9612-9871 facade-exports
+//@ chunk-b9gx6r6h.js:9840-10099 facade-exports
 /**
  * 带守卫地设置权限模式：守卫通过后在 setter 内对最新上下文再守卫一次并调用 transitionPermissionMode，成功后异步发出模式变化事件。
  */
@@ -2031,7 +2044,7 @@ function setPermissionModeWithGuards(requestedMode, toolPermissionContext, setAp
     mode,
   };
 }
-//@ chunk-zfbhezv9.js:9871-10128 facade-exports
+//@ chunk-b9gx6r6h.js:10099-10356 facade-exports
 /**
  * 撤销到先前模式时的副作用：守卫通过则执行模式切换，按需同步 auto 激活状态，离开 auto 时恢复危险规则。
  */
@@ -2054,7 +2067,7 @@ function applyPermissionModeRevertEffects(toolPermissionContext, snapshot) {
     ? restoreDangerousPermissions(snapshot.context)
     : snapshot.context;
 }
-//@ chunk-zfbhezv9.js:10128-10626 facade-exports
+//@ chunk-b9gx6r6h.js:10356-10854 facade-exports
 function splitToolExclusions(entries) {
   let kept = [];
   let excluded = new Set();
@@ -2103,7 +2116,7 @@ function splitToolExclusions(entries) {
     scoped,
   };
 }
-//@ chunk-zfbhezv9.js:10626-10885 facade-exports
+//@ chunk-b9gx6r6h.js:10854-11114 facade-exports
 function parseBaseToolsFromCLI(baseToolsCli, getAllBaseTools) {
   let trimmed = baseToolsCli.join(" ").trim();
   if (getBaseToolsPreset(trimmed)) return defaultPresetToolNames(getAllBaseTools());
@@ -2116,12 +2129,9 @@ function parseBaseToolsFromCLI(baseToolsCli, getAllBaseTools) {
   if (excluded.size === 0) return names;
   return names.filter((name) => !excluded.has(canonicalToolName(name)));
 }
-//@ chunk-zfbhezv9.js:10885-10906 layout
-var SOFTWARE_DEV_TOOL_NAMES; // deferred: uses GREP_TOOL_NAME (../../tools/GrepTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-zfbhezv9.js:10885", () => {
-  SOFTWARE_DEV_TOOL_NAMES = [BASH_TOOL_NAME, POWERSHELL_TOOL_NAME, GLOB_TOOL_NAME, GREP_TOOL_NAME];
-});
-//@ chunk-zfbhezv9.js:10906-12504 facade-exports
+//@ chunk-b9gx6r6h.js:11114-11135 layout
+var SOFTWARE_DEV_TOOL_NAMES = [BASH_TOOL_NAME, POWERSHELL_TOOL_NAME, GLOB_TOOL_NAME, GREP_TOOL_NAME];
+//@ chunk-b9gx6r6h.js:11135-12733 facade-exports
 function literalToolsNarrowing({ baseToolsCli, baseToolsIsPreset, parsedBaseTools, getAllBaseTools }) {
   let warnings = [];
   let securityWarningLines = [];
@@ -2190,7 +2200,7 @@ function literalToolsNarrowing({ baseToolsCli, baseToolsIsPreset, parsedBaseTool
     securityWarnings: securityWarningLines,
   };
 }
-//@ chunk-zfbhezv9.js:12504-12611 fingerprint (2.1.88 match: isSymlinkTo, 1)
+//@ chunk-b9gx6r6h.js:12733-12840 fingerprint (2.1.88 match: isSymlinkTo, 1)
 function isSymlinkTo({ processPwd, originalCwd }) {
   let { resolvedPath: resolvedProcessPwd, isSymlink: isProcessPwdSymlink } = safeResolvePath(
     getFsImplementation(),
@@ -2198,7 +2208,7 @@ function isSymlinkTo({ processPwd, originalCwd }) {
   );
   return isProcessPwdSymlink ? resolvedProcessPwd === resolve(originalCwd) : false;
 }
-//@ chunk-zfbhezv9.js:12611-14232 facade-exports
+//@ chunk-b9gx6r6h.js:12840-14461 facade-exports
 /**
  * 启动时决定权限模式：CLAUDE_CODE_SUBPROCESS_ENV_SCRUB 时强制 default；否则汇总 CLI/env/settings/agent frontmatter/主动性档位交给 initialPermissionModeFromCLI，并在 GrowthBook 或策略未就绪时登记“临时启动模式”以便稍后重算。
  */
@@ -2297,15 +2307,15 @@ function initialPermissionModeFromCLI({
     modeSuppliedOnInvocation: resolved.modeSuppliedOnInvocation,
   };
 }
-//@ chunk-zfbhezv9.js:14232-14288 facade-exports
+//@ chunk-b9gx6r6h.js:14461-14517 facade-exports
 function addDirsAreLauncherNamed() {
   return env.CLAUDE_CODE_SESSION_KIND !== "bg";
 }
-//@ chunk-zfbhezv9.js:14288-14331 facade-exports
+//@ chunk-b9gx6r6h.js:14517-14560 facade-exports
 function cliArgMayMintTrustedRoots(destination) {
   return destination === "cliArg" && addDirsAreLauncherNamed();
 }
-//@ chunk-zfbhezv9.js:14331-14508 facade-exports
+//@ chunk-b9gx6r6h.js:14560-14737 facade-exports
 /**
  * Chrome 分类器地板开关：env CLAUDE_CHROME_CLASSIFIER_FLOOR，否则远程会话读 tengu_cowork_chrome_automode_default 的安全值、本地读普通值。
  */
@@ -2319,7 +2329,7 @@ function readChromeClassifierFloor() {
       : getFeatureValue_CACHED_MAY_BE_STALE("tengu_cowork_chrome_automode_default", false))
   );
 }
-//@ chunk-zfbhezv9.js:14508-14683 facade-exports
+//@ chunk-b9gx6r6h.js:14737-14912 facade-exports
 /**
  * 限制写入在工作目录内，并禁用 EnterWorktree/ExitWorktree 工具（toolsNarrowing deny）。
  */
@@ -2329,7 +2339,7 @@ function withWriteBlockOn(context) {
     blockWritesOutsideWorkingDirectories: true,
     alwaysDenyRules: {
       ...context.alwaysDenyRules,
-      toolsNarrowing: uniq([
+      toolsNarrowing: normalizeCaseForComparison_2([
         ...(context.alwaysDenyRules.toolsNarrowing ?? []),
         ENTER_WORKTREE_TOOL_NAME,
         EXIT_WORKTREE_TOOL_NAME,
@@ -2337,7 +2347,7 @@ function withWriteBlockOn(context) {
     },
   };
 }
-//@ chunk-zfbhezv9.js:14683-19645 facade-exports (2.1.88 match: initializeToolPermissionContext, 0.485)
+//@ chunk-b9gx6r6h.js:14912-20174 facade-exports (2.1.88 match: initializeToolPermissionContext, 0.472)
 /**
  * 构建初始 ToolPermissionContext：解析 --allowedTools/--disallowedTools/--tools，加载 settings 规则（工作区信任门控），计算 bypass 可用性（disableBypassPermissionsMode、restricted），Windows 上禁 Bash 时联动 PowerShell，检测危险/宽泛规则，设置 auto 可用性与 Chrome 分类器开关，校验并加入 additionalDirectories（settings、会话、--add-dir）。
  */
@@ -2359,9 +2369,9 @@ async function initializeToolPermissionContext({
   let unusedNull = null;
   let wantsBypass = permissionMode === "bypassPermissions" || allowDangerouslySkipPermissions;
   let cliAllowedTools = splitRuleList(allowedToolsCli)
-    .map((ruleString) => formatPermissionRule(permissionRuleValueFromString(ruleString)))
+    .map((ruleString) => permissionRuleValueFromString(normalizeRuleString(ruleString, "allow")))
     .filter((rule) => {
-      let parsedDisallowedToolsCli = validateWildcardToolName(permissionRuleValueFromString(rule).toolName);
+      let parsedDisallowedToolsCli = validateWildcardToolName(parseRuleString(rule).toolName);
       if (parsedDisallowedToolsCli) {
         warnings.push(
           `Ignoring --allowedTools rule "${rule}": ${parsedDisallowedToolsCli.error}. ${parsedDisallowedToolsCli.suggestion}.`,
@@ -2370,7 +2380,10 @@ async function initializeToolPermissionContext({
       }
       return true;
     });
-  let baseToolsResult = uniq([...splitRuleList(disallowedToolsCli), ...antBuiltinDenyRules()]);
+  let baseToolsResult = normalizeCaseForComparison_2([
+    ...splitRuleList(disallowedToolsCli),
+    ...antBuiltinDenyRules(),
+  ]);
   let isBaseToolsPreset =
     !!baseToolsCli && baseToolsCli.length > 0 && getBaseToolsPreset(baseToolsCli.join(" ").trim()) !== null;
   let parsedBaseTools =
@@ -2389,7 +2402,7 @@ async function initializeToolPermissionContext({
   let disablesAllBuiltins = !!baseToolsCli?.length && !isBaseToolsPreset && toolsToDisallow.length === 0;
   let isToolNamed = (toolName) =>
     toolsToDisallow.includes(toolName) ||
-    cliAllowedTools.some((ruleString) => permissionRuleValueFromString(ruleString).toolName === toolName);
+    cliAllowedTools.some((ruleString) => parseRuleString(ruleString).toolName === toolName);
   setSearchToolsOptIn([GLOB_TOOL_NAME, GREP_TOOL_NAME].some(isToolNamed));
   setTodoToolsOptIn(TODO_TOOL_NAMES.some(isToolNamed));
   let launchDisallowedTools = [];
@@ -2419,7 +2432,7 @@ async function initializeToolPermissionContext({
       presetExclusions(toolsToDisallow),
     );
     for (let toolName of codeExecutionTools) additionalWorkingDirectories.add(toolName);
-    launchDisallowedTools = uniq([...launchDisallowedTools, ...codeExecutionTools]);
+    launchDisallowedTools = normalizeCaseForComparison_2([...launchDisallowedTools, ...codeExecutionTools]);
   }
   setToolsOmittedByLaunchList(
     toolsOmittedByLaunchList.filter((toolName) => !additionalWorkingDirectories.has(toolName)),
@@ -2464,7 +2477,7 @@ async function initializeToolPermissionContext({
         }
       : {};
   let rules = loadAllPermissionRulesFromDisk(options);
-  let mapped = [...baseToolsResult, ...launchDisallowedTools].map(permissionRuleValueFromString);
+  let mapped = [...baseToolsResult, ...launchDisallowedTools].map(parseRuleString);
   let any = mapped.some(isBareBashRule);
   let mentionsBash =
     mapped.some((ruleValue) => ruleValue.toolName === BASH_TOOL_NAME) ||
@@ -2474,9 +2487,7 @@ async function initializeToolPermissionContext({
     splitRuleList(baseToolsCli ?? [])
       .map(canonicalToolName)
       .includes(POWERSHELL_TOOL_NAME) ||
-    cliAllowedTools.some(
-      (ruleString) => permissionRuleValueFromString(ruleString).toolName === POWERSHELL_TOOL_NAME,
-    ) ||
+    cliAllowedTools.some((ruleString) => parseRuleString(ruleString).toolName === POWERSHELL_TOOL_NAME) ||
     mapped.some((ruleValue) => ruleValue.toolName === POWERSHELL_TOOL_NAME) ||
     rules.some((rule) => rule.ruleValue.toolName === POWERSHELL_TOOL_NAME);
   if (getPlatform() === "windows" && isBashAvailable() && mentionsBash && !mentionsPowerShell) {
@@ -2503,7 +2514,7 @@ async function initializeToolPermissionContext({
       let unusedFlag = false;
       logEvent("tengu_ant_overly_broad_bash_detected", {
         count: broadRules.length,
-        categories: fromEnumArr(uniq(mapped)),
+        categories: fromEnumArr(normalizeCaseForComparison_2(mapped)),
         yoloEquivEnabled,
         willStrip: overlyBroadBashPermissions.length,
         entrypoint: fromEnumOpt(getEntrypointKind()) ?? lit("other"),
@@ -2516,6 +2527,7 @@ async function initializeToolPermissionContext({
     dangerousPermissions = findDangerousClassifierPermissions(rules, cliAllowedTools);
   let managedOnly = shouldAllowManagedPermissionRulesOnly();
   let blockExemptPathsInSettings = readBlockExemptPathsInSettings();
+  holdWorkingDirectoriesAsGiven();
   if (managedOnly && cliAllowedTools.length > 0)
     warnings.push(
       `Ignoring --allowedTools ${cliAllowedTools.join(", ")}: permission rules are restricted to managed settings (allowManagedPermissionRulesOnly).`,
@@ -2573,11 +2585,29 @@ async function initializeToolPermissionContext({
     rules,
   );
   if (isWriteBlockOn()) toolPermissionContext = withWriteBlockOn(toolPermissionContext);
+  for (let ruleString of normalizeCaseForComparison_2([
+    ...splitRuleList(allowedToolsCli),
+    ...getEnabledSettingSources().flatMap((source) => getSettingsForSource(source)?.permissions?.allow ?? []),
+  ])) {
+    let ruleValue = normalizeRuleString(ruleString, "allow");
+    if (
+      permissionRuleValueFromString_2(ruleValue) &&
+      Object.values(toolPermissionContext.alwaysAllowRules)
+        .flat()
+        .includes(permissionRuleValueFromString(ruleValue))
+    ) {
+      let { toolName } = ruleValue;
+      warnings.push(`Permission allow rule "${ruleString}" ${describeWildcardHint(ruleString, toolName)}`);
+      securityWarnings.push({
+        text: `Allow rule "${ruleString}" ${describeWildcardHint(ruleString, toolName)}`,
+      });
+    }
+  }
   for (let advisory of collectPermissionRuleAdvisories(
     [
       ...getAllowRules(toolPermissionContext),
-      ...getDenyRules(toolPermissionContext),
-      ...getAskRules(toolPermissionContext),
+      ...deniedBashRules(toolPermissionContext),
+      ...askedBashRules(toolPermissionContext),
     ],
     getAllBaseTools,
   )) {
@@ -2656,7 +2686,7 @@ async function initializeToolPermissionContext({
     inheritedSessionDirectories,
   };
 }
-//@ chunk-zfbhezv9.js:19645-21746 facade-exports (2.1.88 match: findOverlyBroadPowerShellPermissions, 0.148)
+//@ chunk-b9gx6r6h.js:20174-22275 facade-exports (2.1.88 match: findOverlyBroadPowerShellPermissions, 0.148)
 /**
  * 规则自检告警：deny/ask 规则指向已移除或未知的工具、用 "field:" 原样匹配 command/path 字段（不会生效）；validatePermissionRule 报告的警告。
  */
@@ -2693,20 +2723,20 @@ function collectPermissionRuleAdvisories(rules, getAllBaseTools) {
       if (ruleContentField && ruleContent !== undefined) {
         let index = ruleContent.indexOf(":");
         if (index > 0 && ruleContent.slice(0, index).trim() === ruleContentField) {
-          let message = `Permission ${rule.ruleBehavior} rule "${formatPermissionRule(rule.ruleValue)}" targets ${ruleContentField} as a raw string and will not match`;
+          let message = `Permission ${rule.ruleBehavior} rule "${permissionRuleValueFromString(rule.ruleValue)}" targets ${ruleContentField} as a raw string and will not match`;
           let hint =
             toolName === GREP_TOOL_NAME
               ? "."
               : toolName === GLOB_TOOL_NAME
-                ? ` \u2014 use ${FILE_READ_TOOL_NAME}(${"\u2026"}) to match file-read paths.`
+                ? ` \u2014 use ${READ}(${"\u2026"}) to match file-read paths.`
                 : toolName === FILE_WRITE_TOOL_NAME || toolName === NOTEBOOK_EDIT_TOOL_NAME
-                  ? ` \u2014 use ${FILE_EDIT_TOOL_NAME}(${"\u2026"}) to match file-write paths.`
+                  ? ` \u2014 use ${EDIT}(${"\u2026"}) to match file-write paths.`
                   : ` \u2014 use ${toolName}(${"\u2026"}) for ${toolName}'s own matcher.`;
           warnings.push(
             createRuleWarning(
               rule,
               message + hint,
-              `${capitalize(rule.ruleBehavior)} rule ${formatPermissionRule(rule.ruleValue)} never matches${toolName === GREP_TOOL_NAME ? "" : ` \xB7 use ${toolName === GLOB_TOOL_NAME ? FILE_READ_TOOL_NAME : toolName === FILE_WRITE_TOOL_NAME || toolName === NOTEBOOK_EDIT_TOOL_NAME ? FILE_EDIT_TOOL_NAME : toolName}(${"\u2026"})`}`,
+              `${capitalize(rule.ruleBehavior)} rule ${permissionRuleValueFromString(rule.ruleValue)} never matches${toolName === GREP_TOOL_NAME ? "" : ` \xB7 use ${toolName === GLOB_TOOL_NAME ? READ : toolName === FILE_WRITE_TOOL_NAME || toolName === NOTEBOOK_EDIT_TOOL_NAME ? EDIT : toolName}(${"\u2026"})`}`,
             ),
           );
         }
@@ -2716,8 +2746,8 @@ function collectPermissionRuleAdvisories(rules, getAllBaseTools) {
     warnings.push(
       createRuleWarning(
         rule,
-        `Permission ${rule.ruleBehavior} rule "${formatPermissionRule(rule.ruleValue)}" matches no known tool \u2014 check for typos.`,
-        `${capitalize(rule.ruleBehavior)} rule ${formatPermissionRule(rule.ruleValue)} matches no tool \xB7 check for typos`,
+        `Permission ${rule.ruleBehavior} rule "${permissionRuleValueFromString(rule.ruleValue)}" matches no known tool \u2014 check for typos.`,
+        `${capitalize(rule.ruleBehavior)} rule ${permissionRuleValueFromString(rule.ruleValue)} matches no tool \xB7 check for typos`,
       ),
     );
   }
@@ -2743,7 +2773,7 @@ function collectPermissionRuleAdvisories(rules, getAllBaseTools) {
       )
         continue;
     }
-    let validation = validatePermissionRule(formatPermissionRule(rule.ruleValue), rule.ruleBehavior);
+    let validation = validatePermissionRule(permissionRuleValueFromString(rule.ruleValue), rule.ruleBehavior);
     if (validation.valid && validation.warning) {
       let sourceLabel =
         rule.source === "cliArg"
@@ -2768,7 +2798,7 @@ function collectPermissionRuleAdvisories(rules, getAllBaseTools) {
   }
   return warnings;
 }
-//@ chunk-zfbhezv9.js:21746-21960 layout
+//@ chunk-b9gx6r6h.js:22275-22489 layout
 function createRuleWarning(rule, line, securityNotice) {
   if (securityNotice === undefined)
     return {
@@ -2789,11 +2819,11 @@ function createRuleWarning(rule, line, securityNotice) {
           },
   };
 }
-//@ chunk-zfbhezv9.js:21960-22017 layout
+//@ chunk-b9gx6r6h.js:22489-22546 layout
 function filterRulesByBehavior(rules, behavior) {
   return rules.filter((rule) => rule.ruleBehavior === behavior);
 }
-//@ chunk-zfbhezv9.js:22017-22153 facade-exports
+//@ chunk-b9gx6r6h.js:22546-22682 facade-exports
 /**
  * 把 CLI 参数的 allow 规则追加到 cliArg 来源（受限情况下 yg() 为真时不加）。
  */
@@ -2807,7 +2837,7 @@ function withCliArgAllowRules(toolPermissionContext, allowedTools) {
     },
   };
 }
-//@ chunk-zfbhezv9.js:22153-23082 facade-exports
+//@ chunk-b9gx6r6h.js:22682-23611 facade-exports
 /**
  * GrowthBook 缓存或策略结论到位后重算启动模式；若用户未手动切换过且结果不同，则通过 transitionPermissionMode 切换（trigger=startup_reresolve）。
  */
@@ -2859,7 +2889,7 @@ function settleProvisionalStartupMode(toolPermissionContext, options = {}) {
   setProvisionalStartupMode(nextProvisional);
   return nextContext;
 }
-//@ chunk-zfbhezv9.js:23082-23262 facade-exports
+//@ chunk-b9gx6r6h.js:23611-23791 facade-exports
 /**
  * 主动性档位选择因等待策略结论被暂缓时，返回给用户的提示。
  */
@@ -2877,7 +2907,7 @@ function levelAutoHeldForPendingVerdictNotice() {
     ? undefined
     : orgPolicyNotLoadedNotice(levelPickHeldForPendingVerdict);
 }
-//@ chunk-zfbhezv9.js:23262-23390 facade-exports
+//@ chunk-b9gx6r6h.js:23791-23919 facade-exports
 /**
  * 放弃等待策略结论：清除 awaitsPolicyVerdict（若仍在等 GrowthBook 则保留其余待定状态）。
  */
@@ -2893,7 +2923,7 @@ function abandonPendingPolicyVerdictResolution() {
       : undefined,
   );
 }
-//@ chunk-zfbhezv9.js:23390-25368 facade-exports (2.1.88 match: verifyAutoModeGateAccess, 0.8)
+//@ chunk-b9gx6r6h.js:23919-25897 facade-exports (2.1.88 match: verifyAutoModeGateAccess, 0.8)
 /**
  * 校验 auto 模式能否进入：读 tengu_auto_mode_config（enabled: enabled/disabled/opt-in、disableFastMode）、settings disableAutoMode、模型是否支持；可进入时返回刷新可用性的 updateContext，否则返回踢出 auto 的 updateContext 与原因通知（settings/circuit-breaker/fast-mode/model）。
  */
@@ -3005,23 +3035,23 @@ async function verifyAutoModeGateAccess(context, fastMode, isLaunchRun = false) 
     notification: context.isAutoModeAvailable ? notification : undefined,
   };
 }
-//@ chunk-zfbhezv9.js:25368-25403 facade-exports
+//@ chunk-b9gx6r6h.js:25897-25932 facade-exports
 function autoModeRefusedHere() {
   return isAutoModeCircuitBroken() || isAutoModeDisabledBySettingsNow();
 }
-//@ chunk-zfbhezv9.js:25403-25459 layout
+//@ chunk-b9gx6r6h.js:25932-25988 layout
 function autoModeDisabledSource() {
   return getEnabledSettingSources().findLast((sourceName) =>
     isAutoModeDisabledBySettings(getSettingsForSource(sourceName) || {}),
   );
 }
-//@ chunk-zfbhezv9.js:25459-25514 facade-exports
+//@ chunk-b9gx6r6h.js:25988-26043 facade-exports
 function getDisableAutoModeSettingSources() {
   return getEnabledSettingSources().filter((sourceName) =>
     isAutoModeDisabledBySettings(getSettingsForSource(sourceName) || {}),
   );
 }
-//@ chunk-zfbhezv9.js:25514-25940 facade-exports
+//@ chunk-b9gx6r6h.js:26043-26469 facade-exports
 /**
  * 为遥测收集 auto 模式可用性：是否可用、不可用原因、禁用来源（含策略来源）、enabled 状态及其来源、熔断状态、settings 的 defaultMode、是否来自回退。
  */
@@ -3042,7 +3072,7 @@ function getAutoModeAvailabilityForAnalytics() {
     autoModeFromFallback: isAutoModeFromFallback(),
   };
 }
-//@ chunk-zfbhezv9.js:25940-26009 facade-exports (2.1.88 match: _temp7, 1)
+//@ chunk-b9gx6r6h.js:26469-26538 facade-exports (2.1.88 match: _temp7, 1)
 /**
  * auto 模式是否被托管策略设置禁用（policySettings 与可信策略层均禁用）。
  */
@@ -3052,18 +3082,18 @@ function isAutoModeDisabledByPolicySettings() {
     getVouchedPolicyTierSettings().some(isAutoModeDisabledBySettings)
   );
 }
-//@ chunk-zfbhezv9.js:26009-26026 layout
+//@ chunk-b9gx6r6h.js:26538-26555 layout
 var AUTO_MODE_ENABLED_FALLBACK = "enabled";
-//@ chunk-zfbhezv9.js:26026-26107 fingerprint (2.1.88 match: parseAutoModeEnabledState, 1)
+//@ chunk-b9gx6r6h.js:26555-26636 fingerprint (2.1.88 match: parseAutoModeEnabledState, 1)
 function parseAutoModeEnabledState(value) {
   if (value === "enabled" || value === "disabled" || value === "opt-in") return value;
   return AUTO_MODE_ENABLED_FALLBACK;
 }
-//@ chunk-zfbhezv9.js:26107-26141 facade-exports
+//@ chunk-b9gx6r6h.js:26636-26670 facade-exports
 function getAutoModeEnabledState() {
   return getAutoModeEnabledStateWithSource().value;
 }
-//@ chunk-zfbhezv9.js:26141-26251 facade-exports (2.1.88 match: getAutoModeEnabledState, 0.825)
+//@ chunk-b9gx6r6h.js:26670-26780 facade-exports (2.1.88 match: getAutoModeEnabledState, 0.825)
 function getAutoModeEnabledStateWithSource() {
   let enabled = getFeatureValue_CACHED_MAY_BE_STALE("tengu_auto_mode_config", {})?.enabled;
   let autoModeEnabledState = parseAutoModeEnabledState(enabled);
@@ -3072,7 +3102,7 @@ function getAutoModeEnabledStateWithSource() {
     src: enabled === autoModeEnabledState ? "gb" : "default",
   };
 }
-//@ chunk-zfbhezv9.js:26251-26418 facade-exports (2.1.88 match: createDisabledBypassPermissionsContext, 1)
+//@ chunk-b9gx6r6h.js:26780-26947 facade-exports (2.1.88 match: createDisabledBypassPermissionsContext, 1)
 /**
  * 禁用 bypass：当前为 bypass 时切回 default，并把 isBypassPermissionsModeAvailable 置为 false。
  */
@@ -3089,7 +3119,7 @@ function createDisabledBypassPermissionsContext(currentContext) {
     isBypassPermissionsModeAvailable: false,
   };
 }
-//@ chunk-zfbhezv9.js:26418-26528 facade-exports
+//@ chunk-b9gx6r6h.js:26947-27057 facade-exports
 /**
  * 当前处于 auto，或 plan 且进入前是 auto/已剥离危险规则。
  */
@@ -3099,7 +3129,7 @@ function isAutoModeInUse(context) {
     (context.mode === "plan" && (context.prePlanMode === "auto" || !!context.strippedDangerousRules))
   );
 }
-//@ chunk-zfbhezv9.js:26528-27225 facade-exports
+//@ chunk-b9gx6r6h.js:27057-27754 facade-exports
 /**
  * 闸门关闭时退出 auto：恢复危险规则，模式改回 default（或按主动性档位算出的模式），并标记 auto 不可用。
  */
@@ -3162,18 +3192,18 @@ function createDisabledAutoModeContext(context) {
     canAutoClassifierRun: false,
   };
 }
-//@ chunk-zfbhezv9.js:27225-27291 facade-exports (2.1.88 match: isDefaultPermissionModeAuto, 1)
+//@ chunk-b9gx6r6h.js:27754-27820 facade-exports (2.1.88 match: isDefaultPermissionModeAuto, 1)
 /**
  * settings 的 permissions.defaultMode 是否为 auto。
  */
 function isDefaultPermissionModeAuto() {
   return (getSettings_DEPRECATED() || {}).permissions?.defaultMode === "auto";
 }
-//@ chunk-zfbhezv9.js:27291-27325 facade-exports
+//@ chunk-b9gx6r6h.js:27820-27854 facade-exports
 function shouldPlanUseAutoMode() {
   return isAutoModeGateEnabled() && getUseAutoModeDuringPlan();
 }
-//@ chunk-zfbhezv9.js:27325-27396 layout (2.1.88 match: _temp9, 1)
+//@ chunk-b9gx6r6h.js:27854-27925 layout (2.1.88 match: _temp9, 1)
 function isAutoModeAvailableNow() {
   return (
     isAutoModeActive() &&
@@ -3182,24 +3212,25 @@ function isAutoModeAvailableNow() {
     !isAutoModeDisabledBySettings(getSettingsForSource("flagSettings") || {})
   );
 }
-//@ chunk-zfbhezv9.js:27396-27423 layout
+//@ chunk-b9gx6r6h.js:27925-27969 layout
 function planUsesAutoMode() {
+  if (contextKeyAccepted()) return false;
   return shouldPlanUseAutoMode();
 }
-//@ chunk-zfbhezv9.js:27423-27469 facade-exports
-function canPlanReturnToAutoMode(prePlanMode) {
-  return isAutoModeGateEnabled() || (prePlanMode === "auto" && isAutoModeAvailableNow());
+//@ chunk-b9gx6r6h.js:27969-28015 facade-exports (2.1.88 match: parseDimension, 1)
+function canPlanReturnToAutoMode(v) {
+  return isAutoModeGateEnabled() || (v === "auto" && isAutoModeAvailableNow());
 }
-//@ chunk-zfbhezv9.js:27469-27496 facade-exports
+//@ chunk-b9gx6r6h.js:28015-28042 facade-exports
 function latchPlanAutoModeAtLaunch() {
   setPlanAutoModeOffAtLaunch(!getUseAutoModeDuringPlan());
 }
-//@ chunk-zfbhezv9.js:27496-27535 facade-exports
+//@ chunk-b9gx6r6h.js:28042-28081 facade-exports
 function settlePlanAutoModeAtStart(context) {
   latchPlanAutoModeAtLaunch();
   return reconcilePlanAutoMode(context, shouldPlanUseAutoMode);
 }
-//@ chunk-zfbhezv9.js:27535-27616 layout
+//@ chunk-b9gx6r6h.js:28081-28162 layout
 function isPlanAutoModeAllowed() {
   return (
     (isAutoModeGateEnabled() || isAutoModeAvailableNow()) &&
@@ -3207,19 +3238,24 @@ function isPlanAutoModeAllowed() {
     !isDisabledAboveWorkloadFiles("useAutoModeDuringPlan")
   );
 }
-//@ chunk-zfbhezv9.js:27616-27673 facade-exports
+//@ chunk-b9gx6r6h.js:28162-28219 facade-exports
 function activatePlanAutoMode(context) {
   if (!planUsesAutoMode()) return null;
   setAutoModeActive(true);
   return stripDangerousPermissionsForAutoMode(context);
 }
-//@ chunk-zfbhezv9.js:27673-28016 facade-exports (2.1.88 match: prepareContextForPlanMode, 0.927)
+//@ chunk-b9gx6r6h.js:28219-28618 facade-exports (2.1.88 match: prepareContextForPlanMode, 0.877)
 /**
  * 进入 plan：记录 prePlanMode；从 auto 进入时视 plan 是否沿用分类器决定是否恢复危险规则；从其他模式进入时若 plan 使用 auto 分类器则剥离危险规则。
  */
 function prepareContextForPlanMode(context) {
   let currentMode = context.mode;
   if (currentMode === "plan") return context;
+  if (context.planDoc !== undefined)
+    return prepareContextForPlanMode({
+      ...context,
+      planDoc: undefined,
+    });
   if (currentMode === "auto") {
     if (isPlanAutoModeAllowed())
       return {
@@ -3249,7 +3285,7 @@ function prepareContextForPlanMode(context) {
     prePlanMode: currentMode,
   };
 }
-//@ chunk-zfbhezv9.js:28016-28413 facade-exports (2.1.88 match: transitionPlanAutoMode, 0.56)
+//@ chunk-b9gx6r6h.js:28618-29015 facade-exports (2.1.88 match: transitionPlanAutoMode, 0.559)
 /**
  * 把上下文规整为“已认领的启动模式”：清除主动性档位标记；未经 flag 允许时关闭 bypass 可用；plan 带 prePlanMode 时按 auto 是否激活处理 plan 的 auto 状态。
  */
@@ -3283,11 +3319,11 @@ function asClaimedStartModeContext(context, availability) {
   }
   return nextContext;
 }
-//@ chunk-zfbhezv9.js:28413-28445 facade-exports
+//@ chunk-b9gx6r6h.js:29015-29047 facade-exports
 function transitionPlanAutoMode(context) {
   return reconcilePlanAutoMode(context, isPlanAutoModeAllowed);
 }
-//@ chunk-zfbhezv9.js:28445-28710 affinity
+//@ chunk-b9gx6r6h.js:29047-29312 affinity
 function reconcilePlanAutoMode(context, shouldPlanUseAuto) {
   if (context.mode === "auto") return stripDangerousPermissionsForAutoMode(context);
   if (context.mode !== "plan") return context;
@@ -3305,30 +3341,41 @@ function reconcilePlanAutoMode(context, shouldPlanUseAuto) {
   setNeedsAutoModeExitAttachment(true);
   return restoreDangerousPermissions(context);
 }
-//@ chunk-e6aww6q8.js:1270853-1270876 facade-exports
+//@ chunk-5xgkngpb.js:1268714-1268737 facade-exports
 function antBuiltinDenyRules() {
   return [];
 }
-//@ chunk-e6aww6q8.js:3261661-3261758 fingerprint (2.1.88 match: isAutoModeDisabledBySettings, 1)
+//@ chunk-5xgkngpb.js:2292523-2292582 placement
+/**
+ * tengu_virtual_pancake 开关。
+ */
+function isVirtualPancakeEnabled() {
+  return noExtraBodyParams() ?? getFeatureValue_SESSION_PINNED("tengu_virtual_pancake", false);
+}
+//@ chunk-5xgkngpb.js:2292582-2292604 placement
+function noExtraBodyParams() {
+  return;
+}
+//@ chunk-5xgkngpb.js:3347975-3348072 fingerprint (2.1.88 match: isAutoModeDisabledBySettings, 1)
 function isAutoModeDisabledBySettings(settings) {
   return settings.disableAutoMode === "disable" || settings.permissions?.disableAutoMode === "disable";
 }
-//@ chunk-e6aww6q8.js:3261758-3261794 layout
+//@ chunk-5xgkngpb.js:3348072-3348108 layout
 function isAutoModeDisabledBySettingsNow() {
   return isAutoModeDisabledBySettings(getSettings_DEPRECATED() || {});
 }
-//@ chunk-e6aww6q8.js:3261794-3261832 layout
+//@ chunk-5xgkngpb.js:3348108-3348146 layout
 function isAutoModeSupportedNow() {
   return !isAutoModeCircuitBroken() && modelSupportsAutoMode(getMainLoopModel());
 }
-//@ chunk-e6aww6q8.js:3261832-3261867 facade-exports
+//@ chunk-5xgkngpb.js:3348146-3348181 facade-exports
 /**
  * auto 闸门实时值：未被熔断（Pge）、当前主模型支持 auto、且 settings 未 disableAutoMode。
  */
 function isAutoModeGateEnabled() {
   return isAutoModeSupportedNow() && !isAutoModeDisabledBySettingsNow();
 }
-//@ chunk-e6aww6q8.js:3261867-3262027 facade-exports (2.1.88 match: getAutoModeUnavailableReason, 1)
+//@ chunk-5xgkngpb.js:3348181-3348341 facade-exports (2.1.88 match: getAutoModeUnavailableReason, 1)
 /**
  * auto 不可用的原因：settings / circuit-breaker / model，或 Els() 给出的其他原因。
  */
@@ -3340,7 +3387,7 @@ function getAutoModeUnavailableReason(model = getMainLoopModel()) {
   if (autoModeFastModeBreakerReason === "model" && !isAntInternalFastModelId(model)) return null;
   return autoModeFastModeBreakerReason;
 }
-//@ chunk-e6aww6q8.js:3262027-3262342 facade-exports (2.1.88 match: getAutoModeUnavailableNotification, 0.763)
+//@ chunk-5xgkngpb.js:3348341-3348656 facade-exports (2.1.88 match: getAutoModeUnavailableNotification, 0.763)
 /**
  * auto 不可用原因到提示文字：settings、circuit-breaker、fast-mode、model 四种。
  */
@@ -3362,7 +3409,7 @@ function getAutoModeUnavailableNotification(reason) {
   }
   return base;
 }
-//@ chunk-e6aww6q8.js:3262342-3262427 facade-exports
+//@ chunk-5xgkngpb.js:3348656-3348741 facade-exports
 /**
  * 当前 auto 不可用时的提示文字，无具体原因时用通用文字。
  */
@@ -3372,7 +3419,7 @@ function getAutoModeUnavailableText() {
     ? getAutoModeUnavailableNotification(autoModeUnavailableReason)
     : "auto mode is unavailable right now";
 }
-//@ chunk-4p0ppc72.js:377-468 fingerprint (2.1.88 match: isPermissionUpdateDestination, 0.909)
+//@ chunk-1z536h0d.js:410-501 fingerprint (2.1.88 match: isPermissionUpdateDestination, 0.909)
 /**
  * PermissionUpdate 可用的目的地列表：userSettings、projectSettings、localSettings、flagSettings、cliArg、session。
  */
@@ -3384,9 +3431,9 @@ var PERMISSION_UPDATE_DESTINATIONS = [
   "cliArg",
   "session",
 ];
-//@ chunk-tr0s0d0k.js:23784-23793 affinity
+//@ chunk-6d2p9h2d.js:24031-24040 affinity
 var HOST_CREDENTIAL_SCAN_DEPTH = 4;
-//@ chunk-tr0s0d0k.js:23793-24209 callgraph-fingerprint (2.1.88 match: isOverlyBroadPowerShellAllowRule, 0.244)
+//@ chunk-6d2p9h2d.js:24040-24456 callgraph-fingerprint (2.1.88 match: isOverlyBroadPowerShellAllowRule, 0.243)
 /**
  * 若 Shell 命令会读取宿主凭证（Windows 按 token 检查，其他平台按 wt 扫描），返回 hostCredential 来源的 deny 规则。
  */
@@ -3422,53 +3469,71 @@ async function getHostCredentialDenyRule(tool, input) {
 }
 export {
   isVirtualPancakeEnabled,
-  transitionPermissionMode,
-  sameEffort,
-  setPermissionModeWithGuards,
-  getAutoModeUnavailableText,
+  withWriteBlockOn,
+  isBypassPermissionsModeDisabled,
+  createDisabledBypassPermissionsContext,
+  isAutoModeInUse,
+  isAutoModeDisabledByPolicySettings,
+  createDisabledAutoModeContext,
+  transitionPlanAutoMode,
+  addDirsAreLauncherNamed,
   classifyAllShellEnabled,
   isDangerousClassifierPermission,
   warnMcpRuleMismatch,
   getAutoModeConfigOrDefault,
+  getMcpPrefix,
   requiresClassifierForHookAllow,
-  resolveLoopEffort,
-  isBypassPermissionsModeDisabled,
-  canSeedAutoMode,
-  getAutoModeUnavailableReason,
-  getAutoModeAvailabilityForAnalytics,
   verifyAutoModeGateAccess,
-  BYPASS_CONSENT_MESSAGE,
-  BG_UNCONSENTED_BYPASS_CAPABILITY_NOTICE,
   getAutoModeUnavailableNotification,
-  getStartupModeTelemetry,
-  getAutoSeedFactors,
-  resolveRemoteSessionMode,
-  resolveSeedPermissionMode,
-  getProactivityPolicyVerdict,
-  guardPermissionModeChange,
-  undonePermissionContext,
-  applyPermissionModeRevertEffects,
-  permissionModeSignal,
+  setPermissionModeWithGuards,
   isAutoModeGateEnabled,
-  isMaxEffortReminderEnabled,
-  TENGU_LOGGIA_PASSAGE,
-  approvalLayers,
-  getCarriedRefusalEffort,
-  parseEffortOrKeyword,
-  isReservedEffortKeyword,
-  transitionPlanAutoMode,
+  refuseAutoMode,
+  getAutoModeUnavailableReason,
+  isSameModelForRules,
+  resolveLoopEffort,
+  classifyEffortCarryEffect,
+  getRefusedEffortCarry,
   isHarborWillowEnabled,
+  isMaxEffortReminderEnabled,
   settlePlanAutoModeAtStart,
+  guardPermissionModeChange,
   isBypassPermissionsDeniedOutsideSandbox,
   asClaimedStartModeContext,
   withToolAliases,
   declareSdkHostCodeRunningMcpTools,
   withRulesSetAsideAgain,
-  canPlanReturnToAutoMode,
-  restoreDangerousPermissions,
+  prepareContextForPlanMode,
+  permissionModeSignal,
+  sameEffort,
+  transitionPermissionMode,
+  getAutoModeAvailabilityForAnalytics,
+  BYPASS_CONSENT_MESSAGE,
+  BG_UNCONSENTED_BYPASS_CAPABILITY_NOTICE,
+  getStartupModeTelemetry,
+  getAutoSeedFactors,
+  resolveRemoteSessionMode,
+  resolveSeedPermissionMode,
+  isDangerousBashPermission,
+  isDangerousPowerShellPermission,
+  PERMISSION_UPDATE_DESTINATIONS,
+  getProactivityPolicyVerdict,
   stripDangerousPermissionsForAutoMode,
-  classifyEffortCarryEffect,
-  getRefusedEffortCarry,
+  antBuiltinDenyRules,
+  TENGU_LOGGIA_PASSAGE,
+  approvalLayers,
+  getCarriedRefusalEffort,
+  parseEffortOrKeyword,
+  isReservedEffortKeyword,
+  hasMcpToolAliases,
+  greedyShoreEnabled,
+  refusedEffortTelemetryFields,
+  autoModeRefusedHere,
+  overlyBroadShellAllowsStrippedByEverySession,
+  getHostCredentialDenyRule,
+  canSeedAutoMode,
+  getStoredDefaultModeBar,
+  getAutoModeUnavailableText,
+  getHipaaPolicyVerdict,
   resolveSystemPromptOptions,
   initialPermissionModeFromCLI,
   isDefaultPermissionModeAuto,
@@ -3479,37 +3544,22 @@ export {
   resolveFallbackModels,
   splitCommaList,
   withCliArgAllowRules,
+  undonePermissionContext,
+  applyPermissionModeRevertEffects,
+  canPlanReturnToAutoMode,
+  restoreDangerousPermissions,
+  getBaseToolsPreset,
+  splitToolExclusions,
   isDangerousPermissionRule,
-  releaseStaleRefusalEffortCarry,
-  refusedEffortTelemetryFields,
-  resolveRefusalFallbackEffort,
+  getDisableAutoModeSettingSources,
+  getBypassDisabledReason,
+  getAutoModeEnabledState,
   initializeToolPermissionContext,
-  antBuiltinDenyRules,
   latchPlanAutoModeAtLaunch,
   activatePlanAutoMode,
   resolveStartupModel,
-  hasMcpToolAliases,
-  isDangerousBashPermission,
-  isDangerousPowerShellPermission,
-  PERMISSION_UPDATE_DESTINATIONS,
-  AUTO_MODE_ENABLED_DEFAULT,
-  greedyShoreEnabled,
-  prepareContextForPlanMode,
-  getAutoModeEnabledState,
-  getHipaaPolicyVerdict,
-  getBypassDisabledReason,
-  getStoredDefaultModeBar,
-  withWriteBlockOn,
-  createDisabledBypassPermissionsContext,
-  isAutoModeInUse,
-  isAutoModeDisabledByPolicySettings,
-  createDisabledAutoModeContext,
-  addDirsAreLauncherNamed,
-  refuseAutoMode,
-  getDisableAutoModeSettingSources,
-  autoModeRefusedHere,
-  overlyBroadShellAllowsStrippedByEverySession,
-  getHostCredentialDenyRule,
+  releaseStaleRefusalEffortCarry,
+  resolveRefusalFallbackEffort,
   cliArgMayMintTrustedRoots,
   collectPermissionRuleAdvisories,
   findDangerousClassifierPermissions,
@@ -3524,5 +3574,4 @@ export {
   parseBaseToolsFromCLI,
   removeDangerousPermissions,
   shouldPlanUseAutoMode,
-  splitToolExclusions,
 };

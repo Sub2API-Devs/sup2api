@@ -1,11 +1,11 @@
 /**
  * parse5/dist/common/unicode.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: parse5@7.2.0..7.2.1
- * pieces: chunk-6ja29j2n.js (8)
+ * pieces: chunk-p9ac6cnb.js (8)
  * attribution: esm-fingerprint 7, esm-layout 1
  */
-//@ chunk-6ja29j2n.js:191-462 esm-fingerprint
+//@ chunk-p9ac6cnb.js:191-462 esm-fingerprint
 var UNDEFINED_CODE_POINTS = new Set([
   65534, 65535, 131070, 131071, 196606, 196607, 262142, 262143, 327678, 327679, 393214, 393215, 458750,
   458751, 524286, 524287, 589822, 589823, 655358, 655359, 720894, 720895, 786430, 786431, 851966, 851967,
@@ -13,7 +13,7 @@ var UNDEFINED_CODE_POINTS = new Set([
 ]);
 var REPLACEMENT_CHARACTER = "\uFFFD";
 var CODE_POINTS;
-//@ chunk-6ja29j2n.js:462-1377 esm-fingerprint
+//@ chunk-p9ac6cnb.js:462-1377 esm-fingerprint
 (function (CODE_POINTS) {
   CODE_POINTS[(CODE_POINTS.EOF = -1)] = "EOF";
   CODE_POINTS[(CODE_POINTS.NULL = 0)] = "NULL";
@@ -42,7 +42,7 @@ var CODE_POINTS;
   CODE_POINTS[(CODE_POINTS.LATIN_SMALL_A = 97)] = "LATIN_SMALL_A";
   CODE_POINTS[(CODE_POINTS.LATIN_SMALL_Z = 122)] = "LATIN_SMALL_Z";
 })(CODE_POINTS || (CODE_POINTS = {}));
-//@ chunk-6ja29j2n.js:1377-1488 esm-fingerprint
+//@ chunk-p9ac6cnb.js:1377-1488 esm-fingerprint
 var SEQUENCES = {
   DASH_DASH: "--",
   CDATA_START: "[CDATA[",
@@ -51,26 +51,26 @@ var SEQUENCES = {
   PUBLIC: "public",
   SYSTEM: "system",
 };
-//@ chunk-6ja29j2n.js:1488-1528 esm-fingerprint
+//@ chunk-p9ac6cnb.js:1488-1528 esm-fingerprint
 function isSurrogate(cp) {
   return cp >= 55296 && cp <= 57343;
 }
-//@ chunk-6ja29j2n.js:1528-1569 esm-fingerprint
+//@ chunk-p9ac6cnb.js:1528-1569 esm-fingerprint
 function isSurrogatePair(cp) {
   return cp >= 56320 && cp <= 57343;
 }
-//@ chunk-6ja29j2n.js:1569-1614 esm-fingerprint
+//@ chunk-p9ac6cnb.js:1569-1614 esm-fingerprint
 function getSurrogatePairCodePoint(cp1, cp2) {
   return (cp1 - 55296) * 1024 + 9216 + cp2;
 }
-//@ chunk-6ja29j2n.js:1614-1702 esm-layout
+//@ chunk-p9ac6cnb.js:1614-1702 esm-layout
 function isControlCodePoint(cp) {
   return (
     (cp !== 32 && cp !== 10 && cp !== 13 && cp !== 9 && cp !== 12 && cp >= 1 && cp <= 31) ||
     (cp >= 127 && cp <= 159)
   );
 }
-//@ chunk-6ja29j2n.js:1702-1753 esm-fingerprint
+//@ chunk-p9ac6cnb.js:1702-1753 esm-fingerprint
 function isUndefinedCodePoint(cp) {
   return (cp >= 64976 && cp <= 65007) || UNDEFINED_CODE_POINTS.has(cp);
 }

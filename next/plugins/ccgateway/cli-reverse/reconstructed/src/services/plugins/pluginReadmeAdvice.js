@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件 README 安装命令检查建议
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ca06bv0t.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s4mtq5zk.js (23)
  * attribution: placement 23
  */
 import { join, resolve, dirname, basename } from "path";
@@ -43,13 +43,13 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ca06bv0t.js:17085-17211 placement (2.1.88 match: getCurrentRepoHttpsUrl, 0.765)
+//@ chunk-s4mtq5zk.js:17089-17215 placement (2.1.88 match: getCurrentRepoHttpsUrl, 0.764)
 function getCurrentRepoHttpsUrl({ host, owner, name: repoName }) {
   let parsed = isGithubDotCom(host);
   let included = host.includes(":");
   return parsed ? `${owner}/${repoName}` : included ? undefined : `https://${host}/${owner}/${repoName}.git`;
 }
-//@ chunk-ca06bv0t.js:17211-17420 placement
+//@ chunk-s4mtq5zk.js:17215-17424 placement
 async function repoHttpsUrlOf(repoDir) {
   let gitDir = join(repoDir, ".git");
   let configText = (await isDirectoryOrFalse(gitDir))
@@ -62,25 +62,25 @@ async function repoHttpsUrlOf(repoDir) {
     /^(https|ssh):\/\//i.test(remoteUrl) || !remoteUrl.includes("://") ? parseGitRemote(remoteUrl) : null;
   return parsedRemote === null ? undefined : getCurrentRepoHttpsUrl(parsedRemote);
 }
-//@ chunk-ca06bv0t.js:17420-17559 placement
+//@ chunk-s4mtq5zk.js:17424-17563 placement
 function trimPunctuation(text) {
   let mapped = text.split("").map((character) => !"`'\"()<>[]*.,;:!?".includes(character));
   return text.slice(mapped.findIndex(Boolean), mapped.findLastIndex(Boolean) + 1);
 }
-//@ chunk-ca06bv0t.js:17559-17611 placement
+//@ chunk-s4mtq5zk.js:17563-17615 placement
 /**
  * 判断某个名字是否已被安装过。
  */
 var isInstalledSymbol = (installs, token) =>
   installs.byName.has(token) || installs.bySource.has(trimPunctuation(token));
-//@ chunk-ca06bv0t.js:17679-17825 placement
+//@ chunk-s4mtq5zk.js:17683-17829 placement
 var hasConcreteMarketplaceArg = (args) =>
   args.some((arg, index) =>
     arg.startsWith("--marketplace=")
       ? /^--marketplace=[^<>]+$/.test(arg)
       : arg === "--marketplace" && /^[^-<>][^<>]*$/.test(args[index + 1] ?? ""),
   );
-//@ chunk-ca06bv0t.js:17825-17879 placement
+//@ chunk-s4mtq5zk.js:17829-17883 placement
 /**
  * 把文本切成符号列表（去标点）。
  */
@@ -89,9 +89,9 @@ var splitSymbols = (line) =>
     .split(/\s+/)
     .map(trimPunctuation)
     .filter((token) => token !== "");
-//@ chunk-ca06bv0t.js:17879-17977 placement
+//@ chunk-s4mtq5zk.js:17883-17981 placement
 var OPTIONS_TAKING_VALUES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ca06bv0t.js:17879", () => {
+deferInit("chunk-s4mtq5zk.js:17883", () => {
   OPTIONS_TAKING_VALUES = Object.freeze([
     "--marketplace",
     "--scope",
@@ -101,20 +101,20 @@ deferInit("chunk-ca06bv0t.js:17879", () => {
     "--registry",
   ]);
 });
-//@ chunk-ca06bv0t.js:17977-18053 placement
+//@ chunk-s4mtq5zk.js:17981-18057 placement
 /**
  * 取命令里的市场参数（跳过选项）。
  */
 var marketplaceSymbol = (args) =>
   args.find((arg, index) => !arg.startsWith("-") && !OPTIONS_TAKING_VALUES.includes(args[index - 1] ?? "")) ??
   "";
-//@ chunk-ca06bv0t.js:18053-18187 placement
+//@ chunk-s4mtq5zk.js:18057-18191 placement
 function pluginNameFromSpec(args) {
   let spec = args.find((arg) => arg.lastIndexOf("@") > 0) ?? "";
   let index = spec.indexOf("@");
   return index > 0 && spec.length > index + 1 && !/[<>]/.test(spec) ? spec.slice(0, index) : "";
 }
-//@ chunk-ca06bv0t.js:18187-18368 placement
+//@ chunk-s4mtq5zk.js:18191-18372 placement
 function readmeInstallCommands(text) {
   let mapped = text
     .split(
@@ -128,7 +128,7 @@ function readmeInstallCommands(text) {
     byName: new Set(mapped.map(pluginNameFromSpec)),
   };
 }
-//@ chunk-ca06bv0t.js:18368-18719 placement
+//@ chunk-s4mtq5zk.js:18372-18723 placement
 async function listReadmeFiles(dir) {
   let filtered = (
     await readdir(dir, {
@@ -153,7 +153,7 @@ async function listReadmeFiles(dir) {
       }
     : undefined;
 }
-//@ chunk-ca06bv0t.js:18719-19025 placement
+//@ chunk-s4mtq5zk.js:18723-19029 placement
 async function readmeAdviceForPlugin({ root, name: pluginName, listing }, cache) {
   let readme = await memoizeInMap(cache.readmes, root, listReadmeFiles);
   let listingElsewhere = listing?.entry !== undefined && !isSameResolvedPath(listing.root, root);
@@ -169,7 +169,7 @@ async function readmeAdviceForPlugin({ root, name: pluginName, listing }, cache)
     ? undefined
     : (readme ?? (singleMarketplaceEntry ? marketplaceReadme : undefined));
 }
-//@ chunk-ca06bv0t.js:19025-19345 placement
+//@ chunk-s4mtq5zk.js:19029-19349 placement
 async function pluginReadmeAdvice(plugin, cache) {
   let { name: pluginName, listing } = plugin;
   let readme =
@@ -203,7 +203,7 @@ async function pluginReadmeAdvice(plugin, cache) {
     },
   ];
 }
-//@ chunk-ca06bv0t.js:19345-19531 placement
+//@ chunk-s4mtq5zk.js:19349-19535 placement
 function formatAdviceLines(advice) {
   return advice.length === 0
     ? []
@@ -217,7 +217,7 @@ function formatAdviceLines(advice) {
         "",
       ];
 }
-//@ chunk-ca06bv0t.js:19531-19617 placement
+//@ chunk-s4mtq5zk.js:19535-19621 placement
 /**
  * 顺序收集各目录的 README 建议。
  */
@@ -226,7 +226,7 @@ var collectAdvice = (readmeAdvice, cache) =>
     async (acc, plugin) => [...(await acc), ...(await pluginReadmeAdvice(plugin, cache))],
     Promise.resolve([]),
   );
-//@ chunk-ca06bv0t.js:19707-19802 placement
+//@ chunk-s4mtq5zk.js:19711-19806 placement
 /**
  * 读取 .claude-plugin 下的文件。
  */
@@ -236,7 +236,7 @@ async function readPluginJsonFile(dir, fileName) {
     ? ((await readSmallFileText(join(metaDir, fileName))) ?? "")
     : "";
 }
-//@ chunk-ca06bv0t.js:19802-19940 placement
+//@ chunk-s4mtq5zk.js:19806-19944 placement
 async function readPluginJsonName(pluginDir) {
   try {
     let parsed = objectSchema({
@@ -247,12 +247,12 @@ async function readPluginJsonName(pluginDir) {
     return;
   }
 }
-//@ chunk-ca06bv0t.js:19972-19982 placement
+//@ chunk-s4mtq5zk.js:19976-19986 placement
 /**
  * 最多展示的 README 行数（64）。
  */
 var MAX_README_LINES = 64;
-//@ chunk-ca06bv0t.js:19982-20113 placement
+//@ chunk-s4mtq5zk.js:19986-20117 placement
 async function readMarketplaceJson(marketplaceDir) {
   try {
     let parsed = PluginMarketplaceFileSchema().safeParse(
@@ -263,7 +263,7 @@ async function readMarketplaceJson(marketplaceDir) {
     return;
   }
 }
-//@ chunk-ca06bv0t.js:20113-20655 placement
+//@ chunk-s4mtq5zk.js:20117-20659 placement
 /**
  * 读取 marketplace.json 下各插件的 README，检查是否给出了正确的安装命令，生成不影响结论的建议。
  */
@@ -316,7 +316,7 @@ async function marketplaceReadmeAdvice(marketplaceDir) {
       ]
     : results.flat();
 }
-//@ chunk-ca06bv0t.js:20655-20931 placement
+//@ chunk-s4mtq5zk.js:20659-20935 placement
 async function collectReadmeAdvice(cwd, manifest, contents) {
   let metaDir = dirname(manifest?.filePath ?? "");
   let root = dirname(metaDir);
@@ -338,7 +338,7 @@ async function collectReadmeAdvice(cwd, manifest, contents) {
       ]
     : marketplaceAdvice;
 }
-//@ chunk-ca06bv0t.js:20931-20999 placement
+//@ chunk-s4mtq5zk.js:20935-21003 placement
 /**
  * 记录错误并返回空数组。
  */
@@ -347,7 +347,7 @@ function logAndEmpty(error) {
   else logError(error);
   return [];
 }
-//@ chunk-ca06bv0t.js:20999-21087 placement
+//@ chunk-s4mtq5zk.js:21003-21091 placement
 var readmeAdviceFor = (cwd, manifest, contents) =>
   collectReadmeAdvice(cwd, manifest, contents)
     .then((readmeAdvice) =>

@@ -3,9 +3,9 @@
  *
  * 带高亮段的输入文本渲染（关键词/占位高亮、微光）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/ShimmeredInput.tsx
- * pieces: chunk-81qqq1aq.js (3)
+ * pieces: chunk-3t80v0fz.js (3)
  * attribution: placement 1, fingerprint 2
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -16,7 +16,7 @@ import { usePrefersReducedMotion, SPINNER_FLAG_PRIORITY } from "../Spinner/spinn
 import { useAnimationFrame } from "../../ink/components/Input.js";
 import { Ansi } from "../../ink/components/AnsiText.js";
 
-//@ chunk-81qqq1aq.js:2338-2572 placement (2.1.88 match: ShimmerChar, 1)
+//@ chunk-3t80v0fz.js:2339-2573 placement (2.1.88 match: ShimmerChar, 1)
 function ShimmerChar(props) {
   let $ = useMemoCache(3);
   let { char, index, glimmerIndex, messageColor, shimmerColor } = props;
@@ -35,11 +35,11 @@ function ShimmerChar(props) {
   } else t2 = $[2];
   return t2;
 }
-//@ chunk-81qqq1aq.js:2572-2609 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-3t80v0fz.js:2573-2610 fingerprint (2.1.88 match: _temp, 1)
 function selectShimmerColor(h) {
   return h.shimmerColor;
 }
-//@ chunk-81qqq1aq.js:2609-4298 fingerprint (2.1.88 match: HighlightedInput, 0.819)
+//@ chunk-3t80v0fz.js:2610-4299 fingerprint (2.1.88 match: HighlightedInput, 0.819)
 function HighlightedInput(props) {
   let $ = useMemoCache(21);
   let { text, highlights } = props;

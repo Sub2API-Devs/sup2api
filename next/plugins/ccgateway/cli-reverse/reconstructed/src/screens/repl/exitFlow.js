@@ -3,26 +3,38 @@
  *
  * 2.1.316 新增。REPL 退出流程。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (5)
- * attribution: placement 5
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (7)
+ * attribution: placement 5, sole-consumer 2
  */
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
+import { sampleAlias } from "../../components/Spinner/spinnerStatus.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
-import { useState, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { EARLY_RETURN_SENTINEL, MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { getRandomGoodbyeMessage, noopExitHandler } from "../../commands/exit/exit.js";
 import { ExitFlow } from "../../components/ExitFlow.js";
 import { gracefulShutdown } from "../../utils/gracefulShutdown.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { WorktreeExitDialog } from "../../components/WorktreeExitDialog.js";
 import { BackgroundAndExit, canBackgroundSession } from "../../utils/background/spawnBackgroundFork.js";
+import { noopExitHandler } from "../../commands/exit/exit.js";
 import { ExitBackgroundWorkDialog } from "../../components/ExitBackgroundWorkDialog.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1706461-1708386 placement
+//@ chunk-czq1j3j2.js:1735082-1735086 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1735082", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1752661-1752718 sole-consumer (2.1.88 match: GOODBYE_MESSAGES, 1)
+var GOODBYE_MESSAGES = ["Goodbye!", "See ya!", "Bye!", "Catch you later!"];
+//@ chunk-czq1j3j2.js:1752718-1752760 sole-consumer (2.1.88 match: getRandomGoodbyeMessage, 1)
+function getRandomGoodbyeMessage() {
+  return sampleAlias(GOODBYE_MESSAGES) ?? "Goodbye!";
+}
+//@ chunk-czq1j3j2.js:1752760-1754685 placement
 function useExitFlow(props) {
   let $ = useMemoCache(39);
   let {
@@ -71,7 +83,7 @@ function useExitFlow(props) {
     $[17] !== storageV5
   ) {
     flowResult = EARLY_RETURN_SENTINEL;
-    Bo: {
+    vo: {
       let currentMessages = readMessages();
       let midTurnFlag;
       if ($[19] !== getIsMidTurn || $[20] !== isMidTurn) {
@@ -128,7 +140,7 @@ function useExitFlow(props) {
           $[30] = worktreeDialog;
         } else worktreeDialog = $[30];
         flowResult = worktreeDialog;
-        break Bo;
+        break vo;
       }
       if (backgroundingConfirmed && currentMessages) {
         flowResult = jsxProd_default(BackgroundAndExit, {
@@ -136,7 +148,7 @@ function useExitFlow(props) {
           isMidTurn: isMidTurnNow ?? false,
           responseStreaming: isStreaming(),
         });
-        break Bo;
+        break vo;
       }
       if (backgroundItems.length > 0) {
         let onBackground;
@@ -170,7 +182,7 @@ function useExitFlow(props) {
           $[38] = backgroundDialog;
         } else backgroundDialog = $[38];
         flowResult = backgroundDialog;
-        break Bo;
+        break vo;
       }
     }
     $[7] = backgroundItems;
@@ -189,11 +201,11 @@ function useExitFlow(props) {
   if (flowResult !== EARLY_RETURN_SENTINEL) return flowResult;
   return null;
 }
-//@ chunk-18hwfzwa.js:1708386-1708418 placement
+//@ chunk-czq1j3j2.js:1754685-1754717 placement
 function selectExit(chrome) {
   return chrome.exit;
 }
-//@ chunk-18hwfzwa.js:1708418-1709241 placement
+//@ chunk-czq1j3j2.js:1754717-1755540 placement
 function runExitInterstitial(props) {
   let $ = useMemoCache(9);
   let { chrome } = props;
@@ -235,11 +247,6 @@ function runExitInterstitial(props) {
   } else interstitial = $[8];
   return interstitial;
 }
-//@ chunk-18hwfzwa.js:1709241-1709257 placement
+//@ chunk-czq1j3j2.js:1755540-1755556 placement
 function noopExitFlow() {}
-//@ chunk-18hwfzwa.js:1709257-1709261 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1709257", () => {
-  init_react_production();
-});
-export { runExitInterstitial, useExitFlow };
+export { useExitFlow, runExitInterstitial };

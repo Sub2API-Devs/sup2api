@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：AgentTool 的 create 工厂定义（prompt、权限检查、并发上限、fork 限制、结果映射）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0tkmvwy0.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tmsx2mh0.js (9)
  * attribution: placement 9
  */
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
@@ -22,9 +22,10 @@ import {
 import { getAgentInputSchema, AgentPreconditionError } from "./agentInputSchema.js";
 import { dropRelativeEffortInput } from "./agentEffort.js";
 import { agentOutputSchema, callAgentTool, tryAutoApproveWebFetchDispatch } from "./AgentTool.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { isAutoClassifierActive } from "../../utils/permissions/autoModeState.js";
 import { userFacingName } from "./UI.js";
-import { FILE_READ_TOOL_NAME } from "../FileReadTool/constants.js";
+import { READ } from "../FileReadTool/constants.js";
 import { warnConcurrentWriteAgents } from "./agentLaunch.js";
 import { isHandbackProvenanceEnabled, buildHandbackResultContent } from "./handbackReport.js";
 import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
@@ -39,12 +40,12 @@ import { getExploreAgentModel } from "../../utils/model/agent.js";
 import { booleanSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0tkmvwy0.js:48361-53565 placement
+//@ chunk-tmsx2mh0.js:56858-62105 placement
 /**
  * Agent 工具定义（name "Agent"，别名 "Task"）：call 经 runEngine 调用 callAgentTool；checkPermissions 在 auto/plan(auto) 模式下除免审 web-fetch 派发外一律 passthrough 交分类器，其他模式直接 allow。isReadOnly/isConcurrencySafe 恒 true，maxResultSizeChars 100000，backgrounding "self"。mapToolResultToToolResultBlockParam 按 status（completed/async_launched/remote_launched/teammate_spawned）拼回传文本，completed 附 agentId 与 <usage>。
  */
 var AgentTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0tkmvwy0.js:48361", () => {
+deferInit("chunk-tmsx2mh0.js:56858", () => {
   AgentTool = buildTool({
     async prompt({
       agents,
@@ -100,7 +101,9 @@ deferInit("chunk-0tkmvwy0.js:48361", () => {
             assistantMessage: callContext.parentMessage,
             onProgress: callContext.onProgress,
             timing: callContext.timing,
-            ...false,
+            ...(codeModeAccepted() && {
+              enclosingToolUseId: callContext.enclosingToolUseId,
+            }),
           });
         },
         async checkPermissions(input, callContext) {
@@ -190,7 +193,7 @@ The agent is working in the background. You will be notified automatically when 
           result.canReadOutputFile && result.outputFile
             ? `Do not duplicate this agent's work \u2014 avoid working with the same files or topics it is using.
 output_file: ${result.outputFile}
-Do NOT ${FILE_READ_TOOL_NAME} or tail this file via the shell tool \u2014 it is the full subagent JSONL transcript and reading it will overflow your context. If the user asks for progress, say the agent is still running; you'll get a completion notification.`
+Do NOT ${READ} or tail this file via the shell tool \u2014 it is the full subagent JSONL transcript and reading it will overflow your context. If the user asks for progress, say the agent is still running; you'll get a completion notification.`
             : "In your own words, briefly tell the user what you launched \u2014 do not echo this tool result. Agent results will arrive in a subsequent message. If the user asks for progress, say the agent is still running.";
         let text = `${head}
 ${outputFileNote}${
@@ -283,7 +286,7 @@ duration_ms: ${result.totalDurationMs}</usage>`;
     },
   });
 });
-//@ chunk-0tkmvwy0.js:53565-53745 placement
+//@ chunk-tmsx2mh0.js:62105-62285 placement
 /**
  * 计算 fork 子代理可用性：fork 开关开启、没有同名自定义代理、allowedAgentTypes 允许，且没有 Agent(fork) deny 规则；返回 {available, denyRule}。
  */
@@ -303,7 +306,7 @@ function getForkAvailability(activeAgents, allowedAgentTypes, permissionContext)
     denyRule: denyRuleWithContent,
   };
 }
-//@ chunk-0tkmvwy0.js:53745-54248 placement
+//@ chunk-tmsx2mh0.js:62285-62788 placement
 /**
  * 并发子代理上限检查：超过 CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS（默认 20）时返回 AgentPreconditionError（tengu_amber_kestrel 或 ultracode 豁免）。
  */
@@ -319,7 +322,7 @@ function checkSubagentConcurrencyLimit(toolUseContext) {
     `Concurrent subagent limit reached. You can run ${limit} subagents at once. Do not retry. If the user wants more concurrent subagents, ask them to increase CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS.`,
   );
 }
-//@ chunk-0tkmvwy0.js:54248-54451 placement
+//@ chunk-tmsx2mh0.js:62788-62991 placement
 /**
  * general-purpose 代理是否可用（决定 subagent_type 能否省略）。
  */
@@ -333,7 +336,7 @@ function isGeneralPurposeAgentAvailable(activeAgents, allowedAgentTypes) {
   if (agent) return isAllowed(agent);
   return filtered.length === 1 && isAllowed(filtered[0]);
 }
-//@ chunk-0tkmvwy0.js:54451-54957 placement
+//@ chunk-tmsx2mh0.js:62991-63497 placement
 /**
  * fork 的附加限制：不能与 isolation:"remote" 同用，不能在 fork 子代理内再 fork；返回 {code,message} 或 null。
  */
@@ -351,20 +354,20 @@ function getForkPreconditionError({ isolation, querySource, messages }) {
     };
   return null;
 }
-//@ chunk-0tkmvwy0.js:54957-55000 placement
+//@ chunk-tmsx2mh0.js:63497-63540 placement
 /**
  * 把名字列表 join(", ")，空时返回 "none"。
  */
 function formatAgentList(names) {
   return names.join(", ") || "none";
 }
-//@ chunk-0tkmvwy0.js:55000-55087 placement
+//@ chunk-tmsx2mh0.js:63540-63627 placement
 function getAgentModelInheritCap(agentDefinition, parentModel) {
   if (!agentDefinition) return;
   let exploreAgentModel = getExploreAgentModel(agentDefinition, parentModel);
   return typeof exploreAgentModel === "object" ? exploreAgentModel.inheritCap : exploreAgentModel;
 }
-//@ chunk-0tkmvwy0.js:55087-55312 placement
+//@ chunk-tmsx2mh0.js:63627-63852 placement
 /**
  * 在可提供代理中查找 subagent_type：先精确匹配，再按规范化名（大小写/空白/连字符不敏感）唯一匹配。
  */
@@ -380,7 +383,7 @@ function findAgentByNormalizedType(activeAgents, offeredAgents, agentType) {
   let match = filtered[0];
   return offeredAgents.some((offeredAgent) => offeredAgent.agentType === match.agentType) ? match : undefined;
 }
-//@ chunk-0tkmvwy0.js:55312-55502 placement
+//@ chunk-tmsx2mh0.js:63852-64042 placement
 /**
  * @internal canContinueAgent 输出字段 schema。
  */
@@ -392,12 +395,12 @@ function canContinueAgentSchema() {
     );
 }
 export {
+  AgentTool,
   canContinueAgentSchema,
   getForkAvailability,
   formatAgentList,
   checkSubagentConcurrencyLimit,
   findAgentByNormalizedType,
-  AgentTool,
   getAgentModelInheritCap,
   getForkPreconditionError,
   isGeneralPurposeAgentAvailable,

@@ -3,213 +3,150 @@
  *
  * 启动时的桌面版/插件推荐提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/DesktopUpsell/DesktopUpsellStartup.tsx
- * pieces: chunk-18hwfzwa.js (2), chunk-4t8fx0s8.js (2)
- * attribution: affinity 1, callgraph-fingerprint 1, fingerprint 2
+ * pieces: chunk-czq1j3j2.js (1), chunk-z0x4zh5m.js (2)
+ * attribution: callgraph-fingerprint 1, fingerprint 2
  */
 import { getDynamicConfig_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
-import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
-import { RECENT_INPUT_GUARD_MS as RECENT_INPUT_GUARD_MS_3 } from "../../hooks/useRecentInputGuard.js";
-import { sanitizeOneLineLabel, LabelValueRow } from "../EffortMediumNudgeDialog.js";
-import { isUnattendedInteractiveSession } from "../../utils/concurrentSessions.js";
+import { useGlobalExitKeybindings } from "../../keybindings/useKeybinding.js";
+import { useRefusableAnswer } from "../../hooks/useRefusableAnswer.js";
+import { useInputClock } from "../../ink/components/Input.js";
+import { useMountTime, useRefusalTracker } from "../CustomSelect/selectTypeahead.js";
+import { isWithinRecentInput } from "../../hooks/useRecentInputGuard.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { PermissionDialog_2 } from "../permissions/PermissionDialog.js";
-import { Box, Text } from "../../ink/components/Text.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { Box, Text } from "../../ink/components/Text.js";
+import { toChoice } from "../useCaseChoiceDialog.js";
+import { PermissionDialog_2 } from "../permissions/PermissionDialog.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 
-//@ chunk-4t8fx0s8.js:13747-13804 fingerprint (2.1.88 match: DESKTOP_UPSELL_DEFAULT, 0.667)
+//@ chunk-z0x4zh5m.js:14945-15002 fingerprint (2.1.88 match: DESKTOP_UPSELL_DEFAULT, 0.667)
 var DESKTOP_UPSELL_DEFAULT = {
   enable_shortcut_tip: false,
   enable_contextual_tip: false,
 };
-//@ chunk-4t8fx0s8.js:13804-13854 fingerprint (2.1.88 match: getDesktopUpsellConfig, 1)
+//@ chunk-z0x4zh5m.js:15002-15052 fingerprint (2.1.88 match: getDesktopUpsellConfig, 1)
 function getDesktopUpsellConfig() {
   return getDynamicConfig_CACHED_MAY_BE_STALE("tengu_desktop_upsell", DESKTOP_UPSELL_DEFAULT);
 }
-//@ chunk-18hwfzwa.js:1106798-1106812 affinity
-var DESKTOP_UPSELL_TIMEOUT_MS = 30000;
-//@ chunk-18hwfzwa.js:1106812-1108717 callgraph-fingerprint (2.1.88 match: DesktopUpsellStartup, 0.167)
+//@ chunk-czq1j3j2.js:1140378-1141932 callgraph-fingerprint (2.1.88 match: DesktopUpsellStartup, 0.257)
 function DesktopUpsellStartup(props) {
-  let $ = useMemoCache(33);
-  let {
-    title,
-    intro,
-    pluginName,
-    pluginDescription,
-    marketplaceName,
-    extraIdentityRow,
-    question,
-    options,
-    unansweredResponse,
-    onResponse,
-  } = props;
-  let timeout = useTimeout(RECENT_INPUT_GUARD_MS_3);
-  let identityRows = [
-    {
-      label: "Plugin:",
-      value: pluginName,
-      fallback: "(unnamed plugin)",
-      suffix: "",
-    },
-    {
-      label: "Marketplace:",
-      value: marketplaceName,
-      fallback: "(unnamed marketplace)",
-      suffix: "",
-    },
-    ...(extraIdentityRow ? [extraIdentityRow] : []),
-  ];
-  let descriptionLabelCached;
-  if ($[0] !== pluginDescription) {
-    descriptionLabelCached =
-      pluginDescription === undefined ? undefined : sanitizeOneLineLabel(pluginDescription);
-    $[0] = pluginDescription;
-    $[1] = descriptionLabelCached;
-  } else descriptionLabelCached = $[1];
-  let descriptionLabel = descriptionLabelCached;
-  let timeoutHandlerCached;
-  if ($[2] !== onResponse || $[3] !== unansweredResponse) {
-    timeoutHandlerCached = () =>
-      onResponse(isUnattendedInteractiveSession() ? "cancelled" : unansweredResponse);
-    $[2] = onResponse;
-    $[3] = unansweredResponse;
-    $[4] = timeoutHandlerCached;
-  } else timeoutHandlerCached = $[4];
-  let timeoutDeps;
-  if ($[5] === MEMO_CACHE_SENTINEL) {
-    timeoutDeps = [];
-    $[5] = timeoutDeps;
-  } else timeoutDeps = $[5];
-  useTimeout(timeoutHandlerCached, DESKTOP_UPSELL_TIMEOUT_MS, timeoutDeps);
-  let answerCached;
-  if ($[6] !== timeout || $[7] !== onResponse) {
-    answerCached = function handleAnswer(value) {
-      if (!timeout) {
-        return;
+  let $ = useMemoCache(23);
+  let { choices, onDone, onDismiss } = props;
+  useGlobalExitKeybindings();
+  let finish;
+  if ($[0] !== onDone) {
+    finish = (value) => onDone(value);
+    $[0] = onDone;
+    $[1] = finish;
+  } else finish = $[1];
+  let refusableAnswer = useRefusableAnswer(finish);
+  let inputClock = useInputClock();
+  let mountTime = useMountTime();
+  let { refusedWithin, noteRefused } = useRefusalTracker();
+  let refuseInput;
+  if ($[2] !== inputClock || $[3] !== noteRefused || $[4] !== mountTime || $[5] !== refusedWithin) {
+    refuseInput = () => {
+      if (isWithinRecentInput(inputClock, mountTime()) || refusedWithin()) {
+        noteRefused();
+        return true;
       }
-      if (isUnattendedInteractiveSession()) {
-        onResponse("cancelled");
-        return;
-      }
-      onResponse(value);
+      return false;
     };
-    $[6] = timeout;
-    $[7] = onResponse;
-    $[8] = answerCached;
-  } else answerCached = $[8];
-  let answer = answerCached;
-  const DialogComponent = PermissionDialog_2;
-  const BoxComponent = Box;
-  const flexDirection = "column";
-  const paddingX = 2;
-  const paddingY = 1;
-  let introElement;
-  if ($[9] !== intro) {
-    introElement = jsxProd_default(Box, {
+    $[2] = inputClock;
+    $[3] = noteRefused;
+    $[4] = mountTime;
+    $[5] = refusedWithin;
+    $[6] = refuseInput;
+  } else refuseInput = $[6];
+  let shouldRefuse = refuseInput;
+  let onChange;
+  if ($[7] !== shouldRefuse || $[8] !== refusableAnswer) {
+    onChange = function onChange(value) {
+      if (shouldRefuse()) {
+        refusableAnswer.refuse(value);
+        return;
+      }
+      refusableAnswer.answer(value);
+    };
+    $[7] = shouldRefuse;
+    $[8] = refusableAnswer;
+    $[9] = onChange;
+  } else onChange = $[9];
+  let onChange_2 = onChange;
+  let introRow;
+  if ($[10] === MEMO_CACHE_SENTINEL) {
+    introRow = jsxProd_default(Box, {
       marginBottom: 1,
-      children: intro,
-    });
-    $[9] = intro;
-    $[10] = introElement;
-  } else introElement = $[10];
-  const mapped = identityRows.map(LabelValueRow);
-  let descriptionRow;
-  if ($[11] !== descriptionLabel) {
-    descriptionRow =
-      descriptionLabel &&
-      jsxProd_default_2(Box, {
-        children: [
-          jsxProd_default(Box, {
-            flexShrink: 0,
-            children: jsxProd_default(Text, {
-              dimColor: true,
-              children: "Description:",
-            }),
-          }),
-          jsxProd_default_2(Text, {
-            dimColor: true,
-            wrap: "truncate-end",
-            children: [" ", descriptionLabel],
-          }),
-        ],
-      });
-    $[11] = descriptionLabel;
-    $[12] = descriptionRow;
-  } else descriptionRow = $[12];
-  let questionElement;
-  if ($[13] !== question) {
-    questionElement = jsxProd_default(Box, {
-      marginTop: 1,
       children: jsxProd_default(Text, {
-        children: question,
+        children:
+          "You have more than one Life Sciences use case. Choose the one your work is for: your requests get its reduced restrictions, in this and later sessions. If you leave without choosing, no use case applies for now, and you'll be asked again next session. To choose or change it later, run /use-case.",
       }),
     });
-    $[13] = question;
-    $[14] = questionElement;
-  } else questionElement = $[14];
-  const isDisabled = !timeout;
+    $[10] = introRow;
+  } else introRow = $[10];
+  const attempts = refusableAnswer.attempts;
+  const defaultFocusValue = refusableAnswer.refused ?? undefined;
+  let options;
+  if ($[11] !== choices) {
+    options = choices.map(toChoice);
+    $[11] = choices;
+    $[12] = options;
+  } else options = $[12];
   let onCancel;
-  if ($[15] !== answer) {
-    onCancel = () => answer("no");
-    $[15] = answer;
-    $[16] = onCancel;
-  } else onCancel = $[16];
-  let selectorElement;
-  if ($[17] !== options || $[18] !== answer || $[19] !== isDisabled || $[20] !== onCancel) {
-    selectorElement = jsxProd_default(Box, {
-      children: jsxProd_default(ModelSelector, {
-        options,
-        isDisabled,
-        onChange: answer,
-        onCancel,
+  if ($[13] !== onDismiss || $[14] !== shouldRefuse) {
+    onCancel = () => {
+      if (!shouldRefuse()) onDismiss();
+    };
+    $[13] = onDismiss;
+    $[14] = shouldRefuse;
+    $[15] = onCancel;
+  } else onCancel = $[15];
+  let dialog;
+  if (
+    $[16] !== onChange_2 ||
+    $[17] !== shouldRefuse ||
+    $[18] !== refusableAnswer.attempts ||
+    $[19] !== defaultFocusValue ||
+    $[20] !== options ||
+    $[21] !== onCancel
+  ) {
+    dialog = jsxProd_default(PermissionDialog_2, {
+      title: "Choose your Life Sciences use case",
+      children: jsxProd_default_2(Box, {
+        flexDirection: "column",
+        paddingX: 2,
+        paddingY: 1,
+        children: [
+          introRow,
+          jsxProd_default(
+            ModelSelector,
+            {
+              defaultFocusValue,
+              hideIndexes: true,
+              refuseInput: shouldRefuse,
+              options,
+              onChange: onChange_2,
+              onCancel,
+            },
+            attempts,
+          ),
+        ],
       }),
     });
-    $[17] = options;
-    $[18] = answer;
-    $[19] = isDisabled;
-    $[20] = onCancel;
-    $[21] = selectorElement;
-  } else selectorElement = $[21];
-  let children;
-  if (
-    $[22] !== BoxComponent ||
-    $[23] !== descriptionRow ||
-    $[24] !== questionElement ||
-    $[25] !== selectorElement ||
-    $[26] !== introElement ||
-    $[27] !== mapped
-  ) {
-    children = jsxProd_default_2(BoxComponent, {
-      flexDirection,
-      paddingX,
-      paddingY,
-      children: [introElement, mapped, descriptionRow, questionElement, selectorElement],
-    });
-    $[22] = BoxComponent;
-    $[23] = descriptionRow;
-    $[24] = questionElement;
-    $[25] = selectorElement;
-    $[26] = introElement;
-    $[27] = mapped;
-    $[28] = children;
-  } else children = $[28];
-  let dialogElement;
-  if ($[29] !== DialogComponent || $[30] !== children || $[31] !== title) {
-    dialogElement = jsxProd_default(DialogComponent, {
-      title,
-      children,
-    });
-    $[29] = DialogComponent;
-    $[30] = children;
-    $[31] = title;
-    $[32] = dialogElement;
-  } else dialogElement = $[32];
-  return dialogElement;
+    $[16] = onChange_2;
+    $[17] = shouldRefuse;
+    $[18] = refusableAnswer.attempts;
+    $[19] = defaultFocusValue;
+    $[20] = options;
+    $[21] = onCancel;
+    $[22] = dialog;
+  } else dialog = $[22];
+  return dialog;
 }
-export { DesktopUpsellStartup, getDesktopUpsellConfig };
+export { getDesktopUpsellConfig, DesktopUpsellStartup };

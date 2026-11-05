@@ -1,8 +1,8 @@
 /**
  * @smithy/core/dist-cjs/submodules/retry/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/core@3.30.0
- * pieces: chunk-edce4vxq.js (1)
+ * pieces: chunk-3p78mpxm.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -12,7 +12,7 @@ import { require_v4, require_isStreamingPayload } from "../../../index.js";
 import { require_util_middleware } from "../../../../util-middleware/dist-cjs/index.js";
 import { require_client as require_client_3 } from "../client/index.js";
 
-//@ chunk-edce4vxq.js:128507-134734 cjs-fingerprint
+//@ chunk-3p78mpxm.js:128507-134734 cjs-fingerprint
 var require_retry = __commonJS(function (cjsExports) {
   var retryableErrorCodes = require_index_browser();
   var protocolHttp = require_protocol_http_3();

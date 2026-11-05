@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：pin 动作
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (7)
  * attribution: placement 7
  */
 import { getLiveState } from "../../../services/liveReplica/liveReplica.js";
@@ -18,7 +18,7 @@ import {
   ownershipClassifierMark,
   otherOrgClassifierMark,
 } from "../../../services/artifacts/shareEntries.js";
-import { probeArtifactAccess } from "../../../services/artifacts/audience.js";
+import { getFrameShareStatus } from "../../../services/artifacts/audience.js";
 import { artifactCardTitleFor } from "../permissions/ownershipConsent.js";
 import {
   CONSENT_ASK_TAG,
@@ -50,7 +50,7 @@ import {
   safePublishUrl,
 } from "../artifactUrls.js";
 import { pinCardLede } from "../promptText.js";
-import { parseSessionArtifactUrl } from "../../../services/artifacts/orgScope.js";
+import { validateSessionArtifactUrl } from "../../../services/artifacts/orgScope.js";
 import { urlSubPathError } from "../permissions/dbWriteInputs.js";
 import {
   isRelayUnavailableForPins,
@@ -60,21 +60,21 @@ import {
 import { throwUnroutedArtifactAction, sweepScalarField } from "../../../services/artifacts/artifactPeople.js";
 import { pinSourceSchema } from "../../../services/artifacts/publishSource.js";
 
-//@ chunk-8wvtd8sr.js:132361-132406 placement
+//@ chunk-xzmy9dn4.js:133218-133263 placement
 function isPinAction(action) {
   return action === "pin" || action === "unpin";
 }
-//@ chunk-8wvtd8sr.js:132406-132458 placement
+//@ chunk-xzmy9dn4.js:133263-133315 placement
 function isOwnPublishedArtifact(slug) {
   return getLiveState().ownPublishedSlugs.has(slug);
 }
-//@ chunk-8wvtd8sr.js:132458-132470 placement
+//@ chunk-xzmy9dn4.js:133315-133327 placement
 var PIN_TITLE_FETCH_TIMEOUT_MS = 3000;
-//@ chunk-8wvtd8sr.js:132470-132800 placement
+//@ chunk-xzmy9dn4.js:133327-133657 placement
 async function fetchPinnedArtifactTitle(artifactUrlOrThrow, context) {
   if (probeAnswered(getShareEntry(artifactUrlOrThrow.slug), context.toolUseId)) return;
   let issuedAt = Date.now();
-  let probe = await probeArtifactAccess(
+  let probe = await getFrameShareStatus(
     artifactUrlOrThrow,
     AbortSignal.any([context.abortController.signal, AbortSignal.timeout(PIN_TITLE_FETCH_TIMEOUT_MS)]),
     context.credentials,
@@ -88,7 +88,7 @@ async function fetchPinnedArtifactTitle(artifactUrlOrThrow, context) {
   });
   return artifactCardTitleFor(artifactUrlOrThrow, context).title;
 }
-//@ chunk-8wvtd8sr.js:132800-132958 placement (2.1.88 match: validateSafeCommandSubstitution, 0.388)
+//@ chunk-xzmy9dn4.js:133657-133815 placement
 function allowPinAction(input, reason, target) {
   return {
     behavior: "allow",
@@ -105,7 +105,7 @@ function allowPinAction(input, reason, target) {
     },
   };
 }
-//@ chunk-8wvtd8sr.js:132958-136752 placement
+//@ chunk-xzmy9dn4.js:133815-137609 placement
 /**
  * （切分错误，Artifact 工具）pin/unpin 动作处理器：校验只带 url、权限（自己发布的/自己的直接允许，别人的需确认）、调用 pin 接口并返回标题。
  */
@@ -203,12 +203,12 @@ var ARTIFACT_PIN_ACTION_HANDLER = {
         message: `action "${action}" requires \`url\` \u2014 the artifact's claude.ai URL (the publish result has it; action: "list" shows earlier ones).`,
         errorCode: 7,
       };
-    let sessionArtifactUrl = parseSessionArtifactUrl(url);
-    if (!sessionArtifactUrl.ok)
+    let urlCheck = validateSessionArtifactUrl(url);
+    if (!urlCheck.ok)
       return {
         result: false,
-        message: sessionArtifactUrl.message,
-        errorCode: sessionArtifactUrl.errorCode,
+        message: urlCheck.message,
+        errorCode: urlCheck.errorCode,
       };
     let urlError = urlSubPathError(url, "; a pin names the whole artifact");
     if (urlError !== undefined) return urlError;
@@ -284,7 +284,7 @@ var ARTIFACT_PIN_ACTION_HANDLER = {
       : "pin an artifact to the user's sidebar";
   },
 };
-//@ chunk-8wvtd8sr.js:136752-137407 placement
+//@ chunk-xzmy9dn4.js:137609-138264 placement
 /**
  * 把 pin/unpin 动作结果转换成 tool_result：记录不可读时提示用 list 查看当前 pin 状态，否则说明已 pin 或取消 pin 的 Artifact 标题与 url。
  */

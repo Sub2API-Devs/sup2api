@@ -1,8 +1,8 @@
 /**
  * qrcode/lib/browser.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: qrcode@1.5.4
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_qrcode } from "./core/qrcode.js";
 import { require_canvas } from "./renderer/canvas.js";
 import { require_svg_tag } from "./renderer/svg-tag.js";
 
-//@ chunk-spjgqa4y.js:57046-57866 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:57046-57866 cjs-fingerprint
 var require_browser = __commonJS(function (cjsExports) {
   var canPromise = require_can_promise();
   var QRCode = require_qrcode();

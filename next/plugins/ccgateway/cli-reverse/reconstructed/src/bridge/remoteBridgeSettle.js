@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：创建发往 Remote Control 的消息过滤器：按账户记忆工具位置与内容类型隐去敏感内容并做缓存；在预算时间内轮询直到消息投递落定（live/connect 阶段、会话变更、桥接失败），返回结算结果等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4cm44bmp.js (27)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-56msakfz.js (27)
  * attribution: placement 27
  */
 import { sleep } from "../utils/sleep.js";
@@ -28,7 +28,7 @@ import { PUSHNOTIFICATION } from "../tools/PushNotificationTool/constants.js";
 import { isEphemeralStreamMessage } from "../cli/transports/ccrClient.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-4cm44bmp.js:2705-3202 placement
+//@ chunk-56msakfz.js:2869-3366 placement
 /**
  * 发送并处理服务端要求的 epoch 跟进：被拒时用新 epoch 重发，返回结局（not_refused/followed_up）。
  */
@@ -67,9 +67,9 @@ async function sendWithEpochFollowUps({ heldEpoch, send, maySendAgain }) {
     epoch = last;
   }
 }
-//@ chunk-4cm44bmp.js:3202-3212 placement
+//@ chunk-56msakfz.js:3366-3376 placement
 var DEFAULT_SETTLE_POLL_MS = 50;
-//@ chunk-4cm44bmp.js:3212-6584 placement
+//@ chunk-56msakfz.js:3376-6748 placement
 /**
  * 在预算时间内轮询直到消息投递落定（live/connect 阶段、会话变更、桥接失败），返回结算结果。
  */
@@ -252,24 +252,24 @@ async function settleRemoteBridgeDelivery(bridge, options) {
     return finish("fault", stage);
   }
 }
-//@ chunk-4cm44bmp.js:6584-6612 placement
+//@ chunk-56msakfz.js:6748-6776 placement
 /**
  * 空的 async 函数，作为远程桥接 settle 流程的占位钩子。
  */
 async function noopAsync() {
   return;
 }
-//@ chunk-4cm44bmp.js:6612-6629 placement
+//@ chunk-56msakfz.js:6776-6793 placement
 /**
  * 空函数占位（远程桥接 settle 流程的回调默认值）。
  */
 function noop(unused) {}
-//@ chunk-4cm44bmp.js:6629-6648 placement
+//@ chunk-56msakfz.js:6793-6812 placement
 /**
  * 接收两个参数的空函数，作为远程桥接 settle 流程的占位回调。
  */
 function noopTwoArgs(unused, unusedOther) {}
-//@ chunk-4cm44bmp.js:6648-8797 placement
+//@ chunk-56msakfz.js:6812-8966 placement
 /**
  * 向 Remote Control 隐去内容时使用的占位文本（账户记忆、工具结果、消息内容）。
  */
@@ -295,7 +295,7 @@ var CONTENT_RICH_HOOK_EVENTS;
 var HOOK_EVENTS_WITH_CONTENT;
 var POSTCOMPACT;
 var REDACTABLE_TEXT_BLOCK_TYPES;
-deferInit("chunk-4cm44bmp.js:6648", () => {
+deferInit("chunk-56msakfz.js:6812", () => {
   WITHHELD_ACCOUNT_MEMORY_PLACEHOLDER =
     "[account memory withheld from Remote Control; shown in the terminal session]";
   WITHHELD_TOOL_RESULT_TEXT = "[tool result withheld from Remote Control; shown in the terminal session]";
@@ -379,11 +379,11 @@ deferInit("chunk-4cm44bmp.js:6648", () => {
   POSTCOMPACT = "PostCompact";
   REDACTABLE_TEXT_BLOCK_TYPES = new Set(["text", "thinking", "redacted_thinking"]);
 });
-//@ chunk-4cm44bmp.js:8797-8849 placement
+//@ chunk-56msakfz.js:8966-9018 placement
 function isObject(value) {
   return typeof value === "object" && value !== null;
 }
-//@ chunk-4cm44bmp.js:8849-9114 placement
+//@ chunk-56msakfz.js:9018-9283 placement
 class BoundedIdSet {
   max;
   ids = new Set();
@@ -405,7 +405,7 @@ class BoundedIdSet {
     return this.ids.delete(id);
   }
 }
-//@ chunk-4cm44bmp.js:9114-9269 placement
+//@ chunk-56msakfz.js:9283-9438 placement
 function hasAnthropicMemoryMeta(result) {
   for (let field of REMOTE_RESULT_FIELDS) {
     let value = result[field];
@@ -415,13 +415,13 @@ function hasAnthropicMemoryMeta(result) {
   }
   return false;
 }
-//@ chunk-4cm44bmp.js:9269-9431 placement
+//@ chunk-56msakfz.js:9438-9600 placement
 function getToolUseQualifiedName(block) {
   if (typeof block.name !== "string") return;
   if (block.type !== "mcp_tool_use") return block.name;
   return typeof block.server_name === "string" ? buildMcpToolName(block.server_name, block.name) : undefined;
 }
-//@ chunk-4cm44bmp.js:9431-9655 placement
+//@ chunk-56msakfz.js:9600-9824 placement
 function isAccountMemoryControlRequest(request, placeAccountMemoryTool) {
   if (request.subtype === "can_use_tool")
     return (
@@ -432,11 +432,11 @@ function isAccountMemoryControlRequest(request, placeAccountMemoryTool) {
     return typeof request.dialog_kind !== "string" || request.dialog_kind.includes(ACCOUNT_MEMORY);
   return false;
 }
-//@ chunk-4cm44bmp.js:9655-9728 placement
+//@ chunk-56msakfz.js:9824-9897 placement
 function isCompactSummaryMessage(message) {
   return message.isCompactSummary === true || message.is_compact_summary === true;
 }
-//@ chunk-4cm44bmp.js:9728-9835 placement
+//@ chunk-56msakfz.js:9897-10004 placement
 function isCompactSummaryMessage_2(message) {
   return (
     message.repeatsCompactSummary === true ||
@@ -445,26 +445,26 @@ function isCompactSummaryMessage_2(message) {
       isPostCompactHookContent(message.message.content))
   );
 }
-//@ chunk-4cm44bmp.js:9835-9910 placement
+//@ chunk-56msakfz.js:10004-10079 placement
 function messageContentBlocks(message) {
   let content = message.content;
   return Array.isArray(content) ? content.filter(isObject) : undefined;
 }
-//@ chunk-4cm44bmp.js:9910-9967 placement
+//@ chunk-56msakfz.js:10079-10136 placement
 function messageBlocksOf(message) {
   return isObject(message.message) ? messageContentBlocks(message.message) : undefined;
 }
-//@ chunk-4cm44bmp.js:9967-10018 placement
+//@ chunk-56msakfz.js:10136-10187 placement
 function hasAnyKey(object, keys) {
   return keys.some((key) => object[key] !== undefined);
 }
-//@ chunk-4cm44bmp.js:10018-10095 placement
+//@ chunk-56msakfz.js:10187-10264 placement
 function pickKeys(source, keys) {
   let picked = {};
   for (let key of keys) if (source[key] !== undefined) picked[key] = source[key];
   return picked;
 }
-//@ chunk-4cm44bmp.js:10095-17662 placement
+//@ chunk-56msakfz.js:10264-17847 placement
 /**
  * 创建发往 Remote Control 的消息过滤器：按账户记忆工具位置与内容类型隐去敏感内容并做缓存。
  */
@@ -969,16 +969,16 @@ function createRemoteBridgeRedactor(options) {
     },
   };
 }
-//@ chunk-4cm44bmp.js:17662-17728 placement
+//@ chunk-56msakfz.js:17847-17913 placement
 var BACKFILL_ORIGIN_SCOPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4cm44bmp.js:17662", () => {
+deferInit("chunk-56msakfz.js:17847", () => {
   BACKFILL_ORIGIN_SCOPES = new Set(["auto_default", "auto_settings", "explicit", "sdk"]);
 });
-//@ chunk-4cm44bmp.js:17728-17781 placement
+//@ chunk-56msakfz.js:17913-17966 placement
 function isBackfillOriginScope(transcriptUploadDeferred) {
   return typeof transcriptUploadDeferred === "string" && BACKFILL_ORIGIN_SCOPES.has(transcriptUploadDeferred);
 }
-//@ chunk-4cm44bmp.js:17781-18054 placement
+//@ chunk-56msakfz.js:17966-18239 placement
 /**
  * tengu_noble_snowflake 的 schema：scope、backfill_messages（夹在 50–500，默认 200）、eager_result。
  */
@@ -987,7 +987,7 @@ var MIN_BACKFILL_MESSAGES;
 var MAX_BACKFILL_MESSAGES;
 var DEFAULT_HISTORY_BACKFILL_CONFIG;
 var historyBackfillConfigSchema;
-deferInit("chunk-4cm44bmp.js:17781", () => {
+deferInit("chunk-56msakfz.js:17966", () => {
   DEFAULT_BACKFILL_MESSAGES = 200;
   MIN_BACKFILL_MESSAGES = 50;
   MAX_BACKFILL_MESSAGES = 500;
@@ -1007,7 +1007,7 @@ deferInit("chunk-4cm44bmp.js:17781", () => {
     }),
   );
 });
-//@ chunk-4cm44bmp.js:18054-18218 placement
+//@ chunk-56msakfz.js:18239-18403 placement
 function parseHistoryBackfillConfig(featureValue_CACHED_MAY_BE_STALE) {
   let parsed = historyBackfillConfigSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
   if (!parsed.success) return DEFAULT_HISTORY_BACKFILL_CONFIG;
@@ -1017,11 +1017,11 @@ function parseHistoryBackfillConfig(featureValue_CACHED_MAY_BE_STALE) {
     eagerResult: parsed.data.eager_result,
   };
 }
-//@ chunk-4cm44bmp.js:18218-18275 placement
+//@ chunk-56msakfz.js:18403-18460 placement
 function historyBackfillConfig() {
   return parseHistoryBackfillConfig(getFeatureValue_CACHED_MAY_BE_STALE("tengu_noble_snowflake", null));
 }
-//@ chunk-4cm44bmp.js:18275-18544 placement
+//@ chunk-56msakfz.js:18460-18729 placement
 /**
  * 判断历史回填 scope（off/auto_default/auto/auto_and_sdk/all）是否覆盖本次 Remote Control 的来源（auto_default、auto_settings、sdk 等）；来源未知时不回填。
  */
@@ -1044,7 +1044,7 @@ function isBackfillScopeAllowedForOrigin(scope, remoteControlOrigin) {
       return true;
   }
 }
-//@ chunk-4cm44bmp.js:18544-18699 placement (2.1.88 match: countToolCallsSince, 1)
+//@ chunk-56msakfz.js:18729-18884 placement
 function hasUserMessagingToolUse(message) {
   return (
     message.type === "assistant" &&
@@ -1055,7 +1055,7 @@ function hasUserMessagingToolUse(message) {
     )
   );
 }
-//@ chunk-4cm44bmp.js:18699-18886 placement
+//@ chunk-56msakfz.js:18884-19071 placement
 function isTaskLifecycleMessage(message) {
   return (
     isEphemeralStreamMessage(message) ||
@@ -1068,10 +1068,9 @@ function isTaskLifecycleMessage(message) {
   );
 }
 export {
-  noopAsync,
+  createRemoteBridgeRedactor,
   noop,
   noopTwoArgs,
-  createRemoteBridgeRedactor,
   sendWithEpochFollowUps,
   DEFAULT_HISTORY_BACKFILL_CONFIG,
   historyBackfillConfig,
@@ -1082,4 +1081,10 @@ export {
   isBackfillOriginScope,
   settleRemoteBridgeDelivery,
   isAccountMemoryControlRequest,
+  noopAsync,
+  WITHHELD_SUMMARY_NOTICE,
+  WITHHELD_ACCOUNT_MEMORY_PLACEHOLDER,
+  WITHHELD_TOOL_RESULT_TEXT,
+  WITHHELD_MESSAGE_TEXT,
+  WITHHELD_COMMAND_OUTPUT_TEXT,
 };

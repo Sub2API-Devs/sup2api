@@ -3,10 +3,10 @@
  *
  * 设置校验错误格式化（zod issue → 文件/路径/消息 + 修正提示），无效权限规则过滤，policyHelper 配置校验。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/validation.ts
- * pieces: chunk-dcmhvw5a.js (15)
- * attribution: sole-consumer 1, fingerprint 8, layout 5, file-local 1
+ * pieces: chunk-5xgkngpb.js (1), chunk-z20c443b.js (15)
+ * attribution: fingerprint 7, sole-consumer 1, layout 7, file-local 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
@@ -34,44 +34,45 @@ import {
 } from "./hooksValidation.js";
 import { generateSettingsJSONSchema } from "./schemaOutput.js";
 import { validatePermissionRule } from "./permissionValidation.js";
+import { HOOK_OUTPUT_META_KEYS } from "../hooks.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:437432-437494 sole-consumer
+//@ chunk-z20c443b.js:435894-435956 sole-consumer
 var strictSettingsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:437432", () => {
+deferInit("chunk-z20c443b.js:435894", () => {
   strictSettingsSchema = DoctorLazy(() =>
     buildWholeSettingsSchema(enabledSettingsFeatureGroups(), {
       strictPolicyHelperKeys: true,
     }).strict(),
   );
 });
-//@ chunk-dcmhvw5a.js:437494-437540 fingerprint (2.1.88 match: isInvalidTypeIssue, 1)
+//@ chunk-z20c443b.js:435956-436002 fingerprint (2.1.88 match: isInvalidTypeIssue, 1)
 function isInvalidTypeIssue(issue) {
   return issue.code === "invalid_type";
 }
-//@ chunk-dcmhvw5a.js:437540-437587 fingerprint (2.1.88 match: isInvalidValueIssue, 1)
-function isInvalidValueIssue(issue) {
+//@ chunk-z20c443b.js:436002-436049 layout (2.1.88 match: isInvalidValueIssue, 1)
+function isInvalidValueIssue_2(issue) {
   return issue.code === "invalid_value";
 }
-//@ chunk-dcmhvw5a.js:437587-437638 fingerprint (2.1.88 match: isUnrecognizedKeysIssue, 1)
+//@ chunk-z20c443b.js:436049-436100 layout (2.1.88 match: isUnrecognizedKeysIssue, 1)
 function isUnrecognizedKeysIssue(issue) {
   return issue.code === "unrecognized_keys";
 }
-//@ chunk-dcmhvw5a.js:437638-437681 fingerprint (2.1.88 match: isTooSmallIssue, 1)
+//@ chunk-z20c443b.js:436100-436143 fingerprint (2.1.88 match: isTooSmallIssue, 1)
 function isTooSmallIssue(issue) {
   return issue.code === "too_small";
 }
-//@ chunk-dcmhvw5a.js:437681-437754 layout
+//@ chunk-z20c443b.js:436143-436216 layout
 /**
  * isBlockingSettingsIssue：是否阻断的设置问题。
  */
 function isBlockingSettingsIssue(issue) {
   return issue.severity !== "warning" && !issue.loadedWithoutGuardHook;
 }
-//@ chunk-dcmhvw5a.js:437754-438033 layout
+//@ chunk-z20c443b.js:436216-436495 layout
 var UNLOADABLE_GUARD_HOOK_TEXT =
   'a PreToolUse/PermissionRequest hook that cannot be loaded does not run, nor does any other hook of the document where "hooks" is listed here as ignored; fix or remove the entry. The managed settings document is not skipped for it, unlike a user or project settings file';
-//@ chunk-dcmhvw5a.js:438033-438186 layout
+//@ chunk-z20c443b.js:436495-436648 layout
 function explainUnloadableGuardHooks(issues) {
   return issues.map((issue) =>
     issue.severity !== "warning" && issue.message.includes(UNLOADABLE_GUARD_NOTE)
@@ -83,19 +84,19 @@ function explainUnloadableGuardHooks(issues) {
       : issue,
   );
 }
-//@ chunk-dcmhvw5a.js:438186-438308 fingerprint (2.1.88 match: getReceivedType, 1)
+//@ chunk-z20c443b.js:436648-436770 fingerprint (2.1.88 match: getReceivedType, 1)
 function getReceivedType(value) {
   if (value === null) return "null";
   if (value === undefined) return "undefined";
   if (Array.isArray(value)) return "array";
   return typeof value;
 }
-//@ chunk-dcmhvw5a.js:438308-438376 file-local
+//@ chunk-z20c443b.js:436770-436838 file-local
 function extractReceivedFromMessage(msg) {
   let match = msg.match(/received (\w+)/);
   return match ? match[1] : undefined;
 }
-//@ chunk-dcmhvw5a.js:438376-439575 fingerprint (2.1.88 match: formatZodError, 0.935)
+//@ chunk-z20c443b.js:436838-438037 fingerprint (2.1.88 match: formatZodError, 0.935)
 /**
  * 把 zod 错误转成 {file,path,message} 列表，附带 validationTips 里的修正提示与文档链接。
  */
@@ -119,7 +120,7 @@ function formatZodError(error, filePath) {
       let expectedValue;
       let receivedValue;
       let invalidValue;
-      if (isInvalidValueIssue(issue)) {
+      if (isInvalidValueIssue_2(issue)) {
         enumValues = issue.values.map((v) => String(v));
         expectedValue = enumValues.join(" | ");
         receivedValue = undefined;
@@ -143,7 +144,7 @@ function formatZodError(error, filePath) {
         message: issue.message,
         value: receivedValue,
       });
-      if (isInvalidValueIssue(issue)) {
+      if (isInvalidValueIssue_2(issue)) {
         expected = enumValues?.map((v) => `"${v}"`).join(", ");
         message = `Invalid value. Expected one of: ${expected}`;
       } else if (isInvalidTypeIssue(issue)) {
@@ -169,7 +170,7 @@ function formatZodError(error, filePath) {
       };
     });
 }
-//@ chunk-dcmhvw5a.js:439575-440624 fingerprint (2.1.88 match: validateSettingsFileContent, 0.508)
+//@ chunk-z20c443b.js:438037-439086 fingerprint (2.1.88 match: validateSettingsFileContent, 0.508)
 /**
  * 校验设置文件文本（编辑 settings.json 前后用），返回是否合法与错误说明。
  */
@@ -252,7 +253,7 @@ function validateSettingsFileContent(content) {
     };
   }
 }
-//@ chunk-dcmhvw5a.js:440624-441480 layout
+//@ chunk-z20c443b.js:439086-439942 layout
 function validatePolicyHelperConfig(config, documentPath) {
   let settings = clone(config);
   let strippedKeys = [];
@@ -307,7 +308,7 @@ function validatePolicyHelperConfig(config, documentPath) {
     strippedKeys,
   };
 }
-//@ chunk-dcmhvw5a.js:441480-442221 layout
+//@ chunk-z20c443b.js:439942-440683 layout
 /**
  * 检查 policyHelpers 中的静态设置载荷（default 与各平台 defaultSettings）：别名冲突、规则警告与无效载荷（来自 OS 管理员来源时会拒绝启动），返回警告文字列表。
  */
@@ -345,7 +346,7 @@ function staticPayloadWarnings(settings) {
   }
   return warnings;
 }
-//@ chunk-dcmhvw5a.js:442221-443201 fingerprint (2.1.88 match: filterInvalidPermissionRules, 0.686)
+//@ chunk-z20c443b.js:440683-441663 fingerprint (2.1.88 match: filterInvalidPermissionRules, 0.686)
 /**
  * 从 permissions.allow/deny/ask 中剔除格式错误的规则并给出警告，避免整份设置作废。
  */
@@ -408,13 +409,19 @@ function filterInvalidPermissionRules(data, filePath, options) {
   );
   return warnings;
 }
+//@ chunk-5xgkngpb.js:3503098-3503199 fingerprint (2.1.88 match: isInvalidValueIssue, 1)
+function isInvalidValueIssue(issue) {
+  let last = issue.path.at(-1);
+  return issue.code === "invalid_value" && typeof last === "string" && HOOK_OUTPUT_META_KEYS.has(last);
+}
 export {
   staticPayloadWarnings,
   isBlockingSettingsIssue,
+  formatZodError,
+  validatePolicyHelperConfig,
+  isInvalidValueIssue,
+  validateSettingsFileContent,
   getReceivedType,
   filterInvalidPermissionRules,
-  formatZodError,
   explainUnloadableGuardHooks,
-  validateSettingsFileContent,
-  validatePolicyHelperConfig,
 };

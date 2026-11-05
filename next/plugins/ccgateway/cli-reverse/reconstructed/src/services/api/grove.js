@@ -3,9 +3,9 @@
  *
  * Grove（消费者条款/数据使用选择）接口：读写账号 grove_enabled 设置、获取通知配置、判断是否需要显示 Grove 对话框，以及非交互模式下的处理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/grove.ts
- * pieces: chunk-vrsqcfp3.js (18)
+ * pieces: chunk-zxdyf8nf.js (18)
  * attribution: sole-consumer 6, affinity 2, fingerprint 7, layout 3
  */
 import { getHostPlatformForAnalytics, env } from "../../utils/env.js";
@@ -32,14 +32,14 @@ import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../utils/errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrsqcfp3.js:687-719 sole-consumer
+//@ chunk-zxdyf8nf.js:687-719 sole-consumer
 /**
  * 1 天 / 1 小时 / 请求超时 3 秒。
  */
 var ONE_DAY_MS = 86400000;
 var ONE_HOUR_MS = 3600000;
 var GROVE_REQUEST_TIMEOUT_MS = 3000;
-//@ chunk-vrsqcfp3.js:719-768 affinity
+//@ chunk-zxdyf8nf.js:719-768 affinity
 /**
  * anthropic-client-os 头。
  */
@@ -48,12 +48,12 @@ function getClientOsHeader() {
     "anthropic-client-os": getHostPlatformForAnalytics(),
   };
 }
-//@ chunk-vrsqcfp3.js:768-1386 fingerprint (2.1.88 match: updateGroveSettings, 0.383)
+//@ chunk-zxdyf8nf.js:768-1386 fingerprint (2.1.88 match: updateGroveSettings, 0.383)
 /**
  * 读取账号设置 /api/oauth/account/settings（grove_enabled 等），带缓存。旧版名 updateGroveSettings 为错配，实际是 getGroveSettings。
  */
 var updateGroveSettings_2; // deferred: uses withOAuth401Retry (../../utils/http.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-vrsqcfp3.js:768", () => {
+deferInit("chunk-zxdyf8nf.js:768", () => {
   updateGroveSettings_2 = memoizeAlias(
     async (groveEnabled) => {
       try {
@@ -95,7 +95,7 @@ deferInit("chunk-vrsqcfp3.js:768", () => {
     () => "account",
   );
 });
-//@ chunk-vrsqcfp3.js:1386-1856 fingerprint (2.1.88 match: markGroveNoticeViewed, 0.453)
+//@ chunk-zxdyf8nf.js:1386-1856 fingerprint (2.1.88 match: markGroveNoticeViewed, 0.453)
 /**
  * POST grove_notice_viewed。
  */
@@ -132,7 +132,7 @@ async function markGroveNoticeViewed(credentials) {
     updateGroveSettings_2.cache.clear?.();
   }
 }
-//@ chunk-vrsqcfp3.js:1856-2512 layout
+//@ chunk-zxdyf8nf.js:1856-2512 layout
 /**
  * PATCH 账号 grove_enabled（可只在未设置时写入）。
  */
@@ -177,7 +177,7 @@ async function updateGroveSettings(groveEnabled, credentials, { onlyIfUnset = fa
     updateGroveSettings_2.cache.clear?.();
   }
 }
-//@ chunk-vrsqcfp3.js:2512-2953 fingerprint (2.1.88 match: isQualifiedForGrove, 1)
+//@ chunk-zxdyf8nf.js:2512-2953 fingerprint (2.1.88 match: isQualifiedForGrove, 1)
 /**
  * 是否需要 Grove：读缓存配置，无缓存时后台拉取。
  */
@@ -201,7 +201,7 @@ async function isQualifiedForGrove(configWriteSource, credentials) {
   logForDebugging("Grove: Using fresh cached config");
   return cachedEntry.grove_enabled;
 }
-//@ chunk-vrsqcfp3.js:2953-3531 fingerprint (2.1.88 match: fetchAndStoreGroveConfig, 0.904)
+//@ chunk-zxdyf8nf.js:2953-3532 fingerprint (2.1.88 match: fetchAndStoreGroveConfig, 0.904)
 /**
  * 拉取 Grove 配置并存入全局缓存。
  */
@@ -254,12 +254,12 @@ async function fetchAndStoreGroveConfig(accountId, configWriteSource, credential
     logForDebugging(`Grove: Failed to fetch and store config: ${err}`);
   }
 }
-//@ chunk-vrsqcfp3.js:3531-4327 fingerprint (2.1.88 match: getGroveNoticeConfig, 0.655)
+//@ chunk-zxdyf8nf.js:3532-4330 fingerprint (2.1.88 match: getGroveNoticeConfig, 0.656)
 /**
  * GET /api/claude_code_grove 通知配置。
  */
 var getGroveNoticeConfig; // deferred: uses withOAuth401Retry (../../utils/http.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-vrsqcfp3.js:3531", () => {
+deferInit("chunk-zxdyf8nf.js:3532", () => {
   getGroveNoticeConfig = memoizeAlias(
     async (credentials) => {
       try {
@@ -312,7 +312,7 @@ deferInit("chunk-vrsqcfp3.js:3531", () => {
     () => "config",
   );
 });
-//@ chunk-vrsqcfp3.js:4327-4829 fingerprint (2.1.88 match: calculateShouldShowGrove, 0.821)
+//@ chunk-zxdyf8nf.js:4330-4832 fingerprint (2.1.88 match: calculateShouldShowGrove, 0.821)
 /**
  * 是否显示 Grove 通知：未作出选择且（不在宽限期或到了提醒频率）。
  */
@@ -336,7 +336,7 @@ function calculateShouldShowGrove(settingsResult, configResult, showIfAlreadyVie
     return viewedAt === null || viewedAt === undefined;
   }
 }
-//@ chunk-vrsqcfp3.js:4829-4994 layout
+//@ chunk-zxdyf8nf.js:4832-4997 layout
 /**
  * 服务端一小时内已确认过 Consumer Terms 选择则不再询问。
  */
@@ -349,7 +349,7 @@ async function wasGroveRecentlyConfirmed(credentials) {
     logForDebugging("Grove: the server recently confirmed a Consumer Terms answer; not asking again");
   return recentlyConfirmed;
 }
-//@ chunk-vrsqcfp3.js:4994-5415 layout
+//@ chunk-zxdyf8nf.js:4997-5418 layout
 /**
  * 记录服务端返回的 grove 选择时间。
  */
@@ -380,7 +380,7 @@ async function recordGroveChoiceSeen(groveConfig, configWriteSource, credentials
     logForDebugging(`Grove: could not save the Consumer Terms check: ${error}`);
   }
 }
-//@ chunk-vrsqcfp3.js:5415-6025 fingerprint (2.1.88 match: checkGroveForNonInteractive, 0.667)
+//@ chunk-zxdyf8nf.js:5418-6029 fingerprint (2.1.88 match: checkGroveForNonInteractive, 0.667)
 /**
  * 非交互模式下检查 Grove：需要时打印提示或退出。
  */
@@ -411,7 +411,7 @@ An update to our Consumer Terms and Privacy Policy will take effect on October 8
     }
   }
 }
-//@ chunk-vrsqcfp3.js:6025-6098 affinity
+//@ chunk-zxdyf8nf.js:6029-6102 affinity
 /**
  * 时间戳在一小时以内。
  */
@@ -420,15 +420,15 @@ function isWithinOneHour(seenAt) {
   let ageMs = Date.now() - seenAt;
   return ageMs >= 0 && ageMs < ONE_HOUR_MS;
 }
-//@ chunk-vrsqcfp3.js:6098-6123 sole-consumer
+//@ chunk-zxdyf8nf.js:6102-6127 sole-consumer
 /**
  * groveChoiceSeenAt 配置项（账号 → 时间）的 zod schema。
  */
 var groveChoiceSeenAtSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-vrsqcfp3.js:6098", () => {
+deferInit("chunk-zxdyf8nf.js:6102", () => {
   groveChoiceSeenAtSchema = DoctorLazy(() => record(stringSchema(), numberSchema()));
 });
-//@ chunk-vrsqcfp3.js:6123-6205 sole-consumer
+//@ chunk-zxdyf8nf.js:6127-6209 sole-consumer
 /**
  * 读配置里的 groveChoiceSeenAt，校验失败返回 {}。
  */
@@ -436,7 +436,7 @@ function getGroveChoiceSeenAt(globalConfig) {
   let parsed = groveChoiceSeenAtSchema().safeParse(globalConfig.groveChoiceSeenAt);
   return parsed.success ? parsed.data : {};
 }
-//@ chunk-vrsqcfp3.js:6205-6469 sole-consumer
+//@ chunk-zxdyf8nf.js:6209-6473 sole-consumer
 /**
  * 按凭证来源取账号 uuid（store：OAuth 账号；env/fd：CLAUDE_CODE_ACCOUNT_UUID），小写；未知时返回 undefined 交给服务器判断。
  */
@@ -456,12 +456,12 @@ async function getGroveAccountUuid(credentials) {
     return;
   }
 }
-//@ chunk-vrsqcfp3.js:6469-6589 sole-consumer
+//@ chunk-zxdyf8nf.js:6473-6593 sole-consumer
 /**
  * Grove 接口非 2xx 时抛出，携带 status。
  */
 let GroveHttpError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-vrsqcfp3.js:6469", () => {
+deferInit("chunk-zxdyf8nf.js:6473", () => {
   GroveHttpError = class GroveHttpError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
     status;
     constructor(status) {
@@ -470,7 +470,7 @@ deferInit("chunk-vrsqcfp3.js:6469", () => {
     }
   };
 });
-//@ chunk-vrsqcfp3.js:6589-6635 sole-consumer
+//@ chunk-zxdyf8nf.js:6593-6639 sole-consumer
 /**
  * 状态码不在 200–299 时抛 GroveHttpError。
  */
@@ -478,13 +478,13 @@ function assertGroveOkStatus(status) {
   if (status < 200 || status >= 300) throw new GroveHttpError(status);
 }
 export {
-  updateGroveSettings_2,
-  getGroveNoticeConfig,
   isQualifiedForGrove,
   checkGroveForNonInteractive,
+  wasGroveRecentlyConfirmed,
+  updateGroveSettings_2,
+  getGroveNoticeConfig,
   recordGroveChoiceSeen,
   calculateShouldShowGrove,
   markGroveNoticeViewed,
   updateGroveSettings,
-  wasGroveRecentlyConfirmed,
 };

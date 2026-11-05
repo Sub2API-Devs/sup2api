@@ -3,16 +3,16 @@
  *
  * Intl 缓存：字素/词分割器、相对时间格式、时区、系统语言，按词数统计
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/intl.ts
- * pieces: chunk-bfrv6ttc.js (23)
- * attribution: placement 12, fingerprint 6, callgraph-witnessed 1, layout 4
+ * pieces: chunk-t3ta3dyx.js (24)
+ * attribution: placement 12, fingerprint 6, callgraph-witnessed 1, layout 5
  */
-//@ chunk-bfrv6ttc.js:191-216 placement
+//@ chunk-t3ta3dyx.js:191-216 placement
 var INTL_CACHE = null;
 var segmenterSingleton = null;
 var displayNamesCache = null;
-//@ chunk-bfrv6ttc.js:216-296 placement
+//@ chunk-t3ta3dyx.js:216-296 placement
 function languageDisplayNames() {
   if (!displayNamesCache)
     displayNamesCache = new Intl.DisplayNames(["en"], {
@@ -20,7 +20,7 @@ function languageDisplayNames() {
     });
   return displayNamesCache;
 }
-//@ chunk-bfrv6ttc.js:296-379 fingerprint (2.1.88 match: getGraphemeSegmenter, 1)
+//@ chunk-t3ta3dyx.js:296-379 fingerprint (2.1.88 match: getGraphemeSegmenter, 1)
 /**
  * 惰性创建并复用 Intl.Segmenter（grapheme 粒度），用于按用户可见字符切分字符串。
  */
@@ -31,24 +31,31 @@ function getGraphemeSegmenter() {
     });
   return INTL_CACHE;
 }
-//@ chunk-bfrv6ttc.js:379-478 fingerprint (2.1.88 match: firstGrapheme, 1)
+//@ chunk-t3ta3dyx.js:379-478 fingerprint (2.1.88 match: firstGrapheme, 1)
 function firstGrapheme(text) {
   if (!text) return "";
   return getGraphemeSegmenter().segment(text)[Symbol.iterator]().next().value?.segment ?? "";
 }
-//@ chunk-bfrv6ttc.js:478-567 callgraph-witnessed (2.1.88 match: lastGrapheme, 1)
+//@ chunk-t3ta3dyx.js:478-568 callgraph-witnessed (2.1.88 match: lastGrapheme, 1)
 function lastGrapheme(text) {
   if (!text) return "";
   let last = "";
   for (let { segment } of getGraphemeSegmenter().segment(text)) last = segment;
   return last;
 }
-//@ chunk-bfrv6ttc.js:648-729 placement
+//@ chunk-t3ta3dyx.js:568-649 layout
+function countGraphemes(text) {
+  if (!text) return 0;
+  let count = 0;
+  for (let segment of getGraphemeSegmenter().segment(text)) count++;
+  return count;
+}
+//@ chunk-t3ta3dyx.js:649-730 placement
 function splitGraphemes(text) {
   if (!text) return [];
   return Array.from(getGraphemeSegmenter().segment(text), (grapheme) => grapheme.segment);
 }
-//@ chunk-bfrv6ttc.js:729-999 placement
+//@ chunk-t3ta3dyx.js:730-1000 placement
 function mergeCombiningGraphemes(graphemes) {
   if (graphemes.length < 2) return graphemes;
   let text = graphemes.join("");
@@ -70,7 +77,7 @@ function mergeCombiningGraphemes(graphemes) {
   while (merged.length < graphemes.length) merged.push("");
   return merged;
 }
-//@ chunk-bfrv6ttc.js:999-1099 placement
+//@ chunk-t3ta3dyx.js:1000-1100 placement
 function hasNonAsciiOrCr(text) {
   for (let i = 0; i < text.length; i++) {
     let code = text.charCodeAt(i);
@@ -78,7 +85,7 @@ function hasNonAsciiOrCr(text) {
   }
   return false;
 }
-//@ chunk-bfrv6ttc.js:1099-1179 fingerprint (2.1.88 match: getWordSegmenter, 1)
+//@ chunk-t3ta3dyx.js:1100-1180 fingerprint (2.1.88 match: getWordSegmenter, 1)
 function getWordSegmenter() {
   if (!segmenterSingleton)
     segmenterSingleton = new Intl.Segmenter(undefined, {
@@ -86,7 +93,7 @@ function getWordSegmenter() {
     });
   return segmenterSingleton;
 }
-//@ chunk-bfrv6ttc.js:1179-1332 layout
+//@ chunk-t3ta3dyx.js:1180-1333 layout
 /**
  * 统计词数：取空白切分数与 Intl.Segmenter 词段数中的较大者（兼顾中日文）。
  */
@@ -98,9 +105,9 @@ function countWords(text) {
   for (let segment of getWordSegmenter().segment(trimmed)) if (segment.isWordLike) wordLikeCount++;
   return Math.max(whitespaceWordCount, wordLikeCount);
 }
-//@ chunk-bfrv6ttc.js:1332-1346 layout
+//@ chunk-t3ta3dyx.js:1333-1347 layout
 var relativeTimeFormatCache = new Map();
-//@ chunk-bfrv6ttc.js:1346-1475 fingerprint (2.1.88 match: getRelativeTimeFormat, 1)
+//@ chunk-t3ta3dyx.js:1347-1476 fingerprint (2.1.88 match: getRelativeTimeFormat, 1)
 function getRelativeTimeFormat(style, numeric) {
   let key = `${style}:${numeric}`;
   let rtf = relativeTimeFormatCache.get(key);
@@ -113,16 +120,16 @@ function getRelativeTimeFormat(style, numeric) {
   }
   return rtf;
 }
-//@ chunk-bfrv6ttc.js:1475-1486 layout
+//@ chunk-t3ta3dyx.js:1476-1487 layout
 var timeZoneCache = null;
-//@ chunk-bfrv6ttc.js:1486-1567 fingerprint (2.1.88 match: getTimeZone, 1)
+//@ chunk-t3ta3dyx.js:1487-1568 fingerprint (2.1.88 match: getTimeZone, 1)
 function getTimeZone() {
   if (!timeZoneCache) timeZoneCache = Intl.DateTimeFormat().resolvedOptions().timeZone;
   return timeZoneCache;
 }
-//@ chunk-bfrv6ttc.js:1567-1578 layout
+//@ chunk-t3ta3dyx.js:1568-1579 layout
 var systemLocaleLanguageCache = null;
-//@ chunk-bfrv6ttc.js:1578-1716 fingerprint (2.1.88 match: getSystemLocaleLanguage, 1)
+//@ chunk-t3ta3dyx.js:1579-1717 fingerprint (2.1.88 match: getSystemLocaleLanguage, 1)
 function getSystemLocaleLanguage() {
   if (systemLocaleLanguageCache === null)
     try {
@@ -133,9 +140,9 @@ function getSystemLocaleLanguage() {
     }
   return systemLocaleLanguageCache;
 }
-//@ chunk-bfrv6ttc.js:1716-1734 placement
+//@ chunk-t3ta3dyx.js:1717-1735 placement
 var weakMap = new WeakMap();
-//@ chunk-bfrv6ttc.js:1734-1923 placement
+//@ chunk-t3ta3dyx.js:1735-1924 placement
 function stableOptionsKey(options) {
   if (!options) return "";
   let cachedKey = weakMap.get(options);
@@ -146,9 +153,9 @@ function stableOptionsKey(options) {
   weakMap.set(options, keyParts);
   return keyParts;
 }
-//@ chunk-bfrv6ttc.js:1923-1937 placement
+//@ chunk-t3ta3dyx.js:1924-1938 placement
 var dateTimeFormatCache = new Map();
-//@ chunk-bfrv6ttc.js:1937-1984 placement
+//@ chunk-t3ta3dyx.js:1938-1985 placement
 function withTimeZone(options, timeZone) {
   return timeZone
     ? {
@@ -157,7 +164,7 @@ function withTimeZone(options, timeZone) {
       }
     : options;
 }
-//@ chunk-bfrv6ttc.js:1984-2094 placement
+//@ chunk-t3ta3dyx.js:1985-2095 placement
 function getDateTimeFormat(locales, options) {
   let cacheKey = `${locales ?? ""}|${stableOptionsKey(options)}`;
   let formatter = dateTimeFormatCache.get(cacheKey);
@@ -167,9 +174,9 @@ function getDateTimeFormat(locales, options) {
   }
   return formatter;
 }
-//@ chunk-bfrv6ttc.js:2094-2108 placement
+//@ chunk-t3ta3dyx.js:2095-2109 placement
 var numberFormatCache = new Map();
-//@ chunk-bfrv6ttc.js:2108-2217 placement
+//@ chunk-t3ta3dyx.js:2109-2218 placement
 function getNumberFormat(locales, options) {
   let cacheKey = `${locales ?? ""}|${stableOptionsKey(options)}`;
   let formatter = numberFormatCache.get(cacheKey);
@@ -180,18 +187,19 @@ function getNumberFormat(locales, options) {
   return formatter;
 }
 export {
-  getSystemLocaleLanguage,
-  splitGraphemes,
+  getDateTimeFormat,
+  countGraphemes,
+  countWords,
   getGraphemeSegmenter,
   firstGrapheme,
-  getDateTimeFormat,
+  getWordSegmenter,
+  getSystemLocaleLanguage,
+  splitGraphemes,
   withTimeZone,
+  lastGrapheme,
   getNumberFormat,
   getRelativeTimeFormat,
   getTimeZone,
-  getWordSegmenter,
-  lastGrapheme,
   mergeCombiningGraphemes,
   languageDisplayNames,
-  countWords,
 };

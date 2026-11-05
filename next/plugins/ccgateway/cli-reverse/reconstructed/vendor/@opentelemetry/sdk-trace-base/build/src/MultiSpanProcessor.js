@@ -1,16 +1,16 @@
 /**
  * @opentelemetry/sdk-trace-base/build/src/MultiSpanProcessor.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-trace-base@2.2.0
- * pieces: chunk-9vvvg0d3.js (2)
+ * pieces: chunk-3wgj3rdg.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { __toESM } from "../../../../../runtime/bun-runtime.js";
 import { require_core } from "../../../core/build/src/index.js";
 
-//@ chunk-9vvvg0d3.js:21506-21522 esm-layout
+//@ chunk-3wgj3rdg.js:21878-21894 esm-layout
 var import_core_10 = __toESM(require_core());
-//@ chunk-9vvvg0d3.js:21522-22067 esm-fingerprint
+//@ chunk-3wgj3rdg.js:21894-22439 esm-fingerprint
 class MultiSpanProcessor {
   _spanProcessors;
   constructor(_spanProcessors) {

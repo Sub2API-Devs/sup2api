@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件 hooks 模块的加载、重载、卸载与顺序编排
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (95)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (95)
  * attribution: placement 95
  */
 import { AsyncResource } from "async_hooks";
@@ -93,11 +93,11 @@ import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { logError } from "../../utils/log.js";
 import { vmCreateElement, vmFragment } from "./vm/boundaryCopy.js";
 import { isBuiltinPluginId, getBuiltinPlugin } from "../builtinPlugins.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { buildElementTable } from "./ui/elements.js";
 import { createSurfaceAnswerCache, cachedResolveAnswer, noStreamingOps } from "./vm/moduleLoader.js";
 import { registerHooksModule } from "./api/register.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { ensureNativeHost, ensureEnvironmentHost, initHooksHost } from "./hooksWorkerHost.js";
 import { releaseWaitingCalls, forgetCachedDescribe } from "./commandApi.js";
 import { countModLoadEvent, logModLoadFailed } from "./modLoadTelemetry.js";
@@ -141,8 +141,10 @@ import {
 } from "./engineCreate.js";
 import { providerRank } from "./providerTiers.js";
 import { dependencyRefMatches, qualifyDependency } from "../../utils/plugins/dependencyResolver.js";
+import { countWhere } from "../../utils/collections.js";
 import { SLOW_HOOK_REPORT_INTERVAL_MS_2 } from "./dispatch/slowHookReports.js";
 import { RENDER_SITE_PAIRS } from "./ui/renderSites.js";
+import { clearBackdropFor } from "./sessionApi.js";
 import { forgetMcpServerFor } from "./mcpServerHooks.js";
 import { forgetMcpConnectsFor } from "./mcpApi.js";
 import { noteWorkersLoaded, workerSlots, storageIdOf } from "./apiDispatch.js";
@@ -153,32 +155,32 @@ import { isStoredLoginPinned } from "../../cli/headlessCloud/attachServe.js";
 import { loadedModuleArgs } from "../hooksModules/loadedModuleFilters.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:733946-733981 placement
+//@ chunk-5xgkngpb.js:744475-744510 placement
 /**
  * 内联问题去重集
  */
 var inlineProblemsSeen; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:733946", () => {
+deferInit("chunk-5xgkngpb.js:744475", () => {
   inlineProblemsSeen = identity_2(new Set(), (set) => set.clear());
 });
-//@ chunk-e6aww6q8.js:733981-734014 placement
+//@ chunk-5xgkngpb.js:744510-744543 placement
 /**
  * 延迟输出的问题行
  */
 var deferredProblemLines; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:733981", () => {
+deferInit("chunk-5xgkngpb.js:744510", () => {
   deferredProblemLines = identity_2([], (lines) => {
     lines.length = 0;
   });
 });
-//@ chunk-e6aww6q8.js:734014-734086 placement
+//@ chunk-5xgkngpb.js:744543-744614 placement
 /**
  * 文本输出且非 bg 会话
  */
 function isPlainTextSession() {
   return getPrintOutputFormat() === "text" && env.CLAUDE_CODE_SESSION_KIND !== "bg";
 }
-//@ chunk-e6aww6q8.js:734086-734165 placement
+//@ chunk-5xgkngpb.js:744614-744693 placement
 /**
  * 输出延迟的问题
  */
@@ -189,15 +191,15 @@ function flushDeferredProblems() {
     writeToStderr(`${line}
 `);
 }
-//@ chunk-e6aww6q8.js:734165-734200 placement
+//@ chunk-5xgkngpb.js:744693-744728 placement
 /**
  * 已报告的内联问题
  */
 var reportedInlineProblems; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:734165", () => {
+deferInit("chunk-5xgkngpb.js:744693", () => {
   reportedInlineProblems = identity_2(new Set(), (set) => set.clear());
 });
-//@ chunk-e6aww6q8.js:734200-734378 placement
+//@ chunk-5xgkngpb.js:744728-744905 placement
 /**
  * 非交互会话里，内联插件的问题输出到 stderr（去重；格式化输出时先缓存）。
  */
@@ -215,7 +217,7 @@ function reportInlinePluginNotice(notice, text) {
     writeToStderr(`${line}
 `);
 }
-//@ chunk-e6aww6q8.js:734378-734603 placement
+//@ chunk-5xgkngpb.js:744905-745130 placement
 /**
  * 在所有宿主的进行中分发上执行回调。
  */
@@ -231,7 +233,7 @@ function withInFlightDispatches(runtime, e, fn) {
     (id) => filtered.map((secondHost) => secondHost.nameOf(id)).find((thirdName) => thirdName !== undefined),
   );
 }
-//@ chunk-e6aww6q8.js:734603-734705 placement
+//@ chunk-5xgkngpb.js:745130-745232 placement
 /**
  * 取 tool.call 事件中的工具名。
  */
@@ -239,12 +241,12 @@ function toolNameOfCall(event, payload) {
   let tool = event === "tool.call" && "tool" in payload ? payload.tool : undefined;
   return typeof tool === "string" ? tool : undefined;
 }
-//@ chunk-e6aww6q8.js:734751-734782 placement
+//@ chunk-5xgkngpb.js:745278-745309 placement
 /**
  * 绑定 async 资源
  */
 var bindAsyncResource = () => AsyncResource.bind((value) => value());
-//@ chunk-e6aww6q8.js:734782-734823 placement
+//@ chunk-5xgkngpb.js:745309-745350 placement
 /**
  * 合并出带 options 的对象
  */
@@ -253,13 +255,13 @@ var withOptions = (a, b, options) => ({
   ...b,
   options,
 });
-//@ chunk-e6aww6q8.js:734823-734891 placement
+//@ chunk-5xgkngpb.js:745350-745418 placement
 /**
  * 以 ! 或内部前缀开头
  */
 var isPrivateEventName = (event) =>
   (event.startsWith("!") ? event.slice(1) : event).startsWith(`${PROTO_KEY}.`);
-//@ chunk-e6aww6q8.js:734891-735062 placement
+//@ chunk-5xgkngpb.js:745418-745589 placement
 function warnProtoPatterns(pluginName, registered) {
   for (let pattern of new Set(registered.map((registration) => registration.pattern)))
     if (isPrivateEventName(pattern) && !pattern.startsWith("!"))
@@ -268,7 +270,7 @@ function warnProtoPatterns(pluginName, registered) {
         `registered ${pattern}; that name cannot be a noun, so this hook is never run`,
       );
 }
-//@ chunk-e6aww6q8.js:735062-735333 placement
+//@ chunk-5xgkngpb.js:745589-745860 placement
 function adviseUiRenderMatchers(pluginName, registered) {
   for (let { pattern, matcher } of registered) {
     if (!(pattern === "ui.render" && matcher !== undefined)) continue;
@@ -283,7 +285,7 @@ function adviseUiRenderMatchers(pluginName, registered) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:735333-736099 placement
+//@ chunk-5xgkngpb.js:745860-746626 placement
 function reportUnmatchedHookRegistrations(pluginName, patterns, table) {
   let known = [
     ...HOOK_EVENTS_2_2,
@@ -320,7 +322,7 @@ function reportUnmatchedHookRegistrations(pluginName, patterns, table) {
       );
   }
 }
-//@ chunk-e6aww6q8.js:736099-736506 placement
+//@ chunk-5xgkngpb.js:746626-747033 placement
 /**
  * 校验扫描到的 next.to 目标：只有托管插件可用，且目标须在该层允许的下层之中。
  */
@@ -337,7 +339,7 @@ function checkNextToAllowed(options, scan, tier) {
       );
   }
 }
-//@ chunk-e6aww6q8.js:736506-736889 placement
+//@ chunk-5xgkngpb.js:747033-747416 placement
 /**
  * 校验注册的事件：必须是已知事件或插件自定义事件，且出现在模块扫描结果里。
  */
@@ -365,7 +367,7 @@ function checkRegisteredEvents(pluginName, scan, secondPluginName) {
       );
   }
 }
-//@ chunk-e6aww6q8.js:743601-743796 placement
+//@ chunk-5xgkngpb.js:754190-754385 placement
 function checkScanPolicy(pluginName, scan, args) {
   let refusal = telemetryStreamRefusal(scan, {
     isBuiltin: isOfficialMarketplacePlugin(args),
@@ -375,23 +377,23 @@ function checkScanPolicy(pluginName, scan, args) {
   let item = telemetryRefSummary(scan);
   if (item !== undefined) logForDebugging(`${pluginName}: hooks telemetry for: ${item}`);
 }
-//@ chunk-e6aww6q8.js:762691-762704 placement
+//@ chunk-5xgkngpb.js:773288-773301 placement
 /**
  * 宿主状态
  */
 var hostStateRef; // deferred: uses createMemoMap (./moduleLoader.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:762691", () => {
+deferInit("chunk-5xgkngpb.js:773288", () => {
   hostStateRef = createMemoMap();
 });
-//@ chunk-e6aww6q8.js:762704-762740 placement
+//@ chunk-5xgkngpb.js:773301-773337 placement
 /**
  * 已加载插件的选项
  */
 var loadedPluginOptions; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:762704", () => {
+deferInit("chunk-5xgkngpb.js:773301", () => {
   loadedPluginOptions = identity_2(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-e6aww6q8.js:762740-762812 placement
+//@ chunk-5xgkngpb.js:773337-773409 placement
 /**
  * 取某插件的选项
  */
@@ -399,7 +401,7 @@ function pluginOptionsFor(pluginId) {
   let current = loadedPluginOptions.get();
   return current?.pluginId === pluginId ? current.options : undefined;
 }
-//@ chunk-e6aww6q8.js:762812-763072 placement
+//@ chunk-5xgkngpb.js:773409-773669 placement
 function warnOptionsOutsideChoices(name, userConfig, userConfig_2) {
   for (let [key, value] of Object.entries(userConfig)) {
     let options = userConfig_2[key]?.options;
@@ -414,7 +416,7 @@ function warnOptionsOutsideChoices(name, userConfig, userConfig_2) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:763072-763791 placement
+//@ chunk-5xgkngpb.js:773669-774387 placement
 /**
  * 读取并校验插件 userConfig 选项：取设置中的值（项目设置不读）、补默认值并校验；不合法时内置插件抛错，其他回退为默认值。
  */
@@ -452,7 +454,7 @@ async function resolvePluginOptions(plugin) {
   }
   return key;
 }
-//@ chunk-e6aww6q8.js:763791-763978 placement
+//@ chunk-5xgkngpb.js:774387-774574 placement
 /**
  * 插件当前非敏感选项及其稳定 JSON 文本（用于比较是否变化）。
  */
@@ -473,7 +475,7 @@ function pluginOptionsSnapshot(serverName) {
     ),
   };
 }
-//@ chunk-e6aww6q8.js:763978-764059 placement
+//@ chunk-5xgkngpb.js:774574-774655 placement
 /**
  * 找不可读的受信设置源
  */
@@ -483,7 +485,7 @@ var findBrokenTrustedSetting = () =>
       getSettingsForSource(source) === null &&
       getSettingsParseErrorsForSource(source).some((broken) => broken.severity !== "warning"),
   );
-//@ chunk-e6aww6q8.js:764103-764429 placement
+//@ chunk-5xgkngpb.js:774699-775025 placement
 /**
  * 加载插件的一个界面模块：读取、链接、检查导出，返回模块或问题。
  */
@@ -508,7 +510,7 @@ async function loadSurfaceModule(clientPath, pluginRoot, pluginName) {
     ...listLinkedFiles(graph, resolved),
   };
 }
-//@ chunk-e6aww6q8.js:764429-764540 placement
+//@ chunk-5xgkngpb.js:775025-775136 placement
 /**
  * 依次加载插件的所有界面模块。
  */
@@ -518,7 +520,7 @@ async function loadSurfaceModules(clients, pluginRoot, pluginName) {
   for (let client of clients) loaded.push(await loadSurfaceModule(client, pluginRoot, pluginName));
   return loaded;
 }
-//@ chunk-e6aww6q8.js:764540-765457 placement
+//@ chunk-5xgkngpb.js:775136-776056 placement
 /**
  * 为插件的 hooks 模块准备加载参数：检查准入与命名冲突、读取选项、扫描（或使用密封文本）、加载界面模块、确定层级并校验 next.to 与策略。
  */
@@ -576,13 +578,13 @@ async function prepareHooksModuleArgs(loaderContext, plugin, modulePath) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:765457-765505 placement
+//@ chunk-5xgkngpb.js:776056-776104 placement
 /**
  * 未在 N 毫秒内加载
  */
 var notLoadedWithinText = (pluginName, thirdPluginName) =>
   `${pluginName}: not loaded within ${thirdPluginName}ms`;
-//@ chunk-e6aww6q8.js:765505-765583 placement
+//@ chunk-5xgkngpb.js:776104-776182 placement
 /**
  * 错误文本加 cause
  */
@@ -591,7 +593,7 @@ function errorWithCause(error) {
   if (cause === undefined) return errorMessage(error);
   return `${errorMessage(error)} (${cause})`;
 }
-//@ chunk-e6aww6q8.js:765583-765662 placement
+//@ chunk-5xgkngpb.js:776182-776261 placement
 /**
  * 清空并刷新代理定义
  */
@@ -599,12 +601,12 @@ async function refreshAgentsAndDefinitions() {
   getHostState().agentDefinitions.clear();
   await currentSurfaceBinding()?.refreshAgents();
 }
-//@ chunk-e6aww6q8.js:765662-765717 placement
+//@ chunk-5xgkngpb.js:776261-776316 placement
 /**
  * 插件代理的唯一键
  */
 var agentRegistrationKey = (spec) => `${pluginDisplayKey(spec.plugin, spec.pluginId)}:` + spec.spec.name;
-//@ chunk-e6aww6q8.js:765717-766018 placement
+//@ chunk-5xgkngpb.js:776316-776617 placement
 /**
  * 插件登记的代理表：只列出可用插件的代理，支持登记与查询。
  */
@@ -626,22 +628,22 @@ function createRegisteredAgentsTable(getTable) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:766018-766057 placement
+//@ chunk-5xgkngpb.js:776617-776656 placement
 /**
  * 插件登记的代理表
  */
 var registeredAgentsTable; // deferred: uses createRegisteredAgentsTable of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:766018", () => {
+deferInit("chunk-5xgkngpb.js:776617", () => {
   registeredAgentsTable = createRegisteredAgentsTable(() => getPluginRegistry().registeredAgents);
 });
-//@ chunk-e6aww6q8.js:766057-766112 placement
+//@ chunk-5xgkngpb.js:776656-776711 placement
 /**
  * 忘掉登记的代理并刷新
  */
 function forgetRegisteredAgent(plugin) {
   if (registeredAgentsTable.forget(plugin)) refreshAgentsAndDefinitions().catch((error) => logError(error));
 }
-//@ chunk-e6aww6q8.js:3701193-3701373 placement
+//@ chunk-5xgkngpb.js:3796881-3797061 placement
 function installJsxGlobals() {
   let target = globalThis;
   for (let [key, value] of Object.entries({
@@ -656,7 +658,7 @@ function installJsxGlobals() {
         enumerable: false,
       });
 }
-//@ chunk-e6aww6q8.js:3701373-3701505 placement
+//@ chunk-5xgkngpb.js:3797061-3797193 placement
 /**
  * 若是内置插件，返回其内嵌的 hooks 模块对象。
  */
@@ -665,11 +667,11 @@ function builtinModuleOf(args) {
   let hooksModule = getBuiltinPlugin(args.pluginName)?.hooksModule;
   return hooksModule !== undefined && "module" in hooksModule ? hooksModule.module : undefined;
 }
-//@ chunk-e6aww6q8.js:3701505-3701623 placement
+//@ chunk-5xgkngpb.js:3797193-3797311 placement
 function createUiResolveCopier(name) {
   let withheldElementWarner = createWithheldElementWarner(name);
   return (value, kind) =>
-    isPlainObject_5(value)
+    isPlainObject_6(value)
       ? Object.freeze(
           Object.assign(
             Object.create(null),
@@ -678,7 +680,7 @@ function createUiResolveCopier(name) {
         )
       : value;
 }
-//@ chunk-e6aww6q8.js:3701623-3703563 placement
+//@ chunk-5xgkngpb.js:3797311-3799253 placement
 /**
  * 组装 hooks 模块运行期：host 代理、流式 hook 校验（必须返回 async generator）、参数/返回值直通、卸载信号处理；返回 activation 与 store/dispose。
  */
@@ -798,12 +800,12 @@ var assembleHooksModuleRuntime = async (invokeHost, args, options = {}) => {
     ownsValue: () => false,
   };
 };
-//@ chunk-e6aww6q8.js:3703563-3703578 placement
+//@ chunk-5xgkngpb.js:3799253-3799268 placement
 /**
  * 原样返回
  */
 var identityOf = (value) => value;
-//@ chunk-e6aww6q8.js:3703578-3704164 placement
+//@ chunk-5xgkngpb.js:3799268-3799854 placement
 /**
  * 为模块注册表建立按事件的索引：匹配的注册项、是否监听、是否有 catch、组合 matcher。
  */
@@ -825,7 +827,7 @@ function createRegistrationIndex(registered, options) {
       return registration === undefined || leftOut.includes(index) ? [] : [registration];
     });
   return {
-    patterns: uniq(registered.map((registration) => registration.pattern)),
+    patterns: normalizeCaseForComparison_2(registered.map((registration) => registration.pattern)),
     registrationsFor,
     standingFor,
     hooks: (event, leftOut) => standingFor(event, leftOut).length > 0,
@@ -846,14 +848,14 @@ function createRegistrationIndex(registered, options) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:3704164-3704243 placement
+//@ chunk-5xgkngpb.js:3799854-3799933 placement
 /**
  * 未加载则拒绝
  */
 function rejectIfUnloaded(statusOf, message, fn) {
   return statusOf().kind === "unloaded" ? Promise.reject(new HooksError(message)) : fn();
 }
-//@ chunk-e6aww6q8.js:3704243-3705997 placement
+//@ chunk-5xgkngpb.js:3799933-3801692 placement
 /**
  * 加载并登记一个 hooks 模块：查 environment 上限、建 environment、登记 moduleSeats/environmentArgs，返回带 enter/leave/dispatch/discard/retire/resolveTables/build/press 的模块记录。
  */
@@ -990,12 +992,12 @@ async function loadAndRegisterHooksModule(runtime, args) {
   });
   return secondModule;
 }
-//@ chunk-e6aww6q8.js:3705997-3706009 placement
+//@ chunk-5xgkngpb.js:3801692-3801704 placement
 /**
  * hooks 宿主等待 worker 就绪的默认超时 10 秒；插件自己的 init 可覆盖。
  */
 var HOOKS_READY_TIMEOUT_MS = 1e4;
-//@ chunk-e6aww6q8.js:3706009-3706161 placement
+//@ chunk-5xgkngpb.js:3801704-3801856 placement
 /**
  * 复制注册子句（模式、matcher 与 caught）。
  */
@@ -1009,7 +1011,7 @@ var copyRegistrations = (registrations, options) =>
       caught,
     }),
   }));
-//@ chunk-e6aww6q8.js:3706161-3706953 placement
+//@ chunk-5xgkngpb.js:3801856-3802651 placement
 /**
  * 重载前重新扫描插件的 hooks 模块并重算层级；组织插件与密封插件有额外限制。
  */
@@ -1065,15 +1067,15 @@ async function rescanHooksModuleArgs(state, args, reread) {
     await resolvePluginOptions(reread),
   );
 }
-//@ chunk-e6aww6q8.js:3706953-3706989 placement
+//@ chunk-5xgkngpb.js:3802651-3802687 placement
 /**
  * worker 加载上报器
  */
 var workersLoadedReporter; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3706953", () => {
+deferInit("chunk-5xgkngpb.js:3802651", () => {
   workersLoadedReporter = identity_2(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-e6aww6q8.js:4053009-4053100 placement
+//@ chunk-5xgkngpb.js:4158855-4158946 placement
 /**
  * 记录加载失败
  */
@@ -1083,14 +1085,14 @@ function logHookLoadFailure(error, feature, args) {
     logModLoadFailed(args, feature);
   }
 }
-//@ chunk-e6aww6q8.js:4053100-4053221 placement
+//@ chunk-5xgkngpb.js:4158946-4159067 placement
 async function reprepareFromPlugin(runtime, plugin) {
   if (plugin?.modulePath === undefined) return;
   let hooksModuleArgs = await prepareHooksModuleArgs(runtime.state, plugin, plugin.modulePath);
   setKnownArgs(runtime.state, hooksModuleArgs);
   return hooksModuleArgs;
 }
-//@ chunk-e6aww6q8.js:4053221-4053303 placement
+//@ chunk-5xgkngpb.js:4159067-4159149 placement
 /**
  * 去掉 “插件名: ” 前缀
  */
@@ -1099,7 +1101,7 @@ function stripPluginPrefix(pluginName, error) {
   let prefix = `${pluginName}: `;
   return message.startsWith(prefix) ? message.slice(prefix.length) : message;
 }
-//@ chunk-e6aww6q8.js:4053303-4053389 placement
+//@ chunk-5xgkngpb.js:4159149-4159235 placement
 /**
  * 上报模块加载失败
  */
@@ -1108,20 +1110,20 @@ function reportHookLoadFailure(pluginName, error, notice) {
   reportPluginProblem(pluginName, message);
   if (notice) reportInlinePluginNotice(notice, message);
 }
-//@ chunk-e6aww6q8.js:4053389-4053425 placement
+//@ chunk-5xgkngpb.js:4159235-4159271 placement
 /**
  * 上报重载失败
  */
 function reportReloadFailure(name, error, notice) {
   reportHookLoadFailure(name, errorMessage(error) + PREVIOUS_VERSION_UNLOADED, notice);
 }
-//@ chunk-e6aww6q8.js:4053425-4053473 placement
+//@ chunk-5xgkngpb.js:4159271-4159319 placement
 /**
  * 按名字找钩子成员
  */
 var findHookMemberByName = (modules, failed) =>
   modules.find((loadedModule) => loadedModule.name === failed[0]?.hook);
-//@ chunk-e6aww6q8.js:4062208-4063156 placement
+//@ chunk-5xgkngpb.js:4168062-4169012 placement
 /**
  * 判断加载这组模块时是否需要整组重新折叠 engine.create，返回原因文字（无需则 undefined）。
  */
@@ -1157,21 +1159,21 @@ function describeRefoldReason(runtime, { live, declaring, kept, leaving, unloade
     ? "the kept modules change order"
     : undefined;
 }
-//@ chunk-e6aww6q8.js:4063156-4063273 placement
+//@ chunk-5xgkngpb.js:4169012-4169129 placement
 function handlesCommandRun(scan, command) {
   return (
     scan.hooks.some((hook) => matchesEventPattern(hook, "command.run")) &&
     (scan.runCommands === undefined || scan.runCommands.includes(command))
   );
 }
-//@ chunk-e6aww6q8.js:4063273-4063333 placement
+//@ chunk-5xgkngpb.js:4169129-4169189 placement
 /**
  * 该次扫描要重折叠
  */
 function needsRefoldScan(scan) {
   return scan.calls.includes("command.register");
 }
-//@ chunk-e6aww6q8.js:4063376-4063479 placement
+//@ chunk-5xgkngpb.js:4169232-4169335 placement
 /**
  * 取插件适用的准入文本。
  */
@@ -1182,7 +1184,7 @@ function admissionTextFor(loadedModule) {
     ? admissionText
     : loadedModule?.judgedUnder;
 }
-//@ chunk-e6aww6q8.js:4063479-4063613 placement
+//@ chunk-5xgkngpb.js:4169335-4169469 placement
 function recordOptionsReloadFailure(runtime, args, error) {
   runtime.state.optionsReloadFailures.set(args.name, {
     generation: runtime.state.generations.get(args.name),
@@ -1190,13 +1192,13 @@ function recordOptionsReloadFailure(runtime, args, error) {
     error,
   });
 }
-//@ chunk-e6aww6q8.js:4063613-4063643 placement
+//@ chunk-5xgkngpb.js:4169469-4169499 placement
 /**
  * 插件提供者层级
  */
 var pluginProviderRank = (plugin) =>
   providerRank(plugin, getVouchedPolicyPluginIds(), resolveManagedPluginOrder());
-//@ chunk-e6aww6q8.js:4063643-4063758 placement
+//@ chunk-5xgkngpb.js:4169499-4169614 placement
 function providerRankOf(loadedModule) {
   return loadedModule.sealed === true
     ? providerRank(
@@ -1206,7 +1208,7 @@ function providerRankOf(loadedModule) {
       )
     : pluginProviderRank(loadedModule.pluginStorageId);
 }
-//@ chunk-e6aww6q8.js:4063758-4063869 placement (2.1.88 match: findReverseDependents, 0.826)
+//@ chunk-5xgkngpb.js:4169614-4169725 placement (2.1.88 match: findReverseDependents, 0.826)
 /**
  * 插件 n 的 manifest.dependencies 是否引用插件 e。
  */
@@ -1218,14 +1220,17 @@ function findReverseDependents(pluginId, plugins) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:4063869-4064754 placement
+//@ chunk-5xgkngpb.js:4169725-4170613 placement
 /**
  * 按依赖关系对插件做拓扑排序（同层保持原顺序），并找出依赖环。
  */
 function orderByDependencies(items, getDeps) {
   let known = new Set(items);
   let depsByName = new Map(
-    items.map((item) => [item, uniq(getDeps(item)).filter((dep) => dep !== item && known.has(dep))]),
+    items.map((item) => [
+      item,
+      normalizeCaseForComparison_2(getDeps(item)).filter((dep) => dep !== item && known.has(dep)),
+    ]),
   );
   let closure = new Map();
   for (let item of items) {
@@ -1272,7 +1277,7 @@ function orderByDependencies(items, getDeps) {
     cycles,
   };
 }
-//@ chunk-e6aww6q8.js:4064754-4065681 placement
+//@ chunk-5xgkngpb.js:4170613-4171542 placement
 /**
  * 按提供者层级与依赖关系排列 hooks 模块顺序，并说明冲突时谁优先。
  */
@@ -1319,7 +1324,7 @@ function orderHooksModules(plugins, infoOf) {
     );
   return order;
 }
-//@ chunk-e6aww6q8.js:4065681-4066023 placement
+//@ chunk-5xgkngpb.js:4171542-4171884 placement
 /**
  * 让密封插件按指定顺序排在其他插件前面。
  */
@@ -1340,10 +1345,13 @@ function orderSealedModules(args, infoByName) {
     },
   ).flatMap((args) => byName.get(args.name) ?? []);
 }
-//@ chunk-e6aww6q8.js:4066023-4066254 placement
+//@ chunk-5xgkngpb.js:4171884-4172115 placement
 function logModsBackOn(runtime, admitted) {
   let { modsOffAt } = runtime.state;
-  let nonBuiltinCount = count(admitted, (fourthModule) => builtinModuleOf(fourthModule.args) === undefined);
+  let nonBuiltinCount = countWhere(
+    admitted,
+    (fourthModule) => builtinModuleOf(fourthModule.args) === undefined,
+  );
   if (modsOffAt === undefined || nonBuiltinCount === 0) return;
   runtime.state.modsOffAt = undefined;
   logFeatureOk("plugin_function_hooks_worker_mods", {
@@ -1351,12 +1359,12 @@ function logModsBackOn(runtime, admitted) {
     worker_mods: nonBuiltinCount,
   });
 }
-//@ chunk-e6aww6q8.js:4066254-4066278 placement
+//@ chunk-5xgkngpb.js:4172115-4172139 placement
 /**
  * import( 检测
  */
 var DYNAMIC_IMPORT_RE = /\bimport\s*\(/;
-//@ chunk-e6aww6q8.js:4066321-4066445 placement
+//@ chunk-5xgkngpb.js:4172182-4172306 placement
 /**
  * 判断已加载模块的参数与展示是否与新的完全一致（且源码不含动态 import），可复用。
  */
@@ -1368,12 +1376,12 @@ function isModuleUnchanged(args, next, info) {
     isDeepStrictEqual(args.shown, shownPluginInfo(next, info))
   );
 }
-//@ chunk-e6aww6q8.js:4066445-4066512 placement
+//@ chunk-5xgkngpb.js:4172306-4172373 placement
 /**
  * same-thread 或 worker
  */
 var hookHostKind = () => (env.CLAUDE_CODE_HOOKS_SAME_THREAD ? "same-thread" : "worker");
-//@ chunk-e6aww6q8.js:4066512-4066751 placement
+//@ chunk-5xgkngpb.js:4172373-4172612 placement
 function reusableLoadedModule(runtime, hooksModuleArgs, plugin) {
   let found = getPluginRegistry().loadedModules.find(
     (loadedModule) => loadedModule.name === hooksModuleArgs.pluginName,
@@ -1388,7 +1396,7 @@ function reusableLoadedModule(runtime, hooksModuleArgs, plugin) {
     ? found
     : undefined;
 }
-//@ chunk-e6aww6q8.js:4066751-4066961 placement
+//@ chunk-5xgkngpb.js:4172612-4172822 placement
 function uiResolveEnvironments(admitted, pluginName, resolvedTable) {
   let out = [];
   for (let fifthModule of admitted) {
@@ -1405,7 +1413,7 @@ function uiResolveEnvironments(admitted, pluginName, resolvedTable) {
   }
   return out;
 }
-//@ chunk-e6aww6q8.js:4066961-4067284 placement
+//@ chunk-5xgkngpb.js:4172822-4173145 placement
 /**
  * 让每个活动模块重新解析各 UI 组件的元素表（考虑其他模块的 ui.resolve 钩子），失败时保留旧表。
  */
@@ -1433,7 +1441,7 @@ async function resolveElementTables(admitted) {
       ),
   );
 }
-//@ chunk-e6aww6q8.js:4067284-4072469 placement
+//@ chunk-5xgkngpb.js:4173145-4178348 placement
 /**
  * 加载声明的整组 hooks 模块：未变的保留、变化的全量重载，并记录失败与遥测。
  */
@@ -1535,7 +1543,10 @@ async function loadHooksModuleSet(runtime, plugins, options) {
     for (let n10Module of admitted) runtime.state.crashedWithholders.delete(n10Module.name);
     forgetDeparted();
     for (let loadedModule of loadedModules) {
-      if (!admittedSet.has(loadedModule)) loadedModule.retire();
+      if (!admittedSet.has(loadedModule)) {
+        loadedModule.retire();
+        clearBackdropFor(loadedModule.name);
+      }
       if (!admittedNames.has(loadedModule.name)) {
         forgetMcpServerFor(loadedModule.name);
         forgetMcpConnectsFor(loadedModule.name);
@@ -1710,18 +1721,18 @@ async function loadHooksModuleSet(runtime, plugins, options) {
     for (let [envId, n19Module] of loads) if (runtime.state.unadmitted.has(envId)) n19Module.discard();
   }
 }
-//@ chunk-e6aww6q8.js:4072469-4072580 placement
+//@ chunk-5xgkngpb.js:4178348-4178459 placement
 function isLaterPlugin(name, runtime) {
   let names = [...runtime.state.knownPlugins.keys()];
   let index = names.indexOf(name);
   return (other) => index !== -1 && names.indexOf(other.name) > index;
 }
-//@ chunk-e6aww6q8.js:4072580-4072604 placement
+//@ chunk-5xgkngpb.js:4178459-4178483 placement
 /**
  * 取参数的层级
  */
 var providerRankOfArgs = (args) => providerRankOf(args.args);
-//@ chunk-e6aww6q8.js:4072604-4072714 placement
+//@ chunk-5xgkngpb.js:4178483-4178593 placement
 function needsFullReload(pluginName, runtime, live) {
   let args = runtime.state.knownArgs.get(pluginName);
   return (
@@ -1731,7 +1742,7 @@ function needsFullReload(pluginName, runtime, live) {
     }) !== undefined || isCrashedOrWithholding(pluginName, runtime)
   );
 }
-//@ chunk-e6aww6q8.js:4072714-4072797 placement
+//@ chunk-5xgkngpb.js:4178593-4178676 placement
 /**
  * 逐个退役模块并收集错误
  */
@@ -1745,7 +1756,7 @@ function retireModules(modules) {
     }
   return errors;
 }
-//@ chunk-e6aww6q8.js:4072797-4073208 placement
+//@ chunk-5xgkngpb.js:4178676-4179087 placement
 /**
  * 某插件使 hooks worker 崩溃时：记遥测、报告插件问题（列出仍保持扣留的 $ 名称）并发出失败事件。
  */
@@ -1773,7 +1784,7 @@ function reportWorkerCrash({ state }, name, { reason, fields }) {
     hasOverrun: false,
   });
 }
-//@ chunk-e6aww6q8.js:4073208-4073829 placement
+//@ chunk-5xgkngpb.js:4179087-4179712 placement
 /**
  * 卸载一组 hooks 模块，记录退役时抛出的错误。
  */
@@ -1812,7 +1823,7 @@ async function unloadHooksModules(runtime, names, reason) {
       "a hooks module threw as it retired: " + retired.map(errorMessage).join("; "),
     );
 }
-//@ chunk-e6aww6q8.js:4073829-4073968 placement
+//@ chunk-5xgkngpb.js:4179712-4179851 placement
 async function withUnadmitted(runtime, n23Module, fn) {
   runtime.state.unadmitted.add(n23Module.environmentId);
   try {
@@ -1821,7 +1832,7 @@ async function withUnadmitted(runtime, n23Module, fn) {
     runtime.state.unadmitted.delete(n23Module.environmentId);
   }
 }
-//@ chunk-e6aww6q8.js:4073968-4074080 placement
+//@ chunk-5xgkngpb.js:4179851-4179963 placement
 function insertionIndex(modules, rank, order) {
   let index = modules.findIndex(
     (n24Module) =>
@@ -1829,7 +1840,7 @@ function insertionIndex(modules, rank, order) {
   );
   return index === -1 ? modules.length : index;
 }
-//@ chunk-e6aww6q8.js:4074080-4074165 placement
+//@ chunk-5xgkngpb.js:4179963-4180048 placement
 /**
  * 按层级插入模块
  */
@@ -1837,7 +1848,7 @@ function insertByRank(modules, n25Module, order) {
   let index = insertionIndex(modules, order.rank(n25Module), order);
   return [...modules.slice(0, index), n25Module, ...modules.slice(index)];
 }
-//@ chunk-e6aww6q8.js:4074165-4076943 placement
+//@ chunk-5xgkngpb.js:4180048-4182838 placement
 /**
  * 按名字重载一个 hooks 模块；worker 中途死亡、模块被移出声明集等情况都给出原因。
  */
@@ -1985,6 +1996,7 @@ async function reloadHooksModuleByName(name, runtime) {
   publishRenderPlugins(runtime);
   logModsBackOn(runtime, [n26Module]);
   invalidateAllHookedCaches();
+  clearBackdropFor(name);
   forgetSessionStartCall(name);
   noteWorkersLoaded(pluginRegistry.loadedModules);
   let ms = performance.now() - startTime;
@@ -1997,15 +2009,15 @@ async function reloadHooksModuleByName(name, runtime) {
     ms,
   };
 }
-//@ chunk-e6aww6q8.js:4076943-4076964 placement
+//@ chunk-5xgkngpb.js:4182838-4182859 placement
 /**
  * 重载失败错误类
  */
 let ReloadFailedError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4076943", () => {
+deferInit("chunk-5xgkngpb.js:4182838", () => {
   ReloadFailedError = class ReloadFailedError extends HooksError {};
 });
-//@ chunk-e6aww6q8.js:4076964-4077156 placement
+//@ chunk-5xgkngpb.js:4182859-4183051 placement
 /**
  * 执行重载，失败时包装为说明插件仍在旧版本运行的错误。
  */
@@ -2022,13 +2034,13 @@ async function wrapReloadError(name, fn) {
       : error;
   }
 }
-//@ chunk-e6aww6q8.js:4077156-4077210 placement
+//@ chunk-5xgkngpb.js:4183051-4183105 placement
 /**
  * 排队重载模块
  */
 var queueReload = (name, runtime) =>
   runtime.state.queue(() => wrapReloadError(name, () => reloadHooksModuleByName(name, runtime)));
-//@ chunk-e6aww6q8.js:4077210-4077474 placement
+//@ chunk-5xgkngpb.js:4183105-4183369 placement
 /**
  * 开始加载一批模块：设置重载器并登记加载状态。
  */
@@ -2049,14 +2061,14 @@ function startLoadingModules(runtime, plugins, judgedUnder) {
       runtime.state.loadingRead.emit();
     });
 }
-//@ chunk-e6aww6q8.js:4077474-4077561 placement
+//@ chunk-5xgkngpb.js:4183369-4183456 placement
 /**
  * 等待所有模块读取
  */
 async function waitForModuleReads(hooksHost) {
   await Promise.all([...hooksHost.state.loading].map((thirdLoad) => thirdLoad.read.promise));
 }
-//@ chunk-e6aww6q8.js:4077561-4077663 placement
+//@ chunk-5xgkngpb.js:4183456-4183558 placement
 /**
  * 判断正在加载的模块中是否有处理某 command.run 的。
  */
@@ -2066,7 +2078,7 @@ function isLoadingCommandRun(hooksHost, command) {
       fourthLoad.scans === undefined || fourthLoad.scans.some((scan) => handlesCommandRun(scan, command)),
   );
 }
-//@ chunk-e6aww6q8.js:4077663-4077809 placement
+//@ chunk-5xgkngpb.js:4183558-4183704 placement
 /**
  * 判断正在加载或已知的模块中是否有处理任何 command.run 的。
  */
@@ -2077,7 +2089,7 @@ function isLoadingAnyCommandRun(hooksHost) {
     ) || [...hooksHost.state.knownArgs.values()].some((knownArg) => needsRefoldScan(knownArg.scan))
   );
 }
-//@ chunk-e6aww6q8.js:4077809-4077986 placement
+//@ chunk-5xgkngpb.js:4183704-4183881 placement
 /**
  * 列出插件 hooks 模块的文件。
  */
@@ -2087,7 +2099,7 @@ function hooksModuleFilesOf(name, hooksHost) {
   let plugin = hooksHost.state.knownPlugins.get(name);
   return plugin !== undefined && plugin.modulePath === undefined ? [] : undefined;
 }
-//@ chunk-e6aww6q8.js:4077986-4078339 placement
+//@ chunk-5xgkngpb.js:4183881-4184234 placement
 /**
  * 卸载已被禁用或卸载的插件的 hooks 模块（排队执行）。
  */
@@ -2107,7 +2119,7 @@ var unloadDisabledPlugins = (hooksHost, mode) =>
     for (let fourthName of disabled) hooksHost.state.knownPlugins.delete(fourthName);
     await unloadHooksModules(hooksHost, disabled, "plugin disabled or uninstalled");
   });
-//@ chunk-e6aww6q8.js:4078382-4079470 placement
+//@ chunk-5xgkngpb.js:4184277-4185369 placement
 /**
  * 插件选项（options）状态文案：不能解析、被扣留、失败、已重载、被拒绝。
  */
@@ -2190,7 +2202,7 @@ var HOOKS_OPTIONS_STATUS_TEXT = (hooksHost, attemptLoad) =>
     }
     return options;
   });
-//@ chunk-e6aww6q8.js:4079513-4079732 placement
+//@ chunk-5xgkngpb.js:4185412-4185631 placement
 /**
  * 合并插件记录：清单与 hooks 配置未变时保留原记录。
  */
@@ -2210,7 +2222,7 @@ function mergePluginRecord(record, next) {
         modulePath: next.modulePath,
       };
 }
-//@ chunk-e6aww6q8.js:4079732-4080103 placement
+//@ chunk-5xgkngpb.js:4185631-4186002 placement
 /**
  * 重新读取已知插件记录（排队执行），manifest 不再指定 hooks 模块时卸载；返回前后的模块路径。
  */
@@ -2230,19 +2242,19 @@ var retargetKnownPlugin = (name, hooksHost, fn) =>
       now: next.modulePath,
     };
   });
-//@ chunk-e6aww6q8.js:4080103-4080272 placement
+//@ chunk-5xgkngpb.js:4186002-4186171 placement
 /**
  * 记录 worker 中 mods 被关闭（数量与时间）。
  */
 function logModsTurnedOff(runtime, modules) {
-  let builtinCount = count(modules, (n27Module) => builtinModuleOf(n27Module) !== undefined);
+  let builtinCount = countWhere(modules, (n27Module) => builtinModuleOf(n27Module) !== undefined);
   runtime.state.modsOffAt = Date.now();
   logFeatureBad("plugin_function_hooks_worker_mods", "turned_off", {
     worker_mods: modules.length - builtinCount,
     native_mods: builtinCount,
   });
 }
-//@ chunk-e6aww6q8.js:4116682-4117078 placement
+//@ chunk-5xgkngpb.js:4222636-4223032 placement
 var loadHooksModules; // deferred: uses initHooksHost (./hooksWorkerHost.js) of its import cycle while loading; runs once the cycle is complete
 var mayHookCommand;
 var mayRegisterCommands;
@@ -2261,7 +2273,7 @@ var retireEnvironmentHost;
 var opsDelivered;
 var workInFlight;
 var applyPendingInvalidations;
-deferInit("chunk-e6aww6q8.js:4116682", () => {
+deferInit("chunk-5xgkngpb.js:4222636", () => {
   ({
     loadHooksModules,
     mayHookCommand,
@@ -2284,28 +2296,21 @@ deferInit("chunk-e6aww6q8.js:4116682", () => {
   } = initHooksHost());
 });
 export {
-  workersLoadedReporter,
-  flushDeferredProblems,
   retryUnloadedModules,
+  loadSurfaceModules,
   opsDelivered,
   applyPendingInvalidations,
-  loadingScansRead,
-  mayRegisterCommands,
-  mayHookCommand,
-  onLoadingScansRead,
-  loadHooksModules,
-  loadedPluginOptions,
-  workInFlight,
-  loadSurfaceModules,
-  mergePluginRecord,
-  refreshAgentsAndDefinitions,
+  flushDeferredProblems,
+  HOOKS_READY_TIMEOUT_MS,
   inlineProblemsSeen,
   orderHooksModules,
   reportInlinePluginNotice,
+  loadHooksModules,
   pruneHooksModules,
   refreshOptions,
-  HOOKS_READY_TIMEOUT_MS,
+  workersLoadedReporter,
   registeredAgentsTable,
+  refreshAgentsAndDefinitions,
   toolNameOfCall,
   notLoadedWithinText,
   copyRegistrations,
@@ -2341,8 +2346,15 @@ export {
   stripPluginPrefix,
   ReloadFailedError,
   hostStateRef,
+  mergePluginRecord,
   retargetHooksModule,
   findReverseDependents,
   loadedFilesOf,
   reloadHooksModule,
+  loadingScansRead,
+  mayRegisterCommands,
+  mayHookCommand,
+  onLoadingScansRead,
+  loadedPluginOptions,
+  workInFlight,
 };

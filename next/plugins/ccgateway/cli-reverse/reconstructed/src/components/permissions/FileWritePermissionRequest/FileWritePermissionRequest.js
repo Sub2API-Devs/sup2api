@@ -3,14 +3,14 @@
  *
  * Write 权限请求的 IDE diff 支持描述。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/FileWritePermissionRequest/FileWritePermissionRequest.tsx
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: fingerprint 1
  */
 import { ripgrepStatus } from "../../../utils/ripgrep.js";
 
-//@ chunk-fq0cr76a.js:878544-878582 fingerprint (2.1.88 match: ideDiffSupport, 0.531)
+//@ chunk-qg41pqt6.js:880464-880502 fingerprint (2.1.88 match: ideDiffSupport, 0.53)
 function ideDiffSupport() {
   return ripgrepStatus().getConfig();
 }

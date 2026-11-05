@@ -3,9 +3,9 @@
  *
  * 原始 MDM 读取：reg query HKLM/HKCU 的 Settings 值（macOS 为 plutil 读 plist），返回原始输出与结果分类。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/mdm/rawRead.ts
- * pieces: chunk-qrhwndg8.js (10)
+ * pieces: chunk-6eexe0f3.js (10)
  * attribution: sole-consumer 2, affinity 1, callgraph-fingerprint 1, layout 2, facade-exports 3, fingerprint 1
  */
 import { execFile } from "child_process";
@@ -19,7 +19,7 @@ import {
 import { SETTINGS, WINDOWS_REGISTRY_KEY_PATH_HKLM, WINDOWS_REGISTRY_KEY_PATH_HKCU } from "./constants.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-qrhwndg8.js:297-395 sole-consumer
+//@ chunk-6eexe0f3.js:297-395 sole-consumer
 class RawReadRunner {
   promise = null;
   start() {
@@ -30,12 +30,12 @@ class RawReadRunner {
     this.promise = null;
   }
 }
-//@ chunk-qrhwndg8.js:395-407 sole-consumer
+//@ chunk-6eexe0f3.js:395-407 sole-consumer
 var rawReadRunner; // deferred: uses RawReadRunner of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-qrhwndg8.js:395", () => {
+deferInit("chunk-6eexe0f3.js:395", () => {
   rawReadRunner = new RawReadRunner();
 });
-//@ chunk-qrhwndg8.js:407-870 affinity
+//@ chunk-6eexe0f3.js:407-870 affinity
 function classifyExecResult(error) {
   if (!error)
     return {
@@ -74,7 +74,7 @@ function classifyExecResult(error) {
     signal: null,
   };
 }
-//@ chunk-qrhwndg8.js:870-1244 callgraph-fingerprint (2.1.88 match: execFilePromise, 0.388)
+//@ chunk-6eexe0f3.js:870-1244 callgraph-fingerprint (2.1.88 match: execFilePromise, 0.388)
 function execFilePromise(cmd, args, maxBuffer) {
   let now = Date.now();
   return new Promise((resolve) => {
@@ -113,7 +113,7 @@ function execFilePromise(cmd, args, maxBuffer) {
     }
   });
 }
-//@ chunk-qrhwndg8.js:1244-1442 layout
+//@ chunk-6eexe0f3.js:1244-1442 layout
 function summarizeRegQueryOutcome(outcome) {
   return {
     status: outcome.status,
@@ -128,11 +128,11 @@ function summarizeRegQueryOutcome(outcome) {
         outcome.stderr.includes(REG_KEY_NOT_FOUND_TEXT)),
   };
 }
-//@ chunk-qrhwndg8.js:1442-1535 layout
+//@ chunk-6eexe0f3.js:1442-1535 layout
 function isStdioMaxBufferError(outcome) {
   return outcome.status === "spawn_error" && outcome.errno === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
 }
-//@ chunk-qrhwndg8.js:1535-1683 facade-exports (2.1.88 match: consumeRawReadResult, 0.602)
+//@ chunk-6eexe0f3.js:1535-1683 facade-exports (2.1.88 match: consumeRawReadResult, 0.602)
 /**
  * Windows：并行 reg query HKLM 与 HKCU 的 Settings 值，返回原始输出与每次调用的结果分类。
  */
@@ -150,7 +150,7 @@ function fireRawRead() {
     };
   })();
 }
-//@ chunk-qrhwndg8.js:1683-1991 fingerprint (2.1.88 match: fireRawRead, 0.419)
+//@ chunk-6eexe0f3.js:1683-1991 fingerprint (2.1.88 match: fireRawRead, 0.419)
 async function fireRawRead_2(cmd) {
   let run = (key) => execFilePromise(cmd, ["query", key, "/v", SETTINGS], REG_QUERY_MAX_BUFFER);
   let [hklm, hkcu] = await Promise.all([
@@ -170,11 +170,11 @@ async function fireRawRead_2(cmd) {
     },
   };
 }
-//@ chunk-qrhwndg8.js:1991-2016 facade-exports
+//@ chunk-6eexe0f3.js:1991-2016 facade-exports
 function startMdmRawRead() {
   rawReadRunner.start();
 }
-//@ chunk-qrhwndg8.js:2016-2048 facade-exports
+//@ chunk-6eexe0f3.js:2016-2048 facade-exports
 function getMdmRawReadPromise() {
   return rawReadRunner.promise;
 }

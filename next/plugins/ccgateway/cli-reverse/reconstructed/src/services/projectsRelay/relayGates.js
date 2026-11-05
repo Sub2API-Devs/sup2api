@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：项目中继的开关与回退判断（tengu_opal_circuit、tengu_cinder_relay）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (12)
  * attribution: placement 12
  */
 import { identity as identity_2 } from "../../utils/identity.js";
@@ -19,9 +19,9 @@ import {
 } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:596653-596743 placement
+//@ chunk-exfmq47h.js:609137-609227 placement
 var growthbookFetchMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:596653", () => {
+deferInit("chunk-exfmq47h.js:609137", () => {
   growthbookFetchMap = identity_2(new WeakMap(), (map) => {
     let original = getPolyfills().fetch;
     while (original && map.has(original)) original = map.get(original);
@@ -30,7 +30,7 @@ deferInit("chunk-aepeg2w5.js:596653", () => {
     });
   });
 });
-//@ chunk-aepeg2w5.js:596743-596864 placement
+//@ chunk-exfmq47h.js:609227-609348 placement
 /**
  * 为 GrowthBook 安装走代理的 fetch（只安装一次）。
  */
@@ -49,9 +49,9 @@ function installProxyFetchForGrowthBook() {
     fetch: proxiedFetch,
   });
 }
-//@ chunk-aepeg2w5.js:596864-596892 placement
+//@ chunk-exfmq47h.js:609348-609376 placement
 var TENGU_CINDER_RELAY = "tengu_cinder_relay";
-//@ chunk-aepeg2w5.js:596892-596967 placement
+//@ chunk-exfmq47h.js:609376-609451 placement
 class GateReaderSlot_2 {
   reader = null;
   register(reader) {
@@ -60,16 +60,16 @@ class GateReaderSlot_2 {
     return reader_2;
   }
 }
-//@ chunk-aepeg2w5.js:596967-596981 placement
+//@ chunk-exfmq47h.js:609451-609465 placement
 var commitSkillGateSlot; // deferred: uses GateReaderSlot_2 of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:596967", () => {
+deferInit("chunk-exfmq47h.js:609451", () => {
   commitSkillGateSlot = new GateReaderSlot_2();
 });
-//@ chunk-aepeg2w5.js:596981-597018 placement
+//@ chunk-exfmq47h.js:609465-609502 placement
 function registerCommitSkillGateReader(reader) {
   return commitSkillGateSlot.register(reader);
 }
-//@ chunk-aepeg2w5.js:597018-597171 placement
+//@ chunk-exfmq47h.js:609502-609655 placement
 /**
  * 读取 commit 技能灰度开关（结果一旦确定就锁存）。
  */
@@ -83,9 +83,9 @@ function isCommitSkillRolloutOn() {
   setCommitSkillRolloutGateLatch(value);
   return value;
 }
-//@ chunk-aepeg2w5.js:597171-597199 placement
+//@ chunk-exfmq47h.js:609655-609683 placement
 var TENGU_OPAL_CIRCUIT = "tengu_opal_circuit";
-//@ chunk-aepeg2w5.js:597199-597274 placement
+//@ chunk-exfmq47h.js:609683-609758 placement
 class verifySkillGateSlot {
   reader = null;
   register(reader) {
@@ -94,16 +94,16 @@ class verifySkillGateSlot {
     return reader_2;
   }
 }
-//@ chunk-aepeg2w5.js:597274-597288 placement
+//@ chunk-exfmq47h.js:609758-609772 placement
 var verifySkillGateReaderSlot; // deferred: uses verifySkillGateSlot of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:597274", () => {
+deferInit("chunk-exfmq47h.js:609758", () => {
   verifySkillGateReaderSlot = new verifySkillGateSlot();
 });
-//@ chunk-aepeg2w5.js:597288-597325 placement
+//@ chunk-exfmq47h.js:609772-609809 placement
 function registerVerifySkillGateReader(reader) {
   return verifySkillGateReaderSlot.register(reader);
 }
-//@ chunk-aepeg2w5.js:597325-597478 placement
+//@ chunk-exfmq47h.js:609809-609962 placement
 /**
  * 读取 verify 技能灰度开关（结果一旦确定就锁存）。
  */
@@ -118,9 +118,9 @@ function isVerifySkillRolloutOn() {
   return value;
 }
 export {
+  isCommitSkillRolloutOn,
   installProxyFetchForGrowthBook,
   registerVerifySkillGateReader,
   registerCommitSkillGateReader,
-  isCommitSkillRolloutOn,
   isVerifySkillRolloutOn,
 };

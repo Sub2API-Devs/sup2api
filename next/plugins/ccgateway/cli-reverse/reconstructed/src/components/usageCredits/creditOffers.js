@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。额度相关提议的判定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (23)
  * attribution: placement 23
  */
 import {
@@ -24,17 +24,17 @@ import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1128195-1128199 placement
+//@ chunk-czq1j3j2.js:1132357-1132361 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1128195", () => {
+deferInit("chunk-czq1j3j2.js:1132357", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1128249-1128253 placement
+//@ chunk-czq1j3j2.js:1146131-1146135 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1128249", () => {
+deferInit("chunk-czq1j3j2.js:1146131", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1128253-1129067 placement
+//@ chunk-czq1j3j2.js:1159035-1159849 placement
 /**
  * 额度提议的 zod 结构：id 字符串、额外额度分档（bonus_pct）、折扣分档（discount_pct）、提议本体（arm_id/kind/headline_pct/default_bundle_id/days_left/custom_bonus_tiers）。
  */
@@ -42,7 +42,7 @@ var offerIdSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of 
 var bonusTierSchema;
 var discountTierSchema;
 var creditOfferSchema;
-deferInit("chunk-18hwfzwa.js:1128253", () => {
+deferInit("chunk-czq1j3j2.js:1159035", () => {
   offerIdSchema = DoctorLazy(() =>
     stringSchema()
       .regex(/^[A-Za-z0-9_-]{1,64}$/)
@@ -78,7 +78,7 @@ deferInit("chunk-18hwfzwa.js:1128253", () => {
     }),
   );
 });
-//@ chunk-18hwfzwa.js:1129067-1130101 placement
+//@ chunk-czq1j3j2.js:1159849-1160883 placement
 function parseCreditBundlesOffer(offer) {
   if (offer === undefined || offer === null) return null;
   let parsed = creditOfferSchema().safeParse(offer);
@@ -124,7 +124,7 @@ function parseCreditBundlesOffer(offer) {
     armId: data.arm_id ?? null,
   };
 }
-//@ chunk-18hwfzwa.js:1130101-1130434 placement
+//@ chunk-czq1j3j2.js:1160883-1161216 placement
 /**
  * 解析折扣分档数组，丢弃不合法或 max<=min 的项，转换为驼峰字段。
  */
@@ -145,7 +145,7 @@ function parseDiscountTiers(customDiscountTiers) {
   }
   return tiers;
 }
-//@ chunk-18hwfzwa.js:1130434-1130622 placement
+//@ chunk-czq1j3j2.js:1161216-1161404 placement
 /**
  * 计算本地货币与额度的换算比例（USD 为 1，否则取首个有效价格档推算）。
  */
@@ -154,17 +154,17 @@ function getLocalCurrencyRate(bundles, currency) {
   let found = bundles.find((bundle) => bundle.credit_minor_units > 0 && bundle.local_credit_minor_units > 0);
   return found ? found.credit_minor_units / found.local_credit_minor_units : null;
 }
-//@ chunk-18hwfzwa.js:1130622-1130693 placement
+//@ chunk-czq1j3j2.js:1161404-1161475 placement
 function discountPercentOfPay(creditMinor, payMinor) {
   if (creditMinor <= 0 || payMinor >= creditMinor) return 0;
   return Math.floor(((creditMinor - payMinor) * 100) / creditMinor);
 }
-//@ chunk-18hwfzwa.js:1130693-1130764 placement
+//@ chunk-czq1j3j2.js:1161475-1161546 placement
 function percentOfBase(creditMinor, payMinor) {
   if (payMinor <= 0 || creditMinor <= payMinor) return 0;
   return Math.floor(((creditMinor - payMinor) * 100) / payMinor);
 }
-//@ chunk-18hwfzwa.js:1130764-1131026 placement
+//@ chunk-czq1j3j2.js:1161546-1161808 placement
 function findBonusTier(customBonusTiers, amount) {
   let useLocalBounds =
     customBonusTiers.length > 0 && customBonusTiers.every((tier) => tier.minPayLocalMinor !== null);
@@ -176,7 +176,7 @@ function findBonusTier(customBonusTiers, amount) {
   }
   return null;
 }
-//@ chunk-18hwfzwa.js:1131026-1131228 placement
+//@ chunk-czq1j3j2.js:1161808-1162010 placement
 function getDiscountPct(discountTiers, creditUsdMinor) {
   let bestPct = 0;
   let bestMinUsdMinor = -1;
@@ -191,7 +191,7 @@ function getDiscountPct(discountTiers, creditUsdMinor) {
     }
   return bestPct;
 }
-//@ chunk-18hwfzwa.js:1131228-1132312 placement
+//@ chunk-czq1j3j2.js:1162010-1163094 placement
 function computeCreditOffer({ typedMinor, offer, discountTiers, rate, capRemainingUsdMinor }) {
   let plainOffer = (withheld = null) => ({
     kind: "plain",
@@ -250,39 +250,39 @@ function computeCreditOffer({ typedMinor, offer, discountTiers, rate, capRemaini
     expectedPriceMinor: typedMinor - discountMinor,
   };
 }
-//@ chunk-18hwfzwa.js:1132312-1132362 placement
+//@ chunk-czq1j3j2.js:1163094-1163144 placement
 function bonusMinorUnits(typedMinor, pct) {
   return Math.floor((typedMinor * pct + 50) / 100);
 }
-//@ chunk-18hwfzwa.js:1132362-1132398 placement
+//@ chunk-czq1j3j2.js:1163144-1163180 placement
 function selectBonusPct(tier) {
   return tier.bonusPct;
 }
-//@ chunk-18hwfzwa.js:1132398-1132433 placement
+//@ chunk-czq1j3j2.js:1163180-1163215 placement
 function toBinaryFlag(attempts) {
   return attempts === 0 ? 1 : 0;
 }
-//@ chunk-18hwfzwa.js:1132433-1132474 placement
+//@ chunk-czq1j3j2.js:1163215-1163256 placement
 function decrementClamped(index) {
   return Math.max(0, index - 1);
 }
-//@ chunk-18hwfzwa.js:1132474-1132512 placement
+//@ chunk-czq1j3j2.js:1163256-1163294 placement
 function decrementOrZero(index) {
   return index === 0 ? 0 : index - 1;
 }
-//@ chunk-18hwfzwa.js:1132512-1132550 placement
+//@ chunk-czq1j3j2.js:1163294-1163332 placement
 function incrementCappedAtTwo(index) {
   return index === 2 ? 2 : index + 1;
 }
-//@ chunk-18hwfzwa.js:1132550-1132591 placement
+//@ chunk-czq1j3j2.js:1163332-1163373 placement
 function decrementClampedLower(index) {
   return Math.max(0, index - 1);
 }
-//@ chunk-18hwfzwa.js:1132591-1132619 placement
+//@ chunk-czq1j3j2.js:1163373-1163401 placement
 function applyEffortOverride(storageV5) {
   setModelFamilyConsent(getMainLoopModel(), storageV5);
 }
-//@ chunk-18hwfzwa.js:1132619-1132731 placement
+//@ chunk-czq1j3j2.js:1163401-1163513 placement
 /**
  * 购买用量额度相关常量：设置页与条款链接、金额上下限与轮询参数。
  */
@@ -294,7 +294,7 @@ var CREDIT_MIN_AMOUNT_CENTS;
 var CREDIT_AMOUNT_STEP_CENTS;
 var CREDIT_PRESET_AMOUNTS_CENTS;
 var CREDIT_MAX_AMOUNT_CENTS;
-deferInit("chunk-18hwfzwa.js:1132619", () => {
+deferInit("chunk-czq1j3j2.js:1163401", () => {
   USAGE_SETTINGS_LINK = USAGE_SETTINGS_URL;
   CONSUMER_TERMS_URL = "https://www.anthropic.com/legal/consumer-terms";
   CREDIT_POLL_INTERVAL_MS = 2000;
@@ -304,7 +304,7 @@ deferInit("chunk-18hwfzwa.js:1132619", () => {
   CREDIT_PRESET_AMOUNTS_CENTS = 1e5;
   CREDIT_MAX_AMOUNT_CENTS = 1e6;
 });
-//@ chunk-18hwfzwa.js:1132731-1133109 placement
+//@ chunk-czq1j3j2.js:1163513-1163891 placement
 function parseAmountInput(text) {
   let trimmed = text.trim();
   if (trimmed === "")
@@ -334,11 +334,11 @@ function parseAmountInput(text) {
     cents,
   };
 }
-//@ chunk-18hwfzwa.js:1133109-1133174 placement
+//@ chunk-czq1j3j2.js:1163891-1163956 placement
 function formatDollarAmount(cents) {
   return cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2);
 }
-//@ chunk-18hwfzwa.js:1133174-1134082 placement
+//@ chunk-czq1j3j2.js:1163956-1164864 placement
 function useAmountInputBuffer(initialValue) {
   let $ = useMemoCache(6);
   let [value, setValue] = useState(initialValue);
@@ -422,14 +422,9 @@ function useAmountInputBuffer(initialValue) {
   return bufferState;
 }
 export {
-  parseCreditBundlesOffer,
-  parseDiscountTiers,
-  getLocalCurrencyRate,
-  USAGE_SETTINGS_LINK,
-  applyEffortOverride,
-  percentOfBase,
   discountPercentOfPay,
-  selectBonusPct,
+  percentOfBase,
+  USAGE_SETTINGS_LINK,
   computeCreditOffer,
   CREDIT_MIN_AMOUNT_CENTS,
   formatDollarAmount,
@@ -445,4 +440,9 @@ export {
   CONSUMER_TERMS_URL,
   CREDIT_MAX_POLL_COUNT,
   CREDIT_POLL_INTERVAL_MS,
+  parseCreditBundlesOffer,
+  parseDiscountTiers,
+  getLocalCurrencyRate,
+  applyEffortOverride,
+  selectBonusPct,
 };

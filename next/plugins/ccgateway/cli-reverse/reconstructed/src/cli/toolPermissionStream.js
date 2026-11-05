@@ -3,24 +3,35 @@
  *
  * 2.1.316 新增：stream-json 模式下工具权限请求的消息构造
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-63641kq7.js (4)
- * attribution: placement 4
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jd53r7dh.js (5)
+ * attribution: sole-consumer 1, placement 4
  */
 import { join, dirname } from "path";
 import { readFile } from "fs/promises";
-import { LogSelectorOptionsSchema } from "../components/LogSelector.js";
+import { DoctorLazy } from "./handlers/util.js";
+import { objectSchema, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { sanitizeSessionTitle } from "../utils/stringUtils.js";
 import { isStorageV5Enabled } from "../utils/hoverRest.js";
 import { pathToSessionSideKey } from "../utils/storage/storageKeys.js";
 import { isDiskless } from "../bootstrap/state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-63641kq7.js:5307-5362 placement
+//@ chunk-jd53r7dh.js:4460-4494 sole-consumer
+var LogSelectorOptionsSchema; // deferred: uses DoctorLazy (./handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-jd53r7dh.js:4460", () => {
+  LogSelectorOptionsSchema = DoctorLazy(() =>
+    objectSchema({
+      customTitle: stringSchema(),
+    }),
+  );
+});
+//@ chunk-jd53r7dh.js:4494-4549 placement
 function getCustomTitlePath(title, sessionId) {
   return join(dirname(title), sessionId, "custom-title.json");
 }
-//@ chunk-63641kq7.js:5362-5556 placement
+//@ chunk-jd53r7dh.js:4549-4743 placement
 async function readCustomTitle(fullPath, sessionId, options) {
   let sideFileText = await readSideFileText(getCustomTitlePath(fullPath, sessionId), options);
   if (sideFileText === undefined) return;
@@ -34,7 +45,7 @@ async function readCustomTitle(fullPath, sessionId, options) {
   if (!parsed.success) return;
   return sanitizeSessionTitle(parsed.data.customTitle) || undefined;
 }
-//@ chunk-63641kq7.js:5556-5796 placement
+//@ chunk-jd53r7dh.js:4743-4983 placement
 async function readSideFileText(customTitlePath, options) {
   if (isStorageV5Enabled() && options !== undefined)
     try {
@@ -55,7 +66,7 @@ async function readSideFileText(customTitlePath, options) {
     return;
   }
 }
-//@ chunk-63641kq7.js:5796-5985 placement
+//@ chunk-jd53r7dh.js:4983-5172 placement
 /**
  * 权限流的失败文案："Tool permission request failed: AbortError: …" 的几种变体，用于识别流提前关闭。
  */
@@ -68,9 +79,9 @@ var STREAM_CLOSED_FAILURE_MESSAGES = [
   TOOL_PERMISSION_REQUEST_FAILED,
 ];
 export {
-  TOOL_PERMISSION_REQUEST_FAILED,
   readCustomTitle,
   TOOL_PERMISSION_STREAM_CLOSED_TEXT,
   STREAM_CLOSED_TEXT,
   getCustomTitlePath,
+  TOOL_PERMISSION_REQUEST_FAILED,
 };

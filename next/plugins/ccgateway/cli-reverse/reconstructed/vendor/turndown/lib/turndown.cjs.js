@@ -1,13 +1,13 @@
 /**
  * turndown/lib/turndown.cjs.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: turndown@7.2.0
- * pieces: chunk-vwj6ccer.js (60)
+ * pieces: chunk-w04z664w.js (60)
  * attribution: esm-layout 13, esm-fingerprint 47
  */
 import { require_domino } from "../../@mixmark-io/domino/lib/index.js";
 
-//@ chunk-vwj6ccer.js:237838-237965 esm-layout
+//@ chunk-w04z664w.js:237838-237965 esm-layout
 function extend(destination) {
   for (var i = 1; i < arguments.length; i++) {
     var source = arguments[i];
@@ -15,15 +15,15 @@ function extend(destination) {
   }
   return destination;
 }
-//@ chunk-vwj6ccer.js:237965-238008 esm-layout
+//@ chunk-w04z664w.js:237965-238008 esm-layout
 function repeat(character, count) {
   return Array(count + 1).join(character);
 }
-//@ chunk-vwj6ccer.js:238008-238051 esm-fingerprint
+//@ chunk-w04z664w.js:238008-238051 esm-fingerprint
 function trimLeadingNewlines(string) {
   return string.replace(/^\n*/, "");
 }
-//@ chunk-vwj6ccer.js:238051-238133 esm-fingerprint
+//@ chunk-w04z664w.js:238051-238133 esm-fingerprint
 function trimTrailingNewlines(string) {
   var indexEnd = string.length;
   while (
@@ -35,7 +35,7 @@ function trimTrailingNewlines(string) {
     indexEnd--;
   return string.substring(0, indexEnd);
 }
-//@ chunk-vwj6ccer.js:238133-238506 esm-fingerprint
+//@ chunk-w04z664w.js:238133-238506 esm-fingerprint
 var blockElements = [
   "ADDRESS",
   "ARTICLE",
@@ -87,11 +87,11 @@ var blockElements = [
   "TR",
   "UL",
 ];
-//@ chunk-vwj6ccer.js:238506-238537 esm-layout
+//@ chunk-w04z664w.js:238506-238537 esm-layout
 function isBlock(node) {
   return is(node, blockElements);
 }
-//@ chunk-vwj6ccer.js:238537-238662 esm-fingerprint
+//@ chunk-w04z664w.js:238537-238662 esm-fingerprint
 var voidElements = [
   "AREA",
   "BASE",
@@ -110,15 +110,15 @@ var voidElements = [
   "TRACK",
   "WBR",
 ];
-//@ chunk-vwj6ccer.js:238662-238693 esm-layout
+//@ chunk-w04z664w.js:238662-238693 esm-layout
 function isVoid(node) {
   return is(node, voidElements);
 }
-//@ chunk-vwj6ccer.js:238693-238724 esm-layout
+//@ chunk-w04z664w.js:238693-238724 esm-layout
 function hasVoid(node) {
   return has(node, voidElements);
 }
-//@ chunk-vwj6ccer.js:238724-238813 esm-fingerprint
+//@ chunk-w04z664w.js:238724-238813 esm-fingerprint
 var meaningfulWhenBlankElements = [
   "A",
   "TABLE",
@@ -132,19 +132,19 @@ var meaningfulWhenBlankElements = [
   "AUDIO",
   "VIDEO",
 ];
-//@ chunk-vwj6ccer.js:238813-238844 esm-layout
+//@ chunk-w04z664w.js:238813-238844 esm-layout
 function isMeaningfulWhenBlank(node) {
   return is(node, meaningfulWhenBlankElements);
 }
-//@ chunk-vwj6ccer.js:238844-238875 esm-layout
+//@ chunk-w04z664w.js:238844-238875 esm-layout
 function hasMeaningfulWhenBlank(node) {
   return has(node, meaningfulWhenBlankElements);
 }
-//@ chunk-vwj6ccer.js:238875-238924 esm-fingerprint
+//@ chunk-w04z664w.js:238875-238924 esm-fingerprint
 function is(node, tagNames) {
   return tagNames.indexOf(node.nodeName) >= 0;
 }
-//@ chunk-vwj6ccer.js:238924-239033 esm-fingerprint
+//@ chunk-w04z664w.js:238924-239033 esm-fingerprint
 function has(node, tagNames) {
   return (
     node.getElementsByTagName &&
@@ -153,12 +153,12 @@ function has(node, tagNames) {
     })
   );
 }
-//@ chunk-vwj6ccer.js:239033-239043 esm-layout
+//@ chunk-w04z664w.js:239033-239043 esm-layout
 /**
  * （第三方 turndown 的 commonmark 规则：段落、标题、列表、代码块、链接、图片等 HTML→Markdown 转换，切分错误）
  */
 var rules = {};
-//@ chunk-vwj6ccer.js:239043-239112 esm-fingerprint
+//@ chunk-w04z664w.js:239043-239112 esm-fingerprint
 rules.paragraph = {
   filter: "p",
   replacement: function (content) {
@@ -173,7 +173,7 @@ rules.paragraph = {
     );
   },
 };
-//@ chunk-vwj6ccer.js:239112-239184 esm-fingerprint
+//@ chunk-w04z664w.js:239112-239184 esm-fingerprint
 rules.lineBreak = {
   filter: "br",
   replacement: function (content, node, options) {
@@ -184,7 +184,7 @@ rules.lineBreak = {
     );
   },
 };
-//@ chunk-vwj6ccer.js:239184-239429 esm-fingerprint
+//@ chunk-w04z664w.js:239184-239429 esm-fingerprint
 rules.heading = {
   filter: ["h1", "h2", "h3", "h4", "h5", "h6"],
   replacement: function (content, node, options) {
@@ -217,7 +217,7 @@ rules.heading = {
       );
   },
 };
-//@ chunk-vwj6ccer.js:239429-239562 esm-fingerprint
+//@ chunk-w04z664w.js:239429-239562 esm-fingerprint
 rules.blockquote = {
   filter: "blockquote",
   replacement: function (content) {
@@ -234,7 +234,7 @@ rules.blockquote = {
     );
   },
 };
-//@ chunk-vwj6ccer.js:239562-239717 esm-fingerprint
+//@ chunk-w04z664w.js:239562-239717 esm-fingerprint
 rules.list = {
   filter: ["ul", "ol"],
   replacement: function (content, node) {
@@ -256,7 +256,7 @@ rules.list = {
       );
   },
 };
-//@ chunk-vwj6ccer.js:239717-240060 esm-fingerprint
+//@ chunk-w04z664w.js:239717-240060 esm-fingerprint
 rules.listItem = {
   filter: "li",
   replacement: function (content, node, options) {
@@ -289,7 +289,7 @@ rules.listItem = {
     );
   },
 };
-//@ chunk-vwj6ccer.js:240060-240305 esm-fingerprint
+//@ chunk-w04z664w.js:240060-240305 esm-fingerprint
 rules.indentedCodeBlock = {
   filter: function (node, options) {
     return (
@@ -315,7 +315,7 @@ rules.indentedCodeBlock = {
     );
   },
 };
-//@ chunk-vwj6ccer.js:240305-240768 esm-fingerprint
+//@ chunk-w04z664w.js:240305-240768 esm-fingerprint
 rules.fencedCodeBlock = {
   filter: function (node, options) {
     return (
@@ -354,7 +354,7 @@ rules.fencedCodeBlock = {
     );
   },
 };
-//@ chunk-vwj6ccer.js:240768-240850 esm-fingerprint
+//@ chunk-w04z664w.js:240768-240850 esm-fingerprint
 rules.horizontalRule = {
   filter: "hr",
   replacement: function (content, node, options) {
@@ -369,7 +369,7 @@ rules.horizontalRule = {
     );
   },
 };
-//@ chunk-vwj6ccer.js:240850-241150 esm-fingerprint
+//@ chunk-w04z664w.js:240850-241150 esm-fingerprint
 rules.inlineLink = {
   filter: function (node, options) {
     return options.linkStyle === "inlined" && node.nodeName === "A" && node.getAttribute("href");
@@ -382,7 +382,7 @@ rules.inlineLink = {
     return "[" + content + "](" + href + title + ")";
   },
 };
-//@ chunk-vwj6ccer.js:241150-241759 esm-fingerprint
+//@ chunk-w04z664w.js:241150-241759 esm-fingerprint
 rules.referenceLink = {
   filter: function (node, options) {
     return options.linkStyle === "referenced" && node.nodeName === "A" && node.getAttribute("href");
@@ -428,7 +428,7 @@ rules.referenceLink = {
     return references;
   },
 };
-//@ chunk-vwj6ccer.js:241759-241879 esm-fingerprint
+//@ chunk-w04z664w.js:241759-241879 esm-fingerprint
 rules.emphasis = {
   filter: ["em", "i"],
   replacement: function (content, node, options) {
@@ -436,7 +436,7 @@ rules.emphasis = {
     return options.emDelimiter + content + options.emDelimiter;
   },
 };
-//@ chunk-vwj6ccer.js:241879-242009 esm-fingerprint
+//@ chunk-w04z664w.js:241879-242009 esm-fingerprint
 rules.strong = {
   filter: ["strong", "b"],
   replacement: function (content, node, options) {
@@ -444,7 +444,7 @@ rules.strong = {
     return options.strongDelimiter + content + options.strongDelimiter;
   },
 };
-//@ chunk-vwj6ccer.js:242009-242334 esm-fingerprint
+//@ chunk-w04z664w.js:242009-242334 esm-fingerprint
 rules.code = {
   filter: function (node) {
     var hasSiblings = node.previousSibling || node.nextSibling;
@@ -461,7 +461,7 @@ rules.code = {
     return delimiter + extraSpace + content + extraSpace + delimiter;
   },
 };
-//@ chunk-vwj6ccer.js:242334-242525 esm-fingerprint
+//@ chunk-w04z664w.js:242334-242525 esm-fingerprint
 rules.image = {
   filter: "img",
   replacement: function (content, node) {
@@ -472,7 +472,7 @@ rules.image = {
     return src ? "![" + alt + "](" + src + titlePart + ")" : "";
   },
 };
-//@ chunk-vwj6ccer.js:242525-242580 esm-fingerprint
+//@ chunk-w04z664w.js:242525-242580 esm-fingerprint
 function cleanAttribute(attribute) {
   return attribute
     ? attribute.replace(
@@ -482,7 +482,7 @@ function cleanAttribute(attribute) {
       )
     : "";
 }
-//@ chunk-vwj6ccer.js:242580-242842 esm-fingerprint
+//@ chunk-w04z664w.js:242580-242842 esm-fingerprint
 function Rules(options) {
   this.options = options;
   this._keep = [];
@@ -497,7 +497,7 @@ function Rules(options) {
   this.array = [];
   for (var key in options.rules) this.array.push(options.rules[key]);
 }
-//@ chunk-vwj6ccer.js:242842-243362 esm-fingerprint
+//@ chunk-w04z664w.js:242842-243362 esm-fingerprint
 Rules.prototype = {
   add: function (key, rule) {
     this.array.unshift(rule);
@@ -528,7 +528,7 @@ Rules.prototype = {
     for (var i = 0; i < this.array.length; i++) fn(this.array[i], i);
   },
 };
-//@ chunk-vwj6ccer.js:243362-243449 esm-layout
+//@ chunk-w04z664w.js:243362-243449 esm-layout
 function findRule(rules, node, options) {
   for (var i = 0; i < rules.length; i++) {
     var rule = rules[i];
@@ -536,7 +536,7 @@ function findRule(rules, node, options) {
   }
   return;
 }
-//@ chunk-vwj6ccer.js:243449-243756 esm-fingerprint
+//@ chunk-w04z664w.js:243449-243756 esm-fingerprint
 function filterValue(rule, node, options) {
   var filter = rule.filter;
   if (typeof filter === "string") {
@@ -547,7 +547,7 @@ function filterValue(rule, node, options) {
     if (filter.call(rule, node, options)) return true;
   } else throw TypeError("`filter` needs to be a string, array, or function");
 }
-//@ chunk-vwj6ccer.js:243756-244353 esm-fingerprint
+//@ chunk-w04z664w.js:243756-244353 esm-fingerprint
 function collapseWhitespace(context) {
   var { element, isBlock, isVoid } = context;
   var isPre =
@@ -592,21 +592,21 @@ function collapseWhitespace(context) {
     if (!prevText.data) removeNode(prevText);
   }
 }
-//@ chunk-vwj6ccer.js:244353-244439 esm-fingerprint
+//@ chunk-w04z664w.js:244353-244439 esm-fingerprint
 function removeNode(node) {
   var next = node.nextSibling || node.parentNode;
   node.parentNode.removeChild(node);
   return next;
 }
-//@ chunk-vwj6ccer.js:244439-244571 esm-fingerprint
+//@ chunk-w04z664w.js:244439-244571 esm-fingerprint
 function nextNode_2(prev, current, isPre) {
   if ((prev && prev.parentNode === current) || isPre(current))
     return current.nextSibling || current.parentNode;
   return current.firstChild || current.nextSibling || current.parentNode;
 }
-//@ chunk-vwj6ccer.js:244571-244606 esm-layout
+//@ chunk-w04z664w.js:244571-244606 esm-layout
 var root = typeof window !== "undefined" ? window : {};
-//@ chunk-vwj6ccer.js:244606-244715 esm-fingerprint
+//@ chunk-w04z664w.js:244606-244715 esm-fingerprint
 function canParseHTMLNatively() {
   var Parser = root.DOMParser;
   var canParse = false;
@@ -615,7 +615,7 @@ function canParseHTMLNatively() {
   } catch (e) {}
   return canParse;
 }
-//@ chunk-vwj6ccer.js:244715-244837 esm-fingerprint
+//@ chunk-w04z664w.js:244715-244837 esm-fingerprint
 function createHTMLParser() {
   var Parser = function () {};
   {
@@ -626,9 +626,9 @@ function createHTMLParser() {
   }
   return Parser;
 }
-//@ chunk-vwj6ccer.js:244837-244867 esm-fingerprint
+//@ chunk-w04z664w.js:244837-244867 esm-fingerprint
 var HTMLParser = canParseHTMLNatively() ? root.DOMParser : createHTMLParser();
-//@ chunk-vwj6ccer.js:244867-245144 esm-fingerprint
+//@ chunk-w04z664w.js:244867-245144 esm-fingerprint
 function RootNode(input, options) {
   var root;
   if (typeof input === "string") {
@@ -646,18 +646,18 @@ function RootNode(input, options) {
   });
   return root;
 }
-//@ chunk-vwj6ccer.js:245144-245151 esm-layout
+//@ chunk-w04z664w.js:245144-245151 esm-layout
 var _htmlParser;
-//@ chunk-vwj6ccer.js:245151-245189 esm-layout
+//@ chunk-w04z664w.js:245151-245189 esm-layout
 function htmlParser() {
   _htmlParser = _htmlParser || new HTMLParser();
   return _htmlParser;
 }
-//@ chunk-vwj6ccer.js:245189-245251 esm-fingerprint
+//@ chunk-w04z664w.js:245189-245251 esm-fingerprint
 function isPreOrCode(node) {
   return node.nodeName === "PRE" || node.nodeName === "CODE";
 }
-//@ chunk-vwj6ccer.js:245251-245388 esm-fingerprint
+//@ chunk-w04z664w.js:245251-245388 esm-fingerprint
 function Node(node, options) {
   node.isBlock = isBlock(node);
   node.isCode = node.nodeName === "CODE" || node.parentNode.isCode;
@@ -665,7 +665,7 @@ function Node(node, options) {
   node.flankingWhitespace = flankingWhitespace(node, options);
   return node;
 }
-//@ chunk-vwj6ccer.js:245388-245470 esm-fingerprint
+//@ chunk-w04z664w.js:245388-245470 esm-fingerprint
 function isBlank(node) {
   return (
     !isVoid(node) &&
@@ -675,7 +675,7 @@ function isBlank(node) {
     !hasMeaningfulWhenBlank(node)
   );
 }
-//@ chunk-vwj6ccer.js:245470-245759 esm-fingerprint
+//@ chunk-w04z664w.js:245470-245759 esm-fingerprint
 function flankingWhitespace(node, options) {
   if (node.isBlock || (options.preformattedCode && node.isCode))
     return {
@@ -692,7 +692,7 @@ function flankingWhitespace(node, options) {
     trailing: edges.trailing,
   };
 }
-//@ chunk-vwj6ccer.js:245759-245968 esm-fingerprint
+//@ chunk-w04z664w.js:245759-245968 esm-fingerprint
 function edgeWhitespace(string) {
   var m = string.match(/^(([ \t\r\n]*)(\s*))(?:(?=\S)[\s\S]*\S)?((\s*?)([ \t\r\n]*))$/);
   return {
@@ -704,7 +704,7 @@ function edgeWhitespace(string) {
     trailingAscii: m[6],
   };
 }
-//@ chunk-vwj6ccer.js:245968-246229 esm-fingerprint
+//@ chunk-w04z664w.js:245968-246229 esm-fingerprint
 function isFlankedByWhitespace(side, node, options) {
   var sibling;
   var regExp;
@@ -723,7 +723,7 @@ function isFlankedByWhitespace(side, node, options) {
   }
   return isFlanked;
 }
-//@ chunk-vwj6ccer.js:246229-246476 esm-fingerprint
+//@ chunk-w04z664w.js:246229-246476 esm-fingerprint
 var reduce = Array.prototype.reduce;
 var escapes = [
   [/\\/g, "\\\\"],
@@ -740,7 +740,7 @@ var escapes = [
   [/_/g, "\\_"],
   [/^(\d+)\. /g, "$1\\. "],
 ];
-//@ chunk-vwj6ccer.js:246476-247013 esm-fingerprint
+//@ chunk-w04z664w.js:246476-247013 esm-fingerprint
 function TurndownService(options) {
   if (!(this instanceof TurndownService)) return new TurndownService(options);
   var defaults = {
@@ -789,7 +789,7 @@ function TurndownService(options) {
   this.options = extend({}, defaults, options);
   this.rules = new Rules(this.options);
 }
-//@ chunk-vwj6ccer.js:247013-247666 esm-fingerprint
+//@ chunk-w04z664w.js:247013-247666 esm-fingerprint
 TurndownService.prototype = {
   turndown: function (input) {
     if (!canConvert(input))
@@ -822,7 +822,7 @@ TurndownService.prototype = {
     }, string);
   },
 };
-//@ chunk-vwj6ccer.js:247666-247886 esm-fingerprint
+//@ chunk-w04z664w.js:247666-247886 esm-fingerprint
 function processChildren(parentNode) {
   var service = this;
   return reduce.call(
@@ -837,7 +837,7 @@ function processChildren(parentNode) {
     "",
   );
 }
-//@ chunk-vwj6ccer.js:247886-248066 esm-fingerprint
+//@ chunk-w04z664w.js:247886-248066 esm-fingerprint
 function postProcess(output) {
   var service = this;
   this.rules.forEach(function (rule) {
@@ -845,7 +845,7 @@ function postProcess(output) {
   });
   return output.replace(/^[\t\r\n]+/, "").replace(/[\t\r\n\s]+$/, "");
 }
-//@ chunk-vwj6ccer.js:248066-248246 esm-fingerprint
+//@ chunk-w04z664w.js:248066-248246 esm-fingerprint
 function replacementForNode(node) {
   var rule = this.rules.forNode(node);
   var content = processChildren.call(this, node);
@@ -853,7 +853,7 @@ function replacementForNode(node) {
   if (whitespace.leading || whitespace.trailing) content = content.trim();
   return whitespace.leading + rule.replacement(content, node, this.options) + whitespace.trailing;
 }
-//@ chunk-vwj6ccer.js:248246-248366 esm-fingerprint
+//@ chunk-w04z664w.js:248246-248366 esm-fingerprint
 function join(output, replacement) {
   var s1 = trimTrailingNewlines(output);
   var s2 = trimLeadingNewlines(replacement);
@@ -863,7 +863,7 @@ function join(output, replacement) {
 `.substring(0, nls);
   return s1 + separator + s2;
 }
-//@ chunk-vwj6ccer.js:248366-248482 esm-fingerprint
+//@ chunk-w04z664w.js:248366-248482 esm-fingerprint
 function canConvert(input) {
   return (
     input != null &&
@@ -871,6 +871,6 @@ function canConvert(input) {
       (input.nodeType && (input.nodeType === 1 || input.nodeType === 9 || input.nodeType === 11)))
   );
 }
-//@ chunk-vwj6ccer.js:248482-248492 esm-layout
+//@ chunk-w04z664w.js:248482-248492 esm-layout
 var TurndownService_default = TurndownService;
 export { TurndownService_default };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Chrome CDP 会话
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (23)
  * attribution: placement 23
  */
 import { mkdtemp, writeFile, chmod, rm as rm_2 } from "fs/promises";
@@ -49,7 +49,7 @@ import { DEFAULT_PREVIEW_WIDTHS, MAX_PREVIEW_SCREENSHOT_HEIGHT } from "../prompt
 import { ensureToolResultsDir, writeToolResultFile } from "../../../utils/toolResultStorage.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-8wvtd8sr.js:165072-165606 placement
+//@ chunk-xzmy9dn4.js:167254-167788 placement
 /**
  * 仿真预览后端（artifact 查看器）：把页面字节写到私有临时目录，交给查看器仿真"看一眼"，返回 {engine:"emulator", look, durationMs}；中断时 look 为 aborted，结束后删除临时目录。
  */
@@ -101,9 +101,9 @@ var EMULATOR_PREVIEW_BACKEND = {
     }
   },
 };
-//@ chunk-8wvtd8sr.js:165818-165926 placement
+//@ chunk-xzmy9dn4.js:168000-168108 placement
 let PreviewBrowserGone; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8wvtd8sr.js:165818", () => {
+deferInit("chunk-xzmy9dn4.js:168000", () => {
   PreviewBrowserGone = class PreviewBrowserGone extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -113,9 +113,9 @@ deferInit("chunk-8wvtd8sr.js:165818", () => {
     }
   };
 });
-//@ chunk-8wvtd8sr.js:165926-166065 placement
+//@ chunk-xzmy9dn4.js:168108-168247 placement
 let CdpCommandError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8wvtd8sr.js:165926", () => {
+deferInit("chunk-xzmy9dn4.js:168108", () => {
   CdpCommandError = class CdpCommandError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -127,12 +127,12 @@ deferInit("chunk-8wvtd8sr.js:165926", () => {
     }
   };
 });
-//@ chunk-8wvtd8sr.js:166065-166081 placement
+//@ chunk-xzmy9dn4.js:168247-168263 placement
 /**
  * CDP 消息的字节上限（超过即判定浏览器异常）。
  */
 var MAX_CDP_MESSAGE_BYTES = 67108864;
-//@ chunk-8wvtd8sr.js:166081-168131 placement
+//@ chunk-xzmy9dn4.js:168263-170313 placement
 /**
  * 通过 --remote-debugging-pipe 与 Chrome 通信的 CDP 连接：以 NUL 分隔的 JSON 消息收发，按 id 匹配请求应答、按事件名分发；消息过大或管道断开时以 PreviewBrowserGone 失败所有挂起请求。
  */
@@ -275,7 +275,7 @@ class CdpPipeConnection {
     }
   }
 }
-//@ chunk-8wvtd8sr.js:168131-168424 placement
+//@ chunk-xzmy9dn4.js:170313-170606 placement
 class TailBuffer {
   max;
   chunks = [];
@@ -293,7 +293,7 @@ class TailBuffer {
     return str.length > this.max ? str.slice(-this.max) : str;
   }
 }
-//@ chunk-8wvtd8sr.js:168424-168680 placement
+//@ chunk-xzmy9dn4.js:170606-170862 placement
 var DEFAULT_CHROME_DEPS = {
   spawn: (file, args) =>
     safeSpawn(file, args, {
@@ -312,7 +312,7 @@ var DEFAULT_CHROME_DEPS = {
 var CHROME_CLOSE_GRACE_MS = 2000;
 var CLAUDE_ARTIFACT_PREVIEW = "claude-artifact-preview-";
 var STDERR_TAIL_BYTES = 8192;
-//@ chunk-8wvtd8sr.js:168680-169908 placement
+//@ chunk-xzmy9dn4.js:170862-172092 placement
 /**
  * 启动无头 Chrome 预览进程：临时 user-data-dir、fd 3/4 作为 CDP 管道、保留 stderr 尾部；返回 {cdp, profileDir, exited, stderrTail, close, kill}。
  * close 先发 Browser.close 等待片刻再强杀，最后删除临时目录；进程注册了退出清理。
@@ -393,7 +393,7 @@ async function launchPreviewChrome(chromePath, args, deps = DEFAULT_CHROME_DEPS)
     kill: () => shutdown(false),
   };
 }
-//@ chunk-8wvtd8sr.js:169908-170008 placement
+//@ chunk-xzmy9dn4.js:172092-172192 placement
 function unrefStream(stream) {
   if (
     stream !== null &&
@@ -403,45 +403,45 @@ function unrefStream(stream) {
   )
     stream.unref();
 }
-//@ chunk-8wvtd8sr.js:170008-170073 placement
+//@ chunk-xzmy9dn4.js:172192-172257 placement
 /**
  * 判断对象是否是可写管道。
  */
 function isWritablePipe(pipeOut) {
   return pipeOut !== null && typeof pipeOut === "object" && "write" in pipeOut;
 }
-//@ chunk-8wvtd8sr.js:170073-170147 placement (2.1.88 match: isFileReadDenied, 1)
+//@ chunk-xzmy9dn4.js:172257-172331 placement (2.1.88 match: isFileReadDenied, 1)
 function isFileReadDenied(pipeIn) {
   return pipeIn !== null && typeof pipeIn === "object" && "on" in pipeIn && "read" in pipeIn;
 }
-//@ chunk-8wvtd8sr.js:170147-170204 placement
+//@ chunk-xzmy9dn4.js:172331-172388 placement
 /**
  * 非空对象原样返回，否则空对象。
  */
 function asRecord(value) {
   return value !== null && typeof value === "object" ? value : {};
 }
-//@ chunk-8wvtd8sr.js:170204-170251 placement
+//@ chunk-xzmy9dn4.js:172388-172435 placement
 /**
  * 字符串原样返回，否则空串。
  */
 function stringOrEmpty(message) {
   return typeof message === "string" ? message : "";
 }
-//@ chunk-8wvtd8sr.js:170288-170311 placement
+//@ chunk-xzmy9dn4.js:172472-172495 placement
 /**
  * 预览浏览器空闲关闭时间与启动超时。
  */
 var BROWSER_IDLE_MS = 300000;
 var BROWSER_START_TIMEOUT_MS = 60000;
-//@ chunk-8wvtd8sr.js:170311-170371 placement
+//@ chunk-xzmy9dn4.js:172495-172555 placement
 /**
  * 生成随机预览主机名（p<uuid>.localhost）。
  */
 function randomPreviewHost() {
   return `p${randomUUID().replaceAll("-", "")}.localhost`;
 }
-//@ chunk-8wvtd8sr.js:170371-171754 placement
+//@ chunk-xzmy9dn4.js:172555-173941 placement
 /**
  * 预览浏览器的串行租用池：acquire 排队获取（可被 signal 放弃），同参数复用已有 Chrome，否则启动新的；release 后空闲 idleMs 关闭浏览器。
  */
@@ -563,12 +563,12 @@ function createPreviewBrowserPool(timers) {
     },
   };
 }
-//@ chunk-8wvtd8sr.js:171754-171875 placement
+//@ chunk-xzmy9dn4.js:173941-174062 placement
 /**
  * 预览用浏览器进程池（懒创建，带空闲回收与启动超时）。
  */
 var previewBrowserPool; // deferred: uses createPreviewBrowserPool of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8wvtd8sr.js:171754", () => {
+deferInit("chunk-xzmy9dn4.js:173941", () => {
   previewBrowserPool = new HostScoped(() =>
     createPreviewBrowserPool({
       setTimeout: (fn, delayMs) => setTimeout(fn, delayMs).unref(),
@@ -578,7 +578,7 @@ deferInit("chunk-8wvtd8sr.js:171754", () => {
     }),
   );
 });
-//@ chunk-8wvtd8sr.js:171875-174709 placement
+//@ chunk-xzmy9dn4.js:174062-176896 placement
 /**
  * 预览租用池的默认参数与报告上限：启动/稳定等待、各类清单条数、CSP 与注入脚本。
  */
@@ -599,7 +599,7 @@ var PREVIEW_CSP_POLICY;
 var CSP_ALLOWED_ORIGINS;
 var CSP_AND_RTC_BLOCK_SCRIPT;
 var CSP_VIOLATION_COLLECTOR_SCRIPT;
-deferInit("chunk-8wvtd8sr.js:171875", () => {
+deferInit("chunk-xzmy9dn4.js:174062", () => {
   PREVIEW_SETTLE_TIMEOUT_MS = 20000;
   PREVIEW_START_TIMEOUT_MS = 60000;
   PREVIEW_SETTLE_DELAY_MS = 2000;
@@ -621,9 +621,9 @@ deferInit("chunk-8wvtd8sr.js:171875", () => {
   CSP_VIOLATION_COLLECTOR_SCRIPT =
     "<script>window.__claudePreviewCsp=[];document.addEventListener('securitypolicyviolation',function(e){var l=window.__claudePreviewCsp;if(l.length<64)l.push({uri:String(e.blockedURI||'').slice(0,512),directive:String(e.effectiveDirective||e.violatedDirective||'').slice(0,64)})});</script>";
 });
-//@ chunk-8wvtd8sr.js:174709-174894 placement
+//@ chunk-xzmy9dn4.js:176896-177081 placement
 let PreviewStepTimeout; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8wvtd8sr.js:174709", () => {
+deferInit("chunk-xzmy9dn4.js:176896", () => {
   PreviewStepTimeout = class PreviewStepTimeout extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -640,9 +640,9 @@ deferInit("chunk-8wvtd8sr.js:174709", () => {
     }
   };
 });
-//@ chunk-8wvtd8sr.js:174894-175158 placement
+//@ chunk-xzmy9dn4.js:177081-177345 placement
 let PreviewNavigatedAway; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8wvtd8sr.js:174894", () => {
+deferInit("chunk-xzmy9dn4.js:177081", () => {
   PreviewNavigatedAway = class PreviewNavigatedAway extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -657,7 +657,7 @@ deferInit("chunk-8wvtd8sr.js:174894", () => {
     }
   };
 });
-//@ chunk-8wvtd8sr.js:175158-175274 placement
+//@ chunk-xzmy9dn4.js:177345-177461 placement
 /**
  * 判断 URL 是否为与给定地址同源的 http 地址（解析失败时比较字符串）。
  */
@@ -669,7 +669,7 @@ function isSameHttpOrigin(href, pageUrl) {
     return href === pageUrl;
   }
 }
-//@ chunk-8wvtd8sr.js:175274-175650 placement
+//@ chunk-xzmy9dn4.js:177461-177837 placement
 /**
  * 描述预览页被导航去的目标：同一文件的不同地址、另一个本地文件、http(s) 源、加载被拒的错误页，或其他协议的 URL。
  */
@@ -688,7 +688,7 @@ function describeNavigationTarget(destination, expectedUrl) {
     return "another document";
   }
 }
-//@ chunk-8wvtd8sr.js:175650-179080 placement
+//@ chunk-xzmy9dn4.js:177837-181270 placement
 async function renderPreviewDocument(html, widths, themes, options) {
   let artifactBody = await prepareArtifactBody(html, {
     injectDiagramRuntime: true,

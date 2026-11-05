@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：非阻塞 stdout：终端停读时排队、超限丢弃并在恢复后重绘
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7t3j7ybe.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-97nxmj2m.js (19)
  * attribution: placement 19
  */
 import { isatty } from "tty";
@@ -21,20 +21,20 @@ import { logForDebugging } from "../utils/debug.js";
 import { logError } from "../utils/log.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-7t3j7ybe.js:635-722 placement (2.1.88 match: RESET, 1)
+//@ chunk-97nxmj2m.js:635-722 placement (2.1.88 match: RESET, 1)
 var MAX_BUFFER_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_ITEMS;
 var RESET_BYTES;
 var cache;
 var pendingSet;
-deferInit("chunk-7t3j7ybe.js:635", () => {
+deferInit("chunk-97nxmj2m.js:635", () => {
   MAX_BUFFER_BYTES = 4194304;
   MAX_ITEMS = 25;
   RESET_BYTES = Buffer.from("\x1B[0m");
   cache = new WeakMap();
   pendingSet = identity(new Set(), (pendingSet) => pendingSet.clear());
 });
-//@ chunk-7t3j7ybe.js:722-1279 placement
+//@ chunk-97nxmj2m.js:722-1279 placement
 /**
  * 为 stdout 找到可独立设置 O_NONBLOCK 的 fd（linux/wsl 用 /proc/self/fd，macOS 用 ttyname）。
  */
@@ -96,7 +96,7 @@ function openNonBlockingStdoutFd(fd = 1) {
   } catch {}
   return failure;
 }
-//@ chunk-7t3j7ybe.js:1279-1562 placement
+//@ chunk-97nxmj2m.js:1279-1562 placement
 function logNonBlockingStdoutResult(result, reason, errno) {
   logEvent("tengu_nonblocking_stdout", {
     result: fromEnum(result),
@@ -115,7 +115,7 @@ function logNonBlockingStdoutResult(result, reason, errno) {
           },
     );
 }
-//@ chunk-7t3j7ybe.js:1562-1628 placement
+//@ chunk-97nxmj2m.js:1562-1628 placement
 /**
  * 取流对应的 tty 名称
  */
@@ -126,7 +126,7 @@ function ttyNameOf(fd) {
     return;
   }
 }
-//@ chunk-7t3j7ybe.js:1628-2524 placement
+//@ chunk-97nxmj2m.js:1628-2524 placement
 /**
  * 安装非阻塞 stdout 写入：终端停读时排队并在超限时丢弃，恢复后重绘。
  */
@@ -185,7 +185,7 @@ function installNonBlockingStdout(onEpisodeEnd, openFd = openNonBlockingStdoutFd
   logNonBlockingStdoutResult("installed");
   return nonBlockingStdoutHandle(state);
 }
-//@ chunk-7t3j7ybe.js:2524-2647 placement
+//@ chunk-97nxmj2m.js:2524-2647 placement
 function nonBlockingStdoutHandle(state) {
   return {
     flush: () => flushStdoutQueue(state),
@@ -194,25 +194,25 @@ function nonBlockingStdoutHandle(state) {
     queuedBytes: () => state.queuedBytes,
   };
 }
-//@ chunk-7t3j7ybe.js:2647-2717 placement
+//@ chunk-97nxmj2m.js:2647-2717 placement
 function isNonBlockingStdoutEnabled({ envOverride, isAnt, remoteFlag }) {
   return envOverride ?? (isAnt || remoteFlag());
 }
-//@ chunk-7t3j7ybe.js:2717-2786 placement
+//@ chunk-97nxmj2m.js:2717-2786 placement
 function isNonBlockingStdoutInstalled() {
   return cache.get(process.stdout)?.installedWrite !== undefined;
 }
-//@ chunk-7t3j7ybe.js:2786-2864 placement
+//@ chunk-97nxmj2m.js:2786-2864 placement
 function pauseNonBlockingStdout() {
   let existing = cache.get(process.stdout);
   if (existing?.installedWrite !== undefined) uninstallNonBlockingStdout(existing);
 }
-//@ chunk-7t3j7ybe.js:2864-2942 placement
+//@ chunk-97nxmj2m.js:2864-2942 placement
 function resumeNonBlockingStdout() {
   let existing = cache.get(process.stdout);
   if (existing?.installedWrite !== undefined) flushStdoutQueue(existing);
 }
-//@ chunk-7t3j7ybe.js:2942-3022 placement
+//@ chunk-97nxmj2m.js:2942-3022 placement
 /**
  * 同步写；EAGAIN 时按 0 处理
  */
@@ -224,7 +224,7 @@ function writeSyncToleratingEagain(fd, buffer) {
     throw error;
   }
 }
-//@ chunk-7t3j7ybe.js:3022-3619 placement
+//@ chunk-97nxmj2m.js:3022-3619 placement
 function writeNonBlocking(state, buffer) {
   if (buffer.length === 0) return;
   if (state.queue.length === 0) {
@@ -266,19 +266,19 @@ function writeNonBlocking(state, buffer) {
   }
   enqueueStdoutChunk(state, buffer);
 }
-//@ chunk-7t3j7ybe.js:3619-3758 placement
+//@ chunk-97nxmj2m.js:3619-3758 placement
 function enqueueStdoutChunk(state, chunk) {
   state.queue.push(chunk);
   state.queuedBytes += chunk.length;
   if (state.queuedBytes > state.episode.peakQueuedBytes) state.episode.peakQueuedBytes = state.queuedBytes;
 }
-//@ chunk-7t3j7ybe.js:3758-3874 placement
+//@ chunk-97nxmj2m.js:3758-3874 placement
 function scheduleStdoutRetry(state, hadProgress) {
   state.retryMs = hadProgress ? 0 : Math.min(Math.max(1, state.retryMs * 2), MAX_ITEMS);
   state.timer = setTimeout(drainStdoutQueue, state.retryMs, state);
   state.timer.unref();
 }
-//@ chunk-7t3j7ybe.js:3874-4182 placement
+//@ chunk-97nxmj2m.js:3874-4182 placement
 function drainStdoutQueue(state) {
   state.timer = undefined;
   let hadProgress = false;
@@ -303,7 +303,7 @@ function drainStdoutQueue(state) {
   }
   endStdoutBackpressureEpisode(state, "drain");
 }
-//@ chunk-7t3j7ybe.js:4182-4410 placement
+//@ chunk-97nxmj2m.js:4182-4410 placement
 function endStdoutBackpressureEpisode(state, endedBy) {
   state.dropping = false;
   state.retryMs = 0;
@@ -318,7 +318,7 @@ function endStdoutBackpressureEpisode(state, endedBy) {
     logError(error);
   }
 }
-//@ chunk-7t3j7ybe.js:4410-4645 placement
+//@ chunk-97nxmj2m.js:4410-4645 placement
 function flushStdoutQueue(state) {
   if (state.timer !== undefined) {
     clearTimeout(state.timer);
@@ -336,7 +336,7 @@ function flushStdoutQueue(state) {
   }
   endStdoutBackpressureEpisode(state, "flush");
 }
-//@ chunk-7t3j7ybe.js:4645-4765 placement
+//@ chunk-97nxmj2m.js:4645-4765 placement
 function abandonNonBlockingStdout(state, error) {
   logForDebugging(`nonBlockingStdout: uninstalling (${error})`);
   state.queue = [];
@@ -344,7 +344,7 @@ function abandonNonBlockingStdout(state, error) {
   uninstallNonBlockingStdout(state);
   logNonBlockingStdoutResult("abandoned", undefined, sanitizeErrnoForTelemetry(error));
 }
-//@ chunk-7t3j7ybe.js:4765-4997 placement
+//@ chunk-97nxmj2m.js:4765-4997 placement
 function uninstallNonBlockingStdout(state) {
   if (state.installedWrite === undefined) return;
   if (process.stdout.write === state.installedWrite) process.stdout.write = state.originalWrite;
@@ -357,10 +357,10 @@ function uninstallNonBlockingStdout(state) {
   flushStdoutQueue(state);
 }
 export {
-  isNonBlockingStdoutInstalled,
-  openNonBlockingStdoutFd,
   resumeNonBlockingStdout,
+  isNonBlockingStdoutInstalled,
   isNonBlockingStdoutEnabled,
   installNonBlockingStdout,
+  openNonBlockingStdoutFd,
   pauseNonBlockingStdout,
 };

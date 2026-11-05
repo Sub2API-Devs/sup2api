@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自托管 runner 的独立代理中继模式：读取会话隧道配置并启动中继，或给出拒绝原因。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-88g43zt5.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-80gbjtkg.js (24)
  * attribution: placement 24
  */
 import { HostScoped } from "../../utils/hostScoped.js";
@@ -29,36 +29,36 @@ import { getSessionIngressAuthToken } from "../../utils/sessionIngressAuth.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { clearProxyCache, configureGlobalAgents } from "../../utils/proxy.js";
 
-//@ chunk-88g43zt5.js:19972-20104 placement
+//@ chunk-80gbjtkg.js:19974-20106 placement
 var AGENT_PROXY_STANDALONE_RELAY_MODE = "agent_proxy_standalone";
 var joined = ["localhost", "127.0.0.1", "::1", "127.0.0.0/8", "0.0.0.0/8", "::", "host.docker.internal"].join(
   ",",
 );
-//@ chunk-88g43zt5.js:20104-20130 placement
+//@ chunk-80gbjtkg.js:20106-20132 placement
 class relayForwarderSlot {
   forwarder = undefined;
 }
-//@ chunk-88g43zt5.js:20130-20155 placement
+//@ chunk-80gbjtkg.js:20132-20157 placement
 /**
  * 按 host 保存的独立 agent 代理转发器状态。
  */
 var agentProxyForwarderSlots = new HostScoped(() => new relayForwarderSlot());
-//@ chunk-88g43zt5.js:20155-20192 placement
+//@ chunk-80gbjtkg.js:20157-20194 placement
 /**
  * 取当前 host 的中继转发器状态（是否在跑、URL）。
  */
 function currentRelayForwarder() {
   return agentProxyForwarderSlots.of(getRootSession().host);
 }
-//@ chunk-88g43zt5.js:20192-20238 placement
+//@ chunk-80gbjtkg.js:20194-20240 placement
 function isAgentProxyStandaloneActive() {
   return currentRelayForwarder().forwarder !== undefined;
 }
-//@ chunk-88g43zt5.js:20238-20280 placement
+//@ chunk-80gbjtkg.js:20240-20282 placement
 function agentProxyStandaloneProxyUrl() {
   return currentRelayForwarder().forwarder?.url;
 }
-//@ chunk-88g43zt5.js:20280-22847 placement
+//@ chunk-80gbjtkg.js:20282-22849 placement
 async function startAgentProxyStandaloneRelay() {
   if (env.CCR_AGENT_PROXY_RELAY_MODE !== AGENT_PROXY_STANDALONE_RELAY_MODE)
     return {
@@ -183,23 +183,23 @@ async function startAgentProxyStandaloneRelay() {
     port: forwarder.port,
   };
 }
-//@ chunk-88g43zt5.js:22847-22885 placement
+//@ chunk-80gbjtkg.js:22849-22887 placement
 function isStandaloneRelayMode(relayMode) {
   return relayMode?.trim() === AGENT_PROXY_STANDALONE_RELAY_MODE;
 }
-//@ chunk-88g43zt5.js:22885-22950 placement
+//@ chunk-80gbjtkg.js:22887-22952 placement
 var RUNNER_AGENT_PROXY_URL_SETTING = "--agent-proxy-url / SELF_HOSTED_RUNNER_AGENT_PROXY_URL";
-//@ chunk-88g43zt5.js:22950-22993 placement
+//@ chunk-80gbjtkg.js:22952-22995 placement
 function runnerUsesAgentProxyStandalone(relayMode, runnerProxyUrl) {
   return isStandaloneRelayMode(relayMode) || runnerProxyUrl !== undefined;
 }
-//@ chunk-88g43zt5.js:22993-23086 placement
+//@ chunk-80gbjtkg.js:22995-23088 placement
 var AGENT_PROXY_TOGGLE_ENV_VARS = [
   "CCR_AGENT_PROXY_ENABLED",
   "CCR_EGRESS_GATEWAY_ENABLED",
   "CCR_UPSTREAM_PROXY_ENABLED",
 ];
-//@ chunk-88g43zt5.js:23086-23370 placement
+//@ chunk-80gbjtkg.js:23088-23372 placement
 function hostedRelayReason(serverEnv) {
   if (serverEnv === undefined) return "no_server_config";
   let trimmed = serverEnv.CCR_AGENT_PROXY_RELAY_MODE?.trim();
@@ -215,7 +215,7 @@ function hostedRelayReason(serverEnv) {
     return "hosted_relay";
   return;
 }
-//@ chunk-88g43zt5.js:23370-27067 placement
+//@ chunk-80gbjtkg.js:23372-27069 placement
 function agentProxyStandaloneRefusal(request) {
   let hasRunnerProxyUrl = request.runnerProxyUrl !== undefined;
   if (!runnerUsesAgentProxyStandalone(request.serverEnv?.CCR_AGENT_PROXY_RELAY_MODE, request.runnerProxyUrl))
@@ -276,11 +276,11 @@ function agentProxyStandaloneRefusal(request) {
   }
   return;
 }
-//@ chunk-88g43zt5.js:27067-27117 placement
+//@ chunk-80gbjtkg.js:27069-27119 placement
 function childRelayEnvValue(relayMode, runnerProxyUrl) {
   return runnerProxyUrl !== undefined ? AGENT_PROXY_STANDALONE_RELAY_MODE : relayMode?.trim();
 }
-//@ chunk-88g43zt5.js:27117-27379 placement
+//@ chunk-80gbjtkg.js:27119-27381 placement
 function checkRunnerAgentProxyStandaloneUrl(rawUrl, envName) {
   if (rawUrl === undefined) return;
   let agentProxyUrl = parseAgentProxyUrl(rawUrl, {
@@ -294,7 +294,7 @@ function checkRunnerAgentProxyStandaloneUrl(rawUrl, envName) {
     );
   return agentProxyUrl.url;
 }
-//@ chunk-88g43zt5.js:27379-27567 placement
+//@ chunk-80gbjtkg.js:27381-27569 placement
 function agentProxyStandaloneRunnerEnv(env) {
   return {
     AGENT_PROXY_URL: undefined,
@@ -304,7 +304,7 @@ function agentProxyStandaloneRunnerEnv(env) {
     ...Object.fromEntries(TLS_ENV_VARS.map((envName) => [envName, env[envName]])),
   };
 }
-//@ chunk-88g43zt5.js:27567-27851 placement
+//@ chunk-80gbjtkg.js:27569-27853 placement
 var CA_ENV_VARS = [
   "NODE_EXTRA_CA_CERTS",
   "CLAUDE_CODE_CERT_STORE",
@@ -319,7 +319,7 @@ var CLIENT_CERT_ENV_VARS = [
   "CLAUDE_CODE_CLIENT_KEY_PASSPHRASE",
 ];
 var TLS_ENV_VARS = [...CA_ENV_VARS, ...CLIENT_CERT_ENV_VARS];
-//@ chunk-88g43zt5.js:27851-28178 placement
+//@ chunk-80gbjtkg.js:27853-28180 placement
 /**
  * 读取会话隧道认证（HTTP MCP 服务时从 stdin 信封，否则从环境）：会话 id 与令牌获取函数。
  */
@@ -342,27 +342,27 @@ async function readSessionTunnelAuth() {
     token: getSessionIngressAuthToken,
   };
 }
-//@ chunk-88g43zt5.js:28178-28220 placement
+//@ chunk-80gbjtkg.js:28180-28222 placement
 function envSnapshot(envNames) {
   return jsonStringify(envNames.map((envName) => env[envName]));
 }
-//@ chunk-88g43zt5.js:28220-28289 placement
+//@ chunk-80gbjtkg.js:28222-28291 placement
 function caEnvSnapshot() {
   return `${envSnapshot(CA_ENV_VARS)}${Boolean(env.CLAUDE_CODE_CLIENT_CERT)}`;
 }
-//@ chunk-88g43zt5.js:28289-28370 placement
+//@ chunk-80gbjtkg.js:28291-28372 placement
 async function reloadCertsIfChanged() {
   let [extraCACerts, mtlsClientMaterial] = await Promise.all([loadExtraCACerts(), loadMTLSClientMaterial()]);
   return extraCACerts || mtlsClientMaterial.changed;
 }
-//@ chunk-88g43zt5.js:28370-28414 placement
+//@ chunk-80gbjtkg.js:28372-28416 placement
 async function refreshProxyIfCertsChanged() {
   if (await reloadCertsIfChanged()) {
     clearProxyCache();
     configureGlobalAgents();
   }
 }
-//@ chunk-88g43zt5.js:28414-28902 placement
+//@ chunk-80gbjtkg.js:28416-28904 placement
 /**
  * 代理相关环境变量名，以及代理地址无法认证时的错误与补救说明。
  */
@@ -371,7 +371,7 @@ var PROXY_AUTH_FAILED_TEXT =
   "Claude Code cannot authenticate to the proxy named by SELF_HOSTED_RUNNER_AGENT_PROXY_URL, and does not start without it";
 var PROXY_URL_REMEDY =
   "Start the runner with --agent-proxy-url set to your proxy's https:// URL (for example https://proxy.internal:3128), or set SELF_HOSTED_RUNNER_AGENT_PROXY_URL in its environment, and start a new session. Claude Code does not start without it rather than connect directly.";
-//@ chunk-88g43zt5.js:28902-29890 placement
+//@ chunk-80gbjtkg.js:28904-29892 placement
 /**
  * 校验自托管 runner 的代理地址：必须存在、可解析、是带主机的 https URL、不含用户名密码，否则返回带补救说明的错误。
  */
@@ -427,11 +427,11 @@ export {
   AGENT_PROXY_STANDALONE_RELAY_MODE,
   isAgentProxyStandaloneActive,
   agentProxyStandaloneProxyUrl,
-  checkRunnerAgentProxyStandaloneUrl,
   agentProxyStandaloneRefusal,
   RUNNER_AGENT_PROXY_URL_SETTING,
   runnerUsesAgentProxyStandalone,
   childRelayEnvValue,
   agentProxyStandaloneRunnerEnv,
+  checkRunnerAgentProxyStandaloneUrl,
   startAgentProxyStandaloneRelay,
 };

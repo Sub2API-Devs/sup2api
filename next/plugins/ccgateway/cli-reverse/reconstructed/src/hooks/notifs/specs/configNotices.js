@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。启动通知：配置类。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: placement 3
  */
 import { oauthExpiryWarning } from "../../../components/LogoV2/Notices.js";
@@ -15,7 +15,7 @@ import { getDisplayPath } from "../../../utils/file.js";
 import { reservedNameReason } from "../../../skills/reservedSkillNames.js";
 import { MAX_NAME_WARNINGS, INVALID_NAME_MESSAGE } from "../../../skills/loadSkillsDir.js";
 
-//@ chunk-18hwfzwa.js:1740770-1741068 placement
+//@ chunk-czq1j3j2.js:1787148-1787446 placement
 var oauthExpiryWarningNoticeSpec = {
   id: "oauth-expiry-warning",
   compute: () => {
@@ -38,7 +38,7 @@ var oauthExpiryWarningNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1741068-1741644 placement
+//@ chunk-czq1j3j2.js:1787446-1788022 placement
 /**
  * 启动通知"reserved-skill-names"：有技能/工作流因使用保留名而未加载时，提示怎样改名后重启，多个时附剩余数量。
  */
@@ -79,7 +79,7 @@ var reservedSkillNamesNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1741644-1742035 placement
+//@ chunk-czq1j3j2.js:1788022-1788413 placement
 /**
  * 启动通知规格：有技能或命令名称因冲突被拒用时，提示用 --debug 查看并改名后重启（显示时长常量）。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。auto 模式设置审阅。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (16)
  * attribution: placement 16
  */
 import {
@@ -38,17 +38,22 @@ import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { useSession } from "../../context/session.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1312910-1312914 placement
+//@ chunk-czq1j3j2.js:1299941-1299945 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1312910", () => {
+deferInit("chunk-czq1j3j2.js:1299941", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1312914-1312918 placement
+//@ chunk-czq1j3j2.js:1321784-1321788 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1312914", () => {
+deferInit("chunk-czq1j3j2.js:1321784", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1312918-1314841 placement
+//@ chunk-czq1j3j2.js:1339032-1339036 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1339032", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1339040-1340963 placement
 function AutoModeSetupFlaggedPicker({
   flagged,
   initialPicking,
@@ -198,16 +203,11 @@ function AutoModeSetupFlaggedPicker({
     }),
   });
 }
-//@ chunk-18hwfzwa.js:1314841-1314845 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1314841", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1314845-1314876 placement
+//@ chunk-czq1j3j2.js:1340967-1340998 placement
 function stripLineBreaks(text) {
   return replaceLineBreaks(text);
 }
-//@ chunk-18hwfzwa.js:1314876-1317648 placement
+//@ chunk-czq1j3j2.js:1340998-1343770 placement
 function AutoModeSetupReview(props) {
   let $ = useMemoCache(49);
   let { proposal, hideIndexes, defaultFocusValue, onFocus, onAccept, onDecline, onCancel } = props;
@@ -443,7 +443,7 @@ function AutoModeSetupReview(props) {
   } else dialogElement = $[48];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1317648-1318281 placement
+//@ chunk-czq1j3j2.js:1343770-1344403 placement
 /**
  * auto 模式设置审阅中的一节：粗体标题 + 条目列表（### 开头视为小标题），空时显示 "nothing found"。
  */
@@ -505,19 +505,19 @@ function ReviewEntrySection(props) {
   } else sectionElement = $[9];
   return sectionElement;
 }
-//@ chunk-18hwfzwa.js:1318281-1318334 placement
+//@ chunk-czq1j3j2.js:1344403-1344456 placement
 function withoutDefaultsEntry(entries) {
   return entries.filter((entry) => entry !== "$defaults");
 }
-//@ chunk-18hwfzwa.js:1318334-1318361 placement
+//@ chunk-czq1j3j2.js:1344456-1344483 placement
 function resetReviewFocus() {
   return null;
 }
-//@ chunk-18hwfzwa.js:1318361-1318388 placement
+//@ chunk-czq1j3j2.js:1344483-1344510 placement
 function resetFlaggedStash() {
   return null;
 }
-//@ chunk-18hwfzwa.js:1318388-1318640 placement
+//@ chunk-czq1j3j2.js:1344510-1344762 placement
 function useThrottledRun() {
   let $ = useMemoCache(4);
   let clock = useClock();
@@ -545,17 +545,17 @@ function useThrottledRun() {
   } else runThrottled = $[3];
   return runThrottled;
 }
-//@ chunk-18hwfzwa.js:1318640-1318693 placement
+//@ chunk-czq1j3j2.js:1344762-1344815 placement
 class AutoModeSetupReviewStores {
   reviewFocus = createStore(null);
   flaggedStash = createStore(null);
 }
-//@ chunk-18hwfzwa.js:1318693-1318720 placement
+//@ chunk-czq1j3j2.js:1344815-1344842 placement
 var autoModeSetupReviewStoresSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:1318693", () => {
+deferInit("chunk-czq1j3j2.js:1344815", () => {
   autoModeSetupReviewStoresSlot = new SessionRootSlot(() => new AutoModeSetupReviewStores());
 });
-//@ chunk-18hwfzwa.js:1318720-1319583 placement
+//@ chunk-czq1j3j2.js:1344842-1345705 placement
 function autoModeSetupReviewDialog(props) {
   let $ = useMemoCache(18);
   let { payload, answer } = props;
@@ -629,7 +629,7 @@ function autoModeSetupReviewDialog(props) {
   } else reviewDialog = $[17];
   return reviewDialog;
 }
-//@ chunk-18hwfzwa.js:1319583-1320919 placement
+//@ chunk-czq1j3j2.js:1345705-1347041 placement
 function autoModeSetupFlaggedDialog(props) {
   let $ = useMemoCache(27);
   let { payload, answer } = props;
@@ -742,14 +742,14 @@ function autoModeSetupFlaggedDialog(props) {
   } else pickerElement = $[26];
   return pickerElement;
 }
-//@ chunk-18hwfzwa.js:1320919-1320936 placement
+//@ chunk-czq1j3j2.js:1347041-1347058 placement
 var REVIEW_HEADER_ROWS = 8;
 var REVIEW_DIALOG_WIDTH = 160;
 export {
   REVIEW_DIALOG_WIDTH,
   REVIEW_HEADER_ROWS,
-  autoModeSetupReviewDialog,
-  autoModeSetupFlaggedDialog,
   AutoModeSetupReview,
   AutoModeSetupFlaggedPicker,
+  autoModeSetupReviewDialog,
+  autoModeSetupFlaggedDialog,
 };

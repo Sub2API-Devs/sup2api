@@ -3,9 +3,9 @@
  *
  * vim 模式输入：NORMAL/INSERT/VISUAL 状态机、操作符与动作、点重复，叠加在 useTextInput 之上。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useVimInput.ts
- * pieces: chunk-530hfzwb.js (7)
+ * pieces: chunk-880p06ha.js (7)
  * attribution: placement 5, affinity 1, fingerprint 1
  */
 import {
@@ -68,27 +68,27 @@ import { useTextInput } from "./useTextInput.js";
 import { getVimSharedState, setVimSharedState } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-530hfzwb.js:672-676 placement
+//@ chunk-880p06ha.js:673-677 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-530hfzwb.js:672", () => {
+deferInit("chunk-880p06ha.js:673", () => {
   init_react_production();
 });
-//@ chunk-530hfzwb.js:676-680 placement
+//@ chunk-880p06ha.js:677-681 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-530hfzwb.js:676", () => {
+deferInit("chunk-880p06ha.js:677", () => {
   init_react_production();
 });
-//@ chunk-530hfzwb.js:680-745 placement
+//@ chunk-880p06ha.js:681-746 placement
 function useWatchLoop(active) {
   let { watchLoop } = useContext(APP_CONTEXT);
   useEffect(() => (active ? watchLoop() : undefined), [active, watchLoop]);
 }
-//@ chunk-530hfzwb.js:30136-30218 affinity
+//@ chunk-880p06ha.js:30141-30223 affinity
 function preferredWantedValue(ctx, isInsert, wanted) {
   if (ctx.wanted !== undefined) return ctx.wanted ?? undefined;
   return isInsert ? undefined : wanted;
 }
-//@ chunk-530hfzwb.js:30218-41931 fingerprint (2.1.88 match: useVimInput, 0.505)
+//@ chunk-880p06ha.js:30223-41944 fingerprint (2.1.88 match: useVimInput, 0.503)
 /**
  * vim 输入：维护 NORMAL/INSERT/VISUAL/VISUAL LINE 状态，解析操作符(d/c/y)+动作、文本对象、计数与点重复；INSERT 下回落到 useTextInput。
  */
@@ -986,7 +986,7 @@ function useVimInput(props) {
     isCommandPending: isLooping,
   };
 }
-//@ chunk-530hfzwb.js:41931-43138 placement
+//@ chunk-880p06ha.js:41944-43151 placement
 function VimInputHook(props) {
   let { inputFilter } = props;
   let clearHintRef = useRef(null);
@@ -1055,7 +1055,7 @@ function VimInputHook(props) {
     isCommandPending: vimInput.isCommandPending,
   };
 }
-//@ chunk-530hfzwb.js:43138-43205 placement
+//@ chunk-880p06ha.js:43151-43218 placement
 function getVimInputHelper() {
   let vimSharedState = getVimSharedState();
   if (vimSharedState) return vimSharedState;
@@ -1063,4 +1063,4 @@ function getVimInputHelper() {
   setVimSharedState(initialPersistentState);
   return initialPersistentState;
 }
-export { VimInputHook, useVimInput };
+export { useVimInput, VimInputHook };

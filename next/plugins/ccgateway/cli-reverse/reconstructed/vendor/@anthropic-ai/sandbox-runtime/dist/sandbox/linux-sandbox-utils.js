@@ -1,9 +1,9 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/linux-sandbox-utils.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (61), chunk-yf82ynbr.js (1)
- * attribution: esm-layout 16, esm-fingerprint 46
+ * pieces: chunk-eswddw2z.js (1), chunk-qg41pqt6.js (61)
+ * attribution: esm-fingerprint 46, esm-layout 16
  */
 import path, { join } from "path";
 import "fs";
@@ -43,9 +43,9 @@ import { readNamesOf, writeNamesOf } from "./path-entries.js";
 import { buildJavaToolOptions } from "./java-proxy-agent.js";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-fq0cr76a.js:723589-723598 esm-layout
+//@ chunk-qg41pqt6.js:725271-725280 esm-layout
 var DEFAULT_MANDATORY_DENY_SEARCH_DEPTH = 3;
-//@ chunk-fq0cr76a.js:723598-723793 esm-fingerprint
+//@ chunk-qg41pqt6.js:725280-725475 esm-fingerprint
 function findSymlinkInPath(targetPath, allowedWritePaths) {
   let parts = targetPath.split(path.sep);
   let currentPath = "";
@@ -64,9 +64,9 @@ function findSymlinkInPath(targetPath, allowedWritePaths) {
   }
   return null;
 }
-//@ chunk-fq0cr76a.js:723793-723803 esm-layout
+//@ chunk-qg41pqt6.js:725475-725485 esm-layout
 var MAX_MISSING_NAMES_PASSED = 40;
-//@ chunk-fq0cr76a.js:723803-724575 esm-fingerprint
+//@ chunk-qg41pqt6.js:725485-726257 esm-fingerprint
 function resolveSymlinkedDenyPath(targetPath, alsoDenied) {
   try {
     return realPathOf(targetPath);
@@ -112,7 +112,7 @@ function resolveSymlinkedDenyPath(targetPath, alsoDenied) {
     );
   return null;
 }
-//@ chunk-fq0cr76a.js:724575-724734 esm-fingerprint
+//@ chunk-qg41pqt6.js:726257-726416 esm-fingerprint
 function fileOnTheWay(targetPath) {
   let parts = targetPath.split(path.sep);
   let currentPath = "";
@@ -128,7 +128,7 @@ function fileOnTheWay(targetPath) {
   }
   return;
 }
-//@ chunk-fq0cr76a.js:724734-724867 esm-fingerprint
+//@ chunk-qg41pqt6.js:726416-726549 esm-fingerprint
 function findFirstNonExistentComponent(targetPath) {
   let parts = targetPath.split(path.sep);
   let currentPath = "";
@@ -140,11 +140,11 @@ function findFirstNonExistentComponent(targetPath) {
   }
   return targetPath;
 }
-//@ chunk-fq0cr76a.js:724867-724874 esm-layout
+//@ chunk-qg41pqt6.js:726549-726556 esm-layout
 var MountPointKind;
-//@ chunk-fq0cr76a.js:724874-724980 esm-fingerprint
+//@ chunk-qg41pqt6.js:726556-726662 esm-fingerprint
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fq0cr76a.js:724874", () => {
+deferInit("chunk-qg41pqt6.js:726556", () => {
   (function (MountPointKind) {
     MountPointKind.File = "file";
     MountPointKind.Directory = "directory";
@@ -152,10 +152,10 @@ deferInit("chunk-fq0cr76a.js:724874", () => {
     MountPointKind.Unmakeable = "unmakeable";
   })(MountPointKind || (MountPointKind = {}));
 });
-//@ chunk-fq0cr76a.js:724980-725007 esm-fingerprint
+//@ chunk-qg41pqt6.js:726662-726689 esm-fingerprint
 var O_PATH = 2097152;
 var V9FS_MAGIC = 16914839;
-//@ chunk-fq0cr76a.js:725007-725796 esm-fingerprint
+//@ chunk-qg41pqt6.js:726689-727478 esm-fingerprint
 function makeableMountPoint(dest, wanted) {
   let refusalOf = (attempt) => {
     try {
@@ -201,18 +201,18 @@ function makeableMountPoint(dest, wanted) {
     if (fd !== undefined) fsModule_2.closeSync(fd);
   }
 }
-//@ chunk-fq0cr76a.js:725796-725803 esm-layout
+//@ chunk-qg41pqt6.js:727478-727485 esm-layout
 var DotGitKind;
-//@ chunk-fq0cr76a.js:725803-725887 esm-fingerprint
+//@ chunk-qg41pqt6.js:727485-727569 esm-fingerprint
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fq0cr76a.js:725803", () => {
+deferInit("chunk-qg41pqt6.js:727485", () => {
   (function (DotGitKind) {
     DotGitKind.Directory = "directory";
     DotGitKind.File = "file";
     DotGitKind.Absent = "absent";
   })(DotGitKind || (DotGitKind = {}));
 });
-//@ chunk-fq0cr76a.js:725887-725987 esm-fingerprint
+//@ chunk-qg41pqt6.js:727569-727669 esm-fingerprint
 function dotGitKindAt(dotGitPath) {
   try {
     return fsModule_2.statSync(dotGitPath).isDirectory() ? DotGitKind.Directory : DotGitKind.File;
@@ -220,7 +220,7 @@ function dotGitKindAt(dotGitPath) {
     return DotGitKind.Absent;
   }
 }
-//@ chunk-fq0cr76a.js:725987-726260 esm-fingerprint
+//@ chunk-qg41pqt6.js:727669-727942 esm-fingerprint
 function linuxGetCwdMandatoryDenyPaths(allowGitConfig = false) {
   let cwd = process.cwd();
   let denyPaths = [
@@ -236,7 +236,7 @@ function linuxGetCwdMandatoryDenyPaths(allowGitConfig = false) {
   }
   return denyPaths;
 }
-//@ chunk-fq0cr76a.js:726260-726787 esm-fingerprint
+//@ chunk-qg41pqt6.js:727942-728469 esm-fingerprint
 function unreadableDirectories(stderr, cwd, maxDepth) {
   let found = [];
   let tried = new Set();
@@ -267,7 +267,7 @@ function unreadableDirectories(stderr, cwd, maxDepth) {
   }
   return found;
 }
-//@ chunk-fq0cr76a.js:726787-727833 esm-fingerprint
+//@ chunk-qg41pqt6.js:728469-729521 esm-fingerprint
 async function linuxGetMandatoryDenyPaths(
   ripgrepConfig = {
     command: "rg",
@@ -339,13 +339,13 @@ async function linuxGetMandatoryDenyPaths(
   }
   return [...new Set(denyPaths)];
 }
-//@ chunk-fq0cr76a.js:727833-727851 esm-layout
+//@ chunk-qg41pqt6.js:729521-729539 esm-layout
 var bwrapMountPoints; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var emptyMountSourceDir;
-deferInit("chunk-fq0cr76a.js:727833", () => {
+deferInit("chunk-qg41pqt6.js:729521", () => {
   bwrapMountPoints = new Set();
 });
-//@ chunk-fq0cr76a.js:727851-728223 esm-fingerprint
+//@ chunk-qg41pqt6.js:729539-729911 esm-fingerprint
 function ensureEmptyMountSourceDir() {
   if (emptyMountSourceDir !== undefined) {
     try {
@@ -366,11 +366,11 @@ function ensureEmptyMountSourceDir() {
   fsModule_2.chmodSync(emptyMountSourceDir, 448);
   return emptyMountSourceDir;
 }
-//@ chunk-fq0cr76a.js:728223-728243 esm-layout
+//@ chunk-qg41pqt6.js:729911-729931 esm-layout
 var CAP_SETFCAP = 31;
 var boundingCapabilities;
 var capabilityReadFailureLogged = false;
-//@ chunk-fq0cr76a.js:728243-728598 esm-fingerprint
+//@ chunk-qg41pqt6.js:729931-730286 esm-fingerprint
 function processHasBoundingCapability(cap) {
   let bits = boundingCapabilities;
   if (bits === undefined) {
@@ -396,13 +396,13 @@ function processHasBoundingCapability(cap) {
   }
   return ((bits >> BigInt(cap)) & 1n) === 1n;
 }
-//@ chunk-fq0cr76a.js:728598-728760 esm-fingerprint
+//@ chunk-qg41pqt6.js:730286-730448 esm-fingerprint
 function boundingCapabilitiesFromStatus(status) {
   let bounding = status.match(/^CapBnd:\s*([0-9a-fA-F]+)\s*$/m);
   let inheritable = status.match(/^CapInh:\s*([0-9a-fA-F]+)\s*$/m);
   return bounding && inheritable ? BigInt("0x" + bounding[1]) | BigInt("0x" + inheritable[1]) : undefined;
 }
-//@ chunk-fq0cr76a.js:728760-728924 esm-fingerprint
+//@ chunk-qg41pqt6.js:730448-730612 esm-fingerprint
 function capabilityArgs({ euid, hasSetfcap, usesSeccompHelper }) {
   let args = ["--cap-drop", "ALL"];
   if (euid !== 0) return args;
@@ -410,11 +410,11 @@ function capabilityArgs({ euid, hasSetfcap, usesSeccompHelper }) {
   if (usesSeccompHelper) args.push("--cap-add", "CAP_SETFCAP");
   return args;
 }
-//@ chunk-fq0cr76a.js:728924-729299 esm-layout
+//@ chunk-qg41pqt6.js:730612-730987 esm-layout
 var setfcapMissingLogged = false;
 var CAP_SETFCAP_MISSING_MESSAGE = `running as uid 0 without CAP_SETFCAP in this process's capability bounding set - on kernels that enforce the CAP_SETFCAP requirement for mapping uid 0 into a user namespace (Linux 5.12 and distribution backports) every sandboxed command fails while writing a uid map ("Operation not permitted"). Grant CAP_SETFCAP to this process, or run as a non-root user`;
 var linuxMaxArgStrlen;
-//@ chunk-fq0cr76a.js:729299-729578 esm-fingerprint
+//@ chunk-qg41pqt6.js:730987-731266 esm-fingerprint
 function maxArgStrlen() {
   if (linuxMaxArgStrlen === undefined) {
     let pageSize = 4096;
@@ -434,24 +434,24 @@ function maxArgStrlen() {
   }
   return linuxMaxArgStrlen;
 }
-//@ chunk-fq0cr76a.js:729578-729650 esm-fingerprint
+//@ chunk-qg41pqt6.js:731266-731338 esm-fingerprint
 var ARG_HEADROOM_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var BWRAP_MAX_ARGS;
 var BWRAP_ARGS_FD;
 var O_TMPFILE;
 var bwrapArgsFds;
-deferInit("chunk-fq0cr76a.js:729578", () => {
+deferInit("chunk-qg41pqt6.js:731266", () => {
   ARG_HEADROOM_BYTES = 4096;
   BWRAP_MAX_ARGS = 9000;
   BWRAP_ARGS_FD = 9;
   O_TMPFILE = 4194304 | fsModule_2.constants.O_DIRECTORY;
   bwrapArgsFds = new Set();
 });
-//@ chunk-fq0cr76a.js:729650-729702 esm-fingerprint
+//@ chunk-qg41pqt6.js:731338-731390 esm-fingerprint
 function bwrapArgsProfilePath(fd) {
   return `/proc/${process.pid}/fd/${fd}`;
 }
-//@ chunk-fq0cr76a.js:729702-730148 esm-fingerprint
+//@ chunk-qg41pqt6.js:731390-731836 esm-fingerprint
 function openBwrapArgsProfile(mountWords) {
   let contents = mountWords.map((word) => word + "\x00").join("");
   let failures = [];
@@ -477,18 +477,18 @@ function openBwrapArgsProfile(mountWords) {
   }
   throw Error(`no unnamed file could be opened for it (${failures.join("; ")})`);
 }
-//@ chunk-fq0cr76a.js:730148-730204 esm-fingerprint
+//@ chunk-qg41pqt6.js:731836-731892 esm-fingerprint
 function closeBwrapArgsProfile(fd) {
   bwrapArgsFds.delete(fd);
   try {
     fsModule_2.closeSync(fd);
   } catch {}
 }
-//@ chunk-fq0cr76a.js:730204-730265 esm-layout
+//@ chunk-qg41pqt6.js:731892-731953 esm-layout
 function errorText(error) {
   return error instanceof Error ? error.message : String(error);
 }
-//@ chunk-fq0cr76a.js:730265-730468 esm-fingerprint
+//@ chunk-qg41pqt6.js:731953-732156 esm-fingerprint
 class LinuxSandboxProfileError extends Error {
   constructor(code, message, cause) {
     super(message);
@@ -503,14 +503,14 @@ class LinuxSandboxProfileError extends Error {
       });
   }
 }
-//@ chunk-fq0cr76a.js:730468-730617 esm-fingerprint
+//@ chunk-qg41pqt6.js:732156-732305 esm-fingerprint
 class WorkingDirectoryChanged extends Error {
   constructor() {
     super("The working directory changed while the command was being wrapped");
     this.name = "WorkingDirectoryChanged";
   }
 }
-//@ chunk-fq0cr76a.js:730617-732554 esm-fingerprint
+//@ chunk-qg41pqt6.js:732305-734242 esm-fingerprint
 function renderBwrapInvocation(bwrapBinary, bwrapArgs, mounts) {
   let shares = () =>
     `${mounts.mandatoryDenyArgs} of its arguments are built-in write protection, in no list of the configuration: shell and tool settings and each git repository's hooks and config, in and below the working directory, and the directories holding them. For fewer, run from a directory with fewer repositories in it, or allow writing to fewer of them; a lower mandatoryDenySearchDepth leaves the deeper ones unprotected. The other ${bwrapArgs.length - mounts.mandatoryDenyArgs} are what the configuration expands to: each path takes about three arguments, each environment variable two`;
@@ -570,16 +570,16 @@ function renderBwrapInvocation(bwrapBinary, bwrapArgs, mounts) {
   );
   return viaArgsFile;
 }
-//@ chunk-fq0cr76a.js:732554-732580 esm-layout
+//@ chunk-qg41pqt6.js:734242-734268 esm-layout
 var activeSandboxCount = 0;
 var forcedCleanups = 0;
 var exitHandlerRegistered = false;
 var cleanupInstalled = false;
-//@ chunk-fq0cr76a.js:732580-732600 esm-layout
+//@ chunk-qg41pqt6.js:734268-734288 esm-layout
 function markExitCleanupNeeded() {
   exitHandlerRegistered = true;
 }
-//@ chunk-fq0cr76a.js:732600-732678 esm-fingerprint
+//@ chunk-qg41pqt6.js:734288-734366 esm-fingerprint
 function registerExitCleanupHandler() {
   if (cleanupInstalled) return;
   process.on("exit", () => {
@@ -590,7 +590,7 @@ function registerExitCleanupHandler() {
   });
   cleanupInstalled = true;
 }
-//@ chunk-fq0cr76a.js:732678-733667 esm-fingerprint
+//@ chunk-qg41pqt6.js:734366-735355 esm-fingerprint
 function cleanupBwrapMountPoints(opts) {
   if (!opts?.force) {
     if (activeSandboxCount > 0) activeSandboxCount--;
@@ -642,7 +642,7 @@ function cleanupBwrapMountPoints(opts) {
     }
   for (let argsFd of [...bwrapArgsFds]) closeBwrapArgsProfile(argsFd);
 }
-//@ chunk-fq0cr76a.js:733667-733747 esm-fingerprint
+//@ chunk-qg41pqt6.js:735355-735435 esm-fingerprint
 function isExecutable(p) {
   try {
     fsModule_2.accessSync(p, fsModule_2.constants.X_OK);
@@ -651,7 +651,7 @@ function isExecutable(p) {
     return false;
   }
 }
-//@ chunk-fq0cr76a.js:733747-734347 esm-fingerprint
+//@ chunk-qg41pqt6.js:735435-736035 esm-fingerprint
 function checkLinuxDependencies(opts) {
   let { seccompConfig, bwrapPath, socatPath } = opts ?? {};
   let errors = [];
@@ -682,14 +682,14 @@ function checkLinuxDependencies(opts) {
     errors,
   };
 }
-//@ chunk-fq0cr76a.js:734347-734373 esm-fingerprint
+//@ chunk-qg41pqt6.js:736035-736061 esm-fingerprint
 var MIN_COMMAND_VERSION; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var commandVersionCache;
-deferInit("chunk-fq0cr76a.js:734347", () => {
+deferInit("chunk-qg41pqt6.js:736035", () => {
   MIN_COMMAND_VERSION = "0.5.0";
   commandVersionCache = new Map();
 });
-//@ chunk-fq0cr76a.js:734373-734622 esm-fingerprint
+//@ chunk-qg41pqt6.js:736061-736310 esm-fingerprint
 /**
  * 同步执行 cmd --version 取版本号（缓存）。
  */
@@ -708,7 +708,7 @@ function getCommandVersion(bwrap) {
   commandVersionCache.set(bwrap, version);
   return version;
 }
-//@ chunk-fq0cr76a.js:734622-734844 esm-fingerprint
+//@ chunk-qg41pqt6.js:736310-736532 esm-fingerprint
 function compareVersions(a, b) {
   let partsOf = (version) =>
     version.split(".").map((part) => {
@@ -723,14 +723,14 @@ function compareVersions(a, b) {
   }
   return 0;
 }
-//@ chunk-fq0cr76a.js:734844-735149 esm-layout
+//@ chunk-qg41pqt6.js:736532-736837 esm-layout
 function outdatedBwrapWarning(bwrap) {
   if (bwrap === null) return null;
   let version = getCommandVersion(bwrap);
   if (version === null || compareVersions(version, MIN_COMMAND_VERSION) >= 0) return null;
   return `bubblewrap ${version} at ${bwrap} is older than ${MIN_COMMAND_VERSION}: a denyRead entry or credential mask naming a path that is not a regular file (a fifo, socket or device node) cannot be applied on it. Everything else is unaffected`;
 }
-//@ chunk-fq0cr76a.js:735149-735306 esm-fingerprint
+//@ chunk-qg41pqt6.js:736837-736994 esm-fingerprint
 function uid0SandboxError({ euid, hasSetfcap, bwrap }) {
   if (euid !== 0 || hasSetfcap || bwrap === null) return null;
   let refusal = probeUid0UserNamespace(bwrap);
@@ -739,12 +739,12 @@ function uid0SandboxError({ euid, hasSetfcap, bwrap }) {
     ? CAP_SETFCAP_MISSING_MESSAGE
     : `${CAP_SETFCAP_MISSING_MESSAGE} (bubblewrap: ${refusal})`;
 }
-//@ chunk-fq0cr76a.js:735306-735321 esm-layout
+//@ chunk-qg41pqt6.js:736994-737009 esm-layout
 var uid0UserNamespaceProbes; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fq0cr76a.js:735306", () => {
+deferInit("chunk-qg41pqt6.js:736994", () => {
   uid0UserNamespaceProbes = new Map();
 });
-//@ chunk-fq0cr76a.js:735321-735642 esm-fingerprint
+//@ chunk-qg41pqt6.js:737009-737330 esm-fingerprint
 function probeUid0UserNamespace(bwrap) {
   let cached = uid0UserNamespaceProbes.get(bwrap);
   if (cached !== undefined) return cached;
@@ -767,7 +767,7 @@ function probeUid0UserNamespace(bwrap) {
   uid0UserNamespaceProbes.set(bwrap, refusal);
   return refusal;
 }
-//@ chunk-fq0cr76a.js:735642-737365 esm-fingerprint
+//@ chunk-qg41pqt6.js:737330-739053 esm-fingerprint
 async function initializeLinuxNetworkBridge(httpProxyPort, socksProxyPort, socatPath) {
   let socat = socatPath ?? "socat";
   let socketId = randomBytes(8).toString("hex");
@@ -866,18 +866,18 @@ async function initializeLinuxNetworkBridge(httpProxyPort, socksProxyPort, socat
     socksProxyPort,
   };
 }
-//@ chunk-fq0cr76a.js:737365-737398 esm-fingerprint
+//@ chunk-qg41pqt6.js:739053-739086 esm-fingerprint
 var NESTED_USERNS_ENV = "SRT_ALLOW_NESTED_USERNS";
-//@ chunk-fq0cr76a.js:737398-737441 esm-layout
+//@ chunk-qg41pqt6.js:739086-739129 esm-layout
 function helperEnvironmentPrefix(allowNestedUserNamespaces) {
   return `${NESTED_USERNS_ENV}=${allowNestedUserNamespaces ? "1" : "0"} `;
 }
-//@ chunk-fq0cr76a.js:737441-737456 esm-layout
+//@ chunk-qg41pqt6.js:739129-739144 esm-layout
 var disableUsernsProbes; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fq0cr76a.js:737441", () => {
+deferInit("chunk-qg41pqt6.js:739129", () => {
   disableUsernsProbes = new Map();
 });
-//@ chunk-fq0cr76a.js:737456-737792 esm-fingerprint
+//@ chunk-qg41pqt6.js:739144-739480 esm-fingerprint
 function bwrapCanDisableUserns(bwrap) {
   let cached = disableUsernsProbes.get(bwrap);
   if (cached !== undefined) return cached;
@@ -899,9 +899,9 @@ function bwrapCanDisableUserns(bwrap) {
   disableUsernsProbes.set(bwrap, can);
   return can;
 }
-//@ chunk-fq0cr76a.js:737792-737802 esm-layout
+//@ chunk-qg41pqt6.js:739480-739490 esm-layout
 var noUsernsLimitLogged = false;
-//@ chunk-fq0cr76a.js:737802-737982 esm-fingerprint
+//@ chunk-qg41pqt6.js:739490-739670 esm-fingerprint
 function resolveApplySeccompPrefix(applyPath, argv0) {
   if (argv0) {
     if (!applyPath) throw Error("seccompConfig.argv0 requires seccompConfig.applyPath");
@@ -910,7 +910,7 @@ function resolveApplySeccompPrefix(applyPath, argv0) {
   let binary = getApplySeccompBinaryPath(applyPath);
   return binary ? `${quote([binary])} ` : undefined;
 }
-//@ chunk-fq0cr76a.js:737982-738725 esm-fingerprint
+//@ chunk-qg41pqt6.js:739670-740413 esm-fingerprint
 var RELAYS_LISTEN = [
   "_srt_since=",
   'while [ -r /proc/net/sockstat ] && kill -0 "$_srt_http" "$_srt_socks" 2>/dev/null; do',
@@ -928,7 +928,7 @@ var RELAYS_LISTEN = [
   "done",
   "unset _srt_since _srt_now _srt_up _srt_counts _srt_kind _srt_skip _srt_inuse _srt_http _srt_socks",
 ];
-//@ chunk-fq0cr76a.js:738725-739277 esm-fingerprint
+//@ chunk-qg41pqt6.js:740413-740965 esm-fingerprint
 function buildSandboxCommand(
   httpSocketPath,
   socksSocketPath,
@@ -961,12 +961,12 @@ function buildSandboxCommand(
     return `${shellPath} -c ${quote([innerScript])}`;
   }
 }
-//@ chunk-fq0cr76a.js:739277-739379 esm-fingerprint
+//@ chunk-qg41pqt6.js:740965-741067 esm-fingerprint
 function isTransientErrno(err) {
   let code = err?.code;
   return code === "EIO" || code === "ESTALE" || code === "EMFILE" || code === "ENFILE" || code === "EAGAIN";
 }
-//@ chunk-fq0cr76a.js:739379-739447 esm-layout
+//@ chunk-qg41pqt6.js:741067-741135 esm-layout
 function retryingTransient(attempt) {
   try {
     return attempt();
@@ -975,9 +975,9 @@ function retryingTransient(attempt) {
   }
   return attempt();
 }
-//@ chunk-fq0cr76a.js:739447-739478 esm-fingerprint
+//@ chunk-qg41pqt6.js:741135-741166 esm-fingerprint
 var KERNEL_TOP_LEVEL_DIRS = ["/proc", "/dev", "/sys"];
-//@ chunk-fq0cr76a.js:739478-740085 esm-fingerprint
+//@ chunk-qg41pqt6.js:741166-741773 esm-fingerprint
 function ancestorPinArgs(seeds, writeRoots) {
   let { rootIsWriteRoot } = writeRoots;
   let pinDirs = new Set();
@@ -1015,7 +1015,7 @@ function ancestorPinArgs(seeds, writeRoots) {
     ...covers.flatMap((dir) => ["--bind", dir, dir]),
   ];
 }
-//@ chunk-fq0cr76a.js:740085-741269 esm-fingerprint
+//@ chunk-qg41pqt6.js:741773-742957 esm-fingerprint
 function pushReadDenyDirMounts(args, unit) {
   let { landing, allowedWritePaths, readAllowPaths } = unit;
   args.push("--tmpfs", landing);
@@ -1080,7 +1080,7 @@ function pushReadDenyDirMounts(args, unit) {
     restoredReads,
   };
 }
-//@ chunk-fq0cr76a.js:741269-752374 esm-fingerprint
+//@ chunk-qg41pqt6.js:742957-754071 esm-fingerprint
 async function generateFilesystemArgs(
   readConfig,
   writeConfig,
@@ -1750,7 +1750,7 @@ async function generateFilesystemArgs(
     mandatoryDenyArgs,
   };
 }
-//@ chunk-fq0cr76a.js:752374-756340 esm-fingerprint
+//@ chunk-qg41pqt6.js:754071-758042 esm-fingerprint
 async function wrapCommandWithSandboxLinux(params) {
   let {
     command,
@@ -1967,12 +1967,13 @@ async function wrapCommandWithSandboxLinux(params) {
     throw error;
   }
 }
-//@ chunk-yf82ynbr.js:10481-10512 esm-fingerprint
+//@ chunk-eswddw2z.js:218-248 esm-fingerprint
 var sandboxPaths = ["/proc", "/sys", "/dev"];
 export {
   capabilityArgs,
   processHasBoundingCapability,
   CAP_SETFCAP,
+  sandboxPaths,
   markExitCleanupNeeded,
   linuxGetCwdMandatoryDenyPaths,
   initializeLinuxNetworkBridge,
@@ -1980,5 +1981,4 @@ export {
   wrapCommandWithSandboxLinux,
   WorkingDirectoryChanged,
   cleanupBwrapMountPoints,
-  sandboxPaths,
 };

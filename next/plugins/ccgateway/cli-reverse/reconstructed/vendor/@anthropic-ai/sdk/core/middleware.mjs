@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/core/middleware.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (7)
+ * pieces: chunk-vn3g7zt8.js (7)
  * attribution: esm-layout 1, esm-fingerprint 6
  */
 import { isAbortError_2, castToError } from "../internal/errors.mjs";
@@ -11,13 +11,13 @@ import { loggerFor, defaultLogger } from "../internal/utils/log.mjs";
 import { Stream } from "./streaming.mjs";
 import { addResponseIDs } from "../internal/parse.mjs";
 
-//@ chunk-hwmsct5x.js:34791-34810 esm-layout
+//@ chunk-vn3g7zt8.js:35162-35181 esm-layout
 var fetchOriginErrors = new WeakSet();
-//@ chunk-hwmsct5x.js:34810-34873 esm-fingerprint
+//@ chunk-vn3g7zt8.js:35181-35244 esm-fingerprint
 function isFetchOriginError(err) {
   return typeof err === "object" && err !== null && fetchOriginErrors.has(err);
 }
-//@ chunk-hwmsct5x.js:34873-35039 esm-fingerprint
+//@ chunk-vn3g7zt8.js:35244-35410 esm-fingerprint
 function isRetryableError(err) {
   let seen = new Set();
   while (typeof err === "object" && err !== null && !seen.has(err)) {
@@ -33,7 +33,7 @@ function isRetryableError(err) {
   }
   return false;
 }
-//@ chunk-hwmsct5x.js:35039-35483 esm-fingerprint
+//@ chunk-vn3g7zt8.js:35410-35854 esm-fingerprint
 function wrapFetchWithMiddleware(fetchFn, middleware, options, client) {
   return async (url, init = {}) => {
     if (middleware.length === 0) return fetchFn.call(undefined, url, init);
@@ -55,7 +55,7 @@ function wrapFetchWithMiddleware(fetchFn, middleware, options, client) {
     return response;
   };
 }
-//@ chunk-hwmsct5x.js:35483-35655 esm-fingerprint
+//@ chunk-vn3g7zt8.js:35854-36026 esm-fingerprint
 function createMiddlewareContext(options, client) {
   let cache = new WeakMap();
   return {
@@ -72,7 +72,7 @@ function createMiddlewareContext(options, client) {
     },
   };
 }
-//@ chunk-hwmsct5x.js:35655-36235 esm-fingerprint
+//@ chunk-vn3g7zt8.js:36026-36606 esm-fingerprint
 async function parseResponseBody(response, options, client) {
   if (response.bodyUsed || response.body?.locked)
     throw new AnthropicError(
@@ -89,7 +89,7 @@ async function parseResponseBody(response, options, client) {
   }
   return await response.clone().text();
 }
-//@ chunk-hwmsct5x.js:36235-36448 esm-fingerprint
+//@ chunk-vn3g7zt8.js:36606-36819 esm-fingerprint
 function composeMiddleware(fetchFn, middleware, options, client) {
   let next = async ({ url, ...init }) => {
     try {

@@ -3,10 +3,10 @@
  *
  * Sessions API 客户端：列出/拉取/归档会话，发送事件、控制请求与历史，OAuth 头、重试与设备信任处理（/v1/code/sessions…）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/teleport/api.ts
- * pieces: chunk-0qx6sn4e.js (1), chunk-3nztfxrw.js (1), chunk-aepeg2w5.js (80)
- * attribution: fingerprint 6, placement 76
+ * pieces: chunk-06vyq63w.js (1), chunk-a3r2kq46.js (1), chunk-exfmq47h.js (81)
+ * attribution: fingerprint 6, placement 76, facade-majority 1
  */
 import { randomUUID } from "crypto";
 import { axios_default } from "../../../vendor/axios/dist/esm/axios.js";
@@ -87,7 +87,7 @@ import { lacksAuthorizationHeader } from "../../services/oauth/sessionsBearerHoo
 import { TRANSIENT_NETWORK_ERRNOS } from "../../services/mcp/mcpClientCapabilities.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:777841-778062 placement
+//@ chunk-exfmq47h.js:798601-798822 placement
 /**
  * 按 payload.uuid 去重事件（就地），返回删除数。
  */
@@ -110,7 +110,7 @@ function dedupeEventsByUuid(events) {
   }
   return removedCount;
 }
-//@ chunk-aepeg2w5.js:778461-778628 placement
+//@ chunk-exfmq47h.js:799221-799388 placement
 /**
  * 构造成功的 control_response。
  */
@@ -130,7 +130,7 @@ function buildControlResponse(requestId, response, toolName, alwaysAttachToolNam
     },
   };
 }
-//@ chunk-aepeg2w5.js:781069-781236 placement
+//@ chunk-exfmq47h.js:801865-802032 placement
 /**
  * 响应中的会话对象。
  */
@@ -141,18 +141,18 @@ function extractSessionFromResponse(payload) {
   if (session === null || typeof session !== "object" || typeof session.id !== "string") return;
   return session;
 }
-//@ chunk-aepeg2w5.js:781236-781349 fingerprint (2.1.88 match: fetchSession, 0.343)
+//@ chunk-exfmq47h.js:802032-802145 fingerprint (2.1.88 match: fetchSession, 0.343)
 /**
  * Sessions API 的错误文案常量组（会话不存在、无效 id、会话过期）。
  */
 var SESSION_NOT_FOUND_MESSAGE = "Session not found:";
 var INVALID_SESSION_ID_MESSAGE = "invalid session ID";
 var SESSION_EXPIRED_MESSAGE = "Session expired. Please run /login to sign in again.";
-//@ chunk-aepeg2w5.js:782331-782400 placement (2.1.88 match: CCR_BYOC_BETA_HEADER, 1)
+//@ chunk-exfmq47h.js:803127-803196 placement (2.1.88 match: CCR_BYOC_BETA_HEADER, 1)
 var RETRY_DELAYS_MS = [2000, 4000, 8000, 16000];
 var MAX_SESSION_API_RETRIES = RETRY_DELAYS_MS.length;
 var CCR_BYOC_BETA = "ccr-byoc-2025-07-29";
-//@ chunk-aepeg2w5.js:782400-782551 placement
+//@ chunk-exfmq47h.js:803196-803347 placement
 function sessionsApiWire(apiVersion, baseUrl, credentials) {
   return apiVersion === "v1alpha2"
     ? {
@@ -167,21 +167,21 @@ function sessionsApiWire(apiVersion, baseUrl, credentials) {
         },
       };
 }
-//@ chunk-aepeg2w5.js:782551-782667 placement (2.1.88 match: isTransientNetworkError, 1)
+//@ chunk-exfmq47h.js:803347-803463 placement (2.1.88 match: isTransientNetworkError, 1)
 function isTransientNetworkError(error) {
   if (!axios_default.isAxiosError(error)) return false;
   if (!error.response) return true;
   if (error.response.status >= 500) return true;
   return false;
 }
-//@ chunk-aepeg2w5.js:782667-782704 placement
+//@ chunk-exfmq47h.js:803463-803500 placement
 /**
  * 带指数退避的 GET（只对瞬时网络错误重试）。
  */
 function axiosGetWithRetry(url, options) {
   return axiosGetWithRetry_2(url, () => options);
 }
-//@ chunk-aepeg2w5.js:782704-783021 fingerprint (2.1.88 match: axiosGetWithRetry, 1)
+//@ chunk-exfmq47h.js:803500-803817 fingerprint (2.1.88 match: axiosGetWithRetry, 1)
 async function axiosGetWithRetry_2(url, config) {
   let lastError;
   for (let attempt = 0; attempt <= MAX_SESSION_API_RETRIES; attempt++)
@@ -202,9 +202,9 @@ async function axiosGetWithRetry_2(url, config) {
     }
   throw lastError;
 }
-//@ chunk-aepeg2w5.js:783021-783317 fingerprint (2.1.88 match: CodeSessionSchema, 0.888)
+//@ chunk-exfmq47h.js:803817-804113 fingerprint (2.1.88 match: CodeSessionSchema, 0.888)
 var CodeSessionSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:783021", () => {
+deferInit("chunk-exfmq47h.js:803817", () => {
   CodeSessionSchema = DoctorLazy(() =>
     objectSchema({
       id: stringSchema(),
@@ -225,13 +225,13 @@ deferInit("chunk-aepeg2w5.js:783021", () => {
     }),
   );
 });
-//@ chunk-aepeg2w5.js:783317-783407 placement
+//@ chunk-exfmq47h.js:804113-804203 placement
 function sessionsApiBearerFingerprint() {
   if (!isFirstPartyProvider()) return;
   let accessToken = sessionsApiAccessTokenNow(isConsoleProfileSessionsCredential());
   return accessToken === undefined ? undefined : computeContentHash(accessToken).slice(0, 24);
 }
-//@ chunk-aepeg2w5.js:783407-783613 placement
+//@ chunk-exfmq47h.js:804203-804409 placement
 async function primeSessionsApiBearer({ refresh, credentials }) {
   if (!isFirstPartyProvider()) return;
   if (isConsoleProfileSessionsCredential()) {
@@ -247,16 +247,16 @@ async function primeSessionsApiBearer({ refresh, credentials }) {
     credentials,
   });
 }
-//@ chunk-aepeg2w5.js:783613-783654 fingerprint (2.1.88 match: prepareApiRequest, 0.73)
+//@ chunk-exfmq47h.js:804409-804450 fingerprint (2.1.88 match: prepareApiRequest, 0.73)
 var prepareApiRequest_2 = "Unable to get organization UUID";
-//@ chunk-aepeg2w5.js:783654-783738 placement
+//@ chunk-exfmq47h.js:804450-804534 placement
 class CloudSessionAccessError extends Error {
   constructor(message) {
     super(message);
     this.name = "CloudSessionAccessError";
   }
 }
-//@ chunk-aepeg2w5.js:783738-784178 placement (2.1.88 match: getMyAdminRequests, 0.212)
+//@ chunk-exfmq47h.js:804534-804974 placement (2.1.88 match: getMyAdminRequests, 0.212)
 /**
  * 取云会话调用所需的 {accessToken, orgUUID, profile}：仅第一方提供商；必要时刷新 OAuth。旧版名 getMyAdminRequests 不准确。
  */
@@ -293,7 +293,7 @@ async function prepareApiRequest(requestType, statuses = true) {
     profile: isConsoleProfile,
   };
 }
-//@ chunk-aepeg2w5.js:784178-784360 placement
+//@ chunk-exfmq47h.js:804974-805156 placement
 function repoFromGitSource(gitSource) {
   if (!gitSource?.url) return null;
   let gitHubRepository = parseGitHubRepository(gitSource.url);
@@ -308,7 +308,7 @@ function repoFromGitSource(gitSource) {
     default_branch: gitSource.revision || undefined,
   };
 }
-//@ chunk-aepeg2w5.js:784360-785105 placement (2.1.88 match: fetchCodeSessionsFromSessionsAPI, 0.443)
+//@ chunk-exfmq47h.js:805156-805901 placement (2.1.88 match: fetchCodeSessionsFromSessionsAPI, 0.442)
 /**
  * GET /v1/code/sessions 列出云端会话（teleport_sessions_list）。
  */
@@ -350,7 +350,7 @@ async function fetchCodeSessionsFromSessionsAPI() {
     }
   });
 }
-//@ chunk-aepeg2w5.js:785105-785257 placement (2.1.88 match: getOAuthHeaders, 0.875)
+//@ chunk-exfmq47h.js:805901-806053 placement (2.1.88 match: getOAuthHeaders, 0.875)
 function getOAuthHeaders(accessToken) {
   return {
     Authorization: `Bearer ${accessToken}`,
@@ -359,7 +359,7 @@ function getOAuthHeaders(accessToken) {
     "anthropic-client-platform": getClientPlatform(),
   };
 }
-//@ chunk-aepeg2w5.js:785257-785308 placement (2.1.88 match: getGroveSettings, 0.554)
+//@ chunk-exfmq47h.js:806053-806104 placement (2.1.88 match: getGroveSettings, 0.554)
 /**
  * User-Agent + OAuth 认证头。旧版名 getGroveSettings 为错配。
  */
@@ -369,18 +369,18 @@ function getOAuthRequestHeaders(credentials) {
     ...getOAuthHeaders(credentials),
   };
 }
-//@ chunk-aepeg2w5.js:785308-785404 placement
+//@ chunk-exfmq47h.js:806104-806201 placement
 async function fetchSession(sessionId, request, credentials) {
-  let { session, serverNow } = await sendCloudSessionEvent(sessionId, request, credentials);
+  let { session, serverNow } = await fetchOwnedSession(sessionId, request, credentials);
   return describeCloudSession(session, {
     serverNow,
   });
 }
-//@ chunk-aepeg2w5.js:785404-786206 placement
+//@ chunk-exfmq47h.js:806201-807004 placement
 /**
  * 发送云会话事件（仅第一方）。
  */
-async function sendCloudSessionEvent(sessionId, options, credentials) {
+async function fetchOwnedSession(sessionId, options, credentials) {
   if (!isFirstPartyProvider())
     throw new TeleportOperationError(
       "Cloud sessions are only available on the first-party Anthropic API provider.",
@@ -413,19 +413,19 @@ async function sendCloudSessionEvent(sessionId, options, credentials) {
     serverNow: Number.isFinite(timestamp) ? timestamp : undefined,
   };
 }
-//@ chunk-aepeg2w5.js:786206-786317 placement (2.1.88 match: getBranchFromSession, 1)
+//@ chunk-exfmq47h.js:807004-807115 placement (2.1.88 match: getBranchFromSession, 1)
 function getBranchFromSession(session) {
   return session.session_context.outcomes?.find((outcome) => outcome.type === "git_repository")?.git_info
     ?.branches[0];
 }
-//@ chunk-aepeg2w5.js:786317-786377 placement
+//@ chunk-exfmq47h.js:807115-807175 placement
 async function getSessionRequestHeaders(accessToken, profile) {
   return {
     ...getOAuthRequestHeaders(accessToken),
     ...(profile ? {} : await trustedDeviceHeaders()),
   };
 }
-//@ chunk-aepeg2w5.js:786377-786946 placement
+//@ chunk-exfmq47h.js:807175-807744 placement
 async function resendAfterUntrustedDevice(response, request, credentials, purpose) {
   if (response.status !== 403) return response;
   let { isDeviceIdentityEnabled } = await import("../../services/analytics/violinGates.js");
@@ -451,7 +451,7 @@ async function resendAfterUntrustedDevice(response, request, credentials, purpos
     })) ?? response
   );
 }
-//@ chunk-aepeg2w5.js:786946-787659 placement
+//@ chunk-exfmq47h.js:807744-808457 placement
 /**
  * 附加设备证明并签名事件。
  */
@@ -492,7 +492,7 @@ async function attachDeviceAttestation(response, event, credentials, accessToken
   );
   return signed.device_attestation === undefined ? undefined : signed;
 }
-//@ chunk-aepeg2w5.js:787659-787817 placement
+//@ chunk-exfmq47h.js:808457-808615 placement
 /**
  * 可信设备令牌头 X-Trusted-Device-Token（设备身份功能开启时）。
  */
@@ -507,7 +507,7 @@ async function trustedDeviceHeaders() {
       }
     : {};
 }
-//@ chunk-aepeg2w5.js:787817-787956 placement
+//@ chunk-exfmq47h.js:808615-808754 placement
 function parsePositiveInt(sequenceNum) {
   let sequenceNum_2 =
     typeof sequenceNum === "number"
@@ -517,7 +517,7 @@ function parsePositiveInt(sequenceNum) {
         : NaN;
   return Number.isSafeInteger(sequenceNum_2) && sequenceNum_2 > 0 ? sequenceNum_2 : undefined;
 }
-//@ chunk-aepeg2w5.js:787956-790321 placement
+//@ chunk-exfmq47h.js:808754-811119 placement
 /**
  * 向远程会话发事件：POST <BASE_API_URL>/v1/code/sessions/<id>/events（OAuth Bearer + 组织头），403 未信任设备时尝试设备登记后重试；仅第一方。
  */
@@ -658,13 +658,13 @@ async function sendEventToRemoteSession_2(sessionId, event, credentials, signerO
     };
   }
 }
-//@ chunk-aepeg2w5.js:790321-790455 placement
+//@ chunk-exfmq47h.js:811119-811253 placement
 function classifyRequestFailure(error) {
   if (!axios_default.isAxiosError(error)) return;
   if (error.response !== undefined) return "server";
   return error.code === "ECONNABORTED" ? "timeout" : "network";
 }
-//@ chunk-aepeg2w5.js:790455-790797 placement
+//@ chunk-exfmq47h.js:811253-811663 placement
 async function sendEventToRemoteSession(sessionId, content, options) {
   return sendEventToRemoteSession_2(
     sessionId,
@@ -686,6 +686,9 @@ async function sendEventToRemoteSession(sessionId, content, options) {
       ...(options?.inlinePastes && {
         inline_pastes: options.inlinePastes,
       }),
+      ...(options?.fileAttachments?.length && {
+        file_attachments: options.fileAttachments,
+      }),
     },
     "[sendEventToRemoteSession]",
     {
@@ -693,7 +696,30 @@ async function sendEventToRemoteSession(sessionId, content, options) {
     },
   );
 }
-//@ chunk-aepeg2w5.js:790797-790920 placement
+//@ chunk-exfmq47h.js:811663-811905 facade-majority
+async function sendHandoffToRemoteSession(sessionId, content, handoff) {
+  return sendEventToRemoteSession_2(
+    sessionId,
+    {
+      uuid: handoff.uuid,
+      session_id: sessionId,
+      type: "user",
+      parent_tool_use_id: null,
+      message: {
+        role: "user",
+        content,
+      },
+      isSynthetic: true,
+      client_composed: true,
+      shouldQuery: false,
+    },
+    "[sendHandoffToRemoteSession]",
+    {
+      eventSigner: handoff.eventSigner,
+    },
+  );
+}
+//@ chunk-exfmq47h.js:811905-812028 placement
 async function sendControlRequestToRemoteSession(sessionId, renameSessionRequest, options) {
   return sendEventToRemoteSession_2(
     sessionId,
@@ -707,7 +733,7 @@ async function sendControlRequestToRemoteSession(sessionId, renameSessionRequest
     },
   );
 }
-//@ chunk-aepeg2w5.js:790920-791026 placement
+//@ chunk-exfmq47h.js:812028-812134 placement
 async function sendControlResponseToRemoteSession(sessionId, requestId, response, options) {
   return sendEventToRemoteSession_2(
     sessionId,
@@ -719,7 +745,7 @@ async function sendControlResponseToRemoteSession(sessionId, requestId, response
     options,
   );
 }
-//@ chunk-aepeg2w5.js:791026-791232 placement
+//@ chunk-exfmq47h.js:812134-812340 placement
 async function sendBashCommandToRemoteSession(sessionId, command, options) {
   return sendEventToRemoteSession_2(
     sessionId,
@@ -738,11 +764,11 @@ async function sendBashCommandToRemoteSession(sessionId, command, options) {
     },
   );
 }
-//@ chunk-aepeg2w5.js:791232-791260 placement
+//@ chunk-exfmq47h.js:812340-812368 placement
 var SESSION_EVENTS_BATCH_SIZE = 100;
 var MAX_BATCH_BYTES = 10485760;
 var MAX_CONSECUTIVE_FAILURES = 4;
-//@ chunk-aepeg2w5.js:791260-793010 placement
+//@ chunk-exfmq47h.js:812368-814118 placement
 /**
  * 把本地会话历史批量上传为远程会话事件（/v1/code/sessions/<id>/events，分批、限大小）。
  */
@@ -875,7 +901,7 @@ async function sendSessionHistoryEvents(infraSessionId, events, credentials) {
     droppedEvents: uploadedCount,
   };
 }
-//@ chunk-aepeg2w5.js:793010-793525 placement (2.1.88 match: updateSessionTitle, 0.66)
+//@ chunk-exfmq47h.js:814118-814633 placement (2.1.88 match: updateSessionTitle, 0.66)
 /**
  * 更新云会话标题（/v1/code/sessions/<id>）。
  */
@@ -908,7 +934,7 @@ async function updateSessionTitle(sessionId, title, signal) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:793525-793865 placement
+//@ chunk-exfmq47h.js:814633-814973 placement
 async function markSessionRead(sessionId, eventId) {
   try {
     let { accessToken } = await prepareApiRequest();
@@ -934,14 +960,14 @@ async function markSessionRead(sessionId, eventId) {
     logForDebugging(`[markSessionRead] Error: ${errorMessage(error)}`);
   }
 }
-//@ chunk-aepeg2w5.js:793865-794214 placement
+//@ chunk-exfmq47h.js:814973-815322 placement
 /**
  * can_use_tool 控制请求的 zod schema（含工具名、输入、交互要求与匹配规则）。
  */
 var CanUseToolRequestSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var canUseToolRequestEventSchema;
 var MCP_QUESTION_GRACE_MS;
-deferInit("chunk-aepeg2w5.js:793865", () => {
+deferInit("chunk-exfmq47h.js:814973", () => {
   CanUseToolRequestSchema = DoctorLazy(() =>
     looseObject({
       subtype: literal("can_use_tool"),
@@ -967,7 +993,7 @@ deferInit("chunk-aepeg2w5.js:793865", () => {
   );
   MCP_QUESTION_GRACE_MS = 600000;
 });
-//@ chunk-aepeg2w5.js:794214-794324 placement
+//@ chunk-exfmq47h.js:815322-815432 placement
 function getAccessTokenWithCcrFallback() {
   return (
     getClaudeAIOAuthTokens()?.accessToken ??
@@ -976,20 +1002,20 @@ function getAccessTokenWithCcrFallback() {
       : undefined)
   );
 }
-//@ chunk-aepeg2w5.js:794324-794401 placement
+//@ chunk-exfmq47h.js:815432-815509 placement
 function deviceBridgeAccessToken(credentials) {
   return (
     (credentials.profile ? sessionsApiAccessTokenNow(true) : getAccessTokenWithCcrFallback()) ??
     (hostSessionsBearerOffered() ? undefined : credentials.accessToken)
   );
 }
-//@ chunk-aepeg2w5.js:794401-794445 placement
+//@ chunk-exfmq47h.js:815509-815553 placement
 function sessionsApiAccessTokenWithCcrFallback(profile) {
   return profile
     ? sessionsApiAccessTokenNow(profile)
     : (readHostSessionsBearer() ?? getAccessTokenWithCcrFallback());
 }
-//@ chunk-aepeg2w5.js:794445-795880 placement (2.1.88 match: pollRemoteSessionEvents, 0.527)
+//@ chunk-exfmq47h.js:815553-816991 placement (2.1.88 match: pollRemoteSessionEvents, 0.528)
 /**
  * 轮询远程会话事件（after_id 分页），用于 teleport 拉取日志。
  */
@@ -1094,7 +1120,7 @@ async function pollRemoteSessionEvents(sessionId, afterId, opts) {
     metadataFetchError,
   };
 }
-//@ chunk-aepeg2w5.js:795880-796493 placement (2.1.88 match: archiveRemoteSession, 0.535)
+//@ chunk-exfmq47h.js:816991-817604 placement (2.1.88 match: archiveRemoteSession, 0.534)
 /**
  * POST /v1/code/sessions/<id>/archive 归档云会话。
  */
@@ -1140,39 +1166,39 @@ async function archiveRemoteSession(sessionId, timeout = 1e4) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:796493-796571 placement
+//@ chunk-exfmq47h.js:817604-817682 placement
 var BEARER_FRESHNESS_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var consoleProfileBearerByHost;
-deferInit("chunk-aepeg2w5.js:796493", () => {
+deferInit("chunk-exfmq47h.js:817604", () => {
   BEARER_FRESHNESS_MS = 30000;
   consoleProfileBearerByHost = new HostScoped(() => ({
     lastBearer: undefined,
     storedCredentialCheck: undefined,
   }));
 });
-//@ chunk-aepeg2w5.js:796571-796657 placement
+//@ chunk-exfmq47h.js:817682-817768 placement
 function isConsoleProfileSessionsCredential() {
   if (getWIFAuthType() !== "user_oauth" || !isWIFDispatchAuth()) return false;
   return consoleProfileOrganizationLabel() !== "not_ldr" || !hasUsableClaudeAILogin();
 }
-//@ chunk-aepeg2w5.js:796657-796664 placement
+//@ chunk-exfmq47h.js:817768-817775 placement
 // deferred: uses setTrustedDeviceProbe (../telemetry/memorySummary.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:796657", () => {
+deferInit("chunk-exfmq47h.js:817768", () => {
   setTrustedDeviceProbe(isConsoleProfileSessionsCredential);
 });
-//@ chunk-aepeg2w5.js:796664-796723 placement
+//@ chunk-exfmq47h.js:817775-817834 placement
 function consoleProfileOrganizationLabel() {
   return getConsoleProfileBearerProvider()?.organizationLabel() ?? "unknown";
 }
-//@ chunk-aepeg2w5.js:796723-796783 placement
+//@ chunk-exfmq47h.js:817834-817894 placement
 function consoleProfileOrganizationUuid() {
   return getWIFAccountInfo()?.organizationUuid?.trim() || undefined;
 }
-//@ chunk-aepeg2w5.js:796783-796806 placement
+//@ chunk-exfmq47h.js:817894-817917 placement
 function isConsoleProfileProviderReady() {
   return false;
 }
-//@ chunk-aepeg2w5.js:796806-797176 placement
+//@ chunk-exfmq47h.js:817917-818287 placement
 /**
  * 是否有当前组织的最近凭据。
  */
@@ -1194,7 +1220,7 @@ function hasRecentBearerForOrg() {
     };
   return state.storedCredentialCheck.present;
 }
-//@ chunk-aepeg2w5.js:797176-797232 placement
+//@ chunk-exfmq47h.js:818287-818343 placement
 function consoleProfileCanStartCloudSessions() {
   return (
     isConsoleProfileSessionsCredential() &&
@@ -1202,18 +1228,18 @@ function consoleProfileCanStartCloudSessions() {
     (isConsoleProfileProviderReady() || hasRecentBearerForOrg())
   );
 }
-//@ chunk-aepeg2w5.js:797232-797533 placement
+//@ chunk-exfmq47h.js:818343-818644 placement
 /**
  * 云会话登录提示文案：先运行 claude auth login 再重试。
  */
 var LOGIN_REQUIRED_HINT = "Run `claude auth login` (or /login in a local session), then try again.";
 var CREDENTIAL_PROVIDER_MISSING_TEXT =
   "This command can't use your Console sign-in for cloud sessions: the part of Claude Code that reads that sign-in isn't loaded in this process. That's a bug in Claude Code; please report it, with the command you ran.";
-//@ chunk-aepeg2w5.js:797533-797567 placement
+//@ chunk-exfmq47h.js:818644-818678 placement
 function consoleProfileCredentialProviderLoaded() {
   return getConsoleProfileBearerProvider() !== null;
 }
-//@ chunk-aepeg2w5.js:797567-797903 placement
+//@ chunk-exfmq47h.js:818678-819014 placement
 function cloudSessionsSignInRefusal() {
   if (isConsoleProfileSessionsCredential()) {
     if (!consoleProfileCredentialProviderLoaded()) return CREDENTIAL_PROVIDER_MISSING_TEXT;
@@ -1223,14 +1249,14 @@ function cloudSessionsSignInRefusal() {
   }
   return `Cloud sessions need a claude.ai sign-in. ${LOGIN_REQUIRED_HINT}`;
 }
-//@ chunk-aepeg2w5.js:797903-797997 placement
+//@ chunk-exfmq47h.js:819014-819108 placement
 class ConsoleProfileCloudSessionsError extends Error {
   constructor(message) {
     super(message);
     this.name = "ConsoleProfileCloudSessionsError";
   }
 }
-//@ chunk-aepeg2w5.js:797997-798660 placement
+//@ chunk-exfmq47h.js:819108-819771 placement
 async function resolveConsoleProfileBearer({ credentials, signIn, onBrowserOpening }) {
   let organizationUuid = consoleProfileOrganizationUuid();
   if (organizationUuid === undefined)
@@ -1263,7 +1289,7 @@ async function resolveConsoleProfileBearer({ credentials, signIn, onBrowserOpeni
   if (!provider.ok) throw new ConsoleProfileCloudSessionsError(provider.message);
   return rememberConsoleProfileBearer(provider.accessToken, organizationUuid);
 }
-//@ chunk-aepeg2w5.js:798660-798757 placement
+//@ chunk-exfmq47h.js:819771-819868 placement
 function fetchConsoleProfileCredential(options) {
   let consoleProfileBearerProvider = getConsoleProfileBearerProvider();
   return consoleProfileBearerProvider
@@ -1273,7 +1299,7 @@ function fetchConsoleProfileCredential(options) {
         reason: "needs_sign_in",
       });
 }
-//@ chunk-aepeg2w5.js:798757-798845 placement
+//@ chunk-exfmq47h.js:819868-819956 placement
 async function ensureConsoleProfileCloudSessionsCredential(credentials, onBrowserOpening) {
   if (isConsoleProfileSessionsCredential())
     await resolveConsoleProfileBearer({
@@ -1282,7 +1308,7 @@ async function ensureConsoleProfileCloudSessionsCredential(credentials, onBrowse
       onBrowserOpening,
     });
 }
-//@ chunk-aepeg2w5.js:798845-798933 placement
+//@ chunk-exfmq47h.js:819956-820044 placement
 function rememberConsoleProfileBearer(accessToken, organizationUuid) {
   consoleProfileBearerByHost.of(getRootSession().host).lastBearer = {
     accessToken,
@@ -1290,13 +1316,13 @@ function rememberConsoleProfileBearer(accessToken, organizationUuid) {
   };
   return accessToken;
 }
-//@ chunk-aepeg2w5.js:798933-799021 placement
+//@ chunk-exfmq47h.js:820044-820132 placement
 function forgetConsoleProfileCloudSessionsBearer() {
   let state = consoleProfileBearerByHost.of(getRootSession().host);
   state.lastBearer = undefined;
   state.storedCredentialCheck = undefined;
 }
-//@ chunk-aepeg2w5.js:799021-799313 placement
+//@ chunk-exfmq47h.js:820132-820424 placement
 async function recoverConsoleProfileBearerOutcome(refusedToken) {
   let organizationUuid = consoleProfileOrganizationUuid();
   if (organizationUuid === undefined) return "needs_sign_in";
@@ -1315,11 +1341,11 @@ async function recoverConsoleProfileBearerOutcome(refusedToken) {
   rememberConsoleProfileBearer(consoleProfileCredential.accessToken, organizationUuid);
   return "recovered";
 }
-//@ chunk-aepeg2w5.js:799313-799368 placement
+//@ chunk-exfmq47h.js:820424-820479 placement
 async function isBearerRecovered(refusedToken) {
   return (await recoverConsoleProfileBearerOutcome(refusedToken)) === "recovered";
 }
-//@ chunk-aepeg2w5.js:799368-799537 placement
+//@ chunk-exfmq47h.js:820479-820648 placement
 function sessionsApiAccessTokenNow(isConsoleProfile) {
   if (isConsoleProfile) {
     let lastBearer = consoleProfileBearerByHost.of(getRootSession().host).lastBearer;
@@ -1332,11 +1358,11 @@ function sessionsApiAccessTokenNow(isConsoleProfile) {
   }
   return readHostSessionsBearer() ?? getClaudeAIOAuthTokens()?.accessToken;
 }
-//@ chunk-aepeg2w5.js:799537-799599 placement
+//@ chunk-exfmq47h.js:820648-820710 placement
 async function accountApiAccessToken(isConsoleProfile = isConsoleProfileSessionsCredential()) {
   return isConsoleProfile ? sessionsApiAccessToken(true) : getClaudeAIOAuthTokens()?.accessToken;
 }
-//@ chunk-aepeg2w5.js:799599-799816 placement
+//@ chunk-exfmq47h.js:820710-820927 placement
 async function sessionsApiAccessToken(isConsoleProfile = isConsoleProfileSessionsCredential()) {
   if (isConsoleProfile) {
     let organizationUuid = consoleProfileOrganizationUuid();
@@ -1351,17 +1377,17 @@ async function sessionsApiAccessToken(isConsoleProfile = isConsoleProfileSession
   }
   return (await ensureHostSessionsBearer()) ?? getClaudeAIOAuthTokens()?.accessToken;
 }
-//@ chunk-aepeg2w5.js:799816-799879 placement
+//@ chunk-exfmq47h.js:820927-820990 placement
 async function sessionsApiOrganizationUUID(isConsoleProfile = isConsoleProfileSessionsCredential()) {
   if (isConsoleProfile) return consoleProfileOrganizationUuid() ?? null;
   return getOrganizationUUID();
 }
-//@ chunk-aepeg2w5.js:799879-799937 placement
+//@ chunk-exfmq47h.js:820990-821048 placement
 function recoverSessionsApiBearer(token, mode, third, profile) {
   if (profile) return isBearerRecovered(token);
   return recoverCloudSessionsBearer(token, mode, third);
 }
-//@ chunk-aepeg2w5.js:799937-800530 placement
+//@ chunk-exfmq47h.js:821048-821641 placement
 async function withSessionsApiBearer401Retry(run, options) {
   let isConsoleProfile = options.profile ?? isConsoleProfileSessionsCredential();
   let fallbackToken =
@@ -1407,18 +1433,18 @@ async function withSessionsApiBearer401Retry(run, options) {
     }
   }
 }
-//@ chunk-aepeg2w5.js:800530-800588 placement
+//@ chunk-exfmq47h.js:821641-821699 placement
 function requireBearer(token) {
   if (token === undefined) throw new CloudSessionAccessError(cloudSessionsSignInRefusal());
   return token;
 }
-//@ chunk-aepeg2w5.js:800588-800712 placement
+//@ chunk-exfmq47h.js:821699-821823 placement
 function bearerToSend(heldToken, fallbackToken) {
   let token = heldToken ?? fallbackToken;
   if (token === undefined) throw Error("No credential left to send a cloud-sessions request with");
   return token;
 }
-//@ chunk-aepeg2w5.js:800712-800948 placement
+//@ chunk-exfmq47h.js:821823-822059 placement
 async function resendOnHeldBearer401(heldToken, send, { waitForHost }) {
   let response;
   try {
@@ -1431,7 +1457,7 @@ async function resendOnHeldBearer401(heldToken, send, { waitForHost }) {
   if (heldToken === null || response.status !== 401) return response;
   return resolveSessionsAuth(heldToken, send, waitForHost, lacksAuthorizationHeader(response.config));
 }
-//@ chunk-aepeg2w5.js:800948-801310 placement
+//@ chunk-exfmq47h.js:822059-822421 placement
 /**
  * 解析会话 API 的认证。
  */
@@ -1462,7 +1488,7 @@ async function resolveSessionsAuth(heldToken, send, waitForHost, withheld) {
     ).catch(() => {});
   return response;
 }
-//@ chunk-aepeg2w5.js:801310-801387 placement
+//@ chunk-exfmq47h.js:822421-822498 placement
 class WarnOnceSlot {
   warned = false;
   claim() {
@@ -1471,30 +1497,30 @@ class WarnOnceSlot {
     return true;
   }
 }
-//@ chunk-aepeg2w5.js:801387-801412 placement
+//@ chunk-exfmq47h.js:822498-822523 placement
 var warnOnceSlotByHost; // deferred: uses WarnOnceSlot of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:801387", () => {
+deferInit("chunk-exfmq47h.js:822498", () => {
   warnOnceSlotByHost = new HostScoped(() => new WarnOnceSlot());
 });
-//@ chunk-aepeg2w5.js:801412-801449 placement
+//@ chunk-exfmq47h.js:822523-822560 placement
 function warnOnceSlot() {
   return warnOnceSlotByHost.of(getRootSession().host);
 }
-//@ chunk-aepeg2w5.js:801449-801471 placement
+//@ chunk-exfmq47h.js:822560-822582 placement
 /**
  * 记忆 API 覆盖地址（外部构建恒 undefined）。
  */
 function memoryApiOverride() {
   return;
 }
-//@ chunk-aepeg2w5.js:801471-801508 placement
+//@ chunk-exfmq47h.js:822582-822619 placement
 /**
  * 是否配置了记忆 API 覆盖。
  */
 function hasMemoryApiOverride() {
   return memoryApiOverride() !== undefined;
 }
-//@ chunk-aepeg2w5.js:801508-801718 placement
+//@ chunk-exfmq47h.js:822619-822829 placement
 /**
  * 记忆 API 的主机与认证方式。
  */
@@ -1517,9 +1543,9 @@ function memoryApiTarget() {
     }),
   };
 }
-//@ chunk-aepeg2w5.js:801761-801774 placement
+//@ chunk-exfmq47h.js:822872-822885 placement
 var FLUSH_PROGRESS_SLACK_BYTES = 4 * UPLOAD_CHUNK_BYTES;
-//@ chunk-aepeg2w5.js:801774-801932 placement
+//@ chunk-exfmq47h.js:822885-823043 placement
 /**
  * 上传是否停滞（未开始响应且已刷出的字节明显不足）。
  */
@@ -1532,14 +1558,14 @@ function isStalledUpload(seen) {
     seen.bytes_flushed + FLUSH_PROGRESS_SLACK_BYTES < seen.body_bytes
   );
 }
-//@ chunk-0qx6sn4e.js:3581-3725 fingerprint (2.1.88 match: isTransientNetworkError, 1)
+//@ chunk-06vyq63w.js:3259-3403 fingerprint (2.1.88 match: isTransientNetworkError, 1)
 function isTransientNetworkError_2(error) {
   if (!axios_default.isAxiosError(error)) return false;
   let status = error.response?.status;
   if (status !== undefined) return status >= 500 && status < 600;
   return error.code !== undefined && TRANSIENT_NETWORK_ERRNOS.has(error.code);
 }
-//@ chunk-3nztfxrw.js:5348-5466 fingerprint (2.1.88 match: getOAuthHeaders, 1)
+//@ chunk-a3r2kq46.js:5348-5466 fingerprint (2.1.88 match: getOAuthHeaders, 1)
 function getOAuthHeaders_2(accessToken) {
   return {
     Authorization: `Bearer ${accessToken}`,
@@ -1548,63 +1574,65 @@ function getOAuthHeaders_2(accessToken) {
   };
 }
 export {
-  isStalledUpload,
-  sendEventToRemoteSession,
-  sendBashCommandToRemoteSession,
-  buildControlResponse,
-  prepareApiRequest,
-  getSessionRequestHeaders,
-  getOAuthRequestHeaders,
-  resendAfterUntrustedDevice,
-  fetchCodeSessionsFromSessionsAPI,
   isTransientNetworkError_2,
-  archiveRemoteSession,
   fetchSession,
-  MCP_QUESTION_GRACE_MS,
-  sendControlResponseToRemoteSession,
-  pollRemoteSessionEvents,
-  getOAuthHeaders_2,
+  sendEventToRemoteSession,
   ensureConsoleProfileCloudSessionsCredential,
+  prepareApiRequest,
   sessionsApiAccessTokenNow,
   deviceBridgeAccessToken,
   recoverSessionsApiBearer,
-  SESSION_EXPIRED_MESSAGE,
-  markSessionRead,
-  updateSessionTitle,
+  fetchCodeSessionsFromSessionsAPI,
+  pollRemoteSessionEvents,
+  isTransientNetworkError,
   isConsoleProfileSessionsCredential,
   sessionsApiAccessToken,
   cloudSessionsSignInRefusal,
-  sessionsApiOrganizationUUID,
+  CloudSessionAccessError,
+  isStalledUpload,
+  getAccessTokenWithCcrFallback,
   trustedDeviceHeaders,
+  getOAuthRequestHeaders,
+  resendAfterUntrustedDevice,
+  axiosGetWithRetry,
+  consoleProfileCanStartCloudSessions,
+  archiveRemoteSession,
+  MCP_QUESTION_GRACE_MS,
+  sendControlResponseToRemoteSession,
+  sessionsApiWire,
+  sessionsApiOrganizationUUID,
   getBranchFromSession,
   sendControlRequestToRemoteSession,
-  getAccessTokenWithCcrFallback,
   resolveConsoleProfileBearer,
   ConsoleProfileCloudSessionsError,
   resendOnHeldBearer401,
   bearerToSend,
   CCR_BYOC_BETA,
-  dedupeEventsByUuid,
   extractSessionFromResponse,
+  accountApiAccessToken,
+  fetchOwnedSession,
   consoleProfileCredentialProviderLoaded,
   consoleProfileOrganizationLabel,
   hasMemoryApiOverride,
   memoryApiTarget,
   memoryApiOverride,
+  getOAuthHeaders_2,
+  buildControlResponse,
+  SESSION_EXPIRED_MESSAGE,
+  markSessionRead,
+  updateSessionTitle,
+  sendSessionHistoryEvents,
   getOAuthHeaders,
-  CloudSessionAccessError,
   recoverConsoleProfileBearerOutcome,
-  sessionsApiWire,
-  isTransientNetworkError,
-  axiosGetWithRetry,
-  consoleProfileCanStartCloudSessions,
+  forgetConsoleProfileCloudSessionsBearer,
+  sendHandoffToRemoteSession,
+  sendBashCommandToRemoteSession,
+  getSessionRequestHeaders,
+  dedupeEventsByUuid,
+  sessionsApiAccessTokenWithCcrFallback,
   SESSION_NOT_FOUND_MESSAGE,
   INVALID_SESSION_ID_MESSAGE,
-  forgetConsoleProfileCloudSessionsBearer,
   withSessionsApiBearer401Retry,
-  sessionsApiAccessTokenWithCcrFallback,
-  accountApiAccessToken,
-  sendSessionHistoryEvents,
   primeSessionsApiBearer,
   sessionsApiBearerFingerprint,
 };

@@ -3,14 +3,15 @@
  *
  * 并入已有模块：入站附件是否需要查询的判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/inboundAttachments.ts
- * pieces: chunk-23fm9f0d.js (1), chunk-cxyewwc3.js (4), chunk-n4bsg1hp.js (72)
- * attribution: fingerprint 5, sole-consumer 1, placement 60, layout 10, callgraph-fingerprint 1
+ * pieces: chunk-16n0efh2.js (1), chunk-jf14gxs3.js (1), chunk-kd6y3qsy.js (74), chunk-my9ygfcz.js (4)
+ * attribution: fingerprint 5, placement 61, layout 12, callgraph-fingerprint 1, sole-consumer 1
  */
-import { extname, join, basename, dirname } from "path";
-import { lstat, lutimes, utimes, readdir, rmdir, link, unlink, rm, realpath } from "fs/promises";
+import { extname, sep, join, basename, dirname } from "path";
+import { symlink, lstat, lutimes, utimes, readdir, rmdir, link, unlink, rm, realpath } from "fs/promises";
 import { randomUUID } from "crypto";
+import { parseWebpHeader, pngMayHaveTransparency, MIME_TO_EXTENSION } from "../utils/imageFormats.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import {
   objectSchema,
@@ -18,7 +19,6 @@ import {
   booleanSchema,
   numberSchema,
 } from "../../vendor/zod/v4/classic/schemas.js";
-import { cleanupOldFilesInDirectory } from "../utils/cleanup.js";
 import { isImageOrPdfExtension, IMAGE_EXTENSIONS } from "../tools/FileReadTool/constants.js";
 import { hasBinaryExtension } from "../constants/files.js";
 import { isNotebookPath } from "../utils/path.js";
@@ -38,24 +38,31 @@ import {
   injectPeerFilePrefix,
 } from "../utils/peerFileReceive.js";
 import {
+  getLocalUploadsRoot,
   isCcsTenant,
   getSessionUploadsDirOverride,
   isDiskless,
   inboundAttachmentDownloadRegistry,
   getSessionId,
-  getLocalUploadsRoot,
   inboundAttachmentFileRegistry,
 } from "../bootstrap/state.js";
-import { parseWebpHeader, pngMayHaveTransparency, MIME_TO_EXTENSION } from "../utils/imageFormats.js";
-import { logForDebugging } from "../utils/debug.js";
+import { openOwnedDirChain, createOwnedSubdir, ensureAttachmentsDir } from "../utils/safeMkdir.js";
+import { getChatProjectRoot } from "../utils/stageFileRoots.js";
+import { logFeatureSad, logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { getErrnoCode, sanitizeErrnoForTelemetry, sanitizeErrnoTokenForTelemetry } from "../utils/errors.js";
+import { logForDebugging } from "../utils/debug.js";
 import { sha256OfFile, openSpill } from "./inboundAttachmentSpill.js";
 import { lit, fromEnum } from "../services/analytics/safeMetadata.js";
-import { count } from "../utils/collections.js";
-import { createOwnedSubdir, ensureAttachmentsDir } from "../utils/safeMkdir.js";
+import { countWhere } from "../utils/collections.js";
 import { retryFsOp, writeIfMissing, retryTransient, writeFileAtomic } from "../utils/atomicPublishWrite.js";
 import { isRemoteManagedEnvironment } from "../utils/remoteEnvironment.js";
-import { IMAGE_LIMITS, MODEL_COPY_IMAGE_BYTES, MAX_IMAGE_SIDE_PX } from "../utils/mediaLimits.js";
+import {
+  IMAGE_LIMITS,
+  MODEL_COPY_IMAGE_BYTES,
+  MAX_IMAGE_SIDE_PX,
+  imageTileCount,
+  MAX_IMAGE_COPY_BYTES,
+} from "../utils/mediaLimits.js";
 import {
   getFeatureValue_CACHED_MAY_BE_STALE,
   getFeatureValueWithSource_CACHED_MAY_BE_STALE,
@@ -81,8 +88,12 @@ import {
   MAX_PEER_SPOOL_BYTES,
   MAX_PEER_ATTACHMENTS,
 } from "../utils/peerFileTransfer.js";
-import { isImageDecodingDisabled, detectImageFormatFromBuffer } from "../utils/imageResizer.js";
-import { isFirstPartyProvider } from "../utils/model/providers.js";
+import {
+  isImageDecodingDisabled,
+  fitImageDimensions,
+  detectImageFormatFromBuffer,
+} from "../utils/imageResizer.js";
+import { isFirstPartyProvider, isFirstPartyApiBackend } from "../utils/model/providers.js";
 import { isEssentialTrafficOnly } from "../utils/privacyLevel.js";
 import { computeContentHash } from "../utils/commitAttribution.js";
 import { logError } from "../utils/log.js";
@@ -94,24 +105,32 @@ import {
   readFreshOAuthAccessToken,
 } from "../utils/auth.js";
 import { sniffImageMediaType } from "../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
+import { sleep, fullJitterBackoffMs } from "../utils/sleep.js";
+import { getComputerUseMCPToolOverrides } from "../utils/computerUse/wrapper.js";
 import { convertImagesToBlocks } from "../components/permissions/AskUserQuestionPermissionRequest/AskUserQuestionPermissionRequest.js";
 import { isValidKeySegment, STORAGE_SPACES } from "../utils/storage/storageSpaces.js";
 import { storageErrorCode, formatStorageError } from "../utils/storage/storageErrors.js";
 import { warnDisklessSettingsWrite } from "../utils/settings/settingsStorage.js";
-import { logFeatureSad, logFeatureBad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
+import { modelImageLimits } from "../utils/attachmentMedia.js";
+import { getMainLoopModel } from "../utils/model/model.js";
 import { logForDiagnosticsNoPII } from "../utils/diagLogs.js";
 import { limitConcurrency } from "../utils/concurrencyLimit.js";
+import { recordSavedUpload } from "../utils/uploadsInPlace.js";
 import { dropEmptyTextBlocks } from "./inboundMessageOrigin.js";
 import { isTaggedPeerText } from "../utils/crossSessionMessages.js";
 import { normalizeUuidOrNull } from "../utils/agentId.js";
-import { fullJitterBackoffMs, sleep } from "../utils/sleep.js";
 import { getProxyFetchOptions } from "../utils/proxy.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-cxyewwc3.js:267-413 sole-consumer
+//@ chunk-jf14gxs3.js:2382-2460 placement
+function imageExceedsDimension(data, maxDim) {
+  let webpHeader = parseWebpHeader(data);
+  return webpHeader !== undefined && Math.max(webpHeader.width, webpHeader.height) > maxDim;
+}
+//@ chunk-my9ygfcz.js:267-461 sole-consumer
 var fileAttachmentSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_FILE_ATTACHMENTS;
-deferInit("chunk-cxyewwc3.js:267", () => {
+deferInit("chunk-my9ygfcz.js:267", () => {
   fileAttachmentSchema = DoctorLazy(() =>
     objectSchema({
       file_uuid: stringSchema(),
@@ -119,11 +138,12 @@ deferInit("chunk-cxyewwc3.js:267", () => {
       is_image: booleanSchema().nullish(),
       sha256: stringSchema().nullish().catch(null),
       file_size: numberSchema().nullish().catch(undefined),
+      project_folder_name: stringSchema().nullish().catch(undefined),
     }),
   );
   MAX_FILE_ATTACHMENTS = 256;
 });
-//@ chunk-cxyewwc3.js:413-648 fingerprint (2.1.88 match: extractInboundAttachments, 1)
+//@ chunk-my9ygfcz.js:461-696 fingerprint (2.1.88 match: extractInboundAttachments, 1)
 /**
  * 从入站帧的 file_attachments 字段取出并校验附件列表（截断到上限）。
  */
@@ -137,24 +157,20 @@ function extractInboundAttachments(msg) {
     return parsed.success ? [parsed.data] : [];
   });
 }
-//@ chunk-cxyewwc3.js:648-693 placement
+//@ chunk-my9ygfcz.js:696-741 placement
 var inboundAttachmentQuerySchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-cxyewwc3.js:648", () => {
+deferInit("chunk-my9ygfcz.js:696", () => {
   inboundAttachmentQuerySchema = DoctorLazy(() =>
     objectSchema({
       shouldQuery: booleanSchema().optional(),
     }),
   );
 });
-//@ chunk-cxyewwc3.js:693-751 placement
+//@ chunk-my9ygfcz.js:741-799 placement
 function shouldQueryInboundAttachment(input) {
   return inboundAttachmentQuerySchema().safeParse(input).data?.shouldQuery;
 }
-//@ chunk-23fm9f0d.js:23001-23035 fingerprint (2.1.88 match: uploadsDir, 1)
-function uploadsDir() {
-  return cleanupOldFilesInDirectory("uploads");
-}
-//@ chunk-n4bsg1hp.js:2043-2126 placement
+//@ chunk-kd6y3qsy.js:2182-2265 placement
 /**
  * 判断附件文件是否可被查询读取：有扩展名、不是二进制/notebook、不是特例扩展。
  */
@@ -166,14 +182,14 @@ function isQueryableAttachmentFile(filePath) {
     !isNotebookPath(filePath)
   );
 }
-//@ chunk-n4bsg1hp.js:2126-2174 placement
+//@ chunk-kd6y3qsy.js:2265-2313 placement
 /**
  * 用空目录 + 净化后的原始文件名生成入站附件的内部名字。
  */
 function sanitizedAttachmentInnerName(attachment) {
   return hashPrefixedFileName("", sanitizePeerFileName(attachment.file_name));
 }
-//@ chunk-n4bsg1hp.js:2174-2632 placement
+//@ chunk-kd6y3qsy.js:2313-2771 placement
 function describeAttachmentFailures(attachments) {
   let imageExtCount = 0;
   let pdfCount = 0;
@@ -207,13 +223,44 @@ function describeAttachmentFailures(attachments) {
     all_files_binary_ext_or_pdf_no_sha256: hasAny && binaryOrPdfNoShaCount === attachments.length ? 1 : 0,
   };
 }
-//@ chunk-n4bsg1hp.js:2632-2684 placement
+//@ chunk-kd6y3qsy.js:2849-2899 layout
+var SAFE_FILENAME_PATTERN = /^[\p{L}\p{N}_-]+(?:\.[\p{L}\p{N}_-]*)?$/u;
+//@ chunk-kd6y3qsy.js:2899-3427 layout
+async function linkUploadsIntoProjectFolder(files) {
+  if (files.length === 0) return;
+  let localUploadsRoot = getLocalUploadsRoot();
+  if (localUploadsRoot === null) return;
+  let dirChain = await openOwnedDirChain(getChatProjectRoot(), 1).catch(() => "unknown");
+  if (typeof dirChain === "string") {
+    logFeatureSad("bridge_attachment_project_folder_link", dirChain);
+    return;
+  }
+  let failure;
+  for (let { name, path } of files) {
+    if (!SAFE_FILENAME_PATTERN.test(name) || !path.startsWith(localUploadsRoot + sep)) {
+      failure ??= "refused";
+      continue;
+    }
+    let result = await symlink(path, join(dirChain.at, name)).then(
+      () => {
+        return;
+      },
+      (error) =>
+        getErrnoCode(error) === "EEXIST" ? undefined : (sanitizeErrnoForTelemetry(error) ?? "unknown"),
+    );
+    failure ??= result;
+  }
+  await dirChain.release().catch(() => {});
+  if (failure === undefined) logFeatureOk("bridge_attachment_project_folder_link");
+  else logFeatureSad("bridge_attachment_project_folder_link", failure);
+}
+//@ chunk-kd6y3qsy.js:3427-3479 placement
 function hasFetchUpload(options) {
   return options !== undefined && "fetchUpload" in options;
 }
-//@ chunk-n4bsg1hp.js:2684-2792 placement
+//@ chunk-kd6y3qsy.js:3479-3588 placement
 var DOWNLOAD_QUIET_LIMIT_MS = 30000;
-var MAX_ATTACHMENT_BYTES = 36700160;
+var UPLOADED_FILE_MAX_BYTES = 36700160;
 var DOWNLOAD_TRIES = {
   startsTurn: 3,
   noTurn: 2,
@@ -226,11 +273,11 @@ var MAX_LISTED_ATTACHMENTS = 16;
 var MAX_ATTACHMENTS_WITHOUT_SHA = 20;
 var MAX_REMEMBERED_FILES = 64;
 var MAX_HELD_PREFETCHES = 16;
-//@ chunk-n4bsg1hp.js:2792-2835 placement
+//@ chunk-kd6y3qsy.js:3588-3631 placement
 function maxAttachmentBytes() {
   return (isCcsTenant() ? 16 : 64) * 1024 * 1024;
 }
-//@ chunk-n4bsg1hp.js:2835-3456 placement
+//@ chunk-kd6y3qsy.js:3631-4392 placement
 /**
  * 入站附件预取的常量：预取结果最长保留 5 分钟、持有时长范围、相关请求头名、409 冲突状态、早拒上限与冷却、启动预算与窗口、各失败原因的计数键与数字代码、内联图片最大边长 1568。
  */
@@ -281,16 +328,24 @@ var PREFETCH_FAILURE_CODE_BEARER = 8;
 var PREFETCH_FAILURE_CODE_HEADERS_TIMEOUT = 9;
 var PREFLIGHT_QUIET_LIMIT_MS = 3000;
 var MAX_INLINE_IMAGE_DIMENSION = 1568;
-//@ chunk-n4bsg1hp.js:3456-3533 placement
-function imageExceedsDimension(data, maxDim) {
-  let webpHeader = parseWebpHeader(data);
-  return webpHeader !== undefined && Math.max(webpHeader.width, webpHeader.height) > maxDim;
-}
-//@ chunk-n4bsg1hp.js:3533-3581 fingerprint (2.1.88 match: debug, 1)
+var MAX_INLINE_IMAGES_BY_KIND = {
+  png: 150,
+  other: 50,
+};
+var COPY_OUTCOME_CODES = {
+  copy_late: 1,
+  copy_not_stored: 2,
+  copy_failed: 3,
+  copy_too_small: 4,
+  copy_unusable: 5,
+  copy_is_original: 6,
+  copy_cut_short: 8,
+};
+//@ chunk-kd6y3qsy.js:4392-4440 fingerprint (2.1.88 match: debug, 1)
 function debug(msg) {
   logForDebugging(`[bridge:inbound-attach] ${msg}`);
 }
-//@ chunk-n4bsg1hp.js:3581-4070 layout
+//@ chunk-kd6y3qsy.js:4440-4929 layout
 /**
  * 比较磁盘上同名路径与待写内容：directory / other / absent / same / changed / unknown。
  */
@@ -313,10 +368,10 @@ async function compareExistingFile(path, content, verifyHash = false) {
     return (await sha256OfFile(path, content.size)) === content.sha256 ? "same" : "changed";
   return (await readPeerFileBounded(path, content.length))?.equals(content) ? "same" : "changed";
 }
-//@ chunk-n4bsg1hp.js:4070-4085 layout
+//@ chunk-kd6y3qsy.js:4929-4944 layout
 var MAX_PUBLISH_TRIES = 3;
 var MAX_KEPT_FOLDERS = 64;
-//@ chunk-n4bsg1hp.js:4085-6123 layout
+//@ chunk-kd6y3qsy.js:4944-6982 layout
 /**
  * 发布文件到 uploads：路径被占且内容不同则把原文件移到 .kept-<时间>-<id> 目录再重试（最多 3 次、kept 目录上限 64），相同则只更新 mtime。
  */
@@ -378,7 +433,7 @@ async function publishWithMoveAside(attemptPublish, uploadsDir, fileName, conten
       let created;
       try {
         let entries = await readdir(uploadsDir);
-        if (count(entries, (entry) => entry.startsWith(".kept-")) >= MAX_KEPT_FOLDERS) {
+        if (countWhere(entries, (entry) => entry.startsWith(".kept-")) >= MAX_KEPT_FOLDERS) {
           totals.moveAsideFailedCount++;
           return {
             code: lit("kept_cap"),
@@ -418,7 +473,7 @@ async function publishWithMoveAside(attemptPublish, uploadsDir, fileName, conten
     await movedAside?.held.release().catch(() => {});
   }
 }
-//@ chunk-n4bsg1hp.js:6123-6746 layout
+//@ chunk-kd6y3qsy.js:6982-7605 layout
 async function restoreMovedAside(moved, uploadsDir, fileName, totals, keptFolders) {
   if (moved === undefined) return false;
   let targetPath = join(uploadsDir, fileName);
@@ -457,7 +512,7 @@ async function restoreMovedAside(moved, uploadsDir, fileName, totals, keptFolder
   await rmdir(join(uploadsDir, moved.name)).catch(() => {});
   return true;
 }
-//@ chunk-n4bsg1hp.js:6746-7132 layout
+//@ chunk-kd6y3qsy.js:7605-7991 layout
 /**
  * 用 link(2) 原子放置文件（失败时改为看名字空闲后 rename）。
  */
@@ -480,7 +535,7 @@ async function linkIntoPlace(stagedPath, targetPath, fileName, content, totals, 
   totals.renamedAfterLinkRefusedCount++;
   return "published";
 }
-//@ chunk-n4bsg1hp.js:7132-7385 layout
+//@ chunk-kd6y3qsy.js:7991-8244 layout
 async function countWouldMoveAside(targetPath, content, totals) {
   let startTime = performance.now();
   let compare = await compareExistingFile(targetPath, content, true);
@@ -488,20 +543,20 @@ async function countWouldMoveAside(targetPath, content, totals) {
   if (compare === "changed" || compare === "other") totals.wouldMoveAsideFileCount++;
   else if (compare === "same") totals.wouldLeaveSameFileCount++;
 }
-//@ chunk-n4bsg1hp.js:7385-7430 layout
+//@ chunk-kd6y3qsy.js:8244-8289 layout
 function canSpillToUploads() {
   return isRemoteManagedEnvironment() && getSessionUploadsDirOverride() === null && !isDiskless();
 }
-//@ chunk-n4bsg1hp.js:7430-7509 layout
+//@ chunk-kd6y3qsy.js:8289-8368 layout
 var UUID_V7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-//@ chunk-n4bsg1hp.js:7509-7611 layout
+//@ chunk-kd6y3qsy.js:8368-8470 layout
 function recordSavedName(totals, savedName, attachment) {
   totals.idsBySavedName.set(savedName, [
     ...(totals.idsBySavedName.get(savedName) ?? []),
     attachment.file_uuid.toLowerCase(),
   ]);
 }
-//@ chunk-n4bsg1hp.js:7611-7749 fingerprint (2.1.88 match: attachmentSchema, 0.694)
+//@ chunk-kd6y3qsy.js:8470-8608 fingerprint (2.1.88 match: attachmentSchema, 0.691)
 /**
  * 附件保存文件名：file_uuid 前缀（或稳定形式）+ 清洗后的原文件名。
  */
@@ -513,7 +568,7 @@ function savedFileNameFor(attachment, namedByIdHash) {
     sanitizePeerFileName(attachment.file_name),
   );
 }
-//@ chunk-n4bsg1hp.js:7749-7905 placement
+//@ chunk-kd6y3qsy.js:8608-8764 placement
 function isRetryableDownloadFailure(result) {
   let httpStatus = result.httpStatus ?? 0;
   return (
@@ -522,7 +577,7 @@ function isRetryableDownloadFailure(result) {
     (result.failure === "http_status" && (httpStatus >= 500 || httpStatus === 408 || httpStatus === 429))
   );
 }
-//@ chunk-n4bsg1hp.js:7905-7985 placement
+//@ chunk-kd6y3qsy.js:8764-8844 placement
 function wantsModelCopy(fileSize) {
   return (
     fileSize > IMAGE_LIMITS.targetRawSize ||
@@ -530,7 +585,7 @@ function wantsModelCopy(fileSize) {
       getFeatureValue_CACHED_MAY_BE_STALE("tengu_lucky_widget", false) === true)
   );
 }
-//@ chunk-n4bsg1hp.js:7985-8174 placement
+//@ chunk-kd6y3qsy.js:8844-9033 placement
 function fetchModelCopy(fileUuid, baseUrl, token, abort, totals) {
   return resolveOne({
     fileUuid,
@@ -546,7 +601,7 @@ function fetchModelCopy(fileUuid, baseUrl, token, abort, totals) {
     admitBytes: () => true,
   });
 }
-//@ chunk-n4bsg1hp.js:8174-19102 placement
+//@ chunk-kd6y3qsy.js:9033-21346 placement
 /**
  * 下载一个入站附件：取 OAuth 令牌、图像/PDF 处理、大小上限、停滞检测、重试与写入 uploads 目录（约 11 KB）。
  */
@@ -565,6 +620,7 @@ async function resolveInboundAttachment(
   signal,
   namedByIdHash = false,
   moveAsideMode = "off",
+  a,
 ) {
   let refreshStamp = oauthRefreshLatchStamp(signInRefreshState().recoveries);
   if (isBridgeFileLoginRefused()) await settleStoredLoginRefusal();
@@ -592,8 +648,10 @@ async function resolveInboundAttachment(
   let reusedServedPageCount = false;
   let elapsedMs = 0;
   let remainingTries = tries;
+  let start = wantInlineImage ? a?.start : undefined;
+  let c;
   try {
-    let maxBytes = attachment.sha256 === undefined ? MAX_ATTACHMENT_BYTES : MAX_PEER_FILE_BYTES;
+    let maxBytes = attachment.sha256 === undefined ? UPLOADED_FILE_MAX_BYTES : MAX_PEER_FILE_BYTES;
     let spillPath =
       attachment.sha256 === undefined && canSpillToUploads()
         ? join(uploadsDirOverride ?? sessionUploadsDir(), savedFileNameFor(attachment, namedByIdHash))
@@ -636,6 +694,8 @@ async function resolveInboundAttachment(
         totals.reusedFileCount++;
         return {
           path: known.path,
+          sha256: known.sha256,
+          size: known.size,
         };
       }
       let readBack = overLimit ? null : await readPeerFileBounded(known.path, known.size);
@@ -671,6 +731,7 @@ async function resolveInboundAttachment(
       let counted = takeInFlightDownload(inFlightEntry, startTime, computeContentHash(token));
       let settled = inFlightEntry.settledAt === undefined;
       let byPrefetch = inFlightEntry.startedBy === "prefetch";
+      if (settled) c ??= start?.(() => bearerToken);
       let bytes = await inFlightEntry.bytes;
       let waitedMs = performance.now() - startTime;
       elapsedMs += waitedMs;
@@ -723,6 +784,7 @@ async function resolveInboundAttachment(
           : undefined;
     }
     if (fileBytes === undefined) {
+      c ??= start?.(() => bearerToken);
       let abortController = new AbortController();
       let onAbort = () => abortController.abort();
       signal?.addEventListener("abort", onAbort, {
@@ -927,6 +989,8 @@ async function resolveInboundAttachment(
         );
         return {
           path: file.target,
+          sha256: file.sha256,
+          size: file.size,
           ...keptAsideResult(moveMode, keptFolders, file.target, true),
         };
       }
@@ -995,16 +1059,84 @@ async function resolveInboundAttachment(
         modelCopyBytes = modelCopyResult.data;
     }
   }
+  let holder;
+  if (c !== undefined && a !== undefined) {
+    if (sniffImageMediaType(fileBytes) === null || !imageExceedsDimension(fileBytes, IMAGE_LIMITS.maxWidth))
+      totals.modelCopyBesideUnneededCount++;
+    else {
+      let startTime = performance.now();
+      let abortController = new AbortController();
+      let winner = await Promise.race([
+        c.outcome,
+        sleep(
+          sniffImageMediaType(fileBytes) === "image/png"
+            ? MAX_INLINE_IMAGES_BY_KIND.png
+            : MAX_INLINE_IMAGES_BY_KIND.other,
+          abortController.signal,
+        ).then(() => {
+          return;
+        }),
+      ]);
+      abortController.abort();
+      totals.slowestModelCopyBesideWaitMs = Math.max(
+        totals.slowestModelCopyBesideWaitMs,
+        performance.now() - startTime,
+      );
+      let b;
+      if (winner === undefined) b = "copy_late";
+      else if ("data" in winner) {
+        let computerUseMCPToolOverrides = getComputerUseMCPToolOverrides(
+          winner.data,
+          fileBytes,
+          a.limits,
+          winner.statedLength,
+        );
+        if (typeof computerUseMCPToolOverrides === "string") b = computerUseMCPToolOverrides;
+        else {
+          holder = computerUseMCPToolOverrides;
+          totals.modelCopyBesidePassedCount++;
+          let webpHeader = parseWebpHeader(winner.data);
+          let webpHeader_2 = parseWebpHeader(fileBytes);
+          if (webpHeader !== undefined && webpHeader_2 !== undefined)
+            totals.modelCopyBesideExtraImageTokens +=
+              imageTileCount(webpHeader.width, webpHeader.height) -
+              imageTileCount(
+                ...fitImageDimensions(webpHeader_2.width, webpHeader_2.height, {
+                  ...IMAGE_LIMITS,
+                  maxImageTokens: a.limits.maxImageTokens,
+                }),
+              );
+        }
+      } else b = "failure" in winner && winner.httpStatus === 409 ? "copy_not_stored" : "copy_failed";
+      if (b !== undefined) {
+        totals.modelCopyBesideMissedCount++;
+        totals.lastModelCopyBesideMiss = b;
+      }
+      let { timing } = c;
+      totals.slowestModelCopyBesideTimeToHeadersMs = Math.max(
+        totals.slowestModelCopyBesideTimeToHeadersMs,
+        timing.slowestTimeToHeadersMs,
+      );
+      if (winner !== undefined) {
+        totals.slowestModelCopyBesideDownloadMs = Math.max(
+          totals.slowestModelCopyBesideDownloadMs,
+          timing.slowestDownloadMs,
+        );
+        totals.modelCopyBesideBytes += timing.downloadedBytes;
+      }
+    }
+    c.end();
+  }
   let startTime = performance.now();
-  let toImageBlock = (bytes) =>
+  let b = (bytes) =>
     convertImagesToBlocks(bytes, IMAGE_LIMITS, {
       timings: imageTimings,
     }).catch((error) => {
       debug(`inline ${attachment.file_uuid} threw: ${error}`);
       return null;
     });
-  let modelCopyBlock = modelCopyBytes ? await toImageBlock(modelCopyBytes) : null;
-  let imageBlock = modelCopyBlock ?? (wantInlineImage ? await toImageBlock(fileBytes) : null);
+  let timeout = modelCopyBytes ? await b(modelCopyBytes) : null;
+  let imageBlock = holder ?? timeout ?? (wantInlineImage ? await b(fileBytes) : null);
   totals.slowestInlineImageBuildMs = Math.max(
     totals.slowestInlineImageBuildMs,
     performance.now() - startTime,
@@ -1018,12 +1150,12 @@ async function resolveInboundAttachment(
     totals.slowestInlineImageByteBudgetMs,
     imageTimings.byteBudgetMs,
   );
-  if (modelCopyBlock) totals.modelCopyCount++;
+  if (timeout) totals.modelCopyCount++;
   else if (modelCopyNeeded) {
     totals.modelCopyMissedCount++;
     if (imageBlock) totals.modelCopyMissedSentAsIsCount++;
   }
-  if (imageBlock && detectImageFormatFromBuffer(fileBytes) === "image/png") {
+  if (imageBlock && holder === undefined && detectImageFormatFromBuffer(fileBytes) === "image/png") {
     totals.inlinedPngSourceCount++;
     if (pngMayHaveTransparency(fileBytes)) totals.inlinedPngSourceMaybeTransparentCount++;
     if (imageBlock.source.type === "base64" && imageBlock.source.media_type === "image/jpeg")
@@ -1289,22 +1421,28 @@ async function resolveInboundAttachment(
     return {
       imageBlock,
       path: targetPath,
+      sha256,
+      size: fileBytes.length,
     };
   }
   if (wantInlineImage) {
     debug(`inline ${attachment.file_uuid} fell back to @path ref`);
     return {
       path: targetPath,
+      sha256,
+      size: fileBytes.length,
       inlineFellBack: true,
       ...keptAsideResult(moveMode, keptFolders, targetPath, true),
     };
   }
   return {
     path: targetPath,
+    sha256,
+    size: fileBytes.length,
     ...keptAsideResult(moveMode, keptFolders, targetPath, true),
   };
 }
-//@ chunk-n4bsg1hp.js:19102-19269 placement
+//@ chunk-kd6y3qsy.js:21346-21513 placement
 function rememberResolvedFile(attachment, resolved, context) {
   let registry = autoInboundFileRegistry(context);
   if (registry !== undefined) {
@@ -1316,13 +1454,13 @@ function rememberResolvedFile(attachment, resolved, context) {
     registry.set(foldFileUuid(attachment.file_uuid), resolved);
   }
 }
-//@ chunk-n4bsg1hp.js:19269-19424 placement
+//@ chunk-kd6y3qsy.js:21513-21668 placement
 var FAILURE_REASON_TEXT = {
   download: "it could not be downloaded",
   digest_mismatch: "it failed integrity verification",
   write: "it could not be written to the uploads directory",
 };
-//@ chunk-n4bsg1hp.js:19424-24801 placement
+//@ chunk-kd6y3qsy.js:21668-28830 placement
 /**
  * 解析一条入站消息的全部附件（并发、数量上限）：成功的生成 `@"path"` 前缀或内联图片块，失败的生成 [SendFile: …] 说明；汇总遥测（bridge_attachment_resolve、下载耗时）并返回 {prefix, imageBlocks, deliveredCount, missingFiles, timing…}。
  */
@@ -1366,6 +1504,22 @@ async function resolveInboundAttachments(
       : moveAsideFlag === "on" || moveAsideFlag === "count"
         ? moveAsideFlag
         : "off";
+  let mode =
+    startsTurn !== false &&
+    registerDigest &&
+    shouldQuery &&
+    downloadContext === undefined &&
+    signal === undefined &&
+    uploadsDirOverride === undefined &&
+    attachments.some((attachment) => attachment.is_image === true && attachment.sha256 === undefined) &&
+    isImageDecodingDisabled() &&
+    isFirstPartyProvider() &&
+    isFirstPartyApiBackend() &&
+    !isEssentialTrafficOnly()
+      ? modelImageLimits(getMainLoopModel())
+      : undefined;
+  let override =
+    mode === undefined ? undefined : getFeatureValue_CACHED_MAY_BE_STALE("tengu_twin_heron", false) === true;
   let stats = {
     slowestTimeToHeadersMs: 0,
     slowestDownloadMs: 0,
@@ -1411,6 +1565,16 @@ async function resolveInboundAttachments(
     modelCopyCount: 0,
     modelCopyMissedCount: 0,
     modelCopyMissedSentAsIsCount: 0,
+    requestsModelCopiesBeside: override,
+    modelCopyBesidePassedCount: 0,
+    modelCopyBesideMissedCount: 0,
+    lastModelCopyBesideMiss: undefined,
+    modelCopyBesideUnneededCount: 0,
+    slowestModelCopyBesideTimeToHeadersMs: 0,
+    slowestModelCopyBesideDownloadMs: 0,
+    modelCopyBesideBytes: 0,
+    slowestModelCopyBesideWaitMs: 0,
+    modelCopyBesideExtraImageTokens: 0,
     failedDownloads: {},
   };
   let filtered = attachments.filter((attachment) => typeof attachment.sha256 === "string");
@@ -1478,9 +1642,10 @@ async function resolveInboundAttachments(
   }
   let queryFiles = registerDigest && shouldQuery;
   let mayPrefetch = downloadContext === undefined && signal === undefined;
-  let shouldDropSettled = mayPrefetch && attachments_2.length > MAX_LISTED_ATTACHMENTS;
-  let resolveLimited = limitConcurrency(MAX_LISTED_ATTACHMENTS, (attachment) =>
-    resolveInboundAttachment(
+  let bothUnset = mayPrefetch && attachments_2.length > MAX_LISTED_ATTACHMENTS;
+  let resolveLimited = limitConcurrency(MAX_LISTED_ATTACHMENTS, (attachment) => {
+    let abortController = new AbortController();
+    return resolveInboundAttachment(
       attachment,
       registerDigest,
       queryFiles,
@@ -1495,10 +1660,45 @@ async function resolveInboundAttachments(
       signal,
       namedByIdHash,
       moveAsideMode,
-    ).finally(() => {
-      if (shouldDropSettled) dropSettledTakenDownload(attachment);
-    }),
-  );
+      mode !== undefined && override === true
+        ? {
+            limits: mode,
+            start: (token) => {
+              let start = {
+                slowestTimeToHeadersMs: 0,
+                slowestDownloadMs: 0,
+                downloadedBytes: 0,
+              };
+              return {
+                timing: start,
+                end: () => abortController.abort(),
+                outcome: resolveOne({
+                  fileUuid: attachment.file_uuid,
+                  baseUrl: undefined,
+                  modelCopy: true,
+                  forPrefetch: false,
+                  maxBytes: MAX_IMAGE_COPY_BYTES,
+                  spillTo: undefined,
+                  token,
+                  abort: abortController,
+                  quietLimitMs: PREFLIGHT_QUIET_LIMIT_MS,
+                  totals: start,
+                  admitBytes: () => true,
+                }),
+              };
+            },
+          }
+        : undefined,
+    )
+      .then(async (inboundAttachment) => {
+        if ("path" in inboundAttachment) await recordSavedUpload(attachment.file_uuid, inboundAttachment);
+        return inboundAttachment;
+      })
+      .finally(() => {
+        abortController.abort();
+        if (bothUnset) dropSettledTakenDownload(attachment);
+      });
+  });
   let results;
   try {
     results = await Promise.all(attachments_2.map((attachment) => resolveLimited(attachment)));
@@ -1517,16 +1717,23 @@ async function resolveInboundAttachments(
   let missingWithAside = 0;
   let asides = [];
   let writtenFiles = [];
-  results.forEach((result, index) => {
-    let attachment = attachments_2[index];
+  let index = [];
+  results.forEach((result, index_2) => {
+    let attachment = attachments_2[index_2];
     let hasSha = typeof attachment.sha256 === "string";
     if (hasSha) shaCount++;
-    if ("path" in result)
+    if ("path" in result) {
       writtenFiles.push({
         file_uuid: attachment.file_uuid,
         path: result.path,
         inlined: "imageBlock" in result,
       });
+      if (queryFiles && attachment.sha256 === undefined && attachment.project_folder_name)
+        index.push({
+          name: attachment.project_folder_name,
+          path: result.path,
+        });
+    }
     if ("imageBlock" in result) {
       imageBlocks.push(result.imageBlock);
       imageFileUuids.push(attachment.file_uuid);
@@ -1560,6 +1767,7 @@ async function resolveInboundAttachments(
       }
     }
   });
+  await linkUploadsIntoProjectFolder(index);
   let overCapTail = filtered.length === 0 ? attachments.slice(attachmentCap) : [];
   if (missingFiles.length > 0 || overCapTail.length > 0) {
     missingFiles.push(...allMissing(overCapTail, "count_cap"));
@@ -1612,6 +1820,18 @@ async function resolveInboundAttachments(
         : "fallback_original",
     );
   else if (stats.modelCopyCount > 0) logFeatureOk("bridge_attachment_model_copy");
+  let info = {
+    model_copy_beside_passed_count: stats.modelCopyBesidePassedCount,
+    model_copy_beside_missed_count: stats.modelCopyBesideMissedCount,
+    model_copy_beside_extra_image_tokens: stats.modelCopyBesideExtraImageTokens,
+    slowest_model_copy_beside_time_to_headers_ms: Math.round(stats.slowestModelCopyBesideTimeToHeadersMs),
+    slowest_model_copy_beside_download_ms: Math.round(stats.slowestModelCopyBesideDownloadMs),
+    approx_model_copy_beside_bytes: Number(stats.modelCopyBesideBytes.toPrecision(2)),
+    slowest_model_copy_beside_wait_ms: Math.round(stats.slowestModelCopyBesideWaitMs),
+  };
+  if (stats.lastModelCopyBesideMiss !== undefined)
+    logFeatureSad("bridge_attachment_model_copy_beside", stats.lastModelCopyBesideMiss, info);
+  else if (stats.modelCopyBesidePassedCount > 0) logFeatureOk("bridge_attachment_model_copy_beside", info);
   let prefixParts = [...pathRefs, ...notes];
   return {
     prefix: prefixParts.length > 0 ? prefixParts.join(" ") + " " : "",
@@ -1643,7 +1863,7 @@ async function resolveInboundAttachments(
     },
   };
 }
-//@ chunk-n4bsg1hp.js:24801-25067 fingerprint (2.1.88 match: prependPathRefs, 1)
+//@ chunk-kd6y3qsy.js:28830-29096 fingerprint (2.1.88 match: prependPathRefs, 1)
 function prependPathRefs(content, prefix) {
   if (!prefix) return content;
   if (typeof content === "string") return injectPeerFilePrefix(content, prefix);
@@ -1668,7 +1888,7 @@ function prependPathRefs(content, prefix) {
     },
   ];
 }
-//@ chunk-n4bsg1hp.js:25067-25200 placement
+//@ chunk-kd6y3qsy.js:29096-29229 placement
 function resolveAndPrepend_2(msg, content) {
   if (content.length === 0) return msg;
   let contentBlocks =
@@ -1684,14 +1904,14 @@ function resolveAndPrepend_2(msg, content) {
       : dropEmptyTextBlocks(msg);
   return [...content, ...contentBlocks];
 }
-//@ chunk-n4bsg1hp.js:25200-25272 placement
+//@ chunk-kd6y3qsy.js:29229-29301 placement
 function allMissing(attachments, reason) {
   return attachments.map((attachment) => ({
     file_uuid: attachment.file_uuid,
     reason,
   }));
 }
-//@ chunk-n4bsg1hp.js:25272-25600 placement
+//@ chunk-kd6y3qsy.js:29301-29629 placement
 function contentWithPlannedPathRefs(message, content, uploadsDir, namedByIdHash = false) {
   let attachments = extractInboundAttachments(message);
   if (attachments.length === 0 || attachments.length > maxAttachmentsPerMessage(attachments)) return;
@@ -1711,7 +1931,7 @@ function contentWithPlannedPathRefs(message, content, uploadsDir, namedByIdHash 
     paths,
   };
 }
-//@ chunk-n4bsg1hp.js:25600-25969 placement
+//@ chunk-kd6y3qsy.js:29629-29998 placement
 async function resolveAndPrepend(
   message,
   content,
@@ -1755,31 +1975,31 @@ async function resolveAndPrepend(
     ...rest,
   };
 }
-//@ chunk-n4bsg1hp.js:25969-26102 placement
+//@ chunk-kd6y3qsy.js:29998-30131 placement
 function dropSettledTakenDownload(attachment) {
   let registry = inboundAttachmentDownloadRegistry();
   let foldedUuid = foldFileUuid(attachment.file_uuid);
   let entry = registry.byFileUuid.get(foldedUuid);
   if (entry?.taken !== undefined && entry.settledAt !== undefined) registry.byFileUuid.delete(foldedUuid);
 }
-//@ chunk-n4bsg1hp.js:26102-26163 placement
+//@ chunk-kd6y3qsy.js:30131-30192 placement
 function maxAttachmentsPerMessage(attachments) {
   return attachments.every((attachment) => attachment.sha256 === undefined)
     ? MAX_ATTACHMENTS_WITHOUT_SHA
     : MAX_PEER_ATTACHMENTS;
 }
-//@ chunk-n4bsg1hp.js:26163-26198 placement
+//@ chunk-kd6y3qsy.js:30192-30227 placement
 var MOVE_ASIDE_MODE_CODES = {
   off: 0,
   count: 1,
   on: 2,
   tell: 3,
 };
-//@ chunk-n4bsg1hp.js:26198-26241 placement
+//@ chunk-kd6y3qsy.js:30227-30270 placement
 function isMoveAsideModeOn(mode) {
   return mode === "on" || mode === "tell";
 }
-//@ chunk-n4bsg1hp.js:26241-26471 placement
+//@ chunk-kd6y3qsy.js:30270-30500 placement
 function keptAsideResult(mode, keptFolders, originalPath, saved, failure) {
   if (mode !== "tell") return;
   let [firstKept, ...restKept] = keptFolders.map((folder) =>
@@ -1803,7 +2023,7 @@ function keptAsideResult(mode, keptFolders, originalPath, saved, failure) {
       }
     : undefined;
 }
-//@ chunk-n4bsg1hp.js:26471-27199 placement
+//@ chunk-kd6y3qsy.js:30500-31228 placement
 function asideSentence({ path, saved, keptAt: [firstKept, secondKept] }, spoken = false) {
   if (firstKept === undefined) {
     let leftInPlace = `: "${path}" holds something else (possibly a copy changed during this session), which was left in place`;
@@ -1823,12 +2043,12 @@ function asideSentence({ path, saved, keptAt: [firstKept, secondKept] }, spoken 
     ? `A file attached to a user message was not saved${notAvailable}`
     : `[attachment not saved${notAvailable}]`;
 }
-//@ chunk-n4bsg1hp.js:27199-27324 placement
+//@ chunk-kd6y3qsy.js:31228-31353 placement
 function readAheadOfFiles(signal) {
   if (!signal || getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_ferry", false) !== true) return "off";
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_slate_marten", false) === true ? "on_with_pdfs" : "on";
 }
-//@ chunk-n4bsg1hp.js:27324-27489 placement
+//@ chunk-kd6y3qsy.js:31353-31518 placement
 function aheadOfFilesTelemetry(aheadOfFiles, uploadsDirOverride) {
   return aheadOfFiles === undefined
     ? {}
@@ -1838,7 +2058,7 @@ function aheadOfFilesTelemetry(aheadOfFiles, uploadsDirOverride) {
         queued_ahead_of_files: uploadsDirOverride === undefined ? 0 : 1,
       };
 }
-//@ chunk-n4bsg1hp.js:27489-30455 placement
+//@ chunk-kd6y3qsy.js:31518-34986 placement
 /**
  * 汇总入站附件处理统计用于遥测：文件数、已解析、下载次数、恢复/复用/预取/并入进行中数、内联图片与 PNG 转码、下载字节、失败分类、重名文件等。
  */
@@ -1847,10 +2067,13 @@ function summarizeAttachmentResolution(attachments, resolvedCount, inlinedImageC
   let sharedSavedNameSameIdFileCount = 0;
   let uuidV7Count = 0;
   for (let ids of stats.idsBySavedName.values()) {
-    uuidV7Count += count(ids, (id) => UUID_V7_PATTERN.test(id));
+    uuidV7Count += countWhere(ids, (id) => UUID_V7_PATTERN.test(id));
     if (ids.length > 1) {
       sharedNameCount += ids.length;
-      sharedSavedNameSameIdFileCount += count(ids, (id) => count(ids, (otherId) => otherId === id) > 1);
+      sharedSavedNameSameIdFileCount += countWhere(
+        ids,
+        (id) => countWhere(ids, (otherId) => otherId === id) > 1,
+      );
     }
   }
   return {
@@ -1938,9 +2161,24 @@ function summarizeAttachmentResolution(attachments, resolvedCount, inlinedImageC
     ...(stats.whatStandsAside !== undefined && {
       move_aside_mode_code: MOVE_ASIDE_MODE_CODES[stats.whatStandsAside],
     }),
+    ...(stats.requestsModelCopiesBeside !== undefined && {
+      model_copy_beside_flag_on: stats.requestsModelCopiesBeside ? 1 : 0,
+    }),
+    ...(stats.modelCopyBesidePassedCount > 0 && {
+      model_copy_beside_passed_count: stats.modelCopyBesidePassedCount,
+    }),
+    ...(stats.modelCopyBesideMissedCount > 0 && {
+      model_copy_beside_missed_count: stats.modelCopyBesideMissedCount,
+    }),
+    ...(stats.lastModelCopyBesideMiss !== undefined && {
+      last_model_copy_beside_miss_code: COPY_OUTCOME_CODES[stats.lastModelCopyBesideMiss],
+    }),
+    ...(stats.modelCopyBesideUnneededCount > 0 && {
+      model_copy_beside_unneeded_count: stats.modelCopyBesideUnneededCount,
+    }),
   };
 }
-//@ chunk-n4bsg1hp.js:30455-30595 placement
+//@ chunk-kd6y3qsy.js:34986-35126 placement
 function recordWriteFailure(stats, writeFailed) {
   stats.failedWriteCount++;
   stats.lastFailedWrite = {
@@ -1951,12 +2189,12 @@ function recordWriteFailure(stats, writeFailed) {
     failure: "write",
   };
 }
-//@ chunk-n4bsg1hp.js:30595-30621 placement
+//@ chunk-kd6y3qsy.js:35126-35152 placement
 var NOT_FOUND_HTTP_STATUSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-n4bsg1hp.js:30595", () => {
+deferInit("chunk-kd6y3qsy.js:35126", () => {
   NOT_FOUND_HTTP_STATUSES = new Set([404, 410]);
 });
-//@ chunk-n4bsg1hp.js:30621-30943 placement
+//@ chunk-kd6y3qsy.js:35152-35474 placement
 /**
  * 按失败类型累计 failedDownloads 计数（部分下载另计，记最后的 HTTP 状态），返回 {failure:"download", cause?}；404 类记为 not_found。
  */
@@ -1980,30 +2218,30 @@ function recordDownloadFailure(stats, failure, receivedBytes, httpStatus) {
       }),
   };
 }
-//@ chunk-n4bsg1hp.js:30943-31002 placement
+//@ chunk-kd6y3qsy.js:35474-35533 placement
 function autoInboundFileRegistry(sessionUploadsOverride) {
   return sessionUploadsOverride === undefined && getSessionUploadsDirOverride() === null
     ? inboundAttachmentFileRegistry()
     : undefined;
 }
-//@ chunk-n4bsg1hp.js:31002-31090 placement
+//@ chunk-kd6y3qsy.js:35533-35621 placement
 function writtenInUploadsDir(fileUuid, sessionUploadsOverride) {
   let entry = autoInboundFileRegistry(sessionUploadsOverride)?.get(foldFileUuid(fileUuid));
   return entry !== undefined && dirname(entry.path) === sessionUploadsDir() ? entry : undefined;
 }
-//@ chunk-n4bsg1hp.js:31090-31143 placement
+//@ chunk-kd6y3qsy.js:35621-35674 placement
 function foldFileUuid(fileUuid) {
   return normalizeUuidOrNull(fileUuid) === null ? fileUuid : fileUuid.toLowerCase();
 }
-//@ chunk-n4bsg1hp.js:31143-31193 placement
+//@ chunk-kd6y3qsy.js:35674-35724 placement
 function bridgeAttachmentEarlyReadsGate() {
   return getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_dapper_brooks", false);
 }
-//@ chunk-n4bsg1hp.js:31193-31249 placement
+//@ chunk-kd6y3qsy.js:35724-35780 placement
 function bridgeAttachmentEarlyReadsStopped() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_twinkling_hoare", false) === true;
 }
-//@ chunk-n4bsg1hp.js:31249-31452 placement
+//@ chunk-kd6y3qsy.js:35780-35983 placement
 function prefetchHoldWindow() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_hazel_lantern", 0);
   let isCcs = isCcsTenant();
@@ -2021,7 +2259,7 @@ function prefetchHoldWindow() {
     repeatRenews: !isCcs,
   };
 }
-//@ chunk-n4bsg1hp.js:31452-33852 placement
+//@ chunk-kd6y3qsy.js:35983-38387 placement
 function prefetchInboundAttachments(attachments, { issuedAt, credentials, onlyThese = false }) {
   if (isEssentialTrafficOnly()) return 0;
   let gate = bridgeAttachmentEarlyReadsGate();
@@ -2068,7 +2306,7 @@ function prefetchInboundAttachments(attachments, { issuedAt, credentials, onlyTh
     let fileUuid = foldFileUuid(attachment.file_uuid);
     if (
       normalizeUuidOrNull(attachment.file_uuid) === null ||
-      (attachment.file_size !== undefined && attachment.file_size > MAX_ATTACHMENT_BYTES)
+      (attachment.file_size !== undefined && attachment.file_size > UPLOADED_FILE_MAX_BYTES)
     ) {
       fields.skipped_count++;
       continue;
@@ -2168,15 +2406,15 @@ function prefetchInboundAttachments(attachments, { issuedAt, credentials, onlyTh
   );
   return fields.started_count;
 }
-//@ chunk-n4bsg1hp.js:33852-33884 placement (2.1.88 match: tryReadFileForSync, 1)
+//@ chunk-kd6y3qsy.js:38387-38419 placement (2.1.88 match: tryReadFileForSync, 1)
 function logPrefetchOutcome(eventName, fields) {
   logForDiagnosticsNoPII("info", eventName, fields);
 }
-//@ chunk-n4bsg1hp.js:33884-33926 placement
+//@ chunk-kd6y3qsy.js:38419-38461 placement
 function nonNegativeSize(fileSize) {
   return fileSize !== undefined && fileSize > 0 ? fileSize : 0;
 }
-//@ chunk-n4bsg1hp.js:33926-34132 placement
+//@ chunk-kd6y3qsy.js:38461-38667 placement
 /**
  * 判断能否再开始一个附件预取：清理窗口外的开始记录；持有中的预取数/字节超限返回 held_limit，近期开始数超预算返回 start_budget，否则 ok。
  */
@@ -2190,7 +2428,7 @@ function prefetchAdmission(registry, statedBytes) {
     return "held_limit";
   return recentPrefetchStarts.length < PREFETCH_START_BUDGET ? "ok" : "start_budget";
 }
-//@ chunk-n4bsg1hp.js:34132-34340 placement
+//@ chunk-kd6y3qsy.js:38667-38875 placement
 function heldPrefetchTotals(registry) {
   let count = 0;
   let bytes = 0;
@@ -2207,17 +2445,17 @@ function heldPrefetchTotals(registry) {
     bytes,
   };
 }
-//@ chunk-n4bsg1hp.js:34340-34385 placement
+//@ chunk-kd6y3qsy.js:38875-38920 placement
 function releasePrefetchExpired(entry) {
   entry.release?.("expired_unused");
 }
-//@ chunk-n4bsg1hp.js:34385-34483 placement
+//@ chunk-kd6y3qsy.js:38920-39018 placement
 function schedulePrefetchExpiry(prefetchEntry, ms) {
   clearTimeout(prefetchEntry.expiry);
   prefetchEntry.expiry = setTimeout(releasePrefetchExpired.bind(undefined, prefetchEntry), ms);
   prefetchEntry.expiry.unref();
 }
-//@ chunk-n4bsg1hp.js:34483-36521 placement
+//@ chunk-kd6y3qsy.js:39018-41057 placement
 /**
  * 在消息到达前为一个 file_uuid 启动后台预取：带独立 AbortController 调用 resolveOne（快速静默超时、字节准入回调、served 标记埋点），
  * 把下载登记进 byFileUuid，结束后按结果记 bridge_attachment_prefetch_* 埋点、更新提前拒绝表。
@@ -2238,7 +2476,7 @@ function startAttachmentPrefetch(
     baseUrl: undefined,
     modelCopy: false,
     forPrefetch: true,
-    maxBytes: MAX_ATTACHMENT_BYTES,
+    maxBytes: UPLOADED_FILE_MAX_BYTES,
     spillTo: undefined,
     quietLimitMs: FAST_QUIET_LIMIT_MS,
     token: async () => {
@@ -2344,7 +2582,7 @@ function startAttachmentPrefetch(
     })
     .catch(logError);
 }
-//@ chunk-n4bsg1hp.js:36521-37058 placement
+//@ chunk-kd6y3qsy.js:41057-41594 placement
 /**
  * 新建一条附件下载登记：bytes promise 结算时记录完成时间、失败类型、页数；由消息发起的下载直接标记为已取用。
  */
@@ -2386,7 +2624,7 @@ function newDownloadEntry(startedBy, abortController, download, bearer) {
   };
   return entry;
 }
-//@ chunk-n4bsg1hp.js:37058-37292 placement
+//@ chunk-kd6y3qsy.js:41594-41828 placement
 function shouldRedownload(entry, takenAt) {
   let settledAgeMs = (entry.settledAt ?? performance.now()) - takenAt;
   if (entry.failure === undefined) return false;
@@ -2396,7 +2634,7 @@ function shouldRedownload(entry, takenAt) {
     (entry.receivedBytes > 0 && entry.failure !== "stalled" && settledAgeMs > DOWNLOAD_DEADLINE_SLACK_MS)
   );
 }
-//@ chunk-n4bsg1hp.js:37292-37400 placement
+//@ chunk-kd6y3qsy.js:41828-41936 placement
 function takeInFlightDownload(entry, at, bearer) {
   if (entry.taken) return false;
   entry.taken = {
@@ -2407,7 +2645,7 @@ function takeInFlightDownload(entry, at, bearer) {
   clearTimeout(entry.expiry);
   return true;
 }
-//@ chunk-n4bsg1hp.js:37400-37952 placement
+//@ chunk-kd6y3qsy.js:41936-42488 placement
 /**
  * 记录一次预取结果的使用：附带是否在途、等待/下载耗时与近似字节数；校验通过记 used_joined/used_ready，否则按同一凭据（证明不符）或凭据已变分别记失败。
  */
@@ -2438,7 +2676,7 @@ function logPrefetchUse(prefetch, bytes, { inFlight, passes, sameBearer, waitedM
     );
   }
 }
-//@ chunk-n4bsg1hp.js:37952-38644 placement
+//@ chunk-kd6y3qsy.js:42488-43180 placement
 async function downloadWithRetries(maxAttempts, startedAt, abortController, totals, options) {
   let entry = performance.now() - startedAt + DOWNLOAD_DEADLINE_SLACK_MS;
   for (let j = 0; ; j++) {
@@ -2482,7 +2720,37 @@ async function downloadWithRetries(maxAttempts, startedAt, abortController, tota
     return result;
   }
 }
-//@ chunk-n4bsg1hp.js:38644-38757 placement
+//@ chunk-kd6y3qsy.js:43180-43549 placement
+/**
+ * 按文件 uuid 取入站附件（带 abort 与字节上限），没登录时返回 no_token。
+ */
+async function downloadFileById(fileUuid, maxBytes, signal, credentials) {
+  if (!isFirstPartyProvider())
+    return {
+      failure: "no_token",
+    };
+  let abortController = new AbortController();
+  let abort = () => abortController.abort();
+  signal.addEventListener("abort", abort, {
+    once: true,
+  });
+  if (signal.aborted) abort();
+  try {
+    return await downloadWithRetries(DOWNLOAD_TRIES.startsTurn, 0, abortController, undefined, {
+      fileUuid,
+      baseUrl: undefined,
+      modelCopy: false,
+      forPrefetch: false,
+      maxBytes,
+      spillTo: undefined,
+      token: () => getBridgeAccessTokenAsync(credentials),
+      admitBytes: () => true,
+    });
+  } finally {
+    signal.removeEventListener("abort", abort);
+  }
+}
+//@ chunk-kd6y3qsy.js:43549-43662 placement
 function signInRefreshState() {
   let registry = inboundAttachmentDownloadRegistry();
   registry.signInRefresh ??= {
@@ -2494,7 +2762,7 @@ function signInRefreshState() {
   };
   return registry.signInRefresh;
 }
-//@ chunk-n4bsg1hp.js:38757-39585 placement
+//@ chunk-kd6y3qsy.js:43662-44490 placement
 /**
  * 下载附件遇到 401 时刷新 bridge 令牌：同一会话只尝试一次 handleOAuth401Error（带超时与中断），返回刷新后的新令牌或 undefined。
  */
@@ -2559,7 +2827,7 @@ async function refreshTokenForDownload(staleToken, sessionId, credentials, signa
     abortController.abort();
   }
 }
-//@ chunk-n4bsg1hp.js:39585-41897 callgraph-fingerprint (2.1.88 match: resolveOne, 0.249)
+//@ chunk-kd6y3qsy.js:44490-46955 callgraph-fingerprint (2.1.88 match: resolveOne, 0.238)
 /**
  * 下载单个文件：GET {base}/api/oauth/files/{uuid}/content（可要 model_copy），带静默超时与字节上限，可溢写到磁盘；返回 data / file / failure。
  */
@@ -2701,9 +2969,14 @@ async function resolveOne({
           writeFailed,
         }),
       );
+    let a = response.headers.get("content-encoding") === null ? response.headers.get("content-length") : null;
     return {
       data: Buffer.concat(chunks, receivedBytes),
       servedPageCount: parseServedPageCount(response.headers.get(X_SERVED_FILE_PAGE_COUNT)),
+      ...(a !== null &&
+        /^\d+$/.test(a) && {
+          statedLength: Number(a),
+        }),
     };
   } catch (error) {
     debug(
@@ -2721,11 +2994,11 @@ async function resolveOne({
       totals.slowestDownloadMs = Math.max(totals.slowestDownloadMs, performance.now() - startTime);
   }
 }
-//@ chunk-n4bsg1hp.js:41897-41974 layout
+//@ chunk-kd6y3qsy.js:46955-47032 layout
 function parseServedPageCount(header) {
   return header !== null && /^[1-9][0-9]{0,2}$/.test(header) ? Number(header) : undefined;
 }
-//@ chunk-n4bsg1hp.js:41974-42146 placement
+//@ chunk-kd6y3qsy.js:47032-47204 placement
 async function writeWithPageCount(spill, fileUuid, servedPageCount, ...chunks) {
   let pageCounts = (inboundAttachmentDownloadRegistry().pageCountsOfWrites ??= new Map());
   let record = {
@@ -2738,18 +3011,18 @@ async function writeWithPageCount(spill, fileUuid, servedPageCount, ...chunks) {
     if (pageCounts.get(fileUuid) === record) pageCounts.delete(fileUuid);
   }
 }
-//@ chunk-n4bsg1hp.js:42146-42221 placement
+//@ chunk-kd6y3qsy.js:47204-47279 placement
 function isStalledBeforeHeaders(result) {
   return "failure" in result && result.failure === "stalled" && result.beforeHeaders;
 }
-//@ chunk-n4bsg1hp.js:42221-42279 placement
+//@ chunk-kd6y3qsy.js:47279-47337 placement
 function stalledFailure(hasHeaders) {
   return {
     failure: "stalled",
     beforeHeaders: !hasHeaders,
   };
 }
-//@ chunk-n4bsg1hp.js:42279-42404 placement (2.1.88 match: createChildAbortController, 0.879)
+//@ chunk-kd6y3qsy.js:47337-47462 placement (2.1.88 match: createChildAbortController, 0.878)
 function createChildAbortController(signal) {
   return new Promise((resolve) => {
     if (signal.aborted) {
@@ -2761,9 +3034,9 @@ function createChildAbortController(signal) {
     });
   });
 }
-//@ chunk-n4bsg1hp.js:42404-42465 placement
+//@ chunk-kd6y3qsy.js:47462-47523 placement
 var NO_SPACE_FOR_A_FILE = "A file could not be saved: no space left on device";
-//@ chunk-n4bsg1hp.js:42465-42611 placement
+//@ chunk-kd6y3qsy.js:47523-47669 placement
 function missingAttachmentsNote(arrivedCount, missingCount) {
   return missingCount === 1
     ? "[attachment did not arrive]"
@@ -2771,14 +3044,14 @@ function missingAttachmentsNote(arrivedCount, missingCount) {
       ? `[${missingCount} attachments did not arrive]`
       : `[${arrivedCount} of ${missingCount} attachments did not arrive]`;
 }
+//@ chunk-16n0efh2.js:13939-13999 fingerprint (2.1.88 match: sanitizeFileName, 1)
+function sanitizeFileName(name) {
+  return name.type === "user" || name.type === "attachment";
+}
 export {
   extractInboundAttachments,
   resolveAndPrepend,
   readAheadOfFiles,
-  uploadsDir,
-  writtenInUploadsDir,
-  logPrefetchOutcome,
-  prefetchInboundAttachments,
   describeAttachmentFailures,
   contentWithPlannedPathRefs,
   allMissing,
@@ -2788,6 +3061,12 @@ export {
   NO_SPACE_FOR_A_FILE,
   shouldQueryInboundAttachment,
   resolveInboundAttachments,
+  sanitizeFileName,
+  writtenInUploadsDir,
+  logPrefetchOutcome,
+  prefetchInboundAttachments,
   DOWNLOAD_TRIES,
+  UPLOADED_FILE_MAX_BYTES,
+  downloadFileById,
   downloadWithRetries,
 };

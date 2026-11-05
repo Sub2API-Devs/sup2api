@@ -3,22 +3,23 @@
  *
  * 递归遍历插件目录中的 markdown 文件（限量、跳过符号链接）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/walkPluginMarkdown.ts
- * pieces: chunk-e6aww6q8.js (3)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: affinity 1, fingerprint 1, placement 1
  */
 import { join, relative } from "path";
 import { getFsImplementation, safeResolvePath, isDuplicatePath } from "../fsOperations.js";
 import { logForDebugging } from "../debug.js";
+import { buildSecretScanResult } from "../../skills/bundled/pluginAuthoring/secretScanTool.js";
 import { isENOENT } from "../errors.js";
 import { identity } from "../pathClassification.js";
 
-//@ chunk-e6aww6q8.js:806356-806395 affinity
+//@ chunk-5xgkngpb.js:817699-817738 affinity
 var SKILL_MD_RE = /^skill\.md$/i;
 var MAX_PLUGIN_MARKDOWN_DEPTH = 32;
 var MAX_PLUGIN_MARKDOWN_LENGTH = 4096;
-//@ chunk-e6aww6q8.js:806395-807316 fingerprint (2.1.88 match: walkPluginMarkdown, 0.577)
+//@ chunk-5xgkngpb.js:817738-818921 fingerprint (2.1.88 match: walkPluginMarkdown, 0.538)
 /**
  * 递归遍历插件目录中的 .md 文件（限制数量与深度、跳过符号链接），对每个文件回调。
  */
@@ -54,6 +55,15 @@ async function walkPluginMarkdown(rootDir, onFile, opts = {}) {
       }
       return;
     }
+    if (namespace.length > 0 && (await buildSecretScanResult(dirPath))) {
+      logForDebugging(
+        `Skipping ${label} directory ${dirPath}: it is a link (such as a Windows junction) or could not be checked for one, and links are not followed. If it is a link, replace it with a real folder to load its files.`,
+        {
+          level: "warn",
+        },
+      );
+      return;
+    }
     try {
       let entries = await fs.readdir(dirPath);
       if (opts.stopAtSkillDir && entries.some((e) => e.isFile() && SKILL_MD_RE.test(e.name))) {
@@ -83,7 +93,7 @@ async function walkPluginMarkdown(rootDir, onFile, opts = {}) {
   }
   await scan_2(rootDir, []);
 }
-//@ chunk-e6aww6q8.js:807316-807506 placement (2.1.88 match: validateGlobPattern, 0.6)
+//@ chunk-5xgkngpb.js:818921-819111 placement (2.1.88 match: validateGlobPattern, 0.674)
 /**
  * 按规范化真实路径去重，判断文件是否已加载（未加载则登记）。旧版名 validateGlobPattern 误配，属插件 markdown 遍历。
  */

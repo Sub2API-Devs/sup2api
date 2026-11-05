@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：获取 artifact 用户资料
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qxvqcab6.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nfkwcnxd.js (5)
  * attribution: placement 5
  */
 import { getLiveState } from "../liveReplica/liveReplica.js";
@@ -19,7 +19,7 @@ import { isCancel } from "../../../vendor/axios/dist/esm/axios.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { cleanAnchorText } from "./comments/commentFormatting.js";
 
-//@ chunk-qxvqcab6.js:20523-21433 placement
+//@ chunk-nfkwcnxd.js:20498-21408 placement
 /**
  * 读取 artifact 用户资料（/api/frame/user/profiles），用于评论作者显示名，按账号 epoch 失效。
  */
@@ -96,7 +96,7 @@ async function fetchArtifactUserProfiles(host, profileIds, signal, credentials) 
     profiles: profileMap,
   };
 }
-//@ chunk-qxvqcab6.js:21433-21545 placement
+//@ chunk-nfkwcnxd.js:21408-21520 placement
 function profileFields(profile) {
   if (!isPlainObject(profile)) return {};
   let name = cleanAnchorText(profile.name);
@@ -109,13 +109,13 @@ function profileFields(profile) {
     }),
   };
 }
-//@ chunk-qxvqcab6.js:21545-21555 placement
+//@ chunk-nfkwcnxd.js:21520-21530 placement
 var MAX_PROFILE_NAMES = 512;
-//@ chunk-qxvqcab6.js:21555-21592 placement
+//@ chunk-nfkwcnxd.js:21530-21567 placement
 function profileKey(host, id) {
   return `${host}\x00${id}`;
 }
-//@ chunk-qxvqcab6.js:21592-21816 placement
+//@ chunk-nfkwcnxd.js:21567-21791 placement
 function cacheProfileNames(host, profiles) {
   let profileNames = getLiveState().profileNames;
   for (let [key, value] of Object.entries(profiles)) {

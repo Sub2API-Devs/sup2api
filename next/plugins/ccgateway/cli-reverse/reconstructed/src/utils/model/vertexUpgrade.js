@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Vertex 默认模型可用性检查与升级候选。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5wnerh16.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-scpfjvfj.js (12)
  * attribution: placement 12
  */
 import {
@@ -27,7 +27,7 @@ import { fromNumber, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { catalogEntriesByFirstPartyId } from "./modelCatalog.js";
 import { logForDebugging } from "../debug.js";
 import { telemetrySafeModelName } from "./telemetryModelName.js";
-import { getInitialSettings_2 } from "../settings/settings.js";
+import { getInitialSettings } from "../settings/settings.js";
 import {
   markModelRefused,
   modelNotAvailableError,
@@ -60,11 +60,11 @@ import { bearerFromEnvOrHeaders, CLOUD_AUTH_SLOT } from "../../services/api/cust
 import { getForwardableEnvHeaders } from "../../services/api/requestHeaders.js";
 import { sendStartupModelCheck } from "./modelAccessCheck.js";
 
-//@ chunk-5wnerh16.js:3691-3720 placement
+//@ chunk-scpfjvfj.js:4027-4056 placement
 function defaultVertexOpusTier() {
   return tierConfig(DEFAULT_VERTEX_OPUS_KEY);
 }
-//@ chunk-5wnerh16.js:3720-4564 placement
+//@ chunk-scpfjvfj.js:4056-4900 placement
 async function findVertexUpgradeCandidates() {
   if (getAPIProvider() !== "vertex") return [];
   if (env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST) return [];
@@ -114,16 +114,16 @@ async function findVertexUpgradeCandidates() {
   logForDebugging(`[vertex-upgrade] tiersWithPin=${stalePins.length} candidates=${filtered.length}`);
   return filtered;
 }
-//@ chunk-5wnerh16.js:4564-4597 placement
+//@ chunk-scpfjvfj.js:4900-4933 placement
 function seedUserPinEnvDefault(value) {
   return seedEnvDefaultForUserPin(value, defaultVertexOpusTier());
 }
-//@ chunk-5wnerh16.js:4597-6038 placement
+//@ chunk-scpfjvfj.js:4933-6374 placement
 async function checkVertexDefaultAvailability() {
   if (getAPIProvider() !== "vertex") return [];
   if (env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST) return [];
   let deadline = lastLiveRoundStart(Date.now());
-  let modelOverrides = getInitialSettings_2().modelOverrides;
+  let modelOverrides = getInitialSettings().modelOverrides;
   let documentTiers = defaultVertexOpusTier();
   let unpinnedTiers = collectUnpinnedTiers(documentTiers, modelOverrides);
   if (unpinnedTiers.length === 0) return [];
@@ -216,7 +216,7 @@ async function checkVertexDefaultAvailability() {
   logForDebugging(`[vertex-fallback] unpinnedTiers=${unpinnedTiers.length} fallbacks=${fallbacks.length}`);
   return fallbacks;
 }
-//@ chunk-5wnerh16.js:6038-7099 placement
+//@ chunk-scpfjvfj.js:6374-7435 placement
 /**
  * 为 Vertex 默认模型寻找可用的回退：按同档前代模型（排除已映射与被白名单排除者）及 Opus 跨档 Sonnet 默认依次探测，记录拒绝/可用结论，返回选中的键与 Vertex id。
  */
@@ -302,7 +302,7 @@ async function findVertexFallback(
     }),
   };
 }
-//@ chunk-5wnerh16.js:7099-7524 placement
+//@ chunk-scpfjvfj.js:7435-7860 placement
 async function checkVertexDocumentDefaults() {
   if (
     getAPIProvider() !== "vertex" ||
@@ -325,11 +325,11 @@ async function checkVertexDocumentDefaults() {
       accessible,
     });
     return accessible || probeState.verdict === "temporary";
-  }, getInitialSettings_2().modelOverrides);
+  }, getInitialSettings().modelOverrides);
   logForDebugging(`[vertex-fallback] refutedDocumentDefaults=${refuted.length}`);
   return refuted;
 }
-//@ chunk-5wnerh16.js:7524-7660 placement
+//@ chunk-scpfjvfj.js:7860-7996 placement
 async function probeVertexModel(modelId, options) {
   if (modelId === null) {
     options?.onVerdict?.("refused");
@@ -345,7 +345,7 @@ async function probeVertexModel(modelId, options) {
     )) === "accessible"
   );
 }
-//@ chunk-5wnerh16.js:7660-7795 placement
+//@ chunk-scpfjvfj.js:7996-8131 placement
 async function rememberVertexModelAccess(modelId, verdict) {
   try {
     let vertexCacheKey = await getVertexCacheKey(modelId);
@@ -354,7 +354,7 @@ async function rememberVertexModelAccess(modelId, verdict) {
     logForDebugging(`[3p-model-memory] vertex record failed: ${error}`);
   }
 }
-//@ chunk-5wnerh16.js:7795-8720 placement
+//@ chunk-scpfjvfj.js:8131-9056 placement
 /**
  * 为 Vertex 某档注册回退阶梯（默认模型、前代模型、管理员映射或跨档 Sonnet），并把记忆中已被拒绝的阶梯模型标记为拒绝。
  */
@@ -427,7 +427,7 @@ async function registerVertexLadder(tierInfo, accessMap, documentTarget, preferA
     }),
   ).catch(() => {});
 }
-//@ chunk-5wnerh16.js:8720-8972 placement
+//@ chunk-scpfjvfj.js:9056-9308 placement
 function getVertexCacheKey(modelId) {
   return PACKAGE_INFO("vertex", () => [
     env.ANTHROPIC_VERTEX_PROJECT_ID,
@@ -441,7 +441,7 @@ function getVertexCacheKey(modelId) {
     getCustomHeaders(),
   ]);
 }
-//@ chunk-5wnerh16.js:8972-9592 placement
+//@ chunk-scpfjvfj.js:9308-9928 placement
 /**
  * 用 AnthropicVertex 客户端（按需刷新 GCP 凭据、8 秒超时、不重试）发送启动模型检查请求；成功或 429 视为可用，其他错误返回不可用及错误。
  */
@@ -502,7 +502,7 @@ async function sendVertexStartupCheck(modelId) {
     };
   }
 }
-//@ chunk-5wnerh16.js:9592-9648 placement
+//@ chunk-scpfjvfj.js:9928-9984 placement
 function vertexVariantFor(key) {
   let vertex = catalogEntriesByFirstPartyId[key].vertex;
   return vertex !== null && enforcedAllowlistLeavesOut(vertex);

@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：云 SDK 相关环境变量集合；固定登录进程中 helper 命令不运行的提示等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (10)
- * attribution: placement 10
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (12)
+ * attribution: placement 10, layout 2
  */
 import { commandSyncNameState } from "../settings/commandSyncNames.js";
 import { isStoredLoginPinned } from "../../cli/headlessCloud/attachServe.js";
@@ -16,12 +16,12 @@ import { isHttpMcpServeInvocation } from "../../entrypoints/mcpServeArgs.js";
 import { identity as identity_2 } from "../identity.js";
 import { getSettingsForSource } from "../settings/settings.js";
 import { withHostEnvRestored, hostWrittenEnvNames } from "../settings/hostEnvWrites.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { hostOwnedEnvNames } from "../plugins/securityDefaultPlugin.js";
 import { formatNameList } from "../secureStorage/credentialLegs.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:487365-487446 placement
+//@ chunk-exfmq47h.js:499253-499334 placement
 /**
  * 判断该 helper 命令是否来自已合并的 hook 答案（因此不运行）。
  */
@@ -29,7 +29,7 @@ function isHookedMergeAnswer(settingName) {
   let { answers } = commandSyncNameState().hookedMerge;
   return answers !== null && answers.values.has(settingName);
 }
-//@ chunk-aepeg2w5.js:487446-487919 placement
+//@ chunk-exfmq47h.js:499334-499807 placement
 /**
  * 固定登录进程中 helper 命令不运行的提示。
  */
@@ -54,14 +54,27 @@ function warnPinnedHelper(settingName, value) {
     );
   return;
 }
-//@ chunk-aepeg2w5.js:487919-488444 placement
+//@ chunk-exfmq47h.js:499807-499833 layout
+var REFRESH_TOKEN_EXPIRES_FLOOR; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-exfmq47h.js:499807", () => {
+  REFRESH_TOKEN_EXPIRES_FLOOR = Date.UTC(2025, 0, 1);
+});
+//@ chunk-exfmq47h.js:499833-499911 layout
+function isPlausibleRefreshTokenExpiry(refreshTokenExpiresAt) {
+  return (
+    typeof refreshTokenExpiresAt === "number" &&
+    refreshTokenExpiresAt >= REFRESH_TOKEN_EXPIRES_FLOOR &&
+    refreshTokenExpiresAt <= Date.now() + 315360000000
+  );
+}
+//@ chunk-exfmq47h.js:499911-500436 placement
 /**
  * 匹配云相关环境变量前缀（AWS_、CLOUDSDK_、GOOGLE_ 等）。
  */
 var CLOUD_ENV_VARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CLOUD_ENV_VAR_PREFIX_RE;
 var CLOUD_ENV_VAR_NAME_RE;
-deferInit("chunk-aepeg2w5.js:487919", () => {
+deferInit("chunk-exfmq47h.js:499911", () => {
   CLOUD_ENV_VARS = new Set([
     "AWS_DEFAULT_PROFILE",
     "AWS_DEFAULT_REGION",
@@ -80,12 +93,12 @@ deferInit("chunk-aepeg2w5.js:487919", () => {
     /^(?:VERTEX_REGION_CLAUDE_\w+|(?:(?:ACCOUNT|CLUSTER|COST_CENT(?:ER|RE)|CUSTOMER|DEPARTMENT|ENVIRONMENT|ID|LOCATION|NAME|NAMESPACE|ORG|ORGANIZATION|PROFILE|PROJECT|REGION|ROLE|STAGE|TEAM|TENANT|WORKSPACE|ZONE)(?:_|$))+)$/;
   CLOUD_ENV_VAR_NAME_RE = /^[A-Za-z0-9_][\w.-]*$/;
 });
-//@ chunk-aepeg2w5.js:488444-488499 placement
+//@ chunk-exfmq47h.js:500436-500491 placement
 /**
  * 匹配 CLOUDSDK_CORE_ACCOUNT 的账号格式（可含 @ 域名）。
  */
 var CLOUD_ACCOUNT_ENV_RE = /^[A-Za-z0-9_][\w.-]*(?:@[A-Za-z0-9][\w.-]*)?$/;
-//@ chunk-aepeg2w5.js:488499-488626 placement
+//@ chunk-exfmq47h.js:500491-500618 placement
 function isCloudAccountEnvValue(envKey, envValue) {
   let upper = envKey.toUpperCase();
   return (
@@ -94,15 +107,15 @@ function isCloudAccountEnvValue(envKey, envValue) {
     (CLOUD_ENV_VARS.has(upper) || CLOUD_ENV_VAR_PREFIX_RE.test(upper))
   );
 }
-//@ chunk-aepeg2w5.js:488626-488660 placement
+//@ chunk-exfmq47h.js:500618-500652 placement
 /**
  * 记录托管 helper 环境注入情况的缓存。
  */
 var managedHelperEnvCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:488626", () => {
+deferInit("chunk-exfmq47h.js:500618", () => {
   managedHelperEnvCache = identity_2(new Map(), (map) => map.clear());
 });
-//@ chunk-aepeg2w5.js:488660-488717 placement
+//@ chunk-exfmq47h.js:500652-500709 placement
 /**
  * 条件成立时返回保留仓库值的标记。
  */
@@ -113,7 +126,7 @@ function keepsRepositoryValueIf(check) {
       }
     : {};
 }
-//@ chunk-aepeg2w5.js:488717-488792 placement (2.1.88 match: _temp7, 1)
+//@ chunk-exfmq47h.js:500709-500785 placement (2.1.88 match: _temp7, 1)
 /**
  * 策略设置一致时排除项目设置注入的环境变量再运行 helper。
  */
@@ -122,7 +135,7 @@ function managedHelperSettingsGate(settingName, settingValue, run, isProjectScop
     ? withHostEnvRestored(run, keepsRepositoryValueIf(isProjectScopeTrustAccepted))
     : run();
 }
-//@ chunk-aepeg2w5.js:488792-489130 placement
+//@ chunk-exfmq47h.js:500785-501124 placement
 /**
  * 运行组织托管的 helper 时排除项目设置注入的环境变量。
  */
@@ -133,7 +146,10 @@ function runManagedHelperWithoutProjectEnv(settingName, settingValue, run, isPro
   }
   let envPolicy = keepsRepositoryValueIf(isProjectScopeTrustAccepted);
   let result = withHostEnvRestored(run, envPolicy);
-  let droppedNames = uniq([...hostWrittenEnvNames(envPolicy.keepsRepositoryValue), ...hostOwnedEnvNames()]);
+  let droppedNames = normalizeCaseForComparison_2([
+    ...hostWrittenEnvNames(envPolicy.keepsRepositoryValue),
+    ...hostOwnedEnvNames(),
+  ]);
   managedHelperEnvCache.set(settingName, {
     command: settingValue,
     names: droppedNames,
@@ -144,7 +160,7 @@ function runManagedHelperWithoutProjectEnv(settingName, settingValue, run, isPro
     );
   return result;
 }
-//@ chunk-aepeg2w5.js:489130-489436 placement
+//@ chunk-exfmq47h.js:501124-501430 placement
 /**
  * 托管 helper 启动时被排除的环境变量说明。
  */
@@ -165,4 +181,5 @@ export {
   isHookedMergeAnswer,
   runManagedHelperWithoutProjectEnv,
   managedHelperSettingsGate,
+  isPlausibleRefreshTokenExpiry,
 };

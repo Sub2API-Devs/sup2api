@@ -1,8 +1,8 @@
 /**
  * lodash-es/isEmpty.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: lodash-es@4.17.22..4.18.1
- * pieces: chunk-wy9dbk5f.js (1)
+ * pieces: chunk-9gx98mbf.js (1)
  * attribution: placement 1
  */
 import {
@@ -17,7 +17,7 @@ import { isArrayAlias } from "./toString.js";
 import { MAP_TAG, SET_TAG, hasOwnProperty } from "../../src/services/mcpServe/callUtils.js";
 import { isPrototype_default } from "./_isPrototype.js";
 
-//@ chunk-wy9dbk5f.js:17789-18055 placement
+//@ chunk-9gx98mbf.js:364-626 placement
 /**
  * lodash isEmpty：null、空数组/字符串/arguments、空 Map/Set、无自有属性的对象为空。
  */

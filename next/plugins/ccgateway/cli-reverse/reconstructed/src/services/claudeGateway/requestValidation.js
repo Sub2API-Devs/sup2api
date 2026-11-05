@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：网关请求校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (2)
  * attribution: placement 2
  */
 
-//@ chunk-1ny7cxrt.js:1341439-1341568 placement
+//@ chunk-1hnjmk23.js:1342402-1342531 placement
 /**
  * 校验 model 字段时不深入的键（schema、示例等）。
  */
@@ -23,7 +23,7 @@ var SKIPPED_SCHEMA_KEYS = new Set([
   "tags",
   "classifier_context",
 ]);
-//@ chunk-1ny7cxrt.js:1341568-1342433 placement
+//@ chunk-1hnjmk23.js:1342531-1343396 placement
 /**
  * 递归检查请求中嵌套的 model 字段（深度≤1000、最多 100 个），返回第一个不允许的路径与原因。
  */

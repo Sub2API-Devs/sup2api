@@ -3,9 +3,9 @@
  *
  * 扫描 home 下的仓库（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2a8yx6fc.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fta1hp2w.js (20)
  * attribution: placement 20
  */
 import { sep, join, dirname, resolve, relative, isAbsolute } from "path";
@@ -23,7 +23,7 @@ import { rawPointerPathIsUnsafe } from "../../utils/git/gitFilesystem.js";
 import { isENOENT } from "../../utils/errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-2a8yx6fc.js:1801-2563 placement
+//@ chunk-fta1hp2w.js:1867-2629 placement
 function redactRemoteUrl(remoteUrl) {
   if (remoteUrl.length > 2048) return "(unparseable remote URL redacted)";
   if (hasUnsafeRemoteUrlChars(remoteUrl)) return "(unparseable remote URL redacted)";
@@ -55,7 +55,7 @@ function redactRemoteUrl(remoteUrl) {
     return "(unparseable remote URL redacted)";
   }
 }
-//@ chunk-2a8yx6fc.js:2563-2647 placement
+//@ chunk-fta1hp2w.js:2629-2713 placement
 /**
  * 判断远程 URL 是否含不可解析字符（控制字符、非 ASCII 可印区、反斜杠、百分号），用于脱敏输出。
  */
@@ -63,7 +63,7 @@ function hasUnsafeRemoteUrlChars(remoteUrl) {
   for (let char of remoteUrl) if (char <= " " || char > "~" || char === "\\" || char === "%") return true;
   return false;
 }
-//@ chunk-2a8yx6fc.js:2675-2820 placement
+//@ chunk-fta1hp2w.js:2741-2886 placement
 function isExcludedUnderEitherHome(filePath, homeDir, realHomeDir, isExcluded, platform = getPlatform()) {
   if (isExcluded(filePath)) return true;
   if (homeDir === realHomeDir) return false;
@@ -76,7 +76,7 @@ function isExcludedUnderEitherHome(filePath, homeDir, realHomeDir, isExcluded, p
   }
   return false;
 }
-//@ chunk-2a8yx6fc.js:2820-3003 placement
+//@ chunk-fta1hp2w.js:2886-3069 placement
 function rebasePath(filePath, fromHome, toHome, platform) {
   let normalizeCase = (pathValue) => (platform === "windows" ? pathValue.toLowerCase() : pathValue);
   let normalizedFilePath = normalizeCase(filePath);
@@ -88,7 +88,7 @@ function rebasePath(filePath, fromHome, toHome, platform) {
   if (!normalizedFilePath.startsWith(normalizedFromHomeWithSep)) return null;
   return toHome + filePath.slice(fromHome.length);
 }
-//@ chunk-2a8yx6fc.js:3003-3343 placement
+//@ chunk-fta1hp2w.js:3069-3409 placement
 /**
  * 遍历主目录查找 git 仓库的限制与规则：深度、目录访问预算、仓库数上限、超时、读取上限、托管主机集合、跳过的目录名与云同步/系统目录名。
  */
@@ -104,7 +104,7 @@ var SKIPPED_HOME_DIRS;
 var CLOUD_SYNC_DIR_NAMES;
 var WINDOWS_APPDATA_DIRS;
 var MAC_LIBRARY_DIRS;
-deferInit("chunk-2a8yx6fc.js:3003", () => {
+deferInit("chunk-fta1hp2w.js:3069", () => {
   DEFAULT_MAX_REPO_DEPTH = 2;
   DEFAULT_MAX_DIRS_VISITED = 4000;
   DEFAULT_MAX_REPOS = 20;
@@ -132,7 +132,7 @@ deferInit("chunk-2a8yx6fc.js:3003", () => {
   WINDOWS_APPDATA_DIRS = new Set(["appdata", "application data"]);
   MAC_LIBRARY_DIRS = new Set(["library"]);
 });
-//@ chunk-2a8yx6fc.js:3343-4659 placement
+//@ chunk-fta1hp2w.js:3409-4725 placement
 async function walkHomeRepos(options) {
   let platform = options?.platform ?? getPlatform();
   let homeDir = options?.home ?? getHomeDirOrNull();
@@ -256,7 +256,7 @@ async function walkHomeRepos(options) {
     limit: limitReason,
   };
 }
-//@ chunk-2a8yx6fc.js:4659-5638 placement
+//@ chunk-fta1hp2w.js:4725-5704 placement
 /**
  * 读取一个仓库的远程地址：.git 是文件时解析 gitdir/commondir 并确认都在 home 内且未被排除，再读 config 取出已知托管平台的远程（最多 5 个）。
  */
@@ -340,7 +340,7 @@ async function readRepoRemotes(gitPath, isGitFile, home, platform, isExcluded, e
     remotes,
   };
 }
-//@ chunk-2a8yx6fc.js:5638-5775 placement
+//@ chunk-fta1hp2w.js:5704-5841 placement
 function remotesFromGitConfig(text, extraHost = null) {
   let hosts = [];
   for (let entry of gitConfigEntries(text)) {
@@ -352,7 +352,7 @@ function remotesFromGitConfig(text, extraHost = null) {
   }
   return hosts;
 }
-//@ chunk-2a8yx6fc.js:5775-6002 placement
+//@ chunk-fta1hp2w.js:5841-6068 placement
 function tildePath(dir, homeDir, platform) {
   let isWindows = platform === "windows";
   let normalizeCase = (value) => (isWindows ? value.toLowerCase() : value);
@@ -365,7 +365,7 @@ function tildePath(dir, homeDir, platform) {
   let posixRelative = isWindows ? relativePath.replaceAll("\\", "/") : relativePath;
   return relativePath === dir ? posixRelative : `~/${posixRelative}`;
 }
-//@ chunk-2a8yx6fc.js:6002-6071 placement
+//@ chunk-fta1hp2w.js:6068-6137 placement
 /**
  * 取用户主目录，取不到（空串或抛错）返回 null。
  */
@@ -377,14 +377,14 @@ function getHomeDirOrNull() {
     return null;
   }
 }
-//@ chunk-2a8yx6fc.js:6071-6115 placement
+//@ chunk-fta1hp2w.js:6137-6181 placement
 /**
  * 判断路径是否落在网络主目录（WSL UNC 之外的网络挂载）。
  */
 function isNetworkHomePath(pathToCheck) {
   return (isUncOrDevicePath(pathToCheck) && !isWslUncPath(pathToCheck)) || isNetworkMountRoot(pathToCheck);
 }
-//@ chunk-2a8yx6fc.js:6115-6176 placement
+//@ chunk-fta1hp2w.js:6181-6242 placement
 /**
  * 判断 .git 指针文件里的路径是否不安全：指向符号链接、对外挂载点或无法解析的原始指针。
  */
@@ -396,7 +396,7 @@ function isUnsafeGitPointerPath(pointerPath, baseDir) {
     rawPointerPathIsUnsafe(pointerPath, baseDir)
   );
 }
-//@ chunk-2a8yx6fc.js:6176-6299 placement
+//@ chunk-fta1hp2w.js:6242-6365 placement
 function isInsideDir(candidatePath, home, platform) {
   let relativePath = relative(home, candidatePath);
   let normalizedRelative = platform === "windows" ? relativePath.toLowerCase() : relativePath;
@@ -407,7 +407,7 @@ function isInsideDir(candidatePath, home, platform) {
     !isAbsolute(normalizedRelative)
   );
 }
-//@ chunk-2a8yx6fc.js:6299-6470 placement
+//@ chunk-fta1hp2w.js:6365-6536 placement
 async function checkGitDirRealpath(gitDir, home, platform, isExcluded) {
   try {
     let realGitDir = await fsPromisesModule_2.realpath(gitDir);
@@ -422,7 +422,7 @@ async function checkGitDirRealpath(gitDir, home, platform, isExcluded) {
     return isENOENT(error) ? "missing" : "refused";
   }
 }
-//@ chunk-2a8yx6fc.js:6470-6651 placement (2.1.88 match: getReservedShortcuts, 1)
+//@ chunk-fta1hp2w.js:6536-6717 placement (2.1.88 match: getReservedShortcuts, 1)
 function isReservedName(name, platform) {
   if (SKIPPED_HOME_DIRS.has(name)) return true;
   let lower = name.toLowerCase();
@@ -431,27 +431,27 @@ function isReservedName(name, platform) {
   if (platform === "windows" && WINDOWS_APPDATA_DIRS.has(lower)) return true;
   return platform === "macos" && MAC_LIBRARY_DIRS.has(lower);
 }
-//@ chunk-2a8yx6fc.js:6651-6707 placement
+//@ chunk-fta1hp2w.js:6717-6773 placement
 /**
  * Windows 平台上把路径转小写再比较，其他平台原样返回。
  */
 function normalizeCaseForPlatform(value, platform) {
   return platform === "windows" ? value.toLowerCase() : value;
 }
-//@ chunk-2a8yx6fc.js:6707-6824 placement
+//@ chunk-fta1hp2w.js:6773-6890 placement
 function parseGitdirFile(fileGuarded) {
   if (!fileGuarded.startsWith("gitdir: ")) return null;
   let replaced = fileGuarded.slice(8).replace(/[\r\n]+$/, "");
   return replaced === "" ? null : replaced;
 }
-//@ chunk-2a8yx6fc.js:6824-6912 placement
+//@ chunk-fta1hp2w.js:6890-6978 placement
 /**
  * 校验单个远程路径段（owner/repo 名）：非空、≤100 字符、只含字母数字与 ._- 且至少一个字母数字。
  */
 function isValidRemotePathSegment(segment) {
   return segment.length > 0 && segment.length <= 100 && /^[\w.][\w.-]*$/.test(segment) && /\w/.test(segment);
 }
-//@ chunk-2a8yx6fc.js:6912-7749 placement
+//@ chunk-fta1hp2w.js:6978-7815 placement
 /**
  * 把 git 远程 URL（https/ssh/git 或 git@host:path）规范化为 "host/owner/repo"；只接受已知托管平台（可加一个额外主机）、无凭据无端口的地址，其他返回 null。
  */
@@ -497,7 +497,7 @@ function normalizeHostedRemote(url, extraHost) {
   let [owner, repoName] = sliced;
   return `${host.toLowerCase()}/${owner}/${repoName}`;
 }
-//@ chunk-2a8yx6fc.js:7749-7791 placement
+//@ chunk-fta1hp2w.js:7815-7857 placement
 /**
  * 去掉结尾的单个换行。
  */
@@ -505,13 +505,13 @@ function stripTrailingNewline(stdout) {
   return stdout.replace(/\n$/, "");
 }
 export {
+  isNetworkHomePath,
   stripTrailingNewline,
   normalizeHostedRemote,
+  isValidRemotePathSegment,
   redactRemoteUrl,
   getHomeDirOrNull,
-  isNetworkHomePath,
   isExcludedUnderEitherHome,
   normalizeCaseForPlatform,
   walkHomeRepos,
-  isValidRemotePathSegment,
 };

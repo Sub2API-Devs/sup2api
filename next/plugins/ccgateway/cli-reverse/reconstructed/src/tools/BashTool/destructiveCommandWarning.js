@@ -3,13 +3,13 @@
  *
  * Bash 破坏性命令模式表（git reset --hard、push -f、rm -rf、DROP TABLE、kubectl delete、terraform destroy 等）与匹配函数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/destructiveCommandWarning.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-e6aww6q8.js:1005118-1007274 fingerprint (2.1.88 match: DESTRUCTIVE_PATTERNS, 0.664)
+//@ chunk-5xgkngpb.js:1018909-1021065 fingerprint (2.1.88 match: DESTRUCTIVE_PATTERNS, 0.664)
 /**
  * 破坏性命令模式表（git reset --hard、push --force、clean -f、checkout .、stash drop、branch -D、--no-verify、commit --amend、rm -rf、SQL DROP/TRUNCATE/DELETE、kubectl delete、terraform destroy），每项带 category 与提示文字。
  */

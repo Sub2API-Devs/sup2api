@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/otlp-grpc-exporter-base/build/src/configuration/otlp-grpc-env-configuration.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/otlp-grpc-exporter-base@0.208.0
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_grpc_exporter_transport } from "../grpc-exporter-transport.js";
 import { require_index_node_http } from "../../../../otlp-exporter-base/build/src/index-node-http.js";
 import { require_api as require_api_2 } from "../../../../api/build/src/index.js";
 
-//@ chunk-pwh5dx3n.js:389016-391311 cjs-fingerprint
+//@ chunk-3k21nfa0.js:389016-391311 cjs-fingerprint
 var require_otlp_grpc_env_configuration = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

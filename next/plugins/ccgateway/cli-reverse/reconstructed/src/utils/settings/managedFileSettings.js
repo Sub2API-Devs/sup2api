@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：合并托管设置层并收集错误；应用托管设置覆盖并记录等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (39)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (39)
  * attribution: placement 39
  */
 import { sep, join, resolve } from "path";
@@ -81,7 +81,7 @@ import { serializeSettingsErrors } from "../fileStateCache.js";
 import { parseCommandOutputAsSettings } from "./mdm/settings.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:457142-457489 placement
+//@ chunk-z20c443b.js:455605-455952 placement
 /**
  * 描述无效设置值（截断显示）。
  */
@@ -108,7 +108,7 @@ function describeInvalidValues(errors) {
     };
   });
 }
-//@ chunk-dcmhvw5a.js:457489-459256 placement
+//@ chunk-z20c443b.js:455952-457716 placement
 function loadManagedFileSettings(context) {
   if (context.diskless)
     return {
@@ -227,7 +227,7 @@ function loadManagedFileSettings(context) {
     ),
   };
 }
-//@ chunk-dcmhvw5a.js:459256-459578 placement
+//@ chunk-z20c443b.js:457716-458039 placement
 function heldOffPluginIds(settingsContext) {
   let heldOffPlugins = settingsContext.store.policy.heldOffPlugins;
   if (heldOffPlugins !== undefined) return heldOffPlugins;
@@ -243,7 +243,7 @@ function heldOffPluginIds(settingsContext) {
   settingsContext.store.policy.heldOffPlugins = heldOff;
   return heldOff;
 }
-//@ chunk-dcmhvw5a.js:459578-459983 placement
+//@ chunk-z20c443b.js:458039-458444 placement
 function allowListEntriesThatVouch(context, entries) {
   if (entries === undefined || entries.length === 0) return entries;
   try {
@@ -269,7 +269,7 @@ function allowListEntriesThatVouch(context, entries) {
     return [];
   }
 }
-//@ chunk-dcmhvw5a.js:459983-460296 placement
+//@ chunk-z20c443b.js:458444-458757 placement
 /**
  * 等待组织确认的托管文件设置。
  */
@@ -290,7 +290,7 @@ function heldOrganizationDocument(context) {
     })?.strictKnownMarketplaces ?? []
   );
 }
-//@ chunk-dcmhvw5a.js:460296-460944 placement
+//@ chunk-z20c443b.js:458757-459405 placement
 /**
  * 应用托管设置覆盖并记录。
  */
@@ -332,7 +332,7 @@ function applyManagedOverrides(tier, settings, file) {
     ],
   };
 }
-//@ chunk-dcmhvw5a.js:460944-461419 placement
+//@ chunk-z20c443b.js:459405-459880 placement
 /**
  * 描述托管设置覆盖产生的变化。
  */
@@ -366,16 +366,16 @@ function describeManagedOverrides(written, restrictions) {
       }));
   });
 }
-//@ chunk-dcmhvw5a.js:461419-461466 placement (2.1.88 match: execTmux, 1)
+//@ chunk-z20c443b.js:459880-459927 placement (2.1.88 match: execTmux, 1)
 function shouldReadWindowsManagedSettingsFromWsl(asksOrg) {
   return getPlatform() === "wsl" && (!asksOrg || isWslEnvironment());
 }
-//@ chunk-dcmhvw5a.js:461466-461500 placement
+//@ chunk-z20c443b.js:459927-459961 placement
 var managedSettingsReadSeen; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dcmhvw5a.js:461466", () => {
+deferInit("chunk-z20c443b.js:459927", () => {
   managedSettingsReadSeen = identity_2(new Set(), (file) => file.clear());
 });
-//@ chunk-dcmhvw5a.js:461500-461949 placement
+//@ chunk-z20c443b.js:459961-460410 placement
 /**
  * 读取 MDM 设置文档（等待组织确认的除外）。
  */
@@ -424,9 +424,9 @@ function loadManagedFileTiers(context, prepare) {
   }
   return loadManagedFileSettingsFromDir(getManagedFilePath(), context.store, prepare, heldDocuments);
 }
-//@ chunk-dcmhvw5a.js:461949-461963 placement
+//@ chunk-z20c443b.js:460410-460424 placement
 var alwaysTrue = () => true;
-//@ chunk-dcmhvw5a.js:461963-462846 placement
+//@ chunk-z20c443b.js:460424-461307 placement
 /**
  * 合并托管设置层并收集错误。
  */
@@ -469,21 +469,21 @@ function mergeManagedSettingsLayer(accumulator, tier, issues) {
   if (hasEffectivePolicyContent(settings) && !tier.errors.some((error) => error.onlySubstitutes))
     accumulator.authored = true;
 }
-//@ chunk-dcmhvw5a.js:462846-462901 placement (2.1.88 match: execTmux, 1)
+//@ chunk-z20c443b.js:461307-461362 placement (2.1.88 match: execTmux, 1)
 function managedFileSettingsDirs(asksOrg) {
   return getPlatform() === "wsl" && asksOrg
     ? [WSL_MANAGED_SETTINGS_DIR, getManagedFilePath()]
     : [getManagedFilePath()];
 }
-//@ chunk-dcmhvw5a.js:462901-462964 placement
+//@ chunk-z20c443b.js:461362-461425 placement
 function isManagedSettingsDropInName(name) {
   return name.endsWith(".json") && !name.startsWith(".");
 }
-//@ chunk-dcmhvw5a.js:462964-463032 placement
+//@ chunk-z20c443b.js:461425-461493 placement
 function isManagedSettingsDropInEntry(dirent) {
   return (dirent.isFile() || dirent.isSymbolicLink()) && isManagedSettingsDropInName(dirent.name);
 }
-//@ chunk-dcmhvw5a.js:463032-463320 placement
+//@ chunk-z20c443b.js:461493-461781 placement
 function noteManagedDocumentOwnership(context, folder, path, file) {
   let managedFileProtections = context.managedFileProtections;
   let info = {
@@ -503,7 +503,7 @@ function noteManagedDocumentOwnership(context, folder, path, file) {
   );
   return () => accountCouldChangeDocument(context, path, info.file, info.folder);
 }
-//@ chunk-dcmhvw5a.js:463320-463982 placement
+//@ chunk-z20c443b.js:461781-462443 placement
 function accountCouldChangeDocument(context, path, file, folder) {
   let euid = process.geteuid?.();
   let uid = process.getuid?.();
@@ -539,9 +539,9 @@ function accountCouldChangeDocument(context, path, file, folder) {
   walked.set(path, result);
   return result;
 }
-//@ chunk-dcmhvw5a.js:463982-463992 placement
+//@ chunk-z20c443b.js:462443-462453 placement
 var NEVER_MERGE = false;
-//@ chunk-dcmhvw5a.js:463992-464135 placement
+//@ chunk-z20c443b.js:462453-462596 placement
 function noteWalkedManagedPath(context, dir, steps, folder) {
   let managedDocumentLinks = context.managedDocumentLinks;
   managedDocumentLinks.noteWalked(join(dir, ...steps), () =>
@@ -554,7 +554,7 @@ function noteWalkedManagedPath(context, dir, steps, folder) {
     ),
   );
 }
-//@ chunk-dcmhvw5a.js:464135-465251 placement
+//@ chunk-z20c443b.js:462596-463712 placement
 function loadManagedFileSettingsFromDir(dir, store, gate = (tier) => tier, heldDocuments = []) {
   let errors = [];
   let accumulator = {
@@ -637,7 +637,7 @@ function loadManagedFileSettingsFromDir(dir, store, gate = (tier) => tier, heldD
   }
   return managedLoadResult(accumulator, errors, documentHasPolicyContent, loadState, store);
 }
-//@ chunk-dcmhvw5a.js:465251-465511 placement
+//@ chunk-z20c443b.js:463712-463972 placement
 function managedLoadResult(accumulator, errors, documentHasPolicyContent, loadState, store) {
   let merged = accumulator.found && hasPolicyContent(accumulator.merged) ? accumulator.merged : null;
   if (merged?.forceLoginOrgUUID !== undefined) store.managedFileProtections.setsOrgPin = true;
@@ -653,7 +653,7 @@ function managedLoadResult(accumulator, errors, documentHasPolicyContent, loadSt
       }),
   };
 }
-//@ chunk-dcmhvw5a.js:465511-465614 placement
+//@ chunk-z20c443b.js:463972-464075 placement
 function handleFileSystemError(error, path) {
   if (isENOENT(error)) logMissingSettingsFile(path);
   else
@@ -661,7 +661,7 @@ function handleFileSystemError(error, path) {
       level: "error",
     });
 }
-//@ chunk-dcmhvw5a.js:465614-465845 placement (2.1.88 match: parseSettingsFile, 0.261)
+//@ chunk-z20c443b.js:464075-464467 placement (2.1.88 match: parseSettingsFile, 0.135)
 /**
  * 带缓存地解析一个设置文件（pinned 内容按 \0pinned 另存一份），返回 settings 的深拷贝与错误列表。
  */
@@ -673,14 +673,29 @@ function parseSettingsFile_3(path, store, pinned, tolerant) {
       ...cached,
       settings: cached.settings ? clone(cached.settings) : null,
     };
-  let result = parseSettingsFileUncached(path, pinned, tolerant);
-  store.parsedFiles.set(cacheKey, result);
+  let onStats;
+  let settingsFileUncached = parseSettingsFileUncached(
+    path,
+    pinned,
+    tolerant,
+    ({ ino, size, mtimeMs, ctimeMs }) => {
+      onStats = {
+        ino,
+        size,
+        mtimeMs,
+        ctimeMs,
+      };
+    },
+  );
+  if (pinned === undefined && settingsFileUncached.loadState === "absent") onStats ??= null;
+  if (onStats !== undefined) store.noteFirstRead(path, onStats);
+  store.parsedFiles.set(cacheKey, settingsFileUncached);
   return {
-    ...result,
-    settings: result.settings ? clone(result.settings) : null,
+    ...settingsFileUncached,
+    settings: settingsFileUncached.settings ? clone(settingsFileUncached.settings) : null,
   };
 }
-//@ chunk-dcmhvw5a.js:465845-466193 placement
+//@ chunk-z20c443b.js:464467-464816 placement
 /**
  * 读取 MDM 设置及加载状态。
  */
@@ -707,7 +722,7 @@ function readMdmSettings(context) {
     }),
   };
 }
-//@ chunk-dcmhvw5a.js:466193-466332 placement
+//@ chunk-z20c443b.js:464816-464955 placement
 function parsePolicyObjectTolerant(input, label) {
   let byInput = weakMap_2.get(input);
   let cached = byInput?.get(label);
@@ -717,7 +732,7 @@ function parsePolicyObjectTolerant(input, label) {
   else weakMap_2.set(input, new Map([[label, result]]));
   return cloneManagedLoadResult(result);
 }
-//@ chunk-dcmhvw5a.js:466332-466576 placement
+//@ chunk-z20c443b.js:464955-465199 placement
 function cloneManagedLoadResult(result) {
   return {
     settings: result.settings && clone(result.settings),
@@ -732,12 +747,12 @@ function cloneManagedLoadResult(result) {
     }),
   };
 }
-//@ chunk-dcmhvw5a.js:466576-466595 placement
+//@ chunk-z20c443b.js:465199-465218 placement
 var weakMap_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dcmhvw5a.js:466576", () => {
+deferInit("chunk-z20c443b.js:465199", () => {
   weakMap_2 = new WeakMap();
 });
-//@ chunk-dcmhvw5a.js:466595-467211 placement
+//@ chunk-z20c443b.js:465218-465834 placement
 /**
  * 解析托管设置文件（策略来源校验）。
  */
@@ -783,7 +798,7 @@ function parseManagedSettingsFile(input, label) {
       }),
   };
 }
-//@ chunk-dcmhvw5a.js:467211-467340 placement
+//@ chunk-z20c443b.js:465834-465963 placement
 function isPolicyContentKey(key, value) {
   let restrictive = RESTRICTIVE_TOP_LEVEL_SETTINGS();
   return restrictive.includes(key) ||
@@ -791,7 +806,7 @@ function isPolicyContentKey(key, value) {
     ? isRestrictiveDisable(key, value)
     : isRestrictiveNestedPath(key) && isPolicyContentObject(key, value);
 }
-//@ chunk-dcmhvw5a.js:467340-467490 placement
+//@ chunk-z20c443b.js:465963-466113 placement
 function isPolicyContentObject(prefix, value) {
   return (
     value === null ||
@@ -806,14 +821,14 @@ function isPolicyContentObject(prefix, value) {
       }))
   );
 }
-//@ chunk-dcmhvw5a.js:467490-467582 placement
+//@ chunk-z20c443b.js:466113-466205 placement
 function isInertManagedMcpServersNotice(path) {
   return isSdkEntrypoint() && (path === "managedMcpServers" || path.startsWith("managedMcpServers."));
 }
-//@ chunk-dcmhvw5a.js:467582-467702 placement
+//@ chunk-z20c443b.js:466205-466325 placement
 var MANAGED_ONLY_KEYS = ["managedMcpServers", "isolation", "attributionProjectPolicy"];
 var NON_MANAGED_DROPPED_KEYS = [...MANAGED_ONLY_KEYS, "deniedModels", "availableModelsMatch"];
-//@ chunk-dcmhvw5a.js:467702-467957 placement
+//@ chunk-z20c443b.js:466325-466580 placement
 function dropManagedOnlyKeys(doc, file) {
   if (!isPlainObject_2(doc)) return [];
   let issues = [];
@@ -831,7 +846,7 @@ function dropManagedOnlyKeys(doc, file) {
   }
   return issues;
 }
-//@ chunk-dcmhvw5a.js:467957-468414 placement
+//@ chunk-z20c443b.js:466580-467037 placement
 /**
  * 收集设置问题为警告。
  */
@@ -865,7 +880,7 @@ function collectSettingsIssue(file, sink) {
       });
   };
 }
-//@ chunk-dcmhvw5a.js:468414-469299 placement
+//@ chunk-z20c443b.js:467037-467923 placement
 function parseRemoteManagedSettings(context) {
   let settings = context?.remote
     ? context.remote()
@@ -916,10 +931,10 @@ function parseRemoteManagedSettings(context) {
     }),
   };
 }
-//@ chunk-dcmhvw5a.js:469299-469393 placement
+//@ chunk-z20c443b.js:467923-468017 placement
 var PARENT_MANAGED_SETTINGS_SOURCE_LABEL = "parent managed settings";
 var RETENTION_POLICY_KEYS = ["cleanupPeriodDays", "desktopSessionCleanupPeriodDays"];
-//@ chunk-dcmhvw5a.js:469393-469828 placement
+//@ chunk-z20c443b.js:468017-468452 placement
 function parseParentManagedSettings(context) {
   let parentManaged = context.parentManaged;
   if (!parentManaged || Object.keys(parentManaged).length === 0)
@@ -939,11 +954,11 @@ function parseParentManagedSettings(context) {
       });
   return policyObjectTolerant;
 }
-//@ chunk-dcmhvw5a.js:469828-469856 placement
+//@ chunk-z20c443b.js:468452-468480 placement
 function parseParentTierWithOrganization(context) {
   return null;
 }
-//@ chunk-dcmhvw5a.js:469856-470165 placement
+//@ chunk-z20c443b.js:468480-468789 placement
 function parseInlineFlagSettings(context) {
   let flagInline = context.flagInline;
   if (!flagInline)
@@ -973,21 +988,21 @@ export {
   isManagedSettingsDropInName,
   RETENTION_POLICY_KEYS,
   PARENT_MANAGED_SETTINGS_SOURCE_LABEL,
-  accountCouldChangeDocument,
+  dropManagedOnlyKeys,
+  MANAGED_ONLY_KEYS,
+  isInertManagedMcpServersNotice,
   parsePolicyObjectTolerant,
-  parseRemoteManagedSettings,
+  accountCouldChangeDocument,
   parseSettingsFile_3,
   parseInlineFlagSettings,
   loadManagedFileSettings,
+  parseRemoteManagedSettings,
   heldOffPluginIds,
   allowListEntriesThatVouch,
   parseParentManagedSettings,
   parseParentTierWithOrganization,
   managedFileSettingsDirs,
-  isInertManagedMcpServersNotice,
   handleFileSystemError,
-  dropManagedOnlyKeys,
-  MANAGED_ONLY_KEYS,
   collectSettingsIssue,
   readMdmSettings,
   isPolicyContentKey,

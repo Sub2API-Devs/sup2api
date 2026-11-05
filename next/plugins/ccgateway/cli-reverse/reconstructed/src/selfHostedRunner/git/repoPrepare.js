@@ -3,9 +3,9 @@
  *
  * BYOC 准备仓库：访问校验、remote 配置、fetch/checkout（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-t3sg9e26.js (30)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rzkdv0c6.js (30)
  * attribution: placement 30
  */
 import { join } from "path";
@@ -57,9 +57,9 @@ import { truncateToLength, takeLastChars } from "../../utils/stringUtils.js";
 import { redactSecretsInText } from "../../utils/redactSecrets.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-t3sg9e26.js:1004-1014 placement
+//@ chunk-rzkdv0c6.js:1003-1013 placement
 var REPOSITORY_PREPARE_CONCURRENCY = 50;
-//@ chunk-t3sg9e26.js:10294-10757 placement
+//@ chunk-rzkdv0c6.js:10293-10756 placement
 /**
  * BYOC 会话开始前逐个准备代码仓库：跳过不支持的来源类型，按 outcome 里给出的目标分支调用 prepareRepository（默认跳过 reset），记录耗时遥测。
  */
@@ -98,14 +98,14 @@ async function prepareRepositories(options) {
     });
   }
 }
-//@ chunk-t3sg9e26.js:10757-10828 placement
+//@ chunk-rzkdv0c6.js:10756-10827 placement
 /**
  * 导出函数 `isPreparableRepoType`：参数 e，返回 e === "github" || e === "github-ssh" || e === "test-file"。
  */
 function isPreparableRepoType(type) {
   return type === "github" || type === "github-ssh" || type === "test-file";
 }
-//@ chunk-t3sg9e26.js:10828-11050 placement
+//@ chunk-rzkdv0c6.js:10827-11049 placement
 async function prepareRepositoryTimed(options) {
   let now = Date.now();
   try {
@@ -121,7 +121,7 @@ async function prepareRepositoryTimed(options) {
     throw error;
   }
 }
-//@ chunk-t3sg9e26.js:11050-13156 placement
+//@ chunk-rzkdv0c6.js:11049-13155 placement
 /**
  * BYOC 准备仓库：解析目录/引用/目标分支，读取进度上限配置
  */
@@ -209,7 +209,7 @@ async function prepareRepository(options) {
     repoExisted: prepareResult,
   };
 }
-//@ chunk-t3sg9e26.js:13156-13323 placement
+//@ chunk-rzkdv0c6.js:13155-13322 placement
 function reportGitPhase(ctx, phase, durationMs, details) {
   ctx.onDebug(`[byoc:git] phase ${phase} ${durationMs}ms${details ? " " + jsonStringify(details) : ""}`);
   try {
@@ -218,14 +218,14 @@ function reportGitPhase(ctx, phase, durationMs, details) {
     ctx.onDebug(`[byoc:git] onPhase callback threw: ${errorText(error)}`);
   }
 }
-//@ chunk-t3sg9e26.js:13323-13410 placement
+//@ chunk-rzkdv0c6.js:13322-13409 placement
 async function measureGitPhase(ctx, phase, run, details) {
   let now = Date.now();
   let result = await run();
   reportGitPhase(ctx, phase, Date.now() - now, details);
   return result;
 }
-//@ chunk-t3sg9e26.js:13410-14310 placement
+//@ chunk-rzkdv0c6.js:13409-14309 placement
 /**
  * 仓库访问失败分类：原因代码到可读说明的映射、git 错误行到原因的正则表，以及"其他 HTTP 状态码"排除规则。
  */
@@ -249,7 +249,7 @@ var REPO_ACCESS_FAILURE_PATTERNS = [
 ];
 var OTHER_HTTP_ERROR_REGEX =
   /^fatal: unable to access '.*': the requested url returned error: (?!40[14]$)\d+$/;
-//@ chunk-t3sg9e26.js:14310-14694 placement
+//@ chunk-rzkdv0c6.js:14309-14693 placement
 /**
  * 把仓库访问失败的 git 错误输出归类：经 git 代理时识别"代理拒绝访问"，否则按已知错误行模式匹配原因（看门狗超时、输出过长或含排除行时不归类）。
  */
@@ -273,9 +273,9 @@ function classifyRepoAccessFailure(text, checkProxyDenial) {
     if (mapped.some((line) => pattern.test(line))) return reason;
   return;
 }
-//@ chunk-t3sg9e26.js:14694-15255 placement
+//@ chunk-rzkdv0c6.js:14693-15254 placement
 let RepositoryAccessError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-t3sg9e26.js:14694", () => {
+deferInit("chunk-rzkdv0c6.js:14693", () => {
   RepositoryAccessError = class RepositoryAccessError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -310,7 +310,7 @@ deferInit("chunk-t3sg9e26.js:14694", () => {
     }
   };
 });
-//@ chunk-t3sg9e26.js:15255-15808 placement
+//@ chunk-rzkdv0c6.js:15254-15807 placement
 async function validateRepositoryAccess(ctx, repo, checkRefusal) {
   let baseDelayMs = 2000 + Math.random() * 2000;
   let lastError;
@@ -343,7 +343,7 @@ async function validateRepositoryAccess(ctx, repo, checkRefusal) {
     lastAttemptExitCode: lastInfo.exitCode,
   });
 }
-//@ chunk-t3sg9e26.js:15808-16080 placement
+//@ chunk-rzkdv0c6.js:15807-16079 placement
 function staleMountPushInsteadOfKey(line) {
   let match = line.trim().match(/^(url\.(https?:\/\/[^\s@]+)\.pushinsteadof) (\S+)$/i);
   if (!match) return;
@@ -358,9 +358,9 @@ function staleMountPushInsteadOfKey(line) {
   if (pathPart === undefined || !urlPath.endsWith(`/${pathPart}`)) return;
   return key;
 }
-//@ chunk-t3sg9e26.js:16080-16122 placement
+//@ chunk-rzkdv0c6.js:16079-16121 placement
 var CLAUDE_CODE_SESSION_ACCESS_TOKEN = "CLAUDE_CODE_SESSION_ACCESS_TOKEN";
-//@ chunk-t3sg9e26.js:16122-16299 placement
+//@ chunk-rzkdv0c6.js:16121-16298 placement
 function sessionTokenCredentialHelper(line) {
   let match = line.trim().match(/^(credential\.(https?:\/\/[^\s@]+)\.helper) (.+)$/i);
   if (!match) return;
@@ -372,7 +372,7 @@ function sessionTokenCredentialHelper(line) {
       }
     : undefined;
 }
-//@ chunk-t3sg9e26.js:16299-16564 placement
+//@ chunk-rzkdv0c6.js:16298-16563 placement
 function staleMountInsteadOfKey(line, mountBases) {
   let match = line.trim().match(/^(url\.(https?:\/\/[^\s@]+)\.insteadof) (\S+)$/i);
   if (!match) return;
@@ -381,7 +381,7 @@ function staleMountInsteadOfKey(line, mountBases) {
   if (pathPart === undefined) return;
   return mountBases.some((base) => url === `${base}/${pathPart}`) ? key : undefined;
 }
-//@ chunk-t3sg9e26.js:16564-18738 placement
+//@ chunk-rzkdv0c6.js:16563-18737 placement
 /**
  * 配置远程凭据助手，删除过期的 git-mount 凭据助手
  */
@@ -512,7 +512,7 @@ async function configureRemoteCredentials(ctx, baseDir, options) {
   await normalizeRemoteOriginFetch(ctx);
   return false;
 }
-//@ chunk-t3sg9e26.js:18738-18946 placement
+//@ chunk-rzkdv0c6.js:18737-18945 placement
 /**
  * 写 origin URL 的重试次数与间隔，以及隔离用户/系统 git 配置的环境变量组合。
  */
@@ -521,7 +521,7 @@ var ORIGIN_URL_RETRY_BASE_MS;
 var HERMETIC_GIT_CONFIG_ENV;
 var ISOLATED_HOME_ENV;
 var HERMETIC_GIT_ENV;
-deferInit("chunk-t3sg9e26.js:18738", () => {
+deferInit("chunk-rzkdv0c6.js:18737", () => {
   ORIGIN_URL_WRITE_TRIES = 7;
   ORIGIN_URL_RETRY_BASE_MS = 100;
   HERMETIC_GIT_CONFIG_ENV = {
@@ -540,7 +540,7 @@ deferInit("chunk-t3sg9e26.js:18738", () => {
     ...ISOLATED_HOME_ENV,
   };
 });
-//@ chunk-t3sg9e26.js:18946-19377 placement
+//@ chunk-rzkdv0c6.js:18945-19376 placement
 /**
  * 读取裸仓库配置项（如 remote.origin.url）：键不存在返回 undefined，其他失败抛出带修复建议的错误。
  */
@@ -555,7 +555,7 @@ async function readGitConfigOrThrow(ctx, gitDir, args, env) {
     );
   });
 }
-//@ chunk-t3sg9e26.js:19377-20581 placement
+//@ chunk-rzkdv0c6.js:19376-20580 placement
 async function writeRemoteOriginUrl(ctx) {
   let gitDir = join(ctx.repoPath, ".git");
   let gitConfigOrThrow = await readGitConfigOrThrow(ctx, gitDir, ["--get-all", "remote.origin.url"]);
@@ -626,7 +626,7 @@ async function writeRemoteOriginUrl(ctx) {
     });
   }
 }
-//@ chunk-t3sg9e26.js:20581-21060 placement
+//@ chunk-rzkdv0c6.js:20580-21059 placement
 async function normalizeRemoteOriginFetch(ctx) {
   if (ctx.originURL !== ctx.authURL) {
     let filtered = (
@@ -655,7 +655,7 @@ async function normalizeRemoteOriginFetch(ctx) {
     "^\\+?refs/heads/",
   ]).catch((error) => ctx.onDebug(`[byoc:git] Could not normalize remote.origin.fetch: ${errorText(error)}`));
 }
-//@ chunk-t3sg9e26.js:21060-21320 placement
+//@ chunk-rzkdv0c6.js:21059-21319 placement
 function prepFetchRemote(ctx) {
   if (ctx.originURL === ctx.authURL)
     return {
@@ -675,7 +675,7 @@ function prepFetchRemote(ctx) {
     remote,
   };
 }
-//@ chunk-t3sg9e26.js:21320-22981 placement
+//@ chunk-rzkdv0c6.js:21319-22980 placement
 async function fetchAndCheckout(ctx, ref, full, skipFirst, options) {
   let targetRef = ref || "HEAD";
   let buildArgs = () => {
@@ -790,7 +790,7 @@ async function fetchAndCheckout(ctx, ref, full, skipFirst, options) {
       : undefined,
   );
 }
-//@ chunk-t3sg9e26.js:22981-23143 placement
+//@ chunk-rzkdv0c6.js:22980-23142 placement
 function slowFetchConfigArgs(attempt, enabled) {
   let args = [];
   if (enabled && attempt < SLOW_FETCH_CONFIG_AFTER_ATTEMPT)
@@ -803,11 +803,11 @@ function slowFetchConfigArgs(attempt, enabled) {
   if (attempt >= 3) args.push("-c", "http.version=HTTP/1.1");
   return args;
 }
-//@ chunk-t3sg9e26.js:23143-23197 placement
+//@ chunk-rzkdv0c6.js:23142-23196 placement
 function runGitInRepo(ctx, args, options, capMs, extra) {
   return runGit(ctx, ctx.repoPath, args, options, capMs, extra);
 }
-//@ chunk-t3sg9e26.js:23197-25534 placement
+//@ chunk-rzkdv0c6.js:23196-25535 placement
 /**
  * 带重试与总时长上限的 git fetch
  */
@@ -947,7 +947,7 @@ async function fetchWithRetry(ctx, buildArgs, options, stallGiveUp = false, run 
   if (throttle !== undefined) throw new FetchThrottledError(message, throttle);
   throw Error(message);
 }
-//@ chunk-t3sg9e26.js:25534-25999 placement
+//@ chunk-rzkdv0c6.js:25535-26000 placement
 async function checkoutTargetBranch(ctx, targetBranch, options) {
   if (
     (await runGit(ctx, ctx.repoPath, ["branch", "--show-current"]).catch(() => "")).trim() === targetBranch
@@ -966,7 +966,7 @@ async function checkoutTargetBranch(ctx, targetBranch, options) {
     }).catch(() => {});
   }
 }
-//@ chunk-t3sg9e26.js:25999-26212 placement
+//@ chunk-rzkdv0c6.js:26000-26213 placement
 async function fetchAndForceCheckout(ctx, ref, full) {
   await fetchWithRetry(
     ctx,
@@ -986,7 +986,7 @@ async function fetchAndForceCheckout(ctx, ref, full) {
   );
   await runGit(ctx, ctx.repoPath, ["checkout", "--progress", "--force", "-B", ref, "FETCH_HEAD"]);
 }
-//@ chunk-t3sg9e26.js:26212-26353 placement
+//@ chunk-rzkdv0c6.js:26213-26354 placement
 async function remoteBranchExists(ctx, branch) {
   try {
     return (
@@ -997,7 +997,7 @@ async function remoteBranchExists(ctx, branch) {
     return false;
   }
 }
-//@ chunk-t3sg9e26.js:26353-26472 placement
+//@ chunk-rzkdv0c6.js:26354-26473 placement
 async function localRefExists(ctx, ref) {
   try {
     await runGit(ctx, ctx.repoPath, ["rev-parse", "--verify", "--quiet", ref], {
@@ -1008,7 +1008,7 @@ async function localRefExists(ctx, ref) {
     return false;
   }
 }
-//@ chunk-t3sg9e26.js:26472-26597 placement
+//@ chunk-rzkdv0c6.js:26473-26598 placement
 async function isRemoteEmpty(ctx) {
   try {
     return (await runGit(ctx, ctx.repoPath, ["ls-remote", "--symref", ctx.authURL, "HEAD"])).trim() === "";

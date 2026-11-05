@@ -3,11 +3,19 @@
  *
  * WebSearch 工具：搜索预算、CCR 代理或 web_search_20250305 服务端工具的次级查询，结果映射与引用模式
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/WebSearchTool/WebSearchTool.ts
- * pieces: chunk-kxyd0g16.js (6)
- * attribution: fingerprint 4, placement 1, layout 1
+ * pieces: chunk-fmnbrxwy.js (8)
+ * attribution: placement 3, fingerprint 4, layout 1
  */
+import {
+  isSomething,
+  fastSearchModeConfig,
+  WEBSEARCH,
+  ALLOW_WEB_SEARCH,
+  getWebSearchPrompt,
+  isStandardSearchMode,
+} from "./prompt.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   zodStrictObject,
@@ -18,13 +26,6 @@ import {
   union,
   numberSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
-import {
-  getWebSearchFastMode,
-  WEBSEARCH,
-  ALLOW_WEB_SEARCH,
-  getWebSearchPrompt,
-  isStandardSearchMode,
-} from "./prompt.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { truncate } from "../../utils/format.js";
 import { MAX_DESCRIPTION_CHARS } from "../../constants/outputLimits.js";
@@ -41,8 +42,9 @@ import { getIsNonInteractiveSession, getStickyBetas } from "../../bootstrap/stat
 import { plural } from "../../utils/stringUtils.js";
 import { showSettingsHint } from "../../utils/entrypointKinds.js";
 import { BASH_TOOL_NAME } from "../BashTool/toolName.js";
-import { shouldUseCcrWebSearchProxy, ccrProxyWebSearch } from "./UI.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../utils/errors.js";
+import { env } from "../../utils/env.js";
+import { shouldUseCcrWebSearchProxy, ccrProxyWebSearch } from "./UI.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
 import { createUserMessage, extractTextContent_2 } from "../../utils/messages.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
@@ -51,17 +53,22 @@ import { foundrySupportsCapability } from "../../services/api/foundryCapabilitie
 import { queryModelWithStreaming } from "../../services/api/claude.js";
 import { asSystemPrompt } from "../../utils/systemPromptType.js";
 import { forkStickyBetaLatches } from "../../bootstrap/stateSlices.js";
-import { env } from "../../utils/env.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:40238-40942 fingerprint (2.1.88 match: inputSchema, 0.49)
+//@ chunk-fmnbrxwy.js:54115-54127 placement
+var searchService = null;
+//@ chunk-fmnbrxwy.js:54127-54162 placement
+function getSearchService() {
+  return isSomething() ? searchService : null;
+}
+//@ chunk-fmnbrxwy.js:54162-54866 fingerprint (2.1.88 match: inputSchema, 0.489)
 /**
  * WebSearch 输入 schema：query（≥2 字符）、allowed_domains、blocked_domains；Ts 在快搜实验开启时追加 mode（standard/extended，默认 extended，描述取远程配置）；bs 为单条搜索结果块 schema。
  */
 var webSearchInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var webSearchInputSchemaWithMode;
 var searchResultBlockSchema;
-deferInit("chunk-kxyd0g16.js:40238", () => {
+deferInit("chunk-fmnbrxwy.js:54162", () => {
   webSearchInputSchema = DoctorLazy(() =>
     zodStrictObject({
       query: stringSchema().min(2).describe("The search query to use"),
@@ -76,7 +83,7 @@ deferInit("chunk-kxyd0g16.js:40238", () => {
   webSearchInputSchemaWithMode = DoctorLazy(() =>
     webSearchInputSchema().extend({
       mode: _enum(["standard", "extended"])
-        .describe(getWebSearchFastMode()?.mode_description ?? "")
+        .describe(fastSearchModeConfig()?.mode_description ?? "")
         .prefault("extended"),
     }),
   );
@@ -94,19 +101,19 @@ deferInit("chunk-kxyd0g16.js:40238", () => {
     });
   });
 });
-//@ chunk-kxyd0g16.js:40942-40981 placement (2.1.88 match: getSnippet, 0.688)
+//@ chunk-fmnbrxwy.js:54866-54905 placement
 /**
  * 返回去掉 snippet 字段的对象（归属疑似错误）。
  */
 function omitSnippet({ snippet, ...rest }) {
   return rest;
 }
-//@ chunk-kxyd0g16.js:40981-41296 fingerprint (2.1.88 match: outputSchema, 0.735)
+//@ chunk-fmnbrxwy.js:54905-55220 fingerprint (2.1.88 match: outputSchema, 0.735)
 /**
  * WebSearch 输出 schema：query、results（结果块或模型文字混排）、durationSeconds、searchCount。
  */
 var outputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kxyd0g16.js:40981", () => {
+deferInit("chunk-fmnbrxwy.js:54905", () => {
   outputSchema = DoctorLazy(() =>
     objectSchema({
       query: stringSchema().describe("The search query that was executed"),
@@ -118,7 +125,7 @@ deferInit("chunk-kxyd0g16.js:40981", () => {
     }),
   );
 });
-//@ chunk-kxyd0g16.js:41296-41839 fingerprint (2.1.88 match: makeOutputFromSearchResponse, 0.949)
+//@ chunk-fmnbrxwy.js:55220-55763 fingerprint (2.1.88 match: makeOutputFromSearchResponse, 0.95)
 /**
  * 把次级查询的 content 块整理成输出：server_tool_use 处切分文字段，web_search_tool_result 转成 {tool_use_id, content:[{title,url}]}，错误块转成 "Web search error: <code>"；searchCount 取两类块计数的最大值。
  */
@@ -163,7 +170,7 @@ function makeOutputFromSearchResponse(result, query, durationSeconds) {
     searchCount: Math.max(searchCount, resultCount),
   };
 }
-//@ chunk-kxyd0g16.js:41839-41901 layout
+//@ chunk-fmnbrxwy.js:55763-55825 layout
 /**
  * 工具使用摘要：截断后的 query。
  */
@@ -171,12 +178,12 @@ function getWebSearchToolUseSummary(input) {
   if (!input?.query) return null;
   return truncate(input.query, MAX_DESCRIPTION_CHARS);
 }
-//@ chunk-kxyd0g16.js:41901-49449 fingerprint (2.1.88 match: WebSearchTool, 0.584)
+//@ chunk-fmnbrxwy.js:55825-64163 fingerprint (2.1.88 match: WebSearchTool, 0.56)
 /**
  * WebSearch 工具定义（name "WebSearch"，shouldDefer，只读可并发，maxResultSizeChars 100000）。isEnabled：需要 allow_web_search 开关，且 API 提供方为 firstParty（或 gI 判定的兼容方）/foundry，vertex 看模型是否支持，gateway 一律关。call：先扣会话/轮次搜索预算（用尽时返回不搜索的说明，禁止用 curl/浏览器绕开）；有 CCR 代理时走代理；否则用 web_search_20250305 服务端工具（max_uses 8，强制 toolChoice）发起一次次级流式查询，从流里解析 query 增量与结果数做进度。checkPermissions 返回 passthrough + localSettings allow 建议。
  */
 var WebSearchTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kxyd0g16.js:41901", () => {
+deferInit("chunk-fmnbrxwy.js:55825", () => {
   WebSearchTool = buildTool({
     name: WEBSEARCH,
     searchHint: "search the web for current information",
@@ -204,7 +211,7 @@ deferInit("chunk-kxyd0g16.js:41901", () => {
       return false;
     },
     get inputSchema() {
-      return getWebSearchFastMode() ? webSearchInputSchemaWithMode() : webSearchInputSchema();
+      return fastSearchModeConfig() ? webSearchInputSchemaWithMode() : webSearchInputSchema();
     },
     get outputSchema() {
       return outputSchema();
@@ -216,7 +223,7 @@ deferInit("chunk-kxyd0g16.js:41901", () => {
       return true;
     },
     coerceInput(input) {
-      if (getWebSearchFastMode() || !isPlainObject(input) || !("mode" in input)) return null;
+      if (fastSearchModeConfig() || !isPlainObject(input) || !("mode" in input)) return null;
       let { mode, ...rest } = input;
       return {
         input: rest,
@@ -224,15 +231,16 @@ deferInit("chunk-kxyd0g16.js:41901", () => {
       };
     },
     toAutoClassifierInput(input) {
-      return input.query;
+      return getSearchService()?.queryAsSent(input.query, input) ?? input.query;
     },
     async prompt({ model, leanPrompt }) {
       let webSearchPrompt = getWebSearchPrompt(model, leanPrompt);
-      let webSearchAddendum = getWebSearchFastMode()?.web_search_addendum;
-      return webSearchAddendum
+      let servicePrompt =
+        getSearchService()?.SEARCH_SERVICE_PROMPT ?? fastSearchModeConfig()?.web_search_addendum;
+      return servicePrompt
         ? `${webSearchPrompt.trimEnd()}
 
-${webSearchAddendum}
+${servicePrompt}
 `
         : webSearchPrompt;
     },
@@ -287,6 +295,13 @@ ${webSearchAddendum}
               result: false,
               message: "Error: Cannot specify both allowed_domains and blocked_domains in the same request",
               errorCode: 2,
+            };
+          let serviceRefusal = getSearchService()?.searchServiceInputRefusal(query, input);
+          if (serviceRefusal)
+            return {
+              result: false,
+              message: serviceRefusal,
+              errorCode: 3,
             };
           return {
             result: true,
@@ -346,6 +361,48 @@ ${webSearchAddendum}
                 ],
                 durationSeconds: 0,
                 searchCount: 0,
+              },
+            };
+          }
+          let service = getSearchService();
+          if (service) {
+            let markExternal = timing?.mark("external");
+            let serviceResult = await service
+              .searchViaSearchService(query, input, signal, () => webSearchBudget.acquireDirectSearchSlot())
+              .finally(markExternal);
+            if (!serviceResult.ok)
+              throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+                serviceResult.message,
+                "web-search-service",
+              );
+            onProgress?.({
+              type: "progress",
+              toolUseID: "search-service-1",
+              data: {
+                type: "search_results_received",
+                resultCount: serviceResult.results.length,
+                query,
+              },
+            });
+            return {
+              data: {
+                query,
+                results: [
+                  {
+                    tool_use_id: "search-service-1",
+                    content:
+                      ctx.agentId !== undefined && env.CLAUDE_CODE_WEBSEARCH_CITATIONS
+                        ? serviceResult.results.map(omitSnippet)
+                        : serviceResult.results,
+                  },
+                  ...(serviceResult.leftOut > 0
+                    ? [
+                        `${serviceResult.leftOut} ${plural(serviceResult.leftOut, "result")} left out by allowed_domains or blocked_domains.`,
+                      ]
+                    : []),
+                ],
+                durationSeconds: (performance.now() - startTime) / 1000,
+                searchCount: 1,
               },
             };
           }
@@ -522,14 +579,14 @@ ${webSearchAddendum}
           if (getAPIProvider() === "foundry" && !foundrySupportsCapability(searchModel, "web_search"))
             throw Error("Web search is not available on this Foundry deployment.");
           let durationSeconds = (performance.now() - startTime) / 1000;
-          let data = makeOutputFromSearchResponse(result, query, durationSeconds);
-          if (apiErrorText !== null && data.results.length === 0)
+          let outputFromSearchResponse = makeOutputFromSearchResponse(result, query, durationSeconds);
+          if (apiErrorText !== null && outputFromSearchResponse.results.length === 0)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
               apiErrorText,
               "web-search-side-query-api-error",
             );
           return {
-            data,
+            data: outputFromSearchResponse,
           };
         },
       };
@@ -545,14 +602,14 @@ ${webSearchAddendum}
             },
       ),
     }),
-    mapToolResultToToolResultBlockParam(output, toolUseID) {
+    mapToolResultToToolResultBlockParam(output, toolUseId) {
       let { query, results } = output;
       let flattened = (results ?? []).flatMap((result) =>
         result == null || typeof result === "string" ? [] : (result.content ?? []),
       );
       if (env.CLAUDE_CODE_WEBSEARCH_CITATIONS && flattened.some((contentItem) => contentItem.snippet))
         return {
-          tool_use_id: toolUseID,
+          tool_use_id: toolUseId,
           type: "tool_result",
           content: flattened.map((contentItem) => ({
             type: "search_result",
@@ -592,7 +649,7 @@ ${webSearchAddendum}
       resultText += `
 REMINDER: You MUST include the sources above in your response to the user using markdown hyperlinks.`;
       return {
-        tool_use_id: toolUseID,
+        tool_use_id: toolUseId,
         type: "tool_result",
         content: resultText.trim(),
       };

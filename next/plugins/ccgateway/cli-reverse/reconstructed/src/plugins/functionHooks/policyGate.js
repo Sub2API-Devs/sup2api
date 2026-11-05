@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：托管策略对函数钩子插件的放行判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (12)
  * attribution: placement 12
  */
 import {
@@ -13,7 +13,7 @@ import {
   getAdminAuthoredPolicySettings,
   allowListEntriesThatVouch,
   getSettings_DEPRECATED,
-  getSettingsWithErrors_2,
+  getSettingsWithErrors,
 } from "../../utils/settings/settings.js";
 import { getPluginAffectingSettingsSnapshot } from "../../utils/plugins/loadPluginHooks.js";
 import { TRUSTED_SETTING_SOURCES as TRUSTED_SETTING_SOURCES_2 } from "../../utils/plugins/pluginConfigSources.js";
@@ -35,12 +35,12 @@ import { errorMessage } from "../../utils/errors.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
 import { env } from "../../utils/env.js";
 
-//@ chunk-e6aww6q8.js:4118038-4118103 placement
+//@ chunk-5xgkngpb.js:4223991-4224056 placement
 /**
  * 按键排序的条目
  */
 var sortedEntries = (record) => Object.fromEntries(Object.entries(record ?? {}).toSorted());
-//@ chunk-e6aww6q8.js:4118103-4118220 placement
+//@ chunk-5xgkngpb.js:4224056-4224173 placement
 /**
  * 读取某设置来源里与插件有关的部分（enabledPlugins、pluginConfigs，键排序）。
  */
@@ -52,7 +52,7 @@ function readSourcePluginSettings(source) {
     pluginConfigs: sortedEntries(settingsForSource?.pluginConfigs),
   };
 }
-//@ chunk-e6aww6q8.js:4118220-4118555 placement
+//@ chunk-5xgkngpb.js:4224173-4224508 placement
 /**
  * 读取管理员策略中与插件来源有关的部分（额外/严格已知市场）以及插件影响设置快照中的启用与命名。
  */
@@ -70,7 +70,7 @@ function readAdminPluginPolicy() {
     },
   };
 }
-//@ chunk-e6aww6q8.js:4118555-4119194 placement
+//@ chunk-5xgkngpb.js:4224508-4225147 placement
 function readManagedHooksPolicy() {
   let settings_DEPRECATED = getSettings_DEPRECATED();
   let settingsForSource = getSettingsForSource("policySettings");
@@ -95,23 +95,23 @@ function readManagedHooksPolicy() {
     allDisabled: shouldDisableAllHooksIncludingManaged(),
   };
 }
-//@ chunk-e6aww6q8.js:4119194-4119214 placement
+//@ chunk-5xgkngpb.js:4225147-4225167 placement
 /**
  * 托管钩子策略快照
  */
 var managedHooksPolicyStamp = () => jsonStringify(readManagedHooksPolicy());
-//@ chunk-e6aww6q8.js:4119214-4119268 placement
+//@ chunk-5xgkngpb.js:4225167-4225221 placement
 /**
  * 策略快照是否仍然一致
  */
 var isPolicyStampCurrent = (policy) =>
   policy.readUnder === undefined || policy.readUnder === managedHooksPolicyStamp();
-//@ chunk-e6aww6q8.js:4119268-4119278 placement
+//@ chunk-5xgkngpb.js:4225221-4225231 placement
 /**
  * 2
  */
 var POLICY_REREAD_TRIES = 2;
-//@ chunk-e6aww6q8.js:4119278-4119374 placement
+//@ chunk-5xgkngpb.js:4225231-4225327 placement
 /**
  * 读到策略稳定为止
  */
@@ -121,12 +121,12 @@ async function readStablePolicy(policy, triesLeft = POLICY_REREAD_TRIES) {
     ? read
     : readStablePolicy(await rereadPluginSettings(policy, read), triesLeft - 1);
 }
-//@ chunk-e6aww6q8.js:4119374-4119384 placement
+//@ chunk-5xgkngpb.js:4225327-4225337 placement
 /**
  * 空串
  */
 var EMPTY_POLICY_STAMP = "";
-//@ chunk-e6aww6q8.js:4119384-4119561 placement
+//@ chunk-5xgkngpb.js:4225337-4225514 placement
 /**
  * 生成当前托管钩子策略的序列化快照，用于判断读取插件后策略是否变化；失败时返回空串（强制重读）。
  */
@@ -143,26 +143,26 @@ function managedHooksPolicyStamp_2() {
     return EMPTY_POLICY_STAMP;
   }
 }
-//@ chunk-e6aww6q8.js:4159877-4159947 placement
+//@ chunk-5xgkngpb.js:4266214-4266284 placement
 /**
  * 演示或 claubbet 环境
  */
 function isDemoOrClaubbet() {
   return isEnvTruthy(false) || Boolean(env.IS_DEMO) || Boolean(env.CLAUBBIT);
 }
-//@ chunk-e6aww6q8.js:4159947-4159986 placement
+//@ chunk-5xgkngpb.js:4266284-4266323 placement
 /**
  * 取合并后设置
  */
 function computedSettings(hookedMerge) {
-  getSettingsWithErrors_2();
+  getSettingsWithErrors();
   return hookedMerge.computed;
 }
 export {
-  isDemoOrClaubbet,
   managedHooksPolicyStamp_2,
   EMPTY_POLICY_STAMP,
   readStablePolicy,
+  isDemoOrClaubbet,
   managedHooksPolicyStamp,
   computedSettings,
   sortedEntries,

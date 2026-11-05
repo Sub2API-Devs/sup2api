@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 模拟中继：本地管道服务器，把子会话的 MCP 调用转给替身（固定回答、回放、代理应答者）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (28)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (28)
  * attribution: placement 28
  */
 import { mkdir, writeFile, mkdtemp, rm as rm_2 } from "fs/promises";
@@ -60,7 +60,7 @@ import { runMockResponderQuery, MOCK_OUTPUT_MAX_CHARS } from "./agentMockRespond
 import { truncateMiddle as truncateMiddle_2 } from "../../../memdir/memoryTool.js";
 import { canonicalJsonStringify } from "../canonicalJson.js";
 
-//@ chunk-qchp9vrd.js:242327-242378 placement
+//@ chunk-af1hzzme.js:243746-243797 placement
 /**
  * 空的模拟状态（已声明服务器 + 层级）。
  */
@@ -70,13 +70,13 @@ function emptyMockState() {
     layers: emptyMockLayers(),
   };
 }
-//@ chunk-qchp9vrd.js:242378-242518 placement
+//@ chunk-af1hzzme.js:243797-243937 placement
 var UNENUMERABLE_REASONS = {
   archive: "it is an archive the child extracts",
   manifest: "its manifest does not load",
   mcpb: "it declares them through an MCPB bundle",
 };
-//@ chunk-qchp9vrd.js:242518-243507 placement
+//@ chunk-af1hzzme.js:243937-244926 placement
 async function enumerateMockedServersForRun(
   caseContext,
   pluginDir,
@@ -129,7 +129,7 @@ ${caseContext.pluginDirs.join(`
     notes: [...mapped, ...plan.notes],
   };
 }
-//@ chunk-qchp9vrd.js:243507-243806 placement
+//@ chunk-af1hzzme.js:244926-245225 placement
 function describeMockMode(servers) {
   return servers
     .map((server) => {
@@ -139,26 +139,26 @@ function describeMockMode(servers) {
     })
     .join(", ");
 }
-//@ chunk-qchp9vrd.js:243806-243815 placement
+//@ chunk-af1hzzme.js:245225-245234 placement
 /**
  * 每回合调用预算系数（4）。
  */
 var CALLS_PER_TURN = 4;
-//@ chunk-qchp9vrd.js:243815-243842 placement
+//@ chunk-af1hzzme.js:245234-245261 placement
 /**
  * 按回合数计算调用预算。
  */
 function callBudgetForTurns(maxTurns) {
   return CALLS_PER_TURN * maxTurns;
 }
-//@ chunk-qchp9vrd.js:243842-244104 placement
+//@ chunk-af1hzzme.js:245261-245523 placement
 function describeMissingToolsJsonEntry(mocks) {
   return listUnlistedTools(mocks).map(
     (unlisted) =>
       `${unlisted.server}: no _tools.json entry for ${unlisted.tools.join(", ")} \u2014 served with a permissive schema and no description; save the server's tools/list response as mocks/${unlisted.server}/_tools.json so the model sees the real tool`,
   );
 }
-//@ chunk-qchp9vrd.js:244104-244634 placement
+//@ chunk-af1hzzme.js:245523-246053 placement
 class MockManagedEnvError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   names;
   constructor(names) {
@@ -170,7 +170,7 @@ class MockManagedEnvError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE
     this.name = "MockManagedEnvError";
   }
 }
-//@ chunk-qchp9vrd.js:244634-245095 placement
+//@ chunk-af1hzzme.js:246053-246514 placement
 class MockPolicyBlockedError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   registeredNames;
   constructor(names) {
@@ -183,7 +183,7 @@ class MockPolicyBlockedError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_C
     this.name = "MockPolicyBlockedError";
   }
 }
-//@ chunk-qchp9vrd.js:245095-245751 placement
+//@ chunk-af1hzzme.js:246514-247170 placement
 class MockWithholdPolicyError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   registeredNames;
   constructor(names) {
@@ -196,7 +196,7 @@ class MockWithholdPolicyError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_
     this.name = "MockWithholdPolicyError";
   }
 }
-//@ chunk-qchp9vrd.js:245751-246338 placement
+//@ chunk-af1hzzme.js:247170-247757 placement
 class MockEnterpriseExclusiveError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   mockDirs;
   constructor(mockDirs) {
@@ -208,7 +208,7 @@ class MockEnterpriseExclusiveError extends TelemetrySafeError_I_VERIFIED_THIS_IS
     this.name = "MockEnterpriseExclusiveError";
   }
 }
-//@ chunk-qchp9vrd.js:246338-248211 placement
+//@ chunk-af1hzzme.js:247757-249630 placement
 /**
  * 写入本次运行的替身配置；托管 managed-mcp.json 独占时提示无法注册。
  */
@@ -307,21 +307,21 @@ async function writeRunMocks(servers, arm, evalTempDir, options) {
     })),
   };
 }
-//@ chunk-qchp9vrd.js:248211-248234 placement
+//@ chunk-af1hzzme.js:249630-249653 placement
 /**
  * 恒真（占位）。
  */
 function alwaysTrue() {
   return true;
 }
-//@ chunk-qchp9vrd.js:248234-248325 placement
+//@ chunk-af1hzzme.js:249653-249744 placement
 /**
  * 统计运行中的录制总条数。
  */
 function countRecordings(loaded) {
   return Object.values(loaded.recordings).reduce((acc, recording) => acc + Object.keys(recording).length, 0);
 }
-//@ chunk-qchp9vrd.js:248514-248625 placement
+//@ chunk-af1hzzme.js:249933-250044 placement
 var mockRelayRequestSchema = DoctorLazy(() =>
   objectSchema({
     token: stringSchema(),
@@ -334,7 +334,7 @@ var MAX_MOCK_MESSAGE_BYTES = 1048576;
 var MAX_MOCK_SERVERS = 40;
 var MOCK_RELAY_TIMEOUT_MS = 30000;
 var MAX_MOCK_LINE_BYTES = 16384;
-//@ chunk-qchp9vrd.js:248625-250277 placement
+//@ chunk-af1hzzme.js:250044-251696 placement
 /**
  * 创建 cc-eval-agent- 命名管道/套接字。
  */
@@ -465,14 +465,14 @@ async function createMockRelayPipe({ credentials }) {
     },
   };
 }
-//@ chunk-qchp9vrd.js:250277-250334 placement
+//@ chunk-af1hzzme.js:251696-251753 placement
 /**
  * 关闭流并等待完成。
  */
 function closeStream(server) {
   return new Promise((resolve) => server.close(() => resolve()));
 }
-//@ chunk-qchp9vrd.js:250334-250961 placement
+//@ chunk-af1hzzme.js:251753-252380 placement
 function readMockRelayRequest(socket, runsByToken) {
   let buffer = Buffer.alloc(0);
   let replied = false;
@@ -512,7 +512,7 @@ function readMockRelayRequest(socket, runsByToken) {
     });
   });
 }
-//@ chunk-qchp9vrd.js:250961-251679 placement
+//@ chunk-af1hzzme.js:252380-253097 placement
 async function handleMockRelayRequest(raw, runsByToken) {
   let request;
   try {
@@ -557,7 +557,7 @@ async function handleMockRelayRequest(raw, runsByToken) {
   tokenEntry.queue = answerPromise.catch(() => {});
   return answerPromise;
 }
-//@ chunk-qchp9vrd.js:251679-251740 placement
+//@ chunk-af1hzzme.js:253097-253158 placement
 /**
  * 按 token 查找条目（恒定时间比较）。
  */
@@ -566,7 +566,7 @@ function findTokenEntry(entries, token) {
     if (timingSafeEqualStrings(token, candidateToken)) return value;
   return;
 }
-//@ chunk-qchp9vrd.js:251740-252749 placement
+//@ chunk-af1hzzme.js:253158-254166 placement
 async function answerMockCall(run, call) {
   if (run.aborted !== null)
     return {
@@ -625,7 +625,7 @@ async function answerMockCall(run, call) {
   run.history.set(spec.server, entries);
   return answer;
 }
-//@ chunk-qchp9vrd.js:252749-254085 placement
+//@ chunk-af1hzzme.js:254166-255502 placement
 /**
  * 按回放录制、固定回答或代理应答者回答一次调用，检查 expect 输入约束。
  */
@@ -728,24 +728,24 @@ ${reply.text}`,
     replay: "miss",
   };
 }
-//@ chunk-qchp9vrd.js:254085-254102 placement
+//@ chunk-af1hzzme.js:255502-255519 placement
 /**
  * 单次调用最多固定的录制条数（200）。
  */
 var MAX_TOOL_NAME_CHARS = 80;
 var MAX_RECORDINGS_PER_CALL = 200;
-//@ chunk-qchp9vrd.js:254102-254199 placement
+//@ chunk-af1hzzme.js:255519-255616 placement
 function describeMockBudgetExceeded(run) {
   return `mock call budget exceeded (${run.callBudget} agent-answered calls this run)`;
 }
-//@ chunk-qchp9vrd.js:254199-254255 placement
+//@ chunk-af1hzzme.js:255616-255671 placement
 /**
  * 行内容超长时截断。
  */
 function truncateLine(text) {
   return text.length > MAX_MOCK_LINE_BYTES ? `${truncateToLength(text, MAX_MOCK_LINE_BYTES)}\u2026` : text;
 }
-//@ chunk-qchp9vrd.js:254255-254316 placement
+//@ chunk-af1hzzme.js:255671-255732 placement
 /**
  * 输入 JSON 超长时截断。
  */
@@ -753,7 +753,7 @@ function truncateInput(input) {
   let json = jsonStringify(input) ?? "null";
   return json.length > MAX_MOCK_LINE_BYTES ? truncateLine(json) : input;
 }
-//@ chunk-qchp9vrd.js:254316-254380 placement
+//@ chunk-af1hzzme.js:255732-255796 placement
 /**
  * 生成输出键（tool_error 时中间截断）。
  */
@@ -761,7 +761,7 @@ function outputKey(text, verdict) {
   let trimmed = text.trim();
   return verdict === "tool_error" ? truncateMiddle_2(trimmed) : trimmed;
 }
-//@ chunk-qchp9vrd.js:254380-254443 placement
+//@ chunk-af1hzzme.js:255796-255859 placement
 /**
  * 计算值的规范 JSON 哈希。
  */

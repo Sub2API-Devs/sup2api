@@ -3,10 +3,10 @@
  *
  * 并入旧版已有路径：elicitation 校验。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/mcp/elicitationValidation.ts
- * pieces: chunk-18hwfzwa.js (24), chunk-e6aww6q8.js (1), chunk-s4bxxzsw.js (1)
- * attribution: affinity 1, fingerprint 11, layout 2, file-local 3, placement 9
+ * pieces: chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (24)
+ * attribution: fingerprint 11, affinity 1, layout 2, file-local 2, placement 9
  */
 import { modelSupportsStructuredOutputs, BETA_STRUCTURED_OUTPUTS } from "../betas.js";
 import { isStructuredOutputsUnsupportedClaude } from "../../services/api/claude.js";
@@ -21,33 +21,27 @@ import {
   replaceLineBreaks,
   stripUnsafeChars,
 } from "../permissions/approvalPayloadSerialization.js";
-import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2651592-2651710 fingerprint (2.1.88 match: hasStringFormat, 1)
-function hasStringFormat(outputFormat, outputConfig, betas, model) {
+//@ chunk-5xgkngpb.js:2712668-2712786 fingerprint (2.1.88 match: hasStringFormat, 1)
+function hasStringFormat(outputFormat, request, betas, model) {
   if (
     !outputFormat ||
-    "format" in outputConfig ||
+    "format" in request ||
     !modelSupportsStructuredOutputs(model) ||
     isStructuredOutputsUnsupportedClaude(model)
   )
     return false;
-  outputConfig.format = outputFormat;
+  request.format = outputFormat;
   if (!betas.includes(BETA_STRUCTURED_OUTPUTS)) betas.push(BETA_STRUCTURED_OUTPUTS);
   return true;
 }
-//@ chunk-s4bxxzsw.js:7715-7745 file-local
-var STRING_FORMATS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s4bxxzsw.js:7715", () => {
-  STRING_FORMATS = new Set(["date-time"]);
-});
-//@ chunk-18hwfzwa.js:1201454-1201517 affinity
+//@ chunk-czq1j3j2.js:1231617-1231680 affinity
 function looksLikeIsoDate(stringValue) {
   return /^\d{4}-\d{2}-\d{2}(T|$)/.test(stringValue.trim());
 }
-//@ chunk-18hwfzwa.js:1201517-1201578 fingerprint (2.1.88 match: isEnumSchema, 1)
+//@ chunk-czq1j3j2.js:1231680-1231741 fingerprint (2.1.88 match: isEnumSchema, 1)
 var isEnumSchema = (schema) => schema.type === "string" && ("enum" in schema || "oneOf" in schema);
-//@ chunk-18hwfzwa.js:1201578-1201716 fingerprint (2.1.88 match: isMultiSelectEnumSchema, 1)
+//@ chunk-czq1j3j2.js:1231741-1231879 fingerprint (2.1.88 match: isMultiSelectEnumSchema, 1)
 function isMultiSelectEnumSchema(schema) {
   return (
     schema.type === "array" &&
@@ -57,17 +51,17 @@ function isMultiSelectEnumSchema(schema) {
     ("enum" in schema.items || "anyOf" in schema.items)
   );
 }
-//@ chunk-18hwfzwa.js:1201716-1201808 layout
+//@ chunk-czq1j3j2.js:1231879-1231971 layout
 function isConstOption(schema) {
   return (
     schema !== null && typeof schema === "object" && "const" in schema && typeof schema.const === "string"
   );
 }
-//@ chunk-18hwfzwa.js:1201808-1201850 layout
+//@ chunk-czq1j3j2.js:1231971-1232013 layout
 function isString(value) {
   return typeof value === "string";
 }
-//@ chunk-18hwfzwa.js:1201850-1202070 fingerprint (2.1.88 match: getMultiSelectValues, 1)
+//@ chunk-czq1j3j2.js:1232013-1232233 fingerprint (2.1.88 match: getMultiSelectValues, 1)
 /**
  * getMultiSelectValues：多选 schema（items.anyOf 的 const 或 items.enum）的取值列表。
  */
@@ -80,7 +74,7 @@ function getMultiSelectValues(schema) {
     return Array.isArray(schema.items.enum) ? schema.items.enum.filter(isString) : [];
   return [];
 }
-//@ chunk-18hwfzwa.js:1202070-1202291 fingerprint (2.1.88 match: getMultiSelectLabels, 1)
+//@ chunk-czq1j3j2.js:1232233-1232454 fingerprint (2.1.88 match: getMultiSelectLabels, 1)
 /**
  * getMultiSelectLabels：多选 schema 的显示标签（anyOf 的 title 或 enum 值）。
  */
@@ -93,12 +87,12 @@ function getMultiSelectLabels(schema) {
     return Array.isArray(schema.items.enum) ? schema.items.enum.filter(isString) : [];
   return [];
 }
-//@ chunk-18hwfzwa.js:1202291-1202358 file-local
+//@ chunk-czq1j3j2.js:1232454-1232521 file-local
 function getMultiSelectLabel(schema, value) {
   let index = getMultiSelectValues(schema).indexOf(value);
   return index >= 0 ? (getMultiSelectLabels(schema)[index] ?? value) : value;
 }
-//@ chunk-18hwfzwa.js:1202358-1202542 fingerprint (2.1.88 match: getEnumValues, 1)
+//@ chunk-czq1j3j2.js:1232521-1232705 fingerprint (2.1.88 match: getEnumValues, 1)
 /**
  * getEnumValues：单选 schema（oneOf const 或 enum）的取值列表。
  */
@@ -110,7 +104,7 @@ function getEnumValues(schema) {
   if ("enum" in schema) return Array.isArray(schema.enum) ? schema.enum.filter(isString) : [];
   return [];
 }
-//@ chunk-18hwfzwa.js:1202542-1202837 fingerprint (2.1.88 match: getEnumLabels, 1)
+//@ chunk-czq1j3j2.js:1232705-1233000 fingerprint (2.1.88 match: getEnumLabels, 1)
 /**
  * getEnumLabels：单选 schema 的显示标签（oneOf title、enumNames 或 enum 值）。
  */
@@ -127,12 +121,12 @@ function getEnumLabels(schema) {
   }
   return [];
 }
-//@ chunk-18hwfzwa.js:1202837-1202904 file-local
+//@ chunk-czq1j3j2.js:1233000-1233067 file-local
 function getEnumLabel(schema, value) {
   let index = getEnumValues(schema).indexOf(value);
   return index >= 0 ? (getEnumLabels(schema)[index] ?? value) : value;
 }
-//@ chunk-18hwfzwa.js:1202904-1204340 fingerprint (2.1.88 match: getZodSchema, 0.947)
+//@ chunk-czq1j3j2.js:1233067-1234503 fingerprint (2.1.88 match: getZodSchema, 0.947)
 /**
  * getZodSchema：把 elicitation 的原始属性 schema 转成 zod（枚举、字符串长度与 email/uri/date/date-time 格式、数字范围/整数、布尔），错误消息面向用户。
  */
@@ -209,7 +203,7 @@ function getZodSchema(schema) {
   if (schema.type === "boolean") return coerceBoolean();
   throw Error(`Unsupported schema: ${jsonStringify(schema)}`);
 }
-//@ chunk-18hwfzwa.js:1204340-1204501 fingerprint (2.1.88 match: validateElicitationInput, 1)
+//@ chunk-czq1j3j2.js:1234503-1234664 fingerprint (2.1.88 match: validateElicitationInput, 1)
 /**
  * validateElicitationInput：用 getZodSchema 校验输入字符串，返回 {isValid, value|error}。
  */
@@ -225,7 +219,7 @@ function validateElicitationInput(stringValue, schema) {
     error: parseResult.error.issues.map((e) => e.message).join("; "),
   };
 }
-//@ chunk-18hwfzwa.js:1204501-1204600 fingerprint (2.1.88 match: isDateTimeSchema, 1)
+//@ chunk-czq1j3j2.js:1234664-1234763 fingerprint (2.1.88 match: isDateTimeSchema, 1)
 function isDateTimeSchema(schema) {
   return (
     schema.type === "string" &&
@@ -233,7 +227,7 @@ function isDateTimeSchema(schema) {
     (schema.format === "date" || schema.format === "date-time")
   );
 }
-//@ chunk-18hwfzwa.js:1204600-1204791 fingerprint (2.1.88 match: validateElicitationInputAsync, 1)
+//@ chunk-czq1j3j2.js:1234763-1234954 fingerprint (2.1.88 match: validateElicitationInputAsync, 1)
 /**
  * validateElicitationInputAsync：同步校验失败且字段为 date/date-time、输入不像 ISO 日期时，调用 parseNaturalLanguageDateTime 解析后再校验。
  */
@@ -249,13 +243,13 @@ async function validateElicitationInputAsync(stringValue, schema, signal, creden
   }
   return syncResult;
 }
-//@ chunk-18hwfzwa.js:1204899-1204941 placement
+//@ chunk-czq1j3j2.js:1234954-1234996 placement
 /**
  * URL 字段成本估算的上限与需转义字符正则。
  */
 var MAX_URL_COST_CHARS = 8000;
 var URL_ESCAPE_CHARS_RE = /[()\][%!^"`<>&|;, *?]/g;
-//@ chunk-18hwfzwa.js:1204941-1205061 placement
+//@ chunk-czq1j3j2.js:1234996-1235116 placement
 /**
  * 估算 URL 字段的编码成本（长度加上需转义字符的额外开销）。
  */
@@ -268,27 +262,27 @@ function elicitationUrlCost(url) {
     16
   );
 }
-//@ chunk-18hwfzwa.js:1205061-1205081 placement
+//@ chunk-czq1j3j2.js:1235116-1235136 placement
 /**
  * URL 字段字符上限与分片数上限。
  */
 var MAX_URL_FIELD_CHARS = 1000;
 var MAX_URL_PARTS = 16;
-//@ chunk-18hwfzwa.js:1205081-1205109 placement
+//@ chunk-czq1j3j2.js:1235136-1235164 placement
 /**
  * 取字段标签，无标签返回空串。
  */
 function labelOrEmpty(serverName) {
   return labelOrEmpty_2(serverName);
 }
-//@ chunk-18hwfzwa.js:1205109-1205190 placement
+//@ chunk-czq1j3j2.js:1235164-1235245 placement
 /**
  * 枚举标签的展示宽度、标量类型判定与脱敏占位文本。
  */
 var MAX_ENUM_LABEL_CHARS = 12;
 var isScalarSchemaType = (schema) => ["string", "number", "integer"].includes(schema.type);
 var REDACTED_FIELD_TEXT = "********";
-//@ chunk-18hwfzwa.js:1205353-1205437 placement
+//@ chunk-czq1j3j2.js:1235408-1235492 placement
 /**
  * 判断值是否为空（undefined/null/空串/空数组）。
  */
@@ -297,7 +291,7 @@ function isBlankValue(value) {
     value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0)
   );
 }
-//@ chunk-18hwfzwa.js:1205437-1205530 placement
+//@ chunk-czq1j3j2.js:1235492-1235585 placement
 /**
  * 取对象中值为对象类型的字段条目。
  */
@@ -306,7 +300,7 @@ function objectFieldEntries(properties) {
     (entry) => typeof entry[1] === "object" && entry[1] !== null,
   );
 }
-//@ chunk-18hwfzwa.js:1205530-1205755 placement
+//@ chunk-czq1j3j2.js:1235585-1235810 placement
 /**
  * 解析表单字段输入：空值为未设置或保留空串，否则校验并返回值与错误。
  */
@@ -331,7 +325,7 @@ function parseElicitationField(schema, stringValue) {
         error: validation.error,
       };
 }
-//@ chunk-18hwfzwa.js:1205755-1206341 placement
+//@ chunk-czq1j3j2.js:1235810-1236396 placement
 /**
  * 把预填值还原为表单值：多选只保留合法选项，布尔原样，其余字符串化后校验。
  */
@@ -378,6 +372,7 @@ function restoreElicitationValue(propSchema, rawValue) {
   return;
 }
 export {
+  hasStringFormat,
   objectFieldEntries,
   MAX_URL_FIELD_CHARS,
   restoreElicitationValue,
@@ -398,6 +393,4 @@ export {
   elicitationUrlCost,
   MAX_URL_COST_CHARS,
   REDACTED_FIELD_TEXT,
-  hasStringFormat,
-  STRING_FORMATS,
 };

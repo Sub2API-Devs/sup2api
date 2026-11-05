@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：由请求提交草稿。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4mbryacy.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4dfybe1k.js (1)
  * attribution: placement 1
  */
 import { isFeedbackDraftsEnabled } from "../services/feedbackDrafts.js";
 import { listFeedbackDrafts, FEEDBACK_TYPES } from "../services/feedback/feedbackDrafts.js";
 import { submitFeedbackDraft } from "../services/feedback/feedbackDraft.js";
 
-//@ chunk-4mbryacy.js:11925-12712 placement
+//@ chunk-4dfybe1k.js:13101-13888 placement
 async function submitDraftFromRequest({
   draftId,
   description,

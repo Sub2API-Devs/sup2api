@@ -3,15 +3,15 @@
  *
  * Claude in Chrome 共用：工具名列表与不可用说明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/claudeInChrome/common.ts
- * pieces: chunk-axj4swpp.js (14), chunk-srrcw01s.js (6)
+ * pieces: chunk-bb2bsp6f.js (14), chunk-mdeejm2h.js (6)
  * attribution: facade-exports 13, layout 3, fingerprint 2, placement 2
  */
 import { homedir, platform, userInfo } from "os";
 import { join } from "path";
 import { stat, readdir } from "fs/promises";
-import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
+import { CLAUDEAI_SERVER_PREFIX } from "../../services/mcp/normalization.js";
 import { getPlatform } from "../platform.js";
 import { logForDebugging } from "../debug.js";
 import { isFsInaccessible } from "../errors.js";
@@ -23,25 +23,25 @@ import { execFileNoThrow, execFileNoThrowWithCwd } from "../execFileNoThrow.js";
 import { resolveAppPathFromRegistry, launchDetached, systemRootDir } from "./windowsAppPaths.js";
 import { env } from "../env.js";
 
-//@ chunk-srrcw01s.js:227-275 facade-exports (2.1.88 match: CLAUDE_IN_CHROME_MCP_SERVER_NAME, 0.656)
+//@ chunk-mdeejm2h.js:227-275 facade-exports (2.1.88 match: CLAUDE_IN_CHROME_MCP_SERVER_NAME, 0.656)
 /**
  * 内置 Chrome MCP 服务器名 "claude-in-chrome" 与 javascript_tool 工具名。
  */
 var CLAUDE_IN_CHROME_MCP_SERVER_NAME = "claude-in-chrome";
 var CHROME_JAVASCRIPT_TOOL = "javascript_tool";
-//@ chunk-srrcw01s.js:275-308 facade-exports
+//@ chunk-mdeejm2h.js:275-308 facade-exports
 /**
  * 按规范化后的 MCP 服务器名判断是否是 claude-in-chrome。
  */
 function isClaudeInChromeMCPServer(serverName) {
-  return normalizeNameForMCP(serverName) === CLAUDE_IN_CHROME_MCP_SERVER_NAME;
+  return CLAUDEAI_SERVER_PREFIX(serverName) === CLAUDE_IN_CHROME_MCP_SERVER_NAME;
 }
-//@ chunk-srrcw01s.js:308-339 layout
+//@ chunk-mdeejm2h.js:308-339 layout
 /**
  * 内置 Chrome MCP 服务器的启动参数 --claude-in-chrome-mcp（以当前可执行文件 + 此参数作 stdio 服务器）。
  */
 var CLAUDE_IN_CHROME_MCP_FLAG = "--claude-in-chrome-mcp";
-//@ chunk-srrcw01s.js:339-476 facade-exports (2.1.88 match: getServerCommandArray, 1)
+//@ chunk-mdeejm2h.js:339-476 facade-exports (2.1.88 match: getServerCommandArray, 1)
 /**
  * 判断一个 stdio MCP 配置的 command/args 是否带 --claude-in-chrome-mcp（即在启动内置 Chrome 服务器）。
  */
@@ -52,7 +52,7 @@ function isClaudeInChromeMcpLaunch(config) {
     (config.args?.some((arg) => arg.includes(CLAUDE_IN_CHROME_MCP_FLAG)) ?? false)
   );
 }
-//@ chunk-srrcw01s.js:476-1586 placement
+//@ chunk-mdeejm2h.js:476-1586 placement
 /**
  * Claude in Chrome 工具名清单与不可用说明：file_upload 不可用、上传无人批准、batch 内不能上传、browser_batch 不可用。
  */
@@ -89,7 +89,7 @@ var UPLOAD_IN_BATCH_UNAVAILABLE =
   "file_upload cannot run inside browser_batch in this session, and nothing in this call ran. If file_upload is among your tools, call it on its own.";
 var BROWSER_BATCH_UNAVAILABLE =
   "browser_batch isn't available right now, and nothing in this call ran. Make each action its own call instead. Don't retry it as a batch.";
-//@ chunk-srrcw01s.js:1586-1672 placement (2.1.88 match: setupComputerUseMCP, 0.631)
+//@ chunk-mdeejm2h.js:1586-1672 placement (2.1.88 match: setupComputerUseMCP, 0.63)
 /**
  * 内置 Chrome MCP 服务器的 stdio 配置：以当前可执行文件 + --claude-in-chrome-mcp 启动，scope dynamic。旧版同位置是 setupComputerUseMCP，316 中只用于 Claude in Chrome（setupClaudeInChrome、MCP 配置合并、Chrome 策略拒绝判断）。
  */
@@ -101,7 +101,7 @@ function getClaudeInChromeStdioServerConfig() {
     scope: "dynamic",
   };
 }
-//@ chunk-axj4swpp.js:697-3570 facade-exports (2.1.88 match: CHROMIUM_BROWSERS, 0.905)
+//@ chunk-bb2bsp6f.js:697-3570 facade-exports (2.1.88 match: CHROMIUM_BROWSERS, 0.905)
 /**
  * Claude in Chrome 公共常量：工具名前缀 mcp__claude-in-chrome__、域规则工具名、各 Chromium 系浏览器（Chrome/Brave/Arc/Chromium/Edge/Vivaldi/Opera）在 macOS/Linux/Windows 的 NativeMessagingHosts 路径、注册表键、可执行名，以及检测顺序。
  */
@@ -232,7 +232,7 @@ var CHROMIUM_BROWSERS = {
   },
 };
 var BROWSER_DETECTION_ORDER = ["chrome", "brave", "arc", "edge", "chromium", "vivaldi", "opera"];
-//@ chunk-axj4swpp.js:3570-3921 facade-exports (2.1.88 match: getAllNativeMessagingHostsDirs, 1)
+//@ chunk-bb2bsp6f.js:3570-3901 facade-exports (2.1.88 match: getAllNativeMessagingHostsDirs, 0.938)
 /**
  * 列出当前平台（macOS/Linux/WSL）各浏览器的 NativeMessagingHosts 目录；Windows 返回空（走注册表）。
  */
@@ -246,7 +246,6 @@ function getAllNativeMessagingHostsDirs() {
       case "macos":
         if (config.macos.nativeMessagingPath.length > 0)
           paths.push({
-            browser: browserId,
             path: join(home, ...config.macos.nativeMessagingPath),
           });
         break;
@@ -254,7 +253,6 @@ function getAllNativeMessagingHostsDirs() {
       case "wsl":
         if (config.linux.nativeMessagingPath.length > 0)
           paths.push({
-            browser: browserId,
             path: join(home, ...config.linux.nativeMessagingPath),
           });
         break;
@@ -264,7 +262,7 @@ function getAllNativeMessagingHostsDirs() {
   }
   return paths;
 }
-//@ chunk-axj4swpp.js:3921-4052 facade-exports (2.1.88 match: getAllWindowsRegistryKeys, 1)
+//@ chunk-bb2bsp6f.js:3901-4032 facade-exports (2.1.88 match: getAllWindowsRegistryKeys, 1)
 /**
  * 列出各浏览器的 Windows 注册表 NativeMessagingHosts 键。
  */
@@ -280,7 +278,7 @@ function getAllWindowsRegistryKeys() {
   }
   return keys;
 }
-//@ chunk-axj4swpp.js:4052-4761 facade-exports (2.1.88 match: detectAvailableBrowser, 1)
+//@ chunk-bb2bsp6f.js:4032-4741 facade-exports (2.1.88 match: detectAvailableBrowser, 1)
 /**
  * 按检测顺序找第一个已安装的浏览器：macOS 看 /Applications/*.app，Linux/WSL 找可执行文件，Windows 看 AppData 用户数据目录。
  */
@@ -332,12 +330,12 @@ async function detectAvailableBrowser() {
   }
   return null;
 }
-//@ chunk-axj4swpp.js:4761-4771 layout
+//@ chunk-bb2bsp6f.js:4741-4751 layout
 /**
  * 记录的 Chrome tabId 上限 200。
  */
 var MAX_TRACKED_TABS = 200;
-//@ chunk-axj4swpp.js:4771-4855 facade-exports
+//@ chunk-bb2bsp6f.js:4751-4835 facade-exports
 /**
  * 记录 Claude in Chrome 工具用过的 tabId（超过 200 个清空）。
  */
@@ -346,14 +344,14 @@ function trackClaudeInChromeTabId(tabId) {
   if (trackedTabIds.size >= MAX_TRACKED_TABS && !trackedTabIds.has(tabId)) trackedTabIds.clear();
   trackedTabIds.add(tabId);
 }
-//@ chunk-axj4swpp.js:4855-4904 facade-exports
+//@ chunk-bb2bsp6f.js:4835-4884 facade-exports
 /**
  * 判断 tabId 是否由 Claude in Chrome 打开过。
  */
 function isTrackedClaudeInChromeTabId(tabId) {
   return claudeInChromeSession().trackedTabIds.has(tabId);
 }
-//@ chunk-axj4swpp.js:4904-5060 layout
+//@ chunk-bb2bsp6f.js:4884-5040 layout
 /**
  * 把执行结果转成遥测字段 exec_exit_code / exec_failure_kind（nonzero_exit/not_found/spawn_failed_or_killed）。
  */
@@ -368,7 +366,7 @@ function execFailureFields(result) {
           : lit("spawn_failed_or_killed"),
   };
 }
-//@ chunk-axj4swpp.js:5060-6274 facade-exports (2.1.88 match: openInChrome, 0.581)
+//@ chunk-bb2bsp6f.js:5040-6254 facade-exports (2.1.88 match: openInChrome, 0.581)
 /**
  * 用检测到的浏览器打开 http(s) URL：macOS `open -a`，Windows 先试 App Paths 注册的 exe 再退回 rundll32 url,OpenURL，Linux 依次试可执行名；结果上报 chrome_open_url。
  */
@@ -456,14 +454,14 @@ async function openInChrome(url) {
       return false;
   }
 }
-//@ chunk-axj4swpp.js:6274-6335 facade-exports (2.1.88 match: getSocketDir, 1)
+//@ chunk-bb2bsp6f.js:6254-6315 facade-exports (2.1.88 match: getSocketDir, 1)
 /**
  * 浏览器桥 socket 目录 /tmp/claude-mcp-browser-bridge-<用户名>。
  */
 function getSocketDir() {
   return `/tmp/claude-mcp-browser-bridge-${getUsername()}`;
 }
-//@ chunk-axj4swpp.js:6335-6433 facade-exports (2.1.88 match: getSecureSocketPath, 1)
+//@ chunk-bb2bsp6f.js:6315-6413 facade-exports (2.1.88 match: getSecureSocketPath, 1)
 /**
  * 本进程的 socket 路径：Windows 为 \\.\pipe\claude-mcp-browser-bridge-<用户名>，其他为 <socketDir>/<pid>.sock。
  */
@@ -471,7 +469,7 @@ function getSecureSocketPath() {
   if (platform() === "win32") return `\\\\.\\pipe\\${getSocketName()}`;
   return join(getSocketDir(), `${process.pid}.sock`);
 }
-//@ chunk-axj4swpp.js:6433-6608 facade-exports (2.1.88 match: getSecureSocketPath, 0.944)
+//@ chunk-bb2bsp6f.js:6413-6588 facade-exports (2.1.88 match: getSecureSocketPath, 0.944)
 /**
  * 列出所有候选 socket 路径（目录下全部 .sock；Windows 只有命名管道），供 MCP 客户端寻找原生宿主。
  */
@@ -485,14 +483,14 @@ async function getAllSocketPaths() {
   } catch {}
   return paths;
 }
-//@ chunk-axj4swpp.js:6608-6662 fingerprint (2.1.88 match: getSocketName, 1)
+//@ chunk-bb2bsp6f.js:6588-6642 fingerprint (2.1.88 match: getSocketName, 1)
 /**
  * socket/管道名 claude-mcp-browser-bridge-<用户名>。
  */
 function getSocketName() {
   return `claude-mcp-browser-bridge-${getUsername()}`;
 }
-//@ chunk-axj4swpp.js:6662-6754 fingerprint (2.1.88 match: getUsername, 1)
+//@ chunk-bb2bsp6f.js:6642-6734 fingerprint (2.1.88 match: getUsername, 1)
 /**
  * 取当前用户名，失败回退 USER/USERNAME 环境变量或 "default"。
  */
@@ -506,24 +504,24 @@ function getUsername() {
 export {
   CLAUDE_IN_CHROME_DOMAIN_RULE_TOOL,
   isClaudeInChromeMCPServer,
-  getClaudeInChromeStdioServerConfig,
-  isClaudeInChromeMcpLaunch,
-  FILE_UPLOAD_UNAVAILABLE,
-  CFC_TOOL_PREFIX,
+  CHROME_JAVASCRIPT_TOOL,
+  getSecureSocketPath,
+  getSocketDir,
   CLAUDE_IN_CHROME_MCP_SERVER_NAME,
-  openInChrome,
+  CFC_TOOL_PREFIX,
+  FILE_UPLOAD_UNAVAILABLE,
   UPLOAD_NEEDS_APPROVAL,
   UPLOAD_IN_BATCH_UNAVAILABLE,
   BROWSER_BATCH_UNAVAILABLE,
-  trackClaudeInChromeTabId,
-  CHROME_JAVASCRIPT_TOOL,
+  getClaudeInChromeStdioServerConfig,
+  isClaudeInChromeMcpLaunch,
   CHROME_TOOL_NAMES,
-  BATCH_RESTRICTED_TOOLS,
-  detectAvailableBrowser,
-  getSecureSocketPath,
-  getSocketDir,
+  openInChrome,
   getAllNativeMessagingHostsDirs,
   getAllWindowsRegistryKeys,
   getAllSocketPaths,
+  detectAvailableBrowser,
+  BATCH_RESTRICTED_TOOLS,
+  trackClaudeInChromeTabId,
   isTrackedClaudeInChromeTabId,
 };

@@ -3,10 +3,10 @@
  *
  * 组织策略限制（policy limits）：判定是否适用（第一方 + team/enterprise OAuth 或 API key），请求 /api/claude_code/policy_limits，会话缓存与 ~/.claude/policy-limits.json 磁盘缓存（签名/组织校验），按策略禁用功能并给出提示文案。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/policyLimits/index.ts
- * pieces: chunk-18hwfzwa.js (1), chunk-1wpnxx5r.js (1), chunk-2xp8150w.js (1), chunk-7t4fmt2f.js (2), chunk-aepeg2w5.js (8), chunk-dcmhvw5a.js (1), chunk-yxnffbzs.js (1)
- * attribution: fingerprint 8, placement 7
+ * pieces: chunk-bvz8t570.js (1), chunk-czq1j3j2.js (1), chunk-exfmq47h.js (8), chunk-hfc4cfnt.js (1), chunk-pcv9zvvv.js (2), chunk-z20c443b.js (1)
+ * attribution: fingerprint 7, placement 7
  */
 import { createHash } from "crypto";
 import { sortKeysDeep, isGateAOn } from "../../utils/settings/settingsSourceTrust.js";
@@ -80,28 +80,22 @@ import { TENGU_DUNWICH_BELL } from "../../components/FeedbackSurvey/useMemorySur
 import { isAutoMemoryEnabled } from "../../memdir/paths.js";
 import { shouldSkipFeedbackSurvey } from "../../utils/hostEnvironment.js";
 import { env } from "../../utils/env.js";
-import { isPlainObject } from "../../utils/objectUtils.js";
-import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
-import {
-  RESTRICTION_KEYS,
-  neutralRestrictionSchema,
-} from "../../utils/permissions/permissionContextSerialization.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:173545-173634 fingerprint (2.1.88 match: computeChecksum, 1)
+//@ chunk-z20c443b.js:173695-173784 fingerprint (2.1.88 match: computeChecksum, 1)
 function computeChecksum(restrictions) {
   let sorted = sortKeysDeep(restrictions);
   let normalized = jsonStringify(sorted);
   return `sha256:${createHash("sha256").update(normalized).digest("hex")}`;
 }
-//@ chunk-1wpnxx5r.js:3119-3164 fingerprint (2.1.88 match: isPolicyAllowed, 0.71)
+//@ chunk-hfc4cfnt.js:3124-3169 fingerprint (2.1.88 match: isPolicyAllowed, 0.709)
 /**
  * 按策略限制判断某项功能是否允许（缓存命中或失败开放）。
  */
 function isPolicyAllowed() {
   return isRemoteBrowserEnabled() || remoteBrowserEnabledState.on || remoteBrowserAllowedState.allowed;
 }
-//@ chunk-yxnffbzs.js:2475-2672 fingerprint (2.1.88 match: getPolicyLimitsEndpoint, 0.467)
+//@ chunk-bvz8t570.js:2448-2645 fingerprint (2.1.88 match: getPolicyLimitsEndpoint, 0.467)
 /**
  * 策略禁用与会话禁用两种原因文案（供各功能共用）。
  */
@@ -109,7 +103,7 @@ var POLICY_LIMITS_PATH = "/api/claude_code/policy_limits";
 var DISABLED_BY_POLICY_REASON = "disabled by your organization's policy";
 var DISABLED_FOR_SESSION_REASON =
   "disabled for the rest of this session because an organization with a restricted policy was signed in earlier";
-//@ chunk-aepeg2w5.js:626183-626442 placement
+//@ chunk-exfmq47h.js:638709-638968 placement
 class ReaderRegistry {
   reader = null;
   reporter = null;
@@ -130,13 +124,13 @@ class ReaderRegistry {
     } catch {}
   }
 }
-//@ chunk-aepeg2w5.js:626442-626524 placement
+//@ chunk-exfmq47h.js:638968-639050 placement (2.1.88 match: normalizeAssistantMessageForSDK, 0.701)
 /**
  * org-config 开关计划的单项缓存与读取器单例。
  */
 var orgConfigPlanCache; // deferred: uses ReaderRegistry of its import cycle while loading; runs once the cycle is complete
 var orgConfigGateReaders;
-deferInit("chunk-aepeg2w5.js:626442", () => {
+deferInit("chunk-exfmq47h.js:638968", () => {
   orgConfigPlanCache = identity_2(
     {
       record: undefined,
@@ -149,7 +143,7 @@ deferInit("chunk-aepeg2w5.js:626442", () => {
   );
   orgConfigGateReaders = new ReaderRegistry();
 });
-//@ chunk-aepeg2w5.js:626524-626587 placement (2.1.88 match: AgentsJsonSchema, 0.484)
+//@ chunk-exfmq47h.js:639050-639113 placement (2.1.88 match: AgentsJsonSchema, 0.482)
 /**
  * 注册 org-config 开关读取器与问题报告器（与代理无关，切分误归）。
  */
@@ -157,7 +151,7 @@ function registerGateReader(reader, fallback = null) {
   orgConfigPlanCache.record = undefined;
   return orgConfigGateReaders.register(reader, fallback);
 }
-//@ chunk-aepeg2w5.js:626587-626804 placement
+//@ chunk-exfmq47h.js:639113-639332 placement
 /**
  * 读取已注册的 org-config 开关值，读取失败/格式错误时报告并返回默认值。
  */
@@ -175,14 +169,14 @@ function readGateFlag() {
   if (problem !== undefined) orgConfigGateReaders.report("malformed", problem);
   return flag;
 }
-//@ chunk-aepeg2w5.js:626804-626838 placement
+//@ chunk-exfmq47h.js:639332-639366 placement
 /**
  * 策略宽限是否启用，以及宽限计划计算。
  */
 function isPolicyGraceEnabled() {
   return readGateFlag().enabled;
 }
-//@ chunk-aepeg2w5.js:626838-627035 placement
+//@ chunk-exfmq47h.js:639366-639563 placement
 /**
  * 按开关计算组织配置计划（按记录键缓存）。
  */
@@ -198,9 +192,9 @@ function resolveOrgConfigPlan(plan, verifiedAtMs, nowMs = Date.now()) {
   orgConfigPlanCache.plan = resolved;
   return resolved;
 }
-//@ chunk-aepeg2w5.js:627035-627052 placement
+//@ chunk-exfmq47h.js:639563-639580 placement
 var REVALIDATE_IN_FULL_AFTER_MS = 21600000;
-//@ chunk-aepeg2w5.js:893333-893603 fingerprint (2.1.88 match: getAuthHeaders, 0.587)
+//@ chunk-exfmq47h.js:916227-916497 fingerprint (2.1.88 match: getAuthHeaders, 0.588)
 function getAuthHeaders_2(endpoint) {
   if (isFirstPartyManagedOAuthContext() || isBareMode()) return;
   if (
@@ -227,7 +221,7 @@ function getAuthHeaders_2(endpoint) {
     };
   return;
 }
-//@ chunk-7t4fmt2f.js:16761-17340 fingerprint (2.1.88 match: fetchWithRetry, 0.431)
+//@ chunk-pcv9zvvv.js:16763-17342 fingerprint (2.1.88 match: fetchWithRetry, 0.431)
 async function fetchWithRetry(
   etag,
   cachePath,
@@ -271,7 +265,7 @@ async function fetchWithRetry(
   }
   return lastResult;
 }
-//@ chunk-7t4fmt2f.js:17340-21874 fingerprint (2.1.88 match: fetchPolicyLimits, 0.351)
+//@ chunk-pcv9zvvv.js:17342-21876 fingerprint (2.1.88 match: fetchPolicyLimits, 0.351)
 /**
  * 请求 /api/claude_code/policy_limits（Bearer），支持 ETag/304，失败分类为 auth_failed/network_error/timeout 等，结果写入会话缓存与 policy-limits.json。
  */
@@ -590,7 +584,7 @@ async function fetchPolicyLimits(
     }
   }
 }
-//@ chunk-18hwfzwa.js:1046691-1046806 fingerprint (2.1.88 match: ESSENTIAL_TRAFFIC_DENY_ON_MISS, 0.772)
+//@ chunk-czq1j3j2.js:1080720-1080835 fingerprint (2.1.88 match: ESSENTIAL_TRAFFIC_DENY_ON_MISS, 0.772)
 function isFeedbackSurveyAllowed() {
   return (
     getFeatureValue_CACHED_MAY_BE_STALE(TENGU_DUNWICH_BELL, false) &&
@@ -600,29 +594,18 @@ function isFeedbackSurveyAllowed() {
     !env.CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY
   );
 }
-//@ chunk-2xp8150w.js:2601-2725 fingerprint (2.1.88 match: loadCachedRestrictions, 0.611)
-function loadCachedRestrictions(permissionContext) {
-  let restrictions = isPlainObject(permissionContext) ? permissionContext.restrictions : undefined;
-  return (
-    isPlainObject(restrictions) &&
-    Object.values(omitAlias(restrictions, RESTRICTION_KEYS)).some(
-      (restriction) => !neutralRestrictionSchema().safeParse(restriction).success,
-    )
-  );
-}
 export {
-  isFeedbackSurveyAllowed,
   isPolicyAllowed,
-  computeChecksum,
   getAuthHeaders_2,
-  isPolicyGraceEnabled,
   POLICY_LIMITS_PATH,
   resolveOrgConfigPlan,
-  fetchPolicyLimits,
-  fetchWithRetry,
-  REVALIDATE_IN_FULL_AFTER_MS,
-  registerGateReader,
-  loadCachedRestrictions,
+  computeChecksum,
+  isPolicyGraceEnabled,
   DISABLED_BY_POLICY_REASON,
   DISABLED_FOR_SESSION_REASON,
+  isFeedbackSurveyAllowed,
+  registerGateReader,
+  REVALIDATE_IN_FULL_AFTER_MS,
+  fetchPolicyLimits,
+  fetchWithRetry,
 };

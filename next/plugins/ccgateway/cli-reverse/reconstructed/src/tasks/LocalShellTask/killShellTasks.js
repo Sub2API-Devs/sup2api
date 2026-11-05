@@ -3,9 +3,9 @@
  *
  * 杀 shell 任务：单个 kill、按属主代理批量清理孤儿 shell
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tasks/LocalShellTask/killShellTasks.ts
- * pieces: chunk-e6aww6q8.js (2)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: fingerprint 2
  */
 import { isLocalShellTask } from "./guards.js";
@@ -17,7 +17,7 @@ import { isInputHoldOn } from "../../plugins/functionHooks/inputHold.js";
 import { buildShellTaskResult } from "./backgroundNotices.js";
 import { escapeXml_2 as escapeXml } from "../../utils/confusables.js";
 
-//@ chunk-e6aww6q8.js:2141025-2141937 fingerprint (2.1.88 match: killTask, 0.607)
+//@ chunk-5xgkngpb.js:2194407-2195319 fingerprint (2.1.88 match: killTask, 0.618)
 /**
  * 杀掉运行中的 shell 任务：kill 并清理 shellCommand、标 killed/notified；之前未通知则发 stopped 通知，并（开启时）记录 bash 任务快照；最后回收输出。
  */
@@ -79,7 +79,7 @@ function killTask(taskId, taskRegistry, killOptions) {
     );
   evictTaskOutput(taskId);
 }
-//@ chunk-e6aww6q8.js:2141937-2142159 fingerprint (2.1.88 match: killShellTasksForAgent, 0.685)
+//@ chunk-5xgkngpb.js:2195319-2195541 fingerprint (2.1.88 match: killShellTasksForAgent, 0.684)
 /**
  * 代理退出时杀掉它名下仍在运行的 shell 任务（cause=owner_ended）。
  */
@@ -94,4 +94,4 @@ function killShellTasksForAgent(agentId, taskRegistry) {
       });
     }
 }
-export { killShellTasksForAgent, killTask };
+export { killTask, killShellTasksForAgent };

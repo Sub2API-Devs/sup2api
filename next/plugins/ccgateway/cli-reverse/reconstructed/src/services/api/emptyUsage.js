@@ -3,13 +3,13 @@
  *
  * 全零的 usage 对象常量（service_tier standard、缓存细分为 0）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/emptyUsage.ts
- * pieces: chunk-j387qrdq.js (1)
+ * pieces: chunk-0a7cfwp8.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-j387qrdq.js:263-628 fingerprint (2.1.88 match: EMPTY_USAGE, 0.906)
+//@ chunk-0a7cfwp8.js:263-628 fingerprint (2.1.88 match: EMPTY_USAGE, 0.906)
 /**
  * 空 usage：所有 token 计数为 0，server_tool_use 为 0，service_tier=standard，speed/fallback_credit 为 null 一类默认值。
  */

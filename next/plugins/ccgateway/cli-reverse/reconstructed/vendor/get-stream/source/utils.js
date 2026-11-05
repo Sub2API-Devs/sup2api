@@ -1,11 +1,11 @@
 /**
  * get-stream/source/utils.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: get-stream@8.0.1
- * pieces: chunk-m4p5zn6n.js (1)
+ * pieces: chunk-t889g22j.js (1)
  * attribution: esm-layout 1
  */
-//@ chunk-m4p5zn6n.js:22818-22966 esm-layout
+//@ chunk-t889g22j.js:22817-22965 esm-layout
 var identity = (value) => value;
 var noop = () => {
   return;

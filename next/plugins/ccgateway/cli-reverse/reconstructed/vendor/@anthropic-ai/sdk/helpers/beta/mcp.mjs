@@ -1,9 +1,9 @@
 /**
  * @anthropic-ai/sdk/helpers/beta/mcp.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-38x90rmj.js (1), chunk-8t8n4kdh.js (1), chunk-e6aww6q8.js (1), chunk-fe6rs39h.js (1), chunk-g54kbxqw.js (1), chunk-p8kytbnw.js (1), chunk-z1n5m6nf.js (1)
- * attribution: esm-fingerprint 7
+ * pieces: chunk-5xgkngpb.js (1), chunk-bhrstd6k.js (1), chunk-h44h5gdv.js (1), chunk-jf14gxs3.js (1), chunk-k0v80sg8.js (1), chunk-keyy05re.js (1), chunk-n51jggtb.js (1), chunk-sywnjtqb.js (1)
+ * attribution: esm-fingerprint 8
  */
 import { DoctorLazy } from "../../../../../src/cli/handlers/util.js";
 import {
@@ -46,7 +46,7 @@ import {
 } from "../../../../../src/remote/tools/protocolSchemas.js";
 import { jsonStringify } from "../../../../../src/utils/slowOperations.js";
 import { toolHostInterfaceSchema } from "../../../../../src/remote/tools/protocolNegotiation.js";
-import { uniq } from "../../../../../src/utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../../../src/utils/permissions/filesystem.js";
 import { coercedNumberSchema } from "../../../../../src/tools/ArtifactTool/publishEdits.js";
 import { MAX_PDF_PAGES_PER_READ as MAX_PDF_PAGES_PER_READ_2 } from "../../../../../src/utils/mediaLimits.js";
 import { ALLOW_LARGE_PARAM } from "../../../../../src/tools/FileReadTool/constants.js";
@@ -54,7 +54,7 @@ import { booleanishSchema } from "../../../../../src/utils/spellcheck.js";
 import { attachedMachineInputField } from "../../../../../src/bridge/deviceRegistration.js";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-g54kbxqw.js:16031-18433 esm-fingerprint
+//@ chunk-k0v80sg8.js:14663-17052 esm-fingerprint
 var deviceInventorySchema; // deferred: uses DoctorLazy (../../../../../src/cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var toolHostSchema;
 var toolHostTargetSchema;
@@ -69,7 +69,7 @@ var APPLICATION_PDF_TYPES;
 var pdfPageSchema;
 var pdfPagesSchema;
 var toolResultContentSchema;
-deferInit("chunk-g54kbxqw.js:16031", () => {
+deferInit("chunk-k0v80sg8.js:14663", () => {
   deviceInventorySchema = DoctorLazy(() =>
     objectSchema({
       tools: array(stringSchema().regex(TOOL_HOST_ID_RE)).max(MAX_INVENTORY_TOOLS),
@@ -118,7 +118,7 @@ deferInit("chunk-g54kbxqw.js:16031", () => {
       capabilities: unknown()
         .transform((capabilities) =>
           Array.isArray(capabilities)
-            ? uniq(
+            ? normalizeCaseForComparison_2(
                 capabilities.filter(
                   (capability) => typeof capability === "string" && CAPABILITY_NAME_RE.test(capability),
                 ),
@@ -226,7 +226,7 @@ deferInit("chunk-g54kbxqw.js:16031", () => {
     ]),
   );
 });
-//@ chunk-p8kytbnw.js:276-688 esm-fingerprint
+//@ chunk-jf14gxs3.js:276-688 esm-fingerprint
 function sniffImageMediaType(bytes) {
   if (bytes.length < 4) return null;
   if (bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71) return "image/png";
@@ -255,10 +255,10 @@ function sniffImageMediaType(bytes) {
     return "image/webp";
   return null;
 }
-//@ chunk-e6aww6q8.js:3160592-3161562 esm-fingerprint
+//@ chunk-5xgkngpb.js:3245650-3246620 esm-fingerprint
 var fileReadInputSchema; // deferred: uses DoctorLazy (../../../../../src/cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var imageMediaTypeSchema;
-deferInit("chunk-e6aww6q8.js:3160592", () => {
+deferInit("chunk-5xgkngpb.js:3245650", () => {
   fileReadInputSchema = DoctorLazy(() =>
     zodStrictObject({
       file_path: stringSchema().describe("The absolute path to the file to read"),
@@ -282,23 +282,28 @@ deferInit("chunk-e6aww6q8.js:3160592", () => {
   );
   imageMediaTypeSchema = DoctorLazy(() => _enum(["image/jpeg", "image/png", "image/gif", "image/webp"]));
 });
-//@ chunk-8t8n4kdh.js:69716-69784 esm-fingerprint
+//@ chunk-sywnjtqb.js:69822-69890 esm-fingerprint
+var SUPPORTED_IMAGE_TYPES_4; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-sywnjtqb.js:69822", () => {
+  SUPPORTED_IMAGE_TYPES_4 = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+});
+//@ chunk-h44h5gdv.js:61139-61207 esm-fingerprint
 var SUPPORTED_IMAGE_TYPES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-8t8n4kdh.js:69716", () => {
+deferInit("chunk-h44h5gdv.js:61139", () => {
   SUPPORTED_IMAGE_TYPES_2 = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 });
-//@ chunk-z1n5m6nf.js:59606-59674 esm-fingerprint
+//@ chunk-n51jggtb.js:69443-69511 esm-fingerprint
 var SUPPORTED_IMAGE_TYPES_3; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-z1n5m6nf.js:59606", () => {
+deferInit("chunk-n51jggtb.js:69443", () => {
   SUPPORTED_IMAGE_TYPES_3 = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 });
-//@ chunk-fe6rs39h.js:56627-56983 esm-fingerprint
+//@ chunk-keyy05re.js:56505-56861 esm-fingerprint
 var OMITTED_UNSUPPORTED_CONTENT; // deferred: uses DoctorLazy (../../../../../src/cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var OMITTED_DOCUMENT_PLACEHOLDER;
 var SUPPORTED_IMAGE_MIME_TYPES;
 var documentBlockSchema;
 var textBlockSchema;
-deferInit("chunk-fe6rs39h.js:56627", () => {
+deferInit("chunk-keyy05re.js:56505", () => {
   OMITTED_UNSUPPORTED_CONTENT = "[unsupported content from another client omitted]";
   OMITTED_DOCUMENT_PLACEHOLDER = "[document from another client]";
   SUPPORTED_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
@@ -326,31 +331,32 @@ deferInit("chunk-fe6rs39h.js:56627", () => {
     }),
   );
 });
-//@ chunk-38x90rmj.js:7457-7525 esm-fingerprint
+//@ chunk-bhrstd6k.js:7610-7678 esm-fingerprint
 var SUPPORTED_IMAGE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-38x90rmj.js:7457", () => {
+deferInit("chunk-bhrstd6k.js:7610", () => {
   SUPPORTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 });
 export {
-  SUPPORTED_IMAGE_TYPES_2,
   sniffImageMediaType,
-  SUPPORTED_IMAGE_TYPES_3,
-  SUPPORTED_IMAGE_TYPES,
+  SUPPORTED_IMAGE_TYPES_4,
+  SUPPORTED_IMAGE_TYPES_2,
   imageMediaTypeSchema,
   fileReadInputSchema,
-  MAX_PDF_PAGES_PER_READ,
+  isSupportedResourceMimeType,
+  toolHostSchema,
   PDF_READ_MARKER_PREFIX,
-  OMITTED_UNSUPPORTED_CONTENT,
-  documentBlockSchema,
-  textBlockSchema,
-  OMITTED_DOCUMENT_PLACEHOLDER,
-  SUPPORTED_IMAGE_MIME_TYPES,
+  SUPPORTED_IMAGE_TYPES,
   toolResultContentSchema,
   pdfPagesSchema,
   filePolicySchema,
   askRequestSchema,
   toolHostTargetSchema,
   toolInvocationRequestSchema,
-  toolHostSchema,
-  isSupportedResourceMimeType,
+  OMITTED_UNSUPPORTED_CONTENT,
+  documentBlockSchema,
+  textBlockSchema,
+  OMITTED_DOCUMENT_PLACEHOLDER,
+  SUPPORTED_IMAGE_MIME_TYPES,
+  SUPPORTED_IMAGE_TYPES_3,
+  MAX_PDF_PAGES_PER_READ,
 };

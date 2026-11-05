@@ -3,21 +3,20 @@
  *
  * 2.1.316 新增：注册内置插件 cc-plugin-easel（MCP 结果下自动画图等配置）；easel 插件 hooks 模块的扫描清单（钩子与调用）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-shznzb37.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h7zh4yp6.js (10)
  * attribution: placement 10
  */
 import { __commonJS, __export } from "../../../../runtime/bun-runtime.js";
 import { isScreenReaderMode } from "../../../utils/accessibility/screenReader.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics/growthbook.js";
-import { getProxyUrl } from "../../../utils/proxy.js";
 import { hasComplianceTaint } from "../../../services/policyLimits/complianceTaints.js";
 import { getPlatform } from "../../../utils/platform.js";
 import { isPolicyVerdictAbsent } from "../../../services/policyLimits/policyVerdicts.js";
 import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../builtinPlugins.js";
 
-//@ chunk-shznzb37.js:3501-3854 placement
+//@ chunk-h7zh4yp6.js:3801-4154 placement
 /**
  * easel 插件 hooks 模块的扫描清单（钩子与调用）。
  */
@@ -46,12 +45,12 @@ var EASEL_HOOKS_SCAN = __commonJS(function (requireFn, moduleObject) {
     files: {},
   };
 });
-//@ chunk-shznzb37.js:3854-3863 placement
+//@ chunk-h7zh4yp6.js:4154-4163 placement
 /**
  * 空对象默认导出
  */
 var EMPTY_PLUGIN_EXPORTS = {};
-//@ chunk-shznzb37.js:3863-4018 placement
+//@ chunk-h7zh4yp6.js:4163-4318 placement
 __export(EMPTY_PLUGIN_EXPORTS, {
   PLUGIN_DESCRIPTION: () => EASEL_DESCRIPTION,
   SUPPLEMENTED_MODULE: () => EASEL_HOOKS_MODULE,
@@ -61,14 +60,14 @@ __export(EMPTY_PLUGIN_EXPORTS, {
   isOnByDefault: () => EASEL_ON_BY_DEFAULT,
   registerPlugin: () => registerEaselPlugin,
 });
-//@ chunk-shznzb37.js:4018-4058 placement
+//@ chunk-h7zh4yp6.js:4318-4358 placement
 /**
  * 返回 easel 插件的特性开关名 tengu_joyful_otter。
  */
 function EASEL_FLAG() {
   return "tengu_joyful_otter";
 }
-//@ chunk-shznzb37.js:4058-4264 placement
+//@ chunk-h7zh4yp6.js:4358-4535 placement
 /**
  * easel 钩子模块入口：注入读屏、批量、代理、合规等环境判断后注册。
  */
@@ -77,21 +76,20 @@ var EASEL_HOOKS_MODULE = {
     require("./default.lazy.js").register(on, settings, {
       isReaderOn: () => isScreenReaderMode(),
       isBatchAwaited: () => getFeatureValue_CACHED_MAY_BE_STALE("tengu_virtual_toast", false),
-      isProxySet: () => getProxyUrl() !== undefined,
       isRegulated: () => hasComplianceTaint("hipaa") || hasComplianceTaint("zdr"),
     }),
 };
-//@ chunk-shznzb37.js:4264-4273 placement
+//@ chunk-h7zh4yp6.js:4535-4544 placement
 /**
  * 默认关闭
  */
 var EASEL_ON_BY_DEFAULT = false;
-//@ chunk-shznzb37.js:4273-4306 placement
+//@ chunk-h7zh4yp6.js:4544-4577 placement
 /**
  * linux/macos
  */
 var EASEL_SUPPORTED_PLATFORMS = new Set(["linux", "macos"]);
-//@ chunk-shznzb37.js:4306-4412 placement
+//@ chunk-h7zh4yp6.js:4577-4683 placement
 /**
  * easel 可用：开关开启、平台支持且无 HIPAA/ZDR 合规污点。
  */
@@ -102,10 +100,10 @@ function isEaselAvailable() {
   isPolicyVerdictAbsent();
   return !hasComplianceTaint("hipaa") && !hasComplianceTaint("zdr");
 }
-//@ chunk-shznzb37.js:4412-4541 placement
+//@ chunk-h7zh4yp6.js:4683-4812 placement
 var EASEL_DESCRIPTION =
   "Draws charts in the transcript: a chart tool for Claude, and automatic charts for MCP results that are metrics over time";
-//@ chunk-shznzb37.js:4541-5118 placement
+//@ chunk-h7zh4yp6.js:4812-5389 placement
 /**
  * 注册内置插件 cc-plugin-easel（MCP 结果下自动画图等配置）。
  */

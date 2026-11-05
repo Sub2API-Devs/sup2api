@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：提示把设置里固定的模型更新为同档新版本的对话框
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jxwr2fwk.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-p7cjvx3f.js (1)
  * attribution: placement 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -18,7 +18,7 @@ import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-jxwr2fwk.js:13623-14918 placement
+//@ chunk-p7cjvx3f.js:14771-16066 placement
 /**
  * 提示"有更新的同档模型"，可把设置里固定的模型更新为最新版本（需重启）。
  */

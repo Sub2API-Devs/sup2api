@@ -3,9 +3,9 @@
  *
  * 后台作业行记录（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-12p23jte.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-v6svdz69.js (1)
  * attribution: placement 1
  */
 import { isColorCommandForceHidden } from "../../commands/color/index.js";
@@ -13,7 +13,7 @@ import { readJobState, isSettled, isExecLaunch, writeStateAtomic } from "./jobSt
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-12p23jte.js:343-604 placement
+//@ chunk-v6svdz69.js:343-604 placement
 /**
  * 在后台作业的状态行上记下 stopped（已结束、已停或 exec 启动的作业跳过），失败时记日志。
  */

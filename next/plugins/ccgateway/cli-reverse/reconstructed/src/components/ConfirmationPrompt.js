@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：确认提示的计时与按键 hooks
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e1k38nzg.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jn2nse9c.js (3)
  * attribution: placement 3
  */
 import {
@@ -18,12 +18,12 @@ import { formatDuration } from "../utils/format.js";
 import { MessageActionsKeybindings } from "./messageActions.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e1k38nzg.js:340-344 placement
+//@ chunk-jn2nse9c.js:340-344 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e1k38nzg.js:340", () => {
+deferInit("chunk-jn2nse9c.js:340", () => {
   init_react_production();
 });
-//@ chunk-e1k38nzg.js:344-570 placement
+//@ chunk-jn2nse9c.js:344-570 placement
 function useElapsedTicker(startTime, active, intervalMs = 1000, offsetMs = 0, endTime) {
   let clock = useClock();
   let formatElapsed = () => formatDuration(Math.max(0, (endTime ?? Date.now()) - startTime - offsetMs));
@@ -45,7 +45,7 @@ function useElapsedTicker(startTime, active, intervalMs = 1000, offsetMs = 0, en
   );
   return useSyncExternalStore(tickEffect, formatElapsed, formatElapsed);
 }
-//@ chunk-e1k38nzg.js:570-844 placement
+//@ chunk-jn2nse9c.js:570-844 placement
 function useConfirmationKeys({ onClose, onBack, onKill, onEnter }) {
   MessageActionsKeybindings(
     {

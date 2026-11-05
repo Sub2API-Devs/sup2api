@@ -3,24 +3,24 @@
  *
  * 转圈提示动词表（可被 settings.spinnerVerbs 追加或替换）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/constants/spinnerVerbs.ts
- * pieces: chunk-hbc3mvx0.js (2)
+ * pieces: chunk-2sbb399z.js (2)
  * attribution: fingerprint 2
  */
-import { getInitialSettings_2 } from "../utils/settings/settings.js";
+import { getInitialSettings } from "../utils/settings/settings.js";
 
-//@ chunk-hbc3mvx0.js:2172-2306 fingerprint (2.1.88 match: getSpinnerVerbs, 1)
+//@ chunk-2sbb399z.js:2172-2306 fingerprint (2.1.88 match: getSpinnerVerbs, 1)
 /**
  * 转圈动词：settings.spinnerVerbs 为 replace 模式时替换默认表，否则追加。
  */
 function getSpinnerVerbs() {
-  let config = getInitialSettings_2().spinnerVerbs;
+  let config = getInitialSettings().spinnerVerbs;
   if (!config) return SPINNER_VERBS;
   if (config.mode === "replace") return config.verbs.length > 0 ? config.verbs : SPINNER_VERBS;
   return [...SPINNER_VERBS, ...config.verbs];
 }
-//@ chunk-hbc3mvx0.js:2306-4751 fingerprint (2.1.88 match: SPINNER_VERBS, 0.984)
+//@ chunk-2sbb399z.js:2306-4751 fingerprint (2.1.88 match: SPINNER_VERBS, 0.984)
 /**
  * 默认转圈动词表（Accomplishing、Clauding、Cogitating…）。
  */

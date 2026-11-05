@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：转录修复
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (25)
  * attribution: placement 25
  */
-import { isPlainObject as isPlainObject_5 } from "../isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../isPlainObject.js";
 import { logForDebugging } from "../debug.js";
 import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
@@ -23,7 +23,7 @@ import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:331756-332732 placement
+//@ chunk-5xgkngpb.js:333272-334255 placement
 /**
  * 返回逐行修复函数与收尾函数：system 行按子类型修补字段；user/assistant 行去掉非法内容块（字符串内容包装为文本块）， 无法修复的行丢弃并记录，收尾时把指向被丢弃行的 parentUuid 重接到其祖先，返回各类计数。
  */
@@ -102,12 +102,12 @@ function createRowRepairer() {
     finish,
   };
 }
-//@ chunk-e6aww6q8.js:332732-333133 placement
+//@ chunk-5xgkngpb.js:334255-334656 placement
 /**
  * 消息内容修复：keep/drop 或过滤后的内容块。
  */
 function repairMessageContent(site, message) {
-  if (!isPlainObject_5(message)) return "drop";
+  if (!isPlainObject_6(message)) return "drop";
   let content = message.content;
   if (typeof content === "string") {
     if (site !== "assistant") return "keep";
@@ -135,15 +135,15 @@ function repairMessageContent(site, message) {
     wrapped: false,
   };
 }
-//@ chunk-e6aww6q8.js:333133-333187 placement
+//@ chunk-5xgkngpb.js:334656-334710 placement
 function isTypedContentBlock(block) {
-  return isPlainObject_5(block) && typeof block.type === "string";
+  return isPlainObject_6(block) && typeof block.type === "string";
 }
-//@ chunk-e6aww6q8.js:333187-333238 placement
+//@ chunk-5xgkngpb.js:334710-334761 placement
 function isMessageRole(role) {
   return role === "user" || role === "assistant";
 }
-//@ chunk-e6aww6q8.js:333238-333381 placement
+//@ chunk-5xgkngpb.js:334761-334904 placement
 function isRepairNoop(stats) {
   return (
     stats.cleanedRows === 0 &&
@@ -153,7 +153,7 @@ function isRepairNoop(stats) {
     stats.otherSystemRowsRepaired === 0
   );
 }
-//@ chunk-e6aww6q8.js:333381-333750 placement
+//@ chunk-5xgkngpb.js:334904-335273 placement
 /**
  * 记修复 warn 与 transcript_row_repair feature sad。
  */
@@ -171,7 +171,7 @@ function logRowRepair(site, stats) {
     other_system_rows_repaired: stats.otherSystemRowsRepaired,
   });
 }
-//@ chunk-e6aww6q8.js:333750-334378 placement
+//@ chunk-5xgkngpb.js:335273-335901 placement
 /**
  * 修复转录中格式错误的消息内容。
  */
@@ -201,7 +201,7 @@ function repairMalformedContent(site, extra) {
   ].filter((part) => part !== undefined);
   return `${site}: ${filtered.join(", ")}`;
 }
-//@ chunk-e6aww6q8.js:334378-335072 placement
+//@ chunk-5xgkngpb.js:335901-336595 placement
 function filterStopHookSummariesOnResume(messages) {
   let stats = {
     droppedBlocks: 0,
@@ -221,7 +221,7 @@ function filterStopHookSummariesOnResume(messages) {
           ...row,
         };
         let target = repairedRow;
-        if (isPlainObject_5(target)) applyFieldEdits(target, repair.edits);
+        if (isPlainObject_6(target)) applyFieldEdits(target, repair.edits);
         if (repair.subtype === "stop_hook_summary") stats.stopHookSummariesRepaired++;
         else stats.otherSystemRowsRepaired++;
         return [repairedRow];
@@ -255,10 +255,10 @@ function filterStopHookSummariesOnResume(messages) {
   } catch {}
   return flattened;
 }
-//@ chunk-e6aww6q8.js:335072-335225 placement
+//@ chunk-5xgkngpb.js:336595-336748 placement
 function planSystemRowRepair(row) {
   let target = row;
-  if (!isPlainObject_5(target)) return "keep";
+  if (!isPlainObject_6(target)) return "keep";
   let { subtype } = target;
   let edits = [...ensureStringField(target, "content"), ...systemRowEdits(target)];
   return edits.length === 0
@@ -269,7 +269,7 @@ function planSystemRowRepair(row) {
         edits,
       };
 }
-//@ chunk-e6aww6q8.js:335225-336178 placement
+//@ chunk-5xgkngpb.js:336748-337701 placement
 /**
  * 按子类型列出 system 行字段修补操作。
  */
@@ -309,7 +309,7 @@ function systemRowEdits(row) {
       ];
     case "turn_duration":
       return [
-        ...(isNonNegativeNumber(row.durationMs)
+        ...(isNonNegativeNumber_2(row.durationMs)
           ? []
           : [
               {
@@ -318,7 +318,7 @@ function systemRowEdits(row) {
                 value: 0,
               },
             ]),
-        ...((isNonNegativeNumber(row.budgetTokens) && isNonNegativeNumber(row.budgetLimit)) ||
+        ...((isNonNegativeNumber_2(row.budgetTokens) && isNonNegativeNumber_2(row.budgetLimit)) ||
         BUDGET_COUNT_FIELDS.every((field) => row[field] === undefined)
           ? removeInvalidCountFields(row, ["budgetNudges"])
           : BUDGET_COUNT_FIELDS.flatMap((field) =>
@@ -337,7 +337,7 @@ function systemRowEdits(row) {
       return [];
   }
 }
-//@ chunk-e6aww6q8.js:336178-336325 placement
+//@ chunk-5xgkngpb.js:337701-337848 placement
 var BUDGET_COUNT_FIELDS = ["budgetTokens", "budgetLimit", "budgetNudges"];
 var TURN_DURATION_COUNT_FIELDS = [
   "messageCount",
@@ -345,7 +345,7 @@ var TURN_DURATION_COUNT_FIELDS = [
   "pendingWorkflowCount",
   "briefHiddenCount",
 ];
-//@ chunk-e6aww6q8.js:336325-336417 placement (2.1.88 match: remove, 0.814)
+//@ chunk-5xgkngpb.js:337848-337940 placement (2.1.88 match: remove, 0.814)
 /**
  * 不是非负安全整数的字段生成 remove 修复操作。旧版名 remove 为错配。
  */
@@ -361,13 +361,13 @@ function removeInvalidCountFields(row, fields) {
         ],
   );
 }
-//@ chunk-e6aww6q8.js:336417-336509 placement (2.1.88 match: remove, 0.814)
+//@ chunk-5xgkngpb.js:337940-338032 placement (2.1.88 match: remove, 0.814)
 /**
  * 不是非负数的字段生成 remove 修复操作。
  */
 function removeInvalidNumberFields(compactMetadata, row) {
   return row.flatMap((field) =>
-    compactMetadata[field] === undefined || isNonNegativeNumber(compactMetadata[field])
+    compactMetadata[field] === undefined || isNonNegativeNumber_2(compactMetadata[field])
       ? []
       : [
           {
@@ -377,27 +377,27 @@ function removeInvalidNumberFields(compactMetadata, row) {
         ],
   );
 }
-//@ chunk-e6aww6q8.js:336509-336583 placement
+//@ chunk-5xgkngpb.js:338032-338106 placement
 /**
  * 非负安全整数判断。
  */
 function isNonNegativeSafeInteger(value) {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
-//@ chunk-e6aww6q8.js:336583-336618 placement
+//@ chunk-5xgkngpb.js:338106-338141 placement
 /**
  * 非负有限数判断。
  */
-function isNonNegativeNumber(value) {
+function isNonNegativeNumber_2(value) {
   return isFiniteNumber_2(value) && value >= 0;
 }
-//@ chunk-e6aww6q8.js:336618-336739 placement
+//@ chunk-5xgkngpb.js:338141-338262 placement
 /**
  * 压缩元数据修复用：commandRun schema 与可选数字字段列表（postTokens/cumulativeDroppedTokens/durationMs）。
  */
 var COMMAND_RUN_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var OPTIONAL_COMPACT_NUMBER_FIELDS;
-deferInit("chunk-e6aww6q8.js:336618", () => {
+deferInit("chunk-5xgkngpb.js:338141", () => {
   COMMAND_RUN_SCHEMA = DoctorLazy(() =>
     objectSchema({
       command: stringSchema(),
@@ -407,14 +407,14 @@ deferInit("chunk-e6aww6q8.js:336618", () => {
   );
   OPTIONAL_COMPACT_NUMBER_FIELDS = ["postTokens", "cumulativeDroppedTokens", "durationMs"];
 });
-//@ chunk-e6aww6q8.js:336739-337431 placement
+//@ chunk-5xgkngpb.js:338262-338954 placement
 /**
  * 校验 compact_boundary 的 compactMetadata，生成 set/remove 修复操作（trigger 缺省 auto、preTokens 缺省 0 等）。
  */
 function repairCompactMetadata(row) {
   let compactMetadata = row.compactMetadata;
   if (compactMetadata === undefined) return [];
-  if (!isPlainObject_5(compactMetadata))
+  if (!isPlainObject_6(compactMetadata))
     return [
       {
         kind: "set",
@@ -435,7 +435,7 @@ function repairCompactMetadata(row) {
             value: "auto",
           },
         ]),
-    ...(isNonNegativeNumber(compactMetadata.preTokens)
+    ...(isNonNegativeNumber_2(compactMetadata.preTokens)
       ? []
       : [
           {
@@ -451,7 +451,7 @@ function repairCompactMetadata(row) {
   ];
   let preservedMessages = compactMetadata.preservedMessages;
   let preservedEdits =
-    triggerEdits.every((edit) => edit.key !== "preservedMessages") && isPlainObject_5(preservedMessages)
+    triggerEdits.every((edit) => edit.key !== "preservedMessages") && isPlainObject_6(preservedMessages)
       ? ensureStringArrayField(preservedMessages, "allUuids", "optional")
       : [];
   if (triggerEdits.length === 0 && preservedEdits.length === 0) return [];
@@ -459,7 +459,7 @@ function repairCompactMetadata(row) {
     ...compactMetadata,
   };
   applyFieldEdits(nextMetadata, triggerEdits);
-  if (preservedEdits.length > 0 && isPlainObject_5(preservedMessages)) {
+  if (preservedEdits.length > 0 && isPlainObject_6(preservedMessages)) {
     let nextPreserved = {
       ...preservedMessages,
     };
@@ -474,14 +474,14 @@ function repairCompactMetadata(row) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:337431-337566 placement
+//@ chunk-5xgkngpb.js:338954-339089 placement
 /**
  * preservedMessages 不是 {uuids:[]} 形状时移除。旧版名 removeByFilter 为错配。
  */
 function repairPreservedMessages(compactMetadata) {
   let preservedMessages = compactMetadata.preservedMessages;
   return preservedMessages === undefined ||
-    (isPlainObject_5(preservedMessages) && Array.isArray(preservedMessages.uuids))
+    (isPlainObject_6(preservedMessages) && Array.isArray(preservedMessages.uuids))
     ? []
     : [
         {
@@ -490,7 +490,7 @@ function repairPreservedMessages(compactMetadata) {
         },
       ];
 }
-//@ chunk-e6aww6q8.js:337566-337666 placement (2.1.88 match: remove, 0.814)
+//@ chunk-5xgkngpb.js:339089-339189 placement (2.1.88 match: remove, 0.814)
 /**
  * 字段不符合 schema 时生成 remove 操作。旧版名 remove 为错配。
  */
@@ -505,7 +505,7 @@ function removeIfSchemaInvalid(row, field, schema) {
         },
       ];
 }
-//@ chunk-e6aww6q8.js:337666-337934 placement
+//@ chunk-5xgkngpb.js:339189-339457 placement
 function hookSummaryEdits(row) {
   let normalized = normalizeHookSummary(row);
   return HOOK_SUMMARY_FIELDS.flatMap((field) => {
@@ -541,7 +541,7 @@ function hookSummaryEdits(row) {
         ];
   });
 }
-//@ chunk-e6aww6q8.js:337934-338069 placement
+//@ chunk-5xgkngpb.js:339457-339592 placement
 function ensureStringField(row, field, onMissing = "leave") {
   let value = row[field];
   if (typeof value === "string") return [];
@@ -555,7 +555,7 @@ function ensureStringField(row, field, onMissing = "leave") {
         },
       ];
 }
-//@ chunk-e6aww6q8.js:338069-338141 placement
+//@ chunk-5xgkngpb.js:339592-339664 placement
 function ensureFieldEdit(row, field) {
   return row[field] === undefined
     ? [
@@ -567,7 +567,7 @@ function ensureFieldEdit(row, field) {
       ]
     : [];
 }
-//@ chunk-e6aww6q8.js:338141-338236 placement (2.1.88 match: remove, 0.814)
+//@ chunk-5xgkngpb.js:339664-339759 placement (2.1.88 match: remove, 0.814)
 function remove(row, field) {
   let value = row[field];
   return value === undefined || typeof value === "string"
@@ -579,7 +579,7 @@ function remove(row, field) {
         },
       ];
 }
-//@ chunk-e6aww6q8.js:338236-338459 placement
+//@ chunk-5xgkngpb.js:339759-339982 placement
 function ensureStringArrayField(row, field, value) {
   let current = row[field];
   if (current === undefined)
@@ -609,7 +609,7 @@ function ensureStringArrayField(row, field, value) {
         },
       ];
 }
-//@ chunk-e6aww6q8.js:338459-338564 placement
+//@ chunk-5xgkngpb.js:339982-340087 placement
 function applyFieldEdits(row, edits) {
   for (let edit of edits)
     if (edit.kind === "set") row[edit.key] = edit.value;

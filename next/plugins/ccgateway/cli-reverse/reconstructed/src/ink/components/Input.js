@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Ink 输入组件与视口、选择、动画帧、绘制行等钩子
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-x6v6jz2y.js (41)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-emhzq435.js (39), chunk-q9vyeahf.js (2)
  * attribution: placement 41
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -31,12 +31,12 @@ import { clockContext, noopClock, nullClock, defaultSetTimeout } from "./ClockCo
 import { useTerminalFocusState } from "../hooks/use-terminal-focus.js";
 import { SCROLL_JUMP_LINES } from "../scrollConstants.js";
 import { APP_CONTEXT } from "../../../vendor/convert-to-spaces/dist/index.js";
-import { isDescendantOf } from "../focus.js";
 import { InputNowContext } from "../terminalProbe.js";
 import { getSecondRootError } from "../terminal.js";
+import { isDescendantOf } from "../focus.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-x6v6jz2y.js:19648-20724 placement
+//@ chunk-emhzq435.js:19584-20660 placement
 function InputImpl(props) {
   let $ = useMemoCache(30);
   let caret;
@@ -161,34 +161,34 @@ function InputImpl(props) {
   } else inputElement = $[29];
   return inputElement;
 }
-//@ chunk-x6v6jz2y.js:20724-20735 placement
+//@ chunk-emhzq435.js:20660-20671 placement
 var Input = InputImpl;
-//@ chunk-x6v6jz2y.js:20735-20928 placement (2.1.88 match: Newline, 0.591)
+//@ chunk-emhzq435.js:20671-20864 placement
 /**
  * <Newline>：输出 count 个换行的 ink-text。
  */
 function Newline(props) {
   let $ = useMemoCache(4);
   let { count } = props;
-  let count_2 = count === undefined ? 1 : count;
+  let repeatCount = count === undefined ? 1 : count;
   let children;
-  if ($[0] !== count_2) {
+  if ($[0] !== repeatCount) {
     children = `
-`.repeat(count_2);
-    $[0] = count_2;
+`.repeat(repeatCount);
+    $[0] = repeatCount;
     $[1] = children;
   } else children = $[1];
-  let t3;
+  let textElement;
   if ($[2] !== children) {
-    t3 = jsxProd_default("ink-text", {
+    textElement = jsxProd_default("ink-text", {
       children,
     });
     $[2] = children;
-    $[3] = t3;
-  } else t3 = $[3];
-  return t3;
+    $[3] = textElement;
+  } else textElement = $[3];
+  return textElement;
 }
-//@ chunk-x6v6jz2y.js:20928-21267 placement (2.1.88 match: NoSelect, 0.728)
+//@ chunk-emhzq435.js:20864-21203 placement (2.1.88 match: NoSelect, 0.728)
 /**
  * <NoSelect>：内容不参与鼠标选区复制（如行号栏、装饰符）；fromLeftEdge 时从屏幕最左列起整段不可选。
  */
@@ -226,7 +226,7 @@ function NoSelect(t0) {
   } else t2 = $[8];
   return t2;
 }
-//@ chunk-x6v6jz2y.js:21267-21564 placement (2.1.88 match: RawAnsi, 0.805)
+//@ chunk-emhzq435.js:21203-21500 placement (2.1.88 match: RawAnsi, 0.805)
 /**
  * <RawAnsi>：直接输出已排好的 ANSI 行（ink-raw-ansi），宽高由调用方给出，不再折行或测量。
  */
@@ -257,17 +257,17 @@ function RawAnsi(props) {
   } else t2 = $[5];
   return t2;
 }
-//@ chunk-x6v6jz2y.js:21564-21568 placement
+//@ chunk-emhzq435.js:21500-21504 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:21564", () => {
+deferInit("chunk-emhzq435.js:21500", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:21568-21572 placement
+//@ chunk-emhzq435.js:21504-21508 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:21568", () => {
+deferInit("chunk-emhzq435.js:21504", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:21572-22038 placement
+//@ chunk-emhzq435.js:21508-21974 placement
 /**
  * 节点当前是否在终端可见区域内：累加祖先偏移并减去滚动容器的 scrollTop，按根高度与终端行数推出视口范围；滚动容器尚未渲染时返回 null。
  */
@@ -298,7 +298,7 @@ function isNodeOnScreen(node, terminalSize) {
   if (nodeHeight === 0) return top >= viewportTop && top < viewportBottom;
   return bottom > viewportTop && top < viewportBottom;
 }
-//@ chunk-x6v6jz2y.js:22038-22467 placement (2.1.88 match: useAnimationFrame, 1)
+//@ chunk-emhzq435.js:21974-22403 placement (2.1.88 match: useAnimationFrame, 1)
 /**
  * 跟踪组件是否在终端可见区域：返回 ref 回调、可见状态对象、读取函数与即时探测函数；每次提交后更新。动画类组件据此在不可见时停止刷新。
  */
@@ -335,13 +335,13 @@ function useTerminalViewport() {
   });
   return [setRef, visibilityRef.current, getVisibility, isNodeVisible];
 }
-//@ chunk-x6v6jz2y.js:22467-22478 placement
+//@ chunk-emhzq435.js:22403-22414 placement
 var CURSOR_FLASH_MS = 480;
-//@ chunk-x6v6jz2y.js:22478-22556 placement
+//@ chunk-emhzq435.js:22414-22492 placement
 function fullRepaintInterval(intervalMs) {
   return env.CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT ? Math.max(intervalMs, CURSOR_FLASH_MS) : intervalMs;
 }
-//@ chunk-x6v6jz2y.js:22556-22851 placement
+//@ chunk-emhzq435.js:22492-22787 placement
 function useAnimationFrame(intervalMs = 16) {
   let clock = useContext(clockContext);
   let [frame, { isVisible }, readVisibility] = useTerminalViewport();
@@ -365,23 +365,23 @@ function useAnimationFrame(intervalMs = 16) {
   );
   return [frame, frameValue];
 }
-//@ chunk-x6v6jz2y.js:22851-22855 placement
+//@ chunk-emhzq435.js:22787-22791 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:22851", () => {
+deferInit("chunk-emhzq435.js:22787", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:22855-22879 placement
+//@ chunk-emhzq435.js:22791-22815 placement
 /**
  * 导出值：useInputClockValue（取输入时钟）。
  */
 var useInputClockValue = () => useContext(APP_CONTEXT);
 var useApp = useInputClockValue;
-//@ chunk-x6v6jz2y.js:22879-22883 placement
+//@ chunk-emhzq435.js:22815-22819 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:22879", () => {
+deferInit("chunk-emhzq435.js:22815", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:22883-23169 placement (2.1.88 match: cleanupTaskOutput, 0.67)
+//@ chunk-emhzq435.js:22819-23105 placement (2.1.88 match: cleanupTaskOutput, 0.671)
 function useDebouncedCallback(callback, delayMs) {
   let clock = useContext(clockContext);
   let callbackRef = useRef(callback);
@@ -405,14 +405,14 @@ function useDebouncedCallback(callback, delayMs) {
     return debounced;
   }, [setTimeoutImpl, delayMs]);
 }
-//@ chunk-x6v6jz2y.js:23169-23173 placement
+//@ chunk-emhzq435.js:23105-23109 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:23169", () => {
+deferInit("chunk-emhzq435.js:23105", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:23173-23191 placement
+//@ chunk-emhzq435.js:23109-23127 placement
 var noopClockA = () => () => {};
-//@ chunk-x6v6jz2y.js:23191-23559 placement
+//@ chunk-emhzq435.js:23127-23495 placement
 function useFocus() {
   let { focusManager, rootNode } = useContext(APP_CONTEXT);
   let activeElement = useSyncExternalStore(
@@ -439,46 +439,25 @@ function useFocus() {
     [activeElement, focusManager, rootNode],
   );
 }
-//@ chunk-x6v6jz2y.js:23559-23563 placement
+//@ chunk-emhzq435.js:23495-23499 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:23559", () => {
+deferInit("chunk-emhzq435.js:23495", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:23563-23581 placement
-var noopClockB = () => () => {};
-//@ chunk-x6v6jz2y.js:23581-23734 placement
-function useHasFocus(nodeRef) {
-  let { focusManager } = useContext(APP_CONTEXT);
-  return useSyncExternalStore(
-    focusManager?.subscribe ?? noopClockB,
-    () => {
-      let node = nodeRef.current;
-      let activeElement = focusManager?.activeElement;
-      if (!node || !activeElement) return false;
-      return isDescendantOf(activeElement, node);
-    },
-    () => false,
-  );
-}
-//@ chunk-x6v6jz2y.js:23734-23738 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:23734", () => {
-  init_react_production();
-});
-//@ chunk-x6v6jz2y.js:23738-23771 placement
+//@ chunk-emhzq435.js:23499-23532 placement
 function useInputClock() {
   return useContext(InputNowContext) ?? nowMs;
 }
-//@ chunk-x6v6jz2y.js:23771-23803 placement
+//@ chunk-emhzq435.js:23532-23564 placement
 function nowMs() {
   return Date.now();
 }
-//@ chunk-x6v6jz2y.js:23803-23807 placement
+//@ chunk-emhzq435.js:23564-23568 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:23803", () => {
+deferInit("chunk-emhzq435.js:23564", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:23807-24120 placement
+//@ chunk-emhzq435.js:23568-23881 placement
 function useAnimationTimer(intervalMs) {
   let clock = useContext(clockContext);
   let bucketMs =
@@ -503,7 +482,7 @@ function useAnimationTimer(intervalMs) {
     return Math.floor(lastFrameRef.current / bucketMs) * bucketMs;
   });
 }
-//@ chunk-x6v6jz2y.js:24120-24359 placement
+//@ chunk-emhzq435.js:23881-24120 placement
 function useInterval(callback, intervalMs, options) {
   let callbackRef = useRef(callback);
   callbackRef.current = callback;
@@ -526,7 +505,7 @@ function useInterval(callback, intervalMs, options) {
   );
   useSyncExternalStore(subscribeEffect, nullClock);
 }
-//@ chunk-x6v6jz2y.js:24359-24495 placement
+//@ chunk-emhzq435.js:24120-24256 placement
 function startClockInterval(clock, tick, intervalMs) {
   let isStopped = false;
   let cancelTimer;
@@ -544,12 +523,12 @@ function startClockInterval(clock, tick, intervalMs) {
     cancelTimer();
   };
 }
-//@ chunk-x6v6jz2y.js:24495-24499 placement
+//@ chunk-emhzq435.js:24256-24260 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:24495", () => {
+deferInit("chunk-emhzq435.js:24256", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:24499-24618 placement
+//@ chunk-emhzq435.js:24260-24379 placement
 function useMeasured(select) {
   let { subscribeLayout } = useContext(APP_CONTEXT);
   let value = useSyncExternalStore(subscribeLayout, select);
@@ -559,29 +538,29 @@ function useMeasured(select) {
   });
   return value;
 }
-//@ chunk-x6v6jz2y.js:24618-24622 placement
+//@ chunk-emhzq435.js:24379-24383 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:24618", () => {
+deferInit("chunk-emhzq435.js:24379", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:24622-24696 placement
+//@ chunk-emhzq435.js:24383-24457 placement
 function useFinePointer(retain) {
   let { retainFinePointer } = useContext(APP_CONTEXT);
   useEffect(() => (retain ? retainFinePointer() : undefined), [retain, retainFinePointer]);
 }
-//@ chunk-x6v6jz2y.js:24696-24700 placement
+//@ chunk-emhzq435.js:24457-24461 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:24696", () => {
+deferInit("chunk-emhzq435.js:24457", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:24700-24821 placement
+//@ chunk-emhzq435.js:24461-24582 placement
 function nodeRowRange(node) {
   if (!node?.yogaNode) return;
   if (node.yogaNode.getDisplay() === 1) return null;
   let placement = absoluteTop(node);
   return placement && scrollAdjustedRow(node, placement.box, placement.at);
 }
-//@ chunk-x6v6jz2y.js:24821-24974 placement
+//@ chunk-emhzq435.js:24582-24735 placement
 function nodeScreenBox(node) {
   let placement = node?.yogaNode && absoluteTop(node);
   if (!placement) return;
@@ -591,7 +570,7 @@ function nodeScreenBox(node) {
     viewportRows: placement.box.scrollViewportHeight,
   };
 }
-//@ chunk-x6v6jz2y.js:24974-25358 placement
+//@ chunk-emhzq435.js:24735-25119 placement
 function absoluteTop(node) {
   let row = 0;
   let current = node;
@@ -616,7 +595,7 @@ function absoluteTop(node) {
     current = parentNode;
   }
 }
-//@ chunk-x6v6jz2y.js:25358-25742 placement
+//@ chunk-emhzq435.js:25119-25503 placement
 function scrollAdjustedRow(itemNode, box, at) {
   let { scrollTopRendered, yogaNode } = box;
   let computedHeight = itemNode.yogaNode?.getComputedHeight();
@@ -638,7 +617,7 @@ function scrollAdjustedRow(itemNode, box, at) {
         of: computedHeight,
       };
 }
-//@ chunk-x6v6jz2y.js:25742-26370 placement
+//@ chunk-emhzq435.js:25503-26131 placement
 function usePaintedRows(isEnabled, rows) {
   let { subscribeFrames } = useContext(APP_CONTEXT);
   let nodeRef = useRef(null);
@@ -679,12 +658,12 @@ function usePaintedRows(isEnabled, rows) {
   );
   return [nodeRef, rowsState?.rows, rowsState?.lastRows, rowsState?.contentRows];
 }
-//@ chunk-x6v6jz2y.js:26370-26374 placement
+//@ chunk-emhzq435.js:26131-26135 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:26370", () => {
+deferInit("chunk-emhzq435.js:26131", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:26374-27033 placement (2.1.88 match: useSelection, 0.958)
+//@ chunk-emhzq435.js:26135-26794 placement (2.1.88 match: useSelection, 0.958)
 /**
  * 选区操作钩子：复制（并清除）/复制不清除、取选中文本、清除、是否有选区、读状态、订阅变化、键盘移动焦点、设置选区背景色。没有 Ink 实例时返回空实现。
  */
@@ -717,25 +696,46 @@ function useSelection() {
     };
   }, [ink]);
 }
+//@ chunk-emhzq435.js:26958-26962 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-emhzq435.js:26958", () => {
+  init_react_production();
+});
+//@ chunk-q9vyeahf.js:275-292 placement
+var noopClockB = () => () => {};
+//@ chunk-q9vyeahf.js:292-444 placement
+function isFocusedIn(nodeRef) {
+  let { focusManager } = useContext(APP_CONTEXT);
+  return useSyncExternalStore(
+    focusManager?.subscribe ?? noopClockB,
+    () => {
+      let node = nodeRef.current;
+      let activeElement = focusManager?.activeElement;
+      if (!node || !activeElement) return false;
+      return isDescendantOf(activeElement, node);
+    },
+    () => false,
+  );
+}
 export {
-  useHasFocus,
-  useTerminalViewport,
-  useInterval,
-  useAnimationFrame,
-  NoSelect,
-  RawAnsi,
-  useMeasured,
-  useDebouncedCallback,
-  useSelection,
+  useFocus,
+  isFocusedIn,
   useApp,
+  useAnimationFrame,
+  useMeasured,
+  useSelection,
   useInputClock,
+  useDebouncedCallback,
+  useInterval,
+  Input,
+  useTerminalViewport,
+  NoSelect,
+  Newline,
+  startClockInterval,
+  RawAnsi,
   useAnimationTimer,
   nodeRowRange,
   nodeScreenBox,
-  startClockInterval,
-  useFocus,
-  Newline,
-  Input,
   fullRepaintInterval,
   useFinePointer,
   usePaintedRows,

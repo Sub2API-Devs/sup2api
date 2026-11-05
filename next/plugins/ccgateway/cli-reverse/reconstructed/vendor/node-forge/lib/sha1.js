@@ -1,8 +1,8 @@
 /**
  * node-forge/lib/sha1.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: node-forge@1.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_forge } from "./forge.js";
 import { require_md } from "./md.js";
 import { require_util } from "./util.js";
 
-//@ chunk-fq0cr76a.js:112817-115528 cjs-fingerprint
+//@ chunk-qg41pqt6.js:112783-115494 cjs-fingerprint
 var require_sha1 = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_md();
@@ -107,7 +107,7 @@ var require_sha1 = __commonJS(function (cjsExports, cjsModule) {
   function _update(s_2, w_2, bytes) {
     var t;
     var a;
-    var b_2;
+    var b;
     var c;
     var d;
     var e;
@@ -116,83 +116,83 @@ var require_sha1 = __commonJS(function (cjsExports, cjsModule) {
     var len = bytes.length();
     while (len >= 64) {
       a = s_2.h0;
-      b_2 = s_2.h1;
+      b = s_2.h1;
       c = s_2.h2;
       d = s_2.h3;
       e = s_2.h4;
       for (i = 0; i < 16; ++i) {
         t = bytes.getInt32();
         w_2[i] = t;
-        f = d ^ (b_2 & (c ^ d));
+        f = d ^ (b & (c ^ d));
         t = ((a << 5) | (a >>> 27)) + f + e + 1518500249 + t;
         e = d;
         d = c;
-        c = ((b_2 << 30) | (b_2 >>> 2)) >>> 0;
-        b_2 = a;
+        c = ((b << 30) | (b >>> 2)) >>> 0;
+        b = a;
         a = t;
       }
       for (; i < 20; ++i) {
         t = w_2[i - 3] ^ w_2[i - 8] ^ w_2[i - 14] ^ w_2[i - 16];
         t = (t << 1) | (t >>> 31);
         w_2[i] = t;
-        f = d ^ (b_2 & (c ^ d));
+        f = d ^ (b & (c ^ d));
         t = ((a << 5) | (a >>> 27)) + f + e + 1518500249 + t;
         e = d;
         d = c;
-        c = ((b_2 << 30) | (b_2 >>> 2)) >>> 0;
-        b_2 = a;
+        c = ((b << 30) | (b >>> 2)) >>> 0;
+        b = a;
         a = t;
       }
       for (; i < 32; ++i) {
         t = w_2[i - 3] ^ w_2[i - 8] ^ w_2[i - 14] ^ w_2[i - 16];
         t = (t << 1) | (t >>> 31);
         w_2[i] = t;
-        f = b_2 ^ c ^ d;
+        f = b ^ c ^ d;
         t = ((a << 5) | (a >>> 27)) + f + e + 1859775393 + t;
         e = d;
         d = c;
-        c = ((b_2 << 30) | (b_2 >>> 2)) >>> 0;
-        b_2 = a;
+        c = ((b << 30) | (b >>> 2)) >>> 0;
+        b = a;
         a = t;
       }
       for (; i < 40; ++i) {
         t = w_2[i - 6] ^ w_2[i - 16] ^ w_2[i - 28] ^ w_2[i - 32];
         t = (t << 2) | (t >>> 30);
         w_2[i] = t;
-        f = b_2 ^ c ^ d;
+        f = b ^ c ^ d;
         t = ((a << 5) | (a >>> 27)) + f + e + 1859775393 + t;
         e = d;
         d = c;
-        c = ((b_2 << 30) | (b_2 >>> 2)) >>> 0;
-        b_2 = a;
+        c = ((b << 30) | (b >>> 2)) >>> 0;
+        b = a;
         a = t;
       }
       for (; i < 60; ++i) {
         t = w_2[i - 6] ^ w_2[i - 16] ^ w_2[i - 28] ^ w_2[i - 32];
         t = (t << 2) | (t >>> 30);
         w_2[i] = t;
-        f = (b_2 & c) | (d & (b_2 ^ c));
+        f = (b & c) | (d & (b ^ c));
         t = ((a << 5) | (a >>> 27)) + f + e + 2400959708 + t;
         e = d;
         d = c;
-        c = ((b_2 << 30) | (b_2 >>> 2)) >>> 0;
-        b_2 = a;
+        c = ((b << 30) | (b >>> 2)) >>> 0;
+        b = a;
         a = t;
       }
       for (; i < 80; ++i) {
         t = w_2[i - 6] ^ w_2[i - 16] ^ w_2[i - 28] ^ w_2[i - 32];
         t = (t << 2) | (t >>> 30);
         w_2[i] = t;
-        f = b_2 ^ c ^ d;
+        f = b ^ c ^ d;
         t = ((a << 5) | (a >>> 27)) + f + e + 3395469782 + t;
         e = d;
         d = c;
-        c = ((b_2 << 30) | (b_2 >>> 2)) >>> 0;
-        b_2 = a;
+        c = ((b << 30) | (b >>> 2)) >>> 0;
+        b = a;
         a = t;
       }
       s_2.h0 = (s_2.h0 + a) | 0;
-      s_2.h1 = (s_2.h1 + b_2) | 0;
+      s_2.h1 = (s_2.h1 + b) | 0;
       s_2.h2 = (s_2.h2 + c) | 0;
       s_2.h3 = (s_2.h3 + d) | 0;
       s_2.h4 = (s_2.h4 + e) | 0;

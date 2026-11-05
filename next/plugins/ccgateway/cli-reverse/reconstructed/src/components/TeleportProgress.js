@@ -3,9 +3,9 @@
  *
  * teleport 进度（"Teleporting session…"，校验、检出分支）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/TeleportProgress.tsx
- * pieces: chunk-pfn09c5f.js (4), chunk-tcnhgpc6.js (12)
+ * pieces: chunk-46vqpvpm.js (4), chunk-4vawgj1p.js (12)
  * attribution: placement 13, fingerprint 3
  */
 import { stepDurationSuffix, setupHeadline } from "../services/cloudSessions/setupProgress.js";
@@ -30,7 +30,7 @@ import {
 } from "../utils/teleport.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-tcnhgpc6.js:268-436 placement
+//@ chunk-4vawgj1p.js:268-436 placement
 /**
  * 云会话创建清单的初始进度状态：检查步骤进行中、创建步骤待定。
  */
@@ -54,7 +54,7 @@ function initialUploadProgress(startedAt) {
     requestSent: false,
   };
 }
-//@ chunk-tcnhgpc6.js:436-1570 placement
+//@ chunk-4vawgj1p.js:436-1570 placement
 /**
  * 上传工作树到云会话时的进度状态转换（检查、打包、上传、创建会话）。
  */
@@ -150,7 +150,7 @@ function reduceUploadProgress(state, event, startedAt) {
       return completeRunningStep(state, "create", "completed", startedAt);
   }
 }
-//@ chunk-tcnhgpc6.js:1570-1743 placement
+//@ chunk-4vawgj1p.js:1570-1743 placement
 function completeRunningStep(state, stepId, status, completedAt) {
   return state.steps.some((step) => step.id === stepId && step.status === "running")
     ? {
@@ -167,7 +167,7 @@ function completeRunningStep(state, stepId, status, completedAt) {
       }
     : state;
 }
-//@ chunk-tcnhgpc6.js:1743-1920 placement
+//@ chunk-4vawgj1p.js:1743-1920 placement
 function startPendingStep(state, stepId, startedAt) {
   return state.steps.some((step) => step.id === stepId && step.status === "pending")
     ? {
@@ -184,7 +184,7 @@ function startPendingStep(state, stepId, startedAt) {
       }
     : state;
 }
-//@ chunk-tcnhgpc6.js:1920-2167 placement
+//@ chunk-4vawgj1p.js:1920-2167 placement
 /**
  * 根据最后一个已开始的步骤得出云会话创建的阶段：检查、打包、上传、创建中或已创建。
  */
@@ -202,14 +202,14 @@ function uploadProgressPhase(state) {
       return last.status === "completed" ? "created" : "creating";
   }
 }
-//@ chunk-tcnhgpc6.js:2167-2295 placement
+//@ chunk-4vawgj1p.js:2167-2295 placement
 var BUNDLE_MODE_LABELS = {
   all: "with history",
   current_branch: "current branch only",
   head: "current history only",
   squashed: "snapshot without history",
 };
-//@ chunk-tcnhgpc6.js:2295-2384 placement
+//@ chunk-4vawgj1p.js:2295-2384 placement
 /**
  * 函数 teleportProgressRow（进度行（标签/标注/详情））；位于「teleport 进度（"Teleporting session…"，校验、检出分支）」模块。
  */
@@ -220,11 +220,11 @@ function teleportProgressRow(step, detail, now) {
     detail: noopDetail(step, detail),
   };
 }
-//@ chunk-tcnhgpc6.js:2384-2407 placement
+//@ chunk-4vawgj1p.js:2384-2407 placement
 function noopDetail(step, detail) {
   return;
 }
-//@ chunk-tcnhgpc6.js:2407-3039 placement
+//@ chunk-4vawgj1p.js:2407-3039 placement
 function formatCheckStep(step, { rerouted, folder }) {
   let isDone = step.status === "completed";
   switch (step.id) {
@@ -242,7 +242,7 @@ function formatCheckStep(step, { rerouted, folder }) {
       return isDone ? "Created cloud session" : "Creating cloud session";
   }
 }
-//@ chunk-tcnhgpc6.js:3039-3363 placement
+//@ chunk-4vawgj1p.js:3039-3363 placement
 function formatBundleStep(step, { bundle, folder }) {
   if (bundle === null || (step.status !== "running" && step.status !== "completed")) return "";
   let sizeLabel = formatFileSize(bundle.sizeBytes);
@@ -260,7 +260,7 @@ function formatBundleStep(step, { bundle, folder }) {
       return "";
   }
 }
-//@ chunk-tcnhgpc6.js:3363-3469 placement
+//@ chunk-4vawgj1p.js:3363-3469 placement
 /**
  * 云会话创建清单的标题（完成后改为过去时）。
  */
@@ -270,7 +270,7 @@ function cloudCreateTitle(state) {
     ? headline.replace(/^Setting up/, "Set up")
     : `${headline}\u2026`;
 }
-//@ chunk-tcnhgpc6.js:3469-3657 placement
+//@ chunk-4vawgj1p.js:3469-3657 placement
 /**
  * 取消云会话创建时的提示：请求已发出时说明云会话可能仍已创建。
  */
@@ -279,12 +279,12 @@ function cloudCreateCancelMessage(state) {
     ? "Cancelled after the create request was sent, so a cloud session may still have been created"
     : "Cancelled before a cloud session was created";
 }
-//@ chunk-pfn09c5f.js:14252-14256 placement
+//@ chunk-46vqpvpm.js:15428-15432 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-pfn09c5f.js:14252", () => {
+deferInit("chunk-46vqpvpm.js:15428", () => {
   init_react_production();
 });
-//@ chunk-pfn09c5f.js:14256-14503 fingerprint (2.1.88 match: STEPS, 1)
+//@ chunk-46vqpvpm.js:15432-15679 fingerprint (2.1.88 match: STEPS, 1)
 var TELEPORT_SPINNER_FRAMES = ["\u25D0", "\u25D3", "\u25D1", "\u25D2"];
 var TELEPORT_STEPS = [
   {
@@ -304,7 +304,7 @@ var TELEPORT_STEPS = [
     label: "Checking out branch",
   },
 ];
-//@ chunk-pfn09c5f.js:14503-15625 fingerprint (2.1.88 match: TeleportProgress, 0.916)
+//@ chunk-46vqpvpm.js:15679-16801 fingerprint (2.1.88 match: TeleportProgress, 0.916)
 function TeleportProgress(props) {
   let $ = useMemoCache(16);
   let { currentStep, sessionId } = props;
@@ -419,7 +419,7 @@ function TeleportProgress(props) {
   } else t7 = $[15];
   return t7;
 }
-//@ chunk-pfn09c5f.js:15625-15941 fingerprint (2.1.88 match: teleportWithProgress, 0.866)
+//@ chunk-46vqpvpm.js:16801-17117 fingerprint (2.1.88 match: teleportWithProgress, 0.866)
 async function teleportWithProgress(root, sessionId) {
   let setStep = () => {};
   function TeleportProgressWrapper() {

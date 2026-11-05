@@ -3,10 +3,10 @@
  *
  * 消息操作：可导航消息判定、复制文本、工具调用/结果提取、消息操作栏与 MessageActionsKeybindings。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messageActions.tsx
- * pieces: chunk-0e8j1zzj.js (1), chunk-ag5x7vhf.js (2), chunk-e6aww6q8.js (10), chunk-hyjyj8hj.js (1), chunk-mketzrwm.js (1), chunk-tyg7f3ek.js (1), chunk-yzt83vwd.js (1)
- * attribution: fingerprint 9, sole-consumer 2, file-local 1, layout 1, placement 3, affinity 1
+ * pieces: chunk-0yw3taqg.js (1), chunk-5xgkngpb.js (14), chunk-8prszgkd.js (1), chunk-aexe35rn.js (1), chunk-hnxhr3bs.js (2), chunk-p762h6ag.js (1), chunk-tdcrpxkn.js (1)
+ * attribution: fingerprint 9, placement 7, layout 4, sole-consumer 1
  */
 import { HOOK_RESPONSE_POLL_MS } from "../utils/hooks/hookEvents.js";
 import { postSwitchSlot } from "../utils/model/modelSwitchHooks.js";
@@ -14,7 +14,9 @@ import { withDeadline } from "../utils/sleep.js";
 import { jsonStringify } from "../utils/slowOperations.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { objectSchema, array, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
-import { uniq, count } from "../utils/collections.js";
+import { isInterruptedCall } from "../plugins/functionHooks/ui/interactions.js";
+import { normalizeCaseForComparison_2 } from "../utils/permissions/filesystem.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
 import {
   isCollapsibleToolResult,
   shouldSkipMessage,
@@ -32,6 +34,7 @@ import { AGENT, TASK } from "../tools/AgentTool/constants.js";
 import { truncateToLength, collapseWhitespace as collapseWhitespace_2 } from "../utils/stringUtils.js";
 import { deviceToolDisplayInfo } from "../utils/toolUseDisplay.js";
 import { FILE_EDITING_TOOL_NAMES, countEditLines } from "../tools/AgentTool/agentLaunch.js";
+import { countWhere } from "../utils/collections.js";
 import { useKeybindingContext } from "../keybindings/KeybindingContext.js";
 import { useState, useLayoutEffect, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { asSafePathKey } from "../services/api/errors.js";
@@ -47,7 +50,7 @@ import {
 import { Text, Box } from "../ink/components/Text.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-mketzrwm.js:6314-6704 fingerprint (2.1.88 match: stripSystemReminders, 0.873)
+//@ chunk-aexe35rn.js:6521-6911 fingerprint (2.1.88 match: stripSystemReminders, 0.873)
 function stripSystemReminders(text) {
   let rawText = text.trimStart();
   let hasSystemReminder = false;
@@ -68,7 +71,7 @@ function stripSystemReminders(text) {
   if (!hasSystemReminder) return text;
   return match === "" ? text : match;
 }
-//@ chunk-e6aww6q8.js:3427430-3427980 fingerprint (2.1.88 match: copyTextOf, 0.33)
+//@ chunk-5xgkngpb.js:3516252-3516802 fingerprint (2.1.88 match: copyTextOf, 0.328)
 async function copyTextOf(session, timeoutMs = HOOK_RESPONSE_POLL_MS) {
   let postSwitch = postSwitchSlot.of(session);
   if (postSwitch.inFlight.size > 0 && postSwitch.landedOn?.sessionId === session.id)
@@ -97,9 +100,9 @@ async function copyTextOf(session, timeoutMs = HOOK_RESPONSE_POLL_MS) {
     return true;
   });
 }
-//@ chunk-e6aww6q8.js:4152232-4152286 fingerprint (2.1.88 match: isApplicable, 0.461)
+//@ chunk-5xgkngpb.js:4258292-4258346 fingerprint (2.1.88 match: isApplicable, 0.463)
 var isApplicable; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4152232", () => {
+deferInit("chunk-5xgkngpb.js:4258292", () => {
   isApplicable = DoctorLazy(() =>
     objectSchema({
       compilerOptions: objectSchema({
@@ -108,7 +111,16 @@ deferInit("chunk-e6aww6q8.js:4152232", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:4686545-4686715 file-local
+//@ chunk-5xgkngpb.js:4792839-4793008 fingerprint (2.1.88 match: toolCallOf, 1)
+function toolCallOf(msg) {
+  if (msg.type === "assistant") {
+    let firstBlock = msg.message.content[0];
+    return firstBlock?.type === "tool_use" ? firstBlock.name : null;
+  }
+  if (msg.type === "grouped_tool_use") return msg.toolName;
+  return null;
+}
+//@ chunk-5xgkngpb.js:4796317-4796487 placement
 function toolResultText(message, toolUseIds) {
   if (message.type !== "user") return false;
   let matched = false;
@@ -119,7 +131,47 @@ function toolResultText(message, toolUseIds) {
   }
   return matched;
 }
-//@ chunk-e6aww6q8.js:4686715-4686968 layout (2.1.88 match: toolCallOf, 1)
+//@ chunk-5xgkngpb.js:4796487-4796699 layout
+function skipVirtualCallRun(messages, start) {
+  let index = start;
+  let interrupted = false;
+  let sawVirtual = false;
+  for (; index < messages.length; index++) {
+    let message = messages[index];
+    if (
+      (message.type === "assistant" || message.type === "user") &&
+      (message.isVirtual || message.remoteVirtual)
+    ) {
+      sawVirtual = true;
+      interrupted ||= isInterruptedCall(message);
+    } else if (sawVirtual || !isToolCallRow(message)) break;
+  }
+  return {
+    end: index,
+    interrupted,
+  };
+}
+//@ chunk-5xgkngpb.js:4796699-4796939 layout
+function toolNameForResult(message, messages) {
+  let firstBlock = message.type === "user" ? message.message.content[0] : undefined;
+  if (firstBlock?.type !== "tool_result") return;
+  for (let message of messages) {
+    let firstContentBlock = message.type === "assistant" ? message.message.content[0] : undefined;
+    if (firstContentBlock?.type === "tool_use" && firstContentBlock.id === firstBlock.tool_use_id)
+      return firstContentBlock.name;
+  }
+  return;
+}
+//@ chunk-5xgkngpb.js:4796939-4797153 layout
+function isToolCallRow(message) {
+  if (message.type === "assistant") return message.message.content[0]?.type === "tool_use";
+  if (message.type !== "user") return false;
+  let content = message.message.content;
+  return (
+    Array.isArray(content) && content.length > 0 && content.every((block) => block?.type === "tool_result")
+  );
+}
+//@ chunk-5xgkngpb.js:4797153-4797406 layout (2.1.88 match: toolCallOf, 1)
 function toolCallOf_3(msg) {
   if (msg.type === "assistant") {
     let block = msg.message.content[0];
@@ -134,7 +186,7 @@ function toolCallOf_3(msg) {
       .filter(Boolean);
   return [];
 }
-//@ chunk-e6aww6q8.js:4686968-4687044 placement
+//@ chunk-5xgkngpb.js:4797406-4797482 placement
 /**
  * 函数 collectToolUseIds（收集消息组的工具调用 id）；位于「消息操作：可导航消息判定、复制文本、工具调用/结果提取、消息操作栏与 MessageActionsKeybindings」模块。
  */
@@ -143,14 +195,14 @@ function collectToolUseIds(conversation) {
   for (let message of conversation.messages) ids.push(...toolCallOf_3(message));
   return ids;
 }
-//@ chunk-e6aww6q8.js:4687044-4687096 placement
+//@ chunk-5xgkngpb.js:4797482-4797534 placement
 /**
  * 函数 hasAnyToolUseId（是否有任一 id 在集合内）；位于「消息操作：可导航消息判定、复制文本、工具调用/结果提取、消息操作栏与 MessageActionsKeybindings」模块。
  */
 function hasAnyToolUseId(msg, inProgressToolUseIDs) {
   return collectToolUseIds(msg).some((id) => inProgressToolUseIDs.has(id));
 }
-//@ chunk-e6aww6q8.js:4700121-4702980 placement
+//@ chunk-5xgkngpb.js:4810905-4813815 placement
 /**
  * 把一个折叠的读/搜组的各项计数（搜索、读取、记忆、MCP、Bash、编辑行数、提交、钩子、思考时长等）累加进另一个组，并追加消息。
  */
@@ -168,7 +220,7 @@ function mergeCollapsedReadSearch(target, source) {
   if (source.teamMemoryWriteCount)
     target.teamMemoryWriteCount = (target.teamMemoryWriteCount ?? 0) + source.teamMemoryWriteCount;
   if (source.accountMemoryReadKeys?.length)
-    target.accountMemoryReadKeys = uniq([
+    target.accountMemoryReadKeys = normalizeCaseForComparison_2([
       ...(target.accountMemoryReadKeys ?? []),
       ...source.accountMemoryReadKeys,
     ]);
@@ -188,7 +240,10 @@ function mergeCollapsedReadSearch(target, source) {
   if (source.memorySaves?.length) target.memorySaves = [...(target.memorySaves ?? []), ...source.memorySaves];
   if (source.mcpCallCount) {
     target.mcpCallCount = (target.mcpCallCount ?? 0) + source.mcpCallCount;
-    target.mcpCallLabels = uniq([...(target.mcpCallLabels ?? []), ...(source.mcpCallLabels ?? [])]);
+    target.mcpCallLabels = normalizeCaseForComparison_2([
+      ...(target.mcpCallLabels ?? []),
+      ...(source.mcpCallLabels ?? []),
+    ]);
   }
   if (source.bashCount) target.bashCount = (target.bashCount ?? 0) + source.bashCount;
   if (source.gitOpBashCount) target.gitOpBashCount = (target.gitOpBashCount ?? 0) + source.gitOpBashCount;
@@ -217,9 +272,10 @@ function mergeCollapsedReadSearch(target, source) {
   target.latestDisplayHint = source.latestDisplayHint ?? target.latestDisplayHint;
   if (source.thoughtForMs) target.thoughtForMs = (target.thoughtForMs ?? 0) + source.thoughtForMs;
   target.latestThinkingSummary = source.latestThinkingSummary ?? target.latestThinkingSummary;
+  if (codeModeAccepted() && source.stopShownAfter === true) target.stopShownAfter = true;
   target.messages.push(...source.messages);
 }
-//@ chunk-e6aww6q8.js:4703309-4707177 fingerprint (2.1.88 match: isNavigableMessage, 0.31)
+//@ chunk-5xgkngpb.js:4814144-4818016 placement
 function isNavigableMessage(collapsedBase, tools, getTaskStats, isLoading = false, options = {}) {
   if (options.transcriptV2) return collapsedBase;
   let result = [];
@@ -454,7 +510,7 @@ function isNavigableMessage(collapsedBase, tools, getTaskStats, isLoading = fals
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:4707177-4707389 affinity
+//@ chunk-5xgkngpb.js:4818016-4818228 placement
 function createCollapsedReadSearchGroup(message) {
   return {
     type: "collapsed_read_search",
@@ -470,15 +526,15 @@ function createCollapsedReadSearchGroup(message) {
     timestamp: message.timestamp,
   };
 }
-//@ chunk-e6aww6q8.js:4707389-4708167 sole-consumer
+//@ chunk-5xgkngpb.js:4818228-4819011 placement
 /**
  * 为一组同名工具调用创建折叠组并按工具类型计数：Agent/Task 记描述，MCP/记忆保存记服务器名，编辑类累加增删行，Artifact 计帧数，其他计入 otherToolCount。
  */
 function createCollapsedToolGroup(message, toolName, inputs, tools) {
-  let count_2 = inputs.length;
+  let count = inputs.length;
   let group = createCollapsedReadSearchGroup(message);
   if (toolName === AGENT || toolName === TASK) {
-    group.agentCount = count_2;
+    group.agentCount = count;
     let flattened = inputs.flatMap((input) => {
       let description = input?.description;
       if (typeof description !== "string") return [];
@@ -491,13 +547,13 @@ function createCollapsedToolGroup(message, toolName, inputs, tools) {
   let tool = findToolByName(tools, toolName);
   let displayInfo = tool === undefined ? deviceToolDisplayInfo(toolName) : undefined;
   if (tool?.isMcp) {
-    group.mcpCallCount = count_2;
+    group.mcpCallCount = count;
     if (tool.mcpInfo?.serverName) group.mcpCallLabels = [tool.mcpInfo.serverName];
   } else if (displayInfo !== undefined && memorySaveHooks?.isMemorySaveCall(displayInfo)) {
-    group.mcpCallCount = count_2;
+    group.mcpCallCount = count;
     group.mcpCallLabels = [displayInfo.serverName];
   } else if (FILE_EDITING_TOOL_NAMES.has(toolName)) {
-    group.editFileCount = count_2;
+    group.editFileCount = count;
     let lineDelta = 0;
     let charDelta = 0;
     for (let input of inputs) {
@@ -508,13 +564,13 @@ function createCollapsedToolGroup(message, toolName, inputs, tools) {
     if (lineDelta > 0) group.linesAdded = lineDelta;
     if (charDelta > 0) group.linesRemoved = charDelta;
   } else if (toolName === ARTIFACT_TOOL_NAME) {
-    let frameCount = count(inputs, (input) => isPublishShapedArtifactAction?.(input) === true);
+    let frameCount = countWhere(inputs, (input) => isPublishShapedArtifactAction?.(input) === true);
     if (frameCount > 0) group.frameCount = frameCount;
-    if (count_2 - frameCount > 0) group.otherToolCount = (group.otherToolCount ?? 0) + (count_2 - frameCount);
-  } else group.otherToolCount = count_2;
+    if (count - frameCount > 0) group.otherToolCount = (group.otherToolCount ?? 0) + (count - frameCount);
+  } else group.otherToolCount = count;
   return group;
 }
-//@ chunk-yzt83vwd.js:598-940 fingerprint (2.1.88 match: MessageActionsKeybindings, 0.41)
+//@ chunk-p762h6ag.js:598-940 fingerprint (2.1.88 match: MessageActionsKeybindings, 0.411)
 function MessageActionsKeybindings(handlers, options = {}) {
   let { context = "Global", isActive = true } = options;
   let keybindingContext = useKeybindingContext();
@@ -540,7 +596,7 @@ function MessageActionsKeybindings(handlers, options = {}) {
     };
   }, [context, joined, keybindingContext, isActive, state]);
 }
-//@ chunk-ag5x7vhf.js:175325-175697 fingerprint (2.1.88 match: NAVIGABLE_TYPES, 0.459)
+//@ chunk-hnxhr3bs.js:179627-179999 fingerprint (2.1.88 match: NAVIGABLE_TYPES, 0.459)
 function NAVIGABLE_TYPES(message) {
   let key;
   switch (message.type) {
@@ -565,13 +621,13 @@ function NAVIGABLE_TYPES(message) {
   }
   return asSafePathKey(key);
 }
-//@ chunk-ag5x7vhf.js:175697-175824 sole-consumer (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-hnxhr3bs.js:179999-180126 sole-consumer (2.1.88 match: extractErrorTypeFromData, 1)
 function messageTypeLabel(data) {
   if (data === undefined) return "?";
   let blockType = typeof data === "object" && data !== null && "type" in data ? data.type : undefined;
   return isKnownContentBlockType(blockType) ? blockType : "unknown";
 }
-//@ chunk-tyg7f3ek.js:448270-448342 fingerprint (2.1.88 match: useMessageActions, 0.347)
+//@ chunk-0yw3taqg.js:477435-477507 fingerprint (2.1.88 match: useMessageActions, 0.346)
 function useMessageActions(turnStartClock, arg1, arg2) {
   if (turnStartClock === undefined) return;
   try {
@@ -580,7 +636,7 @@ function useMessageActions(turnStartClock, arg1, arg2) {
     logError(error);
   }
 }
-//@ chunk-0e8j1zzj.js:40067-41402 fingerprint (2.1.88 match: MessageActionsBar, 0.516)
+//@ chunk-8prszgkd.js:49434-50774 fingerprint (2.1.88 match: MessageActionsBar, 0.515)
 function MessageActionsBar(props) {
   let $ = useMemoCache(38);
   let { keyText, contentColumns } = props;
@@ -602,7 +658,7 @@ function MessageActionsBar(props) {
   let borderDimColor;
   if ($[0] !== contentColumns || $[1] !== keyText) {
     resultElement = EARLY_RETURN_SENTINEL;
-    le: {
+    K: {
       let wrappedKey = wrapAnsi(`${keyText}:`, Math.max(10, contentColumns - 2), {
         hard: true,
         trim: false,
@@ -614,7 +670,7 @@ function MessageActionsBar(props) {
           dimColor: true,
           children: wrappedKey,
         });
-        break le;
+        break K;
       }
       footer = Box;
       flexDirection = "column";
@@ -736,14 +792,14 @@ function MessageActionsBar(props) {
   } else footerElement = $[37];
   return footerElement;
 }
-//@ chunk-hyjyj8hj.js:1107-2074 fingerprint (2.1.88 match: PRIMARY_INPUT, 0.377)
+//@ chunk-tdcrpxkn.js:1107-2074 fingerprint (2.1.88 match: PRIMARY_INPUT, 0.378)
 /**
  * 各内置工具的输入路径字段与响应中路径字段的表，供钩子输入路径处理用；同一声明派生 responseMembers 与 responseNested 集合。
  */
 var HOOK_TOOL_PATH_FIELDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var HOOK_RESPONSE_PATH_MEMBERS;
 var HOOK_RESPONSE_NESTED_PATHS;
-deferInit("chunk-hyjyj8hj.js:1107", () => {
+deferInit("chunk-tdcrpxkn.js:1107", () => {
   HOOK_TOOL_PATH_FIELDS = {
     Read: {
       input: "file_path",
@@ -811,16 +867,19 @@ deferInit("chunk-hyjyj8hj.js:1107", () => {
 export {
   MessageActionsKeybindings,
   collectToolUseIds,
-  MessageActionsBar,
-  isNavigableMessage,
-  stripSystemReminders,
   useMessageActions,
-  copyTextOf,
-  hasAnyToolUseId,
-  NAVIGABLE_TYPES,
+  stripSystemReminders,
   isApplicable,
+  toolCallOf,
   toolCallOf_3,
   toolResultText,
+  skipVirtualCallRun,
+  toolNameForResult,
+  isNavigableMessage,
+  MessageActionsBar,
+  hasAnyToolUseId,
+  NAVIGABLE_TYPES,
+  copyTextOf,
   HOOK_RESPONSE_PATH_MEMBERS,
   HOOK_RESPONSE_NESTED_PATHS,
   HOOK_TOOL_PATH_FIELDS,

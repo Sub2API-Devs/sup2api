@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。空闲返回提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (19)
  * attribution: placement 19
  */
 import { getCommandName } from "../../commands.js";
@@ -23,15 +23,15 @@ import {
   _enum,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { fromEnum, lit as lit_2 } from "../../services/analytics/safeMetadata.js";
-import { env } from "../../utils/env.js";
 import { logEvent } from "../../services/analytics/index.js";
+import { env } from "../../utils/env.js";
 import { logError } from "../../utils/log.js";
+import { logFeatureSad, logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { errorMessage } from "../../utils/errors.js";
-import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
+import { fromEnum, lit as lit_2 } from "../../services/analytics/safeMetadata.js";
 import { useState } from "../../../vendor/react/cjs/react.production.js";
-import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { createDependencyWatcher } from "../../cli/print/rewindStandIn.js";
 import { formatTokens } from "../../utils/format.js";
 import {
@@ -64,24 +64,24 @@ import { isPolicyAllowed as isPolicyAllowed_2 } from "../../services/policyLimit
 import {
   isRealUserPromptMessage,
   getUserMessageText,
+  SYNTHETIC_MODEL,
   getAssistantMessageText,
   createUserMessage,
   wrapInSystemReminder,
 } from "../../utils/messages.js";
 import { isLocalCommandMarkup } from "../../utils/messages/localCommandTags.js";
 import { isHumanTurn_2 } from "../../utils/messagePredicates.js";
-import { SYNTHETIC_MODEL } from "../../constants/messages.js";
 import { escapeForTag, escapeAngleBrackets } from "../../utils/sanitization.js";
 import { truncateToLength, takeLastChars } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:40744-40803 placement
+//@ chunk-czq1j3j2.js:42350-42409 placement
 function commandUnavailableMessage(command) {
   return `/${getCommandName(command)} is currently unavailable.`;
 }
-//@ chunk-18hwfzwa.js:40803-40830 placement
+//@ chunk-czq1j3j2.js:42409-42436 placement
 var IDLE_RETURN_HINT = "idle-return-hint";
-//@ chunk-18hwfzwa.js:40830-43638 placement
+//@ chunk-czq1j3j2.js:42436-45244 placement
 /**
  * 闲置回来后的“新任务？/clear 省 token”提示控制器：订阅 turn 快照，按缓存冷却与五小时额度占比决定是否在输入框上方显示提示，记录 hint_shown/hint_converted 遥测。
  */
@@ -90,14 +90,14 @@ class IdleReturnHint {
   #t;
   #o = false;
   #n = null;
-  #s = null;
-  #r = 0;
-  #c = null;
+  #r = null;
+  #s = 0;
+  #l = null;
   #i = 0;
   #a = false;
-  #l = false;
+  #c = false;
   #d;
-  #m = false;
+  #u = false;
   constructor(host) {
     this.#e = host;
     this.#t = host.turn.getSnapshot();
@@ -106,12 +106,12 @@ class IdleReturnHint {
     this.#h();
   }
   setLocalOverlayShowing(showing) {
-    if (this.#m || showing === this.#o) return;
+    if (this.#u || showing === this.#o) return;
     this.#o = showing;
     this.#f();
   }
   onOtherTurnComplete(completionTime) {
-    if (this.#m) return;
+    if (this.#u) return;
     this.#i = this.#e.now() - completionTime;
     this.#h();
   }
@@ -127,15 +127,15 @@ class IdleReturnHint {
     this.#a = false;
   }
   setHintSuppressed(suppressed) {
-    if (this.#m || suppressed === this.#l) return;
-    this.#l = suppressed;
+    if (this.#u || suppressed === this.#c) return;
+    this.#c = suppressed;
     if (suppressed) this.#S();
   }
   dispose() {
-    if (this.#m) return;
-    this.#m = true;
+    if (this.#u) return;
+    this.#u = true;
     this.#d();
-    this.#u();
+    this.#m();
     this.#S();
   }
   #p = () => {
@@ -148,14 +148,14 @@ class IdleReturnHint {
     if (loadStateChanged || snapshot.submitCount !== previousSnapshot.submitCount) this.#f();
     if (loadStateChanged || snapshot.lastTurnStopTime !== previousSnapshot.lastTurnStopTime) this.#h();
   };
-  #u() {
+  #m() {
     this.#n?.();
     this.#n = null;
-    this.#s?.();
-    this.#s = null;
+    this.#r?.();
+    this.#r = null;
   }
   #f() {
-    this.#u();
+    this.#m();
     let { isLoading, submitCount, lastQueryCompletionTime } = this.#t;
     if (isLoading) return;
     if (submitCount === 0 && !this.#e.hasSeededRemotePrompt) return;
@@ -165,7 +165,7 @@ class IdleReturnHint {
         this.#n = null;
         if (this.#e.getLastInteractionTime() > lastQueryCompletionTime) return;
         if (this.#e.backgroundAgents.getSnapshot()) {
-          this.#s = createDependencyWatcher(
+          this.#r = createDependencyWatcher(
             [this.#e.backgroundAgents],
             () => [this.#e.backgroundAgents.getSnapshot()],
             (agents) => {
@@ -182,9 +182,9 @@ class IdleReturnHint {
           !this.#e.hasPendingLoopWakeup() &&
           !this.#e.hasArmedQuotaAutoResume() &&
           idleMs >= this.#e.getIdleNotifThresholdMs() &&
-          lastQueryCompletionTime !== this.#r
+          lastQueryCompletionTime !== this.#s
         ) {
-          this.#r = lastQueryCompletionTime;
+          this.#s = lastQueryCompletionTime;
           this.#e.sendIdleNotification();
         }
       },
@@ -192,9 +192,9 @@ class IdleReturnHint {
     );
   }
   #S() {
-    let hadNotification = this.#c !== null;
-    this.#c?.();
-    this.#c = null;
+    let hadNotification = this.#l !== null;
+    this.#l?.();
+    this.#l = null;
     if (hadNotification) {
       this.#e.removeNotification(IDLE_RETURN_HINT);
       this.#a = false;
@@ -203,7 +203,7 @@ class IdleReturnHint {
   #h() {
     this.#S();
     let { isLoading, lastQueryCompletionTime } = this.#t;
-    if (lastQueryCompletionTime === 0 || isLoading || this.#l) return;
+    if (lastQueryCompletionTime === 0 || isLoading || this.#c) return;
     let tokenThreshold = Number(process.env.CLAUDE_CODE_IDLE_TOKEN_THRESHOLD ?? 1e5);
     if (this.#y(this.#e.getMessages()) < tokenThreshold) return;
     let idleWindowMs = Number(process.env.CLAUDE_CODE_IDLE_THRESHOLD_MINUTES ?? 75) * 60000;
@@ -250,7 +250,7 @@ class IdleReturnHint {
       },
       Math.min(2147483647, Math.max(0, delayMs)),
     );
-    this.#c = timer;
+    this.#l = timer;
   }
   #y(reason) {
     return estimateTokensWithAnchor(messagesSinceCompactBoundary(reason));
@@ -259,23 +259,23 @@ class IdleReturnHint {
     return Math.max(this.#t.lastQueryCompletionTime, this.#t.lastTurnStopTime, this.#i);
   }
 }
-//@ chunk-18hwfzwa.js:43638-43720 placement
+//@ chunk-czq1j3j2.js:45244-45326 placement
 var TENGU_AMBER_TALLY = "tengu_amber_tally";
 var TENGU_DRIFTING_NOVA = "tengu_drifting_nova";
 var TENGU_STATEFUL_MITTEN = "tengu_stateful_mitten";
-//@ chunk-18hwfzwa.js:43720-43757 placement
+//@ chunk-czq1j3j2.js:45326-45363 placement
 function isDriftingNovaEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_DRIFTING_NOVA, false) === true;
 }
-//@ chunk-18hwfzwa.js:43757-43776 placement
+//@ chunk-czq1j3j2.js:45363-45382 placement
 var DEFAULT_MIN_PERCENT = 5;
 var MAX_WARNING_TEXT_CHARS = 1500;
-//@ chunk-18hwfzwa.js:43776-43979 placement
+//@ chunk-czq1j3j2.js:45382-45585 placement
 /**
  * 冷缓存/冷恢复额度警告的配置 schema。
  */
 var COLD_CACHE_QUOTA_CONFIG_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:43776", () => {
+deferInit("chunk-czq1j3j2.js:45382", () => {
   COLD_CACHE_QUOTA_CONFIG_SCHEMA = DoctorLazy(() =>
     objectSchema({
       minPercent: numberSchema().min(1).optional(),
@@ -286,16 +286,16 @@ deferInit("chunk-18hwfzwa.js:43776", () => {
     }),
   );
 });
-//@ chunk-18hwfzwa.js:43979-44080 placement
+//@ chunk-czq1j3j2.js:45585-45686 placement
 /**
  * 额度警告的界面名（空闲或冷恢复）。
  */
 function quotaWarningSurface(surface) {
   return surface === "idle" ? "cli_idle_cold_cache_quota_warning" : "cli_cold_resume_quota_warning";
 }
-//@ chunk-18hwfzwa.js:44080-44388 placement
+//@ chunk-czq1j3j2.js:45686-45994 placement
 var idleReturnDialogDef; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:44080", () => {
+deferInit("chunk-czq1j3j2.js:45686", () => {
   idleReturnDialogDef = withHideWhile({
     kind: COLD_RESUME_QUOTA,
     payload: DoctorLazy(() =>
@@ -313,7 +313,7 @@ deferInit("chunk-18hwfzwa.js:44080", () => {
     hideWhile: [],
   });
 });
-//@ chunk-18hwfzwa.js:44388-44641 placement
+//@ chunk-czq1j3j2.js:45994-46247 placement
 function isRateLimitRejected() {
   let wrapUpZone = getWrapUpZone();
   if (wrapUpZone !== null) return wrapUpZone.resetsAt === undefined ? 1 / 0 : wrapUpZone.resetsAt * 1000;
@@ -322,7 +322,7 @@ function isRateLimitRejected() {
   if (resetsAt === undefined || !Number.isFinite(resetsAt)) return 1 / 0;
   return resetsAt * 1000 > Date.now() ? resetsAt * 1000 : null;
 }
-//@ chunk-18hwfzwa.js:44641-44889 placement
+//@ chunk-czq1j3j2.js:46247-46495 placement
 function estimateResumeQuotaCost({ contextTokens, model, rateLimitTier, config }) {
   if (rateLimitTier === null) return null;
   let fiveHourCredits = config.fiveHourCredits[rateLimitTier];
@@ -335,7 +335,7 @@ function estimateResumeQuotaCost({ contextTokens, model, rateLimitTier, config }
   if (typeof fiveHourCredits !== "number" || typeof creditsPerMillion !== "number") return null;
   return ((contextTokens / 1e6) * creditsPerMillion * 100) / fiveHourCredits;
 }
-//@ chunk-18hwfzwa.js:44889-45963 placement
+//@ chunk-czq1j3j2.js:46495-47568 placement
 /**
  * 冷缓存续接额度提醒：会话闲置后再次提交时，若重新写入缓存的 token 占五小时额度比例超过阈值，弹 idle-return 对话框让用户选择继续/新会话；记录 cli_cold_resume_quota_warning。
  */
@@ -413,7 +413,7 @@ function maybeShowColdResumeQuotaWarning(dialog, mainLoopModelFromState, context
     tierSource: servedTier === null ? "stored" : "served",
   };
 }
-//@ chunk-18hwfzwa.js:45963-46836 placement
+//@ chunk-czq1j3j2.js:47568-48441 placement
 async function showIdleReturnDialog(
   requestDialog,
   { tierSource, uncappedContextTokens, ...rest },
@@ -466,7 +466,7 @@ async function showIdleReturnDialog(
   logFeatureOk(quotaWarningSurface(trigger));
   return dialogResult;
 }
-//@ chunk-18hwfzwa.js:46836-46994 placement
+//@ chunk-czq1j3j2.js:48441-48599 placement
 function isPreviousConversationPointerAllowed() {
   if (!isPolicyAllowed_2("allow_previous_conversation_pointer")) return false;
   let config = COLD_CACHE_QUOTA_CONFIG_SCHEMA().safeParse(
@@ -474,7 +474,7 @@ function isPreviousConversationPointerAllowed() {
   );
   return !(config.success && config.data.newConversationPointer === false);
 }
-//@ chunk-18hwfzwa.js:46994-48335 placement
+//@ chunk-czq1j3j2.js:48599-49940 placement
 /**
  * 开始新会话时生成“上一段对话指针”文本：取原会话最后一条用户输入与其后的助手回复，包进 <user>/<assistant> 标签，提示模型可按文件路径查阅旧转录。
  */
@@ -531,23 +531,24 @@ ${pointerPreview}
     isMeta: true,
   });
 }
-//@ chunk-18hwfzwa.js:48335-48388 placement
+//@ chunk-czq1j3j2.js:49940-49993 placement
 function escapeAmpersand(text) {
   return escapeAngleBrackets(text.replaceAll("&", "&amp;"));
 }
-//@ chunk-18hwfzwa.js:48388-48460 placement
+//@ chunk-czq1j3j2.js:49993-50064 placement
 function truncateWithEllipsisIdleReturn(text) {
   let truncated = truncateToLength(text, MAX_WARNING_TEXT_CHARS);
   return truncated.length < text.length ? `${truncated}\u2026` : truncated;
 }
-//@ chunk-18hwfzwa.js:48460-48532 placement
+//@ chunk-czq1j3j2.js:50064-50136 placement
 function keepTailWithEllipsis(text) {
   let tail = takeLastChars(text, MAX_WARNING_TEXT_CHARS);
   return tail.length < text.length ? `\u2026${tail}` : tail;
 }
-//@ chunk-18hwfzwa.js:48532-48551 placement
+//@ chunk-czq1j3j2.js:50136-50155 placement
 var MAX_INT32 = 2147483647;
 export {
+  commandUnavailableMessage,
   isDriftingNovaEnabled,
   MAX_INT32,
   IdleReturnHint,
@@ -558,5 +559,4 @@ export {
   buildPreviousConversationPointer,
   isPreviousConversationPointerAllowed,
   idleReturnDialogDef,
-  commandUnavailableMessage,
 };

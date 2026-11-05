@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程输入框编辑队列、自动补全与面板描述
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (12)
  * attribution: placement 12
  */
 import { identity } from "../../utils/identity.js";
@@ -33,12 +33,12 @@ import { nonEmptySpans, normalizeInputDecorations } from "../../components/Promp
 import { EMPTY_PROMPT_DRAFT } from "../../plugins/functionHooks/promptApi.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:499590-499624 placement
+//@ chunk-0yw3taqg.js:531216-531250 placement
 var PANE_PLACEMENT_HOLDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tyg7f3ek.js:499590", () => {
+deferInit("chunk-0yw3taqg.js:531216", () => {
   PANE_PLACEMENT_HOLDS = identity(new Map(), (holds) => holds.clear());
 });
-//@ chunk-tyg7f3ek.js:499624-499933 placement
+//@ chunk-0yw3taqg.js:531250-531559 placement
 function pruneDetachedClients() {
   let fullscreenIds = new Set(fullscreenClients().map((client) => client.clientId));
   let liveIds = new Set(clientRegistry.list().map((client) => client.clientId));
@@ -56,7 +56,7 @@ function pruneDetachedClients() {
   if (paneHostSlot.get() === undefined && describePaneUnplaced() === undefined)
     placeWaitingPanes("no sized client attached");
 }
-//@ chunk-tyg7f3ek.js:499933-500343 placement
+//@ chunk-0yw3taqg.js:531559-531969 placement
 var describePanesForClient = (snapshot) => ({
   panes: snapshot.panes.map((pane) => ({
     id: pane.id,
@@ -82,9 +82,9 @@ var describePanesForClient = (snapshot) => ({
   focused_id: snapshot.focusedId,
   focus_requested_id: snapshot.focusRequestedId,
 });
-//@ chunk-tyg7f3ek.js:500343-500364 placement
+//@ chunk-0yw3taqg.js:531969-531990 placement
 var handlePaneScrollRequest = (request) => runPaneRequest(request, SCROLL_REQUEST_KIND);
-//@ chunk-tyg7f3ek.js:500364-500701 placement
+//@ chunk-0yw3taqg.js:531990-532327 placement
 function paneStateFields(props) {
   let { scroll, isFocused } = props;
   let isScrollObject =
@@ -108,7 +108,7 @@ function paneStateFields(props) {
     }),
   };
 }
-//@ chunk-tyg7f3ek.js:500701-501679 placement
+//@ chunk-0yw3taqg.js:532327-533305 placement
 /**
  * 远程编辑器（remote composer）的 prompt.autocomplete：每个客户端一条在途请求，新请求取代旧请求。
  */
@@ -192,9 +192,9 @@ function createRemoteAutocomplete(deps) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:501679-501732 placement
+//@ chunk-0yw3taqg.js:533305-533358 placement
 var REMOTE_AUTOCOMPLETE; // deferred: uses createRemoteAutocomplete of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:501679", () => {
+deferInit("chunk-0yw3taqg.js:533305", () => {
   REMOTE_AUTOCOMPLETE = identity(
     createRemoteAutocomplete({
       onDetach: clientRegistry.onDetach,
@@ -202,12 +202,12 @@ deferInit("chunk-tyg7f3ek.js:501679", () => {
     (queue) => queue.clear(),
   );
 });
-//@ chunk-tyg7f3ek.js:501732-501809 placement
+//@ chunk-0yw3taqg.js:533358-533435 placement
 function editDistanceAfterChange(previousText, nextText) {
   let { start, end, inputText } = diffTextEdit(previousText, nextText);
   return end - start + inputText.length;
 }
-//@ chunk-tyg7f3ek.js:501809-501888 placement
+//@ chunk-0yw3taqg.js:533435-533514 placement
 function closerEditBox(entry, nextText) {
   let { box, offered } = entry;
   return offered !== undefined &&
@@ -215,7 +215,7 @@ function closerEditBox(entry, nextText) {
     ? offered
     : box;
 }
-//@ chunk-tyg7f3ek.js:501888-502041 placement
+//@ chunk-0yw3taqg.js:533514-533667 placement
 function toInkKeyFromRemote(key) {
   let isSpace = key.key === "space";
   return {
@@ -226,7 +226,7 @@ function toInkKeyFromRemote(key) {
     meta: key.meta === true,
   };
 }
-//@ chunk-tyg7f3ek.js:502041-503294 placement
+//@ chunk-0yw3taqg.js:533667-534921 placement
 /**
  * 远程编辑器的 prompt.edit：按客户端排队编辑请求并逐个应用。
  */
@@ -332,9 +332,9 @@ function createRemoteEditQueue(deps) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:503294-503347 placement
+//@ chunk-0yw3taqg.js:534921-534974 placement
 var REMOTE_EDIT_QUEUE; // deferred: uses createRemoteEditQueue of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:503294", () => {
+deferInit("chunk-0yw3taqg.js:534921", () => {
   REMOTE_EDIT_QUEUE = identity(
     createRemoteEditQueue({
       onDetach: clientRegistry.onDetach,

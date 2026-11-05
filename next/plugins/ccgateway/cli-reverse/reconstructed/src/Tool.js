@@ -3,60 +3,61 @@
  *
  * 工具接口的运行时部分：默认属性 TOOL_DEFAULTS、按名/别名查工具（findToolByName、toolMatchesName）、输入容错解析、remoteExecution/backgrounding 取值、getAllBaseTools 注册槽；真正的工具工厂 buildTool（chunk-g54kbxqw#on）目前被切到 _unattributed，混入了两个命令（Skill 别名、typeahead）函数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/Tool.ts
- * pieces: chunk-g54kbxqw.js (36)
- * attribution: placement 11, fingerprint 3, layout 21, callgraph-witnessed 1
+ * pieces: chunk-2c3jp4kn.js (40)
+ * attribution: placement 11, fingerprint 3, layout 25, callgraph-witnessed 1
  */
 import { getProactivitySelectorGate, getProactivitySelectorGateEverOn } from "./bootstrap/state.js";
 import { isBareMode } from "./utils/envUtils.js";
 import { env } from "./utils/env.js";
 import { logEvent } from "./services/analytics/index.js";
 import { fromEnum } from "./services/analytics/safeMetadata.js";
-import { hasClearedToolResultsAfterIdle } from "./services/compact/microCompact.js";
 import { currentMcpClients } from "./services/compact/idleToolResultClearing.js";
 import {
   getToolPermissionContext,
-  getMainLoopModel as getMainLoopModel_2,
+  getMainLoopModel,
   getEffortValue,
   getEffortLayerOverride,
   getHelperEffort,
   getThinkingConfig,
 } from "./utils/permissions/toolPermissionContext.js";
 import { queueGoalOrigin } from "./commands/goal/goal.js";
+import { codeModeAccepted } from "./utils/codeMode/accepted.js";
 import { isModelAdmittedByAvailableModels } from "./utils/model/defaultModel.js";
+import { EVAL_TOOL_NAME, REPL_TOOL_NAME } from "./tools/REPLTool/constants.js";
 import { deferInit } from "../runtime/deferred-init.js";
 
-//@ chunk-g54kbxqw.js:158548-158581 placement
+//@ chunk-2c3jp4kn.js:6529-6561 placement
 function isProactivityActive() {
   return isAttachmentsEnabled() && getProactivitySelectorGate();
 }
-//@ chunk-g54kbxqw.js:158581-158605 placement
+//@ chunk-2c3jp4kn.js:6561-6585 placement
 function alwaysFalse() {
   return false;
 }
-//@ chunk-g54kbxqw.js:158605-158650 placement
+//@ chunk-2c3jp4kn.js:6585-6630 placement
 function isProactiveLevel(proactivityLevel) {
   return proactivityLevel === "proactive" && isProactivityActive();
 }
-//@ chunk-g54kbxqw.js:158650-158683 placement
+//@ chunk-2c3jp4kn.js:6630-6663 placement
 function wasProactivityEverOn() {
   return isAttachmentsEnabled() && getProactivitySelectorGateEverOn();
 }
-//@ chunk-g54kbxqw.js:158683-158745 placement
+//@ chunk-2c3jp4kn.js:6663-6724 placement
 function isAttachmentsEnabled() {
   return !isBareMode() && !env.CLAUDE_CODE_DISABLE_ATTACHMENTS;
 }
-//@ chunk-g54kbxqw.js:158745-158825 placement
+//@ chunk-2c3jp4kn.js:6724-6803 placement
 function proactivityExclusionReason() {
   if (!isAttachmentsEnabled()) return "session_excluded";
   return getProactivitySelectorGate() ? undefined : "gate_off";
 }
-//@ chunk-g54kbxqw.js:158825-158878 placement
+//@ chunk-2c3jp4kn.js:6803-6856 placement
 function BARE_ATTACHMENTS_REASON() {
   return "bare, or attachments disabled";
 }
-//@ chunk-g54kbxqw.js:158878-159051 placement
+//@ chunk-2c3jp4kn.js:6856-7029 placement
 function logProactivityStartup({ level, source, entryMode, entryModeDecidedByLevel }) {
   logEvent("tengu_proactivity_startup", {
     level: fromEnum(level),
@@ -65,17 +66,17 @@ function logProactivityStartup({ level, source, entryMode, entryModeDecidedByLev
     entry_mode_decided_by_level: entryModeDecidedByLevel,
   });
 }
-//@ chunk-g54kbxqw.js:159051-159114 placement
+//@ chunk-2c3jp4kn.js:7029-7092 placement
 function currentProactivityLevel({ getProactivityLevel }) {
   if (isProactivityActive()) return getProactivityLevel();
   return;
 }
-//@ chunk-g54kbxqw.js:159114-165006 placement
+//@ chunk-2c3jp4kn.js:7092-13235 placement
 /**
  * 为工具调用构建上下文视图对象：以 getter 透传 agentId、会话、存储、凭证等字段。
  */
 function createToolUseContextView(context) {
-  return {
+  let view = {
     get agentId() {
       return context.agentId;
     },
@@ -146,17 +147,6 @@ function createToolUseContextView(context) {
     get nestedMemoryAttachmentTriggers() {
       return context.nestedMemoryAttachmentTriggers;
     },
-    get dedupUnchangedReads() {
-      return context.dedupUnchangedReads === false ||
-        hasClearedToolResultsAfterIdle(
-          context.messages,
-          context.options.mainLoopModel,
-          undefined,
-          context.session,
-        )
-        ? false
-        : undefined;
-    },
     get setArtifactReadVersion() {
       return context.setArtifactReadVersion;
     },
@@ -190,7 +180,7 @@ function createToolUseContextView(context) {
       return context.appendSystemMessage;
     },
     mainLoopModel: () => context.options.mainLoopModel,
-    model: () => getMainLoopModel_2(context),
+    model: () => getMainLoopModel(context),
     autoCompactWindow: () => context.options.autoCompactWindow,
     contextRoom: () => context.contextRoom,
     effort: () => getEffortValue(context),
@@ -402,8 +392,30 @@ function createToolUseContextView(context) {
     },
     recordQueuedGoalOrigin: (condition, origin) => queueGoalOrigin(context.setAppState, condition, origin),
   };
+  if (codeModeAccepted()) {
+    Object.defineProperty(view, "primitiveToolGrant", {
+      get: () => context.primitiveToolGrant,
+      enumerable: true,
+    });
+    Object.defineProperty(view, "replScriptCall", {
+      get: () => context.replScriptCall,
+      enumerable: true,
+    });
+    Object.defineProperty(view, "deliveryTurn", {
+      value: () => {
+        let appState = context.getAppState();
+        return {
+          chainId: context.queryTracking?.chainId,
+          mode: appState.toolPermissionContext.mode,
+          fastMode: appState.fastMode ?? false,
+        };
+      },
+      enumerable: true,
+    });
+  }
+  return view;
 }
-//@ chunk-g54kbxqw.js:165006-165268 placement
+//@ chunk-2c3jp4kn.js:16625-16887 placement
 async function runPermissionCheckWithReentry(
   checkPermission,
   tool,
@@ -432,7 +444,7 @@ async function runPermissionCheckWithReentry(
       toolUseContext.toolDecisions.delete(toolUseId);
   }
 }
-//@ chunk-g54kbxqw.js:165268-165458 fingerprint (2.1.88 match: getEmptyToolPermissionContext, 0.888)
+//@ chunk-2c3jp4kn.js:16887-17077 fingerprint (2.1.88 match: getEmptyToolPermissionContext, 0.889)
 /**
  * 返回空的 ToolPermissionContext：mode=default，工作目录、allow/deny/ask 规则、MCP 模式覆盖全为空，bypass 不可用。用于测试、ToolSearch 生成描述等不需要真实权限的场合。
  */
@@ -445,7 +457,7 @@ var getEmptyToolPermissionContext = () => ({
   isBypassPermissionsModeAvailable: false,
   mcpPermissionModeOverrides: {},
 });
-//@ chunk-g54kbxqw.js:165458-165587 layout
+//@ chunk-2c3jp4kn.js:17077-17206 layout
 /**
  * 模型可用性回退时取"主模型"：availabilityFallback.fallbackModel 等于当前 mainLoopModel 时返回 primaryModel，否则返回 mainLoopModel。
  */
@@ -455,7 +467,7 @@ function getPrimaryModelForFallback(options) {
     ? availabilityFallback.primaryModel
     : options.mainLoopModel;
 }
-//@ chunk-g54kbxqw.js:165587-165669 layout
+//@ chunk-2c3jp4kn.js:17206-17288 layout
 /**
  * 在 getPrimaryModelForFallback 的结果上做校验：与当前模型相同或通过 $Ie 检查才采用，否则仍用 mainLoopModel。
  */
@@ -466,14 +478,14 @@ function resolveContextPrimaryModel(options) {
     ? primaryModelForFallback
     : options.mainLoopModel;
 }
-//@ chunk-g54kbxqw.js:165669-165737 fingerprint (2.1.88 match: filterToolProgressMessages, 1)
+//@ chunk-2c3jp4kn.js:17288-17356 fingerprint (2.1.88 match: filterToolProgressMessages, 1)
 /**
  * 过滤掉工具进度消息中的 hook_progress 类型，只保留工具自身进度。
  */
 function filterToolProgressMessages(progressMessagesForMessage) {
   return progressMessagesForMessage.filter((msg) => msg.data?.type !== "hook_progress");
 }
-//@ chunk-g54kbxqw.js:165737-165862 layout
+//@ chunk-2c3jp4kn.js:17356-17481 layout
 /**
  * 判断工具调用结果对象是否带 afterResultCommitted() 回调（结果写入对话后再执行的副作用）。
  */
@@ -485,7 +497,7 @@ function hasAfterResultCommitted(value) {
     typeof value.afterResultCommitted === "function"
   );
 }
-//@ chunk-g54kbxqw.js:165862-165947 layout
+//@ chunk-2c3jp4kn.js:17481-17566 layout
 /**
  * 结果写入对话后调用其 afterResultCommitted()；skip 为真或没有回调时跳过，异常交给 onError，不向上抛。
  */
@@ -497,85 +509,99 @@ function runAfterResultCommitted(result, skip, onError) {
     onError(error);
   }
 }
-//@ chunk-g54kbxqw.js:165947-166012 layout
-/**
- * 工具名匹配：name 相等或在 aliases 里（旧版 toolMatchesName）。全项目约 70 个模块用它按名字判断工具。
- */
-function toolMatchesName(tool, name) {
+//@ chunk-2c3jp4kn.js:17566-17631 layout
+function matchesToolName(tool, name) {
   return tool.name === name || (tool.aliases?.includes(name) ?? false);
 }
-//@ chunk-g54kbxqw.js:166012-166066 layout
+//@ chunk-2c3jp4kn.js:17631-17685 layout
 /**
  * 按 name 的 localeCompare 比较两个工具；工具池组装时内建与 MCP 两个分区各自排序，保证提示缓存前缀稳定。
  */
 function compareToolsByName(tool, name) {
   return tool.name.localeCompare(name.name);
 }
-//@ chunk-g54kbxqw.js:166066-166073 layout
+//@ chunk-2c3jp4kn.js:17685-17692 layout
 var baseToolsProvider;
-//@ chunk-g54kbxqw.js:166073-166094 layout
+//@ chunk-2c3jp4kn.js:17692-17713 layout
 /**
  * 注册 getAllBaseTools 的提供者。tools.ts 顶层执行 umi(getAllBaseTools)，让 Tool.ts 侧（UI、消息渲染）能拿到全部内建工具而不形成循环依赖。
  */
 function registerAllBaseToolsProvider(getAllBaseTools) {
   baseToolsProvider = getAllBaseTools;
 }
-//@ chunk-g54kbxqw.js:166094-166122 layout
+//@ chunk-2c3jp4kn.js:17713-17741 layout
 /**
  * 返回已注册的 getAllBaseTools() 结果；未注册时为 undefined。消息渲染、工具活动展示据此按名字查工具定义。
  */
 function getAllBaseToolsFromRegistry() {
   return baseToolsProvider?.();
 }
-//@ chunk-g54kbxqw.js:166122-166129 layout
+//@ chunk-2c3jp4kn.js:17741-17748 layout
 var extraToolsProvider;
-//@ chunk-g54kbxqw.js:166129-166158 layout
+//@ chunk-2c3jp4kn.js:17748-17769 layout
+function setExtraToolsProvider(getFileAndShellTools) {
+  extraToolsProvider = getFileAndShellTools;
+}
+//@ chunk-2c3jp4kn.js:17769-17798 layout
 /**
  * 读取额外工具提供者 $l；外部构建中 $l 从未赋值，恒返回 undefined（utils/messages 用 fmi()??[]）。
  */
 function getExtraToolsFromProvider() {
   return extraToolsProvider?.();
 }
-//@ chunk-g54kbxqw.js:166158-166165 layout
+//@ chunk-2c3jp4kn.js:17798-17805 layout
 var virtualResultPatcher;
-//@ chunk-g54kbxqw.js:166165-166200 layout
+//@ chunk-2c3jp4kn.js:17805-17826 layout
+function setVirtualResultPatcher(patcher) {
+  virtualResultPatcher = patcher;
+}
+//@ chunk-2c3jp4kn.js:17826-17861 layout
 /**
  * 对 isVirtual 的工具结果消息在 stripForStorage 后追加字段的钩子；外部构建中未注册，恒 undefined。
  */
 function patchVirtualToolResult(tool, input) {
   return virtualResultPatcher?.(tool, input);
 }
-//@ chunk-g54kbxqw.js:166200-166207 layout
+//@ chunk-2c3jp4kn.js:17861-17868 layout
 var remoteHookRunnerProvider;
-//@ chunk-g54kbxqw.js:166207-166238 layout
+//@ chunk-2c3jp4kn.js:17868-17889 layout
+function setRemoteHookRunnerProvider(runner) {
+  remoteHookRunnerProvider = runner;
+}
+//@ chunk-2c3jp4kn.js:17889-17920 layout
 /**
  * 读取远程 hook 运行器；外部构建中未注册，恒 undefined。hooks 里用它判断是否在远端执行 hook。
  */
 function getRemoteHookRunner(toolUseContext) {
   return remoteHookRunnerProvider?.(toolUseContext);
 }
-//@ chunk-g54kbxqw.js:166238-166272 layout
+//@ chunk-2c3jp4kn.js:17920-17954 layout
 var toolNameIndexCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var toolListsSeenOnce;
-deferInit("chunk-g54kbxqw.js:166238", () => {
+deferInit("chunk-2c3jp4kn.js:17920", () => {
   toolNameIndexCache = new WeakMap();
   toolListsSeenOnce = new WeakSet();
 });
-//@ chunk-g54kbxqw.js:166272-166430 layout
+//@ chunk-2c3jp4kn.js:17954-17998 layout
+function isEvalAliasOfRepl(tool, name) {
+  return name === EVAL_TOOL_NAME && tool.name === REPL_TOOL_NAME;
+}
+//@ chunk-2c3jp4kn.js:17998-18178 layout
 /**
  * 把工具数组建成"名字/别名 → 工具"的 Map，先出现者优先。
  */
 function buildToolNameIndex(tools) {
   let index = new Map();
   for (let tool of tools) {
-    if (index.get(tool.name) === undefined) index.set(tool.name, tool);
+    let existing = index.get(tool.name);
+    if (existing === undefined || isEvalAliasOfRepl(existing, tool.name)) index.set(tool.name, tool);
     if (tool.aliases) {
       for (let alias of tool.aliases) if (!index.has(alias)) index.set(alias, tool);
     }
   }
   return index;
 }
-//@ chunk-g54kbxqw.js:166430-166654 callgraph-witnessed (2.1.88 match: findToolByName, 0)
+//@ chunk-2c3jp4kn.js:18178-18467 callgraph-witnessed (2.1.88 match: findToolByName, 0)
 /**
  * 按名字（含别名）在工具数组中找工具。toolAliases 映射先把模型发来的名字换成规范名（递归一次）；同一数组第一次线性查找，第二次起建 WeakMap 索引缓存。
  */
@@ -590,9 +616,12 @@ function findToolByName(tools, name, toolAliases) {
     return toolNameIndex.get(name);
   }
   toolListsSeenOnce.add(tools);
-  return tools.find((tool) => toolMatchesName(tool, name));
+  let tool = tools.find((tool) => matchesToolName(tool, name));
+  if (tool !== undefined && isEvalAliasOfRepl(tool, name))
+    return tools.find((tool) => tool.name === name) ?? tool;
+  return tool;
 }
-//@ chunk-g54kbxqw.js:166654-166753 layout
+//@ chunk-2c3jp4kn.js:18467-18566 layout
 /**
  * 解析工具输入：有 coerceInput 时先修复输入，再用 inputSchema.safeParse 校验。UI 渲染和任务展示用它容错解析历史输入。
  */
@@ -600,33 +629,33 @@ function safeParseToolInput(tool, input) {
   let coerced = tool.coerceInput?.(input) ?? null;
   return tool.inputSchema.safeParse(coerced === null ? input : coerced.input);
 }
-//@ chunk-g54kbxqw.js:166753-166791 layout
+//@ chunk-2c3jp4kn.js:18566-18604 layout
 var REMOTE_EXECUTION_UNSUPPORTED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-g54kbxqw.js:166753", () => {
+deferInit("chunk-2c3jp4kn.js:18566", () => {
   REMOTE_EXECUTION_UNSUPPORTED = Object.freeze({
     supported: false,
   });
 });
-//@ chunk-g54kbxqw.js:166791-166836 layout
+//@ chunk-2c3jp4kn.js:18604-18649 layout
 /**
  * 返回工具的 remoteExecution 描述，未声明时为 {supported:false}。远程/桥接执行决定工具能否在另一台机器上跑。
  */
 function getToolRemoteExecution(tool) {
   return tool.remoteExecution ?? REMOTE_EXECUTION_UNSUPPORTED;
 }
-//@ chunk-g54kbxqw.js:166836-166884 layout
+//@ chunk-2c3jp4kn.js:18649-18697 layout
 /**
  * 返回工具的 backgrounding 声明，默认 "never"。取值 never/self/... 决定工具是否可被转入后台。
  */
 function getToolBackgrounding(tool) {
   return tool.backgrounding ?? "never";
 }
-//@ chunk-g54kbxqw.js:166884-167050 fingerprint (2.1.88 match: TOOL_DEFAULTS, 0.792)
+//@ chunk-2c3jp4kn.js:18697-18863 fingerprint (2.1.88 match: TOOL_DEFAULTS, 0.792)
 /**
  * 工具默认属性：isEnabled=true、isConcurrencySafe=false、isReadOnly=false、isDestructive=false、remoteExecution 不支持、toAutoClassifierInput=""、userFacingName=""。buildTool 先铺这一层再叠加工具定义。
  */
 var TOOL_DEFAULTS; // deferred: uses REMOTE_EXECUTION_UNSUPPORTED of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-g54kbxqw.js:166884", () => {
+deferInit("chunk-2c3jp4kn.js:18697", () => {
   TOOL_DEFAULTS = {
     isEnabled: () => true,
     isConcurrencySafe: (_input) => false,
@@ -638,33 +667,36 @@ deferInit("chunk-g54kbxqw.js:166884", () => {
   };
 });
 export {
-  toolMatchesName,
+  matchesToolName,
+  wasProactivityEverOn,
+  safeParseToolInput,
   findToolByName,
+  getEmptyToolPermissionContext,
+  compareToolsByName,
+  getAllBaseToolsFromRegistry,
+  alwaysFalse,
   patchVirtualToolResult,
   getExtraToolsFromProvider,
   isProactivityActive,
-  wasProactivityEverOn,
-  compareToolsByName,
-  safeParseToolInput,
-  getEmptyToolPermissionContext,
-  alwaysFalse,
-  getAllBaseToolsFromRegistry,
-  filterToolProgressMessages,
-  logProactivityStartup,
-  getPrimaryModelForFallback,
-  createToolUseContextView,
-  currentProactivityLevel,
-  getToolRemoteExecution,
-  resolveContextPrimaryModel,
-  getRemoteHookRunner,
-  REMOTE_EXECUTION_UNSUPPORTED,
-  hasAfterResultCommitted,
-  registerAllBaseToolsProvider,
-  runAfterResultCommitted,
-  getToolBackgrounding,
-  runPermissionCheckWithReentry,
-  TOOL_DEFAULTS,
-  isProactiveLevel,
   proactivityExclusionReason,
   BARE_ATTACHMENTS_REASON,
+  hasAfterResultCommitted,
+  createToolUseContextView,
+  runPermissionCheckWithReentry,
+  TOOL_DEFAULTS,
+  getToolRemoteExecution,
+  getToolBackgrounding,
+  runAfterResultCommitted,
+  getRemoteHookRunner,
+  currentProactivityLevel,
+  registerAllBaseToolsProvider,
+  filterToolProgressMessages,
+  REMOTE_EXECUTION_UNSUPPORTED,
+  logProactivityStartup,
+  resolveContextPrimaryModel,
+  setExtraToolsProvider,
+  setVirtualResultPatcher,
+  setRemoteHookRunnerProvider,
+  isProactiveLevel,
+  getPrimaryModelForFallback,
 };

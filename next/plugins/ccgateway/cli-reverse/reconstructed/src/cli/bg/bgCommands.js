@@ -3,9 +3,9 @@
  *
  * 后台会话命令：--bg 启动、claude attach/logs/stop/rm/respawn 处理器，以及恢复/会话 id 等参数改写
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bg51yd13.js (60)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gwh0qn2w.js (60)
  * attribution: placement 60
  */
 import { mkdir, writeFile, rm, readdir, lstat } from "fs/promises";
@@ -110,6 +110,7 @@ import {
 } from "../../services/daemon/leaseProtocol.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { isTranscriptFileResumeArg } from "../../utils/sessionStoragePortable.js";
+import { takesShortProjectTempDirName } from "../../utils/tempDir.js";
 import { CLAUDE_BG_GATEWAY_WITHHELD } from "../../services/api/errors.js";
 import { formatForkMarker } from "../../utils/conversationRecovery.js";
 import { buildBgDispatcherEnv } from "../../utils/subprocessEnv.js";
@@ -137,7 +138,7 @@ import { setIsInteractive, getProjectConfigRoot } from "../../bootstrap/state.js
 import { drainConfigWrites, getGlobalConfig } from "../../utils/config.js";
 import { queuePromptForJob, queuedPromptOrUndefined } from "../../services/daemon/spawnLauncher.js";
 import { respawnBgSession } from "./bgSpare.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import {
   sanitizeSessionTitle,
   plural,
@@ -183,7 +184,7 @@ import { looksLikeAgentsJson } from "../agentsArg.js";
 import { hasSkipDangerousModePermissionPrompt, hasAutoModeOptIn } from "../../utils/settings/settings.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bg51yd13.js:27567-27615 placement
+//@ chunk-gwh0qn2w.js:27638-27686 placement
 function gateCauseExtra(gateCause) {
   return gateCause
     ? [
@@ -193,11 +194,11 @@ function gateCauseExtra(gateCause) {
       ]
     : [];
 }
-//@ chunk-bg51yd13.js:27615-27700 placement
+//@ chunk-gwh0qn2w.js:27686-27771 placement
 function workspaceGateCause(verdict) {
   return verdict.unresolvable ? "workspace_unresolvable" : "workspace_untrusted";
 }
-//@ chunk-bg51yd13.js:27700-28705 placement
+//@ chunk-gwh0qn2w.js:27771-28776 placement
 async function preSeedReplBgJob(sessionId, options, storage) {
   let hostKey = sessionId.slice(0, 8);
   let jobDir = getJobDir(hostKey);
@@ -257,7 +258,7 @@ async function preSeedReplBgJob(sessionId, options, storage) {
     state,
   };
 }
-//@ chunk-bg51yd13.js:28705-29384 placement
+//@ chunk-gwh0qn2w.js:28776-29455 placement
 async function spawnBgSession(
   argv,
   requestedSessionId,
@@ -325,7 +326,7 @@ async function spawnBgSession(
     })(),
   );
 }
-//@ chunk-bg51yd13.js:29384-36584 placement
+//@ chunk-gwh0qn2w.js:29455-36876 placement
 /**
  * 解析 --bg 启动参数（--agent、--name、--fork-session、恢复参数）并通过守护进程或回退路径启动后台会话（约 7 KB）。
  */
@@ -565,8 +566,15 @@ async function spawnBgSession_2(
       ...(env.CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS && {
         CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS: "1",
       }),
+      CLAUDE_CODE_HOST_SHORT_TEMP_DIRS: takesShortProjectTempDirName() ? "1" : "0",
       ...(env.CLAUDE_CODE_DISABLE_FILE_MENTIONS && {
         CLAUDE_CODE_DISABLE_FILE_MENTIONS: "1",
+      }),
+      ...(env.CLAUDE_CODE_DISABLE_MCP_TASKS && {
+        CLAUDE_CODE_DISABLE_MCP_TASKS: "1",
+      }),
+      ...(env.CLAUDE_CODE_DISABLE_AGENT_PROGRESS_SUMMARIES && {
+        CLAUDE_CODE_DISABLE_AGENT_PROGRESS_SUMMARIES: "1",
       }),
       ...(env.CLAUDE_CODE_AUTO_MODE_TIER !== undefined && {
         CLAUDE_CODE_AUTO_MODE_TIER: env.CLAUDE_CODE_AUTO_MODE_TIER,
@@ -761,7 +769,7 @@ async function spawnBgSession_2(
         : dispatchResult.reason.replace(/-/g, "_"),
   };
 }
-//@ chunk-bg51yd13.js:36584-36954 placement
+//@ chunk-gwh0qn2w.js:36876-37246 placement
 /**
  * 会话记录了 CLAUDE_BG_WORKSPACE_TRUSTED（守护进程只能走回退派发路径、没继承本终端的主目录信任）时写调试日志警告；shell 模式下同时打印到 stderr。
  */
@@ -775,7 +783,7 @@ function warnHomeTrustFallback(descriptor, launchMode) {
     process.stderr.write(`${message}
 `);
 }
-//@ chunk-bg51yd13.js:36954-38133 placement
+//@ chunk-gwh0qn2w.js:37246-38425 placement
 /**
  * 判定 --bg 带 --resume/--continue 时怎么处理：plain（没有恢复）、copy（另起副本，带原因：unresolved/running/open-elsewhere/handle-taken/unreadable/restricted/own-options）、continue（原地唤醒同 id 的后台会话，附带要投递的提示词）。
  */
@@ -880,7 +888,7 @@ async function resolveBgResumeTarget(argv, options) {
           },
   };
 }
-//@ chunk-bg51yd13.js:38133-38341 placement
+//@ chunk-gwh0qn2w.js:38425-38633 placement
 async function checkSessionOpenElsewhere(sessionId) {
   let holders;
   try {
@@ -895,7 +903,7 @@ async function checkSessionOpenElsewhere(sessionId) {
     ? "running"
     : "open-elsewhere";
 }
-//@ chunk-bg51yd13.js:38341-38513 placement
+//@ chunk-gwh0qn2w.js:38633-38805 placement
 async function jobStateExists(short, storageV5) {
   if (storageV5) {
     let meta = await storageV5.statMeta(jobStateKey(short));
@@ -907,7 +915,7 @@ async function jobStateExists(short, storageV5) {
     return !isENOENT(error);
   }
 }
-//@ chunk-bg51yd13.js:38513-39829 placement
+//@ chunk-gwh0qn2w.js:38805-40121 placement
 /**
  * 按 resolveBgResumeTarget 给出的 copy 原因生成 "note: …started a copy as <short>" 提示文字。
  */
@@ -931,7 +939,7 @@ function formatResumeCopyNote(resumeResult, copyShort) {
       return `note: a restricted shell does not wake background session ${resumeResult.original} in place, so this started a restricted copy as ${copyShort}.`;
   }
 }
-//@ chunk-bg51yd13.js:39829-42089 placement
+//@ chunk-gwh0qn2w.js:40121-42381 placement
 /**
  * 处理命令行中的 --bg：判断是标志还是文本，校验与 --print 等冲突，转入后台启动。
  */
@@ -1068,7 +1076,7 @@ async function handleBgFlag(argv, storage) {
   );
   await placeholderJobNameScore(storage);
 }
-//@ chunk-bg51yd13.js:42089-42577 placement
+//@ chunk-gwh0qn2w.js:42381-42869 placement
 /**
  * 交互终端且工作区未受信任时，动态加载 Ink 渲染 agents 工作区信任对话框并等待用户决定；结束后卸载并刷新配置写入。
  */
@@ -1098,7 +1106,7 @@ async function promptBgWorkspaceTrust(cwd, storage) {
   setIsInteractive(false);
   await drainConfigWrites();
 }
-//@ chunk-bg51yd13.js:42577-44096 placement
+//@ chunk-gwh0qn2w.js:42869-44388 placement
 /**
  * 后台会话启动的守护进程派发路径（受限模式、闸门检查、确保守护进程）。
  */
@@ -1156,7 +1164,7 @@ async function wakeExistingBgSession({ jobId: job, state, prompt }, respawnArgs,
   }
   await logFeatureOkAsync("cli_bg_dispatch");
   let flagValueIndices = getFlagValueIndices(state.respawnFlags);
-  let wokeWithFlags = uniq(
+  let wokeWithFlags = normalizeCaseForComparison_2(
     state.respawnFlags
       .map((respawnFlag, index) =>
         flagValueIndices.has(index)
@@ -1183,7 +1191,7 @@ async function wakeExistingBgSession({ jobId: job, state, prompt }, respawnArgs,
   );
   await placeholderJobNameScore(storage);
 }
-//@ chunk-bg51yd13.js:44096-44739 placement
+//@ chunk-gwh0qn2w.js:44388-45031 placement
 /**
  * 读取管道 stdin 作为后台任务输入（TTY 返回空串），超过上限截断并警告；stdin 不可读时打点并返回空串；去掉末尾换行。
  */
@@ -1225,9 +1233,9 @@ async function readBgStdin(stdin = process.stdin) {
 `);
   return buffer.replace(/\r?\n$/, "");
 }
-//@ chunk-bg51yd13.js:44739-44754 placement
+//@ chunk-gwh0qn2w.js:45031-45046 placement
 var MAX_PIPED_STDIN_BYTES = 1048576;
-//@ chunk-bg51yd13.js:44754-44949 placement
+//@ chunk-gwh0qn2w.js:45046-45241 placement
 function appendPromptToArgs(args, bgStdin) {
   let dashDashIndex = findDashDashIndex(args);
   if (dashDashIndex >= 0) {
@@ -1250,7 +1258,7 @@ ${bgStdin}`;
   }
   return [...args, "--", bgStdin];
 }
-//@ chunk-bg51yd13.js:44949-45368 placement
+//@ chunk-gwh0qn2w.js:45241-45660 placement
 /**
  * 在参数里找最后一个位置参数（提示词）的下标：跳过 flag 及其取值、--resume 的可选 id；找不到返回 -1。
  */
@@ -1282,19 +1290,19 @@ function findPromptArgIndex(args) {
   }
   return promptIndex;
 }
-//@ chunk-bg51yd13.js:45368-45402 placement
+//@ chunk-gwh0qn2w.js:45660-45694 placement
 var regExp; // deferred: uses DAEMON_UNREACHABLE_TIMEOUT_PHRASE (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-bg51yd13.js:45368", () => {
+deferInit("chunk-gwh0qn2w.js:45660", () => {
   regExp = new RegExp(`${DAEMON_UNREACHABLE_TIMEOUT_PHRASE} \\d+s`);
 });
-//@ chunk-bg51yd13.js:45402-45517 placement
+//@ chunk-gwh0qn2w.js:45694-45809 placement
 function classifyDaemonError(text) {
   let errnoToken = extractErrnoTokens(text)[0];
   if (errnoToken) return errnoToken;
   if (regExp.test(text)) return "timeout";
   return text.includes(DAEMON_EXITED_BEFORE_REACHABLE_PHRASE) ? "exited" : "other";
 }
-//@ chunk-bg51yd13.js:45517-45822 placement
+//@ chunk-gwh0qn2w.js:45809-46114 placement
 /**
  * 把派发失败码（daemon-unreachable、ack-timeout、dispatch-write 等）翻译成给用户看的短语。
  */
@@ -1314,7 +1322,7 @@ function describeDispatchFailure(reason) {
       return "id collision with a prior job";
   }
 }
-//@ chunk-bg51yd13.js:45822-46146 placement
+//@ chunk-gwh0qn2w.js:46114-46438 placement
 function formatBgHints(short, detail, name) {
   let hint = (command, description) => sequential.dim("  " + command.padEnd(26) + description);
   return [
@@ -1326,18 +1334,18 @@ function formatBgHints(short, detail, name) {
   ].join(`
 `);
 }
-//@ chunk-bg51yd13.js:46146-46178 placement
+//@ chunk-gwh0qn2w.js:46438-46470 placement
 function extraArgsWarningForArgv(argv) {
   return extraArgsWarning(getBgVerbArgsWithoutDebug(argv));
 }
-//@ chunk-bg51yd13.js:46178-46270 placement
+//@ chunk-gwh0qn2w.js:46470-46562 placement
 function extraArgsWarning(extraArgs) {
   return extraArgs.length === 0
     ? null
     : `warning: extra arguments ignored: ${extraArgs.join(" ")}
 `;
 }
-//@ chunk-bg51yd13.js:46270-46631 placement
+//@ chunk-gwh0qn2w.js:46562-46923 placement
 /**
  * 取后台子命令动词之后的参数，去掉 --debug/-d/--debug-file 等调试参数和 --setting-sources 的取值。
  */
@@ -1366,15 +1374,15 @@ function getBgVerbArgsWithoutDebug(argv) {
   }
   return kept;
 }
-//@ chunk-bg51yd13.js:46631-46722 placement
+//@ chunk-gwh0qn2w.js:46923-47014 placement
 function warnOnExtraArgs() {
   let warning = extraArgsWarningForArgv(process.argv.slice(2));
   if (warning) process.stderr.write(warning);
   return warning !== null;
 }
-//@ chunk-bg51yd13.js:46722-46733 placement
+//@ chunk-gwh0qn2w.js:47014-47025 placement
 var MAX_JOB_LIST_PAGES = 1e4;
-//@ chunk-bg51yd13.js:46733-47310 placement
+//@ chunk-gwh0qn2w.js:47025-47602 placement
 /**
  * 分页列出 v5 存储里 namespace=job 的全部 jobId；失败、游标不前进或超过页数上限时返回 undefined。
  */
@@ -1415,7 +1423,7 @@ async function listStorageJobIds(storage) {
   }
   return [...jobIds];
 }
-//@ chunk-bg51yd13.js:47310-47530 placement
+//@ chunk-gwh0qn2w.js:47602-47822 placement
 async function removeJobStorage(storage, short) {
   let jobDir = getJobDir(short);
   let stats = await lstat(jobDir).catch(() => {
@@ -1435,7 +1443,7 @@ async function removeJobStorage(storage, short) {
     })
     .catch(() => {});
 }
-//@ chunk-bg51yd13.js:47530-49783 placement
+//@ chunk-gwh0qn2w.js:47822-50075 placement
 /**
  * 后台会话子命令的通用参数解析：--help、未知选项、按 id/名称查找作业。
  */
@@ -1570,14 +1578,14 @@ ${nameHint}`
   );
   process.exit(1);
 }
-//@ chunk-bg51yd13.js:49783-49842 placement
+//@ chunk-gwh0qn2w.js:50075-50134 placement
 var SHORT_HEX_ID_PATTERN = /^[a-f0-9]{1,8}$/;
 var MAX_LISTED_JOBS = 20;
 var MAX_MATCHED_JOBS = 3;
 var MAX_JOB_TEXT_CHARS = 4096;
 var MAX_JOB_RAW_TEXT_CHARS = 65536;
 var MAX_JOB_TEXT_SNIPPET_CHARS = 32;
-//@ chunk-bg51yd13.js:49842-49948 placement
+//@ chunk-gwh0qn2w.js:50134-50240 placement
 function sanitizeJobLabel(query) {
   if (query.length > MAX_JOB_RAW_TEXT_CHARS) return "\u2026";
   let collapsed = collapseWhitespace(stripFormatChars(collapseWhitespace(query)));
@@ -1585,10 +1593,10 @@ function sanitizeJobLabel(query) {
     ? "\u2026"
     : truncateWithEllipsis(redactSecrets(collapsed), MAX_JOB_TEXT_SNIPPET_CHARS);
 }
-//@ chunk-bg51yd13.js:49948-50042 placement
+//@ chunk-gwh0qn2w.js:50240-50334 placement
 var NAME_IN_PLACE_OF_ID_HINT =
   "Part of the session name works in place of the id. Put a name with spaces in quotes.";
-//@ chunk-bg51yd13.js:50042-50722 placement
+//@ chunk-gwh0qn2w.js:50334-51014 placement
 async function logsHandler(query, storage) {
   let { short, nameLines } = await resolveJobArgument(
     query,
@@ -1642,10 +1650,10 @@ async function logsHandler(query, storage) {
   await logFeatureOkAsync("cli_bg_logs");
   return exitAfterAnalyticsFlush(0);
 }
-//@ chunk-bg51yd13.js:50722-50743 placement
+//@ chunk-gwh0qn2w.js:51014-51035 placement
 var ATTACH_WAIT_TOTAL_MS = 60000;
 var ATTACH_WAIT_STEP_MS = 2000;
-//@ chunk-bg51yd13.js:50743-51148 placement
+//@ chunk-gwh0qn2w.js:51035-51440 placement
 /**
  * 根据 attach 失败消息给出等待提示：会话正在升级/卡住重启/迁移 PTY，或守护进程正在启动/重启。
  */
@@ -1660,7 +1668,7 @@ function describeAttachRetryStatus(msg) {
   if (msg.includes("ESTARTING")) return `${bgSupervisorNounCap()} is starting\u2026`;
   return `${bgSupervisorNounCap()} is restarting\u2026`;
 }
-//@ chunk-bg51yd13.js:51148-52196 placement
+//@ chunk-gwh0qn2w.js:51440-52488 placement
 /**
  * 连接后台会话（attachToJob），遇到短暂错误或套接字竞态时指数退避重试（必要时重新拉起守护进程），在 stderr 显示等待状态；可在按下分离键时中止。返回最终结果与等待时长。
  */
@@ -1755,9 +1763,9 @@ async function attachWithRetry(short, options = {}, storage) {
     waitedMs,
   };
 }
-//@ chunk-bg51yd13.js:52196-52268 placement
+//@ chunk-gwh0qn2w.js:52488-52560 placement
 var ENOJOB_PROBE_FAILED_MESSAGE = "ENOJOB: probe found no handle \u2014 worker retired or settled";
-//@ chunk-bg51yd13.js:52268-58892 placement
+//@ chunk-gwh0qn2w.js:52560-59184 placement
 /**
  * claude attach <id|name>：在当前终端打开后台会话（必要时重启/迁移到可附着 PTY），← 返回代理视图（约 6.6 KB）。
  */
@@ -2126,7 +2134,7 @@ A name opens only a running session. Use the id: \`claude attach ${short}\`
   } else await logFeatureOkAsync("cli_bg_attach", extraFields());
   return exitAfterAnalyticsFlush(attachResult.outcome === "error" ? 1 : 0);
 }
-//@ chunk-bg51yd13.js:58892-59008 placement
+//@ chunk-gwh0qn2w.js:59184-59300 placement
 function isUserApcDetach(result, isTTY, isTTY_2) {
   return (
     result.outcome === "detached" &&
@@ -2136,7 +2144,7 @@ function isUserApcDetach(result, isTTY, isTTY_2) {
     isTTY_2 === true
   );
 }
-//@ chunk-bg51yd13.js:59008-61338 placement
+//@ chunk-gwh0qn2w.js:59300-61630 placement
 /**
  * claude respawn <id>|--all：重启后台会话以使用当前 Claude 二进制。
  */
@@ -2268,7 +2276,7 @@ Usage: claude respawn <id>|--all
   process.stdout.write(`respawned ${short}${result.short !== short ? ` \u2192 ${result.short}` : ""}
 `);
 }
-//@ chunk-bg51yd13.js:61338-62534 placement
+//@ chunk-gwh0qn2w.js:61630-62826 placement
 async function stopHandler(query, storage, isVerbose = false) {
   let query_2 = query;
   let { short } = await resolveJobArgument(
@@ -2334,7 +2342,7 @@ async function stopHandler(query, storage, isVerbose = false) {
 `),
     );
 }
-//@ chunk-bg51yd13.js:62534-63376 placement
+//@ chunk-gwh0qn2w.js:62826-63668 placement
 /**
  * claude rm 的用法行（RM_USAGE）与完整帮助（RM_HELP，说明 --discard-unpushed 与 --force-remove-worktree）。
  */
@@ -2348,7 +2356,7 @@ var RM_HELP =
 ` +
   `  --force-remove-worktree <worktree-id>      delete the worktree directory even though the WorktreeRemove hook or git couldn't remove it (its repository must list it as a worktree, or have dropped it in a removal that couldn't delete it; no uncommitted changes to tracked files, submodules included; the branch is kept) \u2014 pass the value a previous 'claude rm <id>' reported
 `;
-//@ chunk-bg51yd13.js:63376-66128 placement
+//@ chunk-gwh0qn2w.js:63668-66420 placement
 /**
  * claude rm：删除后台会话及其工作树（--discard-unpushed、--force-remove-worktree）。
  */
@@ -2364,15 +2372,15 @@ async function rmHandler(
   let error;
   let extraArgs = [];
   let args = firstArg === undefined ? restArgs : [firstArg, ...restArgs];
-  for (let idx = 0; idx < args.length; idx++) {
-    let arg = args[idx];
+  for (let j = 0; j < args.length; j++) {
+    let arg = args[j];
     if (arg === "--help" || arg === "-h") {
       process.stdout.write(RM_HELP);
       process.exit(0);
     }
     if (arg === "--discard-unpushed" || arg.startsWith("--discard-unpushed=")) {
       let [headSha, worktreeDigest, ...extraParts] = (
-        (arg === "--discard-unpushed" ? args[++idx] : arg.slice(19)) ?? ""
+        (arg === "--discard-unpushed" ? args[++j] : arg.slice(19)) ?? ""
       )
         .toLowerCase()
         .split("@");
@@ -2392,7 +2400,7 @@ async function rmHandler(
         worktreeDigest,
       };
     } else if (arg === "--force-remove-worktree" || arg.startsWith("--force-remove-worktree=")) {
-      let lower = ((arg === "--force-remove-worktree" ? args[++idx] : arg.slice(24)) ?? "").toLowerCase();
+      let lower = ((arg === "--force-remove-worktree" ? args[++j] : arg.slice(24)) ?? "").toLowerCase();
       if (!WORKTREE_DIGEST_PATTERN.test(lower)) {
         error = `option '--force-remove-worktree' takes the <worktree-id> value shown by a previous 'claude rm <id>' refusal
 `;
@@ -2509,7 +2517,7 @@ async function rmHandler(
 `,
   );
 }
-//@ chunk-bg51yd13.js:66128-66271 placement (2.1.88 match: filterAppsForDescription, 0.354)
+//@ chunk-gwh0qn2w.js:66420-66563 placement (2.1.88 match: filterAppsForDescription, 0.353)
 /**
  * （误归 computerUse）把 -abc 形式拆出已知短选项，返回 {peeled, rest}。
  */
@@ -2525,17 +2533,17 @@ function peelCombinedShortFlags(arg) {
     rest,
   };
 }
-//@ chunk-bg51yd13.js:66271-66323 placement
+//@ chunk-gwh0qn2w.js:66563-66615 placement
 function looksLikeFlag(arg) {
   return arg.length > 1 && arg.startsWith("-");
 }
-//@ chunk-bg51yd13.js:66323-66420 placement
+//@ chunk-gwh0qn2w.js:66615-66712 placement
 function findDashDashIndex(argv) {
   let flagValueIndices = getFlagValueIndices(argv);
   for (let j = 0; j < argv.length; j++) if (argv[j] === "--" && !flagValueIndices.has(j)) return j;
   return -1;
 }
-//@ chunk-bg51yd13.js:66420-66556 placement
+//@ chunk-gwh0qn2w.js:66712-66848 placement
 function stripBgOnlyFlags(argv) {
   let dashDashIndex = findDashDashIndex(argv);
   let headArgs = dashDashIndex >= 0 ? argv.slice(0, dashDashIndex) : argv;
@@ -2545,7 +2553,7 @@ function stripBgOnlyFlags(argv) {
   );
   return dashDashIndex >= 0 ? [...filtered, ...argv.slice(dashDashIndex)] : filtered;
 }
-//@ chunk-bg51yd13.js:66556-66951 placement
+//@ chunk-gwh0qn2w.js:66848-67243 placement
 /**
  * 取某个 flag 的值：支持 `--x v`、`--x=v`、组合短参数 `-abv`/`-a v`；遇到 `--` 停止；多次出现取最后一个。
  */
@@ -2581,7 +2589,7 @@ function getFlagValue(argv, longFlag, shortFlag) {
   }
   return value;
 }
-//@ chunk-bg51yd13.js:66951-67678 placement
+//@ chunk-gwh0qn2w.js:67243-67970 placement
 function rewriteDispatchFlagValue(respawnFlags, longFlag, shortFlag, name) {
   let flagValueIndices = getFlagValueIndices(respawnFlags);
   let rewritten = [...respawnFlags];
@@ -2638,7 +2646,7 @@ function rewriteDispatchFlagValue(respawnFlags, longFlag, shortFlag, name) {
   for (let arg of rewritten) if (arg !== null) compacted.push(arg);
   return compacted;
 }
-//@ chunk-bg51yd13.js:67678-68131 placement
+//@ chunk-gwh0qn2w.js:67970-68423 placement
 /**
  * 返回参数数组里"作为 flag 取值"的下标集合（如 --rc 的名字、多值 flag 的后续值），供其他扫描函数跳过。
  */
@@ -2671,7 +2679,7 @@ function getFlagValueIndices(argv) {
   }
   return indices;
 }
-//@ chunk-bg51yd13.js:68131-68471 placement
+//@ chunk-gwh0qn2w.js:68423-68763 placement
 /**
  * 参数里有 --continue/-c 返回 true；有 --resume/-r 时只有带了会话 id 才返回 true。
  */
@@ -2698,7 +2706,7 @@ function hasContinueOrResumeId(argv) {
   if (hasResume) return getResumeArg(argv) !== undefined;
   return hasContinue;
 }
-//@ chunk-bg51yd13.js:68471-68792 placement
+//@ chunk-gwh0qn2w.js:68763-69084 placement
 /**
  * 取 --resume/-r 的参数值（--resume=、-rXXX、或下一个非 flag 参数），没有值返回 undefined。
  */
@@ -2728,7 +2736,7 @@ function getResumeArg(argv) {
   }
   return resumeArg;
 }
-//@ chunk-bg51yd13.js:68792-69022 placement
+//@ chunk-gwh0qn2w.js:69084-69314 placement
 function hasResumeOrContinueFlag(argv) {
   let flagValueIndices = getFlagValueIndices(argv);
   return argv.some((arg, index) => {
@@ -2738,12 +2746,12 @@ function hasResumeOrContinueFlag(argv) {
     return peeled.includes("-c") || rest === "-c" || rest === "-r" || /^-r./.test(rest);
   });
 }
-//@ chunk-bg51yd13.js:69022-69089 placement
+//@ chunk-gwh0qn2w.js:69314-69381 placement
 function hasBareFlag(argv, flag) {
   let flagValueIndices = getFlagValueIndices(argv);
   return argv.some((arg, index) => !flagValueIndices.has(index) && arg === flag);
 }
-//@ chunk-bg51yd13.js:69089-69768 placement
+//@ chunk-gwh0qn2w.js:69381-70060 placement
 function stripResumeFlags(argv) {
   let flagValueIndices = getFlagValueIndices(argv);
   let kept = [];
@@ -2786,7 +2794,7 @@ function stripResumeFlags(argv) {
   }
   return kept;
 }
-//@ chunk-bg51yd13.js:69768-70045 placement
+//@ chunk-gwh0qn2w.js:70060-70337 placement
 function stripSessionIdFlag(argv) {
   let flagValueIndices = getFlagValueIndices(argv);
   let kept = [];
@@ -2809,7 +2817,7 @@ function stripSessionIdFlag(argv) {
   }
   return kept;
 }
-//@ chunk-bg51yd13.js:70045-71769 placement
+//@ chunk-gwh0qn2w.js:70337-72061 placement
 /**
  * 检查后台会话不支持的参数组合（--project-config-root、--print、从文件读 --agents、bypassPermissions 未接受免责声明等），返回拒绝说明。
  */
@@ -2856,7 +2864,7 @@ function validateBgLaunchFlags(args) {
     return "--bg with auto mode requires opting in first. Run `claude --permission-mode auto` once interactively.";
   return null;
 }
-//@ chunk-bg51yd13.js:71769-71994 placement
+//@ chunk-gwh0qn2w.js:72061-72286 placement
 function findLastPositionalArg(argv, resumeArg) {
   let flagValueIndices = getFlagValueIndices(argv);
   let lastPositional;
@@ -2873,7 +2881,7 @@ function findLastPositionalArg(argv, resumeArg) {
   }
   return lastPositional;
 }
-//@ chunk-bg51yd13.js:71994-72321 placement
+//@ chunk-gwh0qn2w.js:72286-72613 placement
 /**
  * 去掉位置参数，只保留 flag 及其取值（用于把参数转成可重放的 respawnFlags）。
  */
@@ -2909,15 +2917,15 @@ function keepFlagArgsOnly(argsWithoutResume) {
   }
   return kept;
 }
-//@ chunk-bg51yd13.js:72321-72350 placement
+//@ chunk-gwh0qn2w.js:72613-72642 placement
 function callerProviderEnv() {
   return withHostOwnedEnv(getSecureStorageConfigDir);
 }
 export {
+  preSeedReplBgJob,
   spawnBgSession,
   stripResumeFlags,
   formatBgHints,
-  preSeedReplBgJob,
   callerProviderEnv,
   gateCauseExtra,
   workspaceGateCause,

@@ -3,12 +3,12 @@
  *
  * 钩子 UI 元素类型（Box/Text/Button/Input/Select/Image/Raster）校验（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (64)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (64)
  * attribution: placement 64
  */
-import { uniq } from "../../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
 import { deepFreezeInPlace, isPlainDataObject } from "../../../utils/hooks/functionHookMatchers.js";
 import { buildVmElement, vmFragment, namedVmElementBuilder } from "../vm/boundaryCopy.js";
 import { isPlainObject } from "../../../utils/isPlainObject.js";
@@ -20,7 +20,7 @@ import { HooksError } from "../hooksErrors.js";
 import { withModifiers } from "../hostBridge.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:69406-69747 placement
+//@ chunk-j8f885h1.js:49948-50306 placement
 var UI_ELEMENT_TYPES = {
   terminal: [
     "Box",
@@ -36,23 +36,23 @@ var UI_ELEMENT_TYPES = {
     "Image",
   ],
   desktop: ["Box", "Text", "Button", "Input", "Select", "Svg", "Link", "Code", "Markdown", "Client"],
-  mobile: ["Box", "Text", "Button", "Svg", "Link", "Code", "Markdown"],
+  mobile: ["Box", "Text", "Button", "Input", "Select", "Svg", "Link", "Code", "Markdown"],
   vscode: ["Box", "Text", "Button", "Input", "Select", "Svg", "Link", "Code", "Markdown"],
 };
-//@ chunk-4121qate.js:69747-69783 placement
+//@ chunk-j8f885h1.js:50306-50342 placement
 /**
  * 全部 UI 元素类型
  */
-var ALL_ELEMENT_TYPES; // deferred: uses UI_ELEMENT_TYPES of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:69747", () => {
-  ALL_ELEMENT_TYPES = uniq(Object.values(UI_ELEMENT_TYPES).flat());
+var ALL_ELEMENT_TYPES; // deferred: uses normalizeCaseForComparison_2 (../../../utils/permissions/filesystem.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-j8f885h1.js:50306", () => {
+  ALL_ELEMENT_TYPES = normalizeCaseForComparison_2(Object.values(UI_ELEMENT_TYPES).flat());
 });
-//@ chunk-4121qate.js:69783-69810 placement
+//@ chunk-j8f885h1.js:50342-50369 placement
 /**
  * 构建占位元素
  */
 var buildStaticElement = (definition) => deepFreezeInPlace(buildVmElement(vmFragment, definition));
-//@ chunk-4121qate.js:69810-69957 placement
+//@ chunk-j8f885h1.js:50369-50516 placement
 /**
  * 构建元素构造器表：包装已有构造器，缺失的元素类型以占位片段补齐并回调告警。
  */
@@ -67,7 +67,7 @@ function buildElementTable(overrides, wrap, onFallback) {
     }
   return table;
 }
-//@ chunk-4121qate.js:69957-70054 placement
+//@ chunk-j8f885h1.js:50516-50613 placement
 /**
  * 某类型元素的构造器表
  */
@@ -76,7 +76,7 @@ function elementBuildersFor(surface) {
   for (let typeName of UI_ELEMENT_TYPES[surface]) builders[typeName] = namedVmElementBuilder(typeName);
   return Object.freeze(builders);
 }
-//@ chunk-4121qate.js:70054-70243 placement
+//@ chunk-j8f885h1.js:50613-50802 placement
 /**
  * 校验元素构造器表：每项都必须是函数。
  */
@@ -86,23 +86,23 @@ function checkElementTable(table) {
     if (typeof value !== "function") return `an entry "${key}" that is not a constructor`;
   return;
 }
-//@ chunk-4121qate.js:70243-70291 placement
+//@ chunk-j8f885h1.js:50802-50850 placement
 /**
  * 是否已知元素类型
  */
 var isElementType_2 = (typeName) => typeof typeName === "string" && ALL_ELEMENT_TYPES.includes(typeName);
-//@ chunk-4121qate.js:175433-175469 placement
+//@ chunk-j8f885h1.js:156608-156644 placement
 /**
  * engine 或 Svg
  */
 var isEngineOrSvg = (typeName) => typeName === "engine" || typeName === "Svg";
-//@ chunk-4121qate.js:175469-175537 placement
+//@ chunk-j8f885h1.js:156644-156712 placement
 /**
  * Button/Input/Select/Markdown
  */
 var isPressableType = (typeName) =>
   typeName === "Button" || typeName === "Input" || typeName === "Select" || typeName === "Markdown";
-//@ chunk-4121qate.js:175537-175619 placement
+//@ chunk-j8f885h1.js:156712-156794 placement
 /**
  * 可承载子元素
  */
@@ -113,7 +113,7 @@ var hasChildrenContainer = (typeName) =>
     typeName !== "Raster" &&
     typeName !== "Image" &&
     !isPressableType(typeName));
-//@ chunk-4121qate.js:175619-175706 placement
+//@ chunk-j8f885h1.js:156794-156881 placement
 /**
  * 取子元素
  */
@@ -121,7 +121,7 @@ function childElements(element, mapChild) {
   let { children } = element;
   return Array.isArray(children) && hasChildrenContainer(element.type) ? children.flatMap(mapChild) : [];
 }
-//@ chunk-4121qate.js:175706-175877 placement
+//@ chunk-j8f885h1.js:156881-157052 placement
 function optionValues(options) {
   if (!Array.isArray(options)) return;
   let mapped = options.map((option) =>
@@ -129,7 +129,7 @@ function optionValues(options) {
   );
   return mapped.every((value) => typeof value === "string") ? mapped : undefined;
 }
-//@ chunk-4121qate.js:175877-176390 placement
+//@ chunk-j8f885h1.js:157052-157565 placement
 function checkElementProps(element) {
   if (typeof element !== "object" || !element || Array.isArray(element)) return [];
   let node = element;
@@ -163,17 +163,17 @@ function checkElementProps(element) {
     ...fromChildren,
   ];
 }
-//@ chunk-4121qate.js:176390-176448 placement
+//@ chunk-j8f885h1.js:157565-157623 placement
 /**
  * client 元素键
  */
 var clientKeyOf = (client) => ["client", client.plugin, client.key, client.module].join(KEY_SEPARATOR);
-//@ chunk-4121qate.js:176448-176481 placement
+//@ chunk-j8f885h1.js:157623-157656 placement
 /**
  * 元素的 plugin
  */
 var pluginOfElement = (element) => (isPlainObject(element) ? element.plugin : undefined);
-//@ chunk-4121qate.js:176481-176742 placement
+//@ chunk-j8f885h1.js:157656-157917 placement
 /**
  * 在渲染树中收集 Client 元素（插件、模块、key）。
  */
@@ -198,21 +198,21 @@ function collectClientElements(element) {
       ]
     : [];
 }
-//@ chunk-4121qate.js:176742-176883 placement
+//@ chunk-j8f885h1.js:157917-158058 placement
 function containsEngineNode(node) {
   if (typeof node === "string") return false;
   let children = "children" in node ? node.children : undefined;
   return node.type === "engine" || (Array.isArray(children) && children.some(containsEngineNode));
 }
-//@ chunk-4121qate.js:176883-176927 placement
+//@ chunk-j8f885h1.js:158058-158102 placement
 /**
  * 字符串或 engine 类型
  */
 var isStringOrEngineType = (element) => typeof element === "string" || isEngineOrSvg(element.type);
-//@ chunk-4121qate.js:176927-176977 placement (2.1.88 match: withModifiers, 0.799)
+//@ chunk-j8f885h1.js:158102-158152 placement (2.1.88 match: withModifiers, 0.799)
 var withModifiers_2 = (element) =>
   isPressableType(element.type) && "press" in element && isPlainObject(element.press);
-//@ chunk-4121qate.js:176977-177256 placement
+//@ chunk-j8f885h1.js:158152-158431 placement
 function restampPress(element, handle) {
   let press = {
     plugin: element.press.plugin,
@@ -244,7 +244,7 @@ function restampPress(element, handle) {
       };
   }
 }
-//@ chunk-4121qate.js:177256-177367 placement (2.1.88 match: setAttribute, 0.839)
+//@ chunk-j8f885h1.js:158431-158542 placement (2.1.88 match: setAttribute, 0.84)
 function mapChildren(element, mapChild) {
   let node = element;
   let children = "children" in node ? node.children : undefined;
@@ -255,7 +255,7 @@ function mapChildren(element, mapChild) {
       }
     : element;
 }
-//@ chunk-4121qate.js:177367-177505 placement
+//@ chunk-j8f885h1.js:158542-158680 placement
 function mapPressHandles_2(element, restamp) {
   if (isStringOrEngineType(element)) return element;
   if (withModifiers_2(element)) {
@@ -264,7 +264,7 @@ function mapPressHandles_2(element, restamp) {
   }
   return mapChildren(element, (child) => mapPressHandles_2(child, restamp));
 }
-//@ chunk-4121qate.js:177505-177550 placement
+//@ chunk-j8f885h1.js:158680-158725 placement
 /**
  * 渲染树内容哈希
  */
@@ -272,7 +272,7 @@ var treeContentHash = (element) =>
   containsEngineNode(element)
     ? undefined
     : computeContentHash(jsonStringify(mapPressHandles_2(element, () => 0)));
-//@ chunk-4121qate.js:177550-177628 placement
+//@ chunk-j8f885h1.js:158725-158803 placement
 /**
  * 收集器状态
  */
@@ -282,17 +282,17 @@ var newCollectorState = () => ({
   parts: new Map(),
   counted: new WeakSet(),
 });
-//@ chunk-4121qate.js:177628-177678 placement
+//@ chunk-j8f885h1.js:158803-158853 placement
 /**
  * 悬停作用域表的键 plugin\0scope，按插件与作用域名区分悬停计数。
  */
 var hoverScopeKey = (entry) => `${entry.plugin}\x00scope\x00${entry.scope}`;
-//@ chunk-4121qate.js:177678-177713 placement
+//@ chunk-j8f885h1.js:158853-158888 placement
 /**
  * Box 或 Text
  */
 var isHoverableType = (type) => type === "Box" || type === "Text";
-//@ chunk-4121qate.js:177713-177791 placement
+//@ chunk-j8f885h1.js:158888-158966 placement
 /**
  * 元素的 scope
  */
@@ -300,7 +300,7 @@ function elementScope(hover) {
   let scope = isPlainObject(hover) ? hover.scope : undefined;
   return typeof scope === "string" ? scope : undefined;
 }
-//@ chunk-4121qate.js:177791-178035 placement
+//@ chunk-j8f885h1.js:158966-159210 placement
 /**
  * 收集渲染树中各插件的悬停作用域（Box/Text 组与可按元素）。
  */
@@ -324,19 +324,19 @@ function collectHoverScopes(element) {
     ...childElements(node, collectHoverScopes),
   ];
 }
-//@ chunk-4121qate.js:178035-178087 placement (2.1.88 match: _temp, 1)
+//@ chunk-j8f885h1.js:159210-159262 placement (2.1.88 match: _temp, 1)
 /**
  * image 元素键
  */
 var imageKeyOf = (c) => ["image", c.plugin, c.key ?? ""].join(KEY_SEPARATOR);
-//@ chunk-4121qate.js:178087-178345 placement
+//@ chunk-j8f885h1.js:159262-159520 placement
 function describeForeignMedia(key, ownerPlugin, kind) {
   let isRaster = kind === "Raster";
   let noun = isRaster ? "a Raster" : "an Image";
   let editableField = isRaster ? "cells" : "source";
   return `returned ${noun} it did not draw (${String(ownerPlugin)}/${String(key)}); a render hook may keep the ones next(e) returned and change their ${editableField}, not which plugin or key they name`;
 }
-//@ chunk-4121qate.js:178345-178385 placement
+//@ chunk-j8f885h1.js:159520-159560 placement
 /**
  * 标记图片所属插件
  */
@@ -346,7 +346,7 @@ var withImageOwner = (element, plugin) => ({
     plugin,
   },
 });
-//@ chunk-4121qate.js:178385-178572 placement
+//@ chunk-j8f885h1.js:159560-159747 placement
 var IMAGE_STAMP_RULES = {
   stampOf: (element) => element.image,
   restamp: withImageOwner,
@@ -361,7 +361,7 @@ var IMAGE_STAMP_RULES = {
   },
   refusal: (element, ownerPlugin) => describeForeignMedia(element.props.key, ownerPlugin, "Image"),
 };
-//@ chunk-4121qate.js:178572-178784 placement
+//@ chunk-j8f885h1.js:159747-159959 placement
 /**
  * 收集渲染树中的 Image 元素（图片与 key）。
  */
@@ -381,19 +381,19 @@ function collectImageElements(element) {
       ]
     : [];
 }
-//@ chunk-4121qate.js:178784-178835 placement
+//@ chunk-j8f885h1.js:159959-160010 placement
 /**
  * onPress/onEvent
  */
 function isPressHandlerProp(propName) {
   return propName === "onPress" || propName === "onEvent";
 }
-//@ chunk-4121qate.js:178835-178880 placement
+//@ chunk-j8f885h1.js:160010-160055 placement
 /**
  * 纯数据且带 type
  */
 var isPlainElement = (value) => isPlainDataObject(value) && typeof value.type === "string";
-//@ chunk-4121qate.js:178880-178963 placement
+//@ chunk-j8f885h1.js:160055-160138 placement
 /**
  * 带 key 的 Markdown
  */
@@ -402,12 +402,12 @@ var isKeyedMarkdown = (element) =>
   !withModifiers_2(element) &&
   isPlainObject(element.props) &&
   typeof element.props.key === "string";
-//@ chunk-4121qate.js:178963-178987 placement
+//@ chunk-j8f885h1.js:160138-160162 placement
 /**
  * 悬停作用域元素
  */
 var isHoverScopeElement = (element) => isHoverableType(element.type);
-//@ chunk-4121qate.js:178987-179084 placement
+//@ chunk-j8f885h1.js:160162-160259 placement
 /**
  * 自有属性的值
  */
@@ -415,7 +415,7 @@ function ownValueOf(target, key) {
   let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(target, key);
   return ownPropertyDescriptor && "value" in ownPropertyDescriptor ? ownPropertyDescriptor.value : undefined;
 }
-//@ chunk-4121qate.js:179084-179123 placement
+//@ chunk-j8f885h1.js:160259-160298 placement
 /**
  * 设置并返回
  */
@@ -423,7 +423,7 @@ function setAndReturn(weakMap, target, value) {
   weakMap.set(target, value);
   return value;
 }
-//@ chunk-4121qate.js:179123-180041 placement
+//@ chunk-j8f885h1.js:160298-161216 placement
 function checkElementList(result, caller) {
   let weakMap = new WeakMap();
   function copyContainer(source) {
@@ -463,12 +463,12 @@ function checkElementList(result, caller) {
   }
   return copyElementValue(result);
 }
-//@ chunk-4121qate.js:180041-180090 placement
+//@ chunk-j8f885h1.js:161216-161265 placement
 /**
  * markdown 片段键
  */
 var markdownKeyOf = (key, plugin) => ["markdown", plugin, String(key)].join(KEY_SEPARATOR);
-//@ chunk-4121qate.js:180090-180272 placement
+//@ chunk-j8f885h1.js:161265-161447 placement
 /**
  * 收集渲染树中的 Markdown 片段（片段与 key）。
  */
@@ -479,7 +479,7 @@ function collectMarkdownParts(element) {
   let key = isPlainObject(node.props) ? node.props.key : undefined;
   return typeof plugin === "string" && typeof key === "string" ? [markdownKeyOf(key, plugin)] : [];
 }
-//@ chunk-4121qate.js:180272-180389 placement
+//@ chunk-j8f885h1.js:161447-161564 placement
 /**
  * 收集渲染树中文本类元素的片段文本。
  */
@@ -491,12 +491,12 @@ function collectTextParts(element) {
     ...childElements(node, collectTextParts),
   ];
 }
-//@ chunk-4121qate.js:180428-180477 placement
+//@ chunk-j8f885h1.js:161603-161652 placement
 /**
  * raster 元素键
  */
 var rasterKeyOf = (entry) => ["raster", entry.plugin, entry.key].join(KEY_SEPARATOR);
-//@ chunk-4121qate.js:180477-180518 placement
+//@ chunk-j8f885h1.js:161652-161693 placement
 /**
  * 标记 raster 所属插件
  */
@@ -506,7 +506,7 @@ var withRasterOwner = (element, plugin) => ({
     plugin,
   },
 });
-//@ chunk-4121qate.js:180518-180695 placement
+//@ chunk-j8f885h1.js:161693-161870 placement
 var RASTER_STAMP_RULES = {
   stampOf: (element) => element.raster,
   restamp: withRasterOwner,
@@ -521,7 +521,7 @@ var RASTER_STAMP_RULES = {
   },
   refusal: (element, ownerPlugin) => describeForeignMedia(element.props.key, ownerPlugin, "Raster"),
 };
-//@ chunk-4121qate.js:180695-180903 placement
+//@ chunk-j8f885h1.js:161870-162078 placement
 /**
  * 收集渲染树中的 Raster 元素（栅格与 key）。
  */
@@ -541,12 +541,12 @@ function collectRasterElements(element) {
       ]
     : [];
 }
-//@ chunk-4121qate.js:180903-180926 placement
+//@ chunk-j8f885h1.js:162078-162101 placement
 /**
  * 映射按键句柄
  */
 var mapPressHandles = (element, restamp) => mapPressHandles_2(element, restamp);
-//@ chunk-4121qate.js:180926-180967 placement
+//@ chunk-j8f885h1.js:162101-162142 placement
 /**
  * 标记 client 所属插件
  */
@@ -556,7 +556,7 @@ var withClientOwner = (element, plugin) => ({
     plugin,
   },
 });
-//@ chunk-4121qate.js:180967-181419 placement
+//@ chunk-j8f885h1.js:162142-162594 placement
 function checkReturnedClient(element, context) {
   let plugin = pluginOfElement(element.client);
   let key = element.props.key;
@@ -579,7 +579,7 @@ function checkReturnedClient(element, context) {
     );
   return element;
 }
-//@ chunk-4121qate.js:181419-181459 placement
+//@ chunk-j8f885h1.js:162594-162634 placement
 /**
  * 标记分组所属插件
  */
@@ -589,7 +589,7 @@ var withGroupOwner = (element, plugin) => ({
     plugin,
   },
 });
-//@ chunk-4121qate.js:181459-181745 placement
+//@ chunk-j8f885h1.js:162634-162920 placement
 function takeHoverGroup(context, scopeEntry, type) {
   let scopeKey = hoverScopeKey(scopeEntry);
   let remaining = context.groups.get(scopeKey) ?? 0;
@@ -599,7 +599,7 @@ function takeHoverGroup(context, scopeEntry, type) {
     );
   context.groups.set(scopeKey, remaining - 1);
 }
-//@ chunk-4121qate.js:181745-181929 placement
+//@ chunk-j8f885h1.js:162920-163104 placement
 function stampHoverGroup(element, context) {
   let scope = elementScope(element.hover);
   if (scope === undefined) return element;
@@ -616,7 +616,7 @@ function stampHoverGroup(element, context) {
   );
   return element;
 }
-//@ chunk-4121qate.js:181929-182160 placement
+//@ chunk-j8f885h1.js:163104-163335 placement
 function stampMedia(element, context, rules) {
   let plugin = pluginOfElement(rules.stampOf(element));
   if (plugin === "" || plugin === undefined) return rules.restamp(element, context.plugin);
@@ -625,12 +625,12 @@ function stampMedia(element, context, rules) {
     throw new HooksError(`${context.plugin}: ${rules.refusal(element, plugin)}`);
   return element;
 }
-//@ chunk-4121qate.js:182160-182185 placement
+//@ chunk-j8f885h1.js:163335-163360 placement
 /**
  * 标记图片媒体
  */
 var stampImageMedia = (element, context) => stampMedia(element, context, IMAGE_STAMP_RULES);
-//@ chunk-4121qate.js:182185-182269 placement
+//@ chunk-j8f885h1.js:163360-163444 placement
 /**
  * a Button/an Input…
  */
@@ -640,7 +640,7 @@ var PRESSABLE_LABELS = {
   Select: "a Select",
   Markdown: "a Markdown",
 };
-//@ chunk-4121qate.js:182269-182308 placement
+//@ chunk-j8f885h1.js:163444-163483 placement
 /**
  * 标记部件所属插件
  */
@@ -650,7 +650,7 @@ var withPartOwner = (element, plugin) => ({
     plugin,
   },
 });
-//@ chunk-4121qate.js:182308-182351 placement
+//@ chunk-j8f885h1.js:163483-163526 placement
 /**
  * 去掉 part
  */
@@ -658,7 +658,7 @@ function withoutPart(element) {
   let { part, ...rest } = element;
   return rest;
 }
-//@ chunk-4121qate.js:182351-182578 placement
+//@ chunk-j8f885h1.js:163526-163753 placement
 function stampPart(element, context) {
   if (!("part" in element)) return element;
   let plugin = pluginOfElement(element.part);
@@ -668,12 +668,12 @@ function stampPart(element, context) {
   context.parts.set(plugin, remaining - 1);
   return withPartOwner(element, plugin);
 }
-//@ chunk-4121qate.js:182578-182603 placement
+//@ chunk-j8f885h1.js:163753-163778 placement
 /**
  * 标记 raster 媒体
  */
 var stampRasterMedia = (element, context) => stampMedia(element, context, RASTER_STAMP_RULES);
-//@ chunk-4121qate.js:182603-182993 placement
+//@ chunk-j8f885h1.js:163778-164168 placement
 /**
  * 把可按元素（Button/Input/Select/Markdown）转为带按键句柄的形状。
  */
@@ -723,7 +723,7 @@ function toPressElement(element, plugin, handle) {
       };
   }
 }
-//@ chunk-4121qate.js:182993-183471 placement
+//@ chunk-j8f885h1.js:164168-164646 placement
 var ELEMENT_HANDLER_ERRORS = {
   Button:
     "returned a Button without an onPress function; a render hook draws one with <Button key label onPress>",
@@ -733,7 +733,7 @@ var ELEMENT_HANDLER_ERRORS = {
   Markdown:
     "returned a pressable Markdown without an onLinkPress function; a render hook draws one with <Markdown key text onLinkPress>",
 };
-//@ chunk-4121qate.js:183471-184565 placement
+//@ chunk-j8f885h1.js:164646-165740 placement
 function validateElement(element, context) {
   if (typeof element === "object" && element !== null && element.type === "engine")
     return {
@@ -793,7 +793,7 @@ function validateElement(element, context) {
     );
   return withChildren;
 }
-//@ chunk-4121qate.js:184565-184654 placement
+//@ chunk-j8f885h1.js:165740-165829 placement
 /**
  * 校验并标记元素
  */
@@ -804,13 +804,18 @@ function validateAndStampElement({ tree, ...context }) {
     : validated;
 }
 export {
-  UI_ELEMENT_TYPES,
-  elementBuildersFor,
+  isHoverableType,
+  elementScope,
+  buildElementTable,
   checkElementProps,
+  UI_ELEMENT_TYPES,
+  treeContentHash,
+  mapPressHandles,
+  collectClientElements,
+  elementBuildersFor,
   checkElementList,
   isPlainElement,
   validateAndStampElement,
-  collectClientElements,
   clientKeyOf,
   collectRasterElements,
   rasterKeyOf,
@@ -825,9 +830,4 @@ export {
   checkElementTable,
   pluginOfElement,
   isElementType_2,
-  buildElementTable,
-  isHoverableType,
-  elementScope,
-  treeContentHash,
-  mapPressHandles,
 };

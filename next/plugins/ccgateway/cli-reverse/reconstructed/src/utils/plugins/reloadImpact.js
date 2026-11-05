@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：计算重新加载插件对 MCP 客户端、命令等的影响；比较重载前后启用插件与加载错误。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4q6mp9e8.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0qaty0z2.js (3)
  * attribution: placement 3
  */
 import { loadAllPluginsForPreview } from "./pluginLoader.js";
@@ -13,7 +13,7 @@ import { getConnectablePluginMcpServerNames } from "../../services/mcp/config.js
 import { bareModePluginAllow, pluginIdsWithSource } from "./refresh.js";
 import {
   isToolSearchEnabledOptimistic,
-  modelSupportsToolReference,
+  supportsToolReferenceOrPelican,
   isVertexModelWithoutToolSearch,
 } from "../toolSearch.js";
 import { getTotalOutputTokens } from "../../bootstrap/state.js";
@@ -24,7 +24,7 @@ import { pluginErrorSummary } from "./marketplaceNames.js";
 import { getPluginLspServers } from "./lspPluginIntegration.js";
 import { logEvent } from "../../services/analytics/index.js";
 
-//@ chunk-4q6mp9e8.js:3503-4402 placement
+//@ chunk-0qaty0z2.js:3486-4386 placement
 /**
  * 计算重新加载插件对 MCP 客户端、命令等的影响。
  */
@@ -50,7 +50,7 @@ async function computePluginReloadImpact(context) {
   let hasMcpChange = sorted.length > 0 || sorted_2.length > 0;
   let toolSearch =
     isToolSearchEnabledOptimistic() &&
-    modelSupportsToolReference(context.model) &&
+    supportsToolReferenceOrPelican(context.model) &&
     !isVertexModelWithoutToolSearch(context.model);
   let hasOutput = getTotalOutputTokens() > 0;
   let lspChange = null;
@@ -79,7 +79,7 @@ async function computePluginReloadImpact(context) {
     wouldInvalidateCache: (hasMcpChange || lspChange !== null) && !toolSearch && hasOutput,
   };
 }
-//@ chunk-4q6mp9e8.js:4402-4949 placement
+//@ chunk-0qaty0z2.js:4386-4933 placement
 /**
  * 比较重载前后启用插件与加载错误。
  */
@@ -113,7 +113,7 @@ async function diffEnabledPlugins(loadPlugins, storageV5, credentials) {
     derivationFailed,
   };
 }
-//@ chunk-4q6mp9e8.js:4949-5179 placement
+//@ chunk-0qaty0z2.js:4933-5163 placement
 /**
  * 记 tengu_reload_plugins_cache_impact（MCP/LSP 变化、是否警告/强制）。
  */

@@ -3,9 +3,9 @@
  *
  * 记忆同步 manifest 与基线（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (19)
  * attribution: placement 19
  */
 import { mkdir, writeFile, link, unlink, lstat, readFile, open } from "fs/promises";
@@ -47,7 +47,7 @@ import { formatStoreBackOnNotice } from "./syncNotices.js";
 import { isLocallyEdited } from "./mountWalk.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:98304-98967 placement
+//@ chunk-7jxyna5q.js:98588-99251 placement
 function createMultiStoreState(storeClients, mountEntries, notices, createdAtMs = Date.now()) {
   if (storeClients.length !== mountEntries.length) throw Error("createMultiStoreState: length mismatch");
   return {
@@ -89,7 +89,7 @@ function createMultiStoreState(storeClients, mountEntries, notices, createdAtMs 
     inFlight: null,
   };
 }
-//@ chunk-s61vbvea.js:98967-99034 placement
+//@ chunk-7jxyna5q.js:99251-99318 placement
 /**
  * 当前版本的依据 schema。
  */
@@ -97,7 +97,7 @@ var SYNC_MANIFEST_FILE; // deferred: uses DoctorLazy (../../cli/handlers/util.js
 var BASIS_VERSION;
 var basisSchema;
 var currentBasisSchema;
-deferInit("chunk-s61vbvea.js:98967", () => {
+deferInit("chunk-7jxyna5q.js:99251", () => {
   SYNC_MANIFEST_FILE = MEMORY_SYNC_DIR;
   BASIS_VERSION = 1;
   basisSchema = (version) =>
@@ -107,7 +107,7 @@ deferInit("chunk-s61vbvea.js:98967", () => {
     });
   currentBasisSchema = DoctorLazy(() => basisSchema(BASIS_VERSION));
 });
-//@ chunk-s61vbvea.js:99034-99980 placement
+//@ chunk-7jxyna5q.js:99318-100264 placement
 async function writeSyncManifest(store, options, storage) {
   let syncManifest = await readSyncManifest(store.mountDir, storage, store.v5MemoryBase);
   if (syncManifest.state === "present" && syncManifest.manifest.partition === store.backend.partitionId) {
@@ -163,7 +163,7 @@ async function writeSyncManifest(store, options, storage) {
   store.manifestSeenThisSession = true;
   return true;
 }
-//@ chunk-s61vbvea.js:99980-100060 placement
+//@ chunk-7jxyna5q.js:100264-100344 placement
 /**
  * 挂载目录下某文件的 v5 存储键。
  */
@@ -172,26 +172,26 @@ function mountFileStorageKey(storage, v5MemoryBase, mountDir, fileName) {
     ? storageKeyForMountPath(v5MemoryBase, mountDir, join(mountDir, fileName))
     : undefined;
 }
-//@ chunk-s61vbvea.js:100060-100119 placement
+//@ chunk-7jxyna5q.js:100344-100403 placement
 /**
  * 清单文件的存储键。
  */
 function manifestStorageKey(storage, store) {
   return mountFileStorageKey(storage, store.v5MemoryBase, store.mountDir, SYNC_MANIFEST_FILE);
 }
-//@ chunk-s61vbvea.js:100119-100178 placement
+//@ chunk-7jxyna5q.js:100403-100462 placement
 /**
  * basis 文件的存储键。
  */
 function basisStorageKey(storage, store) {
   return mountFileStorageKey(storage, store.v5MemoryBase, store.mountDir, BASIS_FILE_NAME);
 }
-//@ chunk-s61vbvea.js:100178-100364 placement
+//@ chunk-7jxyna5q.js:100462-100648 placement
 function failForeignManifest(store) {
   if (isNonAccountStore(store)) logFeatureSad("team_memory_multistore_conflict", "manifest_foreign_at_write");
   throw Error("mount dir holds another store's .memory-sync manifest at write time (fail closed)");
 }
-//@ chunk-s61vbvea.js:100364-101195 placement
+//@ chunk-7jxyna5q.js:100648-101479 placement
 async function createSyncManifest(store, body, manifestKey, storageV5) {
   if (storageV5 !== undefined && manifestKey !== undefined) {
     let writeResult = await storageV5.write(manifestKey, body, {
@@ -237,7 +237,7 @@ async function createSyncManifest(store, body, manifestKey, storageV5) {
     await unlink(stagePath).catch(() => {});
   }
 }
-//@ chunk-s61vbvea.js:101195-101725 placement
+//@ chunk-7jxyna5q.js:101479-102009 placement
 async function readSyncManifest(mountDir, storage, v5MemoryBase) {
   let body;
   try {
@@ -287,18 +287,18 @@ async function readSyncManifest(mountDir, storage, v5MemoryBase) {
     manifest: parsed.data,
   };
 }
-//@ chunk-s61vbvea.js:101725-101827 placement
+//@ chunk-7jxyna5q.js:102009-102111 placement
 async function isOwnManifest(mountDir, partitionId, storage, v5MemoryBase) {
   let syncManifest = await readSyncManifest(mountDir, storage, v5MemoryBase);
   return syncManifest.state === "present" && syncManifest.manifest.partition === partitionId;
 }
-//@ chunk-s61vbvea.js:101827-102050 placement
+//@ chunk-7jxyna5q.js:102111-102334 placement
 var BASIS_FILE_NAME; // deferred: uses SYNC_MANIFEST_FILE of its import cycle while loading; runs once the cycle is complete
 var BASIS_VERSION_2;
 var MAX_BASIS_BYTES;
 var syncBasisSchema;
 var basisEntriesSchema;
-deferInit("chunk-s61vbvea.js:101827", () => {
+deferInit("chunk-7jxyna5q.js:102111", () => {
   BASIS_FILE_NAME = `${SYNC_MANIFEST_FILE}-basis`;
   BASIS_VERSION_2 = 1;
   MAX_BASIS_BYTES = MAX_STORE_ENTRIES * 512;
@@ -314,7 +314,7 @@ deferInit("chunk-s61vbvea.js:101827", () => {
     array(tuple([stringSchema(), stringSchema().regex(SHA256_HEX_RE)])).max(MAX_STORE_ENTRIES),
   );
 });
-//@ chunk-s61vbvea.js:102050-104337 placement
+//@ chunk-7jxyna5q.js:102334-104624 placement
 async function loadPersistedBasis(store, storage) {
   if (store.basisLoaded) return null;
   let body;
@@ -460,7 +460,7 @@ async function loadPersistedBasis(store, storage) {
     },
   };
 }
-//@ chunk-s61vbvea.js:104337-104822 placement
+//@ chunk-7jxyna5q.js:104624-105109 placement
 /**
  * 同步基线不可用时：找出只在本地的文件（按需暂扣并提示库已恢复），并记录基线不可用报告。
  */
@@ -488,7 +488,7 @@ async function handleUnusableBasis(store, entries, storage, walkHashes, { walkTr
     emitted: false,
   };
 }
-//@ chunk-s61vbvea.js:104822-104966 placement
+//@ chunk-7jxyna5q.js:105109-105253 placement
 async function findLocalOnlyFiles(store, entries, storage, walkHashes) {
   let candidates = listUnpulledCandidates(store, entries, storage);
   let editedPaths = new Set();
@@ -497,7 +497,7 @@ async function findLocalOnlyFiles(store, entries, storage, walkHashes) {
   });
   return candidates.filter(([path]) => !editedPaths.has(path));
 }
-//@ chunk-s61vbvea.js:104966-105054 placement
+//@ chunk-7jxyna5q.js:105253-105341 placement
 /**
  * 是否存在未拉取但被本地编辑过的文件。
  */
@@ -506,7 +506,7 @@ async function hasUnpulledLocalEdits(store, entries, storage, walkHashes) {
     if (!(await isLocallyEdited(store, path, walkHashes))) return true;
   return false;
 }
-//@ chunk-s61vbvea.js:105054-105181 placement
+//@ chunk-7jxyna5q.js:105341-105468 placement
 function listUnpulledCandidates(store, entries, editedPaths) {
   return [...entries].filter(
     ([path, entry]) =>
@@ -515,7 +515,7 @@ function listUnpulledCandidates(store, entries, editedPaths) {
       (store.pullWritten.get(path)?.sha256 ?? entry.sha256) === entry.sha256,
   );
 }
-//@ chunk-s61vbvea.js:105181-106010 placement
+//@ chunk-7jxyna5q.js:105468-106297 placement
 async function writeSyncBasis(store, storage) {
   try {
     let heldEntries = isTypedKoalaEnabled() ? [...(store.heldLocal ?? [])] : [];
@@ -557,7 +557,7 @@ async function writeSyncBasis(store, storage) {
     });
   }
 }
-//@ chunk-s61vbvea.js:106010-106068 placement
+//@ chunk-7jxyna5q.js:106297-106355 placement
 /**
  * 清空同步依据并持久化。
  */
@@ -565,7 +565,7 @@ async function clearBasis(store, storage) {
   store.basisUnusable = null;
   await deleteSyncBasis(store, storage);
 }
-//@ chunk-s61vbvea.js:106068-106312 placement
+//@ chunk-7jxyna5q.js:106355-106599 placement
 async function deleteSyncBasis(store, storage) {
   store.lastPersistedBasisBody = undefined;
   let storageKey = basisStorageKey(storage, store);

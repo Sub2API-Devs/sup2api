@@ -1,13 +1,13 @@
 /**
  * base64-js/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: base64-js@1.5.1
- * pieces: chunk-na3pph4p.js (1)
+ * pieces: chunk-e8d3a8an.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 
-//@ chunk-na3pph4p.js:55402-56876 cjs-fingerprint
+//@ chunk-e8d3a8an.js:55402-56876 cjs-fingerprint
 var require_base64_js = __commonJS(function (cjsExports) {
   cjsExports.byteLength = byteLength;
   cjsExports.toByteArray = toByteArray;

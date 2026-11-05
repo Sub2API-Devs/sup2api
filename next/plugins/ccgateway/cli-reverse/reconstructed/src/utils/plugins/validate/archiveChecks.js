@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件目录校验：归档检查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5aas12zq.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6vxyfwtv.js (4)
  * attribution: placement 4
  */
 import { readdir } from "fs/promises";
@@ -21,8 +21,9 @@ import {
   SYSTEM_FILES_FOUND_NOTE,
   MAX_LISTED_SYSTEM_FILES,
 } from "./validatePluginDirectory.js";
+import { buildSecretScanResult } from "../../../skills/bundled/pluginAuthoring/secretScanTool.js";
 
-//@ chunk-5aas12zq.js:42139-42356 placement
+//@ chunk-6vxyfwtv.js:42426-42643 placement
 function markRemoteMcpServer(info, { config }) {
   let type = typeof config.type === "string" ? config.type : "";
   if (
@@ -31,12 +32,12 @@ function markRemoteMcpServer(info, { config }) {
   )
     info.connectsToRemote = true;
 }
-//@ chunk-5aas12zq.js:42356-42438 placement
+//@ chunk-6vxyfwtv.js:42643-42725 placement
 function isAllWhitespace(text) {
   for (let idx = 0; idx < text.length; idx++) if (text.charCodeAt(idx) > 32) return false;
   return true;
 }
-//@ chunk-5aas12zq.js:42438-42646 placement
+//@ chunk-6vxyfwtv.js:42725-42933 placement
 function markRemoteHooks(info, hooks) {
   if (!isPlainObject(hooks)) return;
   for (let entries of Object.values(hooks))
@@ -46,7 +47,7 @@ function markRemoteHooks(info, hooks) {
         if (isPlainObject(hook) && hook.type === "http") info.connectsToRemote = true;
     }
 }
-//@ chunk-5aas12zq.js:42646-44336 placement
+//@ chunk-6vxyfwtv.js:42933-44646 placement
 /**
  * 在有限条目数与目录深度内遍历插件（跳过根 .git），收集 .DS_Store、Thumbs.db、__MACOSX 等系统文件，生成 ARCHIVE_OS_METADATA_FILE 发现项； 截断或无法列出的目录写入说明。
  */
@@ -78,7 +79,11 @@ async function findOsMetadataFiles(root, notes) {
       let relPath = item.relative === "" ? entry.name : `${item.relative}/${entry.name}`;
       let included = `/${item.relative}/`.includes(`/${MACOSX_METADATA_DIR}/`);
       if (entry.isDirectory()) {
-        if (entry.name === ".git" && item.relative === "") continue;
+        if (
+          (entry.name === ".git" && item.relative === "") ||
+          (await buildSecretScanResult(pathModule.join(root, relPath)))
+        )
+          continue;
         if (item.depth + 1 > MAX_SCAN_DEPTH) {
           truncated = true;
           continue;

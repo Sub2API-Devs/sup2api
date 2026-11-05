@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：全屏 downsell 提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ag5x7vhf.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hnxhr3bs.js (5)
  * attribution: placement 5
  */
 import { getFullscreenDecision } from "../../utils/fullscreen.js";
@@ -19,19 +19,19 @@ import {
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logEvent } from "../../services/analytics/index.js";
-import { getInitialSettings_2, updateSettingsForSource } from "../../utils/settings/settings.js";
+import { getInitialSettings, updateSettingsForSource } from "../../utils/settings/settings.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { AnimatedAsterisk } from "./AnimatedAsterisk.js";
 
-//@ chunk-ag5x7vhf.js:84754-84763 placement
+//@ chunk-hnxhr3bs.js:84239-84248 placement
 var DOWNSELL_MAX_VIEWS = 5;
-//@ chunk-ag5x7vhf.js:84763-84857 placement
+//@ chunk-hnxhr3bs.js:84248-84342 placement
 function isFullscreenDownsellActive() {
   if (getFullscreenDecision() !== "downsell_on") return false;
   return (getGlobalConfig().fullscreenDownsellSeenCount ?? 0) < DOWNSELL_MAX_VIEWS;
 }
-//@ chunk-ag5x7vhf.js:84857-85038 placement
+//@ chunk-hnxhr3bs.js:84342-84523 placement
 function FullscreenDownsellNotice() {
   let $ = useMemoCache(3);
   let { storageV5 } = useTheme_2();
@@ -49,7 +49,7 @@ function FullscreenDownsellNotice() {
   } else notice = $[2];
   return notice;
 }
-//@ chunk-ag5x7vhf.js:85038-85454 placement
+//@ chunk-hnxhr3bs.js:84523-84939 placement
 /**
  * 记录全屏下推（downsell）提示被看过一次；达到次数后把 settings.tui=fullscreen 持久化（tengu_fullscreen_downsell_persisted）。
  */
@@ -65,7 +65,7 @@ async function recordFullscreenDownsellSeen(storageV5) {
   logEvent("tengu_fullscreen_downsell_shown", {
     seen_count: seenCount,
   });
-  if (seenCount >= DOWNSELL_MAX_VIEWS && getInitialSettings_2().tui === undefined) {
+  if (seenCount >= DOWNSELL_MAX_VIEWS && getInitialSettings().tui === undefined) {
     let { error } = await updateSettingsForSource(
       "userSettings",
       {
@@ -85,7 +85,7 @@ async function recordFullscreenDownsellSeen(storageV5) {
     });
   }
 }
-//@ chunk-ag5x7vhf.js:85454-86081 placement
+//@ chunk-hnxhr3bs.js:84939-85566 placement
 /**
  * 全屏（无闪烁渲染）说明：滚动、选中即复制、点击移动光标/展开、/tui default 退回。
  */

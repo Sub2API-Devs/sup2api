@@ -3,11 +3,12 @@
  *
  * 2.1.316 新增。统一挂载各类调查的宿主组件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (12)
  * attribution: placement 12
  */
+import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useStoreValue } from "../../screens/repl/storeHooks.js";
 import { pickActiveSurvey, PluginSurveyQuestion } from "./PluginSurvey.js";
@@ -21,23 +22,37 @@ import { logForDebugging } from "../../utils/debug.js";
 import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { createSignal } from "../../utils/signal.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
-import { env } from "../../utils/env.js";
 import { logEvent } from "../../services/analytics/index.js";
-import { errorMessage } from "../../utils/errors.js";
+import { env } from "../../utils/env.js";
 import { logError } from "../../utils/log.js";
+import { errorMessage } from "../../utils/errors.js";
+import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { sumAssistantTokensSince } from "../../utils/tokens.js";
-import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { getDynamicConfig_BLOCKS_ON_INIT } from "../../services/analytics/growthbook.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { collectTrailingAssistantTexts } from "../../utils/messages.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1009885-1009901 placement
+//@ chunk-czq1j3j2.js:1015203-1015207 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1015203", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1022746-1022750 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1022746", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1024777-1024781 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1024777", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1043922-1043938 placement
 function noopSelect() {}
-//@ chunk-18hwfzwa.js:1009901-1009917 placement
+//@ chunk-czq1j3j2.js:1043938-1043954 placement
 function noopUndo() {}
-//@ chunk-18hwfzwa.js:1009917-1016030 placement
+//@ chunk-czq1j3j2.js:1043954-1050068 placement
 /**
  * SurveyHost：统一挂载反馈、长上下文、记忆、压缩后、插件、组织等各类调查，保证同一时间只显示一个。
  */
@@ -394,7 +409,7 @@ function SurveyHost(props) {
     }
   }
 }
-//@ chunk-18hwfzwa.js:1016030-1016687 placement
+//@ chunk-czq1j3j2.js:1050068-1050725 placement
 /**
  * 订阅消息存储，增量统计助手消息 token 总数（只处理新增或变动的尾部消息），作为 useSyncExternalStore 的外部源。
  */
@@ -403,29 +418,29 @@ class AssistantTokenCounter {
   #t = new Set();
   #o = createSignal();
   #n;
-  #s = 0;
-  #r = false;
-  #c = false;
+  #r = 0;
+  #s = false;
+  #l = false;
   #i = [];
   #a = [];
   constructor(transcript) {
     this.#e = transcript;
     this.#d();
-    this.#n = transcript.subscribe(this.#l);
+    this.#n = transcript.subscribe(this.#c);
   }
-  getSnapshot = () => this.#s;
+  getSnapshot = () => this.#r;
   subscribe = (listener) => this.#o.subscribe(listener);
   dispose() {
-    if (this.#c) return;
-    this.#c = true;
+    if (this.#l) return;
+    this.#l = true;
     this.#n();
   }
-  #l = () => {
-    if (this.#r || this.#c) return;
-    this.#r = true;
+  #c = () => {
+    if (this.#s || this.#l) return;
+    this.#s = true;
     queueMicrotask(() => {
-      this.#r = false;
-      if (this.#c) return;
+      this.#s = false;
+      if (this.#l) return;
       this.#d();
     });
   };
@@ -446,22 +461,12 @@ class AssistantTokenCounter {
     }
     addedTokens += sumAssistantTokensSince(messages, this.#t, unchangedCount, (index) => this.#a.push(index));
     if (addedTokens > 0) {
-      this.#s += addedTokens;
+      this.#r += addedTokens;
       this.#o.emit();
     }
   }
 }
-//@ chunk-18hwfzwa.js:1016687-1016691 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1016687", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1016691-1016695 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1016691", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1016695-1016766 placement
+//@ chunk-czq1j3j2.js:1050733-1050804 placement
 function useDynamicConfigValue(key, fallback) {
   let [value, setValue] = useState(fallback);
   useEffect(() => {
@@ -469,14 +474,9 @@ function useDynamicConfigValue(key, fallback) {
   }, [key, fallback]);
   return value;
 }
-//@ chunk-18hwfzwa.js:1016766-1016770 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1016766", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1016770-1016783 placement
+//@ chunk-czq1j3j2.js:1050808-1050821 placement
 var DELAYED_FLAG_DEFAULT_MS = 2000;
-//@ chunk-18hwfzwa.js:1016783-1016923 placement
+//@ chunk-czq1j3j2.js:1050821-1050961 placement
 /**
  * 条件 h 为假时，延迟 x 毫秒（默认 2000）后变为真；h 为真时立即复位为假。
  */
@@ -493,11 +493,11 @@ function useDelayedFlag(busy, delayMs = DELAYED_FLAG_DEFAULT_MS) {
   }, [busy, clock, delayMs]);
   return elapsed;
 }
-//@ chunk-18hwfzwa.js:1016923-1016958 placement
+//@ chunk-czq1j3j2.js:1050961-1050996 placement
 var NUMBERED_LINE_RE = /^[ \t]*\d{1,2}[.)][ \t]/m;
-//@ chunk-18hwfzwa.js:1016958-1017029 placement
+//@ chunk-czq1j3j2.js:1050996-1051067 placement
 function endsWithNumberedList(messages) {
   let [last] = collectTrailingAssistantTexts(messages, 1).messages;
   return last !== undefined && NUMBERED_LINE_RE.test(last);
 }
-export { endsWithNumberedList, useDynamicConfigValue, useDelayedFlag, AssistantTokenCounter, SurveyHost };
+export { endsWithNumberedList, AssistantTokenCounter, SurveyHost, useDelayedFlag, useDynamicConfigValue };

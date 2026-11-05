@@ -1,14 +1,14 @@
 /**
  * @smithy/core/dist-cjs/submodules/endpoints/index.browser.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/core@3.30.0
- * pieces: chunk-a3vzsfpr.js (1)
+ * pieces: chunk-7ycvgepx.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_types } from "../../../../types/dist-cjs/index.js";
 
-//@ chunk-a3vzsfpr.js:819-7701 cjs-fingerprint
+//@ chunk-7ycvgepx.js:819-7701 cjs-fingerprint
 var require_index_browser = __commonJS(function (cjsExports) {
   var EndpointURLScheme = require_types();
   class EndpointCache {

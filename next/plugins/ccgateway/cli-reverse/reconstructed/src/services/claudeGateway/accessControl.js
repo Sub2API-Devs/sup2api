@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：Claude 网关访问控制
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (2)
  * attribution: placement 2
  */
 import { parseIp, ipInRanges, extractIpFromHost } from "./ssrfGuard.js";
 
-//@ chunk-1ny7cxrt.js:1336831-1337177 placement
+//@ chunk-1hnjmk23.js:1337794-1338140 placement
 /**
  * 从受信代理的 X-Forwarded-For 中自右向左找第一个非受信地址作为客户端 IP；格式错误时返回 badHop。
  */
@@ -49,7 +49,7 @@ function resolveClientIp(text, forwardedFor, ranges) {
     clientIp: text,
   };
 }
-//@ chunk-1ny7cxrt.js:1337177-1337260 placement
+//@ chunk-1hnjmk23.js:1338140-1338223 placement
 /**
  * 判断解析后的 IP 是否落在给定的 CIDR/地址范围内（地址为空或范围为空时返回 false）。
  */

@@ -1,15 +1,15 @@
 /**
  * @opentelemetry/resources/build/src/detectors/platform/node/machine-id/getMachineId-win.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/resources@2.2.0
- * pieces: chunk-q8ba87p3.js (2)
+ * pieces: chunk-e1xkd7nr.js (2)
  * attribution: cjs-fingerprint 1, affinity 1
  */
 import { __commonJS, importMetaRequire } from "../../../../../../../../../runtime/bun-runtime.js";
 import { require_execAsync } from "./execAsync.js";
 import { require_api } from "../../../../../../../api/build/src/index.js";
 
-//@ chunk-q8ba87p3.js:302-828 cjs-fingerprint
+//@ chunk-e1xkd7nr.js:302-828 cjs-fingerprint
 var require_getMachineId_win = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
@@ -36,5 +36,5 @@ var require_getMachineId_win = __commonJS(function (cjsExports) {
   }
   cjsExports.getMachineId = getMachineId;
 });
-//@ chunk-q8ba87p3.js:828-847 affinity
+//@ chunk-e1xkd7nr.js:828-847 affinity
 export default require_getMachineId_win();

@@ -3,10 +3,10 @@
  *
  * 主输入框组件 PromptInput：订阅 PromptDraft（value/cursorOffset/mode/pastedContents），组合 TextInput/VimTextInput、模式指示、建议、历史、粘贴、语音、页脚与帮助菜单，提交时调用 onSubmit。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/PromptInput.tsx
- * pieces: chunk-18hwfzwa.js (22)
- * attribution: fingerprint 2, sole-consumer 19, affinity 1
+ * pieces: chunk-czq1j3j2.js (22)
+ * attribution: fingerprint 2, sole-consumer 18, affinity 1, placement 1
  */
 import { getActiveAgentForInput } from "../../state/selectors.js";
 import { EMPTY_MESSAGES } from "../../state/inProgressToolUses.js";
@@ -40,6 +40,7 @@ import {
 import { useMergedClients, NOTIFICATION_TIMEOUT_MS } from "./Notifications.js";
 import { useAppState, useAppStoreDirect, useSetAppState } from "../../state/AppState.js";
 import { selectTeamContext } from "../teams/TeamStatus.js";
+import { selectViewingAgentTaskId_4 } from "./PromptComposer.js";
 import { useSession } from "../../context/session.js";
 import { sessionStore, useVimMode } from "../../screens/repl/storeHooks.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
@@ -58,6 +59,7 @@ import {
   useSyncExternalStore,
   useReducer,
   useImperativeHandle,
+  memo,
 } from "../../../vendor/react/cjs/react.production.js";
 import { setLaunchWarningFor } from "../../state/promptInputStore.js";
 import {
@@ -69,8 +71,8 @@ import {
   hasTextAfterNfcNormalize,
 } from "./promptText.js";
 import { setCwdState } from "./PromptInputFooter.js";
-import { count, uniq } from "../../utils/collections.js";
-import { isRefillableInput } from "../../utils/messageQueueManager.js";
+import { countWhere } from "../../utils/collections.js";
+import { isQueuedCommandEditable } from "../../utils/messageQueueManager.js";
 import {
   registerPasteCarrier,
   getLaunchMessagesOutsidePastes,
@@ -91,7 +93,7 @@ import {
   findUltrareviewTriggerPositions,
   ULTRACODE_KEYWORD,
 } from "../../utils/ultraplan/keyword.js";
-import { isUltrathinkEffective } from "../../utils/effort.js";
+import { ultrathinkRaisesEffort } from "../../utils/effort.js";
 import {
   setupGuideChipHighlights,
   isSetupGuideLink,
@@ -152,6 +154,7 @@ import { isKbCohesionFixesOn } from "../../utils/kbCohesionFixes.js";
 import { getPlatform } from "../../utils/platform.js";
 import { isMacOptionSpecialChar, MACOS_OPTION_SPECIAL_CHARS } from "../../utils/keyboardShortcuts.js";
 import { getNativeCSIuTerminalDisplayName } from "../../commands/terminalSetup/terminalSetup.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { isVirtualPancakeEnabled } from "../../utils/permissions/permissionSetup.js";
 import { stripAnsi } from "../../utils/stripAnsi.js";
 import { PASTE_THRESHOLD, getImageFromClipboard, looksLikeBinaryText } from "../../utils/imagePaste.js";
@@ -190,8 +193,9 @@ import { sequential } from "../../utils/sequential.js";
 import { VimTextInput } from "../VimTextInput.js";
 import { TextInput } from "../TextInput.js";
 import { Divider } from "../design-system/Divider.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:155398-155528 fingerprint (2.1.88 match: buildBorderText, 0.791)
+//@ chunk-czq1j3j2.js:159494-159624 fingerprint (2.1.88 match: buildBorderText, 0.791)
 /**
  * 拼输入框上边框文字（如会话标题/状态）。
  */
@@ -206,26 +210,22 @@ function buildBorderText(segments) {
       }
     : undefined;
 }
-//@ chunk-18hwfzwa.js:879241-879289 sole-consumer (2.1.88 match: _temp2, 1)
-function selectViewingAgentTaskId_3(s_0) {
-  return s_0.viewingAgentTaskId;
-}
-//@ chunk-18hwfzwa.js:879289-879384 sole-consumer
+//@ chunk-czq1j3j2.js:912164-912259 sole-consumer
 function hasSuppliedTextLink(state) {
   return state.linkSuppliedTexts.size > 0 && state.linkSuppliedTexts.has(state.value.trim());
 }
-//@ chunk-18hwfzwa.js:879384-879428 sole-consumer
+//@ chunk-czq1j3j2.js:912259-912303 sole-consumer
 function selectQueueEditIndex_2(state) {
   return state.queueEditIndex;
 }
-//@ chunk-18hwfzwa.js:879428-879534 sole-consumer
+//@ chunk-czq1j3j2.js:912303-912412 sole-consumer
 function viewedAgentMessages(state) {
   let activeAgentForInput = getActiveAgentForInput(state);
   return activeAgentForInput.type === "leader"
     ? undefined
     : (state.transcripts[activeAgentForInput.task.id]?.messages ?? EMPTY_MESSAGES);
 }
-//@ chunk-18hwfzwa.js:879534-879740 sole-consumer
+//@ chunk-czq1j3j2.js:912412-912620 sole-consumer
 function pendingMessagesForActiveAgent(state) {
   let activeAgentForInput = getActiveAgentForInput(state);
   switch (activeAgentForInput.type) {
@@ -242,53 +242,53 @@ function pendingMessagesForActiveAgent(state) {
     }
   }
 }
-//@ chunk-18hwfzwa.js:879740-879781 sole-consumer
+//@ chunk-czq1j3j2.js:912620-912659 sole-consumer
 function shownAsList(state) {
   return state.shownAs ?? [];
 }
-//@ chunk-18hwfzwa.js:879781-879828 sole-consumer
+//@ chunk-czq1j3j2.js:912659-912708 sole-consumer
 function selectUltraplanSessionUrl(state) {
   return state.ultraplanSessionUrl;
 }
-//@ chunk-18hwfzwa.js:879828-879874 sole-consumer
+//@ chunk-czq1j3j2.js:912708-912756 sole-consumer
 function selectUltraplanLaunching(state) {
   return state.ultraplanLaunching;
 }
-//@ chunk-18hwfzwa.js:879874-879912 sole-consumer
+//@ chunk-czq1j3j2.js:912756-912794 sole-consumer
 function isImagePasteRef(ref) {
   return isImagePlaceholder(ref.match);
 }
-//@ chunk-18hwfzwa.js:879912-879928 sole-consumer
+//@ chunk-czq1j3j2.js:912794-912810 sole-consumer
 function noopInputUpdate() {}
-//@ chunk-18hwfzwa.js:879928-879957 sole-consumer
+//@ chunk-czq1j3j2.js:912810-912839 sole-consumer
 function incrementOffset(offset) {
   return offset + 1;
 }
-//@ chunk-18hwfzwa.js:879957-880001 sole-consumer
+//@ chunk-czq1j3j2.js:912839-912883 sole-consumer
 function normalizeNfd(text) {
   return text.normalize("NFD");
 }
-//@ chunk-18hwfzwa.js:880001-880033 sole-consumer
+//@ chunk-czq1j3j2.js:912883-912913 sole-consumer
 function pasteIdOf(ref) {
   return ref.id;
 }
-//@ chunk-18hwfzwa.js:880033-880096 sole-consumer
+//@ chunk-czq1j3j2.js:912913-912976 sole-consumer
 function isOrphanedTextPaste(entry) {
   let [, ref] = entry;
   return ref.type === "text" && !ref.inline;
 }
-//@ chunk-18hwfzwa.js:880096-880135 sole-consumer
+//@ chunk-czq1j3j2.js:912976-913013 sole-consumer
 function secondEntryValue(entry) {
   let [, value] = entry;
   return value;
 }
-//@ chunk-18hwfzwa.js:880135-880220 sole-consumer
+//@ chunk-czq1j3j2.js:913013-913101 sole-consumer
 function truncatedTextPasteIds(ref) {
   return ref.match.startsWith("[...Truncated text") ? [String(ref.id)] : [];
 }
-//@ chunk-18hwfzwa.js:880220-880236 sole-consumer
+//@ chunk-czq1j3j2.js:913101-913117 sole-consumer
 function noopMessageSelector() {}
-//@ chunk-18hwfzwa.js:880236-880307 sole-consumer
+//@ chunk-czq1j3j2.js:913117-913184 sole-consumer
 function markStashUsed(state) {
   return state.hasUsedStash
     ? state
@@ -297,17 +297,17 @@ function markStashUsed(state) {
         hasUsedStash: true,
       };
 }
-//@ chunk-18hwfzwa.js:880307-880377 sole-consumer
+//@ chunk-czq1j3j2.js:913184-913256 sole-consumer
 function logImagePasteFailure(error) {
   logFeatureBad("input_image_paste", "clipboard_read_failed");
   logError(error);
 }
-//@ chunk-18hwfzwa.js:880377-880403 affinity
+//@ chunk-czq1j3j2.js:913256-913282 affinity
 var MIN_INPUT_ROWS = 5;
 var MIN_FULLSCREEN_INPUT_ROWS = 3;
 var INPUT_BADGE_GUTTER = 3;
 var INPUT_RIGHT_GUTTER = 2;
-//@ chunk-18hwfzwa.js:880403-918585 fingerprint (2.1.88 match: PromptInput, 0.391)
+//@ chunk-czq1j3j2.js:913282-951491 fingerprint (2.1.88 match: PromptInput, 0.39)
 /**
  * 主输入框。从 PromptDraft 订阅 value/cursorOffset/mode/pastedContents/interimRange/decorations，从 scope 取 commands；组合：模式指示 + TextInput/VimTextInput（由 editorMode 决定）+ 建议列表（useTypeahead）+ 历史（useArrowKeyHistory / Ctrl+R）+ 粘贴（usePasteHandler，图片转 [Image #N]）+ 语音（useVoiceIntegration）+ 页脚/帮助菜单。
  * 关键行为：输入首字符 ! 切到 bash 模式；@队友 提及高亮；超长输入自动折叠；排队命令可上箭头回到编辑（queueEditIndex）；alt+w 切换 workflow 关键词；提交时调用 onSubmit(value, helpers)。
@@ -370,7 +370,7 @@ function PromptInput(props) {
   let mcpClients = useMergedClients(scope.initialMcpClients, useAppState(selectMcpClients2));
   let activeAgents = useAppState(selectAgentDefinitionsActiveAgents_3);
   let teamContext = useAppState(selectTeamContext);
-  let viewingAgentTaskId = useAppState(selectViewingAgentTaskId_3);
+  let viewingAgentTaskId = useAppState(selectViewingAgentTaskId_4);
   let store = useAppStoreDirect();
   let setAppState = useSetAppState();
   let session = useSession();
@@ -498,7 +498,7 @@ function PromptInput(props) {
       if (queueEditIndex === null) {
         return;
       }
-      let refillableCount = count(commandQueue, isRefillableInput);
+      let refillableCount = countWhere(commandQueue, isQueuedCommandEditable);
       if (refillableCount === 0) setQueueEditIndex(null);
       else if (queueEditIndex > refillableCount - 1) setQueueEditIndex(refillableCount - 1);
     };
@@ -604,7 +604,7 @@ function PromptInput(props) {
       mode === "prompt" &&
       noViewedAgent &&
       ultrathinkPositions.length > 0 &&
-      isUltrathinkEffective(mainLoopModel, coordinatorTaskCount)
+      ultrathinkRaisesEffort(mainLoopModel, coordinatorTaskCount)
         ? ultrathinkPositions
         : [];
     $[52] = coordinatorTaskCount;
@@ -744,7 +744,7 @@ function PromptInput(props) {
   let slackMentionRanges = slackMentionRangesRaw;
   let agentMentionRanges;
   if ($[88] !== displayedValue || $[89] !== teamContext) {
-    js: {
+    Ca: {
       if (!isAgentSwarmsEnabled()) {
         let emptySwarmRanges;
         if ($[91] === MEMO_CACHE_SENTINEL) {
@@ -752,7 +752,7 @@ function PromptInput(props) {
           $[91] = emptySwarmRanges;
         } else emptySwarmRanges = $[91];
         agentMentionRanges = emptySwarmRanges;
-        break js;
+        break Ca;
       }
       if (!teamContext?.teammates) {
         let emptyTeamRanges;
@@ -761,13 +761,13 @@ function PromptInput(props) {
           $[92] = emptyTeamRanges;
         } else emptyTeamRanges = $[92];
         agentMentionRanges = emptyTeamRanges;
-        break js;
+        break Ca;
       }
       let memberRanges = [];
       let members = teamContext.teammates;
       if (!members) {
         agentMentionRanges = memberRanges;
-        break js;
+        break Ca;
       }
       let memberPattern;
       if ($[93] === MEMO_CACHE_SENTINEL) {
@@ -1658,7 +1658,7 @@ function PromptInput(props) {
   let isQueueEditable;
   if ($[261] !== draft.value || $[262] !== value || $[263] !== messageQueue) {
     isQueueEditable = function isQueueEditable() {
-      return messageQueue.getCommandQueue().some(isRefillableInput) && draft.value === value;
+      return messageQueue.getCommandQueue().some(isQueuedCommandEditable) && draft.value === value;
     };
     $[261] = draft.value;
     $[262] = value;
@@ -1695,7 +1695,7 @@ function PromptInput(props) {
       }
       if (isKbCohesionFixesOn()) {
         let queueEditIndex = store.getState().queueEditIndex;
-        let refillableCount = count(messageQueue.getCommandQueueSnapshot(), isRefillableInput);
+        let refillableCount = countWhere(messageQueue.getCommandQueueSnapshot(), isQueuedCommandEditable);
         if (queueEditIndex === null && refillableCount > 0) {
           setQueueEditIndex(refillableCount - 1);
           return;
@@ -1709,8 +1709,8 @@ function PromptInput(props) {
           return;
         }
       } else if (
-        commandQueue.some(isRefillableInput) ||
-        messageQueue.getCommandQueueSnapshot().some(isRefillableInput)
+        commandQueue.some(isQueuedCommandEditable) ||
+        messageQueue.getCommandQueueSnapshot().some(isQueuedCommandEditable)
       ) {
         if (popQueuedInputStable() || !isQueueEditableStable()) {
           return;
@@ -1755,7 +1755,7 @@ function PromptInput(props) {
       if (isKbCohesionFixesOn()) {
         let queueEditIndex = store.getState().queueEditIndex;
         if (queueEditIndex !== null) {
-          let refillableCount = count(messageQueue.getCommandQueueSnapshot(), isRefillableInput);
+          let refillableCount = countWhere(messageQueue.getCommandQueueSnapshot(), isQueuedCommandEditable);
           if (queueEditIndex < refillableCount - 1) setQueueEditIndex(queueEditIndex + 1);
           else setQueueEditIndex(null);
           return;
@@ -1896,8 +1896,8 @@ function PromptInput(props) {
       }
       if (!isKbCohesionFixesOn()) {
         if (
-          (commandQueue.some(isRefillableInput) ||
-            messageQueue.getCommandQueueSnapshot().some(isRefillableInput)) &&
+          (commandQueue.some(isQueuedCommandEditable) ||
+            messageQueue.getCommandQueueSnapshot().some(isQueuedCommandEditable)) &&
           (popQueuedInputStable() || !isQueueEditableStable())
         ) {
           return;
@@ -1918,7 +1918,7 @@ function PromptInput(props) {
       let cachedNfd = (pastedEntry, getVariants) => {
         let cachedVariants = weakMap.get(pastedEntry);
         if (cachedVariants === undefined) {
-          cachedVariants = uniq(getVariants().map(normalizeNfd));
+          cachedVariants = normalizeCaseForComparison_2(getVariants().map(normalizeNfd));
           weakMap.set(pastedEntry, cachedVariants);
         }
         return cachedVariants;
@@ -3264,4 +3264,9 @@ function PromptInput(props) {
   } else inputLayout = $[542];
   return inputLayout;
 }
-export { buildBorderText, PromptInput };
+//@ chunk-czq1j3j2.js:951491-951507 placement
+var MemoizedPromptInput; // deferred: uses PromptInput of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-czq1j3j2.js:951491", () => {
+  MemoizedPromptInput = memo(PromptInput);
+});
+export { buildBorderText, MemoizedPromptInput };

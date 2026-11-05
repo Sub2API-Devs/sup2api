@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：模型切换：服务端模型选择状态同步（model_selector_state）、PreModelSwitch 钩子、保存为默认模型
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-d1cgs5na.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wefvmrb3.js (23)
  * attribution: placement 23
  */
 import {
@@ -67,7 +67,7 @@ import { fetchBootstrapData } from "../../services/api/bootstrap.js";
 import {
   effectiveModelForContext,
   runPreModelSwitchHooks as runPreModelSwitchHooks_2,
-  useMainLoopModel_2 as useMainLoopModel_2_2_2,
+  useMainLoopModel_2 as useMainLoopModel_2_2,
   resolveEffectiveModel,
   recordSwitchIfChanged,
 } from "../../utils/model/modelSwitchHooks.js";
@@ -90,7 +90,7 @@ import { buildUnknownModelNotice } from "../../services/compact/unknownModelNoti
 import {
   updateSettingsForSource,
   getSettingsFilePathForSource,
-  getEffectiveSettingSource_2,
+  getEffectiveSettingSource,
   getSettingsForSource,
   getRelativeSettingsFilePathForSource,
 } from "../../utils/settings/settings.js";
@@ -100,9 +100,9 @@ import { env } from "../../utils/env.js";
 import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
 import { sequential } from "../../utils/sequential.js";
 
-//@ chunk-d1cgs5na.js:1903-1914 placement
+//@ chunk-wefvmrb3.js:1970-1981 placement
 var MODEL_SWITCH_TIMEOUT_MS = 5000;
-//@ chunk-d1cgs5na.js:1914-2192 placement
+//@ chunk-wefvmrb3.js:1981-2260 placement
 async function classifyModelScope(model) {
   if (model === null) return skipSelectionWrite("follows_account");
   if (isOpusPlanAlias(model)) return skipSelectionWrite("not_representable");
@@ -112,7 +112,7 @@ async function classifyModelScope(model) {
   if (scope === null || scope.kind !== "account") return skipSelectionWrite("no_account_scope");
   return syncModelSelectionToServer(scope, catalogSurface(), model);
 }
-//@ chunk-d1cgs5na.js:2192-3061 placement
+//@ chunk-wefvmrb3.js:2260-3129 placement
 /**
  * 把模型选择写到组织的 model_selector_state（失败分类记录）。
  */
@@ -166,7 +166,7 @@ async function syncModelSelectionToServer(model, session, requested) {
     };
   }
 }
-//@ chunk-d1cgs5na.js:3061-3361 placement
+//@ chunk-wefvmrb3.js:3129-3429 placement
 async function describeModelSource(model, session, state, model_2) {
   let cachedCatalogEntry = getCachedCatalogEntry(model, session);
   if (cachedCatalogEntry === undefined || cachedCatalogEntry.catalog === null) return;
@@ -190,7 +190,7 @@ async function describeModelSource(model, session, state, model_2) {
     },
   });
 }
-//@ chunk-d1cgs5na.js:3361-3461 placement
+//@ chunk-wefvmrb3.js:3429-3529 placement
 function skipSelectionWrite(state) {
   logForDebugging(`[servedCatalog] selection write skipped: ${state}`);
   return {
@@ -198,12 +198,12 @@ function skipSelectionWrite(state) {
     reason: state,
   };
 }
-//@ chunk-d1cgs5na.js:3461-3546 placement
+//@ chunk-wefvmrb3.js:3529-3614 placement
 function isOpusPlanAlias(model) {
   let lower = model.trim().toLowerCase();
   return lower === "opusplan" || lower === "opusplan[1m]";
 }
-//@ chunk-d1cgs5na.js:3546-3713 placement
+//@ chunk-wefvmrb3.js:3614-3781 placement
 /**
  * 切换主循环模型的安全包装：失败消息与额度拒绝说明经过遥测清理后再返回。
  */
@@ -221,7 +221,7 @@ async function switchMainLoopModelSafe(...args) {
         creditsRefusal: sanitizeTelemetryString(result.creditsRefusal),
       };
 }
-//@ chunk-d1cgs5na.js:3713-8138 placement
+//@ chunk-wefvmrb3.js:3781-8206 placement
 /**
  * 切换主循环模型：默认/别名、计划模式、保存、遥测（约 4.4 KB）。
  */
@@ -456,11 +456,11 @@ async function switchMainLoopModel(state, session, storageV5, options) {
     };
   }
 }
-//@ chunk-d1cgs5na.js:8138-8161 placement
+//@ chunk-wefvmrb3.js:8206-8229 placement
 function identity(value) {
   return value;
 }
-//@ chunk-d1cgs5na.js:8161-8898 placement
+//@ chunk-wefvmrb3.js:8229-8966 placement
 /**
  * 运行 PreModelSwitch 钩子决定 proceed/block（会话模型在钩子运行中变化时作废）。
  */
@@ -530,9 +530,9 @@ async function runPreModelSwitchHooks(session, readState, model, source, options
         messages,
       };
 }
-//@ chunk-d1cgs5na.js:8898-9136 placement
+//@ chunk-wefvmrb3.js:8966-9204 placement
 function planModeModelOf(state, currentModel) {
-  let mainLoopModel = useMainLoopModel_2_2_2(state);
+  let mainLoopModel = useMainLoopModel_2_2(state);
   let mode = state.toolPermissionContext.mode;
   let modes = [mode, mode === "plan" ? "default" : "plan"];
   let seen = new Set();
@@ -551,7 +551,7 @@ function planModeModelOf(state, currentModel) {
   }
   return models;
 }
-//@ chunk-d1cgs5na.js:9136-9357 placement
+//@ chunk-wefvmrb3.js:9204-9425 placement
 function describeModelSwitchBlocked(refusal) {
   return [
     `Model switch blocked by a PreModelSwitch hook${refusal.reason !== undefined ? `: ${sanitizeHookText(refusal.reason)}` : refusal.decision === "ask" ? ": confirmation required, and this session cannot ask" : ""}`,
@@ -559,14 +559,14 @@ function describeModelSwitchBlocked(refusal) {
   ].join(`
 `);
 }
-//@ chunk-d1cgs5na.js:9357-9404 placement
+//@ chunk-wefvmrb3.js:9425-9472 placement
 /**
  * 净化来自钩子的文本：去不安全字符、换行替换、去尾部空白。
  */
 function sanitizeHookText(text) {
   return replaceLineBreaks(stripUnsafeChars(truncateForDisplayText(text.trimEnd())));
 }
-//@ chunk-d1cgs5na.js:9404-9538 placement
+//@ chunk-wefvmrb3.js:9472-9606 placement
 /**
  * PreModelSwitch 钩子阻止切换模型时的提示文本（含钩子给出的原因与附加消息）。
  */
@@ -577,7 +577,7 @@ function preModelSwitchBlockedMessage(refusal, session, messages) {
   ].join(`
 `);
 }
-//@ chunk-d1cgs5na.js:9538-10115 placement
+//@ chunk-wefvmrb3.js:9606-10183 placement
 async function saveModelSwitch(
   session,
   model,
@@ -627,13 +627,13 @@ async function saveModelSwitch(
 ${remoteResult.text}`;
   return notice;
 }
-//@ chunk-d1cgs5na.js:10115-10136 placement
+//@ chunk-wefvmrb3.js:10183-10204 placement
 /**
  * 设置默认模型的等待 3000ms 与模型列表刷新超时 15000ms。
  */
 var SET_DEFAULT_MODEL_TIMEOUT_MS = 3000;
 var MODEL_LIST_REFRESH_TIMEOUT_MS = 15000;
-//@ chunk-d1cgs5na.js:10136-10493 placement
+//@ chunk-wefvmrb3.js:10204-10561 placement
 async function setDefaultModel(model, storageV5, timeoutMs = SET_DEFAULT_MODEL_TIMEOUT_MS) {
   let write = updateSettingsForSource(
     "userSettings",
@@ -663,7 +663,7 @@ async function setDefaultModel(model, storageV5, timeoutMs = SET_DEFAULT_MODEL_T
     kind: "saved",
   };
 }
-//@ chunk-d1cgs5na.js:10493-10896 placement
+//@ chunk-wefvmrb3.js:10561-10964 placement
 function describeDefaultSaved(saved) {
   if (saved === null || saved.kind === "saved") return "";
   let path = tildify(getSettingsFilePathForSource("userSettings") ?? "settings.json");
@@ -680,7 +680,7 @@ function describeDefaultSaved(saved) {
     }
   }
 }
-//@ chunk-d1cgs5na.js:10896-11078 placement
+//@ chunk-wefvmrb3.js:10964-11146 placement
 /**
  * ANTHROPIC_MODEL 环境变量设置了允许的模型且与当前选择不同时，提示新会话将使用该模型。
  */
@@ -694,7 +694,7 @@ function anthropicModelEnvNotice(userModel) {
     " \u2014 new sessions use that while it is set",
   );
 }
-//@ chunk-d1cgs5na.js:11078-11211 placement
+//@ chunk-wefvmrb3.js:11146-11279 placement
 function isDifferentModelSetting(setting, model) {
   let userSpecifiedModel = parseUserSpecifiedModel(setting);
   let userSpecifiedModel_2 = parseUserSpecifiedModel(model);
@@ -709,9 +709,9 @@ function isDifferentModelSetting(setting, model) {
     /\[1m\]$/i.test(userSpecifiedModel) !== /\[1m\]$/i.test(userSpecifiedModel_2)
   );
 }
-//@ chunk-d1cgs5na.js:11211-11716 placement
+//@ chunk-wefvmrb3.js:11279-11784 placement (2.1.88 match: updateSettingsForSource, 0.263)
 function findModelSettingSource(setting) {
-  let effectiveSettingSource = getEffectiveSettingSource_2("model");
+  let effectiveSettingSource = getEffectiveSettingSource("model");
   if (
     effectiveSettingSource !== "projectSettings" &&
     effectiveSettingSource !== "localSettings" &&
@@ -745,12 +745,12 @@ function findModelSettingSource(setting) {
       : getRelativeSettingsFilePathForSource(effectiveSettingSource);
   return dimWithCode(`${lockedByPolicy} pins `, renderModelSetting(model), " \u2014 that applies on restart");
 }
-//@ chunk-d1cgs5na.js:11716-11786 placement
+//@ chunk-wefvmrb3.js:11784-11854 placement
 function dimWithCode(name, code, suffix) {
   return `${sequential.dim(`
      ${name}`)}${toInlineCode(code)}${sequential.dim(suffix)}`;
 }
-//@ chunk-d1cgs5na.js:11786-12054 placement
+//@ chunk-wefvmrb3.js:11854-12122 placement
 /**
  * 组织默认模型在重启后生效的提示（org 或 standard）。
  */
@@ -768,15 +768,15 @@ function renderOrgDefaultRestartNotice(orgLockedDefaultModel) {
   }
 }
 export {
+  runPreModelSwitchHooks,
+  describeModelSwitchBlocked,
+  sanitizeHookText,
+  preModelSwitchBlockedMessage,
   switchMainLoopModelSafe,
   MODEL_LIST_REFRESH_TIMEOUT_MS,
-  runPreModelSwitchHooks,
-  preModelSwitchBlockedMessage,
-  saveModelSwitch,
-  sanitizeHookText,
-  describeModelSwitchBlocked,
   setDefaultModel,
   describeDefaultSaved,
+  saveModelSwitch,
   anthropicModelEnvNotice,
   findModelSettingSource,
 };

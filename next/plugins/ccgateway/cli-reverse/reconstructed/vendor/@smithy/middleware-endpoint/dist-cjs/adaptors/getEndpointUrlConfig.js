@@ -1,14 +1,14 @@
 /**
  * @smithy/middleware-endpoint/dist-cjs/adaptors/getEndpointUrlConfig.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/middleware-endpoint@4.3.0..4.3.15
- * pieces: chunk-edce4vxq.js (1)
+ * pieces: chunk-3p78mpxm.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_shared_ini_file_loader } from "../../../shared-ini-file-loader/dist-cjs/index.js";
 
-//@ chunk-edce4vxq.js:115651-116280 cjs-fingerprint
+//@ chunk-3p78mpxm.js:115651-116280 cjs-fingerprint
 var require_getEndpointUrlConfig = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

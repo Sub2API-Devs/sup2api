@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增。ListConnectors 工具名与提示词。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kfxfsh2y.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-e7bs7669.js (1)
  * attribution: placement 1
  */
-//@ chunk-kfxfsh2y.js:191-1281 placement
+//@ chunk-e7bs7669.js:191-1281 placement
 var LIST_CONNECTORS_TOOL_NAME = "ListConnectors";
 var DESCRIPTION =
   "List the MCP connectors installed for the user's claude.ai org, optionally filtered by keyword.";

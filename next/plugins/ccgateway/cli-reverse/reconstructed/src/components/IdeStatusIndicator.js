@@ -3,39 +3,41 @@
  *
  * 页脚 IDE 选区指示（"N lines selected" / 当前文件）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/IdeStatusIndicator.tsx
- * pieces: chunk-18hwfzwa.js (3)
- * attribution: placement 2, fingerprint 1
+ * pieces: chunk-czq1j3j2.js (4)
+ * attribution: affinity 1, placement 2, fingerprint 1
  */
-import { getStagedFiles } from "../utils/commitAttribution.js";
 import { ideFileLabel, linesLabel } from "../screens/repl/sendNow.js";
 
-//@ chunk-18hwfzwa.js:119627-119644 placement
+//@ chunk-czq1j3j2.js:120586-120628 affinity
+function isDiffAttribution(attribution) {
+  return attribution?.source === "diff";
+}
+//@ chunk-czq1j3j2.js:120628-120645 placement
 var IDE_FILE_MARKER = "\u29C9 ";
-//@ chunk-18hwfzwa.js:119644-119927 placement
+//@ chunk-czq1j3j2.js:120645-120928 placement
 function ideSelectionLabel(connectionState, attribution) {
   if (!attribution) return null;
-  let stagedFiles = getStagedFiles(attribution);
-  if (!stagedFiles && connectionState !== "connected") return null;
+  let isFromIde = isDiffAttribution(attribution);
+  if (!isFromIde && connectionState !== "connected") return null;
   if (attribution.text && attribution.lineCount > 0) {
     let sourceLabel =
-      stagedFiles && attribution.filePath
+      isFromIde && attribution.filePath
         ? `from ${ideFileLabel(attribution.filePath)}`
-        : stagedFiles
+        : isFromIde
           ? "from diff"
           : "selected";
     return `${IDE_FILE_MARKER}${linesLabel(attribution.lineCount)} ${sourceLabel}`;
   }
-  if (!stagedFiles && attribution.filePath)
-    return `${IDE_FILE_MARKER}In ${ideFileLabel(attribution.filePath)}`;
+  if (!isFromIde && attribution.filePath) return `${IDE_FILE_MARKER}In ${ideFileLabel(attribution.filePath)}`;
   return null;
 }
-//@ chunk-18hwfzwa.js:119927-120241 fingerprint (2.1.88 match: IdeStatusIndicator, 0.31)
+//@ chunk-czq1j3j2.js:120928-121242 fingerprint (2.1.88 match: IdeStatusIndicator, 0.31)
 function IdeStatusIndicator({ ideStatus, ideName, isRemoteWorkspace, isViewingAgent, ideSelection }) {
   if (
     !ideSelection ||
-    getStagedFiles(ideSelection) ||
+    isDiffAttribution(ideSelection) ||
     ideName === null ||
     isRemoteWorkspace ||
     isViewingAgent ||

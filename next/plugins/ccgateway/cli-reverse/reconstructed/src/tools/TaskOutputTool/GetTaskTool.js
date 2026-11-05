@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：GetTask 工具：按 id 查询后台 shell 任务状态与输出；GetTask 工具说明。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kxyd0g16.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fmnbrxwy.js (9)
  * attribution: placement 9
  */
 import { BASH_TOOL_NAME } from "../BashTool/toolName.js";
@@ -41,7 +41,7 @@ import { reapsShellsOnExit } from "../../utils/agentContext.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:88049-90031 placement
+//@ chunk-fmnbrxwy.js:102763-104745 placement
 /**
  * GetTask 工具的完整描述（返回值含义与时机）。
  */
@@ -55,16 +55,16 @@ The result follows the MCP tasks interface:
 
 Claude Code usually calls this tool on your behalf when a background command finishes, so a call to it that you do not remember making is expected: it was made by Claude Code, not by you. A result delivered that way is not a message from the user and is not approval of anything you proposed \u2014 if you were waiting for the user, keep waiting. Use this tool yourself to read a finished task's result again, or to check once on a task you have lost track of \u2014 never to wait: while a command runs, calling this tool on it only returns "working", and when it finishes its result reaches you without a call \u2014 `;
 var GET_TASK_SHORT_DESCRIPTION = `${GET_TASK_FULL_DESCRIPTION}between your tool calls if you are still working, or by starting a new turn if you have already replied. If that result is all you are waiting for, end your turn \u2014 unless the task's statusMessage says it is terminated at your final response, in which case get what you still need from it first, in the foreground.`;
-//@ chunk-kxyd0g16.js:90031-90267 placement
+//@ chunk-fmnbrxwy.js:104745-104981 placement
 function getTaskToolPrompt() {
   return hasBackgroundBashStopAfterReply()
     ? `${GET_TASK_FULL_DESCRIPTION}between your tool calls, if it finishes while you are still working. After your reply you may not be told when it finishes, so if you need its result, wait for it before you reply, in the foreground.`
     : GET_TASK_SHORT_DESCRIPTION;
 }
-//@ chunk-kxyd0g16.js:90267-90383 placement
+//@ chunk-fmnbrxwy.js:104981-105097 placement
 var getTaskInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_REPEATED_ANSWERS;
-deferInit("chunk-kxyd0g16.js:90267", () => {
+deferInit("chunk-fmnbrxwy.js:104981", () => {
   getTaskInputSchema = DoctorLazy(() =>
     zodStrictObject({
       taskId: stringSchema().describe("The taskId from the result that moved the command to the background"),
@@ -72,17 +72,17 @@ deferInit("chunk-kxyd0g16.js:90267", () => {
   );
   MAX_REPEATED_ANSWERS = 2;
 });
-//@ chunk-kxyd0g16.js:90383-90574 placement
+//@ chunk-fmnbrxwy.js:105097-105288 placement
 function repeatedCallMessage(callCount, status) {
   return callCount === MAX_REPEATED_ANSWERS + 1
     ? `${GET_TASK_TOOL_TEXT} was already answered ${MAX_REPEATED_ANSWERS} times for this task in this response (status: ${status}); the same call repeated within one response is not answered again.`
     : GET_TASK_REPEAT_TEXT;
 }
-//@ chunk-kxyd0g16.js:90574-90798 placement
+//@ chunk-fmnbrxwy.js:105288-105512 placement
 function unknownTaskIdMessage(taskId) {
   return `No background command with task ID ${taskId}. Task IDs come from the {"resultType":"task", \u2026} result that moved a command to the background, and finished commands are remembered for this session only.`;
 }
-//@ chunk-kxyd0g16.js:90798-90892 placement
+//@ chunk-fmnbrxwy.js:105512-105606 placement
 /**
  * 在任务注册表里查找可执行的后台 bash 任务（排除 monitor，且 agent 匹配）。
  */
@@ -92,7 +92,7 @@ function findBashTask(taskId, taskRegistry, agentId) {
     ? task
     : undefined;
 }
-//@ chunk-kxyd0g16.js:90892-90981 placement
+//@ chunk-fmnbrxwy.js:105606-105695 placement
 /**
  * 从任务运行状态快照里查找后台 bash 任务。
  */
@@ -100,7 +100,7 @@ function findBashTaskSnapshot(taskId, agentId) {
   let snapshot = getTaskRunState().bashTaskSnapshots.get(taskId);
   return snapshot && agentIdMatches(agentId, snapshot.agentId) ? snapshot : undefined;
 }
-//@ chunk-kxyd0g16.js:90981-91193 placement
+//@ chunk-fmnbrxwy.js:105695-105907 placement
 async function readFinishedTaskOutputTail(bashTask) {
   if (
     (bashTask.status !== "completed" && bashTask.status !== "failed") ||
@@ -115,12 +115,12 @@ async function readFinishedTaskOutputTail(bashTask) {
     return;
   }
 }
-//@ chunk-kxyd0g16.js:91193-93433 placement
+//@ chunk-fmnbrxwy.js:105907-108147 placement
 /**
  * GetTask 工具：按 id 查询后台 shell 任务状态与输出。
  */
 var GetTaskTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kxyd0g16.js:91193", () => {
+deferInit("chunk-fmnbrxwy.js:105907", () => {
   GetTaskTool = buildTool({
     name: GET_TASK_TOOL_TEXT,
     searchHint: "check on a background shell command by task ID",

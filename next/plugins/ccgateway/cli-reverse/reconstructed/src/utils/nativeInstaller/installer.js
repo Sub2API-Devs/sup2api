@@ -3,10 +3,10 @@
  *
  * 已有模块；g2 补充放置声明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/nativeInstaller/installer.ts
- * pieces: chunk-ch0vxh4c.js (1), chunk-e6aww6q8.js (1), chunk-s61vbvea.js (6), chunk-zw17mz74.js (48)
- * attribution: fingerprint 21, placement 5, sole-consumer 1, affinity 2, facade-exports 9, layout 18
+ * pieces: chunk-5xgkngpb.js (1), chunk-7jxyna5q.js (6), chunk-e5z7dpjd.js (53), chunk-wfxhhysk.js (1)
+ * attribution: fingerprint 21, placement 5, sole-consumer 1, affinity 2, facade-exports 9, layout 23
  */
 import {
   stat,
@@ -48,7 +48,8 @@ import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_semver_3 } from "../../../vendor/semver/index.js";
 import { logForDebugging } from "../debug.js";
 import { envDynamicProbe } from "../envDynamic.js";
-import { getNativeVersionsDir, getXDGCacheHome, getXDGStateHome, getUserBinDir } from "../xdg.js";
+import { getNativeVersionsDir, getXDGCacheHome, getUserBinDir } from "../xdg.js";
+import { getLocksDir } from "./lockDir.js";
 import {
   isAutoUpdateEnabled,
   sha256File,
@@ -62,9 +63,11 @@ import {
 import {
   withProcessLock,
   isLockActive,
-  readLockContent,
+  isProcessRunning,
+  getAllLockInfo,
   acquireProcessLifetimeLock,
   cleanupStaleLocks,
+  readLockContent,
 } from "./pidLock.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { sleep } from "../sleep.js";
@@ -78,6 +81,7 @@ import { resolveMaxVersionConfig, isForceDowngradeActive, shouldSkipVersion } fr
 import { isSemverVersion } from "../model/modelCatalog/catalogCapabilities.js";
 import { semverGte, semverGt } from "../semver.js";
 import { sanitizeVersion } from "../../services/analytics/metadata.js";
+import { readFileSafe } from "../file.js";
 import { getCurrentInstallationTypeProbed } from "../doctorDiagnostic.js";
 import { getGlobalConfig, saveGlobalConfig } from "../config.js";
 import { getShellType } from "../localInstaller.js";
@@ -87,11 +91,16 @@ import {
   filterClaudeAliases,
   writeFileLines,
 } from "../shellConfig.js";
+import { versionOrDefault, bundleVersionOfPath, BUNDLES_DIR } from "./bundlePaths.js";
+import { getTaskListLockPath, readActiveLockVersions } from "./lockFiles.js";
+import { tryAcquireComputerUseLock } from "../computerUse/computerUseLock.js";
+import { useCostSummary } from "../../costHook.js";
 import { registerCleanup } from "../cleanupRegistry.js";
+import { cleanUpBundles } from "./cleanup.js";
 import { execFileNoThrowWithCwd } from "../execFileNoThrow.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ch0vxh4c.js:1552-1657 fingerprint (2.1.88 match: isPossibleClaudeBinary, 1)
+//@ chunk-wfxhhysk.js:1552-1657 fingerprint (2.1.88 match: isPossibleClaudeBinary, 1)
 /**
  * 路径是否是可执行的普通文件。
  */
@@ -104,7 +113,7 @@ async function isPossibleClaudeBinary(filePath) {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:504239-504287 placement
+//@ chunk-7jxyna5q.js:421342-421390 placement
 /**
  * 若需要则预取资格判定（非必要流量时跳过）。
  */
@@ -112,19 +121,19 @@ async function prefetchEligibilityIfNeeded(request, options) {
   if (isEssentialTrafficOnly()) return;
   getCachedOrFetchPassesEligibility(request, options);
 }
-//@ chunk-s61vbvea.js:504426-504505 placement
+//@ chunk-7jxyna5q.js:421529-421608 placement
 /**
  * 判断是否为 bridge 子进程并带机器设置。
  */
 function isBridgeChildMachineSettings() {
   return env.CLAUDE_CODE_BRIDGE_CHILD_MACHINE_SETTINGS === true && !getSessionBypassPermissionsMode();
 }
-//@ chunk-s61vbvea.js:504639-504676 placement
+//@ chunk-7jxyna5q.js:421742-421779 placement
 var VERSIONS_DIR_SEGMENT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:504639", () => {
+deferInit("chunk-7jxyna5q.js:421742", () => {
   VERSIONS_DIR_SEGMENT = sep + join("claude", "versions") + sep;
 });
-//@ chunk-s61vbvea.js:504676-504783 placement
+//@ chunk-7jxyna5q.js:421779-421886 placement
 /**
  * 判断安装链接是否存在且指向安装目录（Windows 或不存在时视为是）。
  */
@@ -136,7 +145,7 @@ async function isInstallLinkOrMissing(linkPath) {
     return isENOENT(error);
   }
 }
-//@ chunk-s61vbvea.js:504783-504888 placement
+//@ chunk-7jxyna5q.js:421886-421991 placement
 /**
  * 判断路径是否为指向安装目录的符号链接。
  */
@@ -145,7 +154,7 @@ async function isSymlinkIntoInstallDir(linkPath, stats) {
   let target = await readlink(linkPath);
   return resolve(dirname(linkPath), target).includes(VERSIONS_DIR_SEGMENT);
 }
-//@ chunk-s61vbvea.js:504888-504981 fingerprint (2.1.88 match: isNpmSymlink, 0.912)
+//@ chunk-7jxyna5q.js:421991-422084 fingerprint (2.1.88 match: isNpmSymlink, 0.911)
 /**
  * 启动器是否是 npm 生成的符号链接（指向 .js 或 node_modules）。
  */
@@ -153,18 +162,18 @@ async function isNpmSymlink(executablePath) {
   let targetPath = await realpath(executablePath);
   return targetPath.endsWith(".js") || targetPath.includes("node_modules");
 }
-//@ chunk-e6aww6q8.js:617698-617740 fingerprint (2.1.88 match: atomicMoveToInstallPath, 0.508)
+//@ chunk-5xgkngpb.js:627791-627833 fingerprint (2.1.88 match: atomicMoveToInstallPath, 0.508)
 function atomicMoveToInstallPath_2(path) {
   return path.includes(".tmp.");
 }
-//@ chunk-zw17mz74.js:1332-1350 sole-consumer
+//@ chunk-e5z7dpjd.js:1429-1447 sole-consumer
 var semver; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-zw17mz74.js:1332", () => {
+deferInit("chunk-e5z7dpjd.js:1429", () => {
   semver = __toESM(require_semver_3(), 1);
 });
-//@ chunk-zw17mz74.js:2073-2083 affinity
+//@ chunk-e5z7dpjd.js:2182-2192 affinity
 var FORCE_ARM64 = false;
-//@ chunk-zw17mz74.js:2083-2410 fingerprint (2.1.88 match: getPlatform, 0.712)
+//@ chunk-e5z7dpjd.js:2192-2519 fingerprint (2.1.88 match: getPlatform, 0.712)
 /**
  * 原生安装器的平台标识（linux-x64、darwin-arm64、win32-x64…，含 musl/Android 判断）；316 linux 构建架构固定 x64。
  */
@@ -185,17 +194,17 @@ function getPlatform() {
   }
   return `${os}-${arch}`;
 }
-//@ chunk-zw17mz74.js:20027-20049 affinity
+//@ chunk-e5z7dpjd.js:24246-24268 affinity
 var VERSION_RETENTION_COUNT = 2;
 var VERSION_RETENTION_MS = 604800000;
-//@ chunk-zw17mz74.js:20049-20116 facade-exports (2.1.88 match: getBinaryName, 1)
+//@ chunk-e5z7dpjd.js:24268-24335 facade-exports (2.1.88 match: getBinaryName, 1)
 /**
  * 原生二进制文件名：Windows 为 claude.exe，否则 claude。
  */
 function getBinaryName(platform) {
   return platform.startsWith("win32") ? "claude.exe" : "claude";
 }
-//@ chunk-zw17mz74.js:20116-20260 fingerprint (2.1.88 match: getBaseDirectories, 0.9)
+//@ chunk-e5z7dpjd.js:24335-24459 fingerprint (2.1.88 match: getBaseDirectories, 0.758)
 /**
  * 原生安装目录：versions、staging、locks 与启动器可执行文件路径（~/.local/bin/claude）。
  */
@@ -205,29 +214,29 @@ function getBaseDirectories() {
   return {
     versions: getNativeVersionsDir(),
     staging: join(getXDGCacheHome(), "claude", "staging"),
-    locks: join(getXDGStateHome(), "claude", "locks"),
+    locks: getLocksDir(),
     executable: join(getUserBinDir(), executableName),
   };
 }
-//@ chunk-zw17mz74.js:20260-20332 layout
+//@ chunk-e5z7dpjd.js:24459-24531 layout
 async function isNonEmptyFile(filePath) {
   return stat(filePath).then(
     (stats) => stats.isFile() && stats.size > 0,
     () => false,
   );
 }
-//@ chunk-zw17mz74.js:20332-20404 layout
+//@ chunk-e5z7dpjd.js:24531-24603 layout
 async function findFirstExistingFile(candidates, toPath) {
   for (let candidate of candidates) if (await isNonEmptyFile(toPath(candidate))) return candidate;
   return;
 }
-//@ chunk-zw17mz74.js:20404-20465 layout
+//@ chunk-e5z7dpjd.js:24603-24664 layout
 function backupPathFor(installPath) {
   return `${installPath}.old.${Date.now()}.${process.pid}`;
 }
-//@ chunk-zw17mz74.js:20465-20483 layout
+//@ chunk-e5z7dpjd.js:24664-24682 layout
 var BACKUP_RETENTION_MS = 2592000000;
-//@ chunk-zw17mz74.js:20483-20810 layout
+//@ chunk-e5z7dpjd.js:24682-25009 layout
 function parseBackupOrStagedName(file, prefix) {
   if (!file.toLowerCase().startsWith(`${prefix.toLowerCase()}.`)) return;
   let match = /^(?:old\.(\d+)(?:\.(\d+))?|new\.\d+\.(\d+)\.[0-9a-f]+)$/i.exec(file.slice(prefix.length + 1));
@@ -244,7 +253,7 @@ function parseBackupOrStagedName(file, prefix) {
           stampedMs: Number(match[3]),
         };
 }
-//@ chunk-zw17mz74.js:20810-20934 layout
+//@ chunk-e5z7dpjd.js:25009-25133 layout
 async function isExecutableFile(filePath) {
   try {
     let stats = await stat(filePath);
@@ -254,7 +263,7 @@ async function isExecutableFile(filePath) {
     return false;
   }
 }
-//@ chunk-zw17mz74.js:20934-21462 fingerprint (2.1.88 match: getVersionPaths, 0.681)
+//@ chunk-e5z7dpjd.js:25133-25661 fingerprint (2.1.88 match: getVersionPaths, 0.681)
 async function getVersionPaths(version) {
   let dirs = getBaseDirectories();
   let dirsToCreate = [dirs.versions, dirs.staging, dirs.locks];
@@ -291,7 +300,7 @@ async function getVersionPaths(version) {
     installPath,
   };
 }
-//@ chunk-zw17mz74.js:21462-22584 fingerprint (2.1.88 match: tryWithVersionLock, 0.885)
+//@ chunk-e5z7dpjd.js:25661-26784 fingerprint (2.1.88 match: tryWithVersionLock, 0.885)
 async function tryWithVersionLock(versionFilePath, callback, retries = 0) {
   let dirs = getBaseDirectories();
   let lockfilePath = getLockFilePathFromVersionPath(dirs, versionFilePath);
@@ -379,14 +388,14 @@ async function tryWithVersionLock(versionFilePath, callback, retries = 0) {
     if (release) await release();
   }
 }
-//@ chunk-zw17mz74.js:22584-22606 layout
+//@ chunk-e5z7dpjd.js:26784-26806 layout
 var ATOMIC_MOVE_RETRY_DELAYS_MS = [100, 500, 2000];
-//@ chunk-zw17mz74.js:22606-22770 facade-exports
+//@ chunk-e5z7dpjd.js:26806-26970 facade-exports
 /**
  * staging 中的二进制与校验和不再一致时拒绝安装。
  */
 let StagedBinaryChecksumError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-zw17mz74.js:22606", () => {
+deferInit("chunk-e5z7dpjd.js:26806", () => {
   StagedBinaryChecksumError = class StagedBinaryChecksumError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -398,7 +407,7 @@ deferInit("chunk-zw17mz74.js:22606", () => {
     }
   };
 });
-//@ chunk-zw17mz74.js:22770-23309 layout
+//@ chunk-e5z7dpjd.js:26970-27509 layout
 async function atomicMoveToInstallPath(stagedBinaryPath, installPath, expectedChecksum) {
   await mkdir(dirname(installPath), {
     recursive: true,
@@ -433,7 +442,7 @@ async function atomicMoveToInstallPath(stagedBinaryPath, installPath, expectedCh
   }
   throw lastError;
 }
-//@ chunk-zw17mz74.js:23309-24418 fingerprint (2.1.88 match: installVersionFromPackage, 0.811)
+//@ chunk-e5z7dpjd.js:27509-28618 fingerprint (2.1.88 match: installVersionFromPackage, 0.811)
 async function installVersionFromPackage(stagingPath, installPath, expectedChecksum) {
   try {
     let nodeModulesDir = join(stagingPath, "node_modules", "@anthropic-ai");
@@ -490,7 +499,7 @@ async function installVersionFromPackage(stagingPath, installPath, expectedCheck
     throw error;
   }
 }
-//@ chunk-zw17mz74.js:24418-25351 fingerprint (2.1.88 match: installVersionFromBinary, 0.618)
+//@ chunk-e5z7dpjd.js:28618-29551 fingerprint (2.1.88 match: installVersionFromBinary, 0.618)
 async function installVersionFromBinary(stagingPath, installPath, expectedChecksum) {
   try {
     let platform = getPlatform();
@@ -540,17 +549,17 @@ async function installVersionFromBinary(stagingPath, installPath, expectedChecks
     throw error;
   }
 }
-//@ chunk-zw17mz74.js:25351-25425 fingerprint (2.1.88 match: installVersion, 1)
+//@ chunk-e5z7dpjd.js:29551-29625 fingerprint (2.1.88 match: installVersion, 1)
 async function installVersion(stagingPath, installPath, downloadType, expectedChecksum) {
   if (downloadType === "npm") return installVersionFromPackage(stagingPath, installPath, expectedChecksum);
   return installVersionFromBinary(stagingPath, installPath, expectedChecksum);
 }
-//@ chunk-zw17mz74.js:25425-25451 layout
+//@ chunk-e5z7dpjd.js:29625-29651 layout
 var versionLockSlots; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-zw17mz74.js:25425", () => {
+deferInit("chunk-e5z7dpjd.js:29625", () => {
   versionLockSlots = new HostScoped(() => new Map());
 });
-//@ chunk-zw17mz74.js:25451-27799 fingerprint (2.1.88 match: performVersionUpdate, 0.385)
+//@ chunk-e5z7dpjd.js:29651-31999 fingerprint (2.1.88 match: performVersionUpdate, 0.385)
 /**
  * performVersionUpdate：下载到 staging、校验、原子移动到安装路径（可复用保留的已下载版本）。
  */
@@ -686,18 +695,18 @@ async function performVersionUpdate(
     skippedUnverifiedRelease: false,
   };
 }
-//@ chunk-zw17mz74.js:27799-27864 fingerprint (2.1.88 match: versionIsAvailable, 1)
+//@ chunk-e5z7dpjd.js:31999-32064 fingerprint (2.1.88 match: versionIsAvailable, 1)
 async function versionIsAvailable(version) {
   let { installPath } = await getVersionPaths(version);
   return isExecutableFile(installPath);
 }
-//@ chunk-zw17mz74.js:27864-27977 layout
+//@ chunk-e5z7dpjd.js:32064-32177 layout
 async function isNativeInstallPresent() {
   if (await isRunningFromVersionsDir()) return true;
   let { executable } = getBaseDirectories();
   return (await isExecutableFile(executable)) && !(await isNpmSymlink(executable).catch(() => false));
 }
-//@ chunk-zw17mz74.js:27977-28262 layout
+//@ chunk-e5z7dpjd.js:32177-32462 layout
 async function isRunningFromVersionsDir() {
   let { versions, executable } = getBaseDirectories();
   let found = false;
@@ -724,14 +733,14 @@ async function isRunningFromVersionsDir() {
     }),
   );
 }
-//@ chunk-zw17mz74.js:28262-28437 layout
+//@ chunk-e5z7dpjd.js:32462-32637 layout
 function isUnderVersionsOrExecutable(inputPath, { versions, executable, isWindows }) {
   let normalize = (inputPath) => (isWindows ? inputPath.replaceAll("\\", "/").toLowerCase() : inputPath);
   let normalizedExec = normalize(inputPath);
   let normalizedVersionsPrefix = normalize(versions).replace(/\/+$/, "") + "/";
   return normalizedExec.startsWith(normalizedVersionsPrefix) || normalizedExec === normalize(executable);
 }
-//@ chunk-zw17mz74.js:28437-28632 layout
+//@ chunk-e5z7dpjd.js:32637-32832 layout
 function getCanaryVersion() {
   try {
     let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_canary", {});
@@ -745,7 +754,7 @@ function getCanaryVersion() {
     return null;
   }
 }
-//@ chunk-zw17mz74.js:28632-34601 fingerprint (2.1.88 match: updateLatest, 0.53)
+//@ chunk-e5z7dpjd.js:32832-38802 fingerprint (2.1.88 match: updateLatest, 0.53)
 /**
  * updateLatest：取最新版本（受上限/金丝雀/跳过规则约束）、下载并校验签名、原子安装到 versions 目录、更新启动器链接；持版本锁防并发。
  */
@@ -764,10 +773,10 @@ async function updateLatest(channelOrVersion, forceReinstall = false) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
@@ -804,10 +813,10 @@ async function updateLatest(channelOrVersion, forceReinstall = false) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -820,10 +829,10 @@ async function updateLatest(channelOrVersion, forceReinstall = false) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION
@@ -849,10 +858,10 @@ async function updateLatest(channelOrVersion, forceReinstall = false) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION &&
@@ -890,10 +899,10 @@ async function updateLatest(channelOrVersion, forceReinstall = false) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -935,7 +944,7 @@ async function updateLatest(channelOrVersion, forceReinstall = false) {
       let lockHolderPid;
       if (isAutoUpdateEnabled()) {
         let lockfilePath = getLockFilePathFromVersionPath(dirs, installPath);
-        if (isLockActive(lockfilePath)) lockHolderPid = readLockContent(lockfilePath)?.pid;
+        if (isLockActive(lockfilePath)) lockHolderPid = readFileSafe(lockfilePath)?.pid;
       }
       logFeatureSad("update_apply", "update_apply_native_lock_failed");
       logEvent("tengu_native_update_lock_failed", {
@@ -961,10 +970,10 @@ async function updateLatest(channelOrVersion, forceReinstall = false) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION
@@ -997,7 +1006,7 @@ async function updateLatest(channelOrVersion, forceReinstall = false) {
     latestVersion: version,
   };
 }
-//@ chunk-zw17mz74.js:34601-34790 fingerprint (2.1.88 match: removeDirectoryIfEmpty, 1)
+//@ chunk-e5z7dpjd.js:38802-38991 fingerprint (2.1.88 match: removeDirectoryIfEmpty, 1)
 async function removeDirectoryIfEmpty(path) {
   try {
     await rmdir(path);
@@ -1008,7 +1017,7 @@ async function removeDirectoryIfEmpty(path) {
       logForDebugging(`Could not remove directory at ${path}: ${error}`);
   }
 }
-//@ chunk-zw17mz74.js:34790-36884 fingerprint (2.1.88 match: updateSymlink, 0.619)
+//@ chunk-e5z7dpjd.js:38991-41085 fingerprint (2.1.88 match: updateSymlink, 0.619)
 async function updateSymlink(executablePath, installPath, { expectedChecksum } = {}) {
   if (getPlatform().startsWith("win32"))
     try {
@@ -1145,7 +1154,7 @@ async function updateSymlink(executablePath, installPath, { expectedChecksum } =
     return "failed";
   }
 }
-//@ chunk-zw17mz74.js:36884-38900 facade-exports (2.1.88 match: checkInstall, 0.623)
+//@ chunk-e5z7dpjd.js:41085-43101 facade-exports (2.1.88 match: checkInstall, 0.623)
 /**
  * checkInstall：原生安装的健康检查（启动器存在、PATH、多重安装等），返回问题列表供 doctor/提示。
  */
@@ -1245,7 +1254,7 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ${displayPath} && source ${displa
   else logFeatureSad("native_check_install", issues[0]);
   return messages;
 }
-//@ chunk-zw17mz74.js:38900-38976 layout
+//@ chunk-e5z7dpjd.js:43101-43177 layout
 class InFlightInstall {
   inFlight = null;
   begin(inFlight) {
@@ -1255,12 +1264,12 @@ class InFlightInstall {
     this.inFlight = null;
   }
 }
-//@ chunk-zw17mz74.js:38976-39001 layout
+//@ chunk-e5z7dpjd.js:43177-43202 layout
 var installLatestInFlight; // deferred: uses InFlightInstall of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-zw17mz74.js:38976", () => {
+deferInit("chunk-e5z7dpjd.js:43177", () => {
   installLatestInFlight = new HostScoped(() => new InFlightInstall());
 });
-//@ chunk-zw17mz74.js:39001-39213 facade-exports (2.1.88 match: installLatest, 0.696)
+//@ chunk-e5z7dpjd.js:43202-43414 facade-exports (2.1.88 match: installLatest, 0.697)
 /**
  * installLatest：合并同进程内并发调用（in-flight）后调用 installLatestImpl。
  */
@@ -1279,7 +1288,7 @@ function installLatest(channelOrVersion, forceReinstall = false, storageBackend)
   promise.then(clear, clear);
   return promise;
 }
-//@ chunk-zw17mz74.js:39213-39858 fingerprint (2.1.88 match: installLatestImpl, 0.91)
+//@ chunk-e5z7dpjd.js:43414-44059 fingerprint (2.1.88 match: installLatestImpl, 0.91)
 /**
  * installLatestImpl：updateLatest 成功后把 installMethod 设为 native 并关闭旧的自动更新方式。
  */
@@ -1322,7 +1331,7 @@ async function installLatestImpl(channelOrVersion, forceReinstall = false, stora
     lockFailed: false,
   };
 }
-//@ chunk-zw17mz74.js:39858-39958 layout
+//@ chunk-e5z7dpjd.js:44059-44159 layout
 async function getVersionFromSymlink(executable) {
   try {
     let linkTarget = await readlink(executable);
@@ -1331,18 +1340,96 @@ async function getVersionFromSymlink(executable) {
   } catch {}
   return null;
 }
-//@ chunk-zw17mz74.js:39958-40017 fingerprint (2.1.88 match: getLockFilePathFromVersionPath, 1)
+//@ chunk-e5z7dpjd.js:44159-44211 fingerprint (2.1.88 match: getLockFilePathFromVersionPath, 1)
 function getLockFilePathFromVersionPath(dirs, versionPath) {
-  let versionName = basename(versionPath);
-  return join(dirs.locks, `${versionName}.lock`);
+  return join(dirs.locks, `${versionOrDefault(versionPath)}.lock`);
 }
-//@ chunk-zw17mz74.js:40017-41163 facade-exports (2.1.88 match: lockCurrentVersion, 0.985)
+//@ chunk-e5z7dpjd.js:44211-44673 layout
+async function isBundleLockActive(paths, version) {
+  let lockFilePathFromVersionPath = getLockFilePathFromVersionPath(paths, version);
+  if (isAutoUpdateEnabled()) {
+    if (isLockActive(lockFilePathFromVersionPath)) return true;
+    let currentVersion = bundleVersionOfPath(version);
+    if (currentVersion === undefined) return false;
+    let lockNames;
+    try {
+      lockNames = await readdir(paths.locks);
+    } catch (error) {
+      if (isENOENT(error)) return false;
+      logForDebugging(
+        `Keeping the app bundle of ${currentVersion}: could not list the locks folder ${paths.locks}: ${errorMessage(error)}`,
+        {
+          level: "warn",
+        },
+      );
+      return true;
+    }
+    return lockNames.some(
+      (lockName) =>
+        lockName.startsWith(`${currentVersion}@`) &&
+        /^\d+\.lock$/.test(lockName.slice(currentVersion.length + 1)) &&
+        isLockActive(join(paths.locks, lockName)),
+    );
+  }
+  try {
+    return await checkLockfile(version, {
+      stale: VERSION_RETENTION_MS,
+      lockfilePath: lockFilePathFromVersionPath,
+    });
+  } catch (error) {
+    return bundleVersionOfPath(version) !== undefined && !isENOENT(error);
+  }
+}
+//@ chunk-e5z7dpjd.js:44673-44695 layout
+var RETENTION_SWEEP_INTERVAL_MS = 300000;
+var retentionSweepTimer = null;
+//@ chunk-e5z7dpjd.js:44695-44772 layout
+function startRetentionSweep() {
+  if (retentionSweepTimer) return;
+  let interval = setInterval(() => {
+    sweepRetainedVersions();
+  }, RETENTION_SWEEP_INTERVAL_MS);
+  interval.unref?.();
+  retentionSweepTimer = interval;
+}
+//@ chunk-e5z7dpjd.js:44772-45200 layout
+async function sweepRetainedVersions() {
+  try {
+    if (!isAutoUpdateEnabled()) return;
+    let baseDirectories = getBaseDirectories();
+    if (
+      !process.execPath.includes(baseDirectories.versions) &&
+      bundleVersionOfPath(process.execPath) === undefined
+    )
+      return;
+    let execPath = resolve(process.execPath);
+    await mkdir(baseDirectories.locks, {
+      recursive: true,
+    });
+    let taskListLockPath = getTaskListLockPath(
+      baseDirectories.locks,
+      versionOrDefault(execPath),
+      process.pid,
+    );
+    if (readFileSafe(taskListLockPath)?.pid !== process.pid)
+      tryAcquireComputerUseLock(execPath, baseDirectories.locks);
+    let lockFilePathFromVersionPath = getLockFilePathFromVersionPath(baseDirectories, execPath);
+    let file = readFileSafe(lockFilePathFromVersionPath);
+    if (file?.pid === process.pid) return;
+    if (file && isProcessRunning(file.pid)) return;
+    await useCostSummary(execPath, lockFilePathFromVersionPath);
+  } catch (error) {
+    logForDebugging(`NON-FATAL: version lock maintenance failed: ${errorMessage(error)}`);
+  }
+}
+//@ chunk-e5z7dpjd.js:45200-46462 facade-exports (2.1.88 match: lockCurrentVersion, 0.963)
 /**
  * 为正在运行的版本加 PID 锁，防止被清理。
  */
 async function lockCurrentVersion() {
   let dirs = getBaseDirectories();
-  if (!process.execPath.includes(dirs.versions)) return;
+  if (!process.execPath.includes(dirs.versions) && bundleVersionOfPath(process.execPath) === undefined)
+    return;
   let versionPath = resolve(process.execPath);
   try {
     let lockfilePath = getLockFilePathFromVersionPath(dirs, versionPath);
@@ -1350,10 +1437,14 @@ async function lockCurrentVersion() {
       recursive: true,
     });
     if (isAutoUpdateEnabled()) {
+      let perPidLockWritten = tryAcquireComputerUseLock(versionPath, dirs.locks);
+      startRetentionSweep();
+      await getAllLockInfo();
       if (!(await acquireProcessLifetimeLock(versionPath, lockfilePath))) {
         logEvent("tengu_version_lock_failed", {
           is_pid_based: true,
           is_lifetime_lock: true,
+          per_pid_lock_written: perPidLockWritten,
         });
         logLockAcquisitionError(versionPath, Error("Lock already held by another process"));
         return;
@@ -1361,6 +1452,7 @@ async function lockCurrentVersion() {
       logEvent("tengu_version_lock_acquired", {
         is_pid_based: true,
         is_lifetime_lock: true,
+        per_pid_lock_written: perPidLockWritten,
       });
       logForDebugging(`Acquired PID lock on running version: ${versionPath}`);
     } else {
@@ -1413,7 +1505,7 @@ async function lockCurrentVersion() {
     });
   }
 }
-//@ chunk-zw17mz74.js:41163-41292 fingerprint (2.1.88 match: logLockAcquisitionError, 0.667)
+//@ chunk-e5z7dpjd.js:46462-46591 fingerprint (2.1.88 match: logLockAcquisitionError, 0.667)
 function logLockAcquisitionError(versionPath, lockError) {
   logForDebugging(
     `NON-FATAL: Lock acquisition failed for ${versionPath} (expected in multi-process scenarios): ${errorMessage(lockError)}`,
@@ -1422,7 +1514,7 @@ function logLockAcquisitionError(versionPath, lockError) {
     },
   );
 }
-//@ chunk-zw17mz74.js:41292-41443 fingerprint (2.1.88 match: forceRemoveLock, 1)
+//@ chunk-e5z7dpjd.js:46591-46742 fingerprint (2.1.88 match: forceRemoveLock, 1)
 async function forceRemoveLock(versionFilePath) {
   let dirs = getBaseDirectories();
   let lockfilePath = getLockFilePathFromVersionPath(dirs, versionFilePath);
@@ -1433,9 +1525,9 @@ async function forceRemoveLock(versionFilePath) {
     logForDebugging(`Failed to force-remove lock file: ${errorMessage(error)}`);
   }
 }
-//@ chunk-zw17mz74.js:41443-41458 layout
+//@ chunk-e5z7dpjd.js:46742-46757 layout
 var STALE_STAGING_MS = 3600000;
-//@ chunk-zw17mz74.js:41458-41862 layout
+//@ chunk-e5z7dpjd.js:46757-47161 layout
 async function cleanupOldStagingDirs(stagingDir) {
   let cutoff = Date.now() - STALE_STAGING_MS;
   try {
@@ -1464,7 +1556,7 @@ async function cleanupOldStagingDirs(stagingDir) {
     if (!isENOENT(error)) logForDebugging(`Failed to clean up staging directories: ${error}`);
   }
 }
-//@ chunk-zw17mz74.js:41862-45559 facade-exports (2.1.88 match: cleanupOldVersions, 0.763)
+//@ chunk-e5z7dpjd.js:47161-51416 facade-exports (2.1.88 match: cleanupOldVersions, 0.705)
 /**
  * 清理旧版本：保留最近版本、删除过期 staging/备份与陈旧锁（Windows 处理 .old 可执行文件）。
  */
@@ -1547,7 +1639,7 @@ async function cleanupOldVersions() {
     let entryPath = join(dirs.versions, entry);
     if (/\.tmp\.\d+\.\d+(\.\d+)?$/.test(entry)) {
       try {
-        if ((await stat(entryPath)).mtime.getTime() < oneHourAgo) {
+        if ((await lstat(entryPath)).mtime.getTime() < oneHourAgo) {
           await unlink(entryPath);
           tempFilesCleanedCount++;
           logForDebugging(`Cleaned up orphaned temp install file: ${entry}`);
@@ -1574,7 +1666,8 @@ async function cleanupOldVersions() {
       cleaned_count: tempFilesCleanedCount,
     });
   }
-  if (versionFiles.length === 0) {
+  let included = versionEntries.includes(BUNDLES_DIR);
+  if (versionFiles.length === 0 && !included) {
     logFeatureOk("native_cleanup_versions");
     return;
   }
@@ -1582,6 +1675,10 @@ async function cleanupOldVersions() {
     !(await isInstallLinkOrMissing(dirs.executable)) &&
     !(await isNpmSymlink(dirs.executable).catch(() => false))
   ) {
+    if (included)
+      await cleanUpAppBundles(dirs, {
+        keepEveryBundle: true,
+      });
     logForDebugging(
       `Skipping native version cleanup: the launcher at ${dirs.executable} is externally managed, so the version(s) it needs cannot be determined`,
     );
@@ -1593,6 +1690,8 @@ async function cleanupOldVersions() {
     let protectedVersions = new Set();
     if (currentBinaryPath && currentBinaryPath.includes(dirs.versions))
       protectedVersions.add(resolve(currentBinaryPath));
+    let currentVersion = bundleVersionOfPath(currentBinaryPath);
+    if (currentVersion !== undefined) protectedVersions.add(resolve(dirs.versions, currentVersion));
     let currentSymlinkVersion = await getVersionFromSymlink(dirs.executable);
     if (currentSymlinkVersion) protectedVersions.add(currentSymlinkVersion);
     else if (getPlatform().startsWith("win32"))
@@ -1601,26 +1700,34 @@ async function cleanupOldVersions() {
         for (let versionFile of versionFiles)
           if (versionFile.size === executableStats.size) protectedVersions.add(versionFile.resolvedPath);
       } catch {}
-    for (let v of versionFiles) {
-      if (protectedVersions.has(v.resolvedPath)) continue;
-      let lockFilePath = getLockFilePathFromVersionPath(dirs, v.resolvedPath);
-      let hasActiveLock = false;
-      if (isAutoUpdateEnabled()) hasActiveLock = isLockActive(lockFilePath);
-      else
-        try {
-          hasActiveLock = await checkLockfile(v.resolvedPath, {
-            stale: VERSION_RETENTION_MS,
-            lockfilePath: lockFilePath,
-          });
-        } catch {
-          hasActiveLock = false;
-        }
-      if (hasActiveLock) {
-        protectedVersions.add(v.resolvedPath);
-        logForDebugging(`Protecting locked version from cleanup: ${v.name}`);
+    if (isAutoUpdateEnabled()) {
+      let activeLockVersions = await readActiveLockVersions(dirs.locks);
+      if (activeLockVersions === null) {
+        logForDebugging(
+          "Skipping version cleanup: could not read the locks, so lock protection is unavailable",
+          {
+            level: "error",
+          },
+        );
+        logFeatureSad("native_cleanup_versions", "lock_scan_failed");
+        return;
       }
-      await new Promise((resolve) => setImmediate(resolve));
-    }
+      for (let versionFile of versionFiles) {
+        if (protectedVersions.has(versionFile.resolvedPath)) continue;
+        if (activeLockVersions.has(versionFile.name)) {
+          protectedVersions.add(versionFile.resolvedPath);
+          logForDebugging(`Protecting locked version from cleanup: ${versionFile.name}`);
+        }
+      }
+    } else
+      for (let versionFile of versionFiles) {
+        if (protectedVersions.has(versionFile.resolvedPath)) continue;
+        if (await isBundleLockActive(dirs, versionFile.resolvedPath)) {
+          protectedVersions.add(versionFile.resolvedPath);
+          logForDebugging(`Protecting locked version from cleanup: ${versionFile.name}`);
+        }
+        await new Promise((resolve) => setImmediate(resolve));
+      }
     let eligibleVersions = versionFiles
       .filter((v) => !protectedVersions.has(v.resolvedPath))
       .sort((left, right) => right.mtime.getTime() - left.mtime.getTime());
@@ -1650,18 +1757,26 @@ async function cleanupOldVersions() {
     await Promise.all(
       versionsToDelete.map(async (version) => {
         try {
-          let canCount = true;
+          let stillEligible = true;
+          let lockBusy = false;
           let deleted = await tryWithVersionLock(version.path, async () => {
             if (version.size === 0) {
               let rechecked = await stat(version.path);
               if (rechecked.size > 0 || rechecked.mtime.getTime() >= oneHourAgo) {
-                canCount = false;
+                stillEligible = false;
                 return;
               }
             }
+            if (isAutoUpdateEnabled() && readLockContent(dirs.locks, version.name)) {
+              lockBusy = true;
+              return;
+            }
             await unlink(version.path);
           });
-          if (deleted && canCount) deletedCount++;
+          if (deleted && lockBusy) {
+            lockFailedCount++;
+            logForDebugging(`Skipping deletion of ${version.name} - a live process may be using it`);
+          } else if (deleted && stillEligible) deletedCount++;
           else if (!deleted) {
             lockFailedCount++;
             logForDebugging(`Skipping deletion of ${version.name} - locked by another process`);
@@ -1690,9 +1805,31 @@ async function cleanupOldVersions() {
       logError(Error(`Version cleanup failed: ${error}`));
       logFeatureSad("native_cleanup_versions", "unexpected_error");
     } else logFeatureOk("native_cleanup_versions");
+  } finally {
+    if (included)
+      await cleanUpAppBundles(dirs, {
+        keepEveryBundle: false,
+      });
   }
 }
-//@ chunk-zw17mz74.js:45559-46158 facade-exports (2.1.88 match: removeInstalledSymlink, 0.746)
+//@ chunk-e5z7dpjd.js:51416-51666 layout
+async function cleanUpAppBundles(paths, { keepEveryBundle }) {
+  let cleanedOrStatus = await cleanUpBundles(
+    paths.versions,
+    keepEveryBundle
+      ? undefined
+      : {
+          launcherPath: paths.executable,
+          isVersionLockActive: (versionPath) => isBundleLockActive(paths, versionPath),
+        },
+  );
+  if (typeof cleanedOrStatus === "number")
+    logFeatureOk("native_cleanup_app_bundles", {
+      cleaned_count: cleanedOrStatus,
+    });
+  else logFeatureSad("native_cleanup_app_bundles", cleanedOrStatus);
+}
+//@ chunk-e5z7dpjd.js:51666-52265 facade-exports (2.1.88 match: removeInstalledSymlink, 0.752)
 /**
  * 删除原生安装器创建的 claude 启动器（npm 管理的不动）。
  */
@@ -1728,7 +1865,7 @@ async function removeInstalledSymlink() {
     logFeatureBad("native_remove_symlink", "unlink_failed");
   }
 }
-//@ chunk-zw17mz74.js:46158-46744 facade-exports (2.1.88 match: cleanupShellAliases, 0.822)
+//@ chunk-e5z7dpjd.js:52265-52851 facade-exports (2.1.88 match: cleanupShellAliases, 0.822)
 /**
  * 从 shell 配置文件删除旧的 claude alias。
  */
@@ -1765,7 +1902,7 @@ async function cleanupShellAliases() {
   else logFeatureOk("native_cleanup_aliases");
   return messages;
 }
-//@ chunk-zw17mz74.js:46744-47726 fingerprint (2.1.88 match: manualRemoveNpmPackage, 0.99)
+//@ chunk-e5z7dpjd.js:52851-53833 fingerprint (2.1.88 match: manualRemoveNpmPackage, 0.99)
 async function manualRemoveNpmPackage(packageName) {
   try {
     let prefixResult = await execFileNoThrowWithCwd("npm", ["config", "get", "prefix"], {
@@ -1821,7 +1958,7 @@ async function manualRemoveNpmPackage(packageName) {
     };
   }
 }
-//@ chunk-zw17mz74.js:47726-48515 fingerprint (2.1.88 match: attemptNpmUninstall, 0.979)
+//@ chunk-e5z7dpjd.js:53833-54622 fingerprint (2.1.88 match: attemptNpmUninstall, 0.979)
 async function attemptNpmUninstall(packageName) {
   let { code, stderr } = await execFileNoThrowWithCwd("npm", ["uninstall", "-g", packageName], {
     cwd: process.cwd(),
@@ -1862,7 +1999,7 @@ async function attemptNpmUninstall(packageName) {
     success: false,
   };
 }
-//@ chunk-zw17mz74.js:48515-50843 facade-exports (2.1.88 match: cleanupNpmInstallations, 0.538)
+//@ chunk-e5z7dpjd.js:54622-56950 facade-exports (2.1.88 match: cleanupNpmInstallations, 0.538)
 /**
  * 迁移到原生安装后卸载全局 npm 包（@anthropic-ai/claude-code 等）。
  */
@@ -1885,10 +2022,10 @@ async function cleanupNpmInstallations() {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.PACKAGE_URL &&
@@ -1896,10 +2033,10 @@ async function cleanupNpmInstallations() {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.PACKAGE_URL !== "@anthropic-ai/claude-code"
@@ -1909,10 +2046,10 @@ async function cleanupNpmInstallations() {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.PACKAGE_URL,
@@ -1955,21 +2092,21 @@ async function cleanupNpmInstallations() {
   };
 }
 export {
-  checkInstall,
   lockCurrentVersion,
-  cleanupOldVersions,
-  isBridgeChildMachineSettings,
-  prefetchEligibilityIfNeeded,
-  isPossibleClaudeBinary,
-  atomicMoveToInstallPath_2,
-  isInstallLinkOrMissing,
-  isNpmSymlink,
-  installLatest,
-  cleanupNpmInstallations,
-  cleanupShellAliases,
   removeInstalledSymlink,
-  isSymlinkIntoInstallDir,
   StagedBinaryChecksumError,
+  installLatest,
+  checkInstall,
+  atomicMoveToInstallPath_2,
+  isSymlinkIntoInstallDir,
+  isNpmSymlink,
+  isBridgeChildMachineSettings,
+  cleanupOldVersions,
+  prefetchEligibilityIfNeeded,
   getBinaryName,
   getPlatform,
+  cleanupNpmInstallations,
+  cleanupShellAliases,
+  isInstallLinkOrMissing,
+  isPossibleClaudeBinary,
 };

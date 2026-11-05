@@ -3,20 +3,20 @@
  *
  * 设置修复提示词（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-n37wdxq8.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q2q6zpmw.js (3)
  * attribution: placement 3
  */
 import { replaceControlChars } from "../resultError.js";
 
-//@ chunk-n37wdxq8.js:283-293 placement
+//@ chunk-q2q6zpmw.js:311-321 placement
 var MAX_FIX_PROMPT_CHARS = 500;
-//@ chunk-n37wdxq8.js:293-350 placement
+//@ chunk-q2q6zpmw.js:321-378 placement
 function buildSettingsFixPromptText(text) {
   return replaceControlChars(text).replaceAll("`", "").slice(0, MAX_FIX_PROMPT_CHARS);
 }
-//@ chunk-n37wdxq8.js:350-1589 placement
+//@ chunk-q2q6zpmw.js:378-1617 placement
 /**
  * 生成"帮我修复这些设置问题"的提示词
  */

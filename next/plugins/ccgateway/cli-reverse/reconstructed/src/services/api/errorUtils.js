@@ -3,9 +3,9 @@
  *
  * 连接错误细节提取与格式化：沿 cause 链取错误码（SSL、网络不可达、断流、休眠）、formatAPIError 生成面向用户的连接/SSL/超时文案、提取嵌套错误消息、限额头摘要。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/errorUtils.ts
- * pieces: chunk-7t4fmt2f.js (14), chunk-gr2vfhah.js (25), chunk-s61vbvea.js (2)
+ * pieces: chunk-7jxyna5q.js (2), chunk-k1t1w9mg.js (25), chunk-pcv9zvvv.js (14)
  * attribution: placement 26, fingerprint 3, layout 9, file-local 3
  */
 import { STATUS_CODES } from "http";
@@ -34,14 +34,14 @@ import { isSessionsToken } from "../oauth/sessionsBearerHooks.js";
 import { SERVER_ERROR_TYPES, POLICY_AUTH_DENIAL_CODES } from "../policyLimits/complianceTaints.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-gr2vfhah.js:3506-3601 placement (2.1.88 match: TeamMemoryTooManyEntriesSchema, 0.459)
+//@ chunk-k1t1w9mg.js:5042-5137 placement (2.1.88 match: TeamMemoryTooManyEntriesSchema, 0.458)
 function getApiErrorCode(error) {
   if (!(error instanceof APIError) || !hasNestedError(error)) return;
   return error.error?.error?.details?.error_code;
 }
-//@ chunk-gr2vfhah.js:3601-3632 placement
+//@ chunk-k1t1w9mg.js:5137-5168 placement
 var API_ERROR_CODE_RE = /^[a-z][a-z0-9_]{0,63}$/;
-//@ chunk-gr2vfhah.js:3632-3708 placement
+//@ chunk-k1t1w9mg.js:5168-5244 placement
 /**
  * 导出函数 `apiErrorCode`：参数 e，返回 typeof t === "string" && A.test(t) ? t : void 0。
  */
@@ -49,7 +49,7 @@ function apiErrorCode(error) {
   let apiErrorCode = getApiErrorCode(error);
   return typeof apiErrorCode === "string" && API_ERROR_CODE_RE.test(apiErrorCode) ? apiErrorCode : undefined;
 }
-//@ chunk-gr2vfhah.js:3708-3816 placement
+//@ chunk-k1t1w9mg.js:5244-5352 placement
 /**
  * 取错误的有效状态码：自带的状态码，否则 529 过载或 429 限流。
  */
@@ -59,7 +59,7 @@ function effectiveErrorStatus(error) {
   if (isRateLimitError(error)) return 429;
   return;
 }
-//@ chunk-gr2vfhah.js:3816-4837 placement
+//@ chunk-k1t1w9mg.js:5352-6373 placement
 /**
  * 网络/SSL 错误码分组：证书相关错误、含 TLS 握手的全部 SSL 错误、不可达（拒绝/DNS/网络）与 socket 关闭、可重试的瞬态 socket 错误。
  */
@@ -69,7 +69,7 @@ var ALL_SSL_ERROR_CODES;
 var UNREACHABLE_ERROR_CODES;
 var SOCKET_CLOSED_CODES;
 var TRANSIENT_SOCKET_CODES;
-deferInit("chunk-gr2vfhah.js:3816", () => {
+deferInit("chunk-k1t1w9mg.js:5352", () => {
   SSL_CERT_ERROR_CODES = new Set([
     "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
     "UNABLE_TO_GET_ISSUER_CERT",
@@ -122,7 +122,7 @@ deferInit("chunk-gr2vfhah.js:3816", () => {
     "StreamTruncated",
   ]);
 });
-//@ chunk-gr2vfhah.js:4837-4898 placement
+//@ chunk-k1t1w9mg.js:6373-6434 placement
 /**
  * 导出函数 `reducibleErrorCode`：参数 e，返回 LK.has(e) || PU.has(e) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e) : lit("other")。
  */
@@ -131,7 +131,7 @@ function reducibleErrorCode(code) {
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(code)
     : lit("other");
 }
-//@ chunk-gr2vfhah.js:4898-4967 placement
+//@ chunk-k1t1w9mg.js:6434-6503 placement
 /**
  * 导出函数 `sanitizableErrorCode`：参数 e，返回 PU.has(e) || LK.has(e) || SSL_CERT_ERROR_CODES.has(e) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e) : void 0。
  */
@@ -142,20 +142,20 @@ function sanitizableErrorCode(code) {
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(code)
     : undefined;
 }
-//@ chunk-gr2vfhah.js:4967-5109 placement
+//@ chunk-k1t1w9mg.js:6503-6645 placement
 function formatApiErrorType(type, status) {
   let safeType = /^[a-z][a-z0-9_]{0,63}$/.test(type) ? type : "unknown";
   return fromSanitizer_SANITIZER_OUTPUT_ONLY(
     `API error: type=${safeType} status=${typeof status === "number" ? status : "none"}`,
   );
 }
-//@ chunk-gr2vfhah.js:5109-5237 placement
+//@ chunk-k1t1w9mg.js:6645-6773 placement
 /**
  * 云凭证错误文案：AWS 凭据链解析失败与 Google OAuth 凭据获取失败，沿 cause 链用于识别与过滤。
  */
 var CREDENTIAL_PROVIDER_ERRORS = "Failed to resolve AWS credentials from the credential provider chain.";
 var GOOGLE_CREDENTIAL_ERROR_TEXT = "Failed to acquire Google OAuth credentials.";
-//@ chunk-gr2vfhah.js:5237-5633 fingerprint (2.1.88 match: extractConnectionErrorDetails, 0.813)
+//@ chunk-k1t1w9mg.js:6773-7169 fingerprint (2.1.88 match: extractConnectionErrorDetails, 0.813)
 /**
  * 沿 cause 链（最多 5 层）提取 {code, message, isSSLError}；socket 意外关闭视为 ConnectionClosed。
  */
@@ -189,7 +189,7 @@ function extractConnectionErrorDetails(error) {
   }
   return null;
 }
-//@ chunk-gr2vfhah.js:5633-5691 layout
+//@ chunk-k1t1w9mg.js:7169-7227 layout
 /**
  * 错误码属于 ECONNREFUSED/ENOTFOUND/ENETUNREACH/EAI_AGAIN/代理隧道等网络不可达类。
  */
@@ -197,12 +197,12 @@ function isNetworkUnreachableError(error) {
   let details = extractConnectionErrorDetails(error);
   return details !== null && UNREACHABLE_ERROR_CODES.has(details.code);
 }
-//@ chunk-gr2vfhah.js:5691-5840 layout
+//@ chunk-k1t1w9mg.js:7227-7376 layout
 /**
  * 网络不可达类错误码（ENOTFOUND/EAI_AGAIN/ENETUNREACH/…/ConnectionRefused）。
  */
 var NETWORK_DOWN_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-gr2vfhah.js:5691", () => {
+deferInit("chunk-k1t1w9mg.js:7227", () => {
   NETWORK_DOWN_CODES = new Set([
     "ENOTFOUND",
     "EAI_AGAIN",
@@ -215,14 +215,14 @@ deferInit("chunk-gr2vfhah.js:5691", () => {
     "ConnectionRefused",
   ]);
 });
-//@ chunk-gr2vfhah.js:5840-5900 layout
+//@ chunk-k1t1w9mg.js:7376-7436 layout
 /**
  * cause 链中的 ERR_PROXY_TUNNEL 错误。
  */
 function findProxyTunnelError(error) {
   return findInCauseChain(error, (cause) => getErrnoCode(cause) === "ERR_PROXY_TUNNEL");
 }
-//@ chunk-gr2vfhah.js:5900-6099 layout
+//@ chunk-k1t1w9mg.js:7436-7635 layout
 /**
  * 连接错误为网络不可达（代理隧道 502/503 也算）：可按重连预算多重试。
  */
@@ -235,14 +235,14 @@ function isNetworkDownError(error) {
     proxyTunnelError !== undefined && "status" in proxyTunnelError ? proxyTunnelError.status : undefined;
   return status === 502 || status === 503;
 }
-//@ chunk-gr2vfhah.js:6099-6154 layout
+//@ chunk-k1t1w9mg.js:7635-7690 layout
 /**
  * 错误码 StreamSuspended（电脑休眠断流）。
  */
 function isStreamSuspendedError(error) {
   return extractConnectionErrorDetails(error)?.code === "StreamSuspended";
 }
-//@ chunk-gr2vfhah.js:6154-6260 layout
+//@ chunk-k1t1w9mg.js:7690-7796 layout
 /**
  * 网络不可达或连接中断类错误（排除休眠）。
  */
@@ -255,7 +255,7 @@ function isConnectionError(error) {
       TRANSIENT_SOCKET_CODES.has(connectionErrorDetails.code))
   );
 }
-//@ chunk-gr2vfhah.js:6260-6550 fingerprint (2.1.88 match: getSSLErrorHint, 0.743)
+//@ chunk-k1t1w9mg.js:7796-8086 fingerprint (2.1.88 match: getSSLErrorHint, 0.743)
 /**
  * SSL 错误时给出 NODE_EXTRA_CA_CERTS/代理建议。
  */
@@ -264,14 +264,14 @@ function getSSLErrorHint(error) {
   if (!details?.isSSLError) return null;
   return `SSL certificate error (${details.code}). If you are behind a corporate proxy or TLS-intercepting firewall, set NODE_EXTRA_CA_CERTS to your CA bundle path, or ask IT to allowlist *.anthropic.com. Run \`claude doctor\` for details.`;
 }
-//@ chunk-gr2vfhah.js:6550-6582 layout
+//@ chunk-k1t1w9mg.js:8086-8118 layout
 /**
  * bd() 为真取第二个，否则第一个。
  */
 function pickByEntrypoint(hostValue, managedValue) {
   return isHostEntrypoint() ? managedValue : hostValue;
 }
-//@ chunk-gr2vfhah.js:6582-6724 layout
+//@ chunk-k1t1w9mg.js:8118-8260 layout
 /**
  * HTML 内容只保留 <title>，非 HTML 原样。
  */
@@ -283,7 +283,7 @@ function stripHtmlToTitle(message) {
   }
   return message;
 }
-//@ chunk-gr2vfhah.js:6724-6783 file-local
+//@ chunk-k1t1w9mg.js:8260-8319 file-local
 /**
  * 取错误消息，HTML 响应只留 <title>。
  */
@@ -292,7 +292,7 @@ function sanitizeAPIError(apiError) {
   if (!message) return "";
   return stripHtmlToTitle(message);
 }
-//@ chunk-gr2vfhah.js:6783-6890 file-local
+//@ chunk-k1t1w9mg.js:8319-8426 file-local
 /**
  * 对象有对象类型的 error 字段。
  */
@@ -305,7 +305,7 @@ function hasNestedError(value) {
     value.error !== null
   );
 }
-//@ chunk-gr2vfhah.js:6890-7130 file-local
+//@ chunk-k1t1w9mg.js:8426-8666 file-local
 /**
  * 嵌套错误消息：error.error.message 或 error.message（HTML 只留标题）。
  */
@@ -324,12 +324,12 @@ function extractNestedErrorMessage(error) {
   }
   return null;
 }
-//@ chunk-gr2vfhah.js:7130-7159 layout
+//@ chunk-k1t1w9mg.js:8666-8695 layout
 /**
  * "Connection dropped"。
  */
 var CONNECTION_DROPPED_MESSAGE = "Connection dropped";
-//@ chunk-gr2vfhah.js:7159-11245 fingerprint (2.1.88 match: formatAPIError, 0.518)
+//@ chunk-k1t1w9mg.js:8695-12849 fingerprint (2.1.88 match: formatAPIError, 0.504)
 /**
  * 面向用户的 API 错误文案：连接类（休眠断流、提前关闭、无响应、超时、SSL 证书逐码说明与 NODE_EXTRA_CA_CERTS 建议）、HTML 错误页、嵌套消息等。
  */
@@ -341,6 +341,7 @@ function formatAPIError(error) {
       return isDisklessProcess() ? "Connection lost" : "Connection lost while your computer was asleep";
     if (code === "StreamTruncated") return "Connection closed before the response finished";
     if (code === "StreamNoResponse") return "No response from API";
+    if (code === "RouteTurnedAway") return "The API is temporarily unavailable";
     if (code === "BedrockUnexpectedContentType") return connectionDetails.message;
     if (code === "ETIMEDOUT")
       return isDisklessProcess()
@@ -441,7 +442,7 @@ function formatAPIError(error) {
   }
   return error.message.trimEnd();
 }
-//@ chunk-gr2vfhah.js:11245-11749 placement
+//@ chunk-k1t1w9mg.js:12849-13353 placement
 /**
  * API 错误的展示摘要：message/status/requestId/formatted、连接错误、是否断网、限额头（representative-claim、reset）、无响应等待。
  */
@@ -477,9 +478,9 @@ function summarizeApiError(error) {
       : null,
   };
 }
-//@ chunk-s61vbvea.js:456221-456247 placement
+//@ chunk-7jxyna5q.js:374890-374916 placement
 var X_AMZN_REQUESTID = "x-amzn-requestid";
-//@ chunk-s61vbvea.js:456247-456337 placement
+//@ chunk-7jxyna5q.js:374916-375006 placement
 /**
  * 导出函数 `amazonRequestId`：参数 e, n，返回 e; try { return n?.get(X_AMZN_REQUESTID) || null; } catch (error) { return (logError(toError(error)), null); }…。
  */
@@ -492,27 +493,27 @@ function amazonRequestId(requestId, headers) {
     return null;
   }
 }
-//@ chunk-7t4fmt2f.js:1953-1971 placement
+//@ chunk-pcv9zvvv.js:1954-1972 placement
 class IdleTaskState {
   run = null;
 }
-//@ chunk-7t4fmt2f.js:1971-1996 placement
+//@ chunk-pcv9zvvv.js:1972-1997 placement
 var idleTaskSlot; // deferred: uses IdleTaskState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-7t4fmt2f.js:1971", () => {
+deferInit("chunk-pcv9zvvv.js:1972", () => {
   idleTaskSlot = new HostScoped(() => new IdleTaskState());
 });
-//@ chunk-7t4fmt2f.js:1996-2033 placement
+//@ chunk-pcv9zvvv.js:1997-2034 placement
 function idleTask() {
   return idleTaskSlot.of(getRootSession().host);
 }
-//@ chunk-7t4fmt2f.js:2033-2073 placement
+//@ chunk-pcv9zvvv.js:2034-2074 placement
 /**
  * 导出函数 `runIdleTask`。
  */
 async function runIdleTask() {
   await idleTask().run?.();
 }
-//@ chunk-7t4fmt2f.js:2073-2144 placement
+//@ chunk-pcv9zvvv.js:2074-2145 placement
 function setIdleTask(refetchAfterRegimeRefusal) {
   let idle = idleTask();
   idle.run = refetchAfterRegimeRefusal;
@@ -520,7 +521,7 @@ function setIdleTask(refetchAfterRegimeRefusal) {
     if (idle.run === refetchAfterRegimeRefusal) idle.run = null;
   };
 }
-//@ chunk-7t4fmt2f.js:2704-2778 placement
+//@ chunk-pcv9zvvv.js:2705-2780 placement
 /**
  * 导出函数 `isIdleLongerThan`：参数 e，返回 !isSessionActive() && Date.now() - max > e。
  */
@@ -528,7 +529,7 @@ function isIdleLongerThan(idleMs) {
   let max = Math.max(getLastInteractionTime(), getLastApiCompletionTimestamp() ?? 0);
   return !isSessionActive() && Date.now() - max > idleMs;
 }
-//@ chunk-7t4fmt2f.js:3115-3211 placement
+//@ chunk-pcv9zvvv.js:3117-3213 placement
 /**
  * 响应 content-type 到内容种类（html/json/text/other）的匹配模式表。
  */
@@ -538,12 +539,12 @@ var CONTENT_TYPE_PATTERNS = [
   ["text/json", "json"],
   ["text/", "text"],
 ];
-//@ chunk-7t4fmt2f.js:3211-3299 placement
+//@ chunk-pcv9zvvv.js:3213-3301 placement
 function contentKindOf(contentType) {
   let lower = contentType.toLowerCase();
   return CONTENT_TYPE_PATTERNS.find(([needle]) => lower.includes(needle))?.[1] ?? "other";
 }
-//@ chunk-7t4fmt2f.js:3299-3378 placement
+//@ chunk-pcv9zvvv.js:3301-3380 placement
 /**
  * 导出函数 `hasSessionsTokenRequestId`：参数 e，返回 !1; return isSessionsToken(e["request-id"])。
  */
@@ -551,7 +552,7 @@ function hasSessionsTokenRequestId(headers) {
   if (!headers || typeof headers !== "object") return false;
   return isSessionsToken(headers["request-id"]);
 }
-//@ chunk-7t4fmt2f.js:3378-3524 placement
+//@ chunk-pcv9zvvv.js:3380-3526 placement
 /**
  * 从响应头提取是否带 request-id 与内容类型，供遥测使用。
  */
@@ -563,7 +564,7 @@ function responseHeaderFacts(headers) {
     responseContentType: contentKindOf(String(headerMap["content-type"] ?? "")),
   };
 }
-//@ chunk-7t4fmt2f.js:3524-3616 placement
+//@ chunk-pcv9zvvv.js:3526-3618 placement
 /**
  * 导出函数 `responseHeaderFactsOf`：参数 e，返回 {}; return responseHeaderFacts(r.headers)。
  */
@@ -572,7 +573,7 @@ function responseHeaderFactsOf(error) {
   if (!response || typeof response !== "object") return {};
   return responseHeaderFacts(response.headers);
 }
-//@ chunk-7t4fmt2f.js:3616-4226 placement
+//@ chunk-pcv9zvvv.js:3618-4228 placement
 function extractServerErrorFields(error) {
   let response = error?.response;
   let error_2 = response?.data?.error;
@@ -607,7 +608,7 @@ function extractServerErrorFields(error) {
     }),
   };
 }
-//@ chunk-7t4fmt2f.js:4226-4329 placement
+//@ chunk-pcv9zvvv.js:4228-4331 placement
 /**
  * 返回服务器明确标注的错误类型（非 other 时）。
  */
@@ -616,7 +617,7 @@ function stampedServerErrorType(facts) {
     ? facts.serverErrorType
     : undefined;
 }
-//@ chunk-7t4fmt2f.js:4329-5202 placement
+//@ chunk-pcv9zvvv.js:4331-5204 placement
 function classifyRevokedAccess(message) {
   if (message.startsWith("Organization access has been revoked")) return "org_access_revoked";
   if (message.startsWith("Workspace access has been revoked")) return "workspace_revoked";
@@ -632,38 +633,38 @@ function classifyRevokedAccess(message) {
   return "other";
 }
 export {
-  UNREACHABLE_ERROR_CODES,
-  getSSLErrorHint,
   SSL_CERT_ERROR_CODES,
-  sanitizableErrorCode,
-  contentKindOf,
-  extractServerErrorFields,
-  responseHeaderFactsOf,
-  extractConnectionErrorDetails,
-  TRANSIENT_SOCKET_CODES,
-  amazonRequestId,
   extractNestedErrorMessage,
+  amazonRequestId,
   apiErrorCode,
   getApiErrorCode,
+  extractConnectionErrorDetails,
+  TRANSIENT_SOCKET_CODES,
+  UNREACHABLE_ERROR_CODES,
   isStreamSuspendedError,
   reducibleErrorCode,
   isConnectionError,
   summarizeApiError,
-  responseHeaderFacts,
-  hasSessionsTokenRequestId,
-  stampedServerErrorType,
+  getSSLErrorHint,
+  sanitizableErrorCode,
   SOCKET_CLOSED_CODES,
-  isIdleLongerThan,
-  setIdleTask,
   hasNestedError,
   effectiveErrorStatus,
   formatAPIError,
   sanitizeAPIError,
   STRICT_SSL_ERROR_CODES,
   CONNECTION_DROPPED_MESSAGE,
+  runIdleTask,
+  formatApiErrorType,
   GOOGLE_CREDENTIAL_ERROR_TEXT,
   findProxyTunnelError,
   isNetworkDownError,
-  formatApiErrorType,
-  runIdleTask,
+  responseHeaderFacts,
+  hasSessionsTokenRequestId,
+  responseHeaderFactsOf,
+  extractServerErrorFields,
+  stampedServerErrorType,
+  contentKindOf,
+  isIdleLongerThan,
+  setIdleTask,
 };

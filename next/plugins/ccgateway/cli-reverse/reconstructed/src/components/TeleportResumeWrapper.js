@@ -3,9 +3,9 @@
  *
  * teleport 恢复流程包装（开始/取消事件、中断键）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/TeleportResumeWrapper.tsx
- * pieces: chunk-0bntfk7p.js (4)
+ * pieces: chunk-1c4mt1y2.js (4)
  * attribution: placement 3, facade-exports 1
  */
 import { init_react_production, useEffect } from "../../vendor/react/cjs/react.production.js";
@@ -25,13 +25,13 @@ import { Spinner } from "./Spinner.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { ResumeTask } from "./ResumeTask.js";
 
-//@ chunk-0bntfk7p.js:1249-1253 placement
+//@ chunk-1c4mt1y2.js:1250-1254 placement
 init_react_production();
-//@ chunk-0bntfk7p.js:1253-1257 placement
+//@ chunk-1c4mt1y2.js:1254-1258 placement
 init_react_production();
-//@ chunk-0bntfk7p.js:1971-1975 placement
+//@ chunk-1c4mt1y2.js:1902-1906 placement
 init_react_production();
-//@ chunk-0bntfk7p.js:6828-8727 facade-exports (2.1.88 match: TeleportResumeWrapper, 0.705)
+//@ chunk-1c4mt1y2.js:6748-8644 facade-exports (2.1.88 match: TeleportResumeWrapper, 0.705)
 /**
  * teleport 恢复：显示进度，中断键取消（tengu_teleport_cancelled），完成后回调恢复的会话。
  */

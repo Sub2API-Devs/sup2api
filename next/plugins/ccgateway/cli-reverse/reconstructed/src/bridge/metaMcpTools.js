@@ -3,18 +3,18 @@
  *
  * 解析 bridge meta MCP 工具列表（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ebk61d3a.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mam6bqzr.js (2)
  * attribution: placement 2
  */
 import { CLAUDE_CODE_REMOTE } from "../services/mcp/ccrMetaMcp.js";
 import { logForDebugging } from "../utils/debug.js";
 import { collectServerToolPolicies, buildMcpToolName } from "../services/mcp/mcpStringUtils.js";
 
-//@ chunk-ebk61d3a.js:302-332 placement
+//@ chunk-mam6bqzr.js:302-332 placement
 var META_MCP_TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
-//@ chunk-ebk61d3a.js:332-953 placement
+//@ chunk-mam6bqzr.js:332-953 placement
 /**
  * 解析 bridge meta MCP 的 tools[] 列表，非数组时告警
  */

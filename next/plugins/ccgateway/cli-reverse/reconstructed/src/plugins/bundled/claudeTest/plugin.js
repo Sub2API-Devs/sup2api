@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Claude Test 内置插件的命令/skill 定义与注册
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ae5g0zb5.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mhn0amzz.js (12)
  * attribution: placement 12
  */
 import { randomUUID } from "crypto";
@@ -90,21 +90,21 @@ import { getSessionId, getIsInteractive } from "../../../bootstrap/state.js";
 import { CLAUDE_TEST_HOOK_SCAN } from "./hookScan.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-ae5g0zb5.js:124247-124285 placement
+//@ chunk-mhn0amzz.js:125488-125526 placement
 /**
  * 从命令文本取运行目录
  */
 function runDirFromCommand(command) {
   return RUN_DIR_COMMAND_RE.exec(command)?.[1];
 }
-//@ chunk-ae5g0zb5.js:124285-124378 placement
+//@ chunk-mhn0amzz.js:125526-125619 placement
 /**
  * 在 skill 与钩子文本里替换成运行期值的三个占位标记：沙箱目录、用户设置文件、监听端口。
  */
 var CLAUDE_TEST_SANDBOX_MARK = "${CLAUDE_TEST_SANDBOX}";
 var CLAUDE_TEST_USER_SETTINGS = "${CLAUDE_TEST_USER_SETTINGS}";
 var CLAUDE_TEST_LISTEN = "${CLAUDE_TEST_LISTEN}";
-//@ chunk-ae5g0zb5.js:124378-124742 placement
+//@ chunk-mhn0amzz.js:125619-125983 placement
 function describeNetworkReach() {
   if (!SandboxManager.isSandboxingEnabled()) return "off";
   if (SandboxManager.areUnsandboxedCommandsAllowed()) return "may-leave";
@@ -113,7 +113,7 @@ function describeNetworkReach() {
   if (SandboxManager.getAllowLocalBinding() === true) return "stays-reachable";
   return isSettingSourceEnabled("userSettings") ? "stays-no-listen" : "stays-no-listen-fixed";
 }
-//@ chunk-ae5g0zb5.js:124742-124958 placement
+//@ chunk-mhn0amzz.js:125983-126199 placement
 /**
  * macOS 沙箱启用网络限制且不允许本地绑定时返回 refused（用户设置不可改时 refused-fixed），否则 allowed。
  */
@@ -127,7 +127,7 @@ function checkSandboxLocalBinding() {
     return "allowed";
   return isSettingSourceEnabled("userSettings") ? "refused" : "refused-fixed";
 }
-//@ chunk-ae5g0zb5.js:124995-125293 placement
+//@ chunk-mhn0amzz.js:126236-126534 placement
 async function readSkillFrontmatter(skillName) {
   let { SKILL_MD } = await loadInstalledFiles();
   let skillDir = claudeTestInstalledRoot();
@@ -149,7 +149,7 @@ async function readSkillFrontmatter(skillName) {
 ` + content.trim(),
   };
 }
-//@ chunk-ae5g0zb5.js:125293-126799 placement
+//@ chunk-mhn0amzz.js:126534-128040 placement
 /**
  * 创建 Claude Test 的 skill 命令对象（工具白名单、提示词生成、用户参数）。
  */
@@ -280,7 +280,7 @@ function createClaudeTestSkill(skillName, skill) {
     },
   };
 }
-//@ chunk-ae5g0zb5.js:126799-126992 placement
+//@ chunk-mhn0amzz.js:128040-128233 placement
 /**
  * 检查 Claude Test 自带 agent 是否已加载，返回对应提示。
  */
@@ -298,13 +298,13 @@ async function checkOwnAgentsSeated(activeAgents, agentsJustLoaded) {
       return AGENTS_NOT_LOADED_TEXT;
   }
 }
-//@ chunk-ae5g0zb5.js:126992-127011 placement
+//@ chunk-mhn0amzz.js:128233-128252 placement
 /**
  * 60000
  */
 var LOAD_MARK_TTL_MS = 60000;
 var MAX_LOAD_MARKS = 16;
-//@ chunk-ae5g0zb5.js:127011-127298 placement
+//@ chunk-mhn0amzz.js:128252-128539 placement
 /**
  * 生成加载标记（UUID）并登记，返回带标记前缀的提示词；只保留最近若干个。
  */
@@ -334,7 +334,7 @@ function issueLoadMark(promptText, mayStillStart) {
   return `${LOAD_MARK_PREFIX}${markId}
 ${promptText}`;
 }
-//@ chunk-ae5g0zb5.js:127298-127679 placement
+//@ chunk-mhn0amzz.js:128539-128920 placement
 function describeUnavailableReason(skillName, isNonInteractive, commands, reloadOutcome, agentsReady = true) {
   if (!claudeTestState.isModuleLoaded) {
     let claudeTestRepository = findClaudeTestRepository(commands);
@@ -361,12 +361,12 @@ function describeUnavailableReason(skillName, isNonInteractive, commands, reload
   }
   return agentsReady ? undefined : AGENT_START_FAILED_TEXT;
 }
-//@ chunk-ae5g0zb5.js:127679-127892 placement
+//@ chunk-mhn0amzz.js:128920-129133 placement
 /**
  * Claude Test 的三个技能：run（用户可调用）、execute 与 draft（fork 到内部 agent）。
  */
 var CLAUDE_TEST_SKILLS; // deferred: uses createClaudeTestSkill of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ae5g0zb5.js:127679", () => {
+deferInit("chunk-mhn0amzz.js:128920", () => {
   CLAUDE_TEST_SKILLS = [
     createClaudeTestSkill("run", {
       ...RUN_SKILL_DEFINITION,
@@ -387,7 +387,7 @@ deferInit("chunk-ae5g0zb5.js:127679", () => {
     }),
   ];
 });
-//@ chunk-ae5g0zb5.js:127892-128550 placement
+//@ chunk-mhn0amzz.js:129133-129791 placement
 /**
  * 把运行状态、报告、登录监视等挂到共享状态并注册内置插件。
  */

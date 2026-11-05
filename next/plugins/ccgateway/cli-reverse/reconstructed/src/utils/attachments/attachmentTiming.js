@@ -3,18 +3,18 @@
  *
  * 2.1.316 新增：附件计算耗时
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2dvnfacg.js (2)
  * attribution: placement 2
  */
 import { queryProfileStorage } from "../queryProfiler.js";
 
-//@ chunk-e6aww6q8.js:2481777-2481814 placement (2.1.88 match: getAgentContext, 1)
+//@ chunk-2dvnfacg.js:6596-6631 placement
 function getAttachmentTimingStore() {
   return queryProfileStorage.getStore();
 }
-//@ chunk-e6aww6q8.js:2481814-2481952 placement
+//@ chunk-2dvnfacg.js:6631-6767 placement
 /**
  * 在附件计时上下文中计时一个异步附件生成函数。
  */

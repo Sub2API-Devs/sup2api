@@ -3,19 +3,19 @@
  *
  * 2.1.316 新增。消息批量更新。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (8)
  * attribution: placement 8
  */
 import { isUserTextPrompt } from "../../utils/messages.js";
 import { fileHistoryMakeSnapshot, reduceFileHistoryState } from "../../utils/fileHistory.js";
 import {
   isMainAgentCommand,
-  isRefillableInput,
-  isReplayableHistoryEntry,
-  inputDisplayText,
-  getRetainedPastedContents,
+  isQueuedCommandEditable,
+  isTypedAtThisComposer,
+  restoreTextForPop,
+  collectPastedContentsForPop,
 } from "../../utils/messageQueueManager.js";
 import { createAbortController } from "../../utils/abortController.js";
 import {
@@ -30,7 +30,7 @@ import { recordSubmittedPrompts } from "../../history.js";
 import { withExpandedPastes } from "../../utils/hooks/postSamplingHooks.js";
 import { logError } from "../../utils/log.js";
 
-//@ chunk-18hwfzwa.js:1493732-1494053 placement
+//@ chunk-czq1j3j2.js:1535226-1535547 placement
 /**
  * 生成文件历史快照函数：先为同批的其他用户提示做快照。
  */
@@ -56,7 +56,7 @@ function snapshotBatchSiblings({
     await baseMakeFileHistorySnapshot(op);
   };
 }
-//@ chunk-18hwfzwa.js:1494053-1494614 placement
+//@ chunk-czq1j3j2.js:1535547-1536108 placement
 /**
  * 批量期间把追加/替换/插入消息的操作缓冲到批次中。
  */
@@ -87,7 +87,7 @@ function createBatchedMessageOp({ baseApplyMessageOp, batchMessages, isBatchHand
     baseApplyMessageOp(op);
   };
 }
-//@ chunk-18hwfzwa.js:1494614-1494829 placement
+//@ chunk-czq1j3j2.js:1536108-1536323 placement
 /**
  * 为某条消息做文件历史快照并写回应用状态。
  */
@@ -106,7 +106,7 @@ function makeFileHistorySnapshot({ getAppState, setAppState, messageUuid, storag
     messageUuid,
   );
 }
-//@ chunk-18hwfzwa.js:1494829-1494937 placement
+//@ chunk-czq1j3j2.js:1536323-1536431 placement
 /**
  * 命令队列中没有可执行的用户提示。
  */
@@ -116,11 +116,11 @@ function isQueueFreeOfPrompts(messageQueue, ideSelection) {
     .some(
       (command) =>
         isMainAgentCommand(command) &&
-        isRefillableInput(command) &&
+        isQueuedCommandEditable(command) &&
         (ideSelection === undefined || command.ideSelection === undefined),
     );
 }
-//@ chunk-18hwfzwa.js:1494937-1495168 placement
+//@ chunk-czq1j3j2.js:1536431-1536662 placement
 /**
  * 是否有 prompt.submit 钩子（读取失败时视为有）。
  */
@@ -137,18 +137,18 @@ function hasPromptSubmitHooks(turn, messages, options, mode = "any") {
     return true;
   }
 }
-//@ chunk-18hwfzwa.js:1495168-1495281 placement
+//@ chunk-czq1j3j2.js:1536662-1536776 placement
 /**
  * 被丢弃的输入放回输入框（含粘贴内容）。
  */
 function restoreDroppedInput(entry, composer) {
-  if (!isReplayableHistoryEntry(entry)) return;
-  composer.land(inputDisplayText(entry), entry);
-  let retainedPastedContents = getRetainedPastedContents(entry);
-  if (retainedPastedContents.length > 0)
-    composer.setPastedContents((pasted) => mergeTurnTags(pasted, retainedPastedContents));
+  if (!isTypedAtThisComposer(entry)) return;
+  composer.land(restoreTextForPop(entry), entry);
+  let pastedContentsForPop = collectPastedContentsForPop(entry);
+  if (pastedContentsForPop.length > 0)
+    composer.setPastedContents((pasted) => mergeTurnTags(pasted, pastedContentsForPop));
 }
-//@ chunk-18hwfzwa.js:1495281-1495463 placement
+//@ chunk-czq1j3j2.js:1536776-1536958 placement
 /**
  * 延迟写入一条历史记录（只写一次）。
  */
@@ -168,7 +168,7 @@ function deferredHistoryWrite(entry, storageV5) {
     }
   };
 }
-//@ chunk-18hwfzwa.js:1495463-1495627 placement
+//@ chunk-czq1j3j2.js:1536958-1537122 placement
 /**
  * 写入被扣留的历史记录，被丢弃时放回输入框。
  */

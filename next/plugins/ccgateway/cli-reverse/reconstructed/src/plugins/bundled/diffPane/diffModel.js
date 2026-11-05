@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：diff 面板数据模型：空状态、文件编辑、回合、换行与代码块。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wyqg6m3h.js (48)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c7hntn0y.js (48)
  * attribution: placement 48
  */
 import { arrayOf, MAX_SUMMARY_ROWS } from "./hooks.js";
@@ -15,7 +15,7 @@ import { cutHunks, displayPathOf, isBodyLine } from "./gitDiffRead.js";
 import { todoProgressOf } from "../../../tasks/RemoteAgentTask/RemoteAgentTask.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-wyqg6m3h.js:28722-28943 placement (2.1.88 match: adjustHunkLineNumbers, 0.843)
+//@ chunk-c7hntn0y.js:29086-29307 placement (2.1.88 match: adjustHunkLineNumbers, 0.844)
 /**
  * 从不可信数据中筛出形状合法的 hunks。
  */
@@ -34,7 +34,7 @@ var adjustHunkLineNumbers_2 = (structuredPatch) =>
           ]
         : [];
     });
-//@ chunk-wyqg6m3h.js:28943-29469 placement
+//@ chunk-c7hntn0y.js:29307-29833 placement
 /**
  * 把 Edit/Write 结果转成文件变更显示数据（路径、hunks、是否新建）；暂存结果返回 null。
  */
@@ -72,12 +72,12 @@ function fileEditOf(result) {
     isTruncated: false,
   };
 }
-//@ chunk-wyqg6m3h.js:29469-29562 placement
+//@ chunk-c7hntn0y.js:29833-29926 placement
 var isPromptRow = (row) =>
   row.role === "user" && (row.toolResults === undefined || row.toolResults.length === 0) && row.text !== "";
-//@ chunk-wyqg6m3h.js:29562-29572 placement
+//@ chunk-c7hntn0y.js:29926-29936 placement
 var PREVIEW_CHARS = 30;
-//@ chunk-wyqg6m3h.js:29572-30069 placement
+//@ chunk-c7hntn0y.js:29936-30433 placement
 function turnOf(rows, index) {
   let text = rows[0]?.text ?? "";
   let preview =
@@ -113,7 +113,7 @@ function turnOf(rows, index) {
     files,
   };
 }
-//@ chunk-wyqg6m3h.js:30069-30211 placement
+//@ chunk-c7hntn0y.js:30433-30575 placement
 function turnDiffsOf(rows) {
   let flattened = rows.flatMap((row, index) => (isPromptRow(row) ? [index] : []));
   return flattened
@@ -121,7 +121,7 @@ function turnDiffsOf(rows) {
     .filter((turn) => turn.files.length > 0)
     .toReversed();
 }
-//@ chunk-wyqg6m3h.js:30211-30440 placement
+//@ chunk-c7hntn0y.js:30575-30804 placement
 function afterFetch(state, event) {
   let { outcome, messages } = event;
   let hasData = outcome.kind === "data";
@@ -137,14 +137,14 @@ function afterFetch(state, event) {
     todos: todoProgressOf(messages),
   };
 }
-//@ chunk-wyqg6m3h.js:30440-30455 placement
+//@ chunk-c7hntn0y.js:30804-30819 placement
 var NO_BODIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wyqg6m3h.js:30440", () => {
+deferInit("chunk-c7hntn0y.js:30804", () => {
   NO_BODIES = new Map();
 });
-//@ chunk-wyqg6m3h.js:30455-30570 placement
+//@ chunk-c7hntn0y.js:30819-30934 placement
 var NEW_SESSION_FIELDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wyqg6m3h.js:30455", () => {
+deferInit("chunk-c7hntn0y.js:30819", () => {
   NEW_SESSION_FIELDS = Object.freeze({
     selectedPath: null,
     source: Object.freeze({
@@ -154,27 +154,27 @@ deferInit("chunk-wyqg6m3h.js:30455", () => {
     bodies: NO_BODIES,
   });
 });
-//@ chunk-wyqg6m3h.js:30570-30597 placement
+//@ chunk-c7hntn0y.js:30934-30961 placement
 var afterNewSession = (state) => ({
   ...state,
   ...NEW_SESSION_FIELDS,
 });
-//@ chunk-wyqg6m3h.js:30597-30673 placement
+//@ chunk-c7hntn0y.js:30961-31037 placement
 function baseModeOf(mode) {
   return mode === "session" || mode === "uncommitted" || mode === "branch" ? mode : null;
 }
-//@ chunk-wyqg6m3h.js:30673-30773 placement
+//@ chunk-c7hntn0y.js:31037-31137 placement
 function pickedTurnOf(state) {
   let { source } = state;
   let index = source.kind === "turn" ? source.index : null;
   return state.turns.find((turn) => turn.index === index);
 }
-//@ chunk-wyqg6m3h.js:30773-30857 placement
+//@ chunk-c7hntn0y.js:31137-31221 placement
 var turnTitleOf = (turn) => ({
   title: `Turn ${turn.index}`,
   subtitle: turn.preview === "" ? "" : `"${turn.preview}"`,
 });
-//@ chunk-wyqg6m3h.js:30857-31224 placement
+//@ chunk-c7hntn0y.js:31221-31588 placement
 function dialogTitleOf(state) {
   let turn = pickedTurnOf(state);
   let source = state.data?.source;
@@ -201,7 +201,7 @@ function dialogTitleOf(state) {
   }
   return turn ? turnTitleOf(turn) : defaultTitle();
 }
-//@ chunk-wyqg6m3h.js:31224-31984 placement
+//@ chunk-c7hntn0y.js:31588-32348 placement
 function emptyStateOf(state, filesCount) {
   let { data, words } = state;
   if (!data)
@@ -243,7 +243,7 @@ function emptyStateOf(state, filesCount) {
       };
   }
 }
-//@ chunk-wyqg6m3h.js:31984-32239 placement
+//@ chunk-c7hntn0y.js:32348-32603 placement
 function headerTotalsOf(state, view) {
   let { stats, files } = state;
   let preSession = view.preSession;
@@ -255,9 +255,9 @@ function headerTotalsOf(state, view) {
     notShown: Math.max(0, filesCount - (files.length - preSession.length)),
   };
 }
-//@ chunk-wyqg6m3h.js:32239-32661 placement
+//@ chunk-c7hntn0y.js:32603-33025 placement
 var INITIAL_MODEL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wyqg6m3h.js:32239", () => {
+deferInit("chunk-c7hntn0y.js:32603", () => {
   INITIAL_MODEL = Object.freeze({
     words: GIT_WORDS,
     baseModes: GIT_BASE_MODES,
@@ -290,7 +290,7 @@ deferInit("chunk-wyqg6m3h.js:32239", () => {
     }),
   });
 });
-//@ chunk-wyqg6m3h.js:32661-33102 placement
+//@ chunk-c7hntn0y.js:33025-33466 placement
 function modeLabelOf(requestedMode, view) {
   let { data } = view;
   let source = data?.source;
@@ -312,7 +312,7 @@ function modeLabelOf(requestedMode, view) {
   }
   return `${label()}${pendingMark}`;
 }
-//@ chunk-wyqg6m3h.js:33102-33338 placement
+//@ chunk-c7hntn0y.js:33466-33702 placement
 function partitionOf(files, noiseFilter) {
   let sorted = [...files].sort((fileA, fileB) => displayPathOf(fileA).localeCompare(displayPathOf(fileB)));
   let preSession = sorted.filter((file) => file.isPreSession);
@@ -324,22 +324,22 @@ function partitionOf(files, noiseFilter) {
     noiseCount: filtered.length - filtered_2.length,
   };
 }
-//@ chunk-wyqg6m3h.js:33338-33487 placement
+//@ chunk-c7hntn0y.js:33702-33851 placement
 var turnTotalsOf = (turn) => ({
   filesCount: turn.files.length,
   linesAdded: turn.files.reduce((acc, file) => acc + file.added, 0),
   linesRemoved: turn.files.reduce((acc, file) => acc + file.removed, 0),
   notShown: 0,
 });
-//@ chunk-wyqg6m3h.js:33487-33596 placement
+//@ chunk-c7hntn0y.js:33851-33960 placement
 function unbornNoteOf(state, filesCount) {
   return state.data?.isUnborn === true && filesCount > 0
     ? "no commits yet \u2014 showing staged and new files"
     : null;
 }
-//@ chunk-wyqg6m3h.js:33596-33672 placement
+//@ chunk-c7hntn0y.js:33960-34036 placement
 var ZERO_TOTALS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wyqg6m3h.js:33596", () => {
+deferInit("chunk-c7hntn0y.js:33960", () => {
   ZERO_TOTALS = Object.freeze({
     filesCount: 0,
     linesAdded: 0,
@@ -347,7 +347,7 @@ deferInit("chunk-wyqg6m3h.js:33596", () => {
     notShown: 0,
   });
 });
-//@ chunk-wyqg6m3h.js:33672-33830 placement
+//@ chunk-c7hntn0y.js:34036-34194 placement
 function listWindowOf(view, list) {
   let max = Math.max(0, Math.min(view.place.listStart, list.rows.length - MAX_SUMMARY_ROWS));
   let sliced = list.rows.slice(max, max + MAX_SUMMARY_ROWS);
@@ -357,23 +357,23 @@ function listWindowOf(view, list) {
     below: list.rows.length - max - sliced.length,
   };
 }
-//@ chunk-wyqg6m3h.js:33830-33867 placement
+//@ chunk-c7hntn0y.js:34194-34231 placement
 var segmentRowsOf = (segment) => (segment.kind === "hunk" ? segment.rows : 1);
-//@ chunk-wyqg6m3h.js:33867-33902 placement
+//@ chunk-c7hntn0y.js:34231-34266 placement
 var keptOf = (items) => items.filter((item) => item !== null);
-//@ chunk-wyqg6m3h.js:33902-33915 placement
+//@ chunk-c7hntn0y.js:34266-34279 placement
 var MAX_BODY_CHARS = 80000;
-//@ chunk-wyqg6m3h.js:33915-33927 placement
+//@ chunk-c7hntn0y.js:34279-34291 placement
 var MAX_BODY_NODES = 1500;
-//@ chunk-wyqg6m3h.js:33927-33969 placement
+//@ chunk-c7hntn0y.js:34291-34333 placement
 var BODY_BUDGET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wyqg6m3h.js:33927", () => {
+deferInit("chunk-c7hntn0y.js:34291", () => {
   BODY_BUDGET = Object.freeze({
     chars: MAX_BODY_CHARS,
     nodes: MAX_BODY_NODES,
   });
 });
-//@ chunk-wyqg6m3h.js:33969-34194 placement
+//@ chunk-c7hntn0y.js:34333-34558 placement
 function hunkHeaderOf(hunk) {
   let oldCount = countWhere(hunk.lines, (line) => !line.startsWith("+"));
   let newCount = countWhere(hunk.lines, (line) => !line.startsWith("-"));
@@ -383,11 +383,11 @@ function hunkHeaderOf(hunk) {
   let newStart = newEmpty ? Math.max(0, hunk.newStart - 1) : hunk.newStart;
   return `@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`;
 }
-//@ chunk-wyqg6m3h.js:34194-34235 placement
+//@ chunk-c7hntn0y.js:34558-34599 placement
 var hunkSourceOf = (hunk) =>
   [hunkHeaderOf(hunk), ...hunk.lines].join(`
 `);
-//@ chunk-wyqg6m3h.js:34235-34409 placement
+//@ chunk-c7hntn0y.js:34599-34773 placement
 function leadingHunkOf(hunk, budget) {
   let used = 0;
   let lineCount = 0;
@@ -405,9 +405,9 @@ function leadingHunkOf(hunk, budget) {
     lines: hunk.lines.slice(0, lineCount),
   };
 }
-//@ chunk-wyqg6m3h.js:34409-34420 placement
+//@ chunk-c7hntn0y.js:34773-34784 placement
 var MAX_CODE_CHARS = 1e4;
-//@ chunk-wyqg6m3h.js:34420-34562 placement
+//@ chunk-c7hntn0y.js:34784-34926 placement
 function firstLineCut(hunk, width) {
   let [firstLine = ""] = hunk.lines;
   let sliced = firstLine.slice(
@@ -424,7 +424,7 @@ function firstLineCut(hunk, width) {
   );
   return /[\uD800-\uDBFF]$/u.test(sliced) ? sliced.slice(0, -1) : sliced;
 }
-//@ chunk-wyqg6m3h.js:34562-34754 placement
+//@ chunk-c7hntn0y.js:34926-35118 placement
 function subHunksOf(hunk, width) {
   let hunks = [];
   let remainingHunk = hunk;
@@ -447,9 +447,9 @@ function subHunksOf(hunk, width) {
     isTruncated,
   };
 }
-//@ chunk-wyqg6m3h.js:34754-34765 placement
+//@ chunk-c7hntn0y.js:35118-35129 placement
 var FIRST_WIDE_POINT = 768;
-//@ chunk-wyqg6m3h.js:34765-34974 placement
+//@ chunk-c7hntn0y.js:35129-35338 placement
 var WIDE_RANGES = [
   [4352, 4447],
   [11904, 12350],
@@ -466,14 +466,14 @@ var WIDE_RANGES = [
   [129280, 129535],
   [131072, 262141],
 ];
-//@ chunk-wyqg6m3h.js:34974-35031 placement
+//@ chunk-c7hntn0y.js:35338-35395 placement
 var ZERO_WIDTH_RANGES = [
   [768, 879],
   [8203, 8207],
   [65024, 65039],
   [8400, 8447],
 ];
-//@ chunk-wyqg6m3h.js:35031-35185 placement
+//@ chunk-c7hntn0y.js:35395-35549 placement
 function cellWidth(text) {
   let width = 0;
   for (let char of text) {
@@ -486,26 +486,26 @@ function cellWidth(text) {
   }
   return width;
 }
-//@ chunk-wyqg6m3h.js:35185-35253 placement
+//@ chunk-c7hntn0y.js:35549-35617 placement
 function chargedWidth(text) {
   let width = 0;
   for (let char of text) width += Math.max(1, cellWidth(char));
   return width;
 }
-//@ chunk-wyqg6m3h.js:35253-35308 placement
+//@ chunk-c7hntn0y.js:35617-35672 placement
 var padEnd = (text, width) => `${text}${" ".repeat(Math.max(0, width - chargedWidth(text)))}`;
-//@ chunk-wyqg6m3h.js:35308-35350 placement
+//@ chunk-c7hntn0y.js:35672-35714 placement
 var plural = (count, noun) => (count === 1 ? `1 ${noun}` : `${count} ${noun}s`);
-//@ chunk-wyqg6m3h.js:35350-35359 placement
+//@ chunk-c7hntn0y.js:35714-35723 placement
 var TAB_WIDTH = 4;
-//@ chunk-wyqg6m3h.js:35359-35468 placement
+//@ chunk-c7hntn0y.js:35723-35832 placement
 var sanitizeLine = (text) =>
   text
     .replaceAll("\t", " ".repeat(TAB_WIDTH))
     .replace(/[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]/gu, "");
-//@ chunk-wyqg6m3h.js:35468-35485 placement
+//@ chunk-c7hntn0y.js:35832-35849 placement
 var sanitizeName = (name) => sanitizeLine(name);
-//@ chunk-wyqg6m3h.js:35485-35634 placement
+//@ chunk-c7hntn0y.js:35849-35998 placement
 function truncateStart(text, width) {
   if (chargedWidth(text) <= width) return text;
   let chars = [...text];
@@ -517,7 +517,7 @@ function truncateStart(text, width) {
   }
   return `\u2026${kept}`;
 }
-//@ chunk-wyqg6m3h.js:35634-36123 placement
+//@ chunk-c7hntn0y.js:35998-36487 placement
 function wrappedLines(text, columns) {
   let max = Math.max(1, columns);
   let lines = [""];
@@ -558,9 +558,9 @@ function wrappedLines(text, columns) {
   }
   return lines;
 }
-//@ chunk-wyqg6m3h.js:36123-36190 placement
+//@ chunk-c7hntn0y.js:36487-36554 placement
 var drawnLineOf = (line) => line.slice(0, 1) + line.slice(1).split("\t").map(sanitizeLine).join("\t");
-//@ chunk-wyqg6m3h.js:36190-36666 placement
+//@ chunk-c7hntn0y.js:36554-37030 placement
 function codeBlocksOf(hunks, budget) {
   let sources = [];
   let charsUsed = 0;

@@ -3,11 +3,17 @@
  *
  * 2.1.316 新增。子代理状态行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (7)
  * attribution: placement 7
  */
+import {
+  init_react_production,
+  useRef,
+  useEffect,
+  useSyncExternalStore,
+} from "../../vendor/react/cjs/react.production.js";
 import { isStatusLineManagedOnly } from "./hooks/hookInputRewrite.js";
 import { getSettingsForSource, getSettingsAfterPluginLoad } from "./settings/settings.js";
 import {
@@ -43,26 +49,25 @@ import { subscribeCoordinatorPanel } from "./transcriptDiagnostics.js";
 import { release } from "../state/teammateViewHelpers.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { useClock } from "../ink/components/ClockContext.js";
-import {
-  useRef,
-  useEffect,
-  init_react_production,
-  useSyncExternalStore,
-} from "../../vendor/react/cjs/react.production.js";
 import { trackReceivedMessageUuid } from "../cli/print.js";
 import { agentRowPrefixWidth, AGENT_ROW_WIDTH_RESERVE } from "../components/CoordinatorAgentStatus.js";
 import { subscribeGlobalConfigInstalled } from "./config.js";
 import { EDITOR_MODES } from "./configConstants.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:810409-810547 placement
+//@ chunk-czq1j3j2.js:834753-834757 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:834753", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:843132-843270 placement
 function subagentStatusLineCommand() {
   let setting = isStatusLineManagedOnly()
     ? getSettingsForSource("policySettings")?.subagentStatusLine
     : getSettingsAfterPluginLoad("subagentStatusLine");
   return setting?.type === "command" ? setting.command : undefined;
 }
-//@ chunk-18hwfzwa.js:810547-812078 placement
+//@ chunk-czq1j3j2.js:843270-844801 placement
 async function runSubagentStatusLine(tasks, columns, names, tokenSamples) {
   if (shouldDisableAllHooksIncludingManaged() || isCustomizationDisabled("statusLine")) return {};
   if (shouldSkipHookDueToTrust()) {
@@ -158,10 +163,10 @@ async function runSubagentStatusLine(tasks, columns, names, tokenSamples) {
   }
   return decorations;
 }
-//@ chunk-18hwfzwa.js:812078-812099 placement
+//@ chunk-czq1j3j2.js:844801-844822 placement
 var TICK_DEBOUNCE_MS = 300;
 var TICK_INTERVAL_MS = 5000;
-//@ chunk-18hwfzwa.js:812099-812256 placement
+//@ chunk-czq1j3j2.js:844822-844979 placement
 function sameStatusLineContents(taskDecorations, other) {
   let keys = Object.keys(taskDecorations);
   let keys_2 = Object.keys(other);
@@ -169,7 +174,7 @@ function sameStatusLineContents(taskDecorations, other) {
   for (let key of keys) if (taskDecorations[key]?.content !== other[key]?.content) return false;
   return true;
 }
-//@ chunk-18hwfzwa.js:812465-813789 placement
+//@ chunk-czq1j3j2.js:845188-846512 placement
 function useSubagentStatusLineTick() {
   let appStoreDirect = useAppStoreDirect();
   let setAppState = useSetAppState();
@@ -277,14 +282,9 @@ function useSubagentStatusLineTick() {
     };
   }, [enabled, taskCount, columns, appStoreDirect, setAppState, clock]);
 }
-//@ chunk-18hwfzwa.js:813789-813793 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:813789", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:813793-813854 placement
+//@ chunk-czq1j3j2.js:846516-846578 placement
 function useEditorMode() {
   useAppState((state) => state.settings.editorMode);
   return useSyncExternalStore(subscribeGlobalConfigInstalled, EDITOR_MODES);
 }
-export { useEditorMode, useSubagentStatusLineTick };
+export { useSubagentStatusLineTick, useEditorMode };

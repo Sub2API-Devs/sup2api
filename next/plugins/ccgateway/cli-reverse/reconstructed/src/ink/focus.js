@@ -3,15 +3,15 @@
  *
  * 并入已有模块：取节点的绝对布局（缓存或由 yoga 计算并累加父节点偏移）；方向键焦点移动时计算两个节点间的距离（不在该方向返回无穷大）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/focus.ts
- * pieces: chunk-bzr73sfg.js (13)
+ * pieces: chunk-2avr6cej.js (13)
  * attribution: fingerprint 4, placement 9
  */
 import { FocusEvent } from "./events/focus-event.js";
 import { collectTabbable } from "./render-node-to-output.js";
 
-//@ chunk-bzr73sfg.js:183635-183734 fingerprint (2.1.88 match: isInTree, 0.603)
+//@ chunk-2avr6cej.js:183364-183463 fingerprint (2.1.88 match: isInTree, 0.603)
 /**
  * 从 node 沿父链向上标记 hasAbsoluteDescendant（遇到已标记的停止）；绝对定位子孙会影响渲染缓存的失效范围。
  */
@@ -22,9 +22,9 @@ function markHasAbsoluteDescendant(node) {
     current = current.parentNode;
   }
 }
-//@ chunk-bzr73sfg.js:191113-191123 placement
+//@ chunk-2avr6cej.js:190760-190770 placement
 var MAX_FOCUS_STACK = 32;
-//@ chunk-bzr73sfg.js:191123-193701 placement (2.1.88 match: FocusManager, 0.759)
+//@ chunk-2avr6cej.js:190770-193347 placement (2.1.88 match: FocusManager, 0.758)
 /**
  * 焦点管理器（挂在根节点 focusManager）：activeElement、焦点历史栈与 autoFocus 回退栈（各最多 32）；focus 时 tabIndex=-1 的容器会解析到其内上次聚焦的子孙；节点删除时从历史栈恢复焦点；focusNext/Previous 按 Tab 顺序循环；focusDirection 按屏幕几何找某方向最近的可聚焦元素（316 新增）；handleClickFocus 点击聚焦。
  */
@@ -165,7 +165,7 @@ class FocusManager {
     if (next) this.focus(next);
   }
 }
-//@ chunk-bzr73sfg.js:193701-193777 fingerprint (2.1.88 match: walkTree, 0.357)
+//@ chunk-2avr6cej.js:193347-193423 fingerprint (2.1.88 match: walkTree, 0.357)
 /**
  * tabIndex 是非负数即可 Tab 聚焦。
  */
@@ -173,13 +173,13 @@ function isTabbable(node) {
   let tabIndex = node.attributes.tabIndex;
   return typeof tabIndex === "number" && tabIndex >= 0;
 }
-//@ chunk-bzr73sfg.js:193818-193960 placement (2.1.88 match: dropSubtreeCache, 0.808)
+//@ chunk-2avr6cej.js:193464-193606 placement (2.1.88 match: dropSubtreeCache, 0.808)
 function walkTabbable(node, result) {
   let tabIndex = node.attributes.tabIndex;
   if (typeof tabIndex === "number" && tabIndex >= 0) result.push(node);
   for (let child of node.childNodes) if (child.nodeName !== "#text") walkTabbable(child, result);
 }
-//@ chunk-bzr73sfg.js:193960-194072 placement (2.1.88 match: dropSubtreeCache, 1)
+//@ chunk-2avr6cej.js:193606-193718 placement (2.1.88 match: dropSubtreeCache, 1)
 function hasTabbableDescendant(node) {
   for (let child of node.childNodes) {
     if (child.nodeName === "#text") continue;
@@ -187,7 +187,7 @@ function hasTabbableDescendant(node) {
   }
   return false;
 }
-//@ chunk-bzr73sfg.js:194072-194383 placement
+//@ chunk-2avr6cej.js:193718-194029 placement
 /**
  * 方向键焦点移动时计算两个节点间的距离（不在该方向返回无穷大）。
  */
@@ -208,17 +208,17 @@ function directionalFocusScore(fromRect, toRect, direction) {
     : spanOverlap(fromRect.x, fromRect.width, toRect.x, toRect.width);
   return distance + (isHorizontal ? 2 : 0.5) * offAxis - overlap;
 }
-//@ chunk-bzr73sfg.js:194383-194453 placement
+//@ chunk-2avr6cej.js:194029-194099 placement
 function distanceOutsideSpan(value, start, length) {
   if (value < start) return start - value;
   if (value > start + length) return value - (start + length);
   return 0;
 }
-//@ chunk-bzr73sfg.js:194453-194525 placement
+//@ chunk-2avr6cej.js:194099-194171 placement
 function spanOverlap(startA, lengthA, startB, lengthB) {
   return Math.max(0, Math.min(startA + lengthA, startB + lengthB) - Math.max(startA, startB));
 }
-//@ chunk-bzr73sfg.js:194525-194881 placement
+//@ chunk-2avr6cej.js:194171-194527 placement
 /**
  * 取节点的绝对布局（缓存或由 yoga 计算并累加父节点偏移）。
  */
@@ -247,7 +247,7 @@ function getNodeScreenRect(node) {
   }
   return;
 }
-//@ chunk-bzr73sfg.js:194881-194957 placement
+//@ chunk-2avr6cej.js:194527-194603 placement
 /**
  * 判断节点是否在另一节点之下。
  */
@@ -259,7 +259,7 @@ function isDescendantOf(node, ancestor) {
   }
   return false;
 }
-//@ chunk-bzr73sfg.js:194957-195089 fingerprint (2.1.88 match: getRootNode, 1)
+//@ chunk-2avr6cej.js:194603-194735 fingerprint (2.1.88 match: getRootNode, 1)
 /**
  * 沿父链找挂着 focusManager 的根节点，找不到抛错。
  */
@@ -271,7 +271,7 @@ function getRootNode(node) {
   }
   throw Error("Node is not in a tree with a FocusManager");
 }
-//@ chunk-bzr73sfg.js:195089-195131 fingerprint (2.1.88 match: getFocusManager, 1)
+//@ chunk-2avr6cej.js:194735-194777 fingerprint (2.1.88 match: getFocusManager, 1)
 /**
  * 取节点所在树的 FocusManager。
  */
@@ -279,10 +279,10 @@ function getFocusManager(node) {
   return getRootNode(node).focusManager;
 }
 export {
-  getFocusManager,
   isDescendantOf,
-  markHasAbsoluteDescendant,
+  getFocusManager,
   getRootNode,
   walkTabbable,
+  markHasAbsoluteDescendant,
   FocusManager,
 };

@@ -3,9 +3,9 @@
  *
  * 后台任务列表项（bash/agent/monitor/workflow，状态与未读标记）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/tasks/BackgroundTask.tsx
- * pieces: chunk-18hwfzwa.js (2)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: affinity 1, fingerprint 1
  */
 import { TaskStatusText, ShellProgress } from "./ShellProgress.js";
@@ -22,9 +22,9 @@ import { cleanTaskDescription } from "../../utils/taskDescription.js";
 import { shortTaskLabel } from "../../services/mcp/mcpTaskCapability.js";
 import { isAutoReactArmedMonitorTask } from "../../tasks/MonitorWsTask/MonitorWsTask.js";
 
-//@ chunk-18hwfzwa.js:695523-695559 affinity
+//@ chunk-czq1j3j2.js:716261-716297 affinity
 var AUTO_REPLYING_TEXT = "auto-replying to comments";
-//@ chunk-18hwfzwa.js:695559-697663 fingerprint (2.1.88 match: BackgroundTask, 0.614)
+//@ chunk-czq1j3j2.js:716297-718401 fingerprint (2.1.88 match: BackgroundTask, 0.614)
 function BackgroundTask(t0) {
   let unreadSuffix = t0.status === "completed" && !t0.notified ? ", unread" : "";
   switch (t0.type) {

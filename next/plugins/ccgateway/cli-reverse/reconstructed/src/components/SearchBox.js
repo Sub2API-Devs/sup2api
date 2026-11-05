@@ -3,15 +3,15 @@
  *
  * 通用搜索框组件（"Search…" 占位、聚焦边框色），用于各种选择器。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/SearchBox.tsx
- * pieces: chunk-tzghj6zv.js (3)
+ * pieces: chunk-18rrbwq1.js (3)
  * attribution: fingerprint 1, placement 2
  */
 import { TELEPHONE_RECORDER } from "../constants/figures.js";
 import { useRef, useMemo } from "../../vendor/react/cjs/react.production.js";
 import { assignRef, useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
-import { useHasFocus, Input } from "../ink/components/Input.js";
+import { isFocusedIn, Input } from "../ink/components/Input.js";
 import { measureText, offsetToPosition, positionToOffset } from "../utils/Cursor.js";
 import { isNativeCursorEnabled } from "../ink/nativeCursor.js";
 import { env } from "../utils/env.js";
@@ -24,7 +24,7 @@ import {
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../ink/components/Text.js";
 
-//@ chunk-tzghj6zv.js:49806-51767 fingerprint (2.1.88 match: SearchBox, 0.529)
+//@ chunk-18rrbwq1.js:49787-51733 fingerprint (2.1.88 match: SearchBox, 0.529)
 function SearchBox({
   query,
   placeholder,
@@ -55,8 +55,8 @@ function SearchBox({
     inputRef.current = node;
     assignRef(ref, node);
   };
-  let hasFocus = useHasFocus(inputRef);
-  let focused = isFocused ?? (hasKeyHandler && hasFocus);
+  let isInputFocused = isFocusedIn(inputRef);
+  let focused = isFocused ?? (hasKeyHandler && isInputFocused);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let bordered = !borderless && !isScreenReaderEnabled;
   let neverFlag = false;
@@ -193,7 +193,7 @@ function SearchBox({
     children,
   });
 }
-//@ chunk-tzghj6zv.js:51767-52276 placement (2.1.88 match: EffortIndicatorSymbol, 0.752)
+//@ chunk-18rrbwq1.js:51733-52242 placement (2.1.88 match: EffortIndicatorSymbol, 0.752)
 function EffortIndicatorSymbol(query, highlights, dimRange, cursorIndex, cursorChar) {
   let isHighlighted = (index) =>
     highlights.some(([rangeStart, rangeEnd]) => index >= rangeStart && index < rangeEnd);
@@ -256,7 +256,7 @@ function EffortIndicatorSymbol(query, highlights, dimRange, cursorIndex, cursorC
   }
   return elements;
 }
-//@ chunk-tzghj6zv.js:52276-52334 placement
+//@ chunk-18rrbwq1.js:52242-52300 placement
 /**
  * 函数 neverEmbedded（恒返回 false 的嵌入模式判定）；位于「通用搜索框组件（"Search…" 占位、聚焦边框色），用于各种选择器」模块。
  */

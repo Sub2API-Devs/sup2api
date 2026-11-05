@@ -3,9 +3,9 @@
  *
  * 交互启动时（工作区受信后）触发后台插件安装与官方市场自动安装。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/performStartupChecks.tsx
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { logForDebugging } from "../debug.js";
@@ -18,7 +18,7 @@ import {
 } from "../../services/plugins/PluginInstallationManager.js";
 import { clearPluginCache } from "./pluginLoader.js";
 
-//@ chunk-18hwfzwa.js:206503-207065 fingerprint (2.1.88 match: performStartupChecks, 0.714)
+//@ chunk-czq1j3j2.js:211302-211864 fingerprint (2.1.88 match: performStartupChecks, 0.714)
 /**
  * 交互启动时的插件检查：工作区受信后执行后台市场/插件安装与官方市场自动安装。
  */

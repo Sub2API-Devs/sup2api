@@ -3,24 +3,27 @@
  *
  * 流式工具执行器：回答流式到达时边收 tool_use 边执行，并发安全的并行、不安全的独占，按收到顺序产出结果与进度，中断/流式回退时生成合成错误结果
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/tools/StreamingToolExecutor.ts
- * pieces: chunk-ha3km179.js (4)
- * attribution: placement 1, layout 2, fingerprint 1
+ * pieces: chunk-w3ch4xq2.js (8)
+ * attribution: placement 1, layout 6, fingerprint 1
  */
 import {
   serverFallbackTombstoneAbortReason,
   unwrapAbortReason,
   shutdownInterruptStamp,
+  createAbortController,
   createChildAbortController,
   classifyAbortReasonForTelemetry,
 } from "../../utils/abortController.js";
 import { logEvent } from "../analytics/index.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import { STOP_INSTRUCTION } from "./streamingStopNotice.js";
 import { findTool } from "../api/deferredToolsState.js";
 import {
   shouldWaitForMcpTool,
-  explainUnavailableArtifactTool,
+  describeUnknownTool,
   resolveUnknownToolSafe,
   runToolUse,
   hasTypeField,
@@ -41,7 +44,14 @@ import {
   REJECT_MESSAGE,
   USER_REJECTED_TOOL_USE,
 } from "../../utils/messages.js";
-import { getAbortKind, getSerializedPetalLimit, isCancelAbort } from "./toolAbort.js";
+import {
+  getAbortKind,
+  isStoppedResultWait,
+  getFileUnchangedMessage,
+  isStoppedReplTool,
+  getSerializedPetalLimit,
+  isCancelAbort,
+} from "./toolAbort.js";
 import { abortScopeOf } from "../../utils/abortReasons.js";
 import { errorTelemetryFields } from "../../utils/accessibility/screenReader.js";
 import { logError } from "../../utils/log.js";
@@ -49,7 +59,7 @@ import { getTaskRunState } from "../../utils/task/taskNotifications.js";
 import { isTerminalShutdown } from "../../utils/terminalShutdown.js";
 import { sanitizeToolNameForAnalytics } from "../analytics/metadata.js";
 
-//@ chunk-ha3km179.js:58036-58692 placement
+//@ chunk-w3ch4xq2.js:62615-63271 placement
 /**
  * 丢弃并中止进行中的工具调用，上报统计。
  */
@@ -86,7 +96,16 @@ function discardInFlightTools(streamingToolExecutor, lane, options) {
     startedToolUseIds: discardResult.startedToolUseIds,
   };
 }
-//@ chunk-ha3km179.js:58692-58815 layout
+//@ chunk-w3ch4xq2.js:63271-63381 layout
+function countsAsStoppedWait(tool, message, abortReason) {
+  let stopWait = tool.stopWait;
+  return (
+    abortReason === "user_interrupted" &&
+    stopWait !== undefined &&
+    (stopWait.kept || message?.type === "progress")
+  );
+}
+//@ chunk-w3ch4xq2.js:63381-63504 layout
 /**
  * 工具在中断时是否"正在运行"：callRunning 为真且结果未标记为其它拒绝类型。用于选择取消文案。
  */
@@ -94,7 +113,51 @@ function isInterruptedWhileRunning(tracked, message) {
   let toolDenialKind = message?.type === "user" ? message.toolDenialKind : undefined;
   return tracked.callRunning === true && (toolDenialKind === undefined || toolDenialKind === "interrupted");
 }
-//@ chunk-ha3km179.js:58815-58961 layout
+//@ chunk-w3ch4xq2.js:63504-63675 layout
+function markUserRejected(kept, toolUseId) {
+  if (kept.type !== "user" || kept.toolDenialKind !== undefined) return kept;
+  return {
+    ...kept,
+    toolDenialKind: "user-rejected",
+    message: {
+      ...kept.message,
+      content: appendStoppedText(kept.message.content, toolUseId),
+    },
+  };
+}
+//@ chunk-w3ch4xq2.js:63675-63742 layout
+function stoppedResultText() {
+  return codeModeAccepted() ? `The user stopped this call. ${STOP_INSTRUCTION}` : STOP_INSTRUCTION;
+}
+//@ chunk-w3ch4xq2.js:63742-64015 layout
+function appendStoppedText(content, toolUseId) {
+  if (typeof content === "string") return content;
+  return content.map((block) => {
+    if (block.type !== "tool_result" || block.tool_use_id !== toolUseId) return block;
+    let parts =
+      typeof block.content === "string"
+        ? block.content === ""
+          ? []
+          : [
+              {
+                type: "text",
+                text: block.content,
+              },
+            ]
+        : (block.content ?? []);
+    return {
+      ...block,
+      content: [
+        ...parts,
+        {
+          type: "text",
+          text: stoppedResultText(),
+        },
+      ],
+    };
+  });
+}
+//@ chunk-w3ch4xq2.js:64015-64161 layout
 /**
  * 判断 user 消息里是否已有指定 tool_use_id 的 tool_result，避免重复写合成错误。
  */
@@ -105,7 +168,7 @@ function messageHasToolResultFor(message, toolUseId) {
     message.message.content.some((block) => block.type === "tool_result" && block.tool_use_id === toolUseId)
   );
 }
-//@ chunk-ha3km179.js:58961-69131 fingerprint (2.1.88 match: StreamingToolExecutor, 0.548)
+//@ chunk-w3ch4xq2.js:64161-76217 fingerprint (2.1.88 match: StreamingToolExecutor, 0.507)
 /**
  * StreamingToolExecutor：流式回答期间边收 tool_use 边执行。addTool 时判定并发安全并排队；processQueue 保证"并发安全的可以同时跑，不安全的独占"；结果按收到顺序产出（getCompletedResults/getRemainingResults），进度消息随时产出；中断/流式回退时生成合成错误结果（interrupted、cancelled、Streaming fallback、Conversation ended）。未知工具直接生成 "No such tool available" 错误，并用 TOOL_CATALOG 给建议。
  */
@@ -121,10 +184,10 @@ class StreamingToolExecutor {
   drainableResolve;
   drainGeneration = 0;
   appliedLayers = false;
-  constructor(toolDefinitions, canUseTool, toolUseContext, toolUseContext_2) {
+  constructor(toolDefinitions, canUseTool, toolUseContext, now) {
     this.toolDefinitions = toolDefinitions;
     this.canUseTool = canUseTool;
-    this.now = toolUseContext_2;
+    this.now = now;
     this.toolUseContext = toolUseContext;
   }
   discard() {
@@ -190,7 +253,7 @@ class StreamingToolExecutor {
       return;
     }
     if (!toolDefinition) {
-      let unavailableNote = explainUnavailableArtifactTool(
+      let unavailableNote = describeUnknownTool(
         block.name,
         this.toolDefinitions,
         this.toolUseContext.options.toolCatalog.getAllBaseTools(),
@@ -353,16 +416,82 @@ class StreamingToolExecutor {
       {
         name: tracked.block.name,
         ran,
-        ...false,
+        ...(codeModeAccepted() && {
+          asyncReplReceipt: didRun,
+        }),
       },
       abortScopeOf(this.toolUseContext),
     );
   }
-  armStoppedResultWait(tracked, result) {}
+  armStoppedResultWait(toolDefinitions, canUseTool) {
+    if (codeModeAccepted()) {
+      if (
+        toolDefinitions.status !== "executing" ||
+        toolDefinitions.stopWait !== undefined ||
+        !isStoppedResultWait(this.toolUseContext.abortController.signal, toolDefinitions.block.name)
+      )
+        return;
+      let stoppedWait = {
+        kept: false,
+        taken: false,
+        withdrawn: false,
+        timedOut: false,
+        hookController: createAbortController(),
+      };
+      stoppedWait.timer = setTimeout(
+        (timer, tool, wait, args) => {
+          if (timer.status !== "executing") return;
+          tool.timedOut = true;
+          tool.commit = undefined;
+          tool.hookController.abort(args);
+          wait();
+        },
+        getFileUnchangedMessage(),
+        toolDefinitions,
+        stoppedWait,
+        canUseTool,
+        this.toolUseContext.abortController.signal.reason,
+      );
+      toolDefinitions.stopWait = stoppedWait;
+    }
+  }
   takeKeptResult(tracked, kept) {
+    if (codeModeAccepted()) {
+      let stopWait = tracked.stopWait;
+      if (stopWait === undefined || !messageHasToolResultFor(kept, tracked.id)) return kept;
+      clearTimeout(stopWait.timer);
+      stopWait.taken = true;
+      let commit = stopWait.commit;
+      stopWait.commit = undefined;
+      commit?.();
+      return markUserRejected(kept, tracked.id);
+    }
     return kept;
   }
   stoppedResultWaitOf(tracked) {
+    if (codeModeAccepted()) {
+      let stopWait = tracked.stopWait;
+      if (stopWait === undefined) return;
+      return {
+        hookController: stopWait.hookController,
+        get kept() {
+          return stopWait.kept;
+        },
+        keep: (commit) => {
+          if (stopWait.timedOut || stopWait.withdrawn || stopWait.taken) return false;
+          stopWait.kept = true;
+          stopWait.commit = commit;
+          return true;
+        },
+        withdraw: () => {
+          if (!stopWait.taken) {
+            stopWait.withdrawn = true;
+            stopWait.kept = false;
+            stopWait.commit = undefined;
+          }
+        },
+      };
+    }
     return;
   }
   wakeWaiters() {
@@ -435,7 +564,7 @@ class StreamingToolExecutor {
   async executeTool(tracked) {
     tracked.status = "executing";
     let results = [];
-    let contextModifiers = [];
+    let yieldedResults = [];
     let runPromise = (async () => {
       let initialAbortReason = this.getAbortReason(tracked, false);
       if (initialAbortReason) {
@@ -443,23 +572,23 @@ class StreamingToolExecutor {
           this.createSyntheticErrorMessage(tracked.id, initialAbortReason, tracked.assistantMessage, false),
         );
         tracked.results = results;
-        tracked.contextLayers = contextModifiers;
+        tracked.contextLayers = yieldedResults;
         tracked.status = "completed";
         this.wakeWaiters();
         return;
       }
-      let toolAbortController = createChildAbortController(this.toolUseContext.abortController);
-      toolAbortController.signal.addEventListener(
+      let childAbortController = createChildAbortController(this.toolUseContext.abortController);
+      childAbortController.signal.addEventListener(
         "abort",
         () => {
           if (!this.toolUseContext.abortController.signal.aborted && !this.discarded)
-            this.toolUseContext.abortController.abort(toolAbortController.signal.reason);
+            this.toolUseContext.abortController.abort(childAbortController.signal.reason);
         },
         {
           once: true,
         },
       );
-      tracked.abortController = toolAbortController;
+      tracked.abortController = childAbortController;
       let exclusiveCallQueuedBehind = getTaskRunState().exclusiveCallQueuedBehind;
       let exclusiveState = {
         isQueued: () =>
@@ -479,9 +608,49 @@ class StreamingToolExecutor {
       };
       let signal = this.toolUseContext.abortController.signal;
       let stopAfterCall = false;
-      let noop = () => {};
-      let stopHookError = undefined;
-      let progressError = undefined;
+      let noop = () => {
+        if (codeModeAccepted() && stopAfterCall) {
+          stopAfterCall = false;
+          this.toolUseContext.onStopWaitChange?.(-1);
+        }
+      };
+      let stopHookError =
+        codeModeAccepted() && isStoppedReplTool(tracked.block.name)
+          ? () => {
+              let onStopped = () => {
+                results.push(
+                  this.createSyntheticErrorMessage(
+                    tracked.id,
+                    "user_interrupted",
+                    tracked.assistantMessage,
+                    isInterruptedWhileRunning(tracked),
+                  ),
+                );
+                tracked.results = results;
+                tracked.contextLayers = yieldedResults;
+                tracked.status = "completed";
+                this.wakeWaiters();
+              };
+              this.armStoppedResultWait(tracked, onStopped);
+              if (tracked.stopWait === undefined) noop();
+            }
+          : undefined;
+      if (codeModeAccepted() && stopHookError !== undefined) {
+        signal.addEventListener("abort", stopHookError, {
+          once: true,
+        });
+        stopAfterCall = true;
+        this.toolUseContext.onStopWaitChange?.(1);
+      }
+      using progressError = codeModeAccepted()
+        ? {
+            [Symbol.dispose]: () => {
+              if (stopHookError !== undefined) signal.removeEventListener("abort", stopHookError);
+              noop();
+              clearTimeout(tracked.stopWait?.timer);
+            },
+          }
+        : undefined;
       let abandoned = false;
       let progress;
       let execution = runToolUse(
@@ -490,7 +659,7 @@ class StreamingToolExecutor {
         this.canUseTool,
         {
           ...this.toolUseContext,
-          abortController: toolAbortController,
+          abortController: childAbortController,
           markToolCallStarted: (callId) => {
             if (callId === tracked.id) tracked.callStarted = true;
           },
@@ -501,7 +670,11 @@ class StreamingToolExecutor {
             if (callId === tracked.id) progress = endFn;
           },
           toolCallAbandoned: (callId) => callId === tracked.id && abandoned,
-          ...false,
+          ...(codeModeAccepted() &&
+            stopHookError !== undefined && {
+              stoppedResultWait: (toolUseId) =>
+                toolUseId === tracked.id ? this.stoppedResultWaitOf(tracked) : undefined,
+            }),
           sameTurnToolUses: this.buildSameTurnToolUses(tracked),
           sameTurnErroredToolUseIds: this.buildSameTurnErroredToolUseIds(tracked),
         },
@@ -533,7 +706,7 @@ class StreamingToolExecutor {
           logError(error);
         }
         tracked.results = results;
-        tracked.contextLayers = contextModifiers;
+        tracked.contextLayers = yieldedResults;
         tracked.status = "completed";
         this.wakeWaiters();
       };
@@ -554,15 +727,35 @@ class StreamingToolExecutor {
       };
       for await (let result of execution) {
         if (abandoned) break;
+        if (codeModeAccepted() && tracked.stopWait?.timedOut) break;
+        if (
+          codeModeAccepted() &&
+          tracked.stopWait?.kept === true &&
+          !tracked.stopWait.taken &&
+          isTerminalShutdown()
+        ) {
+          tracked.stopWait.kept = false;
+          tracked.stopWait.commit = undefined;
+        }
         if (hasTypeField(result)) {
           tracked.pendingBridgeEvents.push(result);
           this.wakeWaiters();
           continue;
         }
         let isResultRun = result.message?.type !== "user" || result.message.toolDenialKind === undefined;
-        interruptedDuringRun ||= false;
+        interruptedDuringRun ||=
+          codeModeAccepted() &&
+          result.message?.type === "user" &&
+          require("../../utils/codeMode/asyncReplReceipt.js").isAsyncReplReceipt(
+            result.message.toolUseResult,
+          );
         let abortReason = this.getAbortReason(tracked, isResultRun, interruptedDuringRun);
-        if (abortReason && !sawResult) {
+        if (
+          abortReason &&
+          !sawResult &&
+          !(codeModeAccepted() && countsAsStoppedWait(tracked, result.message, abortReason))
+        ) {
+          if (codeModeAccepted()) clearTimeout(tracked.stopWait?.timer);
           results.push(
             this.createSyntheticErrorMessage(
               tracked.id,
@@ -590,19 +783,24 @@ class StreamingToolExecutor {
               this.progressAvailableResolve = undefined;
             }
           } else {
-            results.push(result.message);
+            results.push(
+              codeModeAccepted() && tracked.stopWait?.kept
+                ? this.takeKeptResult(tracked, result.message)
+                : result.message,
+            );
             if (result.toolDuration) tracked.toolDuration = result.toolDuration;
           }
         }
-        if (result.contextLayers) contextModifiers.push(...result.contextLayers.layers);
+        if (result.contextLayers) yieldedResults.push(...result.contextLayers.layers);
       }
+      if (codeModeAccepted() && tracked.stopWait?.timedOut) return;
       if (abandoned) return;
       tracked.results = results;
-      tracked.contextLayers = contextModifiers;
+      tracked.contextLayers = yieldedResults;
       tracked.status = "completed";
       this.wakeWaiters();
-      if (!tracked.isConcurrencySafe && contextModifiers.length > 0) {
-        this.toolUseContext = applyContextLayers(this.toolUseContext, contextModifiers);
+      if (!tracked.isConcurrencySafe && yieldedResults.length > 0) {
+        this.toolUseContext = applyContextLayers(this.toolUseContext, yieldedResults);
         this.appliedLayers = true;
       }
     })();
@@ -643,7 +841,7 @@ class StreamingToolExecutor {
     }
   }
   hasPendingProgress() {
-    return this.tools.some((t) => t.pendingProgress.length > 0 || t.pendingBridgeEvents.length > 0);
+    return this.tools.some((tool) => tool.pendingProgress.length > 0 || tool.pendingBridgeEvents.length > 0);
   }
   async *getRemainingResults() {
     this.responseOpen = false;

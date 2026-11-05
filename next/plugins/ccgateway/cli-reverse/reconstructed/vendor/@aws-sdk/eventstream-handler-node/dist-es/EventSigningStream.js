@@ -1,15 +1,15 @@
 /**
  * @aws-sdk/eventstream-handler-node/dist-es/EventSigningStream.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/eventstream-handler-node@3.936.0
- * pieces: chunk-3cddmtk7.js (4)
+ * pieces: chunk-ayc8mk37.js (4)
  * attribution: esm-layout 2, esm-fingerprint 2
  */
 import { Transform } from "stream";
 import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_core_2 } from "../../core/dist-cjs/index.js";
 
-//@ chunk-3cddmtk7.js:14802-18139 esm-layout
+//@ chunk-ayc8mk37.js:14802-18139 esm-layout
 var packageJson = {
   name: "@aws-sdk/client-bedrock-runtime",
   description: "AWS SDK for JavaScript Bedrock Runtime Client for Node.js, Browser and React Native",
@@ -113,9 +113,9 @@ var packageJson = {
     directory: "clients/client-bedrock-runtime",
   },
 };
-//@ chunk-3cddmtk7.js:18139-18154 esm-layout
+//@ chunk-ayc8mk37.js:18139-18154 esm-layout
 var import_core_6 = __toESM(require_core_2());
-//@ chunk-3cddmtk7.js:18258-19045 esm-fingerprint
+//@ chunk-ayc8mk37.js:18258-19045 esm-fingerprint
 class EventSigningStream extends Transform {
   priorSignature;
   messageSigner;
@@ -172,7 +172,7 @@ class EventSigningStream extends Transform {
     }
   }
 }
-//@ chunk-3cddmtk7.js:19045-19174 esm-fingerprint
+//@ chunk-ayc8mk37.js:19045-19174 esm-fingerprint
 function getSignatureBinary(signature) {
   let buf = Buffer.from(signature, "hex");
   return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength / Uint8Array.BYTES_PER_ELEMENT);

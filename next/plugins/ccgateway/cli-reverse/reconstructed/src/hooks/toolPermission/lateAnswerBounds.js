@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。晚到的权限回答输入越界检查。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0h4e7gnq.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-frs14hy1.js (4)
  * attribution: placement 4
  */
 import {
@@ -26,20 +26,20 @@ import {
   buildToolsPausedMessage,
   TOOLS_HELD_UNTIL_A_PERSON_TYPES,
 } from "../../utils/permissions/permissions.js";
-import { getToolNameForPermissionCheck as getToolNameForPermissionCheck_3 } from "../../services/mcp/mcpStringUtils.js";
+import { getToolNameForPermissionCheck as getToolNameForPermissionCheck_5 } from "../../services/mcp/mcpStringUtils.js";
 import { logError } from "../../utils/log.js";
 import { TOOL_PERMISSION_REQUEST_FAILED } from "../../cli/toolPermissionStream.js";
 import { CAN_USE_TOOL_REQUEST_FAILED_DENY_REASON } from "../../types/permissions.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0h4e7gnq.js:27425-27686 placement
-var LATE_ANSWER_OUT_OF_BOUNDS_MESSAGE; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+//@ chunk-frs14hy1.js:31900-32161 placement
+var LATE_ANSWER_OUT_OF_BOUNDS_MESSAGE; // deferred: uses MAX_ANSWER_DEPTH (../../utils/permissions/permissionAnswer.js) of its import cycle while loading; runs once the cycle is complete
 var orphanedPermissionCap;
-deferInit("chunk-0h4e7gnq.js:27425", () => {
+deferInit("chunk-frs14hy1.js:31900", () => {
   LATE_ANSWER_OUT_OF_BOUNDS_MESSAGE = `The call was not run. The permission answer gave it an input past what this session takes from an answer: ${MAX_ANSWER_VALUES} values, ${MAX_ANSWER_DEPTH} levels of nesting, ${MAX_ANSWER_CHARS} characters of text. Nothing of the answer is in force.`;
   orphanedPermissionCap = DoctorLazy(() => capPermissionUpdates_2("cut", "orphaned permission"));
 });
-//@ chunk-0h4e7gnq.js:27686-27885 placement
+//@ chunk-frs14hy1.js:32161-32360 placement
 /**
  * 创建晚到权限回答的边界检查器：首次调用时计算并缓存拒绝结果，可查询是否已放行，未被询问时警告其权限更新从未应用。
  */
@@ -68,7 +68,7 @@ function createLateAnswerBound(permissionUpdates, answer, toolUseID, strip) {
     },
   };
 }
-//@ chunk-0h4e7gnq.js:27885-28075 placement
+//@ chunk-frs14hy1.js:32360-32550 placement
 /**
  * 记录警告：晚到的允许回答从未被使用，其 updatedPermissions 均未应用。
  */
@@ -81,7 +81,7 @@ function warnLateAllowNeverServed(toolUseID, updatedPermissions) {
       },
     );
 }
-//@ chunk-0h4e7gnq.js:28075-29062 placement
+//@ chunk-frs14hy1.js:32550-33588 placement
 function boundLateAnswerInput(
   permissionUpdates,
   { updatedInput, updatedPermissions },
@@ -132,8 +132,9 @@ function boundLateAnswerInput(
       {
         vetoed: () => false,
         strip: (rule) => strip(rule, tool, effectiveInput, toolPermissionContext),
-        toolName: getToolNameForPermissionCheck_3(tool),
+        toolName: getToolNameForPermissionCheck_5(tool),
         input: originalInput,
+        suggested: (input) => tool.suggestedAllowRule?.(input, "late") === true,
         setContext,
       },
     );

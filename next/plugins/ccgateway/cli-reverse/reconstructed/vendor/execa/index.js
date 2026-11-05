@@ -1,13 +1,13 @@
 /**
  * execa/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: execa@8.0.1
- * pieces: chunk-m4p5zn6n.js (8)
+ * pieces: chunk-t889g22j.js (8)
  * attribution: placement 2, esm-layout 1, esm-fingerprint 4, affinity 1
  */
-import { default as Mr } from "process";
+import { default as Fo } from "process";
 import path from "path";
-import { Buffer as jo } from "buffer";
+import { Buffer as Go } from "buffer";
 import child_process from "child_process";
 import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_cross_spawn } from "../cross-spawn/index.js";
@@ -23,12 +23,12 @@ import { getSpawnedResult, handleInput, makeAllStream, handleInputSync } from ".
 import { addPipeMethods } from "./lib/pipe.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-m4p5zn6n.js:7096-7115 placement
+//@ chunk-t889g22j.js:7095-7114 placement
 var import_cross_spawn; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-m4p5zn6n.js:7096", () => {
+deferInit("chunk-t889g22j.js:7095", () => {
   import_cross_spawn = __toESM(require_cross_spawn(), 1);
 });
-//@ chunk-m4p5zn6n.js:7223-7413 placement
+//@ chunk-t889g22j.js:7222-7412 placement
 function stripFinalNewline(text) {
   let lastChar =
     typeof text === "string"
@@ -41,12 +41,12 @@ function stripFinalNewline(text) {
   if (text[text.length - 1] === cr) text = text.slice(0, -1);
   return text;
 }
-//@ chunk-m4p5zn6n.js:27831-28526 esm-layout
+//@ chunk-t889g22j.js:27830-28525 esm-layout
 var DEFAULT_MAX_BUFFER = 1e8;
 var getEnv = ({ env: envOption, extendEnv, preferLocal, localDir, execPath }) => {
   let env = extendEnv
     ? {
-        ...Mr.env,
+        ...Fo.env,
         ...envOption,
       }
     : envOption;
@@ -69,8 +69,8 @@ var handleArguments = (file, args, options = {}) => {
     stripFinalNewline: true,
     extendEnv: true,
     preferLocal: false,
-    localDir: options.cwd || Mr.cwd(),
-    execPath: Mr.execPath,
+    localDir: options.cwd || Fo.cwd(),
+    execPath: Fo.execPath,
     encoding: "utf8",
     reject: true,
     cleanup: true,
@@ -81,7 +81,7 @@ var handleArguments = (file, args, options = {}) => {
   };
   options.env = getEnv(options);
   options.stdio = normalizeStdio(options);
-  if (Mr.platform === "win32" && path.basename(file, ".exe") === "cmd") args.unshift("/q");
+  if (Fo.platform === "win32" && path.basename(file, ".exe") === "cmd") args.unshift("/q");
   return {
     file,
     args,
@@ -90,11 +90,11 @@ var handleArguments = (file, args, options = {}) => {
   };
 };
 var handleOutput = (options, value, error) => {
-  if (typeof value !== "string" && !jo.isBuffer(value)) return error === undefined ? undefined : "";
+  if (typeof value !== "string" && !Go.isBuffer(value)) return error === undefined ? undefined : "";
   if (options.stripFinalNewline) return stripFinalNewline(value);
   return value;
 };
-//@ chunk-m4p5zn6n.js:28526-29569 esm-fingerprint
+//@ chunk-t889g22j.js:28525-29568 esm-fingerprint
 function execa(file, args, options) {
   let parsed = handleArguments(file, args, options);
   let command = commandString(file, args);
@@ -174,7 +174,7 @@ function execa(file, args, options) {
   mergePromise(spawned, handlePromiseOnce);
   return spawned;
 }
-//@ chunk-m4p5zn6n.js:29569-30299 esm-fingerprint
+//@ chunk-t889g22j.js:29568-30298 esm-fingerprint
 function execaSync(file, args, options) {
   let parsed = handleArguments(file, args, options);
   let command = commandString(file, args);
@@ -232,7 +232,7 @@ function execaSync(file, args, options) {
     killed: false,
   };
 }
-//@ chunk-m4p5zn6n.js:30299-30439 esm-fingerprint
+//@ chunk-t889g22j.js:30298-30438 esm-fingerprint
 var normalizeScriptStdin = ({ input, inputFile, stdio }) =>
   input === undefined && inputFile === undefined && stdio === undefined
     ? {
@@ -244,7 +244,7 @@ var normalizeScriptOptions = (options = {}) => ({
   ...normalizeScriptStdin(options),
   ...options,
 });
-//@ chunk-m4p5zn6n.js:30439-30740 esm-fingerprint
+//@ chunk-t889g22j.js:30438-30739 esm-fingerprint
 function create$(options) {
   function $(templatesOrOptions, ...expressions) {
     if (!Array.isArray(templatesOrOptions))
@@ -263,9 +263,9 @@ function create$(options) {
   };
   return $;
 }
-//@ chunk-m4p5zn6n.js:30740-30752 affinity
+//@ chunk-t889g22j.js:30739-30751 affinity
 var execaSyncImpl; // deferred: uses create$ of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-m4p5zn6n.js:30740", () => {
+deferInit("chunk-t889g22j.js:30739", () => {
   execaSyncImpl = create$();
 });
 export { execa, execaSync };

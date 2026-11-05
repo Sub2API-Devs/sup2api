@@ -3,14 +3,14 @@
  *
  * 模型 id 与提供方开关（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jabbzrn8.js (21)
- * attribution: placement 21
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pp3ge1ns.js (21)
+ * attribution: placement 20, layout 1
  */
 import { BEDROCK_REGION_PREFIXES } from "./bedrock.js";
 
-//@ chunk-jabbzrn8.js:227-411 placement
+//@ chunk-pp3ge1ns.js:227-411 placement
 var PROVIDER_ENV_FLAGS = [
   "CLAUDE_CODE_USE_BEDROCK",
   "CLAUDE_CODE_USE_FOUNDRY",
@@ -19,7 +19,7 @@ var PROVIDER_ENV_FLAGS = [
   "CLAUDE_CODE_USE_MANTLE",
   "CLAUDE_CODE_USE_VERTEX",
 ];
-//@ chunk-jabbzrn8.js:411-960 placement
+//@ chunk-pp3ge1ns.js:411-960 placement
 /**
  * 已退役/旧版模型 id 列表。
  */
@@ -59,16 +59,16 @@ var LEGACY_MODEL_IDS = [
   "opusplan",
 ];
 var MODEL_KEY_NAMES = ["sonnet", "opus", "haiku", "fable"];
-//@ chunk-jabbzrn8.js:960-992 placement
+//@ chunk-pp3ge1ns.js:960-992 placement
 var CLAUDE_MYTHOS_PREVIEW = "claude-mythos-preview";
-//@ chunk-jabbzrn8.js:992-1029 placement
+//@ chunk-pp3ge1ns.js:992-1029 placement
 /**
  * 判断字符串是否为模型键别名（sonnet/opus/haiku/fable/best/opusplan 等）。
  */
 function isModelKeyAlias(model) {
   return LEGACY_MODEL_IDS.includes(model);
 }
-//@ chunk-jabbzrn8.js:1029-1106 placement
+//@ chunk-pp3ge1ns.js:1029-1106 placement
 /**
  * 去掉 [1m] 后再判断是否为模型键别名。
  */
@@ -77,35 +77,32 @@ function isModelKeyAliasOrResolved(model) {
   let stripped = strip1mSuffix(model);
   return stripped !== model && strip1mSuffix(stripped) === stripped && isModelKeyAlias(stripped);
 }
-//@ chunk-jabbzrn8.js:1106-1153 placement
-/**
- * 去掉末尾的 [1m] 后缀。
- */
-function strip1mSuffix(model) {
-  return model.replace(/\[1m\]$/i, "");
+//@ chunk-pp3ge1ns.js:1106-1153 layout
+function strip1mSuffix(modelId) {
+  return modelId.replace(/\[1m\]$/i, "");
 }
-//@ chunk-jabbzrn8.js:1153-1219 placement
+//@ chunk-pp3ge1ns.js:1153-1219 placement
 /**
  * 忽略大小写与 [1m] 比较两个模型拼写是否相同。
  */
 function sameModelSpelling(modelA, modelB) {
   return strip1mSuffix(modelA).toLowerCase() === strip1mSuffix(modelB).toLowerCase();
 }
-//@ chunk-jabbzrn8.js:1219-1270 placement
+//@ chunk-pp3ge1ns.js:1219-1270 placement
 /**
  * 去掉 [1m]/[2m] 后缀。
  */
 function stripAnyVersatileSuffix(model) {
   return model.replace(/\[(1|2)m\]/gi, "");
 }
-//@ chunk-jabbzrn8.js:1270-1307 placement
+//@ chunk-pp3ge1ns.js:1270-1307 placement
 /**
  * 判断是否为基本模型键（不含 [1m]/opusplan）。
  */
 function isBaseModelKey(key) {
   return MODEL_KEY_NAMES.includes(key);
 }
-//@ chunk-jabbzrn8.js:1307-1919 placement
+//@ chunk-pp3ge1ns.js:1307-1919 placement
 /**
  * 解析 Claude 模型 id（去掉 [1m]、路径前缀与 Bedrock 区域.anthropic. 前缀）为 {family, major, minor, legacyVersionFirst, base, date/trailer}；不合法返回 null。
  */
@@ -139,25 +136,25 @@ function parseModelId(raw) {
   }
   return parsed;
 }
-//@ chunk-jabbzrn8.js:1919-1999 placement
+//@ chunk-pp3ge1ns.js:1919-1999 placement
 /**
  * 把 "claude-opus-4.5" 形式的点号版本归一为连字符。
  */
 function normalizeDottedVersion(lowerCase) {
   return lowerCase.replace(/(claude-(?:[a-z]+-)?\d{1,2})\.(?=\d)/g, "$1-");
 }
-//@ chunk-jabbzrn8.js:1999-2109 placement
+//@ chunk-pp3ge1ns.js:1999-2109 placement
 /**
  * 判断模型 id 后缀是否为标准形式（fast/latest、日期、版本）。
  */
 function isStandardTrailer(trailer) {
   return /^(?:-fast|-latest)?(?:-v\d{1,3}@\d{8}|[-@]\d{8})?(?:-v\d{1,3}(?::\d{1,3})?)?$/.test(trailer);
 }
-//@ chunk-jabbzrn8.js:2109-2217 placement
+//@ chunk-pp3ge1ns.js:2109-2217 placement
 function isReservedTag(tag) {
   return ["experimental", "internal", "prefixlock", "preview", "prod", "snapshot", "test"].includes(tag);
 }
-//@ chunk-jabbzrn8.js:2217-2333 placement
+//@ chunk-pp3ge1ns.js:2217-2333 placement
 /**
  * 判断模型 id 是否含保留标签（experimental、internal、preview 等）。
  */
@@ -169,35 +166,35 @@ function hasReservedTag(model) {
       .some(isReservedTag) === true
   );
 }
-//@ chunk-jabbzrn8.js:2333-2381 placement
+//@ chunk-pp3ge1ns.js:2333-2381 placement
 /**
  * 判断模型 id 是否带 -vN 版本后缀。
  */
 function hasVersionTrailer(trailer) {
   return /-v\d+(?::\d+)?$/.test(trailer);
 }
-//@ chunk-jabbzrn8.js:2381-2432 placement
+//@ chunk-pp3ge1ns.js:2381-2432 placement
 /**
  * 判断解析结果是否为标准版本（无额外后缀）。
  */
 function isStandardVersion(modelId) {
   return modelId !== null && modelId.trailer === undefined;
 }
-//@ chunk-jabbzrn8.js:2432-2500 placement
+//@ chunk-pp3ge1ns.js:2432-2500 placement
 /**
  * 比较两个模型版本（主版本与次版本）。
  */
 function compareVersion(modelId, modelId_2) {
   return modelId.major - modelId_2.major || (modelId.minor ?? 0) - (modelId_2.minor ?? 0);
 }
-//@ chunk-jabbzrn8.js:2500-2604 placement
+//@ chunk-pp3ge1ns.js:2500-2604 placement
 /**
  * 判断两个解析后的模型是否同族同版本。
  */
 function isSameModelVersion(a, b) {
   return a.family === b.family && a.legacyVersionFirst === b.legacyVersionFirst && compareVersion(a, b) === 0;
 }
-//@ chunk-jabbzrn8.js:2604-2743 placement
+//@ chunk-pp3ge1ns.js:2604-2743 placement
 function modelFamilyOf(family) {
   switch (family) {
     case "haiku":
@@ -213,7 +210,7 @@ function modelFamilyOf(family) {
       return;
   }
 }
-//@ chunk-jabbzrn8.js:2743-2936 placement
+//@ chunk-pp3ge1ns.js:2743-2936 placement
 /**
  * 判断第二个模型是否与第一个同代或更新（族排序与版本比较）。
  */
@@ -227,7 +224,7 @@ function isNewerOrSameModel(model, otherModel) {
   if (familyA === undefined || familyB === undefined) return false;
   return familyB >= familyA && compareVersion(modelId_2, modelId) >= 0;
 }
-//@ chunk-jabbzrn8.js:2936-3348 placement
+//@ chunk-pp3ge1ns.js:2936-3348 placement
 /**
  * 匹配 claude-族-主[-次] 或旧式 claude-主[-次]-族 前缀，返回族名、主次版本、是否旧式与匹配到的基础名。
  */
@@ -258,24 +255,24 @@ function parseModelBase(text) {
 }
 export {
   strip1mSuffix,
-  isNewerOrSameModel,
   stripAnyVersatileSuffix,
-  sameModelSpelling,
-  isModelKeyAlias,
-  isModelKeyAliasOrResolved,
-  parseModelId,
-  MODEL_KEY_NAMES,
-  LEGACY_MODEL_IDS,
-  compareVersion,
-  isStandardVersion,
-  LEGACY_MODEL_IDS_2,
+  isNewerOrSameModel,
+  isStandardTrailer,
   isBaseModelKey,
+  parseModelId,
+  isModelKeyAlias,
+  normalizeDottedVersion,
+  isStandardVersion,
+  sameModelSpelling,
   hasVersionTrailer,
   PROVIDER_ENV_FLAGS,
+  MODEL_KEY_NAMES,
+  LEGACY_MODEL_IDS,
   modelFamilyOf,
+  isModelKeyAliasOrResolved,
+  LEGACY_MODEL_IDS_2,
   CLAUDE_MYTHOS_PREVIEW,
+  compareVersion,
   isSameModelVersion,
-  normalizeDottedVersion,
   hasReservedTag,
-  isStandardTrailer,
 };

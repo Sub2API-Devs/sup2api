@@ -1,11 +1,11 @@
 /**
  * entities/lib/esm/decode_codepoint.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: entities@4.5.0
- * pieces: chunk-6ja29j2n.js (2)
+ * pieces: chunk-p9ac6cnb.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
-//@ chunk-6ja29j2n.js:57157-57661 esm-layout
+//@ chunk-p9ac6cnb.js:57157-57661 esm-layout
 var _a_2;
 var decodeMap = new Map([
   [0, 65533],
@@ -50,7 +50,7 @@ var fromCodePoint =
         output += String.fromCharCode(codePoint);
         return output;
       };
-//@ chunk-6ja29j2n.js:57661-57771 esm-fingerprint
+//@ chunk-p9ac6cnb.js:57661-57771 esm-fingerprint
 function decodeCodePoint(codePoint) {
   var _a;
   if ((codePoint >= 55296 && codePoint <= 57343) || codePoint > 1114111) return 65533;

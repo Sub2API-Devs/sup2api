@@ -1,8 +1,8 @@
 /**
  * vscode-jsonrpc/lib/common/api.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: vscode-jsonrpc@8.2.0..8.2.1
- * pieces: chunk-t4ksmxzx.js (1)
+ * pieces: chunk-mvgr3jmb.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -18,7 +18,7 @@ import { require_messageBuffer } from "./messageBuffer.js";
 import { require_connection } from "./connection.js";
 import { require_ral } from "./ral.js";
 
-//@ chunk-t4ksmxzx.js:44519-51933 cjs-fingerprint
+//@ chunk-mvgr3jmb.js:44883-52297 cjs-fingerprint
 var require_api = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

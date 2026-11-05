@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：/model 与 /fast 切换结果的提示文案（含云会话切换失败）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: placement 3
  */
 
-//@ chunk-e6aww6q8.js:4861199-4861423 placement
+//@ chunk-5xgkngpb.js:5002063-5002287 placement
 /**
  * 把文本包成 Markdown 行内代码：换行换成空格，反引号围栏比内容里最长的反引号串多一个，首尾是反引号时补空格。
  */
@@ -21,7 +21,7 @@ function toInlineCode(text) {
   let pad = replaced.startsWith("`") || replaced.endsWith("`") ? " " : "";
   return `${fence}${pad}${replaced}${pad}${fence}`;
 }
-//@ chunk-e6aww6q8.js:4861423-4861569 placement
+//@ chunk-5xgkngpb.js:5002287-5002433 placement
 /**
  * 把文本里的行内代码片段逐个交给回调替换（去掉围栏内两侧的单个空格）。
  */
@@ -31,7 +31,7 @@ function replaceInlineCode(text, replacer) {
     return replacer(hasPad ? code.slice(1, -1) : code);
   });
 }
-//@ chunk-e6aww6q8.js:4861569-4861936 placement
+//@ chunk-5xgkngpb.js:5002433-5002800 placement
 /**
  * /model、/fast 和沙箱切换结果消息的固定文案前缀（VAs 汇总，用于识别这类结果消息）。
  */

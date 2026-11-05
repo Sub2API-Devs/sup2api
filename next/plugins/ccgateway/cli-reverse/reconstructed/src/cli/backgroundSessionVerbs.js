@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：后台会话子命令（attach/logs/stop 等）动词表与识别
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-shkzs7rp.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nhaxap13.js (2)
  * attribution: placement 2
  */
 import { Help, Command } from "../../vendor/commander/esm.mjs";
 
-//@ chunk-shkzs7rp.js:21325-21566 placement
+//@ chunk-nhaxap13.js:22806-23047 placement
 function addBackgroundVerbsToHelp(program) {
   program.configureHelp({
     ...program.configureHelp(),
@@ -22,7 +22,7 @@ function addBackgroundVerbsToHelp(program) {
     },
   });
 }
-//@ chunk-shkzs7rp.js:21566-22472 placement
+//@ chunk-nhaxap13.js:23047-23953 placement
 /**
  * 后台会话动词（attach/logs/stop|kill/respawn/rm）的 commander 定义；只用于根帮助显示，真正执行在 cli.js 快速路径。
  */

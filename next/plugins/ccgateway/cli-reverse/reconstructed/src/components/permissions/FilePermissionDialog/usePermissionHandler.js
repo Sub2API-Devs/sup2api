@@ -3,14 +3,14 @@
  *
  * 文件权限选项的处理器表：accept-once / accept-session（加 session 规则）/ reject / block-outside-reads。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/FilePermissionDialog/usePermissionHandler.ts
- * pieces: chunk-18hwfzwa.js (2)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: callgraph-fingerprint 1, fingerprint 1
  */
 import {
   isInClaudeFolder,
-  isInGlobalClaudeFolder,
+  isInGlobalClaudeFolder_2,
   FILE_RULE_UPDATE_TYPES,
   FILE_FAMILY_TOOLTIP,
   buildReadRuleConsentLabel,
@@ -18,7 +18,7 @@ import {
 import {
   GLOBAL_CLAUDE_FOLDER_PERMISSION_PATTERN,
   CLAUDE_FOLDER_PERMISSION_PATTERN,
-  FILE_EDIT_TOOL_NAME,
+  EDIT,
 } from "../../../tools/FileEditTool/constants.js";
 import {
   parseConsentSuggestions,
@@ -30,10 +30,10 @@ import {
 } from "../consentRows.js";
 import { generateSuggestions } from "../../../utils/permissions/filesystem.js";
 
-//@ chunk-18hwfzwa.js:1367850-1369049 callgraph-fingerprint (2.1.88 match: handleAcceptSession, 0.255)
+//@ chunk-czq1j3j2.js:1390650-1391849 callgraph-fingerprint (2.1.88 match: handleAcceptSession, 0.254)
 function handleAcceptSession(filePath, operationType, toolPermissionContext) {
   let isProjectClaudeFolder = isInClaudeFolder(filePath);
-  let isGlobalClaudeFolder = isInGlobalClaudeFolder(filePath);
+  let isGlobalClaudeFolder = isInGlobalClaudeFolder_2(filePath);
   if ((isProjectClaudeFolder || isGlobalClaudeFolder) && operationType !== "read") {
     let rulePattern = isGlobalClaudeFolder
       ? GLOBAL_CLAUDE_FOLDER_PERMISSION_PATTERN
@@ -44,7 +44,7 @@ function handleAcceptSession(filePath, operationType, toolPermissionContext) {
           type: "addRules",
           rules: [
             {
-              toolName: FILE_EDIT_TOOL_NAME,
+              toolName: EDIT,
               ruleContent: rulePattern,
             },
           ],
@@ -60,7 +60,7 @@ function handleAcceptSession(filePath, operationType, toolPermissionContext) {
             update === undefined ||
             update.type !== "addRules" ||
             update.rules.length !== 1 ||
-            update.rules[0]?.toolName !== FILE_EDIT_TOOL_NAME ||
+            update.rules[0]?.toolName !== EDIT ||
             update.rules[0]?.ruleContent !== rulePattern
           )
             return null;
@@ -105,7 +105,7 @@ function handleAcceptSession(filePath, operationType, toolPermissionContext) {
     value: "yes-session",
   };
 }
-//@ chunk-18hwfzwa.js:1378346-1378871 fingerprint (2.1.88 match: PERMISSION_HANDLERS, 0.396)
+//@ chunk-czq1j3j2.js:1401148-1401673 fingerprint (2.1.88 match: PERMISSION_HANDLERS, 0.397)
 function PERMISSION_HANDLERS(option, payload, feedback) {
   switch (option.type) {
     case "accept-once":

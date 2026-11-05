@@ -3,17 +3,17 @@
  *
  * 2.1.316 新增：Artifact HTML 运行时代码块插入位置。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1c8ngz3c.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h1zz05d3.js (2)
  * attribution: placement 2
  */
 import { budgetedTokenizer } from "./htmlTokenizerBudget.js";
 import { RAWTEXT_MODES } from "../../../vendor/@mixmark-io/domino/lib/HTMLParser.js";
 
-//@ chunk-1c8ngz3c.js:260-299 placement
+//@ chunk-h1zz05d3.js:260-299 placement
 var HTML_CLOSE_TAG_RE = /<\/(?:body|html)[\t\n\f\r />]/i;
-//@ chunk-1c8ngz3c.js:299-802 placement
+//@ chunk-h1zz05d3.js:299-802 placement
 function runtimeBlockInsertionIndex(html) {
   if (!HTML_CLOSE_TAG_RE.test(html)) return html.length;
   let depth = -1;

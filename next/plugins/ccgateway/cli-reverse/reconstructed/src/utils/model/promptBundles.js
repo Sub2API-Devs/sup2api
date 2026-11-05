@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：模型提示词包选择。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p1bhnnws.js (53)
- * attribution: placement 53
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rxbqzcvt.js (53)
+ * attribution: placement 52, layout 1
  */
 import { modelSupportsCapability, parseModelCapabilitiesEnv } from "./modelCatalog.js";
 import { getCanonicalName, strippedCanonicalName, isRecognizedModel } from "./canonicalModelName.js";
@@ -41,9 +41,9 @@ import { memoizeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mer
 import { HostScoped } from "../hostScoped.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-p1bhnnws.js:2662-2690 placement
+//@ chunk-rxbqzcvt.js:828-856 placement
 var TENGU_FENNEL_GODWIT = "tengu_fennel_godwit";
-//@ chunk-p1bhnnws.js:2690-2796 placement
+//@ chunk-rxbqzcvt.js:856-962 placement
 /**
  * 判断模型是否使用 Opus 5 提示词包（能力声明且未被开关关闭）。
  */
@@ -52,11 +52,11 @@ function usesOpus5PromptBundle(model) {
   if (modelSupportsCapability(getCanonicalName(model), "opus_5_prompt_bundle", model) !== true) return false;
   return !getFeatureValue_CACHED_MAY_BE_STALE(TENGU_FENNEL_GODWIT, false);
 }
-//@ chunk-p1bhnnws.js:2796-2860 placement
+//@ chunk-rxbqzcvt.js:962-1026 placement
 function supportsOpus55PromptBundle(canonicalName) {
   return !isLocalAgentOrCowork() && modelSupportsCapability(canonicalName, "opus_5_5_prompt_bundle") === true;
 }
-//@ chunk-p1bhnnws.js:2860-3190 placement
+//@ chunk-rxbqzcvt.js:1026-1356 placement
 /**
  * 模型能力开关集合：对最新模型默认开启的能力、随 Opus 5 提示词包开启的能力、对另一组模型开启的能力，以及遥测去重上限与事件名。
  */
@@ -66,7 +66,7 @@ var LATEST_MODEL_CAPABILITIES;
 var MAX_LOGGED_SESSIONS;
 var TENGU_MODEL_CAPABILITY_FROM_CLIENT_DATA;
 var TENGU_MODEL_CAPABILITY_OFF_FROM_CLIENT_DATA;
-deferInit("chunk-p1bhnnws.js:2860", () => {
+deferInit("chunk-rxbqzcvt.js:1026", () => {
   DEFAULT_ON_CAPABILITIES = new Set([
     "turn_updates",
     "bash_output_audience_note",
@@ -79,7 +79,7 @@ deferInit("chunk-p1bhnnws.js:2860", () => {
   TENGU_MODEL_CAPABILITY_FROM_CLIENT_DATA = "tengu_model_capability_from_client_data";
   TENGU_MODEL_CAPABILITY_OFF_FROM_CLIENT_DATA = "tengu_model_capability_off_from_client_data";
 });
-//@ chunk-p1bhnnws.js:3190-3443 placement
+//@ chunk-rxbqzcvt.js:1356-1609 placement
 /**
  * 判断模型能力是否开启：显式覆盖 > 能力声明 > 默认开启集合（可被客户端数据关闭）> 客户端数据开启。
  */
@@ -101,7 +101,7 @@ function isModelCapabilityEnabled(capability, canonicalName, model, explicit) {
   logClientDataCapability(TENGU_MODEL_CAPABILITY_FROM_CLIENT_DATA, capability, cachedClientDataSlot);
   return true;
 }
-//@ chunk-p1bhnnws.js:3443-3575 placement
+//@ chunk-rxbqzcvt.js:1609-1741 placement
 /**
  * 在能力列表中查找某前缀的最后一个启用值，返回前缀后的部分。
  */
@@ -111,7 +111,7 @@ function findCapabilityValue(prefix, model, model_2) {
     .findLast((name) => name.startsWith(prefix) && modelCapabilitiesEnv.get(name) !== false)
     ?.slice(prefix.length);
 }
-//@ chunk-p1bhnnws.js:3575-3872 placement
+//@ chunk-rxbqzcvt.js:1741-2038 placement
 function logClientDataCapability(eventName, capability, cachedClientDataSlot) {
   let model = cachedClientDataSlot.model ?? stripAnyVersatileSuffix(getMainLoopModel());
   let loggedBySession = (getSessionFeatureValues().clientDataCapabilityLogged ??= new Map());
@@ -134,12 +134,12 @@ function logClientDataCapability(eventName, capability, cachedClientDataSlot) {
     });
   }
 }
-//@ chunk-p1bhnnws.js:3872-3941 placement
+//@ chunk-rxbqzcvt.js:2038-2107 placement
 function usesPerTurnEffort(canonical, model) {
   if (mainLoopCanonicalName() !== canonical) return false;
   return isModelCapabilityEnabled("per_turn_effort", canonical, model);
 }
-//@ chunk-p1bhnnws.js:3941-3993 placement
+//@ chunk-rxbqzcvt.js:2107-2159 placement
 function mainLoopCanonicalName() {
   try {
     return getCanonicalName(getMainLoopModel());
@@ -147,35 +147,35 @@ function mainLoopCanonicalName() {
     return null;
   }
 }
-//@ chunk-p1bhnnws.js:3993-4000 placement
+//@ chunk-rxbqzcvt.js:2159-2166 placement
 // deferred: uses setCachedGateValue (../../services/analytics/growthbookGates.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-p1bhnnws.js:3993", () => {
+deferInit("chunk-rxbqzcvt.js:2159", () => {
   setCachedGateValue(usesPerTurnEffort);
 });
-//@ chunk-p1bhnnws.js:4000-4025 placement
+//@ chunk-rxbqzcvt.js:2166-2191 placement
 /**
  * 恒返回 false（无该档位能力）。
  */
 function neverTierCapability(capability) {
   return false;
 }
-//@ chunk-p1bhnnws.js:4025-4074 placement
+//@ chunk-rxbqzcvt.js:2191-2240 placement
 /**
  * 判断是否 Opus 4.8 模型。
  */
 function isOpus48Model(modelName) {
   return strip1mSuffix(modelName) === "claude-opus-4-8";
 }
-//@ chunk-p1bhnnws.js:4074-4099 placement
+//@ chunk-rxbqzcvt.js:2240-2265 placement
 /**
  * 恒返回 false（无该档位能力，占位）。
  */
 function neverTierCapabilityB(capability) {
   return false;
 }
-//@ chunk-p1bhnnws.js:4099-4306 placement
+//@ chunk-rxbqzcvt.js:2265-2472 placement
 var LEGACY_PROMPT_MODELS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-p1bhnnws.js:4099", () => {
+deferInit("chunk-rxbqzcvt.js:2265", () => {
   LEGACY_PROMPT_MODELS = new Set([
     "claude-opus-4-6",
     "claude-haiku-4-5",
@@ -189,11 +189,11 @@ deferInit("chunk-p1bhnnws.js:4099", () => {
     "claude-3-5-haiku",
   ]);
 });
-//@ chunk-p1bhnnws.js:4306-4340 placement
+//@ chunk-rxbqzcvt.js:2472-2506 placement
 function isLegacyPromptModel(model) {
   return LEGACY_PROMPT_MODELS.has(strip1mSuffix(model));
 }
-//@ chunk-p1bhnnws.js:4340-4420 placement
+//@ chunk-rxbqzcvt.js:2506-2586 placement
 /**
  * 判断模型（或覆盖模型）是否属于旧版提示词模型。
  */
@@ -201,17 +201,17 @@ function isLegacyPromptModelOrOverride(model, remoteCall) {
   if (remoteCall === undefined) return isLegacyPromptModel(model);
   return remoteCall.model !== undefined && isLegacyPromptModel(remoteCall.model);
 }
-//@ chunk-p1bhnnws.js:4420-4478 placement
+//@ chunk-rxbqzcvt.js:2586-2644 placement
 var TENGU_LOGGIA_ROSTER; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var loggiaRosterState;
 var loggiaRosterSchema;
 var loggiaRosterMemo;
-deferInit("chunk-p1bhnnws.js:4420", () => {
+deferInit("chunk-rxbqzcvt.js:2586", () => {
   TENGU_LOGGIA_ROSTER = "tengu_loggia_roster";
   loggiaRosterState = [];
   loggiaRosterSchema = DoctorLazy(() => array(stringSchema().trim()));
 });
-//@ chunk-p1bhnnws.js:4478-4725 placement
+//@ chunk-rxbqzcvt.js:2644-2891 placement
 function getLoggiaRoster() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     TENGU_LOGGIA_ROSTER,
@@ -234,14 +234,14 @@ function getLoggiaRoster() {
   };
   return ids;
 }
-//@ chunk-p1bhnnws.js:4725-4771 placement
+//@ chunk-rxbqzcvt.js:2891-2937 placement
 /**
  * 判断模型是否在 loggia 名单中。
  */
 function isInLoggiaRoster(model) {
   return getLoggiaRoster().some((id) => sameModelSpelling(model, id));
 }
-//@ chunk-p1bhnnws.js:4771-4855 placement
+//@ chunk-rxbqzcvt.js:2937-3021 placement
 /**
  * 取该模型应使用的"精简改写"提示词包。
  */
@@ -249,14 +249,14 @@ function leanRewriteFor(model) {
   let state = currentPromptBundleState();
   return isCatalogSuppressed() ? state.leanRewriteCompiledOnly(model) : state.leanRewrite(model);
 }
-//@ chunk-p1bhnnws.js:4855-4905 placement
+//@ chunk-rxbqzcvt.js:3021-3071 placement
 /**
  * 优先用显式 leanRewrite，否则按模型取。
  */
 function leanRewriteOf(bundle) {
   return bundle.leanRewrite ?? leanRewriteFor(bundle.model);
 }
-//@ chunk-p1bhnnws.js:4905-5181 placement
+//@ chunk-rxbqzcvt.js:3071-3347 placement
 function isLeanRewriteEnabled(model) {
   if (model === undefined) return false;
   let canonicalName = getCanonicalName(model);
@@ -272,7 +272,7 @@ function isLeanRewriteEnabled(model) {
   if (!leanPromptFor(model)) return false;
   return isModelCapabilityEnabled("temporal_hare", canonicalName, model);
 }
-//@ chunk-p1bhnnws.js:5181-5306 placement
+//@ chunk-rxbqzcvt.js:3347-3472 placement
 function clientDataFlagIncludes(flagName, keys) {
   let flag = getCachedClientData()?.[flagName];
   return (
@@ -281,23 +281,23 @@ function clientDataFlagIncludes(flagName, keys) {
     Object.entries(flag).some(([key, value]) => value === true && keys.includes(key))
   );
 }
-//@ chunk-p1bhnnws.js:5306-5375 placement
+//@ chunk-rxbqzcvt.js:3472-3541 placement
 /**
  * 判断 basalt_cove 能力是否开启（环境变量或客户端数据）。
  */
 function isBasaltCoveOn(keys) {
   return env.CLAUDE_CODE_BASALT_COVE || clientDataFlagIncludes("basalt_cove", keys);
 }
-//@ chunk-p1bhnnws.js:5375-5403 placement
+//@ chunk-rxbqzcvt.js:3541-3569 placement
 var TENGU_THRIFTY_SONIC = "tengu_thrifty_sonic";
-//@ chunk-p1bhnnws.js:5403-5512 placement
+//@ chunk-rxbqzcvt.js:3569-3678 placement
 function getBashFirstAssignment() {
   let state = currentPromptBundleState();
   return isCatalogSuppressed()
     ? state.bashFirstSessionAssignmentCompiledOnly()
     : state.bashFirstSessionAssignment();
 }
-//@ chunk-p1bhnnws.js:5512-5678 placement
+//@ chunk-rxbqzcvt.js:3678-3844 placement
 function computeBashFirstAssignment() {
   let model = getPromptModel(getMainLoopModel());
   let canonicalName = getCanonicalName(model);
@@ -312,7 +312,7 @@ function computeBashFirstAssignment() {
     return "forced";
   return isOpus5FamilyModel(model) ? "cohort" : "none";
 }
-//@ chunk-p1bhnnws.js:5678-5851 placement
+//@ chunk-rxbqzcvt.js:3844-4017 placement
 /**
  * 判断 thrifty_sonic 是否开启：环境变量、强制、关闭或按开关分组。
  */
@@ -327,22 +327,22 @@ function isThriftySonicEnabled() {
       return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_THRIFTY_SONIC, false);
   }
 }
-//@ chunk-p1bhnnws.js:5851-5877 placement
+//@ chunk-rxbqzcvt.js:4017-4043 placement
 var TENGU_COZY_TEAPOT = "tengu_cozy_teapot";
-//@ chunk-p1bhnnws.js:5877-5935 placement
+//@ chunk-rxbqzcvt.js:4043-4101 placement
 function normalizeSteerVariant(featureValue_SESSION_PINNED) {
   return featureValue_SESSION_PINNED === "strict" || featureValue_SESSION_PINNED === "relaxed"
     ? featureValue_SESSION_PINNED
     : undefined;
 }
-//@ chunk-p1bhnnws.js:5935-6012 placement
+//@ chunk-rxbqzcvt.js:4101-4178 placement
 /**
  * 取 bash 优先的引导变体（环境变量优先）。
  */
 function bashFirstSteerVariant() {
   return env.CLAUDE_CODE_COZY_TEAPOT ?? currentPromptBundleState().bashFirstSteerVariant();
 }
-//@ chunk-p1bhnnws.js:6012-6108 placement
+//@ chunk-rxbqzcvt.js:4178-4273 placement
 function resolveBashFirstSteerVariant() {
   return (
     normalizeSteerVariant(getCachedClientData()?.[TENGU_COZY_TEAPOT]) ??
@@ -353,17 +353,14 @@ function resolveBashFirstSteerVariant() {
     "strict"
   );
 }
-//@ chunk-p1bhnnws.js:6108-6158 placement
+//@ chunk-rxbqzcvt.js:4273-4322 placement
 var TENGU_GORSE_PLOVER = "tengu_gorse_plover";
 var TENGU_WILLOW_TERN = "tengu_willow_tern";
-//@ chunk-p1bhnnws.js:6158-6209 placement
+//@ chunk-rxbqzcvt.js:4322-4373 placement
 function isClientFlagOrFeatureOn(flagOn, name) {
   return flagOn || getCachedClientData()?.[name] === true || getFeatureValue_CACHED_MAY_BE_STALE(name, false);
 }
-//@ chunk-p1bhnnws.js:6209-6322 placement
-/**
- * 判断 Bash act-first 是否开启（环境变量或开关，按会话缓存）。
- */
+//@ chunk-rxbqzcvt.js:4373-4485 layout
 function isBashActFirstEnabled() {
   let sessionFeatureValues = getSessionFeatureValues();
   sessionFeatureValues.bashActFirstEnabled ??= isClientFlagOrFeatureOn(
@@ -372,7 +369,7 @@ function isBashActFirstEnabled() {
   );
   return sessionFeatureValues.bashActFirstEnabled;
 }
-//@ chunk-p1bhnnws.js:6322-6413 placement
+//@ chunk-rxbqzcvt.js:4485-4576 placement
 /**
  * 判断 amber_astrolabe 能力是否开启。
  */
@@ -384,7 +381,7 @@ function isAmberAstrolabeEnabled(model) {
     env.CLAUDE_CODE_AMBER_ASTROLABE || undefined,
   );
 }
-//@ chunk-p1bhnnws.js:6413-6488 placement
+//@ chunk-rxbqzcvt.js:4576-4651 placement
 /**
  * 判断 bison_cairn 能力是否开启。
  */
@@ -396,7 +393,7 @@ function isBisonCairnEnabled(modelName) {
     env.CLAUDE_CODE_BISON_CAIRN,
   );
 }
-//@ chunk-p1bhnnws.js:6488-6575 placement
+//@ chunk-rxbqzcvt.js:4651-4738 placement
 /**
  * 判断 larch_cistern 能力是否开启。
  */
@@ -408,7 +405,7 @@ function isLarchCisternEnabled(modelName) {
     env.CLAUDE_CODE_LARCH_CISTERN || undefined,
   );
 }
-//@ chunk-p1bhnnws.js:6575-6819 placement
+//@ chunk-rxbqzcvt.js:4738-4982 placement
 /**
  * 读取客户端数据中的 willow_tern 布尔覆盖（非布尔值只提示一次）。
  */
@@ -426,7 +423,7 @@ function getWillowTernOverride() {
   }
   return;
 }
-//@ chunk-p1bhnnws.js:6819-7025 placement
+//@ chunk-rxbqzcvt.js:4982-5188 placement
 /**
  * 判断 willow_tern 写作指引是否开启：环境变量、客户端数据、最新模型或 Opus 5 提示词包加开关。
  */
@@ -440,14 +437,14 @@ function isWillowTernEnabled(model) {
   if (modelSupportsCapability(canonicalName, "opus_5_prompt_bundle", model) !== true) return false;
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_WILLOW_TERN, false);
 }
-//@ chunk-p1bhnnws.js:7025-7068 placement
+//@ chunk-rxbqzcvt.js:5188-5231 placement
 /**
  * 取 CLAUDE_CODE_SIMPLE 环境变量。
  */
 function simpleModeEnv() {
   return env.CLAUDE_CODE_SIMPLE;
 }
-//@ chunk-p1bhnnws.js:7068-7350 placement
+//@ chunk-rxbqzcvt.js:5231-5513 placement
 function isLegacyPromptModel_2(model) {
   let canonicalName = getCanonicalName(model, {
     deterministic: true,
@@ -465,7 +462,7 @@ function isLegacyPromptModel_2(model) {
     canonicalName === "claude-opus-4-7"
   );
 }
-//@ chunk-p1bhnnws.js:7350-7431 placement
+//@ chunk-rxbqzcvt.js:5513-5594 placement
 /**
  * 取该模型应使用的精简提示词包。
  */
@@ -473,14 +470,14 @@ function leanPromptFor(model) {
   let state = currentPromptBundleState();
   return isCatalogSuppressed() ? state.leanPromptCompiledOnly(model) : state.leanPrompt(model);
 }
-//@ chunk-p1bhnnws.js:7431-7479 placement
+//@ chunk-rxbqzcvt.js:5594-5642 placement
 /**
  * 优先用显式 leanPrompt，否则按模型取。
  */
 function leanPromptOf(bundle) {
   return bundle.leanPrompt ?? leanPromptFor(bundle.model);
 }
-//@ chunk-p1bhnnws.js:7479-7706 placement
+//@ chunk-rxbqzcvt.js:5642-5869 placement
 function shouldUseLeanPrompt(model) {
   if (!model) return false;
   if (isEnvTruthy(env.CLAUDE_CODE_SIMPLE_SYSTEM_PROMPT)) return true;
@@ -489,9 +486,9 @@ function shouldUseLeanPrompt(model) {
   if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_velvet_tide", false)) return true;
   return clientDataFlagIncludes("simple_system_prompt", getCanonicalName(model));
 }
-//@ chunk-p1bhnnws.js:7706-7730 placement
+//@ chunk-rxbqzcvt.js:5869-5893 placement
 var BREEZY_HORIZON = "breezy_horizon";
-//@ chunk-p1bhnnws.js:7730-7841 placement
+//@ chunk-rxbqzcvt.js:5893-6004 placement
 /**
  * 返回用于选择提示词的模型（可能被替换）。
  */
@@ -500,7 +497,7 @@ function getPromptModel(model) {
   let state = currentPromptBundleState();
   return isCatalogSuppressed() ? state.modelForPromptCompiledOnly(model) : state.modelForPrompt(model);
 }
-//@ chunk-p1bhnnws.js:7841-7916 placement
+//@ chunk-rxbqzcvt.js:6004-6079 placement
 /**
  * 若该模型在提示词模型替换缓存中，返回替换后的模型。
  */
@@ -508,7 +505,7 @@ function promptModelOverride(model) {
   let modelForPrompt = currentPromptBundleState().modelForPrompt;
   return modelForPrompt.cache.has(model) ? modelForPrompt(model) : undefined;
 }
-//@ chunk-p1bhnnws.js:7916-8551 placement
+//@ chunk-rxbqzcvt.js:6079-6714 placement
 /**
  * 按 CLAUDE_CODE_BREEZY_HORIZON 或客户端数据中的映射，把用于选择提示词的模型替换为另一个模型（校验是模型 id、不是自身），首次替换上报 tengu_breezy_horizon。
  */
@@ -555,11 +552,11 @@ function resolvePromptModelSwap(model) {
   }
   return override;
 }
-//@ chunk-p1bhnnws.js:8551-8591 placement
+//@ chunk-rxbqzcvt.js:6714-6754 placement
 function isUsablePromptModelOverride(override) {
   return isRecognizedModel(override) || isStandardVersion(parseModelId(override));
 }
-//@ chunk-p1bhnnws.js:8591-8916 placement
+//@ chunk-rxbqzcvt.js:6754-7078 placement
 /**
  * 按会话缓存的提示词包判定：bash 优先分组、精简提示词、提示词模型替换、精简改写（各有仅编译期目录的版本），以及已记录的替换与警告状态。
  */
@@ -576,12 +573,12 @@ class PromptBundleState {
   promptModelSwapsLogged = new Set();
   unusableWritingOverrideTold = false;
 }
-//@ chunk-p1bhnnws.js:8916-8940 placement
+//@ chunk-rxbqzcvt.js:7078-7102 placement
 var promptBundleStateRegistry; // deferred: uses PromptBundleState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-p1bhnnws.js:8916", () => {
+deferInit("chunk-rxbqzcvt.js:7078", () => {
   promptBundleStateRegistry = new HostScoped(() => new PromptBundleState());
 });
-//@ chunk-p1bhnnws.js:8940-8976 placement
+//@ chunk-rxbqzcvt.js:7102-7138 placement
 function currentPromptBundleState() {
   return promptBundleStateRegistry.of(getRootSession().host);
 }
@@ -602,12 +599,12 @@ export {
   isBisonCairnEnabled,
   isLarchCisternEnabled,
   leanPromptOf,
-  leanRewriteOf,
-  promptModelOverride,
   isThriftySonicEnabled,
   bashFirstSteerVariant,
+  leanRewriteOf,
   isLegacyPromptModelOrOverride,
   isBashActFirstEnabled,
+  promptModelOverride,
   findCapabilityValue,
   isInLoggiaRoster,
 };

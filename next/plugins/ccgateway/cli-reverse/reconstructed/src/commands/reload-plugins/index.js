@@ -3,12 +3,12 @@
  *
  * /reload-plugins 命令对象（[--force]）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/reload-plugins/index.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:2030075-2030344 fingerprint (2.1.88 match: reloadPlugins, 0.611)
+//@ chunk-5xgkngpb.js:2085892-2086161 fingerprint (2.1.88 match: reloadPlugins, 0.611)
 /**
  * /reload-plugins 命令对象（local）；描述：Activate pending plugin changes in the current session；实现 chunk-8vqp1nqq.js 的 qr。
  */
@@ -22,5 +22,5 @@ var reloadPluginsCommandDefinition = {
   thinClientDispatch: "control-request",
   load: () => import("./HEADLESS_MCP_PENDING_NOTE.lazy.js"),
 };
-var reloadPluginsCommand = reloadPluginsCommandDefinition;
-export { reloadPluginsCommand };
+var reloadPluginsCommandAlias = reloadPluginsCommandDefinition;
+export { reloadPluginsCommandAlias };

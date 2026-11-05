@@ -3,9 +3,9 @@
  *
  * Windows 支持：Git Bash 定位、SHELL 设置、Windows↔POSIX 路径转换、PATHEXT 可执行文件解析缓存
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/windowsPaths.ts
- * pieces: chunk-648vry02.js (3), chunk-e6aww6q8.js (1)
+ * pieces: chunk-3yhwrhy0.js (3), chunk-5xgkngpb.js (1)
  * attribution: fingerprint 3, layout 1
  */
 import * as pathWin32Module from "path/win32";
@@ -16,8 +16,9 @@ import { getFsImplementation } from "./fsOperations.js";
 import { env } from "./env.js";
 import { findExecutableWindows } from "./findExecutableWindows.js";
 import { APPLY_SECCOMP_FD } from "./sandbox/linuxSandboxExec.js";
+import { CWD_FD } from "./shell/bashProvider.js";
 
-//@ chunk-648vry02.js:1139-1300 fingerprint (2.1.88 match: setShellIfWindows, 0.74)
+//@ chunk-3yhwrhy0.js:1139-1300 fingerprint (2.1.88 match: setShellIfWindows, 0.74)
 /**
  * Windows 下把 SHELL 设为 Git Bash 路径。
  */
@@ -30,13 +31,13 @@ function setShellIfWindows() {
     } else logForDebugging("Git Bash not found; BashTool will be unavailable");
   }
 }
-//@ chunk-648vry02.js:1300-1392 layout
+//@ chunk-3yhwrhy0.js:1300-1392 layout
 function getGitBashPathCached() {
   let paths = shellPaths();
   if (paths.gitBashPath === undefined) paths.gitBashPath = findGitBashPath();
   return paths.gitBashPath;
 }
-//@ chunk-648vry02.js:1392-2015 fingerprint (2.1.88 match: findGitBashPath, 0.392)
+//@ chunk-3yhwrhy0.js:1392-2015 fingerprint (2.1.88 match: findGitBashPath, 0.392)
 /**
  * Windows 上定位 Git Bash（CLAUDE_CODE_GIT_BASH_PATH，否则由 git.exe 位置推导），Bash 工具依赖它。
  */
@@ -65,10 +66,11 @@ function findGitBashPath() {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:3096725-3096813 fingerprint (2.1.88 match: checkPathExists, 0.784)
-function checkPathExists(stdin, usePipeMode, outputMode, stdinFd) {
+//@ chunk-5xgkngpb.js:3183089-3183202 fingerprint (2.1.88 match: checkPathExists, 0.784)
+function checkPathExists(stdin, usePipeMode, outputMode, stdinFd, extraFd) {
   let stdioConfig = usePipeMode ? [stdin, "pipe", "pipe"] : [stdin, outputMode, outputMode];
   if (stdinFd !== undefined) stdioConfig[APPLY_SECCOMP_FD] = stdinFd;
+  if (extraFd !== undefined) stdioConfig[CWD_FD] = extraFd;
   return stdioConfig;
 }
-export { getGitBashPathCached, setShellIfWindows, checkPathExists };
+export { getGitBashPathCached, checkPathExists, setShellIfWindows };

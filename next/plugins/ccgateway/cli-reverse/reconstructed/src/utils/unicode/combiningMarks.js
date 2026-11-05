@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：组合字符码点列表。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jajafdnp.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xjkebkfe.js (1)
  * attribution: placement 1
  */
 
-//@ chunk-jajafdnp.js:191-1755 placement
+//@ chunk-xjkebkfe.js:191-1755 placement
 /**
  * 组合字符码点列表。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：prompt.submit 事件钩子与提交改写
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (20)
  * attribution: placement 20
  */
 import { randomUUID } from "crypto";
@@ -13,10 +13,10 @@ import { MANAGED } from "./classicHookBridge.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { onProcessRootHost, mainAgentId } from "../../bootstrap/state.js";
 import {
-  commandsDiscardedSignal,
-  commandsConsumedSignal,
+  commandsDiscarded,
+  commandsConsumed,
   getCommandQueue,
-  enqueueCommand,
+  enqueue,
 } from "../../utils/messageQueueManager.js";
 import { extractTextContent_2 } from "../../utils/messages.js";
 import { createStepRecorder } from "./dispatch/chain.js";
@@ -26,6 +26,7 @@ import { createValueSlot } from "../../utils/valueSlot.js";
 import {
   requireBoundSession,
   isSlashCommandText,
+  checkPromptSubmitArgs,
   submitHoldRefusal,
   MAX_SESSION_TEXT_CHARS,
   LATER,
@@ -36,12 +37,12 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:767357-767413 placement
+//@ chunk-5xgkngpb.js:778336-778392 placement
 /**
  * 钩子未放行提示
  */
 var PROMPT_NOT_PASSED = "a hook answered without passing the prompt on";
-//@ chunk-e6aww6q8.js:767413-767502 placement
+//@ chunk-5xgkngpb.js:778392-778481 placement
 /**
  * 保证有 drop
  */
@@ -53,12 +54,12 @@ function ensureDrop(answered, made) {
         drop: PROMPT_NOT_PASSED,
       });
 }
-//@ chunk-e6aww6q8.js:767502-767550 placement
+//@ chunk-5xgkngpb.js:778481-778529 placement
 /**
  * 批次中前一条失败
  */
 var BATCH_FAILED_DROP = "an earlier prompt in the batch failed";
-//@ chunk-e6aww6q8.js:767550-767606 placement
+//@ chunk-5xgkngpb.js:778529-778585 placement
 /**
  * 构造核心步骤
  */
@@ -68,7 +69,7 @@ var coreStep = (run) => ({
   budgetMs: 0,
   run,
 });
-//@ chunk-e6aww6q8.js:767606-767757 placement
+//@ chunk-5xgkngpb.js:778585-778736 placement
 var createManagedSubmitHandler = (runHooks, noteManagedText) => ({
   name: MANAGED,
   isManaged: true,
@@ -81,17 +82,17 @@ var createManagedSubmitHandler = (runHooks, noteManagedText) => ({
     return outcome.drop === undefined ? bottom(request) : outcome;
   },
 });
-//@ chunk-e6aww6q8.js:767757-767792 placement
+//@ chunk-5xgkngpb.js:778736-778771 placement
 /**
  * 提交监视状态
  */
 var submitWatchState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:767757", () => {
+deferInit("chunk-5xgkngpb.js:778736", () => {
   submitWatchState = new HostScoped(() => ({
     watching: false,
   }));
 });
-//@ chunk-e6aww6q8.js:767792-768237 placement
+//@ chunk-5xgkngpb.js:778771-779216 placement
 /**
  * 跟踪排队中的提示提交：被移出队列时以丢弃结算，以文本形式交给模型时以文本结算。
  */
@@ -113,12 +114,12 @@ function createSubmitWaiters() {
       let watchState = onProcessRootHost(submitWatchState);
       if (!watchState.watching) {
         watchState.watching = true;
-        commandsDiscardedSignal.subscribe((discarded) =>
+        commandsDiscarded.subscribe((discarded) =>
           settleEach(discarded, () => ({
             drop: "the prompt was removed from the queue before it ran",
           })),
         );
-        commandsConsumedSignal.subscribe((consumed) =>
+        commandsConsumed.subscribe((consumed) =>
           settleEach(consumed, (command) => {
             let value = command.value;
             return {
@@ -140,15 +141,15 @@ function createSubmitWaiters() {
     settleEach,
   };
 }
-//@ chunk-e6aww6q8.js:768237-768251 placement
+//@ chunk-5xgkngpb.js:779216-779230 placement
 /**
  * 提交等待者
  */
 var submitWaiters; // deferred: uses createSubmitWaiters of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:768237", () => {
+deferInit("chunk-5xgkngpb.js:779216", () => {
   submitWaiters = createSubmitWaiters();
 });
-//@ chunk-e6aww6q8.js:768251-768326 placement
+//@ chunk-5xgkngpb.js:779230-779305 placement
 /**
  * 释放时丢弃等待项
  */
@@ -159,7 +160,7 @@ var disposeDropsWaiting = (uuids) => ({
     }));
   },
 });
-//@ chunk-e6aww6q8.js:768326-768767 placement
+//@ chunk-5xgkngpb.js:779305-779746 placement
 /**
  * 为 prompt.submit 构造链两端：托管钩子处理器与核心处理器（运行 UserPromptSubmit 钩子并记录每步结果）。
  */
@@ -205,15 +206,15 @@ function createSubmitChainEnds(runHooks, perform = (request) => Promise.resolve(
     arrivedContext: () => arrivedContext,
   };
 }
-//@ chunk-e6aww6q8.js:768767-768795 placement
+//@ chunk-5xgkngpb.js:779746-779774 placement
 /**
  * prompt.submit 站点规则
  */
 var PROMPT_SUBMIT_RULES; // deferred: uses UI_ENV_SITE_RULES (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:768767", () => {
+deferInit("chunk-5xgkngpb.js:779746", () => {
   PROMPT_SUBMIT_RULES = UI_ENV_SITE_RULES["prompt.submit"];
 });
-//@ chunk-e6aww6q8.js:768795-768864 placement
+//@ chunk-5xgkngpb.js:779774-779843 placement
 /**
  * 等待提交结果
  */
@@ -224,25 +225,25 @@ var waitForSubmit = (uuid, origin) =>
       settle: resolve,
     });
   });
-//@ chunk-e6aww6q8.js:768864-768907 placement
+//@ chunk-5xgkngpb.js:779843-779886 placement
 /**
  * 取出等待者
  */
 var takeSubmitWaiter = (uuid) => (uuid === undefined ? undefined : submitWaiters.take(uuid));
-//@ chunk-e6aww6q8.js:768907-768952 placement
+//@ chunk-5xgkngpb.js:779886-779931 placement
 /**
  * 非 undefined 或 session.start
  */
 var isSubmittableEvent = (rootEvent) => rootEvent === undefined || rootEvent === "session.start";
-//@ chunk-e6aww6q8.js:768952-768987 placement
+//@ chunk-5xgkngpb.js:779931-779966 placement
 /**
  * 提交标记槽
  */
 var submitMarksSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:768952", () => {
+deferInit("chunk-5xgkngpb.js:779931", () => {
   submitMarksSlot = identity_2(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-e6aww6q8.js:768987-769042 placement
+//@ chunk-5xgkngpb.js:779966-780021 placement
 /**
  * 记录提交标记
  */
@@ -250,7 +251,7 @@ function markSubmit(uuid, rootEvent) {
   let marks = submitMarksSlot.get();
   if (marks && isSubmittableEvent(rootEvent)) marks.add(uuid);
 }
-//@ chunk-e6aww6q8.js:769042-769370 placement
+//@ chunk-5xgkngpb.js:780021-780349 placement
 /**
  * 提交标记集合：标记、查询，并按当前队列修剪。
  */
@@ -279,15 +280,15 @@ function createSubmitMarks() {
     },
   };
 }
-//@ chunk-e6aww6q8.js:769370-769403 placement
+//@ chunk-5xgkngpb.js:780349-780382 placement
 /**
  * 提交标记集合
  */
 var submitMarks; // deferred: uses createSubmitMarks of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:769370", () => {
+deferInit("chunk-5xgkngpb.js:780349", () => {
   submitMarks = identity_2(createSubmitMarks(), (marks) => marks.clear());
 });
-//@ chunk-e6aww6q8.js:769403-769489 placement
+//@ chunk-5xgkngpb.js:780382-780468 placement
 /**
  * 按回合修剪并标记
  */
@@ -297,7 +298,7 @@ function pruneAndMark(uuid, rootEvent, commandQueue) {
     submitMarks.mark(uuid);
   }
 }
-//@ chunk-e6aww6q8.js:769489-770392 placement
+//@ chunk-5xgkngpb.js:780468-781490 placement
 /**
  * 插件 $.prompt.submit：把一段文本作为用户提示提交给模型。
  */
@@ -321,16 +322,24 @@ function promptSubmitForPlugin(
     return Promise.reject(
       new HooksError(`${plugin}: $.prompt.submit takes text alone; attachments cannot be submitted`),
     );
-  let refusal = submitHoldRefusal(
+  let refusal = checkPromptSubmitArgs(
     {
       plugin,
       ...options,
     },
     "$.prompt.submit",
   );
-  if (refusal !== undefined)
+  if (refusal !== undefined) return Promise.reject(new HooksError(`${plugin}: $.prompt.submit: ${refusal}`));
+  let holdRefusal = submitHoldRefusal(
+    {
+      plugin,
+      ...options,
+    },
+    "$.prompt.submit",
+  );
+  if (holdRefusal !== undefined)
     return Promise.resolve({
-      drop: refusal,
+      drop: holdRefusal,
     });
   logForDebugging(
     `$.prompt.submit (${plugin}): ` + jsonStringify(truncateToLength(text, MAX_SESSION_TEXT_CHARS)),
@@ -340,7 +349,7 @@ function promptSubmitForPlugin(
   let settled = waitForSubmit(uuid, options.origin);
   markSubmit(uuid, options.rootEvent);
   pruneAndMark(uuid, options.rootEvent, getCommandQueue());
-  enqueueCommand({
+  enqueue({
     agentId: mainAgentId(),
     mode: "prompt",
     value: text,
@@ -364,13 +373,13 @@ export {
   submitMarks,
   submitMarksSlot,
   disposeDropsWaiting,
+  PROMPT_SUBMIT_RULES,
+  promptSubmitForPlugin,
+  markSubmit,
+  pruneAndMark,
+  isSubmittableEvent,
   takeSubmitWaiter,
   PROMPT_NOT_PASSED,
   createSubmitChainEnds,
   ensureDrop,
-  PROMPT_SUBMIT_RULES,
-  markSubmit,
-  pruneAndMark,
-  promptSubmitForPlugin,
-  isSubmittableEvent,
 };

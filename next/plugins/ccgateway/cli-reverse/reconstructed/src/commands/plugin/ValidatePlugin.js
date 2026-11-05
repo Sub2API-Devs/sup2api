@@ -3,9 +3,9 @@
  *
  * `claude plugin validate`：校验清单与组件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/ValidatePlugin.tsx
- * pieces: chunk-vrb44rx7.js (4)
+ * pieces: chunk-wb51jffc.js (4)
  * attribution: sole-consumer 2, affinity 1, fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -21,20 +21,20 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
-//@ chunk-vrb44rx7.js:214694-214725 sole-consumer
+//@ chunk-wb51jffc.js:214742-214773 sole-consumer
 function withTrailingNewline(text) {
   return `${text}
 `;
 }
-//@ chunk-vrb44rx7.js:214725-214759 sole-consumer
+//@ chunk-wb51jffc.js:214773-214807 sole-consumer
 function succeededResult(result) {
   return result.success;
 }
-//@ chunk-vrb44rx7.js:214759-214803 affinity
+//@ chunk-wb51jffc.js:214807-214851 affinity
 function hasWarnings(result) {
   return result.warnings.length > 0;
 }
-//@ chunk-vrb44rx7.js:214803-217501 fingerprint (2.1.88 match: ValidatePlugin, 0.654)
+//@ chunk-wb51jffc.js:214851-217549 fingerprint (2.1.88 match: ValidatePlugin, 0.654)
 function ValidatePlugin(props) {
   let $ = useMemoCache(5);
   let { onComplete, path } = props;

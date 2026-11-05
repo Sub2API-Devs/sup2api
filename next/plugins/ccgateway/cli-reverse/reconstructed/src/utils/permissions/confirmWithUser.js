@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：confirmWithUser：工具在执行中经 AskUserQuestion 向用户确认（无人可问、超时、中止）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jns1cm6f.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-evz6wa5s.js (8)
  * attribution: placement 8
  */
 import { randomUUID } from "crypto";
@@ -32,9 +32,9 @@ import {
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-jns1cm6f.js:755-774 placement
+//@ chunk-evz6wa5s.js:754-773 placement
 var CONFIRM = "confirm_";
-//@ chunk-jns1cm6f.js:774-872 placement
+//@ chunk-evz6wa5s.js:773-871 placement
 /**
  * canPromptForConfirmation：可经 AskUserQuestion 向用户确认。
  */
@@ -46,7 +46,7 @@ function canPromptForConfirmation(toolUseContext) {
     toolPermissionContext.mode !== "dontAsk"
   );
 }
-//@ chunk-jns1cm6f.js:872-1478 placement
+//@ chunk-evz6wa5s.js:871-1477 placement
 /**
  * 用 AskUserQuestion 的形式向用户发问并返回选择（dontAsk、无人可问时直接返回）。
  */
@@ -93,7 +93,7 @@ async function confirmWithUser(request) {
   }
   return outcome;
 }
-//@ chunk-jns1cm6f.js:1478-2546 placement
+//@ chunk-evz6wa5s.js:1477-2542 placement
 async function validateConfirmQuestion({
   canUseTool,
   toolUseContext,
@@ -168,7 +168,7 @@ async function validateConfirmQuestion({
       }
     : described;
 }
-//@ chunk-jns1cm6f.js:2546-3377 placement
+//@ chunk-evz6wa5s.js:2542-3373 placement
 function describeConfirmOutcome(decision, forcedDecision, signal, question, choices) {
   if (isSameDecision(decision, forcedDecision))
     return {
@@ -232,9 +232,9 @@ function describeConfirmOutcome(decision, forcedDecision, signal, question, choi
       };
   }
 }
-//@ chunk-jns1cm6f.js:3377-3451 placement
+//@ chunk-evz6wa5s.js:3373-3447 placement
 var confirmUpdatedInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-jns1cm6f.js:3377", () => {
+deferInit("chunk-evz6wa5s.js:3373", () => {
   confirmUpdatedInputSchema = DoctorLazy(() =>
     objectSchema({
       answers: record(stringSchema(), unknown()).optional(),
@@ -242,15 +242,15 @@ deferInit("chunk-jns1cm6f.js:3377", () => {
     }),
   );
 });
-//@ chunk-jns1cm6f.js:3451-3585 placement
+//@ chunk-evz6wa5s.js:3447-3581 placement
 function formatAnswerValue(answer) {
   if (typeof answer === "string") return collapseWhitespace(answer);
   if (Array.isArray(answer))
     return collapseWhitespace(answer.filter((part) => typeof part === "string").join(", "));
   return "";
 }
-//@ chunk-jns1cm6f.js:3585-3635 placement
+//@ chunk-evz6wa5s.js:3581-3631 placement
 function collapseWhitespace(text) {
   return text.replace(/\s+/g, " ").trim();
 }
-export { confirmWithUser, canPromptForConfirmation, CONFIRM };
+export { CONFIRM, confirmWithUser, canPromptForConfirmation };

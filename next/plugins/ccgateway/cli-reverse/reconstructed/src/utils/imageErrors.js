@@ -3,9 +3,9 @@
  *
  * 图片错误码与提示（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mvvq2nx1.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nw81sbzb.js (18)
  * attribution: placement 18
  */
 import { MONITOR } from "../tools/MonitorTool/constants.js";
@@ -13,13 +13,13 @@ import { isCcsTenant } from "../bootstrap/state.js";
 import { plural } from "./stringUtils.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-mvvq2nx1.js:828-869 placement
+//@ chunk-nw81sbzb.js:836-877 placement
 /**
  * 图片在提示文本中的标记前缀 "[Image: " 与 "[Image source: "。
  */
 var IMAGE_MARKER_PREFIX = "[Image: ";
 var IMAGE_SOURCE_MARKER_PREFIX = "[Image source: ";
-//@ chunk-mvvq2nx1.js:869-1079 placement
+//@ chunk-nw81sbzb.js:877-1087 placement
 /**
  * 图片错误码列表与最大图像边长。
  */
@@ -35,18 +35,18 @@ var IMAGE_ERROR_CODES = [
   "upload_timeout",
 ];
 var MAX_IMAGE_DIMENSION = 8000;
-//@ chunk-mvvq2nx1.js:1079-1121 placement
+//@ chunk-nw81sbzb.js:1087-1129 placement
 function isImageErrorCode(code) {
   return IMAGE_ERROR_CODES.some((knownCode) => knownCode === code);
 }
-//@ chunk-mvvq2nx1.js:1121-1159 placement
+//@ chunk-nw81sbzb.js:1129-1167 placement
 /**
  * 合法时返回图片错误码，否则 undefined。
  */
 function imageErrorCodeOrUndefined(code) {
   return isImageErrorCode(code) ? code : undefined;
 }
-//@ chunk-mvvq2nx1.js:1159-2881 placement
+//@ chunk-nw81sbzb.js:1167-2889 placement
 function describeImageTooLarge(code) {
   switch (code) {
     case "image_dimensions_too_large":
@@ -103,7 +103,7 @@ function describeImageTooLarge(code) {
       };
   }
 }
-//@ chunk-mvvq2nx1.js:2881-3494 placement
+//@ chunk-nw81sbzb.js:2889-3502 placement
 /**
  * “upload failed: server returned N” 正则与登录过期的原因/处理说明。
  */
@@ -114,7 +114,7 @@ var SIGN_IN_EXPIRED_HINT = {
   remedy: `an expired sign-in is renewed once this turn has ended and the environment has then run no tool call or ${MONITOR} watch for about five minutes, so do not send again or run sleep now; tell the user to wait at least five minutes without sending anything else in this chat, and then to ask for the file again. If a send after such a wait fails like this too, tell the user instead that sending files may not work in this chat for now`,
   stop: true,
 };
-//@ chunk-mvvq2nx1.js:3494-3564 placement
+//@ chunk-nw81sbzb.js:3502-3572 placement
 function isExpiredSignInUploadError(errorText, errorCode) {
   return (
     imageErrorCodeOrUndefined(errorCode) === undefined &&
@@ -122,20 +122,20 @@ function isExpiredSignInUploadError(errorText, errorCode) {
     isCcsTenant()
   );
 }
-//@ chunk-mvvq2nx1.js:3564-3812 placement
+//@ chunk-nw81sbzb.js:3572-3820 placement
 /**
  * 可能暂时性的上传错误正则、排除正则与可重试状态码。
  */
 var TRANSIENT_UPLOAD_ERROR_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NON_TRANSIENT_UPLOAD_RE;
 var RETRYABLE_UPLOAD_STATUSES_2;
-deferInit("chunk-mvvq2nx1.js:3564", () => {
+deferInit("chunk-nw81sbzb.js:3572", () => {
   TRANSIENT_UPLOAD_ERROR_RE =
     /^upload failed: (?:network error \(|the connection closed before the server answered$|the server did not answer within \d|the transfer stalled \()/;
   NON_TRANSIENT_UPLOAD_RE = /\bInvalid URL\b|certificate/i;
   RETRYABLE_UPLOAD_STATUSES_2 = new Set([429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 529]);
 });
-//@ chunk-mvvq2nx1.js:3812-4031 placement
+//@ chunk-nw81sbzb.js:3820-4039 placement
 /**
  * 给上传错误附加原因与处理建议（图片过大或登录过期）。
  */
@@ -155,12 +155,12 @@ function explainUploadError(errorText, errorCode, remedyGiven = false) {
   ];
   return parts.length === 0 ? errorText : `${errorText} \u2014 ${parts.join("; ")}`;
 }
-//@ chunk-mvvq2nx1.js:4031-4048 placement
+//@ chunk-nw81sbzb.js:4039-4056 placement
 /**
  * 疑似上传上限的字节数（30 MiB）。
  */
 var SUSPECTED_UPLOAD_LIMIT_BYTES = 31457280;
-//@ chunk-mvvq2nx1.js:4048-4130 placement
+//@ chunk-nw81sbzb.js:4056-4138 placement
 /**
  * 把字节数格式化为 MiB 文本。
  */
@@ -168,12 +168,12 @@ function formatMiB(bytes) {
   let mib = bytes / 1048576;
   return `${Number.isInteger(mib) ? mib : mib.toFixed(1)} MiB`;
 }
-//@ chunk-mvvq2nx1.js:4130-4168 placement
+//@ chunk-nw81sbzb.js:4138-4176 placement
 var RETRYABLE_UPLOAD_STATUSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mvvq2nx1.js:4130", () => {
+deferInit("chunk-nw81sbzb.js:4138", () => {
   RETRYABLE_UPLOAD_STATUSES = new Set([502, 503, 504, 520, 524]);
 });
-//@ chunk-mvvq2nx1.js:4168-4277 placement
+//@ chunk-nw81sbzb.js:4176-4285 placement
 /**
  * 上传失败是否可能是暂时性的（状态码或网络错误）。
  */
@@ -184,7 +184,7 @@ function isTransientUploadFailure(errorText, errorCode) {
     (TRANSIENT_UPLOAD_ERROR_RE.test(errorText) && !NON_TRANSIENT_UPLOAD_RE.test(errorText))
   );
 }
-//@ chunk-mvvq2nx1.js:4277-4350 placement
+//@ chunk-nw81sbzb.js:4285-4358 placement
 /**
  * 判断是否为正的安全整数。
  */
@@ -195,7 +195,7 @@ function isPositiveSafeInteger(uploadSuspectedLimitBytes) {
     uploadSuspectedLimitBytes > 0
   );
 }
-//@ chunk-mvvq2nx1.js:4350-4461 placement
+//@ chunk-nw81sbzb.js:4358-4469 placement
 /**
  * 较大文件的暂时性失败是否可能是超过未声明的上传上限。
  */
@@ -206,7 +206,7 @@ function mayBeOverSizeLimit(result) {
     isTransientUploadFailure(result.upload_error, result.upload_error_code)
   );
 }
-//@ chunk-mvvq2nx1.js:4461-4745 placement
+//@ chunk-nw81sbzb.js:4469-4753 placement
 /**
  * 上传失败的说明文本。
  */
@@ -215,7 +215,7 @@ function describeUploadFailure(result) {
     ? `${result.upload_error} \u2014 the cause is unknown and may pass. If the same file fails like this again, it may be over the upload limit that applies to this session, which was not named and is never under ${formatMiB(SUSPECTED_UPLOAD_LIMIT_BYTES)}`
     : explainUploadError(result.upload_error, result.upload_error_code);
 }
-//@ chunk-mvvq2nx1.js:4745-4877 placement
+//@ chunk-nw81sbzb.js:4753-4885 placement
 /**
  * 上传失败是否值得稍后重发。
  */
@@ -227,7 +227,7 @@ function isRetryableUploadFailure(uploadError, uploadErrorCode) {
     (TRANSIENT_UPLOAD_ERROR_RE.test(uploadError) && !NON_TRANSIENT_UPLOAD_RE.test(uploadError))
   );
 }
-//@ chunk-mvvq2nx1.js:4877-5350 placement
+//@ chunk-nw81sbzb.js:4885-5358 placement
 /**
  * 有可能暂时性的失败时，提示用户稍后让你重发。
  */
@@ -248,15 +248,15 @@ function retryLaterHint(failures) {
   }).format(filtered.map((failure) => failure.path))}, whose ${failureWord} may be temporary, ${retryHint}`;
 }
 export {
-  IMAGE_SOURCE_MARKER_PREFIX,
   MAX_IMAGE_DIMENSION,
   formatMiB,
   isTransientUploadFailure,
   SUSPECTED_UPLOAD_LIMIT_BYTES,
   imageErrorCodeOrUndefined,
   IMAGE_MARKER_PREFIX,
-  isPositiveSafeInteger,
+  IMAGE_SOURCE_MARKER_PREFIX,
   describeUploadFailure,
   retryLaterHint,
+  isPositiveSafeInteger,
   explainUploadError,
 };

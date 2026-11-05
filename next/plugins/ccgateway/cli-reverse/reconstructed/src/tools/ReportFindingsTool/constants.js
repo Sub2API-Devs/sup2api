@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：ReportFindings 工具常量
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3h9nvmn3.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3a9s57ey.js (1)
  * attribution: placement 1
  */
-//@ chunk-3h9nvmn3.js:610-1215 placement
+//@ chunk-3a9s57ey.js:609-1214 placement
 /**
  * ReportFindings 工具的完整描述。
  */

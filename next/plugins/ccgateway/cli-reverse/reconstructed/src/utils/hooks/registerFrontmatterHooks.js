@@ -3,9 +3,9 @@
  *
  * 并入已有模块：frontmatter 钩子注册
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/registerFrontmatterHooks.ts
- * pieces: chunk-ahpsetyz.js (3)
+ * pieces: chunk-w4s3ryq5.js (3)
  * attribution: placement 2, fingerprint 1
  */
 import { HOOK_EVENTS } from "../../entrypoints/sdk/coreSchemas.js";
@@ -14,7 +14,7 @@ import { logForDebugging } from "../debug.js";
 import { isPersonalConfigRestricted } from "../personalConfigRestriction.js";
 import { REPO_DIR_SETTING_SOURCES } from "../settings/constants.js";
 
-//@ chunk-ahpsetyz.js:371-545 placement
+//@ chunk-w4s3ryq5.js:371-545 placement
 function hasFrontmatterHooks(hooks) {
   if (!hooks || Object.keys(hooks).length === 0) return false;
   for (let event of HOOK_EVENTS) {
@@ -24,7 +24,7 @@ function hasFrontmatterHooks(hooks) {
   }
   return false;
 }
-//@ chunk-ahpsetyz.js:545-1033 fingerprint (2.1.88 match: registerFrontmatterHooks, 0.946)
+//@ chunk-w4s3ryq5.js:545-1033 fingerprint (2.1.88 match: registerFrontmatterHooks, 0.946)
 /**
  * 把代理（agent）frontmatter 的 hooks 注册为会话钩子；isSubagent 时 Stop 改为 SubagentStop。
  */
@@ -69,7 +69,7 @@ function registerFrontmatterHooks(
       `Registered ${hookCount} frontmatter hook(s) from ${sourceName} for session ${sessionId}`,
     );
 }
-//@ chunk-ahpsetyz.js:1033-1084 placement
+//@ chunk-w4s3ryq5.js:1033-1084 placement
 /**
  * 判断某 frontmatter 钩子来源是否因个人配置受限而禁用。
  */

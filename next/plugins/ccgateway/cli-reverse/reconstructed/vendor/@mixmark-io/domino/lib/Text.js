@@ -1,8 +1,8 @@
 /**
  * @mixmark-io/domino/lib/Text.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @mixmark-io/domino@2.2.0
- * pieces: chunk-vwj6ccer.js (1)
+ * pieces: chunk-w04z664w.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_utils } from "./utils.js";
 import { require_Node } from "./Node.js";
 import { require_CharacterData } from "./CharacterData.js";
 
-//@ chunk-vwj6ccer.js:63701-64873 cjs-fingerprint
+//@ chunk-w04z664w.js:63701-64873 cjs-fingerprint
 var require_Text = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Text;
   var utils = require_utils();

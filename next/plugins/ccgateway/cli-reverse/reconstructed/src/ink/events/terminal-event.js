@@ -3,14 +3,14 @@
  *
  * 终端事件基类（带 target/currentTarget 的 DOM 风格事件）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/events/terminal-event.ts
- * pieces: chunk-bzr73sfg.js (1)
+ * pieces: chunk-2avr6cej.js (1)
  * attribution: fingerprint 1
  */
 import { InkEvent } from "./event.js";
 
-//@ chunk-bzr73sfg.js:190017-190998 fingerprint (2.1.88 match: TerminalEvent, 0.981)
+//@ chunk-2avr6cej.js:189664-190645 fingerprint (2.1.88 match: TerminalEvent, 0.981)
 /**
  * 终端 DOM 事件基类：type、时间戳、bubbles/cancelable、target/currentTarget/eventPhase，stopPropagation/stopImmediatePropagation/preventDefault，consume()=两者都做。
  */

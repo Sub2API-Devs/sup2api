@@ -3,19 +3,16 @@
  *
  * /diff 命令对象
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/diff/index.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
 import { isDiffPaneAvailable } from "../../plugins/bundled/diffPane/index.js";
 import { resolveRenderMode, isFullscreenEnvEnabled } from "../../utils/fullscreen.js";
 
-//@ chunk-e6aww6q8.js:1695347-1695654 fingerprint (2.1.88 match: default, 0.51)
-/**
- * /diff 命令对象（local-jsx）；描述：{return m_n(wd()?"fullscreen":"inline")==="fullscreen"?"Toggle the diff panel showing uncommitted changes":"View uncommitted changes and per；isEnabled: ()=>!Q7n()；实现 chunk-19av2vh6.js 的 C。
- */
-var diffCommand = {
+//@ chunk-5xgkngpb.js:1770717-1771024 fingerprint (2.1.88 match: default, 0.51)
+var diffCommandDefinition = {
   type: "local-jsx",
   name: "diff",
   isEnabled: () => !isDiffPaneAvailable(),
@@ -24,7 +21,7 @@ var diffCommand = {
       ? "Toggle the diff panel showing uncommitted changes"
       : "View uncommitted changes and per-turn diffs";
   },
-  immediate: (args, presentation) => resolveRenderMode(presentation) === "fullscreen",
+  immediate: (input, surface) => resolveRenderMode(surface) === "fullscreen",
   thinClientDispatch: "control-request",
 };
-export { diffCommand };
+export { diffCommandDefinition };

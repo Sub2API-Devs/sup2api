@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：跨会话入站消息门槛
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q40vccff.js (34)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8pf0qxb4.js (34)
  * attribution: placement 34
  */
 import {
@@ -27,7 +27,7 @@ import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTel
 import { RELAY_SOURCE_KINDS_2, SLACK_BOT } from "../../services/projectsRelay/relayConfig.js";
 import { fragmentForLog } from "../udsMessaging/peerGuard.js";
 
-//@ chunk-q40vccff.js:3208-3376 placement
+//@ chunk-8pf0qxb4.js:3208-3376 placement
 function settingToInboundPolicy(setting) {
   switch (setting) {
     case "accept":
@@ -46,7 +46,7 @@ function settingToInboundPolicy(setting) {
       };
   }
 }
-//@ chunk-q40vccff.js:3376-3461 placement
+//@ chunk-8pf0qxb4.js:3376-3461 placement
 /**
  * 跨会话收信总开关关闭时返回“拒绝（kill-switch）”。
  */
@@ -58,7 +58,7 @@ function killSwitchInboundPolicy() {
         refuseCause: "kill-switch",
       };
 }
-//@ chunk-q40vccff.js:3461-3840 placement
+//@ chunk-8pf0qxb4.js:3461-3840 placement
 /**
  * 计算当前跨会话入站策略：总开关优先，其次显式设置；否则读取当前权限模式（读不到或未知模式时暂扣），绕过默认时暂扣，其余接受。
  */
@@ -91,7 +91,7 @@ function getCurrentInboundPolicy() {
         policy: "accept",
       };
 }
-//@ chunk-q40vccff.js:3840-3893 placement
+//@ chunk-8pf0qxb4.js:3840-3893 placement
 /**
  * 计算当前入站策略：总开关优先，否则按来源的显式设置。
  */
@@ -100,14 +100,14 @@ function currentInboundPolicy(originInfo) {
   if (killSwitch) return killSwitch;
   return getPeerMessagePolicy(originInfo, false);
 }
-//@ chunk-q40vccff.js:3893-3922 placement
+//@ chunk-8pf0qxb4.js:3893-3922 placement
 /**
  * 计算某对等来源的入站策略（显式设置、自己发的、未知模式、对方声明模式）。
  */
 function peerInboundPolicy(originInfo) {
   return getPeerMessagePolicy(originInfo, true);
 }
-//@ chunk-q40vccff.js:3922-4422 placement
+//@ chunk-8pf0qxb4.js:3922-4422 placement
 /**
  * 计算某条对等消息的入站策略：显式设置优先；自己发的接受；未知模式暂扣；对方声明的模式须与本端一致，未声明时本端为绕过模式则暂扣。
  */
@@ -149,7 +149,7 @@ function getPeerMessagePolicy(originInfo, fromMode) {
         policy: "accept",
       };
 }
-//@ chunk-q40vccff.js:4422-4519 placement
+//@ chunk-8pf0qxb4.js:4422-4519 placement
 /**
  * 判断权限模式是否为绕过（含计划模式绕过）。
  */
@@ -159,28 +159,28 @@ function isBypassMode(permissions) {
     isPlanBypass(permissions.mode, permissions.isBypassPermissionsModeAvailable)
   );
 }
-//@ chunk-q40vccff.js:4519-4568 placement
+//@ chunk-8pf0qxb4.js:4519-4568 placement
 /**
  * 把权限模式归为 bypass 或 prompting。
  */
 function modeClass_2(mode) {
   return isBypassMode(mode) ? "bypass" : "prompting";
 }
-//@ chunk-q40vccff.js:4568-4601 placement
+//@ chunk-8pf0qxb4.js:4568-4601 placement
 /**
  * 返回当前入站策略的取值（accept/hold/refuse）。
  */
 function currentPolicyValue() {
   return getCurrentInboundPolicy().policy;
 }
-//@ chunk-q40vccff.js:4601-4636 placement
+//@ chunk-8pf0qxb4.js:4601-4636 placement
 /**
  * 返回某来源的入站策略取值。
  */
 function inboundPolicyFor(gate) {
   return currentInboundPolicy(gate).policy;
 }
-//@ chunk-q40vccff.js:4636-4914 placement
+//@ chunk-8pf0qxb4.js:4636-4914 placement
 function readCurrentPermissionMode() {
   let getCurrentMode = swarmHostState().inbound.getCurrentMode;
   if (getCurrentMode === null) {
@@ -196,7 +196,7 @@ function readCurrentPermissionMode() {
     return null;
   }
 }
-//@ chunk-q40vccff.js:4914-5015 placement
+//@ chunk-8pf0qxb4.js:4914-5015 placement
 /**
  * 是否处于绕过默认保留的状态（未显式设置，且当前模式在允许集合中并满足条件）。
  */
@@ -206,14 +206,14 @@ function isBypassDefaultHold() {
   if (permissions === null || !PERMISSION_MODE_SET.has(permissions.mode)) return false;
   return isBypassMode(permissions);
 }
-//@ chunk-q40vccff.js:5015-5051 placement
+//@ chunk-8pf0qxb4.js:5015-5051 placement
 /**
  * 返回按来源把关后的入站策略。
  */
 function gatedPolicyFor(message) {
   return applyInboundPolicy(message, currentInboundPolicy(getPeerOriginInfo(message)));
 }
-//@ chunk-q40vccff.js:5051-5158 placement
+//@ chunk-8pf0qxb4.js:5051-5158 placement
 function getPeerOriginInfo(message) {
   let origin = message.origin;
   if (!origin || origin.kind !== "peer") return;
@@ -222,7 +222,7 @@ function getPeerOriginInfo(message) {
     selfSent: origin.selfSent,
   };
 }
-//@ chunk-q40vccff.js:5158-5443 placement
+//@ chunk-8pf0qxb4.js:5158-5443 placement
 /**
  * 让对等消息经过入口守卫：未准入时发送 dropped 回执并返回 false，准入则记录通信方。
  */
@@ -247,7 +247,7 @@ function admitPeerMessage(message) {
   swarmHostState().inbound.recordCorrespondent?.(message);
   return true;
 }
-//@ chunk-q40vccff.js:5443-6442 placement
+//@ chunk-8pf0qxb4.js:5443-6442 placement
 /**
  * 按策略处理入站对等消息：接受；拒绝（记日志并发 refused 回执）；暂扣（关闭中按过期处理，缓冲满时淘汰最早的，入队并通知、发 held 回执）。
  */
@@ -302,7 +302,7 @@ function applyInboundPolicy(message, policy) {
     }
   }
 }
-//@ chunk-q40vccff.js:6442-6684 placement
+//@ chunk-8pf0qxb4.js:6442-6684 placement
 /**
  * 把入站消息来源分类为 peer、host-injected、coordinator 或 ungated。
  */
@@ -314,7 +314,7 @@ function classifyInboundOrigin(origin) {
     return "coordinator";
   return "ungated";
 }
-//@ chunk-q40vccff.js:6684-6795 placement
+//@ chunk-8pf0qxb4.js:6684-6795 placement
 /**
  * 入站消息是否需要把关：信封标记为 peer、来源需把关且非例外，或来自中继。
  */
@@ -325,7 +325,7 @@ function isGatedInbound({ ingressOrigin, inboundOrigin, envelopePeer = false }) 
     inboundOrigin === RELAY_SOURCE_KINDS_2
   );
 }
-//@ chunk-q40vccff.js:6795-6928 placement
+//@ chunk-8pf0qxb4.js:6795-6928 placement
 function isSlackBotPeer(ingressOrigin) {
   return (
     !!ingressOrigin &&
@@ -335,7 +335,7 @@ function isSlackBotPeer(ingressOrigin) {
     ingressOrigin.inbound_origin === SLACK_BOT
   );
 }
-//@ chunk-q40vccff.js:6928-7080 placement
+//@ chunk-8pf0qxb4.js:6928-7080 placement
 /**
  * 按入站来源选择把关策略，ungated 直接接受。
  */
@@ -351,7 +351,7 @@ function gateInboundByOrigin(origin, message) {
       return "accept";
   }
 }
-//@ chunk-q40vccff.js:7080-7236 placement
+//@ chunk-8pf0qxb4.js:7080-7236 placement
 /**
  * 按入站来源给出拒收原因（peer 取当前原因，coordinator/host-injected 在拒收设置下为 opt-out）。
  */
@@ -366,7 +366,7 @@ function getInboundRefuseCause(origin) {
       return;
   }
 }
-//@ chunk-q40vccff.js:7236-7312 placement
+//@ chunk-8pf0qxb4.js:7236-7312 placement
 /**
  * 当前入站被拒时返回原因，否则 undefined。
  */
@@ -375,7 +375,7 @@ function inboundRefuseCause() {
   if (currentInboundPolicy.policy !== "refuse") return;
   return currentInboundPolicy.refuseCause;
 }
-//@ chunk-q40vccff.js:7312-7378 placement
+//@ chunk-8pf0qxb4.js:7312-7378 placement
 /**
  * 把设置值转成策略，未设置时用 accept。
  */
@@ -387,7 +387,7 @@ function settingOrAcceptPolicy() {
         policy: "accept",
       };
 }
-//@ chunk-q40vccff.js:7378-7450 placement
+//@ chunk-8pf0qxb4.js:7378-7450 placement
 /**
  * 把设置值转成策略并按来源把关。
  */
@@ -396,14 +396,14 @@ function gatedSettingPolicy(message) {
   if (setting === undefined) return "accept";
   return applyInboundPolicy(message, settingToInboundPolicy(setting));
 }
-//@ chunk-q40vccff.js:7450-7486 placement
+//@ chunk-8pf0qxb4.js:7450-7486 placement
 /**
  * 返回按对等来源把关后的入站策略。
  */
 function gatedPeerPolicy(message) {
   return applyInboundPolicy(message, peerInboundPolicy(getPeerOriginInfo(message)));
 }
-//@ chunk-q40vccff.js:7486-7793 placement
+//@ chunk-8pf0qxb4.js:7486-8044 placement
 /**
  * 记录入站 peer 消息被拒（区分 kill switch），并上报把关失败。
  */
@@ -416,10 +416,20 @@ function logInboundRefused(description, cause) {
     logFeatureSad("peer_inbound_gate", "kill_switch");
     return;
   }
+  if (cause === "declared-peer-deny-list") {
+    logForDebugging(
+      `[cross-session-inbound] refused host-declared peer message \u2014 its frame states disallowed_tools, which a peer's turn cannot hold (${description})`,
+      {
+        level: "error",
+      },
+    );
+    logFeatureSad("peer_inbound_gate", "declared_peer_deny_list");
+    return;
+  }
   logForDebugging(`[cross-session-inbound] refused inbound peer message (${description})`);
   logFeatureSad("peer_inbound_gate", "refused");
 }
-//@ chunk-q40vccff.js:7793-7827 placement
+//@ chunk-8pf0qxb4.js:8044-8078 placement
 /**
  * 刷新入站可用性并重新评估暂扣消息。
  */
@@ -427,7 +437,7 @@ function refreshAndReevaluateHeld(origin) {
   publishInboundAvailability();
   return reevaluateHeldMessages(origin);
 }
-//@ chunk-q40vccff.js:7827-7968 placement
+//@ chunk-8pf0qxb4.js:8078-8219 placement
 function getHeldMessagePolicy(message) {
   switch (classifyInboundOrigin(message.origin)) {
     case "coordinator":
@@ -439,7 +449,7 @@ function getHeldMessagePolicy(message) {
       return currentInboundPolicy(getPeerOriginInfo(message));
   }
 }
-//@ chunk-q40vccff.js:7968-9034 placement
+//@ chunk-8pf0qxb4.js:8219-9285 placement
 /**
  * 策略变化后重新评估暂扣的对等消息：拒绝的发回执并丢弃，仍暂扣的在原因变化时重新通知，可接受的经入口守卫放行并发 delivered 回执。返回放行数。
  */
@@ -492,7 +502,7 @@ function reevaluateHeldMessages(origin) {
   for (let message of admitted) inbound.sendPeerReceipt?.(message, "delivered");
   return releasable.length;
 }
-//@ chunk-q40vccff.js:9034-10030 placement
+//@ chunk-8pf0qxb4.js:9285-10281 placement
 /**
  * 处理用户对暂扣消息的决定：批准时再检查策略与入口守卫后放行；拒绝或过期时发送相应回执并丢弃。
  */
@@ -533,28 +543,28 @@ function resolveHeldMessage(heldMessage, decision) {
   inbound.sendPeerReceipt?.(message, receipt);
   return "dropped";
 }
-//@ chunk-q40vccff.js:10030-10070 placement
+//@ chunk-8pf0qxb4.js:10281-10321 placement
 /**
  * 返回当前暂扣的入站消息列表。
  */
 function heldInboundMessages() {
   return swarmHostState().inbound.held;
 }
-//@ chunk-q40vccff.js:10070-10117 placement
+//@ chunk-8pf0qxb4.js:10321-10368 placement
 /**
  * 返回暂扣入站消息的数量。
  */
 function heldInboundCount() {
   return swarmHostState().inbound.held.length;
 }
-//@ chunk-q40vccff.js:10117-10165 placement
+//@ chunk-8pf0qxb4.js:10368-10416 placement
 /**
  * 判断入站是否正在关闭。
  */
 function isInboundShuttingDown() {
   return swarmHostState().inbound.shuttingDown;
 }
-//@ chunk-q40vccff.js:10165-10349 placement
+//@ chunk-8pf0qxb4.js:10416-10600 placement
 function describePeerMessage(message) {
   let from =
     message.origin?.kind === "peer" && typeof message.origin.from === "string"
@@ -564,21 +574,21 @@ function describePeerMessage(message) {
   return `from=${fragmentForLog(from)} "${fragmentForLog(text, 60)}"`;
 }
 export {
-  inboundRefuseCause,
-  logInboundRefused,
-  gatedPolicyFor,
-  isBypassDefaultHold,
-  modeClass_2,
   refreshAndReevaluateHeld,
-  resolveHeldMessage,
   getInboundRefuseCause,
+  logInboundRefused,
   isGatedInbound,
   gateInboundByOrigin,
+  isInboundShuttingDown,
+  inboundRefuseCause,
+  gatedPeerPolicy,
+  gatedPolicyFor,
+  resolveHeldMessage,
+  heldInboundMessages,
+  modeClass_2,
   classifyInboundOrigin,
   currentPolicyValue,
-  isInboundShuttingDown,
-  gatedPeerPolicy,
-  heldInboundMessages,
   heldInboundCount,
   inboundPolicyFor,
+  isBypassDefaultHold,
 };

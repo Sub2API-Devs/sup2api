@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：ScheduleWakeup 工具 schema（延迟、原因、停止）与实现。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kxyd0g16.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fmnbrxwy.js (2)
  * attribution: placement 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -40,21 +40,21 @@ import { needsFableMitigations } from "../../utils/model/fableMitigations.js";
 import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:33507-33592 placement
+//@ chunk-fmnbrxwy.js:47428-47513 placement
 class ScheduleWakeupInputError extends Error {
   constructor(message) {
     super(message);
     this.name = "ScheduleWakeupInputError";
   }
 }
-//@ chunk-kxyd0g16.js:33592-39121 placement
+//@ chunk-fmnbrxwy.js:47513-52960 placement
 /**
  * ScheduleWakeup 工具 schema（延迟、原因、停止）与实现。
  */
 var ScheduleWakeupSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var scheduleWakeupInputSchema;
 var ScheduleWakeupTool;
-deferInit("chunk-kxyd0g16.js:33592", () => {
+deferInit("chunk-fmnbrxwy.js:47513", () => {
   ScheduleWakeupSchema = DoctorLazy(() =>
     zodStrictObject({
       delaySeconds: coercedNumberSchema(numberSchema())
@@ -148,7 +148,7 @@ deferInit("chunk-kxyd0g16.js:33592", () => {
           };
         },
         async call(input, { toolUseId }) {
-          let { delaySeconds, reason, prompt, stop, noop } = input;
+          let { delaySeconds, reason, prompt, stop } = input;
           let message =
             stop !== true && isUnknownPluginSpawnedAgent(caller) ? UNKNOWN_PLUGIN_AGENT_NOTE : undefined;
           if (message !== undefined) {
@@ -171,8 +171,6 @@ deferInit("chunk-kxyd0g16.js:33592", () => {
             );
           if (prompt === undefined)
             throw new ScheduleWakeupInputError("`prompt` is required when `stop` is not true.");
-          if (noop === undefined)
-            throw new ScheduleWakeupInputError("`noop` is required when `stop` is not true.");
           let scheduleResult = scheduleLoopWakeup(delaySeconds, prompt, reason, toolUseId, caller);
           if (scheduleResult === null)
             return {

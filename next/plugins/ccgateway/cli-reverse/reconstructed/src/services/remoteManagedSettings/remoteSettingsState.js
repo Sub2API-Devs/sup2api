@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：远程托管设置的进程级状态（会话缓存、副本信任、组织固定、加载状态、同意基线、混合登录）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (56)
- * attribution: placement 56
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (57)
+ * attribution: placement 57
  */
 import { join } from "path";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import {
   summarizeManagedSettingsRisk,
   needsManagedSettingsConsent,
@@ -50,7 +50,7 @@ import { cacheTrustLabel, trustedPrincipal } from "../../utils/settings/policyCe
 import { isRestrictedUnvouchedDocument } from "./unvouchedRestrictions.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:392501-392588 placement (2.1.88 match: SETTINGS_FILENAME, 0.646)
+//@ chunk-z20c443b.js:390747-390834 placement (2.1.88 match: SETTINGS_FILENAME, 0.646)
 /**
  * 远程托管设置与存储视图的字节上限。
  */
@@ -58,11 +58,11 @@ var SETTINGS_FILENAME = "remote-settings.json";
 var MAX_BACKEND_SETTINGS_BYTES = 5000;
 var MAX_STORAGE_VIEW_BYTES = 2097152;
 var HELPER_CONSENT_STATE_ID = "remote-settings-helper-consent";
-//@ chunk-dcmhvw5a.js:392588-392623 placement
+//@ chunk-z20c443b.js:390834-390869 placement
 function getHelperConsentPath() {
   return join(getClaudeConfigDir(), HELPER_CONSENT_STATE_ID);
 }
-//@ chunk-dcmhvw5a.js:392623-392672 placement
+//@ chunk-z20c443b.js:390869-390918 placement
 /**
  * 计算设置的风险摘要，只在需要用户同意时返回（否则 undefined）。
  */
@@ -70,27 +70,27 @@ function consentRiskOrUndefined(settings) {
   let risk = summarizeManagedSettingsRisk(settings);
   return needsManagedSettingsConsent(risk) ? risk : undefined;
 }
-//@ chunk-dcmhvw5a.js:392672-392717 placement
+//@ chunk-z20c443b.js:390918-390963 placement
 function helperConsentDigest(settings) {
   let risk = consentRiskOrUndefined(settings);
   return risk && realCanonicalPath(risk);
 }
-//@ chunk-dcmhvw5a.js:392717-392855 placement
+//@ chunk-z20c443b.js:390963-391101 placement
 function stripReservedKeys(settings) {
   let stripped = import_reject(settings, (value, key) => key.startsWith("$") && key !== "$schema");
   if (Object.keys(stripped).length !== Object.keys(settings).length) weakMap.set(stripped, settings);
   return stripped;
 }
-//@ chunk-dcmhvw5a.js:392855-392891 placement
+//@ chunk-z20c443b.js:391101-391137 placement
 function servedBodyOf(settings) {
   return weakMap.get(settings) ?? settings;
 }
-//@ chunk-dcmhvw5a.js:392891-392910 placement
+//@ chunk-z20c443b.js:391137-391156 placement
 var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dcmhvw5a.js:392891", () => {
+deferInit("chunk-z20c443b.js:391137", () => {
   weakMap = new WeakMap();
 });
-//@ chunk-dcmhvw5a.js:392910-396728 placement
+//@ chunk-z20c443b.js:391156-395053 placement
 /**
  * 远程托管设置的进程级状态（会话缓存、副本信任、组织固定、加载状态、同意基线、混合登录）。
  */
@@ -123,9 +123,11 @@ class RemoteSettingsState {
   hybridProviderFromOrganization = false;
   hybridOnlyForConnection = false;
   hybridLeftOut = null;
+  hybridCacheLeftOut = null;
   lastLoadStatus = undefined;
   loadCycleEnded = false;
   loadCycleBegun = false;
+  loadCycleEndedSignal = createSignal();
   loadBackstopReleased = false;
   lastLoadStatusChanged = createSignal();
   policySettingsNotified = false;
@@ -249,6 +251,7 @@ class RemoteSettingsState {
     this.hybridProviderFromOrganization = false;
     this.hybridOnlyForConnection = false;
     this.hybridLeftOut = null;
+    this.hybridCacheLeftOut = null;
     this.lastLoadStatus = undefined;
     this.loadCycleEnded = false;
     this.loadCycleBegun = false;
@@ -274,52 +277,52 @@ class RemoteSettingsState {
     }
   }
 }
-//@ chunk-dcmhvw5a.js:396728-396753 placement
+//@ chunk-z20c443b.js:395053-395078 placement
 /**
  * 按 host 隔离的远程托管设置进程状态容器（会话缓存、信任、加载状态、同意基线等）。
  */
 var remoteSettingsStateSlots; // deferred: uses RemoteSettingsState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:396728", () => {
+deferInit("chunk-z20c443b.js:395053", () => {
   remoteSettingsStateSlots = new HostScoped(() => new RemoteSettingsState());
 });
-//@ chunk-dcmhvw5a.js:396753-396790 placement
+//@ chunk-z20c443b.js:395078-395115 placement
 /**
  * 取当前 host 的远程托管设置状态（本文件及缓存/加载模块的高频入口）。
  */
 function currentRemoteSettingsState_2() {
   return remoteSettingsStateSlots.of(getRootSession().host);
 }
-//@ chunk-dcmhvw5a.js:396790-396827 placement
+//@ chunk-z20c443b.js:395115-395152 placement
 function getSyncCacheResetEpoch() {
   return currentRemoteSettingsState_2().resetEpoch;
 }
-//@ chunk-dcmhvw5a.js:396827-396871 placement
+//@ chunk-z20c443b.js:395152-395196 placement
 function getRemoteManagedSettingsConsentedBaseline() {
   return currentRemoteSettingsState_2().consentedPayload;
 }
-//@ chunk-dcmhvw5a.js:396871-396909 placement
+//@ chunk-z20c443b.js:395196-395234 placement
 function markRemoteManagedSettingsConsented(settings) {
   currentRemoteSettingsState_2().markConsented(settings);
 }
-//@ chunk-dcmhvw5a.js:396909-396951 placement
+//@ chunk-z20c443b.js:395234-395276 placement
 function dropRemoteManagedSettingsConsentDeferral() {
   currentRemoteSettingsState_2().dropConsentDeferral();
 }
-//@ chunk-dcmhvw5a.js:396951-397007 placement
+//@ chunk-z20c443b.js:395276-395332 placement
 function setSessionCache(nextCache, options, extra) {
   currentRemoteSettingsState_2().replaceSessionCache(nextCache, options);
   invalidateCommandNames(extra);
 }
-//@ chunk-dcmhvw5a.js:397007-397087 placement
+//@ chunk-z20c443b.js:395332-395412 placement
 function isRemoteManagedSettingsVerified() {
   let { sessionCache, verifiedPayload } = currentRemoteSettingsState_2();
   return sessionCache !== null && sessionCache === verifiedPayload;
 }
-//@ chunk-dcmhvw5a.js:397087-397144 placement
+//@ chunk-z20c443b.js:395412-395469 placement
 function getGatewayThatVerifiedRemoteManagedSettings() {
   return isRemoteManagedSettingsVerified() ? currentRemoteSettingsState_2().verifiedByGateway : undefined;
 }
-//@ chunk-dcmhvw5a.js:397144-397278 placement
+//@ chunk-z20c443b.js:395469-395603 placement
 function isRemoteManagedSettingsVerifiedAndApprovedForSession() {
   let { sessionCache, verifiedPayload, consentedPayload, deferredPayload } = currentRemoteSettingsState_2();
   return (
@@ -328,25 +331,25 @@ function isRemoteManagedSettingsVerifiedAndApprovedForSession() {
     (sessionCache === consentedPayload || sessionCache === deferredPayload)
   );
 }
-//@ chunk-dcmhvw5a.js:397278-397324 placement
+//@ chunk-z20c443b.js:395603-395649 placement
 function registerSyncCacheResetListener(deactivateRemoteHelper) {
   currentRemoteSettingsState_2().registerResetListener(deactivateRemoteHelper);
 }
-//@ chunk-dcmhvw5a.js:397324-397380 placement
+//@ chunk-z20c443b.js:395649-395705 placement
 function resetSyncCache() {
   let state = currentRemoteSettingsState_2();
   state.reset();
   state.resetListener?.();
 }
-//@ chunk-dcmhvw5a.js:397380-397429 placement
+//@ chunk-z20c443b.js:395705-395754 placement
 function markPolicySettingsNotified() {
   currentRemoteSettingsState_2().markPolicySettingsNotified();
 }
-//@ chunk-dcmhvw5a.js:397429-397479 placement
+//@ chunk-z20c443b.js:395754-395804 placement
 function hasPolicySettingsNotified() {
   return currentRemoteSettingsState_2().policySettingsNotified;
 }
-//@ chunk-dcmhvw5a.js:397479-397554 placement
+//@ chunk-z20c443b.js:395804-395879 placement
 function isManagedSettingsCopyTrustEnforced() {
   return (
     isSettingsGateSettled() ||
@@ -354,11 +357,11 @@ function isManagedSettingsCopyTrustEnforced() {
       currentRemoteSettingsState_2().mayHideDialog())
   );
 }
-//@ chunk-dcmhvw5a.js:397554-397612 placement
+//@ chunk-z20c443b.js:395879-395937 placement
 function isManagedSettingsCopyKeptVerifiable() {
   return isSettingsGateAnswered() || currentRemoteSettingsState_2().writesForHiddenDialog();
 }
-//@ chunk-dcmhvw5a.js:397612-397882 placement
+//@ chunk-z20c443b.js:395937-396207 placement
 function setStoredCopyGateInputs({
   readAccount,
   covers,
@@ -375,30 +378,30 @@ function setStoredCopyGateInputs({
   state.storedCopyTrust = "not_asked";
   state.storedCopyRefusal = null;
 }
-//@ chunk-dcmhvw5a.js:397882-397991 placement
+//@ chunk-z20c443b.js:396207-396316 placement
 function setStoredCopyOrgPin(orgPinState) {
   let state = currentRemoteSettingsState_2();
   let storedCopyOrgPin = state.storedCopyOrgPin;
   state.storedCopyOrgPin = orgPinState;
   if (jsonStringify(storedCopyOrgPin) !== jsonStringify(orgPinState)) state.storedCopyRefusal = null;
 }
-//@ chunk-dcmhvw5a.js:397991-398070 placement
+//@ chunk-z20c443b.js:396316-396395 placement
 function refusedCopyForcesRefresh() {
   return (
     getRemoteManagedSettingsRawCache() === null &&
     currentRemoteSettingsState_2().storedCopyRefusal?.forcesRefresh === true
   );
 }
-//@ chunk-dcmhvw5a.js:398070-398144 placement
+//@ chunk-z20c443b.js:396395-396469 placement
 function getStoredCopyTrust() {
   let storedCopyTrust = currentRemoteSettingsState_2().storedCopyTrust;
   return storedCopyTrust === "not_asked" ? storedCopyTrust : cacheTrustLabel(storedCopyTrust);
 }
-//@ chunk-dcmhvw5a.js:398144-398192 placement
+//@ chunk-z20c443b.js:396469-396517 placement
 function getStoredCopyTrustedPrincipal() {
   return trustedPrincipal(currentRemoteSettingsState_2().storedCopyTrust);
 }
-//@ chunk-dcmhvw5a.js:398192-398277 placement
+//@ chunk-z20c443b.js:396517-396602 placement
 function rememberEligibility(eligible, ineligibleReason) {
   currentRemoteSettingsState_2().recordEligibility(eligible, {
     memoize: true,
@@ -406,11 +409,11 @@ function rememberEligibility(eligible, ineligibleReason) {
   });
   return eligible;
 }
-//@ chunk-dcmhvw5a.js:398277-398319 placement
+//@ chunk-z20c443b.js:396602-396644 placement
 function getEligibilityMemo() {
   return currentRemoteSettingsState_2().eligibilityMemo;
 }
-//@ chunk-dcmhvw5a.js:398319-398531 placement
+//@ chunk-z20c443b.js:396644-396856 placement
 function resetEligibilityMemo() {
   let state = currentRemoteSettingsState_2();
   state.eligible = undefined;
@@ -422,7 +425,7 @@ function resetEligibilityMemo() {
     state.loadCycleEnded = false;
   }
 }
-//@ chunk-dcmhvw5a.js:398531-398679 placement
+//@ chunk-z20c443b.js:396856-397004 placement
 function heldMachinePinsSignIn(machineAdminPinsSignInOrg, hasMdmResult) {
   let state = currentRemoteSettingsState_2();
   if (state.machinePinsSignInMemo !== undefined) return state.machinePinsSignInMemo;
@@ -430,43 +433,51 @@ function heldMachinePinsSignIn(machineAdminPinsSignInOrg, hasMdmResult) {
   if (hasMdmResult()) state.machinePinsSignInMemo = pinsSignIn;
   return pinsSignIn;
 }
-//@ chunk-dcmhvw5a.js:398679-398722 placement
+//@ chunk-z20c443b.js:397004-397048 placement
 function getIneligibleReason() {
   return currentRemoteSettingsState_2().ineligibleReason;
 }
-//@ chunk-dcmhvw5a.js:398722-398795 placement
+//@ chunk-z20c443b.js:397048-397121 placement
 function setLastLoadStatus(status) {
   let state = currentRemoteSettingsState_2();
   state.lastLoadStatus = status;
   state.emitLoadStatusChanged(status);
 }
-//@ chunk-dcmhvw5a.js:398795-398836 placement
+//@ chunk-z20c443b.js:397121-397162 placement
 function getLastLoadStatus() {
   return currentRemoteSettingsState_2().lastLoadStatus;
 }
-//@ chunk-dcmhvw5a.js:398836-398943 placement
+//@ chunk-z20c443b.js:397162-397299 placement
 function markLoadCycleEnded() {
   let state = currentRemoteSettingsState_2();
   state.loadCycleEnded = true;
   if (state.lastLoadStatus === undefined) state.emitLoadStatusChanged(undefined);
+  state.loadCycleEndedSignal.emit();
 }
-//@ chunk-dcmhvw5a.js:398943-398985 placement
+//@ chunk-z20c443b.js:397299-397361 placement
+/**
+ * 订阅远端托管设置的加载周期结束信号。
+ */
+function onLoadCycleEnded(listener) {
+  return currentRemoteSettingsState_2().loadCycleEndedSignal.subscribe(listener);
+}
+//@ chunk-z20c443b.js:397361-397403 placement
 function hasLoadCycleEnded() {
   return currentRemoteSettingsState_2().loadCycleEnded;
 }
-//@ chunk-dcmhvw5a.js:398985-399023 placement
+//@ chunk-z20c443b.js:397403-397441 placement
 function markLoadCycleBegun() {
   currentRemoteSettingsState_2().loadCycleBegun = true;
 }
-//@ chunk-dcmhvw5a.js:399023-399065 placement
+//@ chunk-z20c443b.js:397441-397483 placement
 function hasLoadCycleBegun() {
   return currentRemoteSettingsState_2().loadCycleBegun;
 }
-//@ chunk-dcmhvw5a.js:399065-399109 placement
+//@ chunk-z20c443b.js:397483-397527 placement
 function markLoadBackstopReleased() {
   currentRemoteSettingsState_2().loadBackstopReleased = true;
 }
-//@ chunk-dcmhvw5a.js:399109-399345 placement
+//@ chunk-z20c443b.js:397527-397763 placement
 function servedSettingsLoadLeftNoAnswer() {
   let state = currentRemoteSettingsState_2();
   let lastLoadStatus = state.lastLoadStatus;
@@ -481,35 +492,35 @@ function servedSettingsLoadLeftNoAnswer() {
       return false;
   }
 }
-//@ chunk-dcmhvw5a.js:399345-399408 placement
+//@ chunk-z20c443b.js:397763-397826 placement
 function onLastLoadStatusChanged(listener) {
   return currentRemoteSettingsState_2().lastLoadStatusChanged.subscribe(listener);
 }
-//@ chunk-dcmhvw5a.js:399408-399429 placement
+//@ chunk-z20c443b.js:397826-397847 placement
 function getRemoteSettingsPathOverride() {
   return;
 }
-//@ chunk-dcmhvw5a.js:399429-399479 placement
+//@ chunk-z20c443b.js:397847-397897 placement
 function isEvalPolicySnapshotOnly() {
   return currentRemoteSettingsState_2().evalPolicySnapshotOnly;
 }
-//@ chunk-dcmhvw5a.js:399479-399525 placement
+//@ chunk-z20c443b.js:397897-397943 placement
 function setEvalPolicySnapshotOnly(evalPolicySnapshotOnly) {
   currentRemoteSettingsState_2().evalPolicySnapshotOnly = evalPolicySnapshotOnly;
 }
-//@ chunk-dcmhvw5a.js:399525-399572 placement
+//@ chunk-z20c443b.js:397943-397990 placement
 function getSessionUsesGatewayVariable() {
   return currentRemoteSettingsState_2().usesGatewayVariable;
 }
-//@ chunk-dcmhvw5a.js:399572-399615 placement
+//@ chunk-z20c443b.js:397990-398033 placement
 function setSessionUsesGatewayVariable(usesGatewayVariable) {
   currentRemoteSettingsState_2().usesGatewayVariable = usesGatewayVariable;
 }
-//@ chunk-dcmhvw5a.js:399615-399665 placement
+//@ chunk-z20c443b.js:398033-398083 placement
 function getSessionHybridOrganizationUuid() {
   return currentRemoteSettingsState_2().hybridOrganizationUuid;
 }
-//@ chunk-dcmhvw5a.js:399665-399837 placement
+//@ chunk-z20c443b.js:398083-398255 placement
 function setSessionHybridOrganizationUuid(
   hybridOrganizationUuid,
   hybridSignInEnded,
@@ -524,37 +535,37 @@ function setSessionHybridOrganizationUuid(
   state.hybridProviderFromOrganization = hybridProviderFromOrganization;
   state.hybridOnlyForConnection = hybridOnlyForConnection;
 }
-//@ chunk-dcmhvw5a.js:399837-399888 placement
+//@ chunk-z20c443b.js:398255-398306 placement
 function isHybridOnlyForConnection() {
   return currentRemoteSettingsState_2().hybridOnlyForConnection;
 }
-//@ chunk-dcmhvw5a.js:399888-399914 placement
+//@ chunk-z20c443b.js:398306-398332 placement
 /**
  * 按 host 保存的混合（网关）连接映射表。
  */
 var hybridConnectionSlots; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dcmhvw5a.js:399888", () => {
+deferInit("chunk-z20c443b.js:398306", () => {
   hybridConnectionSlots = new HostScoped(() => new Map());
 });
-//@ chunk-dcmhvw5a.js:399914-399960 placement
+//@ chunk-z20c443b.js:398332-398378 placement
 function getSessionHybridConnection(hybridOrganizationUuid) {
   return hybridConnectionSlots.of(getRootSession().host).get(hybridOrganizationUuid);
 }
-//@ chunk-dcmhvw5a.js:399960-399991 placement
+//@ chunk-z20c443b.js:398378-398409 placement
 var verifyAllowedState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dcmhvw5a.js:399960", () => {
+deferInit("chunk-z20c443b.js:398378", () => {
   verifyAllowedState = new HostScoped(() => ({
     value: true,
   }));
 });
-//@ chunk-dcmhvw5a.js:399991-400023 placement
+//@ chunk-z20c443b.js:398409-398441 placement
 /**
  * 无盘会话或只做策略快照评估时，不依赖磁盘缓存。
  */
 function isSnapshotOnlySession() {
   return isDiskless() || isEvalPolicySnapshotOnly();
 }
-//@ chunk-dcmhvw5a.js:400023-400133 placement
+//@ chunk-z20c443b.js:398441-398551 placement
 function isProjectedSnapshot(settings) {
   let { projectedView, projectedParse } = currentRemoteSettingsState_2();
   return (
@@ -565,22 +576,26 @@ function isProjectedSnapshot(settings) {
   );
 }
 export {
-  isEvalPolicySnapshotOnly,
-  markLoadCycleBegun,
+  hasPolicySettingsNotified,
   onLastLoadStatusChanged,
+  getLastLoadStatus,
+  getSyncCacheResetEpoch,
+  servedSettingsLoadLeftNoAnswer,
+  hasLoadCycleBegun,
+  hasLoadCycleEnded,
+  markLoadCycleBegun,
+  getEligibilityMemo,
   isRemoteManagedSettingsVerified,
   getRemoteSettingsPathOverride,
-  getEligibilityMemo,
-  getLastLoadStatus,
-  hasLoadCycleEnded,
-  servedSettingsLoadLeftNoAnswer,
-  getIneligibleReason,
+  isRemoteManagedSettingsVerifiedAndApprovedForSession,
+  registerSyncCacheResetListener,
+  isEvalPolicySnapshotOnly,
+  HELPER_CONSENT_STATE_ID,
+  SETTINGS_FILENAME,
   servedBodyOf,
   stripReservedKeys,
-  getSyncCacheResetEpoch,
   isManagedSettingsCopyKeptVerifiable,
   helperConsentDigest,
-  HELPER_CONSENT_STATE_ID,
   getHelperConsentPath,
   getStoredCopyTrust,
   getStoredCopyTrustedPrincipal,
@@ -590,32 +605,29 @@ export {
   markRemoteManagedSettingsConsented,
   markPolicySettingsNotified,
   markLoadBackstopReleased,
+  getIneligibleReason,
   setLastLoadStatus,
   markLoadCycleEnded,
-  SETTINGS_FILENAME,
-  getGatewayThatVerifiedRemoteManagedSettings,
   resetEligibilityMemo,
+  resetSyncCache,
+  setStoredCopyOrgPin,
+  getSessionUsesGatewayVariable,
+  getSessionHybridOrganizationUuid,
+  setSessionUsesGatewayVariable,
+  setSessionHybridOrganizationUuid,
+  setStoredCopyGateInputs,
+  setEvalPolicySnapshotOnly,
+  rememberEligibility,
+  onLoadCycleEnded,
+  getGatewayThatVerifiedRemoteManagedSettings,
+  heldMachinePinsSignIn,
   dropRemoteManagedSettingsConsentDeferral,
-  isRemoteManagedSettingsVerifiedAndApprovedForSession,
   isSnapshotOnlySession,
   currentRemoteSettingsState_2,
   MAX_BACKEND_SETTINGS_BYTES,
   MAX_STORAGE_VIEW_BYTES,
   isProjectedSnapshot,
   refusedCopyForcesRefresh,
-  hasLoadCycleBegun,
-  getSessionHybridOrganizationUuid,
-  resetSyncCache,
-  setStoredCopyOrgPin,
-  getSessionUsesGatewayVariable,
-  setSessionUsesGatewayVariable,
-  setSessionHybridOrganizationUuid,
-  setStoredCopyGateInputs,
-  setEvalPolicySnapshotOnly,
-  rememberEligibility,
-  heldMachinePinsSignIn,
-  hasPolicySettingsNotified,
-  registerSyncCacheResetListener,
   getSessionHybridConnection,
   isHybridOnlyForConnection,
 };

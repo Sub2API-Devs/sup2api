@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：与 Chrome 扩展通信的 socket 客户端与错误类型
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p7xf186d.js (26)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-290tacpj.js (26)
  * attribution: placement 26
  */
 import { createConnection } from "net";
@@ -25,7 +25,7 @@ import { PairingError } from "./localPairing/pairingErrors.js";
 import { BROWSER_TOOL_TIMEOUT_MS } from "./browserToolSchemas.js";
 import { classifyToolError, firstTextContent } from "./toolErrorClassification.js";
 
-//@ chunk-p7xf186d.js:27900-28175 placement
+//@ chunk-290tacpj.js:27900-28175 placement
 function toolCallMeta(payload, ids) {
   return {
     toolUseId: ids.toolUseId,
@@ -39,7 +39,7 @@ function toolCallMeta(payload, ids) {
     category: normalizeCategory(payload.category),
   };
 }
-//@ chunk-p7xf186d.js:28175-28438 placement
+//@ chunk-290tacpj.js:28175-28438 placement
 function permissionContextFields(options) {
   return {
     ...(options?.permissionMode
@@ -64,32 +64,32 @@ function permissionContextFields(options) {
       : {}),
   };
 }
-//@ chunk-p7xf186d.js:28438-28503 placement
+//@ chunk-290tacpj.js:28438-28503 placement
 function quoteTruncated(text, maxLength = 64) {
   return JSON.stringify(String(text).slice(0, maxLength));
 }
-//@ chunk-p7xf186d.js:28503-28585 placement
+//@ chunk-290tacpj.js:28503-28585 placement
 class SocketConnectionError extends Error {
   constructor(message) {
     super(message);
     this.name = "SocketConnectionError";
   }
 }
-//@ chunk-p7xf186d.js:28585-28670 placement
+//@ chunk-290tacpj.js:28585-28670 placement
 class ToolCallSupersededError extends Error {
   constructor(message) {
     super(message);
     this.name = "ToolCallSupersededError";
   }
 }
-//@ chunk-p7xf186d.js:28670-28757 placement
+//@ chunk-290tacpj.js:28670-28757 placement
 class NoExtensionConnectedError extends Error {
   constructor(message) {
     super(message);
     this.name = "NoExtensionConnectedError";
   }
 }
-//@ chunk-p7xf186d.js:28757-28906 placement
+//@ chunk-290tacpj.js:28757-28906 placement
 class ToolCallTimeoutError extends Error {
   routingAckReceived;
   constructor(message, options) {
@@ -98,35 +98,35 @@ class ToolCallTimeoutError extends Error {
     this.routingAckReceived = options?.routingAckReceived;
   }
 }
-//@ chunk-p7xf186d.js:28906-29000 placement
+//@ chunk-290tacpj.js:28906-29000 placement
 class ExtensionDisconnectedMidCallError extends Error {
   constructor(message) {
     super(message);
     this.name = "ExtensionDisconnectedMidCallError";
   }
 }
-//@ chunk-p7xf186d.js:29000-29082 placement
+//@ chunk-290tacpj.js:29000-29082 placement
 class RequestTooLargeError extends Error {
   constructor(message) {
     super(message);
     this.name = "RequestTooLargeError";
   }
 }
-//@ chunk-p7xf186d.js:29082-29129 placement (2.1.88 match: _temp, 1)
+//@ chunk-290tacpj.js:29082-29129 placement (2.1.88 match: _temp, 1)
 /**
  * 判断解析结果是否为 JSON-RPC 响应（有 result 或 error）。
  */
 function isJsonRpcResult(r) {
   return "result" in r || "error" in r;
 }
-//@ chunk-p7xf186d.js:29129-29191 placement
+//@ chunk-290tacpj.js:29129-29191 placement
 /**
  * 判断解析结果是否为 JSON-RPC 请求（有字符串 method）。
  */
 function isJsonRpcRequest(message) {
   return "method" in message && typeof message.method === "string";
 }
-//@ chunk-p7xf186d.js:29191-29311 placement
+//@ chunk-290tacpj.js:29191-29311 placement
 var CONNECT_TIMEOUT_MS = 5000;
 var PAIRING_REPLY_TIMEOUT_MS = 15000;
 var HANDSHAKE_STEP_TIMEOUT_MS = 15000;
@@ -138,7 +138,7 @@ var LIVENESS_PROBE_TIMEOUT_MS = 1e4;
 var MAX_LOCAL_FRAME_BYTES = 1032192;
 var FRAME_OVERHEAD_BYTES = 1024;
 var MAX_REQUEST_PAYLOAD_BYTES = Math.floor(((MAX_LOCAL_FRAME_BYTES - FRAME_OVERHEAD_BYTES) * 3) / 4) - 16;
-//@ chunk-p7xf186d.js:29311-29418 placement
+//@ chunk-290tacpj.js:29311-29418 placement
 class PeerRefusedPairing extends PairingError {
   constructor(wireCode, httpStatus) {
     super(wireCode, "peer-reported", {
@@ -147,7 +147,7 @@ class PeerRefusedPairing extends PairingError {
     this.name = "PeerRefusedPairing";
   }
 }
-//@ chunk-p7xf186d.js:29418-29600 placement
+//@ chunk-290tacpj.js:29418-29600 placement
 class HandshakeTimeout extends Error {
   which;
   constructor(which) {
@@ -156,7 +156,7 @@ class HandshakeTimeout extends Error {
     this.name = "HandshakeTimeout";
   }
 }
-//@ chunk-p7xf186d.js:29600-30110 placement
+//@ chunk-290tacpj.js:29600-30110 placement
 function handlePairingResult(reply, expectedMsg) {
   let result = reply.result;
   if (result && typeof result === "object" && result.local_pairing) {
@@ -175,19 +175,19 @@ function handlePairingResult(reply, expectedMsg) {
     throw new PeerRefusedPairing("unsupported_peer");
   throw new PairingError("malformed", "unrecognised reply to a pairing message");
 }
-//@ chunk-p7xf186d.js:30110-30158 placement
+//@ chunk-290tacpj.js:30110-30158 placement
 /**
  * 判断 HTTP 状态是否可重试（未给、小于 400 或大于等于 500）。
  */
 function isRetriableHttpStatus(httpStatus) {
   return httpStatus === undefined || httpStatus < 400 || httpStatus >= 500;
 }
-//@ chunk-p7xf186d.js:30158-30203 placement
+//@ chunk-290tacpj.js:30158-30203 placement
 /**
  * 表示连接已死的 errno（ENOENT、ECONNREFUSED）。
  */
 var isDeadConnectionCode = (code) => code === "ENOENT" || code === "ECONNREFUSED";
-//@ chunk-p7xf186d.js:30203-30577 placement
+//@ chunk-290tacpj.js:30203-30577 placement
 function pairingErrorMessage(code, peerReported) {
   switch (code) {
     case "pairing_disabled":
@@ -208,7 +208,7 @@ function pairingErrorMessage(code, peerReported) {
       return "retry";
   }
 }
-//@ chunk-p7xf186d.js:30577-30793 placement
+//@ chunk-290tacpj.js:30577-30793 placement
 function isRetryablePairingError(error) {
   if (!(error instanceof PairingError)) return false;
   switch (error.code) {
@@ -222,20 +222,20 @@ function isRetryablePairingError(error) {
       return false;
   }
 }
-//@ chunk-p7xf186d.js:30793-30940 placement
+//@ chunk-290tacpj.js:30793-30940 placement
 function isNoToolSpecifiedError(response) {
   let content = response.error?.content;
   if (!Array.isArray(content) || content.length !== 1) return false;
   let firstBlock = content[0];
   return firstBlock?.type === "text" && firstBlock.text === "No tool specified";
 }
-//@ chunk-p7xf186d.js:30940-31099 placement
+//@ chunk-290tacpj.js:30940-31099 placement
 function requestTooLargeError(sizeBytes, limitBytes = MAX_LOCAL_FRAME_BYTES) {
   return new RequestTooLargeError(
     `Request too large for the local browser connection (${sizeBytes} bytes; limit ${limitBytes}). Send smaller inputs or fewer files per call.`,
   );
 }
-//@ chunk-p7xf186d.js:31099-31223 placement
+//@ chunk-290tacpj.js:31099-31223 placement
 function peerMaxReassemblyBytes(pairing) {
   let maxReassemblyBytes = pairing.peerInstance?.max_reassembly_bytes;
   return typeof maxReassemblyBytes === "number" &&
@@ -244,7 +244,7 @@ function peerMaxReassemblyBytes(pairing) {
     ? maxReassemblyBytes
     : undefined;
 }
-//@ chunk-p7xf186d.js:31223-31336 placement
+//@ chunk-290tacpj.js:31223-31336 placement
 function isInferenceRequest(body) {
   let request = body;
   return (
@@ -254,7 +254,7 @@ function isInferenceRequest(body) {
     Array.isArray(request.messages)
   );
 }
-//@ chunk-p7xf186d.js:31336-55071 placement
+//@ chunk-290tacpj.js:31336-55071 placement
 /**
  * 与 Chrome 扩展通信的 socket 客户端：连接、配对握手、请求发送与超时、断线处理。
  */
@@ -1403,11 +1403,11 @@ class ChromeSocketClient {
     }
   }
 }
-//@ chunk-p7xf186d.js:55071-55104 placement
+//@ chunk-290tacpj.js:55071-55104 placement
 function createChromeSocketClient(context) {
   return new ChromeSocketClient(context);
 }
-//@ chunk-p7xf186d.js:55104-55174 placement
+//@ chunk-290tacpj.js:55104-55174 placement
 /**
  * 清除某会话的配对上下文来源。
  */
@@ -1418,16 +1418,16 @@ function clearPairingSource(session) {
   return true;
 }
 export {
-  NoExtensionConnectedError,
-  ExtensionDisconnectedMidCallError,
   createChromeSocketClient,
   quoteTruncated,
+  NoExtensionConnectedError,
+  ExtensionDisconnectedMidCallError,
   SocketConnectionError,
-  permissionContextFields,
-  toolCallMeta,
   ToolCallTimeoutError,
-  pairingErrorMessage,
   ToolCallSupersededError,
   RequestTooLargeError,
+  permissionContextFields,
+  toolCallMeta,
+  pairingErrorMessage,
   clearPairingSource,
 };

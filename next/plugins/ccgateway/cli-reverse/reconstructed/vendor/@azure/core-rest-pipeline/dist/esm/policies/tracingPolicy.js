@@ -1,8 +1,8 @@
 /**
  * @azure/core-rest-pipeline/dist/esm/policies/tracingPolicy.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/core-rest-pipeline@1.21.0
- * pieces: chunk-mrx6y2r5.js (8)
+ * pieces: chunk-b5df2wx1.js (8)
  * attribution: esm-layout 2, esm-fingerprint 6
  */
 import { RestError, isRestError } from "../../../../../@typespec/ts-http-runtime/dist/esm/restError.js";
@@ -14,15 +14,15 @@ import { coreRestPipelineLogger } from "../../../../../@typespec/ts-http-runtime
 import { getErrorMessage } from "../../../../core-util/dist/esm/error.js";
 import { createFileBody } from "../util/file.js";
 
-//@ chunk-mrx6y2r5.js:59724-59734 esm-layout
+//@ chunk-b5df2wx1.js:59724-59734 esm-layout
 var RestError_default = RestError;
-//@ chunk-mrx6y2r5.js:59734-59762 esm-layout
+//@ chunk-b5df2wx1.js:59734-59762 esm-layout
 function createSpan(userAgent) {
   return isRestError(userAgent);
 }
-//@ chunk-mrx6y2r5.js:59762-59785 esm-fingerprint
+//@ chunk-b5df2wx1.js:59762-59785 esm-fingerprint
 var TRACINGPOLICY = "tracingPolicy";
-//@ chunk-mrx6y2r5.js:59785-60294 esm-fingerprint
+//@ chunk-b5df2wx1.js:59785-60294 esm-fingerprint
 function tracingPolicy(options = {}) {
   let userAgentPromise = getUserAgentValue(options.userAgentPrefix);
   let sanitizer = new Sanitizer({
@@ -56,7 +56,7 @@ function tracingPolicy(options = {}) {
     },
   };
 }
-//@ chunk-mrx6y2r5.js:60294-60475 esm-fingerprint
+//@ chunk-b5df2wx1.js:60294-60475 esm-fingerprint
 function tryCreateTracingClient() {
   try {
     return createTracingClient({
@@ -69,7 +69,7 @@ function tryCreateTracingClient() {
     return;
   }
 }
-//@ chunk-mrx6y2r5.js:60475-60932 esm-fingerprint
+//@ chunk-b5df2wx1.js:60475-60932 esm-fingerprint
 function tryCreateSpan(tracingClient, request, spanAttributes) {
   try {
     let { span, updatedOptions } = tracingClient.startSpan(
@@ -97,7 +97,7 @@ function tryCreateSpan(tracingClient, request, spanAttributes) {
     return;
   }
 }
-//@ chunk-mrx6y2r5.js:60932-61166 esm-fingerprint
+//@ chunk-b5df2wx1.js:60932-61166 esm-fingerprint
 function tryProcessError(span, error) {
   try {
     span.setStatus({
@@ -110,7 +110,7 @@ function tryProcessError(span, error) {
     coreRestPipelineLogger.warning(`Skipping tracing span processing due to an error: ${getErrorMessage(e)}`);
   }
 }
-//@ chunk-mrx6y2r5.js:61166-61450 esm-fingerprint
+//@ chunk-b5df2wx1.js:61166-61450 esm-fingerprint
 function tryProcessResponse(span, response) {
   try {
     span.setAttribute("http.status_code", response.status);

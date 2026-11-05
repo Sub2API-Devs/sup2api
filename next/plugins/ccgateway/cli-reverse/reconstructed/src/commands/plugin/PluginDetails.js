@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件详情视图：安装预览、组件摘要、headersHelper 等"在本机运行命令"的警告
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vrb44rx7.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wb51jffc.js (20)
  * attribution: placement 20
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -59,7 +59,7 @@ import { findMarketplaceOfAllPlugins } from "./PluginOptionsFlow.js";
 import { NEEDS_CONFIG_NOTE } from "./activatePluginsAfterInstall.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrb44rx7.js:60011-60165 placement
+//@ chunk-wb51jffc.js:60163-60317 placement
 /**
  * 在 Suspense 下渲染插件目录条目的"最后更新"信息（加载中不显示）。
  */
@@ -80,7 +80,7 @@ function PluginLastUpdated(props) {
   } else content = $[1];
   return content;
 }
-//@ chunk-vrb44rx7.js:60165-60481 placement
+//@ chunk-wb51jffc.js:60317-60633 placement
 function renderLastUpdated(props) {
   let $ = useMemoCache(4);
   let { entryPromise } = props;
@@ -109,7 +109,7 @@ function renderLastUpdated(props) {
   } else footer = $[3];
   return footer;
 }
-//@ chunk-vrb44rx7.js:60481-60622 placement
+//@ chunk-wb51jffc.js:60633-60774 placement
 function useCatalogEntryPromise(pluginId) {
   let $ = useMemoCache(3);
   let { storageV5 } = useTheme_2();
@@ -122,7 +122,7 @@ function useCatalogEntryPromise(pluginId) {
   } else content = $[2];
   return content;
 }
-//@ chunk-vrb44rx7.js:60622-60772 placement (2.1.88 match: formatPeakDay, 0.754)
+//@ chunk-wb51jffc.js:60774-60924 placement (2.1.88 match: formatPeakDay, 0.756)
 function formatPeakDay(dateStr) {
   let date = new Date(dateStr);
   if (Number.isNaN(date.getTime())) return;
@@ -132,7 +132,7 @@ function formatPeakDay(dateStr) {
     day: "numeric",
   });
 }
-//@ chunk-vrb44rx7.js:60772-61607 placement
+//@ chunk-wb51jffc.js:60924-61759 placement
 function renderInstallPreview(props) {
   let $ = useMemoCache(17);
   let { plugin, onEntryHelperShown, refreshKey } = props;
@@ -210,7 +210,7 @@ function renderInstallPreview(props) {
   } else details = $[16];
   return details;
 }
-//@ chunk-vrb44rx7.js:61607-61996 placement
+//@ chunk-wb51jffc.js:61759-62149 placement
 /**
  * 等待目录条目，有组件清单时逐项渲染，否则退回到市场条目里的组件摘要。
  */
@@ -257,7 +257,7 @@ function PluginComponentSummary(props) {
   } else footerRows = $[7];
   return footerRows;
 }
-//@ chunk-vrb44rx7.js:61996-63036 placement
+//@ chunk-wb51jffc.js:62149-63189 placement
 /**
  * 警告插件会在本机运行命令并把输出作为请求头发送到指定地址。
  */
@@ -342,7 +342,7 @@ function renderHeadersHelperWarning(props) {
   } else policyNote = $[16];
   return policyNote;
 }
-//@ chunk-vrb44rx7.js:63036-63946 placement
+//@ chunk-wb51jffc.js:63189-64099 placement
 function renderCommandInstallSource(props) {
   let $ = useMemoCache(14);
   let { entry } = props;
@@ -419,7 +419,7 @@ function renderCommandInstallSource(props) {
   } else footer2 = $[13];
   return footer2;
 }
-//@ chunk-vrb44rx7.js:63946-64256 placement
+//@ chunk-wb51jffc.js:64099-64409 placement
 /**
  * 返回 {record, pinned}：record 记录最近一次展示的同意状态，pinned 读取它；依赖变化时清空。
  */
@@ -459,7 +459,7 @@ function usePinnedConsentRecord(consentKey) {
   } else result = $[4];
   return result;
 }
-//@ chunk-vrb44rx7.js:64256-64604 placement
+//@ chunk-wb51jffc.js:64409-64757 placement
 /**
  * 拉取插件归档时的"会在本机运行命令"（headersHelper 等）同意信息，在 Suspense 下渲染警告并回调 onShown。
  */
@@ -493,7 +493,7 @@ function PluginHeadersHelperWarning(props) {
   } else footer = $[7];
   return footer;
 }
-//@ chunk-vrb44rx7.js:64604-64874 placement
+//@ chunk-wb51jffc.js:64757-65027 placement
 function HeadersHelperWarningView(props) {
   let $ = useMemoCache(7);
   let { consentPromise, verb, onShown } = props;
@@ -526,7 +526,7 @@ function HeadersHelperWarningView(props) {
   } else statusLine = $[6];
   return statusLine;
 }
-//@ chunk-vrb44rx7.js:64874-65695 placement
+//@ chunk-wb51jffc.js:65027-65849 placement
 function renderComponentSummary(props) {
   let $ = useMemoCache(11);
   let { entry } = props;
@@ -589,7 +589,7 @@ function renderComponentSummary(props) {
   if (footer !== EARLY_RETURN_SENTINEL) return footer;
   return content;
 }
-//@ chunk-vrb44rx7.js:65695-65908 placement
+//@ chunk-wb51jffc.js:65849-66062 placement
 function getDeclaredNames(groups) {
   if (typeof groups === "string") return [groups];
   if (Array.isArray(groups))
@@ -599,9 +599,9 @@ function getDeclaredNames(groups) {
   if (groups && typeof groups === "object") return Object.keys(groups);
   return [];
 }
-//@ chunk-vrb44rx7.js:65908-65928 placement
+//@ chunk-wb51jffc.js:66062-66082 placement
 var errorOf = (result) => result.error;
-//@ chunk-vrb44rx7.js:65928-66502 placement
+//@ chunk-wb51jffc.js:66082-66656 placement
 class PluginDetailsStore {
   #n = createSignal();
   #e;
@@ -660,15 +660,15 @@ class PluginDetailsStore {
     this.#n.emit();
   }
 }
-//@ chunk-vrb44rx7.js:66502-66506 placement
+//@ chunk-wb51jffc.js:66656-66660 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:66502", () => {
+deferInit("chunk-wb51jffc.js:66656", () => {
   init_react_production();
 });
-//@ chunk-vrb44rx7.js:66506-66651 placement
+//@ chunk-wb51jffc.js:66660-66805 placement
 var BUNDLED_MCP_NEEDS_CONFIG_HINT =
   " A bundled MCP server needs configuration before it can start \u2014 select its plugin in /plugin's Installed tab and choose Configure.";
-//@ chunk-vrb44rx7.js:66651-68678 placement
+//@ chunk-wb51jffc.js:66805-68832 placement
 /**
  * 描述市场条目的风险（通过本机命令安装、headersHelper 等）。
  */
@@ -776,7 +776,7 @@ async function describeMarketplaceEntryRisks({
     type: "menu",
   });
 }
-//@ chunk-vrb44rx7.js:68678-69902 placement
+//@ chunk-wb51jffc.js:68832-70056 placement
 async function describeInstallScopeRisks({
   plugin,
   scope = "user",
@@ -846,19 +846,19 @@ async function describeInstallScopeRisks({
     setInstallError(installed.error);
   }
 }
-//@ chunk-vrb44rx7.js:69902-69906 placement
+//@ chunk-wb51jffc.js:70056-70060 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:69902", () => {
+deferInit("chunk-wb51jffc.js:70056", () => {
   init_react_production();
 });
 export {
-  usePinnedConsentRecord,
-  PluginHeadersHelperWarning,
   PluginDetailsStore,
   PluginLastUpdated,
   renderInstallPreview,
   renderCommandInstallSource,
   errorOf,
   describeMarketplaceEntryRisks,
+  usePinnedConsentRecord,
   describeInstallScopeRisks,
+  PluginHeadersHelperWarning,
 };

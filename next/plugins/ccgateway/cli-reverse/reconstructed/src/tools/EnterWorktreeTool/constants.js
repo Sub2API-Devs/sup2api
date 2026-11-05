@@ -3,13 +3,13 @@
  *
  * EnterWorktree 工具名常量
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/EnterWorktreeTool/constants.ts
- * pieces: chunk-3h9nvmn3.js (1)
+ * pieces: chunk-3a9s57ey.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-3h9nvmn3.js:1215-1238 fingerprint (2.1.88 match: ENTER_WORKTREE_TOOL_NAME, 1)
+//@ chunk-3a9s57ey.js:1214-1237 fingerprint (2.1.88 match: ENTER_WORKTREE_TOOL_NAME, 1)
 /**
  * EnterWorktree 工具名常量。
  */

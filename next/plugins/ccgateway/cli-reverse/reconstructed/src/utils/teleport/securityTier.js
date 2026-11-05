@@ -3,9 +3,9 @@
  *
  * 云会话安全等级请求（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (8)
  * attribution: placement 8
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
@@ -16,7 +16,7 @@ import { objectSchema, _enum, unknown, stringSchema } from "../../../vendor/zod/
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:474352-474421 placement
+//@ chunk-7jxyna5q.js:391830-391899 placement
 /**
  * 安全等级请求开关（tengu_breezy_fairy）。
  */
@@ -27,7 +27,7 @@ function isSecurityTierEnabled() {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:474421-474589 placement
+//@ chunk-7jxyna5q.js:391899-392067 placement
 async function planTrustedDeviceProof() {
   if (!isSecurityTierEnabled() || !isTrustedDeviceActiveForOrg())
     return {
@@ -43,16 +43,16 @@ async function planTrustedDeviceProof() {
         kind: "no_token",
       };
 }
-//@ chunk-s61vbvea.js:474589-474627 placement
+//@ chunk-7jxyna5q.js:392067-392105 placement
 /**
  * 可信设备证明是否生效（模式非 off）。
  */
 function isTrustedDeviceProofActive(securityAsk) {
   return securityAsk.kind !== "off";
 }
-//@ chunk-s61vbvea.js:474627-474700 placement
+//@ chunk-7jxyna5q.js:392105-392178 placement
 var securityTierResponseSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:474627", () => {
+deferInit("chunk-7jxyna5q.js:392105", () => {
   securityTierResponseSchema = DoctorLazy(() =>
     objectSchema({
       session: objectSchema({
@@ -61,7 +61,7 @@ deferInit("chunk-s61vbvea.js:474627", () => {
     }),
   );
 });
-//@ chunk-s61vbvea.js:474700-474793 placement
+//@ chunk-7jxyna5q.js:392178-392271 placement
 /**
  * 从响应里取 session.security_tier。
  */
@@ -69,9 +69,9 @@ function securityTierOfResponse(body) {
   let parsed = securityTierResponseSchema().safeParse(body);
   return parsed.success ? parsed.data.session.security_tier : undefined;
 }
-//@ chunk-s61vbvea.js:474793-474962 placement
+//@ chunk-7jxyna5q.js:392271-392440 placement
 var securityTierErrorSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:474793", () => {
+deferInit("chunk-7jxyna5q.js:392271", () => {
   securityTierErrorSchema = DoctorLazy(() =>
     objectSchema({
       error: objectSchema({
@@ -83,7 +83,7 @@ deferInit("chunk-s61vbvea.js:474793", () => {
     }),
   );
 });
-//@ chunk-s61vbvea.js:474962-475328 placement
+//@ chunk-7jxyna5q.js:392440-392806 placement
 function requestSecurityTier(body) {
   let parsed = securityTierErrorSchema().safeParse(body);
   if (!parsed.success) return "refused";
@@ -99,7 +99,7 @@ function requestSecurityTier(body) {
       return "refused";
   }
 }
-//@ chunk-s61vbvea.js:475328-475422 placement
+//@ chunk-7jxyna5q.js:392806-392900 placement
 /**
  * 记录安全等级请求结果。
  */
@@ -109,10 +109,10 @@ function logSecurityTierOutcome(outcome) {
 }
 export {
   isSecurityTierEnabled,
+  securityTierErrorSchema,
   planTrustedDeviceProof,
   isTrustedDeviceProofActive,
   requestSecurityTier,
   logSecurityTierOutcome,
   securityTierOfResponse,
-  securityTierErrorSchema,
 };

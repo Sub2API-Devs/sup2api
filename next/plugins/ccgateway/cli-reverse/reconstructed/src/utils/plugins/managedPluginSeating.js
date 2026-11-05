@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：托管插件座席
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-czx62zen.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-r7hswen6.js (7)
  * attribution: placement 7
  */
 import {
@@ -28,20 +28,20 @@ import { getManagedPlugins } from "./managedPlugins.js";
 import { isRemoteManagedSettingsVerifiedAndApprovedForSession } from "../../services/remoteManagedSettings/remoteSettingsState.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-czx62zen.js:1537-1620 placement (2.1.88 match: _temp7, 1)
+//@ chunk-r7hswen6.js:1538-1621 placement (2.1.88 match: _temp7, 1)
 function hasPolicySettings() {
   let settingsForSource = getSettingsForSource("policySettings");
   return settingsForSource !== null && Object.keys(settingsForSource).length > 0;
 }
-//@ chunk-czx62zen.js:1620-1654 placement
+//@ chunk-r7hswen6.js:1621-1655 placement
 /**
  * outermostSeatCache：安全插件是否排最外层的缓存。
  */
 var outermostSeatCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-czx62zen.js:1620", () => {
+deferInit("chunk-r7hswen6.js:1621", () => {
   outermostSeatCache = identity(subscribe(), (cache) => cache.set(null));
 });
-//@ chunk-czx62zen.js:1654-2377 placement
+//@ chunk-r7hswen6.js:1655-2378 placement
 /**
  * 决定默认安全插件（Tte）是否排在最外层：给定 prependPlugins 时看是否列出；否则有托管设置/托管 MCP 文件、 Team/Enterprise 组织或本会话已座席时座席。座席后在本会话内保持。返回 {outermost, seat}。
  */
@@ -74,12 +74,12 @@ function resolveSecurityPluginSeat(prependPlugins) {
     seat: `${DEFAULT_SECURITY_SEAT_PLUGIN} ${reason}`,
   };
 }
-//@ chunk-czx62zen.js:2377-2388 placement
+//@ chunk-r7hswen6.js:2378-2389 placement
 /**
  * SEAT_BY_DEFAULT：默认座席标志。
  */
 var SEAT_BY_DEFAULT = true;
-//@ chunk-czx62zen.js:2388-2685 placement
+//@ chunk-r7hswen6.js:2389-2686 placement
 function getDeclaredPluginDigests(tier, pluginId) {
   let { name, marketplace } = parsePluginIdentifier(pluginId);
   if (marketplace === undefined) return;
@@ -94,7 +94,7 @@ function getDeclaredPluginDigests(tier, pluginId) {
     });
   return flattened.length > 0 ? flattened.flat() : undefined;
 }
-//@ chunk-czx62zen.js:2685-2886 placement
+//@ chunk-r7hswen6.js:2686-2887 placement
 function getSeatedPluginDigests(tier, pluginId) {
   let lowered = nfcLower(pluginId);
   let enabledPlugins = tier?.enabledPlugins ?? {};
@@ -106,7 +106,7 @@ function getSeatedPluginDigests(tier, pluginId) {
   );
   return any && any_2 ? getDeclaredPluginDigests(tier, pluginId) : undefined;
 }
-//@ chunk-czx62zen.js:2886-3092 placement
+//@ chunk-r7hswen6.js:2887-3095 placement
 /**
  * 托管插件的可信摘要（远程设置未验证时用本机策略层）。
  */
@@ -127,9 +127,9 @@ function resolveManagedPluginDigests(pluginId) {
     : getSeatedPluginDigests(getMachineAdminPolicyTier(), pluginId);
 }
 export {
+  SEAT_BY_DEFAULT,
+  resolveSecurityPluginSeat,
+  outermostSeatCache,
   hasPolicySettings,
   resolveManagedPluginDigests,
-  resolveSecurityPluginSeat,
-  SEAT_BY_DEFAULT,
-  outermostSeatCache,
 };

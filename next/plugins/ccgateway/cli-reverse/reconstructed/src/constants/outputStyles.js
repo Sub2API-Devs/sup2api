@@ -3,9 +3,9 @@
  *
  * 内置输出风格（Proactive、Concise、Explanatory、Learning）的提示词与加载：合并插件、用户、项目、策略来源的自定义风格，选当前风格。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/constants/outputStyles.ts
- * pieces: chunk-e6aww6q8.js (8)
+ * pieces: chunk-5xgkngpb.js (8)
  * attribution: fingerprint 4, layout 4
  */
 import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
@@ -20,7 +20,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { getSettings_DEPRECATED } from "../utils/settings/settings.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:809547-819458 fingerprint (2.1.88 match: OUTPUT_STYLE_CONFIG, 0.495)
+//@ chunk-5xgkngpb.js:821159-831071 fingerprint (2.1.88 match: OUTPUT_STYLE_CONFIG, 0.495)
 /**
  * 内置输出风格提示词片段：Insights 说明、Proactive 的完整段与简述、Concise 的完整段与简述；zI 为默认风格名 "default"；GZ 为内置风格表（default:null、Proactive、Concise、Explanatory、Learning）。
  */
@@ -30,9 +30,9 @@ var PROACTIVE_STYLE_SUMMARY;
 var PROACTIVE_STYLE_BACKGROUND_NOTE;
 var CONCISE_STYLE_PROMPT;
 var CONCISE_STYLE_SUMMARY;
-var DEFAULT;
+var DEFAULT_2;
 var OUTPUT_STYLE_CONFIG;
-deferInit("chunk-e6aww6q8.js:809547", () => {
+deferInit("chunk-5xgkngpb.js:821159", () => {
   EXPLANATORY_INSIGHTS_PROMPT = `
 ## Insights
 In order to encourage learning, before and after writing code, always provide brief educational explanations about implementation choices using (with backticks):
@@ -64,9 +64,9 @@ These insights should be included in the conversation, not in the codebase. You 
 Where these rules conflict with more general communication or formatting guidance elsewhere in your instructions, these rules win.`;
   CONCISE_STYLE_SUMMARY =
     "Be concise: lead with the result, skip preamble and narration, keep only what the user needs.";
-  DEFAULT = "default";
+  DEFAULT_2 = "default";
   OUTPUT_STYLE_CONFIG = {
-    [DEFAULT]: null,
+    [DEFAULT_2]: null,
     Proactive: {
       name: "Proactive",
       source: "built-in",
@@ -182,7 +182,7 @@ ${EXPLANATORY_INSIGHTS_PROMPT}`,
     },
   };
 });
-//@ chunk-e6aww6q8.js:819458-819540 layout
+//@ chunk-5xgkngpb.js:831071-831153 layout
 /**
  * 按工作目录缓存 getAllOutputStyles 的结果。
  */
@@ -193,7 +193,7 @@ function getAllOutputStylesCached(sessionContext, storageV5) {
     () => getAllOutputStyles(sessionContext, storageV5),
   );
 }
-//@ chunk-e6aww6q8.js:819540-820209 fingerprint (2.1.88 match: getAllOutputStyles, 0.634)
+//@ chunk-5xgkngpb.js:831153-831825 fingerprint (2.1.88 match: getAllOutputStyles, 0.633)
 /**
  * 所有输出风格：内置 + 插件 + 用户 + 项目 + 策略（后者覆盖前者）；outputStyles 被策略锁定时只给内置。
  */
@@ -244,14 +244,14 @@ async function getAllOutputStyles(sessionContext, storageV5) {
       };
   return allStyles;
 }
-//@ chunk-e6aww6q8.js:820209-820265 layout (2.1.88 match: _temp1, 1)
+//@ chunk-5xgkngpb.js:831825-831881 layout (2.1.88 match: _temp1, 1)
 /**
  * null（默认）或 built-in 来源。
  */
 function isBuiltInOrDefaultStyle(a_9) {
   return a_9 === null || a_9?.source === "built-in";
 }
-//@ chunk-e6aww6q8.js:820265-820574 layout
+//@ chunk-5xgkngpb.js:831881-832190 layout
 /**
  * Remote Control/转发消息不能切换自定义风格、本地设置不可写时的提示文本。
  */
@@ -259,14 +259,14 @@ var CUSTOM_STYLE_REMOTE_DENIED_MESSAGE =
   "Custom output styles can't be selected over Remote Control or from a relayed message. Select one in the session itself, or pick a built-in style here.";
 var STYLE_SAVE_UNAVAILABLE_MESSAGE =
   "Output styles are saved to local settings (.claude/settings.local.json), which this session doesn't load, so the style can't be changed here.";
-//@ chunk-e6aww6q8.js:820574-820618 layout
+//@ chunk-5xgkngpb.js:832190-832234 layout
 /**
  * 清空输出风格缓存。
  */
 function clearOutputStylesCache() {
   getHostState().allOutputStyles.clear();
 }
-//@ chunk-e6aww6q8.js:820618-820991 fingerprint (2.1.88 match: getOutputStyleConfig, 1)
+//@ chunk-5xgkngpb.js:832234-832607 fingerprint (2.1.88 match: getOutputStyleConfig, 1)
 /**
  * 当前输出风格配置：插件强制风格优先（多个时警告取第一个），否则 settings.outputStyle（默认 default→null）。
  */
@@ -287,24 +287,24 @@ async function getOutputStyleConfig() {
     logForDebugging(`Using forced plugin output style: ${firstForcedStyle.name}`);
     return firstForcedStyle;
   }
-  let outputStyle = getSettings_DEPRECATED()?.outputStyle || DEFAULT;
+  let outputStyle = getSettings_DEPRECATED()?.outputStyle || DEFAULT_2;
   return allStyles[outputStyle] ?? null;
 }
-//@ chunk-e6aww6q8.js:820991-821035 fingerprint (2.1.88 match: hasCustomOutputStyle, 1)
+//@ chunk-5xgkngpb.js:832607-832651 fingerprint (2.1.88 match: hasCustomOutputStyle, 1)
 /**
  * 当前设置的输出风格名（默认 "default"）。
  */
 function hasCustomOutputStyle() {
-  return getSettings_DEPRECATED()?.outputStyle || DEFAULT;
+  return getSettings_DEPRECATED()?.outputStyle || DEFAULT_2;
 }
 export {
   getOutputStyleConfig,
-  hasCustomOutputStyle,
-  DEFAULT,
+  DEFAULT_2,
   getAllOutputStylesCached,
+  clearOutputStylesCache,
+  hasCustomOutputStyle,
+  OUTPUT_STYLE_CONFIG,
   isBuiltInOrDefaultStyle,
   CUSTOM_STYLE_REMOTE_DENIED_MESSAGE,
   STYLE_SAVE_UNAVAILABLE_MESSAGE,
-  clearOutputStylesCache,
-  OUTPUT_STYLE_CONFIG,
 };

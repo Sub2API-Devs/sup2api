@@ -3,9 +3,9 @@
  *
  * CLAUDE_CODE_HOST_CREDS_FILE 宿主凭据文件（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8p2yt59w.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wny97vc6.js (7)
  * attribution: placement 7
  */
 import { isAbsolute } from "path";
@@ -25,7 +25,7 @@ import { isENOENT, errorMessage } from "./errors.js";
 import { isEnvTruthy } from "./envUtils.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-8p2yt59w.js:723-1097 placement
+//@ chunk-wny97vc6.js:723-1097 placement
 /**
  * 宿主凭据文件的常量与状态：可接收的环境变量集合、文件 schema（env、过期时间、pid、进程启动时间）、已应用的键等。
  */
@@ -35,7 +35,7 @@ var hostCredsFileSchema;
 var HOST_CREDS_POLL_MS;
 var appliedEnvKeys;
 var hostCredsState;
-deferInit("chunk-8p2yt59w.js:723", () => {
+deferInit("chunk-wny97vc6.js:723", () => {
   HOST_CRED_ENV_KEYS = new Set(BASE_URL_ENV_VARS);
   SEEDABLE_ENV_KEYS = new Set([
     ...PROVIDER_CREDENTIAL_ENV_VARS,
@@ -61,21 +61,21 @@ deferInit("chunk-8p2yt59w.js:723", () => {
   appliedEnvKeys = new Set();
   hostCredsState = null;
 });
-//@ chunk-8p2yt59w.js:1097-1175 placement
+//@ chunk-wny97vc6.js:1097-1175 placement
 /**
  * 宿主认证用的环境变量名（未指定时用 ANTHROPIC_AUTH_TOKEN）。
  */
 function hostAuthEnvVarName() {
   return env.CLAUDE_CODE_HOST_AUTH_ENV_VAR || "ANTHROPIC_AUTH_TOKEN";
 }
-//@ chunk-8p2yt59w.js:1175-1261 placement (2.1.88 match: withoutHostManagedProviderVars, 1)
+//@ chunk-wny97vc6.js:1175-1261 placement (2.1.88 match: withoutHostManagedProviderVars, 1)
 function withoutHostManagedProviderVars() {
   return (
     !!getHostAuthTokenRefreshCallback() &&
     (!(isFirstPartyProvider() && isFirstPartyAnthropicBaseUrl()) || env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST)
   );
 }
-//@ chunk-8p2yt59w.js:1261-2105 placement
+//@ chunk-wny97vc6.js:1261-2105 placement
 /**
  * 读取 CLAUDE_CODE_HOST_CREDS_FILE（拒绝组/他人可读）
  */
@@ -129,7 +129,7 @@ async function readHostCredsFile() {
     await handle?.close().catch(() => {});
   }
 }
-//@ chunk-8p2yt59w.js:2105-3022 placement
+//@ chunk-wny97vc6.js:2105-3022 placement
 async function loadHostCredentials() {
   if (getHostAuthTokenRefreshCallback()) return;
   if (!env.CLAUDE_CODE_HOST_CREDS_FILE || !isEnvTruthy(env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST)) return;
@@ -176,7 +176,7 @@ async function loadHostCredentials() {
     };
   });
 }
-//@ chunk-8p2yt59w.js:3022-3224 placement
+//@ chunk-wny97vc6.js:3022-3224 placement
 function seedEndpointEnv(endpoints, envKey, value) {
   let launchValue = process.env[envKey];
   if (launchValue && launchValue !== value) {
@@ -192,11 +192,11 @@ function seedEndpointEnv(endpoints, envKey, value) {
   process.env[envKey] = value;
   endpoints.set(envKey, value);
 }
-//@ chunk-8p2yt59w.js:3224-3343 placement
+//@ chunk-wny97vc6.js:3224-3343 placement
 function applyHostCredsEnv(envValues) {
   for (let appliedEnvKey of appliedEnvKeys)
     if (!(appliedEnvKey in envValues)) delete process.env[appliedEnvKey];
   Object.assign(process.env, envValues);
   appliedEnvKeys = new Set(Object.keys(envValues));
 }
-export { loadHostCredentials, withoutHostManagedProviderVars, hostAuthEnvVarName };
+export { withoutHostManagedProviderVars, hostAuthEnvVarName, loadHostCredentials };

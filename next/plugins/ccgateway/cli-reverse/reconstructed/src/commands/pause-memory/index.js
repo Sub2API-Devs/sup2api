@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：/pause-memory 命令对象：暂停自动记忆
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: placement 1
  */
 import { isRemoteSdkOrRemoteMode } from "../../utils/fullscreen.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
 import { env } from "../../utils/env.js";
 
-//@ chunk-e6aww6q8.js:1695801-1696260 placement
+//@ chunk-5xgkngpb.js:1771171-1771630 placement
 /**
  * /pause-memory 命令对象（local）；描述：{if(g_n())return"Pause automemory for this session";return"Pause account memory and local auto-memory for this session (run again to turn bo；别名 ["memory-pause","toggle-memory"]；isEnabled: ()=>!1；isHidden: {return!g_n()&&Oe(i.IS_DEMO)}；实现 chunk-8dz40wpq.js 的 q。
  */

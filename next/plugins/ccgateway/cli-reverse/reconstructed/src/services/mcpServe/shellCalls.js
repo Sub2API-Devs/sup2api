@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：mcp serve 运行 bash 命令、暂存文件、读取任务输出。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wy9dbk5f.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xrwmcqkn.js (6)
  * attribution: placement 6
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -17,11 +17,12 @@ import {
   booleanSchema,
   union,
   literal,
+  _enum,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { TASK_OUTPUT_TAIL_BYTES, tailOutputOfTask } from "../../utils/task/diskOutput.js";
 import { isTaskIdOfType } from "../../Task.js";
 
-//@ chunk-wy9dbk5f.js:51824-51954 placement
+//@ chunk-xrwmcqkn.js:47515-47645 placement
 /**
  * 读取任务输出的结果 schema。
  */
@@ -38,7 +39,7 @@ var readTaskOutputResultSchema = DoctorLazy(() =>
     truncated: booleanSchema(),
   }),
 );
-//@ chunk-wy9dbk5f.js:51954-52231 placement
+//@ chunk-xrwmcqkn.js:47645-47922 placement
 async function serveReadTaskOutput(input) {
   let { task_id: taskId } = readTaskOutputInputSchema().parse(input);
   if (!isTaskIdOfType("local_bash", taskId)) throw Error("ReadTaskOutput: no shell task has that task_id");
@@ -52,7 +53,7 @@ async function serveReadTaskOutput(input) {
     },
   };
 }
-//@ chunk-wy9dbk5f.js:52231-52345 placement
+//@ chunk-xrwmcqkn.js:47922-48036 placement
 /**
  * 运行 bash 命令的结果 schema。
  */
@@ -69,7 +70,7 @@ var runBashCommandResultSchema = DoctorLazy(() =>
     exitCode: numberSchema(),
   }),
 );
-//@ chunk-wy9dbk5f.js:52345-52662 placement
+//@ chunk-xrwmcqkn.js:48036-48353 placement
 async function serveRunBashCommand(input, signal, context) {
   let { command, cwd } = runBashCommandInputSchema().parse(input);
   let { session, abortController } = context.toolUseContext();
@@ -88,7 +89,7 @@ async function serveRunBashCommand(input, signal, context) {
     },
   };
 }
-//@ chunk-wy9dbk5f.js:52662-52977 placement
+//@ chunk-xrwmcqkn.js:48353-48802 placement
 /**
  * 暂存文件的结果 schema。
  */
@@ -104,11 +105,21 @@ var stageFileInputSchema = DoctorLazy(() =>
     }),
   }),
 );
-var stageFileResultSchema = DoctorLazy(() =>
+var HOOK_RESULT_SCHEMA = DoctorLazy(() =>
   union([
     objectSchema({
       ok: literal(true),
       noop: stringSchema().optional(),
+      replaced: _enum([
+        "nothing",
+        "not_a_file",
+        "same_contents",
+        "different_contents",
+        "same_size_not_compared",
+        "unknown",
+      ])
+        .optional()
+        .catch(undefined),
     }),
     objectSchema({
       ok: literal(false),
@@ -117,7 +128,7 @@ var stageFileResultSchema = DoctorLazy(() =>
     }),
   ]),
 );
-//@ chunk-wy9dbk5f.js:52977-53234 placement
+//@ chunk-xrwmcqkn.js:48802-49059 placement
 async function serveStageFile(input) {
   let { mount_path: mountPath, force, credential } = stageFileInputSchema().parse(input);
   let { stageFile, stageFileWireResult } = await import("../../utils/stageFile.js");

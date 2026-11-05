@@ -3,9 +3,9 @@
  *
  * Artifact frame 域名与网络策略说明（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f6553xe3.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9evew3ee.js (6)
  * attribution: placement 6
  */
 import { ARTIFACT_TOOL_NAME } from "../../tools/ArtifactTool/constants.js";
@@ -17,14 +17,14 @@ import { ARTIFACT_MOUNT } from "./artifactMount.js";
 import { isCoworkEntrypoint } from "../../utils/entrypointKinds.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-f6553xe3.js:414-769 placement
+//@ chunk-9evew3ee.js:414-769 placement
 /**
  * Cowork 云会话里允许直接读取 artifact 的说明：网络访问由 claude.ai 的"Allow network egress"设置决定，需加入给定域名。
  */
 function describeCoworkEgress(egress) {
   return `This cloud session's network access follows the "Allow network egress" setting for Cowork in claude.ai, not an environment allowlist. To allow direct artifact reads here, an organization admin (or the user, on an individual plan) can turn that setting on and either allow all domains or add ${egress} to its additional allowed domains.`;
 }
-//@ chunk-f6553xe3.js:769-871 placement
+//@ chunk-9evew3ee.js:769-871 placement
 class ReaderAvailabilityRegistry {
   availability = () => false;
   register(availability) {
@@ -34,22 +34,22 @@ class ReaderAvailabilityRegistry {
     return this.availability();
   }
 }
-//@ chunk-f6553xe3.js:871-885 placement
+//@ chunk-9evew3ee.js:871-885 placement
 /**
  * artifact 读取方式可用性登记器：注册来源并说明 Artifact 工具/WebFetch 两种读法。
  */
 var readerAvailabilityRegistry; // deferred: uses ReaderAvailabilityRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-f6553xe3.js:871", () => {
+deferInit("chunk-9evew3ee.js:871", () => {
   readerAvailabilityRegistry = new ReaderAvailabilityRegistry();
 });
-//@ chunk-f6553xe3.js:885-917 placement
+//@ chunk-9evew3ee.js:885-917 placement
 /**
  * 导出函数 `registerReaderAvailability`：参数 e。
  */
 function registerReaderAvailability(availability) {
   readerAvailabilityRegistry.register(availability);
 }
-//@ chunk-f6553xe3.js:917-1025 placement
+//@ chunk-9evew3ee.js:917-1025 placement
 /**
  * 给出读取 artifact 链接的方法说明：Artifact 工具可用时用其 read 动作，否则用 WebFetch。
  */
@@ -58,7 +58,7 @@ function describeArtifactReadMethod() {
     ? `read it with the ${ARTIFACT_TOOL_NAME} tool (action: "read", url)`
     : `${WEBFETCH} the url`;
 }
-//@ chunk-f6553xe3.js:1025-2145 placement
+//@ chunk-9evew3ee.js:1025-2145 placement
 function describeFrameDomains() {
   let readRemedy = describeArtifactReadMethod();
   let env = claudeAiEnvironment();
@@ -78,9 +78,9 @@ function describeFrameDomains() {
   };
 }
 export {
-  describeFrameDomains,
-  readerAvailabilityRegistry,
   registerReaderAvailability,
   describeArtifactReadMethod,
+  describeFrameDomains,
+  readerAvailabilityRegistry,
   describeCoworkEgress,
 };

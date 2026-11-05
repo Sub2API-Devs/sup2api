@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/sdk-metrics/build/src/aggregator/LastValue.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-metrics@2.7.1
- * pieces: chunk-wrv5s6k4.js (1)
+ * pieces: chunk-q87n5wsq.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_types } from "./types.js";
 import { require_core } from "../../../../core/build/src/index.js";
 import { require_MetricData } from "../export/MetricData.js";
 
-//@ chunk-wrv5s6k4.js:17137-18190 cjs-fingerprint
+//@ chunk-q87n5wsq.js:17137-18190 cjs-fingerprint
 var require_LastValue = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

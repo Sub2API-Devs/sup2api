@@ -3,9 +3,9 @@
  *
  * 工具拒绝结果：调用工具的 renderToolUseRejectedMessage。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserToolResultMessage/UserToolRejectMessage.tsx
- * pieces: chunk-ah34pb7m.js (2)
+ * pieces: chunk-wjygkcr4.js (2)
  * attribution: affinity 1, fingerprint 1
  */
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
@@ -18,11 +18,11 @@ import { jsxProd_default } from "../../../../vendor/react/cjs/react-jsx-dev-runt
 import { RejectedToolUseMessage } from "./RejectedToolUseMessage.js";
 import { safeParseToolInput, filterToolProgressMessages } from "../../../Tool.js";
 
-//@ chunk-ah34pb7m.js:217416-217470 affinity
+//@ chunk-wjygkcr4.js:224357-224411 affinity
 function selectActiveAgents_4_2(state) {
   return state.agentDefinitions.activeAgents;
 }
-//@ chunk-ah34pb7m.js:217470-218291 fingerprint (2.1.88 match: UserToolRejectMessage, 0.451)
+//@ chunk-wjygkcr4.js:224411-225232 fingerprint (2.1.88 match: UserToolRejectMessage, 0.452)
 function UserToolRejectMessage(props) {
   let $ = useMemoCache(15);
   let { input, progressMessagesForMessage, isInterrupted, style, tool, tools, verbose, isTranscriptMode } =
@@ -46,7 +46,7 @@ function UserToolRejectMessage(props) {
     $[10] !== verbose
   ) {
     rejectedElement = EARLY_RETURN_SENTINEL;
-    K: {
+    G: {
       let override = tool ? mcpRenderOverrideFor(tool, "renderToolUseRejectedMessage") : undefined;
       if (!tool || !override) {
         let rejectedToolUseMessageElement;
@@ -55,7 +55,7 @@ function UserToolRejectMessage(props) {
           $[13] = rejectedToolUseMessageElement;
         } else rejectedToolUseMessageElement = $[13];
         rejectedElement = rejectedToolUseMessageElement;
-        break K;
+        break G;
       }
       let parsedInput = safeParseToolInput(tool, input);
       if (!parsedInput.success) {
@@ -65,7 +65,7 @@ function UserToolRejectMessage(props) {
           $[14] = t4;
         } else t4 = $[14];
         rejectedElement = t4;
-        break K;
+        break G;
       }
       children =
         override(parsedInput.data, {

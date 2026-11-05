@@ -3,14 +3,14 @@
  *
  * /mcp 命令对象（交互面板与 reconnect/enable/disable 无头版）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/mcp/index.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 
-//@ chunk-e6aww6q8.js:1732503-1732969 fingerprint (2.1.88 match: mcp, 0.488)
+//@ chunk-5xgkngpb.js:1807955-1808421 fingerprint (2.1.88 match: mcp, 0.488)
 /**
  * /mcp 命令对象（local）；描述：Manage MCP servers；isEnabled: ()=>_e()；isHidden: {return!_e()}；实现 chunk-3re05e6m.js 的 Le。
  */
@@ -37,5 +37,5 @@ var mcpCommandDefinition = {
     return "twin";
   },
 };
-var mcpCommand = mcpCommandDefinition;
-export { mcpCommand, mcpNonInteractiveCommand };
+var mcpCommandTwin = mcpCommandDefinition;
+export { mcpCommandTwin, mcpNonInteractiveCommand };

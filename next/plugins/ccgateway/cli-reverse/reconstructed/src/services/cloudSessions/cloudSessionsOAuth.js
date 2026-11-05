@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：刷新云会话 OAuth 令牌（文件锁、无盘会话处理）；保存云会话 OAuth 令牌（条件写入、竞争检测）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4r7nqnx2.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vp2eq1tc.js (8)
  * attribution: placement 8
  */
 import { getSecureStorage } from "../../utils/secureStorage/index.js";
@@ -27,13 +27,13 @@ import { CLAUDE_AI_SESSIONS_SCOPE, CLOUD_SESSIONS_OAUTH_SCOPES } from "../../con
 import { logError } from "../../utils/log.js";
 import { env } from "../../utils/env.js";
 
-//@ chunk-4r7nqnx2.js:842-894 placement
+//@ chunk-vp2eq1tc.js:842-894 placement
 /**
  * 云会话 OAuth 授权流程的等待上限（5 分钟，导出给 consoleSignIn 用）。
  */
 var OAUTH_REFRESH_LOCK_NAME = ".cloud_sessions_oauth_refresh.lock";
 var OAUTH_FLOW_TIMEOUT_MS = 300000;
-//@ chunk-4r7nqnx2.js:894-1083 placement
+//@ chunk-vp2eq1tc.js:894-1083 placement
 async function readCloudSessionsOAuthAsync(credentials) {
   try {
     return (await getSecureStorage().readAsync(credentials))?.cloudSessionsOauth ?? null;
@@ -44,7 +44,7 @@ async function readCloudSessionsOAuthAsync(credentials) {
     return "unreadable";
   }
 }
-//@ chunk-4r7nqnx2.js:1083-1302 placement
+//@ chunk-vp2eq1tc.js:1083-1302 placement
 function hasCloudSessionsTokenForOrg(orgUuid) {
   try {
     let cloudSessionsOauth = getSecureStorage().read()?.cloudSessionsOauth;
@@ -60,7 +60,7 @@ function hasCloudSessionsTokenForOrg(orgUuid) {
     return false;
   }
 }
-//@ chunk-4r7nqnx2.js:1302-1650 placement
+//@ chunk-vp2eq1tc.js:1302-1650 placement
 /**
  * 保存云会话 OAuth 令牌（条件写入、竞争检测）。
  */
@@ -93,7 +93,7 @@ async function saveCloudSessionsOAuth(cloudSessionsOauth, options) {
     };
   }
 }
-//@ chunk-4r7nqnx2.js:1650-1898 placement
+//@ chunk-vp2eq1tc.js:1650-1898 placement
 async function clearCloudSessionsOAuthIf(predicate) {
   try {
     await getSecureStorage().mutate((state) => {
@@ -110,13 +110,13 @@ async function clearCloudSessionsOAuthIf(predicate) {
     });
   }
 }
-//@ chunk-4r7nqnx2.js:1898-2005 placement
+//@ chunk-vp2eq1tc.js:1898-2005 placement
 async function readFreshCloudSessionsOAuth() {
   let secureStorage = getSecureStorage();
   secureStorage.invalidateCache?.();
   return (await secureStorage.readAsync())?.cloudSessionsOauth ?? null;
 }
-//@ chunk-4r7nqnx2.js:2005-5005 placement
+//@ chunk-vp2eq1tc.js:2005-5005 placement
 /**
  * 刷新云会话 OAuth 令牌（文件锁、无盘会话处理）。
  */
@@ -305,7 +305,7 @@ async function refreshCloudSessionsOAuth({ organizationUuid, refusedAccessToken,
     };
   }
 }
-//@ chunk-4r7nqnx2.js:5005-5057 placement
+//@ chunk-vp2eq1tc.js:5005-5057 placement
 /**
  * 是否当前是交互式本地会话（用于决定能否走浏览器授权）。
  */

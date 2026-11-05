@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。切换模型时 effort 变化的确认。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: placement 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -27,7 +27,7 @@ import { displayField } from "../utils/permissions/approvalPayloadSerialization.
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-18hwfzwa.js:924178-925874 placement
+//@ chunk-czq1j3j2.js:957128-958825 placement
 function ModelEffortSwitchConfirm(props) {
   let $ = useMemoCache(27);
   let { kind, model, effort, hookReason, overDraft, onConfirm, onCancel } = props;

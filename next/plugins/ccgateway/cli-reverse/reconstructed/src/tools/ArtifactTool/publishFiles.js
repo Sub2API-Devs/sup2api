@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：发布文件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (16)
- * attribution: placement 16
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (17)
+ * attribution: placement 16, layout 1
  */
 import { resolve, dirname, relative, sep, isAbsolute, parse } from "path";
 import { findLastUserPromptUuid } from "../../utils/transcript/deserialize.js";
@@ -17,7 +17,6 @@ import { isCompactBoundaryMessage } from "../../services/projects/threadRows.js"
 import { remapRootPrefix, validateFilesPath } from "../../services/artifacts/publishPaths.js";
 import { isSameOrUnderPath } from "../../utils/pathPrefix.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { findScratchpadRootInPath } from "../../utils/permissions/filesystem.js";
 import { TYPE_FILE_WRITE_REFUSAL } from "../../services/artifacts/publishErrors.js";
 import {
   contentTypeForPath,
@@ -26,16 +25,16 @@ import {
 } from "../../services/artifacts/contentTypes.js";
 import { countCharInString, firstLineOf } from "../../utils/stringUtils.js";
 import { shortPathList } from "../../services/artifacts/artifactTypeRelease.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { getLiveState } from "../../services/liveReplica/liveReplica.js";
 import { relayIsOnlyRoute } from "../../services/artifacts/frameRelay.js";
 
-//@ chunk-8wvtd8sr.js:24363-24377 placement
+//@ chunk-xzmy9dn4.js:24674-24688 placement
 /**
  * 从类型创建时幂等键的前缀。
  */
 var CREATE_IDEMPOTENCY_PREFIX = "cc1-";
-//@ chunk-8wvtd8sr.js:24377-24717 placement
+//@ chunk-xzmy9dn4.js:24688-25028 placement
 /**
  * 为"从类型创建"生成幂等键：仅主线程的人工回合，基于最后一条用户消息 uuid、类型 slug 与本回合之前同类型创建次数计算哈希；子代理、内部调用或回合内已有错误时不生成。
  */
@@ -54,7 +53,7 @@ function createIdempotencyKey(context, typeSlug) {
     computeContentHash([lastUserPromptUuid, typeSlug, String(priorCreates)].join("\x00"))
   );
 }
-//@ chunk-8wvtd8sr.js:24717-25125 placement
+//@ chunk-xzmy9dn4.js:25028-25436 placement
 /**
  * 统计在当前工具调用之前，对话中有多少次针对同一类型（slug）的 type_url 发布调用。
  */
@@ -83,7 +82,7 @@ function countPriorTypeCreates(messages, typeSlug, toolUseId) {
   }
   return count;
 }
-//@ chunk-8wvtd8sr.js:25125-25217 placement
+//@ chunk-xzmy9dn4.js:25436-25528 placement
 /**
  * 判断消息是否是压缩摘要或压缩边界。
  */
@@ -92,26 +91,26 @@ function isCompactOrSummaryMessage(message) {
   if (isCompactBoundaryMessage(message)) return true;
   return false;
 }
-//@ chunk-8wvtd8sr.js:25317-25453 placement
+//@ chunk-xzmy9dn4.js:25628-25764 placement
 var ROOT_RELATIVE_HINTS = {
   map: " (and give each relative `files` source relative to it, or absolute)",
   list: " (and give each `files` path relative to it)",
 };
-//@ chunk-8wvtd8sr.js:25453-25569 placement
+//@ chunk-xzmy9dn4.js:25764-25880 placement
 /**
  * 判断路径是否位于 Claude 会话的草稿目录（claude/<项目>/<会话 uuid>/scratchpad/）中。
  */
 function isScratchpadPath(path) {
   return /(^|\/)claude(-\d+)?\/[^/]+\/[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}\/scratchpad\//i.test(path);
 }
-//@ chunk-8wvtd8sr.js:25569-25633 placement
+//@ chunk-xzmy9dn4.js:25880-25944 placement
 /**
  * 按 served 路径反查其所属根目录。
  */
 function servedPathRoot(absPath, served, folders) {
   return servedPathCandidates(absPath, folders).find((candidate) => candidate.served === served)?.root;
 }
-//@ chunk-8wvtd8sr.js:25633-28490 placement
+//@ chunk-xzmy9dn4.js:25944-28799 placement
 function resolvePublishFileEntry(request) {
   let { absPath, root, folders } = request;
   let { cwd, realCwd } = folders;
@@ -209,7 +208,7 @@ function resolvePublishFileEntry(request) {
     relativeTo,
   };
 }
-//@ chunk-8wvtd8sr.js:28490-32088 placement
+//@ chunk-xzmy9dn4.js:28799-32400 placement
 function checkServedPathConsistency(request, known, listedPaths, otherServed) {
   let { absPath, served } = request;
   let paths = known.filter((known) => !isScratchpadPath(known));
@@ -258,7 +257,7 @@ function checkServedPathConsistency(request, known, listedPaths, otherServed) {
   let topFolder = `${firstLineOf(served, "/")}/`;
   let suggestedTopFolder = `${firstLineOf(suggested, "/")}/`;
   let endsWithServed = suggested.endsWith(`/${served}`);
-  let onlyFileUnder = isListed && count(paths, (known) => known.startsWith(suggestedTopFolder)) === 1;
+  let onlyFileUnder = isListed && countWhere(paths, (known) => known.startsWith(suggestedTopFolder)) === 1;
   let nestedUnderSuggested =
     endsWithServed &&
     served.includes("/") &&
@@ -274,12 +273,12 @@ function checkServedPathConsistency(request, known, listedPaths, otherServed) {
     return `file_path: nothing was published. ${jsonStringify(absPath)} would be served at ${safeJsonQuote(served)}, its path relative to ${request.relativeTo.words} (${jsonStringify(request.relativeTo.dir)}), while ${isListed ? `${safeJsonQuote(suggested)}, which ends in ${safeJsonQuote(served)}, is ${onlyFileUnder ? `the only file under ${safeJsonQuote(suggestedTopFolder)}` : `already one of ${listedPaths}`}: either it was` : `${listedPaths} are all under ${safeJsonQuote(suggestedTopFolder)}: either they were`} published at a wrong path earlier, or ${safeJsonQuote(served)} is not the path this Artifact's page reads. ${request.root !== undefined ? "Keeping `root` as it is, s" : "S"}${retryHint.slice(1)} {${safeJsonQuote(served)}: ${sourceLabel}} to serve it at ${safeJsonQuote(served)}${onlyFileUnder ? "" : ` (then publish the Artifact's other files again without the leading ${safeJsonQuote(suggested.slice(0, -served.length))})`}, or {${safeJsonQuote(suggested)}: ${sourceLabel}} to ${isListed ? "replace" : "serve it at"} ${safeJsonQuote(suggested)}. A path stated in \`files\` is used as it is.${heldPathNote}`;
   return `file_path: nothing was published. ${jsonStringify(absPath)} would be served at ${safeJsonQuote(served)}, its path relative to ${request.relativeTo.words} (${jsonStringify(request.relativeTo.dir)}). That would add a new file${suggested === request.publishedAt ? `, but this conversation last published this file at ${safeJsonQuote(suggested)}` : isListed ? `, while ${safeJsonQuote(suggested)}${endsWithServed ? `, which ends in ${safeJsonQuote(served)},` : ""} is already one of ${listedPaths}` : served.startsWith(topFolder + topFolder) ? ` under a doubled ${safeJsonQuote(topFolder + topFolder)}` : ` outside the top-level folders of ${listedPaths}, such as ${safeJsonQuote(suggestedTopFolder)}`}. ${isListed ? `To replace ${safeJsonQuote(suggested)} with it` : `To serve it at ${safeJsonQuote(suggested)}`}, ${root !== undefined ? `send the call again with \`root\`: ${jsonStringify(root)}${request.listsSources ? ROOT_RELATIVE_HINTS[request.files === "list" ? "list" : "map"] : ""}. Or, ${request.root !== undefined ? "keeping `root` as it is" : "with no `root`"}, ` : ""}${root === undefined && request.root !== undefined ? "keeping `root` as it is, " : ""}${retryHint} {${safeJsonQuote(suggested)}: ${sourceLabel}}. If ${safeJsonQuote(served)} is the path you mean, state that one instead, the same way: {${safeJsonQuote(served)}: ${sourceLabel}}. A path stated in \`files\` is used as it is.${heldPathNote}`;
 }
-//@ chunk-8wvtd8sr.js:32088-32218 placement (2.1.88 match: setCwdState, 0.783)
+//@ chunk-xzmy9dn4.js:32400-32530 placement (2.1.88 match: setCwdState, 0.783)
 function findPublishedSource(slug, path, exclude) {
   let source = getLiveState().publishedSources.get(slug)?.get(path.normalize("NFC"));
   return source !== undefined && !exclude.includes(source) && !isScratchpadPath(source) ? source : undefined;
 }
-//@ chunk-8wvtd8sr.js:32218-32501 placement
+//@ chunk-xzmy9dn4.js:32530-32813 placement
 /**
  * 记录 Artifact 发布的本地源文件映射（规范化路径 → 发布路径），并清除被覆盖或重复的旧映射。
  */
@@ -297,7 +296,22 @@ function recordPublishedSources(slug, targetSlug, entries, previous) {
     kept.add(normalized);
   }
 }
-//@ chunk-8wvtd8sr.js:32736-32845 placement
+//@ chunk-xzmy9dn4.js:32813-33048 layout (2.1.88 match: getScratchpadDir, 0.841)
+/**
+ * 在路径中找出 scratchpad 根（形如 .../claude[-N]/<x>/<UUID>/scratchpad），返回到 scratchpad 为止的前缀；找不到返回 undefined。
+ */
+function findScratchpadRootInPath(inputPath) {
+  let parts = inputPath.split(sep);
+  let lastIndex = parts.findLastIndex(
+    (part, index) =>
+      index >= 3 &&
+      part.toLowerCase() === "scratchpad" &&
+      /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(parts[index - 1]) &&
+      /^claude(-\d+)?$/i.test(parts[index - 3]),
+  );
+  return lastIndex === -1 ? undefined : parts.slice(0, lastIndex + 1).join(sep);
+}
+//@ chunk-xzmy9dn4.js:33048-33156 placement
 function isUnderScratchpad(path, folders) {
   return (
     folders.scratchpad !== undefined &&
@@ -307,7 +321,7 @@ function isUnderScratchpad(path, folders) {
     )
   );
 }
-//@ chunk-8wvtd8sr.js:32845-33297 placement
+//@ chunk-xzmy9dn4.js:33156-33606 placement
 /**
  * 列出本地文件可作为已发布路径的候选（每级父目录作为根时的相对路径），只保留位于工作目录（或 scratchpad）之下的根。
  */
@@ -345,7 +359,7 @@ function servedPathCandidates(absPath, folders) {
           ];
     });
 }
-//@ chunk-8wvtd8sr.js:33297-33446 placement
+//@ chunk-xzmy9dn4.js:33606-33755 placement
 function servedPrefixes(paths) {
   return new Set(
     paths.flatMap((path) => {
@@ -354,7 +368,7 @@ function servedPrefixes(paths) {
     }),
   );
 }
-//@ chunk-8wvtd8sr.js:33446-33562 placement
+//@ chunk-xzmy9dn4.js:33755-33871 placement
 function isServedPath(served, prefixes) {
   let topPrefix = `${firstLineOf(served, "/")}/`;
   return (
@@ -364,7 +378,7 @@ function isServedPath(served, prefixes) {
       (!served.startsWith(topPrefix + topPrefix) || prefixes.has(topPrefix + topPrefix)))
   );
 }
-//@ chunk-8wvtd8sr.js:33562-33609 placement
+//@ chunk-xzmy9dn4.js:33871-33918 placement
 /**
  * 仅走中继时给出的读回提示。
  */
@@ -376,7 +390,6 @@ function relayReadBackHint() {
     : undefined;
 }
 export {
-  relayReadBackHint,
   resolvePublishFileEntry,
   findPublishedSource,
   servedPathRoot,
@@ -384,4 +397,5 @@ export {
   isScratchpadPath,
   recordPublishedSources,
   createIdempotencyKey,
+  relayReadBackHint,
 };

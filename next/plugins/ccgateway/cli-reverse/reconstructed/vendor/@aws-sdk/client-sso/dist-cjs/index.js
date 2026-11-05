@@ -3,9 +3,9 @@
  *
  * AWS SSO 客户端（第三方）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/client-sso@3.936.0..3.940.0
- * pieces: chunk-kejz1rpb.js (15)
+ * pieces: chunk-tvcdn76c.js (15)
  * attribution: esm-fingerprint 5, placement 6, layout 1, esm-layout 3
  */
 import {
@@ -23,7 +23,7 @@ import { deferInit, beginDeferredInits, runDeferredInits } from "../../../../run
 // This module is the first evaluated of an import cycle of 3 modules closed by ../../nested-clients/dist-cjs/submodules/signin/endpoint/endpointResolver.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("vendor/@aws-sdk/nested-clients/dist-cjs/submodules/signin/endpoint/endpointResolver.js");
-//@ chunk-kejz1rpb.js:1605-1969 esm-fingerprint
+//@ chunk-tvcdn76c.js:1605-1969 esm-fingerprint
 var resolveClientEndpointParameters = (options) =>
   Object.assign(options, {
     useDualstackEndpoint: options.useDualstackEndpoint ?? false,
@@ -48,11 +48,11 @@ var commonParams = {
     name: "useDualstackEndpoint",
   },
 };
-//@ chunk-kejz1rpb.js:12718-12874 placement
+//@ chunk-tvcdn76c.js:12718-12874 placement
 var AccessTokenType = [0, "com.amazonaws.sso", "AccessTokenType", 8, 0];
 var SecretAccessKeyType = [0, "com.amazonaws.sso", "SecretAccessKeyType", 8, 0];
 var SessionTokenType = [0, "com.amazonaws.sso", "SessionTokenType", 8, 0];
-//@ chunk-kejz1rpb.js:12874-13292 placement
+//@ chunk-tvcdn76c.js:12874-13292 placement
 var GetRoleCredentialsRequest = [
   3,
   "com.amazonaws.sso",
@@ -99,15 +99,15 @@ var InvalidRequestException = [
   ["message"],
   [0],
 ];
-//@ chunk-kejz1rpb.js:13292-13352 placement
+//@ chunk-tvcdn76c.js:13292-13352 placement
 // deferred: uses import_schema_2 (../../nested-clients/dist-cjs/submodules/sso/index.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kejz1rpb.js:13292", () => {
+deferInit("chunk-tvcdn76c.js:13292", () => {
   import_schema_2.TypeRegistry.for("com.amazonaws.sso").registerError(
     InvalidRequestException,
     InvalidRequestException_2,
   );
 });
-//@ chunk-kejz1rpb.js:13352-13467 placement
+//@ chunk-tvcdn76c.js:13352-13467 placement
 var ResourceNotFoundException = [
   -3,
   "com.amazonaws.sso",
@@ -119,15 +119,15 @@ var ResourceNotFoundException = [
   ["message"],
   [0],
 ];
-//@ chunk-kejz1rpb.js:13467-13527 placement
+//@ chunk-tvcdn76c.js:13467-13527 placement
 // deferred: uses import_schema_2 (../../nested-clients/dist-cjs/submodules/sso/index.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kejz1rpb.js:13467", () => {
+deferInit("chunk-tvcdn76c.js:13467", () => {
   import_schema_2.TypeRegistry.for("com.amazonaws.sso").registerError(
     ResourceNotFoundException,
     ResourceNotFoundException_2,
   );
 });
-//@ chunk-kejz1rpb.js:13527-13668 placement
+//@ chunk-tvcdn76c.js:13527-13668 placement
 var RoleCredentials = [
   3,
   "com.amazonaws.sso",
@@ -136,7 +136,7 @@ var RoleCredentials = [
   ["accessKeyId", "secretAccessKey", "sessionToken", "expiration"],
   [0, [() => SecretAccessKeyType, 0], [() => SessionTokenType, 0], 1],
 ];
-//@ chunk-kejz1rpb.js:13668-13782 layout
+//@ chunk-tvcdn76c.js:13668-13782 layout
 var TooManyRequestsException = [
   -3,
   "com.amazonaws.sso",
@@ -148,15 +148,15 @@ var TooManyRequestsException = [
   ["message"],
   [0],
 ];
-//@ chunk-kejz1rpb.js:13782-13842 esm-fingerprint
+//@ chunk-tvcdn76c.js:13782-13842 esm-fingerprint
 // deferred: uses import_schema_2 (../../nested-clients/dist-cjs/submodules/sso/index.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kejz1rpb.js:13782", () => {
+deferInit("chunk-tvcdn76c.js:13782", () => {
   import_schema_2.TypeRegistry.for("com.amazonaws.sso").registerError(
     TooManyRequestsException,
     TooManyRequestsException_2,
   );
 });
-//@ chunk-kejz1rpb.js:13842-13953 esm-layout
+//@ chunk-tvcdn76c.js:13842-13953 esm-layout
 var UnauthorizedException = [
   -3,
   "com.amazonaws.sso",
@@ -168,15 +168,15 @@ var UnauthorizedException = [
   ["message"],
   [0],
 ];
-//@ chunk-kejz1rpb.js:13953-14013 esm-fingerprint
+//@ chunk-tvcdn76c.js:13953-14013 esm-fingerprint
 // deferred: uses import_schema_2 (../../nested-clients/dist-cjs/submodules/sso/index.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kejz1rpb.js:13953", () => {
+deferInit("chunk-tvcdn76c.js:13953", () => {
   import_schema_2.TypeRegistry.for("com.amazonaws.sso").registerError(
     UnauthorizedException,
     UnauthorizedException_2,
   );
 });
-//@ chunk-kejz1rpb.js:14013-14099 esm-layout
+//@ chunk-tvcdn76c.js:14013-14099 esm-layout
 var SSOServiceException_2 = [
   -3,
   "smithy.ts.sdk.synthetic.com.amazonaws.sso",
@@ -185,15 +185,15 @@ var SSOServiceException_2 = [
   [],
   [],
 ];
-//@ chunk-kejz1rpb.js:14099-14183 esm-fingerprint
+//@ chunk-tvcdn76c.js:14099-14183 esm-fingerprint
 // deferred: uses import_schema_2 (../../nested-clients/dist-cjs/submodules/sso/index.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kejz1rpb.js:14099", () => {
+deferInit("chunk-tvcdn76c.js:14099", () => {
   import_schema_2.TypeRegistry.for("smithy.ts.sdk.synthetic.com.amazonaws.sso").registerError(
     SSOServiceException_2,
     SSOServiceException,
   );
 });
-//@ chunk-kejz1rpb.js:14183-14298 esm-layout
+//@ chunk-tvcdn76c.js:14183-14298 esm-layout
 var GetRoleCredentials = [
   9,
   "com.amazonaws.sso",
@@ -204,9 +204,9 @@ var GetRoleCredentials = [
   () => GetRoleCredentialsRequest,
   () => GetRoleCredentialsResponse,
 ];
-//@ chunk-kejz1rpb.js:14298-14544 esm-fingerprint
+//@ chunk-tvcdn76c.js:14298-14544 esm-fingerprint
 let GetRoleCredentialsCommand; // deferred: uses import_middleware_endpoint_2 (../../nested-clients/dist-cjs/submodules/sso/index.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kejz1rpb.js:14298", () => {
+deferInit("chunk-tvcdn76c.js:14298", () => {
   GetRoleCredentialsCommand = class GetRoleCredentialsCommand extends (
     import_client_6.Command.classBuilder()
       .ep(commonParams)

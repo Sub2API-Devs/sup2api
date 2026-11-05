@@ -3,9 +3,9 @@
  *
  * 向导对话框布局（标题、步骤内容、导航提示），被 16 处使用。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/wizard/WizardDialogLayout.tsx
- * pieces: chunk-095ptjmr.js (1)
+ * pieces: chunk-pqe1nn4c.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -21,26 +21,17 @@ import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
-//@ chunk-095ptjmr.js:3004-3989 fingerprint (2.1.88 match: WizardDialogLayout, 0.585)
+//@ chunk-pqe1nn4c.js:2865-3766 fingerprint (2.1.88 match: WizardDialogLayout, 0.516)
 function WizardDialogLayout(props) {
   let $ = useMemoCache(15);
   let { title: titleOverride, color, children, subtitle, footerText } = props;
   let color_2 = color === undefined ? "suggestion" : color;
-  let {
-    currentStepIndex,
-    totalSteps,
-    title: providerTitle,
-    showStepCounter,
-    goBack,
-    pendingExitHint,
-  } = useWizard();
+  let { currentStepIndex, title: providerTitle, goBack, pendingExitHint } = useWizard();
   let title = titleOverride || providerTitle || "Wizard";
-  let stepSuffix = showStepCounter !== false ? ` (${currentStepIndex + 1}/${totalSteps})` : "";
-  const title_2 = `${title}${stepSuffix}`;
-  let t3;
-  if ($[0] !== children || $[1] !== color_2 || $[2] !== goBack || $[3] !== subtitle || $[4] !== title_2) {
-    t3 = jsxProd_default(Dialog, {
-      title: title_2,
+  let dialog;
+  if ($[0] !== children || $[1] !== color_2 || $[2] !== goBack || $[3] !== subtitle || $[4] !== title) {
+    dialog = jsxProd_default(Dialog, {
+      title,
       subtitle,
       onCancel: goBack,
       color: color_2,
@@ -52,9 +43,9 @@ function WizardDialogLayout(props) {
     $[1] = color_2;
     $[2] = goBack;
     $[3] = subtitle;
-    $[4] = title_2;
-    $[5] = t3;
-  } else t3 = $[5];
+    $[4] = title;
+    $[5] = dialog;
+  } else dialog = $[5];
   let children_2;
   if ($[6] !== currentStepIndex || $[7] !== footerText || $[8] !== pendingExitHint) {
     children_2 =
@@ -97,11 +88,11 @@ function WizardDialogLayout(props) {
     $[11] = footerElement;
   } else footerElement = $[11];
   let t5;
-  if ($[12] !== t3 || $[13] !== footerElement) {
+  if ($[12] !== dialog || $[13] !== footerElement) {
     t5 = jsxProd_default_2(Fragment, {
-      children: [t3, footerElement],
+      children: [dialog, footerElement],
     });
-    $[12] = t3;
+    $[12] = dialog;
     $[13] = footerElement;
     $[14] = t5;
   } else t5 = $[14];

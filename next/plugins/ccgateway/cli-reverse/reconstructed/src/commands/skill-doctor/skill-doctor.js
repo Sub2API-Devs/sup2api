@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。/skill-doctor 命令：列出本会话加载的技能、上下文占用、近 7 天用量与未用技能。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kxw5j15d.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nqp55vs8.js (3)
  * attribution: placement 3
  */
 import { sequential } from "../../utils/sequential.js";
@@ -18,14 +18,14 @@ import {
   SkillDoctorStageError,
 } from "./skillDoctor.js";
 import { plural } from "../../utils/stringUtils.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { printablePluginName } from "../../components/ManagedSettingsSecurityDialog/utils.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 import { logError } from "../../utils/log.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-kxw5j15d.js:534-1049 placement
+//@ chunk-nqp55vs8.js:534-1049 placement
 /**
  * 技能用量表格
  */
@@ -44,7 +44,7 @@ function formatSkillUsageTable(rows) {
   return `${header}
 ${joined}`;
 }
-//@ chunk-kxw5j15d.js:1049-3408 placement
+//@ chunk-nqp55vs8.js:1049-3408 placement
 /**
  * 生成 /skill-doctor 报告
  */
@@ -95,7 +95,7 @@ async function buildSkillDoctorReport(context) {
       ),
     );
   if (unusedFromPlugins.length > 0) {
-    let sources = uniq(
+    let sources = normalizeCaseForComparison_2(
       unusedFromPlugins.map((unusedFromPlugin) =>
         unusedFromPlugin.pluginKey === undefined
           ? unusedFromPlugin.source
@@ -136,7 +136,7 @@ async function buildSkillDoctorReport(context) {
   return lines.join(`
 `);
 }
-//@ chunk-kxw5j15d.js:3408-4028 placement
+//@ chunk-nqp55vs8.js:3408-4028 placement
 var call = async (args, context) => {
   if (isBridgeOrTransport(context.session))
     return {

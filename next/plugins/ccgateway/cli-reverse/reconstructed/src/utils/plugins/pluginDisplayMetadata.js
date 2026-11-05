@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：插件展示元数据
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ca06bv0t.js (28)
- * attribution: placement 28
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s4mtq5zk.js (29)
+ * attribution: placement 28, layout 1
  */
 import { join } from "path";
 import {
@@ -36,38 +36,37 @@ import { errorMessage } from "../errors.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { getOwn } from "../objectSafety.js";
 import { isTrueOrTrueString } from "./pluginConfigEnv.js";
-import { semanticBoolean } from "../semanticBoolean.js";
 import { samePluginSource, sourceUrlAndRef } from "./pluginSourceUrl.js";
 import { isReviewerMarkedEntry } from "./commandSourceErrors.js";
 import { isOfficialMarketplaceName_3, parsePluginIdentifier } from "./pluginIdentifier.js";
 import { isOfficialFamilySameSource } from "./installResultMessages.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { getInstalledPlugins, isInstallationRelevantToCurrentProject } from "./installedPluginsManager.js";
 import { CLAUDE_PLUGINS_OFFICIAL } from "./officialMarketplace.js";
 import { isGithubDotCom } from "../git/githubUrl.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ca06bv0t.js:1586-1638 placement
+//@ chunk-s4mtq5zk.js:1588-1640 placement
 var PRINTABLE_NAME_RE = /^[\x21-\x7e]+$/;
 var PLUGIN_NAME_FIELD_RE = /^[A-Za-z0-9._-]{1,64}$/;
-//@ chunk-ca06bv0t.js:1638-1684 placement
+//@ chunk-s4mtq5zk.js:1640-1686 placement
 function displayMarketplaceName(name) {
   return OFFICIAL_MARKETPLACE_DISPLAY === "" || isValidPluginDisplayName(name, PRINTABLE_NAME_RE)
     ? name
     : printableDisplayName(name);
 }
-//@ chunk-ca06bv0t.js:1684-1753 placement
+//@ chunk-s4mtq5zk.js:1686-1755 placement
 function escapedDisplayText(text) {
   if (isValidPluginDisplayName(text, PLUGIN_NAME_FIELD_RE)) return text;
   return escapeXml(
     OFFICIAL_MARKETPLACE_DISPLAY === "" ? printableName(text, 64) : printableDisplayName(text),
   );
 }
-//@ chunk-ca06bv0t.js:1753-1791 placement
+//@ chunk-s4mtq5zk.js:1755-1793 placement
 function displayTextOrRaw(text) {
   return isValidPluginDisplayName(text, PLUGIN_NAME_FIELD_RE) ? text : printableDisplayName(text);
 }
-//@ chunk-ca06bv0t.js:1791-1848 placement
+//@ chunk-s4mtq5zk.js:1793-1851 placement
 function isValidPluginDisplayName(name, pattern) {
   return (
     pattern.test(name) &&
@@ -75,15 +74,15 @@ function isValidPluginDisplayName(name, pattern) {
     !isSameFoldedName(OFFICIAL_MARKETPLACE_DISPLAY, cleanDisplayNameText(name))
   );
 }
-//@ chunk-ca06bv0t.js:1848-1902 placement
+//@ chunk-s4mtq5zk.js:1851-1905 placement
 function printableDisplayName(name) {
   return printableLabel(printableName(cleanDisplayNameText(name), 64)) || "\u201C\u201D";
 }
-//@ chunk-ca06bv0t.js:1902-1956 placement
+//@ chunk-s4mtq5zk.js:1905-1959 placement
 function cleanDisplayNameText(text) {
   return stripInvisibleKeepEmoji(text).replace(LEADING_INVISIBLE_TEXT_RE, "").trimEnd();
 }
-//@ chunk-ca06bv0t.js:1985-2172 placement
+//@ chunk-s4mtq5zk.js:1988-2175 placement
 async function pluginInstallPath(marketplaceName, plugins, marketplaces, storageV5) {
   let installLocation = Object.hasOwn(marketplaces, marketplaceName)
     ? marketplaces[marketplaceName]?.installLocation
@@ -104,7 +103,7 @@ async function pluginInstallPath(marketplaceName, plugins, marketplaces, storage
     },
   );
 }
-//@ chunk-ca06bv0t.js:2172-3145 placement
+//@ chunk-s4mtq5zk.js:2175-3148 placement
 /**
  * 为插件条目补充展示元数据（从安装位置读 manifest、版本等）。
  */
@@ -156,16 +155,16 @@ async function enrichPluginEntry(plugin, marketplaceName, installLocation, marke
     return plugin;
   }
 }
-//@ chunk-ca06bv0t.js:3145-3182 placement
+//@ chunk-s4mtq5zk.js:3148-3185 placement
 function hasNoOptionalText(text) {
   return cleanOptionalText_2(text) === undefined;
 }
-//@ chunk-ca06bv0t.js:3182-3186 placement
+//@ chunk-s4mtq5zk.js:3185-3189 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ca06bv0t.js:3182", () => {
+deferInit("chunk-s4mtq5zk.js:3185", () => {
   init_react_production();
 });
-//@ chunk-ca06bv0t.js:4870-5179 placement
+//@ chunk-s4mtq5zk.js:4873-5182 placement
 function pluginUserConfigValues(schema, saved) {
   let values = {};
   for (let key of Object.keys(schema)) {
@@ -189,16 +188,18 @@ function pluginUserConfigValues(schema, saved) {
   }
   return values;
 }
-//@ chunk-ca06bv0t.js:5179-5288 placement
+//@ chunk-s4mtq5zk.js:5182-5291 placement
 function userConfigFieldParser(field) {
-  if (field?.type === "boolean") return semanticBoolean;
+  if (field?.type === "boolean") return BOOLEAN_FIELD_VALUES;
   return field?.type === "string" && field.multiple !== true ? field.options : undefined;
 }
-//@ chunk-ca06bv0t.js:5312-5372 placement
+//@ chunk-s4mtq5zk.js:5291-5315 layout
+var BOOLEAN_FIELD_VALUES = ["true", "false"];
+//@ chunk-s4mtq5zk.js:5315-5375 placement
 function firstLine(prev) {
   return (prev.split(/\r\n|\r|\n/, 1)[0] ?? "").trim();
 }
-//@ chunk-ca06bv0t.js:5372-5494 placement
+//@ chunk-s4mtq5zk.js:5375-5497 placement
 function markFromPluginDirectory(entries, knownMarketplacesWithDeclared) {
   return entries.map((entry) => {
     let source = knownMarketplacesWithDeclared[entry.marketplaceName]?.source;
@@ -210,9 +211,9 @@ function markFromPluginDirectory(entries, knownMarketplacesWithDeclared) {
       : entry;
   });
 }
-//@ chunk-ca06bv0t.js:5494-5532 placement
+//@ chunk-s4mtq5zk.js:5497-5535 placement
 var isFromPluginDirectory = (entry) => entry.fromPluginDirectory === true;
-//@ chunk-ca06bv0t.js:5532-5782 placement
+//@ chunk-s4mtq5zk.js:5535-5785 placement
 function mergedDisplayFields(entry, others) {
   let fieldOf = (field) =>
     entry[field] ?? others.find((other) => other.entry[field] !== undefined)?.entry[field];
@@ -236,7 +237,7 @@ function mergedDisplayFields(entry, others) {
   }
   return result;
 }
-//@ chunk-ca06bv0t.js:5782-6517 placement
+//@ chunk-s4mtq5zk.js:5785-6520 placement
 /**
  * 合并多个市场中重复列出的同一插件，记录 alsoListedIn。
  */
@@ -281,13 +282,13 @@ function dedupeListedPlugins(plugins, knownMarketplacesWithDeclared) {
         ...mergedDisplayFields(plugin.entry, shadowing),
       },
       isInstalled: plugin.isInstalled || shadowing.some((plugin) => plugin.isInstalled),
-      alsoListedIn: uniq(shadowing.map((plugin) => plugin.marketplaceName)),
+      alsoListedIn: normalizeCaseForComparison_2(shadowing.map((plugin) => plugin.marketplaceName)),
       installCountIds: shadowing.map((plugin) => plugin.pluginId),
     });
   }
   return result;
 }
-//@ chunk-ca06bv0t.js:6517-6738 placement
+//@ chunk-s4mtq5zk.js:6520-6741 placement
 async function allowlistedInstalledPlugins(knownMarketplacesWithDeclared, storageV5) {
   let keys = new Set();
   let plugins = getInstalledPlugins().plugins;
@@ -308,7 +309,7 @@ async function allowlistedInstalledPlugins(knownMarketplacesWithDeclared, storag
   }
   return keys;
 }
-//@ chunk-ca06bv0t.js:6738-7193 placement
+//@ chunk-s4mtq5zk.js:6741-7196 placement
 function groupBySource(plugins, knownMarketplacesWithDeclared, extraKeys = new Set()) {
   let sourceKeyOf = (plugin) =>
     samePluginSource(
@@ -335,7 +336,7 @@ function groupBySource(plugins, knownMarketplacesWithDeclared, extraKeys = new S
     return !isOfficialMarketplaceName_3(plugin.marketplaceName) || !directoryKeys.has(key);
   });
 }
-//@ chunk-ca06bv0t.js:7193-7345 placement
+//@ chunk-s4mtq5zk.js:7196-7348 placement
 /**
  * 取插件安装数（含别名 id 的最大值）
  */
@@ -348,7 +349,7 @@ function getPluginInstallCount(plugin, counts) {
   }
   return count;
 }
-//@ chunk-ca06bv0t.js:7345-7586 placement (2.1.88 match: _temp, 0.705)
+//@ chunk-s4mtq5zk.js:7348-7589 placement (2.1.88 match: _temp, 0.706)
 /**
  * 按安装量降序排序插件，同量时插件目录内的优先并保持原顺序，其余按名称排序。（误归 HelpV2/Commands）
  */
@@ -366,13 +367,13 @@ function sortPluginsByPopularity(a, b) {
       : left.entry.name.localeCompare(right.entry.name);
   });
 }
-//@ chunk-ca06bv0t.js:7586-7640 placement
+//@ chunk-s4mtq5zk.js:7589-7643 placement
 function marketplaceLabel(plugin) {
   return isFromPluginDirectory(plugin)
     ? OFFICIAL_MARKETPLACE_DISPLAY
     : displayTextOrRaw(plugin.marketplaceName);
 }
-//@ chunk-ca06bv0t.js:7640-7860 placement
+//@ chunk-s4mtq5zk.js:7643-7863 placement
 function installCountsByMarketplace(plugin) {
   let alsoListedIn = plugin.alsoListedIn ?? [];
   if (alsoListedIn.length === 0) return;
@@ -384,7 +385,7 @@ function installCountsByMarketplace(plugin) {
     })
     .join(", ")}`;
 }
-//@ chunk-ca06bv0t.js:7860-8035 placement
+//@ chunk-s4mtq5zk.js:7863-8038 placement
 function installCountEntries(plugin) {
   {
     let entries = [];
@@ -400,7 +401,7 @@ function installCountEntries(plugin) {
   }
   return [];
 }
-//@ chunk-ca06bv0t.js:8035-8159 placement
+//@ chunk-s4mtq5zk.js:8038-8162 placement
 function marketplaceNamesOf(plugin) {
   let normalize = (name) => (name === CLAUDE_PLUGINS_OFFICIAL ? "official" : name);
   return [
@@ -408,11 +409,11 @@ function marketplaceNamesOf(plugin) {
     ...(plugin.alsoListedIn ?? []).map(normalize),
   ].join(" + ");
 }
-//@ chunk-ca06bv0t.js:8159-8234 placement
+//@ chunk-s4mtq5zk.js:8162-8237 placement
 function safeNameOrPrintable(name) {
   return /^[A-Za-z0-9._/@:~-]{1,120}$/.test(name) ? name : printableLabel(printableName(name, 120));
 }
-//@ chunk-ca06bv0t.js:8234-8675 placement
+//@ chunk-s4mtq5zk.js:8237-8678 placement
 function pluginSourceLink(plugin) {
   let source = plugin.entry.source;
   if (typeof source !== "object" || source === null) return;
@@ -433,17 +434,17 @@ function pluginSourceLink(plugin) {
   return path === "" ? link : `${link} (${path})`;
 }
 export {
-  displayMarketplaceName,
-  isFromPluginDirectory,
-  displayTextOrRaw,
   escapedDisplayText,
-  firstLine,
-  pluginUserConfigValues,
-  userConfigFieldParser,
+  displayMarketplaceName,
   groupBySource,
   markFromPluginDirectory,
   allowlistedInstalledPlugins,
   pluginInstallPath,
+  userConfigFieldParser,
+  pluginUserConfigValues,
+  isFromPluginDirectory,
+  displayTextOrRaw,
+  firstLine,
   pluginSourceLink,
   marketplaceLabel,
   installCountsByMarketplace,

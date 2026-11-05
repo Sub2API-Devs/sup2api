@@ -1,8 +1,8 @@
 /**
  * @bufbuild/protobuf/dist/commonjs/codegenv2/embed.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @bufbuild/protobuf@2.12.1
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -13,7 +13,7 @@ import { require_to_binary } from "../../cjs/to-binary.js";
 import { require_clone } from "../clone.js";
 import { require_descriptor_pb } from "../wkt/gen/google/protobuf/descriptor_pb.js";
 
-//@ chunk-fq0cr76a.js:510775-515173 cjs-fingerprint
+//@ chunk-qg41pqt6.js:511349-515747 cjs-fingerprint
 var require_embed = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：分类器模型选择
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (12)
  * attribution: placement 12
  */
 import { antEnv, env } from "../env.js";
@@ -23,7 +23,7 @@ import { getModelStrings } from "../model/modelStrings.js";
 import { mainModelOverrideKeys, strippedCanonicalName } from "../model/canonicalModelName.js";
 import { resolveClassifierMaxRetries } from "../../services/api/withRetry.js";
 
-//@ chunk-e6aww6q8.js:2943344-2943440 placement
+//@ chunk-5xgkngpb.js:3012945-3013041 placement
 /**
  * 分类器温度：环境变量 CLAUDE_CODE_AUTO_MODE_TEMPERATURE（有限数），默认 1。
  */
@@ -31,20 +31,20 @@ function getClassifierTemperature() {
   let configuredTemperature = Number(antEnv.CLAUDE_CODE_AUTO_MODE_TEMPERATURE);
   return Number.isFinite(configuredTemperature) ? configuredTemperature : 1;
 }
-//@ chunk-e6aww6q8.js:2943440-2943520 placement
+//@ chunk-5xgkngpb.js:3013041-3013121 placement
 function isOutcomeCodesEnabled() {
   if (antEnv.CLAUDE_CODE_AUTO_MODE_OUTCOME_CODES === undefined);
   return outcomeCodesEnabled();
 }
-//@ chunk-e6aww6q8.js:2943520-2943554 placement
+//@ chunk-5xgkngpb.js:3013121-3013155 placement
 function getClassifierModel() {
   return resolveClassifierModel().value;
 }
-//@ chunk-e6aww6q8.js:2943554-2943584 placement
+//@ chunk-5xgkngpb.js:3013155-3013185 placement
 function getDefaultClassifierModelFor(mainModel) {
   return getPermissionClassifierFlagshipRerouteTarget(mainModel);
 }
-//@ chunk-e6aww6q8.js:2943584-2944275 placement
+//@ chunk-5xgkngpb.js:3013185-3013876 placement
 /**
  * 选分类器模型：tengu_auto_mode_config.modelByMainModel / model（经组织模型策略校验）优先，且会忽略 CLAUDE_CODE_AUTO_MODE_MODEL 并告警；其次环境变量；再次外部默认 Sonnet 5（探测未降级时，externalDefault=true）；最后按主模型推导默认。返回 {value, src, externalDefault?}。
  */
@@ -95,7 +95,7 @@ function resolveClassifierModel() {
     src: "default",
   };
 }
-//@ chunk-e6aww6q8.js:2944275-2945012 placement
+//@ chunk-5xgkngpb.js:3013876-3014613 placement
 /**
  * 校验候选分类器模型：组织策略不允许、或来自 env 但安全防护会拒绝升级检查时，记一次日志并返回 undefined。
  */
@@ -128,7 +128,7 @@ function vetClassifierModel(model, source) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:2945012-2945409 placement
+//@ chunk-5xgkngpb.js:3014613-3015010 placement
 function lookupModelMapping(mapping, options) {
   if (mapping == null || typeof mapping !== "object") return;
   let vet = options?.vet ?? ((model) => model);
@@ -156,18 +156,18 @@ function lookupModelMapping(mapping, options) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:2945409-2945445 placement
+//@ chunk-5xgkngpb.js:3015010-3015046 placement
 function getFallbackClassifierModel(model) {
   return resolveFallbackClassifierModel(model).value;
 }
-//@ chunk-e6aww6q8.js:2945445-2945496 placement
+//@ chunk-5xgkngpb.js:3015046-3015097 placement
 function resolveFallbackClassifierModel(model) {
   return {
     value: undefined,
     src: "default",
   };
 }
-//@ chunk-e6aww6q8.js:2945496-2945568 placement
+//@ chunk-5xgkngpb.js:3015097-3015169 placement
 function getProbeDemotionFallbackModel(probedModel) {
   let defaultClassifierModelFor = getDefaultClassifierModelFor(getMainLoopModel());
   if (
@@ -177,7 +177,7 @@ function getProbeDemotionFallbackModel(probedModel) {
     return defaultClassifierModelFor;
   return;
 }
-//@ chunk-e6aww6q8.js:2945568-2945682 placement
+//@ chunk-5xgkngpb.js:3015169-3015283 placement
 /**
  * 取分类器的备用模型：外部默认模型走探测降级的备用，其他走配置的备用；与主模型相同则不返回。
  */
@@ -190,7 +190,7 @@ function getClassifierFallbackModel(resolved) {
     ? fallbackModel
     : undefined;
 }
-//@ chunk-e6aww6q8.js:2945682-2945716 placement
+//@ chunk-5xgkngpb.js:3015283-3015317 placement
 function getClassifierMaxRetries() {
   return resolveClassifierMaxRetries().value;
 }

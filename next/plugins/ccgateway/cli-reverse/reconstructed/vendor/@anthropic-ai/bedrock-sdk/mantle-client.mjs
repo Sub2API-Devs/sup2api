@@ -1,22 +1,22 @@
 /**
  * @anthropic-ai/bedrock-sdk/mantle-client.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/bedrock-sdk@0.33.7..0.34.3
- * pieces: chunk-h87x8cg3.js (4), chunk-qhhcfyds.js (3)
+ * pieces: chunk-b8zxeazh.js (4), chunk-f7kbssbx.js (3)
  * attribution: esm-fingerprint 5, esm-layout 2
  */
 import { BaseAnthropic, Anthropic } from "../sdk/client.mjs";
 import { readEnv_2, readEnv_3 } from "./internal/utils/env.mjs";
 import { AnthropicError } from "../sdk/core/error.mjs";
 import { Messages_2 } from "../sdk/resources/messages/messages.mjs";
-import { buildHeaders_2, buildHeaders_3 } from "./internal/headers.mjs";
+import { buildHeaders, buildHeaders_3 } from "./internal/headers.mjs";
 import { VERSION } from "../sdk/version.mjs";
 import { getAuthHeaders_2, getAuthHeaders } from "./core/aws-auth.js";
 import { loggerFor, loggerFor_2 } from "./internal/utils/log.mjs";
 import { Beta } from "../sdk/resources/beta/beta.mjs";
 import { import_node_config_provider, import_index_native } from "./internal/errors.mjs";
 
-//@ chunk-h87x8cg3.js:15740-16062 esm-fingerprint
+//@ chunk-b8zxeazh.js:15740-16062 esm-fingerprint
 var __classPrivateFieldGet_2 = function (receiver, state, kind, f) {
   if (kind === "a" && !f) throw TypeError("Private accessor was defined without a getter");
   if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver))
@@ -26,7 +26,7 @@ var __classPrivateFieldGet_2 = function (receiver, state, kind, f) {
 var _AnthropicBedrockMantle_instances;
 var _AnthropicBedrockMantle_signRequest;
 var DEFAULT_SERVICE_NAME = "bedrock-mantle";
-//@ chunk-h87x8cg3.js:16062-17524 esm-fingerprint
+//@ chunk-b8zxeazh.js:16062-17524 esm-fingerprint
 class AnthropicBedrockMantle_2 extends BaseAnthropic {
   constructor({
     awsRegion,
@@ -82,7 +82,7 @@ class AnthropicBedrockMantle_2 extends BaseAnthropic {
   async authHeaders(opts) {
     if (this.skipAuth) return;
     if (!this._useSigV4)
-      return buildHeaders_2([
+      return buildHeaders([
         {
           Authorization: `Bearer ${this.apiKey}`,
         },
@@ -110,7 +110,7 @@ class AnthropicBedrockMantle_2 extends BaseAnthropic {
     ];
   }
 }
-//@ chunk-h87x8cg3.js:17524-18072 esm-fingerprint
+//@ chunk-b8zxeazh.js:17524-18072 esm-fingerprint
 _AnthropicBedrockMantle_instances = new WeakSet();
 _AnthropicBedrockMantle_signRequest = async function (request) {
   if (this.skipAuth || !this._useSigV4) return request;
@@ -132,17 +132,17 @@ _AnthropicBedrockMantle_signRequest = async function (request) {
   });
   return {
     ...request,
-    headers: buildHeaders_2([request.headers, headers]).values,
+    headers: buildHeaders([request.headers, headers]).values,
   };
 };
-//@ chunk-h87x8cg3.js:18072-18133 esm-layout
+//@ chunk-b8zxeazh.js:18072-18133 esm-layout
 function makeMantleBetaResource(client) {
   let { messages } = new Beta(client);
   return {
     messages,
   };
 }
-//@ chunk-qhhcfyds.js:4536-5142 esm-fingerprint
+//@ chunk-f7kbssbx.js:4536-5142 esm-fingerprint
 var __classPrivateFieldGet = function (receiver, state, kind, f) {
   if (kind === "a" && !f) throw TypeError("Private accessor was defined without a getter");
   if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver))
@@ -156,7 +156,7 @@ var noAwsRegionError = () =>
   new AnthropicError(
     "No AWS region or base URL found. Set `awsRegion` in the constructor, the `AWS_REGION` / `AWS_DEFAULT_REGION` environment variable, configure a `region` for your profile in `~/.aws/config`, or provide a `baseURL` / `ANTHROPIC_AWS_BASE_URL` environment variable.",
   );
-//@ chunk-qhhcfyds.js:5142-7547 esm-layout
+//@ chunk-f7kbssbx.js:5142-7547 esm-layout
 class AnthropicBedrockMantle extends Anthropic {
   constructor({
     awsRegion,
@@ -299,7 +299,7 @@ class AnthropicBedrockMantle extends Anthropic {
     ];
   }
 }
-//@ chunk-qhhcfyds.js:7547-7971 esm-fingerprint
+//@ chunk-f7kbssbx.js:7547-7971 esm-fingerprint
 _AnthropicBedrockMantle_instances_2 = new WeakSet();
 _AnthropicBedrockMantle_signRequest_2 = async function (request) {
   if (this.skipAuth || !this._useSigV4) return request;

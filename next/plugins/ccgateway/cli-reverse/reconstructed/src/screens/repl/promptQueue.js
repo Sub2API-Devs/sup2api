@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。提示队列。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (28)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (24), chunk-wzw7szp3.js (4)
  * attribution: placement 28
  */
 import { join } from "path";
@@ -33,24 +33,25 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { mainAgentId } from "../../bootstrap/state.js";
 import { hasWaitingFor } from "../../services/artifacts/presenceSocket.js";
 import { topBlockingDialog } from "../replDialogState.js";
-import { isSendableQueuedCommand, isMainAgentCommand } from "../../utils/messageQueueManager.js";
+import { isIdleDrainableMainThreadCommand, isMainAgentCommand } from "../../utils/messageQueueManager.js";
 import { isMainAgentPollEventMode } from "../../utils/pollEvents.js";
-import { fromEnum, lit as lit_2 } from "../../services/analytics/safeMetadata.js";
-import { env } from "../../utils/env.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { logEvent } from "../../services/analytics/index.js";
+import { env } from "../../utils/env.js";
 import { logError } from "../../utils/log.js";
+import { logFeatureSad, logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import {
   errorMessage,
   isAbortError,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   isENOENT,
 } from "../../utils/errors.js";
-import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
+import { fromEnum, lit as lit_2 } from "../../services/analytics/safeMetadata.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useState, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { isHumanOrigin } from "../../utils/turnOrigin.js";
 import { looksLikeSlashInput } from "../../commands.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
@@ -66,16 +67,16 @@ import { readJobState } from "../../services/daemon/jobState.js";
 import { retryFsOpSync } from "../../utils/atomicPublishWrite.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:51162-51177 placement
+//@ chunk-wzw7szp3.js:1045-1058 placement
 var noopSubscribe = () => {};
-//@ chunk-18hwfzwa.js:51177-51927 placement
-function makeAgentTurnFacade(agentId, taskRegistry) {
+//@ chunk-wzw7szp3.js:1058-1800 placement
+function makeAgentTurnFacade(agentId, taskRegistry, shownAsByMessage) {
   let getLocalTask = () => {
     let task = taskRegistry.get(agentId);
     return isLocalAgent(task) ? task : undefined;
   };
   let isRunning = () => getLocalTask()?.status === "running";
-  let pendingMessages = () => humanPendingMessagesOf(getLocalTask());
+  let pendingMessages = () => humanPendingMessagesOf(getLocalTask(), shownAsByMessage);
   return {
     turn: {
       agentId,
@@ -112,26 +113,36 @@ function makeAgentTurnFacade(agentId, taskRegistry) {
     },
     transcript: {
       getSnapshot: () =>
-        removeMessagesByUuid(taskRegistry.getTranscript(agentId)?.messages ?? [], pendingMessages()),
+        removeMessagesByUuid(
+          taskRegistry.getTranscript(agentId)?.messages ?? [],
+          humanPendingMessagesOf(getLocalTask()),
+        ),
     },
   };
 }
-//@ chunk-18hwfzwa.js:51927-52153 placement
-function humanPendingMessagesOf(task) {
+//@ chunk-wzw7szp3.js:1800-2053 placement
+function humanPendingMessagesOf(task, shownAsByMessage) {
   if (task === undefined) return [];
   let messages = [];
-  for (let pendingMessage of task.pendingMessages)
-    if (pendingMessage.origin?.kind === "human" && pendingMessage.shownAs !== undefined)
+  for (let pendingMessage of task.pendingMessages) {
+    let uuid =
+      shownAsByMessage !== undefined
+        ? shownAsByMessage.get(pendingMessage)
+        : pendingMessage.origin?.kind === "human"
+          ? pendingMessage.shownAs
+          : undefined;
+    if (uuid !== undefined)
       messages.push({
         value: pendingMessage.text,
         mode: "prompt",
-        uuid: pendingMessage.shownAs,
+        uuid,
         agentId: identityAgentId2(task.agentId),
         origin: pendingMessage.origin,
       });
+  }
   return messages;
 }
-//@ chunk-18hwfzwa.js:52153-52267 placement
+//@ chunk-wzw7szp3.js:2053-2165 placement
 /**
  * 去掉 uuid 在列表中的消息。
  */
@@ -140,7 +151,7 @@ function removeMessagesByUuid(commands, removed) {
   let uuidSet = new Set(removed.map((command) => command.uuid));
   return commands.filter((command) => !uuidSet.has(command.uuid));
 }
-//@ chunk-18hwfzwa.js:52267-53091 placement
+//@ chunk-czq1j3j2.js:52766-53590 placement
 class QueuedSendNowController {
   #e;
   #t = new Map();
@@ -193,7 +204,7 @@ class QueuedSendNowController {
     };
   }
 }
-//@ chunk-18hwfzwa.js:53091-53520 placement
+//@ chunk-czq1j3j2.js:53590-54019 placement
 function readTurnBusyState({ turn, store, session, spinnerStore, dialogStore }) {
   let spinner = spinnerStore.get();
   let state = dialogStore.getState();
@@ -208,19 +219,23 @@ function readTurnBusyState({ turn, store, session, spinnerStore, dialogStore }) 
     isMainRequestAnnounced: turn.stream.isMainRequestAwaitingResponse || turn.stream.isMainResponseStreaming,
   };
 }
-//@ chunk-18hwfzwa.js:53520-53567 placement
+//@ chunk-czq1j3j2.js:54019-54066 placement
 function isPollEmptyDispatchCommand(command) {
   return command.pollEmptyDispatch === true;
 }
-//@ chunk-18hwfzwa.js:53567-53605 placement
+//@ chunk-czq1j3j2.js:54066-54103 placement
 function isNonPollQueuedCommand(command) {
-  return isSendableQueuedCommand(command) && !isPollEmptyDispatchCommand(command);
+  return isIdleDrainableMainThreadCommand(command) && !isPollEmptyDispatchCommand(command);
 }
-//@ chunk-18hwfzwa.js:53605-53663 placement
+//@ chunk-czq1j3j2.js:54103-54195 placement
 function isWakePollCommand(command) {
-  return isMainAgentPollEventMode(command) && command.pollEvent?.wake === true && true;
+  return (
+    isMainAgentPollEventMode(command) &&
+    command.pollEvent?.wake === true &&
+    (!codeModeAccepted() || command.pollEvent.startsTurn !== false)
+  );
 }
-//@ chunk-18hwfzwa.js:53663-55849 placement
+//@ chunk-czq1j3j2.js:54195-56381 placement
 /**
  * 闲置期的 poll 事件投递器：会话空闲时订阅事件队列，启动一轮查询来消费排队事件；若该轮未消费则报 "Queued events were not delivered…" 并保留。
  */
@@ -229,14 +244,14 @@ class PollEventIdleDelivery {
   #t;
   #o;
   #n = false;
-  #s;
   #r;
-  #c;
+  #s;
+  #l;
   #i;
   #a = () => {};
-  #l = () => {};
+  #c = () => {};
   #d = false;
-  #m = false;
+  #u = false;
   #p = false;
   constructor(options) {
     this.#e = options;
@@ -244,21 +259,21 @@ class PollEventIdleDelivery {
     this.#o = options.guard.generation;
   }
   connect() {
-    if (this.#m || this.#p) return;
-    this.#m = true;
+    if (this.#u || this.#p) return;
+    this.#u = true;
     this.#t = this.#e.guard.isActive;
     this.#o = this.#e.guard.generation;
-    this.#a = this.#e.guard.subscribe(this.#u);
-    this.#l = this.#e.queue.subscribe(this.#f);
+    this.#a = this.#e.guard.subscribe(this.#m);
+    this.#c = this.#e.queue.subscribe(this.#f);
     this.#f();
   }
   dispose() {
     if (this.#p) return;
     this.#p = true;
     this.#a();
-    this.#l();
+    this.#c();
   }
-  #u = () => {
+  #m = () => {
     try {
       this.#h();
     } catch (error) {
@@ -281,20 +296,20 @@ class PollEventIdleDelivery {
     let { isActive, generation } = guard;
     if (isActive && !this.#t) {
       this.#n = false;
-      if (this.#s !== undefined && !this.#v()) {
-        this.#r = {
-          ...this.#s,
+      if (this.#r !== undefined && !this.#v()) {
+        this.#s = {
+          ...this.#r,
           ranQuery: false,
         };
-        this.#s = undefined;
+        this.#r = undefined;
       } else this.#C();
-    } else if (isActive && guard.isRunning && this.#r) this.#r.ranQuery = true;
+    } else if (isActive && guard.isRunning && this.#s) this.#s.ranQuery = true;
     else if (!isActive && this.#t) {
-      let wakeSnapshot = this.#r;
-      this.#r = undefined;
+      let wakeSnapshot = this.#s;
+      this.#s = undefined;
       if (generation !== this.#o) {
         this.#n = true;
-        this.#c = undefined;
+        this.#l = undefined;
         this.#i = undefined;
         this.#C();
       } else if (wakeSnapshot === undefined) this.#b(undefined);
@@ -339,7 +354,7 @@ class PollEventIdleDelivery {
   #g(wakeSnapshot) {
     let current = this.#w();
     if (current === undefined || !isSameWakeSnapshot(current, wakeSnapshot)) return;
-    this.#c = wakeSnapshot;
+    this.#l = wakeSnapshot;
     logError(
       Error(
         "Queued events were not delivered by the turn started for them; they stay queued until the next prompt or a newer event",
@@ -350,7 +365,7 @@ class PollEventIdleDelivery {
     return this.#e.queue.getCommandQueue().some(isPollEmptyDispatchCommand);
   }
   #C() {
-    this.#s = undefined;
+    this.#r = undefined;
     if (this.#v()) this.#e.queue.removeByFilter(isPollEmptyDispatchCommand);
   }
   #w() {
@@ -369,9 +384,9 @@ class PollEventIdleDelivery {
     if (wakeSnapshot === undefined) return;
     let commandQueue = this.#e.queue.getCommandQueue();
     if (commandQueue.some(isPollEmptyDispatchCommand) || commandQueue.some(isNonPollQueuedCommand)) return;
-    if (this.#c !== undefined && isSameWakeSnapshot(wakeSnapshot, this.#c)) return;
-    this.#c = undefined;
-    this.#s = wakeSnapshot;
+    if (this.#l !== undefined && isSameWakeSnapshot(wakeSnapshot, this.#l)) return;
+    this.#l = undefined;
+    this.#r = wakeSnapshot;
     this.#e.queue.enqueue({
       value: [],
       mode: "prompt",
@@ -383,11 +398,11 @@ class PollEventIdleDelivery {
     });
   }
 }
-//@ chunk-18hwfzwa.js:55849-55913 placement
+//@ chunk-czq1j3j2.js:56381-56445 placement
 function isSameWakeSnapshot(left, right) {
   return left.first === right.first && left.newest === right.newest;
 }
-//@ chunk-18hwfzwa.js:56108-56177 placement
+//@ chunk-czq1j3j2.js:56640-56709 placement
 /**
  * 后台 fork 携带排队提示的文件名 adopt.json.queued-prompts 与大小/数量/TTL 上限。
  */
@@ -395,18 +410,18 @@ var ADOPT_JSON_QUEUED_PROMPTS = "adopt.json.queued-prompts";
 var MAX_CARRIED_PROMPTS_BYTES = 33554432;
 var MAX_CARRIED_PROMPTS = 256;
 var CARRIED_PROMPTS_TTL_MS = 3600000;
-//@ chunk-18hwfzwa.js:56177-56238 placement
+//@ chunk-czq1j3j2.js:56709-56770 placement
 function isLeftArrowCarriesQueuedOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_left_arrow_carries_queued", true);
 }
-//@ chunk-18hwfzwa.js:56238-56966 placement
+//@ chunk-czq1j3j2.js:56770-57498 placement
 /**
  * 跨进程携带的排队提示 schema：粘贴内容、提示与整份记录。
  */
 var CARRIED_PASTE_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var CARRIED_PROMPT_SCHEMA;
 var CARRIED_PROMPTS_FILE_SCHEMA;
-deferInit("chunk-18hwfzwa.js:56238", () => {
+deferInit("chunk-czq1j3j2.js:56770", () => {
   CARRIED_PASTE_SCHEMA = DoctorLazy(() =>
     objectSchema({
       id: numberSchema().int(),
@@ -447,7 +462,7 @@ deferInit("chunk-18hwfzwa.js:56238", () => {
     }),
   );
 });
-//@ chunk-18hwfzwa.js:56966-57109 placement
+//@ chunk-czq1j3j2.js:57498-57641 placement
 function isHumanPromptCommand(command) {
   return (
     isMainAgentCommand(command) &&
@@ -458,12 +473,12 @@ function isHumanPromptCommand(command) {
     command.passive !== true
   );
 }
-//@ chunk-18hwfzwa.js:57109-57426 placement
+//@ chunk-czq1j3j2.js:57641-57971 placement
 /**
  * 排队提示允许的字段。
  */
 var QUEUED_PROMPT_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:57109", () => {
+deferInit("chunk-czq1j3j2.js:57641", () => {
   QUEUED_PROMPT_KEYS = new Set([
     "value",
     "uuid",
@@ -476,6 +491,7 @@ deferInit("chunk-18hwfzwa.js:57109", () => {
     "agentId",
     "mode",
     "priority",
+    "raisedFrom",
     "origin",
     "skipSlashCommands",
     "timestamp",
@@ -488,7 +504,7 @@ deferInit("chunk-18hwfzwa.js:57109", () => {
     "attachmentSourceUuid",
   ]);
 });
-//@ chunk-18hwfzwa.js:57426-57672 placement
+//@ chunk-czq1j3j2.js:57971-58217 placement
 function toQueuedPromptCommand(command) {
   return (
     command.mode === "prompt" &&
@@ -500,7 +516,7 @@ function toQueuedPromptCommand(command) {
     Object.entries(command).every(([key, value]) => value === undefined || QUEUED_PROMPT_KEYS.has(key))
   );
 }
-//@ chunk-18hwfzwa.js:57672-58147 placement
+//@ chunk-czq1j3j2.js:58217-58692 placement
 function promptHasImages(command, perhapsDelivered) {
   let editedText = command.promptSubmitted !== undefined && command.promptSubmitted.text !== command.value;
   let filtered = Object.entries(command.pastedContents ?? {}).filter(
@@ -523,7 +539,7 @@ function promptHasImages(command, perhapsDelivered) {
     perhapsDelivered,
   };
 }
-//@ chunk-18hwfzwa.js:58147-58355 placement
+//@ chunk-czq1j3j2.js:58692-58900 placement
 /**
  * 序列化要携带的提示（校验 schema、超过字节上限返回 null）。
  */
@@ -539,7 +555,7 @@ function serializeCarriedPrompts(folded, remaining) {
   let serialized = jsonStringify(parsed.data);
   return Buffer.byteLength(serialized) > MAX_CARRIED_PROMPTS_BYTES ? null : serialized;
 }
-//@ chunk-18hwfzwa.js:58355-58885 placement
+//@ chunk-czq1j3j2.js:58900-59430 placement
 function collectCarriablePrompts(queue, carried = []) {
   let filtered = queue.getCommandQueue().filter(isHumanPromptCommand);
   let isFolding = (command) => command.uuid !== undefined && queue.isFoldInFlight(command.uuid);
@@ -568,16 +584,16 @@ function collectCarriablePrompts(queue, carried = []) {
         fileContents: extra,
       };
 }
-//@ chunk-18hwfzwa.js:58885-58937 placement
+//@ chunk-czq1j3j2.js:59430-59482 placement
 function writeCarriedPrompts(dir, prompts) {
   setCarriedPromptHash(dir, prompts);
   return replaceFileExclusive(join(dir, ADOPT_JSON_QUEUED_PROMPTS), prompts);
 }
-//@ chunk-18hwfzwa.js:58937-59109 placement
+//@ chunk-czq1j3j2.js:59482-59654 placement
 function cannotOpenAgentsQueuedMessage(count) {
   return `Cannot open agents \u2014 ${count} queued ${plural(count, "message")} can't move to the background. Press \u2190 again once Claude has read ${count === 1 ? "it" : "them"}.`;
 }
-//@ chunk-18hwfzwa.js:59109-59218 placement
+//@ chunk-czq1j3j2.js:59654-59763 placement
 /**
  * 判断是否为 “Cannot open agents — N queued” 提示。
  */
@@ -585,11 +601,11 @@ function isCannotOpenAgentsMessage(message) {
   let match = /^Cannot open agents \u2014 (\d+) /.exec(message)?.[1];
   return match !== undefined && message === cannotOpenAgentsQueuedMessage(Number(match));
 }
-//@ chunk-18hwfzwa.js:59218-59240 placement
+//@ chunk-czq1j3j2.js:59763-59785 placement
 var EMPTY_CARRIED_PROMPTS = {
   take: () => [],
 };
-//@ chunk-18hwfzwa.js:59240-60281 placement
+//@ chunk-czq1j3j2.js:59785-60826 placement
 /**
  * 后台 fork 子进程启动时读取父进程带过来的排队提示文件（adopt.json.queued-prompts），用环境变量里的 SHA256 校验未被篡改，返回 bound/unbound/altered 及提示列表。
  */
@@ -661,7 +677,7 @@ async function readCarriedPrompts(bgJobDir, messages, storageV5) {
     return EMPTY_CARRIED_PROMPTS;
   }
 }
-//@ chunk-18hwfzwa.js:60281-60517 placement
+//@ chunk-czq1j3j2.js:60826-61062 placement
 function carriedPromptsFromMessages(prompts, messages) {
   let uuids = new Set(
     messages.map((message) =>
@@ -676,7 +692,7 @@ function carriedPromptsFromMessages(prompts, messages) {
     (prompt) => !(prompt.perhapsDelivered && prompt.uuid !== undefined && uuids.has(prompt.uuid)),
   );
 }
-//@ chunk-18hwfzwa.js:60517-60753 placement
+//@ chunk-czq1j3j2.js:61062-61298 placement
 /**
  * 携带的提示转为下一条执行的主线程排队命令。
  */
@@ -697,12 +713,13 @@ function carriedToQueuedCommand(prompt) {
     skipSlashCommands: true,
   };
 }
-//@ chunk-18hwfzwa.js:60873-60877 placement
+//@ chunk-czq1j3j2.js:61418-61422 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:60873", () => {
+deferInit("chunk-czq1j3j2.js:61418", () => {
   init_react_production();
 });
 export {
+  makeAgentTurnFacade,
   isLeftArrowCarriesQueuedOn,
   collectCarriablePrompts,
   cannotOpenAgentsQueuedMessage,

@@ -1,26 +1,26 @@
 /**
  * @anthropic-ai/sdk/internal/stainless-helper-header.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (7)
+ * pieces: chunk-vn3g7zt8.js (7)
  * attribution: esm-fingerprint 3, esm-layout 4
  */
-//@ chunk-hwmsct5x.js:49398-49457 esm-fingerprint
+//@ chunk-vn3g7zt8.js:49769-49828 esm-fingerprint
 var X_STAINLESS_HELPER = "x-stainless-helper";
 var STAINLESS_HELPER_METHOD_HEADER = "x-stainless-helper-method";
-//@ chunk-hwmsct5x.js:49457-49505 esm-layout
+//@ chunk-vn3g7zt8.js:49828-49876 esm-layout
 function stainlessHelperHeader(method) {
   return {
     ["x-stainless-helper"]: method,
   };
 }
-//@ chunk-hwmsct5x.js:49505-49552 esm-fingerprint
+//@ chunk-vn3g7zt8.js:49876-49923 esm-fingerprint
 var SDK_HELPER_SYMBOL = Symbol("anthropic.sdk.stainlessHelper");
-//@ chunk-hwmsct5x.js:49552-49613 esm-layout
+//@ chunk-vn3g7zt8.js:49923-49984 esm-layout
 function wasCreatedByStainlessHelper(value) {
   return typeof value === "object" && value !== null && SDK_HELPER_SYMBOL in value;
 }
-//@ chunk-hwmsct5x.js:49613-49874 esm-fingerprint
+//@ chunk-vn3g7zt8.js:49984-50245 esm-fingerprint
 function collectStainlessHelpers(tools, messages) {
   let helpers = new Set();
   if (tools) {
@@ -39,7 +39,7 @@ function collectStainlessHelpers(tools, messages) {
     }
   return Array.from(helpers);
 }
-//@ chunk-hwmsct5x.js:49874-49974 esm-layout
+//@ chunk-vn3g7zt8.js:50245-50345 esm-layout
 function stainlessHelperHeader_2(tools, messages) {
   let helpers = collectStainlessHelpers(tools, messages);
   if (helpers.length === 0) return {};
@@ -47,7 +47,7 @@ function stainlessHelperHeader_2(tools, messages) {
     ["x-stainless-helper"]: helpers.join(", "),
   };
 }
-//@ chunk-hwmsct5x.js:49974-50044 esm-layout
+//@ chunk-vn3g7zt8.js:50345-50415 esm-layout
 function stainlessHelperHeaders(file) {
   if (wasCreatedByStainlessHelper(file))
     return {

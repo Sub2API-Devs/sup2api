@@ -3,9 +3,9 @@
  *
  * 回合结束时清理 computer-use：恢复隐藏的应用、注销 ESC 热键并发系统通知。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/computerUse/cleanup.ts
- * pieces: chunk-ha3km179.js (2)
+ * pieces: chunk-w3ch4xq2.js (2)
  * attribution: affinity 1, fingerprint 1
  */
 import { getComputerUseOwner } from "./computerUseMcpState.js";
@@ -15,12 +15,12 @@ import { errorMessage } from "../errors.js";
 import { unregisterEscHotkey } from "./escHotkey.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 
-//@ chunk-ha3km179.js:52183-52195 affinity
+//@ chunk-w3ch4xq2.js:56672-56684 affinity
 /**
  * 回合结束时等待 unhide 应用的上限 5s。
  */
 var UNHIDE_TIMEOUT_MS = 5000;
-//@ chunk-ha3km179.js:52195-52979 fingerprint (2.1.88 match: cleanupComputerUseAfterTurn, 0.693)
+//@ chunk-w3ch4xq2.js:56684-57468 fingerprint (2.1.88 match: cleanupComputerUseAfterTurn, 0.693)
 /**
  * 回合结束清理 computer-use：恢复本回合隐藏的应用（最多等 5s，超时上报 unhide_timeout），若本回合用过则注销 ESC 热键并产出系统通知 "Claude is done using your computer"。
  */

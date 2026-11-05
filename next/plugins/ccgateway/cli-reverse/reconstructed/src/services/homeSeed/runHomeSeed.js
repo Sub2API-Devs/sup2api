@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：home seed 运行主流程（打包、上传、重发、结果汇总）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mxpjbr4y.js (36)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s1cmamfh.js (36)
  * attribution: placement 36
  */
 import { SEED_READY_TIMEOUTS, SEED_READY_TIMEOUT_MS, awaitSeedReadiness } from "./seedReadiness.js";
@@ -44,15 +44,15 @@ import { looseObject, array, stringSchema } from "../../../vendor/zod/v4/classic
 import { plural } from "../../utils/stringUtils.js";
 import { claimOnce } from "../api/verificationRequired.js";
 import { sessionIdBody } from "../../bridge/sessionIdCompat.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { tildify } from "../../utils/path.js";
 import { getSettingsFilePathForSource } from "../../utils/settings/settings.js";
 
-//@ chunk-mxpjbr4y.js:14404-14464 placement
+//@ chunk-s1cmamfh.js:14583-14643 placement
 function runHomeSeed(opts) {
   return createHomeSeedRun(opts).pendingSeed(Promise.resolve());
 }
-//@ chunk-mxpjbr4y.js:14464-16215 placement
+//@ chunk-s1cmamfh.js:14643-16394 placement
 /**
  * 创建一次 home seed 运行：打包本地设置、上传到会话存储、等待就绪，并在会话结束时收尾。
  */
@@ -225,7 +225,7 @@ function createHomeSeedRun({
     },
   };
 }
-//@ chunk-mxpjbr4y.js:16215-16580 placement
+//@ chunk-s1cmamfh.js:16394-16759 placement
 function createPackForwarder(upload, mayStillForwardNow) {
   let firstUpload = uploadSettingsPack(upload, 1);
   let state = {
@@ -258,7 +258,7 @@ function createPackForwarder(upload, mayStillForwardNow) {
       })),
   };
 }
-//@ chunk-mxpjbr4y.js:16580-16629 placement
+//@ chunk-s1cmamfh.js:16759-16808 placement
 /**
  * 把 seed 标记为结束并解析结果。
  */
@@ -266,7 +266,7 @@ function resolveSeedDone(state, value) {
   state.isEnded = true;
   state.ended.resolve(value);
 }
-//@ chunk-mxpjbr4y.js:16629-16677 placement
+//@ chunk-s1cmamfh.js:16808-16856 placement
 /**
  * 把 seed 标记为结束并带错误拒绝。
  */
@@ -274,7 +274,7 @@ function rejectSeedDone(state, error) {
   state.isEnded = true;
   state.ended.reject(error);
 }
-//@ chunk-mxpjbr4y.js:16677-16748 placement
+//@ chunk-s1cmamfh.js:16856-16927 placement
 /**
  * 跟踪一个 seed promise，成功/失败都反映到结束状态。
  */
@@ -286,7 +286,7 @@ function trackSeedPromise(state, promise, written) {
     (error) => rejectSeedDone(state, error),
   );
 }
-//@ chunk-mxpjbr4y.js:16748-16842 placement
+//@ chunk-s1cmamfh.js:16927-17021 placement
 /**
  * 保留更“有进展”的结果（优先已写入的）。
  */
@@ -295,7 +295,7 @@ function preferWrittenOutcome(next, current) {
     ? next
     : current;
 }
-//@ chunk-mxpjbr4y.js:16842-17364 placement
+//@ chunk-s1cmamfh.js:17021-17543 placement
 async function forwardLatestPack(state, signal) {
   try {
     let latest = await state.latest;
@@ -332,7 +332,7 @@ async function forwardLatestPack(state, signal) {
     return "done";
   }
 }
-//@ chunk-mxpjbr4y.js:17364-17548 placement
+//@ chunk-s1cmamfh.js:17543-17727 placement
 function buildSendFailure({ outcome, cause, httpStatus }) {
   return {
     kind: "failed",
@@ -345,7 +345,7 @@ function buildSendFailure({ outcome, cause, httpStatus }) {
     }),
   };
 }
-//@ chunk-mxpjbr4y.js:17548-17848 placement
+//@ chunk-s1cmamfh.js:17727-18027 placement
 function homeSeedFailureKind({ outcome, cause, isRefusedAsSent }) {
   switch (outcome) {
     case "deadline":
@@ -365,7 +365,7 @@ function homeSeedFailureKind({ outcome, cause, isRefusedAsSent }) {
       return false;
   }
 }
-//@ chunk-mxpjbr4y.js:17848-18414 placement
+//@ chunk-s1cmamfh.js:18027-18593 placement
 async function uploadSettingsPack(
   { sessionId, storageV5, plan, bound, trigger, signal, cut, getStoreClient, deadlineMs },
   input,
@@ -401,7 +401,7 @@ async function uploadSettingsPack(
   });
   return encoding;
 }
-//@ chunk-mxpjbr4y.js:18414-18781 placement
+//@ chunk-s1cmamfh.js:18593-18960 placement
 function recordHomeSeedOutcome(
   status,
   { sessionId, plan, bound, trigger },
@@ -435,7 +435,7 @@ function recordHomeSeedOutcome(
     written,
   };
 }
-//@ chunk-mxpjbr4y.js:18781-18963 placement
+//@ chunk-s1cmamfh.js:18960-19142 placement
 function describeKeptFiles(plan) {
   if (plan.kind === "none") return {};
   let kept = filesKeptForCredential(plan.leftBehind);
@@ -449,7 +449,7 @@ function describeKeptFiles(plan) {
     }),
   };
 }
-//@ chunk-mxpjbr4y.js:18963-19126 placement
+//@ chunk-s1cmamfh.js:19142-19305 placement
 function describeSettingsRefusal(plan) {
   let settings = plan.settings;
   return settings === "schema_rejected" ||
@@ -461,7 +461,7 @@ function describeSettingsRefusal(plan) {
       }
     : {};
 }
-//@ chunk-mxpjbr4y.js:19126-19458 placement
+//@ chunk-s1cmamfh.js:19305-19637 placement
 function classifyCreateOutcome(reason, trigger) {
   switch (reason) {
     case "failed":
@@ -488,7 +488,7 @@ function classifyCreateOutcome(reason, trigger) {
       return null;
   }
 }
-//@ chunk-mxpjbr4y.js:19458-19777 placement
+//@ chunk-s1cmamfh.js:19637-19956 placement
 function classifyResendOutcome(outcome, cause) {
   switch (outcome) {
     case "sent":
@@ -520,7 +520,7 @@ function classifyResendOutcome(outcome, cause) {
       };
   }
 }
-//@ chunk-mxpjbr4y.js:19777-20115 placement
+//@ chunk-s1cmamfh.js:19956-20294 placement
 function logHomeSeedOutcome(plan, trigger, reason) {
   if (plan === null) return;
   let isCreate = trigger === "create";
@@ -539,7 +539,7 @@ function logHomeSeedOutcome(plan, trigger, reason) {
       return;
   }
 }
-//@ chunk-mxpjbr4y.js:20115-20761 placement
+//@ chunk-s1cmamfh.js:20294-20940 placement
 async function sendSettingsPack(getStoreClient, pack, trigger, context, signal, outerSignal, deadlineMs) {
   if (isAborted(signal))
     return {
@@ -594,7 +594,7 @@ async function sendSettingsPack(getStoreClient, pack, trigger, context, signal, 
     outerSignal?.removeEventListener("abort", onAbort);
   }
 }
-//@ chunk-mxpjbr4y.js:20761-21779 placement
+//@ chunk-s1cmamfh.js:20940-21958 placement
 async function resendSettingsPack(client, pack, trigger, context, signal) {
   if (trigger !== "create") {
     let homeSeedRecord = readHomeSeedRecord(context.sessionId);
@@ -680,7 +680,7 @@ async function resendSettingsPack(client, pack, trigger, context, signal) {
     });
   return result;
 }
-//@ chunk-mxpjbr4y.js:21779-22204 placement
+//@ chunk-s1cmamfh.js:21958-22383 placement
 async function putSettingsPack(store, { pack, generation }, signal, onGeneration) {
   await onGeneration?.(generation);
   let uploadSignal = await store.putStoreRow(joined_5, pack, {
@@ -715,7 +715,7 @@ async function putSettingsPack(store, { pack, generation }, signal, onGeneration
     };
   return putMergedSettingsPack(store, pack, result, signal, onGeneration);
 }
-//@ chunk-mxpjbr4y.js:22204-22380 placement
+//@ chunk-s1cmamfh.js:22383-22559 placement
 function writeSeedRecord(context, pack, generation, etag, extra = {}) {
   let decoded = decodeHomePack(pack);
   let allowRules = decoded.ok ? (allowedPermissions(decoded.pack.settings) ?? []) : [];
@@ -733,7 +733,7 @@ function writeSeedRecord(context, pack, generation, etag, extra = {}) {
     context.storageV5,
   );
 }
-//@ chunk-mxpjbr4y.js:22380-22812 placement
+//@ chunk-s1cmamfh.js:22559-22991 placement
 async function putMergedSettingsPack(client, currentPack, storedRow, signal, onGeneration) {
   let merged = mergePackGeneration(currentPack, storedRow.content);
   await onGeneration?.(merged.generation);
@@ -766,7 +766,7 @@ async function putMergedSettingsPack(client, currentPack, storedRow, signal, onG
         ...storeErrorCause(putResult),
       };
 }
-//@ chunk-mxpjbr4y.js:22812-23139 placement
+//@ chunk-s1cmamfh.js:22991-23318 placement
 function storeErrorCause(error) {
   switch (error.kind) {
     case "lane_unavailable":
@@ -796,7 +796,7 @@ function storeErrorCause(error) {
       return {};
   }
 }
-//@ chunk-mxpjbr4y.js:23139-23687 placement
+//@ chunk-s1cmamfh.js:23318-23866 placement
 function repackForResend(packBytes, homeSeedRecord) {
   let decoded = decodeHomePack(packBytes);
   if (!decoded.ok) throw Error("the settings pack to re-send does not parse");
@@ -829,7 +829,7 @@ function repackForResend(packBytes, homeSeedRecord) {
         cut,
       };
 }
-//@ chunk-mxpjbr4y.js:23687-23731 placement
+//@ chunk-s1cmamfh.js:23866-23910 placement
 /**
  * 只含 allow 的 permissions schema。
  */
@@ -838,7 +838,7 @@ var permissionsAllowSchema = DoctorLazy(() =>
     allow: array(stringSchema()).optional(),
   }),
 );
-//@ chunk-mxpjbr4y.js:23731-23820 placement
+//@ chunk-s1cmamfh.js:23910-23999 placement
 /**
  * 取 settings 里 permissions.allow（没有时 undefined）。
  */
@@ -846,7 +846,7 @@ function allowedPermissions(settings) {
   let allow = permissionsAllowSchema().safeParse(settings?.permissions);
   return allow.success ? allow.data.allow : undefined;
 }
-//@ chunk-mxpjbr4y.js:23820-23936 placement
+//@ chunk-s1cmamfh.js:23999-24115 placement
 function withAllowRules(settings, rules) {
   let parsed = permissionsAllowSchema().safeParse(settings.permissions);
   return {
@@ -857,7 +857,7 @@ function withAllowRules(settings, rules) {
     },
   };
 }
-//@ chunk-mxpjbr4y.js:23936-24202 placement
+//@ chunk-s1cmamfh.js:24115-24381 placement
 function mergePackGeneration(currentPack, bytes) {
   let current = decodeHomePack(currentPack);
   let incoming = decodeHomePack(bytes);
@@ -885,7 +885,7 @@ function mergePackGeneration(currentPack, bytes) {
     unchanged: false,
   };
 }
-//@ chunk-mxpjbr4y.js:24202-24349 placement
+//@ chunk-s1cmamfh.js:24381-24528 placement
 function bumpPackGeneration(pack, delta) {
   let decoded = decodeHomePack(pack);
   if (!decoded.ok)
@@ -902,7 +902,7 @@ function bumpPackGeneration(pack, delta) {
     generation,
   };
 }
-//@ chunk-mxpjbr4y.js:24349-24626 placement
+//@ chunk-s1cmamfh.js:24528-24805 placement
 function storeRowOutcome(row, value) {
   switch (row.kind) {
     case "ok":
@@ -922,7 +922,7 @@ function storeRowOutcome(row, value) {
       return "unauthorized";
   }
 }
-//@ chunk-mxpjbr4y.js:24626-24814 placement
+//@ chunk-s1cmamfh.js:24805-24993 placement
 function mapRowError(error) {
   switch (error.kind) {
     case "not_found":
@@ -936,7 +936,7 @@ function mapRowError(error) {
       return "unauthorized";
   }
 }
-//@ chunk-mxpjbr4y.js:24814-26589 placement
+//@ chunk-s1cmamfh.js:24993-26768 placement
 function homeSeedResultSummary(
   status,
   plan,
@@ -1026,12 +1026,12 @@ function homeSeedResultSummary(
     }
   }
 }
-//@ chunk-mxpjbr4y.js:26589-26876 placement
+//@ chunk-s1cmamfh.js:26768-27055 placement
 function leftBehindSummary(plan) {
   let leftCount =
     plan.summary.overCap +
     plan.unreadable +
-    count(plan.leftBehind, (entry) => entry.reason === "undefusable");
+    countWhere(plan.leftBehind, (entry) => entry.reason === "undefusable");
   let settingsProblem =
     plan.settings === "schema_rejected" ||
     plan.settings === "settings_too_large" ||
@@ -1039,13 +1039,13 @@ function leftBehindSummary(plan) {
   let credentialRestrictions = plan.summary.droppedRules.credentialRestrictions > 0;
   return leftCount > 0 || settingsProblem || credentialRestrictions ? "warning" : "debug";
 }
-//@ chunk-mxpjbr4y.js:26876-26926 placement
+//@ chunk-s1cmamfh.js:27055-27105 placement
 var START_NEW_SESSION_HINT = "; start a new cloud session to try again";
-//@ chunk-mxpjbr4y.js:26926-26974 placement (2.1.88 match: _temp5, 1)
+//@ chunk-s1cmamfh.js:27105-27153 placement (2.1.88 match: _temp5, 1)
 function userSettingsDisplayPath(a_0) {
   return tildify(getSettingsFilePathForSource("userSettings") ?? a_0);
 }
-//@ chunk-mxpjbr4y.js:26974-27091 placement
+//@ chunk-s1cmamfh.js:27153-27270 placement
 function formatRulesNotInForce(reason, { ifNoneStood, otherwise, why, wayOut }) {
   return reason === false
     ? `${ifNoneStood}: ${why}${wayOut}`

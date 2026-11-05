@@ -1,14 +1,14 @@
 /**
  * jsonc-parser/lib/esm/impl/format.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jsonc-parser@3.2.1..3.3.1
- * pieces: chunk-kndsyy4v.js (5)
+ * pieces: chunk-aj4djjd6.js (5)
  * attribution: esm-fingerprint 4, esm-layout 1
  */
 import { EOL, cachedSpaces, cachedBreakLinesWithSpaces } from "./string-intern.js";
 import { createScanner } from "./scanner.js";
 
-//@ chunk-kndsyy4v.js:5455-7403 esm-fingerprint
+//@ chunk-aj4djjd6.js:5455-7403 esm-fingerprint
 function format(documentText, range, options) {
   let initialIndentLevel;
   let formatText;
@@ -164,13 +164,13 @@ function format(documentText, range, options) {
   }
   return editOperations;
 }
-//@ chunk-kndsyy4v.js:7403-7462 esm-layout
-function repeat(s_2, count) {
+//@ chunk-aj4djjd6.js:7403-7462 esm-layout
+function repeat(s, count) {
   let result = "";
-  for (let i = 0; i < count; i++) result += s_2;
+  for (let i = 0; i < count; i++) result += s;
   return result;
 }
-//@ chunk-kndsyy4v.js:7462-7618 esm-fingerprint
+//@ chunk-aj4djjd6.js:7462-7618 esm-fingerprint
 function computeIndentLevel(content, options) {
   let i_2 = 0;
   let nChars = 0;
@@ -184,7 +184,7 @@ function computeIndentLevel(content, options) {
   }
   return Math.floor(nChars / tabSize);
 }
-//@ chunk-kndsyy4v.js:7618-7801 esm-fingerprint
+//@ chunk-aj4djjd6.js:7618-7801 esm-fingerprint
 function getEOL(options, text) {
   for (let i = 0; i < text.length; i++) {
     let ch = text.charAt(i);
@@ -212,7 +212,7 @@ function getEOL(options, text) {
 `
   );
 }
-//@ chunk-kndsyy4v.js:7801-7855 esm-fingerprint
+//@ chunk-aj4djjd6.js:7801-7855 esm-fingerprint
 function isEOL(text, offset) {
   return (
     `\r

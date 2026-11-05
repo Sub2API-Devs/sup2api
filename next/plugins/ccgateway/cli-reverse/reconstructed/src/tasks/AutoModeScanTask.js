@@ -3,21 +3,21 @@
  *
  * 2.1.316 新增：auto mode 扫描后台任务。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-m8444q1d.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8x5p2wd7.js (3)
  * attribution: placement 3
  */
 import { generateTaskId, createTaskStateBase } from "../Task.js";
 
-//@ chunk-m8444q1d.js:14984-15075 placement
+//@ chunk-8x5p2wd7.js:16161-16252 placement
 /**
  * 是否是 auto_mode_scan 任务。
  */
 function isAutoModeScanTask(task) {
   return typeof task === "object" && task !== null && "type" in task && task.type === "auto_mode_scan";
 }
-//@ chunk-m8444q1d.js:15075-15172 placement (2.1.88 match: requestTeammateShutdown, 1)
+//@ chunk-8x5p2wd7.js:16252-16349 placement (2.1.88 match: requestTeammateShutdown, 1)
 /**
  * 找到正在运行的 auto_mode_scan 任务。
  */
@@ -26,7 +26,7 @@ function findRunningAutoModeScanTask(taskRegistry) {
     if (isAutoModeScanTask(task) && task.status === "running") return task;
   return;
 }
-//@ chunk-m8444q1d.js:15172-15399 placement
+//@ chunk-8x5p2wd7.js:16349-16576 placement
 /**
  * 注册"scanning for auto-mode setup"后台任务（运行中、不写入记录，记录是否从 GitHub 组织收集），返回任务 id。
  */

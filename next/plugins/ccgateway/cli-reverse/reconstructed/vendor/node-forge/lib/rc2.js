@@ -1,15 +1,15 @@
 /**
  * node-forge/lib/rc2.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: node-forge@1.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_util } from "./util.js";
 
-//@ chunk-fq0cr76a.js:89883-92952 cjs-fingerprint
+//@ chunk-qg41pqt6.js:89820-92904 cjs-fingerprint
 var require_rc2 = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_util();
@@ -57,31 +57,31 @@ var require_rc2 = __commonJS(function (cjsExports, cjsModule) {
     var mixRound;
     var mashRound;
     var i;
-    var j;
-    var K_2 = [];
+    var j_2;
+    var K = [];
     key = forge.rc2.expandKey(key, bits);
-    for (i = 0; i < 64; i++) K_2.push(key.getInt16Le());
+    for (i = 0; i < 64; i++) K.push(key.getInt16Le());
     if (encrypt) {
       mixRound = function (R) {
         for (i = 0; i < 4; i++) {
-          R[i] += K_2[j] + (R[(i + 3) % 4] & R[(i + 2) % 4]) + (~R[(i + 3) % 4] & R[(i + 1) % 4]);
+          R[i] += K[j_2] + (R[(i + 3) % 4] & R[(i + 2) % 4]) + (~R[(i + 3) % 4] & R[(i + 1) % 4]);
           R[i] = rol(R[i], s_2[i]);
-          j++;
+          j_2++;
         }
       };
       mashRound = function (R) {
-        for (i = 0; i < 4; i++) R[i] += K_2[R[(i + 3) % 4] & 63];
+        for (i = 0; i < 4; i++) R[i] += K[R[(i + 3) % 4] & 63];
       };
     } else {
       mixRound = function (R) {
         for (i = 3; i >= 0; i--) {
           R[i] = ror(R[i], s_2[i]);
-          R[i] -= K_2[j] + (R[(i + 3) % 4] & R[(i + 2) % 4]) + (~R[(i + 3) % 4] & R[(i + 1) % 4]);
-          j--;
+          R[i] -= K[j_2] + (R[(i + 3) % 4] & R[(i + 2) % 4]) + (~R[(i + 3) % 4] & R[(i + 1) % 4]);
+          j_2--;
         }
       };
       mashRound = function (R) {
-        for (i = 3; i >= 0; i--) R[i] -= K_2[R[(i + 3) % 4] & 63];
+        for (i = 3; i >= 0; i--) R[i] -= K[R[(i + 3) % 4] & 63];
       };
     }
     var runPlan = function (plan) {
@@ -93,7 +93,7 @@ var require_rc2 = __commonJS(function (cjsExports, cjsModule) {
           else _iv.putInt16Le(val);
         R.push(val & 65535);
       }
-      j = encrypt ? 0 : 63;
+      j_2 = encrypt ? 0 : 63;
       for (var ptr = 0; ptr < plan.length; ptr++)
         for (var ctr = 0; ctr < plan[ptr][0]; ctr++) plan[ptr][1](R);
       for (i = 0; i < 4; i++) {

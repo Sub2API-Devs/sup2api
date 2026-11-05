@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 服务器发现缓存：加密保存 initialize/tools 结果，按身份代际与授权指纹校验，失败计数与清理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0qyh5wah.js (83)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kbr8ch1e.js (83)
  * attribution: placement 83
  */
 import { randomBytes, createCipheriv, createHash } from "crypto";
@@ -37,7 +37,7 @@ import { VISUALIZE, MEMORY, CLAUDE_ARTIFACTS, derivedServerId } from "./firstPar
 import { isSettingsSourcedEnvValue } from "../../utils/managedEnvApply.js";
 import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import { isPluginServerConfig } from "./types.js";
-import { ccrSessionIdFromMcpUrl, UUID_RE, isSameOriginAsCcr } from "./ccrMcpUrls.js";
+import { ccrSessionIdFromMcpUrl, UUID_RE, isKnownProxyEndpointUrl, isSameOriginAsCcr } from "./ccrMcpUrls.js";
 import { sessionIdBody, isSelfAddressableSessionId } from "../../bridge/sessionIdCompat.js";
 import { startupCcrEnv } from "../../tasks/RemoteAgentTask/remoteAgentKinds.js";
 import {
@@ -45,7 +45,6 @@ import {
   X_MCP_SERVER_ORIGIN,
   X_CCR_OWNER_SLACK_USER_ID,
 } from "./fileReference/fileReferencePolicy.js";
-import { isKnownProxyEndpointUrl } from "../../tools/WebFetchTool/utils.js";
 import { RESERVED_SERVER_IDS_WITH_DOCS } from "./remoteBrowserServer.js";
 import { reservedMcpServerNames } from "./builtinServerNames.js";
 import {
@@ -56,7 +55,7 @@ import {
 } from "./identityChange.js";
 import { isCliOwnedConfig, hasCliOwnedBearer } from "./cliOwnedClients.js";
 import { isFirstPartyMcpUrl, configHasAuthorizationHeader, getServerKey } from "./auth.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import { serverCacheKey } from "./client.js";
 import {
@@ -80,7 +79,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { lock } from "../../utils/lockfile.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0qyh5wah.js:3003-3089 placement
+//@ chunk-kbr8ch1e.js:3001-3087 placement
 /**
  * 缓存版本前缀 "v2:"。
  */
@@ -90,7 +89,7 @@ var AUTH_TAG_BYTES;
 var CACHE_VERSION_PREFIX;
 var buffer;
 var KEY_B64_RE;
-deferInit("chunk-0qyh5wah.js:3003", () => {
+deferInit("chunk-kbr8ch1e.js:3001", () => {
   DISCOVERY_CACHE_KEY_BYTES = 32;
   IV_BYTES = 12;
   AUTH_TAG_BYTES = 16;
@@ -98,13 +97,13 @@ deferInit("chunk-0qyh5wah.js:3003", () => {
   buffer = Buffer.from("mcp-dc", "utf8");
   KEY_B64_RE = /^[A-Za-z0-9+/]{43}=$/;
 });
-//@ chunk-0qyh5wah.js:3089-3207 placement (2.1.88 match: base64URLEncode, 1)
+//@ chunk-kbr8ch1e.js:3087-3205 placement (2.1.88 match: base64URLEncode, 1)
 function base64URLEncode(buffer) {
   if (typeof buffer !== "string" || !KEY_B64_RE.test(buffer)) return;
   let buffer_2 = Buffer.from(buffer, "base64");
   return buffer_2.length === DISCOVERY_CACHE_KEY_BYTES ? buffer_2 : undefined;
 }
-//@ chunk-0qyh5wah.js:3207-3537 placement
+//@ chunk-kbr8ch1e.js:3205-3535 placement
 async function getMcpDiscoveryCacheKey() {
   let secureStorageForMcp = await readSecureStorageForMcp();
   if (secureStorageForMcp === READ_FAILED) return;
@@ -131,11 +130,11 @@ async function getMcpDiscoveryCacheKey() {
   if (secureStorageForMcp_2 === READ_FAILED) return;
   return encodeCacheKey(secureStorageForMcp_2?.mcpDiscoveryCacheKey);
 }
-//@ chunk-0qyh5wah.js:3537-3565 placement
+//@ chunk-kbr8ch1e.js:3535-3563 placement
 function encodeCacheKey(buffer) {
   return base64URLEncode(buffer);
 }
-//@ chunk-0qyh5wah.js:3565-3904 placement
+//@ chunk-kbr8ch1e.js:3563-3902 placement
 function buildDiscoveryCacheAad(schemaVersion, cacheKey, fingerprint) {
   if (!Number.isInteger(schemaVersion) || schemaVersion < 0 || schemaVersion > 255)
     throw Error("discovery-cache seal: schema version must fit one byte");
@@ -149,7 +148,7 @@ function buildDiscoveryCacheAad(schemaVersion, cacheKey, fingerprint) {
   }
   return aad;
 }
-//@ chunk-0qyh5wah.js:3904-4136 placement
+//@ chunk-kbr8ch1e.js:3902-4135 placement
 function sealDiscoveryCacheEntry(sealParams, serialized) {
   let iv = randomBytes(IV_BYTES);
   let cipheriv = createCipheriv("aes-256-gcm", sealParams.key, iv, {
@@ -165,7 +164,7 @@ function sealDiscoveryCacheEntry(sealParams, serialized) {
     Buffer.concat([iv, buffer, authTag]).toString("base64url")
   );
 }
-//@ chunk-0qyh5wah.js:4136-4233 placement
+//@ chunk-kbr8ch1e.js:4135-4233 placement
 function hashCacheKeyId(cacheKey) {
   return createHash("sha256")
     .update(cacheKey, "utf8")
@@ -173,7 +172,7 @@ function hashCacheKeyId(cacheKey) {
     .subarray(0, CACHE_KEY_ID_BYTES)
     .toString("base64url");
 }
-//@ chunk-0qyh5wah.js:4233-4326 placement
+//@ chunk-kbr8ch1e.js:4233-4326 placement
 /**
  * base64url 字符的正则。
  */
@@ -181,13 +180,13 @@ var CACHE_KEY_ID_BYTES; // deferred: has load-time effects after a deferred stat
 var CACHE_KEY_ID_CHARS;
 var regExp;
 var BASE64URL_CHARS_RE;
-deferInit("chunk-0qyh5wah.js:4233", () => {
+deferInit("chunk-kbr8ch1e.js:4233", () => {
   CACHE_KEY_ID_BYTES = 16;
   CACHE_KEY_ID_CHARS = Math.ceil((CACHE_KEY_ID_BYTES * 4) / 3);
   regExp = new RegExp(`^[A-Za-z0-9_-]{${CACHE_KEY_ID_CHARS}}$`);
   BASE64URL_CHARS_RE = /^[A-Za-z0-9_-]*$/;
 });
-//@ chunk-0qyh5wah.js:6392-6432 placement
+//@ chunk-kbr8ch1e.js:6392-6432 placement
 /**
  * 默认的连续刷新失败阈值（1）。
  */
@@ -196,7 +195,7 @@ var DEFAULT_TTL_S = 900;
 var DEFAULT_MAX_STALE_S = 14400;
 var MAX_MAX_STALE_S = 604800;
 var DEFAULT_STRIKES = 1;
-//@ chunk-0qyh5wah.js:6432-6501 placement
+//@ chunk-kbr8ch1e.js:6432-6501 placement
 /**
  * 取连续刷新失败阈值（环境变量可覆盖）。
  */
@@ -206,14 +205,14 @@ function getMaxStrikes() {
     ? MCP_DISCOVERY_CACHE_STRIKES
     : DEFAULT_STRIKES;
 }
-//@ chunk-0qyh5wah.js:6501-6957 placement
+//@ chunk-kbr8ch1e.js:6501-6957 placement
 /**
  * 发现缓存条目的 zod 结构：版本、服务器名、缓存键、保存时间、连续刷新失败次数、serverInfo、协商的协议代、capabilities 与 tools/prompts/resources/templates。
  */
 var CACHE_FILE_MODE; // deferred: loads other modules while loading; runs once its import cycle is complete
 var CACHE_DIR_MODE;
 var discoveryEntrySchema;
-deferInit("chunk-0qyh5wah.js:6501", () => {
+deferInit("chunk-kbr8ch1e.js:6501", () => {
   CACHE_FILE_MODE = 384;
   CACHE_DIR_MODE = 448;
   discoveryEntrySchema = DoctorLazy(() => {
@@ -235,7 +234,7 @@ deferInit("chunk-0qyh5wah.js:6501", () => {
     });
   });
 });
-//@ chunk-0qyh5wah.js:6957-7046 placement
+//@ chunk-kbr8ch1e.js:6957-7046 placement
 /**
  * 取缓存 TTL（毫秒，写入与上限取小）。
  */
@@ -247,7 +246,7 @@ function getCacheTtlMs() {
     getMaxStaleMs(),
   );
 }
-//@ chunk-0qyh5wah.js:7046-7137 placement
+//@ chunk-kbr8ch1e.js:7046-7137 placement
 /**
  * 取缓存最大陈旧时长（毫秒）。
  */
@@ -262,18 +261,18 @@ function getMaxStaleMs() {
     ) * 1000
   );
 }
-//@ chunk-0qyh5wah.js:7137-7175 placement
+//@ chunk-kbr8ch1e.js:7137-7175 placement
 function isDiscoveryCacheEligible(config) {
   return discoveryCacheExclusion(config) === undefined;
 }
-//@ chunk-0qyh5wah.js:7175-7224 placement
+//@ chunk-kbr8ch1e.js:7175-7224 placement
 /**
  * 判断原因是否属于已知的缓存排除原因。
  */
 function isKnownExclusionReason(reason) {
   return CACHE_EXCLUSION_PROPS.some((prop) => prop.reason === reason);
 }
-//@ chunk-0qyh5wah.js:7224-7470 placement
+//@ chunk-kbr8ch1e.js:7224-7470 placement
 var CACHE_EXCLUSION_PROPS = [
   {
     prop: "discoveryCache",
@@ -290,7 +289,7 @@ var CACHE_EXCLUSION_PROPS = [
     valueDomain: [undefined],
   },
 ];
-//@ chunk-0qyh5wah.js:7470-7615 placement
+//@ chunk-kbr8ch1e.js:7470-7615 placement
 function normalizeExclusionProps(config) {
   let normalized = {
     ...config,
@@ -303,7 +302,7 @@ function normalizeExclusionProps(config) {
   }
   return normalized;
 }
-//@ chunk-0qyh5wah.js:7615-7816 placement
+//@ chunk-kbr8ch1e.js:7615-7814 placement
 function hasEnvReferenceInUrlOrHeaders(config) {
   let serverConfig = config;
   if (typeof serverConfig.url === "string" && containsEnvRef(serverConfig.url)) return true;
@@ -313,10 +312,10 @@ function hasEnvReferenceInUrlOrHeaders(config) {
   }
   return false;
 }
-//@ chunk-0qyh5wah.js:7816-7932 placement
-var DISCOVERY_CACHE_ENV_OVERRIDES; // deferred: uses CLAUDE_AI (./firstPartyServerIds.js) of its import cycle while loading; runs once the cycle is complete
+//@ chunk-kbr8ch1e.js:7814-7930 placement
+var DISCOVERY_CACHE_ENV_OVERRIDES; // deferred: uses ARTIFACTS_SERVER_NAME (./firstPartyServerIds.js) of its import cycle while loading; runs once the cycle is complete
 var NON_CACHEABLE_SERVER_NAMES;
-deferInit("chunk-0qyh5wah.js:7816", () => {
+deferInit("chunk-kbr8ch1e.js:7814", () => {
   DISCOVERY_CACHE_ENV_OVERRIDES = [
     "MCP_DISCOVERY_CACHE_TTL_S",
     "MCP_DISCOVERY_CACHE_MAX_STALE_S",
@@ -324,7 +323,7 @@ deferInit("chunk-0qyh5wah.js:7816", () => {
   ];
   NON_CACHEABLE_SERVER_NAMES = [VISUALIZE, MEMORY, CLAUDE_ARTIFACTS];
 });
-//@ chunk-0qyh5wah.js:7932-7995 placement
+//@ chunk-kbr8ch1e.js:7930-7993 placement
 /**
  * 判断环境变量是否由设置提供（用于禁用缓存）。
  */
@@ -332,7 +331,7 @@ function hasSettingsSourcedOverride(envName) {
   let value = process.env[envName];
   return value !== undefined && isSettingsSourcedEnvValue(envName, value);
 }
-//@ chunk-0qyh5wah.js:7995-8077 placement
+//@ chunk-kbr8ch1e.js:7993-8075 placement
 /**
  * 发现缓存功能是否可用。
  */
@@ -343,7 +342,7 @@ function isCacheEnabledHere() {
     !hasSettingsSourcedOverride("MCP_DISCOVERY_CACHE")
   );
 }
-//@ chunk-0qyh5wah.js:8077-8827 placement
+//@ chunk-kbr8ch1e.js:8075-8825 placement
 /**
  * 判断一个动态 http MCP 服务器是否可走发现缓存：必须是本会话自己的 CCR 会话 MCP 地址，带唯一且匹配的 x-mcp-server-id、来源为 directory/custom、非 Slack 归属，且不是已知代理端点或保留的内置服务器。
  */
@@ -394,14 +393,14 @@ function isCacheableCcrSessionServer(config) {
     )
   );
 }
-//@ chunk-0qyh5wah.js:8827-8865 placement
+//@ chunk-kbr8ch1e.js:8825-8863 placement
 /**
  * 该服务器是否可被缓存。
  */
 function isCacheableServer(config) {
   return isDiscoveryCacheEligible(config) && !isCacheableCcrSessionServer(config);
 }
-//@ chunk-0qyh5wah.js:8865-9284 placement
+//@ chunk-kbr8ch1e.js:8863-9282 placement
 function discoveryCacheExclusion(config) {
   let offReason = discoveryCacheOffReason();
   if (offReason !== undefined) return offReason;
@@ -418,14 +417,14 @@ function discoveryCacheExclusion(config) {
     if (excludes(exclusionTarget[prop])) return reason;
   return;
 }
-//@ chunk-0qyh5wah.js:9284-9334 placement
+//@ chunk-kbr8ch1e.js:9282-9332 placement
 /**
  * 发现缓存目录路径。
  */
 function discoveryCacheDir() {
   return join(getClaudeConfigDir(), "mcp-discovery-cache");
 }
-//@ chunk-0qyh5wah.js:9334-9419 placement
+//@ chunk-kbr8ch1e.js:9332-9417 placement
 /**
  * 是否能拿到该服务器的刷新令牌指纹。
  */
@@ -433,7 +432,7 @@ async function canFingerprint(serverName, config) {
   if (!isDiscoveryCacheEligible(config)) return false;
   return (await refreshTokenFingerprint(serverName, config)).kind !== "degenerate";
 }
-//@ chunk-0qyh5wah.js:9419-9705 placement
+//@ chunk-kbr8ch1e.js:9417-9703 placement
 async function refreshTokenFingerprint(serverName, config) {
   if (config.type !== "http" && config.type !== "sse")
     return {
@@ -459,7 +458,7 @@ async function refreshTokenFingerprint(serverName, config) {
     hash: computeContentHash(refreshToken).slice(0, 16),
   };
 }
-//@ chunk-0qyh5wah.js:9705-9911 placement
+//@ chunk-kbr8ch1e.js:9703-9909 placement
 async function grantTokenFor(serverName, config) {
   if (config.type !== "http" && config.type !== "sse") return "grant:none";
   let fingerprint = await refreshTokenFingerprint(serverName, config);
@@ -472,7 +471,7 @@ async function grantTokenFor(serverName, config) {
       return;
   }
 }
-//@ chunk-0qyh5wah.js:9911-10183 placement
+//@ chunk-kbr8ch1e.js:9909-10181 placement
 async function identityFingerprint(serverName, config) {
   let mcpIdentitySnapshot = getMcpIdentitySnapshot();
   if (mcpIdentitySnapshot.kind === "unwired" || mcpIdentitySnapshot.kind === "incomplete") return;
@@ -485,7 +484,7 @@ async function identityFingerprint(serverName, config) {
     grantToken,
   };
 }
-//@ chunk-0qyh5wah.js:10183-10848 placement
+//@ chunk-kbr8ch1e.js:10181-10846 placement
 function discoveryCacheKey(cacheKey, fingerprint, era, uiCapable) {
   let joined = [
     cacheKey,
@@ -495,10 +494,10 @@ function discoveryCacheKey(cacheKey, fingerprint, era, uiCapable) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION ?? "unknown",
@@ -506,12 +505,12 @@ function discoveryCacheKey(cacheKey, fingerprint, era, uiCapable) {
   ].join("\x00");
   return `${createHash("sha256").update(joined).digest("hex").slice(0, 32)}.json`;
 }
-//@ chunk-0qyh5wah.js:10848-10873 placement
+//@ chunk-kbr8ch1e.js:10846-10871 placement
 /**
  * 匹配缓存文件名前缀的正则（16 位十六进制加 NUL）。
  */
 var CACHE_FILE_PREFIX_RE = /^[0-9a-f]{16}\0/;
-//@ chunk-0qyh5wah.js:10873-11017 placement
+//@ chunk-kbr8ch1e.js:10871-11015 placement
 /**
  * 清除某服务器在发现缓存路径记忆中的条目。
  */
@@ -523,21 +522,21 @@ function clearDiscoveryPathMemo(serverName) {
     if (CACHE_FILE_PREFIX_RE.test(key.slice(prefix.length))) filePathMemo.delete(key);
   }
 }
-//@ chunk-0qyh5wah.js:11017-11052 placement
+//@ chunk-kbr8ch1e.js:11015-11050 placement
 /**
  * 生成缓存路径记忆的键。
  */
 function cacheMemoKey(serverName, config) {
   return serverCacheKey(serverName, normalizeExclusionProps(config));
 }
-//@ chunk-0qyh5wah.js:11052-11102 placement
+//@ chunk-kbr8ch1e.js:11050-11100 placement
 /**
  * 取缓存文件路径。
  */
 async function cacheFilePath(serverName, config) {
   return (await resolveDiscoveryCachePath(serverName, config))?.path;
 }
-//@ chunk-0qyh5wah.js:11102-11190 placement
+//@ chunk-kbr8ch1e.js:11100-11188 placement
 /**
  * 取缓存条目的授权 leg 令牌。
  */
@@ -549,7 +548,7 @@ async function cacheGrantLeg(serverName, config) {
     return;
   }
 }
-//@ chunk-0qyh5wah.js:11190-11668 placement
+//@ chunk-kbr8ch1e.js:11188-11666 placement
 /**
  * 计算某服务器发现缓存文件的路径与密钥材料（缓存键、身份指纹、协议代、UI 开关、授权令牌、AAD），结果按组合键记忆，解析失败时移除记忆。
  */
@@ -583,28 +582,28 @@ async function resolveDiscoveryCachePath(serverName, config) {
   }, evictMemo);
   return pending;
 }
-//@ chunk-0qyh5wah.js:11668-11701 placement
+//@ chunk-kbr8ch1e.js:11666-11699 placement
 /**
  * 发现缓存用的存储实现。
  */
 function getStorage() {
   return getDiscoveryCacheStore().storage;
 }
-//@ chunk-0qyh5wah.js:11701-11736 placement
+//@ chunk-kbr8ch1e.js:11699-11734 placement
 /**
  * 发现缓存用的 v5 存储。
  */
 function getStorageV5() {
   return getDiscoveryCacheStore().storageV5;
 }
-//@ chunk-0qyh5wah.js:11736-11806 placement
+//@ chunk-kbr8ch1e.js:11734-11804 placement
 /**
  * 缓存文件的存储空间键。
  */
 function cacheSpaceKey(cachePath) {
   return STORAGE_SPACES.userConfigDir("mcp-discovery-cache", [basename(cachePath)]);
 }
-//@ chunk-0qyh5wah.js:11806-11877 placement
+//@ chunk-kbr8ch1e.js:11804-11875 placement
 /**
  * 单个缓存条目的最大字节数（8 MiB）。
  */
@@ -613,14 +612,14 @@ var CACHE_SPACE = {
   dir: "mcp-discovery-cache",
 };
 var MAX_ENTRY_BYTES = 8388608;
-//@ chunk-0qyh5wah.js:11877-11937 placement
+//@ chunk-kbr8ch1e.js:11875-11935 placement
 /**
  * 条目最近一次保存时间。
  */
 function newestTimestamp(entry) {
   return Math.max(entry.savedAt, entry.toolsSavedAt ?? 0);
 }
-//@ chunk-0qyh5wah.js:11937-12075 placement
+//@ chunk-kbr8ch1e.js:11935-12073 placement
 class RefusedDiscoveryEntryError extends Error {
   entryPath;
   reason;
@@ -631,9 +630,9 @@ class RefusedDiscoveryEntryError extends Error {
     this.name = "RefusedDiscoveryEntryError";
   }
 }
-//@ chunk-0qyh5wah.js:12075-12204 placement
+//@ chunk-kbr8ch1e.js:12073-12202 placement
 let OversizeDiscoveryEntryError; // deferred: uses RefusedDiscoveryEntryError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0qyh5wah.js:12075", () => {
+deferInit("chunk-kbr8ch1e.js:12073", () => {
   OversizeDiscoveryEntryError = class OversizeDiscoveryEntryError extends RefusedDiscoveryEntryError {
     constructor(entryPath) {
       super(entryPath, "oversize", "discovery-cache: oversize entry");
@@ -641,9 +640,9 @@ deferInit("chunk-0qyh5wah.js:12075", () => {
     }
   };
 });
-//@ chunk-0qyh5wah.js:12204-12342 placement
+//@ chunk-kbr8ch1e.js:12202-12340 placement
 let SymlinkedDiscoveryEntryError; // deferred: uses RefusedDiscoveryEntryError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0qyh5wah.js:12204", () => {
+deferInit("chunk-kbr8ch1e.js:12202", () => {
   SymlinkedDiscoveryEntryError = class SymlinkedDiscoveryEntryError extends RefusedDiscoveryEntryError {
     constructor(entryPath) {
       super(entryPath, "symlink", "discovery-cache: symlinked entry refused");
@@ -651,9 +650,9 @@ deferInit("chunk-0qyh5wah.js:12204", () => {
     }
   };
 });
-//@ chunk-0qyh5wah.js:12342-12487 placement
+//@ chunk-kbr8ch1e.js:12340-12485 placement
 let NonRegularDiscoveryEntryError; // deferred: uses RefusedDiscoveryEntryError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0qyh5wah.js:12342", () => {
+deferInit("chunk-kbr8ch1e.js:12340", () => {
   NonRegularDiscoveryEntryError = class NonRegularDiscoveryEntryError extends RefusedDiscoveryEntryError {
     constructor(entryPath) {
       super(entryPath, "non-regular", "discovery-cache: non-regular entry refused");
@@ -661,14 +660,14 @@ deferInit("chunk-0qyh5wah.js:12342", () => {
     }
   };
 });
-//@ chunk-0qyh5wah.js:12487-12524 placement
+//@ chunk-kbr8ch1e.js:12485-12522 placement
 /**
  * 判断错误是否为拒绝读取的条目。
  */
 function isRefusedEntryError(error) {
   return error instanceof RefusedDiscoveryEntryError;
 }
-//@ chunk-0qyh5wah.js:12524-12964 placement
+//@ chunk-kbr8ch1e.js:12522-12962 placement
 /**
  * 读取发现缓存条目文本：拒绝符号链接、非普通文件与超大文件，不存在时返回 undefined。
  */
@@ -701,7 +700,7 @@ async function readDiscoveryEntryText(entryPath, storageV5) {
     throw error;
   }
 }
-//@ chunk-0qyh5wah.js:12964-13366 placement
+//@ chunk-kbr8ch1e.js:12962-13364 placement
 /**
  * 从存储 V5 读取发现缓存条目（拒绝符号链接、非普通文件与超大条目）。
  */
@@ -732,7 +731,7 @@ async function readDiscoveryEntryFromStorage(storageV5, entryPath) {
   if (item.totalBytes > MAX_ENTRY_BYTES) throw new OversizeDiscoveryEntryError(entryPath);
   return Buffer.from(item.value).toString("utf8");
 }
-//@ chunk-0qyh5wah.js:13366-13563 placement
+//@ chunk-kbr8ch1e.js:13364-13561 placement
 async function writeDiscoveryEntryText(cachePath, sealed, storageV5) {
   if (storageV5) {
     let writeResult = await storageV5.write(cacheSpaceKey(cachePath), sealed);
@@ -746,7 +745,7 @@ async function writeDiscoveryEntryText(cachePath, sealed, storageV5) {
   await storage.mkdir(discoveryCacheDir(), CACHE_DIR_MODE);
   await storage.atomicWrite(cachePath, sealed, CACHE_FILE_MODE);
 }
-//@ chunk-0qyh5wah.js:13563-13975 placement
+//@ chunk-kbr8ch1e.js:13561-13973 placement
 /**
  * 列出发现缓存目录中的文件名（本地文件系统或存储 V5 分页列出）。
  */
@@ -775,7 +774,7 @@ async function listDiscoveryCacheFiles(storageV5) {
   } while (cursor);
   return names;
 }
-//@ chunk-0qyh5wah.js:13975-14160 placement
+//@ chunk-kbr8ch1e.js:13973-14158 placement
 async function deleteDiscoveryEntry(path, storageV5) {
   if (storageV5) {
     let deleteResult = await storageV5.delete(cacheSpaceKey(path));
@@ -791,7 +790,7 @@ async function deleteDiscoveryEntry(path, storageV5) {
     if (!isENOENT(error)) throw error;
   }
 }
-//@ chunk-0qyh5wah.js:14160-15931 placement
+//@ chunk-kbr8ch1e.js:14158-15929 placement
 /**
  * 读取 MCP 服务器发现缓存（加密存储的 initialize/tools 列表结果）：校验身份代际、授权指纹与过期，命中则省去握手；异常时清掉该服务器的缓存族。
  */
@@ -925,7 +924,7 @@ async function readDiscoveryCache(serverName, config, now = Date.now()) {
     ageMs: max,
   };
 }
-//@ chunk-0qyh5wah.js:15931-16042 placement
+//@ chunk-kbr8ch1e.js:15929-16040 placement
 function serializeDiscoveryWrite(cacheKey, serverName, operation) {
   return getDiscoveryCacheStore()
     .serializeWrite(cacheKey, operation)
@@ -933,26 +932,26 @@ function serializeDiscoveryWrite(cacheKey, serverName, operation) {
       logMCPDebug(serverName, `discovery-cache: write op failed: ${error}`);
     });
 }
-//@ chunk-0qyh5wah.js:16042-16105 placement
+//@ chunk-kbr8ch1e.js:16040-16103 placement
 /**
  * 取某缓存键的删除代号。
  */
 function deleteGeneration(cacheKey) {
   return getDiscoveryCacheStore().deleteGenerationByCacheKey.get(cacheKey) ?? 0;
 }
-//@ chunk-0qyh5wah.js:16105-16166 placement
+//@ chunk-kbr8ch1e.js:16103-16164 placement
 /**
  * 递增某缓存键的删除代号。
  */
 function bumpDeleteGeneration(cacheKey) {
   getDiscoveryCacheStore().deleteGenerationByCacheKey.set(cacheKey, deleteGeneration(cacheKey) + 1);
 }
-//@ chunk-0qyh5wah.js:16166-16175 placement
+//@ chunk-kbr8ch1e.js:16164-16173 placement
 /**
  * 视为秘密的最短长度（8）。
  */
 var MIN_SECRET_LENGTH = 8;
-//@ chunk-0qyh5wah.js:16175-16586 placement
+//@ chunk-kbr8ch1e.js:16173-16584 placement
 /**
  * 收集某 MCP 服务器的 OAuth 秘密（访问令牌、刷新令牌、客户端密钥），用于确认缓存内容不含秘密。
  */
@@ -970,10 +969,10 @@ async function oauthSecretsFor(serverName, config) {
   if (typeof clientSecret === "string") secrets.push(clientSecret);
   return secrets;
 }
-//@ chunk-0qyh5wah.js:16586-16708 placement
+//@ chunk-kbr8ch1e.js:16584-16706 placement
 var SECRET_KEY_REGEX = /auth|token|key|secret|cookie|session|sig|pass|cred|bearer/i;
 var AUTH_SCHEME_PREFIX_REGEX = /^\s*[A-Za-z][A-Za-z0-9!#$%&'*+.^_`|~-]*\s+(?=\S)/;
-//@ chunk-0qyh5wah.js:16708-16915 placement
+//@ chunk-kbr8ch1e.js:16706-16913 placement
 function forEachSecretValue(headerName, headerValue, record) {
   if (typeof headerValue !== "string" || !SECRET_KEY_REGEX.test(headerName)) return;
   record(headerValue.trim());
@@ -984,7 +983,7 @@ function forEachSecretValue(headerName, headerValue, record) {
       record((index === -1 ? cookie : cookie.slice(index + 1)).trim());
     }
 }
-//@ chunk-0qyh5wah.js:16915-17164 placement
+//@ chunk-kbr8ch1e.js:16913-17162 placement
 /**
  * 记录连接时额外呈现的请求头中的秘密片段，供发现缓存检查。
  */
@@ -1000,12 +999,12 @@ function recordPresentedHeaderSecrets(headers, headers_2) {
     });
   }
 }
-//@ chunk-0qyh5wah.js:17164-17181 placement
+//@ chunk-kbr8ch1e.js:17162-17179 placement
 /**
  * 扫描秘密时的成本上限（256 Mi）。
  */
 var MAX_SCAN_COST = 268435456;
-//@ chunk-0qyh5wah.js:17181-17312 placement
+//@ chunk-kbr8ch1e.js:17179-17310 placement
 function secretEncodings(secret) {
   let variants = [secret];
   let sliced = jsonStringifyRaw(secret).slice(1, -1);
@@ -1016,7 +1015,7 @@ function secretEncodings(secret) {
   } catch {}
   return variants;
 }
-//@ chunk-0qyh5wah.js:17312-18047 placement
+//@ chunk-kbr8ch1e.js:17310-18045 placement
 /**
  * 写入发现缓存前检查条目是否带有密钥材料：收集配置头、URL 查询参数与用户信息、OAuth 令牌、本进程出示过的凭据，按原文/JSON 转义/URL 编码比对；日志不完整或扫描预算超出也拒绝。
  */
@@ -1053,7 +1052,7 @@ function findSecretMaterial(serialized, config, extraSecrets = []) {
     for (let candidate of secretEncodings(secret)) if (serialized.includes(candidate)) return "material";
   return;
 }
-//@ chunk-0qyh5wah.js:18047-18108 placement
+//@ chunk-kbr8ch1e.js:18045-18106 placement
 /**
  * 生成解密句柄（key、cacheKey、aad）。
  */
@@ -1064,7 +1063,7 @@ function sealHandle(key, cachePath) {
     aad: cachePath.aad,
   };
 }
-//@ chunk-0qyh5wah.js:18108-18570 placement
+//@ chunk-kbr8ch1e.js:18106-18568 placement
 /**
  * 解封发现缓存条目：密钥不可用时关闭缓存，解封失败时删除该条目并返回未命中原因。
  */
@@ -1096,14 +1095,14 @@ async function openSealedEntry(sealed, cachePath, serverName, reapEntry) {
     cause: discoverySeal.reason,
   };
 }
-//@ chunk-0qyh5wah.js:18570-18734 placement
+//@ chunk-kbr8ch1e.js:18568-18732 placement
 function logDiscoveryWriteVerdict({ verdict, code }) {
   if (verdict === "written") logFeatureOk("mcp_discovery_cache");
   else if (verdict === "terminal") logFeatureBad("mcp_discovery_cache", code);
   else logFeatureSad("mcp_discovery_cache", code);
   return verdict;
 }
-//@ chunk-0qyh5wah.js:18734-21576 placement
+//@ chunk-kbr8ch1e.js:18732-21574 placement
 /**
  * 写一条发现缓存（加密）：依次检查缓存未被关闭、未被删除、身份纪元与授权未变、密钥可用、条目符合结构且不超限、不含密钥材料，然后加密写盘；返回 written/transient/terminal/superseded 判定。
  */
@@ -1273,7 +1272,7 @@ async function writeDiscoveryEntry(params) {
     code: "written",
   };
 }
-//@ chunk-0qyh5wah.js:21576-21646 placement
+//@ chunk-kbr8ch1e.js:21574-21644 placement
 /**
  * 删除条目并递增删除代号。
  */
@@ -1281,7 +1280,7 @@ async function deleteEntryAndBump(path, serverName, cacheKey) {
   if (cacheKey !== undefined) bumpDeleteGeneration(cacheKey);
   await serializeDiscoveryWrite(path, serverName, () => deleteDiscoveryEntry(path, getStorageV5()));
 }
-//@ chunk-0qyh5wah.js:21646-21736 placement (2.1.88 match: withTimeout, 0.805)
+//@ chunk-kbr8ch1e.js:21644-21734 placement (2.1.88 match: withTimeout, 0.805)
 async function withTimeout(promise, timeoutMs) {
   await Promise.race([
     promise.then(
@@ -1293,12 +1292,12 @@ async function withTimeout(promise, timeoutMs) {
     }),
   ]);
 }
-//@ chunk-0qyh5wah.js:21736-21782 placement
+//@ chunk-kbr8ch1e.js:21734-21781 placement
 async function flushDiscoveryCache(flushPromise, timeoutMs = 1500) {
   registerDiscoveryFlush();
   await withTimeout(flushPromise, timeoutMs);
 }
-//@ chunk-0qyh5wah.js:21782-21883 placement
+//@ chunk-kbr8ch1e.js:21781-21882 placement
 function registerDiscoveryFlush() {
   if (!isDiscoveryCacheUsable()) return;
   let discoveryCacheStore = getDiscoveryCacheStore();
@@ -1307,7 +1306,7 @@ function registerDiscoveryFlush() {
     discoveryCacheStore.drain(ACCOUNT_RESOLVE_TIMEOUT_MS),
   );
 }
-//@ chunk-0qyh5wah.js:21883-23223 placement
+//@ chunk-kbr8ch1e.js:21882-23222 placement
 async function writeDiscoveryCache(serverName, config, listing, options) {
   let now = options.now ?? Date.now();
   let cacheKey = cacheMemoKey(serverName, config);
@@ -1403,7 +1402,7 @@ async function writeDiscoveryCache(serverName, config, listing, options) {
   });
   return verdict ? logDiscoveryWriteVerdict(verdict) : "superseded";
 }
-//@ chunk-0qyh5wah.js:23223-23497 placement
+//@ chunk-kbr8ch1e.js:23222-23496 placement
 async function readExistingEntry(cachePath, serverName) {
   let path = cachePath.path;
   let rawText;
@@ -1428,7 +1427,7 @@ async function readExistingEntry(cachePath, serverName) {
   }
   return parseResult.data;
 }
-//@ chunk-0qyh5wah.js:23497-24285 placement
+//@ chunk-kbr8ch1e.js:23496-24284 placement
 async function mergeDiscoveryTools(serverName, config, tools, options) {
   if (!isCurrentIdentityEpoch(options.identityEpoch)) return;
   if (options.grantLeg === undefined) return;
@@ -1491,7 +1490,7 @@ async function mergeDiscoveryTools(serverName, config, tools, options) {
     );
   });
 }
-//@ chunk-0qyh5wah.js:24285-25321 placement
+//@ chunk-kbr8ch1e.js:24284-25320 placement
 async function recordRefreshFailureStrike(serverName, config, options) {
   if (!isCurrentIdentityEpoch(options.identityEpoch)) return;
   if (options.grantLeg === undefined) return;
@@ -1558,7 +1557,7 @@ async function recordRefreshFailureStrike(serverName, config, options) {
     });
   });
 }
-//@ chunk-0qyh5wah.js:25321-25517 placement
+//@ chunk-kbr8ch1e.js:25320-25516 placement
 /**
  * 懒拨号失败后为该服务器在发现缓存中记一次刷新失败。
  */
@@ -1575,7 +1574,7 @@ function strikeAfterLazyDialFailure(serverName, config) {
     ),
   );
 }
-//@ chunk-0qyh5wah.js:25517-25929 placement
+//@ chunk-kbr8ch1e.js:25516-25929 placement
 /**
  * 扫描发现缓存目录，删除属于给定缓存键或无法读取/解析的条目。
  */
@@ -1609,14 +1608,14 @@ async function purgeEntriesByCacheKey(serverName, cacheKeys) {
     }
   }
 }
-//@ chunk-0qyh5wah.js:25929-25982 placement
+//@ chunk-kbr8ch1e.js:25929-25982 placement
 /**
  * 按缓存键删除该服务器的所有条目变体。
  */
 async function purgeServerEntries(serverName, config) {
   await purgeEntriesByCacheKey(serverName, new Set([cacheMemoKey(serverName, config)]));
 }
-//@ chunk-0qyh5wah.js:25982-26286 placement
+//@ chunk-kbr8ch1e.js:25982-26286 placement
 /**
  * 删除某服务器在发现缓存中的所有条目变体（无法取得指纹时退而扫描删除）。
  */
@@ -1654,7 +1653,7 @@ function purgeServerEntries_2(serverName, config, cacheKeys) {
     done = true;
   }).then(() => done);
 }
-//@ chunk-0qyh5wah.js:26286-26640 placement
+//@ chunk-kbr8ch1e.js:26286-26640 placement
 /**
  * 枚举服务器配置在各可变属性取值下的缓存键集合。
  */
@@ -1690,7 +1689,7 @@ function cacheKeyVariants(serverName, config) {
   });
   return keys;
 }
-//@ chunk-0qyh5wah.js:26640-26685 placement
+//@ chunk-kbr8ch1e.js:26640-26685 placement
 /**
  * 排序后拼接成字符串。
  */
@@ -1698,7 +1697,7 @@ function sortedJoin(values) {
   return [...values].sort().join(`
 `);
 }
-//@ chunk-0qyh5wah.js:26685-27095 placement
+//@ chunk-kbr8ch1e.js:26685-27095 placement
 async function deleteDiscoveryCache(serverName, config) {
   if (config.type !== "http" && config.type !== "sse") return;
   if (!isDiscoveryCacheUsable()) return;
@@ -1728,7 +1727,7 @@ async function deleteDiscoveryCache(serverName, config) {
     logMCPDebug(serverName, `discovery-cache: delete failed: ${error}`);
   }
 }
-//@ chunk-0qyh5wah.js:27095-27635 placement
+//@ chunk-kbr8ch1e.js:27095-27635 placement
 /**
  * 获取发现缓存刷新锁：已被其他进程持有时返回 undefined（跳过刷新），出错时返回空释放函数继续执行。
  */
@@ -1760,16 +1759,9 @@ async function acquireDiscoveryRefreshLock(serverName, config) {
   }
 }
 export {
-  CACHE_VERSION_PREFIX,
-  CACHE_KEY_ID_CHARS,
-  regExp,
-  BASE64URL_CHARS_RE,
-  hashCacheKeyId,
-  IV_BYTES,
-  AUTH_TAG_BYTES,
-  recordPresentedHeaderSecrets,
   flushDiscoveryCache,
   deleteDiscoveryCache,
+  recordPresentedHeaderSecrets,
   clearDiscoveryPathMemo,
   writeDiscoveryCache,
   mergeDiscoveryTools,
@@ -1780,4 +1772,11 @@ export {
   recordRefreshFailureStrike,
   acquireDiscoveryRefreshLock,
   strikeAfterLazyDialFailure,
+  CACHE_VERSION_PREFIX,
+  CACHE_KEY_ID_CHARS,
+  regExp,
+  BASE64URL_CHARS_RE,
+  hashCacheKeyId,
+  IV_BYTES,
+  AUTH_TAG_BYTES,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：git 仓库信息缓存（根目录、远程、monorepo、worktree 等）；取当前宿主的 git 仓库缓存。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-t0gq9gyw.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-85eyj5gy.js (6)
  * attribution: placement 6
  */
 import { lstatSync, statSync } from "fs";
@@ -16,17 +16,17 @@ import { readLinkTextSafe, rawPointerPathIsUnsafe } from "./gitFilesystem.js";
 import { isOnForeignMount } from "../networkPaths.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-t0gq9gyw.js:69612-69695 placement
+//@ chunk-85eyj5gy.js:70419-70502 placement
 /**
  * 表示"仓库不存在"的否定结果标记。
  */
 var REPO_NEGATIVE_RESULT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var REPO_UNREADABLE_RESULT;
-deferInit("chunk-t0gq9gyw.js:69612", () => {
+deferInit("chunk-85eyj5gy.js:70419", () => {
   REPO_NEGATIVE_RESULT = Symbol("git-repo-negative-result");
   REPO_UNREADABLE_RESULT = Symbol("git-repo-unreadable-result");
 });
-//@ chunk-t0gq9gyw.js:69695-71157 placement
+//@ chunk-85eyj5gy.js:70502-72006 placement
 /**
  * git 仓库信息缓存（根目录、远程、monorepo、worktree 等）。
  */
@@ -51,6 +51,7 @@ class GitRepoCache {
     max: 64,
   });
   hostWorktreeReport;
+  lastRemoteHash;
   markersByRoot = new LRUCache({
     max: 50,
   });
@@ -87,6 +88,7 @@ class GitRepoCache {
     this.gitDirByCwd.clear();
     this.linkedFromRootByPin.clear();
     this.hostWorktreeReport = undefined;
+    this.lastRemoteHash = undefined;
     this.markersByRoot.clear();
     this.repositoryByCwd.clear();
     this.remoteHostByCwd.clear();
@@ -105,7 +107,7 @@ class GitRepoCache {
     this.reportedHookInstallSkips.clear();
   }
 }
-//@ chunk-t0gq9gyw.js:71157-71246 placement
+//@ chunk-85eyj5gy.js:72006-72095 placement
 /**
  * 按 Map 缓存并惰性计算取值。
  */
@@ -116,19 +118,19 @@ function memoizeMap(map, key, compute) {
   map.set(key, value);
   return value;
 }
-//@ chunk-t0gq9gyw.js:71246-71271 placement
+//@ chunk-85eyj5gy.js:72095-72120 placement
 var gitRepoCacheRegistry; // deferred: uses GitRepoCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-t0gq9gyw.js:71246", () => {
+deferInit("chunk-85eyj5gy.js:72095", () => {
   gitRepoCacheRegistry = new HostScoped(() => new GitRepoCache());
 });
-//@ chunk-t0gq9gyw.js:71271-71308 placement
+//@ chunk-85eyj5gy.js:72120-72157 placement
 /**
  * 取当前宿主的 git 仓库缓存。
  */
 function getGitRepoCache() {
   return gitRepoCacheRegistry.of(getRootSession().host);
 }
-//@ chunk-t0gq9gyw.js:71308-71536 placement
+//@ chunk-85eyj5gy.js:72157-72385 placement
 function isUsableGitEntry(gitPath, dir) {
   try {
     let stats = lstatSync(gitPath);
@@ -145,4 +147,4 @@ function isUsableGitEntry(gitPath, dir) {
     return false;
   }
 }
-export { REPO_NEGATIVE_RESULT, isUsableGitEntry, memoizeMap, getGitRepoCache, REPO_UNREADABLE_RESULT };
+export { getGitRepoCache, REPO_NEGATIVE_RESULT, isUsableGitEntry, memoizeMap, REPO_UNREADABLE_RESULT };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：确认进程身份未变后发送 SIGTERM。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-gg3tj8q5.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xtdqw4wv.js (6)
  * attribution: placement 6
  */
 import { readFile } from "fs/promises";
@@ -17,7 +17,7 @@ import { getProcessStartTimeAsync } from "../utils/processIdentity.js";
 import { killProcessGroup } from "../utils/auth/lockHolderLiveness.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-gg3tj8q5.js:442-618 placement
+//@ chunk-xtdqw4wv.js:442-618 placement
 class AdoptTicksTokenLogger {
   firedSites = new Set();
   fire(site) {
@@ -31,23 +31,23 @@ class AdoptTicksTokenLogger {
     this.firedSites.clear();
   }
 }
-//@ chunk-gg3tj8q5.js:618-641 placement
+//@ chunk-xtdqw4wv.js:618-641 placement
 var deadProbeSlot; // deferred: uses AdoptTicksTokenLogger of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-gg3tj8q5.js:618", () => {
+deferInit("chunk-xtdqw4wv.js:618", () => {
   deadProbeSlot = new HostScoped(() => new AdoptTicksTokenLogger());
 });
-//@ chunk-gg3tj8q5.js:641-676 placement
+//@ chunk-xtdqw4wv.js:641-676 placement
 function deadProbe() {
   return deadProbeSlot.of(getRootSession().host);
 }
-//@ chunk-gg3tj8q5.js:676-704 placement
+//@ chunk-xtdqw4wv.js:676-704 placement
 /**
  * 函数 fireDeadProbe（触发探测）。
  */
 function fireDeadProbe(site) {
   deadProbe().fire(site);
 }
-//@ chunk-gg3tj8q5.js:704-886 placement
+//@ chunk-xtdqw4wv.js:704-886 placement
 /**
  * 从 /proc/<pid>/stat 读取进程启动时刻（clock ticks），用于确认进程身份；失败返回 null。
  */
@@ -62,7 +62,7 @@ async function readProcessStartTicks(pid) {
     return null;
   }
 }
-//@ chunk-gg3tj8q5.js:886-1080 placement
+//@ chunk-xtdqw4wv.js:886-1106 placement
 /**
  * 确认进程身份未变后发送 SIGTERM。
  */
@@ -78,6 +78,8 @@ async function killIfSameProcess(pid, startTimeTicks, procStart) {
     fireDeadProbe("kill_gate");
     if ((await readProcessStartTicks(pid)) !== startTimeTicks) return;
   } else return;
-  await killProcessGroup(pid, "SIGTERM").catch(() => {});
+  await killProcessGroup(pid, "SIGTERM", {
+    groupMembersByPidToo: true,
+  }).catch(() => {});
 }
-export { fireDeadProbe, readProcessStartTicks, killIfSameProcess };
+export { readProcessStartTicks, killIfSameProcess, fireDeadProbe };

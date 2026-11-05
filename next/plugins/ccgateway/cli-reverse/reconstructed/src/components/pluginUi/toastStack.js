@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。插件 toast 队列。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (21)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (21)
  * attribution: placement 21
  */
 import { randomUUID } from "crypto";
@@ -19,11 +19,7 @@ import { emptyPluginLoadState, getPluginRegistry } from "../../utils/plugins/plu
 import { custom } from "../../../vendor/zod/v4/classic/schemas.js";
 import { identity as identity_4 } from "../../utils/identity.js";
 import { ENGINE } from "../../plugins/functionHooks/dispatch/chain.js";
-import {
-  pluginStateRegistry,
-  stateEntryKey,
-  writeStateValue,
-} from "../../plugins/functionHooks/api/state.js";
+import { stateSession, entryKeyOf, landValue } from "../../plugins/functionHooks/api/state.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { tellOnce } from "../../plugins/functionHooks/ui/renderNotices.js";
 import { arraysEqual } from "../../utils/collections.js";
@@ -32,11 +28,11 @@ import { isPolicyTier } from "../../plugins/functionHooks/hookDispatch.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:32496-32506 placement
+//@ chunk-czq1j3j2.js:34057-34067 placement
 var toastStackNamespace = {};
-//@ chunk-18hwfzwa.js:32506-32946 placement
+//@ chunk-czq1j3j2.js:34067-34507 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:32506", () => {
+deferInit("chunk-czq1j3j2.js:34067", () => {
   __export(toastStackNamespace, {
     NO_TOASTS: () => NO_TOASTS,
     TOAST_FADE_MS: () => TOAST_FADE_MS,
@@ -61,20 +57,20 @@ deferInit("chunk-18hwfzwa.js:32506", () => {
     toastClock: () => toastClock,
   });
 });
-//@ chunk-18hwfzwa.js:180359-180409 placement
+//@ chunk-czq1j3j2.js:185156-185206 placement
 function looseStringSchema() {
   return custom((value) => typeof value === "string");
 }
-//@ chunk-18hwfzwa.js:180409-180443 placement
+//@ chunk-czq1j3j2.js:185206-185240 placement
 var drawnToasts; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:180409", () => {
+deferInit("chunk-czq1j3j2.js:185206", () => {
   drawnToasts = identity_4(new Set(), (set) => set.clear());
 });
-//@ chunk-18hwfzwa.js:180443-180454 placement
+//@ chunk-czq1j3j2.js:185240-185251 placement
 var TOAST_FADE_MS = 240;
-//@ chunk-18hwfzwa.js:180454-180467 placement
+//@ chunk-czq1j3j2.js:185251-185264 placement
 var TOAST_HOLD_MAX_MS = 30000;
-//@ chunk-18hwfzwa.js:180467-180711 placement
+//@ chunk-czq1j3j2.js:185264-185508 placement
 var expiredToasts = (toasts, now) =>
   toasts.flatMap((toast) => {
     let { heldAt, ...rest } = toast;
@@ -96,27 +92,27 @@ var expiredToasts = (toasts, now) =>
       : unheld;
     return isLeaving ? [] : [leaving];
   });
-//@ chunk-18hwfzwa.js:180711-180737 placement
+//@ chunk-czq1j3j2.js:185508-185534 placement
 var NO_TOASTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:180711", () => {
+deferInit("chunk-czq1j3j2.js:185508", () => {
   NO_TOASTS = Object.freeze([]);
 });
-//@ chunk-18hwfzwa.js:180737-180770 placement
+//@ chunk-czq1j3j2.js:185534-185567 placement
 var TOAST_STACK_REF; // deferred: uses ENGINE (../../plugins/functionHooks/dispatch/chain.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:180737", () => {
+deferInit("chunk-czq1j3j2.js:185534", () => {
   TOAST_STACK_REF = {
     plugin: ENGINE,
     key: "toasts",
   };
 });
-//@ chunk-18hwfzwa.js:180770-180866 placement
-function stackedToasts(state = pluginStateRegistry().values.getState()) {
-  let value = state.get(stateEntryKey(TOAST_STACK_REF))?.value;
+//@ chunk-czq1j3j2.js:185567-185663 placement
+function stackedToasts(state = stateSession().values.getState()) {
+  let value = state.get(entryKeyOf(TOAST_STACK_REF))?.value;
   return Array.isArray(value) ? value : NO_TOASTS;
 }
-//@ chunk-18hwfzwa.js:180866-180893 placement
+//@ chunk-czq1j3j2.js:185663-185690 placement
 var toastClock = () => getPluginRegistry().toastClock;
-//@ chunk-18hwfzwa.js:180893-181224 placement
+//@ chunk-czq1j3j2.js:185690-186021 placement
 function scheduleExpiry(now, onExpire) {
   let clock = toastClock();
   if (clock.pending !== undefined) {
@@ -140,7 +136,7 @@ function scheduleExpiry(now, onExpire) {
   );
   clock.pending.unref();
 }
-//@ chunk-18hwfzwa.js:181224-181445 placement
+//@ chunk-czq1j3j2.js:186021-186242 placement
 function sharedStack(toasts) {
   if (toasts.length <= MAX_QUEUED_TOASTS) return toasts;
   let lastIsManaged = toasts.at(-1)?.isManaged === true;
@@ -152,7 +148,7 @@ function sharedStack(toasts) {
   ].toSorted((a, b) => b.length - a.length);
   return sharedStack(toasts.filter((toast) => toast !== largestGroup?.[0]));
 }
-//@ chunk-18hwfzwa.js:181445-181658 placement
+//@ chunk-czq1j3j2.js:186242-186455 placement
 function tellToastUndrawn(toast) {
   logForDebugging(`$.ui.toast (${toast.owner}): ${toast.id} left the stack, never drawn`);
   tellOnce({
@@ -161,20 +157,20 @@ function tellToastUndrawn(toast) {
     text: "$.ui.toast: a toast left the stack before it was ever drawn",
   });
 }
-//@ chunk-18hwfzwa.js:181658-181915 placement
+//@ chunk-czq1j3j2.js:186455-186712 placement
 function keepToasts(toasts, now) {
   let kept = sharedStack(toasts);
   let previous = stackedToasts();
   let keptIds = new Set(kept.map((toast) => toast.id));
   let previousIds = new Set(previous.map((toast) => toast.id));
-  if (!arraysEqual(previous, kept)) writeStateValue(stateEntryKey(TOAST_STACK_REF), kept);
+  if (!arraysEqual(previous, kept)) landValue(entryKeyOf(TOAST_STACK_REF), kept);
   previous
     .concat(toasts.filter((toast) => !previousIds.has(toast.id)))
     .filter((toast) => !keptIds.has(toast.id) && !drawnToasts.delete(toast.id))
     .forEach(tellToastUndrawn);
   scheduleExpiry(now, () => keepToasts(expiredToasts(stackedToasts(), now()), now));
 }
-//@ chunk-18hwfzwa.js:181915-182022 placement
+//@ chunk-czq1j3j2.js:186712-186819 placement
 function dismissToast(id, now = Date.now) {
   let previous = stackedToasts();
   let filtered = previous.filter((toast) => toast.id !== id);
@@ -183,9 +179,9 @@ function dismissToast(id, now = Date.now) {
     keepToasts(filtered, now);
   }
 }
-//@ chunk-18hwfzwa.js:182022-182054 placement
+//@ chunk-czq1j3j2.js:186819-186851 placement
 var expireToasts = (now) => keepToasts(expiredToasts(stackedToasts(), now()), now);
-//@ chunk-18hwfzwa.js:182054-182333 placement
+//@ chunk-czq1j3j2.js:186851-187130 placement
 function holdToast(change, now = Date.now) {
   let nowMs = now();
   let previous = stackedToasts();
@@ -205,7 +201,7 @@ function holdToast(change, now = Date.now) {
   });
   if (mapped.some((toast, index) => toast !== previous[index])) keepToasts(mapped, now);
 }
-//@ chunk-18hwfzwa.js:182333-182596 placement
+//@ chunk-czq1j3j2.js:187130-187393 placement
 function pauseToasts(change, now = Date.now) {
   let clock = toastClock();
   let { pausedAt } = clock;
@@ -226,7 +222,7 @@ function pauseToasts(change, now = Date.now) {
     now,
   );
 }
-//@ chunk-18hwfzwa.js:182634-182833 placement
+//@ chunk-czq1j3j2.js:187431-187630 placement
 function pushToast(request, now = Date.now) {
   let nowMs = now();
   keepToasts(
@@ -246,7 +242,7 @@ function pushToast(request, now = Date.now) {
     now,
   );
 }
-//@ chunk-18hwfzwa.js:182833-183100 placement
+//@ chunk-czq1j3j2.js:187630-187897 placement
 function stackToast(request) {
   let previousIds = new Set(stackedToasts().map((toast) => toast.id));
   pushToast(request);

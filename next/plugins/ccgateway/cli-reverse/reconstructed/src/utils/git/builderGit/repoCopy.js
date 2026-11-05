@@ -3,9 +3,9 @@
  *
  * builderGit：为构建复制仓库（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (33)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fepf8jp6.js (33)
  * attribution: placement 33
  */
 import { readdir, lstat, writeFile, symlink, mkdir, rm, open } from "fs/promises";
@@ -36,11 +36,11 @@ import { buildGitEnv, reachForBoundSession, buildGitEnvForReach, reachRootsOrUnr
 import {
   cleanSingleLine,
   getHomeDirCandidates,
-  isPathInside as isPathInside_2,
+  isPathInside,
 } from "../../permissions/protectedEnvAndGitPaths.js";
 import { probeEntryKind } from "./gitDirShape.js";
 import { logForDebugging } from "../../debug.js";
-import { getPlatform as getPlatform_2 } from "../../platform.js";
+import { getPlatform } from "../../platform.js";
 import { prepareSeedAdmin, isPrivateOwnedDir } from "./seedAdmin.js";
 import { getErrnoCode, errorMessage } from "../../errors.js";
 import { getFirstLine, takeLastChars } from "../../stringUtils.js";
@@ -49,9 +49,9 @@ import { readGitConfigFromEnv, inTreeConfigFileKeys } from "./inTreeConfig.js";
 import { readOnlyNoFollowFlags } from "../../platformTargets.js";
 import { removePathEntry } from "../../fsRemove.js";
 import { startTokensEqualOrCrossFormat, getProcessStartTimeAsync } from "../../processIdentity.js";
-import { count } from "../../collections.js";
+import { countWhere } from "../../collections.js";
 
-//@ chunk-s61vbvea.js:242152-247707 placement
+//@ chunk-fepf8jp6.js:36356-41797 placement
 /**
  * 为构建复制仓库（索引、属性、per-worktree 配置），供隔离 git 使用
  */
@@ -229,7 +229,7 @@ async function copyRepositoryForBuild(
       `the split-index files (sharedindex.*) in ${displayRepoPath(layout, layout.gitDir)} are too large to copy`,
       "shared_index",
     );
-  let linkType = getPlatform_2() === "windows" ? "junction" : undefined;
+  let linkType = getPlatform() === "windows" ? "junction" : undefined;
   let enclosingTree = dirname(layout.commonDir);
   let reach = reachForBoundSession(layout);
   let gitEnvForReach = () =>
@@ -377,22 +377,22 @@ async function copyRepositoryForBuild(
     );
   }
 }
-//@ chunk-s61vbvea.js:247707-247750 placement
+//@ chunk-fepf8jp6.js:41797-41840 placement
 var ATTRIBUTES_CONFIG_KEYS = ["core.attributesfile", "attr.tree"];
-//@ chunk-s61vbvea.js:247750-247807 placement
+//@ chunk-fepf8jp6.js:41840-41897 placement
 function isAttributesConfigKey({ key }) {
   return ATTRIBUTES_CONFIG_KEYS.includes(key.toLowerCase());
 }
-//@ chunk-s61vbvea.js:247807-247871 placement
+//@ chunk-fepf8jp6.js:41897-41961 placement
 function isIgnoreCaseConfigKey({ key }) {
   return key.toLowerCase() === "core.ignorecase";
 }
-//@ chunk-s61vbvea.js:247871-247945 placement
+//@ chunk-fepf8jp6.js:41961-42035 placement
 var COPY_RELEVANT_ENV_VARS = ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "XDG_CONFIG_HOME", "HOME"];
-//@ chunk-s61vbvea.js:247945-248568 placement
+//@ chunk-fepf8jp6.js:42035-42658 placement
 function readAttributesConfig(keys, keys_2, gitConfigPaths, layout) {
   let normalizePath = (path) =>
-    getPlatform_2() === "windows" ? path.replaceAll("\\", "/").toLowerCase() : path;
+    getPlatform() === "windows" ? path.replaceAll("\\", "/").toLowerCase() : path;
   let isGitConfigPath = (entry) =>
     gitConfigPaths
       .map(normalizePath)
@@ -429,7 +429,7 @@ function readAttributesConfig(keys, keys_2, gitConfigPaths, layout) {
     where: displayRepoPath(layout, resolveFileUrl(chosen.origin, layout.workTree) ?? chosen.origin),
   };
 }
-//@ chunk-s61vbvea.js:248568-249295 placement
+//@ chunk-fepf8jp6.js:42658-43385 placement
 /**
  * 环境中会让私有 git 目录读法不同的设置。
  */
@@ -463,7 +463,7 @@ function findUnsupportedGitEnv(gitEnv) {
       kind: "env_config",
       setting: found,
     };
-  let isWindows = getPlatform_2() === "windows";
+  let isWindows = getPlatform() === "windows";
   let isRelativeSetting = (path) =>
     path !== undefined && path !== "" && !isSpelledAbsolutePath(path, isWindows);
   let found_2 = COPY_RELEVANT_ENV_VARS.find((envVar) =>
@@ -489,23 +489,21 @@ function findUnsupportedGitEnv(gitEnv) {
         setting,
       };
 }
-//@ chunk-s61vbvea.js:249295-249366 placement
+//@ chunk-fepf8jp6.js:43385-43455 placement
 function isSpelledAbsolutePath(path, isWindows) {
   return isWindows ? /^(?:[A-Za-z]:[\\/]|[\\/]{2})/.test(path) : isAbsolute(path);
 }
-//@ chunk-s61vbvea.js:249366-249439 placement
+//@ chunk-fepf8jp6.js:43455-43528 placement
 function isTildeOrAbsolutePath(value) {
-  return (
-    value === "" || /^~[^/]*\//.test(value) || isSpelledAbsolutePath(value, getPlatform_2() === "windows")
-  );
+  return value === "" || /^~[^/]*\//.test(value) || isSpelledAbsolutePath(value, getPlatform() === "windows");
 }
-//@ chunk-s61vbvea.js:249439-249735 placement
+//@ chunk-fepf8jp6.js:43528-43824 placement
 function describeUnsupportedGitEnv({ kind, setting, where }) {
   return kind === "config_location"
     ? `${setting} is a relative path, which git under the private git directory resolves from another directory`
     : `${setting} is set in ${where ?? "Claude Code\u2019s environment"}, which git does not read the same way under the private git directory`;
 }
-//@ chunk-s61vbvea.js:249735-249791 placement
+//@ chunk-fepf8jp6.js:43824-43880 placement
 /**
  * 有索引文件路径时返回 GIT_INDEX_FILE 环境项。
  */
@@ -516,14 +514,14 @@ function indexFileEnv(indexFile) {
         GIT_INDEX_FILE: indexFile,
       };
 }
-//@ chunk-s61vbvea.js:249791-249893 placement
+//@ chunk-fepf8jp6.js:43880-43982 placement
 /**
  * 关闭 split index、开启自动刷新的 -c 参数。
  */
 function splitIndexOffArgs(indexFile) {
   return indexFile === undefined ? [] : ["-c", "core.splitIndex=false", "-c", "diff.autoRefreshIndex=true"];
 }
-//@ chunk-s61vbvea.js:249893-251035 placement
+//@ chunk-fepf8jp6.js:43982-45117 placement
 async function rewriteCopyAsSingleFile(gitRoot, signal, probes = currentGitBinaryState()) {
   let gitDirResult = await listGitRefs(gitRoot, ["rev-parse", "--absolute-git-dir", "--git-common-dir"], {
     hardened: false,
@@ -616,7 +614,7 @@ async function rewriteCopyAsSingleFile(gitRoot, signal, probes = currentGitBinar
     };
   }
 }
-//@ chunk-s61vbvea.js:251035-252029 placement
+//@ chunk-fepf8jp6.js:45117-46109 placement
 async function rebuildCachedTree(gitRoot, indexFile, signal) {
   let writeTree = (extraArgs) =>
     listGitRefs(gitRoot, [...splitIndexOffArgs(indexFile), "write-tree", "--missing-ok", ...extraArgs], {
@@ -663,7 +661,7 @@ async function rebuildCachedTree(gitRoot, indexFile, signal) {
         detail: "its cached tree could not be replaced by the one its entries give",
       };
 }
-//@ chunk-s61vbvea.js:252029-252181 placement
+//@ chunk-fepf8jp6.js:46109-46261 placement
 var COPY_SKIPPABLE_ERRORS = [
   "EACCES",
   "EPERM",
@@ -676,7 +674,7 @@ var COPY_SKIPPABLE_ERRORS = [
   "ENOTSUP",
 ];
 var READ_ONLY_ERRORS = ["EACCES", "EPERM", "EROFS", "EOPNOTSUPP", "ENOTSUP"];
-//@ chunk-s61vbvea.js:252181-252402 placement
+//@ chunk-fepf8jp6.js:46261-46481 placement
 function isSkippableCopyError(error, configHome, root) {
   let errnoCode = getErrnoCode(error);
   let destPath =
@@ -691,15 +689,15 @@ function isSkippableCopyError(error, configHome, root) {
     errnoCode !== undefined &&
     COPY_SKIPPABLE_ERRORS.includes(errnoCode) &&
     typeof destPath === "string" &&
-    (isPathInside_2(configHome, destPath) || isPathInside_2(dirname(root), destPath))
+    (isPathInside(configHome, destPath) || isPathInside(dirname(root), destPath))
   );
 }
-//@ chunk-s61vbvea.js:252402-252504 placement
+//@ chunk-fepf8jp6.js:46481-46583 placement
 function displayRepoPath(layout, path) {
-  let shownPath = isPathInside_2(layout.workTree, path) ? relative(layout.workTree, path) : path;
+  let shownPath = isPathInside(layout.workTree, path) ? relative(layout.workTree, path) : path;
   return shownPath.length > 160 ? `\u2026${takeLastChars(shownPath, 159)}` : shownPath;
 }
-//@ chunk-s61vbvea.js:252504-252869 placement
+//@ chunk-fepf8jp6.js:46583-46948 placement
 /**
  * 解析 ref 列表：直接 ref 文本与符号 ref 集合。
  */
@@ -733,9 +731,9 @@ function parsePackedRefs(stdout) {
     symbolic: new Set(flattened.filter(({ target }) => target !== "").map(({ name }) => name)),
   };
 }
-//@ chunk-s61vbvea.js:252869-252900 placement
+//@ chunk-fepf8jp6.js:46948-46978 placement
 var openCopySource = (dirPath, fileName) => open(join(dirPath, fileName), readOnlyNoFollowFlags());
-//@ chunk-s61vbvea.js:252900-253874 placement
+//@ chunk-fepf8jp6.js:46978-47950 placement
 async function copyFileChecked(sourcePath, label, copyKind, openSource) {
   let failureOf = (reason, cause) => ({
     why: `${label} ${reason}`,
@@ -752,7 +750,7 @@ async function copyFileChecked(sourcePath, label, copyKind, openSource) {
               ? `shallow_${cause}`
               : "shallow_other",
   });
-  if (getPlatform_2() === "windows") {
+  if (getPlatform() === "windows") {
     let sourceStats = await lstat(sourcePath).catch(() => null);
     if (sourceStats !== null && !sourceStats.isFile())
       return sourceStats.isSymbolicLink()
@@ -789,13 +787,13 @@ async function copyFileChecked(sourcePath, label, copyKind, openSource) {
     entry: stats,
   };
 }
-//@ chunk-s61vbvea.js:253874-253914 placement
+//@ chunk-fepf8jp6.js:47950-47990 placement
 var SHAREDINDEX_FILE_RE = /^sharedindex\.[0-9a-f]{40,64}$/;
-//@ chunk-s61vbvea.js:253914-254014 placement
+//@ chunk-fepf8jp6.js:47990-48090 placement
 function tooManySplitIndexMessage(layout) {
   return `more than ${MAX_PLACEMENT_DEPTH} split-index files (sharedindex.*) stand in ${displayRepoPath(layout, layout.gitDir)}`;
 }
-//@ chunk-s61vbvea.js:254155-254369 placement
+//@ chunk-fepf8jp6.js:48231-48443 placement
 async function copyFilesChecked(layout, candidates, openSource = openCopySource) {
   return (
     await Promise.all(
@@ -815,14 +813,14 @@ async function copyFilesChecked(layout, candidates, openSource = openCopySource)
     )
   ).filter((failure) => failure !== null);
 }
-//@ chunk-s61vbvea.js:254369-254453 placement
+//@ chunk-fepf8jp6.js:48443-48526 placement
 function headNotABranchMessage(layout) {
   return `${displayRepoPath(layout, join(layout.gitDir, "HEAD"))} is not a branch or an object id`;
 }
-//@ chunk-s61vbvea.js:254453-254577 placement
+//@ chunk-fepf8jp6.js:48526-48650 placement
 var SYMBOLIC_REF_CHECKOUT_NOTE =
   "it is checked out under a symbolic ref (a second name for another ref), and a branch is taken by its own name only";
-//@ chunk-s61vbvea.js:254577-255205 placement
+//@ chunk-fepf8jp6.js:48650-49278 placement
 async function checkCopyBudget(sourcePath, destPath, budget, label, copyKind) {
   let opened = await copyFileChecked(sourcePath, label, copyKind, openCopySource);
   if (opened === null || !("source" in opened)) return opened;
@@ -862,15 +860,15 @@ async function checkCopyBudget(sourcePath, destPath, budget, label, copyKind) {
     await source.close();
   }
 }
-//@ chunk-s61vbvea.js:255205-255231 placement
+//@ chunk-fepf8jp6.js:49278-49304 placement
 var PRIVATE_GIT_DIR_ENTRIES = ["info", "objects"];
-//@ chunk-s61vbvea.js:255231-255378 placement (2.1.88 match: scanDirectory, 0.766)
+//@ chunk-fepf8jp6.js:49304-49450 placement (2.1.88 match: scanDirectory, 0.767)
 async function scanDirectory(dirPath) {
   try {
     return await removePathEntry(dirPath);
   } catch (error) {
     if (
-      getPlatform_2() === "windows" ||
+      getPlatform() === "windows" ||
       !(await lstat(dirPath).then(
         (entry) => entry.isDirectory(),
         () => false,
@@ -880,7 +878,7 @@ async function scanDirectory(dirPath) {
     return "directory";
   }
 }
-//@ chunk-s61vbvea.js:255378-255974 placement
+//@ chunk-fepf8jp6.js:49450-50043 placement
 async function sweepPrivateGitDir(dirPath, entries = PRIVATE_GIT_DIR_ENTRIES) {
   try {
     if ((await scanDirectory(dirPath)) !== "directory") return true;
@@ -924,9 +922,9 @@ async function sweepPrivateGitDir(dirPath, entries = PRIVATE_GIT_DIR_ENTRIES) {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:255974-255989 placement
+//@ chunk-fepf8jp6.js:50043-50058 placement
 var RECENT_GIT_DIR_MTIME_MS = 3600000;
-//@ chunk-s61vbvea.js:255989-257009 placement
+//@ chunk-fepf8jp6.js:50058-51075 placement
 async function stageSeedAdmin(root, fileIdentity, opts) {
   let now = Date.now();
   let stillCheckedDir = async () =>
@@ -971,16 +969,16 @@ async function stageSeedAdmin(root, fileIdentity, opts) {
       ),
     ),
   );
-  let removedCount = count(results, (result) => result === "removed");
+  let removedCount = countWhere(results, (result) => result === "removed");
   if (removedCount > 0)
     logForDebugging(`[builderGit] removed ${removedCount} folder(s) that killed builds left under ${root}`);
   return {
     removed: removedCount,
-    errors: count(results, (result) => result === "failed"),
-    held: count(results, (result) => result === "held"),
+    errors: countWhere(results, (result) => result === "failed"),
+    held: countWhere(results, (result) => result === "held"),
   };
 }
-//@ chunk-s61vbvea.js:257009-257088 placement
+//@ chunk-fepf8jp6.js:51075-51154 placement
 function isProcessAliveOrOwned(pid) {
   try {
     process.kill(pid, 0);
@@ -989,7 +987,7 @@ function isProcessAliveOrOwned(pid) {
     return getErrnoCode(error) === "EPERM";
   }
 }
-//@ chunk-s61vbvea.js:257088-257197 placement
+//@ chunk-fepf8jp6.js:51154-51263 placement
 async function procStartTag(pid, options) {
   return (
     (await getProcessStartTimeAsync(pid, {
@@ -1001,14 +999,14 @@ async function procStartTag(pid, options) {
     .slice(0, 24);
 }
 export {
+  readAttributesConfig,
+  stageSeedAdmin,
+  procStartTag,
+  isSkippableCopyError,
   splitIndexOffArgs,
   indexFileEnv,
   rewriteCopyAsSingleFile,
   rebuildCachedTree,
   findUnsupportedGitEnv,
   copyRepositoryForBuild,
-  readAttributesConfig,
-  stageSeedAdmin,
-  procStartTag,
-  isSkippableCopyError,
 };

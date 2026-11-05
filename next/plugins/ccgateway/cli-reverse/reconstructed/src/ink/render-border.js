@@ -3,9 +3,9 @@
  *
  * 并入边框渲染的分段拼接辅助
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/render-border.ts
- * pieces: chunk-bzr73sfg.js (4), chunk-wj577vf9.js (4), chunk-zxbmtfmw.js (8)
+ * pieces: chunk-2avr6cej.js (4), chunk-ptrwzav4.js (4), chunk-sz26a4x2.js (8)
  * attribution: fingerprint 3, layout 5, placement 5, sole-consumer 3
  */
 import { isPlainObject } from "../utils/isPlainObject.js";
@@ -19,16 +19,16 @@ import { applyColor, applyTextStyles } from "./colorize.js";
 import { sequential } from "../utils/sequential.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-zxbmtfmw.js:1479-1565 sole-consumer
+//@ chunk-sz26a4x2.js:1479-1565 sole-consumer
 var BOX_KEYS = ["top", "left", "right", "bottom", "topLeft", "topRight", "bottomLeft", "bottomRight"];
-//@ chunk-zxbmtfmw.js:1565-1619 sole-consumer
+//@ chunk-sz26a4x2.js:1565-1619 sole-consumer
 var isBoxStyle = (style) => isPlainObject(style) && BOX_KEYS.every((key) => typeof style[key] === "string");
-//@ chunk-zxbmtfmw.js:1619-1635 sole-consumer
+//@ chunk-sz26a4x2.js:1619-1635 sole-consumer
 var cliBoxes; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-zxbmtfmw.js:1619", () => {
+deferInit("chunk-sz26a4x2.js:1619", () => {
   cliBoxes = __toESM(cliBoxesModule(), 1);
 });
-//@ chunk-zxbmtfmw.js:1635-1873 fingerprint (2.1.88 match: CUSTOM_BORDER_STYLES, 0.948)
+//@ chunk-sz26a4x2.js:1635-1873 fingerprint (2.1.88 match: CUSTOM_BORDER_STYLES, 0.948)
 /**
  * 在 cli-boxes 之外新增的边框样式：dashed（虚线）、quote（只有左侧竖条 ▎，用于引用块）。
  */
@@ -54,15 +54,15 @@ var CUSTOM_BORDER_STYLES = {
     bottomRight: " ",
   },
 };
-//@ chunk-zxbmtfmw.js:1873-1899 layout
+//@ chunk-sz26a4x2.js:1873-1899 layout
 var BORDER_STYLES; // deferred: uses cliBoxes of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-zxbmtfmw.js:1873", () => {
+deferInit("chunk-sz26a4x2.js:1873", () => {
   BORDER_STYLES = {
     ...cliBoxes.default,
     ...CUSTOM_BORDER_STYLES,
   };
 });
-//@ chunk-zxbmtfmw.js:1899-1989 layout
+//@ chunk-sz26a4x2.js:1899-1989 layout
 /**
  * borderStyle 名或自定义字符集 → 八个方向的边框字符；不合法返回 undefined。
  */
@@ -73,16 +73,16 @@ function resolveBorderStyle(borderStyle) {
       : borderStyle;
   return isBoxStyle(style) ? style : undefined;
 }
-//@ chunk-zxbmtfmw.js:1989-2041 layout
+//@ chunk-sz26a4x2.js:1989-2041 layout
 var BORDER_STYLE_NAMES; // deferred: uses BORDER_STYLES of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-zxbmtfmw.js:1989", () => {
+deferInit("chunk-sz26a4x2.js:1989", () => {
   BORDER_STYLE_NAMES = Object.keys(BORDER_STYLES).filter((key) => resolveBorderStyle(key) !== undefined);
 });
-//@ chunk-zxbmtfmw.js:2041-2225 placement
+//@ chunk-sz26a4x2.js:2041-2225 placement
 var BIDI_CONTROL_RANGES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var joined;
 var regExp;
-deferInit("chunk-zxbmtfmw.js:2041", () => {
+deferInit("chunk-sz26a4x2.js:2041", () => {
   BIDI_CONTROL_RANGES = Object.freeze([
     [1564, 1564],
     [8234, 8238],
@@ -93,18 +93,18 @@ deferInit("chunk-zxbmtfmw.js:2041", () => {
   ).join("");
   regExp = new RegExp(`[${joined}]`, "gu");
 });
-//@ chunk-wj577vf9.js:7263-7311 placement
+//@ chunk-ptrwzav4.js:7263-7311 placement
 function joinRawSegments(segments) {
   return segments.map((segment) => segment.raw).join("");
 }
-//@ chunk-wj577vf9.js:7311-7357 placement
+//@ chunk-ptrwzav4.js:7311-7357 placement
 /**
  * 行首引用标记
  */
 var BLOCKQUOTE_PREFIX_RE = /^[ \t>]+/gm;
 var INNER_SPACES_RE = /[ \t]+/g;
 var EXCESS_NEWLINES_RE = /\n{3,}/g;
-//@ chunk-wj577vf9.js:7357-7539 placement
+//@ chunk-ptrwzav4.js:7357-7539 placement
 function createNestingGuard() {
   let weakMap = new WeakMap();
   let isAtLimit = (key) => (weakMap.get(key) ?? 0) >= 100;
@@ -122,13 +122,13 @@ function createNestingGuard() {
     },
   };
 }
-//@ chunk-wj577vf9.js:7539-7634 placement
+//@ chunk-ptrwzav4.js:7539-7634 placement
 /**
  * 渲染嵌套深度守卫
  */
 var nestingGuard; // deferred: uses createNestingGuard of its import cycle while loading; runs once the cycle is complete
 var normalizeBlockText;
-deferInit("chunk-wj577vf9.js:7539", () => {
+deferInit("chunk-ptrwzav4.js:7539", () => {
   nestingGuard = createNestingGuard();
   normalizeBlockText = (text) =>
     text
@@ -141,7 +141,7 @@ deferInit("chunk-wj577vf9.js:7539", () => {
       )
       .trimEnd();
 });
-//@ chunk-bzr73sfg.js:288217-288545 fingerprint (2.1.88 match: embedTextInBorder, 1)
+//@ chunk-2avr6cej.js:287798-288126 fingerprint (2.1.88 match: embedTextInBorder, 1)
 /**
  * 把标题文字嵌进一条边框线：按 start/center/end 与 offset 定位，太长则截断；返回 [左段, 文字, 右段]。
  */
@@ -165,13 +165,13 @@ function embedTextInBorder(borderLine, text, align, offset = 0, borderChar) {
     borderLine.substring(borderLength - 1);
   return [before, text, after];
 }
-//@ chunk-bzr73sfg.js:288545-288605 layout
+//@ chunk-2avr6cej.js:288126-288186 layout
 function colorBorderSegment(text, color, dim) {
   let styled = applyColor(text, color);
   if (dim) styled = sequential.dim(styled);
   return styled;
 }
-//@ chunk-bzr73sfg.js:288605-288660 layout
+//@ chunk-2avr6cej.js:288186-288241 layout
 function withBorderBackground(text, backgroundColor) {
   return backgroundColor
     ? applyTextStyles(text, {
@@ -179,7 +179,7 @@ function withBorderBackground(text, backgroundColor) {
       })
     : text;
 }
-//@ chunk-bzr73sfg.js:288660-290208 fingerprint (2.1.88 match: renderBorder, 1)
+//@ chunk-2avr6cej.js:288241-289789 fingerprint (2.1.88 match: renderBorder, 1)
 /**
  * 画 ink-box 的边框：按 borderStyle 取字符集，四边可单独关闭、单独着色/变暗；borderText 可把文字嵌进上或下边框；继承的背景色也涂到边框上。
  */
@@ -268,11 +268,11 @@ var renderBorderAlias = renderBorder;
 export {
   joined,
   regExp,
-  joinRawSegments,
-  BORDER_STYLE_NAMES,
-  BIDI_CONTROL_RANGES,
   resolveBorderStyle,
   renderBorderAlias,
+  BIDI_CONTROL_RANGES,
+  joinRawSegments,
+  BORDER_STYLE_NAMES,
   nestingGuard,
   normalizeBlockText,
 };

@@ -1,8 +1,8 @@
 /**
  * @azure/identity/dist/esm/credentials/defaultAzureCredential.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/identity@4.10.1
- * pieces: chunk-mrx6y2r5.js (9)
+ * pieces: chunk-b5df2wx1.js (9)
  * attribution: esm-fingerprint 8, esm-layout 1
  */
 import { credentialLogger } from "../util/logging.js";
@@ -16,9 +16,9 @@ import {
 import { AzureCliCredential } from "./azureCliCredential.js";
 import { EnvironmentCredential } from "./environmentCredential.js";
 
-//@ chunk-mrx6y2r5.js:329226-329261 esm-fingerprint
+//@ chunk-b5df2wx1.js:329226-329261 esm-fingerprint
 var logger_10 = credentialLogger("DefaultAzureCredential");
-//@ chunk-mrx6y2r5.js:329261-330026 esm-fingerprint
+//@ chunk-b5df2wx1.js:329261-330026 esm-fingerprint
 function createDefaultManagedIdentityCredential(options = {}) {
   var _a;
   var _b;
@@ -67,7 +67,7 @@ function createDefaultManagedIdentityCredential(options = {}) {
   }
   return new ManagedIdentityCredential(options);
 }
-//@ chunk-mrx6y2r5.js:330026-330584 esm-fingerprint
+//@ chunk-b5df2wx1.js:330026-330584 esm-fingerprint
 function createDefaultWorkloadIdentityCredential(options) {
   var _a;
   var _b;
@@ -104,7 +104,7 @@ function createDefaultWorkloadIdentityCredential(options) {
   }
   return new WorkloadIdentityCredential(options);
 }
-//@ chunk-mrx6y2r5.js:330584-330684 esm-fingerprint
+//@ chunk-b5df2wx1.js:330584-330684 esm-fingerprint
 function createDefaultAzureDeveloperCliCredential(options = {}) {
   let processTimeoutInMs = options.processTimeoutInMs;
   return new AzureDeveloperCliCredential(
@@ -116,7 +116,7 @@ function createDefaultAzureDeveloperCliCredential(options = {}) {
     ),
   );
 }
-//@ chunk-mrx6y2r5.js:330684-330784 esm-fingerprint
+//@ chunk-b5df2wx1.js:330684-330784 esm-fingerprint
 function createDefaultAzureCliCredential(options = {}) {
   let processTimeoutInMs = options.processTimeoutInMs;
   return new AzureCliCredential(
@@ -128,7 +128,7 @@ function createDefaultAzureCliCredential(options = {}) {
     ),
   );
 }
-//@ chunk-mrx6y2r5.js:330784-330884 esm-fingerprint
+//@ chunk-b5df2wx1.js:330784-330884 esm-fingerprint
 function createDefaultAzurePowershellCredential(options = {}) {
   let processTimeoutInMs = options.processTimeoutInMs;
   return new AzurePowerShellCredential(
@@ -140,11 +140,11 @@ function createDefaultAzurePowershellCredential(options = {}) {
     ),
   );
 }
-//@ chunk-mrx6y2r5.js:330884-330919 esm-layout
+//@ chunk-b5df2wx1.js:330884-330919 esm-layout
 function createEnvironmentCredential(options = {}) {
   return new EnvironmentCredential(options);
 }
-//@ chunk-mrx6y2r5.js:330919-331152 esm-fingerprint
+//@ chunk-b5df2wx1.js:330919-331152 esm-fingerprint
 class UnavailableDefaultCredential {
   constructor(credentialName, message) {
     this.credentialName = credentialName;
@@ -157,7 +157,7 @@ class UnavailableDefaultCredential {
     return Promise.resolve(null);
   }
 }
-//@ chunk-mrx6y2r5.js:331152-331737 esm-fingerprint
+//@ chunk-b5df2wx1.js:331152-331737 esm-fingerprint
 class DefaultAzureCredential extends ChainedTokenCredential {
   constructor(options) {
     let azureTokenCredentials = process.env.AZURE_TOKEN_CREDENTIALS

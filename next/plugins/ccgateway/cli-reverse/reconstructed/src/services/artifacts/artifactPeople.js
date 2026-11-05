@@ -3,9 +3,9 @@
  *
  * Artifact 人员与可见范围描述（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0wdgqhcf.js (32)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1dbza2qv.js (32)
  * attribution: placement 32
  */
 import { randomUUID } from "crypto";
@@ -35,7 +35,7 @@ import {
 } from "./comments/presence.js";
 import { ARTIFACT_PERMISSION_LIMITS } from "../../tools/ArtifactTool/permissions/artifactPermissionRules.js";
 import { SESSION_ID_SHORT_RE } from "../../utils/cronTasks.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { DB_PROFILES_OP } from "../../tools/ArtifactTool/promptText.js";
 import { profileFields } from "./userProfiles.js";
 import { authoredByOthersPreamble } from "../../constants/xml.js";
@@ -51,7 +51,7 @@ import {
 import { withConfusables } from "../../utils/sanitization.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0wdgqhcf.js:3525-3821 placement
+//@ chunk-1dbza2qv.js:4812-5108 placement
 /**
  * Artifact 动作路由表与处理函数不一致（某动作没有处理分支）时抛出遥测安全的错误。
  */
@@ -67,13 +67,13 @@ function throwUnroutedArtifactAction(action, reason) {
     "Artifact action routing table and handler disagree",
   );
 }
-//@ chunk-0wdgqhcf.js:3821-3841 placement
+//@ chunk-1dbza2qv.js:5108-5128 placement
 /**
  * 导出常量或表 `DEFAULT_RESULT_ROWS`：值为 500, HHs = 4000。
  */
 var DEFAULT_RESULT_ROWS = 500;
 var MAX_RESULT_ROWS = 4000;
-//@ chunk-0wdgqhcf.js:3841-4003 placement
+//@ chunk-1dbza2qv.js:5128-5290 placement
 /**
  * 取结果数组前 N 行（默认上限），筛出普通对象行，返回 rows、无法读取的行数与超出上限未显示的行数。
  */
@@ -86,7 +86,7 @@ function capResultRows(rows, limit = DEFAULT_RESULT_ROWS) {
     pastCap: Array.isArray(rows) ? rows.length - out.length : 0,
   };
 }
-//@ chunk-0wdgqhcf.js:4003-4110 placement
+//@ chunk-1dbza2qv.js:5290-5397 placement
 /**
  * 把标量值（字符串/数字/布尔）转成字符串后按字段规则清洗，供结果行展示；其他类型视为空串。
  */
@@ -100,7 +100,7 @@ function sweepScalarField(value, field) {
     field,
   );
 }
-//@ chunk-0wdgqhcf.js:4110-4585 placement
+//@ chunk-1dbza2qv.js:5397-5872 placement
 function describePublishedIcon(icon) {
   if (icon.iconDropped === true)
     return " No icon was set: the server did not accept the `icon` field on this publish, which went out without it.";
@@ -112,28 +112,28 @@ function describePublishedIcon(icon) {
     ? " No icon was sent: pass `icon` (one short generic word) on your next publish of it to set one."
     : "";
 }
-//@ chunk-0wdgqhcf.js:4585-4647 placement
+//@ chunk-1dbza2qv.js:5872-5934 placement
 /**
  * 导出函数 `clipUnknown`：参数 e，返回 sweepResultLineText(typeof e === "string" ? e : "unknown", 64)。
  */
 function clipUnknown(text) {
   return sweepResultLineText(typeof text === "string" ? text : "unknown", 64);
 }
-//@ chunk-0wdgqhcf.js:4647-4700 placement
+//@ chunk-1dbza2qv.js:5934-5987 placement
 /**
  * 导出函数 `canonicalTargetOrPlaceholder`：参数 e，返回 canonicalArtifactTargetFor(e, "(unrecognized address)")。
  */
 function canonicalTargetOrPlaceholder(url) {
   return canonicalArtifactTargetFor(url, "(unrecognized address)");
 }
-//@ chunk-0wdgqhcf.js:4700-5102 placement
+//@ chunk-1dbza2qv.js:5987-6389 placement
 /**
  * artifact 属于 agent 而非个人时的受众说明，以及"共享设置只能在页面 Share 菜单修改"的提示。
  */
 var AGENT_SCOPED_AUDIENCE_NOTE =
   "This artifact belongs to an agent rather than a person: it is visible to everyone with access to that agent (for Claude in Slack, everyone who can see the channel), not private. To share it more widely, a person adds people from its page's Share where that is offered, or makes a copy from the page and shares the copy.";
 var SHARING_NOT_CHANGEABLE_NOTE = "You cannot change sharing; that is done from the page's Share menu.";
-//@ chunk-0wdgqhcf.js:5102-6456 placement
+//@ chunk-1dbza2qv.js:6389-7743 placement
 function describeArtifactAudience(audience) {
   if (audience === "owner")
     return `This artifact is private: only its owner and the people the owner has given access can open the link. ${SHARING_NOT_CHANGEABLE_NOTE} If the page is meant for someone else, tell the user when you present the page that those people cannot open it until it is shared with them.`;
@@ -147,7 +147,7 @@ function describeArtifactAudience(audience) {
     return `This artifact is shared with ${shareAudience("unknown")}. ${SHARING_NOT_CHANGEABLE_NOTE}`;
   return "Artifacts are private unless shared from the page's Share menu, and you cannot change sharing. If the page is meant for anyone else and the user has not shared it, tell the user that others cannot open the link until it is shared.";
 }
-//@ chunk-0wdgqhcf.js:6456-6718 placement
+//@ chunk-1dbza2qv.js:7743-8005 placement
 /**
  * 描述发布后的可见范围：代理所属的 artifact 用固定说明；否则用受众描述，用户应用会显示卡片时追加"一句话介绍页面、别贴 URL"的指引。
  */
@@ -158,18 +158,18 @@ function describePublishAudience(artifact, audience) {
     ? `${described} The user's app shows this publish as a card with the page's title and link: say in a sentence what the page is, and do not paste the URL into your reply unless the user asks for it.`
     : described;
 }
-//@ chunk-0wdgqhcf.js:6718-6730 placement
+//@ chunk-1dbza2qv.js:8005-8017 placement
 var MAX_LABEL_CHARS = 1000;
-//@ chunk-0wdgqhcf.js:6730-6789 placement
+//@ chunk-1dbza2qv.js:8017-8076 placement
 /**
  * 导出函数 `clipLabel`：参数 e，返回 typeof e === "string" ? sweepResultLineText(e, Yn) : void 0。
  */
 function clipLabel(note) {
   return typeof note === "string" ? sweepResultLineText(note, MAX_LABEL_CHARS) : undefined;
 }
-//@ chunk-0wdgqhcf.js:6789-6800 placement
+//@ chunk-1dbza2qv.js:8076-8087 placement
 var MAX_SHORT_LABEL_CHARS = 200;
-//@ chunk-0wdgqhcf.js:6800-6880 placement
+//@ chunk-1dbza2qv.js:8087-8167 placement
 /**
  * 导出函数 `labelSuffix`：参数 e，返回 t === "" ? "" : `: ${t}`。
  */
@@ -177,7 +177,7 @@ function labelSuffix(detail) {
   let detailValue = typeof detail === "string" ? sweepResultLineText(detail, MAX_SHORT_LABEL_CHARS) : "";
   return detailValue === "" ? "" : `: ${detailValue}`;
 }
-//@ chunk-0wdgqhcf.js:6880-6957 placement
+//@ chunk-1dbza2qv.js:8167-8244 placement
 /**
  * 导出函数 `shortLabelOrUndefined`：参数 e，返回 t === "" ? void 0 : t。
  */
@@ -186,7 +186,7 @@ function shortLabelOrUndefined(serverMessage) {
     typeof serverMessage === "string" ? sweepResultLineText(serverMessage, MAX_SHORT_LABEL_CHARS) : "";
   return line === "" ? undefined : line;
 }
-//@ chunk-0wdgqhcf.js:6957-7227 placement
+//@ chunk-1dbza2qv.js:8244-8514 placement
 /**
  * 生成"N 行无法读取 / 还有 N 行未显示"的括号说明（附后续建议），都为 0 时返回空串。
  */
@@ -209,14 +209,14 @@ function formatRowsOmittedNote(
     : `
 (${filtered.join("; ")} \u2014 ${detail}.)`;
 }
-//@ chunk-0wdgqhcf.js:7227-7288 placement
+//@ chunk-1dbza2qv.js:8514-8575 placement
 /**
  * 导出函数 `peerOrFallback`：参数 e, t, n，返回 typeof e === "string" && t.test(e) ? e : n。
  */
 function peerOrFallback(row, field, fallback) {
   return typeof row === "string" && field.test(row) ? row : fallback;
 }
-//@ chunk-0wdgqhcf.js:7288-7464 placement
+//@ chunk-1dbza2qv.js:8575-8751 placement
 /**
  * 描述实时订阅状态：有跳过原因时给原因与不必重新监听的建议，否则给订阅行文字（去掉 "Live subscription: " 前缀）。
  */
@@ -227,7 +227,7 @@ function describeLiveSubscriptionState(state) {
   let advice = noRewatchAdvice(state);
   return advice === undefined ? `${skipPhrase}.` : `${skipPhrase}; ${advice}.`;
 }
-//@ chunk-0wdgqhcf.js:7464-7602 placement
+//@ chunk-1dbza2qv.js:8751-8889 placement
 /**
  * 把毫秒时间戳格式化为 ISO 字符串，非法值返回 "an unknown time"。
  */
@@ -236,21 +236,21 @@ function formatEpochMsIso(epochMs) {
     ? new Date(epochMs).toISOString()
     : "an unknown time";
 }
-//@ chunk-0wdgqhcf.js:7602-7678 placement
+//@ chunk-1dbza2qv.js:8889-8966 placement
 /**
  * 导出函数 `numberText`：参数 e，返回 typeof e === "number" && Number.isFinite(e) ? String(e) : "?"。
  */
 function numberText(value) {
   return typeof value === "number" && Number.isFinite(value) ? String(value) : "?";
 }
-//@ chunk-0wdgqhcf.js:7678-7713 placement
+//@ chunk-1dbza2qv.js:8966-9001 placement
 /**
  * 导出函数 `jsonQuotedSweep`：参数 e, t，返回 jsonStringify(sweepScalarField(e, t))。
  */
 function jsonQuotedSweep(value, item) {
   return jsonStringify(sweepScalarField(value, item));
 }
-//@ chunk-0wdgqhcf.js:7713-7827 placement
+//@ chunk-1dbza2qv.js:9001-9115 placement
 /**
  * 把字符串/数字/布尔值按扫描结果行的规则清洗并截断，再 JSON 引号化，用于显示。
  */
@@ -266,7 +266,7 @@ function quoteSweptValue(value, max = DB_LIST_LIMIT) {
     ),
   );
 }
-//@ chunk-0wdgqhcf.js:7827-8136 placement
+//@ chunk-1dbza2qv.js:9115-9423 placement
 /**
  * 把服务端返回的警告字符串合并成 "Warning(s): …" 段落，总长受结果大小上限约束，截断时注明。
  */
@@ -295,14 +295,14 @@ function formatResultWarnings(warnings) {
 
 ${plural(entries.length, "Warning")}: ${kept}${cut ? " \u2026 (warnings truncated)" : ""}`;
 }
-//@ chunk-0wdgqhcf.js:8136-8178 placement
+//@ chunk-1dbza2qv.js:9423-9465 placement
 /**
  * 导出常量或表 `MAX_SWEEP_TEXT_CHARS`：值为 8192, Xn = /^[0-9a-f]{16}$/, Jn = 12288。
  */
 var MAX_SWEEP_TEXT_CHARS = 8192;
 var PEER_LABEL_RE = /^[0-9a-f]{16}$/;
 var MAX_PROFILE_TEXT_BYTES = 12288;
-//@ chunk-0wdgqhcf.js:8178-9030 placement
+//@ chunk-1dbza2qv.js:9465-10317 placement
 function describeArtifactPerson(viewers, maxListed) {
   let capped = capResultRows(viewers, MAX_PRESENCE_ENTRIES);
   let bytesUsed = 0;
@@ -341,9 +341,9 @@ ${flattened.join(`
 `)}
   (${PRESENCE_DATA_NOTE})${omittedNote}`;
 }
-//@ chunk-0wdgqhcf.js:9067-9105 placement
+//@ chunk-1dbza2qv.js:10354-10392 placement
 var ROUTED_ACTION_FIELDS = ["action", "url", "db_op", "ids"];
-//@ chunk-0wdgqhcf.js:9105-9254 placement
+//@ chunk-1dbza2qv.js:10392-10541 placement
 /**
  * 校验并去重 db_op 的 ids 参数：必须是非空数组、数量在上限内、每个都是 "u_" 开头的用户 id；不合法返回 null。
  */
@@ -356,14 +356,14 @@ function parseProfileIds(raw) {
     !ids.every((id) => typeof id === "string" && SESSION_ID_SHORT_RE.test(id))
   )
     return null;
-  return uniq(ids);
+  return normalizeCaseForComparison_2(ids);
 }
-//@ chunk-0wdgqhcf.js:9254-9407 placement
+//@ chunk-1dbza2qv.js:10541-10694 placement
 /**
  * db_op 查询用户资料时缺少或给错 ids 的错误提示。
  */
 var PROFILE_IDS_REQUIRED_MESSAGE = `db_op "${DB_PROFILES_OP}" requires \`ids\`: 1-${ARTIFACT_PERMISSION_LIMITS} ids, each "u_" plus 22 letters, digits or underscores, exactly as a document or live event showed it.`;
-//@ chunk-0wdgqhcf.js:9407-9489 placement
+//@ chunk-1dbza2qv.js:10694-10776 placement
 function validateProfileIdsParam(raw) {
   return parseProfileIds(raw) === null
     ? {
@@ -375,11 +375,11 @@ function validateProfileIdsParam(raw) {
         result: true,
       };
 }
-//@ chunk-0wdgqhcf.js:9489-9530 placement
+//@ chunk-1dbza2qv.js:10776-10817 placement
 function profileFieldsOrUndefined(raw) {
   return isPlainObject(raw) ? profileFields(raw) : undefined;
 }
-//@ chunk-0wdgqhcf.js:9530-11720 placement
+//@ chunk-1dbza2qv.js:10817-13007 placement
 /**
  * db_profiles（人员档案）答复的格式化：按 id 列出姓名，标注未知 id 与不可用状态。
  */
@@ -479,7 +479,7 @@ var formatDbProfilesAlt = (input) => {
     },
   };
 };
-//@ chunk-0wdgqhcf.js:11720-12338 placement
+//@ chunk-1dbza2qv.js:13007-13625 placement
 /**
  * artifact 内嵌（embed）错误的 schema：pins 与 warnings 列表，以及四种错误说明文案。
  */
@@ -493,7 +493,7 @@ var ANGLE_OPEN_VARIANTS_RE;
 var ANGLE_CLOSE_VARIANTS_RE;
 var AMPERSAND_FORMS_RE;
 var TRAILING_AMPERSAND_RE;
-deferInit("chunk-0wdgqhcf.js:11720", () => {
+deferInit("chunk-1dbza2qv.js:13007", () => {
   ARTIFACT_EMBED_ERRORS = DoctorLazy(() =>
     objectSchema({
       pins: array(
@@ -548,13 +548,15 @@ export {
   MAX_SWEEP_TEXT_CHARS,
   quoteSweptValue,
   formatResultWarnings,
-  MAX_RESULT_ROWS,
-  capResultRows,
   peerOrFallback,
   numberText,
-  sweepScalarField,
-  formatRowsOmittedNote,
+  capResultRows,
   canonicalTargetOrPlaceholder,
+  formatRowsOmittedNote,
+  describePublishAudience,
+  describePublishedIcon,
+  MAX_RESULT_ROWS,
+  sweepScalarField,
   clipUnknown,
   formatEpochMsIso,
   labelSuffix,
@@ -564,6 +566,4 @@ export {
   describeArtifactPerson,
   formatDbProfiles,
   formatDbProfilesAlt,
-  describePublishAudience,
-  describePublishedIcon,
 };

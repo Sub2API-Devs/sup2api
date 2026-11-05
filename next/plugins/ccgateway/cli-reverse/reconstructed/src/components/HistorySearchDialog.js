@@ -3,9 +3,9 @@
  *
  * Ctrl+R 历史搜索对话框（全屏版本）：扫描 prompt 历史、模糊匹配、显示扫描状态（Loading/Searching older prompts/No history yet）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/HistorySearchDialog.tsx
- * pieces: chunk-18hwfzwa.js (4)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: sole-consumer 1, affinity 2, fingerprint 1
  */
 import { useRegisterOverlay } from "../context/overlayContext.js";
@@ -35,14 +35,14 @@ import { truncateToLength } from "../utils/stringUtils.js";
 import { wrapAnsi } from "../ink/wrapAnsi.js";
 import { OverflowHint } from "./CtrlOToExpand.js";
 
-//@ chunk-18hwfzwa.js:662972-663022 sole-consumer
+//@ chunk-czq1j3j2.js:683676-683726 sole-consumer
 var HISTORY_DIALOG_VISIBLE_ROWS = 6;
 var PROMPT_ROW_GAP = 8;
 var MAX_SCAN_BYTES = 16777216;
 var ENTRY_OVERHEAD_BYTES = 256;
 var INITIAL_HISTORY_BATCH = 100;
 var HISTORY_BATCH_GROWTH = 4;
-//@ chunk-18hwfzwa.js:663022-663303 affinity
+//@ chunk-czq1j3j2.js:683726-684007 affinity
 function getHistoryScanStatusText(scan, query) {
   if (!scan) return "Loading\u2026";
   let trimmed = query.trim();
@@ -56,7 +56,7 @@ function getHistoryScanStatusText(scan, query) {
       return trimmed ? "No matching prompts" : "No history yet";
   }
 }
-//@ chunk-18hwfzwa.js:663303-666723 fingerprint (2.1.88 match: HistorySearchDialog, 0.528)
+//@ chunk-czq1j3j2.js:684007-687427 fingerprint (2.1.88 match: HistorySearchDialog, 0.53)
 /**
  * 全屏历史搜索对话框：列出匹配的历史 prompt（fuzzy），显示扫描进度与截断状态，选中后回填。
  */
@@ -312,7 +312,7 @@ function HistorySearchDialog({ initialQuery, onSelect, onCancel }) {
     },
   });
 }
-//@ chunk-18hwfzwa.js:666723-666845 affinity
+//@ chunk-czq1j3j2.js:687427-687549 affinity
 function fuzzyMatchScore(lower, needle) {
   let lastMatchEnd = 0;
   for (let idx = 0; idx < needle.length; idx++) {

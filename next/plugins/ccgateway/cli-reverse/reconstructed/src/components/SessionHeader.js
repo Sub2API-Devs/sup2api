@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。会话标题头。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (8)
  * attribution: placement 8
  */
 import { getModelBadgeParts } from "../utils/ultraplan/keyword.js";
@@ -30,22 +30,22 @@ import { noEffortHint, effortValueToString, isUltracodeActive } from "../utils/e
 import { isFastModeOnForRequestModel } from "../utils/fastMode.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { isDebugMode } from "../utils/debug.js";
-import { isSendableQueuedCommand } from "../utils/messageQueueManager.js";
+import { isIdleDrainableMainThreadCommand } from "../utils/messageQueueManager.js";
 import { isTaskNotificationCommand } from "./PromptInput/PromptInputQueuedCommands.js";
 import { useCommandQueue } from "./Messages.js";
-import { count } from "../utils/collections.js";
+import { countWhere } from "../utils/collections.js";
 
-//@ chunk-18hwfzwa.js:1442667-1442762 placement
+//@ chunk-czq1j3j2.js:1482896-1482991 placement
 function sessionHeaderParts(header) {
   return [header.compliance, header.debug ? "Debug" : undefined, ...header.modes].filter(
     (part) => part !== undefined,
   );
 }
-//@ chunk-18hwfzwa.js:1442762-1442821 placement
+//@ chunk-czq1j3j2.js:1482991-1483050 placement
 function sessionHeaderText(sessionHeaderInfo) {
   return [...getModelBadgeParts(sessionHeaderInfo), ...sessionHeaderParts(sessionHeaderInfo)].join(" \xB7 ");
 }
-//@ chunk-18hwfzwa.js:1442821-1442880 placement
+//@ chunk-czq1j3j2.js:1483050-1483109 placement
 function renderSessionHeaderLine() {
   return showSwarmFooterGate()
     ? jsxProd_default(SentryErrorBoundary, {
@@ -53,7 +53,7 @@ function renderSessionHeaderLine() {
       })
     : null;
 }
-//@ chunk-18hwfzwa.js:1442880-1443110 placement
+//@ chunk-czq1j3j2.js:1483109-1483339 placement
 function SessionHeaderLine() {
   let $ = useMemoCache(4);
   const sessionHeaderInfo = useSessionHeaderInfo();
@@ -79,7 +79,7 @@ function SessionHeaderLine() {
   } else hintBox = $[3];
   return hintBox;
 }
-//@ chunk-18hwfzwa.js:1443110-1443782 placement
+//@ chunk-czq1j3j2.js:1483339-1484013 placement
 /**
  * 汇总会话标题头信息：模型显示名、effort、ultracode、快速模式、合规标识（HIPAA/zdr）、调试模式与账号记忆标记。
  */
@@ -147,20 +147,20 @@ function useSessionHeaderInfo() {
   } else info = $[12];
   return info;
 }
-//@ chunk-18hwfzwa.js:1443782-1443829 placement (2.1.88 match: _temp2, 1)
+//@ chunk-czq1j3j2.js:1484668-1484715 placement (2.1.88 match: _temp2, 1)
 function selectNoteHasViewedAgentTask(s_0) {
   return !!s_0.viewingAgentTaskId;
 }
-//@ chunk-18hwfzwa.js:1443829-1443921 placement (2.1.88 match: processQueuedCommands, 0.792)
+//@ chunk-czq1j3j2.js:1484715-1484806 placement (2.1.88 match: processQueuedCommands, 0.792)
 function processQueuedCommands_2(queuedCommands) {
   return (
     queuedCommands.mode === "task-notification" &&
     queuedCommands.taskId !== undefined &&
-    isSendableQueuedCommand(queuedCommands) &&
+    isIdleDrainableMainThreadCommand(queuedCommands) &&
     !isTaskNotificationCommand(queuedCommands)
   );
 }
-//@ chunk-18hwfzwa.js:1443921-1444271 placement
+//@ chunk-czq1j3j2.js:1484806-1485156 placement
 /**
  * 面板打开期间有排队的后台任务更新时，显示"N background task updates waiting"。
  */
@@ -170,7 +170,7 @@ function PendingTaskUpdatesNote() {
   let commandQueue = useCommandQueue();
   let queuedCount;
   if ($[0] !== commandQueue) {
-    queuedCount = count(commandQueue, processQueuedCommands_2);
+    queuedCount = countWhere(commandQueue, processQueuedCommands_2);
     $[0] = commandQueue;
     $[1] = queuedCount;
   } else queuedCount = $[1];

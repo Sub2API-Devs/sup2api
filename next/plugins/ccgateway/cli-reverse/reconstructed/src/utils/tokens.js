@@ -3,22 +3,18 @@
  *
  * 从消息的 API usage 读取 token：最近一次响应的上下文 token、带估算的 token 计数、累计被压缩丢弃的 token、状态栏上下文窗口信息等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/tokens.ts
- * pieces: chunk-e6aww6q8.js (16)
- * attribution: shared-adjacent 1, file-local 3, layout 7, fingerprint 3, callgraph-witnessed 1, callgraph-fingerprint 1
+ * pieces: chunk-5xgkngpb.js (16)
+ * attribution: placement 3, fingerprint 3, layout 6, file-local 2, callgraph-witnessed 1, callgraph-fingerprint 1
  */
-import { SYNTHETIC_MESSAGES, signatureTokenEstimate } from "./messages.js";
-import { SYNTHETIC_MODEL } from "../constants/messages.js";
-import {
-  totalTokensOf,
-  getTokenCountFromUsage as getTokenCountFromUsage_5,
-} from "./messages/usageAndStopReason.js";
+import { SYNTHETIC_MESSAGES, SYNTHETIC_MODEL, signatureTokenEstimate } from "./messages.js";
+import { totalTokensOf, getTokenCountFromUsage_2 } from "./messages/usageAndStopReason.js";
 import { isCompactBoundaryMessage as isCompactBoundaryMessage_3 } from "../services/projects/threadRows.js";
 import { jsonStringify } from "./slowOperations.js";
 import { calculateContextPercentages } from "./context.js";
 
-//@ chunk-e6aww6q8.js:1534635-1534844 shared-adjacent (2.1.88 match: getTokenUsage, 0.835)
+//@ chunk-5xgkngpb.js:1542893-1543102 placement (2.1.88 match: getTokenUsage, 0.834)
 /**
  * 返回 assistant 消息的 usage；排除合成占位文本、合成模型消息与 isUnmetered 消息。
  */
@@ -35,7 +31,7 @@ function getTokenUsage(message) {
     return message.message.usage;
   return;
 }
-//@ chunk-e6aww6q8.js:1534844-1534952 file-local
+//@ chunk-5xgkngpb.js:1543102-1543209 placement
 /**
  * 返回 assistant 消息的 API message id（排除合成模型）。
  */
@@ -44,7 +40,7 @@ function getAssistantMessageApiId(message) {
     return message.message.id;
   return;
 }
-//@ chunk-e6aww6q8.js:1534952-1535072 layout (2.1.88 match: getTokenCountFromUsage, 1)
+//@ chunk-5xgkngpb.js:1543209-1543329 fingerprint (2.1.88 match: getTokenCountFromUsage, 1)
 /**
  * input + cache_creation + cache_read + output。
  */
@@ -56,7 +52,7 @@ function getTokenCountFromUsage(usage) {
     usage.output_tokens
   );
 }
-//@ chunk-e6aww6q8.js:1535072-1535122 layout
+//@ chunk-5xgkngpb.js:1543329-1543379 layout
 /**
  * 单条消息 usage 对应的上下文 token（最后一次迭代的输入+输出）。
  */
@@ -64,7 +60,7 @@ function getMessageContextTokens(message) {
   let tokenUsage = getTokenUsage(message);
   return tokenUsage ? totalTokensOf(tokenUsage) : undefined;
 }
-//@ chunk-e6aww6q8.js:1535122-1535217 file-local
+//@ chunk-5xgkngpb.js:1543379-1543473 file-local
 /**
  * 从后往前找最近一条有 usage 的消息，返回其上下文 token；没有返回 0。
  */
@@ -75,14 +71,14 @@ function tokenCountFromLastAPIResponse(messages) {
   }
   return 0;
 }
-//@ chunk-e6aww6q8.js:1535217-1535247 layout
+//@ chunk-5xgkngpb.js:1543473-1543503 layout
 /**
  * tokenCountWithEstimation 的转发（通知栏等 UI 用）。
  */
 function getContextTokenCount(messages) {
   return tokenCountWithEstimation(messages);
 }
-//@ chunk-e6aww6q8.js:1535247-1535364 file-local
+//@ chunk-5xgkngpb.js:1543503-1543620 file-local
 /**
  * 最近一次 API 响应的上下文 token；遇到 compact_boundary 停止（压缩后尚无响应时为 0）。
  */
@@ -95,7 +91,7 @@ function tokenCountWithEstimation(messages) {
   }
   return 0;
 }
-//@ chunk-e6aww6q8.js:1535364-1535564 fingerprint (2.1.88 match: finalContextTokensFromLastResponse, 1)
+//@ chunk-5xgkngpb.js:1543620-1543820 fingerprint (2.1.88 match: finalContextTokensFromLastResponse, 1)
 /**
  * 最近一条有 usage 的消息的 input+output（优先 iterations 最后一项），用于 taskBudget 扣减。
  */
@@ -113,7 +109,7 @@ function finalContextTokensFromLastResponse(messages) {
   }
   return 0;
 }
-//@ chunk-e6aww6q8.js:1535564-1535670 layout
+//@ chunk-5xgkngpb.js:1543820-1543926 layout
 /**
  * 最近一次 usage 规整为最后迭代值。
  */
@@ -121,11 +117,11 @@ function getLastApiUsage(messages) {
   for (let idx = messages.length - 1; idx >= 0; idx--) {
     let message = messages[idx];
     let usage = message ? getTokenUsage(message) : undefined;
-    if (usage) return getTokenCountFromUsage_5(usage);
+    if (usage) return getTokenCountFromUsage_2(usage);
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:1535670-1535960 layout (2.1.88 match: getTokenCountFromUsage, 0.758)
+//@ chunk-5xgkngpb.js:1543926-1544214 layout (2.1.88 match: getTokenCountFromUsage, 0.758)
 /**
  * 从某下标起按 message id 去重累计 assistant 的 input+cache_creation+output；缺 usage 的回调通知。
  */
@@ -152,7 +148,7 @@ function sumAssistantTokensSince(messages, start, end, onUsageMissing) {
   }
   return total;
 }
-//@ chunk-e6aww6q8.js:1535960-1536151 layout
+//@ chunk-5xgkngpb.js:1544214-1544405 layout
 /**
  * 所有 compact_boundary 中最大的累计丢弃 token。
  */
@@ -166,7 +162,7 @@ function getMaxCumulativeDroppedTokens(messages) {
     }
   return total;
 }
-//@ chunk-e6aww6q8.js:1536151-1536291 layout
+//@ chunk-5xgkngpb.js:1544405-1544545 layout
 /**
  * 在新边界上记录累计丢弃 token = 之前最大值 + 本次(pre−post)。
  */
@@ -176,7 +172,7 @@ function setCumulativeDroppedTokens(messages, value) {
   messages.compactMetadata.cumulativeDroppedTokens =
     maxCumulativeDroppedTokens + Math.max(0, preTokens - (postTokens ?? 0));
 }
-//@ chunk-e6aww6q8.js:1536291-1536403 callgraph-witnessed (2.1.88 match: doesMostRecentAssistantMessageExceed200k, 1)
+//@ chunk-5xgkngpb.js:1544545-1544657 callgraph-witnessed (2.1.88 match: doesMostRecentAssistantMessageExceed200k, 1)
 /**
  * 最近一条 assistant 的上下文是否超过 200k（plan 模式选模型用）。
  */
@@ -186,20 +182,20 @@ function doesMostRecentAssistantMessageExceed200k(messages) {
   let usage = getTokenUsage(lastAsst);
   return usage ? totalTokensOf(usage) > 200000 : false;
 }
-//@ chunk-e6aww6q8.js:1536403-1536673 fingerprint (2.1.88 match: getAssistantMessageContentLength, 0.833)
+//@ chunk-5xgkngpb.js:1544657-1544927 placement (2.1.88 match: hasThinkingContent, 0.875)
 /**
  * assistant 内容长度估算（文本、thinking 签名、redacted、tool_use 输入）。
  */
-function getAssistantMessageContentLength(message) {
-  let contentLength = 0;
-  for (let block of message.message.content)
-    if (block.type === "text") contentLength += block.text?.length ?? 0;
-    else if (block.type === "thinking") contentLength += signatureTokenEstimate(block.signature?.length ?? 0);
-    else if (block.type === "redacted_thinking") contentLength += block.data?.length ?? 0;
-    else if (block.type === "tool_use") contentLength += jsonStringify(block.input).length;
-  return contentLength;
+function hasThinkingContent(m) {
+  let chars = 0;
+  for (let block of m.message.content)
+    if (block.type === "text") chars += block.text?.length ?? 0;
+    else if (block.type === "thinking") chars += signatureTokenEstimate(block.signature?.length ?? 0);
+    else if (block.type === "redacted_thinking") chars += block.data?.length ?? 0;
+    else if (block.type === "tool_use") chars += jsonStringify(block.input).length;
+  return chars;
 }
-//@ chunk-e6aww6q8.js:3685902-3686171 callgraph-fingerprint (2.1.88 match: getCurrentUsage, 0.407)
+//@ chunk-5xgkngpb.js:3781325-3781594 callgraph-fingerprint (2.1.88 match: getCurrentUsage, 0.407)
 /**
  * 状态栏输入里的 context_window：总输入/输出 token、窗口大小、当前 usage、已用/剩余百分比。
  */
@@ -218,7 +214,7 @@ function buildContextWindowStatus(currentUsage, contextWindowSize) {
     remaining_percentage: contextPercentages.remaining,
   };
 }
-//@ chunk-e6aww6q8.js:4944387-4944439 fingerprint (2.1.88 match: messageTokenCountFromLastAPIResponse, 0.689)
+//@ chunk-5xgkngpb.js:5093453-5093505 fingerprint (2.1.88 match: messageTokenCountFromLastAPIResponse, 0.691)
 /**
  * usage.output_tokens 或 null（流式消息处理用）。
  */
@@ -226,18 +222,18 @@ function getUsageOutputTokens(messages) {
   return messages.usage?.output_tokens ?? null;
 }
 export {
-  getUsageOutputTokens,
-  doesMostRecentAssistantMessageExceed200k,
-  getTokenUsage,
-  getLastApiUsage,
-  getAssistantMessageContentLength,
-  getContextTokenCount,
-  buildContextWindowStatus,
-  sumAssistantTokensSince,
-  getMaxCumulativeDroppedTokens,
   tokenCountFromLastAPIResponse,
-  finalContextTokensFromLastResponse,
-  getTokenCountFromUsage,
+  getUsageOutputTokens,
+  getTokenUsage,
+  buildContextWindowStatus,
+  getLastApiUsage,
+  doesMostRecentAssistantMessageExceed200k,
   getAssistantMessageApiId,
   setCumulativeDroppedTokens,
+  getContextTokenCount,
+  hasThinkingContent,
+  sumAssistantTokensSince,
+  getMaxCumulativeDroppedTokens,
+  getTokenCountFromUsage,
+  finalContextTokensFromLastResponse,
 };

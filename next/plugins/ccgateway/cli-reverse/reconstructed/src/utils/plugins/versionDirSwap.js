@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：版本目录替换
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (41)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (41)
  * attribution: placement 41
  */
 import { readdir, lstat, readlink, open, rename, lutimes } from "fs/promises";
@@ -46,11 +46,11 @@ import {
 } from "../fsRemove.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4414770-4414805 placement
+//@ chunk-5xgkngpb.js:4521396-4521431 placement
 var COMPARE_TREE_BUDGET = 1e4;
 var COMPARE_TREE_BUDGET_BYTES = 419430400;
 var COMPARE_TREE_CHUNK_BYTES = 65536;
-//@ chunk-e6aww6q8.js:4414805-4415609 placement
+//@ chunk-5xgkngpb.js:4521431-4522235 placement
 async function compareVersionTrees(stagedRoot, installedRoot, options = {}) {
   let budget = options.budget ?? {
     entries: COMPARE_TREE_BUDGET,
@@ -111,14 +111,14 @@ async function compareVersionTrees(stagedRoot, installedRoot, options = {}) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:4415609-4415726 placement
+//@ chunk-5xgkngpb.js:4522235-4522352 placement
 class CompareBudgetExceeded extends Error {
   constructor() {
     super("plugin tree past the compare budget");
     this.name = "CompareBudgetExceeded";
   }
 }
-//@ chunk-e6aww6q8.js:4415726-4417984 placement
+//@ chunk-5xgkngpb.js:4522352-4524613 placement
 /**
  * 比较两个版本目录（package.json、.git、node_modules 等差异）。
  */
@@ -287,23 +287,23 @@ async function compareVersionDirs(
       return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:4417984-4418018 placement
+//@ chunk-5xgkngpb.js:4524613-4524647 placement
 function isOrphanMarkerName(name) {
   return normalizePathSegment(name) === ORPHAN_MARKER_FILE;
 }
-//@ chunk-e6aww6q8.js:4418018-4418030 placement
+//@ chunk-5xgkngpb.js:4524647-4524659 placement
 var FILE_MODE_BITS_MASK = 3602;
-//@ chunk-e6aww6q8.js:4418030-4418094 placement
+//@ chunk-5xgkngpb.js:4524659-4524723 placement
 function ownerKey(stats) {
   return getPlatform() === "windows" ? "-.-" : `${stats.uid}.${stats.gid}`;
 }
-//@ chunk-e6aww6q8.js:4418094-4418188 placement
+//@ chunk-5xgkngpb.js:4524723-4524817 placement
 function isSameOwnerEntry(leftOwnerKey, leftLoose, rightOwnerKey) {
   let [leftUid, leftGid] = leftOwnerKey.split(".");
   let [rightUid, rightGid] = rightOwnerKey.split(".");
   return leftUid === rightUid && ((leftLoose & 16) === 0 || leftGid === rightGid);
 }
-//@ chunk-e6aww6q8.js:4418188-4418574 placement
+//@ chunk-5xgkngpb.js:4524817-4525205 placement
 /**
  * 已安装条目签名与暂存签名是否兼容（链接目标、属主、权限不更宽）。
  */
@@ -334,7 +334,7 @@ function isEntrySignatureCompatible(installedSignature, stagedSignature) {
     (stagedMode & ~installedMode) === 0
   );
 }
-//@ chunk-e6aww6q8.js:4418574-4418715 placement
+//@ chunk-5xgkngpb.js:4525205-4525346 placement
 async function isHookFileStillPlain(rootDir, lockfileName, directories) {
   let lockfilePath = BINARY_LOCKFILE_MESSAGES.get(lockfileName);
   return (
@@ -346,12 +346,12 @@ async function isHookFileStillPlain(rootDir, lockfileName, directories) {
     ))
   );
 }
-//@ chunk-e6aww6q8.js:4418715-4418755 placement
+//@ chunk-5xgkngpb.js:4525346-4525386 placement
 var CACHE_CLEANABLE_NAMES; // deferred: uses ORPHAN_MARKER_FILE (./cacheUtils.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4418715", () => {
+deferInit("chunk-5xgkngpb.js:4525346", () => {
   CACHE_CLEANABLE_NAMES = new Set(["node_modules", IN_USE_MARKER_FILE, LINKS_MATERIALIZED_MARKER_2]);
 });
-//@ chunk-e6aww6q8.js:4418755-4418991 placement
+//@ chunk-5xgkngpb.js:4525386-4525622 placement
 async function isRootEntryUnchanged(rootDir, name, loose, owner) {
   let stats = await lstat(join(rootDir, name), {
     bigint: true,
@@ -362,7 +362,7 @@ async function isRootEntryUnchanged(rootDir, name, loose, owner) {
   if (name === LINKS_MATERIALIZED_MARKER_2) return stats.isFile() && (isWindows || stats.nlink === 1n);
   return stats.isDirectory() && (!isWindows || (await isSameFilesystem(rootDir, name)));
 }
-//@ chunk-e6aww6q8.js:4418991-4419509 placement
+//@ chunk-5xgkngpb.js:4525622-4526140 placement
 /**
  * 路径上每级目录仍是列举时看到的那个普通目录。
  */
@@ -398,7 +398,7 @@ async function arePathDirsUnchanged(rootDir, relPath, directories) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:4419509-4420361 placement
+//@ chunk-5xgkngpb.js:4526140-4526995 placement
 /**
  * bin 文件 sha256 与期望一致（match/wrong/absent）。
  */
@@ -444,7 +444,7 @@ async function compareBinaryDigest(rootDir, name, expectedSha, context, budget, 
     });
   }
 }
-//@ chunk-e6aww6q8.js:4420361-4421527 placement
+//@ chunk-5xgkngpb.js:4526995-4528167 placement
 /**
  * 递归列出目录树条目签名（类型、属主、权限、大小），受预算限制。
  */
@@ -522,7 +522,7 @@ async function listTreeSignatures(
   }
   return signatures;
 }
-//@ chunk-e6aww6q8.js:4421527-4421649 placement
+//@ chunk-5xgkngpb.js:4528167-4528289 placement
 class StagedReadError extends Error {
   reason;
   constructor(reason) {
@@ -530,7 +530,7 @@ class StagedReadError extends Error {
     this.reason = reason;
   }
 }
-//@ chunk-e6aww6q8.js:4421649-4422257 placement
+//@ chunk-5xgkngpb.js:4528289-4528897 placement
 /**
  * 打开普通文件并核对身份、权限、属主与硬链接名。
  */
@@ -580,7 +580,7 @@ async function openRegularFileChecked(filePath, options) {
   });
   return;
 }
-//@ chunk-e6aww6q8.js:4422257-4422540 placement
+//@ chunk-5xgkngpb.js:4528897-4529180 placement
 function isSameFileIdentity_2(filePath, preStats, stats) {
   if (preStats.ino === 0n || stats.ino === 0n) return true;
   let same = preStats.ino === stats.ino && (getPlatform() === "windows" || preStats.dev === stats.dev);
@@ -590,7 +590,7 @@ function isSameFileIdentity_2(filePath, preStats, stats) {
     );
   return same;
 }
-//@ chunk-e6aww6q8.js:4422540-4422637 placement (2.1.88 match: getFileIdentity, 0.794)
+//@ chunk-5xgkngpb.js:4529180-4529277 placement (2.1.88 match: getFileIdentity, 0.795)
 function getFileIdentity_8(seen, current) {
   return (
     seen.ino === 0n ||
@@ -598,7 +598,7 @@ function getFileIdentity_8(seen, current) {
     (current.ino === seen.ino && (getPlatform() === "windows" || current.dev === seen.dev))
   );
 }
-//@ chunk-e6aww6q8.js:4422637-4423234 placement
+//@ chunk-5xgkngpb.js:4529277-4529874 placement
 /**
  * 文件的硬链接数都能由已安装列表解释。
  */
@@ -639,7 +639,7 @@ async function areHardLinksAccounted(filePath, preStats, stats, names, hookNames
   );
   return false;
 }
-//@ chunk-e6aww6q8.js:4423234-4424015 placement
+//@ chunk-5xgkngpb.js:4529874-4530658 placement
 /**
  * 逐块比较暂存与已安装文件内容。
  */
@@ -693,27 +693,27 @@ async function compareFileBytes(stagedRoot, installedRoot, relPath, size, loose,
     });
   }
 }
-//@ chunk-e6aww6q8.js:4424015-4424150 placement
+//@ chunk-5xgkngpb.js:4530658-4530793 placement
 async function readFully(handle, buffer, position, offset = 0) {
   if (offset === buffer.length) return offset;
   let { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, position + offset);
   return bytesRead === 0 ? offset : readFully(handle, buffer, position, offset + bytesRead);
 }
-//@ chunk-e6aww6q8.js:4424150-4424264 placement
+//@ chunk-5xgkngpb.js:4530793-4530907 placement
 var OCCUPIED_RETRY_DELAYS_MS; // deferred: uses RETRY_DELAYS (../atomicPublishWrite.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_WAIT_MS;
 var RETRY_BUDGET_MS;
 var OCCUPIED_ERRORS;
-deferInit("chunk-e6aww6q8.js:4424150", () => {
+deferInit("chunk-5xgkngpb.js:4530793", () => {
   OCCUPIED_RETRY_DELAYS_MS = [100, 500, 2000];
   MAX_WAIT_MS = 20000;
   RETRY_BUDGET_MS =
     LONG_RETRY_DELAYS_MS.reduce((acc, delayMs) => acc + delayMs, 0) + OCCUPIED_RETRY_DELAYS_MS[0];
   OCCUPIED_ERRORS = new Set(["ENOTEMPTY", "EEXIST", "EISDIR"]);
 });
-//@ chunk-e6aww6q8.js:4424264-4424559 placement
+//@ chunk-5xgkngpb.js:4530907-4531202 placement
 let HeldOccupantError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4424264", () => {
+deferInit("chunk-5xgkngpb.js:4530907", () => {
   HeldOccupantError = class HeldOccupantError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -729,9 +729,9 @@ deferInit("chunk-e6aww6q8.js:4424264", () => {
     }
   };
 });
-//@ chunk-e6aww6q8.js:4424559-4424846 placement
+//@ chunk-5xgkngpb.js:4531202-4531489 placement
 let BusyVersionDirError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4424559", () => {
+deferInit("chunk-5xgkngpb.js:4531202", () => {
   BusyVersionDirError = class BusyVersionDirError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -747,7 +747,7 @@ deferInit("chunk-e6aww6q8.js:4424559", () => {
     }
   };
 });
-//@ chunk-e6aww6q8.js:4424846-4424971 placement
+//@ chunk-5xgkngpb.js:4531489-4531614 placement
 class OccupiedDestination extends Error {
   refusal;
   constructor(refusal) {
@@ -756,7 +756,7 @@ class OccupiedDestination extends Error {
     this.name = "OccupiedDestination";
   }
 }
-//@ chunk-e6aww6q8.js:4424971-4426197 placement
+//@ chunk-5xgkngpb.js:4531614-4532843 placement
 /**
  * 替换版本目录：除不可比对的部分外与暂存树一致时整目录替换。
  */
@@ -834,7 +834,7 @@ async function swapVersionDir(stagedPath, versionPath, options) {
   }
   return finish(publishResult, allSetAsidePaths());
 }
-//@ chunk-e6aww6q8.js:4426197-4427064 placement
+//@ chunk-5xgkngpb.js:4532843-4533710 placement
 async function setInstalledCopyAside(versionPath, context) {
   let dirPath = makeTempSiblingName(versionPath);
   try {
@@ -872,18 +872,18 @@ async function setInstalledCopyAside(versionPath, context) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:4427064-4427121 placement
+//@ chunk-5xgkngpb.js:4533710-4533767 placement
 function isTransientFsError(error) {
   return getPlatform() === "windows" && TRANSIENT_FS_ERRORS_2.has(getErrnoCode(error) ?? "");
 }
-//@ chunk-e6aww6q8.js:4427121-4427240 placement
+//@ chunk-5xgkngpb.js:4533767-4533886 placement
 async function sleepWithinBudget(delayMs, context) {
   if (context.budget.waitMs - delayMs < context.budget.reserveMs) return false;
   context.budget.waitMs -= delayMs;
   await context.sleep(delayMs);
   return true;
 }
-//@ chunk-e6aww6q8.js:4427240-4427553 placement
+//@ chunk-5xgkngpb.js:4533886-4534199 placement
 /**
  * 重命名目录，暂时失败按延迟表重试。
  */
@@ -902,7 +902,7 @@ async function renameDirectoryWithRetry(fromPath, toPath, context, refuseOccupie
     await renameDirectoryWithRetry(fromPath, toPath, context, refuseOccupied, attempt + 1);
   }
 }
-//@ chunk-e6aww6q8.js:4427553-4427733 placement
+//@ chunk-5xgkngpb.js:4534199-4534379 placement
 async function classifyRenameFailure(error, versionPath) {
   if (error instanceof OccupiedDestination)
     return {
@@ -918,7 +918,7 @@ async function classifyRenameFailure(error, versionPath) {
     error,
   };
 }
-//@ chunk-e6aww6q8.js:4427733-4428103 placement
+//@ chunk-5xgkngpb.js:4534379-4534749 placement
 /**
  * 发布暂存树；目标被其他进程重建时比较并保留或挪开。
  */
@@ -938,7 +938,7 @@ async function publishStagedTree(stagedPath, versionPath, compare, context, setA
     return publishStagedTree(stagedPath, versionPath, compare, context, setAsidePaths, attempt + 1);
   }
 }
-//@ chunk-e6aww6q8.js:4428103-4428342 placement
+//@ chunk-5xgkngpb.js:4534749-4534988 placement
 async function compareAndSetAside(versionPath, compare, context, setAsidePaths) {
   let verdict = await compare();
   if (verdict === "identical")
@@ -951,7 +951,7 @@ async function compareAndSetAside(versionPath, compare, context, setAsidePaths) 
   }
   return verdict;
 }
-//@ chunk-e6aww6q8.js:4428342-4428723 placement
+//@ chunk-5xgkngpb.js:4534988-4535369 placement
 /**
  * 失败后把挪开的副本移回（无内容则不恢复）。
  */
@@ -979,7 +979,7 @@ async function restoreSetAsideCopy(versionPath, asideResult, compare, context, s
   );
   return moveResult === "moved" ? "restored" : moveResult;
 }
-//@ chunk-e6aww6q8.js:4428723-4429258 placement
+//@ chunk-5xgkngpb.js:4535369-4535904 placement
 async function moveInstalledCopyBack(fromPath, toPath, compare, context, setAsidePaths, retried = false) {
   try {
     await renameDirectoryWithRetry(fromPath, toPath, context, true);
@@ -1014,7 +1014,7 @@ async function moveInstalledCopyBack(fromPath, toPath, compare, context, setAsid
     return "stranded";
   }
 }
-//@ chunk-e6aww6q8.js:4429258-4430664 placement
+//@ chunk-5xgkngpb.js:4535904-4537313 placement
 /**
  * 替换失败时恢复原版本目录，并说明恢复结果。
  */
@@ -1058,7 +1058,7 @@ async function restoreVersionDir(error, versionPath, restoreState, setAsidePaths
     code,
   );
 }
-//@ chunk-e6aww6q8.js:4430664-4430890 placement
+//@ chunk-5xgkngpb.js:4537313-4537539 placement
 async function touchVersionDir(dirPath) {
   let date = new Date();
   await lutimes(dirPath, date, date).catch((error) => {
@@ -1071,11 +1071,11 @@ async function touchVersionDir(dirPath) {
     );
   });
 }
-//@ chunk-e6aww6q8.js:4430890-4430962 placement
+//@ chunk-5xgkngpb.js:4537539-4537611 placement
 function errorCodeOrName(error) {
   return getErrnoCode(error) ?? (error instanceof Error ? error.name : "unknown error");
 }
-//@ chunk-e6aww6q8.js:4430962-4431327 placement
+//@ chunk-5xgkngpb.js:4537611-4537976 placement
 /**
  * 删除挪开的旧副本，删不净记 warn。
  */
@@ -1093,7 +1093,7 @@ async function removeSetAsideCopy(path) {
       },
     );
 }
-//@ chunk-e6aww6q8.js:4431327-4431505 placement
+//@ chunk-5xgkngpb.js:4537976-4538154 placement
 async function removeStagedCopy(path) {
   let kind = await classifyCacheEntry(path);
   if (kind === "absent") return;

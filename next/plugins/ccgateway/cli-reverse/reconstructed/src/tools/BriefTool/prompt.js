@@ -3,12 +3,12 @@
  *
  * SendUserMessage/Brief 名称常量、description、prompt 与主动沟通段落
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BriefTool/prompt.ts
- * pieces: chunk-f5te1san.js (1)
+ * pieces: chunk-qxwk69tt.js (1)
  * attribution: facade-exports 1
  */
-//@ chunk-f5te1san.js:191-2834 facade-exports (2.1.88 match: BRIEF_PROACTIVE_SECTION, 0.627)
+//@ chunk-qxwk69tt.js:191-2834 facade-exports (2.1.88 match: BRIEF_PROACTIVE_SECTION, 0.627)
 /**
  * SendUserMessage/Brief 名称常量、description、两版 prompt 与"未调用即结束回合"的提示。
  */
@@ -32,8 +32,8 @@ For longer work: ack \u2192 work \u2192 result. Between those, send a checkpoint
 
 Keep messages tight \u2014 the decision, the file:line, the PR number. Second person always ("your config"), never third.`;
 export {
-  BRIEF_ENFORCE_SENTINEL,
   BRIEF_TOOL_NAME,
+  BRIEF_ENFORCE_SENTINEL,
   LEGACY_BRIEF_TOOL_NAME,
   DESCRIPTION,
   BRIEF_TOOL_PROMPT,

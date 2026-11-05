@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/nested-clients/dist-cjs/submodules/sts/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-a8ee6x44.js (1)
+ * pieces: chunk-brqnbz3r.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -14,7 +14,7 @@ import { require_schema } from "../../../../../@smithy/core/dist-cjs/submodules/
 import { require_client as require_client_2 } from "../../../../core/dist-cjs/submodules/client/index.js";
 import { require_region_config_resolver } from "../../../../region-config-resolver/dist-cjs/index.js";
 
-//@ chunk-a8ee6x44.js:12668-21063 cjs-fingerprint
+//@ chunk-brqnbz3r.js:12668-21063 cjs-fingerprint
 var require_sts = __commonJS(function (cjsExports) {
   var STSClient = require_STSClient();
   var smithyClient = require_client();

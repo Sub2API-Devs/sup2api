@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增。/usage 用量建议。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sxtya66.js (32)
- * attribution: placement 32
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ywyj74bv.js (33)
+ * attribution: placement 32, layout 1
  */
 import { join } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -22,13 +22,13 @@ import {
   TOOL_USE_RESULT_FIELD_MARKER,
   USD_PER_MTOK_SCALE,
   costWeightedTokens,
+  ID_FIELD_MARKER,
   aggregateRecentUsage_2,
 } from "./transcriptScan.js";
-import { returnValue } from "../../utils/generators.js";
 import { safeParseJSON } from "../../utils/json.js";
 import { hasDotDotSegment } from "../../utils/pathClassification.js";
 import { isNetworkishPath } from "../../utils/networkPaths.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import {
@@ -47,7 +47,7 @@ import { tildify } from "../../utils/path.js";
 import { mcpInfoFromString } from "../mcp/mcpStringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0sxtya66.js:796-1244 placement
+//@ chunk-ywyj74bv.js:796-1244 placement
 /**
  * 证据扫描的常量与 schema：字段长度、标记上限、附件 schema、记忆类型与常见 CLI 命令集合。
  */
@@ -67,7 +67,7 @@ var FILE_MEMORY_TYPES;
 var KNOWN_CLI_COMMANDS;
 var EMPTY_PROJECT_PATH;
 var EMPTY_TOOL_LABEL;
-deferInit("chunk-0sxtya66.js:796", () => {
+deferInit("chunk-ywyj74bv.js:796", () => {
   USAGE_SCAN_MARKERS = 1e6;
   MAX_EVIDENCE_FIELD_CHARS = 64;
   MAX_EVIDENCE_MARKERS = 100;
@@ -109,7 +109,7 @@ deferInit("chunk-0sxtya66.js:796", () => {
   EMPTY_PROJECT_PATH = "";
   EMPTY_TOOL_LABEL = "";
 });
-//@ chunk-0sxtya66.js:1244-1345 placement
+//@ chunk-ywyj74bv.js:1244-1345 placement
 /**
  * 创建用量统计的证据窗口（项目、常驻启动、大结果映射与工作流代理计数）。
  */
@@ -121,7 +121,7 @@ function createEvidenceWindow() {
     workflowAgents: 0,
   };
 }
-//@ chunk-0sxtya66.js:1345-2139 placement
+//@ chunk-ywyj74bv.js:1345-2139 placement
 function alwaysOnContextBreakdown(projects) {
   let toolUseNames = new Map();
   let markers = [];
@@ -196,7 +196,7 @@ function alwaysOnContextBreakdown(projects) {
     },
   };
 }
-//@ chunk-0sxtya66.js:2139-3090 placement
+//@ chunk-ywyj74bv.js:2139-3090 placement
 function alwaysOnContextWindow({ window: usageWindow, sinceMs, seen }, project, records, markers, startMeta) {
   let largeTokens = 0;
   let sawWorkflow = false;
@@ -255,7 +255,7 @@ function alwaysOnContextWindow({ window: usageWindow, sinceMs, seen }, project, 
     usageWindow.largeResults.set(resultKey, entry);
   });
 }
-//@ chunk-0sxtya66.js:3090-3195 placement
+//@ chunk-ywyj74bv.js:3090-3195 placement
 function addProjectEvidence(usageWindow, kind, project, tokens) {
   let byProject = usageWindow.projects.get(kind);
   if (!byProject) {
@@ -264,7 +264,7 @@ function addProjectEvidence(usageWindow, kind, project, tokens) {
   }
   byProject.set(project, (byProject.get(project) ?? 0) + tokens);
 }
-//@ chunk-0sxtya66.js:3195-3695 placement
+//@ chunk-ywyj74bv.js:3195-3695 placement
 function contextDeltaSizes(kind, field, parts) {
   let rounded = Math.round(field.length / 4);
   switch (kind) {
@@ -299,7 +299,33 @@ function contextDeltaSizes(kind, field, parts) {
       return;
   }
 }
-//@ chunk-0sxtya66.js:3948-4055 placement
+//@ chunk-ywyj74bv.js:3695-3948 layout (2.1.88 match: returnValue, 1)
+function returnValue(buffer, end, evidenceByTool) {
+  let fieldStart = indexOfBytes(buffer, TOOL_USE_TYPE_MARKER, 0, end);
+  while (fieldStart >= 0) {
+    let nextRecord = indexOfBytes(
+      buffer,
+      TOOL_USE_TYPE_MARKER,
+      fieldStart + TOOL_USE_TYPE_MARKER.length,
+      end,
+    );
+    let recordEnd = nextRecord < 0 ? end : nextRecord;
+    let jsonStringField = readJsonStringField(buffer, ID_FIELD_MARKER, fieldStart, recordEnd);
+    let label = readJsonStringField(buffer, TOOL_NAME_FIELD_MARKER, fieldStart, recordEnd);
+    if (jsonStringField && label && !evidenceByTool.has(jsonStringField)) {
+      let toolLabel = sanitizeToolLabel(label) ?? EMPTY_TOOL_LABEL;
+      evidenceByTool.set(jsonStringField, {
+        tool: toolLabel,
+        detail: extractToolEvidenceLabel(toolLabel, buffer, fieldStart, recordEnd),
+      });
+      let oldestEntry = evidenceByTool.keys().next();
+      if (evidenceByTool.size > MAX_EVIDENCE_FIELD_CHARS && !oldestEntry.done)
+        evidenceByTool.delete(oldestEntry.value);
+    }
+    fieldStart = nextRecord;
+  }
+}
+//@ chunk-ywyj74bv.js:3948-4055 placement
 function sanitizeEvidencePath(path) {
   return path &&
     /^(?:[A-Za-z]:)?[/\\][\w~./\\@+-]{0,119}$/.test(path) &&
@@ -309,26 +335,26 @@ function sanitizeEvidencePath(path) {
     ? path
     : undefined;
 }
-//@ chunk-0sxtya66.js:4055-4116 placement
+//@ chunk-ywyj74bv.js:4055-4116 placement
 /**
  * 合法的工具标签（不像散文名）才返回，否则 undefined。
  */
 function sanitizeToolLabel(label) {
   return /^[\w-]{1,120}$/.test(label) && !looksLikeProseName(label) ? label : undefined;
 }
-//@ chunk-0sxtya66.js:4116-4227 placement
+//@ chunk-ywyj74bv.js:4116-4227 placement
 function looksLikeProseName(name) {
   return name
     .split(/[/\\]|__/)
     .some((segment) => (segment.match(/[A-Z][a-z]+|[a-z]{2,}|[A-Z]{2,}/g)?.length ?? 0) > 6);
 }
-//@ chunk-0sxtya66.js:4227-4469 placement
+//@ chunk-ywyj74bv.js:4227-4469 placement
 /**
  * 从转录行提取工具调用的证据标签：Read 取文件路径，Bash 取命令首词（部分命令带子命令），不安全或过长的丢弃。
  */
 function extractToolEvidenceLabel(toolName, line, start, end) {
   let fieldKey =
-    toolName === FILE_READ_TOOL_NAME
+    toolName === READ
       ? FILE_PATH_FIELD_MARKER
       : toolName === BASH_TOOL_NAME
         ? COMMAND_FIELD_MARKER
@@ -341,11 +367,11 @@ function extractToolEvidenceLabel(toolName, line, start, end) {
     ? `${command} ${subcommand}`
     : command;
 }
-//@ chunk-0sxtya66.js:4469-4517 placement
+//@ chunk-ywyj74bv.js:4469-4517 placement
 function isTidyAbacusGateOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_tidy_abacus", true);
 }
-//@ chunk-0sxtya66.js:4517-4745 placement
+//@ chunk-ywyj74bv.js:4517-4745 placement
 /**
  * 收集 /usage 建议所需数据：最近 1 天与 7 天的用量统计，以及（开关开启时）常驻上下文的分项证据。
  */
@@ -376,20 +402,20 @@ async function collectUsageRecommendations(storageV5) {
     evidence,
   };
 }
-//@ chunk-0sxtya66.js:4745-4761 placement
+//@ chunk-ywyj74bv.js:4745-4761 placement
 /**
  * 推荐项的最小占比与最多列出条数。
  */
 var MIN_RECOMMENDATION_PCT = 10;
 var MAX_LISTED_RECOMMENDATIONS = 5;
-//@ chunk-0sxtya66.js:4761-4825 placement
+//@ chunk-ywyj74bv.js:4761-4825 placement
 /**
  * 把 token 数按 k 缩写。
  */
 function formatTokenCount(count) {
   return count >= 1000 ? `${Math.round(count / 1000)}k` : String(count);
 }
-//@ chunk-0sxtya66.js:4825-5118 placement
+//@ chunk-ywyj74bv.js:4825-5118 placement
 function effortBelowMaxSaved(mainLoopModel, sessionEffort, context) {
   let effortLevel = resolveEffortLevel(
     {
@@ -416,7 +442,7 @@ function effortBelowMaxSaved(mainLoopModel, sessionEffort, context) {
     isUltracodeOn: isUltracodeActive(context, mainLoopModel),
   };
 }
-//@ chunk-0sxtya66.js:5118-5628 placement
+//@ chunk-ywyj74bv.js:5118-5628 placement
 function usageRecommendationAction(recommendations) {
   let filtered = recommendations.filter(
     (recommendation) => recommendation.action?.kind === "switch" || recommendation.action?.kind === "prompt",
@@ -445,7 +471,7 @@ function usageRecommendationAction(recommendations) {
     ],
   };
 }
-//@ chunk-0sxtya66.js:5628-5842 placement
+//@ chunk-ywyj74bv.js:5628-5842 placement
 /**
  * 把自动续写消息依次加入队列（主代理、低优先级、来源 auto-continuation；非 /effort 消息跳过附件与斜杠命令）。
  */
@@ -467,7 +493,7 @@ function enqueueContinuationMessages(commandQueueOrDefault, plan) {
           }),
     });
 }
-//@ chunk-0sxtya66.js:5842-6425 placement
+//@ chunk-ywyj74bv.js:5842-6425 placement
 function costliestBehavior(usageSummary, effortState, effortState_2) {
   if (usageSummary.totalCost === 0) return [];
   let isWorkflowHeavy = isSignificantBehavior(usageSummary, "workflow");
@@ -517,7 +543,7 @@ function costliestBehavior(usageSummary, effortState, effortState_2) {
         : recommendation,
     );
 }
-//@ chunk-0sxtya66.js:6425-6510 placement
+//@ chunk-ywyj74bv.js:6425-6510 placement
 /**
  * 判断某行为的费用占比是否达到建议阈值。
  */
@@ -527,14 +553,14 @@ function isSignificantBehavior(summary, behaviorKey) {
       behavior.key === behaviorKey && (behavior.cost / summary.totalCost) * 100 >= MIN_RECOMMENDATION_PCT,
   );
 }
-//@ chunk-0sxtya66.js:6510-6554 placement
+//@ chunk-ywyj74bv.js:6510-6554 placement
 /**
  * 占比达到阈值的归属项，未达到返回 undefined。
  */
 function significantAttribution(attribution) {
   return attribution && attribution.pct >= MIN_RECOMMENDATION_PCT ? attribution : undefined;
 }
-//@ chunk-0sxtya66.js:6554-6696 placement
+//@ chunk-ywyj74bv.js:6554-6696 placement
 function sanitizeAttribution(attribution) {
   return attribution &&
     attribution.name.length <= 64 &&
@@ -544,7 +570,7 @@ function sanitizeAttribution(attribution) {
     ? attribution
     : undefined;
 }
-//@ chunk-0sxtya66.js:6696-8012 placement
+//@ chunk-ywyj74bv.js:6696-8012 placement
 function maxEffortRecommendation(key, usageSummary, context, effortState, agentsAttribution) {
   switch (key) {
     case "max_effort": {
@@ -618,7 +644,7 @@ function maxEffortRecommendation(key, usageSummary, context, effortState, agents
       };
   }
 }
-//@ chunk-0sxtya66.js:8012-8556 placement
+//@ chunk-ywyj74bv.js:8012-8556 placement
 /**
  * 始终展示的推荐标题表。
  */
@@ -646,7 +672,7 @@ var ALWAYS_ON_TITLES = {
     },
   },
 };
-//@ chunk-0sxtya66.js:8556-9364 placement
+//@ chunk-ywyj74bv.js:8556-9364 placement
 function contextRecommendation(usageWindow) {
   let topProject = topEntry(usageWindow.projects.get("always_on_context"))?.[0];
   let start = topProject ? usageWindow.alwaysOnStarts.get(topProject) : undefined;
@@ -691,7 +717,7 @@ function contextRecommendation(usageWindow) {
     },
   };
 }
-//@ chunk-0sxtya66.js:9364-10462 placement
+//@ chunk-ywyj74bv.js:9364-10462 placement
 function largeResultsRecommendation(usageWindow) {
   let worst;
   for (let largeResult of usageWindow.largeResults.values())
@@ -708,7 +734,7 @@ function largeResultsRecommendation(usageWindow) {
       detail,
     };
   let claudeMdPath = tildify(join(worst.project, "CLAUDE.md"));
-  if (worst.tool === FILE_READ_TOOL_NAME && worst.detail) {
+  if (worst.tool === READ && worst.detail) {
     let detailPath = tildify(worst.detail);
     return {
       title: `Read ${detailPath} in parts`,
@@ -743,7 +769,7 @@ function largeResultsRecommendation(usageWindow) {
     detail,
   };
 }
-//@ chunk-0sxtya66.js:10462-10778 placement
+//@ chunk-ywyj74bv.js:10462-10778 placement
 function agentModelRecommendation(attribution) {
   return attribution
     ? {
@@ -757,7 +783,7 @@ function agentModelRecommendation(attribution) {
       }
     : undefined;
 }
-//@ chunk-0sxtya66.js:10778-11035 placement
+//@ chunk-ywyj74bv.js:10778-11035 placement
 function skillModelRecommendation(attribution) {
   return attribution
     ? {
@@ -771,7 +797,7 @@ function skillModelRecommendation(attribution) {
       }
     : undefined;
 }
-//@ chunk-0sxtya66.js:11035-11285 placement
+//@ chunk-ywyj74bv.js:11035-11285 placement
 function pluginRecommendation(attribution) {
   return attribution
     ? {
@@ -785,7 +811,7 @@ function pluginRecommendation(attribution) {
       }
     : undefined;
 }
-//@ chunk-0sxtya66.js:11285-11548 placement
+//@ chunk-ywyj74bv.js:11285-11548 placement
 function mcpServerRecommendation(attribution) {
   return attribution
     ? {
@@ -799,7 +825,7 @@ function mcpServerRecommendation(attribution) {
       }
     : undefined;
 }
-//@ chunk-0sxtya66.js:11548-11617 placement
+//@ chunk-ywyj74bv.js:11548-11617 placement
 /**
  * 取数组中第二项值最大的条目。
  */
@@ -808,7 +834,7 @@ function topEntry(entries) {
   for (let entry of entries ?? []) if (!best || entry[1] > best[1]) best = entry;
   return best;
 }
-//@ chunk-0sxtya66.js:11617-11792 placement
+//@ chunk-ywyj74bv.js:11617-11792 placement
 function describeProjectSpread(projects) {
   let top = topEntry(projects);
   if (!projects || !top) return "";
@@ -817,7 +843,7 @@ function describeProjectSpread(projects) {
   if (top[1] < total / 2) return `, across ${projects.size} projects`;
   return top[0] === EMPTY_PROJECT_PATH ? "" : `, mostly in ${tildify(top[0])}`;
 }
-//@ chunk-0sxtya66.js:11792-11841 placement
+//@ chunk-ywyj74bv.js:11792-11841 placement
 /**
  * 拼出「每次请求 N tokens」。
  */
@@ -825,12 +851,6 @@ function tokensPerRequestText(tokens) {
   return `${formatTokenCount(tokens)} tokens per request`;
 }
 export {
-  TOOL_USE_TYPE_MARKER,
-  TOOL_NAME_FIELD_MARKER,
-  sanitizeToolLabel,
-  EMPTY_TOOL_LABEL,
-  extractToolEvidenceLabel,
-  MAX_EVIDENCE_FIELD_CHARS,
   costliestBehavior,
   usageRecommendationAction,
   MIN_RECOMMENDATION_PCT,

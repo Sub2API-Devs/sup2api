@@ -112,7 +112,13 @@ export function reactHooks() {
   }
   return { file: null, hooks: new Map() };
 }
-export const COMPILER_RUNTIME = 'chunk-s89ma3n1.js';
+// The React Compiler runtime chunk: the one small chunk whose export wraps `<React>.H.useMemoCache(n)`
+// (2.1.316: chunk-s89ma3n1.js, 2.1.318: chunk-zt8d60ng.js). Found by content, so a new version needs no edit.
+export const COMPILER_RUNTIME = (() => {
+  const hits = fs.readdirSync('original').filter((f) => /^chunk-[\w-]+\.js$/.test(f) && fs.statSync(path.join('original', f)).size < 2000 && /\.H\.useMemoCache\(/.test(fs.readFileSync(path.join('original', f), 'utf8')));
+  if (hits.length !== 1) throw new Error(`React Compiler runtime chunk: expected 1, found ${hits.length} (${hits.join(', ')})`);
+  return hits[0];
+})();
 
 // Atomic write: tmp file then rename (other members read analysis/names concurrently).
 export function writeJsonlAtomic(file, rows) {

@@ -3,9 +3,9 @@
  *
  * /release-notes 实现：拉取或读取缓存的更新日志并格式化
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/release-notes/release-notes.ts
- * pieces: chunk-8k62p17d.js (7)
+ * pieces: chunk-kvgjd6de.js (7)
  * attribution: sole-consumer 3, fingerprint 2, layout 2
  */
 import { init_react_production, useRef } from "../../../vendor/react/cjs/react.production.js";
@@ -29,9 +29,9 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { Dialog } from "../../components/design-system/Dialog.js";
 
-//@ chunk-8k62p17d.js:13460-13464 sole-consumer
+//@ chunk-kvgjd6de.js:14636-14640 sole-consumer
 init_react_production();
-//@ chunk-8k62p17d.js:13464-13575 sole-consumer
+//@ chunk-kvgjd6de.js:14640-14751 sole-consumer
 function renderVersionItem(entry) {
   let [version, items] = entry;
   return jsxProd_default(
@@ -43,7 +43,7 @@ function renderVersionItem(entry) {
     version,
   );
 }
-//@ chunk-8k62p17d.js:13575-13667 fingerprint (2.1.88 match: formatReleaseNotes, 1)
+//@ chunk-kvgjd6de.js:14751-14843 fingerprint (2.1.88 match: formatReleaseNotes, 1)
 function formatReleaseNotes(version, notes) {
   let header = `Version ${version}:`;
   let bulletPoints = notes.map((note) => `\xB7 ${note}`).join(`
@@ -51,7 +51,7 @@ function formatReleaseNotes(version, notes) {
   return `${header}
 ${bulletPoints}`;
 }
-//@ chunk-8k62p17d.js:13667-13760 layout
+//@ chunk-kvgjd6de.js:14843-14936 layout
 function sortReleaseNotes(notes) {
   return notes
     .slice()
@@ -60,7 +60,7 @@ function sortReleaseNotes(notes) {
 
 `);
 }
-//@ chunk-8k62p17d.js:13760-13850 layout
+//@ chunk-kvgjd6de.js:14936-15026 layout
 function showReleaseNotesNotice(notesText, applyMessageOp, onDone) {
   applyMessageOp({
     type: "append",
@@ -70,7 +70,7 @@ function showReleaseNotesNotice(notesText, applyMessageOp, onDone) {
     display: "skip",
   });
 }
-//@ chunk-8k62p17d.js:13850-14148 fingerprint (2.1.88 match: call, 0.741)
+//@ chunk-kvgjd6de.js:15026-15324 fingerprint (2.1.88 match: call, 0.741)
 /**
  * /release-notes 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -92,7 +92,7 @@ var call = async (onDone, context) => {
     onDone,
   });
 };
-//@ chunk-8k62p17d.js:14148-15247 sole-consumer
+//@ chunk-kvgjd6de.js:15324-16423 sole-consumer
 /**
  * /release-notes 的版本选择对话框：列出"Show all"与各版本（条目数），选择后显示对应的更新说明，取消则跳过。
  */

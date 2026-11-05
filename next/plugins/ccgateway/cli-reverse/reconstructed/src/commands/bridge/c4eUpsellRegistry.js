@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：远程控制相关升级提示的登记
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8k8yqdkq.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-72dsdd1c.js (3)
  * attribution: placement 3
  */
 
-//@ chunk-8k8yqdkq.js:191-341 placement
+//@ chunk-72dsdd1c.js:191-341 placement
 class C4EUpsellRegistry {
   implementation = null;
   isC4EUpsellCommandEnabled() {
@@ -19,12 +19,12 @@ class C4EUpsellRegistry {
     this.implementation = implementation;
   }
 }
-//@ chunk-8k8yqdkq.js:341-355 placement
+//@ chunk-72dsdd1c.js:341-355 placement
 /**
  * C4E upsell 命令的注册表单例。
  */
 var C4E_UPSELL_REGISTRY = new C4EUpsellRegistry();
-//@ chunk-8k8yqdkq.js:355-413 placement
+//@ chunk-72dsdd1c.js:355-413 placement
 /**
  * 把某个命令的 isC4EUpsellCommandEnabled 判定注册到注册表。
  */

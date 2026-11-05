@@ -3,23 +3,23 @@
  *
  * 压缩后调查：compact 边界后有新消息时显示，记录 tengu_post_compact_survey_event。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FeedbackSurvey/usePostCompactSurvey.tsx
- * pieces: chunk-18hwfzwa.js (10)
- * attribution: fingerprint 4, layout 1, file-last-pair 1, file-local 1, callgraph-fingerprint 1, placement 2
+ * pieces: chunk-czq1j3j2.js (10)
+ * attribution: placement 2, fingerprint 4, layout 1, file-last-pair 1, file-local 1, callgraph-fingerprint 1
  */
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit as lit_2, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { logOTelEvent } from "../../utils/telemetry/events.js";
 import { isCompactBoundaryMessage as isCompactBoundaryMessage_2 } from "../../services/projects/threadRows.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
-import {
-  useState,
-  useRef,
-  useEffect,
-  init_react_production,
-} from "../../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useSurveyState } from "./useSurveyState.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
@@ -28,7 +28,17 @@ import { isPolicyAllowed as isPolicyAllowed_2 } from "../../services/policyLimit
 import { env } from "../../utils/env.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1081954-1082146 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:1073292-1073296 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1073292", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1084389-1084393 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1084389", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1115985-1116177 fingerprint (2.1.88 match: _temp, 1)
 function logPostCompactSurveyAppeared(appearanceId) {
   logEvent("tengu_post_compact_survey_event", {
     event_type: lit_2("appeared"),
@@ -40,7 +50,7 @@ function logPostCompactSurveyAppeared(appearanceId) {
     survey_type: "post_compact",
   });
 }
-//@ chunk-18hwfzwa.js:1082146-1082370 fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-czq1j3j2.js:1116177-1116401 fingerprint (2.1.88 match: _temp2, 1)
 function logPostCompactSurveyResponded(appearanceId, selected) {
   logEvent("tengu_post_compact_survey_event", {
     event_type: lit_2("responded"),
@@ -54,7 +64,7 @@ function logPostCompactSurveyResponded(appearanceId, selected) {
     survey_type: "post_compact",
   });
 }
-//@ chunk-18hwfzwa.js:1082370-1082564 layout (2.1.88 match: _temp, 0.826)
+//@ chunk-czq1j3j2.js:1116401-1116595 layout (2.1.88 match: _temp, 0.826)
 function logPostCompactSurveyAbandoned(appearanceId) {
   logEvent("tengu_post_compact_survey_event", {
     event_type: lit_2("abandoned"),
@@ -66,19 +76,19 @@ function logPostCompactSurveyAbandoned(appearanceId) {
     survey_type: "post_compact",
   });
 }
-//@ chunk-18hwfzwa.js:1082564-1082595 file-last-pair
+//@ chunk-czq1j3j2.js:1116595-1116626 file-last-pair
 function isCompactBoundaryMessage(msg) {
   return isCompactBoundaryMessage_2(msg);
 }
-//@ chunk-18hwfzwa.js:1082595-1082627 file-local
+//@ chunk-czq1j3j2.js:1116626-1116658 file-local
 function messageUuidOf(msg) {
   return msg.uuid;
 }
-//@ chunk-18hwfzwa.js:1082627-1082680 fingerprint (2.1.88 match: POST_COMPACT_SURVEY_GATE, 1)
+//@ chunk-czq1j3j2.js:1116658-1116711 fingerprint (2.1.88 match: POST_COMPACT_SURVEY_GATE, 1)
 var HIDE_THANKS_AFTER_MS = 5000;
 var TENGU_POST_COMPACT_SURVEY = "tengu_post_compact_survey";
 var POST_COMPACT_SURVEY_PROBABILITY = 0.2;
-//@ chunk-18hwfzwa.js:1082680-1082861 callgraph-fingerprint (2.1.88 match: hasMessageAfterBoundary, 1)
+//@ chunk-czq1j3j2.js:1116711-1116892 callgraph-fingerprint (2.1.88 match: hasMessageAfterBoundary, 1)
 function hasMessageAfterBoundary(messages, boundaryUuid) {
   let boundaryIndex = messages.findIndex((msg) => msg.uuid === boundaryUuid);
   if (boundaryIndex === -1) return false;
@@ -88,7 +98,7 @@ function hasMessageAfterBoundary(messages, boundaryUuid) {
   }
   return false;
 }
-//@ chunk-18hwfzwa.js:1082861-1084481 fingerprint (2.1.88 match: usePostCompactSurvey, 0.665)
+//@ chunk-czq1j3j2.js:1116892-1118512 fingerprint (2.1.88 match: usePostCompactSurvey, 0.664)
 function usePostCompactSurvey(messages, isLoading, t0, t1) {
   let $ = useMemoCache(26);
   let hasActivePrompt = t0 === undefined ? false : t0;
@@ -248,14 +258,4 @@ function usePostCompactSurvey(messages, isLoading, t0, t1) {
   } else t11 = $[25];
   return t11;
 }
-//@ chunk-18hwfzwa.js:1084481-1084485 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1084481", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1084485-1084489 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1084485", () => {
-  init_react_production();
-});
 export { usePostCompactSurvey };

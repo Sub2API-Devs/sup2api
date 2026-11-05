@@ -3,59 +3,36 @@
  *
  * 用 " · " 连接多个子元素的行内组件（被 140+ 处使用）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/design-system/Byline.tsx
- * pieces: chunk-k1hxk1ex.js (5)
- * attribution: sole-consumer 4, callgraph-witnessed 1
+ * pieces: chunk-3ne3bnw4.js (4)
+ * attribution: placement 3, callgraph-witnessed 1
  */
+import { init_react_production, childrenExport } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
+import { renderBylineItem } from "../Spinner/SpinnerAnimationRow.js";
 import {
-  init_react_production,
-  fragmentTypeExport,
-  isValidElement_default,
-  childrenExport,
-} from "../../../vendor/react/cjs/react.production.js";
-import {
-  jsxProd_default_2,
   jsxProd_default,
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { Text } from "../../ink/components/Text.js";
-import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
-import { EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-k1hxk1ex.js:380-384 sole-consumer
+//@ chunk-3ne3bnw4.js:381-385 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-k1hxk1ex.js:380", () => {
+deferInit("chunk-3ne3bnw4.js:381", () => {
   init_react_production();
 });
-//@ chunk-k1hxk1ex.js:384-388 sole-consumer
+//@ chunk-3ne3bnw4.js:385-389 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-k1hxk1ex.js:384", () => {
+deferInit("chunk-3ne3bnw4.js:385", () => {
   init_react_production();
 });
-//@ chunk-k1hxk1ex.js:388-416 sole-consumer
+//@ chunk-3ne3bnw4.js:389-417 placement
 function isNonEmptyString(text) {
   return text !== "";
 }
-//@ chunk-k1hxk1ex.js:416-519 sole-consumer
-function renderBylineItem(item, index) {
-  return jsxProd_default_2(
-    fragmentTypeExport,
-    {
-      children: [
-        index > 0 &&
-          jsxProd_default(Text, {
-            dimColor: true,
-            children: " \xB7 ",
-          }),
-        item,
-      ],
-    },
-    isValidElement_default(item) ? (item.key ?? index) : index,
-  );
-}
-//@ chunk-k1hxk1ex.js:519-790 callgraph-witnessed (2.1.88 match: Byline, 0.375)
+//@ chunk-3ne3bnw4.js:520-792 callgraph-witnessed (2.1.88 match: Byline, 0.375)
 function Byline(props) {
   let $ = useMemoCache(5);
   let { children } = props;

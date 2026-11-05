@@ -3,9 +3,9 @@
  *
  * 插件详情的辅助渲染（组件清单、来源仓库与固定提交）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/pluginDetailsHelpers.tsx
- * pieces: chunk-vrb44rx7.js (15)
+ * pieces: chunk-wb51jffc.js (15)
  * attribution: placement 9, fingerprint 2, layout 3, callgraph-witnessed 1
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -41,12 +41,12 @@ import { Byline } from "../../components/design-system/Byline.js";
 import { ConfigurableShortcutHint } from "../../components/ConfigurableShortcutHint.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrb44rx7.js:51744-51748 placement
+//@ chunk-wb51jffc.js:51895-51899 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:51744", () => {
+deferInit("chunk-wb51jffc.js:51895", () => {
   init_react_production();
 });
-//@ chunk-vrb44rx7.js:51748-52001 placement
+//@ chunk-wb51jffc.js:51899-52152 placement
 function COMPONENT_LABELS(groups) {
   return [
     ["Commands", groups.commands.map((command) => command.name)],
@@ -57,15 +57,15 @@ function COMPONENT_LABELS(groups) {
     ["LSP Servers", groups.lspServers ?? []],
   ].filter(([, names]) => names.length > 0);
 }
-//@ chunk-vrb44rx7.js:52587-52617 placement
+//@ chunk-wb51jffc.js:52738-52768 placement
 function nullable(value) {
   return value ?? null;
 }
-//@ chunk-vrb44rx7.js:52617-52643 placement
+//@ chunk-wb51jffc.js:52768-52794 placement
 function alwaysNull() {
   return null;
 }
-//@ chunk-vrb44rx7.js:52643-52744 placement
+//@ chunk-wb51jffc.js:52794-52895 placement
 /**
  * 渲染一行"· 组件类型: 名字列表"（暗色）。
  */
@@ -80,16 +80,16 @@ function renderComponentLine(entry) {
     label,
   );
 }
-//@ chunk-vrb44rx7.js:52744-52770 placement
+//@ chunk-wb51jffc.js:52895-52921 placement
 function alwaysNull_2() {
   return null;
 }
-//@ chunk-vrb44rx7.js:52770-52813 placement
+//@ chunk-wb51jffc.js:52921-52964 placement
 function isPairNonEmpty(entry) {
   let [, names] = entry;
   return names.length > 0;
 }
-//@ chunk-vrb44rx7.js:52813-52914 placement
+//@ chunk-wb51jffc.js:52964-53065 placement
 /**
  * 渲染一行"· 组件类型: 名字列表"（暗色），与 renderComponentLine 相同，用在另一个列表里。
  */
@@ -104,7 +104,7 @@ function renderComponentLineAlt(entry) {
     label,
   );
 }
-//@ chunk-vrb44rx7.js:52914-53454 placement
+//@ chunk-wb51jffc.js:53065-53606 placement
 function formatPluginSource(props) {
   let $ = useMemoCache(9);
   let { plugin } = props;
@@ -160,7 +160,7 @@ function formatPluginSource(props) {
   } else fragment = $[8];
   return fragment;
 }
-//@ chunk-vrb44rx7.js:53454-53680 fingerprint (2.1.88 match: extractGitHubRepo, 1)
+//@ chunk-wb51jffc.js:53606-53832 fingerprint (2.1.88 match: extractGitHubRepo, 1)
 function extractGitHubRepo(plugin) {
   if (
     plugin.entry.source &&
@@ -173,7 +173,7 @@ function extractGitHubRepo(plugin) {
     return plugin.entry.source.repo;
   return null;
 }
-//@ chunk-vrb44rx7.js:53680-53908 layout
+//@ chunk-wb51jffc.js:53832-54060 layout
 function getPluginSourceRepoUrl(plugin) {
   {
     let source = plugin.entry.source;
@@ -190,7 +190,7 @@ function getPluginSourceRepoUrl(plugin) {
   }
   return;
 }
-//@ chunk-vrb44rx7.js:53908-54407 fingerprint (2.1.88 match: buildPluginDetailsMenuOptions, 0.927)
+//@ chunk-wb51jffc.js:54060-54559 fingerprint (2.1.88 match: buildPluginDetailsMenuOptions, 0.927)
 function buildPluginDetailsMenuOptions(hasHomepage, githubRepo, repositoryUrl) {
   let options = [
     {
@@ -227,7 +227,7 @@ function buildPluginDetailsMenuOptions(hasHomepage, githubRepo, repositoryUrl) {
   });
   return options;
 }
-//@ chunk-vrb44rx7.js:54407-54826 layout
+//@ chunk-wb51jffc.js:54559-54978 layout
 /**
  * 插件详情页的操作选项列表（ModelSelector 包装）：显示全部选项、隐藏序号、上下边界不循环。
  */
@@ -264,9 +264,9 @@ function PluginActionSelect(props) {
   } else content = $[5];
   return content;
 }
-//@ chunk-vrb44rx7.js:54826-54841 layout
+//@ chunk-wb51jffc.js:54978-54993 layout
 function noop_4() {}
-//@ chunk-vrb44rx7.js:54841-59155 callgraph-witnessed (2.1.88 match: PluginSelectionKeyHint, 0.231)
+//@ chunk-wb51jffc.js:54993-59307 callgraph-witnessed (2.1.88 match: PluginSelectionKeyHint, 0.231)
 function PluginSelectionKeyHint(props) {
   let $ = useMemoCache(88);
   let {
@@ -693,13 +693,13 @@ function PluginSelectionKeyHint(props) {
   return filteredValue;
 }
 export {
-  COMPONENT_LABELS,
-  PluginActionSelect,
   nullable,
   alwaysNull,
+  COMPONENT_LABELS,
   renderComponentLine,
   alwaysNull_2,
   isPairNonEmpty,
   renderComponentLineAlt,
   PluginSelectionKeyHint,
+  PluginActionSelect,
 };

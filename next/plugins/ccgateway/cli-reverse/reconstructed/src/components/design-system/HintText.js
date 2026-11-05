@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：暗色文本，可附带提示（hint）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-j2fh7g5w.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rrqkbcdm.js (1)
  * attribution: placement 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -15,7 +15,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 
-//@ chunk-j2fh7g5w.js:300-709 placement
+//@ chunk-rrqkbcdm.js:300-709 placement
 /**
  * 暗色文本，可附带提示（hint）。
  */

@@ -3,22 +3,22 @@
  *
  * anthropic-beta 头的组装：按模型与提供商列出基础 beta（getAllModelBetas 的条件表）、每轮附加 beta（per-turn-control、mid-conversation-tool-changes、inline-tools）、SDK 自带 beta 过滤，以及模型能力判定（交错思考、context management、structured outputs、中途 system 消息、temperature、auto mode）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/betas.ts
- * pieces: chunk-aepeg2w5.js (51), chunk-bwbq4xvm.js (14)
- * attribution: fingerprint 9, placement 21, affinity 1, layout 7, facade-exports 27
+ * pieces: chunk-7kayq7nc.js (15), chunk-exfmq47h.js (56)
+ * attribution: placement 61, fingerprint 8, affinity 1, layout 1
  */
 import { OAUTH_BETA_HEADER } from "../constants/oauth.js";
 import {
   getAPIProvider,
   isClaudePlatformProvider,
+  isActualFirstPartyAnthropicBaseUrl,
+  isFirstPartyAnthropicBaseUrl,
   hasFirstPartyCapabilities,
   getProviderForModel,
-  isFirstPartyAnthropicBaseUrl,
 } from "./model/providers.js";
 import { env, antEnv } from "./env.js";
 import { hasComplianceTaint } from "../services/policyLimits/complianceTaints.js";
-import { expandBedrockModelIdVariants } from "./model/modelCatalog/catalogSeed.js";
 import {
   modelSupportsCapability,
   modelDefinitelySupports,
@@ -51,31 +51,35 @@ import {
 } from "./model/modelCatalog/servedCatalog.js";
 import { getClientDataDefaultOutputTokens, getModelMaxOutputTokens } from "./context.js";
 import { shouldEnableThinkingByDefault, showThinkingSummaries } from "./thinking.js";
-import { isClaudeAISubscriber, hasAnthropicApiKey, shouldUseWIFAuth } from "./auth.js";
+import { isClaudeAISubscriber, getApiKeySourceSafe, hasAnthropicApiKey, shouldUseWIFAuth } from "./auth.js";
 import { getCapabilityOverrideCached } from "./model/modelSupportOverrides.js";
 import { getProviderState, createModelBetaCaches } from "./model/providerCaches.js";
 import { strip1mTag, isAntInternalFastModelId } from "./model/model.js";
 import { isAutoClassifierActive } from "./permissions/autoModeState.js";
 import { parseUserSpecifiedModel } from "./model/modelDisplay.js";
-import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
+import {
+  getFeatureValue_CACHED_MAY_BE_STALE,
+  getFeatureValue_SESSION_PINNED,
+} from "../services/analytics/growthbook.js";
 import { has1mSuffix_2, modelHasNative1MContext } from "./model/contextWindow1m.js";
+import { programUseCaseIdForWire } from "./programUseCase.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bwbq4xvm.js:152526-152582 placement (2.1.88 match: _temp, 0.699)
+//@ chunk-7kayq7nc.js:151348-151404 placement (2.1.88 match: _temp, 0.697)
 function freezeHeaderEntry(q_0, index_0) {
   return Object.freeze({
     name: q_0,
     header: index_0,
   });
 }
-//@ chunk-bwbq4xvm.js:152582-152640 placement
+//@ chunk-7kayq7nc.js:151404-151462 placement
 function defineLocalBeta(name) {
   return Object.freeze({
     name,
     header: null,
   });
 }
-//@ chunk-bwbq4xvm.js:152640-155473 placement
+//@ chunk-7kayq7nc.js:151462-154585 placement
 /**
  * OAuth 认证 beta（oauth-auth 头）。
  */
@@ -106,6 +110,8 @@ var BETA_MCP_SERVERS;
 var BETA_FILES_API;
 var BETA_ENVIRONMENTS;
 var BETA_CCR_BYOC;
+var BETA_CCR_TOOL_PROVENANCE;
+var BETA_TOOL_PROVENANCE_SERVER_URL_LATCH;
 var BETA_MID_CONVERSATION_SYSTEM;
 var MID_CONVERSATION_SYSTEM_2026_04_07;
 var BETA_PER_MESSAGE_EFFORT;
@@ -113,12 +119,14 @@ var BETA_PER_TURN_TIMING;
 var BETA_MID_CONV_TOOL_CHANGE;
 var BETA_INLINE_TOOLS;
 var BETA_SERVER_SIDE_FALLBACK;
+var BETA_PROGRAM_USE_CASE_IDS;
 var BETA_SERVER_SIDE_FALLBACK_CATEGORY;
 var BETA_FALLBACK_CREDIT;
 var BETA_MID_CONV_CACHE_PROMOTION_LATCH;
 var BETA_MID_CONV_CACHE_PROMOTION_OK_LATCH;
+var BETA_RETIRED_PLACEHOLDER;
 var BETA_AUTO_MODE_CLASSIFIER;
-var THINKING_DISPLAY_BETA;
+var BETA_CLAUDE_CODE_SIDE_QUERY;
 var BETA_DANGEROUS_TOOL_USE;
 var RETIRED_BETA_PLACEHOLDER;
 var BETA_THINKING_DISPLAY_UPDATES;
@@ -129,7 +137,7 @@ var BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT;
 var SUPPORTED_BETA_ENTRIES;
 var KNOWN_BETAS;
 var THIRD_PARTY_SUPPORTED_BETAS;
-deferInit("chunk-bwbq4xvm.js:152640", () => {
+deferInit("chunk-7kayq7nc.js:151462", () => {
   BETA_CLAUDE_CODE = freezeHeaderEntry("claude_code", "claude-code-20250219");
   BETA_OAUTH_AUTH = freezeHeaderEntry("oauth_auth", OAUTH_BETA_HEADER);
   BETA_INTERLEAVED_THINKING = freezeHeaderEntry("interleaved_thinking", "interleaved-thinking-2025-05-14");
@@ -157,6 +165,11 @@ deferInit("chunk-bwbq4xvm.js:152640", () => {
   BETA_FILES_API = freezeHeaderEntry("files_api", "files-api-2025-04-14");
   BETA_ENVIRONMENTS = freezeHeaderEntry("environments", "environments-2025-11-01");
   BETA_CCR_BYOC = freezeHeaderEntry("ccr_byoc", "ccr-byoc-2025-07-29");
+  BETA_CCR_TOOL_PROVENANCE = freezeHeaderEntry("ccr_tool_provenance", "tool-provenance-2026-10-26");
+  BETA_TOOL_PROVENANCE_SERVER_URL_LATCH = freezeHeaderEntry(
+    "tool_provenance_server_url_latch",
+    "x-cc-internal-tool-provenance-server-url",
+  );
   BETA_MID_CONVERSATION_SYSTEM = defineLocalBeta("mid_conversation_system");
   MID_CONVERSATION_SYSTEM_2026_04_07 = "mid-conversation-system-2026-04-07";
   BETA_PER_MESSAGE_EFFORT = freezeHeaderEntry("per_message_effort", "per-turn-control-2026-07-01");
@@ -167,6 +180,7 @@ deferInit("chunk-bwbq4xvm.js:152640", () => {
   );
   BETA_INLINE_TOOLS = freezeHeaderEntry("inline_tools", "inline-tools-2026-09-15");
   BETA_SERVER_SIDE_FALLBACK = freezeHeaderEntry("server_side_fallback", "server-side-fallback-2026-06-01");
+  BETA_PROGRAM_USE_CASE_IDS = freezeHeaderEntry("program_use_case_ids", "program-use-case-ids-2026-09-17");
   BETA_SERVER_SIDE_FALLBACK_CATEGORY = freezeHeaderEntry(
     "server_side_fallback_category",
     "server-side-fallback-2026-07-01",
@@ -180,8 +194,12 @@ deferInit("chunk-bwbq4xvm.js:152640", () => {
     "mid_conv_cache_promotion_ok_latch",
     "x-cc-internal-mid-conv-cache-promotion-ok",
   );
-  BETA_AUTO_MODE_CLASSIFIER = null;
-  THINKING_DISPLAY_BETA = freezeHeaderEntry("auto_mode_classifier", "auto-mode-classifier-2026-07-16");
+  BETA_RETIRED_PLACEHOLDER = null;
+  BETA_AUTO_MODE_CLASSIFIER = freezeHeaderEntry("auto_mode_classifier", "auto-mode-classifier-2026-07-16");
+  BETA_CLAUDE_CODE_SIDE_QUERY = freezeHeaderEntry(
+    "claude_code_side_query",
+    "claude-code-side-query-2026-09-29",
+  );
   BETA_DANGEROUS_TOOL_USE = freezeHeaderEntry("dangerous_tool_use", "dangerous-tool-use-2026-09-03");
   RETIRED_BETA_PLACEHOLDER = null;
   BETA_THINKING_DISPLAY_UPDATES = freezeHeaderEntry(
@@ -227,16 +245,19 @@ deferInit("chunk-bwbq4xvm.js:152640", () => {
       BETA_FILES_API,
       BETA_ENVIRONMENTS,
       BETA_CCR_BYOC,
+      BETA_CCR_TOOL_PROVENANCE,
       BETA_MID_CONVERSATION_SYSTEM,
       BETA_PER_MESSAGE_EFFORT,
       BETA_PER_TURN_TIMING,
       BETA_MID_CONV_TOOL_CHANGE,
       BETA_INLINE_TOOLS,
       BETA_SERVER_SIDE_FALLBACK,
+      BETA_PROGRAM_USE_CASE_IDS,
       BETA_SERVER_SIDE_FALLBACK_CATEGORY,
       BETA_FALLBACK_CREDIT,
+      BETA_RETIRED_PLACEHOLDER,
       BETA_AUTO_MODE_CLASSIFIER,
-      THINKING_DISPLAY_BETA,
+      BETA_CLAUDE_CODE_SIDE_QUERY,
       BETA_DANGEROUS_TOOL_USE,
       RETIRED_BETA_PLACEHOLDER,
       BETA_THINKING_DISPLAY_UPDATES,
@@ -251,9 +272,10 @@ deferInit("chunk-bwbq4xvm.js:152640", () => {
       BETA_ADVISOR_TOOL,
       BETA_AFK_MODE,
       BETA_CACHE_KEEPALIVE,
+      BETA_CLAUDE_CODE_SIDE_QUERY,
       BETA_LONG_CONTEXT,
       BETA_CONTEXT_HINT,
-      BETA_AUTO_MODE_CLASSIFIER,
+      BETA_RETIRED_PLACEHOLDER,
       BETA_DANGEROUS_TOOL_USE,
       BETA_FALLBACK_CREDIT,
       BETA_INLINE_TOOLS,
@@ -262,6 +284,7 @@ deferInit("chunk-bwbq4xvm.js:152640", () => {
       BETA_MID_CONV_TOOL_CHANGE,
       BETA_PER_MESSAGE_EFFORT,
       BETA_PER_TURN_TIMING,
+      BETA_PROGRAM_USE_CASE_IDS,
       RETIRED_BETA_PLACEHOLDER,
       BETA_SERVER_SIDE_FALLBACK,
       BETA_SERVER_SIDE_FALLBACK_CATEGORY,
@@ -276,11 +299,11 @@ deferInit("chunk-bwbq4xvm.js:152640", () => {
     SUPPORTED_BETA_ENTRIES.filter((entry) => entry.header !== null).map((entry) => [entry.header, entry]),
   );
 });
-//@ chunk-bwbq4xvm.js:155473-155506 placement
+//@ chunk-7kayq7nc.js:154585-154618 placement
 function getBetaByName(name) {
   return THIRD_PARTY_SUPPORTED_BETAS.get(name);
 }
-//@ chunk-bwbq4xvm.js:155506-155573 placement
+//@ chunk-7kayq7nc.js:154618-154685 placement
 /**
  * 按名字查 Beta 定义；未知名字当作头值等于名字的 Beta。
  */
@@ -293,11 +316,11 @@ function betaFromName(name) {
     })
   );
 }
-//@ chunk-bwbq4xvm.js:155573-155645 placement
+//@ chunk-7kayq7nc.js:154685-154757 placement
 function betaHeaderValues(betas) {
   return betas.filter((beta) => beta.header !== null).map((beta) => beta.header);
 }
-//@ chunk-bwbq4xvm.js:155645-155704 placement
+//@ chunk-7kayq7nc.js:154757-154816 placement
 /**
  * 把 Beta 列表转成请求参数 {betas:[…]}，空列表返回 {}。
  */
@@ -309,17 +332,17 @@ function betasRequestParam(betas) {
       }
     : {};
 }
-//@ chunk-bwbq4xvm.js:155704-155764 placement
+//@ chunk-7kayq7nc.js:154816-154876 placement
 function isAfkModeBeta(name) {
   return name.toLowerCase().includes("afk-mode");
 }
-//@ chunk-bwbq4xvm.js:155764-155825 placement
+//@ chunk-7kayq7nc.js:154876-154937 placement
 /**
  * 第三方后端也支持的 beta 集合。
  */
 var THINKING_CONTEXT_BETAS; // deferred: uses BETA_CLAUDE_CODE of its import cycle while loading; runs once the cycle is complete
 var FIRST_PARTY_ONLY_BETAS;
-deferInit("chunk-bwbq4xvm.js:155764", () => {
+deferInit("chunk-7kayq7nc.js:154876", () => {
   THINKING_CONTEXT_BETAS = new Set([BETA_INTERLEAVED_THINKING, BETA_LONG_CONTEXT, BETA_TOOL_SEARCH]);
   FIRST_PARTY_ONLY_BETAS = new Set([
     BETA_CLAUDE_CODE,
@@ -328,7 +351,7 @@ deferInit("chunk-bwbq4xvm.js:155764", () => {
     BETA_OAUTH_AUTH,
   ]);
 });
-//@ chunk-bwbq4xvm.js:155825-155897 fingerprint (2.1.88 match: shouldIncludeFirstPartyOnlyBetas, 0.838)
+//@ chunk-7kayq7nc.js:154937-155009 fingerprint (2.1.88 match: shouldIncludeFirstPartyOnlyBetas, 0.838)
 /**
  * 是否发第一方专属 beta：firstParty、anthropicAws/GoogleCloud、foundry。
  */
@@ -336,42 +359,48 @@ function shouldIncludeFirstPartyOnlyBetas() {
   let apiProvider = getAPIProvider();
   return apiProvider === "firstParty" || isClaudePlatformProvider(apiProvider) || apiProvider === "foundry";
 }
-//@ chunk-bwbq4xvm.js:155897-155965 fingerprint (2.1.88 match: shouldUseGlobalCacheScope, 0.633)
+//@ chunk-7kayq7nc.js:155009-155077 fingerprint (2.1.88 match: shouldUseGlobalCacheScope, 0.634)
 /**
  * CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS 或 HIPAA 组织。旧版名 shouldUseGlobalCacheScope 为错配。
  */
 function areExperimentalBetasDisabled() {
   return env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS || isHipaaOrg();
 }
-//@ chunk-bwbq4xvm.js:155965-155998 placement
+//@ chunk-7kayq7nc.js:155077-155110 placement
 /**
  * 组织为 HIPAA（实验 beta、自定义 beta 被禁用）。
  */
 function isHipaaOrg() {
   return hasComplianceTaint("hipaa");
 }
-//@ chunk-bwbq4xvm.js:155998-156035 placement
+//@ chunk-7kayq7nc.js:155110-155147 placement
 /**
  * HIPAA 组织时返回 undefined，否则原值。
  */
 function unlessHipaa(beta) {
   return isHipaaOrg() ? undefined : beta;
 }
-//@ chunk-bwbq4xvm.js:156035-156069 placement
+//@ chunk-7kayq7nc.js:155147-155181 placement
 /**
  * 第一方专属 beta 可发且实验 beta 未禁用。
  */
 function canSendFirstPartyBetas() {
   return shouldIncludeFirstPartyOnlyBetas() && !areExperimentalBetasDisabled();
 }
-//@ chunk-aepeg2w5.js:219037-219085 fingerprint (2.1.88 match: getModelBetas, 1)
+//@ chunk-7kayq7nc.js:155181-155318 placement
 /**
- * Bedrock 返回模型 id 的跨区域推理配置变体列表，其他提供商返回 [id]。旧版名 getModelBetas 为错配。
+ * 判断能否发第一方 beta：必须第一方、允许 beta，且（本机非 unix socket 或指定租户），未模拟代理用量。
  */
-function getProviderWireIdVariants(modelId, provider) {
-  return provider === "bedrock" ? expandBedrockModelIdVariants(modelId) : [modelId];
+function isFirstPartyBetaTransportAllowed(hasTenant) {
+  return (
+    getAPIProvider() === "firstParty" &&
+    canSendFirstPartyBetas() &&
+    ((isActualFirstPartyAnthropicBaseUrl() && env.ANTHROPIC_UNIX_SOCKET === undefined) ||
+      (hasTenant && isFirstPartyAnthropicBaseUrl())) &&
+    !env.CLAUDE_CODE_SIMULATE_PROXY_USAGE
+  );
 }
-//@ chunk-aepeg2w5.js:341166-341312 placement
+//@ chunk-exfmq47h.js:351653-351799 placement
 /**
  * 是否可发送每回合 effort beta。
  */
@@ -383,7 +412,7 @@ function supportsPerTurnEffort(model, canonicalName) {
     cachedGateValue?.(canonicalName, model) === true
   );
 }
-//@ chunk-aepeg2w5.js:341312-341453 placement
+//@ chunk-exfmq47h.js:351799-351940 placement
 /**
  * 是否可发送每回合计时 beta。
  */
@@ -397,7 +426,7 @@ function supportsPerTurnTiming(model, canonicalName) {
   let supported = catalogHasCapability(canonicalName, "per_turn_timing");
   return supported === undefined ? supportsPerTurnEffort(model, canonicalName) : supported;
 }
-//@ chunk-aepeg2w5.js:341453-341495 placement
+//@ chunk-exfmq47h.js:351940-351982 placement
 /**
  * 是否带 1M 上下文 beta。
  */
@@ -406,21 +435,21 @@ function hasContextBeta(betas) {
     isBetaRejected(betas, BETA_PER_MESSAGE_EFFORT) || isBetaRejected(betas, BETA_MID_CONVERSATION_SYSTEM)
   );
 }
-//@ chunk-aepeg2w5.js:341495-341541 placement
+//@ chunk-exfmq47h.js:351982-352028 placement
 /**
  * 支持按轮投入度且没带上下文 beta 时才发该 beta。
  */
 function usesPerTurnEffortBeta(model, canonicalName) {
   return supportsPerTurnEffort(model, canonicalName) && !hasContextBeta(getStickyBetas());
 }
-//@ chunk-aepeg2w5.js:341541-341574 placement
+//@ chunk-exfmq47h.js:352028-352061 placement
 /**
  * 判断该模型是否已被后端拒绝 1M 上下文 beta。
  */
 function isContextBetaRefused(model) {
   return isContext1mMarkedRefused(stripAnyVersatileSuffix(model));
 }
-//@ chunk-aepeg2w5.js:341574-341893 placement
+//@ chunk-exfmq47h.js:352061-352380 placement
 /**
  * 后端拒绝 beta 后为该模型去掉它并记录。
  */
@@ -434,7 +463,7 @@ function rejectContextBetaForModel(model) {
     },
   );
 }
-//@ chunk-aepeg2w5.js:444296-444410 fingerprint (2.1.88 match: getToolSearchBetaHeader, 0.788)
+//@ chunk-exfmq47h.js:455687-455801 fingerprint (2.1.88 match: getToolSearchBetaHeader, 0.789)
 /**
  * 第三方云（bedrock/vertex/mantle）上该模型是否需要工具搜索 beta 头。
  */
@@ -444,7 +473,7 @@ function getToolSearchBetaHeader(envFamily) {
   if (provider !== "bedrock" && provider !== "vertex" && provider !== "mantle") return false;
   return userConfiguredDefault(envFamily);
 }
-//@ chunk-aepeg2w5.js:475090-475193 placement
+//@ chunk-exfmq47h.js:486488-486591 placement
 /**
  * 模型默认输出 token 上限。
  */
@@ -457,7 +486,7 @@ function defaultMaxOutputTokens(model) {
     getModelMaxOutputTokens(model).default
   );
 }
-//@ chunk-aepeg2w5.js:475236-475473 fingerprint (2.1.88 match: modelSupportsStructuredOutputs, 0.717)
+//@ chunk-exfmq47h.js:486634-486871 fingerprint (2.1.88 match: modelSupportsStructuredOutputs, 0.717)
 /**
  * 3.x 及 opus-4-0/4-1/4-5/4-6、sonnet-4-0/4-5/4-6、haiku-4-5 这批老模型（第三方云上不接受新 beta）。旧版名错配。
  */
@@ -474,7 +503,7 @@ function isLegacyStructuredOutputModel(model) {
     model === "claude-haiku-4-5"
   );
 }
-//@ chunk-aepeg2w5.js:476485-476681 affinity
+//@ chunk-exfmq47h.js:487883-488079 affinity
 /**
  * 模型发布先后表（opus-4-0 … opus-4-8），isOlderModelThan 用它比较。
  */
@@ -490,7 +519,7 @@ var MODEL_RELEASE_ORDER = [
   "claude-opus-4-7",
   "claude-opus-4-8",
 ];
-//@ chunk-aepeg2w5.js:476681-476786 fingerprint (2.1.88 match: modelSupportsAutoMode, 0.377)
+//@ chunk-exfmq47h.js:488079-488184 fingerprint (2.1.88 match: modelSupportsAutoMode, 0.378)
 /**
  * 模型是否早于参照模型（3.x 一律算更早）。旧版名 modelSupportsAutoMode 为错配。
  */
@@ -499,7 +528,7 @@ function isOlderModelThan(model, otherModel) {
   let index = MODEL_RELEASE_ORDER.indexOf(model);
   return index !== -1 && index < MODEL_RELEASE_ORDER.indexOf(otherModel);
 }
-//@ chunk-aepeg2w5.js:480243-480291 placement
+//@ chunk-exfmq47h.js:491641-491689 placement
 /**
  * beta 头是否允许。
  */
@@ -507,15 +536,15 @@ function isBetaHeaderAllowed() {
   if (shouldEnableThinkingByDefault() !== null) return false;
   return true;
 }
-//@ chunk-aepeg2w5.js:480291-480312 layout
+//@ chunk-exfmq47h.js:491689-491710 layout
 /**
  * SDK 自定义 betas 白名单：只有 context-1m。
  */
 var SDK_ALLOWED_BETAS; // deferred: uses BETA_CLAUDE_CODE of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:480291", () => {
+deferInit("chunk-exfmq47h.js:491689", () => {
   SDK_ALLOWED_BETAS = new Set([BETA_LONG_CONTEXT]);
 });
-//@ chunk-aepeg2w5.js:480312-480442 fingerprint (2.1.88 match: partitionBetasByAllowlist, 1)
+//@ chunk-exfmq47h.js:491710-491840 fingerprint (2.1.88 match: partitionBetasByAllowlist, 1)
 /**
  * 把 SDK 传入的 beta 分成白名单内/外两组。
  */
@@ -532,7 +561,7 @@ function partitionBetasByAllowlist(betas) {
     disallowed,
   };
 }
-//@ chunk-aepeg2w5.js:480442-480804 facade-exports (2.1.88 match: filterAllowedSdkBetas, 1)
+//@ chunk-exfmq47h.js:491840-492202 placement (2.1.88 match: filterAllowedSdkBetas, 1)
 /**
  * 过滤 SDK 自定义 betas：订阅用户直接忽略并警告；不在白名单的逐个警告。
  */
@@ -549,7 +578,7 @@ function filterAllowedSdkBetas(sdkBetas) {
     );
   return allowed.length > 0 ? allowed : undefined;
 }
-//@ chunk-aepeg2w5.js:480804-481034 facade-exports (2.1.88 match: modelSupportsISP, 0.609)
+//@ chunk-exfmq47h.js:492202-492432 placement (2.1.88 match: modelSupportsISP, 0.609)
 /**
  * 模型是否支持交错思考（interleaved-thinking beta）：能力覆盖优先；foundry 一律支持；第一方系提供商除 3.x 外都支持；haiku-4-5 与 3.x 不支持。
  */
@@ -563,14 +592,14 @@ function modelSupportsISP(model) {
   if (canonical === "claude-haiku-4-5" || canonical.includes("claude-3-")) return false;
   return true;
 }
-//@ chunk-aepeg2w5.js:481034-481082 facade-exports
+//@ chunk-exfmq47h.js:492432-492480 placement
 /**
  * Vertex 上该模型是否支持 web search beta（不早于 opus-4-0）。
  */
 function vertexModelSupportsWebSearch(model) {
   return !isOlderModelThan(model, "claude-opus-4-0");
 }
-//@ chunk-aepeg2w5.js:481082-481269 fingerprint (2.1.88 match: modelSupportsContextManagement, 0.427)
+//@ chunk-exfmq47h.js:492480-492667 fingerprint (2.1.88 match: modelSupportsContextManagement, 0.428)
 /**
  * 模型是否支持 context-management（API 侧 clear_thinking 等编辑）。
  */
@@ -583,7 +612,7 @@ function modelSupportsContextManagement(model) {
   if (hasFirstPartyCapabilities(provider)) return !canonical.includes("claude-3-");
   return supported || canonical === "claude-mythos-5";
 }
-//@ chunk-aepeg2w5.js:481269-481426 facade-exports
+//@ chunk-exfmq47h.js:492667-492824 placement
 /**
  * 模型是否支持 structured outputs：仅第一方系提供商、未禁用实验 beta 与 CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS、不早于 opus-4-1。
  */
@@ -595,7 +624,7 @@ function modelSupportsStructuredOutputs(model) {
   if (env.CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS) return false;
   return !isOlderModelThan(canonicalName, "claude-opus-4-1");
 }
-//@ chunk-aepeg2w5.js:481426-481491 layout
+//@ chunk-exfmq47h.js:492824-492889 placement
 /**
  * 当前会话的 beta 结果缓存（服务目录被抑制时用 compiledOnly 版）。
  */
@@ -603,7 +632,7 @@ function getBetaCacheStore() {
   let providerState = getProviderState();
   return isCatalogSuppressed() ? providerState.betasCompiledOnly : providerState.betas;
 }
-//@ chunk-aepeg2w5.js:481491-481658 layout
+//@ chunk-exfmq47h.js:492889-493056 placement
 /**
  * 按模型缓存 beta 计算结果，并同步写一份不看服务目录的版本。
  */
@@ -619,7 +648,7 @@ function memoizeBetaResult(pickStore, model, compute) {
   }
   return result;
 }
-//@ chunk-aepeg2w5.js:481658-481726 facade-exports
+//@ chunk-exfmq47h.js:493056-493123 placement
 /**
  * 模型是否接受中途 role=system 消息（mid_conversation_system，缓存）。
  */
@@ -630,7 +659,7 @@ function shouldUseMidConvSystem(model) {
     () => computeMidConvSystemSupport(model),
   );
 }
-//@ chunk-aepeg2w5.js:481726-481805 facade-exports
+//@ chunk-exfmq47h.js:493123-493202 placement
 /**
  * 工具加载提示文本：目录能力优先，否则按模型名判断。
  */
@@ -640,7 +669,7 @@ function modelGetsToolLoadedText(model) {
     modelSupportsCapability(canonical, "tool_loaded_text", model) ?? canonical.includes(CLAUDE_MYTHOS_PREVIEW)
   );
 }
-//@ chunk-aepeg2w5.js:481805-482044 facade-exports
+//@ chunk-exfmq47h.js:493202-493440 placement
 /**
  * 模型是否接受中途工具增减（mid-conversation-tool-changes）：需第一方 beta、接受中途 system；可用 CLAUDE_CODE_FORCE_MID_CONVERSATION_SYSTEM 强制。
  */
@@ -653,7 +682,7 @@ function modelTakesToolAdditions(model) {
   if (supported !== undefined) return supported;
   return canonicalName === "claude-mythos-5" || getCatalogEntry(strip1mTag(canonicalName)) === undefined;
 }
-//@ chunk-aepeg2w5.js:482044-482291 layout
+//@ chunk-exfmq47h.js:493440-493687 placement
 /**
  * 中途 system 消息支持判定：HIPAA 关闭；强制开关；能力覆盖；早于 opus-4-8 的不支持；否则看目录（默认支持）。
  */
@@ -666,14 +695,14 @@ function computeMidConvSystemSupport(model) {
   if (isOlderModelThan(strip1mTag(canonicalName), "claude-opus-4-8")) return false;
   return modelSupportsCapability(canonicalName, "mid_conv_system", model) ?? true;
 }
-//@ chunk-aepeg2w5.js:482291-482340 facade-exports
+//@ chunk-exfmq47h.js:493687-493736 placement
 /**
  * sonnet-5 保留中途 system-reminder 标签。
  */
 function shouldKeepMidConvSystemReminderTags(model) {
   return getCanonicalName(model) === "claude-sonnet-5";
 }
-//@ chunk-aepeg2w5.js:482340-482442 facade-exports
+//@ chunk-exfmq47h.js:493736-493838 placement
 /**
  * 模型是否接受 temperature 参数（早于 opus-4-7 的才接受）。
  */
@@ -682,14 +711,14 @@ function modelSupportsTemperature(model) {
   if (capabilityOverride !== undefined) return capabilityOverride;
   return isOlderModelThan(getCanonicalName(model), "claude-opus-4-7");
 }
-//@ chunk-aepeg2w5.js:482442-482494 facade-exports
+//@ chunk-exfmq47h.js:493838-493890 placement
 /**
  * 模型默认隐藏思考（不早于 opus-4-7）。
  */
 function modelHidesThinkingByDefault(model) {
   return !isOlderModelThan(getCanonicalName(model), "claude-opus-4-7");
 }
-//@ chunk-aepeg2w5.js:482494-482594 facade-exports (2.1.88 match: getToolSearchBetaHeader, 0.788)
+//@ chunk-exfmq47h.js:493890-493990 placement (2.1.88 match: getToolSearchBetaHeader, 0.789)
 /**
  * 第三方云是否接受 thinking-binding-controls beta（vertex 接受；bedrock/mantle 上老模型不接受）。
  */
@@ -698,7 +727,7 @@ function thirdPartyAcceptsThinkingBindingBeta(providerForModel, model) {
   if (providerForModel !== "bedrock" && providerForModel !== "mantle") return false;
   return !isLegacyStructuredOutputModel(getCanonicalName(model));
 }
-//@ chunk-aepeg2w5.js:482594-482669 facade-exports
+//@ chunk-exfmq47h.js:493990-494065 placement
 /**
  * 第三方云是否接受 dangerous-tool-use beta。
  */
@@ -706,7 +735,7 @@ function thirdPartyAcceptsDangerousToolUseBeta(provider, resolvedModel) {
   if (provider !== "bedrock" && provider !== "mantle") return true;
   return !isLegacyStructuredOutputModel(getCanonicalName(resolvedModel));
 }
-//@ chunk-aepeg2w5.js:482669-482727 facade-exports (2.1.88 match: logEventTo1P, 1)
+//@ chunk-exfmq47h.js:494065-494123 placement (2.1.88 match: logEventTo1P, 1)
 /**
  * 非第一方、非 anthropicAws/GoogleCloud 的提供商（auto mode 第三方选项）。
  */
@@ -714,21 +743,21 @@ function isAutoMode3POptIn() {
   let apiProvider = getAPIProvider();
   return apiProvider !== "firstParty" && !isClaudePlatformProvider(apiProvider);
 }
-//@ chunk-aepeg2w5.js:482727-482761 facade-exports
+//@ chunk-exfmq47h.js:494123-494157 placement
 /**
  * 是否允许发 afk-mode beta：第一方 beta 可用或第三方 auto mode。
  */
 function shouldAllowAfkModeBeta() {
   return canSendFirstPartyBetas() || isAutoMode3POptIn();
 }
-//@ chunk-aepeg2w5.js:482761-482808 placement (2.1.88 match: MITIGATION_EXEMPT_MODELS, 1)
+//@ chunk-exfmq47h.js:494157-494204 placement (2.1.88 match: MITIGATION_EXEMPT_MODELS, 1)
 /**
  * 模型是否排在 claude-opus-4-6 之前（modelSupportsAutoMode 的排序比较）；被快速模式支持判断使用。归属与旧版名均疑似错误。
  */
 function isModelOlderThanOpus46(canonicalName) {
   return isOlderModelThan(canonicalName, "claude-opus-4-6");
 }
-//@ chunk-aepeg2w5.js:482808-482975 facade-exports
+//@ chunk-exfmq47h.js:494204-494371 placement
 /**
  * 模型是否支持 auto mode（第三方上 opus-4-6、sonnet-4-6、haiku（除 5-5）不支持）。
  */
@@ -744,7 +773,7 @@ function modelSupportsAutoMode(model) {
     return false;
   return true;
 }
-//@ chunk-aepeg2w5.js:482975-483107 facade-exports
+//@ chunk-exfmq47h.js:494371-494503 placement
 /**
  * auto mode 支持情况：{supported, disableFastModeBreakerFires}。
  */
@@ -755,7 +784,7 @@ function getAutoModeModelSupport({ model, fastMode, disableFastMode }) {
     disableFastModeBreakerFires: fastModeBreaker,
   };
 }
-//@ chunk-aepeg2w5.js:483107-483575 facade-exports
+//@ chunk-exfmq47h.js:494503-494971 placement
 /**
  * 当前权限模式下技能/命令指定的模型是否允许（auto mode 不支持时记日志拒绝）。
  */
@@ -777,14 +806,14 @@ function isSkillModelOverrideAllowedInMode({ skillModel, mode, fastMode }) {
   );
   return false;
 }
-//@ chunk-aepeg2w5.js:483575-483610 facade-exports
+//@ chunk-exfmq47h.js:494971-495006 placement
 /**
  * 工具搜索 beta：第一方 advanced-tool-use-2025-11-20，第三方 tool-search-tool-2025-10-19。
  */
 function getToolSearchBeta() {
   return canSendFirstPartyBetas() ? BETA_TOOL_SEARCH_ADVANCED : BETA_TOOL_SEARCH;
 }
-//@ chunk-aepeg2w5.js:483610-483724 facade-exports
+//@ chunk-exfmq47h.js:495006-495120 placement
 /**
  * 请求是否打到 Anthropic 自己的后端：anthropicAws 未自定义 base URL，或第一方且为官方 API。
  */
@@ -792,7 +821,7 @@ function hitsAnthropicBackend(apiProvider = getAPIProvider()) {
   if (apiProvider === "anthropicAws") return env.ANTHROPIC_AWS_BASE_URL === undefined;
   return apiProvider === "firstParty" && isFirstPartyAnthropicBaseUrl();
 }
-//@ chunk-aepeg2w5.js:483724-483829 facade-exports
+//@ chunk-exfmq47h.js:495120-495225 placement
 /**
  * 是否用 cache_control scope:"global"（prompt-caching-scope beta）：第一方 beta 可用、官方 API、提供商为 firstParty/anthropicAws。实测第一方形状多出此 beta 与 system 静态块的 scope:global。
  */
@@ -802,13 +831,45 @@ function shouldUseGlobalCacheScope() {
   let apiProvider = getAPIProvider();
   return apiProvider === "firstParty" || apiProvider === "anthropicAws";
 }
-//@ chunk-aepeg2w5.js:483829-484719 fingerprint (2.1.88 match: getAllModelBetas, 0.528)
+//@ chunk-exfmq47h.js:495225-495303 placement
+var TENGU_SNAPPY_NOODLE = "tengu_snappy_noodle";
+var TENGU_JAZZY_VALLEY = "tengu_jazzy_valley";
+var TENGU_WOVEN_KESTREL = "tengu_woven_kestrel";
+//@ chunk-exfmq47h.js:495303-495440 placement
+/**
+ * 判定是否满足 firstParty + 特定会话条件下才要读的 beta 组合。
+ */
+function toolProvenancePermitted() {
+  return (
+    getAPIProvider() === "firstParty" &&
+    isFirstPartyAnthropicBaseUrl() &&
+    canSendFirstPartyBetas() &&
+    (getApiKeySourceSafe() === "none" || isClaudeAISubscriber()) &&
+    !env.CCR_SESSION_PROFILE &&
+    (!env.CLAUDE_CODE_REMOTE || getFeatureValue_CACHED_MAY_BE_STALE(TENGU_WOVEN_KESTREL, false))
+  );
+}
+//@ chunk-exfmq47h.js:495440-495495 placement (2.1.88 match: logEventTo1P, 1)
+function logEventTo1P_2() {
+  return (
+    toolProvenancePermitted() &&
+    getFeatureValue_SESSION_PINNED(TENGU_SNAPPY_NOODLE, getAPIProvider() === "firstParty")
+  );
+}
+//@ chunk-exfmq47h.js:495495-495544 placement (2.1.88 match: logEventTo1P, 1)
+/**
+ * tengu_jazzy_valley 开关控制的 beta 判定。
+ */
+function toolProvenanceCoversConfiguredServers() {
+  return getFeatureValue_SESSION_PINNED(TENGU_JAZZY_VALLEY, getAPIProvider() === "firstParty");
+}
+//@ chunk-exfmq47h.js:495544-496457 fingerprint (2.1.88 match: getAllModelBetas, 0.528)
 /**
  * 每轮附加 beta 条件表（getMergedBetas 用）：per-turn-control、timing、mid-conversation-tool-changes、inline-tools。
  */
 var MODEL_BETA_RULES; // deferred: uses BETA_CLAUDE_CODE of its import cycle while loading; runs once the cycle is complete
 var PER_TURN_BETA_RULES;
-deferInit("chunk-aepeg2w5.js:483829", () => {
+deferInit("chunk-exfmq47h.js:495544", () => {
   MODEL_BETA_RULES = [
     {
       beta: BETA_CLAUDE_CODE,
@@ -892,10 +953,14 @@ deferInit("chunk-aepeg2w5.js:483829", () => {
       when: (context) =>
         isFoamySpringGateOn() && modelTakesToolAdditions(context.model) && isInlineToolsEnabled(),
     },
+    {
+      beta: BETA_CCR_TOOL_PROVENANCE,
+      when: () => logEventTo1P_2(),
+    },
     ...[],
   ];
 });
-//@ chunk-aepeg2w5.js:484719-484779 facade-exports
+//@ chunk-exfmq47h.js:496457-496517 placement
 /**
  * 模型的基础 beta 列表（缓存）。门面名为准时以门面为准。
  */
@@ -906,7 +971,7 @@ function getAllModelBetas(model) {
     () => computeAllModelBetas(model),
   );
 }
-//@ chunk-aepeg2w5.js:484779-485341 layout
+//@ chunk-exfmq47h.js:496517-497079 placement
 /**
  * 按 MODEL_BETA_RULES 计算基础 beta，再追加 ANTHROPIC_BETAS（组织禁用实验 beta 时忽略；已 GA 的 mid-conversation-system 不发）。
  */
@@ -945,7 +1010,7 @@ function computeAllModelBetas(model) {
       }
   return betas;
 }
-//@ chunk-aepeg2w5.js:485341-485529 facade-exports
+//@ chunk-exfmq47h.js:497079-497318 placement
 /**
  * 模型的 beta 列表：Bedrock 去掉放进请求体的那几个；去掉本会话被服务器拒绝过的；1M 原生模型去掉 context-1m。
  */
@@ -954,19 +1019,41 @@ function getModelBetas(model) {
     (store) => store.modelBetas,
     model,
     () => {
-      let allModelBetas = getAllModelBetas(model);
+      let beta = getAllModelBetas(model);
       if (getProviderForModel(model) === "bedrock")
-        return allModelBetas.filter((beta) => !THINKING_CONTEXT_BETAS.has(beta));
-      return allModelBetas;
+        return beta.filter((beta) => !THINKING_CONTEXT_BETAS.has(beta));
+      return beta;
     },
   );
   let refusedBetaHeaders = getRefusedBetaHeaders();
+  let withUseCase =
+    programUseCaseIdForWire() === null ||
+    betas.includes(BETA_PROGRAM_USE_CASE_IDS) ||
+    !programUseCaseHeaderAllowed()
+      ? betas
+      : [...betas, BETA_PROGRAM_USE_CASE_IDS];
   return dropRedundantContext1m(
     model,
-    refusedBetaHeaders.size === 0 ? betas : betas.filter((beta) => !refusedBetaHeaders.has(beta)),
+    refusedBetaHeaders.size === 0 ? withUseCase : withUseCase.filter((beta) => !refusedBetaHeaders.has(beta)),
   );
 }
-//@ chunk-aepeg2w5.js:485529-485634 facade-exports
+//@ chunk-exfmq47h.js:497318-497373 placement (2.1.88 match: logEventTo1P, 1)
+/**
+ * firstParty 且未处于某些条件时可用的一组 beta。
+ */
+function programUseCaseHeaderAllowed() {
+  return (
+    getAPIProvider() === "firstParty" && isFirstPartyAnthropicBaseUrl() && !areExperimentalBetasDisabled()
+  );
+}
+//@ chunk-exfmq47h.js:497373-497417 placement
+/**
+ * qNn 之外还要未被某集合排除；utils/betas 与 services/api/claude 使用。
+ */
+function programUseCaseHeaderGoesOut() {
+  return programUseCaseHeaderAllowed() && !getRefusedBetaHeaders().has(BETA_PROGRAM_USE_CASE_IDS);
+}
+//@ chunk-exfmq47h.js:497417-497522 placement
 /**
  * Bedrock 需要放进请求体 anthropic_beta 的 beta（interleaved-thinking、context-1m、tool-search-tool）。
  */
@@ -980,7 +1067,7 @@ function getBedrockExtraBodyParamsBetas(model) {
     ),
   );
 }
-//@ chunk-aepeg2w5.js:485634-485704 layout
+//@ chunk-exfmq47h.js:497522-497592 placement
 /**
  * 模型本身就是 1M 上下文时去掉 context-1m beta。
  */
@@ -989,7 +1076,7 @@ function dropRedundantContext1m(model, betas) {
     ? betas.filter((beta) => beta !== BETA_LONG_CONTEXT)
     : betas;
 }
-//@ chunk-aepeg2w5.js:485704-486273 facade-exports
+//@ chunk-exfmq47h.js:497592-498161 placement
 /**
  * 本次请求的 beta 列表（queryModel 起点）：getModelBetas + 代理式查询补 claude-code + PER_TURN_BETA_RULES + SDK betas（组织禁用时丢弃，第三方只留白名单）。
  */
@@ -1024,14 +1111,14 @@ function getMergedBetas(model, options) {
     });
   return dropRedundantContext1m(model, [...baseBetas, ...mapped.filter((beta) => !baseBetas.includes(beta))]);
 }
-//@ chunk-aepeg2w5.js:486273-486316 facade-exports
+//@ chunk-exfmq47h.js:498161-498204 placement
 /**
  * 是否会发 structured-outputs beta。
  */
 function willSendStructuredOutputsBeta(model) {
   return getAllModelBetas(model).includes(BETA_STRUCTURED_OUTPUTS);
 }
-//@ chunk-aepeg2w5.js:486316-486381 facade-exports
+//@ chunk-exfmq47h.js:498204-498269 placement
 /**
  * 清空 beta 缓存。
  */
@@ -1040,12 +1127,12 @@ function clearBetasCaches() {
   providerState.betas = createModelBetaCaches();
   providerState.betasCompiledOnly = createModelBetaCaches();
 }
-//@ chunk-aepeg2w5.js:486381-486451 layout
+//@ chunk-exfmq47h.js:498269-498339 placement
 /**
  * 第三方提供商也会发送的 beta 集合；其余 beta 只发给第一方系提供商。
  */
 var THIRD_PARTY_SAFE_BETAS; // deferred: uses BETA_CLAUDE_CODE of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:486381", () => {
+deferInit("chunk-exfmq47h.js:498269", () => {
   THIRD_PARTY_SAFE_BETAS = new Set([
     BETA_CLAUDE_CODE,
     BETA_INTERLEAVED_THINKING,
@@ -1064,7 +1151,7 @@ deferInit("chunk-aepeg2w5.js:486381", () => {
     BETA_THINKING_DISPLAY_UPDATES,
   ]);
 });
-//@ chunk-aepeg2w5.js:486451-486517 facade-exports
+//@ chunk-exfmq47h.js:498339-498405 placement
 /**
  * 非第一方系提供商时只保留 THIRD_PARTY_SAFE_BETAS 里的 beta。
  */
@@ -1076,25 +1163,11 @@ export {
   shouldUseMidConvSystem,
   shouldKeepMidConvSystemReminderTags,
   shouldUseGlobalCacheScope,
-  modelGetsToolLoadedText,
-  modelSupportsAutoMode,
-  getModelBetas,
-  betasRequestParam,
-  BETA_MCP_SERVERS,
-  areExperimentalBetasDisabled,
-  isBetaHeaderAllowed,
-  BETA_CCR_BYOC,
-  clearBetasCaches,
-  getToolSearchBeta,
-  usesPerTurnEffortBeta,
-  modelSupportsStructuredOutputs,
-  BETA_STRUCTURED_OUTPUTS,
-  isSkillModelOverrideAllowedInMode,
   betaHeaderValues,
-  getBetaByName,
-  FIRST_PARTY_ONLY_BETAS,
-  THINKING_CONTEXT_BETAS,
+  getModelBetas,
+  usesPerTurnEffortBeta,
   hasContextBeta,
+  areExperimentalBetasDisabled,
   modelSupportsISP,
   shouldIncludeFirstPartyOnlyBetas,
   modelHidesThinkingByDefault,
@@ -1106,6 +1179,7 @@ export {
   isAfkModeBeta,
   BETA_EFFORT,
   BETA_TASK_BUDGETS,
+  betasRequestParam,
   hitsAnthropicBackend,
   BETA_LONG_CONTEXT,
   modelTakesToolAdditions,
@@ -1115,10 +1189,15 @@ export {
   BETA_PER_TURN_TIMING,
   supportsPerTurnTiming,
   getMergedBetas,
+  BETA_PROGRAM_USE_CASE_IDS,
+  programUseCaseHeaderGoesOut,
   BETA_ADVISOR_TOOL,
   BETA_THINKING_TOKEN_COUNT,
+  BETA_CCR_TOOL_PROVENANCE,
+  getToolSearchBeta,
   BETA_PROMPT_CACHING_SCOPE,
   willSendStructuredOutputsBeta,
+  BETA_STRUCTURED_OUTPUTS,
   BETA_SERVER_SIDE_FALLBACK_CATEGORY,
   shouldAllowAfkModeBeta,
   BETA_AFK_MODE,
@@ -1133,6 +1212,7 @@ export {
   THINKING_DISPLAY_NAMED_BETA,
   BETA_MESSAGE_THREADS,
   KNOWN_BETAS,
+  BETA_CLAUDE_CODE_SIDE_QUERY,
   isAutoMode3POptIn,
   getBedrockExtraBodyParamsBetas,
   BETA_FALLBACK_CREDIT,
@@ -1147,24 +1227,39 @@ export {
   BETA_CONTEXT_MANAGEMENT,
   BETA_MID_CONV_CACHE_PROMOTION_OK_LATCH,
   rejectContextBetaForModel,
-  filterAllowedSdkBetas,
-  THINKING_DISPLAY_BETA,
-  BETA_AUTO_MODE_CLASSIFIER,
-  defaultMaxOutputTokens,
+  BETA_MCP_SERVERS,
+  modelSupportsAutoMode,
+  modelGetsToolLoadedText,
+  clearBetasCaches,
+  isBetaHeaderAllowed,
+  isSkillModelOverrideAllowedInMode,
+  isFirstPartyBetaTransportAllowed,
+  isOlderModelThan,
+  getBetaByName,
+  FIRST_PARTY_ONLY_BETAS,
+  THINKING_CONTEXT_BETAS,
   getAutoModeModelSupport,
+  getAllModelBetas,
+  isContextBetaRefused,
   BETA_TOOL_SEARCH_ADVANCED,
   BETA_TOOL_SEARCH,
   SUPPORTED_BETA_ENTRIES,
   MID_CONVERSATION_SYSTEM_2026_04_07,
-  getProviderWireIdVariants,
+  modelSupportsTemperature,
+  BETA_AUTO_MODE_CLASSIFIER,
+  BETA_RETIRED_PLACEHOLDER,
+  toolProvenancePermitted,
+  toolProvenanceCoversConfiguredServers,
+  BETA_TOOL_PROVENANCE_SERVER_URL_LATCH,
+  modelSupportsStructuredOutputs,
+  BETA_FILES_API,
+  BETA_CCR_BYOC,
+  filterAllowedSdkBetas,
+  defaultMaxOutputTokens,
   getToolSearchBetaHeader,
   unlessHipaa,
-  isContextBetaRefused,
-  BETA_ENVIRONMENTS,
-  modelSupportsTemperature,
-  getAllModelBetas,
   BETA_CONTEXT_HINT,
   vertexModelSupportsWebSearch,
-  BETA_FILES_API,
-  isOlderModelThan,
+  BETA_ENVIRONMENTS,
+  programUseCaseHeaderAllowed,
 };

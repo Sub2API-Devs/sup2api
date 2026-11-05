@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。启动通知：沙箱类。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: placement 4
  */
 import {
@@ -18,16 +18,16 @@ import { plural } from "../../../utils/stringUtils.js";
 import { settingsChangeDetector } from "../../../utils/settings/changeDetector.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1786113-1786174 placement
+//@ chunk-czq1j3j2.js:1834088-1834149 placement
 var sessionModelRestrictedNoticeSpec; // deferred: uses SESSION_MODEL_DENY_TTL_MS (../../../utils/model/sessionModelRestriction.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:1786113", () => {
+deferInit("chunk-czq1j3j2.js:1834088", () => {
   sessionModelRestrictedNoticeSpec = {
     id: SESSION_MODEL_RESTRICTED,
     deps: (ctx) => [ctx.addNotification],
     setup: () => sessionModelRestrictedNotice,
   };
 });
-//@ chunk-18hwfzwa.js:1786174-1786309 placement
+//@ chunk-czq1j3j2.js:1834149-1834284 placement
 function sessionModelRestrictedNotice({ addNotification }) {
   if (getIsRemoteMode()) return;
   return subscribeSessionModelRestriction((text) => {
@@ -40,7 +40,7 @@ function sessionModelRestrictedNotice({ addNotification }) {
     });
   });
 }
-//@ chunk-18hwfzwa.js:1786309-1786906 placement
+//@ chunk-czq1j3j2.js:1834284-1834881 placement
 /**
  * 统计因属于另一台主机而未生效的沙箱 deny 路径，写入 setupIssues 计数；出现新的此类路径时立即提示。
  */
@@ -72,7 +72,7 @@ function sandboxDeniesOnAnotherHostNotice({ store, addNotification }, previousDe
       text: `${denies.length} sandbox deny ${plural(denies.length, "path")} on another computer ${plural(denies.length, "is", "are")} not enforced \xB7 /status`,
     });
 }
-//@ chunk-18hwfzwa.js:1786906-1787159 placement
+//@ chunk-czq1j3j2.js:1834881-1835134 placement
 var sandboxDeniesOnAnotherHostNoticeSpec = {
   id: "sandbox-denies-on-another-host",
   deps: (ctx) => [ctx.store, ctx.addNotification],

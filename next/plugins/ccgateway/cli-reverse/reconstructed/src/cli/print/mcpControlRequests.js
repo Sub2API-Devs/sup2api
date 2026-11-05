@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：SDK 控制请求中 MCP 相关的处理（mcp_status、mcp_set_servers、mcp_reconnect、mcp_toggle、权限模式覆盖、mcp_read_resource）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-nkdv7dw8.js (53)
- * attribution: placement 53
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vxsfen55.js (56)
+ * attribution: placement 51, layout 5
  */
 import { import_baseUniq, uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { identityEpoch } from "../../services/mcp/identityChange.js";
@@ -18,6 +18,13 @@ import {
   BLOCKED_BY_POLICY_REASON,
   RESERVED_ADDRESS_REASON,
   ACCOUNT_CHANGED_REASON,
+  NOT_APPROVED_REASON,
+  DISABLED_BY_SETTING_REASON,
+  DISABLED_IN_MCP_REASON,
+  AUTH_CLEARED_REASON,
+  AUTH_CLEAR_FAILED_REASON,
+  CLOSED_WHILE_SIGNING_IN_REASON,
+  TOKEN_REJECTED_REASON,
   isArtifacts404Failure,
 } from "../../services/mcp/redactMcpErrors.js";
 import { sanitizeTelemetryString } from "../../utils/sanitization.js";
@@ -33,6 +40,8 @@ import {
   clientStatusForSnapshot,
 } from "../../services/mcp/config.js";
 import { isFromBuiltinMarketplace } from "../../utils/plugins/pluginIdentifier.js";
+import { isPluginServerConfig } from "../../services/mcp/types.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   WireSafeControlError,
   getErrnoCode,
@@ -50,7 +59,12 @@ import { isClientWithoutTransport } from "../../services/mcp/officialPluginPromp
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { UNSUPPORTED_CONTROL_SUBTYPE_TEXT } from "../../remote/wireFrameShape.js";
 import { takeRecentWithin } from "./rateLimitForwarding.js";
-import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import {
+  redactsOrPersists,
+  transportStateByHost,
+  isBridgeOrTransport,
+  mayTransportPersist,
+} from "../transportState.js";
 import { QueuedNotificationError } from "../../services/queuedNotifications/queuedNotifications.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { isDiscoveryCacheUsable } from "../../services/mcp/mcpAccountKey.js";
@@ -58,9 +72,10 @@ import { flushDiscoveryCache } from "../../services/mcp/discoveryCache.js";
 import { reject_default } from "../../../vendor/lodash-es/reject.js";
 import { commandBelongsToServer, filterToolsByServer } from "../../services/mcp/utils.js";
 import { omitKeys } from "../../utils/hooks/hookCommandResolution.js";
-import { minimalStatuses, isBridgeOrTransport, mayTransportPersist } from "../transportState.js";
+import { jsonStringify } from "../../utils/slowOperations.js";
+import { MAX_LIVE_RESPONSE_BYTES, stripInitializeAgentPaths } from "../../bridge/controlRequests.js";
+import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import { getVersionReport } from "../earlyArgs.js";
-import { stripInitializeAgentPaths } from "../../bridge/controlRequests.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
 import { collectContextData } from "../../commands/context/context-noninteractive.js";
 import { toSdkModelInfos, mcpAuthErrorCode } from "../../entrypoints/sdk/coreSchemas.js";
@@ -100,9 +115,12 @@ import { fromEnum, lit, fromNumber } from "../../services/analytics/safeMetadata
 import { getConnectionTimeoutMs } from "../../services/mcp/client.js";
 import { classifyMcpErrorSourceCategory } from "../../services/mcp/mcpResultErrors.js";
 import { stripAnthropicMeta } from "../../services/mcp/anthropicMeta.js";
-import { jsonStringify } from "../../utils/slowOperations.js";
 import { logPrefetchOutcome, prefetchInboundAttachments } from "../../bridge/inboundAttachments.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
+import { isSessionJwtAuth } from "../../services/projects/projectMemory.js";
+import { env } from "../../utils/env.js";
+import { forgetKeptProjectDetail } from "../../services/projects/projectContext.js";
+import { invalidateUserContext } from "../../context.js";
 import { getSessionId } from "../../bootstrap/state.js";
 import {
   getMaterializedSessionFile,
@@ -120,29 +138,29 @@ import { logTitleChangeError } from "./sessionControlRequests.js";
 import { getSdkHostedBridgeHandle } from "../../bridge/replBridgeHandle.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-nkdv7dw8.js:3284-3371 placement
+//@ chunk-vxsfen55.js:3660-3747 placement
 function mergeClientConfigsIfAny(configs, transform) {
   transform = typeof transform == "function" ? transform : undefined;
   return configs && configs.length ? import_baseUniq(configs, undefined, transform) : [];
 }
-//@ chunk-nkdv7dw8.js:3371-3381 placement
+//@ chunk-vxsfen55.js:3747-3757 placement
 var mergeMcpClientConfigs = mergeClientConfigsIfAny;
-//@ chunk-nkdv7dw8.js:3381-3419 placement
+//@ chunk-vxsfen55.js:3757-3795 placement
 var requireVtyyqz9qChunk; // deferred: loads other modules while loading; runs once its import cycle is complete
-deferInit("chunk-nkdv7dw8.js:3381", () => {
-  requireVtyyqz9qChunk = require("../../services/mcp/artifactMcpFilter.js");
+deferInit("chunk-vxsfen55.js:3757", () => {
+  requireVtyyqz9qChunk = require("../../services/mcp/CCR_ARTIFACTS_WITHHELD.lazy.js");
 });
-//@ chunk-nkdv7dw8.js:3419-3488 placement
+//@ chunk-vxsfen55.js:3795-3864 placement
 function mcpClientModule_5() {
   return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
-//@ chunk-nkdv7dw8.js:3488-3584 placement
+//@ chunk-vxsfen55.js:3864-3960 placement
 function describeMcpServerStatus(serverInfo) {
   return serverInfo.type === "failed"
     ? (serverInfo.error ?? "Connection failed")
     : `Server status: ${serverInfo.type}`;
 }
-//@ chunk-nkdv7dw8.js:3584-5072 placement
+//@ chunk-vxsfen55.js:3960-5451 placement
 /**
  * 汇总 MCP 服务器状态供 mcp_status 返回。
  */
@@ -234,11 +252,11 @@ function buildMcpStatusList(status, controlState, clients) {
     ),
   };
 }
-//@ chunk-nkdv7dw8.js:5072-7153 placement
+//@ chunk-vxsfen55.js:5451-7693 placement
 /**
  * 推送的 MCP 服务器被忽略/不接纳的原因文本。
  */
-var BUILTIN_SERVER_IGNORED_REASON; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var BUILTIN_SERVER_IGNORED_REASON; // deferred: uses requireVtyyqz9qChunk of its import cycle while loading; runs once the cycle is complete
 var IGNORED_BY_ENTERPRISE_POLICY_TEXT;
 var IGNORED_HERMETIC_MODE_TEXT;
 var IGNORED_EXCLUSIVE_MANAGED_CONFIG_TEXT;
@@ -254,9 +272,10 @@ var NO_TOOL_POLICY_IN_SESSION_TEXT;
 var TOGGLED_BY_SERVER_SET_TEXT;
 var UNCONFIRMED_TOGGLE_TEXT;
 var SAVED_FOR_NEXT_START_TEXT;
-var KNOWN_MCP_STATUS_TEXTS;
+var NOT_DIALED_SUPERSEDED_TEXT;
+var KNOWN_STATUS_TEXTS;
 var KNOWN_RUNNER_SKIP_REASONS;
-deferInit("chunk-nkdv7dw8.js:5072", () => {
+deferInit("chunk-vxsfen55.js:5451", () => {
   BUILTIN_SERVER_IGNORED_REASON = "Builtin server is CLI-owned; ignored";
   IGNORED_BY_ENTERPRISE_POLICY_TEXT = "Blocked by enterprise policy (allowedMcpServers/deniedMcpServers)";
   IGNORED_HERMETIC_MODE_TEXT = "Ignored in hermetic mode (not declared in user config)";
@@ -285,7 +304,8 @@ deferInit("chunk-nkdv7dw8.js:5072", () => {
     "The session's tool container did not confirm the change, so the server may be on or off. Check its status before trying again";
   SAVED_FOR_NEXT_START_TEXT =
     "Saved. The server stays off for now and will be connected the next time this session starts after being idle. There is nothing more to do";
-  KNOWN_MCP_STATUS_TEXTS = new Set([
+  NOT_DIALED_SUPERSEDED_TEXT = "not dialed: a newer server set replaced it";
+  KNOWN_STATUS_TEXTS = new Set([
     BUILTIN_SERVER_IGNORED_REASON,
     OPERATOR_SUPPLIED_IGNORED_TEXT,
     IGNORED_BY_ENTERPRISE_POLICY_TEXT,
@@ -306,6 +326,17 @@ deferInit("chunk-nkdv7dw8.js:5072", () => {
     BLOCKED_BY_POLICY_REASON,
     RESERVED_ADDRESS_REASON,
     ACCOUNT_CHANGED_REASON,
+    NOT_APPROVED_REASON,
+    DISABLED_BY_SETTING_REASON,
+    DISABLED_IN_MCP_REASON,
+    AUTH_CLEARED_REASON,
+    AUTH_CLEAR_FAILED_REASON,
+    CLOSED_WHILE_SIGNING_IN_REASON,
+    NOT_DIALED_SUPERSEDED_TEXT,
+    TOKEN_REJECTED_REASON,
+    ...(requireVtyyqz9qChunk !== null
+      ? [requireVtyyqz9qChunk.CCR_ARTIFACTS_WITHHELD, requireVtyyqz9qChunk.CCR_ARTIFACTS_WITHHELD_ON_A_RUNNER]
+      : []),
   ]);
   KNOWN_RUNNER_SKIP_REASONS = new Set([
     "synced-file staging not supported on this runner kind",
@@ -313,7 +344,7 @@ deferInit("chunk-nkdv7dw8.js:5072", () => {
     "list returned incomplete credential",
   ]);
 });
-//@ chunk-nkdv7dw8.js:7153-7450 placement
+//@ chunk-vxsfen55.js:7693-7990 placement
 /**
  * MCP 资源请求错误文字的白名单校验：只放行固定集合或符合 gated/failed/truncated/stalled 格式的文字，其他返回 undefined。
  */
@@ -328,18 +359,22 @@ function sanitizeMcpResourceError(error) {
     return error;
   return;
 }
-//@ chunk-nkdv7dw8.js:7450-7613 placement
+//@ chunk-vxsfen55.js:7990-8153 placement
 function allowlistedStatusText(text) {
   if (text.match(/^Server status: ([a-z][a-z-]{0,31})$/) !== null) return text;
   if (text.match(/^Server not found: ([A-Za-z0-9 _.-]{1,64})$/) !== null) return text;
   return;
 }
-//@ chunk-nkdv7dw8.js:7613-7684 placement
+//@ chunk-vxsfen55.js:8153-8218 layout
+function statusTextOrFallback(text, fallbackText = "Connection failed") {
+  return KNOWN_STATUS_TEXTS.has(text) ? text : (allowlistedStatusText(text) ?? fallbackText);
+}
+//@ chunk-vxsfen55.js:8218-8289 placement
 /**
  * mcp_set_servers 的 servers 参数必须为对象映射时的错误文本。
  */
 var SERVERS_OBJECT_REQUIRED_TEXT = "mcp_set_servers: servers must be an object of config objects";
-//@ chunk-nkdv7dw8.js:7684-7945 placement
+//@ chunk-vxsfen55.js:8289-8538 placement
 /**
  * 生成可上报的 MCP 服务器状态表：需要脱敏时清洗服务器名（重名加 #n），状态文本只保留白名单内的形状，否则记为 "connection failed"。
  */
@@ -354,17 +389,13 @@ function sanitizeMcpStatusMap(shouldSanitize, errors) {
       sanitizedKey = `${sanitizedKey}#${suffix}`;
     }
     sanitized[sanitizedKey] =
-      !shouldSanitize ||
-      KNOWN_MCP_STATUS_TEXTS.has(value) ||
-      (isPrototypeKey(key) && value === reservedServerNameMessage(key))
+      !shouldSanitize || (isPrototypeKey(key) && value === reservedServerNameMessage(key))
         ? value
-        : (allowlistedStatusText(value) ?? "connection failed");
+        : statusTextOrFallback(value, "connection failed");
   }
   return sanitized;
 }
-//@ chunk-nkdv7dw8.js:7945-7997 placement
-var NOT_DIALED_SUPERSEDED_TEXT = "not dialed: a newer server set replaced it";
-//@ chunk-nkdv7dw8.js:7997-8143 placement
+//@ chunk-vxsfen55.js:8538-8669 placement
 /**
  * 按范围筛选 MCP 服务器配置：严格配置模式返回空；configured 范围全部保留，否则只留内置市场来的服务器。
  */
@@ -372,30 +403,37 @@ function filterServersForScope(servers, { scope, strictMcpConfig }) {
   let result = emptyServerMap();
   if (strictMcpConfig) return result;
   for (let [key, value] of Object.entries(servers))
-    if (scope === "configured" || isFromBuiltinMarketplace(value)) result[key] = value;
+    if (isScopeAllowedForServer(scope, key, value)) result[key] = value;
   return result;
 }
-//@ chunk-nkdv7dw8.js:8143-8230 placement
+//@ chunk-vxsfen55.js:8669-8792 layout
+function isScopeAllowedForServer(scope, serverName, command) {
+  if (scope === "configured") return true;
+  if (scope === "account_plugins") return isFromBuiltinMarketplace(command);
+  return isPluginServerConfig(command) && import_sortedIndex_2(command, scope.copies.get(serverName));
+}
+//@ chunk-vxsfen55.js:8792-8884 placement
 /**
  * 从服务器配置表里挑出非内置市场来源的服务器（未知上下文下会整体保留）。
  */
-function nonBuiltinMarketplaceServers(configs) {
+function nonBuiltinMarketplaceServers(configs, scope) {
   let result = emptyServerMap();
-  for (let [key, value] of Object.entries(configs)) if (!isFromBuiltinMarketplace(value)) result[key] = value;
+  for (let [key, value] of Object.entries(configs))
+    if (!isScopeAllowedForServer(scope, key, value)) result[key] = value;
   return result;
 }
-//@ chunk-nkdv7dw8.js:21884-21956 placement
+//@ chunk-vxsfen55.js:24950-25022 placement
 var teleportRelayEnvModule; // deferred: loads other modules while loading; runs once its import cycle is complete
 var chromeSwitchNotesModule;
-deferInit("chunk-nkdv7dw8.js:21884", () => {
+deferInit("chunk-vxsfen55.js:24950", () => {
   teleportRelayEnvModule = require("../../utils/teleport/relayEnv.js");
   chromeSwitchNotesModule = require("../../services/teleport/relayState.js");
 });
-//@ chunk-nkdv7dw8.js:21956-22026 placement
+//@ chunk-vxsfen55.js:25022-25092 placement
 function mcpClientModule_7() {
   return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
-//@ chunk-nkdv7dw8.js:22026-23645 placement
+//@ chunk-vxsfen55.js:25092-26711 placement
 /**
  * mcp_reconnect / mcp_toggle 的开关处理：解析 lane 上下文、处理待定手工交换，再按目标状态启用或禁用服务器并回复。
  */
@@ -478,7 +516,7 @@ var handleMcpToggle = (request, context) => {
   }
   return reconnectServerForControl(context, lanes, serverName, config, false);
 };
-//@ chunk-nkdv7dw8.js:23645-23816 placement
+//@ chunk-vxsfen55.js:26711-26882 placement
 /**
  * 判断 SDK 注册的 MCP 服务器是否尚未被接管：不是 Chrome 服务器、有 SDK 注册、无归属配置，且不在当前客户端或动态客户端中。
  */
@@ -491,22 +529,22 @@ function isUnadoptedSdkServer(lanes, engineState, serverName) {
     !lanes.dynamicClients().some((client) => client.name === serverName)
   );
 }
-//@ chunk-nkdv7dw8.js:23816-23901 placement
+//@ chunk-vxsfen55.js:26882-26967 placement
 function requireMcpControlLanes(context) {
   if (context.mcpControlLanes === null) throw new WireSafeControlError(UNSUPPORTED_CONTROL_SUBTYPE_TEXT);
   return context.mcpControlLanes;
 }
-//@ chunk-nkdv7dw8.js:23901-23962 placement
+//@ chunk-vxsfen55.js:26967-27028 placement
 function setServerEnabledEverywhere(context, lanes, serverName, enabled) {
   setMcpServerEnabled(serverName, enabled, context.storageV5);
   lanes.switchSaved(serverName, enabled);
 }
-//@ chunk-nkdv7dw8.js:23962-24028 placement
+//@ chunk-vxsfen55.js:27028-27094 placement
 async function awaitExchangeThenToggle(exchange, context, lanes, serverName) {
   await exchange.catch(() => {});
   return toggleMcpServer(context, lanes, serverName);
 }
-//@ chunk-nkdv7dw8.js:24028-24596 placement
+//@ chunk-vxsfen55.js:27094-27662 placement
 function toggleMcpServer(context, lanes, serverName) {
   let engineState = context.engineState();
   let config =
@@ -537,7 +575,7 @@ function toggleMcpServer(context, lanes, serverName) {
     existing.type !== "pending";
   return reconnectServerForControl(context, lanes, serverName, config, distrust);
 }
-//@ chunk-nkdv7dw8.js:24596-24791 placement
+//@ chunk-vxsfen55.js:27662-27862 placement
 async function reconnectServerForControl(context, lanes, serverName, config, distrust) {
   lanes.seedControlDialSlot(serverName, config);
   let result = await lanes.reconnectForControlRequest(serverName, config, {
@@ -547,7 +585,7 @@ async function reconnectServerForControl(context, lanes, serverName, config, dis
   replyThenThrowOnError(
     context,
     reconnectMcpServer(
-      context,
+      redactsOrPersists(context),
       lanes.landControlResult(
         serverName,
         sameConfig
@@ -560,28 +598,29 @@ async function reconnectServerForControl(context, lanes, serverName, config, dis
     ),
   );
 }
-//@ chunk-nkdv7dw8.js:24791-24888 placement
+//@ chunk-vxsfen55.js:27862-27959 placement
 function replyThenThrowOnError(context, reply) {
   if (context.replyNow !== null) context.replyNow(reply);
   if (reply.subtype === "error") throw new QueuedNotificationError(reply.error);
 }
-//@ chunk-nkdv7dw8.js:24888-25250 placement
-function reconnectMcpServer(context, client) {
+//@ chunk-vxsfen55.js:27959-28258 placement
+function reconnectMcpServer(isLive, client) {
   if (client.type === "connected")
     return {
       subtype: "success",
     };
   if (client.type === "failed") {
-    if (context.redactsPersistedLane())
-      logForDebugging(`mcp reconnect/toggle failed: ${client.error ?? "(no detail)"}`, {
-        level: "error",
-      });
+    if (isLive)
+      logForDebugging(
+        `mcp reconnect/toggle failed for ${sanitizeTelemetryString(client.name)}: ${client.error ?? "(no detail)"}`,
+        {
+          level: "error",
+        },
+      );
     let error = client.error ?? "Connection failed";
     return {
       subtype: "error",
-      error: KNOWN_MCP_STATUS_TEXTS.has(error)
-        ? error
-        : (allowlistedStatusText(error) ?? (context.redactsPersistedLane() ? "Connection failed" : error)),
+      error: isLive ? statusTextOrFallback(error) : error,
     };
   }
   return {
@@ -589,12 +628,12 @@ function reconnectMcpServer(context, client) {
     error: describeMcpServerStatus(client),
   };
 }
-//@ chunk-nkdv7dw8.js:25250-25308 placement
+//@ chunk-vxsfen55.js:28258-28316 placement
 function reconnectDisabledServer(context, lanes, serverName, config, engineState) {
   setServerEnabledEverywhere(context, lanes, serverName, false);
   return reconnectMcpServerByName(context, lanes, serverName, config, engineState);
 }
-//@ chunk-nkdv7dw8.js:25308-25697 placement
+//@ chunk-vxsfen55.js:28316-28705 placement
 /**
  * 处理 mcp_reconnect：找到同名的启动/SDK/动态/已连接客户端，清除已连接实例（按配置去重）的服务器缓存，再重连并回复。
  */
@@ -620,7 +659,7 @@ function reconnectMcpServerByName(context, lanes, serverName, config, engineStat
   }
   return finishMcpReconnect(context, lanes, serverName, config, filtered[0], shouldFinish);
 }
-//@ chunk-nkdv7dw8.js:25697-25802 placement
+//@ chunk-vxsfen55.js:28705-28810 placement
 async function disableSdkServerControl(context, lanes, serverName, config) {
   setServerEnabledEverywhere(context, lanes, serverName, false);
   await lanes.disableSdkServer(serverName);
@@ -629,13 +668,13 @@ async function disableSdkServerControl(context, lanes, serverName, config) {
     subtype: "success",
   });
 }
-//@ chunk-nkdv7dw8.js:25802-25944 placement
+//@ chunk-vxsfen55.js:28810-28957 placement
 async function enableSdkServerControl(context, lanes, serverName, config) {
   let result = await lanes.enableSdkServer(serverName);
   replyThenThrowOnError(
     context,
     reconnectMcpServer(
-      context,
+      redactsOrPersists(context),
       result ?? {
         name: serverName,
         type: "failed",
@@ -645,7 +684,7 @@ async function enableSdkServerControl(context, lanes, serverName, config) {
     ),
   );
 }
-//@ chunk-nkdv7dw8.js:25944-26281 placement
+//@ chunk-vxsfen55.js:28957-29294 placement
 /**
  * MCP 重连控制请求的收尾：仍有效时找到该服务器的当前客户端；若是缓存/新连接则先刷新其工具再回复成功，否则直接清理并回复成功。
  */
@@ -672,7 +711,7 @@ function finishMcpReconnect(context, lanes, serverName, config, client, shouldFi
     subtype: "success",
   });
 }
-//@ chunk-nkdv7dw8.js:26281-26511 placement
+//@ chunk-vxsfen55.js:29294-29525 placement
 async function dropServerCaches(serverName, config, client, fallbackClient) {
   if (client?.type === "cached")
     mcpClientModule_7().disposeServerConnectionDetached(serverName, client.config);
@@ -681,7 +720,7 @@ async function dropServerCaches(serverName, config, client, fallbackClient) {
   if (!isDiscoveryCacheUsable()) return;
   await flushDiscoveryCache(mcpClientModule_7().dropDiscoveryEntry(serverName, config));
 }
-//@ chunk-nkdv7dw8.js:26511-26865 placement
+//@ chunk-vxsfen55.js:29525-29879 placement
 /**
  * 把 MCP 服务器在引擎状态中标为 disabled：客户端条目改为 disabled，并移除其工具、命令、资源与资源模板。
  */
@@ -708,17 +747,56 @@ function markServerDisabled(context, lanes, serverName) {
     },
   }));
 }
-//@ chunk-nkdv7dw8.js:26865-26900 placement
-var handleMcpStatus = (request, context) => ({
-  mcpServers: mcpStatusForReply(context),
-});
-//@ chunk-nkdv7dw8.js:26900-27000 placement
-function mcpStatusForReply(context) {
-  return context.redactsPersistedLane()
-    ? minimalStatuses(describeMcpServerForStatus(context.mcpConnections()))
-    : describeMcpServerForStatus(context.mcpConnections());
+//@ chunk-vxsfen55.js:29879-30000 placement
+var handleMcpStatus = (request, context) => {
+  let servers = describeMcpServersForStatus(context);
+  return {
+    mcpServers:
+      request.liveReply === true && transportStateByHost.of(context.session).transportPersists === true
+        ? trimServerDetailForSize(servers)
+        : servers,
+  };
+};
+var LIVE_RESPONSE_OVERHEAD_BYTES = 256;
+//@ chunk-vxsfen55.js:30000-30155 layout
+function trimServerDetailForSize(servers) {
+  if (Buffer.byteLength(jsonStringify(servers)) <= MAX_LIVE_RESPONSE_BYTES - LIVE_RESPONSE_OVERHEAD_BYTES)
+    return servers;
+  return servers.map(({ tools, serverInfo, capabilities, ...rest }) => ({
+    ...rest,
+    ...(tools && {
+      toolCount: tools.length,
+    }),
+  }));
 }
-//@ chunk-nkdv7dw8.js:27000-27281 placement
+//@ chunk-vxsfen55.js:30155-30680 layout
+function describeMcpServersForStatus(context) {
+  let servers = describeMcpServerForStatus(context.mcpConnections());
+  if (!redactsOrPersists(context)) return servers;
+  if (context.redactsPersistedLane())
+    return servers.map(({ name, status }) => ({
+      name,
+      status,
+    }));
+  return servers.map((server) => ({
+    name: server.name,
+    status: server.status,
+    serverInfo: server.serverInfo,
+    error: server.error === undefined ? undefined : statusTextOrFallback(server.error),
+    error_code: server.error_code,
+    config: undefined,
+    transport: server.transport,
+    sessionProxied: server.sessionProxied,
+    cloudServiceProvided: server.cloudServiceProvided,
+    urlHost: isRemoteManagedEnvironment() ? server.urlHost : undefined,
+    scope: server.scope,
+    source: server.source,
+    tools: server.tools,
+    toolCount: server.toolCount,
+    capabilities: server.capabilities,
+  }));
+}
+//@ chunk-vxsfen55.js:30680-30961 placement
 var handleGetBinaryVersion = () => getVersionReport();
 var handleGetContextUsage = async (request, context) => {
   if (request.detail != null && request.detail !== "summary" && request.detail !== "full")
@@ -730,7 +808,7 @@ var handleGetContextUsage = async (request, context) => {
     ...(!mayIncludeAgentPaths(context) && stripInitializeAgentPaths(payload)),
   };
 };
-//@ chunk-nkdv7dw8.js:27281-27566 placement
+//@ chunk-vxsfen55.js:30961-31246 placement
 function collectContextUsage(context, detail, localPaths) {
   let { messages, mainLoopModel = getMainLoopModel(), ...rest } = context.contextUsageInputs();
   return collectContextData({
@@ -748,7 +826,7 @@ function collectContextUsage(context, detail, localPaths) {
     localPaths,
   });
 }
-//@ chunk-nkdv7dw8.js:27566-28256 placement
+//@ chunk-vxsfen55.js:31246-31936 placement
 /**
  * 控制请求的三个小处理器：get_session_cost 返回总费用文本、reload_output_styles 清缓存并返回可用样式名、get_usage 校验 skip_behaviors 参数后返回用量。
  */
@@ -802,7 +880,7 @@ var handleGetUsage = async (request, context) => {
     },
   };
 };
-//@ chunk-nkdv7dw8.js:28256-29878 placement
+//@ chunk-vxsfen55.js:31936-33558 placement
 function describeMcpServerForStatus({ connections, tools }) {
   let allTools = uniqByExport(tools, "name");
   return connections
@@ -906,11 +984,11 @@ function describeMcpServerForStatus({ connections, tools }) {
       };
     });
 }
-//@ chunk-nkdv7dw8.js:29878-29942 placement
+//@ chunk-vxsfen55.js:33558-33622 placement
 function mayIncludeAgentPaths(context) {
   return !context.redactsPersistedLane() && !mayTransportPersist(context.session);
 }
-//@ chunk-nkdv7dw8.js:29942-30609 placement
+//@ chunk-vxsfen55.js:33622-34289 placement
 function handleSetMcpPermissionModeOverride(request) {
   let { serverName, mode } = request;
   if (typeof serverName !== "string")
@@ -942,12 +1020,12 @@ function handleSetMcpPermissionModeOverride(request) {
     override: mcpModeOverride.override,
   };
 }
-//@ chunk-nkdv7dw8.js:30609-30771 placement
+//@ chunk-vxsfen55.js:34289-34451 placement
 var ASK_FOR_TOOLS_INVALID_MESSAGE; // deferred: uses UNRECOGNIZED_PERMISSION_MODE_ERROR (../../types/permissions.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-nkdv7dw8.js:30609", () => {
+deferInit("chunk-vxsfen55.js:34289", () => {
   ASK_FOR_TOOLS_INVALID_MESSAGE = `set_mcp_permission_mode_override: askForTools must be a list of at most ${MCP_ASK_FOR_TOOLS_MAX} {name} entries, each name 1 to 64 letters, digits, underscores or hyphens`;
 });
-//@ chunk-nkdv7dw8.js:30771-31143 placement
+//@ chunk-vxsfen55.js:34451-34823 placement
 /**
  * 校验 set_mcp_permission_mode_override 的 askForTools：至多上限个 {name}、名字合法，去掉服务器前缀后去重返回，空则 undefined；不合法抛 WireSafeControlError。
  */
@@ -970,7 +1048,7 @@ function parseAskForTools(request, serverName) {
   }
   return names.size > 0 ? [...names] : undefined;
 }
-//@ chunk-nkdv7dw8.js:31143-31938 placement
+//@ chunk-vxsfen55.js:34823-35618 placement
 var clearUnknownServerOverride = (request, context) => {
   let { serverName, override } = handleSetMcpPermissionModeOverride(request);
   let askForTools = parseAskForTools(request, serverName);
@@ -1017,22 +1095,22 @@ var clearUnknownServerOverride = (request, context) => {
         : `MCP server '${sanitizeTelemetryString(serverName)}' is not yet known; override stored but will not apply until a server with that exact name connects.`,
   };
 };
-//@ chunk-nkdv7dw8.js:31938-31966 placement
+//@ chunk-vxsfen55.js:35618-35646 placement
 /**
  * mcp_read_resource 结果 JSON 的长度上限 10MB，超过即拒绝。
  */
 var MAX_MCP_RESOURCE_JSON_CHARS = 10485760;
 var UI = "ui://";
-//@ chunk-nkdv7dw8.js:31966-32018 placement
+//@ chunk-vxsfen55.js:35646-35698 placement
 function mcpModulesChunk_3() {
   return require("../../services/mcp/emitTripwireEvent.lazy.js");
 }
-//@ chunk-nkdv7dw8.js:32018-32076 placement
+//@ chunk-vxsfen55.js:35698-35756 placement
 function refuseMcpReadResource(reason, message) {
   logFeatureBad("mcp_read_resource", reason);
   throw new WireSafeControlError(message);
 }
-//@ chunk-nkdv7dw8.js:32076-34360 placement
+//@ chunk-vxsfen55.js:35756-38096 placement
 var handleMcpReadResource = async (request, context) => {
   if (context.redactsPersistedLane())
     refuseMcpReadResource("redacting_lane", "mcp_read_resource is not available on this connection");
@@ -1120,7 +1198,11 @@ var handleMcpReadResource = async (request, context) => {
         level: "warn",
       },
     );
-    throw new QueuedNotificationError(sanitizeTelemetryString(`mcp_read_resource: ${errorMessage(error)}`));
+    throw new QueuedNotificationError(
+      redactsOrPersists(context)
+        ? "mcp_read_resource: could not read the resource"
+        : sanitizeTelemetryString(`mcp_read_resource: ${errorMessage(error)}`),
+    );
   }
   let mapped = resource.contents.map((content) => ({
     uri: content.uri,
@@ -1142,9 +1224,9 @@ var handleMcpReadResource = async (request, context) => {
     contents: mapped,
   };
 };
-//@ chunk-nkdv7dw8.js:34360-34374 placement
+//@ chunk-vxsfen55.js:38096-38110 placement
 var noop = () => {};
-//@ chunk-nkdv7dw8.js:34374-35228 placement
+//@ chunk-vxsfen55.js:38110-38964 placement
 /**
  * prefetch_attachments 请求的形状错误文案，以及对应的合法性校验函数。
  */
@@ -1191,11 +1273,28 @@ var isValidPrefetchAttachmentsRequest = (request, context) => {
     }),
   };
 };
-//@ chunk-nkdv7dw8.js:35228-35299 placement
+//@ chunk-vxsfen55.js:38964-39035 placement
 function isPlainObjectOrArrayCheck(file) {
   return typeof file === "object" && file !== null && !Array.isArray(file);
 }
-//@ chunk-nkdv7dw8.js:35299-35384 placement
+//@ chunk-vxsfen55.js:39035-39481 layout
+var handleSetAttachedProject = (request, { session }) => {
+  let projectUuid = request.project_uuid;
+  let normalizedProjectUuid = normalizeUuidOrNull(projectUuid);
+  if (projectUuid !== null && normalizedProjectUuid === null)
+    throw new WireSafeControlError("set_attached_project: project_uuid must be a UUID or null");
+  if (!isSessionJwtAuth())
+    throw new WireSafeControlError(
+      "set_attached_project: this session does not read its Project through the service that hosts it",
+    );
+  if (normalizedProjectUuid === null) {
+    if (env.CLAUDE_PROJECT_UUID === undefined) return;
+    env.unset("CLAUDE_PROJECT_UUID");
+  } else env.set("CLAUDE_PROJECT_UUID", normalizedProjectUuid);
+  forgetKeptProjectDetail();
+  invalidateUserContext(session, normalizedProjectUuid === null ? "project_left" : "project_changed");
+};
+//@ chunk-vxsfen55.js:39481-39566 placement
 /**
  * 创建一次写尝试状态 {latched, attempted, pending, fallback, owed}（MCP 控制请求的写重试用）。
  */
@@ -1208,7 +1307,7 @@ function initialWriteAttempt(latched) {
     owed: false,
   };
 }
-//@ chunk-nkdv7dw8.js:35384-35428 placement
+//@ chunk-vxsfen55.js:39566-39610 placement
 /**
  * 把写尝试状态锁存到给定值（latched 与 attempted 同时更新）。
  */
@@ -1216,8 +1315,8 @@ function latchWriteAttempt(state, attempted) {
   state.latched = attempted;
   state.attempted = attempted;
 }
-//@ chunk-nkdv7dw8.js:35428-36337 placement
-function saveGeneratedTitle(text, host, signal = host.turnAbortSignal()) {
+//@ chunk-vxsfen55.js:39610-40539 placement
+function saveGeneratedTitle(text, host, promptUuid) {
   let { titles } = host;
   let sessionId = getSessionId();
   if (titles.pending?.sessionId === sessionId) return titles.pending.title;
@@ -1226,7 +1325,7 @@ function saveGeneratedTitle(text, host, signal = host.turnAbortSignal()) {
     settled: false,
     retracted: false,
   };
-  let titlePromise = requestSessionTitle(text, signal, host.credentials)
+  let titlePromise = requestSessionTitle(text, new AbortController().signal, host.credentials)
     .then((response) => {
       call.settled = true;
       if (call.retracted) return null;
@@ -1286,6 +1385,7 @@ function saveGeneratedTitle(text, host, signal = host.turnAbortSignal()) {
   let pending = {
     sessionId,
     title: titlePromise,
+    promptUuid,
     call,
   };
   titles.pending = pending;
@@ -1314,7 +1414,10 @@ export {
   sanitizeMcpResourceError,
   SERVERS_OBJECT_REQUIRED_TEXT,
   sanitizeMcpStatusMap,
-  describeMcpServerForStatus,
+  describeMcpServersForStatus,
+  reconnectMcpServerByName,
+  markServerDisabled,
+  MAX_MCP_RESOURCE_JSON_CHARS,
   saveGeneratedTitle,
   handleMcpStatus,
   handleGetContextUsage,
@@ -1329,8 +1432,6 @@ export {
   handleMcpReadResource,
   isValidPrefetchAttachmentsRequest,
   noop,
+  handleSetAttachedProject,
   isUnadoptedSdkServer,
-  reconnectMcpServerByName,
-  markServerDisabled,
-  MAX_MCP_RESOURCE_JSON_CHARS,
 };

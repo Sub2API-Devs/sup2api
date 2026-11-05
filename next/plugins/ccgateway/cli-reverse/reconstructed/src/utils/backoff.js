@@ -3,14 +3,14 @@
  *
  * 退避（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-zn0hg2p9.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5gxa0bhz.js (1)
  * attribution: placement 1
  */
 import { sleep } from "./sleep.js";
 
-//@ chunk-zn0hg2p9.js:226-329 placement
+//@ chunk-5gxa0bhz.js:226-329 placement
 /**
  * 生成指数退避等待函数（第 n 次等待 base·2^(n-1)，50%–100% 抖动）。
  */

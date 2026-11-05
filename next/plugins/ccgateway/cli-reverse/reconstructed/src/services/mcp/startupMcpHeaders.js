@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：启动时 MCP 服务器配置与请求头快照（比较、收窄）；MCP 服务器条目的比较文本与工具权限。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cjydagjy.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h61dq9nz.js (8)
  * attribution: placement 8
  */
 import { logForDebugging } from "../../utils/debug.js";
@@ -14,6 +14,7 @@ import {
   headerValues,
   X_MCP_SERVER_ORIGIN,
   X_CCR_OWNER_SLACK_USER_ID,
+  X_CCR_GMAIL_ATTACHMENTS,
   getFileReferenceOffer,
   serverCapabilityCache,
 } from "./fileReference/fileReferencePolicy.js";
@@ -30,7 +31,7 @@ import { isPlainObject } from "../../utils/objectUtils.js";
 import { toDynamicServerConfig } from "./dynamicServers.js";
 import { canonicalMcpConfigKey } from "./client.js";
 
-//@ chunk-cjydagjy.js:17117-18705 placement
+//@ chunk-h61dq9nz.js:17260-18895 placement
 /**
  * 启动时 MCP 服务器配置与请求头快照（比较、收窄）。
  */
@@ -62,7 +63,8 @@ class StartupMcpHeaders {
         };
         if (
           headerValues(singleHeader, X_MCP_SERVER_ORIGIN).length > 0 ||
-          headerValues(singleHeader, X_CCR_OWNER_SLACK_USER_ID).length > 0
+          headerValues(singleHeader, X_CCR_OWNER_SLACK_USER_ID).length > 0 ||
+          headerValues(singleHeader, X_CCR_GMAIL_ATTACHMENTS).length > 0
         )
           originHeaders[key] = value_2;
       }
@@ -109,10 +111,13 @@ class StartupMcpHeaders {
         for (let [entry, reason] of ended) {
           let found = FILE_REFERENCE_ROWS.find((row) => {
             let expectedUrl = `${row.connectorOrigin}${row.connectorPath}`;
-            return entry?.forms.some((form) => {
-              let upstreamUrl = ccrSessionIdFromMcpUrl(form.url)?.upstreamUrl;
-              return upstreamUrl === expectedUrl || upstreamUrl === `${expectedUrl}/`;
-            });
+            return (
+              row.recipientCheck === undefined &&
+              entry?.forms.some((form) => {
+                let upstreamUrl = ccrSessionIdFromMcpUrl(form.url)?.upstreamUrl;
+                return upstreamUrl === expectedUrl || upstreamUrl === `${expectedUrl}/`;
+              })
+            );
           });
           if (found !== undefined)
             getFileReferenceOffer().note(found, {
@@ -131,7 +136,7 @@ class StartupMcpHeaders {
     }
   }
 }
-//@ chunk-cjydagjy.js:18705-18998 placement
+//@ chunk-h61dq9nz.js:18895-19188 placement
 function installStartupMcpHeaders(session, regularMcpConfigs, ownership, asWritten = {}) {
   if (!isRemoteOrFalse() || isCcsTenant()) return;
   try {
@@ -154,14 +159,14 @@ function installStartupMcpHeaders(session, regularMcpConfigs, ownership, asWritt
     logError(error);
   }
 }
-//@ chunk-cjydagjy.js:18998-19047 placement
+//@ chunk-h61dq9nz.js:19188-19237 placement
 /**
  * 校验对象是否为 SDK 的 http 消息结构。
  */
 function isSdkHttpMessage(value) {
   return SDKHttpMessageSchema().safeParse(value).success;
 }
-//@ chunk-cjydagjy.js:19047-19246 placement
+//@ chunk-h61dq9nz.js:19237-19435 placement
 function headerSnapshotsFor(serverName, config) {
   let fingerprint = entryFingerprintText(config);
   if (
@@ -190,7 +195,7 @@ function headerSnapshotsFor(serverName, config) {
         },
       ];
 }
-//@ chunk-cjydagjy.js:19246-19474 placement
+//@ chunk-h61dq9nz.js:19435-19663 placement
 function permissionsWithinStartup(config, asWritten) {
   let caps = mcpEntryFingerprint(asWritten)?.caps;
   if (caps === undefined) return false;
@@ -202,14 +207,14 @@ function permissionsWithinStartup(config, asWritten) {
     )
   );
 }
-//@ chunk-cjydagjy.js:19474-19508 placement
+//@ chunk-h61dq9nz.js:19663-19697 placement
 /**
  * 取服务器条目的指纹文本。
  */
 function entryFingerprintText(entry) {
   return mcpEntryFingerprint(entry)?.text;
 }
-//@ chunk-cjydagjy.js:19508-19844 placement
+//@ chunk-h61dq9nz.js:19697-20033 placement
 /**
  * MCP 服务器条目的比较文本与工具权限。
  */
@@ -235,7 +240,7 @@ function mcpEntryFingerprint(entry) {
     return;
   }
 }
-//@ chunk-cjydagjy.js:19844-20128 placement
+//@ chunk-h61dq9nz.js:20033-20317 placement
 function withoutAllowPermissions(dynamicServerConfig) {
   if (!("toolPermissions" in dynamicServerConfig) || !isPlainObject(dynamicServerConfig.toolPermissions))
     return dynamicServerConfig;

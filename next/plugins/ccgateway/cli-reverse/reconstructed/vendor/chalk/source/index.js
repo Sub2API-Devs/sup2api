@@ -1,13 +1,13 @@
 /**
  * chalk/source/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: chalk@5.6.0..5.6.2
- * pieces: chunk-4ymxyb4g.js (14)
+ * pieces: chunk-h88kgep4.js (14)
  * attribution: esm-layout 5, esm-fingerprint 9
  */
 import { supportsColor_default, ansiStylesAlias } from "./vendor/supports-color/index.js";
 
-//@ chunk-4ymxyb4g.js:4788-4951 esm-layout
+//@ chunk-h88kgep4.js:4788-4951 esm-layout
 function stringReplaceAll(string, close, open) {
   let index = string.indexOf(close);
   if (index === -1) return string;
@@ -22,7 +22,7 @@ function stringReplaceAll(string, close, open) {
   returnValue += string.slice(endIndex);
   return returnValue;
 }
-//@ chunk-4ymxyb4g.js:4951-5109 esm-layout
+//@ chunk-h88kgep4.js:4951-5109 esm-layout
 function stringEncaseCRLFWithFirstIndex(string, closeAll, openAll, lfIndex) {
   let endIndex = 0;
   let returnValue = "";
@@ -47,7 +47,7 @@ function stringEncaseCRLFWithFirstIndex(string, closeAll, openAll, lfIndex) {
   returnValue += string.slice(endIndex);
   return returnValue;
 }
-//@ chunk-4ymxyb4g.js:5109-5455 esm-fingerprint
+//@ chunk-h88kgep4.js:5109-5455 esm-fingerprint
 var { stdout: stdoutColor, stderr: stderrColor } = supportsColor_default;
 var GENERATOR = Symbol("GENERATOR");
 var STYLER = Symbol("STYLER");
@@ -60,26 +60,26 @@ var applyOptions = (chalk, options = {}) => {
   let level = stdoutColor ? stdoutColor.level : 0;
   chalk.level = options.level === undefined ? level : options.level;
 };
-//@ chunk-4ymxyb4g.js:5455-5493 esm-layout
+//@ chunk-h88kgep4.js:5455-5493 esm-layout
 class Chalk {
   constructor(options) {
     return chalkFactory(options);
   }
 }
-//@ chunk-4ymxyb4g.js:5493-5585 esm-fingerprint
+//@ chunk-h88kgep4.js:5493-5585 esm-fingerprint
 var chalkFactory = (options) => {
   let chalk = (...strings) => strings.join(" ");
   applyOptions(chalk, options);
   Object.setPrototypeOf(chalk, createChalk.prototype);
   return chalk;
 };
-//@ chunk-4ymxyb4g.js:5585-5611 esm-layout
+//@ chunk-h88kgep4.js:5585-5611 esm-layout
 function createChalk(options) {
   return chalkFactory(options);
 }
-//@ chunk-4ymxyb4g.js:5611-5665 esm-fingerprint
+//@ chunk-h88kgep4.js:5611-5665 esm-fingerprint
 Object.setPrototypeOf(createChalk.prototype, Function.prototype);
-//@ chunk-4ymxyb4g.js:5665-5809 esm-fingerprint
+//@ chunk-h88kgep4.js:5665-5809 esm-fingerprint
 for (let [styleName, style] of Object.entries(ansiStylesAlias))
   styles[styleName] = {
     get() {
@@ -90,7 +90,7 @@ for (let [styleName, style] of Object.entries(ansiStylesAlias))
       return builder;
     },
   };
-//@ chunk-4ymxyb4g.js:5809-5910 esm-fingerprint
+//@ chunk-h88kgep4.js:5809-5910 esm-fingerprint
 styles.visible = {
   get() {
     let builder = createBuilder(this, this[STYLER], true);
@@ -100,7 +100,7 @@ styles.visible = {
     return builder;
   },
 };
-//@ chunk-4ymxyb4g.js:5910-6184 esm-fingerprint
+//@ chunk-h88kgep4.js:5910-6184 esm-fingerprint
 var getModelAnsi = (model, level, type, ...arguments_) => {
   if (model === "rgb") {
     if (level === "ansi16m") return ansiStylesAlias[type].ansi16m(...arguments_);
@@ -112,7 +112,7 @@ var getModelAnsi = (model, level, type, ...arguments_) => {
   return ansiStylesAlias[type][model](...arguments_);
 };
 var usedModels = ["rgb", "hex", "ansi256"];
-//@ chunk-4ymxyb4g.js:6184-6513 esm-fingerprint
+//@ chunk-h88kgep4.js:6184-6513 esm-fingerprint
 for (let model of usedModels) {
   styles[model] = {
     get() {
@@ -142,7 +142,7 @@ for (let model of usedModels) {
     },
   };
 }
-//@ chunk-4ymxyb4g.js:6513-7121 esm-fingerprint
+//@ chunk-h88kgep4.js:6513-7121 esm-fingerprint
 var proto = Object.defineProperties(() => {}, {
   ...styles,
   level: {
@@ -197,9 +197,9 @@ var applyStyle = (builder, string) => {
   if (lfIndex !== -1) string = stringEncaseCRLFWithFirstIndex(string, closeAll, openAll, lfIndex);
   return openAll + string + closeAll;
 };
-//@ chunk-4ymxyb4g.js:7121-7160 esm-fingerprint
+//@ chunk-h88kgep4.js:7121-7160 esm-fingerprint
 Object.defineProperties(createChalk.prototype, styles);
-//@ chunk-4ymxyb4g.js:7160-7196 esm-layout
+//@ chunk-h88kgep4.js:7160-7196 esm-layout
 var chalk = createChalk();
 var chalkStderr = createChalk({
   level: stderrColor ? stderrColor.level : 0,

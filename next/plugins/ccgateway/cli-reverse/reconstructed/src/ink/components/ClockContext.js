@@ -3,9 +3,9 @@
  *
  * 并入时钟上下文 useClock 与 StyledText
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/components/ClockContext.tsx
- * pieces: chunk-cg10fy59.js (5), chunk-x6v6jz2y.js (4)
+ * pieces: chunk-emhzq435.js (4), chunk-w63e462p.js (5)
  * attribution: placement 8, fingerprint 1
  */
 import { SCROLL_JUMP_LINES } from "../scrollConstants.js";
@@ -22,11 +22,11 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { BaseText } from "./Text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-cg10fy59.js:902-928 placement
+//@ chunk-w63e462p.js:902-928 placement
 function useClockTick() {
   return ClockProvider_2(SCROLL_JUMP_LINES);
 }
-//@ chunk-cg10fy59.js:928-1020 placement
+//@ chunk-w63e462p.js:928-1020 placement
 /**
  * 导出值：同一声明里的多个绑定：defaultSetTimeout（setTimeout 包装）；noopClock（空时钟）；nullClock（恒 null）；位于「并入时钟上下文 useClock 与 StyledText」模块。
  */
@@ -36,7 +36,7 @@ var defaultSetTimeout = (fn, ms) => {
 };
 var noopClock = () => () => {};
 var nullClock = () => null;
-//@ chunk-cg10fy59.js:1020-1614 placement
+//@ chunk-w63e462p.js:1020-1614 placement
 function ClockProvider_2(tickIntervalMs) {
   let subscribers = new Map();
   let interval = null;
@@ -87,17 +87,17 @@ function ClockProvider_2(tickIntervalMs) {
     },
   };
 }
-//@ chunk-cg10fy59.js:1614-1637 placement
+//@ chunk-w63e462p.js:1614-1637 placement
 /**
  * 导出值：同一声明里的多个绑定：clockContext（时钟上下文）；CLOCK_INTERVAL_MS（tick 的两倍）；位于「并入时钟上下文 useClock 与 StyledText」模块。
  */
 var clockContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CLOCK_INTERVAL_MS;
-deferInit("chunk-cg10fy59.js:1614", () => {
+deferInit("chunk-w63e462p.js:1614", () => {
   clockContext = createContext(null);
   CLOCK_INTERVAL_MS = SCROLL_JUMP_LINES * 2;
 });
-//@ chunk-cg10fy59.js:1637-1925 fingerprint (2.1.88 match: createClock, 0.744)
+//@ chunk-w63e462p.js:1637-1925 fingerprint (2.1.88 match: createClock, 0.743)
 /**
  * 动画时钟 Provider：终端有焦点时按正常帧间隔滴答，失焦时放慢，供 useAnimationFrame 等订阅。
  */
@@ -134,7 +134,7 @@ function ClockProvider(props) {
   } else t3 = $[6];
   return t3;
 }
-//@ chunk-x6v6jz2y.js:16990-17463 placement (2.1.88 match: StyledText, 1)
+//@ chunk-emhzq435.js:16926-17399 placement (2.1.88 match: StyledText, 1)
 /**
  * <Ansi> 渲染每个样式段用的小组件：粗体与暗不能同时生效时优先暗，否则粗体，再否则普通 <Text>。
  */
@@ -197,20 +197,20 @@ function StyledText(t0) {
   } else t1 = $[13];
   return t1;
 }
-//@ chunk-x6v6jz2y.js:17463-17467 placement
+//@ chunk-emhzq435.js:17399-17403 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:17463", () => {
+deferInit("chunk-emhzq435.js:17399", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:17467-17471 placement
+//@ chunk-emhzq435.js:17403-17407 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:17467", () => {
+deferInit("chunk-emhzq435.js:17403", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:17471-17573 placement
+//@ chunk-emhzq435.js:17407-17509 placement
 function useClock() {
   let clock = useContext(clockContext);
   if (!clock) throw Error("useClock must be used within a ClockProvider");
   return clock;
 }
-export { useClock, clockContext, defaultSetTimeout, ClockProvider, noopClock, StyledText, nullClock };
+export { useClock, clockContext, defaultSetTimeout, noopClock, ClockProvider, StyledText, nullClock };

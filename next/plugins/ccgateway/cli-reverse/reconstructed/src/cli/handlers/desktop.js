@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：claude --desktop：把当前或指定会话交给 Claude Desktop 打开
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wgcp7px2.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-91mk8c4s.js (3)
  * attribution: placement 3
  */
 import { getPreSettingsEnvSnapshot } from "../../utils/managedEnvApply.js";
@@ -30,7 +30,7 @@ import { logFeatureOkAsync, logFeatureBadAsync } from "../../services/analytics/
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { printCliError } from "../exit.js";
 
-//@ chunk-wgcp7px2.js:12075-12238 placement
+//@ chunk-91mk8c4s.js:13222-13385 placement
 var DESKTOP_NO_SESSION_HINT = "Run `claude --resume` to pick a session, then /desktop inside it.";
 var DESKTOP_IGNORED_OPTIONS = new Set([
   "desktop",
@@ -41,7 +41,7 @@ var DESKTOP_IGNORED_OPTIONS = new Set([
   "debugFile",
   "verbose",
 ]);
-//@ chunk-wgcp7px2.js:12238-15583 placement
+//@ chunk-91mk8c4s.js:13385-16729 placement
 /**
  * `claude --desktop`：校验参数（不支持非交互/管道输入/prompt），把当前或指定会话交给 Claude Desktop 打开。
  */
@@ -233,7 +233,7 @@ async function launchDesktopHandoff({
   });
   return 0;
 }
-//@ chunk-wgcp7px2.js:15583-15653 placement
+//@ chunk-91mk8c4s.js:16729-16799 placement
 async function failDesktopLaunch(event, message) {
   printCliError(message);
   await logFeatureBadAsync("desktop_cli_launch", event);

@@ -3,12 +3,12 @@
  *
  * /mobile（别名 ios、android）命令对象
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/mobile/index.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:1732969-1733123 fingerprint (2.1.88 match: mobile, 0.895)
+//@ chunk-5xgkngpb.js:1808421-1808575 fingerprint (2.1.88 match: mobile, 0.894)
 /**
  * /mobile 命令对象（local-jsx）；描述：Show QR code to download the Claude mobile app；别名 ["ios","android"]；实现 chunk-7mtn3rbz.js 的 le。
  */

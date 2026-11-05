@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/lib/credentials/oidc-federation.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-3wydcdvj.js (1)
+ * pieces: chunk-gjbr82c9.js (1)
  * attribution: esm-fingerprint 1
  */
 import {
@@ -18,7 +18,7 @@ import {
 import { VERSION } from "../../version.mjs";
 import { nowSeconds } from "./token-cache.mjs";
 
-//@ chunk-3wydcdvj.js:8473-10007 esm-fingerprint
+//@ chunk-gjbr82c9.js:8473-10007 esm-fingerprint
 function oidcFederationProvider(config) {
   return async () => {
     requireSecureTokenEndpoint(config.baseURL);

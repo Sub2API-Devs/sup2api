@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/add-dir：加入工作目录并加载其中的 skills/commands/agents，说明被跳过的技能
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wwhzwan6.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h00yz63s.js (3)
  * attribution: placement 3
  */
 import { resolve } from "path";
@@ -29,7 +29,7 @@ import { appendRespawnFlag } from "../../services/daemon/jobState.js";
 import { sequential } from "../../utils/sequential.js";
 import { executeDirectoryAddedHooks } from "../../utils/hooks.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { persistLargeHookOutput } from "../../utils/toolResultStorage.js";
 import { plural } from "../../utils/stringUtils.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
@@ -41,7 +41,7 @@ import { isSettingSourceEnabled } from "../../utils/settings/constants.js";
 import { isCustomizationDisabled } from "../../utils/settings/customizationDisabled.js";
 import { isRestrictedToPluginOnly } from "../../utils/settings/pluginOnlyPolicy.js";
 
-//@ chunk-wwhzwan6.js:912-1036 placement
+//@ chunk-h00yz63s.js:912-1036 placement
 function addClaudeMdDirectory(session, normalizedDir) {
   let additionalDirectoriesForClaudeMd = getAdditionalDirectoriesForClaudeMd();
   if (additionalDirectoriesForClaudeMd.some((dir) => identity(resolve(dir)) === normalizedDir)) return false;
@@ -51,7 +51,7 @@ function addClaudeMdDirectory(session, normalizedDir) {
   reloadSkillsAfterDirectoryChange();
   return true;
 }
-//@ chunk-wwhzwan6.js:1036-2497 placement
+//@ chunk-h00yz63s.js:1036-2497 placement
 /**
  * /add-dir：把目录加入权限上下文（会话或 localSettings），刷新配置并加载其中的 skills/commands/agents。
  */
@@ -87,7 +87,7 @@ async function addWorkingDirectory(context, directoryPath, options) {
           logForDebugging(`DirectoryAdded hook failed: ${result.output}`, {
             level: "error",
           });
-      let failedCount = count(results, (result) => !result.succeeded);
+      let failedCount = countWhere(results, (result) => !result.succeeded);
       let messages = [
         ...(await Promise.all(
           systemMessages.map((systemMessage, index) =>
@@ -123,7 +123,7 @@ async function addWorkingDirectory(context, directoryPath, options) {
     });
   return skillsResult;
 }
-//@ chunk-wwhzwan6.js:2497-4078 placement
+//@ chunk-h00yz63s.js:2497-4078 placement
 function explainAddDirSkillsSkipped(context, outcome) {
   let toolPermissionContext = getToolPermissionContext(context);
   if (outcome.isExactMatch || !outcome.isOriginalCwd) return null;

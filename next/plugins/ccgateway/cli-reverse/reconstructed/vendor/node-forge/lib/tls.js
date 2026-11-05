@@ -1,8 +1,8 @@
 /**
  * node-forge/lib/tls.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: node-forge@1.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -16,7 +16,7 @@ import { require_random } from "./random.js";
 import { require_sha1 } from "./sha1.js";
 import { require_util } from "./util.js";
 
-//@ chunk-fq0cr76a.js:211753-249438 cjs-fingerprint
+//@ chunk-qg41pqt6.js:212221-249906 cjs-fingerprint
 var require_tls = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_asn1();
@@ -273,27 +273,27 @@ var require_tls = __commonJS(function (cjsExports, cjsModule) {
         },
       });
     else {
-      var b_2 = record.fragment;
-      var remaining = b_2.length();
+      var b = record.fragment;
+      var remaining = b.length();
       msg = {
         version: {
-          major: b_2.getByte(),
-          minor: b_2.getByte(),
+          major: b.getByte(),
+          minor: b.getByte(),
         },
-        random: forge.util.createBuffer(b_2.getBytes(32)),
-        session_id: readVector(b_2, 1),
+        random: forge.util.createBuffer(b.getBytes(32)),
+        session_id: readVector(b, 1),
         extensions: [],
       };
       if (client) {
-        msg.cipher_suite = b_2.getBytes(2);
-        msg.compression_method = b_2.getByte();
+        msg.cipher_suite = b.getBytes(2);
+        msg.compression_method = b.getByte();
       } else {
-        msg.cipher_suites = readVector(b_2, 2);
-        msg.compression_methods = readVector(b_2, 1);
+        msg.cipher_suites = readVector(b, 2);
+        msg.compression_methods = readVector(b, 1);
       }
-      remaining = length - (remaining - b_2.length());
+      remaining = length - (remaining - b.length());
       if (remaining > 0) {
-        var exts = readVector(b_2, 2);
+        var exts = readVector(b, 2);
         while (exts.length() > 0)
           msg.extensions.push({
             type: [exts.getByte(), exts.getByte()],
@@ -509,9 +509,9 @@ var require_tls = __commonJS(function (cjsExports, cjsModule) {
           description: tls.Alert.Description.illegal_parameter,
         },
       });
-    var b_2 = record.fragment;
+    var b = record.fragment;
     var msg = {
-      certificate_list: readVector(b_2, 3),
+      certificate_list: readVector(b, 3),
     };
     var cert;
     var asn1;
@@ -575,9 +575,9 @@ var require_tls = __commonJS(function (cjsExports, cjsModule) {
           description: tls.Alert.Description.unsupported_certificate,
         },
       });
-    var b_2 = record.fragment;
+    var b = record.fragment;
     var msg = {
-      enc_pre_master_secret: readVector(b_2, 2).getBytes(),
+      enc_pre_master_secret: readVector(b, 2).getBytes(),
     };
     var privateKey = null;
     if (c.getPrivateKey)
@@ -649,12 +649,12 @@ var require_tls = __commonJS(function (cjsExports, cjsModule) {
           description: tls.Alert.Description.illegal_parameter,
         },
       });
-    var b_2 = record.fragment;
-    b_2.read -= 4;
-    var msgBytes = b_2.bytes();
-    b_2.read += 4;
+    var b = record.fragment;
+    b.read -= 4;
+    var msgBytes = b.bytes();
+    b.read += 4;
     var msg = {
-      signature: readVector(b_2, 2).getBytes(),
+      signature: readVector(b, 2).getBytes(),
     };
     var verify = forge.util.createBuffer();
     verify.putBuffer(c.session.md5.digest());
@@ -775,21 +775,21 @@ var require_tls = __commonJS(function (cjsExports, cjsModule) {
     c.process();
   };
   tls.handleFinished = function (c, record, length) {
-    var b_2 = record.fragment;
-    b_2.read -= 4;
-    var msgBytes = b_2.bytes();
-    b_2.read += 4;
+    var b = record.fragment;
+    b.read -= 4;
+    var msgBytes = b.bytes();
+    b.read += 4;
     var vd = record.fragment.getBytes();
-    b_2 = forge.util.createBuffer();
-    b_2.putBuffer(c.session.md5.digest());
-    b_2.putBuffer(c.session.sha1.digest());
+    b = forge.util.createBuffer();
+    b.putBuffer(c.session.md5.digest());
+    b.putBuffer(c.session.sha1.digest());
     var client = c.entity === tls.ConnectionEnd.client;
     var label = client ? "server finished" : "client finished";
     var sp = c.session.sp;
     var vdl = 12;
     var prf = prf_TLS1;
-    b_2 = prf(sp.master_secret, label, b_2.getBytes(), vdl);
-    if (b_2.getBytes() !== vd)
+    b = prf(sp.master_secret, label, b.getBytes(), vdl);
+    if (b.getBytes() !== vd)
       return c.error(c, {
         message: "Invalid verify_data in Finished message.",
         send: true,
@@ -1360,7 +1360,7 @@ var require_tls = __commonJS(function (cjsExports, cjsModule) {
     b = b.getBytes();
     c.getSignature =
       c.getSignature ||
-      function (c, b_2, callback) {
+      function (c, b, callback) {
         var privateKey = null;
         if (c.getPrivateKey)
           try {
@@ -1386,8 +1386,8 @@ var require_tls = __commonJS(function (cjsExports, cjsModule) {
               description: tls.Alert.Description.internal_error,
             },
           });
-        else b_2 = privateKey.sign(b_2, null);
-        callback(c, b_2);
+        else b = privateKey.sign(b, null);
+        callback(c, b);
       };
     c.getSignature(c, b, callback);
   };
@@ -1431,19 +1431,19 @@ var require_tls = __commonJS(function (cjsExports, cjsModule) {
     return rval;
   };
   tls.createFinished = function (c) {
-    var b_2 = forge.util.createBuffer();
-    b_2.putBuffer(c.session.md5.digest());
-    b_2.putBuffer(c.session.sha1.digest());
+    var b = forge.util.createBuffer();
+    b.putBuffer(c.session.md5.digest());
+    b.putBuffer(c.session.sha1.digest());
     var client = c.entity === tls.ConnectionEnd.client;
     var sp = c.session.sp;
     var vdl = 12;
     var prf = prf_TLS1;
     var label = client ? "client finished" : "server finished";
-    b_2 = prf(sp.master_secret, label, b_2.getBytes(), vdl);
+    b = prf(sp.master_secret, label, b.getBytes(), vdl);
     var rval = forge.util.createBuffer();
     rval.putByte(tls.HandshakeType.finished);
-    rval.putInt24(b_2.length());
-    rval.putBuffer(b_2);
+    rval.putInt24(b.length());
+    rval.putBuffer(b);
     return rval;
   };
   tls.createHeartbeat = function (type, payload, payloadLength) {

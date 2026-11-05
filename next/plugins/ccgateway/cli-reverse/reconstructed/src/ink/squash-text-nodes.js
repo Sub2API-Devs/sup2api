@@ -3,19 +3,19 @@
  *
  * 并入已有模块：文本节点合并补充。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/squash-text-nodes.ts
- * pieces: chunk-bzr73sfg.js (6)
+ * pieces: chunk-2avr6cej.js (6)
  * attribution: placement 4, fingerprint 2
  */
 import { measureText } from "./measure-text.js";
 
-//@ chunk-bzr73sfg.js:175892-175903 placement
+//@ chunk-2avr6cej.js:175641-175652 placement
 /**
  * measureText 的门面导出别名。
  */
 var measureTextAlias = measureText;
-//@ chunk-bzr73sfg.js:175903-175988 placement
+//@ chunk-2avr6cej.js:175652-175737 placement
 /**
  * 追加待清理项
  */
@@ -23,7 +23,7 @@ function queuePendingClear(parent, clear) {
   if (parent.pendingClears) parent.pendingClears.push(clear);
   else parent.pendingClears = [clear];
 }
-//@ chunk-bzr73sfg.js:175988-176070 placement
+//@ chunk-2avr6cej.js:175737-175819 placement
 /**
  * 标记根节点被移出
  */
@@ -32,7 +32,7 @@ function markAbsoluteNodeRemoved(parent) {
   while (ancestor.parentNode) ancestor = ancestor.parentNode;
   ancestor.absoluteNodeRemoved = true;
 }
-//@ chunk-bzr73sfg.js:176070-176152 placement
+//@ chunk-2avr6cej.js:175819-175901 placement
 /**
  * 读取节点是否被整体移出，并复位标记。
  */
@@ -41,7 +41,7 @@ function consumeAbsoluteNodeRemoved(node) {
   node.absoluteNodeRemoved = false;
   return wasRemoved;
 }
-//@ chunk-bzr73sfg.js:176152-176712 fingerprint (2.1.88 match: squashTextNodesToSegments, 0.881)
+//@ chunk-2avr6cej.js:175901-176461 fingerprint (2.1.88 match: squashTextNodesToSegments, 0.881)
 /**
  * 把 ink-text 子树压平成 {text, styles, hyperlink} 段：样式沿树合并，ink-link 的 href 作为超链接下传；跨文本节点被拆开的 UTF-16 代理对会拼回前一段。
  */
@@ -77,7 +77,7 @@ function squashTextNodesToSegments(node, inheritedStyles = {}, inheritedHyperlin
   }
   return out;
 }
-//@ chunk-bzr73sfg.js:176712-176949 fingerprint (2.1.88 match: squashTextNodes, 1)
+//@ chunk-2avr6cej.js:176461-176698 fingerprint (2.1.88 match: squashTextNodes, 1)
 /**
  * 把 ink-text 子树的纯文本拼起来（不带样式）。
  */
@@ -94,9 +94,9 @@ function squashTextNodes(node) {
 }
 export {
   squashTextNodes,
+  squashTextNodesToSegments,
   markAbsoluteNodeRemoved,
   queuePendingClear,
-  squashTextNodesToSegments,
   measureTextAlias,
   consumeAbsoluteNodeRemoved,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。插件评测 HTML 报告片段渲染（用例行、运行详情、CSS）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5wjwnxna.js (28)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wsa1bbj1.js (28)
  * attribution: placement 28
  */
 import { relative } from "path";
@@ -13,20 +13,20 @@ import { Marked } from "../../../../vendor/marked/lib/marked.esm.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
 import { printableName } from "../../../utils/printableName.js";
 import { plural, truncateMiddle } from "../../../utils/stringUtils.js";
-import { count } from "../../../utils/collections.js";
+import { countWhere } from "../../../utils/collections.js";
 import { mean } from "../../../services/pluginEval/evalReport.js";
 import { formatDuration } from "../../../utils/format.js";
 import { escapeXmlAttr } from "../../../utils/xml.js";
 import { INVISIBLE_CHAR_CLASSES } from "../../../utils/confusables.js";
 
-//@ chunk-5wjwnxna.js:910-1023 placement
+//@ chunk-wsa1bbj1.js:993-1106 placement
 var UNESCAPED_AMPERSAND = /&(?!(?:#\d{1,7}|#[Xx][0-9a-fA-F]{1,6}|\w+);)/g;
 var DISABLED_CHECKBOX_PREFIX_PATTERN = /^<input (?:checked="" )?disabled="" type="checkbox"> ?/;
-//@ chunk-5wjwnxna.js:1023-1111 placement (2.1.88 match: escapeXml, 1)
+//@ chunk-wsa1bbj1.js:1106-1194 placement (2.1.88 match: escapeXml, 1)
 function escapeXml(s) {
   return s.replace(UNESCAPED_AMPERSAND, "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
-//@ chunk-5wjwnxna.js:1111-1538 placement
+//@ chunk-wsa1bbj1.js:1194-1621 placement
 /**
  * 创建安全的 Markdown→HTML 渲染器（marked，GFM），原始 HTML 一律转义，链接与图片渲染可定制。
  */
@@ -56,7 +56,7 @@ function createSafeMarkdownRenderer(options) {
     },
   });
 }
-//@ chunk-5wjwnxna.js:1538-1773 placement
+//@ chunk-wsa1bbj1.js:1621-1856 placement
 var safeHtmlMarkdownRenderer = createSafeMarkdownRenderer({
   renderLink(href, html, title) {
     let trimmed = href.trim();
@@ -68,7 +68,7 @@ var safeHtmlMarkdownRenderer = createSafeMarkdownRenderer({
     return `<code>[image: ${escapeXml(alt || href)}]</code>`;
   },
 });
-//@ chunk-5wjwnxna.js:1773-1973 placement
+//@ chunk-wsa1bbj1.js:1856-2056 placement
 function createMarkdownHtmlCache() {
   let cache = new Map();
   return (markdown) => {
@@ -87,7 +87,7 @@ function createMarkdownHtmlCache() {
     return wrapped;
   };
 }
-//@ chunk-5wjwnxna.js:1973-2091 placement (2.1.88 match: formatPrice, 1)
+//@ chunk-wsa1bbj1.js:2056-2174 placement (2.1.88 match: formatPrice, 1)
 /**
  * 比例转百分比串（<1 时最多 99.9%）。疑似不属于 modelCost。
  */
@@ -96,16 +96,16 @@ function formatPercent(price) {
   if (price < 1 && percent >= 100) percent = 99.9;
   return Number.isInteger(percent) ? `${percent}%` : `${percent.toFixed(1)}%`;
 }
-//@ chunk-5wjwnxna.js:2091-2130 placement
+//@ chunk-wsa1bbj1.js:2174-2213 placement
 function formatCostUsd(costUsd) {
   return `$${costUsd.toFixed(2)}`;
 }
-//@ chunk-5wjwnxna.js:2130-2230 placement
+//@ chunk-wsa1bbj1.js:2213-2313 placement
 function formatUtcMinute(startedAt) {
   let match = startedAt.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
   return match ? `${match[1]} ${match[2]} UTC` : startedAt;
 }
-//@ chunk-5wjwnxna.js:2230-2538 placement
+//@ chunk-wsa1bbj1.js:2313-2621 placement
 /**
  * 生成百分比进度条 HTML（0–100% 截断），可带一个刻度标记。
  */
@@ -118,7 +118,7 @@ function renderMeter(fraction, cls, tickFraction) {
       : "";
   return `<span class="meter ${cls}" aria-hidden="true"><span style="width:${max.toFixed(1)}%"></span>${tick}</span>`;
 }
-//@ chunk-5wjwnxna.js:2538-2707 placement
+//@ chunk-wsa1bbj1.js:2621-2790 placement
 function deltaStyle(meanDelta) {
   if (meanDelta > 0)
     return {
@@ -138,12 +138,12 @@ function deltaStyle(meanDelta) {
     sign: "",
   };
 }
-//@ chunk-5wjwnxna.js:2707-2828 placement
+//@ chunk-wsa1bbj1.js:2790-2911 placement
 function renderDelta(delta) {
   let { cls, arrow, sign } = deltaStyle(delta);
   return `<span class="delta ${cls}">${arrow} ${sign}${(delta * 100).toFixed(1)} pts</span>`;
 }
-//@ chunk-5wjwnxna.js:2828-3358 placement
+//@ chunk-wsa1bbj1.js:2911-3441 placement
 /**
  * 插件评测报告常量：出错运行的星号标记、长度上限、插件状态是否影响结果及其说明。
  */
@@ -165,7 +165,7 @@ var PLUGIN_WARNING_LABELS = {
   archive_not_probed: "archive \u2014 identity not probed",
   will_not_load: "will not load",
 };
-//@ chunk-5wjwnxna.js:3358-3574 placement
+//@ chunk-wsa1bbj1.js:3441-3657 placement
 /**
  * 生成评测报告标题（插件名与版本，或 Eval suite）。
  */
@@ -183,10 +183,10 @@ function suiteTitle(report) {
         .join(", ")
     : "Eval suite";
 }
-//@ chunk-5wjwnxna.js:3574-3637 placement
+//@ chunk-wsa1bbj1.js:3657-3720 placement
 var SAFE_PLUGIN_NAME_PATTERN = /^[0-9A-Za-z._@/-]{1,80}$/;
 var SAFE_VERSION_PATTERN = /^[0-9A-Za-z._+-]{1,40}$/;
-//@ chunk-5wjwnxna.js:3637-4499 placement
+//@ chunk-wsa1bbj1.js:3720-4582 placement
 function renderCaseRow(grader) {
   let chip = grader.passed
     ? '<span class="chip chip-pass">\u2713 pass</span>'
@@ -209,7 +209,7 @@ ${votes}${evidence}
 </div>
 </details>`;
 }
-//@ chunk-5wjwnxna.js:4499-6254 placement
+//@ chunk-wsa1bbj1.js:4582-6337 placement
 function renderRunDetails(run, index, cls) {
   let errorBlock = run.error
     ? `<div class="run-error"><span class="chip chip-fail">\u2717 run error</span> <span class="explanation">${escapeAttr(run.error)}</span></div>`
@@ -235,7 +235,7 @@ ${errorBlock}${abortedBlock}${budgetBlock}${mocksBlock}
 `)}</div>
 </div>`;
 }
-//@ chunk-5wjwnxna.js:6254-6655 placement
+//@ chunk-wsa1bbj1.js:6337-6738 placement
 /**
  * 渲染一个对照臂（arm）区块：平均分进度条与满分比例（不可比时给提示），以及每次运行的详情。
  */
@@ -255,13 +255,13 @@ ${runs.map((run, index) => renderRunDetails(run, index, cls)).join(`
 `)}
 </section>`;
 }
-//@ chunk-5wjwnxna.js:6655-6853 placement
+//@ chunk-wsa1bbj1.js:6738-6936 placement
 function renderGraderConfig(config) {
   let entries = Object.entries(config);
   if (entries.length === 0) return "";
   return `<div class="config">${entries.map(([key, value]) => `<div class="kv"><span>${escapeAttr(key)}</span><code>${escapeAttr(jsonStringify(value) ?? "")}</code></div>`).join("")}</div>`;
 }
-//@ chunk-5wjwnxna.js:6853-7164 placement
+//@ chunk-wsa1bbj1.js:6936-7247 placement
 /**
  * 渲染评分器定义：名称、类型、权重（非 1 时），以及 Markdown 说明或配置键值表。
  */
@@ -271,7 +271,7 @@ function renderGraderDefinition(grader, renderMarkdown) {
 ${grader.graderMarkdown ? renderMarkdown(grader.graderMarkdown) : renderGraderConfig(grader.config)}
 </div>`;
 }
-//@ chunk-5wjwnxna.js:7164-8761 placement
+//@ chunk-wsa1bbj1.js:7247-8844 placement
 function renderCaseSections(caseResult, index, renderMarkdown, tickFraction) {
   let hasBaseline = (caseResult.arms.without?.length ?? 0) > 0;
   let promptSection = `<details class="section" open>
@@ -287,12 +287,12 @@ ${caseResult.graders.map((grader) => renderGraderDefinition(grader, renderMarkdo
 <summary>Results</summary>
 ${hasBaseline ? renderArmSection("With plugin", "m-accent", caseResult.aggregates.score, caseResult.aggregates.passRate, caseResult.arms.with) + renderArmSection("Baseline (no plugin)", "m-base", caseResult.aggregates.scoreWithout, caseResult.aggregates.passRateWithout, caseResult.arms.without ?? []) : renderArmSection("Runs", "m-accent", caseResult.aggregates.score, caseResult.aggregates.passRate, caseResult.arms.with)}
 </details>`;
-  let erroredWith = count(caseResult.arms.with, (run) => run.error !== null);
-  let unjudgedWith = count(caseResult.arms.with, (run) => run.skippedPaidGraders && run.error === null);
+  let erroredWith = countWhere(caseResult.arms.with, (run) => run.error !== null);
+  let unjudgedWith = countWhere(caseResult.arms.with, (run) => run.skippedPaidGraders && run.error === null);
   let baselineRuns = caseResult.aggregates.delta !== undefined ? (caseResult.arms.without ?? []) : [];
-  let erroredTotal = erroredWith + count(baselineRuns, (run) => run.error !== null);
+  let erroredTotal = erroredWith + countWhere(baselineRuns, (run) => run.error !== null);
   let unjudgedTotal =
-    unjudgedWith + count(baselineRuns, (run) => run.skippedPaidGraders && run.error === null);
+    unjudgedWith + countWhere(baselineRuns, (run) => run.skippedPaidGraders && run.error === null);
   let joined = [
     erroredTotal > 0
       ? `<span class="flag">\u26A0 ${erroredTotal} ${plural(erroredTotal, "run")} errored</span>`
@@ -320,7 +320,7 @@ ${promptSection}
 ${gradersSection}
 </article>`;
 }
-//@ chunk-5wjwnxna.js:8761-18703 placement
+//@ chunk-wsa1bbj1.js:8844-18786 placement
 /**
  * 插件评测 HTML 报告的内嵌 CSS。
  */
@@ -485,7 +485,7 @@ window.addEventListener('afterprint',function(){
   });
 });
 </script>`;
-//@ chunk-5wjwnxna.js:18703-24469 placement
+//@ chunk-wsa1bbj1.js:18786-24552 placement
 /**
  * renderEvalReportFragment：把插件评测结果渲染成 HTML 片段（用例分节、每个用例的运行详情）。
  */
@@ -504,15 +504,15 @@ function renderEvalReportFragment(report) {
   let meanDelta = aggregates.meanDelta;
   let isAblation = suite.ablation === "with-without";
   let flattened = cases.flatMap((caseResult) => caseResult.arms.with);
-  let erroredWith = count(flattened, (run) => run.error !== null);
-  let unjudgedWith = count(flattened, (run) => run.skippedPaidGraders && run.error === null);
+  let erroredWith = countWhere(flattened, (run) => run.error !== null);
+  let unjudgedWith = countWhere(flattened, (run) => run.skippedPaidGraders && run.error === null);
   let hasIncomplete = erroredWith + unjudgedWith > 0;
   let flattened_2 = cases
     .filter((caseResult) => caseResult.aggregates.delta !== undefined)
     .flatMap((caseResult) => caseResult.arms.without ?? []);
-  let erroredTotal = erroredWith + count(flattened_2, (run) => run.error !== null);
+  let erroredTotal = erroredWith + countWhere(flattened_2, (run) => run.error !== null);
   let unjudgedTotal =
-    unjudgedWith + count(flattened_2, (run) => run.skippedPaidGraders && run.error === null);
+    unjudgedWith + countWhere(flattened_2, (run) => run.skippedPaidGraders && run.error === null);
   let incompleteBanner =
     erroredTotal + unjudgedTotal > 0
       ? `<div class="banner"><span class="chip-warn">\u26A0 Averages include non-judgments</span><span>${[erroredTotal > 0 ? `${erroredTotal} ${plural(erroredTotal, "run")} errored` : "", unjudgedTotal > 0 ? `${unjudgedTotal} ${plural(unjudgedTotal, "run")} force-failed at the cost ceiling` : ""].filter(Boolean).join("; ")} \u2014 their scores count toward the averages shown without a complete judgment.</span></div>`
@@ -522,8 +522,8 @@ function renderEvalReportFragment(report) {
     meanDelta !== undefined && filtered_2.length > 0
       ? (() => {
           let { cls, arrow, sign } = deltaStyle(meanDelta);
-          let improved = count(filtered_2, (caseResult) => (caseResult.aggregates.delta ?? 0) > 0);
-          let regressed = count(filtered_2, (caseResult) => (caseResult.aggregates.delta ?? 0) < 0);
+          let improved = countWhere(filtered_2, (caseResult) => (caseResult.aggregates.delta ?? 0) > 0);
+          let regressed = countWhere(filtered_2, (caseResult) => (caseResult.aggregates.delta ?? 0) < 0);
           let flat = filtered_2.length - improved - regressed;
           return `<p class="verdict">Plugin effect: <span class="delta ${cls}">${arrow} ${sign}${(meanDelta * 100).toFixed(1)} pts</span> vs baseline \u2014 improved ${improved} \xB7 flat ${flat} \xB7 regressed ${regressed} of ${filtered_2.length} ${plural(filtered_2.length, "case")}.</p>`;
         })()
@@ -599,7 +599,7 @@ ${cases.map((caseResult, index) => renderCaseSections(caseResult, index, markdow
 ${body}
 ${EVAL_REPORT_SCRIPT_BLOCK}`;
 }
-//@ chunk-5wjwnxna.js:24469-24825 placement
+//@ chunk-wsa1bbj1.js:24552-24908 placement
 /**
  * 检查报告里的聚合分数与按运行重算的值是否一致（容差 0.005），不一致时返回警告标记 HTML。
  */
@@ -617,7 +617,7 @@ function aggregatesMismatchFlag(report) {
     ? ' \xB7 <span class="flag">\u26A0 aggregates in this file do not match values recomputed from its runs</span>'
     : "";
 }
-//@ chunk-5wjwnxna.js:24825-25063 placement
+//@ chunk-wsa1bbj1.js:24908-25146 placement
 /**
  * 把报告片段包成完整 HTML 文档。
  */
@@ -635,7 +635,7 @@ ${body}
 </html>
 `;
 }
-//@ chunk-5wjwnxna.js:25063-25180 placement
+//@ chunk-wsa1bbj1.js:25146-25262 placement
 function truncateTranscript(evidence) {
   return truncateMiddle(
     evidence,
@@ -646,13 +646,13 @@ function truncateTranscript(evidence) {
 `,
   );
 }
-//@ chunk-5wjwnxna.js:25180-25210 placement
+//@ chunk-wsa1bbj1.js:25262-25292 placement
 function escapeAttr(text) {
   return escapeXmlAttr(stripInvisibleChars(text));
 }
-//@ chunk-5wjwnxna.js:25210-25274 placement
+//@ chunk-wsa1bbj1.js:25292-25356 placement
 var regExp = new RegExp(`[${INVISIBLE_CHAR_CLASSES}\u2028\u2029]|[^\\P{Cc}\\n\\t]`, "gu");
-//@ chunk-5wjwnxna.js:25274-25313 placement
+//@ chunk-wsa1bbj1.js:25356-25395 placement
 function stripInvisibleChars(text) {
   return text.replace(regExp, " ");
 }

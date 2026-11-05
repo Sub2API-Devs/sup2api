@@ -3,18 +3,18 @@
  *
  * 2.1.316 新增：Claude Desktop 浏览器面板的 file_upload 转发
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-v64arqfj.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b874ry9h.js (3)
  * attribution: placement 3
  */
 import { preparePaneFileUploadInput } from "./fileUpload.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../errors.js";
 
-//@ chunk-v64arqfj.js:5723-5805 placement
+//@ chunk-b874ry9h.js:6171-6253 placement
 var CLAUDECODE_FILESREADBYCLAUDECODE = "claudecode/filesReadByClaudeCode";
 var CLAUDECODE_AUTOMODECLASSIFIERALLOWED = "claudecode/autoModeClassifierAllowed";
-//@ chunk-v64arqfj.js:5805-6438 placement
+//@ chunk-b874ry9h.js:6253-6886 placement
 /**
  * 把 file_upload 转发给 Claude Desktop 浏览器面板前：校验并读取路径（每个文件由宿主询问），失败抛出；在 MCP 请求元数据中标注文件由 Claude Code 读取，单文件且路径与读取一致时允许自动模式分类器处理。
  */
@@ -44,7 +44,7 @@ async function preparePaneUpload(input, context, requestMeta, hostAsksPerFile, a
     mcpRequestMeta: meta,
   };
 }
-//@ chunk-v64arqfj.js:6438-6639 placement
+//@ chunk-b874ry9h.js:6886-7087 placement
 function isSingleRequestedPath(args, other) {
   let path = Array.isArray(args?.paths) ? args.paths[0] : undefined;
   let file = Array.isArray(other.files) ? other.files[0] : undefined;

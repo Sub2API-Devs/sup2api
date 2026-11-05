@@ -3,9 +3,9 @@
  *
  * 已有模块；g2 补充放置声明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/headlessPluginInstall.ts
- * pieces: chunk-qna1q0cq.js (3)
+ * pieces: chunk-54b7qs0h.js (3)
  * attribution: placement 1, fingerprint 1, sole-consumer 1
  */
 import { getPluginRegistry } from "./pluginLoadState.js";
@@ -33,7 +33,7 @@ import { errorMessage } from "../errors.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
 import { logEvent } from "../../services/analytics/index.js";
 
-//@ chunk-qna1q0cq.js:1505-1665 placement
+//@ chunk-54b7qs0h.js:1506-1666 placement
 /**
  * 串行化 headless 插件安装（排在上一轮之后）。
  */
@@ -52,7 +52,7 @@ function installPluginsForHeadlessSerialized(pluginIds, storageV5, credentials) 
   );
   return pass;
 }
-//@ chunk-qna1q0cq.js:1665-3461 fingerprint (2.1.88 match: installPluginsForHeadless, 0.914)
+//@ chunk-54b7qs0h.js:1666-3463 fingerprint (2.1.88 match: installPluginsForHeadless, 0.914)
 /**
  * headless/SDK 模式下安装插件：同步种子市场、对账声明的市场（zip 缓存模式下同步到 zip 缓存），安装缺失的启用插件，最后刷新插件缓存；记 tengu_headless_plugin_install。
  */
@@ -159,7 +159,7 @@ async function installPluginsForHeadless(onProgress, storageV5, credentials) {
     logEvent("tengu_headless_plugin_install", metrics);
   }
 }
-//@ chunk-qna1q0cq.js:3461-3509 sole-consumer
+//@ chunk-54b7qs0h.js:3463-3511 sole-consumer
 function prefetchPluginsIfEnabled(pluginIds, storageV5) {
   if (shouldFillPluginLoadWithStore(storageV5)) loadAllPluginsCacheOnly(pluginIds, storageV5).catch(() => {});
 }

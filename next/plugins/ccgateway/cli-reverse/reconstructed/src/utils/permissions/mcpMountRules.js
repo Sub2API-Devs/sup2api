@@ -3,18 +3,18 @@
  *
  * 2.1.316 新增：MCP 挂载允许规则
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-yckdkb4w.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7fctjtqr.js (3)
  * attribution: placement 3
  */
 import { extractRules, sanitizePermissionUpdates } from "./PermissionUpdate.js";
+import { normalizeRuleString } from "./legacyWildcardRules.js";
 import { permissionRuleValueFromString } from "./permissionRuleParser.js";
-import { formatPermissionRule } from "./disallowedToolsFlag.js";
 import { logForDebugging } from "../debug.js";
 import { jsonStringify } from "../slowOperations.js";
 
-//@ chunk-yckdkb4w.js:308-438 placement (2.1.88 match: buildPermissionUpdates, 0.774)
+//@ chunk-7fctjtqr.js:341-479 placement (2.1.88 match: buildPermissionUpdates, 0.774)
 function buildSessionAllowRuleUpdates(rules) {
   return rules.flatMap((rule) =>
     extractRules(
@@ -23,13 +23,13 @@ function buildSessionAllowRuleUpdates(rules) {
           type: "addRules",
           destination: "session",
           behavior: "allow",
-          rules: [permissionRuleValueFromString(rule)],
+          rules: [normalizeRuleString(rule, "allow")],
         },
       ]),
-    ).map(formatPermissionRule),
+    ).map(permissionRuleValueFromString),
   );
 }
-//@ chunk-yckdkb4w.js:438-696 placement
+//@ chunk-7fctjtqr.js:479-737 placement
 function applyMcpMountAllowRules(toolPermissionContext, rules) {
   let sessionAllowRuleUpdates = buildSessionAllowRuleUpdates(rules);
   if (sessionAllowRuleUpdates.length === 0) return toolPermissionContext;
@@ -44,7 +44,7 @@ function applyMcpMountAllowRules(toolPermissionContext, rules) {
     },
   };
 }
-//@ chunk-yckdkb4w.js:696-1100 placement
+//@ chunk-7fctjtqr.js:737-1141 placement
 function replaceMcpMountRules(toolPermissionContext, rules, removalMode) {
   let mcpMount = toolPermissionContext.alwaysAllowRules.mcpMount ?? [];
   let sessionAllowRuleUpdates = buildSessionAllowRuleUpdates(rules);

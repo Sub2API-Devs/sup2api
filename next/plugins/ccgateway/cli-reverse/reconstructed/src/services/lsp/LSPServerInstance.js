@@ -3,9 +3,9 @@
  *
  * 单个 LSP 服务器实例的状态机：启动/initialize、workspace/configuration 应答、崩溃恢复与重启上限、带超时和 ContentModified 重试的请求。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/lsp/LSPServerInstance.ts
- * pieces: chunk-e6aww6q8.js (4)
+ * pieces: chunk-5xgkngpb.js (4)
  * attribution: sole-consumer 1, affinity 2, fingerprint 1
  */
 import { pathToFileURL } from "url";
@@ -19,7 +19,7 @@ import { getCwd } from "../../utils/cwd.js";
 import { withTimeout as withTimeout_2, sleep } from "../../utils/sleep.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-e6aww6q8.js:4626357-4626575 sole-consumer
+//@ chunk-5xgkngpb.js:4734941-4735159 sole-consumer
 /**
  * 按点号分隔的 section 路径从服务器 settings 里取子值，取不到返回 null；用于响应 workspace/configuration。
  */
@@ -38,7 +38,7 @@ function getConfigSection(settings, section) {
   }
   return current ?? null;
 }
-//@ chunk-e6aww6q8.js:4626575-4626614 affinity
+//@ chunk-5xgkngpb.js:4735159-4735198 affinity
 /**
  * LSP 请求重试常量：ContentModified 错误码 -32801、最多重试 3 次、退避基数 500ms、请求默认超时 60s。
  */
@@ -46,7 +46,7 @@ var LSP_ERROR_CONTENT_MODIFIED = -32801;
 var MAX_RETRIES_FOR_TRANSIENT_ERRORS = 3;
 var RETRY_BASE_DELAY_MS = 500;
 var DEFAULT_REQUEST_TIMEOUT_MS = 60000;
-//@ chunk-e6aww6q8.js:4626614-4632777 fingerprint (2.1.88 match: createLSPServerInstance, 0.717)
+//@ chunk-5xgkngpb.js:4735198-4741363 fingerprint (2.1.88 match: createLSPServerInstance, 0.717)
 /**
  * 创建一个 LSP 服务器实例（状态机 stopped/starting/running/stopping/error）。start() 串行化并发启动、受 restartOnCrash/maxRestarts 约束；启动时注册 workspace/configuration（按 settings 回答）、忽略 client/registerCapability，发 initialize（clientInfo "Claude Code"+版本，声明 hover/definition/references/documentSymbol/callHierarchy/publishDiagnostics 能力），有 settings 时推 workspace/didChangeConfiguration。sendRequest 对 ContentModified 指数退避重试并带 requestTimeout。各步骤上报 lsp_server_start/lsp_request 等健康指标。
  */
@@ -135,10 +135,10 @@ function createLSPServerInstance(name, config) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION,
@@ -403,7 +403,7 @@ function createLSPServerInstance(name, config) {
     onRequest,
   };
 }
-//@ chunk-e6aww6q8.js:4632777-4632970 affinity
+//@ chunk-5xgkngpb.js:4741363-4741556 affinity
 /**
  * 把 client/(un)registerCapability 请求里的 registrations 列成 method 名串，供日志使用。
  */

@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/sdk-logs/build/src/export/ConsoleLogRecordExporter.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-logs@0.208.0
- * pieces: chunk-9vvvg0d3.js (4)
+ * pieces: chunk-3wgj3rdg.js (4)
  * attribution: esm-layout 3, esm-fingerprint 1
  */
 import { __toESM } from "../../../../../../runtime/bun-runtime.js";
@@ -10,14 +10,14 @@ import { require_api } from "../../../../api/build/src/index.js";
 import { require_core } from "../../../../core/build/src/index.js";
 import { require_resources } from "../../../../resources/build/src/index.js";
 
-//@ chunk-9vvvg0d3.js:5201-5218 esm-layout
+//@ chunk-3wgj3rdg.js:5573-5590 esm-layout
 var import_api = __toESM(require_api(), 1);
-//@ chunk-9vvvg0d3.js:5218-5250 esm-layout
+//@ chunk-3wgj3rdg.js:5590-5622 esm-layout
 var import_core = __toESM(require_core(), 1);
 var import_resources = __toESM(require_resources(), 1);
-//@ chunk-9vvvg0d3.js:5250-5266 esm-layout
+//@ chunk-3wgj3rdg.js:5622-5638 esm-layout
 var import_core_2 = __toESM(require_core());
-//@ chunk-9vvvg0d3.js:5266-5817 esm-fingerprint
+//@ chunk-3wgj3rdg.js:5638-6189 esm-fingerprint
 class ConsoleLogRecordExporter {
   export(logs, resultCallback) {
     this._sendLogRecords(logs, resultCallback);

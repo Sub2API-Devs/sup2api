@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：mcp serve 读取仓库 git 状态。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wy9dbk5f.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xrwmcqkn.js (3)
  * attribution: placement 3
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -28,7 +28,7 @@ import { getRepoCheckouts, resolveCheckoutPath } from "../../utils/git/repoCheck
 import { refreshGitDir, readGitHead } from "../../utils/git/gitFilesystem.js";
 import { drainTaskNotifications } from "../../utils/task/taskNotifications.js";
 
-//@ chunk-wy9dbk5f.js:50401-50887 placement
+//@ chunk-xrwmcqkn.js:46092-46578 placement
 /**
  * 读取 git 状态结果的 schema。
  */
@@ -66,7 +66,7 @@ var readRepoGitStateResultSchema = DoctorLazy(() =>
     cut: booleanSchema().optional(),
   }),
 );
-//@ chunk-wy9dbk5f.js:50887-51776 placement
+//@ chunk-xrwmcqkn.js:46578-47467 placement
 async function serveReadRepoGitState(input, signal, { callerGone }) {
   let checkouts = [...getRepoCheckouts()];
   let cut = checkouts.length > MAX_BRANCHES;
@@ -132,7 +132,7 @@ async function serveReadRepoGitState(input, signal, { callerGone }) {
     },
   };
 }
-//@ chunk-wy9dbk5f.js:51776-51824 placement
+//@ chunk-xrwmcqkn.js:47467-47515 placement
 /**
  * 判断分支表条数是否在上限内。
  */

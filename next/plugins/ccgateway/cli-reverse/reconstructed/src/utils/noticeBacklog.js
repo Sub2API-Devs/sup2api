@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：提示积压队列
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b272vy9d.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-va9bpgvm.js (2)
  * attribution: placement 2
  */
 import { createSignal } from "./signal.js";
 
-//@ chunk-b272vy9d.js:227-236 placement
+//@ chunk-va9bpgvm.js:227-236 placement
 var MAX_NOTICE_BACKLOG = 50;
-//@ chunk-b272vy9d.js:236-501 placement
+//@ chunk-va9bpgvm.js:236-501 placement
 function createNoticeBacklog() {
   let signal = createSignal();
   let backlog = [];

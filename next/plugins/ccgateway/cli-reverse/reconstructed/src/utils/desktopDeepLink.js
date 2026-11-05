@@ -3,16 +3,15 @@
  *
  * 打开 claude.ai 页面：优先 Claude Desktop 深链，回退浏览器；含 Windows 默认浏览器检测（default-browser 风格代码）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/desktopDeepLink.ts
- * pieces: chunk-5nte8cwj.js (15)
- * attribution: placement 5, fingerprint 4, affinity 1, layout 4, callgraph-fingerprint 1
+ * pieces: chunk-vbwrr9hv.js (17)
+ * attribution: placement 5, layout 5, fingerprint 4, sole-consumer 1, affinity 1, callgraph-fingerprint 1
  */
 import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_semver_3 } from "../../vendor/semver/index.js";
+import { semverGt } from "./semver.js";
 import { execFileNoThrow } from "./execFileNoThrow.js";
-import { COPY_DIR } from "../commands/copy/copy.js";
-import { EnvironmentVariablesSchema } from "./settings/types.js";
 import { logForDebugging } from "./debug.js";
 import { printableName } from "./printableName.js";
 import { getFirstLine } from "./stringUtils.js";
@@ -22,32 +21,32 @@ import { HTTPS_CLAUDE_AI } from "../constants/product.js";
 import { openValidatedUrlSucceeded } from "./browser.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-5nte8cwj.js:623-640 placement
+//@ chunk-vbwrr9hv.js:623-640 placement
 /**
  * semver 模块的包装导入。
  */
 var semverModuleForDesktop; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-5nte8cwj.js:623", () => {
+deferInit("chunk-vbwrr9hv.js:623", () => {
   semverModuleForDesktop = __toESM(require_semver_3(), 1);
 });
-//@ chunk-5nte8cwj.js:640-659 placement
+//@ chunk-vbwrr9hv.js:640-659 placement
 /**
  * 桌面端最低可用版本（1.1.9669），低于它需先更新。
  */
 var MIN_DESKTOP_VERSION = "1.1.9669";
-//@ chunk-5nte8cwj.js:659-885 placement (2.1.88 match: isRunningFromBuildDirectory, 0.964)
+//@ chunk-vbwrr9hv.js:659-885 placement (2.1.88 match: isRunningFromBuildDirectory, 0.964)
 function isRunningFromBuildDirectory() {
   let mapped = [process.argv[1] || "", process.execPath || ""].map((path) => path.replaceAll("\\", "/"));
   let buildDirs = ["/build-ant/", "/build-ant-native/", "/build-external/", "/build-external-native/"];
   return mapped.some((path) => buildDirs.some((dir) => path.includes(dir)));
 }
-//@ chunk-5nte8cwj.js:885-1012 placement (2.1.88 match: ghIsDangerousCallback, 0.784)
+//@ chunk-vbwrr9hv.js:885-1012 placement (2.1.88 match: ghIsDangerousCallback, 0.785)
 function buildUrlWithParams(scheme, host, params = {}) {
   let url = new URL(`${scheme}://${host}`);
   for (let [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   return url.toString();
 }
-//@ chunk-5nte8cwj.js:1012-1184 placement
+//@ chunk-vbwrr9hv.js:1012-1184 placement
 function buildDesktopUrl(sessionId, scheme) {
   switch (sessionId.kind) {
     case "resume":
@@ -58,7 +57,12 @@ function buildDesktopUrl(sessionId, scheme) {
       return `${buildUrlWithParams(scheme, "code/new")}?folder=${encodeURIComponent(sessionId.folder)}`;
   }
 }
-//@ chunk-5nte8cwj.js:1251-1399 fingerprint (2.1.88 match: isDesktopInstalled, 0.4)
+//@ chunk-vbwrr9hv.js:1184-1251 layout
+function isNewerThanMinDesktopVersion(version) {
+  let desktopVersion = semverModuleForDesktop.coerce(version);
+  return desktopVersion !== null && semverGt(desktopVersion.version, MIN_DESKTOP_VERSION);
+}
+//@ chunk-vbwrr9hv.js:1251-1399 fingerprint (2.1.88 match: isDesktopInstalled, 0.4)
 async function isDesktopInstalled(scheme) {
   {
     let { code, stdout } = await execFileNoThrow("xdg-mime", [
@@ -70,18 +74,22 @@ async function isDesktopInstalled(scheme) {
   }
   return false;
 }
-//@ chunk-5nte8cwj.js:1399-1501 fingerprint (2.1.88 match: buildDesktopDeepLink, 0.662)
+//@ chunk-vbwrr9hv.js:1399-1501 fingerprint (2.1.88 match: buildDesktopDeepLink, 0.663)
 async function buildDesktopDeepLink() {
   if (isRunningFromBuildDirectory()) {
     if (await isDesktopInstalled("claude-dev")) return "claude-dev";
   }
-  return (await COPY_DIR()) ? "claude" : null;
+  return (await isClaudeDesktopInstalled()) ? "claude" : null;
 }
-//@ chunk-5nte8cwj.js:1584-1615 affinity
+//@ chunk-vbwrr9hv.js:1546-1584 sole-consumer
+async function isClaudeDesktopInstalled() {
+  return isDesktopInstalled("claude");
+}
+//@ chunk-vbwrr9hv.js:1584-1615 affinity
 async function getDesktopAppVersion() {
   return null;
 }
-//@ chunk-5nte8cwj.js:1615-2013 fingerprint (2.1.88 match: getDesktopInstallStatus, 0.724)
+//@ chunk-vbwrr9hv.js:1615-2013 fingerprint (2.1.88 match: getDesktopInstallStatus, 0.724)
 async function getDesktopInstallStatus() {
   let installed = await buildDesktopDeepLink();
   if (installed === null)
@@ -112,7 +120,7 @@ async function getDesktopInstallStatus() {
       scheme: installed,
       macApp,
     };
-  if (!EnvironmentVariablesSchema(version))
+  if (!isNewerThanMinDesktopVersion(version))
     return {
       status: "version-too-old",
       version,
@@ -124,12 +132,12 @@ async function getDesktopInstallStatus() {
     macApp,
   };
 }
-//@ chunk-5nte8cwj.js:2013-2023 layout
+//@ chunk-vbwrr9hv.js:2013-2023 layout
 /**
  * 桌面路径的最大长度（200）。
  */
 var MAX_DESKTOP_PATH_CHARS = 200;
-//@ chunk-5nte8cwj.js:2023-2529 layout
+//@ chunk-vbwrr9hv.js:2023-2529 layout
 function describeOpenFailure(command, outcome) {
   let { code, exitCode, stderr, error, timedOut, maxBufferExceeded } = outcome;
   if (code === 0)
@@ -160,7 +168,7 @@ function describeOpenFailure(command, outcome) {
     detail: replaced.length === 0 ? summary : `${summary}: ${replaced}`,
   };
 }
-//@ chunk-5nte8cwj.js:2529-2718 fingerprint (2.1.88 match: openDeepLink, 0.355)
+//@ chunk-vbwrr9hv.js:2529-2718 fingerprint (2.1.88 match: openDeepLink, 0.355)
 async function openDeepLink(url, macApp) {
   logForDebugging(`Opening deep link: ${url}`);
   return describeOpenFailure(
@@ -175,7 +183,7 @@ async function openDeepLink(url, macApp) {
     detail: "no deep link opener for linux",
   };
 }
-//@ chunk-5nte8cwj.js:2718-2875 layout
+//@ chunk-vbwrr9hv.js:2718-2875 layout
 /**
  * 拼 claude.ai 完整 URL（CLAUDE_AI_ORIGIN + 校验过的路径）。
  */
@@ -189,7 +197,7 @@ function getClaudeAiWebUrl(webPath) {
   }
   return `${CLAUDE_AI_ORIGIN}${webPath}`;
 }
-//@ chunk-5nte8cwj.js:2875-3111 layout
+//@ chunk-vbwrr9hv.js:2875-3111 layout
 /**
  * 打开 claude.ai 页面：生产环境优先尝试 Claude Desktop 深链，失败再用浏览器打开 web 路径，返回 desktop/browser/none。
  */
@@ -202,7 +210,7 @@ async function openInDesktopOrBrowser({ webPath, desktopPath }) {
   }
   return (await openValidatedUrlSucceeded(getClaudeAiWebUrl(webPath))) ? "browser" : "none";
 }
-//@ chunk-5nte8cwj.js:3111-3680 callgraph-fingerprint (2.1.88 match: openCurrentSessionInDesktop, 0.233)
+//@ chunk-vbwrr9hv.js:3111-3680 callgraph-fingerprint (2.1.88 match: openCurrentSessionInDesktop, 0.234)
 async function openCurrentSessionInDesktop(sessionId) {
   let installed = await getDesktopInstallStatus();
   if (installed.status === "not-installed")
@@ -232,12 +240,10 @@ async function openCurrentSessionInDesktop(sessionId) {
   };
 }
 export {
-  isDesktopInstalled,
   buildDesktopDeepLink,
-  semverModuleForDesktop,
-  MIN_DESKTOP_VERSION,
   openCurrentSessionInDesktop,
   getDesktopInstallStatus,
+  MIN_DESKTOP_VERSION,
   openInDesktopOrBrowser,
   getClaudeAiWebUrl,
 };

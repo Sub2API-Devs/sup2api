@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：尝试阶梯中的一级；检查模型访问（缓存失败结果）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (41), chunk-d1cgs5na.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (41), chunk-wefvmrb3.js (6)
  * attribution: placement 47
  */
 import { HostScoped } from "../hostScoped.js";
@@ -20,9 +20,9 @@ import { needsConsentCreditsOrOut, needsConsentOrCredits } from "../planTiers.js
 import { isModelDeniedByManagedSettings } from "./modelAllowlist.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:420644-420658 placement
+//@ chunk-exfmq47h.js:432035-432049 placement
 var MODEL_REFUSAL_TTL_MS = 600000;
-//@ chunk-aepeg2w5.js:420658-420883 placement
+//@ chunk-exfmq47h.js:432049-432274 placement
 class FallbackLadderState {
   ladders = new Map();
   rungIndex = new Map();
@@ -36,26 +36,26 @@ class FallbackLadderState {
   conversationSizes = new Map();
   failedChecks = new Map();
 }
-//@ chunk-aepeg2w5.js:420883-420908 placement
+//@ chunk-exfmq47h.js:432274-432299 placement
 var fallbackLadderRegistry; // deferred: uses FallbackLadderState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:420883", () => {
+deferInit("chunk-exfmq47h.js:432274", () => {
   fallbackLadderRegistry = new HostScoped(() => new FallbackLadderState());
 });
-//@ chunk-aepeg2w5.js:420908-420945 placement
+//@ chunk-exfmq47h.js:432299-432336 placement
 /**
  * 取当前宿主的模型回退阶梯状态。
  */
 function currentFallbackLadderStates() {
   return fallbackLadderRegistry.of(getRootSession().host);
 }
-//@ chunk-aepeg2w5.js:420945-421054 placement
+//@ chunk-exfmq47h.js:432336-432445 placement
 /**
  * 是否禁用模型回退。
  */
 function isModelFallbackDisabled() {
   return env.CLAUDE_CODE_NO_MODEL_FALLBACK === true || env.CLAUDE_CODE_DISABLE_MODEL_ACCESS_FALLBACK === true;
 }
-//@ chunk-aepeg2w5.js:421054-421349 placement
+//@ chunk-exfmq47h.js:432445-432740 placement
 /**
  * 注册某提供商/档位的回退阶梯。
  */
@@ -79,7 +79,7 @@ function registerFallbackLadder(provider, tier, envVar, rungs) {
       states.rungIndex.set(rung.id, references);
     }
 }
-//@ chunk-aepeg2w5.js:421349-421533 placement
+//@ chunk-exfmq47h.js:432740-432924 placement
 function findPrimaryRung(model) {
   let references = currentFallbackLadderStates().rungIndex.get(strip1mSuffix(model)) ?? [];
   let filtered = references.filter((reference) => reference.ladder.rungs[reference.index].crossTier !== true);
@@ -88,32 +88,32 @@ function findPrimaryRung(model) {
     undefined,
   );
 }
-//@ chunk-aepeg2w5.js:421533-421579 placement
+//@ chunk-exfmq47h.js:432924-432970 placement
 /**
  * 取主阶梯的提供商。
  */
 function primaryRungProvider(model) {
   return findPrimaryRung(model)?.ladder.provider;
 }
-//@ chunk-aepeg2w5.js:421579-421621 placement
+//@ chunk-exfmq47h.js:432970-433012 placement
 /**
  * 取主阶梯的档位。
  */
 function primaryRungTier(model) {
   return findPrimaryRung(model)?.ladder.tier;
 }
-//@ chunk-aepeg2w5.js:421621-421658 placement
+//@ chunk-exfmq47h.js:433012-433049 placement
 function hasPrimaryRung(model) {
   return findPrimaryRung(model) !== undefined;
 }
-//@ chunk-aepeg2w5.js:421658-421776 placement
+//@ chunk-exfmq47h.js:433049-433167 placement
 function getLadderHead(ladder) {
   let tierEnvVar = readTierEnvVar(ladder.envVar);
   let tierForEnvVar = getTierForEnvVar(ladder.envVar);
   if (tierEnvVar === undefined) return ladder.rungs[0].id;
   return tierForEnvVar !== undefined && userConfiguredDefault(tierForEnvVar) ? tierEnvVar : undefined;
 }
-//@ chunk-aepeg2w5.js:421776-422104 placement
+//@ chunk-exfmq47h.js:433167-433495 placement
 /**
  * 查找模型所在的阶梯位置。
  */
@@ -141,7 +141,7 @@ function findLadderRung(model) {
         below: found.ladder.rungs.slice(found.index + 1).map((rung) => rung.id),
       };
 }
-//@ chunk-aepeg2w5.js:422104-422171 placement
+//@ chunk-exfmq47h.js:433495-433562 placement
 /**
  * 判断模型是否在某阶梯中或曾是阶梯头。
  */
@@ -150,7 +150,7 @@ function isFormerHeadOrInLadder(model) {
     findLadderRung(model) !== undefined || currentFallbackLadderStates().formerHeads.has(strip1mSuffix(model))
   );
 }
-//@ chunk-aepeg2w5.js:422171-422338 placement
+//@ chunk-exfmq47h.js:433562-433729 placement
 /**
  * 列出阶梯中当前模型之后、未被拒绝的回退模型（保留后缀）。
  */
@@ -164,14 +164,14 @@ function getUnrefusedFallbacks(model) {
     .filter((id) => !isModelRefused(id))
     .map((id) => id + sliced);
 }
-//@ chunk-aepeg2w5.js:422338-422472 placement
+//@ chunk-exfmq47h.js:433729-433863 placement
 function getFallbackModels(model) {
   let primaryRung = findPrimaryRung(model);
   if (primaryRung === undefined) return [];
   let sliced = model.slice(strip1mSuffix(model).length);
   return primaryRung.ladder.rungs.slice(primaryRung.index + 1).map((rung) => rung.id + sliced);
 }
-//@ chunk-aepeg2w5.js:422472-422551 placement
+//@ chunk-exfmq47h.js:433863-433942 placement
 /**
  * 把一批模型标记为已配置（阶梯可管理）。
  */
@@ -179,7 +179,7 @@ function markModelsConfigured(models) {
   let states = currentFallbackLadderStates();
   states.configured = new Set([...states.configured, ...models.map(strip1mSuffix)]);
 }
-//@ chunk-aepeg2w5.js:422551-422726 placement
+//@ chunk-exfmq47h.js:433942-434117 placement
 /**
  * 判断某个曾为阶梯头的模型已被拒绝且位于另一模型之前。
  */
@@ -194,28 +194,28 @@ function isFormerHeadRefused(model, requested) {
     )
   );
 }
-//@ chunk-aepeg2w5.js:422726-422776 placement
+//@ chunk-exfmq47h.js:434117-434167 placement
 /**
  * 判断模型是否已被标记为配置过。
  */
 function isModelConfigured(model) {
   return currentFallbackLadderStates().configured.has(strip1mSuffix(model));
 }
-//@ chunk-aepeg2w5.js:422776-422816 placement
+//@ chunk-exfmq47h.js:434167-434207 placement
 /**
  * 设置本次会话的回退模型列表。
  */
 function setSessionFallbacks(sessionFallbacks) {
   currentFallbackLadderStates().sessionFallbacks = sessionFallbacks;
 }
-//@ chunk-aepeg2w5.js:422816-422859 placement
+//@ chunk-exfmq47h.js:434207-434250 placement
 /**
  * 取本次会话的回退模型列表。
  */
 function sessionFallbacks() {
   return currentFallbackLadderStates().sessionFallbacks;
 }
-//@ chunk-aepeg2w5.js:422859-423219 placement
+//@ chunk-exfmq47h.js:434250-434610 placement
 /**
  * 解析回退模型。
  */
@@ -243,7 +243,7 @@ function resolveFallbackModel(requested, candidate, isRefusedOrSentModel = () =>
         accessFallbackModel: candidate,
       };
 }
-//@ chunk-aepeg2w5.js:423219-423388 placement
+//@ chunk-exfmq47h.js:434610-434779 placement
 /**
  * 模型对本账号不可用的错误。
  */
@@ -253,7 +253,7 @@ function modelNotAvailableError(model) {
     "model not available to this account",
   );
 }
-//@ chunk-aepeg2w5.js:423388-423463 placement
+//@ chunk-exfmq47h.js:434779-434854 placement
 /**
  * 标记模型被拒绝（带期限）。
  */
@@ -263,7 +263,7 @@ function markModelRefused(model, error, until = Date.now() + MODEL_REFUSAL_TTL_M
     until,
   });
 }
-//@ chunk-aepeg2w5.js:423463-423641 placement
+//@ chunk-exfmq47h.js:434854-435032 placement
 /**
  * 清除模型的拒绝记录与失败检查，记录应答时间。
  */
@@ -275,40 +275,40 @@ function clearModelRefusal_2(model, now = Date.now()) {
     if (key.startsWith(`${stripped}\x00`)) states.failedChecks.delete(key);
   states.answeredAt.set(stripped, now);
 }
-//@ chunk-aepeg2w5.js:423641-423684 placement
+//@ chunk-exfmq47h.js:435032-435075 placement
 /**
  * 清除某模型的"拒绝"标记。
  */
 function clearModelRefusal(model) {
   currentFallbackLadderStates().refused.delete(strip1mSuffix(model));
 }
-//@ chunk-aepeg2w5.js:423684-423734 placement
+//@ chunk-exfmq47h.js:435075-435125 placement
 /**
  * 取某模型被答复（探测）的时间。
  */
 function modelAnsweredAt(model) {
   return currentFallbackLadderStates().answeredAt.get(strip1mSuffix(model));
 }
-//@ chunk-aepeg2w5.js:423734-423819 placement
+//@ chunk-exfmq47h.js:435125-435210 placement
 function activeRefusal(model, now) {
   let refusal = currentFallbackLadderStates().refused.get(strip1mSuffix(model));
   return refusal !== undefined && now < refusal.until ? refusal : undefined;
 }
-//@ chunk-aepeg2w5.js:423819-423872 placement
+//@ chunk-exfmq47h.js:435210-435263 placement
 /**
  * 模型是否处于拒绝状态。
  */
 function isModelRefused(model, now = Date.now()) {
   return activeRefusal(model, now) !== undefined;
 }
-//@ chunk-aepeg2w5.js:423872-423923 placement
+//@ chunk-exfmq47h.js:435263-435314 placement
 /**
  * 取模型当前的拒绝错误（未拒绝返回 undefined）。
  */
 function modelRefusedError(model, now = Date.now()) {
   return activeRefusal(model, now)?.error;
 }
-//@ chunk-aepeg2w5.js:423923-424337 placement
+//@ chunk-exfmq47h.js:435314-435728 placement
 /**
  * 检查模型访问（缓存失败结果）。
  */
@@ -338,7 +338,7 @@ function checkModelAccess(model, probe, cacheKey, now = Date.now()) {
   states.checks.set(key, promise);
   return promise;
 }
-//@ chunk-aepeg2w5.js:424337-424528 placement
+//@ chunk-exfmq47h.js:435728-435919 placement
 function getTierForEnvVar(envVar) {
   switch (envVar) {
     case "ANTHROPIC_DEFAULT_SONNET_MODEL":
@@ -351,7 +351,7 @@ function getTierForEnvVar(envVar) {
       return;
   }
 }
-//@ chunk-aepeg2w5.js:424528-424794 placement
+//@ chunk-exfmq47h.js:435919-436185 placement
 function readTierEnvVar(envVar) {
   switch (envVar) {
     case "ANTHROPIC_DEFAULT_SONNET_MODEL":
@@ -364,7 +364,7 @@ function readTierEnvVar(envVar) {
       return;
   }
 }
-//@ chunk-aepeg2w5.js:424794-425051 placement
+//@ chunk-exfmq47h.js:436185-436442 placement
 /**
  * 模型不可用时推进所有包含它的回退阶梯（含 Sonnet 跨档），有变化时通知监听者。
  */
@@ -384,7 +384,7 @@ function advanceFallbackLadders(model, wouldLoseContext = () => false, supportsA
       } catch {}
   return advanced;
 }
-//@ chunk-aepeg2w5.js:425051-425128 placement
+//@ chunk-exfmq47h.js:436442-436519 placement
 /**
  * 订阅档位迁移事件，返回退订函数。
  */
@@ -393,9 +393,9 @@ function subscribeTierMoves(listener) {
   tierMoveListeners.add(listener);
   return () => tierMoveListeners.delete(listener);
 }
-//@ chunk-aepeg2w5.js:425128-425168 placement
+//@ chunk-exfmq47h.js:436519-436559 placement
 var OPUS_UNAVAILABLE_PREFIX = "Opus unavailable \u2014 using ";
-//@ chunk-aepeg2w5.js:425168-425836 placement
+//@ chunk-exfmq47h.js:436559-437227 placement
 /**
  * 尝试阶梯中的一级。
  */
@@ -438,7 +438,7 @@ function tryLadderRung(ladder, index, suffix, wouldLoseContext, supportsAutoMode
   }
   return true;
 }
-//@ chunk-aepeg2w5.js:425836-426191 placement
+//@ chunk-exfmq47h.js:437227-437582 placement
 /**
  * 跨档位回退。
  */
@@ -463,7 +463,7 @@ function crossTierFallback(ladder, index, wouldLoseContext, supportsAutoMode) {
     supportsAutoMode,
   );
 }
-//@ chunk-aepeg2w5.js:426191-426387 placement
+//@ chunk-exfmq47h.js:437582-437778 placement
 /**
  * 对第三方提供商的 Sonnet 阶梯应用跨档回退。
  */
@@ -475,7 +475,7 @@ function applyThirdPartyCrossTierFallback(provider, model, supportsAutoMode) {
     crossTierFallback(sonnetLadder, index, (id) => above.has(id), supportsAutoMode);
   }
 }
-//@ chunk-aepeg2w5.js:426387-426664 placement
+//@ chunk-exfmq47h.js:437778-438055 placement
 function setTierEnvVar(envVar, id) {
   switch (envVar) {
     case "ANTHROPIC_DEFAULT_SONNET_MODEL":
@@ -489,21 +489,21 @@ function setTierEnvVar(envVar, id) {
       break;
   }
 }
-//@ chunk-aepeg2w5.js:426664-426706 placement
+//@ chunk-exfmq47h.js:438055-438097 placement
 /**
  * 判断是否已有回退阶梯。
  */
 function hasFallbackLadders() {
   return currentFallbackLadderStates().ladders.size > 0;
 }
-//@ chunk-aepeg2w5.js:426706-426756 placement
+//@ chunk-exfmq47h.js:438097-438147 placement
 /**
  * 记录某模型的会话上下文大小（用于回退时判断丢上下文）。
  */
 function recordConversationSize(sessionId, size) {
   currentFallbackLadderStates().conversationSizes.set(sessionId, size);
 }
-//@ chunk-d1cgs5na.js:13461-13509 placement
+//@ chunk-wefvmrb3.js:13529-13577 placement
 /**
  * 取默认模型对应的回退阶梯。
  */
@@ -511,7 +511,7 @@ function ladderForDefaultModel(setting) {
   let userSpecifiedModel = parseUserSpecifiedModel(setting ?? getDefaultMainLoopModelSetting());
   return needsConsentCreditsOrOut(userSpecifiedModel);
 }
-//@ chunk-d1cgs5na.js:13509-13564 placement
+//@ chunk-wefvmrb3.js:13577-13632 placement
 /**
  * 判断某模型设置是否有对应阶梯。
  */
@@ -519,14 +519,14 @@ function hasLadderForSetting(setting) {
   if (setting === null) return false;
   return needsConsentOrCredits(parseUserSpecifiedModel(setting));
 }
-//@ chunk-d1cgs5na.js:13564-13589 placement
+//@ chunk-wefvmrb3.js:13632-13657 placement
 /**
  * 恒返回 false（永不拒绝）。
  */
 function neverDenied(model, other) {
   return false;
 }
-//@ chunk-d1cgs5na.js:13589-13949 placement
+//@ chunk-wefvmrb3.js:13657-14017 placement
 function classifyModelUnavailability(flags) {
   if (flags.notFound) return "not_found";
   if (flags.permissionDenied) return "unavailable_for_account";
@@ -537,7 +537,7 @@ function classifyModelUnavailability(flags) {
   if (flags.retryable) return "check_failed";
   return flags.rejected ? "check_rejected" : undefined;
 }
-//@ chunk-d1cgs5na.js:13949-13993 placement
+//@ chunk-wefvmrb3.js:14017-14061 placement
 /**
  * 有错误码时返回 {code}，否则返回空对象。
  */
@@ -548,7 +548,7 @@ function codeError(code) {
         code,
       };
 }
-//@ chunk-d1cgs5na.js:13993-14095 placement
+//@ chunk-wefvmrb3.js:14061-14163 placement
 /**
  * 分类模型被拒原因：托管设置拒绝或不允许。
  */
@@ -560,37 +560,37 @@ function classifyModelDenial(model) {
   }
 }
 export {
-  hasLadderForSetting,
-  ladderForDefaultModel,
   hasFallbackLadders,
   recordConversationSize,
   resolveFallbackModel,
-  setSessionFallbacks,
-  registerFallbackLadder,
-  applyThirdPartyCrossTierFallback,
-  markModelRefused,
-  modelNotAvailableError,
-  clearModelRefusal,
   isModelRefused,
   modelRefusedError,
   clearModelRefusal_2,
   isModelFallbackDisabled,
   isModelConfigured,
   advanceFallbackLadders,
+  markModelRefused,
+  modelNotAvailableError,
+  findLadderRung,
+  modelAnsweredAt,
+  primaryRungTier,
+  checkModelAccess,
+  primaryRungProvider,
+  setSessionFallbacks,
+  hasLadderForSetting,
+  ladderForDefaultModel,
+  subscribeTierMoves,
   currentFallbackLadderStates,
   getUnrefusedFallbacks,
   markModelsConfigured,
   sessionFallbacks,
   isFormerHeadOrInLadder,
-  primaryRungProvider,
   isFormerHeadRefused,
+  registerFallbackLadder,
+  applyThirdPartyCrossTierFallback,
+  clearModelRefusal,
   classifyModelDenial,
   neverDenied,
   codeError,
   classifyModelUnavailability,
-  subscribeTierMoves,
-  findLadderRung,
-  modelAnsweredAt,
-  primaryRungTier,
-  checkModelAccess,
 };

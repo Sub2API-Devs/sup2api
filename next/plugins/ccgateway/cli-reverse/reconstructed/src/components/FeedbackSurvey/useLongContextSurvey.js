@@ -3,20 +3,20 @@
  *
  * 2.1.316 新增。长上下文体验调查 hook。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (7)
  * attribution: placement 7
  */
-import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
-import { useStoreSelector } from "../../hooks/useStoreSelector.js";
-import { selectIsLoading3, selectSubmitCount2, useSurveyState } from "./useSurveyState.js";
 import {
+  init_react_production,
   useState,
   useRef,
   useEffect,
-  init_react_production,
 } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { useStoreSelector } from "../../hooks/useStoreSelector.js";
+import { selectIsLoading3, selectSubmitCount2, useSurveyState } from "./useSurveyState.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit as lit_2, fromEnum } from "../../services/analytics/safeMetadata.js";
@@ -31,7 +31,12 @@ import { estimateTokensWithAnchor } from "../../services/compact/autoCompact.js"
 import { getLastAssistantMessage } from "../../utils/messages.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1034794-1035136 placement
+//@ chunk-czq1j3j2.js:1050725-1050729 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1050725", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1068823-1069165 placement
 var SURVEY_HIDE_THANKS_AFTER_MS = 5000;
 var TENGU_LONG_CONTEXT_SURVEY_THRESHOLD = "tengu_long_context_survey_threshold";
 var TENGU_LONG_CONTEXT_SURVEY_QUESTION_VARIANT = "tengu_long_context_survey_question_variant";
@@ -43,27 +48,27 @@ var SURVEY_QUESTION_TEXT = {
   instruction_following:
     "How well is Claude following the instructions you gave earlier in this conversation? (optional)",
 };
-//@ chunk-18hwfzwa.js:1035136-1035221 placement
+//@ chunk-czq1j3j2.js:1069165-1069250 placement
 function normalizeQuestionVariant(featureValue_CACHED_MAY_BE_STALE) {
   return featureValue_CACHED_MAY_BE_STALE === "instruction_following" ? "instruction_following" : "generic";
 }
-//@ chunk-18hwfzwa.js:1035221-1035297 placement
+//@ chunk-czq1j3j2.js:1069250-1069326 placement
 function normalizeTriggerMode(featureValue_CACHED_MAY_BE_STALE) {
   return featureValue_CACHED_MAY_BE_STALE === "virtual_context" ? "virtual_context" : "cumulative";
 }
-//@ chunk-18hwfzwa.js:1035297-1035404 placement
+//@ chunk-czq1j3j2.js:1069326-1069433 placement
 function parseProbability(featureValue_CACHED_MAY_BE_STALE) {
   let value = Number(featureValue_CACHED_MAY_BE_STALE);
   if (featureValue_CACHED_MAY_BE_STALE === "" || !Number.isFinite(value)) return DEFAULT_SURVEY_PROBABILITY;
   return Math.min(1, Math.max(0, value));
 }
-//@ chunk-18hwfzwa.js:1035404-1035488 placement
+//@ chunk-czq1j3j2.js:1069433-1069517 placement
 function parsePositiveInt(featureValue_CACHED_MAY_BE_STALE) {
   if (!/^\d+$/.test(featureValue_CACHED_MAY_BE_STALE)) return;
   let value = parseInt(featureValue_CACHED_MAY_BE_STALE, 10);
   return value > 0 ? value : undefined;
 }
-//@ chunk-18hwfzwa.js:1035488-1039263 placement
+//@ chunk-czq1j3j2.js:1069517-1073292 placement
 /**
  * useLongContextSurvey：长上下文使用后触发体验调查的 hook。
  */
@@ -331,9 +336,4 @@ function useLongContextSurvey(props) {
   } else props_2 = $[30];
   return props_2;
 }
-//@ chunk-18hwfzwa.js:1039263-1039267 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1039263", () => {
-  init_react_production();
-});
 export { useLongContextSurvey };

@@ -3,9 +3,9 @@
  *
  * keybindings.json 校验：结构、上下文、动作、按键串、重复键、保留键，生成警告
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/keybindings/validate.ts
- * pieces: chunk-x1mwqya5.js (13)
+ * pieces: chunk-m2f3rb0f.js (13)
  * attribution: affinity 1, file-local 1, fingerprint 7, layout 3, callgraph-witnessed 1
  */
 import {
@@ -14,16 +14,16 @@ import {
   isDeprecatedAction,
   KEYBINDING_ACTIONS,
 } from "./schema.js";
-import { parseKeystroke, chordToString, parseChord, normalizeKeyForComparison } from "./parser.js";
+import { parseKeystroke, chordToString, parseChord } from "./parser.js";
 import { truncateWithCount, firstLineOf } from "../utils/stringUtils.js";
 import { suggestClosestName } from "../utils/settings/managedEnvKeys.js";
-import { uniq } from "../utils/collections.js";
-import { getReservedShortcuts } from "./reservedShortcuts.js";
+import { normalizeCaseForComparison_2 } from "../utils/permissions/filesystem.js";
+import { normalizeKeyForComparison, getReservedShortcuts } from "./reservedShortcuts.js";
 import { isKeybindingBlockArray } from "./loadUserBindings.js";
 import { logForDebugging } from "../utils/debug.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-x1mwqya5.js:3103-3318 affinity (2.1.88 match: normalizeStep, 0.875)
+//@ chunk-m2f3rb0f.js:3101-3316 affinity (2.1.88 match: normalizeStep, 0.875)
 /**
  * validate.ts 用的常量：合法上下文列表、修饰键名与别名（ctrl/control、alt/opt/option、shift、meta、cmd/command/super/win）、Keystroke 的修饰位字段、报错时最多列出 3 个非修饰键、引用按键串最长 80 字符。
  */
@@ -32,7 +32,7 @@ var MODIFIER_NAMES;
 var MODIFIER_FLAGS;
 var MAX_LISTED_NON_MODIFIERS;
 var MAX_QUOTED_KEY_LENGTH;
-deferInit("chunk-x1mwqya5.js:3103", () => {
+deferInit("chunk-m2f3rb0f.js:3101", () => {
   VALID_CONTEXTS = KEYBINDING_CONTEXTS;
   MODIFIER_NAMES = [
     {
@@ -58,11 +58,11 @@ deferInit("chunk-x1mwqya5.js:3103", () => {
   MAX_LISTED_NON_MODIFIERS = 3;
   MAX_QUOTED_KEY_LENGTH = 80;
 });
-//@ chunk-x1mwqya5.js:3318-3355 file-local
+//@ chunk-m2f3rb0f.js:3316-3353 file-local
 function isValidContext(value) {
   return VALID_CONTEXTS.includes(value);
 }
-//@ chunk-x1mwqya5.js:3355-4825 fingerprint (2.1.88 match: validateKeystroke, 0.311)
+//@ chunk-m2f3rb0f.js:3353-4823 fingerprint (2.1.88 match: validateKeystroke, 0.311)
 /**
  * 检查一个按键串里「+」前面的部分是不是修饰键（316 新增的细化报错）。空的部分或「+」两侧有空格导致某一步没有主键时报 parse_error；否则把不是修饰键的部分（如 "k+j" 的 k）列出来，说明实际会被解释成什么，能猜出修饰键别名时给 Did you mean 建议，否则提示用空格分隔连续按键。
  */
@@ -110,7 +110,7 @@ function validateKeystroke(key, contextName) {
     suggestedSteps.push(fixedParts.join("+"));
   }
   if (nonModifierParts.length === 0) return null;
-  let parsed = uniq(nonModifierParts);
+  let parsed = normalizeCaseForComparison_2(nonModifierParts);
   let listedCount = parsed.length > MAX_LISTED_NON_MODIFIERS + 1 ? MAX_LISTED_NON_MODIFIERS : parsed.length;
   let mapped = parsed
     .slice(0, listedCount)
@@ -138,7 +138,7 @@ function validateKeystroke(key, contextName) {
         : `Use ${modifierNamesText} before "+"; for keys pressed one after another, put a space between them, as in "ctrl+x ctrl+s"`,
   };
 }
-//@ chunk-x1mwqya5.js:4825-6822 fingerprint (2.1.88 match: validateBlock, 0.959)
+//@ chunk-m2f3rb0f.js:4823-6820 fingerprint (2.1.88 match: validateBlock, 0.959)
 /**
  * 校验 keybindings.json 中的一个块：必须是对象、有字符串 context 且在合法上下文里、bindings 是对象；逐条校验按键串（validateKeystroke）和动作：动作只能是字符串或 null；command:* 名字只能含字母数字冒号连字符下划线且只能放在 Chat 上下文；未知动作报错并给出相近动作建议；voice:pushToTalk 绑到无修饰的单个字母会警告（预热期间会把字母打进输入框）。
  */
@@ -238,7 +238,7 @@ function validateBlock(block, blockIndex) {
   }
   return warnings;
 }
-//@ chunk-x1mwqya5.js:6822-7174 layout
+//@ chunk-m2f3rb0f.js:6820-7172 layout
 /**
  * 给未知动作找建议：编辑距离≤2 的已知动作给 Did you mean；否则列出同命名空间的动作；再否则列出所有动作命名空间。
  */
@@ -256,29 +256,31 @@ function suggestAction(action) {
   let namespace = firstLineOf(action, ":");
   let filtered = KEYBINDING_ACTIONS.filter((action) => action.startsWith(`${namespace}:`));
   if (filtered.length > 0) return `Valid "${namespace}:" actions: ${filtered.join(", ")}`;
-  return `Valid action namespaces: ${uniq(KEYBINDING_ACTIONS.map((action) => firstLineOf(action, ":")))
+  return `Valid action namespaces: ${normalizeCaseForComparison_2(
+    KEYBINDING_ACTIONS.map((action) => firstLineOf(action, ":")),
+  )
     .map((prefix) => `${prefix}:`)
     .join(", ")}`;
 }
-//@ chunk-x1mwqya5.js:7174-7413 layout
-function levenshteinDistance(a, b) {
+//@ chunk-m2f3rb0f.js:7172-7411 layout
+function levenshteinDistance(a_2, b) {
   let prevRow = Array.from(
     {
       length: b.length + 1,
     },
     (value, index) => index,
   );
-  for (let k = 1; k <= a.length; k++) {
+  for (let k = 1; k <= a_2.length; k++) {
     let row = [k];
     for (let k_2 = 1; k_2 <= b.length; k_2++) {
-      let cost = a[k - 1] === b[k_2 - 1] ? 0 : 1;
+      let cost = a_2[k - 1] === b[k_2 - 1] ? 0 : 1;
       row[k_2] = Math.min((prevRow[k_2] ?? 0) + 1, (row[k_2 - 1] ?? 0) + 1, (prevRow[k_2 - 1] ?? 0) + cost);
     }
     prevRow = row;
   }
   return prevRow[b.length] ?? 0;
 }
-//@ chunk-x1mwqya5.js:7413-7997 fingerprint (2.1.88 match: checkDuplicateKeysInJson, 1)
+//@ chunk-m2f3rb0f.js:7411-7995 fingerprint (2.1.88 match: checkDuplicateKeysInJson, 1)
 /**
  * 在原始 JSON 文本里用正则找同一 bindings 对象内重复出现的键（JSON.parse 会静默保留最后一个），每个重复键报一次 duplicate 警告。
  */
@@ -313,7 +315,7 @@ function checkDuplicateKeysInJson(jsonString) {
   }
   return warnings;
 }
-//@ chunk-x1mwqya5.js:7997-8243 fingerprint (2.1.88 match: validateUserConfig, 1)
+//@ chunk-m2f3rb0f.js:7995-8241 fingerprint (2.1.88 match: validateUserConfig, 1)
 /**
  * 顶层校验：bindings 必须是数组，然后逐块 validateBlock。
  */
@@ -331,7 +333,7 @@ function validateUserConfig(userBlocks) {
   for (let i = 0; i < userBlocks.length; i++) warnings.push(...validateBlock(userBlocks[i], i));
   return warnings;
 }
-//@ chunk-x1mwqya5.js:8243-8684 fingerprint (2.1.88 match: checkDuplicates, 1)
+//@ chunk-m2f3rb0f.js:8241-8682 fingerprint (2.1.88 match: checkDuplicates, 1)
 /**
  * 同一上下文内规范化后相同的按键串绑定了不同动作时警告（只有最后一个生效）。
  */
@@ -359,7 +361,7 @@ function checkDuplicates(blocks) {
   }
   return warnings;
 }
-//@ chunk-x1mwqya5.js:8684-8938 fingerprint (2.1.88 match: checkReservedShortcuts, 1)
+//@ chunk-m2f3rb0f.js:8682-8936 fingerprint (2.1.88 match: checkReservedShortcuts, 1)
 /**
  * 用户绑定里用到保留快捷键（ctrl+c/ctrl+d/ctrl+m 等硬编码键、终端信号键、macOS 系统键）时按保留表的严重度报警。
  */
@@ -382,7 +384,7 @@ function checkReservedShortcuts(bindings) {
   }
   return warnings;
 }
-//@ chunk-x1mwqya5.js:8938-9110 layout (2.1.88 match: parseBindings, 1)
+//@ chunk-m2f3rb0f.js:8936-9108 layout (2.1.88 match: parseBindings, 1)
 /**
  * 校验用的简化展开：按单个空格拆和弦，不做 space 特判。
  */
@@ -399,7 +401,7 @@ function parseUserBindings(blocks) {
     }
   return bindings;
 }
-//@ chunk-x1mwqya5.js:9110-9325 callgraph-witnessed (2.1.88 match: validateBindings, 0)
+//@ chunk-m2f3rb0f.js:9108-9323 callgraph-witnessed (2.1.88 match: validateBindings, 0)
 /**
  * 汇总用户配置校验：结构校验 + 块合法时查重复与保留键；按 type:key:context 去重。
  */
@@ -419,7 +421,7 @@ function validateBindings(userBlocks, _parsedBindings) {
     return true;
   });
 }
-//@ chunk-x1mwqya5.js:10139-10275 fingerprint (2.1.88 match: formatWarning, 0.568)
+//@ chunk-m2f3rb0f.js:10137-10273 fingerprint (2.1.88 match: formatWarning, 0.568)
 /**
  * 把每条校验警告写调试日志（[keybindings] [severity] message — suggestion）。
  */

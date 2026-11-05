@@ -3,9 +3,9 @@
  *
  * 远程下发的 policyHelper（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q8cqcff6.js (44)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5fn9rb8r.js (44)
  * attribution: placement 44
  */
 import { getPolicyHelperCommand } from "../../../components/ManagedSettingsSecurityDialog/utils.js";
@@ -43,7 +43,7 @@ import { logError } from "../../log.js";
 import { getIsInteractive } from "../../../bootstrap/state.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-q8cqcff6.js:74436-74621 placement
+//@ chunk-5fn9rb8r.js:74699-74884 placement
 function selectPerOsConfig(policyHelpers, chain, requireCommand) {
   for (let osKey of chain) {
     let entry = policyHelpers[osKey];
@@ -62,7 +62,7 @@ function selectPerOsConfig(policyHelpers, chain, requireCommand) {
   }
   return null;
 }
-//@ chunk-q8cqcff6.js:74621-74715 placement
+//@ chunk-5fn9rb8r.js:74884-74978 placement
 /**
  * remoteHelperCommand：按平台选出的远程 policy helper 命令。
  */
@@ -74,7 +74,7 @@ function remoteHelperCommand(settings) {
       )
     : undefined;
 }
-//@ chunk-q8cqcff6.js:74715-75507 placement
+//@ chunk-5fn9rb8r.js:74978-75770 placement
 function selectPerOsHelper(policyHelpers, policyHelper, chainInfo, requireCommand) {
   if (!policyHelpers || !chainInfo)
     return policyHelper
@@ -128,7 +128,7 @@ function selectPerOsHelper(policyHelpers, policyHelper, chainInfo, requireComman
   }
   return null;
 }
-//@ chunk-q8cqcff6.js:75507-75574 placement
+//@ chunk-5fn9rb8r.js:75770-75837 placement
 /**
  * RemoteHelperError：远程 helper 错误类。
  */
@@ -139,7 +139,7 @@ class RemoteHelperError extends Error {
     this.code = code;
   }
 }
-//@ chunk-q8cqcff6.js:75574-76946 placement
+//@ chunk-5fn9rb8r.js:75837-77209 placement
 async function runRemoteArmedHelper({ config, fromPerOs }, options) {
   let armed = options?.armedFromRemote === true;
   let { remoteArmGeneration, osAdminRetireGeneration } = policyHelperRunner;
@@ -200,89 +200,89 @@ async function runRemoteArmedHelper({ config, fromPerOs }, options) {
     });
   return "applied";
 }
-//@ chunk-q8cqcff6.js:76946-77005 placement
+//@ chunk-5fn9rb8r.js:77209-77268 placement
 /**
  * managedSettingsFromRemote：远程下发的托管设置。
  */
 function managedSettingsFromRemote() {
   return policyHelperRunner.state?.output.managedSettings ?? null;
 }
-//@ chunk-q8cqcff6.js:77005-77078 placement
+//@ chunk-5fn9rb8r.js:77268-77341 placement
 function remotePolicyState() {
   let state = policyHelperRunner.state;
   return state && !state.armedFromRemote ? state.output : undefined;
 }
-//@ chunk-q8cqcff6.js:77078-77121 placement
+//@ chunk-5fn9rb8r.js:77341-77384 placement
 /**
  * remoteClaudeMd：远程下发的 CLAUDE.md。
  */
 function remoteClaudeMd() {
   return remotePolicyState()?.claudeMd ?? null;
 }
-//@ chunk-q8cqcff6.js:77121-77174 placement
+//@ chunk-5fn9rb8r.js:77384-77437 placement
 /**
  * remoteAppendSystemPrompt：远程下发的追加系统提示。
  */
 function remoteAppendSystemPrompt() {
   return remotePolicyState()?.appendSystemPrompt ?? null;
 }
-//@ chunk-q8cqcff6.js:77174-77211 placement
+//@ chunk-5fn9rb8r.js:77437-77474 placement
 /**
  * hasRemoteHelperState：是否已有远程 helper 状态。
  */
 function hasRemoteHelperState() {
   return policyHelperRunner.state !== null;
 }
-//@ chunk-q8cqcff6.js:77211-77252 placement
+//@ chunk-5fn9rb8r.js:77474-77515 placement
 /**
  * hasHelperPassInFlight：是否有 helper 轮次进行中。
  */
 function hasHelperPassInFlight() {
   return policyHelperRunner.passesInFlight > 0;
 }
-//@ chunk-q8cqcff6.js:77252-77304 placement
+//@ chunk-5fn9rb8r.js:77515-77567 placement
 /**
  * releaseLatchWhenTickSettles：是否在 tick 结算后释放锁存。
  */
 function releaseLatchWhenTickSettles() {
   return policyHelperRunner.releaseLatchWhenTickSettles;
 }
-//@ chunk-q8cqcff6.js:77304-77354 placement
+//@ chunk-5fn9rb8r.js:77567-77617 placement
 /**
  * subscribeHelperPassSettled：订阅 helper 轮次结算。
  */
 function subscribeHelperPassSettled(listener) {
   return policyHelperRunner.passSettled.subscribe(listener);
 }
-//@ chunk-q8cqcff6.js:77354-77398 placement
+//@ chunk-5fn9rb8r.js:77617-77661 placement
 /**
  * helperInitAttempted：是否尝试过初始化 helper。
  */
 function helperInitAttempted() {
   return policyHelperRunner.initializeAttempted;
 }
-//@ chunk-q8cqcff6.js:77398-77449 placement
+//@ chunk-5fn9rb8r.js:77661-77712 placement
 /**
  * armedFromRemote：是否由远程武装。
  */
 function armedFromRemote() {
   return policyHelperRunner.state?.armedFromRemote === true;
 }
-//@ chunk-q8cqcff6.js:77449-77515 placement
+//@ chunk-5fn9rb8r.js:77712-77778 placement
 /**
  * armedFromUserWritableBase：由用户可写基座武装。
  */
 function armedFromUserWritableBase() {
   return policyHelperRunner.state !== null && policyHelperRunner.armedFromUserWritableBase;
 }
-//@ chunk-q8cqcff6.js:77515-77563 placement
+//@ chunk-5fn9rb8r.js:77778-77826 placement
 /**
  * mergesRemoteOutput：远程输出参与合并。
  */
 function mergesRemoteOutput() {
   return policyHelperRunner.state?.mergesOutput === true;
 }
-//@ chunk-q8cqcff6.js:77563-77780 placement
+//@ chunk-5fn9rb8r.js:77826-78043 placement
 /**
  * 远程载荷遮蔽了 OS 管理员策略时，退役原有的 policyHelper pass。
  */
@@ -298,21 +298,21 @@ function retireIfShadowedByRemote(origin) {
     code: "retired_shadowed_by_remote",
   });
 }
-//@ chunk-q8cqcff6.js:77780-77805 placement
+//@ chunk-5fn9rb8r.js:78043-78068 placement
 /**
  * notifyOrganizationAsking：通知组织询问状态（不作答）。
  */
 function notifyOrganizationAsking(readBase) {
   onAskingOrganizationChange(readBase, false);
 }
-//@ chunk-q8cqcff6.js:77805-77830 placement
+//@ chunk-5fn9rb8r.js:78068-78093 placement
 /**
  * notifyOrganizationAskingForced：通知组织询问状态（强制）。
  */
 function notifyOrganizationAskingForced(readBase) {
   onAskingOrganizationChange(readBase, true);
 }
-//@ chunk-q8cqcff6.js:77830-78276 placement
+//@ chunk-5fn9rb8r.js:78093-78539 placement
 /**
  * 会话开始或停止向组织请求设置时，重新处理 OS 管理员的 policyHelper：远程已接管时忽略；有进行中的 pass 时记下重启；否则退役当前 pass 并按新的基础设置重新武装。
  */
@@ -346,13 +346,13 @@ function onAskingOrganizationChange(readBase, forced) {
     `was read again at the turn ${forced ? "away from" : "to"} asking its organization`,
   );
 }
-//@ chunk-q8cqcff6.js:78276-78358 placement
+//@ chunk-5fn9rb8r.js:78539-78621 placement
 function refuseFromRemoteArming(message) {
   let osAdminArming = policyHelperRunner.osAdminArming;
   if (osAdminArming) osAdminArming.refuse(message);
   else policyHelperRunner.undeliveredRefusal = message;
 }
-//@ chunk-q8cqcff6.js:78358-78598 placement
+//@ chunk-5fn9rb8r.js:78621-78861 placement
 var RETIRE_FOR_ASKING = {
   said: "the session asks its organization: a fresh pass runs from the base as now read",
   code: "retired_held_document",
@@ -361,14 +361,14 @@ var RETIRE_FOR_STOPPED_ASKING = {
   said: "the session stopped asking its organization: the base is read whole again",
   code: "retired_stopped_asking",
 };
-//@ chunk-q8cqcff6.js:78598-78641 placement
+//@ chunk-5fn9rb8r.js:78861-78904 placement
 /**
  * retireReason：退役原因（停止询问或仍在询问）。
  */
 function retireReason() {
   return policyHelperRunner.stoppedAsking ? RETIRE_FOR_STOPPED_ASKING : RETIRE_FOR_ASKING;
 }
-//@ chunk-q8cqcff6.js:78641-79026 placement
+//@ chunk-5fn9rb8r.js:78904-79289 placement
 /**
  * 退役 OS 管理员 policyHelper pass：停止刷新、清理状态与默认回退，必要时清除已决定来源；原本有状态时记日志、遥测并通知层级变化。
  */
@@ -389,7 +389,7 @@ function retireOsAdminPass({ said, code }) {
   logFeatureSad("settings_policy_helper", code);
   policyHelperRunner.announceTierChange();
 }
-//@ chunk-q8cqcff6.js:79026-79377 placement
+//@ chunk-5fn9rb8r.js:79289-79640 placement
 /**
  * 停用远程武装的 policyHelper（或远程静态载荷）：清理远程决定；若当前由远程武装，则停止刷新、退役状态、释放闩并通知层级变化。
  */
@@ -411,12 +411,12 @@ function deactivateRemoteHelper() {
   });
   policyHelperRunner.announceTierChange();
 }
-//@ chunk-q8cqcff6.js:79377-79385 placement
+//@ chunk-5fn9rb8r.js:79640-79648 placement
 // deferred: uses registerSyncCacheResetListener (../../../services/remoteManagedSettings/remoteSettingsState.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-q8cqcff6.js:79377", () => {
+deferInit("chunk-5fn9rb8r.js:79640", () => {
   registerSyncCacheResetListener(deactivateRemoteHelper);
 });
-//@ chunk-q8cqcff6.js:79385-79567 placement
+//@ chunk-5fn9rb8r.js:79648-79830 placement
 function matchingRemoteHelperConfig(config) {
   let readRemotePayload = policyHelperRunner.readRemotePayload;
   if (readRemotePayload === null || !isRemoteManagedSettingsVerifiedAndApprovedForSession()) return null;
@@ -428,7 +428,7 @@ function matchingRemoteHelperConfig(config) {
     ? remoteConfig
     : null;
 }
-//@ chunk-q8cqcff6.js:79567-80659 placement
+//@ chunk-5fn9rb8r.js:79830-80922 placement
 async function retryRemoteHelper(config, fromPerOs) {
   try {
     if (matchingRemoteHelperConfig(config) === null) {
@@ -498,7 +498,7 @@ async function retryRemoteHelper(config, fromPerOs) {
     logError(error);
   }
 }
-//@ chunk-q8cqcff6.js:80659-80808 placement
+//@ chunk-5fn9rb8r.js:80922-81071 placement
 /**
  * 启用会话中途的 policyHelper 武装，并交付尚未送达的拒绝。
  */
@@ -511,7 +511,7 @@ function enableMidSessionArming(arming) {
     policyHelperRunner.undeliveredRefusal = null;
   }
 }
-//@ chunk-q8cqcff6.js:80808-80864 placement
+//@ chunk-5fn9rb8r.js:81071-81127 placement
 /**
  * applyRemotePolicyMidSession：会话中应用远程策略。
  */
@@ -519,7 +519,7 @@ function applyRemotePolicyMidSession(reader) {
   applyRemotePolicyMidSession_2(reader);
   armFromOsAdminIfNew("became the base mid-session");
 }
-//@ chunk-q8cqcff6.js:80864-81076 placement
+//@ chunk-5fn9rb8r.js:81127-81339 placement
 function armFromOsAdminIfNew(reason) {
   let osAdminArming = policyHelperRunner.osAdminArming;
   if (
@@ -534,7 +534,7 @@ function armFromOsAdminIfNew(reason) {
     return;
   armFromBase(osAdminArming, reason);
 }
-//@ chunk-q8cqcff6.js:81076-81482 placement
+//@ chunk-5fn9rb8r.js:81339-81745 placement
 /**
  * 按基础设置的来源武装 policyHelper：pass 拒绝时按启动时的方式退出并记下来源，成功则记日志并通知层级变化。
  */
@@ -564,7 +564,7 @@ function armFromBase(osAdminArming, reason) {
       logError(error);
     });
 }
-//@ chunk-q8cqcff6.js:81482-83187 placement
+//@ chunk-5fn9rb8r.js:81745-83450 placement
 function applyRemotePolicyMidSession_2(reader) {
   policyHelperRunner.readRemotePayload = reader;
   if (
@@ -644,7 +644,7 @@ function applyRemotePolicyMidSession_2(reader) {
         policyHelperRunner.announceTierChange();
     });
 }
-//@ chunk-q8cqcff6.js:83187-84358 placement
+//@ chunk-5fn9rb8r.js:83450-84621 placement
 function reserveRemoteStaticPayload(reader) {
   let remoteDecision = policyHelperRunner.remoteDecision;
   if (remoteDecision === null) return;
@@ -707,21 +707,21 @@ function reserveRemoteStaticPayload(reader) {
   }
   deactivateRemoteHelper();
 }
-//@ chunk-q8cqcff6.js:84358-84408 placement
+//@ chunk-5fn9rb8r.js:84621-84671 placement
 /**
  * helperConfigPath：helper 配置文件路径。
  */
 function helperConfigPath() {
   return policyHelperRunner.state?.config?.path ?? null;
 }
-//@ chunk-q8cqcff6.js:84408-84455 placement
+//@ chunk-5fn9rb8r.js:84671-84718 placement
 /**
  * retiredHelperPaths：已退役的 helper 路径。
  */
 function retiredHelperPaths() {
   return [...policyHelperRunner.retiredHelperPaths];
 }
-//@ chunk-q8cqcff6.js:84455-84778 placement
+//@ chunk-5fn9rb8r.js:84718-85041 placement
 /**
  * 列出设置中所有有效的路径型 policyHelper（按平台链与单数键），用于沙箱配置。
  */
@@ -748,14 +748,14 @@ function policyHelperPaths(basePolicySettings) {
       paths.push(config.path);
   return paths;
 }
-//@ chunk-q8cqcff6.js:84778-84829 placement
+//@ chunk-5fn9rb8r.js:85041-85092 placement
 /**
  * isServingDefault：正在服务 “default” helper。
  */
 function isServingDefault() {
   return policyHelperRunner.state?.serving === "default";
 }
-//@ chunk-q8cqcff6.js:84829-85531 placement
+//@ chunk-5fn9rb8r.js:85092-85794 placement
 function policyHelperConsentState() {
   let { state, lastFailure, selectedEntry, remoteFailedConfig } = policyHelperRunner;
   let remoteDecision = policyHelperRunner.remoteDecision;
@@ -796,14 +796,14 @@ function policyHelperConsentState() {
     },
   };
 }
-//@ chunk-q8cqcff6.js:85531-85602 placement
+//@ chunk-5fn9rb8r.js:85794-85865 placement
 /**
  * helperSelectionWarnings：合并选择与状态的警告。
  */
 function helperSelectionWarnings() {
   return [...policyHelperRunner.selectionWarnings, ...(policyHelperRunner.state?.warnings ?? [])];
 }
-//@ chunk-q8cqcff6.js:85602-85647 placement
+//@ chunk-5fn9rb8r.js:85865-85910 placement
 /**
  * resetRemoteHelperState：重置远程 helper 状态。
  */
@@ -811,12 +811,12 @@ function resetRemoteHelperState() {
   policyHelperRunner.reset();
   policyHelperRunner.startsNoSession = false;
 }
-//@ chunk-q8cqcff6.js:85647-85659 placement
+//@ chunk-5fn9rb8r.js:85910-85922 placement
 /**
  * helperOutputOverride：helper 输出覆盖值。
  */
 var helperOutputOverride = null;
-//@ chunk-q8cqcff6.js:85659-85680 placement
+//@ chunk-5fn9rb8r.js:85922-85943 placement
 /**
  * setHelperOutputOverride：设置 helper 输出覆盖值。
  */
@@ -824,31 +824,17 @@ function setHelperOutputOverride(getPreSettingsEnvSnapshot) {
   helperOutputOverride = getPreSettingsEnvSnapshot;
 }
 export {
-  isServingDefault,
-  armedFromUserWritableBase,
+  subscribeHelperPassSettled,
+  helperSelectionWarnings,
   remoteClaudeMd,
   hasRemoteHelperState,
   retireIfShadowedByRemote,
   enableMidSessionArming,
-  policyHelperConsentState,
-  subscribeHelperPassSettled,
-  hasHelperPassInFlight,
-  releaseLatchWhenTickSettles,
-  helperSelectionWarnings,
   remoteAppendSystemPrompt,
-  reserveRemoteStaticPayload,
-  applyRemotePolicyMidSession,
-  managedSettingsFromRemote,
-  armedFromRemote,
-  mergesRemoteOutput,
-  notifyOrganizationAsking,
-  notifyOrganizationAskingForced,
-  helperInitAttempted,
-  helperConfigPath,
-  policyHelperPaths,
-  retiredHelperPaths,
-  setHelperOutputOverride,
+  policyHelperConsentState,
+  isServingDefault,
   helperOutputOverride,
+  applyRemotePolicyMidSession,
   retryRemoteHelper,
   matchingRemoteHelperConfig,
   resetRemoteHelperState,
@@ -859,4 +845,18 @@ export {
   RemoteHelperError,
   remoteHelperCommand,
   selectPerOsConfig,
+  managedSettingsFromRemote,
+  armedFromRemote,
+  mergesRemoteOutput,
+  armedFromUserWritableBase,
+  hasHelperPassInFlight,
+  helperConfigPath,
+  policyHelperPaths,
+  retiredHelperPaths,
+  setHelperOutputOverride,
+  reserveRemoteStaticPayload,
+  releaseLatchWhenTickSettles,
+  notifyOrganizationAsking,
+  notifyOrganizationAskingForced,
+  helperInitAttempted,
 };

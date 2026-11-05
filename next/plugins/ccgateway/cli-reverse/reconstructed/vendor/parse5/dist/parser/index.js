@@ -1,8 +1,8 @@
 /**
  * parse5/dist/parser/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: parse5@7.2.0..7.2.1
- * pieces: chunk-6ja29j2n.js (133)
+ * pieces: chunk-p9ac6cnb.js (133)
  * attribution: esm-fingerprint 133
  */
 import { TAG_ID, getTagID, SPECIAL_ELEMENTS, HEADING_ELEMENTS } from "../common/html.js";
@@ -24,12 +24,12 @@ import { errors } from "../../lib/common/error-codes.js";
 import { CODE_POINTS, REPLACEMENT_CHARACTER } from "../common/unicode.js";
 import { getDocumentMode, isConforming } from "../common/doctype.js";
 
-//@ chunk-6ja29j2n.js:132780-132808 esm-fingerprint
+//@ chunk-p9ac6cnb.js:132780-132808 esm-fingerprint
 var HIDDEN_INPUT_TYPE = "hidden";
 var AA_OUTER_LOOP_ITER = 8;
 var AA_INNER_LOOP_ITER = 3;
 var InsertionMode;
-//@ chunk-6ja29j2n.js:132808-133610 esm-fingerprint
+//@ chunk-p9ac6cnb.js:132808-133610 esm-fingerprint
 (function (InsertionMode) {
   InsertionMode[(InsertionMode.INITIAL = 0)] = "INITIAL";
   InsertionMode[(InsertionMode.BEFORE_HTML = 1)] = "BEFORE_HTML";
@@ -55,7 +55,7 @@ var InsertionMode;
   InsertionMode[(InsertionMode.AFTER_AFTER_BODY = 21)] = "AFTER_AFTER_BODY";
   InsertionMode[(InsertionMode.AFTER_AFTER_FRAMESET = 22)] = "AFTER_AFTER_FRAMESET";
 })(InsertionMode || (InsertionMode = {}));
-//@ chunk-6ja29j2n.js:133610-133827 esm-fingerprint
+//@ chunk-p9ac6cnb.js:133610-133827 esm-fingerprint
 var BASE_LOC = {
   startLine: -1,
   startCol: -1,
@@ -71,7 +71,7 @@ var defaultParserOptions = {
   treeAdapter: defaultTreeAdapter,
   onParseError: null,
 };
-//@ chunk-6ja29j2n.js:133827-150244 esm-fingerprint
+//@ chunk-p9ac6cnb.js:133827-150244 esm-fingerprint
 class Parser {
   constructor(options, documentNode, fragmentContext = null, scriptHandler = null) {
     this.fragmentContext = fragmentContext;
@@ -1063,7 +1063,7 @@ class Parser {
     }
   }
 }
-//@ chunk-6ja29j2n.js:150244-150506 esm-fingerprint
+//@ chunk-p9ac6cnb.js:150244-150506 esm-fingerprint
 function aaObtainFormattingElementEntry(p, token) {
   let formattingElementEntry = p.activeFormattingElements.getElementEntryInScopeWithTagName(token.tagName);
   if (formattingElementEntry) {
@@ -1074,7 +1074,7 @@ function aaObtainFormattingElementEntry(p, token) {
   } else genericEndTagInBody(p, token);
   return formattingElementEntry;
 }
-//@ chunk-6ja29j2n.js:150506-150780 esm-fingerprint
+//@ chunk-p9ac6cnb.js:150506-150780 esm-fingerprint
 function aaObtainFurthestBlock(p, formattingElementEntry) {
   let furthestBlock = null;
   let idx = p.openElements.stackTop;
@@ -1089,7 +1089,7 @@ function aaObtainFurthestBlock(p, formattingElementEntry) {
   }
   return furthestBlock;
 }
-//@ chunk-6ja29j2n.js:150780-151194 esm-fingerprint
+//@ chunk-p9ac6cnb.js:150780-151194 esm-fingerprint
 function aaInnerLoop(p, furthestBlock, formattingElement) {
   let lastElement = furthestBlock;
   let nextElement = p.openElements.getCommonAncestor(furthestBlock);
@@ -1110,7 +1110,7 @@ function aaInnerLoop(p, furthestBlock, formattingElement) {
   }
   return lastElement;
 }
-//@ chunk-6ja29j2n.js:151194-151378 esm-fingerprint
+//@ chunk-p9ac6cnb.js:151194-151378 esm-fingerprint
 function aaRecreateElementFromEntry(p, elementEntry) {
   let ns = p.treeAdapter.getNamespaceURI(elementEntry.element);
   let newElement = p.treeAdapter.createElement(elementEntry.token.tagName, ns, elementEntry.token.attrs);
@@ -1118,7 +1118,7 @@ function aaRecreateElementFromEntry(p, elementEntry) {
   elementEntry.element = newElement;
   return newElement;
 }
-//@ chunk-6ja29j2n.js:151378-151648 esm-fingerprint
+//@ chunk-p9ac6cnb.js:151378-151648 esm-fingerprint
 function aaInsertLastNodeInCommonAncestor(p, commonAncestor, lastElement) {
   let tn = p.treeAdapter.getTagName(commonAncestor);
   let tid = getTagID(tn);
@@ -1130,7 +1130,7 @@ function aaInsertLastNodeInCommonAncestor(p, commonAncestor, lastElement) {
     p.treeAdapter.appendChild(commonAncestor, lastElement);
   }
 }
-//@ chunk-6ja29j2n.js:151648-152001 esm-fingerprint
+//@ chunk-p9ac6cnb.js:151648-152001 esm-fingerprint
 function aaReplaceFormattingElement(p, furthestBlock, formattingElementEntry) {
   let ns = p.treeAdapter.getNamespaceURI(formattingElementEntry.element);
   let { token } = formattingElementEntry;
@@ -1142,7 +1142,7 @@ function aaReplaceFormattingElement(p, furthestBlock, formattingElementEntry) {
   p.openElements.remove(formattingElementEntry.element);
   p.openElements.insertAfter(furthestBlock, newElement, token.tagID);
 }
-//@ chunk-6ja29j2n.js:152001-152254 esm-fingerprint
+//@ chunk-p9ac6cnb.js:152001-152254 esm-fingerprint
 function callAdoptionAgency(p, token) {
   for (let i = 0; i < AA_OUTER_LOOP_ITER; i++) {
     let formattingElementEntry = aaObtainFormattingElementEntry(p, token);
@@ -1157,19 +1157,19 @@ function callAdoptionAgency(p, token) {
     aaReplaceFormattingElement(p, furthestBlock, formattingElementEntry);
   }
 }
-//@ chunk-6ja29j2n.js:152254-152335 esm-fingerprint
+//@ chunk-p9ac6cnb.js:152254-152335 esm-fingerprint
 function appendComment(p, token) {
   p._appendCommentNode(token, p.openElements.currentTmplContentOrNode);
 }
-//@ chunk-6ja29j2n.js:152335-152400 esm-fingerprint
+//@ chunk-p9ac6cnb.js:152335-152400 esm-fingerprint
 function appendCommentToRootHtmlElement(p, token) {
   p._appendCommentNode(token, p.openElements.items[0]);
 }
-//@ chunk-6ja29j2n.js:152400-152452 esm-fingerprint
+//@ chunk-p9ac6cnb.js:152400-152452 esm-fingerprint
 function appendCommentToDocument(p, token) {
   p._appendCommentNode(token, p.document);
 }
-//@ chunk-6ja29j2n.js:152452-152928 esm-fingerprint
+//@ chunk-p9ac6cnb.js:152452-152928 esm-fingerprint
 function stopParsing(p, token) {
   p.stopped = true;
   if (token.location) {
@@ -1189,7 +1189,7 @@ function stopParsing(p, token) {
     }
   }
 }
-//@ chunk-6ja29j2n.js:152928-153119 esm-fingerprint
+//@ chunk-p9ac6cnb.js:152928-153119 esm-fingerprint
 function doctypeInInitialMode(p, token) {
   p._setDocumentType(token);
   let mode = token.forceQuirks ? DOCUMENT_MODE.QUIRKS : getDocumentMode(token);
@@ -1197,33 +1197,33 @@ function doctypeInInitialMode(p, token) {
   p.treeAdapter.setDocumentMode(p.document, mode);
   p.insertionMode = InsertionMode.BEFORE_HTML;
 }
-//@ chunk-6ja29j2n.js:153119-153265 esm-fingerprint
+//@ chunk-p9ac6cnb.js:153119-153265 esm-fingerprint
 function tokenInInitialMode(p, token) {
   p._err(token, errors.missingDoctype, true);
   p.treeAdapter.setDocumentMode(p.document, DOCUMENT_MODE.QUIRKS);
   p.insertionMode = InsertionMode.BEFORE_HTML;
   p._processToken(token);
 }
-//@ chunk-6ja29j2n.js:153265-153371 esm-fingerprint
+//@ chunk-p9ac6cnb.js:153265-153371 esm-fingerprint
 function startTagBeforeHtml(p, token) {
   if (token.tagID === TAG_ID.HTML) {
     p._insertElement(token, NAMESPACES.HTML);
     p.insertionMode = InsertionMode.BEFORE_HEAD;
   } else tokenBeforeHtml(p, token);
 }
-//@ chunk-6ja29j2n.js:153371-153457 esm-fingerprint
+//@ chunk-p9ac6cnb.js:153371-153457 esm-fingerprint
 function endTagBeforeHtml(p, token) {
   let tn = token.tagID;
   if (tn === TAG_ID.HTML || tn === TAG_ID.HEAD || tn === TAG_ID.BODY || tn === TAG_ID.BR)
     tokenBeforeHtml(p, token);
 }
-//@ chunk-6ja29j2n.js:153457-153549 esm-fingerprint
+//@ chunk-p9ac6cnb.js:153457-153549 esm-fingerprint
 function tokenBeforeHtml(p, token) {
   p._insertFakeRootElement();
   p.insertionMode = InsertionMode.BEFORE_HEAD;
   p._processToken(token);
 }
-//@ chunk-6ja29j2n.js:153549-153733 esm-fingerprint
+//@ chunk-p9ac6cnb.js:153549-153733 esm-fingerprint
 function startTagBeforeHead(p, token) {
   switch (token.tagID) {
     case TAG_ID.HTML: {
@@ -1240,21 +1240,21 @@ function startTagBeforeHead(p, token) {
       tokenBeforeHead(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:153733-153869 esm-fingerprint
+//@ chunk-p9ac6cnb.js:153733-153869 esm-fingerprint
 function endTagBeforeHead(p, token) {
   let tn = token.tagID;
   if (tn === TAG_ID.HEAD || tn === TAG_ID.BODY || tn === TAG_ID.HTML || tn === TAG_ID.BR)
     tokenBeforeHead(p, token);
   else p._err(token, errors.endTagWithoutMatchingOpenElement);
 }
-//@ chunk-6ja29j2n.js:153869-154003 esm-fingerprint
+//@ chunk-p9ac6cnb.js:153869-154003 esm-fingerprint
 function tokenBeforeHead(p, token) {
   p._insertFakeElement(TAG_NAMES.HEAD, TAG_ID.HEAD);
   p.headElement = p.openElements.current;
   p.insertionMode = InsertionMode.IN_HEAD;
   p._processToken(token);
 }
-//@ chunk-6ja29j2n.js:154003-154790 esm-fingerprint
+//@ chunk-p9ac6cnb.js:154003-154790 esm-fingerprint
 function startTagInHead(p, token) {
   switch (token.tagID) {
     case TAG_ID.HTML: {
@@ -1307,7 +1307,7 @@ function startTagInHead(p, token) {
       tokenInHead(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:154790-155024 esm-fingerprint
+//@ chunk-p9ac6cnb.js:154790-155024 esm-fingerprint
 function endTagInHead(p, token) {
   switch (token.tagID) {
     case TAG_ID.HEAD: {
@@ -1329,7 +1329,7 @@ function endTagInHead(p, token) {
       p._err(token, errors.endTagWithoutMatchingOpenElement);
   }
 }
-//@ chunk-6ja29j2n.js:155024-155418 esm-fingerprint
+//@ chunk-p9ac6cnb.js:155024-155418 esm-fingerprint
 function templateEndTagInHead(p, token) {
   if (p.openElements.tmplCount > 0) {
     p.openElements.generateImpliedEndTagsThoroughly();
@@ -1341,13 +1341,13 @@ function templateEndTagInHead(p, token) {
     p._resetInsertionMode();
   } else p._err(token, errors.endTagWithoutMatchingOpenElement);
 }
-//@ chunk-6ja29j2n.js:155418-155503 esm-fingerprint
+//@ chunk-p9ac6cnb.js:155418-155503 esm-fingerprint
 function tokenInHead(p, token) {
   p.openElements.pop();
   p.insertionMode = InsertionMode.AFTER_HEAD;
   p._processToken(token);
 }
-//@ chunk-6ja29j2n.js:155503-155744 esm-fingerprint
+//@ chunk-p9ac6cnb.js:155503-155744 esm-fingerprint
 function startTagInHeadNoScript(p, token) {
   switch (token.tagID) {
     case TAG_ID.HTML: {
@@ -1372,7 +1372,7 @@ function startTagInHeadNoScript(p, token) {
       tokenInHeadNoScript(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:155744-155925 esm-fingerprint
+//@ chunk-p9ac6cnb.js:155744-155925 esm-fingerprint
 function endTagInHeadNoScript(p, token) {
   switch (token.tagID) {
     case TAG_ID.NOSCRIPT: {
@@ -1388,7 +1388,7 @@ function endTagInHeadNoScript(p, token) {
       p._err(token, errors.endTagWithoutMatchingOpenElement);
   }
 }
-//@ chunk-6ja29j2n.js:155925-156103 esm-fingerprint
+//@ chunk-p9ac6cnb.js:155925-156103 esm-fingerprint
 function tokenInHeadNoScript(p, token) {
   let errCode =
     token.type === TokenType.EOF ? errors.openElementsLeftAfterEof : errors.disallowedContentInNoscriptInHead;
@@ -1397,7 +1397,7 @@ function tokenInHeadNoScript(p, token) {
   p.insertionMode = InsertionMode.IN_HEAD;
   p._processToken(token);
 }
-//@ chunk-6ja29j2n.js:156103-156679 esm-fingerprint
+//@ chunk-p9ac6cnb.js:156103-156679 esm-fingerprint
 function startTagAfterHead(p, token) {
   switch (token.tagID) {
     case TAG_ID.HTML: {
@@ -1439,7 +1439,7 @@ function startTagAfterHead(p, token) {
       tokenAfterHead(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:156679-156844 esm-fingerprint
+//@ chunk-p9ac6cnb.js:156679-156844 esm-fingerprint
 function endTagAfterHead(p, token) {
   switch (token.tagID) {
     case TAG_ID.BODY:
@@ -1456,13 +1456,13 @@ function endTagAfterHead(p, token) {
       p._err(token, errors.endTagWithoutMatchingOpenElement);
   }
 }
-//@ chunk-6ja29j2n.js:156844-156930 esm-fingerprint
+//@ chunk-p9ac6cnb.js:156844-156930 esm-fingerprint
 function tokenAfterHead(p, token) {
   p._insertFakeElement(TAG_NAMES.BODY, TAG_ID.BODY);
   p.insertionMode = InsertionMode.IN_BODY;
   modeInBody(p, token);
 }
-//@ chunk-6ja29j2n.js:156930-157164 esm-fingerprint
+//@ chunk-p9ac6cnb.js:156930-157164 esm-fingerprint
 function modeInBody(p, token) {
   switch (token.type) {
     case TokenType.CHARACTER: {
@@ -1492,22 +1492,22 @@ function modeInBody(p, token) {
     default:
   }
 }
-//@ chunk-6ja29j2n.js:157164-157245 esm-fingerprint
+//@ chunk-p9ac6cnb.js:157164-157245 esm-fingerprint
 function whitespaceCharacterInBody(p, token) {
   p._reconstructActiveFormattingElements();
   p._insertCharacters(token);
 }
-//@ chunk-6ja29j2n.js:157245-157342 esm-fingerprint
+//@ chunk-p9ac6cnb.js:157245-157342 esm-fingerprint
 function characterInBody(p, token) {
   p._reconstructActiveFormattingElements();
   p._insertCharacters(token);
   p.framesetOk = false;
 }
-//@ chunk-6ja29j2n.js:157342-157454 esm-fingerprint
+//@ chunk-p9ac6cnb.js:157342-157454 esm-fingerprint
 function htmlStartTagInBody(p, token) {
   if (p.openElements.tmplCount === 0) p.treeAdapter.adoptAttributes(p.openElements.items[0], token.attrs);
 }
-//@ chunk-6ja29j2n.js:157454-157619 esm-fingerprint
+//@ chunk-p9ac6cnb.js:157454-157619 esm-fingerprint
 function bodyStartTagInBody(p, token) {
   let bodyElement = p.openElements.tryPeekProperlyNestedBodyElement();
   if (bodyElement && p.openElements.tmplCount === 0) {
@@ -1515,7 +1515,7 @@ function bodyStartTagInBody(p, token) {
     p.treeAdapter.adoptAttributes(bodyElement, token.attrs);
   }
 }
-//@ chunk-6ja29j2n.js:157619-157835 esm-fingerprint
+//@ chunk-p9ac6cnb.js:157619-157835 esm-fingerprint
 function framesetStartTagInBody(p, token) {
   let bodyElement = p.openElements.tryPeekProperlyNestedBodyElement();
   if (p.framesetOk && bodyElement) {
@@ -1525,25 +1525,25 @@ function framesetStartTagInBody(p, token) {
     p.insertionMode = InsertionMode.IN_FRAMESET;
   }
 }
-//@ chunk-6ja29j2n.js:157835-157938 esm-fingerprint
+//@ chunk-p9ac6cnb.js:157835-157938 esm-fingerprint
 function addressStartTagInBody(p, token) {
   if (p.openElements.hasInButtonScope(TAG_ID.P)) p._closePElement();
   p._insertElement(token, NAMESPACES.HTML);
 }
-//@ chunk-6ja29j2n.js:157938-158100 esm-fingerprint
+//@ chunk-p9ac6cnb.js:157938-158100 esm-fingerprint
 function numberedHeaderStartTagInBody(p, token) {
   if (p.openElements.hasInButtonScope(TAG_ID.P)) p._closePElement();
   if (HEADING_ELEMENTS.has(p.openElements.currentTagId)) p.openElements.pop();
   p._insertElement(token, NAMESPACES.HTML);
 }
-//@ chunk-6ja29j2n.js:158100-158240 esm-fingerprint
+//@ chunk-p9ac6cnb.js:158100-158240 esm-fingerprint
 function preStartTagInBody(p, token) {
   if (p.openElements.hasInButtonScope(TAG_ID.P)) p._closePElement();
   p._insertElement(token, NAMESPACES.HTML);
   p.skipNextNewLine = true;
   p.framesetOk = false;
 }
-//@ chunk-6ja29j2n.js:158240-158442 esm-fingerprint
+//@ chunk-p9ac6cnb.js:158240-158442 esm-fingerprint
 function formStartTagInBody(p, token) {
   let inTemplate = p.openElements.tmplCount > 0;
   if (!p.formElement || inTemplate) {
@@ -1552,7 +1552,7 @@ function formStartTagInBody(p, token) {
     if (!inTemplate) p.formElement = p.openElements.current;
   }
 }
-//@ chunk-6ja29j2n.js:158442-158908 esm-fingerprint
+//@ chunk-p9ac6cnb.js:158442-158908 esm-fingerprint
 function listItemStartTagInBody(p, token) {
   p.framesetOk = false;
   let tn = token.tagID;
@@ -1577,13 +1577,13 @@ function listItemStartTagInBody(p, token) {
   if (p.openElements.hasInButtonScope(TAG_ID.P)) p._closePElement();
   p._insertElement(token, NAMESPACES.HTML);
 }
-//@ chunk-6ja29j2n.js:158908-159042 esm-fingerprint
+//@ chunk-p9ac6cnb.js:158908-159042 esm-fingerprint
 function plaintextStartTagInBody(p, token) {
   if (p.openElements.hasInButtonScope(TAG_ID.P)) p._closePElement();
   p._insertElement(token, NAMESPACES.HTML);
   p.tokenizer.state = TokenizerMode.PLAINTEXT;
 }
-//@ chunk-6ja29j2n.js:159042-159269 esm-fingerprint
+//@ chunk-p9ac6cnb.js:159042-159269 esm-fingerprint
 function buttonStartTagInBody(p, token) {
   if (p.openElements.hasInScope(TAG_ID.BUTTON)) {
     p.openElements.generateImpliedEndTags();
@@ -1593,7 +1593,7 @@ function buttonStartTagInBody(p, token) {
   p._insertElement(token, NAMESPACES.HTML);
   p.framesetOk = false;
 }
-//@ chunk-6ja29j2n.js:159269-159579 esm-fingerprint
+//@ chunk-p9ac6cnb.js:159269-159579 esm-fingerprint
 function aStartTagInBody(p, token) {
   let activeElementEntry = p.activeFormattingElements.getElementEntryInScopeWithTagName(TAG_NAMES.A);
   if (activeElementEntry) {
@@ -1605,13 +1605,13 @@ function aStartTagInBody(p, token) {
   p._insertElement(token, NAMESPACES.HTML);
   p.activeFormattingElements.pushElement(p.openElements.current, token);
 }
-//@ chunk-6ja29j2n.js:159579-159729 esm-fingerprint
+//@ chunk-p9ac6cnb.js:159579-159729 esm-fingerprint
 function bStartTagInBody(p, token) {
   p._reconstructActiveFormattingElements();
   p._insertElement(token, NAMESPACES.HTML);
   p.activeFormattingElements.pushElement(p.openElements.current, token);
 }
-//@ chunk-6ja29j2n.js:159729-159965 esm-fingerprint
+//@ chunk-p9ac6cnb.js:159729-159965 esm-fingerprint
 function nobrStartTagInBody(p, token) {
   p._reconstructActiveFormattingElements();
   if (p.openElements.hasInScope(TAG_ID.NOBR)) {
@@ -1621,14 +1621,14 @@ function nobrStartTagInBody(p, token) {
   p._insertElement(token, NAMESPACES.HTML);
   p.activeFormattingElements.pushElement(p.openElements.current, token);
 }
-//@ chunk-6ja29j2n.js:159965-160108 esm-fingerprint
+//@ chunk-p9ac6cnb.js:159965-160108 esm-fingerprint
 function appletStartTagInBody(p, token) {
   p._reconstructActiveFormattingElements();
   p._insertElement(token, NAMESPACES.HTML);
   p.activeFormattingElements.insertMarker();
   p.framesetOk = false;
 }
-//@ chunk-6ja29j2n.js:160108-160308 esm-fingerprint
+//@ chunk-p9ac6cnb.js:160108-160308 esm-fingerprint
 function tableStartTagInBody(p, token) {
   if (
     p.treeAdapter.getDocumentMode(p.document) !== DOCUMENT_MODE.QUIRKS &&
@@ -1639,44 +1639,44 @@ function tableStartTagInBody(p, token) {
   p.framesetOk = false;
   p.insertionMode = InsertionMode.IN_TABLE;
 }
-//@ chunk-6ja29j2n.js:160308-160429 esm-fingerprint
+//@ chunk-p9ac6cnb.js:160308-160429 esm-fingerprint
 function areaStartTagInBody(p, token) {
   p._reconstructActiveFormattingElements();
   p._appendElement(token, NAMESPACES.HTML);
   p.framesetOk = false;
   token.ackSelfClosing = true;
 }
-//@ chunk-6ja29j2n.js:160429-160499 esm-fingerprint
+//@ chunk-p9ac6cnb.js:160429-160499 esm-fingerprint
 function isHiddenInput(token) {
   let inputType = getTokenAttr(token, ATTRS.TYPE);
   return inputType != null && inputType.toLowerCase() === HIDDEN_INPUT_TYPE;
 }
-//@ chunk-6ja29j2n.js:160499-160630 esm-fingerprint
+//@ chunk-p9ac6cnb.js:160499-160630 esm-fingerprint
 function inputStartTagInBody(p, token) {
   p._reconstructActiveFormattingElements();
   p._appendElement(token, NAMESPACES.HTML);
   if (!isHiddenInput(token)) p.framesetOk = false;
   token.ackSelfClosing = true;
 }
-//@ chunk-6ja29j2n.js:160630-160694 esm-fingerprint
+//@ chunk-p9ac6cnb.js:160630-160694 esm-fingerprint
 function paramStartTagInBody(p, token) {
   p._appendElement(token, NAMESPACES.HTML);
   token.ackSelfClosing = true;
 }
-//@ chunk-6ja29j2n.js:160694-160833 esm-fingerprint
+//@ chunk-p9ac6cnb.js:160694-160833 esm-fingerprint
 function hrStartTagInBody(p, token) {
   if (p.openElements.hasInButtonScope(TAG_ID.P)) p._closePElement();
   p._appendElement(token, NAMESPACES.HTML);
   p.framesetOk = false;
   token.ackSelfClosing = true;
 }
-//@ chunk-6ja29j2n.js:160833-160888 esm-fingerprint
+//@ chunk-p9ac6cnb.js:160833-160888 esm-fingerprint
 function imageStartTagInBody(p, token) {
   token.tagName = TAG_NAMES.IMG;
   token.tagID = TAG_ID.IMG;
   areaStartTagInBody(p, token);
 }
-//@ chunk-6ja29j2n.js:160888-161060 esm-fingerprint
+//@ chunk-p9ac6cnb.js:160888-161060 esm-fingerprint
 function textareaStartTagInBody(p, token) {
   p._insertElement(token, NAMESPACES.HTML);
   p.skipNextNewLine = true;
@@ -1685,23 +1685,23 @@ function textareaStartTagInBody(p, token) {
   p.framesetOk = false;
   p.insertionMode = InsertionMode.TEXT;
 }
-//@ chunk-6ja29j2n.js:161060-161230 esm-fingerprint
+//@ chunk-p9ac6cnb.js:161060-161230 esm-fingerprint
 function xmpStartTagInBody(p, token) {
   if (p.openElements.hasInButtonScope(TAG_ID.P)) p._closePElement();
   p._reconstructActiveFormattingElements();
   p.framesetOk = false;
   p._switchToTextParsing(token, TokenizerMode.RAWTEXT);
 }
-//@ chunk-6ja29j2n.js:161230-161300 esm-fingerprint
+//@ chunk-p9ac6cnb.js:161230-161300 esm-fingerprint
 function iframeStartTagInBody(p, token) {
   p.framesetOk = false;
   p._switchToTextParsing(token, TokenizerMode.RAWTEXT);
 }
-//@ chunk-6ja29j2n.js:161300-161354 esm-fingerprint
+//@ chunk-p9ac6cnb.js:161300-161354 esm-fingerprint
 function rawTextStartTagInBody(p, token) {
   p._switchToTextParsing(token, TokenizerMode.RAWTEXT);
 }
-//@ chunk-6ja29j2n.js:161354-161657 esm-fingerprint
+//@ chunk-p9ac6cnb.js:161354-161657 esm-fingerprint
 function selectStartTagInBody(p, token) {
   p._reconstructActiveFormattingElements();
   p._insertElement(token, NAMESPACES.HTML);
@@ -1715,23 +1715,23 @@ function selectStartTagInBody(p, token) {
       ? InsertionMode.IN_SELECT_IN_TABLE
       : InsertionMode.IN_SELECT;
 }
-//@ chunk-6ja29j2n.js:161657-161805 esm-fingerprint
+//@ chunk-p9ac6cnb.js:161657-161805 esm-fingerprint
 function optgroupStartTagInBody(p, token) {
   if (p.openElements.currentTagId === TAG_ID.OPTION) p.openElements.pop();
   p._reconstructActiveFormattingElements();
   p._insertElement(token, NAMESPACES.HTML);
 }
-//@ chunk-6ja29j2n.js:161805-161926 esm-fingerprint
+//@ chunk-p9ac6cnb.js:161805-161926 esm-fingerprint
 function rbStartTagInBody(p, token) {
   if (p.openElements.hasInScope(TAG_ID.RUBY)) p.openElements.generateImpliedEndTags();
   p._insertElement(token, NAMESPACES.HTML);
 }
-//@ chunk-6ja29j2n.js:161926-162065 esm-fingerprint
+//@ chunk-p9ac6cnb.js:161926-162065 esm-fingerprint
 function rtStartTagInBody(p, token) {
   if (p.openElements.hasInScope(TAG_ID.RUBY)) p.openElements.generateImpliedEndTagsWithExclusion(TAG_ID.RTC);
   p._insertElement(token, NAMESPACES.HTML);
 }
-//@ chunk-6ja29j2n.js:162065-162235 esm-fingerprint
+//@ chunk-p9ac6cnb.js:162065-162235 esm-fingerprint
 function mathStartTagInBody(p, token) {
   p._reconstructActiveFormattingElements();
   adjustTokenMathMLAttrs(token);
@@ -1740,7 +1740,7 @@ function mathStartTagInBody(p, token) {
   else p._insertElement(token, NAMESPACES.MATHML);
   token.ackSelfClosing = true;
 }
-//@ chunk-6ja29j2n.js:162235-162399 esm-fingerprint
+//@ chunk-p9ac6cnb.js:162235-162399 esm-fingerprint
 function svgStartTagInBody(p, token) {
   p._reconstructActiveFormattingElements();
   adjustTokenSVGAttrs(token);
@@ -1749,12 +1749,12 @@ function svgStartTagInBody(p, token) {
   else p._insertElement(token, NAMESPACES.SVG);
   token.ackSelfClosing = true;
 }
-//@ chunk-6ja29j2n.js:162399-162484 esm-fingerprint
+//@ chunk-p9ac6cnb.js:162399-162484 esm-fingerprint
 function genericStartTagInBody(p, token) {
   p._reconstructActiveFormattingElements();
   p._insertElement(token, NAMESPACES.HTML);
 }
-//@ chunk-6ja29j2n.js:162484-164405 esm-fingerprint
+//@ chunk-p9ac6cnb.js:162484-164405 esm-fingerprint
 function startTagInBody(p, token) {
   switch (token.tagID) {
     case TAG_ID.I:
@@ -1966,7 +1966,7 @@ function startTagInBody(p, token) {
       genericStartTagInBody(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:164405-164612 esm-fingerprint
+//@ chunk-p9ac6cnb.js:164405-164612 esm-fingerprint
 function bodyEndTagInBody(p, token) {
   if (p.openElements.hasInScope(TAG_ID.BODY)) {
     p.insertionMode = InsertionMode.AFTER_BODY;
@@ -1976,14 +1976,14 @@ function bodyEndTagInBody(p, token) {
     }
   }
 }
-//@ chunk-6ja29j2n.js:164612-164703 esm-fingerprint
+//@ chunk-p9ac6cnb.js:164612-164703 esm-fingerprint
 function htmlEndTagInBody(p, token) {
   if (p.openElements.hasInScope(TAG_ID.BODY)) {
     p.insertionMode = InsertionMode.AFTER_BODY;
     endTagAfterBody(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:164703-164846 esm-fingerprint
+//@ chunk-p9ac6cnb.js:164703-164846 esm-fingerprint
 function addressEndTagInBody(p, token) {
   let tn = token.tagID;
   if (p.openElements.hasInScope(tn)) {
@@ -1991,7 +1991,7 @@ function addressEndTagInBody(p, token) {
     p.openElements.popUntilTagNamePopped(tn);
   }
 }
-//@ chunk-6ja29j2n.js:164846-165109 esm-fingerprint
+//@ chunk-p9ac6cnb.js:164846-165109 esm-fingerprint
 function formEndTagInBody(p) {
   let inTemplate = p.openElements.tmplCount > 0;
   let { formElement } = p;
@@ -2002,19 +2002,19 @@ function formEndTagInBody(p) {
     else if (formElement) p.openElements.remove(formElement);
   }
 }
-//@ chunk-6ja29j2n.js:165109-165214 esm-fingerprint
+//@ chunk-p9ac6cnb.js:165109-165214 esm-fingerprint
 function pEndTagInBody(p) {
   if (!p.openElements.hasInButtonScope(TAG_ID.P)) p._insertFakeElement(TAG_NAMES.P, TAG_ID.P);
   p._closePElement();
 }
-//@ chunk-6ja29j2n.js:165214-165372 esm-fingerprint
+//@ chunk-p9ac6cnb.js:165214-165372 esm-fingerprint
 function liEndTagInBody(p) {
   if (p.openElements.hasInListItemScope(TAG_ID.LI)) {
     p.openElements.generateImpliedEndTagsWithExclusion(TAG_ID.LI);
     p.openElements.popUntilTagNamePopped(TAG_ID.LI);
   }
 }
-//@ chunk-6ja29j2n.js:165372-165529 esm-fingerprint
+//@ chunk-p9ac6cnb.js:165372-165529 esm-fingerprint
 function ddEndTagInBody(p, token) {
   let tn = token.tagID;
   if (p.openElements.hasInScope(tn)) {
@@ -2022,14 +2022,14 @@ function ddEndTagInBody(p, token) {
     p.openElements.popUntilTagNamePopped(tn);
   }
 }
-//@ chunk-6ja29j2n.js:165529-165675 esm-fingerprint
+//@ chunk-p9ac6cnb.js:165529-165675 esm-fingerprint
 function numberedHeaderEndTagInBody(p) {
   if (p.openElements.hasNumberedHeaderInScope()) {
     p.openElements.generateImpliedEndTags();
     p.openElements.popUntilNumberedHeaderPopped();
   }
 }
-//@ chunk-6ja29j2n.js:165675-165865 esm-fingerprint
+//@ chunk-p9ac6cnb.js:165675-165865 esm-fingerprint
 function appletEndTagInBody(p, token) {
   let tn = token.tagID;
   if (p.openElements.hasInScope(tn)) {
@@ -2038,14 +2038,14 @@ function appletEndTagInBody(p, token) {
     p.activeFormattingElements.clearToLastMarker();
   }
 }
-//@ chunk-6ja29j2n.js:165865-165990 esm-fingerprint
+//@ chunk-p9ac6cnb.js:165865-165990 esm-fingerprint
 function brEndTagInBody(p) {
   p._reconstructActiveFormattingElements();
   p._insertFakeElement(TAG_NAMES.BR, TAG_ID.BR);
   p.openElements.pop();
   p.framesetOk = false;
 }
-//@ chunk-6ja29j2n.js:165990-166351 esm-fingerprint
+//@ chunk-p9ac6cnb.js:165990-166351 esm-fingerprint
 function genericEndTagInBody(p, token) {
   let { tagName, tagID: tid } = token;
   for (let i = p.openElements.stackTop; i > 0; i--) {
@@ -2059,7 +2059,7 @@ function genericEndTagInBody(p, token) {
     if (p._isSpecialElement(element, elementId)) break;
   }
 }
-//@ chunk-6ja29j2n.js:166351-167292 esm-fingerprint
+//@ chunk-p9ac6cnb.js:166351-167292 esm-fingerprint
 function endTagInBody(p, token) {
   switch (token.tagID) {
     case TAG_ID.A:
@@ -2161,12 +2161,12 @@ function endTagInBody(p, token) {
       genericEndTagInBody(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:167292-167367 esm-fingerprint
+//@ chunk-p9ac6cnb.js:167292-167367 esm-fingerprint
 function eofInBody(p, token) {
   if (p.tmplInsertionModeStack.length > 0) eofInTemplate(p, token);
   else stopParsing(p, token);
 }
-//@ chunk-6ja29j2n.js:167367-167546 esm-fingerprint
+//@ chunk-p9ac6cnb.js:167367-167546 esm-fingerprint
 function endTagInText(p, token) {
   var _a;
   if (token.tagID === TAG_ID.SCRIPT) {
@@ -2175,14 +2175,14 @@ function endTagInText(p, token) {
   p.openElements.pop();
   p.insertionMode = p.originalInsertionMode;
 }
-//@ chunk-6ja29j2n.js:167546-167682 esm-fingerprint
+//@ chunk-p9ac6cnb.js:167546-167682 esm-fingerprint
 function eofInText(p, token) {
   p._err(token, errors.eofInElementThatCanContainOnlyText);
   p.openElements.pop();
   p.insertionMode = p.originalInsertionMode;
   p.onEof(token);
 }
-//@ chunk-6ja29j2n.js:167682-167990 esm-fingerprint
+//@ chunk-p9ac6cnb.js:167682-167990 esm-fingerprint
 function characterInTable(p, token) {
   if (TABLE_STRUCTURE_TAGS.has(p.openElements.currentTagId))
     switch (
@@ -2203,40 +2203,40 @@ function characterInTable(p, token) {
     }
   else tokenInTable(p, token);
 }
-//@ chunk-6ja29j2n.js:167990-168146 esm-fingerprint
+//@ chunk-p9ac6cnb.js:167990-168146 esm-fingerprint
 function captionStartTagInTable(p, token) {
   p.openElements.clearBackToTableContext();
   p.activeFormattingElements.insertMarker();
   p._insertElement(token, NAMESPACES.HTML);
   p.insertionMode = InsertionMode.IN_CAPTION;
 }
-//@ chunk-6ja29j2n.js:168146-168265 esm-fingerprint
+//@ chunk-p9ac6cnb.js:168146-168265 esm-fingerprint
 function colgroupStartTagInTable(p, token) {
   p.openElements.clearBackToTableContext();
   p._insertElement(token, NAMESPACES.HTML);
   p.insertionMode = InsertionMode.IN_COLUMN_GROUP;
 }
-//@ chunk-6ja29j2n.js:168265-168409 esm-fingerprint
+//@ chunk-p9ac6cnb.js:168265-168409 esm-fingerprint
 function colStartTagInTable(p, token) {
   p.openElements.clearBackToTableContext();
   p._insertFakeElement(TAG_NAMES.COLGROUP, TAG_ID.COLGROUP);
   p.insertionMode = InsertionMode.IN_COLUMN_GROUP;
   startTagInColumnGroup(p, token);
 }
-//@ chunk-6ja29j2n.js:168409-168526 esm-fingerprint
+//@ chunk-p9ac6cnb.js:168409-168526 esm-fingerprint
 function tbodyStartTagInTable(p, token) {
   p.openElements.clearBackToTableContext();
   p._insertElement(token, NAMESPACES.HTML);
   p.insertionMode = InsertionMode.IN_TABLE_BODY;
 }
-//@ chunk-6ja29j2n.js:168526-168662 esm-fingerprint
+//@ chunk-p9ac6cnb.js:168526-168662 esm-fingerprint
 function tdStartTagInTable(p, token) {
   p.openElements.clearBackToTableContext();
   p._insertFakeElement(TAG_NAMES.TBODY, TAG_ID.TBODY);
   p.insertionMode = InsertionMode.IN_TABLE_BODY;
   startTagInTableBody(p, token);
 }
-//@ chunk-6ja29j2n.js:168662-168814 esm-fingerprint
+//@ chunk-p9ac6cnb.js:168662-168814 esm-fingerprint
 function tableStartTagInTable(p, token) {
   if (p.openElements.hasInTableScope(TAG_ID.TABLE)) {
     p.openElements.popUntilTagNamePopped(TAG_ID.TABLE);
@@ -2244,13 +2244,13 @@ function tableStartTagInTable(p, token) {
     p._processStartTag(token);
   }
 }
-//@ chunk-6ja29j2n.js:168814-168899 esm-fingerprint
+//@ chunk-p9ac6cnb.js:168814-168899 esm-fingerprint
 function inputStartTagInTable(p, token) {
   if (isHiddenInput(token)) p._appendElement(token, NAMESPACES.HTML);
   else tokenInTable(p, token);
   token.ackSelfClosing = true;
 }
-//@ chunk-6ja29j2n.js:168899-169049 esm-fingerprint
+//@ chunk-p9ac6cnb.js:168899-169049 esm-fingerprint
 function formStartTagInTable(p, token) {
   if (!p.formElement && p.openElements.tmplCount === 0) {
     p._insertElement(token, NAMESPACES.HTML);
@@ -2258,7 +2258,7 @@ function formStartTagInTable(p, token) {
     p.openElements.pop();
   }
 }
-//@ chunk-6ja29j2n.js:169049-169423 esm-fingerprint
+//@ chunk-p9ac6cnb.js:169049-169423 esm-fingerprint
 function startTagInTable(p, token) {
   switch (token.tagID) {
     case TAG_ID.TD:
@@ -2307,7 +2307,7 @@ function startTagInTable(p, token) {
       tokenInTable(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:169423-169775 esm-fingerprint
+//@ chunk-p9ac6cnb.js:169423-169775 esm-fingerprint
 function endTagInTable(p, token) {
   switch (token.tagID) {
     case TAG_ID.TABLE: {
@@ -2337,23 +2337,23 @@ function endTagInTable(p, token) {
       tokenInTable(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:169775-169885 esm-fingerprint
+//@ chunk-p9ac6cnb.js:169775-169885 esm-fingerprint
 function tokenInTable(p, token) {
   let savedFosterParentingState = p.fosterParentingEnabled;
   p.fosterParentingEnabled = true;
   modeInBody(p, token);
   p.fosterParentingEnabled = savedFosterParentingState;
 }
-//@ chunk-6ja29j2n.js:169885-169935 esm-fingerprint
+//@ chunk-p9ac6cnb.js:169885-169935 esm-fingerprint
 function whitespaceCharacterInTableText(p, token) {
   p.pendingCharacterTokens.push(token);
 }
-//@ chunk-6ja29j2n.js:169935-170028 esm-fingerprint
+//@ chunk-p9ac6cnb.js:169935-170028 esm-fingerprint
 function characterInTableText(p, token) {
   p.pendingCharacterTokens.push(token);
   p.hasNonWhitespacePendingCharacterToken = true;
 }
-//@ chunk-6ja29j2n.js:170028-170327 esm-fingerprint
+//@ chunk-p9ac6cnb.js:170028-170327 esm-fingerprint
 function tokenInTableText(p, token) {
   let i = 0;
   if (p.hasNonWhitespacePendingCharacterToken)
@@ -2362,7 +2362,7 @@ function tokenInTableText(p, token) {
   p.insertionMode = p.originalInsertionMode;
   p._processToken(token);
 }
-//@ chunk-6ja29j2n.js:170327-170411 esm-fingerprint
+//@ chunk-p9ac6cnb.js:170327-170411 esm-fingerprint
 var TABLE_VOID_ELEMENTS = new Set([
   TAG_ID.CAPTION,
   TAG_ID.COL,
@@ -2374,7 +2374,7 @@ var TABLE_VOID_ELEMENTS = new Set([
   TAG_ID.THEAD,
   TAG_ID.TR,
 ]);
-//@ chunk-6ja29j2n.js:170411-170682 esm-fingerprint
+//@ chunk-p9ac6cnb.js:170411-170682 esm-fingerprint
 function startTagInCaption(p, token) {
   let tn = token.tagID;
   if (TABLE_VOID_ELEMENTS.has(tn)) {
@@ -2387,7 +2387,7 @@ function startTagInCaption(p, token) {
     }
   } else startTagInBody(p, token);
 }
-//@ chunk-6ja29j2n.js:170682-171131 esm-fingerprint
+//@ chunk-p9ac6cnb.js:170682-171131 esm-fingerprint
 function endTagInCaption(p, token) {
   let tn = token.tagID;
   switch (tn) {
@@ -2417,7 +2417,7 @@ function endTagInCaption(p, token) {
       endTagInBody(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:171131-171302 esm-fingerprint
+//@ chunk-p9ac6cnb.js:171131-171302 esm-fingerprint
 function startTagInColumnGroup(p, token) {
   switch (token.tagID) {
     case TAG_ID.HTML: {
@@ -2437,7 +2437,7 @@ function startTagInColumnGroup(p, token) {
       tokenInColumnGroup(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:171302-171514 esm-fingerprint
+//@ chunk-p9ac6cnb.js:171302-171514 esm-fingerprint
 function endTagInColumnGroup(p, token) {
   switch (token.tagID) {
     case TAG_ID.COLGROUP: {
@@ -2457,7 +2457,7 @@ function endTagInColumnGroup(p, token) {
       tokenInColumnGroup(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:171514-171642 esm-fingerprint
+//@ chunk-p9ac6cnb.js:171514-171642 esm-fingerprint
 function tokenInColumnGroup(p, token) {
   if (p.openElements.currentTagId === TAG_ID.COLGROUP) {
     p.openElements.pop();
@@ -2465,7 +2465,7 @@ function tokenInColumnGroup(p, token) {
     p._processToken(token);
   }
 }
-//@ chunk-6ja29j2n.js:171642-172182 esm-fingerprint
+//@ chunk-p9ac6cnb.js:171642-172182 esm-fingerprint
 function startTagInTableBody(p, token) {
   switch (token.tagID) {
     case TAG_ID.TR: {
@@ -2500,7 +2500,7 @@ function startTagInTableBody(p, token) {
       startTagInTable(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:172182-172695 esm-fingerprint
+//@ chunk-p9ac6cnb.js:172182-172695 esm-fingerprint
 function endTagInTableBody(p, token) {
   let tn = token.tagID;
   switch (token.tagID) {
@@ -2536,7 +2536,7 @@ function endTagInTableBody(p, token) {
       endTagInTable(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:172695-173153 esm-fingerprint
+//@ chunk-p9ac6cnb.js:172695-173153 esm-fingerprint
 function startTagInRow(p, token) {
   switch (token.tagID) {
     case TAG_ID.TH:
@@ -2566,7 +2566,7 @@ function startTagInRow(p, token) {
       startTagInTable(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:173153-173845 esm-fingerprint
+//@ chunk-p9ac6cnb.js:173153-173845 esm-fingerprint
 function endTagInRow(p, token) {
   switch (token.tagID) {
     case TAG_ID.TR: {
@@ -2609,7 +2609,7 @@ function endTagInRow(p, token) {
       endTagInTable(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:173845-174008 esm-fingerprint
+//@ chunk-p9ac6cnb.js:173845-174008 esm-fingerprint
 function startTagInCell(p, token) {
   let tn = token.tagID;
   if (TABLE_VOID_ELEMENTS.has(tn)) {
@@ -2619,7 +2619,7 @@ function startTagInCell(p, token) {
     }
   } else startTagInBody(p, token);
 }
-//@ chunk-6ja29j2n.js:174008-174488 esm-fingerprint
+//@ chunk-p9ac6cnb.js:174008-174488 esm-fingerprint
 function endTagInCell(p, token) {
   let tn = token.tagID;
   switch (tn) {
@@ -2654,7 +2654,7 @@ function endTagInCell(p, token) {
       endTagInBody(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:174488-175307 esm-fingerprint
+//@ chunk-p9ac6cnb.js:174488-175307 esm-fingerprint
 function startTagInSelect(p, token) {
   switch (token.tagID) {
     case TAG_ID.HTML: {
@@ -2698,7 +2698,7 @@ function startTagInSelect(p, token) {
     default:
   }
 }
-//@ chunk-6ja29j2n.js:175307-175842 esm-fingerprint
+//@ chunk-p9ac6cnb.js:175307-175842 esm-fingerprint
 function endTagInSelect(p, token) {
   switch (token.tagID) {
     case TAG_ID.OPTGROUP: {
@@ -2729,7 +2729,7 @@ function endTagInSelect(p, token) {
     default:
   }
 }
-//@ chunk-6ja29j2n.js:175842-176078 esm-fingerprint
+//@ chunk-p9ac6cnb.js:175842-176078 esm-fingerprint
 function startTagInSelectInTable(p, token) {
   let tn = token.tagID;
   if (
@@ -2747,7 +2747,7 @@ function startTagInSelectInTable(p, token) {
     p._processStartTag(token);
   } else startTagInSelect(p, token);
 }
-//@ chunk-6ja29j2n.js:176078-176344 esm-fingerprint
+//@ chunk-p9ac6cnb.js:176078-176344 esm-fingerprint
 function endTagInSelectInTable(p, token) {
   let tn = token.tagID;
   if (
@@ -2767,7 +2767,7 @@ function endTagInSelectInTable(p, token) {
     }
   } else endTagInSelect(p, token);
 }
-//@ chunk-6ja29j2n.js:176344-177064 esm-fingerprint
+//@ chunk-p9ac6cnb.js:176344-177064 esm-fingerprint
 function startTagInTemplate(p, token) {
   switch (token.tagID) {
     case TAG_ID.BASE:
@@ -2818,11 +2818,11 @@ function startTagInTemplate(p, token) {
       startTagInBody(p, token);
   }
 }
-//@ chunk-6ja29j2n.js:177064-177112 esm-fingerprint
+//@ chunk-p9ac6cnb.js:177064-177112 esm-fingerprint
 function endTagInTemplate(p, token) {
   if (token.tagID === TAG_ID.TEMPLATE) templateEndTagInHead(p, token);
 }
-//@ chunk-6ja29j2n.js:177112-177336 esm-fingerprint
+//@ chunk-p9ac6cnb.js:177112-177336 esm-fingerprint
 function eofInTemplate(p, token) {
   if (p.openElements.tmplCount > 0) {
     p.openElements.popUntilTagNamePopped(TAG_ID.TEMPLATE);
@@ -2832,12 +2832,12 @@ function eofInTemplate(p, token) {
     p.onEof(token);
   } else stopParsing(p, token);
 }
-//@ chunk-6ja29j2n.js:177336-177393 esm-fingerprint
+//@ chunk-p9ac6cnb.js:177336-177393 esm-fingerprint
 function startTagAfterBody(p, token) {
   if (token.tagID === TAG_ID.HTML) startTagInBody(p, token);
   else tokenAfterBody(p, token);
 }
-//@ chunk-6ja29j2n.js:177393-177769 esm-fingerprint
+//@ chunk-p9ac6cnb.js:177393-177769 esm-fingerprint
 function endTagAfterBody(p, token) {
   var _a;
   if (token.tagID === TAG_ID.HTML) {
@@ -2855,12 +2855,12 @@ function endTagAfterBody(p, token) {
     }
   } else tokenAfterBody(p, token);
 }
-//@ chunk-6ja29j2n.js:177769-177820 esm-fingerprint
+//@ chunk-p9ac6cnb.js:177769-177820 esm-fingerprint
 function tokenAfterBody(p, token) {
   p.insertionMode = InsertionMode.IN_BODY;
   modeInBody(p, token);
 }
-//@ chunk-6ja29j2n.js:177820-178036 esm-fingerprint
+//@ chunk-p9ac6cnb.js:177820-178036 esm-fingerprint
 function startTagInFrameset(p, token) {
   switch (token.tagID) {
     case TAG_ID.HTML: {
@@ -2883,7 +2883,7 @@ function startTagInFrameset(p, token) {
     default:
   }
 }
-//@ chunk-6ja29j2n.js:178036-178241 esm-fingerprint
+//@ chunk-p9ac6cnb.js:178036-178241 esm-fingerprint
 function endTagInFrameset(p, token) {
   if (token.tagID === TAG_ID.FRAMESET && !p.openElements.isRootHtmlElementCurrent()) {
     p.openElements.pop();
@@ -2891,7 +2891,7 @@ function endTagInFrameset(p, token) {
       p.insertionMode = InsertionMode.AFTER_FRAMESET;
   }
 }
-//@ chunk-6ja29j2n.js:178241-178340 esm-fingerprint
+//@ chunk-p9ac6cnb.js:178241-178340 esm-fingerprint
 function startTagAfterFrameset(p, token) {
   switch (token.tagID) {
     case TAG_ID.HTML: {
@@ -2905,21 +2905,21 @@ function startTagAfterFrameset(p, token) {
     default:
   }
 }
-//@ chunk-6ja29j2n.js:178340-178416 esm-fingerprint
+//@ chunk-p9ac6cnb.js:178340-178416 esm-fingerprint
 function endTagAfterFrameset(p, token) {
   if (token.tagID === TAG_ID.HTML) p.insertionMode = InsertionMode.AFTER_AFTER_FRAMESET;
 }
-//@ chunk-6ja29j2n.js:178416-178473 esm-fingerprint
+//@ chunk-p9ac6cnb.js:178416-178473 esm-fingerprint
 function startTagAfterAfterBody(p, token) {
   if (token.tagID === TAG_ID.HTML) startTagInBody(p, token);
   else tokenAfterAfterBody(p, token);
 }
-//@ chunk-6ja29j2n.js:178473-178524 esm-fingerprint
+//@ chunk-p9ac6cnb.js:178473-178524 esm-fingerprint
 function tokenAfterAfterBody(p, token) {
   p.insertionMode = InsertionMode.IN_BODY;
   modeInBody(p, token);
 }
-//@ chunk-6ja29j2n.js:178524-178623 esm-fingerprint
+//@ chunk-p9ac6cnb.js:178524-178623 esm-fingerprint
 function startTagAfterAfterFrameset(p, token) {
   switch (token.tagID) {
     case TAG_ID.HTML: {
@@ -2933,17 +2933,17 @@ function startTagAfterAfterFrameset(p, token) {
     default:
   }
 }
-//@ chunk-6ja29j2n.js:178623-178673 esm-fingerprint
+//@ chunk-p9ac6cnb.js:178623-178673 esm-fingerprint
 function nullCharacterInForeignContent(p, token) {
   token.chars = REPLACEMENT_CHARACTER;
   p._insertCharacters(token);
 }
-//@ chunk-6ja29j2n.js:178673-178729 esm-fingerprint
+//@ chunk-p9ac6cnb.js:178673-178729 esm-fingerprint
 function characterInForeignContent(p, token) {
   p._insertCharacters(token);
   p.framesetOk = false;
 }
-//@ chunk-6ja29j2n.js:178729-178910 esm-fingerprint
+//@ chunk-p9ac6cnb.js:178729-178910 esm-fingerprint
 function popUntilHtmlOrIntegrationPoint(p) {
   while (
     p.treeAdapter.getNamespaceURI(p.openElements.current) !== NAMESPACES.HTML &&
@@ -2951,7 +2951,7 @@ function popUntilHtmlOrIntegrationPoint(p) {
   )
     p.openElements.pop();
 }
-//@ chunk-6ja29j2n.js:178910-179200 esm-fingerprint
+//@ chunk-p9ac6cnb.js:178910-179200 esm-fingerprint
 function startTagInForeignContent(p, token) {
   if (causesExit(token)) {
     popUntilHtmlOrIntegrationPoint(p);
@@ -2970,7 +2970,7 @@ function startTagInForeignContent(p, token) {
     token.ackSelfClosing = true;
   }
 }
-//@ chunk-6ja29j2n.js:179200-179577 esm-fingerprint
+//@ chunk-p9ac6cnb.js:179200-179577 esm-fingerprint
 function endTagInForeignContent(p, token) {
   if (token.tagID === TAG_ID.P || token.tagID === TAG_ID.BR) {
     popUntilHtmlOrIntegrationPoint(p);

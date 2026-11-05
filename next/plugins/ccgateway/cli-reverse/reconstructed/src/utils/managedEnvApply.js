@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：托管环境变量应用
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q4qb1h08.js (49)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-71parphm.js (49)
  * attribution: placement 49
  */
 import { isEnvTruthy } from "./envUtils.js";
@@ -33,6 +33,11 @@ import {
   OTEL_DETAIL_VARS,
   isProtectedEnvVar,
 } from "./managedEnvConstants.js";
+import {
+  CLAUDE_CODE_EXPERIMENTAL_CODE_MODE,
+  CODE_MODE_RESTART_ENV,
+  CODE_MODE_RESTARTED_FROM_ENV,
+} from "../constants/codeMode.js";
 import {
   isSafeChromeEnvValue,
   isCatalogDisabledByPolicy,
@@ -74,6 +79,7 @@ import {
   credentialRoad,
 } from "../entrypoints/warmSpare/claimCredentials.js";
 import { getPlatform } from "./platform.js";
+import { env } from "./env.js";
 import { getGlobalConfig, PERSISTED_TRUST_IGNORED } from "./config.js";
 import { applySafeConfigEnvironmentVariables_2 } from "./managedEnv.js";
 import { hasDangerousEnvVars } from "../components/TrustDialog/utils.js";
@@ -82,19 +88,23 @@ import { logForDebugging } from "./debug.js";
 import { isEnvSettingOn } from "./settings/marketplaceSettingsAliases.js";
 import { isHttpMcpServeInvocation } from "../entrypoints/mcpServeArgs.js";
 import { invalidateCommandNames } from "./settings/commandSyncNames.js";
-import { env } from "./env.js";
+import {
+  proxyEnvFingerprint,
+  hasConfiguredGlobalAgents,
+  clearProxyCache,
+  configureGlobalAgents,
+} from "./proxy.js";
 import { hasPossibleCredentialFromDescriptor } from "./authFileDescriptor.js";
 import { clearCACertsCache, loadExtraCACerts } from "./caCerts.js";
-import { hasConfiguredGlobalAgents, clearProxyCache, configureGlobalAgents } from "./proxy.js";
 import { getLoadedMTLSPaths, clearMTLSCache, loadMTLSClientMaterial } from "./mtls.js";
 import { logError } from "./log.js";
 import { retainCacheKey } from "./memoize.js";
 import { emitCredentialChange } from "./auth/credentialEpoch.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-q4qb1h08.js:11334-11486 placement
+//@ chunk-71parphm.js:12054-12206 placement
 var HOST_MANAGED_STRIP_CONTEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-q4qb1h08.js:11334", () => {
+deferInit("chunk-71parphm.js:12054", () => {
   HOST_MANAGED_STRIP_CONTEXT = Object.freeze({
     coworkCloud: false,
     managedByHost: false,
@@ -105,7 +115,7 @@ deferInit("chunk-q4qb1h08.js:11334", () => {
     hybridConnection: false,
   });
 });
-//@ chunk-q4qb1h08.js:11486-11804 placement
+//@ chunk-71parphm.js:12206-12524 placement
 /**
  * 汇总当前环境的托管情况：云端协作托管设置、是否由宿主管理提供方（标记或认证变量）、桌面宿主、宿主编排（含 byoc）、固定存储登录、混合连接。
  */
@@ -123,11 +133,11 @@ function hostManagementFacts() {
     hybridConnection: isHybridConnectionAllowed(),
   };
 }
-//@ chunk-q4qb1h08.js:11804-11827 placement
+//@ chunk-71parphm.js:12524-12547 placement
 function isHybridConnectionAllowed() {
   return false;
 }
-//@ chunk-q4qb1h08.js:11827-17123 placement
+//@ chunk-71parphm.js:12547-18193 placement
 /**
  * 项目级设置不能设置的环境变量清单（宿主/会话控制、配置目录、临时目录、遥测与调试输出等），以及按前缀屏蔽的列表。
  */
@@ -137,7 +147,7 @@ var EXTRA_BLOCKED_ENV_PREFIXES;
 var BLOCKED_PREFIX_GROUPS;
 var PROJECT_SCOPE_BLOCKED_ENV_VARS;
 var PROJECT_SCOPE_BLOCKED_PREFIXES;
-deferInit("chunk-q4qb1h08.js:11827", () => {
+deferInit("chunk-71parphm.js:12547", () => {
   PROJECT_LEVEL_SETTING_SOURCES = new Set(["policySettings", "projectSettings", "localSettings"]);
   EXTRA_BLOCKED_ENV_VARS = [];
   EXTRA_BLOCKED_ENV_PREFIXES = [];
@@ -145,6 +155,7 @@ deferInit("chunk-q4qb1h08.js:11827", () => {
   PROJECT_SCOPE_BLOCKED_ENV_VARS = new Set([
     PROCESS_WRAPPER_ENV,
     "CLAUDE_CODE_CUSTOM_OAUTH_URL",
+    "CLAUDE_CODE_DISABLE_SUBAGENT_HANDBACK",
     "CLAUDE_CODE_SYNC_SKILLS",
     "CLAUDE_CODE_SYNC_PLUGINS",
     "CLAUDE_CODE_TRANSCRIPT_LOCAL_GC",
@@ -161,6 +172,8 @@ deferInit("chunk-q4qb1h08.js:11827", () => {
     "CLAUDE_CODE_DISABLE_PROACTIVITY",
     "CLAUDE_CODE_DISABLE_ATTACHMENTS",
     "CLAUDE_CODE_TETHER_LIVE",
+    "CLAUDE_CODE_PROGRAM_USE_CASE_ID",
+    "CLAUDE_CODE_PROGRAM_USE_CASE_STAMPED",
     "CLAUDE_CODE_BRIDGE_CHILD_AUTO_DEFAULT",
     "CLAUDE_CODE_BRIDGE_CHILD_ARTIFACT",
     "CLAUDE_CODE_BRIDGE_CHILD_MACHINE_SETTINGS",
@@ -185,6 +198,8 @@ deferInit("chunk-q4qb1h08.js:11827", () => {
     "CLAUDE_CODE_DISABLE_ATTRIBUTION_CROSS_REPO",
     "CLAUDE_CODE_DISABLE_WEB_FETCH",
     "CLAUDE_CODE_DISABLE_RESPONSE_COMPARISON",
+    "CLAUDE_CODE_DISABLE_MCP_TASKS",
+    "CLAUDE_CODE_DISABLE_AGENT_PROGRESS_SUMMARIES",
     "CLAUDE_CODE_DISABLE_ULTRATHINK",
     "CLAUDE_CODE_DISABLE_FILE_MENTIONS",
     "CCR_SESSION_PROFILE",
@@ -268,9 +283,13 @@ deferInit("chunk-q4qb1h08.js:11827", () => {
     "CLAUDE_CODE_BASH_EDIT_DIFF",
     "CLAUDE_CODE_FORWARD_USER_INTENT",
     "CLAUDE_CODE_WHIMSICAL_ELEPHANT",
+    "CLAUDE_CODE_PARSED_WILLOW",
+    "CLAUDE_CODE_DAPPER_CUPCAKE",
+    "CLAUDE_CODE_DEEP_TWILIGHT",
     "CLAUDE_CODE_ARTIFACT_PRESENCE",
     "CLAUDE_CODE_ARTIFACT_OPEN_ACTION",
     "CLAUDE_CODE_ARTIFACT_REPL",
+    "CLAUDE_CODE_RESUME_CACHE_WARM",
     "CLAUDE_CODE_ARTIFACT_PREVIEW_EMULATOR",
     "USER_TYPE",
     "CLAUDE_CODE_MESSAGING_SOCKET",
@@ -280,6 +299,7 @@ deferInit("chunk-q4qb1h08.js:11827", () => {
     "CLAUDE_CODE_TOASTY_THIMBLE",
     "CLAUDE_CODE_GENTLE_PARASOL",
     "CLAUDE_CODE_STREAMED_BUMBLEBEE_TEXT",
+    "CLAUDE_CODE_CURRIED_TRINKET",
     "CLAUDE_CODE_LEGACY_BUNDLE",
     "CCR_ENABLE_BUNDLE",
     "CCR_FORCE_BUNDLE",
@@ -319,6 +339,9 @@ deferInit("chunk-q4qb1h08.js:11827", () => {
     "CLAUDE_CHROME_PERMISSION_MODE",
     "CLAUDE_CODE_ENABLE_CFC",
     "CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL",
+    CLAUDE_CODE_EXPERIMENTAL_CODE_MODE,
+    CODE_MODE_RESTART_ENV,
+    CODE_MODE_RESTARTED_FROM_ENV,
     ...EXTRA_BLOCKED_ENV_VARS,
   ]);
   PROJECT_SCOPE_BLOCKED_PREFIXES = [
@@ -327,7 +350,7 @@ deferInit("chunk-q4qb1h08.js:11827", () => {
     ...EXTRA_BLOCKED_ENV_PREFIXES,
   ];
 });
-//@ chunk-q4qb1h08.js:17123-17210 placement
+//@ chunk-71parphm.js:18193-18280 placement
 function isProjectScopeBlockedEnvVar(envName) {
   let upper = envName.toUpperCase();
   return (
@@ -335,27 +358,27 @@ function isProjectScopeBlockedEnvVar(envName) {
     PROJECT_SCOPE_BLOCKED_PREFIXES.some((prefix) => upper.startsWith(prefix))
   );
 }
-//@ chunk-q4qb1h08.js:21865-21905 placement
+//@ chunk-71parphm.js:22936-22976 placement
 /**
  * 判断某环境项的值是否允许下发（安全值或目录例外）。
  */
 function isServableEnvValue(name, value) {
   return isSafeChromeEnvValue(name, value) || isCatalogDisabledByPolicy(name, value);
 }
-//@ chunk-q4qb1h08.js:21905-21964 placement
+//@ chunk-71parphm.js:22976-23035 placement
 function purgeHostOwnedChromeVars() {
   for (let key of CHROME_ENV_VARS.keys()) delete process.env[key];
 }
-//@ chunk-q4qb1h08.js:21964-22069 placement
+//@ chunk-71parphm.js:23035-23140 placement
 var USER_SCOPE_BLOCKED_ENV_VARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-q4qb1h08.js:21964", () => {
+deferInit("chunk-71parphm.js:23035", () => {
   USER_SCOPE_BLOCKED_ENV_VARS = new Set([
     "CLAUDE_CODE_PLUGIN_DIRS",
     "CLAUDE_CODE_PLUGIN_DIR_WATCH",
     "CLAUDE_CODE_PROCESS_WRAPPER",
   ]);
 });
-//@ chunk-q4qb1h08.js:22069-22200 placement
+//@ chunk-71parphm.js:23140-23271 placement
 function stripHostOnlyEnv(env, source) {
   if (
     env === undefined ||
@@ -365,22 +388,22 @@ function stripHostOnlyEnv(env, source) {
     return env;
   return import_reject(env, (value, key) => USER_SCOPE_BLOCKED_ENV_VARS.has(key.toUpperCase()));
 }
-//@ chunk-q4qb1h08.js:22200-22298 placement
+//@ chunk-71parphm.js:23271-23369 placement
 function withoutRestrictedEnvKeys(env) {
   if (!env) return {};
   let filtered = {};
   for (let [key, value] of Object.entries(env)) if (!isRestrictedEnvKey(key, value)) filtered[key] = value;
   return filtered;
 }
-//@ chunk-q4qb1h08.js:22298-22348 placement
+//@ chunk-71parphm.js:23369-23419 placement
 function getEnvAboveProjectSettings() {
   return managedEnvApplier.envAboveProjectSettings();
 }
-//@ chunk-q4qb1h08.js:22348-22399 placement
+//@ chunk-71parphm.js:23419-23470 placement
 function getPreSettingsEnvSnapshot() {
   return managedEnvApplier.getPreSettingsEnvSnapshot();
 }
-//@ chunk-q4qb1h08.js:22399-22506 placement
+//@ chunk-71parphm.js:23470-23577 placement
 function getPreSettingsEnvHonoringLiveDeletions() {
   let env = {
     ...getPreSettingsEnvSnapshot(),
@@ -388,93 +411,93 @@ function getPreSettingsEnvHonoringLiveDeletions() {
   for (let key of Object.keys(env)) if (process.env[key] === undefined) delete env[key];
   return env;
 }
-//@ chunk-q4qb1h08.js:22506-22563 placement
+//@ chunk-71parphm.js:23577-23634 placement
 function isSettingsSourcedEnvValue(key, value) {
   return managedEnvApplier.isSettingsSourcedEnvValue(key, value);
 }
-//@ chunk-q4qb1h08.js:22563-22619 placement
+//@ chunk-71parphm.js:23634-23690 placement
 function personsSettingsEnvKeeps(name, value) {
   return managedEnvApplier.personsSettingsEnvKeeps(name, value);
 }
-//@ chunk-q4qb1h08.js:22619-22675 placement
+//@ chunk-71parphm.js:23690-23746 placement
 function putBackUnsuppliedTelemetryEnv() {
   return managedEnvApplier.putBackUnsuppliedTelemetryEnv();
 }
-//@ chunk-q4qb1h08.js:22675-22719 placement
+//@ chunk-71parphm.js:23746-23790 placement
 function setToolServerLaunchEnv(env) {
   managedEnvApplier.setToolServerLaunchEnv(env);
 }
-//@ chunk-q4qb1h08.js:22719-22766 placement
+//@ chunk-71parphm.js:23790-23837 placement
 function recordPersonsEnvValue(name, value) {
   managedEnvApplier.recordPersonsEnvValue(name, value);
 }
-//@ chunk-q4qb1h08.js:22766-22818 placement
+//@ chunk-71parphm.js:23837-23889 placement
 function getLatchedPreSettingsEnvSnapshot() {
   return managedEnvApplier.peekPreSettingsEnvSnapshot();
 }
-//@ chunk-q4qb1h08.js:22818-22842 placement
+//@ chunk-71parphm.js:23889-23913 placement
 function withLaunchValuesOfHybridConnection(env) {
   return env;
 }
-//@ chunk-q4qb1h08.js:22842-22884 placement
+//@ chunk-71parphm.js:23913-23955 placement
 function getLegacyEnvMap() {
   return managedEnvApplier.getLegacyEnvMap();
 }
-//@ chunk-q4qb1h08.js:22884-22936 placement
+//@ chunk-71parphm.js:23955-24006 placement
 function getAppliedGlobalConfigEnv() {
   return managedEnvApplier.getAppliedGlobalConfigEnv();
 }
-//@ chunk-q4qb1h08.js:22936-22944 placement
+//@ chunk-71parphm.js:24006-24014 placement
 // deferred: uses setHelperOutputOverride (./settings/policyHelper/helperRemote.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-q4qb1h08.js:22936", () => {
+deferInit("chunk-71parphm.js:24006", () => {
   setHelperOutputOverride(getPreSettingsEnvSnapshot);
 });
-//@ chunk-q4qb1h08.js:22944-22984 placement
+//@ chunk-71parphm.js:24014-24054 placement
 // deferred: uses withEnvTake (./settings/hostEnvWrites.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-q4qb1h08.js:22944", () => {
+deferInit("chunk-71parphm.js:24014", () => {
   withEnvTake(() => managedEnvApplier.takeChildEnvFromRepository());
 });
-//@ chunk-q4qb1h08.js:22984-22992 placement
+//@ chunk-71parphm.js:24054-24062 placement
 // deferred: uses setPersonalConfigRestriction (./personalConfigRestriction.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-q4qb1h08.js:22984", () => {
+deferInit("chunk-71parphm.js:24054", () => {
   setPersonalConfigRestriction(getLatchedPreSettingsEnvSnapshot);
 });
-//@ chunk-q4qb1h08.js:22992-23031 placement (2.1.88 match: _temp7, 1)
+//@ chunk-71parphm.js:24062-24101 placement (2.1.88 match: _temp7, 1)
 // deferred: uses setManagedOverrideProvider (./settings/hostEnvWrites.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-q4qb1h08.js:22992", () => {
+deferInit("chunk-71parphm.js:24062", () => {
   setManagedOverrideProvider(() => getSettingsForSource("policySettings")?.env ?? {});
 });
-//@ chunk-q4qb1h08.js:23031-23037 placement
+//@ chunk-71parphm.js:24101-24107 placement
 // deferred: uses setEnvEntryProblemCheck (./envValidation.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-q4qb1h08.js:23031", () => {
+deferInit("chunk-71parphm.js:24101", () => {
   setEnvEntryProblemCheck(isSettingsSourcedEnvValue);
 });
-//@ chunk-q4qb1h08.js:23037-23092 placement
+//@ chunk-71parphm.js:24107-24162 placement
 // deferred: uses setRemoteSettingsProbes (../services/cloudSessions/eligibility.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-q4qb1h08.js:23037", () => {
+deferInit("chunk-71parphm.js:24107", () => {
   setRemoteSettingsProbes(
     (verdict) => managedEnvApplier.routeAfterVerdict(verdict),
     (name) => managedEnvApplier.launchNamed(name),
   );
 });
-//@ chunk-q4qb1h08.js:23092-23204 placement
+//@ chunk-71parphm.js:24162-24274 placement
 // deferred: uses setClaimContext (../entrypoints/warmSpare/claimCredentials.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-q4qb1h08.js:23092", () => {
+deferInit("chunk-71parphm.js:24162", () => {
   setClaimContext({
     env: () => managedEnvApplier.getHostLaunchEnv(),
     credential: () => managedEnvApplier.getLaunchCredential(),
     road: () => managedEnvApplier.getLaunchCredentialRoad(),
   });
 });
-//@ chunk-q4qb1h08.js:23204-23263 placement
+//@ chunk-71parphm.js:24274-24333 placement
 function resetPreSettingsEnvSnapshotForClaim(claimId, kept) {
   return managedEnvApplier.dropPreSettingsEnvSnapshot(claimId, kept);
 }
-//@ chunk-q4qb1h08.js:23263-23318 placement
+//@ chunk-71parphm.js:24333-24388 placement
 function envKeyCase(key) {
   return getPlatform() === "windows" ? key.toUpperCase() : key;
 }
-//@ chunk-q4qb1h08.js:23318-23614 placement
+//@ chunk-71parphm.js:24388-24684 placement
 function launchViewAtClaim(claimedEnv, nameList, overrides) {
   if (claimedEnv === undefined)
     return Object.freeze({
@@ -488,7 +511,7 @@ function launchViewAtClaim(claimedEnv, nameList, overrides) {
     else if (claimedByName.has(envKeyCase(key))) view[key] = claimedByName.get(envKeyCase(key));
   return Object.freeze(view);
 }
-//@ chunk-q4qb1h08.js:23614-23801 placement
+//@ chunk-71parphm.js:24684-24871 placement
 function putBackTransport(snapshot, shouldRestore) {
   let filtered = Object.keys(process.env).filter(
     (key) => shouldRestore(key) && process.env[key] !== snapshot[key],
@@ -498,35 +521,35 @@ function putBackTransport(snapshot, shouldRestore) {
     else process.env[key] = snapshot[key];
   return filtered.length > 0;
 }
-//@ chunk-q4qb1h08.js:23801-23894 placement
+//@ chunk-71parphm.js:24871-24964 placement
 function filterPolicyPredicateEnv(env, sourceName = "policySettings") {
   return managedEnvApplier.filterPolicyPredicateEnv(env, sourceName, {
     forPolicyMatch: false,
   });
 }
-//@ chunk-q4qb1h08.js:23894-23988 placement
+//@ chunk-71parphm.js:24964-25058 placement
 function filterEnvForPolicyPredicateMatch(env, sourceName = "policySettings") {
   return managedEnvApplier.filterPolicyPredicateEnv(env, sourceName, {
     forPolicyMatch: true,
   });
 }
-//@ chunk-q4qb1h08.js:23988-24046 placement
+//@ chunk-71parphm.js:25058-25116 placement
 function withoutInvalidSettingsEnv(env, settings) {
   return managedEnvApplier.withoutInvalidSettingsEnv(env, settings);
 }
-//@ chunk-q4qb1h08.js:24046-24083 placement
+//@ chunk-71parphm.js:25116-25153 placement
 function settingsEnvForHookChild(env, settings) {
   return withoutRestrictedEnvKeys(withoutInvalidSettingsEnv(env, settings));
 }
-//@ chunk-q4qb1h08.js:24083-24363 placement
-var TELEMETRY_SETTING_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+//@ chunk-71parphm.js:25153-25433 placement
+var TELEMETRY_SETTING_SOURCES; // deferred: uses PROVIDER_ENV_VARS (./managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
 var OTLP_SIGNALS;
 var OTLP_EXPORTER_PREFIX;
 var OTLP_SECRET_SUFFIXES;
 var OTEL_EXPORTER_SELECTORS;
 var CLAUDE_CODE_ENABLE_TELEMETRY;
 var BETA_TRACING_ENDPOINT;
-deferInit("chunk-q4qb1h08.js:24083", () => {
+deferInit("chunk-71parphm.js:25153", () => {
   TELEMETRY_SETTING_SOURCES = ["userSettings", "flagSettings", "policySettings"];
   OTLP_SIGNALS = ["TRACES", "METRICS", "LOGS", "PROFILES"];
   OTLP_EXPORTER_PREFIX = OTEL_EXPORTER_OTLP;
@@ -535,38 +558,38 @@ deferInit("chunk-q4qb1h08.js:24083", () => {
   CLAUDE_CODE_ENABLE_TELEMETRY = "CLAUDE_CODE_ENABLE_TELEMETRY";
   BETA_TRACING_ENDPOINT = "BETA_TRACING_ENDPOINT";
 });
-//@ chunk-q4qb1h08.js:24363-24431 placement
-var OTEL_ENDPOINT_ENV_VARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-q4qb1h08.js:24363", () => {
+//@ chunk-71parphm.js:25433-25501 placement
+var OTEL_ENDPOINT_ENV_VARS; // deferred: uses PROVIDER_ENV_VARS (./managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-71parphm.js:25433", () => {
   OTEL_ENDPOINT_ENV_VARS = new Set([
     `${OTEL_EXPORTER_OTLP}ENDPOINT`,
     `${OTEL_EXPORTER_OTLP}HEADERS`,
     `${OTEL_EXPORTER_OTLP}PROTOCOL`,
   ]);
 });
-//@ chunk-q4qb1h08.js:24431-24454 placement
+//@ chunk-71parphm.js:25501-25524 placement
 function identityEnvMap(envKey) {
   return envKey;
 }
-//@ chunk-q4qb1h08.js:24454-24525 placement
+//@ chunk-71parphm.js:25524-25595 placement
 function lacksOtlpExporter(exporters) {
   return !exporters
     .split(",")
     .map((exporter) => exporter.trim())
     .includes("otlp");
 }
-//@ chunk-q4qb1h08.js:24525-24580 placement
+//@ chunk-71parphm.js:25595-25650 placement
 function envKeyCaseUpper(envName) {
   return getPlatform() === "windows" ? envName.toUpperCase() : envName;
 }
-//@ chunk-q4qb1h08.js:24580-24709 placement
+//@ chunk-71parphm.js:25650-25779 placement
 function pickEnvKeys(env, wantedNames) {
   let picked = {};
   for (let [key, value] of Object.entries(env ?? {}))
     if (wantedNames.includes(key.toUpperCase()) && value !== undefined) picked[key] = String(value);
   return picked;
 }
-//@ chunk-q4qb1h08.js:24709-41306 placement
+//@ chunk-71parphm.js:25779-42486 placement
 /**
  * 应用托管/项目设置中的环境变量：按作用域过滤被阻止变量、剥离 provider 相关变量并告警。
  */
@@ -595,9 +618,12 @@ class ManagedEnvApplier {
   untrustedFolderDropWarned = new Set();
   servedFolderEnvWithheld = false;
   getPreSettingsEnvSnapshot() {
-    this.preSettingsEnvSnapshot ??= this.latchPreSettingsEnvSnapshot({
-      ...process.env,
-    });
+    if (this.preSettingsEnvSnapshot === undefined) {
+      this.preSettingsEnvSnapshot = this.latchPreSettingsEnvSnapshot({
+        ...process.env,
+      });
+      env.unset("CLAUDE_CODE_PERSONAL_HOOKS_OFF");
+    }
     return this.preSettingsEnvSnapshot;
   }
   latchPreSettingsEnvSnapshot(envSnapshot) {
@@ -1190,6 +1216,7 @@ class ManagedEnvApplier {
     let previousDisableLoopedCrossCertDrop = env.CLAUDE_CODE_DISABLE_LOOPED_CROSS_CERT_DROP;
     let CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP = env.CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP;
     let NODE_OPTIONS = env.NODE_OPTIONS;
+    let platformEnv = proxyEnvFingerprint();
     if (this.hostSpawnEnvKeys === undefined) {
       this.hostSpawnEnvKeys = this.providerStripContext.hostOrchestrated
         ? new Set(Object.keys(process.env).map((key) => key.toUpperCase()))
@@ -1254,18 +1281,16 @@ class ManagedEnvApplier {
     }
     this.enforceManagedOtelFamilyDominance();
     this.resetSettingsIfUserSettingsFileMoved(settingsFilePathForSource);
-    if (
+    let extraCerts =
       env.NODE_EXTRA_CA_CERTS !== NODE_EXTRA_CA_CERTS ||
       env.CLAUDE_CODE_CERT_STORE !== CLAUDE_CODE_CERT_STORE ||
       env.CLAUDE_CODE_DISABLE_LOOPED_CROSS_CERT_DROP !== previousDisableLoopedCrossCertDrop ||
       env.CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP !== CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP ||
-      env.NODE_OPTIONS !== NODE_OPTIONS
-    ) {
-      clearCACertsCache();
-      if (hasConfiguredGlobalAgents()) {
-        clearProxyCache();
-        configureGlobalAgents();
-      }
+      env.NODE_OPTIONS !== NODE_OPTIONS;
+    if (extraCerts) clearCACertsCache();
+    if ((extraCerts || proxyEnvFingerprint() !== platformEnv) && hasConfiguredGlobalAgents()) {
+      clearProxyCache();
+      configureGlobalAgents();
     }
   }
   applyConfigEnvironmentVariables() {
@@ -1329,16 +1354,16 @@ class ManagedEnvApplier {
       .catch(logError);
   }
 }
-//@ chunk-q4qb1h08.js:41306-41337 placement
+//@ chunk-71parphm.js:42486-42517 placement
 var managedEnvApplier; // deferred: uses ManagedEnvApplier of its import cycle while loading; runs once the cycle is complete
 var preSettingsEnvLatch;
-deferInit("chunk-q4qb1h08.js:41306", () => {
+deferInit("chunk-71parphm.js:42486", () => {
   managedEnvApplier = new ManagedEnvApplier();
   preSettingsEnvLatch = retainCacheKey({
     clear: resetManagedEnvApplier,
   });
 });
-//@ chunk-q4qb1h08.js:41337-41419 placement
+//@ chunk-71parphm.js:42517-42599 placement
 function applySafeConfigEnvironmentVariables() {
   try {
     managedEnvApplier.applySafeConfigEnvironmentVariables();
@@ -1348,7 +1373,7 @@ function applySafeConfigEnvironmentVariables() {
   noopEnvHook();
   emitCredentialChange();
 }
-//@ chunk-q4qb1h08.js:41419-41496 placement
+//@ chunk-71parphm.js:42599-42676 placement
 function applyConfigEnvironmentVariables() {
   try {
     managedEnvApplier.applyConfigEnvironmentVariables();
@@ -1358,40 +1383,40 @@ function applyConfigEnvironmentVariables() {
   noopEnvHook();
   emitCredentialChange();
 }
-//@ chunk-q4qb1h08.js:41496-41549 placement
+//@ chunk-71parphm.js:42676-42729 placement
 function servedFolderEnvWasWithheld() {
   return managedEnvApplier.servedFolderEnvWasWithheld();
 }
-//@ chunk-q4qb1h08.js:41549-41573 placement
+//@ chunk-71parphm.js:42729-42753 placement
 function resetManagedEnvApplier() {
   managedEnvApplier.reset();
 }
 export {
+  getPreSettingsEnvSnapshot,
   getLatchedPreSettingsEnvSnapshot,
   getAppliedGlobalConfigEnv,
-  getPreSettingsEnvSnapshot,
-  filterEnvForPolicyPredicateMatch,
-  getLegacyEnvMap,
-  isSettingsSourcedEnvValue,
   applyConfigEnvironmentVariables,
   applySafeConfigEnvironmentVariables,
   filterPolicyPredicateEnv,
-  withLaunchValuesOfHybridConnection,
   settingsEnvForHookChild,
-  putBackUnsuppliedTelemetryEnv,
-  getPreSettingsEnvHonoringLiveDeletions,
-  setToolServerLaunchEnv,
+  isSettingsSourcedEnvValue,
   isProjectScopeBlockedEnvVar,
+  withLaunchValuesOfHybridConnection,
+  getPreSettingsEnvHonoringLiveDeletions,
+  filterEnvForPolicyPredicateMatch,
+  getLegacyEnvMap,
   recordPersonsEnvValue,
   personsSettingsEnvKeeps,
-  servedFolderEnvWasWithheld,
-  PROJECT_SCOPE_BLOCKED_ENV_VARS,
-  getEnvAboveProjectSettings,
   isServableEnvValue,
   PROJECT_LEVEL_SETTING_SOURCES,
+  getEnvAboveProjectSettings,
+  putBackUnsuppliedTelemetryEnv,
+  servedFolderEnvWasWithheld,
+  withoutInvalidSettingsEnv,
   purgeHostOwnedChromeVars,
   putBackTransport,
   launchViewAtClaim,
   resetPreSettingsEnvSnapshotForClaim,
-  withoutInvalidSettingsEnv,
+  PROJECT_SCOPE_BLOCKED_ENV_VARS,
+  setToolServerLaunchEnv,
 };

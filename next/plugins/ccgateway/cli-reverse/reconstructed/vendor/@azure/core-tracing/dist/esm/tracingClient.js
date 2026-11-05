@@ -1,14 +1,14 @@
 /**
  * @azure/core-tracing/dist/esm/tracingClient.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/core-tracing@1.2.0..1.3.1
- * pieces: chunk-mrx6y2r5.js (1)
+ * pieces: chunk-b5df2wx1.js (1)
  * attribution: esm-fingerprint 1
  */
 import { getInstrumenter } from "./instrumenter.js";
 import { AZURE_TRACING_SYMBOLS } from "./tracingContext.js";
 
-//@ chunk-mrx6y2r5.js:58616-59724 esm-fingerprint
+//@ chunk-b5df2wx1.js:58616-59724 esm-fingerprint
 function createTracingClient(options) {
   let { namespace, packageName, packageVersion } = options;
   function startSpan(name, operationOptions, spanOptions) {

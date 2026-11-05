@@ -3,9 +3,9 @@
  *
  * 根据安装类型（native/package-manager/npm）选择对应的自动更新组件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/AutoUpdaterWrapper.tsx
- * pieces: chunk-tzghj6zv.js (3)
+ * pieces: chunk-18rrbwq1.js (3)
  * attribution: sole-consumer 2, fingerprint 1
  */
 import { homedir } from "os";
@@ -55,9 +55,9 @@ import { useTimeout } from "../ink/hooks/useTerminalHooks.js";
 import { NativeAutoUpdater } from "./NativeAutoUpdater.js";
 import { AutoUpdater } from "./AutoUpdater.js";
 
-//@ chunk-tzghj6zv.js:38943-38958 sole-consumer
+//@ chunk-18rrbwq1.js:38948-38963 sole-consumer
 var PKG_MANAGER_UPDATE_RETRY_MS = 1800000;
-//@ chunk-tzghj6zv.js:38958-46626 sole-consumer
+//@ chunk-18rrbwq1.js:38963-46617 sole-consumer
 /**
  * 包管理器（homebrew/winget 等）安装的自动更新组件：检查最新版本（受 maxVersion 上限与跳过版本限制），CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE 开启时执行包管理器升级命令并记录 tengu_pkg_manager_auto_updater_* 事件，否则只提示可用更新。
  */
@@ -147,10 +147,10 @@ function PackageManagerAutoUpdater(props) {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION,
@@ -163,10 +163,10 @@ function PackageManagerAutoUpdater(props) {
                 ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
                 PACKAGE_URL: "@anthropic-ai/claude-code",
                 README_URL: "https://code.claude.com/docs/en/overview",
-                VERSION: "2.1.316",
+                VERSION: "2.1.318",
                 FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                BUILD_TIME: "2026-10-30T23:28:13Z",
-                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                BUILD_TIME: "2026-11-03T18:52:53Z",
+                GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                 HOOKS_WORKER_URL:
                   import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                 DD_SOURCEMAP_GROUP: "default",
@@ -187,10 +187,10 @@ function PackageManagerAutoUpdater(props) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION,
@@ -209,10 +209,10 @@ function PackageManagerAutoUpdater(props) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION
@@ -361,10 +361,10 @@ function PackageManagerAutoUpdater(props) {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION,
@@ -444,10 +444,10 @@ function PackageManagerAutoUpdater(props) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION,
@@ -519,7 +519,7 @@ function PackageManagerAutoUpdater(props) {
   } else rowElement = $[53];
   return rowElement;
 }
-//@ chunk-tzghj6zv.js:46626-47769 fingerprint (2.1.88 match: AutoUpdaterWrapper, 0.58)
+//@ chunk-18rrbwq1.js:46617-47750 fingerprint (2.1.88 match: AutoUpdaterWrapper, 0.58)
 /**
  * 检测安装类型后渲染 NativeAutoUpdater / PackageManagerAutoUpdater / AutoUpdater。
  */

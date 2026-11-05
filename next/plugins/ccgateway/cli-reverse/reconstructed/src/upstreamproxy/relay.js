@@ -3,10 +3,10 @@
  *
  * 上游代理本地中继：CONNECT 隧道经 WebSocket 转发到 CCR 代理，独立 relay 模式（CCR_AGENT_PROXY_RELAY_MODE）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/upstreamproxy/relay.ts
- * pieces: chunk-3tvkk9nn.js (1), chunk-8wvtd8sr.js (1), chunk-awy329vy.js (64), chunk-e6aww6q8.js (11)
- * attribution: fingerprint 8, placement 24, layout 42, file-local 1, callgraph-fingerprint 1, affinity 1
+ * pieces: chunk-572btqwd.js (1), chunk-5xgkngpb.js (11), chunk-9knfmvrf.js (75), chunk-xzmy9dn4.js (1)
+ * attribution: fingerprint 8, placement 24, layout 53, file-local 2, affinity 1
  */
 import { readdir, readlink } from "fs/promises";
 import { createHash } from "crypto";
@@ -16,7 +16,7 @@ import { HostScoped } from "../utils/hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { env } from "../utils/env.js";
 import { isRemoteManagedEnvironment } from "../utils/remoteEnvironment.js";
-import { PRINTABLE_CHAR_MIN, DECIMAL_RADIX } from "../utils/plugins/npmPluginSource.js";
+import { lit, fromEnum } from "../services/analytics/safeMetadata.js";
 import { walkProtobufFields } from "../services/api/narrationClassifier.js";
 import {
   normalizeHostnameText,
@@ -28,15 +28,16 @@ import { createTokenBucket, BUCKET_CAPACITY, TOKEN_REFILL_MS } from "../utils/to
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { PEER_PROCESS_PENDING, lookupPeerProcessName, PEER_PROCESS_LOOKUP_FAILED } from "./caBundle.js";
 import { sleep } from "../utils/sleep.js";
-import { logForDebugging } from "../utils/debug.js";
 import { logEvent } from "../services/analytics/index.js";
+import { logForDebugging } from "../utils/debug.js";
+import { bumpCounter } from "../tools/BashTool/bashEditDiff/snapshot.js";
 import { jsonStringify } from "../utils/slowOperations.js";
 import { firstLineOf, truncateToLength, plural } from "../utils/stringUtils.js";
 import { getWebSocketProxyUrl } from "../utils/proxy.js";
 import { getWebSocketTLSOptions } from "../utils/mtls.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:186807-188642 placement
+//@ chunk-5xgkngpb.js:186917-189305 placement
 /**
  * 代理中继失败记录与最近事件的上限。
  */
@@ -44,7 +45,6 @@ var PROXY_RELAY_ERRORS = {
   tls_to_relay: "a client spoke TLS to the proxy port (HTTPS_PROXY must be an http:// URL)",
   header_too_long: "request headers exceeded 8 KiB before the CONNECT ended",
   not_connect: "a client sent a plain-HTTP request to the proxy (only HTTPS CONNECT is supported)",
-  startup_probe: "the hosted egress proxy was unreachable at startup",
   selective_invalid_host: "control byte in the CONNECT host",
   bad_connect_port: "invalid port in the CONNECT request",
   pending_overflow: "upload buffer exceeded while the tunnel was not accepting bytes",
@@ -53,6 +53,14 @@ var PROXY_RELAY_ERRORS = {
     "the egress proxy refused the connection or could not reach the host; a refusal most often means that the host is not allowed for this session",
   ws_error: "the tunnel to the egress proxy failed before any response",
   ws_open_failed: "could not open the tunnel to the egress proxy",
+  ws_open_refused:
+    "new tunnels to the egress proxy were refused with HTTP 429 or 503; run fewer downloads or requests at once, or retry in a few seconds",
+  tunnel_wait_timeout:
+    "too many connections were busy through the agent proxy, and this one timed out waiting for a tunnel; run fewer downloads or requests at once",
+  tunnel_wait_abandoned:
+    "too many connections were busy through the agent proxy, and the client gave up waiting for a tunnel; run fewer downloads or requests at once",
+  tunnel_queue_full:
+    "too many connections were already waiting for a tunnel through the agent proxy; run fewer downloads or requests at once",
   ws_closed_mid_exchange: "the tunnel to the egress proxy closed before the exchange completed",
   v2_not_acked: "the egress proxy did not complete the tunnel handshake",
   direct_blocked: "destination not allowed for normal networking (refused by the proxy)",
@@ -67,7 +75,7 @@ var PROXY_RELAY_ERROR_MESSAGES = 3;
 var MAX_PROXY_POLICY_REFUSED_HOSTS = 80;
 var PROXY_STATUS_URL_SUFFIX =
   "Allowed domains are set on claude.ai in a web browser: on a paid individual plan by the person, under Settings > Capabilities; on a Team or Enterprise plan by their admin, under Organization settings > Capabilities. On the Free plan, only package managers can be allowed.";
-//@ chunk-e6aww6q8.js:188642-188707 placement
+//@ chunk-5xgkngpb.js:189305-189370 placement
 /**
  * 按宿主保存的中继运行时状态（状态地址、序号、最近事件、被策略拒绝的主机）。
  */
@@ -77,29 +85,29 @@ class ProxyRelayRuntimeState {
   recent = [];
   policyRefused = new Set();
 }
-//@ chunk-e6aww6q8.js:188707-188734 placement
+//@ chunk-5xgkngpb.js:189370-189397 placement
 /**
  * 按宿主隔离的中继运行时状态缓存。
  */
 var proxyRelayStateByHost; // deferred: uses ProxyRelayRuntimeState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:188707", () => {
+deferInit("chunk-5xgkngpb.js:189370", () => {
   proxyRelayStateByHost = new HostScoped(() => new ProxyRelayRuntimeState());
 });
-//@ chunk-e6aww6q8.js:188734-188772 placement
+//@ chunk-5xgkngpb.js:189397-189435 placement
 /**
  * 取出当前宿主的中继运行时状态。
  */
 function getProxyRelayState() {
   return proxyRelayStateByHost.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:188772-188805 placement
+//@ chunk-5xgkngpb.js:189435-189468 placement
 /**
  * 记录中继状态页地址。
  */
 function setProxyStatusUrl(statusUrl) {
   getProxyRelayState().statusUrl = statusUrl;
 }
-//@ chunk-e6aww6q8.js:188805-188897 placement
+//@ chunk-5xgkngpb.js:189468-189560 placement
 /**
  * 记录一条中继事件（超过上限淘汰最早的）。
  */
@@ -109,18 +117,18 @@ function recordProxyRelayEvent(event) {
   proxyRelayState.recent.push(event);
   if (proxyRelayState.recent.length > MAX_RELAY_FAILURES) proxyRelayState.recent.shift();
 }
-//@ chunk-e6aww6q8.js:188897-189039 placement
+//@ chunk-5xgkngpb.js:189560-189702 placement
 var POLICY_BLOCKED_RESPONSE_REGEX =
   /^HTTP\/1\.[01] 403 [^\r\n]*\r\n(?:[^\r\n]+\r\n)*\r\nrequest blocked(?:: no rule or allowlist entry allows host | by policy)/;
 var MAX_POLICY_REFUSED_HOSTS = 256;
-//@ chunk-e6aww6q8.js:189039-189121 placement
+//@ chunk-5xgkngpb.js:189702-189784 placement
 /**
  * 是否启用“策略拒绝后不再重拨”（需设环境变量且为托管模式）。
  */
 function shouldHonorPolicyRefusal() {
   return env.CLAUDE_CODE_MCP_NO_REDIAL_AFTER_POLICY_REFUSAL === true && isRemoteManagedEnvironment();
 }
-//@ chunk-e6aww6q8.js:189121-189342 placement
+//@ chunk-5xgkngpb.js:189784-190005 placement
 /**
  * 根据 CONNECT 响应记录被策略拦截的主机：响应为 403 "request blocked" 时加入集合（超过上限淘汰最早的），否则移出。
  */
@@ -138,7 +146,7 @@ function notePolicyRefusedHost(hostname, responseBytes) {
       break;
     }
 }
-//@ chunk-e6aww6q8.js:189342-189484 placement (2.1.88 match: shouldBypassProxy, 0.851)
+//@ chunk-5xgkngpb.js:190005-190147 placement (2.1.88 match: shouldBypassProxy, 0.851)
 function shouldBypassProxy(url) {
   if (!shouldHonorPolicyRefusal()) return false;
   let parsedUrl = URL.parse(url);
@@ -147,23 +155,14 @@ function shouldBypassProxy(url) {
     getProxyRelayState().policyRefused.has(`${parsedUrl.hostname}:${parsedUrl.port || "443"}`)
   );
 }
-//@ chunk-e6aww6q8.js:4397916-4398208 fingerprint (2.1.88 match: decodeChunk, 0.681)
-function decodeChunk(buf) {
-  let headers = new Map();
-  let offset = 0;
-  while (offset < buf.length) {
-    let index = buf.indexOf(PRINTABLE_CHAR_MIN, offset);
-    if (index < 0) break;
-    let chunkSize = parseInt(buf.subarray(offset, index).toString("utf8"), DECIMAL_RADIX);
-    if (!Number.isFinite(chunkSize) || chunkSize <= 0) break;
-    let str = buf.subarray(index + 1, offset + chunkSize - 1).toString("utf8");
-    let index_2 = str.indexOf("=");
-    if (index_2 > 0) headers.set(str.slice(0, index_2), str.slice(index_2 + 1));
-    offset += chunkSize;
-  }
-  return headers;
+//@ chunk-5xgkngpb.js:504266-504385 fingerprint (2.1.88 match: decodeChunk, 0.679)
+function lastLineOf(buf) {
+  let end = buf.length;
+  while (end > 0 && buf[end - 1] === 10) end--;
+  let start = end === 0 ? 0 : buf.lastIndexOf(10, end - 1) + 1;
+  return buf.subarray(start, end);
 }
-//@ chunk-8wvtd8sr.js:199476-199622 fingerprint (2.1.88 match: startBunRelay, 0.448)
+//@ chunk-xzmy9dn4.js:201667-201813 fingerprint (2.1.88 match: startBunRelay, 0.447)
 async function startBunRelay(hostname, port) {
   try {
     (
@@ -183,7 +182,7 @@ async function startBunRelay(hostname, port) {
     return false;
   }
 }
-//@ chunk-awy329vy.js:4790-5176 placement
+//@ chunk-9knfmvrf.js:4799-5185 placement
 /**
  * 通过遍历 /proc/*\/fd 查找持有指定 socket inode 的进程 pid。
  */
@@ -198,10 +197,10 @@ async function findSocketOwnerPid(socketInode) {
   let filtered = procEntries.filter((pid) => /^\d+$/.test(pid));
   let results = await Promise.all(filtered.map((pid) => readdir(`/proc/${pid}/fd`).catch(() => [])));
   let fdEntries = [];
-  for (let idx = 0; idx < filtered.length; idx++)
-    for (let fd of results[idx])
+  for (let j = 0; j < filtered.length; j++)
+    for (let fd of results[j])
       fdEntries.push({
-        pid: filtered[idx],
+        pid: filtered[j],
         fd,
       });
   let index = (
@@ -211,7 +210,439 @@ async function findSocketOwnerPid(socketInode) {
   ).indexOf(socketLink);
   return index === -1 ? undefined : fdEntries[index].pid;
 }
-//@ chunk-awy329vy.js:5176-5631 placement
+//@ chunk-9knfmvrf.js:5185-5573 layout
+var RELAY_DEFAULTS = {
+  maxBusyTunnels: 1 / 0,
+  tunnelIdleAfterMs: 5000,
+  clientGoneIdleAfterMs: 1000,
+  tunnelStalledMaxMs: 660000,
+  idleTunnelFactor: 4,
+  tunnelWaitTimeoutMs: 60000,
+  waitingClientBufferBytes: 16384,
+  abandonedNoteAfterMs: 1000,
+  tunnelQueueMax: 4096,
+  tunnelGateTickMs: 100,
+  dialRefusedBackoffBaseMs: 250,
+  dialRefusedBackoffMaxMs: 5000,
+  dialRefusedMemoryMs: 30000,
+  openTunnelsReportAt: 64,
+  openTunnelsReportIntervalMs: 60000,
+};
+//@ chunk-9knfmvrf.js:5573-5734 layout
+function createTunnelState(admit, refuse, isStalled) {
+  return {
+    admit,
+    refuse,
+    isStalled,
+    state: "new",
+    askedAt: 0,
+    turn: 0,
+    opened: false,
+    counted: false,
+    clientGone: false,
+    lastByteAt: 0,
+    waitingSince: 0,
+    hasWaited: false,
+  };
+}
+//@ chunk-9knfmvrf.js:5734-5995 layout
+function createTunnelStats(maxBusyTunnels, openPeak) {
+  return {
+    max_busy_tunnels: Number.isFinite(maxBusyTunnels) ? maxBusyTunnels : 0,
+    open_peak: openPeak,
+    busy_peak: 0,
+    waited: 0,
+    waiting_peak: 0,
+    max_wait_ms: 0,
+    total_wait_ms: 0,
+    wait_timeouts: 0,
+    left_while_waiting: 0,
+    queue_overflows: 0,
+    upgrades_refused_429: 0,
+    upgrades_refused_503: 0,
+    idle_uncounted: 0,
+  };
+}
+//@ chunk-9knfmvrf.js:5995-6112 layout
+var TUNNEL_COUNTER_FIELDS = [
+  "busy_peak",
+  "waited",
+  "waiting_peak",
+  "idle_uncounted",
+  "wait_timeouts",
+  "left_while_waiting",
+  "queue_overflows",
+];
+//@ chunk-9knfmvrf.js:6112-6480 layout
+function buildTunnelReports(statsWindow, generation) {
+  let common = {
+    generation,
+    limit: statsWindow.max_busy_tunnels,
+  };
+  let reports = [
+    {
+      ...common,
+      reason: lit("open_peak"),
+      count: statsWindow.open_peak,
+      wait_ms: statsWindow.max_wait_ms,
+      total_wait_ms: statsWindow.total_wait_ms,
+    },
+  ];
+  for (let field of TUNNEL_COUNTER_FIELDS)
+    if (statsWindow[field] > 0)
+      reports.push({
+        ...common,
+        reason: fromEnum(field),
+        count: statsWindow[field],
+      });
+  for (let status of [429, 503]) {
+    let refusedCount = statsWindow[`upgrades_refused_${status}`];
+    if (refusedCount > 0)
+      reports.push({
+        ...common,
+        reason: lit("upgrades_refused"),
+        count: refusedCount,
+        http_status: status,
+      });
+  }
+  return reports;
+}
+//@ chunk-9knfmvrf.js:6480-6537 layout
+function nextGeneration(generation, nowMs) {
+  return Math.max(generation + 1, Math.floor(nowMs / 1000));
+}
+//@ chunk-9knfmvrf.js:6537-12521 layout
+class TunnelGate {
+  limits;
+  pooled;
+  sendReport;
+  now;
+  enabled;
+  holders = new Set();
+  opened = 0;
+  counted = 0;
+  queue = [];
+  turns = 0;
+  ceiling = 1 / 0;
+  probeAt = 0;
+  probing = false;
+  probeStep = 1;
+  refusedAt = 0;
+  refusedStatus = 429;
+  failedTrials = 0;
+  pumping = false;
+  stopped = false;
+  ticker;
+  reportTimer;
+  window;
+  openPeak = 0;
+  busySampledAt = -1 / 0;
+  busySampledOpen = 0;
+  constructor(now, pooled, sendReport, now_2 = () => performance.now()) {
+    this.limits = now;
+    this.pooled = pooled;
+    this.sendReport = sendReport;
+    this.now = now_2;
+    this.enabled = Number.isFinite(now.maxBusyTunnels);
+    this.window = createTunnelStats(now.maxBusyTunnels, 0);
+  }
+  request(connState) {
+    connState.askedAt = this.now();
+    connState.turn = this.turns++;
+    if (!this.enabled) {
+      this.admit(connState);
+      return;
+    }
+    if (this.queue.length >= this.limits.tunnelQueueMax) {
+      connState.state = "done";
+      this.window.queue_overflows++;
+      this.startReport();
+      connState.refuse({
+        why: "queue_full",
+        refusedStatus: this.refusing(),
+      });
+      return;
+    }
+    connState.state = "waiting";
+    connState.waitingSince = connState.askedAt;
+    this.queue.push(connState);
+    this.pump();
+    if (connState.state === "waiting") this.noteWaiting(connState);
+  }
+  release(connState) {
+    if (connState?.state === "waiting") {
+      connState.state = "done";
+      this.queue.splice(this.queue.indexOf(connState), 1);
+      this.window.left_while_waiting++;
+      this.stopTickerIfIdle();
+      return {
+        waitedMs: this.noteWaitOver(connState),
+        refusedStatus: this.refusing(),
+      };
+    }
+    if (connState?.state !== "holding") return;
+    this.drop(connState);
+    connState.state = "done";
+    this.pump();
+    return;
+  }
+  clientLeft(connState) {
+    if (connState?.state === "holding") {
+      connState.clientGone = true;
+      connState.lastByteAt = this.now();
+    }
+  }
+  dialing(connState) {
+    if (connState?.opened) {
+      connState.opened = false;
+      this.opened--;
+      this.touch(connState);
+    }
+  }
+  tookPooled(connState) {
+    if (connState?.state === "holding" && !connState.opened) {
+      connState.opened = true;
+      this.opened++;
+    }
+  }
+  dialOpened(connState) {
+    if (connState?.state !== "holding" || connState.opened) return;
+    connState.opened = true;
+    this.opened++;
+    connState.lastByteAt = this.now();
+    if (this.probing) {
+      this.failedTrials = 0;
+      if (this.refusedStatus === 503) this.probeStep++;
+      this.ceiling = this.opened + this.pooled() + this.probeStep;
+    }
+    this.pump();
+  }
+  noteUpgradeRefused(status) {
+    if (status === 429) this.window.upgrades_refused_429++;
+    else this.window.upgrades_refused_503++;
+    this.startReport();
+  }
+  dialRefused(connState, status) {
+    if (connState.state !== "holding") return;
+    let refusedAt = this.now();
+    this.drop(connState);
+    this.ceiling = status === 429 ? this.opened + this.pooled() : 0;
+    this.probing = false;
+    this.refusedAt = refusedAt;
+    this.refusedStatus = status;
+    if (refusedAt >= this.probeAt) {
+      let min = Math.min(
+        this.limits.dialRefusedBackoffBaseMs * 2 ** this.failedTrials,
+        this.limits.dialRefusedBackoffMaxMs,
+      );
+      this.failedTrials++;
+      this.probeAt = refusedAt + min * (0.5 + Math.random() / 2);
+    }
+    connState.state = "waiting";
+    connState.waitingSince = refusedAt;
+    let insertAt = 0;
+    while (insertAt < this.queue.length && this.queue[insertAt].turn < connState.turn) insertAt++;
+    this.queue.splice(insertAt, 0, connState);
+    this.noteWaiting(connState);
+  }
+  touch(connState) {
+    if (connState?.state !== "holding") return;
+    connState.lastByteAt = this.now();
+    if (!connState.counted) {
+      connState.counted = true;
+      this.counted++;
+    }
+  }
+  tick() {
+    let nowMs = this.now();
+    while (this.queue.length > 0 && nowMs - this.queue[0].askedAt >= this.limits.tunnelWaitTimeoutMs) {
+      let connState = this.queue.shift();
+      connState.state = "done";
+      this.window.wait_timeouts++;
+      let waitedMs = this.noteWaitOver(connState);
+      let waitDurationMs = this.refusing();
+      connState.refuse(
+        waitDurationMs
+          ? {
+              why: "dial_refused",
+              status: waitDurationMs,
+              waitedMs,
+            }
+          : {
+              why: "wait_timeout",
+              waitedMs,
+            },
+      );
+    }
+    if (
+      this.queue.length > 0 &&
+      this.holders.size >= this.ceiling &&
+      nowMs >= this.probeAt &&
+      this.holders.size === this.opened
+    ) {
+      this.ceiling = this.holders.size + 1;
+      this.probing = true;
+      this.probeStep = 1;
+    }
+    this.pump();
+  }
+  stop() {
+    if (this.stopped) return;
+    this.stopped = true;
+    clearInterval(this.ticker);
+    this.ticker = undefined;
+    this.flushReport();
+  }
+  snapshot() {
+    let { maxBusyTunnels, idleTunnelFactor } = this.limits;
+    return {
+      maxBusyTunnels: this.enabled ? maxBusyTunnels : null,
+      maxOpenTunnels: this.enabled ? maxBusyTunnels * idleTunnelFactor : null,
+      busyTunnels: this.enabled ? this.counted : null,
+      openTunnels: this.open(),
+      openTunnelsPeak: this.openPeak,
+      connectsWaitingForTunnel: this.queue.length,
+    };
+  }
+  flushReport() {
+    clearTimeout(this.reportTimer);
+    this.reportTimer = undefined;
+    let reportStatus = this.window;
+    this.window = createTunnelStats(this.limits.maxBusyTunnels, this.open());
+    this.window.waiting_peak = this.queue.length;
+    if (this.isWorthReporting(reportStatus)) this.sendReport(reportStatus);
+    if (this.isWorthReporting(this.window)) this.startReport();
+  }
+  open() {
+    return this.holders.size + this.pooled();
+  }
+  admit(connState) {
+    connState.state = "holding";
+    connState.counted = true;
+    connState.lastByteAt = this.now();
+    this.holders.add(connState);
+    this.counted++;
+    connState.admit();
+    let openCount = this.open();
+    if (openCount > this.openPeak) this.openPeak = openCount;
+    if (openCount > this.window.open_peak) {
+      this.window.open_peak = openCount;
+      if (openCount >= this.limits.openTunnelsReportAt) this.startReport();
+    }
+    let lastByteAt = connState.lastByteAt;
+    if (
+      openCount >= this.limits.openTunnelsReportAt &&
+      (lastByteAt - this.busySampledAt >= 1000 || openCount * 4 >= this.busySampledOpen * 5)
+    ) {
+      this.busySampledAt = lastByteAt;
+      this.busySampledOpen = openCount;
+      let nowMs = 0;
+      for (let holder of this.holders) if (!this.isIdle(holder, lastByteAt)) nowMs++;
+      if (nowMs > this.window.busy_peak) this.window.busy_peak = nowMs;
+    }
+  }
+  isIdle(connState, nowMs) {
+    let idleMs = nowMs - connState.lastByteAt;
+    if (connState.clientGone) return idleMs >= this.limits.clientGoneIdleAfterMs;
+    return (
+      connState.opened &&
+      idleMs >= this.limits.tunnelIdleAfterMs &&
+      (idleMs >= this.limits.tunnelStalledMaxMs || !connState.isStalled())
+    );
+  }
+  refusing() {
+    return this.holders.size >= this.ceiling ? this.refusedStatus : undefined;
+  }
+  drop(connState) {
+    this.holders.delete(connState);
+    if (connState.counted) {
+      connState.counted = false;
+      this.counted--;
+    }
+    if (connState.opened) {
+      connState.opened = false;
+      this.opened--;
+    }
+  }
+  findRoom() {
+    let nowMs = this.now();
+    if (nowMs - this.refusedAt > this.limits.dialRefusedMemoryMs) {
+      this.ceiling = 1 / 0;
+      this.probing = false;
+      this.failedTrials = 0;
+    }
+    let { maxBusyTunnels, idleTunnelFactor } = this.limits;
+    if (this.pooled() === 0 && this.holders.size >= Math.min(this.ceiling, maxBusyTunnels * idleTunnelFactor))
+      return false;
+    if (this.counted < maxBusyTunnels) return true;
+    for (let holder of this.holders)
+      if (holder.counted && this.isIdle(holder, nowMs)) {
+        holder.counted = false;
+        this.counted--;
+        this.window.idle_uncounted++;
+      }
+    return this.counted < maxBusyTunnels;
+  }
+  pump() {
+    if (this.pumping || this.stopped) return;
+    this.pumping = true;
+    try {
+      while (this.queue.length > 0 && this.findRoom()) {
+        let connState = this.queue.shift();
+        this.noteWaitOver(connState);
+        this.admit(connState);
+      }
+    } finally {
+      this.pumping = false;
+    }
+    this.stopTickerIfIdle();
+  }
+  noteWaiting(connState) {
+    if (!connState.hasWaited) {
+      connState.hasWaited = true;
+      this.window.waited++;
+    }
+    if (this.queue.length > this.window.waiting_peak) this.window.waiting_peak = this.queue.length;
+    this.startReport();
+    if (!this.stopped) this.ticker ??= setInterval(tickGate, this.limits.tunnelGateTickMs, this);
+  }
+  noteWaitOver(nowMs) {
+    let askedMs = this.now();
+    this.window.total_wait_ms += Math.round(askedMs - nowMs.waitingSince);
+    let rounded = Math.round(askedMs - nowMs.askedAt);
+    if (rounded > this.window.max_wait_ms) this.window.max_wait_ms = rounded;
+    return rounded;
+  }
+  stopTickerIfIdle() {
+    if (this.queue.length === 0) {
+      clearInterval(this.ticker);
+      this.ticker = undefined;
+    }
+  }
+  isWorthReporting(statsWindow) {
+    return (
+      statsWindow.open_peak >= this.limits.openTunnelsReportAt ||
+      statsWindow.waiting_peak > 0 ||
+      statsWindow.queue_overflows > 0 ||
+      statsWindow.left_while_waiting > 0 ||
+      statsWindow.upgrades_refused_429 > 0 ||
+      statsWindow.upgrades_refused_503 > 0
+    );
+  }
+  startReport() {
+    if (!this.stopped)
+      this.reportTimer ??= setTimeout(flushGateReport, this.limits.openTunnelsReportIntervalMs, this);
+  }
+}
+//@ chunk-9knfmvrf.js:12521-12545 layout
+function tickGate(gate) {
+  gate.tick();
+}
+//@ chunk-9knfmvrf.js:12545-12576 layout
+function flushGateReport(gate) {
+  gate.flushReport();
+}
+//@ chunk-9knfmvrf.js:12576-13031 placement
 /**
  * 隧道保活 ping 的间隔（30 秒）。
  */
@@ -243,7 +674,7 @@ var DEFAULT_RELAY_LIMITS = {
   finGraceMs: 1e4,
   peerLookupWaitMs: 10,
 };
-//@ chunk-awy329vy.js:5631-5800 placement
+//@ chunk-9knfmvrf.js:13031-13200 placement
 function encodeChunk(data) {
   let len = data.length;
   let varint = [];
@@ -259,7 +690,7 @@ function encodeChunk(data) {
   out.set(data, 1 + varint.length);
   return out;
 }
-//@ chunk-awy329vy.js:5800-5879 placement
+//@ chunk-9knfmvrf.js:13200-13279 placement
 /**
  * 编码隧道协议帧（帧类型加可选的协议版本）。
  */
@@ -268,7 +699,7 @@ function encodeFrame(control, version = 0) {
   if (version !== 0) fields.push(24, version);
   return new Uint8Array(fields);
 }
-//@ chunk-awy329vy.js:5879-6061 placement
+//@ chunk-9knfmvrf.js:13279-13461 placement
 function parseTunnelFrame(bytes) {
   let frame = {
     data: bytes.subarray(0, 0),
@@ -287,7 +718,7 @@ function parseTunnelFrame(bytes) {
     ? frame
     : null;
 }
-//@ chunk-awy329vy.js:6061-6224 placement
+//@ chunk-9knfmvrf.js:13461-13624 placement
 function normalizeHostname(hostname) {
   let normalized = normalizeHostnameText(hostname);
   if (normalized.startsWith("*.")) return "*." + normalizeHostname(normalized.slice(2));
@@ -295,7 +726,7 @@ function normalizeHostname(hostname) {
   let replaced = canonicalHostname(hostname_2).replace(/\.+$/, "");
   return replaced !== "" ? replaced : hostname_2;
 }
-//@ chunk-awy329vy.js:6224-6376 placement
+//@ chunk-9knfmvrf.js:13624-13776 placement
 function isPrivateIpv4(address) {
   let mapped = address.split(".").map(Number);
   return (
@@ -305,14 +736,14 @@ function isPrivateIpv4(address) {
     (mapped[0] === 100 && mapped[1] >= 64 && mapped[1] <= 127)
   );
 }
-//@ chunk-awy329vy.js:6376-6433 placement
+//@ chunk-9knfmvrf.js:13776-13833 placement
 /**
  * 主机是否匹配选择性包含列表（无列表视为全部匹配）。
  */
 function hostMatchesSelectiveList(includeHosts, selective) {
   return includeHosts === undefined || hostMatchesAllowlist(selective, includeHosts.includeHosts);
 }
-//@ chunk-awy329vy.js:6433-6778 placement
+//@ chunk-9knfmvrf.js:13833-14178 placement
 /**
  * 判断主机名是否匹配允许列表（支持 *、*.domain 后缀与段内通配），比较前统一规范化。
  */
@@ -345,7 +776,7 @@ function hostMatchesAllowlist(hostname, includeHosts) {
   }
   return false;
 }
-//@ chunk-awy329vy.js:6778-7525 placement
+//@ chunk-9knfmvrf.js:14178-14925 placement
 function isLocalOrMetadataHost(hostname) {
   let normalizedHost = normalizeHostname(hostname);
   if (
@@ -375,7 +806,7 @@ function isLocalOrMetadataHost(hostname) {
   if (normalizedHost === "192.0.0.192") return "metadata_reserved";
   return null;
 }
-//@ chunk-awy329vy.js:7525-7734 placement
+//@ chunk-9knfmvrf.js:14925-15134 placement
 function classifyPeerAddress(address) {
   if (!address) return "peer_unreadable";
   if (address.includes(":")) return classifyIpv6Peer(address);
@@ -384,7 +815,7 @@ function classifyPeerAddress(address) {
     return "peer_unreadable";
   return classifyIpv4Peer(octets, address);
 }
-//@ chunk-awy329vy.js:7734-8014 placement
+//@ chunk-9knfmvrf.js:15134-15414 placement
 function classifyIpv4Peer(octets, address) {
   if (octets[0] === 0) return "unspecified";
   if (octets[0] === 127) return "loopback";
@@ -394,7 +825,7 @@ function classifyIpv4Peer(octets, address) {
   if (address === "192.0.0.192") return "metadata_reserved";
   return null;
 }
-//@ chunk-awy329vy.js:8014-8581 placement
+//@ chunk-9knfmvrf.js:15414-15981 placement
 /**
  * 分类 IPv6 对端地址：IPv4 映射/兼容/NAT64 地址按 IPv4 规则处理，全局单播返回 null，否则为链路本地、唯一本地或非全局地址。
  */
@@ -429,7 +860,7 @@ function classifyIpv6Peer(address) {
   if (((bytes[0] ?? 0) & 254) === 252) return "unique_local";
   return "v6_non_global";
 }
-//@ chunk-awy329vy.js:8581-9315 placement
+//@ chunk-9knfmvrf.js:15981-16715 placement
 function matchNoProxy(address) {
   let index = address.indexOf("%");
   let parts = (index >= 0 ? address.slice(0, index) : address).toLowerCase().split("::");
@@ -465,7 +896,7 @@ function matchNoProxy(address) {
   let combined = leadingBytes.concat(Array(fillCount).fill(0), trailingBytes);
   return combined.length === 16 ? combined : null;
 }
-//@ chunk-awy329vy.js:9315-9728 layout
+//@ chunk-9knfmvrf.js:16715-17128 layout
 function writeDirectUpstream(clientSocket, conn, chunk) {
   let directUpstream = conn.directUpstream;
   if (!directUpstream) return;
@@ -493,16 +924,16 @@ function writeDirectUpstream(clientSocket, conn, chunk) {
     clientSocket.end();
   }
 }
-//@ chunk-awy329vy.js:9728-9815 layout
+//@ chunk-9knfmvrf.js:17128-17215 layout
 var CONTROL_CHAR_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CONTROL_CHAR_RE;
 var CONTROL_CHAR_RE_G;
-deferInit("chunk-awy329vy.js:9728", () => {
+deferInit("chunk-9knfmvrf.js:17128", () => {
   CONTROL_CHAR_PATTERN = "[\\u0000-\\u001f\\u007f-\\u009f]";
   CONTROL_CHAR_RE = new RegExp(CONTROL_CHAR_PATTERN, "u");
   CONTROL_CHAR_RE_G = new RegExp(CONTROL_CHAR_PATTERN, "gu");
 });
-//@ chunk-awy329vy.js:9815-10097 layout
+//@ chunk-9knfmvrf.js:17215-17497 layout
 function logRelayEventRateLimited(ctx, kind, fields) {
   let budget = ctx.badEventBudgets.get(kind);
   if (!budget) {
@@ -529,7 +960,7 @@ function logRelayEventRateLimited(ctx, kind, fields) {
   budget.suppressed = 0;
   return true;
 }
-//@ chunk-awy329vy.js:10097-10289 layout
+//@ chunk-9knfmvrf.js:17497-17689 layout
 function recordRelayFailure(ctx, kind, detail, authorityOf) {
   let entry = {
     ts: new Date().toISOString(),
@@ -541,23 +972,29 @@ function recordRelayFailure(ctx, kind, detail, authorityOf) {
   if (ctx.failures.length > MAX_RELAY_FAILURES) ctx.failures.shift();
   ctx.onFailure?.(entry);
 }
-//@ chunk-awy329vy.js:10289-10337 layout
+//@ chunk-9knfmvrf.js:17689-17737 layout
 function connectAuthorityOf(conn) {
   return conn.connectAuthority || undefined;
 }
-//@ chunk-awy329vy.js:10337-10481 layout
-function writeHttpResponse(socket, statusCode, statusText, contentType, body) {
+//@ chunk-9knfmvrf.js:17737-17925 layout
+function writeHttpResponse(socket, statusCode, statusText, contentType, body, retryAfterSeconds) {
   socket.write(
     `HTTP/1.1 ${statusCode} ${statusText}\r
 Content-Type: ${contentType}\r
 Content-Length: ${Buffer.byteLength(body)}\r
-Connection: close\r
+` +
+      (retryAfterSeconds === undefined
+        ? ""
+        : `Retry-After: ${retryAfterSeconds}\r
+`) +
+      `Connection: close\r
 \r
-` + body,
+` +
+      body,
   );
 }
-//@ chunk-awy329vy.js:10481-10649 layout
-function writeRelayError(socket, statusCode, statusText, reasonText) {
+//@ chunk-9knfmvrf.js:17925-18098 layout
+function writeRelayError(socket, statusCode, statusText, reasonText, retryAfterSeconds) {
   writeHttpResponse(
     socket,
     statusCode,
@@ -566,9 +1003,10 @@ function writeRelayError(socket, statusCode, statusText, reasonText) {
     `agent-proxy relay: ${reasonText}
 GET /__agentproxy/status on this proxy port shows proxy state and recent failures.
 `,
+    retryAfterSeconds,
   );
 }
-//@ chunk-awy329vy.js:10649-11058 fingerprint (2.1.88 match: newConnState, 0.331)
+//@ chunk-9knfmvrf.js:18098-18507 fingerprint (2.1.88 match: newConnState, 0.331)
 function newConnState(limits, pool, ctx) {
   return {
     connectBuf: Buffer.alloc(0),
@@ -599,12 +1037,12 @@ function newConnState(limits, pool, ctx) {
     ctx,
   };
 }
-//@ chunk-awy329vy.js:11058-11514 layout
+//@ chunk-9knfmvrf.js:18507-18963 layout
 function probeRelayReachability(wsUrl, connectHeaders, openTimeoutMs, openMaxAttempts) {
   let openOnce = () =>
     new Promise((resolve, reject) => {
       let settled = false;
-      let tunnel = openTunnel(wsUrl, connectHeaders);
+      let tunnel = openTunnel_2(wsUrl, connectHeaders);
       let timer = setTimeout(() => {
         if (settled) return;
         settled = true;
@@ -631,21 +1069,21 @@ function probeRelayReachability(wsUrl, connectHeaders, openTimeoutMs, openMaxAtt
     });
   return (async () => {
     let lastError;
-    for (let idx = 0; idx < openMaxAttempts; idx++)
+    for (let j = 0; j < openMaxAttempts; j++)
       try {
         await openOnce();
         return;
       } catch (error) {
         lastError = error;
-        if (idx + 1 < openMaxAttempts) await sleep(Math.min(200 * 2 ** idx, 2000));
+        if (j + 1 < openMaxAttempts) await sleep(Math.min(200 * 2 ** j, 2000));
       }
     throw lastError;
   })();
 }
-//@ chunk-awy329vy.js:11514-11541 layout
+//@ chunk-9knfmvrf.js:18963-18990 layout
 var BACKPRESSURE_PROBE_CHUNK = 1048576;
 var BACKPRESSURE_PROBE_TOTAL = 33554432;
-//@ chunk-awy329vy.js:11541-12600 layout
+//@ chunk-9knfmvrf.js:18990-20049 layout
 function probeWebSocketPauseSupport(openTimeoutMs) {
   return new Promise((resolve, reject) => {
     let handshakeDone = false;
@@ -712,7 +1150,7 @@ Sec-WebSocket-Accept: ${acceptKey}\r
     };
   });
 }
-//@ chunk-awy329vy.js:12600-14378 file-local
+//@ chunk-9knfmvrf.js:20049-22032 file-local
 /**
  * startUpstreamProxyRelay：在 127.0.0.1 随机端口起 HTTP CONNECT 中继，把每个 CONNECT 隧道经 WebSocket（Bearer 会话令牌）转发到 CCR agent-proxy；带启动可达性探测、连接池、上下行背压与 /__agentproxy/status 状态页。
  */
@@ -726,6 +1164,8 @@ async function startUpstreamProxyRelay(opts) {
     ...DEFAULT_RELAY_LIMITS,
     ...opts.limits,
   };
+  let pool = [];
+  let generation = 0;
   let state = {
     statusProvider: opts.statusProvider,
     failures: [],
@@ -738,8 +1178,20 @@ async function startUpstreamProxyRelay(opts) {
     selective: opts.selective,
     upstreamOpened: false,
     badEventBudgets: new Map(),
+    gate: new TunnelGate(
+      {
+        ...RELAY_DEFAULTS,
+        ...opts.tunnelGateLimits,
+      },
+      () => pool.length,
+      (statsWindow) => {
+        generation = nextGeneration(generation, Date.now());
+        for (let report of buildTunnelReports(statsWindow, generation))
+          logEvent("tengu_agent_proxy_open_tunnels", report);
+      },
+    ),
   };
-  let relayListener = startRelayListener(opts.wsUrl, authHeader, limits, state);
+  let relayListener = startRelayListener(opts.wsUrl, authHeader, limits, state, pool);
   function runStartupChecks() {
     probeRelayReachability(opts.wsUrl, authHeader, limits.openTimeoutMs, limits.openMaxAttempts)
       .then(() => {
@@ -755,11 +1207,11 @@ async function startUpstreamProxyRelay(opts) {
           );
           return;
         }
-        state.startupError = (
-          `hosted agent-proxy unreachable at startup: ${error?.message ?? String(error)}. Tunneled CONNECTs get one dial attempt each and return 502 until ` +
-          "one reaches upstream (which clears this) \u2014 inference is " +
-          "force-tunneled, so a session without the hosted proxy is non-functional regardless. Check network egress to the CCR base URL."
-        ).replace(CONTROL_CHAR_RE_G, "?");
+        state.startupError =
+          `hosted agent-proxy unreachable at startup: ${error?.message ?? String(error)}. Tunneled CONNECTs get one dial attempt and return 502 if that fails, until one reaches upstream (which clears this). A dial refused as busy may wait, then return 429 or 503. Inference is force-tunneled, so a session without the hosted proxy is non-functional regardless. Check network egress to the CCR base URL.`.replace(
+            CONTROL_CHAR_RE_G,
+            "?",
+          );
         logForDebugging(`[agent-proxy] ${state.startupError}`, {
           level: "error",
         });
@@ -796,7 +1248,7 @@ async function startUpstreamProxyRelay(opts) {
     runStartupChecks,
   };
 }
-//@ chunk-awy329vy.js:14378-14949 layout
+//@ chunk-9knfmvrf.js:22032-22603 layout
 function finishDownloadQueue(conn) {
   conn.ctx.downloadQueuedBytes -= conn.writeBufBytes;
   conn.writeBufBytes = 0;
@@ -820,18 +1272,18 @@ function finishDownloadQueue(conn) {
   conn.pendingPeakBytes = 0;
   conn.uploadPauses = 0;
 }
-//@ chunk-awy329vy.js:14949-15010 layout
+//@ chunk-9knfmvrf.js:22603-22664 layout
 function webSocketSupportsPause() {
   return "pause" in globalThis.WebSocket.prototype;
 }
-//@ chunk-awy329vy.js:15010-16907 layout
-function startRelayListener(wsUrl, authHeader, limits, ctx) {
-  let pool = [];
+//@ chunk-9knfmvrf.js:22664-24631 layout
+function startRelayListener(wsUrl, authHeader, limits, ctx, pool) {
   let listener = Bun.listen({
     hostname: "127.0.0.1",
     port: 0,
     socket: {
       open(socket) {
+        bumpCounter("relay_connections");
         socket.data = {
           ...newConnState(limits, pool, ctx),
           writeBuf: [],
@@ -856,13 +1308,13 @@ function startRelayListener(wsUrl, authHeader, limits, ctx) {
           );
         }
       },
-      data(sock, data) {
-        let connState = sock.data;
+      data(socket, payload) {
+        let connState = socket.data;
         if (connState.closed) return;
         let client = {
           write: (payload) => {
             let writePayload = typeof payload === "string" ? Buffer.from(payload, "utf8") : payload;
-            let written = connState.writeBuf.length > 0 ? 0 : sock.write(writePayload);
+            let written = connState.writeBuf.length > 0 ? 0 : socket.write(writePayload);
             if (written < 0 || written === writePayload.length) return;
             let chunk = writePayload.subarray(written);
             connState.writeBuf.push(chunk);
@@ -874,13 +1326,14 @@ function startRelayListener(wsUrl, authHeader, limits, ctx) {
               connState.ctx.downloadQueuedPeakBytes = connState.ctx.downloadQueuedBytes;
             if (connState.writeBufBytes > connState.limits.receiveHighWater) pauseWsRead(connState);
           },
+          queuedBytes: () => connState.writeBufBytes,
           end: () => {
             resumeClientRead(connState);
             if (connState.writeBuf.length > 0) {
               connState.endAfterDrain = true;
               return;
             }
-            sock.end();
+            socket.end();
           },
           destroy: () => {
             resumeClientRead(connState);
@@ -888,11 +1341,11 @@ function startRelayListener(wsUrl, authHeader, limits, ctx) {
               connState.destroyAfterDrain = true;
               return;
             }
-            sock.terminate();
+            socket.terminate();
           },
         };
         connState.client = client;
-        handleData(client, connState, data, wsUrl, authHeader);
+        handleClientData(client, connState, payload, wsUrl, authHeader);
       },
       drain(socket) {
         let connState = socket.data;
@@ -940,12 +1393,13 @@ function startRelayListener(wsUrl, authHeader, limits, ctx) {
   return {
     port: listener.port,
     stop: () => {
+      ctx.gate.stop();
       closePool(pool);
       listener.stop(true);
     },
   };
 }
-//@ chunk-awy329vy.js:16907-17502 layout
+//@ chunk-9knfmvrf.js:24631-25226 layout
 async function serveStatusRequest(socket, connState) {
   let [status] = await Promise.all([
     (async () => connState.ctx.statusProvider?.())().catch((error) => {
@@ -981,7 +1435,7 @@ async function serveStatusRequest(socket, connState) {
     socket.destroy();
   }
 }
-//@ chunk-awy329vy.js:17502-18052 layout
+//@ chunk-9knfmvrf.js:25226-25801 layout
 function buildStatusPayload(connState, status) {
   return {
     ...status,
@@ -996,14 +1450,15 @@ function buildStatusPayload(connState, status) {
     uploadPauseSupported: connState.clientRead !== undefined,
     uploadGateEnabled: Number.isFinite(connState.limits.sendPauseAfterPendingBytes),
     bufferedAmountTrusted: connState.ctx.bufferedAmountTrusted ?? null,
+    ...connState.ctx.gate.snapshot(),
   };
 }
-//@ chunk-awy329vy.js:18052-20286 callgraph-fingerprint (2.1.88 match: handleData, 0.163)
+//@ chunk-9knfmvrf.js:25801-28334 layout
 /**
  * 中继收到客户端数据：解析 CONNECT 请求（拒绝 TLS 直连中继端口），选择性中继时直连或隧道，已建立后转发数据。
  */
-function handleData(socket, connState, data, wsUrl, authHeader) {
-  if (!connState.ws && !connState.directUpstream && !connState.directDialing) {
+function handleClientData(socket, connState, data, wsUrl, authHeader) {
+  if (!connState.ws && !connState.tunnel && !connState.directUpstream && !connState.directDialing) {
     connState.connectBuf = Buffer.concat([connState.connectBuf, data]);
     if (connState.connectBuf[0] === 22) {
       if (logRelayEventRateLimited(connState.ctx, "agent_proxy_request_tls_to_relay"))
@@ -1040,9 +1495,9 @@ function handleData(socket, connState, data, wsUrl, authHeader) {
       }
       return;
     }
-    let reqHead = connState.connectBuf.subarray(0, index).toString("utf8");
+    let str = connState.connectBuf.subarray(0, index).toString("utf8");
     let requestLine = firstLineOf(
-      reqHead,
+      str,
       `\r
 `,
     );
@@ -1074,9 +1529,9 @@ function handleData(socket, connState, data, wsUrl, authHeader) {
     }
     connState.connectLine = requestLine;
     connState.connectAuthority = match[1] ?? "";
-    let trailing = connState.connectBuf.subarray(index + 4);
-    if (trailing.length > 0) {
-      bufferPending(socket, connState, Buffer.from(trailing));
+    let chunk = connState.connectBuf.subarray(index + 4);
+    if (chunk.length > 0) {
+      bufferPending(socket, connState, Buffer.from(chunk));
       if (connState.closed) return;
     }
     connState.connectBuf = Buffer.alloc(0);
@@ -1095,7 +1550,17 @@ function handleData(socket, connState, data, wsUrl, authHeader) {
         return;
       }
     }
-    openOrReuseTunnel(socket, connState, wsUrl, authHeader);
+    connState.tunnel = createTunnelState(
+      () => openTunnel(socket, connState, wsUrl, authHeader),
+      (refusal) => refuseTunnel(socket, connState, refusal),
+      () =>
+        connState.paused ||
+        connState.pendingBytes > 0 ||
+        socket.queuedBytes() > 0 ||
+        connState.ws?.isPaused === true ||
+        (connState.ws?.bufferedAmount ?? 0) > 0,
+    );
+    connState.ctx.gate.request(connState.tunnel);
     return;
   }
   if (connState.directUpstream) {
@@ -1108,8 +1573,14 @@ function handleData(socket, connState, data, wsUrl, authHeader) {
   }
   if (!connState.wsOpen || connState.paused) {
     bufferPending(socket, connState, Buffer.from(data));
-    if (!connState.closed && connState.pendingBytes > connState.limits.sendPauseAfterPendingBytes)
-      pauseClientRead(connState);
+    let pauseThreshold =
+      connState.tunnel?.state === "waiting"
+        ? Math.max(
+            connState.limits.sendPauseAfterPendingBytes,
+            connState.ctx.gate.limits.waitingClientBufferBytes,
+          )
+        : connState.limits.sendPauseAfterPendingBytes;
+    if (!connState.closed && connState.pendingBytes > pauseThreshold) pauseClientRead(connState);
     return;
   }
   connState.redialEligible = false;
@@ -1118,7 +1589,7 @@ function handleData(socket, connState, data, wsUrl, authHeader) {
     maybePauseUpload(connState);
   }
 }
-//@ chunk-awy329vy.js:20286-20831 layout
+//@ chunk-9knfmvrf.js:28334-28879 layout
 function bufferPending(socket, connState, chunk) {
   connState.pending.push(chunk);
   connState.pendingBytes += chunk.length;
@@ -1141,7 +1612,7 @@ function bufferPending(socket, connState, chunk) {
     );
   }
 }
-//@ chunk-awy329vy.js:20831-21065 layout
+//@ chunk-9knfmvrf.js:28879-29115 layout
 function abortRequest(socket, connState, kind, detail) {
   logRelayEventRateLimited(connState.ctx, `agent_proxy_request_${kind}`);
   recordRelayFailure(connState.ctx, kind, detail, connectAuthorityOf(connState));
@@ -1159,7 +1630,7 @@ function abortRequest(socket, connState, kind, detail) {
   }
   teardownConn(connState);
 }
-//@ chunk-awy329vy.js:21065-21284 layout
+//@ chunk-9knfmvrf.js:29115-29334 layout
 function maybePauseUpload(conn) {
   if (conn.paused || !conn.ws) return;
   if (conn.ws.bufferedAmount > conn.limits.sendHighWater) {
@@ -1169,7 +1640,7 @@ function maybePauseUpload(conn) {
     conn.drainTimer = setInterval(pollUploadDrain, conn.limits.drainPollMs, conn);
   }
 }
-//@ chunk-awy329vy.js:21284-22113 layout
+//@ chunk-9knfmvrf.js:29334-30163 layout
 function pollUploadDrain(conn) {
   let ws = conn.ws;
   if (!ws || ws.readyState !== WebSocket.OPEN || conn.closed) {
@@ -1209,14 +1680,14 @@ function pollUploadDrain(conn) {
     resumeClientRead(conn);
   }
 }
-//@ chunk-awy329vy.js:22113-22192 layout
+//@ chunk-9knfmvrf.js:30163-30242 layout
 function clearDrainTimer(conn) {
   if (conn.drainTimer) {
     clearInterval(conn.drainTimer);
     conn.drainTimer = undefined;
   }
 }
-//@ chunk-awy329vy.js:22192-22348 layout
+//@ chunk-9knfmvrf.js:30242-30398 layout
 function pauseClientRead(conn) {
   if (conn.readPaused || !conn.clientRead) return;
   conn.readPaused = true;
@@ -1225,42 +1696,87 @@ function pauseClientRead(conn) {
   conn.ctx.uploadPauses++;
   conn.clientRead.pause();
 }
-//@ chunk-awy329vy.js:22348-22468 layout
+//@ chunk-9knfmvrf.js:30398-30518 layout
 function resumeClientRead(conn) {
   if (!conn.readPaused || !conn.clientRead) return;
   conn.readPaused = false;
   conn.ctx.uploadPausedClients--;
   conn.clientRead.resume();
 }
-//@ chunk-awy329vy.js:22468-22572 layout
+//@ chunk-9knfmvrf.js:30518-30622 layout
 function pauseWsRead(conn) {
   let ws = conn.ws;
   if (!ws?.pause || ws.readyState !== WebSocket.OPEN || ws.isPaused === true) return;
   ws.pause();
 }
-//@ chunk-awy329vy.js:22572-22678 fingerprint (2.1.88 match: cleanupConn, 0.655)
+//@ chunk-9knfmvrf.js:30622-30728 fingerprint (2.1.88 match: cleanupConn, 0.656)
 function cleanupConn(st) {
   let ws = st.ws;
   if (!ws?.resume || ws.readyState !== WebSocket.OPEN || ws.isPaused === false) return;
   ws.resume();
 }
-//@ chunk-awy329vy.js:22678-23936 layout
-function openOrReuseTunnel(socket, connState, wsUrl, authHeader) {
+//@ chunk-9knfmvrf.js:30728-30817 layout
+var RETRY_ADVICE = "Run fewer downloads or requests at once, or close idle connections, then retry.";
+//@ chunk-9knfmvrf.js:30817-31979 layout
+function refuseTunnel(socket, connState, refusal) {
+  if (connState.closed) return;
+  connState.closed = true;
+  let { maxBusyTunnels, idleTunnelFactor, tunnelQueueMax } = connState.ctx.gate.limits;
+  let overview = `too many connections are open through this proxy (new ones wait once ${maxBusyTunnels} are busy or ${maxBusyTunnels * idleTunnelFactor} are open)`;
+  let statusCode = 429;
+  let reasonCode;
+  let reasonText;
+  switch (refusal.why) {
+    case "wait_timeout":
+      reasonCode = "tunnel_wait_timeout";
+      reasonText = `${overview}. This connection waited ${Math.round(refusal.waitedMs / 1000)} s for a tunnel. ${RETRY_ADVICE}`;
+      break;
+    case "queue_full":
+      reasonCode = "tunnel_queue_full";
+      statusCode = refusal.refusedStatus ?? 429;
+      reasonText = refusal.refusedStatus
+        ? `the egress proxy recently refused new tunnels with HTTP ${statusCode}, and ${tunnelQueueMax} connections are already waiting. ${statusCode === 429 ? RETRY_ADVICE : "Retry in a few seconds."}`
+        : `${overview}, and ${tunnelQueueMax} more are already waiting. ${RETRY_ADVICE}`;
+      break;
+    case "dial_refused":
+      statusCode = refusal.status;
+      reasonCode = "ws_open_refused";
+      reasonText = `this connection waited ${Math.round(refusal.waitedMs / 1000)} s for a tunnel, and the egress proxy recently refused new ones with HTTP ${statusCode === 429 ? `429 (too many connections or requests). ${RETRY_ADVICE}` : "503 (busy or unavailable). Retry in a few seconds."}`;
+      break;
+  }
+  if (logRelayEventRateLimited(connState.ctx, `agent_proxy_request_${reasonCode}`))
+    logForDebugging(`[agent-proxy] CONNECT refused: ${reasonCode}`, {
+      level: "warn",
+    });
+  writeRelayError(
+    socket,
+    statusCode,
+    statusCode === 429 ? "Too Many Requests" : "Service Unavailable",
+    reasonText,
+    5,
+  );
+  socket.end();
+  recordRelayFailure(connState.ctx, reasonCode, reasonText, connectAuthorityOf(connState));
+  teardownConn(connState);
+}
+//@ chunk-9knfmvrf.js:31979-33271 layout
+function openTunnel(socket, connState, wsUrl, authHeader) {
   let pooled = takePooledTunnel(connState);
   if (pooled) {
     connState.ws = pooled.ws;
     connState.wsOpen = true;
     connState.pinger = pooled.pinger;
     connState.wsMeta = pooled.meta;
+    connState.ctx.gate.tookPooled(connState.tunnel);
     let sliced = connState.pending.slice();
     connState.redialEligible = true;
-    let fellThrough = false;
-    let onPooledFailure = (reason) => {
-      if (fellThrough || connState.closed) return;
-      fellThrough = true;
+    let settled = false;
+    let onPooledFailure = (errorText) => {
+      if (settled || connState.closed) return;
+      settled = true;
       connState.redialEligible = false;
       logForDebugging(
-        `[agent-proxy] pooled ws failed before response (${reason}); falling through to fresh dial`,
+        `[agent-proxy] pooled ws failed before response (${errorText}); falling through to fresh dial`,
       );
       if (connState.openTimer) {
         clearTimeout(connState.openTimer);
@@ -1281,7 +1797,7 @@ function openOrReuseTunnel(socket, connState, wsUrl, authHeader) {
       clearDrainTimer(connState);
       connState.paused = false;
       connState.pending = [...sliced, ...connState.pending];
-      connState.pendingBytes = connState.pending.reduce((acc, chunk) => acc + chunk.length, 0);
+      connState.pendingBytes = connState.pending.reduce((acc, wsUrl) => acc + wsUrl.length, 0);
       if (connState.pendingBytes > connState.pendingPeakBytes)
         connState.pendingPeakBytes = connState.pendingBytes;
       connState.uploadBytes = 0;
@@ -1318,7 +1834,7 @@ function openOrReuseTunnel(socket, connState, wsUrl, authHeader) {
   }
   dialTunnel(socket, connState, wsUrl, authHeader);
 }
-//@ chunk-awy329vy.js:23936-26149 layout
+//@ chunk-9knfmvrf.js:33271-35490 layout
 /**
  * 选择性中继：对允许直连的目标直接 Bun.connect，策略拒绝回 403，超时回 504。
  */
@@ -1487,7 +2003,7 @@ function dialDirectUpstream(socket, connState, hostname, port) {
     );
   });
 }
-//@ chunk-awy329vy.js:26149-26448 layout
+//@ chunk-9knfmvrf.js:35490-35789 layout
 function takePooledTunnel(value) {
   let { pool, limits } = value;
   while (pool.length > 0) {
@@ -1510,7 +2026,7 @@ function takePooledTunnel(value) {
   }
   return;
 }
-//@ chunk-awy329vy.js:26448-26863 layout
+//@ chunk-9knfmvrf.js:35789-36233 layout
 function returnTunnelToPool(value) {
   let { ws, wsMeta } = value;
   if (
@@ -1541,9 +2057,10 @@ function returnTunnelToPool(value) {
   value.ws = undefined;
   value.pinger = undefined;
   value.wsMeta = undefined;
+  value.ctx.gate.release(value.tunnel);
   return true;
 }
-//@ chunk-awy329vy.js:26863-26962 layout
+//@ chunk-9knfmvrf.js:36233-36332 layout
 function removeFromPool(pool, value) {
   let index = pool.findIndex((bindingValue) => bindingValue.ws === value);
   if (index >= 0) {
@@ -1551,7 +2068,7 @@ function removeFromPool(pool, value) {
     pool.splice(index, 1);
   }
 }
-//@ chunk-awy329vy.js:26962-27071 layout
+//@ chunk-9knfmvrf.js:36332-36441 file-local
 function closePool(value) {
   for (let bindingValue of value) {
     clearInterval(bindingValue.pinger);
@@ -1562,7 +2079,7 @@ function closePool(value) {
   }
   value.length = 0;
 }
-//@ chunk-awy329vy.js:27071-28900 layout
+//@ chunk-9knfmvrf.js:36441-38362 layout
 function attachTunnelHandlers(socket, connState, ws, onPooledFailure) {
   ws.onmessage = (event) => {
     let bytes =
@@ -1580,7 +2097,10 @@ function attachTunnelHandlers(socket, connState, ws, onPooledFailure) {
         failV2Negotiation(socket, connState, "server sent data before HELLO_ACK");
         return;
       }
-      if (connState.localClosed) return;
+      if (connState.localClosed) {
+        connState.ctx.gate.touch(connState.tunnel);
+        return;
+      }
       if (!connState.established) {
         connState.established = true;
         let match = Buffer.from(tunnelFrame.data.subarray(0, 16))
@@ -1607,6 +2127,8 @@ function attachTunnelHandlers(socket, connState, ws, onPooledFailure) {
         logFeatureOk("agent_proxy_request");
       }
       connState.downloadBytes += tunnelFrame.data.length;
+      bumpCounter("relay_bytes", tunnelFrame.data.length);
+      connState.ctx.gate.touch(connState.tunnel);
       socket.write(tunnelFrame.data);
     }
   };
@@ -1677,7 +2199,7 @@ function attachTunnelHandlers(socket, connState, ws, onPooledFailure) {
     teardownConn(connState);
   };
 }
-//@ chunk-awy329vy.js:28900-29438 layout
+//@ chunk-9knfmvrf.js:38362-38900 layout
 function onTunnelClosedMidExchange(socket, connState, reasonText, code) {
   if (connState.connectRejected) {
     socket.destroy();
@@ -1702,7 +2224,7 @@ function onTunnelClosedMidExchange(socket, connState, reasonText, code) {
   );
   socket.destroy();
 }
-//@ chunk-awy329vy.js:29438-29848 layout
+//@ chunk-9knfmvrf.js:38900-39310 layout
 function handleControlFrame(socket, connState, ws, tunnelFrame) {
   if (tunnelFrame.control === FRAME_HELLO_ACK) {
     if (connState.wsMeta && !connState.wsMeta.v2) {
@@ -1732,7 +2254,7 @@ function handleControlFrame(socket, connState, ws, tunnelFrame) {
     return;
   }
 }
-//@ chunk-awy329vy.js:29848-30283 layout
+//@ chunk-9knfmvrf.js:39310-39747 layout
 function handleFin(socket, connState, ws) {
   if (connState.finSeen) return;
   if (connState.closed) {
@@ -1744,6 +2266,7 @@ function handleFin(socket, connState, ws) {
     return;
   }
   connState.finSeen = true;
+  ws.send(encodeFrame(FRAME_FIN));
   if (connState.finCloseTimer) {
     clearTimeout(connState.finCloseTimer);
     connState.finCloseTimer = undefined;
@@ -1758,12 +2281,11 @@ function handleFin(socket, connState, ws) {
   connState.paused = false;
   connState.pending = [];
   connState.pendingBytes = 0;
-  ws.send(encodeFrame(FRAME_FIN));
   let returnedToPool = returnTunnelToPool(connState);
   connState.closed = true;
   if (!returnedToPool) teardownConn(connState);
 }
-//@ chunk-awy329vy.js:30283-30521 layout
+//@ chunk-9knfmvrf.js:39747-39985 layout
 function sendConnectPreamble(connState, ws, header) {
   let head = `${connState.connectLine}\r
 Proxy-Authorization: ${header}\r
@@ -1777,15 +2299,16 @@ X-Agent-Proxy-Client-Process: ${connState.clientProcess}\r
   resumeClientRead(connState);
   maybePauseUpload(connState);
 }
-//@ chunk-awy329vy.js:30521-30721 fingerprint (2.1.88 match: openTunnel, 0.556)
+//@ chunk-9knfmvrf.js:39985-40208 fingerprint (2.1.88 match: openTunnel, 0.525)
 /**
  * 打开到 agent-proxy 的 WebSocket（application/proto，Authorization: Bearer）。
  */
-function openTunnel(wsUrl, authHeader) {
+function openTunnel_2(wsUrl, authHeader) {
   let headers = {
     "Content-Type": "application/proto",
     Authorization: authHeader.wsHeader(),
   };
+  bumpCounter("relay_dials");
   let ws = new globalThis.WebSocket(wsUrl, {
     headers,
     proxy: getWebSocketProxyUrl(wsUrl),
@@ -1794,17 +2317,18 @@ function openTunnel(wsUrl, authHeader) {
   ws.binaryType = "arraybuffer";
   return ws;
 }
-//@ chunk-awy329vy.js:30721-32439 layout
+//@ chunk-9knfmvrf.js:40208-42405 layout
 /**
  * 为一个连接拨号新隧道，失败按指数退避重试（openMaxAttempts），耗尽后回 502。
  */
 function dialTunnel(socket, connState, wsUrl, authHeader) {
   if (connState.wsAttempt === 0) connState.probeErrorAtDial = connState.ctx.startupError;
-  let tunnel = openTunnel(wsUrl, authHeader);
+  connState.ctx.gate.dialing(connState.tunnel);
+  let tunnel = openTunnel_2(wsUrl, authHeader);
   connState.ws = tunnel;
   connState.wsOpen = false;
   connState.wsMeta = undefined;
-  let detachHandlers = () => {
+  let closeWebSocket = () => {
     tunnel.onopen = tunnel.onmessage = tunnel.onerror = tunnel.onclose = null;
     try {
       tunnel.close();
@@ -1816,9 +2340,23 @@ function dialTunnel(socket, connState, wsUrl, authHeader) {
       clearTimeout(connState.openTimer);
       connState.openTimer = undefined;
     }
-    detachHandlers();
-    connState.wsAttempt++;
+    closeWebSocket();
     let probeErrorAtDial = connState.probeErrorAtDial;
+    let statusText = reasonText.match(/(?:Expected 101 status code|Proxy connection failed): (\d{3})\b/)?.[1];
+    let refusedStatus = statusText === "429" ? 429 : statusText === "503" ? 503 : undefined;
+    if (refusedStatus !== undefined) {
+      connState.ctx.gate.noteUpgradeRefused(refusedStatus);
+      if (connState.ctx.gate.enabled && connState.tunnel) {
+        logForDebugging(`[agent-proxy] ws open refused with ${refusedStatus}; waiting to dial again`);
+        connState.ws = undefined;
+        connState.failOrRetry = undefined;
+        connState.ctx.gate.dialRefused(connState.tunnel, refusedStatus);
+        if (connState.pendingBytes <= connState.ctx.gate.limits.waitingClientBufferBytes)
+          resumeClientRead(connState);
+        return;
+      }
+    }
+    connState.wsAttempt++;
     let openMaxAttempts = probeErrorAtDial ? 1 : connState.limits.openMaxAttempts;
     if (connState.wsAttempt < openMaxAttempts) {
       let backoffMs = connState.limits.openBackoffBaseMs * 2 ** (connState.wsAttempt - 1);
@@ -1874,6 +2412,7 @@ function dialTunnel(socket, connState, wsUrl, authHeader) {
       failV2Negotiation(socket, connState, `no HELLO_ACK within ${connState.limits.openTimeoutMs}ms`);
     };
     connState.openTimer = setTimeout(fireHelloAckDeadline, connState.limits.openTimeoutMs, connState);
+    connState.ctx.gate.dialOpened(connState.tunnel);
   };
   tunnel.onerror = (event) => {
     let reasonText = "message" in event ? String(event.message) : "websocket error";
@@ -1882,33 +2421,33 @@ function dialTunnel(socket, connState, wsUrl, authHeader) {
   };
   tunnel.onclose = () => onOpenFailure("closed before open");
 }
-//@ chunk-awy329vy.js:32439-32517 fingerprint (2.1.88 match: sendKeepalive, 1)
+//@ chunk-9knfmvrf.js:42405-42483 fingerprint (2.1.88 match: sendKeepalive, 1)
 function sendKeepalive(ws) {
   if (ws.readyState === WebSocket.OPEN) ws.send(encodeChunk(new Uint8Array(0)));
 }
-//@ chunk-awy329vy.js:32517-32652 layout
+//@ chunk-9knfmvrf.js:42483-42618 layout
 function onOpenTimeout(connState) {
   if (connState.ws && connState.ws.readyState === WebSocket.CONNECTING) {
     logForDebugging("[agent-proxy] ws open timeout");
     connState.failOrRetry?.("handshake timeout");
   }
 }
-//@ chunk-awy329vy.js:32652-32790 layout
+//@ chunk-9knfmvrf.js:42618-42756 layout
 function releaseClientProcessWait(connState) {
   if (connState.clientProcessWait === undefined) return;
   clearTimeout(connState.clientProcessWait);
   connState.clientProcessWait = undefined;
   connState.clientRead?.resume();
 }
-//@ chunk-awy329vy.js:32790-32826 layout
+//@ chunk-9knfmvrf.js:42756-42792 layout
 function firePooledDeadline(connState) {
   connState.pooledDeadline?.();
 }
-//@ chunk-awy329vy.js:32826-32864 layout
+//@ chunk-9knfmvrf.js:42792-42830 layout
 function fireHelloAckDeadline(connState) {
   connState.helloAckDeadline?.();
 }
-//@ chunk-awy329vy.js:32864-33274 layout
+//@ chunk-9knfmvrf.js:42830-43242 layout
 function failV2Negotiation(socket, connState, reasonText) {
   if (connState.closed) return;
   connState.closed = true;
@@ -1931,7 +2470,7 @@ function failV2Negotiation(socket, connState, reasonText) {
   );
   teardownConn(connState);
 }
-//@ chunk-awy329vy.js:33274-33560 layout
+//@ chunk-9knfmvrf.js:43242-43560 layout
 function beginLocalClose(connState) {
   if (
     !connState.wsMeta?.v2 ||
@@ -1948,24 +2487,27 @@ function beginLocalClose(connState) {
   }
   connState.pooledDeadline = undefined;
   connState.finCloseTimer = setTimeout(onFinGraceElapsed, connState.limits.finGraceMs, connState);
+  connState.ctx.gate.clientLeft(connState.tunnel);
   return true;
 }
-//@ chunk-awy329vy.js:33560-33623 layout
+//@ chunk-9knfmvrf.js:43560-43624 layout
 function onFinGraceElapsed(connState) {
   connState.finCloseTimer = undefined;
   if (connState.finSeen) return;
   teardownConn(connState);
 }
-//@ chunk-awy329vy.js:33623-33776 fingerprint (2.1.88 match: forwardToWs, 0.85)
+//@ chunk-9knfmvrf.js:43624-43832 fingerprint (2.1.88 match: forwardToWs, 0.481)
 function forwardToWs(connState, ws, chunk) {
   if (ws.readyState !== WebSocket.OPEN) return;
   connState.uploadBytes += chunk.length;
+  bumpCounter("relay_bytes", chunk.length);
+  connState.ctx.gate.touch(connState.tunnel);
   for (let off = 0; off < chunk.length; off += MAX_CHUNK_BYTES) {
     let slice = chunk.subarray(off, off + MAX_CHUNK_BYTES);
     ws.send(encodeChunk(slice));
   }
 }
-//@ chunk-awy329vy.js:33776-34284 affinity
+//@ chunk-9knfmvrf.js:43832-44743 affinity
 function teardownConn(connState) {
   if (!connState) return;
   if (connState.directUpstream) {
@@ -1999,8 +2541,24 @@ function teardownConn(connState) {
       connState.ws.close();
     } catch {}
   connState.ws = undefined;
+  let releaseResult = connState.ctx.gate.release(connState.tunnel);
+  if (
+    releaseResult &&
+    releaseResult.waitedMs >= connState.ctx.gate.limits.abandonedNoteAfterMs &&
+    !connState.uploadAborted
+  ) {
+    let abandonedText = `the client closed after waiting ${Math.round(releaseResult.waitedMs / 1000)} s for a tunnel`;
+    recordRelayFailure(
+      connState.ctx,
+      releaseResult.refusedStatus ? "ws_open_refused" : "tunnel_wait_abandoned",
+      releaseResult.refusedStatus
+        ? `${abandonedText}, after the egress proxy refused new ones with HTTP ${releaseResult.refusedStatus}`
+        : `${abandonedText}, with too many connections busy`,
+      connectAuthorityOf(connState),
+    );
+  }
 }
-//@ chunk-3tvkk9nn.js:999-1255 fingerprint (2.1.88 match: startNodeRelay, 0.597)
+//@ chunk-572btqwd.js:999-1255 fingerprint (2.1.88 match: startNodeRelay, 0.598)
 async function startNodeRelay(port) {
   try {
     return await new Promise((resolve, reject) => {
@@ -2019,19 +2577,19 @@ async function startNodeRelay(port) {
   }
 }
 export {
-  setProxyStatusUrl,
-  startUpstreamProxyRelay,
-  recordProxyRelayEvent,
-  notePolicyRefusedHost,
-  hostMatchesSelectiveList,
-  shouldBypassProxy,
+  lastLineOf,
   startNodeRelay,
-  startBunRelay,
-  findSocketOwnerPid,
   getProxyRelayState,
   PROXY_RELAY_ERROR_MESSAGES,
   MAX_PROXY_POLICY_REFUSED_HOSTS,
   PROXY_RELAY_ERRORS,
   PROXY_STATUS_URL_SUFFIX,
-  decodeChunk,
+  shouldBypassProxy,
+  setProxyStatusUrl,
+  startUpstreamProxyRelay,
+  recordProxyRelayEvent,
+  notePolicyRefusedHost,
+  hostMatchesSelectiveList,
+  findSocketOwnerPid,
+  startBunRelay,
 };

@@ -3,9 +3,9 @@
  *
  * 多代理（swarm）横幅：显示 "View teammates: tmux -L …" 与当前查看的队友颜色。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/useSwarmBanner.ts
- * pieces: chunk-0e8j1zzj.js (5), chunk-7s4yj2r0.js (1)
+ * pieces: chunk-8prszgkd.js (5), chunk-ya7t8whx.js (1)
  * attribution: fingerprint 2, layout 3, placement 1
  */
 import {
@@ -27,7 +27,7 @@ import {
 import { useAppState, useAppStoreDirect } from "../../state/AppState.js";
 import { useMemo } from "../../../vendor/react/cjs/react.production.js";
 
-//@ chunk-7s4yj2r0.js:227-317 placement
+//@ chunk-ya7t8whx.js:227-317 placement
 /**
  * 函数 swarmBannerName（远端会话名或独立代理名）；位于「new in 2.1.316 (2.1.88 has no file at this path)」模块。
  */
@@ -35,7 +35,7 @@ function swarmBannerName(props) {
   if (getTeamName()) return;
   return props.remoteSessionName ?? props.standaloneAgentContext?.name;
 }
-//@ chunk-0e8j1zzj.js:13825-14564 fingerprint (2.1.88 match: useSwarmBanner, 0.733)
+//@ chunk-8prszgkd.js:14092-14812 fingerprint (2.1.88 match: useSwarmBanner, 0.716)
 function useSwarmBanner({ state, teamContext, insideTmux }) {
   if (isTeammate() && !isInProcessTeammate()) {
     let agentName = getAgentName();
@@ -43,7 +43,7 @@ function useSwarmBanner({ state, teamContext, insideTmux }) {
       return {
         agent: {
           text: `@${agentName}`,
-          bgColor: toThemeColor(teamContext?.selfAgentColor ?? getTeammateColor()),
+          bgColor: toThemeColor(getTeammateColor()),
         },
         tmuxHint: null,
       };
@@ -92,7 +92,7 @@ function useSwarmBanner({ state, teamContext, insideTmux }) {
     tmuxHint: null,
   };
 }
-//@ chunk-0e8j1zzj.js:14564-14800 layout
+//@ chunk-8prszgkd.js:14812-15048 layout
 /**
  * 读取 AppState 计算提示框上方的会话横幅（会话标题或代理名与颜色）。
  */
@@ -111,7 +111,7 @@ function useSessionBanner(props) {
     }),
   );
 }
-//@ chunk-0e8j1zzj.js:14800-15217 layout
+//@ chunk-8prszgkd.js:15048-15465 layout
 /**
  * 计算会话横幅：有会话名或独立代理颜色时显示标题，否则显示代理名，颜色取用户覆盖或代理定义的颜色。
  */
@@ -142,7 +142,7 @@ function computeSessionBanner({ state, standaloneAgentContext, remoteSessionName
     };
   return null;
 }
-//@ chunk-0e8j1zzj.js:15217-15326 layout
+//@ chunk-8prszgkd.js:15465-15574 layout
 function useStableBanner(banner) {
   let text = banner?.text;
   let bgColor = banner?.bgColor;
@@ -157,7 +157,7 @@ function useStableBanner(banner) {
     [text, bgColor],
   );
 }
-//@ chunk-0e8j1zzj.js:15326-15402 fingerprint (2.1.88 match: toThemeColor, 1)
+//@ chunk-8prszgkd.js:15574-15650 fingerprint (2.1.88 match: toThemeColor, 1)
 function toThemeColor(colorName, fallback = "cyan_FOR_SUBAGENTS_ONLY") {
   return colorName && AGENT_COLOR_NAMES.includes(colorName)
     ? AGENT_COLOR_TO_THEME_COLOR[colorName]

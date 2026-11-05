@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：home seed 发送记录的读写
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fznepy1n.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yecppxzh.js (8)
  * attribution: placement 8
  */
 import { createHash } from "crypto";
@@ -22,7 +22,7 @@ import { getGlobalConfig, saveGlobalConfigDurably } from "../../utils/config.js"
 import { logEvent } from "../analytics/index.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-fznepy1n.js:450-564 placement
+//@ chunk-yecppxzh.js:450-564 placement
 var MAX_SEED_RECORDS = 64;
 var seedRecordSchema = DoctorLazy(() =>
   objectSchema({
@@ -33,30 +33,30 @@ var seedRecordSchema = DoctorLazy(() =>
     tried: literal(true).optional(),
   }),
 );
-//@ chunk-fznepy1n.js:564-642 placement
+//@ chunk-yecppxzh.js:564-642 placement
 function shortSha256(value) {
   return createHash("sha256").update(value, "utf8").digest("hex").slice(0, 32);
 }
-//@ chunk-fznepy1n.js:642-669 placement
+//@ chunk-yecppxzh.js:642-669 placement
 /**
  * 取会话 id 主体作为记录键。
  */
 function homeSeedRecordKey(sessionId) {
   return sessionIdBody(sessionId);
 }
-//@ chunk-fznepy1n.js:669-802 placement
+//@ chunk-yecppxzh.js:669-802 placement
 function readHomeSeedRecord(sessionId) {
   let record = getGlobalConfig().remoteHomeSettingsSent?.[homeSeedRecordKey(sessionId)];
   if (record === undefined) return;
   let reason = seedRecordSchema().safeParse(record);
   return reason.success ? reason.data : undefined;
 }
-//@ chunk-fznepy1n.js:802-863 placement
+//@ chunk-yecppxzh.js:802-863 placement
 function hasUntriedHomeSeed(sessionId) {
   let homeSeedRecord = readHomeSeedRecord(sessionId);
   return homeSeedRecord !== undefined && homeSeedRecord.tried !== true;
 }
-//@ chunk-fznepy1n.js:863-1150 placement
+//@ chunk-yecppxzh.js:863-1150 placement
 async function writeHomeSeedRecord(sessionId, record, storageV5) {
   let key = homeSeedRecordKey(sessionId);
   if (
@@ -77,7 +77,7 @@ async function writeHomeSeedRecord(sessionId, record, storageV5) {
     });
   }
 }
-//@ chunk-fznepy1n.js:1150-1382 placement
+//@ chunk-yecppxzh.js:1150-1382 placement
 function mergeSeedRecord(prior, next) {
   let existing = seedRecordSchema().safeParse(prior).data;
   let { tried, ...rest } = next;
@@ -91,7 +91,7 @@ function mergeSeedRecord(prior, next) {
     allow: next.allow.filter((allow) => next.etag || !existing || existing.allow.includes(allow)),
   };
 }
-//@ chunk-fznepy1n.js:1382-1597 placement
+//@ chunk-yecppxzh.js:1382-1597 placement
 function pruneSeedRecords(records) {
   let flattened = Object.entries(records).flatMap(([key, value]) => {
     let parsed = seedRecordSchema().safeParse(value);

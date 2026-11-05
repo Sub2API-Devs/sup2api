@@ -3,14 +3,14 @@
  *
  * 设置文件变更后刷新 AppState 中依赖设置的部分（权限上下文等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/applySettingsChange.ts
- * pieces: chunk-pc1rmcr2.js (2)
+ * pieces: chunk-01b7fqej.js (2)
  * attribution: placement 1, fingerprint 1
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { createSignal } from "../signal.js";
-import { getInitialSettings_2 } from "./settings.js";
+import { getInitialSettings } from "./settings.js";
 import { logForDebugging } from "../debug.js";
 import { resetLocalSettingsGitTrackedCache } from "../config.js";
 import {
@@ -32,23 +32,24 @@ import {
 } from "../permissions/readBlock.js";
 import { withWriteBlockOn } from "../permissions/permissionSetup.js";
 import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { holdWorkingDirectoriesAsGiven } from "../permissions/filesystem.js";
 import { isAwaySummaryEnabled } from "../../services/awaySummary.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-pc1rmcr2.js:1032-1057 placement
+//@ chunk-01b7fqej.js:1069-1094 placement
 /**
  * settingsChangedSignal：设置变更信号。
  */
 var settingsChangedSignal; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-pc1rmcr2.js:1032", () => {
+deferInit("chunk-01b7fqej.js:1069", () => {
   settingsChangedSignal = new SessionRootSlot(() => createSignal());
 });
-//@ chunk-pc1rmcr2.js:1057-1784 fingerprint (2.1.88 match: applySettingsChange, 0.366)
+//@ chunk-01b7fqej.js:1094-1827 fingerprint (2.1.88 match: applySettingsChange, 0.366)
 /**
  * 设置变更后刷新 AppState 中依赖设置的部分（权限上下文、模型等），日志 Settings changed from <source>, updating app state。
  */
 function applySettingsChange(session, source, setState, provenance, options) {
-  let newSettings = getInitialSettings_2();
+  let newSettings = getInitialSettings();
   logForDebugging(`Settings changed from ${source}, updating app state`);
   resetLocalSettingsGitTrackedCache();
   let updatedRules = loadAllPermissionRulesFromDisk();
@@ -86,6 +87,7 @@ function applySettingsChange(session, source, setState, provenance, options) {
         ...newContext,
         readBlockExemptPaths: blockExemptPathsInSettings,
       };
+    holdWorkingDirectoriesAsGiven();
     let awayEnabled = isAwaySummaryEnabled();
     return {
       ...prev,

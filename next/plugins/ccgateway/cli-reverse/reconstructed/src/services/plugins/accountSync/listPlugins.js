@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：账号插件同步：列出账号插件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f9asxqh1.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q1gbn2mn.js (22)
  * attribution: placement 22
  */
 import { Transform } from "stream";
@@ -34,7 +34,7 @@ import { isRemoteOrCowork } from "../../../skills/skillSources.js";
 import { ccrSessionIdForRefs } from "../../../utils/claudeAiSync/sessionRefsGate.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-f9asxqh1.js:11800-12359 placement
+//@ chunk-q1gbn2mn.js:11916-12475 placement
 /**
  * 把账号技能/插件列表请求的失败响应归类：未认证、被拦、服务端错误信封（带错误类型与状态码）或格式不符。
  */
@@ -75,7 +75,7 @@ function listErrorResult(kind, response) {
     kind: "malformed",
   };
 }
-//@ chunk-f9asxqh1.js:12359-12474 placement
+//@ chunk-q1gbn2mn.js:12475-12590 placement
 /**
  * 把列表请求的网络异常转换为失败结果：错误类别、消息与可上报的 errno。
  */
@@ -91,7 +91,7 @@ function transportErrorResult(error) {
     }),
   };
 }
-//@ chunk-f9asxqh1.js:12633-12749 placement
+//@ chunk-q1gbn2mn.js:12749-12865 placement
 /**
  * 生成列表失败的遥测字段：失败类别，以及可选的状态码与 errno。
  */
@@ -106,7 +106,7 @@ function listErrorTelemetry(error) {
     }),
   };
 }
-//@ chunk-f9asxqh1.js:12840-13006 placement
+//@ chunk-q1gbn2mn.js:12956-13122 placement
 /**
  * 从响应体前 2KB 里解析错误信封的错误类型，不是 JSON 时返回 non_json_body。
  */
@@ -117,7 +117,7 @@ function errorTypeFromBody(body) {
   } catch {}
   return "non_json_body";
 }
-//@ chunk-f9asxqh1.js:15123-15890 placement
+//@ chunk-q1gbn2mn.js:16802-17569 placement
 /**
  * 把服务端插件条目转换为本地行：id、名称、版本、更新时间、市场名、安装偏好、市场类型、presents_as；需要时附带校验过的组件列表与 plugin.json 名称。
  */
@@ -168,7 +168,7 @@ function toAccountPluginRow(raw, { components = false } = {}) {
       }),
   };
 }
-//@ chunk-f9asxqh1.js:15990-16091 placement
+//@ chunk-q1gbn2mn.js:17669-17770 placement
 /**
  * 账号插件列表的指纹：按 [pluginId, name, version, updatedAt] 序列化每行后排序拼接，用于判断列表是否变化。
  */
@@ -178,40 +178,48 @@ function pluginListFingerprint(plugins) {
     .toSorted().join(`
 `);
 }
-//@ chunk-f9asxqh1.js:16091-16137 placement
+//@ chunk-q1gbn2mn.js:17770-17817 placement
 /**
  * 插件 zip 下载的字节上限。
  */
-var LIST_PLUGINS_TIMEOUT_MS = 1e4;
-var DOWNLOAD_STALL_MS = 60000;
-var RETRY_DELAY_MS = 500;
-var LIST_PAGE_SIZE = 100;
-var MAX_LIST_PAGES = 20;
-var MAX_DOWNLOAD_BYTES = MAX_SPILL_BYTES;
-//@ chunk-f9asxqh1.js:16137-16207 placement
+var LIST_PLUGINS_TIMEOUT_MS; // deferred: uses MAX_SPILL_BYTES (../../../utils/plugins/commandSource.js) of its import cycle while loading; runs once the cycle is complete
+var DOWNLOAD_STALL_MS;
+var RETRY_DELAY_MS;
+var LIST_PAGE_SIZE;
+var MAX_LIST_PAGES;
+var MAX_DOWNLOAD_BYTES;
+deferInit("chunk-q1gbn2mn.js:17770", () => {
+  LIST_PLUGINS_TIMEOUT_MS = 1e4;
+  DOWNLOAD_STALL_MS = 60000;
+  RETRY_DELAY_MS = 500;
+  LIST_PAGE_SIZE = 100;
+  MAX_LIST_PAGES = 20;
+  MAX_DOWNLOAD_BYTES = MAX_SPILL_BYTES;
+});
+//@ chunk-q1gbn2mn.js:17817-17887 placement
 /**
  * 取下载停滞超时（环境变量可覆盖）。
  */
 function downloadStallMs() {
   return env.CLAUDE_CODE_SYNC_PLUGINS_DOWNLOAD_STALL_MS ?? DOWNLOAD_STALL_MS;
 }
-//@ chunk-f9asxqh1.js:16207-16302 placement
+//@ chunk-q1gbn2mn.js:17887-17982 placement
 /**
  * 账号插件列表的接口路径。
  */
 var LIST_PLUGINS_PATH =
   "/api/oauth/organizations/:orgUUID/plugins/list-plugins?enabled_only=true&compact=true";
-//@ chunk-f9asxqh1.js:16302-16452 placement
+//@ chunk-q1gbn2mn.js:17982-18132 placement
 var COMPONENT_DETAILS_QUERY; // deferred: uses pageUrl of its import cycle while loading; runs once the cycle is complete
 var CONVERTED_SKILLS_QUERY;
 var FIRST_PAGE_URL;
-deferInit("chunk-f9asxqh1.js:16302", () => {
+deferInit("chunk-q1gbn2mn.js:17982", () => {
   COMPONENT_DETAILS_QUERY =
     "&include_component_details=true&include_hooks=true&include_plugin_json_names=true";
   CONVERTED_SKILLS_QUERY = "&wrapped_skills_as_plugins=true";
   FIRST_PAGE_URL = pageUrl(`${LIST_PLUGINS_PATH}${COMPONENT_DETAILS_QUERY}`, 0);
 });
-//@ chunk-f9asxqh1.js:16452-16529 placement
+//@ chunk-q1gbn2mn.js:18132-18209 placement
 /**
  * 失败后等待一次再重试。
  */
@@ -221,7 +229,7 @@ async function retryOnce(attempt) {
   await sleep(RETRY_DELAY_MS);
   return attempt();
 }
-//@ chunk-f9asxqh1.js:16529-17006 placement
+//@ chunk-q1gbn2mn.js:18209-18686 placement
 /**
  * 列出账号（claude.ai 组织）里的插件：分页拉取，可选附带组件详情与钩子、把技能当插件返回；结果中 required 插件排前，策略允许时解析各插件的同步钩子。
  */
@@ -256,7 +264,7 @@ async function listAccountPlugins(options = {}) {
       }
     : pluginRowsWithRetry;
 }
-//@ chunk-f9asxqh1.js:17006-17353 placement
+//@ chunk-q1gbn2mn.js:18686-19033 placement
 /**
  * 列出账号插件：缺少 user:plugins 作用域时直接返回，失败（非 403）时等待后重试一次。
  */
@@ -279,7 +287,7 @@ async function fetchPluginRowsWithRetry(query, options) {
       }
     : pluginPages_2;
 }
-//@ chunk-f9asxqh1.js:17353-18185 placement
+//@ chunk-q1gbn2mn.js:19033-19868 placement
 /**
  * 逐页 GET 账号插件列表直到没有更多，合并 degraded 与 converted_skills_as_plugins 标志，超过页数上限报 page_cap；错误交给统一分类。
  */
@@ -337,21 +345,21 @@ async function fetchPluginPages(query, options) {
     return transportErrorResult(error);
   }
 }
-//@ chunk-f9asxqh1.js:18185-18318 placement
+//@ chunk-q1gbn2mn.js:19868-20001 placement
 function isPluginHooksSyncBlocked() {
   let denyKind = policyDenyKind("allow_account_plugins_sync");
   let isTransientDeny = denyKind === "cache_miss" || denyKind === "route_missing";
   refreshSyncVeto();
   return getPluginsSyncVetoed() || (denyKind !== null && !(isTransientDeny && isRemoteOrCowork()));
 }
-//@ chunk-f9asxqh1.js:18318-18387 placement
+//@ chunk-q1gbn2mn.js:20001-20070 placement
 /**
  * 判断该插件行是否仅以降级形式提供技能。
  */
 function hasDegradedSkills(plugin) {
   return plugin.enabled !== true || plugin.skills_display_degraded === true;
 }
-//@ chunk-f9asxqh1.js:18387-18684 placement
+//@ chunk-q1gbn2mn.js:20070-20367 placement
 /**
  * 生成账号插件 zip 的下载路径（可带版本；Tag 场景附带默认市场参数）。
  */
@@ -363,14 +371,14 @@ function pluginDownloadPath(pluginId, version) {
   let queryString = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
   return `/api/oauth/organizations/:orgUUID/plugins/${encodeURIComponent(pluginId)}/download${queryString}`;
 }
-//@ chunk-f9asxqh1.js:18684-18742 placement
+//@ chunk-q1gbn2mn.js:20367-20425 placement
 /**
  * 带重试的插件 zip 下载。
  */
 async function downloadWithRetry(pluginId, destPath, version, options = {}) {
   return retryOnce(() => downloadPluginZip(pluginId, destPath, version, options));
 }
-//@ chunk-f9asxqh1.js:18742-20178 placement
+//@ chunk-q1gbn2mn.js:20425-21861 placement
 /**
  * 以流方式下载账号插件 zip：带停滞超时与字节上限，写入目标路径后检查 PK 头，不是 zip 时删除并记录服务端错误；可用环境变量改为一次性缓冲下载。
  */
@@ -477,7 +485,7 @@ async function downloadPluginZip(pluginId, destPath, version, options) {
     };
   }
 }
-//@ chunk-f9asxqh1.js:20178-20826 placement
+//@ chunk-q1gbn2mn.js:21861-22509 placement
 /**
  * 一次性缓冲下载账号插件 zip：检查 PK 头，不是 zip 时记录服务端错误类型，成功则写入目标文件。
  */
@@ -528,14 +536,14 @@ async function downloadPluginZipBuffered(urlPath, destPath, options) {
     };
   }
 }
-//@ chunk-f9asxqh1.js:20826-20883 placement
+//@ chunk-q1gbn2mn.js:22509-22566 placement
 /**
  * 生成列表分页地址。
  */
 function pageUrl(query, pageIndex) {
   return `${query}&limit=${LIST_PAGE_SIZE}&offset=${pageIndex * LIST_PAGE_SIZE}`;
 }
-//@ chunk-f9asxqh1.js:21047-21085 placement
+//@ chunk-q1gbn2mn.js:22730-22768 placement
 /**
  * 判断会话引用是否属于已知 CCR 会话。
  */
@@ -543,11 +551,11 @@ function isKnownCcrSessionRef(refs) {
   return ccrSessionIdForRefs(refs) !== undefined;
 }
 export {
-  downloadWithRetry,
-  pluginDownloadPath,
   listAccountPlugins,
   listErrorTelemetry,
   pluginListFingerprint,
+  downloadWithRetry,
+  pluginDownloadPath,
   isKnownCcrSessionRef,
   listErrorResult,
   transportErrorResult,

@@ -3,11 +3,12 @@
  *
  * 上传分享的会话记录到 /api/claude_code_shared_session_transcripts。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FeedbackSurvey/submitTranscriptShare.ts
- * pieces: chunk-18hwfzwa.js (10)
+ * pieces: chunk-czq1j3j2.js (10)
  * attribution: placement 9, fingerprint 1
  */
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
 import { isPolicyAllowed as isPolicyAllowed_2 } from "../../services/policyLimits/policyEvidence.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -50,19 +51,23 @@ import { apiClient } from "../../services/routines/routinesApi.js";
 import { getMainLoopModel, isOpus55FamilyModel, isSonnet55FamilyModel } from "../../utils/model/model.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { TENGU_RUSSET_WHIMBREL } from "./useFeedbackSurvey.js";
-import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1017029-1017106 placement
+//@ chunk-czq1j3j2.js:1030403-1030407 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1030403", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1051067-1051144 placement
 var TRANSCRIPT_TOP_LEVEL_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SUBAGENT_TRANSCRIPT_KEYS;
 var SHARE_UPLOAD_TIMEOUT_MS;
-deferInit("chunk-18hwfzwa.js:1017029", () => {
+deferInit("chunk-czq1j3j2.js:1051067", () => {
   TRANSCRIPT_TOP_LEVEL_KEYS = new Set(["transcript"]);
   SUBAGENT_TRANSCRIPT_KEYS = new Set(["subagentTranscripts"]);
   SHARE_UPLOAD_TIMEOUT_MS = 1e4;
 });
-//@ chunk-18hwfzwa.js:1017106-1017615 placement
+//@ chunk-czq1j3j2.js:1051144-1051653 placement
 async function transcriptSharePolicy(messages, storage, host) {
   try {
     if (isEssentialTrafficOnly())
@@ -103,7 +108,7 @@ async function transcriptSharePolicy(messages, storage, host) {
     };
   }
 }
-//@ chunk-18hwfzwa.js:1017615-1017679 placement
+//@ chunk-czq1j3j2.js:1051653-1051717 placement
 async function collectTranscriptShareWithPolicy(
   messages,
   trigger,
@@ -119,7 +124,7 @@ async function collectTranscriptShareWithPolicy(
     credentials,
   );
 }
-//@ chunk-18hwfzwa.js:1017679-1020352 placement
+//@ chunk-czq1j3j2.js:1051717-1054391 placement
 async function collectTranscriptShare(policyPromise, trigger, appearanceId, credentials) {
   if (isEssentialTrafficOnly()) return transcriptShareFailure(lit_2("essential_traffic_only"));
   if (!isPolicyAllowed_2("allow_product_feedback")) return transcriptShareFailure(lit_2("policy_blocked"));
@@ -169,10 +174,10 @@ async function collectTranscriptShare(policyPromise, trigger, appearanceId, cred
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -281,7 +286,7 @@ async function collectTranscriptShare(policyPromise, trigger, appearanceId, cred
     return transcriptShareFailure(classifyShareError(error));
   }
 }
-//@ chunk-18hwfzwa.js:1020352-1020432 placement
+//@ chunk-czq1j3j2.js:1054391-1054471 placement
 function transcriptShareFailure(errorCode) {
   logFeatureBad("feedback_transcript_share", errorCode);
   return {
@@ -289,7 +294,7 @@ function transcriptShareFailure(errorCode) {
     errorCode,
   };
 }
-//@ chunk-18hwfzwa.js:1020432-1021210 fingerprint (2.1.88 match: submitTranscriptShare, 0.331)
+//@ chunk-czq1j3j2.js:1054471-1055249 fingerprint (2.1.88 match: submitTranscriptShare, 0.331)
 async function submitTranscriptShare(payload, credentials) {
   try {
     let response = await withOAuth401Retry(
@@ -346,11 +351,11 @@ async function submitTranscriptShare(payload, credentials) {
     };
   }
 }
-//@ chunk-18hwfzwa.js:1021210-1021254 placement (2.1.88 match: executePush, 0.329)
+//@ chunk-czq1j3j2.js:1055249-1055293 placement (2.1.88 match: executePush, 0.33)
 function isHttpErrorLabel(status) {
   return concatSafe(lit_2("http_"), fromNumber(status));
 }
-//@ chunk-18hwfzwa.js:1021254-1021526 placement
+//@ chunk-czq1j3j2.js:1055293-1055565 placement
 function classifyShareError(error) {
   if (error instanceof RangeError) return lit_2("payload_range_error");
   let { kind, status } = classifyAxiosError(error);
@@ -366,7 +371,7 @@ function classifyShareError(error) {
       return lit_2("exception");
   }
 }
-//@ chunk-18hwfzwa.js:1021526-1021629 placement
+//@ chunk-czq1j3j2.js:1055565-1055668 placement
 /**
  * 仅 Opus 5.5 / Sonnet 5.5 系模型：读特性值 TENGU_RUSSET_WHIMBREL，2→true、1→false，其余 null。
  */
@@ -380,14 +385,9 @@ function getTranscriptShareGate() {
       ? false
       : null;
 }
-//@ chunk-18hwfzwa.js:1021629-1021633 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1021629", () => {
-  init_react_production();
-});
 export {
+  collectTranscriptShareWithPolicy,
   transcriptSharePolicy,
   getTranscriptShareGate,
   collectTranscriptShare,
-  collectTranscriptShareWithPolicy,
 };

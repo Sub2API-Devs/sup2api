@@ -3,11 +3,12 @@
  *
  * 问题选项预览框（等宽边框绘制，超出行数显示 "N lines hidden"）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/AskUserQuestionPermissionRequest/PreviewBox.tsx
- * pieces: chunk-18hwfzwa.js (10)
+ * pieces: chunk-czq1j3j2.js (10)
  * attribution: placement 8, fingerprint 2
  */
+import { init_react_production } from "../../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../../../ink/components/ErrorBoundary.js";
 import {
@@ -15,7 +16,6 @@ import {
   jsxProd_default_2,
 } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Link, Box } from "../../../ink/components/Text.js";
-import { init_react_production } from "../../../../vendor/react/cjs/react.production.js";
 import { squashSingleText } from "../../../ink/layout/node.js";
 import { bunStringWidth } from "../../../ink/stringWidth.js";
 import { useTerminalSize } from "../../../hooks/useTerminalSize.js";
@@ -28,7 +28,17 @@ import { ELLIPSIS } from "../../../ink/styles.js";
 import { Ansi } from "../../../ink/components/AnsiText.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1270669-1271136 placement
+//@ chunk-czq1j3j2.js:1296454-1296458 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1296454", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1296458-1296462 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1296458", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1296462-1296929 placement
 function PreviewBox(props) {
   let $ = useMemoCache(7);
   let settings = useIsScreenReaderEnabled();
@@ -87,32 +97,32 @@ function PreviewBox(props) {
   } else previewText = $[6];
   return previewText;
 }
-//@ chunk-18hwfzwa.js:1271136-1271140 placement
+//@ chunk-czq1j3j2.js:1296929-1296933 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1271136", () => {
+deferInit("chunk-czq1j3j2.js:1296929", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1271140-1271251 placement
+//@ chunk-czq1j3j2.js:1296933-1297044 placement
 /**
  * 问题预览框的最大长度，以及预览无法完整显示时的提示文本。
  */
 var MAX_PREVIEW_LENGTH = 2000;
 var PREVIEW_WITHHELD_TEXT =
   "(preview cannot be shown in full \u2014 compare the option labels and descriptions instead)";
-//@ chunk-18hwfzwa.js:1271251-1271255 placement
+//@ chunk-czq1j3j2.js:1297044-1297048 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1271251", () => {
+deferInit("chunk-czq1j3j2.js:1297044", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1271255-1271287 placement
+//@ chunk-czq1j3j2.js:1297048-1297080 placement
 function layoutNode(node) {
   return squashSingleText(node);
 }
-//@ chunk-18hwfzwa.js:1271287-1271318 placement
+//@ chunk-czq1j3j2.js:1297080-1297111 placement
 function nodeWidth(text) {
   return bunStringWidth(text);
 }
-//@ chunk-18hwfzwa.js:1271318-1271476 fingerprint (2.1.88 match: BOX_CHARS, 1)
+//@ chunk-czq1j3j2.js:1297111-1297269 fingerprint (2.1.88 match: BOX_CHARS, 1)
 var BOX_CHARS = {
   topLeft: "\u250C",
   topRight: "\u2510",
@@ -123,7 +133,7 @@ var BOX_CHARS = {
   teeLeft: "\u251C",
   teeRight: "\u2524",
 };
-//@ chunk-18hwfzwa.js:1271755-1274144 fingerprint (2.1.88 match: PreviewBoxBody, 0.928)
+//@ chunk-czq1j3j2.js:1297548-1299937 fingerprint (2.1.88 match: PreviewBoxBody, 0.929)
 function PreviewBoxBody(props) {
   let $ = useMemoCache(37);
   let { content, maxLines, minHeight, minWidth, maxWidth, highlight } = props;
@@ -313,14 +323,4 @@ function PreviewBoxBody(props) {
   } else t8 = $[36];
   return t8;
 }
-//@ chunk-18hwfzwa.js:1274144-1274148 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1274144", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1274148-1274152 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1274148", () => {
-  init_react_production();
-});
-export { PreviewBoxBody, PREVIEW_WITHHELD_TEXT, PreviewBox, MAX_PREVIEW_LENGTH };
+export { PreviewBoxBody, MAX_PREVIEW_LENGTH, PREVIEW_WITHHELD_TEXT, PreviewBox };

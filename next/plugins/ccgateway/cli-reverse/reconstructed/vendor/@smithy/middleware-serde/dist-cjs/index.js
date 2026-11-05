@@ -1,14 +1,14 @@
 /**
  * @smithy/middleware-serde/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/middleware-serde@4.2.6..4.2.12
- * pieces: chunk-83tv5s1x.js (1)
+ * pieces: chunk-vhcq2g1g.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_protocol_http } from "../../protocol-http/dist-cjs/index.js";
 
-//@ chunk-83tv5s1x.js:339-2070 cjs-fingerprint
+//@ chunk-vhcq2g1g.js:339-2070 cjs-fingerprint
 var require_middleware_serde = __commonJS(function (cjsExports) {
   var protocolHttp = require_protocol_http();
   var deserializerMiddleware = (options, deserializer) => (next, context) => async (args) => {

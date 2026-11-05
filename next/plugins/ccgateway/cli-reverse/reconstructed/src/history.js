@@ -3,10 +3,10 @@
  *
  * 输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/history.ts
- * pieces: chunk-0eyv3mzk.js (2), chunk-2njac0sx.js (2), chunk-5f8vf2zr.js (1), chunk-8t8n4kdh.js (1), chunk-e6aww6q8.js (14), chunk-ez320trn.js (1), chunk-ha3km179.js (5), chunk-s61vbvea.js (60)
- * attribution: affinity 1, fingerprint 10, placement 44, callgraph-fingerprint 1, file-local 2, layout 28
+ * pieces: chunk-1xrdahqv.js (1), chunk-3n0n2sf6.js (2), chunk-5xgkngpb.js (14), chunk-75v47sk5.js (1), chunk-7jxyna5q.js (60), chunk-cwkrfaxh.js (2), chunk-h44h5gdv.js (1), chunk-sywnjtqb.js (1), chunk-w3ch4xq2.js (5)
+ * attribution: fingerprint 10, placement 45, callgraph-fingerprint 1, file-local 2, layout 28, affinity 1
  */
 import { join } from "path";
 import { readdir } from "fs/promises";
@@ -20,7 +20,7 @@ import {
   unknown,
 } from "../vendor/zod/v4/classic/schemas.js";
 import { regExp, TEAM_SETUP_GUIDE_LABEL, shouldRedactInput } from "./commands.js";
-import { uniq } from "./utils/collections.js";
+import { normalizeCaseForComparison_2 } from "./utils/permissions/filesystem.js";
 import { buildLaunchMessage } from "./commands/ultraplan.js";
 import {
   findHistoryCopySpans,
@@ -32,7 +32,7 @@ import { logForDebugging } from "./utils/debug.js";
 import { jsonParseRaw, jsonStringify } from "./utils/slowOperations.js";
 import { truncateToLength } from "./utils/stringUtils.js";
 import { serializeCalls } from "./utils/promiseQueue.js";
-import { getClaudeConfigDir, isEnvTruthy } from "./utils/envUtils.js";
+import { getClaudeConfigDir } from "./utils/markdownConfigLoader.js";
 import { readLinesReverse, FileChangedDuringReadError } from "./utils/fsOperations.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "./services/analytics/featureTelemetry.js";
 import {
@@ -54,6 +54,7 @@ import { getFileReader } from "./utils/fileStore.js";
 import { lock } from "./utils/lockfile.js";
 import { logError } from "./utils/log.js";
 import { sleep } from "./utils/sleep.js";
+import { isEnvTruthy } from "./utils/envUtils.js";
 import { isNestedInteractiveClaudeSession } from "./utils/teammate.js";
 import { registerCleanup } from "./utils/cleanupRegistry.js";
 import { HostScoped } from "./utils/hostScoped.js";
@@ -71,13 +72,13 @@ import { isOwnTempName } from "./utils/atomicPublishWrite.js";
 import { isHashTempFile } from "./services/memorySync/syncFiles.js";
 import { deferInit } from "../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:34066-34244 fingerprint (2.1.88 match: resolveStoredPastedContent, 0.799)
+//@ chunk-7jxyna5q.js:34664-34842 fingerprint (2.1.88 match: resolveStoredPastedContent, 0.8)
 var MAX_HISTORY_ITEMS; // deferred: uses DoctorLazy (./cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_CLEARED_DRAFTS;
 var MAX_CLEARED_DRAFTS_CHARS;
 var MAX_PASTED_CONTENT_LENGTH;
 var PastedContentSchema;
-deferInit("chunk-s61vbvea.js:34066", () => {
+deferInit("chunk-7jxyna5q.js:34664", () => {
   MAX_HISTORY_ITEMS = 100;
   MAX_CLEARED_DRAFTS = 10;
   MAX_CLEARED_DRAFTS_CHARS = 1e7;
@@ -93,20 +94,20 @@ deferInit("chunk-s61vbvea.js:34066", () => {
     }),
   );
 });
-//@ chunk-s61vbvea.js:34244-34301 file-local
+//@ chunk-7jxyna5q.js:34842-34899 file-local
 function getPastedTextRefNumLines(text) {
   return (text.match(/\r\n|\r|\n/g) || []).length;
 }
-//@ chunk-s61vbvea.js:34301-34398 fingerprint (2.1.88 match: formatPastedTextRef, 0.508)
+//@ chunk-7jxyna5q.js:34899-34996 fingerprint (2.1.88 match: formatPastedTextRef, 0.492)
 function formatPastedTextRef(id, numLines, label = "Pasted text") {
   if (numLines === 0) return `[${label} #${id}]`;
   return `[${label} #${id} +${numLines} lines]`;
 }
-//@ chunk-s61vbvea.js:34398-34436 fingerprint (2.1.88 match: formatImageRef, 1)
+//@ chunk-7jxyna5q.js:34996-35034 fingerprint (2.1.88 match: formatImageRef, 1)
 function formatImageRef(id) {
   return `[Image #${id}]`;
 }
-//@ chunk-s61vbvea.js:34436-34575 layout
+//@ chunk-7jxyna5q.js:35034-35173 layout
 /**
  * 从文本中解析粘贴内容占位符（[Pasted text #N] 等），返回 {id, match, index} 列表。
  */
@@ -120,14 +121,14 @@ function parsePastedRefs(display) {
     }))
     .filter((ref) => ref.id > 0);
 }
-//@ chunk-s61vbvea.js:34575-34637 layout
+//@ chunk-7jxyna5q.js:35173-35235 layout
 /**
  * 函数 isValidPasteId（正整数且 < 2^32）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
 function isValidPasteId(id) {
   return Number.isInteger(id) && id > 0 && id < 4294967296;
 }
-//@ chunk-s61vbvea.js:34637-35038 layout
+//@ chunk-7jxyna5q.js:35235-35636 layout
 /**
  * 生成提示历史去重键：把占位符编号替换为 #_，并附上每个占位的内容指纹（哈希、内联内容、不可用或字面量）。
  */
@@ -150,7 +151,7 @@ function getPromptHistoryKey(display, pastedContents) {
   });
   return `${placeholderKey}\x00${mapped.join("\x01")}`;
 }
-//@ chunk-s61vbvea.js:35038-35101 layout
+//@ chunk-7jxyna5q.js:35636-35699 layout
 /**
  * 函数 addPastedEntry（写入一条粘贴记录）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
@@ -162,15 +163,15 @@ function addPastedEntry(display, pastedContents, lookup, refs) {
     getInlinePasteTexts(pastedContents),
   );
 }
-//@ chunk-s61vbvea.js:35101-35165 layout
+//@ chunk-7jxyna5q.js:35699-35763 layout
 var LEADING_COMBINING_MARKS = /^[\p{M}\u1161-\u1175\u11A8-\u11C2\u{16D67}\u{16D68}]+/u;
-//@ chunk-s61vbvea.js:35165-35275 layout (2.1.88 match: setCwdState, 0.843)
+//@ chunk-7jxyna5q.js:35763-35873 layout (2.1.88 match: setCwdState, 0.843)
 function nfcVariants(cwd) {
   let normalized = cwd.normalize("NFC");
   let stripped = normalized.replace(LEADING_COMBINING_MARKS, "").trimStart();
-  return uniq([cwd, normalized, stripped]).filter((variant) => variant !== "");
+  return normalizeCaseForComparison_2([cwd, normalized, stripped]).filter((variant) => variant !== "");
 }
-//@ chunk-s61vbvea.js:35275-35489 layout
+//@ chunk-7jxyna5q.js:35873-36087 layout
 /**
  * 收集内联粘贴文本（可包含仅斜杠名的项），含 NFC 变体，按长度降序。
  */
@@ -186,7 +187,7 @@ function getInlinePasteTexts(pastedContents, includeSlashOnly = false) {
       for (let variant of nfcVariants(entry.content)) texts.add(variant);
   return [...texts].sort((a, b) => b.length - a.length);
 }
-//@ chunk-s61vbvea.js:35489-35984 layout
+//@ chunk-7jxyna5q.js:36087-36582 layout
 /**
  * 在占位符之外的文本中查找内联粘贴内容出现的区间，合并重叠后按起点排序。
  */
@@ -223,7 +224,7 @@ function findInlinePasteRanges(text, pastedContents, includeSlashOnly = false) {
   addMatchesIn(cursor, text.length);
   return ranges.sort((a, b) => a[0] - b[0]);
 }
-//@ chunk-s61vbvea.js:35984-36222 layout
+//@ chunk-7jxyna5q.js:36582-36820 layout
 /**
  * 把文本中的"[...Truncated text]"占位替换为对应的完整粘贴内容。
  */
@@ -240,7 +241,7 @@ function expandTruncatedPastes(display, pastedContents) {
   }
   return out + display.slice(cursor);
 }
-//@ chunk-s61vbvea.js:36222-36410 layout
+//@ chunk-7jxyna5q.js:36820-37008 layout
 /**
  * 生成启动消息片段，排除与粘贴内容重叠的部分；粘贴中有 ultraplan 而原文没有时返回空。
  */
@@ -257,19 +258,19 @@ function getLaunchMessagesOutsidePastes(messageText, pastedContents) {
   let inlinePasteRanges = findInlinePasteRanges(messageText, pastedContents);
   return launchMessage.filter((range) => !rangesOverlap(range.start, range.end, inlinePasteRanges));
 }
-//@ chunk-s61vbvea.js:36410-36453 file-local
+//@ chunk-7jxyna5q.js:37008-37051 file-local
 function flushPromptHistory(disconnectedBridge, pastedContents) {
   return getLaunchMessagesOutsidePastes(disconnectedBridge, pastedContents).length > 0;
 }
-//@ chunk-s61vbvea.js:36453-36505 layout
+//@ chunk-7jxyna5q.js:37051-37103 layout
 function rangesOverlap(start, end, inlinePasteRanges) {
   return inlinePasteRanges.some(([from, to]) => start < to && end > from);
 }
-//@ chunk-s61vbvea.js:36505-36581 layout
+//@ chunk-7jxyna5q.js:37103-37179 layout
 function isPastedPlaceholderText(match) {
   return match.startsWith("[Pasted text") || match.startsWith(`[${TEAM_SETUP_GUIDE_LABEL}`);
 }
-//@ chunk-s61vbvea.js:36581-36714 layout
+//@ chunk-7jxyna5q.js:37179-37312 layout
 /**
  * 取文本中占位符对应、仍可用的手动输入粘贴内容。
  */
@@ -281,7 +282,7 @@ function getTypedPasteContents(text, nextPasteId) {
       : [];
   });
 }
-//@ chunk-s61vbvea.js:36714-37209 layout
+//@ chunk-7jxyna5q.js:37312-37807 layout
 /**
  * 按占位符把提示拆成段：用户输入的文本、展开的粘贴内容（可经变换标为非输入）、不可用或非文本占位保持原样。
  */
@@ -329,7 +330,7 @@ function splitPromptSegments(display, pastedRefs, pastedContents, skipUnavailabl
   });
   return segments;
 }
-//@ chunk-s61vbvea.js:37209-37656 layout
+//@ chunk-7jxyna5q.js:37807-38254 layout
 /**
  * 把提示段拼回文本：输入段可经转换（可按内联粘贴再拆分），非输入段之后补换行。
  */
@@ -383,7 +384,7 @@ function joinPromptSegments(segments, transformTyped, inlinePasteTexts, inlinePa
   }
   return joined;
 }
-//@ chunk-s61vbvea.js:37656-37892 layout
+//@ chunk-7jxyna5q.js:38254-38490 layout
 function splitByInlinePastes(text, inlinePasteTexts, wrap) {
   let segments = [];
   let cursor = 0;
@@ -406,7 +407,7 @@ function splitByInlinePastes(text, inlinePasteTexts, wrap) {
     });
   return segments;
 }
-//@ chunk-s61vbvea.js:37892-37969 layout
+//@ chunk-7jxyna5q.js:38490-38567 layout
 function stripPlaceholders(display, pastedContents) {
   let { stripped, removed } = expandPromptForSubmit(display, pastedContents);
   return {
@@ -414,7 +415,7 @@ function stripPlaceholders(display, pastedContents) {
     removed,
   };
 }
-//@ chunk-s61vbvea.js:37969-38341 layout
+//@ chunk-7jxyna5q.js:38567-38939 layout
 /**
  * 展开提示中的占位：去掉已不可用的粘贴占位（记录被删的项），并生成展开后的文本。
  */
@@ -444,14 +445,14 @@ function expandPromptForSubmit(display, pastedContents, wrapUntyped, escapePaste
     removed,
   };
 }
-//@ chunk-s61vbvea.js:38341-38382 layout
+//@ chunk-7jxyna5q.js:38939-38980 layout
 /**
  * 函数 stripPlaceholdersWithOptions（带选项的剥离）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
 function stripPlaceholdersWithOptions(text, pastedContents, wrapUntyped, escapePastedContentTag) {
   return expandPromptForSubmit(text, pastedContents, wrapUntyped, escapePastedContentTag);
 }
-//@ chunk-s61vbvea.js:38382-38547 layout
+//@ chunk-7jxyna5q.js:38980-39145 layout
 function getReferencedTextPastes(display, pastedContents) {
   if (!pastedContents) return [];
   let referencedIds = new Set(parsePastedRefs(display).map((ref) => ref.id));
@@ -459,7 +460,7 @@ function getReferencedTextPastes(display, pastedContents) {
     (pair) => pair[1].type === "text" && !pair[1].unavailable && referencedIds.has(Number(pair[0])),
   );
 }
-//@ chunk-s61vbvea.js:38547-38736 layout
+//@ chunk-7jxyna5q.js:39145-39334 layout
 /**
  * 说明哪些粘贴内容已不可用并已从提示中移除。
  */
@@ -470,7 +471,7 @@ function describeRemovedPastes(removed) {
     ? `${joined} is no longer available and was removed from the prompt`
     : `${joined} are no longer available and were removed from the prompt`;
 }
-//@ chunk-s61vbvea.js:38736-38909 layout
+//@ chunk-7jxyna5q.js:39334-39507 layout
 /**
  * 生成粘贴内容不可用导致未发送的错误提示，请用户放回原文后重发。
  */
@@ -478,16 +479,16 @@ function buildUnavailablePasteError(removed) {
   let labels = describePlaceholders(removed);
   return `Not sent: ${labels.join(", ")} ${labels.length === 1 ? "is" : "are"} no longer available. Put that text back in place of its placeholder and send again.`;
 }
-//@ chunk-s61vbvea.js:38909-38968 layout
+//@ chunk-7jxyna5q.js:39507-39566 layout
 function describePlaceholders(removed) {
-  return uniq(removed.map((item) => `${item.label} #${item.id}`));
+  return normalizeCaseForComparison_2(removed.map((item) => `${item.label} #${item.id}`));
 }
-//@ chunk-s61vbvea.js:38968-38980 layout
+//@ chunk-7jxyna5q.js:39566-39578 layout
 /**
  * 导出值：MAX_HISTORY_ENTRIES（1e5：历史条数上限）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
 var MAX_HISTORY_ENTRIES = 1e5;
-//@ chunk-s61vbvea.js:38980-39284 layout
+//@ chunk-7jxyna5q.js:39578-39882 layout
 /**
  * 把最后一个可用的文本粘贴占位就地展开（内容过长时不展开），返回展开文本、ID 与光标位置。
  */
@@ -507,10 +508,10 @@ function expandLastPaste(display, pastedContents) {
     cursorOffset: bestRef.index + content.length,
   };
 }
-//@ chunk-s61vbvea.js:39284-39305 layout
+//@ chunk-7jxyna5q.js:39882-39903 layout
 var MAX_HISTORY_ENTRY_CHARS = 200;
 var MAX_PASTED_CONTENT_BYTES = 262144;
-//@ chunk-s61vbvea.js:39305-39871 layout
+//@ chunk-7jxyna5q.js:39903-40469 layout
 /**
  * 从存储倒序分页读取输入历史记录（首页按条数、之后按字节），逐行产出；游标不前进时报错。
  */
@@ -554,9 +555,9 @@ async function* readHistoryRecordsBackward(storage) {
     fromSeq = nextSeq;
   }
 }
-//@ chunk-s61vbvea.js:39871-40221 fingerprint (2.1.88 match: getTimestampedHistory, 0.47)
+//@ chunk-7jxyna5q.js:40469-40819 fingerprint (2.1.88 match: getTimestampedHistory, 0.469)
 var getTimestampedHistory_2; // deferred: uses DoctorLazy (./cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:39871", () => {
+deferInit("chunk-7jxyna5q.js:40469", () => {
   getTimestampedHistory_2 = DoctorLazy(() =>
     objectSchema({
       display: stringSchema(),
@@ -580,11 +581,11 @@ deferInit("chunk-s61vbvea.js:39871", () => {
     }),
   );
 });
-//@ chunk-s61vbvea.js:40221-40318 layout
+//@ chunk-7jxyna5q.js:40819-40916 layout
 function formatZodIssues(error) {
   return error.issues.map((issue) => `${issue.path.join(".") || "value"}: ${issue.message}`).join("; ");
 }
-//@ chunk-s61vbvea.js:40318-40610 placement
+//@ chunk-7jxyna5q.js:40916-41208 placement
 /**
  * 解析 history.jsonl 一行并按 schema 校验，失败返回 parse_failed 或 shape_rejected。
  */
@@ -608,7 +609,7 @@ function parseHistoryLine(line) {
     };
   }
 }
-//@ chunk-s61vbvea.js:40610-40854 placement
+//@ chunk-7jxyna5q.js:41208-41452 placement
 function hasDroppedPasteRecords(raw, parsed) {
   if (typeof raw !== "object" || raw === null || !("pastedContents" in raw)) return false;
   let pastedContents = raw.pastedContents;
@@ -616,14 +617,14 @@ function hasDroppedPasteRecords(raw, parsed) {
   if (typeof pastedContents !== "object" || Array.isArray(pastedContents)) return true;
   return Object.keys(pastedContents).length > Object.keys(parsed.pastedContents).length;
 }
-//@ chunk-s61vbvea.js:40854-40935 placement
+//@ chunk-7jxyna5q.js:41452-41533 placement
 function totalPastedLength(pastedContents) {
   return Object.values(pastedContents).reduce((acc, entry) => acc + (entry.content?.length ?? 0), 0);
 }
-//@ chunk-s61vbvea.js:40935-40959 placement
+//@ chunk-7jxyna5q.js:41533-41557 placement
 var MAX_EXPANDED_PASTE_CHARS = 32768;
 var MAX_PROJECT_HISTORY_BYTES = 4194304;
-//@ chunk-s61vbvea.js:40959-41098 placement
+//@ chunk-7jxyna5q.js:41557-41695 placement
 function expandHistoryDisplay(display, pastedContents) {
   let expandedContents = {};
   for (let [key, value] of Object.entries(pastedContents))
@@ -636,16 +637,16 @@ function expandHistoryDisplay(display, pastedContents) {
         : value;
   return addPastedEntry(display, expandedContents);
 }
-//@ chunk-s61vbvea.js:41098-41141 placement
+//@ chunk-7jxyna5q.js:41695-41738 placement
 var HISTORY_SCOPES = ["session", "project", "everywhere"];
-//@ chunk-s61vbvea.js:41141-41342 placement
+//@ chunk-7jxyna5q.js:41738-41939 placement
 function isDuplicateOfLastEntry(candidate) {
   let { prev, next, project, sessionId } = candidate;
   if (!prev || prev.display !== next.display) return false;
   if (prev.project !== project || prev.sessionId !== sessionId) return false;
   return !(Object.keys(prev.pastedContents).length > 0) && !next.hasPastes;
 }
-//@ chunk-s61vbvea.js:41342-51397 placement
+//@ chunk-7jxyna5q.js:41939-52010 placement
 /**
  * 输入历史存储：add 时去重（与上一条相同则跳过）、过滤敏感命令，超过 1024 字的粘贴存进 paste-cache 只记 hash；pendingEntries 加文件锁追加到 <配置目录>/history.jsonl（权限 0600），失败最多重试 5 次、退出时强制刷盘；读取时按 project/session 过滤，最多 100 条。CLAUDE_CODE_SKIP_PROMPT_HISTORY 关闭写入。
  */
@@ -1182,36 +1183,36 @@ class PromptHistoryStore {
     } else this.skippedKeys.add(`${lastAddedEntry.timestamp}\x00${lastAddedEntry.sessionId ?? ""}`);
   }
 }
-//@ chunk-s61vbvea.js:51397-51422 placement
+//@ chunk-7jxyna5q.js:52010-52035 placement
 var promptHistoryByHost; // deferred: uses PromptHistoryStore of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:51397", () => {
+deferInit("chunk-7jxyna5q.js:52010", () => {
   promptHistoryByHost = new HostScoped(() => new PromptHistoryStore());
 });
-//@ chunk-s61vbvea.js:51422-51459 placement
+//@ chunk-7jxyna5q.js:52035-52072 placement
 /**
  * 取当前宿主的输入历史存储（PromptHistoryStore）。
  */
 function getPromptHistory() {
   return promptHistoryByHost.of(getRootSession().host);
 }
-//@ chunk-s61vbvea.js:51459-51479 placement
+//@ chunk-7jxyna5q.js:52072-52092 placement
 class SensitiveCommandsRegistry {
   get = () => [];
 }
-//@ chunk-s61vbvea.js:51479-51504 placement
+//@ chunk-7jxyna5q.js:52092-52117 placement
 var historyStoreSlot; // deferred: uses SensitiveCommandsRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:51479", () => {
+deferInit("chunk-7jxyna5q.js:52092", () => {
   historyStoreSlot = new HostScoped(() => new SensitiveCommandsRegistry());
 });
-//@ chunk-s61vbvea.js:51504-51541 placement
+//@ chunk-7jxyna5q.js:52117-52154 placement
 function getSensitiveCommandsRegistry() {
   return historyStoreSlot.of(getRootSession().host);
 }
-//@ chunk-s61vbvea.js:51541-51584 placement
+//@ chunk-7jxyna5q.js:52154-52197 placement
 function getHistory(storageV5) {
   return getPromptHistory().readEntries(storageV5);
 }
-//@ chunk-s61vbvea.js:51584-51782 placement
+//@ chunk-7jxyna5q.js:52197-52395 placement
 function isTransientHistoryReadError(error) {
   if (error instanceof FileChangedDuringReadError) return true;
   let cause = error instanceof Error ? error.cause : undefined;
@@ -1224,29 +1225,29 @@ function isTransientHistoryReadError(error) {
   let errno = getErrnoCode(error) ?? storageCauseErrnoCode(error);
   return isSadFsErrnoCode(errno) || isEnvFsErrnoCode(errno);
 }
-//@ chunk-s61vbvea.js:51782-51843 placement
+//@ chunk-7jxyna5q.js:52395-52456 placement
 function getTimestampedHistory(scope = "project", storageV5) {
   return getPromptHistory().readTimestamped(scope, storageV5);
 }
-//@ chunk-s61vbvea.js:51843-51894 placement
+//@ chunk-7jxyna5q.js:52456-52507 placement
 function countHistoryForProject(filter, storageV5) {
   return getPromptHistory().countForProject(filter, storageV5);
 }
-//@ chunk-s61vbvea.js:51894-51944 placement
+//@ chunk-7jxyna5q.js:52507-52557 placement
 /**
  * 函数 readProjectHistory（读项目历史）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
 function readProjectHistory(storageV5, options) {
   return getPromptHistory().readForProject(storageV5, options);
 }
-//@ chunk-s61vbvea.js:51944-51980 placement
+//@ chunk-7jxyna5q.js:52557-52593 placement
 /**
  * 函数 addHistoryEntry（追加历史）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
 function addHistoryEntry(display, storageV5, options) {
   getPromptHistory().add(display, storageV5, options);
 }
-//@ chunk-s61vbvea.js:51980-52256 placement
+//@ chunk-7jxyna5q.js:52593-52869 placement
 /**
  * 把提交的提示逐条写入历史（含筛查与未回答状态），全都没写入时按需撤销撤回状态。
  */
@@ -1270,7 +1271,7 @@ function recordSubmittedPrompts(prompts, storageV5, context) {
   if (!isFirst && context.armUndo !== false && context.screened === undefined)
     getPromptHistory().disarmUndo();
 }
-//@ chunk-s61vbvea.js:52256-52311 placement
+//@ chunk-7jxyna5q.js:52869-52924 placement
 /**
  * 函数 addHistoryEntryNoUndo（追加历史且不挂撤销）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
@@ -1280,42 +1281,42 @@ function addHistoryEntryNoUndo(text, storageV5, submitMode) {
     armUndo: false,
   });
 }
-//@ chunk-s61vbvea.js:52311-52353 placement
+//@ chunk-7jxyna5q.js:52924-52966 placement
 /**
  * 函数 registerHistoryExitFlush（注册退出前刷盘）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
 function registerHistoryExitFlush(flushFn) {
   getPromptHistory().registerExitFlush(flushFn);
 }
-//@ chunk-s61vbvea.js:52353-52380 placement
+//@ chunk-7jxyna5q.js:52966-52993 placement
 /**
  * 函数 setHistoryStore（替换历史存储）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
 function setHistoryStore(get) {
   getSensitiveCommandsRegistry().get = get;
 }
-//@ chunk-s61vbvea.js:52380-52425 placement
+//@ chunk-7jxyna5q.js:52993-53038 placement
 /**
  * 函数 keepClearedDraft（保留已清空的草稿）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
 function keepClearedDraft(draft, clearedAt) {
   getPromptHistory().keepClearedDraft(draft, clearedAt);
 }
-//@ chunk-s61vbvea.js:52425-52468 placement
+//@ chunk-7jxyna5q.js:53038-53081 placement
 /**
  * 函数 getHistoryGeneration（取历史代数）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
 function getHistoryGeneration() {
   return getPromptHistory().getGeneration();
 }
-//@ chunk-s61vbvea.js:52468-52501 placement
+//@ chunk-7jxyna5q.js:53081-53114 placement
 /**
  * 函数 removeLastHistoryEntry（移除最后一条历史）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
 function removeLastHistoryEntry() {
   getPromptHistory().removeLast();
 }
-//@ chunk-e6aww6q8.js:191405-191531 placement
+//@ chunk-5xgkngpb.js:192068-192194 placement
 function groupByToObject(items, keyOf) {
   let groups = Object.create(null);
   let index = 0;
@@ -1326,9 +1327,9 @@ function groupByToObject(items, keyOf) {
   }
   return groups;
 }
-//@ chunk-e6aww6q8.js:191531-191550 placement
+//@ chunk-5xgkngpb.js:192194-192213 placement
 var MAX_PASTE_ID = 2147483648;
-//@ chunk-e6aww6q8.js:191550-192112 placement
+//@ chunk-5xgkngpb.js:192213-192775 placement
 /**
  * 粘贴占位编号分配器：跳过转录与承载者中已用的编号，按会话纪元记录本纪元分配过的编号。
  */
@@ -1365,23 +1366,23 @@ class PasteIdAllocator {
     return this.minted.has(pasteId);
   }
 }
-//@ chunk-e6aww6q8.js:192112-192140 placement
+//@ chunk-5xgkngpb.js:192775-192803 placement
 var pasteIdAllocatorSlot; // deferred: uses SessionRootSlot (./bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:192112", () => {
+deferInit("chunk-5xgkngpb.js:192775", () => {
   pasteIdAllocatorSlot = new SessionRootSlot(() => new PasteIdAllocator());
 });
-//@ chunk-e6aww6q8.js:192140-192173 placement
+//@ chunk-5xgkngpb.js:192803-192836 placement
 function pasteIdAllocator() {
   return pasteIdAllocatorSlot.of(getRootSession());
 }
-//@ chunk-e6aww6q8.js:192173-192219 placement
+//@ chunk-5xgkngpb.js:192836-192883 placement
 /**
  * 函数 registerPasteCarrier（登记粘贴占位载体）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
 function registerPasteCarrier(carrier) {
   return pasteIdAllocator().registerCarrier(carrier);
 }
-//@ chunk-e6aww6q8.js:192219-192938 placement
+//@ chunk-5xgkngpb.js:192883-193602 placement
 /**
  * 从会话消息（用户消息、图片粘贴 ID、排队命令）中推进粘贴编号，再开始新纪元。
  */
@@ -1408,27 +1409,27 @@ function primePasteIdsFromMessages(messages) {
     }
   allocator.startEpoch(getSessionId());
 }
-//@ chunk-e6aww6q8.js:192938-192974 placement
+//@ chunk-5xgkngpb.js:193602-193638 placement
 /**
  * 函数 advancePasteId（推进已用的粘贴编号）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
 function advancePasteId(maxStoredImageId) {
   pasteIdAllocator().advancePast(maxStoredImageId);
 }
-//@ chunk-e6aww6q8.js:192974-193012 placement
+//@ chunk-5xgkngpb.js:193638-193676 placement
 /**
  * 函数 mintPasteId（分配新的粘贴编号）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
 function mintPasteId(allocator, text) {
   return mintPasteId_2(pasteIdAllocator(), allocator, text);
 }
-//@ chunk-e6aww6q8.js:193012-193132 placement
+//@ chunk-5xgkngpb.js:193676-193796 placement
 function mintPasteId_2(allocator, display, pastedContents) {
   if (display) allocator.advancePastText(display);
   if (pastedContents) for (let key of Object.keys(pastedContents)) allocator.advancePast(Number(key));
   return allocator.mint();
 }
-//@ chunk-e6aww6q8.js:193132-193311 placement
+//@ chunk-5xgkngpb.js:193796-193975 placement
 function isPasteRefOfType(match, labelPrefix) {
   switch (labelPrefix) {
     case "text":
@@ -1441,7 +1442,7 @@ function isPasteRefOfType(match, labelPrefix) {
       return match.startsWith("[Image");
   }
 }
-//@ chunk-e6aww6q8.js:193311-193524 placement
+//@ chunk-5xgkngpb.js:193975-194188 placement
 function expandPastedTextRefs_2(input, pasteId, pastedContents, labelPrefix) {
   let refs = parsePastedRefs(input).filter(
     (ref) => ref.id === pasteId && isPasteRefOfType(ref.match, labelPrefix),
@@ -1456,7 +1457,7 @@ function expandPastedTextRefs_2(input, pasteId, pastedContents, labelPrefix) {
   }
   return expanded;
 }
-//@ chunk-e6aww6q8.js:193524-193960 placement
+//@ chunk-5xgkngpb.js:194188-194633 placement
 /**
  * 把历史条目里的粘贴编号重新分配为本会话不冲突的新编号，同时更新显示文本中的占位（本纪元已分配的可跳过）。
  */
@@ -1494,7 +1495,7 @@ function renumberPastedContents({ display, pastedContents, allowCurrentEpochSkip
     pastedContents: contents,
   };
 }
-//@ chunk-e6aww6q8.js:932812-933012 fingerprint (2.1.88 match: removeLastFromHistory, 0.389)
+//@ chunk-5xgkngpb.js:944007-944207 fingerprint (2.1.88 match: removeLastFromHistory, 0.388)
 class HistoryWriterStack {
   writers = [];
   register(writer) {
@@ -1511,7 +1512,7 @@ class HistoryWriterStack {
     this.writers.at(-1)?.(line);
   }
 }
-//@ chunk-ez320trn.js:7416-7526 fingerprint (2.1.88 match: getHistory, 0.7)
+//@ chunk-1xrdahqv.js:7416-7526 fingerprint (2.1.88 match: getHistory, 0.699)
 async function getHistory_2(slug, deadlineSignal, context) {
   let [publishedReadme, publishedReadme_2] = await Promise.all([
     readPublishedReadme(slug, README_MD, false, deadlineSignal, context),
@@ -1522,7 +1523,7 @@ async function getHistory_2(slug, deadlineSignal, context) {
     project: publishedReadme_2,
   };
 }
-//@ chunk-2njac0sx.js:812-935 placement
+//@ chunk-3n0n2sf6.js:849-972 placement
 var SKILL_WATCH_DEBOUNCE_MS = 1000;
 var SKILL_WATCH_MIN_MS = 500;
 var SKILL_WATCH_SETTLE_MS = 300;
@@ -1535,7 +1536,7 @@ var SKILL_WATCH_TIMEOUT_MS = 600000;
 var SKILL_WATCH_MAX_WAIT_MS = 40000;
 var SKILL_WATCH_BACKOFF_MS = 2000;
 var SKILL_WATCH_ENABLED = true;
-//@ chunk-2njac0sx.js:935-1112 callgraph-fingerprint (2.1.88 match: addToPromptHistory, 0.208)
+//@ chunk-3n0n2sf6.js:972-1149 callgraph-fingerprint (2.1.88 match: addToPromptHistory, 0.208)
 async function collectPromptCommandHashes(command) {
   let skillDirCommands = await getSkillDirCommandsCached(getProjectRoot(), command);
   let originalCwd = getOriginalCwd();
@@ -1545,7 +1546,7 @@ async function collectPromptCommandHashes(command) {
     hashes.set(command.name, command.type === "prompt" ? (command.contentHash ?? "") : "");
   return hashes;
 }
-//@ chunk-ha3km179.js:52979-53402 placement
+//@ chunk-w3ch4xq2.js:57468-57891 placement
 /**
  * 把短小的粘贴块（不超过限定行数）展开回文本，其余保留为粘贴引用。
  */
@@ -1584,7 +1585,7 @@ function collapseSmallPastedBlocks(text, salt = sessionTagSalt()) {
     pastedContents: rebuilt.entries,
   };
 }
-//@ chunk-ha3km179.js:53402-53931 placement
+//@ chunk-w3ch4xq2.js:57891-58420 placement
 /**
  * 按块重建提示文本与 pastedContents 映射。
  */
@@ -1638,7 +1639,7 @@ function rebuildPastedContents(pieces, salt, collapsed, makeRef) {
     shortPastes,
   };
 }
-//@ chunk-ha3km179.js:53931-54196 placement
+//@ chunk-w3ch4xq2.js:58420-58685 placement
 function getShortPastePieces(rebuilt) {
   let needles = getInlinePasteTexts(rebuilt.entries);
   let pieces = [];
@@ -1660,7 +1661,7 @@ function getShortPastePieces(rebuilt) {
   }
   return pieces;
 }
-//@ chunk-ha3km179.js:54196-54258 placement
+//@ chunk-w3ch4xq2.js:58685-58747 placement
 /**
  * 函数 readPromptText（按特性返回纯文本或解析后的粘贴内容）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
@@ -1672,19 +1673,23 @@ function readPromptText(text) {
         pastedContents: {},
       };
 }
-//@ chunk-ha3km179.js:54258-54310 fingerprint (2.1.88 match: logEntryToHistoryEntry, 1)
+//@ chunk-w3ch4xq2.js:58747-58799 fingerprint (2.1.88 match: logEntryToHistoryEntry, 1)
 var logEntryToHistoryEntry = (logEntry, display, pastedContents) => ({
   ...logEntry,
   display,
   pastedContents,
 });
-//@ chunk-8t8n4kdh.js:174068-174129 fingerprint (2.1.88 match: addToHistory, 1)
+//@ chunk-sywnjtqb.js:175621-175682 placement (2.1.88 match: addToHistory, 1)
 function addToHistory_2() {
   return isSessionPersistenceDisabled() || env.CLAUDE_CODE_SKIP_PROMPT_HISTORY;
 }
-//@ chunk-0eyv3mzk.js:584-632 affinity
+//@ chunk-h44h5gdv.js:138665-138726 fingerprint (2.1.88 match: addToHistory, 1)
+function addToHistory() {
+  return isSessionPersistenceDisabled() || env.CLAUDE_CODE_SKIP_PROMPT_HISTORY;
+}
+//@ chunk-cwkrfaxh.js:584-632 affinity
 var URL_HOST_PATTERN = /https?:\/\/([^\s/?#'"`<>\\)\];&|(,]+)/gi;
-//@ chunk-0eyv3mzk.js:632-839 fingerprint (2.1.88 match: parseReferences, 0.696)
+//@ chunk-cwkrfaxh.js:632-839 fingerprint (2.1.88 match: parseReferences, 0.696)
 function parseReferences(input) {
   if (!input) return [];
   let hosts = [];
@@ -1698,7 +1703,7 @@ function parseReferences(input) {
   }
   return hosts;
 }
-//@ chunk-5f8vf2zr.js:28166-28267 fingerprint (2.1.88 match: makeLogEntryReader, 0.56)
+//@ chunk-75v47sk5.js:29342-29443 fingerprint (2.1.88 match: makeLogEntryReader, 0.56)
 async function dirHasHistoryFile(claudeConfigDir) {
   try {
     return (await readdir(claudeConfigDir)).some(
@@ -1709,32 +1714,56 @@ async function dirHasHistoryFile(claudeConfigDir) {
   }
 }
 export {
+  addToHistory_2,
+  addToHistory,
+  addHistoryEntry,
+  getHistory_2,
+  setHistoryStore,
   mintPasteId,
   formatImageRef,
-  primePasteIdsFromMessages,
-  advancePasteId,
-  getPastedTextRefNumLines,
-  formatPastedTextRef,
-  addPastedEntry,
-  parseReferences,
   registerPasteCarrier,
   groupByToObject,
   parsePastedRefs,
   isValidPasteId,
   expandPastedTextRefs_2,
-  addHistoryEntry,
-  recordSubmittedPrompts,
-  renumberPastedContents,
-  getLaunchMessagesOutsidePastes,
-  expandTruncatedPastes,
-  nfcVariants,
-  expandLastPaste,
-  MAX_HISTORY_ENTRIES,
+  primePasteIdsFromMessages,
+  advancePasteId,
+  SKILL_WATCH_DEBOUNCE_MS,
+  SKILL_WATCH_MIN_MS,
+  SKILL_WATCH_SETTLE_MS,
+  SKILL_WATCH_POLL_MS,
+  SKILL_WATCH_IDLE_MS,
+  collectPromptCommandHashes,
+  SKILL_WATCH_ENABLED,
+  SKILL_WATCH_MAX_IDLE_MS,
+  SKILL_WATCH_RETRY_MS,
+  SKILL_WATCH_TIMEOUT_MS,
+  SKILL_WATCHER_IDLE_WAKE_TAG,
+  SKILL_WATCH_BACKOFF_MS,
+  SKILL_WATCH_MAX_WAIT_MS,
   stripPlaceholdersWithOptions,
   getTypedPasteContents,
   getInlinePasteTexts,
-  buildUnavailablePasteError,
+  getPastedTextRefNumLines,
+  formatPastedTextRef,
+  addPastedEntry,
   describeRemovedPastes,
+  addHistoryEntryNoUndo,
+  flushPromptHistory,
+  recordSubmittedPrompts,
+  nfcVariants,
+  HistoryWriterStack,
+  findInlinePasteRanges,
+  parseReferences,
+  dirHasHistoryFile,
+  expandLastPaste,
+  MAX_HISTORY_ENTRIES,
+  registerHistoryExitFlush,
+  renumberPastedContents,
+  getLaunchMessagesOutsidePastes,
+  expandTruncatedPastes,
+  buildUnavailablePasteError,
+  getHistoryGeneration,
   readPromptText,
   keepClearedDraft,
   isTransientHistoryReadError,
@@ -1744,31 +1773,8 @@ export {
   readProjectHistory,
   getTimestampedHistory,
   HISTORY_SCOPES,
-  addToHistory_2,
   collapseSmallPastedBlocks,
-  getHistoryGeneration,
   countHistoryForProject,
-  addHistoryEntryNoUndo,
-  flushPromptHistory,
   removeLastHistoryEntry,
-  registerHistoryExitFlush,
-  SKILL_WATCH_DEBOUNCE_MS,
-  SKILL_WATCH_MIN_MS,
-  SKILL_WATCH_SETTLE_MS,
-  SKILL_WATCH_POLL_MS,
-  collectPromptCommandHashes,
-  SKILL_WATCH_ENABLED,
-  SKILL_WATCH_MAX_IDLE_MS,
-  SKILL_WATCH_RETRY_MS,
-  SKILL_WATCH_IDLE_MS,
-  SKILL_WATCH_TIMEOUT_MS,
-  SKILL_WATCHER_IDLE_WAKE_TAG,
-  SKILL_WATCH_BACKOFF_MS,
-  SKILL_WATCH_MAX_WAIT_MS,
-  dirHasHistoryFile,
-  HistoryWriterStack,
-  setHistoryStore,
-  findInlinePasteRanges,
-  getHistory_2,
   logEntryToHistoryEntry,
 };

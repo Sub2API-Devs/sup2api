@@ -3,13 +3,13 @@
  *
  * 矩形工具（并、包含、相交、滚动目标计算）；部分声明误归（图表、盒线画布）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/layout/geometry.ts
- * pieces: chunk-bzr73sfg.js (1)
+ * pieces: chunk-2avr6cej.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-bzr73sfg.js:199445-199617 fingerprint (2.1.88 match: unionRect, 1)
+//@ chunk-2avr6cej.js:199097-199269 fingerprint (2.1.88 match: unionRect, 1)
 /**
  * 两个矩形的并（包围盒）。
  */

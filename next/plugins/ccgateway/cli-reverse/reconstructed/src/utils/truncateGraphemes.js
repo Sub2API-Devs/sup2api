@@ -3,33 +3,33 @@
  *
  * 2.1.316 新增：按字素截断每行；图片尺寸与大小上限等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-t0gq9gyw.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-85eyj5gy.js (20)
  * attribution: placement 20
  */
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { getGraphemeSegmenter } from "./intl.js";
 import { expandTabsInText } from "../ink/wrapAnsi.js";
 
-//@ chunk-t0gq9gyw.js:3025-3094 placement
+//@ chunk-85eyj5gy.js:3095-3164 placement
 function isDisallowedControlCode(code) {
   if (code === 9 || code === 10) return false;
   return code < 32 || (code >= 127 && code <= 159);
 }
-//@ chunk-t0gq9gyw.js:3094-3161 placement
+//@ chunk-85eyj5gy.js:3164-3231 placement
 function isFormatControlCode(code) {
   return code === 1564 || (code >= 8234 && code <= 8238) || (code >= 8294 && code <= 8297);
 }
-//@ chunk-t0gq9gyw.js:3161-3204 placement
+//@ chunk-85eyj5gy.js:3231-3274 placement
 function isVariationSelectorCode(code) {
   return code === 65038 || code === 65039;
 }
-//@ chunk-t0gq9gyw.js:3204-3245 placement
+//@ chunk-85eyj5gy.js:3274-3315 placement
 function isSurrogateCode(code) {
   return code >= 55296 && code <= 57343;
 }
-//@ chunk-t0gq9gyw.js:3245-3373 placement
+//@ chunk-85eyj5gy.js:3315-3443 placement
 function graphemeWidth(segment) {
   let code = segment.codePointAt(0);
   if (segment.length === 1) {
@@ -39,7 +39,7 @@ function graphemeWidth(segment) {
   let width = bunStringWidth(segment);
   return width === 0 ? 0 : width === 1 ? 1 : width;
 }
-//@ chunk-t0gq9gyw.js:3373-3434 placement
+//@ chunk-85eyj5gy.js:3443-3504 placement
 /**
  * 行内字素上限与分段长度常量组（含截断提示正则）。
  */
@@ -47,7 +47,7 @@ var MAX_INLINE_GRAPHEME_CHARS = 4096;
 var GRAPHEME_TRUNCATION_MARKER_RE = /\u2026 \[\+\d+ graphemes\]/;
 var MAX_INLINE_GRAPHEME_CUT = 4064;
 var MAX_GRAPHEME_SEGMENT_CHARS = 256;
-//@ chunk-t0gq9gyw.js:3434-3698 placement
+//@ chunk-85eyj5gy.js:3504-3768 placement (2.1.88 match: truncateToWidthNoEllipsis, 1)
 /**
  * 把过长的行按字素切分换行（每段长度有上限），短文本原样返回。
  */
@@ -73,7 +73,7 @@ function wrapLongLines(text) {
     }).join(`
 `);
 }
-//@ chunk-t0gq9gyw.js:3698-3822 placement
+//@ chunk-85eyj5gy.js:3768-3892 placement (2.1.88 match: wrapText, 1)
 function hasConsistentWidths(text) {
   let accumulated = "";
   let previousWidth = 0;
@@ -86,7 +86,7 @@ function hasConsistentWidths(text) {
   }
   return true;
 }
-//@ chunk-t0gq9gyw.js:3822-3953 placement
+//@ chunk-85eyj5gy.js:3892-4023 placement (2.1.88 match: findWordObject, 1)
 function replaceMismeasuredGraphemes(text) {
   let result = "";
   let accumulated = "";
@@ -100,10 +100,10 @@ function replaceMismeasuredGraphemes(text) {
   }
   return result;
 }
-//@ chunk-t0gq9gyw.js:3953-4119 placement
+//@ chunk-85eyj5gy.js:4023-4189 placement (2.1.88 match: flushBuffer, 0.346)
 function normalizeGraphemeWidths(text) {
   let current = text;
-  for (let j = 0; j < 16; j++) {
+  for (let idx = 0; idx < 16; idx++) {
     if (hasConsistentWidths(current)) return current;
     let replaced = replaceMismeasuredGraphemes(current);
     if (replaced === current) break;
@@ -112,7 +112,7 @@ function normalizeGraphemeWidths(text) {
   if (hasConsistentWidths(current)) return current;
   return [...getGraphemeSegmenter().segment(current)].map(() => "\uFFFD").join("");
 }
-//@ chunk-t0gq9gyw.js:4119-4226 placement
+//@ chunk-85eyj5gy.js:4189-4296 placement
 function takeGraphemesUpTo(text, maxWidth) {
   let taken = "";
   for (let { segment } of getGraphemeSegmenter().segment(text)) {
@@ -121,11 +121,11 @@ function takeGraphemesUpTo(text, maxWidth) {
   }
   return taken;
 }
-//@ chunk-t0gq9gyw.js:4226-4257 placement
+//@ chunk-85eyj5gy.js:4296-4327 placement
 function truncateToInlineCut(text) {
   return truncateGraphemesSafe(text, MAX_INLINE_GRAPHEME_CUT);
 }
-//@ chunk-t0gq9gyw.js:4257-4405 placement
+//@ chunk-85eyj5gy.js:4327-4475 placement
 function truncateGraphemesSafe(text, max) {
   let taken = takeGraphemesUpTo(text, max);
   if (taken.length > 0) return taken;
@@ -134,11 +134,11 @@ function truncateGraphemesSafe(text, max) {
   if (code >= 55296 && code <= 56319) min -= 1;
   return text.slice(0, min);
 }
-//@ chunk-t0gq9gyw.js:4405-4442 placement
+//@ chunk-85eyj5gy.js:4475-4512 placement
 var MAX_WRAP_TOTAL_CHARS = 4 * MAX_INLINE_GRAPHEME_CHARS * MAX_INLINE_GRAPHEME_CHARS;
 var MAX_TRUNCATE_LINE_CHARS = 1024;
 var MAX_TRUNCATE_TOTAL_CHARS = 64 * MAX_TRUNCATE_LINE_CHARS * MAX_TRUNCATE_LINE_CHARS;
-//@ chunk-t0gq9gyw.js:4442-5054 placement
+//@ chunk-85eyj5gy.js:4512-5124 placement
 /**
  * 按字素截断每行。
  */
@@ -183,22 +183,23 @@ function truncateLinesByGraphemes(text) {
     }).join(`
 `);
 }
-//@ chunk-t0gq9gyw.js:5054-5137 placement
+//@ chunk-85eyj5gy.js:5124-5207 placement
 /**
  * 是否全部为可打印字符。
  */
 function isAllPrintable(script) {
-  for (let j = 0; j < script.length; j++) if (isDisallowedControlCode(script.charCodeAt(j))) return false;
+  for (let idx = 0; idx < script.length; idx++)
+    if (isDisallowedControlCode(script.charCodeAt(idx))) return false;
   return true;
 }
-//@ chunk-t0gq9gyw.js:5137-5168 placement
+//@ chunk-85eyj5gy.js:5207-5238 placement
 /**
  * 去除不可打印字符。
  */
 function stripNonPrintable(text) {
   return sanitizeDisplayChars(text, true);
 }
-//@ chunk-t0gq9gyw.js:5168-5315 placement
+//@ chunk-85eyj5gy.js:5238-5385 placement
 /**
  * 清理显示文本：删除特定字符，把不可显示字符替换为 U+FFFD，可选按字素截断行。
  */
@@ -213,9 +214,9 @@ function sanitizeDisplayChars(text, truncateLines) {
   let expanded = expandTabsInText(result);
   return truncateLines ? truncateLinesByGraphemes(expanded) : expanded;
 }
-//@ chunk-t0gq9gyw.js:5315-5333 placement
+//@ chunk-85eyj5gy.js:5385-5403 placement
 var DEFAULT_IGNORABLE_RE = /\p{DI}/gu;
-//@ chunk-t0gq9gyw.js:5333-5373 placement
+//@ chunk-85eyj5gy.js:5403-5443 placement
 /**
  * 去除变体选择符。
  */
@@ -224,10 +225,10 @@ function stripVariationSelectors(text) {
 }
 export {
   stripNonPrintable,
-  GRAPHEME_TRUNCATION_MARKER_RE,
-  MAX_INLINE_GRAPHEME_CHARS,
-  stripVariationSelectors,
   isAllPrintable,
-  wrapLongLines,
+  stripVariationSelectors,
   sanitizeDisplayChars,
+  GRAPHEME_TRUNCATION_MARKER_RE,
+  wrapLongLines,
+  MAX_INLINE_GRAPHEME_CHARS,
 };

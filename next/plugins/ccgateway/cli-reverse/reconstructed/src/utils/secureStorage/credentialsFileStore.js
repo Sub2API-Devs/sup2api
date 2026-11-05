@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。按配置目录取凭据文件存储（.credentials.json 等），拒绝符号链接。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6tm3rt42.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1853x41x.js (16)
  * attribution: placement 16
  */
 import { join, isAbsolute, basename, dirname } from "path";
@@ -14,14 +14,15 @@ import { open, mkdir, lstat } from "fs/promises";
 import { keychainProjectDirs } from "./macOsKeychainHelpers.js";
 import { getErrnoCode } from "../errors.js";
 import { getFsImplementation } from "../fsOperations.js";
-import { publishWriteAtomic } from "../atomicPublishWrite.js";
+import { filePath } from "../atomicPublishWrite.js";
 import { jsonStringify } from "../slowOperations.js";
+import { preservedTmpOf } from "./preservedTmpNotice.js";
 import { isDiskless } from "../../bootstrap/state.js";
 import { MAX_CREDENTIAL_READ_BYTES } from "../authFileDescriptor.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6tm3rt42.js:604-698 placement
+//@ chunk-1853x41x.js:640-734 placement
 function credentialsStorePaths() {
   let dir = keychainProjectDirs();
   return dir === null
@@ -31,10 +32,10 @@ function credentialsStorePaths() {
         storePath: join(dir, ".credentials.json"),
       };
 }
-//@ chunk-6tm3rt42.js:698-727 placement
+//@ chunk-1853x41x.js:734-763 placement
 var O_NONBLOCK = constants.O_NONBLOCK;
 var MAX_CREDENTIALS_FILE_BYTES = 1048576;
-//@ chunk-6tm3rt42.js:727-914 placement
+//@ chunk-1853x41x.js:763-950 placement
 /**
  * 只读、不跟随符号链接打开
  */
@@ -56,7 +57,7 @@ async function openForReadNoFollow(path) {
     };
   }
 }
-//@ chunk-6tm3rt42.js:914-1131 placement
+//@ chunk-1853x41x.js:950-1167 placement
 /**
  * 写方式、不跟随符号链接打开
  */
@@ -79,16 +80,16 @@ async function openForWriteNoFollow(path, mode) {
     };
   }
 }
-//@ chunk-6tm3rt42.js:1131-1190 placement
+//@ chunk-1853x41x.js:1167-1226 placement
 function isUsableStoreDir(dir) {
   return dir.length > 0 && !dir.includes("\x00") && isAbsolute(dir);
 }
-//@ chunk-6tm3rt42.js:1190-1258 placement
+//@ chunk-1853x41x.js:1226-1294 placement
 var CREDENTIAL_FIELD_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-6tm3rt42.js:1190", () => {
+deferInit("chunk-1853x41x.js:1226", () => {
   CREDENTIAL_FIELD_NAMES = new Set([".oauth_token", ".api_key", ".session_ingress_token"]);
 });
-//@ chunk-6tm3rt42.js:1258-1338 placement
+//@ chunk-1853x41x.js:1294-1374 placement
 function classifyReadError(code) {
   return code === "ENOENT"
     ? {
@@ -99,11 +100,11 @@ function classifyReadError(code) {
         code,
       };
 }
-//@ chunk-6tm3rt42.js:1338-1395 placement
+//@ chunk-1853x41x.js:1374-1431 placement
 function readErrorState(errnoCode) {
   return errnoCode === "ENOENT" ? "absent" : "read-failed";
 }
-//@ chunk-6tm3rt42.js:1395-1550 placement
+//@ chunk-1853x41x.js:1431-1586 placement
 /**
  * 读取错误分类
  */
@@ -112,7 +113,7 @@ function classifyReadErrno(code, platform) {
   if ((code === "EACCES" || code === "EPERM") && platform !== "win32") return "absent";
   return "read-failed";
 }
-//@ chunk-6tm3rt42.js:1550-2570 placement
+//@ chunk-1853x41x.js:1586-2606 placement
 /**
  * 读取凭据文件
  */
@@ -215,7 +216,7 @@ async function readCredentialsFile(readErrorState) {
     }
   }
 }
-//@ chunk-6tm3rt42.js:2570-4838 placement
+//@ chunk-1853x41x.js:2606-4918 placement
 /**
  * 凭据文件存储实现
  */
@@ -236,11 +237,14 @@ var CREDENTIALS_FILE_STORE = {
     let { storeDir, storePath } = paths;
     try {
       await getFsImplementation().mkdir(storeDir);
-      await publishWriteAtomic(storePath, jsonStringify(data), {
+      await filePath(storePath, jsonStringify(data), {
         mode: 384,
         exactMode: 384,
+        flush: true,
+        flushForgivesEbadf: true,
       });
     } catch (error) {
+      await preservedTmpOf(error);
       return {
         state: "write-failed",
         code: getErrnoCode(error),
@@ -417,7 +421,7 @@ var CREDENTIALS_FILE_STORE = {
     };
   },
 };
-//@ chunk-6tm3rt42.js:4838-5006 placement
+//@ chunk-1853x41x.js:4918-5086 placement
 /**
  * 删除凭据文件
  */
@@ -439,26 +443,26 @@ async function deleteCredentialsFile(path) {
     };
   }
 }
-//@ chunk-6tm3rt42.js:5006-5059 placement
+//@ chunk-1853x41x.js:5086-5139 placement
 var CredentialsStoreHandleSymbol; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-6tm3rt42.js:5006", () => {
+deferInit("chunk-1853x41x.js:5086", () => {
   CredentialsStoreHandleSymbol = Symbol("secureStorage.CredentialsStoreHandle");
 });
-//@ chunk-6tm3rt42.js:5059-5113 placement
+//@ chunk-1853x41x.js:5139-5193 placement
 /**
  * 按配置目录取凭据文件存储（.credentials.json 等），拒绝符号链接。
  */
 function credentialsStoreFor(handle, store = CREDENTIALS_FILE_STORE) {
   return isStorageV5Enabled() && handle !== undefined ? withStoreHandle(store) : undefined;
 }
-//@ chunk-6tm3rt42.js:5113-5167 placement
+//@ chunk-1853x41x.js:5193-5247 placement
 function sessionServicesFor(storageV5) {
   return {
     storageV5,
     credentials: credentialsStoreFor(storageV5),
   };
 }
-//@ chunk-6tm3rt42.js:5167-5225 placement
+//@ chunk-1853x41x.js:5247-5305 placement
 function withStoreHandle(store = CREDENTIALS_FILE_STORE) {
   return {
     ...store,

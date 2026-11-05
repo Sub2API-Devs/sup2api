@@ -1,8 +1,8 @@
 /**
  * zod/v4/core/json-schema-processors.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: zod@4.6.2
- * pieces: chunk-7vp249v4.js (12), chunk-dcmhvw5a.js (1)
+ * pieces: chunk-m4y44r15.js (12), chunk-z20c443b.js (1)
  * attribution: esm-layout 2, esm-fingerprint 11
  */
 import { NUMBER_FORMAT_RANGES, BIGINT_FORMAT_RANGES, getEnumValues, assignProp } from "./util.js";
@@ -17,7 +17,7 @@ import {
   finalize,
 } from "./to-json-schema.js";
 
-//@ chunk-7vp249v4.js:65890-67028 esm-layout
+//@ chunk-m4y44r15.js:65890-67028 esm-layout
 var narrowMin = (agg, key, value) => {
   if (agg[key] === undefined || value > agg[key]) agg[key] = value;
 };
@@ -71,7 +71,7 @@ var contributors = {
   },
   mime_type: (agg, def) => intersectMime(agg, def.mime),
 };
-//@ chunk-7vp249v4.js:67028-67644 esm-fingerprint
+//@ chunk-m4y44r15.js:67028-67644 esm-fingerprint
 function aggregateChecks(schema) {
   let agg = {};
   let def = schema._zod.def;
@@ -91,7 +91,7 @@ function aggregateChecks(schema) {
   for (let pattern of bag.patterns ?? []) addPattern(agg, pattern);
   return agg;
 }
-//@ chunk-7vp249v4.js:67644-71734 esm-fingerprint
+//@ chunk-m4y44r15.js:67644-71734 esm-fingerprint
 var formatMap = {
   guid: "uuid",
   url: "uri",
@@ -319,14 +319,14 @@ var arrayProcessor = (schema, ctx, _json, params) => {
     path: [...params.path, "items"],
   });
 };
-//@ chunk-7vp249v4.js:71734-71901 esm-fingerprint
+//@ chunk-m4y44r15.js:71734-71901 esm-fingerprint
 function inputOptin(schema) {
   let def = schema._zod.def;
   if (def.type === "pipe" && def.in._zod.traits.has("$ZodTransform")) return inputOptin(def.out);
   if (def.type === "catch") return inputOptin(def.innerType);
   return schema._zod.optin;
 }
-//@ chunk-7vp249v4.js:71901-74555 esm-fingerprint
+//@ chunk-m4y44r15.js:71901-74555 esm-fingerprint
 var objectProcessor = (schema, ctx, _json, params) => {
   let json = _json;
   let def = schema._zod.def;
@@ -482,7 +482,7 @@ var tupleProcessor = (schema, ctx, _json, params) => {
   if (typeof minimum === "number") json.minItems = minimum;
   if (typeof maximum === "number") json.maxItems = maximum;
 };
-//@ chunk-7vp249v4.js:74555-75344 esm-fingerprint
+//@ chunk-m4y44r15.js:74555-75344 esm-fingerprint
 function stringifyKeyNames(bySchema, json, visited) {
   if (json.$ref) {
     if (visited.has(json)) return json;
@@ -514,9 +514,9 @@ function stringifyKeyNames(bySchema, json, visited) {
   if (!values) rest.pattern = (types.includes("number") ? number : integer).source;
   return rest;
 }
-//@ chunk-7vp249v4.js:75344-75363 esm-layout
+//@ chunk-m4y44r15.js:75344-75363 esm-layout
 var pendingRecords = new WeakMap();
-//@ chunk-7vp249v4.js:75363-75773 esm-fingerprint
+//@ chunk-m4y44r15.js:75363-75773 esm-fingerprint
 function rewriteKeyNames(ctx) {
   let bySchema = new Map();
   for (let entry of ctx.seen.values())
@@ -536,7 +536,7 @@ function rewriteKeyNames(ctx) {
       if (rewritten) carrier.propertyNames = rewritten;
     }
 }
-//@ chunk-7vp249v4.js:75773-76797 esm-fingerprint
+//@ chunk-m4y44r15.js:75773-76797 esm-fingerprint
 var recordProcessor = (schema, ctx, _json, params) => {
   let json = _json;
   let def = schema._zod.def;
@@ -599,7 +599,7 @@ var nonoptionalProcessor = (schema, ctx, _json, params) => {
   seen.ref = def.innerType;
 };
 var UNREPRESENTABLE_DEFAULT = Symbol();
-//@ chunk-7vp249v4.js:76797-77010 esm-fingerprint
+//@ chunk-m4y44r15.js:76797-77010 esm-fingerprint
 function serializeDefaultValue(value, schema, ctx, json, params) {
   let unrepresentable = false;
   let serialized = JSON.stringify(value, (_, val) => {
@@ -611,7 +611,7 @@ function serializeDefaultValue(value, schema, ctx, json, params) {
   handleUnrepresentable(schema, ctx, json, params, "BigInt defaults cannot be represented in JSON Schema");
   return UNREPRESENTABLE_DEFAULT;
 }
-//@ chunk-7vp249v4.js:77010-78481 esm-fingerprint
+//@ chunk-m4y44r15.js:77010-78481 esm-fingerprint
 var defaultProcessor = (schema, ctx, json, params) => {
   let def = schema._zod.def;
   processSchema(def.innerType, ctx, params);
@@ -718,7 +718,7 @@ var allProcessors = {
   optional: optionalProcessor,
   lazy: lazyProcessor,
 };
-//@ chunk-7vp249v4.js:78481-78914 esm-fingerprint
+//@ chunk-m4y44r15.js:78481-78914 esm-fingerprint
 function toJSONSchema(input, params) {
   if ("_idmap" in input) {
     let registry = input;
@@ -761,7 +761,7 @@ function toJSONSchema(input, params) {
   extractDefs(ctx, input);
   return finalize(ctx, input);
 }
-//@ chunk-dcmhvw5a.js:431253-431399 esm-fingerprint
+//@ chunk-z20c443b.js:429715-429861 esm-fingerprint
 var plainFormatChecks = new Set(["starts_with", "ends_with", "includes"]);
 var formatAliases = {
   guid: "uuid",

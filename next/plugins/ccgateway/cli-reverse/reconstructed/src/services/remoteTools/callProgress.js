@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程工具调用进度监视：对端沉默时探测、轮询并判定是否放弃。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qmsrnapp.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5vfqv7sk.js (25)
  * attribution: placement 25
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
@@ -27,7 +27,7 @@ import { outcomeQueryEnvelope } from "../../remote/tools/protocolSchemas.js";
 import { isTransportFailure, interpretCallOutcome, hostEpochOf, isRefusedDrop } from "./callOutcome.js";
 import { logRemoteTools } from "./remoteToolsDebug.js";
 
-//@ chunk-qmsrnapp.js:2057-2135 placement
+//@ chunk-5vfqv7sk.js:2267-2345 placement
 function isSilentCallWatchEnabled() {
   try {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_pernambuco", false) === true;
@@ -35,7 +35,7 @@ function isSilentCallWatchEnabled() {
     return false;
   }
 }
-//@ chunk-qmsrnapp.js:2135-2326 placement
+//@ chunk-5vfqv7sk.js:2345-2536 placement
 /**
  * 远程静默调用的计时参数：探测宽限、首次探测前的静默时长、可疑次数、重拨时间、判定窗口与自身流保活。
  */
@@ -50,7 +50,7 @@ var SILENT_CALL_TIMING = {
   ownStreamKeepaliveMs: 15000,
 };
 var SAYS_STILL_HERE = "says_still_here";
-//@ chunk-qmsrnapp.js:2326-2465 placement
+//@ chunk-5vfqv7sk.js:2536-2675 placement
 function sessionProgressProbe(host) {
   return isSilentCallWatchEnabled() &&
     isStillHereOnCached() &&
@@ -59,11 +59,11 @@ function sessionProgressProbe(host) {
     ? host.transport.silence
     : undefined;
 }
-//@ chunk-qmsrnapp.js:2465-2528 placement
+//@ chunk-5vfqv7sk.js:2675-2738 placement
 function missedProbesSince(probe, since) {
   return probe.missed().filter((miss) => miss.writtenAt >= since);
 }
-//@ chunk-qmsrnapp.js:2528-2664 placement
+//@ chunk-5vfqv7sk.js:2738-2874 placement
 function silentCallDecision(misses, timing) {
   let writtenAt = misses[timing.suspectProbes - 1]?.writtenAt;
   return writtenAt === undefined
@@ -72,14 +72,14 @@ function silentCallDecision(misses, timing) {
         decidedAt: writtenAt + timing.redialStartedAfterMs + timing.decidingWindowMs,
       };
 }
-//@ chunk-qmsrnapp.js:2664-2752 placement
+//@ chunk-5vfqv7sk.js:2874-2962 placement
 /**
  * 判断给定探测记录里是否还有在 n 时刻仍未到期的可疑探测。
  */
 function anyProbeStillPending(misses, decidedAt, timing) {
   return misses.slice(timing.suspectProbes).some((miss) => miss.writtenAt + miss.waitedMs >= decidedAt);
 }
-//@ chunk-qmsrnapp.js:2752-2814 placement
+//@ chunk-5vfqv7sk.js:2962-3024 placement
 /**
  * 记录进度监视异常：写错误日志并上报 rtc_silent_call/watch_threw。
  */
@@ -88,7 +88,7 @@ function logWatchFailure(error) {
   logFeatureBad("rtc_silent_call", "watch_threw");
   return;
 }
-//@ chunk-qmsrnapp.js:2814-2877 placement
+//@ chunk-5vfqv7sk.js:3024-3087 placement
 /**
  * 空进度句柄：不做任何监视，onAccepted 与 stop 都是空实现。
  */
@@ -99,7 +99,7 @@ var NOOP_PROGRESS_WATCH = {
   },
   stop: () => {},
 };
-//@ chunk-qmsrnapp.js:2877-3244 placement
+//@ chunk-5vfqv7sk.js:3087-3454 placement
 /**
  * 远程工具调用发出后监视对端是否沉默：连续错过进度探测时判定 suspect，并在决定窗口内重拨或放弃（rtc_silent_call 遥测）。
  */
@@ -137,7 +137,7 @@ function watchSilentCall({
     return NOOP_PROGRESS_WATCH;
   }
 }
-//@ chunk-qmsrnapp.js:3244-3659 placement
+//@ chunk-5vfqv7sk.js:3454-3869 placement
 async function pollSilentCall({ host, since, signal, timing, wait, now }) {
   while (!signal.aborted) {
     let probe = sessionProgressProbe(host);
@@ -158,14 +158,14 @@ async function pollSilentCall({ host, since, signal, timing, wait, now }) {
     if ((await probe.probe()) !== false) return;
   }
 }
-//@ chunk-qmsrnapp.js:3659-3770 placement
+//@ chunk-5vfqv7sk.js:3869-3980 placement
 function decidingWindowMs(decidedAt, timing, nowMs) {
   return Math.min(
     timing.redialStartedAfterMs + timing.decidingWindowMs,
     Math.max(timing.decidingWindowMs, decidedAt - nowMs),
   );
 }
-//@ chunk-qmsrnapp.js:3770-4034 placement
+//@ chunk-5vfqv7sk.js:3980-4244 placement
 function startStillHereProbe(options) {
   try {
     let probe = sessionProgressProbe(options.host);
@@ -190,7 +190,7 @@ function startStillHereProbe(options) {
     return logWatchFailure(error);
   }
 }
-//@ chunk-qmsrnapp.js:4034-4392 placement
+//@ chunk-5vfqv7sk.js:4244-4602 placement
 async function probeStillHere({ host, since, signal, timing, now }) {
   for (let pass of [1, 2]) {
     let probe = sessionProgressProbe(host);
@@ -208,7 +208,7 @@ async function probeStillHere({ host, since, signal, timing, now }) {
     ? false
     : undefined;
 }
-//@ chunk-qmsrnapp.js:4392-4980 placement
+//@ chunk-5vfqv7sk.js:4602-5190 placement
 function classifySilentCall({ host, since, probed, checkWrittenAt, timing, now }) {
   try {
     let probe = sessionProgressProbe(host);
@@ -245,19 +245,19 @@ function classifySilentCall({ host, since, probed, checkWrittenAt, timing, now }
     };
   }
 }
-//@ chunk-qmsrnapp.js:4980-5108 placement
+//@ chunk-5vfqv7sk.js:5190-5318 placement
 var CAP_PROGRESS_CHECKS = "progress_checks";
 var STANDING_APPROVALS = "standing_approvals";
 var STANDING_OFFERED_RULES = "standing_offered_rules";
 var PLAN_CLASSIFIER = "plan_classifier";
 var ANNOUNCES_RETURN = "announces_return";
 var PROGRESS_POLL_MIN_MS = 3000;
-//@ chunk-qmsrnapp.js:5108-5199 placement
+//@ chunk-5vfqv7sk.js:5318-5409 placement
 function clampedHostLimit(server, limitName) {
   let { min, max } = SERVING_LIMIT_BOUNDS[limitName];
   return sanitizeInt(server.description?.limits[limitName] ?? DEFAULT_SERVING_LIMITS[limitName], min, max);
 }
-//@ chunk-qmsrnapp.js:5199-5338 placement
+//@ chunk-5vfqv7sk.js:5409-5548 placement
 function progressCheckTiming(host) {
   return {
     intervalMs: clampedHostLimit(host, "progress_interval_ms"),
@@ -265,23 +265,23 @@ function progressCheckTiming(host) {
     unreachableBudgetMs: clampedHostLimit(host, "reconcile_ms"),
   };
 }
-//@ chunk-qmsrnapp.js:5338-5408 placement
+//@ chunk-5vfqv7sk.js:5548-5618 placement
 function hostSupportsProgressChecks(host) {
   return host.description?.capabilities?.includes(CAP_PROGRESS_CHECKS) === true;
 }
-//@ chunk-qmsrnapp.js:5408-5478 placement
+//@ chunk-5vfqv7sk.js:5618-5688 placement
 function hostAnnouncesReturn(host) {
   return host.description?.capabilities?.includes(ANNOUNCES_RETURN) === true;
 }
-//@ chunk-qmsrnapp.js:5478-5530 placement
+//@ chunk-5vfqv7sk.js:5688-5740 placement
 function isSessionTransport(host) {
   return host.transport.kind === "session";
 }
-//@ chunk-qmsrnapp.js:5530-5600 placement
+//@ chunk-5vfqv7sk.js:5740-5810 placement
 function hasCapability(server) {
   return server.description?.capabilities?.includes(PLAN_CLASSIFIER) === true;
 }
-//@ chunk-qmsrnapp.js:5600-5676 placement (2.1.88 match: handleAutoModeTransition, 0.799)
+//@ chunk-5vfqv7sk.js:5810-5886 placement (2.1.88 match: handleAutoModeTransition, 0.798)
 function isAutoModeCapableHost(host) {
   let accountSetPermissionMode = getAccountSetPermissionMode();
   return (
@@ -289,17 +289,17 @@ function isAutoModeCapableHost(host) {
     (accountSetPermissionMode === "auto" || (accountSetPermissionMode === "plan" && isSessionTransport(host)))
   );
 }
-//@ chunk-qmsrnapp.js:5676-5754 placement
+//@ chunk-5vfqv7sk.js:5886-5964 placement
 function hasSessionCapability(host) {
   return isSessionTransport(host) && host.description?.capabilities?.includes(STANDING_APPROVALS) === true;
 }
-//@ chunk-qmsrnapp.js:5754-5832 placement
+//@ chunk-5vfqv7sk.js:5964-6042 placement
 function hasSessionCapabilityPair(host) {
   return (
     hasSessionCapability(host) && host.description?.capabilities?.includes(STANDING_OFFERED_RULES) === true
   );
 }
-//@ chunk-qmsrnapp.js:5832-9616 placement
+//@ chunk-5vfqv7sk.js:6042-9835 placement
 /**
  * 等待在远程机器上执行的调用结果：周期性进度探测、迟到结果、对端重启/断线时向对端追问调用结局。
  */
@@ -585,6 +585,7 @@ async function awaitRemoteCallWithProgress({
   });
 }
 export {
+  isSessionTransport,
   hostSupportsProgressChecks,
   clampedHostLimit,
   progressCheckTiming,
@@ -596,5 +597,4 @@ export {
   hasCapability,
   hasSessionCapability,
   hasSessionCapabilityPair,
-  isSessionTransport,
 };

@@ -1,8 +1,8 @@
 /**
  * es-set-tostringtag/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: es-set-tostringtag@2.1.0
- * pieces: chunk-h6b7mazd.js (1)
+ * pieces: chunk-ww9agm6g.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_shams_2 } from "../has-tostringtag/shams.js";
 import { require_hasown } from "../hasown/index.js";
 import { require_es_object_atoms_7 } from "../es-object-atoms/index.js";
 
-//@ chunk-h6b7mazd.js:20651-21208 cjs-fingerprint
+//@ chunk-ww9agm6g.js:20651-21208 cjs-fingerprint
 var require_es_set_tostringtag = __commonJS(function (cjsExports, cjsModule) {
   var GetIntrinsic = require_get_intrinsic();
   var $defineProperty = GetIntrinsic("%Object.defineProperty%", true);

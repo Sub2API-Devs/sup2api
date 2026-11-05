@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：模型来源覆盖提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3wek6r2k.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hjswk319.js (3)
  * attribution: placement 3
  */
 import {
@@ -45,7 +45,7 @@ import {
 } from "../../services/mcp/config.js";
 import { agentMcpSpecsToScopedConfigs } from "../../tools/AgentTool/loadAgentsDir.js";
 
-//@ chunk-3wek6r2k.js:64581-66146 placement
+//@ chunk-hjswk319.js:64005-65570 placement
 /**
  * 汇总模型来源（命令行、环境变量、设置、代理定义），生成覆盖提示。
  */
@@ -131,7 +131,7 @@ async function collectModelOverrides(options) {
     modelWithoutStartupOverride: startupModel.modelWithoutStartupOverride,
   };
 }
-//@ chunk-3wek6r2k.js:66146-66539 placement
+//@ chunk-hjswk319.js:65570-65963 placement
 function applyAgentModelOverride(configs, agent, options) {
   if (!agent) return configs;
   if (isSafeMode()) return configs;
@@ -156,7 +156,7 @@ function applyAgentModelOverride(configs, agent, options) {
     ...configs,
   };
 }
-//@ chunk-3wek6r2k.js:66576-66663 placement
+//@ chunk-hjswk319.js:66000-66087 placement
 /**
  * 模型 pin 格式正则、空白提示正则与提示文本长度上限。
  */

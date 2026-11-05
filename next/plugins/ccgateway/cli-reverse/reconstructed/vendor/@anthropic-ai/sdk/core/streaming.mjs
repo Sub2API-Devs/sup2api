@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/core/streaming.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (1)
+ * pieces: chunk-vn3g7zt8.js (1)
  * attribution: esm-layout 1
  */
 import { __classPrivateFieldSet, __classPrivateFieldGet } from "../internal/tslib.mjs";
@@ -16,7 +16,7 @@ import { LineDecoder } from "../internal/decoders/line.mjs";
 import { ReadableStreamToAsyncIterable, makeReadableStream } from "../internal/shims.mjs";
 import { encodeUTF8 } from "../internal/utils/bytes.mjs";
 
-//@ chunk-hwmsct5x.js:28977-32502 esm-layout
+//@ chunk-vn3g7zt8.js:29348-32873 esm-layout
 var _Stream_client;
 var Stream = (() => {
   class Stream {

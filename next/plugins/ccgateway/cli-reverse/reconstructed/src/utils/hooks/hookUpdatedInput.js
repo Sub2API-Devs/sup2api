@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：钩子 updatedInput 校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (17)
  * attribution: placement 17
  */
 import { logForDebugging } from "../debug.js";
@@ -26,9 +26,9 @@ import { NullBytePathError, UnstablePathError } from "../path.js";
 import { logError } from "../log.js";
 import { formatZodValidationError } from "../toolErrors.js";
 import { ZodError } from "../../../vendor/zod/v4/classic/errors.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 
-//@ chunk-e6aww6q8.js:997050-997563 placement
+//@ chunk-5xgkngpb.js:1010815-1011328 placement
 function guardAccountMemoryHookRewrite(tool, hookEvent, hookSource) {
   let message = `A ${hookEvent} hook rewrote the ${tool.name} call to the account memory server; a hook may allow or deny such a call but not change it. The call is denied.`;
   logForDebugging(message, {
@@ -54,13 +54,13 @@ function guardAccountMemoryHookRewrite(tool, hookEvent, hookSource) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:1000528-1000663 placement (2.1.88 match: isUnrecognizedKeysIssue, 1)
+//@ chunk-5xgkngpb.js:1014301-1014436 placement (2.1.88 match: isUnrecognizedKeysIssue, 1)
 function isUnrecognizedKeysIssue(issue) {
   return (Array.isArray(issue) ? issue : []).filter(
     (issue) => issue?.code === "unrecognized_keys" && Array.isArray(issue.keys) && Array.isArray(issue.path),
   );
 }
-//@ chunk-e6aww6q8.js:1000663-1000943 placement
+//@ chunk-5xgkngpb.js:1014436-1014716 placement
 function deleteKeysAtPaths(input, issues) {
   let result = {
     ...input,
@@ -89,9 +89,9 @@ function deleteKeysAtPaths(input, issues) {
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:1000943-1001028 placement
+//@ chunk-5xgkngpb.js:1014716-1014801 placement
 var HOOK_REWRITE_INVALID_TEXT = "The tool input from the model was valid; the hook's rewrite of it was not.";
-//@ chunk-e6aww6q8.js:1001028-1003124 placement
+//@ chunk-5xgkngpb.js:1014801-1016914 placement
 /**
  * 校验钩子返回的 updatedInput：未知键、保留键、类型不符时拒绝并记录。
  */
@@ -235,7 +235,7 @@ The tool input from the model was valid.`,
     input: enforced ? restored : input,
   };
 }
-//@ chunk-e6aww6q8.js:1003124-1003251 placement (2.1.88 match: getKnownModelOption, 0.315)
+//@ chunk-5xgkngpb.js:1016914-1017041 placement (2.1.88 match: getKnownModelOption, 0.315)
 /**
  * "<event> hook (source) for <工具名>"。旧版名 getKnownModelOption 为错配，与模型无关（钩子模块）。
  */
@@ -244,7 +244,7 @@ function formatHookSourceLabel(tool, context) {
     context.source === undefined || context.source === "settings" ? "" : ` (${context.source})`;
   return `${context.event} hook${sourceSuffix} for ${tool.name}`;
 }
-//@ chunk-e6aww6q8.js:1003251-1003389 placement
+//@ chunk-5xgkngpb.js:1017041-1017179 placement
 function restoreShownKeys(input, original, shown) {
   if (shown === undefined) return input;
   let restored = {
@@ -255,7 +255,7 @@ function restoreShownKeys(input, original, shown) {
       restored[key] = shown[key];
   return restored;
 }
-//@ chunk-e6aww6q8.js:1003389-1003499 placement
+//@ chunk-5xgkngpb.js:1017179-1017289 placement
 function isUnchangedShownKey(key, input, shown) {
   return (
     shown !== undefined &&
@@ -265,13 +265,13 @@ function isUnchangedShownKey(key, input, shown) {
     deepEqualIgnoringUndefined(input[key], shown[key])
   );
 }
-//@ chunk-e6aww6q8.js:1003499-1003669 placement
+//@ chunk-5xgkngpb.js:1017289-1017459 placement
 function hookSourceKind(source) {
   if (source === undefined || source === "settings") return source;
   if (source === "plugin" || source.startsWith("plugin:")) return "plugin";
   return source === "skill" || source.startsWith("skill:") ? "skill" : "other";
 }
-//@ chunk-e6aww6q8.js:1003669-1003777 placement
+//@ chunk-5xgkngpb.js:1017459-1017567 placement
 function backfillObservableInput(tool, input) {
   if (!tool.backfillObservableInput) return input;
   let copied = {
@@ -280,7 +280,7 @@ function backfillObservableInput(tool, input) {
   tool.backfillObservableInput(copied);
   return copied;
 }
-//@ chunk-e6aww6q8.js:1003777-1003915 placement
+//@ chunk-5xgkngpb.js:1017567-1017705 placement
 function countChangedKeys(before, after) {
   if (before === after || !isObjectLike_2(before) || !isObjectLike_2(after)) return 0;
   let changed = 0;
@@ -288,11 +288,11 @@ function countChangedKeys(before, after) {
     changed += Object.hasOwn(after, key) ? countChangedKeys(before[key], after[key]) : 1;
   return changed;
 }
-//@ chunk-e6aww6q8.js:1003915-1003968 placement
+//@ chunk-5xgkngpb.js:1017705-1017758 placement
 function isObjectLike_2(value) {
   return typeof value === "object" && value !== null;
 }
-//@ chunk-e6aww6q8.js:1003968-1004201 placement
+//@ chunk-5xgkngpb.js:1017758-1017991 placement
 async function validatePermissionRequestUpdatedInput(tool, updatedInput, original, validate) {
   if (updatedInput === undefined || Object.keys(updatedInput).length === 0)
     return {
@@ -316,7 +316,7 @@ async function validatePermissionRequestUpdatedInput(tool, updatedInput, origina
         deny: checked.deny,
       };
 }
-//@ chunk-e6aww6q8.js:1004201-1004469 placement
+//@ chunk-5xgkngpb.js:1017991-1018260 placement
 function describeValidateError(tool, context, error) {
   let code =
     getErrnoCode(error) ??
@@ -332,12 +332,12 @@ function describeValidateError(tool, context, error) {
     );
   return errorMessage(error);
 }
-//@ chunk-e6aww6q8.js:1004469-1004750 placement
+//@ chunk-5xgkngpb.js:1018260-1018541 placement
 function schemaInvalidUpdatedInput(tool, context, issues) {
   let message = `${formatHookSourceLabel(tool, context)} returned updatedInput that failed schema validation: ${formatZodValidationError(tool.name, new ZodError(issues))}
 ${HOOK_REWRITE_INVALID_TEXT}`;
   logForDebugging(
-    `${context.event} hook's updatedInput for ${toolCategoryForTelemetry(tool)} failed schema validation (${uniq(issues.map((issue) => issue.code)).join(",")})`,
+    `${context.event} hook's updatedInput for ${toolCategoryForTelemetry(tool)} failed schema validation (${normalizeCaseForComparison_2(issues.map((issue) => issue.code)).join(",")})`,
     {
       level: "warn",
     },
@@ -347,7 +347,7 @@ ${HOOK_REWRITE_INVALID_TEXT}`;
     deny: hookDenyDecision(tool, context, message),
   };
 }
-//@ chunk-e6aww6q8.js:1004750-1004954 placement
+//@ chunk-5xgkngpb.js:1018541-1018745 placement
 function hookDenyDecision(tool, context, message) {
   return {
     behavior: "deny",
@@ -361,7 +361,7 @@ function hookDenyDecision(tool, context, message) {
     ...permissionRequestHookExtras(context),
   };
 }
-//@ chunk-e6aww6q8.js:1004954-1005038 placement
+//@ chunk-5xgkngpb.js:1018745-1018829 placement
 function permissionRequestHookExtras(context) {
   return context.event === "PermissionRequest"
     ? {

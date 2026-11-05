@@ -3,9 +3,9 @@
  *
  * presence 转录条目构造（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aqdf5t3e.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tsrpnscb.js (5)
  * attribution: placement 5
  */
 import { isHumanTurn } from "../../utils/turnOrigin.js";
@@ -13,7 +13,7 @@ import { parseArtifactUrlAnyCase } from "../../tools/ArtifactTool/constants.js";
 import { decodeBase58Uuid } from "../../utils/messages.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aqdf5t3e.js:24386-24667 placement (2.1.88 match: buildTranscriptEntries, 0.777)
+//@ chunk-tsrpnscb.js:24427-24708 placement (2.1.88 match: buildTranscriptEntries, 0.902)
 function findHumanMessagesContaining(messages, text) {
   let repoUrl = text.toLowerCase();
   let lines = [];
@@ -32,7 +32,7 @@ function findHumanMessagesContaining(messages, text) {
   }
   return lines;
 }
-//@ chunk-aqdf5t3e.js:24667-25078 placement
+//@ chunk-tsrpnscb.js:24708-25119 placement
 /**
  * 识别会话记录里 URL 的正则：http 前缀、裸域名路径、空白与零宽字符、首尾标点、Markdown 链接；以及 artifact-files 标记。
  */
@@ -46,7 +46,7 @@ var LEADING_PUNCT_RE;
 var TRAILING_PUNCT_RE;
 var MARKDOWN_LINK_RE;
 var ARTIFACT_FILES;
-deferInit("chunk-aqdf5t3e.js:24667", () => {
+deferInit("chunk-tsrpnscb.js:24708", () => {
   HTTP_URL_RE = /^https?:\/\//i;
   BARE_HOST_PATH_RE = /^[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::\d+)?\//i;
   WHITESPACE_CLASS = "\\t\\n\\v\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000";
@@ -61,7 +61,7 @@ deferInit("chunk-aqdf5t3e.js:24667", () => {
   );
   ARTIFACT_FILES = "artifact-files";
 });
-//@ chunk-aqdf5t3e.js:25078-25199 placement
+//@ chunk-tsrpnscb.js:25119-25240 placement
 function mentionsCurrentRepoUrl(text, repoUrl) {
   for (let match of text.matchAll(MARKDOWN_LINK_RE))
     if (getCurrentRepoHttpsUrl(match[1], repoUrl)) return true;
@@ -69,7 +69,7 @@ function mentionsCurrentRepoUrl(text, repoUrl) {
     .split(WHITESPACE_RE)
     .some((url) => getCurrentRepoHttpsUrl(url.replace(LEADING_PUNCT_RE, ""), repoUrl));
 }
-//@ chunk-aqdf5t3e.js:25199-25466 placement (2.1.88 match: getCurrentRepoHttpsUrl, 0.803)
+//@ chunk-tsrpnscb.js:25240-25507 placement (2.1.88 match: getCurrentRepoHttpsUrl, 0.805)
 function getCurrentRepoHttpsUrl(url, repoName) {
   let replaced = url.replace(TRAILING_PUNCT_RE, "");
   if (ZERO_WIDTH_RE.test(replaced)) return false;
@@ -82,7 +82,7 @@ function getCurrentRepoHttpsUrl(url, repoName) {
     return parts.some((part, partIndex) => part === repoName && parts[partIndex - 1] === ARTIFACT_FILES);
   return parts[0] === repoName || decodeBase58Uuid(replaced) === repoName;
 }
-//@ chunk-aqdf5t3e.js:25466-25720 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-tsrpnscb.js:25507-25761 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function joinTextContentOrNull(data) {
   if (typeof data === "string") return data;
   if (!Array.isArray(data)) return null;

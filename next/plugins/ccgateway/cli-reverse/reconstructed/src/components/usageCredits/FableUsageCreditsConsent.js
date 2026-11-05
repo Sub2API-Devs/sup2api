@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。Fable 模型使用额度同意。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: placement 3
  */
 import { firstWord as firstWord_2 } from "../../utils/model/thirdPartyModelDefaults.js";
@@ -15,8 +15,8 @@ import { useMemo, useState, useRef, useEffect } from "../../../vendor/react/cjs/
 import { withQuotaResumeFire } from "../../services/quotaAutoResume/quotaAutoResume.js";
 import { useInputClock } from "../../ink/components/Input.js";
 import { useRefusableAnswer } from "../../hooks/useRefusableAnswer.js";
-import { useInputRefusalWindow, useRefusalTracker, settleKey } from "../CustomSelect/selectTypeahead.js";
-import { isWithinRecentInput } from "../../hooks/useRecentInputGuard.js";
+import { useRecentInputStamp, isWithinRecentInput } from "../../hooks/useRecentInputGuard.js";
+import { useRecentInputWithin, useRefusalTracker, settleKey } from "../CustomSelect/selectTypeahead.js";
 import { fetchPrepaidBalance, DEFAULT_MONTHLY_SPEND_LIMIT } from "../../services/api/billing.js";
 import { checkExtraUsageStatus, enableOverageForConsent } from "../../services/api/overageConsent.js";
 import {
@@ -54,9 +54,9 @@ import { ExtraUsageDialogEntry } from "./ExtraUsageDialog.js";
 import { AwaitWork } from "./BuyCreditsFlow.js";
 import { sleep } from "../../utils/sleep.js";
 
-//@ chunk-18hwfzwa.js:1185083-1185164 placement
+//@ chunk-czq1j3j2.js:1215272-1215353 placement
 var CREDITS_CONSENT_TEXT = "By continuing, you agree to turn on usage credits per our Help Center:";
-//@ chunk-18hwfzwa.js:1185164-1191955 placement
+//@ chunk-czq1j3j2.js:1215353-1222160 placement
 /**
  * FableUsageCreditsConsent：使用 Fable 模型会消耗用量额度时的同意界面。
  */
@@ -87,15 +87,19 @@ function FableUsageCreditsConsent(props) {
     setStepName(consentState.s);
     setStepStartedAt(Date.now());
   }
-  let inputRefusalWindow = useInputRefusalWindow();
+  let withinStepGuard = useRecentInputStamp(stepStartedAt);
+  let isRecentInput = useRecentInputWithin();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
   let hasReenabledRef = useRef(false);
   let remount = settleKey(`${stepStartedAt}:${epoch}`);
   function isInputRefusedNow() {
-    return (stepStartedAt !== 0 && isWithinRecentInput(inputClock, stepStartedAt)) || refusedWithin();
+    return (
+      (stepStartedAt !== 0 && isWithinRecentInput(inputClock, withinStepGuard(stepStartedAt))) ||
+      refusedWithin()
+    );
   }
   function refuseInput() {
-    if (inputRefusalWindow() || isInputRefusedNow()) {
+    if (isRecentInput() || isInputRefusedNow()) {
       noteRefused();
       return true;
     }
@@ -222,7 +226,7 @@ function FableUsageCreditsConsent(props) {
     logFeatureSad("model_fable_consent", "upsell_selected");
   }
   function onDismiss() {
-    if (inputRefusalWindow() || isInputRefusedNow()) {
+    if (isRecentInput() || isInputRefusedNow()) {
       noteRefused();
       return;
     }
@@ -448,7 +452,7 @@ function FableUsageCreditsConsent(props) {
         title,
         color: "warning",
         onCancel: () => {
-          if (inputRefusalWindow() || isInputRefusedNow()) {
+          if (isRecentInput() || isInputRefusedNow()) {
             noteRefused();
             return;
           }
@@ -534,7 +538,7 @@ function FableUsageCreditsConsent(props) {
       });
   }
 }
-//@ chunk-18hwfzwa.js:1191955-1192350 placement
+//@ chunk-czq1j3j2.js:1222160-1222555 placement
 function usageCreditsBlockedText(prefixText, status, modelName) {
   switch (status) {
     case "disabled":

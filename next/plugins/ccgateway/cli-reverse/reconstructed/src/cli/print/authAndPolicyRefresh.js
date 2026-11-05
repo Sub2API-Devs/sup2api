@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：认证变化后刷新依赖设置，处理“按原样写入”读文件的服务状态
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (6)
- * attribution: placement 6
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (7)
+ * attribution: placement 6, layout 1
  */
 import { refreshRemoteManagedSettings } from "../../services/remoteManagedSettings/loader.js";
 import { logError } from "../../utils/log.js";
@@ -15,14 +15,14 @@ import { errorKindForTelemetry } from "../../services/policyLimits/startupGate.j
 import { refreshPolicyLimits } from "../../services/policyLimits/PolicyLimitsClient.js";
 import { isTransportBacked } from "../transportState.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import { TENGU_PROUD_PEARL } from "../../services/api/withRetry.js";
+import { TENGU_PROUD_PEARL, TENGU_PATIENT_WALNUT } from "../../services/api/withRetry.js";
 import { isPolicyVerdictAbsentOrHipaa } from "../../utils/messages/systemInit.js";
 import { hasComplianceTaint } from "../../services/policyLimits/complianceTaints.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:32339-32639 placement
+//@ chunk-0yw3taqg.js:35012-35313 placement
 /**
  * claude_authenticate 后刷新远程托管设置与策略限制，失败只记日志。
  */
@@ -44,11 +44,11 @@ function refreshAuthDependentSettings(storageV5, credentials) {
     ),
   );
 }
-//@ chunk-tyg7f3ek.js:32639-32676 placement
+//@ chunk-0yw3taqg.js:51117-51154 placement
 function isReadFileAsWrittenServed(params) {
   return readFileAsWrittenUnservedReason(params) === undefined;
 }
-//@ chunk-tyg7f3ek.js:32676-32781 placement
+//@ chunk-0yw3taqg.js:51154-51259 placement
 /**
  * 判断 read_file as_written 是否可用：lane 会话恒可用，否则受 HIPAA/策略应答与开关限制。
  */
@@ -60,7 +60,11 @@ function readFileAsWrittenUnservedReason(params) {
   logAsWrittenServingChange(params, reason);
   return reason;
 }
-//@ chunk-tyg7f3ek.js:32781-32890 placement
+//@ chunk-0yw3taqg.js:51259-51295 layout
+function isAsWrittenSearchEnabled() {
+  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_PATIENT_WALNUT, false) === true;
+}
+//@ chunk-0yw3taqg.js:51295-51404 placement
 function policyReasonForAsWritten() {
   try {
     return !isPolicyVerdictAbsentOrHipaa()
@@ -72,10 +76,10 @@ function policyReasonForAsWritten() {
     return "no_policy_answer";
   }
 }
-//@ chunk-tyg7f3ek.js:32890-33040 placement
+//@ chunk-0yw3taqg.js:51404-51554 placement
 var AS_WRITTEN_UNSERVED_TEXT; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
 var FILE_AS_WRITTEN_SERVED_SLOT;
-deferInit("chunk-tyg7f3ek.js:32890", () => {
+deferInit("chunk-0yw3taqg.js:51404", () => {
   AS_WRITTEN_UNSERVED_TEXT = {
     hipaa: "the organization is marked hipaa",
     no_policy_answer: "no answer yet from /api/claude_code/policy_limits",
@@ -84,7 +88,7 @@ deferInit("chunk-tyg7f3ek.js:32890", () => {
     last: undefined,
   }));
 });
-//@ chunk-tyg7f3ek.js:33040-33333 placement
+//@ chunk-0yw3taqg.js:51554-51847 placement
 function logAsWrittenServingChange(params, reason) {
   let slot = FILE_AS_WRITTEN_SERVED_SLOT.of(params);
   let message;
@@ -102,4 +106,9 @@ function logAsWrittenServingChange(params, reason) {
     });
   } catch {}
 }
-export { readFileAsWrittenUnservedReason, refreshAuthDependentSettings, isReadFileAsWrittenServed };
+export {
+  isAsWrittenSearchEnabled,
+  readFileAsWrittenUnservedReason,
+  refreshAuthDependentSettings,
+  isReadFileAsWrittenServed,
+};

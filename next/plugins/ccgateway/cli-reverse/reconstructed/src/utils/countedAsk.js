@@ -3,15 +3,15 @@
  *
  * 计数请求（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-c8400jaf.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9ay0r00c.js (2)
  * attribution: placement 2
  */
 import { logForDebugging } from "./debug.js";
 import { createSignal } from "./signal.js";
 
-//@ chunk-c8400jaf.js:262-586 placement
+//@ chunk-9ay0r00c.js:262-586 placement
 class CountedAsk {
   #e = false;
   #t = createSignal();
@@ -40,7 +40,7 @@ class CountedAsk {
     return this.#t.subscribe(listener);
   }
 }
-//@ chunk-c8400jaf.js:586-994 placement
+//@ chunk-9ay0r00c.js:586-994 placement
 /**
  * 计数请求队列：登记未完成的请求，结束时移除；为请求生成"第 N 个，共 M 个"的位置标签并通知订阅者。
  */

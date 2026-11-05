@@ -3,9 +3,9 @@
  *
  * asciicast 录屏文件：按会话重命名录像。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/asciicast.ts
- * pieces: chunk-08s5p3av.js (5)
+ * pieces: chunk-2snqx25v.js (5)
  * attribution: file-local 1, layout 2, facade-exports 1, placement 1
  */
 import { join, relative, basename } from "path";
@@ -19,7 +19,7 @@ import { logForDebugging } from "./debug.js";
 import { unwrapResult } from "./resultError.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-08s5p3av.js:3102-3334 file-local
+//@ chunk-2snqx25v.js:3169-3401 file-local
 class _resetRecordingStateForTesting {
   filePath = null;
   key = undefined;
@@ -42,7 +42,7 @@ class _resetRecordingStateForTesting {
     this.failed = true;
   }
 }
-//@ chunk-08s5p3av.js:3334-3424 layout
+//@ chunk-2snqx25v.js:3401-3491 layout
 /**
  * 录制文件的存储命名（namespace、项目键、会话 id 与时间戳）。
  */
@@ -54,15 +54,15 @@ function recordingKey(projectKey, sessionId, timestamp) {
     stamp: String(timestamp),
   };
 }
-//@ chunk-08s5p3av.js:3424-3449 layout
+//@ chunk-2snqx25v.js:3491-3516 layout
 /**
  * 按会话根保存的录制状态。
  */
 var recordingStateByRoot; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-08s5p3av.js:3424", () => {
+deferInit("chunk-2snqx25v.js:3491", () => {
   recordingStateByRoot = new SessionRootSlot(() => new _resetRecordingStateForTesting());
 });
-//@ chunk-08s5p3av.js:3449-4215 facade-exports (2.1.88 match: renameRecordingForSession, 0.754)
+//@ chunk-2snqx25v.js:3516-4282 facade-exports (2.1.88 match: renameRecordingForSession, 0.755)
 async function renameRecordingForSession(session, storage) {
   let recordingState = recordingStateByRoot.of(session);
   let oldPath = recordingState.filePath;
@@ -104,7 +104,7 @@ async function renameRecordingForSession(session, storage) {
     logForDebugging(`[asciicast] Failed to rename recording from ${oldName} to ${newName}`);
   }
 }
-//@ chunk-08s5p3av.js:4215-4320 placement
+//@ chunk-2snqx25v.js:4282-4387 placement
 async function moveSessionRecording(storage, key, nextKey) {
   unwrapResult(await storage.move(key, nextKey));
   await rmdir(join(getProjectsDir(), key.projectKey, key.sessionId)).catch(() => {});

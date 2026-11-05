@@ -3,9 +3,9 @@
  *
  * GitHub App 安装向导：安装 Claude GitHub App 步骤
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/install-github-app/InstallAppStep.tsx
- * pieces: chunk-4v9zy7gn.js (1)
+ * pieces: chunk-2xbvbqx2.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -19,7 +19,7 @@ import { Box, Text } from "../../ink/components/Text.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { GITHUB_ACTION_SETUP_DOCS_URL } from "../../constants/github-app.js";
 
-//@ chunk-4v9zy7gn.js:32810-34294 fingerprint (2.1.88 match: InstallAppStep, 0.475)
+//@ chunk-2xbvbqx2.js:33854-35337 fingerprint (2.1.88 match: InstallAppStep, 0.475)
 function InstallAppStep(props) {
   let $ = useMemoCache(12);
   let { repoUrl, onSubmit } = props;

@@ -3,9 +3,9 @@
  *
  * SendUserMessage 结果渲染（转录/仅 Brief/普通三种布局）与附件列表组件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BriefTool/UI.tsx
- * pieces: chunk-ah34pb7m.js (3)
+ * pieces: chunk-wjygkcr4.js (3)
  * attribution: fingerprint 3
  */
 import { isAbsolute } from "path";
@@ -25,7 +25,7 @@ import { formatBriefTimestamp } from "../../utils/formatBriefTimestamp.js";
 import { NoSelect } from "../../ink/components/Input.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 
-//@ chunk-ah34pb7m.js:23792-24125 fingerprint (2.1.88 match: _temp, 0.855)
+//@ chunk-wjygkcr4.js:24075-24408 fingerprint (2.1.88 match: _temp, 0.856)
 function renderAttachmentRow(att) {
   let canLink = isAbsolute(att.path) && att.pathValidated && !isUntouchableSpelling(att.path);
   return jsxProd_default_2(
@@ -54,7 +54,7 @@ function renderAttachmentRow(att) {
     att.file_uuid ?? att.path,
   );
 }
-//@ chunk-ah34pb7m.js:24125-25088 fingerprint (2.1.88 match: renderToolResultMessage, 0.868)
+//@ chunk-wjygkcr4.js:24408-25371 fingerprint (2.1.88 match: renderToolResultMessage, 0.869)
 /**
  * SendUserMessage 结果渲染：转录模式、仅 Brief 模式（Claude 标签+时间）与普通模式三种布局，附附件列表。
  */
@@ -154,7 +154,7 @@ function renderToolResultMessage_6(output, _progressMessages, options) {
     ],
   });
 }
-//@ chunk-ah34pb7m.js:25088-25329 fingerprint (2.1.88 match: AttachmentList, 1)
+//@ chunk-wjygkcr4.js:25371-25612 fingerprint (2.1.88 match: AttachmentList, 1)
 /**
  * 附件列表组件：每行显示 [image]/[file]、可点击路径与大小。
  */

@@ -3,9 +3,9 @@
  *
  * 错误日志 sink：errors/<日期>.jsonl、mcp-logs-<server>/<日期>.jsonl；混有 history purge 与转录路径辅助代码。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/errorLogSink.ts
- * pieces: chunk-3g8vhh6f.js (1), chunk-425yaf76.js (1), chunk-7t4fmt2f.js (1), chunk-k7fgdyw5.js (11)
+ * pieces: chunk-50ktwjzn.js (1), chunk-5qsfbz2c.js (1), chunk-p13f9wk2.js (11), chunk-pcv9zvvv.js (1)
  * attribution: fingerprint 7, callgraph-witnessed 2, layout 2, sole-consumer 1, affinity 1, facade-exports 1
  */
 import { join } from "path";
@@ -30,11 +30,11 @@ import { registerCleanup } from "./cleanupRegistry.js";
 import { writePendingWakeup } from "./scheduledWakeup.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3g8vhh6f.js:747-809 fingerprint (2.1.88 match: getErrorsPath, 1)
+//@ chunk-5qsfbz2c.js:747-809 fingerprint (2.1.88 match: getErrorsPath, 1)
 function hasJsonlFiles(session) {
   return storageNameSpellings(session).some((spelling) => spelling.endsWith(".jsonl"));
 }
-//@ chunk-7t4fmt2f.js:2483-2597 fingerprint (2.1.88 match: _clearLogWritersForTesting, 0.685)
+//@ chunk-pcv9zvvv.js:2484-2598 fingerprint (2.1.88 match: _clearLogWritersForTesting, 0.686)
 function setDisposableInterval(callback, intervalMs, options = {}) {
   let interval = setInterval(callback, intervalMs);
   if (options.unref) interval.unref?.();
@@ -42,30 +42,30 @@ function setDisposableInterval(callback, intervalMs, options = {}) {
     [Symbol.dispose]: () => clearInterval(interval),
   };
 }
-//@ chunk-k7fgdyw5.js:667-695 callgraph-witnessed (2.1.88 match: DATE, 0)
+//@ chunk-p13f9wk2.js:700-728 callgraph-witnessed (2.1.88 match: DATE, 0)
 var getTodayLogDate; // deferred: uses dateToFilename (./log.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-k7fgdyw5.js:667", () => {
+deferInit("chunk-p13f9wk2.js:700", () => {
   getTodayLogDate = memoizeAlias(() => dateToFilename(new Date()));
 });
-//@ chunk-k7fgdyw5.js:695-744 layout (2.1.88 match: getErrorsPath, 1)
+//@ chunk-p13f9wk2.js:728-777 layout (2.1.88 match: getErrorsPath, 1)
 /**
  * 错误日志文件 <缓存目录 claude-cli>/errors/<YYYY-MM-DD>.jsonl。
  */
 function getErrorLogFilePath() {
   return join(CACHE_PATHS.errors(), getTodayLogDate() + ".jsonl");
 }
-//@ chunk-k7fgdyw5.js:744-796 fingerprint (2.1.88 match: getMCPLogsPath, 1)
+//@ chunk-p13f9wk2.js:777-829 fingerprint (2.1.88 match: getMCPLogsPath, 1)
 /**
  * MCP 日志文件 <缓存目录>/mcp-logs-<server>/<日期>.jsonl。
  */
 function getMCPLogsPath(serverName) {
   return join(CACHE_PATHS.mcpLogs(serverName), getTodayLogDate() + ".jsonl");
 }
-//@ chunk-k7fgdyw5.js:1738-1763 sole-consumer
+//@ chunk-p13f9wk2.js:1771-1796 sole-consumer
 function logErrorSinkNoop(message, errorLogFilePath, perRuntimePath) {
   return;
 }
-//@ chunk-k7fgdyw5.js:1763-2016 affinity (2.1.88 match: extractErrorDetail, 1)
+//@ chunk-p13f9wk2.js:1796-2049 affinity (2.1.88 match: extractErrorDetail, 1)
 function extractErrorMessage(data) {
   if (typeof data === "string") return data;
   if (data && typeof data === "object") {
@@ -81,7 +81,7 @@ function extractErrorMessage(data) {
   }
   return;
 }
-//@ chunk-k7fgdyw5.js:2016-2343 fingerprint (2.1.88 match: logErrorImpl, 0.949)
+//@ chunk-p13f9wk2.js:2049-2376 fingerprint (2.1.88 match: logErrorImpl, 0.949)
 /**
  * 错误日志 sink：调试日志记一行 error，并把 {error} 追加到 <缓存目录>/errors/<日期>.jsonl。
  */
@@ -104,7 +104,7 @@ function logErrorImpl(message, error) {
     error: `${context}${errorStr}`,
   });
 }
-//@ chunk-k7fgdyw5.js:2343-2553 callgraph-witnessed (2.1.88 match: logMCPErrorImpl, 0.738)
+//@ chunk-p13f9wk2.js:2376-2586 callgraph-witnessed (2.1.88 match: logMCPErrorImpl, 0.739)
 function logMCPErrorImpl(sink, serverName, error) {
   logForDebugging(`MCP server "${serverName}" ${error}`, {
     level: "error",
@@ -119,14 +119,14 @@ function logMCPErrorImpl(sink, serverName, error) {
   };
   sink.writerFor(logFile).write(errorInfo);
 }
-//@ chunk-k7fgdyw5.js:2553-2623 layout
+//@ chunk-p13f9wk2.js:2586-2656 layout
 /**
  * CLAUDE_CODE_SKIP_MCP_DEBUG_LOG_FILES 为真时不写 MCP 调试日志文件。
  */
 function shouldSkipMcpDebugLogFiles() {
   return env.CLAUDE_CODE_SKIP_MCP_DEBUG_LOG_FILES === true && isRemoteManagedEnvironment();
 }
-//@ chunk-k7fgdyw5.js:2623-2794 fingerprint (2.1.88 match: logMCPDebugImpl, 0.859)
+//@ chunk-p13f9wk2.js:2656-2827 fingerprint (2.1.88 match: logMCPDebugImpl, 0.859)
 function logMCPDebugImpl(sink, serverName, message) {
   logForDebugging(`MCP server "${serverName}": ${message}`);
   if (shouldSkipMcpDebugLogFiles()) return;
@@ -139,7 +139,7 @@ function logMCPDebugImpl(sink, serverName, message) {
   };
   sink.writerFor(logFile).write(debugInfo);
 }
-//@ chunk-k7fgdyw5.js:2794-2970 facade-exports
+//@ chunk-p13f9wk2.js:2827-3003 facade-exports
 function initializeErrorLogSink() {
   attachErrorLogSink(initializeErrorLogSink_2(new BatchedLogWriter()));
   let droppedBeforeSink = errorLogBuffer.droppedBeforeSink;
@@ -149,7 +149,7 @@ function initializeErrorLogSink() {
       : `Error log sink initialized; ${droppedBeforeSink} events logged before it attached were dropped`,
   );
 }
-//@ chunk-k7fgdyw5.js:2970-3106 fingerprint (2.1.88 match: initializeErrorLogSink, 0.586)
+//@ chunk-p13f9wk2.js:3003-3139 fingerprint (2.1.88 match: initializeErrorLogSink, 0.586)
 /**
  * 创建错误日志 sink：logError / logMCPError / logMCPDebug（MCP 写 <缓存目录>/mcp-logs-<server>/<日期>.jsonl）。
  */
@@ -161,7 +161,7 @@ function initializeErrorLogSink_2(options) {
     keepsMCPDebug: () => !shouldSkipMcpDebugLogFiles() || debugLogTakesLevel("debug"),
   };
 }
-//@ chunk-425yaf76.js:1126-1477 fingerprint (2.1.88 match: createJsonlWriter, 1)
+//@ chunk-50ktwjzn.js:1126-1477 fingerprint (2.1.88 match: createJsonlWriter, 1)
 class SerialWriteQueue {
   #o = Promise.resolve();
   #r = 0;
@@ -191,4 +191,4 @@ class SerialWriteQueue {
     this.#o.then(() => this.#e?.());
   }
 }
-export { SerialWriteQueue, setDisposableInterval, initializeErrorLogSink, hasJsonlFiles };
+export { SerialWriteQueue, hasJsonlFiles, initializeErrorLogSink, setDisposableInterval };

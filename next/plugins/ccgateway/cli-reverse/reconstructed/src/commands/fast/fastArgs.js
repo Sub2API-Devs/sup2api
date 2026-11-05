@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/fast [on|off] 参数处理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vr5qyyg8.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jq8w4f0j.js (1)
  * attribution: placement 1
  */
 import {
@@ -20,7 +20,7 @@ import { isBridgeOrVerifiedSlackTurn } from "../../utils/promptSubmissionOrigin.
 import { toggleFastMode } from "./fast.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 
-//@ chunk-vr5qyyg8.js:12230-13030 placement
+//@ chunk-jq8w4f0j.js:13378-14178 placement
 /**
  * /fast [on|off]：切换快速模式，不可用时返回原因。
  */

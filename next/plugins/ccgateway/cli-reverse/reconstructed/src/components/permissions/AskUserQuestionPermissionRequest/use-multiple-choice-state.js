@@ -3,14 +3,14 @@
  *
  * 问答对话框状态 reducer（当前问题、答案、文本输入模式）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/AskUserQuestionPermissionRequest/use-multiple-choice-state.ts
- * pieces: chunk-18hwfzwa.js (3)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: fingerprint 3
  */
 import { useReducer, useCallback } from "../../../../vendor/react/cjs/react.production.js";
 
-//@ chunk-18hwfzwa.js:1274152-1274957 fingerprint (2.1.88 match: reducer, 0.952)
+//@ chunk-czq1j3j2.js:1299945-1300750 fingerprint (2.1.88 match: reducer, 0.953)
 function reducer(state, action) {
   switch (action.type) {
     case "next-question":
@@ -64,14 +64,14 @@ function reducer(state, action) {
       };
   }
 }
-//@ chunk-18hwfzwa.js:1274957-1275036 fingerprint (2.1.88 match: INITIAL_STATE, 1)
+//@ chunk-czq1j3j2.js:1300750-1300829 fingerprint (2.1.88 match: INITIAL_STATE, 1)
 var INITIAL_STATE = {
   currentQuestionIndex: 0,
   answers: {},
   questionStates: {},
   isInTextInput: false,
 };
-//@ chunk-18hwfzwa.js:1275036-1275630 fingerprint (2.1.88 match: useMultipleChoiceState, 1)
+//@ chunk-czq1j3j2.js:1300829-1301423 fingerprint (2.1.88 match: useMultipleChoiceState, 1)
 function useMultipleChoiceState() {
   let [state, dispatch] = useReducer(reducer, INITIAL_STATE);
   let nextQuestion = useCallback(() => {

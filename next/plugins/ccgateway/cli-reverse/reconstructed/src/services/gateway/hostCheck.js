@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：调用 /gateway-api/gateway-hosts/check 确认网关主机；创建到网关的 HTTPS 请求（代理、客户端证书、CA）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (22)
- * attribution: placement 22
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (23)
+ * attribution: placement 22, layout 1
  */
 import { Agent, request as request_2 } from "https";
 import { getBedrockRegionPrefix, withBedrockRegionPrefix } from "../../utils/model/bedrock.js";
@@ -48,10 +48,9 @@ import { anthropicHostOf } from "../../utils/anthropicHosts.js";
 import { DESKTOP_3P_ENTRYPOINT } from "../../utils/entrypointKinds.js";
 import { withTimeout } from "../../utils/sleep.js";
 import { claudeCodeUserAgent } from "../../utils/http.js";
-import { LOCALHOST_NAMES } from "../../bridge/workSecret.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:231706-231792 placement
+//@ chunk-exfmq47h.js:241221-241307 placement
 /**
  * 把模型名解析成上游 wire id（Bedrock 时按 profile 与区域前缀处理）。
  */
@@ -63,21 +62,21 @@ function resolveWireModelId(model) {
     withBedrockRegionPrefix(model, regionPrefix)
   );
 }
-//@ chunk-aepeg2w5.js:231792-231834 placement
+//@ chunk-exfmq47h.js:241307-241349 placement
 /**
  * 判断模型是否可解析成 provider 模型 id。
  */
 function hasProviderModelId(provider, model) {
   return resolveProviderModelId(provider, model) !== undefined;
 }
-//@ chunk-aepeg2w5.js:231834-231887 placement
+//@ chunk-exfmq47h.js:241349-241402 placement
 /**
  * 生成网关缓存代际键（provider 与 first-party/custom）。
  */
 function gatewayGeneration() {
   return `${getAPIProvider()}|${isFirstPartyAnthropicBaseUrl() ? "api" : "custom"}`;
 }
-//@ chunk-aepeg2w5.js:231887-231959 placement
+//@ chunk-exfmq47h.js:241402-241474 placement
 /**
  * 按 wire id 查网关模型的目录行 id。
  */
@@ -88,7 +87,7 @@ function gatewayCatalogRowId(wireId) {
     wireIdOf: gatewayModelIdFor,
   });
 }
-//@ chunk-aepeg2w5.js:232332-232372 placement
+//@ chunk-exfmq47h.js:241847-241887 placement
 /**
  * 记录网关 URL 的看到/确认状态。
  */
@@ -96,22 +95,22 @@ class GatewaySeenState {
   seenAt = undefined;
   settledAt = undefined;
 }
-//@ chunk-aepeg2w5.js:232372-232397 placement
+//@ chunk-exfmq47h.js:241887-241912 placement
 /**
  * 网关 URL 状态的宿主作用域单例。
  */
 var gatewaySeenState; // deferred: uses GatewaySeenState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:232372", () => {
+deferInit("chunk-exfmq47h.js:241887", () => {
   gatewaySeenState = new HostScoped(() => new GatewaySeenState());
 });
-//@ chunk-aepeg2w5.js:232397-232434 placement
+//@ chunk-exfmq47h.js:241912-241949 placement
 /**
  * 取当前宿主的网关 URL 状态。
  */
 function getGatewaySeenState() {
   return gatewaySeenState.of(getRootSession().host);
 }
-//@ chunk-aepeg2w5.js:232434-232544 placement
+//@ chunk-exfmq47h.js:241949-242059 placement
 /**
  * 记录看到的网关 URL。
  */
@@ -126,7 +125,7 @@ function noteGatewaySeen(gatewayVersion) {
   )
     gatewaySeenState.seenAt = url;
 }
-//@ chunk-aepeg2w5.js:232544-232639 placement
+//@ chunk-exfmq47h.js:242059-242154 placement
 /**
  * 记录已确认的网关 URL，返回它是否与之前看到的一致。
  */
@@ -137,11 +136,11 @@ function noteGatewaySettled() {
   gatewaySeenState.settledAt = url;
   return gatewaySeenState.seenAt === url;
 }
-//@ chunk-aepeg2w5.js:232639-232785 placement
+//@ chunk-exfmq47h.js:242154-242300 placement
 var GATEWAY_HOST_CHECK_PATH; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_HOST_CHECK_BYTES;
 var GatewayHostCheckSchema;
-deferInit("chunk-aepeg2w5.js:232639", () => {
+deferInit("chunk-exfmq47h.js:242154", () => {
   GATEWAY_HOST_CHECK_PATH = "/gateway-api/gateway-hosts/check";
   MAX_HOST_CHECK_BYTES = 8192;
   GatewayHostCheckSchema = DoctorLazy(() =>
@@ -153,12 +152,12 @@ deferInit("chunk-aepeg2w5.js:232639", () => {
     }),
   );
 });
-//@ chunk-aepeg2w5.js:232785-232852 placement
+//@ chunk-exfmq47h.js:242300-242367 placement
 /**
  * 网关主机检查中可重试的错误（429/5xx）。
  */
 let GatewayHostCheckRetryableError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:232785", () => {
+deferInit("chunk-exfmq47h.js:242300", () => {
   GatewayHostCheckRetryableError = class GatewayHostCheckRetryableError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -169,17 +168,17 @@ deferInit("chunk-aepeg2w5.js:232785", () => {
     }
   };
 });
-//@ chunk-aepeg2w5.js:232852-232872 placement
+//@ chunk-exfmq47h.js:242367-242387 placement
 /**
  * 网关主机检查的一般失败（非 200、非 JSON）。
  */
 let GatewayHostCheckError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:232852", () => {
+deferInit("chunk-exfmq47h.js:242367", () => {
   GatewayHostCheckError = class GatewayHostCheckError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {};
 });
-//@ chunk-aepeg2w5.js:232872-232948 placement
+//@ chunk-exfmq47h.js:242387-242463 placement
 /**
  * 临时暂停代理时钟后取 helper 的代理认证。
  */
@@ -191,7 +190,7 @@ async function withProxyAuthHelper(helperClock) {
     clock?.();
   }
 }
-//@ chunk-aepeg2w5.js:232948-234232 placement
+//@ chunk-exfmq47h.js:242463-243747 placement
 /**
  * 调用 /gateway-api/gateway-hosts/check 确认网关主机。
  */
@@ -266,7 +265,7 @@ async function queryGatewayHostCheck(
     );
   return validated.data;
 }
-//@ chunk-aepeg2w5.js:234232-234436 placement
+//@ chunk-exfmq47h.js:243747-243951 placement
 var HOST_CHECK_TIMEOUT_MESSAGE = "timed out";
 var ANSWER_TOO_LARGE_MESSAGE = "answer exceeds size limit";
 var answerTooLargeError = () =>
@@ -274,7 +273,7 @@ var answerTooLargeError = () =>
 var PROXY_AUTH_REQUIRED_MESSAGE = "the proxy requires authentication, HTTP 407";
 var MAX_ERROR_DETAIL = 160;
 var TLS_REFUSED_MESSAGE = "TLS connection not accepted";
-//@ chunk-aepeg2w5.js:234436-235145 placement
+//@ chunk-exfmq47h.js:243951-244659 placement
 /**
  * 把 TLS/网络错误归类并截短消息。
  */
@@ -299,7 +298,7 @@ function classifyTlsError(error) {
     return `${TLS_REFUSED_MESSAGE}: ${text}`;
   return text;
 }
-//@ chunk-aepeg2w5.js:235145-236281 placement
+//@ chunk-exfmq47h.js:244659-245795 placement
 /**
  * 探测网关的 /managed/settings 端点。
  */
@@ -324,10 +323,10 @@ async function probeGatewayManagedSettings(url, authorization, timeoutMs) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION
@@ -352,7 +351,7 @@ async function probeGatewayManagedSettings(url, authorization, timeoutMs) {
     return;
   }
 }
-//@ chunk-aepeg2w5.js:236281-236560 placement
+//@ chunk-exfmq47h.js:245795-246074 placement
 async function requestWithProxyAuthRetry(url, options) {
   try {
     return await requestWithTimeout(url, options);
@@ -369,7 +368,7 @@ async function requestWithProxyAuthRetry(url, options) {
     throw proxyErrorToHostCheckError(error) ?? error;
   }
 }
-//@ chunk-aepeg2w5.js:236560-236757 placement
+//@ chunk-exfmq47h.js:246074-246271 placement
 async function requestWithTimeout(url, options) {
   let signal = AbortSignal.timeout(options.timeoutMs);
   try {
@@ -384,7 +383,7 @@ async function requestWithTimeout(url, options) {
     throw error;
   }
 }
-//@ chunk-aepeg2w5.js:236757-237047 placement
+//@ chunk-exfmq47h.js:246271-246561 placement
 function proxyErrorToHostCheckError(error) {
   let proxyError = findProxyError(error);
   if (proxyError === undefined) return;
@@ -400,7 +399,7 @@ function proxyErrorToHostCheckError(error) {
         "no-answer",
       );
 }
-//@ chunk-aepeg2w5.js:237047-238316 placement
+//@ chunk-exfmq47h.js:246561-247830 placement
 /**
  * 创建到网关的 HTTPS 请求（代理、客户端证书、CA）。
  */
@@ -502,7 +501,15 @@ function createGatewayRequest(
     request.end();
   }).finally(() => agent.destroy());
 }
-//@ chunk-aepeg2w5.js:238366-238658 placement
+//@ chunk-exfmq47h.js:247830-247880 layout
+/**
+ * 允许使用 http:// 的本地主机名集合。
+ */
+var LOCALHOST_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-exfmq47h.js:247830", () => {
+  LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+});
+//@ chunk-exfmq47h.js:247880-248172 placement
 /**
  * 规范化网关 URL：补 https://，非本地主机拒绝 http，去掉结尾斜杠。
  */
@@ -517,9 +524,9 @@ function normalizeGatewayUrl(url) {
   return parsed.href.replace(/\/+$/, "");
 }
 export {
-  gatewayCatalogRowId,
-  probeGatewayManagedSettings,
   normalizeGatewayUrl,
+  probeGatewayManagedSettings,
+  gatewayCatalogRowId,
   noteGatewaySettled,
   noteGatewaySeen,
   resolveWireModelId,

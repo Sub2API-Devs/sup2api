@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：本机为云会话提供工具（attach serve）：设备链接重试、拒绝/关闭原因文案、恢复服务。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fe6rs39h.js (34), chunk-q8cqcff6.js (18)
- * attribution: placement 52
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5fn9rb8r.js (19), chunk-keyy05re.js (34)
+ * attribution: placement 52, layout 1
  */
 import {
   eagerParseCliFlag,
@@ -32,6 +32,7 @@ import {
 } from "../../services/analytics/growthbook.js";
 import { ATTACH_SERVE_FLAG } from "./deviceHooks.js";
 import { apiClient } from "../../services/routines/routinesApi.js";
+import { trustedDeviceHeaders } from "../../utils/teleport/api.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage, isFsInaccessible, TeleportOperationError } from "../../utils/errors.js";
 import { fromEnum, lit } from "../../services/analytics/safeMetadata.js";
@@ -66,13 +67,13 @@ import { sessionStillBoundTo } from "./attachDeviceBinding.js";
 import { isSameDevice, isConnectedAndResumed, isServingConnected } from "./hostPermissions.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-q8cqcff6.js:6929-7034 placement
+//@ chunk-5fn9rb8r.js:7067-7172 placement
 function isCloudFlag(flag) {
   return (
     flag === "--cloud" || flag === "--remote" || flag.startsWith("--cloud=") || flag.startsWith("--remote=")
   );
 }
-//@ chunk-q8cqcff6.js:7034-7133 placement
+//@ chunk-5fn9rb8r.js:7172-7272 placement
 function isAttachServeMode() {
   return (
     eagerParseCliFlag("--attach-serve") !== undefined ||
@@ -82,21 +83,21 @@ function isAttachServeMode() {
       !eagerHasCliFlag("--print"))
   );
 }
-//@ chunk-q8cqcff6.js:7133-7192 placement
+//@ chunk-5fn9rb8r.js:7272-7332 placement
 /**
  * attach serve 模式下判断某设置来源是否为仓库目录级（非 globalConfig 且在 REPO_DIR_SETTING_SOURCES 内）。
  */
 function isAttachServeRepoScopedSource(sourceName) {
   return sourceName !== "globalConfig" && REPO_DIR_SETTING_SOURCES.has(sourceName) && isAttachServeMode();
 }
-//@ chunk-q8cqcff6.js:7192-7260 placement
+//@ chunk-5fn9rb8r.js:7332-7400 placement
 /**
  * 在宿主环境守卫内读取 CLAUDE_CODE_IGNORE_PERSISTED_TRUST（是否忽略持久化的信任）。
  */
 function ignoresPersistedTrust() {
   return withHostOwnedEnvGuard(() => env.CLAUDE_CODE_IGNORE_PERSISTED_TRUST);
 }
-//@ chunk-q8cqcff6.js:7260-7334 placement
+//@ chunk-5fn9rb8r.js:7400-7475 placement
 /**
  * 仓库目录级设置来源在 attach serve 模式、或非交互且忽略持久信任时视为生效。
  */
@@ -107,10 +108,10 @@ function isAttachServeRepoScopedSourceOrNonInteractive(sourceName) {
     (isAttachServeMode() || (getIsNonInteractiveSession() && ignoresPersistedTrust()))
   );
 }
-//@ chunk-q8cqcff6.js:7334-7461 placement
+//@ chunk-5fn9rb8r.js:7475-7602 placement
 var OAUTH_ENDPOINT_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var pinCache;
-deferInit("chunk-q8cqcff6.js:7334", () => {
+deferInit("chunk-5fn9rb8r.js:7475", () => {
   OAUTH_ENDPOINT_KEYS = [
     "BASE_API_URL",
     "TOKEN_URL",
@@ -121,7 +122,7 @@ deferInit("chunk-q8cqcff6.js:7334", () => {
   ];
   pinCache = identity_2(new Map(), (cache) => cache.clear());
 });
-//@ chunk-q8cqcff6.js:7461-7580 placement
+//@ chunk-5fn9rb8r.js:7602-7721 placement
 /**
  * 是否固定使用已存储的登录（缓存首次判断结果，可由环境变量开启）。
  */
@@ -130,22 +131,22 @@ function isStoredLoginPinned() {
   pinCache.set("isPinned", pinned);
   return pinned;
 }
-//@ chunk-q8cqcff6.js:7580-7604 placement
+//@ chunk-5fn9rb8r.js:7721-7745 placement
 /**
  * 恒返回 true 的占位判断（attach serve 相关构建期开关）。
  */
 function isAlwaysTrue() {
   return true;
 }
-//@ chunk-q8cqcff6.js:7604-7669 placement
+//@ chunk-5fn9rb8r.js:7745-7810 placement
 function isRemoteToolsPinStoredLogin() {
   return "CLAUDE_CODE_REMOTE_TOOLS_PIN_STORED_LOGIN";
 }
-//@ chunk-q8cqcff6.js:7669-7813 placement
+//@ chunk-5fn9rb8r.js:7810-7954 placement
 function formatServeHelperStoppedError(target) {
   return `Error: serve helper stopped: ${target} does not resolve to this computer's stored claude.ai login on Anthropic's own service`;
 }
-//@ chunk-q8cqcff6.js:7813-8191 placement
+//@ chunk-5fn9rb8r.js:7954-8332 placement
 /**
  * 远程工具固定使用存储登录时，检查 base URL 与 OAuth 端点是否为官方第一方（本地 OAuth 构建另行判断），不符时返回 base_url 或 oauth_endpoint。
  */
@@ -170,7 +171,7 @@ function getServeHelperStopReason() {
     return "oauth_endpoint";
   return;
 }
-//@ chunk-q8cqcff6.js:8191-8319 placement
+//@ chunk-5fn9rb8r.js:8332-8460 placement
 /**
  * 固定使用已存储登录但服务助手不满足条件时，输出错误并以配置错误码退出。
  */
@@ -185,12 +186,12 @@ function exitIfServeHelperMisconfigured() {
     process.exit(EXIT_CONFIG_ERROR);
   }
 }
-//@ chunk-q8cqcff6.js:8319-8448 placement
+//@ chunk-5fn9rb8r.js:8460-8589 placement
 /**
  * 受管设置询问的进程级状态（询问内容、是否询问中、读取身份、是否已告知），可重置。
  */
 var managedSettingsAskState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-q8cqcff6.js:8319", () => {
+deferInit("chunk-5fn9rb8r.js:8460", () => {
   managedSettingsAskState = identity_2(
     {
       asks: undefined,
@@ -206,7 +207,7 @@ deferInit("chunk-q8cqcff6.js:8319", () => {
     },
   );
 });
-//@ chunk-q8cqcff6.js:8448-8694 placement
+//@ chunk-5fn9rb8r.js:8589-8835 placement
 /**
  * 读取是否存在托管设置（可通过注入的 asks 回调），递归调用时返回上次结果；结果变化时使策略层缓存失效。
  */
@@ -230,19 +231,21 @@ function hasManagedSettingsCached() {
   if (didChange) commandSyncNameState().invalidatePolicyLayer();
   return current;
 }
-//@ chunk-q8cqcff6.js:8694-8707 placement
+//@ chunk-5fn9rb8r.js:8835-8848 placement
 /**
  * 内部写入记录的有效窗口 5000ms：窗口内同路径写入事件视为自身写入而忽略。
  */
 var INTERNAL_WRITE_WINDOW_MS = 5000;
-//@ chunk-q8cqcff6.js:8707-8761 placement
+//@ chunk-5fn9rb8r.js:8848-8928 placement
 /**
  * 按宿主记录一次内部写入时间戳，供 consumeInternalWrite 在窗口内消费。
  */
 function markInternalWrite(key) {
-  commandSyncNameState().internalWrites.set(key, Date.now());
+  let state = commandSyncNameState();
+  state.internalWrites.set(key, Date.now());
+  state.noteOwnWrite(key);
 }
-//@ chunk-q8cqcff6.js:8761-8877 placement
+//@ chunk-5fn9rb8r.js:8928-9044 placement
 /**
  * 若某路径在时间窗口内有内部写入记录则消费该记录并返回 true，用于忽略自身写入触发的变更。
  */
@@ -255,14 +258,20 @@ function consumeInternalWrite(key, windowMs) {
   }
   return false;
 }
-//@ chunk-q8cqcff6.js:8877-8920 placement
+//@ chunk-5fn9rb8r.js:9044-9120 layout
+function withdrawInternalWrite(key) {
+  let state = commandSyncNameState();
+  state.internalWrites.delete(key);
+  state.withdrawOwnWrite(key);
+}
+//@ chunk-5fn9rb8r.js:9120-9163 placement
 /**
  * 清空全部内部写入记录（重新开始监听外部变更时用）。
  */
 function clearInternalWrites() {
   commandSyncNameState().internalWrites.clear();
 }
-//@ chunk-fe6rs39h.js:18087-18160 placement
+//@ chunk-keyy05re.js:18472-18545 placement
 async function isAttachServeEnabled() {
   try {
     return (await isViolinWoodEnabled()) && (await checkGate_CACHED_OR_BLOCKING(ATTACH_SERVE_FLAG));
@@ -270,7 +279,7 @@ async function isAttachServeEnabled() {
     return false;
   }
 }
-//@ chunk-fe6rs39h.js:18160-18384 placement
+//@ chunk-keyy05re.js:18545-18769 placement
 function shouldServeOnlyNotArmed({ serveOnly, lookup, sessionBefore, sweep }) {
   return serveOnly &&
     lookup.handle === undefined &&
@@ -282,7 +291,7 @@ function shouldServeOnlyNotArmed({ serveOnly, lookup, sessionBefore, sweep }) {
     ? "separate_copy"
     : undefined;
 }
-//@ chunk-fe6rs39h.js:18384-18553 placement
+//@ chunk-keyy05re.js:18769-18938 placement
 function isBeforeRetentionCutoff(createdAt, sweep) {
   switch (sweep.kind) {
     case "never":
@@ -295,7 +304,7 @@ function isBeforeRetentionCutoff(createdAt, sweep) {
     }
   }
 }
-//@ chunk-fe6rs39h.js:18553-18669 placement
+//@ chunk-keyy05re.js:18938-19054 placement
 function notArmedHereLookup(sessionRecordElsewhere) {
   return {
     handle: undefined,
@@ -305,7 +314,7 @@ function notArmedHereLookup(sessionRecordElsewhere) {
     }),
   };
 }
-//@ chunk-fe6rs39h.js:18669-18866 placement
+//@ chunk-keyy05re.js:19054-19251 placement
 var LATE_BIND_REFUSED = "late_bind_refused";
 var TOOL_HOST_GRANT_REFUSED = "tool_host_grant_refused";
 var DEVICE_NOT_FOUND = "device_not_found";
@@ -313,7 +322,7 @@ var BIND_ATTESTATION_STALE = "bind_attestation_stale";
 var SESSION_ALREADY_BOUND_ELSEWHERE = "session_already_bound_elsewhere";
 var SESSION_WORKER_BUSY = "session_worker_busy";
 var TOOL_HOST_PROOF_INVALID = "tool_host_proof_invalid";
-//@ chunk-fe6rs39h.js:18866-22034 placement
+//@ chunk-keyy05re.js:19251-22419 placement
 /**
  * 本机为云会话提供工具时，服务端拒绝码 → 面向用户的说明文字表。
  */
@@ -361,24 +370,25 @@ var ATTACH_REFUSAL_MESSAGES = {
     "that session isn't running in the cloud, and only a cloud session can use a folder on this computer",
   session_kind_refused: "that kind of session can't use a folder on a computer",
 };
-//@ chunk-fe6rs39h.js:22034-22076 placement
+//@ chunk-keyy05re.js:22419-22461 placement
 function isKnownAttachRefusal(kind) {
   return Object.hasOwn(ATTACH_REFUSAL_MESSAGES, kind);
 }
-//@ chunk-fe6rs39h.js:22076-22153 placement
+//@ chunk-keyy05re.js:22461-22538 placement
 var ATTACH_LINK_RETRY_DELAYS_MS = [2000, 4000, 8000, 12000, 15000, 15000, 15000];
 var ATTACH_LINK_TOTAL_TIMEOUT_MS = 90000;
 var ATTACH_LINK_TRANSIENT_RETRY_MS = [2000, 4000, 8000];
-//@ chunk-fe6rs39h.js:22153-22264 placement
-function postTeleportOrg(url, body, credentials) {
+//@ chunk-keyy05re.js:22538-22674 placement
+async function postTeleportOrg(url, body, credentials) {
   return apiClient.post(url, body, {
     auth: "teleport-org",
+    headers: await trustedDeviceHeaders(),
     timeout: 15000,
     validateStatus: () => true,
     credentials,
   });
 }
-//@ chunk-fe6rs39h.js:22264-23069 placement
+//@ chunk-keyy05re.js:22674-23479 placement
 /**
  * 把本机设备链接到指定云会话（attach-serve）：签名链接证明、调用 /v1/code/sessions/{id}/device，记录遥测。
  */
@@ -444,11 +454,11 @@ async function linkAttachServe({
   }
   return linkResult;
 }
-//@ chunk-fe6rs39h.js:23069-23665 placement
+//@ chunk-keyy05re.js:23479-24060 placement
 /**
  * 本地预检能否为该云会话服务：会话 id 合法、本机服务开关、设备绑定器就绪。
  */
-async function checkAttachServeLocally({ sessionId, credentials, resuming = false, seams = {} }) {
+async function checkAttachServeLocally({ sessionId, credentials, seams = {} }) {
   try {
     let sessionUuid = decodeTaggedUuid(sessionId);
     if (sessionUuid === undefined)
@@ -458,7 +468,7 @@ async function checkAttachServeLocally({ sessionId, credentials, resuming = fals
         },
         sessionId,
       );
-    let servingOffReason = await (seams.servingOff ?? servingOffReason_2)(resuming);
+    let servingOffReason = await (seams.servingOff ?? servingOffReason_2)();
     if (servingOffReason !== undefined)
       return attachServeRefusal(
         {
@@ -503,7 +513,7 @@ async function checkAttachServeLocally({ sessionId, credentials, resuming = fals
     );
   }
 }
-//@ chunk-fe6rs39h.js:23665-23999 placement
+//@ chunk-keyy05re.js:24060-24394 placement
 async function registerAndLinkDevice({
   sessionId,
   credentials,
@@ -539,7 +549,7 @@ async function registerAndLinkDevice({
         sessionId,
       );
 }
-//@ chunk-fe6rs39h.js:23999-26544 placement
+//@ chunk-keyy05re.js:24394-26939 placement
 async function linkDeviceWithRetries({
   sessionId,
   orgUuid,
@@ -739,7 +749,7 @@ async function linkDeviceWithRetries({
     }
   }
 }
-//@ chunk-fe6rs39h.js:26544-27166 placement
+//@ chunk-keyy05re.js:26939-27561 placement
 async function registerDeviceForAttach({ accountUuid, credentials, readBack, seams }) {
   try {
     let registered = await (seams.register ?? registerDeviceCached)(
@@ -778,10 +788,10 @@ async function registerDeviceForAttach({ accountUuid, credentials, readBack, sea
     };
   }
 }
-//@ chunk-fe6rs39h.js:27166-27233 placement
+//@ chunk-keyy05re.js:27561-27628 placement
 var CLOUD_SESSION_ID_PATTERN = /^cse_[A-Za-z0-9_]{1,124}$/;
 var CLOUD_ENVIRONMENT_ID_PATTERN = /^env_[A-Za-z0-9_-]{1,124}$/;
-//@ chunk-fe6rs39h.js:27233-27512 placement
+//@ chunk-keyy05re.js:27628-27907 placement
 function readAttachServeRequest(initialize) {
   let attachServeRequest = initialize?.attachServeRequest;
   if (attachServeRequest === undefined) return;
@@ -799,7 +809,7 @@ function readAttachServeRequest(initialize) {
     environmentId: attachServeRequest.environmentId,
   };
 }
-//@ chunk-fe6rs39h.js:27512-27658 placement
+//@ chunk-keyy05re.js:27907-28053 placement
 function readToolHostStatus(body) {
   let externalMetadata = body?.session?.external_metadata;
   return typeof externalMetadata === "object" &&
@@ -808,11 +818,11 @@ function readToolHostStatus(body) {
     ? (externalMetadata.tool_host_status ?? undefined)
     : undefined;
 }
-//@ chunk-fe6rs39h.js:27658-27721 placement
+//@ chunk-keyy05re.js:28053-28116 placement
 function nonEmptyString(value) {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
-//@ chunk-fe6rs39h.js:27721-29019 placement
+//@ chunk-keyy05re.js:28116-29414 placement
 function classifyAttachLinkResponse(result, deviceUUID) {
   if (!result.ok)
     return {
@@ -934,7 +944,7 @@ function classifyAttachLinkResponse(result, deviceUUID) {
     },
   };
 }
-//@ chunk-fe6rs39h.js:29019-29138 placement
+//@ chunk-keyy05re.js:29414-29533 placement
 function attachServeRefusal(refusal, sessionId) {
   return {
     ok: false,
@@ -942,7 +952,7 @@ function attachServeRefusal(refusal, sessionId) {
     message: `Error: cannot serve cloud session ${sessionId} from this computer: ${describeAttachRefusal(refusal)}`,
   };
 }
-//@ chunk-fe6rs39h.js:29138-30351 placement
+//@ chunk-keyy05re.js:29533-30746 placement
 function describeAttachRefusal(refusal) {
   switch (refusal.kind) {
     case "local":
@@ -974,9 +984,9 @@ function describeAttachRefusal(refusal) {
       return `the service could not be reached or answered unexpectedly${refusal.status !== undefined ? ` (HTTP ${refusal.status})` : ""}; try again shortly.`;
   }
 }
-//@ chunk-fe6rs39h.js:30351-31763 placement
+//@ chunk-keyy05re.js:30746-32089 placement
 var SERVING_OFF_MESSAGES; // deferred: uses deviceBindingRefusalText (../../bridge/deviceBinding.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fe6rs39h.js:30351", () => {
+deferInit("chunk-keyy05re.js:30746", () => {
   SERVING_OFF_MESSAGES = {
     external_build: "this Claude Code cannot serve tools to cloud sessions.",
     windows: "serving tools from a Windows computer is not available yet.",
@@ -995,17 +1005,16 @@ deferInit("chunk-fe6rs39h.js:30351", () => {
     egress: `${deviceBindingRefusalText("egress")}.`,
     policy_org: "your organization's policy does not allow using this computer from cloud sessions.",
     channel_off: "this computer's session channel is switched off.",
-    test_vm_without_vm: "this folder cannot be served as it was offered.",
   };
 });
-//@ chunk-fe6rs39h.js:31763-31790 placement
+//@ chunk-keyy05re.js:32089-32116 placement
 async function noopAsync() {
   return;
 }
-//@ chunk-fe6rs39h.js:31790-32256 placement
-async function servingOffReason_2(isResuming) {
+//@ chunk-keyy05re.js:32116-32552 placement
+async function servingOffReason_2() {
   let [
-    { remoteToolServingOffReason, remoteToolVmSwitch },
+    { remoteToolServingOffReason },
     { servedToolsUnavailableReason },
     { isViolinWoodServedOff },
     { primeWindowsProfileDirs },
@@ -1022,13 +1031,12 @@ async function servingOffReason_2(isResuming) {
     remoteToolServingOffReason() ??
     ((await inExcludedRepository(getOriginalCwd())) ? "excluded_repository" : undefined) ??
     servedToolsUnavailableReason() ??
-    (isViolinWoodServedOff() ? "flag_off" : undefined) ??
-    undefined
+    (isViolinWoodServedOff() ? "flag_off" : undefined)
   );
 }
-//@ chunk-fe6rs39h.js:32256-32285 placement
+//@ chunk-keyy05re.js:32552-32581 placement
 var ATTACH_RESUME_FLAG = "tengu_violin_volute";
-//@ chunk-fe6rs39h.js:32285-32381 placement
+//@ chunk-keyy05re.js:32581-32677 placement
 function isAttachResumeEnabled() {
   try {
     let { value, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(ATTACH_RESUME_FLAG, false);
@@ -1037,14 +1045,14 @@ function isAttachResumeEnabled() {
     return false;
   }
 }
-//@ chunk-fe6rs39h.js:32381-32665 placement
+//@ chunk-keyy05re.js:32677-32961 placement
 var ATTACH_RESUME_RETRY_MS; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var ATTACH_RESUME_BACKOFF_JITTER;
 var ATTACH_LINK_STATUS_STALE_MS;
 var ATTACH_RESUME_POLL_MS;
 var ATTACH_RESUME_MAX_ATTEMPTS;
 var linkedToolHostStatusSchema;
-deferInit("chunk-fe6rs39h.js:32381", () => {
+deferInit("chunk-keyy05re.js:32677", () => {
   ATTACH_RESUME_RETRY_MS = [1000, 3000, 8000];
   ATTACH_RESUME_BACKOFF_JITTER = {
     kind: "symmetric",
@@ -1071,7 +1079,7 @@ deferInit("chunk-fe6rs39h.js:32381", () => {
     }),
   );
 });
-//@ chunk-fe6rs39h.js:32665-32956 placement
+//@ chunk-keyy05re.js:32961-33252 placement
 async function readLinkedStatus(deviceId, readSession, resumeState) {
   let session;
   let isBound = await sessionStillBoundTo(deviceId, async () => {
@@ -1090,7 +1098,7 @@ async function readLinkedStatus(deviceId, readSession, resumeState) {
     return;
   }
 }
-//@ chunk-fe6rs39h.js:32956-33167 placement
+//@ chunk-keyy05re.js:33252-33463 placement
 async function waitForLinkedStatus(
   deviceId,
   readSession,
@@ -1110,7 +1118,7 @@ async function waitForLinkedStatus(
   }
   return linkedStatus === undefined ? undefined : linkedStatus === "linked";
 }
-//@ chunk-fe6rs39h.js:33167-34156 placement
+//@ chunk-keyy05re.js:33463-34452 placement
 /**
  * 链接状态为 detached 且持有恢复请求时，尝试重新签名并恢复本机对云会话的服务（tengu_attach_serve_resume）。
  */
@@ -1181,13 +1189,12 @@ function maybeResumeAttach({ linkedStatus, request, held, seams = {}, ...attachC
       parseToolHostStatus(session.tool_host_status, resumeArgs)?.state === "detached",
   };
 }
-//@ chunk-fe6rs39h.js:34156-34624 placement
+//@ chunk-keyy05re.js:34452-34908 placement
 async function checkAttachResumeAllowed(args, state, seams) {
   if (!(seams.flagOn ?? isAttachResumeEnabled)()) return "flag_off";
   let localCheck = await (seams.localIdentity ?? checkAttachServeLocally)({
     sessionId: args.sessionId,
     credentials: args.credentials,
-    resuming: true,
   });
   if (!localCheck.ok || localCheck.accountUuid !== args.held.accountUuid) return "local";
   let retryDelaysMs = seams.retryDelaysMs ?? ATTACH_RESUME_RETRY_MS;
@@ -1205,7 +1212,7 @@ async function checkAttachResumeAllowed(args, state, seams) {
     await (seams.sleep ?? sleep)(Math.round(delayMs));
   }
 }
-//@ chunk-fe6rs39h.js:34624-36104 placement
+//@ chunk-keyy05re.js:34908-36388 placement
 async function resumeAttachServe(args, state, seams) {
   let session;
   try {
@@ -1272,7 +1279,7 @@ async function resumeAttachServe(args, state, seams) {
     ? "resumed"
     : "not_same_attach";
 }
-//@ chunk-fe6rs39h.js:36104-36262 placement
+//@ chunk-keyy05re.js:36388-36546 placement
 function parseToolHostStatus(toolHostStatus, resumeArgs) {
   let parsed = linkedToolHostStatusSchema().safeParse(toolHostStatus);
   return parsed.success &&
@@ -1281,7 +1288,7 @@ function parseToolHostStatus(toolHostStatus, resumeArgs) {
     ? parsed.data
     : undefined;
 }
-//@ chunk-fe6rs39h.js:36262-36483 placement
+//@ chunk-keyy05re.js:36546-36767 placement
 function resumableDetachState(session, resumeArgs, nowMs) {
   let toolHostStatus = parseToolHostStatus(session.tool_host_status, resumeArgs);
   if (
@@ -1293,22 +1300,24 @@ function resumableDetachState(session, resumeArgs, nowMs) {
   return Date.parse(toolHostStatus.resume.until) > nowMs ? toolHostStatus.resume : "expired";
 }
 export {
-  ignoresPersistedTrust,
+  managedSettingsAskState,
   formatServeHelperStoppedError,
   isAttachServeMode,
   isStoredLoginPinned,
-  managedSettingsAskState,
+  notArmedHereLookup,
   isAlwaysTrue,
   isRemoteToolsPinStoredLogin,
   hasManagedSettingsCached,
-  isAttachServeRepoScopedSourceOrNonInteractive,
-  isAttachServeRepoScopedSource,
-  markInternalWrite,
   clearInternalWrites,
   consumeInternalWrite,
   INTERNAL_WRITE_WINDOW_MS,
-  isAttachServeEnabled,
+  isAttachServeRepoScopedSourceOrNonInteractive,
+  isAttachServeRepoScopedSource,
+  markInternalWrite,
   exitIfServeHelperMisconfigured,
+  withdrawInternalWrite,
+  isAttachServeEnabled,
+  ignoresPersistedTrust,
   parseToolHostStatus,
   readLinkedStatus,
   checkAttachServeLocally,
@@ -1318,5 +1327,4 @@ export {
   maybeResumeAttach,
   shouldServeOnlyNotArmed,
   waitForLinkedStatus,
-  notArmedHereLookup,
 };

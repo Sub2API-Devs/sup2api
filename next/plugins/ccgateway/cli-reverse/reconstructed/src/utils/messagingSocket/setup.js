@@ -3,19 +3,19 @@
  *
  * 2.1.316 新增：消息 socket 设置
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tm1p6ddm.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8ejqp86e.js (4)
  * attribution: placement 4
  */
 import { HostScoped } from "../hostScoped.js";
 
-//@ chunk-tm1p6ddm.js:226-240 placement
+//@ chunk-8ejqp86e.js:226-240 placement
 /**
  * 消息套接字服务启动/连接的默认超时（30 秒）。
  */
 var MESSAGING_SOCKET_TIMEOUT_MS = 30000;
-//@ chunk-tm1p6ddm.js:240-1214 placement
+//@ chunk-8ejqp86e.js:240-1214 placement
 /**
  * 消息 socket 的状态：socket 路径、已连接客户端、回调、令牌、认证与启动失败原因等。
  */
@@ -61,7 +61,7 @@ class MessagingSocketState {
     this.peerDirOwnerUids = [];
   }
 }
-//@ chunk-tm1p6ddm.js:1214-1779 placement
+//@ chunk-8ejqp86e.js:1214-1779 placement
 /**
  * 消息 socket 不可用的原因文字（目录、路径、绑定、发布密钥、绑定后设置失败）。
  */
@@ -84,7 +84,7 @@ function messagingSocketUnavailableReason(state) {
       return;
   }
 }
-//@ chunk-tm1p6ddm.js:1779-1804 placement
+//@ chunk-8ejqp86e.js:1779-1804 placement
 /**
  * 宿主隔离的消息套接字服务端状态。
  */

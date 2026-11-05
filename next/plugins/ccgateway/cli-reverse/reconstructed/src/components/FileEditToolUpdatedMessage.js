@@ -3,13 +3,13 @@
  *
  * 文件编辑成功结果："Added N lines, removed M lines" + 结构化 diff（condensed 模式只显示统计）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FileEditToolUpdatedMessage.tsx
- * pieces: chunk-dcmhvw5a.js (1), chunk-vnfdjr3f.js (5)
- * attribution: fingerprint 2, file-local 2, callgraph-fingerprint 1, layout 1
+ * pieces: chunk-8tdq6z7n.js (5), chunk-z20c443b.js (1)
+ * attribution: file-local 2, callgraph-fingerprint 1, layout 1, fingerprint 2
  */
 import { countCharInString } from "../utils/stringUtils.js";
-import { count } from "../utils/collections.js";
+import { countWhere } from "../utils/collections.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import {
@@ -23,7 +23,7 @@ import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { CtrlOToExpand } from "./CtrlOToExpand.js";
 import { StructuredDiffList } from "./StructuredDiffList.js";
 
-//@ chunk-dcmhvw5a.js:383995-384090 fingerprint (2.1.88 match: _temp4, 0.685)
+//@ chunk-z20c443b.js:382241-382336 fingerprint (2.1.88 match: _temp4, 0.686)
 function editSizeOf(script) {
   return {
     bytes: Buffer.byteLength(script, "utf8"),
@@ -39,23 +39,23 @@ function editSizeOf(script) {
         : 1),
   };
 }
-//@ chunk-vnfdjr3f.js:2341-2381 file-local
+//@ chunk-8tdq6z7n.js:2342-2382 file-local
 function isAddedLine(__0) {
   return __0.startsWith("+");
 }
-//@ chunk-vnfdjr3f.js:2381-2421 callgraph-fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-8tdq6z7n.js:2382-2422 callgraph-fingerprint (2.1.88 match: _temp2, 1)
 function addAddedLines(acc, hunk) {
-  return acc + count(hunk.lines, isAddedLine);
+  return acc + countWhere(hunk.lines, isAddedLine);
 }
-//@ chunk-vnfdjr3f.js:2421-2463 file-local
+//@ chunk-8tdq6z7n.js:2422-2464 file-local
 function isRemovedLine(line) {
   return line.startsWith("-");
 }
-//@ chunk-vnfdjr3f.js:2463-2507 layout
+//@ chunk-8tdq6z7n.js:2464-2508 layout
 function addRemovedLines(acc, hunk) {
-  return acc + count(hunk.lines, isRemovedLine);
+  return acc + countWhere(hunk.lines, isRemovedLine);
 }
-//@ chunk-vnfdjr3f.js:2507-3881 fingerprint (2.1.88 match: FileEditToolUpdatedMessage, 0.834)
+//@ chunk-8tdq6z7n.js:2508-3884 fingerprint (2.1.88 match: FileEditToolUpdatedMessage, 0.834)
 /**
  * 编辑成功消息："Added N lines, removed M lines"，非 condensed 时下方显示 StructuredDiffList。
  */
@@ -198,4 +198,4 @@ function FileEditToolUpdatedMessage(props) {
   } else t8 = $[24];
   return t8;
 }
-export { editSizeOf, FileEditToolUpdatedMessage };
+export { FileEditToolUpdatedMessage, editSizeOf };

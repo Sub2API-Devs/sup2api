@@ -3,9 +3,9 @@
  *
  * 权限规则界面中的云会话规则页（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p2qwpk2k.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h5wy8vq5.js (8)
  * attribution: placement 8
  */
 import {
@@ -35,9 +35,9 @@ import { KeyboardShortcutHint } from "../../design-system/KeyboardShortcutHint.j
 import { Pane } from "../../design-system/Pane.js";
 import { Commands } from "../../HelpV2/Commands.js";
 
-//@ chunk-p2qwpk2k.js:16014-16018 placement
+//@ chunk-h5wy8vq5.js:17134-17138 placement
 init_react_production();
-//@ chunk-p2qwpk2k.js:16018-16104 placement
+//@ chunk-h5wy8vq5.js:17138-17224 placement
 function toRuleOption(entry, index) {
   let { rule, source } = entry;
   return {
@@ -46,9 +46,9 @@ function toRuleOption(entry, index) {
     description: source,
   };
 }
-//@ chunk-p2qwpk2k.js:16104-16119 placement
+//@ chunk-h5wy8vq5.js:17224-17239 placement
 function noopRulePicker() {}
-//@ chunk-p2qwpk2k.js:16119-16675 placement
+//@ chunk-h5wy8vq5.js:17239-17795 placement
 /**
  * 云会话规则页的分节（allow/ask/deny/工作目录）、规则读取响应的宽松 zod 结构、需要去掉的零宽字符。
  */
@@ -97,11 +97,11 @@ var cloudSessionRulesResponseSchema = DoctorLazy(() => {
   });
 });
 var ZERO_WIDTH_CHARS_RE = /[\u200b\u200e\u200f\u2060\ufeff]/g;
-//@ chunk-p2qwpk2k.js:16675-16724 placement
+//@ chunk-h5wy8vq5.js:17795-17844 placement
 function replaceControlChars(text) {
   return stripInvisibleChars(text.replace(ZERO_WIDTH_CHARS_RE, "\uFFFD"));
 }
-//@ chunk-p2qwpk2k.js:16724-17347 placement
+//@ chunk-h5wy8vq5.js:17844-18466 placement
 /**
  * 通过 get_settings 读取云会话权限规则，版本不兼容时标记不可读
  */
@@ -156,7 +156,7 @@ async function readCloudSessionRules(remoteCaps, signal) {
     };
   }
 }
-//@ chunk-p2qwpk2k.js:17347-18952 placement
+//@ chunk-h5wy8vq5.js:18466-20071 placement
 function CloudSessionRulesTab(props) {
   let $ = useMemoCache(19);
   let { onExit, rulesRead } = props;
@@ -282,7 +282,7 @@ function CloudSessionRulesTab(props) {
   } else paneElement = $[18];
   return paneElement;
 }
-//@ chunk-p2qwpk2k.js:18952-19779 placement
+//@ chunk-h5wy8vq5.js:20071-20898 placement
 /**
  * 显示云会话某类规则：读取失败显示原因，部分设置文件解析失败时警告，空时显示空提示。
  */

@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/own-files.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: esm-fingerprint 1
  */
 import { fileURLToPath } from "url";
@@ -20,7 +20,7 @@ import "fs";
 import "fs";
 import { pathSpellingVariants, normalizePathForSandbox, isAtOrUnder } from "./sandbox-utils.js";
 
-//@ chunk-fq0cr76a.js:817514-817926 esm-fingerprint
+//@ chunk-qg41pqt6.js:819326-819738 esm-fingerprint
 function ownInstallWarning(allowedWritePaths, moduleFile = fileURLToPath(import.meta.url)) {
   let root = pathModule_2.dirname(moduleFile);
   while (!fsModule_2.existsSync(pathModule_2.join(root, "package.json"))) {

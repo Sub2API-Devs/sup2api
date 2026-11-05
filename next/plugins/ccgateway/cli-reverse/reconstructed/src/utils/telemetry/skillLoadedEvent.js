@@ -3,9 +3,9 @@
  *
  * 会话开始时为已加载 Skill 发 tengu_skill_loaded。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/telemetry/skillLoadedEvent.ts
- * pieces: chunk-csq9ftr9.js (6)
+ * pieces: chunk-n0gp41wj.js (6)
  * attribution: placement 5, fingerprint 1
  */
 import { parsePluginIdentifier_2, isOfficialMarketplaceName_3 } from "../plugins/pluginIdentifier.js";
@@ -14,7 +14,7 @@ import { logOTelEvent } from "./events.js";
 import { fromEnum, fromSanitizer_SANITIZER_OUTPUT_ONLY } from "../../services/analytics/safeMetadata.js";
 import { hashPluginId } from "./pluginTelemetry.js";
 
-//@ chunk-csq9ftr9.js:8909-9328 placement
+//@ chunk-n0gp41wj.js:8909-9328 placement
 function skillLoadedSource(skillName, command, invocationTrigger, agentContext) {
   let source = command?.type === "prompt" ? command.source : undefined;
   let pluginInfo = command?.type === "prompt" ? command.pluginInfo : undefined;
@@ -47,7 +47,7 @@ function skillLoadedSource(skillName, command, invocationTrigger, agentContext) 
     agentContext,
   );
 }
-//@ chunk-csq9ftr9.js:9328-9469 fingerprint (2.1.88 match: logSkillsLoaded, 0.497)
+//@ chunk-n0gp41wj.js:9328-9469 fingerprint (2.1.88 match: logSkillsLoaded, 0.497)
 /**
  * 会话开始时为每个已加载 Skill 发 tengu_skill_loaded 事件（带插件来源字段）。
  */
@@ -67,7 +67,7 @@ function logSkillsLoaded(source, loadedFrom, kind, createdBy) {
     }),
   };
 }
-//@ chunk-csq9ftr9.js:9469-9520 placement
+//@ chunk-n0gp41wj.js:9469-9520 placement
 /**
  * 技能名哈希字段。
  */
@@ -76,7 +76,7 @@ function skillNameHashFields(skillName) {
     skill_name_hash: fromSanitizer_SANITIZER_OUTPUT_ONLY(hashPluginId(skillName)),
   };
 }
-//@ chunk-csq9ftr9.js:9520-9624 placement
+//@ chunk-n0gp41wj.js:9520-9624 placement
 /**
  * 父技能名哈希与命令名字段。
  */
@@ -87,14 +87,14 @@ function parentSkillFields(skillName, canonicalName) {
     parent_command_name: parentCommandName(skillName, canonicalName),
   };
 }
-//@ chunk-csq9ftr9.js:9624-9666 placement
+//@ chunk-n0gp41wj.js:9624-9666 placement
 /**
  * 父命令名（非官方记 custom）。
  */
 function parentCommandName(skillName, mayLogName) {
   return fromSanitizer_SANITIZER_OUTPUT_ONLY(mayLogName ? skillName : "custom");
 }
-//@ chunk-csq9ftr9.js:9666-9850 placement
+//@ chunk-n0gp41wj.js:9666-9850 placement
 /**
  * 生成遥测用 skill 名：MCP 记 "mcp"，内置/打包/官方市场用原名，其余记 "custom" 并附名称哈希。
  */
@@ -106,10 +106,10 @@ function sanitizeSkillNameForTelemetry({ rawName, canonicalName, isMcp, isBuiltI
   };
 }
 export {
+  parentCommandName,
   sanitizeSkillNameForTelemetry,
+  parentSkillFields,
   logSkillsLoaded,
   skillLoadedSource,
   skillNameHashFields,
-  parentSkillFields,
-  parentCommandName,
 };

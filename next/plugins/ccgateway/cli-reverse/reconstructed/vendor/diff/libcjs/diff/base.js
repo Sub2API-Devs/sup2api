@@ -1,12 +1,12 @@
 /**
  * diff/libcjs/diff/base.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: diff@9.0.0
- * pieces: chunk-7vb8p3zb.js (1)
+ * pieces: chunk-9dtasr5y.js (1)
  * attribution: esm-fingerprint 1
  */
 
-//@ chunk-7vb8p3zb.js:191-3027 esm-fingerprint
+//@ chunk-9dtasr5y.js:191-3027 esm-fingerprint
 class Diff {
   diff(oldStr, newStr, options = {}) {
     let callback;

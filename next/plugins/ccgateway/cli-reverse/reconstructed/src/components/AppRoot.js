@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：应用根组件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xe7zq1p4.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-swe0kb5q.js (1)
  * attribution: placement 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -22,7 +22,7 @@ import { FpsMetricsProvider } from "../context/fpsMetrics.js";
 import { QueueProvider } from "../context/QueuedMessageContext.js";
 import { StorageCredentialsProvider } from "./design-system/ThemeProvider.js";
 
-//@ chunk-xe7zq1p4.js:16717-18127 placement (2.1.88 match: App, 0.592)
+//@ chunk-swe0kb5q.js:16737-18147 placement (2.1.88 match: App, 0.593)
 function AppRoot(props) {
   let $ = useMemoCache(32);
   let {

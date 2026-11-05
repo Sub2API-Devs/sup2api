@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：claude self-hosted-runner setup 交互向导（系统提示词与受限工具集）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-w14wefpp.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-djys6q2g.js (3)
  * attribution: placement 3
  */
 import { spawnSync } from "child_process";
@@ -24,7 +24,7 @@ import { env } from "../../utils/env.js";
 import { logFeatureBadAsync, logFeatureOkAsync } from "../../services/analytics/featureTelemetry.js";
 import { exitAfterAnalyticsFlush } from "../exit.js";
 
-//@ chunk-w14wefpp.js:4744-12414 placement
+//@ chunk-djys6q2g.js:5141-12811 placement
 /**
  * `claude self-hosted-runner setup` 向导的系统提示词：指导模型用 self_hosted_runner_* 工具带操作员完成自托管 runner 配置。
  */
@@ -78,7 +78,7 @@ Walk them through where each surface lives on the **Cloud environments** admin p
 
 Production deployment is **taught, not tooled** \u2014 there is no \`deploy_to_k8s\` tool. If asked, explain the k8s/compose pattern and Write a sample manifest; the operator owns their orchestrator.`;
 }
-//@ chunk-w14wefpp.js:12414-12892 placement
+//@ chunk-djys6q2g.js:12811-13289 placement
 /**
  * claude self-hosted-runner setup 向导：允许的工具集与系统提示词（受限制工具集的初始化配置流程）。
  */
@@ -101,7 +101,7 @@ var SELF_HOSTED_RUNNER_SETUP_TOOLS = [
 ].join(",");
 var SELF_HOSTED_RUNNER_SETUP_PROMPT =
   "Start the self-hosted runner setup wizard. Greet me and begin Phase 1 (create an environment in the Admin UI). Walk me through one step at a time.";
-//@ chunk-w14wefpp.js:12892-14766 placement
+//@ chunk-djys6q2g.js:13289-15163 placement
 /**
  * self-hosted-runner setup 子命令入口：处理 --help，然后以受限工具集启动交互向导。
  */

@@ -3,18 +3,18 @@
  *
  * gh 替身代理参数（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6p9kc8f6.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pnaj1q5d.js (7)
  * attribution: placement 7
  */
-//@ chunk-6p9kc8f6.js:191-229 placement
+//@ chunk-pnaj1q5d.js:191-229 placement
 /**
  * gh 替身代理的启动参数 --gh-standin。
  */
 var GH_STANDIN_FLAG = "--gh-standin";
 var GHE_HOST_SUFFIX = ".ghe.com";
-//@ chunk-6p9kc8f6.js:229-463 placement
+//@ chunk-pnaj1q5d.js:229-463 placement
 /**
  * gh 替身代理的参数与错误提示：--any-host 标志、独立代理模式名，以及会话代理未设置时的报错。
  */
@@ -22,7 +22,7 @@ var ANY_HOST_FLAG = "--any-host";
 var STANDALONE_PROXY = "standalone-proxy";
 var GH_PROXY_UNSET_MESSAGE =
   "gh: this session's proxy is not set (HTTPS_PROXY names no proxy on 127.0.0.1), so gh cannot reach GitHub; run gh from this session's own shell, with HTTPS_PROXY as the session set it.";
-//@ chunk-6p9kc8f6.js:463-579 placement
+//@ chunk-pnaj1q5d.js:463-579 placement
 /**
  * 解析代理地址，只接受 http://127.0.0.1 的地址，返回规范化 href。
  */
@@ -30,7 +30,7 @@ function parseLoopbackProxyUrl(value) {
   let parsedUrl = URL.parse(value?.trim() ?? "");
   return parsedUrl?.protocol === "http:" && parsedUrl.hostname === "127.0.0.1" ? parsedUrl.href : undefined;
 }
-//@ chunk-6p9kc8f6.js:579-1247 placement
+//@ chunk-pnaj1q5d.js:579-1247 placement
 /**
  * 生成 shell 片段：检查 HTTPS_PROXY 指向 127.0.0.1 的代理，否则报错退出，并导出 HTTPS_PROXY/https_proxy。
  */
@@ -51,9 +51,9 @@ fi
 HTTPS_PROXY="$proxy"; https_proxy="$proxy"; export HTTPS_PROXY https_proxy
 `;
 }
-//@ chunk-6p9kc8f6.js:1247-1260 placement
+//@ chunk-pnaj1q5d.js:1247-1260 placement
 var ANY = "any";
-//@ chunk-6p9kc8f6.js:1260-1846 placement
+//@ chunk-pnaj1q5d.js:1260-1846 placement
 function parseGhStandinArgs() {
   let [standinFlag, portArg = "", caBundlePath = "", ...rest] = process.argv.slice(2);
   if (standinFlag !== "--gh-standin") return;
@@ -80,7 +80,7 @@ function parseGhStandinArgs() {
   process.exitCode = 1;
   return "refused";
 }
-//@ chunk-6p9kc8f6.js:1846-2527 placement
+//@ chunk-pnaj1q5d.js:1846-2527 placement
 function describeGhStandinHosts(options) {
   let [hostsFlag, hostsDescription] =
     options.ghesHosts === ANY

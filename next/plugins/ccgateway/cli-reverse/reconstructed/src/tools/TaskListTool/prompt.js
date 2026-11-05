@@ -3,19 +3,19 @@
  *
  * TaskList 描述与提示词（含队友工作流）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TaskListTool/prompt.ts
- * pieces: chunk-kxyd0g16.js (2)
+ * pieces: chunk-fmnbrxwy.js (2)
  * attribution: fingerprint 2
  */
 import { isAgentSwarmsEnabled } from "../../utils/agentSwarmsEnabled.js";
 
-//@ chunk-kxyd0g16.js:150001-150042 fingerprint (2.1.88 match: DESCRIPTION, 1)
+//@ chunk-fmnbrxwy.js:164998-165039 fingerprint (2.1.88 match: DESCRIPTION, 1)
 /**
  * TaskList 描述。
  */
 var DESCRIPTION_2 = "List all tasks in the task list";
-//@ chunk-kxyd0g16.js:150042-151742 fingerprint (2.1.88 match: getPrompt, 1)
+//@ chunk-fmnbrxwy.js:165039-166739 fingerprint (2.1.88 match: getPrompt, 1)
 /**
  * TaskList 提示词（agent swarms 下补充队友工作流）。
  */

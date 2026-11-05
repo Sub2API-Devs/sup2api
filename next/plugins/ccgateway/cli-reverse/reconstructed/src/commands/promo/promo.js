@@ -3,9 +3,9 @@
  *
  * 促销/优惠领取命令界面与状态（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ndsajhew.js (39)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wq8b028c.js (39)
  * attribution: placement 39
  */
 import { isDeepStrictEqual } from "util";
@@ -50,13 +50,13 @@ import { isWebSetupOfferable } from "../../services/cloudSessions/webSetup.js";
 import { getGhAuthStatus } from "../../utils/github/ghAuthStatus.js";
 import { GITHUB_CONNECTION_STATUS_CACHE } from "../remote-setup/api.js";
 
-//@ chunk-ndsajhew.js:4209-4238 placement
+//@ chunk-wq8b028c.js:4545-4574 placement
 var TENGU_SMOOTH_FOREST = "tengu_smooth_forest";
-//@ chunk-ndsajhew.js:4238-4272 placement
+//@ chunk-wq8b028c.js:4574-4608 placement
 function isSmoothForestEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SMOOTH_FOREST, false) === true;
 }
-//@ chunk-ndsajhew.js:4314-4433 placement
+//@ chunk-wq8b028c.js:4650-4769 placement
 var promoStatusCacheSchema = DoctorLazy(() =>
   objectSchema({
     accountUuid: stringSchema().min(1),
@@ -66,7 +66,7 @@ var promoStatusCacheSchema = DoctorLazy(() =>
     checkedAt: numberSchema().optional().catch(undefined),
   }),
 );
-//@ chunk-ndsajhew.js:4433-4717 placement
+//@ chunk-wq8b028c.js:4769-5053 placement
 function readPromoStatusCache(accountUuid, endpoint, ttlSeconds, nowMs) {
   try {
     let cachedStatus = promoStatusCacheSchema().safeParse(getGlobalConfig().promoStartupStatusCache).data;
@@ -90,7 +90,7 @@ function readPromoStatusCache(accountUuid, endpoint, ttlSeconds, nowMs) {
     return;
   }
 }
-//@ chunk-ndsajhew.js:4717-4853 placement
+//@ chunk-wq8b028c.js:5053-5189 placement
 function writePromoStatusCache(nextCache, storage) {
   try {
     saveGlobalConfig(
@@ -107,27 +107,27 @@ function writePromoStatusCache(nextCache, storage) {
     logError(toError(error));
   }
 }
-//@ chunk-ndsajhew.js:4853-4911 placement
+//@ chunk-wq8b028c.js:5189-5247 placement
 var PROMO_CLAIM_TIMEOUT_MS = 1e4;
 var MAX_FAILED_STATUS_ASKS = 3;
 var INELIGIBLE_PROMO_STATUS = Object.freeze({
   eligible: false,
   claimed: false,
 });
-//@ chunk-ndsajhew.js:4911-4962 placement
+//@ chunk-wq8b028c.js:5247-5298 placement
 function createPromoState() {
   return {
     entries: new Map(),
     changed: createSignal(),
   };
 }
-//@ chunk-ndsajhew.js:4962-4979 placement
+//@ chunk-wq8b028c.js:5298-5315 placement
 var PROMO_STATE_SLOT = new HostScoped(createPromoState);
-//@ chunk-ndsajhew.js:4979-5015 placement
+//@ chunk-wq8b028c.js:5315-5351 placement
 function promoState() {
   return PROMO_STATE_SLOT.of(getRootSession().host);
 }
-//@ chunk-ndsajhew.js:5015-5079 placement
+//@ chunk-wq8b028c.js:5351-5415 placement
 function promoEntryKey(endpoint) {
   let accountUuid = getOauthAccountInfo()?.accountUuid;
   return accountUuid
@@ -135,12 +135,12 @@ function promoEntryKey(endpoint) {
 ${endpoint}`
     : null;
 }
-//@ chunk-ndsajhew.js:5079-5146 placement
+//@ chunk-wq8b028c.js:5415-5482 placement
 function promoEntryOf(endpoint) {
   let entryKey = promoEntryKey(endpoint);
   return entryKey === null ? undefined : promoState().entries.get(entryKey);
 }
-//@ chunk-ndsajhew.js:5146-5357 placement
+//@ chunk-wq8b028c.js:5482-5693 placement
 function getPromoEntry(endpoint) {
   let entryKey = promoEntryKey(endpoint);
   if (entryKey === null) return null;
@@ -159,17 +159,17 @@ function getPromoEntry(endpoint) {
   }
   return entry;
 }
-//@ chunk-ndsajhew.js:5357-5471 placement
+//@ chunk-wq8b028c.js:5693-5807 placement
 function isPromoOfferable(endpoint) {
   if (!isAbsolutePromoPath(endpoint) || !arePromoOffersAllowed()) return false;
   let entry = promoEntryOf(endpoint);
   return entry?.status?.eligible === true && !entry.status.claimed && !entry.taken;
 }
-//@ chunk-ndsajhew.js:5471-5509 placement
+//@ chunk-wq8b028c.js:5807-5845 placement
 function isPromoTaken(endpoint) {
   return promoEntryOf(endpoint)?.taken === true;
 }
-//@ chunk-ndsajhew.js:5509-6545 placement
+//@ chunk-wq8b028c.js:5845-6881 placement
 /**
  * 获取促销资格状态：内存有效则直接用；否则读全局配置缓存；再否则发起请求（失败计数受限），成功后写入缓存并通知变化。
  */
@@ -246,7 +246,7 @@ async function getPromoStatus(
   await entry.pendingStatus;
   return entry.status;
 }
-//@ chunk-ndsajhew.js:6545-6590 placement
+//@ chunk-wq8b028c.js:6881-6926 placement
 function emitSignalSafely(changed) {
   try {
     changed.emit();
@@ -254,7 +254,7 @@ function emitSignalSafely(changed) {
     logError(toError(error));
   }
 }
-//@ chunk-ndsajhew.js:6590-7604 placement
+//@ chunk-wq8b028c.js:6926-7940 placement
 /**
  * 查询促销状态，无登录或 teleport 组织时跳过
  */
@@ -318,9 +318,9 @@ async function fetchPromoStatus(endpoint, credentials) {
     return;
   }
 }
-//@ chunk-ndsajhew.js:7604-7615 placement
+//@ chunk-wq8b028c.js:7940-7951 placement
 var PROMO_OPEN_TIMEOUT_MS = 1e4;
-//@ chunk-ndsajhew.js:7615-8237 placement
+//@ chunk-wq8b028c.js:7951-8573 placement
 /**
  * 打开优惠领取页，组织策略禁止时不打开
  */
@@ -365,7 +365,7 @@ async function openPromoClaimPage(endpoint, claimPaths) {
     httpsUrl: getClaudeAiWebUrl(claimPaths.webPath),
   };
 }
-//@ chunk-ndsajhew.js:8237-8809 placement
+//@ chunk-wq8b028c.js:8573-9145 placement
 /**
  * /claim-credit 促销的文案与常量：入口编号、各种不可用/已领取/处理中提示、帮助链接、/web-setup 提示与打开延时。
  */
@@ -385,7 +385,7 @@ var PROMO_SUPPORT_URL = "https://support.claude.com/en/articles/17152539";
 var WEB_SETUP_HINT = "Set up GitHub for cloud sessions automatically by running /web-setup";
 var OPEN_DELAY_MS = 750;
 var STATUS_CHECK_FAILED_TEXT = "Couldn't check this offer right now.";
-//@ chunk-ndsajhew.js:8809-8883 placement
+//@ chunk-wq8b028c.js:9145-9219 placement
 function createPromoStatus() {
   return {
     exposureLogged: false,
@@ -393,13 +393,13 @@ function createPromoStatus() {
     keptParse: null,
   };
 }
-//@ chunk-ndsajhew.js:8883-8900 placement
+//@ chunk-wq8b028c.js:9219-9236 placement
 var PROMO_STATUS_SLOT = new HostScoped(createPromoStatus);
-//@ chunk-ndsajhew.js:8900-8936 placement
+//@ chunk-wq8b028c.js:9236-9272 placement
 function promoStatus() {
   return PROMO_STATUS_SLOT.of(getRootSession().host);
 }
-//@ chunk-ndsajhew.js:8936-9016 placement
+//@ chunk-wq8b028c.js:9272-9352 placement
 var promoStatusSchema = DoctorLazy(() =>
   objectSchema({
     accountUuid: stringSchema().min(1),
@@ -408,11 +408,11 @@ var promoStatusSchema = DoctorLazy(() =>
     claimed: booleanSchema(),
   }),
 );
-//@ chunk-ndsajhew.js:9016-9062 placement
+//@ chunk-wq8b028c.js:9352-9398 placement
 function currentAccountUuid() {
   return getOauthAccountInfo()?.accountUuid || undefined;
 }
-//@ chunk-ndsajhew.js:9062-9263 placement
+//@ chunk-wq8b028c.js:9398-9599 placement
 function parseKeptPromoCache(promoStartupStatusCache) {
   let state = promoStatus();
   if (state.keptParse === null || state.keptParse.raw !== promoStartupStatusCache) {
@@ -424,14 +424,14 @@ function parseKeptPromoCache(promoStartupStatusCache) {
   }
   return state.keptParse.kept;
 }
-//@ chunk-ndsajhew.js:9263-9369 placement
+//@ chunk-wq8b028c.js:9599-9705 placement
 function getCachedPromoForAccount(config, accountUuid, endpoint) {
   let keptPromoCache = parseKeptPromoCache(config.promoStartupStatusCache);
   return keptPromoCache?.accountUuid === accountUuid && keptPromoCache.endpoint === endpoint
     ? keptPromoCache
     : undefined;
 }
-//@ chunk-ndsajhew.js:9369-9930 placement
+//@ chunk-wq8b028c.js:9705-10266 placement
 /**
  * 刷新促销状态并同步全局配置中的启动缓存：不再符合时清除，状态变化时更新。
  */
@@ -472,11 +472,11 @@ async function refreshPromoStartupStatus(promo, credentials, storage, refresh) {
   }, storage);
   return status;
 }
-//@ chunk-ndsajhew.js:9930-9983 placement
+//@ chunk-wq8b028c.js:10266-10319 placement
 function isPromoOfferedHere() {
   return !isPromoOffersBlocked() && isPolicyAllowed("allow_promo_offers");
 }
-//@ chunk-ndsajhew.js:9983-10142 placement
+//@ chunk-wq8b028c.js:10319-10478 placement
 function logPromoExposureOnce(surface, promo) {
   let isExposed = isSmoothForestEnabled();
   let state = promoStatus();
@@ -490,7 +490,7 @@ function logPromoExposureOnce(surface, promo) {
   }
   return isExposed;
 }
-//@ chunk-ndsajhew.js:10142-11554 placement
+//@ chunk-wq8b028c.js:10478-11890 placement
 async function resolvePromoCommandState(host, credentials, storage) {
   if (!isPromoOfferedHere()) return OFFER_UNAVAILABLE_TEXT;
   let promoConfigFromGate = readPromoConfigFromGate();
@@ -584,16 +584,16 @@ async function resolvePromoCommandState(host, credentials, storage) {
     state.commandInFlight = false;
   }
 }
-//@ chunk-ndsajhew.js:11554-11611 placement
+//@ chunk-wq8b028c.js:11890-11947 placement
 function claimPageLine(promoConfig, pageUrl) {
   return `${promoConfig.claimPageLine ?? OFFER_PAGE_LABEL} \xB7 ${pageUrl}`;
 }
-//@ chunk-ndsajhew.js:11611-11695 placement
+//@ chunk-wq8b028c.js:11947-12031 placement
 function offerLine(promoConfig, { opened, httpsUrl }) {
   let pageLine = claimPageLine(promoConfig, httpsUrl);
   return opened === "none" ? `${OFFER_OPEN_FAILED_TEXT} ${pageLine}` : pageLine;
 }
-//@ chunk-ndsajhew.js:11695-11856 placement
+//@ chunk-wq8b028c.js:12031-12192 placement
 function logPromoNotOffered(promoConfig, reason, opened) {
   logEvent("tengu_promo_command_not_offered", {
     surface: fromEnum("command"),
@@ -605,14 +605,14 @@ function logPromoNotOffered(promoConfig, reason, opened) {
     }),
   });
 }
-//@ chunk-ndsajhew.js:11856-11897 placement
+//@ chunk-wq8b028c.js:12192-12233 placement
 function offerLineWithSetupHint(line, showSetupHint) {
   return showSetupHint
     ? `${line}
 ${WEB_SETUP_HINT}`
     : line;
 }
-//@ chunk-ndsajhew.js:11897-11961 placement
+//@ chunk-wq8b028c.js:12233-12297 placement
 function canOfferWebSetup() {
   try {
     return !isRemoteSessionAvailable() && isWebSetupOfferable();
@@ -621,7 +621,7 @@ function canOfferWebSetup() {
     return false;
   }
 }
-//@ chunk-ndsajhew.js:11961-12182 placement
+//@ chunk-wq8b028c.js:12297-12518 placement
 async function shouldSuggestWebSetup(host, credentials, storage) {
   try {
     if (!canOfferWebSetup()) return false;
@@ -637,7 +637,7 @@ async function shouldSuggestWebSetup(host, credentials, storage) {
     return false;
   }
 }
-//@ chunk-ndsajhew.js:12182-12712 placement
+//@ chunk-wq8b028c.js:12518-13048 placement
 /**
  * 根据促销状态给出不可提供的原因与提示文字：未知、本会话已领取、不符合、处理中、已过期、在其他组织领取、已领取。
  */
@@ -688,7 +688,7 @@ function describePromoState(status, takenThisSession) {
       };
   }
 }
-//@ chunk-ndsajhew.js:12712-12818 placement
+//@ chunk-wq8b028c.js:13048-13154 placement
 /**
  * /claim-credit 命令实现：返回解析后的促销命令状态文本。
  */

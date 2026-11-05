@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/resources/beta/sessions/events.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (1)
+ * pieces: chunk-vn3g7zt8.js (1)
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../../core/resource.mjs";
@@ -11,7 +11,7 @@ import { TokenPage } from "../../../core/pagination.mjs";
 import { buildHeaders } from "../../../internal/headers.mjs";
 import { SessionToolRunner } from "../../../lib/tools/SessionToolRunner.mjs";
 
-//@ chunk-hwmsct5x.js:129788-130754 esm-fingerprint
+//@ chunk-vn3g7zt8.js:130168-131134 esm-fingerprint
 var Events = (() => {
   class Events extends APIResource {
     list(sessionID, params = {}, options) {

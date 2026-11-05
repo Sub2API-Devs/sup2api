@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：git 主机识别
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f2w6209x.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wsf8by0j.js (5)
  * attribution: placement 5
  */
 import {
@@ -16,38 +16,31 @@ import {
 } from "./git/githubUrl.js";
 import { describeUrlScheme } from "./resultError.js";
 import { isSuspiciousUrl } from "./fsBoundRead.js";
-import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-f2w6209x.js:309-354 placement
+//@ chunk-wsf8by0j.js:310-355 placement
 /**
  * 去掉主机名末尾的端口号。
  */
 function portlessHost(host) {
   return host.replace(/:\d+$/, "");
 }
-//@ chunk-f2w6209x.js:354-522 placement
+//@ chunk-wsf8by0j.js:355-523 placement
 /**
  * git 主机类型到官方域名映射，以及 SSH 别名主机到类型的映射。
  */
-var GITLAB_COM; // deferred: uses GITHUB_HOST (./git/githubUrl.js) of its import cycle while loading; runs once the cycle is complete
-var BITBUCKET_ORG;
-var GIT_HOST_NAME_BY_KIND;
-var SSH_HOST_KIND_MAP;
-deferInit("chunk-f2w6209x.js:354", () => {
-  GITLAB_COM = "gitlab.com";
-  BITBUCKET_ORG = "bitbucket.org";
-  GIT_HOST_NAME_BY_KIND = {
-    github: GITHUB_HOST,
-    gitlab: GITLAB_COM,
-    bitbucket: BITBUCKET_ORG,
-  };
-  SSH_HOST_KIND_MAP = {
-    "ssh.github.com": "github",
-    "altssh.gitlab.com": "gitlab",
-    "altssh.bitbucket.org": "bitbucket",
-  };
-});
-//@ chunk-f2w6209x.js:522-669 placement
+var GITLAB_COM = "gitlab.com";
+var BITBUCKET_ORG = "bitbucket.org";
+var GIT_HOST_NAME_BY_KIND = {
+  github: GITHUB_HOST,
+  gitlab: GITLAB_COM,
+  bitbucket: BITBUCKET_ORG,
+};
+var SSH_HOST_KIND_MAP = {
+  "ssh.github.com": "github",
+  "altssh.gitlab.com": "gitlab",
+  "altssh.bitbucket.org": "bitbucket",
+};
+//@ chunk-wsf8by0j.js:523-670 placement
 /**
  * 识别 git 主机类型：github、已知自托管映射、gitlab、bitbucket 或 other。
  */
@@ -61,7 +54,7 @@ function getGitHostKind(host) {
   if (host_2 === BITBUCKET_ORG) return "bitbucket";
   return "other";
 }
-//@ chunk-f2w6209x.js:669-862 placement (2.1.88 match: ghIsDangerousCallback, 0.82)
+//@ chunk-wsf8by0j.js:670-864 placement (2.1.88 match: ghIsDangerousCallback, 0.819)
 function ghIsDangerousCallback(remoteUrl) {
   let trimmed = remoteUrl.trim();
   if (hasBackslashInUrlAuthority(trimmed) || describeUrlScheme(trimmed) || isSuspiciousUrl(trimmed))
@@ -74,7 +67,7 @@ function ghIsDangerousCallback(remoteUrl) {
     }
   return /^(?:[^@:/]+@)?([^:/]+):/.exec(trimmed)?.[1] ?? null;
 }
-//@ chunk-f2w6209x.js:862-982 placement
+//@ chunk-wsf8by0j.js:864-984 placement
 /**
  * 解析 scp 风格的 git 地址 user@host:path，带 URL 协议时返回 null。
  */
@@ -88,4 +81,4 @@ function parseScpLikeUrl(url) {
       }
     : null;
 }
-export { portlessHost, getGitHostKind, ghIsDangerousCallback, parseScpLikeUrl, GIT_HOST_NAME_BY_KIND };
+export { ghIsDangerousCallback, getGitHostKind, parseScpLikeUrl, portlessHost, GIT_HOST_NAME_BY_KIND };

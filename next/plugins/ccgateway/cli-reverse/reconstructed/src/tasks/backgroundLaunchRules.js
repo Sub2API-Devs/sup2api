@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：后台启动规则（ask/confirm）的执行
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (12)
- * attribution: placement 12
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (13)
+ * attribution: placement 12, layout 1
  */
 import { getHostAgentPolicy } from "../utils/hostAgentPolicy.js";
 import { userAbortReason } from "../utils/abortController.js";
@@ -17,22 +17,22 @@ import {
   errorMessage,
 } from "../utils/errors.js";
 import { isForegroundAgentMoveDisabled } from "../tools/AgentTool/backgroundGates.js";
-import { isPlainObject as isPlainObject_5 } from "../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../utils/isPlainObject.js";
 import { logForDebugging } from "../utils/debug.js";
 
-//@ chunk-e6aww6q8.js:580780-581008 placement
+//@ chunk-5xgkngpb.js:589348-589576 placement
 var NO_BG_AGENT_TEXT =
   "Background agents cannot be started in this session right now. Run the agent without run_in_background.";
 var NO_BG_AGENT_FALSE_TEXT =
   "Background agents cannot be started in this session right now. Run the agent with run_in_background: false.";
-//@ chunk-e6aww6q8.js:581008-581041 placement
+//@ chunk-5xgkngpb.js:589576-589609 placement
 /**
  * 按是否允许后台启动返回对应说明文案。
  */
 function backgroundLaunchRuleText(launchesByDefault) {
   return launchesByDefault ? NO_BG_AGENT_FALSE_TEXT : NO_BG_AGENT_TEXT;
 }
-//@ chunk-e6aww6q8.js:581041-581107 placement
+//@ chunk-5xgkngpb.js:589609-589675 placement
 /**
  * 读取宿主代理策略里的后台启动规则（异常返回 undefined）。
  */
@@ -43,11 +43,11 @@ function getBackgroundLaunchRule() {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:581107-581171 placement
+//@ chunk-5xgkngpb.js:589675-589739 placement
 function remoteCancelAbortReason() {
   return getBackgroundLaunchRule() === undefined ? undefined : userAbortReason("remote-cancel");
 }
-//@ chunk-e6aww6q8.js:581171-581292 placement
+//@ chunk-5xgkngpb.js:589739-589859 placement
 /**
  * 安全调用 admitsWake 判断是否允许唤醒，出错时记录并返回 false。
  */
@@ -59,7 +59,16 @@ function admitsWakeSafe(backgroundLaunchRule, agentId) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:581292-582618 placement
+//@ chunk-5xgkngpb.js:589859-590003 layout
+function agentId(backgroundLaunchRule, agentId) {
+  try {
+    return backgroundLaunchRule.asksOfForegroundLaunch?.(agentId) === true;
+  } catch (error) {
+    logLaunchRuleError(error, "asksOfForegroundLaunch", new AbortController().signal);
+    return true;
+  }
+}
+//@ chunk-5xgkngpb.js:590003-591326 placement
 /**
  * 执行后台启动规则的 ask()/confirm()，校验返回值并处理拒绝或中止。
  */
@@ -143,7 +152,7 @@ function runBackgroundLaunchRules(rule, request) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:582618-583524 placement
+//@ chunk-5xgkngpb.js:591326-592232 placement
 function runBackgroundMoveRules(request, isBackgrounded) {
   let rule;
   try {
@@ -190,7 +199,7 @@ function runBackgroundMoveRules(request, isBackgrounded) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:583524-583619 placement
+//@ chunk-5xgkngpb.js:592232-592327 placement
 function errorMessageString(error) {
   try {
     return String(errorMessage(error));
@@ -198,15 +207,15 @@ function errorMessageString(error) {
     return "a value that could not be made a string";
   }
 }
-//@ chunk-e6aww6q8.js:583619-583712 placement
+//@ chunk-5xgkngpb.js:592327-592420 placement
 function isConfirmableLaunchAnswer(value) {
   return (
-    isPlainObject_5(value) && typeof value.confirm === "function" && typeof value.registered === "function"
+    isPlainObject_6(value) && typeof value.confirm === "function" && typeof value.registered === "function"
   );
 }
-//@ chunk-e6aww6q8.js:583712-583968 placement
+//@ chunk-5xgkngpb.js:592420-592676 placement
 function parseLaunchRuleAnswer(value) {
-  if (!isPlainObject_5(value)) return;
+  if (!isPlainObject_6(value)) return;
   let { kind, message } = value;
   if (kind === "aborted")
     return {
@@ -224,7 +233,7 @@ function parseLaunchRuleAnswer(value) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:583968-584072 placement
+//@ chunk-5xgkngpb.js:592676-592779 placement
 function logLaunchRuleError(error, method, signal) {
   if (isAbortError(error) && signal.aborted) {
     logForDebugging(`background launch rule: ${method} aborted: ${errorMessage(error)}`);
@@ -232,14 +241,15 @@ function logLaunchRuleError(error, method, signal) {
   }
   logError(error);
 }
-//@ chunk-e6aww6q8.js:584072-584105 placement
+//@ chunk-5xgkngpb.js:592779-592812 placement
 var BACKGROUND_RULE_ID_REGEX = /^[a-zA-Z0-9_-]{1,128}$/;
 export {
-  getBackgroundLaunchRule,
-  admitsWakeSafe,
-  runBackgroundLaunchRules,
-  backgroundLaunchRuleText,
   remoteCancelAbortReason,
   runBackgroundMoveRules,
+  getBackgroundLaunchRule,
+  admitsWakeSafe,
   BACKGROUND_RULE_ID_REGEX,
+  runBackgroundLaunchRules,
+  backgroundLaunchRuleText,
+  agentId,
 };

@@ -3,10 +3,10 @@
  *
  * Bash 路径约束：各命令路径提取器 PATH_EXTRACTORS、操作类型、路径校验、rm/rmdir 危险目标检查、输入/输出重定向检查、进程替换拦截、写入目标推断
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/pathValidation.ts
- * pieces: chunk-e6aww6q8.js (56)
- * attribution: fingerprint 12, file-local 3, layout 33, sole-consumer 2, affinity 3, placement 3
+ * pieces: chunk-5xgkngpb.js (55)
+ * attribution: fingerprint 12, file-local 3, layout 21, sole-consumer 3, placement 13, affinity 3
  */
 import { isAbsolute, resolve as resolve_2, normalize, sep, posix, basename, relative, dirname } from "path";
 import { homedir } from "os";
@@ -21,8 +21,8 @@ import {
   resolveForPermissionCheck,
   getPathsForPermissionCheck_2,
 } from "../../utils/fsOperations.js";
-import { uniq, count } from "../../utils/collections.js";
 import {
+  normalizeCaseForComparison_2,
   allWorkingDirectories,
   pathInWorkingPath,
   acceptEditsSuggestionApplies,
@@ -58,7 +58,7 @@ import {
   hasInteriorDotDot,
   validatePath,
   shellPathSegments,
-  formatDirectoryList,
+  formatDirectoryList as formatDirectoryList_2,
   internalPathDenyWords,
   hostPersonOnlyTag,
   internalDenyShellAskReason,
@@ -66,6 +66,7 @@ import {
 } from "../../utils/permissions/pathValidation.js";
 import { isUncOrDevicePath } from "../../utils/pathClassification.js";
 import { env } from "../../utils/env.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   outsideReadsRuntimePathAsk,
   OUTSIDE_READS_BLOCKED_DENY_REASON,
@@ -73,22 +74,22 @@ import {
   isBypassImmuneCircuitBreaker,
   isClassifierRoutedCircuitBreaker,
 } from "../../types/permissions.js";
+import { READ } from "../FileReadTool/constants.js";
 import { firstGlobCharIndex } from "../../utils/windowsUncPaths.js";
-import { FILE_READ_TOOL_NAME } from "../FileReadTool/constants.js";
 import { firstLineOf } from "../../utils/stringUtils.js";
+import { urlPatternToRegex } from "../../services/mcp/config.js";
 import { getDirectoryForPath } from "../../utils/path.js";
 import { createReadRuleSuggestion } from "../../utils/permissions/PermissionUpdate.js";
 import { getCommandArgv, extractOutputRedirections, splitCommand } from "../../utils/bash/commands.js";
 import { stripSafeWrappers, skipTimeoutFlags } from "./bashPermissions.js";
 import { sedCommandIsAllowedByAllowlist } from "./sedValidation.js";
 import { getPlatform } from "../../utils/platform.js";
-import { mergeSafetyCheckAlso } from "./bashSecurity.js";
 import { containsVulnerableUncPath } from "../../utils/shell/readOnlyCommandValidation.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
 import { NON_CREATING_WRITE_COMMANDS } from "./readOnlyValidation.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1070212-1074425 fingerprint (2.1.88 match: checkDangerousRemovalPaths, 0.381)
+//@ chunk-5xgkngpb.js:1065467-1069680 fingerprint (2.1.88 match: checkDangerousRemovalPaths, 0.385)
 /**
  * rm/rmdir 危险目标检查：可能为空的变量 + 顶层目录名、反斜杠根、cd 后的相对通配、无法静态解析的通配目标、关键系统目录、工作目录及其祖先、挂载盘根（CLAUDE_CODE_DISABLE_MOUNTED_DRIVE_RM_PROMPT 可关）、跨多层的通配；命中返回不可被规则自动允许的 ask。
  */
@@ -97,7 +98,7 @@ function checkDangerousRemovalPaths(command, args, cwd, toolPermissionContext, c
   let paths = extractor(args);
   let { resolvedPath } = safeResolvePath(getFsImplementation(), cwd);
   let cwdVariants = resolvedPath === cwd ? [cwd] : [cwd, resolvedPath];
-  let workingDirVariants = uniq(
+  let workingDirVariants = normalizeCaseForComparison_2(
     [...cwdVariants, ...(toolPermissionContext ? allWorkingDirectories(toolPermissionContext) : [])].flatMap(
       (dir) => {
         let { resolvedPath } = safeResolvePath(getFsImplementation(), dir);
@@ -239,9 +240,9 @@ If you meant something deeper inside, name it by its full path.`,
     }
     if (hasGlobSuffix && /[\\/]\*$/.test(absolutePath)) {
       let extraDepth =
-        count(absolutePath.split(/[\\/]+/), (segment) => segment && segment !== ".") -
-        count(strippedGlobs.split(/[\\/]+/), (segment) => segment && segment !== ".");
-      let globSegments = count(relativeTarget.split(/[\\/]+/), (segment) => /[*?[]/.test(segment));
+        countWhere(absolutePath.split(/[\\/]+/), (segment) => segment && segment !== ".") -
+        countWhere(strippedGlobs.split(/[\\/]+/), (segment) => segment && segment !== ".");
+      let globSegments = countWhere(relativeTarget.split(/[\\/]+/), (segment) => /[*?[]/.test(segment));
       if (extraDepth + globSegments > 1)
         return dangerousRemovalAsk(
           command,
@@ -259,7 +260,7 @@ This command's glob pattern traverses directories that cannot be statically enum
     }
   );
 }
-//@ chunk-e6aww6q8.js:1090073-1090223 file-local
+//@ chunk-5xgkngpb.js:1085352-1085502 file-local
 /**
  * 去掉 argv 中的选项，返回从第一个位置参数（或 -- 之后）开始的参数。
  */
@@ -276,7 +277,7 @@ function filterOutFlags(args) {
     }
   return result;
 }
-//@ chunk-e6aww6q8.js:1090223-1090994 layout
+//@ chunk-5xgkngpb.js:1085502-1086273 layout
 /**
  * 按命令的选项规格（布尔/带值/粘连，长短）生成路径提取器：跳过选项及其值，遇到未知选项后不再跳选项。
  */
@@ -321,16 +322,16 @@ function makeFlagAwarePathExtractor(spec) {
     return paths;
   };
 }
-//@ chunk-e6aww6q8.js:1090994-1091064 layout
+//@ chunk-5xgkngpb.js:1086273-1086343 layout
 var DEVICE_PATHS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1090994", () => {
+deferInit("chunk-5xgkngpb.js:1086273", () => {
   DEVICE_PATHS = new Set(["/dev/null", "/dev/stdout", "/dev/stderr", "/dev/tty"]);
 });
-//@ chunk-e6aww6q8.js:1091064-1091114 layout
+//@ chunk-5xgkngpb.js:1086343-1086393 layout
 function filterDevicePaths(paths) {
   return paths.filter((path) => !DEVICE_PATHS.has(path));
 }
-//@ chunk-e6aww6q8.js:1091114-1091981 fingerprint (2.1.88 match: parsePatternCommand, 0.526)
+//@ chunk-5xgkngpb.js:1086393-1087269 fingerprint (2.1.88 match: parsePatternCommand, 0.526)
 /**
  * grep 类命令的路径提取：第一个位置参数是模式（有 -e/-f 时不是），-f/--file/--exclude-from 等的值也算路径；无路径时返回默认值。
  */
@@ -396,7 +397,7 @@ function parsePatternCommand(args, flagsWithArgs, defaults = []) {
   }
   return paths.length > 0 ? paths : defaults;
 }
-//@ chunk-e6aww6q8.js:1091981-1092205 layout
+//@ chunk-5xgkngpb.js:1087269-1087493 layout
 function getAttachedFlagValue(arg, flags) {
   if (!arg.startsWith("-")) return;
   let index = arg.indexOf("=");
@@ -408,7 +409,7 @@ function getAttachedFlagValue(arg, flags) {
     if (flag.length === 2 && flag[0] === "-" && arg.startsWith(flag) && arg !== flag) return arg.slice(2);
   return;
 }
-//@ chunk-e6aww6q8.js:1092205-1093136 layout
+//@ chunk-5xgkngpb.js:1087493-1088427 layout
 /**
  * grep/egrep/fgrep 路径提取（-r 无路径时为 "."）；uye 是 awk 系的路径提取（-f/-E 的程序文件也算路径）。
  */
@@ -487,18 +488,18 @@ var extractAwkPaths = (args) => {
   }
   return paths;
 };
-//@ chunk-e6aww6q8.js:1093136-1093201 layout
+//@ chunk-5xgkngpb.js:1088427-1088492 layout
 function joinPathSegment(base, segment) {
   return base === "" ? segment : `${base.replace(/\/+$/, "")}/${segment}`;
 }
-//@ chunk-e6aww6q8.js:1093201-1099428 fingerprint (2.1.88 match: PATH_EXTRACTORS, 0.427)
+//@ chunk-5xgkngpb.js:1088492-1094719 fingerprint (2.1.88 match: PATH_EXTRACTORS, 0.427)
 /**
  * 每个路径受限命令的路径提取器表 PATH_EXTRACTORS（cd/ls/find/rm/cp/cat/grep/rg/sed/jq/git…），以及 git 全局带值选项、rg 带值选项表。
  */
 var GIT_GLOBAL_FLAGS_WITH_VALUE; // deferred: uses makeFlagAwarePathExtractor of its import cycle while loading; runs once the cycle is complete
 var RG_FLAGS_WITH_VALUE;
 var PATH_EXTRACTORS;
-deferInit("chunk-e6aww6q8.js:1093201", () => {
+deferInit("chunk-5xgkngpb.js:1088492", () => {
   GIT_GLOBAL_FLAGS_WITH_VALUE = new Set([
     "-C",
     "-c",
@@ -767,7 +768,7 @@ deferInit("chunk-e6aww6q8.js:1093201", () => {
         return (
           !arg.startsWith("-")
             ? [arg]
-            : uniq([
+            : normalizeCaseForComparison_2([
                 ...(arg.includes("=") ? [arg.slice(arg.indexOf("=") + 1)] : []),
                 ...(arg.length > 2 && !arg.startsWith("--") ? [arg.slice(2)] : []),
                 ...(pathStartIndex > 0 ? [arg.slice(pathStartIndex)] : []),
@@ -940,7 +941,7 @@ deferInit("chunk-e6aww6q8.js:1093201", () => {
     },
   };
 });
-//@ chunk-e6aww6q8.js:1099428-1102123 fingerprint (2.1.88 match: ACTION_VERBS, 0.822)
+//@ chunk-5xgkngpb.js:1094719-1097414 fingerprint (2.1.88 match: ACTION_VERBS, 0.821)
 /**
  * 路径受限命令列表、每个命令的动作描述（用于提示文字）和操作类型（read/write/create），以及 mv/cp/cd 的参数安全检查。
  */
@@ -948,7 +949,7 @@ var SUPPORTED_PATH_COMMANDS; // deferred: uses GIT_GLOBAL_FLAGS_WITH_VALUE of it
 var ACTION_VERBS;
 var COMMAND_OPERATION_TYPE;
 var COMMAND_ARGS_SAFE_CHECKS;
-deferInit("chunk-e6aww6q8.js:1099428", () => {
+deferInit("chunk-5xgkngpb.js:1094719", () => {
   SUPPORTED_PATH_COMMANDS = Object.keys(PATH_EXTRACTORS);
   ACTION_VERBS = {
     cd: "change directories to",
@@ -1083,7 +1084,7 @@ deferInit("chunk-e6aww6q8.js:1099428", () => {
     },
   };
 });
-//@ chunk-e6aww6q8.js:1102123-1103108 layout
+//@ chunk-5xgkngpb.js:1097414-1098399 sole-consumer
 /**
  * pushd 或 env -C/--chdir 的目标目录读权限检查：命中拒绝规则→deny；读封锁（blockReadsOutsideWorkingDirectories）下工作目录外→ask；其余通过。
  */
@@ -1133,7 +1134,7 @@ function checkPushdEnvChdirPath(argv, cwd, toolPermissionContext) {
     };
   return outsideReadsRuntimePathAsk(sliced);
 }
-//@ chunk-e6aww6q8.js:1103108-1103912 layout
+//@ chunk-5xgkngpb.js:1098399-1099211 sole-consumer
 /**
  * ln/link 源路径的读权限检查，规则同 pushd/env：拒绝规则→deny，读封锁下工作目录外→ask。
  */
@@ -1169,60 +1170,7 @@ function checkLinkSourcePaths(argv, cwd, toolPermissionContext) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:1103912-1104143 layout
-function findBracketExpressionEnd(pattern) {
-  let idx = pattern[1] === "!" || pattern[1] === "^" ? 2 : 1;
-  if (pattern[idx] === "]") idx++;
-  for (; idx < pattern.length; idx++) {
-    let char = pattern[idx];
-    if (char === "]") return idx;
-    if (char === "[" && /^[:=.]/.test(pattern.slice(idx + 1))) {
-      let classChar = pattern[idx + 1];
-      let index = pattern.indexOf(classChar + "]", idx + 2);
-      if (index !== -1) idx = index + 1;
-    }
-  }
-  return pattern.length - 1;
-}
-//@ chunk-e6aww6q8.js:1104143-1104811 layout (2.1.88 match: urlPatternToRegex, 1)
-function urlPatternToRegex(pattern) {
-  if (firstGlobCharIndex(pattern) === -1) return false;
-  if (pattern.startsWith("[")) {
-    let sliced = pattern.slice(findBracketExpressionEnd(pattern) + 1);
-    if (firstGlobCharIndex(sliced) === -1 && sliced !== ".") return false;
-  }
-  if (/\[[:=.]/.test(pattern)) return true;
-  if (pattern.startsWith("*") || pattern.startsWith("?")) return false;
-  let regexSource = "^";
-  for (let idx = 0; idx < pattern.length; idx++) {
-    let char = pattern[idx];
-    if (char === "*") regexSource += ".*";
-    else if (char === "?") regexSource += ".";
-    else if (char === "[") {
-      let isNegated = pattern[idx + 1] === "!" || pattern[idx + 1] === "^";
-      let index = pattern.indexOf("]", idx + (isNegated ? 3 : 2));
-      if (index === -1) {
-        regexSource += "\\[";
-        continue;
-      }
-      if (idx > 0 && (isNegated || pattern.indexOf("]", index + 1) !== -1)) {
-        regexSource += ".*";
-        break;
-      }
-      let sliced = pattern.slice(idx + 1, index);
-      if (sliced.startsWith("!") || sliced.startsWith("^")) sliced = "^" + sliced.slice(1);
-      regexSource += "[" + sliced.replace(/[\\\]]/g, "\\$&") + "]";
-      idx = index;
-    } else regexSource += char.replace(/[.+^$()|{}\\]/g, "\\$&");
-  }
-  regexSource += "$";
-  try {
-    return new RegExp(regexSource).test("..");
-  } catch {
-    return true;
-  }
-}
-//@ chunk-e6aww6q8.js:1104811-1105100 layout
+//@ chunk-5xgkngpb.js:1100110-1100399 placement
 /**
  * 只检查拒绝规则的路径校验：写路径按操作类型、额外读路径按 read，命中拒绝规则即返回 deny。
  */
@@ -1243,16 +1191,16 @@ function checkDenyRulesForPaths(commandName, paths, cwd, toolPermissionContext, 
     }
   return;
 }
-//@ chunk-e6aww6q8.js:1105100-1105146 layout
+//@ chunk-5xgkngpb.js:1100399-1100445 placement
 var AWK_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1105100", () => {
+deferInit("chunk-5xgkngpb.js:1100399", () => {
   AWK_COMMANDS = new Set(["awk", "gawk", "mawk", "nawk"]);
 });
-//@ chunk-e6aww6q8.js:1105146-1105200 layout
+//@ chunk-5xgkngpb.js:1100445-1100499 placement
 function isBashToolRule(rule) {
-  return rule === FILE_READ_TOOL_NAME || rule.startsWith(`${FILE_READ_TOOL_NAME}(`);
+  return rule === READ || rule.startsWith(`${READ}(`);
 }
-//@ chunk-e6aww6q8.js:1105200-1105285 layout
+//@ chunk-5xgkngpb.js:1100499-1100584 placement
 /**
  * 任一来源存在 Bash(...) 拒绝规则。
  */
@@ -1261,7 +1209,7 @@ function hasBashDenyRule(context) {
     (alwaysDenyRule ?? []).some(isBashToolRule),
   );
 }
-//@ chunk-e6aww6q8.js:1105285-1105399 layout
+//@ chunk-5xgkngpb.js:1100584-1100698 placement
 /**
  * 除 hostCredential 外，没有任何 Bash(...) 拒绝规则。
  */
@@ -1270,7 +1218,7 @@ function hasNoBashDenyRules(context) {
     ([key, value]) => key === "hostCredential" || !(value ?? []).some(isBashToolRule),
   );
 }
-//@ chunk-e6aww6q8.js:1105399-1105518 layout
+//@ chunk-5xgkngpb.js:1100698-1100817 placement
 function getSourceArgsOfWriteCommand(commandName, args) {
   switch (commandName) {
     case "cp":
@@ -1282,10 +1230,10 @@ function getSourceArgsOfWriteCommand(commandName, args) {
       return [];
   }
 }
-//@ chunk-e6aww6q8.js:1105518-1105644 layout
+//@ chunk-5xgkngpb.js:1100817-1100943 placement
 var GIT_PATH_ENV_RE =
   /^(HOME|XDG_CONFIG_HOME|PROGRAMDATA|GIT_DIR|GIT_COMMON_DIR|GIT_CEILING_DIRECTORIES|GIT_EXEC_PATH|PATH)$|^GIT_CONFIG/i;
-//@ chunk-e6aww6q8.js:1105644-1105832 layout
+//@ chunk-5xgkngpb.js:1100943-1101131 placement
 /**
  * 解析 git 子命令前的全局选项（-C、--git-dir 等带值选项），返回子命令下标与选项列表。
  */
@@ -1311,7 +1259,7 @@ function parseLeadingGitOptions(argv) {
     options,
   };
 }
-//@ chunk-e6aww6q8.js:1105832-1106720 layout
+//@ chunk-5xgkngpb.js:1101131-1102022 placement
 /**
  * 找出需要额外做读检查的 glob 参数：无危险选项、无改变路径解析环境变量的普通 git 调用直接返回 []；否则返回未加引号、含通配且未在路径列表中的参数。
  */
@@ -1371,7 +1319,7 @@ function getGlobArgsNeedingCheck(commandName, astCommand, args, checkedGlobs) {
     args.some((arg, argIdx) => arg === newGlobArg && argvUnquotedGlob[prefixLength + argIdx] === true),
   );
 }
-//@ chunk-e6aww6q8.js:1106720-1106828 layout
+//@ chunk-5xgkngpb.js:1102022-1102130 placement
 function getNewGlobArgs(args, checkedGlobs) {
   let seen = new Set(checkedGlobs);
   let newGlobs = [];
@@ -1382,7 +1330,7 @@ function getNewGlobArgs(args, checkedGlobs) {
     }
   return newGlobs;
 }
-//@ chunk-e6aww6q8.js:1106828-1107218 layout
+//@ chunk-5xgkngpb.js:1102130-1102520 layout
 /**
  * 解析 cp/mv 的 -t / --target-directory，返回是否指定了目标目录和粘连写法里的目标路径。
  */
@@ -1407,7 +1355,7 @@ function getTargetDirectoryOption(commandName, args) {
     attachedDestinations,
   };
 }
-//@ chunk-e6aww6q8.js:1107218-1112301 fingerprint (2.1.88 match: validateCommandPaths, 0.571)
+//@ chunk-5xgkngpb.js:1102520-1107616 fingerprint (2.1.88 match: validateCommandPaths, 0.566)
 /**
  * 对一个路径受限命令的全部路径做权限校验：读封锁下的通配/占位符/~user 路径要询问；写操作的路径先按读校验；按操作类型 validatePath，deny 规则直接拒绝，不在工作目录内则 ask（带 blockedPath）。
  */
@@ -1630,7 +1578,7 @@ function validateCommandPaths(
     : filtered.slice(0, 1))
     if (!allowed) {
       let workingDirs = Array.from(allWorkingDirectories(context));
-      let dirListStr = formatDirectoryList(workingDirs);
+      let dirListStr = formatDirectoryList_2(workingDirs);
       let isPlainWorkingDirPath = isInWorkingDir === true && decisionReason === undefined;
       let message =
         decisionReason?.type === "other" || decisionReason?.type === "safetyCheck"
@@ -1665,7 +1613,7 @@ function validateCommandPaths(
     message: `Path validation passed for ${commandName} command`,
   };
 }
-//@ chunk-e6aww6q8.js:1112301-1112882 fingerprint (2.1.88 match: createPathChecker, 1)
+//@ chunk-5xgkngpb.js:1107616-1108199 fingerprint (2.1.88 match: createPathChecker, 1)
 /**
  * 为某命令生成路径检查器：validateCommandPaths + rm/rmdir 危险删除检查；ask 时附建议（读：会话读规则；写：加会话目录，必要时切 acceptEdits）。
  */
@@ -1712,11 +1660,11 @@ function createPathChecker(command, operationTypeOverride) {
     return result;
   };
 }
-//@ chunk-e6aww6q8.js:1112882-1112911 layout
+//@ chunk-5xgkngpb.js:1108199-1108228 layout
 function parseCommandArgs(command) {
   return getCommandArgv(command);
 }
-//@ chunk-e6aww6q8.js:1112911-1113249 fingerprint (2.1.88 match: validateSinglePathCommand, 1)
+//@ chunk-5xgkngpb.js:1108228-1108566 fingerprint (2.1.88 match: validateSinglePathCommand, 1)
 /**
  * 文本版：剥离包装后解析命令，若是路径受限命令则做路径检查（白名单内的 sed 视为读）。
  */
@@ -1745,7 +1693,7 @@ function validateSinglePathCommand(cmd, cwd, toolPermissionContext, compoundComm
     astCommand,
   );
 }
-//@ chunk-e6aww6q8.js:1113249-1113594 fingerprint (2.1.88 match: validateSinglePathCommandArgv, 1)
+//@ chunk-5xgkngpb.js:1108566-1108911 fingerprint (2.1.88 match: validateSinglePathCommandArgv, 1)
 /**
  * AST 版：对 tree-sitter 解析出的简单命令做路径检查。
  */
@@ -1774,7 +1722,7 @@ function validateSinglePathCommandArgv(cmd, cwd, toolPermissionContext, compound
     cmd,
   );
 }
-//@ chunk-e6aww6q8.js:1113594-1113838 layout
+//@ chunk-5xgkngpb.js:1108911-1109155 layout
 /**
  * 求 AST 命令读取的路径（路径提取 + 输入重定向），去掉占位符和特殊设备。
  */
@@ -1796,7 +1744,7 @@ function getReadPathsForAstCommand(astCommand) {
   readPaths.push(...astRedirectsToOutputRedirections(astCommand.redirects).inputRedirections);
   return readPaths.filter((path) => !containsAnyPlaceholder(path) && !isSpecialDevicePath(path));
 }
-//@ chunk-e6aww6q8.js:1113838-1114900 layout
+//@ chunk-5xgkngpb.js:1109155-1110228 layout
 /**
  * 求 AST 命令会写入的路径：写命令的目标、cp/mv 落点、输出重定向目标，并标记是否可能写入看不到的位置（sort -o、uniq 第二参数、find -fprint、sed 写、cp/mv --backup 等）。供文件监视/编辑 diff 使用。
  */
@@ -1863,13 +1811,13 @@ function getWriteTargetsForAstCommand(simple) {
       written.push(redirect.target);
   return {
     known: isKnownCommand,
-    written: uniq(written).filter((path) => !isSpecialDevicePath(path)),
-    landings: uniq(landings),
-    copySources: uniq(copySources),
+    written: normalizeCaseForComparison_2(written).filter((path) => !isSpecialDevicePath(path)),
+    landings: normalizeCaseForComparison_2(landings),
+    copySources: normalizeCaseForComparison_2(copySources),
     writesUnseen,
   };
 }
-//@ chunk-e6aww6q8.js:1114900-1115068 layout
+//@ chunk-5xgkngpb.js:1110228-1110396 layout
 function cpHasAmbiguousDestination(args, destinations) {
   return (
     destinations.some((destination) => {
@@ -1880,16 +1828,16 @@ function cpHasAmbiguousDestination(args, destinations) {
     }) || args.some((arg) => arg.startsWith("--no-t") || /^-[^-]*T/.test(arg))
   );
 }
-//@ chunk-e6aww6q8.js:1115068-1115152 layout
+//@ chunk-5xgkngpb.js:1110396-1110480 layout
 function hasBackupSuffixOption(args) {
   return args.some((arg) => /^--(?:pa|b|su)/.test(arg) || /^-[^-]*[bS]/.test(arg));
 }
-//@ chunk-e6aww6q8.js:1115152-1115201 layout
+//@ chunk-5xgkngpb.js:1110480-1110529 layout
 var OUTPUT_REDIRECT_OPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1115152", () => {
+deferInit("chunk-5xgkngpb.js:1110480", () => {
   OUTPUT_REDIRECT_OPS = new Set([">", ">|", "&>", ">>", "&>>", ">&"]);
 });
-//@ chunk-e6aww6q8.js:1115201-1115382 layout
+//@ chunk-5xgkngpb.js:1110529-1110710 layout
 function hasOnlyListOptions(args) {
   let sawPath = false;
   for (let arg of args) {
@@ -1899,12 +1847,12 @@ function hasOnlyListOptions(args) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:1115382-1115420 layout
+//@ chunk-5xgkngpb.js:1110710-1110748 layout
 var CASE_SENSITIVE_PATH_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1115382", () => {
+deferInit("chunk-5xgkngpb.js:1110710", () => {
   CASE_SENSITIVE_PATH_COMMANDS = new Set(["rm", "rmdir", "tee"]);
 });
-//@ chunk-e6aww6q8.js:1115420-1115564 layout
+//@ chunk-5xgkngpb.js:1110748-1110892 layout
 /**
  * 规范化命令名：rm/rmdir/tee 去掉目录前缀（tee 还去 .exe 并小写），其他保持原样。
  */
@@ -1914,7 +1862,7 @@ function normalizeCommandName(commandName) {
   if (CASE_SENSITIVE_PATH_COMMANDS.has(replaced)) return replaced;
   return replaced.toLowerCase().replace(/\.exe$/, "") === "tee" ? "tee" : commandName;
 }
-//@ chunk-e6aww6q8.js:1115564-1117098 fingerprint (2.1.88 match: validateOutputRedirections, 0.822)
+//@ chunk-5xgkngpb.js:1110892-1112428 fingerprint (2.1.88 match: validateOutputRedirections, 0.818)
 /**
  * 输出重定向检查：目标命中 deny 规则拒绝；复合命令含 cd 时任何重定向都要询问；目标不在可写范围则 ask 并建议添加会话目录。
  */
@@ -1949,7 +1897,7 @@ function validateOutputRedirections(redirections, cwd, toolPermissionContext, co
   for (let { allowed, resolvedPath, decisionReason, isInWorkingDir } of mapped)
     if (!allowed) {
       let workingDirs = Array.from(allWorkingDirectories(toolPermissionContext));
-      let dirListStr = formatDirectoryList(workingDirs);
+      let dirListStr = formatDirectoryList_2(workingDirs);
       let message =
         decisionReason?.type === "other" || decisionReason?.type === "safetyCheck"
           ? decisionReason.reason
@@ -1987,7 +1935,7 @@ function validateOutputRedirections(redirections, cwd, toolPermissionContext, co
     }
   );
 }
-//@ chunk-e6aww6q8.js:1117098-1117225 sole-consumer
+//@ chunk-5xgkngpb.js:1112428-1112555 layout
 function isHardSafetyAsk(result) {
   return (
     result.behavior === "ask" &&
@@ -1996,7 +1944,30 @@ function isHardSafetyAsk(result) {
     !isClassifierRoutedCircuitBreaker(result.decisionReason)
   );
 }
-//@ chunk-e6aww6q8.js:1117528-1123341 fingerprint (2.1.88 match: checkPathConstraints, 0.338)
+//@ chunk-5xgkngpb.js:1112555-1112858 layout
+/**
+ * 把第二个 safetyCheck 结果的 circuitBreaker/also 合并进第一个的 also 列表（去重、去掉自身）。
+ */
+function mergeSafetyCheckAlso(result, otherResult) {
+  let decisionReason = result.decisionReason;
+  let decisionReason_2 = otherResult?.decisionReason;
+  if (decisionReason?.type !== "safetyCheck" || decisionReason_2?.type !== "safetyCheck") return result;
+  let filtered = normalizeCaseForComparison_2([
+    ...(decisionReason.also ?? []),
+    ...(decisionReason_2.circuitBreaker !== undefined ? [decisionReason_2.circuitBreaker] : []),
+    ...(decisionReason_2.also ?? []),
+  ]).filter((breaker) => breaker !== decisionReason.circuitBreaker);
+  return filtered.length === 0
+    ? result
+    : {
+        ...result,
+        decisionReason: {
+          ...decisionReason,
+          also: filtered,
+        },
+      };
+}
+//@ chunk-5xgkngpb.js:1112858-1118675 fingerprint (2.1.88 match: checkPathConstraints, 0.327)
 /**
  * Bash 路径约束总检查：进程替换 >( <( 要询问；输入重定向检查；每个子命令的路径检查（deny 优先）；危险重定向目标检查（含 edit deny 规则）；输出重定向检查；汇总返回 deny/ask/passthrough。
  */
@@ -2228,7 +2199,7 @@ function checkPathConstraints(
     let mergeAsk = (askResult) => {
       if (askResult.behavior !== "ask" || askResult.decisionReason?.type !== "safetyCheck") return askResult;
       let decisionReason = askResult.decisionReason;
-      let filtered = uniq([...(decisionReason.also ?? []), ...alsoBreakers]).filter(
+      let filtered = normalizeCaseForComparison_2([...(decisionReason.also ?? []), ...alsoBreakers]).filter(
         (breaker) => breaker !== decisionReason.circuitBreaker,
       );
       return {
@@ -2378,7 +2349,7 @@ function checkPathConstraints(
     message: "All path commands validated successfully",
   };
 }
-//@ chunk-e6aww6q8.js:1123341-1124615 layout
+//@ chunk-5xgkngpb.js:1118675-1119952 layout
 /**
  * 输入重定向（< file）检查：目标是通配或在 cd 之后时询问；命中 read deny 规则拒绝；否则按读路径校验。
  */
@@ -2431,7 +2402,7 @@ function validateInputRedirections(targets, cwd, toolPermissionContext, compound
       message:
         decisionReason?.type === "other" || decisionReason?.type === "safetyCheck"
           ? decisionReason.reason
-          : `Input redirection from '${resolvedPath}' was blocked. For security, Claude Code may only read files in the allowed working directories for this session: ${formatDirectoryList(Array.from(allWorkingDirectories(toolPermissionContext)))}.`,
+          : `Input redirection from '${resolvedPath}' was blocked. For security, Claude Code may only read files in the allowed working directories for this session: ${formatDirectoryList_2(Array.from(allWorkingDirectories(toolPermissionContext)))}.`,
       blockedPath: resolvedPath,
       decisionReason,
       ...(readRuleSuggestion && {
@@ -2446,7 +2417,7 @@ function validateInputRedirections(targets, cwd, toolPermissionContext, compound
     }
   );
 }
-//@ chunk-e6aww6q8.js:1124615-1124791 layout
+//@ chunk-5xgkngpb.js:1119952-1120128 layout
 /**
  * /dev/null、/dev/std*、/dev/tty、/dev/fd/N、/proc/self/fd/0-2 等特殊设备路径。
  */
@@ -2461,7 +2432,7 @@ function isSpecialDevicePath(path) {
     /^\/proc\/self\/fd\/[0-2]$/.test(path)
   );
 }
-//@ chunk-e6aww6q8.js:1124791-1124946 layout
+//@ chunk-5xgkngpb.js:1120128-1120283 layout
 function getRedirectTargetCandidates(target, cwd) {
   let result = [];
   let expanded = expandTildeWithHome(target);
@@ -2477,7 +2448,7 @@ function getRedirectTargetCandidates(target, cwd) {
     });
   return result;
 }
-//@ chunk-e6aww6q8.js:1124946-1125928 fingerprint (2.1.88 match: astRedirectsToOutputRedirections, 0.617)
+//@ chunk-5xgkngpb.js:1120283-1121265 fingerprint (2.1.88 match: astRedirectsToOutputRedirections, 0.617)
 /**
  * 把 AST 重定向列表拆成输出重定向、输入重定向、需做 deny 检查的重定向，并标记危险重定向。
  */
@@ -2558,7 +2529,7 @@ function astRedirectsToOutputRedirections(redirects) {
     denyCheckOutputRedirections,
   };
 }
-//@ chunk-e6aww6q8.js:1125928-1126168 file-local
+//@ chunk-5xgkngpb.js:1121265-1121505 file-local
 function skipStdbufFlags(a) {
   let i = 1;
   while (i < a.length) {
@@ -2571,7 +2542,7 @@ function skipStdbufFlags(a) {
   }
   return i > 1 && i < a.length ? i : -1;
 }
-//@ chunk-e6aww6q8.js:1126168-1126404 file-local
+//@ chunk-5xgkngpb.js:1121505-1121741 file-local
 function skipEnvFlags(a) {
   let i = 1;
   while (i < a.length) {
@@ -2584,7 +2555,7 @@ function skipEnvFlags(a) {
   }
   return i < a.length ? i : -1;
 }
-//@ chunk-e6aww6q8.js:1126404-1127358 fingerprint (2.1.88 match: stripWrappersFromArgv, 0.809)
+//@ chunk-5xgkngpb.js:1121741-1122695 fingerprint (2.1.88 match: stripWrappersFromArgv, 0.81)
 /**
  * 剥离 time/nohup/timeout/nice/stdbuf/env/command 包装（含它们的选项），返回实际命令 argv。被 readOnlyValidation、沙箱读封锁等多处使用。
  */
@@ -2638,19 +2609,19 @@ function stripWrappersFromArgvForPaths(argv) {
     } else return remaining;
   }
 }
-//@ chunk-e6aww6q8.js:1127358-1127430 affinity
+//@ chunk-5xgkngpb.js:1122695-1122767 affinity
 function formatDenyRuleBlockedMessage(what, direction, ruleValue) {
   return `${what} ${direction} '${ruleValue}' was blocked by a deny rule.`;
 }
-//@ chunk-e6aww6q8.js:1127430-1127630 affinity
+//@ chunk-5xgkngpb.js:1122767-1122967 affinity
 function formatInsideWorkingDirApproval(subject, dirListStr) {
   return `${subject} needs approval. The path is inside the working directories for this session (${dirListStr}), and Claude Code asks before a shell command creates, changes or removes files there.`;
 }
-//@ chunk-e6aww6q8.js:1127630-1127784 affinity
+//@ chunk-5xgkngpb.js:1122967-1123121 affinity
 function formatOutsideWorkingDirApproval(subject, dirListStr) {
   return `${subject} needs approval. The path is outside the working directories for this session (${dirListStr}). Allowing runs the command as written.`;
 }
-//@ chunk-e6aww6q8.js:1153141-1153309 sole-consumer
+//@ chunk-5xgkngpb.js:1148488-1148656 sole-consumer
 function isPathOrAncestorMatched(path, dir) {
   if (isPathMatchedForPermission(path, dir)) return true;
   for (let idx = 1; idx < path.length; idx++) {
@@ -2662,7 +2633,7 @@ function isPathOrAncestorMatched(path, dir) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1153309-1153579 placement (2.1.88 match: setCwdState, 1)
+//@ chunk-5xgkngpb.js:1148656-1148926 placement (2.1.88 match: setCwdState, 1)
 function isCaseVariantInsideCwd(path, dir) {
   let lower = path.toLowerCase();
   if (lower === dir.toLowerCase()) return true;
@@ -2679,7 +2650,7 @@ function isCaseVariantInsideCwd(path, dir) {
     ancestor = dirname(ancestor);
   }
 }
-//@ chunk-e6aww6q8.js:1153579-1154977 placement
+//@ chunk-5xgkngpb.js:1148926-1150329 placement
 /**
  * 从 mkdir/touch 等命令中提取写入目标路径。
  */
@@ -2767,26 +2738,26 @@ function extractWriteTargets(commands, cwd) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1154977-1155016 placement
+//@ chunk-5xgkngpb.js:1150329-1150368 placement
 /**
  * 输入类重定向操作符集合；只读命令判定时这类重定向不算“写”操作。
  */
 var INPUT_REDIRECT_OPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1154977", () => {
+deferInit("chunk-5xgkngpb.js:1150329", () => {
   INPUT_REDIRECT_OPS = new Set(["<", "<<", "<&", "<<<"]);
 });
 export {
   stripWrappersFromArgvForPaths,
+  normalizeCommandName,
+  COMMAND_OPERATION_TYPE,
   PATH_EXTRACTORS,
-  urlPatternToRegex,
+  INPUT_REDIRECT_OPS,
+  mergeSafetyCheckAlso,
+  extractWriteTargets,
   checkPathConstraints,
   hasBashDenyRule,
   checkDangerousRemovalPaths,
-  normalizeCommandName,
   hasNoBashDenyRules,
-  extractWriteTargets,
-  COMMAND_OPERATION_TYPE,
-  INPUT_REDIRECT_OPS,
   getReadPathsForAstCommand,
   getWriteTargetsForAstCommand,
 };

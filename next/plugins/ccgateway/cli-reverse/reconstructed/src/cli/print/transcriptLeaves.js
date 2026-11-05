@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：会话记录行加载与持久化检查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (5)
  * attribution: placement 5
  */
 import { stat } from "fs/promises";
@@ -18,7 +18,7 @@ import {
   isTurnOpen,
 } from "./transcriptChain.js";
 import {
-  isSyntheticApiErrorMessage,
+  isNoResponseRequestedMessage,
   isTransientApiError,
   isToolResultMessage,
 } from "../../utils/messages.js";
@@ -28,16 +28,16 @@ import {
   getTranscriptPathForSession,
   getTranscriptStorageKey,
   loadTranscriptFile,
-  MAX_TRANSCRIPT_READ_BYTES,
   doesMessageExistInSession,
   isMessageTurnUnanswered,
 } from "../../utils/sessionStorage.js";
 import { isDiskless, getSessionId } from "../../bootstrap/state.js";
+import { MAX_TRANSCRIPT_READ_BYTES } from "../../services/api/tether.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { isClaudeAiChatOrigin } from "../../utils/entrypointKinds.js";
 import { logError } from "../../utils/log.js";
 
-//@ chunk-tyg7f3ek.js:50620-51236 placement
+//@ chunk-0yw3taqg.js:69532-70148 placement
 function foldedFollowUpEnd(entries, uuid) {
   let messageIndex = findMessageIndex(entries, uuid);
   if (entries[messageIndex]?.type !== "attachment") return;
@@ -48,11 +48,11 @@ function foldedFollowUpEnd(entries, uuid) {
   let rows = filtered.filter(
     (row) =>
       (row.type === "user" || row.type === "assistant") &&
-      !isSyntheticApiErrorMessage(row) &&
+      !isNoResponseRequestedMessage(row) &&
       !isSyntheticUserMessage(row),
   );
   let lastIndex = filtered.findLastIndex(
-    (row) => isSyntheticApiErrorMessage(row) || isInterruptMarkerRow(row),
+    (row) => isNoResponseRequestedMessage(row) || isInterruptMarkerRow(row),
   );
   let last = rows.at(-1);
   return {
@@ -76,7 +76,7 @@ function foldedFollowUpEnd(entries, uuid) {
       filtered.slice(lastIndex + 1).some((row) => isRealAssistantReply(row) || isToolResultMessage(row)),
   };
 }
-//@ chunk-tyg7f3ek.js:51236-51413 placement
+//@ chunk-0yw3taqg.js:70148-70325 placement
 async function loadSessionTranscriptRows(sessionId, storageV5) {
   let transcriptPathForSession = getTranscriptPathForSession(sessionId);
   let transcriptStorageKey = getTranscriptStorageKey(transcriptPathForSession, storageV5);
@@ -93,7 +93,7 @@ async function loadSessionTranscriptRows(sessionId, storageV5) {
   });
   return [...messages.values()];
 }
-//@ chunk-tyg7f3ek.js:51413-51950 placement
+//@ chunk-0yw3taqg.js:70325-70862 placement
 function createPersistenceChecker({ storageV5, heldInMemory }) {
   return () => {
     let sessionId = getSessionId();
@@ -132,7 +132,7 @@ function createPersistenceChecker({ storageV5, heldInMemory }) {
     };
   };
 }
-//@ chunk-tyg7f3ek.js:51950-51996 placement
+//@ chunk-0yw3taqg.js:70862-70908 placement
 function chatOriginField() {
   return isClaudeAiChatOrigin()
     ? {
@@ -140,7 +140,7 @@ function chatOriginField() {
       }
     : {};
 }
-//@ chunk-tyg7f3ek.js:51996-52052 placement
+//@ chunk-0yw3taqg.js:70908-70964 placement
 function tryOr(fn, fallback) {
   try {
     return fn();
@@ -149,4 +149,4 @@ function tryOr(fn, fallback) {
     return fallback;
   }
 }
-export { createPersistenceChecker, loadSessionTranscriptRows, tryOr, chatOriginField, foldedFollowUpEnd };
+export { createPersistenceChecker, loadSessionTranscriptRows, foldedFollowUpEnd, chatOriginField, tryOr };

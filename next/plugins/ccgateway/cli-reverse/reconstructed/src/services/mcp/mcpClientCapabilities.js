@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 客户端能力声明（URL elicitation、MCP Apps UI、无状态跳过 initialize）与 anthropic-mcp-client-capabilities 头
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0qx6sn4e.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-06vyq63w.js (15), chunk-zcbqcqbg.js (3)
  * attribution: placement 18
  */
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
@@ -23,7 +23,7 @@ import { MCP_PROTOCOL_LATEST, MCP_PROTOCOL_NEXT } from "./mcpCallConstants.js";
 import { UNREACHABLE_ERROR_CODES } from "../api/errorUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0qx6sn4e.js:1391-1479 placement
+//@ chunk-zcbqcqbg.js:263-351 placement
 /**
  * 判断插件模块是否存在且被接纳。
  */
@@ -31,7 +31,7 @@ function isModuleAdmittedByName(plugin) {
   let found = getPluginRegistry().loadedModules.find((loadedModule) => loadedModule.name === plugin);
   return found === undefined || isModuleAdmitted(found);
 }
-//@ chunk-0qx6sn4e.js:1479-1815 placement
+//@ chunk-zcbqcqbg.js:351-687 placement
 function createModuleStore() {
   let byName = new Map();
   let keyByName = new Map();
@@ -56,42 +56,42 @@ function createModuleStore() {
     },
   };
 }
-//@ chunk-0qx6sn4e.js:1815-1828 placement
+//@ chunk-zcbqcqbg.js:687-700 placement
 /**
  * 模块存储（插件模块索引）。
  */
 var moduleStore; // deferred: uses createModuleStore of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0qx6sn4e.js:1815", () => {
+deferInit("chunk-zcbqcqbg.js:687", () => {
   moduleStore = createModuleStore();
 });
-//@ chunk-0qx6sn4e.js:1828-1882 placement
+//@ chunk-06vyq63w.js:1490-1544 placement
 /**
  * 是否启用 URL 模式 elicitation。
  */
 function isUrlElicitationEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_url_elicitation", true);
 }
-//@ chunk-0qx6sn4e.js:1882-1948 placement
+//@ chunk-06vyq63w.js:1544-1610 placement
 /**
  * 是否启用旧版 URL elicitation。
  */
 function isLegacyUrlElicitationEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_legacy_url_elicitation", true) === true;
 }
-//@ chunk-0qx6sn4e.js:1948-2013 placement
+//@ chunk-06vyq63w.js:1610-1675 placement
 /**
  * MCP 应用（UI）的 MIME 类型。
  */
 var IO_MODELCONTEXTPROTOCOL_UI = "io.modelcontextprotocol/ui";
 var MCP_APP_MIME_TYPE = "text/html;profile=mcp-app";
-//@ chunk-0qx6sn4e.js:2013-2068 placement
+//@ chunk-06vyq63w.js:1675-1730 placement
 /**
  * 当前是否作为 MCP 应用宿主。
  */
 function isMcpAppsHost() {
   return env.CLAUDE_CODE_MCP_APPS_HOST === true;
 }
-//@ chunk-0qx6sn4e.js:2068-2172 placement
+//@ chunk-06vyq63w.js:1730-1834 placement
 function baseClientCapabilities() {
   return {
     roots: {
@@ -107,7 +107,7 @@ function baseClientCapabilities() {
     }),
   };
 }
-//@ chunk-0qx6sn4e.js:2172-2361 placement
+//@ chunk-06vyq63w.js:1834-2023 placement
 /**
  * 从客户端能力中去掉 tasks 能力及其扩展声明。
  */
@@ -128,7 +128,7 @@ function stripTasksCapability(capabilities) {
       }
     : rest;
 }
-//@ chunk-0qx6sn4e.js:2361-2412 placement
+//@ chunk-06vyq63w.js:2023-2074 placement
 /**
  * 基础客户端能力（v2 SDK 时附加任务扩展）。
  */
@@ -136,7 +136,7 @@ function clientCapabilitiesForSdk() {
   let capabilities = baseClientCapabilities();
   return mcpSdkGeneration() === "v2" ? withTasksExtension(capabilities) : capabilities;
 }
-//@ chunk-0qx6sn4e.js:2412-2501 placement
+//@ chunk-06vyq63w.js:2074-2163 placement
 /**
  * 需要时给客户端能力加上 tasks 扩展。
  */
@@ -150,7 +150,7 @@ function withTasksExtension(capabilities) {
     },
   };
 }
-//@ chunk-0qx6sn4e.js:2501-2587 placement
+//@ chunk-06vyq63w.js:2163-2249 placement
 /**
  * 在基础能力上附加 elicitation（form/url）能力。
  */
@@ -165,31 +165,35 @@ function clientCapabilitiesWithElicitation() {
     },
   };
 }
-//@ chunk-0qx6sn4e.js:2587-2811 placement
+//@ chunk-06vyq63w.js:2249-2494 placement
 /**
  * 选择发给 MCP 服务器的客户端能力：符合条件的服务器声明完整 elicitation 能力，否则用精简能力。
  */
 function clientCapabilitiesFor(serverRef, { denylisted }) {
-  return isLegacyUrlElicitationEnabled() &&
-    !denylisted &&
+  let entry =
     (serverRef.type === undefined ||
       serverRef.type === "stdio" ||
       serverRef.type === "sse" ||
       serverRef.type === "http" ||
       serverRef.type === "ws") &&
-    !isCcrHostedConfig(serverRef) &&
+    !isCcrHostedConfig(serverRef);
+  let isRemoteTransport =
+    isLegacyUrlElicitationEnabled() &&
+    !denylisted &&
+    entry &&
     !("bareElicitationCapability" in serverRef && serverRef.bareElicitationCapability === true)
-    ? clientCapabilitiesWithElicitation()
-    : clientCapabilitiesForSdk();
+      ? clientCapabilitiesWithElicitation()
+      : clientCapabilitiesForSdk();
+  return entry ? stripTasksCapability(isRemoteTransport) : isRemoteTransport;
 }
-//@ chunk-0qx6sn4e.js:2811-2871 placement
+//@ chunk-06vyq63w.js:2494-2554 placement
 /**
  * 是否跳过无状态服务器的 initialize。
  */
 function isStatelessSkipInitEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_stateless_skip_init", true);
 }
-//@ chunk-0qx6sn4e.js:2871-2983 placement
+//@ chunk-06vyq63w.js:2554-2666 placement
 /**
  * 读取 server/discover 投影先验的开关值（off / legacy_only / all）。
  */
@@ -202,12 +206,12 @@ function discoverProjectionPrior() {
     ? featureValue_CACHED_MAY_BE_STALE
     : "off";
 }
-//@ chunk-0qx6sn4e.js:2983-2995 placement
+//@ chunk-06vyq63w.js:2666-2677 placement
 /**
  * discover 投影信息的字节上限（6144）。
  */
 var MAX_DISCOVER_PROJECTION_BYTES = 6144;
-//@ chunk-0qx6sn4e.js:2995-3387 placement
+//@ chunk-06vyq63w.js:2677-3068 placement
 function buildClientCapabilitiesHeader() {
   let projectionPrior = discoverProjectionPrior();
   if (!isStatelessSkipInitEnabled() && projectionPrior === "off") return {};
@@ -227,7 +231,7 @@ function buildClientCapabilitiesHeader() {
     }),
   };
 }
-//@ chunk-0qx6sn4e.js:3387-3581 placement
+//@ chunk-06vyq63w.js:3068-3259 placement
 var CLAUDEAI_FETCH_TIMEOUT_MS; // deferred: uses SSL_CERT_ERROR_CODES (../api/errorUtils.js) of its import cycle while loading; runs once the cycle is complete
 var CLAUDEAI_FETCH_MAX_ATTEMPTS;
 var CLAUDEAI_RETRY_BASE_MS;
@@ -235,7 +239,7 @@ var CLAUDEAI_RETRY_FACTOR;
 var CLAUDEAI_RETRY_BUDGET_MS;
 var TRANSIENT_NETWORK_ERRNOS;
 var RETRYABLE_NETWORK_CODES;
-deferInit("chunk-0qx6sn4e.js:3387", () => {
+deferInit("chunk-06vyq63w.js:3068", () => {
   CLAUDEAI_FETCH_TIMEOUT_MS = 5000;
   CLAUDEAI_FETCH_MAX_ATTEMPTS = 3;
   CLAUDEAI_RETRY_BASE_MS = 500;
@@ -262,13 +266,13 @@ export {
   CLAUDEAI_RETRY_BUDGET_MS,
   RETRYABLE_NETWORK_CODES,
   moduleStore,
-  isMcpAppsHost,
   clientCapabilitiesFor,
   stripTasksCapability,
   discoverProjectionPrior,
   clientCapabilitiesForSdk,
   clientCapabilitiesWithElicitation,
-  isStatelessSkipInitEnabled,
-  createModuleStore,
   isModuleAdmittedByName,
+  createModuleStore,
+  isMcpAppsHost,
+  isStatelessSkipInitEnabled,
 };

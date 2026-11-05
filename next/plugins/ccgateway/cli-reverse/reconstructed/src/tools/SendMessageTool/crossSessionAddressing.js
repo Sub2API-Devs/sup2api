@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：跨会话消息寻址
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-n0beqxxz.js (47)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-k7agbjgj.js (47)
  * attribution: placement 47
  */
 import { getAPIProvider } from "../../utils/model/providers.js";
@@ -57,10 +57,10 @@ import { logForDebugging } from "../../utils/debug.js";
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import { isMainSessionTask } from "../../tasks/LocalMainSessionTask.js";
 import { mayBeSamePath, isSamePath } from "../../utils/peerAddress.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { similarNames } from "../../utils/settings/managedEnvKeys.js";
 
-//@ chunk-n0beqxxz.js:963-1269 placement
+//@ chunk-k7agbjgj.js:964-1270 placement
 /**
  * 跨会话发送的组织策略键（Remote Control / 云会话）、未知类型时的合并标签与无策略允许时的说明。
  */
@@ -75,7 +75,7 @@ var COMBINED_REMOTE_FEATURE_LABEL = {
 };
 var NO_POLICY_ALLOWS_REASON =
   "No organization policy allows sends to this kind of session, so it can't be shown as permitted.";
-//@ chunk-n0beqxxz.js:1269-1785 placement
+//@ chunk-k7agbjgj.js:1270-1786 placement
 /**
  * 判断能否向某类远程会话发送：非第一方/仅必要流量时为 residency；组织策略都拒绝时记录并返回第一个拒绝原因；允许时返回 null。
  */
@@ -114,7 +114,7 @@ function getRemoteSendBlock(via) {
         : deniedReasons[0]) ?? NO_POLICY_ALLOWS_REASON,
   };
 }
-//@ chunk-n0beqxxz.js:1785-2146 placement
+//@ chunk-k7agbjgj.js:1786-2147 placement
 /**
  * 记录本会话对某名字的发送目标（id、ref、socket），身份变化时更新 sendMessagePins，保留更稳定的会话 id。
  */
@@ -149,13 +149,13 @@ function pinSendTarget(setSendMessagePins, displayName, target) {
         };
   });
 }
-//@ chunk-n0beqxxz.js:2146-2254 placement
+//@ chunk-k7agbjgj.js:2147-2255 placement
 /**
  * 用曾用名字首次给一个新会话发消息时的提示（对方是否重启过？）。
  */
 var PREVIOUSLY_PINNED_NOTE =
   "Note: messaging a new session for the first time under a previously used name (was it restarted?)";
-//@ chunk-n0beqxxz.js:2254-2453 placement
+//@ chunk-k7agbjgj.js:2255-2454 placement
 /**
  * 说明本机某会话现名为 X、其旧名之一为目标名（会话改名提示）。
  */
@@ -163,14 +163,14 @@ function renamedSessionNote(previousName, name) {
   return `
 A session on this machine now named '${name}' reports '${previousName}' as one of its former names \u2014 if that is the session you meant, it goes by '${name}' now (a rename, not a stop).`;
 }
-//@ chunk-n0beqxxz.js:2453-2544 placement
+//@ chunk-k7agbjgj.js:2454-2545 placement
 /**
  * 说明某会话把该名字作为旧名（已改名）的提示文本。
  */
 function renamedSessionNoteText(name) {
   return ` A session now named '${name}' reports it as a former name (renamed).`;
 }
-//@ chunk-n0beqxxz.js:2544-3107 placement
+//@ chunk-k7agbjgj.js:2545-3108 placement
 /**
  * 跨会话发送的提示：本机另有会话记录声称同一身份、目标会话自上次联系后重启，以及本机会话的通用称呼。
  */
@@ -179,7 +179,7 @@ var IDENTITY_CONTESTED_NOTE =
 var RESTARTED_SINCE_PIN_NOTE =
   "Note: this session has restarted since this conversation last reached it (same session, new process). If you were not expecting that, check with the user before sending it anything sensitive.";
 var LOCAL_SESSION_LABEL = "another Claude session on this machine";
-//@ chunk-n0beqxxz.js:3107-3544 placement
+//@ chunk-k7agbjgj.js:3108-3545 placement
 /**
  * 子代理发送跨会话消息时的说明：以本会话地址发出，回复会送到主对话（单向时只说明发送身份）。
  */
@@ -201,7 +201,7 @@ function describeSubagentSender(agentId, from, options) {
         display: ` (sent by ${senderLabel}; replies go to the main conversation)`,
       };
 }
-//@ chunk-n0beqxxz.js:3544-3678 placement
+//@ chunk-k7agbjgj.js:3545-3679 placement
 /**
  * 描述远程会话类型：云端会话或经 Remote Control 的其他机器会话。
  */
@@ -210,7 +210,7 @@ function describeRemoteSessionKind(kind) {
     ? "a Claude session running in the cloud"
     : "a Claude session on another machine, over Remote Control";
 }
-//@ chunk-n0beqxxz.js:3678-4379 placement
+//@ chunk-k7agbjgj.js:3679-4380 placement
 /**
  * 跨会话投递状态说明：服务端已接受但未确认送达（对方可能是旧版本），或已进入对方收件箱尚未读取（是否会回报取决于本地是否绑定收件箱）。
  */
@@ -222,21 +222,21 @@ var INBOX_WITH_NOTICE_NOTE =
   "; in that session's inbox, not yet read by its Claude \u2014 a [Cross-session delivery notice] follows if that session holds it (usually a different permission mode) or refuses it";
 var INBOX_NO_NOTICE_NOTE =
   "; in that session's inbox, not yet read by its Claude \u2014 that session may hold it (usually a different permission mode) or refuse it, and with no inbox bound here nothing reports back, so never treat silence as agreement";
-//@ chunk-n0beqxxz.js:4379-4410 placement
+//@ chunk-k7agbjgj.js:4380-4411 placement
 /**
  * 按是否有投递说明返回对应的 inbox 提示。
  */
 function inboxNoticeNote(hasInboxNotice) {
   return hasInboxNotice ? INBOX_WITH_NOTICE_NOTE : INBOX_NO_NOTICE_NOTE;
 }
-//@ chunk-n0beqxxz.js:4410-4627 placement
+//@ chunk-k7agbjgj.js:4411-4628 placement
 /**
  * 跨会话消息无已读回执的说明（对方可能保留或拒绝，此路由不回报）。
  */
 var NO_READ_RECEIPT_NOTE =
   "; not confirmed read \u2014 that session may hold it (usually a different permission mode) or refuse it, and this route reports nothing back";
 var NO_READ_RECEIPT_DISPLAY = " (that session's settings decide delivery; no read receipt)";
-//@ chunk-n0beqxxz.js:4627-4701 placement
+//@ chunk-k7agbjgj.js:4628-4702 placement
 /**
  * 未确认投递时的说明（message 与 display 两份）。
  */
@@ -251,14 +251,14 @@ function unconfirmedDeliveryNote(unreported) {
         display: "",
       };
 }
-//@ chunk-n0beqxxz.js:4701-4969 placement
+//@ chunk-k7agbjgj.js:4702-4970 placement
 /**
  * 生成本机目标会话的附加说明（也通过 Remote Control 连接、同名远程会话被本地认领等）。
  */
 function describeLocalTargetCaveats(resolvedRecipient) {
   return `${resolvedRecipient.alsoListedRemotely ? "; it is also connected via Remote Control" : ""}${resolvedRecipient.remoteNamesakeClaimedLocally ? `; a Remote Control or cloud session also named '${resolvedRecipient.displayName}' is registered to a session on this machine` : ""}${resolvedRecipient.searchTruncated ? TRUNCATED_SEARCH_NOTE : ""}`;
 }
-//@ chunk-n0beqxxz.js:4969-5211 placement
+//@ chunk-k7agbjgj.js:4970-5212 placement
 /**
  * 生成"已发往本对话确认过的会话"的说明，并提示如何改发给其他同名目标。
  */
@@ -269,7 +269,7 @@ function describePinnedChoice(resolvedRecipient, retryHint, kindNoun = "live ses
     kindNoun,
   );
 }
-//@ chunk-n0beqxxz.js:5211-5380 placement
+//@ chunk-k7agbjgj.js:5212-5381 placement
 /**
  * 生成"已发往本对话先前确认的那个"的简短说明。
  */
@@ -280,7 +280,7 @@ function describeConfirmedChoice(resolvedRecipient, kindNoun = "live session", w
     kindNoun,
   );
 }
-//@ chunk-n0beqxxz.js:5380-5659 placement
+//@ chunk-k7agbjgj.js:5381-5660 placement
 function describePinCaveats(resolved, extraNote, kindNoun) {
   let pinNote = resolved.previouslyPinned
     ? `
@@ -298,19 +298,19 @@ Note: ${resolved.sameNamedSiblings} other ${plural(resolved.sameNamedSiblings, `
     : "";
   return `${pinNote}${siblingsNote}`;
 }
-//@ chunk-n0beqxxz.js:5659-5857 placement
+//@ chunk-k7agbjgj.js:5660-5858 placement
 /**
  * 生成远程目标会话的附加说明（离线、同名会话已在本机注册等）。
  */
 function describeRemoteTargetCaveats(target) {
   return `${target.offline ? OFFLINE_QUEUED_NOTE : ""}${target.remoteNamesakeClaimedLocally ? `; another session also named '${target.displayName}' is registered to a session on this machine` : ""}${target.searchTruncated ? TRUNCATED_SEARCH_NOTE : ""}`;
 }
-//@ chunk-n0beqxxz.js:5857-5948 placement
+//@ chunk-k7agbjgj.js:5858-5949 placement
 /**
  * 目标机离线、投递排队中的说明。
  */
 var OFFLINE_QUEUED_NOTE = "; it is offline right now \u2014 delivery is queued until that machine reconnects";
-//@ chunk-n0beqxxz.js:5948-6259 placement
+//@ chunk-k7agbjgj.js:5949-6260 placement
 /**
  * 说明哪些会话来源未能搜索：本机会话列表不可用、本机与账号会话都未能全部检查，或账号会话未能检查。
  */
@@ -323,14 +323,14 @@ function describeUnsearchedSessions(resolvedRecipient) {
       ? "this machine's and your account's other sessions could not all be checked just now"
       : "your account's other sessions could not be checked just now";
 }
-//@ chunk-n0beqxxz.js:6259-6385 placement
+//@ chunk-k7agbjgj.js:6260-6386 placement
 /**
  * 本机会话声称是先前确认在别处的会话时的说明。
  */
 function claimedElsewhereMessage(pinnedIdentityClaimedLocally) {
   return `A session on this machine now claims to be '${pinnedIdentityClaimedLocally}', which was confirmed earlier as a session elsewhere`;
 }
-//@ chunk-n0beqxxz.js:6385-6700 placement
+//@ chunk-k7agbjgj.js:6386-6701 placement
 /**
  * 会话列表过长未能完整搜索时的说明（附加在结果、段落与简短形式中）。
  */
@@ -339,7 +339,7 @@ var TRUNCATED_SEARCH_NOTE =
 var TRUNCATED_SEARCH_PARAGRAPH = `
 Your session list was too long to check completely, so a session by that name may exist beyond what was searched.`;
 var TRUNCATED_SEARCH_SHORT = "your session list was too long to check completely";
-//@ chunk-n0beqxxz.js:6700-11055 placement
+//@ chunk-k7agbjgj.js:6701-11056 placement
 /**
  * 解析 SendMessage 的跨会话收件人（会话名/团队成员），返回匹配或最接近的候选。
  */
@@ -688,14 +688,14 @@ async function resolveCrossSessionAddress(
     }
   );
 }
-//@ chunk-n0beqxxz.js:11055-11179 placement
+//@ chunk-k7agbjgj.js:11056-11180 placement
 function getLocallyClaimedPinName(sendMessagePins, pinName, localClaimedBodies) {
   let pinKind = getPinKind(sendMessagePins, pinName);
   if (pinKind !== "cloud" && pinKind !== "remote-control") return;
   let pin = sendMessagePins[pinName];
   return localClaimedBodies.has(sessionIdBody(pin.id)) ? pin.name : undefined;
 }
-//@ chunk-n0beqxxz.js:11179-11349 placement
+//@ chunk-k7agbjgj.js:11180-11350 placement
 function expandPinPrefixes(sendMessagePins, names) {
   let firstName = names[0];
   if (firstName === undefined || firstName.length < 3) return names;
@@ -704,7 +704,7 @@ function expandPinPrefixes(sendMessagePins, names) {
   );
   return filtered.length === 0 ? names : [...names, ...filtered];
 }
-//@ chunk-n0beqxxz.js:11349-11467 placement
+//@ chunk-k7agbjgj.js:11350-11468 placement
 function findLocallyClaimedPin(sendMessagePins, names, localClaimedBodies) {
   for (let name of expandPinPrefixes(sendMessagePins, names)) {
     let locallyClaimedPinName = getLocallyClaimedPinName(sendMessagePins, name, localClaimedBodies);
@@ -715,7 +715,7 @@ function findLocallyClaimedPin(sendMessagePins, names, localClaimedBodies) {
   }
   return {};
 }
-//@ chunk-n0beqxxz.js:11467-11663 placement
+//@ chunk-k7agbjgj.js:11468-11664 placement
 function getPinKind(sendMessagePins, pinName) {
   let pin = Object.hasOwn(sendMessagePins, pinName) ? sendMessagePins[pinName] : undefined;
   if (pin === undefined) return;
@@ -723,7 +723,7 @@ function getPinKind(sendMessagePins, pinName) {
   if (pin.id.startsWith("cse_")) return "cloud";
   return sessionIdBody(pin.id) !== pin.id ? "remote-control" : "local";
 }
-//@ chunk-n0beqxxz.js:11663-11978 placement
+//@ chunk-k7agbjgj.js:11664-11979 placement
 /**
  * 按需为固定目标加载远程会话列表：不需要时沿用已有结果，需要时拉取并在失败时回退到已有行。
  */
@@ -753,7 +753,7 @@ async function loadRemoteRowsForPin(
         : warmListing.truncated,
   };
 }
-//@ chunk-n0beqxxz.js:11978-12160 placement
+//@ chunk-k7agbjgj.js:11979-12161 placement
 function needsRemoteLookupForPin(sendMessagePins, pinName, sessions, rows) {
   let pinKind = getPinKind(sendMessagePins, pinName);
   if (pinKind !== "remote-control" && pinKind !== "cloud") return false;
@@ -761,7 +761,7 @@ function needsRemoteLookupForPin(sendMessagePins, pinName, sessions, rows) {
   if (sessions.some((session) => sessionIdBody(session.id) === pinBody)) return false;
   return rows === undefined || !rows.some((row) => sessionIdBody(row.id) === pinBody);
 }
-//@ chunk-n0beqxxz.js:12160-12395 placement
+//@ chunk-k7agbjgj.js:12161-12396 placement
 function searchGaps(gaps) {
   return {
     ...(gaps.cloudUnavailable && {
@@ -778,7 +778,7 @@ function searchGaps(gaps) {
     }),
   };
 }
-//@ chunk-n0beqxxz.js:12395-13120 placement
+//@ chunk-k7agbjgj.js:12396-13121 placement
 /**
  * 按名字精确解析发送目标：唯一时直接转为路由；同名多个时优先使用已固定的目标，若只有一个会话且所有来源都已搜索则视为唯一，否则返回 ambiguous 并带搜索缺口说明。
  */
@@ -837,7 +837,7 @@ function resolveExactName(index, slug, agentName, toolContext, listingGaps) {
   }
   return;
 }
-//@ chunk-n0beqxxz.js:13120-14768 placement
+//@ chunk-k7agbjgj.js:13121-14769 placement
 /**
  * 按名字前缀（≥3 字符）解析发送目标：唯一前缀匹配时处理已固定目标与同名歧义、未搜索完整的来源；多个前缀匹配返回 ambiguous；记录 send_message_prefix_match 遥测。
  */
@@ -947,7 +947,7 @@ function resolveNamePrefix(index, slug, toolContext, listingGaps) {
   }
   return;
 }
-//@ chunk-n0beqxxz.js:14768-14892 placement
+//@ chunk-k7agbjgj.js:14769-14893 placement
 function findCandidateByRef(index, slug, ref) {
   let candidates = index.byName.get(slug) ?? [];
   let uniqueCandidate = resolveUniqueCandidate(index.byName, slug);
@@ -955,7 +955,7 @@ function findCandidateByRef(index, slug, ref) {
     (candidate) => candidate.ref === ref,
   );
 }
-//@ chunk-n0beqxxz.js:14892-15825 placement
+//@ chunk-k7agbjgj.js:14893-15826 placement
 /**
  * 冷启动时拉取 Remote Control 会话列表（有超时），失败或超时返回 unavailable 原因，成功时与云会话列表去重并按需记录。
  */
@@ -1016,14 +1016,14 @@ async function fetchRemoteSessionRows(session, cloudListing, slug, credentials) 
     truncated: false,
   };
 }
-//@ chunk-n0beqxxz.js:15825-15863 placement
+//@ chunk-k7agbjgj.js:15826-15864 placement
 /**
  * 值有效时原样返回，否则 undefined。
  */
 function definedIf(unavailable) {
   return isTransientListingFailure(unavailable) ? unavailable : undefined;
 }
-//@ chunk-n0beqxxz.js:15863-16057 placement
+//@ chunk-k7agbjgj.js:15864-16058 placement
 function describeSearchGaps(cloudListing, bridgeUnavailable, unavailable, { remoteTruncated }) {
   return {
     cloudUnavailable: definedIf(cloudListing.unavailable),
@@ -1038,7 +1038,7 @@ function describeSearchGaps(cloudListing, bridgeUnavailable, unavailable, { remo
     }),
   };
 }
-//@ chunk-n0beqxxz.js:16057-16369 placement
+//@ chunk-k7agbjgj.js:16058-16370 placement
 /**
  * 把子代理 id 转换为路由：运行中、被用户停止、已停止（带状态）或已从任务表逐出。
  */
@@ -1069,7 +1069,7 @@ function subagentRoute(toolContext, agentId, agentName) {
     agentName,
   };
 }
-//@ chunk-n0beqxxz.js:16369-17137 placement
+//@ chunk-k7agbjgj.js:16370-17138 placement
 /**
  * 把寻址候选转换为投递路由：main、队友邮箱、子代理（运行中/已停止/已逐出）、本机会话（socket 与 pin id）、云/Remote Control 会话。
  */
@@ -1121,13 +1121,13 @@ function candidateToRoute(candidate, toolContext) {
       };
   }
 }
-//@ chunk-n0beqxxz.js:17137-17154 placement
+//@ chunk-k7agbjgj.js:17138-17155 placement
 /**
  * 名字有歧义时最多列出的候选数（3）。
  */
 var MAX_AMBIGUOUS_CANDIDATES = 3;
 var REMOTE_POPULATION_TIMEOUT_MS = 5000;
-//@ chunk-n0beqxxz.js:17154-17247 placement
+//@ chunk-k7agbjgj.js:17155-17248 placement
 /**
  * 构造“名字有歧义”的结果（候选、总数与匹配方式）。
  */
@@ -1139,7 +1139,7 @@ function ambiguousMatch(candidates, matchedBy) {
     matchedBy,
   };
 }
-//@ chunk-n0beqxxz.js:17247-17785 placement
+//@ chunk-k7agbjgj.js:17248-17786 placement
 /**
  * 查找改过名的会话：唯一一条记录的旧名等于目标名、socket 唯一且对应候选名唯一时，返回改名提示与候选。
  */
@@ -1181,10 +1181,10 @@ function findRenamedSession(slug, sessions, index, sendMessagePins) {
     renamedTo: found,
   };
 }
-//@ chunk-n0beqxxz.js:17785-17957 placement
+//@ chunk-k7agbjgj.js:17786-17959 placement
 function notFoundWithSuggestions(inputName, index, filter) {
   let pool = filter ? index.candidates.filter(filter) : index.candidates;
-  let names = uniq(pool.map((candidate) => slugifySessionName(candidate.name)));
+  let names = normalizeCaseForComparison_2(pool.map((candidate) => slugifySessionName(candidate.name)));
   return {
     kind: "not-found",
     closest: similarNames(inputName, names, MAX_AMBIGUOUS_CANDIDATES).map((name) =>
@@ -1192,7 +1192,7 @@ function notFoundWithSuggestions(inputName, index, filter) {
     ),
   };
 }
-//@ chunk-n0beqxxz.js:17957-18673 placement
+//@ chunk-k7agbjgj.js:17959-18675 placement
 /**
  * 按会话固定的 pin 查找候选：跳过代理类与被本地认领的远程 pin，相关来源不可用时放弃；按 id 或 socket 匹配，找不到记录 pin 失效。
  */
@@ -1240,7 +1240,7 @@ function findPinnedCandidate(
   logFeatureOk("send_message_pin");
   return match;
 }
-//@ chunk-n0beqxxz.js:18673-19093 placement
+//@ chunk-k7agbjgj.js:18675-19095 placement
 /**
  * 把固定的候选转换为路由：本机会话 pin id 与持有的更稳定 id 不符时标记身份冲突，附加同名兄弟数量与路由标记。
  */
@@ -1270,7 +1270,7 @@ function pinnedRoute(pinnedCandidate, candidates, toolContext, slug, index, list
     ...describeRouteFlags(effectiveRoute, slug, index, listingGaps, toolContext.sendMessagePins),
   };
 }
-//@ chunk-n0beqxxz.js:19093-19293 placement
+//@ chunk-k7agbjgj.js:19095-19295 placement
 function getMirroredSockets(sessions, cloudListing, rows) {
   let remoteBodies = new Set([
     ...cloudListing.sessions.map((session) => sessionIdBody(session.id)),
@@ -1284,7 +1284,7 @@ function getMirroredSockets(sessions, cloudListing, rows) {
     ),
   );
 }
-//@ chunk-n0beqxxz.js:19293-19512 placement
+//@ chunk-k7agbjgj.js:19295-19514 placement
 function matchesPin(pin, candidate) {
   if (stableSessionKey(candidate) === pin.id) return true;
   if (
@@ -1300,7 +1300,7 @@ function matchesPin(pin, candidate) {
       (candidate.claimedSessionIds ?? []).some((claimedId) => stableSessionAddress(claimedId) === pin.id))
   );
 }
-//@ chunk-n0beqxxz.js:19512-19949 placement
+//@ chunk-k7agbjgj.js:19514-19951 placement
 /**
  * 生成路由附加标记：自固定后已重启、也在远程列表中、同名远程会话被本地认领、搜索被截断。
  */

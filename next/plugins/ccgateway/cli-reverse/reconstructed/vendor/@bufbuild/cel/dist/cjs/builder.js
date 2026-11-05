@@ -1,14 +1,14 @@
 /**
  * @bufbuild/cel/dist/cjs/builder.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @bufbuild/cel@0.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_logic_manager } from "./logic-manager.js";
 
-//@ chunk-fq0cr76a.js:526143-532305 cjs-fingerprint
+//@ chunk-qg41pqt6.js:526717-532879 cjs-fingerprint
 var require_builder = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

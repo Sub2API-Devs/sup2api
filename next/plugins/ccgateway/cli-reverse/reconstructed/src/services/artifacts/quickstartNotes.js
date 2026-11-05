@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：Artifact 快速开始说明。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-chsmq3nc.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hbx6mtez.js (1)
  * attribution: placement 1
  */
 import { shellQuoteArgs } from "../../utils/bash/bashPipeCommand.js";
 import { canonicalArtifactTargetFor } from "../../tools/ArtifactTool/artifactUrls.js";
 
-//@ chunk-chsmq3nc.js:991-1715 placement
+//@ chunk-hbx6mtez.js:1075-1799 placement
 function afterQuickstartSavedLine(result, pageDir, sameDir, prefix) {
   let isUnder = (base, child) =>
     typeof base === "string" && typeof child === "string" && base === sameDir(child);

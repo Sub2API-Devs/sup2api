@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：写入前处理记忆文档内容（前言、换行、BOM）；重写前言中的指定键等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-a477qqne.js (51)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b3a6nm9h.js (51)
  * attribution: placement 51
  */
 import { randomUUID } from "crypto";
@@ -41,7 +41,7 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { parseYaml } from "../../utils/yaml.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-a477qqne.js:4131-4795 placement
+//@ chunk-b3a6nm9h.js:4164-4828 placement
 /**
  * claudeCodeItem 元数据的 schema。
  */
@@ -54,7 +54,7 @@ var typedTurnSchema;
 var promotedSchema;
 var claudeCodeItemSchema;
 var CLAUDECODEITEM;
-deferInit("chunk-a477qqne.js:4131", () => {
+deferInit("chunk-b3a6nm9h.js:4164", () => {
   MAX_PROMOTED_ENTRIES = 16;
   MAX_IDS = 64;
   SHORT_TOKEN_RE = /^[A-Za-z0-9_-]{1,128}$/;
@@ -91,7 +91,7 @@ deferInit("chunk-a477qqne.js:4131", () => {
   );
   CLAUDECODEITEM = "claudeCodeItem";
 });
-//@ chunk-a477qqne.js:4795-4849 placement
+//@ chunk-b3a6nm9h.js:4828-4882 placement
 /**
  * 取记忆前言里的 claudeCodeItem 对象。
  */
@@ -99,7 +99,7 @@ function claudeCodeItemMeta(frontmatter) {
   let itemMetadata = frontmatter.metadata[CLAUDECODEITEM];
   return isPlainObject(itemMetadata) ? itemMetadata : {};
 }
-//@ chunk-a477qqne.js:4849-5142 placement
+//@ chunk-b3a6nm9h.js:4882-5175 placement
 function readItemMetadata(frontmatter) {
   let rawMetadata = claudeCodeItemMeta(frontmatter);
   if (rawMetadata.id === undefined) return;
@@ -119,7 +119,7 @@ function readItemMetadata(frontmatter) {
   });
   return parsed.success ? parsed.data : undefined;
 }
-//@ chunk-a477qqne.js:5142-5220 placement
+//@ chunk-b3a6nm9h.js:5175-5253 placement
 /**
  * 把单值或数组统一成数组（空返回空数组）。
  */
@@ -127,7 +127,7 @@ function arrayOrEmpty(promoted) {
   if (promoted === undefined || promoted === null) return [];
   return Array.isArray(promoted) ? promoted : [promoted];
 }
-//@ chunk-a477qqne.js:5220-5499 placement
+//@ chunk-b3a6nm9h.js:5253-5532 placement
 function serializeItemMetadata(item) {
   return {
     id: item.id,
@@ -152,21 +152,21 @@ function serializeItemMetadata(item) {
     }),
   };
 }
-//@ chunk-a477qqne.js:5499-5553 placement
+//@ chunk-b3a6nm9h.js:5532-5586 placement
 /**
  * 匹配缩进行（续行）的正则。
  */
 var MODIFIED_LINE_RE = /^(\s*)modified\s*:/;
 var COMMENT_OR_EMPTY_RE = /^\s*(#|$)/;
 var INDENTED_LINE_RE = /^\s+\S/;
-//@ chunk-a477qqne.js:5553-5598 placement
+//@ chunk-b3a6nm9h.js:5586-5631 placement
 /**
  * 预处理记忆内容并取正文。
  */
 function prepareContent(filePath, content, context) {
   return prepareMemoryContent(filePath, content, context).content;
 }
-//@ chunk-a477qqne.js:5598-6838 placement
+//@ chunk-b3a6nm9h.js:5631-6871 placement
 /**
  * 写入前处理记忆文档内容（前言、换行、BOM）。
  */
@@ -289,7 +289,7 @@ function prepareMemoryContent(filePath, content, context) {
     item: undefined,
   };
 }
-//@ chunk-a477qqne.js:6838-6892 placement
+//@ chunk-b3a6nm9h.js:6871-6925 placement
 /**
  * 宽松解析记忆文件（保留有损值的引用形式）。
  */
@@ -298,35 +298,35 @@ function parseMemoryFileLoose(text, filePath) {
     quoteLossyValues: true,
   });
 }
-//@ chunk-a477qqne.js:6892-6915 placement
+//@ chunk-b3a6nm9h.js:6925-6948 placement
 /**
  * 空的 header 类拒绝说明。
  */
 function emptyRefusalHeader() {
   return "";
 }
-//@ chunk-a477qqne.js:6915-6938 placement
+//@ chunk-b3a6nm9h.js:6948-6971 placement
 /**
  * 空的 copied_id 类拒绝说明。
  */
 function emptyRefusalCopiedId() {
   return "";
 }
-//@ chunk-a477qqne.js:6938-6961 placement
+//@ chunk-b3a6nm9h.js:6971-6994 placement
 /**
  * 空的 item_keys 类拒绝说明。
  */
 function emptyRefusalItemKeys() {
   return "";
 }
-//@ chunk-a477qqne.js:6961-6984 placement
+//@ chunk-b3a6nm9h.js:6994-7017 placement
 /**
  * 空的缺项类拒绝说明。
  */
 function emptyRefusalMissingItem() {
   return "";
 }
-//@ chunk-a477qqne.js:6984-7433 placement
+//@ chunk-b3a6nm9h.js:7017-7466 placement
 /**
  * 给新记忆内容加来源会话与修改时间。
  */
@@ -363,7 +363,7 @@ function stampNewMemoryContent(filePath, content, memoryFile, modified) {
   }
   return memoryFrontmatter;
 }
-//@ chunk-a477qqne.js:7433-7500 placement
+//@ chunk-b3a6nm9h.js:7466-7533 placement
 /**
  * 统一 BOM 与换行。
  */
@@ -375,19 +375,19 @@ function normalizeLineEndings(text) {
 `,
   );
 }
-//@ chunk-a477qqne.js:7500-7537 placement
+//@ chunk-b3a6nm9h.js:7533-7570 placement
 /**
  * 只含 claudeCodeItem 的键列表。
  */
 var TYPEDTURN; // deferred: uses MAX_PROMOTED_ENTRIES of its import cycle while loading; runs once the cycle is complete
 var CLAUDECODE_KEYS;
 var CLAUDECODE_ITEM_KEYS;
-deferInit("chunk-a477qqne.js:7500", () => {
+deferInit("chunk-b3a6nm9h.js:7533", () => {
   TYPEDTURN = "typedTurn";
   CLAUDECODE_KEYS = [CLAUDECODEITEM, TYPEDTURN];
   CLAUDECODE_ITEM_KEYS = [CLAUDECODEITEM];
 });
-//@ chunk-a477qqne.js:7537-8361 placement
+//@ chunk-b3a6nm9h.js:7570-8394 placement
 /**
  * 写入时更新记忆前言（保留原值、记录写者）。
  */
@@ -470,7 +470,7 @@ function stampMemoryWrite(content, memoryFile, context, modified) {
           item,
         };
 }
-//@ chunk-a477qqne.js:8361-8843 placement
+//@ chunk-b3a6nm9h.js:8394-8876 placement
 /**
  * 必要时更新记忆前言，否则返回 unchanged。
  */
@@ -515,7 +515,7 @@ function restampMemoryContent(originalContent, memoryFile, item, modified) {
   }
   return rewriteFrontmatterKeys(originalContent, item, freshMetadata);
 }
-//@ chunk-a477qqne.js:8843-9125 placement
+//@ chunk-b3a6nm9h.js:8876-9158 placement
 function isMetadataUnchanged(text, memoryFile, item) {
   let frontmatter = parseMemoryFile(text).frontmatter;
   if (!isPlainFrontmatter(text)) return false;
@@ -533,12 +533,12 @@ function isMetadataUnchanged(text, memoryFile, item) {
     )
   );
 }
-//@ chunk-a477qqne.js:9125-9159 placement
+//@ chunk-b3a6nm9h.js:9158-9192 placement
 /**
  * item 元数据里需要序列化的键。
  */
 var ITEM_METADATA_KEYS = ["typed", "promoted", "ids"];
-//@ chunk-a477qqne.js:9159-9247 placement
+//@ chunk-b3a6nm9h.js:9192-9280 placement
 /**
  * 生成 item 元数据的前言行。
  */
@@ -548,7 +548,7 @@ function metadataLines(item, indent) {
     serialized[key] === undefined ? [] : [indent + key + ": " + jsonStringify(serialized[key])],
   );
 }
-//@ chunk-a477qqne.js:9247-9642 placement
+//@ chunk-b3a6nm9h.js:9280-9675 placement
 /**
  * 在前言中查找元数据块。
  */
@@ -575,7 +575,7 @@ function findMetadataBlock(lines) {
   }
   return;
 }
-//@ chunk-a477qqne.js:9642-9894 placement
+//@ chunk-b3a6nm9h.js:9675-9927 placement
 function insertMetadataLines(text, item) {
   let frontmatterText = FRONTMATTER_REGEX.exec(text)?.[0];
   if (frontmatterText === undefined) return text;
@@ -593,7 +593,7 @@ function insertMetadataLines(text, item) {
 `) + text.slice(frontmatterText.length)
   );
 }
-//@ chunk-a477qqne.js:9894-10050 placement
+//@ chunk-b3a6nm9h.js:9927-10083 placement
 function hasEmptyListKeys(text) {
   let lines = (FRONTMATTER_REGEX.exec(text)?.[0] ?? "").split(`
 `);
@@ -605,7 +605,7 @@ function hasEmptyListKeys(text) {
       .some((line) => /^\s*(typed|promoted|ids)\s*:\s*$/.test(line))
   );
 }
-//@ chunk-a477qqne.js:10050-10251 placement
+//@ chunk-b3a6nm9h.js:10083-10284 placement
 function pickComparableFields(memoryFile) {
   let metadata = import_reject(
     memoryFile.frontmatter.metadata,
@@ -618,7 +618,7 @@ function pickComparableFields(memoryFile) {
     body: memoryFile.body,
   };
 }
-//@ chunk-a477qqne.js:10251-10363 placement
+//@ chunk-b3a6nm9h.js:10284-10396 placement
 function hasManagedMetadataKeys(text) {
   return (FRONTMATTER_REGEX.exec(text)?.[0] ?? "")
     .split(
@@ -627,34 +627,34 @@ function hasManagedMetadataKeys(text) {
     )
     .some((line) => CLAUDECODE_KEYS.some((key) => new RegExp("^" + key + "\\s*:").test(line)));
 }
-//@ chunk-a477qqne.js:10363-10453 placement
+//@ chunk-b3a6nm9h.js:10396-10486 placement
 /**
  * 匹配 metadata: 起始行（可带值）。
  */
 var METADATA_BLOCK_RE = /^(["']?)metadata\1\s*:\s*(&\S+\s*)?(!\S+\s*)?(#.*)?$/;
 var METADATA_START_RE = /^(["']?)metadata\1\s*:/;
-//@ chunk-a477qqne.js:10453-10487 placement
+//@ chunk-b3a6nm9h.js:10486-10520 placement
 /**
  * 判断文本是否匹配前言正则。
  */
 function matchesFrontmatter(text) {
   return regExp_2.test(text);
 }
-//@ chunk-a477qqne.js:10487-10575 placement
+//@ chunk-b3a6nm9h.js:10520-10608 placement
 var regExp_2; // deferred: uses MAX_PROMOTED_ENTRIES of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-a477qqne.js:10487", () => {
+deferInit("chunk-b3a6nm9h.js:10520", () => {
   regExp_2 = new RegExp(
     `^[ \\t]*(-[ \\t]+)*((&|!)\\S*[ \\t]+)*["']?` + CLAUDECODEITEM + `["']?[ \\t]*:`,
     "m",
   );
 });
-//@ chunk-a477qqne.js:10575-10715 placement
+//@ chunk-b3a6nm9h.js:10608-10748 placement
 function hasNestedKey(value, key) {
   if (Array.isArray(value)) return value.some((item) => hasNestedKey(item, key));
   if (!import_isPlainObject(value)) return false;
   return Object.entries(value).some(([key_2, value]) => key_2 === key || hasNestedKey(value, key));
 }
-//@ chunk-a477qqne.js:10715-10935 placement
+//@ chunk-b3a6nm9h.js:10748-10968 placement
 function countOccurrences_2(value, needle) {
   let countIn = (text) => text.split(needle).length - 1;
   if (typeof value === "string") return countIn(value);
@@ -665,14 +665,14 @@ function countOccurrences_2(value, needle) {
     0,
   );
 }
-//@ chunk-a477qqne.js:10935-10979 placement
+//@ chunk-b3a6nm9h.js:10968-11012 placement
 /**
  * 统计子串出现次数。
  */
 function countOccurrences(text, needle) {
   return text.split(needle).length - 1;
 }
-//@ chunk-a477qqne.js:10979-11178 placement
+//@ chunk-b3a6nm9h.js:11012-11211 placement
 function hasYamlAliases(text) {
   let aliasNames = (marker) =>
     new Set(
@@ -685,7 +685,7 @@ function hasYamlAliases(text) {
     [...aliasNames("*")].some((aliasName) => declaredAnchors.has(aliasName)) || /(^|\s)<<[ \t]*:/m.test(text)
   );
 }
-//@ chunk-a477qqne.js:11178-11827 placement
+//@ chunk-b3a6nm9h.js:11211-11860 placement
 /**
  * 规范化前言（BOM、分隔线）。
  */
@@ -738,20 +738,20 @@ function normalizeFrontmatter(text) {
     ? stripped
     : undefined;
 }
-//@ chunk-a477qqne.js:11827-11864 placement
+//@ chunk-b3a6nm9h.js:11860-11897 placement
 /**
  * 判断文本里是否含 claudeCodeItem 键。
  */
 function mentionsItemKey(text) {
   return text.includes(CLAUDECODEITEM);
 }
-//@ chunk-a477qqne.js:11864-11993 placement
+//@ chunk-b3a6nm9h.js:11897-12026 placement
 function hasRiskyQuotedEscapes(text) {
   return text
     .split(/\r\n?|\n/)
     .some((line) => line.includes('"') && (/\\[xuU][0-9A-Fa-f]/.test(line) || line.trimEnd().endsWith("\\")));
 }
-//@ chunk-a477qqne.js:11993-12182 placement
+//@ chunk-b3a6nm9h.js:12026-12215 placement
 function parseFrontmatterObject(text, { lenient = true } = {}) {
   let body = text.match(STRICT_FRONTMATTER_REGEX)?.[1];
   if (body === undefined) return;
@@ -765,7 +765,7 @@ function parseFrontmatterObject(text, { lenient = true } = {}) {
   let yamlLenient = parseYamlLenient(body);
   return yamlLenient.ok && import_isPlainObject(yamlLenient.value) ? yamlLenient.value : undefined;
 }
-//@ chunk-a477qqne.js:12182-12290 placement
+//@ chunk-b3a6nm9h.js:12215-12323 placement
 function isPlainFrontmatter(text) {
   let frontmatterObject = parseFrontmatterObject(text);
   return (
@@ -773,14 +773,14 @@ function isPlainFrontmatter(text) {
     ![...CLAUDECODE_KEYS, "originSessionId", "modified"].some((key) => frontmatterObject[key] !== undefined)
   );
 }
-//@ chunk-a477qqne.js:12290-12412 placement
+//@ chunk-b3a6nm9h.js:12323-12445 placement
 function hasLooseFrontmatter(text) {
   let looseBody = FRONTMATTER_REGEX.exec(text)?.[1];
   if (looseBody === undefined) return false;
   let strictBody = text.match(STRICT_FRONTMATTER_REGEX)?.[1];
   return strictBody === undefined || looseBody.trim() !== strictBody.trim();
 }
-//@ chunk-a477qqne.js:12412-13485 placement
+//@ chunk-b3a6nm9h.js:12445-13518 placement
 /**
  * 重写前言中的指定键。
  */
@@ -867,14 +867,14 @@ function rewriteFrontmatterKeys(text, item, metadata) {
     ? result
     : undefined;
 }
-//@ chunk-a477qqne.js:13485-13536 placement
+//@ chunk-b3a6nm9h.js:13518-13569 placement
 /**
  * 计算行首缩进宽度。
  */
 function leadingSpaces(line) {
   return line.length - line.trimStart().length;
 }
-//@ chunk-a477qqne.js:13536-14045 placement
+//@ chunk-b3a6nm9h.js:13569-14078 placement
 /**
  * 删除前言中的指定键。
  */
@@ -920,7 +920,7 @@ function stripFrontmatterKeys(lines, keys, { topLevel = true } = {}) {
   }
   return kept;
 }
-//@ chunk-a477qqne.js:14045-14404 placement
+//@ chunk-b3a6nm9h.js:14078-14437 placement
 /**
  * 去掉前言中的保留键。
  */
@@ -955,7 +955,7 @@ function withoutFrontmatterKeys(text, keys = CLAUDECODE_KEYS, { topLevel = true 
     ? undefined
     : stripped;
 }
-//@ chunk-a477qqne.js:14404-14704 placement
+//@ chunk-b3a6nm9h.js:14437-14737 placement
 /**
  * 前言的行。
  */
@@ -977,7 +977,7 @@ function frontmatterLines(text) {
 `) + text.slice(frontmatterText.length),
   ).frontmatter.metadata;
 }
-//@ chunk-a477qqne.js:14704-14923 placement
+//@ chunk-b3a6nm9h.js:14737-14956 placement
 function getMemoryScope(frontmatter) {
   switch (parseMemoryType(frontmatter.metadata.type)) {
     case "user":
@@ -993,7 +993,7 @@ function getMemoryScope(frontmatter) {
       return "unknown";
   }
 }
-//@ chunk-a477qqne.js:14923-15690 placement
+//@ chunk-b3a6nm9h.js:14956-15723 placement
 /**
  * 解析记忆前言（name、description、metadata）。
  */
@@ -1044,26 +1044,26 @@ function parseMemoryFrontmatter(text, modifiedLine) {
     ? result
     : null;
 }
-//@ chunk-a477qqne.js:15690-15731 placement
+//@ chunk-b3a6nm9h.js:15723-15764 placement
 /**
  * 去掉行尾的 \r。
  */
 function stripTrailingCR(line) {
   return line.replace(/\r$/, "");
 }
-//@ chunk-a477qqne.js:15731-15870 placement
+//@ chunk-b3a6nm9h.js:15764-15903 placement
 function splitModifiedLine(line) {
   let [, indent, rest] = line.match(/^(\s*)modified\s*:([\s\S]*)$/);
   return [indent, /^["']/.test(rest.trimStart()) ? "" : (rest.match(/([ \t]+#.*)$/)?.[1] ?? "")];
 }
-//@ chunk-a477qqne.js:15870-15929 placement
+//@ chunk-b3a6nm9h.js:15903-15962 placement
 /**
  * 在指定位置插入一行。
  */
 function insertAt(lines, index, line) {
   return [...lines.slice(0, index), line, ...lines.slice(index)];
 }
-//@ chunk-a477qqne.js:15929-16300 placement
+//@ chunk-b3a6nm9h.js:15962-16333 placement
 /**
  * 找到插入 metadata 的位置。
  */
@@ -1088,7 +1088,7 @@ function findMetadataInsertion(lines, makeLines) {
       ?.match(/^(\s+)/)?.[1] ?? "  ";
   return insertAt(lines, blockEnd, makeLines(childIndent));
 }
-//@ chunk-a477qqne.js:16300-16515 placement
+//@ chunk-b3a6nm9h.js:16333-16548 placement
 function skipContinuationLines(lines, blockStart) {
   let lineIndex = blockStart + 1;
   while (lineIndex < lines.length - 1) {
@@ -1117,10 +1117,10 @@ function skipContinuationLines(lines, blockStart) {
 }
 export {
   prepareMemoryContent,
-  emptyRefusalItemKeys,
-  prepareContent,
   normalizeFrontmatter,
   claudeCodeItemMeta,
   CLAUDECODEITEM,
   matchesFrontmatter,
+  emptyRefusalItemKeys,
+  prepareContent,
 };

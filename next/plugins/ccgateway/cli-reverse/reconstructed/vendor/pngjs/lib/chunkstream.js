@@ -1,13 +1,13 @@
 /**
  * pngjs/lib/chunkstream.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: pngjs@5.0.0
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-spjgqa4y.js:20975-23141 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:20975-23141 cjs-fingerprint
 var require_chunkstream = __commonJS(function (cjsExports, cjsModule) {
   var util = importMetaRequire("util");
   var Stream = importMetaRequire("stream");

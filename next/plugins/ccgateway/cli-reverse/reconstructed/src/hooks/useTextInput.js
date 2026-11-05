@@ -3,9 +3,9 @@
  *
  * 文本输入核心 hook：按键映射到 Cursor 编辑操作（移动/删除/kill/yank/换行）、历史上下、双击 Esc 清空、Ctrl-C 处理、提交。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useTextInput.ts
- * pieces: chunk-7p2hc4jn.js (20)
+ * pieces: chunk-42wa4pww.js (20)
  * attribution: placement 18, file-local 1, fingerprint 1
  */
 import { claimOnce } from "../services/api/verificationRequired.js";
@@ -42,7 +42,7 @@ import { addHistoryEntry } from "../history.js";
 import { markBackslashReturnUsed } from "../commands/terminalSetup/terminalSetup.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-7p2hc4jn.js:38712-38960 placement
+//@ chunk-42wa4pww.js:38712-38960 placement
 /**
  * 文本换行行与原文不能完全拼合、回退到硬换行时，每进程只记录一次错误。
  */
@@ -55,7 +55,7 @@ function logWrapFallbackOnce(columns, textLength) {
     ),
   );
 }
-//@ chunk-7p2hc4jn.js:38960-39072 placement
+//@ chunk-42wa4pww.js:38960-39072 placement
 class OnceFlag {
   prewarmed = false;
   claim() {
@@ -67,18 +67,18 @@ class OnceFlag {
     this.prewarmed = false;
   }
 }
-//@ chunk-7p2hc4jn.js:39072-39097 placement
+//@ chunk-42wa4pww.js:39072-39097 placement
 var textInputStoreSlot; // deferred: uses OnceFlag of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-7p2hc4jn.js:39072", () => {
+deferInit("chunk-42wa4pww.js:39072", () => {
   textInputStoreSlot = new HostScoped(() => new OnceFlag());
 });
-//@ chunk-7p2hc4jn.js:39097-39112 placement
+//@ chunk-42wa4pww.js:39097-39112 placement
 function noopTextInput() {}
-//@ chunk-7p2hc4jn.js:39112-39136 placement
+//@ chunk-42wa4pww.js:39112-39136 placement
 function returnFalseTextInput(event) {
   return false;
 }
-//@ chunk-7p2hc4jn.js:39136-39264 placement
+//@ chunk-42wa4pww.js:39136-39264 placement
 /**
  * 左方向键手势的常量：武装窗口毫秒数、两段提示文字、吸收窗口与人手节奏间隔。
  */
@@ -88,7 +88,7 @@ var LEFT_ARROW_DETACH_HINT = "Ambiguous \u2190, press again to detach";
 var LEFT_ARROW_ABSORB_MS = 1000;
 var HUMAN_CADENCE_MS = 150;
 var ATTACH_CONFIRM_MIN_MS = 150;
-//@ chunk-7p2hc4jn.js:39264-39402 placement
+//@ chunk-42wa4pww.js:39264-39402 placement
 /**
  * 新建左方向键手势状态：编辑清空时间、武装时间、吸收锚点、上次有效按键时间、attach 确认武装时间、是否已记过吸收日志。
  */
@@ -102,7 +102,7 @@ function createLeftArrowGestureState() {
     absorbLogged: false,
   };
 }
-//@ chunk-7p2hc4jn.js:39402-40028 placement
+//@ chunk-42wa4pww.js:39402-40028 placement
 /**
  * 决定一次左方向键（返回代理列表/脱离会话）该怎么处理：reject（不是单独按键）、fire（执行）、arm（刚清空输入，先提示再按一次）、absorb（人手节奏的连按被吞掉）、attach-arm/attach-absorb（attach 模式下的确认）。
  */
@@ -130,7 +130,7 @@ function decideLeftArrowGesture(
   if (isRecent(state.absorbAnchorMs) && nowMs - state.absorbAnchorMs < LEFT_ARROW_ABSORB_MS) return "absorb";
   return isRecent(state.editedEmptyAtMs) && nowMs - state.editedEmptyAtMs < 2000 ? "arm" : "fire";
 }
-//@ chunk-7p2hc4jn.js:40028-40522 placement
+//@ chunk-42wa4pww.js:40028-40522 placement
 /**
  * 按 decideLeftArrowGesture 的结果更新手势状态（武装、吸收锚点、上次按键时间等）。
  */
@@ -163,7 +163,7 @@ function applyLeftArrowGesture(state, decision, nowMs) {
       return;
   }
 }
-//@ chunk-7p2hc4jn.js:40522-41484 placement
+//@ chunk-42wa4pww.js:40522-41484 placement
 /**
  * 为被拦下的左方向键手势打点 tengu_left_arrow_blocked（原因：editing-quiet、attach-quiet、not-solo、absorb 等）并写调试日志；吸收日志每个锚点只记一次。
  */
@@ -218,11 +218,11 @@ function logLeftArrowGesture(decision, nowMs, state) {
       return;
   }
 }
-//@ chunk-7p2hc4jn.js:41484-41592 placement (2.1.88 match: setCwdState, 1)
+//@ chunk-42wa4pww.js:41484-41592 placement (2.1.88 match: setCwdState, 1)
 var rangesBefore = (ranges, limit) => ranges.filter((range) => range.start < limit);
 var isNfcStable = (text, virtualTextLayout) =>
   text.normalize("NFC") === text && virtualTextLayout.text.normalize("NFC") === virtualTextLayout.text;
-//@ chunk-7p2hc4jn.js:41592-41920 placement
+//@ chunk-42wa4pww.js:41592-41920 placement
 /**
  * 按方向移动光标，跳过与当前偏移相同或（上下移动时）不在目标行的位置，直到找到一个实际不同的光标位置；到边界时原地不动。
  */
@@ -246,7 +246,7 @@ function moveCursorToDistinctRow(layout, startCursor, key) {
     current = nextCursor;
   }
 }
-//@ chunk-7p2hc4jn.js:41920-42358 placement
+//@ chunk-42wa4pww.js:41920-42358 placement
 /**
  * 把带占位文本（如折叠粘贴）的缓冲区展开成显示文本并测量换行，返回显示/缓冲区偏移换算与按行移动光标的辅助函数；NFC 不稳定时返回 undefined。
  */
@@ -284,7 +284,7 @@ function buildDisplayTextMapping({ buffer, texts, columns, side }) {
       ),
   };
 }
-//@ chunk-7p2hc4jn.js:42358-42598 placement
+//@ chunk-42wa4pww.js:42358-42598 placement
 /**
  * 为输入缓冲区建立光标：有显示映射时光标落在显示文本上，并给出把显示偏移换回缓冲区偏移的函数；否则直接用缓冲区。
  */
@@ -306,9 +306,9 @@ function createDisplayCursor({ buffer, offset, texts, columns, side }) {
     bufferOffset: (offset) => shiftSpans(displayTextMapping.text, offset),
   };
 }
-//@ chunk-7p2hc4jn.js:42598-42612 placement
+//@ chunk-42wa4pww.js:42598-42612 placement
 var noopTextInputCallback = () => {};
-//@ chunk-7p2hc4jn.js:42612-42791 placement
+//@ chunk-42wa4pww.js:42612-42791 placement
 function announceDeletion(deleted, mask) {
   if (deleted === "") return;
   if (mask !== "") {
@@ -332,9 +332,9 @@ function announceDeletion(deleted, mask) {
           .trim();
   announce(description);
 }
-//@ chunk-7p2hc4jn.js:42791-42926 placement
+//@ chunk-42wa4pww.js:42791-42926 placement
 var IGNORED_KEY_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-7p2hc4jn.js:42791", () => {
+deferInit("chunk-42wa4pww.js:42791", () => {
   IGNORED_KEY_NAMES = new Set([
     "insert",
     "clear",
@@ -356,21 +356,21 @@ deferInit("chunk-7p2hc4jn.js:42791", () => {
     "f12",
   ]);
 });
-//@ chunk-7p2hc4jn.js:42926-42991 placement
+//@ chunk-42wa4pww.js:42926-42991 placement
 /**
  * 函数 needsShiftWorkaround（Apple Terminal 需要 shift 兼容）；位于「文本输入核心 hook：按键映射到 Cursor 编辑操作（移动/删除/kill/yank/换行）、历史上下、双击 Esc 清空、Ctrl-C 处理、提交」模块。
  */
 function needsShiftWorkaround() {
   return env.terminal === "Apple_Terminal" && returnFalseTextInput("shift");
 }
-//@ chunk-7p2hc4jn.js:42991-43067 file-local
+//@ chunk-42wa4pww.js:42991-43067 file-local
 function mapInput(input_map) {
   let map = new Map(input_map);
   return function (input) {
     return (map.get(input) ?? noopTextInputCallback)(input);
   };
 }
-//@ chunk-7p2hc4jn.js:43067-50977 fingerprint (2.1.88 match: useTextInput, 0.462)
+//@ chunk-42wa4pww.js:43067-50977 fingerprint (2.1.88 match: useTextInput, 0.462)
 /**
  * 文本输入核心：把按键映射为 Cursor 操作（ctrl+a/e/b/f/h/d/k/u/w/y、alt+b/f/d、方向键、home/end、换行 \⏎/shift+⏎），上下键在多行内移动或触发历史；Esc 双击清空（escape-again-to-clear），Ctrl-C 清空或退出提示；Apple Terminal 特判；返回 onInput、渲染文本与光标位置。
  */
@@ -955,14 +955,14 @@ function useTextInput({
   };
 }
 export {
+  logWrapFallbackOnce,
+  useTextInput,
   HUMAN_CADENCE_MS,
   LEFT_ARROW_BACK_HINT,
   isNfcStable,
   rangesBefore,
   createDisplayCursor,
   needsShiftWorkaround,
-  logWrapFallbackOnce,
-  useTextInput,
   createLeftArrowGestureState,
   LEFT_ARROW_ARM_WINDOW_MS,
   decideLeftArrowGesture,

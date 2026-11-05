@@ -1,17 +1,20 @@
 /**
  * @modelcontextprotocol/client/dist/cfWorkerProvider-l7BFVI5n.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/client@2.0.0
- * pieces: chunk-dcmhvw5a.js (1), chunk-n332mrkv.js (2)
- * attribution: esm-fingerprint 2, esm-layout 1
+ * pieces: chunk-fra0jg2y.js (2), chunk-z20c443b.js (1)
+ * attribution: esm-layout 1, esm-fingerprint 2
  */
 import { validationMetaSchema, simpleTypes, require_ajv } from "./ajvProvider-BIwGVY6G.mjs";
-import { deferInit, beginDeferredInits, runDeferredInits } from "../../../../runtime/deferred-init.js";
+import { deferInit, beginDeferredInits } from "../../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 2 modules closed by ./ajvProvider-BIwGVY6G.mjs;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("vendor/@modelcontextprotocol/client/dist/ajvProvider-BIwGVY6G.mjs");
 // This module is the first evaluated of an import cycle of 2 modules closed by ./ajvProvider-BIwGVY6G.mjs (in the hooks worker thread);
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("worker:vendor/@modelcontextprotocol/client/dist/ajvProvider-BIwGVY6G.mjs");
-//@ chunk-dcmhvw5a.js:354157-354313 esm-fingerprint
+//@ chunk-z20c443b.js:352137-352293 esm-fingerprint
 function countCodePointsInString(str, strLength) {
   let i = 0;
   for (let j = 0; j < strLength; j++) {
@@ -27,7 +30,7 @@ function countCodePointsInString(str, strLength) {
   }
   return i;
 }
-//@ chunk-n332mrkv.js:24566-35916 esm-layout
+//@ chunk-fra0jg2y.js:24566-35916 esm-layout
 function validateValidationSchema(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
@@ -963,9 +966,9 @@ function validateValidationSchema(
   validateValidationSchema.errors = vErrors;
   return errorsCount === 0;
 }
-//@ chunk-n332mrkv.js:35916-36244 esm-fingerprint
+//@ chunk-fra0jg2y.js:35916-36244 esm-fingerprint
 // deferred: uses validateValidationSchema of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-n332mrkv.js:35916", () => {
+deferInit("chunk-fra0jg2y.js:35916", () => {
   validateValidationSchema.evaluated = {
     props: {
       type: true,
@@ -993,8 +996,4 @@ deferInit("chunk-n332mrkv.js:35916", () => {
     dynamicItems: false,
   };
 });
-
-// The import cycle this module closes (2 modules) is complete: run the load-time work its statements
-// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
-runDeferredInits("vendor/@modelcontextprotocol/client/dist/cfWorkerProvider-l7BFVI5n.mjs");
-export { countCodePointsInString, validateValidationSchema };
+export { validateValidationSchema, countCodePointsInString };

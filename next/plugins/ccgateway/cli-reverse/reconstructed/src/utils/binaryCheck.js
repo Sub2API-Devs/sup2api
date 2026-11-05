@@ -3,16 +3,16 @@
  *
  * 检查某命令行程序是否已安装（which + 缓存）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/binaryCheck.ts
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { logForDebugging } from "./debug.js";
 import { SAFE_PATH_RE, installedSummaries } from "../hooks/useAwaySummary.js";
 import { whichAsync } from "./which.js";
 
-//@ chunk-18hwfzwa.js:1797785-1798239 fingerprint (2.1.88 match: isBinaryInstalled, 0.836)
+//@ chunk-czq1j3j2.js:1845764-1846218 fingerprint (2.1.88 match: isBinaryInstalled, 0.836)
 async function isBinaryInstalled(session, command) {
   if (!command || !command.trim()) {
     logForDebugging("[binaryCheck] Empty command provided, returning false");

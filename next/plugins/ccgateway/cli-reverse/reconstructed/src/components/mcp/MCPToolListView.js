@@ -3,9 +3,9 @@
  *
  * MCP 工具列表：权限状态（blocked/ask-only/read-only）与凭证检查。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/mcp/MCPToolListView.tsx
- * pieces: chunk-vrb44rx7.js (8)
+ * pieces: chunk-wb51jffc.js (8)
  * attribution: fingerprint 2, placement 1, callgraph-fingerprint 1, layout 4
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -39,13 +39,13 @@ import { useAppState } from "../../state/AppState.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
 import { filterToolsByServer } from "../../services/mcp/utils.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { getMcpDisplayName, extractMcpToolDisplayName } from "../../services/mcp/mcpStringUtils.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { HintText } from "../design-system/HintText.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrb44rx7.js:8350-9935 fingerprint (2.1.88 match: _temp2, 0.345)
+//@ chunk-wb51jffc.js:8462-10047 fingerprint (2.1.88 match: _temp2, 0.345)
 /**
  * 远程（SSE/HTTP）MCP 服务器菜单的外壳：异步检查 design MCP 凭证与已存 OAuth token，检查期间显示 “Checking credentials…”，完成后渲染 MCPRemoteServerMenu。
  */
@@ -171,16 +171,16 @@ function RemoteServerMenuLoader(exitState) {
   } else menu = $[27];
   return menu;
 }
-//@ chunk-vrb44rx7.js:33767-33771 placement
+//@ chunk-wb51jffc.js:33891-33895 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:33767", () => {
+deferInit("chunk-wb51jffc.js:33891", () => {
   init_react_production();
 });
-//@ chunk-vrb44rx7.js:33771-33807 callgraph-fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-wb51jffc.js:33895-33931 callgraph-fingerprint (2.1.88 match: _temp, 1)
 function selectMcpTools(s) {
   return s.mcp.tools;
 }
-//@ chunk-vrb44rx7.js:33807-33955 layout
+//@ chunk-wb51jffc.js:33931-34079 layout
 /**
  * 排序比较：effectiveMaxPermission 为 blocked 的工具排在后面。
  */
@@ -189,15 +189,15 @@ function compareBlockedLast(toolA, toolB) {
   let rankB = toolB.mcpInfo?.effectiveMaxPermission === "blocked" ? 1 : 0;
   return rankA - rankB;
 }
-//@ chunk-vrb44rx7.js:33955-34025 layout
+//@ chunk-wb51jffc.js:34079-34149 layout
 function isBlockedTool(tool) {
   return tool.mcpInfo?.effectiveMaxPermission === "blocked";
 }
-//@ chunk-vrb44rx7.js:34025-34074 layout
+//@ chunk-wb51jffc.js:34149-34198 layout
 function isCliOwnedTool(tool) {
   return tool.mcpInfo?.cliOwned === true;
 }
-//@ chunk-vrb44rx7.js:34074-34200 layout
+//@ chunk-wb51jffc.js:34198-34324 layout
 /**
  * 工具列表项（被阻止时带警告图标）。
  */
@@ -216,7 +216,7 @@ function renderToolListItem(item) {
     item.tool.name,
   );
 }
-//@ chunk-vrb44rx7.js:34200-36255 fingerprint (2.1.88 match: MCPToolListView, 0.487)
+//@ chunk-wb51jffc.js:34324-36379 fingerprint (2.1.88 match: MCPToolListView, 0.487)
 function MCPToolListView(props) {
   let $ = useMemoCache(23);
   let { server, onSelectTool, onBack } = props;
@@ -245,7 +245,7 @@ function MCPToolListView(props) {
     tools = sortedTools;
   }
   let tools_2 = tools;
-  let blockedCount = count(tools_2, isBlockedTool);
+  let blockedCount = countWhere(tools_2, isBlockedTool);
   let blockedBy = tools_2.some(isCliOwnedTool) ? "Claude Code" : "your organization";
   let dialog;
   if (

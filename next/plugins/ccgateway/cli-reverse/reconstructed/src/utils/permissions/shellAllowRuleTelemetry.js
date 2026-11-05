@@ -3,9 +3,9 @@
  *
  * shell 允许规则遥测（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4p0ppc72.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1z536h0d.js (5)
  * attribution: placement 5
  */
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
@@ -15,17 +15,17 @@ import {
   isDangerousPowerShellPermission,
   PERMISSION_UPDATE_DESTINATIONS,
 } from "./permissionSetup.js";
-import { permissionRuleValueFromString } from "./permissionRuleParser.js";
+import { parseRuleString } from "./permissionRuleParser.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 
-//@ chunk-4p0ppc72.js:468-534 placement
+//@ chunk-1z536h0d.js:501-567 placement
 function shellToolNameOrNull(toolName) {
   if (toolName === BASH_TOOL_NAME) return BASH_TOOL_NAME;
   if (toolName === POWERSHELL_TOOL_NAME) return POWERSHELL_TOOL_NAME;
   return null;
 }
-//@ chunk-4p0ppc72.js:534-701 placement
+//@ chunk-1z536h0d.js:567-734 placement
 function classifyShellAllowRule(toolName, ruleContent) {
   let toolName_2 = shellToolNameOrNull(toolName);
   if (toolName_2 === null) return null;
@@ -38,13 +38,13 @@ function classifyShellAllowRule(toolName, ruleContent) {
     ? "dangerous_prefix"
     : "scoped";
 }
-//@ chunk-4p0ppc72.js:701-945 placement
+//@ chunk-1z536h0d.js:734-978 placement
 function countShellAllowRules(rulesByDestination) {
   let counts = {};
   let total = 0;
   for (let destination of PERMISSION_UPDATE_DESTINATIONS)
     for (let ruleString of rulesByDestination[destination] ?? []) {
-      let { toolName, ruleContent } = permissionRuleValueFromString(ruleString);
+      let { toolName, ruleContent } = parseRuleString(ruleString);
       let shellTool = shellToolNameOrNull(toolName);
       if (shellTool === null) continue;
       let category = classifyShellAllowRule(shellTool, ruleContent);
@@ -56,14 +56,14 @@ function countShellAllowRules(rulesByDestination) {
   counts.total_shell_allow_rules = total;
   return counts;
 }
-//@ chunk-4p0ppc72.js:945-1003 placement
+//@ chunk-1z536h0d.js:978-1036 placement
 /**
  * logShellAllowRulesAtInit：启动时上报 shell 允许规则数量。
  */
 function logShellAllowRulesAtInit(rulesByDestination) {
   logEvent("tengu_shell_allow_rules_at_init", countShellAllowRules(rulesByDestination));
 }
-//@ chunk-4p0ppc72.js:1003-1302 placement
+//@ chunk-1z536h0d.js:1036-1335 placement
 function logShellAllowRuleAdded(updates) {
   for (let update of updates) {
     if (update.type !== "addRules" || update.behavior !== "allow") continue;

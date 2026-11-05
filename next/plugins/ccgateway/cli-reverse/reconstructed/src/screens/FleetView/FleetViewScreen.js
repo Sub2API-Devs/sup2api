@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增（门面模块 FleetViewScreen）。Fleet 多会话视图。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8kxjtdv8.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-zcs6jmx6.js (6)
  * attribution: placement 6
  */
 import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
@@ -22,9 +22,9 @@ import { AlternateScreen } from "../../ink/components/AlternateScreen.js";
 import { getPlatform } from "../../utils/platform.js";
 import { env } from "../../utils/env.js";
 
-//@ chunk-8kxjtdv8.js:675-679 placement
+//@ chunk-zcs6jmx6.js:675-679 placement
 init_react_production();
-//@ chunk-8kxjtdv8.js:679-786 placement
+//@ chunk-zcs6jmx6.js:679-786 placement
 var SURFACE_COLORS = {
   light: {
     background: "#f9f9f7",
@@ -35,7 +35,7 @@ var SURFACE_COLORS = {
     foreground: "#ffffff",
   },
 };
-//@ chunk-8kxjtdv8.js:786-908 placement
+//@ chunk-zcs6jmx6.js:786-908 placement
 function resolveSurface(setting, systemTheme, enabled) {
   if (!enabled) return;
   let theme;
@@ -45,7 +45,7 @@ function resolveSurface(setting, systemTheme, enabled) {
   } else theme = resolveThemeSetting(setting);
   return isLightTheme(theme) ? SURFACE_COLORS.light : SURFACE_COLORS.dark;
 }
-//@ chunk-8kxjtdv8.js:908-1104 placement
+//@ chunk-zcs6jmx6.js:908-1104 placement
 function useSurfaceTheme() {
   let $ = useMemoCache(4);
   let [theme, setTheme] = useState(getCachedSystemTheme);
@@ -69,7 +69,7 @@ function useSurfaceTheme() {
   } else surface = $[3];
   return surface;
 }
-//@ chunk-8kxjtdv8.js:1104-1483 placement
+//@ chunk-zcs6jmx6.js:1104-1483 placement
 function FleetViewScreen(props) {
   let $ = useMemoCache(9);
   let { children, mouseTracking, killRing } = props;
@@ -108,7 +108,7 @@ function FleetViewScreen(props) {
   }
   return content;
 }
-//@ chunk-8kxjtdv8.js:1483-1585 placement
+//@ chunk-zcs6jmx6.js:1483-1585 placement
 function applyFleetViewHostWindowsEnv() {
   if (getPlatform() === "windows" || env.WT_SESSION) process.env.CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT ??= "1";
 }

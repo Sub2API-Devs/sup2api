@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增。系统 CA 信任安装。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-awy329vy.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9knfmvrf.js (13)
  * attribution: placement 13
  */
 import { createHash, X509Certificate } from "crypto";
-import { join, basename } from "path";
+import { join, basename, dirname } from "path";
 import { readdir, lstat, unlink, chmod, rename, mkdir, open, symlink, stat, readlink } from "fs/promises";
 import { constants } from "fs";
 import { env } from "../utils/env.js";
@@ -22,7 +22,7 @@ import { execFileNoThrow } from "../utils/execFileNoThrow.js";
 import { logToolOutput, describeExecOutcome } from "./toolTrust.js";
 import { readFileSyncCached } from "../utils/file.js";
 
-//@ chunk-awy329vy.js:34747-35690 placement
+//@ chunk-9knfmvrf.js:45220-46163 placement
 /**
  * 表示 dpkg 安装未完成的标记文件。
  */
@@ -54,7 +54,7 @@ var JKS_ENTRY_TAG = 2;
 var X_509 = "X.509";
 var JKS_TRAILER_BYTES = 20;
 var JAVA_VERSION_RE = /^-----(?:BEGIN ([^-\n]*)-----[\s\S]*?^-----END \1-----)?/m;
-//@ chunk-awy329vy.js:35690-37424 placement
+//@ chunk-9knfmvrf.js:46163-47897 placement
 async function installJavaStoreDirect(javaVersion, link, javaHook) {
   try {
     if (env.CCR_AGENT_PROXY_JAVA_STORE_DIRECT_DISABLED) return "disabled";
@@ -150,7 +150,7 @@ Triggers-Awaited:`) ||
     return "error";
   }
 }
-//@ chunk-awy329vy.js:37424-37939 placement
+//@ chunk-9knfmvrf.js:47897-48412 placement
 /**
  * 解析 Java KeyStore（JKS）字节：校验魔数与版本，逐个读取受信证书条目的别名（类型须为 X.509），最后校验整体 SHA-1 摘要；格式不符返回 undefined。
  */
@@ -185,7 +185,7 @@ function parseJavaKeystoreAliases(buffer) {
   }
   return aliases;
 }
-//@ chunk-awy329vy.js:37939-38336 placement
+//@ chunk-9knfmvrf.js:48412-48809 placement
 /**
  * 向 JKS 字节追加一个受信证书条目（别名、时间戳、X.509 证书），更新条目数并重新计算末尾摘要。
  */
@@ -202,7 +202,7 @@ function appendJavaKeystoreCert(bytes, alias, digest) {
   buffer.writeUInt32BE(bytes.readUInt32BE(8) + 1, 8);
   return Buffer.concat([buffer, javaKeystoreDigest(buffer)]);
 }
-//@ chunk-awy329vy.js:38336-38465 placement
+//@ chunk-9knfmvrf.js:48809-48938 placement
 function javaKeystoreDigest(keystore) {
   return createHash("sha1")
     .update(Buffer.from(CHANGEIT, "utf16le").swap16())
@@ -210,7 +210,7 @@ function javaKeystoreDigest(keystore) {
     .update(keystore)
     .digest();
 }
-//@ chunk-awy329vy.js:38465-38544 placement
+//@ chunk-9knfmvrf.js:48938-49017 placement
 /**
  * 异步判断路径是否存在（ENOENT 返回 false，其他错误抛出）。
  */
@@ -223,7 +223,7 @@ async function pathExistsAsync(filePath) {
     },
   );
 }
-//@ chunk-awy329vy.js:38544-38797 placement
+//@ chunk-9knfmvrf.js:49017-49270 placement
 async function readSmallFileWithMeta(filePath, maxBytes) {
   let handle;
   try {
@@ -243,7 +243,7 @@ async function readSmallFileWithMeta(filePath, maxBytes) {
     await handle?.close().catch(() => {});
   }
 }
-//@ chunk-awy329vy.js:38797-39477 placement
+//@ chunk-9knfmvrf.js:49270-49950 placement
 /**
  * Debian 系系统 CA 证书相关路径：更新脚本、配置文件、证书目录与证书包等。
  */
@@ -273,7 +273,7 @@ var MAX_CERT_FILE_BYTES = 1048576;
 var MAX_CA_BUNDLE_BYTES = 4194304;
 var MAX_COMMAND_OUTPUT_BYTES = 1048576;
 var MAX_LOGGED_OUTPUT_CHARS = 2048;
-//@ chunk-awy329vy.js:39477-41785 placement
+//@ chunk-9knfmvrf.js:49950-52285 placement
 async function installSystemCaDirect(pemText, options) {
   let { anchorPath, link, layout, recordPath, timeoutMs } = options;
   let buffer = Buffer.from(pemText, "utf8");
@@ -330,7 +330,11 @@ async function installSystemCaDirect(pemText, options) {
     };
   };
   try {
-    let tempBundle = await writeIfMissing(layout.bundle, updateResult.bundle);
+    let tempBundle = await writeIfMissing(
+      join(dirname(layout.certsDir), basename(layout.bundle)),
+      updateResult.bundle,
+      420,
+    );
     try {
       await chmod(tempBundle, 420);
       await rename(tempBundle, layout.bundle);
@@ -425,7 +429,7 @@ async function installSystemCaDirect(pemText, options) {
     }),
   };
 }
-//@ chunk-awy329vy.js:41785-43516 placement
+//@ chunk-9knfmvrf.js:52285-54016 placement
 async function runUpdateCaCertificates(anchorPath, link, pemText, layout) {
   let scriptPath = layout.script.includes("/") ? layout.script : await whichAsync(layout.script);
   let scriptBytes = scriptPath ? await readFileSyncCached(scriptPath, MAX_UPDATE_SCRIPT_BYTES) : undefined;
@@ -540,7 +544,7 @@ async function runUpdateCaCertificates(anchorPath, link, pemText, layout) {
     bundle: Buffer.concat(parts),
   };
 }
-//@ chunk-awy329vy.js:43516-43720 placement
+//@ chunk-9knfmvrf.js:54016-54220 placement
 async function readLinkedSystemCert(certPath, layout) {
   let linkName =
     basename(certPath, ".crt").replace(/ /g, "_").replace(/[()]/g, "=").replace(/,/g, "_") + ".pem";
@@ -553,7 +557,7 @@ async function readLinkedSystemCert(certPath, layout) {
   let bytes = await readFileSyncCached(certPath, MAX_CERT_FILE_BYTES);
   return bytes && ensureTrailingNewline(bytes);
 }
-//@ chunk-awy329vy.js:43720-43808 placement
+//@ chunk-9knfmvrf.js:54220-54308 placement
 /**
  * 内容末尾没有换行时补一个换行。
  */
@@ -566,7 +570,7 @@ function ensureTrailingNewline(bytes) {
 `),
       ]);
 }
-//@ chunk-awy329vy.js:43808-43887 placement
+//@ chunk-9knfmvrf.js:54308-54387 placement
 /**
  * 异步判断路径是否存在（仅把 ENOENT 视为不存在）。
  */

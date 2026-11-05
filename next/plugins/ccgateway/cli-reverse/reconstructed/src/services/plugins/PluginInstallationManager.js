@@ -3,10 +3,10 @@
  *
  * 并入旧版已有路径：插件安装管理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/plugins/PluginInstallationManager.ts
- * pieces: chunk-18hwfzwa.js (3), chunk-e6aww6q8.js (1)
- * attribution: placement 2, fingerprint 1, callgraph-fingerprint 1
+ * pieces: chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (3)
+ * attribution: callgraph-fingerprint 1, placement 2, fingerprint 1
  */
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import {
@@ -46,7 +46,7 @@ import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { refreshActivePlugins } from "../../utils/plugins/refresh.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 
-//@ chunk-e6aww6q8.js:4233013-4233217 callgraph-fingerprint (2.1.88 match: updateMarketplaceStatus, 0.212)
+//@ chunk-5xgkngpb.js:4339446-4339650 callgraph-fingerprint (2.1.88 match: updateMarketplaceStatus, 0.212)
 /**
  * 重置全局市场安装状态（marketplaces 状态表与进行中的刷新）。
  */
@@ -60,7 +60,7 @@ function updateMarketplaceStatus() {
   pluginRegistry.marketplaceHelperMemo.clear();
   pluginRegistry.marketplaceResolutionNoticesLogged.clear();
 }
-//@ chunk-18hwfzwa.js:202646-204071 placement
+//@ chunk-czq1j3j2.js:207445-208870 placement
 async function refreshMarketplacesOnMiss(attempted = new Set(), storageV5) {
   let refreshed = new Set();
   if (shouldSkipPluginAutoupdate()) return refreshed;
@@ -155,7 +155,7 @@ async function refreshMarketplacesOnMiss(attempted = new Set(), storageV5) {
   }
   return refreshed;
 }
-//@ chunk-18hwfzwa.js:204071-204622 placement
+//@ chunk-czq1j3j2.js:208870-209421 placement
 async function marketplaceLoadErrors(storageV5, retryDelays = BRIDGE_RETRY_DELAYS_MS) {
   let recovered = new Set();
   try {
@@ -196,7 +196,7 @@ async function marketplaceLoadErrors(storageV5, retryDelays = BRIDGE_RETRY_DELAY
   }
   return recovered;
 }
-//@ chunk-18hwfzwa.js:204622-206503 fingerprint (2.1.88 match: performBackgroundPluginInstallations, 0.672)
+//@ chunk-czq1j3j2.js:209421-211302 fingerprint (2.1.88 match: performBackgroundPluginInstallations, 0.671)
 /**
  * 后台插件安装：对比 settings 声明的市场与 known_marketplaces，reconcileMarketplaces 安装缺失/变化的市场，更新全局市场安装状态，必要时刷新插件；记 tengu_marketplace_background_install。
  */

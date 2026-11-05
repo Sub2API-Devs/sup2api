@@ -3,13 +3,13 @@
  *
  * TaskUpdate 工具名常量
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TaskUpdateTool/constants.ts
- * pieces: chunk-3e7edr38.js (1)
+ * pieces: chunk-mer7cb3z.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-3e7edr38.js:211-231 fingerprint (2.1.88 match: TASK_UPDATE_TOOL_NAME, 1)
+//@ chunk-mer7cb3z.js:1280-1300 fingerprint (2.1.88 match: TASK_UPDATE_TOOL_NAME, 1)
 /**
  * "TaskUpdate"。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关设备码登录流程
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5v6dfhf4.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qj0cbf1s.js (8)
  * attribution: placement 8
  */
 import { errorMessage, getErrnoCode } from "../../../utils/errors.js";
@@ -40,7 +40,7 @@ import { saveGatewayCredential } from "../../gateway/gatewayCredentialStore.js";
 import { logAuthEvent } from "../../../utils/telemetry/thirdPartyEventRecords.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-5v6dfhf4.js:691-2133 placement
+//@ chunk-qj0cbf1s.js:690-2132 placement
 /**
  * 登录未完成的说明。
  */
@@ -59,7 +59,7 @@ var TRUST_REJECTED_MESSAGE;
 var PIN_MISMATCH_MESSAGE;
 var LOGIN_FAILED_MESSAGE;
 var LOGIN_INCOMPLETE_MESSAGE;
-deferInit("chunk-5v6dfhf4.js:691", () => {
+deferInit("chunk-qj0cbf1s.js:690", () => {
   GATEWAY_LOGIN_CONSTANTS = "urn:ietf:params:oauth:grant-type:device_code";
   CLAUDE_CODE = "claude_code";
   TLS_TRUST_ERRORS = new Set([
@@ -89,7 +89,7 @@ deferInit("chunk-5v6dfhf4.js:691", () => {
   LOGIN_INCOMPLETE_MESSAGE =
     "The gateway's TLS certificate changed during sign-in: it no longer matches the one you trusted. Aborting without storing credentials; start the sign-in again to review the new certificate.";
 });
-//@ chunk-5v6dfhf4.js:2133-2543 placement
+//@ chunk-qj0cbf1s.js:2132-2542 placement
 function credentialsFileErrorText(error) {
   let message = errorMessage(error);
   if (message.includes(PIN_STORE_SYMLINK_MESSAGE))
@@ -99,7 +99,7 @@ function credentialsFileErrorText(error) {
   if (pinMismatchFromError(error) !== undefined) return LOGIN_INCOMPLETE_MESSAGE;
   return message;
 }
-//@ chunk-5v6dfhf4.js:2543-2713 placement
+//@ chunk-qj0cbf1s.js:2542-2711 placement
 function oauthErrorDescription(error) {
   let body = error?.response?.data;
   if (typeof body !== "object" || body === null) return;
@@ -107,7 +107,7 @@ function oauthErrorDescription(error) {
   if (typeof errorDescription !== "string") return;
   return truncateToLength(printableText(errorDescription), 300).trim() || undefined;
 }
-//@ chunk-5v6dfhf4.js:2713-3454 placement
+//@ chunk-qj0cbf1s.js:2711-3452 placement
 function tlsErrorHint(error) {
   let errnoCode = getErrnoCode(error) ?? getErrnoCode(error?.cause);
   let message = errorMessage(error);
@@ -127,9 +127,9 @@ function tlsErrorHint(error) {
     "`env.NODE_EXTRA_CA_CERTS` in your user settings (~/.claude/settings.json)."
   );
 }
-//@ chunk-5v6dfhf4.js:3454-3599 placement
+//@ chunk-qj0cbf1s.js:3452-3597 placement
 var GATEWAY_DISCOVERY_SCHEMA; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-5v6dfhf4.js:3454", () => {
+deferInit("chunk-qj0cbf1s.js:3452", () => {
   GATEWAY_DISCOVERY_SCHEMA = DoctorLazy(() =>
     create({
       device_authorization_endpoint: create_2().optional(),
@@ -138,7 +138,7 @@ deferInit("chunk-5v6dfhf4.js:3454", () => {
     }),
   );
 });
-//@ chunk-5v6dfhf4.js:3599-3763 placement
+//@ chunk-qj0cbf1s.js:3597-3761 placement
 function sameOriginEndpoint(baseUrl, advertised, pathSuffix) {
   let advertisedSameOrigin = sameOriginUrl(baseUrl, advertised);
   if (advertisedSameOrigin) return advertisedSameOrigin;
@@ -148,9 +148,9 @@ function sameOriginEndpoint(baseUrl, advertised, pathSuffix) {
     );
   return `${baseUrl}${pathSuffix}`;
 }
-//@ chunk-5v6dfhf4.js:3763-3919 placement
+//@ chunk-qj0cbf1s.js:3761-3917 placement
 var DEVICE_AUTHORIZATION_SCHEMA; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-5v6dfhf4.js:3763", () => {
+deferInit("chunk-qj0cbf1s.js:3761", () => {
   DEVICE_AUTHORIZATION_SCHEMA = DoctorLazy(() =>
     create({
       device_code: create_2(),
@@ -162,7 +162,7 @@ deferInit("chunk-5v6dfhf4.js:3763", () => {
     }),
   );
 });
-//@ chunk-5v6dfhf4.js:3919-9825 placement
+//@ chunk-qj0cbf1s.js:3917-9821 placement
 /**
  * 网关登录流程状态机：输入地址、设备码授权、轮询令牌、保存凭证。
  */

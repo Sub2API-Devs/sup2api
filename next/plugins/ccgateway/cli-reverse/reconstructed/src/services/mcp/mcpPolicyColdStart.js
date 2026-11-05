@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 冷启动时等待远程托管设置/策略限制结论
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-x8dej8aq.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bym3dfgj.js (1)
  * attribution: placement 1
  */
 import {
@@ -27,7 +27,7 @@ import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { hostSessionSkipsSharedCache } from "../remoteManagedSettings/remoteSettingsCache.js";
 import { recordLoadBarrier } from "../policyLimits/startupGate.js";
 
-//@ chunk-x8dej8aq.js:595-1829 placement
+//@ chunk-bym3dfgj.js:596-1831 placement
 /**
  * MCP 配置冷启动前等待策略：远程托管设置在验证中时等其落定；可能有 MCP 服务器来源时等远程托管设置加载，并记录等待耗时诊断；需要时再等策略限制结论（超时则不带它继续）。
  */

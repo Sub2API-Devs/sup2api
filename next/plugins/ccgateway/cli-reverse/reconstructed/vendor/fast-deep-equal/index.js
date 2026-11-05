@@ -1,13 +1,13 @@
 /**
  * fast-deep-equal/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: fast-deep-equal@3.1.3
- * pieces: chunk-dxsqk077.js (1)
+ * pieces: chunk-8zgjzcry.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 
-//@ chunk-dxsqk077.js:226-953 cjs-fingerprint
+//@ chunk-8zgjzcry.js:226-953 cjs-fingerprint
 var require_fast_deep_equal = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = function equal(a, b) {
     if (a === b) return true;

@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：API 请求体 gzip 压缩：按大小与开关决定是否压缩并设置头。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hwmsct5x.js (17), chunk-nmregrje.js (39), chunk-rbe666af.js (23)
- * attribution: placement 78, affinity 1
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g8sg6xj8.js (63), chunk-vn3g7zt8.js (20)
+ * attribution: placement 76, layout 6, affinity 1
  */
 import { deflateRawSync, inflateRawSync, deflateRaw, inflateRaw, constants, gunzip } from "zlib";
 import { promisify } from "util";
 import { MAX_REQUEST_BYTES } from "../../utils/mediaLimits.js";
-import { getErrnoCode, sanitizeErrnoForTelemetry } from "../../utils/errors.js";
+import { getErrnoCode, sanitizeErrnoForTelemetry, findInCauseChain } from "../../utils/errors.js";
 import { pMap } from "../../../vendor/p-map/index.js";
 import { env } from "../../utils/env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
@@ -42,7 +42,7 @@ import { getRootSession } from "../../bootstrap/state.js";
 import { modelApiFetch, isAbortedWithoutStreamError } from "./clientHelpers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-rbe666af.js:1909-2047 placement
+//@ chunk-g8sg6xj8.js:1079-1267 placement
 /**
  * gzip 分块请求体的常量：块 128 KB、字典 32 KB、最多保留 4 块、缓存上限 32、空闲丢弃 210 s、CTC BLOCK 头 256 字节、正文切分标记与系统块尾部间隙 1024。
  */
@@ -58,9 +58,11 @@ var BODY_SPLIT_MARKERS = {
   messages: '"messages":[',
   system: '],"system":',
   endOfSystemBlock: '"},{',
+  metadata: ',"metadata":{"user_id":"',
 };
 var MAX_SYSTEM_TAIL_GAP = 1024;
-//@ chunk-rbe666af.js:2047-2227 placement
+var SYSTEM_TAIL_GAP_BYTES = 4096;
+//@ chunk-g8sg6xj8.js:1267-1475 placement
 function createBlockCache(maxStoredBytes = DEFAULT_BLOCK_BUDGET) {
   return {
     blocks: new Map(),
@@ -69,11 +71,12 @@ function createBlockCache(maxStoredBytes = DEFAULT_BLOCK_BUDGET) {
     evictedForSpaceCount: 0,
     generation: 0,
     keptBody: undefined,
+    keptSubagentBodies: new Map(),
     cancelIdleDrop: undefined,
     pooledCompression: Promise.resolve(),
   };
 }
-//@ chunk-rbe666af.js:2227-2354 placement
+//@ chunk-g8sg6xj8.js:1475-1631 placement
 /**
  * 清空 gzip 块缓存：取消空闲清理、清空块与保留的请求体、递增世代。
  */
@@ -83,30 +86,35 @@ function clearGzipBlockStore(blockStore) {
   blockStore.blocks.clear();
   blockStore.storedBytes = 0;
   blockStore.keptBody = undefined;
+  blockStore.keptSubagentBodies.clear();
   blockStore.generation++;
 }
-//@ chunk-rbe666af.js:2354-2787 placement
-/**
- * 规划分块 gzip：在 messages/system 边界处把请求体切成固定大小块（带字典窗口），计算每块的键并从缓存中取出可复用的压缩结果，统计复用块数与字节。
- */
-function planGzipBlocks({ body, level, store, clock }) {
-  let blocks = splitBodyBlocks(body);
-  let { keys, carriedDigestCount } = blockDigestKeys(
+//@ chunk-g8sg6xj8.js:1631-1806 layout
+function findKeptBody(blockStore, body) {
+  if (blockStore.keptBody?.memory.buffer === body.buffer) return blockStore.keptBody;
+  for (let { keptBody } of blockStore.keptSubagentBodies.values())
+    if (keptBody?.memory.buffer === body.buffer) return keptBody;
+  return;
+}
+//@ chunk-g8sg6xj8.js:1806-2222 layout
+function planBlockStore({ body, level, store, clock, cutNearToolsEnd = false }) {
+  let blocks = splitBodyBlocks(body, cutNearToolsEnd);
+  let { keys, carriedDigestCount } = digestBlocks(
     body,
     blocks,
     level,
-    body.buffer === store.keptBody?.memory.buffer && body.byteOffset === 0 ? store.keptBody : undefined,
+    body.byteOffset === 0 ? findKeptBody(store, body) : undefined,
   );
   let lastUsedAt = clock.monotonicNow();
   let reusedBlockCount = 0;
   let reusedBytes = 0;
   let reused = blocks.map((block, index) => {
-    let cached = takeCachedBlock(store, keys[index], lastUsedAt);
-    if (cached !== undefined) {
+    let cachedBlock = takeCachedBlock(store, keys[index], lastUsedAt);
+    if (cachedBlock !== undefined) {
       reusedBlockCount++;
       reusedBytes += block.end - block.start;
     }
-    return cached;
+    return cachedBlock;
   });
   if (store.blocks.size > 0) scheduleIdleDrop(store, clock);
   return {
@@ -121,14 +129,14 @@ function planGzipBlocks({ body, level, store, clock }) {
     generation: store.generation,
   };
 }
-//@ chunk-rbe666af.js:2787-2867 placement
+//@ chunk-g8sg6xj8.js:2222-2302 placement
 /**
  * 导出函数 `needsBodyAssembly`：参数 { keys: keys, reused: reused }，返回 keys.some((n, r) => n !== void 0 && reused[r] === void 0)。
  */
 function needsBodyAssembly({ keys, reused }) {
   return keys.some((key, index) => key !== undefined && reused[index] === undefined);
 }
-//@ chunk-rbe666af.js:2867-3107 placement
+//@ chunk-g8sg6xj8.js:2302-2542 placement
 /**
  * 组装完整的 gzip 请求体：gzip 头、各压缩块与包含 CRC32 和长度的尾部。
  */
@@ -141,7 +149,7 @@ async function assembleGzipBody(plan, store, clock, opts) {
   trailer.writeUInt32LE(plan.body.length % 4294967296, 6);
   return Buffer.concat([buffer, ...compressed, trailer]);
 }
-//@ chunk-rbe666af.js:3107-3240 placement
+//@ chunk-g8sg6xj8.js:2542-2675 placement
 class GzipBlockCheckError extends Error {
   fault;
   constructor(fault, options) {
@@ -149,7 +157,7 @@ class GzipBlockCheckError extends Error {
     this.fault = fault;
   }
 }
-//@ chunk-rbe666af.js:3240-3321 placement
+//@ chunk-g8sg6xj8.js:2675-2756 placement
 /**
  * 导出函数 `zlibErrorCode`：参数 e，返回 t === "Z_DATA_ERROR" || t === "Z_BUF_ERROR" ? t : void 0。
  */
@@ -157,7 +165,7 @@ function zlibErrorCode(error) {
   let errnoCode = getErrnoCode(error);
   return errnoCode === "Z_DATA_ERROR" || errnoCode === "Z_BUF_ERROR" ? errnoCode : undefined;
 }
-//@ chunk-rbe666af.js:3321-4394 placement
+//@ chunk-g8sg6xj8.js:2756-3836 placement
 /**
  * 压缩请求体并校验每个压缩块
  */
@@ -230,16 +238,19 @@ async function gzipRequestBody(plan, store, clock, { signal, stopIf, inBackgroun
   scheduleIdleDrop(store, clock);
   return compressed;
 }
-//@ chunk-rbe666af.js:4394-4689 placement
-function splitBodyBlocks(body) {
-  let index = body.lastIndexOf(BODY_SPLIT_MARKERS.system);
-  let systemEnd = index === -1 ? -1 : body.indexOf(BODY_SPLIT_MARKERS.endOfSystemBlock, index);
-  let boundaries = [
-    body.indexOf(BODY_SPLIT_MARKERS.messages),
-    index,
-    systemEnd !== -1 && systemEnd - index <= MAX_SYSTEM_TAIL_GAP ? systemEnd + 2 : -1,
-    body.length,
-  ];
+//@ chunk-g8sg6xj8.js:3836-4241 placement
+function splitBodyBlocks(body, cutNearToolsEnd) {
+  let index = body.indexOf(BODY_SPLIT_MARKERS.messages);
+  let index_2 = body.lastIndexOf(BODY_SPLIT_MARKERS.system);
+  let systemBlockEnd = index_2 === -1 ? -1 : body.indexOf(BODY_SPLIT_MARKERS.endOfSystemBlock, index_2);
+  let systemEnd =
+    systemBlockEnd !== -1 && systemBlockEnd - index_2 <= MAX_SYSTEM_TAIL_GAP ? systemBlockEnd + 2 : -1;
+  let toolsCutRaw =
+    cutNearToolsEnd && index !== -1 && index < index_2 && systemEnd !== -1
+      ? body.lastIndexOf(BODY_SPLIT_MARKERS.metadata) - SYSTEM_TAIL_GAP_BYTES
+      : -1;
+  let toolsCut = toolsCutRaw > systemEnd ? toolsCutRaw : -1;
+  let boundaries = [index, index_2, systemEnd, toolsCut, body.length];
   let blocks = [];
   let cursor = 0;
   for (let boundary of boundaries) {
@@ -249,31 +260,33 @@ function splitBodyBlocks(body) {
         start,
         end: Math.min(start + GZIP_BLOCK_BYTES, boundary),
         dictionaryStart: Math.max(start - GZIP_DICTIONARY_BYTES, cursor),
+        endsAtToolsCut: boundary === toolsCut && start + GZIP_BLOCK_BYTES >= boundary,
       });
     cursor = boundary;
   }
   return blocks;
 }
-//@ chunk-rbe666af.js:4689-5235 placement
-/**
- * 按块计算 gzip 请求体各块摘要并复用上次摘要（carriedDigestCount），用于块缓存键。
- */
-function blockDigestKeys(body, blocks, level, carried) {
-  let carriedCount = 0;
+//@ chunk-g8sg6xj8.js:4241-4825 layout
+function digestBlocks(body, blocks, level, previous) {
+  let carriedDigestCount = 0;
   let mapped = blocks.map((block) => {
-    if (block.end - block.start !== GZIP_BLOCK_BYTES) return;
-    let digestEntry = carried?.blockDigests.get(block.start);
-    if (carried !== undefined && digestEntry?.end === block.end && block.end <= carried.digestedBytes) {
-      carriedCount++;
-      return digestEntry.digest;
+    if (block.end - block.start !== GZIP_BLOCK_BYTES && !block.endsAtToolsCut) return;
+    let previousBlockDigest = previous?.blockDigests.get(block.start);
+    if (
+      previous !== undefined &&
+      previousBlockDigest?.end === block.end &&
+      block.end <= previous.digestedBytes
+    ) {
+      carriedDigestCount++;
+      return previousBlockDigest.digest;
     }
     return Bun.SHA256.hash(body.subarray(block.start, block.end), "base64");
   });
-  if (carried !== undefined) {
-    carried.blockDigests = new Map(
+  if (previous !== undefined) {
+    previous.blockDigests = new Map(
       blocks.flatMap((block, index) => {
         let digest = mapped[index];
-        return digest === undefined
+        return digest === undefined || block.end - block.start !== GZIP_BLOCK_BYTES
           ? []
           : [
               [
@@ -286,28 +299,28 @@ function blockDigestKeys(body, blocks, level, carried) {
             ];
       }),
     );
-    carried.digestedBytes = carried.length;
+    previous.digestedBytes = previous.length;
   }
   return {
-    carriedDigestCount: carriedCount,
+    carriedDigestCount,
     keys: blocks.map((block, index) => {
       let digest = mapped[index];
-      let dictionaryDigest = block.dictionaryStart < block.start ? mapped[index - 1] : "none";
-      return digest === undefined || dictionaryDigest === undefined
+      let previousDigest = block.dictionaryStart < block.start ? mapped[index - 1] : "none";
+      return digest === undefined || previousDigest === undefined
         ? undefined
-        : `${level}:${dictionaryDigest}:${digest}`;
+        : `${level}:${previousDigest}:${digest}`;
     }),
   };
 }
-//@ chunk-rbe666af.js:5235-5269 placement
+//@ chunk-g8sg6xj8.js:4825-4860 placement
 function deflateChunkAsync(chunk, options) {
   return promisify(deflateRaw)(chunk, options);
 }
-//@ chunk-rbe666af.js:5269-5303 placement
+//@ chunk-g8sg6xj8.js:4860-4895 placement
 function inflateChunkAsync(chunk, options) {
   return promisify(inflateRaw)(chunk, options);
 }
-//@ chunk-rbe666af.js:5303-5457 placement
+//@ chunk-g8sg6xj8.js:4895-5050 placement
 function syncFlushOptions(body, block, level) {
   return {
     level,
@@ -318,7 +331,7 @@ function syncFlushOptions(body, block, level) {
     }),
   };
 }
-//@ chunk-rbe666af.js:5457-5525 placement
+//@ chunk-g8sg6xj8.js:5050-5118 placement
 function toGzipCheckError(error) {
   let fault = zlibErrorCode(error);
   return fault === undefined
@@ -327,15 +340,15 @@ function toGzipCheckError(error) {
         cause: error,
       });
 }
-//@ chunk-rbe666af.js:5525-5538 placement
+//@ chunk-g8sg6xj8.js:5118-5131 placement
 var Z_SYNC_FLUSH_MARKER = 65535;
-//@ chunk-rbe666af.js:5538-5693 placement
+//@ chunk-g8sg6xj8.js:5131-5286 placement
 function verifyInflatedBlock(chunk, deflated, inflated) {
   if (!inflated.equals(chunk)) throw new GzipBlockCheckError("inflates_to_other_bytes");
   if (deflated.length < 4 || deflated.readUInt32BE(deflated.length - 4) !== Z_SYNC_FLUSH_MARKER)
     throw new GzipBlockCheckError("no_flush_marker");
 }
-//@ chunk-rbe666af.js:5693-5878 placement
+//@ chunk-g8sg6xj8.js:5286-5471 placement
 function takeCachedBlock(store, key, lastUsedAt) {
   let entry = key === undefined ? undefined : store.blocks.get(key);
   if (key === undefined || entry === undefined) return;
@@ -346,7 +359,7 @@ function takeCachedBlock(store, key, lastUsedAt) {
   });
   return entry.compressed;
 }
-//@ chunk-rbe666af.js:5878-5971 placement
+//@ chunk-g8sg6xj8.js:5471-5564 placement
 function storeBlock(store, key, compressed, lastUsedAt) {
   let entry = {
     compressed,
@@ -355,7 +368,7 @@ function storeBlock(store, key, compressed, lastUsedAt) {
   store.blocks.set(key, entry);
   store.storedBytes += blockStoredSize(entry);
 }
-//@ chunk-rbe666af.js:5971-6151 placement
+//@ chunk-g8sg6xj8.js:5564-5744 placement
 function evictGzipBlocks(store, now) {
   for (let [key, entry] of store.blocks) {
     let overCapacity = store.storedBytes > store.maxStoredBytes;
@@ -365,7 +378,7 @@ function evictGzipBlocks(store, now) {
     if (overCapacity) store.evictedForSpaceCount++;
   }
 }
-//@ chunk-rbe666af.js:6151-6298 placement
+//@ chunk-g8sg6xj8.js:5744-5891 placement
 /**
  * 安排空闲一段时间后清空 gzip 块缓存（弱引用，不阻止退出）。
  */
@@ -383,15 +396,15 @@ function scheduleIdleDrop(store, clock) {
     },
   );
 }
-//@ chunk-rbe666af.js:6298-6341 placement
+//@ chunk-g8sg6xj8.js:5891-5935 placement
 function blockStoredSize(entry) {
   return BLOCK_OVERHEAD_BYTES + entry.compressed.length;
 }
-//@ chunk-rbe666af.js:6341-6373 placement
+//@ chunk-g8sg6xj8.js:5935-5967 placement
 function newWeakMap() {
   return new WeakMap();
 }
-//@ chunk-nmregrje.js:685-772 placement
+//@ chunk-g8sg6xj8.js:9345-9438 placement
 /**
  * 请求体 gzip 的两个开关（gentle_hammock / golden_popcorn）与尺寸/时窗常量：最小 4096 字符（ccr_worker 1024）、块遥测保留 7 天、序列化尾部 8192。
  */
@@ -401,7 +414,7 @@ var MIN_BODY_CHARS = 4096;
 var MIN_BODY_CHARS_CCR = 1024;
 var BLOCK_TELEMETRY_TTL_MS = 604800000;
 var MAX_SERIALISED_TAIL = 8192;
-//@ chunk-nmregrje.js:772-887 placement
+//@ chunk-g8sg6xj8.js:9438-9554 placement
 /**
  * 读取 gzip 压缩等级覆盖值（环境变量或开关，1–9 有效）。
  */
@@ -410,17 +423,17 @@ function gzipLevelOverride() {
     env.CLAUDE_CODE_GZIP_REQUEST_BODY_LEVEL ?? getFeatureValue_CACHED_MAY_BE_STALE(TENGU_GOLDEN_POPCORN, 0);
   return Number.isInteger(level) && level >= 1 && level <= 9 ? level : undefined;
 }
-//@ chunk-nmregrje.js:887-997 placement
+//@ chunk-g8sg6xj8.js:9554-9665 placement
 function gzipEnvSwitch(rollout) {
   return rollout === "ccr_worker"
     ? env.CLAUDE_CODE_GZIP_CCR_REQUEST_BODIES
     : env.CLAUDE_CODE_GZIP_REQUEST_BODIES;
 }
-//@ chunk-nmregrje.js:997-1039 placement
+//@ chunk-g8sg6xj8.js:9665-9710 placement
 function minBodyCharsFor(rollout) {
   return rollout === "ccr_worker" ? MIN_BODY_CHARS_CCR : MIN_BODY_CHARS;
 }
-//@ chunk-nmregrje.js:1039-1361 placement
+//@ chunk-g8sg6xj8.js:9710-10033 placement
 /**
  * 判断当前传输方式是否会阻碍请求体 gzip：Unix socket、代理、mTLS 或自定义 CA。
  */
@@ -441,20 +454,20 @@ function gzipBlockingTransport(url) {
   }
   return;
 }
-//@ chunk-nmregrje.js:1361-1456 placement
+//@ chunk-g8sg6xj8.js:10033-10128 placement
 /**
  * 导出函数 `isSerialisedBody`：参数 e，返回 Buffer.isBuffer(e) && Ws().gzipRequestBody.serialisedBodies.has(e.buffer)。
  */
 function isSerialisedBody(body) {
   return Buffer.isBuffer(body) && streamFallbackWarning().gzipRequestBody.serialisedBodies.has(body.buffer);
 }
-//@ chunk-nmregrje.js:1456-1555 placement
+//@ chunk-g8sg6xj8.js:10128-10228 placement
 function serialisedBodyInfo(body) {
   return Buffer.isBuffer(body)
     ? streamFallbackWarning().gzipRequestBody.serialisedBodies.get(body.buffer)
     : undefined;
 }
-//@ chunk-nmregrje.js:1555-1677 placement
+//@ chunk-g8sg6xj8.js:10228-10351 placement
 /**
  * 生成请求体复用遥测字段：复用的字符数与是否与 SDK 序列化结果核对过。
  */
@@ -467,21 +480,21 @@ function reuseTelemetry(body) {
         requestBodyComparedWithSdk: record.checked,
       };
 }
-//@ chunk-nmregrje.js:1677-1741 affinity
+//@ chunk-g8sg6xj8.js:10351-10416 affinity
 /**
  * 导出函数 `bodyCharCount`：参数 e，返回 typeof e === "string" ? e.length : x(e)?.chars。
  */
 function bodyCharCount(body) {
   return typeof body === "string" ? body.length : serialisedBodyInfo(body)?.chars;
 }
-//@ chunk-nmregrje.js:1805-1857 placement
+//@ chunk-g8sg6xj8.js:10481-10534 placement
 /**
  * 导出函数 `wouldGzipForHost`：参数 e, n, r，返回 isFirstPartyAnthropicHost(e) && decideGzip(e, 1 / 0, n, r).gzip。
  */
 function wouldGzipForHost(url, storage, rollout) {
   return isFirstPartyAnthropicHost(url) && decideGzip(url, 1 / 0, storage, rollout).gzip;
 }
-//@ chunk-nmregrje.js:1857-2481 placement
+//@ chunk-g8sg6xj8.js:10534-11163 placement
 /**
  * 判定请求体是否 gzip：env 关闭、非 Bun、非字符串、太小时不压；env 强开时只看本进程是否被拒过；unix socket/代理/mTLS/自定义 CA 时不压；ccr_worker 需开关；已锁存关闭时不压。返回 {gzip, reason, bodyChars}。
  */
@@ -546,7 +559,7 @@ function decideGzip(url, bodyChars, storage, rollout) {
     bodyChars,
   };
 }
-//@ chunk-nmregrje.js:2481-2824 placement
+//@ chunk-g8sg6xj8.js:11163-11511 placement
 /**
  * gzip 请求体相关的结构与常量：API 错误结构、闩锁记录、拒绝原因、表示服务端无法解析 JSON 的消息与正则。
  */
@@ -555,7 +568,7 @@ var LATCH_SCHEMA;
 var PROXY_ERROR_SCHEMA;
 var INVALID_JSON_MESSAGES;
 var BAD_JSON_PATTERN;
-deferInit("chunk-nmregrje.js:2481", () => {
+deferInit("chunk-g8sg6xj8.js:11163", () => {
   API_ERROR_SCHEMA = DoctorLazy(() =>
     objectSchema({
       type: literal("error"),
@@ -583,7 +596,7 @@ deferInit("chunk-nmregrje.js:2481", () => {
   ];
   BAD_JSON_PATTERN = /^bad json: (?:invalid character |unexpected EOF$|unexpected end of JSON input$|EOF$)/;
 });
-//@ chunk-nmregrje.js:2824-2917 placement
+//@ chunk-g8sg6xj8.js:11511-11605 placement
 function responseFacts(response) {
   return {
     status: response.status,
@@ -591,11 +604,11 @@ function responseFacts(response) {
     bodyText: () => readBodyPrefix(response),
   };
 }
-//@ chunk-nmregrje.js:2917-3015 placement
+//@ chunk-g8sg6xj8.js:11605-11704 placement
 function isAnthropicRejection(facts) {
   return (facts.header("request-id")?.startsWith("req_") ?? false) || facts.header("cf-ray") !== undefined;
 }
-//@ chunk-nmregrje.js:3015-3291 placement
+//@ chunk-g8sg6xj8.js:11704-11982 placement
 async function readBodyPrefix(response) {
   let reader = response.clone().body?.getReader();
   if (!reader) return "";
@@ -618,7 +631,7 @@ async function readBodyPrefix(response) {
   }
   return text;
 }
-//@ chunk-nmregrje.js:3291-3537 placement
+//@ chunk-g8sg6xj8.js:11982-12234 placement
 function isInvalidJsonRejection(bodyText) {
   let parsed;
   try {
@@ -636,14 +649,14 @@ function isInvalidJsonRejection(bodyText) {
     BAD_JSON_PATTERN.test(proxyParsed.data.error)
   );
 }
-//@ chunk-nmregrje.js:3537-3744 placement
+//@ chunk-g8sg6xj8.js:12234-12443 placement
 async function classifyGzipRejection(facts) {
   if (facts.status !== 400 && facts.status !== 403 && facts.status !== 415) return null;
   if (!isAnthropicRejection(facts)) return "non_anthropic_rejection";
   if (facts.status === 400 && isInvalidJsonRejection(await facts.bodyText())) return "invalid_json_at_origin";
   return null;
 }
-//@ chunk-nmregrje.js:3744-3801 placement
+//@ chunk-g8sg6xj8.js:12443-12500 placement
 /**
  * 导出函数 `classifyRejectionOf`：参数 e，返回 null; return classifyGzipRejection(q(e))。
  */
@@ -651,12 +664,12 @@ async function classifyRejectionOf(response) {
   if (response.ok) return null;
   return classifyGzipRejection(responseFacts(response));
 }
-//@ chunk-nmregrje.js:3801-3950 placement
+//@ chunk-g8sg6xj8.js:12500-12649 placement
 async function classifyResend(facts) {
   if ((await classifyGzipRejection(facts)) !== null) return "same_rejection";
   return facts.header("request-id")?.startsWith("req_") ? "api_response" : "not_api_response";
 }
-//@ chunk-nmregrje.js:3950-4115 placement
+//@ chunk-g8sg6xj8.js:12649-12815 placement
 function readPersistedLatch() {
   let raw;
   try {
@@ -668,7 +681,7 @@ function readPersistedLatch() {
   let parsed = LATCH_SCHEMA().safeParse(raw);
   return parsed.success ? parsed.data : "malformed";
 }
-//@ chunk-nmregrje.js:4115-4317 placement
+//@ chunk-g8sg6xj8.js:12815-13019 placement
 function clearPersistedLatch(latchedAt, storage) {
   saveGlobalConfig((current) => {
     let parsed = LATCH_SCHEMA().safeParse(current.gzipRequestBodiesLatchedOff);
@@ -682,7 +695,7 @@ function clearPersistedLatch(latchedAt, storage) {
       : current;
   }, storage);
 }
-//@ chunk-nmregrje.js:4317-4899 placement
+//@ chunk-g8sg6xj8.js:13019-13604 placement
 /**
  * 检查 gzip 是否已锁存关闭：本进程已关则是；否则读一次全局配置里的持久锁存，未过期则生效，格式错误或过期则清除并记事件。
  */
@@ -715,14 +728,14 @@ function isGzipLatchedOff(storage) {
   });
   return false;
 }
-//@ chunk-nmregrje.js:4899-5007 placement
+//@ chunk-g8sg6xj8.js:13604-13712 placement
 function latchOffThisProcess() {
   let gzipRequestBody = streamFallbackWarning().gzipRequestBody;
   gzipRequestBody.latchedOff = true;
   gzipRequestBody.rejectedThisProcess = true;
   gzipRequestBody.persistedLatchChecked = true;
 }
-//@ chunk-nmregrje.js:5007-5304 placement
+//@ chunk-g8sg6xj8.js:13712-14011 placement
 function latchGzipOff({ persist, status, storageV5, rollout = "api" }) {
   latchOffThisProcess();
   let gzipRequestBody = streamFallbackWarning().gzipRequestBody;
@@ -741,7 +754,7 @@ function latchGzipOff({ persist, status, storageV5, rollout = "api" }) {
   }
   return gzipRequestBody.persistedLatchInEffect ? "persisted" : "process";
 }
-//@ chunk-nmregrje.js:5304-5848 placement
+//@ chunk-g8sg6xj8.js:14011-14556 placement
 /**
  * 按投放范围（api、ccr_worker、frame_publish）记录 gzip 请求体特性结果：回退记一次负面，成功每进程只记一次。
  */
@@ -763,14 +776,14 @@ function logGzipFeature(rollout, outcome) {
       return;
   }
 }
-//@ chunk-nmregrje.js:5848-5882 placement
+//@ chunk-g8sg6xj8.js:14556-14591 placement
 /**
  * 导出函数 `logGzipSent`：参数 e = "api"。
  */
 function logGzipSent(rollout = "api") {
   logGzipFeature(rollout, "sent");
 }
-//@ chunk-nmregrje.js:5882-6122 placement
+//@ chunk-g8sg6xj8.js:14591-14831 placement
 function logCcrSkipReason(rollout, skip) {
   if (rollout !== "ccr_worker") return;
   let ccrWorkerSkipReasonsLogged = streamFallbackWarning().gzipRequestBody.ccrWorkerSkipReasonsLogged;
@@ -782,7 +795,7 @@ function logCcrSkipReason(rollout, skip) {
     requestBodyChars: skip.bodyChars,
   });
 }
-//@ chunk-nmregrje.js:6122-6601 placement
+//@ chunk-g8sg6xj8.js:14831-15312 placement
 /**
  * 记录 gzip 请求体被拒后回退为未压缩重发的情况：调试日志与 tengu_gzip_request_body_fallback 遥测（拒绝类别、状态码、重发结果、是否闩锁关闭）。
  */
@@ -814,7 +827,7 @@ function logGzipFallback({
     requestBodyChars: bodyChars,
   });
 }
-//@ chunk-nmregrje.js:6601-7182 placement
+//@ chunk-g8sg6xj8.js:15312-15898 placement
 /**
  * gzip 请求被拒后以未压缩方式重发：记录拒绝原因与重发结果，必要时持久锁存关闭（非 Anthropic 拒绝且重发成功），返回重发响应。
  */
@@ -869,7 +882,7 @@ async function resendUncompressed({
   });
   return retried;
 }
-//@ chunk-nmregrje.js:7182-7798 placement
+//@ chunk-g8sg6xj8.js:15898-16515 placement
 /**
  * 检查 gzip 请求的响应是否为拒绝：是则锁存关闭、取消原响应、更新遥测，并以原始请求体重发。
  */
@@ -916,7 +929,7 @@ async function retryRejectedGzipRequest({
     rollout,
   });
 }
-//@ chunk-nmregrje.js:7798-8040 placement
+//@ chunk-g8sg6xj8.js:16515-16758 placement
 /**
  * Artifact 帧发布时检查 gzip 是否被拒，被拒则以未压缩身份重发并处理闩锁，否则原样返回响应。
  */
@@ -944,7 +957,7 @@ async function handleFrameGzipRejection({
     rollout,
   });
 }
-//@ chunk-nmregrje.js:8040-8326 placement
+//@ chunk-g8sg6xj8.js:16758-17044 placement
 /**
  * 生成带 gzip 压缩的 fetch 包装：符合条件时压缩请求体并加水印，被拒时自动回退重发。
  */
@@ -973,14 +986,14 @@ function createGzipFetchWrapper(rollout, storage) {
     });
   };
 }
-//@ chunk-nmregrje.js:8326-8401 placement
+//@ chunk-g8sg6xj8.js:17044-17119 placement
 /**
  * 导出函数 `recordGzipBlockTelemetry`：参数 e, n。
  */
 function recordGzipBlockTelemetry(clientRequestId, telemetry) {
   streamFallbackWarning().gzipRequestBody.telemetryByClientRequestId.set(clientRequestId, telemetry);
 }
-//@ chunk-nmregrje.js:8401-8647 placement
+//@ chunk-g8sg6xj8.js:17119-17365 placement
 /**
  * 请求体按块 gzip 被拒时，把该请求的遥测记录标记为 rejected。
  */
@@ -1000,14 +1013,14 @@ function markGzipBlocksRejected(clientRequestId, blocks) {
         : blocks,
   });
 }
-//@ chunk-nmregrje.js:8647-8723 placement
+//@ chunk-g8sg6xj8.js:17365-17441 placement
 /**
  * 导出函数 `takeDispatchAtGzip`：参数 e, n。
  */
 function takeDispatchAtGzip(clientRequestId, at) {
   streamFallbackWarning().gzipRequestBody.dispatchAtByClientRequestId.set(clientRequestId, at);
 }
-//@ chunk-nmregrje.js:8723-8847 placement
+//@ chunk-g8sg6xj8.js:17441-17565 placement
 /**
  * 取出并删除某个客户端请求 id 记录的分派时间。
  */
@@ -1018,7 +1031,7 @@ function takeDispatchAt(clientRequestId) {
   dispatchAtByClientRequestId.delete(clientRequestId);
   return at;
 }
-//@ chunk-nmregrje.js:8847-8970 placement
+//@ chunk-g8sg6xj8.js:17565-17688 placement
 /**
  * 取出并删除某个客户端请求 id 的 gzip 遥测记录。
  */
@@ -1029,7 +1042,7 @@ function takeGzipTelemetry(clientRequestId) {
   telemetryByClientRequestId.delete(clientRequestId);
   return telemetry;
 }
-//@ chunk-nmregrje.js:8970-10369 placement
+//@ chunk-g8sg6xj8.js:17688-19087 placement
 /**
  * 把 gzip 请求体遥测（编码、字符数、级别、准备耗时、块复用、跳过原因、回退状态等）展开为日志字段。
  */
@@ -1079,16 +1092,17 @@ function gzipTelemetryFields(telemetry) {
     }),
   };
 }
-//@ chunk-nmregrje.js:10369-10378 placement
+//@ chunk-g8sg6xj8.js:19087-19096 placement
 // deferred: uses swapWatermark (../analytics/eventSerialization.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-nmregrje.js:10369", () => {
+deferInit("chunk-g8sg6xj8.js:19087", () => {
   swapWatermark(ANT_KEY_PFX);
 });
-//@ chunk-hwmsct5x.js:241035-241246 placement
+//@ chunk-vn3g7zt8.js:244606-244844 placement
 /**
- * 请求体 gzip/复用校验按块进行所需的最小体积（512 KB）、大响应体标记与开关参数（gzip 等级 6、块并发 1000、不压的查询来源、抽样率 0.1）。
+ * 按块计算 gzip 请求体各块摘要并复用上次摘要（carriedDigestCount），用于块缓存键。
  */
 var TENGU_BUZZING_PIKE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var blockDigestKeys;
 var MIN_CHARS_FOR_REUSE_CHECK;
 var LARGE_BODY_MARKERS;
 var MARKER_SEARCH_TAIL_CHARS;
@@ -1096,8 +1110,9 @@ var DEFAULT_GZIP_LEVEL;
 var BLOCK_CONCURRENCY;
 var NO_GZIP_QUERY_SOURCES;
 var REUSE_MISMATCH_SAMPLE_RATE;
-deferInit("chunk-hwmsct5x.js:241035", () => {
+deferInit("chunk-vn3g7zt8.js:244606", () => {
   TENGU_BUZZING_PIKE = "tengu_buzzing_pike";
+  blockDigestKeys = "tengu_starry_crescent";
   MIN_CHARS_FOR_REUSE_CHECK = 524288;
   LARGE_BODY_MARKERS = ['"thread":{"type":"create"}', '"thread":{"type":"continue",', '"speed":"fast"'];
   MARKER_SEARCH_TAIL_CHARS = 4096;
@@ -1106,22 +1121,32 @@ deferInit("chunk-hwmsct5x.js:241035", () => {
   NO_GZIP_QUERY_SOURCES = new Set(["extract_memories", "prompt_suggestion", "compact"]);
   REUSE_MISMATCH_SAMPLE_RATE = 0.1;
 });
-//@ chunk-hwmsct5x.js:241246-241389 placement
+//@ chunk-vn3g7zt8.js:244844-245092 placement
 function gzipTelemetryExtras(info) {
   return {
+    ...(info.cutNearToolsEndFlagOn && {
+      cut_near_tools_end_flag_on: true,
+    }),
     incremental_request_body: info.incrementalRequestBody === true,
+    ...(info.keptForSubagent && {
+      kept_for_subagent: true,
+    }),
     ...(info.carriedDigests !== undefined && {
       carried_digests: info.carriedDigests,
     }),
   };
 }
-//@ chunk-hwmsct5x.js:241389-241482 placement
+//@ chunk-vn3g7zt8.js:245092-245185 placement
 function getGzipRequestBodyBlocksMode() {
   let decision =
     env.CLAUDE_CODE_GZIP_REQUEST_BODY_BLOCKS ?? getFeatureValue_CACHED_MAY_BE_STALE(TENGU_BUZZING_PIKE, 0);
   return decision === 1 || decision === 2 ? decision : 0;
 }
-//@ chunk-hwmsct5x.js:241482-241585 placement
+//@ chunk-vn3g7zt8.js:245185-245220 layout
+function isBlockDigestKeysOn() {
+  return getFeatureValue_CACHED_MAY_BE_STALE(blockDigestKeys, false) === true;
+}
+//@ chunk-vn3g7zt8.js:245220-245323 placement
 function isMessagesEndpoint(url) {
   try {
     return new URL(requestMethodAndUrl(url, undefined).url).pathname.endsWith("/v1/messages");
@@ -1129,7 +1154,7 @@ function isMessagesEndpoint(url) {
     return false;
   }
 }
-//@ chunk-hwmsct5x.js:241585-241774 placement
+//@ chunk-vn3g7zt8.js:245323-245512 placement
 function shouldGzipRequestBody(body) {
   let body_2 = body?.body;
   return (
@@ -1144,7 +1169,7 @@ function shouldGzipRequestBody(body) {
     )
   );
 }
-//@ chunk-hwmsct5x.js:241774-243558 placement
+//@ chunk-vn3g7zt8.js:245512-247457 placement
 /**
  * 请求体 gzip 分块压缩：按会话开关决定整体/分块/关闭，构建增量块存储并在响应后自检。
  */
@@ -1160,20 +1185,25 @@ async function prepareGzipRequestBody(init, clock = systemClock) {
       init,
     };
   let body = init.body;
-  let baseTelemetry =
+  let gzipRequestBody = streamFallbackWarning();
+  let gzipRequestBody_2 = gzipRequestBody.gzipRequestBody;
+  let blockStore = gzipRequestBody_2.blockStore;
+  let keptBody = typeof body === "string" ? undefined : findKeptBody(blockStore, body);
+  let clock_2 =
     typeof body === "string"
       ? {}
       : {
           incrementalRequestBody: true,
+          ...(keptBody !== undefined &&
+            keptBody !== blockStore.keptBody && {
+              keptForSubagent: true,
+            }),
         };
-  let telemetry = baseTelemetry;
-  let gzipState = streamFallbackWarning();
-  let gzipRequestBody = gzipState.gzipRequestBody;
-  let blockStore = gzipRequestBody.blockStore;
+  let telemetry = clock_2;
   let headers = new Headers(init.headers);
   let clientRequestId = headers.get(CLIENT_REQUEST_ID_HEADER);
   let gzipRequestBodyBlocksMode = getGzipRequestBodyBlocksMode();
-  if (gzipRequestBodyBlocksMode === 0 || gzipRequestBody.blocksSwitchedOff) {
+  if (gzipRequestBodyBlocksMode === 0 || gzipRequestBody_2.blocksSwitchedOff) {
     markGzipBlocksRejected(clientRequestId, {
       mode: gzipRequestBodyBlocksMode,
       outcome: gzipRequestBodyBlocksMode === 0 ? "off" : "switched_off",
@@ -1183,7 +1213,7 @@ async function prepareGzipRequestBody(init, clock = systemClock) {
     };
   }
   let previousTelemetry =
-    clientRequestId === null ? undefined : gzipRequestBody.telemetryByClientRequestId.get(clientRequestId);
+    clientRequestId === null ? undefined : gzipRequestBody_2.telemetryByClientRequestId.get(clientRequestId);
   let shouldReportAfterResponse = !(
     previousTelemetry?.requestBodyEncoding === "gzip" &&
     previousTelemetry.querySource !== undefined &&
@@ -1197,7 +1227,7 @@ async function prepareGzipRequestBody(init, clock = systemClock) {
     return {
       init,
       ...(shouldReportAfterResponse && {
-        afterResponse: onGzipBlocksBuilt(gzipRequestBody, clock, body, level, baseTelemetry),
+        afterResponse: onGzipBlocksBuilt(gzipRequestBody_2, clock, body, level, clock_2),
       }),
     };
   }
@@ -1212,15 +1242,22 @@ async function prepareGzipRequestBody(init, clock = systemClock) {
   };
   let startTime = performance.now();
   try {
-    let blockPlan = planGzipBlocks({
+    let cutNearToolsEndFlagOn = isBlockDigestKeysOn();
+    if (cutNearToolsEndFlagOn)
+      telemetry = {
+        ...telemetry,
+        cutNearToolsEndFlagOn: true,
+      };
+    let blockPlan = planBlockStore({
       body: typeof body === "string" ? Buffer.from(body) : body,
       level,
       store: blockStore,
       clock,
+      cutNearToolsEnd: cutNearToolsEndFlagOn,
     });
-    if (baseTelemetry.incrementalRequestBody)
+    if (clock_2.incrementalRequestBody)
       telemetry = {
-        ...baseTelemetry,
+        ...telemetry,
         carriedDigests: blockPlan.carriedDigestCount,
       };
     let reuseSavesSpace = blockPlan.reusedBytes * 2 < blockPlan.body.length;
@@ -1229,9 +1266,9 @@ async function prepareGzipRequestBody(init, clock = systemClock) {
         ? undefined
         : await assembleGzipBody(blockPlan, blockStore, clock, {
             signal: init.signal ?? undefined,
-            stopIf: () => gzipRequestBody.blocksSwitchedOff !== false,
+            stopIf: () => gzipRequestBody_2.blocksSwitchedOff !== false,
           });
-    if (gzipRequestBody.blocksSwitchedOff) return rejectSwitchedOff();
+    if (gzipRequestBody_2.blocksSwitchedOff) return rejectSwitchedOff();
     markGzipBlocksRejected(clientRequestId, {
       mode: gzipRequestBodyBlocksMode,
       outcome: gzippedBody === undefined ? "by_runtime" : "as_blocks",
@@ -1250,10 +1287,10 @@ async function prepareGzipRequestBody(init, clock = systemClock) {
         init,
         ...(shouldReportAfterResponse &&
           needsBodyAssembly(blockPlan) && {
-            afterResponse: onGzipBlocksBuilt(gzipRequestBody, clock, body, level, baseTelemetry),
+            afterResponse: onGzipBlocksBuilt(gzipRequestBody_2, clock, body, level, clock_2),
           }),
       };
-    if (gzipState.once("gzip_request_body_blocks_ok")) logFeatureOk("api_gzip_request_body_blocks");
+    if (gzipRequestBody.once("gzip_request_body_blocks_ok")) logFeatureOk("api_gzip_request_body_blocks");
     headers.set("Content-Encoding", "gzip");
     let { compress, ...initWithoutCompress } = init;
     return {
@@ -1262,16 +1299,16 @@ async function prepareGzipRequestBody(init, clock = systemClock) {
         headers,
         body: gzippedBody,
       },
-      afterResponse: scheduleGzipSelfCheck(gzipRequestBody, clock, gzippedBody, telemetry),
+      afterResponse: scheduleGzipSelfCheck(gzipRequestBody_2, clock, gzippedBody, telemetry),
     };
   } catch (error) {
     if (init.signal?.aborted)
       return {
         init,
       };
-    if (gzipRequestBody.blocksSwitchedOff && !(error instanceof GzipBlockCheckError))
+    if (gzipRequestBody_2.blocksSwitchedOff && !(error instanceof GzipBlockCheckError))
       return rejectSwitchedOff();
-    reportGzipBlockFailure(error, gzipRequestBody, "failed", telemetry);
+    reportGzipBlockFailure(error, gzipRequestBody_2, "failed", telemetry);
     markGzipBlocksRejected(clientRequestId, {
       mode: gzipRequestBodyBlocksMode,
       outcome: "failed",
@@ -1281,7 +1318,7 @@ async function prepareGzipRequestBody(init, clock = systemClock) {
     };
   }
 }
-//@ chunk-hwmsct5x.js:243558-244092 placement
+//@ chunk-vn3g7zt8.js:247457-247991 placement
 async function handleGzipRejectedResponse(response, resend) {
   let gzipRequestBody = streamFallbackWarning().gzipRequestBody;
   let blocks = gzipRequestBody.blockGzippedResponses.get(response);
@@ -1317,7 +1354,7 @@ async function handleGzipRejectedResponse(response, resend) {
     });
   }
 }
-//@ chunk-hwmsct5x.js:244092-244287 placement
+//@ chunk-vn3g7zt8.js:247991-248186 placement
 function switchOffGzipBlocks(body, blocksSwitchedOff, blocks) {
   if (body.blocksSwitchedOff !== "for_the_session") body.blocksSwitchedOff = blocksSwitchedOff;
   clearGzipBlockStore(body.blockStore);
@@ -1325,7 +1362,7 @@ function switchOffGzipBlocks(body, blocksSwitchedOff, blocks) {
     level: "warn",
   });
 }
-//@ chunk-hwmsct5x.js:244287-244693 placement
+//@ chunk-vn3g7zt8.js:248186-248617 placement
 function reportGzipBlockFailure(error, status, capability, blocks) {
   logError(error);
   if (error instanceof GzipBlockCheckError) {
@@ -1343,35 +1380,36 @@ function reportGzipBlockFailure(error, status, capability, blocks) {
     logFeatureSad(
       "api_gzip_request_body_blocks",
       capability,
-      ...(blocks.incrementalRequestBody ? [blocks] : []),
+      ...(blocks.incrementalRequestBody || blocks.cutNearToolsEndFlagOn ? [blocks] : []),
     );
   }
 }
-//@ chunk-hwmsct5x.js:244693-245303 placement
+//@ chunk-vn3g7zt8.js:248617-249280 placement
 function onGzipBlocksBuilt(status, store, body, level, clock) {
   let blockStore = status.blockStore;
   let { generation } = blockStore;
   return (onBlocks) => {
     if (!onBlocks?.ok || status.blocksBuildGeneration === generation) return;
     let result =
-      typeof body !== "string" && body.buffer === blockStore.keptBody?.memory.buffer
-        ? Buffer.from(body)
-        : body;
+      typeof body !== "string" && findKeptBody(blockStore, body) !== undefined ? Buffer.from(body) : body;
     status.blocksBuildGeneration = generation;
     store.setTimeout(
       async () => {
+        let cutNearToolsEnd = false;
         try {
           if (
             !status.blocksSwitchedOff &&
             getGzipRequestBodyBlocksMode() !== 0 &&
             blockStore.generation === generation
-          )
+          ) {
+            cutNearToolsEnd = isBlockDigestKeysOn();
             await gzipRequestBody(
-              planGzipBlocks({
+              planBlockStore({
                 body: typeof result === "string" ? Buffer.from(result) : result,
                 level,
                 store: blockStore,
                 clock: store,
+                cutNearToolsEnd,
               }),
               blockStore,
               store,
@@ -1380,9 +1418,15 @@ function onGzipBlocksBuilt(status, store, body, level, clock) {
                 stopIf: () => status.blocksSwitchedOff !== false,
               },
             );
+          }
         } catch (error) {
           if (!status.blocksSwitchedOff || error instanceof GzipBlockCheckError)
-            reportGzipBlockFailure(error, status, "build_failed", clock);
+            reportGzipBlockFailure(error, status, "build_failed", {
+              ...clock,
+              ...(cutNearToolsEnd && {
+                cutNearToolsEndFlagOn: true,
+              }),
+            });
         } finally {
           if (status.blocksBuildGeneration === generation) status.blocksBuildGeneration = undefined;
         }
@@ -1394,7 +1438,7 @@ function onGzipBlocksBuilt(status, store, body, level, clock) {
     );
   };
 }
-//@ chunk-hwmsct5x.js:245303-245888 placement
+//@ chunk-vn3g7zt8.js:249280-249865 placement
 function scheduleGzipSelfCheck(gzipRequestBody, store, blocks, extras) {
   return (onChecked) => {
     if (onChecked !== undefined) gzipRequestBody.blockGzippedResponses.set(onChecked, extras);
@@ -1432,30 +1476,30 @@ function scheduleGzipSelfCheck(gzipRequestBody, store, blocks, extras) {
     );
   };
 }
-//@ chunk-hwmsct5x.js:245888-245982 placement
+//@ chunk-vn3g7zt8.js:249865-249959 placement
 function isTransientFailure(status) {
   return (
     status === undefined ||
     (status.status >= 400 && status.status < 500 && status.status !== 401 && status.status !== 429)
   );
 }
-//@ chunk-hwmsct5x.js:245982-246098 placement
+//@ chunk-vn3g7zt8.js:249959-250075 placement
 function gzipLevelOf(compress) {
   if (compress === "gzip") return DEFAULT_GZIP_LEVEL;
   return typeof compress === "object" && compress !== null && compress.encoding === "gzip"
     ? (compress.level ?? DEFAULT_GZIP_LEVEL)
     : undefined;
 }
-//@ chunk-hwmsct5x.js:246098-246171 placement
+//@ chunk-vn3g7zt8.js:250075-250148 placement
 var routeFinalAnswerState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var X_CLAUDE_CODE_ROUTE_FINAL_ANSWER;
-deferInit("chunk-hwmsct5x.js:246098", () => {
+deferInit("chunk-vn3g7zt8.js:250075", () => {
   routeFinalAnswerState = new HostScoped(() => ({
     route: undefined,
   }));
   X_CLAUDE_CODE_ROUTE_FINAL_ANSWER = "x-claude-code-route-final-answer";
 });
-//@ chunk-hwmsct5x.js:246171-246242 placement
+//@ chunk-vn3g7zt8.js:250148-250219 placement
 function isRoutedFinalAnswerError(error) {
   return (
     error instanceof APIError &&
@@ -1463,11 +1507,30 @@ function isRoutedFinalAnswerError(error) {
     hasFinalAnswerRoute()
   );
 }
-//@ chunk-hwmsct5x.js:246242-246295 placement
+//@ chunk-vn3g7zt8.js:250219-250441 layout
+class RouteTurnError extends Error {
+  status;
+  retryAfter;
+  name = "RouteTurnedAwayError";
+  code = "RouteTurnedAway";
+  constructor(status, retryAfter, cause) {
+    super("the request was turned away before any work was done on it", {
+      cause,
+    });
+    this.status = status;
+    this.retryAfter = retryAfter;
+  }
+}
+//@ chunk-vn3g7zt8.js:250441-250522 layout
+function findRouteTurnError(error) {
+  let inCauseChain = findInCauseChain(error, (cause) => cause instanceof RouteTurnError);
+  return inCauseChain instanceof RouteTurnError ? inCauseChain : undefined;
+}
+//@ chunk-vn3g7zt8.js:250522-250575 placement
 function hasFinalAnswerRoute() {
   return routeFinalAnswerState.of(getRootSession().host).route !== undefined;
 }
-//@ chunk-hwmsct5x.js:246295-246577 placement
+//@ chunk-vn3g7zt8.js:250575-250857 placement
 /**
  * API 客户端 fetch 包装：优先走注入的 route，再按需对请求体做 gzip 分块压缩。
  */
@@ -1495,13 +1558,23 @@ async function fetchWithRequestBodyCompression(input, init) {
   }
 }
 export {
+  getGzipRequestBodyBlocksMode,
+  findRouteTurnError,
+  takeDispatchAtGzip,
+  wouldGzipForHost,
   createGzipFetchWrapper,
   decideGzip,
   bodyCharCount,
-  takeDispatchAtGzip,
-  fetchWithRequestBodyCompression,
+  newWeakMap,
+  createBlockCache,
   clearGzipBlockStore,
+  gzipTelemetryFields,
+  takeGzipTelemetry,
   isRoutedFinalAnswerError,
+  fetchWithRequestBodyCompression,
+  hasFinalAnswerRoute,
+  scheduleIdleDrop,
+  findKeptBody,
   isMessagesEndpoint,
   isSerialisedBody,
   takeDispatchAt,
@@ -1511,13 +1584,5 @@ export {
   recordGzipBlockTelemetry,
   handleGzipRejectedResponse,
   retryRejectedGzipRequest,
-  gzipTelemetryFields,
-  takeGzipTelemetry,
-  getGzipRequestBodyBlocksMode,
-  hasFinalAnswerRoute,
-  scheduleIdleDrop,
-  newWeakMap,
-  createBlockCache,
   handleFrameGzipRejection,
-  wouldGzipForHost,
 };

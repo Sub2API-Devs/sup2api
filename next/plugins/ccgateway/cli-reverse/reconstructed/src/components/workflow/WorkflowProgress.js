@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工作流运行进度显示（阶段、子代理行、汇总）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xvcy52fk.js (43)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g916dfgc.js (43)
  * attribution: placement 43
  */
 import {
@@ -30,7 +30,7 @@ import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { formatTokens, formatDuration, truncateToWidth, formatBarElapsed } from "../../utils/format.js";
 import { plural, collapseWhitespace } from "../../utils/stringUtils.js";
 import { StatusIcon } from "../design-system/StatusIcon.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { getBrailleSpinnerFrames } from "../../../vendor/chart.js/dist/chart.js";
@@ -40,43 +40,45 @@ import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useScrollViewportSize, useHasScrollViewport } from "../ScrollViewportContext.js";
 import { isFullscreenActive } from "../../utils/fullscreen.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
+import { isStopReason } from "../../tasks/LocalWorkflowTask/workflowStopReasons.js";
 import { parseWorkflowScript } from "../../services/workflows/workflowScriptMeta.js";
 import { isTerminalTaskStatus } from "../../tasks/taskStatus.js";
 import { pausedUsageLine } from "../../utils/usageLimitText.js";
+import { hasStartedOrQueued } from "../../tasks/LocalWorkflowTask/LocalWorkflowTask.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-xvcy52fk.js:918-922 placement
+//@ chunk-g916dfgc.js:959-963 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-xvcy52fk.js:918", () => {
+deferInit("chunk-g916dfgc.js:959", () => {
   init_react_production();
 });
-//@ chunk-xvcy52fk.js:922-1045 placement
+//@ chunk-g916dfgc.js:963-1086 placement
 function modelTransitionText(id, id_2) {
   let formatModel = (id) => getMarketingNameForModel(id) ?? displayModelName(id);
   if (id_2 != null) return `${id == null ? "" : `${formatModel(id)} `}${RIGHT_ARROW} ${formatModel(id_2)}`;
   return id != null ? formatModel(id) : "";
 }
-//@ chunk-xvcy52fk.js:1045-1086 placement
+//@ chunk-g916dfgc.js:1086-1127 placement (2.1.88 match: AGENT_VERB, 0.386)
 function isDoneState(agent) {
   return agent.state === "done";
 }
-//@ chunk-xvcy52fk.js:1086-1128 placement
+//@ chunk-g916dfgc.js:1127-1169 placement
 function isErrorState(agent) {
   return agent.state === "error";
 }
-//@ chunk-xvcy52fk.js:1128-1193 placement
+//@ chunk-g916dfgc.js:1169-1234 placement
 function isRunningStep(member) {
   return member.state === "start" || member.state === "progress";
 }
-//@ chunk-xvcy52fk.js:1193-1232 placement
+//@ chunk-g916dfgc.js:1234-1273 placement
 function isDoneStep(member) {
   return member.state === "done";
 }
-//@ chunk-xvcy52fk.js:1232-1272 placement
+//@ chunk-g916dfgc.js:1273-1313 placement
 function isErrorStep(member) {
   return member.state === "error";
 }
-//@ chunk-xvcy52fk.js:1272-1328 placement
+//@ chunk-g916dfgc.js:1313-1369 placement
 function renderDimText(children, key) {
   return jsxProd_default(
     Text,
@@ -87,7 +89,7 @@ function renderDimText(children, key) {
     key,
   );
 }
-//@ chunk-xvcy52fk.js:1328-1642 placement
+//@ chunk-g916dfgc.js:1369-1683 placement
 function collectWorkflowProgress(events) {
   let agentByIndex = new Map();
   let logs = [];
@@ -106,7 +108,7 @@ function collectWorkflowProgress(events) {
     phaseTitles: phaseTitleByIndex,
   };
 }
-//@ chunk-xvcy52fk.js:1642-1950 placement
+//@ chunk-g916dfgc.js:1683-1991 placement
 function groupAgentsByPhase(agents, phaseTitles) {
   if (!agents.some((agent) => agent.phaseIndex != null)) return null;
   let groupByPhase = new Map();
@@ -127,7 +129,7 @@ function groupAgentsByPhase(agents, phaseTitles) {
   }
   return [...groupByPhase.values()].sort((groupA, groupB) => groupA.phaseIndex - groupB.phaseIndex);
 }
-//@ chunk-xvcy52fk.js:1950-3756 placement
+//@ chunk-g916dfgc.js:1991-3797 placement
 function WorkflowAgentRow(props) {
   let $ = useMemoCache(31);
   let { row, isLast } = props;
@@ -267,7 +269,7 @@ function WorkflowAgentRow(props) {
   } else rowElement = $[30];
   return rowElement;
 }
-//@ chunk-xvcy52fk.js:3756-5648 placement
+//@ chunk-g916dfgc.js:3797-5689 placement
 function WorkflowPhaseGroup(props) {
   let $ = useMemoCache(41);
   let { group, verbose, width } = props;
@@ -443,9 +445,9 @@ function WorkflowPhaseGroup(props) {
   } else groupElement = $[40];
   return groupElement;
 }
-//@ chunk-xvcy52fk.js:5648-5657 placement
+//@ chunk-g916dfgc.js:5689-5698 placement
 var WORKFLOW_ROW_HEIGHT = 8;
-//@ chunk-xvcy52fk.js:5657-6778 placement
+//@ chunk-g916dfgc.js:5698-6819 placement
 function WorkflowAgentList(props) {
   let $ = useMemoCache(26);
   let { agents, verbose } = props;
@@ -460,12 +462,12 @@ function WorkflowAgentList(props) {
   let hiddenCount = agents.length - visibleAgents_.length;
   let doneCount;
   if ($[3] !== agents) {
-    doneCount = count(agents, isDoneStep);
+    doneCount = countWhere(agents, isDoneStep);
     $[3] = agents;
     $[4] = doneCount;
   } else doneCount = $[4];
   let doneCount_ = doneCount;
-  let errorCount = count(agents, isErrorStep);
+  let errorCount = countWhere(agents, isErrorStep);
   const totalCount = agents.length;
   let agentLabel;
   if ($[5] !== agents.length) {
@@ -544,7 +546,7 @@ function WorkflowAgentList(props) {
   } else listElement = $[25];
   return listElement;
 }
-//@ chunk-xvcy52fk.js:6778-7809 placement
+//@ chunk-g916dfgc.js:6819-7850 placement
 /**
  * 工作流进度主体：按阶段分组显示子代理状态与日志。
  */
@@ -659,19 +661,19 @@ function WorkflowProgressBody(props) {
   } else rootElement = $[17];
   return rootElement;
 }
-//@ chunk-xvcy52fk.js:7809-7813 placement
+//@ chunk-g916dfgc.js:7850-7854 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-xvcy52fk.js:7809", () => {
+deferInit("chunk-g916dfgc.js:7850", () => {
   init_react_production();
 });
-//@ chunk-xvcy52fk.js:7813-7845 placement
+//@ chunk-g916dfgc.js:7854-7886 placement
 function nowMs() {
   return Date.now();
 }
-//@ chunk-xvcy52fk.js:7845-7859 placement
+//@ chunk-g916dfgc.js:7886-7900 placement
 var WORKFLOW_INDENT = 4;
 var WORKFLOW_LABEL_WIDTH = 80;
-//@ chunk-xvcy52fk.js:7859-8055 placement
+//@ chunk-g916dfgc.js:7900-8096 placement
 function useSpinnerGlyph(active) {
   let $ = useMemoCache(2);
   let frames;
@@ -690,7 +692,7 @@ function useSpinnerGlyph(active) {
   useInterval(advanceFrame, active && !prefersReducedMotion ? WORKFLOW_LABEL_WIDTH : null);
   return frames_[frameIndex % frames_.length];
 }
-//@ chunk-xvcy52fk.js:8055-8700 placement
+//@ chunk-g916dfgc.js:8096-8741 placement
 function ProgressBar(props) {
   let $ = useMemoCache(14);
   let { done, total, running } = props;
@@ -753,15 +755,15 @@ function ProgressBar(props) {
   } else barElement = $[13];
   return barElement;
 }
-//@ chunk-xvcy52fk.js:8700-8716 placement
+//@ chunk-g916dfgc.js:8741-8757 placement
 /**
  * 导出值：WORKFLOW_MAX_ROWS（12：最多行）。
  */
 var WORKFLOW_PROGRESS_LIMITS = 9;
 var WORKFLOW_MAX_ROWS = 12;
-//@ chunk-xvcy52fk.js:8716-9082 placement
+//@ chunk-g916dfgc.js:8757-9096 placement
 function useWorkflowProgressRows(promptVisibleBelow) {
-  let $ = useMemoCache(9);
+  let $ = useMemoCache(8);
   let terminalSize = useTerminalSize();
   let { rows } = useScrollViewportSize(terminalSize);
   let hasScrollViewport = useHasScrollViewport();
@@ -783,22 +785,20 @@ function useWorkflowProgressRows(promptVisibleBelow) {
   let { columns } = terminalSize;
   let width = Math.max(24, columns - 6);
   let layout;
-  if ($[4] !== availableRows_2 || $[5] !== columns || $[6] !== rows || $[7] !== width) {
+  if ($[4] !== availableRows_2 || $[5] !== rows || $[6] !== width) {
     layout = {
       availableRows: availableRows_2,
       width,
       rows,
-      columns,
     };
     $[4] = availableRows_2;
-    $[5] = columns;
-    $[6] = rows;
-    $[7] = width;
-    $[8] = layout;
-  } else layout = $[8];
+    $[5] = rows;
+    $[6] = width;
+    $[7] = layout;
+  } else layout = $[7];
   return layout;
 }
-//@ chunk-xvcy52fk.js:9082-9282 placement
+//@ chunk-g916dfgc.js:9096-9296 placement
 function ElapsedClock(task) {
   let $ = useMemoCache(1);
   let isRunning = task.status === "running";
@@ -811,9 +811,9 @@ function ElapsedClock(task) {
   useInterval(tick, isRunning ? 1000 : null);
   return Math.max(0, (task.endTime ?? now) - task.startTime - (task.totalPausedMs ?? 0));
 }
-//@ chunk-xvcy52fk.js:9282-9292 placement
+//@ chunk-g916dfgc.js:9296-9306 placement
 var WORKFLOW_PROGRESS_WIDTH = 17;
-//@ chunk-xvcy52fk.js:9292-10718 placement
+//@ chunk-g916dfgc.js:9306-10732 placement
 function WorkflowPhaseRow(props) {
   let $ = useMemoCache(28);
   let { index, title, done: doneCount, total, status, selected, trailing } = props;
@@ -919,7 +919,7 @@ function WorkflowPhaseRow(props) {
   } else rowElement = $[27];
   return rowElement;
 }
-//@ chunk-xvcy52fk.js:10718-11745 placement
+//@ chunk-g916dfgc.js:10732-11759 placement
 function WorkflowSummaryRow(props) {
   let $ = useMemoCache(23);
   let { name, done: doneCount, total, running, elapsedMs, complete, dotState, phaseText, selected } = props;
@@ -1012,7 +1012,7 @@ function WorkflowSummaryRow(props) {
   } else rowElement = $[22];
   return rowElement;
 }
-//@ chunk-xvcy52fk.js:11745-12627 placement
+//@ chunk-g916dfgc.js:11759-12641 placement
 function WorkflowHeader(props) {
   let $ = useMemoCache(17);
   let { name, subtext, stats, width } = props;
@@ -1095,10 +1095,13 @@ function WorkflowHeader(props) {
   } else headerBox = $[16];
   return headerBox;
 }
-//@ chunk-xvcy52fk.js:12627-13056 placement
+//@ chunk-g916dfgc.js:12641-13085 placement
 function agentStateCounts(workflowProgress) {
-  let doneCount = count(workflowProgress.agents, (agent) => agent.state === "done");
-  let errorCount = count(workflowProgress.agents, (otherAgent) => otherAgent.state === "error");
+  let doneCount = countWhere(workflowProgress.agents, (agent) => agent.state === "done");
+  let errorCount = countWhere(
+    workflowProgress.agents,
+    (otherAgent) => otherAgent.state === "error" && !isStopReason(otherAgent.error),
+  );
   let totalCount = workflowProgress.agents.length;
   let isAllSettled = doneCount + errorCount === totalCount && totalCount > 0;
   let tokens = 0;
@@ -1123,7 +1126,7 @@ function agentStateCounts(workflowProgress) {
     durationMs,
   };
 }
-//@ chunk-xvcy52fk.js:13056-13165 placement
+//@ chunk-g916dfgc.js:13085-13194 placement
 function emptyPhaseRow(title) {
   return {
     title,
@@ -1135,11 +1138,11 @@ function emptyPhaseRow(title) {
     durationMs: 0,
   };
 }
-//@ chunk-xvcy52fk.js:13165-13210 placement
+//@ chunk-g916dfgc.js:13194-13239 placement
 function normalizeLabel(label) {
   return label.toLowerCase().trim();
 }
-//@ chunk-xvcy52fk.js:13210-13317 placement
+//@ chunk-g916dfgc.js:13239-13346 placement
 function phaseTitlesMatch(phaseTitle, label) {
   let normalizedPhase = normalizeLabel(phaseTitle);
   let normalizedTitle = normalizeLabel(label);
@@ -1150,7 +1153,7 @@ function phaseTitlesMatch(phaseTitle, label) {
     normalizedTitle.startsWith(normalizedPhase)
   );
 }
-//@ chunk-xvcy52fk.js:13317-13562 placement
+//@ chunk-g916dfgc.js:13346-13591 placement
 function alignPhaseRows(phases, agents) {
   let usedAgents = new Set();
   let rows = [];
@@ -1172,7 +1175,7 @@ function alignPhaseRows(phases, agents) {
     if (!usedAgents.has(remainingAgent)) rows.push(agentStateCounts(remainingAgent));
   return rows;
 }
-//@ chunk-xvcy52fk.js:13562-13760 placement
+//@ chunk-g916dfgc.js:13591-13789 placement
 function workflowPhaseRows(workflow) {
   let workflowProgress = collectWorkflowProgress(workflow.workflowProgress);
   let groupedAgents = groupAgentsByPhase(workflowProgress.agents, workflowProgress.phaseTitles) ?? [];
@@ -1187,18 +1190,18 @@ function workflowPhaseRows(workflow) {
     ];
   return phaseRows;
 }
-//@ chunk-xvcy52fk.js:13760-13770 placement
+//@ chunk-g916dfgc.js:13789-13799 placement
 var WORKFLOW_COLUMN_WIDTH = 16;
-//@ chunk-xvcy52fk.js:13770-13800 placement
+//@ chunk-g916dfgc.js:13799-13829 placement
 function noWorkflowFooter(collected, unusedFooterProps) {
   return null;
 }
-//@ chunk-xvcy52fk.js:13800-14015 placement
+//@ chunk-g916dfgc.js:13829-14044 placement
 var PHASE_NAME_WIDTH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var AEIOU;
 var GERUND_OVERRIDES;
 var SIMPLE_VERB_RE;
-deferInit("chunk-xvcy52fk.js:13800", () => {
+deferInit("chunk-g916dfgc.js:13829", () => {
   PHASE_NAME_WIDTH = WORKFLOW_COLUMN_WIDTH + 8;
   AEIOU = "aeiou";
   GERUND_OVERRIDES = new Map([
@@ -1213,7 +1216,7 @@ deferInit("chunk-xvcy52fk.js:13800", () => {
   ]);
   SIMPLE_VERB_RE = /^[A-Za-z]{3,12}$/;
 });
-//@ chunk-xvcy52fk.js:14015-14450 placement
+//@ chunk-g916dfgc.js:14044-14479 placement
 function normalizePhaseTitle(title) {
   if (!SIMPLE_VERB_RE.test(title)) return title;
   let lower = title.toLowerCase();
@@ -1234,9 +1237,9 @@ function normalizePhaseTitle(title) {
     return `${title}${last}ing`;
   return `${title}ing`;
 }
-//@ chunk-xvcy52fk.js:14450-14463 placement
+//@ chunk-g916dfgc.js:14479-14492 placement
 var LABEL_JOINER = " & ";
-//@ chunk-xvcy52fk.js:14463-14791 placement
+//@ chunk-g916dfgc.js:14492-14820 placement
 function phaseTitleSummary(titleSummary) {
   let { titles, positionStart, totalPhases } = titleSummary;
   let mapped = titles.map((title) => normalizePhaseTitle(collapseWhitespace(title)));
@@ -1257,7 +1260,7 @@ function phaseTitleSummary(titleSummary) {
     remainderSuffix
   );
 }
-//@ chunk-xvcy52fk.js:14791-14916 placement
+//@ chunk-g916dfgc.js:14820-14945 placement
 function sumPhaseCounts(phaseRows, agentCount) {
   let doneAgentCount = 0;
   let totalAgentCount = 0;
@@ -1270,7 +1273,7 @@ function sumPhaseCounts(phaseRows, agentCount) {
     totalAgents: Math.max(agentCount, totalAgentCount, doneAgentCount),
   };
 }
-//@ chunk-xvcy52fk.js:14916-15073 placement
+//@ chunk-g916dfgc.js:14945-15102 placement
 function workflowDescription(workflow) {
   if (workflow.script.length > 0) {
     let workflowScript = parseWorkflowScript(workflow.script);
@@ -1279,7 +1282,7 @@ function workflowDescription(workflow) {
   }
   return workflow.description || workflow.summary || "";
 }
-//@ chunk-xvcy52fk.js:15073-15476 placement
+//@ chunk-g916dfgc.js:15102-15505 placement
 function workflowStatusLine(workflow, defaultSubtext, agentCounts, elapsedMs) {
   let statusSuffix =
     workflow.status === "completed"
@@ -1302,7 +1305,7 @@ function workflowStatusLine(workflow, defaultSubtext, agentCounts, elapsedMs) {
     stats,
   };
 }
-//@ chunk-xvcy52fk.js:15476-15868 placement
+//@ chunk-g916dfgc.js:15505-15845 placement
 function countWorkflowAgents(messages, agentCount = 0) {
   let totalAgentCount = 0;
   let doneCount = 0;
@@ -1320,8 +1323,7 @@ function countWorkflowAgents(messages, agentCount = 0) {
       startedCount++;
     } else if (message.state === "start" || message.state === "progress") {
       isRunning = true;
-      if (message.startedAt !== undefined || message.queuedAt === undefined || (message.tokens ?? 0) > 0)
-        startedCount++;
+      if (hasStartedOrQueued(message)) startedCount++;
     }
   }
   let max = Math.max(agentCount, totalAgentCount);
@@ -1336,14 +1338,14 @@ function countWorkflowAgents(messages, agentCount = 0) {
   };
 }
 export {
-  ElapsedClock,
-  countWorkflowAgents,
-  WORKFLOW_PROGRESS_LIMITS,
   collectWorkflowProgress,
   WorkflowProgressBody,
+  countWorkflowAgents,
   noWorkflowFooter,
   WorkflowSummaryRow,
   phaseTitleSummary,
+  ElapsedClock,
+  WORKFLOW_PROGRESS_LIMITS,
   modelTransitionText,
   useWorkflowProgressRows,
   workflowPhaseRows,

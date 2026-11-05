@@ -1,15 +1,15 @@
 /**
  * pngjs/lib/parser.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: pngjs@5.0.0
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_constants } from "./constants.js";
 import { require_crc } from "./crc.js";
 
-//@ chunk-spjgqa4y.js:27104-31843 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:27104-31843 cjs-fingerprint
 var require_parser = __commonJS(function (cjsExports, cjsModule) {
   var constants = require_constants();
   var CrcCalculator = require_crc();

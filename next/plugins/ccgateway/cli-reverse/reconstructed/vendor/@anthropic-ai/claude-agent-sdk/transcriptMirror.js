@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/claude-agent-sdk/transcriptMirror.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/claude-agent-sdk/transcriptMirror.js
- * pieces: chunk-y805ph4h.js (11)
+ * pieces: chunk-tp1gh0pb.js (11)
  * attribution: placement 11
  */
 import { join } from "path";
@@ -13,16 +13,17 @@ import { toError } from "../../../src/utils/errors.js";
 import { logForDebugging } from "../../../src/utils/debug.js";
 import { HostScoped } from "../../../src/utils/hostScoped.js";
 import { getRootSession } from "../../../src/bootstrap/state.js";
-import { isEnvVarTruthy, getClaudeConfigDir } from "../../../src/utils/envUtils.js";
+import { isEnvVarTruthy } from "../../../src/utils/envUtils.js";
+import { getClaudeConfigDir } from "../../../src/utils/markdownConfigLoader.js";
 import { getFileReader } from "../../../src/utils/fileStore.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-y805ph4h.js:2771-2793 placement
+//@ chunk-tp1gh0pb.js:3009-3031 placement
 var DEFAULT_MAX_PENDING_ENTRIES = 500;
 var DEFAULT_MAX_PENDING_BYTES = 1048576;
-//@ chunk-y805ph4h.js:2793-2810 placement
+//@ chunk-tp1gh0pb.js:3031-3048 placement
 var DEFAULT_BACKOFF_MS = [200, 800];
-//@ chunk-y805ph4h.js:2810-4447 placement
+//@ chunk-tp1gh0pb.js:3048-4685 placement
 /**
  * Agent SDK 的转录镜像批处理器：把会话转录行批量转发给宿主（日志前缀 [TranscriptMirrorBatcher]）。
  */
@@ -124,31 +125,31 @@ class TranscriptMirrorBatcher {
     }
   }
 }
-//@ chunk-y805ph4h.js:4447-4454 placement
+//@ chunk-tp1gh0pb.js:4685-4692 placement
 var McpToolKind;
-//@ chunk-y805ph4h.js:4454-4513 placement
+//@ chunk-tp1gh0pb.js:4692-4751 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-y805ph4h.js:4454", () => {
+deferInit("chunk-tp1gh0pb.js:4692", () => {
   (function (holder) {
     holder.Completable = "McpCompletable";
   })(McpToolKind || (McpToolKind = {}));
 });
-//@ chunk-y805ph4h.js:4579-4639 placement
+//@ chunk-tp1gh0pb.js:4817-4877 placement
 class DebugState {
   debugFilePath = undefined;
   initPromise = null;
   logStem = null;
 }
-//@ chunk-y805ph4h.js:4639-4664 placement
+//@ chunk-tp1gh0pb.js:4877-4902 placement
 var debugStateByHost; // deferred: uses DebugState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-y805ph4h.js:4639", () => {
+deferInit("chunk-tp1gh0pb.js:4877", () => {
   debugStateByHost = new HostScoped(() => new DebugState());
 });
-//@ chunk-y805ph4h.js:4664-4701 placement
+//@ chunk-tp1gh0pb.js:4902-4939 placement
 function getDebugState() {
   return debugStateByHost.of(getRootSession().host);
 }
-//@ chunk-y805ph4h.js:4701-5073 placement
+//@ chunk-tp1gh0pb.js:4939-5311 placement
 function ensureDebugFile(state) {
   if (state.initPromise) return state.initPromise;
   if (!isEnvVarTruthy("DEBUG_CLAUDE_AGENT_SDK")) {
@@ -166,7 +167,7 @@ function ensureDebugFile(state) {
     .catch(() => {});
   return state.initPromise;
 }
-//@ chunk-y805ph4h.js:5073-5171 placement
+//@ chunk-tp1gh0pb.js:5311-5409 placement
 function getDebugLogMeta(state) {
   return state.logStem === null
     ? null
@@ -176,7 +177,7 @@ function getDebugLogMeta(state) {
         channel: "debug",
       };
 }
-//@ chunk-y805ph4h.js:5171-5231 placement
+//@ chunk-tp1gh0pb.js:5409-5469 placement
 function getDebugFilePath() {
   let state = getDebugState();
   ensureDebugFile(state);

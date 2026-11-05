@@ -1,15 +1,15 @@
 /**
  * cross-spawn/lib/util/resolveCommand.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: cross-spawn@7.0.5..7.0.6
- * pieces: chunk-m4p5zn6n.js (1)
+ * pieces: chunk-t889g22j.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_which } from "../../../which/which.js";
 import { require_pathKey } from "../../../unresolved-cjs/index.js";
 
-//@ chunk-m4p5zn6n.js:3917-4564 cjs-fingerprint
+//@ chunk-t889g22j.js:3917-4564 cjs-fingerprint
 var require_resolveCommand = __commonJS(function (cjsExports, cjsModule) {
   var path = importMetaRequire("path");
   var which = require_which();

@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/resources/beta/beta.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (1)
+ * pieces: chunk-vn3g7zt8.js (1)
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../core/resource.mjs";
@@ -23,7 +23,7 @@ import { Dreams } from "./dreams.mjs";
 import { Tunnels } from "./tunnels/tunnels.mjs";
 import { Organization } from "./organization/organization.mjs";
 
-//@ chunk-hwmsct5x.js:144643-145529 esm-fingerprint
+//@ chunk-vn3g7zt8.js:145023-145909 esm-fingerprint
 var Beta = (() => {
   class Beta extends APIResource {
     constructor() {

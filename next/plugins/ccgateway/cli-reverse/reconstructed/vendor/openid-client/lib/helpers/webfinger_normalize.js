@@ -1,13 +1,13 @@
 /**
  * openid-client/lib/helpers/webfinger_normalize.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: openid-client@5.7.1
- * pieces: chunk-1ny7cxrt.js (1)
+ * pieces: chunk-1hnjmk23.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-1ny7cxrt.js:68948-69495 cjs-fingerprint
+//@ chunk-1hnjmk23.js:69317-69864 cjs-fingerprint
 var require_webfinger_normalize = __commonJS(function (cjsExports, cjsModule) {
   var PORT = /^\d+$/;
   function hasScheme(input) {

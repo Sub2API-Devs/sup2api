@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。/restart 命令：检查能否重启（会话已保存、非远程控制），重启到已安装的新版本并说明版本变化。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qfpyehtk.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5w5bn6qj.js (7)
  * attribution: placement 7
  */
 import { realpath } from "fs/promises";
@@ -96,7 +96,7 @@ import { sequential } from "../../utils/sequential.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-qfpyehtk.js:1833-2044 placement
+//@ chunk-5w5bn6qj.js:1831-2042 placement
 async function resolveLauncher() {
   let claudePath = await whichAsync("claude");
   let argv0 = processWrapperArgv()[0];
@@ -112,7 +112,7 @@ async function resolveLauncher() {
     });
   return getLaunchCommand();
 }
-//@ chunk-qfpyehtk.js:2044-3246 placement
+//@ chunk-5w5bn6qj.js:2042-3244 placement
 /**
  * 升级/降级/同版本的结果文字
  */
@@ -124,10 +124,10 @@ function describeVersionChange(change) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION
@@ -138,10 +138,10 @@ function describeVersionChange(change) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION
@@ -151,21 +151,21 @@ function describeVersionChange(change) {
       return "Session resumed";
   }
 }
-//@ chunk-qfpyehtk.js:3246-3289 placement
+//@ chunk-5w5bn6qj.js:3244-3287 placement
 var REMOTE_CONTROL_STAFF_MARKER = Symbol("staff, over Remote Control");
-//@ chunk-qfpyehtk.js:3289-3387 placement
+//@ chunk-5w5bn6qj.js:3287-3385 placement
 function restartRefusalReason(context) {
   if (isBridgeOrVerifiedSlackTurn(context)) return "not_owner";
   let submittedFromComposer = context.submittedFromComposer;
   return isFrozenMarker(submittedFromComposer) ? submittedFromComposer : "not_typed";
 }
-//@ chunk-qfpyehtk.js:3387-3513 placement
+//@ chunk-5w5bn6qj.js:3385-3511 placement
 function restartOrExplain(staffMarker, ...relaunchArgs) {
   if (staffMarker !== REMOTE_CONTROL_STAFF_MARKER && !isFrozenMarker(staffMarker))
     throw Error("Can't restart automatically. Type /restart at the prompt.");
   return relaunchOrExplain(...relaunchArgs);
 }
-//@ chunk-qfpyehtk.js:3672-6618 placement
+//@ chunk-5w5bn6qj.js:3670-6616 placement
 /**
  * 判定能否重启并给出拒绝原因
  */
@@ -204,7 +204,7 @@ function planRestart(messages, storageV5) {
           "gone",
           goneStatus === "empty"
             ? "Can't restart this session. It isn't saved to disk, so a restart would lose it. Nothing was changed. To use the installed version, exit and start Claude Code again. You may not be able to resume this session."
-            : "Can't restart this session. Its saved file can't be found. It may have been moved or deleted. You can keep working here, or run /export to save a copy of the conversation before you exit.",
+            : "Can't restart this session. Its saved file can't be found and may have been moved or deleted. You can keep working here, or run /export to save a copy of the conversation before you exit.",
         );
       }
     }
@@ -256,10 +256,10 @@ function planRestart(messages, storageV5) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION
@@ -267,7 +267,7 @@ function planRestart(messages, storageV5) {
     );
   return;
 }
-//@ chunk-qfpyehtk.js:6618-12248 placement
+//@ chunk-5w5bn6qj.js:6616-12244 placement
 var call = async (args, context) => {
   if (isDisklessSession())
     return {
@@ -520,10 +520,10 @@ var call = async (args, context) => {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,

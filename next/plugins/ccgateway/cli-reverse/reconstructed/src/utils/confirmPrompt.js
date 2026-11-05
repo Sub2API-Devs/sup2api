@@ -3,16 +3,16 @@
  *
  * [y/N] 确认提示（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e8rfj3kv.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-zjx7fj60.js (3)
  * attribution: placement 3
  */
 import { createInterface } from "readline";
 import { setRawModeSafe } from "../ink/setRawModeSafe.js";
 import { sleep } from "./sleep.js";
 
-//@ chunk-e8rfj3kv.js:305-409 placement
+//@ chunk-zjx7fj60.js:305-409 placement
 /**
  * 确认提问要求的最小回答延迟（250 毫秒）。
  */
@@ -20,7 +20,7 @@ var CONFIRM_MAX_ATTEMPTS = 5;
 var MIN_CONFIRM_ANSWER_DELAY_MS = 250;
 var TOO_FAST_ANSWER_TEXT =
   "That answer arrived too quickly after the question to count. Please answer again.";
-//@ chunk-e8rfj3kv.js:409-976 placement
+//@ chunk-zjx7fj60.js:409-976 placement
 async function confirmPrompt(
   question,
   input = process.stdin,
@@ -65,7 +65,7 @@ async function confirmPrompt(
   });
   return promise;
 }
-//@ chunk-e8rfj3kv.js:976-1373 placement
+//@ chunk-zjx7fj60.js:976-1373 placement
 /**
  * 在确认提示前短暂读取并丢弃输入（TTY 下切换原始模式），返回输入流是否已结束。
  */
@@ -97,4 +97,4 @@ async function drainEarlyInput(stream, readline) {
     ("destroyed" in stream && stream.destroyed === true)
   );
 }
-export { confirmPrompt, MIN_CONFIRM_ANSWER_DELAY_MS, TOO_FAST_ANSWER_TEXT };
+export { MIN_CONFIRM_ANSWER_DELAY_MS, confirmPrompt, TOO_FAST_ANSWER_TEXT };

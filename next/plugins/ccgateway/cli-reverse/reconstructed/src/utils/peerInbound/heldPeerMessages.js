@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。暂存的同伴消息。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (7)
  * attribution: placement 7
  */
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
@@ -33,9 +33,9 @@ import { jsonStringify } from "../slowOperations.js";
 import { truncateToWidthNoEllipsis } from "../format.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:354486-354793 placement
+//@ chunk-czq1j3j2.js:354336-354643 placement
 var peerInboundApprovalDialogDef; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:354486", () => {
+deferInit("chunk-czq1j3j2.js:354336", () => {
   peerInboundApprovalDialogDef = withHideWhile({
     kind: "peer_inbound_approval",
     payload: DoctorLazy(() =>
@@ -58,7 +58,7 @@ deferInit("chunk-18hwfzwa.js:354486", () => {
     },
   });
 });
-//@ chunk-18hwfzwa.js:354793-358069 placement
+//@ chunk-czq1j3j2.js:392208-395484 placement
 /**
  * 跨会话入站消息审核：crossSessionInbound=hold 或权限模式不匹配时，把其他 Claude 会话发来的消息暂存，弹出 peer_inbound_approval 对话框，批准后投递、拒绝则告知发送方。
  */
@@ -242,18 +242,18 @@ function HeldPeerMessages({ clock, store, transcript, requestDialog, visibleDial
     stopCapsWatch();
   };
 }
-//@ chunk-18hwfzwa.js:358069-358141 placement
-var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:358069", () => {
+//@ chunk-czq1j3j2.js:395484-395556 placement
+var regExp; // deferred: uses BOX_DRAWING_RANGES_2 (../sanitization.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-czq1j3j2.js:395484", () => {
   regExp = new RegExp(`[\\p{Ps}\\p{Pe}\\p{Pi}\\p{Pf}"'\u2212${BOX_DRAWING_RANGES_2}]`, "gu");
 });
-//@ chunk-18hwfzwa.js:358141-358227 placement
+//@ chunk-czq1j3j2.js:395556-395642 placement
 function sanitizePeerDisplayLabel(label) {
   return normalizeForDisplay(label)
     .replace(regExp, "")
     .replace(/\p{Pd}/gu, (dash) => (dash === "-" ? "-" : ""));
 }
-//@ chunk-18hwfzwa.js:358227-359449 placement
+//@ chunk-czq1j3j2.js:395642-396862 placement
 function describePeerSender(message) {
   let origin = message.origin?.kind === "peer" ? message.origin : undefined;
   let address =
@@ -318,7 +318,7 @@ function describePeerSender(message) {
     dialogBody,
   };
 }
-//@ chunk-18hwfzwa.js:359449-359635 placement
+//@ chunk-czq1j3j2.js:396862-397048 placement
 function peerHoldReleaseReason(releaseReason) {
   switch (releaseReason) {
     case "mode-changed":
@@ -329,7 +329,7 @@ function peerHoldReleaseReason(releaseReason) {
       return "you approved it";
   }
 }
-//@ chunk-18hwfzwa.js:359635-360893 placement
+//@ chunk-czq1j3j2.js:397048-398306 placement
 function peerHoldReasonText(holdReason) {
   switch (holdReason) {
     case "bypass-default":
@@ -350,4 +350,4 @@ function peerHoldReasonText(holdReason) {
       return 'The sender did not attest its permission mode and this session bypasses prompts. Review it below, or set "crossSessionInbound" to "accept".';
   }
 }
-export { HeldPeerMessages, peerInboundApprovalDialogDef };
+export { peerInboundApprovalDialogDef, HeldPeerMessages };

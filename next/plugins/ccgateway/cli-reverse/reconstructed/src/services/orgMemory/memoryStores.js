@@ -3,9 +3,9 @@
  *
  * CLAUDE_MEMORY_STORES 解析与校验（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-82kqcve8.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a2q0x549.js (16), chunk-exfmq47h.js (1)
  * attribution: placement 17
  */
 import { isDiskless } from "../../bootstrap/state.js";
@@ -40,22 +40,22 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js"
 import { getSessionIngressAuthToken } from "../../utils/sessionIngressAuth.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:8454-8501 placement
+//@ chunk-exfmq47h.js:72102-72148 placement
 /**
  * 是否为无盘会话且没有 v5 存储状态。
  */
 function isDisklessWithoutState(storageV5) {
   return isDiskless() && !(isStorageV5Enabled() && storageV5 !== undefined);
 }
-//@ chunk-82kqcve8.js:8501-8520 placement
+//@ chunk-a2q0x549.js:8577-8596 placement
 /**
  * 懒加载记忆库环境变量解析模块。
  */
 var memoryStoresEnvModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-82kqcve8.js:8501", () => {
+deferInit("chunk-a2q0x549.js:8577", () => {
   memoryStoresEnvModule = __toESM(require_ignore(), 1);
 });
-//@ chunk-82kqcve8.js:8828-8975 placement
+//@ chunk-a2q0x549.js:8904-9051 placement
 function isPathAbsoluteSameOrigin(path) {
   if (!path.startsWith("/")) return false;
   try {
@@ -64,7 +64,7 @@ function isPathAbsoluteSameOrigin(path) {
     return false;
   }
 }
-//@ chunk-82kqcve8.js:8975-9260 placement
+//@ chunk-a2q0x549.js:9051-9336 placement
 /**
  * 由记忆库路径的最后一段派生挂载名（非 [A-Za-z0-9_-] 替换为 -），为空或 ./.. 时抛错。
  */
@@ -77,7 +77,7 @@ function deriveMountName(path) {
     throw Error(`derived mount name is not a valid path segment: ${sliced}`);
   return replaced_2;
 }
-//@ chunk-82kqcve8.js:9260-9467 placement
+//@ chunk-a2q0x549.js:9336-9543 placement
 var MOUNT_NAME_RULE_MESSAGE = "mount must match /^[A-Za-z0-9_-]+$/";
 var STORE_KIND_LABELS = [
   "public_projects",
@@ -94,7 +94,7 @@ var STORE_KIND_PREFIXES = [
   ["silo_", "silo_*"],
   ["slack_", "slack_*"],
 ];
-//@ chunk-82kqcve8.js:9467-9592 placement
+//@ chunk-a2q0x549.js:9543-9668 placement
 /**
  * 把记忆存储种类映射为遥测值：精确匹配或按前缀匹配，否则为 other。
  */
@@ -104,7 +104,7 @@ function getStoreKindTelemetry(mountName) {
   let found_2 = STORE_KIND_PREFIXES.find(([prefixEntry]) => mountName.startsWith(prefixEntry));
   return found_2 ? fromEnum(found_2[1]) : lit("other");
 }
-//@ chunk-82kqcve8.js:9592-10209 placement
+//@ chunk-a2q0x549.js:9668-10285 placement
 /**
  * CLAUDE_MEMORY_STORES 条目的 schema：路径或 {path, mode, scope, mount, promptIndex, skillsDirs(末段须为 skills), promptIndexMaxBytes}。
  */
@@ -112,7 +112,7 @@ var storePathSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) o
 var MAX_SKILLS_DIRS;
 var relativeSegmentsSchema;
 var memoryStoreEntrySchema;
-deferInit("chunk-82kqcve8.js:9592", () => {
+deferInit("chunk-a2q0x549.js:9668", () => {
   storePathSchema = DoctorLazy(() =>
     stringSchema().min(1).refine(isPathAbsoluteSameOrigin, {
       message: "path must be path-absolute and must not override the host",
@@ -150,7 +150,7 @@ deferInit("chunk-82kqcve8.js:9592", () => {
     ]),
   );
 });
-//@ chunk-82kqcve8.js:10209-10329 placement
+//@ chunk-a2q0x549.js:10285-10405 placement
 /**
  * 相对路径各段是否只含安全字符且不是 . 或 ..。
  */
@@ -160,7 +160,7 @@ function isValidRelativeSegments(segments) {
     .split("/")
     .every((segment) => /^[A-Za-z0-9._-]+$/.test(segment) && segment !== "." && segment !== "..");
 }
-//@ chunk-82kqcve8.js:10329-10551 placement
+//@ chunk-a2q0x549.js:10405-10627 placement
 /**
  * 解析 CLAUDE_MEMORY_STORES 环境变量（多 store 记忆同步配置），未设置返回 null。
  */
@@ -177,7 +177,7 @@ function parseMemoryStoresEnv() {
   }
   return validateMemoryStores(parsed, "CLAUDE_MEMORY_STORES");
 }
-//@ chunk-82kqcve8.js:10551-11364 placement
+//@ chunk-a2q0x549.js:10627-11440 placement
 function validateMemoryStores(raw, label) {
   let parsed = array(memoryStoreEntrySchema()).safeParse(raw);
   if (!parsed.success) throw Error(`${label} failed validation: ${parsed.error.message}`);
@@ -227,7 +227,7 @@ function validateMemoryStores(raw, label) {
   );
   return stores;
 }
-//@ chunk-82kqcve8.js:11364-11415 placement
+//@ chunk-a2q0x549.js:11440-11491 placement
 /**
  * 尝试解析 CLAUDE_MEMORY_STORES。
  */
@@ -238,14 +238,14 @@ function tryParseMemoryStoresEnv() {
     return null;
   }
 }
-//@ chunk-82kqcve8.js:11415-11450 placement
+//@ chunk-a2q0x549.js:11491-11526 placement
 /**
  * 当前没有认证阻塞。
  */
 function hasNoAuthBlocker() {
   return getOrgMemoryAuthBlocker() === undefined;
 }
-//@ chunk-82kqcve8.js:11450-11605 placement
+//@ chunk-a2q0x549.js:11526-11681 placement
 function getOrgMemoryAuthBlocker() {
   if (hasMemoryApiOverride()) return;
   if (!isFirstPartyAnthropicBaseUrl()) return "base_url";
@@ -254,7 +254,7 @@ function getOrgMemoryAuthBlocker() {
   if (!(hasOAuthScope(CLAUDE_AI_INFERENCE_SCOPE) && hasOAuthScope(CLAUDE_AI_PROFILE_SCOPE))) return "scope";
   return;
 }
-//@ chunk-82kqcve8.js:11605-11750 placement
+//@ chunk-a2q0x549.js:11681-11826 placement
 function getOrgMemoryPolicyState() {
   if (!isOrgMemoryEligible_2()) return "closed";
   if (isPolicyVerdictUnobtainable()) {
@@ -262,21 +262,21 @@ function getOrgMemoryPolicyState() {
   } else if (isPolicyVerdictAbsent()) return "held";
   return isPolicyAllowed("allow_memory_sync") ? "open" : "closed";
 }
-//@ chunk-82kqcve8.js:11750-11785 placement
+//@ chunk-a2q0x549.js:11826-11861 placement
 /**
  * 组织记忆策略是否为 open。
  */
 function isOrgMemoryPolicyOpen() {
   return getOrgMemoryPolicyState() === "open";
 }
-//@ chunk-82kqcve8.js:11785-11817 placement
+//@ chunk-a2q0x549.js:11861-11893 placement
 /**
  * 组织记忆是否可用（资格满足且无策略结论）。
  */
 function isOrgMemoryEligible() {
   return isOrgMemoryEligible_2() && isPolicyVerdictAbsent();
 }
-//@ chunk-82kqcve8.js:11817-12035 placement
+//@ chunk-a2q0x549.js:11893-12111 placement
 /**
  * 组织记忆是否可用：未被环境变量/安全模式禁用、tengu_haze_glass 开启、未配置 CLAUDE_MEMORY_STORES、无会话入口令牌，且为订阅用户或有记忆 API 覆盖。
  */
@@ -290,13 +290,13 @@ function isOrgMemoryEligible_2() {
 }
 export {
   memoryStoresEnvModule,
+  tryParseMemoryStoresEnv,
   isDisklessWithoutState,
+  isValidRelativeSegments,
+  getStoreKindTelemetry,
+  parseMemoryStoresEnv,
   isOrgMemoryPolicyOpen,
   validateMemoryStores,
-  isValidRelativeSegments,
   getOrgMemoryPolicyState,
   isOrgMemoryEligible,
-  parseMemoryStoresEnv,
-  tryParseMemoryStoresEnv,
-  getStoreKindTelemetry,
 };

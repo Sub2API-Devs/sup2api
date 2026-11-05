@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：读取权限规则
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-rbtj21yz.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rgh5rrjm.js (15)
  * attribution: placement 15
  */
 import { WEBFETCH, WEB_FETCH_RULE_CONTENT_FIELD } from "../../WebFetchTool/prompt.js";
@@ -19,12 +19,12 @@ import {
   getContentRulesMapForToolName,
   NARROWING_RULE_SOURCES,
   getDenyRuleForTool,
-  getAskRuleForTool,
+  findAskRuleForTool,
 } from "../../../utils/permissions/permissions.js";
 import { artifactViewerUrlFor, artifactContentOriginUrlFor, refusalEcho } from "../artifactUrls.js";
 import { lookupDomainRule } from "../../../utils/wildcardMapLookup.js";
 import { dataToolEquivalent, getServerUrl } from "./ruleTarget.js";
-import { formatPermissionRule } from "../../../utils/permissions/disallowedToolsFlag.js";
+import { permissionRuleValueFromString } from "../../../utils/permissions/permissionRuleParser.js";
 import { getSettingSourceDisplayNameLowercase } from "../../../utils/settings/constants.js";
 import {
   getToolPermissionContext,
@@ -39,10 +39,10 @@ import {
 import { hasSharedReadConsent } from "../../../services/artifacts/consentClasses.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-rbtj21yz.js:2556-2656 placement
-var WEBFETCH_RULE_TOOL; // deferred: uses ARTIFACT_TOOL_NAME (../constants.js) of its import cycle while loading; runs once the cycle is complete
+//@ chunk-rgh5rrjm.js:2556-2656 placement
+var WEBFETCH_RULE_TOOL; // deferred: uses WEBFETCH (../../WebFetchTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
 var ARTIFACT_RULE_TOOL;
-deferInit("chunk-rbtj21yz.js:2556", () => {
+deferInit("chunk-rgh5rrjm.js:2556", () => {
   WEBFETCH_RULE_TOOL = {
     name: WEBFETCH,
     mcpInfo: undefined,
@@ -54,7 +54,7 @@ deferInit("chunk-rbtj21yz.js:2556", () => {
     ruleContentField: ARTIFACT_RULE_CONTENT_FIELD,
   };
 });
-//@ chunk-rbtj21yz.js:2656-2828 placement
+//@ chunk-rgh5rrjm.js:2656-2828 placement
 function artifactReadRuleInputs(url, prompt, page, version) {
   let prompt_2 = prompt ?? DEFAULT_ARTIFACT_READ_PROMPT;
   return {
@@ -76,9 +76,9 @@ function artifactReadRuleInputs(url, prompt, page, version) {
     },
   };
 }
-//@ chunk-rbtj21yz.js:2828-2972 placement
+//@ chunk-rgh5rrjm.js:2828-2972 placement
 var ARTIFACT_WEBFETCH_READ_ACTIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-rbtj21yz.js:2828", () => {
+deferInit("chunk-rgh5rrjm.js:2828", () => {
   ARTIFACT_WEBFETCH_READ_ACTIONS = new Set([
     "read",
     "read_db",
@@ -92,7 +92,7 @@ deferInit("chunk-rbtj21yz.js:2828", () => {
     "run_script",
   ]);
 });
-//@ chunk-rbtj21yz.js:2972-3320 placement
+//@ chunk-rgh5rrjm.js:2972-3320 placement
 function webFetchRuleForArtifactRead(toolPermissionContext, target, url, behavior, options) {
   let toolRule =
     options === undefined
@@ -104,8 +104,8 @@ function webFetchRuleForArtifactRead(toolPermissionContext, target, url, behavio
           behavior,
         );
   if (toolRule !== null) return toolRule;
-  let rules = getContentRulesMapForToolName(toolPermissionContext, WEBFETCH, behavior);
-  if (rules.size === 0) return null;
+  let contentRulesMapForToolName = getContentRulesMapForToolName(toolPermissionContext, WEBFETCH, behavior);
+  if (contentRulesMapForToolName.size === 0) return null;
   let hostnames = new Set([
     new URL(artifactViewerUrlFor(target)).hostname,
     new URL(artifactContentOriginUrlFor(target)).hostname,
@@ -115,12 +115,12 @@ function webFetchRuleForArtifactRead(toolPermissionContext, target, url, behavio
       hostnames.add(new URL(url).hostname);
     } catch {}
   for (let hostname of hostnames) {
-    let domainRule = lookupDomainRule(rules, `domain:${hostname}`);
+    let domainRule = lookupDomainRule(contentRulesMapForToolName, `domain:${hostname}`);
     if (domainRule !== undefined) return domainRule;
   }
   return null;
 }
-//@ chunk-rbtj21yz.js:3320-3579 placement
+//@ chunk-rgh5rrjm.js:3320-3579 placement
 function artifactReadRule(toolPermissionContext, target, url, behavior, options = {}) {
   let dataToolName = dataToolEquivalent(
     {
@@ -143,7 +143,7 @@ function artifactReadRule(toolPermissionContext, target, url, behavior, options 
   }
   return null;
 }
-//@ chunk-rbtj21yz.js:3579-3746 placement
+//@ chunk-rgh5rrjm.js:3579-3746 placement
 function withoutNarrowingDenyRules(context) {
   if (!NARROWING_RULE_SOURCES.some((source) => (context.alwaysDenyRules[source]?.length ?? 0) > 0))
     return context;
@@ -156,7 +156,7 @@ function withoutNarrowingDenyRules(context) {
     alwaysDenyRules: denyRules,
   };
 }
-//@ chunk-rbtj21yz.js:3746-3848 placement
+//@ chunk-rgh5rrjm.js:3746-3848 placement
 function matchArtifactReadRule(context, tool, input, behavior) {
   let { action, ...fields } = input;
   return (
@@ -172,13 +172,13 @@ function matchArtifactReadRule(context, tool, input, behavior) {
         )) ?? matchToolRule(context, tool, fields, behavior)
   );
 }
-//@ chunk-rbtj21yz.js:3848-3992 placement
+//@ chunk-rgh5rrjm.js:3848-3992 placement
 function artifactToolRuleForRead(context, ruleMap, url, behavior, options = {}) {
   let denyContext = withoutNarrowingDenyRules(context);
   return (
     (behavior === "deny"
       ? getDenyRuleForTool(denyContext, ARTIFACT_RULE_TOOL)
-      : getAskRuleForTool(denyContext, ARTIFACT_RULE_TOOL)) ??
+      : findAskRuleForTool(denyContext, ARTIFACT_RULE_TOOL)) ??
     matchArtifactReadRule(
       context,
       ARTIFACT_RULE_TOOL,
@@ -188,7 +188,7 @@ function artifactToolRuleForRead(context, ruleMap, url, behavior, options = {}) 
     getServerUrl(getContentRulesMapForToolName(context, ARTIFACT_TOOL_NAME, behavior), ruleMap, url)
   );
 }
-//@ chunk-rbtj21yz.js:3992-4359 placement
+//@ chunk-rgh5rrjm.js:3992-4359 placement
 function artifactCallReadRule(context, target, url, behavior, options) {
   let ruleInput = {
     ...options.fields,
@@ -208,7 +208,7 @@ function artifactCallReadRule(context, target, url, behavior, options) {
       ? getDenyRuleForTool(context_2, toolRef)
       : options.wholeToolAskAnswered === true && toolRef.name === ARTIFACT_TOOL_NAME
         ? null
-        : getAskRuleForTool(context_2, toolRef);
+        : findAskRuleForTool(context_2, toolRef);
   return (
     wholeToolRule(ARTIFACT_RULE_TOOL) ??
     matchArtifactReadRule(context, ARTIFACT_RULE_TOOL, ruleInput, behavior) ??
@@ -219,14 +219,14 @@ function artifactCallReadRule(context, target, url, behavior, options) {
     artifactReadRule(context, target, url, behavior, options)
   );
 }
-//@ chunk-rbtj21yz.js:4359-4442 placement
+//@ chunk-rgh5rrjm.js:4359-4442 placement
 function denyRulePhrase(rule) {
-  return `the ${refusalEcho(formatPermissionRule(rule.ruleValue))} deny rule from ${getSettingSourceDisplayNameLowercase(rule.source)}`;
+  return `the ${refusalEcho(permissionRuleValueFromString(rule.ruleValue))} deny rule from ${getSettingSourceDisplayNameLowercase(rule.source)}`;
 }
-//@ chunk-rbtj21yz.js:4442-4546 placement
+//@ chunk-rgh5rrjm.js:4442-4546 placement
 var NEUTRALIZED_MARKS =
   'some tag-like sequences or line-opening turn markers in the copy below carry an inserted "\\"';
-//@ chunk-rbtj21yz.js:4546-4711 placement (2.1.88 match: isFileReadDenied, 0.771)
+//@ chunk-rgh5rrjm.js:4546-4711 placement (2.1.88 match: isFileReadDenied, 0.772)
 function sharedReadApprovalHolds(context, target, url, read = {}) {
   let toolPermissionContext = getToolPermissionContext(context);
   let ruleInput = {
@@ -240,7 +240,7 @@ function sharedReadApprovalHolds(context, target, url, read = {}) {
     artifactCallReadRule(toolPermissionContext, target, url, "ask", ruleInput) === null
   );
 }
-//@ chunk-rbtj21yz.js:4711-4829 placement
+//@ chunk-rgh5rrjm.js:4711-4829 placement
 function artifactReadNeedsUser(context, target) {
   let { mode, modeBeforeRewrite } = getToolPermissionContext(context);
   return (
@@ -250,7 +250,7 @@ function artifactReadNeedsUser(context, target) {
       outsideOrgReadIsUserOnly(target.slug))
   );
 }
-//@ chunk-rbtj21yz.js:4829-4906 placement
+//@ chunk-rgh5rrjm.js:4829-4906 placement
 function sharedReadApprovalReachable(context, target, url, read = {}) {
   return (
     getToolPermissionContext(context).mode !== "dontAsk" &&
@@ -258,7 +258,7 @@ function sharedReadApprovalReachable(context, target, url, read = {}) {
     sharedReadApprovalHolds(context, target, url, read)
   );
 }
-//@ chunk-rbtj21yz.js:4906-4985 placement
+//@ chunk-rgh5rrjm.js:4906-4985 placement
 function sharedArtifactReadApproved(context, target, url, read = {}) {
   return (
     hasSharedReadConsent(context.artifactRegistries, target.slug) &&
@@ -266,14 +266,14 @@ function sharedArtifactReadApproved(context, target, url, read = {}) {
   );
 }
 export {
-  sharedArtifactReadApproved,
-  sharedReadApprovalReachable,
-  NEUTRALIZED_MARKS,
   denyRulePhrase,
   artifactReadRule,
   artifactCallReadRule,
-  ARTIFACT_WEBFETCH_READ_ACTIONS,
   webFetchRuleForArtifactRead,
   artifactToolRuleForRead,
+  sharedArtifactReadApproved,
   sharedReadApprovalHolds,
+  ARTIFACT_WEBFETCH_READ_ACTIONS,
+  sharedReadApprovalReachable,
+  NEUTRALIZED_MARKS,
 };

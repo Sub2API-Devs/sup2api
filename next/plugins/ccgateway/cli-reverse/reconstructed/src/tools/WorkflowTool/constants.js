@@ -3,12 +3,12 @@
  *
  * Workflow 工具名。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-39r7st4c.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8jmzq9hw.js (1)
  * attribution: placement 1
  */
-//@ chunk-39r7st4c.js:191-299 placement
+//@ chunk-8jmzq9hw.js:191-299 placement
 var WORKFLOW_TOOL_NAME = "Workflow";
 var WORKFLOW_SUBAGENT_TYPE = "workflow-subagent";
 var WORKFLOW_TRANSCRIPT_SUBDIR = "workflows";

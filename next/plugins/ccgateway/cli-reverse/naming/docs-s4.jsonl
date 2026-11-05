@@ -1,724 +1,723 @@
-{"id":"chunk-08945j39.js#et","doc":"远程会话跟踪容量常量：Set 型跟踪表（已应答请求 id、可恢复对话框 id 等）上限 1000、每请求记录的成功工具名上限 8、权限请求缓存上限 200。"}
-{"id":"chunk-08945j39.js#eCs","doc":"需要转给本机处理的对话框类控制请求子类型：can_use_tool 与 request_user_dialog。"}
-{"id":"chunk-08945j39.js#ie","doc":"远程控制请求的长度与重试常量：id 上限 256 字符、withheld 首条消息重发最多 3 次、退避 750 ms、重试窗口 35 秒。"}
-{"id":"chunk-08945j39.js#mXe","doc":"未决应答的投递常量：取消/撤回文案、已关闭的投递结果、释放等待 1500 ms、重发退避 [1s,5s,15s,45s] 及次数上限、工具类控制请求超时 120 s。"}
-{"id":"chunk-08945j39.js#_en","doc":"远程历史事件分页条数：fetchLatestEvents/fetchOlderEvents 默认 100 条，historyPrefetch 首页用 500 条，服务端 400 时回落到 100。"}
-{"id":"chunk-18hwfzwa.js#nUe","doc":"转发来的权限请求无法在本终端展示时的三段文案：概括、短版、等待用户按 esc 的完整版。"}
-{"id":"chunk-fnk5kvbf.js#Rdo","doc":"远程模式句柄的判定与回退：远程能力表、是否可控制通道、能力探测，以及本地模式下的固定句柄。"}
-{"id":"chunk-3xdfvx0n.js#x","doc":"远程会话事件限额：最多保留 20 条运行中任务进度、任务时长上限 30 天、展示文本 40 行。"}
-{"id":"chunk-3xdfvx0n.js#pe","doc":"远程会话事件里的展示限额：artifacts 列表最多 100 项、标题截断到 256 字符。"}
-{"id":"chunk-25sm7c4g.js#Me","doc":"远程调用/Office bridge 的错误归类表：请求超时与连接关闭错误码、bridge 状态码到 unreachable/dropped/timed_out 的分组、三类错误消息正则、可分类消息长度上限 200。"}
-{"id":"chunk-g54kbxqw.js#Af","doc":"远程工具协议版本常量：协议版本 1、受支持版本列表、溢出输出字节字段名 spilledOutputBytes。"}
-{"id":"chunk-g54kbxqw.js#QQo","doc":"远程工具服务端限额：截断提示正则、限额默认值（进度 20 s、2 次丢失、最长询问 120 s、对账 30 s）及各限额上下界。"}
-{"id":"chunk-g54kbxqw.js#flr","doc":"机器在线状态取值：sleeping、says_still_here、still_here、released，以及 left_idle/left_released 的映射。"}
-{"id":"chunk-g54kbxqw.js#OXr","doc":"远程工具拒绝/撤回/取消原因码表：拒绝码、撤回原因码、答复丢失原因码及其合并集合。"}
-{"id":"chunk-g54kbxqw.js#Co","doc":"远程工具错误码三个表：错误分类（in_flight/queue/sessions）、错误种类（tool_error/internal_error/cancelled/timed_out）、执行结论（ran/denied_by_* 等）。"}
-{"id":"chunk-g54kbxqw.js#nt","doc":"服务端校验结论（server_verdict）的字段名与 zod schema：匹配状态、是否标记、依据、上下文与年龄。"}
-{"id":"chunk-g54kbxqw.js#hlr","doc":"远程宿主 id 与能力校验：still_here 文案、睡眠/探测时长、能力名正则、能力个数上限。"}
-{"id":"chunk-f2w97cfp.js#GYt","doc":"工具宿主界面特性版本表：从 first=5 到 repoHooksListing=18 的每个特性及其版本号，并取最新版本作为当前界面版本。"}
-{"id":"chunk-g54kbxqw.js#CYe","doc":"remote_tool_call 元数据键与别名：__remote_tool_call、协议标签 2.1、caller 字段集合，以及 anthropic/remoteToolExecution 等类型名和若干大小上限。"}
-{"id":"chunk-g54kbxqw.js#LYt","doc":"远程调用结果的大小限额与各工具保留字段：行数/行长/结果字节等上限，以及 Bash、PowerShell、Edit、Write 工具允许透传的结果字段。"}
-{"id":"chunk-g54kbxqw.js#Ce","doc":"远程工具字段限额：工具名 64、工作目录 1024、id 形态 8–64 位、工具名长度 128。"}
-{"id":"chunk-g54kbxqw.js#Zr","doc":"工具名 schema：匹配安全名字正则并排除危险名；另定义统一的 name/working_dir 目标 schema。"}
-{"id":"chunk-s61vbvea.js#Jti","doc":"仓库信任状态的判定与文案：最终态（not_marked/declined/nothing_to_mark）、是否可上报、是否可标记，以及各状态对应的同意提示文案。"}
-{"id":"chunk-tr0s0d0k.js#zbo","doc":"远程工具服务端后台命令的限额：最多跟踪 4 条运行中的命令、16 条历史、输出尾部上限 8192 字节、停止轮询间隔 1 s。"}
-{"id":"chunk-tr0s0d0k.js#Kn","doc":"凭据路径清单：Unix 凭据目录（.ssh/.aws/.config/gcloud 等）、凭据文件（.netrc/.npmrc/.pgpass 等）、Windows 凭据目录与文件、.claude 配置，以及编辑器备份/临时变体展开。"}
-{"id":"chunk-tr0s0d0k.js#Un","doc":"凭据路径的 glob 组合：目录与其 `/**`、文件与 `.*` 变体、短名别名变体，以及用于字面量匹配的 matcher 构造。"}
-{"id":"chunk-tr0s0d0k.js#Te","doc":"Windows 凭据工具名清单：cmdkey/vaultcmd、PowerShell 凭据管理函数及常见凭据模块名。"}
-{"id":"chunk-tr0s0d0k.js#tr","doc":"Windows 命令行里的凭据访问/混淆检测正则：凭据 cmdlet、模块加载、凭据管理器类型、PasswordVault、runas、/savecred、动态执行与 powershell 调用等。"}
-{"id":"chunk-hkmynrbn.js#Ybo","doc":"后台 shell 记录：id/日志文件名正则、字段长度上限（命令 80、调用者 64）、日志尾部 8192 字节、最多列 256 个日志、最多展示 32 条，以及记录 schema。"}
-{"id":"chunk-tr0s0d0k.js#vr","doc":"路径判定限额：嵌套输入深度 8、单条路径 512 字符、总扫描 131072 字符，以及绝对路径、通配符、URL 前缀、引号等形态正则。"}
-{"id":"chunk-tr0s0d0k.js#Xn","doc":"路径形态正则集合：通配符/不安全字符/命令分隔/URL/普通名字/相对路径/proc、Data 卷、私有域名与数字主机等，用于判断云会话传来的路径是否可在本机处理。"}
-{"id":"chunk-tr0s0d0k.js#Cs","doc":"远程工具权限判定原因常量：会话答复、破坏性询问、分类器询问、本机设置写入/编辑、无法确认的 shell 写入等，以及每条最多保留 16 条。"}
-{"id":"chunk-tr0s0d0k.js#mo","doc":"远程调用的拒绝模板：确认失败、回答前被停止，以及允许直接执行的权限模式集合（default/plan/dontAsk/acceptEdits）。"}
-{"id":"chunk-tr0s0d0k.js#Xr","doc":"本机安全检查（destructive-command 分类器）的预算与文案：20 s 总预算、5 s 余量、2 s 最小预算，按不可逆删除/外部代码两类给出询问文案，以及未答与未放行的兜底文案。"}
-{"id":"chunk-g4k0hvs5.js#W","doc":"仓库层设置冻结的事件名与最短刷新间隔：changed、changed-between、taken-as-found、record-unavailable 四种，及 5 s 间隔。"}
-{"id":"chunk-tr0s0d0k.js#as","doc":"shell 行解析限额：最多 16 段；变量名、路径、赋值字符集；重定向操作符；保留 bash/zsh 变量与前缀；会读取路径的命令集合。"}
-{"id":"chunk-ad2e1aj6.js#Yt","doc":"设置文件的三种存在状态标记：empty:/absent，以及路径链分隔符 \">\"。"}
-{"id":"chunk-ad2e1aj6.js#ir","doc":"远程服务的默认策略：58 s 截止、4 并发、沙箱/后台/凭证擦除等默认值，以及给用户看的策略说明文案。"}
-{"id":"chunk-ad2e1aj6.js#xi","doc":"执行模式 schema：in_process 与 vm（含 availability、executor、copy 说明）两种模式的定义。"}
-{"id":"chunk-ad2e1aj6.js#An","doc":"会话常驻批准的限额：有效期 30 分钟、最多 256 条、单批 16 条。"}
-{"id":"chunk-s61vbvea.js#nie","doc":"远程调用日志的终态与限额：joined_retry/replaced_by_retry 等终态集合，以及日志版本、文件大小、天数、条数上限与 TTL。"}
-{"id":"chunk-mthxbav8.js#na","doc":"权限模式推送失败的退避与三段提示文案：重试 400/1200 ms、5 s 窗口，以及 server 未保存、会话空闲、会话未激活三种说明。"}
-{"id":"chunk-mthxbav8.js#aa","doc":"远程响应等待超时与提示：普通 60 s、等待用户答复 180 s，以及“云端可能无响应”“Claude 在等你回答”两段文案。"}
-{"id":"chunk-s61vbvea.js#cs","doc":"属主设置冻结的开关与受管限制字段表：read_block、write_block、auto_mode_off、plan_asks_a_person、unattended_serving_off 各自的设置路径。"}
-{"id":"chunk-s61vbvea.js#Ti","doc":"按宿主保存的“持有中”属主设置槽：会话启动时冻结的设置快照与当前用户设置的合并。"}
-{"id":"chunk-012rhzq5.js#ze","doc":"服务结果图片重编码的参数：最多 4 轮、每轮目标压缩到 9 成、小于 16 KB 的图片不再处理。"}
-{"id":"chunk-25sm7c4g.js#cn","doc":"远程工具目标的列表节奏：首次探测 8 s 截止、分页上限 5000、失败清单 30 s 内不重试、失效记录仅当失败超过 2 s 才记，重新列举最短 5 s / 最长 30 s，临时目标 60 s 内视为新鲜。"}
-{"id":"chunk-g54kbxqw.js#Bo","doc":"远程工具描述符的上限与 schema：最多 16 个工具、passthrough 名 256、描述 2048/4096、schema 64 KB 且深度 16，以及 served/passthrough 两种描述符的字段定义。"}
-{"id":"chunk-3zy56vtn.js#be","doc":"工具宿主助手子进程的环境裁剪：无人值守开关与会话键、要携带的登录/路径类变量、会改写登录或流量的变量（拒绝）、提供方选择变量，以及会话/环境 id 的正则。"}
-{"id":"chunk-18hwfzwa.js#Aoe","doc":"REPL 差异面板的显示限额：最多同时显示 8 个文件、超过 20 个文件折叠提示、加载提示延迟 300 ms 出现。"}
-{"id":"chunk-18hwfzwa.js#Oee","doc":"惰性取值封装：current 每次读取时调用构造时传入的函数，用于加载计时等派生状态。"}
-{"id":"chunk-t3sg9e26.js#Uz","doc":"安全 git 环境与参数：禁 hook、禁 fsmonitor、禁 askPass、关自动 gc 的 -c 参数，安全环境变量（含 GIT_ALLOW_PROTOCOL）以及完全锁定协议的子进程环境。"}
-{"id":"chunk-3nztfxrw.js#Ln","doc":"健康检查服务的限额：请求体上限 256 KB、保留最近 5 条请求、端口范围 100–500。"}
-{"id":"chunk-3nztfxrw.js#he","doc":"hook 进程的生命周期常量：残留输出窗口 1 s、SIGKILL 期限 5 s、进程快照 500 ms、清理宽限等，以及残留输出的提示文案。"}
-{"id":"chunk-3nztfxrw.js#ve","doc":"进程表限额：最多 4096 个进程、每次并发 64 个、ps/命令超时 3 s。"}
-{"id":"chunk-3nztfxrw.js#gvr","doc":"runner API 错误的分类集合（transport/timeout/5xx/429/4xx）与计数初始化。"}
-{"id":"chunk-0h4e7gnq.js#iu","doc":"tengu_groovy_ember 摘要模式开关（full/short）及其 zod schema。"}
-{"id":"chunk-0h4e7gnq.js#du","doc":"生成子代理摘要时各段文本的长度上限：命令描述逐级减半的起始预算 800、最近回复 300、工具摘要 160/120、整段 10000、最近消息 60 条。"}
-{"id":"chunk-s61vbvea.js#zm","doc":"账号记忆服务器的模式常量（all/read_only/none 及排序）与 capabilities.experimental[\"anthropic/memory\"] 的 schema。"}
-{"id":"chunk-s61vbvea.js#$T","doc":"记忆上下文等待常量：最长等待 900 s、上次检查窗口 60 s、默认等待 2 s、首次 5 s、滞后请求 10 s。"}
-{"id":"chunk-s61vbvea.js#WT","doc":"记忆上下文的版本与大小限额：版本 TTL 1 小时、内容 256 KB、响应 1 MB、文件版本表 4096 项。"}
-{"id":"chunk-s61vbvea.js#lv","doc":"记忆文件在上次读取后变化时的两段提示：过期读取警告（需重新 memory_read）和 memory_updates 机器生成块的说明（模型不得转述该块）。"}
-{"id":"chunk-hddjmtjj.js#gn","doc":"Codex 的 MCP server 配置 schema（command/args/env/url/http_headers/bearer_token_env_var）。"}
-{"id":"chunk-hddjmtjj.js#Oe","doc":"导入文件大小上限 10 MB，超过直接报错拒绝。"}
-{"id":"chunk-wd9kxbpn.js#ye","doc":"后台分类器的输入裁剪常量：输入上限约 4 MB、密钥遮盖回溯窗口 8 段、重试前等待 8 s。"}
-{"id":"chunk-wd9kxbpn.js#De","doc":"后台分类器的节流参数：默认 15 s、REPL 5 s、两次分类最短间隔 8 s、最大年龄 240 s、禁用思考时预算 2048、缓存 1 万条。"}
-{"id":"chunk-aepeg2w5.js#X3","doc":"Anthropic 遥测导出器：环境列表（dry_run/test_mode/production）、失败计数包装与日志前缀。"}
-{"id":"chunk-w6mc5gr3.js#_e","doc":"按（事件, 服务器）的限速窗口：60 s 内最多放行 10 条，最多记 200 个窗口。"}
-{"id":"chunk-aepeg2w5.js#K2","doc":"一方遥测导出器的默认值：导出间隔 10 s、批量 200、队列 8192、单次刷新上限 1024。"}
-{"id":"chunk-aepeg2w5.js#S2","doc":"一方遥测导出的 OAUTH 刷新超时、密钥助手加入超时与 WIF 铸造重试间隔。"}
-{"id":"chunk-aepeg2w5.js#t_","doc":"一方遥测 sink 被 killswitch 关闭时抛出的错误类型。"}
-{"id":"chunk-c13g0cfa.js#o","doc":"按宿主保存的退出前刷新任务列表（HostScoped），供各遥测 sink 注册收尾工作。"}
-{"id":"chunk-aepeg2w5.js#GW","doc":"GrowthBook 初始化前的 OAuth/密钥助手等待时长（60 s / 5 s / 5 s）与原因标记。"}
-{"id":"chunk-pm6ycja1.js#e","doc":"凭证存储状态缓存（是否已检查、检查中的 Promise），用于判断能否使用首批凭据读取功能开关。"}
-{"id":"chunk-aepeg2w5.js#Nh","doc":"juniper_shoal 配置读取器插槽：注册读取函数并提供各子配置（工具搜索提醒、参数严格性、空输入修复、搜索抓取规则、schema 描述修复）的取值函数。"}
-{"id":"chunk-aepeg2w5.js#Az","doc":"隐私等级对安全事件（tengu_safety_event）的判定：是否属安全事件、是否缺裁决、是否需要盖主体戳、是否属他人行、HIPAA 是否被污染。"}
-{"id":"chunk-0wqny7vr.js#r","doc":"安全元数据的透传函数：原样返回传入值（不做脱敏），另有 lit 作为其别名。"}
-{"id":"chunk-e6aww6q8.js#jYs","doc":"计费接口的模拟数据：预付额度套餐的四档金额与默认/折扣两组 mock 套餐。"}
-{"id":"chunk-e6aww6q8.js#luo","doc":"缓存保活（cache keepalive）的常量与开关 schema：touch 端点、10 s 超时、3 次失败上限、5 分钟 TTL 与提前续期余量、拒用窗口 1 小时、客户端最大复用 4 分钟、活动事件名，以及配置字段。"}
-{"id":"chunk-e6aww6q8.js#bhr","doc":"web 搜索相关的内容常量：web_search/server_tool_use、web_search_tool_result、引用位置类型、占位文案与计数初始值。"}
-{"id":"chunk-e6aww6q8.js#Fhr","doc":"流式护栏暂存增量的上限、哨兵与最后标量缓存：暂存文本最多 8192 字，读取结束用 Symbol 标记。"}
-{"id":"chunk-hwmsct5x.js#o9r","doc":"x-claude-code-sandy-plover 请求头（本轮用过的工具名列表）的编码限额：最多 64 项、总长 7168 字节、单项 256 字节。"}
-{"id":"chunk-hwmsct5x.js#df","doc":"内置工具名集合：编码请求头时把内置工具排在自定义工具之后。"}
-{"id":"chunk-e6aww6q8.js#W7t","doc":"压缩请求里工具耗时头 x-claude-code-prev-tool-durations 的限额：最多 32 项、头值 4096 字符。"}
-{"id":"chunk-a76knw89.js#Ro","doc":"声明工具集合的默认来源（servers/entries 为空），用于 planDeclaredTools 的参数默认值。"}
-{"id":"chunk-gr2vfhah.js#WEe","doc":"网络/SSL 错误码分组：证书相关错误、含 TLS 握手的全部 SSL 错误、不可达（拒绝/DNS/网络）与 socket 关闭、可重试的瞬态 socket 错误。"}
-{"id":"chunk-gr2vfhah.js#c","doc":"云凭证错误文案：AWS 凭据链解析失败与 Google OAuth 凭据获取失败，沿 cause 链用于识别与过滤。"}
-{"id":"chunk-7t4fmt2f.js#Qt","doc":"响应 content-type 到内容种类（html/json/text/other）的匹配模式表。"}
-{"id":"chunk-e6aww6q8.js#x6o","doc":"遥测用的安全键/路径键正则（小写字母数字下划线，路径版允许斜杠）与对应脱敏函数。"}
-{"id":"chunk-e6aww6q8.js#I6o","doc":"后台网关被扣留时的环境变量值长度上限与安全字符集校验。"}
-{"id":"chunk-0ba63vr9.js#A","doc":"Feature of the Week 活动配置：开关名、命令与时间窗、标题/说明/提示文案、公告行与领取期限的 zod schema。"}
-{"id":"chunk-hwmsct5x.js#t_","doc":"已知的无效请求错误消息模式（提示过长、max_tokens 超限、图片类型、余额不足）以及错误信封允许的键集合。"}
-{"id":"chunk-nmregrje.js#D","doc":"请求体 gzip 的两个开关（gentle_hammock / golden_popcorn）与尺寸/时窗常量：最小 4096 字符（ccr_worker 1024）、块遥测保留 7 天、序列化尾部 8192。"}
-{"id":"chunk-hwmsct5x.js#Lb","doc":"请求体 gzip/复用校验按块进行所需的最小体积（512 KB）、大响应体标记与开关参数（gzip 等级 6、块并发 1000、不压的查询来源、抽样率 0.1）。"}
-{"id":"chunk-rbe666af.js#I","doc":"gzip 分块请求体的常量：块 128 KB、字典 32 KB、最多保留 4 块、缓存上限 32、空闲丢弃 210 s、CTC BLOCK 头 256 字节、正文切分标记与系统块尾部间隙 1024。"}
-{"id":"chunk-e6aww6q8.js#shr","doc":"费用以微美元记录（cost_usd_micros）的换算系数 1e6。"}
-{"id":"chunk-3n6ygrtf.js#S","doc":"指标开关查询的缓存与刷新间隔（1 小时 / 1 天）与接口路径。"}
-{"id":"chunk-e6aww6q8.js#pJn","doc":"accessFallbackModels 客户端数据结构：for（最多 256 字符）与 models（1–3 个安全模型名）的 schema。"}
-{"id":"chunk-e6aww6q8.js#Ygr","doc":"narration 的 protobuf 字段号：外层 2、内层 1、文本 8，以及 \"narration\" 标记。"}
-{"id":"chunk-73yknwsx.js#u","doc":"Pro 试用默认 14 天（本地初始化试用结束时间用）。"}
-{"id":"chunk-g54kbxqw.js#ka","doc":"提示缓存失效检测的输出上限：摘要块数 16、散列块 10000、系统附件字符 4 倍块上限，空摘要结构。"}
-{"id":"chunk-g54kbxqw.js#Qa","doc":"缓存断裂状态文件的限额：最多 32 个状态、文件 2 MB、版本号 1 与 outlines 结构。"}
-{"id":"chunk-g54kbxqw.js#GXr","doc":"用户上下文 system-reminder 的开头/结尾模板、worker MCP 工具说明前缀，以及上下文分段名、块类型与提示条数上限。"}
-{"id":"chunk-g54kbxqw.js#IYe","doc":"后台任务事件的系统通知文案：告知模型这不是用户消息、不得视为用户确认或授权。"}
-{"id":"chunk-g54kbxqw.js#sa","doc":"定时任务的触发文案：说明本轮由调度器按预先保存的提示启动，不是实时用户输入。"}
-{"id":"chunk-s61vbvea.js#t$","doc":"Bedrock 鉴权/模型访问错误的名称与消息特征表，用于把 403/400 归类为 refused 或 denied。"}
-{"id":"chunk-hwmsct5x.js#sb","doc":"安全拒绝回退的线路表：按类别（bio/cyber/frontier_llm）给出可换用的 Opus/Sonnet 模型，以及每条路线最多 3 个候选。"}
-{"id":"chunk-hwmsct5x.js#xXo","doc":"安全拒绝时展示的帮助文章 URL：网络风险（cyber）专用、模型相关与通用三种。"}
-{"id":"chunk-hwmsct5x.js#Ob","doc":"静默回退请求头相关的长度上限（头值 80 / 10000）。"}
-{"id":"chunk-1fgvxqz2.js#c","doc":"请求指纹哈希分片阈值 64 KB：累积到该长度先 flush 一次。"}
-{"id":"chunk-hwmsct5x.js#Jp","doc":"请求头 SF 字典（键值对头）的限额：最多 32 项、键 128、值 128，另留键长余量。"}
-{"id":"chunk-hwmsct5x.js#Qy","doc":"未监视回复暂存流的常量：哪些查询来源的回复要暂存（subagent/auxiliary/compaction）、脉冲/增量事件字节前缀、LF/CR/BOM 字节、最多暂存 256 KB 与发送状态。"}
-{"id":"chunk-aepeg2w5.js#t8t","doc":"请求分类请求头 x-claude-code-request-class 与 x-claude-code-agent-type，及允许的请求类别列表。"}
-{"id":"chunk-e6aww6q8.js#Plo","doc":"请求过大提示的开关 tengu_wobbly_fern（字节上限）与其 zod schema。"}
-{"id":"chunk-e6aww6q8.js#Q6o","doc":"诊断用的缓存/代理响应头名单与网关头前缀（anthropic-、x-amz-、x-goog- 等），用于识别中间层。"}
-{"id":"chunk-e6aww6q8.js#CQt","doc":"按宿主保存的安全拒绝设置状态（跳过的类别、被设置拒绝的类别、变更信号）。"}
-{"id":"chunk-hwmsct5x.js#Q8r","doc":"安全机制提示的文案与开关：了解链接、宽泛性说明、切换模型标题、开关名与用户偏好标签。"}
-{"id":"chunk-hwmsct5x.js#Eb","doc":"各安全类别（cyber/bio/frontier_llm）的首次提示文案，以及按模型族（sonnet）给出的类别与恢复后提示规则。"}
-{"id":"chunk-hwmsct5x.js#Ef","doc":"按宿主保存的会话标志读取器集合与会话标志持有者（合并、清空）。"}
-{"id":"chunk-gr2vfhah.js#hAi","doc":"流错误重试窗口上限 10 分钟；取升级后或首次重试窗口。"}
-{"id":"chunk-rbe666af.js#L","doc":"流回退警告的遥测表容量（按客户端请求 id 最多记 256 条）。"}
-{"id":"chunk-e6aww6q8.js#Icn","doc":"思考块被丢弃原因的严重度顺序（other < model_mismatch < prefix_mismatch），汇总时取最严重者。"}
-{"id":"chunk-e6aww6q8.js#jyr","doc":"ATIS 不一致时重新拉取 bootstrap 的参数：最小间隔 300 s（30–86400）、最大抖动 180 s（0–3600）与开关名、拉取时间槽。"}
-{"id":"chunk-a76knw89.js#me","doc":"工具定义里会出现在 schema 层的布尔字段名（strict/eager_input_streaming/citations）。"}
-{"id":"chunk-aepeg2w5.js#He","doc":"工具描述缓存的门面实例（HostScoped）：转发读取、盖章、登记、已发送记录与大小，重置时清空延迟与重述记录。"}
-{"id":"chunk-twvgrhqz.js#A","doc":"ultrareview 提示的两种 key（prose-pointer、post-commit）与同一提示最多显示 5 次。"}
-{"id":"chunk-w5ndchqs.js#Me","doc":"用量提示常量：接近上限阈值 0.7、个人花费/用量限额文案与 wrap-up 链接。"}
-{"id":"chunk-w5ndchqs.js#At","doc":"用量页促销文案表（tengu_starry_waterfall）：菜单后缀、提示、对话框标题、横幅四种场景的折扣/返现文案与默认值。"}
-{"id":"chunk-w5ndchqs.js#Lt","doc":"限额页促销通知（tengu_rate_limit_promo_notices）的 schema：进度条文字、说明文字与可选主题变体。"}
-{"id":"chunk-w5ndchqs.js#g7n","doc":"组织花费上限原因集合与“频道月度花费/用量上限”文案和提升提示。"}
-{"id":"chunk-hwmsct5x.js#kf","doc":"混淆头 x-claude-code-wiggly-dove：头名常量与用于按 sha256 识别的摘要值。"}
-{"id":"chunk-r0perv8y.js#L","doc":"内嵌 artifact 预览（emulator）：启动脚本挂载位置检查、是否编译进本构（compiledPreviewModule）、emulator 可用性开关与远端启用判断。"}
-{"id":"chunk-cqgek8qx.js#a","doc":"各 addon（comments/data/check）工具对旧 Artifact 动作的改写规则与“动作在本工具里怎么写”的映射，均委托 artifactLegacyHost。"}
-{"id":"chunk-x7pzr0ah.js#a","doc":"Artifact 可用性登记器全局实例：注册来源并聚合判断 artifact 功能是否可用。"}
-{"id":"chunk-9xyz2gbc.js#Izs","doc":"Artifact 发布输入 connectors 字段的开关与服务端能力声明处理（BCR/CCR 托管、SDK 服务器分组）。"}
-{"id":"chunk-0zqb2m0b.js#IB","doc":"数据库工具的操作分类：读（get/list/query）、写（set/update/delete/str_replace）、作用域（view/interact/admin），及列表上限 1000。"}
-{"id":"chunk-0zqb2m0b.js#KHe","doc":"数据库工具的大小与编辑限额：单字段 256 KB、文档 1 MB、请求体 4 MB、最多 200 处编辑、查询 1000 条、批量写 50、写入体 1 MB，及编辑错误码表。"}
-{"id":"chunk-0zqb2m0b.js#We","doc":"数据库错误码映射表：服务端各种错误码统一到 not_found/invalid_argument/quota_or_rate/busy/upstream_auth/store_unavailable 等，及需要用户级 OAuth 错误的文案集合。"}
-{"id":"chunk-0zqb2m0b.js#tt","doc":"数据库错误响应体 schema（code/reason/kind/limit/version/index/required）与配额原因集合。"}
-{"id":"chunk-0zqb2m0b.js#G2s","doc":"版本冲突错误的提示前缀与写入/删除时“需先读最新版本”的文案。"}
-{"id":"chunk-0zqb2m0b.js#Y","doc":"数据库读取自身身份（data/users/me、whoami）的路径常量与 schema。"}
-{"id":"chunk-0zqb2m0b.js#dt","doc":"关闭云端网络访问时数据库读取失败的说明文案（只能读自己发布的 artifact）与读取范围头。"}
-{"id":"chunk-5nrcp6t7.js#N","doc":"artifact MCP 线路常量：广告 TTL 5 分钟、tools/list 超时 5 s/1 s、调用超时 5 s、响应体上限 1 MB 与帧客户端请求头名单。"}
-{"id":"chunk-xf84t5b0.js#J","doc":"artifact 通知的聚合参数：默认 15 s、最长 60 s 结算窗口、最多保留 20 条明细。"}
-{"id":"chunk-5323y1gy.js#pe","doc":"artifact 打开预取的限额：单文件 1 MB、合计 8 MB、最多 100 个文件、12 个字体、32 个参考页、1500 ms 截止、8 个并发读，及启动文件清单。"}
-{"id":"chunk-0wdgqhcf.js#BHs","doc":"db_profiles（人员档案）答复的格式化：按 id 列出姓名，标注未知 id 与不可用状态。"}
-{"id":"chunk-0wdgqhcf.js#zt","doc":"artifact 内嵌（embed）错误的 schema：pins 与 warnings 列表，以及四种错误说明文案。"}
-{"id":"chunk-aqdf5t3e.js#Ai","doc":"presence 空闲参数开关 tengu_slate_lantern_hush 的 schema 与取值范围（空闲判定 600–86400 s、保活 25–600 s、默认 50 s）。"}
-{"id":"chunk-easqy8j1.js#he","doc":"共享授权（share grant）schema：读/写授权、评论者与查看者、组织只读级别、owner 与版本等字段。"}
-{"id":"chunk-4v4n55c3.js#aNo","doc":"数据库写入动作名（set/update/str_replace/delete/batch），简写展开时归到 write_db。"}
-{"id":"chunk-4xpk3fhh.js#y","doc":"判断 Artifact 总开关（用户设置）是否关闭。"}
-{"id":"chunk-06y4szbn.js#cs","doc":"artifact 文档清单的限额：最多 4096 项、路径 ≤512 字符且不得以 / 开头或含 .. 与转义控制字符，doc 名 ≤64。"}
-{"id":"chunk-easqy8j1.js#tt","doc":"Artifact 工具输入模式的构建：时间戳 schema、门面 gate 快照、发布编辑是否可用，以及缓存的 inputSchema。"}
-{"id":"chunk-75vetdac.js#n","doc":"按 artifact 类型取参考文件清单，并按“创建时内联/需要设计系统/打印/kit 读取”筛选的四个辅助函数。"}
-{"id":"chunk-w08rdxhd.js#PLo","doc":"发布时附加的类型发行版说明：是否启用类型、锁定发行版与可否修改。"}
-{"id":"chunk-99h01h55.js#WQr","doc":"数据库规则路径正则（允许 {self} 段）与可用作用域集合（view/interact/admin/owner/self）。"}
-{"id":"chunk-99h01h55.js#Jes","doc":"CLAUDE_ARTIFACT_HOST_GRANT 环境变量的 schema：本机允许 artifact 调用的 MCP 服务器与工具。"}
-{"id":"chunk-99h01h55.js#oe","doc":"artifact 能力声明的已知键（artifact/self/downloads/comments/room/db/assets/user 等）及其扩展集合 mcp/flags。"}
-{"id":"chunk-99h01h55.js#Ne","doc":"页面连接器声明的文案：动态 mcp 说明、无效名与“查看者逐个批准”的提示。"}
-{"id":"chunk-3jhw7vrg.js#v","doc":"自动模式分类器的 Artifact 上下文占位（handlers/room_client 恒 false）与路径/房间/连接器信息。"}
-{"id":"chunk-w4p2kd11.js#ft","doc":"评论监控意图里“已遗忘 slug”表的上限 1024。"}
-{"id":"chunk-bf8g35sz.js#m","doc":"评论读取记录（按工具调用 id、按 slug）表的容量上限 256。"}
-{"id":"chunk-9tgt55am.js#on","doc":"自动回复确认语的模板表（7 条，标出是否随改稿）与冷却时间 2 s、固定确认文案、两条模型系统提示。"}
-{"id":"chunk-9tgt55am.js#bo","doc":"自动改稿的尺寸与截止参数：内容 256 KB 上限、替换体 64 KB、组合截止 180 s、提示 10 万字节上限等。"}
-{"id":"chunk-9tgt55am.js#$d","doc":"自动改稿的重试上限 8 次、失败回问文案（整篇重写不可用）与截断长度。"}
-{"id":"chunk-9tgt55am.js#Xd","doc":"自动改稿四类失败（未应用、无变化、整篇重写被拒、超时）分别给用户与给模型的两套说明文案。"}
-{"id":"chunk-9tgt55am.js#Na","doc":"自动回复“先说不再需要”的三种不应答原因（他人召唤、已有答复、页面自管讨论串）。"}
-{"id":"chunk-eavynfj6.js#oe","doc":"自动改稿补丁的限额：最多编辑数（沿用发布上限）、替换 64 KB、新建文件 256 KB、新建合计 512 KB，以及 surrogate 转义标记。"}
-{"id":"chunk-eavynfj6.js#Ae","doc":"自动改稿补丁的截止与转义解析常量：45 s 截止、最少 10 s 余量、最多 3 轮实体解析，以及 HTML 实体/反斜杠转义正则与实体名表。"}
-{"id":"chunk-9tgt55am.js#ws","doc":"自动回复的节流与开关常量：合并等待默认 60 s、读重试 [5s,15s,30s,60s]、时钟偏差 10 分钟、快确认刷新 3 s，及若干 GrowthBook 开关名。"}
-{"id":"chunk-9tgt55am.js#Is","doc":"自动回复的合并等待 5 s、读重试退避表与 mullion 开关名。"}
-{"id":"chunk-9tgt55am.js#oi","doc":"自动回复台账（autoreact ledger）的限额与 schema：最长 1 天、最短写入间隔 1 小时、防抖 10 s、未来偏差 5 分钟、每部分 160 KB、2000 线程、每线程 500 条、600 个回合时间戳。"}
-{"id":"chunk-9tgt55am.js#Ai","doc":"后台评论 agent 的开关名与每个会话最多 5 个线程 agent 的上限。"}
-{"id":"chunk-9tgt55am.js#Si","doc":"后台评论 agent 权限包装里禁止它再调用的工具（Agent、SendMessage、Monitor、workflow、定时任务等）。"}
-{"id":"chunk-av47g0rj.js#g3r","doc":"评论作者身份常量：principal token（u_ 开头）与原始角色字符串的正则、relay 路由，以及本账号已记住的 token 集合。"}
-{"id":"chunk-grzs9chm.js#gqn","doc":"评论目标的键与文本截断上限（目标 120 字符、正文 4000、@提及 32）。"}
-{"id":"chunk-b0a246e7.js#Vze","doc":"评论 id 与时间戳文本的正则（id 64 位 hex/横线、时间戳 40 字符）。"}
-{"id":"chunk-b0a246e7.js#ZBt","doc":"锚点提示标签（[anchored at]、[on page]、[region of] 等）与 CSS 选择器片段正则，及 128 字节的锚点文本上限。"}
-{"id":"chunk-b0a246e7.js#at","doc":"锚点上限：位置 2^24、标签 128、详情 512、子节点 8 个且索引 <4096、文件 sha256 正则与降级标记。"}
-{"id":"chunk-b0a246e7.js#he","doc":"评论里 @提及 的解析：<mention:...> 模式、UUID 与短 id 两种合法形态，及不可见空白字符处理。"}
-{"id":"chunk-b0a246e7.js#X","doc":"评论回复相关的错误说明：未激活、需要用户级凭证、组织服务键无法读/写评论、网络关闭、已回复、他人召唤、id 占用等。"}
-{"id":"chunk-b0a246e7.js#Nt","doc":"评论回复不确定性的两段说明（可能已发出/连接未承载）与回复结果 schema。"}
-{"id":"chunk-b0a246e7.js#qt","doc":"线程解决的错误文案：需要 claude.ai 会话、CCR agent token 不可用、中继失败时不确认的说明。"}
-{"id":"chunk-tq1fsmqn.js#cGs","doc":"评论回复同意写入器的标识（interactive/sdk/bg_session 三种界面）。"}
-{"id":"chunk-06y4szbn.js#P0o","doc":"Artifact 可服务的 MIME 类型集合：标记类（html/xhtml/xml/svg）、脚本/WASM、以及文本、图片、字体、音视频清单。"}
-{"id":"chunk-06y4szbn.js#ko","doc":"发布内容的类型说明文案：按族列出扩展名、不支持类型的提示、纯文本与文档归档的处理建议。"}
-{"id":"chunk-06y4szbn.js#Co","doc":"发布限流的文案与等待秒数（10/120）：给用户与给模型的提示、重发指引与预检拒绝的正则。"}
-{"id":"chunk-06y4szbn.js#mr","doc":"契约版本过新（服务器尚未全部更新）时的提示文案与匹配正则。"}
-{"id":"chunk-06y4szbn.js#il","doc":"artifact 页面契约 schema（版本、能力列表、claude/core 能力与 features 映射）与读取参数。"}
-{"id":"chunk-ez320trn.js#p","doc":"设计系统指南相关常量：README 路径、读取上限（12000/7000/700 字符）与读取失败的三种原因文案。"}
-{"id":"chunk-5nrcp6t7.js#CN","doc":"frame API 的响应大小上限 20 MB 与拒绝响应的 content-type。"}
-{"id":"chunk-jv307fw4.js#_0o","doc":"去掉页面末尾 __frame_comments__ 脚本块时的大小上限（4 MB / 3 MB）。"}
-{"id":"chunk-f6553xe3.js#VFr","doc":"artifact 读取方式可用性登记器：注册来源并说明 Artifact 工具/WebFetch 两种读法。"}
-{"id":"chunk-aqdf5t3e.js#lo","doc":"实时订阅消息里版本号字段的正则（1–15 位数字）。"}
-{"id":"chunk-aqdf5t3e.js#ji","doc":"frame-live 实时订阅的协议标识 frame-live.v1、通知入队函数与 25 s 重试间隔。"}
-{"id":"chunk-sh3bk7pt.js#Kor","doc":"通过会话中继转发 artifact 请求的路由族与具体路由表：boot/blobs/comments/subscriptions/types/type_create/db/sharing/publish/frames_external 各自的 method+path。"}
-{"id":"chunk-sh3bk7pt.js#Ue","doc":"中继请求的两个头 x-ccr-relay-upstream、x-ccr-sandbox-egress 与沙箱出网档位取值。"}
-{"id":"chunk-jv307fw4.js#Zt","doc":"经 frame /api/frame/content 读取 artifact 内容的路由头、重试次数 3 与退避上限 10 s。"}
-{"id":"chunk-jv307fw4.js#St","doc":"接受“版本号时间戳不超前”的容差 10 分钟与版本串前缀正则。"}
-{"id":"chunk-hag5hcx6.js#y","doc":"路径钉住的限额：每个 artifact 20 条、路径 32000 字符。"}
-{"id":"chunk-06y4szbn.js#dc","doc":"每日发布上限错误的两个代码（frame_daily_publish_cap_reached / frame_daily_push_cap_reached）、schema 与两种计划文案，以及 publish 429 前缀与剩余次数响应头。"}
-{"id":"chunk-06y4szbn.js#Cs","doc":"发布重试参数：503 最多 3 次、退避基数 5 s、retry-after 上限 20 s、可接受 30 s 内的值。"}
-{"id":"chunk-06y4szbn.js#Yo","doc":"未纳入发布的文件提示常量：no_file 标记、文件类型正则、未命名上限 16 与路径 160 字符。"}
-{"id":"chunk-06y4szbn.js#Lc","doc":"artifact 列表条目的 schema（slug/title/favicon/rel/更新时间/星标/外部可能写入）与列表上限、响应体 4 MB 上限。"}
-{"id":"chunk-jv307fw4.js#R5n","doc":"记录已听过的版本号：与给定版本相同时清除记录。"}
-{"id":"chunk-06y4szbn.js#jo","doc":"本会话自己发布记录的上限 8 个版本与版本号形态正则。"}
-{"id":"chunk-06y4szbn.js#Ws","doc":"页面准备的基础样式与发布状态/契约/阻塞清单的 schema，以及 echo manifest 的路径 1024 / 条目上限。"}
-{"id":"chunk-06y4szbn.js#dun","doc":"页面运行时（frame-runtime / base href / preamble）识别的窗口 8192 字符、最大跨度 5 分钟与相关正则。"}
-{"id":"chunk-06y4szbn.js#wl","doc":"HTML 开标签识别正则（body、base、原始文本元素）。"}
-{"id":"chunk-06y4szbn.js#xl","doc":"去除运行时标记时的迭代上限（64/96/64）。"}
-{"id":"chunk-06y4szbn.js#Rl","doc":"页面剥除运行时标记失败的错误说明：blocks/author 两类说明与嵌套层级超限说明。"}
-{"id":"chunk-6ht21p2a.js#Jn","doc":"类型目录查询的缓存时长：成功 10 分钟、失败 1 分钟、等待 3 s，以及探测预算等参数。"}
-{"id":"chunk-6ht21p2a.js#Qn","doc":"发布冲突差异比较的参数：上下文 2 行、超时 2 s、探测字符预算 9600 万、易混字符权重 48、行首/换行正则。"}
-{"id":"chunk-06y4szbn.js#gun","doc":"发布被拒的原因码表：denied 与 refused 两组（合规、组织、限额、渲染、版本冲突等），以及 \"publish denied: \" 前缀。"}
-{"id":"chunk-06y4szbn.js#pa","doc":"标记“发送前即被拒”错误的 Symbol。"}
-{"id":"chunk-06y4szbn.js#VHe","doc":"类型实例发布清单的类型表：可作为文本发布的 MIME、可服务的 MIME 全集，以及只按扩展名识别的代码与办公文档后缀。"}
-{"id":"chunk-jv307fw4.js#v2s","doc":"缩略图 href 的校验：上限 1 MB 与 .png/.jpg/.jpeg 正则。"}
-{"id":"chunk-0wdgqhcf.js#vt","doc":"导出常量或表 `MAX_TITLE_CHARS`：值为 256, Ye = null, at = null。"}
-{"id":"chunk-5e92hn02.js#K","doc":"已发布文件清单的常量：_files.json、最多 4096 个文件、读取上限 16 MB、90 s 超时、文档哈希与序号响应头及清单 schema。"}
-{"id":"chunk-5e92hn02.js#q","doc":"已发布文件读取不可用的两种说明（需要本会话或带网关中继的云会话）。"}
-{"id":"chunk-6ht21p2a.js#an","doc":"读取已存 frame 声明的超时（6 s / 5 s）与最多展示的键数 16。"}
-{"id":"chunk-6ht21p2a.js#At","doc":"类型目录担保查询的默认结果（ships=false、firstParty=false）。"}
-{"id":"chunk-06y4szbn.js#Nl","doc":"<base href> 指向 artifact 之外时的两段说明（含 files 的内联版与单页版）。"}
-{"id":"chunk-06y4szbn.js#Un","doc":"发布后回读的限额：最多 8 项、占结果大小上限的 7 成。"}
-{"id":"chunk-bhxaz9j0.js#m","doc":"重复拒绝断路提示：同一目标因同一原因被拒多次后，告知模型不要再重发同一调用。"}
-{"id":"chunk-06y4szbn.js#Gl","doc":"渲染输出限额：32、16 条警告、200 字符来源、路径正则，以及 embeds/pins/warnings 的 schema。"}
-{"id":"chunk-06y4szbn.js#sa","doc":"渲染输出转换的占位实现（本构建中均返回空数组）。"}
-{"id":"chunk-sqqsb7w7.js#S","doc":"评论自动回复让渡协议：4 s 超时、最多 16 个 slug、表上限 64，以及 yield/unyield 消息 schema 与 unref 定时器。"}
-{"id":"chunk-5v4t11fy.js#lNo","doc":"会话提示头被服务端拒绝后的冷却时长 1 小时。"}
-{"id":"chunk-qkycbme9.js#M","doc":"分享条目探测记录的上限：判定的 512、最近文本 8192、观察 64 条。"}
-{"id":"chunk-11fv1n21.js#t","doc":"Artifact 快速起步套件开关 tengu_concurrent_candle 及其默认值 false。"}
-{"id":"chunk-99h01h55.js#Dyi","doc":"显示文本用的小写标签正则（`[a-z][a-z_-]{0,31}`）与掩码器。"}
-{"id":"chunk-18hwfzwa.js#jae","doc":"artifact 监听的错误文案表：功能关闭、会话不支持、按原因（flag/remote/not_found/other_org 等）的具体说明与“监听未能重启”的提示。"}
-{"id":"chunk-xx1vmpsq.js#fn","doc":"回合前预热 API 认证的常量与共享状态：3 s 超时、60 s 退避、2 s 宽限，以及在途去重与事件信号。"}
-{"id":"chunk-aepeg2w5.js#YV","doc":"遥测用的 MCP 登记表（按宿主）：第一方插件、可记录服务器、工具名是否扣留、CCR 注入配置等，以及归因字段可见性规则。"}
-{"id":"chunk-aepeg2w5.js#JY","doc":"遥测里工具输入的截断限额：字符串 512、JSON 4096、数组/键 20 项、嵌套深度 2；另有扩展名与地区信息正则。"}
-{"id":"chunk-aepeg2w5.js#Td","doc":"遥测中按 MCP 工具名推断的内置工具名（Bash、WebFetch）映射与 Artifact 工具名集合。"}
-{"id":"chunk-aepeg2w5.js#Uro","doc":"会话相关 MCP 的固定名称：anthropic/session、anthropic/sessionEndHooks 及空名称常量。"}
-{"id":"chunk-06y4szbn.js#Ei","doc":"页面 data-id 属性的长度 16 与对应正则（chart/mermaid 运行时标记识别用）。"}
-{"id":"chunk-06y4szbn.js#uo","doc":"图表（高亮）运行时标记识别的规格：起始前缀、结束标记、最多 8 位长度数字、最大跨度 4 MB 与校验函数。"}
-{"id":"chunk-06y4szbn.js#mo","doc":"Mermaid 图的浅色/深色配色与图表样式。"}
-{"id":"chunk-06y4szbn.js#Eo","doc":"Mermaid 运行时标记识别的规格：起始/结束标记、最多 8 位长度、最大跨度 8 MB 与校验函数。"}
-{"id":"chunk-w08rdxhd.js#We","doc":"弯引号与各种短横线的替换正则，用于清洗类型目录文本。"}
-{"id":"chunk-w08rdxhd.js#Yt","doc":"“type url”标签匹配用的分隔符字符集与惰性正则。"}
-{"id":"chunk-w08rdxhd.js#pe","doc":"清洗链接的易混字符/UUID/路径片段模式集合（惰性构造）。"}
-{"id":"chunk-w08rdxhd.js#_e","doc":"类型说明文本的内联上限 20000 字符、服务端行 300 字符与待读时长。"}
-{"id":"chunk-jv307fw4.js#Fe","doc":"claude.ai 链接族的分类表：chat/share/task/cowork/project/design/settings/api 各自是否需要 id，以及族到展示名的映射。"}
-{"id":"chunk-jv307fw4.js#CA","doc":"发布路径长度上限 512 与单个 URL 段 255 字符。"}
-{"id":"chunk-g62cc56z.js#dNi","doc":"本机/云会话的唤醒说明三种文案（本地监听、云端已注册、注册失败），并列出可接受的错误码集合。"}
-{"id":"chunk-hvmwwjxr.js#a","doc":"评测用 Artifacts MCP 服务的参数：发布类与读取类工具名清单、路径通配符正则。"}
-{"id":"chunk-18hwfzwa.js#QZ","doc":"屏幕阅读器/全屏/WezTerm 下是否启用程序状态（会话在线状态行）。"}
-{"id":"chunk-18hwfzwa.js#nBt","doc":"草稿值订阅的占位文案 \"[longer input]\"（超过 1 个字符时复用固定字符串减少重渲染）。"}
-{"id":"chunk-9tgt55am.js#HDr","doc":"评论普查的计数上限 999 与时间分桶 120 秒。"}
-{"id":"chunk-4xpk3fhh.js#Z","doc":"是否对修改 artifact 公开状态的询问总是询问（当前恒 true），以及 artifact 同意记录的键构造。"}
-{"id":"chunk-18hwfzwa.js#vLe","doc":"后台 fork 携带排队提示的文件名 adopt.json.queued-prompts 与大小/数量/TTL 上限。"}
-{"id":"chunk-jh9jdn8w.js#oyt","doc":"无人值守自动回复计数的上限 10000（按 artifact slug 记）。"}
-{"id":"chunk-18hwfzwa.js#FUe","doc":"远程会话里不支持的命令说明表（ide/resume/continue/statusline/workflows/artifacts）及统一提示。"}
-{"id":"chunk-g54kbxqw.js#X_","doc":"GetTask 工具不可用时的三段说明：为什么不能调用 GetTask、tool_use_error 包装文案与重复调用的应答。"}
-{"id":"chunk-ad2e1aj6.js#zo","doc":"本机对云会话的服务公告：服务状态键、Claude Code 版本、机器名、进程姿态与常驻批准限额。"}
-{"id":"chunk-ag5x7vhf.js#LXe","doc":"LSP 推荐对话框与插件提示对话框的定义：kind、payload/result schema、默认结果与隐藏条件。"}
-{"id":"chunk-rbe666af.js#ne","doc":"按块计算 gzip 请求体各块摘要并复用上次摘要（carriedDigestCount），用于块缓存键。"}
-{"id":"chunk-9tgt55am.js#rd","doc":"评论自动回复的两段系统提示（写一句确认 / 从列表选一句）与纯文本、不得描述内部机制的附加要求。"}
-{"id":"chunk-06y4szbn.js#Xc","doc":"从类型创建的 artifact 不允许改页面的说明文案（无法发布自身文件、重试无用等）。"}
-{"id":"chunk-08945j39.js#xmo","doc":"导出函数 `isToolNameDifferent`：参数 e, n，返回 typeof n === \"string\" && isDifferentString(tt(e), n)。"}
-{"id":"chunk-08945j39.js#tCs","doc":"导出函数 `sendFailureMessage`：参数 e，返回 n === \"timeout\" || n === \"network\" ? nt[n] : void 0。"}
-{"id":"chunk-08945j39.js#$Nn","doc":"导出类 `UntrustedDeviceTokenError`：继承 `Error`。"}
-{"id":"chunk-08945j39.js#YAs","doc":"导出常量或表 `BASH_TASK_COUNT_DELAY_MS`：值为 2000。"}
-{"id":"chunk-08945j39.js#Kkr","doc":"导出函数 `supportsBackgroundTasksMovesBash`：参数 e，返回 Array.isArray(e.capabilities) && e.capabilities.includes(BACKGROUND_TASKS_MOVES_BASH_V1)。"}
-{"id":"chunk-08945j39.js#Amo","doc":"导出函数 `isControlCommandLike`：参数 e，返回 hasToolResultContent(e) || hasNonTextContent(e)。"}
-{"id":"chunk-fnk5kvbf.js#Jn","doc":"导出函数 `getRemoteCaps`：返回 getCaps().remote。"}
-{"id":"chunk-fnk5kvbf.js#cwr","doc":"导出常量或表 `REMOTE_STOPPED_WAITING_NOTICE`：值为 \"Stopped waiting for the remote \\u2014 the command may still complete there\"。"}
-{"id":"chunk-fnk5kvbf.js#wt","doc":"导出函数 `isRemoteSessionAvailable`：返回 getIsRemoteMode() || Jn() !== null。"}
-{"id":"chunk-fnk5kvbf.js#IMe","doc":"导出函数 `preferRemoteValue`：参数 e, n，返回 wt() ? n : e。"}
-{"id":"chunk-fnk5kvbf.js#ml","doc":"导出函数 `isRemoteControlChannelAvailable`：返回 r_s(Jn())。"}
-{"id":"chunk-fnk5kvbf.js#r_s","doc":"导出函数 `hasRemoteControlChannel`：参数 e，返回 e?.caps?.controlChannel === !0 && !e.viewerOnly。"}
-{"id":"chunk-fnk5kvbf.js#uwr","doc":"导出函数 `alwaysFalseRemoteMode`：返回 !1。"}
-{"id":"chunk-fnk5kvbf.js#_C","doc":"导出函数 `hasRemoteCap`：参数 e，返回 Jn()?.caps?.[e] === !0。"}
-{"id":"chunk-fnk5kvbf.js#xdo","doc":"导出函数 `canUseRemoteFeature`：参数 e, n，返回 n && !(e.isRemoteMode && e.viewerOnly)。"}
-{"id":"chunk-fnk5kvbf.js#Yg","doc":"导出函数 `runInRemoteCallFrameMain`：参数 e, n，返回 s.run({ cwd: Mn(e) }, n)。"}
-{"id":"chunk-18hwfzwa.js#iAs","doc":"导出函数 `registerPendingModeAck`：参数 h, x, D，返回 cUe.of(h).register(x, D)。"}
-{"id":"chunk-3xdfvx0n.js#Skr","doc":"导出函数 `isResultEvent`：参数 r，返回 r.type === \"result\"。"}
-{"id":"chunk-3xdfvx0n.js#gAs","doc":"导出函数 `shouldDeliverEvent`：参数 e, n, r，返回 r.taskWake || (s === void 0 ? r.sent : s.some((i) => n.has(i)))。"}
-{"id":"chunk-3xdfvx0n.js#Ekr","doc":"导出函数 `recordNestedUuidAliases`：参数 e, n, r。"}
-{"id":"chunk-3xdfvx0n.js#vkr","doc":"导出函数 `recordInProgressToolUses`：参数 e, n, r。"}
-{"id":"chunk-3xdfvx0n.js#M0n","doc":"导出函数 `clearInProgressToolUses`：参数 e, n。"}
-{"id":"chunk-3xdfvx0n.js#Upo","doc":"导出函数 `parseWorkflowProgressList`：参数 e，返回 e.flatMap((n) => { let safeParse = WORKFLOW_PROGRESS_SCHEMA().safeParse(n); return safeParse.success ? [safePa…。"}
-{"id":"chunk-g54kbxqw.js#AJ","doc":"导出函数 `clampToMaxPageSize`：参数 e，返回 1; return Math.min(Math.floor(e), Ie)。"}
-{"id":"chunk-g54kbxqw.js#iv","doc":"导出函数 `byteLengthOf`：参数 e，返回 Buffer.byteLength(jsonStringify(e), \"utf8\")。"}
-{"id":"chunk-g54kbxqw.js#zt","doc":"导出常量或表 `SCHEMA_COMBINATOR_KEYS`：值为 [\"anyOf\", \"oneOf\", \"allOf\"], LXr = /^[a-zA-Z0-9_.-]{1,64}$/, Br = [\"$defs\", \"definitions\", \"$schema\", \"additionalPropert…。"}
-{"id":"chunk-g54kbxqw.js#RXr","doc":"导出常量或表 `TOOL_HOST_ID_RE`：值为 /^[a-z0-9][a-z0-9+._-]{0,31}(@[0-9][0-9A-Za-z.+_-]{0,23})?$/, xXr = 96, PXr = 1e6, IXr = 2048。"}
-{"id":"chunk-s61vbvea.js#KNe","doc":"导出函数 `isConfirmRepositoryTrustTool`：参数 e，返回 getMcpPrefix(e, CONFIRM_REPOSITORY_TRUST)。"}
-{"id":"chunk-s61vbvea.js#m2","doc":"导出函数 `isRequestComputerFolderTool`：参数 e，返回 getMcpPrefix(e, REQUEST_COMPUTER_FOLDER)。"}
-{"id":"chunk-s61vbvea.js#n4o","doc":"导出函数 `isListComputerFoldersTool`：参数 e，返回 getMcpPrefix(e, LIST_COMPUTER_FOLDERS)。"}
-{"id":"chunk-f2w97cfp.js#lkn","doc":"导出函数 `TOOL_HOST_INTERFACE_VERSION`。"}
-{"id":"chunk-s61vbvea.js#Xti","doc":"导出函数 `repositoryTrustFromMessageTags`：参数 e, n，返回 repositoryTrustFromTags(e.tags)。"}
-{"id":"chunk-s61vbvea.js#Str","doc":"导出函数 `reportableRepositoryTrust`：参数 e, n，返回 (e === \"not_marked\" || e === \"nothing_to_mark\") && !n ? void 0 : e。"}
-{"id":"chunk-s61vbvea.js#Qti","doc":"导出函数 `markableRepositoryTrust`：参数 e，返回 e === \"nothing_to_mark\" ? void 0 : e。"}
-{"id":"chunk-s61vbvea.js#Zti","doc":"导出函数 `repositoryTrustConsentText`：参数 e，返回 REMOTE_TOOLS_CONSENT_TEXT[`repository_trust.state.${e}`]; } export { Jti, Str, Qti, Xti, Zti }。"}
-{"id":"chunk-s61vbvea.js#f_n","doc":"导出函数 `settingsToJsonText`：参数 e，返回 `${jsonStringify(e, null, 2)} `。"}
-{"id":"chunk-s61vbvea.js#N4r","doc":"导出函数 `keepEmptyOwnerSettings`。"}
-{"id":"chunk-s61vbvea.js#hti","doc":"导出函数 `isVersionAtLeast2_32`：参数 e，返回 e !== null && (e.major > 2 || (e.major === 2 && e.minor >= 32))。"}
-{"id":"chunk-s61vbvea.js#yti","doc":"导出函数 `isVersionAtLeast2_32b`：参数 e，返回 e !== null && (e.major > 2 || (e.major === 2 && e.minor >= 32))。"}
-{"id":"chunk-s61vbvea.js#vSe","doc":"导出常量或表 `GIT_SHA_RE`：值为 /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/, BF = /^0+$/。"}
-{"id":"chunk-s61vbvea.js#_ti","doc":"导出函数 `hasNonZeroHash`：参数 e，返回 !BF.test(e)。"}
-{"id":"chunk-012rhzq5.js#_n","doc":"导出函数 `deviceBindingOffReason`：返回 getDeviceBindingRefusal() ?? (isSessionChannelDisabled() ? \"channel_off\" : void 0)。"}
-{"id":"chunk-25sm7c4g.js#uHr","doc":"导出常量或表 `SESSION_TRANSPORT_LIMITS`：值为 { maxRequestBytes: 4128768, defaultDeadlineMs: 58000 }, he = 60000, PROBE_DEADLINE_MS = 1e4。"}
-{"id":"chunk-s61vbvea.js#w_n","doc":"导出常量或表 `SERVED_CALLS_UNATTESTED`：值为 \"served-calls-unattested\", SERVED_CALLS_UNATTESTED_UNTRUSTED_REPO = \"served-calls-unattested-untrusted-repo\", _j = 30000。"}
-{"id":"chunk-s61vbvea.js#r4o","doc":"导出函数 `attachStateSchema`。"}
-{"id":"chunk-kakaahp3.js#n","doc":"导出常量或表 `TOOL_SERVER_ENV_DEFAULTS_ALIAS`：值为 { ...r }。"}
-{"id":"chunk-c8ynteey.js#R7","doc":"导出常量或表 `UNSUPPORTED_CONTROL_SUBTYPE_TEXT`：值为 \"Unsupported control request subtype\"。"}
-{"id":"chunk-1ptrwbb7.js#Lgt","doc":"导出函数 `isReportableDiagnostic`：参数 error，返回 error.filter((r) => !r.mcpErrorMetadata && !r.statusOnly && !r.startupFatal)。"}
-{"id":"chunk-aepeg2w5.js#mvi","doc":"导出函数 `maxOutputTokensMinusOne`：参数 v，返回 getModelMaxOutputTokens(v).upperLimit - 1。"}
-{"id":"chunk-xe7zq1p4.js#qCr","doc":"导出函数 `isTerminalInterested`：返回 Se(ie)。"}
-{"id":"chunk-18hwfzwa.js#T0n","doc":"导出函数 `alwaysFalseBackgroundConfirm`：返回 !1。"}
-{"id":"chunk-18hwfzwa.js#tce","doc":"导出函数 `noopBackgroundConfirm`：参数 h。"}
-{"id":"chunk-ag5x7vhf.js#jgo","doc":"导出常量或表 `STATE_HAS_RAW`：值为 1, yu = 2, Su = 4, yT = /^\\s*\\|[^\\n]*(\\n[ |:\\r-]*|\\n[ |:\\r-]+\\n[^\\n]*)?$/。"}
-{"id":"chunk-t3sg9e26.js#LVn","doc":"导出常量或表 `DEFAULT_FETCH_REFSPEC`：值为 \"+refs/heads/*:refs/remotes/origin/*\"。"}
-{"id":"chunk-t3sg9e26.js#H0r","doc":"导出函数 `getUpstreamUrl`：参数 e，返回 e.upstreamUrl。"}
-{"id":"chunk-t3sg9e26.js#NVn","doc":"导出函数 `isFetchRefNotFound`：参数 e，返回 rt.some((t) => lower.includes(t))。"}
-{"id":"chunk-t3sg9e26.js#Mln","doc":"导出函数 `rewriteContractionError`：参数 e，返回 e.replace(regExp, (n) => `could not${n.slice(8)}`)。"}
-{"id":"chunk-t3sg9e26.js#$Vn","doc":"导出常量或表 `SHR_GIT_PROXY_TOKEN`：值为 \"SHR_GIT_PROXY_TOKEN\", uMo = [\"-c\", \"lfs.locksverify=false\"]。"}
-{"id":"chunk-t3sg9e26.js#fMo","doc":"导出函数 `anonCredentialHelperArgs`：参数 e，返回 credentialHelperScript(\"unused\", e)。"}
-{"id":"chunk-t3sg9e26.js#FVn","doc":"导出函数 `tokenCredentialHelperArgs`：参数 e，返回 credentialHelperScript(\"x-access-token\", e)。"}
-{"id":"chunk-t3sg9e26.js#DUt","doc":"导出函数 `gitConfigPairs`：参数 e，返回 e.flatMap(([n, t]) => [\"-c\", `${n}=${t}`])。"}
-{"id":"chunk-t3sg9e26.js#$0r","doc":"导出函数 `isPreparableRepoType`：参数 e，返回 e === \"github\" || e === \"github-ssh\" || e === \"test-file\"。"}
-{"id":"chunk-3nztfxrw.js#NHn","doc":"导出函数 `emptyErrorCategoryCounts`：返回 { transport: 0, timeout: 0, \"5xx\": 0, 429: 0, \"4xx\": 0 }; } export { formatRunnerApiError, gvr, classifyRunner…。"}
-{"id":"chunk-66nm9g6r.js#u","doc":"导出函数 `watchLiveness`：参数 e。"}
-{"id":"chunk-66nm9g6r.js#m","doc":"导出函数 `writeInitSystemLine`。"}
-{"id":"chunk-0h4e7gnq.js#y2n","doc":"导出函数 `mergeTaskProgressIntoTranscript`：参数 e, n, s。"}
-{"id":"chunk-s61vbvea.js#ONe","doc":"导出函数 `normalizeServerPath`：参数 e，返回 (\"/\" + e).replace(/\\/{2,}/g, \"/\")。"}
-{"id":"chunk-s61vbvea.js#Y2t","doc":"导出函数 `isServedAccountMemoryTool`：参数 e, n，返回 e.mcpInfo?.accountMemoryServer === !0 && pVo(e.mcpInfo.toolName, n)。"}
-{"id":"chunk-s61vbvea.js#pVo","doc":"导出函数 `isMemoryToolAllowed`：参数 e, n，返回 n === \"none\" || !eu(e)。"}
-{"id":"chunk-s61vbvea.js#tZs","doc":"导出函数 `memoryCallerKind`：参数 { isTeammate: isTeammate, isBackground: isBackgrou…，返回 isTeammate || isBackground ? \"worker\" : \"subagent\"。"}
-{"id":"chunk-s61vbvea.js#nZs","doc":"导出函数 `memoryNoteIfEnabled`：参数 e，返回 e.mode === \"none\" ? void 0 : e.note; } export { READ_ONLY, Y2t, tZs, nZs, createAccountMemoryToolGate, refuseN…。"}
-{"id":"chunk-s61vbvea.js#vyn","doc":"导出函数 `memorySyncPolicyClosedStub`：返回 \"closed\"。"}
-{"id":"chunk-s61vbvea.js#kyn","doc":"导出函数 `alwaysFalseMemCtx`：返回 !1。"}
-{"id":"chunk-s61vbvea.js#bN","doc":"导出函数 `memoryModeForSession`：参数 e，返回 accountMemoryServerState(currentMcpClients(e), WZn(e.session.host))。"}
-{"id":"chunk-s61vbvea.js#WZn","doc":"导出函数 `subagentMemoryMode`：参数 e，返回 memoryContextState.of(e).subagentMode。"}
-{"id":"chunk-s61vbvea.js#iZs","doc":"导出函数 `resetMemoryContextForSession`：参数 e。"}
-{"id":"chunk-s61vbvea.js#yVo","doc":"导出函数 `maybeKickMemoryContextFetch`：参数 e, n = {}, r。"}
-{"id":"chunk-s61vbvea.js#lZs","doc":"导出函数 `refreshMemoryContextForCcr`：参数 e，返回 !1; return (kickMemoryContextFetch(e.host, \"ccr\", {}), !0)。"}
-{"id":"chunk-s61vbvea.js#GZn","doc":"导出函数 `kickTurnEndCheckMemCtx`：参数 e, n = {}。"}
-{"id":"chunk-s61vbvea.js#mZs","doc":"导出函数 `heldMemoryVersions`：参数 e，返回 memoryContextState.of(e).held?.versions。"}
-{"id":"chunk-s61vbvea.js#gZs","doc":"导出函数 `heldPostTurnInstruction`：参数 e，返回 memoryContextState.of(e).held?.postTurnInstruction。"}
-{"id":"chunk-hddjmtjj.js#L9","doc":"导出函数 `shortenDescription`：参数 n，返回 trimmed.length > 120 ? truncateCodePoints(trimmed, 117) + \"\\u2026\" : trimmed。"}
-{"id":"chunk-hddjmtjj.js#V0","doc":"导出函数 `shortenInstructions`：参数 n，返回 trimmed.length > 500 ? truncateCodePoints(trimmed, 497) + \"\\u2026\" : trimmed。"}
-{"id":"chunk-h3ha77z5.js#YFt","doc":"导出函数 `isPlainUserImportItem`：参数 e，返回 e.scope === \"user\" && !e.warning && e.kind !== \"skill\"。"}
-{"id":"chunk-wjzg3t3t.js#z","doc":"导出常量或表 `MAX_OBSERVED_TEXT_CHARS`：值为 2000, x7e = 16000, gln = 64000。"}
-{"id":"chunk-wjzg3t3t.js#Wyt","doc":"导出函数 `pairingForObserver`：参数 e, r，返回 e.observers.pairings.get(r)。"}
-{"id":"chunk-wd9kxbpn.js#re","doc":"导出常量或表 `MAX_CLASSIFIER_INPUT_BYTES`：值为 4194304。"}
-{"id":"chunk-wd9kxbpn.js#Bn","doc":"导出函数 `setPendingStructuredResult`：参数 e。"}
-{"id":"chunk-aepeg2w5.js#aro","doc":"导出函数 `currentAuthSurface`：返回 \"daemon_child\"; if (!isReplBridgeActive()) return; return getIsInteractive() ? \"repl\" : \"sdk_host\"。"}
-{"id":"chunk-aepeg2w5.js#Tki","doc":"导出函数 `sanitizeCommonFields`：参数 e，返回 sanitizeFields(e, Vz)。"}
-{"id":"chunk-aepeg2w5.js#Jl","doc":"导出常量或表 `lastWatermark`：值为 null, Nis = 257。"}
-{"id":"chunk-aepeg2w5.js#xki","doc":"导出函数 `gzipBody`：参数 e，返回 _x(e)。"}
-{"id":"chunk-aepeg2w5.js#Pki","doc":"导出函数 `gzipWatermarkedBody`：参数 e，返回 _x(appendWatermark(e))。"}
-{"id":"chunk-aepeg2w5.js#Iki","doc":"导出函数 `swapWatermark`：参数 e，返回 ((Jl = e), n)。"}
-{"id":"chunk-aepeg2w5.js#$is","doc":"导出常量或表 `MAX_NORMALIZED_TEXT_CHARS`：值为 2048。"}
-{"id":"chunk-aepeg2w5.js#K6e","doc":"导出函数 `truncateNormalizedText`：参数 e，返回 normalizeFullWidthSpace(e.slice(0, $is)); } export { Tki, K6e, filterEventsForPrivacy, _r, gzipTelemetryBody, …。"}
-{"id":"chunk-8nhse09v.js#ke","doc":"导出常量或表 `toSnakeFeatureName`：值为 W(function (e, r, u) { return e + (u ? \"_\" : \"\") + r.toLowerCase(); }), IDn = ke。"}
-{"id":"chunk-aepeg2w5.js#sro","doc":"导出函数 `initCoreUserData`：返回 Yi().init()。"}
-{"id":"chunk-aepeg2w5.js#Eki","doc":"导出函数 `gitUserName`：返回 Yi().gitUserName()。"}
-{"id":"chunk-aepeg2w5.js#FRn","doc":"导出函数 `envBearerFallbackMarker`：参数 e，返回 getGrowthBookClient_2。"}
-{"id":"chunk-pm6ycja1.js#P_n","doc":"导出函数 `hooksModulesFollowState`。"}
-{"id":"chunk-pm6ycja1.js#I_n","doc":"导出函数 `resolveHooksModulesValue`：返回 s ? HOOKS_MODULES_DEFAULT : o。"}
-{"id":"chunk-pm6ycja1.js#O_n","doc":"导出函数 `areHooksModulesActiveGbc`。"}
-{"id":"chunk-aepeg2w5.js#Zos","doc":"导出函数 `readGateTrueByDefault`：参数 e，返回 !0; try { return reader(e, !0) !== !1; } catch { return !0; }。"}
-{"id":"chunk-aepeg2w5.js#Kpr","doc":"导出函数 `isFoamySpringGateOn`：返回 isFoamySpringEnabled()。"}
-{"id":"chunk-aepeg2w5.js#Uwi","doc":"导出函数 `setCachedGateValue`：参数 e。"}
-{"id":"chunk-aepeg2w5.js#wki","doc":"导出函数 `setVerdictJudge`：参数 e。"}
-{"id":"chunk-aepeg2w5.js#Nas","doc":"导出函数 `toolSearchReminderConfig`：返回 getJuniperShoalConfig().toolSearchReminder。"}
-{"id":"chunk-aepeg2w5.js#ITi","doc":"导出函数 `toolParamStrictnessConfig`：返回 getJuniperShoalConfig().toolParamStrictness。"}
-{"id":"chunk-aepeg2w5.js#OTi","doc":"导出函数 `emptyInputRepairConfig`：返回 getJuniperShoalConfig().emptyInputRepair。"}
-{"id":"chunk-aepeg2w5.js#MTi","doc":"导出函数 `toolSearchFetchRuleConfig`：返回 getJuniperShoalConfig().toolSearchFetchRule。"}
-{"id":"chunk-aepeg2w5.js#$as","doc":"导出函数 `schemaDescFixesConfig`：返回 getJuniperShoalConfig().schemaDescFixes; } export { ITi, Hh, MTi, $as, OTi, Nas }。"}
-{"id":"chunk-aepeg2w5.js#Xki","doc":"导出函数 `registerFirstPartyPlugin`：参数 e, n。"}
-{"id":"chunk-aepeg2w5.js#Cgr","doc":"导出函数 `markMcpServerLoggable`：参数 e。"}
-{"id":"chunk-aepeg2w5.js#Jki","doc":"导出函数 `attributionWithMetrics`：参数 e, n，返回 attributionFor(e, n, !0)。"}
-{"id":"chunk-aepeg2w5.js#xgr","doc":"导出函数 `isOwnToolContainerConfig`：参数 e，返回 typeof e === \"object\" && e !== null && ht().ownToolContainerConfigs.has(e)。"}
-{"id":"chunk-aepeg2w5.js#OPt","doc":"导出函数 `hasCcrMeta`：参数 e，返回 typeof e === \"object\" && e !== null && ht().ccrMetaEntries.has(e)。"}
-{"id":"chunk-aepeg2w5.js#ias","doc":"导出函数 `isSelfHostedRunnerCcrServer`：参数 e，返回 startupCcrEnv.isSelfHostedRunnerChild && isInjectedCcrServer(e) && !isRunnerDynamicServer(e)。"}
-{"id":"chunk-aepeg2w5.js#nxn","doc":"导出函数 `isOwnArtifactMcpTool`：参数 e, n，返回 !1; if (firstPartyServerIdFor(n) === ARTIFACTS_SERVER_ID) return !0; return isOwnCcrMcpServer(n)。"}
-{"id":"chunk-aepeg2w5.js#aas","doc":"导出函数 `jobsDir`：返回 join_11(getClaudeConfigDir(), \"jobs\")。"}
-{"id":"chunk-aepeg2w5.js#las","doc":"导出常量或表 `JOB_PARENT_TRANSCRIPT_FILE`：值为 [\"parent-transcript.jsonl\"]。"}
-{"id":"chunk-aepeg2w5.js#Oro","doc":"导出函数 `jobStorageSpace`：参数 e, n，返回 STORAGE_SPACES.job(r, n)。"}
-{"id":"chunk-aepeg2w5.js#Igr","doc":"导出函数 `isValidLocalTaskId`：参数 e，返回 typeof e === \"string\" && LOCAL_TASK_ID_PATTERN.test(e) ? e : void 0。"}
-{"id":"chunk-aepeg2w5.js#fTi","doc":"导出函数 `isInferredMcpToolName`：参数 e，返回 Object.hasOwn(Td, e)。"}
-{"id":"chunk-aepeg2w5.js#pTi","doc":"导出函数 `isMcpFamilyToolName`：参数 e，返回 e === \"mcp_tool\" || Object.values(Td).includes(e) || qY.has(e)。"}
-{"id":"chunk-aepeg2w5.js#X4","doc":"导出函数 `platformOrOther`：参数 e，返回 lit(\"none\"); if (KNOWN_PLATFORMS.has(e)) return fromSanitizer_SANITIZER_OUTPUT_ONLY(e); return lit(\"other\")。"}
-{"id":"chunk-aepeg2w5.js#hBe","doc":"导出函数 `localeOrNonconforming`：参数 e，返回 fromSanitizer_SANITIZER_OUTPUT_ONLY(e); return lit(\"nonconforming\")。"}
-{"id":"chunk-aepeg2w5.js#Lis","doc":"导出函数 `isHipaaModeCurrent`：返回 Xl()。"}
-{"id":"chunk-0wqny7vr.js#b","doc":"导出函数 `lit`：参数 n，返回 r(n)。"}
-{"id":"chunk-m42zcgyq.js#tyn","doc":"导出函数 `maskModelFields`：参数 e, n，返回 maskModelIdsInRecord(e); } export { initializeAnalyticsSink, tyn }。"}
-{"id":"chunk-s61vbvea.js#nVo","doc":"导出函数 `capabilityRejectedText`：参数 e，返回 `${Nm}${e}`。"}
-{"id":"chunk-s61vbvea.js#W7s","doc":"导出函数 `isBetaHeaderRejection`：参数 e，返回 e.includes(`${Nm}beta_header:`)。"}
-{"id":"chunk-s61vbvea.js#pqr","doc":"导出函数 `isContextWindowError`：参数 e，返回 e.toLowerCase().includes(\"context window\")。"}
-{"id":"chunk-s61vbvea.js#mqr","doc":"导出函数 `isPdfUnsupportedError`：参数 e，返回 PDF_UNSUPPORTED_PHRASES.some((r) => lower.includes(r))。"}
-{"id":"chunk-s61vbvea.js#wyn","doc":"导出函数 `mentionsAnthropicBeta`：参数 e, n，返回 e.includes(n) && /anthropic[-_]beta/.test(e)。"}
-{"id":"chunk-s61vbvea.js#z7s","doc":"导出函数 `isBetaHeaderNamed`：参数 e, n，返回 wyn(e, n) || includesWholeWord(e, `beta_header:${n}`)。"}
-{"id":"chunk-e6aww6q8.js#GJ","doc":"导出函数 `isExpectedBillingError`。"}
-{"id":"chunk-e6aww6q8.js#LVs","doc":"导出函数 `isKeepaliveArmed`：返回 Fw().armed !== void 0。"}
-{"id":"chunk-e6aww6q8.js#Qun","doc":"导出函数 `withKeepaliveReset`：参数 e，返回 (Xg(e, DO), e)。"}
-{"id":"chunk-e6aww6q8.js#njt","doc":"导出函数 `isDapperDawnEnabled`：返回 getFeatureValue_CACHED_MAY_BE_STALE(\"tengu_dapper_dawn\", !1)。"}
-{"id":"chunk-e6aww6q8.js#$Vs","doc":"导出函数 `endMaintenanceAtSubagentEnd`：参数 e。"}
-{"id":"chunk-e6aww6q8.js#u3n","doc":"导出函数 `endMaintenanceAndForget`：参数 e。"}
-{"id":"chunk-e6aww6q8.js#x3s","doc":"导出函数 `canonicalNameOrUndefined`：参数 e，返回 Vpr(e, getCanonicalName(e)); } catch (error) { logError(toError(error)); return; }。"}
-{"id":"chunk-e6aww6q8.js#P3s","doc":"导出函数 `ultrathinkEffectiveSafely`：参数 e, n，返回 isUltrathinkEffective(e, n()); } catch (error) { logError(toError(error)); return; }。"}
-{"id":"chunk-e6aww6q8.js#_Jn","doc":"导出函数 `shouldSendInterleavedThinkingBeta`：参数 e，返回 ( !areExperimentalBetasDisabled() && modelSupportsISP(e) && (shouldIncludeFirstPartyOnlyBetas() || modelHidesT…。"}
-{"id":"chunk-e6aww6q8.js#DGt","doc":"导出函数 `isBasaltSpurEnabled`：返回 canSendFirstPartyBetas() && getFeatureValue_CACHED_MAY_BE_STALE(\"tengu_basalt_spur\", !1)。"}
-{"id":"chunk-e6aww6q8.js#E8s","doc":"导出函数 `watchSessionSwitchForThinkingKeep`：返回 onSessionSwitch((e, n) => { if (aes.has(n)) Ws().foreignThinkingKeep = void 0; })。"}
-{"id":"chunk-a76knw89.js#OYo","doc":"导出函数 `stickyBetasOr`：参数 e，返回 e ?? getStickyBetas()。"}
-{"id":"chunk-a76knw89.js#DSe","doc":"导出函数 `asDeclaredToolSet`：参数 e，返回 declaredTools instanceof DeclaredToolSet ? declaredTools : void 0。"}
-{"id":"chunk-a76knw89.js#kbn","doc":"导出函数 `asScratchDeclaredToolSet`：参数 e，返回 noChannelTools instanceof DeclaredToolSet ? noChannelTools : void 0。"}
-{"id":"chunk-a76knw89.js#Cqe","doc":"导出函数 `stickyBetasForRequest`：参数 e，返回 OYo(e.stickyBetas)。"}
-{"id":"chunk-a76knw89.js#Hrt","doc":"导出函数 `cachedDeclaredTools`：参数 e，返回 n === void 0 ? void 0 : DSe(n)。"}
-{"id":"chunk-a76knw89.js#Tbn","doc":"导出函数 `cachedNoChannelTools`：参数 e，返回 n === void 0 ? void 0 : kbn(n)。"}
-{"id":"chunk-a76knw89.js#soi","doc":"导出函数 `recordDeclaredToolsIfMissing`：参数 e, n，返回 !1; return (dLn(e, new DeclaredToolSet(n)), !0)。"}
-{"id":"chunk-a76knw89.js#_nr","doc":"导出函数 `turnDeniedTools`：参数 e, n，返回 updateDeclaredToolSet(e, turnDeniedTools instanceof DeclaredToolSet ? turnDeniedTools : void 0) .tools。"}
-{"id":"chunk-a76knw89.js#aoi","doc":"导出函数 `hasScratchToolSet`：参数 e, n，返回 hasDeclaredToolSet(o, n, !0)。"}
-{"id":"chunk-a76knw89.js#coi","doc":"导出函数 `deferredToolsEnabled`：返回 l$e()。"}
-{"id":"chunk-a76knw89.js#uoi","doc":"导出函数 `clientNames`：参数 e，返回 n。"}
-{"id":"chunk-a76knw89.js#Nrt","doc":"导出函数 `toolChangeHeaderAllowed`：参数 e，返回 lT(e, Lb) && !we(e)。"}
-{"id":"chunk-a76knw89.js#d$e","doc":"导出函数 `canDeclareToolChangeAhead`：参数 e, n，返回 (lT(e, Lb) || (Kpr() && !Lp(e, Lb))) && !we(e) && modelTakesToolAdditions(n)。"}
-{"id":"chunk-a76knw89.js#poi","doc":"导出函数 `canDeclareInlineTools`：参数 e, n，返回 Snr(e) && ae(e, n)。"}
-{"id":"chunk-a76knw89.js#Snr","doc":"导出函数 `inlineToolsAllowed`：参数 e，返回 lT(e, tb) && !isInlineToolsRefused() && Nrt(e)。"}
-{"id":"chunk-a76knw89.js#NYo","doc":"导出函数 `dropToolChangeState`：参数 e。"}
-{"id":"chunk-a76knw89.js#Vri","doc":"导出函数 `markHostOnlyNativeTool`：参数 e，返回 (Object.defineProperty(e, Je, { value: !0, enumerable: !0 }), e)。"}
-{"id":"chunk-a76knw89.js#_2","doc":"导出函数 `isHostOnlyNativeTool`：参数 e，返回 Je in e。"}
-{"id":"chunk-a76knw89.js#l$e","doc":"导出函数 `areDeferredToolsKept`：返回 ((e.keptDeferredToolsEnabled ??= on()), e.keptDeferredToolsEnabled)。"}
-{"id":"chunk-a76knw89.js#bbn","doc":"导出函数 `deferredToolsKeptCached`：返回 Ao().keptDeferredToolsEnabled ?? on()。"}
-{"id":"chunk-a76knw89.js#Sbn","doc":"导出函数 `deferredToolCacheSlot`。"}
-{"id":"chunk-a76knw89.js#jW","doc":"导出函数 `deferredToolCache`：返回 Sbn.of(getRootSession())。"}
-{"id":"chunk-a76knw89.js#PYo","doc":"导出函数 `shouldTrackDeferredToolForQuery`：参数 e，返回 xe(classifyQuerySource(e), e)。"}
-{"id":"chunk-a76knw89.js#qS","doc":"导出函数 `findTool`：参数 e, n, o，返回 findToolByName(e, n, o)。"}
-{"id":"chunk-a76knw89.js#uo","doc":"导出函数 `normalizeServerNameShort`：参数 e, n = 64，返回 \"\"; return normalizeMcpServerName(normalizeNfkc(e).replace(/['`]/g, \" \"), n, \"none\")。"}
-{"id":"chunk-a76knw89.js#Gri","doc":"导出函数 `normalizeServerNameLong`：参数 e, n = 1024，返回 normalizeMcpServerName(e, n)。"}
-{"id":"chunk-98z6pwp4.js#dWs","doc":"导出函数 `clearDumpPromptState`。"}
-{"id":"chunk-gr2vfhah.js#Loo","doc":"导出函数 `apiErrorCode`：参数 e，返回 typeof t === \"string\" && A.test(t) ? t : void 0。"}
-{"id":"chunk-gr2vfhah.js#Thr","doc":"导出函数 `reducibleErrorCode`：参数 e，返回 LK.has(e) || PU.has(e) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e) : lit(\"other\")。"}
-{"id":"chunk-gr2vfhah.js#oIt","doc":"导出函数 `sanitizableErrorCode`：参数 e，返回 PU.has(e) || LK.has(e) || SSL_CERT_ERROR_CODES.has(e) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e) : void 0。"}
-{"id":"chunk-7t4fmt2f.js#Gts","doc":"导出函数 `runIdleTask`。"}
-{"id":"chunk-7t4fmt2f.js#Wts","doc":"导出函数 `isIdleLongerThan`：参数 e，返回 !isSessionActive() && Date.now() - max > e。"}
-{"id":"chunk-7t4fmt2f.js#k5e","doc":"导出函数 `hasSessionsTokenRequestId`：参数 e，返回 !1; return isSessionsToken(e[\"request-id\"])。"}
-{"id":"chunk-7t4fmt2f.js#eAn","doc":"导出函数 `responseHeaderFactsOf`：参数 e，返回 {}; return responseHeaderFacts(r.headers)。"}
-{"id":"chunk-s61vbvea.js#rqe","doc":"导出函数 `amazonRequestId`：参数 e, n，返回 e; try { return n?.get(X_AMZN_REQUESTID) || null; } catch (error) { return (logError(toError(error)), null); }…。"}
-{"id":"chunk-e6aww6q8.js#rpn","doc":"导出函数 `sanitizeEventKey`：参数 e，返回 typeof e === \"string\" && x6o.test(e) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e) : lit_2(\"unknown\")。"}
-{"id":"chunk-e6aww6q8.js#$Ys","doc":"导出函数 `asSafePathKey`：参数 e，返回 P6o.test(e) ? e : \"unknown\"。"}
-{"id":"chunk-e6aww6q8.js#j8n","doc":"导出函数 `isWithheldGatewayBgSession`：返回 isBgSession() && Boolean(env.CLAUDE_BG_GATEWAY_WITHHELD) && !env.ANTHROPIC_BASE_URL。"}
-{"id":"chunk-e6aww6q8.js#EUo","doc":"导出函数 `isNoGatewayHint`：参数 e，返回 e.startsWith(`${NO_GATEWAY_MESSAGE} To fix, run `)。"}
-{"id":"chunk-e6aww6q8.js#TUo","doc":"导出函数 `hasInvalidCredentialPrefix`：参数 e，返回 [ INVALID_API_KEY_MESSAGE, INVALID_AUTH_TOKEN_MESSAGE, INVALID_CUSTOM_HEADERS_MESSAGE, INVALID_ENV_HEADER_MESS…。"}
-{"id":"chunk-e6aww6q8.js#rWt","doc":"导出常量或表 `RATE_LIMIT_RESET_MAX_MS`：值为 86400000。"}
-{"id":"chunk-e6aww6q8.js#Y8n","doc":"导出函数 `intentProviderSlot`。"}
-{"id":"chunk-gr2vfhah.js#Ioo","doc":"导出函数 `headerlessDeclineKind`：参数 e，返回 d(e) ? lit(\"headerless_decline\") : lit(\"headerless_retryable_503\")。"}
-{"id":"chunk-gr2vfhah.js#Ooo","doc":"导出函数 `headerlessDeclineRetryDelay`：参数 e，返回 d(e) ? 0 : getRetryDelay(1)。"}
-{"id":"chunk-gr2vfhah.js#Moo","doc":"导出函数 `isNonRetryable4xx`：参数 e，返回 e >= 400 && e < 500 && e !== 401 && e !== 408 && e !== 409 && e !== 429 && e !== 451。"}
-{"id":"chunk-gr2vfhah.js#adt","doc":"导出函数 `isDlpRequestDenied`：参数 e，返回 getApiErrorCode(e) === DLP_REQUEST_DENIED。"}
-{"id":"chunk-gr2vfhah.js#_Ai","doc":"导出函数 `isExtraUsageOutOfCredits`：参数 e，返回 getApiErrorCode(e) === EXTRA_USAGE_OUT_OF_CREDITS。"}
-{"id":"chunk-gr2vfhah.js#Doo","doc":"导出函数 `isClaudeCodeVersionTooOld`：参数 e，返回 getApiErrorCode(e) === CLAUDE_CODE_VERSION_TOO_OLD。"}
-{"id":"chunk-gr2vfhah.js#_3e","doc":"导出函数 `alwaysFalseErrors`：参数 e，返回 !1。"}
-{"id":"chunk-gr2vfhah.js#U9t","doc":"导出函数 `alwaysFalseB`：参数 e，返回 !1。"}
-{"id":"chunk-0ba63vr9.js#BDr","doc":"导出函数 `promoCommand`：返回 parsePromoCampaign()?.command ?? null。"}
-{"id":"chunk-0ba63vr9.js#jDr","doc":"导出函数 `isPromoCommand`：参数 e，返回 n !== null && e === n。"}
-{"id":"chunk-0ba63vr9.js#WDr","doc":"导出函数 `canClaimPromoCreditFor`：参数 e，返回 jDr(e) && canClaimPromoCredit()。"}
-{"id":"chunk-aepeg2w5.js#jos","doc":"导出常量或表 `MAX_TRACKED_CALLS`：值为 1e4。"}
-{"id":"chunk-aepeg2w5.js#U3t","doc":"导出函数 `fileReferenceTrackerSlot`。"}
-{"id":"chunk-aepeg2w5.js#Wos","doc":"导出函数 `fileReferenceHintLatch`：返回 U3t.of(getRootSession()).fileReferenceHintLatch()。"}
-{"id":"chunk-aepeg2w5.js#Mxt","doc":"导出函数 `replaceFileReferenceHintLatch`：参数 e。"}
-{"id":"chunk-aepeg2w5.js#Eto","doc":"导出函数 `noteFileReferenceCall`：参数 e。"}
-{"id":"chunk-nmregrje.js#Ast","doc":"导出函数 `isSerialisedBody`：参数 e，返回 Buffer.isBuffer(e) && Ws().gzipRequestBody.serialisedBodies.has(e.buffer)。"}
-{"id":"chunk-nmregrje.js#Dir","doc":"导出函数 `bodyCharCount`：参数 e，返回 typeof e === \"string\" ? e.length : x(e)?.chars。"}
-{"id":"chunk-nmregrje.js#zci","doc":"导出函数 `wouldGzipForHost`：参数 e, n, r，返回 isFirstPartyAnthropicHost(e) && decideGzip(e, 1 / 0, n, r).gzip。"}
-{"id":"chunk-nmregrje.js#JXo","doc":"导出函数 `classifyRejectionOf`：参数 e，返回 null; return classifyGzipRejection(q(e))。"}
-{"id":"chunk-nmregrje.js#PEn","doc":"导出函数 `logGzipSent`：参数 e = \"api\"。"}
-{"id":"chunk-nmregrje.js#ZXo","doc":"导出函数 `recordGzipBlockTelemetry`：参数 e, n。"}
-{"id":"chunk-nmregrje.js#Vci","doc":"导出函数 `takeDispatchAtGzip`：参数 e, n。"}
-{"id":"chunk-rbe666af.js#Mhi","doc":"导出函数 `needsBodyAssembly`：参数 { keys: keys, reused: reused }，返回 keys.some((n, r) => n !== void 0 && reused[r] === void 0)。"}
-{"id":"chunk-rbe666af.js#ses","doc":"导出函数 `zlibErrorCode`：参数 e，返回 t === \"Z_DATA_ERROR\" || t === \"Z_BUF_ERROR\" ? t : void 0。"}
-{"id":"chunk-e6aww6q8.js#SXn","doc":"导出函数 `markTakesRequestBodyBytes`：参数 e。"}
-{"id":"chunk-e6aww6q8.js#oGr","doc":"导出函数 `takesRequestBodyBytes`：参数 e，返回 e === void 0 || e === fetchWithRequestBodyCompression || ycn in e。"}
-{"id":"chunk-e6aww6q8.js#yW","doc":"导出函数 `entrypointForTelemetry`：参数 e，返回 fromEnumOpt(found) ?? lit_2(\"other\")。"}
-{"id":"chunk-e6aww6q8.js#uJn","doc":"导出函数 `preferSameModel`：参数 e, n，返回 e !== void 0 && Bn(e) === Bn(n) ? e : n。"}
-{"id":"chunk-e6aww6q8.js#sWt","doc":"导出函数 `needsOverageConsentForModel`：参数 e, n，返回 fPe(e) && !isModelBlockedByOverride(getCanonicalName(e)) && YJt(n)。"}
-{"id":"chunk-e6aww6q8.js#KYs","doc":"导出函数 `needsOverageConsentOnMainThread`：参数 e，返回 e.isMainThread && YJt(e.requestDialog)。"}
-{"id":"chunk-73yknwsx.js#Qgo","doc":"导出函数 `trialDurationDays`：返回 getOauthAccountInfo()?.claudeCodeTrialDurationDays ?? null。"}
-{"id":"chunk-1t61stbc.js#ZW","doc":"导出常量或表 `CACHE_TTL_5M_MS`：值为 300000, oR = 3600000。"}
-{"id":"chunk-a76knw89.js#Dri","doc":"导出函数 `isCacheFingerprintPart`：参数 e，返回 e.part === \"tool\" || e.part === \"system\" || e.part === \"message\"。"}
-{"id":"chunk-a76knw89.js#AYo","doc":"导出函数 `describeSnapshotDiff`：参数 e, n，返回 e.seeded ? diffToolLists(e, n) : [ ...diffToolLists(e, n), ...diffThinkingBlocks(e, n), ...diffCacheMarkers(e,…。"}
-{"id":"chunk-a76knw89.js#dbn","doc":"导出函数 `isDeferredTool`：参数 e，返回 lO(e, \"defer_loading\") === !0。"}
-{"id":"chunk-e6aww6q8.js#lse","doc":"导出函数 `noopLedger`：参数 e, n。"}
-{"id":"chunk-e6aww6q8.js#Uue","doc":"导出函数 `containsProviderId`：参数 e，返回 PROVIDER_ID_PREFIXES.some((n) => e.includes(n))。"}
-{"id":"chunk-e6aww6q8.js#jbt","doc":"导出函数 `anyMessageHasProviderId`：参数 e，返回 e.some((n) => { try { return Uue(jsonStringify(n)); } catch { return !0; } }); } export { jbt, Uue }。"}
-{"id":"chunk-hwmsct5x.js#cci","doc":"导出函数 `noRefusalFallbackOpusModel`：返回 isModelAdmittedByAvailableModels(enforcementRefusalFallbackOpusModel())。"}
-{"id":"chunk-hwmsct5x.js#uci","doc":"导出函数 `everyLineupModelAdmitted`：参数 e，返回 Si(strippedCanonicalName(e)).every((n) => isModelAdmittedByAvailableModels(n))。"}
-{"id":"chunk-hwmsct5x.js#fci","doc":"导出函数 `isInRefusalLineup`：参数 e, n，返回 !isSameModel(e, n) && Si(strippedCanonicalName(e)).includes(strippedCanonicalName(n))。"}
-{"id":"chunk-hwmsct5x.js#RXo","doc":"导出函数 `refusalRouteLimit`：返回 _b。"}
-{"id":"chunk-hwmsct5x.js#Y8r","doc":"导出函数 `noopDialogHost`。"}
-{"id":"chunk-hwmsct5x.js#Z8r","doc":"导出函数 `isSwitchModelsOnFlagDisabled`：返回 resolveSetting(\"switchModelsOnFlag\", !0).value === !1。"}
-{"id":"chunk-hwmsct5x.js#Rci","doc":"导出函数 `refusalFallbackDialog`：参数 e, n，返回 e。"}
-{"id":"chunk-hwmsct5x.js#AEn","doc":"导出函数 `hasConvoluteArcadesFlag`：返回 getCachedClientData()?.[CONVOLUTE_ARCADES_FLAG] === !0。"}
-{"id":"chunk-hwmsct5x.js#CEn","doc":"导出函数 `hasFallbackLatch`：返回 getFallbackLatchKind() !== \"none\"。"}
-{"id":"chunk-1fgvxqz2.js#Xq","doc":"导出函数 `canonicalFingerprint`：参数 n, { omitCacheControl: t = !1 } = {}，返回 (feedCanonicalJson(n, s, t), s.join(\"\"))。"}
-{"id":"chunk-hwmsct5x.js#Nci","doc":"导出函数 `canSendWigglyDoveHeader`：返回 eh() && !getCustomHeaders()。"}
-{"id":"chunk-hwmsct5x.js#$ci","doc":"导出函数 `isSunnyGardenSenderAddress`：返回 ( isCcsTenant() && isFirstPartyApiBackend() && getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SUNNY_GARDEN, !1) ); …。"}
-{"id":"chunk-aepeg2w5.js#MEi","doc":"导出函数 `isRetryOn529Source`：参数 e，返回 !1; let n = RETRY_ON_529_QUERY_SOURCES; return e.startsWith(\"agent:\") || n.has(e)。"}
-{"id":"chunk-aepeg2w5.js#NEi","doc":"导出函数 `allowlistedBlockType`：参数 e，返回 Sp.has(e) ? e : `non-allowlisted (${e.length} chars)`。"}
-{"id":"chunk-949rqstz.js#v5e","doc":"导出函数 `isNonOriginSource`：参数 e，返回 e === \"nonorigin_cf\" || e === \"nonorigin_other\"。"}
-{"id":"chunk-e6aww6q8.js#kUo","doc":"导出函数 `onRefusalSettingsChange`：参数 e，返回 () => {}; return l5o().changed.subscribe(e)。"}
-{"id":"chunk-hwmsct5x.js#Eir","doc":"导出函数 `isRefusalFallbackActive`：返回 isRefusalFallbackEnabled()。"}
-{"id":"chunk-hwmsct5x.js#bci","doc":"导出函数 `safeguardsFlaggedMessage`：参数 e, n, r，返回 `${h} ${y} ${buildSafeguardsLearnMore(e)}${formatRefusalDetails(r)}`。"}
-{"id":"chunk-hwmsct5x.js#Lci","doc":"导出函数 `setSessionFlagReaders`：参数 e。"}
-{"id":"chunk-hwmsct5x.js#Hci","doc":"导出函数 `noopSyncPermissionMode`。"}
-{"id":"chunk-hwmsct5x.js#KXo","doc":"导出函数 `noopMergeSessionFlags`：参数 e。"}
-{"id":"chunk-gr2vfhah.js#Poo","doc":"导出函数 `retryWindowFor`：参数 e，返回 e.escalated ? e.retryWindowMs : e.firstWindowMs。"}
-{"id":"chunk-gr2vfhah.js#Yxn","doc":"导出函数 `findStreamNoResponseError`：参数 e，返回 t instanceof StreamNoResponseError ? t : void 0。"}
-{"id":"chunk-rbe666af.js#Ws","doc":"导出函数 `streamFallbackWarning`：返回 de.of(getRootSession())。"}
-{"id":"chunk-rbe666af.js#aes","doc":"导出常量或表 `CONVERSATION_RESET_KINDS`：值为 new Set([\"clear\", \"resume\", \"spare_claim\", \"remote_attach\"])。"}
-{"id":"chunk-a76knw89.js#lO","doc":"导出函数 `exactKeyValue`：参数 e, n，返回 Object.entries(e).find(([o]) => o === n)?.[1]。"}
-{"id":"chunk-a76knw89.js#Hri","doc":"导出函数 `shortContentHash`：参数 e，返回 computeContentHash(jsonStringify(sortKeysDeep(e))).slice(0, 16)。"}
-{"id":"chunk-a76knw89.js#fVt","doc":"导出函数 `ownValue`：参数 e, n，返回 e !== void 0 && Object.hasOwn(e, n) ? e[n] : void 0。"}
-{"id":"chunk-a76knw89.js#$ri","doc":"导出函数 `deferredToolNames`：参数 e, n = new Set(，返回 new Set(collectDeferredToolsDeltas(e, n).keys())。"}
-{"id":"chunk-a76knw89.js#FYr","doc":"导出函数 `telemetryToolCategory`：参数 e，返回 Mn.find((o) => o === n) ?? \"other_tool\"。"}
-{"id":"chunk-a76knw89.js#Tqe","doc":"导出函数 `stripSuffixNumber`：参数 e，返回 match ? e.slice(0, -match[0].length) : void 0; } export { toolCategoryForTelemetry, collectDeferredToolsDeltas…。"}
-{"id":"chunk-twvgrhqz.js#uPo","doc":"导出函数 `refreshUltrareviewQuota`：参数 e。"}
-{"id":"chunk-twvgrhqz.js#B2n","doc":"导出函数 `ultrareviewQuota`：参数 e，返回 (uPo(e), null); return r.quota。"}
-{"id":"chunk-twvgrhqz.js#zLr","doc":"导出函数 `isUltrareviewSurfaceOn`：参数 e，返回 !1; if (!isPolicyAllowed(\"allow_remote_sessions\")) return !1; return U()[e] === !0。"}
-{"id":"chunk-twvgrhqz.js#fPo","doc":"导出函数 `hasRunUltrareview`：返回 getGlobalConfig().hasRunUltrareview === !0。"}
-{"id":"chunk-twvgrhqz.js#m1s","doc":"导出函数 `markUltrareviewRun`：参数 e。"}
-{"id":"chunk-twvgrhqz.js#pPo","doc":"导出函数 `freeReviewsBadge`：参数 e，返回 `${e} free ${e === 1 ? \"review\" : \"reviews\"} left`。"}
-{"id":"chunk-w5ndchqs.js#HEt","doc":"导出函数 `isLimitEnabled`：参数 e，返回 !0; return isOutOfCreditsReason(e?.disabled_reason ?? null)。"}
-{"id":"chunk-w5ndchqs.js#kVe","doc":"导出函数 `hasUsageLimitKeys`：参数 e，返回 typeof e === \"object\" && e !== null && !Array.isArray(e) && USAGE_LIMIT_KEYS.some((n) => n in e)。"}
-{"id":"chunk-w5ndchqs.js#a2o","doc":"导出函数 `rateLimitPromoNotices`：返回 safeParse.success ? safeParse.data : []。"}
-{"id":"chunk-w5ndchqs.js#_hn","doc":"导出函数 `hasModelScopedLimit`：参数 e，返回 ( Array.isArray(e) && e.some((n) => typeof n === \"object\" && n !== null && isModelScopedWeeklyLimit(n)) )。"}
-{"id":"chunk-aepeg2w5.js#kwi","doc":"导出函数 `nullVerificationState`：返回 null。"}
-{"id":"chunk-aepeg2w5.js#Twi","doc":"导出函数 `noop`：参数 e。"}
-{"id":"chunk-aepeg2w5.js#Awi","doc":"导出函数 `hasFastModeRateLimitDuration`：返回 Zt().fastModeRateLimitDurationMs !== null。"}
-{"id":"chunk-aepeg2w5.js#Cwi","doc":"导出函数 `checkFastModeRateLimit`：参数 e，返回 Zt().checkFastModeRateLimit(e)。"}
-{"id":"chunk-aepeg2w5.js#xwi","doc":"导出函数 `pendingVerification`：返回 ru.pending。"}
-{"id":"chunk-e6aww6q8.js#pRe","doc":"导出函数 `retryWatchdogEnv`：返回 env.CLAUDE_CODE_RETRY_WATCHDOG。"}
-{"id":"chunk-jh9jdn8w.js#oAe","doc":"导出函数 `canAutoReply`：返回 !0; return getAttacherCaps() !== null && getRvSupervisorLinkLive()。"}
-{"id":"chunk-jh9jdn8w.js#HUs","doc":"导出函数 `subscribeAutoReplyChanges`：参数 e，返回 () => { (t(), n()); }。"}
-{"id":"chunk-jh9jdn8w.js#NUs","doc":"导出函数 `isAutoReactWatching`：返回 getLiveState().autoReact.enabledMemo === !0 && hasActiveAutoReactWatch({ reconnecting: !0 })。"}
-{"id":"chunk-jh9jdn8w.js#URo","doc":"导出函数 `bumpUnattendedReply`：参数 e。"}
-{"id":"chunk-jh9jdn8w.js#BRo","doc":"导出函数 `addUnattendedReplies`：参数 e, t。"}
-{"id":"chunk-jh9jdn8w.js#$Us","doc":"导出函数 `takeUnattendedReplies`：参数 e，返回 (t.delete(e), n)。"}
-{"id":"chunk-r0perv8y.js#LYn","doc":"导出函数 `artifactEmulatorDir`：返回 join_2(SKILLS_MOUNT_SPEC.base, EXAMPLES_ARTIFACT_EMULATOR)。"}
-{"id":"chunk-x7pzr0ah.js#jGs","doc":"导出函数 `registerAvailabilitySource`：参数 i。"}
-{"id":"chunk-x7pzr0ah.js#Xb","doc":"导出函数 `isArtifactsAvailable`：返回 a.isAvailable(); } export { Xb, jGs }。"}
-{"id":"chunk-9xyz2gbc.js#SLo","doc":"导出函数 `isHostEntrypointSession`：返回 isHostEntrypoint()。"}
-{"id":"chunk-0zqb2m0b.js#U2s","doc":"导出函数 `randomBatchId`：返回 randomBytes(16).toString(\"base64url\")。"}
-{"id":"chunk-0zqb2m0b.js#Ze","doc":"导出函数 `ME_ID_TTL_MS`。"}
-{"id":"chunk-0zqb2m0b.js#W2s","doc":"导出函数 `isQuotaReason`：参数 e，返回 ve.has(e)。"}
-{"id":"chunk-0zqb2m0b.js#z2s","doc":"导出函数 `clearMeIdCache`：参数 e。"}
-{"id":"chunk-0zqb2m0b.js#AFr","doc":"导出函数 `isRecoverableStoreError`：参数 e，返回 e !== \"store_unavailable\"。"}
-{"id":"chunk-kmc5hpaz.js#dHs","doc":"导出函数 `visibleTools`：参数 e，返回 isBuiltInArtifactHiddenForMcp() ? T(e) : [...e]。"}
-{"id":"chunk-aepeg2w5.js#Vwi","doc":"导出函数 `artifactProxyPath`：参数 e, n，返回 `${getAgentProxyPath()}/artifact/${encodeURIComponent(e)}${n}`。"}
-{"id":"chunk-aepeg2w5.js#qwi","doc":"导出函数 `artifactAssetTokenHeader`：参数 e，返回 { \"x-frame-asset-token\": e }。"}
-{"id":"chunk-aepeg2w5.js#Y3t","doc":"导出函数 `isArtifactMountUsable`：返回 isArtifactMountMode() && !isDesktopTopSession()。"}
-{"id":"chunk-aepeg2w5.js#Xpr","doc":"导出函数 `isArtifactPathMounted`：返回 isArtifactMountMode() || isClaudeAiChatCowork()。"}
-{"id":"chunk-xf84t5b0.js#PLr","doc":"导出常量或表 `SUMMON_STATE_TTL_MS`：值为 3600000。"}
-{"id":"chunk-xf84t5b0.js#DBs","doc":"导出常量或表 `ROUTE_ABSENT_4001`：值为 \"4001\", OFt = \"4503\", MFt = \"4403\", k2n = 900000。"}
-{"id":"chunk-xf84t5b0.js#LBs","doc":"导出常量或表 `TOKEN_MIN_GRACE_MS`：值为 300000, HBs = 3。"}
-{"id":"chunk-xf84t5b0.js#UBs","doc":"导出函数 `seedJitter`：参数 e，返回 Math.round(Math.random() * e.seedDeferMaxMs)。"}
-{"id":"chunk-5323y1gy.js#Y$t","doc":"导出函数 `findPrefetchFile`：参数 e, s，返回 e.find((n) => n.path === `project/${s}`) ?? e.find((n) => n.path === s)。"}
-{"id":"chunk-0wdgqhcf.js#Vn","doc":"导出常量或表 `DEFAULT_RESULT_ROWS`：值为 500, HHs = 4000。"}
-{"id":"chunk-0wdgqhcf.js#Wce","doc":"导出函数 `clipUnknown`：参数 e，返回 sweepResultLineText(typeof e === \"string\" ? e : \"unknown\", 64)。"}
-{"id":"chunk-0wdgqhcf.js#Ov","doc":"导出函数 `canonicalTargetOrPlaceholder`：参数 e，返回 canonicalArtifactTargetFor(e, \"(unrecognized address)\")。"}
-{"id":"chunk-0wdgqhcf.js#jvo","doc":"导出函数 `clipLabel`：参数 e，返回 typeof e === \"string\" ? sweepResultLineText(e, Yn) : void 0。"}
-{"id":"chunk-0wdgqhcf.js#Wvo","doc":"导出函数 `labelSuffix`：参数 e，返回 t === \"\" ? \"\" : `: ${t}`。"}
-{"id":"chunk-0wdgqhcf.js#$Hs","doc":"导出函数 `shortLabelOrUndefined`：参数 e，返回 t === \"\" ? void 0 : t。"}
-{"id":"chunk-0wdgqhcf.js#j0","doc":"导出函数 `peerOrFallback`：参数 e, t, n，返回 typeof e === \"string\" && t.test(e) ? e : n。"}
-{"id":"chunk-0wdgqhcf.js#G7","doc":"导出函数 `numberText`：参数 e，返回 typeof e === \"number\" && Number.isFinite(e) ? String(e) : \"?\"。"}
-{"id":"chunk-0wdgqhcf.js#eF","doc":"导出函数 `jsonQuotedSweep`：参数 e, t，返回 jsonStringify(sweepScalarField(e, t))。"}
-{"id":"chunk-0wdgqhcf.js#zce","doc":"导出常量或表 `MAX_SWEEP_TEXT_CHARS`：值为 8192, Xn = /^[0-9a-f]{16}$/, Jn = 12288。"}
-{"id":"chunk-aqdf5t3e.js#gzn","doc":"导出函数 `trackDurableClaudeDocSlug`：参数 e。"}
-{"id":"chunk-aqdf5t3e.js#eyt","doc":"导出函数 `setWorking`：参数 e, n。"}
-{"id":"chunk-aqdf5t3e.js#fzn","doc":"导出函数 `isWorking`：参数 e，返回 ve.of(e).working.getState().working。"}
-{"id":"chunk-w08rdxhd.js#vZe","doc":"导出函数 `hasArtifactAddon`：参数 e，返回 ( isArtifactToolsetSplit() && isArtifactToolRegistered() && getArtifactPublishStubDir() === null && isAddonEna…。"}
-{"id":"chunk-w08rdxhd.js#kLo","doc":"导出常量或表 `artifactGatesSlot`：值为 new xe()。"}
-{"id":"chunk-w08rdxhd.js#TLo","doc":"导出函数 `storeRouteMode`：返回 getStoreRoute(s && dbVerbsOn, s && runScriptOn)。"}
-{"id":"chunk-w08rdxhd.js#RYn","doc":"导出函数 `isDesignType`：参数 e，返回 e !== void 0 && rt.has(e)。"}
-{"id":"chunk-w08rdxhd.js#Dzs","doc":"导出函数 `isMigratedDesignType`：参数 e，返回 e !== void 0 && it.has(e)。"}
-{"id":"chunk-gfcxsygg.js#Uht","doc":"导出函数 `createEmptyArtifactSessionStores`：返回 createArtifactSessionStores( () => e, (r) => { e = r(e); }, )。"}
-{"id":"chunk-gfcxsygg.js#Bht","doc":"导出函数 `NO_OP_COLOR_ASSIGNER`。"}
-{"id":"chunk-easqy8j1.js#SDo","doc":"导出函数 `isRelayUnavailableForPins`：返回 mn() && !frameVerbRelayActive()。"}
-{"id":"chunk-easqy8j1.js#hDo","doc":"导出函数 `isOrgReadMode`：参数 e，返回 e === \"org\" || e === \"people\"。"}
-{"id":"chunk-easqy8j1.js#INr","doc":"导出函数 `isOrgAccessMode`：参数 e，返回 e === \"view\" || e === \"comment\"。"}
-{"id":"chunk-easqy8j1.js#yDo","doc":"导出常量或表 `MAX_SHARE_TARGETS`：值为 50, Le = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/。"}
-{"id":"chunk-easqy8j1.js#odn","doc":"导出函数 `isRelayUnavailableForSharing`：返回 mn() && !frameVerbRelayActive(SHARING_RELAY_FAMILY)。"}
-{"id":"chunk-easqy8j1.js#j9","doc":"导出函数 `isArtifactRoomEnabledStub`：返回 null?.isArtifactRoomEnabled() === !0; } export { j9, isArtifactPinEnabled, versionLabelSchema, listArtifactVer…。"}
-{"id":"chunk-4v4n55c3.js#P1t","doc":"导出函数 `isLegacyArtifactAction`：参数 t，返回 Object.hasOwn(ADDON_OF_LEGACY_ACTION, t)。"}
-{"id":"chunk-75vetdac.js#N$s","doc":"导出函数 `inlinedByCreatePaths`：参数 r，返回 n(r) .filter((e) => e.inlinedByCreate) .map((e) => e.path)。"}
-{"id":"chunk-75vetdac.js#$$s","doc":"导出函数 `inlinedByCreateDesignPaths`：参数 r，返回 n(r) .filter((e) => e.inlinedByCreate && e.needsDesignSystem) .map((e) => e.path)。"}
-{"id":"chunk-75vetdac.js#NMr","doc":"导出函数 `printedTypePaths`：参数 r，返回 n(r) .filter((e) => e.printed) .map((e) => e.path)。"}
-{"id":"chunk-75vetdac.js#F$s","doc":"导出函数 `kitReadTypePaths`：参数 r，返回 n(r) .filter((e) => e.readByKit) .map((e) => e.path); } export { NMr, F$s, ARTIFACT_TYPE_REFERENCES, N$s, $$s …。"}
-{"id":"chunk-w08rdxhd.js#YAe","doc":"导出函数 `versionShapeOrPlaceholder`：参数 e，返回 typeof e === \"string\" && VER_SHAPE.test(e) ? e : \"unrecognized-version-shape\"。"}
-{"id":"chunk-w08rdxhd.js#TZe","doc":"导出函数 `pathListOrUnreadable`：参数 e，返回 Array.isArray(e) ? formatPathList(stringEntries(e), e.length) : \"(unreadable)\"。"}
-{"id":"chunk-w08rdxhd.js#a$r","doc":"导出函数 `shortPathList`：参数 e，返回 Oe(e).filter((r) => r.length <= MAX_PATH_CHARS)。"}
-{"id":"chunk-hvmwwjxr.js#vun","doc":"导出函数 `mcpToolNames`：参数 r，返回 r.map((o) => buildMcpToolName(CLAUDE_ARTIFACTS, o))。"}
-{"id":"chunk-jv307fw4.js#TFr","doc":"导出常量或表 `AUDIENCE_QUERY_TIMEOUT_MS`：值为 30000; export { scrubPageText, assessOwnArtifactPage, getSharedReadLane, CONTROL_CHAR_REGEX, buildAudienceFraming, isWri…。"}
-{"id":"chunk-99h01h55.js#KQr","doc":"导出函数 `isKnownCapabilityObject`：参数 e，返回 de(e, oe)。"}
-{"id":"chunk-99h01h55.js#Zes","doc":"导出函数 `isFullCapabilityObject`：参数 e，返回 de(e, xe)。"}
-{"id":"chunk-99h01h55.js#Wyi","doc":"导出函数 `allKnownCapabilityKeys`：参数 e，返回 e.every((n) => xe.has(n))。"}
-{"id":"chunk-w4p2kd11.js#pUs","doc":"导出函数 `setRegistrySink`：参数 e。"}
-{"id":"chunk-w4p2kd11.js#mUs","doc":"导出函数 `resetRegistryPublished`。"}
-{"id":"chunk-w4p2kd11.js#DRo","doc":"导出函数 `ownProcStart`：返回 ownProcStartAsync()。"}
-{"id":"chunk-w4p2kd11.js#Ozn","doc":"导出函数 `tornStopIntents`：返回 getLiveState().commentMonitorIntent.tornStops。"}
-{"id":"chunk-w4p2kd11.js#LRo","doc":"导出函数 `monitorStorage`：返回 getLiveState().commentMonitorIntent.storageV5。"}
-{"id":"chunk-w4p2kd11.js#v5","doc":"导出函数 `runCommentMonitorWithIntent`：参数 e。"}
-{"id":"chunk-w4p2kd11.js#_Us","doc":"导出函数 `forgetSlugIntent`：参数 e, t，返回 runCommentMonitor(t?.storageV5).bySlug.get(e)?.state。"}
-{"id":"chunk-w4p2kd11.js#HRo","doc":"导出函数 `markSlugTravelling`：参数 e, t。"}
-{"id":"chunk-0sfjpx19.js#EAs","doc":"导出函数 `otherArmedSlugs`：参数 e, n，返回 listOtherArmedSlugs(e, {}).filter((r) => !n(r))。"}
-{"id":"chunk-bf8g35sz.js#hqn","doc":"导出函数 `newLaneNoticeId`：参数 e = randomUUID(，返回 e。"}
-{"id":"chunk-bf8g35sz.js#fGs","doc":"导出函数 `laneNoticeSlug`：参数 e，返回 getLiveState().laneNoticeSlugs.get(e)。"}
-{"id":"chunk-bf8g35sz.js#mGs","doc":"导出函数 `commentReadFor`：参数 e，返回 getLiveState().commentReads.get(e)。"}
-{"id":"chunk-bf8g35sz.js#_qn","doc":"导出函数 `lastOthersCommentReadAt`：返回 getLiveState().lastOthersCommentReadAt。"}
-{"id":"chunk-9tgt55am.js#JFs","doc":"导出函数 `isSummonSettled`：参数 e，返回 getLiveState().summonSeeds.settled.has(Me(e.slug, e.threadId, e.gestureAt))。"}
-{"id":"chunk-9tgt55am.js#QFs","doc":"导出函数 `openSummonFor`：参数 e，返回 getLiveState().summonSeeds.open.get(Me(e.slug, e.threadId, e.gestureAt))。"}
-{"id":"chunk-9tgt55am.js#KQe","doc":"导出函数 `isThreadAgentEnabled`：返回 getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SORREL_TRELLIS_TENON, !1) === !0。"}
-{"id":"chunk-9tgt55am.js#$Dr","doc":"导出函数 `isTealCorbelFinialEnabled`：返回 !isDiskless() && getFeatureValue_CACHED_MAY_BE_STALE(\"tengu_teal_corbel_finial\", !0)。"}
-{"id":"chunk-9tgt55am.js#cUs","doc":"导出函数 `hasThreadAgentForSlugPost`：参数 e，返回 hasThreadAgentForSlug(e)。"}
-{"id":"chunk-tq1fsmqn.js#B9","doc":"导出函数 `isConsentUiKind`：参数 e，返回 e === \"interactive\" || e === \"sdk\" || e === \"bg_session\"。"}
-{"id":"chunk-9tgt55am.js#ODr","doc":"导出函数 `permissionRuleDestination`：返回 isVsCodeTopSession() || isDesktopNonClaudecode() ? \"userSettings\" : \"session\"。"}
-{"id":"chunk-9tgt55am.js#Ezn","doc":"导出函数 `isReplyRuleGateOn`：返回 getFeatureValue_CACHED_MAY_BE_STALE(\"tengu_ochre_plover\", !1)。"}
-{"id":"chunk-9tgt55am.js#xRo","doc":"导出常量或表 `ACTIVATED_LABEL`：值为 \"Claude: activated\", MDr = \"Claude: NOT activated\"; export { ODr, findReplyAllowRule, Ezn, hasReplyDenyOrAsk, xRo, MDr, …。"}
-{"id":"chunk-9tgt55am.js#Czn","doc":"导出函数 `isBackgroundSurface`：参数 e，返回 e !== void 0 && e !== \"interactive\"。"}
-{"id":"chunk-9tgt55am.js#Rzn","doc":"导出函数 `describeHolderWithOthersComments`：参数 e, t, n，返回 { where: describeReplyHolder(e, n), surface: getHolderSurface(e), others: t }。"}
-{"id":"chunk-9tgt55am.js#Min","doc":"导出函数 `holderElsewhereText`：参数 e，返回 e !== void 0 ? describeHolderWithOthers(e) : \"another session on this machine\"。"}
-{"id":"chunk-9tgt55am.js#zFs","doc":"导出函数 `markCensusDirty`：参数 e。"}
-{"id":"chunk-9tgt55am.js#bFt","doc":"导出函数 `censusGeneration`：参数 e，返回 $e().get(e)?.generation。"}
-{"id":"chunk-9tgt55am.js#kzn","doc":"导出函数 `censusEntry`：参数 e，返回 $e().get(e)。"}
-{"id":"chunk-9tgt55am.js#VFs","doc":"导出函数 `forgetCensus`：参数 e。"}
-{"id":"chunk-99h01h55.js#Vcr","doc":"导出函数 `sanitizeConnectorNameConnectors`：参数 e，返回 scrubArtifactEnvelopeTags( truncateCodePoints(e, MAX_NAME_LENGTH).replace(DISPLAY_UNSAFE_RE, escapeChar), )。"}
-{"id":"chunk-99h01h55.js#zit","doc":"导出函数 `isDeclarableServer`：参数 e，返回 e.declarable !== !1 && getMcpPrefix(e.server)。"}
-{"id":"chunk-99h01h55.js#k4","doc":"导出函数 `isPlainObjectConnector`：参数 e，返回 e !== null && typeof e === \"object\" && !Array.isArray(e); } export { sanitizeConnectorName, zit, k4, Vcr, G, Q…。"}
-{"id":"chunk-4xpk3fhh.js#Ncr","doc":"导出函数 `isRememberedArtifactConsent`：参数 e，返回 e.ask && e.remember === \"artifact\"。"}
-{"id":"chunk-4xpk3fhh.js#iRt","doc":"导出函数 `consentClassKey`：参数 e，返回 e.endpoint ? `${e.class}:endpoint` : e.class。"}
-{"id":"chunk-4xpk3fhh.js#b3","doc":"导出函数 `hasClassConsent`：参数 e, n，返回 getLiveState().askClassConsent.has(g(e, n))。"}
-{"id":"chunk-4xpk3fhh.js#Iyi","doc":"导出函数 `rememberOutsideOrgConsent`：参数 e。"}
-{"id":"chunk-4xpk3fhh.js#Res","doc":"导出函数 `hasOutsideOrgConsent`：参数 e，返回 getLiveState().askClassOutsideOrgConsent.has(g(\"foreign_read\", e))。"}
-{"id":"chunk-4xpk3fhh.js#xQr","doc":"导出函数 `forgetNamedOtherOrg`：参数 e。"}
-{"id":"chunk-4xpk3fhh.js#z5t","doc":"导出函数 `hasClassPersonConsent`：参数 e, n，返回 getLiveState().askClassPersonConsent.has(g(e, n))。"}
-{"id":"chunk-4xpk3fhh.js#i5e","doc":"导出函数 `consentEpochGuard`：参数 e，返回 (e.artifactConsentEpoch ?? 0) === getLiveState().accountEpoch ? e : freeze。"}
-{"id":"chunk-4xpk3fhh.js#Hte","doc":"导出函数 `hasSharedReadConsentClasses`：参数 e, n, r，返回 i5e(e)[n]?.[r] === !0。"}
-{"id":"chunk-4xpk3fhh.js#$it","doc":"导出函数 `consentEpochKey`：返回 `${accountEpoch}:${conversationEpoch}`。"}
-{"id":"chunk-w08rdxhd.js#B_t","doc":"导出函数 `artifactTypesEnabled`：返回 env.CLAUDE_CODE_ARTIFACT_TYPES ?? getFeatureValue_CACHED_MAY_BE_STALE(TENGU_COBALT_PLINTH_LARCH, !0)。"}
-{"id":"chunk-w08rdxhd.js#RLo","doc":"导出函数 `isRelayUnavailableForTypeCreate`：返回 uC() && !frameVerbRelayActive(TYPE_CREATE_RELAY_FAMILY) && !ce()。"}
-{"id":"chunk-jeazk6wn.js#nWn","doc":"导出函数 `durableRowList`：返回 [...R().values()]。"}
-{"id":"chunk-jeazk6wn.js#Hye","doc":"导出函数 `durableRowFor`：参数 e，返回 R().get(e)。"}
-{"id":"chunk-jeazk6wn.js#_0s","doc":"导出函数 `hasConnectorForUrl`：参数 e，返回 se(e) !== null。"}
-{"id":"chunk-jeazk6wn.js#b0s","doc":"导出函数 `localDurableWatchRefusal`：返回 env.CLAUDE_CODE_REMOTE ? null : \"not_remote\"。"}
-{"id":"chunk-jeazk6wn.js#Gko","doc":"导出函数 `isSubscriptionRelayBlocked`：返回 ( mn() && frameRelayActive() && !frameVerbRelayActive(SUBSCRIPTIONS_RELAY_FAMILY) && !isServiceAgentSession() …。"}
-{"id":"chunk-aqdf5t3e.js#iRo","doc":"导出函数 `isMissingSessionSubscribe`：参数 e，返回 e.reason === \"subscribe_failed\" && e.status === 404 && !e.fromGateway。"}
-{"id":"chunk-aqdf5t3e.js#bDr","doc":"导出函数 `unexpectedWatchFailure`：参数 e，返回 EXPECTED_WATCH_FAILURES.has(e) ? null : NGr。"}
-{"id":"chunk-aqdf5t3e.js#FFs","doc":"导出函数 `noteArmInFlight`：参数 e。"}
-{"id":"chunk-aqdf5t3e.js#lRo","doc":"导出函数 `forgetArmOutcome`：参数 e。"}
-{"id":"chunk-5nrcp6t7.js#T4e","doc":"导出常量或表 `sumByAliasField`：值为 ye。"}
-{"id":"chunk-5nrcp6t7.js#G3o","doc":"导出函数 `frameSessionId`：返回 e && he.test(e) ? e : void 0。"}
-{"id":"chunk-5nrcp6t7.js#Kxe","doc":"导出函数 `requestIdMeta`：参数 e，返回 e !== void 0 && be.test(e) ? { request_id: e } : {}。"}
-{"id":"chunk-5nrcp6t7.js#STt","doc":"导出函数 `mentionsField`：参数 e, r，返回 e.includes(`'${r}'`) || new RegExp(`\"${r}\"(?!\\\\??:)`).test(e)。"}
-{"id":"chunk-5nrcp6t7.js#Xor","doc":"导出函数 `isUnknownFieldErrorFor`：参数 e, r，返回 UNKNOWN_FIELD_ERROR_RE.test(s) && STt(s, r)。"}
-{"id":"chunk-5nrcp6t7.js#V6","doc":"导出常量或表 `SAFE_ERROR_CODE_RE`：值为 /^[A-Za-z0-9_-]{1,64}$/。"}
-{"id":"chunk-jv307fw4.js#h0o","doc":"导出函数 `emptyText`：参数 e, n，返回 \"\"。"}
-{"id":"chunk-jv307fw4.js#y0o","doc":"导出函数 `sanitizeOriginNotes`：参数 e，返回 scrubArtifactEnvelopeTags(neutralizeConfusableTags(ARTIFACT_ORIGIN_NOTES, e.replace(Lt, \" \")))。"}
-{"id":"chunk-jv307fw4.js#_Fr","doc":"导出函数 `isOwnedExternally`：参数 e，返回 isNotSolelyOwned(e) || e.outsideOrg === !0。"}
-{"id":"chunk-jv307fw4.js#v_e","doc":"导出函数 `mayHaveForeignWriters`：参数 e，返回 _Fr(e) || e.outsidersMayHaveWritten === !0。"}
-{"id":"chunk-jv307fw4.js#dbt","doc":"导出函数 `hasOnlyOutsideWriters`：参数 e，返回 e.outsidersMayHaveWritten === !0 && !_Fr(e)。"}
-{"id":"chunk-jv307fw4.js#x5n","doc":"导出函数 `isSharedOrNotOwned`：参数 e，返回 isNotSolelyOwned(e) || e.outsideWriter === !0。"}
-{"id":"chunk-f6553xe3.js#oKs","doc":"导出函数 `registerReaderAvailability`：参数 e。"}
-{"id":"chunk-06y4szbn.js#Es","doc":"导出常量或表 `FRAME_CONSTANTS`：值为 null, MAX_ARTIFACT_BYTES = 16777216, tl = \"/api/frame/contract/latest\"。"}
-{"id":"chunk-sh3bk7pt.js#y3r","doc":"导出函数 `publishReadDeadlineS`：参数 e，返回 PUBLISH_READ_DEADLINE_S; return Math.min( PUBLISH_READ_DEADLINE_MAX_S, PUBLISH_READ_DEADLINE_S + Math.floor(e …。"}
-{"id":"chunk-jv307fw4.js#UZe","doc":"导出函数 `singleReadRetryBudget`：返回 { remaining: 1 }。"}
-{"id":"chunk-jv307fw4.js#Ycn","doc":"导出函数 `canReadViaFrame`：参数 e，返回 e.contentVia === \"frame\" && !env.CLAUDE_CODE_REMOTE。"}
-{"id":"chunk-jv307fw4.js#BZe","doc":"导出函数 `contentTypeOfHeaders`：参数 e，返回 n?.[\"x-frame-asset-content-type\"] ?? n?.[\"content-type\"]。"}
-{"id":"chunk-06y4szbn.js#pun","doc":"导出函数 `ARTIFACT_LIST_SCOPES`。"}
-{"id":"chunk-jv307fw4.js#Y9","doc":"导出函数 `isRetryableStatus`：参数 e，返回 e !== void 0 && (e >= 500 || e === 429 || e === 408)。"}
-{"id":"chunk-nfdb9b3q.js#Bjn","doc":"导出常量或表 `OPEN_PROBE_TIMEOUT_MS`：值为 15000。"}
-{"id":"chunk-jv307fw4.js#k_e","doc":"导出函数 `isGone`：参数 e，返回 e.gone === !0。"}
-{"id":"chunk-jv307fw4.js#cbt","doc":"导出函数 `isNeverPublished`：参数 e，返回 e.neverPublished === !0。"}
-{"id":"chunk-jv307fw4.js#B5","doc":"导出函数 `isOtherOrg`：参数 e，返回 e.otherOrg === !0。"}
-{"id":"chunk-jv307fw4.js#L2s","doc":"导出函数 `isAccessRefused`：参数 e，返回 k_e(e) || (e.errorCode !== void 0 && ACCESS_REFUSAL_CODES.has(e.errorCode))。"}
-{"id":"chunk-jv307fw4.js#H2s","doc":"导出函数 `stripInviteHints`：参数 e，返回 e.replace(`. ${EMAIL_INVITE_HINT}`, \"\").replace(`. ${CROSS_ORG_SHARE_HINT}`, \"\")。"}
-{"id":"chunk-jv307fw4.js#Jt","doc":"导出函数 `requestAccessSchema`。"}
-{"id":"chunk-06y4szbn.js#RFr","doc":"导出常量或表 `MERMAID_RUNTIME_PATH`：值为 \"/_runtime/mermaid-11.16.1.min.js\", _i = '<script src=\"/_runtime/mermaid-11.16.1.min.js\">'。"}
-{"id":"chunk-jv307fw4.js#hFr","doc":"导出函数 `parseHtml`：参数 e，返回 e。"}
-{"id":"chunk-jv307fw4.js#abt","doc":"导出函数 `attrOf`：参数 e, n，返回 e.attrs?.find((s) => s.name.toLowerCase() === lower)?.value。"}
-{"id":"chunk-aqdf5t3e.js#pzn","doc":"导出函数 `setWaitingFor`：参数 e, n。"}
-{"id":"chunk-aqdf5t3e.js#mzn","doc":"导出函数 `hasWaitingFor`：参数 e，返回 oRo(e) !== void 0。"}
-{"id":"chunk-aqdf5t3e.js#oRo","doc":"导出函数 `waitingFor`：参数 e，返回 ve.of(e).userPrompt.getState().waitingFor。"}
-{"id":"chunk-aqdf5t3e.js#$Fs","doc":"导出函数 `subscribeWaiting`：参数 e, n，返回 ve.of(e).userPrompt.subscribe(n)。"}
-{"id":"chunk-6ht21p2a.js#oBs","doc":"导出函数 `getTypeInfo`：参数 e，返回 weakMap.get(e)。"}
-{"id":"chunk-6ht21p2a.js#Gin","doc":"导出函数 `isBoot404`：参数 e，返回 e === \"boot_404\"。"}
-{"id":"chunk-jv307fw4.js#gFr","doc":"导出函数 `isServiceViewPath`：参数 e，返回 e.startsWith(\"_\") || e === \"index.html.json\" || e === \".json\"。"}
-{"id":"chunk-jv307fw4.js#LZe","doc":"导出函数 `isUnderAnchor`：参数 e, n, r，返回 e === n || e.startsWith(n + sep) || e === r || e.startsWith(r + sep)。"}
-{"id":"chunk-jv307fw4.js#HZe","doc":"导出函数 `normalizeTrailingSlash`：参数 e，返回 replaced === \"\" ? e : replaced。"}
-{"id":"chunk-0wdgqhcf.js#tOr","doc":"导出函数 `needsReadAsk`：参数 e, t，返回 e.readAsks || e.hardLinked || e.stagedUpload || t。"}
-{"id":"chunk-0wdgqhcf.js#lht","doc":"导出函数 `classifierGated`：参数 e，返回 sse(getAutoModeClassifierRole(e)) || br()。"}
-{"id":"chunk-0wdgqhcf.js#hko","doc":"导出常量或表 `MAX_HOSTS`：值为 32, Vjn = 8, bn = new Set([\"ENOENT\", \"ENOTDIR\", \"ENAMETOOLONG\"])。"}
-{"id":"chunk-0wdgqhcf.js#jon","doc":"导出函数 `quotedSweptPath`：参数 e，返回 `\"${truncatePathMiddle(sweptPagePath(e) || \"(unprintable path)\", 300)}\"`。"}
-{"id":"chunk-0wdgqhcf.js#ZIr","doc":"导出函数 `assertArtifactWithinLimit`：参数 e。"}
-{"id":"chunk-5e92hn02.js#LDo","doc":"导出常量或表 `FILE_READ_CONCURRENCY`：值为 4, ne = MANIFEST_REQUEST_BUDGET。"}
-{"id":"chunk-965tj7mg.js#rt","doc":"导出函数 `hasStartKitSwitchAndBash`：参数 e，返回 startKitSwitchOn() && findToolByName(e.options.tools ?? [], BASH_TOOL_NAME) !== void 0。"}
-{"id":"chunk-965tj7mg.js#at","doc":"导出函数 `hasArtifactReplTool`：参数 e，返回 artifactReplToolInPool(e.options.tools ?? [])。"}
-{"id":"chunk-965tj7mg.js#lt","doc":"导出函数 `hasSkillTool`：参数 e，返回 findToolByName(e.options.tools ?? [], SKILL) !== void 0。"}
-{"id":"chunk-965tj7mg.js#dt","doc":"导出函数 `readTypeSkillOrNull`：参数 e，返回 \"notSaved\" in i ? null : i。"}
-{"id":"chunk-6ht21p2a.js#zRo","doc":"导出函数 `noteRefusedPublishBody`：参数 e, n, s。"}
-{"id":"chunk-6ht21p2a.js#VRo","doc":"导出函数 `hasRefusedBody`：参数 e, n, s，返回 findRefusedBody(e, n, s) !== void 0。"}
-{"id":"chunk-6ht21p2a.js#rBs","doc":"导出函数 `forgetRefusedBody`：参数 e, n。"}
-{"id":"chunk-bhxaz9j0.js#vkt","doc":"导出函数 `stripRejectBreakerNotice`：参数 e，返回 e.startsWith(`${ARTIFACT_REJECT_BREAKER_NOTICE} `) ? e.slice(ARTIFACT_REJECT_BREAKER_NOTICE.length + 2) : e。"}
-{"id":"chunk-bhxaz9j0.js#Tnr","doc":"导出常量或表 `MAX_REJECT_KEY_CHARS`：值为 1e5, Cbn = OUTPUT_SIZE_LIMITS - 2000。"}
-{"id":"chunk-bhxaz9j0.js#yie","doc":"导出函数 `statusText`：参数 e，返回 STATUS_CODES[e] ?? \"Unknown Status\"; } export { Ekt, Tnr, yie, Cbn, withRejectBreakerNotice, wrapToolWithRejec…。"}
-{"id":"chunk-sqqsb7w7.js#IUs","doc":"导出函数 `hasOutstanding`：参数 e，返回 typeof e === \"string\" && y().outstanding.has(e)。"}
-{"id":"chunk-sqqsb7w7.js#NRo","doc":"导出函数 `setYieldHolder`：参数 e, i = null。"}
-{"id":"chunk-sqqsb7w7.js#MUs","doc":"导出函数 `revertGoneTakersNow`：参数 e，返回 revertGoneTakers(y(), e)。"}
-{"id":"chunk-sqqsb7w7.js#$Ro","doc":"导出函数 `setSendAnswer`：参数 e, i = null。"}
-{"id":"chunk-5v4t11fy.js#I1t","doc":"导出函数 `entrypointHint`：返回 n ? { entrypoint: n.toLowerCase().slice(0, 64) } : {}。"}
-{"id":"chunk-5v4t11fy.js#qFr","doc":"导出函数 `sessionIdHint`：返回 n && !isAgentSdkEntrypoint() ? { session_id: n } : {}。"}
-{"id":"chunk-5v4t11fy.js#q5n","doc":"导出函数 `noteSessionHintsRefused`。"}
-{"id":"chunk-5v4t11fy.js#YFr","doc":"导出常量或表 `SESSION_HINT_FIELDS`：值为 [\"entrypoint\", \"session_id\", \"request_id\"], u = new Set(YFr)。"}
-{"id":"chunk-5v4t11fy.js#yun","doc":"导出函数 `mentionsSessionHintField`：参数 n，返回 n.includes(\"entrypoint\") || n.includes(\"session_id\")。"}
-{"id":"chunk-5v4t11fy.js#iKs","doc":"导出函数 `stripSessionHints`：参数 n，返回 e; } export { lNo, I1t, qFr, getSessionHintHeaders, findRejectedHintFields, yun, q5n, YFr, iKs }。"}
-{"id":"chunk-s61vbvea.js#mSe","doc":"导出函数 `isArtifactFamilyTool`：参数 e，返回 toolMatchesAnyName(e, ARTIFACT_FAMILY_TOOL_NAMES)。"}
-{"id":"chunk-99h01h55.js#aK","doc":"导出函数 `isMeaningfulFlag`：参数 e，返回 e !== void 0 && e !== null && e !== !1。"}
-{"id":"chunk-jv307fw4.js#gF","doc":"导出函数 `webfetchReadFile`：参数 e, n, r, s = \"artifact_webfetch_read\", a = \"probe\"…，返回 readArtifactViaWebFetch(e, n, s, e.file, r, a, l, d, h)。"}
-{"id":"chunk-jv307fw4.js#F2s","doc":"导出函数 `webfetchProbe`：参数 e, n, r, s, a，返回 readArtifactViaWebFetch(e, r, a, void 0, s, \"probe\", void 0, void 0, !1, n)。"}
+{"id":"chunk-h29vk4wn.js#rt","doc":"远程会话跟踪容量常量：Set 型跟踪表（已应答请求 id、可恢复对话框 id 等）上限 1000、每请求记录的成功工具名上限 8、权限请求缓存上限 200。"}
+{"id":"chunk-h29vk4wn.js#uGs","doc":"需要转给本机处理的对话框类控制请求子类型：can_use_tool 与 request_user_dialog。"}
+{"id":"chunk-h29vk4wn.js#de","doc":"远程控制请求的长度与重试常量：id 上限 256 字符、withheld 首条消息重发最多 3 次、退避 750 ms、重试窗口 35 秒。"}
+{"id":"chunk-h29vk4wn.js#s$e","doc":"未决应答的投递常量：取消/撤回文案、已关闭的投递结果、释放等待 1500 ms、重发退避 [1s,5s,15s,45s] 及次数上限、工具类控制请求超时 120 s。"}
+{"id":"chunk-h29vk4wn.js#ldn","doc":"远程历史事件分页条数：fetchLatestEvents/fetchOlderEvents 默认 100 条，historyPrefetch 首页用 500 条，服务端 400 时回落到 100。"}
+{"id":"chunk-czq1j3j2.js#VUe","doc":"转发来的权限请求无法在本终端展示时的三段文案：概括、短版、等待用户按 esc 的完整版。"}
+{"id":"chunk-sbrfdm61.js#Rko","doc":"远程模式句柄的判定与回退：远程能力表、是否可控制通道、能力探测，以及本地模式下的固定句柄。"}
+{"id":"chunk-0p9n1dy7.js#D","doc":"远程会话事件限额：最多保留 20 条运行中任务进度、任务时长上限 30 天、展示文本 40 行。"}
+{"id":"chunk-0p9n1dy7.js#fe","doc":"远程会话事件里的展示限额：artifacts 列表最多 100 项、标题截断到 256 字符。"}
+{"id":"chunk-sjeyntvz.js#Me","doc":"远程调用/Office bridge 的错误归类表：请求超时与连接关闭错误码、bridge 状态码到 unreachable/dropped/timed_out 的分组、三类错误消息正则、可分类消息长度上限 200。"}
+{"id":"chunk-k0v80sg8.js#pf","doc":"远程工具协议版本常量：协议版本 1、受支持版本列表、溢出输出字节字段名 spilledOutputBytes。"}
+{"id":"chunk-k0v80sg8.js#Wgs","doc":"远程工具服务端限额：截断提示正则、限额默认值（进度 20 s、2 次丢失、最长询问 120 s、对账 30 s）及各限额上下界。"}
+{"id":"chunk-k0v80sg8.js#mwr","doc":"机器在线状态取值：sleeping、says_still_here、still_here、released，以及 left_idle/left_released 的映射。"}
+{"id":"chunk-k0v80sg8.js#nuo","doc":"远程工具拒绝/撤回/取消原因码表：拒绝码、撤回原因码、答复丢失原因码及其合并集合。"}
+{"id":"chunk-k0v80sg8.js#ce","doc":"远程工具错误码三个表：错误分类（in_flight/queue/sessions）、错误种类（tool_error/internal_error/cancelled/timed_out）、执行结论（ran/denied_by_* 等）。"}
+{"id":"chunk-k0v80sg8.js#iLn","doc":"服务端校验结论（server_verdict）的字段名与 zod schema：匹配状态、是否标记、依据、上下文与年龄。"}
+{"id":"chunk-k0v80sg8.js#_wr","doc":"远程宿主 id 与能力校验：still_here 文案、睡眠/探测时长、能力名正则、能力个数上限。"}
+{"id":"chunk-37ybptf3.js#PQt","doc":"工具宿主界面特性版本表：从 first=5 到 repoHooksListing=18 的每个特性及其版本号，并取最新版本作为当前界面版本。"}
+{"id":"chunk-k0v80sg8.js#DXe","doc":"remote_tool_call 元数据键与别名：__remote_tool_call、协议标签 2.1、caller 字段集合，以及 anthropic/remoteToolExecution 等类型名和若干大小上限。"}
+{"id":"chunk-k0v80sg8.js#xQt","doc":"远程调用结果的大小限额与各工具保留字段：行数/行长/结果字节等上限，以及 Bash、PowerShell、Edit、Write 工具允许透传的结果字段。"}
+{"id":"chunk-k0v80sg8.js#S","doc":"远程工具字段限额：工具名 64、工作目录 1024、id 形态 8–64 位、工具名长度 128。"}
+{"id":"chunk-k0v80sg8.js#on","doc":"工具名 schema：匹配安全名字正则并排除危险名；另定义统一的 name/working_dir 目标 schema。"}
+{"id":"chunk-7jxyna5q.js#GEi","doc":"仓库信任状态的判定与文案：最终态（not_marked/declined/nothing_to_mark）、是否可上报、是否可标记，以及各状态对应的同意提示文案。"}
+{"id":"chunk-6d2p9h2d.js#HDo","doc":"远程工具服务端后台命令的限额：最多跟踪 4 条运行中的命令、16 条历史、输出尾部上限 8192 字节、停止轮询间隔 1 s。"}
+{"id":"chunk-6d2p9h2d.js#Kn","doc":"凭据路径清单：Unix 凭据目录（.ssh/.aws/.config/gcloud 等）、凭据文件（.netrc/.npmrc/.pgpass 等）、Windows 凭据目录与文件、.claude 配置，以及编辑器备份/临时变体展开。"}
+{"id":"chunk-6d2p9h2d.js#Un","doc":"凭据路径的 glob 组合：目录与其 `/**`、文件与 `.*` 变体、短名别名变体，以及用于字面量匹配的 matcher 构造。"}
+{"id":"chunk-6d2p9h2d.js#Ee","doc":"Windows 凭据工具名清单：cmdkey/vaultcmd、PowerShell 凭据管理函数及常见凭据模块名。"}
+{"id":"chunk-6d2p9h2d.js#or","doc":"Windows 命令行里的凭据访问/混淆检测正则：凭据 cmdlet、模块加载、凭据管理器类型、PasswordVault、runas、/savecred、动态执行与 powershell 调用等。"}
+{"id":"chunk-nefh4pze.js#BDo","doc":"后台 shell 记录：id/日志文件名正则、字段长度上限（命令 80、调用者 64）、日志尾部 8192 字节、最多列 256 个日志、最多展示 32 条，以及记录 schema。"}
+{"id":"chunk-6d2p9h2d.js#kr","doc":"路径判定限额：嵌套输入深度 8、单条路径 512 字符、总扫描 131072 字符，以及绝对路径、通配符、URL 前缀、引号等形态正则。"}
+{"id":"chunk-6d2p9h2d.js#Qn","doc":"路径形态正则集合：通配符/不安全字符/命令分隔/URL/普通名字/相对路径/proc、Data 卷、私有域名与数字主机等，用于判断云会话传来的路径是否可在本机处理。"}
+{"id":"chunk-6d2p9h2d.js#Cs","doc":"远程工具权限判定原因常量：会话答复、破坏性询问、分类器询问、本机设置写入/编辑、无法确认的 shell 写入等，以及每条最多保留 16 条。"}
+{"id":"chunk-6d2p9h2d.js#mo","doc":"远程调用的拒绝模板：确认失败、回答前被停止，以及允许直接执行的权限模式集合（default/plan/dontAsk/acceptEdits）。"}
+{"id":"chunk-6d2p9h2d.js#Jr","doc":"本机安全检查（destructive-command 分类器）的预算与文案：20 s 总预算、5 s 余量、2 s 最小预算，按不可逆删除/外部代码两类给出询问文案，以及未答与未放行的兜底文案。"}
+{"id":"chunk-gw6tgnv9.js#B","doc":"仓库层设置冻结的事件名与最短刷新间隔：changed、changed-between、taken-as-found、record-unavailable 四种，及 5 s 间隔。"}
+{"id":"chunk-6d2p9h2d.js#ds","doc":"shell 行解析限额：最多 16 段；变量名、路径、赋值字符集；重定向操作符；保留 bash/zsh 变量与前缀；会读取路径的命令集合。"}
+{"id":"chunk-nvm0wye1.js#Yt","doc":"设置文件的三种存在状态标记：empty:/absent，以及路径链分隔符 \">\"。"}
+{"id":"chunk-nvm0wye1.js#mr","doc":"远程服务的默认策略：58 s 截止、4 并发、沙箱/后台/凭证擦除等默认值，以及给用户看的策略说明文案。"}
+{"id":"chunk-nvm0wye1.js#Wi","doc":"执行模式 schema：in_process 与 vm（含 availability、executor、copy 说明）两种模式的定义。"}
+{"id":"chunk-nvm0wye1.js#bn","doc":"会话常驻批准的限额：有效期 30 分钟、最多 256 条、单批 16 条。"}
+{"id":"chunk-7jxyna5q.js#ide","doc":"远程调用日志的终态与限额：joined_retry/replaced_by_retry 等终态集合，以及日志版本、文件大小、天数、条数上限与 TTL。"}
+{"id":"chunk-4z1ntdgk.js#hl","doc":"权限模式推送失败的退避与三段提示文案：重试 400/1200 ms、5 s 窗口，以及 server 未保存、会话空闲、会话未激活三种说明。"}
+{"id":"chunk-4z1ntdgk.js#wl","doc":"远程响应等待超时与提示：普通 60 s、等待用户答复 180 s，以及“云端可能无响应”“Claude 在等你回答”两段文案。"}
+{"id":"chunk-7jxyna5q.js#Or","doc":"属主设置冻结的开关与受管限制字段表：read_block、write_block、auto_mode_off、plan_asks_a_person、unattended_serving_off 各自的设置路径。"}
+{"id":"chunk-7jxyna5q.js#Ws","doc":"按宿主保存的“持有中”属主设置槽：会话启动时冻结的设置快照与当前用户设置的合并。"}
+{"id":"chunk-3hjq2hdt.js#ze","doc":"服务结果图片重编码的参数：最多 4 轮、每轮目标压缩到 9 成、小于 16 KB 的图片不再处理。"}
+{"id":"chunk-sjeyntvz.js#cn","doc":"远程工具目标的列表节奏：首次探测 8 s 截止、分页上限 5000、失败清单 30 s 内不重试、失效记录仅当失败超过 2 s 才记，重新列举最短 5 s / 最长 30 s，临时目标 60 s 内视为新鲜。"}
+{"id":"chunk-k0v80sg8.js#ze","doc":"远程工具描述符的上限与 schema：最多 16 个工具、passthrough 名 256、描述 2048/4096、schema 64 KB 且深度 16，以及 served/passthrough 两种描述符的字段定义。"}
+{"id":"chunk-3emqeq9c.js#Ce","doc":"工具宿主助手子进程的环境裁剪：无人值守开关与会话键、要携带的登录/路径类变量、会改写登录或流量的变量（拒绝）、提供方选择变量，以及会话/环境 id 的正则。"}
+{"id":"chunk-czq1j3j2.js#Poe","doc":"REPL 差异面板的显示限额：最多同时显示 8 个文件、超过 20 个文件折叠提示、加载提示延迟 300 ms 出现。"}
+{"id":"chunk-czq1j3j2.js#xee","doc":"惰性取值封装：current 每次读取时调用构造时传入的函数，用于加载计时等派生状态。"}
+{"id":"chunk-rzkdv0c6.js#UK","doc":"安全 git 环境与参数：禁 hook、禁 fsmonitor、禁 askPass、关自动 gc 的 -c 参数，安全环境变量（含 GIT_ALLOW_PROTOCOL）以及完全锁定协议的子进程环境。"}
+{"id":"chunk-a3r2kq46.js#Ln","doc":"健康检查服务的限额：请求体上限 256 KB、保留最近 5 条请求、端口范围 100–500。"}
+{"id":"chunk-a3r2kq46.js#he","doc":"hook 进程的生命周期常量：残留输出窗口 1 s、SIGKILL 期限 5 s、进程快照 500 ms、清理宽限等，以及残留输出的提示文案。"}
+{"id":"chunk-a3r2kq46.js#Te","doc":"进程表限额：最多 4096 个进程、每次并发 64 个、ps/命令超时 3 s。"}
+{"id":"chunk-a3r2kq46.js#mHr","doc":"runner API 错误的分类集合（transport/timeout/5xx/429/4xx）与计数初始化。"}
+{"id":"chunk-frs14hy1.js#Ou","doc":"tengu_groovy_ember 摘要模式开关（full/short）及其 zod schema。"}
+{"id":"chunk-frs14hy1.js#Du","doc":"生成子代理摘要时各段文本的长度上限：命令描述逐级减半的起始预算 800、最近回复 300、工具摘要 160/120、整段 10000、最近消息 60 条。"}
+{"id":"chunk-7jxyna5q.js#ep","doc":"账号记忆服务器的模式常量（all/read_only/none 及排序）与 capabilities.experimental[\"anthropic/memory\"] 的 schema。"}
+{"id":"chunk-7jxyna5q.js#zk","doc":"记忆上下文等待常量：最长等待 900 s、上次检查窗口 60 s、默认等待 2 s、首次 5 s、滞后请求 10 s。"}
+{"id":"chunk-7jxyna5q.js#Xk","doc":"记忆上下文的版本与大小限额：版本 TTL 1 小时、内容 256 KB、响应 1 MB、文件版本表 4096 项。"}
+{"id":"chunk-7jxyna5q.js#px","doc":"记忆文件在上次读取后变化时的两段提示：过期读取警告（需重新 memory_read）和 memory_updates 机器生成块的说明（模型不得转述该块）。"}
+{"id":"chunk-ndr12bqk.js#gn","doc":"Codex 的 MCP server 配置 schema（command/args/env/url/http_headers/bearer_token_env_var）。"}
+{"id":"chunk-ndr12bqk.js#Oe","doc":"导入文件大小上限 10 MB，超过直接报错拒绝。"}
+{"id":"chunk-rytc8e8q.js#Ce","doc":"后台分类器的输入裁剪常量：输入上限约 4 MB、密钥遮盖回溯窗口 8 段、重试前等待 8 s。"}
+{"id":"chunk-rytc8e8q.js#Fe","doc":"后台分类器的节流参数：默认 15 s、REPL 5 s、两次分类最短间隔 8 s、最大年龄 240 s、禁用思考时预算 2048、缓存 1 万条。"}
+{"id":"chunk-exfmq47h.js#_X","doc":"Anthropic 遥测导出器：环境列表（dry_run/test_mode/production）、失败计数包装与日志前缀。"}
+{"id":"chunk-nw1tz3f4.js#_e","doc":"按（事件, 服务器）的限速窗口：60 s 内最多放行 10 条，最多记 200 个窗口。"}
+{"id":"chunk-exfmq47h.js#$q","doc":"一方遥测导出器的默认值：导出间隔 10 s、批量 200、队列 8192、单次刷新上限 1024。"}
+{"id":"chunk-exfmq47h.js#aq","doc":"一方遥测导出的 OAUTH 刷新超时、密钥助手加入超时与 WIF 铸造重试间隔。"}
+{"id":"chunk-exfmq47h.js#y_","doc":"一方遥测 sink 被 killswitch 关闭时抛出的错误类型。"}
+{"id":"chunk-bssqrg80.js#o","doc":"按宿主保存的退出前刷新任务列表（HostScoped），供各遥测 sink 注册收尾工作。"}
+{"id":"chunk-exfmq47h.js#Wj","doc":"GrowthBook 初始化前的 OAuth/密钥助手等待时长（60 s / 5 s / 5 s）与原因标记。"}
+{"id":"chunk-05astxy8.js#e","doc":"凭证存储状态缓存（是否已检查、检查中的 Promise），用于判断能否使用首批凭据读取功能开关。"}
+{"id":"chunk-exfmq47h.js#ry","doc":"juniper_shoal 配置读取器插槽：注册读取函数并提供各子配置（工具搜索提醒、参数严格性、空输入修复、搜索抓取规则、schema 描述修复）的取值函数。"}
+{"id":"chunk-exfmq47h.js#RW","doc":"隐私等级对安全事件（tengu_safety_event）的判定：是否属安全事件、是否缺裁决、是否需要盖主体戳、是否属他人行、HIPAA 是否被污染。"}
+{"id":"chunk-vwtpw18x.js#r","doc":"安全元数据的透传函数：原样返回传入值（不做脱敏），另有 lit 作为其别名。"}
+{"id":"chunk-5xgkngpb.js#Oci","doc":"计费接口的模拟数据：预付额度套餐的四档金额与默认/折扣两组 mock 套餐。"}
+{"id":"chunk-5xgkngpb.js#wpo","doc":"缓存保活（cache keepalive）的常量与开关 schema：touch 端点、10 s 超时、3 次失败上限、5 分钟 TTL 与提前续期余量、拒用窗口 1 小时、客户端最大复用 4 分钟、活动事件名，以及配置字段。"}
+{"id":"chunk-5xgkngpb.js#wwr","doc":"web 搜索相关的内容常量：web_search/server_tool_use、web_search_tool_result、引用位置类型、占位文案与计数初始值。"}
+{"id":"chunk-5xgkngpb.js#Owr","doc":"流式护栏暂存增量的上限、哨兵与最后标量缓存：暂存文本最多 8192 字，读取结束用 Symbol 标记。"}
+{"id":"chunk-vn3g7zt8.js#Ulo","doc":"x-claude-code-sandy-plover 请求头（本轮用过的工具名列表）的编码限额：最多 64 项、总长 7168 字节、单项 256 字节。"}
+{"id":"chunk-vn3g7zt8.js#Ulo","doc":"内置工具名集合：编码请求头时把内置工具排在自定义工具之后。"}
+{"id":"chunk-5xgkngpb.js#ctn","doc":"压缩请求里工具耗时头 x-claude-code-prev-tool-durations 的限额：最多 32 项、头值 4096 字符。"}
+{"id":"chunk-03tec5k5.js#tn","doc":"声明工具集合的默认来源（servers/entries 为空），用于 planDeclaredTools 的参数默认值。"}
+{"id":"chunk-k1t1w9mg.js#FAe","doc":"网络/SSL 错误码分组：证书相关错误、含 TLS 握手的全部 SSL 错误、不可达（拒绝/DNS/网络）与 socket 关闭、可重试的瞬态 socket 错误。"}
+{"id":"chunk-k1t1w9mg.js#p","doc":"云凭证错误文案：AWS 凭据链解析失败与 Google OAuth 凭据获取失败，沿 cause 链用于识别与过滤。"}
+{"id":"chunk-pcv9zvvv.js#Qt","doc":"响应 content-type 到内容种类（html/json/text/other）的匹配模式表。"}
+{"id":"chunk-5xgkngpb.js#e2o","doc":"遥测用的安全键/路径键正则（小写字母数字下划线，路径版允许斜杠）与对应脱敏函数。"}
+{"id":"chunk-5xgkngpb.js#r2o","doc":"后台网关被扣留时的环境变量值长度上限与安全字符集校验。"}
+{"id":"chunk-a76zrsb5.js#v","doc":"Feature of the Week 活动配置：开关名、命令与时间窗、标题/说明/提示文案、公告行与领取期限的 zod schema。"}
+{"id":"chunk-vn3g7zt8.js#A_","doc":"已知的无效请求错误消息模式（提示过长、max_tokens 超限、图片类型、余额不足）以及错误信封允许的键集合。"}
+{"id":"chunk-g8sg6xj8.js#ve","doc":"请求体 gzip 的两个开关（gentle_hammock / golden_popcorn）与尺寸/时窗常量：最小 4096 字符（ccr_worker 1024）、块遥测保留 7 天、序列化尾部 8192。"}
+{"id":"chunk-vn3g7zt8.js#hy","doc":"请求体 gzip/复用校验按块进行所需的最小体积（512 KB）、大响应体标记与开关参数（gzip 等级 6、块并发 1000、不压的查询来源、抽样率 0.1）。"}
+{"id":"chunk-g8sg6xj8.js#q","doc":"gzip 分块请求体的常量：块 128 KB、字典 32 KB、最多保留 4 块、缓存上限 32、空闲丢弃 210 s、CTC BLOCK 头 256 字节、正文切分标记与系统块尾部间隙 1024。"}
+{"id":"chunk-5xgkngpb.js#awr","doc":"费用以微美元记录（cost_usd_micros）的换算系数 1e6。"}
+{"id":"chunk-1gytdxcy.js#S","doc":"指标开关查询的缓存与刷新间隔（1 小时 / 1 天）与接口路径。"}
+{"id":"chunk-5xgkngpb.js#nlr","doc":"accessFallbackModels 客户端数据结构：for（最多 256 字符）与 models（1–3 个安全模型名）的 schema。"}
+{"id":"chunk-5xgkngpb.js#Ybr","doc":"narration 的 protobuf 字段号：外层 2、内层 1、文本 8，以及 \"narration\" 标记。"}
+{"id":"chunk-t1peve9y.js#u","doc":"Pro 试用默认 14 天（本地初始化试用结束时间用）。"}
+{"id":"chunk-5xgkngpb.js#vqo","doc":"提示缓存失效检测的输出上限：摘要块数 16、散列块 10000、系统附件字符 4 倍块上限，空摘要结构。"}
+{"id":"chunk-5xgkngpb.js#nKo","doc":"缓存断裂状态文件的限额：最多 32 个状态、文件 2 MB、版本号 1 与 outlines 结构。"}
+{"id":"chunk-4qfkyrk4.js#koo","doc":"用户上下文 system-reminder 的开头/结尾模板、worker MCP 工具说明前缀，以及上下文分段名、块类型与提示条数上限。"}
+{"id":"chunk-4qfkyrk4.js#cct","doc":"后台任务事件的系统通知文案：告知模型这不是用户消息、不得视为用户确认或授权。"}
+{"id":"chunk-4qfkyrk4.js#E","doc":"定时任务的触发文案：说明本轮由调度器按预先保存的提示启动，不是实时用户输入。"}
+{"id":"chunk-7jxyna5q.js#AM","doc":"Bedrock 鉴权/模型访问错误的名称与消息特征表，用于把 403/400 归类为 refused 或 denied。"}
+{"id":"chunk-vn3g7zt8.js#Pb","doc":"安全拒绝回退的线路表：按类别（bio/cyber/frontier_llm）给出可换用的 Opus/Sonnet 模型，以及每条路线最多 3 个候选。"}
+{"id":"chunk-vn3g7zt8.js#yps","doc":"安全拒绝时展示的帮助文章 URL：网络风险（cyber）专用、模型相关与通用三种。"}
+{"id":"chunk-vn3g7zt8.js#cy","doc":"静默回退请求头相关的长度上限（头值 80 / 10000）。"}
+{"id":"chunk-q3c0tzex.js#c","doc":"请求指纹哈希分片阈值 64 KB：累积到该长度先 flush 一次。"}
+{"id":"chunk-vn3g7zt8.js#ym","doc":"请求头 SF 字典（键值对头）的限额：最多 32 项、键 128、值 128，另留键长余量。"}
+{"id":"chunk-vn3g7zt8.js#FS","doc":"未监视回复暂存流的常量：哪些查询来源的回复要暂存（subagent/auxiliary/compaction）、脉冲/增量事件字节前缀、LF/CR/BOM 字节、最多暂存 256 KB 与发送状态。"}
+{"id":"chunk-exfmq47h.js#Rtn","doc":"请求分类请求头 x-claude-code-request-class 与 x-claude-code-agent-type，及允许的请求类别列表。"}
+{"id":"chunk-5xgkngpb.js#Qco","doc":"请求过大提示的开关 tengu_wobbly_fern（字节上限）与其 zod schema。"}
+{"id":"chunk-5xgkngpb.js#_2o","doc":"诊断用的缓存/代理响应头名单与网关头前缀（anthropic-、x-amz-、x-goog- 等），用于识别中间层。"}
+{"id":"chunk-5xgkngpb.js#rnn","doc":"按宿主保存的安全拒绝设置状态（跳过的类别、被设置拒绝的类别、变更信号）。"}
+{"id":"chunk-vn3g7zt8.js#FJt","doc":"安全机制提示的文案与开关：了解链接、宽泛性说明、切换模型标题、开关名与用户偏好标签。"}
+{"id":"chunk-vn3g7zt8.js#oy","doc":"各安全类别（cyber/bio/frontier_llm）的首次提示文案，以及按模型族（sonnet）给出的类别与恢复后提示规则。"}
+{"id":"chunk-vn3g7zt8.js#Yf","doc":"按宿主保存的会话标志读取器集合与会话标志持有者（合并、清空）。"}
+{"id":"chunk-k1t1w9mg.js#U2i","doc":"流错误重试窗口上限 10 分钟；取升级后或首次重试窗口。"}
+{"id":"chunk-g8sg6xj8.js#X","doc":"流回退警告的遥测表容量（按客户端请求 id 最多记 256 条）。"}
+{"id":"chunk-5xgkngpb.js#myn","doc":"思考块被丢弃原因的严重度顺序（other < model_mismatch < prefix_mismatch），汇总时取最严重者。"}
+{"id":"chunk-5xgkngpb.js#PEr","doc":"ATIS 不一致时重新拉取 bootstrap 的参数：最小间隔 300 s（30–86400）、最大抖动 180 s（0–3600）与开关名、拉取时间槽。"}
+{"id":"chunk-03tec5k5.js#I","doc":"工具定义里会出现在 schema 层的布尔字段名（strict/eager_input_streaming/citations）。"}
+{"id":"chunk-exfmq47h.js#Be","doc":"工具描述缓存的门面实例（HostScoped）：转发读取、盖章、登记、已发送记录与大小，重置时清空延迟与重述记录。"}
+{"id":"chunk-a2r96cyy.js#A","doc":"ultrareview 提示的两种 key（prose-pointer、post-commit）与同一提示最多显示 5 次。"}
+{"id":"chunk-7pwjpdkw.js#Ne","doc":"用量提示常量：接近上限阈值 0.7、个人花费/用量限额文案与 wrap-up 链接。"}
+{"id":"chunk-7pwjpdkw.js#xt","doc":"用量页促销文案表（tengu_starry_waterfall）：菜单后缀、提示、对话框标题、横幅四种场景的折扣/返现文案与默认值。"}
+{"id":"chunk-7pwjpdkw.js#Pt","doc":"限额页促销通知（tengu_rate_limit_promo_notices）的 schema：进度条文字、说明文字与可选主题变体。"}
+{"id":"chunk-7pwjpdkw.js#rcr","doc":"组织花费上限原因集合与“频道月度花费/用量上限”文案和提升提示。"}
+{"id":"chunk-vn3g7zt8.js#Xf","doc":"混淆头 x-claude-code-wiggly-dove：头名常量与用于按 sha256 识别的摘要值。"}
+{"id":"chunk-1ap3yadm.js#M","doc":"内嵌 artifact 预览（emulator）：启动脚本挂载位置检查、是否编译进本构（compiledPreviewModule）、emulator 可用性开关与远端启用判断。"}
+{"id":"chunk-fey5mp6z.js#a","doc":"各 addon（comments/data/check）工具对旧 Artifact 动作的改写规则与“动作在本工具里怎么写”的映射，均委托 artifactLegacyHost。"}
+{"id":"chunk-qt90e95a.js#a","doc":"Artifact 可用性登记器全局实例：注册来源并聚合判断 artifact 功能是否可用。"}
+{"id":"chunk-0hjter80.js#moi","doc":"Artifact 发布输入 connectors 字段的开关与服务端能力声明处理（BCR/CCR 托管、SDK 服务器分组）。"}
+{"id":"chunk-jkpnfdxp.js#Ej","doc":"数据库工具的操作分类：读（get/list/query）、写（set/update/delete/str_replace）、作用域（view/interact/admin），及列表上限 1000。"}
+{"id":"chunk-jkpnfdxp.js#XUe","doc":"数据库工具的大小与编辑限额：单字段 256 KB、文档 1 MB、请求体 4 MB、最多 200 处编辑、查询 1000 条、批量写 50、写入体 1 MB，及编辑错误码表。"}
+{"id":"chunk-jkpnfdxp.js#Pe","doc":"数据库错误码映射表：服务端各种错误码统一到 not_found/invalid_argument/quota_or_rate/busy/upstream_auth/store_unavailable 等，及需要用户级 OAuth 错误的文案集合。"}
+{"id":"chunk-jkpnfdxp.js#tt","doc":"数据库错误响应体 schema（code/reason/kind/limit/version/index/required）与配额原因集合。"}
+{"id":"chunk-jkpnfdxp.js#gsi","doc":"版本冲突错误的提示前缀与写入/删除时“需先读最新版本”的文案。"}
+{"id":"chunk-jkpnfdxp.js#Z","doc":"数据库读取自身身份（data/users/me、whoami）的路径常量与 schema。"}
+{"id":"chunk-jkpnfdxp.js#dt","doc":"关闭云端网络访问时数据库读取失败的说明文案（只能读自己发布的 artifact）与读取范围头。"}
+{"id":"chunk-57tfkp5n.js#N","doc":"artifact MCP 线路常量：广告 TTL 5 分钟、tools/list 超时 5 s/1 s、调用超时 5 s、响应体上限 1 MB 与帧客户端请求头名单。"}
+{"id":"chunk-cx778tm5.js#J","doc":"artifact 通知的聚合参数：默认 15 s、最长 60 s 结算窗口、最多保留 20 条明细。"}
+{"id":"chunk-0pt9fb1a.js#ce","doc":"artifact 打开预取的限额：单文件 1 MB、合计 8 MB、最多 100 个文件、12 个字体、32 个参考页、1500 ms 截止、8 个并发读，及启动文件清单。"}
+{"id":"chunk-1dbza2qv.js#Z3s","doc":"db_profiles（人员档案）答复的格式化：按 id 列出姓名，标注未知 id 与不可用状态。"}
+{"id":"chunk-1dbza2qv.js#vt","doc":"artifact 内嵌（embed）错误的 schema：pins 与 warnings 列表，以及四种错误说明文案。"}
+{"id":"chunk-tsrpnscb.js#yi","doc":"presence 空闲参数开关 tengu_slate_lantern_hush 的 schema 与取值范围（空闲判定 600–86400 s、保活 25–600 s、默认 50 s）。"}
+{"id":"chunk-fgpd7qrh.js#he","doc":"共享授权（share grant）schema：读/写授权、评论者与查看者、组织只读级别、owner 与版本等字段。"}
+{"id":"chunk-7f790p0r.js#A5o","doc":"数据库写入动作名（set/update/str_replace/delete/batch），简写展开时归到 write_db。"}
+{"id":"chunk-0avm71bs.js#y","doc":"判断 Artifact 总开关（用户设置）是否关闭。"}
+{"id":"chunk-51jy8ztq.js#ms","doc":"artifact 文档清单的限额：最多 4096 项、路径 ≤512 字符且不得以 / 开头或含 .. 与转义控制字符，doc 名 ≤64。"}
+{"id":"chunk-fgpd7qrh.js#tt","doc":"Artifact 工具输入模式的构建：时间戳 schema、门面 gate 快照、发布编辑是否可用，以及缓存的 inputSchema。"}
+{"id":"chunk-mzeyg7fv.js#n","doc":"按 artifact 类型取参考文件清单，并按“创建时内联/需要设计系统/打印/kit 读取”筛选的四个辅助函数。"}
+{"id":"chunk-95pbtx8d.js#Yqo","doc":"发布时附加的类型发行版说明：是否启用类型、锁定发行版与可否修改。"}
+{"id":"chunk-chhd9p2w.js#kco","doc":"数据库规则路径正则（允许 {self} 段）与可用作用域集合（view/interact/admin/owner/self）。"}
+{"id":"chunk-chhd9p2w.js#rgs","doc":"CLAUDE_ARTIFACT_HOST_GRANT 环境变量的 schema：本机允许 artifact 调用的 MCP 服务器与工具。"}
+{"id":"chunk-chhd9p2w.js#oe","doc":"artifact 能力声明的已知键（artifact/self/downloads/comments/room/db/assets/user 等）及其扩展集合 mcp/flags。"}
+{"id":"chunk-chhd9p2w.js#Ne","doc":"页面连接器声明的文案：动态 mcp 说明、无效名与“查看者逐个批准”的提示。"}
+{"id":"chunk-fnsx7q86.js#v","doc":"自动模式分类器的 Artifact 上下文占位（handlers/room_client 恒 false）与路径/房间/连接器信息。"}
+{"id":"chunk-8kbxsj3k.js#ft","doc":"评论监控意图里“已遗忘 slug”表的上限 1024。"}
+{"id":"chunk-yz7g8v1y.js#m","doc":"评论读取记录（按工具调用 id、按 slug）表的容量上限 256。"}
+{"id":"chunk-c0pq6qyx.js#zt","doc":"自动回复确认语的模板表（7 条，标出是否随改稿）与冷却时间 2 s、固定确认文案、两条模型系统提示。"}
+{"id":"chunk-c0pq6qyx.js#so","doc":"自动改稿的尺寸与截止参数：内容 256 KB 上限、替换体 64 KB、组合截止 180 s、提示 10 万字节上限等。"}
+{"id":"chunk-c0pq6qyx.js#od","doc":"自动改稿的重试上限 8 次、失败回问文案（整篇重写不可用）与截断长度。"}
+{"id":"chunk-c0pq6qyx.js#pd","doc":"自动改稿四类失败（未应用、无变化、整篇重写被拒、超时）分别给用户与给模型的两套说明文案。"}
+{"id":"chunk-c0pq6qyx.js#la","doc":"自动回复“先说不再需要”的三种不应答原因（他人召唤、已有答复、页面自管讨论串）。"}
+{"id":"chunk-0df0kb9z.js#oe","doc":"自动改稿补丁的限额：最多编辑数（沿用发布上限）、替换 64 KB、新建文件 256 KB、新建合计 512 KB，以及 surrogate 转义标记。"}
+{"id":"chunk-0df0kb9z.js#Ae","doc":"自动改稿补丁的截止与转义解析常量：45 s 截止、最少 10 s 余量、最多 3 轮实体解析，以及 HTML 实体/反斜杠转义正则与实体名表。"}
+{"id":"chunk-c0pq6qyx.js#Hi","doc":"自动回复的节流与开关常量：合并等待默认 60 s、读重试 [5s,15s,30s,60s]、时钟偏差 10 分钟、快确认刷新 3 s，及若干 GrowthBook 开关名。"}
+{"id":"chunk-c0pq6qyx.js#ts","doc":"自动回复的合并等待 5 s、读重试退避表与 mullion 开关名。"}
+{"id":"chunk-c0pq6qyx.js#xa","doc":"自动回复台账（autoreact ledger）的限额与 schema：最长 1 天、最短写入间隔 1 小时、防抖 10 s、未来偏差 5 分钟、每部分 160 KB、2000 线程、每线程 500 条、600 个回合时间戳。"}
+{"id":"chunk-c0pq6qyx.js#Xa","doc":"后台评论 agent 的开关名与每个会话最多 5 个线程 agent 的上限。"}
+{"id":"chunk-c0pq6qyx.js#Qa","doc":"后台评论 agent 权限包装里禁止它再调用的工具（Agent、SendMessage、Monitor、workflow、定时任务等）。"}
+{"id":"chunk-x6hygg70.js#Xio","doc":"评论作者身份常量：principal token（u_ 开头）与原始角色字符串的正则、relay 路由，以及本账号已记住的 token 集合。"}
+{"id":"chunk-s4zszvmd.js#bZn","doc":"评论目标的键与文本截断上限（目标 120 字符、正文 4000、@提及 32）。"}
+{"id":"chunk-78ymyfsy.js#PYe","doc":"评论 id 与时间戳文本的正则（id 64 位 hex/横线、时间戳 40 字符）。"}
+{"id":"chunk-78ymyfsy.js#VVt","doc":"锚点提示标签（[anchored at]、[on page]、[region of] 等）与 CSS 选择器片段正则，及 128 字节的锚点文本上限。"}
+{"id":"chunk-78ymyfsy.js#at","doc":"锚点上限：位置 2^24、标签 128、详情 512、子节点 8 个且索引 <4096、文件 sha256 正则与降级标记。"}
+{"id":"chunk-78ymyfsy.js#ge","doc":"评论里 @提及 的解析：<mention:...> 模式、UUID 与短 id 两种合法形态，及不可见空白字符处理。"}
+{"id":"chunk-78ymyfsy.js#X","doc":"评论回复相关的错误说明：未激活、需要用户级凭证、组织服务键无法读/写评论、网络关闭、已回复、他人召唤、id 占用等。"}
+{"id":"chunk-78ymyfsy.js#It","doc":"评论回复不确定性的两段说明（可能已发出/连接未承载）与回复结果 schema。"}
+{"id":"chunk-78ymyfsy.js#qt","doc":"线程解决的错误文案：需要 claude.ai 会话、CCR agent token 不可用、中继失败时不确认的说明。"}
+{"id":"chunk-k4jk4dzy.js#yri","doc":"评论回复同意写入器的标识（interactive/sdk/bg_session 三种界面）。"}
+{"id":"chunk-51jy8ztq.js#XYo","doc":"Artifact 可服务的 MIME 类型集合：标记类（html/xhtml/xml/svg）、脚本/WASM、以及文本、图片、字体、音视频清单。"}
+{"id":"chunk-51jy8ztq.js#Fo","doc":"发布内容的类型说明文案：按族列出扩展名、不支持类型的提示、纯文本与文档归档的处理建议。"}
+{"id":"chunk-51jy8ztq.js#Lo","doc":"发布限流的文案与等待秒数（10/120）：给用户与给模型的提示、重发指引与预检拒绝的正则。"}
+{"id":"chunk-51jy8ztq.js#wr","doc":"契约版本过新（服务器尚未全部更新）时的提示文案与匹配正则。"}
+{"id":"chunk-51jy8ztq.js#bl","doc":"artifact 页面契约 schema（版本、能力列表、claude/core 能力与 features 映射）与读取参数。"}
+{"id":"chunk-1xrdahqv.js#p","doc":"设计系统指南相关常量：README 路径、读取上限（12000/7000/700 字符）与读取失败的三种原因文案。"}
+{"id":"chunk-57tfkp5n.js#iF","doc":"frame API 的响应大小上限 20 MB 与拒绝响应的 content-type。"}
+{"id":"chunk-m0ks5273.js#HYo","doc":"去掉页面末尾 __frame_comments__ 脚本块时的大小上限（4 MB / 3 MB）。"}
+{"id":"chunk-9evew3ee.js#P5r","doc":"artifact 读取方式可用性登记器：注册来源并说明 Artifact 工具/WebFetch 两种读法。"}
+{"id":"chunk-tsrpnscb.js#po","doc":"实时订阅消息里版本号字段的正则（1–15 位数字）。"}
+{"id":"chunk-tsrpnscb.js#zi","doc":"frame-live 实时订阅的协议标识 frame-live.v1、通知入队函数与 25 s 重试间隔。"}
+{"id":"chunk-he38vqx2.js#yyr","doc":"通过会话中继转发 artifact 请求的路由族与具体路由表：boot/blobs/comments/subscriptions/types/type_create/db/sharing/publish/frames_external 各自的 method+path。"}
+{"id":"chunk-he38vqx2.js#Ne","doc":"中继请求的两个头 x-ccr-relay-upstream、x-ccr-sandbox-egress 与沙箱出网档位取值。"}
+{"id":"chunk-m0ks5273.js#Zt","doc":"经 frame /api/frame/content 读取 artifact 内容的路由头、重试次数 3 与退避上限 10 s。"}
+{"id":"chunk-m0ks5273.js#St","doc":"接受“版本号时间戳不超前”的容差 10 分钟与版本串前缀正则。"}
+{"id":"chunk-7kh4b4jr.js#y","doc":"路径钉住的限额：每个 artifact 20 条、路径 32000 字符。"}
+{"id":"chunk-51jy8ztq.js#xc","doc":"每日发布上限错误的两个代码（frame_daily_publish_cap_reached / frame_daily_push_cap_reached）、schema 与两种计划文案，以及 publish 429 前缀与剩余次数响应头。"}
+{"id":"chunk-51jy8ztq.js#Ds","doc":"发布重试参数：503 最多 3 次、退避基数 5 s、retry-after 上限 20 s、可接受 30 s 内的值。"}
+{"id":"chunk-51jy8ztq.js#Qo","doc":"未纳入发布的文件提示常量：no_file 标记、文件类型正则、未命名上限 16 与路径 160 字符。"}
+{"id":"chunk-51jy8ztq.js#za","doc":"artifact 列表条目的 schema（slug/title/favicon/rel/更新时间/星标/外部可能写入）与列表上限、响应体 4 MB 上限。"}
+{"id":"chunk-m0ks5273.js#mnr","doc":"记录已听过的版本号：与给定版本相同时清除记录。"}
+{"id":"chunk-51jy8ztq.js#Go","doc":"本会话自己发布记录的上限 8 个版本与版本号形态正则。"}
+{"id":"chunk-51jy8ztq.js#Zs","doc":"页面准备的基础样式与发布状态/契约/阻塞清单的 schema，以及 echo manifest 的路径 1024 / 条目上限。"}
+{"id":"chunk-51jy8ztq.js#DSn","doc":"页面运行时（frame-runtime / base href / preamble）识别的窗口 8192 字符、最大跨度 5 分钟与相关正则。"}
+{"id":"chunk-51jy8ztq.js#Ll","doc":"HTML 开标签识别正则（body、base、原始文本元素）。"}
+{"id":"chunk-51jy8ztq.js#Dl","doc":"去除运行时标记时的迭代上限（64/96/64）。"}
+{"id":"chunk-51jy8ztq.js#jl","doc":"页面剥除运行时标记失败的错误说明：blocks/author 两类说明与嵌套层级超限说明。"}
+{"id":"chunk-z0t7mpxt.js#Jn","doc":"类型目录查询的缓存时长：成功 10 分钟、失败 1 分钟、等待 3 s，以及探测预算等参数。"}
+{"id":"chunk-z0t7mpxt.js#Qn","doc":"发布冲突差异比较的参数：上下文 2 行、超时 2 s、探测字符预算 9600 万、易混字符权重 48、行首/换行正则。"}
+{"id":"chunk-51jy8ztq.js#BSn","doc":"发布被拒的原因码表：denied 与 refused 两组（合规、组织、限额、渲染、版本冲突等），以及 \"publish denied: \" 前缀。"}
+{"id":"chunk-51jy8ztq.js#wa","doc":"标记“发送前即被拒”错误的 Symbol。"}
+{"id":"chunk-51jy8ztq.js#JUe","doc":"类型实例发布清单的类型表：可作为文本发布的 MIME、可服务的 MIME 全集，以及只按扩展名识别的代码与办公文档后缀。"}
+{"id":"chunk-m0ks5273.js#rsi","doc":"缩略图 href 的校验：上限 1 MB 与 .png/.jpg/.jpeg 正则。"}
+{"id":"chunk-1dbza2qv.js#St","doc":"导出常量或表 `MAX_TITLE_CHARS`：值为 256, Ye = null, at = null。"}
+{"id":"chunk-53h5bf9k.js#K","doc":"已发布文件清单的常量：_files.json、最多 4096 个文件、读取上限 16 MB、90 s 超时、文档哈希与序号响应头及清单 schema。"}
+{"id":"chunk-53h5bf9k.js#q","doc":"已发布文件读取不可用的两种说明（需要本会话或带网关中继的云会话）。"}
+{"id":"chunk-z0t7mpxt.js#sn","doc":"读取已存 frame 声明的超时（6 s / 5 s）与最多展示的键数 16。"}
+{"id":"chunk-z0t7mpxt.js#It","doc":"类型目录担保查询的默认结果（ships=false、firstParty=false）。"}
+{"id":"chunk-51jy8ztq.js#ql","doc":"<base href> 指向 artifact 之外时的两段说明（含 files 的内联版与单页版）。"}
+{"id":"chunk-51jy8ztq.js#Vn","doc":"发布后回读的限额：最多 8 项、占结果大小上限的 7 成。"}
+{"id":"chunk-1jwzj2da.js#g","doc":"重复拒绝断路提示：同一目标因同一原因被拒多次后，告知模型不要再重发同一调用。"}
+{"id":"chunk-51jy8ztq.js#lc","doc":"渲染输出限额：32、16 条警告、200 字符来源、路径正则，以及 embeds/pins/warnings 的 schema。"}
+{"id":"chunk-51jy8ztq.js#fa","doc":"渲染输出转换的占位实现（本构建中均返回空数组）。"}
+{"id":"chunk-27nza5ft.js#S","doc":"评论自动回复让渡协议：4 s 超时、最多 16 个 slug、表上限 64，以及 yield/unyield 消息 schema 与 unref 定时器。"}
+{"id":"chunk-0br1jecm.js#C5o","doc":"会话提示头被服务端拒绝后的冷却时长 1 小时。"}
+{"id":"chunk-0v2m06bh.js#j","doc":"分享条目探测记录的上限：判定的 512、最近文本 8192、观察 64 条。"}
+{"id":"chunk-0p181y8d.js#t","doc":"Artifact 快速起步套件开关 tengu_concurrent_candle 及其默认值 false。"}
+{"id":"chunk-chhd9p2w.js#rLi","doc":"显示文本用的小写标签正则（`[a-z][a-z_-]{0,31}`）与掩码器。"}
+{"id":"chunk-czq1j3j2.js#$le","doc":"artifact 监听的错误文案表：功能关闭、会话不支持、按原因（flag/remote/not_found/other_org 等）的具体说明与“监听未能重启”的提示。"}
+{"id":"chunk-pwdsqzsj.js#yn","doc":"回合前预热 API 认证的常量与共享状态：3 s 超时、60 s 退避、2 s 宽限，以及在途去重与事件信号。"}
+{"id":"chunk-exfmq47h.js#WV","doc":"遥测用的 MCP 登记表（按宿主）：第一方插件、可记录服务器、工具名是否扣留、CCR 注入配置等，以及归因字段可见性规则。"}
+{"id":"chunk-exfmq47h.js#UY","doc":"遥测里工具输入的截断限额：字符串 512、JSON 4096、数组/键 20 项、嵌套深度 2；另有扩展名与地区信息正则。"}
+{"id":"chunk-exfmq47h.js#Id","doc":"遥测中按 MCP 工具名推断的内置工具名（Bash、WebFetch）映射与 Artifact 工具名集合。"}
+{"id":"chunk-exfmq47h.js#D_o","doc":"会话相关 MCP 的固定名称：anthropic/session、anthropic/sessionEndHooks 及空名称常量。"}
+{"id":"chunk-51jy8ztq.js#Ti","doc":"页面 data-id 属性的长度 16 与对应正则（chart/mermaid 运行时标记识别用）。"}
+{"id":"chunk-51jy8ztq.js#_o","doc":"图表（高亮）运行时标记识别的规格：起始前缀、结束标记、最多 8 位长度数字、最大跨度 4 MB 与校验函数。"}
+{"id":"chunk-51jy8ztq.js#xo","doc":"Mermaid 图的浅色/深色配色与图表样式。"}
+{"id":"chunk-51jy8ztq.js#Co","doc":"Mermaid 运行时标记识别的规格：起始/结束标记、最多 8 位长度、最大跨度 8 MB 与校验函数。"}
+{"id":"chunk-95pbtx8d.js#We","doc":"弯引号与各种短横线的替换正则，用于清洗类型目录文本。"}
+{"id":"chunk-95pbtx8d.js#Bt","doc":"“type url”标签匹配用的分隔符字符集与惰性正则。"}
+{"id":"chunk-95pbtx8d.js#pe","doc":"清洗链接的易混字符/UUID/路径片段模式集合（惰性构造）。"}
+{"id":"chunk-95pbtx8d.js#_e","doc":"类型说明文本的内联上限 20000 字符、服务端行 300 字符与待读时长。"}
+{"id":"chunk-m0ks5273.js#Fe","doc":"claude.ai 链接族的分类表：chat/share/task/cowork/project/design/settings/api 各自是否需要 id，以及族到展示名的映射。"}
+{"id":"chunk-m0ks5273.js#DC","doc":"发布路径长度上限 512 与单个 URL 段 255 字符。"}
+{"id":"chunk-m4b3rd96.js#t7i","doc":"本机/云会话的唤醒说明三种文案（本地监听、云端已注册、注册失败），并列出可接受的错误码集合。"}
+{"id":"chunk-q536ar22.js#a","doc":"评测用 Artifacts MCP 服务的参数：发布类与读取类工具名清单、路径通配符正则。"}
+{"id":"chunk-czq1j3j2.js#JZ","doc":"屏幕阅读器/全屏/WezTerm 下是否启用程序状态（会话在线状态行）。"}
+{"id":"chunk-hnxhr3bs.js#bI","doc":"草稿值订阅的占位文案 \"[longer input]\"（超过 1 个字符时复用固定字符串减少重渲染）。"}
+{"id":"chunk-c0pq6qyx.js#q2r","doc":"评论普查的计数上限 999 与时间分桶 120 秒。"}
+{"id":"chunk-0avm71bs.js#ee","doc":"是否对修改 artifact 公开状态的询问总是询问（当前恒 true），以及 artifact 同意记录的键构造。"}
+{"id":"chunk-czq1j3j2.js#tFe","doc":"后台 fork 携带排队提示的文件名 adopt.json.queued-prompts 与大小/数量/TTL 上限。"}
+{"id":"chunk-rj4qvv4x.js#Jvt","doc":"无人值守自动回复计数的上限 10000（按 artifact slug 记）。"}
+{"id":"chunk-czq1j3j2.js#zWe","doc":"远程会话里不支持的命令说明表（ide/resume/continue/statusline/workflows/artifacts）及统一提示。"}
+{"id":"chunk-wrq65rh8.js#yS","doc":"GetTask 工具不可用时的三段说明：为什么不能调用 GetTask、tool_use_error 包装文案与重复调用的应答。"}
+{"id":"chunk-nvm0wye1.js#tr","doc":"本机对云会话的服务公告：服务状态键、Claude Code 版本、机器名、进程姿态与常驻批准限额。"}
+{"id":"chunk-fpa5emn1.js#Ert","doc":"LSP 推荐对话框与插件提示对话框的定义：kind、payload/result schema、默认结果与隐藏条件。"}
+{"id":"chunk-vn3g7zt8.js#hy","doc":"按块计算 gzip 请求体各块摘要并复用上次摘要（carriedDigestCount），用于块缓存键。"}
+{"id":"chunk-c0pq6qyx.js#Cs","doc":"评论自动回复的两段系统提示（写一句确认 / 从列表选一句）与纯文本、不得描述内部机制的附加要求。"}
+{"id":"chunk-51jy8ztq.js#gd","doc":"从类型创建的 artifact 不允许改页面的说明文案（无法发布自身文件、重试无用等）。"}
+{"id":"chunk-h29vk4wn.js#Axo","doc":"导出函数 `isToolNameDifferent`：参数 e, n，返回 typeof n === \"string\" && isDifferentString(tt(e), n)。"}
+{"id":"chunk-h29vk4wn.js#fGs","doc":"导出函数 `sendFailureMessage`：参数 e，返回 n === \"timeout\" || n === \"network\" ? nt[n] : void 0。"}
+{"id":"chunk-h29vk4wn.js#$Kn","doc":"导出类 `UntrustedDeviceTokenError`：继承 `Error`。"}
+{"id":"chunk-h29vk4wn.js#iGs","doc":"导出常量或表 `BASH_TASK_COUNT_DELAY_MS`：值为 2000。"}
+{"id":"chunk-h29vk4wn.js#Y0r","doc":"导出函数 `supportsBackgroundTasksMovesBash`：参数 e，返回 Array.isArray(e.capabilities) && e.capabilities.includes(BACKGROUND_TASKS_MOVES_BASH_V1)。"}
+{"id":"chunk-h29vk4wn.js#vxo","doc":"导出函数 `isControlCommandLike`：参数 e，返回 hasToolResultContent(e) || hasNonTextContent(e)。"}
+{"id":"chunk-sbrfdm61.js#tr","doc":"导出函数 `getRemoteCaps`：返回 getCaps().remote。"}
+{"id":"chunk-sbrfdm61.js#lDr","doc":"导出常量或表 `REMOTE_STOPPED_WAITING_NOTICE`：值为 \"Stopped waiting for the remote \\u2014 the command may still complete there\"。"}
+{"id":"chunk-sbrfdm61.js#Tt","doc":"导出函数 `isRemoteSessionAvailable`：返回 getIsRemoteMode() || Jn() !== null。"}
+{"id":"chunk-sbrfdm61.js#_Ne","doc":"导出函数 `preferRemoteValue`：参数 e, n，返回 wt() ? n : e。"}
+{"id":"chunk-sbrfdm61.js#$l","doc":"导出函数 `isRemoteControlChannelAvailable`：返回 r_s(Jn())。"}
+{"id":"chunk-sbrfdm61.js#$Hs","doc":"导出函数 `hasRemoteControlChannel`：参数 e，返回 e?.caps?.controlChannel === !0 && !e.viewerOnly。"}
+{"id":"chunk-sbrfdm61.js#dDr","doc":"导出函数 `alwaysFalseRemoteMode`：返回 !1。"}
+{"id":"chunk-sbrfdm61.js#vR","doc":"导出函数 `hasRemoteCap`：参数 e，返回 Jn()?.caps?.[e] === !0。"}
+{"id":"chunk-sbrfdm61.js#xko","doc":"导出函数 `canUseRemoteFeature`：参数 e, n，返回 n && !(e.isRemoteMode && e.viewerOnly)。"}
+{"id":"chunk-sbrfdm61.js#zm","doc":"导出函数 `runInRemoteCallFrameMain`：参数 e, n，返回 s.run({ cwd: Mn(e) }, n)。"}
+{"id":"chunk-czq1j3j2.js#pWs","doc":"导出函数 `registerPendingModeAck`：参数 h, x, D，返回 cUe.of(h).register(x, D)。"}
+{"id":"chunk-0p9n1dy7.js#E0r","doc":"导出函数 `isResultEvent`：参数 r，返回 r.type === \"result\"。"}
+{"id":"chunk-0p9n1dy7.js#wWs","doc":"导出函数 `shouldDeliverEvent`：参数 e, n, r，返回 r.taskWake || (s === void 0 ? r.sent : s.some((i) => n.has(i)))。"}
+{"id":"chunk-0p9n1dy7.js#k0r","doc":"导出函数 `recordNestedUuidAliases`：参数 e, n, r。"}
+{"id":"chunk-0p9n1dy7.js#T0r","doc":"导出函数 `recordInProgressToolUses`：参数 e, n, r。"}
+{"id":"chunk-0p9n1dy7.js#x2n","doc":"导出函数 `clearInProgressToolUses`：参数 e, n。"}
+{"id":"chunk-0p9n1dy7.js#ue","doc":"导出函数 `parseWorkflowProgressList`：参数 e，返回 e.flatMap((n) => { let safeParse = WORKFLOW_PROGRESS_SCHEMA().safeParse(n); return safeParse.success ? [safePa…。"}
+{"id":"chunk-k0v80sg8.js#tq","doc":"导出函数 `clampToMaxPageSize`：参数 e，返回 1; return Math.min(Math.floor(e), Ie)。"}
+{"id":"chunk-k0v80sg8.js#sw","doc":"导出函数 `byteLengthOf`：参数 e，返回 Buffer.byteLength(jsonStringify(e), \"utf8\")。"}
+{"id":"chunk-k0v80sg8.js#F","doc":"导出常量或表 `SCHEMA_COMBINATOR_KEYS`：值为 [\"anyOf\", \"oneOf\", \"allOf\"], LXr = /^[a-zA-Z0-9_.-]{1,64}$/, Br = [\"$defs\", \"definitions\", \"$schema\", \"additionalPropert…。"}
+{"id":"chunk-k0v80sg8.js#Qco","doc":"导出常量或表 `TOOL_HOST_ID_RE`：值为 /^[a-z0-9][a-z0-9+._-]{0,31}(@[0-9][0-9A-Za-z.+_-]{0,23})?$/, xXr = 96, PXr = 1e6, IXr = 2048。"}
+{"id":"chunk-7jxyna5q.js#Q1e","doc":"导出函数 `isConfirmRepositoryTrustTool`：参数 e，返回 getMcpPrefix(e, CONFIRM_REPOSITORY_TRUST)。"}
+{"id":"chunk-7jxyna5q.js#bV","doc":"导出函数 `isRequestComputerFolderTool`：参数 e，返回 getMcpPrefix(e, REQUEST_COMPUTER_FOLDER)。"}
+{"id":"chunk-7jxyna5q.js#$os","doc":"导出函数 `isListComputerFoldersTool`：参数 e，返回 getMcpPrefix(e, LIST_COMPUTER_FOLDERS)。"}
+{"id":"chunk-37ybptf3.js#dLn","doc":"导出函数 `TOOL_HOST_INTERFACE_VERSION`。"}
+{"id":"chunk-7jxyna5q.js#WEi","doc":"导出函数 `repositoryTrustFromMessageTags`：参数 e, n，返回 repositoryTrustFromTags(e.tags)。"}
+{"id":"chunk-7jxyna5q.js#dpr","doc":"导出函数 `reportableRepositoryTrust`：参数 e, n，返回 (e === \"not_marked\" || e === \"nothing_to_mark\") && !n ? void 0 : e。"}
+{"id":"chunk-7jxyna5q.js#zEi","doc":"导出函数 `markableRepositoryTrust`：参数 e，返回 e === \"nothing_to_mark\" ? void 0 : e。"}
+{"id":"chunk-7jxyna5q.js#KEi","doc":"导出函数 `repositoryTrustConsentText`：参数 e，返回 REMOTE_TOOLS_CONSENT_TEXT[`repository_trust.state.${e}`]; } export { Jti, Str, Qti, Xti, Zti }。"}
+{"id":"chunk-7jxyna5q.js#dRn","doc":"导出函数 `settingsToJsonText`：参数 e，返回 `${jsonStringify(e, null, 2)} `。"}
+{"id":"chunk-7jxyna5q.js#Fno","doc":"导出函数 `keepEmptyOwnerSettings`。"}
+{"id":"chunk-e3y61d7t.js#pPi","doc":"导出函数 `isVersionAtLeast2_32`：参数 e，返回 e !== null && (e.major > 2 || (e.major === 2 && e.minor >= 32))。"}
+{"id":"chunk-e3y61d7t.js#mPi","doc":"导出函数 `isVersionAtLeast2_32b`：参数 e，返回 e !== null && (e.major > 2 || (e.major === 2 && e.minor >= 32))。"}
+{"id":"chunk-fepf8jp6.js#Dde","doc":"导出常量或表 `GIT_SHA_RE`：值为 /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/, BF = /^0+$/。"}
+{"id":"chunk-fepf8jp6.js#$Ci","doc":"导出函数 `hasNonZeroHash`：参数 e，返回 !BF.test(e)。"}
+{"id":"chunk-3hjq2hdt.js#vn","doc":"导出函数 `deviceBindingOffReason`：返回 getDeviceBindingRefusal() ?? (isSessionChannelDisabled() ? \"channel_off\" : void 0)。"}
+{"id":"chunk-sjeyntvz.js#VKr","doc":"导出常量或表 `SESSION_TRANSPORT_LIMITS`：值为 { maxRequestBytes: 4128768, defaultDeadlineMs: 58000 }, he = 60000, PROBE_DEADLINE_MS = 1e4。"}
+{"id":"chunk-7jxyna5q.js#_Rn","doc":"导出常量或表 `SERVED_CALLS_UNATTESTED`：值为 \"served-calls-unattested\", SERVED_CALLS_UNATTESTED_UNTRUSTED_REPO = \"served-calls-unattested-untrusted-repo\", _j = 30000。"}
+{"id":"chunk-7jxyna5q.js#Fos","doc":"导出函数 `attachStateSchema`。"}
+{"id":"chunk-hp4m40y1.js#O","doc":"导出常量或表 `TOOL_SERVER_ENV_DEFAULTS_ALIAS`：值为 { ...r }。"}
+{"id":"chunk-z6e3cpmy.js#W4","doc":"导出常量或表 `UNSUPPORTED_CONTROL_SUBTYPE_TEXT`：值为 \"Unsupported control request subtype\"。"}
+{"id":"chunk-cckh1dq3.js#yEt","doc":"导出函数 `isReportableDiagnostic`：参数 error，返回 error.filter((r) => !r.mcpErrorMetadata && !r.statusOnly && !r.startupFatal)。"}
+{"id":"chunk-exfmq47h.js#PWi","doc":"导出函数 `maxOutputTokensMinusOne`：参数 v，返回 getModelMaxOutputTokens(v).upperLimit - 1。"}
+{"id":"chunk-swe0kb5q.js#QFr","doc":"导出函数 `isTerminalInterested`：返回 Se(ie)。"}
+{"id":"chunk-czq1j3j2.js#w2n","doc":"导出函数 `alwaysFalseBackgroundConfirm`：返回 !1。"}
+{"id":"chunk-czq1j3j2.js#wpe","doc":"导出函数 `noopBackgroundConfirm`：参数 h。"}
+{"id":"chunk-hnxhr3bs.js#FPo","doc":"导出常量或表 `STATE_HAS_RAW`：值为 1, yu = 2, Su = 4, yT = /^\\s*\\|[^\\n]*(\\n[ |:\\r-]*|\\n[ |:\\r-]+\\n[^\\n]*)?$/。"}
+{"id":"chunk-rzkdv0c6.js#dQn","doc":"导出常量或表 `DEFAULT_FETCH_REFSPEC`：值为 \"+refs/heads/*:refs/remotes/origin/*\"。"}
+{"id":"chunk-rzkdv0c6.js#mqr","doc":"导出函数 `getUpstreamUrl`：参数 e，返回 e.upstreamUrl。"}
+{"id":"chunk-rzkdv0c6.js#uQn","doc":"导出函数 `isFetchRefNotFound`：参数 e，返回 rt.some((t) => lower.includes(t))。"}
+{"id":"chunk-rzkdv0c6.js#Gyn","doc":"导出函数 `rewriteContractionError`：参数 e，返回 e.replace(regExp, (n) => `could not${n.slice(8)}`)。"}
+{"id":"chunk-rzkdv0c6.js#fQn","doc":"导出常量或表 `SHR_GIT_PROXY_TOKEN`：值为 \"SHR_GIT_PROXY_TOKEN\", uMo = [\"-c\", \"lfs.locksverify=false\"]。"}
+{"id":"chunk-rzkdv0c6.js#rKo","doc":"导出函数 `anonCredentialHelperArgs`：参数 e，返回 credentialHelperScript(\"unused\", e)。"}
+{"id":"chunk-rzkdv0c6.js#pQn","doc":"导出函数 `tokenCredentialHelperArgs`：参数 e，返回 credentialHelperScript(\"x-access-token\", e)。"}
+{"id":"chunk-rzkdv0c6.js#bKt","doc":"导出函数 `gitConfigPairs`：参数 e，返回 e.flatMap(([n, t]) => [\"-c\", `${n}=${t}`])。"}
+{"id":"chunk-rzkdv0c6.js#gqr","doc":"导出函数 `isPreparableRepoType`：参数 e，返回 e === \"github\" || e === \"github-ssh\" || e === \"test-file\"。"}
+{"id":"chunk-a3r2kq46.js#Ozn","doc":"导出函数 `emptyErrorCategoryCounts`：返回 { transport: 0, timeout: 0, \"5xx\": 0, 429: 0, \"4xx\": 0 }; } export { formatRunnerApiError, gvr, classifyRunner…。"}
+{"id":"chunk-9n77nmqt.js#u","doc":"导出函数 `watchLiveness`：参数 e。"}
+{"id":"chunk-9n77nmqt.js#m","doc":"导出函数 `writeInitSystemLine`。"}
+{"id":"chunk-frs14hy1.js#wXn","doc":"导出函数 `mergeTaskProgressIntoTranscript`：参数 e, n, s。"}
+{"id":"chunk-7jxyna5q.js#j1e","doc":"导出函数 `normalizeServerPath`：参数 e，返回 (\"/\" + e).replace(/\\/{2,}/g, \"/\")。"}
+{"id":"chunk-7jxyna5q.js#Y3t","doc":"导出函数 `isServedAccountMemoryTool`：参数 e, n，返回 e.mcpInfo?.accountMemoryServer === !0 && pVo(e.mcpInfo.toolName, n)。"}
+{"id":"chunk-7jxyna5q.js#Qns","doc":"导出函数 `isMemoryToolAllowed`：参数 e, n，返回 n === \"none\" || !eu(e)。"}
+{"id":"chunk-7jxyna5q.js#rSi","doc":"导出函数 `memoryCallerKind`：参数 { isTeammate: isTeammate, isBackground: isBackgrou…，返回 isTeammate || isBackground ? \"worker\" : \"subagent\"。"}
+{"id":"chunk-7jxyna5q.js#oSi","doc":"导出函数 `memoryNoteIfEnabled`：参数 e，返回 e.mode === \"none\" ? void 0 : e.note; } export { READ_ONLY, Y2t, tZs, nZs, createAccountMemoryToolGate, refuseN…。"}
+{"id":"chunk-7jxyna5q.js#TCn","doc":"导出函数 `memorySyncPolicyClosedStub`：返回 \"closed\"。"}
+{"id":"chunk-7jxyna5q.js#ACn","doc":"导出函数 `alwaysFalseMemCtx`：返回 !1。"}
+{"id":"chunk-7jxyna5q.js#Y$","doc":"导出函数 `memoryModeForSession`：参数 e，返回 accountMemoryServerState(currentMcpClients(e), WZn(e.session.host))。"}
+{"id":"chunk-7jxyna5q.js#Lur","doc":"导出函数 `subagentMemoryMode`：参数 e，返回 memoryContextState.of(e).subagentMode。"}
+{"id":"chunk-7jxyna5q.js#dSi","doc":"导出函数 `resetMemoryContextForSession`：参数 e。"}
+{"id":"chunk-7jxyna5q.js#trs","doc":"导出函数 `maybeKickMemoryContextFetch`：参数 e, n = {}, r。"}
+{"id":"chunk-7jxyna5q.js#fSi","doc":"导出函数 `refreshMemoryContextForCcr`：参数 e，返回 !1; return (kickMemoryContextFetch(e.host, \"ccr\", {}), !0)。"}
+{"id":"chunk-7jxyna5q.js#Hur","doc":"导出函数 `kickTurnEndCheckMemCtx`：参数 e, n = {}。"}
+{"id":"chunk-7jxyna5q.js#_Si","doc":"导出函数 `heldMemoryVersions`：参数 e，返回 memoryContextState.of(e).held?.versions。"}
+{"id":"chunk-7jxyna5q.js#bSi","doc":"导出函数 `heldPostTurnInstruction`：参数 e，返回 memoryContextState.of(e).held?.postTurnInstruction。"}
+{"id":"chunk-ndr12bqk.js#_7","doc":"导出函数 `shortenDescription`：参数 n，返回 trimmed.length > 120 ? truncateCodePoints(trimmed, 117) + \"\\u2026\" : trimmed。"}
+{"id":"chunk-ndr12bqk.js#v$","doc":"导出函数 `shortenInstructions`：参数 n，返回 trimmed.length > 500 ? truncateCodePoints(trimmed, 497) + \"\\u2026\" : trimmed。"}
+{"id":"chunk-k9ewfrhk.js#FKt","doc":"导出函数 `isPlainUserImportItem`：参数 e，返回 e.scope === \"user\" && !e.warning && e.kind !== \"skill\"。"}
+{"id":"chunk-7j7zbwpf.js#z","doc":"导出常量或表 `MAX_OBSERVED_TEXT_CHARS`：值为 2000, x7e = 16000, gln = 64000。"}
+{"id":"chunk-7j7zbwpf.js#Tkt","doc":"导出函数 `pairingForObserver`：参数 e, r，返回 e.observers.pairings.get(r)。"}
+{"id":"chunk-rytc8e8q.js#se","doc":"导出常量或表 `MAX_CLASSIFIER_INPUT_BYTES`：值为 4194304。"}
+{"id":"chunk-rytc8e8q.js#Rn","doc":"导出函数 `setPendingStructuredResult`：参数 e。"}
+{"id":"chunk-exfmq47h.js#Qyo","doc":"导出函数 `currentAuthSurface`：返回 \"daemon_child\"; if (!isReplBridgeActive()) return; return getIsInteractive() ? \"repl\" : \"sdk_host\"。"}
+{"id":"chunk-exfmq47h.js#$Gi","doc":"导出函数 `sanitizeCommonFields`：参数 e，返回 sanitizeFields(e, Vz)。"}
+{"id":"chunk-exfmq47h.js#Xl","doc":"导出常量或表 `lastWatermark`：值为 null, Nis = 257。"}
+{"id":"chunk-exfmq47h.js#jGi","doc":"导出函数 `gzipBody`：参数 e，返回 _x(e)。"}
+{"id":"chunk-exfmq47h.js#WGi","doc":"导出函数 `gzipWatermarkedBody`：参数 e，返回 _x(appendWatermark(e))。"}
+{"id":"chunk-exfmq47h.js#GGi","doc":"导出函数 `swapWatermark`：参数 e，返回 ((Jl = e), n)。"}
+{"id":"chunk-exfmq47h.js#Bks","doc":"导出常量或表 `MAX_NORMALIZED_TEXT_CHARS`：值为 2048。"}
+{"id":"chunk-exfmq47h.js#F7e","doc":"导出函数 `truncateNormalizedText`：参数 e，返回 normalizeFullWidthSpace(e.slice(0, $is)); } export { Tki, K6e, filterEventsForPrivacy, _r, gzipTelemetryBody, …。"}
+{"id":"chunk-47b8txen.js#ke","doc":"导出常量或表 `toSnakeFeatureName`：值为 W(function (e, r, u) { return e + (u ? \"_\" : \"\") + r.toLowerCase(); }), IDn = ke。"}
+{"id":"chunk-exfmq47h.js#Xyo","doc":"导出函数 `initCoreUserData`：返回 Yi().init()。"}
+{"id":"chunk-exfmq47h.js#LGi","doc":"导出函数 `gitUserName`：返回 Yi().gitUserName()。"}
+{"id":"chunk-exfmq47h.js#onn","doc":"导出函数 `envBearerFallbackMarker`：参数 e，返回 getGrowthBookClient_2。"}
+{"id":"chunk-05astxy8.js#ARn","doc":"导出函数 `hooksModulesFollowState`。"}
+{"id":"chunk-05astxy8.js#CRn","doc":"导出函数 `resolveHooksModulesValue`：返回 s ? HOOKS_MODULES_DEFAULT : o。"}
+{"id":"chunk-05astxy8.js#RRn","doc":"导出函数 `areHooksModulesActiveGbc`。"}
+{"id":"chunk-exfmq47h.js#nvs","doc":"导出函数 `readGateTrueByDefault`：参数 e，返回 !0; try { return reader(e, !0) !== !1; } catch { return !0; }。"}
+{"id":"chunk-exfmq47h.js#vAr","doc":"导出函数 `isFoamySpringGateOn`：返回 isFoamySpringEnabled()。"}
+{"id":"chunk-exfmq47h.js#V1i","doc":"导出函数 `setCachedGateValue`：参数 e。"}
+{"id":"chunk-exfmq47h.js#DGi","doc":"导出函数 `setVerdictJudge`：参数 e。"}
+{"id":"chunk-exfmq47h.js#BTs","doc":"导出函数 `toolSearchReminderConfig`：返回 getJuniperShoalConfig().toolSearchReminder。"}
+{"id":"chunk-exfmq47h.js#jzi","doc":"导出函数 `toolParamStrictnessConfig`：返回 getJuniperShoalConfig().toolParamStrictness。"}
+{"id":"chunk-exfmq47h.js#Wzi","doc":"导出函数 `emptyInputRepairConfig`：返回 getJuniperShoalConfig().emptyInputRepair。"}
+{"id":"chunk-exfmq47h.js#Gzi","doc":"导出函数 `toolSearchFetchRuleConfig`：返回 getJuniperShoalConfig().toolSearchFetchRule。"}
+{"id":"chunk-exfmq47h.js#jTs","doc":"导出函数 `schemaDescFixesConfig`：返回 getJuniperShoalConfig().schemaDescFixes; } export { ITi, Hh, MTi, $as, OTi, Nas }。"}
+{"id":"chunk-exfmq47h.js#lzi","doc":"导出函数 `registerFirstPartyPlugin`：参数 e, n。"}
+{"id":"chunk-exfmq47h.js#aRr","doc":"导出函数 `markMcpServerLoggable`：参数 e。"}
+{"id":"chunk-exfmq47h.js#dzi","doc":"导出函数 `attributionWithMetrics`：参数 e, n，返回 attributionFor(e, n, !0)。"}
+{"id":"chunk-exfmq47h.js#dRr","doc":"导出函数 `isOwnToolContainerConfig`：参数 e，返回 typeof e === \"object\" && e !== null && ht().ownToolContainerConfigs.has(e)。"}
+{"id":"chunk-exfmq47h.js#J0t","doc":"导出函数 `hasCcrMeta`：参数 e，返回 typeof e === \"object\" && e !== null && ht().ccrMetaEntries.has(e)。"}
+{"id":"chunk-exfmq47h.js#uTs","doc":"导出函数 `isSelfHostedRunnerCcrServer`：参数 e，返回 startupCcrEnv.isSelfHostedRunnerChild && isInjectedCcrServer(e) && !isRunnerDynamicServer(e)。"}
+{"id":"chunk-exfmq47h.js#yht","doc":"导出函数 `isOwnArtifactMcpTool`：参数 e, n，返回 !1; if (firstPartyServerIdFor(n) === ARTIFACTS_SERVER_ID) return !0; return isOwnCcrMcpServer(n)。"}
+{"id":"chunk-exfmq47h.js#_nn","doc":"导出函数 `jobsDir`：返回 join_11(getClaudeConfigDir(), \"jobs\")。"}
+{"id":"chunk-exfmq47h.js#bnn","doc":"导出常量或表 `JOB_PARENT_TRANSCRIPT_FILE`：值为 [\"parent-transcript.jsonl\"]。"}
+{"id":"chunk-exfmq47h.js#A_o","doc":"导出函数 `jobStorageSpace`：参数 e, n，返回 STORAGE_SPACES.job(r, n)。"}
+{"id":"chunk-exfmq47h.js#uRr","doc":"导出函数 `isValidLocalTaskId`：参数 e，返回 typeof e === \"string\" && LOCAL_TASK_ID_PATTERN.test(e) ? e : void 0。"}
+{"id":"chunk-exfmq47h.js#Z0t","doc":"导出函数 `isInferredMcpToolName`：参数 e，返回 Object.hasOwn(Td, e)。"}
+{"id":"chunk-exfmq47h.js#vzi","doc":"导出函数 `isMcpFamilyToolName`：参数 e，返回 e === \"mcp_tool\" || Object.values(Td).includes(e) || qY.has(e)。"}
+{"id":"chunk-exfmq47h.js#V5","doc":"导出函数 `platformOrOther`：参数 e，返回 lit(\"none\"); if (KNOWN_PLATFORMS.has(e)) return fromSanitizer_SANITIZER_OUTPUT_ONLY(e); return lit(\"other\")。"}
+{"id":"chunk-exfmq47h.js#Rze","doc":"导出函数 `localeOrNonconforming`：参数 e，返回 fromSanitizer_SANITIZER_OUTPUT_ONLY(e); return lit(\"nonconforming\")。"}
+{"id":"chunk-exfmq47h.js#$ks","doc":"导出函数 `isHipaaModeCurrent`：返回 Xl()。"}
+{"id":"chunk-vwtpw18x.js#b","doc":"导出函数 `lit`：参数 n，返回 r(n)。"}
+{"id":"chunk-dhvhhb5r.js#eCn","doc":"导出函数 `maskModelFields`：参数 e, n，返回 maskModelIdsInRecord(e); } export { initializeAnalyticsSink, tyn }。"}
+{"id":"chunk-7jxyna5q.js#Bns","doc":"导出函数 `capabilityRejectedText`：参数 e，返回 `${Nm}${e}`。"}
+{"id":"chunk-7jxyna5q.js#Kbi","doc":"导出函数 `isBetaHeaderRejection`：参数 e，返回 e.includes(`${Nm}beta_header:`)。"}
+{"id":"chunk-7jxyna5q.js#Rto","doc":"导出函数 `isContextWindowError`：参数 e，返回 e.toLowerCase().includes(\"context window\")。"}
+{"id":"chunk-7jxyna5q.js#xto","doc":"导出函数 `isPdfUnsupportedError`：参数 e，返回 PDF_UNSUPPORTED_PHRASES.some((r) => lower.includes(r))。"}
+{"id":"chunk-7jxyna5q.js#vCn","doc":"导出函数 `mentionsAnthropicBeta`：参数 e, n，返回 e.includes(n) && /anthropic[-_]beta/.test(e)。"}
+{"id":"chunk-7jxyna5q.js#Vbi","doc":"导出函数 `isBetaHeaderNamed`：参数 e, n，返回 wyn(e, n) || includesWholeWord(e, `beta_header:${n}`)。"}
+{"id":"chunk-5xgkngpb.js#rte","doc":"导出函数 `isExpectedBillingError`。"}
+{"id":"chunk-5xgkngpb.js#fai","doc":"导出函数 `isKeepaliveArmed`：返回 Fw().armed !== void 0。"}
+{"id":"chunk-5xgkngpb.js#Iwn","doc":"导出函数 `withKeepaliveReset`：参数 e，返回 (Xg(e, DO), e)。"}
+{"id":"chunk-5xgkngpb.js#Zqt","doc":"导出函数 `isDapperDawnEnabled`：返回 getFeatureValue_CACHED_MAY_BE_STALE(\"tengu_dapper_dawn\", !1)。"}
+{"id":"chunk-5xgkngpb.js#hai","doc":"导出函数 `endMaintenanceAtSubagentEnd`：参数 e。"}
+{"id":"chunk-5xgkngpb.js#eor","doc":"导出函数 `endMaintenanceAndForget`：参数 e。"}
+{"id":"chunk-5xgkngpb.js#fpi","doc":"导出函数 `canonicalNameOrUndefined`：参数 e，返回 Vpr(e, getCanonicalName(e)); } catch (error) { logError(toError(error)); return; }。"}
+{"id":"chunk-5xgkngpb.js#ppi","doc":"导出函数 `ultrathinkEffectiveSafely`：参数 e, n，返回 isUltrathinkEffective(e, n()); } catch (error) { logError(toError(error)); return; }。"}
+{"id":"chunk-5xgkngpb.js#GRt","doc":"导出函数 `shouldSendInterleavedThinkingBeta`：参数 e，返回 ( !areExperimentalBetasDisabled() && modelSupportsISP(e) && (shouldIncludeFirstPartyOnlyBetas() || modelHidesT…。"}
+{"id":"chunk-5xgkngpb.js#P5t","doc":"导出函数 `isBasaltSpurEnabled`：返回 canSendFirstPartyBetas() && getFeatureValue_CACHED_MAY_BE_STALE(\"tengu_basalt_spur\", !1)。"}
+{"id":"chunk-5xgkngpb.js#ami","doc":"导出函数 `watchSessionSwitchForThinkingKeep`：返回 onSessionSwitch((e, n) => { if (aes.has(n)) Ws().foreignThinkingKeep = void 0; })。"}
+{"id":"chunk-03tec5k5.js#gis","doc":"导出函数 `stickyBetasOr`：参数 e，返回 e ?? getStickyBetas()。"}
+{"id":"chunk-03tec5k5.js#Oge","doc":"导出函数 `asDeclaredToolSet`：参数 e，返回 declaredTools instanceof DeclaredToolSet ? declaredTools : void 0。"}
+{"id":"chunk-03tec5k5.js#bxn","doc":"导出函数 `asScratchDeclaredToolSet`：参数 e，返回 noChannelTools instanceof DeclaredToolSet ? noChannelTools : void 0。"}
+{"id":"chunk-03tec5k5.js#g8e","doc":"导出函数 `stickyBetasForRequest`：参数 e，返回 OYo(e.stickyBetas)。"}
+{"id":"chunk-03tec5k5.js#zMe","doc":"导出函数 `cachedDeclaredTools`：参数 e，返回 n === void 0 ? void 0 : DSe(n)。"}
+{"id":"chunk-03tec5k5.js#Sxn","doc":"导出函数 `cachedNoChannelTools`：参数 e，返回 n === void 0 ? void 0 : kbn(n)。"}
+{"id":"chunk-03tec5k5.js#Kki","doc":"导出函数 `recordDeclaredToolsIfMissing`：参数 e, n，返回 !1; return (dLn(e, new DeclaredToolSet(n)), !0)。"}
+{"id":"chunk-03tec5k5.js#dmr","doc":"导出函数 `turnDeniedTools`：参数 e, n，返回 updateDeclaredToolSet(e, turnDeniedTools instanceof DeclaredToolSet ? turnDeniedTools : void 0) .tools。"}
+{"id":"chunk-03tec5k5.js#qki","doc":"导出函数 `hasScratchToolSet`：参数 e, n，返回 hasDeclaredToolSet(o, n, !0)。"}
+{"id":"chunk-03tec5k5.js#Jki","doc":"导出函数 `deferredToolsEnabled`：返回 l$e()。"}
+{"id":"chunk-03tec5k5.js#Qki","doc":"导出函数 `clientNames`：参数 e，返回 n。"}
+{"id":"chunk-03tec5k5.js#nct","doc":"导出函数 `toolChangeHeaderAllowed`：参数 e，返回 lT(e, Lb) && !we(e)。"}
+{"id":"chunk-03tec5k5.js#pje","doc":"导出函数 `canDeclareToolChangeAhead`：参数 e, n，返回 (lT(e, Lb) || (Kpr() && !Lp(e, Lb))) && !we(e) && modelTakesToolAdditions(n)。"}
+{"id":"chunk-03tec5k5.js#eTi","doc":"导出函数 `canDeclareInlineTools`：参数 e, n，返回 Snr(e) && ae(e, n)。"}
+{"id":"chunk-03tec5k5.js#umr","doc":"导出函数 `inlineToolsAllowed`：参数 e，返回 lT(e, tb) && !isInlineToolsRefused() && Nrt(e)。"}
+{"id":"chunk-03tec5k5.js#wis","doc":"导出函数 `dropToolChangeState`：参数 e。"}
+{"id":"chunk-03tec5k5.js#Dki","doc":"导出函数 `markHostOnlyNativeTool`：参数 e，返回 (Object.defineProperty(e, Je, { value: !0, enumerable: !0 }), e)。"}
+{"id":"chunk-03tec5k5.js#TV","doc":"导出函数 `isHostOnlyNativeTool`：参数 e，返回 Je in e。"}
+{"id":"chunk-03tec5k5.js#fje","doc":"导出函数 `areDeferredToolsKept`：返回 ((e.keptDeferredToolsEnabled ??= on()), e.keptDeferredToolsEnabled)。"}
+{"id":"chunk-03tec5k5.js#pxn","doc":"导出函数 `deferredToolsKeptCached`：返回 Ao().keptDeferredToolsEnabled ?? on()。"}
+{"id":"chunk-03tec5k5.js#mxn","doc":"导出函数 `deferredToolCacheSlot`。"}
+{"id":"chunk-03tec5k5.js#Hz","doc":"导出函数 `deferredToolCache`：返回 Sbn.of(getRootSession())。"}
+{"id":"chunk-03tec5k5.js#mis","doc":"导出函数 `shouldTrackDeferredToolForQuery`：参数 e，返回 xe(classifyQuerySource(e), e)。"}
+{"id":"chunk-03tec5k5.js#Ww","doc":"导出函数 `findTool`：参数 e, n, o，返回 findToolByName(e, n, o)。"}
+{"id":"chunk-c41z4928.js#go","doc":"导出函数 `normalizeServerNameShort`：参数 e, n = 64，返回 \"\"; return normalizeMcpServerName(normalizeNfkc(e).replace(/['`]/g, \" \"), n, \"none\")。"}
+{"id":"chunk-c41z4928.js#lTi","doc":"导出函数 `normalizeServerNameLong`：参数 e, n = 1024，返回 normalizeMcpServerName(e, n)。"}
+{"id":"chunk-wd6hahbe.js#Fti","doc":"导出函数 `clearDumpPromptState`。"}
+{"id":"chunk-k1t1w9mg.js#Dbo","doc":"导出函数 `apiErrorCode`：参数 e，返回 typeof t === \"string\" && A.test(t) ? t : void 0。"}
+{"id":"chunk-k1t1w9mg.js#hxr","doc":"导出函数 `reducibleErrorCode`：参数 e，返回 LK.has(e) || PU.has(e) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e) : lit(\"other\")。"}
+{"id":"chunk-k1t1w9mg.js#RNt","doc":"导出函数 `sanitizableErrorCode`：参数 e，返回 PU.has(e) || LK.has(e) || SSL_CERT_ERROR_CODES.has(e) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e) : void 0。"}
+{"id":"chunk-pcv9zvvv.js#Gbs","doc":"导出函数 `runIdleTask`。"}
+{"id":"chunk-pcv9zvvv.js#Wbs","doc":"导出函数 `isIdleLongerThan`：参数 e，返回 !isSessionActive() && Date.now() - max > e。"}
+{"id":"chunk-pcv9zvvv.js#yJe","doc":"导出函数 `hasSessionsTokenRequestId`：参数 e，返回 !1; return isSessionsToken(e[\"request-id\"])。"}
+{"id":"chunk-pcv9zvvv.js#GHn","doc":"导出函数 `responseHeaderFactsOf`：参数 e，返回 {}; return responseHeaderFacts(r.headers)。"}
+{"id":"chunk-7jxyna5q.js#V3e","doc":"导出函数 `amazonRequestId`：参数 e, n，返回 e; try { return n?.get(X_AMZN_REQUESTID) || null; } catch (error) { return (logError(toError(error)), null); }…。"}
+{"id":"chunk-5xgkngpb.js#jEn","doc":"导出函数 `sanitizeEventKey`：参数 e，返回 typeof e === \"string\" && x6o.test(e) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e) : lit_2(\"unknown\")。"}
+{"id":"chunk-5xgkngpb.js#Rci","doc":"导出函数 `asSafePathKey`：参数 e，返回 P6o.test(e) ? e : \"unknown\"。"}
+{"id":"chunk-5xgkngpb.js#Isr","doc":"导出函数 `isWithheldGatewayBgSession`：返回 isBgSession() && Boolean(env.CLAUDE_BG_GATEWAY_WITHHELD) && !env.ANTHROPIC_BASE_URL。"}
+{"id":"chunk-5xgkngpb.js#n9o","doc":"导出函数 `isNoGatewayHint`：参数 e，返回 e.startsWith(`${NO_GATEWAY_MESSAGE} To fix, run `)。"}
+{"id":"chunk-5xgkngpb.js#s9o","doc":"导出函数 `hasInvalidCredentialPrefix`：参数 e，返回 [ INVALID_API_KEY_MESSAGE, INVALID_AUTH_TOKEN_MESSAGE, INVALID_CUSTOM_HEADERS_MESSAGE, INVALID_ENV_HEADER_MESS…。"}
+{"id":"chunk-5xgkngpb.js#X4t","doc":"导出常量或表 `RATE_LIMIT_RESET_MAX_MS`：值为 86400000。"}
+{"id":"chunk-5xgkngpb.js#$sr","doc":"导出函数 `intentProviderSlot`。"}
+{"id":"chunk-k1t1w9mg.js#xbo","doc":"导出函数 `headerlessDeclineKind`：参数 e，返回 d(e) ? lit(\"headerless_decline\") : lit(\"headerless_retryable_503\")。"}
+{"id":"chunk-k1t1w9mg.js#Pbo","doc":"导出函数 `headerlessDeclineRetryDelay`：参数 e，返回 d(e) ? 0 : getRetryDelay(1)。"}
+{"id":"chunk-k1t1w9mg.js#Ibo","doc":"导出函数 `isNonRetryable4xx`：参数 e，返回 e >= 400 && e < 500 && e !== 401 && e !== 408 && e !== 409 && e !== 429 && e !== 451。"}
+{"id":"chunk-k1t1w9mg.js#Ght","doc":"导出函数 `isDlpRequestDenied`：参数 e，返回 getApiErrorCode(e) === DLP_REQUEST_DENIED。"}
+{"id":"chunk-k1t1w9mg.js#j2i","doc":"导出函数 `isExtraUsageOutOfCredits`：参数 e，返回 getApiErrorCode(e) === EXTRA_USAGE_OUT_OF_CREDITS。"}
+{"id":"chunk-k1t1w9mg.js#Obo","doc":"导出函数 `isClaudeCodeVersionTooOld`：参数 e，返回 getApiErrorCode(e) === CLAUDE_CODE_VERSION_TOO_OLD。"}
+{"id":"chunk-k1t1w9mg.js#mQe","doc":"导出函数 `alwaysFalseErrors`：参数 e，返回 !1。"}
+{"id":"chunk-k1t1w9mg.js#Ern","doc":"导出函数 `alwaysFalseB`：参数 e，返回 !1。"}
+{"id":"chunk-a76zrsb5.js#c2r","doc":"导出函数 `promoCommand`：返回 parsePromoCampaign()?.command ?? null。"}
+{"id":"chunk-a76zrsb5.js#u2r","doc":"导出函数 `isPromoCommand`：参数 e，返回 n !== null && e === n。"}
+{"id":"chunk-a76zrsb5.js#f2r","doc":"导出函数 `canClaimPromoCreditFor`：参数 e，返回 jDr(e) && canClaimPromoCredit()。"}
+{"id":"chunk-exfmq47h.js#GEs","doc":"导出常量或表 `MAX_TRACKED_CALLS`：值为 1e4。"}
+{"id":"chunk-exfmq47h.js#o0t","doc":"导出函数 `fileReferenceTrackerSlot`。"}
+{"id":"chunk-exfmq47h.js#zEs","doc":"导出函数 `fileReferenceHintLatch`：返回 U3t.of(getRootSession()).fileReferenceHintLatch()。"}
+{"id":"chunk-exfmq47h.js#fgo","doc":"导出函数 `noteFileReferenceCall`：参数 e。"}
+{"id":"chunk-g8sg6xj8.js#rft","doc":"导出函数 `isSerialisedBody`：参数 e，返回 Buffer.isBuffer(e) && Ws().gzipRequestBody.serialisedBodies.has(e.buffer)。"}
+{"id":"chunk-g8sg6xj8.js#mbr","doc":"导出函数 `bodyCharCount`：参数 e，返回 typeof e === \"string\" ? e.length : x(e)?.chars。"}
+{"id":"chunk-g8sg6xj8.js#bMi","doc":"导出函数 `wouldGzipForHost`：参数 e, n, r，返回 isFirstPartyAnthropicHost(e) && decideGzip(e, 1 / 0, n, r).gzip。"}
+{"id":"chunk-g8sg6xj8.js#zps","doc":"导出函数 `classifyRejectionOf`：参数 e，返回 null; return classifyGzipRejection(q(e))。"}
+{"id":"chunk-g8sg6xj8.js#uMn","doc":"导出函数 `logGzipSent`：参数 e = \"api\"。"}
+{"id":"chunk-g8sg6xj8.js#Vps","doc":"导出函数 `recordGzipBlockTelemetry`：参数 e, n。"}
+{"id":"chunk-g8sg6xj8.js#wMi","doc":"导出函数 `takeDispatchAtGzip`：参数 e, n。"}
+{"id":"chunk-g8sg6xj8.js#mMi","doc":"导出函数 `needsBodyAssembly`：参数 { keys: keys, reused: reused }，返回 keys.some((n, r) => n !== void 0 && reused[r] === void 0)。"}
+{"id":"chunk-g8sg6xj8.js#Bps","doc":"导出函数 `zlibErrorCode`：参数 e，返回 t === \"Z_DATA_ERROR\" || t === \"Z_BUF_ERROR\" ? t : void 0。"}
+{"id":"chunk-5xgkngpb.js#aar","doc":"导出函数 `markTakesRequestBodyBytes`：参数 e。"}
+{"id":"chunk-5xgkngpb.js#aJr","doc":"导出函数 `takesRequestBodyBytes`：参数 e，返回 e === void 0 || e === fetchWithRequestBodyCompression || ycn in e。"}
+{"id":"chunk-5xgkngpb.js#yz","doc":"导出函数 `entrypointForTelemetry`：参数 e，返回 fromEnumOpt(found) ?? lit_2(\"other\")。"}
+{"id":"chunk-5xgkngpb.js#elr","doc":"导出函数 `preferSameModel`：参数 e, n，返回 e !== void 0 && Bn(e) === Bn(n) ? e : n。"}
+{"id":"chunk-5xgkngpb.js#CCt","doc":"导出函数 `needsOverageConsentForModel`：参数 e, n，返回 fPe(e) && !isModelBlockedByOverride(getCanonicalName(e)) && YJt(n)。"}
+{"id":"chunk-5xgkngpb.js#Hci","doc":"导出函数 `needsOverageConsentOnMainThread`：参数 e，返回 e.isMainThread && YJt(e.requestDialog)。"}
+{"id":"chunk-t1peve9y.js#JPo","doc":"导出函数 `trialDurationDays`：返回 getOauthAccountInfo()?.claudeCodeTrialDurationDays ?? null。"}
+{"id":"chunk-ac0ps64w.js#xB","doc":"导出常量或表 `CACHE_TTL_5M_MS`：值为 300000, oR = 3600000。"}
+{"id":"chunk-03tec5k5.js#Aki","doc":"导出函数 `isCacheFingerprintPart`：参数 e，返回 e.part === \"tool\" || e.part === \"system\" || e.part === \"message\"。"}
+{"id":"chunk-03tec5k5.js#dis","doc":"导出函数 `describeSnapshotDiff`：参数 e, n，返回 e.seeded ? diffToolLists(e, n) : [ ...diffToolLists(e, n), ...diffThinkingBlocks(e, n), ...diffCacheMarkers(e,…。"}
+{"id":"chunk-03tec5k5.js#sxn","doc":"导出函数 `isDeferredTool`：参数 e，返回 lO(e, \"defer_loading\") === !0。"}
+{"id":"chunk-5xgkngpb.js#lle","doc":"导出函数 `noopLedger`：参数 e, n。"}
+{"id":"chunk-5xgkngpb.js#e8","doc":"导出函数 `containsProviderId`：参数 e，返回 PROVIDER_ID_PREFIXES.some((n) => e.includes(n))。"}
+{"id":"chunk-5xgkngpb.js#TAt","doc":"导出函数 `anyMessageHasProviderId`：参数 e，返回 e.some((n) => { try { return Uue(jsonStringify(n)); } catch { return !0; } }); } export { jbt, Uue }。"}
+{"id":"chunk-vn3g7zt8.js#COi","doc":"导出函数 `noRefusalFallbackOpusModel`：返回 isModelAdmittedByAvailableModels(enforcementRefusalFallbackOpusModel())。"}
+{"id":"chunk-vn3g7zt8.js#ROi","doc":"导出函数 `everyLineupModelAdmitted`：参数 e，返回 Si(strippedCanonicalName(e)).every((n) => isModelAdmittedByAvailableModels(n))。"}
+{"id":"chunk-vn3g7zt8.js#xOi","doc":"导出函数 `isInRefusalLineup`：参数 e, n，返回 !isSameModel(e, n) && Si(strippedCanonicalName(e)).includes(strippedCanonicalName(n))。"}
+{"id":"chunk-vn3g7zt8.js#gps","doc":"导出函数 `refusalRouteLimit`：返回 _b。"}
+{"id":"chunk-vn3g7zt8.js#Dlo","doc":"导出函数 `noopDialogHost`。"}
+{"id":"chunk-vn3g7zt8.js#Nlo","doc":"导出函数 `isSwitchModelsOnFlagDisabled`：返回 resolveSetting(\"switchModelsOnFlag\", !0).value === !1。"}
+{"id":"chunk-vn3g7zt8.js#GOi","doc":"导出函数 `refusalFallbackDialog`：参数 e, n，返回 e。"}
+{"id":"chunk-vn3g7zt8.js#sMn","doc":"导出函数 `hasConvoluteArcadesFlag`：返回 getCachedClientData()?.[CONVOLUTE_ARCADES_FLAG] === !0。"}
+{"id":"chunk-vn3g7zt8.js#iMn","doc":"导出函数 `hasFallbackLatch`：返回 getFallbackLatchKind() !== \"none\"。"}
+{"id":"chunk-q3c0tzex.js#XY","doc":"导出函数 `canonicalFingerprint`：参数 n, { omitCacheControl: t = !1 } = {}，返回 (feedCanonicalJson(n, s, t), s.join(\"\"))。"}
+{"id":"chunk-vn3g7zt8.js#ZOi","doc":"导出函数 `canSendWigglyDoveHeader`：返回 eh() && !getCustomHeaders()。"}
+{"id":"chunk-vn3g7zt8.js#tMi","doc":"导出函数 `isSunnyGardenSenderAddress`：返回 ( isCcsTenant() && isFirstPartyApiBackend() && getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SUNNY_GARDEN, !1) ); …。","carry":"fallback-c"}
+{"id":"chunk-exfmq47h.js#qji","doc":"导出函数 `isRetryOn529Source`：参数 e，返回 !1; let n = RETRY_ON_529_QUERY_SOURCES; return e.startsWith(\"agent:\") || n.has(e)。"}
+{"id":"chunk-exfmq47h.js#Zji","doc":"导出函数 `allowlistedBlockType`：参数 e，返回 Sp.has(e) ? e : `non-allowlisted (${e.length} chars)`。"}
+{"id":"chunk-e89b3gwy.js#gJe","doc":"导出函数 `isNonOriginSource`：参数 e，返回 e === \"nonorigin_cf\" || e === \"nonorigin_other\"。"}
+{"id":"chunk-5xgkngpb.js#o9o","doc":"导出函数 `onRefusalSettingsChange`：参数 e，返回 () => {}; return l5o().changed.subscribe(e)。"}
+{"id":"chunk-vn3g7zt8.js#X_r","doc":"导出函数 `isRefusalFallbackActive`：返回 isRefusalFallbackEnabled()。"}
+{"id":"chunk-vn3g7zt8.js#HOi","doc":"导出函数 `safeguardsFlaggedMessage`：参数 e, n, r，返回 `${h} ${y} ${buildSafeguardsLearnMore(e)}${formatRefusalDetails(r)}`。"}
+{"id":"chunk-vn3g7zt8.js#JOi","doc":"导出函数 `setSessionFlagReaders`：参数 e。"}
+{"id":"chunk-vn3g7zt8.js#QOi","doc":"导出函数 `noopSyncPermissionMode`。"}
+{"id":"chunk-vn3g7zt8.js#Dps","doc":"导出函数 `noopMergeSessionFlags`：参数 e。"}
+{"id":"chunk-k1t1w9mg.js#Abo","doc":"导出函数 `retryWindowFor`：参数 e，返回 e.escalated ? e.retryWindowMs : e.firstWindowMs。"}
+{"id":"chunk-k1t1w9mg.js#NFn","doc":"导出函数 `findStreamNoResponseError`：参数 e，返回 t instanceof StreamNoResponseError ? t : void 0。"}
+{"id":"chunk-g8sg6xj8.js#Ps","doc":"导出函数 `streamFallbackWarning`：返回 de.of(getRootSession())。"}
+{"id":"chunk-g8sg6xj8.js#Wps","doc":"导出常量或表 `CONVERSATION_RESET_KINDS`：值为 new Set([\"clear\", \"resume\", \"spare_claim\", \"remote_attach\"])。"}
+{"id":"chunk-03tec5k5.js#Nk","doc":"导出函数 `exactKeyValue`：参数 e, n，返回 Object.entries(e).find(([o]) => o === n)?.[1]。"}
+{"id":"chunk-03tec5k5.js#xki","doc":"导出函数 `shortContentHash`：参数 e，返回 computeContentHash(jsonStringify(sortKeysDeep(e))).slice(0, 16)。"}
+{"id":"chunk-03tec5k5.js#s9t","doc":"导出函数 `ownValue`：参数 e, n，返回 e !== void 0 && Object.hasOwn(e, n) ? e[n] : void 0。"}
+{"id":"chunk-03tec5k5.js#Iki","doc":"导出函数 `deferredToolNames`：参数 e, n = new Set(，返回 new Set(collectDeferredToolsDeltas(e, n).keys())。"}
+{"id":"chunk-xh983qqr.js#Qso","doc":"导出函数 `telemetryToolCategory`：参数 e，返回 Mn.find((o) => o === n) ?? \"other_tool\"。"}
+{"id":"chunk-xh983qqr.js#Gje","doc":"导出函数 `stripSuffixNumber`：参数 e，返回 match ? e.slice(0, -match[0].length) : void 0; } export { toolCategoryForTelemetry, collectDeferredToolsDeltas…。"}
+{"id":"chunk-a2r96cyy.js#mGo","doc":"导出函数 `refreshUltrareviewQuota`：参数 e。"}
+{"id":"chunk-a2r96cyy.js#yJn","doc":"导出函数 `ultrareviewQuota`：参数 e，返回 (uPo(e), null); return r.quota。"}
+{"id":"chunk-a2r96cyy.js#TKr","doc":"导出函数 `isUltrareviewSurfaceOn`：参数 e，返回 !1; if (!isPolicyAllowed(\"allow_remote_sessions\")) return !1; return U()[e] === !0。"}
+{"id":"chunk-a2r96cyy.js#hGo","doc":"导出函数 `hasRunUltrareview`：返回 getGlobalConfig().hasRunUltrareview === !0。"}
+{"id":"chunk-a2r96cyy.js#GZs","doc":"导出函数 `markUltrareviewRun`：参数 e。"}
+{"id":"chunk-a2r96cyy.js#gGo","doc":"导出函数 `freeReviewsBadge`：参数 e，返回 `${e} free ${e === 1 ? \"review\" : \"reviews\"} left`。"}
+{"id":"chunk-7pwjpdkw.js#Cxt","doc":"导出函数 `isLimitEnabled`：参数 e，返回 !0; return isOutOfCreditsReason(e?.disabled_reason ?? null)。"}
+{"id":"chunk-7pwjpdkw.js#p3e","doc":"导出函数 `hasUsageLimitKeys`：参数 e，返回 typeof e === \"object\" && e !== null && !Array.isArray(e) && USAGE_LIMIT_KEYS.some((n) => n in e)。"}
+{"id":"chunk-7pwjpdkw.js#Xes","doc":"导出函数 `rateLimitPromoNotices`：返回 safeParse.success ? safeParse.data : []。"}
+{"id":"chunk-7pwjpdkw.js#yAn","doc":"导出函数 `hasModelScopedLimit`：参数 e，返回 ( Array.isArray(e) && e.some((n) => typeof n === \"object\" && n !== null && isModelScopedWeeklyLimit(n)) )。"}
+{"id":"chunk-exfmq47h.js#x1i","doc":"导出函数 `nullVerificationState`：返回 null。"}
+{"id":"chunk-exfmq47h.js#P1i","doc":"导出函数 `noop`：参数 e。"}
+{"id":"chunk-exfmq47h.js#I1i","doc":"导出函数 `hasFastModeRateLimitDuration`：返回 Zt().fastModeRateLimitDurationMs !== null。"}
+{"id":"chunk-exfmq47h.js#O1i","doc":"导出函数 `checkFastModeRateLimit`：参数 e，返回 Zt().checkFastModeRateLimit(e)。"}
+{"id":"chunk-exfmq47h.js#D1i","doc":"导出函数 `pendingVerification`：返回 ru.pending。"}
+{"id":"chunk-5xgkngpb.js#LOe","doc":"导出函数 `retryWatchdogEnv`：返回 env.CLAUDE_CODE_RETRY_WATCHDOG。"}
+{"id":"chunk-rj4qvv4x.js#_Pe","doc":"导出函数 `canAutoReply`：返回 !0; return getAttacherCaps() !== null && getRvSupervisorLinkLive()。"}
+{"id":"chunk-rj4qvv4x.js#zQs","doc":"导出函数 `subscribeAutoReplyChanges`：参数 e，返回 () => { (t(), n()); }。"}
+{"id":"chunk-rj4qvv4x.js#KQs","doc":"导出函数 `isAutoReactWatching`：返回 getLiveState().autoReact.enabledMemo === !0 && hasActiveAutoReactWatch({ reconnecting: !0 })。"}
+{"id":"chunk-rj4qvv4x.js#hWo","doc":"导出函数 `bumpUnattendedReply`：参数 e。"}
+{"id":"chunk-rj4qvv4x.js#gWo","doc":"导出函数 `addUnattendedReplies`：参数 e, t。"}
+{"id":"chunk-rj4qvv4x.js#VQs","doc":"导出函数 `takeUnattendedReplies`：参数 e，返回 (t.delete(e), n)。"}
+{"id":"chunk-1ap3yadm.js#Itr","doc":"导出函数 `artifactEmulatorDir`：返回 join_2(SKILLS_MOUNT_SPEC.base, EXAMPLES_ARTIFACT_EMULATOR)。"}
+{"id":"chunk-qt90e95a.js#lri","doc":"导出函数 `registerAvailabilitySource`：参数 i。"}
+{"id":"chunk-qt90e95a.js#GS","doc":"导出函数 `isArtifactsAvailable`：返回 a.isAvailable(); } export { Xb, jGs }。"}
+{"id":"chunk-0hjter80.js#$qo","doc":"导出函数 `isHostEntrypointSession`：返回 isHostEntrypoint()。"}
+{"id":"chunk-jkpnfdxp.js#fsi","doc":"导出函数 `randomBatchId`：返回 randomBytes(16).toString(\"base64url\")。"}
+{"id":"chunk-jkpnfdxp.js#Ze","doc":"导出函数 `ME_ID_TTL_MS`。"}
+{"id":"chunk-jkpnfdxp.js#hsi","doc":"导出函数 `isQuotaReason`：参数 e，返回 ve.has(e)。"}
+{"id":"chunk-jkpnfdxp.js#ysi","doc":"导出函数 `clearMeIdCache`：参数 e。"}
+{"id":"chunk-jkpnfdxp.js#d5r","doc":"导出函数 `isRecoverableStoreError`：参数 e，返回 e !== \"store_unavailable\"。"}
+{"id":"chunk-v7crmwhb.js#m3s","doc":"导出函数 `visibleTools`：参数 e，返回 isBuiltInArtifactHiddenForMcp() ? T(e) : [...e]。"}
+{"id":"chunk-exfmq47h.js#eji","doc":"导出函数 `artifactProxyPath`：参数 e, n，返回 `${getAgentProxyPath()}/artifact/${encodeURIComponent(e)}${n}`。"}
+{"id":"chunk-exfmq47h.js#tji","doc":"导出函数 `artifactAssetTokenHeader`：参数 e，返回 { \"x-frame-asset-token\": e }。"}
+{"id":"chunk-exfmq47h.js#Etn","doc":"导出函数 `isArtifactMountUsable`：返回 isArtifactMountMode() && !isDesktopTopSession()。"}
+{"id":"chunk-exfmq47h.js#CAr","doc":"导出函数 `isArtifactPathMounted`：返回 isArtifactMountMode() || isClaudeAiChatCowork()。"}
+{"id":"chunk-cx778tm5.js#tKr","doc":"导出常量或表 `SUMMON_STATE_TTL_MS`：值为 3600000。"}
+{"id":"chunk-cx778tm5.js#YQs","doc":"导出常量或表 `ROUTE_ABSENT_4001`：值为 \"4001\", OFt = \"4503\", MFt = \"4403\", k2n = 900000。"}
+{"id":"chunk-cx778tm5.js#XQs","doc":"导出常量或表 `TOKEN_MIN_GRACE_MS`：值为 300000, HBs = 3。"}
+{"id":"chunk-cx778tm5.js#tZs","doc":"导出函数 `seedJitter`：参数 e，返回 Math.round(Math.random() * e.seedDeferMaxMs)。"}
+{"id":"chunk-0pt9fb1a.js#Rzt","doc":"导出函数 `findPrefetchFile`：参数 e, s，返回 e.find((n) => n.path === `project/${s}`) ?? e.find((n) => n.path === s)。"}
+{"id":"chunk-1dbza2qv.js#Xn","doc":"导出常量或表 `DEFAULT_RESULT_ROWS`：值为 500, HHs = 4000。"}
+{"id":"chunk-1dbza2qv.js#ume","doc":"导出函数 `clipUnknown`：参数 e，返回 sweepResultLineText(typeof e === \"string\" ? e : \"unknown\", 64)。"}
+{"id":"chunk-1dbza2qv.js#Pk","doc":"导出函数 `canonicalTargetOrPlaceholder`：参数 e，返回 canonicalArtifactTargetFor(e, \"(unrecognized address)\")。"}
+{"id":"chunk-1dbza2qv.js#E$o","doc":"导出函数 `clipLabel`：参数 e，返回 typeof e === \"string\" ? sweepResultLineText(e, Yn) : void 0。"}
+{"id":"chunk-1dbza2qv.js#v$o","doc":"导出函数 `labelSuffix`：参数 e，返回 t === \"\" ? \"\" : `: ${t}`。"}
+{"id":"chunk-1dbza2qv.js#X3s","doc":"导出函数 `shortLabelOrUndefined`：参数 e，返回 t === \"\" ? void 0 : t。"}
+{"id":"chunk-1dbza2qv.js#_$","doc":"导出函数 `peerOrFallback`：参数 e, t, n，返回 typeof e === \"string\" && t.test(e) ? e : n。"}
+{"id":"chunk-1dbza2qv.js#Mte","doc":"导出函数 `numberText`：参数 e，返回 typeof e === \"number\" && Number.isFinite(e) ? String(e) : \"?\"。"}
+{"id":"chunk-1dbza2qv.js#UU","doc":"导出函数 `jsonQuotedSweep`：参数 e, t，返回 jsonStringify(sweepScalarField(e, t))。"}
+{"id":"chunk-1dbza2qv.js#pme","doc":"导出常量或表 `MAX_SWEEP_TEXT_CHARS`：值为 8192, Xn = /^[0-9a-f]{16}$/, Jn = 12288。"}
+{"id":"chunk-tsrpnscb.js#B9n","doc":"导出函数 `trackDurableClaudeDocSlug`：参数 e。"}
+{"id":"chunk-tsrpnscb.js#Dvt","doc":"导出函数 `setWorking`：参数 e, n。"}
+{"id":"chunk-tsrpnscb.js#$9n","doc":"导出函数 `isWorking`：参数 e，返回 ve.of(e).working.getState().working。"}
+{"id":"chunk-95pbtx8d.js#jst","doc":"导出函数 `hasArtifactAddon`：参数 e，返回 ( isArtifactToolsetSplit() && isArtifactToolRegistered() && getArtifactPublishStubDir() === null && isAddonEna…。"}
+{"id":"chunk-95pbtx8d.js#Wqo","doc":"导出常量或表 `artifactGatesSlot`：值为 new xe()。"}
+{"id":"chunk-95pbtx8d.js#Gqo","doc":"导出函数 `storeRouteMode`：返回 getStoreRoute(s && dbVerbsOn, s && runScriptOn)。"}
+{"id":"chunk-95pbtx8d.js#ktr","doc":"导出函数 `isDesignType`：参数 e，返回 e !== void 0 && rt.has(e)。"}
+{"id":"chunk-95pbtx8d.js#Ooi","doc":"导出函数 `isMigratedDesignType`：参数 e，返回 e !== void 0 && it.has(e)。"}
+{"id":"chunk-pse52p6n.js#kvt","doc":"导出函数 `createEmptyArtifactSessionStores`：返回 createArtifactSessionStores( () => e, (r) => { e = r(e); }, )。"}
+{"id":"chunk-pse52p6n.js#Tvt","doc":"导出函数 `NO_OP_COLOR_ASSIGNER`。"}
+{"id":"chunk-fgpd7qrh.js#RKo","doc":"导出函数 `isRelayUnavailableForPins`：返回 mn() && !frameVerbRelayActive()。"}
+{"id":"chunk-fgpd7qrh.js#kKo","doc":"导出函数 `isOrgReadMode`：参数 e，返回 e === \"org\" || e === \"people\"。"}
+{"id":"chunk-fgpd7qrh.js#Hqr","doc":"导出函数 `isOrgAccessMode`：参数 e，返回 e === \"view\" || e === \"comment\"。"}
+{"id":"chunk-fgpd7qrh.js#TKo","doc":"导出常量或表 `MAX_SHARE_TARGETS`：值为 50, Le = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/。"}
+{"id":"chunk-fgpd7qrh.js#s_n","doc":"导出函数 `isRelayUnavailableForSharing`：返回 mn() && !frameVerbRelayActive(SHARING_RELAY_FAMILY)。"}
+{"id":"chunk-fgpd7qrh.js#v7","doc":"导出函数 `isArtifactRoomEnabledStub`：返回 null?.isArtifactRoomEnabled() === !0; } export { j9, isArtifactPinEnabled, versionLabelSchema, listArtifactVer…。"}
+{"id":"chunk-7f790p0r.js#Aqt","doc":"导出函数 `isLegacyArtifactAction`：参数 t，返回 Object.hasOwn(ADDON_OF_LEGACY_ACTION, t)。"}
+{"id":"chunk-mzeyg7fv.js#sJs","doc":"导出函数 `inlinedByCreatePaths`：参数 r，返回 n(r) .filter((e) => e.inlinedByCreate) .map((e) => e.path)。"}
+{"id":"chunk-mzeyg7fv.js#iJs","doc":"导出函数 `inlinedByCreateDesignPaths`：参数 r，返回 n(r) .filter((e) => e.inlinedByCreate && e.needsDesignSystem) .map((e) => e.path)。"}
+{"id":"chunk-mzeyg7fv.js#fzr","doc":"导出函数 `printedTypePaths`：参数 r，返回 n(r) .filter((e) => e.printed) .map((e) => e.path)。"}
+{"id":"chunk-mzeyg7fv.js#aJs","doc":"导出函数 `kitReadTypePaths`：参数 r，返回 n(r) .filter((e) => e.readByKit) .map((e) => e.path); } export { NMr, F$s, ARTIFACT_TYPE_REFERENCES, N$s, $$s …。"}
+{"id":"chunk-95pbtx8d.js#uIe","doc":"导出函数 `versionShapeOrPlaceholder`：参数 e，返回 typeof e === \"string\" && VER_SHAPE.test(e) ? e : \"unrecognized-version-shape\"。"}
+{"id":"chunk-95pbtx8d.js#Gst","doc":"导出函数 `pathListOrUnreadable`：参数 e，返回 Array.isArray(e) ? formatPathList(stringEntries(e), e.length) : \"(unreadable)\"。"}
+{"id":"chunk-95pbtx8d.js#eYr","doc":"导出函数 `shortPathList`：参数 e，返回 Oe(e).filter((r) => r.length <= MAX_PATH_CHARS)。"}
+{"id":"chunk-q536ar22.js#qSn","doc":"导出函数 `mcpToolNames`：参数 r，返回 r.map((o) => buildMcpToolName(CLAUDE_ARTIFACTS, o))。"}
+{"id":"chunk-m0ks5273.js#Enr","doc":"导出常量或表 `AUDIENCE_QUERY_TIMEOUT_MS`：值为 30000; export { scrubPageText, assessOwnArtifactPage, getSharedReadLane, CONTROL_CHAR_REGEX, buildAudienceFraming, isWri…。"}
+{"id":"chunk-chhd9p2w.js#Cco","doc":"导出函数 `isKnownCapabilityObject`：参数 e，返回 de(e, oe)。"}
+{"id":"chunk-chhd9p2w.js#sgs","doc":"导出函数 `isFullCapabilityObject`：参数 e，返回 de(e, xe)。"}
+{"id":"chunk-chhd9p2w.js#fLi","doc":"导出函数 `allKnownCapabilityKeys`：参数 e，返回 e.every((n) => xe.has(n))。"}
+{"id":"chunk-8kbxsj3k.js#pQs","doc":"导出函数 `setRegistrySink`：参数 e。"}
+{"id":"chunk-8kbxsj3k.js#mQs","doc":"导出函数 `resetRegistryPublished`。"}
+{"id":"chunk-8kbxsj3k.js#aWo","doc":"导出函数 `ownProcStart`：返回 ownProcStartAsync()。"}
+{"id":"chunk-8kbxsj3k.js#NXn","doc":"导出函数 `tornStopIntents`：返回 getLiveState().commentMonitorIntent.tornStops。"}
+{"id":"chunk-8kbxsj3k.js#lWo","doc":"导出函数 `monitorStorage`：返回 getLiveState().commentMonitorIntent.storageV5。"}
+{"id":"chunk-8kbxsj3k.js#R3","doc":"导出函数 `runCommentMonitorWithIntent`：参数 e。"}
+{"id":"chunk-8kbxsj3k.js#_Qs","doc":"导出函数 `forgetSlugIntent`：参数 e, t，返回 runCommentMonitor(t?.storageV5).bySlug.get(e)?.state。"}
+{"id":"chunk-8kbxsj3k.js#dWo","doc":"导出函数 `markSlugTravelling`：参数 e, t。"}
+{"id":"chunk-nh1pvp1m.js#xWs","doc":"导出函数 `otherArmedSlugs`：参数 e, n，返回 listOtherArmedSlugs(e, {}).filter((r) => !n(r))。"}
+{"id":"chunk-yz7g8v1y.js#uZn","doc":"导出函数 `newLaneNoticeId`：参数 e = randomUUID(，返回 e。"}
+{"id":"chunk-yz7g8v1y.js#mri","doc":"导出函数 `laneNoticeSlug`：参数 e，返回 getLiveState().laneNoticeSlugs.get(e)。"}
+{"id":"chunk-yz7g8v1y.js#gri","doc":"导出函数 `commentReadFor`：参数 e，返回 getLiveState().commentReads.get(e)。"}
+{"id":"chunk-yz7g8v1y.js#pZn","doc":"导出函数 `lastOthersCommentReadAt`：返回 getLiveState().lastOthersCommentReadAt。"}
+{"id":"chunk-r9a43qwr.js#FQs","doc":"导出函数 `isSummonSettled`：参数 e，返回 getLiveState().summonSeeds.settled.has(Me(e.slug, e.threadId, e.gestureAt))。"}
+{"id":"chunk-r9a43qwr.js#UQs","doc":"导出函数 `openSummonFor`：参数 e，返回 getLiveState().summonSeeds.open.get(Me(e.slug, e.threadId, e.gestureAt))。"}
+{"id":"chunk-c0pq6qyx.js#uot","doc":"导出函数 `isThreadAgentEnabled`：返回 getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SORREL_TRELLIS_TENON, !1) === !0。"}
+{"id":"chunk-c0pq6qyx.js#X2r","doc":"导出函数 `isTealCorbelFinialEnabled`：返回 !isDiskless() && getFeatureValue_CACHED_MAY_BE_STALE(\"tengu_teal_corbel_finial\", !0)。"}
+{"id":"chunk-c0pq6qyx.js#cQs","doc":"导出函数 `hasThreadAgentForSlugPost`：参数 e，返回 hasThreadAgentForSlug(e)。"}
+{"id":"chunk-k4jk4dzy.js#R7","doc":"导出函数 `isConsentUiKind`：参数 e，返回 e === \"interactive\" || e === \"sdk\" || e === \"bg_session\"。"}
+{"id":"chunk-c0pq6qyx.js#G2r","doc":"导出函数 `permissionRuleDestination`：返回 isVsCodeTopSession() || isDesktopNonClaudecode() ? \"userSettings\" : \"session\"。"}
+{"id":"chunk-c0pq6qyx.js#xXn","doc":"导出函数 `isReplyRuleGateOn`：返回 getFeatureValue_CACHED_MAY_BE_STALE(\"tengu_ochre_plover\", !1)。"}
+{"id":"chunk-c0pq6qyx.js#nWo","doc":"导出常量或表 `ACTIVATED_LABEL`：值为 \"Claude: activated\", MDr = \"Claude: NOT activated\"; export { ODr, findReplyAllowRule, Ezn, hasReplyDenyOrAsk, xRo, MDr, …。"}
+{"id":"chunk-c0pq6qyx.js#OXn","doc":"导出函数 `isBackgroundSurface`：参数 e，返回 e !== void 0 && e !== \"interactive\"。"}
+{"id":"chunk-c0pq6qyx.js#MXn","doc":"导出函数 `describeHolderWithOthersComments`：参数 e, t, n，返回 { where: describeReplyHolder(e, n), surface: getHolderSurface(e), others: t }。"}
+{"id":"chunk-c0pq6qyx.js#ign","doc":"导出函数 `holderElsewhereText`：参数 e，返回 e !== void 0 ? describeHolderWithOthers(e) : \"another session on this machine\"。"}
+{"id":"chunk-c0pq6qyx.js#Q7s","doc":"导出函数 `markCensusDirty`：参数 e。"}
+{"id":"chunk-c0pq6qyx.js#f2t","doc":"导出函数 `censusGeneration`：参数 e，返回 $e().get(e)?.generation。"}
+{"id":"chunk-c0pq6qyx.js#IXn","doc":"导出函数 `censusEntry`：参数 e，返回 $e().get(e)。"}
+{"id":"chunk-c0pq6qyx.js#eQs","doc":"导出函数 `forgetCensus`：参数 e。"}
+{"id":"chunk-chhd9p2w.js#zSr","doc":"导出函数 `sanitizeConnectorNameConnectors`：参数 e，返回 scrubArtifactEnvelopeTags( truncateCodePoints(e, MAX_NAME_LENGTH).replace(DISPLAY_UNSAFE_RE, escapeChar), )。"}
+{"id":"chunk-chhd9p2w.js#zft","doc":"导出函数 `isDeclarableServer`：参数 e，返回 e.declarable !== !1 && getMcpPrefix(e.server)。"}
+{"id":"chunk-chhd9p2w.js#m5","doc":"导出函数 `isPlainObjectConnector`：参数 e，返回 e !== null && typeof e === \"object\" && !Array.isArray(e); } export { sanitizeConnectorName, zit, k4, Vcr, G, Q…。"}
+{"id":"chunk-0avm71bs.js#DSr","doc":"导出函数 `isRememberedArtifactConsent`：参数 e，返回 e.ask && e.remember === \"artifact\"。"}
+{"id":"chunk-0avm71bs.js#vDt","doc":"导出函数 `consentClassKey`：参数 e，返回 e.endpoint ? `${e.class}:endpoint` : e.class。"}
+{"id":"chunk-0avm71bs.js#T9","doc":"导出函数 `hasClassConsent`：参数 e, n，返回 getLiveState().askClassConsent.has(g(e, n))。"}
+{"id":"chunk-0avm71bs.js#ZDi","doc":"导出函数 `rememberOutsideOrgConsent`：参数 e。"}
+{"id":"chunk-0avm71bs.js#Phs","doc":"导出函数 `hasOutsideOrgConsent`：参数 e，返回 getLiveState().askClassOutsideOrgConsent.has(g(\"foreign_read\", e))。"}
+{"id":"chunk-0avm71bs.js#lco","doc":"导出函数 `forgetNamedOtherOrg`：参数 e。"}
+{"id":"chunk-0avm71bs.js#J7t","doc":"导出函数 `hasClassPersonConsent`：参数 e, n，返回 getLiveState().askClassPersonConsent.has(g(e, n))。"}
+{"id":"chunk-0avm71bs.js#wXe","doc":"导出函数 `consentEpochGuard`：参数 e，返回 (e.artifactConsentEpoch ?? 0) === getLiveState().accountEpoch ? e : freeze。"}
+{"id":"chunk-0avm71bs.js#goe","doc":"导出函数 `hasSharedReadConsentClasses`：参数 e, n, r，返回 i5e(e)[n]?.[r] === !0。"}
+{"id":"chunk-0avm71bs.js#Nft","doc":"导出函数 `consentEpochKey`：返回 `${accountEpoch}:${conversationEpoch}`。"}
+{"id":"chunk-95pbtx8d.js#PTt","doc":"导出函数 `artifactTypesEnabled`：返回 env.CLAUDE_CODE_ARTIFACT_TYPES ?? getFeatureValue_CACHED_MAY_BE_STALE(TENGU_COBALT_PLINTH_LARCH, !0)。"}
+{"id":"chunk-95pbtx8d.js#Vqo","doc":"导出函数 `isRelayUnavailableForTypeCreate`：返回 uC() && !frameVerbRelayActive(TYPE_CREATE_RELAY_FAMILY) && !ce()。"}
+{"id":"chunk-y0ps0qva.js#v3n","doc":"导出函数 `durableRowList`：返回 [...R().values()]。"}
+{"id":"chunk-y0ps0qva.js#hwe","doc":"导出函数 `durableRowFor`：参数 e，返回 R().get(e)。"}
+{"id":"chunk-y0ps0qva.js#P8s","doc":"导出函数 `hasConnectorForUrl`：参数 e，返回 se(e) !== null。"}
+{"id":"chunk-y0ps0qva.js#I8s","doc":"导出函数 `localDurableWatchRefusal`：返回 env.CLAUDE_CODE_REMOTE ? null : \"not_remote\"。"}
+{"id":"chunk-y0ps0qva.js#kFo","doc":"导出函数 `isSubscriptionRelayBlocked`：返回 ( mn() && frameRelayActive() && !frameVerbRelayActive(SUBSCRIPTIONS_RELAY_FAMILY) && !isServiceAgentSession() …。"}
+{"id":"chunk-tsrpnscb.js#z1o","doc":"导出函数 `isMissingSessionSubscribe`：参数 e，返回 e.reason === \"subscribe_failed\" && e.status === 404 && !e.fromGateway。"}
+{"id":"chunk-tsrpnscb.js#Xzr","doc":"导出函数 `unexpectedWatchFailure`：参数 e，返回 EXPECTED_WATCH_FAILURES.has(e) ? null : NGr。"}
+{"id":"chunk-tsrpnscb.js#o7s","doc":"导出函数 `noteArmInFlight`：参数 e。"}
+{"id":"chunk-tsrpnscb.js#V1o","doc":"导出函数 `forgetArmOutcome`：参数 e。"}
+{"id":"chunk-57tfkp5n.js#Oke","doc":"导出常量或表 `sumByAliasField`：值为 ye。"}
+{"id":"chunk-57tfkp5n.js#Ics","doc":"导出函数 `frameSessionId`：返回 e && he.test(e) ? e : void 0。"}
+{"id":"chunk-57tfkp5n.js#TDe","doc":"导出函数 `requestIdMeta`：参数 e，返回 e !== void 0 && be.test(e) ? { request_id: e } : {}。"}
+{"id":"chunk-57tfkp5n.js#NOt","doc":"导出函数 `mentionsField`：参数 e, r，返回 e.includes(`'${r}'`) || new RegExp(`\"${r}\"(?!\\\\??:)`).test(e)。"}
+{"id":"chunk-57tfkp5n.js#wyr","doc":"导出函数 `isUnknownFieldErrorFor`：参数 e, r，返回 UNKNOWN_FIELD_ERROR_RE.test(s) && STt(s, r)。"}
+{"id":"chunk-57tfkp5n.js#i9","doc":"导出常量或表 `SAFE_ERROR_CODE_RE`：值为 /^[A-Za-z0-9_-]{1,64}$/。"}
+{"id":"chunk-m0ks5273.js#DYo","doc":"导出函数 `emptyText`：参数 e, n，返回 \"\"。"}
+{"id":"chunk-m0ks5273.js#LYo","doc":"导出函数 `sanitizeOriginNotes`：参数 e，返回 scrubArtifactEnvelopeTags(neutralizeConfusableTags(ARTIFACT_ORIGIN_NOTES, e.replace(Lt, \" \")))。"}
+{"id":"chunk-m0ks5273.js#hnr","doc":"导出函数 `isOwnedExternally`：参数 e，返回 isNotSolelyOwned(e) || e.outsideOrg === !0。"}
+{"id":"chunk-m0ks5273.js#Qme","doc":"导出函数 `mayHaveForeignWriters`：参数 e，返回 _Fr(e) || e.outsidersMayHaveWritten === !0。"}
+{"id":"chunk-m0ks5273.js#tit","doc":"导出函数 `hasOnlyOutsideWriters`：参数 e，返回 e.outsidersMayHaveWritten === !0 && !_Fr(e)。"}
+{"id":"chunk-m0ks5273.js#bSn","doc":"导出函数 `isSharedOrNotOwned`：参数 e，返回 isNotSolelyOwned(e) || e.outsideWriter === !0。"}
+{"id":"chunk-9evew3ee.js#Psi","doc":"导出函数 `registerReaderAvailability`：参数 e。"}
+{"id":"chunk-51jy8ztq.js#$s","doc":"导出常量或表 `FRAME_CONSTANTS`：值为 null, MAX_ARTIFACT_BYTES = 16777216, tl = \"/api/frame/contract/latest\"。"}
+{"id":"chunk-he38vqx2.js#tao","doc":"导出函数 `publishReadDeadlineS`：参数 e，返回 PUBLISH_READ_DEADLINE_S; return Math.min( PUBLISH_READ_DEADLINE_MAX_S, PUBLISH_READ_DEADLINE_S + Math.floor(e …。"}
+{"id":"chunk-m0ks5273.js#jYe","doc":"导出函数 `singleReadRetryBudget`：返回 { remaining: 1 }。"}
+{"id":"chunk-m0ks5273.js#uqt","doc":"导出函数 `canReadViaFrame`：参数 e，返回 e.contentVia === \"frame\" && !env.CLAUDE_CODE_REMOTE。"}
+{"id":"chunk-m0ks5273.js#WYe","doc":"导出函数 `contentTypeOfHeaders`：参数 e，返回 n?.[\"x-frame-asset-content-type\"] ?? n?.[\"content-type\"]。"}
+{"id":"chunk-51jy8ztq.js#FSn","doc":"导出函数 `ARTIFACT_LIST_SCOPES`。"}
+{"id":"chunk-m0ks5273.js#q3","doc":"导出函数 `isRetryableStatus`：参数 e，返回 e !== void 0 && (e >= 500 || e === 429 || e === 408)。"}
+{"id":"chunk-b7m46xj6.js#d3n","doc":"导出常量或表 `OPEN_PROBE_TIMEOUT_MS`：值为 15000。"}
+{"id":"chunk-m0ks5273.js#Zme","doc":"导出函数 `isGone`：参数 e，返回 e.gone === !0。"}
+{"id":"chunk-m0ks5273.js#nit","doc":"导出函数 `isNeverPublished`：参数 e，返回 e.neverPublished === !0。"}
+{"id":"chunk-m0ks5273.js#iY","doc":"导出函数 `isOtherOrg`：参数 e，返回 e.otherOrg === !0。"}
+{"id":"chunk-m0ks5273.js#UYo","doc":"导出函数 `isAccessRefused`：参数 e，返回 k_e(e) || (e.errorCode !== void 0 && ACCESS_REFUSAL_CODES.has(e.errorCode))。"}
+{"id":"chunk-m0ks5273.js#BYo","doc":"导出函数 `stripInviteHints`：参数 e，返回 e.replace(`. ${EMAIL_INVITE_HINT}`, \"\").replace(`. ${CROSS_ORG_SHARE_HINT}`, \"\")。"}
+{"id":"chunk-m0ks5273.js#zt","doc":"导出函数 `requestAccessSchema`。"}
+{"id":"chunk-51jy8ztq.js#u5r","doc":"导出常量或表 `MERMAID_RUNTIME_PATH`：值为 \"/_runtime/mermaid-11.16.1.min.js\", _i = '<script src=\"/_runtime/mermaid-11.16.1.min.js\">'。"}
+{"id":"chunk-m0ks5273.js#t5r","doc":"导出函数 `parseHtml`：参数 e，返回 e。"}
+{"id":"chunk-m0ks5273.js#KTt","doc":"导出函数 `attrOf`：参数 e, n，返回 e.attrs?.find((s) => s.name.toLowerCase() === lower)?.value。"}
+{"id":"chunk-tsrpnscb.js#F9n","doc":"导出函数 `setWaitingFor`：参数 e, n。"}
+{"id":"chunk-tsrpnscb.js#U9n","doc":"导出函数 `hasWaitingFor`：参数 e，返回 oRo(e) !== void 0。"}
+{"id":"chunk-tsrpnscb.js#W1o","doc":"导出函数 `waitingFor`：参数 e，返回 ve.of(e).userPrompt.getState().waitingFor。"}
+{"id":"chunk-tsrpnscb.js#r7s","doc":"导出函数 `subscribeWaiting`：参数 e, n，返回 ve.of(e).userPrompt.subscribe(n)。"}
+{"id":"chunk-z0t7mpxt.js#NZs","doc":"导出函数 `getTypeInfo`：参数 e，返回 weakMap.get(e)。"}
+{"id":"chunk-z0t7mpxt.js#_gn","doc":"导出函数 `isBoot404`：参数 e，返回 e === \"boot_404\"。"}
+{"id":"chunk-m0ks5273.js#e5r","doc":"导出函数 `isServiceViewPath`：参数 e，返回 e.startsWith(\"_\") || e === \"index.html.json\" || e === \".json\"。"}
+{"id":"chunk-m0ks5273.js#Qst","doc":"导出函数 `isUnderAnchor`：参数 e, n, r，返回 e === n || e.startsWith(n + sep) || e === r || e.startsWith(r + sep)。"}
+{"id":"chunk-m0ks5273.js#Zst","doc":"导出函数 `normalizeTrailingSlash`：参数 e，返回 replaced === \"\" ? e : replaced。"}
+{"id":"chunk-1dbza2qv.js#wWr","doc":"导出函数 `needsReadAsk`：参数 e, t，返回 e.readAsks || e.hardLinked || e.stagedUpload || t。"}
+{"id":"chunk-1dbza2qv.js#KEt","doc":"导出函数 `classifierGated`：参数 e，返回 sse(getAutoModeClassifierRole(e)) || br()。"}
+{"id":"chunk-1dbza2qv.js#X$o","doc":"导出常量或表 `MAX_HOSTS`：值为 32, Vjn = 8, bn = new Set([\"ENOENT\", \"ENOTDIR\", \"ENAMETOOLONG\"])。"}
+{"id":"chunk-1dbza2qv.js#tmn","doc":"导出函数 `quotedSweptPath`：参数 e，返回 `\"${truncatePathMiddle(sweptPagePath(e) || \"(unprintable path)\", 300)}\"`。"}
+{"id":"chunk-1dbza2qv.js#bWr","doc":"导出函数 `assertArtifactWithinLimit`：参数 e。"}
+{"id":"chunk-53h5bf9k.js#WKo","doc":"导出常量或表 `FILE_READ_CONCURRENCY`：值为 4, ne = MANIFEST_REQUEST_BUDGET。"}
+{"id":"chunk-nbf99cpy.js#rt","doc":"导出函数 `hasStartKitSwitchAndBash`：参数 e，返回 startKitSwitchOn() && findToolByName(e.options.tools ?? [], BASH_TOOL_NAME) !== void 0。"}
+{"id":"chunk-nbf99cpy.js#at","doc":"导出函数 `hasArtifactReplTool`：参数 e，返回 artifactReplToolInPool(e.options.tools ?? [])。"}
+{"id":"chunk-nbf99cpy.js#lt","doc":"导出函数 `hasSkillTool`：参数 e，返回 findToolByName(e.options.tools ?? [], SKILL) !== void 0。"}
+{"id":"chunk-nbf99cpy.js#dt","doc":"导出函数 `readTypeSkillOrNull`：参数 e，返回 \"notSaved\" in i ? null : i。"}
+{"id":"chunk-z0t7mpxt.js#RWo","doc":"导出函数 `noteRefusedPublishBody`：参数 e, n, s。"}
+{"id":"chunk-z0t7mpxt.js#PWo","doc":"导出函数 `hasRefusedBody`：参数 e, n, s，返回 findRefusedBody(e, n, s) !== void 0。"}
+{"id":"chunk-z0t7mpxt.js#HZs","doc":"导出函数 `forgetRefusedBody`：参数 e, n。"}
+{"id":"chunk-1jwzj2da.js#vIt","doc":"导出函数 `stripRejectBreakerNotice`：参数 e，返回 e.startsWith(`${ARTIFACT_REJECT_BREAKER_NOTICE} `) ? e.slice(ARTIFACT_REJECT_BREAKER_NOTICE.length + 2) : e。"}
+{"id":"chunk-1jwzj2da.js#Smr","doc":"导出常量或表 `MAX_REJECT_KEY_CHARS`：值为 1e5, Cbn = OUTPUT_SIZE_LIMITS - 2000。"}
+{"id":"chunk-1jwzj2da.js#kde","doc":"导出函数 `statusText`：参数 e，返回 STATUS_CODES[e] ?? \"Unknown Status\"; } export { Ekt, Tnr, yie, Cbn, withRejectBreakerNotice, wrapToolWithRejec…。"}
+{"id":"chunk-27nza5ft.js#IQs","doc":"导出函数 `hasOutstanding`：参数 e，返回 typeof e === \"string\" && y().outstanding.has(e)。"}
+{"id":"chunk-27nza5ft.js#cWo","doc":"导出函数 `setYieldHolder`：参数 e, i = null。"}
+{"id":"chunk-27nza5ft.js#MQs","doc":"导出函数 `revertGoneTakersNow`：参数 e，返回 revertGoneTakers(y(), e)。"}
+{"id":"chunk-27nza5ft.js#uWo","doc":"导出函数 `setSendAnswer`：参数 e, i = null。"}
+{"id":"chunk-0br1jecm.js#Cqt","doc":"导出函数 `entrypointHint`：返回 n ? { entrypoint: n.toLowerCase().slice(0, 64) } : {}。"}
+{"id":"chunk-0br1jecm.js#I5r","doc":"导出函数 `sessionIdHint`：返回 n && !isAgentSdkEntrypoint() ? { session_id: n } : {}。"}
+{"id":"chunk-0br1jecm.js#Nnr","doc":"导出函数 `noteSessionHintsRefused`。"}
+{"id":"chunk-0br1jecm.js#O5r","doc":"导出常量或表 `SESSION_HINT_FIELDS`：值为 [\"entrypoint\", \"session_id\", \"request_id\"], u = new Set(YFr)。"}
+{"id":"chunk-0br1jecm.js#WSn","doc":"导出函数 `mentionsSessionHintField`：参数 n，返回 n.includes(\"entrypoint\") || n.includes(\"session_id\")。"}
+{"id":"chunk-0br1jecm.js#Osi","doc":"导出函数 `stripSessionHints`：参数 n，返回 e; } export { lNo, I1t, qFr, getSessionHintHeaders, findRejectedHintFields, yun, q5n, YFr, iKs }。"}
+{"id":"chunk-7jxyna5q.js#zve","doc":"导出函数 `isArtifactFamilyTool`：参数 e，返回 toolMatchesAnyName(e, ARTIFACT_FAMILY_TOOL_NAMES)。"}
+{"id":"chunk-chhd9p2w.js#Jz","doc":"导出函数 `isMeaningfulFlag`：参数 e，返回 e !== void 0 && e !== null && e !== !1。"}
+{"id":"chunk-m0ks5273.js#R$","doc":"导出函数 `webfetchReadFile`：参数 e, n, r, s = \"artifact_webfetch_read\", a = \"probe\"…，返回 readArtifactViaWebFetch(e, n, s, e.file, r, a, l, d, h)。"}
+{"id":"chunk-m0ks5273.js#GYo","doc":"导出函数 `webfetchProbe`：参数 e, n, r, s, a，返回 readArtifactViaWebFetch(e, r, a, void 0, s, \"probe\", void 0, void 0, !1, n)。"}

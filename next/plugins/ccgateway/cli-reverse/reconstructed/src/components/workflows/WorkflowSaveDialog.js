@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。保存动态工作流对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-axsvbsqv.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-n6w10qzg.js (9)
  * attribution: placement 9
  */
 import { join, dirname } from "path";
@@ -19,7 +19,7 @@ import { getProjectDirsUpToHome } from "../../utils/markdownConfigLoader.js";
 import { slugifyWorkflowName } from "../../services/workflow/scriptFile.js";
 import { isPathConfigDir } from "../../utils/envUtils.js";
 import { assertDirChainReal } from "../../utils/fsSafety/atomicWriteStaging.js";
-import { writeFileAtomic } from "../../utils/file.js";
+import { readJsonFile_2 } from "../../utils/file.js";
 import {
   getErrnoCode,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -47,14 +47,14 @@ import { FocusColumn } from "../design-system/FocusColumn.js";
 import { Dialog } from "../design-system/Dialog.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-axsvbsqv.js:7923-7927 placement
+//@ chunk-n6w10qzg.js:9372-9376 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-axsvbsqv.js:7923", () => {
+deferInit("chunk-n6w10qzg.js:9372", () => {
   init_react_production();
 });
-//@ chunk-axsvbsqv.js:8052-8096 placement
+//@ chunk-n6w10qzg.js:9501-9545 placement
 var NAME_CONFLICT_HINT = "Use a different name or overwrite.";
-//@ chunk-axsvbsqv.js:8096-8470 placement
+//@ chunk-n6w10qzg.js:9545-9919 placement
 /**
  * 求动态工作流保存目录：用户范围用用户目录；--project-config-root 下项目范围不可用；否则用仓库根或已有工作流目录下的 .claude/workflows。
  */
@@ -72,7 +72,7 @@ async function getWorkflowSaveDir(scope, startPath) {
   if (existingWorkflowsDir !== undefined) return existingWorkflowsDir;
   return join(projectRoot, ".claude", "workflows");
 }
-//@ chunk-axsvbsqv.js:8470-9114 placement
+//@ chunk-n6w10qzg.js:9919-10563 placement
 /**
  * 保存动态工作流脚本：用户范围且有存储 v5 时走存储；项目范围先校验目录链为真实目录；按需覆盖或排他写入（已存在时报错）。
  */
@@ -96,7 +96,7 @@ async function saveDynamicWorkflow(options, storage) {
   });
   try {
     if (options.overwrite)
-      await writeFileAtomic(filePath, options.script, {
+      await readJsonFile_2(filePath, options.script, {
         encoding: "utf8",
         mode: 384,
         checkParentDir: checkParent,
@@ -117,10 +117,10 @@ async function saveDynamicWorkflow(options, storage) {
   }
   return finishWorkflowSave(name, filePath, options);
 }
-//@ chunk-axsvbsqv.js:9114-9379 placement
+//@ chunk-n6w10qzg.js:10563-10828 placement
 async function finishWorkflowSave(name, path, options) {
   clearAllWorkflows();
-  let { clearCommandMemoizationCaches } = await import("../../commands.js");
+  let { clearCommandMemoizationCaches } = await import("../../commands.lazy.js");
   clearCommandMemoizationCaches();
   logFeatureOk("workflow_save");
   logEvent("tengu_workflow_saved", {
@@ -134,7 +134,7 @@ async function finishWorkflowSave(name, path, options) {
     scope: options.scope,
   };
 }
-//@ chunk-axsvbsqv.js:9379-9893 placement
+//@ chunk-n6w10qzg.js:10828-11342 placement
 /**
  * 通过存储 v5 写入用户范围的工作流脚本（覆盖时原子写，否则要求不存在），失败时转换为对应错误。
  */
@@ -170,15 +170,15 @@ async function saveWorkflowToStorage(storage, name, displayPath, options) {
   }
   return finishWorkflowSave(name, displayPath, options);
 }
-//@ chunk-axsvbsqv.js:9893-9923 placement
+//@ chunk-n6w10qzg.js:11342-11372 placement
 function selectCwd(projectContext) {
   return projectContext.cwd;
 }
-//@ chunk-axsvbsqv.js:9923-9978 placement
+//@ chunk-n6w10qzg.js:11372-11427 placement
 function toggleSaveScope(scope) {
   return scope === "project" ? "user" : "project";
 }
-//@ chunk-axsvbsqv.js:9978-13272 placement
+//@ chunk-n6w10qzg.js:11427-14721 placement
 /**
  * 保存动态工作流的对话框。
  */

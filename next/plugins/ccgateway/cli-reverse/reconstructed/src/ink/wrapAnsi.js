@@ -3,9 +3,9 @@
  *
  * 沿用旧版路径：ANSI 文本换行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/wrapAnsi.ts
- * pieces: chunk-tw8fk0yz.js (32)
+ * pieces: chunk-8n1fbght.js (32)
  * attribution: placement 32
  */
 import { C0 } from "./termio/ansi.js";
@@ -15,7 +15,7 @@ import { stripAnsi } from "../utils/stripAnsi.js";
 import { getGraphemeSegmenter } from "../utils/intl.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-tw8fk0yz.js:3673-3990 placement
+//@ chunk-8n1fbght.js:3685-4004 placement
 /**
  * 判断一段转义序列是否已结束（按 ESC 后的引导字符与终止字符）。
  */
@@ -33,7 +33,7 @@ function isCompleteEscapeSequence(text, start, end) {
   if (index !== -1 && index < end) return true;
   return (lastChar >= "A" && lastChar <= "Z") || (length > 2 && (lastChar === ":" || isTerminator));
 }
-//@ chunk-tw8fk0yz.js:3990-4137 placement
+//@ chunk-8n1fbght.js:4004-4151 placement
 /**
  * 换行相关常量与正则：制表宽度、制表/换行、ESC/CSI、C1 控制字符、DCS/OSC 等字符串序列。
  */
@@ -44,14 +44,14 @@ var C1_STRING_START_RE = /[\x90\x98\x9d-\x9f]/g;
 var CONTROL_INTRODUCER_RE = /[\x1b\x90\x98\x9b\x9d-\x9f]/;
 var STRING_SEQUENCE_START_RE = /^\x1b[P\]X^_k]/;
 var TERMINATED_STRING_SEQUENCE_RE = /^\x1b[P_].*\x07$|\x9c/s;
-//@ chunk-tw8fk0yz.js:4137-4215 placement
+//@ chunk-8n1fbght.js:4151-4229 placement
 /**
  * 若文本含制表符或可展开控制字符，按列位置展开为空格（跳过转义序列）。
  */
 function expandTabsInText(text, tabWidth = DEFAULT_TAB_WIDTH) {
   return text.includes("\t") || hasExpandableControls([text]) ? expandTabs([text], tabWidth).join("") : text;
 }
-//@ chunk-tw8fk0yz.js:4215-4618 placement
+//@ chunk-8n1fbght.js:4229-4632 placement (2.1.88 match: Newline, 0.7)
 /**
  * 把每段文本中的制表符按列位置展开为空格（跨段累计列位置，跳过转义序列）。
  */
@@ -101,14 +101,14 @@ function expandTabs(texts, tabWidth = DEFAULT_TAB_WIDTH) {
     return out;
   });
 }
-//@ chunk-tw8fk0yz.js:4618-4652 placement
+//@ chunk-8n1fbght.js:4632-4666 placement
 /**
  * 判断文本是否含需要中和的 ESC/C1 控制序列。
  */
 function hasControlSequences(text) {
   return CONTROL_INTRODUCER_RE.test(text);
 }
-//@ chunk-tw8fk0yz.js:4652-4757 placement
+//@ chunk-8n1fbght.js:4666-4771 placement
 /**
  * 文本中是否有需要中和的控制序列。
  */
@@ -121,7 +121,7 @@ function hasExpandableControls(texts) {
       ),
   );
 }
-//@ chunk-tw8fk0yz.js:4757-5032 placement
+//@ chunk-8n1fbght.js:4771-5046 placement
 /**
  * 用 termio 分词器切分文本；末段未完结的序列按是否最后一段决定当序列还是文本。
  */
@@ -149,7 +149,7 @@ function tokenizeForTabs(text, isLast) {
     });
   return tokens;
 }
-//@ chunk-tw8fk0yz.js:5032-5244 placement
+//@ chunk-8n1fbght.js:5046-5258 placement
 /**
  * 文本或含换行/不完整的字符串序列中，把 ESC/CSI 换成 CAN 使其失效；普通序列返回 undefined。
  */
@@ -165,19 +165,19 @@ function neutralizeStringSequence(token) {
     return neutralizeC1Starts(`\x18${token.value.slice(2).replace(/\x9b/g, "\x18")}`);
   return;
 }
-//@ chunk-tw8fk0yz.js:5244-5289 placement
+//@ chunk-8n1fbght.js:5258-5303 placement
 /**
  * 把 C1 字符串起始符替换为替换字符
  */
 function neutralizeC1Starts(text) {
   return text.replace(C1_STRING_START_RE, "\uFFFD");
 }
-//@ chunk-tw8fk0yz.js:5289-5324 placement
+//@ chunk-8n1fbght.js:5303-5338 placement
 /**
  * 按给定的附加参数字符生成 `\x1b[...m` 的 SGR 正则片段。
  */
 var sgrPatternSource = (extraChars) => `\\x1b\\[[0-9${extraChars}]*m`;
-//@ chunk-tw8fk0yz.js:5324-5480 placement
+//@ chunk-8n1fbght.js:5338-5494 placement
 /**
  * 换行功能的特性读取器与锁存登记（返回旧值）。
  */
@@ -195,29 +195,29 @@ class WrapFeatureRegistry {
     return latches_2;
   }
 }
-//@ chunk-tw8fk0yz.js:5480-5493 placement
+//@ chunk-8n1fbght.js:5494-5507 placement
 /**
  * 换行特性读取器与锁存登记表
  */
 var wrapFeatureRegistry; // deferred: uses WrapFeatureRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tw8fk0yz.js:5480", () => {
+deferInit("chunk-8n1fbght.js:5494", () => {
   wrapFeatureRegistry = new WrapFeatureRegistry();
 });
-//@ chunk-tw8fk0yz.js:5493-5536 placement
+//@ chunk-8n1fbght.js:5507-5550 placement
 /**
  * 登记换行用的特性读取器（供 wrapAnsi 判断是否可换行）。
  */
 function registerWrapFeatureReader(reader) {
   return wrapFeatureRegistry.registerReader(reader);
 }
-//@ chunk-tw8fk0yz.js:5536-5580 placement
+//@ chunk-8n1fbght.js:5550-5594 placement
 /**
  * 登记换行用的锁存读取（一次性取值后缓存）。
  */
 function registerWrapFeatureLatches(getSessionFeatureValues) {
   return wrapFeatureRegistry.registerLatches(getSessionFeatureValues);
 }
-//@ chunk-tw8fk0yz.js:5580-5843 placement
+//@ chunk-8n1fbght.js:5594-5857 placement
 /**
  * 读 tengu_frolicking_nest 决定是否启用硬换行适配（锁存一次，读取失败默认开启）。
  */
@@ -236,7 +236,7 @@ function isWrapFitEnabled() {
   if (flag.source !== "payload" || !flag.defaultHost) return true;
   return (latched.wrapFitEnabled = flag.value !== false);
 }
-//@ chunk-tw8fk0yz.js:5843-6187 placement
+//@ chunk-8n1fbght.js:5857-6201 placement
 /**
  * 换行实现用的一批正则与常量：SGR、超链接 OSC、复位码、颜色码、前景/背景槽位，以及 SGR 编号到槽位的映射。
  */
@@ -248,7 +248,7 @@ var SGR_COLOR_RE;
 var FG_COLOR_SLOT;
 var BG_COLOR_SLOT;
 var SGR_SLOT_MAP;
-deferInit("chunk-tw8fk0yz.js:5843", () => {
+deferInit("chunk-8n1fbght.js:5857", () => {
   regExp = new RegExp(sgrPatternSource(";:"), "g");
   HYPERLINK_OSC_RE = /\x1b\]8;[^\x07\x1b]*(?:\x07|\x1b\\)/y;
   regExp_2 = new RegExp(`\\r((?:${sgrPatternSource(";:")})+)\\n`, "g");
@@ -275,7 +275,7 @@ deferInit("chunk-tw8fk0yz.js:5843", () => {
     [74, 13],
   ]);
 });
-//@ chunk-tw8fk0yz.js:6187-8076 placement
+//@ chunk-8n1fbght.js:6201-8090 placement
 function wrapAnsi(text, width, wrapOptions) {
   if (!(width > 0)) return text;
   if (!text.includes("\x1B[")) return wrapAnsiLine(text, width, wrapOptions);
@@ -301,7 +301,8 @@ function wrapAnsi(text, width, wrapOptions) {
   if (match === null) return wrappedPlain;
   let parts = text.split(regExp);
   let sequenceEnds = [];
-  for (let k = 0, cumulative = 0; k < match.length; k++) sequenceEnds.push((cumulative += parts[k].length));
+  for (let idx = 0, cumulative = 0; idx < match.length; idx++)
+    sequenceEnds.push((cumulative += parts[idx].length));
   let sgrState = emptySgrState();
   let outParts = [];
   let nextSequenceIndex = 0;
@@ -478,7 +479,7 @@ function wrapAnsi(text, width, wrapOptions) {
   outParts.push(wrappedPlain.slice(emittedUntil));
   return outParts.join("");
 }
-//@ chunk-tw8fk0yz.js:8076-8325 placement
+//@ chunk-8n1fbght.js:8090-8339 placement
 /**
  * 从位置 n 开始扫描连续的转义序列/控制字符，记录各自位置与代码。
  */
@@ -498,21 +499,21 @@ function scanLeadingControls(text, start, positions, codes) {
   positions[count] = index;
   return count;
 }
-//@ chunk-tw8fk0yz.js:8325-8367 placement
+//@ chunk-8n1fbght.js:8339-8381 placement
 /**
  * 空格或 9–13
  */
 function isWrapSpaceCode(code) {
   return code === 32 || (code >= 9 && code <= 13);
 }
-//@ chunk-tw8fk0yz.js:8367-8403 placement
+//@ chunk-8n1fbght.js:8381-8417 placement
 /**
  * 生成一张空的 SGR 状态槽位数组（前景/背景/下划线等）。
  */
 function emptySgrState() {
   return SGR_RESET_CODES.map(() => "");
 }
-//@ chunk-tw8fk0yz.js:8403-9049 placement
+//@ chunk-8n1fbght.js:8417-9063 placement
 /**
  * 把一个 SGR 序列应用到样式状态数组（前景/背景色、256/真彩色、下划线样式、复位）。
  */
@@ -545,7 +546,7 @@ function applySgrToState(sequence, state) {
     else applySgrCode(sgrCode, state);
   }
 }
-//@ chunk-tw8fk0yz.js:9049-9250 placement
+//@ chunk-8n1fbght.js:9063-9264 placement
 /**
  * 应用单个 SGR 参数：颜色、属性开关或全部复位。
  */
@@ -560,7 +561,7 @@ function applySgrCode(code, state) {
   else if (code === 0) state.fill("");
   else for (let i = 0; i < state.length; i++) if (SGR_RESET_CODES[i] === code) state[i] = "";
 }
-//@ chunk-tw8fk0yz.js:9250-9687 placement
+//@ chunk-8n1fbght.js:9264-9701 placement
 /**
  * 换行时的宽字符处理：两个私有区占位符、匹配占位符的正则、完整转义序列判定，以及“窄字符”判定的字符类。
  */
@@ -570,7 +571,7 @@ var WIDE_CHAR_PLACEHOLDERS_RE;
 var COMPLETE_ESCAPE_SEQUENCE_RE;
 var regExp_3;
 var NON_WIDE_SAFE_CHARS_RE;
-deferInit("chunk-tw8fk0yz.js:9250", () => {
+deferInit("chunk-8n1fbght.js:9264", () => {
   WIDE_PLACEHOLDER_1 = "\uDB80\uDC00";
   WIDE_PLACEHOLDER_2 = "\uD87E\uDE1D";
   WIDE_CHAR_PLACEHOLDERS_RE = /[\u{F0000}\u{2FA1D}]/gu;
@@ -579,7 +580,7 @@ deferInit("chunk-tw8fk0yz.js:9250", () => {
   NON_WIDE_SAFE_CHARS_RE =
     /[^\x00-\u02FF\u0370-\u0482\u048A-\u052F\u2000-\u200B\u2010-\u205F\u2070-\u20CF\u2100-\u2BFF\u2E80-\u3029\u3030-\u3098\u309B-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFF01-\uFF9D\uFFE0-\uFFEE\u{1f000}-\u{1f1e5}\u{1f200}-\u{1f3fa}\u{1f400}-\u{1faff}]/gu;
 });
-//@ chunk-tw8fk0yz.js:9687-11425 placement
+//@ chunk-8n1fbght.js:9701-11439 placement
 function wrapAnsiLine(text, width, wrapOptions, foldSequences = true) {
   if (text.search(NON_WIDE_SAFE_CHARS_RE) === -1) return Bun.wrapAnsi(text, width, wrapOptions);
   let plainText = "";
@@ -678,8 +679,8 @@ function wrapAnsiLine(text, width, wrapOptions, foldSequences = true) {
   let hasWidePlaceholders = text.search(WIDE_CHAR_PLACEHOLDERS_RE) !== -1;
   let swapIndex = 0;
   let scanOffset = 0;
-  for (let k = 0; k <= starts.length; k++) {
-    let nextStart = k < starts.length ? starts[k] : plainText.length;
+  for (let idx = 0; idx <= starts.length; idx++) {
+    let nextStart = idx < starts.length ? starts[idx] : plainText.length;
     for (; scanOffset < sequences.length && sequenceOffsets[scanOffset] <= nextStart; scanOffset++) {
       let text = plainText.slice(swapIndex, sequenceOffsets[scanOffset]);
       pushSegment(swapStarts, outParts, text, hasWidePlaceholders);
@@ -688,10 +689,10 @@ function wrapAnsiLine(text, width, wrapOptions, foldSequences = true) {
     }
     let text = plainText.slice(swapIndex, nextStart);
     pushSegment(swapStarts, outParts, text, hasWidePlaceholders);
-    if (k === starts.length) break;
-    swapStarts.push(handedAs[k]);
-    outParts.push(restoredAs[k]);
-    swapIndex = ends[k];
+    if (idx === starts.length) break;
+    swapStarts.push(handedAs[idx]);
+    outParts.push(restoredAs[idx]);
+    swapIndex = ends[idx];
     while (scanOffset < sequences.length && sequenceOffsets[scanOffset] < swapIndex) scanOffset++;
   }
   let joined = swapStarts.join("");
@@ -711,7 +712,7 @@ function wrapAnsiLine(text, width, wrapOptions, foldSequences = true) {
           );
   return hardWrapPreservingSequences(restored, text, width, wrapOptions);
 }
-//@ chunk-tw8fk0yz.js:11425-11849 placement
+//@ chunk-8n1fbght.js:11439-11863 placement
 /**
  * 硬换行时若有行超宽，按段检查控制序列是否安全，再逐行强制折断。
  */
@@ -750,7 +751,7 @@ function hardWrapPreservingSequences(wrapped, original, width, options) {
   return out.join(`
 `);
 }
-//@ chunk-tw8fk0yz.js:11849-12250 placement
+//@ chunk-8n1fbght.js:11863-12264 placement
 /**
  * 按字素宽度把一行强制折成不超过 n 列的多行（转义序列不计宽，超宽字素拆开）。
  */
@@ -789,19 +790,19 @@ function breakLineByGraphemes(text, width, hardOnly, lines) {
   }
   flushLine();
 }
-//@ chunk-tw8fk0yz.js:12250-12287 placement
+//@ chunk-8n1fbght.js:12264-12301 placement
 /**
  * 10 或 13
  */
 function isLineBreakCode(code) {
   return code === 10 || code === 13;
 }
-//@ chunk-tw8fk0yz.js:12287-12305 placement
+//@ chunk-8n1fbght.js:12301-12319 placement
 /**
  * \r\n?|\n
  */
 var LINE_BREAK_RE = /\r\n?|\n/;
-//@ chunk-tw8fk0yz.js:12305-12400 placement
+//@ chunk-8n1fbght.js:12319-12414 placement
 /**
  * 登记一次字素替换
  */
@@ -811,7 +812,7 @@ function recordGraphemeSwap(swaps, start, end, placeholder, segment) {
   swaps.handedAs.push(placeholder);
   swaps.restoredAs.push(segment);
 }
-//@ chunk-tw8fk0yz.js:12400-12562 placement
+//@ chunk-8n1fbght.js:12414-12576 placement
 /**
  * 找出宽度与码元数不一致的字素并登记替换。
  */
@@ -824,7 +825,7 @@ function markWidthMismatchGraphemes(text, start, end, swaps) {
       recordGraphemeSwap(swaps, start + index, start + index + segment.length, placeholder, segment);
   }
 }
-//@ chunk-tw8fk0yz.js:12562-12674 placement
+//@ chunk-8n1fbght.js:12576-12688 placement
 /**
  * 多码点字素按显示宽度选 1 或 2 宽的占位字符。
  */
@@ -834,7 +835,7 @@ function placeholderForGrapheme(segment) {
   let width = bunStringWidth(segment);
   return width === 1 ? WIDE_PLACEHOLDER_1 : width === 2 ? WIDE_PLACEHOLDER_2 : "";
 }
-//@ chunk-tw8fk0yz.js:12674-12766 placement
+//@ chunk-8n1fbght.js:12688-12780 placement
 /**
  * 收集一段文本并登记其中的宽字符
  */
@@ -846,15 +847,15 @@ function pushSegment(out, placeholders, text, collectPlaceholders) {
 }
 export {
   wrapAnsi,
-  expandTabsInText,
+  DEFAULT_TAB_WIDTH,
   hasExpandableControls,
   expandTabs,
   hasControlSequences,
-  DEFAULT_TAB_WIDTH,
+  isCompleteEscapeSequence,
+  expandTabsInText,
   registerWrapFeatureReader,
   registerWrapFeatureLatches,
   sgrPatternSource,
   emptySgrState,
   applySgrToState,
-  isCompleteEscapeSequence,
 };

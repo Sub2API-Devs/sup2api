@@ -3,10 +3,10 @@
  *
  * AskUserQuestion 工具：1–4 个问题、每题 2–4 选项（扩展模式支持 text/number 题），由权限组件收集答案并映射成给模型的结果文本
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AskUserQuestionTool/AskUserQuestionTool.tsx
- * pieces: chunk-a91k35xs.js (10), chunk-e6aww6q8.js (2)
- * attribution: fingerprint 7, callgraph-fingerprint 1, layout 3, affinity 1
+ * pieces: chunk-5xgkngpb.js (2), chunk-zxdsqmea.js (10)
+ * attribution: fingerprint 7, affinity 1, callgraph-fingerprint 1, layout 3
  */
 import { sanitizeAttentionText } from "../../components/fleet/sessionAttention.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -53,14 +53,14 @@ import { isPlanModeToolUnavailable } from "../AgentTool/agentEffort.js";
 import { ASK_USER_QUESTION_SECTION, PLAN_MODE_ASK_NOTE } from "../../constants/promptSections.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { canPromptUserForPermission } from "../../utils/permissions/permissions.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { shortHash } from "../../utils/shortHash.js";
 import { getOwn } from "../../utils/objectSafety.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1729603-1729837 fingerprint (2.1.88 match: UNIQUENESS_REFINE, 0.523)
+//@ chunk-5xgkngpb.js:1804981-1805215 fingerprint (2.1.88 match: UNIQUENESS_REFINE, 0.523)
 /**
  * 把任意输入清洗成 {questions:[{question, options:[{label}]}]}，只保留第一题、每题最多 4 个选项，丢弃空文本。
  */
@@ -91,16 +91,16 @@ function UNIQUENESS_REFINE_2(input) {
       .slice(0, 1),
   };
 }
-//@ chunk-e6aww6q8.js:1729837-1729936 affinity
+//@ chunk-5xgkngpb.js:1805215-1805314 affinity
 function takeFirstFourObjects(value) {
   return Array.isArray(value)
     ? value.slice(0, 4).filter((entry) => typeof entry === "object" && entry !== null)
     : [];
 }
-//@ chunk-a91k35xs.js:4785-5526 fingerprint (2.1.88 match: questionOptionSchema, 0.784)
+//@ chunk-zxdsqmea.js:5015-5756 fingerprint (2.1.88 match: questionOptionSchema, 0.784)
 var questionOptionSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var questionOptionSchemaOptionalDescription;
-deferInit("chunk-a91k35xs.js:4785", () => {
+deferInit("chunk-zxdsqmea.js:5015", () => {
   questionOptionSchema = DoctorLazy(() =>
     objectSchema({
       label: stringSchema().describe(
@@ -126,7 +126,7 @@ deferInit("chunk-a91k35xs.js:4785", () => {
     }),
   );
 });
-//@ chunk-a91k35xs.js:5526-6700 fingerprint (2.1.88 match: questionSchema, 0.844)
+//@ chunk-zxdsqmea.js:5756-6930 fingerprint (2.1.88 match: questionSchema, 0.844)
 /**
  * 按给定选项 schema 构造单个问题 schema：question、header（短标签）、options 2–4 项、multiSelect（默认 false）。
  */
@@ -153,7 +153,7 @@ function questionSchema(optionSchema) {
       ),
   });
 }
-//@ chunk-a91k35xs.js:6700-11203 callgraph-fingerprint (2.1.88 match: commonFields, 0.195)
+//@ chunk-zxdsqmea.js:6930-11433 callgraph-fingerprint (2.1.88 match: commonFields, 0.196)
 /**
  * 扩展问题 schema 的组合校验：placeholder 只给 text，min/max/step/defaultValue/unit 只给 number；choice 至少 2 个选项；text/number 不能有选项或 multiSelect；number 需 min<max 且默认值在区间内。
  */
@@ -171,7 +171,7 @@ var MAX_ARRAY_LENGTH;
 var MAX_ENTRIES_FOR_CLASSIFIER;
 var answerValueSchema;
 var answerFieldsSchema;
-deferInit("chunk-a91k35xs.js:6700", () => {
+deferInit("chunk-zxdsqmea.js:6930", () => {
   choiceQuestionSchema = DoctorLazy(() => questionSchema(questionOptionSchema()));
   choiceQuestionSchemaOptionalDescription = DoctorLazy(() =>
     questionSchema(questionOptionSchemaOptionalDescription()),
@@ -318,10 +318,10 @@ deferInit("chunk-a91k35xs.js:6700", () => {
       let entryCount = value.length;
       if (!Number.isInteger(entryCount) || entryCount < 0 || entryCount > MAX_ARRAY_LENGTH) return value;
       let joined = "";
-      for (let k = 0; k < entryCount; k++) {
-        let entry = value[k];
+      for (let j = 0; j < entryCount; j++) {
+        let entry = value[j];
         if (typeof entry !== "string") return value;
-        joined = k === 0 ? entry : joined + ", " + entry;
+        joined = j === 0 ? entry : joined + ", " + entry;
       }
       return joined;
     }, stringSchema()),
@@ -342,7 +342,7 @@ deferInit("chunk-a91k35xs.js:6700", () => {
       .describe("Optional metadata for tracking and analytics purposes. Not displayed to user."),
   }));
 });
-//@ chunk-a91k35xs.js:11203-11571 fingerprint (2.1.88 match: inputSchema, 0.713)
+//@ chunk-zxdsqmea.js:11433-11801 fingerprint (2.1.88 match: inputSchema, 0.713)
 /**
  * 构造 AskUserQuestion 输入 schema：questions 1–4 项 + answers/annotations/metadata，并附加唯一性 refine。
  */
@@ -361,13 +361,13 @@ function inputSchema(questionSchema) {
     message: UNIQUENESS_REFINE.message,
   });
 }
-//@ chunk-a91k35xs.js:11571-12802 fingerprint (2.1.88 match: outputSchema, 0.43)
+//@ chunk-zxdsqmea.js:11801-13032 fingerprint (2.1.88 match: outputSchema, 0.43)
 var askUserQuestionInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var askUserQuestionInputSchemaOptionalDescription;
 var extendedAskUserQuestionInputSchema;
 var askUserQuestionOutputSchema;
 var extendedAskUserQuestionOutputSchema;
-deferInit("chunk-a91k35xs.js:11571", () => {
+deferInit("chunk-zxdsqmea.js:11801", () => {
   askUserQuestionInputSchema = DoctorLazy(() => inputSchema(choiceQuestionSchema()));
   askUserQuestionInputSchemaOptionalDescription = DoctorLazy(() =>
     inputSchema(choiceQuestionSchemaOptionalDescription()),
@@ -418,19 +418,19 @@ deferInit("chunk-a91k35xs.js:11571", () => {
     }),
   );
 });
-//@ chunk-a91k35xs.js:12802-12825 layout
+//@ chunk-zxdsqmea.js:13032-13055 layout
 /**
  * AskUserQuestion 中"只有备注、未选选项"的答案占位文本 "(notes only)"，权限组件写入、结果映射时视为未选。
  */
 var NOTES_ONLY_ANSWER = "(notes only)";
-//@ chunk-a91k35xs.js:12825-13052 layout
+//@ chunk-zxdsqmea.js:13055-13282 layout
 /**
  * AFK 超时后返回给模型的说明：用户可能离开，按已有上下文自行判断，之后可再问。
  */
 function formatAfkTimeoutMessage(afkTimeoutMs) {
   return `No response after ${Math.round(afkTimeoutMs / 1000)}s \u2014 the user may be away from keyboard. Proceed using your best judgment based on the context so far; you can re-ask this question later if it's still relevant.`;
 }
-//@ chunk-a91k35xs.js:13052-13251 layout
+//@ chunk-zxdsqmea.js:13282-13481 layout
 /**
  * 生成展示给卡片/外部 UI 的输入（title、questions、metadata），扩展模式下给缺省 kind 填 "choice"。
  */
@@ -451,12 +451,12 @@ function toShownCardInput(input) {
     }),
   };
 }
-//@ chunk-a91k35xs.js:13251-20068 fingerprint (2.1.88 match: AskUserQuestionTool, 0.356)
+//@ chunk-zxdsqmea.js:13481-20297 fingerprint (2.1.88 match: AskUserQuestionTool, 0.357)
 /**
  * AskUserQuestion 工具（只读、可并发、requiresUserInteraction；isEnabled 为 ebe()：非交互会话且没有可用的提问通道时关闭）。输入 1–4 个问题，每题 2–4 个选项（扩展模式下支持 kind text/number 与 title），问题文本与选项 label 必须唯一；HTML 预览格式下校验预览为不含 script/style 的 HTML 片段。checkPermissions 恒为 ask（由权限组件收集答案写回 answers/annotations）。结果文本区分：AFK 超时、要求追问（followUp）、自由回复、答案全部合规、答案需细读、未作答。prompt 由多段拼成（计划模式说明、GrowthBook tengu_cinder_plover/tengu_cinder_wren 追加文本、扩展问题说明、preview 说明）。
  */
 var AskUserQuestionTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-a91k35xs.js:13251", () => {
+deferInit("chunk-zxdsqmea.js:13481", () => {
   AskUserQuestionTool = buildTool({
     name: ASKUSERQUESTION,
     searchHint: "prompt the user with a multiple-choice question",
@@ -677,7 +677,7 @@ ${wrenPrompt}
                 },
           );
           let { response, afkTimeoutMs, followUp } = input;
-          let answerCount = count(mapped, ({ question }) => {
+          let answerCount = countWhere(mapped, ({ question }) => {
             let answer = answers[question];
             return Array.isArray(answer)
               ? answer.length > 0
@@ -686,16 +686,16 @@ ${wrenPrompt}
           logEvent("tengu_ask_user_question_completed", {
             extended: getExtendedQuestionsEnabled(),
             questionCount: mapped.length,
-            choiceCount: count(
+            choiceCount: countWhere(
               mapped,
               (question) => (question.kind ?? "choice") === "choice" && !question.multiSelect,
             ),
-            multiSelectCount: count(
+            multiSelectCount: countWhere(
               mapped,
               (question) => (question.kind ?? "choice") === "choice" && question.multiSelect,
             ),
-            textCount: count(mapped, (question) => question.kind === "text"),
-            numberCount: count(mapped, (question) => question.kind === "number"),
+            textCount: countWhere(mapped, (question) => question.kind === "text"),
+            numberCount: countWhere(mapped, (question) => question.kind === "number"),
             answerCount,
             followUp: followUp === true,
             outcome: fromEnum(
@@ -808,7 +808,7 @@ Before going idle the user had selected: ${joined}.`
     },
   });
 });
-//@ chunk-a91k35xs.js:20068-20545 fingerprint (2.1.88 match: validateHtmlPreview, 1)
+//@ chunk-zxdsqmea.js:20297-20774 fingerprint (2.1.88 match: validateHtmlPreview, 1)
 /**
  * 校验 HTML 预览：不能是完整文档、不能含 script/style、必须含 HTML 标签；返回错误文本或 null。
  */
@@ -822,4 +822,4 @@ function validateHtmlPreview(preview) {
     return 'preview must contain HTML (previewFormat is set to "html"). Wrap content in a tag like <div> or <pre>.';
   return null;
 }
-export { NOTES_ONLY_ANSWER, AskUserQuestionTool, UNIQUENESS_REFINE_2 };
+export { UNIQUENESS_REFINE_2, AskUserQuestionTool, NOTES_ONLY_ANSWER };

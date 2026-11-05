@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程工具调用的权限判定：会话规则、宿主规则、ask 转发与分类器结论缓存
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dtv8x2hx.js (31)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yvhjwwtt.js (31)
  * attribution: placement 31
  */
 import { randomUUID } from "crypto";
@@ -23,42 +23,44 @@ import { hostSupportsProgressChecks } from "./callProgress.js";
 import { outcomeQueryEnvelope } from "../../remote/tools/protocolSchemas.js";
 import { interpretCallOutcome } from "./callOutcome.js";
 import { logRemoteTools } from "./remoteToolsDebug.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
 import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
 import { FILE_EDITING_TOOL_NAMES } from "../../tools/AgentTool/agentLaunch.js";
-import {
-  buildMcpToolName,
-  getToolNameForPermissionCheck as getToolNameForPermissionCheck_2,
-  getMcpPrefix,
-} from "../mcp/mcpStringUtils.js";
+import { buildMcpToolName, getToolNameForPermissionCheck, getMcpPrefix } from "../mcp/mcpStringUtils.js";
 import { REMOTE_DEVICES } from "../mcp/firstPartyServerIds.js";
 import { HOST_TOOL_INPUT_FIELD, DEVICE_2, machineNameMatches } from "../../bridge/deviceRegistration.js";
-import { uniq } from "../../utils/collections.js";
-import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFlag.js";
 import {
-  FILE_EDIT_TOOL_NAME,
+  normalizeCaseForComparison_2,
+  hasReadDenyRuleForPath,
+  matchingRuleForInput,
+} from "../../utils/permissions/filesystem.js";
+import {
+  permissionRuleValueFromString,
+  matchWildcard,
+  permissionRuleIdentityKey,
+} from "../../utils/permissions/permissionRuleParser.js";
+import {
+  EDIT,
   READ_DENY_RULE_EDIT_ERROR,
   READ_DENY_RULE_WRITE_ERROR,
 } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
-import { hasReadDenyRuleForPath, matchingRuleForInput } from "../../utils/permissions/filesystem.js";
 import { expandStablePath, expandPath } from "../../utils/path.js";
 import { isRemoteOnlyCheck } from "../../utils/permissions/checkRegistry.js";
 import {
-  getAskRules,
+  askedBashRules,
   createPermissionRequestMessage,
   matchToolRule,
   formatRuleDeniedMessage,
   checkRuleBasedPermissions,
   PERMISSION_CHECK_CRASHED_REASON,
   isAskRuleDrivenReason,
-  getDenyRules,
+  deniedBashRules,
   parseFieldRuleContent,
   toolMatchesRule,
-  NARROWING_RULE_SOURCES,
   getDenyRuleForTool,
-  getAskRuleForTool,
+  findAskRuleForTool,
 } from "../../utils/permissions/permissions.js";
 import { walkPermissionCheckPaths } from "../../utils/fsOperations.js";
 import {
@@ -67,12 +69,11 @@ import {
 } from "../../utils/permissions/toolPermissionContext.js";
 import { notContactedMessage, inputTooLargeMessage } from "./targetMessages.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
-import { matchWildcard, permissionRuleIdentityKey } from "../../utils/permissions/permissionRuleParser.js";
 import { ASK_FIRST_REASON_TEXTS } from "../../utils/permissions/askFirstReasons.js";
 import { DONT_ASK_REJECT_MESSAGE, buildNoPromptAvailableDenial } from "../../utils/messages.js";
 import { collectAskRules } from "./remoteToolCall.js";
 
-//@ chunk-dtv8x2hx.js:14143-14523 placement
+//@ chunk-yvhjwwtt.js:15444-15824 placement
 /**
  * 记住某主机上某工具的 ask 结论（消息、原因、宿主规则），LRU 上限。
  */
@@ -108,9 +109,9 @@ ${toolName}`;
 ${toolName}`);
   }
 }
-//@ chunk-dtv8x2hx.js:14523-14534 placement
+//@ chunk-yvhjwwtt.js:15824-15835 placement
 var MAX_REMEMBERED_CALL_NOTES = 256;
-//@ chunk-dtv8x2hx.js:14534-15170 placement
+//@ chunk-yvhjwwtt.js:15835-16471 placement
 /**
  * 远程调用前的早期检查：异步开始、记录结果供后续复用。
  */
@@ -167,7 +168,7 @@ class EarlyCheckRunner {
     }
   }
 }
-//@ chunk-dtv8x2hx.js:15170-15337 placement
+//@ chunk-yvhjwwtt.js:16471-16638 placement
 function speculationSnapshot(entry) {
   let now = Date.now();
   return {
@@ -178,9 +179,9 @@ function speculationSnapshot(entry) {
     readyMs: entry.settledAt === undefined ? 0 : now - entry.settledAt,
   };
 }
-//@ chunk-dtv8x2hx.js:15337-15348 placement
+//@ chunk-yvhjwwtt.js:16638-16649 placement
 var MAX_STATUS_TEXT_CHARS = 500;
-//@ chunk-dtv8x2hx.js:15348-15627 placement
+//@ chunk-yvhjwwtt.js:16649-16924 placement
 function truncateAtSentence(message) {
   let truncated = truncateToLength(message, MAX_STATUS_TEXT_CHARS);
   if (truncated.length === message.length) return message;
@@ -191,11 +192,11 @@ function truncateAtSentence(message) {
   let spaceAt = oneMore.search(/\s\S*$/);
   return `${spaceAt > minSentenceAt ? truncateToLength(truncated, spaceAt).trimEnd() : truncated}\u2026`;
 }
-//@ chunk-dtv8x2hx.js:15627-15652 placement
+//@ chunk-yvhjwwtt.js:16924-16949 placement
 var MAX_OUTPUT_LINE_WIDTH = 60;
 var LAST_LINE_TAIL_CHARS = 1200;
 var LAST_LINE_LEAD_CHARS = 800;
-//@ chunk-dtv8x2hx.js:15652-15803 placement
+//@ chunk-yvhjwwtt.js:16949-17099 placement
 function lastOutputLineStatus(hostName, progress) {
   let last = progress.text
     .split(/[\r\n]+/)
@@ -205,7 +206,7 @@ function lastOutputLineStatus(hostName, progress) {
     ? undefined
     : `Running on ${hostName} \xB7 ${truncateToWidth(redactSecrets(truncateToLength(last, 4 * MAX_OUTPUT_LINE_WIDTH)), MAX_OUTPUT_LINE_WIDTH)}`;
 }
-//@ chunk-dtv8x2hx.js:15803-16262 placement
+//@ chunk-yvhjwwtt.js:17099-17558 placement
 /**
  * 给远程机器返回的文本加上"来自该机器、非指令"的围栏说明。
  */
@@ -238,14 +239,14 @@ function formatRemoteOutputFence({ name: hostName, showForMs, onStatus, waiting,
     },
   };
 }
-//@ chunk-dtv8x2hx.js:16262-16338 placement
+//@ chunk-yvhjwwtt.js:17558-17634 placement
 var PROGRESS_WATCH_TIMING = {
   sayAfterMs: 2000,
   firstCheckAfterMs: 5000,
   intervalMs: 5000,
   forMs: 60000,
 };
-//@ chunk-dtv8x2hx.js:16338-16614 placement
+//@ chunk-yvhjwwtt.js:17634-17910 placement
 class RemoteCallState {
   #e = new Set();
   has(hostName, callId) {
@@ -269,14 +270,14 @@ ${callId}`);
 ${callId}`);
   }
 }
-//@ chunk-dtv8x2hx.js:16614-16659 placement
+//@ chunk-yvhjwwtt.js:17910-17955 placement
 var NOOP_STATUS_WATCH = {
   onAccepted: undefined,
   stop: () => {
     return;
   },
 };
-//@ chunk-dtv8x2hx.js:16659-18214 placement
+//@ chunk-yvhjwwtt.js:17955-19510 placement
 /**
  * 远程调用进行中定期显示"Running on <主机>"状态并检测无记录情况。
  */
@@ -393,40 +394,40 @@ function watchRemoteCallProgress({
     },
   };
 }
-//@ chunk-dtv8x2hx.js:18251-18344 placement
-var READ_ONLY_TOOL_NAMES = new Set([FILE_READ_TOOL_NAME, GLOB_TOOL_NAME, GREP_TOOL_NAME]);
+//@ chunk-yvhjwwtt.js:19547-19640 placement
+var READ_ONLY_TOOL_NAMES = new Set([READ, GLOB_TOOL_NAME, GREP_TOOL_NAME]);
 var flattened = [...READ_ONLY_TOOL_NAMES, ...FILE_EDITING_TOOL_NAMES].flatMap((toolName) => [
   toolName,
   buildMcpToolName(REMOTE_DEVICES, toolName),
 ]);
 var TARGET_FIELD_NAMES = new Set([HOST_TOOL_INPUT_FIELD, DEVICE_2]);
-//@ chunk-dtv8x2hx.js:18344-18408 placement
+//@ chunk-yvhjwwtt.js:19640-19704 placement
 /**
  * 把一批权限规则格式化、去重后用逗号连接。
  */
 function formatRulesList(rules) {
-  return uniq(rules.map((rule) => formatPermissionRule(rule.ruleValue))).join(", ");
+  return normalizeCaseForComparison_2(
+    rules.map((rule) => permissionRuleValueFromString(rule.ruleValue)),
+  ).join(", ");
 }
-//@ chunk-dtv8x2hx.js:18408-18520 placement
+//@ chunk-yvhjwwtt.js:19704-19816 placement
 function permissionToolNames(tool, behavior) {
   let isEditing = FILE_EDITING_TOOL_NAMES.has(tool.name);
-  return uniq([
+  return normalizeCaseForComparison_2([
     tool.name,
-    ...(isEditing ? [FILE_EDIT_TOOL_NAME] : []),
-    ...(READ_ONLY_TOOL_NAMES.has(tool.name) || (isEditing && behavior === "deny")
-      ? [FILE_READ_TOOL_NAME]
-      : []),
+    ...(isEditing ? [EDIT] : []),
+    ...(READ_ONLY_TOOL_NAMES.has(tool.name) || (isEditing && behavior === "deny") ? [READ] : []),
   ]);
 }
-//@ chunk-dtv8x2hx.js:18520-18556 placement
+//@ chunk-yvhjwwtt.js:19816-19852 placement
 /**
  * 写类工具在「读拒绝」规则下的错误文案。
  */
 var READ_DENY_ERRORS_BY_TOOL = new Map([
-  [FILE_EDIT_TOOL_NAME, READ_DENY_RULE_EDIT_ERROR],
+  [EDIT, READ_DENY_RULE_EDIT_ERROR],
   [FILE_WRITE_TOOL_NAME, READ_DENY_RULE_WRITE_ERROR],
 ]);
-//@ chunk-dtv8x2hx.js:18556-18691 placement
+//@ chunk-yvhjwwtt.js:19852-19987 placement
 function readDenyVerdict(tool, parsedInput, toolPermissionContext) {
   let path = tool.getPath?.(parsedInput);
   if (path === undefined) return "unjudged";
@@ -436,12 +437,12 @@ function readDenyVerdict(tool, parsedInput, toolPermissionContext) {
     return "unjudged";
   }
 }
-//@ chunk-dtv8x2hx.js:18691-19011 placement
+//@ chunk-yvhjwwtt.js:19987-20307 placement
 function describeRuleSource(tool, parsedInput, toolPermissionContext) {
   let path =
     READ_ONLY_TOOL_NAMES.has(tool.name) &&
     !isRemoteOnlyCheck(tool.name) &&
-    getAskRules(toolPermissionContext).some((rule) => rule.ruleValue.ruleContent !== undefined)
+    askedBashRules(toolPermissionContext).some((rule) => rule.ruleValue.ruleContent !== undefined)
       ? tool.getPath?.(parsedInput)
       : undefined;
   let matched =
@@ -462,17 +463,17 @@ function describeRuleSource(tool, parsedInput, toolPermissionContext) {
     decisionReason: reason,
   };
 }
-//@ chunk-dtv8x2hx.js:19011-19129 placement
+//@ chunk-yvhjwwtt.js:20307-20425 placement
 function permissionEvalFailedMessage(tool) {
   return `This session could not evaluate its permission rules for this ${tool.name} call (internal error).`;
 }
-//@ chunk-dtv8x2hx.js:19129-19248 placement
+//@ chunk-yvhjwwtt.js:20425-20544 placement
 function ruleSuffix(rule, tool) {
   return rule.ruleValue.toolName === tool.name
     ? ""
     : ` (rule ${rule.ruleValue.toolName}(${rule.ruleValue.ruleContent}))`;
 }
-//@ chunk-dtv8x2hx.js:19248-22884 placement
+//@ chunk-yvhjwwtt.js:20544-24121 placement
 /**
  * 远程调用权限：会话 deny/ask 规则、宿主允许规则、输入形状校验，返回 refuse/proceed/ask（约 3.6 KB）。
  */
@@ -519,7 +520,7 @@ async function checkRemoteToolPermission({ tool, parsedInput, requestBytes, tool
         name: host.name,
         ruleMessage:
           shapeDeny.ruleValue.ruleContent === undefined
-            ? `The rule ${formatPermissionRule(shapeDeny.ruleValue)} denies this session the bridge that reaches ${host.name}, so its ${tool.name} is not forwarded there either.`
+            ? `The rule ${permissionRuleValueFromString(shapeDeny.ruleValue)} denies this session the bridge that reaches ${host.name}, so its ${tool.name} is not forwarded there either.`
             : tool.isMcp === true
               ? `${formatRuleDeniedMessage(tool.name, shapeDeny)} Rules on this tool apply to a forwarded call field by field; one this session cannot check that way (a field the tool does not declare, or a structured value) refuses every forwarded call, and a plain rule on mcp__${REMOTE_DEVICES} covers every attached machine's tools.`
               : `${formatRuleDeniedMessage(tool.name, shapeDeny)} Rules on the bridge's names apply to a forwarded call field by field, and one this session cannot check that way (a pattern over the command, or the machine field) refuses every forwarded ${tool.name}: ${tool.name}(\u2026) scopes a rule to commands, ${tool.name}(${HOST_TOOL_INPUT_FIELD}:\u2026) to one machine, and a plain rule on mcp__${REMOTE_DEVICES} covers every attached machine whatever it calls itself.`,
@@ -586,33 +587,31 @@ async function checkRemoteToolPermission({ tool, parsedInput, requestBytes, tool
   let toolPermissionContext_2 = getToolPermissionContext(toolUseContext);
   let fileRuleHits =
     tool.name === POWERSHELL_TOOL_NAME && host.description?.copy_of !== undefined
-      ? [...getDenyRules(toolPermissionContext_2), ...getAskRules(toolPermissionContext_2)].filter((rule) => {
-          let { source, ruleValue } = rule;
-          let { ruleContent = "" } = ruleValue;
-          let fieldRuleContent = parseFieldRuleContent(ruleContent);
-          return (
-            flattened.some((name) =>
-              toolMatchesRule(
-                toolPermissionContext_2,
-                {
-                  name,
-                },
-                rule,
-              ),
-            ) &&
-            !(ruleContent === "" && NARROWING_RULE_SOURCES.includes(source)) &&
-            (fieldRuleContent === null ||
-              !TARGET_FIELD_NAMES.has(fieldRuleContent.key) ||
-              matchWildcard(fieldRuleContent.expected, host.name) ||
-              (fieldRuleContent.expected.includes("*")
-                ? matchWildcard(fieldRuleContent.expected.toLowerCase(), host.name)
-                : machineNameMatches(fieldRuleContent.expected, host.name)))
-          );
-        })
+      ? [...deniedBashRules(toolPermissionContext_2), ...askedBashRules(toolPermissionContext_2)].filter(
+          (rule) => {
+            let fieldRuleContent = parseFieldRuleContent(rule.ruleValue.ruleContent ?? "");
+            return (
+              rule.source === "policySettings" &&
+              flattened.some((name) =>
+                toolMatchesRule(
+                  toolPermissionContext_2,
+                  {
+                    name,
+                  },
+                  rule,
+                ),
+              ) &&
+              (fieldRuleContent === null ||
+                !TARGET_FIELD_NAMES.has(fieldRuleContent.key) ||
+                matchWildcard(fieldRuleContent.expected, host.name) ||
+                (fieldRuleContent.expected.includes("*")
+                  ? matchWildcard(fieldRuleContent.expected.toLowerCase(), host.name)
+                  : machineNameMatches(fieldRuleContent.expected, host.name)))
+            );
+          },
+        )
       : [];
-  let rules_3 = fileRuleHits.filter(
-    (rule) => rule.ruleBehavior === "deny" && rule.source === "policySettings",
-  );
+  let rules_3 = fileRuleHits.filter((rule) => rule.ruleBehavior === "deny");
   if (rules_3.length > 0)
     return {
       kind: "refuse",
@@ -685,21 +684,21 @@ async function checkRemoteToolPermission({ tool, parsedInput, requestBytes, tool
     kind: "proceed",
   };
 }
-//@ chunk-dtv8x2hx.js:22884-23017 placement
+//@ chunk-yvhjwwtt.js:24121-24254 placement
 function maxRequestBytes(host) {
   return Math.min(
     host.transport.limits.maxRequestBytes,
     host.description?.limits.max_request_bytes ?? Number.POSITIVE_INFINITY,
   );
 }
-//@ chunk-dtv8x2hx.js:23017-23062 placement
+//@ chunk-yvhjwwtt.js:24254-24299 placement
 var SANDBOX_AUTO_ALLOW_SUSPENDED = {
   kind: "sandbox_auto_allow_suspended",
 };
-//@ chunk-dtv8x2hx.js:23062-23832 placement
+//@ chunk-yvhjwwtt.js:24299-25069 placement
 function validateRemoteInputShape(toolPermissionContext, tool, parsedInput, behavior) {
   let prefixNames = [
-    tool.isMcp === true ? getToolNameForPermissionCheck_2(tool) : buildMcpToolName(REMOTE_DEVICES, tool.name),
+    tool.isMcp === true ? getToolNameForPermissionCheck(tool) : buildMcpToolName(REMOTE_DEVICES, tool.name),
     getMcpPrefix(REMOTE_DEVICES).replace(/__$/, ""),
   ];
   let reduced = prefixNames.reduce(
@@ -709,7 +708,7 @@ function validateRemoteInputShape(toolPermissionContext, tool, parsedInput, beha
         ? getDenyRuleForTool(toolPermissionContext, {
             name,
           })
-        : getAskRuleForTool(toolPermissionContext, {
+        : findAskRuleForTool(toolPermissionContext, {
             name,
           })),
     null,
@@ -732,42 +731,43 @@ function validateRemoteInputShape(toolPermissionContext, tool, parsedInput, beha
     );
     if (match) return match;
     return (
-      (behavior === "deny" ? getDenyRules(toolPermissionContext) : getAskRules(toolPermissionContext)).find(
-        (rule) => {
-          let ruleContent = rule.ruleValue.ruleContent;
-          if (
-            ruleContent === undefined ||
-            !toolMatchesRule(
-              toolPermissionContext,
-              {
-                name,
-              },
-              rule,
-            )
+      (behavior === "deny"
+        ? deniedBashRules(toolPermissionContext)
+        : askedBashRules(toolPermissionContext)
+      ).find((rule) => {
+        let ruleContent = rule.ruleValue.ruleContent;
+        if (
+          ruleContent === undefined ||
+          !toolMatchesRule(
+            toolPermissionContext,
+            {
+              name,
+            },
+            rule,
           )
-            return false;
-          let key = ruleContent.slice(0, Math.max(0, ruleContent.indexOf(":"))).trim();
-          return (
-            !prefixNames.includes(rule.ruleValue.toolName) ||
-            key === "" ||
-            key === tool.ruleContentField ||
-            key === HOST_TOOL_INPUT_FIELD ||
-            key === DEVICE_2 ||
-            !declaredFields.has(key) ||
-            isStructured(key)
-          );
-        },
-      ) ?? null
+        )
+          return false;
+        let key = ruleContent.slice(0, Math.max(0, ruleContent.indexOf(":"))).trim();
+        return (
+          !prefixNames.includes(rule.ruleValue.toolName) ||
+          key === "" ||
+          key === tool.ruleContentField ||
+          key === HOST_TOOL_INPUT_FIELD ||
+          key === DEVICE_2 ||
+          !declaredFields.has(key) ||
+          isStructured(key)
+        );
+      }) ?? null
     );
   }, null);
 }
-//@ chunk-dtv8x2hx.js:23832-23910 placement (2.1.88 match: hasBashPermission, 1)
+//@ chunk-yvhjwwtt.js:25069-25147 placement (2.1.88 match: hasBashPermission, 1)
 function hasBashPermission(rules) {
   return collectAskRules(rules).map((rule) =>
     permissionRuleIdentityKey(rule.source, rule.ruleBehavior, rule.ruleValue),
   );
 }
-//@ chunk-dtv8x2hx.js:23910-24047 placement
+//@ chunk-yvhjwwtt.js:25147-25284 placement
 function isSameHostName(rule, other) {
   if (other === undefined) return false;
   if (rule === other) return true;
@@ -777,7 +777,7 @@ function isSameHostName(rule, other) {
     leftList !== undefined && rightList !== undefined && leftList.every((entry) => rightList.includes(entry))
   );
 }
-//@ chunk-dtv8x2hx.js:24047-24146 placement
+//@ chunk-yvhjwwtt.js:25284-25383 placement
 /**
  * 合并两组（可能为空的）规则列表，生成稳定的规则串。
  */
@@ -788,7 +788,7 @@ function mergeRuleLists(rule, rule_2) {
     ? rule_2
     : stableRuleListJson([...leftList, ...rightList]);
 }
-//@ chunk-dtv8x2hx.js:24146-24299 placement
+//@ chunk-yvhjwwtt.js:25383-25536 placement
 function isProceedVerdict(left, right) {
   if (left.kind === "refuse" || right.kind === "proceed") return left;
   if (right.kind === "refuse" || left.kind === "proceed") return right;
@@ -797,7 +797,7 @@ function isProceedVerdict(left, right) {
     rule: mergeRuleLists(left.rule, right.rule),
   };
 }
-//@ chunk-dtv8x2hx.js:24299-24448 placement
+//@ chunk-yvhjwwtt.js:25536-25685 placement
 function formatUnnamedHost(ruleKey) {
   if (ruleKey.startsWith("unnamed:")) return;
   try {
@@ -807,13 +807,13 @@ function formatUnnamedHost(ruleKey) {
     return;
   }
 }
-//@ chunk-dtv8x2hx.js:24448-24527 placement
+//@ chunk-yvhjwwtt.js:25685-25764 placement
 /**
  * 把规则列表去重、排序并规范化成稳定 JSON（用作规则集标识）。
  */
 function stableRuleListJson(keys) {
   return JSON.stringify(
-    uniq([...keys])
+    normalizeCaseForComparison_2([...keys])
       .sort()
       .map((key) => JSON.parse(key)),
   );

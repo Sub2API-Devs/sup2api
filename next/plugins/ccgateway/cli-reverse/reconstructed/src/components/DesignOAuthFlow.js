@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Claude Design 的 OAuth 授权界面与 /design login
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-zkzpd9ky.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-f94bkgbg.js (8)
  * attribution: placement 8
  */
 import {
@@ -50,28 +50,28 @@ import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { FocusColumn } from "./design-system/FocusColumn.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-zkzpd9ky.js:14331-14335 placement
+//@ chunk-f94bkgbg.js:15480-15484 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-zkzpd9ky.js:14331", () => {
+deferInit("chunk-f94bkgbg.js:15480", () => {
   init_react_production();
 });
-//@ chunk-zkzpd9ky.js:14335-14363 placement
+//@ chunk-f94bkgbg.js:15484-15512 placement
 function createOAuthService() {
   return new OAuthService();
 }
-//@ chunk-zkzpd9ky.js:14363-14391 placement
+//@ chunk-f94bkgbg.js:15512-15540 placement
 function runCleanup(cleanup) {
   return cleanup();
 }
-//@ chunk-zkzpd9ky.js:14391-14419 placement
+//@ chunk-f94bkgbg.js:15540-15568 placement
 function runCleanup_2(cleanup) {
   return cleanup();
 }
-//@ chunk-zkzpd9ky.js:14419-14518 placement
+//@ chunk-f94bkgbg.js:15568-15667 placement
 var PASTE_CODE_PROMPT_3 = "Paste code here if prompted > ";
 var DESIGN_AUTH_SUCCESS_TEXT = `Design-system access authorized.
 ${DESIGN_LOGIN_CLOSING_NOTICE} Details: ${DESIGN_CLOSING_SUPPORT_URL}`;
-//@ chunk-zkzpd9ky.js:14518-20079 placement
+//@ chunk-f94bkgbg.js:15667-21223 placement
 /**
  * Claude Design 的 OAuth 授权流程界面（浏览器授权、手动粘贴 code、保存到安全存储）。
  */
@@ -500,7 +500,7 @@ function DesignOAuthFlow(props) {
   } else flowElement = $[58];
   return flowElement;
 }
-//@ chunk-zkzpd9ky.js:21845-21983 placement
+//@ chunk-f94bkgbg.js:22990-23128 placement
 function DesignOAuthWarning() {
   let $ = useMemoCache(1);
   let warning;
@@ -520,7 +520,7 @@ function DesignOAuthWarning() {
   } else warning = $[0];
   return warning;
 }
-//@ chunk-zkzpd9ky.js:21983-22085 placement
+//@ chunk-f94bkgbg.js:23128-23230 placement
 /**
  * /design-login 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

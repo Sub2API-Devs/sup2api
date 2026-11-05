@@ -1,13 +1,13 @@
 /**
  * @modelcontextprotocol/core/(bundler runtime of a pre-bundled dist file)
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/core@2.0.0
- * pieces: chunk-r1g76qsy.js (1)
+ * pieces: chunk-qq5knpkd.js (1)
  * attribution: embedded-runtime 1
  */
-//@ chunk-r1g76qsy.js:516-1173 embedded-runtime
+//@ chunk-qq5knpkd.js:516-1173 embedded-runtime
 var { create, defineProperty, getOwnPropertyDescriptor, getOwnPropertyNames, getPrototypeOf } = Object;
-var hasOwnProperty = Object.prototype.hasOwnProperty;
+var __create = Object.prototype.hasOwnProperty;
 var initModule = (initModule, moduleRef) => () => {
   if (!moduleRef)
     initModule(
@@ -39,7 +39,7 @@ var reExport = (target, from, excluded, descriptor) => {
       keyIndex++
     ) {
       propKey = ownPropertyNames[keyIndex];
-      if (!hasOwnProperty.call(target, propKey) && propKey !== excluded)
+      if (!__create.call(target, propKey) && propKey !== excluded)
         defineProperty(target, propKey, {
           get: ((key) => from[key]).bind(null, propKey),
           enumerable: !(descriptor = getOwnPropertyDescriptor(from, propKey)) || descriptor.enumerable,
@@ -60,4 +60,4 @@ var interopDefault = (mod, exporter, target) => {
     mod,
   );
 };
-export { toESModule, initModule, interopDefault };
+export { initModule, interopDefault, toESModule };

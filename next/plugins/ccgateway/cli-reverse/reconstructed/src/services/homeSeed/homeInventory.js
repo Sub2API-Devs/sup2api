@@ -3,18 +3,25 @@
  *
  * 2.1.316 新增：本地 home 目录配置清点
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-axmbhcjg.js (58)
- * attribution: placement 58
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vb7ng9fr.js (60)
+ * attribution: placement 58, sole-consumer 1, layout 1
  */
+import { win32, relative, sep, extname, resolve, dirname, join, posix } from "path";
 import { realpath, readlink, lstat, stat, readdir } from "fs/promises";
-import { relative, sep, extname, resolve, dirname, join, posix } from "path";
 import { isDiskless } from "../../bootstrap/state.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { applyRemoteEntriesToLocal } from "../settingsSync/index.js";
 import { normalizePathForCompare } from "../../utils/file.js";
 import { isInstructionsMemoryType_3, MAX_INCLUDE_DEPTH } from "../../utils/claudemd.js";
+import {
+  platformPath,
+  isParentOrAbsolute,
+  toPosixNfcPath,
+  MD_EXTENSION,
+  PATH_SEPARATOR_RE,
+} from "../../utils/posixPaths.js";
 import { hasBackslash, isUncOrDevicePath } from "../../utils/pathClassification.js";
 import {
   safeResolvePath,
@@ -22,17 +29,14 @@ import {
   hasUntouchableRecordSpelling,
 } from "../../utils/fsOperations.js";
 import {
-  isParentOrAbsolute,
-  toPosixNfcPath,
-  MD_EXTENSION,
-  PATH_SEPARATOR_RE,
-} from "../../utils/posixPaths.js";
-import { uniq, count } from "../../utils/collections.js";
+  normalizeCaseForComparison_2,
+  resolveSensitivePath,
+  getSensitivePathReason,
+} from "../../utils/permissions/filesystem.js";
 import { foldName } from "../../utils/permissions/protectedDirNames.js";
 import { firstLineOf, isWellFormedString, countCharInString } from "../../utils/stringUtils.js";
 import { shouldIgnore } from "../syncedFiles/syncedFileSyncer.js";
 import { DIR_SYNC_EXCLUDED_DIRS } from "../../utils/teleport/dirSync.js";
-import { getThinkbackSkillDir } from "../../commands/thinkback/thinkback.js";
 import {
   RULES,
   OUTPUT_STYLES,
@@ -45,6 +49,7 @@ import {
   escapeUnvettedIncludes,
   allowAllIncludes,
 } from "./workingFiles.js";
+import { SYNCED_DIR } from "../../utils/plugins/syncedItems.js";
 import { getErrnoCode } from "../../utils/errors.js";
 import { isNonWslUncPath, isWslUncPath, isNetworkMountPath } from "../../utils/networkPaths.js";
 import { isSettingsToCloudEnabled } from "../analytics/violinGates.js";
@@ -55,7 +60,7 @@ import {
 } from "../../utils/settings/customizationDisabled.js";
 import { isAborted } from "../../utils/abortSignalUtils.js";
 import { capInventoryEntries } from "./homePack.js";
-import { resolveSensitivePath, getSensitivePathReason } from "../../utils/permissions/filesystem.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   readNativeWorkingFile,
   buildWithheldEntry,
@@ -71,20 +76,19 @@ import {
   hasUnvettedInclude,
 } from "../../utils/claudemdIncludes.js";
 import { expandPath } from "../../utils/path.js";
-import { normalizeGitPaths } from "../../hooks/fileSuggestions.js";
 import { isSensitiveWithGitConfig } from "../../utils/permissions/sensitivePaths.js";
 import { looksLikeCredentialIncludingNul } from "./portableSettings.js";
 import { matchKey } from "../../components/GlobalSearchDialog.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import { FRONTMATTER_REGEX } from "../../utils/frontmatterParser.js";
 
-//@ chunk-axmbhcjg.js:7915-7933 placement
+//@ chunk-vb7ng9fr.js:7949-7967 placement
 /**
  * 是否继续解析 include 的深度上限标记（true）。
  */
 var MAX_INCLUDE_READS = 4096;
 var INCLUDE_EXTERNAL = true;
-//@ chunk-axmbhcjg.js:7933-8417 placement
+//@ chunk-vb7ng9fr.js:7967-8451 placement
 /**
  * 从配置目录出发收集用户记忆文件及其 @include 链（按类型+路径去重，读取次数超上限返回 null）；无磁盘会话直接返回 null。
  */
@@ -117,12 +121,24 @@ async function collectMemoryIncludeTree(configDir, signal) {
   }
   return [...seen.values()];
 }
-//@ chunk-axmbhcjg.js:9323-9427 placement
+//@ chunk-vb7ng9fr.js:9185-9358 sole-consumer
+function relativeUnderConfigHome(configHome, expanded, pathModule = platformPath) {
+  let relativePath = pathModule.relative(configHome, expanded);
+  if (pathModule.isAbsolute(relativePath)) return null;
+  let resolved = pathModule.resolve(configHome, relativePath);
+  let resolved_2 = pathModule.resolve(expanded);
+  return (
+    pathModule === win32 ? resolved.toLowerCase() === resolved_2.toLowerCase() : resolved === resolved_2
+  )
+    ? relativePath
+    : null;
+}
+//@ chunk-vb7ng9fr.js:9358-9462 placement
 async function realpathStrict(path) {
   if (hasBackslash(path)) throw Error("realpath would misread a backslash in the path");
   return realpath(path);
 }
-//@ chunk-axmbhcjg.js:9427-9511 placement
+//@ chunk-vb7ng9fr.js:9462-9546 placement
 /**
  * 解析路径的规范形式（符号链接或安全解析）。
  */
@@ -135,12 +151,12 @@ function resolvePathInfo(path) {
       }
     : safeResolvePath(getFsImplementation(), path);
 }
-//@ chunk-axmbhcjg.js:9511-9523 placement
+//@ chunk-vb7ng9fr.js:9546-9558 placement
 /**
  * 别名目录的数量上限（4096）。
  */
 var MAX_ALIAS_DIRECTORIES = 4096;
-//@ chunk-axmbhcjg.js:9523-9765 placement
+//@ chunk-vb7ng9fr.js:9558-9800 placement
 async function locateInConfigHome(walkState, nativePath, lexicalRel, rawLexicalRel) {
   let realPath;
   try {
@@ -156,10 +172,13 @@ async function locateInConfigHome(walkState, nativePath, lexicalRel, rawLexicalR
     nativeRel,
     rel: posixNfcPath,
     lexicalRel: lexicalRel ?? posixNfcPath,
-    rawRels: uniq([toPosixSeparators(nativeRel), ...(rawLexicalRel === null ? [] : [rawLexicalRel])]),
+    rawRels: normalizeCaseForComparison_2([
+      toPosixSeparators(nativeRel),
+      ...(rawLexicalRel === null ? [] : [rawLexicalRel]),
+    ]),
   };
 }
-//@ chunk-axmbhcjg.js:9765-9867 placement
+//@ chunk-vb7ng9fr.js:9800-9902 placement
 async function isOutsideOrUnresolvable(filePath, target) {
   try {
     let resolved = await realpathStrict(target);
@@ -171,21 +190,21 @@ async function isOutsideOrUnresolvable(filePath, target) {
     return true;
   }
 }
-//@ chunk-axmbhcjg.js:9867-9916 placement
+//@ chunk-vb7ng9fr.js:9902-9951 placement
 /**
  * 判断相对路径是否落在配置主目录之外。
  */
 function isOutsideConfigHome(entry, configHome) {
   return !isParentOrAbsolute(relative(configHome, entry.realConfigHome));
 }
-//@ chunk-axmbhcjg.js:9916-9969 placement
+//@ chunk-vb7ng9fr.js:9951-10004 placement
 /**
  * 把路径分隔符统一成 /。
  */
 function toPosixSeparators(path) {
   return sep === "/" ? path : path.split(sep).join("/");
 }
-//@ chunk-axmbhcjg.js:9969-10113 placement
+//@ chunk-vb7ng9fr.js:10004-10148 placement
 function relativeToConfigHome(walkState, nativePath) {
   let path = [walkState.configHome, walkState.realConfigHome]
     .map((base) => relative(base, nativePath))
@@ -197,7 +216,7 @@ function relativeToConfigHome(walkState, nativePath) {
         raw: toPosixSeparators(path),
       };
 }
-//@ chunk-axmbhcjg.js:10113-10286 placement
+//@ chunk-vb7ng9fr.js:10148-10321 placement
 function isSyncableMarkdownPath(path) {
   let firstSegment = foldName(firstLineOf(path, "/"));
   return (
@@ -212,7 +231,7 @@ function isSyncableMarkdownPath(path) {
     !isRulesOrOutputStylePath(path)
   );
 }
-//@ chunk-axmbhcjg.js:10286-10353 placement
+//@ chunk-vb7ng9fr.js:10321-10388 placement
 /**
  * 判断相对路径首段是否为 rules 或 output-styles。
  */
@@ -220,13 +239,18 @@ function isRulesOrOutputStylePath(path) {
   let firstSegment = foldName(firstLineOf(path, "/"));
   return firstSegment === foldName(RULES) || firstSegment === foldName(OUTPUT_STYLES);
 }
-//@ chunk-axmbhcjg.js:10434-10453 placement
+//@ chunk-vb7ng9fr.js:10388-10469 layout (2.1.88 match: getThinkbackSkillDir, 1)
+function getThinkbackSkillDir(pathParts) {
+  let [firstSegment, secondSegment] = pathParts.split("/");
+  return foldName(firstSegment ?? "") === "skills" && foldName(secondSegment ?? "") === SYNCED_DIR;
+}
+//@ chunk-vb7ng9fr.js:10469-10488 placement
 /**
  * 跟随符号链接的最大跳数（32）。
  */
 var TRAILING_TILDE_NUMBER_RE = /~\d/;
 var MAX_SYMLINK_HOPS = 32;
-//@ chunk-axmbhcjg.js:10453-11003 placement
+//@ chunk-vb7ng9fr.js:10488-11038 placement
 /**
  * 沿符号链接链逐跳检查（有跳数上限）：遇到循环返回 false；链接文本非 UTF-8、先进入目录再向上越级、或指向不可触碰的拼写时视为有风险。
  */
@@ -266,7 +290,7 @@ async function isRiskyLinkChain(start) {
   }
   throw Error("link chain too long to vet");
 }
-//@ chunk-axmbhcjg.js:11003-11060 placement
+//@ chunk-vb7ng9fr.js:11038-11095 placement
 /**
  * 判断是否为可忽略的查找错误（EINVAL 也算），否则抛出。
  */
@@ -274,7 +298,7 @@ function isIgnorableLookupError(error) {
   if (isMissingPathError(error) || getErrnoCode(error) === "EINVAL") return true;
   throw error;
 }
-//@ chunk-axmbhcjg.js:11060-11153 placement
+//@ chunk-vb7ng9fr.js:11095-11188 placement
 /**
  * 判断错误码是否表示路径不存在（ENOENT/ENOTDIR/ELOOP/ENAMETOOLONG）。
  */
@@ -284,14 +308,14 @@ function isMissingPathError(error) {
     errnoCode === "ENOENT" || errnoCode === "ENOTDIR" || errnoCode === "ELOOP" || errnoCode === "ENAMETOOLONG"
   );
 }
-//@ chunk-axmbhcjg.js:11153-11221 placement
+//@ chunk-vb7ng9fr.js:11188-11256 placement
 /**
  * 判断符号链接文本里是否有超过 255 字符的段。
  */
 function hasOverlongSegment(linkBody) {
   return linkBody.split(/[\\/]/).some((segment) => [...segment].length > 255);
 }
-//@ chunk-axmbhcjg.js:11221-11290 placement
+//@ chunk-vb7ng9fr.js:11256-11325 placement
 /**
  * 路径缺失或不可读（stat 失败且错误可忽略）。
  */
@@ -303,7 +327,7 @@ async function missingOrUnreadable(path) {
     return isMissingPathError(error);
   }
 }
-//@ chunk-axmbhcjg.js:11290-11372 placement
+//@ chunk-vb7ng9fr.js:11325-11407 placement
 /**
  * 判断路径是否不是目录（缺失时也返回 true）。
  */
@@ -314,7 +338,7 @@ async function isNonDirectoryOrMissing(dir) {
     return isMissingPathError(error);
   }
 }
-//@ chunk-axmbhcjg.js:11372-11486 placement
+//@ chunk-vb7ng9fr.js:11407-11521 placement
 function linkClimbsAfterEntering(linkBody) {
   let entered = false;
   for (let segment of linkBody.split(PATH_SEPARATOR_RE))
@@ -323,7 +347,7 @@ function linkClimbsAfterEntering(linkBody) {
     } else if (segment !== "" && segment !== ".") entered = true;
   return false;
 }
-//@ chunk-axmbhcjg.js:11486-11518 placement
+//@ chunk-vb7ng9fr.js:11521-11553 placement
 /**
  * 清点被中止时的统一返回值。
  */
@@ -331,7 +355,7 @@ var ABORTED_INVENTORY_RESULT = {
   ok: false,
   reason: "aborted",
 };
-//@ chunk-axmbhcjg.js:11518-13602 placement
+//@ chunk-vb7ng9fr.js:11553-13637 placement
 /**
  * 清点本机 ~/.claude 中要发往云会话的内容（CLAUDE.md、rules、output-styles 及其 @include）：检查开关与用户设置可发送性，处理顶层符号链接别名、敏感/拒读路径，按上限保留条目，返回 {entries, summary, leftBehind} 或失败原因。
  */
@@ -524,7 +548,7 @@ async function buildHomeInventory({
     };
   }
 }
-//@ chunk-axmbhcjg.js:13602-13727 placement
+//@ chunk-vb7ng9fr.js:13637-13762 placement
 function emptyInventory({ rulesUnreadable }) {
   return {
     ok: true,
@@ -538,7 +562,7 @@ function emptyInventory({ rulesUnreadable }) {
     },
   };
 }
-//@ chunk-axmbhcjg.js:13727-14145 placement
+//@ chunk-vb7ng9fr.js:13762-14180 placement
 /**
  * 汇总清点结果：各类未发送原因的计数（敏感、拒读、include 未发送、符号链接、非目的地、不可读、超限、无法去引用）以及内联与去引用的 import 数。
  */
@@ -557,14 +581,14 @@ function summarizeInventory(leftBehind, leftBehind_2) {
     defusedImports: leftBehind.reduce((acc, reason) => acc + reason.defused, 0),
   };
 }
-//@ chunk-axmbhcjg.js:14145-14191 placement
+//@ chunk-vb7ng9fr.js:14180-14226 placement
 /**
  * 按未发送原因统计条目数。
  */
 function countByReason(items, target) {
-  return count(items, (item) => item.reason === target);
+  return countWhere(items, (item) => item.reason === target);
 }
-//@ chunk-axmbhcjg.js:14191-14234 placement
+//@ chunk-vb7ng9fr.js:14226-14269 placement
 /**
  * 三类条目的排序优先级（claude_md、rule、output_style）。
  */
@@ -573,7 +597,7 @@ var KIND_SORT_ORDER = {
   rule: 1,
   output_style: 2,
 };
-//@ chunk-axmbhcjg.js:14234-14353 placement
+//@ chunk-vb7ng9fr.js:14269-14388 placement
 function compareInventoryEntries(entry, entry_2) {
   return (
     KIND_SORT_ORDER[entry.kind] - KIND_SORT_ORDER[entry_2.kind] ||
@@ -581,7 +605,7 @@ function compareInventoryEntries(entry, entry_2) {
     (entry.path < entry_2.path ? -1 : entry.path > entry_2.path ? 1 : 0)
   );
 }
-//@ chunk-axmbhcjg.js:14353-14819 placement
+//@ chunk-vb7ng9fr.js:14388-14854 placement
 /**
  * 列出 CLAUDE.md 与 rules 目录下的记忆文件；CLAUDE.md 是指向非文件的符号链接时记为 symlink_not_sent，指向目录且在配置目录内时放弃。
  */
@@ -618,7 +642,7 @@ async function listMemoryFiles(walkState) {
     leftBehind: ruleFiles.leftBehind,
   };
 }
-//@ chunk-axmbhcjg.js:14819-15184 placement
+//@ chunk-vb7ng9fr.js:14854-15219 placement
 /**
  * 列出配置目录下某子目录（rules、output-styles）的文件；子目录是符号链接且不指向目录时只按别名处理。
  */
@@ -656,7 +680,7 @@ async function listDirFiles(walkState, relPath) {
   }
   return walkMarkdownDir(walkState, dirPath, [relPath], dirPath_2.isSymlink, new Set());
 }
-//@ chunk-axmbhcjg.js:15184-15686 placement
+//@ chunk-vb7ng9fr.js:15219-15721 placement
 /**
  * 列出配置目录顶层指向目录内部的符号链接（名字与目标相对路径）；读不了或指向别的主机时放弃。
  */
@@ -696,7 +720,7 @@ async function listTopLevelLinks(ctx) {
   }
   return aliases;
 }
-//@ chunk-axmbhcjg.js:15686-15826 placement
+//@ chunk-vb7ng9fr.js:15721-15861 placement
 function getAliasSpellings(walkState, channel) {
   return walkState.topLevelLinks.flatMap(({ name: link, targetRel }) =>
     channel === targetRel
@@ -706,7 +730,7 @@ function getAliasSpellings(walkState, channel) {
         : [],
   );
 }
-//@ chunk-axmbhcjg.js:15826-15963 placement
+//@ chunk-vb7ng9fr.js:15861-15998 placement
 async function lstatOrGiveUp(walkState, path) {
   try {
     return {
@@ -717,7 +741,7 @@ async function lstatOrGiveUp(walkState, path) {
     return null;
   }
 }
-//@ chunk-axmbhcjg.js:15963-17111 placement
+//@ chunk-vb7ng9fr.js:15998-17146 placement
 /**
  * 递归遍历目录收集 .md 文件（经符号链接进入的子树也记录），处理循环、越界与无法读取的情况，返回 {files, leftBehind}。
  */
@@ -810,7 +834,7 @@ async function walkMarkdownDir(walkState, dir, segments, viaSymlink, visitedReal
     leftBehind,
   };
 }
-//@ chunk-axmbhcjg.js:17111-17679 placement
+//@ chunk-vb7ng9fr.js:17146-17714 placement
 /**
  * 遍历只作为别名出现的目录，收集其中的 .md 与符号链接文件（标记 aliasOnly），子目录按别名预算继续。
  */
@@ -855,7 +879,7 @@ async function walkAliasOnlyDir(walkState, dir, segments, visited) {
   }
   return files;
 }
-//@ chunk-axmbhcjg.js:17679-18043 placement
+//@ chunk-vb7ng9fr.js:17714-18078 placement
 /**
  * 尝试认领一个别名（符号链接）目录：读不出、越界或已见过时放弃，不是可同步的工作文件时跳过，受别名预算限制。
  */
@@ -882,7 +906,7 @@ async function claimAliasDir(walkState, dir, visited) {
   walkState.aliasBudget.left -= 1;
   return realDir;
 }
-//@ chunk-axmbhcjg.js:18043-18280 placement
+//@ chunk-vb7ng9fr.js:18078-18315 placement
 async function resolveDirentType(walkState, relPath, dirent) {
   if (
     dirent.isSymbolicLink() ||
@@ -901,7 +925,7 @@ async function resolveDirentType(walkState, relPath, dirent) {
     return null;
   }
 }
-//@ chunk-axmbhcjg.js:18280-18476 placement
+//@ chunk-vb7ng9fr.js:18315-18511 placement
 async function statFollowingSafeLinks(walkState, filePath) {
   let risky;
   try {
@@ -918,21 +942,21 @@ async function statFollowingSafeLinks(walkState, filePath) {
     return null;
   }
 }
-//@ chunk-axmbhcjg.js:18476-18535 placement
+//@ chunk-vb7ng9fr.js:18511-18570 placement
 /**
  * 按名字排序的比较函数。
  */
 function compareByName(left, right) {
   return left.name < right.name ? -1 : left.name > right.name ? 1 : 0;
 }
-//@ chunk-axmbhcjg.js:18535-18587 placement
+//@ chunk-vb7ng9fr.js:18570-18622 placement
 /**
  * 在已见位置表里登记（已有记录时不覆盖）。
  */
 function rememberLocation(records, realPath, value) {
   if (value !== null || !records.has(realPath)) records.set(realPath, value);
 }
-//@ chunk-axmbhcjg.js:18587-19522 placement
+//@ chunk-vb7ng9fr.js:18622-19557 placement
 /**
  * 判定一个清点文件：别名只做敏感归属；无法解析或越界记为未发送；不是可同步目的地时记为不发送或拒绝；已见过的文件归属；否则返回候选条目。
  */
@@ -990,7 +1014,7 @@ async function classifyInventoryFile(walkState, pathFilter, file, claimed, attri
     },
   };
 }
-//@ chunk-axmbhcjg.js:19522-19596 placement
+//@ chunk-vb7ng9fr.js:19557-19631 placement
 /**
  * 构造“未发送”条目（路径 + 原因）。
  */
@@ -1003,7 +1027,7 @@ function refusedLeftBehind(file, reason) {
     },
   };
 }
-//@ chunk-axmbhcjg.js:19596-19692 placement
+//@ chunk-vb7ng9fr.js:19631-19727 placement
 /**
  * 把候选放入目的地持有表（重复时返回 null）。
  */
@@ -1013,7 +1037,7 @@ function holdDestination(held, candidate) {
   held.held.set(key, candidate);
   return candidate;
 }
-//@ chunk-axmbhcjg.js:19692-20306 placement
+//@ chunk-vb7ng9fr.js:19727-20341 placement
 /**
  * 对每个记忆文件求候选，读取其 include 树：无 include 时检查内容可读；无可用目的地时记为不发送；否则持有候选并解析其 import。
  */
@@ -1071,14 +1095,14 @@ async function collectMemoryCandidates(
   }
   return leftBehind;
 }
-//@ chunk-axmbhcjg.js:20306-20370 placement
+//@ chunk-vb7ng9fr.js:20341-20405 placement
 /**
  * 生成 glob 作用域的键（排序后的 JSON）。
  */
 function scopeKey(scope) {
   return scope.globs === undefined ? "" : jsonStringify(scope.globs.toSorted());
 }
-//@ chunk-axmbhcjg.js:20370-22323 placement
+//@ chunk-vb7ng9fr.js:20405-22358 placement
 /**
  * 解析候选文件的 include 链：每个被引用文件在目的地范围内、非敏感、作用域一致时作为内联 import，输出样式单独记录经由关系；其他按原因（越界、敏感、非目的地、include 未发送）记入未发送列表。
  */
@@ -1188,7 +1212,9 @@ async function resolveCandidateImports(
       continue;
     }
     if (holder.withheld) continue;
-    let all = uniq([location.rel, location.lexicalRel, ...location.rawRels]).every(isSyncableMarkdownPath);
+    let all = normalizeCaseForComparison_2([location.rel, location.lexicalRel, ...location.rawRels]).every(
+      isSyncableMarkdownPath,
+    );
     let sensitivePath = all ? resolveSensitivePath(ctx, classify, location, location.lexicalRel) : null;
     let reason = sensitivePath?.reason ?? null;
     let isRulesOrStyle =
@@ -1219,7 +1245,7 @@ async function resolveCandidateImports(
   }
   return left;
 }
-//@ chunk-axmbhcjg.js:22323-23412 placement
+//@ chunk-vb7ng9fr.js:22358-23447 placement
 /**
  * 扫描文件中的 @ 引用拼写：解析到配置目录外的路径按过滤器结果记为敏感或拒读；配置目录内的走敏感路径判定；无法审查时放弃整次清点。
  */
@@ -1258,7 +1284,7 @@ async function attributeAtReferences(ctx, classify, memoryFile, withheld) {
         isParentOrAbsolute(relative(ctx.realConfigHome, resolvedPath))
       )
         continue;
-      let gitRel = normalizeGitPaths(ctx.configHome, expanded);
+      let gitRel = relativeUnderConfigHome(ctx.configHome, expanded);
       if (gitRel === null) {
         ctx.giveUp ??= "alias_unreadable";
         continue;
@@ -1299,7 +1325,7 @@ async function attributeAtReferences(ctx, classify, memoryFile, withheld) {
     if (sensitiveReason !== null) rememberLocation(withheld, location.realPath, sensitiveReason);
   }
 }
-//@ chunk-axmbhcjg.js:23412-23526 placement
+//@ chunk-vb7ng9fr.js:23447-23561 placement
 async function isMissingReference(path) {
   if ((isUncOrDevicePath(path) && !isWslUncPath(path)) || isNetworkMountPath(path)) return true;
   try {
@@ -1309,7 +1335,7 @@ async function isMissingReference(path) {
     return isMissingPathError(error) && (await missingOrUnreadable(path));
   }
 }
-//@ chunk-axmbhcjg.js:23526-23906 placement
+//@ chunk-vb7ng9fr.js:23561-23941 placement
 /**
  * 收集候选文件中被拒绝的项：拒绝项直接记录，非 output style 的符号链接与无目标位置的候选记为不发送，其余登记真实路径。
  */
@@ -1348,7 +1374,7 @@ async function collectOutputStyleCandidates(
   }
   return path;
 }
-//@ chunk-axmbhcjg.js:24585-26856 placement
+//@ chunk-vb7ng9fr.js:24620-26891 placement
 /**
  * 生成一个清点条目：检查敏感、可读与大小，凭证内容拒发；非输出样式先去引用化，再按上限依次内联 import（跳过敏感、未闭合块、含链接、超限或含凭证的），必要时对合并结果再去引用；返回 {entry, foldedIncludes, leftBehind}。
  */
@@ -1496,7 +1522,7 @@ async function buildInventoryEntry(walkState, pathFilter, candidate, sensitiveBy
     };
   }
   let foldedSet = new Set(folded);
-  let defusedCount = count(
+  let defusedCount = countWhere(
     defused.defusedPaths,
     (defusedPath) =>
       !foldedSet.has(
@@ -1516,7 +1542,7 @@ async function buildInventoryEntry(walkState, pathFilter, candidate, sensitiveBy
     leftBehind,
   };
 }
-//@ chunk-axmbhcjg.js:26856-27439 placement
+//@ chunk-vb7ng9fr.js:26891-27474 placement
 /**
  * 对记忆文件正文中指向非目的地的 @include 加反斜杠去引用（保留 frontmatter 与 BOM）；结果仍可能引用时退回到整体转义 @。
  */
@@ -1570,7 +1596,7 @@ function defuseIncludes(destination, content, path) {
         defusedPaths,
       };
 }
-//@ chunk-axmbhcjg.js:27439-27522 placement
+//@ chunk-vb7ng9fr.js:27474-27557 placement
 /**
  * 找出所有未受审查的 @ 引用写法。
  */
@@ -1580,17 +1606,17 @@ function defusedIncludes(body, isDestination) {
     ? atReferenceSpellings.spellings.filter((spelling) => !isDestination(spelling))
     : [];
 }
-//@ chunk-axmbhcjg.js:27522-27650 placement
+//@ chunk-vb7ng9fr.js:27557-27685 placement
 function hasNewIncludes(text, mergedContent, destination) {
   let isDestination = (include) => isDestinationInclude(destination, include);
   let includedOf = (text) => extractIncludePathsFromText(splitFrontmatter(text.toString("utf8")).body);
   let nextIncludes = includedOf(mergedContent);
   return (
     nextIncludes.some((include) => !isDestination(include)) ||
-    count(nextIncludes, isDestination) > count(includedOf(text), isDestination)
+    countWhere(nextIncludes, isDestination) > countWhere(includedOf(text), isDestination)
   );
 }
-//@ chunk-axmbhcjg.js:27650-27819 placement
+//@ chunk-vb7ng9fr.js:27685-27854 placement
 function escapeAllIncludes(content) {
   let str = content.toString("utf8");
   let { head, body } = splitFrontmatter(str);
@@ -1598,14 +1624,14 @@ function escapeAllIncludes(content) {
   let buffer = Buffer.from(inner + head + escapeAtSigns(body));
   return hasUnvettedIncludeIn(buffer, allowAllIncludes) ? Buffer.from(escapeAtSigns(str)) : buffer;
 }
-//@ chunk-axmbhcjg.js:27819-27877 placement
+//@ chunk-vb7ng9fr.js:27854-27912 placement
 /**
  * 判断内容体里是否有未受审查的 @include。
  */
 function hasUnvettedIncludeIn(content, isAllowed) {
   return hasUnvettedInclude(splitFrontmatter(content.toString("utf8")).body, isAllowed);
 }
-//@ chunk-axmbhcjg.js:27877-28019 placement
+//@ chunk-vb7ng9fr.js:27912-28054 placement
 function splitFrontmatter(text) {
   let strippedBom = text.startsWith("\uFEFF") ? text.slice(1) : text;
   let match = FRONTMATTER_REGEX.exec(strippedBom)?.[0];
@@ -1619,14 +1645,14 @@ function splitFrontmatter(text) {
         body: strippedBom.slice(match.length),
       };
 }
-//@ chunk-axmbhcjg.js:28019-28199 placement
+//@ chunk-vb7ng9fr.js:28054-28234 placement
 function isDestinationInclude(destination, include) {
   if (include.startsWith("/") || include.startsWith("~")) return false;
   let normalized = posix.normalize(posix.join(posix.dirname(destination), include));
   let normalizedInclude = normalized.startsWith("../") ? null : classifyWorkingFile(normalized);
   return normalizedInclude === "claude_md" || normalizedInclude === "rule";
 }
-//@ chunk-axmbhcjg.js:28199-28317 placement
+//@ chunk-vb7ng9fr.js:28234-28352 placement
 function isViaExcluded(via, excludedReal, styleVia) {
   let seen = new Set();
   for (let part = via; part !== undefined && !seen.has(part); part = styleVia.get(part)) {
@@ -1635,7 +1661,7 @@ function isViaExcluded(via, excludedReal, styleVia) {
   }
   return false;
 }
-//@ chunk-axmbhcjg.js:28317-28422 placement
+//@ chunk-vb7ng9fr.js:28352-28457 placement
 async function isStillAtRealPath(walkState, location) {
   try {
     return (await realpathStrict(join(walkState.realConfigHome, location.nativeRel))) === location.realPath;

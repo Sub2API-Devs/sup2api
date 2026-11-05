@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。在本机运行 RunMonitorCommand：检查规则、节流输出、超时与进程组清理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pzkdz9nx.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wdedvd7d.js (6)
  * attribution: placement 6
  */
 import { readdir, readFile } from "fs/promises";
@@ -38,7 +38,7 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { lit } from "../analytics/safeMetadata.js";
 import { appendTaskOutputTrailer, evictTaskOutput } from "../../utils/task/diskOutput.js";
 
-//@ chunk-pzkdz9nx.js:889-1853 placement
+//@ chunk-wdedvd7d.js:888-1852 placement
 /**
  * 监控结果的 schema。
  */
@@ -93,7 +93,7 @@ var monitorResultSchema = DoctorLazy(() =>
     outputPath: stringSchema().optional(),
   }),
 );
-//@ chunk-pzkdz9nx.js:1853-2109 placement
+//@ chunk-wdedvd7d.js:1852-2108 placement
 /**
  * 监控输出节流与洪泛检测
  */
@@ -127,14 +127,14 @@ function createOutputThrottle({ tryConsume, killAfterMs, quietGapMs, now, send, 
     unreported: () => suppressedCount,
   };
 }
-//@ chunk-pzkdz9nx.js:2109-2141 placement
+//@ chunk-wdedvd7d.js:2108-2140 placement
 /**
  * 按宿主统计的运行中监控数。
  */
 var monitorCountByHost = new HostScoped(() => ({
   running: 0,
 }));
-//@ chunk-pzkdz9nx.js:2141-2433 placement
+//@ chunk-wdedvd7d.js:2140-2431 placement
 /**
  * 读 /proc 中同进程组的进程
  */
@@ -159,7 +159,7 @@ async function readProcessGroup(pid) {
     alive,
   };
 }
-//@ chunk-pzkdz9nx.js:2433-2827 placement
+//@ chunk-wdedvd7d.js:2431-2825 placement
 /**
  * 结束监控命令的进程组
  */
@@ -186,7 +186,7 @@ async function killMonitorProcessGroup(target) {
   }
   for (let j = 0; alive && j < MAX_SIGKILL_ROUNDS; j++) alive = await signalGroup("SIGKILL");
 }
-//@ chunk-pzkdz9nx.js:2827-8313 placement
+//@ chunk-wdedvd7d.js:2825-8311 placement
 /**
  * 在本机运行 RunMonitorCommand：检查规则、节流输出、超时与进程组清理。
  */

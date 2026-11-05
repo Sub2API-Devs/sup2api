@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/cd 命令：切换工作目录，进入不受信任目录时的信任提示流程。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fh3th4b7.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h7zt53zj.js (12)
  * attribution: placement 12
  */
 import { resolve } from "path";
@@ -28,9 +28,10 @@ import { Text, Box, Link } from "../../ink/components/Text.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { useInputClock } from "../../ink/components/Input.js";
-import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
+import { useMountTime } from "../../components/CustomSelect/selectTypeahead.js";
 import { isWithinRecentInput, RECENT_INPUT_GUARD_MS } from "../../hooks/useRecentInputGuard.js";
 import { escapePathForDisplay, stripInvisibleChars } from "../../utils/invisibleChars.js";
+import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { ConfirmSelect } from "../../components/design-system/ConfirmSelect.js";
 import { Byline } from "../../components/design-system/Byline.js";
 import { KeyboardShortcutHint } from "../../components/design-system/KeyboardShortcutHint.js";
@@ -57,9 +58,9 @@ import { MCPServerApprovalDialog } from "../../components/MCPServerApprovalDialo
 import { MCPServerMultiselectDialog } from "../../components/MCPServerMultiselectDialog.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 
-//@ chunk-fh3th4b7.js:14226-14230 placement
+//@ chunk-h7zt53zj.js:15411-15415 placement
 init_react_production();
-//@ chunk-fh3th4b7.js:14230-14381 placement
+//@ chunk-h7zt53zj.js:15415-15564 placement
 function readBackstopSettingsSafe() {
   try {
     return collectPermissionTrustSources();
@@ -71,13 +72,13 @@ function readBackstopSettingsSafe() {
     return;
   }
 }
-//@ chunk-fh3th4b7.js:14381-14452 placement
+//@ chunk-h7zt53zj.js:15564-15635 placement
 function logPersistTrustFailure(error) {
   logForDebugging(`/cd: persisting trust failed: ${error}`, {
     level: "error",
   });
 }
-//@ chunk-fh3th4b7.js:14452-14810 placement
+//@ chunk-h7zt53zj.js:15635-15993 placement
 /**
  * /cd 结果消息组件（立即结束）。
  */
@@ -116,29 +117,25 @@ function CdResultMessage(props) {
   } else layout = $[6];
   return layout;
 }
-//@ chunk-fh3th4b7.js:14810-17326 placement
+//@ chunk-h7zt53zj.js:15993-18460 placement
 function CdTrustPrompt(props) {
   let $ = useMemoCache(36);
   let { directory, trustRoot, disclosures, backstop, onConfirm, onCancel } = props;
   let isBackstop = backstop === undefined ? false : backstop;
   let committed = useRef(false);
   let inputClock = useInputClock();
-  let startedAt;
-  if ($[0] === MEMO_CACHE_SENTINEL) {
-    startedAt = Date.now();
-    $[0] = startedAt;
-  } else startedAt = $[0];
-  let lastInput = useRef(startedAt);
+  let mountTime = useMountTime();
   let guard;
-  if ($[1] !== inputClock) {
+  if ($[0] !== inputClock || $[1] !== mountTime) {
     guard = (fn) => {
-      if (committed.current || isWithinRecentInput(inputClock, lastInput.current, RECENT_INPUT_GUARD_MS)) {
+      if (committed.current || isWithinRecentInput(inputClock, mountTime(), RECENT_INPUT_GUARD_MS)) {
         return;
       }
       committed.current = true;
       fn();
     };
-    $[1] = inputClock;
+    $[0] = inputClock;
+    $[1] = mountTime;
     $[2] = guard;
   } else guard = $[2];
   let guarded = guard;
@@ -314,7 +311,7 @@ function CdTrustPrompt(props) {
   } else footer = $[35];
   return footer;
 }
-//@ chunk-fh3th4b7.js:17326-19183 placement
+//@ chunk-h7zt53zj.js:18460-20317 placement
 /**
  * 进入目录前的信任披露：预批准规则、额外目录、钩子与命令助手来源。
  */
@@ -464,7 +461,7 @@ function TrustDisclosures(props) {
   } else disclosureBox = $[21];
   return disclosureBox;
 }
-//@ chunk-fh3th4b7.js:19183-21594 placement
+//@ chunk-h7zt53zj.js:20317-22728 placement
 /**
  * 先校验路径（不存在、不是目录等给出提示），需要时进入信任对话框； 切换后重载插件与 MCP，待批准的项目 MCP 服务器逐个弹出确认。
  */
@@ -606,7 +603,7 @@ async function runCdCommand(onDone, context, args) {
     },
   });
 }
-//@ chunk-fh3th4b7.js:21594-22016 placement
+//@ chunk-h7zt53zj.js:22728-23150 placement
 /**
  * 收集新目录待批准的项目 MCP 服务器（设置文件有错时不弹）。
  */
@@ -637,7 +634,7 @@ async function collectPendingMcpServers(context) {
     return pending;
   }
 }
-//@ chunk-fh3th4b7.js:22016-22174 placement
+//@ chunk-h7zt53zj.js:23150-23308 placement
 async function reloadPluginsSafe(context) {
   try {
     await context.reloadPlugins?.();
@@ -647,7 +644,7 @@ async function reloadPluginsSafe(context) {
     });
   }
 }
-//@ chunk-fh3th4b7.js:22174-22787 placement
+//@ chunk-h7zt53zj.js:23308-23921 placement
 /**
  * 逐个弹出待批准 MCP 服务器的确认。
  */
@@ -691,7 +688,7 @@ function PendingMcpApprovals(props) {
   } else footer = $[10];
   return footer;
 }
-//@ chunk-fh3th4b7.js:22787-23697 placement
+//@ chunk-h7zt53zj.js:23921-24831 placement
 function CdUntrustedMoveFlow(props) {
   let $ = useMemoCache(18);
   let { directory, trustRoot, disclosures, onConfirm, onComplete, onCancel } = props;
@@ -770,7 +767,7 @@ function CdUntrustedMoveFlow(props) {
   } else statusLine = $[17];
   return statusLine;
 }
-//@ chunk-fh3th4b7.js:23697-25009 placement
+//@ chunk-h7zt53zj.js:24831-26145 placement
 /**
  * /cd 结果视图（先处理项目授权，再完成）。
  */

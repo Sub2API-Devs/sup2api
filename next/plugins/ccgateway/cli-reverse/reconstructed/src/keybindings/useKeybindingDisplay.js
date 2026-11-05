@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：快捷键显示钩子。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qfgcgf22.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s4vz6xge.js (2)
  * attribution: placement 2
  */
 import { init_react_production, useRef, useEffect } from "../../vendor/react/cjs/react.production.js";
@@ -15,12 +15,12 @@ import { logShortcutFallbackUsed } from "./shortcutFormat.js";
 import { chordToString } from "./parser.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-qfgcgf22.js:310-314 placement
+//@ chunk-s4vz6xge.js:310-314 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-qfgcgf22.js:310", () => {
+deferInit("chunk-s4vz6xge.js:310", () => {
   init_react_production();
 });
-//@ chunk-qfgcgf22.js:314-544 placement
+//@ chunk-s4vz6xge.js:314-544 placement
 /**
  * 取动作对应快捷键的显示文本；找不到绑定时回退给定文本并（一次性）上报回退原因。
  */

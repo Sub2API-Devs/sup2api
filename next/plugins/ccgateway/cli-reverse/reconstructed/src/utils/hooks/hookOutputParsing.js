@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：钩子输出解析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (19)
  * attribution: placement 19
  */
 import { getHookEventEmitState, getHookMessageTexts } from "./hookEventHelpers.js";
 import { env } from "../env.js";
 import { logForDebugging } from "../debug.js";
-import { isPlainObject as isPlainObject_5 } from "../isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../isPlainObject.js";
 import { hookJSONOutputSchema, isSyncHookJSONOutput } from "../../types/hooks.js";
 import { hasMcpInboundDoor, MAX_NESTING_PARSED } from "../../services/mcp/mcpInboundDoor.js";
 import { isJsonNestingWithin, countJsonMembers } from "../jsonScan.js";
@@ -20,14 +20,14 @@ import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:937271-937320 placement
+//@ chunk-5xgkngpb.js:948464-948513 placement
 /**
  * 打开/关闭"发送全部钩子事件"的 SDK 开关。
  */
 function setAllHookEventsEnabled(enabled) {
   getHookEventEmitState().setAllHookEventsEnabled(enabled);
 }
-//@ chunk-e6aww6q8.js:937320-937491 placement
+//@ chunk-5xgkngpb.js:948513-948684 placement
 /**
  * 读取并清除 CLAUDE_CODE_EMIT_USER_PROMPT_SUBMIT_HOOK_EVENTS，开启 UserPromptSubmit 开始/结束事件。
  */
@@ -36,7 +36,7 @@ function consumeUserPromptSubmitEventsEnv() {
     getHookEventEmitState().userPromptSubmitStartAndEndEnabled = true;
   env.unset("CLAUDE_CODE_EMIT_USER_PROMPT_SUBMIT_HOOK_EVENTS");
 }
-//@ chunk-e6aww6q8.js:937491-938146 placement
+//@ chunk-5xgkngpb.js:948684-949339 placement
 /**
  * 校验钩子 JSON 输出的键，给出拼写建议。
  */
@@ -65,9 +65,9 @@ function validateHookJsonOutput(output, schema) {
     : "";
   logForDebugging(`Hook JSON output had unrecognized keys (ignored): ${unknownKeys.join(", ")}.${hint}`);
 }
-//@ chunk-e6aww6q8.js:938146-938387 placement
-function findSyncJsonAnswer(stdout, { objectIn: reader } = createHookJsonReader()) {
-  let lines = stdout.trim().split(`
+//@ chunk-5xgkngpb.js:949339-949580 placement
+function findSyncJsonAnswer(value, { objectIn: reader } = createHookJsonReader()) {
+  let lines = value.trim().split(`
 `);
   let [firstLine = ""] = lines;
   let parsed = reader(firstLine.trim());
@@ -86,12 +86,12 @@ function findSyncJsonAnswer(stdout, { objectIn: reader } = createHookJsonReader(
   }
   return;
 }
-//@ chunk-e6aww6q8.js:938387-938573 placement
-function hasUnparsedJsonLine(stdout, { objectIn: reader, leftSomeUnparsed } = createHookJsonReader()) {
+//@ chunk-5xgkngpb.js:949580-949766 placement
+function hasUnparsedJsonLine(value, { objectIn: reader, leftSomeUnparsed } = createHookJsonReader()) {
   let isAsync = (text) => "async" in (reader(text) ?? {});
   return (
-    !isAsync(stdout.trim()) &&
-    stdout
+    !isAsync(value.trim()) &&
+    value
       .split(
         `
 `,
@@ -103,12 +103,12 @@ function hasUnparsedJsonLine(stdout, { objectIn: reader, leftSomeUnparsed } = cr
     !leftSomeUnparsed()
   );
 }
-//@ chunk-e6aww6q8.js:938573-939819 placement
+//@ chunk-5xgkngpb.js:949766-951012 placement
 /**
  * 解析异步钩子的 JSON 输出，校验 systemMessage 等字段。
  */
 function parseAsyncHookOutput(output, hookName) {
-  if (!isPlainObject_5(output)) {
+  if (!isPlainObject_6(output)) {
     logForDebugging(
       `${hookName} async hook JSON output must be an object, got ${jsonTypeLabel(output)} \u2014 ignored`,
       {
@@ -128,14 +128,14 @@ function parseAsyncHookOutput(output, hookName) {
     if (typeof output.systemMessage === "string") result.systemMessage = output.systemMessage;
     else dropped.push(`systemMessage (${jsonTypeLabel(output.systemMessage)})`);
   if ("metrics" in output)
-    if (isPlainObject_5(output.metrics)) {
+    if (isPlainObject_6(output.metrics)) {
       let filtered = Object.entries(output.metrics).filter(
         (entry) => typeof entry[1] === "boolean" || typeof entry[1] === "number",
       );
       result.metrics = Object.fromEntries(filtered);
     } else dropped.push(`metrics (${jsonTypeLabel(output.metrics)})`);
   if ("hookSpecificOutput" in output)
-    if (isPlainObject_5(output.hookSpecificOutput)) {
+    if (isPlainObject_6(output.hookSpecificOutput)) {
       let { additionalContext, ...rest } = output.hookSpecificOutput;
       let hasContext = typeof additionalContext === "string";
       if (!hasContext && additionalContext !== undefined)
@@ -157,15 +157,15 @@ function parseAsyncHookOutput(output, hookName) {
   );
   return result;
 }
-//@ chunk-e6aww6q8.js:939819-939918 placement
+//@ chunk-5xgkngpb.js:951012-951111 placement
 function jsonTypeLabel(value) {
   if (value === null) return "null";
   if (Array.isArray(value)) return "an array";
   return `a ${typeof value}`;
 }
-//@ chunk-e6aww6q8.js:939918-939930 placement
+//@ chunk-5xgkngpb.js:951111-951123 placement
 var MAX_JSON_KEYS_BUDGET = 256;
-//@ chunk-e6aww6q8.js:939930-940304 placement
+//@ chunk-5xgkngpb.js:951123-951496 placement
 /**
  * 存在 MCP 入站通道时创建 JSON 解析预算：限制嵌套深度和成员总数。
  */
@@ -194,7 +194,7 @@ function createJsonParseBudget() {
     return false;
   };
 }
-//@ chunk-e6aww6q8.js:940304-940597 placement
+//@ chunk-5xgkngpb.js:951496-951788 placement
 function createHookJsonReader() {
   if (!hasMcpInboundDoor())
     return {
@@ -225,17 +225,17 @@ function createHookJsonReader() {
     leftSomeUnparsed: () => dropped,
   };
 }
-//@ chunk-e6aww6q8.js:940597-940693 placement
+//@ chunk-5xgkngpb.js:951788-951884 placement
 function parseJsonObjectOrUndefined(text) {
   if (!text.startsWith("{")) return;
   try {
     let parsed = jsonParse(text);
-    return isPlainObject_5(parsed) ? parsed : undefined;
+    return isPlainObject_6(parsed) ? parsed : undefined;
   } catch {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:940693-941306 placement
+//@ chunk-5xgkngpb.js:951884-952590 placement
 /**
  * 异步 hook 注册状态：待完成 hook、未投递的响应、会话环境是否过期等。
  */
@@ -243,6 +243,10 @@ class AsyncHookRegistryState {
   pendingHooks = new Map();
   undeliveredResponses = [];
   holdsAnswerForModel = false;
+  plainOutputs = {
+    held: 0,
+    polled: 0,
+  };
   isSessionEnvStale = false;
   register(hook) {
     this.pendingHooks.set(hook.processId, hook);
@@ -266,26 +270,27 @@ class AsyncHookRegistryState {
   }
   holdResponse(response) {
     this.undeliveredResponses.push(response);
-    this.holdsAnswerForModel ||= getHookMessageTexts(response.response).length > 0;
+    if (response.isPlainOutput) this.plainOutputs.held++;
+    this.holdsAnswerForModel ||= !response.isPlainOutput && getHookMessageTexts(response.response).length > 0;
   }
   takeUndeliveredResponses() {
     this.holdsAnswerForModel = false;
     return this.undeliveredResponses.splice(0);
   }
 }
-//@ chunk-e6aww6q8.js:941306-941333 placement
+//@ chunk-5xgkngpb.js:952590-952617 placement
 var asyncHookRegistryStateRegistry; // deferred: uses AsyncHookRegistryState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:941306", () => {
+deferInit("chunk-5xgkngpb.js:952590", () => {
   asyncHookRegistryStateRegistry = new HostScoped(() => new AsyncHookRegistryState());
 });
-//@ chunk-e6aww6q8.js:941333-941372 placement
+//@ chunk-5xgkngpb.js:952617-952656 placement
 /**
  * 取当前宿主的异步钩子注册状态。
  */
 function currentAsyncHookRegistryState() {
   return asyncHookRegistryStateRegistry.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:3391747-3391914 placement
+//@ chunk-5xgkngpb.js:3479954-3480121 placement
 /**
  * 创建空的钩子输出解析状态（stdout/stderr/退出码等字段）。
  */
@@ -303,7 +308,7 @@ function emptyHookOutputState() {
     stdoutScanFrom: 0,
   };
 }
-//@ chunk-e6aww6q8.js:3391914-3392024 placement
+//@ chunk-5xgkngpb.js:3480121-3480231 placement
 /**
  * 扫描钩子输出中的 started/result/exited 标记段。
  */
@@ -311,7 +316,7 @@ function scanHookOutputMarkers(state, marker) {
   state.scanFrom = stripHookOutputMarkers(state, "stderr", state.scanFrom, marker);
   state.stdoutScanFrom = stripHookOutputMarkers(state, "stdout", state.stdoutScanFrom, marker);
 }
-//@ chunk-e6aww6q8.js:3392024-3392984 placement
+//@ chunk-5xgkngpb.js:3480231-3481197 placement
 /**
  * 从 hook 输出中剥离 started/result/exited 标记段并解析结果，记录冲突。
  */
@@ -382,7 +387,7 @@ ${marker} `,
   let max = Math.max(0, state[stream].length - (marker.length + 16));
   return index_2 === -1 ? max : Math.min(index_2, max);
 }
-//@ chunk-e6aww6q8.js:3392984-3393040 placement
+//@ chunk-5xgkngpb.js:3481197-3481253 placement
 /**
  * 合并退出码：2（阻断）优先，否则取新值。
  */
@@ -390,7 +395,7 @@ function strongerExitStatus(code, exitStatus) {
   if (exitStatus === undefined) return;
   return code === 2 ? 2 : exitStatus;
 }
-//@ chunk-e6aww6q8.js:3393040-3393213 placement (2.1.88 match: sameSessionId, 0.656)
+//@ chunk-5xgkngpb.js:3481253-3481426 placement (2.1.88 match: sameSessionId, 0.656)
 /**
  * 从输出缓冲的某字段剪掉一段并在 output 中删除相同文本（与 bridge 无关）。
  */
@@ -403,8 +408,6 @@ function spliceOutputSegment(state, stream, from, to) {
 }
 export {
   currentAsyncHookRegistryState,
-  setAllHookEventsEnabled,
-  consumeUserPromptSubmitEventsEnv,
   createHookJsonReader,
   findSyncJsonAnswer,
   parseAsyncHookOutput,
@@ -414,4 +417,6 @@ export {
   emptyHookOutputState,
   scanHookOutputMarkers,
   strongerExitStatus,
+  setAllHookEventsEnabled,
+  consumeUserPromptSubmitEventsEnv,
 };

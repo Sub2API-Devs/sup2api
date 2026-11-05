@@ -1,13 +1,13 @@
 /**
  * semver/internal/constants.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: semver@7.7.3..7.7.4
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-bwbq4xvm.js:1410-1748 cjs-fingerprint
+//@ chunk-7kayq7nc.js:1484-1822 cjs-fingerprint
 var require_constants = __commonJS(function (cjsExports, cjsModule) {
   var MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER || 9007199254740991;
   var RELEASE_TYPES = ["major", "premajor", "minor", "preminor", "patch", "prepatch", "prerelease"];

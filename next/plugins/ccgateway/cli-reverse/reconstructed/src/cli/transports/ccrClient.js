@@ -3,13 +3,13 @@
  *
  * CCR（云会话）worker 客户端：事件批量上传、状态、心跳、投递确认与流事件处理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/transports/ccrClient.ts
- * pieces: chunk-3wek6r2k.js (1), chunk-fp6aqx1j.js (91)
- * attribution: fingerprint 3, placement 73, layout 11, affinity 4, callgraph-witnessed 1
+ * pieces: chunk-hjswk319.js (1), chunk-qyz2x025.js (95)
+ * attribution: fingerprint 3, placement 73, layout 13, affinity 4, sole-consumer 2, callgraph-witnessed 1
  */
 import { randomUUID } from "crypto";
-import { count, setsEqual, uniq } from "../../utils/collections.js";
+import { countWhere, setsEqual } from "../../utils/collections.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -17,6 +17,10 @@ import { MAX_FRAME_BYTES, findCoalescedRunHead, coalesceStreamEvents } from "./s
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { lit, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { isKnownContentBlockType } from "../../services/api/requestHeaders.js";
+import { coalescePatches } from "./WorkerStateUploader.js";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { sleep, withDeadline } from "../../utils/sleep.js";
+import { pickByHelper } from "../../utils/git/gitSafeEnv.js";
 import { REMOTE_TOOLS_LOG_EVENTS } from "../../services/remoteTools/remoteToolsDebug.js";
 import { getErrnoCode, errorMessage } from "../../utils/errors.js";
 import { DoctorLazy } from "../handlers/util.js";
@@ -31,13 +35,17 @@ import {
   literal,
   numberSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
-import { requestIdOf, notifySessionStateChanged } from "../../utils/sessionState.js";
+import { requestIdOf } from "../../utils/sessionState.js";
 import { buildRequiresActionDetails } from "../structuredIO.js";
+import {
+  MAX_LIVE_RESPONSE_BYTES,
+  capLiveOnlyResponseSize,
+  isLiveOnlyResponse,
+} from "../../bridge/controlRequests.js";
 import { env } from "../../utils/env.js";
+import { isSelfHostedRemoteEnvironment, isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import { getSessionIngressAuthHeaders, getSessionIngressAuthToken } from "../../utils/sessionIngressAuth.js";
 import { convertWsUrlToPostUrl } from "./HybridTransport.js";
-import { WorkerStateUploader } from "./WorkerStateUploader.js";
-import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { logForDiagnosticsNoPII, flushDiagnosticLogs } from "../../utils/diagLogs.js";
 import {
   ClientEventUploader,
@@ -51,6 +59,7 @@ import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { logEvent } from "../../services/analytics/index.js";
 import {
   isAssistantWithMessageId,
+  withholdFileBodiesDeep,
   stripInlineMediaBase64,
   dedupeMcpImageData,
   stripTranscriptOnlyFields,
@@ -58,11 +67,11 @@ import {
 } from "./ccrMessageMapping.js";
 import { isRelayableControlFrame } from "../../remote/RemoteSessionManager.js";
 import { MAX_TIMER_DELAY_MS } from "../../utils/timerDelayClamp.js";
-import { sleep, withDeadline } from "../../utils/sleep.js";
 import {
   setActivityCallback,
   onWorkStarted,
   hasActiveWork,
+  isActivityReasonActive,
   clearActivityCallback,
   getMainLoopRefcount,
 } from "../../utils/sessionActivity.js";
@@ -76,19 +85,19 @@ import { createCombinedAbortSignal } from "../../utils/combinedAbortSignal.js";
 import { readRequestIdSource, isNonOriginSource } from "../../services/api/requestIdSource.js";
 import { decodeJwtExpiry } from "../../bridge/jwtUtils.js";
 import { isHearthDegraded } from "../../services/mcp/hearthDegraded.js";
-import { pickByHelper } from "../../utils/git/gitSafeEnv.js";
 import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { retirePoolAfterNoAnswer } from "../../upstreamproxy/ccrPoolRetire.js";
+import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
 import { sessionIdBody } from "../../bridge/sessionIdCompat.js";
 import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
-import { capLiveOnlyResponseSize, isLiveOnlyResponse } from "../../bridge/controlRequests.js";
-import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
 import { chunk_default } from "../../../vendor/lodash-es/chunk.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { isClassifierDumpEvent } from "../../utils/teleport/autoModeDumps.js";
 import { registerCleanup, registerPreExitFlush } from "../../utils/cleanupRegistry.js";
 import { createSignal } from "../../utils/signal.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3wek6r2k.js:29172-29300 fingerprint (2.1.88 match: scopeKey, 0.642)
+//@ chunk-hjswk319.js:28509-28637 fingerprint (2.1.88 match: scopeKey, 0.641)
 /**
  * 构造一条 replay 用户消息（isReplay）。
  */
@@ -105,10 +114,10 @@ function scopeKey(sessionId, uuid, content) {
     },
   };
 }
-//@ chunk-fp6aqx1j.js:1962-2061 placement
+//@ chunk-qyz2x025.js:2067-2166 placement
 var CCR_TICKET_HEADER_NAMES = ["x-ccr-ticket-rev", "x-ccr-ticket-session", "x-ccr-ticket-seq"];
 var TICKET_VALUE_PATTERN = /^[A-Za-z0-9_-]{1,4096}$/;
-//@ chunk-fp6aqx1j.js:2061-2498 placement
+//@ chunk-qyz2x025.js:2166-2603 placement
 class TicketHeaders {
   authorization;
   held = new Map();
@@ -133,9 +142,9 @@ class TicketHeaders {
     }
   }
 }
-//@ chunk-fp6aqx1j.js:2498-2508 placement
+//@ chunk-qyz2x025.js:2603-2613 placement
 var MAX_REMEMBERED_ATTEMPTS = 64;
-//@ chunk-fp6aqx1j.js:2508-3134 placement
+//@ chunk-qyz2x025.js:2613-3239 placement
 class UploadBacklogStats {
   rowsAhead;
   queuedSince = new WeakSet();
@@ -150,7 +159,7 @@ class UploadBacklogStats {
     for (let id of ids) this.queuedSince.add(id);
   }
   noteAttempt(ids, startedAt, attemptStart) {
-    let ahead = count(ids, (id) => this.queuedSince.has(id));
+    let ahead = countWhere(ids, (id) => this.queuedSince.has(id));
     this.posts++;
     if (attemptStart) this.rows += ahead;
     else this.failedPosts++;
@@ -179,16 +188,16 @@ class UploadBacklogStats {
     };
   }
 }
-//@ chunk-fp6aqx1j.js:3134-3147 placement
+//@ chunk-qyz2x025.js:3239-3252 placement
 /**
  * 压缩边界 preservedMessages.uuids 最多保留 1536 个，超出截尾并同步裁剪 allUuids 与 headUuid。
  */
 var MAX_PRESERVED_MESSAGE_UUIDS = 1536;
-//@ chunk-fp6aqx1j.js:3147-3221 placement
+//@ chunk-qyz2x025.js:3252-3326 placement
 function isStringArray(value) {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
-//@ chunk-fp6aqx1j.js:3221-3630 placement
+//@ chunk-qyz2x025.js:3326-3735 placement
 /**
  * 压缩后的 boundary 行如果 preservedMessages.uuids 过多，只保留最后 n 个并同步裁剪 allUuids 与 preservedSegment.headUuid。
  */
@@ -224,7 +233,12 @@ function trimPreservedMessagesMetadata(metadata, max = MAX_PRESERVED_MESSAGE_UUI
     },
   };
 }
-//@ chunk-fp6aqx1j.js:3630-3693 placement
+//@ chunk-qyz2x025.js:3735-3772 layout
+var REQUEST_FOLLOWS_INIT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-qyz2x025.js:3735", () => {
+  REQUEST_FOLLOWS_INIT = Symbol("requestFollowsInit");
+});
+//@ chunk-qyz2x025.js:3772-3835 placement
 /**
  * 持久上传账本限额：重试次数小于 10 优先重发、未应答超过 1 万条清空停写、行龄与行字节上限。
  */
@@ -233,11 +247,11 @@ var MAX_LEDGER_RETRIES = 10;
 var MAX_UNANSWERED_ROWS = 1e4;
 var MAX_ROW_AGE_MS = 400;
 var MAX_ROW_BYTES = 2097152;
-//@ chunk-fp6aqx1j.js:3693-3796 placement
+//@ chunk-qyz2x025.js:3835-3938 placement
 function isIsoTimestamp(value) {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value) && !Number.isNaN(Date.parse(value));
 }
-//@ chunk-fp6aqx1j.js:3796-4060 placement
+//@ chunk-qyz2x025.js:3938-4202 placement
 function parseClientRowsOwedSpans(clientRowsOwed) {
   if (!isPlainObject(clientRowsOwed) || clientRowsOwed.v !== 1 || !Array.isArray(clientRowsOwed.spans))
     return [];
@@ -256,7 +270,7 @@ function parseClientRowsOwedSpans(clientRowsOwed) {
       : [],
   );
 }
-//@ chunk-fp6aqx1j.js:4060-6802 placement
+//@ chunk-qyz2x025.js:4202-6944 placement
 /**
  * 记录本轮已发送/重发的消息与未应答项，用于恢复时补发（tengu_patient_ledger）。
  */
@@ -299,7 +313,7 @@ class TurnLedger {
       this.runOpen = !this.runOpen;
       this.runOpenedAt = this.runOpen ? rows.toISOString() : this.runOpenedAt;
     }
-    if (!stamp) return this.guardEnded(rows);
+    if (!stamp) return this.guardEnded(rows.getTime());
     return (
       (this.runOpen ? this.openOwnSpan(rows) : this.rowsAnswered([])) ??
       (this.writes && (this.own !== undefined || this.earlier.length > 0) ? this.note() : undefined)
@@ -342,7 +356,7 @@ class TurnLedger {
   }
   guardEnded(reason) {
     this.guardLapsed = true;
-    this.stampsCountFrom = reason.getTime();
+    this.stampsCountFrom = reason;
     this.unanswered.clear();
     if (!this.writes || this.own === undefined) return;
     this.own = undefined;
@@ -403,7 +417,7 @@ class TurnLedger {
     };
   }
 }
-//@ chunk-fp6aqx1j.js:6802-7052 placement
+//@ chunk-qyz2x025.js:6944-7194 placement
 function getMainThreadTurnUuid(message) {
   let content = isPlainObject(message.message) ? message.message.content : undefined;
   return typeof message.uuid === "string" &&
@@ -416,7 +430,7 @@ function getMainThreadTurnUuid(message) {
     ? message.uuid
     : undefined;
 }
-//@ chunk-fp6aqx1j.js:7052-7911 placement
+//@ chunk-qyz2x025.js:7194-8053 placement
 function selectRowsToResend(fromUuid, rows, keep = () => true) {
   let reason = "nothing";
   let flattened = fromUuid.flatMap(({ since, until }) => {
@@ -468,7 +482,7 @@ function selectRowsToResend(fromUuid, rows, keep = () => true) {
     leftOut: reason,
   };
 }
-//@ chunk-fp6aqx1j.js:7911-8078 placement
+//@ chunk-qyz2x025.js:8053-8220 placement
 function findLastRowBeforeSpans(spans, rowsLoaded, fromMs) {
   let index = rowsLoaded.findIndex(
     isAtOrAfterTimestamp(Math.min(...spans.map(({ since }) => Date.parse(since)))),
@@ -476,12 +490,12 @@ function findLastRowBeforeSpans(spans, rowsLoaded, fromMs) {
   let uuid = (index < 0 ? rowsLoaded : rowsLoaded.slice(0, index)).findLast(fromMs)?.uuid;
   return typeof uuid === "string" ? uuid : undefined;
 }
-//@ chunk-fp6aqx1j.js:8078-8190 placement
+//@ chunk-qyz2x025.js:8220-8332 placement (2.1.88 match: evaluateTimeBasedTrigger, 0.795)
 function isAtOrAfterTimestamp(time) {
   let time_2 = new Date(time).getTime();
   return (message) => typeof message.timestamp === "string" && Date.parse(message.timestamp) >= time_2;
 }
-//@ chunk-fp6aqx1j.js:8190-8432 placement
+//@ chunk-qyz2x025.js:8332-8574 placement
 var STREAM_EVENT_TYPES = {
   message_start: true,
   message_delta: true,
@@ -498,7 +512,7 @@ var STREAM_DELTA_TYPES = {
   signature_delta: true,
   compaction_delta: true,
 };
-//@ chunk-fp6aqx1j.js:8432-8725 placement
+//@ chunk-qyz2x025.js:8574-8867 placement
 function stripInputTransformations(event) {
   let { event: event_2 } = event;
   if (event_2.type === "message_start" && event_2.message?.input_transformations) {
@@ -520,7 +534,7 @@ function stripInputTransformations(event) {
   }
   return event;
 }
-//@ chunk-fp6aqx1j.js:8725-9005 placement
+//@ chunk-qyz2x025.js:8867-9147 placement
 function dropOversizeStreamEvent(frame, maxBytes) {
   let label = describeStreamEventForTelemetry(frame.event);
   let joined = Object.entries(label)
@@ -537,7 +551,7 @@ function dropOversizeStreamEvent(frame, maxBytes) {
     bytes: maxBytes,
   });
 }
-//@ chunk-fp6aqx1j.js:9005-9295 placement
+//@ chunk-qyz2x025.js:9147-9437 placement
 function describeStreamEventForTelemetry(event) {
   if (!isPlainObject(event))
     return {
@@ -557,25 +571,15 @@ function describeStreamEventForTelemetry(event) {
     }),
   };
 }
-//@ chunk-fp6aqx1j.js:9295-9359 placement
+//@ chunk-qyz2x025.js:9437-9501 placement
 function matchedKeyOrOther(key, known) {
   for (let key_2 in key) if (key_2 === known) return key_2;
   return "other";
 }
-//@ chunk-fp6aqx1j.js:9359-9379 layout
+//@ chunk-qyz2x025.js:9501-9521 layout
 var TEXT_POST_GAP_MS = 500;
 var MAX_TIMER_LATENESS_MS = 60000;
-//@ chunk-fp6aqx1j.js:9379-9497 layout
-function getTextRhythm(timing) {
-  timing.textRhythm ??= {
-    posts: 0,
-    gapsOver500Ms: 0,
-    lastPostAtMs: undefined,
-    timerMaxLateMs: undefined,
-  };
-  return timing.textRhythm;
-}
-//@ chunk-fp6aqx1j.js:9497-9736 fingerprint (2.1.88 match: accumulateStreamEvents, 0.846)
+//@ chunk-qyz2x025.js:9521-9760 fingerprint (2.1.88 match: accumulateStreamEvents, 0.846)
 function accumulateStreamEvents(payload) {
   if (payload.type !== "stream_event" || payload.parent_tool_use_id != null) return false;
   let { event } = payload;
@@ -588,25 +592,26 @@ function accumulateStreamEvents(payload) {
     /\S/.test(delta.text)
   );
 }
-//@ chunk-fp6aqx1j.js:9736-9828 affinity
-function markTextDeltaRows(events, countedTextEvents) {
-  let marked = false;
-  for (let event of events)
-    if (accumulateStreamEvents(event.payload) && !countedTextEvents.has(event)) {
-      countedTextEvents.add(event);
-      marked = true;
-    }
-  return marked;
-}
-//@ chunk-fp6aqx1j.js:9828-9950 affinity
-function recordTextPost(timing, postedAtMs) {
+//@ chunk-qyz2x025.js:9760-10081 affinity
+function countTextPostRhythm(timing, events, countedTextEvents, now) {
+  let filtered = events.filter(
+    (event) => accumulateStreamEvents(event.payload) && !countedTextEvents.has(event),
+  );
+  if (filtered.length === 0) return;
+  for (let event of filtered) countedTextEvents.add(event);
   let textRhythm = getTextRhythm(timing);
+  let { posts, gapsOver500Ms, lastPostAtMs } = textRhythm;
   textRhythm.posts++;
-  if (textRhythm.lastPostAtMs !== undefined && postedAtMs - textRhythm.lastPostAtMs > TEXT_POST_GAP_MS)
-    textRhythm.gapsOver500Ms++;
-  textRhythm.lastPostAtMs = postedAtMs;
+  if (lastPostAtMs !== undefined && now - lastPostAtMs > TEXT_POST_GAP_MS) textRhythm.gapsOver500Ms++;
+  textRhythm.lastPostAtMs = now;
+  return () => {
+    for (let event of filtered) countedTextEvents.delete(event);
+    textRhythm.posts = posts;
+    textRhythm.gapsOver500Ms = gapsOver500Ms;
+    textRhythm.lastPostAtMs = lastPostAtMs;
+  };
 }
-//@ chunk-fp6aqx1j.js:9950-10071 affinity
+//@ chunk-qyz2x025.js:10081-10202 affinity
 function recordTimerLateness(timing, latenessMs) {
   if (!(latenessMs >= 0)) return;
   let textRhythm = getTextRhythm(timing);
@@ -615,7 +620,17 @@ function recordTimerLateness(timing, latenessMs) {
     Math.min(Math.round(latenessMs), MAX_TIMER_LATENESS_MS),
   );
 }
-//@ chunk-fp6aqx1j.js:10071-10761 affinity
+//@ chunk-qyz2x025.js:10202-10320 affinity
+function getTextRhythm(timing) {
+  timing.textRhythm ??= {
+    posts: 0,
+    gapsOver500Ms: 0,
+    lastPostAtMs: undefined,
+    timerMaxLateMs: undefined,
+  };
+  return timing.textRhythm;
+}
+//@ chunk-qyz2x025.js:10320-11010 affinity
 class HoldStats {
   counts = {
     wholeTurnHolds: 0,
@@ -657,7 +672,252 @@ class HoldStats {
     }
   }
 }
-//@ chunk-fp6aqx1j.js:15795-15943 placement
+//@ chunk-qyz2x025.js:11010-15864 sole-consumer
+/**
+ * WorkerStateUploader：合并 worker 状态补丁（external/internal_metadata 深合并）并节流上传。
+ */
+class PatchQueue {
+  inflight = null;
+  pending = null;
+  pendingWaits = false;
+  pendingSince = 0;
+  waitTimer = null;
+  requeued = null;
+  requeuedMetadata = null;
+  remembered = {};
+  sending = null;
+  closingToNewPatches = new AbortController();
+  hasDroppedSomething = false;
+  cutKeptMetadata = false;
+  closed = false;
+  config;
+  constructor(config) {
+    this.config = config;
+  }
+  enqueue(patch) {
+    if (this.closed || this.isClosedToNewPatches) {
+      this.hasDroppedSomething = true;
+      return;
+    }
+    if (this.pending && "worker_status" in this.pending && "worker_status" in patch) this.drain();
+    let waits = !("worker_status" in patch) && (this.config.waitsForStatus?.(patch) ?? false);
+    this.pendingWaits = (this.pending === null || this.pendingWaits) && waits !== false;
+    if (this.pendingWaits && typeof waits === "number")
+      this.waitTimer ??= setTimeout(() => this.sendWaiting(), waits);
+    if (this.pending === null) {
+      this.pendingSince = Date.now();
+      this.pending = patch;
+    } else this.pending = coalescePatches(this.pending, patch);
+    if ("worker_status" in patch) this.requeued = null;
+    this.requeuedMetadata &&= diffMetadataAgainst(this.requeuedMetadata, patch);
+    this.remember(patch);
+    if (this.config.mergesSameRun?.()) queueMicrotask(() => void this.drain());
+    else this.drain();
+  }
+  requeueStatus(requeued) {
+    if (this.closed || this.isClosedToNewPatches) {
+      this.hasDroppedSomething = true;
+      return;
+    }
+    if (this.pending && "worker_status" in this.pending) return;
+    this.requeued = requeued;
+    this.drain();
+  }
+  requeueMetadata(metadata) {
+    if (this.closed || this.isClosedToNewPatches) {
+      this.hasDroppedSomething = true;
+      return;
+    }
+    this.putBackMetadata(metadata);
+  }
+  putBackMetadata(metadata) {
+    this.requeuedMetadata = diffMetadataAgainst(
+      coalescePatches(this.requeuedMetadata ?? {}, metadata),
+      this.pending ?? {},
+    );
+    this.drain();
+  }
+  remember(patch) {
+    if (this.config.remembers) this.remembered = coalescePatches(this.remembered, patch);
+  }
+  sendWaiting(minAgeMs = 0) {
+    if (this.pendingWaits && (minAgeMs <= 0 || Date.now() - this.pendingSince >= minAgeMs)) {
+      this.pendingWaits = false;
+      this.drain();
+    }
+  }
+  closeToNewPatches() {
+    if (this.closed) return;
+    this.pendingWaits = false;
+    this.disarmWaitTimer();
+    this.drain();
+    this.closingToNewPatches.abort();
+    this.hasDroppedSomething ||= this.requeued !== null;
+    this.requeued = null;
+    if (this.pending) {
+      this.hasDroppedSomething ||= "worker_status" in this.pending;
+      this.pending = this.withoutStatus(this.pending);
+    }
+  }
+  get isClosedToNewPatches() {
+    return this.closingToNewPatches.signal.aborted;
+  }
+  get hasCutKeptMetadata() {
+    return this.cutKeptMetadata;
+  }
+  get owesMetadata() {
+    return (
+      this.isClosedToNewPatches &&
+      !this.closed &&
+      (this.pending !== null ||
+        this.requeuedMetadata !== null ||
+        (this.sending !== null && this.withoutStatus(this.sending) !== null))
+    );
+  }
+  keepsWithoutStatus(patch) {
+    return this.withoutStatus(patch) !== null;
+  }
+  withoutStatus(patch) {
+    if (!("worker_status" in patch)) return patch;
+    let internalMetadata = patch.internal_metadata;
+    let keptMetadata = isPlainObject(internalMetadata)
+      ? omitAlias(
+          internalMetadata,
+          (this.config.ridesAStatus ?? []).filter(
+            (key) => internalMetadata[key] !== null || !this.config.deleteOutlivesStatus?.includes(key),
+          ),
+        )
+      : {};
+    return Object.keys(keptMetadata).length > 0
+      ? {
+          internal_metadata: keptMetadata,
+        }
+      : null;
+  }
+  close() {
+    this.pendingWaits = false;
+    this.drain();
+    this.closed = true;
+    this.clearPending();
+    this.requeued = null;
+    this.requeuedMetadata = null;
+  }
+  get unsent() {
+    return this.inflight !== null || this.pending !== null;
+  }
+  async flush() {
+    while (!this.closed)
+      if (this.inflight) await this.inflight;
+      else if (this.pending || this.requeued || this.requeuedMetadata) {
+        this.pendingWaits = false;
+        await this.drain();
+      } else return !this.hasDroppedSomething;
+    return false;
+  }
+  async drain() {
+    if (this.inflight || this.closed) return;
+    let pending = this.pendingWaits ? null : this.pending;
+    let next = pending ?? this.requeued;
+    let statusOnly = !pending;
+    if (pending) this.clearPending();
+    else if (this.requeued) this.requeued = null;
+    else if (this.requeuedMetadata) {
+      let remainder = diffMetadataAgainst(this.requeuedMetadata, {
+        internal_metadata: Object.fromEntries((this.config.requeuedAlone ?? []).map((key) => [key, null])),
+      });
+      if (remainder === null && this.pending) return;
+      let [[key, value] = []] = Object.entries(remainder ?? this.requeuedMetadata);
+      next =
+        key === undefined
+          ? null
+          : {
+              [key]: value,
+            };
+      this.requeuedMetadata = next && diffMetadataAgainst(this.requeuedMetadata, next);
+    }
+    if (!next) return;
+    this.inflight = this.sendWithRetry(next, statusOnly).then(() => {
+      this.inflight = null;
+      this.sending = null;
+      if ((this.pending || this.requeued || this.requeuedMetadata) && !this.closed) this.drain();
+    });
+  }
+  async sendWithRetry(patch, statusOnly) {
+    let current = patch;
+    let attempts = 0;
+    let cutKept = false;
+    while (!this.closed) {
+      this.sending = current;
+      if (await this.config.send(current)) return;
+      if (this.handsBackWithoutStatus(current)) return;
+      if (
+        this.isClosedToNewPatches &&
+        statusOnly &&
+        !("worker_status" in current) &&
+        this.pending &&
+        !this.closed
+      ) {
+        this.putBackMetadata(current);
+        return;
+      }
+      if (this.isClosedToNewPatches && !cutKept) {
+        cutKept = true;
+        attempts = 0;
+      }
+      attempts++;
+      await sleep(
+        this.retryDelay(attempts),
+        this.isClosedToNewPatches ? undefined : this.closingToNewPatches.signal,
+      );
+      if (this.handsBackWithoutStatus(current)) return;
+      if (this.pending && !this.closed) {
+        if (statusOnly) {
+          if (!("worker_status" in current) && !this.pendingWaits) {
+            this.putBackMetadata(current);
+            return;
+          }
+          if ("worker_status" in current && "worker_status" in this.pending) return;
+          continue;
+        }
+        current = coalescePatches(current, this.pending);
+        this.clearPending();
+      }
+    }
+  }
+  handsBackWithoutStatus(patch) {
+    if (!this.isClosedToNewPatches || !("worker_status" in patch)) return false;
+    if (this.closed) return true;
+    this.hasDroppedSomething = true;
+    this.cutKeptMetadata ||= this.pending !== null && "external_metadata" in this.pending;
+    this.pending = this.withoutStatus(this.pending ? coalescePatches(patch, this.pending) : patch);
+    return true;
+  }
+  clearPending() {
+    this.pending = null;
+    this.disarmWaitTimer();
+  }
+  disarmWaitTimer() {
+    if (this.waitTimer) {
+      clearTimeout(this.waitTimer);
+      this.waitTimer = null;
+    }
+  }
+  retryDelay(attempt) {
+    let min = Math.min(this.config.baseDelayMs * 2 ** (attempt - 1), this.config.maxDelayMs);
+    let jitter = Math.random() * this.config.jitterMs;
+    return min + jitter;
+  }
+}
+//@ chunk-qyz2x025.js:15864-16033 sole-consumer
+function diffMetadataAgainst(metadata, against) {
+  let out = {};
+  for (let [key, value] of Object.entries(metadata)) {
+    let kept = pickByHelper(value, (value, fieldName) => !(fieldName in (against[key] ?? {})));
+    if (Object.keys(kept).length > 0) out[key] = kept;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+//@ chunk-qyz2x025.js:16252-16407 placement
 var EMPTY_UPLOAD_TRIM; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DEFAULT_HEARTBEAT_INTERVAL_MS;
 var MIN_HEARTBEAT_INTERVAL_MS;
@@ -673,7 +933,8 @@ var HEARTBEAT_STALE_FACTOR;
 var MAX_CONSECUTIVE_HEARTBEAT_FAILURES;
 var HEARTBEAT_FATAL_STATUSES;
 var DEFAULT_STREAM_EVENT_FLUSH_INTERVAL_MS;
-deferInit("chunk-fp6aqx1j.js:15795", () => {
+var DEFAULT_HELD_BUNCH_FLUSH_MS;
+deferInit("chunk-qyz2x025.js:16252", () => {
   EMPTY_UPLOAD_TRIM = {};
   DEFAULT_HEARTBEAT_INTERVAL_MS = 20000;
   MIN_HEARTBEAT_INTERVAL_MS = 1e4;
@@ -689,12 +950,13 @@ deferInit("chunk-fp6aqx1j.js:15795", () => {
   MAX_CONSECUTIVE_HEARTBEAT_FAILURES = 3;
   HEARTBEAT_FATAL_STATUSES = new Set([401, 403, 404, 429]);
   DEFAULT_STREAM_EVENT_FLUSH_INTERVAL_MS = 100;
+  DEFAULT_HELD_BUNCH_FLUSH_MS = 20;
 });
-//@ chunk-fp6aqx1j.js:15943-15991 placement
+//@ chunk-qyz2x025.js:16407-16455 placement
 function isClientErrorStatus(status) {
   return status === 400 || status === 413 || status === 422;
 }
-//@ chunk-fp6aqx1j.js:15991-16184 placement
+//@ chunk-qyz2x025.js:16455-16648 placement
 var EVENT_BATCH_PATH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var BATCH_UNSUPPORTED_STATUSES;
 var RIDE_PAUSE_BASE_MS;
@@ -710,7 +972,7 @@ var POST_TIMEOUT_MS_PER_MIB;
 var DEFAULT_MAX_EVENT_POST_TIMEOUT_MS;
 var LARGE_BATCH_RETRY_BACKOFF;
 var LARGE_BATCH_BYTES;
-deferInit("chunk-fp6aqx1j.js:15991", () => {
+deferInit("chunk-qyz2x025.js:16455", () => {
   EVENT_BATCH_PATH = "/worker/event-batch";
   BATCH_UNSUPPORTED_STATUSES = new Set([404, 405, 501]);
   RIDE_PAUSE_BASE_MS = 60000;
@@ -727,7 +989,7 @@ deferInit("chunk-fp6aqx1j.js:15991", () => {
   LARGE_BATCH_RETRY_BACKOFF = 1.5;
   LARGE_BATCH_BYTES = 262144;
 });
-//@ chunk-fp6aqx1j.js:16184-16360 placement
+//@ chunk-qyz2x025.js:16648-16824 placement
 /**
  * 按批次字节数估算事件 POST 超时：基础 10s 加每 MiB 5s，大批次（≥256KiB 且不可切分）按重试次数指数放大，夹在 minMs–maxMs。
  */
@@ -741,16 +1003,16 @@ function computeEventPostTimeoutMs(events, { maxMs, minMs = MIN_EVENT_POST_TIMEO
       : bytesMs;
   return Math.max(minMs, Math.min(maxMs, Math.round(computedMs)));
 }
-//@ chunk-fp6aqx1j.js:16360-16420 placement
+//@ chunk-qyz2x025.js:16824-16884 placement
 var SERVABLE_CONTROL_SUBTYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fp6aqx1j.js:16360", () => {
+deferInit("chunk-qyz2x025.js:16824", () => {
   SERVABLE_CONTROL_SUBTYPES = new Set(["remote_tool_call", "remote_plumbing_call"]);
 });
-//@ chunk-fp6aqx1j.js:16420-16456 placement
+//@ chunk-qyz2x025.js:16884-16920 placement
 function isServableControlRequest(request) {
   return SERVABLE_CONTROL_SUBTYPES.has(getControlRequestSubtypeOfEvent(request));
 }
-//@ chunk-fp6aqx1j.js:16456-16781 placement
+//@ chunk-qyz2x025.js:16920-17245 placement
 /**
  * CCR 客户端的控制请求子类型集合与相关上限常量（可服务调用的子类型、可透传的设置类子类型等）。
  */
@@ -760,7 +1022,7 @@ var SETTINGS_CONTROL_SUBTYPES;
 var DEFAULT_SETTINGS_ANSWER_WAIT_MS;
 var MAX_SETTINGS_REQUEST_IDS;
 var HOUSEKEEPING_CONTROL_SUBTYPES;
-deferInit("chunk-fp6aqx1j.js:16456", () => {
+deferInit("chunk-qyz2x025.js:16920", () => {
   SERVED_CALL_REQUEST_SUBTYPES = new Set(REMOTE_TOOLS_LOG_EVENTS);
   MAX_URGENT_REQUEST_IDS = 256;
   SETTINGS_CONTROL_SUBTYPES = new Set([
@@ -783,14 +1045,14 @@ deferInit("chunk-fp6aqx1j.js:16456", () => {
     "set_model",
   ]);
 });
-//@ chunk-fp6aqx1j.js:16916-17066 placement
+//@ chunk-qyz2x025.js:17380-17530 placement
 function getControlRequestSubtypeOfEvent(event) {
   let request = event.payload.type === "control_request" ? event.payload.request : undefined;
   return typeof request === "object" && request !== null && "subtype" in request
     ? request.subtype
     : undefined;
 }
-//@ chunk-fp6aqx1j.js:17066-17191 placement (2.1.88 match: mergeClients, 1)
+//@ chunk-qyz2x025.js:17530-17655 placement (2.1.88 match: mergeClients, 1)
 function mergeClients(error) {
   let errnoCode = getErrnoCode(error);
   if (errnoCode) return errnoCode;
@@ -798,20 +1060,22 @@ function mergeClients(error) {
     return error.name;
   return;
 }
-//@ chunk-fp6aqx1j.js:17191-17320 fingerprint (2.1.88 match: CCRInitError, 0.859)
+//@ chunk-qyz2x025.js:17655-17814 fingerprint (2.1.88 match: CCRInitError, 0.72)
 /**
  * CCRClient 初始化失败错误（reason + httpStatus）。
  */
 class CCRInitError extends Error {
   reason;
   httpStatus;
-  constructor(message, httpStatus) {
+  noAnswer;
+  constructor(message, httpStatus, noAnswer = false) {
     super(`CCRClient init failed: ${message}`);
     this.reason = message;
     this.httpStatus = httpStatus;
+    this.noAnswer = noAnswer;
   }
 }
-//@ chunk-fp6aqx1j.js:17320-17416 placement
+//@ chunk-qyz2x025.js:17814-17910 placement
 /**
  * 判断是否为 worker_register_failed 且非 4xx 的初始化失败（可重试）。
  */
@@ -822,7 +1086,7 @@ function isWorkerRegisterFailure(error) {
     !isClientErrorStatus(error.httpStatus)
   );
 }
-//@ chunk-fp6aqx1j.js:17416-17749 placement
+//@ chunk-qyz2x025.js:17910-18243 placement
 /**
  * 连续鉴权失败上限，以及 WebSocket 关闭原因到关闭码的映射（epoch 冲突、被取代、令牌过期等）。
  */
@@ -850,7 +1114,7 @@ var DEFAULT_MAX_ATTEMPTS = 10;
 var RETRY_COUNT_3 = 3;
 var WORKER_STATE_MAX_ATTEMPTS = 3;
 var INTERNAL_EVENT_UUID_BATCH_SIZE = 100;
-//@ chunk-fp6aqx1j.js:17749-18138 placement
+//@ chunk-qyz2x025.js:18243-18632 placement
 /**
  * 流式读取响应体，超过字节上限时取消并返回 null；解码出空串但读到字节视为内存不足抛 RangeError。
  */
@@ -879,7 +1143,7 @@ async function readBodyCapped(response, maxBytes) {
     bytes,
   };
 }
-//@ chunk-fp6aqx1j.js:18138-18246 placement
+//@ chunk-qyz2x025.js:18632-18740 placement
 function isTimestampWithinLimit(timestamp, maxTimestampChars) {
   let timestamp_2 = timestamp.payload?.timestamp;
   return (
@@ -888,14 +1152,14 @@ function isTimestampWithinLimit(timestamp, maxTimestampChars) {
     (typeof timestamp_2 === "string" && timestamp_2.length <= maxTimestampChars)
   );
 }
-//@ chunk-fp6aqx1j.js:18246-18266 placement
+//@ chunk-qyz2x025.js:18740-18760 placement
 var INIT_STATE_ORDERING_BOUND_MS = 1e4;
 var MAX_RETRY_DELAY_MS = 30000;
-//@ chunk-fp6aqx1j.js:18266-18345 placement
+//@ chunk-qyz2x025.js:18760-18839 placement
 function durableUploadOutcome(status) {
   return status !== undefined && status >= 400 && status < 500 ? "not_accepted" : "indeterminate";
 }
-//@ chunk-fp6aqx1j.js:18345-18551 placement
+//@ chunk-qyz2x025.js:18839-19045 placement
 function detectTaskBookends(messages) {
   let sawTaskNotification = false;
   let sawStart = false;
@@ -909,15 +1173,15 @@ function detectTaskBookends(messages) {
       }
     : null;
 }
-//@ chunk-fp6aqx1j.js:18551-18623 placement
+//@ chunk-qyz2x025.js:19045-19117 placement
 function clampInt32(value) {
   return Math.min(Math.max(0, Math.trunc(value) || 0), 2147483647);
 }
-//@ chunk-fp6aqx1j.js:18623-18843 placement
+//@ chunk-qyz2x025.js:19117-19337 placement
 var ENDPOINT_CATEGORIES; // deferred: uses EVENT_BATCH_PATH of its import cycle while loading; runs once the cycle is complete
 var MAX_REFUSED_INTERNAL_EVENT_UUIDS;
 var UPGRADE_RELAY_MARKER;
-deferInit("chunk-fp6aqx1j.js:18623", () => {
+deferInit("chunk-qyz2x025.js:19117", () => {
   ENDPOINT_CATEGORIES = {
     "/worker": "worker_state",
     [EVENT_BATCH_PATH]: "events",
@@ -929,7 +1193,7 @@ deferInit("chunk-fp6aqx1j.js:18623", () => {
   MAX_REFUSED_INTERNAL_EVENT_UUIDS = 512;
   UPGRADE_RELAY_MARKER = "upgrade_relay_marker";
 });
-//@ chunk-fp6aqx1j.js:19042-19658 placement
+//@ chunk-qyz2x025.js:19536-20152 placement
 /**
  * 云会话 worker pending_action 及事件列表的 zod schema（事件、分页、agent_metadata、批量写入结果）。
  */
@@ -938,7 +1202,7 @@ var sessionEventSchema;
 var sessionEventsPageSchema;
 var agentMetadataEventsSchema;
 var eventBatchResultSchema;
-deferInit("chunk-fp6aqx1j.js:19042", () => {
+deferInit("chunk-qyz2x025.js:19536", () => {
   pendingActionSchema = DoctorLazy(() =>
     objectSchema({
       tool_name: stringSchema().refine((toolName) => !toolName.startsWith("dialog:")),
@@ -990,7 +1254,7 @@ deferInit("chunk-fp6aqx1j.js:19042", () => {
     }),
   );
 });
-//@ chunk-fp6aqx1j.js:19658-19986 placement
+//@ chunk-qyz2x025.js:20152-20480 placement
 /**
  * 用 schema 解析待处理动作（工具调用审批请求），取得 requestId 后返回规范化的动作对象；不合法时返回 undefined。
  */
@@ -1012,7 +1276,7 @@ function parsePendingAction(pendingAction) {
     }),
   };
 }
-//@ chunk-fp6aqx1j.js:19986-20341 placement
+//@ chunk-qyz2x025.js:20480-20835 placement
 /**
  * 根据 worker 外部状态里的 pending_action 判断会话是否处于 requires_action：读取中/失败/无待办/无法上报时返回 idle 与原因，否则带 requestId 与详情返回 requires_action。
  */
@@ -1045,7 +1309,25 @@ function resolveWorkerRequiresActionState(state) {
     ...pendingAction_2,
   };
 }
-//@ chunk-fp6aqx1j.js:20599-22423 placement
+//@ chunk-qyz2x025.js:20835-21093 layout
+/**
+ * 通知会话状态变化（idle/running/requires_action），供 SDK/远程控制显示。
+ */
+function withPendingActionOutstanding(status, metadata) {
+  if (status === "requires_action")
+    return {
+      reported: status,
+    };
+  let pendingActions = metadata.external?.pending_actions;
+  return {
+    reported: status,
+    pendingActionOutstanding:
+      metadata.readFailed === true ||
+      (metadata.external?.pending_action !== undefined && metadata.external.pending_action !== null) ||
+      (Array.isArray(pendingActions) && pendingActions.length > 0),
+  };
+}
+//@ chunk-qyz2x025.js:21093-22942 placement
 /**
  * CCR 客户端默认批量策略常量：事件数/年龄/字节上限、跨模型调用持有、事件脉冲与拾取等待、入站 UUID 容量、查看器检查点、可等待事件集合等。
  */
@@ -1056,10 +1338,13 @@ var DEFAULT_MAX_HOLD_AGE_MS;
 var DEFAULT_TRANSCRIPT_MAX_AGE_MS;
 var MAX_HOLD_AGE_MS;
 var EVENTS_PULSE_INTERVAL_MS;
+var DEFAULT_START_REPORTS_MAX_WAIT_MS;
+var VIEWER_LEFT_GRACE_MS;
+var EVENTS_POST_FAILING_MAX_MS;
 var DEFAULT_PICKUP_WAIT_MS;
 var PICKUP_BARRIER_MAX_WRITES;
 var MAX_INBOUND_MESSAGE_UUIDS;
-var DEFAULT_START_REPORTS_MAX_WAIT_MS;
+var DEFAULT_TOOL_CALL_ROW_GRACE_MS;
 var VIEWER_CHECKPOINT_INTERVAL_MS;
 var DEFAULT_MAX_HOLD_BYTES;
 var TOOLS_WHOSE_INPUT_MAY_WAIT;
@@ -1069,7 +1354,7 @@ var MAX_MUST_FLUSH_TYPES;
 var MAX_HOLD_AGAIN_TOOL_NAMES;
 var DEFAULT_SETTINGS_RECEIPTS_MAX_WAIT_MS;
 var MAX_LIVE_ONLY_TYPE_REFUSALS;
-deferInit("chunk-fp6aqx1j.js:20599", () => {
+deferInit("chunk-qyz2x025.js:21093", () => {
   WorkerLimitsSchema = DoctorLazy(() =>
     looseObject({
       max_events: numberSchema().nullish(),
@@ -1120,10 +1405,13 @@ deferInit("chunk-fp6aqx1j.js:20599", () => {
   DEFAULT_TRANSCRIPT_MAX_AGE_MS = 60000;
   MAX_HOLD_AGE_MS = 240000;
   EVENTS_PULSE_INTERVAL_MS = 30000;
+  DEFAULT_START_REPORTS_MAX_WAIT_MS = 2000;
+  VIEWER_LEFT_GRACE_MS = 1e4;
+  EVENTS_POST_FAILING_MAX_MS = 600000;
   DEFAULT_PICKUP_WAIT_MS = 5000;
   PICKUP_BARRIER_MAX_WRITES = 1000;
   MAX_INBOUND_MESSAGE_UUIDS = 256;
-  DEFAULT_START_REPORTS_MAX_WAIT_MS = 2000;
+  DEFAULT_TOOL_CALL_ROW_GRACE_MS = 2000;
   VIEWER_CHECKPOINT_INTERVAL_MS = 5000;
   DEFAULT_MAX_HOLD_BYTES = 1048576;
   TOOLS_WHOSE_INPUT_MAY_WAIT = new Set(["Bash", "Write", "Edit", "NotebookEdit", "Agent"]);
@@ -1134,11 +1422,11 @@ deferInit("chunk-fp6aqx1j.js:20599", () => {
   DEFAULT_SETTINGS_RECEIPTS_MAX_WAIT_MS = MAX_HOLD_AGE_MS;
   MAX_LIVE_ONLY_TYPE_REFUSALS = 16;
 });
-//@ chunk-fp6aqx1j.js:22423-22463 placement
+//@ chunk-qyz2x025.js:22942-22982 placement
 function isProcessedReceipt(x, status) {
   return status === "processed";
 }
-//@ chunk-fp6aqx1j.js:22463-23833 placement
+//@ chunk-qyz2x025.js:22982-24539 placement
 /**
  * CCR 客户端的实时/元数据事件集合与刷写策略常量：live-only 与 may-wait 事件类型、可上报元数据键、响应字节上限、flush 前后工具等待、订阅者标志等。
  */
@@ -1147,6 +1435,10 @@ var SYSTEM_FOREGROUND_SHELL_TASK_ROWS;
 var SYSTEM_STATUS_REQUESTING_REPEAT;
 var SYSTEM_STATUS_REQUESTING_REPEAT_RELEASING;
 var SYSTEM_STATUS_REQUESTING_REPEAT_STARTING;
+var SYSTEM_STATUS_REQUESTING_FIRST;
+var SYSTEM_STATUS_REQUESTING_REPEAT_WAITING;
+var SYSTEM_STATUS_REQUESTING_AFTER_INPUT;
+var SYSTEM_STATUS_REQUESTING_BEHIND_SUB_AGENT;
 var LIVE_ONLY_EVENT_TYPES;
 var MAY_WAIT_EVENT_TYPES;
 var MAX_LIVE_TWIN_TYPES;
@@ -1154,33 +1446,41 @@ var STATUS_PAYLOAD_METADATA_KEYS;
 var STATUS_METADATA_KEYS_ALL;
 var DEFAULT_COST_REPORT_MAX_WAIT_MS;
 var REPORTABLE_METADATA_KEYS;
-var MAX_LIVE_RESPONSE_BYTES;
+var MAX_EVENT_PAYLOAD_BYTES;
 var MAX_EVENT_PAYLOAD_ESTIMATED_BYTES;
 var POLICY_VERSION_PATTERN;
 var DEFAULT_FLUSH_BEFORE_TOOLS_WAIT_MS;
-var DEFAULT_TOOL_CALL_ROW_GRACE_MS;
+var TOOL_CALL_ROW_GRACE_FALLBACK_MS;
 var FLUSH_AFTER_TOOLS_MODES;
 var MAX_EPHEMERAL_RECEIPT_IDS;
 var MAX_VIEWER_ROWS_BEFORE_FLUSH;
 var HELD_ROWS_MAX_AGE_MS;
-var SUBSCRIBER_FLAG_REQUIRED;
+var DEBUG_STATE_DUMP;
 var RECENT_INBOUND_EVENT_MS;
-var VIEWER_LEFT_GRACE_MS;
+var UNWATCHED_VIEWER_LEFT_GRACE_MS;
 var isEphemeralOrKeepAlive;
 var isEphemeralKeepAliveOrControlResponse;
 var neverFlush;
-deferInit("chunk-fp6aqx1j.js:22463", () => {
+deferInit("chunk-qyz2x025.js:22982", () => {
   FLAG_CONTROL_SUBTYPES = new Set(["apply_flag_settings", "set_max_thinking_tokens", "mcp_set_servers"]);
   SYSTEM_FOREGROUND_SHELL_TASK_ROWS = "system/foreground_shell_task_rows";
   SYSTEM_STATUS_REQUESTING_REPEAT = "system/status_requesting_repeat";
   SYSTEM_STATUS_REQUESTING_REPEAT_RELEASING = "system/status_requesting_repeat_releasing";
   SYSTEM_STATUS_REQUESTING_REPEAT_STARTING = "system/status_requesting_repeat_starting";
+  SYSTEM_STATUS_REQUESTING_FIRST = "system/status_requesting_first";
+  SYSTEM_STATUS_REQUESTING_REPEAT_WAITING = "system/status_requesting_repeat_waiting";
+  SYSTEM_STATUS_REQUESTING_AFTER_INPUT = "system/status_requesting_repeat_after_input";
+  SYSTEM_STATUS_REQUESTING_BEHIND_SUB_AGENT = "system/status_requesting_behind_sub_agent";
   LIVE_ONLY_EVENT_TYPES = new Set([
     "system/task_summary",
     SYSTEM_FOREGROUND_SHELL_TASK_ROWS,
     SYSTEM_STATUS_REQUESTING_REPEAT,
     SYSTEM_STATUS_REQUESTING_REPEAT_RELEASING,
     SYSTEM_STATUS_REQUESTING_REPEAT_STARTING,
+    SYSTEM_STATUS_REQUESTING_FIRST,
+    SYSTEM_STATUS_REQUESTING_REPEAT_WAITING,
+    SYSTEM_STATUS_REQUESTING_AFTER_INPUT,
+    SYSTEM_STATUS_REQUESTING_BEHIND_SUB_AGENT,
   ]);
   MAY_WAIT_EVENT_TYPES = new Set([
     "rate_limit_event/allowed",
@@ -1221,34 +1521,36 @@ deferInit("chunk-fp6aqx1j.js:22463", () => {
     "permission_mode",
     "rate_limit_info",
   ]);
-  MAX_LIVE_RESPONSE_BYTES = 57344;
+  MAX_EVENT_PAYLOAD_BYTES = MAX_LIVE_RESPONSE_BYTES;
   MAX_EVENT_PAYLOAD_ESTIMATED_BYTES = 64512;
   POLICY_VERSION_PATTERN = /^[A-Za-z0-9._-]{1,16}$/;
   DEFAULT_FLUSH_BEFORE_TOOLS_WAIT_MS = 30000;
-  DEFAULT_TOOL_CALL_ROW_GRACE_MS = 2000;
+  TOOL_CALL_ROW_GRACE_FALLBACK_MS = 2000;
   FLUSH_AFTER_TOOLS_MODES = ["none", "write", "all"];
   MAX_EPHEMERAL_RECEIPT_IDS = 64;
   MAX_VIEWER_ROWS_BEFORE_FLUSH = 50;
   HELD_ROWS_MAX_AGE_MS = 5000;
-  SUBSCRIBER_FLAG_REQUIRED = false;
+  DEBUG_STATE_DUMP = false;
   RECENT_INBOUND_EVENT_MS = 3000;
-  VIEWER_LEFT_GRACE_MS = 1e4;
+  UNWATCHED_VIEWER_LEFT_GRACE_MS = 1e4;
   isEphemeralOrKeepAlive = (event) => event.ephemeral === true || event.payload.type === "keep_alive";
   isEphemeralKeepAliveOrControlResponse = (event) =>
     isEphemeralOrKeepAlive(event) || event.payload.type === "control_response";
   neverFlush = () => false;
 });
-//@ chunk-fp6aqx1j.js:23833-23887 placement
+//@ chunk-qyz2x025.js:24539-24593 placement
 /**
  * 从 CLAUDE_CODE_WORKER_EPOCH 读取 worker epoch（缺失时为 NaN）。
  */
 function workerEpochFromEnv() {
   return env.CLAUDE_CODE_WORKER_EPOCH ?? NaN;
 }
-//@ chunk-fp6aqx1j.js:23887-24110 placement
+//@ chunk-qyz2x025.js:24593-24848 placement
 var CUMULATIVE_COST_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var COST_STATE_METADATA_KEYS;
-deferInit("chunk-fp6aqx1j.js:23887", () => {
+var DISABLED_MCP_SERVERS;
+var MAX_REFUSED_ALONE_BACKOFF;
+deferInit("chunk-qyz2x025.js:24593", () => {
   CUMULATIVE_COST_KEYS = [
     "cumulative_cost_usd",
     "cumulative_input_tokens",
@@ -1262,22 +1564,25 @@ deferInit("chunk-fp6aqx1j.js:23887", () => {
     "memory_extract_place",
     "model_turn_stored",
   ]);
+  DISABLED_MCP_SERVERS = "disabled_mcp_servers";
+  MAX_REFUSED_ALONE_BACKOFF = 64;
 });
-//@ chunk-fp6aqx1j.js:24110-24253 placement
+//@ chunk-qyz2x025.js:24848-25007 placement
 function pickCostAndModelMetadata(metadata) {
   return Object.entries(metadata).filter(
     ([key]) =>
       COST_STATE_METADATA_KEYS.has(key) ||
       key === "last_served_model" ||
       key === "worker_permission_mode" ||
+      key === "plan_doc" ||
       key === "card_turn_stamp",
   );
 }
-//@ chunk-fp6aqx1j.js:24253-24313 placement
+//@ chunk-qyz2x025.js:25007-25067 placement
 function jsonStringEncodedSize(length) {
   return 1 + (length < 128 ? 1 : length < 16384 ? 2 : length < 2097152 ? 3 : 4) + length;
 }
-//@ chunk-fp6aqx1j.js:24313-24601 placement
+//@ chunk-qyz2x025.js:25067-25355 placement
 function estimateJsonEncodedSize(value) {
   if (typeof value === "string") return jsonStringEncodedSize(Buffer.byteLength(value));
   if (typeof value === "number") return 9;
@@ -1294,16 +1599,16 @@ function estimateJsonEncodedSize(value) {
   } else return 2;
   return jsonStringEncodedSize(size);
 }
-//@ chunk-fp6aqx1j.js:24601-24700 placement
+//@ chunk-qyz2x025.js:25355-25454 placement
 function isClientEventNotFoundError(response) {
   let error = response?.error;
   return error?.type === "not_found_error" && error.resource_type === "client_event";
 }
-//@ chunk-fp6aqx1j.js:24700-24758 placement
+//@ chunk-qyz2x025.js:25454-25512 placement
 function equalsIgnoreCase(a, b) {
   return a.toLowerCase() === b.toLowerCase();
 }
-//@ chunk-fp6aqx1j.js:24758-24974 placement
+//@ chunk-qyz2x025.js:25512-25728 placement
 function describeUploadFailure(status) {
   if (status === 404) return "http_404_unknown_body";
   if (status === 401 || status === 403) return "http_refused";
@@ -1311,9 +1616,9 @@ function describeUploadFailure(status) {
   if (status === 501) return "http_not_served";
   return status >= 500 ? "http_server_error" : "http_other";
 }
-//@ chunk-fp6aqx1j.js:24974-25162 placement
+//@ chunk-qyz2x025.js:25728-25916 placement
 var clientEventSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fp6aqx1j.js:24974", () => {
+deferInit("chunk-qyz2x025.js:25728", () => {
   clientEventSchema = DoctorLazy(() =>
     objectSchema({
       event_id: stringSchema(),
@@ -1328,7 +1633,7 @@ deferInit("chunk-fp6aqx1j.js:24974", () => {
     }),
   );
 });
-//@ chunk-fp6aqx1j.js:25162-25628 placement
+//@ chunk-qyz2x025.js:25916-26382 placement
 function parseDeliveryEvent(event, eventId) {
   let parsed = clientEventSchema().safeParse(event);
   if (!parsed.success)
@@ -1359,7 +1664,7 @@ function parseDeliveryEvent(event, eventId) {
     },
   };
 }
-//@ chunk-fp6aqx1j.js:25921-134287 callgraph-witnessed (2.1.88 match: CCRClient, 0.237)
+//@ chunk-qyz2x025.js:26675-141357 callgraph-witnessed (2.1.88 match: CCRClient, 0.225)
 /**
  * CCRClient：云端 worker 与 CCR 会话服务的客户端：注册 worker（epoch）、心跳、上传事件/状态、接收 served call 与冲突处理（superseded_by_worker、epoch_stale）。
  */
@@ -1370,6 +1675,7 @@ class CCRClient {
   seedHeartbeatIntervalMs;
   advertiseHeartbeatProbeSupport;
   uploadTrim;
+  withholdsWholeFiles = isSelfHostedRemoteEnvironment();
   keepsRequestId;
   uploadHoldMarker;
   shellTaskRowsLiveOnly;
@@ -1388,8 +1694,10 @@ class CCRClient {
   waitingAnswers = [];
   waitingAnswersTimer = null;
   lastRateLimitKind;
+  lastRateLimitRepeat;
   seesModelCallBoundaries = false;
   lastRequestingList;
+  liveOnlyFirstRow;
   turnTookInput = false;
   housekeepingRequestIds = new Set();
   toolResultEndsCall = false;
@@ -1448,6 +1756,7 @@ class CCRClient {
   loggedTranscriptEnvelopeStrip = false;
   loggedToolResultBlank = false;
   loggedMcpImageBlank = false;
+  loggedWholeFileWithheld = false;
   loggedRequestIdKept = false;
   maxAdvisedIntervalMs;
   beatOnStaleReconnect;
@@ -1462,6 +1771,9 @@ class CCRClient {
   lastCadenceTickAtMs = 0;
   lastBeatingEventsPostOkAtMs = 0;
   lastEventsAnswerOrPulseAtMs = 0;
+  keepAliveAloneSentAtMs = -1 / 0;
+  eventsPostsFailingSinceMs;
+  eventsPostRateLimited = false;
   skippedPreviousCadenceBeat = false;
   lastHeartbeatSuccessAtMs = Date.now();
   heartbeatsSent = 0;
@@ -1487,6 +1799,7 @@ class CCRClient {
   currentState = null;
   reportParkAtInit;
   guardsClientRows;
+  clientRowsSwitchIsOn = false;
   hasDisplayHooks = undefined;
   displayHookSeen = false;
   clientRowsOwed = new TurnLedger();
@@ -1511,6 +1824,8 @@ class CCRClient {
   streamEventFlushDueAt = 0;
   streamEventFlushIntervalMs = DEFAULT_STREAM_EVENT_FLUSH_INTERVAL_MS;
   streamEventFirstFlushMs = 0;
+  streamEventWindowRunsFromLastFlush = false;
+  heldBunchFlushMs = DEFAULT_HELD_BUNCH_FLUSH_MS;
   firstDeltaFlushTimer = null;
   firstContentFlushPending = false;
   toolInputFlushMs = 0;
@@ -1580,6 +1895,7 @@ class CCRClient {
   adoptRefreshedAuth;
   gzipRequestBodyFetch;
   ownConnectionPool;
+  leavesPoolAfterServerError;
   constructor(transport, url, options) {
     this.lastLineWhen = options?.onEpochMismatch ? "queued" : "now";
     this.onEpochMismatch =
@@ -1612,7 +1928,7 @@ class CCRClient {
     this.launchFlushPolicy = options?.launchFlushPolicy;
     this.processExiting = options?.processExiting ?? (() => false);
     this.gatesToolCalls = options?.gatesToolCalls === true;
-    this.toolCallRowGraceMs = options?.toolCallRowGraceMs ?? DEFAULT_TOOL_CALL_ROW_GRACE_MS;
+    this.toolCallRowGraceMs = options?.toolCallRowGraceMs ?? TOOL_CALL_ROW_GRACE_FALLBACK_MS;
     this.pickupWaitMs = options?.pickupWaitMs ?? DEFAULT_PICKUP_WAIT_MS;
     this.beatOnStaleReconnect = options?.beatOnStaleReconnect ?? false;
     this.idleTracker = options?.idleTracker;
@@ -1633,22 +1949,25 @@ class CCRClient {
     this.adoptRefreshedAuth = options?.adoptRefreshedAuth;
     this.gzipRequestBodyFetch = options?.gzipRequestBodyFetch;
     this.ownConnectionPool = options?.ownConnectionPool;
+    this.leavesPoolAfterServerError = options?.leavesPoolAfterServerError;
     this.reportParkAtInit = options?.reportParkAtInit ?? false;
-    this.guardsClientRows = options?.guardsClientRows ?? (() => false);
+    this.guardsClientRows = options?.guardsClientRows;
+    this.flagsRefreshed();
     this.initExternalMetadata = options?.initExternalMetadata ?? {};
     this.initialWorkerStatus = options?.initialWorkerStatus ?? "idle";
     this.initStateGetOrderingBoundMs = options?.initStateGetOrderingBoundMs ?? INIT_STATE_ORDERING_BOUND_MS;
     this.stateReadEndsAtRegistration = options?.stateReadEndsAtRegistration ?? false;
-    this.startReportsMaxWaitMs = options?.startReportsMaxWaitMs ?? DEFAULT_START_REPORTS_MAX_WAIT_MS;
+    this.startReportsMaxWaitMs = options?.startReportsMaxWaitMs ?? DEFAULT_TOOL_CALL_ROW_GRACE_MS;
     this.readSource = {
       ...convertWsUrlToPostUrl(url, this.getAuthHeaders),
       isClosed: () => this.closed,
       onConflict: (reason) => this.handleEpochMismatch(reason),
       ownConnectionPool: this.ownConnectionPool,
+      leavesPoolAfterServerError: this.leavesPoolAfterServerError,
     };
     this.sessionBaseUrl = this.readSource.sessionBaseUrl;
     this.sessionId = url.pathname.replace(/\/$/, "").split("/").pop() || "";
-    this.workerState = new WorkerStateUploader({
+    this.workerState = new PatchQueue({
       send: async (patch) => {
         let upload =
           this.clientRowsOwed.writesNoMore && isPlainObject(patch.internal_metadata)
@@ -1657,6 +1976,9 @@ class CCRClient {
                 internal_metadata: omitAlias(patch.internal_metadata, "client_rows_owed"),
               }
             : patch;
+        let internalMetadata = isPlainObject(upload.internal_metadata) ? upload.internal_metadata : {};
+        let droppedKeyPresent = DISABLED_MCP_SERVERS in internalMetadata;
+        if (droppedKeyPresent) this.refusedSwitchedOffMcpServers = null;
         let result = await this.request(
           "put",
           "/worker",
@@ -1668,6 +1990,15 @@ class CCRClient {
         );
         if (result.ok) {
           if (upload.worker_status !== undefined) logFeatureOk("ccr_worker_state_publish");
+          let refusedSwitchedOffMcpServers = this.refusedSwitchedOffMcpServers;
+          if (droppedKeyPresent) this.switchedOffMcpServersRefusedAlone = 0;
+          else if (
+            refusedSwitchedOffMcpServers !== null &&
+            refusedSwitchedOffMcpServers.writesToWaitFor > 0 &&
+            Object.keys(internalMetadata).length > 0
+          )
+            refusedSwitchedOffMcpServers.writesToWaitFor--;
+          this.requeueRefusedSwitchedOffMcpServersOnceIdle();
           return true;
         }
         if (this.closed && result.status === 409) {
@@ -1682,7 +2013,11 @@ class CCRClient {
           logForDiagnosticsNoPII("warn", "cli_worker_state_4xx_dropped", {
             status: result.status,
           });
-          this.droppedWorkerStatePatchCount++;
+          let onlyDroppedKey =
+            droppedKeyPresent &&
+            Object.keys(upload).length === 1 &&
+            Object.keys(internalMetadata).length === 1;
+          if (!onlyDroppedKey) this.droppedWorkerStatePatchCount++;
           if (this.workerState.keepsWithoutStatus(upload)) this.droppedOwedMetadataPatchCount++;
           if (isPlainObject(upload.internal_metadata) && "client_rows_owed" in upload.internal_metadata) {
             logFeatureSad("ccr_client_rows_owed", "report_with_note_refused", {
@@ -1690,10 +2025,19 @@ class CCRClient {
             });
             this.clientRowsOwed.reportWithNoteRefused();
           }
-          let internalMetadata = isPlainObject(upload.internal_metadata) ? upload.internal_metadata : {};
           let externalMetadata = isPlainObject(upload.external_metadata) ? upload.external_metadata : {};
           if (isPlainObject(externalMetadata.pending_action))
             this.onCardRecordRefused?.(result.status, upload);
+          if (droppedKeyPresent) {
+            logFeatureSad("mcp_switched_off_record", "write_refused");
+            this.refusedSwitchedOffMcpServers = {
+              value: internalMetadata[DISABLED_MCP_SERVERS],
+              writesToWaitFor: onlyDroppedKey
+                ? Math.min(2 ** this.switchedOffMcpServersRefusedAlone++, MAX_REFUSED_ALONE_BACKOFF)
+                : 1,
+            };
+          }
+          this.requeueRefusedSwitchedOffMcpServersOnceIdle();
           let {
             internal_metadata: internalMetadata_2,
             external_metadata: externalMetadata_2,
@@ -1746,6 +2090,8 @@ class CCRClient {
       maxDelayMs: 30000,
       jitterMs: 500,
       ridesAStatus: ["reply_degraded", "card_turn_stamp"],
+      deleteOutlivesStatus: ["card_turn_stamp"],
+      requeuedAlone: [DISABLED_MCP_SERVERS],
       mergesSameRun: () => this.flushPolicy?.mergeWorkerReports === true && this.followsServedPolicy,
       waitsForStatus: (upload) => {
         let flushPolicy = this.flushPolicy;
@@ -1860,14 +2206,18 @@ class CCRClient {
         let timings = [];
         for (let upload of this.trackedFrameUploads("ackedAtMs"))
           if (events.some((event) => event.payload.uuid === upload.uuid)) timings.push(upload.timing);
+        let postedTimings = [];
         for (let timing of timings)
           if (timing.postedAtMs === undefined) {
             timing.postedAtMs = performance.now();
             timing.postedWallMs = Date.now();
+            postedTimings.push(timing);
           }
         let timing = this.firstTextFrameUpload?.timing;
-        if (timing?.postedAtMs !== undefined && markTextDeltaRows(events, this.countedTextEvents))
-          recordTextPost(timing, performance.now());
+        let textRhythmUndo =
+          timing?.postedAtMs === undefined
+            ? undefined
+            : countTextPostRhythm(timing, events, this.countedTextEvents, performance.now());
         let result;
         try {
           result = await this.request(
@@ -2010,12 +2360,14 @@ class CCRClient {
               return;
             }
             this.reportDurableUpload(filtered, durableUploadOutcome(retryResult.status));
-            if (!isClientErrorStatus(retryResult.status))
+            if (!isClientErrorStatus(retryResult.status)) {
+              this.noteEventsPostFailed(retryResult.status);
               throw retryResult.fetchFailed
                 ? this.retrySmaller("client_events", filtered, opts, eventPostTimeoutMs, {
                     bytes: filtered.reduce((acc, event) => acc + Buffer.byteLength(jsonStringify(event)), 0),
                   })
                 : new ClientEventUploadError("client event POST failed", retryResult.retryAfterMs);
+            }
             status = retryResult.status;
           }
           if (filtered.length > 0) {
@@ -2047,9 +2399,16 @@ class CCRClient {
         }
         this.rowsSentAgainStepAside(events);
         if (events.length === 0) return;
+        this.noteEventsPostFailed(result.status);
         if (result.fetchFailed) throw this.retrySmaller("client_events", events, opts, eventPostTimeoutMs);
-        if (status === undefined && result.reason === "no_auth_headers")
+        if (status === undefined && result.reason === "no_auth_headers") {
+          for (let timing of postedTimings) {
+            timing.postedAtMs = undefined;
+            timing.postedWallMs = undefined;
+          }
+          textRhythmUndo?.();
           throw new ClientEventBatchRejectedError("client event POST not sent");
+        }
         throw new ClientEventUploadError("client event POST failed", result.retryAfterMs);
       }),
       baseDelayMs: 500,
@@ -2144,7 +2503,7 @@ class CCRClient {
             count: events.length,
             status: result.status,
           });
-          let kept = count(
+          let kept = countWhere(
             events,
             (event) => isAssistantWithMessageId(event.payload) && typeof event.payload.requestId === "string",
           );
@@ -2204,6 +2563,8 @@ class CCRClient {
     });
     this.setStreamEventFlushIntervalMs(options?.streamEventFlushIntervalMs);
     this.setStreamEventFirstFlushMs(options?.streamEventFirstFlushMs);
+    this.setStreamEventWindowRunsFromLastFlush(options?.streamEventWindowRunsFromLastFlush);
+    this.setHeldBunchFlushMs(options?.heldBunchFlushMs);
     this.setToolInputFlushMs(options?.toolInputFlushMs);
     this.setNoSubscriberStreamEventFlushIntervalMs(options?.noSubscriberStreamEventFlushIntervalMs);
     this.setNoSubscriberUploadHoldMs(options?.noSubscriberUploadHoldMs);
@@ -2384,7 +2745,7 @@ class CCRClient {
           "worker_registration_gave_up",
         );
       }
-      throw new CCRInitError("worker_register_failed", result.status);
+      throw new CCRInitError("worker_register_failed", result.status, result.fetchFailed === true);
     }
     this.currentState = park?.status ?? this.initialWorkerStatus;
     this.startReportsWaitUntilMs =
@@ -2463,7 +2824,7 @@ class CCRClient {
     return park
       ? {
           ...metadata,
-          initParkReport: notifySessionStateChanged(park.status, metadata),
+          initParkReport: withPendingActionOutstanding(park.status, metadata),
         }
       : metadata;
   }
@@ -2547,6 +2908,7 @@ class CCRClient {
             }),
           },
           source.ownConnectionPool,
+          source.leavesPoolAfterServerError,
         );
       } catch {
         failure = {
@@ -2624,6 +2986,7 @@ class CCRClient {
       signal,
       onLateSocketAnswer,
       uploadAttempt,
+      outsideItsLane = false,
     },
   ) {
     let authHeaders = this.getAuthHeaders();
@@ -2700,18 +3063,22 @@ class CCRClient {
         Object.assign(init.headers, this.tickets.headersFor(Authorization));
         response = this.gzipRequestBodyFetch
           ? await this.gzipRequestBodyFetch(url, init, (init) =>
-              proxyAwareFetch(url, init, this.ownConnectionPool),
+              proxyAwareFetch(url, init, this.ownConnectionPool, this.leavesPoolAfterServerError),
             )
-          : await proxyAwareFetch(url, init, this.ownConnectionPool);
+          : await proxyAwareFetch(url, init, this.ownConnectionPool, this.leavesPoolAfterServerError);
       }
       posted = true;
       if (!carried) this.tickets.note(Authorization, response);
       if (response.ok) {
         this.consecutiveAuthFailures = 0;
         this.consecutiveNotFound = 0;
-        this.reportNonOriginRun("onCleared", ENDPOINT_CATEGORIES[path]);
-        this.nonOriginRuns.delete(ENDPOINT_CATEGORIES[path]);
-        for (let nonOriginRun of this.nonOriginRuns.values()) nonOriginRun.othersPassed = true;
+        let originRun = ENDPOINT_CATEGORIES[path];
+        if (!outsideItsLane) {
+          this.reportNonOriginRun("onCleared", originRun);
+          this.nonOriginRuns.delete(originRun);
+        }
+        for (let [othersPassed, run] of this.nonOriginRuns)
+          if (othersPassed !== originRun) run.othersPassed = true;
         if (parseBody)
           try {
             return {
@@ -2764,7 +3131,7 @@ class CCRClient {
             : readRequestIdSource((header) => response.headers.get(header));
       let nonOrigin403Transient = this.nonOrigin403Transient;
       let counts = nonOrigin403Transient !== false && isNonOriginSource(source);
-      if (counts && typeof nonOrigin403Transient === "object") {
+      if (counts && typeof nonOrigin403Transient === "object" && !outsideItsLane) {
         let category = ENDPOINT_CATEGORIES[path];
         let startTime = performance.now();
         let run = this.nonOriginRuns.get(category) ?? {
@@ -2938,7 +3305,12 @@ class CCRClient {
       requires_action_details: details ? buildRequiresActionDetails(details) : null,
       internal_metadata: {
         reply_degraded: isHearthDegraded(),
-        ...this.clientRowsOwed.stateReported(state, new Date(), this.clientRowsAreGuarded()),
+        ...(this.guardsClientRows !== undefined &&
+          this.clientRowsOwed.stateReported(
+            state,
+            new Date(),
+            this.flagsRefreshed() && this.clientRowsAreGuarded(),
+          )),
       },
       ...(this.autocompactStateStored !== undefined && {
         external_metadata: {
@@ -3020,8 +3392,13 @@ class CCRClient {
     this.stopHeartbeat();
     if (this.closed) return;
     let schedule = () => {
-      let jitter = this.heartbeatIntervalMs * this.heartbeatJitterFraction * (2 * Math.random() - 1);
-      this.heartbeatTimer = setTimeout(tick, this.heartbeatIntervalMs + jitter);
+      let jitter =
+        Math.max(
+          this.heartbeatIntervalMs * this.heartbeatJitterFraction,
+          this.keepAlivesGoAlone() ? DEFAULT_START_REPORTS_MAX_WAIT_MS : 0,
+        ) *
+        (2 * Math.random() - 1);
+      this.heartbeatTimer = setTimeout(tick, Math.min(MAX_TIMER_DELAY_MS, this.heartbeatIntervalMs + jitter));
     };
     let tick = () => {
       let lastCadenceTickAtMs = this.lastCadenceTickAtMs;
@@ -3033,11 +3410,12 @@ class CCRClient {
       } else this.sendHeartbeat();
       if (this.heartbeatTimer === null) return;
       if (
-        this.holdsAcrossModelCalls() &&
-        this.turnHold === "whole" &&
         env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES &&
         hasActiveWork() &&
-        this.lastCadenceTickAtMs - this.lastEventsAnswerOrPulseAtMs >= EVENTS_PULSE_INTERVAL_MS
+        (this.keepAlivesGoAlone() ||
+          (this.holdsAcrossModelCalls() &&
+            this.turnHold === "whole" &&
+            this.lastCadenceTickAtMs - this.lastEventsAnswerOrPulseAtMs >= EVENTS_PULSE_INTERVAL_MS))
       ) {
         this.lastEventsAnswerOrPulseAtMs = this.lastCadenceTickAtMs;
         this.writeEvent({
@@ -3051,6 +3429,8 @@ class CCRClient {
   }
   noteBeatingEventsPostOk(events) {
     this.lastEventsAnswerOrPulseAtMs = Date.now();
+    this.eventsPostsFailingSinceMs = undefined;
+    this.eventsPostRateLimited = false;
     if (!this.workerSocket?.isTransport() && events.some((event) => !event.ephemeral))
       this.lastBeatingEventsPostOkAtMs = Date.now();
   }
@@ -3119,6 +3499,10 @@ class CCRClient {
     if (this.currentState === "running") {
       logForDiagnosticsNoPII("info", "cli_worker_goodbye_skipped_mid_turn");
       this.leftMidTurn = true;
+      return;
+    }
+    if (isRemoteManagedEnvironment() && isActivityReasonActive("resume_load")) {
+      logForDiagnosticsNoPII("info", "cli_worker_goodbye_skipped_resume_load");
       return;
     }
     this.goodbyeFlushed = this.request(
@@ -3333,6 +3717,12 @@ class CCRClient {
         );
       }
       if (!result.ok && !state.succeededLateOnSocket) {
+        if (
+          result.fetchFailed &&
+          result.reason === "fetch_failed:TimeoutError" &&
+          this.leavesPoolAfterServerError?.()
+        )
+          retirePoolAfterNoAnswer();
         if (trigger === "probe") logFeatureBad("ccr_heartbeat_probe", "beat_failed");
         else if (trigger === "resync_stale") logFeatureBad("ccr_reconnect_beat", "beat_failed");
         else if (trigger === "reactivate") logFeatureBad("ccr_reactivation_beat", "beat_failed");
@@ -3547,7 +3937,26 @@ class CCRClient {
     }
   }
   writeEvent(event) {
+    try {
+      if (this.bufferLoneDelta(event)) return Promise.resolve();
+    } catch (error) {
+      return Promise.reject(error);
+    }
     return this.writeEvents([event]);
+  }
+  bufferLoneDelta(frame) {
+    if (
+      this.streamEventFlushIntervalMs <= 0 ||
+      this.pickupBarriers.length > 0 ||
+      this.guardsClientRows !== undefined ||
+      frame.type !== "stream_event" ||
+      frame.event.type !== "content_block_delta" ||
+      "resume_reason" in frame
+    )
+      return false;
+    this.streamedEphemeralSinceLastAssistant = true;
+    this.bufferEphemeral(frame);
+    return true;
   }
   trackFirstFrameUpload(uuid) {
     let timing = {};
@@ -3579,8 +3988,8 @@ class CCRClient {
       if (upload && upload.timing[field] === undefined) list.push(upload);
     return list;
   }
-  writeEvents(events, opts) {
-    let flattened = events.flatMap((event) => {
+  writeEvents(event, opts) {
+    let flattened = event.flatMap((event) => {
       if (
         event.type !== "system" ||
         (event.subtype !== "task_started" &&
@@ -3599,7 +4008,7 @@ class CCRClient {
       if (!liveOnly) return [event];
       if (
         (event.subtype === "task_updated" && event.patch.is_backgrounded) ||
-        Buffer.byteLength(jsonStringify(event)) > MAX_LIVE_RESPONSE_BYTES
+        Buffer.byteLength(jsonStringify(event)) > MAX_EVENT_PAYLOAD_BYTES
       )
         return liveOnly === event
           ? [event]
@@ -3686,14 +4095,22 @@ class CCRClient {
         event.rate_limit_info.overagePeriodMonthly === undefined &&
         event.rate_limit_info.overagePeriodChannel === undefined;
       this.lastRateLimitKind = kind;
-      return !repeated || this.currentUploadTrim().rate_limit_repeats !== true;
+      this.lastRateLimitRepeat =
+        repeated && this.currentUploadTrim().rate_limit_repeats === true ? event : undefined;
+      return this.lastRateLimitRepeat === undefined;
     });
-    if (events.length > 0 && filtered.length === 0) return Promise.resolve();
-    this.reportClientRowsOwed(
-      this.clientRowsAreGuarded()
-        ? this.clientRowsOwed.rowsEntered(filtered, new Date())
-        : this.clientRowsOwed.guardEnded(new Date()),
-    );
+    let index = filtered.findIndex((event) => event.type === "result");
+    if (index !== -1 && this.lastRateLimitRepeat !== undefined) {
+      filtered.splice(index, 0, this.lastRateLimitRepeat);
+      this.lastRateLimitRepeat = undefined;
+    }
+    if (event.length > 0 && filtered.length === 0) return Promise.resolve();
+    if (this.guardsClientRows !== undefined)
+      this.reportClientRowsOwed(
+        this.clientRowsAreGuarded()
+          ? this.clientRowsOwed.rowsEntered(filtered, new Date())
+          : this.clientRowsOwed.guardEnded(Date.now()),
+      );
     let settingsAnswersMaxWaitMs = this.flushPolicy?.settingsAnswersMaxWaitMs ?? 0;
     let initMaxWaitMs = this.flushPolicy?.initMaxWaitMs ?? 0;
     if (
@@ -3781,6 +4198,7 @@ class CCRClient {
     let shellRows = [];
     let twinStamps = [];
     let repeatIndex;
+    let droppedCount = false;
     for (let event of events) {
       let row = event.type === "stream_event" ? stripInputTransformations(event) : event;
       if (row.type === "stream_event" && row.event.type === "message_start" && !row.parent_tool_use_id) {
@@ -3910,6 +4328,11 @@ class CCRClient {
         release ??= buffered.release;
         ready.push(...buffered.events);
       }
+      if (row.type === "keep_alive" && this.keepAlivesGoAlone()) {
+        this.sendKeepAliveAlone();
+        droppedCount = true;
+        continue;
+      }
       if (this.gatesToolCalls) {
         let mainThreadToolUseIds = getMainThreadToolUseIds(row);
         if (
@@ -3966,7 +4389,8 @@ class CCRClient {
         !(
           releaseState === "round_trip" &&
           !turnOpen &&
-          !this.subAgentWroteSinceStoredRequesting &&
+          (!this.subAgentWroteSinceStoredRequesting ||
+            this.flushPolicy?.liveOnlyTypes.has(SYSTEM_STATUS_REQUESTING_BEHIND_SUB_AGENT)) &&
           this.flushPolicy?.liveOnlyTypes.has(SYSTEM_STATUS_REQUESTING_REPEAT_RELEASING) &&
           (hold !== "starts" ||
             (this.nextLiveIndex === this.indexBehindHeldToolResult &&
@@ -3979,6 +4403,7 @@ class CCRClient {
       if (
         releaseState === "round_trip" &&
         row !== this.liveOnlyRequestingRow &&
+        row !== this.liveOnlyFirstRow &&
         !("parent_tool_use_id" in row && row.parent_tool_use_id)
       )
         this.subAgentWroteSinceStoredRequesting = false;
@@ -4003,6 +4428,19 @@ class CCRClient {
         this.nextLiveIndex = 0;
         this.openTurn();
         this.droppedBeforeLiveTurn = this.droppedDurableBatches;
+        if (
+          REQUEST_FOLLOWS_INIT in row &&
+          this.followsServedPolicy &&
+          this.flushPolicy?.liveOnlyTypes.has(SYSTEM_STATUS_REQUESTING_FIRST) &&
+          !(
+            this.flushPolicy.holdAcrossModelCalls &&
+            this.subAgentWroteSinceStoredRequesting &&
+            !this.flushPolicy.liveOnlyTypes.has(SYSTEM_STATUS_REQUESTING_BEHIND_SUB_AGENT)
+          )
+        ) {
+          emittedEvent.payload.request_at_init = true;
+          this.liveOnlyFirstRow = "next";
+        }
       }
       if (!emittedEvent.ephemeral) this.indexBehindHeldToolResult = undefined;
       ready.push(emittedEvent);
@@ -4018,7 +4456,7 @@ class CCRClient {
         !this.viewerAbsentReported &&
         filtered.some(
           (index) =>
-            Buffer.byteLength(jsonStringify(ready[index]?.payload)) > MAX_LIVE_RESPONSE_BYTES ||
+            Buffer.byteLength(jsonStringify(ready[index]?.payload)) > MAX_EVENT_PAYLOAD_BYTES ||
             estimateJsonEncodedSize(ready[index]?.payload) > MAX_EVENT_PAYLOAD_ESTIMATED_BYTES,
         )
       )
@@ -4050,13 +4488,21 @@ class CCRClient {
           }
       }
     }
-    if (heldRepeatUuid !== undefined && this.toolResultEndsCall && stamped.length > 0) {
+    if (
+      heldRepeatUuid !== undefined &&
+      stamped.length > 0 &&
+      (this.toolResultEndsCall ||
+        (this.flushPolicy?.liveOnlyTypes.has(SYSTEM_STATUS_REQUESTING_REPEAT_WAITING) &&
+          ready.some(
+            (event) => event.payload.type === "assistant" && event.payload.live_index !== undefined,
+          )))
+    ) {
       this.heldRepeatUuid = undefined;
       this.eventUploader.withdraw((event) => !event.ephemeral && event.payload.uuid === heldRepeatUuid);
     }
     for (let { frame, at, turnId, index } of twinStamps) {
       frame.live_turn_id = turnId;
-      frame.live_next_index = index + count(stamped, (stamp) => stamp < at);
+      frame.live_next_index = index + countWhere(stamped, (stamp) => stamp < at);
     }
     if (urgent.length > 0)
       this.enqueueClientEvents(urgent, {
@@ -4089,11 +4535,59 @@ class CCRClient {
       if (cutBackoff) this.eventUploader.cutBackoff();
       await promise;
       this.noteToolCallRows("client_events", toolUseIds, "queued");
-    } else if (urgent.length > 0 && release) {
+    } else if ((urgent.length > 0 || droppedCount) && release) {
       if (this.parkedRows.length > 0) this.flushStreamEventBuffer();
       this.releaseTranscriptLane(release, undefined, releasedByType);
       this.releaseClientEvents(release);
     } else if (samplingEnd) this.releaseClientEvents("sampling_end");
+  }
+  noteEventsPostFailed(rateLimited) {
+    this.eventsPostRateLimited ||= rateLimited === 429;
+    if (this.eventsPostsFailingSinceMs !== undefined) return;
+    this.eventsPostsFailingSinceMs = performance.now();
+    if (this.keepAlivesGoAlone() && env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES && hasActiveWork())
+      this.sendKeepAliveAlone();
+  }
+  keepAlivesGoAlone() {
+    return (
+      this.eventsPostsFailingSinceMs !== undefined &&
+      performance.now() - this.eventsPostsFailingSinceMs <= EVENTS_POST_FAILING_MAX_MS &&
+      !this.eventsPostRateLimited &&
+      !isEssentialTrafficOnly() &&
+      this.providerWithheldReason() === undefined
+    );
+  }
+  sendKeepAliveAlone() {
+    if (this.closed || performance.now() - this.keepAliveAloneSentAtMs < VIEWER_LEFT_GRACE_MS) return;
+    let event = {
+      worker_epoch: this.workerEpoch,
+      events: [
+        this.toClientEvent({
+          type: "keep_alive",
+        }),
+      ],
+    };
+    this.keepAliveAloneSentAtMs = performance.now();
+    this.lastEventsAnswerOrPulseAtMs = Date.now();
+    this.request("post", "/worker/events", event, "keep_alive (own POST)", {
+      signal: this.closeAbort.signal,
+      countTowardEscalation: false,
+      outsideItsLane: true,
+    })
+      .then((response) => {
+        this.eventsPostRateLimited ||= !response.ok && response.status === 429;
+        if (response.ok) logFeatureOk("ccr_keep_alive_own_post");
+        else if (!this.closed)
+          logFeatureSad(
+            "ccr_keep_alive_own_post",
+            response.status !== undefined
+              ? `http_${response.status}`
+              : response.fetchFailed
+                ? "no_answer"
+                : "no_status",
+          );
+      })
+      .catch(logError);
   }
   releaseTranscriptLane(release, releasedBy, event) {
     if (this.holdRule !== "served_policy" || !this.flushPolicy?.transcriptMaxAgeMs)
@@ -4333,9 +4827,13 @@ class CCRClient {
     );
   }
   clientRowsAreGuarded() {
-    if (!this.guardsClientRows() || this.hasDisplayHooks === undefined) return false;
+    if (!this.clientRowsSwitchIsOn || this.hasDisplayHooks === undefined) return false;
     this.displayHookSeen ||= this.hasDisplayHooks();
     return !this.displayHookSeen;
+  }
+  flagsRefreshed() {
+    this.clientRowsSwitchIsOn = this.guardsClientRows?.() === true;
+    return this.clientRowsSwitchIsOn;
   }
   markOfRepliesShownAsStored() {
     return this.clientRowsAreGuarded() ? sessionIdBody(this.sessionId) || undefined : undefined;
@@ -4344,9 +4842,13 @@ class CCRClient {
     this.hasDisplayHooks = hasDisplayHooks;
   }
   noteClientRowsSettled(state, events) {
-    if (!this.clientRowsAreGuarded()) this.reportClientRowsOwed(this.clientRowsOwed.guardEnded(new Date()));
+    if (this.guardsClientRows === undefined) return;
+    if (!this.clientRowsAreGuarded()) {
+      this.reportClientRowsOwed(this.clientRowsOwed.guardEnded(Date.now()));
+      if (this.clientRowsOwed.rowsSentAgain.size === 0) return;
+    }
     let flattened = events.flatMap((event) => (event.ephemeral ? [] : [event.payload.uuid]));
-    let againCount = count(flattened, (uuid) => this.clientRowsOwed.rowsSentAgain.has(uuid));
+    let againCount = countWhere(flattened, (uuid) => this.clientRowsOwed.rowsSentAgain.has(uuid));
     if (againCount > 0) {
       this.ownRowsWaitBehindRowsSentAgainSince = undefined;
       if (state === "stored")
@@ -4367,9 +4869,9 @@ class CCRClient {
       });
   }
   async clientRowsOwedByEarlierWorkers(flagsLoaded) {
-    if (this.clientRowsOwed.earlierSpans.length === 0) return [];
+    if (this.guardsClientRows === undefined || this.clientRowsOwed.earlierSpans.length === 0) return [];
     await flagsLoaded();
-    return this.guardsClientRows() ? this.clientRowsOwed.earlierSpans : [];
+    return this.flagsRefreshed() ? this.clientRowsOwed.earlierSpans : [];
   }
   async tryClientRowsOwedByEarlierWorkers(afterUuid) {
     this.reportClientRowsOwed(this.clientRowsOwed.earlierSpansTried(afterUuid));
@@ -4377,7 +4879,7 @@ class CCRClient {
       logFeatureSad("ccr_client_rows_owed", "try_report_unanswered");
   }
   async sendOwedClientRowsAgain(rows) {
-    if (!this.guardsClientRows()) return;
+    if (!this.flagsRefreshed()) return;
     let events = uniqByExport(
       rows.map((row) => this.toClientEvent(row)),
       (event) => event.payload.uuid,
@@ -4475,7 +4977,7 @@ class CCRClient {
         ) === true &&
         !this.flushPolicy.mustFlushTypes.has(row.type)
       );
-    if (this.holdRule === "no_subscriber_flag" && !SUBSCRIBER_FLAG_REQUIRED) return true;
+    if (this.holdRule === "no_subscriber_flag" && !DEBUG_STATE_DUMP) return true;
     if (row.type === "user" && "isReplay" in row && row.isReplay) return false;
     let flushPolicy = this.flushPolicy;
     if (!flushPolicy) return true;
@@ -4511,9 +5013,15 @@ class CCRClient {
       !this.turnTookInput &&
       this.followsServedPolicy &&
       this.flushPolicy?.liveOnlyTypes.has(SYSTEM_STATUS_REQUESTING_REPEAT) === true;
+    if (this.liveOnlyFirstRow === "next") this.liveOnlyFirstRow = row;
     this.lastRequestingList = list;
     this.toolResultEndsCall = false;
     this.liveOnlyRequestingRow = repeat ? row : undefined;
+    if (
+      row !== this.liveOnlyFirstRow &&
+      this.flushPolicy?.liveOnlyTypes.has(SYSTEM_STATUS_REQUESTING_AFTER_INPUT)
+    )
+      this.turnTookInput = false;
     this.heldRepeatUuid = undefined;
     return;
   }
@@ -4535,10 +5043,11 @@ class CCRClient {
       isThinkingTokensSystemMessage(row) ||
       isLiveOnlyResponse(capped) ||
       this.isLiveOnlyRow(row) ||
-      row === this.liveOnlyRequestingRow;
+      row === this.liveOnlyRequestingRow ||
+      row === this.liveOnlyFirstRow;
     let toolResult =
-      capped.type === "user" && capped.is_virtual !== true
-        ? this.uploadedToolResult(capped.tool_use_result, capped.message)
+      capped.type === "user"
+        ? this.uploadedToolResult(capped.tool_use_result, capped.message, capped.is_virtual === true)
         : capped.tool_use_result;
     return {
       payload: {
@@ -4556,7 +5065,17 @@ class CCRClient {
       }),
     };
   }
-  uploadedToolResult(result, message) {
+  uploadedToolResult(uuid, size, keepWhole) {
+    let result = keepWhole ? uuid : this.trimmedToolResult(uuid, size);
+    if (!this.withholdsWholeFiles) return result;
+    let withheld = withholdFileBodiesDeep(result);
+    if (withheld !== result && !this.loggedWholeFileWithheld) {
+      this.loggedWholeFileWithheld = true;
+      logFeatureOk("ccr_whole_file_withheld");
+    }
+    return withheld;
+  }
+  trimmedToolResult(result, message) {
     let trim = this.currentUploadTrim();
     let stripped = stripInlineMediaBase64(result, trim);
     if (stripped !== result && !this.loggedToolResultBlank) {
@@ -4582,11 +5101,14 @@ class CCRClient {
   setStreamEventFirstFlushMs(ms) {
     this.streamEventFirstFlushMs = parseFlushIntervalMs("streamEventFirstFlushMs", ms, 0);
   }
-  setToolInputFlushMs(ms) {
-    this.toolInputFlushMs = Math.min(
-      parseFlushIntervalMs("toolInputFlushMs", ms, 0),
-      MAX_TOOL_INPUT_FLUSH_MS,
-    );
+  setStreamEventWindowRunsFromLastFlush(value) {
+    this.streamEventWindowRunsFromLastFlush = value === true;
+  }
+  setHeldBunchFlushMs(value) {
+    this.heldBunchFlushMs = parseFlushIntervalMs("heldBunchFlushMs", value, DEFAULT_HELD_BUNCH_FLUSH_MS);
+  }
+  setToolInputFlushMs(value) {
+    this.toolInputFlushMs = clampToolInputFlushMs(value);
   }
   setNoSubscriberStreamEventFlushIntervalMs(ms) {
     let flushIntervalMs = parseFlushIntervalMs("noSubscriberStreamEventFlushIntervalMs", ms, 0);
@@ -4673,6 +5195,7 @@ class CCRClient {
   }
   openTurn() {
     this.lastRequestingList = undefined;
+    this.liveOnlyFirstRow = undefined;
     this.liveOnlyRequestingRow = undefined;
     this.turnTookInput = false;
     this.modelCallStreamed = false;
@@ -4974,7 +5497,15 @@ class CCRClient {
       ? Math.min(this.streamEventFirstFlushMs, this.streamEventFlushIntervalMs)
       : toolInputSlow
         ? Math.min(Math.max(this.streamEventsTakenAt + max - now, this.streamEventFlushIntervalMs), max)
-        : this.streamEventFlushIntervalMs;
+        : this.streamEventWindowRunsFromLastFlush
+          ? Math.min(
+              Math.max(
+                this.streamEventsTakenAt + this.streamEventFlushIntervalMs - now,
+                this.heldBunchFlushMs,
+              ),
+              this.streamEventFlushIntervalMs,
+            )
+          : this.streamEventFlushIntervalMs;
     if (delay > this.streamEventFlushIntervalMs && !this.loggedToolInputFlush) {
       this.loggedToolInputFlush = true;
       logFeatureOk("ccr_tool_input_flush");
@@ -5002,7 +5533,8 @@ class CCRClient {
       this.lastViewerLeftAtMs = Date.now();
     }
     let unwatchedPastGrace = this.unwatchedPastGrace;
-    this.unwatchedPastGrace = value === false && Date.now() - this.lastViewerLeftAtMs >= VIEWER_LEFT_GRACE_MS;
+    this.unwatchedPastGrace =
+      value === false && Date.now() - this.lastViewerLeftAtMs >= UNWATCHED_VIEWER_LEFT_GRACE_MS;
     if (this.dropUnwatchedStreamEvents && unwatchedPastGrace !== this.unwatchedPastGrace)
       logForDebugging(
         this.unwatchedPastGrace
@@ -5219,8 +5751,12 @@ class CCRClient {
       }
       outPayload = stripped;
     }
-    if (kind === "transcript" && outPayload.type === "user" && outPayload.isVirtual !== true) {
-      let result = this.uploadedToolResult(outPayload.toolUseResult, outPayload.message);
+    if (kind === "transcript" && outPayload.type === "user") {
+      let result = this.uploadedToolResult(
+        outPayload.toolUseResult,
+        outPayload.message,
+        outPayload.isVirtual === true,
+      );
       if (result !== outPayload.toolUseResult)
         outPayload = {
           ...outPayload,
@@ -5345,6 +5881,19 @@ class CCRClient {
     if (this.holdRule !== "served_policy" || !flushPolicy) return true;
     let type = kind === "transcript" ? payload.type : kind;
     if (typeof type !== "string" || flushPolicy.mustFlushTypes.has(type)) return false;
+    if (
+      type === "attachment" &&
+      !agentId &&
+      isPlainObject(payload.attachment) &&
+      payload.attachment.type === "prompt_snapshot"
+    )
+      return this.internalEventUploader.hasHeld(
+        (held) =>
+          held.session_agent_id === undefined &&
+          (held.payload.type === "assistant" ||
+            (held.payload.type === "user" &&
+              (held.payload.toolUseResult !== undefined || hasToolResultContent(held.payload.message)))),
+      );
     if (type === "user") {
       if (flushPolicy.holdAcrossModelCalls && this.turnHold === "open" && !agentId) return false;
       return (
@@ -5691,6 +6240,26 @@ class CCRClient {
   get droppedWorkerStatePatches() {
     return this.droppedWorkerStatePatchCount;
   }
+  refusedSwitchedOffMcpServers = null;
+  switchedOffMcpServersRefusedAlone = 0;
+  requeueRefusedSwitchedOffMcpServersOnceIdle() {
+    if (this.refusedSwitchedOffMcpServers === null || this.refusedSwitchedOffMcpServers.writesToWaitFor > 0)
+      return;
+    setImmediate(
+      (client, marker) => {
+        if (client.refusedSwitchedOffMcpServers !== marker || client.workerState.unsent || client.closed)
+          return;
+        client.refusedSwitchedOffMcpServers = null;
+        client.workerState.requeueMetadata({
+          internal_metadata: {
+            [DISABLED_MCP_SERVERS]: marker.value,
+          },
+        });
+      },
+      this,
+      this.refusedSwitchedOffMcpServers,
+    );
+  }
   async readInternalEvents(afterEventId, signal, pageOpts) {
     return CCRClient.readInternalEventsFrom(this.readSource, afterEventId, signal, pageOpts);
   }
@@ -5774,7 +6343,10 @@ class CCRClient {
       return null;
     }
     let events = [];
-    for (let sessionAgentIds of chunk_default(uniq(ids), INTERNAL_EVENT_UUID_BATCH_SIZE)) {
+    for (let sessionAgentIds of chunk_default(
+      normalizeCaseForComparison_2(ids),
+      INTERNAL_EVENT_UUID_BATCH_SIZE,
+    )) {
       let authHeaders = this.readSource.getAuthHeaders();
       if (Object.keys(authHeaders).length === 0) return null;
       let result = await CCRClient.getWithRetry(
@@ -5934,13 +6506,18 @@ class CCRClient {
       for (let event of page.data ?? [])
         if (!isClassifierDumpEvent(event.payload)) events.push(normalizePayload(event));
       count += Math.max(1, page.data?.length ?? 0);
-      if (
-        (singlePage && page.next_cursor) ||
-        (pageOpts !== undefined &&
-          (count > pageOpts.maxEvents ||
-            page.pastMaxBytes === true ||
-            (page.data ?? []).some((event) => !isTimestampWithinLimit(event, pageOpts.maxTimestampChars))))
-      )
+      let event =
+        pageOpts === undefined
+          ? undefined
+          : page.pastMaxBytes === true
+            ? "bytes"
+            : count > pageOpts.maxEvents
+              ? "events"
+              : (page.data ?? []).some((event) => !isTimestampWithinLimit(event, pageOpts.maxTimestampChars))
+                ? "timestamp"
+                : undefined;
+      if ((singlePage && page.next_cursor) || event !== undefined) {
+        if (event !== undefined) pageOpts?.onPassed?.(event);
         return {
           events: [],
           stats: {
@@ -5949,7 +6526,11 @@ class CCRClient {
             contentEncoding: encoding ?? "none",
           },
           overBound: true,
+          ...(event !== undefined && {
+            overBoundBy: event,
+          }),
         };
+      }
       cursor = page.next_cursor;
     } while (cursor);
     logForDebugging(
@@ -5961,6 +6542,9 @@ class CCRClient {
         pageCount: pages,
         bytesReceived: received,
         contentEncoding: encoding ?? "none",
+        ...(pageOpts !== undefined && {
+          bytesDecoded: bytes,
+        }),
       },
     };
   }
@@ -6011,6 +6595,7 @@ class CCRClient {
             }),
           },
           source.ownConnectionPool,
+          source.leavesPoolAfterServerError,
         );
         if (response.ok) {
           let body = readBody ? await readBody(response) : await response.json();
@@ -6314,6 +6899,13 @@ class CCRClient {
   }
   close(opts) {
     this.closeExceptInternalEvents(opts);
+    if (this.refusedSwitchedOffMcpServers !== null) {
+      logForDiagnosticsNoPII("warn", "cli_worker_switched_off_mcp_servers_not_saved", {
+        times_refused_alone: this.switchedOffMcpServersRefusedAlone,
+        accepted_writes_until_due: this.refusedSwitchedOffMcpServers.writesToWaitFor,
+      });
+      this.refusedSwitchedOffMcpServers = null;
+    }
     let count = this.countRowsAwaitingCompactSummary();
     for (let key of this.rowsAwaitingCompactSummary.keys()) this.takeRowsAwaitingCompactSummary(key, "close");
     this.rowsAwaitingCompactSummaryAtClose ??= count;
@@ -6445,9 +7037,9 @@ class CCRClient {
     ]);
   }
 }
-//@ chunk-fp6aqx1j.js:134287-134299 layout
+//@ chunk-qyz2x025.js:141357-141369 layout
 var CCR_RETRY_DELAY_MS = 3000;
-//@ chunk-fp6aqx1j.js:134299-134457 layout
+//@ chunk-qyz2x025.js:141369-141527 layout
 function blockedToNeedInput(metadata) {
   let postTurnSummary = metadata.post_turn_summary;
   if (!hasStatusCategory(postTurnSummary) || postTurnSummary.status_category !== "blocked") return metadata;
@@ -6459,7 +7051,7 @@ function blockedToNeedInput(metadata) {
     },
   };
 }
-//@ chunk-fp6aqx1j.js:134457-134569 layout
+//@ chunk-qyz2x025.js:141527-141639 layout
 function hasStatusCategory(postTurnSummary) {
   return (
     postTurnSummary !== null &&
@@ -6468,7 +7060,7 @@ function hasStatusCategory(postTurnSummary) {
     typeof postTurnSummary.status_category === "string"
   );
 }
-//@ chunk-fp6aqx1j.js:134569-134772 layout
+//@ chunk-qyz2x025.js:141639-141842 layout
 async function readConflictReason(response) {
   let reason = asConflictReason(response.headers.get("x-ccr-conflict-reason"));
   if (reason !== undefined) {
@@ -6481,7 +7073,7 @@ async function readConflictReason(response) {
   } catch {}
   return;
 }
-//@ chunk-fp6aqx1j.js:134772-134892 layout
+//@ chunk-qyz2x025.js:141842-141962 layout
 function asConflictReason(value) {
   switch (value) {
     case "superseded_by_worker":
@@ -6492,7 +7084,7 @@ function asConflictReason(value) {
       return;
   }
 }
-//@ chunk-fp6aqx1j.js:134892-137300 layout
+//@ chunk-qyz2x025.js:141962-144370 layout
 function parseHoldPolicy(raw) {
   let parsed = WorkerLimitsSchema().safeParse(raw);
   if (!parsed.success) return;
@@ -6542,7 +7134,7 @@ function parseHoldPolicy(raw) {
           }
         : undefined,
     mayWaitTypes: new Set((data.may_wait_types ?? []).filter((type) => MAY_WAIT_EVENT_TYPES.has(type))),
-    mayWaitTypesRefused: count(data.may_wait_types ?? [], (type) => !MAY_WAIT_EVENT_TYPES.has(type)),
+    mayWaitTypesRefused: countWhere(data.may_wait_types ?? [], (type) => !MAY_WAIT_EVENT_TYPES.has(type)),
     settingsReceiptsMaxWaitMs: clampNonNegativeInt(
       data.settings_receipts_max_wait_ms,
       DEFAULT_SETTINGS_RECEIPTS_MAX_WAIT_MS,
@@ -6585,7 +7177,7 @@ function parseHoldPolicy(raw) {
       policyVersion !== undefined && POLICY_VERSION_PATTERN.test(policyVersion) ? policyVersion : undefined,
   };
 }
-//@ chunk-fp6aqx1j.js:137300-137376 layout
+//@ chunk-qyz2x025.js:144370-144446 layout
 function normalizePayload(event) {
   let payload = normalizeUserToolUseResult(event.payload);
   return payload === event.payload
@@ -6595,7 +7187,7 @@ function normalizePayload(event) {
         payload,
       };
 }
-//@ chunk-fp6aqx1j.js:137376-137544 layout
+//@ chunk-qyz2x025.js:144446-144614 layout
 function hasUserMessageUuids(message) {
   return (
     "user_message_uuids" in message &&
@@ -6604,7 +7196,7 @@ function hasUserMessageUuids(message) {
     message.user_message_uuids.every((userMessageUuid) => typeof userMessageUuid === "string")
   );
 }
-//@ chunk-fp6aqx1j.js:137544-137672 layout
+//@ chunk-qyz2x025.js:144614-144742 layout
 function isTopLevelSystemInit(message) {
   return (
     message.type === "system" &&
@@ -6613,12 +7205,12 @@ function isTopLevelSystemInit(message) {
     !("parent_tool_use_id" in message && message.parent_tool_use_id)
   );
 }
-//@ chunk-fp6aqx1j.js:137672-137740 placement
+//@ chunk-qyz2x025.js:144742-144810 placement
 var SDK_ROW_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fp6aqx1j.js:137672", () => {
+deferInit("chunk-qyz2x025.js:144742", () => {
   SDK_ROW_TYPES = new Set(["assistant", "attachment", "result", "system", "user"]);
 });
-//@ chunk-fp6aqx1j.js:137740-137913 placement
+//@ chunk-qyz2x025.js:144810-144983 placement
 function describeSingleRowForTelemetry(events) {
   let payload = events.length === 1 ? events[0].payload : undefined;
   return (
@@ -6629,7 +7221,7 @@ function describeSingleRowForTelemetry(events) {
     }
   );
 }
-//@ chunk-fp6aqx1j.js:137913-138447 placement
+//@ chunk-qyz2x025.js:144983-145517 placement
 /**
  * 把一条 SDK 行归类为遥测用的 type/subtype 字符串；前台 shell 任务开始与 rate_limit_event（带 grace/overage 后缀）有专门分类。
  */
@@ -6657,25 +7249,25 @@ function classifyRowTypeForTelemetry(message) {
     ? `${message.type}/${message.subtype}`
     : message.type;
 }
-//@ chunk-fp6aqx1j.js:138447-138557 placement
+//@ chunk-qyz2x025.js:145517-145627 placement
 function hasToolResultContent(message) {
   let content = isPlainObject(message) ? message.content : undefined;
   return (
     Array.isArray(content) && content.some((block) => isPlainObject(block) && block.type === "tool_result")
   );
 }
-//@ chunk-fp6aqx1j.js:138557-138595 placement
+//@ chunk-qyz2x025.js:145627-145665 placement
 var READ_NOTIFICATIONS_TOOL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fp6aqx1j.js:138557", () => {
+deferInit("chunk-qyz2x025.js:145627", () => {
   READ_NOTIFICATIONS_TOOL_NAMES = new Set(["ReadNotifications"]);
 });
-//@ chunk-fp6aqx1j.js:138595-138709 placement
+//@ chunk-qyz2x025.js:145665-145779 placement
 function getMainThreadToolUseIds(message, filter) {
   return isPlainObject(message) && message.type === "assistant" && message.parent_tool_use_id == null
     ? collectContentBlockField(message.message, "tool_use", "id", filter)
     : [];
 }
-//@ chunk-fp6aqx1j.js:138709-138941 placement
+//@ chunk-qyz2x025.js:145779-146011 placement
 function collectContentBlockField(message, blockType, field, names) {
   let content = isPlainObject(message) ? message.content : undefined;
   if (!Array.isArray(content)) return [];
@@ -6691,7 +7283,7 @@ function collectContentBlockField(message, blockType, field, names) {
     }
   return blocks;
 }
-//@ chunk-fp6aqx1j.js:138941-139051 placement (2.1.88 match: createChildAbortController, 0.879)
+//@ chunk-qyz2x025.js:146011-146121 placement (2.1.88 match: createChildAbortController, 0.878)
 function createChildAbortController(signal) {
   return new Promise((resolve) => {
     if (signal.aborted) resolve();
@@ -6701,20 +7293,20 @@ function createChildAbortController(signal) {
       });
   });
 }
-//@ chunk-fp6aqx1j.js:139051-139135 placement
+//@ chunk-qyz2x025.js:146121-146205 placement
 function evictOldestIfFull(set) {
   if (set.size > MAX_EPHEMERAL_RECEIPT_IDS) {
     let oldest = set.keys().next().value;
     if (oldest !== undefined) set.delete(oldest);
   }
 }
-//@ chunk-fp6aqx1j.js:139135-139239 placement
+//@ chunk-qyz2x025.js:146205-146309 placement
 function clampNonNegativeInt(value, max) {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.min(Math.max(0, Math.trunc(value)), max)
     : 0;
 }
-//@ chunk-fp6aqx1j.js:139239-141177 placement
+//@ chunk-qyz2x025.js:146309-148247 placement
 function summarizeAssistantMessage(flushPolicy, other) {
   if (!flushPolicy || !other) return flushPolicy === other;
   return (
@@ -6759,7 +7351,7 @@ function summarizeAssistantMessage(flushPolicy, other) {
     setsEqual(flushPolicy.metadataNeverSent, other.metadataNeverSent)
   );
 }
-//@ chunk-fp6aqx1j.js:141177-141418 placement
+//@ chunk-qyz2x025.js:148247-148488 placement
 function parseFlushIntervalMs(field, value, fallback) {
   let numeric = typeof value === "string" ? Number(value) : value;
   if (typeof numeric === "number" && Number.isFinite(numeric)) return Math.min(Math.max(numeric, 0), 60000);
@@ -6769,11 +7361,15 @@ function parseFlushIntervalMs(field, value, fallback) {
     });
   return fallback;
 }
-//@ chunk-fp6aqx1j.js:141418-141504 placement
+//@ chunk-qyz2x025.js:148488-148550 layout
+function clampToolInputFlushMs(value) {
+  return Math.min(parseFlushIntervalMs("toolInputFlushMs", value, 0), MAX_TOOL_INPUT_FLUSH_MS);
+}
+//@ chunk-qyz2x025.js:148550-148636 placement
 function isThinkingTokensSystemMessage(message) {
   return message.type === "system" && "subtype" in message && message.subtype === "thinking_tokens";
 }
-//@ chunk-fp6aqx1j.js:141504-141867 placement
+//@ chunk-qyz2x025.js:148636-148999 placement
 /**
  * 判断一条 SDK 消息是否属于实时/进度类（user、stream_event、tool_progress、不含 SendUserMessage/PushNotification 的 assistant、thinking_tokens/task_progress/hook_progress 系统消息），决定 CCRClient 的保留与刷写策略。
  */
@@ -6800,24 +7396,24 @@ function isEphemeralStreamMessage(message) {
       return false;
   }
 }
-//@ chunk-fp6aqx1j.js:141867-141925 placement
+//@ chunk-qyz2x025.js:148999-149057 placement
 function hearthQuerySuffix(include) {
   if (include) return "?include_hearth=true";
   return "";
 }
-//@ chunk-fp6aqx1j.js:141925-141957 placement
+//@ chunk-qyz2x025.js:149057-149089 placement
 function isHearthRequest(response) {
   return response?.hearth;
 }
-//@ chunk-fp6aqx1j.js:141957-142022 placement
+//@ chunk-qyz2x025.js:149089-149154 placement
 function isHistoricalPayloadSeen(event, uuids) {
   return event.historical === true && uuids.has(event.payload.uuid);
 }
-//@ chunk-fp6aqx1j.js:142022-142068 placement
+//@ chunk-qyz2x025.js:149154-149200 placement
 function isUserPayload(event) {
   return event.payload.type === "user";
 }
-//@ chunk-fp6aqx1j.js:142068-142330 placement
+//@ chunk-qyz2x025.js:149200-149462 placement
 /**
  * 创建空闲跟踪器：noteActivity 记录活动并通知订阅者，sampleIdleSeconds 在回合运行时返回 0，否则返回距上次活动的秒数；用于 CCR 心跳的 idle 上报。
  */
@@ -6846,21 +7442,23 @@ function createIdleTracker(options) {
   };
 }
 export {
-  SETTINGS_CONTROL_SUBTYPES,
-  isEphemeralStreamMessage,
-  DEFAULT_STREAM_EVENT_FLUSH_INTERVAL_MS,
-  createIdleTracker,
-  MAX_PRESERVED_MESSAGE_UUIDS,
-  scopeKey,
-  CCRClient,
-  WORKER_CONFLICT_CLOSE_CODES,
-  isUserPayload,
+  REQUEST_FOLLOWS_INIT,
+  TENGU_PATIENT_LEDGER,
   findLastRowBeforeSpans,
   selectRowsToResend,
   MAX_ROW_AGE_MS,
   CCRInitError,
   isWorkerRegisterFailure,
   SHUTDOWN_REQUEST_TIMEOUT_MS,
+  WORKER_CONFLICT_CLOSE_CODES,
+  DEFAULT_STREAM_EVENT_FLUSH_INTERVAL_MS,
+  DEFAULT_HELD_BUNCH_FLUSH_MS,
+  CCRClient,
   workerEpochFromEnv,
-  TENGU_PATIENT_LEDGER,
+  createIdleTracker,
+  isEphemeralStreamMessage,
+  MAX_PRESERVED_MESSAGE_UUIDS,
+  SETTINGS_CONTROL_SUBTYPES,
+  scopeKey,
+  isUserPayload,
 };

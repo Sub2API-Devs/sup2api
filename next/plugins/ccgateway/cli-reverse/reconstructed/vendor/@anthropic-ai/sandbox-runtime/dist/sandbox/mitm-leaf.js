@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/mitm-leaf.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (7)
+ * pieces: chunk-qg41pqt6.js (7)
  * attribution: esm-fingerprint 6, esm-layout 1
  */
 import { createSecureContext } from "tls";
@@ -16,7 +16,7 @@ import {
 } from "./mitm-ca.js";
 import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 
-//@ chunk-fq0cr76a.js:665429-666350 esm-fingerprint
+//@ chunk-qg41pqt6.js:665951-666872 esm-fingerprint
 function mintLeafCert(ca, hostname) {
   let { pki } = getRootCertificates();
   let cached = cacheGet(ca.leafCerts, hostname);
@@ -85,7 +85,7 @@ function mintLeafCert(ca, hostname) {
   logForDebugging_2(`[mitm-leaf] minted RSA leaf for ${hostname}`);
   return leaf;
 }
-//@ chunk-fq0cr76a.js:666350-666514 esm-fingerprint
+//@ chunk-qg41pqt6.js:666872-667036 esm-fingerprint
 function secureContextFor(ca, hostname) {
   let cached = cacheGet(ca.secureContexts, hostname);
   if (cached) return cached;
@@ -97,7 +97,7 @@ function secureContextFor(ca, hostname) {
   cacheSet(ca.secureContexts, hostname, ctx, ca.cacheLimit ?? LEAF_CACHE_LIMIT);
   return ctx;
 }
-//@ chunk-fq0cr76a.js:666514-666577 esm-fingerprint
+//@ chunk-qg41pqt6.js:667036-667099 esm-fingerprint
 function sanFor(hostname) {
   return isIP(hostname) !== 0
     ? {
@@ -109,16 +109,16 @@ function sanFor(hostname) {
         value: hostname,
       };
 }
-//@ chunk-fq0cr76a.js:666577-666685 esm-fingerprint
+//@ chunk-qg41pqt6.js:667099-667207 esm-fingerprint
 function clampValidity(caCert, notBefore) {
   let caEnd = caCert.validity.notAfter;
   let max = new Date(notBefore);
   max.setDate(max.getDate() + 99);
   return caEnd < max ? new Date(caEnd) : max;
 }
-//@ chunk-fq0cr76a.js:666685-666696 esm-layout
+//@ chunk-qg41pqt6.js:667207-667218 esm-layout
 var LEAF_CACHE_LIMIT = 256;
-//@ chunk-fq0cr76a.js:666696-666774 esm-fingerprint
+//@ chunk-qg41pqt6.js:667218-667296 esm-fingerprint
 function cacheGet(cache, key) {
   let value = cache.get(key);
   if (value !== undefined) {
@@ -127,7 +127,7 @@ function cacheGet(cache, key) {
   }
   return value;
 }
-//@ chunk-fq0cr76a.js:666774-666861 esm-fingerprint
+//@ chunk-qg41pqt6.js:667296-667383 esm-fingerprint
 function cacheSet(cache, key, value, limit) {
   cache.set(key, value);
   for (let oldest of cache.keys()) {

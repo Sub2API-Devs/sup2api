@@ -3,12 +3,11 @@
  *
  * 助手工具调用：工具名 + renderToolUseMessage 参数摘要 + 状态圆点，排队/进度/等待权限状态；MCP 工具显示服务器名。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/AssistantToolUseMessage.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-ah34pb7m.js (12)
+ * pieces: chunk-czq1j3j2.js (1), chunk-wjygkcr4.js (12)
  * attribution: fingerprint 5, placement 3, affinity 1, callgraph-fingerprint 1, layout 3
  */
-import { init_react_production, useContext, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useAppStateSlice, appStoreContext } from "../../state/AppState.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { VALIDATE_TREE_NAMESPACE } from "../../plugins/functionHooks/ui/index.js";
@@ -21,11 +20,13 @@ import {
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useTheme } from "../design-system/ThemeProvider.js";
 import { useHost, useSessionOrUndefined } from "../../context/session.js";
+import { useContext, useEffect, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { staticRenderStorageSlot } from "../../utils/staticRender.js";
 import { detachedCallSlots } from "../../services/tools/detachedToolCalls.js";
 import { useFrozenValue } from "../FreezeWhenOffscreen.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { displayOnlyMcpTool } from "../../tools/MCPTool/displayOnlyTool.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { MEMO_CACHE_SENTINEL, EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   findToolByName,
@@ -35,10 +36,10 @@ import {
 } from "../../Tool.js";
 import {
   STRUCTUREDOUTPUT,
-  countToolCallsSince_2,
+  structuredOutputText,
 } from "../../tools/SyntheticOutputTool/SyntheticOutputTool.js";
 import { SUBAGENTHANDBACK } from "../../tools/AgentTool/constants.js";
-import { isReplToolName } from "../../tools/REPLTool/constants.js";
+import { isEvalToolName, isEvalToolCallName } from "../../tools/REPLTool/constants.js";
 import { RETIRED_TOOL_NAMES } from "../../tools/retiredTools.js";
 import { getShadowedSearchToolNames } from "../../utils/embeddedTools.js";
 import { remoteMachineRefForDisplay } from "../../utils/toolUseDisplay.js";
@@ -63,32 +64,27 @@ import { SentryErrorBoundary } from "../SentryErrorBoundary.js";
 import { HookProgressMessage } from "./HookProgressMessage.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:64176-64180 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:64176", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:64180-64207 placement
+//@ chunk-wjygkcr4.js:64798-64825 placement
 function useClassifierChecking(host) {
   return null;
 }
-//@ chunk-ah34pb7m.js:64207-64280 placement
+//@ chunk-wjygkcr4.js:64825-64898 placement
 function isClassifierChecking(id) {
   return useAppStateSlice((state) => state.classifierApprovals.checking.has(id)) ?? false;
 }
-//@ chunk-ah34pb7m.js:66292-66339 affinity (2.1.88 match: _temp, 1)
+//@ chunk-wjygkcr4.js:66910-66957 affinity (2.1.88 match: _temp, 1)
 function selectPendingWorkerRequest_2(state) {
   return state.pendingWorkerRequest;
 }
-//@ chunk-ah34pb7m.js:66339-66392 callgraph-fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-wjygkcr4.js:66957-67010 callgraph-fingerprint (2.1.88 match: _temp2, 1)
 function selectPermissionMode(state) {
   return state.toolPermissionContext.mode;
 }
-//@ chunk-ah34pb7m.js:66392-66448 layout
+//@ chunk-wjygkcr4.js:67010-67066 layout
 function selectActiveAgents(state) {
   return state.agentDefinitions.activeAgents;
 }
-//@ chunk-ah34pb7m.js:66448-67780 layout
+//@ chunk-wjygkcr4.js:67066-68398 layout
 function ToolUseStatusDot(props) {
   let $ = useMemoCache(29);
   let { param, inProgressToolUseIDs, lookups } = props;
@@ -197,12 +193,12 @@ function ToolUseStatusDot(props) {
   } else containerElement = $[28];
   return actionKeysNamespace.useRenderHook(rowElement, containerElement);
 }
-//@ chunk-ah34pb7m.js:67780-76484 fingerprint (2.1.88 match: AssistantToolUseMessage, 0.537)
+//@ chunk-wjygkcr4.js:68398-78282 fingerprint (2.1.88 match: AssistantToolUseMessage, 0.509)
 /**
  * 工具调用消息：根据 lookups 判定状态（排队/运行/等待权限/已完成/失败/已停止），显示 ToolUseLoader 圆点 + userFacingName + renderToolUseMessage(input)；运行中显示进度消息，排队时显示 renderToolUseQueuedMessage；MCP 工具名 mcp__server__tool 拆开显示。
  */
 function AssistantToolUseMessage(props) {
-  let $ = useMemoCache(209);
+  let $ = useMemoCache(219);
   let {
     param,
     addMargin,
@@ -254,27 +250,36 @@ function AssistantToolUseMessage(props) {
     $[7] = displayTool;
   } else displayTool = $[7];
   let displayToolValue = displayTool;
-  let unusedFlag = undefined?.type === "user" && undefined.isVirtual === true;
+  let unusedFlag;
+  if ($[8] !== lookups.toolResultByToolUseID || $[9] !== param.id) {
+    unusedFlag = codeModeAccepted() ? lookups.toolResultByToolUseID.get(param.id) : undefined;
+    $[8] = lookups.toolResultByToolUseID;
+    $[9] = param.id;
+    $[10] = unusedFlag;
+  } else unusedFlag = $[10];
+  let resultMsg = unusedFlag;
+  let isVirtual = resultMsg?.type === "user" && resultMsg.isVirtual === true;
   let toolInfo;
   if (
-    $[8] !== permissionMode ||
-    $[9] !== displayToolValue ||
-    $[10] !== param.input ||
-    $[11] !== param.name ||
-    $[12] !== toolLabel ||
-    $[13] !== tools
+    $[11] !== permissionMode ||
+    $[12] !== displayToolValue ||
+    $[13] !== isVirtual ||
+    $[14] !== param.input ||
+    $[15] !== param.name ||
+    $[16] !== toolLabel ||
+    $[17] !== tools
   ) {
-    ve: {
+    Ue: {
       if (!tools) {
         let noToolsInfo;
-        if ($[15] === MEMO_CACHE_SENTINEL) {
+        if ($[19] === MEMO_CACHE_SENTINEL) {
           noToolsInfo = {
             notFound: "no-tools",
           };
-          $[15] = noToolsInfo;
-        } else noToolsInfo = $[15];
+          $[19] = noToolsInfo;
+        } else noToolsInfo = $[19];
         toolInfo = noToolsInfo;
-        break ve;
+        break Ue;
       }
       let resolvedTool = findToolByName(tools, param.name) ?? displayToolValue;
       if (!resolvedTool) {
@@ -283,8 +288,12 @@ function AssistantToolUseMessage(props) {
           param.name.startsWith("skill__") ||
           param.name === STRUCTUREDOUTPUT ||
           param.name === SUBAGENTHANDBACK ||
-          isReplToolName(param.name) ||
-          false ||
+          isEvalToolName(param.name) ||
+          (codeModeAccepted() &&
+            isVirtual &&
+            require("../../utils/codeMode/isReplScriptHelperCall.lazy.js").isReplScriptHelperCall(
+              param.name,
+            )) ||
           param.name === "WebBrowser" ||
           RETIRED_TOOL_NAMES.has(param.name) ||
           getShadowedSearchToolNames().has(param.name) ||
@@ -292,15 +301,15 @@ function AssistantToolUseMessage(props) {
             ? "expected-absent"
             : "unknown";
         let notFoundInfo;
-        if ($[16] !== notFound) {
+        if ($[20] !== notFound) {
           notFoundInfo = {
             notFound,
           };
-          $[16] = notFound;
-          $[17] = notFoundInfo;
-        } else notFoundInfo = $[17];
+          $[20] = notFound;
+          $[21] = notFoundInfo;
+        } else notFoundInfo = $[21];
         toolInfo = notFoundInfo;
-        break ve;
+        break Ue;
       }
       let tool = safeParseToolInput(resolvedTool, param.input);
       let parsedData = tool.success ? tool.data : undefined;
@@ -322,19 +331,20 @@ function AssistantToolUseMessage(props) {
         isTransparentWrapper: resolvedTool.isTransparentWrapper?.() ?? false,
       };
     }
-    $[8] = permissionMode;
-    $[9] = displayToolValue;
-    $[10] = param.input;
-    $[11] = param.name;
-    $[12] = toolLabel;
-    $[13] = tools;
-    $[14] = toolInfo;
-  } else toolInfo = $[14];
+    $[11] = permissionMode;
+    $[12] = displayToolValue;
+    $[13] = isVirtual;
+    $[14] = param.input;
+    $[15] = param.name;
+    $[16] = toolLabel;
+    $[17] = tools;
+    $[18] = toolInfo;
+  } else toolInfo = $[18];
   let toolInfo_2 = toolInfo;
   let notFound = "notFound" in toolInfo_2 ? toolInfo_2.notFound : null;
   let logMissingToolEffect;
   let logMissingToolDeps;
-  if ($[18] !== notFound || $[19] !== param.name) {
+  if ($[22] !== notFound || $[23] !== param.name) {
     logMissingToolEffect = () => {
       if (notFound === "no-tools")
         logError(
@@ -351,22 +361,22 @@ function AssistantToolUseMessage(props) {
         logError(withTelemetryMessage(Error(`Tool ${param.name} not found`), "Tool not found"));
     };
     logMissingToolDeps = [param.name, notFound];
-    $[18] = notFound;
-    $[19] = param.name;
-    $[20] = logMissingToolEffect;
-    $[21] = logMissingToolDeps;
+    $[22] = notFound;
+    $[23] = param.name;
+    $[24] = logMissingToolEffect;
+    $[25] = logMissingToolDeps;
   } else {
-    logMissingToolEffect = $[20];
-    logMissingToolDeps = $[21];
+    logMissingToolEffect = $[24];
+    logMissingToolDeps = $[25];
   }
   useEffect(logMissingToolEffect, logMissingToolDeps);
   let thinkingContent;
-  if ($[22] !== lookups.erroredToolUseIDs || $[23] !== param) {
-    thinkingContent = countToolCallsSince_2(param, lookups.erroredToolUseIDs);
-    $[22] = lookups.erroredToolUseIDs;
-    $[23] = param;
-    $[24] = thinkingContent;
-  } else thinkingContent = $[24];
+  if ($[26] !== lookups.erroredToolUseIDs || $[27] !== param) {
+    thinkingContent = structuredOutputText(param, lookups.erroredToolUseIDs);
+    $[26] = lookups.erroredToolUseIDs;
+    $[27] = param;
+    $[28] = thinkingContent;
+  } else thinkingContent = $[28];
   let thinkingContent_2 = thinkingContent;
   const isThinking = thinkingContent_2 !== null;
   let innerRow;
@@ -391,69 +401,71 @@ function AssistantToolUseMessage(props) {
   let earlyResult;
   let tool;
   if (
-    $[25] !== permissionMode ||
-    $[26] !== addMargin ||
-    $[27] !== commands ||
-    $[28] !== callEntry ||
-    $[29] !== inProgressToolCallCount ||
-    $[30] !== inProgressToolUseIDs ||
-    $[31] !== isFailedOrStopped ||
-    $[32] !== isRunning ||
-    $[33] !== pendingWorkerRequest ||
-    $[34] !== isTranscriptMode ||
-    $[35] !== lookups ||
-    $[36] !== param ||
-    $[37] !== toolInfo_2 ||
-    $[38] !== isClassifierCheckingRaw?.toolUseId ||
-    $[39] !== progressMessagesForMessage ||
-    $[40] !== thinkingContent_2 ||
-    $[41] !== sessionOrUndefined ||
-    $[42] !== shouldAnimate ||
-    $[43] !== shouldShowDot ||
-    $[44] !== isThinking ||
-    $[45] !== terminalSize ||
-    $[46] !== theme ||
-    $[47] !== tools ||
-    $[48] !== verbose
+    $[29] !== permissionMode ||
+    $[30] !== addMargin ||
+    $[31] !== commands ||
+    $[32] !== callEntry ||
+    $[33] !== inProgressToolCallCount ||
+    $[34] !== inProgressToolUseIDs ||
+    $[35] !== isFailedOrStopped ||
+    $[36] !== isRunning ||
+    $[37] !== pendingWorkerRequest ||
+    $[38] !== isTranscriptMode ||
+    $[39] !== lookups ||
+    $[40] !== param ||
+    $[41] !== toolInfo_2 ||
+    $[42] !== isClassifierCheckingRaw?.toolUseId ||
+    $[43] !== progressMessagesForMessage ||
+    $[44] !== thinkingContent_2 ||
+    $[45] !== sessionOrUndefined ||
+    $[46] !== shouldAnimate ||
+    $[47] !== shouldShowDot ||
+    $[48] !== isThinking ||
+    $[49] !== terminalSize ||
+    $[50] !== theme ||
+    $[51] !== toolLabel ||
+    $[52] !== tools ||
+    $[53] !== verbose
   ) {
     earlyResult = EARLY_RETURN_SENTINEL;
-    xr: {
+    Pt: {
       if (isThinking) {
         earlyResult = jsxProd_default(ThinkingMessage, {
           content: thinkingContent_2,
           addMargin,
         });
-        break xr;
+        break Pt;
       }
       const hasNotFound = "notFound" in toolInfo_2;
       if (
-        $[70] !== permissionMode ||
-        $[71] !== addMargin ||
-        $[72] !== commands ||
-        $[73] !== callEntry ||
-        $[74] !== inProgressToolCallCount ||
-        $[75] !== inProgressToolUseIDs ||
-        $[76] !== isFailedOrStopped ||
-        $[77] !== isRunning ||
-        $[78] !== pendingWorkerRequest ||
-        $[79] !== isTranscriptMode ||
-        $[80] !== lookups ||
-        $[81] !== param ||
-        $[82] !== toolInfo_2 ||
-        $[83] !== isClassifierCheckingRaw?.toolUseId ||
-        $[84] !== progressMessagesForMessage ||
-        $[85] !== sessionOrUndefined ||
-        $[86] !== shouldAnimate ||
-        $[87] !== shouldShowDot ||
-        $[88] !== hasNotFound ||
-        $[89] !== terminalSize ||
-        $[90] !== theme ||
-        $[91] !== tools ||
-        $[92] !== verbose
+        $[75] !== permissionMode ||
+        $[76] !== addMargin ||
+        $[77] !== commands ||
+        $[78] !== callEntry ||
+        $[79] !== inProgressToolCallCount ||
+        $[80] !== inProgressToolUseIDs ||
+        $[81] !== isFailedOrStopped ||
+        $[82] !== isRunning ||
+        $[83] !== pendingWorkerRequest ||
+        $[84] !== isTranscriptMode ||
+        $[85] !== lookups ||
+        $[86] !== param ||
+        $[87] !== toolInfo_2 ||
+        $[88] !== isClassifierCheckingRaw?.toolUseId ||
+        $[89] !== progressMessagesForMessage ||
+        $[90] !== sessionOrUndefined ||
+        $[91] !== shouldAnimate ||
+        $[92] !== shouldShowDot ||
+        $[93] !== hasNotFound ||
+        $[94] !== terminalSize ||
+        $[95] !== theme ||
+        $[96] !== toolLabel ||
+        $[97] !== tools ||
+        $[98] !== verbose
       ) {
         if (hasNotFound) {
           earlyResult = null;
-          break xr;
+          break Pt;
         }
         let {
           tool: tool_2,
@@ -465,33 +477,34 @@ function AssistantToolUseMessage(props) {
         } = toolInfo_2;
         tool = tool_2;
         if (
-          $[113] !== permissionMode ||
-          $[114] !== addMargin ||
-          $[115] !== commands ||
-          $[116] !== callEntry ||
-          $[117] !== inProgressToolCallCount ||
-          $[118] !== inProgressToolUseIDs ||
-          $[119] !== input ||
-          $[120] !== isFailedOrStopped ||
-          $[121] !== isRunning ||
-          $[122] !== pendingWorkerRequest ||
-          $[123] !== isTranscriptMode ||
-          $[124] !== isTransparentWrapper ||
-          $[125] !== lookups ||
-          $[126] !== param ||
-          $[127] !== isClassifierCheckingRaw?.toolUseId ||
-          $[128] !== progressMessagesForMessage ||
-          $[129] !== remoteHost ||
-          $[130] !== sessionOrUndefined ||
-          $[131] !== shouldAnimate ||
-          $[132] !== shouldShowDot ||
-          $[133] !== terminalSize ||
-          $[134] !== theme ||
-          $[135] !== tool ||
-          $[136] !== tools ||
-          $[137] !== userFacingToolName ||
-          $[138] !== userFacingToolNameBackgroundColor ||
-          $[139] !== verbose
+          $[119] !== permissionMode ||
+          $[120] !== addMargin ||
+          $[121] !== commands ||
+          $[122] !== callEntry ||
+          $[123] !== inProgressToolCallCount ||
+          $[124] !== inProgressToolUseIDs ||
+          $[125] !== input ||
+          $[126] !== isFailedOrStopped ||
+          $[127] !== isRunning ||
+          $[128] !== pendingWorkerRequest ||
+          $[129] !== isTranscriptMode ||
+          $[130] !== isTransparentWrapper ||
+          $[131] !== lookups ||
+          $[132] !== param ||
+          $[133] !== isClassifierCheckingRaw?.toolUseId ||
+          $[134] !== progressMessagesForMessage ||
+          $[135] !== remoteHost ||
+          $[136] !== sessionOrUndefined ||
+          $[137] !== shouldAnimate ||
+          $[138] !== shouldShowDot ||
+          $[139] !== terminalSize ||
+          $[140] !== theme ||
+          $[141] !== toolLabel ||
+          $[142] !== tool ||
+          $[143] !== tools ||
+          $[144] !== userFacingToolName ||
+          $[145] !== userFacingToolNameBackgroundColor ||
+          $[146] !== verbose
         ) {
           isResolved = lookups.resolvedToolUseIDs.has(param.id) && !isRunning;
           isQueued = !inProgressToolUseIDs.has(param.id) && !isResolved && !isRunning;
@@ -512,24 +525,50 @@ function AssistantToolUseMessage(props) {
             });
             if (classifierChecking !== null) {
               earlyResult = classifierChecking;
-              break xr;
+              break Pt;
+            }
+            let scriptSourceRow = null;
+            if (codeModeAccepted() && isTranscriptMode === true && isEvalToolCallName(param.name)) {
+              let { ScriptSourceRow } = require("./ScriptSourceRow.lazy.js");
+              const toolUseId = param.id;
+              const input = param.input;
+              const isUnresolved = !isResolved;
+              let isError;
+              if ($[166] !== lookups.erroredToolUseIDs || $[167] !== param.id) {
+                isError = lookups.erroredToolUseIDs.has(param.id);
+                $[166] = lookups.erroredToolUseIDs;
+                $[167] = param.id;
+                $[168] = isError;
+              } else isError = $[168];
+              scriptSourceRow = jsxProd_default(ScriptSourceRow, {
+                tool,
+                toolUseId,
+                input,
+                toolLabel,
+                output: toolUseResult,
+                shouldAnimate,
+                isUnresolved,
+                isError,
+                addMargin,
+              });
             }
             if (isResolved) {
-              earlyResult = null;
-              break xr;
+              earlyResult = scriptSourceRow;
+              break Pt;
             }
+            const scriptSourceRowElement = scriptSourceRow;
             let progressMessage;
             if (
-              $[159] !== permissionMode ||
-              $[160] !== inProgressToolCallCount ||
-              $[161] !== isTranscriptMode ||
-              $[162] !== lookups ||
-              $[163] !== param.id ||
-              $[164] !== progressMessagesForMessage ||
-              $[165] !== terminalSize ||
-              $[166] !== tool ||
-              $[167] !== tools ||
-              $[168] !== verbose
+              $[169] !== permissionMode ||
+              $[170] !== inProgressToolCallCount ||
+              $[171] !== isTranscriptMode ||
+              $[172] !== lookups ||
+              $[173] !== param.id ||
+              $[174] !== progressMessagesForMessage ||
+              $[175] !== terminalSize ||
+              $[176] !== tool ||
+              $[177] !== tools ||
+              $[178] !== verbose
             ) {
               progressMessage = renderToolUseProgressMessage_3(
                 tool,
@@ -545,28 +584,28 @@ function AssistantToolUseMessage(props) {
                 },
                 terminalSize,
               );
-              $[159] = permissionMode;
-              $[160] = inProgressToolCallCount;
-              $[161] = isTranscriptMode;
-              $[162] = lookups;
-              $[163] = param.id;
-              $[164] = progressMessagesForMessage;
-              $[165] = terminalSize;
-              $[166] = tool;
-              $[167] = tools;
-              $[168] = verbose;
-              $[169] = progressMessage;
-            } else progressMessage = $[169];
+              $[169] = permissionMode;
+              $[170] = inProgressToolCallCount;
+              $[171] = isTranscriptMode;
+              $[172] = lookups;
+              $[173] = param.id;
+              $[174] = progressMessagesForMessage;
+              $[175] = terminalSize;
+              $[176] = tool;
+              $[177] = tools;
+              $[178] = verbose;
+              $[179] = progressMessage;
+            } else progressMessage = $[179];
             earlyResult = jsxProd_default_2(Box, {
               flexDirection: "column",
               width: "100%",
-              children: [null, progressMessage],
+              children: [scriptSourceRowElement, progressMessage],
             });
-            break xr;
+            break Pt;
           }
           if (userFacingToolName === "") {
             earlyResult = null;
-            break xr;
+            break Pt;
           }
           let renderedParam = input.success
             ? renderToolUseMessage_2(tool, input.data, {
@@ -582,7 +621,7 @@ function AssistantToolUseMessage(props) {
             : null;
           if (renderedParam === null) {
             earlyResult = null;
-            break xr;
+            break Pt;
           }
           let max = Math.max(
             terminalSize.columns - (shouldShowDot ? 2 : 0) - bunStringWidth(userFacingToolName) - 2,
@@ -626,7 +665,7 @@ function AssistantToolUseMessage(props) {
                       hasProgress: filterToolProgressMessages(progressMessagesForMessage).length > 0,
                     }),
                 }));
-          if ($[170] !== userFacingToolName || $[171] !== userFacingToolNameBackgroundColor) {
+          if ($[180] !== userFacingToolName || $[181] !== userFacingToolNameBackgroundColor) {
             toolNameTag = jsxProd_default(Box, {
               flexShrink: 0,
               children: jsxProd_default(TagTabs, {
@@ -636,10 +675,10 @@ function AssistantToolUseMessage(props) {
                 children: userFacingToolName,
               }),
             });
-            $[170] = userFacingToolName;
-            $[171] = userFacingToolNameBackgroundColor;
-            $[172] = toolNameTag;
-          } else toolNameTag = $[172];
+            $[180] = userFacingToolName;
+            $[181] = userFacingToolNameBackgroundColor;
+            $[182] = toolNameTag;
+          } else toolNameTag = $[182];
           paramText =
             renderedParam !== "" &&
             jsxProd_default(diffDialogSlot.Provider, {
@@ -667,218 +706,221 @@ function AssistantToolUseMessage(props) {
               toolUseResult,
               progressMessages: lookups.progressMessagesByToolUseID.get(param.id),
             });
-          $[113] = permissionMode;
-          $[114] = addMargin;
-          $[115] = commands;
-          $[116] = callEntry;
-          $[117] = inProgressToolCallCount;
-          $[118] = inProgressToolUseIDs;
-          $[119] = input;
-          $[120] = isFailedOrStopped;
-          $[121] = isRunning;
-          $[122] = pendingWorkerRequest;
-          $[123] = isTranscriptMode;
-          $[124] = isTransparentWrapper;
-          $[125] = lookups;
-          $[126] = param;
-          $[127] = isClassifierCheckingRaw?.toolUseId;
-          $[128] = progressMessagesForMessage;
-          $[129] = remoteHost;
-          $[130] = sessionOrUndefined;
-          $[131] = shouldAnimate;
-          $[132] = shouldShowDot;
-          $[133] = terminalSize;
-          $[134] = theme;
-          $[135] = tool;
-          $[136] = tools;
-          $[137] = userFacingToolName;
-          $[138] = userFacingToolNameBackgroundColor;
-          $[139] = verbose;
-          $[140] = innerRow;
-          $[141] = contentColumn;
-          $[142] = outerBox;
-          $[143] = isQueued;
-          $[144] = isResolved;
-          $[145] = isPendingClassifier;
-          $[146] = flexDirection;
-          $[147] = flexWrap;
-          $[148] = minWidth;
-          $[149] = statusDot;
-          $[150] = toolNameTag;
-          $[151] = paramText;
-          $[152] = renderTag;
-          $[153] = flexDirection_2;
-          $[154] = ref;
-          $[155] = flexDirection_3;
-          $[156] = justifyContent;
-          $[157] = marginTop;
-          $[158] = width;
+          $[119] = permissionMode;
+          $[120] = addMargin;
+          $[121] = commands;
+          $[122] = callEntry;
+          $[123] = inProgressToolCallCount;
+          $[124] = inProgressToolUseIDs;
+          $[125] = input;
+          $[126] = isFailedOrStopped;
+          $[127] = isRunning;
+          $[128] = pendingWorkerRequest;
+          $[129] = isTranscriptMode;
+          $[130] = isTransparentWrapper;
+          $[131] = lookups;
+          $[132] = param;
+          $[133] = isClassifierCheckingRaw?.toolUseId;
+          $[134] = progressMessagesForMessage;
+          $[135] = remoteHost;
+          $[136] = sessionOrUndefined;
+          $[137] = shouldAnimate;
+          $[138] = shouldShowDot;
+          $[139] = terminalSize;
+          $[140] = theme;
+          $[141] = toolLabel;
+          $[142] = tool;
+          $[143] = tools;
+          $[144] = userFacingToolName;
+          $[145] = userFacingToolNameBackgroundColor;
+          $[146] = verbose;
+          $[147] = innerRow;
+          $[148] = contentColumn;
+          $[149] = outerBox;
+          $[150] = isQueued;
+          $[151] = isResolved;
+          $[152] = isPendingClassifier;
+          $[153] = flexDirection;
+          $[154] = flexWrap;
+          $[155] = minWidth;
+          $[156] = statusDot;
+          $[157] = toolNameTag;
+          $[158] = paramText;
+          $[159] = renderTag;
+          $[160] = flexDirection_2;
+          $[161] = ref;
+          $[162] = flexDirection_3;
+          $[163] = justifyContent;
+          $[164] = marginTop;
+          $[165] = width;
         } else {
-          innerRow = $[140];
-          contentColumn = $[141];
-          outerBox = $[142];
-          isQueued = $[143];
-          isResolved = $[144];
-          isPendingClassifier = $[145];
-          flexDirection = $[146];
-          flexWrap = $[147];
-          minWidth = $[148];
-          statusDot = $[149];
-          toolNameTag = $[150];
-          paramText = $[151];
-          renderTag = $[152];
-          flexDirection_2 = $[153];
-          ref = $[154];
-          flexDirection_3 = $[155];
-          justifyContent = $[156];
-          marginTop = $[157];
-          width = $[158];
+          innerRow = $[147];
+          contentColumn = $[148];
+          outerBox = $[149];
+          isQueued = $[150];
+          isResolved = $[151];
+          isPendingClassifier = $[152];
+          flexDirection = $[153];
+          flexWrap = $[154];
+          minWidth = $[155];
+          statusDot = $[156];
+          toolNameTag = $[157];
+          paramText = $[158];
+          renderTag = $[159];
+          flexDirection_2 = $[160];
+          ref = $[161];
+          flexDirection_3 = $[162];
+          justifyContent = $[163];
+          marginTop = $[164];
+          width = $[165];
         }
-        $[70] = permissionMode;
-        $[71] = addMargin;
-        $[72] = commands;
-        $[73] = callEntry;
-        $[74] = inProgressToolCallCount;
-        $[75] = inProgressToolUseIDs;
-        $[76] = isFailedOrStopped;
-        $[77] = isRunning;
-        $[78] = pendingWorkerRequest;
-        $[79] = isTranscriptMode;
-        $[80] = lookups;
-        $[81] = param;
-        $[82] = toolInfo_2;
-        $[83] = isClassifierCheckingRaw?.toolUseId;
-        $[84] = progressMessagesForMessage;
-        $[85] = sessionOrUndefined;
-        $[86] = shouldAnimate;
-        $[87] = shouldShowDot;
-        $[88] = hasNotFound;
-        $[89] = terminalSize;
-        $[90] = theme;
-        $[91] = tools;
-        $[92] = verbose;
-        $[93] = innerRow;
-        $[94] = contentColumn;
-        $[95] = outerBox;
-        $[96] = isQueued;
-        $[97] = isResolved;
-        $[98] = isPendingClassifier;
-        $[99] = flexDirection;
-        $[100] = flexWrap;
-        $[101] = minWidth;
-        $[102] = statusDot;
-        $[103] = toolNameTag;
-        $[104] = paramText;
-        $[105] = renderTag;
-        $[106] = flexDirection_2;
-        $[107] = ref;
-        $[108] = flexDirection_3;
-        $[109] = justifyContent;
-        $[110] = marginTop;
-        $[111] = width;
-        $[112] = tool;
+        $[75] = permissionMode;
+        $[76] = addMargin;
+        $[77] = commands;
+        $[78] = callEntry;
+        $[79] = inProgressToolCallCount;
+        $[80] = inProgressToolUseIDs;
+        $[81] = isFailedOrStopped;
+        $[82] = isRunning;
+        $[83] = pendingWorkerRequest;
+        $[84] = isTranscriptMode;
+        $[85] = lookups;
+        $[86] = param;
+        $[87] = toolInfo_2;
+        $[88] = isClassifierCheckingRaw?.toolUseId;
+        $[89] = progressMessagesForMessage;
+        $[90] = sessionOrUndefined;
+        $[91] = shouldAnimate;
+        $[92] = shouldShowDot;
+        $[93] = hasNotFound;
+        $[94] = terminalSize;
+        $[95] = theme;
+        $[96] = toolLabel;
+        $[97] = tools;
+        $[98] = verbose;
+        $[99] = innerRow;
+        $[100] = contentColumn;
+        $[101] = outerBox;
+        $[102] = isQueued;
+        $[103] = isResolved;
+        $[104] = isPendingClassifier;
+        $[105] = flexDirection;
+        $[106] = flexWrap;
+        $[107] = minWidth;
+        $[108] = statusDot;
+        $[109] = toolNameTag;
+        $[110] = paramText;
+        $[111] = renderTag;
+        $[112] = flexDirection_2;
+        $[113] = ref;
+        $[114] = flexDirection_3;
+        $[115] = justifyContent;
+        $[116] = marginTop;
+        $[117] = width;
+        $[118] = tool;
       } else {
-        innerRow = $[93];
-        contentColumn = $[94];
-        outerBox = $[95];
-        isQueued = $[96];
-        isResolved = $[97];
-        isPendingClassifier = $[98];
-        flexDirection = $[99];
-        flexWrap = $[100];
-        minWidth = $[101];
-        statusDot = $[102];
-        toolNameTag = $[103];
-        paramText = $[104];
-        renderTag = $[105];
-        flexDirection_2 = $[106];
-        ref = $[107];
-        flexDirection_3 = $[108];
-        justifyContent = $[109];
-        marginTop = $[110];
-        width = $[111];
-        tool = $[112];
+        innerRow = $[99];
+        contentColumn = $[100];
+        outerBox = $[101];
+        isQueued = $[102];
+        isResolved = $[103];
+        isPendingClassifier = $[104];
+        flexDirection = $[105];
+        flexWrap = $[106];
+        minWidth = $[107];
+        statusDot = $[108];
+        toolNameTag = $[109];
+        paramText = $[110];
+        renderTag = $[111];
+        flexDirection_2 = $[112];
+        ref = $[113];
+        flexDirection_3 = $[114];
+        justifyContent = $[115];
+        marginTop = $[116];
+        width = $[117];
+        tool = $[118];
       }
     }
-    $[25] = permissionMode;
-    $[26] = addMargin;
-    $[27] = commands;
-    $[28] = callEntry;
-    $[29] = inProgressToolCallCount;
-    $[30] = inProgressToolUseIDs;
-    $[31] = isFailedOrStopped;
-    $[32] = isRunning;
-    $[33] = pendingWorkerRequest;
-    $[34] = isTranscriptMode;
-    $[35] = lookups;
-    $[36] = param;
-    $[37] = toolInfo_2;
-    $[38] = isClassifierCheckingRaw?.toolUseId;
-    $[39] = progressMessagesForMessage;
-    $[40] = thinkingContent_2;
-    $[41] = sessionOrUndefined;
-    $[42] = shouldAnimate;
-    $[43] = shouldShowDot;
-    $[44] = isThinking;
-    $[45] = terminalSize;
-    $[46] = theme;
-    $[47] = tools;
-    $[48] = verbose;
-    $[49] = innerRow;
-    $[50] = contentColumn;
-    $[51] = outerBox;
-    $[52] = isQueued;
-    $[53] = isResolved;
-    $[54] = isPendingClassifier;
-    $[55] = flexDirection;
-    $[56] = flexWrap;
-    $[57] = minWidth;
-    $[58] = statusDot;
-    $[59] = toolNameTag;
-    $[60] = paramText;
-    $[61] = renderTag;
-    $[62] = flexDirection_2;
-    $[63] = ref;
-    $[64] = flexDirection_3;
-    $[65] = justifyContent;
-    $[66] = marginTop;
-    $[67] = width;
-    $[68] = earlyResult;
-    $[69] = tool;
+    $[29] = permissionMode;
+    $[30] = addMargin;
+    $[31] = commands;
+    $[32] = callEntry;
+    $[33] = inProgressToolCallCount;
+    $[34] = inProgressToolUseIDs;
+    $[35] = isFailedOrStopped;
+    $[36] = isRunning;
+    $[37] = pendingWorkerRequest;
+    $[38] = isTranscriptMode;
+    $[39] = lookups;
+    $[40] = param;
+    $[41] = toolInfo_2;
+    $[42] = isClassifierCheckingRaw?.toolUseId;
+    $[43] = progressMessagesForMessage;
+    $[44] = thinkingContent_2;
+    $[45] = sessionOrUndefined;
+    $[46] = shouldAnimate;
+    $[47] = shouldShowDot;
+    $[48] = isThinking;
+    $[49] = terminalSize;
+    $[50] = theme;
+    $[51] = toolLabel;
+    $[52] = tools;
+    $[53] = verbose;
+    $[54] = innerRow;
+    $[55] = contentColumn;
+    $[56] = outerBox;
+    $[57] = isQueued;
+    $[58] = isResolved;
+    $[59] = isPendingClassifier;
+    $[60] = flexDirection;
+    $[61] = flexWrap;
+    $[62] = minWidth;
+    $[63] = statusDot;
+    $[64] = toolNameTag;
+    $[65] = paramText;
+    $[66] = renderTag;
+    $[67] = flexDirection_2;
+    $[68] = ref;
+    $[69] = flexDirection_3;
+    $[70] = justifyContent;
+    $[71] = marginTop;
+    $[72] = width;
+    $[73] = earlyResult;
+    $[74] = tool;
   } else {
-    innerRow = $[49];
-    contentColumn = $[50];
-    outerBox = $[51];
-    isQueued = $[52];
-    isResolved = $[53];
-    isPendingClassifier = $[54];
-    flexDirection = $[55];
-    flexWrap = $[56];
-    minWidth = $[57];
-    statusDot = $[58];
-    toolNameTag = $[59];
-    paramText = $[60];
-    renderTag = $[61];
-    flexDirection_2 = $[62];
-    ref = $[63];
-    flexDirection_3 = $[64];
-    justifyContent = $[65];
-    marginTop = $[66];
-    width = $[67];
-    earlyResult = $[68];
-    tool = $[69];
+    innerRow = $[54];
+    contentColumn = $[55];
+    outerBox = $[56];
+    isQueued = $[57];
+    isResolved = $[58];
+    isPendingClassifier = $[59];
+    flexDirection = $[60];
+    flexWrap = $[61];
+    minWidth = $[62];
+    statusDot = $[63];
+    toolNameTag = $[64];
+    paramText = $[65];
+    renderTag = $[66];
+    flexDirection_2 = $[67];
+    ref = $[68];
+    flexDirection_3 = $[69];
+    justifyContent = $[70];
+    marginTop = $[71];
+    width = $[72];
+    earlyResult = $[73];
+    tool = $[74];
   }
   if (earlyResult !== EARLY_RETURN_SENTINEL) return earlyResult;
   let headerRow;
   if (
-    $[173] !== innerRow ||
-    $[174] !== flexDirection ||
-    $[175] !== flexWrap ||
-    $[176] !== minWidth ||
-    $[177] !== statusDot ||
-    $[178] !== toolNameTag ||
-    $[179] !== paramText ||
-    $[180] !== renderTag
+    $[183] !== innerRow ||
+    $[184] !== flexDirection ||
+    $[185] !== flexWrap ||
+    $[186] !== minWidth ||
+    $[187] !== statusDot ||
+    $[188] !== toolNameTag ||
+    $[189] !== paramText ||
+    $[190] !== renderTag
   ) {
     headerRow = jsxProd_default_2(innerRow, {
       flexDirection,
@@ -886,31 +928,31 @@ function AssistantToolUseMessage(props) {
       minWidth,
       children: [statusDot, toolNameTag, paramText, renderTag],
     });
-    $[173] = innerRow;
-    $[174] = flexDirection;
-    $[175] = flexWrap;
-    $[176] = minWidth;
-    $[177] = statusDot;
-    $[178] = toolNameTag;
-    $[179] = paramText;
-    $[180] = renderTag;
-    $[181] = headerRow;
-  } else headerRow = $[181];
+    $[183] = innerRow;
+    $[184] = flexDirection;
+    $[185] = flexWrap;
+    $[186] = minWidth;
+    $[187] = statusDot;
+    $[188] = toolNameTag;
+    $[189] = paramText;
+    $[190] = renderTag;
+    $[191] = headerRow;
+  } else headerRow = $[191];
   let statusLine;
   if (
-    $[182] !== permissionMode ||
-    $[183] !== inProgressToolCallCount ||
-    $[184] !== isQueued ||
-    $[185] !== isResolved ||
-    $[186] !== isTranscriptMode ||
-    $[187] !== isPendingClassifier ||
-    $[188] !== lookups ||
-    $[189] !== param.id ||
-    $[190] !== progressMessagesForMessage ||
-    $[191] !== terminalSize ||
-    $[192] !== tool ||
-    $[193] !== tools ||
-    $[194] !== verbose
+    $[192] !== permissionMode ||
+    $[193] !== inProgressToolCallCount ||
+    $[194] !== isQueued ||
+    $[195] !== isResolved ||
+    $[196] !== isTranscriptMode ||
+    $[197] !== isPendingClassifier ||
+    $[198] !== lookups ||
+    $[199] !== param.id ||
+    $[200] !== progressMessagesForMessage ||
+    $[201] !== terminalSize ||
+    $[202] !== tool ||
+    $[203] !== tools ||
+    $[204] !== verbose
   ) {
     statusLine =
       !isResolved &&
@@ -938,47 +980,47 @@ function AssistantToolUseMessage(props) {
               },
               terminalSize,
             ));
-    $[182] = permissionMode;
-    $[183] = inProgressToolCallCount;
-    $[184] = isQueued;
-    $[185] = isResolved;
-    $[186] = isTranscriptMode;
-    $[187] = isPendingClassifier;
-    $[188] = lookups;
-    $[189] = param.id;
-    $[190] = progressMessagesForMessage;
-    $[191] = terminalSize;
-    $[192] = tool;
-    $[193] = tools;
-    $[194] = verbose;
-    $[195] = statusLine;
-  } else statusLine = $[195];
+    $[192] = permissionMode;
+    $[193] = inProgressToolCallCount;
+    $[194] = isQueued;
+    $[195] = isResolved;
+    $[196] = isTranscriptMode;
+    $[197] = isPendingClassifier;
+    $[198] = lookups;
+    $[199] = param.id;
+    $[200] = progressMessagesForMessage;
+    $[201] = terminalSize;
+    $[202] = tool;
+    $[203] = tools;
+    $[204] = verbose;
+    $[205] = statusLine;
+  } else statusLine = $[205];
   let children;
   if (
-    $[196] !== contentColumn ||
-    $[197] !== flexDirection_2 ||
-    $[198] !== headerRow ||
-    $[199] !== statusLine
+    $[206] !== contentColumn ||
+    $[207] !== flexDirection_2 ||
+    $[208] !== headerRow ||
+    $[209] !== statusLine
   ) {
     children = jsxProd_default_2(contentColumn, {
       flexDirection: flexDirection_2,
       children: [headerRow, statusLine],
     });
-    $[196] = contentColumn;
-    $[197] = flexDirection_2;
-    $[198] = headerRow;
-    $[199] = statusLine;
-    $[200] = children;
-  } else children = $[200];
+    $[206] = contentColumn;
+    $[207] = flexDirection_2;
+    $[208] = headerRow;
+    $[209] = statusLine;
+    $[210] = children;
+  } else children = $[210];
   let row;
   if (
-    $[201] !== outerBox ||
-    $[202] !== ref ||
-    $[203] !== flexDirection_3 ||
-    $[204] !== justifyContent ||
-    $[205] !== marginTop ||
-    $[206] !== width ||
-    $[207] !== children
+    $[211] !== outerBox ||
+    $[212] !== ref ||
+    $[213] !== flexDirection_3 ||
+    $[214] !== justifyContent ||
+    $[215] !== marginTop ||
+    $[216] !== width ||
+    $[217] !== children
   ) {
     row = jsxProd_default(outerBox, {
       ref,
@@ -988,18 +1030,18 @@ function AssistantToolUseMessage(props) {
       width,
       children,
     });
-    $[201] = outerBox;
-    $[202] = ref;
-    $[203] = flexDirection_3;
-    $[204] = justifyContent;
-    $[205] = marginTop;
-    $[206] = width;
-    $[207] = children;
-    $[208] = row;
-  } else row = $[208];
+    $[211] = outerBox;
+    $[212] = ref;
+    $[213] = flexDirection_3;
+    $[214] = justifyContent;
+    $[215] = marginTop;
+    $[216] = width;
+    $[217] = children;
+    $[218] = row;
+  } else row = $[218];
   return row;
 }
-//@ chunk-ah34pb7m.js:76484-78187 layout
+//@ chunk-wjygkcr4.js:78282-79989 layout
 function ToolResultInline(props) {
   let $ = useMemoCache(46);
   let { addMargin, call, verbose } = props;
@@ -1181,7 +1223,7 @@ function ToolResultInline(props) {
   } else resultElementElement = $[45];
   return resultElementElement;
 }
-//@ chunk-ah34pb7m.js:78187-78421 fingerprint (2.1.88 match: renderToolUseMessage, 0.389)
+//@ chunk-wjygkcr4.js:79989-80224 fingerprint (2.1.88 match: renderToolUseMessage, 0.39)
 /**
  * 安全调用 tool.renderToolUseMessage，异常时记录 "Error rendering tool use message for <tool>"（MCP 名脱敏）。
  */
@@ -1200,7 +1242,7 @@ function renderToolUseMessage_2(tool, input, theme) {
     return "";
   }
 }
-//@ chunk-ah34pb7m.js:78421-79021 fingerprint (2.1.88 match: renderToolUseProgressMessage, 0.741)
+//@ chunk-wjygkcr4.js:80224-80825 fingerprint (2.1.88 match: renderToolUseProgressMessage, 0.742)
 function renderToolUseProgressMessage_3(
   tool,
   tools,
@@ -1244,7 +1286,7 @@ function renderToolUseProgressMessage_3(
     return null;
   }
 }
-//@ chunk-ah34pb7m.js:79021-79262 fingerprint (2.1.88 match: renderToolUseQueuedMessage, 0.388)
+//@ chunk-wjygkcr4.js:80825-81066 fingerprint (2.1.88 match: renderToolUseQueuedMessage, 0.388)
 function renderToolUseQueuedMessage(tool) {
   try {
     return mcpRenderOverrideFor(tool, "renderToolUseQueuedMessage")?.();
@@ -1258,8 +1300,13 @@ function renderToolUseQueuedMessage(tool) {
     return null;
   }
 }
-//@ chunk-18hwfzwa.js:433138-433186 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-wjygkcr4.js:82393-82397 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:82393", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:457970-458018 fingerprint (2.1.88 match: _temp, 1)
 function selectPendingWorkerRequest(state) {
   return state.pendingWorkerRequest;
 }
-export { selectPendingWorkerRequest, ToolResultInline, ToolUseStatusDot };
+export { ToolUseStatusDot, selectPendingWorkerRequest, ToolResultInline };

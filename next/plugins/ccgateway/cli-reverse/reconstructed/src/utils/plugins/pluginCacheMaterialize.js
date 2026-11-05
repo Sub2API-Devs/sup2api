@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件缓存链接实体化
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (67)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (67)
  * attribution: placement 67
  */
 import { sep, resolve as resolve_2, parse, dirname, relative, isAbsolute, join, basename } from "path";
@@ -16,7 +16,7 @@ import {
   readlink,
   lstat,
   mkdir,
-  rm as rm_2,
+  rm,
   writeFile,
   readdir,
   open,
@@ -75,19 +75,19 @@ import { LOCK_STALE_MS, isHashTempFile } from "../../services/memorySync/syncFil
 import { isFreshTimestamp as isFreshTimestamp_2 } from "./pluginCachePaths.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:698057-698101 placement
+//@ chunk-5xgkngpb.js:708539-708583 placement
 var CACHE_SKIP_ENTRY_NAMES; // deferred: uses CACHE_META_FILES (./cacheUtils.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:698057", () => {
+deferInit("chunk-5xgkngpb.js:708539", () => {
   CACHE_SKIP_ENTRY_NAMES = new Set(["node_modules", ...CACHE_META_FILES, LINKS_MATERIALIZED_MARKER_2]);
 });
-//@ chunk-e6aww6q8.js:698101-698134 placement
+//@ chunk-5xgkngpb.js:708583-708616 placement
 /**
  * isCacheSkipEntry：是否为缓存遍历跳过项。
  */
 function isCacheSkipEntry(name) {
   return matchesSegmentOrTempName(name, CACHE_SKIP_ENTRY_NAMES);
 }
-//@ chunk-e6aww6q8.js:698134-698220 placement
+//@ chunk-5xgkngpb.js:708616-708702 placement
 /**
  * isPathUnder：路径是否在给定目录下。
  */
@@ -96,11 +96,11 @@ function isPathUnder(childPath, parentPath) {
   let parentPrefix = parentPath.endsWith(sep) ? parentPath : parentPath + sep;
   return childPath.startsWith(parentPrefix);
 }
-//@ chunk-e6aww6q8.js:698220-698249 placement
+//@ chunk-5xgkngpb.js:708702-708731 placement
 function sameFileIdentityAs(path) {
   return hasBackslash(path);
 }
-//@ chunk-e6aww6q8.js:698249-698718 placement
+//@ chunk-5xgkngpb.js:708731-709200 placement
 /**
  * 两个路径 stat 的 dev/ino 是否相同（Windows 直接 same）。
  */
@@ -126,7 +126,7 @@ async function compareStatIdentity(leftPath, rightPath) {
   if (left.value.ino === 0n || right.value.ino === 0n) return "unknown";
   return left.value.dev === right.value.dev && left.value.ino === right.value.ino ? "same" : "different";
 }
-//@ chunk-e6aww6q8.js:698718-699023 placement
+//@ chunk-5xgkngpb.js:709200-709505 placement
 /**
  * 路径 realpath 是否在根内且 stat 一致（inside/outside/unknown）。
  */
@@ -151,12 +151,12 @@ async function classifyRealpathContainment(targetPath, root) {
   if (declaredStat.ino === 0n || realStat.ino === 0n) return "unknown";
   return declaredStat.dev === realStat.dev && declaredStat.ino === realStat.ino ? "inside" : "outside";
 }
-//@ chunk-e6aww6q8.js:699023-699063 placement
+//@ chunk-5xgkngpb.js:709505-709545 placement
 var SYMLINK_COPY_BUDGET = {
   entries: 20000,
   bytes: 536870912,
 };
-//@ chunk-e6aww6q8.js:699063-699092 placement
+//@ chunk-5xgkngpb.js:709545-709574 placement
 /**
  * freshSymlinkCopyBudget：复制预算的初值。
  */
@@ -165,9 +165,9 @@ function freshSymlinkCopyBudget() {
     ...SYMLINK_COPY_BUDGET,
   };
 }
-//@ chunk-e6aww6q8.js:699092-699250 placement
+//@ chunk-5xgkngpb.js:709574-709732 placement
 let SymlinkCopyBudgetError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:699092", () => {
+deferInit("chunk-5xgkngpb.js:709574", () => {
   SymlinkCopyBudgetError = class SymlinkCopyBudgetError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -179,7 +179,7 @@ deferInit("chunk-e6aww6q8.js:699092", () => {
     }
   };
 });
-//@ chunk-e6aww6q8.js:699250-699333 placement
+//@ chunk-5xgkngpb.js:709732-709815 placement
 /**
  * consumeSymlinkCopyBudget：扣减复制预算。
  */
@@ -188,26 +188,26 @@ function consumeSymlinkCopyBudget(budget, entries, bytes) {
   budget.bytes -= bytes;
   if (budget.entries < 0 || budget.bytes < 0) throw new SymlinkCopyBudgetError();
 }
-//@ chunk-e6aww6q8.js:699333-699378 placement
+//@ chunk-5xgkngpb.js:709815-709860 placement
 /**
  * pathHasNodeModulesSegment：路径里是否含 node_modules。
  */
 function pathHasNodeModulesSegment(path) {
   return path.split(sep).some(isNodeModulesSegment);
 }
-//@ chunk-e6aww6q8.js:699378-699432 placement
+//@ chunk-5xgkngpb.js:709860-709914 placement
 var WRITE_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TIMESTAMP_SKEW_LIMIT_MS;
-deferInit("chunk-e6aww6q8.js:699378", () => {
+deferInit("chunk-5xgkngpb.js:709860", () => {
   WRITE_ERROR_CODES = new Set(["EROFS", "EACCES", "EPERM"]);
   TIMESTAMP_SKEW_LIMIT_MS = 600000;
 });
-//@ chunk-e6aww6q8.js:699432-699488 placement
+//@ chunk-5xgkngpb.js:709914-709970 placement
 function isTimestampFreshish(mtimeMs) {
   let stampMtimeMs = Date.now() - mtimeMs;
   return stampMtimeMs > -TIMESTAMP_SKEW_LIMIT_MS && stampMtimeMs < TIMESTAMP_SKEW_LIMIT_MS;
 }
-//@ chunk-e6aww6q8.js:699488-699741 placement
+//@ chunk-5xgkngpb.js:709970-710223 placement
 var MATERIALIZE_MAX_AGE_MS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_MARKER_BYTES;
 var PARKED_SUFFIX;
@@ -217,7 +217,7 @@ var MAX_SCREEN_MARKER_BYTES;
 var SCREEN_VERSION;
 var ScreenMarkerSchema;
 var TRANSIENT_FS_ERRORS;
-deferInit("chunk-e6aww6q8.js:699488", () => {
+deferInit("chunk-5xgkngpb.js:709970", () => {
   MATERIALIZE_MAX_AGE_MS = 600000;
   MAX_MARKER_BYTES = 4096;
   PARKED_SUFFIX = ".parked";
@@ -247,12 +247,12 @@ deferInit("chunk-e6aww6q8.js:699488", () => {
     "EACCES",
   ]);
 });
-//@ chunk-e6aww6q8.js:699741-699797 placement
+//@ chunk-5xgkngpb.js:710223-710279 placement
 function touchPathTimes(path) {
   let date = new Date();
   lutimes(path, date, date).catch(() => {});
 }
-//@ chunk-e6aww6q8.js:699797-700136 placement
+//@ chunk-5xgkngpb.js:710279-710618 placement
 /**
  * 构造判断链接拼写/目标是否指向网络或其他卷的检查器。
  */
@@ -283,7 +283,7 @@ function createLinkTargetScreen(rootDir) {
       hasOtherMounts(parent + sep + target),
   };
 }
-//@ chunk-e6aww6q8.js:700136-700258 placement
+//@ chunk-5xgkngpb.js:710618-710740 placement
 var MAX_SYMLINK_HOPS_2 = 40;
 var DRIVE_RELATIVE_RE = /^[a-zA-Z]:(?![\\/])/;
 var splitPathSegments_2 = (path) =>
@@ -291,18 +291,18 @@ var splitPathSegments_2 = (path) =>
     .slice(parse(path).root.length)
     .split(sep === "\\" ? /[\\/]+/ : /\/+/)
     .filter(Boolean);
-//@ chunk-e6aww6q8.js:700258-700329 placement
+//@ chunk-5xgkngpb.js:710740-710811 placement
 /**
  * resolveLinkChainFromParent：从父目录起解析链接链。
  */
 async function resolveLinkChainFromParent(linkPath, screen, firstTarget, options = {}) {
   return walkLinkChain(dirname(linkPath), [], screen, options, firstTarget ?? (await readlink(linkPath)));
 }
-//@ chunk-e6aww6q8.js:700329-700385 placement
+//@ chunk-5xgkngpb.js:710811-710867 placement
 async function resolveLinkChainForPath(root, relPath, screen, options = {}) {
   return walkLinkChain(root, splitPathSegments_2(relPath), screen, options);
 }
-//@ chunk-e6aww6q8.js:700385-701655 placement
+//@ chunk-5xgkngpb.js:710867-712147 placement
 /**
  * 手动逐段解析路径（含 Windows junction/盘符相对路径），每段检查是否指向网络位置； 链接跳数超过上限返回 loop，缺失返回 dangling，拼写可疑返回 network，Windows 不支持的形式返回 unsupported。
  */
@@ -384,14 +384,14 @@ async function walkLinkChain(root, segments, screen, options, firstLink) {
   }
   return "clean";
 }
-//@ chunk-e6aww6q8.js:701655-701848 placement
+//@ chunk-5xgkngpb.js:712147-712340 placement
 function stagedCopyReplacedError(passLabel) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
     `Refusing to swap in a staged copy: it is no longer the ${passLabel} this pass made (replaced during the conversion).`,
     "plugin cache staged copy replaced before the swap",
   );
 }
-//@ chunk-e6aww6q8.js:701848-709580 placement
+//@ chunk-5xgkngpb.js:712340-720078 placement
 /**
  * 实体化插件目录中的链接（命令源等），无法写入时保留链接。
  */
@@ -453,7 +453,7 @@ async function materializePluginLinks(pluginPath, copyDir, options = {}) {
   };
   let discardScratch = async (path) => {
     if (await isScratchOurs())
-      await rm_2(path, {
+      await rm(path, {
         recursive: true,
         force: true,
       }).catch(() => {});
@@ -824,7 +824,7 @@ async function materializePluginLinks(pluginPath, copyDir, options = {}) {
     scratchRemoved =
       !parkedUnrestored &&
       stillOurs &&
-      (await rm_2(scratchDir, {
+      (await rm(scratchDir, {
         recursive: true,
         force: true,
       }).then(
@@ -855,12 +855,12 @@ async function materializePluginLinks(pluginPath, copyDir, options = {}) {
   );
   return result;
 }
-//@ chunk-e6aww6q8.js:709580-709605 placement
+//@ chunk-5xgkngpb.js:720078-720103 placement
 var REFUSED_SYMBOL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:709580", () => {
+deferInit("chunk-5xgkngpb.js:720078", () => {
   REFUSED_SYMBOL = Symbol("refused");
 });
-//@ chunk-e6aww6q8.js:709605-709709 placement
+//@ chunk-5xgkngpb.js:720103-720207 placement
 async function toTransientSentinel(promise) {
   try {
     return await promise;
@@ -870,7 +870,7 @@ async function toTransientSentinel(promise) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:709709-710637 placement
+//@ chunk-5xgkngpb.js:720207-721138 placement
 async function stampMaterializedTree(label, root, mode, sharedPath = false) {
   let complete = true;
   if (mode === "install") {
@@ -903,7 +903,7 @@ async function stampMaterializedTree(label, root, mode, sharedPath = false) {
       if (!transientSentinel.isDirectory()) {
         if (
           (await toTransientSentinel(
-            rm_2(path, {
+            rm(path, {
               force: true,
             }),
           )) === REFUSED_SYMBOL
@@ -937,7 +937,7 @@ async function stampMaterializedTree(label, root, mode, sharedPath = false) {
     }
     if (
       (await toTransientSentinel(
-        rm_2(path, {
+        rm(path, {
           recursive: true,
           force: true,
         }),
@@ -947,12 +947,12 @@ async function stampMaterializedTree(label, root, mode, sharedPath = false) {
   }
   return complete;
 }
-//@ chunk-e6aww6q8.js:710637-710712 placement (2.1.88 match: scanDirectory, 0.766)
+//@ chunk-5xgkngpb.js:721138-721213 placement (2.1.88 match: scanDirectory, 0.767)
 async function scanDirectory_2(dirPath) {
   let transientSentinel = await toTransientSentinel(removePathEntry(dirPath));
   return transientSentinel !== REFUSED_SYMBOL && transientSentinel !== "directory";
 }
-//@ chunk-e6aww6q8.js:710712-710903 placement
+//@ chunk-5xgkngpb.js:721213-721404 placement
 async function isOnDifferentFilesystem(leftPath, rightPath) {
   if (getPlatform() !== "windows") return false;
   let sameFs = await isSameFilesystem(leftPath, rightPath).catch((error) => {
@@ -963,7 +963,7 @@ async function isOnDifferentFilesystem(leftPath, rightPath) {
   });
   return sameFs === null ? null : !sameFs;
 }
-//@ chunk-e6aww6q8.js:710903-711052 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
+//@ chunk-5xgkngpb.js:721404-721553 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 /**
  * 目录项检查后递归扫描或删除（名字配错）。
  */
@@ -973,18 +973,18 @@ async function convertDirectoryToZipInPlace(dirPath, zipPath) {
   if (differentFs) return scanDirectory_2(join(dirPath, zipPath));
   return (
     (await toTransientSentinel(
-      rm_2(join(dirPath, zipPath), {
+      rm(join(dirPath, zipPath), {
         recursive: true,
         force: true,
       }),
     )) !== REFUSED_SYMBOL
   );
 }
-//@ chunk-e6aww6q8.js:711052-711126 placement
+//@ chunk-5xgkngpb.js:721553-721627 placement
 async function hasUnexpectedEntry(dirPath) {
   return (await readdir(dirPath).catch(() => [])).some((name) => !isCacheSkipEntry(name));
 }
-//@ chunk-e6aww6q8.js:711126-711271 placement
+//@ chunk-5xgkngpb.js:721627-721772 placement
 async function hasOtherTempEntries(dirPath, excludePath) {
   let names = await readdir(dirPath).catch((error) => (getErrnoCode(error) === "ENOENT" ? [] : null));
   if (names === null) return true;
@@ -994,7 +994,7 @@ async function hasOtherTempEntries(dirPath, excludePath) {
       join(dirPath, name) !== excludePath,
   );
 }
-//@ chunk-e6aww6q8.js:711271-712292 placement
+//@ chunk-5xgkngpb.js:721772-722796 placement
 /**
  * 扫描暂存目录里的 .origin 记录，校验原位置仍在根内、未被占用且暂存项是链接后把 .parked 条目移回； 出现无法判定的情况返回 false（不完整）。
  */
@@ -1064,7 +1064,7 @@ async function restoreParkedEntries(label, root, parkDir) {
   }
   return complete;
 }
-//@ chunk-e6aww6q8.js:712292-713001 placement
+//@ chunk-5xgkngpb.js:722796-723505 placement
 /**
  * 撤销版本目录的屏检标记：先删除；失败则移到临时名；再失败用 O_NOFOLLOW 打开并确认单链接普通文件后改写为 withdrawn。
  */
@@ -1072,7 +1072,7 @@ async function withdrawScreenMarker(versionDirPath) {
   let markerPath = join(versionDirPath, LINKS_MATERIALIZED_MARKER_2);
   let attempts = [
     () =>
-      rm_2(markerPath, {
+      rm(markerPath, {
         force: true,
       }),
     () => retryFsOp(markerPath, makeTempSiblingPath(markerPath)),
@@ -1124,7 +1124,7 @@ async function withdrawScreenMarker(versionDirPath) {
     }
   return false;
 }
-//@ chunk-e6aww6q8.js:713001-713974 placement
+//@ chunk-5xgkngpb.js:723505-724478 placement
 /**
  * 以 wx 写入屏检标记（时间、CLI 版本、屏检版本与计数）；已存在且有效则视为成功，否则把目录转换后重写。
  */
@@ -1136,10 +1136,10 @@ async function writeScreenMarker(versionDirPath, realRoot, summary) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -1185,21 +1185,21 @@ async function writeScreenMarker(versionDirPath, realRoot, summary) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:713974-713994 placement
-var weakMap_7; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:713974", () => {
-  weakMap_7 = new WeakMap();
+//@ chunk-5xgkngpb.js:724478-724498 placement
+var weakMap_9; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xgkngpb.js:724478", () => {
+  weakMap_9 = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:713994-714271 placement
+//@ chunk-5xgkngpb.js:724498-724775 placement
 function materializeVersionLinksOnce(versionDirPath, cacheRoot, copyDir, storageV5, isVersionInUse) {
   if (!isStorageV5Enabled() || storageV5 === undefined || isDiskless()) return Promise.resolve();
-  let state = weakMap_7.get(storageV5);
+  let state = weakMap_9.get(storageV5);
   if (state === undefined) {
     state = {
       attempts: new Map(),
       deferrals: new Map(),
     };
-    weakMap_7.set(storageV5, state);
+    weakMap_9.set(storageV5, state);
   }
   let attempts = state.attempts;
   let pending = attempts.get(versionDirPath);
@@ -1217,7 +1217,7 @@ function materializeVersionLinksOnce(versionDirPath, cacheRoot, copyDir, storage
   }
   return pending;
 }
-//@ chunk-e6aww6q8.js:714271-714523 placement
+//@ chunk-5xgkngpb.js:724775-725027 placement
 async function hasValidScreenMarker(versionDirPath) {
   let markerPath = join(versionDirPath, LINKS_MATERIALIZED_MARKER_2);
   let markerStats = await lstat(markerPath).catch((error) => {
@@ -1234,7 +1234,7 @@ async function hasValidScreenMarker(versionDirPath) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:714523-715316 placement
+//@ chunk-5xgkngpb.js:725027-725820 placement
 async function removeLinkMarkers(versionDirPath) {
   let markerPath = join(versionDirPath, IN_USE_MARKER_FILE);
   try {
@@ -1275,7 +1275,7 @@ async function removeLinkMarkers(versionDirPath) {
     return "unremovable";
   }
 }
-//@ chunk-e6aww6q8.js:715316-717278 placement
+//@ chunk-5xgkngpb.js:725820-727790 placement
 /**
  * 列出待实体化的链接，无法列出时留给探测判断。
  */
@@ -1397,11 +1397,11 @@ async function listPluginLinks(versionDirPath) {
       );
   }
 }
-//@ chunk-e6aww6q8.js:717278-717339 placement
+//@ chunk-5xgkngpb.js:727790-727851 placement
 function isVersionDirName(name) {
   return /^[0-9]+(\.tmp\.[0-9a-f]+)?$/i.test(name);
 }
-//@ chunk-e6aww6q8.js:717339-717506 placement
+//@ chunk-5xgkngpb.js:727851-728018 placement
 async function rmdirIfEmpty(dirPath) {
   try {
     await rmdir(dirPath);
@@ -1413,7 +1413,7 @@ async function rmdirIfEmpty(dirPath) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:717506-717835 placement
+//@ chunk-5xgkngpb.js:728018-728347 placement
 /**
  * 按类别判断标记目录项是否应删除。
  */
@@ -1436,7 +1436,7 @@ async function shouldRemoveMarkerEntry(entryPath, name, entryKind) {
       );
   }
 }
-//@ chunk-e6aww6q8.js:717835-717931 placement
+//@ chunk-5xgkngpb.js:728347-728443 placement
 function isUsableVersionMarker(stat, name) {
   return (
     /^[0-9]+$/.test(name) &&
@@ -1445,13 +1445,13 @@ function isUsableVersionMarker(stat, name) {
     (stat.size > 0 || isTimestampFreshish(stat.mtimeMs))
   );
 }
-//@ chunk-e6aww6q8.js:717931-718050 placement
+//@ chunk-5xgkngpb.js:728443-728562 placement
 function logUnrecognizedMarker(pluginPath, name) {
   logForDebugging(
     `materializeLinks: ${pluginPath}: left ${IN_USE_MARKER_FILE}/${name}: not named like a session's marker; the probe judges it`,
   );
 }
-//@ chunk-e6aww6q8.js:718050-718560 placement
+//@ chunk-5xgkngpb.js:728562-729072 placement
 /**
  * 列出前重新确认 in_use 目录仍是真实目录。
  */
@@ -1484,7 +1484,7 @@ async function rescreenMarkerDir(versionDir, markerDir) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:718560-718714 placement (2.1.88 match: getFileIdentity, 0.865)
+//@ chunk-5xgkngpb.js:729072-729226 placement (2.1.88 match: getFileIdentity, 0.864)
 async function getFileIdentity_3(filePath, stat) {
   let current = await lstat(filePath, {
     bigint: true,
@@ -1497,7 +1497,7 @@ async function getFileIdentity_3(filePath, stat) {
     current.ino === stat.ino
   );
 }
-//@ chunk-e6aww6q8.js:718714-720591 placement
+//@ chunk-5xgkngpb.js:729226-731107 placement
 /**
  * 把插件版本目录中的链接实体化，跳过符号链接的版本目录。
  */
@@ -1605,15 +1605,15 @@ async function materializeVersionLinks(versionPath, cacheRoot, copyDir, deferral
     return errnoCode === undefined || !TRANSIENT_FS_ERRORS.has(errnoCode);
   }
 }
-//@ chunk-e6aww6q8.js:720591-720652 placement
+//@ chunk-5xgkngpb.js:731107-731168 placement
 var TEMP_SUFFIX_MARK = ".tmp~";
 var TEMP_SUFFIX_HEX_RE = /^[0-9a-f]{8}$/;
 var TEMP_SUFFIX_RE = /\.tmp~[0-9a-f]{8}$/;
-//@ chunk-e6aww6q8.js:720652-720711 placement (2.1.88 match: generatePlaceholders, 1)
+//@ chunk-5xgkngpb.js:731168-731227 placement (2.1.88 match: generatePlaceholders, 1)
 function makeTempSiblingName(baseName) {
   return `${baseName}${TEMP_SUFFIX_MARK}${randomBytes(4).toString("hex")}`;
 }
-//@ chunk-e6aww6q8.js:720711-720838 placement
+//@ chunk-5xgkngpb.js:731227-731354 placement
 function classifyTempSibling(name, baseName) {
   if (
     name.startsWith(baseName + TEMP_SUFFIX_MARK) &&
@@ -1622,9 +1622,9 @@ function classifyTempSibling(name, baseName) {
     return "current";
   return isOwnTempName(name, baseName) ? "scratch" : null;
 }
-//@ chunk-e6aww6q8.js:720838-721052 placement
+//@ chunk-5xgkngpb.js:731354-731568 placement
 async function moveIntoVersionPath(stagingPath, cachePath) {
-  await rm_2(join(stagingPath, ORPHAN_MARKER_FILE), {
+  await rm(join(stagingPath, ORPHAN_MARKER_FILE), {
     force: true,
   });
   if (
@@ -1641,7 +1641,7 @@ async function moveIntoVersionPath(stagingPath, cachePath) {
     });
   await retryFsOp(stagingPath, cachePath);
 }
-//@ chunk-e6aww6q8.js:721052-721159 placement
+//@ chunk-5xgkngpb.js:731568-731675 placement
 async function dirHasAnyEntry(dir, names) {
   try {
     let entries = new Set(await readdir(dir));
@@ -1650,9 +1650,9 @@ async function dirHasAnyEntry(dir, names) {
     return !isPathAbsent(error);
   }
 }
-//@ chunk-e6aww6q8.js:721159-721196 placement
+//@ chunk-5xgkngpb.js:731675-731712 placement
 var VERSION_TMP_NAME_RE = /^[0-9]+\.tmp\.[0-9a-f]{8}$/;
-//@ chunk-e6aww6q8.js:721196-721426 placement
+//@ chunk-5xgkngpb.js:731712-731942 placement
 async function removeStaleMarkerFiles(dir) {
   let names = await readdir(dir).catch(() => []);
   let cutoff = Date.now() - LOCK_STALE_MS;
@@ -1663,14 +1663,14 @@ async function removeStaleMarkerFiles(dir) {
     if (stat !== null && stat.isFile() && stat.mtimeMs < cutoff) await unlink(path).catch(() => {});
   }
 }
-//@ chunk-e6aww6q8.js:721426-721466 placement
+//@ chunk-5xgkngpb.js:731942-731982 placement
 /**
  * isCacheEntryName：缓存条目名（含临时名变体）。
  */
 function isCacheEntryName(name) {
   return isCacheSkipEntry(name) || isHashTempFile(normalizePathSegment(name));
 }
-//@ chunk-e6aww6q8.js:721466-721622 placement
+//@ chunk-5xgkngpb.js:731982-732138 placement
 async function hasRealEntries(cachePath, { whenUnreadable = true } = {}) {
   try {
     return (await readdir(cachePath)).some((name) => !isCacheEntryName(name));
@@ -1681,7 +1681,7 @@ async function hasRealEntries(cachePath, { whenUnreadable = true } = {}) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:721622-721763 placement
+//@ chunk-5xgkngpb.js:732138-732279 placement
 async function isLinkLike(path, stat) {
   if (stat.isSymbolicLink()) return true;
   if (!stat.isDirectory()) return false;
@@ -1691,7 +1691,7 @@ async function isLinkLike(path, stat) {
     return !isPathAbsent(error);
   }
 }
-//@ chunk-e6aww6q8.js:721763-721854 placement
+//@ chunk-5xgkngpb.js:732279-732370 placement
 /**
  * versionPathOccupantError：版本目录占位无法检查的错误。
  */
@@ -1701,7 +1701,7 @@ function versionPathOccupantError(message) {
     "plugin cache version path occupant could not be examined",
   );
 }
-//@ chunk-e6aww6q8.js:721854-721983 placement
+//@ chunk-5xgkngpb.js:732370-732499 placement
 async function classifyCacheEntry(path) {
   try {
     let stat = await lstat(path);
@@ -1710,23 +1710,23 @@ async function classifyCacheEntry(path) {
     return isPathAbsent(error) ? "absent" : "unexaminable";
   }
 }
-//@ chunk-e6aww6q8.js:721983-722017 placement
+//@ chunk-5xgkngpb.js:732499-732533 placement
 /**
  * isTempSiblingName：是否有临时兄弟后缀。
  */
 function isTempSiblingName(name) {
   return TEMP_SUFFIX_RE.test(name);
 }
-//@ chunk-e6aww6q8.js:722017-722058 placement
+//@ chunk-5xgkngpb.js:732533-732574 placement
 /**
  * stripTempSiblingSuffix：去掉临时兄弟后缀。
  */
 function stripTempSiblingSuffix(name) {
   return name.replace(TEMP_SUFFIX_RE, "");
 }
-//@ chunk-e6aww6q8.js:722058-722075 placement
+//@ chunk-5xgkngpb.js:732574-732591 placement
 var TEMP_SIBLING_TTL_MS = 86400000;
-//@ chunk-e6aww6q8.js:722075-722480 placement
+//@ chunk-5xgkngpb.js:732591-732996 placement
 /**
  * 清理版本目录旁过期的临时兄弟项。
  */
@@ -1754,9 +1754,9 @@ async function sweepStaleTempSiblings(cachePath) {
     }),
   );
 }
-//@ chunk-e6aww6q8.js:722480-722495 placement
+//@ chunk-5xgkngpb.js:732996-733011 placement
 var VERSION_DIR_DELETE_GRACE_MS = 600000;
-//@ chunk-e6aww6q8.js:722495-723808 placement
+//@ chunk-5xgkngpb.js:733011-734324 placement
 /**
  * 尝试删除版本目录：是链接、含非可清理项或有新鲜标记时返回 held；清理 in_use 标记目录、node_modules 与临时项后 rmdir， 成功返回 removed。
  */
@@ -1840,7 +1840,7 @@ async function removeVersionDirIfIdle(versionDir) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:723808-724136 placement
+//@ chunk-5xgkngpb.js:734324-734652 placement
 /**
  * 目录及其内容都超过期限时删除遗留目录。
  */
@@ -1866,14 +1866,14 @@ async function removeStaleLeftover(cachePath) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:724136-724184 placement
+//@ chunk-5xgkngpb.js:734652-734700 placement
 /**
  * removeDirectoryTreeNoFollow：不跟随符号链接删除目录树。
  */
 async function removeDirectoryTreeNoFollow(path) {
   await removeDirectoryTreeNoFollow_2(path).catch(() => {});
 }
-//@ chunk-e6aww6q8.js:724184-724353 placement
+//@ chunk-5xgkngpb.js:734700-734869 placement
 /**
  * 检查路径从自身父目录到 base 之间是否有符号链接或无法检查的祖先目录；有则不信任存储层（storageV5）对该路径的操作。
  */

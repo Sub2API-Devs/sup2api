@@ -1,13 +1,13 @@
 /**
  * ajv/dist/refs/data.json
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: ajv@8.13.0
- * pieces: chunk-s82q9s4x.js (1)
+ * pieces: chunk-xcs4sv9h.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-s82q9s4x.js:57215-57579 cjs-fingerprint
+//@ chunk-xcs4sv9h.js:57215-57579 cjs-fingerprint
 var require_data_2 = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
     $id: "https://raw.githubusercontent.com/ajv-validator/ajv/master/lib/refs/data.json#",

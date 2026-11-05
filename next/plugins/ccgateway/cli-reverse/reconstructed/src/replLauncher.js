@@ -3,9 +3,9 @@
  *
  * 并入已有模块：REPL 启动器导出占位。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/replLauncher.tsx
- * pieces: chunk-19arrzdw.js (3)
+ * pieces: chunk-pfe3pddp.js (3)
  * attribution: placement 1, facade-exports 2
  */
 import {
@@ -16,6 +16,9 @@ import {
   useEffect,
 } from "../vendor/react/cjs/react.production.js";
 import { syncSessionPermissionMode } from "./services/api/sessionFlags.js";
+import { codeModeAccepted } from "./utils/codeMode/accepted.js";
+import { getIsRemoteMode, markPollEventWiringForRun } from "./bootstrap/state.js";
+import { isAsyncReplRequested } from "./tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { useAppStoreDirect } from "./state/AppState.js";
 import { noopTrialEffect, persistFullscreenTrial } from "./components/FullscreenUpsellTrial.js";
 import { createQueryEngine } from "./engine/queryEngine.js";
@@ -39,18 +42,26 @@ import { adoptEngineForLauncher } from "./dialogLaunchers.js";
 import { onChangeAppState } from "./state/onChangeAppState.js";
 import { deferInit } from "../runtime/deferred-init.js";
 
-//@ chunk-19arrzdw.js:855-859 placement
+//@ chunk-pfe3pddp.js:969-973 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-19arrzdw.js:855", () => {
+deferInit("chunk-pfe3pddp.js:969", () => {
   init_react_production();
 });
-//@ chunk-19arrzdw.js:859-954 facade-exports
+//@ chunk-pfe3pddp.js:973-1225 facade-exports
 function launchSessionRepl(...args) {
   let { mode } = args[1].initialState.toolPermissionContext;
   syncSessionPermissionMode(mode);
+  if (codeModeAccepted()) {
+    let { remoteSessionConfig, directConnectConfig, sshSession } = args[2];
+    if (!(getIsRemoteMode() || !!remoteSessionConfig || !!directConnectConfig || !!sshSession))
+      markPollEventWiringForRun({
+        entrypoint: "terminal",
+        ownEventsRequested: isAsyncReplRequested(mode),
+      });
+  }
   return launchRepl(...args);
 }
-//@ chunk-19arrzdw.js:954-2312 facade-exports
+//@ chunk-pfe3pddp.js:1225-2584 facade-exports
 async function launchRepl(args, options, renderer, extra) {
   let { AppRoot } = await import("./components/AppRoot.js");
   let { REPL } = await import("./screens/REPL.js");

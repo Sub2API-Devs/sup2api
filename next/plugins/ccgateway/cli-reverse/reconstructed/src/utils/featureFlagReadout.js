@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：特性开关读数。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-zzw8w3zt.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g4bt0b21.js (2)
  * attribution: placement 2
  */
 import {
@@ -14,7 +14,7 @@ import {
   getFeatureValue_CACHED_MAY_BE_STALE,
 } from "../services/analytics/growthbook.js";
 
-//@ chunk-zzw8w3zt.js:232-470 placement
+//@ chunk-g4bt0b21.js:232-470 placement
 /**
  * 读 tengu_radiant_heron 开关：下发/覆盖值、禁用为 false，未拉取时为 unknown。
  */
@@ -39,7 +39,7 @@ function readRadiantHeron() {
     return "unknown";
   }
 }
-//@ chunk-zzw8w3zt.js:470-520 placement
+//@ chunk-g4bt0b21.js:470-520 placement
 /**
  * 读取 tengu_radiant_heron 特性开关（默认关闭）。
  */

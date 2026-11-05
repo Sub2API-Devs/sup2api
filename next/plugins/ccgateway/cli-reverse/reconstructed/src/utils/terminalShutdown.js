@@ -3,30 +3,30 @@
  *
  * 2.1.316 新增：终端关闭锁存。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bwbq4xvm.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7kayq7nc.js (6)
  * attribution: placement 6
  */
 
-//@ chunk-bwbq4xvm.js:166982-167004 placement
+//@ chunk-7kayq7nc.js:166231-166253 placement
 class TerminalShutdownLatch {
   committed = false;
 }
-//@ chunk-bwbq4xvm.js:167004-167018 placement
+//@ chunk-7kayq7nc.js:166253-166267 placement
 var terminalShutdownLatch = new TerminalShutdownLatch();
-//@ chunk-bwbq4xvm.js:167018-167052 placement
+//@ chunk-7kayq7nc.js:166267-166301 placement
 function isTerminalShutdown() {
   return terminalShutdownLatch.committed;
 }
-//@ chunk-bwbq4xvm.js:167052-167083 placement
+//@ chunk-7kayq7nc.js:166301-166332 placement
 function latchTerminalShutdown() {
   terminalShutdownLatch.committed = true;
 }
-//@ chunk-bwbq4xvm.js:167083-167110 placement
+//@ chunk-7kayq7nc.js:166332-166359 placement
 var NEVER_RESOLVING = new Promise(() => {});
-//@ chunk-bwbq4xvm.js:167110-167134 placement
+//@ chunk-7kayq7nc.js:166359-166383 placement
 function heldUntilExit() {
   return NEVER_RESOLVING;
 }
-export { isTerminalShutdown, heldUntilExit, latchTerminalShutdown };
+export { isTerminalShutdown, latchTerminalShutdown, heldUntilExit };

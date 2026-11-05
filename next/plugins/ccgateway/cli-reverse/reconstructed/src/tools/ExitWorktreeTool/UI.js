@@ -3,9 +3,9 @@
  *
  * ExitWorktree 结果渲染
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ExitWorktreeTool/UI.tsx
- * pieces: chunk-ah34pb7m.js (1)
+ * pieces: chunk-wjygkcr4.js (1)
  * attribution: fingerprint 1
  */
 import {
@@ -16,7 +16,7 @@ import {
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
-//@ chunk-ah34pb7m.js:30882-31204 fingerprint (2.1.88 match: renderToolResultMessage, 0.78)
+//@ chunk-wjygkcr4.js:31846-32169 fingerprint (2.1.88 match: renderToolResultMessage, 0.78)
 /**
  * ExitWorktree 结果渲染：Kept/Removed worktree（分支名）与返回的目录。
  */

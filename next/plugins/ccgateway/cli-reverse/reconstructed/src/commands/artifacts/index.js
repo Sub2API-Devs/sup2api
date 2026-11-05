@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：/artifacts 命令对象：列出与打开 Artifact
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: placement 3
  */
 import { isArtifactToolEnabled } from "../../services/artifacts/artifactToolGates.js";
 import { getArtifactPublishStubDir } from "../../tools/ArtifactTool/constants.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 
-//@ chunk-e6aww6q8.js:1685492-1685669 placement
+//@ chunk-5xgkngpb.js:1760384-1760561 placement
 /**
  * /artifacts 命令对象（local-jsx）；描述：Browse your published and shared artifacts；isEnabled: ()=>VA()&&hc()===null；实现 chunk-qr2y97px.js 的 fs。
  */
@@ -25,13 +25,13 @@ var artifactsCommandDefinition = {
   immediate: true,
   runsBesideTurns: artifactsRunsBesideTurns,
 };
-//@ chunk-e6aww6q8.js:1685669-1685728 placement
+//@ chunk-5xgkngpb.js:1760561-1760620 placement
 /**
  * artifactsRunsBesideTurns：tengu_cobalt_plinth_sainfoin：/artifacts 可在回合进行中打开。
  */
 function artifactsRunsBesideTurns() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth_sainfoin", false);
 }
-//@ chunk-e6aww6q8.js:1685728-1685740 placement
+//@ chunk-5xgkngpb.js:1760620-1760632 placement
 var artifactsCommand = artifactsCommandDefinition;
 export { artifactsCommand };

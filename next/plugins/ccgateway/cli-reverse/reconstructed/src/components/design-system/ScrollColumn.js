@@ -3,9 +3,9 @@
  *
  * 可滚动列组件（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1kwgxcw6.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2nf232h2.js (4)
  * attribution: placement 4
  */
 import {
@@ -21,22 +21,22 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { Box } from "../../ink/components/Text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1kwgxcw6.js:1290-1294 placement
+//@ chunk-2nf232h2.js:1290-1294 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1kwgxcw6.js:1290", () => {
+deferInit("chunk-2nf232h2.js:1290", () => {
   init_react_production();
 });
-//@ chunk-1kwgxcw6.js:1294-1314 placement
+//@ chunk-2nf232h2.js:1294-1314 placement
 /**
  * ScrollColumn 的 context（当前滚动值）与最小行数 1。
  */
 var SCROLL_COLUMN_CONTEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SCROLL_COLUMN_MIN_ROWS;
-deferInit("chunk-1kwgxcw6.js:1294", () => {
+deferInit("chunk-2nf232h2.js:1294", () => {
   SCROLL_COLUMN_CONTEXT = createContext(null);
   SCROLL_COLUMN_MIN_ROWS = 1;
 });
-//@ chunk-1kwgxcw6.js:1314-1717 placement
+//@ chunk-2nf232h2.js:1314-1717 placement
 /**
  * 可滚动列容器：按终端行数和预留行数限制高度。
  */
@@ -81,7 +81,7 @@ function ScrollColumn(props) {
   } else contextValue = $[9];
   return contextValue;
 }
-//@ chunk-1kwgxcw6.js:1717-1744 placement
+//@ chunk-2nf232h2.js:1717-1744 placement
 /**
  * 读 ScrollColumn context 的 hook。
  */

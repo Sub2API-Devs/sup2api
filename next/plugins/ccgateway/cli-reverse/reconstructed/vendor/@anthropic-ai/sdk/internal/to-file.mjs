@@ -1,13 +1,13 @@
 /**
  * @anthropic-ai/sdk/internal/to-file.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (4)
+ * pieces: chunk-vn3g7zt8.js (4)
  * attribution: esm-fingerprint 4
  */
 import { checkFileSupport, getName, makeFile, isAsyncIterable } from "./uploads.mjs";
 
-//@ chunk-hwmsct5x.js:41841-42220 esm-fingerprint
+//@ chunk-vn3g7zt8.js:42212-42591 esm-fingerprint
 var isBlobLike = (value) =>
   value != null &&
   typeof value === "object" &&
@@ -27,7 +27,7 @@ var isResponseLike = (value) =>
   typeof value === "object" &&
   typeof value.url === "string" &&
   typeof value.blob === "function";
-//@ chunk-hwmsct5x.js:42220-42684 esm-fingerprint
+//@ chunk-vn3g7zt8.js:42591-43055 esm-fingerprint
 async function toFile(value, name, options) {
   checkFileSupport();
   value = await value;
@@ -56,7 +56,7 @@ async function toFile(value, name, options) {
   }
   return makeFile(parts, name, options);
 }
-//@ chunk-hwmsct5x.js:42684-43045 esm-fingerprint
+//@ chunk-vn3g7zt8.js:43055-43416 esm-fingerprint
 async function getBytes(value) {
   let parts = [];
   if (typeof value === "string" || ArrayBuffer.isView(value) || value instanceof ArrayBuffer)
@@ -71,7 +71,7 @@ async function getBytes(value) {
   }
   return parts;
 }
-//@ chunk-hwmsct5x.js:43045-43184 esm-fingerprint
+//@ chunk-vn3g7zt8.js:43416-43555 esm-fingerprint
 function propsForError(value) {
   if (typeof value !== "object" || value === null) return "";
   return `; props: [${Object.getOwnPropertyNames(value)

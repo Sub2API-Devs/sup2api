@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：preview 动作（headless Chrome）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (23)
  * attribution: placement 23
  */
 import { randomUUID } from "crypto";
@@ -26,7 +26,7 @@ import { truncatePathMiddle, formatBytesDecimal } from "../../../utils/format.js
 import { foldForDecisionSurface } from "../permissions/consentStamps.js";
 import { isUntouchableSpelling } from "../../../utils/networkPaths.js";
 import { FILE_WRITE_TOOL_NAME } from "../../FileWriteTool/prompt.js";
-import { FILE_EDIT_TOOL_NAME } from "../../FileEditTool/constants.js";
+import { EDIT } from "../../FileEditTool/constants.js";
 import { objectSchema, stringSchema } from "../../../../vendor/zod/v4/classic/schemas.js";
 import {
   requirePreviewChrome,
@@ -40,13 +40,13 @@ import {
 import { isENOENT, getErrnoCode, AbortError } from "../../../utils/errors.js";
 import {
   allWorkingDirectories,
+  normalizeCaseForComparison_2,
   checkWritePermissionForTool,
   pathInWorkingPath,
   checkReadPermissionForTool,
   readPermissionDecisionForPath,
 } from "../../../utils/permissions/filesystem.js";
 import { getClaudeTempDirRealpath } from "../../../utils/tempDirRealpaths.js";
-import { uniq, count } from "../../../utils/collections.js";
 import { toolAlwaysAllowedRule } from "../../../utils/permissions/permissions.js";
 import { SandboxManager } from "../../../utils/sandbox/sandbox-adapter.js";
 import { isPathInSandboxWriteAllowlist } from "../../../utils/permissions/pathValidation.js";
@@ -84,11 +84,12 @@ import {
   MAX_PREVIEW_ISSUES_DROPPED,
 } from "../promptText.js";
 import { getOriginalCwd } from "../../../utils/toolResultStorage.js";
+import { countWhere } from "../../../utils/collections.js";
 import { fromEnum } from "../../../services/analytics/safeMetadata.js";
 import { sanitizeDisplayText } from "../../../services/artifacts/capabilityDeclaration.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-8wvtd8sr.js:209605-209986 placement
+//@ chunk-xzmy9dn4.js:211826-212207 placement
 /**
  * preview 动作的固定文案与允许的输入键：会话不可用、需要普通 .html 文件、拒绝经网络共享的路径。
  */
@@ -97,7 +98,7 @@ var PREVIEW_INPUT_KEYS;
 var EMULATOR_PREVIEW_INPUT_KEYS;
 var PREVIEW_NOT_REGULAR_FILE_MESSAGE;
 var PREVIEW_NETWORK_PATH_MESSAGE;
-deferInit("chunk-8wvtd8sr.js:209605", () => {
+deferInit("chunk-xzmy9dn4.js:211826", () => {
   PREVIEW_UNAVAILABLE_MESSAGE = "preview is not available in this session.";
   PREVIEW_INPUT_KEYS = new Set(["action", "file_path", "widths", "themes"]);
   EMULATOR_PREVIEW_INPUT_KEYS = new Set(["action", "file_path"]);
@@ -106,13 +107,13 @@ deferInit("chunk-8wvtd8sr.js:209605", () => {
   PREVIEW_NETWORK_PATH_MESSAGE =
     "preview renders local files only; this path, or a link on the way to it, reaches a network share, or a directory or link on the way could not be examined.";
 });
-//@ chunk-8wvtd8sr.js:209986-210093 placement
+//@ chunk-xzmy9dn4.js:212207-212314 placement
 function previewShotName(toolUseId) {
   return typeof toolUseId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(toolUseId)
     ? toolUseId
     : `preview-${randomUUID().slice(0, 8)}`;
 }
-//@ chunk-8wvtd8sr.js:210093-210186 placement
+//@ chunk-xzmy9dn4.js:212314-212407 placement
 /**
  * 取 preview 输入的文件路径并展开。
  */
@@ -121,7 +122,7 @@ function expandedPreviewFilePath(input) {
     ? expandPath(input.file_path)
     : undefined;
 }
-//@ chunk-8wvtd8sr.js:210186-210250 placement
+//@ chunk-xzmy9dn4.js:212407-212471 placement
 /**
  * 把预览路径回显成单行（转义、截断）。
  */
@@ -133,7 +134,7 @@ function previewPathEcho(path) {
     ),
   );
 }
-//@ chunk-8wvtd8sr.js:210250-210328 placement
+//@ chunk-xzmy9dn4.js:212471-212549 placement
 /**
  * 判断预览路径是否被读规则拒绝（或本身可疑）。
  */
@@ -143,7 +144,7 @@ function isPreviewPathRefusedByRule(input, filePath) {
     (typeof input.file_path === "string" && isUntouchableSpelling(input.file_path))
   );
 }
-//@ chunk-8wvtd8sr.js:210328-211263 placement
+//@ chunk-xzmy9dn4.js:212549-213484 placement
 /**
  * preview 渲染前复核文件来源失败时的各种原因文案（路径变化、经链接、硬链接、无文件身份、读规则拒绝、大小等），符号链接/硬链接提示，以及预览截图 base64 上限。
  */
@@ -151,7 +152,7 @@ var PREVIEW_SOURCE_REFUSALS; // deferred: uses PREVIEW_UNAVAILABLE_MESSAGE of it
 var PREVIEW_SYMLINK_ASK_MESSAGE;
 var PREVIEW_HARD_LINK_MESSAGE;
 var MAX_PREVIEW_IMAGE_BASE64;
-deferInit("chunk-8wvtd8sr.js:210328", () => {
+deferInit("chunk-xzmy9dn4.js:212549", () => {
   PREVIEW_SOURCE_REFUSALS = {
     network: PREVIEW_NETWORK_PATH_MESSAGE,
     changed: "file_path changed between the permission check and the render \u2014 preview it again.",
@@ -169,18 +170,18 @@ deferInit("chunk-8wvtd8sr.js:210328", () => {
     "file_path shares its contents with another hard link \u2014 preview a plain copy of the page.";
   MAX_PREVIEW_IMAGE_BASE64 = 1400000;
 });
-//@ chunk-8wvtd8sr.js:211263-211750 placement
+//@ chunk-xzmy9dn4.js:213484-213971 placement
 /**
  * 预览拒绝启动可能被本会话命令写入/篡改的 Chrome（位于工作目录、临时目录、沙箱可写根或 Write/Edit 允许规则覆盖处）时的文案，可附安装提示。
  */
 function plantableChromeRefusal(refused, paths) {
   return `preview will not launch a browser this session's commands could have planted or altered: each one it found sits somewhere they can write without asking (a working directory, a temp dir, a sandbox write root, or a path a Write or Edit allow rule covers) \u2014 ${paths === undefined ? "install Chrome outside those places" : `install one outside those places (run via Bash, one-time, ~270 MB: ${paths})`}, or point BUN_CHROME_PATH at one from your shell. Refused: ${refused.join("; ")}`;
 }
-//@ chunk-8wvtd8sr.js:211750-211857 placement
+//@ chunk-xzmy9dn4.js:213971-214078 placement
 var FILE_WRITE_TOOL_NAMES; // deferred: uses objectSchema (../../../../vendor/zod/v4/classic/schemas.js) of its import cycle while loading; runs once the cycle is complete
 var FILE_WRITE_RULE_PROBE_TOOL;
-deferInit("chunk-8wvtd8sr.js:211750", () => {
-  FILE_WRITE_TOOL_NAMES = [FILE_WRITE_TOOL_NAME, FILE_EDIT_TOOL_NAME];
+deferInit("chunk-xzmy9dn4.js:213971", () => {
+  FILE_WRITE_TOOL_NAMES = [FILE_WRITE_TOOL_NAME, EDIT];
   FILE_WRITE_RULE_PROBE_TOOL = {
     name: FILE_WRITE_TOOL_NAME,
     mcpInfo: undefined,
@@ -190,7 +191,7 @@ deferInit("chunk-8wvtd8sr.js:211750", () => {
     getPath: (input) => String(input.file_path),
   };
 });
-//@ chunk-8wvtd8sr.js:211857-212059 placement
+//@ chunk-xzmy9dn4.js:214078-214280 placement
 async function findTrustedPreviewChrome(permissionContext) {
   let previewChrome = requirePreviewChrome();
   let refusals = [];
@@ -210,7 +211,7 @@ async function findTrustedPreviewChrome(permissionContext) {
     refused: refusals,
   };
 }
-//@ chunk-8wvtd8sr.js:212059-212227 placement
+//@ chunk-xzmy9dn4.js:214280-214448 placement
 async function trustedInstallHint(chrome, permissionContext) {
   let installDir = chrome.installDir();
   if (installDir === undefined || chrome.installHint() === undefined) return;
@@ -218,7 +219,7 @@ async function trustedInstallHint(chrome, permissionContext) {
     ? undefined
     : chrome.installHint();
 }
-//@ chunk-8wvtd8sr.js:212227-212701 placement
+//@ chunk-xzmy9dn4.js:214448-214922 placement
 /**
  * 检查一个 Chrome 候选路径能否用于预览：网络路径拒绝；非 bypass 模式下，若位于工作目录/临时目录、写权限规则允许、沙箱可写处或可写的多硬链接文件则拒绝。
  */
@@ -259,7 +260,7 @@ async function vetChromeBinary(candidate, permissionContext) {
   let dirs = [...allWorkingDirectories(permissionContext), getClaudeTempDirRealpath(), tmpdir_2()].flatMap(
     (dir) => getPathsForPermissionCheck(dir),
   );
-  let refused = uniq([...paths, resolved]).some(
+  let refused = normalizeCaseForComparison_2([...paths, resolved]).some(
     (path) =>
       isInAnyWorkingPath(path, dirs) ||
       isWriteAllowedPath(path, permissionContext) ||
@@ -270,7 +271,7 @@ async function vetChromeBinary(candidate, permissionContext) {
     refused,
   };
 }
-//@ chunk-8wvtd8sr.js:212701-212831 placement
+//@ chunk-xzmy9dn4.js:214922-215052 placement
 function isWriteAllowedPath(filePath, permissionContext) {
   try {
     return (
@@ -293,7 +294,7 @@ function isWriteAllowedPath(filePath, permissionContext) {
     return true;
   }
 }
-//@ chunk-8wvtd8sr.js:212831-213051 placement
+//@ chunk-xzmy9dn4.js:215052-215272 placement
 function isSandboxWritablePath(path) {
   try {
     if (!SandboxManager.isSandboxingEnabled()) return false;
@@ -314,14 +315,14 @@ function isSandboxWritablePath(path) {
     return true;
   }
 }
-//@ chunk-8wvtd8sr.js:213051-213090 placement
+//@ chunk-xzmy9dn4.js:215272-215311 placement
 /**
  * 判断路径是否含通配符字符。
  */
 function hasGlobMetaChars(value) {
   return /[*?[\]]/.test(value);
 }
-//@ chunk-8wvtd8sr.js:213090-213149 placement
+//@ chunk-xzmy9dn4.js:215311-215370 placement
 /**
  * 判断路径是否位于任一工作目录下（忽略大小写）。
  */
@@ -332,7 +333,7 @@ function isInAnyWorkingPath(path, dirs) {
     }),
   );
 }
-//@ chunk-8wvtd8sr.js:213149-213260 placement
+//@ chunk-xzmy9dn4.js:215370-215481 placement
 async function isWritableFile(resolved) {
   try {
     await access(resolved, constants.W_OK);
@@ -342,13 +343,13 @@ async function isWritableFile(resolved) {
     return !(errnoCode === "EACCES" || errnoCode === "EPERM");
   }
 }
-//@ chunk-8wvtd8sr.js:213260-214273 placement
+//@ chunk-xzmy9dn4.js:215481-216494 placement
 /**
  * 本机 Chrome 预览后端：refusal() 在只找到不可信 Chrome 时返回拒绝（记 tengu_artifact_preview_refused），render() 在无头 Chrome 中按宽度和主题渲染截图并收集问题。
  */
 var PREVIEW_NETWORK_PATH_DENY; // deferred: uses PREVIEW_UNAVAILABLE_MESSAGE of its import cycle while loading; runs once the cycle is complete
 var LOCAL_CHROME_PREVIEW_BACKEND;
-deferInit("chunk-8wvtd8sr.js:213260", () => {
+deferInit("chunk-xzmy9dn4.js:215481", () => {
   PREVIEW_NETWORK_PATH_DENY = {
     behavior: "deny",
     message: PREVIEW_NETWORK_PATH_MESSAGE,
@@ -421,14 +422,14 @@ deferInit("chunk-8wvtd8sr.js:213260", () => {
     },
   };
 });
-//@ chunk-8wvtd8sr.js:214273-214318 placement
+//@ chunk-xzmy9dn4.js:216494-216539 placement
 /**
  * 按当前预览引擎返回后端标识。
  */
 function previewBackend() {
   return previewEngineKind() === "emulator" ? EMULATOR_PREVIEW_BACKEND : LOCAL_CHROME_PREVIEW_BACKEND;
 }
-//@ chunk-8wvtd8sr.js:214318-220580 placement
+//@ chunk-xzmy9dn4.js:216539-222801 placement
 var ARTIFACT_PREVIEW_ACTION_HANDLER = {
   actions: ["preview"],
   localOnly: true,
@@ -630,7 +631,7 @@ var ARTIFACT_PREVIEW_ACTION_HANDLER = {
     if (renderOutcome.engine === "emulator")
       return emulatorPreviewResult(previewPath, renderOutcome.look, renderOutcome.durationMs);
     let { result: rendered, durationMs } = renderOutcome;
-    let shotCount = count(rendered.shots, (shot) => shot.path !== undefined);
+    let shotCount = countWhere(rendered.shots, (shot) => shot.path !== undefined);
     logEvent("tengu_artifact_preview", {
       outcome: fromEnum(
         rendered.renderError !== undefined
@@ -642,7 +643,7 @@ var ARTIFACT_PREVIEW_ACTION_HANDLER = {
               : "rendered",
       ),
       shots: shotCount,
-      issues: count(rendered.issues, (issue) => issue.kind !== "note") + rendered.issuesDropped,
+      issues: countWhere(rendered.issues, (issue) => issue.kind !== "note") + rendered.issuesDropped,
       widths: widths.length,
       themes: themes.length,
       bytes: rendered.bytes,
@@ -694,7 +695,7 @@ var ARTIFACT_PREVIEW_ACTION_HANDLER = {
       : `preview ${shownName} locally (read-only; nothing is uploaded)`;
   },
 };
-//@ chunk-8wvtd8sr.js:220580-221001 placement
+//@ chunk-xzmy9dn4.js:222801-223222 placement
 /**
  * 把 artifact 查看器仿真预览的结果（looked/stopped/failed）记 tengu_artifact_preview_emulator 埋点并组装成 emulatorPreview 结果数据。
  */
@@ -724,7 +725,7 @@ function emulatorPreviewResult(file, outcome, durationMs) {
     },
   };
 }
-//@ chunk-8wvtd8sr.js:221001-225180 placement
+//@ chunk-xzmy9dn4.js:223222-227401 placement
 /**
  * 预览结果的渲染与存储：rs 清理显示文本；wh 把 preview 结果映射为 tool_result（截图、问题、说明）；_h 存储时剥离截图 base64；ch 为仿真预览失败原因文案表。
  */
@@ -885,7 +886,7 @@ var EMULATOR_FAILURE_REASONS = {
   picture_not_png: "the picture was not a PNG image",
   picture_not_saved: "the picture could not be converted and saved",
 };
-//@ chunk-8wvtd8sr.js:225180-225371 placement
+//@ chunk-xzmy9dn4.js:227401-227592 placement
 function emulatorFailureText(outcome) {
   if (outcome.startsWith("mount_"))
     return "the artifact viewer's files in this session are not as expected, so it was not run";
@@ -893,7 +894,7 @@ function emulatorFailureText(outcome) {
     ? EMULATOR_FAILURE_REASONS[outcome]
     : "the look did not finish";
 }
-//@ chunk-8wvtd8sr.js:225371-227997 placement
+//@ chunk-xzmy9dn4.js:227592-230218 placement
 /**
  * 仿真预览结果：bh 把 emulatorPreview 映射为 tool_result（图片、标记、错误、提纲），vh 存储时剥离图片 base64；fh 为无法检查外观时给模型的指示。
  */
@@ -917,7 +918,7 @@ var renderEmulatorPreviewBlock = (result, toolUseId) => {
     typeof picture.base64 === "string" &&
     picture.base64.startsWith("/9j/") &&
     picture.base64.length <= MAX_PREVIEW_IMAGE_BASE64;
-  let detachedCount = count(sliced, (picture) => !isAttachable(picture));
+  let detachedCount = countWhere(sliced, (picture) => !isAttachable(picture));
   if (emulatorPreview.outcome === "looked") {
     lines.push(`Looked at ${fileName} in the artifact viewer.`);
     if (detachedCount > 0)

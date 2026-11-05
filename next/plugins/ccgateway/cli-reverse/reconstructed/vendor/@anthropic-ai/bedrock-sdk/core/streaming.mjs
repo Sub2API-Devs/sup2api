@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/bedrock-sdk/core/streaming.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/bedrock-sdk@0.33.7..0.34.3
- * pieces: chunk-h87x8cg3.js (2)
+ * pieces: chunk-b8zxeazh.js (2)
  * attribution: esm-fingerprint 2
  */
 import { de_ResponseStream } from "../AWS_restJson1.js";
@@ -14,7 +14,7 @@ import { is_buffer } from "../internal/qs/utils.js";
 import { BedrockRuntimeServiceException } from "../../../@aws-sdk/client-bedrock-runtime/dist-cjs/index.js";
 import { isAbortError } from "../internal/errors.mjs";
 
-//@ chunk-h87x8cg3.js:7144-7853 esm-fingerprint
+//@ chunk-b8zxeazh.js:7144-7853 esm-fingerprint
 function eventStreamToSSEResponse(response) {
   let body = response.body;
   if (!body) return response;
@@ -59,7 +59,7 @@ data: ${JSON.stringify({
   });
   return normalized;
 }
-//@ chunk-h87x8cg3.js:7853-8101 esm-fingerprint
+//@ chunk-b8zxeazh.js:7853-8101 esm-fingerprint
 function frameError(err) {
   if (err instanceof BedrockRuntimeServiceException)
     return {

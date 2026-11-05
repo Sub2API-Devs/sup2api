@@ -3,9 +3,9 @@
  *
  * 服务端下发的自动模式规则（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3nztfxrw.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a3r2kq46.js (13)
  * attribution: placement 13
  */
 import {
@@ -20,14 +20,14 @@ import { objectSchema, union, numberSchema, stringSchema } from "../../vendor/zo
 import { claudeCodeUserAgent } from "../utils/http.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3nztfxrw.js:1180-1263 placement
+//@ chunk-a3r2kq46.js:1179-1262 placement
 /**
  * CCR 云端会话里 autoMode 规则应用预设：all / no-allow / none。
  */
 var AUTO_MODE_APPLY_PRESETS; // deferred: uses AUTO_MODE_RULE_SECTIONS (../utils/permissions/autoModeRulesPrompt.js) of its import cycle while loading; runs once the cycle is complete
 var AUTO_MODE_ENV_MAX_BYTES;
 var CCR_AUTO_MODE_APPLY;
-deferInit("chunk-3nztfxrw.js:1180", () => {
+deferInit("chunk-a3r2kq46.js:1179", () => {
   AUTO_MODE_APPLY_PRESETS = {
     all: [],
     "no-allow": ["allow"],
@@ -36,7 +36,7 @@ deferInit("chunk-3nztfxrw.js:1180", () => {
   AUTO_MODE_ENV_MAX_BYTES = 2097152;
   CCR_AUTO_MODE_APPLY = "CCR_AUTO_MODE_APPLY";
 });
-//@ chunk-3nztfxrw.js:1263-1355 placement
+//@ chunk-a3r2kq46.js:1262-1354 placement
 /**
  * CCR 会话环境变量里 CCR_AUTO_MODE_APPLY=1 时才应用宿主下发的 autoMode 规则。
  */
@@ -47,7 +47,7 @@ function isCcrAutoModeApplySet(config) {
     environmentVariables[CCR_AUTO_MODE_APPLY] === "1"
   );
 }
-//@ chunk-3nztfxrw.js:1355-1597 placement (2.1.88 match: autoModeConfigHandler, 0.823)
+//@ chunk-a3r2kq46.js:1354-1596 placement (2.1.88 match: autoModeConfigHandler, 0.827)
 /**
  * 读取 CCR 会话下发的 autoMode allow/environment/soft_deny 配置状态（absent/present/invalid）。
  */
@@ -71,9 +71,9 @@ function autoModeConfigHandler(config) {
     soft_deny: readAutoModeEnvList(environmentVariables, AUTO_MODE_SECTION_ENV_VARS.soft_deny),
   };
 }
-//@ chunk-3nztfxrw.js:1597-1616 placement
+//@ chunk-a3r2kq46.js:1596-1615 placement
 var NO_ALLOW = "no-allow";
-//@ chunk-3nztfxrw.js:1616-1836 placement
+//@ chunk-a3r2kq46.js:1615-1835 placement
 /**
  * 按预设去掉服务端自动模式的某些规则列表，返回保留的配置与被扣下的列表名。
  */
@@ -95,10 +95,10 @@ function applyAutoModePreset(lists, serverAutoModeLists) {
     withheld: nonEmpty,
   };
 }
-//@ chunk-3nztfxrw.js:1836-1990 placement
+//@ chunk-a3r2kq46.js:1835-1989 placement
 var UNDECODABLE_RULES_HINT =
   "nothing on this runner needs changing; if an admin of your organization wrote the entry, a line break, some emoji or a blank rule can cause this";
-//@ chunk-3nztfxrw.js:1990-3514 placement
+//@ chunk-a3r2kq46.js:1989-3513 placement
 function readServerAutoModeRules(carried) {
   let picked = {};
   for (let section of AUTO_MODE_RULE_SECTIONS) {
@@ -139,7 +139,7 @@ function readServerAutoModeRules(carried) {
     refusedCounts,
   };
 }
-//@ chunk-3nztfxrw.js:3514-3782 placement
+//@ chunk-a3r2kq46.js:3513-3781 placement
 function readAutoModeEnvList(environmentVariables, carrier) {
   let raw = Object.hasOwn(environmentVariables, carrier) ? environmentVariables[carrier] : undefined;
   if (raw === undefined || raw === "")
@@ -164,14 +164,14 @@ function readAutoModeEnvList(environmentVariables, carrier) {
     };
   }
 }
-//@ chunk-3nztfxrw.js:3782-3942 placement
+//@ chunk-a3r2kq46.js:3781-3941 placement
 class UnreadableToolsHostError extends Error {
   constructor() {
     super("IssueSessionToken: response holds a tools_host that this runner cannot read");
     this.name = "UnreadableToolsHostError";
   }
 }
-//@ chunk-3nztfxrw.js:3942-4818 placement
+//@ chunk-a3r2kq46.js:3941-4817 placement
 /**
  * 自托管 runner 常量：配置 schema（tool_server_hosting、api_base_url、cwd）、版本号、自动模式环境变量名、标签正则与各种长度/超时上限。
  */
@@ -183,7 +183,7 @@ var ENV_DEFAULT_TIMEOUT_MS;
 var ENV_MAX_TIMEOUT_MS;
 var MAX_ENV_TOKEN_CHARS;
 var MAX_ENV_VALUE_BYTES;
-deferInit("chunk-3nztfxrw.js:3942", () => {
+deferInit("chunk-a3r2kq46.js:3941", () => {
   RUNNER_CONFIG_SCHEMA = DoctorLazy(() =>
     objectSchema({
       tool_server_hosting: union([numberSchema(), stringSchema().regex(/^\d+$/).transform(Number)]).pipe(
@@ -199,10 +199,10 @@ deferInit("chunk-3nztfxrw.js:3942", () => {
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
-    VERSION: "2.1.316",
+    VERSION: "2.1.318",
     FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-    BUILD_TIME: "2026-10-30T23:28:13Z",
-    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
     HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
     DD_SOURCEMAP_GROUP: "default",
   }.VERSION.replace(/^v/, "").split(/[-+]/)[0];
@@ -217,17 +217,17 @@ deferInit("chunk-3nztfxrw.js:3942", () => {
   MAX_ENV_TOKEN_CHARS = 256;
   MAX_ENV_VALUE_BYTES = 65536;
 });
-//@ chunk-3nztfxrw.js:4818-4886 placement
+//@ chunk-a3r2kq46.js:4817-4885 placement
 function isSafeEnvToken(value) {
   return typeof value === "string" && value.length <= MAX_ENV_TOKEN_CHARS && ENV_TOKEN_RE.test(value);
 }
-//@ chunk-3nztfxrw.js:4886-5006 placement
+//@ chunk-a3r2kq46.js:4885-5006 placement
 function validateRunnerLabel(label, field) {
   if (!isSafeEnvToken(label))
     throw Error(`Invalid ${field}: contains unsafe characters or exceeds ${MAX_ENV_TOKEN_CHARS} characters`);
   return label;
 }
-//@ chunk-3nztfxrw.js:5006-5177 placement (2.1.88 match: getOAuthHeaders, 0.778)
+//@ chunk-a3r2kq46.js:5006-5177 placement (2.1.88 match: getOAuthHeaders, 0.779)
 function getOAuthHeaders(accessToken) {
   return {
     "User-Agent": claudeCodeUserAgent(),

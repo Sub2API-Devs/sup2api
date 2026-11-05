@@ -3,9 +3,9 @@
  *
  * MCP 工具详情：描述、参数 schema、只读/破坏性标注。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/mcp/MCPToolDetailView.tsx
- * pieces: chunk-vrb44rx7.js (4)
+ * pieces: chunk-wb51jffc.js (4)
  * attribution: callgraph-fingerprint 1, placement 1, layout 1, fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -27,7 +27,7 @@ import { ParenHint } from "../diff/DiffDetailView.js";
 import { Dialog } from "../design-system/Dialog.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrb44rx7.js:26449-26810 callgraph-fingerprint (2.1.88 match: _temp, 0.594)
+//@ chunk-wb51jffc.js:26568-26929 callgraph-fingerprint (2.1.88 match: _temp, 0.593)
 /**
  * 返回提示：等待二次按键时“再按一次返回”，否则显示 Esc 返回快捷键。
  */
@@ -60,15 +60,15 @@ function BackHint(exitState) {
   } else hint = $[4];
   return hint;
 }
-//@ chunk-vrb44rx7.js:30172-30176 placement
+//@ chunk-wb51jffc.js:30295-30299 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:30172", () => {
+deferInit("chunk-wb51jffc.js:30295", () => {
   init_react_production();
 });
-//@ chunk-vrb44rx7.js:30176-30195 layout
+//@ chunk-wb51jffc.js:30299-30318 layout
 var TOOL_DETAIL_REFRESH_MS = 1000;
 var TOOL_DETAIL_MIN_MS = 200;
-//@ chunk-vrb44rx7.js:30195-33767 fingerprint (2.1.88 match: MCPToolDetailView, 0.553)
+//@ chunk-wb51jffc.js:30318-33891 fingerprint (2.1.88 match: MCPToolDetailView, 0.552)
 function MCPToolDetailView(props) {
   let $ = useMemoCache(50);
   let { tool, server, onBack } = props;

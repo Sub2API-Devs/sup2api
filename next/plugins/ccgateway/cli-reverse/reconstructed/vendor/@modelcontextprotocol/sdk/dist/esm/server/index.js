@@ -1,8 +1,8 @@
 /**
  * @modelcontextprotocol/sdk/dist/esm/server/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/sdk@1.29.0
- * pieces: chunk-exz1ts42.js (1)
+ * pieces: chunk-d020vhv1.js (1)
  * attribution: esm-fingerprint 1
  */
 import { Protocol } from "../shared/protocol.js";
@@ -33,9 +33,9 @@ import {
 } from "../experimental/tasks/helpers.js";
 import { deferInit } from "../../../../../../runtime/deferred-init.js";
 
-//@ chunk-exz1ts42.js:2221-10329 esm-fingerprint
+//@ chunk-d020vhv1.js:2223-10335 esm-fingerprint
 let Server; // deferred: uses Protocol (../shared/protocol.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-exz1ts42.js:2221", () => {
+deferInit("chunk-d020vhv1.js:2223", () => {
   Server = class Server extends Protocol {
     constructor(_serverInfo, options) {
       super(options);

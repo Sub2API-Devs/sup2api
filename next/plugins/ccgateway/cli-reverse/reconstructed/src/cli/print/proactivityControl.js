@@ -3,12 +3,14 @@
  *
  * 2.1.316 新增：主动性等级的切换、启用与通知
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (14)
  * attribution: placement 14
  */
 import { logError } from "../../utils/log.js";
+import { requestIdOf } from "../../utils/sessionState.js";
+import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import {
   wasProactivityEverOn,
   isProactivityActive,
@@ -26,12 +28,11 @@ import { DoctorLazy } from "../handlers/util.js";
 import { objectSchema, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
 import { PROACTIVITY_MODES, isProactivityMode } from "../../utils/proactivityMode.js";
 import { noop as noop_2 } from "../../keybindings/cycleModeBinding.js";
-import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:86501-86559 placement
+//@ chunk-0yw3taqg.js:109843-109901 placement
 function safeCallback(onLate) {
   return (...args) => {
     try {
@@ -41,22 +42,28 @@ function safeCallback(onLate) {
     }
   };
 }
-//@ chunk-tyg7f3ek.js:86559-86650 placement
-function notifyRequiresAction({ io, setAppState }, details) {
+//@ chunk-0yw3taqg.js:109901-110170 placement
+function notifyRequiresAction({ io, setAppState, leadsWithOldestCard }, details) {
+  if (leadsWithOldestCard !== undefined) io.sessionState.leadsWithOldestCard = leadsWithOldestCard();
   io.sessionState.notifyStateChanged("requires_action", details);
+  if (
+    leadsWithOldestCard !== undefined &&
+    io.sessionState.pendingActionLeadRequestId !== requestIdOf(details)
+  )
+    logFeatureOk("ccr_record_leads_with_older_card");
 }
-//@ chunk-tyg7f3ek.js:86687-86752 placement
+//@ chunk-0yw3taqg.js:116887-116952 placement
 function proactivityStateStub({ proactivityLevel, toolPermissionContext }) {
   return;
 }
-//@ chunk-tyg7f3ek.js:86752-86830 placement
+//@ chunk-0yw3taqg.js:116952-117031 placement
 function notifyProactivityChanged(sessionState, state) {
   if (!wasProactivityEverOn()) return;
   sessionState.notifyMetadataChanged({
     proactivity: proactivityMetadata(state),
   });
 }
-//@ chunk-tyg7f3ek.js:86830-86907 placement
+//@ chunk-0yw3taqg.js:117031-117108 placement
 function proactivityMetadata(state) {
   if (!isProactivityActive()) return null;
   return (
@@ -65,18 +72,18 @@ function proactivityMetadata(state) {
     }
   );
 }
-//@ chunk-tyg7f3ek.js:86907-86972 placement
+//@ chunk-0yw3taqg.js:117108-117173 placement
 function makePermissionModeReader(getState, notify) {
   return () => notify(toExternalPermissionMode(getState().toolPermissionContext.mode));
 }
-//@ chunk-tyg7f3ek.js:86972-87046 placement
+//@ chunk-0yw3taqg.js:117173-117247 placement
 function onProactivitySelectorChange(onChange) {
   return onProactivitySelectorGateChanged(() => {
     if (proactivityExclusionReason() === "session_excluded") return;
     onChange();
   });
 }
-//@ chunk-tyg7f3ek.js:87046-87439 placement
+//@ chunk-0yw3taqg.js:117247-117640 placement
 function applyProactivityOptIn({
   optIn,
   permissionModeSuppliedOnInvocation,
@@ -110,16 +117,16 @@ function applyProactivityOptIn({
     });
   }
 }
-//@ chunk-tyg7f3ek.js:87439-87471 placement
+//@ chunk-0yw3taqg.js:117640-117672 placement
 var proactivityLevelSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:87439", () => {
+deferInit("chunk-0yw3taqg.js:117640", () => {
   proactivityLevelSchema = DoctorLazy(() =>
     objectSchema({
       level: _enum(PROACTIVITY_MODES),
     }),
   );
 });
-//@ chunk-tyg7f3ek.js:87471-87753 placement
+//@ chunk-0yw3taqg.js:117672-117954 placement
 function setProactivityLevel(proactivity, setAppState) {
   {
     trackProactivitySelectorGate(true);
@@ -142,14 +149,14 @@ function setProactivityLevel(proactivity, setAppState) {
   }
   return false;
 }
-//@ chunk-tyg7f3ek.js:87753-87844 placement
+//@ chunk-0yw3taqg.js:117954-118045 placement
 function notifyProactivityOptIn(sessionState, optIn, state) {
   sessionState.notifyInternalMetadataChanged({
     proactivity_opt_in: optIn ? true : null,
   });
   notifyProactivityChanged(sessionState, state);
 }
-//@ chunk-tyg7f3ek.js:87844-88853 placement
+//@ chunk-0yw3taqg.js:118045-119054 placement
 /**
  * SDK 请求切换主动性等级（proactivity）：会话被排除、未启用或等级非法时返回错误，可附带绕过权限选项。
  */
@@ -208,9 +215,9 @@ function cycleProactivityLevel(level, getState, setAppState, context, { offerByp
     error: "Unsupported control request subtype",
   };
 }
-//@ chunk-tyg7f3ek.js:88853-88863 placement
+//@ chunk-0yw3taqg.js:119054-119064 placement
 var MAX_PROACTIVITY_REASON_CHARS = 64;
-//@ chunk-tyg7f3ek.js:88863-89024 placement
+//@ chunk-0yw3taqg.js:119064-119224 placement
 function previewValue(value, { quoteStrings = false } = {}) {
   let text;
   if (typeof value === "string" && !quoteStrings) text = value;
@@ -225,9 +232,9 @@ function previewValue(value, { quoteStrings = false } = {}) {
     : text;
 }
 export {
-  notifyProactivityChanged,
   notifyRequiresAction,
   makePermissionModeReader,
+  notifyProactivityChanged,
   onProactivitySelectorChange,
   cycleProactivityLevel,
   proactivityStateStub,

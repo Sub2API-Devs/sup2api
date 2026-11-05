@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：决策原因
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: placement 3
  */
 import {
@@ -13,7 +13,7 @@ import {
   TOOL_HOST_ALLOW_IS_CLASSIFIED_REASON,
 } from "../../types/permissions.js";
 
-//@ chunk-e6aww6q8.js:920454-920605 placement
+//@ chunk-5xgkngpb.js:930955-931106 placement
 /**
  * 决策原因是否全部来自规则（子命令结果需每项都是规则原因）。
  */
@@ -23,7 +23,7 @@ function isAllRuleReason(decisionReason) {
     return [...decisionReason.reasons.values()].every((reason) => isAllRuleReason(reason.decisionReason));
   return false;
 }
-//@ chunk-e6aww6q8.js:920729-921111 placement (2.1.88 match: serializeDecisionReason, 0.967)
+//@ chunk-5xgkngpb.js:931230-931612 placement (2.1.88 match: serializeDecisionReason, 0.968)
 /**
  * 权限决定原因转换为给宿主显示的文本（rule/mode 等不显示，safetyCheck/classifier/hook 显示原因）。
  */
@@ -51,7 +51,7 @@ function serializeDecisionReason(reason) {
         : reason.reason;
   }
 }
-//@ chunk-e6aww6q8.js:921111-921230 placement
+//@ chunk-5xgkngpb.js:931612-931731 placement
 /**
  * 安全检查是否由熔断原因触发（outsideReadsBlocked/unfinishedCheck）。
  */
@@ -60,4 +60,4 @@ function isCircuitBreakerSafetyCheck({ circuitBreaker, also }) {
     (reason) => reason === "outsideReadsBlocked" || reason === "unfinishedCheck",
   );
 }
-export { isAllRuleReason, serializeDecisionReason, isCircuitBreakerSafetyCheck };
+export { serializeDecisionReason, isCircuitBreakerSafetyCheck, isAllRuleReason };

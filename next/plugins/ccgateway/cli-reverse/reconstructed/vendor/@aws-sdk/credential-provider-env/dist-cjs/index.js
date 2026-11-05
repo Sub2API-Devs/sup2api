@@ -1,15 +1,15 @@
 /**
  * @aws-sdk/credential-provider-env/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/credential-provider-env@3.936.0
- * pieces: chunk-j3x7ed1b.js (1)
+ * pieces: chunk-qrtqtj8x.js (1)
  * attribution: esm-layout 1
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_client } from "../../core/dist-cjs/submodules/client/index.js";
 import { require_property_provider } from "../../../@smithy/property-provider/dist-cjs/index.js";
 
-//@ chunk-j3x7ed1b.js:335-1021 esm-layout
+//@ chunk-qrtqtj8x.js:335-1021 esm-layout
 var client = __toESM(require_client());
 var propertyProvider = __toESM(require_property_provider());
 var ENV_KEY = "AWS_ACCESS_KEY_ID";
@@ -50,4 +50,4 @@ var fromEnv = (init) => async () => {
     logger: init?.logger,
   });
 };
-export { ENV_KEY, ENV_SECRET, fromEnv };
+export { fromEnv, ENV_KEY, ENV_SECRET };

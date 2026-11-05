@@ -3,18 +3,18 @@
  *
  * 从 shell 历史中给出 ! 命令补全（缓存 60 秒）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/suggestions/shellHistoryCompletion.ts
- * pieces: chunk-18hwfzwa.js (4)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: affinity 1, fingerprint 3
  */
 import { suggestionCacheBySessionRoot } from "./suggestionCache.js";
 import { readProjectHistory, parsePastedRefs } from "../../history.js";
 import { logForDebugging } from "../debug.js";
 
-//@ chunk-18hwfzwa.js:607982-607996 affinity
+//@ chunk-czq1j3j2.js:628663-628677 affinity
 var SHELL_HISTORY_CACHE_TTL_MS = 60000;
-//@ chunk-18hwfzwa.js:607996-608512 fingerprint (2.1.88 match: getShellHistoryCommands, 0.582)
+//@ chunk-czq1j3j2.js:628677-629193 fingerprint (2.1.88 match: getShellHistoryCommands, 0.582)
 async function getShellHistoryCommands(session, historyPath) {
   let cache = suggestionCacheBySessionRoot.of(session);
   let now = Date.now();
@@ -41,7 +41,7 @@ async function getShellHistoryCommands(session, historyPath) {
   cache.shellHistoryLoadedAt = now;
   return commands;
 }
-//@ chunk-18hwfzwa.js:608512-608635 fingerprint (2.1.88 match: prependToShellHistoryCache, 0.708)
+//@ chunk-czq1j3j2.js:629193-629316 fingerprint (2.1.88 match: prependToShellHistoryCache, 0.708)
 function prependToShellHistoryCache(session, command) {
   let shellHistoryCommands = suggestionCacheBySessionRoot.of(session).shellHistoryCommands;
   if (!shellHistoryCommands) return;
@@ -49,7 +49,7 @@ function prependToShellHistoryCache(session, command) {
   if (idx !== -1) shellHistoryCommands.splice(idx, 1);
   shellHistoryCommands.unshift(command);
 }
-//@ chunk-18hwfzwa.js:608635-608844 fingerprint (2.1.88 match: getShellHistoryCompletion, 1)
+//@ chunk-czq1j3j2.js:629316-629525 fingerprint (2.1.88 match: getShellHistoryCompletion, 1)
 async function getShellHistoryCompletion(session, input, historyPath) {
   if (!input || input.length < 2) return null;
   if (!input.trim()) return null;

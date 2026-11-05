@@ -3,10 +3,10 @@
  *
  * Edit 工具（权限对话框/结果中）的 diff 展示：异步计算结构化 diff，超时显示警告，DiffFrame 外框被 20 处复用。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FileEditToolDiff.tsx
- * pieces: chunk-18hwfzwa.js (7), chunk-r2w21sc3.js (1)
- * attribution: fingerprint 6, layout 2
+ * pieces: chunk-cec8js9j.js (1), chunk-czq1j3j2.js (7), chunk-e5wzyn92.js (1)
+ * attribution: fingerprint 6, affinity 1, sole-consumer 2
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
@@ -27,16 +27,23 @@ import { logForDebugging } from "../utils/debug.js";
 import { logError } from "../utils/log.js";
 import { markBrokenSequences, stripUnsafeChars } from "../utils/permissions/approvalPayloadSerialization.js";
 
-//@ chunk-r2w21sc3.js:299-708 fingerprint (2.1.88 match: DiffFrame, 0.74)
-/**
- * diff 外框（虚线边框、subtle 色），被 Edit/Write/Notebook 等 20 处复用。
- */
+//@ chunk-cec8js9j.js:5886-5984 fingerprint (2.1.88 match: normalizeEdit, 1)
+function normalizeEdit(fileContent, edit) {
+  return (
+    !fileContent &&
+    edit.length === 1 &&
+    edit[0] !== undefined &&
+    edit[0].old_string === "" &&
+    edit[0].new_string === ""
+  );
+}
+//@ chunk-e5wzyn92.js:299-708 fingerprint (2.1.88 match: DiffFrame, 0.741)
 function DiffFrame(props) {
   let $ = useMemoCache(6);
   let { children, paddingX, marginTop, marginBottom } = props;
   let paddingX_2 = paddingX === undefined ? 1 : paddingX;
   const borderStyle = useIsScreenReaderEnabled() ? undefined : "dashed";
-  let box;
+  let frame;
   if (
     $[0] !== children ||
     $[1] !== marginBottom ||
@@ -44,7 +51,7 @@ function DiffFrame(props) {
     $[3] !== paddingX_2 ||
     $[4] !== borderStyle
   ) {
-    box = jsxProd_default(Box, {
+    frame = jsxProd_default(Box, {
       borderStyle,
       borderColor: "subtle",
       borderLeft: false,
@@ -61,11 +68,11 @@ function DiffFrame(props) {
     $[2] = marginTop;
     $[3] = paddingX_2;
     $[4] = borderStyle;
-    $[5] = box;
-  } else box = $[5];
-  return box;
+    $[5] = frame;
+  } else frame = $[5];
+  return frame;
 }
-//@ chunk-18hwfzwa.js:1364313-1364888 fingerprint (2.1.88 match: FileEditToolDiff, 0.468)
+//@ chunk-czq1j3j2.js:1387113-1387688 fingerprint (2.1.88 match: FileEditToolDiff, 0.468)
 function FileEditToolDiff(props) {
   let $ = useMemoCache(9);
   let t0;
@@ -112,7 +119,7 @@ function FileEditToolDiff(props) {
   } else t2 = $[8];
   return t2;
 }
-//@ chunk-18hwfzwa.js:1364888-1365381 fingerprint (2.1.88 match: DiffBody, 0.817)
+//@ chunk-czq1j3j2.js:1387688-1388181 fingerprint (2.1.88 match: DiffBody, 0.817)
 function DiffBody(props) {
   let $ = useMemoCache(6);
   let { promise, file_path } = props;
@@ -153,13 +160,13 @@ function DiffBody(props) {
   } else t1 = $[5];
   return t1;
 }
-//@ chunk-18hwfzwa.js:1365381-1366478 fingerprint (2.1.88 match: loadDiffData, 0.882)
+//@ chunk-czq1j3j2.js:1388181-1389278 fingerprint (2.1.88 match: loadDiffData, 0.882)
 async function loadDiffData(file_path, edits, fileContent, toolUseContext) {
   let valid = edits.filter((e) => e.old_string != null && e.new_string != null);
   let single = valid.length === 1 ? valid[0] : undefined;
   try {
     if (fileContent !== undefined) {
-      let edits = valid.map((edit) => normalizeEdit(fileContent, edit));
+      let edits = valid.map((edit) => normalizeEdit_2(fileContent, edit));
       return {
         patch: getPatchForDisplay({
           filePath: file_path,
@@ -181,7 +188,7 @@ async function loadDiffData(file_path, edits, fileContent, toolUseContext) {
         let file = await readCapped(handle);
         if (file === null || (single && findActualString(file, single.old_string) === null))
           return diffToolInputsOnly(file_path, valid);
-        normalizedEdits = valid.map((e) => normalizeEdit(file, e));
+        normalizedEdits = valid.map((e) => normalizeEdit_2(file, e));
         if (single && normalizedEdits[0].old_string !== single.old_string)
           ctx = await scanForContext(handle, normalizedEdits[0].old_string, DIFF_CONTEXT_LINES);
         if (ctx.content === "") {
@@ -221,7 +228,7 @@ async function loadDiffData(file_path, edits, fileContent, toolUseContext) {
     return diffToolInputsOnly(file_path, valid);
   }
 }
-//@ chunk-18hwfzwa.js:1366478-1366612 fingerprint (2.1.88 match: diffToolInputsOnly, 1)
+//@ chunk-czq1j3j2.js:1389278-1389412 fingerprint (2.1.88 match: diffToolInputsOnly, 1)
 function diffToolInputsOnly(filePath, edits) {
   return {
     patch: edits.flatMap((e) =>
@@ -235,7 +242,7 @@ function diffToolInputsOnly(filePath, edits) {
     fileContent: undefined,
   };
 }
-//@ chunk-18hwfzwa.js:1366612-1366769 layout
+//@ chunk-czq1j3j2.js:1389412-1389569 affinity
 function mapDiffDataLines(data) {
   return {
     patch: data.patch.map((hunk) => ({
@@ -246,12 +253,12 @@ function mapDiffDataLines(data) {
     fileContent: data.fileContent,
   };
 }
-//@ chunk-18hwfzwa.js:1366769-1366802 layout
+//@ chunk-czq1j3j2.js:1389569-1389602 sole-consumer
 function sanitizeDiffLine(firstLine) {
   return markBrokenSequences(stripUnsafeChars(firstLine));
 }
-//@ chunk-18hwfzwa.js:1366802-1366954 fingerprint (2.1.88 match: normalizeEdit, 1)
-function normalizeEdit(fileContent, edit) {
+//@ chunk-czq1j3j2.js:1389602-1389754 sole-consumer (2.1.88 match: normalizeEdit, 1)
+function normalizeEdit_2(fileContent, edit) {
   let actualOld = findActualString(fileContent, edit.old_string) || edit.old_string;
   let actualNew = preserveEscapeStyle(
     edit.old_string,
@@ -264,4 +271,4 @@ function normalizeEdit(fileContent, edit) {
     new_string: actualNew,
   };
 }
-export { DiffFrame, FileEditToolDiff };
+export { DiffFrame, normalizeEdit, FileEditToolDiff };

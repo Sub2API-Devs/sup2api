@@ -3,15 +3,15 @@
  *
  * WebFetch 预批准文档站列表与主机/路径前缀派生表
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/WebFetchTool/preapproved.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
 import { GITHUB_HOST } from "../../utils/git/githubUrl.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2165704-2167829 fingerprint (2.1.88 match: PREAPPROVED_HOSTS, 0.912)
+//@ chunk-5xgkngpb.js:2219141-2221266 fingerprint (2.1.88 match: PREAPPROVED_HOSTS, 0.912)
 /**
  * 预批准文档站列表（Claude/Anthropic 官方站、主流语言与框架文档等约 100 项），派生 HOSTNAME_ONLY / PATH_PREFIXES；oar 为需要额外路径限制的主机。
  */
@@ -20,7 +20,7 @@ var HOSTNAME_ONLY;
 var PATH_PREFIXES;
 var GITHUB_COM_ANTHROPICS;
 var PATH_RESTRICTED_HOSTS;
-deferInit("chunk-e6aww6q8.js:2165704", () => {
+deferInit("chunk-5xgkngpb.js:2219141", () => {
   PREAPPROVED_HOSTS = new Set([
     "platform.claude.com",
     "code.claude.com",

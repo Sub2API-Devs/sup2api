@@ -3,9 +3,9 @@
  *
  * validateDirectoryForWorkspace：附加目录校验（空路径、展开失败、不存在、已在工作区内等）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/add-dir/validation.ts
- * pieces: chunk-m4knadjm.js (2)
+ * pieces: chunk-4x0f46hf.js (2)
  * attribution: fingerprint 2
  */
 import { resolve, dirname } from "path";
@@ -24,7 +24,7 @@ import {
 import { sequential } from "../../utils/sequential.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-m4knadjm.js:578-1599 fingerprint (2.1.88 match: validateDirectoryForWorkspace, 0.585)
+//@ chunk-4x0f46hf.js:580-1603 fingerprint (2.1.88 match: validateDirectoryForWorkspace, 0.585)
 async function validateDirectoryForWorkspace(directoryPath, permissionContext) {
   if (!directoryPath)
     return {
@@ -102,7 +102,7 @@ async function validateDirectoryForWorkspace(directoryPath, permissionContext) {
     absolutePath,
   };
 }
-//@ chunk-m4knadjm.js:1599-3015 fingerprint (2.1.88 match: addDirHelpMessage, 0.67)
+//@ chunk-4x0f46hf.js:1603-3019 fingerprint (2.1.88 match: addDirHelpMessage, 0.67)
 function addDirHelpMessage(result) {
   switch (result.resultType) {
     case "emptyPath":

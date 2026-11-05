@@ -1,14 +1,14 @@
 /**
  * google-logging-utils/build/src/logging-utils.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: google-logging-utils@1.0.1..1.1.3
- * pieces: chunk-na3pph4p.js (1)
+ * pieces: chunk-e8d3a8an.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_colours } from "./colours.js";
 
-//@ chunk-na3pph4p.js:45073-49774 cjs-fingerprint
+//@ chunk-e8d3a8an.js:45073-49774 cjs-fingerprint
 var require_logging_utils = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||

@@ -1,0 +1,1564 @@
+{"file":"chunk-5xgkngpb.js","key":"@168509","name":"listUnreadableToolsUsed","source":"semantic","confidence":0.8,"note":"316 同名；过滤掉已使用过的工具名"}
+{"file":"chunk-5xgkngpb.js","key":"@168513","name":"toolsUsed","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@168554","name":"knownTools","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@168577","name":"message","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@168613","name":"toolName","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@168644","name":"readableName","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@168683","name":"expandToolAliases","source":"semantic","confidence":0.7,"note":"flatMap 把每个工具名展开为「名 + 别名」"}
+{"file":"chunk-5xgkngpb.js","key":"@168686","name":"toolNames","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@168709","name":"toolName","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@174823","name":"collectImageFileUuids","source":"semantic","confidence":0.8,"note":"返回图片 file_uuid 集合，供后续比较"}
+{"file":"chunk-5xgkngpb.js","key":"@174827","name":"messages","source":"semantic","confidence":0.85}
+{"file":"chunk-5xgkngpb.js","key":"@174834","name":"fileUuidsByPath","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@174852","name":"message","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@174867","name":"savedFile","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@175068","name":"message","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@175311","name":"fileUuid","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@286858","name":"MEDIA_REMOVED_PLACEHOLDER","source":"semantic","confidence":0.9,"note":"字面量 \"[media removed: request limit]\""}
+{"file":"chunk-5xgkngpb.js","key":"@286918","name":"isUnsentImageBlock","source":"semantic","confidence":0.85,"note":"source.data 以 UNSENT 前缀开头"}
+{"file":"chunk-5xgkngpb.js","key":"@286922","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@286979","name":"replaceUnsentMediaInToolResult","source":"semantic","confidence":0.8,"note":"把 tool_result 里未发送的媒体换成占位文本"}
+{"file":"chunk-5xgkngpb.js","key":"@287057","name":"didReplace","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@287087","name":"contentBlock","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@287171","name":"mediaBlock","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@287233","name":"innerBlock","source":"semantic","confidence":0.65}
+{"file":"chunk-5xgkngpb.js","key":"@303497","name":"isFileSnapshotMessage","source":"semantic","confidence":0.85,"note":"subtype === \"file_snapshot\""}
+{"file":"chunk-5xgkngpb.js","key":"@303500","name":"message","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@319537","name":"CITE_TAG_PATTERN","source":"semantic","confidence":0.85,"note":"正则匹配 <cite …> 与 </cite>（含 antml: 前缀）"}
+{"file":"chunk-5xgkngpb.js","key":"@319643","name":"stripCiteTags","source":"semantic","confidence":0.8,"note":"按配对栈删除 cite 标签，保留文本"}
+{"file":"chunk-5xgkngpb.js","key":"@319647","name":"messageWithText","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@319743","name":"output","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@319748","name":"cursor","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@319752","name":"openTagStack","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@319765","name":"match","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@319799","name":"isTagMatch","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@586489","name":"isSendNowAndMellowMinskyOnce","source":"semantic","confidence":0.7,"note":"isSendNowKeyEnabled 且 tengu_mellow_minsky 默认开"}
+{"file":"chunk-5xgkngpb.js","key":"@593903","name":"isConfidential","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@777961","name":"sessionStartHostRefusedSlot","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@778006","name":"hookContext","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@778008","name":"hookName","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@778085","name":"refusalReason","source":"semantic","confidence":0.8,"note":"写入调试日志的固定说明文本"}
+{"file":"chunk-5xgkngpb.js","key":"@933801","name":"HookCallbackFailedError","source":"semantic","confidence":0.8,"note":"错误消息 \"Hook callback … failed\""}
+{"file":"chunk-5xgkngpb.js","key":"@933827","name":"hookCallbackId","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@933829","name":"reason","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@933972","name":"notifyHookCallbackFailure","source":"semantic","confidence":0.8,"note":"以 system/informational 通知发出失败提示"}
+{"file":"chunk-5xgkngpb.js","key":"@934146","name":"error","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@934148","name":"onFailure","source":"semantic","confidence":0.8,"note":"取值与 onFailure 设置比较"}
+{"file":"chunk-5xgkngpb.js","key":"@974416","name":"isRemoteNonInteractiveNonCcsSession","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@974564","name":"featureValue","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@974649","name":"isAmberTrellisOff","source":"semantic","confidence":0.7,"note":"与 bLo 相反的判定"}
+{"file":"chunk-5xgkngpb.js","key":"@974732","name":"featureValue","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@974784","name":"isMergeMessage","source":"semantic","confidence":0.6,"note":"判定合并消息是否携带 tool_states"}
+{"file":"chunk-5xgkngpb.js","key":"@974790","name":"isLive","source":"semantic","confidence":0.65}
+{"file":"chunk-5xgkngpb.js","key":"@974868","name":"sessionRoot","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@974968","name":"flags","source":"semantic","confidence":0.65}
+{"file":"chunk-5xgkngpb.js","key":"@975159","name":"flags","source":"semantic","confidence":0.65}
+{"file":"chunk-5xgkngpb.js","key":"@975281","name":"sessionRootStatesSlot","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@975352","name":"sessionRoot","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@975354","name":"states","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@975361","name":"rootEntry","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@975373","name":"previousStatesById","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@975403","name":"prevState","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@975423","name":"nextChangedAt","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@975441","name":"state","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@975453","name":"stateId","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@975462","name":"previousChangedAt","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@975584","name":"sessionRoot","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@975696","name":"tools","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@975718","name":"tool","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@975742","name":"readerStatesFromHookMessage","source":"semantic","confidence":0.6,"note":"有 queries 且工具含 ReadWidgetContext 时取 reader 状态"}
+{"file":"chunk-5xgkngpb.js","key":"@975746","name":"readerState","source":"semantic","confidence":0.6}
+{"file":"chunk-5xgkngpb.js","key":"@975748","name":"hookMessage","source":"semantic","confidence":0.65}
+{"file":"chunk-5xgkngpb.js","key":"@1170926","name":"isUsableNodeType","source":"semantic","confidence":0.75,"note":"排除 PARSE_ABORT / ERROR"}
+{"file":"chunk-5xgkngpb.js","key":"@1170930","name":"nodeType","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@1170992","name":"canParseEscapedSpaceCommand","source":"semantic","confidence":0.8,"note":"命令含转义空白时重解析，返回是否可信"}
+{"file":"chunk-5xgkngpb.js","key":"@1170998","name":"parseContext","source":"semantic","confidence":0.6}
+{"file":"chunk-5xgkngpb.js","key":"@1171000","name":"nodeType","source":"semantic","confidence":0.65}
+{"file":"chunk-5xgkngpb.js","key":"@1171073","name":"parseResult","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1194479","name":"askForDangerousRmOnParseError","source":"semantic","confidence":0.8,"note":"解析结果为 ERROR 时要求危险 rm 审批"}
+{"file":"chunk-5xgkngpb.js","key":"@1194483","name":"parseResult","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1194485","name":"nodeType","source":"semantic","confidence":0.65}
+{"file":"chunk-5xgkngpb.js","key":"@1276413","name":"isClassifiableForAutoAllow","source":"semantic","confidence":0.7,"note":"逐项排除会抑制规则的工具"}
+{"file":"chunk-5xgkngpb.js","key":"@1276419","name":"toolInput","source":"semantic","confidence":0.6}
+{"file":"chunk-5xgkngpb.js","key":"@1439504","name":"SEARCH_INCOMPLETE_NOTE","source":"semantic","confidence":0.85,"note":"搜索结果可能不全的说明文本"}
+{"file":"chunk-5xgkngpb.js","key":"@1710902","name":"MAX_TOOL_SIGNATURE_LENGTH","source":"semantic","confidence":0.7,"note":"签名长度上限 300"}
+{"file":"chunk-5xgkngpb.js","key":"@1710919","name":"buildToolApiSchemaOrUndefined","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1710991","name":"formatToolInputSignature","source":"semantic","confidence":0.75,"note":"把工具的 inputSchema 压成 {字段: 类型} 文本"}
+{"file":"chunk-5xgkngpb.js","key":"@1710995","name":"tool","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1711013","name":"apiSchema","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1711093","name":"requiredFields","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@1711292","name":"fullSignature","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@1711361","name":"keptFields","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@1711366","name":"omittedRequiredCount","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@1711370","name":"lengthSoFar","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1711418","name":"left","source":"semantic","confidence":0.6}
+{"file":"chunk-5xgkngpb.js","key":"@1711421","name":"right","source":"semantic","confidence":0.6}
+{"file":"chunk-5xgkngpb.js","key":"@1711535","name":"truncatedSignature","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@1711690","name":"describeSchemaType","source":"semantic","confidence":0.8,"note":"把 JSON schema 类型渲染成文本，数组加 []"}
+{"file":"chunk-5xgkngpb.js","key":"@1711694","name":"schema","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1711967","name":"quoteJson","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@1711971","name":"value","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1712008","name":"isPlainObject","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@1712012","name":"value","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1712084","name":"name","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1712196","name":"BYTES_PER_TOKEN_ESTIMATE","source":"semantic","confidence":0.75,"note":"字节数除以 2.5 估算 token"}
+{"file":"chunk-5xgkngpb.js","key":"@1712219","name":"partitionToolsByRoom","source":"semantic","confidence":0.65,"note":"按 tengu_measured_shelf 比例与 apiLimit 取舍工具"}
+{"file":"chunk-5xgkngpb.js","key":"@1712225","name":"room","source":"semantic","confidence":0.65}
+{"file":"chunk-5xgkngpb.js","key":"@1712385","name":"toolName","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1712420","name":"deferredTool","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1712655","name":"result","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1712758","name":"index","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1712761","name":"toolName","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1712784","name":"cost","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1713025","name":"estimateToolTokens","source":"semantic","confidence":0.8,"note":"schema 与描述的字节数 / 2.5"}
+{"file":"chunk-5xgkngpb.js","key":"@1713031","name":"description","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@1813366","name":"getTelemetryOrganizationUuid","source":"semantic","confidence":0.75,"note":"组织 UUID 归一化并转小写"}
+{"file":"chunk-5xgkngpb.js","key":"@1827118","name":"hostScopedEmptyObject","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2128702","name":"stripModelDateSuffix","source":"semantic","confidence":0.8,"note":"去掉 -YYYYMMDD 后缀"}
+{"file":"chunk-5xgkngpb.js","key":"@2128706","name":"modelId","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2577483","name":"SESSION_SCOPED_SERVERS","source":"semantic","confidence":0.7,"note":"会话级 MCP 服务器的 id 与上游路径"}
+{"file":"chunk-5xgkngpb.js","key":"@2577650","name":"EXPECTED_CCR_MCP_PATHS","source":"semantic","confidence":0.75,"note":"服务器名 → 预期的 ccr mcp 路径"}
+{"file":"chunk-5xgkngpb.js","key":"@2577962","name":"MAX_MCP_URL_LENGTH","source":"semantic","confidence":0.75,"note":"2048 上限"}
+{"file":"chunk-5xgkngpb.js","key":"@2577971","name":"MCP_URL_PATTERN","source":"semantic","confidence":0.75,"note":"解析 mcp url 的主机部分"}
+{"file":"chunk-5xgkngpb.js","key":"@2578074","name":"UNKNOWN_PROVENANCE","source":"semantic","confidence":0.75,"note":"来源与 url 都未确定"}
+{"file":"chunk-5xgkngpb.js","key":"@2578121","name":"CONFIGURED_PROVENANCE","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2578234","name":"recordLaunchMcpUrl","source":"semantic","confidence":0.75,"note":"记录 CLI 自己启动的 mcp url"}
+{"file":"chunk-5xgkngpb.js","key":"@2578453","name":"getReportableMcpUrl","source":"semantic","confidence":0.75,"note":"只接受 https、非 localhost、带点域名、长度受限"}
+{"file":"chunk-5xgkngpb.js","key":"@2578457","name":"url","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2578464","name":"hostname","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2578682","name":"connectorProvenance","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2578685","name":"url","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2578692","name":"reportableUrl","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2578948","name":"segment","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2578998","name":"relayedConfiguredProvenance","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2579051","name":"serverProvenanceOf","source":"semantic","confidence":0.8,"note":"按 config.type 判定 serverProvenance"}
+{"file":"chunk-5xgkngpb.js","key":"@2579055","name":"server","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2579227","name":"storedServer","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2579726","name":"mcpUrlParam","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2579778","name":"originHeaders","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2579863","name":"scopedServer","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2579881","name":"sessionIdParts","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2579894","name":"upstreamUrl","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2580267","name":"hostname","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2580511","name":"configType","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2580608","name":"isUnverifiedMcpAnnotation","source":"semantic","confidence":0.8,"note":"verified===false 且 owner===\"mcp\""}
+{"file":"chunk-5xgkngpb.js","key":"@2580612","name":"annotation","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2580779","name":"toUnverifiedMcpAnnotation","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2580783","name":"provenance","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2580785","name":"coverage","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2580974","name":"annotationForServer","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2580978","name":"server","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2580980","name":"coverage","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2581108","name":"makeServerAnnotationResolver","source":"semantic","confidence":0.7,"note":"按服务器名缓存注解结果"}
+{"file":"chunk-5xgkngpb.js","key":"@2581112","name":"servers","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2581114","name":"allServers","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2581156","name":"serversByName","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2581190","name":"cache","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2581230","name":"server","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2581339","name":"UNVERIFIED_MCP_ANNOTATION","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2581377","name":"isCliOwnedOrAuthStub","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2581381","name":"server","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2581560","name":"toolName","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2581562","name":"servers","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2581564","name":"coverage","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2581646","name":"server","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2581699","name":"server","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2581734","name":"server","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2581804","name":"first","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2581837","name":"annotation","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582188","name":"beta","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582291","name":"withProperty","source":"semantic","confidence":0.75,"note":"不可变地设置单个属性"}
+{"file":"chunk-5xgkngpb.js","key":"@2582295","name":"object","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582297","name":"key","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582299","name":"value","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582385","name":"tryOrUndefined","source":"semantic","confidence":0.8,"note":"捕获异常记日志后返回 undefined"}
+{"file":"chunk-5xgkngpb.js","key":"@2582389","name":"fn","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582445","name":"withoutOwnershipMetadata","source":"semantic","confidence":0.75,"note":"深拷贝时剔除 ownership_metadata"}
+{"file":"chunk-5xgkngpb.js","key":"@2582471","name":"key","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582473","name":"value","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582523","name":"applyServerUrlOption","source":"semantic","confidence":0.7,"note":"serverUrls 为假时剥掉 server_url"}
+{"file":"chunk-5xgkngpb.js","key":"@2582527","name":"annotation","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582529","name":"options","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582609","name":"rest","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582632","name":"isSameAnnotation","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2582636","name":"existing","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582638","name":"next","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582762","name":"annotateTools","source":"semantic","confidence":0.75,"note":"给工具的 ownership_metadata 补 server_url"}
+{"file":"chunk-5xgkngpb.js","key":"@2582766","name":"tools","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582768","name":"options","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582770","name":"resolveToolAnnotation","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582777","name":"changed","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582791","name":"tool","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582855","name":"nextAnnotation","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2582966","name":"rest","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583076","name":"annotateToolsWithFallback","source":"semantic","confidence":0.75,"note":"失败时逐级降级，最后剥掉字段"}
+{"file":"chunk-5xgkngpb.js","key":"@2583080","name":"tools","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583082","name":"options","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583084","name":"resolveToolAnnotation","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583209","name":"stripToolAnnotations","source":"semantic","confidence":0.75,"note":"剥掉所有工具的 ownership_metadata"}
+{"file":"chunk-5xgkngpb.js","key":"@2583283","name":"annotateMessageContents","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2583287","name":"messages","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583289","name":"options","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583291","name":"resolveToolAnnotation","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583298","name":"changed","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583312","name":"message","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583379","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583388","name":"toolName","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583397","name":"nextAnnotation","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583475","name":"nextBlock","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583477","name":"index","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583555","name":"annotateMessageContentsWithFallback","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2583559","name":"messages","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583563","name":"resolveToolAnnotation","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583688","name":"isUrlWithheldAnnotation","source":"semantic","confidence":0.75,"note":"server_url 为「未记录」占位"}
+{"file":"chunk-5xgkngpb.js","key":"@2583692","name":"annotation","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583738","name":"countWithheldUrls","source":"semantic","confidence":0.75,"note":"统计被扣下 server_url 的工具与消息数"}
+{"file":"chunk-5xgkngpb.js","key":"@2583812","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583857","name":"tool","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583959","name":"count","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2583961","name":"index","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2584033","name":"stripUrlsFromAnnotations","source":"semantic","confidence":0.7,"note":"把 ownership_metadata 里的地址降级"}
+{"file":"chunk-5xgkngpb.js","key":"@2584037","name":"request","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2584128","name":"nextMetadata","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2584269","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2584309","name":"nextBlock","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2584311","name":"index","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2584422","name":"handleServerUrlRefused","source":"semantic","confidence":0.8,"note":"API 拒绝 server_url 后标记 beta 已拒并重试"}
+{"file":"chunk-5xgkngpb.js","key":"@2584428","name":"hasTools","source":"semantic","confidence":0.6}
+{"file":"chunk-5xgkngpb.js","key":"@2584430","name":"hasMessages","source":"semantic","confidence":0.6}
+{"file":"chunk-5xgkngpb.js","key":"@3110640","name":"CHAR_TAB","source":"semantic","confidence":0.85,"note":"ASCII 9"}
+{"file":"chunk-5xgkngpb.js","key":"@3110646","name":"CHAR_LF","source":"semantic","confidence":0.85,"note":"ASCII 10"}
+{"file":"chunk-5xgkngpb.js","key":"@3110652","name":"CHAR_SPACE","source":"semantic","confidence":0.85,"note":"ASCII 32"}
+{"file":"chunk-5xgkngpb.js","key":"@3110659","name":"CHAR_DQUOTE","source":"semantic","confidence":0.85,"note":"ASCII 34"}
+{"file":"chunk-5xgkngpb.js","key":"@3110665","name":"CHAR_HASH","source":"semantic","confidence":0.8,"note":"ASCII 35，注释起始"}
+{"file":"chunk-5xgkngpb.js","key":"@3110672","name":"CHAR_DOLLAR","source":"semantic","confidence":0.85,"note":"ASCII 36"}
+{"file":"chunk-5xgkngpb.js","key":"@3110679","name":"CHAR_AMP","source":"semantic","confidence":0.8,"note":"ASCII 38"}
+{"file":"chunk-5xgkngpb.js","key":"@3110686","name":"CHAR_SQUOTE","source":"semantic","confidence":0.85,"note":"ASCII 39"}
+{"file":"chunk-5xgkngpb.js","key":"@3110692","name":"CHAR_LPAREN","source":"semantic","confidence":0.85,"note":"ASCII 40"}
+{"file":"chunk-5xgkngpb.js","key":"@3110698","name":"CHAR_RPAREN","source":"semantic","confidence":0.85,"note":"ASCII 41"}
+{"file":"chunk-5xgkngpb.js","key":"@3110704","name":"CHAR_PLUS","source":"semantic","confidence":0.85,"note":"ASCII 43"}
+{"file":"chunk-5xgkngpb.js","key":"@3110711","name":"CHAR_MINUS","source":"semantic","confidence":0.85,"note":"ASCII 45"}
+{"file":"chunk-5xgkngpb.js","key":"@3110718","name":"CHAR_SEMI","source":"semantic","confidence":0.85,"note":"ASCII 59"}
+{"file":"chunk-5xgkngpb.js","key":"@3110725","name":"CHAR_LT","source":"semantic","confidence":0.85,"note":"ASCII 60"}
+{"file":"chunk-5xgkngpb.js","key":"@3110732","name":"CHAR_EQ","source":"semantic","confidence":0.85,"note":"ASCII 61"}
+{"file":"chunk-5xgkngpb.js","key":"@3110739","name":"CHAR_GT","source":"semantic","confidence":0.85,"note":"ASCII 62"}
+{"file":"chunk-5xgkngpb.js","key":"@3110746","name":"CHAR_LBRACKET","source":"semantic","confidence":0.85,"note":"ASCII 91"}
+{"file":"chunk-5xgkngpb.js","key":"@3110753","name":"CHAR_BACKSLASH","source":"semantic","confidence":0.85,"note":"ASCII 92"}
+{"file":"chunk-5xgkngpb.js","key":"@3110759","name":"CHAR_RBRACKET","source":"semantic","confidence":0.85,"note":"ASCII 93"}
+{"file":"chunk-5xgkngpb.js","key":"@3110766","name":"CHAR_BACKTICK","source":"semantic","confidence":0.85,"note":"ASCII 96"}
+{"file":"chunk-5xgkngpb.js","key":"@3110773","name":"CHAR_LBRACE","source":"semantic","confidence":0.85,"note":"ASCII 123"}
+{"file":"chunk-5xgkngpb.js","key":"@3110780","name":"CHAR_RBRACE","source":"semantic","confidence":0.85,"note":"ASCII 125"}
+{"file":"chunk-5xgkngpb.js","key":"@3110797","name":"createLexerState","source":"semantic","confidence":0.75,"note":"初始化各标记集合"}
+{"file":"chunk-5xgkngpb.js","key":"@3110907","name":"DOLLAR_SUBSTITUTION_RE","source":"semantic","confidence":0.7,"note":"$$ 后跟 $( etc."}
+{"file":"chunk-5xgkngpb.js","key":"@3110954","name":"isIdentChar","source":"semantic","confidence":0.9,"note":"ASCII 字母或下划线"}
+{"file":"chunk-5xgkngpb.js","key":"@3110957","name":"code","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3111026","name":"isDigit","source":"semantic","confidence":0.9}
+{"file":"chunk-5xgkngpb.js","key":"@3111029","name":"code","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3111073","name":"isBlank","source":"semantic","confidence":0.8,"note":"空格或制表符"}
+{"file":"chunk-5xgkngpb.js","key":"@3111077","name":"code","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3111108","name":"NAME_CHARS","source":"semantic","confidence":0.75,"note":"解析参数名时允许的标点"}
+{"file":"chunk-5xgkngpb.js","key":"@3111143","name":"SUBSTITUTION_NAME_CHARS","source":"semantic","confidence":0.7,"note":"$name / ${...} 里允许的字符"}
+{"file":"chunk-5xgkngpb.js","key":"@3111181","name":"OPERATOR_CHARS","source":"semantic","confidence":0.75,"note":"shell 运算符字符"}
+{"file":"chunk-5xgkngpb.js","key":"@3111365","name":"DOLLAR_SPECIAL_CHARS","source":"semantic","confidence":0.7,"note":"$ 后可接受的单字符特殊参数"}
+{"file":"chunk-5xgkngpb.js","key":"@3111400","name":"TOKEN_BOUNDARY_CHARS","source":"semantic","confidence":0.75,"note":"单词边界字符，含空白与 ;|&()<>"}
+{"file":"chunk-5xgkngpb.js","key":"@3111448","name":"scanCommandReading","source":"semantic","confidence":0.8,"note":"逐字节扫描命令，返回 quotes/comments/heredocs/substitutions；不合法返回 null"}
+{"file":"chunk-5xgkngpb.js","key":"@3111452","name":"code","source":"semantic","confidence":0.8,"note":"Buffer 字节"}
+{"file":"chunk-5xgkngpb.js","key":"@3111459","name":"reading","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3111467","name":"stack","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3111472","name":"substitutionDepth","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3111476","name":"quoteDepth","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3111480","name":"pendingHeredocs","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3111485","name":"inHeredoc","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3111490","name":"atTokenStart","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3111495","name":"prevKind","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3111505","name":"sawBrace","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3111510","name":"sawDollarInSingleQuotes","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3111515","name":"sawBraceOutsideQuotes","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3111521","name":"sawSubstitutionOutsideQuotes","source":"semantic","confidence":0.65}
+{"file":"chunk-5xgkngpb.js","key":"@3111527","name":"pos","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@3111677","name":"heredoc","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3111724","name":"lineStart","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3111730","name":"lineEnd","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3111819","name":"contentStart","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3111911","name":"expected","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3111914","name":"offset","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3112248","name":"ch","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@3112282","name":"nextCh","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@3112293","name":"inString","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3112618","name":"substitutionEnd","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3112793","name":"innerCursor","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3112837","name":"innerCh","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3113063","name":"afterDollar","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3113205","name":"quoteCursor","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3114463","name":"heredocCursor","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3114471","name":"stripsTabs","source":"semantic","confidence":0.7,"note":"<<- 形式"}
+{"file":"chunk-5xgkngpb.js","key":"@3114523","name":"wordStart","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3114529","name":"quoteCh","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3114538","name":"quoted","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3114582","name":"heredocWordStart","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3114980","name":"assignCursor","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3115226","name":"substitutionEnd","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3115480","name":"nameCursor","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3115691","name":"isNameChar","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3115915","name":"STRING_NODE_TYPES","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3115968","name":"SUBSTITUTION_NODE_TYPES","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@3116061","name":"collectReadingFromTree","source":"semantic","confidence":0.75,"note":"从 AST 收集引号/注释/heredoc，whole 标记不可信"}
+{"file":"chunk-5xgkngpb.js","key":"@3116065","name":"node","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3116067","name":"insideSubstitution","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3116069","name":"result","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3116814","name":"isSubstitution","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3116941","name":"classifyCommandReliability","source":"semantic","confidence":0.75,"note":"返回 4/5 表示不可靠等级，null 表示可信"}
+{"file":"chunk-5xgkngpb.js","key":"@3116945","name":"normalizedCommand","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3117051","name":"treeReading","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3117100","name":"tree","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3117160","name":"scanReading","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3117589","name":"DID_NOT_RUN_MARKER","source":"semantic","confidence":0.8,"note":"环境变量名前缀，用于识别 shell 太旧"}
+{"file":"chunk-5xgkngpb.js","key":"@3117718","name":"shellTooOldReason","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@3117722","name":"bashVersion","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3118253","name":"bashVersionGuard","source":"semantic","confidence":0.75,"note":"case 语句检查 BASH_VERSINFO 后 exit 126"}
+{"file":"chunk-5xgkngpb.js","key":"@3118257","name":"maxAllowedMinor","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3372449","name":"areAttachmentsDisabled","source":"semantic","confidence":0.85}
+{"file":"chunk-5xgkngpb.js","key":"@3373603","name":"getDisableReplyCheck","source":"semantic","confidence":0.8,"note":"首个定义了的策略层设置"}
+{"file":"chunk-5xgkngpb.js","key":"@3499838","name":"executeMcpToolHook","source":"semantic","confidence":0.85,"note":"等待 MCP 连接后调用 hook 指定的工具"}
+{"file":"chunk-5xgkngpb.js","key":"@3499842","name":"hook","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3499844","name":"hookEventName","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3499846","name":"interpolationContext","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3499848","name":"clients","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3499850","name":"signal","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3499852","name":"defaultTimeoutMs","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3499857","name":"memoryMode","source":"semantic","confidence":0.65}
+{"file":"chunk-5xgkngpb.js","key":"@3499859","name":"getClients","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3500070","name":"clientList","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3500099","name":"skipReason","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3500207","name":"timeoutMs","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3500236","name":"deadline","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3500262","name":"client","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3500328","name":"client","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3500576","name":"readyClient","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3500657","name":"waitedMs","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3500970","name":"notConnectedReason","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3501112","name":"refusal","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3501276","name":"input","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3501305","name":"remainingMs","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3501754","name":"refusal","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3501923","name":"isMemoryServer","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3501995","name":"refusal","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3502215","name":"result","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3502322","name":"body","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3502367","name":"contentBlock","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3502589","name":"errorText","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4854548","name":"MINUTE_MS","source":"semantic","confidence":0.85,"note":"60000"}
+{"file":"chunk-5xgkngpb.js","key":"@4854558","name":"RESTART_WINDOW_MS","source":"semantic","confidence":0.75,"note":"30 分钟窗口"}
+{"file":"chunk-5xgkngpb.js","key":"@4854569","name":"MAX_EARLIER_STOPS","source":"semantic","confidence":0.7,"note":"50"}
+{"file":"chunk-5xgkngpb.js","key":"@4854576","name":"MAX_REPORTED_EARLIER_STOPS","source":"semantic","confidence":0.7,"note":"上报值上限 3"}
+{"file":"chunk-5xgkngpb.js","key":"@4854591","name":"limitBand","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@4854602","name":"minutes","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4854717","name":"quietBand","source":"semantic","confidence":0.75,"note":"按输出最近变化时间分档"}
+{"file":"chunk-5xgkngpb.js","key":"@4854789","name":"quietMs","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4854863","name":"recordBackgroundLimitRestart","source":"semantic","confidence":0.7,"note":"上报重复触发限额重启的遥测"}
+{"file":"chunk-5xgkngpb.js","key":"@4854867","name":"toolCall","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4854873","name":"now","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4855011","name":"previousStop","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4855022","name":"sinceMs","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4855554","name":"readTaskOutput","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@4855569","name":"stat","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4855665","name":"recordLimitStop","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@4855669","name":"stopKey","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4855671","name":"stopInfo","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4855684","name":"workKind","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4855701","name":"limitBucket","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4855718","name":"quietBucket","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4856204","name":"HEAVY_MINUTE_MS","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@4856214","name":"HEAVY_CPU_THRESHOLD_MS","source":"semantic","confidence":0.8,"note":"1e6，判为重型命令的用量"}
+{"file":"chunk-5xgkngpb.js","key":"@4856222","name":"WORK_COMMAND_CPU_MS","source":"semantic","confidence":0.75,"note":"1e4"}
+{"file":"chunk-5xgkngpb.js","key":"@4856230","name":"MAX_WATCH_MS","source":"semantic","confidence":0.75,"note":"180 分钟"}
+{"file":"chunk-5xgkngpb.js","key":"@4856242","name":"MAX_WORK_COMMANDS","source":"semantic","confidence":0.7,"note":"50"}
+{"file":"chunk-5xgkngpb.js","key":"@4856249","name":"MAX_REPORTED_STOPS","source":"semantic","confidence":0.7,"note":"上报上限 3"}
+{"file":"chunk-5xgkngpb.js","key":"@4856255","name":"KIND_GROUPS","source":"semantic","confidence":0.75,"note":"命令类别归并表"}
+{"file":"chunk-5xgkngpb.js","key":"@4856462","name":"OTHER_KINDS","source":"semantic","confidence":0.7,"note":"不归入 programs 的杂项类别"}
+{"file":"chunk-5xgkngpb.js","key":"@4856670","name":"classifyKinds","source":"semantic","confidence":0.75,"note":"把类别列表归并成上报用的组名"}
+{"file":"chunk-5xgkngpb.js","key":"@4856681","name":"kindsList","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4856720","name":"groupKinds","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4856733","name":"kind","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4856768","name":"kind","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4856841","name":"firstWorkStartBand","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4856845","name":"stop","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4856896","name":"minutesAfterStop","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4857022","name":"closeHeavyStop","source":"semantic","confidence":0.75,"note":"清除定时器并上报 after_heavy_stop 遥测"}
+{"file":"chunk-5xgkngpb.js","key":"@4857026","name":"stops","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4857028","name":"stop","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4857030","name":"closedBy","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4857032","name":"stillRunningCpuMs","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4858036","name":"logStopError","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4858116","name":"sumRunningCpuMs","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4858120","name":"stop","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4858122","name":"tasks","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4858133","name":"totalCpuMs","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4858145","name":"task","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4858399","name":"onWatchTimeUp","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4858403","name":"stops","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4858405","name":"stop","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4858407","name":"tasks","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4858468","name":"startHeavyStopWatch","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4858474","name":"usageInfo","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4858476","name":"tasks","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4858574","name":"previousStop","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4858585","name":"isAfterPrevious","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4858705","name":"stop","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4859060","name":"timeUpAt","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4859261","name":"trackWorkAfterStop","source":"semantic","confidence":0.75,"note":"累加停止后各组的 CPU 时间"}
+{"file":"chunk-5xgkngpb.js","key":"@4859267","name":"usageInfo","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4859353","name":"startedAt","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4859368","name":"stop","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4859432","name":"cpuMs","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4889158","name":"prepareNamedRemoval","source":"semantic","confidence":0.75,"note":"Bash rm 后记录被删的已同步文件"}
+{"file":"chunk-5xgkngpb.js","key":"@4889162","name":"store","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4889164","name":"collectPaths","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4889235","name":"paths","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4889247","name":"candidates","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4889829","name":"MAX_PROCS_PER_CHECK","source":"semantic","confidence":0.7,"note":"10"}
+{"file":"chunk-5xgkngpb.js","key":"@4889836","name":"LEFT_RUNNING_TIMEOUT_MS","source":"semantic","confidence":0.7,"note":"30000"}
+{"file":"chunk-5xgkngpb.js","key":"@4889846","name":"LEFT_RUNNING_POLL_MS","source":"semantic","confidence":0.7,"note":"5000"}
+{"file":"chunk-5xgkngpb.js","key":"@4889855","name":"MAX_TEXT_CHARS","source":"semantic","confidence":0.65,"note":"1e4"}
+{"file":"chunk-5xgkngpb.js","key":"@4889863","name":"MAX_CGROUP_PROCS","source":"semantic","confidence":0.7,"note":"512"}
+{"file":"chunk-5xgkngpb.js","key":"@4889871","name":"MAX_FAMILIES","source":"semantic","confidence":0.65,"note":"32"}
+{"file":"chunk-5xgkngpb.js","key":"@4889878","name":"MAX_CALLS","source":"semantic","confidence":0.65,"note":"200"}
+{"file":"chunk-5xgkngpb.js","key":"@4889886","name":"MAX_ORIGINS","source":"semantic","confidence":0.6,"note":"64"}
+{"file":"chunk-5xgkngpb.js","key":"@4889893","name":"MAX_REPORTED","source":"semantic","confidence":0.6,"note":"32"}
+{"file":"chunk-5xgkngpb.js","key":"@4889900","name":"MAX_COMMAND_CHARS","source":"semantic","confidence":0.65,"note":"1e4"}
+{"file":"chunk-5xgkngpb.js","key":"@4889908","name":"MAX_LINE_BYTES","source":"semantic","confidence":0.65,"note":"16384"}
+{"file":"chunk-5xgkngpb.js","key":"@4889918","name":"MAX_PENDING","source":"semantic","confidence":0.6,"note":"32"}
+{"file":"chunk-5xgkngpb.js","key":"@4889925","name":"SMAPS_RSS_PATTERN","source":"semantic","confidence":0.75,"note":"从 /proc pid smaps 里取 0A 行与 RSS"}
+{"file":"chunk-5xgkngpb.js","key":"@4890002","name":"KIND_LABELS","source":"semantic","confidence":0.75,"note":"命令类别 → 上报文案"}
+{"file":"chunk-5xgkngpb.js","key":"@4890595","name":"BROWSER_PROCESS_NAMES","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@4890794","name":"ParallelLanternSchema","source":"semantic","confidence":0.75,"note":"tengu_parallel_lantern 的设置 schema"}
+{"file":"chunk-5xgkngpb.js","key":"@4891122","name":"LeftRunningTracker","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4891143","name":"leftRunningByHost","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4891166","name":"CGROUP_SOURCES","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4891298","name":"procs","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4891505","name":"pid","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4891617","name":"reportGaveUp","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4891620","name":"tracker","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4891622","name":"reason","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4891789","name":"resetTracker","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4891793","name":"tracker","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4891883","name":"disableTracker","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4891887","name":"tracker","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4891965","name":"tracker","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4891986","name":"parsed","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4892110","name":"isUntouched","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4892114","name":"call","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4892116","name":"thresholds","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4892118","name":"now","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4892211","name":"splitCommandWords","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4892215","name":"command","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4892222","name":"words","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4892270","name":"word","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4892458","name":"classifyProgram","source":"semantic","confidence":0.8,"note":"识别浏览器与 ffmpeg"}
+{"file":"chunk-5xgkngpb.js","key":"@4892462","name":"programName","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4892556","name":"describeCommand","source":"semantic","confidence":0.7,"note":"取命令类别与输出重定向目标"}
+{"file":"chunk-5xgkngpb.js","key":"@4892567","name":"parts","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4892628","name":"kind","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4892785","name":"findOrigin","source":"semantic","confidence":0.75,"note":"沿父进程链找调用来源"}
+{"file":"chunk-5xgkngpb.js","key":"@4892789","name":"pid","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4892791","name":"stats","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4892802","name":"current","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4892806","name":"stat","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4892849","name":"knownOrigin","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4892910","name":"parentStat","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4893058","name":"diffTicks","source":"semantic","confidence":0.7,"note":"按 tick 差值算增量，继续已欠的 tick"}
+{"file":"chunk-5xgkngpb.js","key":"@4893064","name":"nextMembers","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4893073","name":"ownDelta","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4893077","name":"totalDelta","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4893089","name":"pid","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4893091","name":"entry","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4893103","name":"previous","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4893114","name":"sameProcess","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4893263","name":"pid","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4893265","name":"entry","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4893362","name":"parentEntry","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4893549","name":"reportLeftRunning","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4893553","name":"tracker","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4893555","name":"family","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4893557","name":"thresholds","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4893559","name":"now","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4893561","name":"at","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4893681","name":"ageMs","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4893695","name":"spanMs","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4894877","name":"pollLeftRunning","source":"semantic","confidence":0.8,"note":"轮询 cgroup 成员，统计仍运行的进程族"}
+{"file":"chunk-5xgkngpb.js","key":"@4894894","name":"thresholds","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4894977","name":"readAt","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4895002","name":"pids","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4895155","name":"statsByPid","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4895173","name":"pid","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4895191","name":"left","source":"semantic","confidence":0.6}
+{"file":"chunk-5xgkngpb.js","key":"@4895194","name":"right","source":"semantic","confidence":0.6}
+{"file":"chunk-5xgkngpb.js","key":"@4895456","name":"adopters","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4895495","name":"depth","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4895523","name":"ppid","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4895663","name":"now","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4895688","name":"originsByPid","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4895699","name":"membersByOrigin","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4895718","name":"pid","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4895721","name":"entry","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4895734","name":"origin","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4895834","name":"originMembers","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4895949","name":"call","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4895977","name":"socketInodes","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4895980","name":"socketsReadable","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4895986","name":"socketBudget","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4895993","name":"parseBudget","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4896000","name":"grownByFamily","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4896019","name":"origin","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4896022","name":"members","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4896093","name":"family","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4896115","name":"isNewFamily","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4896210","name":"ownedCall","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4896229","name":"call","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4896349","name":"parseStart","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4897131","name":"tickDelta","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4897166","name":"cpuMs","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4897184","name":"spanMs","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4897691","name":"socketTables","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4897705","name":"tableName","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4897810","name":"table","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4897847","name":"table","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4897880","name":"socketMatch","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4897978","name":"pid","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4898014","name":"links","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4898188","name":"link","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4898202","name":"port","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4899349","name":"schedulePoll","source":"semantic","confidence":0.75,"note":"串行化下一次轮询，超时后放弃"}
+{"file":"chunk-5xgkngpb.js","key":"@4899353","name":"watch","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4899355","name":"at","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4899478","name":"clearTimer","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4899713","name":"onCommand","source":"semantic","confidence":0.7,"note":"命令启动或结束后刷新 touch 与计数"}
+{"file":"chunk-5xgkngpb.js","key":"@4899799","name":"thresholds","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4899833","name":"now","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4899858","name":"words","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4899867","name":"isWaitCommand","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4899908","name":"origin","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4899910","name":"family","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4900108","name":"onSpawn","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4900112","name":"call","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4900414","name":"record","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4900547","name":"record","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4900804","name":"setIdle","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4900808","name":"watch","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4900810","name":"state","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4900817","name":"isIdle","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4900969","name":"createWatch","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4901071","name":"watch","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4901354","name":"state","source":"semantic","confidence":0.7}
+{"file":"chunk-5yfs8sfq.js","key":"@379","name":"getCode","source":"semantic","confidence":0.8,"note":"取非空 code 字符串"}
+{"file":"chunk-5yfs8sfq.js","key":"@383","name":"value","source":"semantic","confidence":0.75}
+{"file":"chunk-5ythzcas.js","key":"@38003","name":"deletedImageNote","source":"semantic","confidence":0.85,"note":"图片被删除的说明文本，按数量单复数"}
+{"file":"chunk-5ythzcas.js","key":"@38007","name":"count","source":"semantic","confidence":0.75}
+{"file":"chunk-5ythzcas.js","key":"@38951","name":"HIDDEN_IMAGE_MARK","source":"semantic","confidence":0.85,"note":"图片被隐藏处的占位文本"}
+{"file":"chunk-5ythzcas.js","key":"@39036","name":"hiddenImageNote","source":"semantic","confidence":0.85}
+{"file":"chunk-5ythzcas.js","key":"@39040","name":"count","source":"semantic","confidence":0.75}
+{"file":"chunk-5ythzcas.js","key":"@40226","name":"REMOVED_TOOL_RESULT_MARK","source":"semantic","confidence":0.8}
+{"file":"chunk-64pvkb50.js","key":"@195","name":"STOP_REASONS","source":"semantic","confidence":0.85,"note":"workflow 停止原因文案"}
+{"file":"chunk-64pvkb50.js","key":"@369","name":"stopReasons","source":"semantic","confidence":0.8}
+{"file":"chunk-64pvkb50.js","key":"@408","name":"isStopReason","source":"semantic","confidence":0.8}
+{"file":"chunk-68hdkynn.js","key":"@305","name":"INNER_TOOL_ERRORS_HEADER","source":"semantic","confidence":0.85}
+{"file":"chunk-68hdkynn.js","key":"@359","name":"hintForError","source":"semantic","confidence":0.8,"note":"按错误文本返回提示"}
+{"file":"chunk-68hdkynn.js","key":"@363","name":"errorText","source":"semantic","confidence":0.75}
+{"file":"chunk-68hdkynn.js","key":"@735","name":"method","source":"semantic","confidence":0.7}
+{"file":"chunk-68hdkynn.js","key":"@737","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-68hdkynn.js","key":"@1262","name":"turnLimitNotice","source":"semantic","confidence":0.8,"note":"turn 数超限的说明"}
+{"file":"chunk-68hdkynn.js","key":"@1266","name":"turnLimit","source":"semantic","confidence":0.75}
+{"file":"chunk-68hdkynn.js","key":"@1268","name":"count","source":"semantic","confidence":0.75}
+{"file":"chunk-68hdkynn.js","key":"@1270","name":"durationText","source":"semantic","confidence":0.7}
+{"file":"chunk-68hdkynn.js","key":"@1751","name":"describeStopSummary","source":"semantic","confidence":0.8,"note":"汇总已完成的工具调用与停止原因"}
+{"file":"chunk-68hdkynn.js","key":"@1755","name":"events","source":"semantic","confidence":0.75}
+{"file":"chunk-68hdkynn.js","key":"@1757","name":"wasStopped","source":"semantic","confidence":0.75}
+{"file":"chunk-68hdkynn.js","key":"@1776","name":"completedByTool","source":"semantic","confidence":0.75}
+{"file":"chunk-68hdkynn.js","key":"@1794","name":"event","source":"semantic","confidence":0.7}
+{"file":"chunk-68hdkynn.js","key":"@1872","name":"cause","source":"semantic","confidence":0.7}
+{"file":"chunk-68hdkynn.js","key":"@2099","name":"toolName","source":"semantic","confidence":0.7}
+{"file":"chunk-68hdkynn.js","key":"@2101","name":"count","source":"semantic","confidence":0.7}
+{"file":"chunk-6ezjwmcr.js","key":"@480","name":"DAY_MS","source":"semantic","confidence":0.85,"note":"86400000"}
+{"file":"chunk-6ezjwmcr.js","key":"@491","name":"EXPIRY_MARGIN_DAYS","source":"semantic","confidence":0.75,"note":"提前 3 天"}
+{"file":"chunk-6ezjwmcr.js","key":"@495","name":"WARN_DAYS","source":"semantic","confidence":0.75,"note":"7+3 天内提醒"}
+{"file":"chunk-6ezjwmcr.js","key":"@510","name":"credentialExpiresAtField","source":"semantic","confidence":0.75}
+{"file":"chunk-6ezjwmcr.js","key":"@524","name":"expiresAt","source":"semantic","confidence":0.7}
+{"file":"chunk-6ezjwmcr.js","key":"@625","name":"formatExpiryWarning","source":"semantic","confidence":0.8}
+{"file":"chunk-6ezjwmcr.js","key":"@629","name":"now","source":"semantic","confidence":0.7}
+{"file":"chunk-6ezjwmcr.js","key":"@651","name":"expiresAt","source":"semantic","confidence":0.7}
+{"file":"chunk-6ezjwmcr.js","key":"@942","name":"warnIfSignInExpiring","source":"semantic","confidence":0.8,"note":"向 stderr 打印登录即将到期"}
+{"file":"chunk-6ezjwmcr.js","key":"@946","name":"now","source":"semantic","confidence":0.7}
+{"file":"chunk-6ezjwmcr.js","key":"@968","name":"expiresAt","source":"semantic","confidence":0.7}
+{"file":"chunk-6ezjwmcr.js","key":"@999","name":"remainingMs","source":"semantic","confidence":0.7}
+{"file":"chunk-6ezjwmcr.js","key":"@1693","name":"expiryBands","source":"semantic","confidence":0.75,"note":"算出最早/最晚到期日与天数"}
+{"file":"chunk-6ezjwmcr.js","key":"@1695","name":"expiresAt","source":"semantic","confidence":0.7}
+{"file":"chunk-6ezjwmcr.js","key":"@1697","name":"now","source":"semantic","confidence":0.7}
+{"file":"chunk-6ezjwmcr.js","key":"@1704","name":"earliestMs","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@7683","name":"checkNotPublicWhen","source":"semantic","confidence":0.75,"note":"校验 anthropic/notPublicWhen 元数据"}
+{"file":"chunk-6fpa18d8.js","key":"@7687","name":"args","source":"semantic","confidence":0.75}
+{"file":"chunk-6fpa18d8.js","key":"@7689","name":"fallback","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@7696","name":"mark","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@7756","name":"entries","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@7784","name":"byFoldedName","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@7802","name":"name","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@7865","name":"name","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@7867","name":"audience","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@7907","name":"entry","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@8051","name":"name","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@8053","name":"audience","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@8142","name":"splitArtifactNames","source":"semantic","confidence":0.75}
+{"file":"chunk-6fpa18d8.js","key":"@8145","name":"list","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@8195","name":"name","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@8261","name":"needsProjectLink","source":"semantic","confidence":0.7,"note":"判断路径是否落在链接之外"}
+{"file":"chunk-6fpa18d8.js","key":"@8263","name":"args","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@8329","name":"path","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@8433","name":"withSep","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@8515","name":"link","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@8576","name":"getToolsMachineDir","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@8668","name":"STAGE_ROOTS","source":"semantic","confidence":0.7,"note":"不算项目的暂存根目录"}
+{"file":"chunk-6fpa18d8.js","key":"@8710","name":"collectPathsOutsideProject","source":"semantic","confidence":0.75,"note":"收集不在机器目录下的路径参数"}
+{"file":"chunk-6fpa18d8.js","key":"@8712","name":"args","source":"semantic","confidence":0.75}
+{"file":"chunk-6fpa18d8.js","key":"@8721","name":"machineDir","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@8760","name":"value","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@8769","name":"path","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@8913","name":"stageRoot","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@8958","name":"isStrictHumanTurn","source":"semantic","confidence":0.8,"note":"取最后一个真人轮次再判断"}
+{"file":"chunk-6fpa18d8.js","key":"@8989","name":"isTypedByPerson","source":"semantic","confidence":0.8}
+{"file":"chunk-6fpa18d8.js","key":"@8991","name":"message","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@9082","name":"holdsOthersWriting","source":"semantic","confidence":0.8,"note":"通知类工具或会写他人文本的 artifact 工具"}
+{"file":"chunk-6fpa18d8.js","key":"@9091","name":"mcpInfo","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@9166","name":"FORK_TOOLS","source":"semantic","confidence":0.8,"note":"Agent/Task/SendMessage"}
+{"file":"chunk-6fpa18d8.js","key":"@9197","name":"messageHoldsOthersWriting","source":"semantic","confidence":0.8}
+{"file":"chunk-6fpa18d8.js","key":"@9199","name":"message","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@9254","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@9387","name":"othersTextState","source":"semantic","confidence":0.75,"note":"artifact 工具的他人文本状态，非 artifact 为 null"}
+{"file":"chunk-6fpa18d8.js","key":"@9396","name":"mcpInfo","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@9464","name":"messageUsesOthersTextTool","source":"semantic","confidence":0.8}
+{"file":"chunk-6fpa18d8.js","key":"@9466","name":"message","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@9522","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@9574","name":"isAuthoredByOthersResult","source":"semantic","confidence":0.75,"note":"结果是纯文本且带他人撰写标记"}
+{"file":"chunk-6fpa18d8.js","key":"@9583","name":"blocks","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@9662","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@9693","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@9762","name":"isOthersTextTold","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@9764","name":"messages","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@9773","name":"reportedIds","source":"semantic","confidence":0.75}
+{"file":"chunk-6fpa18d8.js","key":"@9794","name":"message","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@9956","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@10029","name":"message","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@10079","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@10088","name":"state","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@10212","name":"PROMPT_HOOK_EVENTS","source":"semantic","confidence":0.8}
+{"file":"chunk-6fpa18d8.js","key":"@10292","name":"message","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@10707","name":"hasAnyHooks","source":"semantic","confidence":0.8,"note":"配置、会话、插件任一处有 hook 则为真"}
+{"file":"chunk-6fpa18d8.js","key":"@10739","name":"hasAny","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@10742","name":"byEvent","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@10769","name":"hooks","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@10919","name":"hooks","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@10931","name":"hook","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@10987","name":"event","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@11052","name":"isForkOrSkillMessage","source":"semantic","confidence":0.75}
+{"file":"chunk-6fpa18d8.js","key":"@11055","name":"message","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@11117","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@11164","name":"messageUsesTool","source":"semantic","confidence":0.75}
+{"file":"chunk-6fpa18d8.js","key":"@11167","name":"message","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@11225","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@11352","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@11451","name":"isCleanHumanTurn","source":"semantic","confidence":0.75}
+{"file":"chunk-6fpa18d8.js","key":"@11453","name":"previous","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@11525","name":"classifyJoin","source":"semantic","confidence":0.8,"note":"判定这次调用是否可并入已有轮次及各原因码"}
+{"file":"chunk-6fpa18d8.js","key":"@11527","name":"context","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@11615","name":"humanTurn","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@11624","name":"humanTurnIndex","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@11712","name":"index","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@11757","name":"entry","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@11854","name":"entry","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@11856","name":"index","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@11918","name":"entry","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@11920","name":"index","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@11990","name":"entry","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@12095","name":"entry","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@12097","name":"index","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@12171","name":"classifyArtifactCall","source":"semantic","confidence":0.8,"note":"返回 respelled/audience/contract/opener/file 等原因码"}
+{"file":"chunk-6fpa18d8.js","key":"@12174","name":"args","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@12192","name":"context","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@12194","name":"useFallback","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@12323","name":"reason","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@12467","name":"joinReason","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@12528","name":"value","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@12608","name":"isReplScriptInner","source":"semantic","confidence":0.8}
+{"file":"chunk-6fpa18d8.js","key":"@12611","name":"route","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@12653","name":"isClassifierRouteEnabled","source":"semantic","confidence":0.75}
+{"file":"chunk-6fpa18d8.js","key":"@12711","name":"hasAlwaysAllowRule","source":"semantic","confidence":0.8}
+{"file":"chunk-6fpa18d8.js","key":"@12770","name":"fallbackAskDecision","source":"semantic","confidence":0.75,"note":"记 over_ask 后直接走 ask 决策"}
+{"file":"chunk-6fpa18d8.js","key":"@12781","name":"reason","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@12840","name":"runOwnCheck","source":"semantic","confidence":0.75}
+{"file":"chunk-6fpa18d8.js","key":"@12843","name":"card","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@12849","name":"input","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@12851","name":"context","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@12859","name":"hasRule","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@12873","name":"decision","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@12939","name":"passthroughRefusal","source":"semantic","confidence":0.75,"note":"判断 file 卡是否保留 passthrough，返回原因码"}
+{"file":"chunk-6fpa18d8.js","key":"@12953","name":"decision","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@13311","name":"decideFileCard","source":"semantic","confidence":0.8}
+{"file":"chunk-6fpa18d8.js","key":"@13314","name":"card","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@13316","name":"decision","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@13318","name":"hasRule","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@13324","name":"input","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@13326","name":"context","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@13459","name":"agentId","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@13499","name":"expiredFor","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@13630","name":"autoAllow","source":"semantic","confidence":0.75}
+{"file":"chunk-6fpa18d8.js","key":"@13778","name":"rest","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@13856","name":"reason","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@14176","name":"reason","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@14305","name":"agentKey","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@14342","name":"makesNewArtifact","source":"semantic","confidence":0.75}
+{"file":"chunk-6fpa18d8.js","key":"@14356","name":"input","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@14404","name":"deciderUuid","source":"semantic","confidence":0.75}
+{"file":"chunk-6fpa18d8.js","key":"@14477","name":"describeOutsideFolder","source":"semantic","confidence":0.8,"note":"拼「可能在 Claude 工作目录之外」提示"}
+{"file":"chunk-6fpa18d8.js","key":"@14488","name":"input","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@14495","name":"stagePrefix","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@14506","name":"paths","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@14523","name":"outsidePath","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@14533","name":"path","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@14598","name":"machineDir","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@14604","name":"extraCount","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@14617","name":"extraText","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@14795","name":"prefixDescription","source":"semantic","confidence":0.75}
+{"file":"chunk-6fpa18d8.js","key":"@14797","name":"prefix","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@14799","name":"prepared","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@14806","name":"result","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@14888","name":"buildAskDecision","source":"semantic","confidence":0.8}
+{"file":"chunk-6fpa18d8.js","key":"@14890","name":"card","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@14892","name":"reason","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@14894","name":"input","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@15081","name":"part","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@15291","name":"unaskedTurnDecision","source":"semantic","confidence":0.75}
+{"file":"chunk-6fpa18d8.js","key":"@15294","name":"permissionContext","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@15296","name":"tool","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@15302","name":"input","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@15304","name":"context","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@15363","name":"reason","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@15365","name":"notice","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@15785","name":"installFileCardChecks","source":"semantic","confidence":0.8,"note":"替换工具上的 check 与 call 等钩子"}
+{"file":"chunk-6fpa18d8.js","key":"@15788","name":"tool","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@15790","name":"meta","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@15792","name":"client","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@15799","name":"mark","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@15844","name":"check","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@15847","name":"input","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@15849","name":"context","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@15863","name":"card","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@16079","name":"input","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@16081","name":"context","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@16090","name":"decision","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@16269","name":"input","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@16271","name":"context","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@16273","name":"options","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@16282","name":"prepared","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@16326","name":"prefix","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@16427","name":"part","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@16565","name":"again","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@16593","name":"originalCall","source":"semantic","confidence":0.75}
+{"file":"chunk-6fpa18d8.js","key":"@16615","name":"input","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@16617","name":"context","source":"semantic","confidence":0.7}
+{"file":"chunk-6fpa18d8.js","key":"@16622","name":"rest","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@1196","name":"UPLOADS_IN_PLACE_DIR","source":"semantic","confidence":0.85,"note":"path \"/.uploads-in-place\""}
+{"file":"chunk-6jvva4a7.js","key":"@1220","name":"UPLOAD_RECORD_PATH_PATTERN","source":"semantic","confidence":0.85,"note":"md5/uuid/sha256 三段路径"}
+{"file":"chunk-6jvva4a7.js","key":"@1296","name":"MAX_RECORDS","source":"semantic","confidence":0.7,"note":"500 条上限"}
+{"file":"chunk-6jvva4a7.js","key":"@1303","name":"MAX_REMOVABLE_BYTES","source":"semantic","confidence":0.7,"note":"30 MiB"}
+{"file":"chunk-6jvva4a7.js","key":"@1315","name":"PASS_TIMEOUT_MS","source":"semantic","confidence":0.75,"note":"1e4"}
+{"file":"chunk-6jvva4a7.js","key":"@1337","name":"runStagedPassWithDeadline","source":"semantic","confidence":0.8}
+{"file":"chunk-6jvva4a7.js","key":"@1339","name":"signal","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@1346","name":"timeoutSignal","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@1570","name":"removeStagedDuplicates","source":"semantic","confidence":0.8,"note":"删掉与 store 记录同内容、且 store 里已不在的暂存文件"}
+{"file":"chunk-6jvva4a7.js","key":"@1573","name":"signal","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@1575","name":"changedUuids","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@1582","name":"report","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@1670","name":"ownedDirs","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@1683","name":"root","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@1788","name":"dirNames","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@1837","name":"dirent","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@1863","name":"dirent","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@1876","name":"files","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@1889","name":"dirName","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@2005","name":"dirent","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@2161","name":"openFilestoreReader","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@2182","name":"hashStandingFile","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@2202","name":"sameFileUntouched","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@2287","name":"opened","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@2369","name":"listing","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@2561","name":"md5","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@2563","name":"uuid","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@2565","name":"digest","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@2642","name":"noFollowSupport","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@2660","name":"file","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@2720","name":"record","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@2803","name":"filePath","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@2824","name":"stats","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@2826","name":"bigStats","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@3009","name":"hashed","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@3086","name":"record","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@3147","name":"inStore","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@3342","name":"support","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@3422","name":"bigStats","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@3655","name":"ownedDir","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@3691","name":"addFailure","source":"semantic","confidence":0.8}
+{"file":"chunk-6jvva4a7.js","key":"@3693","name":"report","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@3733","name":"SAVED_UPLOADS_FILE","source":"semantic","confidence":0.85,"note":"\".saved-uploads.jsonl\""}
+{"file":"chunk-6jvva4a7.js","key":"@3758","name":"MAX_RECORD_FILE_BYTES","source":"semantic","confidence":0.7,"note":"1 MiB"}
+{"file":"chunk-6jvva4a7.js","key":"@3769","name":"ISO_TIME_PATTERN","source":"semantic","confidence":0.8}
+{"file":"chunk-6jvva4a7.js","key":"@3832","name":"MAX_RECORD_AGE_MS","source":"semantic","confidence":0.7,"note":"一天"}
+{"file":"chunk-6jvva4a7.js","key":"@3844","name":"CLOCK_SKEW_MS","source":"semantic","confidence":0.75,"note":"5 分钟"}
+{"file":"chunk-6jvva4a7.js","key":"@3854","name":"FLAGS_WAIT_MS","source":"semantic","confidence":0.7,"note":"2000"}
+{"file":"chunk-6jvva4a7.js","key":"@3871","name":"isBridgeUploadsEnabled","source":"semantic","confidence":0.8}
+{"file":"chunk-6jvva4a7.js","key":"@4056","name":"readRecordFile","source":"semantic","confidence":0.75}
+{"file":"chunk-6jvva4a7.js","key":"@4058","name":"dir","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@4065","name":"handle","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@4184","name":"data","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@4329","name":"recordSavedUpload","source":"semantic","confidence":0.8}
+{"file":"chunk-6jvva4a7.js","key":"@4360","name":"alreadyOwned","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@4401","name":"dir","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@4517","name":"existing","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@4693","name":"handle","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@4933","name":"removeDeletedChatFiles","source":"semantic","confidence":0.8}
+{"file":"chunk-6jvva4a7.js","key":"@4939","name":"options","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@4962","name":"idsToReport","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@5110","name":"key","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@5119","name":"value","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@5218","name":"unknownAge","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@5277","name":"tooOld","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@5347","name":"removable","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@5384","name":"id","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@5411","name":"removeEnabled","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@5416","name":"reportEnabled","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@5616","name":"stats","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@5790","name":"whyFailed","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@5871","name":"dirs","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@5894","name":"root","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@5927","name":"dir","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@6126","name":"line","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@6135","name":"record","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@6363","name":"keptNames","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@6383","name":"record","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@6427","name":"record","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@6440","name":"presentNames","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@6466","name":"unused","source":"semantic","confidence":0.6}
+{"file":"chunk-6jvva4a7.js","key":"@6476","name":"name","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@6496","name":"record","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@6576","name":"filePath","source":"semantic","confidence":0.7}
+{"file":"chunk-6jvva4a7.js","key":"@6588","name":"fileStats","source":"semantic","confidence":0.7}
+{"file":"chunk-7p76mrq7.js","key":"@347","name":"shouldSuppressAlwaysAllow","source":"semantic","confidence":0.8}
+{"file":"chunk-7p76mrq7.js","key":"@353","name":"input","source":"semantic","confidence":0.7}
+{"file":"chunk-7p76mrq7.js","key":"@463","name":"suggestion","source":"semantic","confidence":0.75}
+{"file":"chunk-7pvjwb7z.js","key":"@3708","name":"isEnabled","source":"semantic","confidence":0.6,"note":"恒返回 false 的开关"}
+{"file":"chunk-7pvjwb7z.js","key":"@3710","name":"ignored","source":"semantic","confidence":0.6}
+{"file":"chunk-7pvjwb7z.js","key":"@3734","name":"shouldUse","source":"semantic","confidence":0.6}
+{"file":"chunk-7pvjwb7z.js","key":"@3736","name":"context","source":"semantic","confidence":0.65}
+{"file":"chunk-7pvjwb7z.js","key":"@3757","name":"resolveStickyBetas","source":"semantic","confidence":0.75}
+{"file":"chunk-7pvjwb7z.js","key":"@3759","name":"options","source":"semantic","confidence":0.7}
+{"file":"chunk-7pvjwb7z.js","key":"@3831","name":"hasRefusedNameOnly","source":"semantic","confidence":0.75}
+{"file":"chunk-7pvjwb7z.js","key":"@3833","name":"state","source":"semantic","confidence":0.7}
+{"file":"chunk-8b3c8k70.js","key":"@3817","name":"hooksModule","source":"semantic","confidence":0.8,"note":"CommonJS 包装，声明 scan 能力"}
+{"file":"chunk-8b3c8k70.js","key":"@3830","name":"mod","source":"semantic","confidence":0.7}
+{"file":"chunk-8b3c8k70.js","key":"@3832","name":"exportsObj","source":"semantic","confidence":0.7}
+{"file":"chunk-8b3c8k70.js","key":"@4053","name":"DEFAULT_AVAILABLE","source":"semantic","confidence":0.8,"note":"isAvailable 的默认值 true"}
+{"file":"chunk-8b3c8k70.js","key":"@4067","name":"isAvailable","source":"semantic","confidence":0.85,"note":"读 tengu_wise_newt 会话固定值"}
+{"file":"chunk-8b3c8k70.js","key":"@4106","name":"WEB_TOOLS","source":"semantic","confidence":0.8}
+{"file":"chunk-8b3c8k70.js","key":"@4146","name":"SHELL_TOOLS","source":"semantic","confidence":0.8}
+{"file":"chunk-8b3c8k70.js","key":"@4187","name":"NETWORK_COMMAND_PATTERN","source":"semantic","confidence":0.85,"note":"curl/wget/ssh 等出网命令"}
+{"file":"chunk-8b3c8k70.js","key":"@4469","name":"register","source":"semantic","confidence":0.85,"note":"注册 tool.check 钩子"}
+{"file":"chunk-8b3c8k70.js","key":"@4471","name":"on","source":"semantic","confidence":0.7}
+{"file":"chunk-8b3c8k70.js","key":"@4514","name":"context","source":"semantic","confidence":0.7}
+{"file":"chunk-8b3c8k70.js","key":"@4516","name":"event","source":"semantic","confidence":0.7}
+{"file":"chunk-8b3c8k70.js","key":"@4518","name":"next","source":"semantic","confidence":0.7}
+{"file":"chunk-8b3c8k70.js","key":"@4527","name":"decision","source":"semantic","confidence":0.7}
+{"file":"chunk-8b3c8k70.js","key":"@4647","name":"whole","source":"semantic","confidence":0.7}
+{"file":"chunk-8b3c8k70.js","key":"@4649","name":"hex","source":"semantic","confidence":0.7}
+{"file":"chunk-8b3c8k70.js","key":"@4794","name":"accountEmail","source":"semantic","confidence":0.7}
+{"file":"chunk-8b3c8k70.js","key":"@3917","name":"pluginExports","source":"semantic","confidence":0.75,"note":"__export 写入的插件导出对象"}
+{"file":"chunk-8b3c8k70.js","key":"@4007","name":"hooksNamespace","source":"semantic","confidence":0.7,"note":"hooksModule 的命名空间对象"}
+{"file":"chunk-8b3c8k70.js","key":"@4985","name":"registerPlugin","source":"semantic","confidence":0.85,"note":"registerBuiltinPlugin 注册隐私插件"}
+{"file":"chunk-8nzbdydx.js","key":"@58650","name":"isReplOn","source":"semantic","confidence":0.75}
+{"file":"chunk-8nzbdydx.js","key":"@63042","name":"isCountedForContext","source":"semantic","confidence":0.7,"note":"排除 Repl/Poll/StructuredOutput"}
+{"file":"chunk-8nzbdydx.js","key":"@63045","name":"tool","source":"semantic","confidence":0.75}
+{"file":"chunk-8prszgkd.js","key":"@21191","name":"useGrownOverflow","source":"semantic","confidence":0.75,"note":"随终端尺寸记忆并增长 overflow"}
+{"file":"chunk-8prszgkd.js","key":"@21195","name":"wanted","source":"semantic","confidence":0.7}
+{"file":"chunk-8prszgkd.js","key":"@21226","name":"state","source":"semantic","confidence":0.7}
+{"file":"chunk-8prszgkd.js","key":"@21228","name":"setState","source":"semantic","confidence":0.7}
+{"file":"chunk-8prszgkd.js","key":"@21267","name":"sizeUnchanged","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@3872","name":"describePendingEvals","source":"semantic","confidence":0.8,"note":"拼待处理 eval 的状态行"}
+{"file":"chunk-8tee4zrd.js","key":"@3874","name":"evals","source":"semantic","confidence":0.75}
+{"file":"chunk-8tee4zrd.js","key":"@3876","name":"brief","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@3907","name":"item","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@3937","name":"namedIds","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@3965","name":"item","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@3976","name":"omittedCount","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@3994","name":"omittedNote","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@4109","name":"item","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@4145","name":"item","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@4582","name":"item","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@4604","name":"item","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@4643","name":"othersNote","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@4838","name":"item","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@4847","name":"pendingNote","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@5268","name":"noun","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@5481","name":"MAX_NAMED_EVALS","source":"semantic","confidence":0.75,"note":"3"}
+{"file":"chunk-8tee4zrd.js","key":"@5494","name":"describeNotStarted","source":"semantic","confidence":0.75}
+{"file":"chunk-8tee4zrd.js","key":"@5503","name":"pronoun","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@5550","name":"call","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@5596","name":"omittedCount","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@5616","name":"listed","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@5941","name":"MAX_LISTED_CALLS","source":"semantic","confidence":0.75,"note":"5"}
+{"file":"chunk-8tee4zrd.js","key":"@5954","name":"emitStatusLine","source":"semantic","confidence":0.8,"note":"把状态行作为 poll 事件发出"}
+{"file":"chunk-8tee4zrd.js","key":"@5956","name":"sink","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@5958","name":"evals","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@5960","name":"agentId","source":"semantic","confidence":0.7}
+{"file":"chunk-8tee4zrd.js","key":"@5962","name":"brief","source":"semantic","confidence":0.7}
+{"file":"chunk-8v1yrjsj.js","key":"@314","name":"embeddedResource","source":"semantic","confidence":0.75,"note":"内嵌资源句柄"}
+{"file":"chunk-8v1yrjsj.js","key":"@336","name":"embeddedText","source":"semantic","confidence":0.8,"note":"同步读出内嵌文本"}
+{"file":"chunk-9br2jtex.js","key":"@4888","name":"ERROR_PREFIX_PATTERN","source":"semantic","confidence":0.8,"note":"可选的 <ErrorType>: 前缀"}
+{"file":"chunk-9br2jtex.js","key":"@4931","name":"isHelperCall","source":"semantic","confidence":0.75}
+{"file":"chunk-9br2jtex.js","key":"@4933","name":"toolName","source":"semantic","confidence":0.75}
+{"file":"chunk-9br2jtex.js","key":"@4965","name":"dropRedundantHelperErrors","source":"semantic","confidence":0.8,"note":"去掉与 eval 失败重复的脚本助手错误"}
+{"file":"chunk-9br2jtex.js","key":"@4967","name":"messages","source":"semantic","confidence":0.75}
+{"file":"chunk-9br2jtex.js","key":"@4992","name":"evalIds","source":"semantic","confidence":0.75}
+{"file":"chunk-9br2jtex.js","key":"@5002","name":"helperIds","source":"semantic","confidence":0.75}
+{"file":"chunk-9br2jtex.js","key":"@5012","name":"redundantIds","source":"semantic","confidence":0.75}
+{"file":"chunk-9br2jtex.js","key":"@5022","name":"lastFailure","source":"semantic","confidence":0.7}
+{"file":"chunk-9br2jtex.js","key":"@5032","name":"message","source":"semantic","confidence":0.7}
+{"file":"chunk-9br2jtex.js","key":"@5073","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-9br2jtex.js","key":"@5366","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-9br2jtex.js","key":"@5644","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-9br2jtex.js","key":"@5714","name":"isRedundant","source":"semantic","confidence":0.7}
+{"file":"chunk-9br2jtex.js","key":"@5965","name":"message","source":"semantic","confidence":0.7}
+{"file":"chunk-9br2jtex.js","key":"@6066","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-9br2jtex.js","key":"@6214","name":"block","source":"semantic","confidence":0.7}
+{"file":"chunk-9br2jtex.js","key":"@6285","name":"stripErrorPrefix","source":"semantic","confidence":0.8}
+{"file":"chunk-9br2jtex.js","key":"@6294","name":"text","source":"semantic","confidence":0.7}
+{"file":"chunk-9sx87q0n.js","key":"@351","name":"isPersonTurn","source":"semantic","confidence":0.75,"note":"非合成、非 meta、平台是真人客户端"}
+{"file":"chunk-9sx87q0n.js","key":"@355","name":"message","source":"semantic","confidence":0.7}
+{"file":"chunk-9xh6zw2q.js","key":"@1333","name":"fetchFollowingCcsRedirect","source":"semantic","confidence":0.75,"note":"ccs 租户下 http 先手动跟一次重定向"}
+{"file":"chunk-9xh6zw2q.js","key":"@1335","name":"url","source":"semantic","confidence":0.7}
+{"file":"chunk-9xh6zw2q.js","key":"@1476","name":"rest","source":"semantic","confidence":0.7}
+{"file":"chunk-9xh6zw2q.js","key":"@1528","name":"response","source":"semantic","confidence":0.7}
+{"file":"chunk-9xh6zw2q.js","key":"@1645","name":"REDIRECT_STATUSES","source":"semantic","confidence":0.8,"note":"301/302/303/307/308"}
+{"file":"chunk-9xh6zw2q.js","key":"@1678","name":"NO_ANSWER_MS","source":"semantic","confidence":0.7,"note":"60000"}
+{"file":"chunk-9xh6zw2q.js","key":"@1695","name":"retirePoolAfterNoAnswer","source":"semantic","confidence":0.8}
+{"file":"chunk-9xh6zw2q.js","key":"@1938","name":"session","source":"semantic","confidence":0.7}
+{"file":"chunk-9xh6zw2q.js","key":"@2375","name":"logServerStatus","source":"semantic","confidence":0.75}
+{"file":"chunk-a0z7wvnd.js","key":"@231","name":"CLOUD_OPTION_KEYS","source":"semantic","confidence":0.8,"note":"与 --cloud 冲突的选项名"}
+{"file":"chunk-a0z7wvnd.js","key":"@456","name":"cloudSessionIdFromOptions","source":"semantic","confidence":0.8}
+{"file":"chunk-a0z7wvnd.js","key":"@467","name":"cloudRef","source":"semantic","confidence":0.7}
+{"file":"chunk-a0z7wvnd.js","key":"@534","name":"key","source":"semantic","confidence":0.7}
+{"file":"chunk-a0z7wvnd.js","key":"@564","name":"cloudId","source":"semantic","confidence":0.7}
+{"file":"chunk-a0z7wvnd.js","key":"@617","name":"resumeId","source":"semantic","confidence":0.7}
+{"file":"chunk-a0z7wvnd.js","key":"@669","name":"candidateId","source":"semantic","confidence":0.7}
+{"file":"chunk-a0z7wvnd.js","key":"@807","name":"flags","source":"semantic","confidence":0.7}
+{"file":"chunk-amb421qb.js","key":"@323","name":"embeddedResource","source":"semantic","confidence":0.75}
+{"file":"chunk-amb421qb.js","key":"@345","name":"embeddedText","source":"semantic","confidence":0.8}
+{"file":"chunk-asf5gh8x.js","key":"@66382","name":"MIN_IDLE_RELEASE_MINUTES","source":"semantic","confidence":0.75,"note":"0.1"}
+{"file":"chunk-asf5gh8x.js","key":"@66389","name":"MAX_IDLE_RELEASE_MINUTES","source":"semantic","confidence":0.75,"note":"10080"}
+{"file":"chunk-asf5gh8x.js","key":"@66407","name":"getRunnerIdleMs","source":"semantic","confidence":0.75}
+{"file":"chunk-asf5gh8x.js","key":"@66469","name":"describeIdleRelease","source":"semantic","confidence":0.8}
+{"file":"chunk-asf5gh8x.js","key":"@66878","name":"idleReleaseMsFromSession","source":"semantic","confidence":0.8,"note":"读环境变量并以分钟换算毫秒"}
+{"file":"chunk-asf5gh8x.js","key":"@66881","name":"session","source":"semantic","confidence":0.7}
+{"file":"chunk-asf5gh8x.js","key":"@66962","name":"raw","source":"semantic","confidence":0.7}
+{"file":"chunk-asf5gh8x.js","key":"@67030","name":"minutes","source":"semantic","confidence":0.7}
+{"file":"chunk-asf5gh8x.js","key":"@67117","name":"withLatestIdleRelease","source":"semantic","confidence":0.75,"note":"只把最新一次结果的空闲期回报给回调"}
+{"file":"chunk-asf5gh8x.js","key":"@67120","name":"fn","source":"semantic","confidence":0.7}
+{"file":"chunk-asf5gh8x.js","key":"@67122","name":"onChange","source":"semantic","confidence":0.7}
+{"file":"chunk-asf5gh8x.js","key":"@67129","name":"seq","source":"semantic","confidence":0.7}
+{"file":"chunk-asf5gh8x.js","key":"@67133","name":"latest","source":"semantic","confidence":0.7}
+{"file":"chunk-asf5gh8x.js","key":"@67153","name":"args","source":"semantic","confidence":0.7}
+{"file":"chunk-asf5gh8x.js","key":"@67162","name":"mine","source":"semantic","confidence":0.7}
+{"file":"chunk-asf5gh8x.js","key":"@67168","name":"result","source":"semantic","confidence":0.7}
+{"file":"chunk-b0ffgtxf.js","key":"@231","name":"codeModeShape","source":"semantic","confidence":0.8,"note":"延迟 require 的 codeModeShape"}
+{"file":"chunk-b2c956ye.js","key":"@276","name":"readFlagWithOverride","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-b2c956ye.js","key":"@279","name":"key","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-b2c956ye.js","key":"@305","name":"value","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-ba67dbvd.js","key":"@815","name":"embeddedResource0","source":"semantic","confidence":0.7}
+{"file":"chunk-ba67dbvd.js","key":"@837","name":"embeddedText0","source":"semantic","confidence":0.7}
+{"file":"chunk-ba67dbvd.js","key":"@869","name":"embeddedResource1","source":"semantic","confidence":0.7}
+{"file":"chunk-ba67dbvd.js","key":"@891","name":"embeddedText1","source":"semantic","confidence":0.7}
+{"file":"chunk-ba67dbvd.js","key":"@923","name":"embeddedResource2","source":"semantic","confidence":0.7}
+{"file":"chunk-ba67dbvd.js","key":"@945","name":"embeddedText2","source":"semantic","confidence":0.7}
+{"file":"chunk-ba67dbvd.js","key":"@977","name":"embeddedResource3","source":"semantic","confidence":0.7}
+{"file":"chunk-ba67dbvd.js","key":"@999","name":"embeddedText3","source":"semantic","confidence":0.7}
+{"file":"chunk-ba67dbvd.js","key":"@1031","name":"embeddedResource4","source":"semantic","confidence":0.7}
+{"file":"chunk-ba67dbvd.js","key":"@1053","name":"embeddedResource5","source":"semantic","confidence":0.7}
+{"file":"chunk-ba67dbvd.js","key":"@1075","name":"EMBEDDED_SCRIPTS","source":"semantic","confidence":0.8,"note":"按 core/team、bash/powershell 组织的脚本"}
+{"file":"chunk-c3ck1mmp.js","key":"@4877","name":"renderConnectorCount","source":"semantic","confidence":0.75}
+{"file":"chunk-c3ck1mmp.js","key":"@4879","name":"notice","source":"semantic","confidence":0.7}
+{"file":"chunk-c5hnttn1.js","key":"@266","name":"scaleRef","source":"semantic","confidence":0.7,"note":"identity 包裹的 scale 设置"}
+{"file":"chunk-c5hnttn1.js","key":"@287","name":"state","source":"semantic","confidence":0.7}
+{"file":"chunk-c7pfs23n.js","key":"@331","name":"replErrorMessages","source":"semantic","confidence":0.8,"note":"构造虚拟的失败 tool_use/tool_result 对"}
+{"file":"chunk-c7pfs23n.js","key":"@335","name":"message","source":"semantic","confidence":0.7}
+{"file":"chunk-c7pfs23n.js","key":"@415","name":"toolUseId","source":"semantic","confidence":0.7}
+{"file":"chunk-c7pfs23n.js","key":"@430","name":"remoteVisibility","source":"semantic","confidence":0.7}
+{"file":"chunk-cjaaaha5.js","key":"@390","name":"matchWithPathTable","source":"semantic","confidence":0.7}
+{"file":"chunk-cjaaaha5.js","key":"@394","name":"matcher","source":"semantic","confidence":0.7}
+{"file":"chunk-cjaaaha5.js","key":"@396","name":"input","source":"semantic","confidence":0.7}
+{"file":"chunk-cjaaaha5.js","key":"@398","name":"pathTable","source":"semantic","confidence":0.7}
+{"file":"chunk-cn14725t.js","key":"@20751","name":"MoveToCloudDialog","source":"semantic","confidence":0.85,"note":"对话框标题 \"Move this session to the cloud\""}
+{"file":"chunk-cn14725t.js","key":"@20781","name":"doneRef","source":"semantic","confidence":0.7}
+{"file":"chunk-cn14725t.js","key":"@20789","name":"finishOnce","source":"semantic","confidence":0.75}
+{"file":"chunk-cn14725t.js","key":"@20806","name":"value","source":"semantic","confidence":0.7}
+{"file":"chunk-cn14725t.js","key":"@20874","name":"done","source":"semantic","confidence":0.7}
+{"file":"chunk-cn14725t.js","key":"@20879","name":"text","source":"semantic","confidence":0.7}
+{"file":"chunk-cn14725t.js","key":"@20881","name":"setText","source":"semantic","confidence":0.7}
+{"file":"chunk-cn14725t.js","key":"@20891","name":"cursorOffset","source":"semantic","confidence":0.7}
+{"file":"chunk-cn14725t.js","key":"@20893","name":"setCursorOffset","source":"semantic","confidence":0.7}
+{"file":"chunk-cn14725t.js","key":"@20918","name":"cancel","source":"semantic","confidence":0.7}
+{"file":"chunk-cn14725t.js","key":"@20978","name":"keybindingContext","source":"semantic","confidence":0.7}
+{"file":"chunk-cn14725t.js","key":"@21121","name":"prompt","source":"semantic","confidence":0.7}
+{"file":"chunk-cn14725t.js","key":"@21414","name":"submitted","source":"semantic","confidence":0.7}
+{"file":"chunk-cn14725t.js","key":"@21525","name":"input","source":"semantic","confidence":0.7}
+{"file":"chunk-cn14725t.js","key":"@21893","name":"dialog","source":"semantic","confidence":0.7}
+{"file":"chunk-cn14725t.js","key":"@22099","name":"showMoveToCloudDialog","source":"semantic","confidence":0.8}
+{"file":"chunk-cn14725t.js","key":"@22102","name":"context","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1140326","name":"toChoice","source":"semantic","confidence":0.8,"note":"选项 {label, value}"}
+{"file":"chunk-czq1j3j2.js","key":"@1140330","name":"useCase","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1140372","name":"NO_USE_CASE_VALUE","source":"semantic","confidence":0.8,"note":"空串代表无 use case"}
+{"file":"chunk-czq1j3j2.js","key":"@1141941","name":"UseCaseDialog","source":"semantic","confidence":0.85,"note":"标题 \"Choose a use case\""}
+{"file":"chunk-czq1j3j2.js","key":"@1141980","name":"current","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1142063","name":"toOption","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1142083","name":"useCase","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1142205","name":"noUseCaseOption","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1142355","name":"value","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1142603","name":"dialog","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1418258","name":"CONTINUATION_INDENT","source":"semantic","confidence":0.75,"note":"两个空格"}
+{"file":"chunk-czq1j3j2.js","key":"@1418267","name":"CONTINUATION_MARK","source":"semantic","confidence":0.75,"note":"\"\\\" +\" 续行标记"}
+{"file":"chunk-czq1j3j2.js","key":"@1418277","name":"BULLET","source":"semantic","confidence":0.8,"note":"\"* \" 列表标记"}
+{"file":"chunk-czq1j3j2.js","key":"@1418285","name":"NAME_DISCLAIMER","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1418336","name":"NON_LATIN_SCRIPTS","source":"semantic","confidence":0.85,"note":"各非拉丁文字的正则"}
+{"file":"chunk-czq1j3j2.js","key":"@1419015","name":"pattern","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1419062","name":"getWrittenPaths","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1419066","name":"text","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1419101","name":"getLocatedPaths","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1419105","name":"text","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1419139","name":"parsePathBullets","source":"semantic","confidence":0.8,"note":"解析 \"* \\\"path\\\"\" 列表，处理续行"}
+{"file":"chunk-czq1j3j2.js","key":"@1419143","name":"text","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1419174","name":"hasDisclaimer","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1419191","name":"lines","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1419211","name":"written","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1419217","name":"liesAt","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1419223","name":"sawBullet","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1419264","name":"line","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1419314","name":"isLocated","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1419530","name":"path","source":"semantic","confidence":0.7}
+{"file":"chunk-d0gk5ksh.js","key":"@380","name":"EvalSettleFieldsSchema","source":"semantic","confidence":0.75}
+{"file":"chunk-d0gk5ksh.js","key":"@469","name":"EvalSettleEventSchema","source":"semantic","confidence":0.75}
+{"file":"chunk-d0gk5ksh.js","key":"@515","name":"parseSettleEvent","source":"semantic","confidence":0.8,"note":"优先按 schema，退回标签正则解析"}
+{"file":"chunk-d0gk5ksh.js","key":"@519","name":"text","source":"semantic","confidence":0.7}
+{"file":"chunk-d0gk5ksh.js","key":"@521","name":"raw","source":"semantic","confidence":0.7}
+{"file":"chunk-d0gk5ksh.js","key":"@544","name":"parsed","source":"semantic","confidence":0.7}
+{"file":"chunk-d0gk5ksh.js","key":"@604","name":"TAG_PATTERN","source":"semantic","confidence":0.75}
+{"file":"chunk-d0gk5ksh.js","key":"@689","name":"attributes","source":"semantic","confidence":0.7}
+{"file":"chunk-d0gk5ksh.js","key":"@691","name":"body","source":"semantic","confidence":0.7}
+{"file":"chunk-d0gk5ksh.js","key":"@693","name":"nonce","source":"semantic","confidence":0.7}
+{"file":"chunk-d0gk5ksh.js","key":"@765","name":"evalId","source":"semantic","confidence":0.7}
+{"file":"chunk-d0gk5ksh.js","key":"@946","name":"fields","source":"semantic","confidence":0.7}
+{"file":"chunk-d0gk5ksh.js","key":"@1015","name":"parseSettleEvents","source":"semantic","confidence":0.8}
+{"file":"chunk-d0gk5ksh.js","key":"@1019","name":"text","source":"semantic","confidence":0.7}
+{"file":"chunk-d0gk5ksh.js","key":"@1044","name":"EVENT_PATTERN","source":"semantic","confidence":0.75}
+{"file":"chunk-d0gk5ksh.js","key":"@1120","name":"events","source":"semantic","confidence":0.7}
+{"file":"chunk-d0gk5ksh.js","key":"@1133","name":"sorted","source":"semantic","confidence":0.7}
+{"file":"chunk-d0gk5ksh.js","key":"@1157","name":"event","source":"semantic","confidence":0.7}
+{"file":"chunk-d0gk5ksh.js","key":"@1215","name":"toSettleEvent","source":"semantic","confidence":0.75}
+{"file":"chunk-d0gk5ksh.js","key":"@1217","name":"fields","source":"semantic","confidence":0.7}
+{"file":"chunk-d5d5va77.js","key":"@558","name":"HOOK_EVENT_PATTERNS","source":"semantic","confidence":0.8,"note":"可用于工具检查的 hook 事件"}
+{"file":"chunk-d5d5va77.js","key":"@878","name":"SETTINGS_ONLY_EVENTS","source":"semantic","confidence":0.75,"note":"settingsHooksOff 时保留的事件"}
+{"file":"chunk-d5d5va77.js","key":"@990","name":"hasHookingPlugin","source":"semantic","confidence":0.8}
+{"file":"chunk-d5d5va77.js","key":"@1005","name":"plugin","source":"semantic","confidence":0.7}
+{"file":"chunk-d5d5va77.js","key":"@1139","name":"eventPattern","source":"semantic","confidence":0.7}
+{"file":"chunk-d5d5va77.js","key":"@1202","name":"pluginsHookingTool","source":"semantic","confidence":0.8,"note":"返回会在该工具上挂钩的插件名"}
+{"file":"chunk-d5d5va77.js","key":"@1206","name":"tool","source":"semantic","confidence":0.7}
+{"file":"chunk-d5d5va77.js","key":"@1208","name":"context","source":"semantic","confidence":0.7}
+{"file":"chunk-d5d5va77.js","key":"@1215","name":"patterns","source":"semantic","confidence":0.7}
+{"file":"chunk-d5d5va77.js","key":"@1259","name":"pattern","source":"semantic","confidence":0.7}
+{"file":"chunk-d5d5va77.js","key":"@1291","name":"seen","source":"semantic","confidence":0.7}
+{"file":"chunk-d5d5va77.js","key":"@1389","name":"respawn","source":"semantic","confidence":0.7}
+{"file":"chunk-d5d5va77.js","key":"@1484","name":"pattern","source":"semantic","confidence":0.7}
+{"file":"chunk-d5d5va77.js","key":"@1618","name":"hookingPluginNotice","source":"semantic","confidence":0.8}
+{"file":"chunk-d5d5va77.js","key":"@1622","name":"pluginNames","source":"semantic","confidence":0.7}
+{"file":"chunk-d5d5va77.js","key":"@1629","name":"fallbackAdvice","source":"semantic","confidence":0.7}
+{"file":"chunk-d5d5va77.js","key":"@2088","name":"who","source":"semantic","confidence":0.7}
+{"file":"chunk-d5d5va77.js","key":"@2090","name":"them","source":"semantic","confidence":0.7}
+{"file":"chunk-d775357q.js","key":"@13068","name":"hasHookingPluginsForPreview","source":"semantic","confidence":0.75}
+{"file":"chunk-d7jrrm3a.js","key":"@303","name":"EXPIRY_MARGIN_MS","source":"semantic","confidence":0.7,"note":"5000"}
+{"file":"chunk-d7jrrm3a.js","key":"@319","name":"buildRemoteCallEnvelope","source":"semantic","confidence":0.8,"note":"按 run/decline 构造远端调用信封"}
+{"file":"chunk-d7jrrm3a.js","key":"@325","name":"marker","source":"semantic","confidence":0.7}
+{"file":"chunk-d7jrrm3a.js","key":"@414","name":"base","source":"semantic","confidence":0.7}
+{"file":"chunk-d7jrrm3a.js","key":"@479","name":"caller","source":"semantic","confidence":0.7}
+{"file":"chunk-e08yqx9s.js","key":"@232","name":"McpOauthRefusedError","source":"semantic","confidence":0.8}
+{"file":"chunk-e08yqx9s.js","key":"@256","name":"assertRedirectUriOnlyAllowed","source":"semantic","confidence":0.8}
+{"file":"chunk-e5z7dpjd.js","key":"@22435","name":"TRANSIENT_ERRNOS","source":"semantic","confidence":0.85}
+{"file":"chunk-e5z7dpjd.js","key":"@22501","name":"classifyErrno","source":"semantic","confidence":0.85,"note":"transient/directory/permanent"}
+{"file":"chunk-e5z7dpjd.js","key":"@22623","name":"HASH_MARK","source":"semantic","confidence":0.6,"note":"\"#\""}
+{"file":"chunk-e5z7dpjd.js","key":"@22642","name":"dir","source":"semantic","confidence":0.7}
+{"file":"chunk-e5z7dpjd.js","key":"@22644","name":"taskListName","source":"semantic","confidence":0.7}
+{"file":"chunk-e5z7dpjd.js","key":"@22695","name":"fileName","source":"semantic","confidence":0.7}
+{"file":"chunk-e5z7dpjd.js","key":"@22697","name":"taskListName","source":"semantic","confidence":0.7}
+{"file":"chunk-e8ezf3em.js","key":"@5688","name":"UploadListSchema","source":"semantic","confidence":0.75}
+{"file":"chunk-e8ezf3em.js","key":"@5839","name":"file","source":"semantic","confidence":0.7}
+{"file":"chunk-e8ezf3em.js","key":"@5911","name":"noteUploadedFiles","source":"semantic","confidence":0.8}
+{"file":"chunk-e8ezf3em.js","key":"@5913","name":"args","source":"semantic","confidence":0.7}
+{"file":"chunk-e8ezf3em.js","key":"@5915","name":"isInScope","source":"semantic","confidence":0.7}
+{"file":"chunk-e8ezf3em.js","key":"@5944","name":"notedCount","source":"semantic","confidence":0.7}
+{"file":"chunk-e8ezf3em.js","key":"@5961","name":"entry","source":"semantic","confidence":0.7}
+{"file":"chunk-e8ezf3em.js","key":"@6134","name":"RemovedChatFilesArgsSchema","source":"semantic","confidence":0.75}
+{"file":"chunk-e8ezf3em.js","key":"@6184","name":"PassResultSchema","source":"semantic","confidence":0.75}
+{"file":"chunk-e8ezf3em.js","key":"@6309","name":"removeDeletedChatFilesHandler","source":"semantic","confidence":0.8}
+{"file":"chunk-e8ezf3em.js","key":"@6311","name":"args","source":"semantic","confidence":0.7}
+{"file":"chunk-e8ezf3em.js","key":"@6353","name":"result","source":"semantic","confidence":0.7}
+{"file":"chunk-f4m1wxh3.js","key":"@195","name":"STOP_INSTRUCTION","source":"semantic","confidence":0.85}
+{"file":"chunk-f4vx46x7.js","key":"@6834","name":"MAX_AHEAD_COMMITS","source":"semantic","confidence":0.7,"note":"1000"}
+{"file":"chunk-f4vx46x7.js","key":"@6841","name":"STATUS_EXCLUDES","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@6900","name":"buildCleanGitEnv","source":"semantic","confidence":0.75,"note":"隔离 HOME/XDG 并清掉凭证变量"}
+{"file":"chunk-f4vx46x7.js","key":"@7152","name":"lookAtWorktree","source":"semantic","confidence":0.8,"note":"并发取脏状态、推送情况与 stash"}
+{"file":"chunk-f4vx46x7.js","key":"@7154","name":"cwd","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@7210","name":"gitEnv","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@7267","name":"state","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@7269","name":"stateMs","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@7272","name":"commits","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@7274","name":"stashRef","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@7311","name":"collected","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@7893","name":"collectIdleTreeState","source":"semantic","confidence":0.75}
+{"file":"chunk-f4vx46x7.js","key":"@7895","name":"gitRoot","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@7897","name":"deadlineMs","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@7899","name":"gitEnv","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@8150","name":"checkAheadOfOrigin","source":"semantic","confidence":0.75}
+{"file":"chunk-f4vx46x7.js","key":"@8197","name":"pushed","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@8636","name":"LOOK_DEADLINE_MS","source":"semantic","confidence":0.75,"note":"1e4"}
+{"file":"chunk-f4vx46x7.js","key":"@8642","name":"MAX_WORKTREES","source":"semantic","confidence":0.75,"note":"50"}
+{"file":"chunk-f4vx46x7.js","key":"@8656","name":"classifyTreeState","source":"semantic","confidence":0.8}
+{"file":"chunk-f4vx46x7.js","key":"@8658","name":"state","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@9196","name":"worktreesDir","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@9231","name":"base","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@9283","name":"linkPath","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@9308","name":"entries","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@9367","name":"resolved","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@9380","name":"bases","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@9394","name":"linkDir","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@9406","name":"realLinkDir","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@9544","name":"realWorktreePath","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@9704","name":"listDirNames","source":"semantic","confidence":0.75}
+{"file":"chunk-f4vx46x7.js","key":"@9706","name":"dir","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@9708","name":"limit","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@9715","name":"names","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@9734","name":"entry","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@9826","name":"lookAtPath","source":"semantic","confidence":0.75}
+{"file":"chunk-f4vx46x7.js","key":"@9911","name":"linkedWorktrees","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@10000","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@10043","name":"state","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@10104","name":"checkStartCommit","source":"semantic","confidence":0.8}
+{"file":"chunk-f4vx46x7.js","key":"@10228","name":"gitEnv","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@10305","name":"ref","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@10368","name":"out","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@10439","name":"out","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@10548","name":"runFromStdin","source":"semantic","confidence":0.8}
+{"file":"chunk-f4vx46x7.js","key":"@10551","name":"argv","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@10558","name":"items","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@10608","name":"item","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@10948","name":"reason","source":"semantic","confidence":0.7}
+{"file":"chunk-f4vx46x7.js","key":"@11010","name":"reason","source":"semantic","confidence":0.7}
+{"file":"chunk-fg9fwa9r.js","key":"@305","name":"sturdyLanternSetting","source":"semantic","confidence":0.7}
+{"file":"chunk-fg9fwa9r.js","key":"@324","name":"registerSetting","source":"semantic","confidence":0.7}
+{"file":"chunk-fg9fwa9r.js","key":"@328","name":"reader","source":"semantic","confidence":0.7}
+{"file":"chunk-fg9fwa9r.js","key":"@356","name":"bypassStorage","source":"semantic","confidence":0.7,"note":"AsyncLocalStorage 标记"}
+{"file":"chunk-fg9fwa9r.js","key":"@373","name":"withSturdyLanternOff","source":"semantic","confidence":0.75,"note":"在 ALS 标记内读取时跳过该设置"}
+{"file":"chunk-fg9fwa9r.js","key":"@377","name":"fn","source":"semantic","confidence":0.7}
+{"file":"chunk-fmnbrxwy.js","key":"@23568","name":"COMBINING_SCRIPT_SOURCE","source":"semantic","confidence":0.75,"note":"扩展组合附加符号区间"}
+{"file":"chunk-fmnbrxwy.js","key":"@23721","name":"WORD_WITH_MARKS_SOURCE","source":"semantic","confidence":0.75}
+{"file":"chunk-fmnbrxwy.js","key":"@23779","name":"LEADING_PUNCT_SOURCE","source":"semantic","confidence":0.75}
+{"file":"chunk-fmnbrxwy.js","key":"@23850","name":"INNER_PUNCT_SOURCE","source":"semantic","confidence":0.75}
+{"file":"chunk-fmnbrxwy.js","key":"@23924","name":"TRAILING_PUNCT_SOURCE","source":"semantic","confidence":0.75}
+{"file":"chunk-fmnbrxwy.js","key":"@24054","name":"WORD_SOURCE","source":"semantic","confidence":0.75}
+{"file":"chunk-fmnbrxwy.js","key":"@24081","name":"BRACKETED_WORD_SOURCE","source":"semantic","confidence":0.75}
+{"file":"chunk-fmnbrxwy.js","key":"@24185","name":"WORD_SEQUENCE_SOURCE","source":"semantic","confidence":0.7}
+{"file":"chunk-fmnbrxwy.js","key":"@24342","name":"BETWEEN_WORD_SIGNS","source":"semantic","confidence":0.7}
+{"file":"chunk-fmnbrxwy.js","key":"@24404","name":"END_WORD_SIGNS","source":"semantic","confidence":0.7}
+{"file":"chunk-fmnbrxwy.js","key":"@24453","name":"describeLabelProblem","source":"semantic","confidence":0.8,"note":"校验按钮文案并返回问题说明"}
+{"file":"chunk-fmnbrxwy.js","key":"@24456","name":"label","source":"semantic","confidence":0.75}
+{"file":"chunk-fmnbrxwy.js","key":"@24621","name":"index","source":"semantic","confidence":0.7}
+{"file":"chunk-fmnbrxwy.js","key":"@24623","name":"word","source":"semantic","confidence":0.7}
+{"file":"chunk-fmnbrxwy.js","key":"@25135","name":"prefix","source":"semantic","confidence":0.7}
+{"file":"chunk-fmnbrxwy.js","key":"@25189","name":"sign","source":"semantic","confidence":0.7}
+{"file":"chunk-fmnbrxwy.js","key":"@25937","name":"describeChar","source":"semantic","confidence":0.8,"note":"字符的引号 + U+ 码点描述"}
+{"file":"chunk-fmnbrxwy.js","key":"@25940","name":"char","source":"semantic","confidence":0.7}
+{"file":"chunk-fmnbrxwy.js","key":"@25950","name":"codePoint","source":"semantic","confidence":0.7}
+{"file":"chunk-fmnbrxwy.js","key":"@26187","name":"MAX_LABEL_CHARS","source":"semantic","confidence":0.75,"note":"24"}
+{"file":"chunk-fmnbrxwy.js","key":"@26193","name":"NON_WORD_CHARS","source":"semantic","confidence":0.75}
+{"file":"chunk-fmnbrxwy.js","key":"@26214","name":"EXTRA_INVISIBLE_SOURCE","source":"semantic","confidence":0.7}
+{"file":"chunk-fmnbrxwy.js","key":"@26315","name":"LABEL_CHECKS","source":"semantic","confidence":0.75,"note":"按钮文案的逐项校验"}
+{"file":"chunk-fmnbrxwy.js","key":"@26323","name":"label","source":"semantic","confidence":0.7}
+{"file":"chunk-fmnbrxwy.js","key":"@26587","name":"label","source":"semantic","confidence":0.7}
+{"file":"chunk-fmnbrxwy.js","key":"@26777","name":"label","source":"semantic","confidence":0.7}
+{"file":"chunk-fmnbrxwy.js","key":"@26873","name":"label","source":"semantic","confidence":0.7}
+{"file":"chunk-fmnbrxwy.js","key":"@26934","name":"RecapArgsSchema","source":"semantic","confidence":0.75,"note":"recap/ask/blocked/actions 的 schema"}
+{"file":"chunk-gcy2kcsb.js","key":"@313","name":"isAccepted","source":"semantic","confidence":0.75}
+{"file":"chunk-gcy2kcsb.js","key":"@345","name":"contextKeyAccepted","source":"semantic","confidence":0.7}
+{"file":"chunk-gcy2kcsb.js","key":"@371","name":"isStateOn","source":"semantic","confidence":0.65}
+{"file":"chunk-gcy2kcsb.js","key":"@393","name":"isOnHolder","source":"semantic","confidence":0.75}
+{"file":"chunk-gcy2kcsb.js","key":"@418","name":"setIsOn","source":"semantic","confidence":0.75}
+{"file":"chunk-gcy2kcsb.js","key":"@443","name":"isOn","source":"semantic","confidence":0.7}
+{"file":"chunk-gcy2kcsb.js","key":"@522","name":"setAccepted","source":"semantic","confidence":0.75}
+{"file":"chunk-gg17c06d.js","key":"@4394","name":"READ_LIKE_TOOLS","source":"semantic","confidence":0.8}
+{"file":"chunk-gg17c06d.js","key":"@4431","name":"WRITE_LIKE_TOOLS","source":"semantic","confidence":0.8}
+{"file":"chunk-fq92ancp.js","key":"@4112","name":"goalCommand","source":"semantic","confidence":0.8,"note":"/goal 斜杠命令"}
+{"file":"chunk-fq92ancp.js","key":"@4120","name":"argText","source":"semantic","confidence":0.7}
+{"file":"chunk-fq92ancp.js","key":"@4122","name":"context","source":"semantic","confidence":0.7}
+{"file":"chunk-fq92ancp.js","key":"@4262","name":"condition","source":"semantic","confidence":0.75}
+{"file":"chunk-fq92ancp.js","key":"@4389","name":"iterationsText","source":"semantic","confidence":0.75}
+{"file":"chunk-fq92ancp.js","key":"@4472","name":"lastCheckText","source":"semantic","confidence":0.7}
+{"file":"chunk-fq92ancp.js","key":"@4614","name":"cleared","source":"semantic","confidence":0.7}
+{"file":"chunk-fq92ancp.js","key":"@4832","name":"error","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@4463","name":"describeWildcardHint","source":"semantic","confidence":0.8}
+{"file":"chunk-gg17c06d.js","key":"@4467","name":"ruleText","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@4875","name":"isAmberPloverOn","source":"semantic","confidence":0.8,"note":"读 bot_protected_tengu_amber_plover"}
+{"file":"chunk-gg17c06d.js","key":"@4937","name":"normalizeRuleString","source":"semantic","confidence":0.75,"note":"把 Tool(*) 归一成 Tool(*)"}
+{"file":"chunk-gg17c06d.js","key":"@4940","name":"rule","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@4942","name":"behavior","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@5025","name":"parens","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@5183","name":"parseRuleValue","source":"semantic","confidence":0.75}
+{"file":"chunk-gg17c06d.js","key":"@5186","name":"rule","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@7533","name":"unGrantedNotice","source":"semantic","confidence":0.8,"note":"\"Claude requested permissions…\""}
+{"file":"chunk-gg17c06d.js","key":"@7537","name":"toolName","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@7626","name":"EMPTY_NAME_SET","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@7674","name":"registerCheckName","source":"semantic","confidence":0.7,"note":"给工具登记用于权限检查的名字"}
+{"file":"chunk-gg17c06d.js","key":"@7678","name":"tool","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@7703","name":"mcpPolicyAskRule","source":"semantic","confidence":0.8}
+{"file":"chunk-gg17c06d.js","key":"@7794","name":"makeAskDecision","source":"semantic","confidence":0.75}
+{"file":"chunk-gg17c06d.js","key":"@7800","name":"checkName","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@7896","name":"liftedAsksInAcceptEdits","source":"semantic","confidence":0.8}
+{"file":"chunk-gg17c06d.js","key":"@7900","name":"context","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@7902","name":"tool","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@7946","name":"ownName","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@8103","name":"lifted","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@8223","name":"liftedNameForTool","source":"semantic","confidence":0.75}
+{"file":"chunk-gg17c06d.js","key":"@8226","name":"context","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@8228","name":"tool","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@8235","name":"name","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@8338","name":"liftedNamesFromContext","source":"semantic","confidence":0.75}
+{"file":"chunk-gg17c06d.js","key":"@8340","name":"context","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@8342","name":"names","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@8458","name":"ruleName","source":"semantic","confidence":0.7}
+{"file":"chunk-gg17c06d.js","key":"@8507","name":"prefix","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@14028","name":"buildUltrareviewNotice","source":"semantic","confidence":0.8}
+{"file":"chunk-gsmkwtjh.js","key":"@14186","name":"reviewCount","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@14197","name":"lines","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@14321","name":"pullRequest","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@14603","name":"pullRequest","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@15013","name":"maxCostText","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@15305","name":"creditsText","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@15573","name":"batches","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@16414","name":"confirmUltrareviewStart","source":"semantic","confidence":0.8}
+{"file":"chunk-gsmkwtjh.js","key":"@17316","name":"GH_TIMEOUT_MS","source":"semantic","confidence":0.75,"note":"1e4"}
+{"file":"chunk-gsmkwtjh.js","key":"@17323","name":"PullRequestSchema","source":"semantic","confidence":0.75}
+{"file":"chunk-gsmkwtjh.js","key":"@17477","name":"lookUpPullRequest","source":"semantic","confidence":0.8,"note":"用 gh pr view 取合并信息并做大小校验"}
+{"file":"chunk-gsmkwtjh.js","key":"@17480","name":"pullRequest","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@17511","name":"repoName","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@17699","name":"ghPath","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@18167","name":"info","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@18229","name":"lastErrorLine","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@18797","name":"changedLines","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@19433","name":"COPY_TIMEOUT_MS","source":"semantic","confidence":0.7,"note":"180000"}
+{"file":"chunk-gsmkwtjh.js","key":"@19443","name":"COPY_STEP_TIMEOUT_MS","source":"semantic","confidence":0.7,"note":"30000"}
+{"file":"chunk-gsmkwtjh.js","key":"@19452","name":"MAX_COPY_CONCURRENCY","source":"semantic","confidence":0.7,"note":"100"}
+{"file":"chunk-gsmkwtjh.js","key":"@19474","name":"copyPullRequest","source":"semantic","confidence":0.75}
+{"file":"chunk-gsmkwtjh.js","key":"@19477","name":"pullRequest","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@19561","name":"copyFailed","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@19628","name":"scratchDir","source":"semantic","confidence":0.75}
+{"file":"chunk-gsmkwtjh.js","key":"@19630","name":"succeeded","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@19690","name":"repoDir","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@19710","name":"gitOpts","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@19835","name":"initResult","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@20123","name":"gitArgs","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@20288","name":"fetchOpts","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@20344","name":"fetchArgs","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@20570","name":"fetchResult","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@20621","name":"parentCommit","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@20623","name":"secondParent","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@20719","name":"baseCommit","source":"semantic","confidence":0.75}
+{"file":"chunk-gsmkwtjh.js","key":"@20723","name":"commitCount","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@21143","name":"fetchErrorLine","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@21583","name":"diffResult","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@22280","name":"MAX_REVIEWS","source":"semantic","confidence":0.75,"note":"20"}
+{"file":"chunk-gsmkwtjh.js","key":"@22286","name":"LOOKUP_CONCURRENCY","source":"semantic","confidence":0.7,"note":"5"}
+{"file":"chunk-gsmkwtjh.js","key":"@22290","name":"GIVE_UP_NEIGHBOURS","source":"semantic","confidence":0.7,"note":"3"}
+{"file":"chunk-gsmkwtjh.js","key":"@22294","name":"GIVE_UP_SINCE_SUCCESS","source":"semantic","confidence":0.7,"note":"10"}
+{"file":"chunk-gsmkwtjh.js","key":"@22299","name":"GAVE_UP_MESSAGE","source":"semantic","confidence":0.8}
+{"file":"chunk-gsmkwtjh.js","key":"@22498","name":"STOPPED_MESSAGE","source":"semantic","confidence":0.8}
+{"file":"chunk-gsmkwtjh.js","key":"@22537","name":"GIT_MISSING_MESSAGE","source":"semantic","confidence":0.8}
+{"file":"chunk-gsmkwtjh.js","key":"@22620","name":"runUltrareview","source":"semantic","confidence":0.85}
+{"file":"chunk-gsmkwtjh.js","key":"@22726","name":"typicalCostUsd","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@22734","name":"affordable","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@23206","name":"lookedUp","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@23220","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@23381","name":"entry","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@23577","name":"toReview","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@23582","name":"leftOut","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@23587","name":"starts","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@23592","name":"seenCommits","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@23614","name":"index","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@23616","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@23658","name":"repoName","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@23674","name":"lookup","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@23681","name":"label","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@23707","name":"commitKey","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@23767","name":"duplicateOf","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@23778","name":"leftOutReason","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@23859","name":"url","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@34919","name":"stopRun","source":"semantic","confidence":0.8,"note":"写 stderr 提示并 abort"}
+{"file":"chunk-gsmkwtjh.js","key":"@34922","name":"run","source":"semantic","confidence":0.7}
+{"file":"chunk-h13zwtby.js","key":"@795","name":"enableCodeMode","source":"semantic","confidence":0.75,"note":"recordCodeMode(true)"}
+{"file":"chunk-h13zwtby.js","key":"@806","name":"codeMode","source":"semantic","confidence":0.7}
+{"file":"chunk-h13zwtby.js","key":"@870","name":"cloudMoveRefusalReason","source":"semantic","confidence":0.75}
+{"file":"chunk-h13zwtby.js","key":"@889","name":"codeMode","source":"semantic","confidence":0.7}
+{"file":"chunk-h13zwtby.js","key":"@966","name":"resumeSourceForPath","source":"semantic","confidence":0.75}
+{"file":"chunk-h13zwtby.js","key":"@970","name":"transcriptPath","source":"semantic","confidence":0.7}
+{"file":"chunk-h13zwtby.js","key":"@986","name":"codeMode","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@2051","name":"CONNECTORS_PATH","source":"semantic","confidence":0.8,"note":"\"/customize/connectors\""}
+{"file":"chunk-h29vk4wn.js","key":"@2087","name":"parseStartRefusal","source":"semantic","confidence":0.8}
+{"file":"chunk-h29vk4wn.js","key":"@2091","name":"attachment","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@2258","name":"parseActionUrl","source":"semantic","confidence":0.8,"note":"只接受 https 且同源、无凭证"}
+{"file":"chunk-h29vk4wn.js","key":"@2306","name":"parsed","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@2453","name":"githubAuthUrl","source":"semantic","confidence":0.8}
+{"file":"chunk-h29vk4wn.js","key":"@2458","name":"org","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@2492","name":"url","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@2684","name":"describeStartRefusal","source":"semantic","confidence":0.8}
+{"file":"chunk-h29vk4wn.js","key":"@2688","name":"refusal","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@2690","name":"sessionUrl","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@2716","name":"connectUrl","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@2736","name":"connectHint","source":"semantic","confidence":0.7}
+{"file":"chunk-h7hgs1mf.js","key":"@4961","name":"SPAWN_REASON_PATTERN","source":"semantic","confidence":0.8}
+{"file":"chunk-h7hgs1mf.js","key":"@5011","name":"normalizeSpawnReason","source":"semantic","confidence":0.75}
+{"file":"chunk-hfc4cfnt.js","key":"@18323","name":"originOf","source":"semantic","confidence":0.7,"note":"origin 为 null/blob 时返回 undefined"}
+{"file":"chunk-hfc4cfnt.js","key":"@18326","name":"url","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@4615","name":"claudeConfigPrefixesFor","source":"semantic","confidence":0.75}
+{"file":"chunk-hma1b5gv.js","key":"@4618","name":"path","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@4625","name":"aliases","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@4662","name":"configDir","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@4677","name":"alias","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@14562","name":"SENSITIVE_SEGMENTS","source":"semantic","confidence":0.75,"note":"敏感目录名与路径片段表"}
+{"file":"chunk-hma1b5gv.js","key":"@14577","name":"name","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@14608","name":"first","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@14610","name":"second","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@14651","name":"GIT_CONFIG_NAMES","source":"semantic","confidence":0.75}
+{"file":"chunk-hma1b5gv.js","key":"@14742","name":"segment","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@14757","name":"ASCII_ONLY","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@14786","name":"toGlobTail","source":"semantic","confidence":0.7,"note":"首字符保留，其余转成首行 glob"}
+{"file":"chunk-hma1b5gv.js","key":"@14789","name":"text","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@14863","name":"pair","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@14893","name":"entry","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@14935","name":"isSensitiveName","source":"semantic","confidence":0.8}
+{"file":"chunk-hma1b5gv.js","key":"@14938","name":"name","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15022","name":"reader","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15059","name":"variant","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15098","name":"readings","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15171","name":"candidate","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15229","name":"makeSensitivePathMatcher","source":"semantic","confidence":0.75}
+{"file":"chunk-hma1b5gv.js","key":"@15232","name":"rootPath","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15239","name":"readingsOf","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15346","name":"candidate","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15385","name":"segments","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15396","name":"segment","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15407","name":"rootPrefix","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15447","name":"segment","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15471","name":"canUseStatePaths","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15515","name":"segments","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15527","name":"sensitive","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15576","name":"stateTails","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15648","name":"literal","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15665","name":"segment","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15728","name":"part","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15757","name":"candidate","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15788","name":"candidateSegment","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15790","name":"index","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15849","name":"candidate","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15882","name":"stateTailPattern","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15947","name":"segments","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@15988","name":"segments","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16018","name":"unused","source":"semantic","confidence":0.6}
+{"file":"chunk-hma1b5gv.js","key":"@16020","name":"depth","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16049","name":"tailSegments","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16061","name":"sensitive","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16114","name":"credentialConfigNames","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16129","name":"segments","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16143","name":"literal","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16159","name":"literal","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16188","name":"simplePrefix","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16283","name":"caseFoldings","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16316","name":"allForms","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16339","name":"variant","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16372","name":"form","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16397","name":"part","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16428","name":"basename","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16485","name":"variant","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16526","name":"mappedPath","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16592","name":"form","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16647","name":"gitSlashIndex","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16750","name":"effectiveSegments","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16810","name":"mappedPath","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16899","name":"name","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16919","name":"prefix","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16931","name":"form","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@16976","name":"form","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@17008","name":"part","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@17025","name":"part","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@17027","name":"index","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@17029","name":"parts","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@17078","name":"readings","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@17129","name":"variant","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@17142","name":"sensitive","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@17238","name":"EMPTY_TREE_SHA","source":"semantic","confidence":0.85,"note":"git 空树 4b825dc…"}
+{"file":"chunk-hma1b5gv.js","key":"@17284","name":"MAX_LISTED_FILES","source":"semantic","confidence":0.75,"note":"1e4"}
+{"file":"chunk-hma1b5gv.js","key":"@17291","name":"BATCH_SIZE","source":"semantic","confidence":0.7,"note":"256"}
+{"file":"chunk-hma1b5gv.js","key":"@17298","name":"MAX_DEPTH","source":"semantic","confidence":0.7,"note":"32"}
+{"file":"chunk-hma1b5gv.js","key":"@17342","name":"CREDENTIAL_LIKE_NAMES","source":"semantic","confidence":0.75}
+{"file":"chunk-hma1b5gv.js","key":"@17371","name":"name","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@17393","name":"UUID_SOURCE","source":"semantic","confidence":0.75}
+{"file":"chunk-hma1b5gv.js","key":"@17550","name":"MAX_PROJECT_DIRS","source":"semantic","confidence":0.7,"note":"256"}
+{"file":"chunk-hma1b5gv.js","key":"@17557","name":"NEEDS_QUOTING","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@17581","name":"MAX_FILE_BYTES","source":"semantic","confidence":0.7,"note":"20 MiB"}
+{"file":"chunk-hma1b5gv.js","key":"@17593","name":"BYTE_BUDGET","source":"semantic","confidence":0.7,"note":"1e8"}
+{"file":"chunk-hma1b5gv.js","key":"@17600","name":"KEPT_DOTFILES","source":"semantic","confidence":0.75}
+{"file":"chunk-hma1b5gv.js","key":"@17635","name":"IGNORED_DIRS","source":"semantic","confidence":0.75}
+{"file":"chunk-hma1b5gv.js","key":"@17706","name":"name","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@17737","name":"name","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@17773","name":"isIgnoredPath","source":"semantic","confidence":0.75}
+{"file":"chunk-hma1b5gv.js","key":"@17776","name":"path","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@17861","name":"segment","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@17904","name":"SCRATCH_GIT_CONFIG","source":"semantic","confidence":0.75,"note":"临时仓库的 git config 内容"}
+{"file":"chunk-hma1b5gv.js","key":"@18008","name":"COMMIT_IDENTITY","source":"semantic","confidence":0.75}
+{"file":"chunk-hma1b5gv.js","key":"@18170","name":"isWorkspaceDiffOn","source":"semantic","confidence":0.7,"note":"恒 false 的开关"}
+{"file":"chunk-hma1b5gv.js","key":"@18193","name":"planEmptyRepoDiff","source":"semantic","confidence":0.75}
+{"file":"chunk-hma1b5gv.js","key":"@18197","name":"session","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@18746","name":"diffWithoutRepository","source":"semantic","confidence":0.8,"note":"临时空仓库列出文件并生成差量"}
+{"file":"chunk-hma1b5gv.js","key":"@18750","name":"session","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@18756","name":"buildDiff","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@18765","name":"launchDirLeftOut","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@18770","name":"outcome","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@18880","name":"subdir","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@18976","name":"fileName","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@18978","name":"content","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@19431","name":"listing","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@19734","name":"resolvedCwd","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@19834","name":"status","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@20117","name":"listUntrackedFiles","source":"semantic","confidence":0.8}
+{"file":"chunk-hma1b5gv.js","key":"@20124","name":"gitDir","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@20221","name":"file","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@20266","name":"file","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@20299","name":"entry","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@20353","name":"excluded","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@20363","name":"seenDirs","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@20379","name":"settingsDirs","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@20417","name":"file","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@20506","name":"projectDir","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@20776","name":"batch","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@20833","name":"dir","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@20879","name":"dir","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@20891","name":"projectsDir","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@20911","name":"projectNames","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@20951","name":"hasTranscript","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@20983","name":"projectName","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21044","name":"entries","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21056","name":"entry","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21107","name":"prefix","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21239","name":"launchDirExcluded","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21298","name":"file","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21333","name":"match","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21365","name":"prefix","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21396","name":"stageEmptyBlobs","source":"semantic","confidence":0.8,"note":"用空 blob 建索引条目"}
+{"file":"chunk-hma1b5gv.js","key":"@21403","name":"gitDir","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21407","name":"rules","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21598","name":"file","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21607","name":"filePath","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21616","name":"stats","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21852","name":"file","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21854","name":"index","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21912","name":"byteBudget","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21917","name":"staged","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21922","name":"isSensitive","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21958","name":"index","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21960","name":"file","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@21982","name":"fileSize","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@22088","name":"filePath","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@22118","name":"reading","source":"semantic","confidence":0.7}
+{"file":"chunk-hma1b5gv.js","key":"@22311","name":"file","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@27555","name":"writeReportAnyway","source":"semantic","confidence":0.7,"note":"写完报告后转成布尔"}
+{"file":"chunk-gsmkwtjh.js","key":"@27558","name":"work","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@27562","name":"counts","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@27740","name":"MAX_TARGETS","source":"semantic","confidence":0.75,"note":"100"}
+{"file":"chunk-gsmkwtjh.js","key":"@27747","name":"MAX_LIST_BYTES","source":"semantic","confidence":0.75,"note":"500000"}
+{"file":"chunk-gsmkwtjh.js","key":"@27757","name":"OWNER_REPO_NUMBER_RE","source":"semantic","confidence":0.8,"note":"owner/repo#123"}
+{"file":"chunk-gsmkwtjh.js","key":"@27789","name":"BARE_NUMBER_RE","source":"semantic","confidence":0.8,"note":"#123 或 123"}
+{"file":"chunk-gsmkwtjh.js","key":"@27804","name":"COMMENT_LINE_RE","source":"semantic","confidence":0.8,"note":"# 后不是数字"}
+{"file":"chunk-gsmkwtjh.js","key":"@27818","name":"PULL_URL_RE","source":"semantic","confidence":0.8}
+{"file":"chunk-gsmkwtjh.js","key":"@27971","name":"MAX_HOST_LENGTH","source":"semantic","confidence":0.75,"note":"253"}
+{"file":"chunk-gsmkwtjh.js","key":"@27978","name":"MAX_OWNER_LENGTH","source":"semantic","confidence":0.75,"note":"39"}
+{"file":"chunk-gsmkwtjh.js","key":"@27984","name":"MAX_REPO_LENGTH","source":"semantic","confidence":0.75,"note":"100"}
+{"file":"chunk-gsmkwtjh.js","key":"@27991","name":"TARGET_FORMAT_HINT","source":"semantic","confidence":0.8}
+{"file":"chunk-gsmkwtjh.js","key":"@28125","name":"readListFile","source":"semantic","confidence":0.8}
+{"file":"chunk-gsmkwtjh.js","key":"@28135","name":"text","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28158","name":"chunk","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28275","name":"parseTargets","source":"semantic","confidence":0.85,"note":"解析 owner/repo#N、URL 或编号成 targets 与 problems"}
+{"file":"chunk-gsmkwtjh.js","key":"@28277","name":"inputs","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28279","name":"source","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28281","name":"defaultRepo","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28288","name":"defaultHost","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28360","name":"trustedRepo","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28490","name":"targets","source":"semantic","confidence":0.75}
+{"file":"chunk-gsmkwtjh.js","key":"@28495","name":"problems","source":"semantic","confidence":0.75}
+{"file":"chunk-gsmkwtjh.js","key":"@28500","name":"seen","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28510","name":"duplicatesFolded","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28522","name":"index","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28524","name":"raw","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28546","name":"lineText","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28605","name":"linePrefix","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28638","name":"firstWord","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28663","name":"note","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28707","name":"withoutInvisible","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28726","name":"redacted","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28735","name":"redactionIndex","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@28831","name":"shown","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@29109","name":"urlParts","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@29134","name":"ownerRepoMatch","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@29147","name":"bareNumberMatch","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@29362","name":"repository","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@29811","name":"number","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@29844","name":"host","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@29881","name":"repoName","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@30686","name":"runUltrareviewEval","source":"semantic","confidence":0.85,"note":"ultrareview eval 子命令入口"}
+{"file":"chunk-gsmkwtjh.js","key":"@30689","name":"mode","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@30691","name":"args","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@30693","name":"options","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@30695","name":"credentials","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@30784","name":"flagName","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@30786","name":"flagValue","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@31062","name":"policyRefusal","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@31125","name":"denyKind","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@31378","name":"maxCostUsd","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@31422","name":"reportPath","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@31517","name":"configDir","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@31524","name":"reportRelative","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@31584","name":"usageError","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@32455","name":"listLines","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@32785","name":"currentRepository","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@32817","name":"targets","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@32828","name":"problems","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@32847","name":"duplicatesFolded","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@33013","name":"preflight","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@33320","name":"run","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@33444","name":"pendingRun","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@33636","name":"result","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@33900","name":"pullRequests","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@33925","name":"attempted","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@33946","name":"reviewed","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@33953","name":"pullRequest","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@33981","name":"findingCount","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@33994","name":"pullRequest","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@34017","name":"unfinished","source":"semantic","confidence":0.7}
+{"file":"chunk-gsmkwtjh.js","key":"@34024","name":"pullRequest","source":"semantic","confidence":0.7}

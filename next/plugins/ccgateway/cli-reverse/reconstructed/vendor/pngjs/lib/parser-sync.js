@@ -1,8 +1,8 @@
 /**
  * pngjs/lib/parser-sync.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: pngjs@5.0.0
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
@@ -13,7 +13,7 @@ import { require_parser } from "./parser.js";
 import { require_bitmapper } from "./bitmapper.js";
 import { require_format_normaliser } from "./format-normaliser.js";
 
-//@ chunk-spjgqa4y.js:46406-47377 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:46406-47377 cjs-fingerprint
 var require_parser_sync = __commonJS(function (cjsExports, cjsModule) {
   var hasSyncZlib = true;
   var zlib = importMetaRequire("zlib");

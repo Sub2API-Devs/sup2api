@@ -3,10 +3,10 @@
  *
  * MCP 配置解析告警（按 user/project/local/managed 作用域的诊断）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/mcp/McpParsingWarnings.tsx
- * pieces: chunk-4xzsbgqr.js (14)
- * attribution: sole-consumer 5, affinity 1, fingerprint 5, file-local 2, layout 1
+ * pieces: chunk-d994c611.js (14)
+ * attribution: sole-consumer 6, fingerprint 5, file-local 2, layout 1
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -33,18 +33,18 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { isRestrictedToPluginOnly } from "../../utils/settings/pluginOnlyPolicy.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-4xzsbgqr.js:609-613 sole-consumer
+//@ chunk-d994c611.js:609-613 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4xzsbgqr.js:609", () => {
+deferInit("chunk-d994c611.js:609", () => {
   init_react_production();
 });
-//@ chunk-4xzsbgqr.js:613-1011 sole-consumer
+//@ chunk-d994c611.js:613-888 sole-consumer
 /**
  * 粗体标题、状态图标和可选说明的一行。
  */
 function StatusLine(props) {
-  let $ = useMemoCache(10);
-  let { title, status, detail } = props;
+  let $ = useMemoCache(7);
+  let { title, status } = props;
   let titleText;
   if ($[0] !== title) {
     titleText = jsxProd_default(Text, {
@@ -62,38 +62,26 @@ function StatusLine(props) {
     $[2] = status;
     $[3] = icon;
   } else icon = $[3];
-  let detailText;
-  if ($[4] !== detail) {
-    detailText = detail
-      ? jsxProd_default_2(Text, {
-          dimColor: true,
-          children: [" \xB7 ", detail],
-        })
-      : null;
-    $[4] = detail;
-    $[5] = detailText;
-  } else detailText = $[5];
   let line;
-  if ($[6] !== titleText || $[7] !== icon || $[8] !== detailText) {
+  if ($[4] !== titleText || $[5] !== icon) {
     line = jsxProd_default_2(Text, {
-      children: [titleText, " ", icon, detailText],
+      children: [titleText, " ", icon],
     });
-    $[6] = titleText;
-    $[7] = icon;
-    $[8] = detailText;
-    $[9] = line;
-  } else line = $[9];
+    $[4] = titleText;
+    $[5] = icon;
+    $[6] = line;
+  } else line = $[6];
   return line;
 }
-//@ chunk-4xzsbgqr.js:1011-1042 sole-consumer
+//@ chunk-d994c611.js:888-919 sole-consumer
 function warningFile(warning) {
   return warning.file;
 }
-//@ chunk-4xzsbgqr.js:1042-1076 sole-consumer
+//@ chunk-d994c611.js:919-953 sole-consumer
 function isNonAgentScope(warning) {
   return !isManagedConfigScope(warning.scope);
 }
-//@ chunk-4xzsbgqr.js:1076-1189 sole-consumer
+//@ chunk-d994c611.js:953-1066 sole-consumer
 /**
  * 某作用域的服务器（含未展开变量的显示版本）。
  */
@@ -106,21 +94,21 @@ function scopeServersSnapshot(warning) {
     }).servers,
   };
 }
-//@ chunk-4xzsbgqr.js:1189-1231 affinity
+//@ chunk-d994c611.js:1066-1108 sole-consumer
 function isApprovedServer(server) {
   return getEffectiveProjectMcpServerStatus(server) === "approved";
 }
-//@ chunk-4xzsbgqr.js:1231-1298 fingerprint (2.1.88 match: _temp3, 1)
+//@ chunk-d994c611.js:1108-1175 fingerprint (2.1.88 match: _temp3, 1)
 function hasFatalError(t0) {
   let { config } = t0;
   return filterErrors(config.errors, "fatal").length > 0;
 }
-//@ chunk-4xzsbgqr.js:1298-1367 file-local
+//@ chunk-d994c611.js:1175-1244 file-local
 function hasWarningError(t0) {
   let { config } = t0;
   return filterErrors(config.errors, "warning").length > 0;
 }
-//@ chunk-4xzsbgqr.js:1367-1495 fingerprint (2.1.88 match: _temp5, 1)
+//@ chunk-d994c611.js:1244-1372 fingerprint (2.1.88 match: _temp5, 1)
 /**
  * 渲染一个作用域的配置错误与警告。
  */
@@ -136,7 +124,7 @@ function renderScopeErrors(t0) {
     scope,
   );
 }
-//@ chunk-4xzsbgqr.js:1495-1677 layout
+//@ chunk-d994c611.js:1372-1554 layout
 /**
  * 冲突提示节点（消息与建议）。
  */
@@ -159,7 +147,7 @@ function renderConflictNode(conflict, index) {
     `conflict-${index}`,
   );
 }
-//@ chunk-4xzsbgqr.js:1677-4246 fingerprint (2.1.88 match: McpConfigErrorSection, 0.412)
+//@ chunk-d994c611.js:1554-4123 fingerprint (2.1.88 match: McpConfigErrorSection, 0.414)
 function McpConfigErrorSection(props) {
   let $ = useMemoCache(56);
   let { scope, parsingErrors, warnings } = props;
@@ -413,7 +401,7 @@ function McpConfigErrorSection(props) {
   } else section = $[55];
   return section;
 }
-//@ chunk-4xzsbgqr.js:4246-5320 fingerprint (2.1.88 match: McpParsingWarnings, 0.411)
+//@ chunk-d994c611.js:4123-5197 fingerprint (2.1.88 match: McpParsingWarnings, 0.41)
 function McpParsingWarnings() {
   let $ = useMemoCache(3);
   let diagnostics;
@@ -509,11 +497,11 @@ function McpParsingWarnings() {
   } else t5 = $[2];
   return t5;
 }
-//@ chunk-4xzsbgqr.js:5320-5391 fingerprint (2.1.88 match: filterErrors, 1)
+//@ chunk-d994c611.js:5197-5268 fingerprint (2.1.88 match: filterErrors, 1)
 function filterErrors(errors, severity) {
   return errors.filter((e) => e.mcpErrorMetadata?.severity === severity);
 }
-//@ chunk-4xzsbgqr.js:5391-5838 file-local
+//@ chunk-d994c611.js:5268-5715 file-local
 /**
  * 去掉会被后面作用域覆盖的服务器警告；企业/锁定时非托管作用域的警告全部隐藏。
  */

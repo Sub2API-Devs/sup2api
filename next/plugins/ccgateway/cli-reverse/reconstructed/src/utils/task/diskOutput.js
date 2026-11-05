@@ -3,16 +3,15 @@
  *
  * 后台任务输出文件：<项目临时目录>/<sessionId>/tasks/<taskId>.output 的安全打开、追加、读取与链接校验。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/task/diskOutput.ts
- * pieces: chunk-1dp9p908.js (65), chunk-aepeg2w5.js (1), chunk-c0cahhqh.js (2), chunk-y805ph4h.js (1)
- * attribution: facade-majority 32, layout 31, callgraph-fingerprint 1, file-local 1, fingerprint 2, affinity 1, placement 1
+ * pieces: chunk-3katra73.js (67), chunk-j8qkeqz1.js (2), chunk-tp1gh0pb.js (1)
+ * attribution: facade-majority 33, layout 32, callgraph-fingerprint 1, file-local 1, placement 2, fingerprint 1
  */
 import { constants, fstat } from "fs";
 import { join, dirname, sep, isAbsolute, resolve, basename } from "path";
 import { lstat, readdir, readlink, unlink, symlink, mkdir, open, realpath } from "fs/promises";
 import { randomBytes } from "crypto";
-import { withDeadline, sleep } from "../sleep.js";
 import { getClaudeTempDirRealpath, sessionTempDirRealpath } from "../tempDirRealpaths.js";
 import { getBgTakeover } from "../concurrentSessions.js";
 import { getSessionId, isDiskless } from "../../bootstrap/state.js";
@@ -26,7 +25,7 @@ import {
   withTelemetryMessage,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from "../errors.js";
-import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
+import { sleep } from "../sleep.js";
 import { getPlatform } from "../platform.js";
 import {
   readFileRange,
@@ -35,7 +34,7 @@ import {
   getPathsForPermissionCheck,
   tailFile,
 } from "../fsOperations.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2, normalizeCaseForComparison } from "../permissions/filesystem.js";
 import {
   openNoFollow,
   procFdPath,
@@ -43,7 +42,6 @@ import {
   refuseSymlinkWrite,
 } from "../fsSafety/pathRevalidation.js";
 import { getProjectsDir } from "../sessionStorage.js";
-import { normalizeCaseForComparison } from "../permissions/filesystem.js";
 import { isValidSessionIdForAdopt } from "../background/adopt.js";
 import { SymlinkWriteRefusedError } from "../fsSafety/atomicWriteStaging.js";
 import {
@@ -54,21 +52,17 @@ import {
 import { getFileReader } from "../fileStore.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:901197-901268 fingerprint (2.1.88 match: _clearOutputsForTest, 0.46)
-async function _clearOutputsForTest(state, timeoutMs) {
-  await withDeadline(Promise.allSettled(state.emitsInFlight), timeoutMs);
-}
-//@ chunk-1dp9p908.js:1692-1762 facade-majority (2.1.88 match: MAX_TASK_OUTPUT_BYTES_DISPLAY, 0.861)
+//@ chunk-3katra73.js:1002-1072 facade-majority (2.1.88 match: MAX_TASK_OUTPUT_BYTES_DISPLAY, 0.862)
 var O_NOFOLLOW_FLAG = constants.O_NOFOLLOW ?? 0;
 var DEFAULT_DELTA_BYTES = 8388608;
 var MAX_TASK_OUTPUT_BYTES = 5368709120;
 var MAX_TASK_OUTPUT_BYTES_DISPLAY = "5GB";
 var MAX_PERSISTED_OUTPUT_BYTES = 67108864;
-//@ chunk-1dp9p908.js:1762-1789 facade-majority
+//@ chunk-3katra73.js:1072-1099 facade-majority
 function getTaskOutputRootDir() {
   return getClaudeTempDirRealpath();
 }
-//@ chunk-1dp9p908.js:1789-1966 facade-majority
+//@ chunk-3katra73.js:1099-1276 facade-majority
 /**
  * 后台任务输出目录 <项目临时目录>/<sessionId>/tasks，每个任务一个 <taskId>.output 文件。
  */
@@ -80,18 +74,18 @@ function getTaskOutputDir() {
     taskRunState.outputDir = join(sessionTempDirRealpath(), getSessionId(), "tasks");
   return taskRunState.outputDir;
 }
-//@ chunk-1dp9p908.js:1966-2007 facade-majority (2.1.88 match: getTaskOutputDir, 1)
+//@ chunk-3katra73.js:1276-1317 facade-majority (2.1.88 match: getTaskOutputDir, 1)
 function taskOutputDirForSession(taskId) {
   return join(sessionTempDirRealpath(), taskId, "tasks");
 }
-//@ chunk-1dp9p908.js:2007-2120 facade-majority
+//@ chunk-3katra73.js:1317-1430 facade-majority
 function peekTaskOutputDir() {
   return getBgTakeover()?.adoptShellOutputRoot !== undefined
     ? getTaskOutputDir()
     : ((isDiskless() ? undefined : getTaskRunState().outputDir) ??
         join(sessionTempDirRealpath(), getSessionId(), "tasks"));
 }
-//@ chunk-1dp9p908.js:2120-2263 layout (2.1.88 match: getTaskOutputDir, 0.761)
+//@ chunk-3katra73.js:1430-1573 layout (2.1.88 match: getTaskOutputDir, 0.761)
 function getTaskOutputDir_2() {
   let taskRunState = getTaskRunState();
   if (taskRunState.outputDir === undefined) {
@@ -100,7 +94,7 @@ function getTaskOutputDir_2() {
   }
   return taskRunState.outputDir;
 }
-//@ chunk-1dp9p908.js:2263-2489 facade-majority
+//@ chunk-3katra73.js:1573-1783 facade-majority
 /**
  * 任务输出文件路径 <tasks 目录>/<taskId>.output，按 taskId 缓存（diskless 会话抛错）。
  */
@@ -108,11 +102,15 @@ function bindTaskOutputPath(taskId) {
   if (isDiskless()) throw Error("Task output is not written to disk in a diskless session");
   let boundPath = getTaskRunState().outputPathBindings.get(taskId);
   if (boundPath !== undefined) return boundPath;
-  let defaultPath = join(getTaskOutputDir(), `${taskId}.output`);
+  let defaultPath = unboundTaskOutputPath(taskId);
   getTaskRunState().outputPathBindings.set(taskId, defaultPath);
   return defaultPath;
 }
-//@ chunk-1dp9p908.js:2489-2661 facade-majority (2.1.88 match: getTaskOutputPath, 0.529)
+//@ chunk-3katra73.js:1783-1829 facade-majority (2.1.88 match: getAgentOutputTaskId, 1)
+function unboundTaskOutputPath(filePath) {
+  return join(getTaskOutputDir(), `${filePath}.output`);
+}
+//@ chunk-3katra73.js:1829-2001 facade-majority (2.1.88 match: getTaskOutputPath, 0.53)
 /**
  * 后台任务输出文件路径：<项目临时目录>/<sessionId>/tasks/<taskId>.output（可被绑定覆盖）；diskless 会话抛错。
  */
@@ -122,19 +120,19 @@ function getTaskOutputPath(taskId) {
   if (boundPath !== undefined) return boundPath;
   return join(getTaskOutputDir_2(), `${taskId}.output`);
 }
-//@ chunk-1dp9p908.js:2661-2762 callgraph-fingerprint (2.1.88 match: track, 0.508)
+//@ chunk-3katra73.js:2001-2102 callgraph-fingerprint (2.1.88 match: track, 0.507)
 function track(p) {
   let pendingOutputOps = getTaskRunState().pendingOutputOps;
   pendingOutputOps.add(p);
   p.finally(() => pendingOutputOps.delete(p)).catch(() => {});
   return p;
 }
-//@ chunk-1dp9p908.js:2762-2889 layout
+//@ chunk-3katra73.js:2102-2227 layout
 var TASK_OUTPUT_FLUSH_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var OUTPUT_OMITTED_NOTE;
 var GLUE_LINE_LENGTHS;
 var reduced;
-deferInit("chunk-1dp9p908.js:2762", () => {
+deferInit("chunk-3katra73.js:2102", () => {
   TASK_OUTPUT_FLUSH_BYTES = 16777216;
   OUTPUT_OMITTED_NOTE = `
 [output omitted: it could not be written to disk]
@@ -142,30 +140,30 @@ deferInit("chunk-1dp9p908.js:2762", () => {
   GLUE_LINE_LENGTHS = [50, 100, 200, 400, 800, 1600];
   reduced = GLUE_LINE_LENGTHS.reduce((acc, lineLength) => acc + lineLength, 0);
 });
-//@ chunk-1dp9p908.js:2889-5609 facade-majority (2.1.88 match: DiskTaskOutput, 0.323)
+//@ chunk-3katra73.js:2227-4945 facade-majority (2.1.88 match: DiskTaskOutput, 0.323)
 class DiskTaskOutput {
   #h;
   #n = null;
   #t = [];
-  #w = 0;
-  #o = false;
+  #p = 0;
+  #a = false;
   #e = 0;
   #r = 0;
   #i = false;
   #u = new Set();
   #c = false;
   #s = null;
-  #a = null;
+  #o = null;
   #l = null;
   #d = null;
   constructor(taskId, path) {
     this.#h = path ?? bindTaskOutputPath(taskId);
   }
   append(text) {
-    if (this.#o) return;
-    this.#w += text.length;
-    if (this.#w > MAX_TASK_OUTPUT_BYTES) this.#o = true;
-    let textToWrite = this.#o
+    if (this.#a) return;
+    this.#p += text.length;
+    if (this.#p > MAX_TASK_OUTPUT_BYTES) this.#a = true;
+    let textToWrite = this.#a
       ? `
 [output truncated: exceeded ${MAX_TASK_OUTPUT_BYTES_DISPLAY} disk cap]
 `
@@ -180,7 +178,7 @@ class DiskTaskOutput {
     }
   }
   appendTrailer(trailerText, exitKind) {
-    if (!this.#o) this.#s = exitKind;
+    if (!this.#a) this.#s = exitKind;
     this.append(trailerText);
   }
   flush() {
@@ -200,8 +198,8 @@ class DiskTaskOutput {
     this.#t.length = 0;
     this.#e = 0;
     this.#s = null;
-    this.#a?.abort();
-    this.#a = null;
+    this.#o?.abort();
+    this.#o = null;
   }
   async #f() {
     while (true) {
@@ -210,7 +208,7 @@ class DiskTaskOutput {
         while (true) {
           let cancelGeneration = this.#r;
           try {
-            await this.#m();
+            await this.#y();
           } catch (error) {
             if (this.#r === cancelGeneration) {
               this.#c = true;
@@ -232,10 +230,10 @@ class DiskTaskOutput {
       break;
     }
   }
-  #m() {
-    return this.#n.appendFile(this.#y());
-  }
   #y() {
+    return this.#n.appendFile(this.#m());
+  }
+  #m() {
     let queue = this.#t.splice(0, this.#t.length);
     this.#e = 0;
     this.#s = null;
@@ -249,7 +247,7 @@ class DiskTaskOutput {
   async #O() {
     try {
       await this.#f();
-      this.#p();
+      this.#w();
     } catch (error) {
       if (this.#g(error) !== null) {
         if (!this.#i) {
@@ -259,13 +257,13 @@ class DiskTaskOutput {
           );
         }
         for (let [attempt, delayMs] of GLUE_LINE_LENGTHS.entries()) {
-          this.#a ??= new AbortController();
-          await sleep(delayMs, this.#a.signal);
+          this.#o ??= new AbortController();
+          await sleep(delayMs, this.#o.signal);
           if (this.#t.length === 0) return;
           let cancelGeneration_2 = this.#r;
           try {
             await this.#f();
-            this.#p();
+            this.#w();
             return;
           } catch (error) {
             if (this.#t.length === 0 && this.#r !== cancelGeneration_2) return;
@@ -287,7 +285,7 @@ class DiskTaskOutput {
       if (this.#t.length > 0)
         try {
           await this.#f();
-          this.#p();
+          this.#w();
         } catch (error) {
           this.#k(error, null);
         }
@@ -298,7 +296,7 @@ class DiskTaskOutput {
       resolveDrain();
     }
   }
-  #p() {
+  #w() {
     this.#i = false;
     this.#u.clear();
   }
@@ -354,7 +352,7 @@ class DiskTaskOutput {
     }
   }
 }
-//@ chunk-1dp9p908.js:5609-5708 layout
+//@ chunk-3katra73.js:4945-5044 layout
 function getDiskTaskOutput(taskId) {
   let output = getTaskRunState().diskOutputs.get(taskId);
   if (!output) {
@@ -363,11 +361,11 @@ function getDiskTaskOutput(taskId) {
   }
   return output;
 }
-//@ chunk-1dp9p908.js:5708-5742 facade-majority
+//@ chunk-3katra73.js:5044-5078 facade-majority
 function appendTaskOutput(taskId, content) {
   getDiskTaskOutput(taskId).append(content);
 }
-//@ chunk-1dp9p908.js:5742-5906 facade-majority
+//@ chunk-3katra73.js:5078-5242 facade-majority
 function appendTaskOutputTrailer(taskId, outcome) {
   let diskTaskOutput = getDiskTaskOutput(taskId);
   if (outcome === "killed")
@@ -385,7 +383,7 @@ function appendTaskOutputTrailer(taskId, outcome) {
       "exited",
     );
 }
-//@ chunk-1dp9p908.js:5906-6185 facade-majority (2.1.88 match: evictTaskOutput, 0.156)
+//@ chunk-3katra73.js:5242-5521 facade-majority (2.1.88 match: evictTaskOutput, 0.155)
 /**
  * 刷新并移除某任务的磁盘输出写入器，释放内存；写失败时记录丢失的字符数。
  */
@@ -409,7 +407,7 @@ function evictTaskOutput(taskId) {
     })(),
   );
 }
-//@ chunk-1dp9p908.js:6185-6327 facade-majority (2.1.88 match: getAgentOutputTaskId, 0.778)
+//@ chunk-3katra73.js:5521-5663 facade-majority (2.1.88 match: getAgentOutputTaskId, 0.778)
 /**
  * 若任务输出路径绑定仍指向默认 <dir>/<id>.output，则删除该绑定（归属疑似错误）。
  */
@@ -422,7 +420,7 @@ function releaseConvergentTaskOutputBinding(filePath) {
   )
     getTaskRunState().outputPathBindings.delete(filePath);
 }
-//@ chunk-1dp9p908.js:6327-6754 facade-majority (2.1.88 match: getTaskOutputDelta, 0.623)
+//@ chunk-3katra73.js:5663-6090 facade-majority (2.1.88 match: getTaskOutputDelta, 0.622)
 async function getTaskOutputDelta(taskId, fromOffset, maxBytes = DEFAULT_DELTA_BYTES) {
   try {
     let taskOutputForRead = await openTaskOutputForRead(getTaskOutputPath(taskId));
@@ -464,7 +462,7 @@ async function getTaskOutputDelta(taskId, fromOffset, maxBytes = DEFAULT_DELTA_B
     };
   }
 }
-//@ chunk-1dp9p908.js:6754-7203 facade-majority
+//@ chunk-3katra73.js:6090-6539 facade-majority
 async function getTaskOutputSize(taskId) {
   try {
     let taskOutputForRead = await openTaskOutputForRead(getTaskOutputPath(taskId));
@@ -491,11 +489,11 @@ async function getTaskOutputSize(taskId) {
     return 0;
   }
 }
-//@ chunk-1dp9p908.js:7203-7594 facade-majority
+//@ chunk-3katra73.js:6539-6930 facade-majority
 async function repointTaskOutputSymlinks(oldRoot, newRoot) {
   if (isDiskless()) return;
   let taskRunState = getTaskRunState();
-  let dirs = uniq([
+  let dirs = normalizeCaseForComparison_2([
     ...(taskRunState.outputDir !== undefined ? [taskRunState.outputDir] : []),
     ...[...taskRunState.outputPathBindings.values()].map((outputPathBinding) => dirname(outputPathBinding)),
   ]);
@@ -518,7 +516,7 @@ async function repointTaskOutputSymlinks(oldRoot, newRoot) {
     await repointOutputSymlinksInDir(dir, entries, oldRootPrefix, oldRoot, newRoot);
   }
 }
-//@ chunk-1dp9p908.js:7594-8432 layout
+//@ chunk-3katra73.js:6930-7768 layout
 /**
  * repointTaskOutputSymlinks 的单目录实现：对目录中每个 .output 符号链接，若指向旧任务输出根则改指到新根（固定写目标、校验链接未被改动、先删后建），并更新 linkedOutputs 登记。
  */
@@ -577,7 +575,7 @@ async function repointOutputSymlinksInDir(dir, entries, oldRootPrefix, oldRoot, 
     }
   }
 }
-//@ chunk-1dp9p908.js:8432-9566 layout
+//@ chunk-3katra73.js:7768-8902 layout
 /**
  * 安全地以追加方式打开任务输出文件：无盘会话报错；Windows 直接 open；其余固定写目标后检查叶子——符号链接只允许一跳且指向任务输出根，必须是单链接普通文件，
  * 用 O_NOFOLLOW|O_APPEND 打开（必要时独占创建），并核对打开的文件身份。
@@ -671,7 +669,7 @@ async function openTaskOutputForAppend_2(outputPath, options, linkDepth = 0) {
     await pinned.close();
   }
 }
-//@ chunk-1dp9p908.js:9566-10657 facade-majority
+//@ chunk-3katra73.js:8902-9993 facade-majority
 async function openTaskOutputForRead(outputPath, linkDepth = 0, relooked = false) {
   if (getPlatform() === "windows") {
     let existing = await getTaskOutputSize_2(outputPath);
@@ -742,7 +740,7 @@ async function openTaskOutputForRead(outputPath, linkDepth = 0, relooked = false
     await pinned.close();
   }
 }
-//@ chunk-1dp9p908.js:10657-11014 layout
+//@ chunk-3katra73.js:9993-10350 layout
 async function adoptInheritedOutputLink(outputPath, ioPath, linkTarget) {
   let inProjects = isAbsolute(linkTarget) && resolve(linkTarget).startsWith(resolve(getProjectsDir()) + sep);
   if (!isAbsolute(linkTarget) || (!isInTaskOutputRoot(linkTarget) && !inProjects))
@@ -759,7 +757,7 @@ async function adoptInheritedOutputLink(outputPath, ioPath, linkTarget) {
   await registerLinkedOutput(outputPath, linkTarget);
   return linkTarget;
 }
-//@ chunk-1dp9p908.js:11014-11335 layout
+//@ chunk-3katra73.js:10350-10671 layout
 async function verifyOutputLink(outputPath, ioPath) {
   let linkedTarget = getTaskRunState().linkedOutputs.get(outputPath);
   if (linkedTarget === undefined) {
@@ -774,7 +772,7 @@ async function verifyOutputLink(outputPath, ioPath) {
   if (currentTarget !== linkedTarget) return refuseOutputSwap(outputPath, "output symlink was re-pointed");
   return linkedTarget;
 }
-//@ chunk-1dp9p908.js:11335-11427 layout
+//@ chunk-3katra73.js:10671-10763 layout
 async function readlinkOrNull(path) {
   try {
     return await readlink(path);
@@ -783,7 +781,7 @@ async function readlinkOrNull(path) {
     throw error;
   }
 }
-//@ chunk-1dp9p908.js:11427-11913 layout
+//@ chunk-3katra73.js:10763-11249 layout
 /**
  * 打开任务输出链接的目标供读取：指回任务目录时按链深度处理，否则解析真实路径、以不跟随链接方式打开，并核对是普通文件且 inode/设备与 lstat 一致。
  */
@@ -819,7 +817,7 @@ async function openLinkTargetForRead(linkTarget, linkDepth, outputPath) {
   }
   return handle;
 }
-//@ chunk-1dp9p908.js:11913-11986 layout
+//@ chunk-3katra73.js:11249-11322 layout
 function isInTaskOutputRoot(path) {
   let claudeTempDirRealpath = getClaudeTempDirRealpath();
   return (
@@ -827,7 +825,7 @@ function isInTaskOutputRoot(path) {
     path.startsWith(claudeTempDirRealpath.endsWith(sep) ? claudeTempDirRealpath : claudeTempDirRealpath + sep)
   );
 }
-//@ chunk-1dp9p908.js:11986-12078 file-local
+//@ chunk-3katra73.js:11322-11414 file-local
 async function getTaskOutputSize_2(taskId) {
   try {
     return await lstat(taskId);
@@ -836,23 +834,23 @@ async function getTaskOutputSize_2(taskId) {
     throw e;
   }
 }
-//@ chunk-1dp9p908.js:12078-12092 layout
+//@ chunk-3katra73.js:11414-11428 layout
 var linkTargetIdentities; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1dp9p908.js:12078", () => {
+deferInit("chunk-3katra73.js:11414", () => {
   linkTargetIdentities = new Map();
 });
-//@ chunk-1dp9p908.js:12092-12199 layout
+//@ chunk-3katra73.js:11428-11535 layout
 function getRecordedLinkIdentity(outputPath) {
   let identity = linkTargetIdentities.get(outputPath);
   if (identity === undefined) return refuseOutputSwap(outputPath, "link target identity was never recorded");
   return identity;
 }
-//@ chunk-1dp9p908.js:12199-12270 layout
+//@ chunk-3katra73.js:11535-11606 layout
 async function registerLinkedOutput(outputPath, linkTarget) {
   if (isInTaskOutputRoot(linkTarget)) await recordLinkTargetIdentity(linkTarget);
   getTaskRunState().linkedOutputs.set(outputPath, linkTarget);
 }
-//@ chunk-1dp9p908.js:12270-12613 layout
+//@ chunk-3katra73.js:11606-11949 layout
 /**
  * 记录任务输出链接目标的文件身份：以不跟随链接方式打开，要求是只有一个硬链接的普通文件，保存其 dev/ino。
  */
@@ -884,7 +882,7 @@ async function recordLinkTargetIdentity(outputPath) {
     await pinned.close();
   }
 }
-//@ chunk-1dp9p908.js:12613-13075 layout
+//@ chunk-3katra73.js:11949-12411 layout
 /**
  * 核对已打开的输出文件身份：必须是普通文件、硬链接数/登记身份与打开前一致；可选在文件已被删除（nlink 0）时返回 gone。不一致抛"output file identity changed"。
  */
@@ -919,7 +917,7 @@ async function checkOutputIdentity(handle, existing, outputPath, opts) {
     throw error;
   }
 }
-//@ chunk-1dp9p908.js:13075-13265 layout
+//@ chunk-3katra73.js:12411-12601 layout
 function mapOpenRefusal(error, path) {
   let errnoCode = getErrnoCode(error);
   if (
@@ -937,7 +935,7 @@ function mapOpenRefusal(error, path) {
     }
   return error;
 }
-//@ chunk-1dp9p908.js:13265-13428 layout
+//@ chunk-3katra73.js:12601-12764 layout
 function canonicalizeTaskOutputPath(path) {
   let taskOutputBaseDir = getTaskOutputBaseDir();
   let resolved = resolve(path);
@@ -949,11 +947,11 @@ function canonicalizeTaskOutputPath(path) {
     ? join(taskOutputBaseDir, resolved.slice(ancestorDir.length + 1))
     : resolved;
 }
-//@ chunk-1dp9p908.js:13428-13467 layout
+//@ chunk-3katra73.js:12764-12803 layout
 function getTaskOutputBaseDir() {
   return dirname(dirname(dirname(resolve(getTaskOutputDir()))));
 }
-//@ chunk-1dp9p908.js:13467-13655 facade-majority (2.1.88 match: getTaskOutputDir, 0.807)
+//@ chunk-3katra73.js:12803-12991 facade-majority (2.1.88 match: getTaskOutputDir, 0.807)
 function isTaskOutputFilePath(path) {
   let taskOutputBaseDir = getTaskOutputBaseDir();
   let fsImplementation = getFsImplementation();
@@ -971,22 +969,25 @@ function isTaskOutputFilePath(path) {
     );
   });
 }
-//@ chunk-1dp9p908.js:13655-13800 layout
+//@ chunk-3katra73.js:12991-13136 layout
 function getSessionDirGlobs() {
   let globs = ["????????-????-????-????-????????????", "session_*", "cse_*"];
   let sessionId = getSessionId();
   if (!isValidSessionIdForAdopt(sessionId) && /^[A-Za-z0-9._-]+$/.test(sessionId)) globs.push(sessionId);
   return globs;
 }
-//@ chunk-1dp9p908.js:13800-13838 layout
+//@ chunk-3katra73.js:13136-13174 layout
 function isOwnSessionId(sessionId) {
   return isValidSessionIdForAdopt(sessionId) || sessionId === getSessionId();
 }
-//@ chunk-1dp9p908.js:13838-14616 facade-majority
+//@ chunk-3katra73.js:13174-13952 facade-majority
 function taskOutputDirExclusions(canonical) {
   let taskOutputBaseDir = getTaskOutputBaseDir();
   let fsImplementation = getFsImplementation();
-  let baseDirs = uniq([taskOutputBaseDir, safeResolvePath(fsImplementation, taskOutputBaseDir).resolvedPath]);
+  let baseDirs = normalizeCaseForComparison_2([
+    taskOutputBaseDir,
+    safeResolvePath(fsImplementation, taskOutputBaseDir).resolvedPath,
+  ]);
   let exclusions = new Set();
   let relativeUnder = (base, path) => {
     let basePrefix = base.endsWith(sep) ? base : base + sep;
@@ -1032,7 +1033,7 @@ function taskOutputDirExclusions(canonical) {
   }
   return [...exclusions];
 }
-//@ chunk-1dp9p908.js:14616-15005 facade-majority
+//@ chunk-3katra73.js:13952-14341 facade-majority
 async function bindTaskOutputForRead(path) {
   path = canonicalizeTaskOutputPath(path);
   let taskOutputForRead = await openTaskOutputForRead(path);
@@ -1060,13 +1061,13 @@ async function bindTaskOutputForRead(path) {
     close: () => taskOutputForRead.close(),
   };
 }
-//@ chunk-1dp9p908.js:15005-15018 facade-majority
+//@ chunk-3katra73.js:14341-14354 facade-majority
 var TASK_OUTPUT_TAIL_BYTES = 8192;
-//@ chunk-1dp9p908.js:15018-15062 facade-majority
+//@ chunk-3katra73.js:14354-14398 facade-majority
 async function tailOutputOfTask(taskId) {
   return tailTaskOutput(getTaskOutputPath(taskId), TASK_OUTPUT_TAIL_BYTES);
 }
-//@ chunk-1dp9p908.js:15062-15211 facade-majority (2.1.88 match: getTaskOutput, 1)
+//@ chunk-3katra73.js:14398-14547 facade-majority (2.1.88 match: getTaskOutput, 1)
 async function tailTaskOutput(taskId, maxBytes) {
   let taskOutputForRead = await openTaskOutputForRead(taskId);
   if (taskOutputForRead === null)
@@ -1081,7 +1082,7 @@ async function tailTaskOutput(taskId, maxBytes) {
     await taskOutputForRead.close();
   }
 }
-//@ chunk-1dp9p908.js:15211-15527 facade-majority
+//@ chunk-3katra73.js:14547-14863 facade-majority
 async function unlinkTaskOutput(path) {
   let linkedTarget = getTaskRunState().linkedOutputs.get(path);
   getTaskRunState().linkedOutputs.delete(path);
@@ -1107,12 +1108,12 @@ async function unlinkTaskOutput(path) {
     await pinned.close();
   }
 }
-//@ chunk-1dp9p908.js:15527-15555 layout
+//@ chunk-3katra73.js:14863-14891 layout
 var uint8Array; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1dp9p908.js:15527", () => {
+deferInit("chunk-3katra73.js:14863", () => {
   uint8Array = new Uint8Array([10]);
 });
-//@ chunk-1dp9p908.js:15555-15878 facade-majority
+//@ chunk-3katra73.js:14891-15214 facade-majority
 async function probeTaskOutputWrite(path) {
   let probePath = `${path}.${randomBytes(6).toString("hex")}.probe`;
   try {
@@ -1139,7 +1140,7 @@ async function probeTaskOutputWrite(path) {
     });
   }
 }
-//@ chunk-1dp9p908.js:15878-16021 facade-majority
+//@ chunk-3katra73.js:15214-15357 facade-majority
 async function writeTaskOutputSnapshot(outputFile, data) {
   let taskOutputForAppend = await openTaskOutputForAppend_2(outputFile, {
     exclusive: false,
@@ -1152,13 +1153,50 @@ async function writeTaskOutputSnapshot(outputFile, data) {
     await taskOutputForAppend.close();
   }
 }
-//@ chunk-1dp9p908.js:16021-17958 layout
+//@ chunk-3katra73.js:15357-16033 layout
+async function pinOutputPath(outputPath, options) {
+  try {
+    return await pinWriteTarget(outputPath, [outputPath], {
+      createParents: options?.create ?? true,
+      ...(options?.replaceLeaf && {
+        leaf: "replace",
+      }),
+    });
+  } catch (error) {
+    if (error instanceof SymlinkWriteRefusedError) {
+      if (!(await isTempRootResolvable())) {
+        if (options?.create ?? true)
+          await mkdir(dirname(outputPath), {
+            recursive: true,
+            mode: 448,
+          });
+        return {
+          ioPath: outputPath,
+          canonicalPath: outputPath,
+          readExisting: () => Promise.resolve(null),
+          recheckBeforeWrite: () => {},
+          close: async () => {},
+        };
+      }
+      logForDebugging(`task output: pin of ${dirname(outputPath)} refused: ${errorMessage(error)}`, {
+        level: "warn",
+      });
+      refuseOutputSwap(
+        outputPath,
+        "tasks dir moved or linked",
+        `restart Claude Code with CLAUDE_CODE_TMPDIR set to a fresh directory; or, if ${sessionTempDirRealpath().replace(/[\\/]+$/, "")} is a stray directory or a symbolic link that should not be there, remove that entry itself (not what it points to) and restart`,
+      );
+    }
+    throw error;
+  }
+}
+//@ chunk-3katra73.js:16033-17349 layout
 /**
  * 获取输出文件所在目录的固定写视图（按目录缓存并核对目录 inode 未变），pinWriteTarget 遇到符号链接拒绝且临时根不可 realpath 时退化为直接路径。
  */
-async function pinOutputDir(path, options) {
-  let dir = dirname(path);
-  let name = basename(path);
+async function pinOutputDir(outputPath, options) {
+  let dir = dirname(outputPath);
+  let name = basename(outputPath);
   let existingHold = pinnedOutputDirs.get(dir);
   if (existingHold !== undefined) {
     let held = await existingHold.catch(() => null);
@@ -1176,46 +1214,15 @@ async function pinOutputDir(path, options) {
       if (view !== null) return view;
       if (pinnedOutputDirs.get(dir) === existingHold) pinnedOutputDirs.delete(dir);
       await held.release();
-    } else if (pinnedOutputDirs.get(dir) === existingHold) pinnedOutputDirs.delete(dir);
+    } else {
+      if (pinnedOutputDirs.get(dir) === existingHold) pinnedOutputDirs.delete(dir);
+      return pinOutputPath(outputPath, options);
+    }
   }
   let otherHold = pinnedOutputDirs.get(dir);
-  if (otherHold !== undefined && otherHold !== existingHold) return pinOutputDir(path, options);
+  if (otherHold !== undefined && otherHold !== existingHold) return pinOutputDir(outputPath, options);
   let holdPromise = (async () => {
-    let pinned;
-    try {
-      pinned = await pinWriteTarget(path, [path], {
-        createParents: options?.create ?? true,
-        ...(options?.replaceLeaf && {
-          leaf: "replace",
-        }),
-      });
-    } catch (error) {
-      if (error instanceof SymlinkWriteRefusedError) {
-        if (!(await isTempRootResolvable())) {
-          if (options?.create ?? true)
-            await mkdir(dirname(path), {
-              recursive: true,
-              mode: 448,
-            });
-          return {
-            ioPath: path,
-            canonicalPath: path,
-            readExisting: () => Promise.resolve(null),
-            recheckBeforeWrite: () => {},
-            close: async () => {},
-          };
-        }
-        logForDebugging(`task output: pin of ${dirname(path)} refused: ${errorMessage(error)}`, {
-          level: "warn",
-        });
-        refuseOutputSwap(
-          path,
-          "tasks dir moved or linked",
-          `restart Claude Code with CLAUDE_CODE_TMPDIR set to a fresh directory; or, if ${sessionTempDirRealpath().replace(/[\\/]+$/, "")} is a stray directory or a symbolic link that should not be there, remove that entry itself (not what it points to) and restart`,
-        );
-      }
-      throw error;
-    }
+    let pinned = await pinOutputPath(outputPath, options);
     let match = /^\/proc\/self\/fd\/(\d+)\//.exec(pinned.ioPath);
     if (match === null) return pinned;
     let sliced = pinned.ioPath.slice(0, pinned.ioPath.length - name.length - 1);
@@ -1285,9 +1292,9 @@ async function pinOutputDir(path, options) {
   }
   return wonHold.viewFor(name) ?? Promise.reject(Error("unreachable: fresh hold retired"));
 }
-//@ chunk-1dp9p908.js:17958-17964 layout
+//@ chunk-3katra73.js:17349-17355 layout
 var tempRootResolvableCache;
-//@ chunk-1dp9p908.js:17964-18120 layout
+//@ chunk-3katra73.js:17355-17511 layout
 async function isTempRootResolvable() {
   let claudeTempDirRealpath = getClaudeTempDirRealpath();
   if (tempRootResolvableCache?.root === claudeTempDirRealpath) return tempRootResolvableCache.ok;
@@ -1302,27 +1309,27 @@ async function isTempRootResolvable() {
     };
   return resolvable;
 }
-//@ chunk-1dp9p908.js:18120-18134 layout
+//@ chunk-3katra73.js:17511-17525 layout
 var pinnedOutputDirs; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1dp9p908.js:18120", () => {
+deferInit("chunk-3katra73.js:17511", () => {
   pinnedOutputDirs = new Map();
 });
-//@ chunk-1dp9p908.js:18134-18201 layout
+//@ chunk-3katra73.js:17525-17592 layout
 function fstatPromise(fd) {
   return new Promise((resolve, reject) =>
     fstat(fd, (error, stats) => (error ? reject(error) : resolve(stats))),
   );
 }
-//@ chunk-1dp9p908.js:18201-18210 layout
+//@ chunk-3katra73.js:17592-17601 layout
 var MAX_PINNED_OUTPUT_DIRS = 8;
-//@ chunk-1dp9p908.js:18210-18274 facade-majority
+//@ chunk-3katra73.js:17601-17665 facade-majority
 function openTaskOutputForAppend(path, windowsFlags = "a") {
   return openTaskOutputForAppend_2(path, {
     exclusive: false,
     windowsFlags,
   });
 }
-//@ chunk-1dp9p908.js:18274-18396 facade-majority
+//@ chunk-3katra73.js:17665-17787 facade-majority
 function initTaskOutput(taskId) {
   return track(
     (async () => {
@@ -1337,16 +1344,16 @@ function initTaskOutput(taskId) {
     })(),
   );
 }
-//@ chunk-1dp9p908.js:18396-18435 layout
+//@ chunk-3katra73.js:17787-17826 layout
 var OUTPUT_SWAP_REFUSED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1dp9p908.js:18396", () => {
+deferInit("chunk-3katra73.js:17787", () => {
   OUTPUT_SWAP_REFUSED = Symbol("taskOutputSwapRefused");
 });
-//@ chunk-1dp9p908.js:18435-18486 facade-majority
+//@ chunk-3katra73.js:17826-17877 facade-majority
 function isTaskOutputSwapRefusal(error) {
   return error instanceof Error && OUTPUT_SWAP_REFUSED in error;
 }
-//@ chunk-1dp9p908.js:18486-18760 layout
+//@ chunk-3katra73.js:17877-18151 layout
 /**
  * 抛出"task output swap refused"错误（带恢复建议），写调试日志；同一原因+路径只上报一次 logError（集合有上限）。
  */
@@ -1374,14 +1381,14 @@ function refuseOutputSwap(path, reason, recovery) {
   }
   throw merged;
 }
-//@ chunk-1dp9p908.js:18760-18781 layout
+//@ chunk-3katra73.js:18151-18172 layout
 var refusedSwapReasons; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_REFUSED_SWAP_REASONS;
-deferInit("chunk-1dp9p908.js:18760", () => {
+deferInit("chunk-3katra73.js:18151", () => {
   refusedSwapReasons = new Set();
   MAX_REFUSED_SWAP_REASONS = 256;
 });
-//@ chunk-1dp9p908.js:18781-19471 facade-majority
+//@ chunk-3katra73.js:18172-18862 facade-majority
 async function openVerifiedTaskOutput(path, maxBytes) {
   let stats;
   try {
@@ -1434,7 +1441,7 @@ async function openVerifiedTaskOutput(path, maxBytes) {
     throw error;
   }
 }
-//@ chunk-1dp9p908.js:19471-19915 facade-majority
+//@ chunk-3katra73.js:18862-19306 facade-majority
 async function getVerifiedTaskOutputTail(path, maxBytes, outputFileSize = MAX_TASK_OUTPUT_BYTES) {
   let opened;
   try {
@@ -1474,9 +1481,9 @@ async function getVerifiedTaskOutputTail(path, maxBytes, outputFileSize = MAX_TA
     await handle.close();
   }
 }
-//@ chunk-1dp9p908.js:19915-20293 facade-majority
-async function persistTaskOutputSnapshot(path, toolResultFilePath, maxBytes) {
-  let { handle, size } = await openVerifiedTaskOutput(path, maxBytes);
+//@ chunk-3katra73.js:19306-19684 facade-majority
+async function persistTaskOutputSnapshot(outputFilePath, toolResultFilePath, maxBytes) {
+  let { handle, size } = await openVerifiedTaskOutput(outputFilePath, maxBytes);
   try {
     let fh = await open(
       toolResultFilePath,
@@ -1504,7 +1511,7 @@ async function persistTaskOutputSnapshot(path, toolResultFilePath, maxBytes) {
     await handle.close();
   }
 }
-//@ chunk-1dp9p908.js:20293-20424 layout
+//@ chunk-3katra73.js:19684-19815 layout
 async function isSameOutputFile(path, otherPath, ioPath = path) {
   if (path === otherPath) return true;
   try {
@@ -1514,7 +1521,7 @@ async function isSameOutputFile(path, otherPath, ioPath = path) {
     return false;
   }
 }
-//@ chunk-1dp9p908.js:20424-21301 facade-majority
+//@ chunk-3katra73.js:19815-20692 facade-majority
 function initTaskOutputAsSymlink(taskId, targetPath, onMode) {
   return track(
     (async () => {
@@ -1580,18 +1587,18 @@ function initTaskOutputAsSymlink(taskId, targetPath, onMode) {
     })(),
   );
 }
-//@ chunk-c0cahhqh.js:1430-1523 affinity
+//@ chunk-j8qkeqz1.js:1467-1560 placement
 function isPlainAbsolutePath(path) {
   return path.length <= 1024 && /^(?:\/(?!\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+)+$/.test(path);
 }
-//@ chunk-c0cahhqh.js:1523-1583 placement (2.1.88 match: getAgentOutputTaskId, 1)
+//@ chunk-j8qkeqz1.js:1560-1620 placement (2.1.88 match: getAgentOutputTaskId, 1)
 /**
  * 路径是否为某任务的输出文件（以 /<taskId>.output 结尾）。
  */
 function isTaskOutputPathFor(taskId, path) {
   return isPlainAbsolutePath(path) && path.endsWith(`/${taskId}.output`);
 }
-//@ chunk-y805ph4h.js:5231-5498 fingerprint (2.1.88 match: appendTaskOutput, 0.465)
+//@ chunk-tp1gh0pb.js:5469-5736 fingerprint (2.1.88 match: appendTaskOutput, 0.465)
 function appendTaskOutput_2(taskId, content) {
   let state = getDebugState();
   if (state.debugFilePath === null) return;
@@ -1617,26 +1624,19 @@ function appendTaskOutput_2(taskId, content) {
   });
 }
 export {
-  evictTaskOutput,
-  getTaskOutputPath,
-  initTaskOutput,
-  appendTaskOutput,
-  openTaskOutputForAppend,
-  taskOutputDirForSession,
   initTaskOutputAsSymlink,
-  tailOutputOfTask,
-  writeTaskOutputSnapshot,
-  MAX_PERSISTED_OUTPUT_BYTES,
-  getTaskOutputRootDir,
-  persistTaskOutputSnapshot,
+  evictTaskOutput,
   getTaskOutputDelta,
+  getTaskOutputPath,
   isTaskOutputFilePath,
   bindTaskOutputForRead,
   getTaskOutputSize,
-  tailTaskOutput,
-  _clearOutputsForTest,
-  getTaskOutputDir,
-  peekTaskOutputDir,
+  unboundTaskOutputPath,
+  openTaskOutputForAppend,
+  releaseConvergentTaskOutputBinding,
+  MAX_PERSISTED_OUTPUT_BYTES,
+  getTaskOutputRootDir,
+  persistTaskOutputSnapshot,
   getVerifiedTaskOutputTail,
   isTaskOutputSwapRefusal,
   isPlainAbsolutePath,
@@ -1644,15 +1644,22 @@ export {
   MAX_TASK_OUTPUT_BYTES,
   MAX_TASK_OUTPUT_BYTES_DISPLAY,
   bindTaskOutputPath,
+  tailTaskOutput,
   DiskTaskOutput,
   openTaskOutputForRead,
   unlinkTaskOutput,
-  releaseConvergentTaskOutputBinding,
   probeTaskOutputWrite,
   taskOutputDirExclusions,
+  initTaskOutput,
+  appendTaskOutput,
+  peekTaskOutputDir,
   appendTaskOutputTrailer,
   openVerifiedTaskOutput,
-  TASK_OUTPUT_TAIL_BYTES,
+  writeTaskOutputSnapshot,
+  taskOutputDirForSession,
+  tailOutputOfTask,
+  getTaskOutputDir,
   appendTaskOutput_2,
+  TASK_OUTPUT_TAIL_BYTES,
   repointTaskOutputSymlinks,
 };

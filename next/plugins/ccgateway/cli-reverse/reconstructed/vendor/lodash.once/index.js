@@ -1,13 +1,13 @@
 /**
  * lodash.once/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: lodash.once@4.1.1
- * pieces: chunk-mrx6y2r5.js (1)
+ * pieces: chunk-b5df2wx1.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 
-//@ chunk-mrx6y2r5.js:15734-17076 cjs-fingerprint
+//@ chunk-b5df2wx1.js:15734-17076 cjs-fingerprint
 var require_lodash_once = __commonJS(function (cjsExports, cjsModule) {
   var FUNC_ERROR_TEXT = "Expected a function";
   var INFINITY = 1 / 0;

@@ -3,9 +3,9 @@
  *
  * /reload-plugins 实现：在当前会话激活待生效的插件变更（远程会话转发）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/reload-plugins/reload-plugins.ts
- * pieces: chunk-8vqp1nqq.js (27)
+ * pieces: chunk-bwd173d9.js (27)
  * attribution: sole-consumer 26, fingerprint 1
  */
 import { lstat, readdir, stat } from "fs/promises";
@@ -40,16 +40,16 @@ import { OFFICIAL_MARKETPLACE_DISPLAY } from "../../utils/plugins/officialMarket
 import { isLocalStdinSubmission } from "../../utils/promptSubmissionOrigin.js";
 import { stripInvisibleKeepEmoji } from "../../utils/settings/marketplaceSettingsAliases.js";
 
-//@ chunk-8vqp1nqq.js:12207-12250 sole-consumer
+//@ chunk-bwd173d9.js:13356-13399 sole-consumer
 var IGNORABLE_FS_ERROR_CODES = Object.freeze(["ENOENT", "ENOTDIR"]);
-//@ chunk-8vqp1nqq.js:12250-12283 sole-consumer
+//@ chunk-bwd173d9.js:13399-13432 sole-consumer
 var isIgnorableFsError = (error) => IGNORABLE_FS_ERROR_CODES.includes(getErrnoCode(error) ?? "");
-//@ chunk-8vqp1nqq.js:12283-12368 sole-consumer
+//@ chunk-bwd173d9.js:13432-13517 sole-consumer
 function maxFreshMtime(mtimeCandidates, fallback) {
   let filtered = mtimeCandidates.filter((mtime) => mtime <= fallback + WATCH_CLOCK_SLACK_MS);
   return Math.max(0, ...(filtered.length > 0 ? filtered : [fallback]));
 }
-//@ chunk-8vqp1nqq.js:12368-12519 sole-consumer
+//@ chunk-bwd173d9.js:13517-13668 sole-consumer
 var statWrittenAt = (path, fallback) =>
   lstat(path).then(
     (stats) => ({
@@ -63,18 +63,18 @@ var statWrittenAt = (path, fallback) =>
       isFolder: false,
     }),
   );
-//@ chunk-8vqp1nqq.js:12519-12530 sole-consumer
+//@ chunk-bwd173d9.js:13668-13679 sole-consumer
 var PLUGIN_SCAN_CAP_MS = 1e4;
-//@ chunk-8vqp1nqq.js:12530-12542 sole-consumer
+//@ chunk-bwd173d9.js:13679-13691 sole-consumer
 var PLUGIN_SCAN_DEADLINE_MARGIN_MS = 2000;
-//@ chunk-8vqp1nqq.js:12542-12582 sole-consumer
+//@ chunk-bwd173d9.js:13691-13731 sole-consumer
 var pluginScanBudget = (startedAt, cap = PLUGIN_SCAN_CAP_MS) => ({
   cap,
   deadline: startedAt + PLUGIN_SCAN_DEADLINE_MARGIN_MS,
 });
-//@ chunk-8vqp1nqq.js:12582-12591 sole-consumer
+//@ chunk-bwd173d9.js:13731-13740 sole-consumer
 var SCAN_BATCH_SIZE = 64;
-//@ chunk-8vqp1nqq.js:12591-12745 sole-consumer
+//@ chunk-bwd173d9.js:13740-13894 sole-consumer
 async function mapInBatchesUntil(items, mapper, deadline) {
   let results = [];
   for (let offset = 0; offset < items.length; offset += SCAN_BATCH_SIZE) {
@@ -84,14 +84,14 @@ async function mapInBatchesUntil(items, mapper, deadline) {
   }
   return results;
 }
-//@ chunk-8vqp1nqq.js:12846-12894 sole-consumer
+//@ chunk-bwd173d9.js:13995-14043 sole-consumer
 var PLUGIN_CONFIG_FILE_NAMES = Object.freeze([".lsp.json", ".mcp.json"]);
-//@ chunk-8vqp1nqq.js:12894-12954 sole-consumer
+//@ chunk-bwd173d9.js:14043-14103 sole-consumer
 var shouldWatchPath = (rootDir, watchedPath) =>
   (!isIgnoredWatchPath(watchedPath, getDebugLogPath()) ||
     PLUGIN_CONFIG_FILE_NAMES.includes(basename(watchedPath))) &&
   !isInsideTypesDir(rootDir, watchedPath);
-//@ chunk-8vqp1nqq.js:12954-13046 sole-consumer
+//@ chunk-bwd173d9.js:14103-14195 sole-consumer
 var listWatchedChildren = (rootDir, parentDir) =>
   readdir(parentDir).then(
     (entries) =>
@@ -100,13 +100,13 @@ var listWatchedChildren = (rootDir, parentDir) =>
         .filter((childPath) => shouldWatchPath(rootDir, childPath)),
     (error) => (isIgnorableFsError(error) ? [] : undefined),
   );
-//@ chunk-8vqp1nqq.js:13082-13154 sole-consumer
+//@ chunk-bwd173d9.js:14231-14303 sole-consumer
 var latestMtimeOfPath = (dir, fallback) =>
   stat(dir).then(
     (stats) => maxFreshMtime([stats.mtimeMs, stats.ctimeMs], fallback),
     (error) => (isIgnorableFsError(error) ? 0 : fallback),
   );
-//@ chunk-8vqp1nqq.js:13154-13533 sole-consumer
+//@ chunk-bwd173d9.js:14303-14682 sole-consumer
 /**
  * 判断插件目录自上次读取后是否有改动：先看目录本身，再按层（数量上限、截止时间内）遍历子项 mtime/ctime；超时或无法读取时视为已改动。
  */
@@ -135,7 +135,7 @@ async function folderChangedSince(dir, readAt, budget) {
   }
   return dirChanged;
 }
-//@ chunk-8vqp1nqq.js:13533-13645 sole-consumer
+//@ chunk-bwd173d9.js:14682-14794 sole-consumer
 async function folderChangedWithin(dir, readAt, budget = pluginScanBudget(Date.now())) {
   let remainingMs = budget.deadline - Date.now();
   return (
@@ -144,7 +144,7 @@ async function folderChangedWithin(dir, readAt, budget = pluginScanBudget(Date.n
       : undefined) ?? true
   );
 }
-//@ chunk-8vqp1nqq.js:13645-13820 sole-consumer
+//@ chunk-bwd173d9.js:14794-14969 sole-consumer
 var pluginsChangedOnDisk = (folderReadAt, plugins, budget) =>
   plugins.reduce(async (acc, plugin) => {
     let loadedPlugins = await acc;
@@ -155,18 +155,18 @@ var pluginsChangedOnDisk = (folderReadAt, plugins, budget) =>
       ? loadedPlugins.concat(plugin)
       : loadedPlugins;
   }, Promise.resolve([]));
-//@ chunk-8vqp1nqq.js:13820-13853 sole-consumer
+//@ chunk-bwd173d9.js:14969-15002 sole-consumer
 var pluginSourceLabel = (plugin) => `\`${printableName(plugin.source)}\``;
-//@ chunk-8vqp1nqq.js:13853-13922 sole-consumer
+//@ chunk-bwd173d9.js:15002-15071 sole-consumer
 var rereadPluginLine = (plugin) =>
   `${pluginSourceLabel(plugin)} re-read from its folder: \`${printableOrEmpty(getDisplayPath(plugin.path))}\``;
-//@ chunk-8vqp1nqq.js:13922-13930 sole-consumer
+//@ chunk-bwd173d9.js:15071-15079 sole-consumer
 var MAX_LISTED_EXTRA_PLUGINS = 5;
-//@ chunk-8vqp1nqq.js:13930-14036 sole-consumer
+//@ chunk-bwd173d9.js:15079-15185 sole-consumer
 var alsoRereadFromFoldersLine = (plugins) =>
   `Also re-read from ${plural(plugins.length, "its folder", "their folders")}: ` +
   plugins.map((plugin) => pluginSourceLabel(plugin)).join(", ");
-//@ chunk-8vqp1nqq.js:14036-14172 sole-consumer
+//@ chunk-bwd173d9.js:15185-15321 sole-consumer
 async function describeRereadPlugins(folderReadAt, plugins) {
   let changedPlugins = await pluginsChangedOnDisk(folderReadAt, plugins, pluginScanBudget(Date.now()));
   let plugins_2 = changedPlugins.slice(MAX_LISTED_EXTRA_PLUGINS);
@@ -175,13 +175,13 @@ async function describeRereadPlugins(folderReadAt, plugins) {
     .map((plugin) => rereadPluginLine(plugin))
     .concat(plugins_2.length > 0 ? [alsoRereadFromFoldersLine(plugins_2)] : []);
 }
-//@ chunk-8vqp1nqq.js:14172-14293 sole-consumer
+//@ chunk-bwd173d9.js:15321-15442 sole-consumer
 function recordFolderReadAt(enabled) {
   let { folderReadAt } = getPluginRegistry();
   for (let plugin of enabled)
     if (plugin.readFromFolderAt !== undefined) folderReadAt.set(plugin.source, plugin.readFromFolderAt);
 }
-//@ chunk-8vqp1nqq.js:14293-16985 fingerprint (2.1.88 match: call, 0.457)
+//@ chunk-bwd173d9.js:15442-18136 fingerprint (2.1.88 match: call, 0.46)
 /**
  * /reload-plugins：we 为远程 reload_plugins 结果 schema；call 在远程会话转发控制请求，本地则计算 MCP/LSP 变更是否会使缓存失效（未 --force 时先警告），再刷新插件、补装缺失依赖并汇报。
  */
@@ -328,11 +328,11 @@ ${countWithNoun(refreshed.error_count, "error")} during load. Run /plugin for de
     });
   }
 };
-//@ chunk-8vqp1nqq.js:16985-17049 sole-consumer
+//@ chunk-bwd173d9.js:18136-18200 sole-consumer
 function canReloadPlugins(context) {
   return !context.options.isNonInteractiveSession || isLocalStdinSubmission(context);
 }
-//@ chunk-8vqp1nqq.js:17049-17304 sole-consumer
+//@ chunk-bwd173d9.js:18200-18455 sole-consumer
 function cacheInvalidationWarning(impact, isNonInteractiveSession) {
   if (!impact.wouldInvalidateCache) return null;
   if (!isNonInteractiveSession)
@@ -348,11 +348,11 @@ function cacheInvalidationWarning(impact, isNonInteractiveSession) {
     lspToolChange: impact.lspToolChange,
   });
 }
-//@ chunk-8vqp1nqq.js:17304-17343 sole-consumer
+//@ chunk-bwd173d9.js:18455-18494 sole-consumer
 function countWithNoun(value, noun) {
   return `${value} ${plural(value, noun)}`;
 }
-//@ chunk-8vqp1nqq.js:17343-17886 sole-consumer
+//@ chunk-bwd173d9.js:18494-19037 sole-consumer
 /**
  * 生成"本次重载会使提示缓存失效"的说明：列出变化的 MCP 服务器和 LSP 工具变化，提示下一条消息将重读整个对话，可用 --force 强制应用。
  */

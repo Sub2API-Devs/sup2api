@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：排队命令（print/stream-json 模式下）的辅助函数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-63641kq7.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jd53r7dh.js (7)
  * attribution: placement 7
  */
 
-//@ chunk-63641kq7.js:7195-7403 placement
+//@ chunk-jd53r7dh.js:6451-6659 placement (2.1.88 match: buildTranscriptEntries, 0.773)
 function getQueuedCommandField(attachment, field) {
   let attachment_2 = attachment.type === "attachment" ? attachment.attachment : undefined;
   if (
@@ -22,15 +22,15 @@ function getQueuedCommandField(attachment, field) {
   let value = Reflect.get(attachment_2, field);
   return typeof value === "string" && value ? value : undefined;
 }
-//@ chunk-63641kq7.js:7403-7445 placement
+//@ chunk-jd53r7dh.js:6659-6701 placement
 function getSourceUuid(message) {
   return getQueuedCommandField(message, "source_uuid");
 }
-//@ chunk-63641kq7.js:7445-7487 placement
+//@ chunk-jd53r7dh.js:6701-6743 placement
 function getDeliveryId(message) {
   return getQueuedCommandField(message, "delivery_id");
 }
-//@ chunk-63641kq7.js:7487-7612 placement
+//@ chunk-jd53r7dh.js:6743-6868 placement
 function getMessageIdentityUuids(message) {
   let { submitUuid } = message;
   let uuids =
@@ -38,24 +38,24 @@ function getMessageIdentityUuids(message) {
     (message.type === "system" && typeof submitUuid === "string" ? submitUuid : undefined);
   return uuids ? [message.uuid, uuids] : [message.uuid];
 }
-//@ chunk-63641kq7.js:7612-7680 placement
+//@ chunk-jd53r7dh.js:6868-6936 placement
 function getDroppedPromptUuids(message) {
   return message.type === "user" ? filterUuidList(message.droppedPromptUuids) : [];
 }
-//@ chunk-63641kq7.js:7680-7766 placement
+//@ chunk-jd53r7dh.js:6936-7022 placement
 function filterUuidList(list) {
   return Array.isArray(list) ? list.filter((uuid) => typeof uuid === "string" && uuid !== "") : [];
 }
-//@ chunk-63641kq7.js:7766-7864 placement
+//@ chunk-jd53r7dh.js:7022-7120 placement
 function findMessageIndexByUuid(messages, uuid) {
   let index = messages.findIndex((message) => message.uuid === uuid);
   return index !== -1 ? index : messages.findIndex((message) => getSourceUuid(message) === uuid);
 }
 export {
+  getSourceUuid,
+  filterUuidList,
   getMessageIdentityUuids,
   getDroppedPromptUuids,
   getDeliveryId,
   findMessageIndexByUuid,
-  getSourceUuid,
-  filterUuidList,
 };

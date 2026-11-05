@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/nested-clients/dist-cjs/submodules/signin/runtimeConfig.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-y366fgzk.js (1)
+ * pieces: chunk-csa0qt1j.js (1)
  * attribution: cjs-require-graph 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -22,7 +22,7 @@ import { require_index_browser as require_index_browser_2 } from "../../../../..
 import { require_runtimeConfig_shared } from "./runtimeConfig.shared.js";
 import { require_client } from "../../../../../@smithy/core/dist-cjs/submodules/client/index.js";
 
-//@ chunk-y366fgzk.js:5894-7546 cjs-require-graph
+//@ chunk-csa0qt1j.js:5894-7546 cjs-require-graph
 var require_runtimeConfig = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

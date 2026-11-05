@@ -3,9 +3,9 @@
  *
  * ultraplan：轮询云会话事件，跟踪 ExitPlanMode 调用与结果，判定计划批准/拒绝/传送回本地/终止
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/ultraplan/ccrSession.ts
- * pieces: chunk-e6aww6q8.js (8)
+ * pieces: chunk-5xgkngpb.js (8)
  * attribution: affinity 1, fingerprint 5, callgraph-witnessed 2
  */
 import { EXITPLANMODE_2 } from "../../tools/ExitPlanModeTool/constants.js";
@@ -13,10 +13,10 @@ import { pollRemoteSessionEvents, isTransientNetworkError } from "../teleport/ap
 import { sleep } from "../sleep.js";
 import { logForDebugging } from "../debug.js";
 
-//@ chunk-e6aww6q8.js:2010166-2010185 affinity
+//@ chunk-5xgkngpb.js:2065964-2065983 affinity
 var POLL_INTERVAL_MS = 3000;
 var MAX_CONSECUTIVE_FAILURES = 5;
-//@ chunk-e6aww6q8.js:2010185-2010355 fingerprint (2.1.88 match: UltraplanPollError, 0.667)
+//@ chunk-5xgkngpb.js:2065983-2066153 fingerprint (2.1.88 match: UltraplanPollError, 0.667)
 class UltraplanPollError extends Error {
   reason;
   rejectCount;
@@ -29,9 +29,9 @@ class UltraplanPollError extends Error {
     this.name = "UltraplanPollError";
   }
 }
-//@ chunk-e6aww6q8.js:2010355-2010394 fingerprint (2.1.88 match: ULTRAPLAN_TELEPORT_SENTINEL, 1)
+//@ chunk-5xgkngpb.js:2066153-2066192 fingerprint (2.1.88 match: ULTRAPLAN_TELEPORT_SENTINEL, 1)
 var ULTRAPLAN_TELEPORT_SENTINEL = "__ULTRAPLAN_TELEPORT_LOCAL__";
-//@ chunk-e6aww6q8.js:2010394-2011874 fingerprint (2.1.88 match: ExitPlanModeScanner, 1)
+//@ chunk-5xgkngpb.js:2066192-2067672 fingerprint (2.1.88 match: ExitPlanModeScanner, 1)
 /**
  * 扫描远程事件：记录 ExitPlanMode 调用及其 tool_result，判定最新一次为 pending / approved（含计划）/ teleport（回本地执行）/ rejected / terminated。
  */
@@ -119,7 +119,7 @@ class ExitPlanModeScanner {
     };
   }
 }
-//@ chunk-e6aww6q8.js:2011874-2013559 fingerprint (2.1.88 match: pollForApprovedExitPlanMode, 0.86)
+//@ chunk-5xgkngpb.js:2067672-2069361 fingerprint (2.1.88 match: pollForApprovedExitPlanMode, 0.859)
 /**
  * 每 3 秒轮询云会话事件直到批准或超时：approved → executionTarget=remote，teleport → local；网络错误连续 5 次放弃；阶段变化（running/needs_input/plan_ready）回调通知。
  */
@@ -227,7 +227,7 @@ async function pollForApprovedExitPlanMode(sessionId, timeoutMs, onPhaseChange, 
     stats,
   );
 }
-//@ chunk-e6aww6q8.js:2013559-2013668 callgraph-witnessed (2.1.88 match: contentToText, 0)
+//@ chunk-5xgkngpb.js:2069361-2069470 callgraph-witnessed (2.1.88 match: contentToText, 0)
 function contentToText(content) {
   return typeof content === "string"
     ? content
@@ -235,7 +235,7 @@ function contentToText(content) {
       ? content.map((content) => ("text" in content ? content.text : "")).join("")
       : "";
 }
-//@ chunk-e6aww6q8.js:2013668-2013783 callgraph-witnessed (2.1.88 match: extractTeleportPlan, 1)
+//@ chunk-5xgkngpb.js:2069470-2069585 callgraph-witnessed (2.1.88 match: extractTeleportPlan, 1)
 function extractTeleportPlan(content) {
   let text = contentToText(content);
   let marker = `${ULTRAPLAN_TELEPORT_SENTINEL}
@@ -244,7 +244,7 @@ function extractTeleportPlan(content) {
   if (idx === -1) return null;
   return text.slice(idx + marker.length).trimEnd();
 }
-//@ chunk-e6aww6q8.js:2013783-2014140 fingerprint (2.1.88 match: extractApprovedPlan, 0.565)
+//@ chunk-5xgkngpb.js:2069585-2069942 fingerprint (2.1.88 match: extractApprovedPlan, 0.565)
 function extractApprovedPlan(content) {
   let text = contentToText(content);
   let markers = [

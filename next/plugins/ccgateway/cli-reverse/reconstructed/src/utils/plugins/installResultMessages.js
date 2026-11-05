@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：安装结果文案
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (10)
  * attribution: placement 10
  */
 import {
@@ -16,7 +16,7 @@ import {
 } from "./pluginDependencies.js";
 import { isInstallationRelevantToCurrentProject } from "./installedPluginsManager.js";
 import { quotedPrintable, printableLabel, printableName } from "../printableName.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { qualifiedMarketplaceLabel, canReplaceOfficialInstalls } from "./crossMarketplaceInstall.js";
 import { claudeCommand, runCommandHint } from "../worktreeResumeHint.js";
 import { CLAUDE_PLUGINS_OFFICIAL } from "./officialMarketplace.js";
@@ -40,7 +40,7 @@ import { truncateMiddle } from "../stringUtils.js";
 import { qualifyDependency } from "./dependencyResolver.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
 
-//@ chunk-e6aww6q8.js:4459079-4459325 placement
+//@ chunk-5xgkngpb.js:4565763-4566009 placement
 /**
  * 同名插件在其他项目作用域的安装。
  */
@@ -68,7 +68,7 @@ async function findOtherProjectInstalls(pluginId, entry, knownMarketplaces, stor
     ),
   );
 }
-//@ chunk-e6aww6q8.js:4459325-4459637 placement
+//@ chunk-5xgkngpb.js:4566009-4566321 placement
 /**
  * ✓ Installed … 文案，附依赖、其他项目说明与禁用提示。
  */
@@ -78,14 +78,16 @@ function formatInstalledMessage(options) {
     ? installedText
     : `${installedText} This plugin is disabled ${options.disabled === "by-default" ? "by default" : "in your settings"} \u2014 ${options.enableHint}`;
 }
-//@ chunk-e6aww6q8.js:4459637-4460392 placement
+//@ chunk-5xgkngpb.js:4566321-4567076 placement
 function describeOtherMarketplaceInstall(pluginId, name, installs) {
   {
     if (installs.length === 0) return "";
     let marketplaceNames = new Intl.ListFormat("en", {
       type: "conjunction",
     }).format(
-      uniq(installs.map((install) => qualifiedMarketplaceLabel(install.pluginId, "another marketplace"))),
+      normalizeCaseForComparison_2(
+        installs.map((install) => qualifiedMarketplaceLabel(install.pluginId, "another marketplace")),
+      ),
     );
     let joined = installs
       .map((install) => {
@@ -94,7 +96,7 @@ function describeOtherMarketplaceInstall(pluginId, name, installs) {
       })
       .join("; ");
     let canSwitch = canReplaceOfficialInstalls(pluginId, installs);
-    let commands = uniq(
+    let commands = normalizeCaseForComparison_2(
       installs.flatMap(
         (install) =>
           (install.scope === "local" && canSwitch
@@ -110,7 +112,7 @@ function describeOtherMarketplaceInstall(pluginId, name, installs) {
   }
   return "";
 }
-//@ chunk-e6aww6q8.js:4460392-4460461 placement
+//@ chunk-5xgkngpb.js:4567076-4567145 placement
 /**
  * isOfficialFamilySameSource：官方市场族内同源插件。
  */
@@ -121,7 +123,7 @@ function isOfficialFamilySameSource(marketplace, entry) {
     entryDeclaresComponents(entry)
   );
 }
-//@ chunk-e6aww6q8.js:4460461-4461104 placement
+//@ chunk-5xgkngpb.js:4567145-4567790 placement
 /**
  * 已安装插件来自官方市场族时，在其他官方市场（claude-plugins-official 优先）中找来源相同、未被策略阻止的同名插件，返回 {pluginId, marketplace, sha}。
  */
@@ -171,7 +173,7 @@ async function findOfficialMarketplaceAlternative(pluginId, storageV5) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:4461104-4461208 placement
+//@ chunk-5xgkngpb.js:4567790-4567894 placement
 /**
  * git 缺失 / 主机拉取失败。
  */
@@ -180,7 +182,7 @@ function classifyOfficialFetchError(error) {
   if (error instanceof GitHostFetchFailedError) return "fetch-failed";
   return;
 }
-//@ chunk-e6aww6q8.js:4461208-4461433 placement
+//@ chunk-5xgkngpb.js:4567894-4568119 placement
 /**
  * 官方市场副本下载失败、改从其他市场安装的说明。
  */
@@ -192,7 +194,7 @@ function formatOfficialFallbackNote(cause, marketplace) {
     }) || "another marketplace"
   } instead.)`;
 }
-//@ chunk-e6aww6q8.js:4461433-4462064 placement
+//@ chunk-5xgkngpb.js:4568119-4568749 placement
 function describeInstallFetchFailure(cause, pluginId, marketplace, scope, errorText) {
   let causeText = cause === "git-missing" ? "git was not found" : "git could not fetch it from its host";
   let pluginLabel = quotedPrintable(pluginId);
@@ -219,7 +221,7 @@ function describeInstallFetchFailure(cause, pluginId, marketplace, scope, errorT
   } instead, but not completely${detailSuffix}.
 ${pluginLabel} is still installed, and may not load. To remove it, ${uninstallHint}.`;
 }
-//@ chunk-e6aww6q8.js:4462064-4462357 placement
+//@ chunk-5xgkngpb.js:4568749-4569042 placement
 /**
  * 汇总各依赖的版本范围要求及要求方。
  */
@@ -240,7 +242,7 @@ function collectDependencyVersionRanges(plugins, exclude) {
     requirers,
   };
 }
-//@ chunk-e6aww6q8.js:4462357-4462968 placement
+//@ chunk-5xgkngpb.js:4569042-4569653 placement
 /**
  * 安装前检查：插件被策略阻止、插件目录不可用、市场被策略阻止时返回 refusal；通过时返回已知市场与 failClosedOnUnknownSource。
  */
@@ -298,13 +300,13 @@ async function checkInstallAllowed(pluginId, entry, storageV5) {
 }
 export {
   checkInstallAllowed,
+  collectDependencyVersionRanges,
   findOtherProjectInstalls,
   describeOtherMarketplaceInstall,
+  formatInstalledMessage,
   classifyOfficialFetchError,
-  collectDependencyVersionRanges,
   describeInstallFetchFailure,
   formatOfficialFallbackNote,
   isOfficialFamilySameSource,
   findOfficialMarketplaceAlternative,
-  formatInstalledMessage,
 };

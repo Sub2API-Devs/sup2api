@@ -1,14 +1,14 @@
 /**
  * @smithy/util-utf8/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/util-utf8@2.3.0..3.0.0
- * pieces: chunk-wr8v03d0.js (1)
+ * pieces: chunk-2v4fe6xx.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_util_buffer_from } from "../../util-buffer-from/dist-cjs/index.js";
 
-//@ chunk-wr8v03d0.js:1251-1939 cjs-fingerprint
+//@ chunk-2v4fe6xx.js:1251-1939 cjs-fingerprint
 var require_util_utf8 = __commonJS(function (cjsExports) {
   var import_util_buffer_from = require_util_buffer_from();
   var fromUtf8 = (input) => {

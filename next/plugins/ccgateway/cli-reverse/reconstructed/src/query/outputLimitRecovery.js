@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：回退到上下文窗口更小的模型时生成说明；输出上限恢复耗尽时的处理（丢弃思考或继续）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ha3km179.js (23)
- * attribution: placement 23
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-w3ch4xq2.js (26)
+ * attribution: placement 23, layout 3
  */
 import { classifyQuerySource } from "../services/api/requestHeaders.js";
 import { isClaudeAiChatCowork } from "../utils/entrypointKinds.js";
@@ -52,7 +52,7 @@ import { strip1mSuffix } from "../utils/model/modelIds.js";
 import { formatTokens } from "../utils/format.js";
 import { discardInFlightTools } from "../services/tools/StreamingToolExecutor.js";
 
-//@ chunk-ha3km179.js:143553-143743 placement
+//@ chunk-w3ch4xq2.js:152465-152680 placement
 /**
  * 输出上限/反应式压缩恢复计数的初始值。
  */
@@ -64,23 +64,24 @@ var INITIAL_RECOVERY_STATE = {
 var INITIAL_LOOP_RECOVERY_STATE = {
   ...INITIAL_RECOVERY_STATE,
   thinkingOnlyNudged: false,
+  emptyCompletionResent: false,
   malformedToolUseRetryCount: 0,
   stopHookBlockingCount: 0,
 };
-//@ chunk-ha3km179.js:143743-143766 placement
+//@ chunk-w3ch4xq2.js:152680-152703 placement
 /**
  * 恒 false
  */
 function alwaysFalse() {
   return false;
 }
-//@ chunk-ha3km179.js:143766-143838 placement
+//@ chunk-w3ch4xq2.js:152703-152775 placement
 /**
  * 3
  */
 var MAX_CONTINUE_ATTEMPTS = 3;
 var THINKING_LIMIT_NOTE = " The last attempt reached the limit while still thinking.";
-//@ chunk-ha3km179.js:143838-144349 placement
+//@ chunk-w3ch4xq2.js:152775-153286 placement
 /**
  * 输出达到 max_tokens 时是否用提示让模型继续（tengu_rosy_pebble）。
  */
@@ -118,7 +119,7 @@ function shouldNudgeOutputLimitResume(responses, attempt, querySource) {
     return OUTPUT_LIMIT_RESUME;
   }
 }
-//@ chunk-ha3km179.js:144349-145065 placement
+//@ chunk-w3ch4xq2.js:153286-154002 placement
 /**
  * 输出上限恢复耗尽时的处理（丢弃思考或继续）。
  */
@@ -167,7 +168,7 @@ function recoverExhaustedOutput({ withheld, responses, model, isNonInteractiveSe
     return withheld;
   }
 }
-//@ chunk-ha3km179.js:145065-145666 placement
+//@ chunk-w3ch4xq2.js:154002-154603 placement
 /**
  * 上报输出上限恢复的结果。
  */
@@ -203,7 +204,7 @@ function reportOutputLimitRecovery({ transition, resumed, request, responses, wi
     logError(error);
   }
 }
-//@ chunk-ha3km179.js:145666-145926 placement
+//@ chunk-w3ch4xq2.js:154603-154863 placement
 /**
  * 输出上限恢复重试时发出 agent-mode 事件（含尝试次数）。
  */
@@ -223,7 +224,7 @@ function announceOutputLimitRecovery(transition, agentId) {
     logError(withTelemetryMessage(toError(error), "output-limit recovery announcement failed"));
   }
 }
-//@ chunk-ha3km179.js:145926-146115 placement
+//@ chunk-w3ch4xq2.js:154863-155052 placement
 /**
  * 最后一条因 max_tokens 结束，且全部内容都是思考块。
  */
@@ -238,7 +239,16 @@ function endsWithThinkingOnly(responses) {
     )
   );
 }
-//@ chunk-ha3km179.js:146115-146655 placement
+//@ chunk-w3ch4xq2.js:155052-155119 layout
+async function drainIfStopsAtToolGap(stopsAtToolGap) {
+  try {
+    return await stopsAtToolGap();
+  } catch (error) {
+    logError(error);
+    return false;
+  }
+}
+//@ chunk-w3ch4xq2.js:155119-155659 placement
 /**
  * 上报 tengu_turn_end（终止原因、错误类型、是否有目标）。
  */
@@ -264,7 +274,29 @@ function reportTurnEnd({ terminal, querySource, agentContext, hasActiveGoal, sta
     });
   }
 }
-//@ chunk-ha3km179.js:146655-146774 placement
+//@ chunk-w3ch4xq2.js:155659-155798 layout
+function fixStopSequence(event) {
+  try {
+    if (event.message.stop_reason === "stop_sequence") {
+      event.message.stop_reason = "tool_use";
+      event.message.stop_sequence = null;
+    }
+  } catch (error) {
+    logError(error);
+  }
+}
+//@ chunk-w3ch4xq2.js:155798-155940 layout
+function fixOutgoingStopReason(event, attemptState) {
+  if (
+    event.isApiErrorMessage &&
+    attemptState.needsFollowUp &&
+    attemptState.toolRequestedEndTurn === false &&
+    !attemptState.shouldPreventContinuation &&
+    !attemptState.toolWasDeferred
+  )
+    fixStopSequence(event);
+}
+//@ chunk-w3ch4xq2.js:155940-156059 placement
 /**
  * 模型回退记录（来源、目标、是否全部过载）。
  */
@@ -277,7 +309,7 @@ function newFallbackRecord(originalModel, toModel, toModelIsConfigured, reason) 
     allOverloaded: reason === "overloaded",
   };
 }
-//@ chunk-ha3km179.js:146774-146946 placement
+//@ chunk-w3ch4xq2.js:156059-156231 placement
 /**
  * 连续回退时合并回退记录。
  */
@@ -291,7 +323,7 @@ function chainFallbackRecord(previousRecord, fallbackRecord) {
       }
     : fallbackRecord;
 }
-//@ chunk-ha3km179.js:146946-147205 placement
+//@ chunk-w3ch4xq2.js:156231-156490 placement
 /**
  * 回退到上下文窗口更小的模型时生成说明后缀。
  */
@@ -314,7 +346,7 @@ function describeFallbackWindow(fallbackRecord, previousRecord) {
     return;
   }
 }
-//@ chunk-ha3km179.js:147205-147994 placement
+//@ chunk-w3ch4xq2.js:156490-157279 placement
 /**
  * 回退到上下文窗口更小的模型时生成说明。
  */
@@ -347,7 +379,7 @@ function fallbackWindowNotice({ fallback, mainLoopModel, configuredWindow }) {
     return plainNotice;
   }
 }
-//@ chunk-ha3km179.js:147994-148082 placement
+//@ chunk-w3ch4xq2.js:157279-157367 placement
 /**
  * 两个模型的上下文窗口
  */
@@ -358,7 +390,7 @@ function contextWindowsOf(fallbackRecord) {
     toWindow: getContextWindow(fallbackRecord.toModel, sdkBetas),
   };
 }
-//@ chunk-ha3km179.js:148082-148417 placement
+//@ chunk-w3ch4xq2.js:157367-157702 placement
 /**
  * 所有模型过载时能否回退到配置的同族模型。
  */
@@ -378,30 +410,30 @@ function canFallBackToConfiguredFamily(fallbackRecord, fromModel) {
     ? `use ${familyModel} for this entry in your fallback model list`
     : undefined;
 }
-//@ chunk-ha3km179.js:148417-148459 placement
+//@ chunk-w3ch4xq2.js:157702-157744 placement
 /**
  * 紧凑 token 文本
  */
 function formatCompactTokens(tokenCount) {
   return formatTokens(tokenCount).toUpperCase();
 }
-//@ chunk-ha3km179.js:148459-148619 placement
+//@ chunk-w3ch4xq2.js:157744-157904 placement
 var IMAGE_ERROR_TOOL_CANCEL_TEXT =
   "An image in this turn could not be sent to the API, so this tool call was cancelled. If it had already started, some of its effects may have happened.";
-//@ chunk-ha3km179.js:148619-148781 placement
+//@ chunk-w3ch4xq2.js:157904-158066 placement
 /**
  * 回合出错导致工具调用取消的说明。
  */
 function turnErrorToolCancelText(errorText) {
   return `The turn ended on an error, so this tool call was cancelled. If it had already started, some of its effects may have happened. Error: ${errorText}`;
 }
-//@ chunk-ha3km179.js:148781-148961 placement
+//@ chunk-w3ch4xq2.js:158066-158246 placement
 var TOOL_CANCEL_FAILURE_MESSAGES = {
   safety_monitor_block: "tool cancel failed after safety monitor block",
   image_error: "tool cancel failed after image error",
   model_error: "tool cancel failed after model error",
 };
-//@ chunk-ha3km179.js:148961-149283 placement
+//@ chunk-w3ch4xq2.js:158246-158568 placement
 /**
  * 重置流式工具执行器，取回已完成结果。
  */
@@ -426,7 +458,7 @@ function resetStreamingToolExecutor(attemptState, cancelReason) {
     };
   }
 }
-//@ chunk-ha3km179.js:149283-149448 placement
+//@ chunk-w3ch4xq2.js:158568-158733 placement
 /**
  * 已有结果（含 hook_deferred_tool 附件）的工具调用 id。
  */
@@ -440,7 +472,7 @@ function completedToolUseIds(attemptState) {
     ),
   ]);
 }
-//@ chunk-ha3km179.js:149448-149629 placement
+//@ chunk-w3ch4xq2.js:158733-158914 placement
 /**
  * 工具结果中的 tool_use_id 列表。
  */
@@ -453,18 +485,21 @@ function toolResultIds(attemptState) {
       : [],
   );
 }
-//@ chunk-ha3km179.js:149629-149773 placement
+//@ chunk-w3ch4xq2.js:158914-159058 placement
 var SAFETY_BLOCK_TOOL_CANCEL_TEXT =
   "A safety monitor blocked this turn, so this tool call was cancelled. If it had already started, some of its effects may have happened.";
 export {
   reportTurnEnd,
   INITIAL_LOOP_RECOVERY_STATE,
+  drainIfStopsAtToolGap,
   announceOutputLimitRecovery,
   fallbackWindowNotice,
   resetStreamingToolExecutor,
   IMAGE_ERROR_TOOL_CANCEL_TEXT,
   turnErrorToolCancelText,
   completedToolUseIds,
+  fixStopSequence,
+  fixOutgoingStopReason,
   newFallbackRecord,
   chainFallbackRecord,
   describeFallbackWindow,

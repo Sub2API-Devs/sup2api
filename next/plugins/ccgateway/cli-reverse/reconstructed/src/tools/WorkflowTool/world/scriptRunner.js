@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工作流脚本运行器（VM 宿主 API、world 绑定、运行生命周期）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-y1shfdfm.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kgbsr4tm.js (14)
  * attribution: placement 14
  */
 import "vm";
@@ -39,7 +39,7 @@ import { truncateToLength } from "../../../utils/stringUtils.js";
 import { WorkflowJournalStub } from "../../../services/workflow/localFileJournal.js";
 import { logFeatureOk, logFeatureBad, logFeatureSad } from "../../../services/analytics/featureTelemetry.js";
 import { fromEnum, lit } from "../../../services/analytics/safeMetadata.js";
-import { count } from "../../../utils/collections.js";
+import { countWhere } from "../../../utils/collections.js";
 import { logError } from "../../../utils/log.js";
 import { finiteOrZero, hasErrorField, isAgentEvalRow } from "./runRegistry.js";
 import { sleep } from "../../../utils/sleep.js";
@@ -49,9 +49,9 @@ import { beginDeferredInits } from "../../../../runtime/deferred-init.js";
 // This module is the first evaluated of an import cycle of 2 modules closed by ./runRegistry.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("src/tools/WorkflowTool/world/runRegistry.js");
-//@ chunk-y1shfdfm.js:25123-25172 placement
+//@ chunk-kgbsr4tm.js:26339-26388 placement
 var STOP_REASONS = ["user", "model", "stop", "runaway", "pause"];
-//@ chunk-y1shfdfm.js:25194-25857 placement
+//@ chunk-kgbsr4tm.js:26410-27073 placement
 async function runScriptInContext(script, runtime) {
   let settled;
   try {
@@ -104,7 +104,7 @@ ${errorInfo.stack}`,
     };
   }
 }
-//@ chunk-y1shfdfm.js:25857-26040 placement
+//@ chunk-kgbsr4tm.js:27073-27256 placement
 function isInsideChildWorkflow(world, addr, boundaryAddr) {
   let cursor = world.rows[addr]?.in ?? HOST_SCOPE;
   while (cursor !== HOST_SCOPE && cursor !== boundaryAddr) {
@@ -115,7 +115,7 @@ function isInsideChildWorkflow(world, addr, boundaryAddr) {
   }
   return false;
 }
-//@ chunk-y1shfdfm.js:26040-26249 placement
+//@ chunk-kgbsr4tm.js:27256-27465 placement
 function resolveRuleOrigin(world, row, boundaryAddr) {
   let { addr, by } = row;
   for (;;) {
@@ -134,7 +134,7 @@ function resolveRuleOrigin(world, row, boundaryAddr) {
     by = ruleRow.by;
   }
 }
-//@ chunk-y1shfdfm.js:26249-26310 placement
+//@ chunk-kgbsr4tm.js:27465-27526 placement
 /**
  * 判断某行是否属于当前脚本可触发的规则（不在子工作流内且能解析来源）。
  */
@@ -144,7 +144,7 @@ function isValidRuleRow(world, row, boundaryAddr) {
     resolveRuleOrigin(world, row, boundaryAddr) !== undefined
   );
 }
-//@ chunk-y1shfdfm.js:26310-30512 placement
+//@ chunk-kgbsr4tm.js:27526-31728 placement
 /**
  * 为工作流脚本 VM 构建宿主 API（agent/spawn/world 操作等），处理跨 VM 边界的克隆与包装。
  */
@@ -433,14 +433,14 @@ function createWorkflowHostApi(options) {
     cut: cutChild,
   };
 }
-//@ chunk-y1shfdfm.js:30534-30573 placement
+//@ chunk-kgbsr4tm.js:31750-31789 placement
 /**
  * 是否为数组（辅助判断）。
  */
 function isArray(value) {
   return Array.isArray(value);
 }
-//@ chunk-y1shfdfm.js:30573-30672 placement
+//@ chunk-kgbsr4tm.js:31789-31888 placement
 /**
  * 把内部行裁剪成对外暴露的字段（地址、来源、状态、值、错误、事实）。
  */
@@ -454,7 +454,7 @@ function toPublicRow(value) {
     fact: value.fact,
   };
 }
-//@ chunk-y1shfdfm.js:30672-31090 placement
+//@ chunk-kgbsr4tm.js:31888-32306 placement
 function parsePlacementOptions(world) {
   if (world === undefined || world === null) return false;
   if (typeof world !== "object" || Array.isArray(world))
@@ -466,7 +466,7 @@ function parsePlacementOptions(world) {
     throw TypeError("placement option top must be a boolean");
   return boundaryAddr.top === true;
 }
-//@ chunk-y1shfdfm.js:31090-36466 placement
+//@ chunk-kgbsr4tm.js:32306-37707 placement
 /**
  * 为脚本提供 world（put/retract/read/rule 等）绑定，带作用域信号与 spawn 记忆。
  */
@@ -839,7 +839,7 @@ function createWorldBindings(
     cutChild: cut,
   };
 }
-//@ chunk-y1shfdfm.js:36466-36740 placement
+//@ chunk-kgbsr4tm.js:37707-37981 placement
 /**
  * 等待 world 落定的超时（5 秒）。
  */
@@ -848,14 +848,14 @@ var WORLD_SETTLE_TIMEOUT_MS = 5000;
 var MODEL = "model";
 var RUNAWAY_RUN_KILLED_TEXT =
   "killed (runaway): the run exceeded the per-run row cap \u2014 usually a rule putting the fact it fires on. Its facts are readable with read {status:'retracted'}; fix the rule (or split a genuinely larger workload) before launching again.";
-//@ chunk-y1shfdfm.js:36740-36793 placement
+//@ chunk-kgbsr4tm.js:37981-38034 placement
 /**
  * 把停止原因规范成已知值，未知记为 unknown。
  */
 function normalizeStopReason(reason) {
   return STOP_REASONS.find((workflowSize) => workflowSize === reason) ?? "unknown";
 }
-//@ chunk-y1shfdfm.js:36793-48223 placement
+//@ chunk-kgbsr4tm.js:38034-49846 placement
 /**
  * 一次工作流脚本运行：持有 VM 脚本、world、控制器与日志，负责启动、终止与收尾。
  */
@@ -875,6 +875,7 @@ class WorkflowScriptRun {
   killed = false;
   killedSize;
   foreignArtifactContentAtKill = false;
+  remoteControlDeviceReportAtKill = false;
   toolsUsedAtKill = [];
   scope = -1;
   priorScopes = [];
@@ -916,6 +917,9 @@ class WorkflowScriptRun {
   }
   get carriedForeignArtifactContent() {
     return this.foreignArtifactContentAtKill || this.ctx?.hooks.getForeignArtifactContent() === true;
+  }
+  get carriedRemoteControlDeviceReport() {
+    return this.remoteControlDeviceReportAtKill || this.ctx?.hooks.getRemoteControlDeviceReport() === true;
   }
   get isActive() {
     return this.scope >= 0 && !this.world.isIdle(this.scope);
@@ -970,7 +974,7 @@ class WorkflowScriptRun {
         at: Date.now(),
         reason,
         ...statusCounts,
-        rules: count(
+        rules: countWhere(
           this.world.read(
             {
               topic: "sub",
@@ -1013,6 +1017,7 @@ class WorkflowScriptRun {
       }
     }
     this.foreignArtifactContentAtKill = this.carriedForeignArtifactContent;
+    this.remoteControlDeviceReportAtKill = this.carriedRemoteControlDeviceReport;
     this.toolsUsedAtKill = this.ctx?.hooks.getToolsUsed() ?? [];
     this.ctx = undefined;
     this.words = undefined;
@@ -1219,10 +1224,10 @@ class WorkflowScriptRun {
     let durationMs = Date.now() - now;
     this.logSettlement({
       result: result_2,
-      errorResults: count(resultItems, hasErrorField),
+      errorResults: countWhere(resultItems, hasErrorField),
       scriptError: errorText === undefined ? undefined : isRunaway ? "runaway" : "script_failed",
       errors:
-        count(
+        countWhere(
           this.world.read(
             {
               topic: "error",
@@ -1243,6 +1248,12 @@ class WorkflowScriptRun {
       failures,
       ...(this.carriedForeignArtifactContent && {
         foreignArtifactContent: true,
+      }),
+      ...(this.ctx?.hooks.getPluginSteered() !== false && {
+        pluginSteered: true,
+      }),
+      ...(this.carriedRemoteControlDeviceReport && {
+        remoteControlDeviceReport: true,
       }),
       ...(toolsUsed.length > 0 && {
         toolsUsed,
@@ -1574,7 +1585,7 @@ class WorkflowScriptRun {
     );
   }
 }
-//@ chunk-y1shfdfm.js:48223-48333 placement
+//@ chunk-kgbsr4tm.js:49846-49956 placement
 function isFoundingScriptRow(row) {
   return (
     row.in === HOST_SCOPE &&

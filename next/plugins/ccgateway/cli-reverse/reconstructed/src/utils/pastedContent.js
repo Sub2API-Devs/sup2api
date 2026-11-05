@@ -3,12 +3,12 @@
  *
  * 粘贴内容标签（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-km6vv5ys.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-dahajswd.js (13)
  * attribution: placement 13
  */
-//@ chunk-km6vv5ys.js:191-287 placement
+//@ chunk-dahajswd.js:191-287 placement
 /**
  * 粘贴内容标签名与 id 长度、前后标签前缀与行尾格式。
  */
@@ -18,7 +18,7 @@ var PASTED_CONTENT_OPEN_PREFIX = '<pasted_content id="';
 var PASTED_CONTENT_LINE_END = `">
 `;
 var PASTED_CONTENT_CLOSE_PREFIX = '</pasted_content id="';
-//@ chunk-km6vv5ys.js:287-339 placement
+//@ chunk-dahajswd.js:287-339 placement
 /**
  * 生成粘贴内容的开始标签。
  */
@@ -26,7 +26,7 @@ function pastedContentOpenTag(pasteId) {
   return `<pasted_content id="${pasteId}">
 `;
 }
-//@ chunk-km6vv5ys.js:339-392 placement
+//@ chunk-dahajswd.js:339-392 placement
 /**
  * 生成粘贴内容的结束标签。
  */
@@ -34,7 +34,7 @@ function pastedContentCloseTag(pasteId) {
   return `</pasted_content id="${pasteId}">
 `;
 }
-//@ chunk-km6vv5ys.js:392-535 placement
+//@ chunk-dahajswd.js:392-535 placement
 /**
  * 是否为 4 位小写十六进制。
  */
@@ -46,13 +46,13 @@ function isPasteIdHex(candidate) {
   }
   return true;
 }
-//@ chunk-km6vv5ys.js:535-576 placement
+//@ chunk-dahajswd.js:535-576 placement
 /**
  * 开/闭标点字符正则。
  */
 var OPENING_PUNCT_RE = /[([{"'`]/;
 var CLOSING_PUNCT_RE = /[)\]}"'`.,;:!?]/;
-//@ chunk-km6vv5ys.js:576-674 placement
+//@ chunk-dahajswd.js:576-674 placement
 /**
  * 判断标点后是否接了词（后有空白或到末尾）。
  */
@@ -61,7 +61,7 @@ function hasWordAfterPunct(text, start = 0, end = text.length) {
   while (index < end && CLOSING_PUNCT_RE.test(text[index])) index++;
   return index >= end || /\s/.test(text[index]);
 }
-//@ chunk-km6vv5ys.js:674-1204 placement
+//@ chunk-dahajswd.js:674-1204 placement
 /**
  * （切分错误）把文本拆成普通文本段和 <pasted_content id="xxxx"> 块。
  */
@@ -135,13 +135,13 @@ ${sliced_2}`,
     });
   return segments;
 }
-//@ chunk-km6vv5ys.js:1204-1343 placement (2.1.88 match: createContentSummary, 0.501)
+//@ chunk-dahajswd.js:1204-1343 placement
 /**
  * （切分错误）去掉 pasted_content 包装，只保留块正文。
  */
-function unwrapPastedContentBlocks(content) {
-  let segments = splitPastedContentBlocks(content);
-  if (!segments.some((segment) => segment.kind === "block")) return content;
+function unwrapPastedContentBlocks(text) {
+  let segments = splitPastedContentBlocks(text);
+  if (!segments.some((segment) => segment.kind === "block")) return text;
   return segments
     .map((segment) => (segment.kind === "text" ? segment.text : segment.body))
     .join(
@@ -151,7 +151,7 @@ function unwrapPastedContentBlocks(content) {
     )
     .trim();
 }
-//@ chunk-km6vv5ys.js:1343-1475 placement
+//@ chunk-dahajswd.js:1343-1475 placement
 /**
  * 展开粘贴内容块为原文。
  */
@@ -160,7 +160,7 @@ function flattenPastedBlocks(text) {
   if (segments.length === 1 && segments[0].kind === "text") return text;
   return segments.map((segment) => (segment.kind === "text" ? segment.text : segment.body)).join("");
 }
-//@ chunk-km6vv5ys.js:1475-2076 placement
+//@ chunk-dahajswd.js:1475-2076 placement
 function expandPastedContent(text, pasteId) {
   let segments = splitPastedContentBlocks(text);
   if (!segments.some((segment) => segment.kind === "block" && segment.id === pasteId)) return text;
@@ -202,7 +202,7 @@ function expandPastedContent(text, pasteId) {
   }
   return result;
 }
-//@ chunk-km6vv5ys.js:2076-2165 placement
+//@ chunk-dahajswd.js:2076-2165 placement
 /**
  * 31 位字符串哈希（Java String.hashCode 形式）。
  */
@@ -211,14 +211,14 @@ function hashString31(text) {
   for (let i = 0; i < text.length; i++) hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
   return hash;
 }
-//@ chunk-km6vv5ys.js:2165-2210 placement
+//@ chunk-dahajswd.js:2165-2210 placement
 /**
  * 用 Bun.hash 计算单个值的字符串哈希。
  */
 function bunHashOf(text) {
   return Bun.hash(text).toString();
 }
-//@ chunk-km6vv5ys.js:2210-2270 placement
+//@ chunk-dahajswd.js:2210-2270 placement
 /**
  * 用 Bun.hash 计算两个值的组合哈希。
  */
@@ -226,22 +226,22 @@ function bunHashPair(first, second) {
   return Bun.hash(second, Bun.hash(first)).toString();
 }
 export {
+  flattenPastedBlocks,
   splitPastedContentBlocks,
   hasWordAfterPunct,
-  flattenPastedBlocks,
-  bunHashPair,
   hashString31,
+  bunHashPair,
   bunHashOf,
-  unwrapPastedContentBlocks,
-  PASTED_CONTENT_TAG,
-  expandPastedContent,
   PASTE_ID_LENGTH,
+  PASTED_CONTENT_TAG,
   pastedContentOpenTag,
   pastedContentCloseTag,
+  unwrapPastedContentBlocks,
   OPENING_PUNCT_RE,
   CLOSING_PUNCT_RE,
   PASTED_CONTENT_OPEN_PREFIX,
   PASTED_CONTENT_CLOSE_PREFIX,
   isPasteIdHex,
   PASTED_CONTENT_LINE_END,
+  expandPastedContent,
 };

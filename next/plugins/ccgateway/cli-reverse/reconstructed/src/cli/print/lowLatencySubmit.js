@@ -3,35 +3,29 @@
  *
  * 2.1.316 新增：[low-latency-submit] 排队消息的提前投递（在当前轮次中插入或等待），含失败重试与观察者/协调者来源判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sfjpx19.js (28)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-aac6cgbf.js (11), chunk-nh1pvp1m.js (17)
  * attribution: placement 28
  */
 import { logForDebugging } from "../../utils/debug.js";
-import { logFeatureSad, logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { DoctorLazy } from "../handlers/util.js";
-import {
-  errorMessage,
-  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-} from "../../utils/errors.js";
-import { stringSchema, objectSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { logFeatureOk, logFeatureSad, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
+import { stringSchema, objectSchema, literal } from "../../../vendor/zod/v4/classic/schemas.js";
+import { isQueuedCommandEditable } from "../../utils/messageQueueManager.js";
 import { logError } from "../../utils/log.js";
-import { logEvent } from "../../services/analytics/index.js";
-import { isRefillableInput } from "../../utils/messageQueueManager.js";
 import { isBackgroundTasksOff } from "../../tools/AgentTool/backgroundGates.js";
-import { dropTextInBriefTurns } from "../../components/Messages.js";
-import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import { env } from "../../utils/env.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
+import { unansweredToolBriefs } from "../../components/Messages.js";
 import {
   MOVED_RESULT_HOLD_MS,
+  MOVED_RESULT_POLL_MS,
   GRACE_POLL_TICKS,
   decideQueuedPromptAction,
   MAX_MOVED_RESULT_WAITS,
 } from "./setModelControl.js";
 import {
   backgroundShellsToDeliverMessage,
+  isArmedForegroundShell,
   isForegroundShellOf,
   isForegroundShellFromCaller,
   isForegroundTask,
@@ -41,8 +35,15 @@ import {
   foregroundCallRegistrySlots,
   backgroundForegroundCalls,
 } from "../../services/tools/detachedToolCalls.js";
+import { getTaskRunState } from "../../utils/task/taskNotifications.js";
+import { getIsNonInteractiveSession, mainAgentId, getDisableSlashCommands } from "../../bootstrap/state.js";
+import {
+  isAutoBackgroundHeld,
+  moveAgentToBackground,
+  queuePendingMessage,
+  isBackgroundedSubagent,
+} from "../../tasks/LocalAgentTask/LocalAgentTask.js";
 import { isActivityReasonActive, getMainLoopRefcount } from "../../utils/sessionActivity.js";
-import { mainAgentId, getDisableSlashCommands } from "../../bootstrap/state.js";
 import { PREAMBLE_TASK_SUFFIX, stripPreambleSuffix } from "../../tasks/LocalShellTask/backgroundNotices.js";
 import {
   isForegroundAgentTask,
@@ -50,13 +51,7 @@ import {
   canReceiveNotification,
 } from "../../tasks/taskKinds.js";
 import { AGENT, TASK } from "../../tools/AgentTool/constants.js";
-import {
-  moveAgentToBackground,
-  queuePendingMessage,
-  isBackgroundedSubagent,
-  hasCompletedWithFindings,
-} from "../../tasks/LocalAgentTask/LocalAgentTask.js";
-import { isExactReplToolName } from "../../tools/REPLTool/constants.js";
+import { isEvalToolCallName } from "../../tools/REPLTool/constants.js";
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import { isLocalShellTask } from "../../tasks/LocalShellTask/guards.js";
 import { firstLineOf } from "../../utils/stringUtils.js";
@@ -73,20 +68,22 @@ import {
   drainPendingMessages,
   dropDeniedResumeMessages,
 } from "../../tasks/LocalAgentTask/pendingMessages.js";
-import { getTaskRunState } from "../../utils/task/taskNotifications.js";
-import { neverFalse } from "../../utils/pollEvents.js";
-import { uniq } from "../../utils/collections.js";
+import { errorMessage } from "../../utils/errors.js";
+import { isEvalSettleWakePollEvent } from "../../utils/pollEvents.js";
+import { hasCompletedWithFindings } from "../../components/tasks/RemoteSessionProgress.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { isTaskNotificationOrigin } from "../../utils/backgroundSessionResume.js";
 import { REFUSAL_FALLBACK_DIALOG } from "../../services/requestUserDialog.js";
 import { FABLE_OVERAGE_CONSENT_DIALOG } from "../../services/api/overageConsent.js";
 import { AUTO_MODE_SERVER_FALLBACK, ENUM_PROMPT } from "../../components/nudges/nudgeIds.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { toBridgeSlashCommands, getCommandName } from "../../commands.js";
 import { dropSyncedNameClashes } from "../../utils/commandPredicates.js";
 import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { bridgeHostState } from "../../bridge/bridgeHostState.js";
 import { ContextUsageEstimateReporter } from "./resumeTurnBoundaries.js";
 
-//@ chunk-0sfjpx19.js:34121-34784 placement
+//@ chunk-aac6cgbf.js:2446-3108 placement
 function pickQueuedMessageToMove(commandQueue, movingUuids, messageQueue, agentId) {
   let index = commandQueue.findIndex(
     (queuedMessage) =>
@@ -136,34 +133,46 @@ function pickQueuedMessageToMove(commandQueue, movingUuids, messageQueue, agentI
     priority,
   };
 }
-//@ chunk-0sfjpx19.js:34784-39757 placement
+//@ chunk-aac6cgbf.js:3108-8422 placement
 /**
  * 低延迟提交队列：决定排队消息何时可提前送入正在进行的轮次（约 5 KB）。
  */
 class LowLatencySubmitQueue {
-  #t;
+  #n;
   #e = new Map();
-  #n = null;
-  #f = [];
-  #m = false;
-  #p = "";
-  #d = false;
+  #t = null;
+  #p = [];
+  #g = false;
+  #h = "";
+  #c = false;
   #o = 0;
   #l = false;
-  #r = new Set();
-  #g = 0;
+  #s = new Set();
+  #y = 0;
   #u = 0;
-  #h = false;
+  #i = false;
+  #m = 0;
+  #S = false;
   constructor(deps) {
-    this.#t = deps;
+    this.#n = deps;
   }
-  sendQueuedNow = () => {
+  sendQueuedNow = () => this.#v(isQueuedCommandEditable);
+  sendAgentMessageNow() {
+    this.#i = true;
+    this.#m = 0;
+    if (this.#v(() => true)) {
+      this.#t?.();
+      this.#T();
+    }
+    return this.#m;
+  }
+  #v(accept) {
     let didSchedule = false;
-    this.#a(() => {
-      if (this.#h) return;
-      let { messageQueue, turn } = this.#t;
+    this.#d(() => {
+      if (this.#S) return;
+      let { messageQueue, turn } = this.#n;
       if (!turn.guard.isRunning && !turn.guard.isDispatchingForModel) {
-        this.#s();
+        this.#a();
         return;
       }
       let agentId = agentIdOrMain(turn.agentId);
@@ -172,7 +181,7 @@ class LowLatencySubmitQueue {
           queuedMessage.uuid !== undefined &&
           queuedMessage.agentId === agentId &&
           queuedMessage.mode === "prompt" &&
-          isRefillableInput(queuedMessage) &&
+          accept(queuedMessage) &&
           !this.#e.has(queuedMessage.uuid)
         )
           this.#e.set(queuedMessage.uuid, {
@@ -187,22 +196,22 @@ class LowLatencySubmitQueue {
         agentId,
       )?.head;
       if (head === "behind_earlier" || head === "ended_by_hook") {
-        this.#s();
+        this.#a();
         return;
       }
       didSchedule = true;
-      this.#d = false;
+      this.#c = false;
       this.#l = false;
-      if (this.#f.length === 0) this.#f = [messageQueue.subscribe(this.#S), turn.guard.subscribe(this.#C)];
-      if (this.#n === null) this.#y(0);
+      if (this.#p.length === 0) this.#p = [messageQueue.subscribe(this.#w), turn.guard.subscribe(this.#M)];
+      if (this.#t === null) this.#b(0);
     });
     return didSchedule;
-  };
+  }
   moveHolders() {
-    this.#a(() => {
-      let { turn, transcript, taskRegistry } = this.#t;
-      if (this.#h || !isLocalTurnRunning(turn) || isBackgroundTasksOff()) return;
-      let liveToolUseIds = dropTextInBriefTurns(transcript.getSnapshot());
+    this.#d(() => {
+      let { turn, transcript, taskRegistry } = this.#n;
+      if (this.#S || !isLocalTurnRunning(turn) || isBackgroundTasksOff()) return;
+      let liveToolUseIds = unansweredToolBriefs(transcript.getSnapshot());
       let values = Object.values(taskRegistry.all());
       toolUseIdsToMoveToBackground(
         runningForegroundShellsFor(values, liveToolUseIds, turn.agentId),
@@ -214,104 +223,105 @@ class LowLatencySubmitQueue {
     });
   }
   dispose() {
-    this.#h = true;
-    this.#a(() => this.#s());
+    this.#S = true;
+    this.#d(() => this.#a());
   }
-  #y(delayMs) {
-    this.#n?.();
-    this.#n = this.#t.clock.setTimeout(this.#v, delayMs);
+  #b(delayMs) {
+    this.#t?.();
+    this.#t = this.#n.clock.setTimeout(this.#T, delayMs);
   }
-  #i() {
-    this.#n?.();
-    this.#n = null;
+  #r() {
+    this.#t?.();
+    this.#t = null;
     this.#o = 0;
-    this.#r.clear();
-    this.#g = 0;
+    this.#s.clear();
+    this.#y = 0;
     this.#u = 0;
   }
-  #s() {
-    this.#i();
-    for (let unsubscribe of this.#f.splice(0)) unsubscribe();
-    this.#w();
+  #a() {
+    this.#r();
+    for (let unsubscribe of this.#p.splice(0)) unsubscribe();
+    this.#A();
     this.#e.clear();
-    this.#m = false;
-    this.#p = "";
-    this.#d = false;
+    this.#g = false;
+    this.#h = "";
+    this.#c = false;
     this.#l = false;
   }
-  #c() {
-    if (this.#e.size > 0) this.#y(MOVED_RESULT_HOLD_MS);
+  #f() {
+    if (this.#e.size > 0) this.#b(this.#i ? MOVED_RESULT_HOLD_MS : MOVED_RESULT_POLL_MS);
   }
-  #w() {
+  #A() {
     for (let [messageUuid, moveState] of this.#e)
       if (moveState.raisedFrom !== null) {
         let raisedFrom = moveState.raisedFrom;
         moveState.raisedFrom = null;
-        this.#t.messageQueue.demoteFromNow(messageUuid, raisedFrom);
+        this.#n.messageQueue.demoteFromNow(messageUuid, raisedFrom);
       }
   }
-  #b() {
+  #_() {
     let liveUuids = new Set(
-      this.#t.messageQueue.getCommandQueueSnapshot().map((queuedMessage) => queuedMessage.uuid),
+      this.#n.messageQueue.getCommandQueueSnapshot().map((queuedMessage) => queuedMessage.uuid),
     );
     for (let [messageUuid, moveState] of this.#e) {
       if (liveUuids.has(messageUuid)) continue;
       this.#e.delete(messageUuid);
-      if (this.#t.messageQueue.isFoldInFlight(messageUuid)) this.#l = true;
+      if (this.#n.messageQueue.isFoldInFlight(messageUuid)) this.#l = true;
       if (moveState.outcome !== "undecided" && moveState.outcome !== "delivered_early")
-        logFeatureSad(this.#t.featureName, moveState.outcome);
+        logFeatureSad(this.#n.featureName, moveState.outcome);
     }
   }
-  #S = () => {
-    this.#a(() => {
+  #w = () => {
+    this.#d(() => {
       let [previousFirstUuid] = this.#e.keys();
-      this.#b();
+      this.#_();
       if (this.#e.size === 0) {
-        this.#s();
+        this.#a();
         return;
       }
       if (this.#l) {
-        this.#i();
+        this.#r();
         return;
       }
       let [currentFirstUuid] = this.#e.keys();
-      if (currentFirstUuid !== previousFirstUuid && (this.#n !== null || this.#t.turn.guard.isActive))
-        this.#y(0);
+      if (currentFirstUuid !== previousFirstUuid && (this.#t !== null || this.#n.turn.guard.isActive))
+        this.#b(0);
     });
   };
-  #C = () => {
-    this.#a(() => {
-      let { guard } = this.#t.turn;
+  #M = () => {
+    this.#d(() => {
+      let { guard } = this.#n.turn;
       if (!guard.isActive) {
-        this.#d = true;
-        this.#i();
+        this.#c = true;
+        this.#r();
         return;
       }
-      if (this.#d) this.#s();
+      if (this.#c) this.#a();
     });
   };
-  #v = () => {
-    this.#n = null;
-    this.#a(() => {
-      this.#A();
+  #T = () => {
+    this.#t = null;
+    this.#d(() => {
+      this.#I();
     });
   };
-  #a(callback) {
+  #d(callback) {
     try {
       callback();
     } catch (error) {
       logError(error);
-      if (!this.#m) {
-        this.#m = true;
-        logFeatureBad(this.#t.featureName, "check_threw");
+      this.#m = null;
+      if (!this.#g) {
+        this.#g = true;
+        logFeatureBad(this.#n.featureName, "check_threw");
       }
     }
   }
-  #A() {
-    let { messageQueue, turn, transcript, session, taskRegistry } = this.#t;
-    this.#b();
+  #I() {
+    let { messageQueue, turn, transcript, session, taskRegistry } = this.#n;
+    this.#_();
     if (this.#e.size === 0) {
-      this.#s();
+      this.#a();
       return;
     }
     let picked = pickQueuedMessageToMove(
@@ -322,7 +332,7 @@ class LowLatencySubmitQueue {
     );
     let pickedState = picked === null ? undefined : this.#e.get(picked.uuid);
     let snapshot = transcript.getSnapshot();
-    let liveToolUseIds = dropTextInBriefTurns(snapshot);
+    let liveToolUseIds = unansweredToolBriefs(snapshot);
     let values = Object.values(taskRegistry.all());
     let liveShells = runningForegroundShellsFor(values, liveToolUseIds, turn.agentId);
     let hasRaisedHolders =
@@ -335,34 +345,52 @@ class LowLatencySubmitQueue {
           killTask(task.id, taskRegistry);
     }
     if (picked === null || pickedState === undefined) {
-      if (hasRaisedHolders) this.#c();
-      else this.#i();
+      if (hasRaisedHolders) this.#f();
+      else this.#r();
       return;
     }
     let { head, uuid, priority } = picked;
-    let agentTasks = foregroundAgentTasksInSet(values, liveToolUseIds, turn.agentId);
+    let target = foregroundAgentTasksInSet(values, liveToolUseIds, turn.agentId);
     let calls = (foregroundCallRegistrySlots.peek(session)?.list() ?? []).filter((call) =>
       setHasToolUseId(liveToolUseIds, call.toolUseId),
     );
     let backgroundingDisabled = isBackgroundTasksOff();
-    let movableShells = backgroundingDisabled ? [] : liveShells;
-    let movableAgentTasks = backgroundingDisabled
+    let movableShells = backgroundingDisabled
       ? []
-      : agentTasks.filter((agentTask) => isToolUseMarkedAgentOrTask(liveToolUseIds, agentTask));
+      : liveShells.filter((liveShell) => {
+          if (!this.#i) return true;
+          let toolUseId = firstLineOfToolUseId(liveShell);
+          let exclusiveOwner =
+            toolUseId === undefined ? undefined : getTaskRunState().exclusiveCallQueuedBehind.get(toolUseId);
+          return (
+            isArmedForegroundShell(liveShell, turn.agentId) &&
+            !exclusiveOwner?.isQueued() &&
+            !exclusiveOwner?.mayYetBeQueued()
+          );
+        });
+    let agentTasks =
+      backgroundingDisabled || (this.#i && getIsNonInteractiveSession())
+        ? []
+        : target.filter(
+            (agentTask) =>
+              isToolUseMarkedAgentOrTask(liveToolUseIds, agentTask) &&
+              !(this.#i && isAutoBackgroundHeld(agentTask)),
+          );
     let evidence = turn.readEvidence();
     let last = snapshot.at(-1);
-    for (let toolUseId of this.#r) if (!liveToolUseIds.has(toolUseId)) this.#r.delete(toolUseId);
+    for (let toolUseId of this.#s) if (!liveToolUseIds.has(toolUseId)) this.#s.delete(toolUseId);
+    let totalCount = liveShells.length + target.length + calls.length;
+    let remainingCount = liveShells.length - movableShells.length + (target.length - agentTasks.length);
     let decisionInput = {
       head,
       hasFoldTakenPrompt: this.#l,
       isLocalTurnActive: turn.guard.isActive,
       isLocalTurnRunning: isLocalTurnRunning(turn),
       isHeldByDialog: evidence.isHeldByDialog,
-      holderCount: liveShells.length + agentTasks.length + calls.length,
-      unmovableHolderCount:
-        (backgroundingDisabled ? liveShells.length : 0) + (agentTasks.length - movableAgentTasks.length),
+      holderCount: totalCount,
+      unmovableHolderCount: this.#i && remainingCount > 0 ? totalCount : remainingCount,
       isExecuting: evidence.isToolCallStarting || liveToolUseIds.size > 0,
-      isAwaitingMovedResult: this.#r.size > 0,
+      isAwaitingMovedResult: this.#s.size > 0,
       isBackgroundingDisabled: backgroundingDisabled,
       isCompacting: evidence.isCompacting,
       isUnmovableGraceOver: this.#o >= GRACE_POLL_TICKS,
@@ -377,83 +405,84 @@ class LowLatencySubmitQueue {
     };
     let decision = decideQueuedPromptAction(decisionInput);
     let traceLine = `${decision.action}${decision.action === "wait" ? ` ${decision.reason}` : ""} head=${head} holders=${decisionInput.holderCount} executing=${decisionInput.isExecuting}`;
-    if (traceLine !== this.#p) {
-      this.#p = traceLine;
+    if (traceLine !== this.#h) {
+      this.#h = traceLine;
       logForDebugging(`[low-latency-submit] ${traceLine} agent=${turn.agentId ?? "main"}`);
     }
     switch (decision.action) {
       case "stand_by":
-        this.#i();
+        this.#r();
         return;
       case "wait":
         this.#o = decision.reason === "unmovable_grace" ? this.#o + 1 : 0;
-        if (decision.reason === "moved_result" && ++this.#g >= MAX_MOVED_RESULT_WAITS) this.#r.clear();
+        if (decision.reason === "moved_result" && ++this.#y >= MAX_MOVED_RESULT_WAITS) this.#s.clear();
         if (decision.reason !== "not_ready" && pickedState.outcome === "undecided")
           pickedState.outcome = decision.reason;
-        this.#c();
+        this.#f();
         return;
       case "background": {
         let outcome = pickedState.outcome;
         pickedState.outcome = "delivered_early";
-        let movedToolUseIds = toolUseIdsToMoveToBackground(movableShells, movableAgentTasks, taskRegistry);
+        let movedToolUseIds = toolUseIdsToMoveToBackground(movableShells, agentTasks, taskRegistry);
         let movedCount = movedToolUseIds.length;
         let backgroundedCallCount = backgroundForegroundCalls(calls);
         movedCount += backgroundedCallCount;
+        this.#m = movedCount;
         if (backgroundedCallCount > 0) movedToolUseIds.push(...calls.map((movedCall) => movedCall.toolUseId));
         if (this.#e.size > 0) {
-          this.#g = 0;
+          this.#y = 0;
           for (let movedToolUseId of movedToolUseIds)
-            if (movedToolUseId !== undefined) this.#r.add(movedToolUseId);
+            if (movedToolUseId !== undefined) this.#s.add(movedToolUseId);
         }
         if (movedCount === 0) {
           pickedState.outcome = outcome === "undecided" ? "nothing_moved" : outcome;
           if (decisionInput.isUnmovableGraceOver) {
-            if (backgroundingDisabled) this.#_(pickedState);
+            if (backgroundingDisabled) this.#x(pickedState);
             else this.#k(pickedState, uuid, priority);
             return;
           }
           if (this.#e.size > 0) this.#o++;
         } else {
           this.#o = 0;
-          if (outcome !== "delivered_early") logFeatureOk(this.#t.featureName);
+          if (outcome !== "delivered_early") logFeatureOk(this.#n.featureName);
         }
-        this.#c();
+        this.#f();
         return;
       }
       case "interrupt":
         this.#k(pickedState, uuid, priority);
         return;
       case "cancel":
-        this.#_(pickedState);
+        this.#x(pickedState);
     }
   }
-  #_(moveState) {
-    let { interruptForSubmit } = this.#t.turn;
+  #x(moveState) {
+    let { interruptForSubmit } = this.#n.turn;
     if (interruptForSubmit === undefined) {
       if (moveState.outcome === "undecided") moveState.outcome = "nothing_moved";
     } else {
       if (moveState.outcome !== "delivered_early") moveState.outcome = "fell_back_to_cancel";
       interruptForSubmit();
     }
-    this.#i();
+    this.#r();
   }
   #k(moveState, messageUuid, raisedFrom) {
     this.#o = 0;
     this.#u = 0;
     moveState.raisedFrom = raisedFrom;
-    if (!this.#t.messageQueue.promoteToNow(messageUuid)) moveState.raisedFrom = null;
+    if (!this.#n.messageQueue.promoteToNow(messageUuid)) moveState.raisedFrom = null;
     else if (moveState.outcome !== "delivered_early") {
       moveState.outcome = "delivered_early";
-      logFeatureOk(this.#t.featureName);
+      logFeatureOk(this.#n.featureName);
     }
-    this.#c();
+    this.#f();
   }
 }
-//@ chunk-0sfjpx19.js:39757-39787 placement
+//@ chunk-aac6cgbf.js:8422-8451 placement
 function agentIdOrMain(agentId) {
   return agentId ?? mainAgentId();
 }
-//@ chunk-0sfjpx19.js:39787-39949 placement
+//@ chunk-aac6cgbf.js:8451-8610 placement
 function runningForegroundShellsFor(allTasks, liveToolUseIds, agentId) {
   return allTasks
     .filter((task) => isForegroundShellOf(task, agentId))
@@ -465,18 +494,18 @@ function runningForegroundShellsFor(allTasks, liveToolUseIds, agentId) {
         setHasToolUseId(liveToolUseIds, firstLineOfToolUseId(task)),
     );
 }
-//@ chunk-0sfjpx19.js:39949-40030 placement
+//@ chunk-aac6cgbf.js:8610-8689 placement
 function foregroundAgentTasksInSet(allTasks, liveToolUseIds, parentAgentId) {
   return allTasks
     .filter((task) => isForegroundAgentTask(task, parentAgentId))
     .filter((task) => setHasToolUseId(liveToolUseIds, task.toolUseId));
 }
-//@ chunk-0sfjpx19.js:40030-40114 placement
+//@ chunk-aac6cgbf.js:8689-8772 placement
 function isToolUseMarkedAgentOrTask(marks, { toolUseId }) {
   let mark = toolUseId === undefined ? undefined : marks.get(toolUseId);
   return mark === AGENT || mark === TASK;
 }
-//@ chunk-0sfjpx19.js:40114-40213 placement
+//@ chunk-aac6cgbf.js:8772-8869 placement
 function toolUseIdsToMoveToBackground(tasks, agentTasks, taskRegistry) {
   return [
     ...backgroundShellsToDeliverMessage(tasks, taskRegistry).map(firstLineOfToolUseId),
@@ -485,17 +514,17 @@ function toolUseIdsToMoveToBackground(tasks, agentTasks, taskRegistry) {
       .map((agentTask) => agentTask.toolUseId),
   ];
 }
-//@ chunk-0sfjpx19.js:40213-40293 placement
+//@ chunk-aac6cgbf.js:8869-8948 placement
 function isLocalTurnRunning(turn) {
   return turn.guard.isRunning && turn.abortController?.signal.aborted === false;
 }
-//@ chunk-0sfjpx19.js:40293-40360 placement
+//@ chunk-aac6cgbf.js:8948-9014 placement
 function firstLineOfToolUseId(task) {
   return task.toolUseId === undefined ? undefined : stripPreambleSuffix(task.toolUseId);
 }
-//@ chunk-0sfjpx19.js:40360-40921 placement
+//@ chunk-aac6cgbf.js:9014-9573 placement
 function isTurnRunning(allTasks, liveToolUseIds, exemptShells, agentId) {
-  let any = [...liveToolUseIds.values()].some(isExactReplToolName);
+  let any = [...liveToolUseIds.values()].some(isEvalToolCallName);
   let filtered = allTasks
     .filter(isLocalAgent)
     .filter((agent) => agent.status === "running" && !agent.isBackgrounded);
@@ -523,11 +552,11 @@ function isTurnRunning(allTasks, liveToolUseIds, exemptShells, agentId) {
     return any || (toolUseId !== undefined && setHasToolUseId(liveToolUseIds, firstLineOf(toolUseId, ":")));
   });
 }
-//@ chunk-0sfjpx19.js:40921-40966 placement
+//@ chunk-aac6cgbf.js:9573-9617 placement
 function setHasToolUseId(toolUseIdSet, toolUseId) {
   return toolUseId !== undefined && toolUseIdSet.has(toolUseId);
 }
-//@ chunk-0sfjpx19.js:40966-41040 placement
+//@ chunk-nh1pvp1m.js:60545-60619 placement
 /**
  * 判断错误是否属于可重试的代理恢复错误（恢复进行中 / 暂时性 / 仍在停止三类）。
  */
@@ -538,7 +567,7 @@ function isRetryableAgentError(error) {
     error instanceof AgentStillStoppingError
   );
 }
-//@ chunk-0sfjpx19.js:41040-41910 placement
+//@ chunk-nh1pvp1m.js:60619-61492 placement
 async function deliverQueuedNow(agentId, taskRegistry, resume) {
   let heldByPlugin = isHeldByPlugin();
   let pendingMessages = drainPendingMessages(agentId, taskRegistry);
@@ -596,14 +625,14 @@ async function deliverQueuedNow(agentId, taskRegistry, resume) {
   if (isResumeDenied(resumeResult))
     dropDeniedResumeMessages(agentId, taskRegistry, [chosenMessage, ...filtered], resumeResult);
 }
-//@ chunk-0sfjpx19.js:41910-41937 placement
+//@ chunk-nh1pvp1m.js:61492-61519 placement
 /**
  * 代理恢复退避参数：最多 5 次瞬时失败重试、基数 2s、上限 60s。
  */
 var MAX_TRANSIENT_RESUME_RETRIES = 5;
 var RESUME_BACKOFF_BASE_MS = 2000;
 var RESUME_BACKOFF_CAP_MS = 60000;
-//@ chunk-0sfjpx19.js:41937-42039 placement
+//@ chunk-nh1pvp1m.js:61519-61621 placement
 /**
  * 指数退避加抖动：延迟取 min(上限, 基数×2^(n−1))，结果在其一半到全值之间随机。
  */
@@ -611,12 +640,12 @@ function jitteredBackoffMs(attempt, random = Math.random) {
   let min = Math.min(RESUME_BACKOFF_CAP_MS, RESUME_BACKOFF_BASE_MS * 2 ** Math.max(0, attempt - 1));
   return Math.round(min / 2 + (random() * min) / 2);
 }
-//@ chunk-0sfjpx19.js:42039-42116 placement
+//@ chunk-nh1pvp1m.js:61621-61698 placement
 var realTimers = {
   setTimeout: (fn, delayMs) => setTimeout(fn, delayMs),
   clearTimeout: (timer) => clearTimeout(timer),
 };
-//@ chunk-0sfjpx19.js:42116-43567 placement
+//@ chunk-nh1pvp1m.js:61698-63151 placement
 /**
  * 恢复卡住时按退避重试，多次失败后回调 onFailed。
  */
@@ -724,14 +753,14 @@ function createStrandedResumeRetrier({
     },
   };
 }
-//@ chunk-0sfjpx19.js:43567-43597 placement
+//@ chunk-nh1pvp1m.js:63151-63181 placement
 /**
  * 判断消息是否为"只含结果"的任务通知（排除纯工具调用的用户消息）。
  */
 function isResultOnlyTaskNotification(message) {
-  return neverFalse(message);
+  return isEvalSettleWakePollEvent(message);
 }
-//@ chunk-0sfjpx19.js:43597-44358 placement
+//@ chunk-nh1pvp1m.js:63181-63942 placement
 function buildTaskNotificationText(allMessages, tasks) {
   if (!tasks || allMessages.length === 0) return [];
   let tasksByAgent = new Map();
@@ -764,7 +793,9 @@ function buildTaskNotificationText(allMessages, tasks) {
       (notification) => typeof notification.value === "string" && notification.value,
     );
     let mapped = filtered.map((notification) => String(notification.value));
-    let toolsUsed = uniq(filtered.flatMap((notification) => notification.toolsUsed ?? []));
+    let toolsUsed = normalizeCaseForComparison_2(
+      filtered.flatMap((notification) => notification.toolsUsed ?? []),
+    );
     return {
       agentId,
       prompt: mapped.join(`
@@ -782,7 +813,7 @@ function buildTaskNotificationText(allMessages, tasks) {
     };
   });
 }
-//@ chunk-0sfjpx19.js:44358-44446 placement
+//@ chunk-nh1pvp1m.js:63942-64030 placement
 var TASK_NOTIFICATION_ORIGIN = {
   kind: "task-notification",
 };
@@ -790,14 +821,14 @@ var SESSION_TASK_NOTIFICATION_ORIGIN = {
   kind: "task-notification",
   producer: "session-task",
 };
-//@ chunk-0sfjpx19.js:44446-44521 placement
+//@ chunk-nh1pvp1m.js:64030-64105 placement
 function notificationOriginForResults(notifications) {
   return notifications.length > 0 &&
     notifications.every((notification) => isTaskNotificationOrigin(notification.origin, undefined))
     ? SESSION_TASK_NOTIFICATION_ORIGIN
     : TASK_NOTIFICATION_ORIGIN;
 }
-//@ chunk-0sfjpx19.js:44521-44694 placement
+//@ chunk-nh1pvp1m.js:64105-64278 placement
 /**
  * 记录已送达的子代理结果消息，并判断某次"仅结果"投递涉及的结果是否都已送达过。
  */
@@ -817,13 +848,13 @@ function createDeliveredResultsTracker() {
     },
   };
 }
-//@ chunk-0sfjpx19.js:44694-44755 placement
+//@ chunk-nh1pvp1m.js:64278-64339 placement
 function resultOnlyMessagesOfAgent(messages, agentId) {
   return messages.filter((message) => message.agentId === agentId && isResultOnlyTaskNotification(message));
 }
-//@ chunk-0sfjpx19.js:44755-44767 placement
+//@ chunk-nh1pvp1m.js:64339-64351 placement
 var SLACK_CONNECT_DIALOGS_CACHE = null;
-//@ chunk-0sfjpx19.js:44767-44968 placement
+//@ chunk-nh1pvp1m.js:64351-64552 placement
 function isSdkHostOrigin(kind, originKind) {
   if (kind === REFUSAL_FALLBACK_DIALOG.kind || kind === FABLE_OVERAGE_CONSENT_DIALOG.kind) return true;
   if (kind === AUTO_MODE_SERVER_FALLBACK) return originKind === "sdk_host";
@@ -836,7 +867,7 @@ function isSdkHostOrigin(kind, originKind) {
     )
   );
 }
-//@ chunk-0sfjpx19.js:44968-45109 placement
+//@ chunk-nh1pvp1m.js:64552-64693 placement
 function logBridgeInitializeCommands(commands) {
   if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_bridge_initialize_commands", false)) return [];
   if (getDisableSlashCommands()) return [];
@@ -844,7 +875,7 @@ function logBridgeInitializeCommands(commands) {
   logFeatureOk("bridge_initialize_commands");
   return bridgeSlashCommands;
 }
-//@ chunk-0sfjpx19.js:45109-45348 placement
+//@ chunk-nh1pvp1m.js:64693-64932 placement
 function commandNamesForBridge(commands, extraCommands, syncedCommands) {
   let merged = dropSyncedNameClashes(commands, [...extraCommands, ...syncedCommands]);
   if (extraCommands.length === 0) return merged;
@@ -862,7 +893,7 @@ function commandNamesForBridge(commands, extraCommands, syncedCommands) {
     );
   return [...merged, ...mapped];
 }
-//@ chunk-0sfjpx19.js:45348-45722 placement
+//@ chunk-nh1pvp1m.js:64932-65306 placement
 function buildBridgeInitializeCommands(usage, turnEndAt) {
   let bridgeHost = bridgeHostState();
   let bridgeHandle = bridgeHost.replHandle ?? bridgeHost.sdkHostedHandle;
@@ -882,16 +913,16 @@ function buildBridgeInitializeCommands(usage, turnEndAt) {
     : bridgeHost.contextUsageMirror.report(usage);
 }
 export {
-  LowLatencySubmitQueue,
+  buildBridgeInitializeCommands,
   commandNamesForBridge,
+  logBridgeInitializeCommands,
+  isSdkHostOrigin,
+  LowLatencySubmitQueue,
   createDeliveredResultsTracker,
+  isResultOnlyTaskNotification,
   buildTaskNotificationText,
   isRetryableAgentError,
   MAX_TRANSIENT_RESUME_RETRIES,
-  jitteredBackoffMs,
-  isResultOnlyTaskNotification,
   createStrandedResumeRetrier,
-  buildBridgeInitializeCommands,
-  logBridgeInitializeCommands,
-  isSdkHostOrigin,
+  jitteredBackoffMs,
 };

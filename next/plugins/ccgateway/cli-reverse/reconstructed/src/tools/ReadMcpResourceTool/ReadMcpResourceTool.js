@@ -3,9 +3,9 @@
  *
  * ReadMcpResource 工具：按 server+uri 读取 MCP 资源，二进制存文件，错误转可读提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ReadMcpResourceTool/ReadMcpResourceTool.ts
- * pieces: chunk-9ycd12hk.js (5)
+ * pieces: chunk-zmp9ej5f.js (5)
  * attribution: sole-consumer 3, affinity 1, fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -13,17 +13,20 @@ import { objectSchema, stringSchema, array } from "../../../vendor/zod/v4/classi
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { greedyShoreEnabled } from "../../utils/permissions/permissionSetup.js";
 import { READMCPRESOURCETOOL, READ_MCP_RESOURCE_DESCRIPTION, READ_MCP_RESOURCE_PROMPT } from "./prompt.js";
-import { ensureConnectedClient_2 } from "../../services/mcp/client.js";
-import { throwIfWithheldResources } from "../../services/mcp/withheldResources.js";
-import { recordPluginUsage } from "../../utils/telemetry/pluginTelemetry.js";
-import { recordPluginActivity } from "../../utils/pluginActivity.js";
+import { findServersByName } from "../../services/mcp/normalization.js";
 import {
-  noopSkillFetch,
+  fetchMcpSkillsForClient,
   classifySkillResourceUri,
+  noopSkillFetch,
   countUniqueFiles,
   unreadSkillFileMessage,
   verifySkillFile,
 } from "../../services/mcp/mcpSkills.js";
+import { autoModeAutoAllows } from "../../services/mcp/skillDirectoryResource.js";
+import { ensureConnectedClient_2 } from "../../services/mcp/client.js";
+import { throwIfWithheldResources } from "../../services/mcp/withheldResources.js";
+import { recordPluginUsage } from "../../utils/telemetry/pluginTelemetry.js";
+import { recordPluginActivity } from "../../utils/pluginActivity.js";
 import { readMcpResource } from "../../services/mcp/mcpWireUtils.js";
 import { AbortError } from "../../utils/errors.js";
 import { logMCPError } from "../../utils/log.js";
@@ -39,30 +42,30 @@ import { toolResultStoreOrNull } from "../../utils/toolResultStorage.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-9ycd12hk.js:8592-8643 sole-consumer
+//@ chunk-zmp9ej5f.js:9203-9254 sole-consumer
 function requireMcpModules() {
   return require("../../services/mcp/emitTripwireEvent.lazy.js");
 }
-//@ chunk-9ycd12hk.js:8643-8701 sole-consumer
+//@ chunk-zmp9ej5f.js:9254-9312 sole-consumer
 function getMcpErrorClassification() {
   return requireMcpModules().mcpSdkErrorClassificationModule();
 }
-//@ chunk-9ycd12hk.js:8701-8743 sole-consumer
+//@ chunk-zmp9ej5f.js:9312-9354 sole-consumer
 function getMcpClientModule() {
   return requireMcpModules().mcpClientModule();
 }
-//@ chunk-9ycd12hk.js:8743-8792 affinity
+//@ chunk-zmp9ej5f.js:9354-9403 affinity
 function getMcpDirectoryReadModule() {
   return requireMcpModules().mcpDirectoryReadModule();
 }
-//@ chunk-9ycd12hk.js:8792-12553 fingerprint (2.1.88 match: ReadMcpResourceTool, 0.373)
+//@ chunk-zmp9ej5f.js:9403-13367 fingerprint (2.1.88 match: ReadMcpResourceTool, 0.371)
 /**
  * ReadMcpResource 工具（别名 ReadMcpResource）。输入 server+uri。权限：SFe() 为假时直接 allow，否则 passthrough。call：插件来源的服务器记一次插件使用；检查 MCP Skill 访问限制；连接后 resources/read，MethodNotFound/ResourceNotFound 转成可读错误（提示重新 list 或改用目录读取工具）；二进制 blob 存成文件并返回路径说明。 ReadMcpResource 输入 schema（server、uri）与输出 schema（contents[{uri,mimeType,text,blobSavedTo}]、error）。
  */
 var readMcpResourceInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var readMcpResourceOutputSchema;
 var ReadMcpResourceTool;
-deferInit("chunk-9ycd12hk.js:8792", () => {
+deferInit("chunk-zmp9ej5f.js:9403", () => {
   readMcpResourceInputSchema = DoctorLazy(() =>
     objectSchema({
       server: stringSchema().describe("The MCP server name"),
@@ -117,11 +120,28 @@ deferInit("chunk-9ycd12hk.js:8792", () => {
     },
     create(toolContext) {
       return {
-        async checkPermissions(updatedInput) {
+        async checkPermissions(input) {
           if (!greedyShoreEnabled())
             return {
               behavior: "allow",
-              updatedInput,
+              updatedInput: input,
+            };
+          let [serverClient] = findServersByName(toolContext.turnMcpClients, input.server);
+          let skills =
+            serverClient === undefined
+              ? []
+              : await fetchMcpSkillsForClient(
+                  serverClient,
+                  toolContext.messages(),
+                  toolContext.inheritedMcpSkillMessages(),
+                );
+          if (
+            classifySkillResourceUri(input.uri, skills).case === "listed" &&
+            !autoModeAutoAllows(toolContext.permissions())
+          )
+            return {
+              behavior: "allow",
+              updatedInput: input,
             };
           return {
             behavior: "passthrough",

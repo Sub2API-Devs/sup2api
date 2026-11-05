@@ -3,18 +3,22 @@
  *
  * 2.1.316 新增：plugin eval 子会话的沙箱配置（网络域、文件系统读写围栏、shell 授权条件）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (5)
  * attribution: placement 5
  */
-import os_2 from "os";
+import os from "os";
 import { default as path_3 } from "path";
 import { realpath, lstat, readFile, writeFile } from "fs/promises";
 import { fileURLToPath } from "url";
 import { SHELL_TOOLS, hasToolRule } from "./runToolRules.js";
-import { uniq } from "../../utils/collections.js";
-import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
+import {
+  normalizeCaseForComparison_2,
+  DANGEROUS_DIRECTORIES,
+  DANGEROUS_FILES,
+} from "../../utils/permissions/filesystem.js";
+import { parseRuleString } from "../../utils/permissions/permissionRuleParser.js";
 import { WEBFETCH } from "../../tools/WebFetchTool/prompt.js";
 import { getSettingsForSource, getAllPolicyTierSettings } from "../../utils/settings/settings.js";
 import { SandboxManager } from "../../utils/sandbox/sandbox-adapter.js";
@@ -89,12 +93,11 @@ import {
   AWS_CACHE_DIRS,
 } from "./childEnvironment.js";
 import { EVAL_ARTIFACTS_DIR } from "./artifactStub.js";
-import { DANGEROUS_DIRECTORIES, DANGEROUS_FILES } from "../../utils/permissions/filesystem.js";
 import { PLACEHOLDER_CREDENTIAL_KEYS } from "../../upstreamproxy/upstreamproxy.js";
 import { PROXY_INJECTED_MARKER } from "../../utils/subprocessEnv.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-qchp9vrd.js:129357-147750 placement
+//@ chunk-af1hzzme.js:130718-149116 placement
 /**
  * 生成子会话沙箱设置：允许域、读写路径、凭据排除；无法保证时拒绝 shell 授权（约 18 KB）。
  */
@@ -108,9 +111,9 @@ async function buildEvalSandboxSettings(
   options,
 ) {
   if (!SHELL_TOOLS.some((toolName) => hasToolRule(rules, toolName))) return;
-  let networkDomains = uniq(
+  let networkDomains = normalizeCaseForComparison_2(
     operatorAllowedTools.flatMap((ruleString) => {
-      let rule = permissionRuleValueFromString(ruleString);
+      let rule = parseRuleString(ruleString);
       return rule.toolName === WEBFETCH && rule.ruleContent?.startsWith("domain:")
         ? [rule.ruleContent.slice(7)]
         : [];
@@ -166,24 +169,26 @@ async function buildEvalSandboxSettings(
     envVars[name] ?? Object.entries(envVars).find(([key]) => key.toUpperCase() === name)?.[1];
   let env_2 = evalCase.execution.env ?? {};
   let pathEnv = caseEnvVar("PATH");
-  let homeDir = os_2.homedir();
+  let homeDir = os.homedir();
   if (isRootDir(homeDir))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "the operator's home directory is the filesystem root, so the Bash sandbox cannot exclude it \u2014 a Bash-granting evaluation cannot run here (set HOME to a real home directory)",
       "eval shell grant refused: home is the filesystem root",
     );
   let wslMounts = getPlatform() === "wsl" ? await detectWslWindowsMounts(signal) : [];
-  let filtered = uniq([
+  let filtered = normalizeCaseForComparison_2([
     homeDir,
     withDirname(homeDir),
     ...wslMounts,
     sandbox.operatorConfigDir,
-    ...(await withPathDirectories(uniq([...evalCase.pluginDirsUnderTest, evalCase.caseDir]))).map(
-      withDirname,
-    ),
+    ...(
+      await withPathDirectories(
+        normalizeCaseForComparison_2([...evalCase.pluginDirsUnderTest, evalCase.caseDir]),
+      )
+    ).map(withDirname),
     path_3.dirname(sandbox.root),
     ...getTempDirs(),
-    os_2.tmpdir(),
+    os.tmpdir(),
     caseEnvVar("XDG_RUNTIME_DIR") ?? process.env.XDG_RUNTIME_DIR ?? "",
     caseEnvVar("CLAUDE_CODE_FEDERATION_CACHE_DIR") ?? "",
     env.CLAUDE_CODE_TMPDIR ? path_3.join(env.CLAUDE_CODE_TMPDIR, `claude-${process.getuid?.() ?? ""}`) : "",
@@ -203,11 +208,11 @@ async function buildEvalSandboxSettings(
     );
   let addDirs = options?.addDirs ?? (await checkAddDirsInsideCase(evalCase));
   let readScope = options?.readScope ?? (await buildEvalFence(evalCase, addDirs));
-  let denyPaths = uniq(readScope.denyPaths);
+  let denyPaths = normalizeCaseForComparison_2(readScope.denyPaths);
   for (let denyPath of denyPaths) checkPathSegmentWhitespace(denyPath, "eval deny path");
   let privateDirs = await withPathDirectories([homeDir, sandbox.operatorConfigDir]);
   let underPrivateDirs = (path) => privateDirs.some((dir) => toEvalPathError(dir, path));
-  let underTemp = (path) => [...getTempDirs(), os_2.tmpdir()].some((dir) => toEvalPathError(dir, path));
+  let underTemp = (path) => [...getTempDirs(), os.tmpdir()].some((dir) => toEvalPathError(dir, path));
   let filtered_2 = (
     await probePathDirectories(
       Promise.all(
@@ -245,7 +250,7 @@ async function buildEvalSandboxSettings(
         } catch {}
     })(),
   );
-  let caFiles = uniq(
+  let caFiles = normalizeCaseForComparison_2(
     (
       await probePathDirectories(
         Promise.all(
@@ -300,7 +305,9 @@ async function buildEvalSandboxSettings(
     resolveConfigDir() ||
     "";
   let joined = path_3.join(getXdgConfigHome(), "anthropic");
-  let profileDirs = uniq([joined, anthropicConfigDir].filter((dir) => dir && path_3.isAbsolute(dir)));
+  let profileDirs = normalizeCaseForComparison_2(
+    [joined, anthropicConfigDir].filter((dir) => dir && path_3.isAbsolute(dir)),
+  );
   let profileFiles = (
     await Promise.all(
       profileDirs.map((dir) =>
@@ -311,7 +318,7 @@ async function buildEvalSandboxSettings(
   let processEnv = (name) => process.env[name];
   let envValue = (name) => envVars[name] ?? processEnv(name);
   let envValues = (name) =>
-    uniq(
+    normalizeCaseForComparison_2(
       [...Object.entries(envVars), ...Object.entries(process.env)]
         .filter(([key]) => key.toUpperCase() === name)
         .map(([, value]) => value)
@@ -319,7 +326,7 @@ async function buildEvalSandboxSettings(
         .flatMap((value) => (KUBECONFIG_ENV.has(name) ? value.split(path_3.delimiter) : [value]))
         .filter((value) => !(name === "GOENV" && value.trim() === "off")),
     );
-  let home = os_2.homedir();
+  let home = os.homedir();
   let expandHome = (path) => path.replace(/^~(?=[\\/]|$)/, home);
   let mapped = CREDENTIAL_FILE_ENV_VARS.flatMap(envValues).map(expandHome);
   if (mapped.some((path) => path && path.trim() !== "" && !path_3.isAbsolute(path.trim())))
@@ -334,7 +341,7 @@ async function buildEvalSandboxSettings(
     return value;
   };
   let pathsForEnv = (name, fallback) =>
-    uniq([fallback, resolveConfigPath(name, fallback)].filter(isAbsolutePath));
+    normalizeCaseForComparison_2([fallback, resolveConfigPath(name, fallback)].filter(isAbsolutePath));
   let awsConfigFiles = [
     ...pathsForEnv("AWS_CONFIG_FILE", path_3.join(home, ".aws", "config")),
     ...pathsForEnv("AWS_SHARED_CREDENTIALS_FILE", path_3.join(home, ".aws", "credentials")),
@@ -358,7 +365,7 @@ async function buildEvalSandboxSettings(
   let azureConfigDir = resolveConfigPath("AZURE_CONFIG_DIR", path_3.join(home, ".azure"));
   let cloudsdkRootDir = absoluteEnvPaths("CLOUDSDK_ROOT_DIR")[0];
   let xdgConfigHome = getXdgConfigHome();
-  let npmPrefixes = uniq(
+  let npmPrefixes = normalizeCaseForComparison_2(
     [...envValues("NPM_CONFIG_PREFIX"), envValue("PREFIX")]
       .map((value) => value?.trim())
       .filter((value) => !!value)
@@ -400,7 +407,7 @@ async function buildEvalSandboxSettings(
     ...pathsForEnv("DOCKER_CERT_PATH", path_3.join(home, ".docker")).map((dir) =>
       path_3.join(dir, "key.pem"),
     ),
-    ...uniq([
+    ...normalizeCaseForComparison_2([
       path_3.join(home, ".config", "gh"),
       ...pathsForEnv("GH_CONFIG_DIR", path_3.join(xdgConfigHome, "gh")),
     ]).map((dir) => path_3.join(dir, "hosts.yml")),
@@ -445,7 +452,7 @@ async function buildEvalSandboxSettings(
       path_3.join(dir, "credentials.toml"),
       path_3.join(dir, "credentials"),
     ]),
-    ...uniq([
+    ...normalizeCaseForComparison_2([
       path_3.join(xdgConfigHome, "composer"),
       path_3.join(home, ".composer"),
       ...pathsForEnv("COMPOSER_HOME", path_3.join(home, ".config", "composer")),
@@ -551,7 +558,7 @@ async function buildEvalSandboxSettings(
     .split(path_3.delimiter)
     .filter((entry) => path_3.isAbsolute(entry));
   let keychainFiles = await probePathDirectories(probeMacKeychain(filtered_5));
-  let kubeconfigPaths = uniq(
+  let kubeconfigPaths = normalizeCaseForComparison_2(
     [path_3.join(home, ".kube", "config"), ...(envValue("KUBECONFIG") ?? "").split(path_3.delimiter)]
       .map((entry) => expandHome(entry.trim()))
       .filter(Boolean)
@@ -615,7 +622,7 @@ async function buildEvalSandboxSettings(
     ...(await parseSshConfigIdentities("/etc/ssh/ssh_config", homeDir, 0, "/etc/ssh")),
     ...(
       await Promise.all(
-        uniq([
+        normalizeCaseForComparison_2([
           path_3.join(homeDir, ".gitconfig"),
           path_3.join(xdgConfigHome, "git", "config"),
           ...gitConfigFilePaths(),
@@ -652,7 +659,7 @@ async function buildEvalSandboxSettings(
       )
     ).flat(),
   ];
-  let credentialPaths = uniq(
+  let credentialPaths = normalizeCaseForComparison_2(
     [
       ...mapped,
       ...mapped.map((credentialPath) => credentialPath?.trim()),
@@ -815,16 +822,16 @@ async function buildEvalSandboxSettings(
     let daemonDirNames = [`claude-${uid}`, `cc-daemon-${uid}`, "cc-socks", `cc-socks-${uid}`];
     let CLAUDE_CODE_TMPDIR = env.CLAUDE_CODE_TMPDIR;
     let tmpDirChildPaths = CLAUDE_CODE_TMPDIR
-      ? uniq([
+      ? normalizeCaseForComparison_2([
           CLAUDE_CODE_TMPDIR,
           await probePathDirectories(resolveDirSymlink(CLAUDE_CODE_TMPDIR), "a directory"),
         ]).flatMap((tmpDir) =>
           [`claude-${uid}`, "cc-socks"].map((childName) => path_3.join(tmpDir, childName)),
         )
       : [];
-    macTempDaemonDirs = uniq([
+    macTempDaemonDirs = normalizeCaseForComparison_2([
       ...filtered.flatMap(({ dir, real }) =>
-        uniq([dir, real]).flatMap((basePath) =>
+        normalizeCaseForComparison_2([dir, real]).flatMap((basePath) =>
           daemonDirNames.map((childName) => path_3.join(basePath, childName)),
         ),
       ),
@@ -846,11 +853,13 @@ async function buildEvalSandboxSettings(
           ...macTempDaemonDirs,
           sandbox.configDir,
           sandbox.outDir,
-          ...(await withPathDirectories(uniq([...evalCase.pluginDirsUnderTest, evalCase.caseDir]))),
+          ...(await withPathDirectories(
+            normalizeCaseForComparison_2([...evalCase.pluginDirsUnderTest, evalCase.caseDir]),
+          )),
           ...readScope.denyPaths,
           path_3.join(sandbox.home, ".config", "git"),
           path_3.join(sandbox.home, ".local", "lib"),
-          ...uniq(
+          ...normalizeCaseForComparison_2(
             AWS_CACHE_DIRS.flatMap((cacheDir) => [
               path_3.join(sandbox.home, cacheDir),
               path_3.join(sandbox.home, path_3.dirname(cacheDir)),
@@ -875,7 +884,7 @@ async function buildEvalSandboxSettings(
           ...AWS_CACHE_DIRS.map((cacheDir) => path_3.join(sandbox.home, cacheDir)),
           ...denyPaths,
         ].map(toSandboxPathForPlatform),
-        allowRead: uniq(
+        allowRead: normalizeCaseForComparison_2(
           [
             sandbox.home,
             sandbox.tmpDir,
@@ -897,7 +906,7 @@ async function buildEvalSandboxSettings(
         allowedDomains: networkDomains,
       },
       credentials: {
-        envVars: uniq([
+        envVars: normalizeCaseForComparison_2([
           ...secretEnvNameCandidates(envVars),
           ...PROXY_ENV_VARS_EXTRA,
           ...parseMavenArgs(envVars),
@@ -935,7 +944,7 @@ async function buildEvalSandboxSettings(
     flag: "wx",
   });
 }
-//@ chunk-qchp9vrd.js:147750-147924 placement
+//@ chunk-af1hzzme.js:149116-149290 placement
 async function resolveSandboxPaths(paths) {
   let resolved = [];
   let seen = new Set();
@@ -949,7 +958,7 @@ async function resolveSandboxPaths(paths) {
   }
   return resolved;
 }
-//@ chunk-qchp9vrd.js:147924-148077 placement
+//@ chunk-af1hzzme.js:149290-149443 placement
 async function resolveDirSymlink(path) {
   let resolved = await realpathOfExistingPrefix(path);
   try {
@@ -960,7 +969,7 @@ async function resolveDirSymlink(path) {
   } catch {}
   return resolved;
 }
-//@ chunk-qchp9vrd.js:148077-148300 placement
+//@ chunk-af1hzzme.js:149443-149666 placement
 async function realpathOfExistingPrefix(targetPath) {
   let dir = path_3.dirname(targetPath);
   let missingParts = [path_3.basename(targetPath)];
@@ -975,7 +984,7 @@ async function realpathOfExistingPrefix(targetPath) {
       dir = path_3.dirname(dir);
     }
 }
-//@ chunk-qchp9vrd.js:148300-148702 placement
+//@ chunk-af1hzzme.js:149666-150068 placement
 async function checkAddDirsInsideCase(evalCase) {
   let results = await Promise.all(
     evalCase.context.add_dirs.map((addDir) => checkCaseInsideRoot(evalCase, addDir)),

@@ -1,14 +1,14 @@
 /**
  * qrcode/lib/core/polynomial.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: qrcode@1.5.4
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_galois_field } from "./galois-field.js";
 
-//@ chunk-spjgqa4y.js:6966-7479 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:6966-7479 cjs-fingerprint
 var require_polynomial = __commonJS(function (cjsExports) {
   var GF = require_galois_field();
   cjsExports.mul = function (p1, p2) {

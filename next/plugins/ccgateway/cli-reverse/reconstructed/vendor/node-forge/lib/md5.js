@@ -1,8 +1,8 @@
 /**
  * node-forge/lib/md5.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: node-forge@1.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_forge } from "./forge.js";
 import { require_md } from "./md.js";
 import { require_util } from "./util.js";
 
-//@ chunk-fq0cr76a.js:65722-68269 cjs-fingerprint
+//@ chunk-qg41pqt6.js:65611-68158 cjs-fingerprint
 var require_md5 = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_md();
@@ -115,7 +115,7 @@ var require_md5 = __commonJS(function (cjsExports, cjsModule) {
   function _update(s_2, w_2, bytes) {
     var t;
     var a;
-    var b_2;
+    var b;
     var c;
     var d;
     var f;
@@ -124,48 +124,48 @@ var require_md5 = __commonJS(function (cjsExports, cjsModule) {
     var len = bytes.length();
     while (len >= 64) {
       a = s_2.h0;
-      b_2 = s_2.h1;
+      b = s_2.h1;
       c = s_2.h2;
       d = s_2.h3;
       for (i = 0; i < 16; ++i) {
         w_2[i] = bytes.getInt32Le();
-        f = d ^ (b_2 & (c ^ d));
+        f = d ^ (b & (c ^ d));
         t = a + f + _k[i] + w_2[i];
         r = _r[i];
         a = d;
         d = c;
-        c = b_2;
-        b_2 += (t << r) | (t >>> (32 - r));
+        c = b;
+        b += (t << r) | (t >>> (32 - r));
       }
       for (; i < 32; ++i) {
-        f = c ^ (d & (b_2 ^ c));
+        f = c ^ (d & (b ^ c));
         t = a + f + _k[i] + w_2[_g[i]];
         r = _r[i];
         a = d;
         d = c;
-        c = b_2;
-        b_2 += (t << r) | (t >>> (32 - r));
+        c = b;
+        b += (t << r) | (t >>> (32 - r));
       }
       for (; i < 48; ++i) {
-        f = b_2 ^ c ^ d;
+        f = b ^ c ^ d;
         t = a + f + _k[i] + w_2[_g[i]];
         r = _r[i];
         a = d;
         d = c;
-        c = b_2;
-        b_2 += (t << r) | (t >>> (32 - r));
+        c = b;
+        b += (t << r) | (t >>> (32 - r));
       }
       for (; i < 64; ++i) {
-        f = c ^ (b_2 | ~d);
+        f = c ^ (b | ~d);
         t = a + f + _k[i] + w_2[_g[i]];
         r = _r[i];
         a = d;
         d = c;
-        c = b_2;
-        b_2 += (t << r) | (t >>> (32 - r));
+        c = b;
+        b += (t << r) | (t >>> (32 - r));
       }
       s_2.h0 = (s_2.h0 + a) | 0;
-      s_2.h1 = (s_2.h1 + b_2) | 0;
+      s_2.h1 = (s_2.h1 + b) | 0;
       s_2.h2 = (s_2.h2 + c) | 0;
       s_2.h3 = (s_2.h3 + d) | 0;
       len -= 64;

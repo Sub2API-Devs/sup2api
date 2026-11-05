@@ -3,12 +3,22 @@
  *
  * 文件读写权限判定：工作目录与规则模式（gitignore 语义、按规则来源定根）、危险文件/目录与 Claude 设置/配置路径的自动编辑安全检查、内部可读写路径（计划、scratchpad、记忆、配置目录禁区）及权限建议生成。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/filesystem.ts
- * pieces: chunk-18hwfzwa.js (1), chunk-82kqcve8.js (185), chunk-8wvtd8sr.js (1), chunk-axmbhcjg.js (3), chunk-bhhkxwra.js (1), chunk-fq0cr76a.js (4), chunk-tb11za84.js (1)
- * attribution: fingerprint 9, facade-majority 87, callgraph-witnessed 1, layout 80, file-local 4, sole-consumer 4, placement 8, affinity 3
+ * pieces: chunk-1z3a1qn5.js (1), chunk-5xgkngpb.js (1), chunk-a2q0x549.js (190), chunk-cr1mmxrf.js (1), chunk-czq1j3j2.js (1), chunk-nrv8bm0w.js (1), chunk-qg41pqt6.js (4), chunk-vb7ng9fr.js (3), chunk-xea05003.js (1)
+ * attribution: fingerprint 10, facade-majority 88, callgraph-witnessed 2, layout 86, file-local 4, sole-consumer 1, placement 9, affinity 3
  */
-import { join, sep, posix, basename, dirname, normalize, resolve, isAbsolute, win32 } from "path";
+import {
+  sep as sep_2,
+  posix,
+  basename,
+  dirname as dirname_2,
+  normalize as normalize_2,
+  resolve,
+  isAbsolute as isAbsolute_2,
+  win32,
+  join,
+} from "path";
 import { homedir, hostname } from "os";
 import { randomBytes } from "crypto";
 import {
@@ -50,7 +60,6 @@ import {
 import { USER_SETTINGS_FILE_NAMES } from "../settings/settingsFileParsing.js";
 import { wslInheritsSettings } from "../settings/mdm/settings.js";
 import { WSL_MANAGED_SETTINGS_DIR } from "../settings/mdm/wslRegistry.js";
-import { uniq } from "../collections.js";
 import { getSessionPathsCache, sessionClock } from "../sessionPathsCache.js";
 import {
   walkPermissionCheckPaths,
@@ -79,10 +88,13 @@ import {
 } from "../plugins/pluginCachePaths.js";
 import { logError } from "../log.js";
 import { getSettingsWatchPaths } from "../../services/remoteManagedSettings/consentRecords.js";
-import { getClaudeConfigDir, getClaudeConfigDirOrNull } from "../envUtils.js";
+import { getClaudeConfigDir } from "../markdownConfigLoader.js";
 import { isManagedSettingsDropInName } from "../settings/managedFileSettings.js";
-import { normalizeFilePath } from "../commitAttribution.js";
-import { getErrnoCode, TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../errors.js";
+import {
+  getErrnoCode,
+  isENOENT,
+  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+} from "../errors.js";
 import { getDropInDir } from "../fileStateCache.js";
 import { workflowScriptsDir } from "../../services/workflow/scriptFile.js";
 import { getCwd, launchedCwd, getCwdOrNull } from "../cwd.js";
@@ -132,33 +144,32 @@ import {
 } from "../networkPaths.js";
 import { containsVulnerableUncPath } from "../shell/readOnlyCommandValidation.js";
 import { encodeControlChars } from "../sanitization.js";
+import { workingDirectoriesAsGivenInSettings, isAutoMemPathFromRepoSettings } from "./readBlock.js";
 import { getNonProjectAdditionalDirectories } from "../../components/agents/AgentsMenu.js";
 import { findCanonicalGitRoot, findGitRootRecheckingNegative } from "../git.js";
 import { resolveWslGitDir } from "../wslPaths.js";
 import { memoryStoresEnvModule } from "../../services/orgMemory/memoryStores.js";
 import { rootAliasMountPoints, pathBelowRootAlias, isWslMountInfoUnreadable } from "../wslMounts.js";
-import {
-  escapeRuleContent,
-  unescapeRuleContent_2,
-  permissionRuleValueFromString,
-} from "./permissionRuleParser.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { escapeRuleContent, unescapeRuleContent_2, parseRuleString } from "./permissionRuleParser.js";
+import { getClaudeConfigDirOrNull } from "../envUtils.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import {
   getContentRulesForToolName,
   getDenyRuleForTool,
-  getDenyRules,
-  getAskRuleForTool,
+  deniedBashRules,
+  findAskRuleForTool,
   NARROWING_RULE_SOURCES as NARROWING_RULE_SOURCES_2,
-  getAskRules,
+  askedBashRules,
 } from "./permissions.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum, lit } from "../../services/analytics/safeMetadata.js";
 import { hasWildcards, matchWildcardPattern } from "./shellRuleMatching.js";
 import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
 import { stripNonPrintable } from "../truncateGraphemes.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import { REPL_TOOL_NAME } from "../../tools/REPLTool/constants.js";
+import { codeModeAccepted } from "../codeMode/accepted.js";
 import { HostScoped } from "../hostScoped.js";
 import {
   isAutoMemoryHeldForSession,
@@ -173,23 +184,28 @@ import {
 } from "../../memdir/paths.js";
 import { blocksReadsOutsideWorkingDirs, createReadRuleSuggestion } from "./PermissionUpdate.js";
 import { isSkillDirGlob } from "../../components/permissions/hooks.js";
-import { requireAllAllowed } from "../../tools/BashTool/bashSecurity.js";
+import { findAllowRuleForTool } from "./mcpPolicyAsks.js";
 import { getPlanFilePath_2 } from "../plans.js";
 import { isInsideAgentMemoryDir } from "../../tools/AgentTool/agentMemory.js";
-import { isAutoMemPathFromRepoSettings } from "./readBlock.js";
-import { toolResultsDir } from "../toolResultStorage.js";
+import { toolResultsDir, TOOL_RESULTS_SUBDIR } from "../toolResultStorage.js";
 import { isLoopbackHost } from "../localhost.js";
+import { isOutsideAllowedRoot } from "../../services/memoryStore/memoryKeys.js";
+import { MEMORY_INDEX_FILENAME } from "../../memdir/memdir.js";
 import { getAliasSpellings } from "../../services/homeSeed/homeInventory.js";
 import { isSensitiveWithGitConfig } from "./sensitivePaths.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bhhkxwra.js:191-788 fingerprint (2.1.88 match: DANGEROUS_FILES, 0.395)
+//@ chunk-xea05003.js:593-629 callgraph-witnessed (2.1.88 match: normalizeCaseForComparison, 0)
+function normalizeCaseForComparison_2(path) {
+  return [...new Set(path)];
+}
+//@ chunk-1z3a1qn5.js:191-788 fingerprint (2.1.88 match: DANGEROUS_FILES, 0.394)
 /**
  * 不允许自动编辑的危险文件名（shell 配置、git 配置、包管理器与构建工具配置等）及其小写集合。
  */
 var DANGEROUS_FILES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DANGEROUS_FILES_LOWER;
-deferInit("chunk-bhhkxwra.js:191", () => {
+deferInit("chunk-1z3a1qn5.js:191", () => {
   DANGEROUS_FILES = [
     ".gitconfig",
     ".gitmodules",
@@ -231,7 +247,23 @@ deferInit("chunk-bhhkxwra.js:191", () => {
   ];
   DANGEROUS_FILES_LOWER = new Set(DANGEROUS_FILES.map((fileName) => fileName.toLowerCase()));
 });
-//@ chunk-82kqcve8.js:231561-231674 facade-majority (2.1.88 match: DANGEROUS_DIRECTORIES, 0.514)
+//@ chunk-a2q0x549.js:224568-224720 fingerprint (2.1.88 match: allWorkingDirectories, 1)
+/**
+ * 向权限上下文添加额外工作目录（记录来源），返回新上下文。
+ */
+function addAdditionalWorkingDirectories(context, directories, source) {
+  let dirs = new Map(context.additionalWorkingDirectories);
+  for (let directory of directories)
+    dirs.set(directory, {
+      path: directory,
+      source,
+    });
+  return {
+    ...context,
+    additionalWorkingDirectories: dirs,
+  };
+}
+//@ chunk-a2q0x549.js:230508-230621 facade-majority (2.1.88 match: DANGEROUS_DIRECTORIES, 0.514)
 /**
  * 自动编辑的危险目录名表：.git .vscode .idea .claude .husky .cargo .devcontainer .yarn .mvn（比 2.1.88 多后五个）；同一语句还定义多段危险子路径 DANGEROUS_SUBPATHS = ['.config/git']。checkPathSafetyForAutoEdit 用它判定是否需要人工确认。
  */
@@ -247,7 +279,7 @@ var DANGEROUS_DIRECTORIES = [
   ".mvn",
 ];
 var DANGEROUS_SUBPATHS = [".config/git"];
-//@ chunk-82kqcve8.js:231674-231758 facade-majority
+//@ chunk-a2q0x549.js:230621-230705 facade-majority
 /**
  * 路径比较前的大小写归一：toLowerCase，并把土耳其无点 ı 与长 s ſ 折成 i/s，防止 Unicode 大小写绕过。
  */
@@ -257,7 +289,7 @@ function normalizeCaseForComparison(path) {
     .replace(/\u0131/g, "i")
     .replace(/\u017f/g, "s");
 }
-//@ chunk-82kqcve8.js:231758-232518 fingerprint (2.1.88 match: getClaudeSkillScope, 1)
+//@ chunk-a2q0x549.js:230705-231467 fingerprint (2.1.88 match: getClaudeSkillScope, 1)
 /**
  * 判断路径是否落在项目或用户的 .claude/skills/<名>/ 下，是则返回 {skillName, pattern:"/.claude/skills/<名>/**" 或 "~/.claude/skills/<名>/**"}，用于“仅允许编辑这个 skill”建议；名字含通配、..、反斜杠、内置/保留 skill 名或子路径再含 .claude 时返回 null。
  */
@@ -277,11 +309,11 @@ function getClaudeSkillScope(filePath) {
   ];
   for (let { dir, prefix } of bases) {
     let dirLower = normalizeCaseForComparison(dir);
-    for (let separator of [sep, "/"])
+    for (let separator of [sep_2, "/"])
       if (absolutePathLower.startsWith(dirLower + separator.toLowerCase())) {
         let rest = absolutePath.slice(dir.length + separator.length);
         let slash = rest.indexOf("/");
-        let bslash = sep === "\\" ? rest.indexOf("\\") : -1;
+        let bslash = sep_2 === "\\" ? rest.indexOf("\\") : -1;
         let cut = slash === -1 ? bslash : bslash === -1 ? slash : Math.min(slash, bslash);
         if (cut <= 0) return null;
         let skillName = rest.slice(0, cut);
@@ -303,9 +335,9 @@ function getClaudeSkillScope(filePath) {
   }
   return null;
 }
-//@ chunk-82kqcve8.js:232518-232532 callgraph-witnessed (2.1.88 match: DIR_SEP, 1)
+//@ chunk-a2q0x549.js:231467-231481 callgraph-witnessed (2.1.88 match: DIR_SEP, 1)
 var DIR_SEP = posix.sep;
-//@ chunk-82kqcve8.js:232532-232638 facade-majority (2.1.88 match: relativePath, 1)
+//@ chunk-a2q0x549.js:231481-231587 facade-majority (2.1.88 match: relativePath, 1)
 /**
  * posix 风格的相对路径；Windows 上先把两端转成 posix 形式再算。
  */
@@ -317,7 +349,7 @@ function relativePath(from, to) {
   }
   return posix.relative(from, to);
 }
-//@ chunk-82kqcve8.js:232638-232694 facade-majority
+//@ chunk-a2q0x549.js:231587-231643 facade-majority
 /**
  * Windows 上把路径转成 posix 形式，其他平台原样返回。
  */
@@ -325,7 +357,7 @@ function toPosixPath(path) {
   if (getPlatform() === "windows") return windowsPathToPosixPath(path);
   return path;
 }
-//@ chunk-82kqcve8.js:232694-232892 layout
+//@ chunk-a2q0x549.js:231643-231841 layout
 /**
  * 所有设置文件路径：各 SETTING_SOURCES 的文件、每个配置目录下的用户设置文件名，WSL 下再加 Windows 侧 managed-settings.json。
  */
@@ -339,9 +371,9 @@ function getAllSettingsFilePaths() {
     filtered.push(join(WSL_MANAGED_SETTINGS_DIR, "managed-settings.json"));
   return filtered;
 }
-//@ chunk-82kqcve8.js:232892-232904 layout
+//@ chunk-a2q0x549.js:231841-231853 layout
 var SETTINGS_LINKS_CACHE_MS = 2000;
-//@ chunk-82kqcve8.js:232904-233605 layout
+//@ chunk-a2q0x549.js:231853-232554 layout
 /**
  * 遍历每个设置文件的路径链，若末端是符号链接，把链上每种拼写（规范化后）映射回该设置文件；结果按路径集合缓存 2 秒。出错时 2 秒内视为没有链接。
  */
@@ -349,7 +381,7 @@ function getSettingsFileLinkSpellings() {
   let empty = new Map();
   try {
     let legacyLocalSettingsFilePath = getLegacyLocalSettingsFilePath();
-    let settingsPaths = uniq(
+    let settingsPaths = normalizeCaseForComparison_2(
       legacyLocalSettingsFilePath === undefined
         ? getAllSettingsFilePaths()
         : [...getAllSettingsFilePaths(), legacyLocalSettingsFilePath],
@@ -378,7 +410,7 @@ function getSettingsFileLinkSpellings() {
         );
       if (!walk.leafIsSymlink) continue;
       for (let spelling of walk.spellings)
-        for (let candidateSpelling of uniq([spelling, identity(spelling)]))
+        for (let candidateSpelling of normalizeCaseForComparison_2([spelling, identity(spelling)]))
           if (!isClaudeSettingsPath_2(candidateSpelling))
             linkMap.set(foldPathSegments(candidateSpelling), settingsPath);
     }
@@ -397,7 +429,7 @@ function getSettingsFileLinkSpellings() {
     return empty;
   }
 }
-//@ chunk-82kqcve8.js:233605-233662 layout
+//@ chunk-a2q0x549.js:232554-232611 layout
 /**
  * 返回 [当前项目根] 或 [项目根, 另一根目录]（第二个来自 lo()，未确认含义），用于 .claude 配置路径判定。
  */
@@ -405,7 +437,7 @@ function getProjectRootDirs() {
   let projectConfigRoot = getProjectConfigRoot();
   return projectConfigRoot === null ? [getOriginalCwd()] : [getOriginalCwd(), projectConfigRoot];
 }
-//@ chunk-82kqcve8.js:233662-233712 facade-majority
+//@ chunk-a2q0x549.js:232611-232661 facade-majority
 /**
  * 路径是否是 Claude 设置文件本身，或是指向设置文件的符号链接的某种拼写。
  */
@@ -415,7 +447,7 @@ function isClaudeSettingsPath(filePath) {
     isClaudeSettingsPath_2(filePath)
   );
 }
-//@ chunk-82kqcve8.js:233712-234186 layout (2.1.88 match: isClaudeSettingsPath, 0.91)
+//@ chunk-a2q0x549.js:232661-233135 layout (2.1.88 match: isClaudeSettingsPath, 0.91)
 /**
  * 判断路径是否是 Claude Code 设置文件：任何 .claude/settings(.local).json、SETTING_SOURCES 的各文件、managed-settings drop-in 目录下文件，以及配置目录/项目 .claude 目录 realpath 后的同名文件。
  */
@@ -423,8 +455,8 @@ function isClaudeSettingsPath_2(filePath) {
   let expandedPath = expandPath(filePath);
   let normalizedPath = foldPathSegments(expandedPath);
   if (
-    normalizedPath.endsWith(`${sep}.claude${sep}settings.json`) ||
-    normalizedPath.endsWith(`${sep}.claude${sep}settings.local.json`)
+    normalizedPath.endsWith(`${sep_2}.claude${sep_2}settings.json`) ||
+    normalizedPath.endsWith(`${sep_2}.claude${sep_2}settings.local.json`)
   )
     return true;
   if (getAllSettingsFilePaths().some((settingsPath) => foldPathSegments(settingsPath) === normalizedPath))
@@ -449,7 +481,7 @@ function isClaudeSettingsPath_2(filePath) {
     }
   });
 }
-//@ chunk-82kqcve8.js:234186-234512 layout
+//@ chunk-a2q0x549.js:233135-233461 layout
 /**
  * 路径是否为 Claude 设置/配置文件：设置路径、--agents/--mcp-config 指定的文件、配置目录候选里的主体与凭据文件；同名时再按真实路径比较。
  */
@@ -479,21 +511,21 @@ function isProtectedClaudeConfigFile(filePath) {
     (watchPath) => foldPathSegments(watchPath) === folded,
   );
 }
-//@ chunk-82kqcve8.js:234512-234562 layout (2.1.88 match: isInGlobalClaudeFolder, 1)
+//@ chunk-a2q0x549.js:233461-233511 layout (2.1.88 match: isInGlobalClaudeFolder, 1)
 function getClaudeConfigDirCandidates() {
-  return uniq([getClaudeConfigDir(), join(homedir(), ".claude")]);
+  return normalizeCaseForComparison_2([getClaudeConfigDir(), join(homedir(), ".claude")]);
 }
-//@ chunk-82kqcve8.js:234562-234620 facade-majority
+//@ chunk-a2q0x549.js:233511-233569 facade-majority
 function isManagedSettingsDropInPath(filePath, { dirs }) {
   let path = expandPath(filePath);
   return pathInAllowedWorkingPath_2(path, foldPathSegments(path), dirs);
 }
-//@ chunk-82kqcve8.js:234620-234667 facade-majority
+//@ chunk-a2q0x549.js:233569-233616 facade-majority
 function isJsonSpelling(filePath) {
   let expanded = expandPath(filePath);
   return hasSettingsFileSpelling(expanded, foldPathSegments(expanded));
 }
-//@ chunk-82kqcve8.js:234667-234744 layout
+//@ chunk-a2q0x549.js:233616-233693 layout
 function hasSettingsFileSpelling(filePath, folded) {
   let baseName = basename(filePath);
   return (
@@ -502,7 +534,7 @@ function hasSettingsFileSpelling(filePath, folded) {
     isManagedSettingsDropInName(baseName)
   );
 }
-//@ chunk-82kqcve8.js:234744-234945 facade-majority
+//@ chunk-a2q0x549.js:233693-233894 facade-majority
 /**
  * 判断一组路径拼写是否指向 Claude 设置文件：命中已知设置路径或托管目录即 certain；没有 .json 拼写为 none；有 .json 但托管 drop-in 目录尚未全部解析时为 possible。写阻断（blockWritesOutsideWorkingDirectories）据此决定是否拒绝。
  */
@@ -515,19 +547,19 @@ function settingsFileCertainty(filePaths) {
   if (filtered.some((jsonPath) => isManagedSettingsDropInPath(jsonPath, managedDropInDirs))) return "certain";
   return managedDropInDirs.allResolved ? "none" : "possible";
 }
-//@ chunk-82kqcve8.js:234945-235019 file-local
+//@ chunk-a2q0x549.js:233894-233968 file-local
 function pathInAllowedWorkingPath_2(path, toolPermissionContext, precomputedPathsToCheck) {
   if (!hasSettingsFileSpelling(path, toolPermissionContext)) return false;
-  return precomputedPathsToCheck.some((wp) => foldPathSegments(wp) === dirname(toolPermissionContext));
+  return precomputedPathsToCheck.some((wp) => foldPathSegments(wp) === dirname_2(toolPermissionContext));
 }
-//@ chunk-82kqcve8.js:235019-235126 layout
+//@ chunk-a2q0x549.js:233968-234075 layout
 function resolveManagedDropInDirs() {
   return summarizeDropInDirResolution(
     managedDropInDirs().map((dir) => {
       try {
         return {
           dir,
-          located: normalizeFilePath(dir),
+          located: normalizeFilePath_2(dir),
         };
       } catch (error) {
         return {
@@ -538,7 +570,7 @@ function resolveManagedDropInDirs() {
     }),
   );
 }
-//@ chunk-82kqcve8.js:235126-235270 facade-majority
+//@ chunk-a2q0x549.js:234075-234219 facade-majority
 /**
  * 对每个托管设置 drop-in 目录异步调用定位函数（通常是 realpath），收集 {dir, located} 或 {dir, error}，用于得到 managed-settings.d 的全部真实拼写。
  */
@@ -561,7 +593,7 @@ async function managedDropInDirSpellingsAsync(realpathAllowMissing) {
     ),
   );
 }
-//@ chunk-82kqcve8.js:235270-235497 sole-consumer
+//@ chunk-a2q0x549.js:234219-234446 layout
 function summarizeDropInDirResolution(results) {
   let dirs = [];
   let allResolved = true;
@@ -576,12 +608,12 @@ function summarizeDropInDirResolution(results) {
     dirs.push(result.located, identity(result.located));
   }
   return {
-    dirs: uniq(dirs),
+    dirs: normalizeCaseForComparison_2(dirs),
     allResolved,
     allLocated,
   };
 }
-//@ chunk-82kqcve8.js:235497-235773 sole-consumer
+//@ chunk-a2q0x549.js:234446-234722 layout
 function logDropInResolveFailure(error, label) {
   let errnoCode = getErrnoCode(error);
   if (errnoCode === "EACCES" || errnoCode === "EPERM" || errnoCode === "ENOTDIR") {
@@ -596,7 +628,16 @@ function logDropInResolveFailure(error, label) {
   );
   return false;
 }
-//@ chunk-82kqcve8.js:235885-235969 facade-majority (2.1.88 match: getManagedSettingsDropInDir, 0.733)
+//@ chunk-a2q0x549.js:234722-234834 layout (2.1.88 match: normalizeFilePath, 1)
+function normalizeFilePath_2(filePath) {
+  try {
+    return getFsImplementation().realpathSync(filePath);
+  } catch (error) {
+    if (!isENOENT(error) || dirname_2(filePath) === filePath) throw error;
+    return join(normalizeFilePath_2(dirname_2(filePath)), basename(filePath));
+  }
+}
+//@ chunk-a2q0x549.js:234834-234918 facade-majority (2.1.88 match: getManagedSettingsDropInDir, 0.733)
 /**
  * 返回托管设置 drop-in 目录列表：平台默认的 managed-settings.d；WSL 且启用 Windows 侧托管设置时再加 Windows 侧目录。
  */
@@ -608,17 +649,17 @@ function managedDropInDirs() {
       : []),
   ];
 }
-//@ chunk-82kqcve8.js:235969-236052 facade-majority (2.1.88 match: SETTINGS_FILES, 1)
-var PROJECT_SETTINGS_FILE_BASENAMES; // deferred: uses USER_SETTINGS_FILE_NAMES (../settings/settingsFileParsing.js) of its import cycle while loading; runs once the cycle is complete
+//@ chunk-a2q0x549.js:234918-235001 facade-majority (2.1.88 match: SETTINGS_FILES, 1)
+var PROJECT_SETTINGS_FILE_BASENAMES; // deferred: uses normalizeCaseForComparison_2 of its import cycle while loading; runs once the cycle is complete
 var SETTINGS_FILE_BASENAMES;
-deferInit("chunk-82kqcve8.js:235969", () => {
+deferInit("chunk-a2q0x549.js:234918", () => {
   PROJECT_SETTINGS_FILE_BASENAMES = ["settings.json", "settings.local.json"];
-  SETTINGS_FILE_BASENAMES = uniq([
+  SETTINGS_FILE_BASENAMES = normalizeCaseForComparison_2([
     ...Object.values(USER_SETTINGS_FILE_NAMES),
     ...PROJECT_SETTINGS_FILE_BASENAMES,
   ]);
 });
-//@ chunk-82kqcve8.js:236052-236250 layout
+//@ chunk-a2q0x549.js:235001-235199 layout
 function isClaudeSettingsDir(dirPath) {
   let replaced = foldPathSegments(expandPath(dirPath)).replace(/[\\/]+$/, "");
   if (basename(replaced) === foldName(".claude")) return true;
@@ -632,55 +673,62 @@ function isClaudeSettingsDir(dirPath) {
     }
   });
 }
-//@ chunk-82kqcve8.js:236250-236379 layout
+//@ chunk-a2q0x549.js:235199-235328 layout
 function getClaudeSettingsDirs() {
   let settingsFilePathForSource = getSettingsFilePathForSource("policySettings");
-  return uniq([
+  return normalizeCaseForComparison_2([
     ...getClaudeConfigDirCandidates(),
     ...getProjectRootDirs().map((projectRoot) => join(projectRoot, ".claude")),
-    ...(settingsFilePathForSource !== undefined ? [dirname(settingsFilePathForSource)] : []),
+    ...(settingsFilePathForSource !== undefined ? [dirname_2(settingsFilePathForSource)] : []),
     ...managedDropInDirs(),
   ]);
 }
-//@ chunk-82kqcve8.js:236379-236482 facade-majority
+//@ chunk-a2q0x549.js:235328-235431 facade-majority
 /**
  * 汇总所有设置文件路径（各层 settings、附加目录里的 settings）和设置目录（含 drop-in 目录的父目录），去重后返回 {files, dirs}，供设置路径保护使用。
  */
 function settingsLocationPaths() {
   return {
-    files: uniq([...getAllSettingsFilePaths(), ...getFlagAgentsFilePaths(), ...getFlagMcpConfigFilePaths()]),
-    dirs: uniq([...getClaudeSettingsDirs(), ...managedDropInDirs().map((dir) => dirname(dir))]),
+    files: normalizeCaseForComparison_2([
+      ...getAllSettingsFilePaths(),
+      ...getFlagAgentsFilePaths(),
+      ...getFlagMcpConfigFilePaths(),
+    ]),
+    dirs: normalizeCaseForComparison_2([
+      ...getClaudeSettingsDirs(),
+      ...managedDropInDirs().map((dir) => dirname_2(dir)),
+    ]),
   };
 }
-//@ chunk-82kqcve8.js:236482-236765 facade-majority
+//@ chunk-a2q0x549.js:235431-235714 facade-majority
 /**
  * 生成用于在命令/路径文本里粗查“是否提到设置文件”的小写关键串：cowork 设置名、managed-settings.json、managed-settings.d/、策略设置所在目录、drop-in 目录，以及 .claude 和配置目录名下各设置文件名的 / 与 \ 两种拼写。
  */
 function settingsTextNeedles() {
-  let dirNames = uniq([".claude", basename(getClaudeConfigDir())]);
+  let dirNames = normalizeCaseForComparison_2([".claude", basename(getClaudeConfigDir())]);
   let settingsFilePathForSource = getSettingsFilePathForSource("policySettings");
-  return uniq([
+  return normalizeCaseForComparison_2([
     USER_SETTINGS_FILE_NAMES.cowork,
     "managed-settings.json",
     "managed-settings.d/",
     "managed-settings.d\\",
-    ...(settingsFilePathForSource !== undefined ? [dirname(settingsFilePathForSource)] : []),
+    ...(settingsFilePathForSource !== undefined ? [dirname_2(settingsFilePathForSource)] : []),
     ...managedDropInDirs(),
     ...dirNames.flatMap((dirName) =>
       SETTINGS_FILE_BASENAMES.flatMap((fileName) => [`${dirName}/${fileName}`, `${dirName}\\${fileName}`]),
     ),
   ]).map((needle) => needle.toLowerCase());
 }
-//@ chunk-82kqcve8.js:236765-236880 facade-majority (2.1.88 match: isInGlobalClaudeFolder, 1)
+//@ chunk-a2q0x549.js:235714-235829 facade-majority (2.1.88 match: isInGlobalClaudeFolder, 1)
 /**
  * 返回 .claude 与配置目录基名中以点开头、长度大于 1 的小写目录词，用于文本级判断路径是否落在 Claude 设置目录。旧版名 isInGlobalClaudeFolder 与实际行为不符。
  */
 function settingsDirectoryWords() {
-  return uniq([".claude", basename(getClaudeConfigDir())].map((name) => name.toLowerCase())).filter(
-    (word) => word.length > 1 && word.startsWith("."),
-  );
+  return normalizeCaseForComparison_2(
+    [".claude", basename(getClaudeConfigDir())].map((name) => name.toLowerCase()),
+  ).filter((word) => word.length > 1 && word.startsWith("."));
 }
-//@ chunk-82kqcve8.js:236880-237188 facade-majority
+//@ chunk-a2q0x549.js:235829-236137 facade-majority
 /**
  * 拼装 safetyCheck 决策原因里的分类器字段：普通情况透传 classifierApprovable/circuitBreaker/also；restricted 模式下强制 classifierApprovable=false、circuitBreaker='restrictedMode'，原熔断标签并入 also。
  */
@@ -704,7 +752,7 @@ function safetyCheckReasonFields(reason, restricted) {
     }),
   };
 }
-//@ chunk-82kqcve8.js:237188-237342 fingerprint (2.1.88 match: isClaudeConfigFilePath, 1)
+//@ chunk-a2q0x549.js:236137-236291 fingerprint (2.1.88 match: isClaudeConfigFilePath, 1)
 /**
  * 是否是 Claude 配置文件：设置文件（含链接）或项目根下 .claude/commands、.claude/agents、.claude/skills 里的文件。
  */
@@ -717,30 +765,42 @@ function isClaudeConfigFilePath(filePath) {
       pathInWorkingPath(filePath, join(root, ".claude", "skills")),
   );
 }
-//@ chunk-82kqcve8.js:237506-237579 sole-consumer
+//@ chunk-a2q0x549.js:236455-236528 sole-consumer
 function isWorkflowScriptPath(filePath) {
-  let normalized = normalize(filePath);
+  let normalized = normalize_2(filePath);
   return normalized.startsWith(workflowScriptsDir()) && normalized.endsWith(".js");
 }
-//@ chunk-82kqcve8.js:237579-237654 file-local
+//@ chunk-a2q0x549.js:236528-236603 file-local
 function isSessionMemoryPath(normalizedPath, cwd = getCwd()) {
   let normalizedPath_2 = getProjectDir(cwd);
-  let normalizedInput = normalize(normalizedPath);
-  return normalizedInput === normalizedPath_2 || normalizedInput.startsWith(normalizedPath_2 + sep);
+  let normalizedInput = normalize_2(normalizedPath);
+  return normalizedInput === normalizedPath_2 || normalizedInput.startsWith(normalizedPath_2 + sep_2);
 }
-//@ chunk-82kqcve8.js:237654-237784 facade-majority (2.1.88 match: isScratchpadGateEnabled, 0.594)
+//@ chunk-a2q0x549.js:236603-236932 facade-majority (2.1.88 match: isScratchpadGateEnabled, 0.366)
 /**
  * scratchpad 是否启用：GrowthBook tengu_scratch 打开，或 Artifact 工具可用（isArtifactToolEligible）。
  */
 function isScratchpadEnabled() {
   if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_scratch", false)) return true;
   {
-    let { isArtifactToolEligible } = require("../../services/artifacts/artifactToolGates.js");
-    return isArtifactToolEligible();
+    let {
+      claimScratchpadStartForCcrEntry,
+      isArtifactToolEligible,
+      isArtifactToolReplacedByCcrEntry,
+    } = require("../../services/artifacts/artifactToolGates.js");
+    if (isArtifactToolEligible()) return true;
+    if (!isArtifactToolReplacedByCcrEntry()) return false;
+    if (claimScratchpadStartForCcrEntry())
+      ensureScratchpadDir().catch((error) =>
+        logForDebugging(`isScratchpadEnabled: ensureScratchpadDir failed: ${error}`, {
+          level: "error",
+        }),
+      );
+    return true;
   }
   return false;
 }
-//@ chunk-82kqcve8.js:237784-238466 facade-majority (2.1.88 match: getBundledSkillsRoot, 0.33)
+//@ chunk-a2q0x549.js:236932-237614 facade-majority (2.1.88 match: getBundledSkillsRoot, 0.33)
 /**
  * 内置 skill 参考文件的解压根目录 <临时目录>/bundled-skills/<版本>/<随机 nonce>，进程内缓存；读权限对其放行。
  */
@@ -756,10 +816,10 @@ function getBundledSkillsRoot() {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -767,7 +827,7 @@ function getBundledSkillsRoot() {
   );
   return sessionPathsCache.bundledSkillsRoot;
 }
-//@ chunk-82kqcve8.js:238466-238684 facade-majority (2.1.88 match: getScratchpadDir, 0.765)
+//@ chunk-a2q0x549.js:237614-237832 facade-majority (2.1.88 match: getScratchpadDir, 0.762)
 /**
  * 会话 scratchpad 目录 <项目临时目录>/<sessionId>/scratchpad，按 sessionId 缓存；无项目临时目录时为 null。
  */
@@ -785,7 +845,7 @@ function getScratchpadDir(sessionId = getSessionId()) {
   sessionPathsCache.scratchpadDirBySessionId.set(sessionId, scratchpadDir);
   return scratchpadDir;
 }
-//@ chunk-82kqcve8.js:238684-238806 facade-majority
+//@ chunk-a2q0x549.js:237832-237953 facade-majority
 /**
  * scratchpad 功能开启且非远程时创建会话 scratchpad 目录（0700）并返回路径，否则 null。
  */
@@ -798,20 +858,20 @@ async function ensureScratchpadDir() {
   });
   return scratchpadDir;
 }
-//@ chunk-82kqcve8.js:238806-238948 layout
+//@ chunk-a2q0x549.js:237953-238095 layout
 function getScratchpadComparePaths(path) {
   if (!isScratchpadEnabled()) return null;
   let scratchpadDir = getScratchpadDir();
   if (scratchpadDir === null) return null;
-  let comparePath = normalizeCaseForComparison(normalize(path));
+  let comparePath = normalizeCaseForComparison(normalize_2(path));
   let compareDir = normalizeCaseForComparison(scratchpadDir);
   return {
     comparePath,
     compareDir,
-    prefix: compareDir + sep,
+    prefix: compareDir + sep_2,
   };
 }
-//@ chunk-82kqcve8.js:238948-239101 facade-majority
+//@ chunk-a2q0x549.js:238095-238248 facade-majority
 /**
  * 路径是否是当前会话 scratchpad 目录本身或其下（大小写归一比较，并排除 s3 列出的特殊子路径）。
  */
@@ -828,7 +888,7 @@ function isScratchpadPath(path) {
       ))
   );
 }
-//@ chunk-82kqcve8.js:239101-239214 facade-majority
+//@ chunk-a2q0x549.js:238248-238361 facade-majority
 /**
  * 判断路径是否在当前会话的 scratchpad 目录下（按比较前缀，并排除跨越会话边界的拼写），用于把内部路径显示为 scratchpad。
  */
@@ -844,28 +904,28 @@ function isScratchpadDisplayPath(path) {
     )
   );
 }
-//@ chunk-82kqcve8.js:239214-239341 layout
+//@ chunk-a2q0x549.js:238361-238488 layout
 function getSeedAdminPaths(configDir) {
   let paths = [foldPathSegments(join(configDir, "seed-admin"))];
   try {
     let realConfigDir = getFsImplementation().realpathSync(configDir);
     paths.push(foldPathSegments(join(realConfigDir, "seed-admin")));
   } catch {}
-  return uniq(paths);
+  return normalizeCaseForComparison_2(paths);
 }
-//@ chunk-82kqcve8.js:239341-239421 file-local
+//@ chunk-a2q0x549.js:238488-238568 file-local
 function isSeedAdminPath(absolutePath) {
   let projectDir = foldPathSegments(absolutePath);
   return getSeedAdminPaths(getClaudeConfigDir()).some(
-    (seedAdminPath) => projectDir === seedAdminPath || projectDir.startsWith(seedAdminPath + sep),
+    (seedAdminPath) => projectDir === seedAdminPath || projectDir.startsWith(seedAdminPath + sep_2),
   );
 }
-//@ chunk-82kqcve8.js:239421-239899 layout
+//@ chunk-a2q0x549.js:238568-239048 layout
 /**
  * 在每个配置目录候选路径下查找名为 entryName 的条目（jobs、daemon、shell-snapshots…），与给定路径的各拼写逐段比较（含 Windows 短名），返回每个命中的 {written, folded} 余下路径段。
  */
 function findConfigDirEntryMatches(spellings, entryName, spellingMode, pathCache, shortNameRe) {
-  let withSystemSpelling = (path) => uniq([path, isSystemVolumePath(path)]);
+  let withSystemSpelling = (path) => normalizeCaseForComparison_2([path, isSystemVolumePath(path)]);
   let entryPaths =
     pathCache.get(entryName) ??
     getConfigDirEntryPaths(entryName).map((entryPath) => getPathsForPermissionCheck(entryPath));
@@ -875,12 +935,12 @@ function findConfigDirEntryMatches(spellings, entryName, spellingMode, pathCache
       spellingMode === "exact" ? entryPath : expandWindowsPathSpellings(entryPath, spellingMode).spellings,
     )
     .flatMap(withSystemSpelling)
-    .map((spelling) => foldPathSegments(spelling).split(sep));
+    .map((spelling) => foldPathSegments(spelling).split(sep_2));
   let flattened = spellings.flatMap((spelling) => withSystemSpelling(normalizeMsysDrivePath(spelling)));
   let isWindows = getPlatform() === "windows";
   return flattened.flatMap((spelling) => {
-    let parts = normalize(spelling).split(sep);
-    let pathSegments = foldPathSegments(spelling).split(sep);
+    let parts = normalize_2(spelling).split(sep_2);
+    let pathSegments = foldPathSegments(spelling).split(sep_2);
     let endIndex = pathSegments.at(-1) === "" ? -1 : undefined;
     let prefixKind = isWindows && spellingMode === "widest" ? classifyWindowsPathPrefix(spelling) : "named";
     return mapped.flatMap((entryParts) =>
@@ -897,15 +957,15 @@ function findConfigDirEntryMatches(spellings, entryName, spellingMode, pathCache
     );
   });
 }
-//@ chunk-82kqcve8.js:239899-239981 layout
+//@ chunk-a2q0x549.js:239048-239130 layout
 function getConfigDirEntryPaths(entryName) {
-  return uniq(
+  return normalizeCaseForComparison_2(
     getClaudeConfigDirCandidates().flatMap((configDir) =>
       ["", launchedCwd ?? "", homedir()].map((source) => resolve(source, configDir, entryName)),
     ),
   );
 }
-//@ chunk-82kqcve8.js:239981-240426 layout
+//@ chunk-a2q0x549.js:239130-239575 layout
 /**
  * Windows 上把路径扩展成它可能打开的所有拼写（短名、尾点/空格、链接目标…，最多查 40 个）；非 Windows 原样。返回 {spellings, notFollowed}（未能解析的第一个拼写）。
  */
@@ -917,7 +977,7 @@ function expandWindowsPathSpellings(paths, spellingMode) {
     };
   if (spellingMode === "exact")
     return {
-      spellings: uniq(paths.flatMap((path) => [path, normalizeDosDevicePath(path)])),
+      spellings: normalizeCaseForComparison_2(paths.flatMap((path) => [path, normalizeDosDevicePath(path)])),
       notFollowed: undefined,
     };
   let pending = new Set(paths);
@@ -925,7 +985,7 @@ function expandWindowsPathSpellings(paths, spellingMode) {
   let lookupBudget = MAX_WINDOWS_SPELLING_LOOKUPS;
   let notFollowed;
   for (let spelling of pending)
-    for (let candidate of uniq([spelling, normalizeWin32Path(spelling)])) {
+    for (let candidate of normalizeCaseForComparison_2([spelling, normalizeWin32Path(spelling)])) {
       let drivePath = uncToDrivePath(candidate);
       if (pending.has(drivePath) || visited.has(drivePath)) continue;
       visited.add(drivePath);
@@ -939,13 +999,13 @@ function expandWindowsPathSpellings(paths, spellingMode) {
       for (let extraSpelling of permissionCheckSpellings(walk)) pending.add(extraSpelling);
     }
   return {
-    spellings: uniq([...pending, ...visited]),
+    spellings: normalizeCaseForComparison_2([...pending, ...visited]),
     notFollowed,
   };
 }
-//@ chunk-82kqcve8.js:240426-240436 layout
+//@ chunk-a2q0x549.js:239575-239585 layout
 var MAX_WINDOWS_SPELLING_LOOKUPS = 40;
-//@ chunk-82kqcve8.js:240436-241081 layout
+//@ chunk-a2q0x549.js:239585-240230 layout
 function withWindowsSpellingNote(denial, spellingMode) {
   return spellingMode === "exact"
     ? denial
@@ -954,13 +1014,13 @@ function withWindowsSpellingNote(denial, spellingMode) {
         message: `${denial.message.replace(/\.?$/, ".")} Claude Code may have refused this only because it reads a Windows path that does not start with a drive letter (a share such as \\\\host\\C$\\x, a device path such as \\\\?\\Volume{GUID}\\x, or \\x), or that holds a name which Windows may strip (such as ".. " or "..."), as each path on this computer that it could open, and one of those is in the config directory. This path, the config directory's path, or a link on the way to either one is written that way. If the file is really somewhere else, such as on another computer, a person can edit it there.`,
       };
 }
-//@ chunk-82kqcve8.js:241081-241156 layout
+//@ chunk-a2q0x549.js:240230-240305 layout
 function isAdoptJsonMatch({ folded }) {
   return folded.length === 2 && folded[1].startsWith("adopt.json");
 }
-//@ chunk-82kqcve8.js:241156-241203 layout
+//@ chunk-a2q0x549.js:240305-240352 layout
 var ADOPT_SHORT_NAME_RE = /^ad[0-9a-z]{0,4}~\d+(?:\.[^.]{0,3})?$/;
-//@ chunk-82kqcve8.js:241203-243096 layout
+//@ chunk-a2q0x549.js:240352-242245 layout
 /**
  * 写入目标若落在配置目录的 jobs/（只放行后台会话的 tmp）、daemon/、daemon.json、shell-snapshots/、session-env/ 或 adopt.json（含 Windows 短名与临时文件替身），返回对应 deny 结果；Windows 上拼写无法确定时也拒绝。tengu_merry_boot 控制新规则是否生效。
  */
@@ -1015,20 +1075,20 @@ function checkConfigDirInternalWrite(paths, spellingMode, pathCache) {
         },
       };
 }
-//@ chunk-82kqcve8.js:243096-243461 layout
+//@ chunk-a2q0x549.js:242245-242610 layout
 function withRelativeConfigDirNote(denial) {
-  return isAbsolute(getClaudeConfigDir())
+  return isAbsolute_2(getClaudeConfigDir())
     ? denial
     : {
         ...denial,
         message: `${denial.message} CLAUDE_CONFIG_DIR is empty or relative here, so the config directory is worked out from each of three folders: the current one, the one where Claude Code was started and the home folder. That may be the only reason this path counts. Unset CLAUDE_CONFIG_DIR or set it to an absolute path to avoid that.`,
       };
 }
-//@ chunk-82kqcve8.js:243461-243573 layout
+//@ chunk-a2q0x549.js:242610-242722 layout
 var DAEMON_JSON_ALIAS_RE = /^daemon\.json\.tmp\.|^da[0-9a-z]{0,4}~\d+\.jso$/;
 var SHELL_SNAPSHOTS_SHORT_NAME_RE = /^sh[0-9a-z-]{0,4}~\d+$/;
 var SESSION_ENV_SHORT_NAME_RE = /^se[0-9a-z]{0,4}~\d+$/;
-//@ chunk-82kqcve8.js:243573-243745 layout
+//@ chunk-a2q0x549.js:242722-242894 layout
 /**
  * 路径是否是 CLAUDE_CODE_HOST_CREDS_FILE 指向的宿主凭证文件（任一拼写）。
  */
@@ -1038,16 +1098,16 @@ function isHostCredsFilePath(path) {
   let configuredPath =
     CLAUDE_CODE_HOST_CREDS_FILE.replace(getPlatform() === "windows" ? /[\\/]+$/ : /\/+$/, "") ||
     CLAUDE_CODE_HOST_CREDS_FILE;
-  let normalizedPath = normalizeCaseForComparison(normalize(path));
+  let normalizedPath = normalizeCaseForComparison(normalize_2(path));
   return getPathsForPermissionCheck(configuredPath).some(
-    (candidate) => normalizeCaseForComparison(normalize(candidate)) === normalizedPath,
+    (candidate) => normalizeCaseForComparison(normalize_2(candidate)) === normalizedPath,
   );
 }
-//@ chunk-82kqcve8.js:243745-244009 layout
+//@ chunk-a2q0x549.js:242894-243158 layout
 function isProfileStorePath(path) {
   let wifProfileStoreDenyPaths = getWIFProfileStoreDenyPaths();
   if (wifProfileStoreDenyPaths === null) return false;
-  let normalizedPath = normalizeCaseForComparison(normalize(path));
+  let normalizedPath = normalizeCaseForComparison(normalize_2(path));
   if (
     wifProfileStoreDenyPaths.dirs.some((dir) =>
       [
@@ -1057,19 +1117,19 @@ function isProfileStorePath(path) {
         }),
       ].some((dirSpelling) => {
         if (dirSpelling === null) return false;
-        let normalizedDir = normalizeCaseForComparison(normalize(dirSpelling));
-        return normalizedPath === normalizedDir || normalizedPath.startsWith(normalizedDir + sep);
+        let normalizedDir = normalizeCaseForComparison(normalize_2(dirSpelling));
+        return normalizedPath === normalizedDir || normalizedPath.startsWith(normalizedDir + sep_2);
       }),
     )
   )
     return true;
   return wifProfileStoreDenyPaths.files.some((file) =>
     getPathsForPermissionCheck(file).some(
-      (fileSpelling) => normalizeCaseForComparison(normalize(fileSpelling)) === normalizedPath,
+      (fileSpelling) => normalizeCaseForComparison(normalize_2(fileSpelling)) === normalizedPath,
     ),
   );
 }
-//@ chunk-82kqcve8.js:244009-244170 layout
+//@ chunk-a2q0x549.js:243158-243319 layout
 function getPhysicalTwinPath(path, options) {
   let resolved;
   try {
@@ -1078,9 +1138,9 @@ function getPhysicalTwinPath(path, options) {
     logForDebugging(`Could not resolve the physical twin of ${path}: ${error}`);
     return null;
   }
-  return resolved === undefined || resolved === path || dirname(resolved) === resolved ? null : resolved;
+  return resolved === undefined || resolved === path || dirname_2(resolved) === resolved ? null : resolved;
 }
-//@ chunk-82kqcve8.js:244170-244486 layout
+//@ chunk-a2q0x549.js:243319-243635 layout
 var PROFILE_STORE_WRITE_DENIAL = {
   behavior: "deny",
   message:
@@ -1091,7 +1151,7 @@ var PROFILE_STORE_WRITE_DENIAL = {
     classifierApprovable: false,
   },
 };
-//@ chunk-82kqcve8.js:244486-244619 layout
+//@ chunk-a2q0x549.js:243635-243768 layout
 function isSettingsReviewStorePath(path) {
   let foldedPath = foldPathSegments(path);
   let stateDir = join(homedir(), ".claude", "state");
@@ -1099,7 +1159,7 @@ function isSettingsReviewStorePath(path) {
     getPathsForPermissionCheck(storePath).some((spelling) => foldPathSegments(spelling) === foldedPath),
   );
 }
-//@ chunk-82kqcve8.js:244619-244971 layout
+//@ chunk-a2q0x549.js:243768-244120 layout
 var SETTINGS_REVIEW_STORE_WRITE_DENIAL = {
   behavior: "deny",
   message:
@@ -1111,15 +1171,15 @@ var SETTINGS_REVIEW_STORE_WRITE_DENIAL = {
     circuitBreaker: "claudeSettingsFile",
   },
 };
-//@ chunk-82kqcve8.js:244971-244993 layout
+//@ chunk-a2q0x549.js:244120-244142 layout
 function noConfigDirWriteDenialForPlan(inputPath) {
   return;
 }
-//@ chunk-82kqcve8.js:244993-245015 layout
+//@ chunk-a2q0x549.js:244142-244164 layout
 function noConfigDirWriteDenialForRead(inputPath) {
   return;
 }
-//@ chunk-82kqcve8.js:245015-245258 layout
+//@ chunk-a2q0x549.js:244164-244407 layout
 var HOST_CREDS_WRITE_DENIAL = {
   behavior: "deny",
   message: "The host credentials file is managed by the host process; it cannot be written directly",
@@ -1129,14 +1189,14 @@ var HOST_CREDS_WRITE_DENIAL = {
     classifierApprovable: false,
   },
 };
-//@ chunk-82kqcve8.js:245258-245344 layout
+//@ chunk-a2q0x549.js:244407-244493 layout
 function normalizeMsysDrivePath(path) {
   return getPlatform() === "windows" && /^\/(?:cygdrive\/)?[A-Za-z]\//.test(path)
     ? posixPathToWindowsPath(path)
     : path;
 }
-//@ chunk-82kqcve8.js:245344-249937 layout
-var MEMORY_PAUSED_WRITE_DENIAL; // deferred: uses MEMORY_PAUSED_MESSAGE (../../types/permissions.js) of its import cycle while loading; runs once the cycle is complete
+//@ chunk-a2q0x549.js:244493-249086 layout
+var MEMORY_PAUSED_WRITE_DENIAL; // deferred: uses PERMISSION_REQUEST_TOOL_KINDS (../../types/permissions.js) of its import cycle while loading; runs once the cycle is complete
 var MEMORY_PAUSED_READ_DENIAL;
 var SEED_ADMIN_WRITE_DENIAL;
 var ADOPT_JSON_WRITE_DENIAL;
@@ -1146,7 +1206,7 @@ var DAEMON_JSON_WRITE_DENIAL;
 var SHELL_SNAPSHOTS_WRITE_DENIAL;
 var SESSION_ENV_WRITE_DENIAL;
 var NO_CONFIG_DIR_WRITE_DENIAL;
-deferInit("chunk-82kqcve8.js:245344", () => {
+deferInit("chunk-a2q0x549.js:244493", () => {
   MEMORY_PAUSED_WRITE_DENIAL = {
     behavior: "deny",
     message: "Cannot write to memory while it is paused for this session; only the user can turn it back on.",
@@ -1251,7 +1311,7 @@ deferInit("chunk-82kqcve8.js:245344", () => {
     },
   };
 });
-//@ chunk-82kqcve8.js:249937-250184 layout
+//@ chunk-a2q0x549.js:249086-249333 layout
 /**
  * 后台会话（CLAUDE_CODE_SESSION_KIND=bg）中，路径是否落在 $CLAUDE_JOB_DIR/tmp/ 下（且 CLAUDE_JOB_DIR 在配置目录 jobs/ 内）。
  */
@@ -1259,14 +1319,14 @@ function isBgJobTmpPath(path) {
   if (env.CLAUDE_CODE_SESSION_KIND !== "bg") return false;
   let envClaudeJobDir = process.env.CLAUDE_JOB_DIR;
   if (!envClaudeJobDir) return false;
-  let jobsPrefix = join(getClaudeConfigDir(), "jobs") + sep;
-  let jobDir = normalize(envClaudeJobDir);
+  let jobsPrefix = join(getClaudeConfigDir(), "jobs") + sep_2;
+  let jobDir = normalize_2(envClaudeJobDir);
   if (!jobDir.startsWith(jobsPrefix)) return false;
-  let tmpPrefix = jobDir + sep + "tmp" + sep;
+  let tmpPrefix = jobDir + sep_2 + "tmp" + sep_2;
   if (!normalizeCaseForComparison(path).startsWith(normalizeCaseForComparison(tmpPrefix))) return false;
   return !isProtectedDirPath(path, tmpPrefix, DANGEROUS_FILES_LOWER);
 }
-//@ chunk-82kqcve8.js:250184-250341 facade-majority
+//@ chunk-a2q0x549.js:249333-249490 facade-majority
 /**
  * 判断 UNC/网络路径是否位于 trustedNetworkDirectories 列出的可信网络根之下（要求同为网络路径形状，且 pathInWorkingPath 成立）；设备命名空间路径一律不可信。
  */
@@ -1280,7 +1340,7 @@ function isPathInTrustedNetworkRoot(path, trustedNetworkDirectories) {
     }
   return false;
 }
-//@ chunk-82kqcve8.js:250341-250408 facade-majority
+//@ chunk-a2q0x549.js:249490-249557 facade-majority
 /**
  * 是否为不可信的 UNC 路径：NT 设备命名空间直接视为不可信；否则是 UNC 形状、不是本地映射且不在可信网络根下。
  */
@@ -1292,15 +1352,15 @@ function isUntrustedUncPath(path, trustedNetworkDirectories) {
     !isPathInTrustedNetworkRoot(path, trustedNetworkDirectories)
   );
 }
-//@ chunk-82kqcve8.js:250408-250449 facade-majority
+//@ chunk-a2q0x549.js:249557-249598 facade-majority
 function isUntrustedAutomountPath(path, trustedNetworkDirectories) {
   return isNetworkOrSpecialPath(path) && !isPathInTrustedNetworkRoot(path, trustedNetworkDirectories);
 }
-//@ chunk-82kqcve8.js:250449-250814 layout (2.1.88 match: isDangerousFilePathToAutoEdit, 0.9)
+//@ chunk-a2q0x549.js:249598-249962 layout (2.1.88 match: isDangerousFilePathToAutoEdit, 0.9)
 function getProjectRootSegmentDepth(pathSegments) {
   let depth = 0;
-  for (let workingDirPath of getResolvedWorkingDirPaths(getOriginalCwd())) {
-    let pathSegments_2 = expandPath(workingDirPath).split(sep);
+  for (let workingDirPath of spellingsForWorkingDir(getOriginalCwd())) {
+    let pathSegments_2 = expandPath(workingDirPath).split(sep_2);
     if (pathSegments_2.length > 1 && pathSegments_2.at(-1) === "") pathSegments_2.pop();
     let commonLength = 0;
     while (
@@ -1327,16 +1387,16 @@ function getProjectRootSegmentDepth(pathSegments) {
   }
   return depth;
 }
-//@ chunk-82kqcve8.js:250814-250927 layout (2.1.88 match: isInGlobalClaudeFolder, 1)
+//@ chunk-a2q0x549.js:249962-250075 layout (2.1.88 match: isInGlobalClaudeFolder, 1)
 function isInGlobalClaudeFolder(filePath) {
-  let pathSegments = expandPath(filePath).split(sep);
+  let pathSegments = expandPath(filePath).split(sep_2);
   let absolutePath = getProjectRootSegmentDepth(pathSegments);
   let count = 0;
   for (let index = absolutePath; index < pathSegments.length; index++)
     if (foldName(pathSegments[index]) === ".claude") count++;
   return count;
 }
-//@ chunk-82kqcve8.js:250927-251340 layout
+//@ chunk-a2q0x549.js:250075-250488 layout
 /**
  * 规则以 ~/.claude/ 或 /.claude/ 开头时，判断路径是否在对应根的 .claude 之下、且其后还有名为 .claude 的段。
  */
@@ -1347,9 +1407,9 @@ function hasNestedClaudeDirBelowRuleRoot(spelling, ruleSpelling) {
       ? getOriginalCwd()
       : null;
   if (base === null) return false;
-  let parts = expandPath(join(base, ".claude")).split(sep);
+  let parts = expandPath(join(base, ".claude")).split(sep_2);
   if (parts.length > 1 && parts.at(-1) === "") parts.pop();
-  let parts_2 = expandPath(spelling).split(sep);
+  let parts_2 = expandPath(spelling).split(sep_2);
   for (let j = 0; j < parts.length; j++)
     if (
       parts_2[j] !== parts[j] &&
@@ -1360,13 +1420,13 @@ function hasNestedClaudeDirBelowRuleRoot(spelling, ruleSpelling) {
     if (foldName(parts_2[index]) === ".claude") return true;
   return false;
 }
-//@ chunk-82kqcve8.js:251340-252091 layout
+//@ chunk-a2q0x549.js:250488-251246 layout
 /**
  * 路径是否属于危险位置、不能自动编辑：插件目录、命令产出目录、不可信 UNC/自动挂载路径、危险目录（.claude 下 skills/agents/commands/worktrees 例外处理）、危险子路径、危险文件名。
  */
 function isDangerousFilePathToAutoEdit(filePath, allowClaudeSubdirs, options) {
   let absolutePath = expandPath(filePath);
-  let pathSegments = absolutePath.split(sep);
+  let pathSegments = absolutePath.split(sep_2);
   let last = pathSegments.at(-1);
   if (isPluginDirReadable(absolutePath)) return true;
   if (
@@ -1425,11 +1485,11 @@ function isDangerousFilePathToAutoEdit(filePath, allowClaudeSubdirs, options) {
   }
   return false;
 }
-//@ chunk-82kqcve8.js:252091-252133 facade-majority
+//@ chunk-a2q0x549.js:251246-251288 facade-majority
 function hasSuspiciousWindowsPathPattern(inputPath, trustedNetworkDirectories) {
   return classifySuspiciousWindowsPathPattern(inputPath, trustedNetworkDirectories) !== undefined;
 }
-//@ chunk-82kqcve8.js:252133-252732 facade-majority
+//@ chunk-a2q0x549.js:251288-251887 facade-majority
 /**
  * 给可疑 Windows 路径形状分类并返回原因码：nt_device_namespace、colon_past_drive_position（Windows/WSL 上盘符后再出现冒号，即 ADS）、tilde_digit（8.3 短名）、device_path_prefix（\\?\ 等）、trailing_dot_or_whitespace、dos_device_suffix、dot_run_segment（...）、unc_or_webdav_form（不可信网络根）。无可疑返回 undefined。
  */
@@ -1461,7 +1521,7 @@ function classifySuspiciousWindowsPathPattern(inputPath, trustedNetworkDirectori
     return "unc_or_webdav_form";
   return;
 }
-//@ chunk-82kqcve8.js:252732-252917 facade-majority
+//@ chunk-a2q0x549.js:251887-252072 facade-majority
 /**
  * 远程模式下编辑 Claude 配置的豁免是否适用：要求 isRemoteMode、非 restricted、当前与改写前都不是 auto、且不是沿用 auto 分类器的 plan。
  */
@@ -1477,7 +1537,7 @@ function remoteConfigEditExemptionApplies(toolPermissionContext) {
     toolPermissionContext.modeBeforeRewrite !== "auto"
   );
 }
-//@ chunk-82kqcve8.js:252917-253043 facade-majority
+//@ chunk-a2q0x549.js:252072-252198 facade-majority
 /**
  * 写权限询问时是否附带“切到 acceptEdits”建议：改写前模式不是 auto 类；default 模式总是附带；plan 模式仅当进入 plan 前的模式不是 auto 类时附带。
  */
@@ -1486,11 +1546,11 @@ function acceptEditsSuggestionApplies(toolPermissionContext) {
   if (toolPermissionContext.mode === "default") return true;
   return toolPermissionContext.mode === "plan" && !isAutoEditingMode(toolPermissionContext.prePlanMode);
 }
-//@ chunk-82kqcve8.js:253043-253135 layout
+//@ chunk-a2q0x549.js:252198-252290 layout
 function isAutoEditingMode(mode) {
   return mode === "auto" || mode === "bypassPermissions" || mode === "acceptEdits" || mode === "dontAsk";
 }
-//@ chunk-82kqcve8.js:253135-254319 facade-majority (2.1.88 match: checkPathSafetyForAutoEdit, 0.702)
+//@ chunk-a2q0x549.js:252290-253474 facade-majority (2.1.88 match: checkPathSafetyForAutoEdit, 0.702)
 /**
  * 自动编辑（acceptEdits/自动放行）前的路径安全检查：远程模式一律不安全；可疑 Windows 路径（设备命名空间、短名、尾点、UNC…）；Claude 设置文件（含经链接，classifierApprovable 取决于是否经链接）；Claude 配置文件（commands/agents/skills）；危险文件/目录（Xp）。返回 {safe:true} 或 {safe:false, message, classifierApprovable, circuitBreaker?}。
  */
@@ -1556,22 +1616,22 @@ function checkPathSafetyForAutoEdit(
     safe: true,
   };
 }
-//@ chunk-82kqcve8.js:254319-254398 facade-majority
+//@ chunk-a2q0x549.js:253474-253553 facade-majority (2.1.88 match: allWorkingDirectories, 1)
 /**
  * 工作目录集合 = 当前原始 cwd + toolPermissionContext.additionalWorkingDirectories 的键（--add-dir、settings additionalDirectories、会话内添加）。
  */
 function allWorkingDirectories(toolPermissionContext) {
   return new Set([getOriginalCwd(), ...toolPermissionContext.additionalWorkingDirectories.keys()]);
 }
-//@ chunk-82kqcve8.js:254398-254435 facade-majority
+//@ chunk-a2q0x549.js:253553-253590 facade-majority
 function spellingsToJudge(filePath) {
   return isDiskless() ? [filePath] : getPathsForPermissionCheck(filePath);
 }
-//@ chunk-82kqcve8.js:254435-254619 facade-majority
+//@ chunk-a2q0x549.js:253590-253773 layout
 /**
  * 取某工作目录的全部真实拼写（符号链接解析等），结果缓存在权限状态里；CLAUDE_CODE_EVAL_CONFINED 下对 cwd 只用原拼写。
  */
-function getResolvedWorkingDirPaths(workingDir) {
+function spellingsForWorkingDir(workingDir) {
   let sessionPathsCache = getSessionPathsCache();
   let cached = sessionPathsCache.resolvedWorkingDirPaths.get(workingDir);
   if (cached !== undefined) return cached;
@@ -1582,7 +1642,7 @@ function getResolvedWorkingDirPaths(workingDir) {
   sessionPathsCache.resolvedWorkingDirPaths.set(workingDir, paths);
   return paths;
 }
-//@ chunk-82kqcve8.js:254619-254719 facade-majority
+//@ chunk-a2q0x549.js:253773-253873 facade-majority
 /**
  * 把某工作目录钉为只按原名比较（解析结果设为自身，并加入“按名持有”集合），用于不允许跟随符号链接的目录。
  */
@@ -1591,7 +1651,7 @@ function pinResolvedWorkingDirPath(workingDir) {
   sessionPathsCache.resolvedWorkingDirPaths.set(workingDir, [workingDir]);
   sessionPathsCache.workingDirPathsHeldAsNamed.add(workingDir);
 }
-//@ chunk-82kqcve8.js:254719-254819 facade-majority
+//@ chunk-a2q0x549.js:253873-253973 facade-majority
 /**
  * 若该工作目录尚未解析过，则把它登记为“按名持有”，后续只按字面路径比较。
  */
@@ -1600,26 +1660,35 @@ function holdUnresolvedWorkingDirPathAsNamed(workingDir) {
   if (!sessionPathsCache.resolvedWorkingDirPaths.has(workingDir))
     sessionPathsCache.workingDirPathsHeldAsNamed.add(workingDir);
 }
-//@ chunk-82kqcve8.js:254819-254881 facade-majority
+//@ chunk-a2q0x549.js:253973-254055 facade-majority
+function holdWorkingDirectoriesAsGiven() {
+  let { workingDirPathsHeldAsNamed } = getSessionPathsCache();
+  for (let workingDir of workingDirectoriesAsGivenInSettings()) workingDirPathsHeldAsNamed.add(workingDir);
+}
+//@ chunk-a2q0x549.js:254055-254117 facade-majority
 /**
  * 查询工作目录是否被登记为“按名持有”（只按字面路径比较，不展开真实拼写）。
  */
 function isWorkingDirPathHeldAsNamed(namedPath) {
   return getSessionPathsCache().workingDirPathsHeldAsNamed.has(namedPath);
 }
-//@ chunk-82kqcve8.js:255014-255062 facade-majority
-function declaredAbsoluteAdditionalDirectories(source) {
-  return getNonProjectAdditionalDirectories(source).filter((path) => isAbsolute(path));
+//@ chunk-a2q0x549.js:254117-254157 facade-majority
+function getCountedWorkingDirPaths(namedPath) {
+  return isWorkingDirPathHeldAsNamed(namedPath) ? [namedPath] : spellingsForWorkingDir(namedPath);
 }
-//@ chunk-82kqcve8.js:255062-255110 facade-majority
+//@ chunk-a2q0x549.js:254290-254338 facade-majority
+function declaredAbsoluteAdditionalDirectories(source) {
+  return getNonProjectAdditionalDirectories(source).filter((path) => isAbsolute_2(path));
+}
+//@ chunk-a2q0x549.js:254338-254386 facade-majority
 function blockReadsWorkingDirectories(toolPermissionContext) {
   return new Set([getOriginalCwd(), ...getNonProjectAdditionalDirectories(toolPermissionContext)]);
 }
-//@ chunk-82kqcve8.js:255110-255175 layout
+//@ chunk-a2q0x549.js:254386-254451 layout
 function readBlockExemptPaths(toolPermissionContext) {
   return toolPermissionContext.restricted ? [] : (toolPermissionContext.readBlockExemptPaths ?? []);
 }
-//@ chunk-82kqcve8.js:255175-255262 layout
+//@ chunk-a2q0x549.js:254451-254538 layout
 function isReadInsideWorkingPath(
   filePath,
   spellings,
@@ -1634,7 +1703,7 @@ function isReadInsideWorkingPath(
       checkInternal().behavior === "allow")
   );
 }
-//@ chunk-82kqcve8.js:255262-255464 facade-majority
+//@ chunk-a2q0x549.js:254538-254740 facade-majority
 /**
  * blockReadsOutsideWorkingDirectories 打开时判断这次读是否被拦：路径不在读允许的工作目录内、且不是内部可读路径（readBlockFence 模式下的 checkReadableInternalPath）即返回 true。
  */
@@ -1655,7 +1724,7 @@ function outsideReadBlocked(filePath, toolPermissionContext, spellings) {
     readBlockExemptPaths(toolPermissionContext),
   );
 }
-//@ chunk-82kqcve8.js:255464-255760 facade-majority
+//@ chunk-a2q0x549.js:254740-254979 facade-majority
 /**
  * 判断路径的全部拼写是否都落在某个工作目录（含其真实拼写，按名持有的目录只用原名）或额外根之内；比较时不折叠大小写、要求 UNC 形状一致，非 macOS 的额外根跳过 /private 别名。
  */
@@ -1667,10 +1736,7 @@ function pathInAllowedWorkingPath(
   exemptPaths = [],
 ) {
   let judgedSpellings = spellings ?? getPathsForPermissionCheck(filePath);
-  let { workingDirPathsHeldAsNamed } = getSessionPathsCache();
-  let flattened = Array.from(workingDirectories).flatMap((workingDir) =>
-    workingDirPathsHeldAsNamed.has(workingDir) ? [workingDir] : getResolvedWorkingDirPaths(workingDir),
-  );
+  let flattened = Array.from(workingDirectories).flatMap(getCountedWorkingDirPaths);
   let skipPrivateAlias = getPlatform() !== "macos";
   return judgedSpellings.every(
     (spelling) =>
@@ -1689,14 +1755,14 @@ function pathInAllowedWorkingPath(
       ),
   );
 }
-//@ chunk-82kqcve8.js:255760-255846 layout
+//@ chunk-a2q0x549.js:254979-255065 layout
 function editableInternalPathDecision(filePath, spellings, toolPermissionContext) {
   return checkEditableInternalPath(filePath, {}, spellings, {
     restricted: toolPermissionContext.restricted,
     blockOutsideWrites: true,
   });
 }
-//@ chunk-82kqcve8.js:255846-256077 facade-majority
+//@ chunk-a2q0x549.js:255065-255296 facade-majority
 /**
  * Shell 写目标的阻断说明：先查内部硬拒绝；blockWritesOutsideWorkingDirectories 打开时，目录外写返回“工作目录外”消息，写到可能是设置文件的路径返回设置文件消息；否则返回 undefined。
  */
@@ -1718,14 +1784,14 @@ function writeBlockRefusal(absolutePath, toolPermissionContext, spellings) {
     ? undefined
     : encodeControlChars(`${absolutePath}: ${SETTINGS_WRITES_BLOCKED_DENY_REASON}`);
 }
-//@ chunk-82kqcve8.js:256077-256575 layout
+//@ chunk-a2q0x549.js:255296-255794 layout
 /**
  * --restricted 与 blockReads/WritesOutsideWorkingDirectories 三种工作目录约束的说明文字与拒绝原因。
  */
 var RESTRICTED_MODE_CONSTRAINT; // deferred: uses PERMISSION_REQUEST_TOOL_KINDS (../../types/permissions.js) of its import cycle while loading; runs once the cycle is complete
 var OUTSIDE_READS_CONSTRAINT;
 var OUTSIDE_WRITES_CONSTRAINT;
-deferInit("chunk-82kqcve8.js:256077", () => {
+deferInit("chunk-a2q0x549.js:255296", () => {
   RESTRICTED_MODE_CONSTRAINT = {
     why: "--restricted confines the file tools to the working directory.",
     reason: RESTRICTED_MODE_DENY_REASON,
@@ -1739,7 +1805,7 @@ deferInit("chunk-82kqcve8.js:256077", () => {
     reason: OUTSIDE_WRITES_BLOCKED_DENY_REASON,
   };
 });
-//@ chunk-82kqcve8.js:256575-257027 layout
+//@ chunk-a2q0x549.js:255794-256246 layout
 /**
  * 按工作目录约束检查路径：无法解析直接拒绝；在允许目录内返回 null；否则给出拒绝（含符号链接落点说明与 blockedPath）。
  */
@@ -1788,14 +1854,14 @@ function denyIfOutsideWorkingDirs(
     blockedPath: redirect?.carriedOut ? redirect.landing : filePath,
   };
 }
-//@ chunk-82kqcve8.js:257027-257092 facade-majority
+//@ chunk-a2q0x549.js:256246-256311 facade-majority
 /**
  * GrowthBook tengu_auto_mode_worktree_fast_path：auto 模式下是否对已核实的 linked worktree 目录走快路径。
  */
 function isLinkedWorktreeFastPathEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_auto_mode_worktree_fast_path", false);
 }
-//@ chunk-82kqcve8.js:257092-257516 facade-majority
+//@ chunk-a2q0x549.js:256311-256734 facade-majority
 /**
  * 在 worktree 快路径开启时，从每个工作目录找到 git 仓库根，核实其在工作目录内且 realpath 未被重定向后，列出该仓库的 linked worktree 目录（跳过不安全目录），供 auto 模式视作可写工作区。
  */
@@ -1814,7 +1880,7 @@ async function verifiedLinkedWorktreeDirectories(toolPermissionContext) {
       !pathInAllowedWorkingPath(
         canonicalGitRoot,
         toolPermissionContext,
-        getResolvedWorkingDirPaths(canonicalGitRoot),
+        spellingsForWorkingDir(canonicalGitRoot),
       )
     )
       continue;
@@ -1836,7 +1902,7 @@ async function verifiedLinkedWorktreeDirectories(toolPermissionContext) {
   }
   return Array.from(directories);
 }
-//@ chunk-82kqcve8.js:257516-257927 facade-majority (2.1.88 match: pathInWorkingPath, 0.775)
+//@ chunk-a2q0x549.js:256734-257145 facade-majority (2.1.88 match: pathInWorkingPath, 0.776)
 /**
  * path 是否在 workingPath 内：两端展开为绝对路径，macOS /private/var、/private/tmp 归一为 /var、/tmp，可选大小写折叠与 UNC 形状一致性检查，再看 posix 相对路径是否不以 .. 开头且非绝对。
  */
@@ -1873,7 +1939,7 @@ function pathInWorkingPath(
   if (containsPathTraversal(relativeSubpath)) return false;
   return !posix.isAbsolute(relativeSubpath);
 }
-//@ chunk-82kqcve8.js:257927-258205 facade-majority (2.1.88 match: rootPathForSource, 0.728)
+//@ chunk-a2q0x549.js:257145-257423 facade-majority (2.1.88 match: rootPathForSource, 0.728)
 /**
  * 规则来源对应的根目录：cliArg/command/session 等会话来源用当前工作目录；settings 各层用该设置文件所在目录的根。
  */
@@ -1895,11 +1961,11 @@ function rootPathForSource(source) {
       return getRuleAnchorRootForSource(source);
   }
 }
-//@ chunk-82kqcve8.js:258205-258241 file-local
+//@ chunk-a2q0x549.js:257423-257459 file-local
 function prependDirSep(path) {
   return posix.join(DIR_SEP, path);
 }
-//@ chunk-82kqcve8.js:258241-258642 fingerprint (2.1.88 match: normalizePatternToPath, 1)
+//@ chunk-a2q0x549.js:257459-257860 fingerprint (2.1.88 match: normalizePatternToPath, 1)
 /**
  * 把带根的规则模式换算成相对 rootPath 的 gitignore 模式列表：同根直接加 /；模式在根下取后缀；根在模式下用 stripPatternPrefixSegments 吃掉前缀段；无关返回 []。
  */
@@ -1923,7 +1989,7 @@ function normalizePatternToPath({ patternRoot, pattern, rootPath }) {
     }
   }
 }
-//@ chunk-82kqcve8.js:258642-259235 layout
+//@ chunk-a2q0x549.js:257860-258453 layout
 /**
  * 用 gitignore 语义让模式逐段匹配并消耗前缀目录段（支持 **），返回剩余模式集合（全部消耗则为 **）。
  */
@@ -1974,13 +2040,13 @@ function stripPatternPrefixSegments(pattern, prefixSegments) {
   }
   return Array.from(results);
 }
-//@ chunk-82kqcve8.js:259235-259355 layout
+//@ chunk-a2q0x549.js:258453-258573 layout
 function toComparablePosixPath(path) {
   if (getPlatform() !== "windows") return path;
   let normalized = posix.normalize(toPosixPath(path));
   return normalized.length > 1 && normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
 }
-//@ chunk-82kqcve8.js:259355-259809 facade-majority (2.1.88 match: normalizePatternsToPath, 1)
+//@ chunk-a2q0x549.js:258573-259027 facade-majority (2.1.88 match: normalizePatternsToPath, 1)
 /**
  * 把按根分组的忽略模式统一换算成相对 root 的模式列表（含模式根的 realpath 版本），供 ripgrep 等搜索工具的忽略规则使用。
  */
@@ -2014,7 +2080,7 @@ function normalizePatternsToPath(patternsByRoot, root) {
   }
   return Array.from(result);
 }
-//@ chunk-82kqcve8.js:259809-260189 layout
+//@ chunk-a2q0x549.js:259027-259407 layout
 function withResolvedPatternRoot(patternRoot, pattern, realpathCache) {
   let baseEntry = {
     patternRoot,
@@ -2044,7 +2110,7 @@ function withResolvedPatternRoot(patternRoot, pattern, realpathCache) {
     },
   ];
 }
-//@ chunk-82kqcve8.js:260189-260492 facade-majority (2.1.88 match: getFileReadIgnorePatterns, 0.674)
+//@ chunk-a2q0x549.js:259407-259710 facade-majority (2.1.88 match: getFileReadIgnorePatterns, 0.674)
 /**
  * Read 的 deny 规则按根分组的模式表（去掉 ! 取反项）；WSL 第二根挂载开启时为每个挂载根复制一份。
  */
@@ -2066,11 +2132,11 @@ function getFileReadIgnorePatterns(toolPermissionContext) {
     }
   return result;
 }
-//@ chunk-82kqcve8.js:260492-260529 facade-majority
+//@ chunk-a2q0x549.js:259710-259747 facade-majority
 function patternWithRootFor(pattern, root) {
   return patternWithRoot_2(pattern, () => root);
 }
-//@ chunk-82kqcve8.js:260529-261309 fingerprint (2.1.88 match: patternWithRoot, 1)
+//@ chunk-a2q0x549.js:259747-260527 fingerprint (2.1.88 match: patternWithRoot, 1)
 /**
  * 解析路径规则模式的根：//x 为文件系统根（Windows //c/ 为盘符根）、C:\ 盘符、~/ 为家目录、/x 为规则来源根，其余相对模式 root=null（匹配时用 cwd）。返回 {relativePattern, root}。
  */
@@ -2119,7 +2185,7 @@ function patternWithRoot_2(pattern, source) {
     root: null,
   };
 }
-//@ chunk-82kqcve8.js:261309-261478 layout
+//@ chunk-a2q0x549.js:260527-260696 layout
 function normalizeRulePattern(pattern) {
   let replaced = pattern.replace(/\/{2,}/g, "/");
   if (/^\s*(?:\/\*\*)?$/.test(replaced)) return replaced;
@@ -2127,11 +2193,11 @@ function normalizeRulePattern(pattern) {
     .replace(/^\uFEFF([!#]?)/, (bomMatch, bomMarker) => (bomMarker ? "\\" + bomMarker : ""))
     .replace(/^\uFEFF/, "[\uFEFF]");
 }
-//@ chunk-82kqcve8.js:261478-261520 facade-majority
+//@ chunk-a2q0x549.js:260696-260738 facade-majority
 function patternWithRoot(pattern, source) {
   return patternWithRoot_2(pattern, () => rootPathForSource(source));
 }
-//@ chunk-82kqcve8.js:261520-261653 facade-majority
+//@ chunk-a2q0x549.js:260738-260871 facade-majority
 /**
  * 把一条路径规则编译成 {root, pattern}：patternWithRoot 拆根，规范化后转成 gitignore 风格 glob（allow 规则与 deny 规则的规范化方式不同）；无效模式返回 null。
  */
@@ -2146,9 +2212,9 @@ function compiledPathRulePattern(ruleContent, source, behavior) {
         pattern: normalizeGitignoreGlob(sanitizedPattern, isAllow),
       };
 }
-//@ chunk-82kqcve8.js:261653-261664 layout
+//@ chunk-a2q0x549.js:260871-260882 layout
 var MAX_RULE_PATTERN_LENGTH = 1e4;
-//@ chunk-82kqcve8.js:261664-261804 layout (2.1.88 match: parseSkillPaths, 0.822)
+//@ chunk-a2q0x549.js:260882-261022 layout (2.1.88 match: parseSkillPaths, 0.822)
 function normalizeGitignoreGlob(glob, allowMode) {
   if (glob.endsWith("/**")) {
     let sliced = glob.slice(0, -3);
@@ -2160,7 +2226,7 @@ function normalizeGitignoreGlob(glob, allowMode) {
   }
   return glob;
 }
-//@ chunk-82kqcve8.js:261804-262144 layout
+//@ chunk-a2q0x549.js:261022-261362 layout
 /**
  * 规整权限规则模式：按 gitignore 语义检查，有问题时记警告，allow（或否定 deny）规则直接丢弃，其余改为匹配字面路径。
  */
@@ -2184,9 +2250,9 @@ function sanitizeRulePattern(pattern, allowMode) {
   let content = pattern.slice(negationPrefix.length, pattern.length - suffix.length);
   return negationPrefix + escapeRuleContent(unescapeRuleContent_2(content)) + suffix;
 }
-//@ chunk-82kqcve8.js:262144-262179 layout
+//@ chunk-a2q0x549.js:261362-261397 layout
 var GLOB_METACHAR_IN_SEGMENT_RE = /(?:^|[^\\])(?:\\\\)*[*?[]/;
-//@ chunk-82kqcve8.js:262179-262569 layout
+//@ chunk-a2q0x549.js:261397-261787 layout
 /**
  * 非 Windows 下把规则前缀的目录换成物理路径孪生（如符号链接目标），得到等价的绝对规则模式；无法安全转换返回 null。
  */
@@ -2218,7 +2284,7 @@ function getPhysicalTwinPattern(root, relativePattern) {
     return null;
   return pattern;
 }
-//@ chunk-82kqcve8.js:262569-264250 layout
+//@ chunk-a2q0x549.js:261787-263484 layout
 /**
  * 把某类（edit/read）某种行为的内容规则按根目录分桶，生成 gitignore 匹配器；deny/ask 结果按会话缓存（LRU 16），并为带根的规则追加物理孪生路径模式。
  */
@@ -2257,9 +2323,9 @@ function getPatternsByRoot(permissionContext, toolType, behavior) {
   let toolName = (() => {
     switch (toolType) {
       case "edit":
-        return FILE_EDIT_TOOL_NAME;
+        return EDIT;
       case "read":
-        return FILE_READ_TOOL_NAME;
+        return READ;
     }
   })();
   let isAllow = behavior === "allow";
@@ -2348,17 +2414,17 @@ function getPatternsByRoot(permissionContext, toolType, behavior) {
   }
   return byRoot;
 }
-//@ chunk-82kqcve8.js:264250-264273 layout
+//@ chunk-a2q0x549.js:263484-263507 layout
 var NON_ASCII_RE = /[^\p{ASCII}]/u;
-//@ chunk-82kqcve8.js:264273-264298 facade-majority
-function mayBeGuardedFileSyncCopy(e) {
+//@ chunk-a2q0x549.js:263507-263532 facade-majority
+function mayBeGuardedFileSyncCopy(path) {
   return false;
 }
-//@ chunk-82kqcve8.js:264298-264340 facade-majority
+//@ chunk-a2q0x549.js:263532-263574 facade-majority
 function mayEscapeExclusionGlobs(path) {
   return NON_ASCII_RE.test(path) || mayBeGuardedFileSyncCopy(path);
 }
-//@ chunk-82kqcve8.js:264340-264516 facade-majority (2.1.88 match: isFileReadDenied, 1)
+//@ chunk-a2q0x549.js:263574-263750 facade-majority (2.1.88 match: isFileReadDenied, 1)
 /**
  * 找出可能借大小写折叠或排除 glob 逃逸的路径中、其任一拼写命中 Read deny 规则的那些，返回集合；用于搜索类工具补做 deny 过滤。旧版名 isFileReadDenied 不准确。
  */
@@ -2375,17 +2441,17 @@ function denyFoldVariantPaths(paths, toolPermissionContext, extraSpellings = () 
   }
   return denied;
 }
-//@ chunk-82kqcve8.js:264516-264567 facade-majority
+//@ chunk-a2q0x549.js:263750-263801 facade-majority
 function isSearchResultRootRespellEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_fizzy_treasure", true);
 }
-//@ chunk-82kqcve8.js:264567-265157 facade-majority (2.1.88 match: getPatternsByRoot, 0.606)
+//@ chunk-a2q0x549.js:263801-264397 facade-majority (2.1.88 match: getPatternsByRoot, 0.607)
 /**
  * 对相对或含 .. 的路径，把它的尾部依次拼到每条 Read/Edit deny 规则的根（及根下各前缀）后再匹配，返回第一条命中的 deny 规则（用于 shell 命令里写法不定的路径）。
  */
 function denyRuleMatchingAnywhere(path, toolPermissionContext, operation) {
   let expandedPath = expandPath(path);
-  if (isAbsolute(path) || path.startsWith("~"))
+  if (isAbsolute_2(path) || path.startsWith("~"))
     return matchingRuleForInput(expandedPath, toolPermissionContext, operation, "deny");
   let filtered = path.split(/[\\/]+/).filter((segment) => segment !== "" && segment !== ".");
   while (filtered[0] === "..") filtered.shift();
@@ -2393,7 +2459,7 @@ function denyRuleMatchingAnywhere(path, toolPermissionContext, operation) {
   let joined = filtered.join("/");
   let contentRulesForToolName = getContentRulesForToolName(
     toolPermissionContext,
-    operation === "read" ? FILE_READ_TOOL_NAME : FILE_EDIT_TOOL_NAME,
+    operation === "read" ? READ : EDIT,
     "deny",
   );
   let patternsByRoot = new Set();
@@ -2415,16 +2481,12 @@ function denyRuleMatchingAnywhere(path, toolPermissionContext, operation) {
   }
   return null;
 }
-//@ chunk-82kqcve8.js:265157-265739 facade-majority
+//@ chunk-a2q0x549.js:264397-264984 facade-majority
 /**
  * 搜索根目录下是否有路径被 Read deny 规则覆盖（规则根在搜索根内，或规则段与相对路径前缀匹配），返回第一条这样的规则；用于 Grep/Glob 搜索根的预检。
  */
 function readDenyRuleMayMatchBeneath(searchRoot, toolPermissionContext) {
-  let contentRulesForToolName = getContentRulesForToolName(
-    toolPermissionContext,
-    FILE_READ_TOOL_NAME,
-    "deny",
-  );
+  let contentRulesForToolName = getContentRulesForToolName(toolPermissionContext, READ, "deny");
   if (contentRulesForToolName.length === 0) return null;
   let paths = getPathsForPermissionCheck(searchRoot);
   let rootSpellings =
@@ -2456,7 +2518,7 @@ function readDenyRuleMayMatchBeneath(searchRoot, toolPermissionContext) {
   }
   return null;
 }
-//@ chunk-82kqcve8.js:265739-266059 layout
+//@ chunk-a2q0x549.js:264984-265304 layout
 function segmentsMatchPattern(ruleSegments, pathSegments) {
   for (let [index, pathSegment] of pathSegments.entries()) {
     let ruleSegment = ruleSegments[index];
@@ -2480,7 +2542,7 @@ function segmentsMatchPattern(ruleSegments, pathSegments) {
   }
   return true;
 }
-//@ chunk-82kqcve8.js:266059-266317 facade-majority
+//@ chunk-a2q0x549.js:265304-265562 facade-majority
 /**
  * matchingRuleForInput 的外层：先按原路径匹配；deny/ask 未命中时再查（WSL 第二根挂载开启时）路径在另一挂载根下的拼写，命中则上报 tengu_path_rule_matched_through_second_root_mount。
  */
@@ -2508,11 +2570,11 @@ function matchingRuleForInput(path, toolPermissionContext, toolType, behavior, o
   if (aliasMatch !== null) reportSecondRootMountMatch(toolType, behavior);
   return aliasMatch;
 }
-//@ chunk-82kqcve8.js:266317-266352 layout
+//@ chunk-a2q0x549.js:265562-265597 layout
 function matchingRuleForInputSecondRoot(path, toolPermissionContext, toolType, behavior, options) {
   return null;
 }
-//@ chunk-82kqcve8.js:266352-266564 layout
+//@ chunk-a2q0x549.js:265597-265809 layout
 function reportSecondRootMountMatch(toolType, behavior) {
   let key = `${toolType} ${behavior}`;
   let { reportedSecondRootMountMatches } = getSessionPathsCache();
@@ -2525,13 +2587,13 @@ function reportSecondRootMountMatch(toolType, behavior) {
     });
   }
 }
-//@ chunk-82kqcve8.js:266564-266632 layout
+//@ chunk-a2q0x549.js:265809-265877 layout
 function withSecondRootMountSpellings(paths) {
   return isWslSecondRootMountEnabled()
-    ? uniq([...paths, ...paths.flatMap((path) => pathBelowRootAlias(path) ?? [])])
+    ? normalizeCaseForComparison_2([...paths, ...paths.flatMap((path) => pathBelowRootAlias(path) ?? [])])
     : paths;
 }
-//@ chunk-82kqcve8.js:266632-266824 layout
+//@ chunk-a2q0x549.js:265877-266069 layout
 function isWslSecondRootMountEnabled() {
   if (getPlatform() !== "wsl") return false;
   try {
@@ -2545,7 +2607,7 @@ function isWslSecondRootMountEnabled() {
     return true;
   }
 }
-//@ chunk-82kqcve8.js:266824-267601 fingerprint (2.1.88 match: matchingRuleForInput, 0.576)
+//@ chunk-a2q0x549.js:266069-266849 fingerprint (2.1.88 match: matchingRuleForInput, 0.575)
 /**
  * 在按根分组的 gitignore 匹配器里找命中路径的规则：路径换成相对规则根的形式（Windows 与 caseInsensitiveTarget 时大小写折叠，目录加 /），倒序取最后一条命中；处理 x/** 与 /x 的等价写法。返回规则对象或 null。
  */
@@ -2590,7 +2652,7 @@ function matchingRuleForInput_2(path, toolPermissionContext, toolType, behavior,
   }
   return null;
 }
-//@ chunk-82kqcve8.js:267601-267937 facade-majority
+//@ chunk-a2q0x549.js:266849-267185 facade-majority
 /**
  * 若某目录本身就是一条 deny（或指定行为）路径规则的根、且该规则是 /** 或 **（整目录内容），返回该规则；Windows 上按大小写折叠比较，并补 WSL 第二挂载根拼写。用于判断整个目录的内容是否被拒。
  */
@@ -2613,12 +2675,12 @@ function matchingDenyRuleForDirectoryContents(dirPath, toolPermissionContext, to
   }
   return null;
 }
-//@ chunk-82kqcve8.js:267937-268334 facade-majority
+//@ chunk-a2q0x549.js:267185-267582 facade-majority
 /**
  * 判断一个路径是否匹配给定规则串：按 session 来源解析根，用 ignore 库做 gitignore 匹配；不匹配时，若规则以 * 开头或不像路径且不是 :* 前缀规则，再退回通配匹配。
  */
-function matchesPathRule(pattern, filePath) {
-  let expandedPath = expandPath(filePath);
+function matchesPathRule(pattern, candidatePath) {
+  let expandedPath = expandPath(candidatePath);
   if (getPlatform() === "windows" && expandedPath.includes("\\"))
     expandedPath = windowsPathToPosixPath(expandedPath);
   let { relativePattern, root } = patternWithRoot(pattern, "session");
@@ -2639,10 +2701,10 @@ function matchesPathRule(pattern, filePath) {
     return true;
   let pattern_2 = pattern.trim();
   let isBarePattern = !hasWildcards(pattern_2) && !pattern_2.endsWith(":*");
-  if (pattern_2.startsWith("*") || isBarePattern) return matchWildcardPattern(pattern, filePath);
+  if (pattern_2.startsWith("*") || isBarePattern) return matchWildcardPattern(pattern, candidatePath);
   return false;
 }
-//@ chunk-82kqcve8.js:268334-268699 layout
+//@ chunk-a2q0x549.js:267582-267947 layout
 /**
  * 探测系统级可信符号链接（/tmp→/private/tmp 等），按会话缓存真实路径→别名的映射。
  */
@@ -2667,17 +2729,17 @@ function getTrustedSymlinkEquivalences() {
   sessionPathsCache.trustedSymlinkEquivalences = equivalences;
   return equivalences;
 }
-//@ chunk-82kqcve8.js:268699-268800 facade-majority
+//@ chunk-a2q0x549.js:267947-268048 facade-majority
 /**
  * 把位于可信符号链接前缀下的路径改写为其目标前缀，用于 allow 规则匹配时补一次拼写。
  */
 function normalizeTrustedSymlink(absolutePath) {
   for (let [scratchpadDir, aliasPath] of getTrustedSymlinkEquivalences())
-    if (absolutePath === scratchpadDir || absolutePath.startsWith(scratchpadDir + sep))
+    if (absolutePath === scratchpadDir || absolutePath.startsWith(scratchpadDir + sep_2))
       return aliasPath + absolutePath.slice(scratchpadDir.length);
   return absolutePath;
 }
-//@ chunk-82kqcve8.js:268800-268953 facade-majority
+//@ chunk-a2q0x549.js:268048-268201 facade-majority
 /**
  * 要求所有路径拼写都命中某条 allow 规则（必要时用可信符号链接改写后的拼写再试），全部命中返回第一条规则，否则 null。
  */
@@ -2695,7 +2757,7 @@ function matchingAllowRuleForAllPaths(spellings, toolPermissionContext, toolType
   }
   return firstMatch;
 }
-//@ chunk-82kqcve8.js:268953-272628 facade-majority
+//@ chunk-a2q0x549.js:268201-271876 facade-majority
 /**
  * 读权限的网络路径防御：对 /net、/Network 自动挂载、macOS 内核重定向前缀（/.vol 等）和 UNC 路径（含所有解析拼写），若不在可信网络根下则返回 ask，并说明可能触发 DNS 查询或远程挂载。
  */
@@ -2810,32 +2872,32 @@ function checkReadNetworkPathSafety(tool, input, toolPermissionContext, options)
       };
   return null;
 }
-//@ chunk-82kqcve8.js:272628-272682 layout
+//@ chunk-a2q0x549.js:271876-271930 layout
 var NARROWING_RULE_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-82kqcve8.js:272628", () => {
+deferInit("chunk-a2q0x549.js:271876", () => {
   NARROWING_RULE_SOURCES = new Set(["toolsNarrowing", "cliArg", "command"]);
 });
-//@ chunk-82kqcve8.js:272682-272725 facade-majority
+//@ chunk-a2q0x549.js:271930-271973 facade-majority
 function hasPermissionAuthoredBareReadDeny(tool, probePath = READ_PATH_PROBE) {
   return denyRuleForReadProbe(tool, probePath) !== null;
 }
-//@ chunk-82kqcve8.js:272725-272797 layout
+//@ chunk-a2q0x549.js:271973-272045 layout
 function denyRuleForReadProbe(tool, probePath = READ_PATH_PROBE) {
   return getDenyRuleForTool(
     tool,
     probePath,
-    getDenyRules(tool).filter((rule) => !NARROWING_RULE_SOURCES.has(rule.source)),
+    deniedBashRules(tool).filter((rule) => !NARROWING_RULE_SOURCES.has(rule.source)),
   );
 }
-//@ chunk-82kqcve8.js:272797-272855 facade-majority (2.1.88 match: isFileReadDenied, 1)
+//@ chunk-a2q0x549.js:272045-272103 facade-majority (2.1.88 match: isFileReadDenied, 1)
 function hasReadDenyRuleInForce(filePath) {
   return hasPermissionAuthoredBareReadDeny(filePath) || getPatternsByRoot(filePath, "read", "deny").size > 0;
 }
-//@ chunk-82kqcve8.js:272855-272901 facade-majority
+//@ chunk-a2q0x549.js:272103-272149 facade-majority
 function hasReadDenyRuleForPath(filePath, toolPermissionContext, restriction) {
   return readDenyRuleForPath(filePath, toolPermissionContext, restriction) !== undefined;
 }
-//@ chunk-82kqcve8.js:272901-273072 facade-majority (2.1.88 match: isFileReadDenied, 1)
+//@ chunk-a2q0x549.js:272149-272320 facade-majority (2.1.88 match: isFileReadDenied, 1)
 /**
  * 返回命中某路径的 Read deny 规则：先查整工具 deny；没有路径级 deny 规则时直接返回；否则逐个拼写用 matchingRuleForInput 查。
  */
@@ -2849,15 +2911,15 @@ function readDenyRuleForPath(inputPath, toolPermissionContext, spellings) {
   }
   return;
 }
-//@ chunk-82kqcve8.js:273072-273434 facade-majority
+//@ chunk-a2q0x549.js:272320-272682 facade-majority
 /**
  * 只支持 Read 工具最小属性集（name、getPath 等）的探针对象，用 Proxy 包装，访问其他属性即抛错；供“按路径算读权限”的函数在没有真实工具对象时调用规则检查。
  */
 var READ_PATH_PROBE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-82kqcve8.js:273072", () => {
+deferInit("chunk-a2q0x549.js:272320", () => {
   READ_PATH_PROBE = new Proxy(
     {
-      name: FILE_READ_TOOL_NAME,
+      name: READ,
       mcpInfo: undefined,
       familyParentToolName: undefined,
       aliasSkillToolNames: undefined,
@@ -2875,7 +2937,7 @@ deferInit("chunk-82kqcve8.js:273072", () => {
     },
   );
 });
-//@ chunk-82kqcve8.js:273434-273481 facade-majority
+//@ chunk-a2q0x549.js:272738-272785 facade-majority
 function readPermissionDecisionForPath(filePath, toolPermissionContext) {
   return checkReadPermissionForTool(
     READ_PATH_PROBE,
@@ -2885,14 +2947,14 @@ function readPermissionDecisionForPath(filePath, toolPermissionContext) {
     toolPermissionContext,
   );
 }
-//@ chunk-82kqcve8.js:273481-273723 facade-majority
+//@ chunk-a2q0x549.js:272785-273027 facade-majority
 /**
  * 判断读某路径是否会被自动放行：有整工具 Read deny/ask 规则则否；按分层读判定，allow 层为是，path-mode-ask 仅在 bypassPermissions 下为是，其余（各类 deny/ask）为否。
  */
 function readWouldBeAutoAllowedForPath(filePath, toolPermissionContext) {
   if (
     getDenyRuleForTool(toolPermissionContext, READ_PATH_PROBE) !== null ||
-    getAskRuleForTool(toolPermissionContext, READ_PATH_PROBE) !== null
+    findAskRuleForTool(toolPermissionContext, READ_PATH_PROBE) !== null
   )
     return false;
   switch (layeredReadVerdictForPaths([filePath], toolPermissionContext).layer) {
@@ -2907,10 +2969,10 @@ function readWouldBeAutoAllowedForPath(filePath, toolPermissionContext) {
       return false;
   }
 }
-//@ chunk-82kqcve8.js:273723-273813 layout
+//@ chunk-a2q0x549.js:273027-273117 layout
 var AUTOMOUNTER_PATH_REASON =
   "path names a darwin automounter lookup (/Network browse root or auto_home entry)";
-//@ chunk-82kqcve8.js:273813-274748 facade-majority
+//@ chunk-a2q0x549.js:273117-274052 facade-majority
 /**
  * 对一组路径做分层读判定，返回最先命中的层：bare-deny（整工具 deny）、path-deny（可选拒绝自动挂载查找路径，或某路径被拒）、path-rule-ask（路径级 ask 规则）、bare-ask（整工具 ask）、path-mode-ask（其他需询问）、allow。toolsNarrowing/command 来源的规则不参与。
  */
@@ -2918,7 +2980,7 @@ function layeredReadVerdictForPaths(paths, toolPermissionContext, options) {
   let denyRuleForTool = getDenyRuleForTool(
     toolPermissionContext,
     READ_PATH_PROBE,
-    getDenyRules(toolPermissionContext).filter((rule) => !NARROWING_RULE_SOURCES_2.includes(rule.source)),
+    deniedBashRules(toolPermissionContext).filter((rule) => !NARROWING_RULE_SOURCES_2.includes(rule.source)),
   );
   if (denyRuleForTool !== null)
     return {
@@ -2977,15 +3039,15 @@ function layeredReadVerdictForPaths(paths, toolPermissionContext, options) {
       layer: "path-rule-ask",
       ...found,
     };
-  let askRuleForTool = getAskRuleForTool(
+  let bareAskRule = findAskRuleForTool(
     toolPermissionContext,
     READ_PATH_PROBE,
-    getAskRules(toolPermissionContext).filter((rule) => !NARROWING_RULE_SOURCES_2.includes(rule.source)),
+    askedBashRules(toolPermissionContext).filter((rule) => !NARROWING_RULE_SOURCES_2.includes(rule.source)),
   );
-  if (askRuleForTool !== null)
+  if (bareAskRule !== null)
     return {
       layer: "bare-ask",
-      rule: askRuleForTool,
+      rule: bareAskRule,
     };
   let [askedEntry] = asked;
   if (askedEntry)
@@ -2997,53 +3059,58 @@ function layeredReadVerdictForPaths(paths, toolPermissionContext, options) {
     layer: "allow",
   };
 }
-//@ chunk-82kqcve8.js:274748-274808 layout
+//@ chunk-a2q0x549.js:274052-274112 layout
 function toolPoolCannotRead(toolName, callContext) {
-  return callContext.tools.some((tool) => toolMatchesName(tool, toolName)) && !poolCanRead(callContext);
+  return callContext.tools.some((tool) => matchesToolName(tool, toolName)) && !poolCanRead(callContext);
 }
-//@ chunk-82kqcve8.js:274808-274895 facade-majority
+//@ chunk-a2q0x549.js:274112-274266 facade-majority
 /**
  * 工具池里是否有能读文件的工具（Read，或另一读类工具）。
  */
 function poolCanRead(callContext) {
   let { tools } = callContext;
   return (
-    tools.some((tool) => toolMatchesName(tool, FILE_READ_TOOL_NAME)) ||
-    (tools.some((tool) => toolMatchesName(tool, REPL_TOOL_NAME)) && true)
+    tools.some((tool) => matchesToolName(tool, READ)) ||
+    (tools.some((tool) => matchesToolName(tool, REPL_TOOL_NAME)) &&
+      !(
+        codeModeAccepted() &&
+        callContext.primitiveToolGrant !== undefined &&
+        !callContext.primitiveToolGrant.has(READ)
+      ))
   );
 }
-//@ chunk-82kqcve8.js:274895-274942 facade-majority
+//@ chunk-a2q0x549.js:274266-274313 facade-majority
 function readAutoAllowedForMutation(toolName, absolutePath, callContext, toolPermissionContext) {
   return (
     !toolPoolCannotRead(toolName, callContext) &&
     readWouldBeAutoAllowedForPath(absolutePath, toolPermissionContext)
   );
 }
-//@ chunk-82kqcve8.js:274942-274993 layout
+//@ chunk-a2q0x549.js:274313-274364 layout
 function playfulLobsterEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_playful_lobster", true);
 }
-//@ chunk-82kqcve8.js:274993-275022 layout
+//@ chunk-a2q0x549.js:274364-274393 layout
 class LoggedPathCache {
   loggedPaths = new Set();
 }
-//@ chunk-82kqcve8.js:275022-275047 layout
+//@ chunk-a2q0x549.js:274393-274418 layout
 var loggedPathCacheSlot; // deferred: uses LoggedPathCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-82kqcve8.js:275022", () => {
+deferInit("chunk-a2q0x549.js:274393", () => {
   loggedPathCacheSlot = new HostScoped(() => new LoggedPathCache());
 });
-//@ chunk-82kqcve8.js:275047-275096 layout
+//@ chunk-a2q0x549.js:274418-274467 layout
 function loggedPaths() {
   return loggedPathCacheSlot.of(getRootSession().host).loggedPaths;
 }
-//@ chunk-82kqcve8.js:275096-275107 layout
+//@ chunk-a2q0x549.js:274467-274478 layout
 var MAX_LOGGED_PATHS = 256;
-//@ chunk-82kqcve8.js:275107-275161 layout
+//@ chunk-a2q0x549.js:274478-274532 layout
 function markPathLoggedOnce(key) {
   let logged = loggedPaths();
   return logged.size < MAX_LOGGED_PATHS && !logged.has(key);
 }
-//@ chunk-82kqcve8.js:275161-275309 layout
+//@ chunk-a2q0x549.js:274532-274680 layout
 function logPlayfulLobsterOnce(absolutePath, step, mode) {
   let key = `${mode}:${absolutePath}`;
   if (!markPathLoggedOnce(key)) return;
@@ -3054,7 +3121,7 @@ function logPlayfulLobsterOnce(absolutePath, step, mode) {
     permissionMode: fromEnum(mode),
   });
 }
-//@ chunk-82kqcve8.js:275309-275396 layout
+//@ chunk-a2q0x549.js:274680-274767 layout
 function hasMultipleHardLinks(absolutePath) {
   try {
     let stats = getFsImplementation().statSync(absolutePath);
@@ -3063,7 +3130,7 @@ function hasMultipleHardLinks(absolutePath) {
     return false;
   }
 }
-//@ chunk-82kqcve8.js:275396-277561 facade-majority (2.1.88 match: checkReadPermissionForTool, 0.573)
+//@ chunk-a2q0x549.js:274767-276932 facade-majority (2.1.88 match: checkReadPermissionForTool, 0.566)
 /**
  * 读权限判定：1 Read deny 规则（每种拼写）→ deny；2 记忆暂停时读记忆 → deny；3 restricted / blockReadsOutsideWorkingDirectories 下工作目录外的读 → deny 或 ask；路径无法解析 → deny；4 dYe 额外检查；5 Read ask 规则 → ask；6 若同一路径可编辑（checkWritePermissionForTool 以非 plan 上下文判定为 allow）则读也允许；7 在工作目录内 → allow；8 内部可读路径（checkReadableInternalPath）；9 Read allow 规则；否则 ask 并给出 addRules/addDirectories 建议。
  */
@@ -3214,7 +3281,7 @@ function checkReadPermissionForTool(tool, input, toolPermissionContext, precompu
     ...buildOutsideWorkingDirAsk("read from", path, pathsToCheck, toolPermissionContext),
   };
 }
-//@ chunk-82kqcve8.js:277561-279637 facade-majority (2.1.88 match: checkWritePermissionForTool, 0.694)
+//@ chunk-a2q0x549.js:276932-279035 facade-majority (2.1.88 match: checkWritePermissionForTool, 0.689)
 /**
  * 写权限判定：1 j9r 早期判定（deny 规则、受保护路径等）；2 会话里允许的 skill 目录规则；3 Edit ask 规则 → ask；4 内部可编辑路径（计划文件、scratchpad、记忆…）→ allow 或 deny；5 checkPathSafetyForAutoEdit 不安全 → ask（建议限定 skill 规则或 acceptEdits）；6 plan 模式 → ask；7 acceptEdits 且在工作目录内 → allow；8 Edit allow 规则 → allow；9 其他 → ask（工作目录外附 addDirectories 建议，经符号链接落到目录外时说明）。
  */
@@ -3231,7 +3298,7 @@ function checkWritePermissionForTool(tool, input, toolPermissionContext, precomp
   let earlyDecision = writeDenyPrefix(path, pathsToCheck, absolutePathForEdit, toolPermissionContext);
   if (earlyDecision !== undefined) return earlyDecision;
   let sessionSkillRules = (toolPermissionContext.alwaysAllowRules.session ?? []).filter((ruleString) => {
-    let ruleContent = permissionRuleValueFromString(ruleString).ruleContent;
+    let ruleContent = parseRuleString(ruleString).ruleContent;
     return (
       isSkillDirGlob(ruleContent) &&
       !spellings.some((spelling) => hasNestedClaudeDirBelowRuleRoot(spelling, ruleContent ?? ""))
@@ -3309,7 +3376,7 @@ function checkWritePermissionForTool(tool, input, toolPermissionContext, precomp
             type: "addRules",
             rules: [
               {
-                toolName: FILE_EDIT_TOOL_NAME,
+                toolName: EDIT,
                 ruleContent: skillScope.pattern,
               },
             ],
@@ -3357,7 +3424,9 @@ function checkWritePermissionForTool(tool, input, toolPermissionContext, precomp
         mode: toolPermissionContext.mode,
       },
     };
-  let allowRule = matchingAllowRuleForAllPaths(spellings, toolPermissionContext, "edit");
+  let allowRule =
+    (inWorkingDir ? findAllowRuleForTool(toolPermissionContext, tool.name) : null) ??
+    matchingAllowRuleForAllPaths(spellings, toolPermissionContext, "edit");
   if (allowRule)
     return {
       behavior: "allow",
@@ -3379,7 +3448,7 @@ function checkWritePermissionForTool(tool, input, toolPermissionContext, precomp
     ...buildOutsideWorkingDirAsk("write to", path, pathsToCheck, toolPermissionContext),
   };
 }
-//@ chunk-82kqcve8.js:279637-280005 facade-majority
+//@ chunk-a2q0x549.js:279035-279403 facade-majority
 /**
  * 写入目标本身是符号链接时拒绝，提示改写链接目标路径。
  */
@@ -3400,7 +3469,7 @@ function leafSymlinkWriteRefusal(path, pathsToCheck) {
     }),
   };
 }
-//@ chunk-82kqcve8.js:280005-280180 facade-majority
+//@ chunk-a2q0x549.js:279403-279578 facade-majority
 /**
  * 请求路径经符号链接后落点与原拼写不同时，返回 {landing, landingOutside, spellingInside, carriedOut}（carriedOut=原拼写在工作目录内而落点在外）。
  */
@@ -3418,7 +3487,7 @@ function symlinkRedirect(pathsToCheck, toolPermissionContext, extraDirs) {
     carriedOut: spellingInside && landingOutside,
   };
 }
-//@ chunk-82kqcve8.js:280180-280278 facade-majority
+//@ chunk-a2q0x549.js:279578-279676 facade-majority
 /**
  * 若路径经符号链接解析后的落点与请求路径不同（按规范键比较），返回落点；未解析或相同返回 null。
  */
@@ -3428,11 +3497,11 @@ function symlinkLanding(pathsToCheck) {
     ? null
     : pathsToCheck.landing;
 }
-//@ chunk-82kqcve8.js:280278-280315 layout
+//@ chunk-a2q0x549.js:279676-279713 layout
 function canonicalPathKey(spelling) {
   return normalizeTrustedSymlink(identity(resolve(spelling)));
 }
-//@ chunk-82kqcve8.js:280315-280528 facade-majority
+//@ chunk-a2q0x549.js:279713-279926 facade-majority
 /**
  * 写目标经符号链接重定向时生成说明：返回 {landing, sentence, personOnly}；请求路径本身安全或已实际落到目录外时 personOnly=true，要求必须由人确认。
  */
@@ -3452,7 +3521,7 @@ function sensitiveWriteRedirect(path, pathsToCheck, toolPermissionContext) {
     personOnly: safe || redirect.carriedOut,
   };
 }
-//@ chunk-82kqcve8.js:280528-280624 facade-majority
+//@ chunk-a2q0x549.js:279926-280022 facade-majority
 /**
  * 路径是否是只能由人改的内部文件（checkEditableInternalPath 精确匹配为 deny），供 Bash/PowerShell 路径校验使用。
  */
@@ -3464,14 +3533,14 @@ function hardDeniedAsSpelled(path, toolPermissionContext) {
     }).behavior === "deny"
   );
 }
-//@ chunk-82kqcve8.js:280624-280744 facade-majority
+//@ chunk-a2q0x549.js:280022-280142 facade-majority
 /**
  * 拼出“X 解析到 Y”的符号链接说明句；落点在工作目录外时追加“which is outside the allowed working directories”。
  */
 function symlinkRedirectSentence(path, redirect) {
   return `${formatSymlinkResolution(path, redirect.landing)}${redirect.landingOutside ? ", which is outside the allowed working directories" : ""}`;
 }
-//@ chunk-82kqcve8.js:280744-281133 layout
+//@ chunk-a2q0x549.js:280142-280531 layout
 function buildOutsideWorkingDirAsk(verb, path, pathsToCheck, toolPermissionContext) {
   let askMessage = `Claude requested permissions to ${verb} ${encodeControlChars(path)}, but you haven't granted it yet.`;
   let redirect = symlinkRedirect(pathsToCheck, toolPermissionContext);
@@ -3500,7 +3569,7 @@ function buildOutsideWorkingDirAsk(verb, path, pathsToCheck, toolPermissionConte
           },
   };
 }
-//@ chunk-82kqcve8.js:281133-281402 layout
+//@ chunk-a2q0x549.js:280531-280800 layout
 function denyUnresolvablePath(verb, path) {
   return {
     behavior: "deny",
@@ -3511,11 +3580,11 @@ function denyUnresolvablePath(verb, path) {
     },
   };
 }
-//@ chunk-82kqcve8.js:281402-281475 layout
+//@ chunk-a2q0x549.js:280800-280873 layout
 function formatSymlinkResolution(path, landing) {
   return `${truncatePathForDisplay(path)} resolves through a symlink to ${truncatePathForDisplay(landing)}`;
 }
-//@ chunk-82kqcve8.js:281475-281897 facade-majority (2.1.88 match: generateSuggestions, 0.949)
+//@ chunk-a2q0x549.js:280873-281295 facade-majority (2.1.88 match: generateSuggestions, 0.949)
 /**
  * 生成权限对话框的建议更新：工作目录外的读 → 对父目录的 Read 会话规则；写/创建 → 可切到 acceptEdits 时建议 setMode，目录外再加 addDirectories；其他只给 setMode 建议。
  */
@@ -3563,7 +3632,7 @@ function generateSuggestions(filePath, operationType, toolPermissionContext, pre
       ]
     : [];
 }
-//@ chunk-82kqcve8.js:281897-282090 facade-majority
+//@ chunk-a2q0x549.js:281295-281487 facade-majority
 /**
  * 把内部路径的真实拼写还原成规范根：若路径以 cwd、原始 cwd、配置目录、家目录等根的某个解析拼写开头，就换回原根；否则按可信符号链接改写。
  */
@@ -3577,26 +3646,53 @@ function normalizeInternalPathRoot(absolutePath) {
     homedir(),
   ]) {
     if (root === null) continue;
-    for (let resolvedRoot of getResolvedWorkingDirPaths(root)) {
+    for (let resolvedRoot of spellingsForWorkingDir(root)) {
       if (resolvedRoot === root) continue;
-      if (absolutePath === resolvedRoot || absolutePath.startsWith(resolvedRoot + sep))
+      if (absolutePath === resolvedRoot || absolutePath.startsWith(resolvedRoot + sep_2))
         return root + absolutePath.slice(resolvedRoot.length);
     }
   }
   return normalizeTrustedSymlink(absolutePath);
 }
-//@ chunk-82kqcve8.js:282356-282430 sole-consumer
+//@ chunk-a2q0x549.js:281487-281753 layout (2.1.88 match: validateShellMetacharacters, 1)
+/**
+ * 对一组路径/项逐个调用检查函数（passthrough 时再试替代形式）：任一 deny 返回 deny，有非 allow 返回 passthrough，全部 allow 返回第一个 allow。
+ */
+function requireAllAllowed(pathsToCheck, checkPath, context) {
+  let firstAllow;
+  for (let path of pathsToCheck) {
+    let result = checkPath(path, context);
+    if (result.behavior === "passthrough") {
+      let normalizedPath = normalizeInternalPathRoot(path);
+      if (normalizedPath !== path) result = checkPath(normalizedPath, context);
+    }
+    if (result.behavior === "deny") return result;
+    if (result.behavior !== "allow")
+      return {
+        behavior: "passthrough",
+        message: "",
+      };
+    firstAllow ??= result;
+  }
+  return (
+    firstAllow ?? {
+      behavior: "passthrough",
+      message: "",
+    }
+  );
+}
+//@ chunk-a2q0x549.js:281753-281827 layout
 function isHeldMemoryPath(paths) {
   return (
     isAutoMemoryHeldForSession() &&
     (hasNoAutoMemPath() ||
       paths.some(
         (inputPath) =>
-          isAutoMemPath(inputPath + sep) || isAutoMemPath(normalizeInternalPathRoot(inputPath) + sep),
+          isAutoMemPath(inputPath + sep_2) || isAutoMemPath(normalizeInternalPathRoot(inputPath) + sep_2),
       ))
   );
 }
-//@ chunk-82kqcve8.js:282430-282537 facade-majority
+//@ chunk-a2q0x549.js:281827-281934 facade-majority
 /**
  * 把 safetyCheck 类型的拒绝原因改成 other（保留 reason，标 wasSafetyCheck），让它作为 ask 传播时不再带安全检查的熔断语义。
  */
@@ -3608,14 +3704,14 @@ function untypeDenyReasonForAskPropagation(decisionReason) {
     wasSafetyCheck: true,
   };
 }
-//@ chunk-82kqcve8.js:282537-282604 facade-majority
+//@ chunk-a2q0x549.js:281934-282001 facade-majority
 /**
  * 内部路径给出的结论是否成立：服务端代执行（servedCall）的调用不接受内部路径的 allow，其余都成立。
  */
 function internalPathDecisionStands(decision, toolPermissionContext) {
   return !(toolPermissionContext.servedCall === true && decision.behavior === "allow");
 }
-//@ chunk-82kqcve8.js:282604-284134 facade-majority (2.1.88 match: checkEditableInternalPath, 0.569)
+//@ chunk-a2q0x549.js:282001-283535 facade-majority (2.1.88 match: checkEditableInternalPath, 0.576)
 /**
  * 内部路径写判定：拒绝写宿主凭证文件、配置目录 jobs/daemon/shell-snapshots/session-env/adopt.json、seed-admin、profile store、settings-review store、记忆暂停时的记忆文件；放行（返回 allow，denySpeculation 包装）当前会话计划文件、workflow 脚本、scratchpad、后台会话 tmp、agent/auto memory 的 .md、.claude/launch.json；否则 passthrough。
  */
@@ -3644,8 +3740,8 @@ function checkEditableInternalPath(absolutePath, input, pathsToCheck, options) {
       input,
     );
   }
-  let normalizedPath = normalize(absolutePath);
-  let normalizedMsysPath = normalize(normalizeMsysDrivePath(absolutePath));
+  let normalizedPath = normalize_2(absolutePath);
+  let normalizedMsysPath = normalize_2(normalizeMsysDrivePath(absolutePath));
   let pathCache = new Map();
   let configDirDenial =
     checkConfigDirInternalWrite([normalizedMsysPath], "exact", pathCache) ??
@@ -3697,7 +3793,7 @@ function checkEditableInternalPath(absolutePath, input, pathsToCheck, options) {
     message: "",
   };
 }
-//@ chunk-82kqcve8.js:284134-285855 facade-majority (2.1.88 match: checkReadableInternalPath, 0.698)
+//@ chunk-a2q0x549.js:283535-285258 facade-majority (2.1.88 match: checkReadableInternalPath, 0.704)
 /**
  * 内部路径读判定：放行项目目录、计划文件、工具结果文件、scratchpad、后台会话 tmp、项目临时目录、agent/auto memory、tasks/teams、（readBlockFence 时）用户 CLAUDE.md 与 skills/plugins/rules/agents/commands、内置 skill 参考文件；记忆暂停时拒绝读记忆；否则 passthrough。
  */
@@ -3715,7 +3811,7 @@ function checkReadableInternalPath(absolutePath, input, pathsToCheck, options) {
       (spelling, spellingInput) => checkReadableInternalPath(spelling, spellingInput, undefined, options),
       input,
     );
-  let normalizedPath = normalize(absolutePath);
+  let normalizedPath = normalize_2(absolutePath);
   if (mayBeAutoMemPath(normalizedPath) && isAutoMemoryHeldForSession()) return MEMORY_PAUSED_READ_DENIAL;
   if (
     !options?.restricted &&
@@ -3725,7 +3821,7 @@ function checkReadableInternalPath(absolutePath, input, pathsToCheck, options) {
   if (getPlanFilePath_2(normalizedPath))
     return allowWithReason(input, "Plan files for current session are allowed for reading");
   let toolResultsDir_2 = toolResultsDir();
-  let toolResultsDirWithSep = toolResultsDir_2.endsWith(sep) ? toolResultsDir_2 : toolResultsDir_2 + sep;
+  let toolResultsDirWithSep = toolResultsDir_2.endsWith(sep_2) ? toolResultsDir_2 : toolResultsDir_2 + sep_2;
   if (normalizedPath === toolResultsDir_2 || normalizedPath.startsWith(toolResultsDirWithSep))
     return allowWithReason(input, "Tool result files are allowed for reading");
   if (isScratchpadPath(normalizedPath))
@@ -3741,17 +3837,17 @@ function checkReadableInternalPath(absolutePath, input, pathsToCheck, options) {
   if (
     !isRestricted &&
     (isAutoMemPathSafeForCarveout(normalizedPath) ||
-      (options?.searchRootFence && isAutoMemPathSafeForCarveout(normalizedPath + sep))) &&
+      (options?.searchRootFence && isAutoMemPathSafeForCarveout(normalizedPath + sep_2))) &&
     !(options?.blockOutsideReads && isAutoMemPathFromRepoSettings())
   )
     return allowWithReason(input, "auto memory files are allowed for reading");
-  let tasksPrefix = join(getClaudeConfigDir(), "tasks") + sep;
+  let tasksPrefix = join(getClaudeConfigDir(), "tasks") + sep_2;
   if (
     !blocksOutside &&
     (normalizedPath === tasksPrefix.slice(0, -1) || normalizedPath.startsWith(tasksPrefix))
   )
     return allowWithReason(input, "Task files are allowed for reading");
-  let teamsPrefix = join(getClaudeConfigDir(), "teams") + sep;
+  let teamsPrefix = join(getClaudeConfigDir(), "teams") + sep_2;
   if (
     !blocksOutside &&
     (normalizedPath === teamsPrefix.slice(0, -1) || normalizedPath.startsWith(teamsPrefix))
@@ -3761,33 +3857,33 @@ function checkReadableInternalPath(absolutePath, input, pathsToCheck, options) {
     if (normalizedPath === join(getClaudeConfigDir(), "CLAUDE.md"))
       return allowWithReason(input, "The user memory file is allowed for reading");
     for (let subdir of ["skills", "plugins", "rules", "agents", "commands"]) {
-      let prefix = join(getClaudeConfigDir(), subdir) + sep;
+      let prefix = join(getClaudeConfigDir(), subdir) + sep_2;
       if (normalizedPath === prefix.slice(0, -1) || normalizedPath.startsWith(prefix))
         return allowWithReason(input, `User ${subdir} files are allowed for reading`);
     }
   }
-  if (!options?.remoteSurface && normalizedPath.startsWith(getBundledSkillsRoot() + sep))
+  if (!options?.remoteSurface && normalizedPath.startsWith(getBundledSkillsRoot() + sep_2))
     return allowWithReason(input, "Bundled skill reference files are allowed for reading");
   return {
     behavior: "passthrough",
     message: "",
   };
 }
-//@ chunk-82kqcve8.js:285855-285951 placement (2.1.88 match: denySpeculation, 0.639)
+//@ chunk-a2q0x549.js:285258-285354 placement
 /**
  * 权限结果 {behavior:"allow", updatedInput, decisionReason:{type:"other", reason}}。旧版名 denySpeculation 为错配，属于权限文件系统检查。
  */
-function allowWithReason(message, reason) {
+function allowWithReason(updatedInput, reason) {
   return {
     behavior: "allow",
-    updatedInput: message,
+    updatedInput,
     decisionReason: {
       type: "other",
       reason,
     },
   };
 }
-//@ chunk-82kqcve8.js:285951-286070 layout
+//@ chunk-a2q0x549.js:285354-285473 layout
 function buildSafetyCheckAsk(message, reason) {
   return {
     behavior: "ask",
@@ -3799,7 +3895,7 @@ function buildSafetyCheckAsk(message, reason) {
     },
   };
 }
-//@ chunk-82kqcve8.js:286070-286275 facade-majority
+//@ chunk-a2q0x549.js:285473-285678 facade-majority
 /**
  * 是否为读闸门产生的安全询问：behavior 为 ask，且原因是 other，或是不可由分类器批准、也没有熔断标签的 safetyCheck。
  */
@@ -3812,7 +3908,7 @@ function isReadGateSafetyAsk(decision) {
         decision.decisionReason.circuitBreaker === undefined))
   );
 }
-//@ chunk-82kqcve8.js:286275-286619 layout
+//@ chunk-a2q0x549.js:285678-286022 layout
 /**
  * 用户 skills 目录（配置目录下 skills，含真实路径）的大小写折叠拼写列表，按会话缓存。
  */
@@ -3836,7 +3932,7 @@ function getUserSkillsBaseSpellings() {
   sessionPathsCache.userSkillsBaseSpellingsFolded = [...spellings];
   return sessionPathsCache.userSkillsBaseSpellingsFolded;
 }
-//@ chunk-82kqcve8.js:286619-287050 facade-majority
+//@ chunk-a2q0x549.js:286022-286453 facade-majority
 /**
  * 写判定的前置拒绝：先查内部硬拒绝；restricted 或 blockWritesOutsideWorkingDirectories 下检查工作目录约束；阻写模式下可能是设置文件则直接 deny；最后交给 yh 做剩余前置检查。
  */
@@ -3870,7 +3966,7 @@ function writeDenyPrefix(path, pathsToCheck, absolutePath, toolPermissionContext
     };
   return getInternalWriteDenial(path, pathsToCheck, absolutePath);
 }
-//@ chunk-82kqcve8.js:287050-287240 affinity
+//@ chunk-a2q0x549.js:286453-286643 affinity
 function findEditDenyForSpellings(path, spellings, toolPermissionContext) {
   for (let spelling of spellings) {
     let denyRule = matchingRuleForInput(spelling, toolPermissionContext, "edit", "deny");
@@ -3886,7 +3982,7 @@ function findEditDenyForSpellings(path, spellings, toolPermissionContext) {
   }
   return;
 }
-//@ chunk-82kqcve8.js:287240-287677 affinity
+//@ chunk-a2q0x549.js:286643-287080 affinity
 /**
  * 内部写路径的硬拒绝：无磁盘模式、记忆暂停、配置目录内部文件、种子管理/宿主凭据/档案/设置审阅存储，以及其他内部禁区；路径无法解析时拒绝。
  */
@@ -3907,7 +4003,7 @@ function getInternalWriteDenial(path, pathsToCheck, absolutePath) {
   if (pathsToCheck.unresolved) return denyUnresolvablePath("write to", path);
   return checkConfigDirInternalWrite(pathsToCheck.spellings, "widest", pathCache);
 }
-//@ chunk-82kqcve8.js:287677-287804 affinity
+//@ chunk-a2q0x549.js:287080-287207 affinity
 function orderRootEntries(patternsByRoot) {
   return patternsByRoot.has(null) && getCwdOrNull() === null
     ? [...patternsByRoot.entries()].sort(
@@ -3915,24 +4011,24 @@ function orderRootEntries(patternsByRoot) {
       )
     : patternsByRoot.entries();
 }
-//@ chunk-fq0cr76a.js:876912-876997 placement (2.1.88 match: normalizeGitPathArg, 0.677)
+//@ chunk-qg41pqt6.js:878622-878707 placement (2.1.88 match: normalizeGitPathArg, 0.677)
 /**
  * （旧版名不符）Windows 路径规范化：解析真实路径、本机管理共享转盘符，再大写并按 \ 拆段。
  */
 function normalizeGitPathArg(arg) {
   return win32.normalize(realPathOfAdminShare(arg)).toUpperCase().split("\\").filter(Boolean);
 }
-//@ chunk-fq0cr76a.js:876997-877058 placement
+//@ chunk-qg41pqt6.js:878707-878768 placement
 function realPathOfAdminShare(sharePath) {
   let drivePath = realPathOrSelf(adminShareToDrivePath(sharePath));
   let roundTripPath = adminShareToDrivePath(drivePath);
   return roundTripPath === drivePath ? drivePath : realPathOrSelf(roundTripPath);
 }
-//@ chunk-fq0cr76a.js:877058-877095 placement
+//@ chunk-qg41pqt6.js:878768-878805 placement
 function realPathOrSelf(path) {
   return realpathNativeLongSync(path).real ?? path;
 }
-//@ chunk-fq0cr76a.js:877095-877365 placement
+//@ chunk-qg41pqt6.js:878805-879075 placement
 function adminShareToDrivePath(inputPath) {
   let replaced = uncHostOf(inputPath)?.replace(/\.$/, "");
   let match = /^[\\/]{2}(?:[?.][\\/]unc[\\/])?[^\\/]+[\\/]+([a-z])\$(?:[\\/](.*))?$/is.exec(inputPath);
@@ -3944,29 +4040,26 @@ function adminShareToDrivePath(inputPath) {
     ? `${match[1]}:\\${match[2] ?? ""}`
     : inputPath;
 }
-//@ chunk-8wvtd8sr.js:32501-32736 fingerprint (2.1.88 match: getScratchpadDir, 0.842)
-/**
- * 在路径中找出 scratchpad 根（形如 .../claude[-N]/<x>/<UUID>/scratchpad），返回到 scratchpad 为止的前缀；找不到返回 undefined。
- */
-function findScratchpadRootInPath(inputPath) {
-  let parts = inputPath.split(sep);
-  let lastIndex = parts.findLastIndex(
-    (part, index) =>
-      index >= 3 &&
-      part.toLowerCase() === "scratchpad" &&
-      /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(parts[index - 1]) &&
-      /^claude(-\d+)?$/i.test(parts[index - 3]),
+//@ chunk-5xgkngpb.js:1466819-1466881 fingerprint (2.1.88 match: isSessionPlanFile, 1)
+function isMemoryTopicFile(absolutePath) {
+  return (
+    absolutePath.endsWith(".md") &&
+    isOutsideAllowedRoot(absolutePath) &&
+    basename(absolutePath) !== MEMORY_INDEX_FILENAME
   );
-  return lastIndex === -1 ? undefined : parts.slice(0, lastIndex + 1).join(sep);
 }
-//@ chunk-axmbhcjg.js:23906-23956 placement
+//@ chunk-nrv8bm0w.js:3878-3970 fingerprint (2.1.88 match: getScratchpadDir, 1)
+var ARTIFACT_FILE_NAME_RE = /^artifact-[^-]+-.+-.*-[0-9a-f]{32}\.[^.]+$/;
+var SESSION_FILE_PREFIX_RE = /^(session|cse)_/;
+var SESSION_SUBDIRS = [TOOL_RESULTS_SUBDIR, "scratchpad"];
+//@ chunk-vb7ng9fr.js:23941-23991 placement
 /**
  * 返回 classifySensitivePath 的 reason 或 null。与模型无关（切分错误）。
  */
 function getSensitivePathReason(cwd, classifier, location) {
   return classifySensitivePath(cwd, classifier, location)?.reason ?? null;
 }
-//@ chunk-axmbhcjg.js:23956-24047 placement (2.1.88 match: resolveAntModel, 0.385)
+//@ chunk-vb7ng9fr.js:23991-24082 placement (2.1.88 match: resolveAntModel, 0.385)
 /**
  * 敏感或拒绝读时返回 {path: 别名或原路径, reason}。旧版名 resolveAntModel 为错配。
  */
@@ -3979,13 +4072,13 @@ function resolveSensitivePath(cwd, classifier, location, lexicalRel) {
         reason: match.reason,
       };
 }
-//@ chunk-axmbhcjg.js:24047-24585 placement
+//@ chunk-vb7ng9fr.js:24082-24620 placement
 /**
  * 把路径（词法/真实/原始相对路径及其别名、配置目录下的对应路径）逐一交给判定函数：sensitive/host_config 归 sensitive，read_denied/rules_unreadable 归 read_denied，否则 null。
  */
 function classifySensitivePath(cwd, classifyRelative, location) {
-  let rawRels = uniq([location.lexicalRel, location.rel, ...location.rawRels]);
-  let filtered = uniq(rawRels.flatMap((rel) => getAliasSpellings(cwd, rel))).filter(
+  let rawRels = normalizeCaseForComparison_2([location.lexicalRel, location.rel, ...location.rawRels]);
+  let filtered = normalizeCaseForComparison_2(rawRels.flatMap((rel) => getAliasSpellings(cwd, rel))).filter(
     (alias) => !rawRels.includes(alias),
   );
   let candidates = [...rawRels, ...filtered];
@@ -4023,14 +4116,14 @@ function classifySensitivePath(cwd, classifyRelative, location) {
   }
   return null;
 }
-//@ chunk-18hwfzwa.js:63795-63873 fingerprint (2.1.88 match: allWorkingDirectories, 0.708)
+//@ chunk-czq1j3j2.js:64339-64417 placement
 /**
  * 从工具上下文取 toolPermissionContext.additionalWorkingDirectories（Map）。与 filesystem 的 allWorkingDirectories 同名但不含 cwd，应归 UI/工具侧代码。
  */
-function allWorkingDirectories_2(context) {
+function additionalWorkingDirectoriesOf(context) {
   return context.toolPermissionContext.additionalWorkingDirectories;
 }
-//@ chunk-tb11za84.js:5160-5281 fingerprint (2.1.88 match: hasSuspiciousWindowsPathPattern, 0.569)
+//@ chunk-cr1mmxrf.js:5277-5398 fingerprint (2.1.88 match: hasSuspiciousWindowsPathPattern, 0.569)
 /**
  * 是否 UNC 路径：\\?\UNC\ 前缀，或以 \\ 开头但不是 \\?\、\\.\ 设备前缀。旧版名 hasSuspiciousWindowsPathPattern 误配。
  */
@@ -4041,99 +4134,105 @@ function isUncPath(path) {
   );
 }
 export {
-  DANGEROUS_FILES_LOWER,
-  normalizeTrustedSymlink,
+  holdWorkingDirectoriesAsGiven,
+  addAdditionalWorkingDirectories,
   isLinkedWorktreeFastPathEnabled,
   verifiedLinkedWorktreeDirectories,
+  normalizeCaseForComparison_2,
+  ensureScratchpadDir,
   pinResolvedWorkingDirPath,
-  pathInWorkingPath,
+  matchingRuleForInput,
+  leafSymlinkWriteRefusal,
+  checkWritePermissionForTool,
+  checkReadPermissionForTool,
+  isScratchpadDisplayPath,
+  matchesPathRule,
   normalizeCaseForComparison,
-  allWorkingDirectories,
   isScratchpadEnabled,
   getScratchpadDir,
+  declaredAbsoluteAdditionalDirectories,
+  pathInWorkingPath,
+  allWorkingDirectories,
   READ_PATH_PROBE,
   isPathInTrustedNetworkRoot,
   hasSuspiciousWindowsPathPattern,
   readPermissionDecisionForPath,
   isReadGateSafetyAsk,
-  checkReadPermissionForTool,
   pathInAllowedWorkingPath,
   symlinkLanding,
-  getResolvedWorkingDirPaths,
+  getCountedWorkingDirPaths,
   isScratchpadPath,
-  matchingRuleForInput,
-  checkWritePermissionForTool,
   checkPathSafetyForAutoEdit,
   remoteConfigEditExemptionApplies,
-  allWorkingDirectories_2,
-  toPosixPath,
-  generateSuggestions,
-  declaredAbsoluteAdditionalDirectories,
-  hasReadDenyRuleForPath,
-  readWouldBeAutoAllowedForPath,
-  holdUnresolvedWorkingDirPathAsNamed,
-  patternWithRoot,
-  relativePath,
-  poolCanRead,
-  readAutoAllowedForMutation,
-  patternWithRootFor,
-  ensureScratchpadDir,
-  checkReadNetworkPathSafety,
-  isClaudeSettingsPath,
-  isJsonSpelling,
-  isManagedSettingsDropInPath,
-  managedDropInDirSpellingsAsync,
-  isUntrustedAutomountPath,
-  normalizeInternalPathRoot,
-  safetyCheckReasonFields,
-  matchesPathRule,
-  findScratchpadRootInPath,
-  leafSymlinkWriteRefusal,
-  layeredReadVerdictForPaths,
-  hasReadDenyRuleInForce,
-  managedDropInDirs,
-  settingsLocationPaths,
-  normalizePatternsToPath,
-  isSearchResultRootRespellEnabled,
-  resolveSensitivePath,
-  getSensitivePathReason,
-  getBundledSkillsRoot,
   outsideReadBlocked,
-  getFileReadIgnorePatterns,
-  acceptEditsSuggestionApplies,
   checkEditableInternalPath,
+  internalPathDecisionStands,
+  sensitiveWriteRedirect,
+  hardDeniedAsSpelled,
   symlinkRedirect,
   symlinkRedirectSentence,
-  hardDeniedAsSpelled,
+  checkReadableInternalPath,
+  untypeDenyReasonForAskPropagation,
+  matchingAllowRuleForAllPaths,
+  isUntrustedAutomountPath,
+  readWouldBeAutoAllowedForPath,
+  blockReadsWorkingDirectories,
+  DANGEROUS_FILES_LOWER,
+  generateSuggestions,
+  hasReadDenyRuleForPath,
+  holdUnresolvedWorkingDirPathAsNamed,
+  normalizePatternsToPath,
+  getFileReadIgnorePatterns,
+  acceptEditsSuggestionApplies,
+  safetyCheckReasonFields,
   denyRuleMatchingAnywhere,
   readDenyRuleMayMatchBeneath,
   matchingDenyRuleForDirectoryContents,
   spellingsToJudge,
   hasPermissionAuthoredBareReadDeny,
-  isScratchpadDisplayPath,
+  hasReadDenyRuleInForce,
   readDenyRuleForPath,
+  readAutoAllowedForMutation,
   writeBlockRefusal,
   writeDenyPrefix,
   mayBeGuardedFileSyncCopy,
   mayEscapeExclusionGlobs,
   denyFoldVariantPaths,
+  isMemoryTopicFile,
+  patternWithRoot,
   rootPathForSource,
+  getBundledSkillsRoot,
   isUntrustedUncPath,
-  isWorkingDirPathHeldAsNamed,
-  checkReadableInternalPath,
-  normalizeGitPathArg,
-  internalPathDecisionStands,
-  sensitiveWriteRedirect,
-  untypeDenyReasonForAskPropagation,
-  matchingAllowRuleForAllPaths,
-  classifySuspiciousWindowsPathPattern,
-  compiledPathRulePattern,
-  blockReadsWorkingDirectories,
-  DANGEROUS_DIRECTORIES,
-  DANGEROUS_FILES,
-  isUncPath,
+  isClaudeSettingsPath,
+  checkReadNetworkPathSafety,
+  settingsLocationPaths,
   SETTINGS_FILE_BASENAMES,
   settingsFileCertainty,
+  layeredReadVerdictForPaths,
+  classifySuspiciousWindowsPathPattern,
+  toPosixPath,
   settingsTextNeedles,
   settingsDirectoryWords,
+  poolCanRead,
+  isWorkingDirPathHeldAsNamed,
+  DANGEROUS_DIRECTORIES,
+  DANGEROUS_FILES,
+  patternWithRootFor,
+  normalizeInternalPathRoot,
+  isUncPath,
+  additionalWorkingDirectoriesOf,
+  normalizeTrustedSymlink,
+  relativePath,
+  isJsonSpelling,
+  isManagedSettingsDropInPath,
+  managedDropInDirSpellingsAsync,
+  ARTIFACT_FILE_NAME_RE,
+  SESSION_SUBDIRS,
+  SESSION_FILE_PREFIX_RE,
+  managedDropInDirs,
+  normalizeGitPathArg,
+  isSearchResultRootRespellEnabled,
+  resolveSensitivePath,
+  getSensitivePathReason,
+  compiledPathRulePattern,
 };

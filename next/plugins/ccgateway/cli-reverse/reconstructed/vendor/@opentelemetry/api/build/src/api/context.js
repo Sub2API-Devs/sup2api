@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/api/build/src/api/context.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/api@1.9.0
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_NoopContextManager } from "../context/NoopContextManager.js";
 import { require_global_utils } from "../internal/global-utils.js";
 import { require_diag } from "./diag.js";
 
-//@ chunk-bwbq4xvm.js:38464-39147 cjs-fingerprint
+//@ chunk-7kayq7nc.js:38550-39233 cjs-fingerprint
 var require_context_2 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

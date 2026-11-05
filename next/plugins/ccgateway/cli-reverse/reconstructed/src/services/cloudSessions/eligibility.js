@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程托管设置不适用的原因说明；远程设置拉取失败原因说明等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mdb2vxrz.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cyf1fcbt.js (1), chunk-pqw3c7pj.js (21)
  * attribution: placement 22
  */
 import { env } from "../../utils/env.js";
@@ -51,20 +51,20 @@ import {
 import { isGatewayServerProcess, isGatewayRequiredByHostPolicy } from "../../bootstrap/state.js";
 import { machineAdminMayPinSignInOrg } from "../../utils/settings/settings.js";
 
-//@ chunk-mdb2vxrz.js:996-1074 placement
+//@ chunk-cyf1fcbt.js:226-304 placement
 /**
  * 是否为封闭（hermetic）远程会话。
  */
 function isHermeticRemoteSession() {
   return env.CLAUDE_CODE_REMOTE && env.CLAUDE_CODE_REMOTE_HERMETIC_MODE;
 }
-//@ chunk-mdb2vxrz.js:1074-1092 placement
+//@ chunk-pqw3c7pj.js:1033-1051 placement
 /**
  * 最近一次加载状态读取的缓存函数（由 r_i 注入）。
  */
 var lastEligibilityCompute = null;
 var lastLoadStatusGetter = null;
-//@ chunk-mdb2vxrz.js:1092-1118 placement
+//@ chunk-pqw3c7pj.js:1051-1077 placement
 /**
  * 注入远程设置资格计算与加载状态读取的实现。
  */
@@ -72,18 +72,18 @@ function setRemoteSettingsProbes(compute, statusGetter) {
   lastEligibilityCompute = compute;
   lastLoadStatusGetter = statusGetter;
 }
-//@ chunk-mdb2vxrz.js:1118-1152 placement
+//@ chunk-pqw3c7pj.js:1077-1111 placement
 function _(input) {
   return lastEligibilityCompute?.(input) ?? null;
 }
-//@ chunk-mdb2vxrz.js:1152-1186 placement
+//@ chunk-pqw3c7pj.js:1111-1145 placement
 /**
  * 读取缓存的远程设置加载状态（未注入时返回 null）。
  */
 function getCachedLastLoadStatus(input) {
   return lastLoadStatusGetter?.(input) ?? null;
 }
-//@ chunk-mdb2vxrz.js:1186-1299 placement
+//@ chunk-pqw3c7pj.js:1145-1259 placement
 /**
  * 远程托管设置的加载状态。
  */
@@ -100,14 +100,14 @@ function getRemoteSettingsLoadState() {
   }
   return;
 }
-//@ chunk-mdb2vxrz.js:1299-1346 placement
+//@ chunk-pqw3c7pj.js:1259-1306 placement
 /**
  * 是否应提示远程设置状态：资格已算出但还没加载过。
  */
 function shouldWarnRemoteSettings() {
   return getEligibilityMemo() === true && getLastLoadStatus() === undefined;
 }
-//@ chunk-mdb2vxrz.js:1346-1488 placement
+//@ chunk-pqw3c7pj.js:1306-1448 placement
 function isRemoteSettingsFetchFailed() {
   if (getEligibilityMemo() !== true) return false;
   let lastLoadStatus = getLastLoadStatus();
@@ -118,7 +118,7 @@ function isRemoteSettingsFetchFailed() {
     Object.keys(remoteManagedSettingsSyncFromCache).length === 0
   );
 }
-//@ chunk-mdb2vxrz.js:1488-2672 placement
+//@ chunk-pqw3c7pj.js:1448-2632 placement
 /**
  * 远程托管设置不适用的原因说明。
  */
@@ -148,7 +148,7 @@ function describeIneligibleReason(reason) {
       return "no usable credentials for the settings fetch";
   }
 }
-//@ chunk-mdb2vxrz.js:2672-3835 placement
+//@ chunk-pqw3c7pj.js:2632-3795 placement
 /**
  * 远程设置拉取失败原因说明。
  */
@@ -189,7 +189,7 @@ function describeFetchFailure(errorKind, httpStatus) {
       return "unexpected error";
   }
 }
-//@ chunk-mdb2vxrz.js:3835-4170 placement
+//@ chunk-pqw3c7pj.js:3795-4130 placement
 /**
  * 是否需要提示远程设置状态。
  */
@@ -211,7 +211,7 @@ function shouldWarnRemoteSettings_2(remoteSettingsLoadState) {
       );
   }
 }
-//@ chunk-mdb2vxrz.js:4170-4857 placement
+//@ chunk-pqw3c7pj.js:4130-4817 placement
 /**
  * 远程设置状态的说明文字。
  */
@@ -231,7 +231,7 @@ function describeRemoteSettingsStatus(remoteSettingsLoadState) {
       return `not fetched \u2014 ${describeIneligibleReason(remoteSettingsLoadState.reason)}`;
   }
 }
-//@ chunk-mdb2vxrz.js:4857-4912 placement
+//@ chunk-pqw3c7pj.js:4817-4872 placement
 function getUrlHost(url) {
   try {
     return new URL(url).host;
@@ -239,7 +239,7 @@ function getUrlHost(url) {
     return;
   }
 }
-//@ chunk-mdb2vxrz.js:4912-5026 placement (2.1.88 match: getBridgeBaseUrl, 1)
+//@ chunk-pqw3c7pj.js:4872-4986 placement (2.1.88 match: getBridgeBaseUrl, 1)
 /**
  * 判断 API 基址是否为官方（未设置或与 OAuth BASE_API_URL 同 host）。
  */
@@ -248,21 +248,21 @@ function getBridgeBaseUrl(url = env.ANTHROPIC_BASE_URL || getWIFProfileBaseUrl()
   let urlHost = getUrlHost(getOauthConfig().BASE_API_URL);
   return urlHost !== undefined && getUrlHost(url) === urlHost;
 }
-//@ chunk-mdb2vxrz.js:5026-5046 placement
+//@ chunk-pqw3c7pj.js:4986-5006 placement
 /**
  * 重置远程设置同步缓存。
  */
 function resetRemoteSettingsSyncCache() {
   resetSyncCache();
 }
-//@ chunk-mdb2vxrz.js:5046-5074 placement
+//@ chunk-pqw3c7pj.js:5006-5034 placement
 /**
  * 根据资格计算结果把组织 pin 写进已存凭据。
  */
 function persistOrgPinFromEligibility() {
   setStoredCopyOrgPin(readOrgPinState(computeRemoteSettingsEligibility()));
 }
-//@ chunk-mdb2vxrz.js:5074-5199 placement
+//@ chunk-pqw3c7pj.js:5034-5159 placement
 function readOrgPinState(credential) {
   if (!isSettingsGateSettled() && !isStoredLoginRemoteSettingsCredential(credential))
     return {
@@ -279,7 +279,7 @@ function readOrgPinState(credential) {
     };
   }
 }
-//@ chunk-mdb2vxrz.js:5199-5372 placement
+//@ chunk-pqw3c7pj.js:5159-5332 placement
 function getRemoteSettingsOrgUuid(eligibility) {
   {
     if (
@@ -297,7 +297,7 @@ function getRemoteSettingsOrgUuid(eligibility) {
   }
   return;
 }
-//@ chunk-mdb2vxrz.js:5372-5649 placement
+//@ chunk-pqw3c7pj.js:5332-5609 placement
 function isStoredLoginRemoteSettingsCredential(eligibility, allowProfile = false) {
   try {
     if (getRemoteSettingsOrgUuid(eligibility) === undefined) return false;
@@ -319,7 +319,7 @@ function isStoredLoginRemoteSettingsCredential(eligibility, allowProfile = false
     return true;
   }
 }
-//@ chunk-mdb2vxrz.js:5649-5908 placement
+//@ chunk-pqw3c7pj.js:5609-5868 placement
 function classifyRemoteSettingsCredential() {
   if (isClaudeAISubscriber() && isBigQueryMetricsEnabled_2() && hasUsableClaudeAILogin())
     return {
@@ -345,7 +345,7 @@ function classifyRemoteSettingsCredential() {
     kind: isProfileRemoteSettingsCredential() ? "profile" : "login",
   };
 }
-//@ chunk-mdb2vxrz.js:5908-6448 placement
+//@ chunk-pqw3c7pj.js:5868-6408 placement
 /**
  * 计算远程托管设置资格（混合登录、组织等）。
  */
@@ -386,7 +386,7 @@ function computeRemoteSettingsEligibility() {
   let evalSkippedPolicy = eligible || evalPolicySnapshotOnly;
   return rememberEligibility(evalSkippedPolicy, evalSkippedPolicy ? undefined : ineligibleReason);
 }
-//@ chunk-mdb2vxrz.js:6448-6503 placement
+//@ chunk-pqw3c7pj.js:6408-6463 placement
 /**
  * 当前凭据是否可参与远程托管设置（BigQuery 开启，或已有 OAuth 令牌且订阅类型未知/可 pin）。
  */
@@ -397,21 +397,21 @@ function isRemoteSettingsEligibleForCredential() {
   );
 }
 export {
-  getRemoteSettingsLoadState,
-  shouldWarnRemoteSettings_2,
-  describeRemoteSettingsStatus,
-  resetRemoteSettingsSyncCache,
-  describeFetchFailure,
   isHermeticRemoteSession,
-  computeRemoteSettingsEligibility,
+  describeFetchFailure,
+  resetRemoteSettingsSyncCache,
+  getRemoteSettingsLoadState,
+  describeRemoteSettingsStatus,
   shouldWarnRemoteSettings,
+  shouldWarnRemoteSettings_2,
+  isRemoteSettingsFetchFailed,
+  setRemoteSettingsProbes,
+  computeRemoteSettingsEligibility,
   classifyRemoteSettingsCredential,
   getBridgeBaseUrl,
   persistOrgPinFromEligibility,
-  isRemoteSettingsFetchFailed,
+  getRemoteSettingsOrgUuid,
   _,
   getCachedLastLoadStatus,
   isRemoteSettingsEligibleForCredential,
-  setRemoteSettingsProbes,
-  getRemoteSettingsOrgUuid,
 };

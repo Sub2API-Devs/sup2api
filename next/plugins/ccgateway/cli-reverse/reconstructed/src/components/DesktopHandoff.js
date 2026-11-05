@@ -3,9 +3,9 @@
  *
  * 把会话交给 Claude Desktop：检测/下载桌面版并打开。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/DesktopHandoff.tsx
- * pieces: chunk-5nte8cwj.js (1), chunk-ds2d8kad.js (5)
+ * pieces: chunk-nj7rp16y.js (5), chunk-vbwrr9hv.js (1)
  * attribution: placement 2, fingerprint 3, layout 1
  */
 import {
@@ -36,7 +36,7 @@ import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 import { PANE_PADDING_X, PANE_PADDING } from "./design-system/Pane.js";
 import { WorkerBadge } from "./permissions/WorkerBadge.js";
 
-//@ chunk-5nte8cwj.js:3680-3743 placement
+//@ chunk-vbwrr9hv.js:3680-3743 placement
 /**
  * 以 resume 方式把当前会话交到 Claude Desktop 打开。
  */
@@ -46,11 +46,11 @@ async function resumeCurrentSessionInDesktop() {
     sessionId: getSessionId(),
   });
 }
-//@ chunk-ds2d8kad.js:15178-15182 placement
+//@ chunk-nj7rp16y.js:16349-16353 placement
 init_react_production();
-//@ chunk-ds2d8kad.js:15182-15214 fingerprint (2.1.88 match: DESKTOP_DOCS_URL, 1)
+//@ chunk-nj7rp16y.js:16353-16385 fingerprint (2.1.88 match: DESKTOP_DOCS_URL, 1)
 var DESKTOP_DOCS_URL = "https://clau.de/desktop";
-//@ chunk-ds2d8kad.js:15214-15407 fingerprint (2.1.88 match: getDownloadUrl, 0.863)
+//@ chunk-nj7rp16y.js:16385-16578 fingerprint (2.1.88 match: getDownloadUrl, 0.863)
 function getDownloadUrl() {
   switch ("linux") {
     case "win32":
@@ -59,13 +59,13 @@ function getDownloadUrl() {
       return "https://claude.ai/api/desktop/darwin/universal/dmg/latest/redirect";
   }
 }
-//@ chunk-ds2d8kad.js:15407-15441 layout
+//@ chunk-nj7rp16y.js:16578-16612 layout
 function nullRef() {
   return {
     current: null,
   };
 }
-//@ chunk-ds2d8kad.js:15441-18318 fingerprint (2.1.88 match: DesktopHandoff, 0.632)
+//@ chunk-nj7rp16y.js:16612-19487 fingerprint (2.1.88 match: DesktopHandoff, 0.632)
 /**
  * 交给桌面版：检测是否安装 Claude Desktop，未安装则提示下载（按平台下载链接），已安装则打开并传递会话。
  */

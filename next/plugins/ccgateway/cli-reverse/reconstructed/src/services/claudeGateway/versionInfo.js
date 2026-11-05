@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关版本信息
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (1)
  * attribution: placement 1
  */
 import { forwardedRequestParts, STRIPPED_RESPONSE_HEADERS } from "./proxyRequest.js";
@@ -14,7 +14,7 @@ import { fetchWithAbortTimeout, stripResponseHeaders, withUpstreamRequestIds } f
 import { ssrfSafeFetch } from "./ssrfGuard.js";
 import { getProxyFetchOptions } from "../../utils/proxy.js";
 
-//@ chunk-1ny7cxrt.js:1369882-1371328 placement
+//@ chunk-1hnjmk23.js:1371661-1373107 placement
 /**
  * 原样转发请求到 HTTP 上游：过滤头、User-Agent 加 cc-gateway/版本、身份与认证头，带超时；回写过滤后的响应与上游请求 id。
  */
@@ -27,10 +27,10 @@ async function forwardRawRequest(request, pathname, body, upstream, ttfbMs, iden
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     } !== "undefined"
@@ -38,10 +38,10 @@ async function forwardRawRequest(request, pathname, body, upstream, ttfbMs, iden
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION

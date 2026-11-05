@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设置页里的云会话状态
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6p6y0k3t.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-zpfg1kae.js (10)
  * attribution: placement 10
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -16,12 +16,12 @@ import { GITHUB_CONNECTION_STATUS_CACHE } from "../../commands/remote-setup/api.
 import { getSessionProject } from "../../bootstrap/sessionSlices.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6p6y0k3t.js:1500-1504 placement
+//@ chunk-zpfg1kae.js:1505-1509 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-6p6y0k3t.js:1500", () => {
+deferInit("chunk-zpfg1kae.js:1505", () => {
   init_react_production();
 });
-//@ chunk-6p6y0k3t.js:1504-1636 placement
+//@ chunk-zpfg1kae.js:1509-1641 placement
 function getCloudSessionsStatus(host, credentials, storageV5) {
   if (getAPIProvider() !== "firstParty" || !isConsumerSubscriber() || !isWebSetupEnabled()) return;
   let cache = GITHUB_CONNECTION_STATUS_CACHE.of(host);
@@ -30,7 +30,7 @@ function getCloudSessionsStatus(host, credentials, storageV5) {
     settled: cache.read(credentials, storageV5),
   };
 }
-//@ chunk-6p6y0k3t.js:1636-1876 placement
+//@ chunk-zpfg1kae.js:1641-1881 placement
 /**
  * 把 GitHub 连接状态转成 /status 的"Cloud sessions"行：已连接、未设置（提示 /web-setup）；未知时不显示。
  */
@@ -55,31 +55,31 @@ function getCloudSessionsStatusRows(webSetupStatus) {
       return [];
   }
 }
-//@ chunk-6p6y0k3t.js:1876-1914 placement
+//@ chunk-zpfg1kae.js:1881-1919 placement
 function selectMainLoopModel(state) {
   return state.mainLoopModel;
 }
-//@ chunk-6p6y0k3t.js:1914-1942 placement
+//@ chunk-zpfg1kae.js:1919-1947 placement
 function selectMcp(state) {
   return state.mcp;
 }
-//@ chunk-6p6y0k3t.js:1942-1993 placement
+//@ chunk-zpfg1kae.js:1947-1998 placement
 function selectPermissionMode(state) {
   return state.toolPermissionContext.mode;
 }
-//@ chunk-6p6y0k3t.js:1993-2037 placement
+//@ chunk-zpfg1kae.js:1998-2042 placement
 function selectRemoteSessionName(state) {
   return state.remoteSessionName;
 }
-//@ chunk-6p6y0k3t.js:2037-2066 placement
+//@ chunk-zpfg1kae.js:2042-2071 placement
 function selectSessionId(state) {
   return state.id;
 }
-//@ chunk-6p6y0k3t.js:2066-2100 placement
+//@ chunk-zpfg1kae.js:2071-2105 placement
 function selectCwd(state) {
   return getSessionProject(state).cwd;
 }
-//@ chunk-6p6y0k3t.js:2100-2135 placement
+//@ chunk-zpfg1kae.js:2105-2140 placement
 function hasItems(items) {
   return items.length > 0;
 }

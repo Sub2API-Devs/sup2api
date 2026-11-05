@@ -3,44 +3,31 @@
  *
  * 创建隔离 VM realm 与宿主函数包装（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hmaqgh0x.js (18)
  * attribution: placement 18
  */
-import "vm";
-import * as vmModule_2 from "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
-import "vm";
+import * as vmModule from "vm";
 import { CLONE_DEPTH_THRESHOLD } from "../../../utils/structuredCloneLimits.js";
 import { copyAcrossVmBoundary } from "./boundaryCopy.js";
 import { sanitizeAndLogError } from "../../../components/Feedback.js";
 import { SubAgentContext } from "../../../components/CtrlOToExpand.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:49745-49840 placement
+//@ chunk-hmaqgh0x.js:507-600 placement
 /**
  * 无 import 钩子标记
  */
 var NO_IMPORT_HOOK; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NO_IMPORT_OPTIONS;
-deferInit("chunk-4121qate.js:49745", () => {
+deferInit("chunk-hmaqgh0x.js:507", () => {
   NO_IMPORT_HOOK = Symbol("compile with no import() hook");
   NO_IMPORT_OPTIONS = Object.freeze({
     importModuleDynamically: NO_IMPORT_HOOK,
   });
 });
-//@ chunk-4121qate.js:49840-50178 placement
+//@ chunk-hmaqgh0x.js:600-936 placement
 /**
  * 校验 VM 编译选项：importModuleDynamically 必须是函数或"无 import 钩子"标记，后者返回 undefined。
  */
@@ -55,7 +42,7 @@ function vmImportOptions(options) {
     importModuleDynamically,
   };
 }
-//@ chunk-4121qate.js:50178-50243 placement
+//@ chunk-hmaqgh0x.js:936-1001 placement
 /**
  * 构造 timeout 选项
  */
@@ -68,12 +55,12 @@ function timeoutOption(timeout, override) {
     timeout,
   };
 }
-//@ chunk-4121qate.js:50243-56738 placement
+//@ chunk-hmaqgh0x.js:1001-7494 placement
 /**
  * 创建钩子运行用的隔离 VM realm，装入全局与宿主函数包装
  */
 function createVmRealm(context, importHook) {
-  vmModule_2.runInContext(
+  vmModule.runInContext(
     `(() => {
     Object.defineProperty(Error, 'prepareStackTrace', {
       value: (err) => { const s = err.stack; return typeof s === 'string' ? s : '' },
@@ -204,33 +191,33 @@ function createVmRealm(context, importHook) {
     vmImportOptions(importHook),
   );
 }
-//@ chunk-4121qate.js:56738-56820 placement
+//@ chunk-hmaqgh0x.js:7494-7575 placement
 /**
  * 删除 Error.captureStackTrace
  */
 function removeCaptureStackTrace(context) {
-  vmModule_2.runInContext("'use strict'; delete Error.captureStackTrace", context);
+  vmModule.runInContext("'use strict'; delete Error.captureStackTrace", context);
 }
-//@ chunk-4121qate.js:56820-56909 placement
+//@ chunk-hmaqgh0x.js:7575-7663 placement
 /**
  * 空原型包装 await
  */
 function awaitAsNullProto(vmContext) {
-  return vmModule_2.runInContext("(async v => ({__proto__: null, v: await v}))", vmContext);
+  return vmModule.runInContext("(async v => ({__proto__: null, v: await v}))", vmContext);
 }
-//@ chunk-4121qate.js:56909-56984 placement
+//@ chunk-hmaqgh0x.js:7663-7737 placement
 /**
  * 直接调用函数
  */
 function callWithArgs(context) {
-  return vmModule_2.runInContext("((fn, ...args) => fn(...args))", context);
+  return vmModule.runInContext("((fn, ...args) => fn(...args))", context);
 }
-//@ chunk-4121qate.js:56984-57646 placement
+//@ chunk-hmaqgh0x.js:7737-8398 placement
 /**
  * 在 VM 上下文中创建读取抛出值 name/message/stack 的函数（各字段独立 try，取不到时用默认值）。
  */
 function createVmErrorDescriber(vmContext) {
-  return vmModule_2.runInContext(
+  return vmModule.runInContext(
     `(e => {
       let name = 'Error', message = '', stack = ''
       try { const v = e?.name; if (typeof v === 'string') name = v } catch {}
@@ -249,7 +236,7 @@ function createVmErrorDescriber(vmContext) {
     vmContext,
   );
 }
-//@ chunk-4121qate.js:57646-57891 placement
+//@ chunk-hmaqgh0x.js:8398-8641 placement
 /**
  * 在 VM 上下文中创建把值复制进 VM 的 copy 函数（数组长度上限、原型键处理）。
  */
@@ -260,7 +247,7 @@ function createVmInboundCopier(
     protoKey: "left-out",
   },
 ) {
-  return vmModule_2.runInContext(
+  return vmModule.runInContext(
     `(() => {
       'use strict';
       ${copyAcrossVmBoundary({
@@ -274,7 +261,7 @@ function createVmInboundCopier(
     context,
   );
 }
-//@ chunk-4121qate.js:57891-58479 placement
+//@ chunk-hmaqgh0x.js:8641-9228 placement
 /**
  * 把抛出值重新封装为冻结纯错误对象的源码。
  */
@@ -298,12 +285,12 @@ var RESEAL_ERROR_SOURCE = `(e) => {
     toString: toStr,
   })
 }`;
-//@ chunk-4121qate.js:58479-58803 placement
+//@ chunk-hmaqgh0x.js:9228-9550 placement
 /**
  * 在 VM 上下文中创建宿主函数包装：同步抛错重新封装为冻结的纯错误对象。
  */
 function createVmHostFnWrapper(context) {
-  return vmModule_2.runInContext(
+  return vmModule.runInContext(
     `(() => {
       const _freeze = Object.freeze
       const _setProto = Object.setPrototypeOf
@@ -319,9 +306,9 @@ function createVmHostFnWrapper(context) {
     context,
   );
 }
-//@ chunk-4121qate.js:58803-60519 placement
+//@ chunk-hmaqgh0x.js:9550-11264 placement
 function VM_HOST_FN_WRAPPER(context) {
-  return vmModule_2.runInContext(
+  return vmModule.runInContext(
     `(() => {
       const _freeze = Object.freeze
       const _setProto = Object.setPrototypeOf
@@ -368,12 +355,12 @@ function VM_HOST_FN_WRAPPER(context) {
     context,
   );
 }
-//@ chunk-4121qate.js:60519-60910 placement
+//@ chunk-hmaqgh0x.js:11264-11654 placement
 /**
  * 在 VM 上下文中创建函数包装：调用返回的 Promise 被拒绝时把原因交给日志回调。
  */
 function createVmRejectionWatcher(context, onRejection) {
-  return vmModule_2.runInContext(
+  return vmModule.runInContext(
     `((onRejection) => {
       const _apply = Reflect.apply
       const _then = Promise.prototype.then
@@ -387,7 +374,7 @@ function createVmRejectionWatcher(context, onRejection) {
     context,
   )(sanitizeAndLogError(onRejection));
 }
-//@ chunk-4121qate.js:60910-61097 placement
+//@ chunk-hmaqgh0x.js:11654-11841 placement
 /**
  * 创建冻结的纯错误对象（name、message、stack、toString），可安全跨越 VM 边界抛出。
  */
@@ -403,12 +390,12 @@ function createSealedError(message, name = "Error", stack) {
     toString,
   });
 }
-//@ chunk-4121qate.js:61097-61104 placement
+//@ chunk-hmaqgh0x.js:11841-11847 placement
 /**
  * 懒创建的错误读取器
  */
 var lazyErrorReader;
-//@ chunk-4121qate.js:61104-61903 placement
+//@ chunk-hmaqgh0x.js:11847-12640 placement
 /**
  * 获取（懒创建）在隔离 VM 中读取抛出值 msg/name/stack 的函数。
  */
@@ -427,7 +414,7 @@ function getThrownValueDescriber() {
     );
     removeCaptureStackTrace(context);
     createVmRealm(context, NO_IMPORT_OPTIONS);
-    lazyErrorReader = vmModule_2.runInContext(
+    lazyErrorReader = vmModule.runInContext(
       `(e => {
         // Independent try blocks \u2014 a throwing .name getter must not discard
         // an already-validated .message (and vice versa).
@@ -451,7 +438,7 @@ function getThrownValueDescriber() {
   }
   return lazyErrorReader;
 }
-//@ chunk-4121qate.js:61903-62161 placement
+//@ chunk-hmaqgh0x.js:12640-12897 placement
 function describeThrownValue(value) {
   try {
     let described = getThrownValueDescriber()(value);
@@ -467,7 +454,7 @@ function describeThrownValue(value) {
     };
   }
 }
-//@ chunk-4121qate.js:62161-62271 placement
+//@ chunk-hmaqgh0x.js:12897-13007 placement
 /**
  * 日志参数文本：原始值转字符串，对象与函数给 "[类型]"。
  */
@@ -476,19 +463,19 @@ function describeLogArg(value) {
   return `[${typeof value}]`;
 }
 export {
-  describeLogArg,
+  createVmErrorDescriber,
+  timeoutOption,
   describeThrownValue,
   createSealedError,
+  describeLogArg,
   vmImportOptions,
   createVmInboundCopier,
   createVmRealm,
   NO_IMPORT_OPTIONS,
   callWithArgs,
-  createVmErrorDescriber,
   VM_HOST_FN_WRAPPER,
   createVmRejectionWatcher,
   removeCaptureStackTrace,
   createVmHostFnWrapper,
   awaitAsNullProto,
-  timeoutOption,
 };

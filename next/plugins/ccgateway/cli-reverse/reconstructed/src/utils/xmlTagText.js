@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：XML 标签文本
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (6)
  * attribution: placement 6
  */
 import { truncateToLength } from "./stringUtils.js";
@@ -21,7 +21,7 @@ import {
 import { escapeXml_2 as escapeXml, unescapeHtmlEntities } from "./confusables.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:128547-128660 placement
+//@ chunk-5xgkngpb.js:135297-135409 placement
 /**
  * 生成 forked skill launch 标签（描述截断后 JSON 序列化并做 XML 转义）。
  */
@@ -32,11 +32,11 @@ function forkedSkillLaunchTag(launch) {
   };
   return `<${FORKED_SKILL_LAUNCH}>${escapeXml(JSON.stringify(cappedLaunch))}</${FORKED_SKILL_LAUNCH}>`;
 }
-//@ chunk-e6aww6q8.js:128660-128759 placement
-var REPLACEMENT_CHAR; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+//@ chunk-5xgkngpb.js:135409-135508 placement
+var REPLACEMENT_CHAR; // deferred: uses COMMAND_NAME (../constants/xml.js) of its import cycle while loading; runs once the cycle is complete
 var regExp;
 var QUOTED_TAG_NAMES;
-deferInit("chunk-e6aww6q8.js:128660", () => {
+deferInit("chunk-5xgkngpb.js:135409", () => {
   REPLACEMENT_CHAR = "\uFFFD";
   regExp = new RegExp(
     `^[\\s${REPLACEMENT_CHAR}]*<${FORKED_SKILL_LAUNCH}>([^<]*)</${FORKED_SKILL_LAUNCH}>\\s*$`,
@@ -49,7 +49,7 @@ deferInit("chunk-e6aww6q8.js:128660", () => {
     COMMAND_ARGS,
   ];
 });
-//@ chunk-e6aww6q8.js:128759-129010 placement
+//@ chunk-5xgkngpb.js:135508-135759 placement
 function stripQuotedTagBlocks(text) {
   let out = "";
   let offset = 0;
@@ -69,19 +69,19 @@ function stripQuotedTagBlocks(text) {
     offset = end;
   }
 }
-//@ chunk-e6aww6q8.js:129010-129049 placement
-var regExp_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:129010", () => {
+//@ chunk-5xgkngpb.js:135759-135798 placement
+var regExp_2; // deferred: uses COMMAND_NAME (../constants/xml.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-5xgkngpb.js:135759", () => {
   regExp_2 = new RegExp(`<(/?)${FORKED_SKILL_LAUNCH}>`, "g");
 });
-//@ chunk-e6aww6q8.js:129049-129111 placement
+//@ chunk-5xgkngpb.js:135798-135860 placement
 /**
  * 把 forked skill launch 标签转义。
  */
 function escapeForkedSkillTag(text) {
   return text.replace(regExp_2, (match, prefix) => `&lt;${prefix}${FORKED_SKILL_LAUNCH}>`);
 }
-//@ chunk-e6aww6q8.js:129111-129314 placement
+//@ chunk-5xgkngpb.js:135860-136063 placement
 /**
  * 从文本中解析 forked skill launch 标签内容（反转义后 JSON 解析并校验）。
  */
@@ -98,4 +98,4 @@ function parseForkedSkillLaunches(text) {
   let validation = AGENT_SKILL_REF_SCHEMA().safeParse(parsed);
   return validation.success ? [validation.data] : [];
 }
-export { escapeForkedSkillTag, parseForkedSkillLaunches, forkedSkillLaunchTag };
+export { escapeForkedSkillTag, forkedSkillLaunchTag, parseForkedSkillLaunches };

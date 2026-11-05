@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/utils/real-path.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-r0ads4ty.js (4)
+ * pieces: chunk-getdj2mr.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
  */
 import "path";
@@ -11,9 +11,9 @@ import "fs";
 import * as fsModule_2 from "fs";
 import "fs";
 
-//@ chunk-r0ads4ty.js:884-894 esm-layout
+//@ chunk-getdj2mr.js:884-894 esm-layout
 var MAX_LINKS = 40;
-//@ chunk-r0ads4ty.js:894-1077 esm-fingerprint
+//@ chunk-getdj2mr.js:894-1077 esm-fingerprint
 function textOf(ask, at) {
   let text = ask(at);
   if (text.includes("\uFFFD") && !ask(at, "buffer").equals(Buffer.from(text)))
@@ -22,7 +22,7 @@ function textOf(ask, at) {
     });
   return text;
 }
-//@ chunk-r0ads4ty.js:1077-1274 esm-fingerprint
+//@ chunk-getdj2mr.js:1077-1274 esm-fingerprint
 function realPathOf(p) {
   let from = pathModule_2.isAbsolute(p) ? "" : process.cwd();
   let folded = pathModule_2.resolve(from, p);
@@ -31,7 +31,7 @@ function realPathOf(p) {
   if (notThere !== undefined) throw notThere;
   return real || "/";
 }
-//@ chunk-r0ads4ty.js:1274-1985 esm-fingerprint
+//@ chunk-getdj2mr.js:1274-1985 esm-fingerprint
 function wayTo(folded) {
   let real = "";
   let links = 0;

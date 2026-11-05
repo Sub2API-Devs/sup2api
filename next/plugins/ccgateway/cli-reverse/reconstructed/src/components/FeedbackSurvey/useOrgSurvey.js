@@ -3,11 +3,19 @@
  *
  * 2.1.316 新增：组织调查与插件反馈调查的触发 Hook：按策略、遥测与插件来源决定是否弹出调查对话框并记录事件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (19)
  * attribution: placement 19
  */
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useCallback,
+} from "../../../vendor/react/cjs/react.production.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -17,14 +25,6 @@ import {
   isSurveyEligible,
   orgSurveyCredentialSource,
 } from "../../services/orgSurvey/orgSurvey.js";
-import {
-  useState,
-  useRef,
-  useEffect,
-  init_react_production,
-  useMemo,
-  useCallback,
-} from "../../../vendor/react/cjs/react.production.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
@@ -75,23 +75,33 @@ import { getInstalledPlugins } from "../../utils/plugins/installedPluginsManager
 import { policyEnabledPluginNameSet } from "../../utils/plugins/pluginPolicy.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1070020-1070057 placement
+//@ chunk-czq1j3j2.js:1055668-1055672 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1055668", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1068743-1068747 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1068743", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1104049-1104086 placement
 function selectTurnLoadingSurvey(appState) {
   return appState.isLoading;
 }
-//@ chunk-18hwfzwa.js:1070057-1070108 placement
+//@ chunk-czq1j3j2.js:1104086-1104137 placement
 function openIfAnswering(status) {
   return status === "answering" ? "open" : status;
 }
-//@ chunk-18hwfzwa.js:1070108-1070121 placement
+//@ chunk-czq1j3j2.js:1104137-1104150 placement
 var SURVEY_CLOSE_DELAY_MS = 4000;
-//@ chunk-18hwfzwa.js:1070121-1070182 placement
+//@ chunk-czq1j3j2.js:1104150-1104211 placement
 function logOrgSurveyEvent(eventType) {
   logEvent("tengu_org_survey_event", {
     event_type: fromEnum(eventType),
   });
 }
-//@ chunk-18hwfzwa.js:1070182-1074142 placement
+//@ chunk-czq1j3j2.js:1104211-1108173 placement
 /**
  * 组织调查问卷的显示状态：回合结束后拉取待答问卷，满足空闲、无其他提示与问卷、非无人值守等条件时打开；忽略/提交时上报并关闭。
  */
@@ -456,12 +466,7 @@ function useOrgSurvey(props) {
   } else cardProps = $[60];
   return cardProps;
 }
-//@ chunk-18hwfzwa.js:1074142-1074146 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1074142", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1074146-1074281 placement
+//@ chunk-czq1j3j2.js:1108177-1108312 placement
 /**
  * 插件评分商店的默认配置、请求选项（teleport-org 认证、后台、5xx 才算错误）与每插件串行链的缓存上限。
  */
@@ -475,7 +480,7 @@ var PLUGIN_RATINGS_REQUEST_OPTIONS = {
   validateStatus: (status) => status < 500,
 };
 var MAX_RATING_CHAINS = 8;
-//@ chunk-18hwfzwa.js:1074281-1074562 placement
+//@ chunk-czq1j3j2.js:1108312-1108593 placement
 function recordPluginRatingAppearance(chains, appearanceId, plugin, credentials) {
   return chainRatingRequest(chains, appearanceId, async () => {
     let pluginRatingTarget = await getPluginRatingTarget(plugin, credentials);
@@ -494,7 +499,7 @@ function recordPluginRatingAppearance(chains, appearanceId, plugin, credentials)
     );
   });
 }
-//@ chunk-18hwfzwa.js:1074562-1075909 placement
+//@ chunk-czq1j3j2.js:1108593-1109940 placement
 /**
  * 把插件评分提交到商店：bad/fine/good 提交评分，dismissed/not_sure 上报结果并在之前已评分时撤回；同一出现 id 的请求串行执行。
  */
@@ -520,10 +525,10 @@ function submitPluginRating(chains, appearanceId, plugin, response, credentials)
                 ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
                 PACKAGE_URL: "@anthropic-ai/claude-code",
                 README_URL: "https://code.claude.com/docs/en/overview",
-                VERSION: "2.1.316",
+                VERSION: "2.1.318",
                 FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                BUILD_TIME: "2026-10-30T23:28:13Z",
-                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                BUILD_TIME: "2026-11-03T18:52:53Z",
+                GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                 HOOKS_WORKER_URL:
                   import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                 DD_SOURCEMAP_GROUP: "default",
@@ -566,7 +571,7 @@ function submitPluginRating(chains, appearanceId, plugin, response, credentials)
     }
   });
 }
-//@ chunk-18hwfzwa.js:1075909-1076474 placement
+//@ chunk-czq1j3j2.js:1109940-1110505 placement
 /**
  * 判断是否可以向商店上报插件评分（未禁用反馈、第一方、非官方市场、组织匹配、动态配置开启），返回 {marketplaceName, pluginName} 或 null。
  */
@@ -600,7 +605,7 @@ async function getPluginRatingTarget(plugin, credentials) {
     pluginName: plugin.name,
   };
 }
-//@ chunk-18hwfzwa.js:1076474-1076765 placement
+//@ chunk-czq1j3j2.js:1110505-1110796 placement
 function chainRatingRequest(chains, appearanceId, task) {
   let entry = chains.get(appearanceId);
   if (!entry) {
@@ -626,7 +631,7 @@ function chainRatingRequest(chains, appearanceId, task) {
   );
   return entry.chain;
 }
-//@ chunk-18hwfzwa.js:1076765-1077648 placement
+//@ chunk-czq1j3j2.js:1110796-1111679 placement
 /**
  * 调用插件评分商店 API（post/delete），按网络错误、认证、HTTP 状态分类记录 cli_plugin_rating_store 结果，成功返回 true。
  */
@@ -678,7 +683,7 @@ async function callPluginRatingsApi(step, method, path, body, credentials) {
   });
   return false;
 }
-//@ chunk-18hwfzwa.js:1077648-1077868 placement
+//@ chunk-czq1j3j2.js:1111679-1111899 placement
 /**
  * 插件反馈调查的常量：感谢提示时长、默认配置（概率、全局/单插件间隔、最小活动时长、触发类型）、待调查记录上限、同插件活动去重窗口。
  */
@@ -693,7 +698,7 @@ var PLUGIN_SURVEY_DEFAULT_CONFIG = {
 };
 var MAX_PENDING_SURVEYS = 32;
 var ACTIVITY_DEDUPE_MS = 3600000;
-//@ chunk-18hwfzwa.js:1077868-1078489 placement
+//@ chunk-czq1j3j2.js:1111899-1112520 placement
 /**
  * 把新的插件使用活动合并进待调查记录：同插件一小时内只保留更合适的触发类型，超过上限保留最新的。
  */
@@ -739,7 +744,7 @@ function mergePendingSurveyActivity(
   }
   return next ?? pending;
 }
-//@ chunk-18hwfzwa.js:1078489-1078963 placement
+//@ chunk-czq1j3j2.js:1112520-1112994 placement
 /**
  * 从插件反馈问卷记录中筛出已到期（距触发超过最小间隔）且仍已安装、触发类型有效的插件，按触发时间倒序返回。
  */
@@ -771,7 +776,7 @@ function listEligibleSurveySubjects(activity, minActivityAgeMs, listPluginNames,
   }
   return subjects.sort((a, b) => b.ts - a.ts);
 }
-//@ chunk-18hwfzwa.js:1078963-1079370 placement
+//@ chunk-czq1j3j2.js:1112994-1113401 placement
 /**
  * 上报插件反馈问卷事件：tengu_plugin_feedback_survey_event 与 OTel feedback_survey（第三方插件名在未开启工具详情日志时隐去）。
  */
@@ -800,7 +805,7 @@ function logPluginSurveyEvent(eventType, appearanceId, subject, response) {
     "plugin.name": isFirstPartyPlugin ? subject.name : THIRD_PARTY,
   });
 }
-//@ chunk-18hwfzwa.js:1079370-1079965 placement
+//@ chunk-czq1j3j2.js:1113401-1113996 placement
 /**
  * 从候选中选出要显示问卷的插件：触发类型与作用域须启用、每个插件只看一次、距上次展示超过最小间隔，取最久未展示者。
  */
@@ -836,7 +841,7 @@ function pickPluginSurveySubject(subjects, config, lastShownByPlugin, capabiliti
   }
   return best?.subject ?? null;
 }
-//@ chunk-18hwfzwa.js:1079965-1081950 placement
+//@ chunk-czq1j3j2.js:1113996-1115981 placement
 /**
  * 插件反馈调查：回合结束后按概率、间隔、启用的触发与范围挑选一个最近使用的插件显示调查，记录出现/回答/放弃并同步到评分商店。
  */
@@ -980,9 +985,4 @@ function usePluginFeedbackSurvey({
     handleUndo,
   };
 }
-//@ chunk-18hwfzwa.js:1081950-1081954 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1081950", () => {
-  init_react_production();
-});
 export { usePluginFeedbackSurvey, useOrgSurvey };

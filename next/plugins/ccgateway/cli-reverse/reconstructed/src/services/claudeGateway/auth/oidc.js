@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关 OIDC/设备流登录
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (8)
  * attribution: placement 8
  */
 import { createPrivateKey, X509Certificate, createHash, randomUUID } from "crypto";
@@ -18,7 +18,7 @@ import { getWebSocketTLSOptions_2 } from "../../../utils/mtls.js";
 import { Issuer, custom } from "./tokens.js";
 import { SignJWT } from "../../../../vendor/jose/dist/webapi/jwt/sign.js";
 
-//@ chunk-1ny7cxrt.js:1325607-1325761 placement
+//@ chunk-1hnjmk23.js:1326570-1326724 placement
 /**
  * OIDC discovery 返回的 jwks/token/userinfo 端点被 SSRF 规则拦截时抛错。
  */
@@ -27,7 +27,7 @@ function assertAllowedOidcEndpoints(metadata) {
     if (endpointUrl && !isAllowedOutboundUrl(endpointUrl))
       throw Error(`OIDC discovery returned a blocked endpoint: ${endpointUrl}`);
 }
-//@ chunk-1ny7cxrt.js:1325761-1328131 placement
+//@ chunk-1hnjmk23.js:1326724-1329094 placement
 /**
  * 构建网关 OIDC 客户端：过滤自定义 CA、决定 IdP 请求是否走代理、discovery 并校验端点、按支持选择 token 认证方式与时钟偏差。
  */
@@ -107,13 +107,13 @@ async function createOidcClient(oidc) {
   if (oidc.clock_skew_seconds !== undefined) client[custom.clock_tolerance] = oidc.clock_skew_seconds;
   return client;
 }
-//@ chunk-1ny7cxrt.js:1328131-1328155 placement
+//@ chunk-1hnjmk23.js:1329094-1329118 placement
 /**
  * 证书临近过期（30 天内）时重复警告的间隔（24 小时）。
  */
 var CERT_WARN_REPEAT_MS = 3600000;
 var CERT_WARN_INTERVAL_MS = 24 * CERT_WARN_REPEAT_MS;
-//@ chunk-1ny7cxrt.js:1328155-1329728 placement
+//@ chunk-1hnjmk23.js:1329118-1330691 placement
 /**
  * private_key_jwt 客户端认证：用证书私钥签发 client_assertion（x5t 指纹，5 分钟有效），并在证书临近过期或无效时周期性警告。
  */
@@ -177,7 +177,7 @@ function createClientAssertionSigner(clientId, clientAssertion, tokenEndpoint, n
     };
   };
 }
-//@ chunk-1ny7cxrt.js:1329728-1330199 placement
+//@ chunk-1hnjmk23.js:1330691-1331162 placement
 /**
  * 校验 id_token 的 email 已验证且域名在允许列表中。
  */
@@ -195,7 +195,7 @@ function assertEmailAllowed(claims, allowedEmailDomains) {
   let lower = email.slice(email.lastIndexOf("@") + 1).toLowerCase();
   if (!allowedEmailDomains.includes(lower)) throw Error("email domain not allowed");
 }
-//@ chunk-1ny7cxrt.js:1330199-1330337 placement
+//@ chunk-1hnjmk23.js:1331162-1331300 placement
 /**
  * 用户不属于任何允许的组时抛错。
  */
@@ -205,7 +205,7 @@ function assertGroupAllowed(groups, allowedGroups) {
   if (!groups?.some((group) => allowedSet.has(group)))
     throw Error("user is not a member of an allowed group");
 }
-//@ chunk-1ny7cxrt.js:1330337-1330534 placement
+//@ chunk-1hnjmk23.js:1331300-1331497 placement
 /**
  * 读取声明：普通键或 JSON Pointer（/a/b，支持 ~0 ~1 转义）。
  */
@@ -219,7 +219,7 @@ function readClaim(claims, path) {
   }
   return current;
 }
-//@ chunk-1ny7cxrt.js:1330534-1330650 placement
+//@ chunk-1hnjmk23.js:1331497-1331613 placement
 /**
  * 按候选路径依次读取第一个非空声明。
  */

@@ -3,22 +3,28 @@
  *
  * 并入旧版已有路径：清理（转录保留期清理）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/cleanup.ts
- * pieces: chunk-23fm9f0d.js (107), chunk-4nhpaxz9.js (1), chunk-kqn19nw9.js (3)
- * attribution: placement 35, facade-majority 8, layout 21, fingerprint 8, file-local 1, callgraph-witnessed 2, affinity 8, sole-consumer 28
+ * pieces: chunk-2zeqrfs5.js (1), chunk-3328vqg0.js (3), chunk-pc3x100t.js (112)
+ * attribution: fingerprint 8, placement 35, facade-majority 8, layout 54, file-local 1, callgraph-witnessed 2, affinity 7, sole-consumer 1
  */
 import { join, dirname, basename } from "path";
 import * as fsPromisesModule from "fs/promises";
 import { lstat, readdir, unlink, rmdir } from "fs/promises";
 import { homedir, tmpdir as tmpdir_2 } from "os";
 import { getFsImplementation } from "./fsOperations.js";
-import { claudeTempDir, PDF_SCRATCH_DIR_PREFIX, PREVIEW_COPY_DIR_PREFIX, tmpdir } from "./tempDir.js";
+import {
+  claudeTempDir,
+  projectTempDirNames,
+  PDF_SCRATCH_DIR_PREFIX,
+  PREVIEW_COPY_DIR_PREFIX,
+  tmpdir,
+} from "./tempDir.js";
 import { getSessionId, isDiskless } from "../bootstrap/state.js";
 import { normalizeUuidOrNull } from "./agentId.js";
 import { isFsInaccessible, getErrnoCode, isEnvFsErrno, isENOENT, errorMessage } from "./errors.js";
 import { pinWriteTarget } from "./fsSafety/pathRevalidation.js";
-import { isOwnTempName, publishWriteAtomic, isTempFileName } from "./atomicPublishWrite.js";
+import { isOwnTempName, filePath, isTempFileName } from "./atomicPublishWrite.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { objectSchema, stringSchema, numberSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { createJsonStore } from "./jsonStore.js";
@@ -93,10 +99,11 @@ import {
 } from "./sessionStoragePortable.js";
 import { isHostEntrypointName } from "./entrypointKinds.js";
 import { TOOL_RESULTS_SUBDIR } from "./toolResultStorage.js";
-import { getClaudeConfigDir, getClaudeConfigDirOrNull, getTeamsDir } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { accessMemoryPath, providerProbeVerdictsPath } from "./model/thirdPartyModelAccess.js";
 import { modelCatalogCacheDir, MASKED_IDS_JSON_2 } from "./model/modelCatalog/maskedIds.js";
 import { PUBLISHED_FLOOR_JSON } from "./model/modelCatalog/publishedCatalogFloor.js";
+import { getClaudeConfigDirOrNull, getTeamsDir } from "./envUtils.js";
 import { isProcessRunning } from "./genericProcessUtils.js";
 import { pruneReviewEntriesBefore } from "./settings/settingsReview.js";
 import { isHashTempFile } from "../services/memorySync/syncFiles.js";
@@ -105,7 +112,7 @@ import { mapped, checkCacheFilePermissions } from "./settings/policyCertificates
 import { openHistoryFile, HistoryFileError, HISTORY_FILE_RETRY_OPTIONS } from "./historyFile.js";
 import { lock, releaseLockQuietly } from "./lockfile.js";
 import { resetPlanFileCacheToUnknown } from "./plans.js";
-import { verifySyncRoot, readSyncMarker, checkSyncRoots } from "./claudeAiSync/syncOwnedRoot.js";
+import { verifySyncRoot, readSyncMarker, moveRootToTrashOk } from "./claudeAiSync/syncOwnedRoot.js";
 import { skillWatchStateByHost } from "../skills/skillChangeWatch.js";
 import { scanAllSessions } from "../commands/insights.js";
 import {
@@ -144,6 +151,7 @@ import { readPinnedJobIds, readJobStateFreshOrNull, isSettled } from "../service
 import { isSameProcessAsync } from "./processIdentity.js";
 import { reapJobWorktreeIfSafe, cleanupStaleAgentWorktrees } from "./worktree.js";
 import { sweepJobDrafts } from "../daemon/jobs/draftSweep.js";
+import { renewGlobalConfigBackup } from "./config.js";
 import { nonRegularErrorSet } from "../services/memorySync/pathScrub.js";
 import { lit, fromEnum } from "../services/analytics/safeMetadata.js";
 import { logEvent } from "../services/analytics/index.js";
@@ -152,23 +160,19 @@ import { getMemoryBaseDir, getAutoMemPath } from "../memdir/paths.js";
 import { findModifiedFiles } from "./filePersistence/outputsScanner.js";
 import { cleanupOldImageCaches } from "./imageStore.js";
 import { logRetentionSweep } from "./telemetry/thirdPartyEventRecords.js";
-import { resolveBackupPath } from "./fileHistory.js";
 import { getSessionEnvDirPath } from "./sessionEnvironment.js";
-import { uploadsDir } from "../bridge/inboundAttachments.js";
 import { getDumpPromptsPath } from "../services/api/dumpPrompts.js";
-import { getConfigBackupDir } from "./config.js";
-import { getMcpAuthCachePath } from "../services/mcp/client.js";
 import { cleanupOldPastes } from "./pasteStore.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-kqn19nw9.js:557-596 placement
+//@ chunk-3328vqg0.js:557-596 placement
 /**
  * 匹配 “数字.扩展名” 的图片文件名。
  */
 var IMAGES = "images";
 var IMAGE_FILE_NAME_RE = /^(\d+)\.[a-z]+$/;
-//@ chunk-kqn19nw9.js:596-1076 placement
+//@ chunk-3328vqg0.js:596-1076 placement
 /**
  * 遍历临时目录中各项目下的会话目录（跳过当前会话），删除早于截止时间的 images 子目录，统计删除数与错误数。
  */
@@ -215,7 +219,7 @@ async function cleanupSessionImageDirs(cutoffDate, tempDir) {
   }
   return result;
 }
-//@ chunk-kqn19nw9.js:1076-1698 placement
+//@ chunk-3328vqg0.js:1076-1698 placement
 /**
  * 删除过期的 images 子目录（变新则中止）。
  */
@@ -258,15 +262,15 @@ async function removeStaleImagesDir(imagesDir, cutoffDate) {
     await dirPin.close();
   }
 }
-//@ chunk-23fm9f0d.js:2482-2525 placement
+//@ chunk-pc3x100t.js:2490-2533 placement
 var MCP_SKILL_ARCHIVES = "mcp-skill-archives";
 var META_JSON = "meta.json";
-//@ chunk-23fm9f0d.js:2525-2590 placement
+//@ chunk-pc3x100t.js:2533-2598 placement
 /**
  * 资源元数据（uri、cacheKey、fetchedAt）的 schema。
  */
 var assetMetaSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-23fm9f0d.js:2525", () => {
+deferInit("chunk-pc3x100t.js:2533", () => {
   assetMetaSchema = DoctorLazy(() =>
     objectSchema({
       uri: stringSchema().optional(),
@@ -275,7 +279,7 @@ deferInit("chunk-23fm9f0d.js:2525", () => {
     }),
   );
 });
-//@ chunk-23fm9f0d.js:2590-2679 placement
+//@ chunk-pc3x100t.js:2598-2687 placement
 /**
  * 某目录下的资源元数据 JSON 存储。
  */
@@ -285,14 +289,14 @@ function assetMetaStore(dirPath) {
     ensureDir: true,
   });
 }
-//@ chunk-23fm9f0d.js:2679-2711 placement
+//@ chunk-pc3x100t.js:2687-2719 placement
 /**
  * 内容哈希的十六进制长度（64）。
  */
 var HASH_HEX_CHARS = 64;
 var HASH_PREFIX_CHARS = 16;
 var CONTENT_ADDRESSED_NAME_CHARS = HASH_HEX_CHARS + 2 + HASH_HEX_CHARS + 2 + HASH_PREFIX_CHARS;
-//@ chunk-23fm9f0d.js:2711-2781 placement
+//@ chunk-pc3x100t.js:2719-2789 placement
 /**
  * 读取资源元数据，失败返回 null。
  */
@@ -303,9 +307,9 @@ async function readAssetMetaOrNull(dirPath) {
     return null;
   }
 }
-//@ chunk-23fm9f0d.js:3149-3210 placement
+//@ chunk-pc3x100t.js:3157-3218 placement
 var cacheIndexEntrySchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-23fm9f0d.js:3149", () => {
+deferInit("chunk-pc3x100t.js:3157", () => {
   cacheIndexEntrySchema = DoctorLazy(() =>
     objectSchema({
       key: stringSchema(),
@@ -314,7 +318,7 @@ deferInit("chunk-23fm9f0d.js:3149", () => {
     }),
   );
 });
-//@ chunk-23fm9f0d.js:3210-3995 placement
+//@ chunk-pc3x100t.js:3218-4003 placement
 async function startRetentionSweep(initialDelayMs = REREAD_INITIAL_DELAY_MS) {
   let pluginRegistry = getPluginRegistry();
   let hookWait = {
@@ -349,7 +353,7 @@ async function startRetentionSweep(initialDelayMs = REREAD_INITIAL_DELAY_MS) {
   );
   return waitReason;
 }
-//@ chunk-23fm9f0d.js:3995-4085 placement
+//@ chunk-pc3x100t.js:4003-4093 placement
 /**
  * 桌面会话清理的默认天数（0 表示不清理）。
  */
@@ -361,7 +365,7 @@ var DESKTOP_SIDE_FILES = [
   "sent-prefix.json",
   AUTO_MODE_DUMP_FILES,
 ];
-//@ chunk-23fm9f0d.js:4085-4172 placement
+//@ chunk-pc3x100t.js:4093-4180 placement
 /**
  * 判断文件名是否为规范的会话名（单拼写且小写）。
  */
@@ -374,7 +378,7 @@ function isCanonicalSessionName(name) {
     isNameableSessionId(name)
   );
 }
-//@ chunk-23fm9f0d.js:4172-4329 placement
+//@ chunk-pc3x100t.js:4180-4337 placement
 function isAutoModeStateFile(name) {
   return (
     DESKTOP_SIDE_FILES.some((sideFile) => name === sideFile || isOwnTempName(name, sideFile)) ||
@@ -382,7 +386,7 @@ function isAutoModeStateFile(name) {
     (name.startsWith(AUTO_MODE_ENV_EDIT) && name.endsWith(".md"))
   );
 }
-//@ chunk-23fm9f0d.js:4329-5677 facade-majority
+//@ chunk-pc3x100t.js:4337-5686 facade-majority
 async function retentionCleanupSkipReason(settingsState) {
   if (isDiskless()) return "diskless";
   if (!isSettingSourceEnabled("userSettings") && getSettings_DEPRECATED()?.cleanupPeriodDays === undefined) {
@@ -428,12 +432,12 @@ async function retentionCleanupSkipReason(settingsState) {
   }
   return null;
 }
-//@ chunk-23fm9f0d.js:5677-5740 facade-majority
+//@ chunk-pc3x100t.js:5686-5749 facade-majority
 async function isRetentionCleanupSafe(settingsState, initialDelayMs) {
   await startRetentionSweep(initialDelayMs);
   return (await retentionCleanupSkipReason(settingsState)) === null;
 }
-//@ chunk-23fm9f0d.js:5740-5838 layout
+//@ chunk-pc3x100t.js:5749-5847 layout
 /**
  * 由天数算出清理截止日期（非法日期返回 null）。
  */
@@ -441,7 +445,7 @@ function cutoffDateFromDays(days) {
   let date = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   return Number.isNaN(date.getTime()) ? null : date;
 }
-//@ chunk-23fm9f0d.js:5838-5950 facade-majority (2.1.88 match: getCutoffDate, 1)
+//@ chunk-pc3x100t.js:5847-5959 facade-majority (2.1.88 match: getCutoffDate, 1)
 /**
  * 计算清理截止日期；cleanupPeriodDays=0 时返回 null（不清理）。
  */
@@ -451,32 +455,32 @@ function getCutoffDate(requestedDays) {
   if (requestedDays !== undefined && requestedDays < cleanupPeriodDays) cleanupPeriodDays = requestedDays;
   return cutoffDateFromDays(cleanupPeriodDays);
 }
-//@ chunk-23fm9f0d.js:5950-5989 placement
+//@ chunk-pc3x100t.js:5959-5998 placement
 /**
  * 桌面会话“已释放”标记文件的后缀。
  */
 var DESKTOP_RELEASED_SUFFIX = ".desktop-released.json";
 var MAX_RELEASE_STATE_BYTES = 4096;
-//@ chunk-23fm9f0d.js:5989-6027 placement
+//@ chunk-pc3x100t.js:5998-6036 placement
 /**
  * 由会话文件路径推出其释放状态文件路径。
  */
 function releasedStatePath(transcriptPath) {
   return transcriptPath.slice(0, -6) + DESKTOP_RELEASED_SUFFIX;
 }
-//@ chunk-23fm9f0d.js:6027-6068 placement
+//@ chunk-pc3x100t.js:6036-6077 placement
 /**
  * 释放状态文件的 schema。
  */
 var releaseStateSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-23fm9f0d.js:6027", () => {
+deferInit("chunk-pc3x100t.js:6036", () => {
   releaseStateSchema = DoctorLazy(() =>
     objectSchema({
       reason: stringSchema().optional(),
     }),
   );
 });
-//@ chunk-23fm9f0d.js:6068-6363 placement
+//@ chunk-pc3x100t.js:6077-6372 placement
 async function getDumpReleaseState(statePath, fsImplementation, cutoffDate) {
   let fileFdGated = await fsImplementation.readFileFdGated(statePath, MAX_RELEASE_STATE_BYTES);
   if (fileFdGated === null) return "none";
@@ -491,21 +495,21 @@ async function getDumpReleaseState(statePath, fsImplementation, cutoffDate) {
   if (releaseReason === "archive") return fileFdGated.stats.mtime < cutoffDate ? "release-now" : "grace";
   return "none";
 }
-//@ chunk-23fm9f0d.js:6363-6416 placement
+//@ chunk-pc3x100t.js:6372-6425 placement
 /**
  * 判断释放状态对应的会话 id 是否合法。
  */
 function isValidReleaseSessionId(sessionId) {
   return /^[0-9A-Za-z_-]{1,64}$/.test(sessionId);
 }
-//@ chunk-23fm9f0d.js:6416-6478 layout
+//@ chunk-pc3x100t.js:6425-6487 layout
 /**
  * 取桌面会话清理的截止日期。
  */
 function desktopCleanupCutoff() {
   return getRetentionCutoff("desktopSessionCleanupPeriodDays", DEFAULT_DESKTOP_CLEANUP_DAYS);
 }
-//@ chunk-23fm9f0d.js:6478-6600 placement (2.1.88 match: _temp5, 1)
+//@ chunk-pc3x100t.js:6487-6609 placement (2.1.88 match: _temp5, 1)
 function getRetentionCutoff(policyKey, defaultDays) {
   let userSettingDays = getSettingsForSourceTightenOnly("userSettings")?.[policyKey];
   let days =
@@ -516,7 +520,7 @@ function getRetentionCutoff(policyKey, defaultDays) {
   if (days === 0) return null;
   return cutoffDateFromDays(days);
 }
-//@ chunk-23fm9f0d.js:6600-6782 layout
+//@ chunk-pc3x100t.js:6609-6791 layout
 function isRetentionPolicyManaged() {
   if (getSettingsForSource("policySettings")?.cleanupPeriodDays !== undefined) return true;
   if (anyAdminPolicyTierGovernsRetention()) return true;
@@ -526,11 +530,11 @@ function isRetentionPolicyManaged() {
       (RETENTION_POLICY_KEYS.some((policyKey) => policyKey === issue.path) || issue.severity !== "warning"),
   );
 }
-//@ chunk-23fm9f0d.js:6782-6833 facade-majority
+//@ chunk-pc3x100t.js:6791-6842 facade-majority
 function isRetentionExemptionDisabled() {
   return isRetentionPolicyManaged() || hasComplianceTaint("hipaa") || hasComplianceTaint("zdr");
 }
-//@ chunk-23fm9f0d.js:6833-6913 layout
+//@ chunk-pc3x100t.js:6842-6922 layout
 function emptyCleanupResult() {
   return {
     messages: 0,
@@ -539,7 +543,7 @@ function emptyCleanupResult() {
     filesPastCutoff: 0,
   };
 }
-//@ chunk-23fm9f0d.js:6913-7106 layout
+//@ chunk-pc3x100t.js:6922-7115 layout
 function addCleanupResults(target, source) {
   return {
     messages: target.messages + source.messages,
@@ -548,19 +552,19 @@ function addCleanupResults(target, source) {
     filesPastCutoff: target.filesPastCutoff + source.filesPastCutoff,
   };
 }
-//@ chunk-23fm9f0d.js:7106-7217 fingerprint (2.1.88 match: convertFileNameToDate, 1)
+//@ chunk-pc3x100t.js:7115-7226 fingerprint (2.1.88 match: convertFileNameToDate, 1)
 function convertFileNameToDate(filename) {
   let isoStr = firstLineOf(filename, ".").replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z/, "T$1:$2:$3.$4Z");
   return new Date(isoStr);
 }
-//@ chunk-23fm9f0d.js:7217-7253 facade-majority
+//@ chunk-pc3x100t.js:7226-7262 facade-majority
 /**
  * 清理时可静默忽略的文件系统错误（不存在/已删除等）。
  */
 function isCleanupQuietFsErrno(error) {
   return isFsInaccessible(error) || isEnvFsErrno(error);
 }
-//@ chunk-23fm9f0d.js:7253-7611 layout
+//@ chunk-pc3x100t.js:7262-7620 layout
 async function cleanupFilesByNameDate(dirPath, cutoffDate, isMessagePath) {
   let result = emptyCleanupResult();
   try {
@@ -587,7 +591,7 @@ async function cleanupFilesByNameDate(dirPath, cutoffDate, isMessagePath) {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:7611-8033 fingerprint (2.1.88 match: cleanupOldMessageFiles, 0.7)
+//@ chunk-pc3x100t.js:7620-8042 fingerprint (2.1.88 match: cleanupOldMessageFiles, 0.7)
 async function cleanupOldMessageFiles() {
   let fsImpl = getFsImplementation();
   let cutoffDate = getCutoffDate();
@@ -619,7 +623,7 @@ async function cleanupOldMessageFiles() {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:8033-8321 fingerprint (2.1.88 match: unlinkIfOld, 0.686)
+//@ chunk-pc3x100t.js:8042-8330 fingerprint (2.1.88 match: unlinkIfOld, 0.685)
 async function unlinkIfOld(
   filePath,
   cutoffDate,
@@ -649,19 +653,19 @@ async function unlinkIfOld(
   }
   return true;
 }
-//@ chunk-23fm9f0d.js:8321-8396 fingerprint (2.1.88 match: tryRmdir, 1)
+//@ chunk-pc3x100t.js:8330-8405 fingerprint (2.1.88 match: tryRmdir, 1)
 async function tryRmdir(dirPath, fsImpl) {
   if (!(await isDirectory(dirPath, fsImpl))) return;
   try {
     await fsImpl.rmdir(dirPath);
   } catch {}
 }
-//@ chunk-23fm9f0d.js:8396-8413 layout
+//@ chunk-pc3x100t.js:8405-8422 layout
 var SESSION_SUBDIR_NAMES; // deferred: uses CLOUD_SNAPSHOTS_DIR (./storage/storageKeys.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-23fm9f0d.js:8396", () => {
+deferInit("chunk-pc3x100t.js:8405", () => {
   SESSION_SUBDIR_NAMES = [ARCHIVE_SYNC, FOLDER_SYNC];
 });
-//@ chunk-23fm9f0d.js:8413-9470 layout
+//@ chunk-pc3x100t.js:8422-9479 layout
 async function cleanupSessionDir(sessionDir, cutoffDate, fsImpl, result) {
   try {
     for (let subdirName of SESSION_SUBDIR_NAMES)
@@ -740,7 +744,7 @@ async function cleanupSessionDir(sessionDir, cutoffDate, fsImpl, result) {
     if (!isENOENT(error)) result.errors++;
   }
 }
-//@ chunk-23fm9f0d.js:9470-9957 layout
+//@ chunk-pc3x100t.js:9479-9966 layout
 async function cleanupDirFiles(dirPath, cutoffDate, fsImpl, result) {
   if (!(await isDirectory(dirPath, fsImpl))) return;
   let entries = await fsImpl.readdir(dirPath).catch(() => []);
@@ -777,7 +781,7 @@ async function cleanupDirFiles(dirPath, cutoffDate, fsImpl, result) {
   }
   await tryRmdir(dirPath, fsImpl);
 }
-//@ chunk-23fm9f0d.js:9957-10234 layout
+//@ chunk-pc3x100t.js:9966-10243 layout
 async function entryKind(dirent, entryPath, fsImpl) {
   if (dirent.isDirectory()) return "directory";
   if (dirent.isFile()) return "file";
@@ -792,11 +796,11 @@ async function entryKind(dirent, entryPath, fsImpl) {
   let stats = await fsImpl.lstat(entryPath);
   return stats.isDirectory() ? "directory" : stats.isFile() ? "file" : "other";
 }
-//@ chunk-23fm9f0d.js:10234-10289 file-local
+//@ chunk-pc3x100t.js:10243-10298 file-local
 async function cleanupOldVersionsThrottled(dirPath, fsImpl) {
   return (await fsImpl.lstat(dirPath)).mtimeMs;
 }
-//@ chunk-23fm9f0d.js:10289-10515 callgraph-witnessed (2.1.88 match: cleanupOldSessionFiles, 0.308)
+//@ chunk-pc3x100t.js:10298-10524 callgraph-witnessed (2.1.88 match: cleanupOldSessionFiles, 0.307)
 async function cleanupOldSessionFiles(result) {
   let cutoffDate = getCutoffDate();
   let result_2 = emptyCleanupResult();
@@ -813,7 +817,7 @@ async function cleanupOldSessionFiles(result) {
   }
   return result_2;
 }
-//@ chunk-23fm9f0d.js:10515-10798 affinity
+//@ chunk-pc3x100t.js:10524-10807 affinity
 async function removeGitObjectsDir(gitDirPath, fsImpl) {
   let currentDir = gitDirPath;
   let removedAny = false;
@@ -837,7 +841,7 @@ async function removeGitObjectsDir(gitDirPath, fsImpl) {
   }
   return removedAny;
 }
-//@ chunk-23fm9f0d.js:10798-10879 affinity
+//@ chunk-pc3x100t.js:10807-10888 affinity
 async function isDirectory(dirPath, fsImpl) {
   try {
     return (await fsImpl.lstat(dirPath)).isDirectory();
@@ -845,7 +849,7 @@ async function isDirectory(dirPath, fsImpl) {
     return false;
   }
 }
-//@ chunk-23fm9f0d.js:10879-11309 affinity
+//@ chunk-pc3x100t.js:10888-11318 affinity
 async function cleanupTreeRecursive(dirPath, cutoffDate, fsImplementation, result, options = {}) {
   let { entryMatcher } = options;
   let entries = await fsImplementation.readdir(dirPath).catch((error) => {
@@ -875,7 +879,7 @@ async function cleanupTreeRecursive(dirPath, cutoffDate, fsImplementation, resul
   }
   await tryRmdir(dirPath, fsImplementation);
 }
-//@ chunk-23fm9f0d.js:11802-16138 placement
+//@ chunk-pc3x100t.js:11811-16190 placement
 /**
  * 按保留期清理旧会话转录（hipaa/zdr/桌面端等情况豁免）。
  */
@@ -892,7 +896,8 @@ async function cleanupOldTranscripts() {
   let projectEntries;
   try {
     projectEntries = await fsImplementation.readdir(projectsDir);
-  } catch {
+  } catch (error) {
+    if (!isENOENT(error)) result.errors++;
     return result;
   }
   let tempDir;
@@ -904,7 +909,7 @@ async function cleanupOldTranscripts() {
   }
   let isExemptionDisabled = isRetentionExemptionDisabled();
   let desktopCutoff = desktopCleanupCutoff();
-  let buf = null;
+  let exemptionDisabled = null;
   let shouldExempt = isExemptionDisabled
     ? undefined
     : async (transcriptPath, stats) => {
@@ -931,8 +936,8 @@ async function cleanupOldTranscripts() {
             return true;
           }
         }
-        buf ??= Buffer.allocUnsafe(LITE_READ_BUF_SIZE);
-        let { head, tail } = await readHeadAndTail(transcriptPath, stats.size, buf);
+        exemptionDisabled ??= Buffer.allocUnsafe(LITE_READ_BUF_SIZE);
+        let { head, tail } = await readHeadAndTail(transcriptPath, stats.size, exemptionDisabled);
         if (head === "" && stats.size > 0) {
           await fsImplementation.stat(transcriptPath);
           throw Error(
@@ -940,11 +945,11 @@ async function cleanupOldTranscripts() {
           );
         }
         let tailText = stats.size > LITE_READ_BUF_SIZE ? anchorOffsetTail(tail) : tail;
-        let entrypoint = extractFieldFromFirstEntryStrict(head, "entrypoint");
-        let entrypoint_2 = extractFieldFromLastEntryStrict(tailText, "entrypoint");
+        let firstEntrypoint = extractFieldFromFirstEntryStrict(head, "entrypoint");
+        let lastEntrypoint = extractFieldFromLastEntryStrict(tailText, "entrypoint");
         if (!(
-          (entrypoint !== undefined && isHostEntrypointName(entrypoint)) ||
-          (entrypoint_2 !== undefined && isHostEntrypointName(entrypoint_2))
+          (firstEntrypoint !== undefined && isHostEntrypointName(firstEntrypoint)) ||
+          (lastEntrypoint !== undefined && isHostEntrypointName(lastEntrypoint))
         ))
           return false;
         let sessionId = basename(transcriptPath).startsWith("agent-")
@@ -1036,21 +1041,22 @@ async function cleanupOldTranscripts() {
                   .catch(() => {
                     result.errors++;
                   });
-                if (tempDir !== null) {
-                  let tempSessionDir = join(tempDir, projectEntry.name);
-                  let tempSessionStats = await fsImplementation.lstat(tempSessionDir).catch(() => null);
-                  if (tempSessionStats?.isDirectory()) {
-                    await fsImplementation
-                      .rm(join(tempSessionDir, name), {
-                        recursive: true,
-                        force: true,
-                      })
-                      .catch(() => {
-                        result.errors++;
-                      });
-                    if (tempSessionStats.mtime < cutoffDate) await tryRmdir(tempSessionDir, fsImplementation);
+                if (tempDir !== null)
+                  for (let dirName of projectTempDirNames(projectEntry.name)) {
+                    let projectPath = join(tempDir, dirName);
+                    let tempSessionStats = await fsImplementation.lstat(projectPath).catch(() => null);
+                    if (tempSessionStats?.isDirectory()) {
+                      await fsImplementation
+                        .rm(join(projectPath, name), {
+                          recursive: true,
+                          force: true,
+                        })
+                        .catch(() => {
+                          result.errors++;
+                        });
+                      if (tempSessionStats.mtime < cutoffDate) await tryRmdir(projectPath, fsImplementation);
+                    }
                   }
-                }
               }
             }
           }
@@ -1185,7 +1191,7 @@ async function cleanupOldTranscripts() {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:16138-16495 placement
+//@ chunk-pc3x100t.js:16190-16547 placement
 /**
  * 删除目录中名字匹配（后缀或谓词）且早于保留期截止时间的文件，统计删除数与错误数，可选在清空后删除目录。
  */
@@ -1222,7 +1228,7 @@ async function cleanupOldFilesMatching(
   if (removeEmptyDir) await tryRmdir(dirPath, fsImplementation);
   return result;
 }
-//@ chunk-23fm9f0d.js:16495-16721 placement
+//@ chunk-pc3x100t.js:16547-16773 placement
 async function cleanupHfiAuthFile() {
   let result = emptyCleanupResult();
   let cutoffDate = getCutoffDate();
@@ -1240,7 +1246,7 @@ async function cleanupHfiAuthFile() {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:16721-16989 placement
+//@ chunk-pc3x100t.js:16773-17041 placement
 async function cleanupTeamDiscoveryCache() {
   let result = emptyCleanupResult();
   let cutoffDate = getCutoffDate();
@@ -1260,7 +1266,7 @@ async function cleanupTeamDiscoveryCache() {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:16989-17238 placement
+//@ chunk-pc3x100t.js:17041-17290 placement
 async function cleanupModelAccessMemory() {
   let result = emptyCleanupResult();
   let cutoffDate = getCutoffDate();
@@ -1280,7 +1286,7 @@ async function cleanupModelAccessMemory() {
     }
   return result;
 }
-//@ chunk-23fm9f0d.js:17238-17344 placement
+//@ chunk-pc3x100t.js:17290-17396 placement
 async function cleanupModelCatalogCache() {
   return cleanupOldFilesMatching(
     modelCatalogCacheDir(),
@@ -1290,7 +1296,30 @@ async function cleanupModelCatalogCache() {
       (fileName.endsWith(".json") || fileName.includes(".json.tmp.")),
   );
 }
-//@ chunk-23fm9f0d.js:17604-17882 sole-consumer
+//@ chunk-pc3x100t.js:17396-17656 layout
+/**
+ * getMcpAuthCachePath：needs-auth 缓存文件路径（<配置目录>/mcp-needs-auth-cache.json）。
+ */
+async function cleanupMcpAuthCache() {
+  let result = emptyCleanupResult();
+  let cutoffDate = getCutoffDate();
+  if (cutoffDate === null) return result;
+  let cachePath = join(getClaudeConfigDir(), "mcp-needs-auth-cache.json");
+  try {
+    if (await unlinkIfOld(cachePath, cutoffDate, getFsImplementation(), result)) result.messages++;
+  } catch (error) {
+    if (!isENOENT(error)) {
+      result.errors++;
+      if (isCleanupQuietFsErrno(error))
+        logForDebugging(`cleanup mcp-auth-cache failed: ${error.code}`, {
+          level: "error",
+        });
+      else logError(error);
+    }
+  }
+  return result;
+}
+//@ chunk-pc3x100t.js:17656-17934 layout
 async function cleanupDeviceUnboundCreates() {
   let result = emptyCleanupResult();
   let cutoffDate = getCutoffDate();
@@ -1310,7 +1339,7 @@ async function cleanupDeviceUnboundCreates() {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:17882-18158 sole-consumer
+//@ chunk-pc3x100t.js:17934-18210 layout
 async function cleanupMcpDiscoverVerdicts() {
   let result = emptyCleanupResult();
   let cutoffDate = getCutoffDate();
@@ -1330,7 +1359,7 @@ async function cleanupMcpDiscoverVerdicts() {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:18158-18450 sole-consumer
+//@ chunk-pc3x100t.js:18210-18502 layout
 async function cleanupDeviceMcpNotNow() {
   let result = emptyCleanupResult();
   let cutoffDate = getCutoffDate();
@@ -1351,7 +1380,7 @@ async function cleanupDeviceMcpNotNow() {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:18450-18615 sole-consumer
+//@ chunk-pc3x100t.js:18502-18667 layout
 async function cleanupServedCalls(dirPath = join(homedir(), ".claude", "state", "served-calls")) {
   return cleanupOldFilesMatching(
     dirPath,
@@ -1361,7 +1390,7 @@ async function cleanupServedCalls(dirPath = join(homedir(), ".claude", "state", 
     getRetentionCutoff("cleanupPeriodDays", CEL_MAX_ITEMS),
   );
 }
-//@ chunk-23fm9f0d.js:18615-18850 sole-consumer
+//@ chunk-pc3x100t.js:18667-18902 layout
 async function cleanupUnattendedServingRuns(
   dirPath = join(homedir(), ".claude", "state", "unattended-serving-runs"),
 ) {
@@ -1376,7 +1405,7 @@ async function cleanupUnattendedServingRuns(
     getRetentionCutoff("cleanupPeriodDays", CEL_MAX_ITEMS),
   );
 }
-//@ chunk-23fm9f0d.js:18850-19058 sole-consumer
+//@ chunk-pc3x100t.js:18902-19110 layout
 async function cleanupSettingsReviewStore(storageV5) {
   let result = emptyCleanupResult();
   let cutoffDate = getCutoffDate();
@@ -1393,7 +1422,7 @@ async function cleanupSettingsReviewStore(storageV5) {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:19058-19260 sole-consumer
+//@ chunk-pc3x100t.js:19110-19312 layout
 function isMalformedHistoryEntry(line) {
   if (!line) return false;
   try {
@@ -1406,7 +1435,7 @@ function isMalformedHistoryEntry(line) {
     return true;
   }
 }
-//@ chunk-23fm9f0d.js:19260-19457 sole-consumer
+//@ chunk-pc3x100t.js:19312-19509 layout
 function isHistoryEntryOlderThan(line, cutoffMs) {
   if (!line) return false;
   try {
@@ -1418,7 +1447,7 @@ function isHistoryEntryOlderThan(line, cutoffMs) {
     return false;
   }
 }
-//@ chunk-23fm9f0d.js:19457-19782 sole-consumer
+//@ chunk-pc3x100t.js:19509-19834 layout
 /**
  * 删除配置目录中早于截止时间的自有临时文件（history.jsonl、远程设置同意文件等的临时副本）；缓存文件改为检查权限而不删除。
  */
@@ -1451,7 +1480,7 @@ async function cleanupStaleConfigTempFiles(claudeConfigDir, cutoffDate) {
       }),
   );
 }
-//@ chunk-23fm9f0d.js:19782-21710 sole-consumer
+//@ chunk-pc3x100t.js:19834-21761 layout
 /**
  * 按保留期裁剪 history.jsonl：先无锁扫描去掉过期/格式错误的条目，加锁后核对文件身份与大小、扫描新增尾部，原子重写；文件在扫描期间变化则推迟，锁被破坏时放弃。
  */
@@ -1569,7 +1598,7 @@ async function pruneHistoryFile(cutoff) {
         errors: 0,
       };
     let combined = headScan.kept.concat(tailScan.kept);
-    await publishWriteAtomic(
+    await filePath(
       historyPath,
       combined.length
         ? `${combined.join(`
@@ -1603,7 +1632,7 @@ async function pruneHistoryFile(cutoff) {
     await releaseLockQuietly(release, "history retention");
   }
 }
-//@ chunk-23fm9f0d.js:21710-22112 affinity
+//@ chunk-pc3x100t.js:21761-22163 layout
 async function cleanupMcpDiscoveryCache() {
   let cacheDir = join(getClaudeConfigDir(), "mcp-discovery-cache");
   let result = await cleanupOldFilesMatching(
@@ -1635,7 +1664,7 @@ async function cleanupMcpDiscoveryCache() {
   await tryRmdir(cacheDir, fsImplementation);
   return result;
 }
-//@ chunk-23fm9f0d.js:22112-22295 fingerprint (2.1.88 match: cleanupOldPlanFiles, 0.745)
+//@ chunk-pc3x100t.js:22163-22346 fingerprint (2.1.88 match: cleanupOldPlanFiles, 0.743)
 async function cleanupOldPlanFiles(baseDir) {
   if (isDiskless()) return emptyCleanupResult();
   let plansDir = join(getClaudeConfigDir(), "plans");
@@ -1650,7 +1679,7 @@ async function cleanupOldPlanFiles(baseDir) {
     resetPlanFileCacheToUnknown();
   }
 }
-//@ chunk-23fm9f0d.js:22295-22892 placement (2.1.88 match: getSessionId, 0)
+//@ chunk-pc3x100t.js:22346-22943 placement (2.1.88 match: getSessionId, 0)
 async function cleanupOldFilesInDirectory(
   subdirName,
   {
@@ -1711,11 +1740,22 @@ async function cleanupOldFilesInDirectory(
   if (removeEmptyBaseDir) await tryRmdir(rootDir, fsImplementation);
   return result;
 }
-//@ chunk-23fm9f0d.js:22969-23001 placement (2.1.88 match: getTaskOutputDir, 1)
+//@ chunk-pc3x100t.js:22943-22982 affinity (2.1.88 match: resolveBackupPath, 1)
+/**
+ * 取会话的 file-history 目录（误配名 resolveBackupPath）。
+ */
+function resolveBackupPath() {
+  return cleanupOldFilesInDirectory("file-history");
+}
+//@ chunk-pc3x100t.js:23020-23052 placement (2.1.88 match: getTaskOutputDir, 1)
 function getTaskOutputDir() {
   return cleanupOldFilesInDirectory("tasks");
 }
-//@ chunk-23fm9f0d.js:23035-23195 sole-consumer
+//@ chunk-pc3x100t.js:23052-23086 layout (2.1.88 match: uploadsDir, 1)
+function uploadsDir() {
+  return cleanupOldFilesInDirectory("uploads");
+}
+//@ chunk-pc3x100t.js:23086-23246 layout
 function cleanupDevMods() {
   let folder = skillWatchStateByHost.get()?.folder;
   let options = getCutoffDate();
@@ -1725,13 +1765,13 @@ function cleanupDevMods() {
     removeEmptyBaseDir: false,
   });
 }
-//@ chunk-23fm9f0d.js:23195-23209 sole-consumer
+//@ chunk-pc3x100t.js:23246-23260 layout
 /**
  * 扫描会话时的最大数量参数（3）。
  */
 var SCAN_SESSIONS_MAX = 3;
 var PEER_SPOOL_MAX_AGE_DAYS = 2;
-//@ chunk-23fm9f0d.js:23209-23384 sole-consumer
+//@ chunk-pc3x100t.js:23260-23435 layout
 async function cleanupBashEditDiffs() {
   let bashEditDiffDir = getBashEditDiffDir();
   let dirIdentity = await statOwnedPrivateDir(bashEditDiffDir).catch(() => null);
@@ -1743,7 +1783,7 @@ async function cleanupBashEditDiffs() {
     skipIf: async (dirPath) => !(await getFileIdentity(dirPath, dirIdentity)),
   });
 }
-//@ chunk-23fm9f0d.js:23384-23581 sole-consumer
+//@ chunk-pc3x100t.js:23435-23632 layout
 async function sweepSeedAdminSafely() {
   try {
     return await sweepSeedAdmin();
@@ -1761,7 +1801,7 @@ async function sweepSeedAdminSafely() {
     };
   }
 }
-//@ chunk-23fm9f0d.js:23581-23949 sole-consumer
+//@ chunk-pc3x100t.js:23632-24000 layout
 /**
  * 清理过期的 bridge-spawn 目录：v5 存储可用时先按作用域删除；否则在自有私有目录中删除过期子目录，并核对目录身份与真实路径防止被重定向。
  */
@@ -1789,7 +1829,7 @@ async function cleanupBridgeSpawnDirs(scopeBackend) {
     },
   });
 }
-//@ chunk-23fm9f0d.js:23949-24361 sole-consumer
+//@ chunk-pc3x100t.js:24000-24412 layout
 /**
  * 通过 v5 存储删除 bridge-spawn 作用域中早于保留期的对象；作用域无法寻址时返回 unaddressed 让调用方回退到文件系统清理。
  */
@@ -1814,14 +1854,14 @@ async function cleanupBridgeSpawnScope(scopeBackend) {
   result.errors += deleteResult.value.failed ?? 0;
   return result;
 }
-//@ chunk-23fm9f0d.js:24361-24401 sole-consumer
+//@ chunk-pc3x100t.js:24412-24452 layout
 /**
  * 清理 peer 文件传输的暂存目录。
  */
 function cleanupPeerTransferSpool() {
   return cleanupOldFilesMatching(peerTransferSpoolDir(), "", false, PEER_TRANSFER_VERSION);
 }
-//@ chunk-23fm9f0d.js:24401-24552 sole-consumer
+//@ chunk-pc3x100t.js:24452-24603 layout
 async function cleanupSkillsSyncDirs(storageV5) {
   return addCleanupResults(
     addCleanupResults(
@@ -1837,7 +1877,7 @@ async function cleanupSkillsSyncDirs(storageV5) {
     await cleanupPerAccountSyncDirs(SKILLS_SYNC_DIR_2, storageV5),
   );
 }
-//@ chunk-23fm9f0d.js:24552-24949 sole-consumer
+//@ chunk-pc3x100t.js:24603-25000 layout
 /**
  * 在配置目录下指定根（拒绝被重定向的根）中，对每个合法账号子目录清理其同步子目录中的过期文件，合并结果。
  */
@@ -1880,7 +1920,7 @@ async function cleanupPerAccountSyncDirs(syncDirName, storageV5) {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:24949-25207 sole-consumer
+//@ chunk-pc3x100t.js:25000-25258 layout
 async function cleanupTrashRoots(storageV5) {
   let result = emptyCleanupResult();
   let claudeConfigDir = getClaudeConfigDir();
@@ -1910,7 +1950,7 @@ async function cleanupTrashRoots(storageV5) {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:25207-25274 sole-consumer
+//@ chunk-pc3x100t.js:25258-25325 layout
 /**
  * 清理同步根下过期的账号目录（跳过当前账号与未标记目录）。
  */
@@ -1920,7 +1960,7 @@ function cleanupAccountSyncDirs(storageV5) {
     storageV5,
   });
 }
-//@ chunk-23fm9f0d.js:25274-26012 sole-consumer
+//@ chunk-pc3x100t.js:25325-26063 layout
 /**
  * 清理同步根目录下过期的账号目录：跳过当前账号与未标记目录，按清单文件或目录 mtime 判断是否过期，核对同步根后移到回收位置并计数。
  */
@@ -1979,7 +2019,7 @@ async function cleanupStaleSyncRoots(rootLabel, trashLabel, failureEvent, storag
     }
     result.filesPastCutoff++;
     if (
-      await checkSyncRoots({
+      await moveRootToTrashOk({
         dir: entryDir,
         trashRoot: join(configDir, trashLabel),
         configHome: configDir,
@@ -1993,7 +2033,7 @@ async function cleanupStaleSyncRoots(rootLabel, trashLabel, failureEvent, storag
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:26012-26080 sole-consumer
+//@ chunk-pc3x100t.js:26063-26131 layout
 /**
  * 清理插件同步的回收根目录。
  */
@@ -2005,7 +2045,7 @@ function cleanupPluginsSyncTrashRoots(storageV5) {
     storageV5,
   );
 }
-//@ chunk-23fm9f0d.js:26080-26147 sole-consumer
+//@ chunk-pc3x100t.js:26131-26198 layout
 /**
  * 清理技能同步的回收根目录。
  */
@@ -2017,7 +2057,7 @@ function cleanupSkillsSyncTrashRoots(storageV5) {
     storageV5,
   );
 }
-//@ chunk-23fm9f0d.js:26147-26214 sole-consumer
+//@ chunk-pc3x100t.js:26198-26265 layout
 /**
  * 清理插件同步根下的过期条目。
  */
@@ -2027,7 +2067,7 @@ function cleanupPluginsSyncRootEntries(storageV5) {
     storageV5,
   });
 }
-//@ chunk-23fm9f0d.js:26214-26311 sole-consumer
+//@ chunk-pc3x100t.js:26265-26362 layout
 /**
  * 清理自有同步根与按账号同步目录。
  */
@@ -2040,7 +2080,7 @@ async function cleanupOwnedSyncRoots(storageV5) {
     await cleanupPerAccountSyncDirs(SKILLS_SYNCED_STAGING, storageV5),
   );
 }
-//@ chunk-23fm9f0d.js:26311-26469 sole-consumer
+//@ chunk-pc3x100t.js:26362-26520 layout
 async function cleanupPluginStore() {
   let storeDir = join(getPluginsDirectory(), "store");
   let result = await cleanupOldFilesMatching(
@@ -2052,7 +2092,7 @@ async function cleanupPluginStore() {
   if (cutoffDate !== null) await cleanupDirFiles(storeDir, cutoffDate, getFsImplementation(), result);
   return result;
 }
-//@ chunk-23fm9f0d.js:26469-26521 affinity
+//@ chunk-pc3x100t.js:26520-26572 layout
 /**
  * 清理已移出或不可读的插件文件。
  */
@@ -2063,7 +2103,7 @@ function cleanupRemovedPluginFiles() {
     false,
   );
 }
-//@ chunk-23fm9f0d.js:26521-27094 fingerprint (2.1.88 match: cleanupOldSessionEnvDirs, 0.762)
+//@ chunk-pc3x100t.js:26572-27145 fingerprint (2.1.88 match: cleanupOldSessionEnvDirs, 0.761)
 async function cleanupOldSessionEnvDirs() {
   let cutoffDate = getCutoffDate();
   let result = emptyCleanupResult();
@@ -2117,7 +2157,7 @@ async function cleanupOldSessionEnvDirs() {
   await tryRmdir(archivesDir, fsImpl);
   return result;
 }
-//@ chunk-23fm9f0d.js:27094-27383 layout
+//@ chunk-pc3x100t.js:27145-27434 layout
 async function cleanupUsageData() {
   let usageDir = join(getClaudeConfigDir(), "usage-data");
   let result = await cleanupOldFilesMatching(
@@ -2142,7 +2182,7 @@ async function cleanupUsageData() {
   await tryRmdir(usageDir, getFsImplementation());
   return result;
 }
-//@ chunk-23fm9f0d.js:27383-27856 layout
+//@ chunk-pc3x100t.js:27434-27907 layout
 async function cleanupTempTranscripts() {
   let cutoffDate = getCutoffDate();
   let result = emptyCleanupResult();
@@ -2177,7 +2217,7 @@ async function cleanupTempTranscripts() {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:27856-28265 placement (2.1.88 match: getOverlayPath, 0.436)
+//@ chunk-pc3x100t.js:27907-28316 placement (2.1.88 match: getOverlayPath, 0.437)
 /**
  * 清理过期的 speculation 目录（utils/cleanup 的一部分）。旧版名 getOverlayPath 为错配。
  */
@@ -2220,7 +2260,7 @@ async function cleanupOldSpeculationDir() {
   await tryRmdir(speculationDir, fsImplementation);
   return result;
 }
-//@ chunk-23fm9f0d.js:28265-28431 affinity
+//@ chunk-pc3x100t.js:28316-28482 affinity
 async function cleanupShares() {
   let sharesDir = join(getClaudeConfigDir(), "shares");
   let result = await cleanupOldFilesInDirectory("shares");
@@ -2235,7 +2275,7 @@ async function cleanupShares() {
   await tryRmdir(sharesDir, getFsImplementation());
   return result;
 }
-//@ chunk-23fm9f0d.js:28431-28667 affinity
+//@ chunk-pc3x100t.js:28482-28718 affinity
 async function cleanupTelemetry() {
   let telemetryDir = join(getClaudeConfigDir(), "telemetry");
   let result = await cleanupOldFilesMatching(telemetryDir, ".json", false);
@@ -2250,14 +2290,16 @@ async function cleanupTelemetry() {
   await tryRmdir(telemetryDir, getFsImplementation());
   return result;
 }
-//@ chunk-23fm9f0d.js:28730-28789 placement
+//@ chunk-pc3x100t.js:28781-28840 placement
 /**
  * 清理 shell-snapshots 目录下过期的快照文件。
  */
 function cleanupShellSnapshots() {
   return cleanupOldFilesMatching(join(getClaudeConfigDir(), "shell-snapshots"), ".sh", false);
 }
-//@ chunk-23fm9f0d.js:28789-29195 placement
+//@ chunk-pc3x100t.js:28840-28902 layout
+var DELETED_FILE_SUFFIX_RE = /\.deleted-[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
+//@ chunk-pc3x100t.js:28902-29419 placement
 /**
  * 清理团队目录下各 inboxes 中过期的消息 JSON 文件，并删除空目录。
  */
@@ -2269,6 +2311,18 @@ async function cleanupTeamInboxes() {
   let teamsDir = getTeamsDir();
   for (let teamEntry of await fsImplementation.readdir(teamsDir).catch(() => [])) {
     if (!teamEntry.isDirectory()) continue;
+    if (DELETED_FILE_SUFFIX_RE.test(teamEntry.name)) {
+      try {
+        await fsImplementation.rm(join(teamsDir, teamEntry.name), {
+          recursive: true,
+          force: true,
+        });
+        result.messages++;
+      } catch {
+        result.errors++;
+      }
+      continue;
+    }
     let inboxesDir = join(teamsDir, teamEntry.name, "inboxes");
     if (await isDirectory(inboxesDir, fsImplementation)) {
       for (let inboxEntry of await fsImplementation.readdir(inboxesDir).catch(() => [])) {
@@ -2286,7 +2340,7 @@ async function cleanupTeamInboxes() {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:29195-29956 placement
+//@ chunk-pc3x100t.js:29419-30180 placement
 /**
  * 清理临时目录中他人遗留、只含过期 stderr.log 的 cc-daemon-* 私有目录（确认归属与 inode 未变后删除）。
  */
@@ -2345,17 +2399,17 @@ async function cleanupDaemonStderrDirs(cutoff, tmpDir = tmpdir_2()) {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:29956-30000 placement
+//@ chunk-pc3x100t.js:30180-30224 placement
 var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-23fm9f0d.js:29956", () => {
+deferInit("chunk-pc3x100t.js:30180", () => {
   regExp = new RegExp(`^${PDF_SCRATCH_DIR_PREFIX}[A-Za-z0-9]{6}$`);
 });
-//@ chunk-23fm9f0d.js:30000-30044 placement
+//@ chunk-pc3x100t.js:30224-30268 placement
 var regExp_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-23fm9f0d.js:30000", () => {
+deferInit("chunk-pc3x100t.js:30224", () => {
   regExp_2 = new RegExp(`^${PREVIEW_COPY_DIR_PREFIX}[A-Za-z0-9]{6}$`);
 });
-//@ chunk-23fm9f0d.js:30044-30553 placement
+//@ chunk-pc3x100t.js:30268-30777 placement
 /**
  * 清理临时目录中匹配模式的过期私有目录（整棵树都早于截止时间时递归删除）。
  */
@@ -2404,7 +2458,7 @@ async function cleanupOldTempDirs(cutoff = getCutoffDate(), tmpDir = tmpdir()) {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:30553-32645 placement
+//@ chunk-pc3x100t.js:30777-32869 placement
 /**
  * 清理后台守护相关的旧文件：已结算作业与派发记录、无对应作业的 host-managed 文件、过期作业目录（排除固定作业与名册中存活 worker 的作业，必要时回收作业工作树）、daemon 临时 stderr、daemon.log、过期名册与损坏名册备份，以及作业草稿。
  */
@@ -2556,7 +2610,13 @@ async function cleanupDaemonFiles(storageV5, storageBackend) {
   await sweepJobDrafts();
   return result;
 }
-//@ chunk-23fm9f0d.js:32693-32955 fingerprint (2.1.88 match: cleanupOldDebugLogs, 0.819)
+//@ chunk-pc3x100t.js:32869-32968 layout (2.1.88 match: getConfigBackupDir, 1)
+async function getConfigBackupDir() {
+  let config = getCutoffDate();
+  if (config !== null) await renewGlobalConfigBackup(config);
+  return cleanupOldFilesMatching(join(getClaudeConfigDir(), "backups"), "", false, undefined, config);
+}
+//@ chunk-pc3x100t.js:32968-33230 fingerprint (2.1.88 match: cleanupOldDebugLogs, 0.819)
 async function cleanupOldDebugLogs() {
   let cutoffDate = getCutoffDate();
   let result = emptyCleanupResult();
@@ -2579,11 +2639,11 @@ async function cleanupOldDebugLogs() {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:32955-33019 layout
+//@ chunk-pc3x100t.js:33230-33294 layout
 async function cleanupFeedbackBundles() {
   return cleanupOldFilesMatching(join(getClaudeConfigDir(), "feedback-bundles"), ".zip");
 }
-//@ chunk-23fm9f0d.js:33019-33134 layout
+//@ chunk-pc3x100t.js:33294-33409 layout
 async function cleanupFeedbackDrafts() {
   return cleanupOldFilesMatching(
     join(getClaudeConfigDir(), "feedback", "drafts"),
@@ -2592,7 +2652,7 @@ async function cleanupFeedbackDrafts() {
     30,
   );
 }
-//@ chunk-23fm9f0d.js:33134-33466 layout
+//@ chunk-pc3x100t.js:33409-33741 layout
 async function cleanupRemoteControlForkSeeds() {
   let forkSeedsDir = join(getClaudeConfigDir(), "remote-control", "fork-seeds");
   let result = await cleanupOldFilesMatching(
@@ -2612,40 +2672,40 @@ async function cleanupRemoteControlForkSeeds() {
     }
   return result;
 }
-//@ chunk-23fm9f0d.js:33466-33628 layout
+//@ chunk-pc3x100t.js:33741-33903 layout
 async function cleanupTracesAndStartupPerf() {
   let result = await cleanupOldFilesMatching(join(getClaudeConfigDir(), "traces"), ".json");
   let perfResult = await cleanupOldFilesMatching(join(getClaudeConfigDir(), "startup-perf"), ".txt");
   let perfJsonResult = await cleanupOldFilesMatching(join(getClaudeConfigDir(), "startup-perf"), ".json");
   return addCleanupResults(addCleanupResults(result, perfResult), perfJsonResult);
 }
-//@ chunk-23fm9f0d.js:33628-33651 layout
+//@ chunk-pc3x100t.js:33903-33926 layout
 var ONE_DAY_MS; // deferred: uses NON_REGULAR_ERRORS (../services/memorySync/pathScrub.js) of its import cycle while loading; runs once the cycle is complete
 var QUIET_FS_ERRNOS;
-deferInit("chunk-23fm9f0d.js:33628", () => {
+deferInit("chunk-pc3x100t.js:33903", () => {
   ONE_DAY_MS = 86400000;
   QUIET_FS_ERRNOS = nonRegularErrorSet;
 });
-//@ chunk-23fm9f0d.js:33651-33795 layout
+//@ chunk-pc3x100t.js:33926-34070 layout
 function errnoTelemetryValue(code) {
   if (code === undefined) return lit("none");
   if (!QUIET_FS_ERRNOS.has(code)) return lit("other");
   return code === "ELOOP" ? lit("ELOOP") : code === "EISDIR" ? lit("EISDIR") : lit("ENXIO");
 }
-//@ chunk-23fm9f0d.js:33795-33886 layout
+//@ chunk-pc3x100t.js:34070-34161 layout
 function isQuietFsFailure(error) {
   return (
     error.code === "Failed" && error.telemetryCode !== undefined && QUIET_FS_ERRNOS.has(error.telemetryCode)
   );
 }
-//@ chunk-23fm9f0d.js:33886-34150 layout
+//@ chunk-pc3x100t.js:34161-34425 layout
 function describeMarkerRemoval(removal) {
   if (removal.ok) return "removed it";
   return ("telemetryCode" in removal.error ? removal.error.telemetryCode : undefined) === "EISDIR"
     ? "could not remove it (EISDIR): a directory at the marker path stays and the marker write will keep failing"
     : `could not remove it (${removal.error.code})`;
 }
-//@ chunk-23fm9f0d.js:34150-34613 facade-majority
+//@ chunk-pc3x100t.js:34425-34888 facade-majority
 /**
  * .last-cleanup 标记不是普通文件时尝试修复并上报 tengu_cleanup_throttle_marker。
  */
@@ -2668,14 +2728,14 @@ async function healRefusedSentinelLeaf(storageV5) {
     },
   );
 }
-//@ chunk-23fm9f0d.js:34613-34707 layout
+//@ chunk-pc3x100t.js:34888-34982 layout
 var STAGING_MARKER_FILES = [
   ".npm-cache-cleanup",
   ".version-cleanup",
   ".last-cleanup",
   ".deep-link-register-failed",
 ];
-//@ chunk-23fm9f0d.js:34707-34993 facade-majority (2.1.88 match: cleanupOldFilesInDirectory, 0.455)
+//@ chunk-pc3x100t.js:34982-35268 facade-majority (2.1.88 match: cleanupOldFilesInDirectory, 0.454)
 /**
  * 删除配置目录下过期（1 天）的 staging 标记文件（.npm-cache-cleanup、.version-cleanup 等），每进程一次。
  */
@@ -2700,7 +2760,7 @@ async function reapStaleHousekeepingStagingFiles(claudeConfigDir, backgroundHous
       }),
   );
 }
-//@ chunk-23fm9f0d.js:34993-35584 callgraph-witnessed (2.1.88 match: cleanupOldFileHistoryBackups, 0.645)
+//@ chunk-pc3x100t.js:35268-35859 callgraph-witnessed (2.1.88 match: cleanupOldFileHistoryBackups, 0.644)
 async function cleanupOldFileHistoryBackups() {
   let cutoffDate = getCutoffDate();
   let fsImpl = emptyCleanupResult();
@@ -2749,7 +2809,7 @@ async function cleanupOldFileHistoryBackups() {
   }
   return fsImpl;
 }
-//@ chunk-23fm9f0d.js:35584-36085 affinity
+//@ chunk-pc3x100t.js:35859-36360 affinity
 async function cleanupTinyMemoryFiles() {
   let result = emptyCleanupResult();
   let cutoffDate = getCutoffDate();
@@ -2779,7 +2839,7 @@ async function cleanupTinyMemoryFiles() {
   }
   return result;
 }
-//@ chunk-23fm9f0d.js:36085-36356 sole-consumer
+//@ chunk-pc3x100t.js:36360-36631 sole-consumer
 async function cleanupMemoryProposals() {
   let result = emptyCleanupResult();
   let cutoffDate = getCutoffDate();
@@ -2803,7 +2863,7 @@ async function cleanupMemoryProposals() {
     await findModifiedFiles(join(getAutoMemPath(), "proposals"), cutoffDate, fsImplementation),
   );
 }
-//@ chunk-23fm9f0d.js:36895-39583 facade-majority (2.1.88 match: cleanupOldMessageFilesInBackground, 0.123)
+//@ chunk-pc3x100t.js:37170-39858 facade-majority (2.1.88 match: cleanupOldMessageFilesInBackground, 0.123)
 /**
  * 后台保留期清理（cleanupPeriodDays，默认 30 天）：错误日志、会话、计划、文件历史、调试日志、反馈包、MCP 缓存、worktree 等数十类数据，结果上报 tengu_retention_sweep。
  */
@@ -2894,7 +2954,7 @@ async function cleanupOldMessageFilesInBackground(storageV5) {
   results.push(await cleanupDaemonFiles(storageV5, sharedCutoffDate));
   results.push(await getConfigBackupDir());
   results.push(await cleanupHfiAuthFile());
-  results.push(await getMcpAuthCachePath());
+  results.push(await cleanupMcpAuthCache());
   results.push(await cleanupDeviceUnboundCreates());
   results.push(await cleanupMcpDiscoverVerdicts());
   results.push(await cleanupDeviceMcpNotNow());
@@ -2969,7 +3029,7 @@ async function cleanupOldMessageFilesInBackground(storageV5) {
     historyEntriesPruned: historyPrune.entriesPruned,
   });
 }
-//@ chunk-4nhpaxz9.js:7688-7945 fingerprint (2.1.88 match: cleanupSingleDirectory, 0.409)
+//@ chunk-2zeqrfs5.js:7772-8029 fingerprint (2.1.88 match: cleanupSingleDirectory, 0.408)
 async function cleanupSingleDirectory(dirPath, cutoffDate) {
   let mtimeMs = (await dirPath.fs.lstat(cutoffDate)).mtimeMs;
   let entries = await dirPath.fs.readdir(cutoffDate);
@@ -2987,21 +3047,20 @@ async function cleanupSingleDirectory(dirPath, cutoffDate) {
   return mtimeMs;
 }
 export {
-  retentionCleanupSkipReason,
   IMAGES,
   IMAGE_FILE_NAME_RE,
+  cleanupSingleDirectory,
+  retentionCleanupSkipReason,
   cleanupOldFilesMatching,
+  emptyCleanupResult,
+  tryRmdir,
   cleanupOldMessageFilesInBackground,
   reapStaleHousekeepingStagingFiles,
   healRefusedSentinelLeaf,
   isCleanupQuietFsErrno,
   entryKind,
-  emptyCleanupResult,
-  getCutoffDate,
-  unlinkIfOld,
-  cleanupOldFilesInDirectory,
-  tryRmdir,
-  cleanupSingleDirectory,
   isRetentionCleanupSafe,
+  getCutoffDate,
+  cleanupOldFilesInDirectory,
   isRetentionExemptionDisabled,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。启动早期执行组织配置闸门，不满足时拒绝启动。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-r2x77faw.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-f5ya71jx.js (9)
  * attribution: placement 9
  */
 import {
@@ -31,7 +31,7 @@ import { currentSettingsOutcome } from "./orgConfigGateMessages.js";
 import { isUnattendedInteractiveSession } from "../../utils/concurrentSessions.js";
 import { withDeadline } from "../../utils/sleep.js";
 
-//@ chunk-r2x77faw.js:463-735 placement
+//@ chunk-f5ya71jx.js:464-736 placement
 /**
  * 因组织配置拒绝退出
  */
@@ -46,7 +46,7 @@ async function exitForOrgConfig(evaluation, print) {
     beforeExit: settlePendingGateWork,
   });
 }
-//@ chunk-r2x77faw.js:735-1045 placement
+//@ chunk-f5ya71jx.js:736-1046 placement
 /**
  * 组织配置闸门选项
  */
@@ -68,7 +68,7 @@ function orgConfigGateOptions(interactive, options) {
     }),
   };
 }
-//@ chunk-r2x77faw.js:1045-1469 placement
+//@ chunk-f5ya71jx.js:1046-1470 placement
 /**
  * 启动早期执行组织配置闸门，不满足时拒绝启动。
  */
@@ -91,7 +91,7 @@ async function refuseOrgConfigEarlyAtStartup(options = {}) {
   await logOrgConfigGate(evaluation, evaluation.outcomes);
   return enforceOrgConfigGate(evaluation, gateOptions, interactive, options);
 }
-//@ chunk-r2x77faw.js:1469-1634 placement
+//@ chunk-f5ya71jx.js:1470-1636 placement
 async function enforceOrgConfigGateAtStartup(options = {}) {
   let interactive = options.interactive ?? !getIsNonInteractiveSession();
   let gateOptions = orgConfigGateOptions(interactive, options);
@@ -100,7 +100,7 @@ async function enforceOrgConfigGateAtStartup(options = {}) {
   if (!isGateBlocking(evaluation.decision)) return;
   return enforceOrgConfigGate(evaluation, gateOptions, interactive, options);
 }
-//@ chunk-r2x77faw.js:1634-1938 placement
+//@ chunk-f5ya71jx.js:1636-1940 placement
 async function enforceOrgConfigGateHeadless(work, options = {}) {
   let gateOptions = orgConfigGateOptions(false, options);
   let { armed } = await readOrgConfigDecision(gateOptions, options);
@@ -119,7 +119,7 @@ async function enforceOrgConfigGateHeadless(work, options = {}) {
     ? workResult
     : undefined;
 }
-//@ chunk-r2x77faw.js:1938-2269 placement
+//@ chunk-f5ya71jx.js:1940-2272 placement
 async function enforceOrgConfigGateOnLaunchLane(options = {}) {
   let gateOptions = orgConfigGateOptions(true, options);
   let evaluation = await readOrgConfigDecision(gateOptions, options);
@@ -142,7 +142,7 @@ async function enforceOrgConfigGateOnLaunchLane(options = {}) {
     retryFirst: true,
   });
 }
-//@ chunk-r2x77faw.js:2269-2440 placement
+//@ chunk-f5ya71jx.js:2272-2443 placement
 /**
  * 读组织配置闸门判定
  */
@@ -155,7 +155,7 @@ async function readOrgConfigDecision(gateOptions, options) {
   }
   return retryGateAfterOutcomes(evaluation, () => peek(gateOptions), options.primeSettingsCacheAge);
 }
-//@ chunk-r2x77faw.js:2440-3227 placement
+//@ chunk-f5ya71jx.js:2443-3231 placement
 /**
  * 执行组织配置闸门
  */
@@ -221,7 +221,7 @@ async function enforceOrgConfigGate(evaluation, gateOptions, interactive, option
   });
   return exit(latestEvaluation);
 }
-//@ chunk-r2x77faw.js:3227-3571 placement
+//@ chunk-f5ya71jx.js:3231-3575 placement
 /**
  * 凭据刷新导致不可用时重试
  */
@@ -240,8 +240,8 @@ async function retryAfterCredentialRefresh(evaluation, gateOptions, options) {
   return (options.reevaluate ?? orgConfigGateSync)(gateOptions, decision.blockedMs + max, 1);
 }
 export {
+  enforceOrgConfigGateAtStartup,
   refuseOrgConfigEarlyAtStartup,
   enforceOrgConfigGateHeadless,
-  enforceOrgConfigGateAtStartup,
   enforceOrgConfigGateOnLaunchLane,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设备 MCP 同意与"暂不"状态的读写。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-weh04swb.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rpcghvjh.js (24)
  * attribution: placement 24
  */
 import { join, dirname } from "path";
@@ -16,7 +16,7 @@ import { FORCE_NOT_REMOTELY_EXECUTABLE } from "../../remote/tools/serve/servedPe
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, literal, _enum, stringSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { tildify } from "../../utils/path.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage, isENOENT } from "../../utils/errors.js";
 import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
@@ -27,40 +27,40 @@ import { getFileReader } from "../../utils/fileStore.js";
 import { shortLabel } from "../../utils/permissions/approvalPayloadSerialization.js";
 import { deferInit, runDeferredInits } from "../../../runtime/deferred-init.js";
 
-//@ chunk-weh04swb.js:18955-18984 placement
+//@ chunk-rpcghvjh.js:19019-19048 placement
 var MCP_PASSTHROUGH = lit("mcp_passthrough");
-//@ chunk-weh04swb.js:18984-19016 placement
+//@ chunk-rpcghvjh.js:19048-19080 placement
 /**
  * 判断作用域是否属于管理员作用域。
  */
 function isAdminScope(scope) {
   return ADMIN_SCOPES.has(scope);
 }
-//@ chunk-weh04swb.js:19016-19025 placement
+//@ chunk-rpcghvjh.js:19080-19090 placement
 /**
  * 是否允许把 project 作用域的 MCP 服务器透传给远程设备（当前恒 false）。
  */
 var PROJECT_SERVERS_ALLOWED = false;
-//@ chunk-weh04swb.js:19025-19074 placement
+//@ chunk-rpcghvjh.js:19090-19140 placement
 /**
  * 是否需要对每个服务器单独询问同意（非管理员作用域且允许 project 服务器）。
  */
 function shouldAskPerServer(scope) {
   return !isAdminScope(scope) && (PROJECT_SERVERS_ALLOWED || scope !== "project");
 }
-//@ chunk-weh04swb.js:19074-19083 placement
+//@ chunk-rpcghvjh.js:19140-19149 placement
 /**
  * 设备 MCP 同意记录的 schema 版本（1）。
  */
 var CONSENT_SCHEMA_VERSION = 1;
-//@ chunk-weh04swb.js:19083-19199 placement
+//@ chunk-rpcghvjh.js:19149-19266 placement
 function describeConsentPolicy() {
   return [
     FORCE_NOT_REMOTELY_EXECUTABLE ? "each-call-asked" : "local-rules-decide",
     PROJECT_SERVERS_ALLOWED ? "project-servers" : "no-project-servers",
   ].join("+");
 }
-//@ chunk-weh04swb.js:19199-19364 placement
+//@ chunk-rpcghvjh.js:19266-19431 placement
 /**
  * 设备 MCP 同意记录的 schema（版本、接受/拒绝、条款、决定时间、主机名）及其存储键名与"暂不"键名。
  */
@@ -68,7 +68,7 @@ var DEVICE_MCP_CONSENT_SCHEMA; // deferred: uses CONSENT_SCHEMA_VERSION of its i
 var DEVICE_MCP_CONSENT;
 var DEVICE_MCP_CONSENT_NOT_NOW;
 var CONSENT_SCHEMA_VERSION_2;
-deferInit("chunk-weh04swb.js:19199", () => {
+deferInit("chunk-rpcghvjh.js:19266", () => {
   DEVICE_MCP_CONSENT_SCHEMA = DoctorLazy(() =>
     objectSchema({
       version: literal(CONSENT_SCHEMA_VERSION),
@@ -82,42 +82,42 @@ deferInit("chunk-weh04swb.js:19199", () => {
   DEVICE_MCP_CONSENT_NOT_NOW = "device-mcp-consent-not-now";
   CONSENT_SCHEMA_VERSION_2 = 1;
 });
-//@ chunk-weh04swb.js:19364-19424 placement
+//@ chunk-rpcghvjh.js:19431-19491 placement
 /**
  * 如何让用户被重新询问的提示：删掉同意文件。
  */
 function deleteConsentHint() {
   return `delete ${tildify(consentFilePath())} to be asked again`;
 }
-//@ chunk-weh04swb.js:19424-19507 placement
+//@ chunk-rpcghvjh.js:19491-19574 placement
 /**
  * 如何让用户被重新询问的提示：删掉 not-now 文件并新开 cloud 会话。
  */
 function deleteNotNowHint() {
   return `delete ${tildify(notNowFilePath())}, then start a new claude --cloud session`;
 }
-//@ chunk-weh04swb.js:19507-19558 placement
+//@ chunk-rpcghvjh.js:19574-19625 placement
 /**
  * 设备 MCP 状态文件的路径（configDir/state/<key>.json）。
  */
 function stateFilePath(key) {
   return join(getClaudeConfigDir(), "state", `${key}.json`);
 }
-//@ chunk-weh04swb.js:19558-19586 placement
+//@ chunk-rpcghvjh.js:19625-19653 placement
 /**
  * 设备 MCP 同意记录的文件路径。
  */
 function consentFilePath() {
   return stateFilePath(DEVICE_MCP_CONSENT);
 }
-//@ chunk-weh04swb.js:19586-19614 placement
+//@ chunk-rpcghvjh.js:19653-19681 placement
 /**
  * 设备 MCP “暂不同意”记录的文件路径。
  */
 function notNowFilePath() {
   return stateFilePath(DEVICE_MCP_CONSENT_NOT_NOW);
 }
-//@ chunk-weh04swb.js:19614-19974 placement
+//@ chunk-rpcghvjh.js:19681-20041 placement
 async function readDeviceMcpConsent(store) {
   let text;
   try {
@@ -140,12 +140,12 @@ async function readDeviceMcpConsent(store) {
     return "unset";
   }
 }
-//@ chunk-weh04swb.js:19974-20049 placement
+//@ chunk-rpcghvjh.js:20041-20116 placement
 async function deviceMcpConsentAnswer(store) {
   let deviceMcpConsent = await readDeviceMcpConsent(store);
   return deviceMcpConsent === "unreadable" ? "unset" : deviceMcpConsent;
 }
-//@ chunk-weh04swb.js:20049-20298 placement
+//@ chunk-rpcghvjh.js:20116-20365 placement
 async function writeDeviceMcpConsent(choice, store) {
   try {
     await store.writeText(
@@ -171,12 +171,12 @@ async function writeDeviceMcpConsent(choice, store) {
     return false;
   }
 }
-//@ chunk-weh04swb.js:20298-20373 placement
+//@ chunk-rpcghvjh.js:20365-20440 placement
 /**
  * not-now 记录的 schema。
  */
 var notNowSchema; // deferred: uses DEVICE_MCP_CONSENT_SCHEMA of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-weh04swb.js:20298", () => {
+deferInit("chunk-rpcghvjh.js:20365", () => {
   notNowSchema = DoctorLazy(() =>
     objectSchema({
       version: literal(CONSENT_SCHEMA_VERSION_2),
@@ -186,7 +186,7 @@ deferInit("chunk-weh04swb.js:20298", () => {
     }),
   );
 });
-//@ chunk-weh04swb.js:20373-20658 placement
+//@ chunk-rpcghvjh.js:20440-20725 placement
 async function readDeviceMcpNotNow(store) {
   let text;
   try {
@@ -207,7 +207,7 @@ async function readDeviceMcpNotNow(store) {
     return [];
   }
 }
-//@ chunk-weh04swb.js:20658-20890 placement
+//@ chunk-rpcghvjh.js:20725-20957 placement
 async function writeDeviceMcpNotNow(servers, store) {
   try {
     await store.writeText(
@@ -232,7 +232,7 @@ async function writeDeviceMcpNotNow(servers, store) {
     return false;
   }
 }
-//@ chunk-weh04swb.js:20890-21009 placement
+//@ chunk-rpcghvjh.js:20957-21076 placement
 async function clearDeviceMcpNotNow(store) {
   try {
     await store.removeText();
@@ -242,7 +242,7 @@ async function clearDeviceMcpNotNow(store) {
     });
   }
 }
-//@ chunk-weh04swb.js:21009-21099 placement
+//@ chunk-rpcghvjh.js:21076-21166 placement
 /**
  * 判断 n 是否是 e 的子集（e 为空时 false）。
  */
@@ -251,7 +251,7 @@ function containsAll(all, required) {
   let requiredSet = new Set(all);
   return required.every((name) => requiredSet.has(name));
 }
-//@ chunk-weh04swb.js:21099-21768 placement
+//@ chunk-rpcghvjh.js:21166-21835 placement
 /**
  * 为设备 MCP 状态建立读写对象：启用 v5 存储时读写存储里的 state 键，否则读写本地文件（0600 原子写）；附带当前时间与主机名函数。
  */
@@ -304,15 +304,15 @@ function createDeviceMcpStateStore(key, storage) {
     hostname,
   };
 }
-//@ chunk-weh04swb.js:21768-21800 placement
+//@ chunk-rpcghvjh.js:21835-21867 placement
 function deviceMcpConsentStore(storageV5) {
   return createDeviceMcpStateStore(DEVICE_MCP_CONSENT, storageV5);
 }
-//@ chunk-weh04swb.js:21800-21832 placement
+//@ chunk-rpcghvjh.js:21867-21899 placement
 function deviceMcpNotNowStore(storageV5) {
   return createDeviceMcpStateStore(DEVICE_MCP_CONSENT_NOT_NOW, storageV5);
 }
-//@ chunk-weh04swb.js:21832-21861 placement
+//@ chunk-rpcghvjh.js:21899-21928 placement
 /**
  * 取服务器的短标签。
  */
@@ -324,19 +324,19 @@ function shortServerLabel(serverName) {
 // marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
 runDeferredInits("src/services/deviceBridge/deviceMcpConsent.js");
 export {
-  deviceMcpConsentAnswer,
+  deleteNotNowHint,
+  shortServerLabel,
+  readDeviceMcpConsent,
   deviceMcpConsentStore,
-  containsAll,
   readDeviceMcpNotNow,
   deviceMcpNotNowStore,
-  readDeviceMcpConsent,
+  containsAll,
+  MCP_PASSTHROUGH,
+  deviceMcpConsentAnswer,
   writeDeviceMcpNotNow,
   clearDeviceMcpNotNow,
-  shortServerLabel,
   writeDeviceMcpConsent,
-  shouldAskPerServer,
   deleteConsentHint,
-  deleteNotNowHint,
   isAdminScope,
-  MCP_PASSTHROUGH,
+  shouldAskPerServer,
 };

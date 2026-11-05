@@ -1,14 +1,14 @@
 /**
  * parse5/dist/common/foreign-content.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: parse5@7.2.0..7.2.1
- * pieces: chunk-6ja29j2n.js (9)
+ * pieces: chunk-p9ac6cnb.js (9)
  * attribution: esm-fingerprint 9
  */
 import { NAMESPACES, ATTRS } from "../../lib/common/html.js";
 import { TAG_ID, getTagID } from "./html.js";
 
-//@ chunk-6ja29j2n.js:129218-131766 esm-fingerprint
+//@ chunk-p9ac6cnb.js:129218-131766 esm-fingerprint
 var MIME_TYPES = {
   TEXT_HTML: "text/html",
   APPLICATION_XML: "application/xhtml+xml",
@@ -253,7 +253,7 @@ var EXITS_FOREIGN_CONTENT = new Set([
   TAG_ID.UL,
   TAG_ID.VAR,
 ]);
-//@ chunk-6ja29j2n.js:131766-131887 esm-fingerprint
+//@ chunk-p9ac6cnb.js:131766-131887 esm-fingerprint
 function causesExit(startTagToken) {
   let tn = startTagToken.tagID;
   return (
@@ -264,7 +264,7 @@ function causesExit(startTagToken) {
     EXITS_FOREIGN_CONTENT.has(tn)
   );
 }
-//@ chunk-6ja29j2n.js:131887-131986 esm-fingerprint
+//@ chunk-p9ac6cnb.js:131887-131986 esm-fingerprint
 function adjustTokenMathMLAttrs(token) {
   for (let i = 0; i < token.attrs.length; i++)
     if (token.attrs[i].name === DEFINITION_URL_ATTR) {
@@ -272,14 +272,14 @@ function adjustTokenMathMLAttrs(token) {
       break;
     }
 }
-//@ chunk-6ja29j2n.js:131986-132095 esm-fingerprint
+//@ chunk-p9ac6cnb.js:131986-132095 esm-fingerprint
 function adjustTokenSVGAttrs(token) {
   for (let i = 0; i < token.attrs.length; i++) {
     let adjustedAttrName = SVG_ATTRS_ADJUSTMENT_MAP.get(token.attrs[i].name);
     if (adjustedAttrName != null) token.attrs[i].name = adjustedAttrName;
   }
 }
-//@ chunk-6ja29j2n.js:132095-132263 esm-fingerprint
+//@ chunk-p9ac6cnb.js:132095-132263 esm-fingerprint
 function adjustTokenXMLAttrs(token) {
   for (let i = 0; i < token.attrs.length; i++) {
     let adjustedAttrEntry = XML_ATTRS_ADJUSTMENT_MAP.get(token.attrs[i].name);
@@ -290,7 +290,7 @@ function adjustTokenXMLAttrs(token) {
     }
   }
 }
-//@ chunk-6ja29j2n.js:132263-132346 esm-fingerprint
+//@ chunk-p9ac6cnb.js:132263-132346 esm-fingerprint
 function adjustTokenSVGTagName(token) {
   let adjustedTagName = SVG_TAG_NAMES_ADJUSTMENT_MAP.get(token.tagName);
   if (adjustedTagName != null) {
@@ -298,14 +298,14 @@ function adjustTokenSVGTagName(token) {
     token.tagID = getTagID(token.tagName);
   }
 }
-//@ chunk-6ja29j2n.js:132346-132438 esm-fingerprint
+//@ chunk-p9ac6cnb.js:132346-132438 esm-fingerprint
 function isMathMLTextIntegrationPoint(tn, ns) {
   return (
     ns === NAMESPACES.MATHML &&
     (tn === TAG_ID.MI || tn === TAG_ID.MO || tn === TAG_ID.MN || tn === TAG_ID.MS || tn === TAG_ID.MTEXT)
   );
 }
-//@ chunk-6ja29j2n.js:132438-132696 esm-fingerprint
+//@ chunk-p9ac6cnb.js:132438-132696 esm-fingerprint
 function isHtmlIntegrationPoint(tn, ns, attrs) {
   if (ns === NAMESPACES.MATHML && tn === TAG_ID.ANNOTATION_XML) {
     for (let i = 0; i < attrs.length; i++)
@@ -316,7 +316,7 @@ function isHtmlIntegrationPoint(tn, ns, attrs) {
   }
   return ns === NAMESPACES.SVG && (tn === TAG_ID.FOREIGN_OBJECT || tn === TAG_ID.DESC || tn === TAG_ID.TITLE);
 }
-//@ chunk-6ja29j2n.js:132696-132780 esm-fingerprint
+//@ chunk-p9ac6cnb.js:132696-132780 esm-fingerprint
 function isIntegrationPoint(tn, ns, attrs, foreignNS) {
   return (
     ((!foreignNS || foreignNS === NAMESPACES.HTML) && isHtmlIntegrationPoint(tn, ns, attrs)) ||

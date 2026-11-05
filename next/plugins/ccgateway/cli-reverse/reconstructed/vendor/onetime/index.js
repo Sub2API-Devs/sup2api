@@ -1,13 +1,13 @@
 /**
  * onetime/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: onetime@7.0.0
- * pieces: chunk-m4p5zn6n.js (2)
+ * pieces: chunk-t889g22j.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { mimicFunction } from "../mimic-function/index.js";
 
-//@ chunk-m4p5zn6n.js:9126-9455 esm-layout
+//@ chunk-t889g22j.js:9125-9454 esm-layout
 var calledFunctions = new WeakMap();
 var onetime = (function_, options = {}) => {
   if (typeof function_ !== "function") throw TypeError("Expected a function");
@@ -26,7 +26,7 @@ var onetime = (function_, options = {}) => {
   calledFunctions.set(onetime, callCount);
   return onetime;
 };
-//@ chunk-m4p5zn6n.js:9455-9596 esm-fingerprint
+//@ chunk-t889g22j.js:9454-9595 esm-fingerprint
 onetime.callCount = (function_) => {
   if (!calledFunctions.has(function_))
     throw Error(`The given function \`${function_.name}\` is not wrapped by the \`onetime\` package`);

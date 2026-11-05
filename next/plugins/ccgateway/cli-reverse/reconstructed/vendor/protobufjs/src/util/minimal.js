@@ -1,12 +1,12 @@
 /**
  * protobufjs/src/util/minimal.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: protobufjs@7.6.0
- * pieces: chunk-798ashq9.js (1)
+ * pieces: chunk-vxhm2nqe.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
-import { require_aspromise } from "./aspromise.js";
+import { require_aspromise } from "../../../@protobufjs/aspromise/index.js";
 import { require_base64 } from "./base64.js";
 import { require_eventemitter } from "./eventemitter.js";
 import { require_float } from "./float.js";
@@ -15,7 +15,7 @@ import { require_utf8 } from "./utf8.js";
 import { require_pool } from "./pool.js";
 import { require_longbits } from "./longbits.js";
 
-//@ chunk-798ashq9.js:27725-30944 cjs-fingerprint
+//@ chunk-vxhm2nqe.js:27725-30944 cjs-fingerprint
 var require_minimal = __commonJS(function (cjsExports) {
   var util = cjsExports;
   util.asPromise = require_aspromise();

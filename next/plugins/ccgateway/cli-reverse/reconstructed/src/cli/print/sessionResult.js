@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：SDK 结果上报与暂存结果控制
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (12)
  * attribution: placement 12
  */
 import { addUsage_2 } from "../../../vendor/@anthropic-ai/sdk/lib/internal/tracing/response.mjs";
@@ -40,7 +40,7 @@ import { stopAllRunningTasks } from "../../tasks/stopTask.js";
 import { endActivity, startSessionActivity } from "../../utils/sessionActivity.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 
-//@ chunk-tyg7f3ek.js:170455-170980 placement (2.1.88 match: makeResultMessage, 0.805)
+//@ chunk-0yw3taqg.js:203905-204430 placement (2.1.88 match: makeResultMessage, 0.806)
 /**
  * 把暂存的若干 result 消息与新 result 合并：取第一个失败的作为主体，usage/num_turns/duration_ms 累加，permission_denials 合并，并清空暂存。
  */
@@ -62,9 +62,9 @@ function mergeResultMessages(pending, result) {
     permission_denials: results.flatMap((entry) => entry.permission_denials),
   };
 }
-//@ chunk-tyg7f3ek.js:170980-171022 placement
+//@ chunk-0yw3taqg.js:204430-204472 placement
 var loadedModCount = () => getActiveModNames(getPluginRegistry().loadedModules).length;
-//@ chunk-tyg7f3ek.js:171022-173001 placement
+//@ chunk-0yw3taqg.js:204472-206451 placement
 /**
  * print 结束时组装并输出 SDK result 消息（成功/崩溃/错误），附带错误、遥测与转录排空等待。
  */
@@ -180,10 +180,10 @@ class SdkResultReporter {
     ]);
   }
 }
-//@ chunk-tyg7f3ek.js:173001-173020 placement
+//@ chunk-0yw3taqg.js:206451-206470 placement
 var FLUSH_SESSION_BEFORE_RESULT_MS = 1e4;
 var FLUSH_SESSION_BEFORE_RESULT_ABORT_MS = 5000;
-//@ chunk-tyg7f3ek.js:173020-173230 placement
+//@ chunk-0yw3taqg.js:206470-206680 placement
 async function flushSessionBeforeResult(
   sessionMirror,
   flushSessionStorage_2 = flushSessionStorage,
@@ -207,7 +207,7 @@ async function flushSessionBeforeResult(
     logError(error);
   }
 }
-//@ chunk-tyg7f3ek.js:173230-173327 placement
+//@ chunk-0yw3taqg.js:206680-206777 placement
 function publishFailedSummary(sessionState, statusDetail) {
   publishPostTurnSummary(sessionState, {
     status_category: "failed",
@@ -215,7 +215,7 @@ function publishFailedSummary(sessionState, statusDetail) {
     needs_action: "",
   });
 }
-//@ chunk-tyg7f3ek.js:173327-173545 placement
+//@ chunk-0yw3taqg.js:206777-206995 placement
 function errorTelemetryFields(error) {
   let isApiError = error instanceof APIError;
   let errorName = isApiError ? fromEnum(classifyAPIError(error)) : classifyToolError(error);
@@ -228,7 +228,7 @@ function errorTelemetryFields(error) {
     cause_name: causeName,
   };
 }
-//@ chunk-tyg7f3ek.js:173545-176978 placement
+//@ chunk-0yw3taqg.js:206995-210430 placement
 /**
  * 暂存并按顺序释放 SDK result：评估工具结果、指针结果、迟到结果与停止通知。
  */
@@ -394,10 +394,10 @@ class HeldResultsController {
     this.emitPendingSuggestion();
   }
 }
-//@ chunk-tyg7f3ek.js:176978-177015 placement
+//@ chunk-0yw3taqg.js:210430-210467 placement
 var RESUME_LOAD_HOLD = "resume-load-hold";
 var RESUME_LOAD_HOLD_MAX_MS = 1800000;
-//@ chunk-tyg7f3ek.js:177015-177167 placement
+//@ chunk-0yw3taqg.js:210467-210619 placement
 function startResumeLoadHold() {
   let active = true;
   let endHold = () => {
@@ -411,14 +411,14 @@ function startResumeLoadHold() {
   timer.unref();
   return endHold;
 }
-//@ chunk-tyg7f3ek.js:177167-177252 placement
+//@ chunk-0yw3taqg.js:210619-210704 placement
 function onResumeLoadHoldExpired(endHold) {
   logForDiagnosticsNoPII("warn", "session_activity_resume_load_hold_expired", {
     max_ms: RESUME_LOAD_HOLD_MAX_MS,
   });
   endHold();
 }
-//@ chunk-tyg7f3ek.js:177289-177301 placement
+//@ chunk-0yw3taqg.js:210741-210753 placement
 var SUMMARY_RETRY_DELAY_MS = 2000;
 export {
   publishFailedSummary,

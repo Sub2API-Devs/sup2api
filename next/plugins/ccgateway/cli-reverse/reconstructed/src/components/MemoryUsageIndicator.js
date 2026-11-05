@@ -3,9 +3,9 @@
  *
  * 内存占用告警指示：high/critical 时提示 "restart and resume with claude --continue"。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/MemoryUsageIndicator.tsx
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -20,7 +20,7 @@ import {
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 
-//@ chunk-18hwfzwa.js:783611-784345 fingerprint (2.1.88 match: MemoryUsageIndicator, 0.397)
+//@ chunk-czq1j3j2.js:816230-816964 fingerprint (2.1.88 match: MemoryUsageIndicator, 0.397)
 function MemoryUsageIndicator(props) {
   let $ = useMemoCache(11);
   let { tier, onShowingChange } = props;

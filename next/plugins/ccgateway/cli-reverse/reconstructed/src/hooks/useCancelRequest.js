@@ -3,10 +3,10 @@
  *
  * 取消请求处理器（Esc/Ctrl+C）：中断当前回合、取消待定唤醒/队友、处理排队命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useCancelRequest.ts
- * pieces: chunk-18hwfzwa.js (4)
- * attribution: sole-consumer 1, affinity 2, fingerprint 1
+ * pieces: chunk-czq1j3j2.js (3)
+ * attribution: placement 1, fingerprint 1, affinity 1
  */
 import { isZincHarborOn, clearHeldInput } from "../plugins/functionHooks/inputHold.js";
 import { taskAbortController } from "../tasks/taskKinds.js";
@@ -34,7 +34,7 @@ import { plural } from "../utils/stringUtils.js";
 import { mainAgentId, onSessionCronsChange } from "../bootstrap/state.js";
 import { useAppStoreDirect, useSetAppState, useAppState } from "../state/AppState.js";
 import { useSpinnerStore } from "../components/Spinner/spinnerStatus.js";
-import { useSetVoiceState } from "../context/voice.js";
+import { useTaskFramework } from "../context/voice.js";
 import { useSession } from "../context/session.js";
 import { useCallback, useRef, useSyncExternalStore } from "../../vendor/react/cjs/react.production.js";
 import {
@@ -58,12 +58,18 @@ import {
   isAutoArmedByItself,
 } from "../services/quotaAutoResume/quotaAutoResume.js";
 import {
+  noopUnsubscribeFactory,
+  LOOP_WAKEUP_CANCELLED,
+  LOOP_WAKEUP_CANCELLED_TEXT,
+  SAVED_MODEL_SUCCESSOR_DRAW_MS,
+} from "../components/PromptInput/promptInputState.js";
+import {
   isClaimableAutoReactSubscription,
   hasStoppableAutoReactSupervision,
   killAutoReactSubscriptions,
 } from "../services/artifacts/frameLive.js";
 import {
-  processQueuedCommands as processQueuedCommands_4,
+  processQueuedCommands as processQueuedCommands_3,
   artifactWatchStopNotice,
   drainQueuedTaskNotifications,
   activeArtifactConnections,
@@ -83,7 +89,7 @@ import { sanitizeMarkName } from "../utils/startupMarks.js";
 import { promptInputValue } from "../state/promptInputStore.js";
 import { cancelQuotaAutoResumeWithNotice } from "./useChromeExtensionNotification.js";
 import { logEvent } from "../services/analytics/index.js";
-import { hasModeCharCommand, shouldPrependModeChar } from "../utils/messageQueueManager.js";
+import { hasPullableCommandInQueue, isQueuedCommandPullableInto } from "../utils/messageQueueManager.js";
 import { clearSummonWakeTimers, bumpScanGeneration } from "../services/artifacts/summonArms.js";
 import { useSecondOverlayKeys, useOverlayKeys } from "../context/overlayContext.js";
 import { useDialogOfKind } from "../state/dialogQueue.js";
@@ -97,7 +103,7 @@ import {
 } from "../services/agentObserver/agentObserver.js";
 import { isAutoreactArmed } from "../services/artifacts/comments/postReply.js";
 import { isScreeningPendingEntry } from "../utils/historyFile.js";
-import { alwaysFalseTool } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { isCodeModeExperimentEnabled } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { isPollEventMode } from "../utils/pollEvents.js";
 import { recordSubmittedPrompts } from "../history.js";
 import { withExpandedPastes } from "../utils/hooks/postSamplingHooks.js";
@@ -107,7 +113,7 @@ import { escapeXml_2 as escapeXml } from "../utils/confusables.js";
 import { stoppedAfterAutoActionsNotice } from "../tools/ArtifactTool/artifactNotices.js";
 import { getShortcutDisplay } from "../keybindings/shortcutFormat.js";
 
-//@ chunk-18hwfzwa.js:465321-466660 sole-consumer
+//@ chunk-czq1j3j2.js:491386-492725 placement
 /**
  * 取消时中断后台子代理与队友并汇总。
  */
@@ -175,12 +181,7 @@ function interruptBackgroundWork(tasks, taskRegistry, addNotification, store, st
   }
   return false;
 }
-//@ chunk-18hwfzwa.js:466660-466747 affinity
-var noopUnsubscribeFactory = () => () => {};
-var LOOP_WAKEUP_CANCELLED = "loop-wakeup-cancelled";
-var LOOP_WAKEUP_CANCELLED_TEXT = "Pending wakeup cancelled";
-var GESTURE_WINDOW_MS = 1000;
-//@ chunk-18hwfzwa.js:466747-473810 fingerprint (2.1.88 match: CancelRequestHandler, 0.522)
+//@ chunk-czq1j3j2.js:492812-500006 fingerprint (2.1.88 match: CancelRequestHandler, 0.514)
 function CancelRequestHandler(props) {
   let {
     onCancel,
@@ -203,7 +204,7 @@ function CancelRequestHandler(props) {
   let appStoreDirect = useAppStoreDirect();
   let setAppState = useSetAppState();
   let spinnerStore = useSpinnerStore();
-  let taskRegistry = useSetVoiceState();
+  let taskRegistry = useTaskFramework();
   let session = useSession();
   let hasFooterSelection = useCallback(
     () => appStoreDirect.getState().footerSelection !== null,
@@ -218,6 +219,7 @@ function CancelRequestHandler(props) {
   let lastKillAgentsPressRef = useRef(0);
   let viewSelectionMode = useRef(0);
   let viewSelectionMode_2 = useAppState((state) => state.viewSelectionMode);
+  let footerSelected = useAppState((state) => state.footerSelection !== null);
   let queuedMessageText = useQueuedMessageText();
   let handleCancel = useSyncExternalStore(onSessionCronsChange, hasLoopTask);
   let exitDetaches = exitDetachesToCaller || isBgSession();
@@ -240,10 +242,10 @@ function CancelRequestHandler(props) {
     killAllAgentsAndNotify,
     () => (stoppableWork?.stoppable() ?? 0) > 0,
   );
-  let shouldPrependModeChar_2 = useAppState((state) =>
+  let shouldPrependModeChar = useAppState((state) =>
     Object.values(state.tasks).some(isClaimableAutoReactSubscription),
   );
-  let any = setAppState_2.some(processQueuedCommands_4);
+  let any = setAppState_2.some(processQueuedCommands_3);
   let handleCancelPress = useCallback(
     ({ passive }) => {
       let tasks = appStoreDirect.getState().tasks;
@@ -343,21 +345,22 @@ function CancelRequestHandler(props) {
         return true;
       }
       let any = Object.values(appStoreDirect.getState().tasks).some(isClaimableAutoReactSubscription);
-      let any_2 = store.getCommandQueueSnapshot().some(processQueuedCommands_4);
-      let shouldDrain =
-        !suppressBackgroundAgentKill &&
-        (hasAgentPanelTask || any || any_2 || hasStoppableAutoReactSupervision());
+      let any_2 = store.getCommandQueueSnapshot().some(processQueuedCommands_3);
+      let shouldDrain = !isInputEmptyNow && !hasFooterSelection();
+      let hasPanelTask = hasAgentPanelTask && !shouldDrain;
+      let canStop =
+        !suppressBackgroundAgentKill && (hasPanelTask || any || any_2 || hasStoppableAutoReactSupervision());
       let canPopQueuedModeCommand =
-        hasModeCharCommand(store, isInputEmptyNow) && popCommandFromQueue !== undefined;
+        hasPullableCommandInQueue(store, isInputEmptyNow) && popCommandFromQueue !== undefined;
       let hasTickTarget = tickValue > 0;
       let isInterruptible =
-        shouldDrain ||
+        canStop ||
         canPopQueuedModeCommand ||
         hasTickTarget ||
         (isHardInterrupt && hasLoopTask()) ||
         pressLandedOnWork ||
         abortSignal !== undefined ||
-        Date.now() - viewSelectionMode.current < GESTURE_WINDOW_MS;
+        Date.now() - viewSelectionMode.current < SAVED_MODEL_SUCCESSOR_DRAW_MS;
       if (isArmedOrStale && !unusedFlag && !isInterruptible && allowAgentKill) {
         cancelQuotaAutoResumeWithNotice(addNotification, gesture);
         unusedFlag = true;
@@ -369,7 +372,8 @@ function CancelRequestHandler(props) {
       if (
         !suppressBackgroundAgentKill &&
         any_2 &&
-        !hasAgentPanelTask &&
+        !hasPanelTask &&
+        !hasStoppableWork &&
         !any &&
         !hasStoppableAutoReactSupervision()
       ) {
@@ -382,10 +386,11 @@ function CancelRequestHandler(props) {
         logEvent("tengu_cancel", killOptions);
         return unusedFlag || hasTickTarget;
       }
-      let any_3 = Object.values(appStoreDirect.getState().tasks).some(isAgentPanelTask);
+      let panelTaskOnStore =
+        !shouldDrain && Object.values(appStoreDirect.getState().tasks).some(isAgentPanelTask);
       if (
         !suppressBackgroundAgentKill &&
-        (hasAgentPanelTask || hasStoppableWork || any || hasStoppableAutoReactSupervision())
+        (hasPanelTask || hasStoppableWork || any || hasStoppableAutoReactSupervision())
       ) {
         let interrupted = interruptIfStoppable(stoppableWork);
         let killedSubscriptions = killAutoReactSubscriptions(taskRegistry, {
@@ -397,18 +402,19 @@ function CancelRequestHandler(props) {
           passive: true,
         });
         if (
-          (isZincHarborOn()
-            ? interruptBackgroundWork(
-                appStoreDirect.getState().tasks,
-                taskRegistry,
-                addNotification,
-                store,
-                storageV5,
-              )
-            : handleCancelPress({
-                passive: true,
-              })) ||
-          any_3 ||
+          (!shouldDrain &&
+            (isZincHarborOn()
+              ? interruptBackgroundWork(
+                  appStoreDirect.getState().tasks,
+                  taskRegistry,
+                  addNotification,
+                  store,
+                  storageV5,
+                )
+              : handleCancelPress({
+                  passive: true,
+                }))) ||
+          panelTaskOnStore ||
           interrupted ||
           killedSubscriptions > 0 ||
           drainedNotifications.length > 0
@@ -444,6 +450,7 @@ function CancelRequestHandler(props) {
       storageV5,
       isArmedOrStale,
       detachesAndCalm,
+      hasFooterSelection,
     ],
   );
   let secondOverlayKeys = useSecondOverlayKeys();
@@ -453,7 +460,7 @@ function CancelRequestHandler(props) {
   let isBusyNow = (abortSignal !== undefined && !abortSignal.aborted) || isExternalLoading;
   let isHeldMessageIdle = isCloudMessageHeld && isInputEmpty;
   let hasSelectorOnIdleInput = storeSelector && isInputEmpty;
-  let any_2 = setAppState_2.some((state) => shouldPrependModeChar(state, isInputEmpty));
+  let any_2 = setAppState_2.some((state) => isQueuedCommandPullableInto(state, isInputEmpty));
   let isNonPromptModeIdle = inputMode !== undefined && inputMode !== "prompt" && isInputEmpty;
   let isViewingAgent = viewSelectionMode_2 === "viewing-agent";
   let shouldCancel =
@@ -480,9 +487,9 @@ function CancelRequestHandler(props) {
           any_2 ||
           canCancel ||
           isPhaseActiveNow ||
-          hasAgentPanelTask ||
+          (hasAgentPanelTask && (isInputEmpty || footerSelected)) ||
           hasStoppableWork ||
-          shouldPrependModeChar_2 ||
+          shouldPrependModeChar ||
           any ||
           hasStoppableAutoReactSupervision() ||
           isViewingAgent));
@@ -580,6 +587,7 @@ function CancelRequestHandler(props) {
         key: "kill-agents-none",
         kind: "feedback",
         text: "No background agents running",
+        row1Hint: "no background agents running",
         priority: "immediate",
         timeoutMs: 2000,
       });
@@ -607,7 +615,7 @@ function CancelRequestHandler(props) {
         let notifications = store
           .clearCommandQueue({
             reason: "cleared_on_cancel",
-            ...(alwaysFalseTool() && {
+            ...(isCodeModeExperimentEnabled() && {
               keep: isPollEventMode,
             }),
           })
@@ -711,7 +719,7 @@ ${escapeXml(
   });
   return null;
 }
-//@ chunk-18hwfzwa.js:473810-473910 affinity
+//@ chunk-czq1j3j2.js:500006-500106 affinity
 function hasRunningTask(tasks) {
   for (let task of tasks.values()) if (task.status === "running" && !task.stopRequested) return true;
   return false;

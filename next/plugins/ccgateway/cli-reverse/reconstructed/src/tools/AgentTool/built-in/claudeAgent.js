@@ -3,21 +3,21 @@
  *
  * 2.1.316 新增。内置 claude 代理定义（FleetView 默认代理）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fgpf3f12.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xcr6czxx.js (1)
  * attribution: placement 1
  */
 import { AGENT } from "../constants.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-fgpf3f12.js:227-2351 placement (2.1.88 match: getMagicDocsAgent, 0.611)
+//@ chunk-xcr6czxx.js:227-2351 placement (2.1.88 match: getMagicDocsAgent, 0.611)
 /**
  * 内置 claude 代理定义（FleetView 默认代理）。
  */
 var BACKGROUND_JOB_GUIDANCE; // deferred: uses AGENT (../constants.js) of its import cycle while loading; runs once the cycle is complete
 var CLAUDE_AGENT;
-deferInit("chunk-fgpf3f12.js:227", () => {
+deferInit("chunk-xcr6czxx.js:227", () => {
   BACKGROUND_JOB_GUIDANCE = `This session is a background job. The user may be live or away \u2014 respond naturally either way. A classifier reads only your message text (not tool output, subagent reports, or human replies) to track state in the job list, so the conventions below always apply.
 
 **Narrate.** One line on your approach before acting. After each chunk: what happened, what's next.

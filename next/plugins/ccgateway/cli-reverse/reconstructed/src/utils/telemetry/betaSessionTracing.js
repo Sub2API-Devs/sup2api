@@ -3,10 +3,10 @@
  *
  * beta 详细追踪：ENABLE_BETA_TRACING_DETAILED + BETA_TRACING_ENDPOINT，给 span 附加提示词/响应/工具输入输出（带哈希与截断）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/telemetry/betaSessionTracing.ts
- * pieces: chunk-a9ek44g8.js (17), chunk-spwda8nt.js (1)
- * attribution: placement 3, fingerprint 10, callgraph-witnessed 1, file-local 1, layout 3
+ * pieces: chunk-3bj63apf.js (1), chunk-4qbrxszq.js (17)
+ * attribution: fingerprint 10, placement 3, callgraph-witnessed 1, file-local 1, layout 3
  */
 import { createHash } from "crypto";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
@@ -41,18 +41,18 @@ import {
 } from "../../services/sessionStatus/sessionStateClassifier.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-a9ek44g8.js:2157-2250 placement
+//@ chunk-4qbrxszq.js:2223-2316 placement
 class BetaTracingState {
   seenHashes = new Set();
   lastReportedMessage = new Map();
   emittedUserPromptForSessionId = undefined;
 }
-//@ chunk-a9ek44g8.js:2250-2276 placement
+//@ chunk-4qbrxszq.js:2316-2342 placement
 var betaTracingStateBySession; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-a9ek44g8.js:2250", () => {
+deferInit("chunk-4qbrxszq.js:2316", () => {
   betaTracingStateBySession = new SessionRootSlot(() => new BetaTracingState());
 });
-//@ chunk-a9ek44g8.js:2276-2359 placement
+//@ chunk-4qbrxszq.js:2342-2425 placement
 /**
  * 压缩后清空 beta 追踪的哈希与消息记录。
  */
@@ -61,7 +61,7 @@ function clearBetaTracingState() {
   state.seenHashes.clear();
   state.lastReportedMessage.clear();
 }
-//@ chunk-a9ek44g8.js:2359-2510 fingerprint (2.1.88 match: isBetaTracingEnabled, 0.764)
+//@ chunk-4qbrxszq.js:2425-2576 fingerprint (2.1.88 match: isBetaTracingEnabled, 0.764)
 /**
  * beta 追踪：ENABLE_BETA_TRACING_DETAILED 且设了 BETA_TRACING_ENDPOINT、非 diskless，并且非交互或 tengu_trace_lantern 开启。
  */
@@ -70,24 +70,24 @@ function isBetaTracingEnabled() {
     return false;
   return getIsNonInteractiveSession() || getFeatureValue_CACHED_MAY_BE_STALE("tengu_trace_lantern", false);
 }
-//@ chunk-a9ek44g8.js:2510-2580 callgraph-witnessed (2.1.88 match: shortHash, 1)
+//@ chunk-4qbrxszq.js:2576-2646 callgraph-witnessed (2.1.88 match: shortHash, 1)
 function shortHash(content) {
   return createHash("sha256").update(content).digest("hex").slice(0, 12);
 }
-//@ chunk-a9ek44g8.js:2580-2614 fingerprint (2.1.88 match: hashSystemPrompt, 1)
+//@ chunk-4qbrxszq.js:2646-2680 fingerprint (2.1.88 match: hashSystemPrompt, 1)
 function hashSystemPrompt(systemPrompt) {
   return `sp_${shortHash(systemPrompt)}`;
 }
-//@ chunk-a9ek44g8.js:2614-2676 fingerprint (2.1.88 match: hashMessage, 1)
+//@ chunk-4qbrxszq.js:2680-2742 fingerprint (2.1.88 match: hashMessage, 1)
 function hashMessage(message) {
   let content = jsonStringify(message.message.content);
   return `msg_${shortHash(content)}`;
 }
-//@ chunk-a9ek44g8.js:2676-2787 file-local
+//@ chunk-4qbrxszq.js:2742-2853 file-local
 function extractSystemReminderContent(text) {
   return /^<system-reminder>\n?([\s\S]*?)\n?<\/system-reminder>$/.exec(text.trim())?.[1]?.trim() || null;
 }
-//@ chunk-a9ek44g8.js:2787-3403 fingerprint (2.1.88 match: formatMessagesForContext, 0.893)
+//@ chunk-4qbrxszq.js:2853-3469 fingerprint (2.1.88 match: formatMessagesForContext, 0.894)
 function formatMessagesForContext(messages, includeUser) {
   let contextParts = [];
   let systemReminders = [];
@@ -129,7 +129,7 @@ ${jsonStringify(block.content)}`);
     systemReminders,
   };
 }
-//@ chunk-a9ek44g8.js:3403-3505 layout
+//@ chunk-4qbrxszq.js:3469-3571 layout
 function contextPartsFor(messages, withheldReason) {
   let { systemReminders } = formatMessagesForContext(messages, false);
   return {
@@ -137,7 +137,7 @@ function contextPartsFor(messages, withheldReason) {
     systemReminders: systemReminders.map(() => withheldReason),
   };
 }
-//@ chunk-a9ek44g8.js:3505-3641 layout
+//@ chunk-4qbrxszq.js:3571-3707 layout
 function redactToolUseIds(newMessages, messagesForAPI, memoryKeys) {
   let toolUseIds = collectToolUseIds(
     newMessages.map((keptMessage) => keptMessage.message),
@@ -153,9 +153,9 @@ function redactToolUseIds(newMessages, messagesForAPI, memoryKeys) {
         },
   );
 }
-//@ chunk-a9ek44g8.js:3641-3666 layout
+//@ chunk-4qbrxszq.js:3707-3732 layout
 var accountMemoryKeysForSession = () => accountMemoryRedactionKeys(getRootSession().host);
-//@ chunk-a9ek44g8.js:3666-3889 fingerprint (2.1.88 match: addBetaInteractionAttributes, 1)
+//@ chunk-4qbrxszq.js:3732-3955 fingerprint (2.1.88 match: addBetaInteractionAttributes, 1)
 function addBetaInteractionAttributes(span, userPrompt) {
   if (!isBetaTracingEnabled() || !isUserPromptLoggingEnabled()) return;
   let { content: truncatedPrompt, truncated } = truncateContentForTelemetry(`[USER PROMPT]
@@ -168,7 +168,7 @@ ${redactAccountMemoryText(() => accountMemoryRedactionKeys(getRootSession().host
     }),
   });
 }
-//@ chunk-a9ek44g8.js:3889-6437 fingerprint (2.1.88 match: addBetaLLMRequestAttributes, 0.795)
+//@ chunk-4qbrxszq.js:3955-6503 fingerprint (2.1.88 match: addBetaLLMRequestAttributes, 0.795)
 function addBetaLLMRequestAttributes(span, newContext, messagesForAPI, memoryKeys, tracer) {
   if (!isBetaTracingEnabled()) return;
   let state = betaTracingStateBySession.of(getRootSession());
@@ -341,7 +341,7 @@ function addBetaLLMRequestAttributes(span, newContext, messagesForAPI, memoryKey
       });
   }
 }
-//@ chunk-a9ek44g8.js:6437-6746 fingerprint (2.1.88 match: addBetaLLMResponseAttributes, 0.81)
+//@ chunk-4qbrxszq.js:6503-6812 fingerprint (2.1.88 match: addBetaLLMResponseAttributes, 0.81)
 function addBetaLLMResponseAttributes(endAttributes, metadata) {
   if (!isBetaTracingEnabled() || !isUserPromptLoggingEnabled() || !metadata) return;
   let redactOutput = (modelOutput) =>
@@ -357,7 +357,7 @@ function addBetaLLMResponseAttributes(endAttributes, metadata) {
     }
   }
 }
-//@ chunk-a9ek44g8.js:6746-6958 fingerprint (2.1.88 match: addBetaToolInputAttributes, 1)
+//@ chunk-4qbrxszq.js:6812-7024 fingerprint (2.1.88 match: addBetaToolInputAttributes, 1)
 function addBetaToolInputAttributes(span, toolName, toolInput, notRecorded = false) {
   if (!isBetaTracingEnabled() || !isToolDetailsLoggingEnabled()) return;
   let { content: truncatedInput, truncated } = truncateContentForTelemetry(`[TOOL INPUT: ${toolName}]
@@ -370,7 +370,7 @@ ${notRecorded ? notRecordedLength(toolInput) : toolInput}`);
     }),
   });
 }
-//@ chunk-a9ek44g8.js:6958-7159 fingerprint (2.1.88 match: addBetaToolResultAttributes, 1)
+//@ chunk-4qbrxszq.js:7024-7225 fingerprint (2.1.88 match: addBetaToolResultAttributes, 1)
 function addBetaToolResultAttributes(endAttributes, toolName, toolContent, notRecorded = false) {
   if (!isBetaTracingEnabled() || !isToolContentLoggingEnabled()) return;
   let { content: truncatedResult, truncated } = truncateContentForTelemetry(`[TOOL RESULT: ${toolName}]
@@ -381,7 +381,7 @@ ${notRecorded ? notRecordedLength(toolContent) : toolContent}`);
     endAttributes.new_context_original_length = toolContent.length;
   }
 }
-//@ chunk-spwda8nt.js:16240-16395 fingerprint (2.1.88 match: truncateContent, 0.693)
+//@ chunk-3bj63apf.js:16244-16399 fingerprint (2.1.88 match: truncateContent, 0.694)
 function truncateContent(content, maxSize = MAX_HEADLINE_LENGTH_2) {
   let normalized = normalizeWhitespace(content);
   if (normalized.length <= maxSize)
@@ -398,11 +398,11 @@ function truncateContent(content, maxSize = MAX_HEADLINE_LENGTH_2) {
 }
 export {
   isBetaTracingEnabled,
+  truncateContent,
   addBetaInteractionAttributes,
   addBetaLLMRequestAttributes,
   addBetaLLMResponseAttributes,
   addBetaToolInputAttributes,
   addBetaToolResultAttributes,
   clearBetaTracingState,
-  truncateContent,
 };

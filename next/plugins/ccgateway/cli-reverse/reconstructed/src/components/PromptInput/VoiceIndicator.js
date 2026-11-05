@@ -3,10 +3,10 @@
  *
  * 语音输入状态指示（录音中/处理中微光）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/VoiceIndicator.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-tzghj6zv.js (6)
- * attribution: fingerprint 2, placement 5
+ * pieces: chunk-18rrbwq1.js (6), chunk-czq1j3j2.js (1)
+ * attribution: placement 5, fingerprint 2
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../state/AppState.js";
@@ -22,13 +22,13 @@ import { useSettingsState } from "../../hooks/useSettings.js";
 import { isReducedMotion } from "../Spinner/spinnerFlags.js";
 import { useAnimationFrame } from "../../ink/components/Input.js";
 import { isXtermJs } from "../../ink/terminal.js";
-import { roundToStep, toRGBColor, parseRGB } from "../Spinner/utils.js";
+import { roundToStep, toRGBColor, interpolateColor } from "../Spinner/utils.js";
 
-//@ chunk-tzghj6zv.js:20376-20429 placement
+//@ chunk-18rrbwq1.js:20387-20440 placement
 function selectVoiceMode(state) {
   return state.settings.voice?.mode ?? "hold";
 }
-//@ chunk-tzghj6zv.js:20429-20484 placement (2.1.88 match: SETTLED_GREY, 1)
+//@ chunk-18rrbwq1.js:20440-20495 placement (2.1.88 match: SETTLED_GREY, 1)
 var VOICE_DIM_COLOR = {
   r: 153,
   g: 153,
@@ -40,7 +40,7 @@ var VOICE_ACTIVE_COLOR = {
   b: 185,
 };
 var VOICE_BAR_COUNT = 2;
-//@ chunk-tzghj6zv.js:20484-20928 placement
+//@ chunk-18rrbwq1.js:20495-20939 placement
 /**
  * 语音状态指示：录音中显示 REC（点按模式附"tap to send"）或"listening…"，处理中显示微光动画，空闲不显示。
  */
@@ -92,7 +92,7 @@ function VoiceStateIndicator(props) {
     }
   }
 }
-//@ chunk-tzghj6zv.js:20928-21058 placement
+//@ chunk-18rrbwq1.js:20939-21069 placement
 /**
  * 语音输入的音量字符图标（按当前电平着色）。
  */
@@ -112,7 +112,7 @@ function VoiceLevelGlyph() {
   } else glyphElement = $[1];
   return glyphElement;
 }
-//@ chunk-tzghj6zv.js:21058-21177 placement
+//@ chunk-18rrbwq1.js:21069-21188 placement
 /**
  * 按住说话时显示的"keep holding…"提示。
  */
@@ -128,7 +128,7 @@ function KeepHoldingHint() {
   } else hintElement = $[0];
   return hintElement;
 }
-//@ chunk-tzghj6zv.js:21177-21690 fingerprint (2.1.88 match: ProcessingShimmer, 0.589)
+//@ chunk-18rrbwq1.js:21188-21701 fingerprint (2.1.88 match: ProcessingShimmer, 0.589)
 function ProcessingShimmer() {
   let $ = useMemoCache(8);
   let settings = useSettingsState();
@@ -150,7 +150,7 @@ function ProcessingShimmer() {
   let t0;
   if ($[1] !== opacity) {
     let reducedMotion = isXtermJs() ? roundToStep(opacity) : opacity;
-    t0 = toRGBColor(parseRGB(VOICE_DIM_COLOR, VOICE_ACTIVE_COLOR, reducedMotion));
+    t0 = toRGBColor(interpolateColor(VOICE_DIM_COLOR, VOICE_ACTIVE_COLOR, reducedMotion));
     $[1] = opacity;
     $[2] = t0;
   } else t0 = $[2];
@@ -176,8 +176,8 @@ function ProcessingShimmer() {
   } else t2 = $[7];
   return t2;
 }
-//@ chunk-18hwfzwa.js:787748-787830 fingerprint (2.1.88 match: VoiceIndicatorImpl, 0.678)
+//@ chunk-czq1j3j2.js:820367-820449 fingerprint (2.1.88 match: VoiceIndicatorImpl, 0.679)
 function VoiceIndicatorImpl(t0) {
   return t0.voiceState === "recording" || t0.voiceState === "processing";
 }
-export { VoiceIndicatorImpl, VoiceStateIndicator, KeepHoldingHint, VoiceLevelGlyph };
+export { KeepHoldingHint, VoiceStateIndicator, VoiceLevelGlyph, VoiceIndicatorImpl };

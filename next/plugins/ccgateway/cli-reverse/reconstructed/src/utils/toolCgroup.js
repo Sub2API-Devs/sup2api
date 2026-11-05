@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工具子进程的 cgroup 资源限制（Linux）：探测、创建与写入限制。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-m4p5zn6n.js (52)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-t889g22j.js (52)
  * attribution: placement 52
  */
 import { readFileSync, mkdirSync, writeFileSync, rmdirSync, statSync } from "fs";
@@ -26,7 +26,7 @@ import { procStatField, statPpid } from "./procStat.js";
 import { shellQuoteArgs } from "./bash/bashPipeCommand.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-m4p5zn6n.js:31106-31417 placement
+//@ chunk-t889g22j.js:31105-31416 placement
 /**
  * 解析 /proc/self/cgroup：优先返回 cgroup v1 的 memory 层级（挂载点与路径），否则返回 v2 统一层级（0::路径）；都没有时返回 undefined。
  */
@@ -53,13 +53,13 @@ function parseMemoryCgroup(text) {
         v2: true,
       };
 }
-//@ chunk-m4p5zn6n.js:31417-31545 placement
+//@ chunk-t889g22j.js:31416-31544 placement
 var CLAUDE_CODE_BASH = "claude-code-bash";
 var CLAUDE_CODE_KEEPER = "claude-code-keeper";
 var RESERVED_CGROUP_BYTES = 1073741824;
 var MIN_CGROUP_LIMIT_BYTES = RESERVED_CGROUP_BYTES;
 var EXCLUDED_TOOL_CLASS_NAMES = ["mcp", "lsp", "hooks", "plugin", "tmux", "helper", "agent"];
-//@ chunk-m4p5zn6n.js:31545-31690 placement
+//@ chunk-t889g22j.js:31544-31689 placement
 class FeatureFlagReaderSlot {
   reader = null;
   subscribeRefresh = null;
@@ -72,12 +72,12 @@ class FeatureFlagReaderSlot {
     return this.reader ? this.reader(target, extra) : extra;
   }
 }
-//@ chunk-m4p5zn6n.js:31690-31703 placement
+//@ chunk-t889g22j.js:31689-31702 placement
 var featureFlagReaderSlot; // deferred: uses FeatureFlagReaderSlot of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-m4p5zn6n.js:31690", () => {
+deferInit("chunk-t889g22j.js:31689", () => {
   featureFlagReaderSlot = new FeatureFlagReaderSlot();
 });
-//@ chunk-m4p5zn6n.js:31703-31777 placement
+//@ chunk-t889g22j.js:31702-31776 placement
 /**
  * 注册特性开关读取器（带刷新订阅）。
  */
@@ -85,7 +85,7 @@ function registerFeatureFlagReader(getFeatureValue_CACHED_MAY_BE_STALE, onGrowth
   if (onGrowthBookRefresh !== undefined) featureFlagReaderSlot.subscribeRefresh = onGrowthBookRefresh;
   return featureFlagReaderSlot.register(getFeatureValue_CACHED_MAY_BE_STALE);
 }
-//@ chunk-m4p5zn6n.js:31777-31910 placement
+//@ chunk-t889g22j.js:31776-31909 placement
 class ToolCgroupState {
   dir = undefined;
   layout = undefined;
@@ -95,12 +95,12 @@ class ToolCgroupState {
   pendingUnsubscribe = undefined;
   oomKillsSeen = undefined;
 }
-//@ chunk-m4p5zn6n.js:31910-31934 placement
+//@ chunk-t889g22j.js:31909-31935 placement
 var toolCgroupStateByHost; // deferred: uses ToolCgroupState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-m4p5zn6n.js:31910", () => {
+deferInit("chunk-t889g22j.js:31909", () => {
   toolCgroupStateByHost = new HostScoped(() => new ToolCgroupState());
 });
-//@ chunk-m4p5zn6n.js:31934-32944 placement
+//@ chunk-t889g22j.js:31935-32947 placement
 /**
  * 初始化工具内存 cgroup（只在 Linux/WSL）：环境变量或功能开关决定是否启用；解析当前 cgroup 布局，按内存上限创建子 cgroup（嵌套时复用），记录状态并打点；失败则禁用。
  */
@@ -165,7 +165,7 @@ function initToolCgroup() {
   }
   return state.dir ?? undefined;
 }
-//@ chunk-m4p5zn6n.js:32944-33191 placement
+//@ chunk-t889g22j.js:32947-33196 placement
 function getToolCgroupDirForClass(cls) {
   if (initToolCgroup() === undefined) return;
   if (cls !== "shell" && getExcludedToolClasses().has(cls)) return;
@@ -182,7 +182,7 @@ function getToolCgroupDirForClass(cls) {
   }
   return toolCgroupDir;
 }
-//@ chunk-m4p5zn6n.js:33191-33271 placement
+//@ chunk-t889g22j.js:33196-33278 placement
 /**
  * 该工具类别是否可使用内存 cgroup。
  */
@@ -192,7 +192,7 @@ function isToolCgroupDirUsable(cls) {
     (cls === "shell" || !getExcludedToolClasses().has(cls))
   );
 }
-//@ chunk-m4p5zn6n.js:33271-33759 placement
+//@ chunk-t889g22j.js:33278-33766 placement
 /**
  * 确认工具 cgroup 目录仍存在，被删除时按布局重新创建；无法恢复时禁用并打点。
  */
@@ -224,7 +224,7 @@ function ensureToolCgroupDir(
     return;
   }
 }
-//@ chunk-m4p5zn6n.js:33759-33816 placement
+//@ chunk-t889g22j.js:33766-33823 placement
 function pathExistsSync(path) {
   return (
     statSync(path, {
@@ -232,27 +232,27 @@ function pathExistsSync(path) {
     }) !== undefined
   );
 }
-//@ chunk-m4p5zn6n.js:33816-33956 placement
+//@ chunk-t889g22j.js:33823-33963 placement
 function getExcludedToolClasses() {
   let flagValue = env.CLAUDE_CODE_TOOL_MEMORY_CGROUP_EXCLUDE?.trim();
   let excludedToolClasses = parseExcludedToolClasses(flagValue);
   if (excludedToolClasses.has("mcp") || !isMcpCgroupDisabled(!flagValue)) return excludedToolClasses;
   return new Set([...excludedToolClasses, "mcp"]);
 }
-//@ chunk-m4p5zn6n.js:33956-34107 placement
+//@ chunk-t889g22j.js:33963-34114 placement
 function parseExcludedToolClasses(flagValue) {
   if (flagValue) return toToolClassSet(flagValue.split(","));
   let featureValue = featureFlagReaderSlot.read("tengu_tool_cgroup_exclude_classes", null);
   if (Array.isArray(featureValue)) return toToolClassSet(featureValue);
   return new Set(EXCLUDED_TOOL_CLASS_NAMES);
 }
-//@ chunk-m4p5zn6n.js:34107-34271 placement
+//@ chunk-t889g22j.js:34114-34278 placement
 function isMcpCgroupDisabled(lower) {
   let lower_2 = env.CLAUDE_CODE_MCP_MEMORY_CGROUP?.trim().toLowerCase();
   if (lower_2 && (isEnvDefinedFalsy(lower_2) || lower_2 === "none")) return true;
   return lower && featureFlagReaderSlot.read("tengu_mcp_memory_cgroup", null) === false;
 }
-//@ chunk-m4p5zn6n.js:34271-34479 placement
+//@ chunk-t889g22j.js:34278-34486 placement
 function toToolClassSet(values) {
   let set = new Set();
   for (let value of values) {
@@ -266,7 +266,7 @@ function toToolClassSet(values) {
   }
   return set;
 }
-//@ chunk-m4p5zn6n.js:34479-34537 placement
+//@ chunk-t889g22j.js:34486-34544 placement
 /**
  * 生成带 cgroup 的 spawn 选项。
  */
@@ -278,7 +278,7 @@ function cgroupSpawnOptions(toolCgroupClass) {
         cgroup: toolCgroupDirForClass,
       };
 }
-//@ chunk-m4p5zn6n.js:34537-34828 placement
+//@ chunk-t889g22j.js:34544-34835 placement
 /**
  * 把工具命令包装为先把自身写入 cgroup.procs 再 exec 的 /bin/sh 调用；cgroup 不可用时原样返回并标记是否待定。
  */
@@ -311,14 +311,14 @@ function wrapCommandInCgroup(cls, command, extra) {
     ],
   };
 }
-//@ chunk-m4p5zn6n.js:34828-34869 placement
+//@ chunk-t889g22j.js:34835-34878 placement
 /**
  * 工具 cgroup 目录是否尚未就绪。
  */
 function isToolCgroupPending() {
   return onProcessRootHost(toolCgroupStateByHost).dir === undefined;
 }
-//@ chunk-m4p5zn6n.js:34869-34957 placement
+//@ chunk-t889g22j.js:34878-34966 placement
 var MAX_PENDING_PIDS = 64;
 var CGROUP_IO_DEPS = {
   readStarttime: readStatStartTime,
@@ -326,7 +326,7 @@ var CGROUP_IO_DEPS = {
   readCgroupPids,
   readProcIdentity,
 };
-//@ chunk-m4p5zn6n.js:34957-35399 placement
+//@ chunk-t889g22j.js:34966-35410 placement
 /**
  * 在 cgroup 尚未就绪时暂存进程（记录类别、启动时间与是否保持不受限），待开关刷新后再晚绑定；已就绪则直接绑定；暂存数量有上限。
  */
@@ -358,7 +358,7 @@ function parkPendingPid(cls, pid, shouldStayUncapped, deps = CGROUP_IO_DEPS) {
     logForDebugging(`tool cgroup: pending pid not parked (${error})`);
   }
 }
-//@ chunk-m4p5zn6n.js:35399-35657 placement
+//@ chunk-t889g22j.js:35410-35670 placement
 function attachPendingPids(deps = CGROUP_IO_DEPS) {
   let state = onProcessRootHost(toolCgroupStateByHost);
   try {
@@ -376,7 +376,7 @@ function attachPendingPids(deps = CGROUP_IO_DEPS) {
   state.pendingUnsubscribe?.();
   state.pendingUnsubscribe = undefined;
 }
-//@ chunk-m4p5zn6n.js:35657-36128 placement
+//@ chunk-t889g22j.js:35670-36143 placement
 /**
  * 把暂存的进程晚绑定到其类别的工具 cgroup（启动时间不符或应保持不受限时跳过），并一并移动其后代进程。
  */
@@ -401,12 +401,12 @@ function lateAttachPid(pid, { cls, starttime, shouldStayUncapped }, deps) {
     logForDebugging(`tool cgroup: late attach of pid ${pid} failed (${getErrnoCode(error) ?? error})`);
   }
 }
-//@ chunk-m4p5zn6n.js:36128-36236 placement
+//@ chunk-t889g22j.js:36143-36251 placement
 function dropRecycledPendingPids(pending, deps) {
   for (let [pid, { starttime }] of pending.pendingPids)
     if (deps.readStarttime(pid) !== starttime) pending.pendingPids.delete(pid);
 }
-//@ chunk-m4p5zn6n.js:36236-36308 placement
+//@ chunk-t889g22j.js:36251-36323 placement
 function readStatStartTime(pid) {
   try {
     return procStatField(readFileSync(`/proc/${pid}/stat`, "utf8"));
@@ -414,7 +414,7 @@ function readStatStartTime(pid) {
     return;
   }
 }
-//@ chunk-m4p5zn6n.js:36308-36450 placement
+//@ chunk-t889g22j.js:36323-36465 placement
 function readProcIdentity(pid) {
   try {
     let statText = readFileSync(`/proc/${pid}/stat`, "utf8");
@@ -430,7 +430,7 @@ function readProcIdentity(pid) {
     return;
   }
 }
-//@ chunk-m4p5zn6n.js:36450-36580 placement
+//@ chunk-t889g22j.js:36465-36595 placement
 function readCgroupPids(dir) {
   return readFileSync(posix.join(dir, "cgroup.procs"), "utf8")
     .split(
@@ -440,20 +440,20 @@ function readCgroupPids(dir) {
     .map((line) => Number.parseInt(line, 10))
     .filter((pid) => !Number.isNaN(pid));
 }
-//@ chunk-m4p5zn6n.js:36580-36670 placement
+//@ chunk-t889g22j.js:36595-36685 placement
 function oomKillCountFromText(text) {
   let match = /^oom_kill (\d+)$/m.exec(text);
   return match ? Number.parseInt(match[1], 10) : undefined;
 }
-//@ chunk-m4p5zn6n.js:36670-36748 placement
+//@ chunk-t889g22j.js:36685-36763 placement
 function oomEventsPath(layout) {
   return posix.join(layout.dir, layout.v2 ? "memory.events" : "memory.oom_control");
 }
-//@ chunk-m4p5zn6n.js:36748-36781 placement
+//@ chunk-t889g22j.js:36763-36796 placement
 function readFileText(path) {
   return readFileSync(path, "utf8");
 }
-//@ chunk-m4p5zn6n.js:36781-36834 placement
+//@ chunk-t889g22j.js:36796-36849 placement
 function readOomKillCount(path, readFile = readFileText) {
   try {
     return oomKillCountFromText(readFile(path));
@@ -461,7 +461,7 @@ function readOomKillCount(path, readFile = readFileText) {
     return;
   }
 }
-//@ chunk-m4p5zn6n.js:36834-36922 placement
+//@ chunk-t889g22j.js:36849-36939 placement
 /**
  * 取当前工具 cgroup 的 OOM kill 计数。
  */
@@ -470,7 +470,7 @@ function currentOomKillCount(readFile = readFileText) {
   if (!dir || layout === undefined) return;
   return readOomKillCount(oomEventsPath(layout), readFile);
 }
-//@ chunk-m4p5zn6n.js:36922-37034 placement
+//@ chunk-t889g22j.js:36939-37053 placement
 /**
  * 检查自上次以来工具 cgroup 是否发生过 OOM kill。
  */
@@ -481,7 +481,7 @@ function hasNewOomKills(deps, state = readFileText) {
   checkOomKills(hostState, state, currentCount);
   return seenCount === undefined || currentCount === undefined ? undefined : currentCount > seenCount;
 }
-//@ chunk-m4p5zn6n.js:37034-37431 placement
+//@ chunk-t889g22j.js:37053-37450 placement
 /**
  * 读取工具 cgroup 的 OOM kill 计数，有新增时记日志并打点。
  */
@@ -506,7 +506,7 @@ function checkOomKills(state, readFile = readFileText, extra) {
     logForDebugging(`tool cgroup: oom_kill check skipped (${error})`);
   }
 }
-//@ chunk-m4p5zn6n.js:37431-37540 placement
+//@ chunk-t889g22j.js:37450-37561 placement
 /**
  * 返回读取指定类别工具 cgroup OOM kill 计数的函数，cgroup 不可用时返回 undefined。
  */
@@ -517,7 +517,7 @@ function getOomKillCounter(cls, readFile = readFileText) {
   let eventsPath = oomEventsPath(layout);
   return () => readOomKillCount(eventsPath, readFile);
 }
-//@ chunk-m4p5zn6n.js:37540-37676 placement
+//@ chunk-t889g22j.js:37561-37697 placement
 /**
  * 在 shell 命令前加上把自身加入工具 cgroup 的前缀，cgroup 不可用时原样返回。
  */
@@ -526,7 +526,7 @@ function prefixCgroupJoinCommand(cls, command) {
   if (toolCgroupDirForClass === undefined) return command;
   return `sh -c '{ echo $PPID > "$1"/cgroup.procs; } 2>/dev/null' sh ${shellQuoteArgs([toolCgroupDirForClass])}; ${command}`;
 }
-//@ chunk-m4p5zn6n.js:37676-38299 placement
+//@ chunk-t889g22j.js:37697-38322 placement
 /**
  * 把进程（及其后代）从工具 cgroup 移回本进程的 cgroup：cgroup 尚未初始化时只是取消暂存；启动时间不符（进程已回收）时不处理。
  */
@@ -558,7 +558,7 @@ function releasePidFromCgroup(root, starttime, deps = CGROUP_IO_DEPS) {
     return false;
   }
 }
-//@ chunk-m4p5zn6n.js:38299-38608 placement
+//@ chunk-t889g22j.js:38322-38631 placement
 /**
  * 把进程的后代逐个写入目标 cgroup（跳过已退出或 pid 被复用的），返回移动数量。
  */
@@ -580,7 +580,7 @@ function moveDescendants(root, procsFile, procsFile_2, deps, actionLabel) {
   }
   return moved;
 }
-//@ chunk-m4p5zn6n.js:38608-39073 placement
+//@ chunk-t889g22j.js:38631-39096 placement
 /**
  * 读取 cgroup 成员并按父子关系建立进程树，返回指定进程的所有后代（pid 与启动时间）；成员无法读取时返回空列表。
  */
@@ -621,7 +621,7 @@ function listDescendantPids(deps, procsFile, procDeps) {
     }
   return descendants;
 }
-//@ chunk-m4p5zn6n.js:39073-39370 placement
+//@ chunk-t889g22j.js:39096-39393 placement
 function createCgroupWithLimit(
   layout,
   deps,
@@ -652,7 +652,7 @@ function createCgroupWithLimit(
     throw error;
   }
 }
-//@ chunk-m4p5zn6n.js:39370-39476 placement
+//@ chunk-t889g22j.js:39393-39499 placement
 function resolveCgroupLayout(text) {
   let memoryCgroup = parseMemoryCgroup(text);
   if (!memoryCgroup) return;
@@ -663,7 +663,7 @@ function resolveCgroupLayout(text) {
     memoryCgroup.v2,
   );
 }
-//@ chunk-m4p5zn6n.js:39476-39672 placement
+//@ chunk-t889g22j.js:39499-39695 placement
 function getKeeperCgroupDir(text) {
   let memoryCgroup = parseMemoryCgroup(text);
   if (!memoryCgroup) return;
@@ -681,13 +681,13 @@ function getKeeperCgroupDir(text) {
         create: false,
       };
 }
-//@ chunk-m4p5zn6n.js:39672-39760 placement
+//@ chunk-t889g22j.js:39695-39783 placement
 var KEEPER_CGROUP_IO_DEPS = {
   readSelfCgroup: () => readFileSync("/proc/self/cgroup", "utf8"),
   mkdirSync,
   writeFileSync,
 };
-//@ chunk-m4p5zn6n.js:39760-40027 placement
+//@ chunk-t889g22j.js:39783-40050 placement
 function ensureKeeperCgroupDir(deps) {
   let platform = getPlatform();
   if (platform !== "linux" && platform !== "wsl") return;
@@ -706,7 +706,7 @@ function ensureKeeperCgroupDir(deps) {
     return;
   }
 }
-//@ chunk-m4p5zn6n.js:40027-40264 placement
+//@ chunk-t889g22j.js:40050-40287 placement
 /**
  * 把 keeper 进程移入 keeper cgroup 目录，失败只记日志。
  */
@@ -721,7 +721,7 @@ function moveKeeperPid(pid, deps = KEEPER_CGROUP_IO_DEPS) {
     logForDebugging(`tool cgroup: keeper pid ${pid} not moved (${getErrnoCode(error) ?? error})`);
   }
 }
-//@ chunk-m4p5zn6n.js:40264-40327 placement
+//@ chunk-t889g22j.js:40287-40350 placement
 /**
  * 生成 keeper cgroup 的 spawn 选项。
  */
@@ -733,7 +733,7 @@ function keeperCgroupSpawnOptions(deps = KEEPER_CGROUP_IO_DEPS) {
         cgroup: keeperCgroupDir,
       };
 }
-//@ chunk-m4p5zn6n.js:40327-40484 placement
+//@ chunk-t889g22j.js:40350-40507 placement
 function buildCgroupLayout(mountRoot, path, classDir, v2) {
   let included = path.split("/").includes(CLAUDE_CODE_BASH);
   let joined = posix.join(mountRoot, path, ".");
@@ -751,47 +751,48 @@ function buildCgroupLayout(mountRoot, path, classDir, v2) {
         selfDir: joined,
       };
 }
-//@ chunk-m4p5zn6n.js:40484-40542 placement
+//@ chunk-t889g22j.js:40507-40565 placement
 function defaultCgroupLimit(totalBytes) {
   return Math.floor(totalBytes - Math.max(2 * RESERVED_CGROUP_BYTES, totalBytes * 0.15));
 }
-//@ chunk-m4p5zn6n.js:40542-40616 placement
+//@ chunk-t889g22j.js:40565-40639 placement
 function resolveCgroupLimit(explicitLimit, totalBytes) {
   if (explicitLimit !== undefined) return explicitLimit;
   let limit = defaultCgroupLimit(totalBytes);
   return limit >= MIN_CGROUP_LIMIT_BYTES ? limit : undefined;
 }
-//@ chunk-m4p5zn6n.js:40616-40812 placement
+//@ chunk-t889g22j.js:40639-40835 placement
 function parseMemorySize(limitSetting) {
   let match = /^(\d+(?:\.\d+)?)\s*([kmgt]?)(?:i?b)?$/i.exec(limitSetting?.trim() ?? "");
   if (!match) return;
   let floored = Math.floor(Number(match[1]) * 1024 ** " kmgt".indexOf((match[2] || " ").toLowerCase()));
   return floored >= 1 ? floored : undefined;
 }
-//@ chunk-m4p5zn6n.js:40812-40896 placement
+//@ chunk-t889g22j.js:40835-40919 placement
 function helperCgroupSpawnOptions({ useToolMemoryCgroup = true, toolCgroupClass = "helper" }) {
   return useToolMemoryCgroup ? cgroupSpawnOptions(toolCgroupClass) : {};
 }
-//@ chunk-m4p5zn6n.js:40896-40919 placement
+//@ chunk-t889g22j.js:40919-40942 placement
 function isToolMemoryCgroupDisabled() {
   return false;
 }
 export {
-  moveKeeperPid,
-  keeperCgroupSpawnOptions,
   wrapCommandInCgroup,
   parkPendingPid,
   cgroupSpawnOptions,
-  prefixCgroupJoinCommand,
-  getOomKillCounter,
-  registerFeatureFlagReader,
+  isToolCgroupPending,
+  moveKeeperPid,
+  keeperCgroupSpawnOptions,
   hasNewOomKills,
   currentOomKillCount,
-  isToolCgroupPending,
   parseMemoryCgroup,
-  helperCgroupSpawnOptions,
-  isToolMemoryCgroupDisabled,
+  toolCgroupStateByHost,
   CGROUP_IO_DEPS,
   releasePidFromCgroup,
+  registerFeatureFlagReader,
   isToolCgroupDirUsable,
+  prefixCgroupJoinCommand,
+  helperCgroupSpawnOptions,
+  isToolMemoryCgroupDisabled,
+  getOomKillCounter,
 };

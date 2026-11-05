@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Agents 视图的滚动列表（分组头、选中、过滤、旧会话行）；Agents 视图中一个会话（job）行：状态、详情、子行、重命名/分组/删除状态等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-93kwxas0.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-avy0g5d4.js (25)
  * attribution: placement 25
  */
 import { basename } from "path";
@@ -61,6 +61,7 @@ import {
   isTerminalDetail,
   jobPreviewText,
   stripJobPreviewText,
+  deleteMethodName,
   FLEET_BUCKET_LABELS,
   shortenPath,
   FLEET_BUCKET_HINTS,
@@ -78,7 +79,7 @@ import { useKeybindingContext } from "../../keybindings/KeybindingContext.js";
 import { parseBindings } from "../../keybindings/parser.js";
 import { DEFAULT_BINDINGS } from "../../keybindings/defaultBindings.js";
 
-//@ chunk-93kwxas0.js:100082-102493 placement
+//@ chunk-avy0g5d4.js:100091-102504 placement
 /**
  * Agents 视图底部的派发输入区（布局、简化视图、派发默认值、当前目录）。
  */
@@ -281,7 +282,7 @@ function FleetComposer(props) {
   } else composerHeader = $[32];
   return composerHeader;
 }
-//@ chunk-93kwxas0.js:102493-102976 placement
+//@ chunk-avy0g5d4.js:102504-102987 placement
 /**
  * 计算派发窗口（模型、effort、快速模式）对新会话的有效默认值。
  */
@@ -334,7 +335,7 @@ function useDispatchWindowDefaults(store, launch) {
   } else defaultsLayout = $[11];
   return defaultsLayout;
 }
-//@ chunk-93kwxas0.js:102976-103108 placement
+//@ chunk-avy0g5d4.js:102987-103119 placement
 /**
  * “New sessions: 模型 · effort · ultracode” 标签。
  */
@@ -342,7 +343,7 @@ function formatDispatchDefaultsLabel(newSession) {
   let effortSuffix = newSession.effort ? ` \xB7 ${newSession.effort} effort` : "";
   return `New sessions: ${newSession.model}${effortSuffix}${newSession.ultracode ? " \xB7 ultracode" : ""}`;
 }
-//@ chunk-93kwxas0.js:103108-103288 placement
+//@ chunk-avy0g5d4.js:103119-103299 placement
 /**
  * 按可用宽度依次尝试完整/缩短的默认值标签，都放不下时截断模型名。
  */
@@ -358,21 +359,21 @@ function fitDispatchDefaultsLabel(newSession, width) {
     truncateToWidth(newSession.model, Math.max(width, 1))
   );
 }
-//@ chunk-93kwxas0.js:103288-103292 placement
+//@ chunk-avy0g5d4.js:103299-103303 placement
 init_react_production();
-//@ chunk-93kwxas0.js:103292-103296 placement
+//@ chunk-avy0g5d4.js:103303-103307 placement
 init_react_production();
-//@ chunk-93kwxas0.js:103329-103359 placement
+//@ chunk-avy0g5d4.js:103340-103370 placement
 function isNotFrameRow(row) {
   return !isFrameRow(row);
 }
-//@ chunk-93kwxas0.js:103359-103400 placement
+//@ chunk-avy0g5d4.js:103370-103411 placement
 function hasColor(row) {
   return row.color !== undefined;
 }
-//@ chunk-93kwxas0.js:103400-103430 placement
+//@ chunk-avy0g5d4.js:103411-103441 placement
 var RESERVED_NAME_SUFFIX_WIDTH = bunStringWidth(" (reserved name)");
-//@ chunk-93kwxas0.js:103430-103848 placement
+//@ chunk-avy0g5d4.js:103441-103861 placement
 /**
  * 在文本中绘制光标（反显字符）。
  */
@@ -420,12 +421,12 @@ function renderCursorText(draft, cursor, width, selected = false) {
     ],
   });
 }
-//@ chunk-93kwxas0.js:103848-109675 placement
+//@ chunk-avy0g5d4.js:103861-109770 placement
 /**
  * Agents 视图中一个会话（job）行：状态、详情、子行、重命名/分组/删除状态。
  */
 function FleetJobRow(props) {
-  let $ = useMemoCache(67);
+  let $ = useMemoCache(68);
   let {
     job,
     isFocused,
@@ -494,7 +495,7 @@ function FleetJobRow(props) {
     !detailIsTerminal
       ? job.state.detail
       : undefined;
-  let previewText =
+  let detailText =
     isOrigin && isFocused
       ? previewDetail
         ? previewDetail === IDLE_NEEDS
@@ -655,7 +656,7 @@ function FleetJobRow(props) {
     $[33] = width;
     $[34] = labelBox;
   } else labelBox = $[34];
-  let detailText;
+  let detailText_2;
   if (
     $[35] !== attaching ||
     $[36] !== cols.detail ||
@@ -664,11 +665,12 @@ function FleetJobRow(props) {
     $[39] !== groupEditing ||
     $[40] !== hasRoomForSuffix ||
     $[41] !== heldInTerminal ||
-    $[42] !== previewText ||
-    $[43] !== showVerb ||
-    $[44] !== activity
+    $[42] !== job.state.backend ||
+    $[43] !== detailText ||
+    $[44] !== showVerb ||
+    $[45] !== activity
   ) {
-    detailText = groupEditing
+    detailText_2 = groupEditing
       ? jsxProd_default_2(Text, {
           wrap: "truncate",
           children: [
@@ -723,8 +725,8 @@ function FleetJobRow(props) {
               children: deleteArmed.ungroup
                 ? "ctrl+x again to ungroup"
                 : deleteArmed.justKilled
-                  ? "stopped \xB7 ctrl+x again to delete"
-                  : "ctrl+x again to delete",
+                  ? `stopped \xB7 ctrl+x again to ${deleteMethodName(job.state.backend)}`
+                  : `ctrl+x again to ${deleteMethodName(job.state.backend)}`,
             })
           : deleteRefusedNotice
             ? jsxProd_default_2(Text, {
@@ -772,10 +774,10 @@ function FleetJobRow(props) {
                             dimColor: activity.dim,
                             children: activity.word,
                           }),
-                          previewText &&
+                          detailText &&
                             jsxProd_default(Text, {
                               dimColor: true,
-                              children: previewText,
+                              children: detailText,
                             }),
                         ],
                       }),
@@ -783,7 +785,7 @@ function FleetJobRow(props) {
                   : jsxProd_default(Text, {
                       dimColor: true,
                       wrap: "truncate",
-                      children: previewText,
+                      children: detailText,
                     });
     $[35] = attaching;
     $[36] = cols.detail;
@@ -792,19 +794,20 @@ function FleetJobRow(props) {
     $[39] = groupEditing;
     $[40] = hasRoomForSuffix;
     $[41] = heldInTerminal;
-    $[42] = previewText;
-    $[43] = showVerb;
-    $[44] = activity;
-    $[45] = detailText;
-  } else detailText = $[45];
+    $[42] = job.state.backend;
+    $[43] = detailText;
+    $[44] = showVerb;
+    $[45] = activity;
+    $[46] = detailText_2;
+  } else detailText_2 = $[46];
   let kickBadge;
   if (
-    $[46] !== attaching ||
-    $[47] !== deleteArmed ||
-    $[48] !== deleteRefusedNotice ||
-    $[49] !== groupEditing ||
-    $[50] !== heldInTerminal ||
-    $[51] !== loopKickCount
+    $[47] !== attaching ||
+    $[48] !== deleteArmed ||
+    $[49] !== deleteRefusedNotice ||
+    $[50] !== groupEditing ||
+    $[51] !== heldInTerminal ||
+    $[52] !== loopKickCount
   ) {
     kickBadge =
       loopKickCount && !groupEditing && !deleteArmed && !deleteRefusedNotice && !attaching && !heldInTerminal
@@ -817,26 +820,26 @@ function FleetJobRow(props) {
             }),
           })
         : null;
-    $[46] = attaching;
-    $[47] = deleteArmed;
-    $[48] = deleteRefusedNotice;
-    $[49] = groupEditing;
-    $[50] = heldInTerminal;
-    $[51] = loopKickCount;
-    $[52] = kickBadge;
-  } else kickBadge = $[52];
+    $[47] = attaching;
+    $[48] = deleteArmed;
+    $[49] = deleteRefusedNotice;
+    $[50] = groupEditing;
+    $[51] = heldInTerminal;
+    $[52] = loopKickCount;
+    $[53] = kickBadge;
+  } else kickBadge = $[53];
   let detailBox;
-  if ($[53] !== detailText || $[54] !== kickBadge) {
+  if ($[54] !== detailText_2 || $[55] !== kickBadge) {
     detailBox = jsxProd_default_2(Box, {
       flexGrow: 1,
       width: 0,
       paddingLeft: 2,
-      children: [detailText, kickBadge],
+      children: [detailText_2, kickBadge],
     });
-    $[53] = detailText;
-    $[54] = kickBadge;
-    $[55] = detailBox;
-  } else detailBox = $[55];
+    $[54] = detailText_2;
+    $[55] = kickBadge;
+    $[56] = detailBox;
+  } else detailBox = $[56];
   const artifactBox =
     cols.artifact > 0
       ? jsxProd_default(Box, {
@@ -880,16 +883,16 @@ function FleetJobRow(props) {
       : null;
   const width_2 = cols.age + 2;
   let children_4;
-  if ($[56] !== age) {
+  if ($[57] !== age) {
     children_4 = jsxProd_default(Text, {
       dimColor: true,
       children: age,
     });
-    $[56] = age;
-    $[57] = children_4;
-  } else children_4 = $[57];
+    $[57] = age;
+    $[58] = children_4;
+  } else children_4 = $[58];
   let ageBox;
-  if ($[58] !== width_2 || $[59] !== children_4) {
+  if ($[59] !== width_2 || $[60] !== children_4) {
     ageBox = jsxProd_default(Box, {
       width: width_2,
       flexShrink: 0,
@@ -897,33 +900,33 @@ function FleetJobRow(props) {
       justifyContent: "flex-end",
       children: children_4,
     });
-    $[58] = width_2;
-    $[59] = children_4;
-    $[60] = ageBox;
-  } else ageBox = $[60];
+    $[59] = width_2;
+    $[60] = children_4;
+    $[61] = ageBox;
+  } else ageBox = $[61];
   let row;
   if (
-    $[61] !== rowContainer ||
-    $[62] !== labelBox ||
-    $[63] !== detailBox ||
-    $[64] !== artifactBox ||
-    $[65] !== ageBox
+    $[62] !== rowContainer ||
+    $[63] !== labelBox ||
+    $[64] !== detailBox ||
+    $[65] !== artifactBox ||
+    $[66] !== ageBox
   ) {
     row = jsxProd_default_2(rowContainer, {
       children: [labelBox, detailBox, artifactBox, ageBox],
     });
-    $[61] = rowContainer;
-    $[62] = labelBox;
-    $[63] = detailBox;
-    $[64] = artifactBox;
-    $[65] = ageBox;
-    $[66] = row;
-  } else row = $[66];
+    $[62] = rowContainer;
+    $[63] = labelBox;
+    $[64] = detailBox;
+    $[65] = artifactBox;
+    $[66] = ageBox;
+    $[67] = row;
+  } else row = $[67];
   return row;
 }
-//@ chunk-93kwxas0.js:109675-109684 placement
+//@ chunk-avy0g5d4.js:109770-109779 placement
 var SESSION_ROW_INDENT = 3;
-//@ chunk-93kwxas0.js:109684-111065 placement
+//@ chunk-avy0g5d4.js:109779-111160 placement
 /**
  * 会话行的单行绘制（图标、标签、时长、令牌、状态、展开）。
  */
@@ -1068,25 +1071,25 @@ function FleetRowLine(props) {
   } else row = $[26];
   return row;
 }
-//@ chunk-93kwxas0.js:111065-111097 placement
+//@ chunk-avy0g5d4.js:111160-111192 placement
 function selectEditorQuery(editor) {
   return editor.query;
 }
-//@ chunk-93kwxas0.js:111097-111131 placement
+//@ chunk-avy0g5d4.js:111192-111226 placement
 function selectHistoryLoading(earlier) {
   return earlier.loading;
 }
-//@ chunk-93kwxas0.js:111131-111154 placement
+//@ chunk-avy0g5d4.js:111226-111249 placement
 function returnFalse() {
   return false;
 }
-//@ chunk-93kwxas0.js:111154-111169 placement
+//@ chunk-avy0g5d4.js:111249-111264 placement
 function noopEffect() {}
-//@ chunk-93kwxas0.js:111169-111208 placement
+//@ chunk-avy0g5d4.js:111264-111303 placement
 function isJobRow(row) {
   return row.kind === "job";
 }
-//@ chunk-93kwxas0.js:111208-123201 placement
+//@ chunk-avy0g5d4.js:111303-123298 placement
 /**
  * Agents 视图的滚动列表（分组头、选中、过滤、旧会话行）。
  */
@@ -2019,24 +2022,24 @@ function FleetRowList(props) {
   } else scrollBox = $[116];
   return scrollBox;
 }
-//@ chunk-93kwxas0.js:123201-123205 placement
+//@ chunk-avy0g5d4.js:123298-123302 placement
 init_react_production();
-//@ chunk-93kwxas0.js:123205-123244 placement
+//@ chunk-avy0g5d4.js:123302-123341 placement
 function selectSessionModel_2(state) {
   return state.sessionModel;
 }
-//@ chunk-93kwxas0.js:123244-123284 placement
+//@ chunk-avy0g5d4.js:123341-123381 placement
 function selectSessionEffort_2(state) {
   return state.sessionEffort;
 }
-//@ chunk-93kwxas0.js:123284-123326 placement
+//@ chunk-avy0g5d4.js:123381-123423 placement
 function createLatch() {
   let latched = false;
   return () => {
     latched = true;
   };
 }
-//@ chunk-93kwxas0.js:123326-123555 placement
+//@ chunk-avy0g5d4.js:123423-123652 placement
 /**
  * Agents 视图支持的快捷键动作列表。
  */
@@ -2051,7 +2054,7 @@ var FLEET_KEY_ACTIONS = [
   "chat:externalEditor",
 ];
 var FLEET_EDITOR_SAFE_ACTIONS = new Set(["agents:switchView", "agents:togglePin", "agents:rename"]);
-//@ chunk-93kwxas0.js:123555-123600 placement
+//@ chunk-avy0g5d4.js:123652-123697 placement
 function useFleetBindings() {
   return useKeybindingContext()?.bindings ?? parseBindings(DEFAULT_BINDINGS);
 }

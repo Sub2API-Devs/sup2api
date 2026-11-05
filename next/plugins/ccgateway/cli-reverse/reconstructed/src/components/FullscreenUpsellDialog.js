@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。推荐全屏界面的对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (9)
  * attribution: placement 9
  */
 import {
@@ -31,7 +31,7 @@ import {
   MAX_FULLSCREEN_UPSELL_SHOWS,
 } from "../utils/fullscreen.js";
 import { isScreenReaderMode } from "../utils/accessibility/screenReader.js";
-import { getInitialSettings_2, updateSettingsForSource } from "../utils/settings/settings.js";
+import { getInitialSettings, updateSettingsForSource } from "../utils/settings/settings.js";
 import { getGlobalConfig } from "../utils/config.js";
 import { hasFullscreenBootFailures } from "../utils/fullscreenBootGuard.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -58,7 +58,7 @@ import { relaunchInto, relaunchFailedMessage } from "../commands/tui/tui.js";
 import { logError } from "../utils/log.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:151490-151577 placement
+//@ chunk-czq1j3j2.js:155585-155672 placement
 function renderBulletLine(line) {
   return jsxProd_default_2(
     Text,
@@ -75,7 +75,7 @@ function renderBulletLine(line) {
     line,
   );
 }
-//@ chunk-18hwfzwa.js:151577-151934 placement
+//@ chunk-czq1j3j2.js:155672-156029 placement
 function shouldOfferFullscreenUpsell() {
   if (isBgSession()) return false;
   if (getIsRemoteMode()) return false;
@@ -83,7 +83,7 @@ function shouldOfferFullscreenUpsell() {
   if (env.CLAUDE_CODE_FORCE_FULLSCREEN_UPSELL) return true;
   if (isFullscreenEnvEnabled()) return false;
   if (isScreenReaderMode()) return false;
-  if (getInitialSettings_2().tui !== undefined) return false;
+  if (getInitialSettings().tui !== undefined) return false;
   if (resolveFullscreenMode() === "fullscreen") return false;
   if (isAutoOffDecision(getFullscreenDecision())) return false;
   if (isFullscreenGateFromFallback()) return false;
@@ -92,7 +92,7 @@ function shouldOfferFullscreenUpsell() {
   if (hasFullscreenBootFailures()) return false;
   return true;
 }
-//@ chunk-18hwfzwa.js:151934-153416 placement
+//@ chunk-czq1j3j2.js:156029-157512 placement
 function FullscreenUpsellDialog(props) {
   let $ = useMemoCache(16);
   let { answer } = props;
@@ -211,9 +211,9 @@ function FullscreenUpsellDialog(props) {
   } else dialog = $[15];
   return dialog;
 }
-//@ chunk-18hwfzwa.js:153416-153575 placement
+//@ chunk-czq1j3j2.js:157512-157671 placement
 var AUTO_DEFAULT_NUDGE_DIALOG; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:153416", () => {
+deferInit("chunk-czq1j3j2.js:157512", () => {
   AUTO_DEFAULT_NUDGE_DIALOG = withHideWhile({
     kind: AUTO_DEFAULT_NUDGE,
     payload: DoctorLazy(() =>
@@ -226,7 +226,7 @@ deferInit("chunk-18hwfzwa.js:153416", () => {
     hideWhile: ["panel", "draft"],
   });
 });
-//@ chunk-18hwfzwa.js:153575-153747 placement
+//@ chunk-czq1j3j2.js:157671-157843 placement
 async function openAutoDefaultNudge(requestDialog, currentMode, options, storageV5) {
   await waitForFalse(options.activity, options.signal);
   let answer = await requestDialog(
@@ -242,9 +242,9 @@ async function openAutoDefaultNudge(requestDialog, currentMode, options, storage
   if (answer === "cancelled" || isUnattendedInteractiveSession()) return;
   resolveAutoDefaultNudge(answer, currentMode, storageV5);
 }
-//@ chunk-18hwfzwa.js:169743-169856 placement
+//@ chunk-czq1j3j2.js:173836-173949 placement
 var FULLSCREEN_UPSELL_DIALOG; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:169743", () => {
+deferInit("chunk-czq1j3j2.js:173836", () => {
   FULLSCREEN_UPSELL_DIALOG = withHideWhile({
     kind: FULLSCREEN_UPSELL,
     payload: DoctorLazy(() => objectSchema({})),
@@ -252,7 +252,7 @@ deferInit("chunk-18hwfzwa.js:169743", () => {
     default: "cancelled",
   });
 });
-//@ chunk-18hwfzwa.js:169856-169932 placement
+//@ chunk-czq1j3j2.js:173949-174025 placement
 async function openFullscreenUpsell(requestDialog, services) {
   let answer = await requestDialog(
     FULLSCREEN_UPSELL_DIALOG,
@@ -263,7 +263,7 @@ async function openFullscreenUpsell(requestDialog, services) {
   );
   await resolveFullscreenUpsell(answer, services);
 }
-//@ chunk-18hwfzwa.js:169932-170110 placement
+//@ chunk-czq1j3j2.js:174025-174203 placement
 async function resolveFullscreenUpsell(answer, services) {
   switch (answer) {
     case "cancelled":
@@ -277,7 +277,7 @@ async function resolveFullscreenUpsell(answer, services) {
       return;
   }
 }
-//@ chunk-18hwfzwa.js:170110-171209 placement
+//@ chunk-czq1j3j2.js:174203-175302 placement
 async function acceptFullscreenUpsell({
   getAppState,
   getMessages,

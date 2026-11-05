@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：未知模型（不在目录中）时上下文窗口假设的提示（[1m]、CLAUDE_CODE_MAX_CONTEXT_TOKENS）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ck9j9jgt.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xbb32ch6.js (4)
  * attribution: placement 4
  */
 import { logForDebugging } from "../../utils/debug.js";
@@ -18,13 +18,13 @@ import { env } from "../../utils/env.js";
 import { displayModelName } from "../../utils/model/validateModel.js";
 import { formatTokens } from "../../utils/format.js";
 
-//@ chunk-ck9j9jgt.js:452-572 placement
+//@ chunk-xbb32ch6.js:452-572 placement
 /**
  * 模型配置文档链接。
  */
 var MODEL_CONFIG_DOCS_URL = "https://code.claude.com/docs/en/model-config";
 var MODEL_WINDOW_DOCS_URL = `${MODEL_CONFIG_DOCS_URL}#correct-the-window-for-a-gateway-or-custom-model-id`;
-//@ chunk-ck9j9jgt.js:572-693 placement
+//@ chunk-xbb32ch6.js:572-693 placement
 /**
  * 记录未知模型提示；无头模式直接输出，交互模式返回提示。
  */
@@ -36,7 +36,7 @@ function emitUnknownModelNotice(unknownModelNotice, mode) {
   mode.headless(unknownModelNotice.text);
   return null;
 }
-//@ chunk-ck9j9jgt.js:693-797 placement
+//@ chunk-xbb32ch6.js:693-797 placement
 function buildUnknownModelNotice(model, autoCompactWindow, info) {
   try {
     return buildUnknownModelNoticeText(model, autoCompactWindow, info);
@@ -45,7 +45,7 @@ function buildUnknownModelNotice(model, autoCompactWindow, info) {
     return null;
   }
 }
-//@ chunk-ck9j9jgt.js:797-1801 placement
+//@ chunk-xbb32ch6.js:797-1801 placement
 /**
  * 模型不在目录中时，说明假设的上下文窗口与如何修正（[1m] 或 CLAUDE_CODE_MAX_CONTEXT_TOKENS）。
  */
@@ -75,4 +75,4 @@ function buildUnknownModelNoticeText(model, autoCompactWindow, facts) {
     detail: `"${model}" isn't described by this version's model catalog; update Claude Code, or map it with behavesAs on a modelPicker row (or modelOverrides, if it is a provider id of a model this version knows). Until then auto-compact keeps this session within ${formatTokens(contextWindow)} tokens (the context window it assumes)${hintSuffix}; CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1 restores the previous wait-for-the-API behavior.`,
   };
 }
-export { MODEL_WINDOW_DOCS_URL, MODEL_CONFIG_DOCS_URL, buildUnknownModelNotice, emitUnknownModelNotice };
+export { buildUnknownModelNotice, emitUnknownModelNotice, MODEL_WINDOW_DOCS_URL, MODEL_CONFIG_DOCS_URL };

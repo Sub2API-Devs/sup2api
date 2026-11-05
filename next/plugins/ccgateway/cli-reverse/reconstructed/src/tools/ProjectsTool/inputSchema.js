@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Projects 工具输入结构
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-eg496hkq.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y2k9w57g.js (11)
  * attribution: placement 11
  */
 import { resolve, isAbsolute } from "path";
@@ -36,12 +36,13 @@ import {
   getFeatureValue_CACHED_MAY_BE_STALE,
 } from "../../services/analytics/growthbook.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
+import { isCcsCoworkSurface } from "../../utils/entrypointKinds.js";
 
-//@ chunk-eg496hkq.js:12864-13067 placement
+//@ chunk-y2k9w57g.js:14070-14273 placement
 var ORIGINAL_UNAVAILABLE_NOTE = "Note: `original` is not available in this session and was ignored.";
 var IF_VERSION_UNAVAILABLE_NOTE =
   "Note: `if_version` is not available in this session and was ignored: this call did not check whether the doc had changed.";
-//@ chunk-eg496hkq.js:13067-13546 placement
+//@ chunk-y2k9w57g.js:14273-14752 placement
 function validateProjectWriteFlags(input, { originalOffered, docVersionsOffered }) {
   if (!isPlainObject(input)) return null;
   let hasForce = typeof input.force === "boolean";
@@ -77,13 +78,13 @@ function validateProjectWriteFlags(input, { originalOffered, docVersionsOffered 
     }),
   };
 }
-//@ chunk-eg496hkq.js:13546-13570 placement
+//@ chunk-y2k9w57g.js:14752-14776 placement
 var PROJECT_HOST_STATE = new SessionRootSlot(() => ({}));
-//@ chunk-eg496hkq.js:13570-13619 placement
+//@ chunk-y2k9w57g.js:14776-14825 placement
 function hasProjectHost() {
   return PROJECT_HOST_STATE.peek(getRootSession())?.host !== undefined;
 }
-//@ chunk-eg496hkq.js:13619-14834 placement
+//@ chunk-y2k9w57g.js:14825-16040 placement
 function findProjectDocInView(messages, content, projectsToolAliases, toolUseId) {
   if (content === "")
     return {
@@ -173,7 +174,7 @@ function findProjectDocInView(messages, content, projectsToolAliases, toolUseId)
     foundIn: "none",
   };
 }
-//@ chunk-eg496hkq.js:14834-16242 placement
+//@ chunk-y2k9w57g.js:16040-17448 placement
 var projectsInputSchemaFor = (contentHint, localPathHint) =>
   zodStrictObject({
     method: _enum([
@@ -214,13 +215,13 @@ var projectsInputSchemaFor = (contentHint, localPathHint) =>
         "project_read: true saves the original file of a document-kind upload (PDF, docx) to a local file and returns its path, in place of its extracted text. Ignored for text docs and other uploads.",
       ),
   });
-//@ chunk-eg496hkq.js:16242-16309 placement
+//@ chunk-y2k9w57g.js:17448-17515 placement
 function isLocalUploadsEnabled() {
   return (
     toolResultStoreOrNull()?.maxBytes !== 0 && getFeatureValue_SESSION_PINNED("tengu_mossy_wirth", false)
   );
 }
-//@ chunk-eg496hkq.js:16309-18810 placement
+//@ chunk-y2k9w57g.js:17515-20016 placement
 /**
  * Projects 的 schema 组：各方法的输入/输出 schema、共用的 notice 字段、各方法的必填字段表，以及 Unicode 规范化比对用的放大系数与长度上限。
  */
@@ -394,7 +395,7 @@ var REQUIRED_FIELDS_BY_METHOD = {
   project_memory_list: [],
   project_memory_read: ["path"],
 };
-//@ chunk-eg496hkq.js:18810-18947 placement
+//@ chunk-y2k9w57g.js:20016-20153 placement
 function isReadOnlyProjectMethod(method) {
   return (
     method === "project_info" ||
@@ -404,11 +405,14 @@ function isReadOnlyProjectMethod(method) {
     method === "project_memory_read"
   );
 }
-//@ chunk-eg496hkq.js:18947-19003 placement
+//@ chunk-y2k9w57g.js:20153-20211 placement
 function isConfirmableProjectWrite(method) {
-  return !isReadOnlyProjectMethod(method) && getFeatureValue_CACHED_MAY_BE_STALE("tengu_serene_curry", false);
+  return (
+    !isReadOnlyProjectMethod(method) &&
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_serene_curry", isCcsCoworkSurface())
+  );
 }
-//@ chunk-eg496hkq.js:19003-19077 placement
+//@ chunk-y2k9w57g.js:20211-20285 placement
 function resolveLocalPath(localPath) {
   let originalCwdOrNull = getOriginalCwdOrNull();
   if (originalCwdOrNull !== null) return resolve(originalCwdOrNull, localPath);

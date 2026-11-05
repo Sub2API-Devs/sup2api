@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：设置校验错误的格式化与上报
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (4)
  * attribution: placement 4
  */
 import { isReportableDiagnostic } from "../../screens/Doctor.js";
-import { getSettingsWithErrors_2, getPolicySettingsLoadErrors } from "../../utils/settings/settings.js";
+import { getSettingsWithErrors, getPolicySettingsLoadErrors } from "../../utils/settings/settings.js";
 import { helperSelectionWarnings } from "../../utils/settings/policyHelper/helperRemote.js";
 import { logSkippedInvalidSetting } from "../../utils/settings/settingsErrorsHeadless.js";
 import { logEvent } from "../../services/analytics/index.js";
@@ -17,12 +17,12 @@ import { settingsSourceLabel } from "../../utils/settings/settingsLabel.js";
 import { SETTINGS_ERROR_NOTICE_LIMITS, SETTINGS_NOTICE_MAX_CHARS } from "./lateSessionStartHooks.js";
 import { sanitizeDisplayText } from "../../utils/resultError.js";
 
-//@ chunk-tyg7f3ek.js:508695-509459 placement
+//@ chunk-0yw3taqg.js:548020-548784 placement
 /**
  * headless 启动时把配置文件校验错误（被跳过的设置项）输出给 stream-json 宿主。
  */
 function reportSettingsValidationErrors(outputFormat) {
-  let reportable = isReportableDiagnostic(getSettingsWithErrors_2().errors);
+  let reportable = isReportableDiagnostic(getSettingsWithErrors().errors);
   if (reportable.length === 0) return;
   let knownKeys = new Set(
     [...getPolicySettingsLoadErrors(), ...helperSelectionWarnings()].map(settingsErrorKey),
@@ -49,11 +49,11 @@ ${formatSettingsErrors(errors_3)}`);
 `)}
 `);
 }
-//@ chunk-tyg7f3ek.js:509459-509515 placement
+//@ chunk-0yw3taqg.js:548784-548840 placement
 function settingsErrorKey(error) {
   return `${error.file}:${error.path}:${error.message}`;
 }
-//@ chunk-tyg7f3ek.js:509515-509781 placement
+//@ chunk-0yw3taqg.js:548840-549106 placement
 function formatSettingsErrors(errors) {
   let lines = [];
   for (let [file, fileErrors] of Map.groupBy(errors, (error) => error.file)) {
@@ -68,7 +68,7 @@ function formatSettingsErrors(errors) {
   return lines.join(`
 `);
 }
-//@ chunk-tyg7f3ek.js:509781-509827 placement
+//@ chunk-0yw3taqg.js:549106-549152 placement
 function sanitizeNoticeText(text) {
   return sanitizeDisplayText(text, {
     maxCodeUnits: SETTINGS_NOTICE_MAX_CHARS,

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。teleport 中继（提示缓存中继）的进程内状态：激活/回退、gzip 与 thinking 处理、启动判定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fft78xw8.js (41)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-w83r403t.js (41)
  * attribution: placement 41
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
@@ -13,8 +13,9 @@ import { getRootSession } from "../../bootstrap/state.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { logFeatureSad } from "../analytics/featureTelemetry.js";
 import { logForDebugging } from "../../utils/debug.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fft78xw8.js:334-659 placement
+//@ chunk-w83r403t.js:367-692 placement
 class TeleportLatch {
   state = {
     status: "inactive",
@@ -34,27 +35,30 @@ class TeleportLatch {
   forkDirectLines = new Set();
   relayRefusedGzip = false;
 }
-//@ chunk-fft78xw8.js:659-687 placement
-var teleportLatches = new SessionRootSlot(() => new TeleportLatch());
-//@ chunk-fft78xw8.js:687-719 placement
+//@ chunk-w83r403t.js:692-720 placement
+var teleportLatches; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-w83r403t.js:692", () => {
+  teleportLatches = new SessionRootSlot(() => new TeleportLatch());
+});
+//@ chunk-w83r403t.js:720-752 placement
 /**
  * 取当前会话的中继闩锁状态。
  */
 function currentTeleportLatch() {
   return teleportLatches.of(getRootSession());
 }
-//@ chunk-fft78xw8.js:719-750 placement
+//@ chunk-w83r403t.js:752-783 placement
 function getTeleportCacheState() {
   return currentTeleportLatch().state;
 }
-//@ chunk-fft78xw8.js:750-852 placement
+//@ chunk-w83r403t.js:783-885 placement
 function activateTeleportCache(state) {
   let latch = currentTeleportLatch();
   if (latch.state.status !== "inactive") return;
   latch.state = state;
   latch.relayThinkingStripOwed = false;
 }
-//@ chunk-fft78xw8.js:852-1264 placement
+//@ chunk-w83r403t.js:885-1297 placement
 function revertTeleportCache(reason, sessionId, detail) {
   let latch = currentTeleportLatch();
   if (latch.state.status === "reverted") return;
@@ -80,7 +84,7 @@ function revertTeleportCache(reason, sessionId, detail) {
     detail,
   };
 }
-//@ chunk-fft78xw8.js:1264-1400 placement
+//@ chunk-w83r403t.js:1297-1433 placement
 function recordEnableStubCall(stubName, id) {
   let enableStubsCalled = currentTeleportLatch().enableStubsCalled;
   if (!enableStubsCalled.has(stubName)) {
@@ -89,28 +93,31 @@ function recordEnableStubCall(stubName, id) {
   }
   return !!id && id === enableStubsCalled.get(stubName) ? "not_repeat" : "repeat";
 }
-//@ chunk-fft78xw8.js:1400-1439 placement
+//@ chunk-w83r403t.js:1433-1472 placement
 function noteChromeSwitch(chromeSwitchedOn) {
   currentTeleportLatch().chromeSwitchedOn = chromeSwitchedOn;
 }
-//@ chunk-fft78xw8.js:1439-1482 placement
+//@ chunk-w83r403t.js:1472-1515 placement
 function chromeSwitchNote() {
   return currentTeleportLatch().chromeSwitchedOn;
 }
-//@ chunk-fft78xw8.js:1482-1500 placement
-var weakMap = new WeakMap();
-//@ chunk-fft78xw8.js:1500-1529 placement
+//@ chunk-w83r403t.js:1515-1533 placement
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-w83r403t.js:1515", () => {
+  weakMap = new WeakMap();
+});
+//@ chunk-w83r403t.js:1533-1562 placement
 function registerRelayFetch(fetchToken, loop) {
   weakMap.set(fetchToken, loop);
 }
-//@ chunk-fft78xw8.js:1529-1723 placement
+//@ chunk-w83r403t.js:1562-1756 placement
 function relayThinkingDisposition(request) {
   let latch = currentTeleportLatch();
   if (latch.relayThinkingStripOwed) return request.mainLoop ? "strip_and_mark" : "strip";
   if (latch.state.status !== "active") return "keep";
   return request.fetch !== undefined && weakMap.has(request.fetch) ? "keep" : "strip";
 }
-//@ chunk-fft78xw8.js:1723-1805 placement
+//@ chunk-w83r403t.js:1756-1838 placement
 function isRelayedRequest(fetchToken) {
   return (
     currentTeleportLatch().state.status === "active" &&
@@ -118,19 +125,19 @@ function isRelayedRequest(fetchToken) {
     weakMap.get(fetchToken) === "main"
   );
 }
-//@ chunk-fft78xw8.js:1805-1843 placement
+//@ chunk-w83r403t.js:1838-1876 placement
 function holdRelayBootVerdictOpen(openBootVerdict) {
   currentTeleportLatch().openBootVerdict = openBootVerdict;
 }
-//@ chunk-fft78xw8.js:1843-1894 placement
+//@ chunk-w83r403t.js:1876-1927 placement
 function isRelayBootVerdictOpen() {
   return currentTeleportLatch().openBootVerdict !== undefined;
 }
-//@ chunk-fft78xw8.js:1894-1928 placement
+//@ chunk-w83r403t.js:1927-1961 placement
 function noteRelayBootSettled() {
   currentTeleportLatch().bootSettled = true;
 }
-//@ chunk-fft78xw8.js:1928-1997 placement
+//@ chunk-w83r403t.js:1961-2030 placement
 function relayStillUsableInProcess() {
   return (
     !currentTeleportLatch().bootSettled ||
@@ -138,25 +145,25 @@ function relayStillUsableInProcess() {
     isRelayBootVerdictOpen()
   );
 }
-//@ chunk-fft78xw8.js:1997-2076 placement
+//@ chunk-w83r403t.js:2030-2109 placement
 function takeOpenRelayBootVerdict() {
   let latch = currentTeleportLatch();
   let openBootVerdict = latch.openBootVerdict;
   latch.openBootVerdict = undefined;
   return openBootVerdict;
 }
-//@ chunk-fft78xw8.js:2076-2116 placement
+//@ chunk-w83r403t.js:2109-2149 placement
 function noteHandoffMarkerStep(handoffMarkerStep) {
   currentTeleportLatch().handoffMarkerStep = handoffMarkerStep;
 }
-//@ chunk-fft78xw8.js:2116-2199 placement
+//@ chunk-w83r403t.js:2149-2232 placement
 function takeHandoffMarkerStep() {
   let latch = currentTeleportLatch();
   let handoffMarkerStep = latch.handoffMarkerStep;
   latch.handoffMarkerStep = undefined;
   return handoffMarkerStep;
 }
-//@ chunk-fft78xw8.js:2199-2433 placement
+//@ chunk-w83r403t.js:2232-2466 placement
 function closeOpenRelayBootVerdict() {
   let verdict = takeOpenRelayBootVerdict();
   if (verdict === undefined) return;
@@ -167,48 +174,48 @@ function closeOpenRelayBootVerdict() {
   });
   logForDebugging(`prompt-cache relay stays off: boot had no marker (${verdict}) and no hand-off armed it`);
 }
-//@ chunk-fft78xw8.js:2433-2478 placement
+//@ chunk-w83r403t.js:2466-2511 placement
 function oweRelayThinkingStrip() {
   currentTeleportLatch().relayThinkingStripOwed = true;
 }
-//@ chunk-fft78xw8.js:2478-2527 placement
+//@ chunk-w83r403t.js:2511-2560 placement
 function isRelayThinkingStripOwed() {
   return currentTeleportLatch().relayThinkingStripOwed;
 }
-//@ chunk-fft78xw8.js:2527-2570 placement
+//@ chunk-w83r403t.js:2560-2603 placement
 function relayTakesGzip() {
   return !currentTeleportLatch().relayRefusedGzip;
 }
-//@ chunk-fft78xw8.js:2570-2690 placement
+//@ chunk-w83r403t.js:2603-2723 placement
 function noteRelayRefusedGzip() {
   let latch = currentTeleportLatch();
   if (latch.relayRefusedGzip) return;
   latch.relayRefusedGzip = true;
   logForDiagnosticsNoPII("warn", "cli_teleport_relay_gzip_refused");
 }
-//@ chunk-fft78xw8.js:2690-2770 placement
+//@ chunk-w83r403t.js:2723-2803 placement
 function noteRelayDispatch(lastDispatchRelayed) {
   let latch = currentTeleportLatch();
   latch.lastDispatchRelayed = lastDispatchRelayed;
   latch.lastDispatchFallback = undefined;
 }
-//@ chunk-fft78xw8.js:2770-2836 placement
+//@ chunk-w83r403t.js:2803-2869 placement
 function noteRelayFallback(cause, httpStatus) {
   currentTeleportLatch().lastDispatchFallback = {
     cause,
     httpStatus,
   };
 }
-//@ chunk-fft78xw8.js:2836-2883 placement
+//@ chunk-w83r403t.js:2869-2916 placement
 function getLastDispatchFallback() {
   return currentTeleportLatch().lastDispatchFallback;
 }
-//@ chunk-fft78xw8.js:2883-2964 placement
+//@ chunk-w83r403t.js:2916-2997 placement
 function relayStoppedInLastDispatch() {
   let latch = currentTeleportLatch();
   return latch.relayThinkingStripOwed && !latch.lastDispatchRelayed;
 }
-//@ chunk-fft78xw8.js:2964-3114 placement
+//@ chunk-w83r403t.js:2997-3147 placement
 function markRelayThinkingStripRecorded(outcome) {
   let latch = currentTeleportLatch();
   if (!latch.relayThinkingStripOwed) return;
@@ -217,7 +224,7 @@ function markRelayThinkingStripRecorded(outcome) {
     outcome,
   });
 }
-//@ chunk-fft78xw8.js:3114-3241 placement
+//@ chunk-w83r403t.js:3147-3274 placement
 function logTeleportFallbackOnce(reason) {
   let latch = currentTeleportLatch();
   if (latch.fallbackSadEmitted.has(reason)) return;
@@ -225,14 +232,14 @@ function logTeleportFallbackOnce(reason) {
   logFeatureSad("upgrade_teleport_cache", reason);
   logTeleportRelayFallback(reason);
 }
-//@ chunk-fft78xw8.js:3241-3369 placement
+//@ chunk-w83r403t.js:3274-3402 placement
 function revertAfterDirectServe(cause, reason) {
   if (currentTeleportLatch().state.status !== "active") return;
   logTeleportRelayFallback("direct_served", cause);
   logUpgradeRelayEnd(reason, `direct_served_${cause}`);
   revertTeleportCache("direct_served", reason, cause);
 }
-//@ chunk-fft78xw8.js:3369-3520 placement
+//@ chunk-w83r403t.js:3402-3553 placement
 function noteForkWentDirect(lineUuids, reason) {
   let latch = currentTeleportLatch();
   if (latch.state.status !== "active") return;
@@ -240,19 +247,19 @@ function noteForkWentDirect(lineUuids, reason) {
   if (last !== undefined) latch.forkDirectLines.add(last);
   logFeatureSad("upgrade_relay_fork_direct", reason);
 }
-//@ chunk-fft78xw8.js:3520-3601 placement
+//@ chunk-w83r403t.js:3553-3634 placement
 function hasForkGoneDirect(lineUuids) {
   let forkDirectLines = currentTeleportLatch().forkDirectLines;
   return forkDirectLines.size > 0 && lineUuids.some((uuid) => forkDirectLines.has(uuid));
 }
-//@ chunk-fft78xw8.js:3601-3652 placement
+//@ chunk-w83r403t.js:3634-3685 placement
 /**
  * 上报中继升级结束的差评事件（原因 + 结果拼接）。
  */
 function logUpgradeRelayEnd(reason, loop) {
   logFeatureSad("upgrade_relay_end", `${reason}_${loop}`);
 }
-//@ chunk-fft78xw8.js:3652-3744 placement
+//@ chunk-w83r403t.js:3685-3777 placement
 /**
  * 记录提示缓存中继回退的原因（诊断日志）。
  */
@@ -264,7 +271,7 @@ function logTeleportRelayFallback(reason, cause) {
     }),
   });
 }
-//@ chunk-fft78xw8.js:3744-3857 placement
+//@ chunk-w83r403t.js:3777-3890 placement
 /**
  * 活动锚点快照仍成立时为真；被改动时记录 context_reduced 回退。auto 名 clearFastModeCooldown 错配，与 fast mode 无关。
  */
@@ -274,7 +281,7 @@ function verifyPreAnchorIntact(lineUuids) {
   revertTeleportCache("context_reduced", "main", mismatch);
   return false;
 }
-//@ chunk-fft78xw8.js:3857-3918 placement (2.1.88 match: runtimeState, 1)
+//@ chunk-w83r403t.js:3890-3951 placement (2.1.88 match: runtimeState, 1)
 /**
  * 旧版名 runtimeState 为错配。
  */
@@ -283,7 +290,7 @@ function isPreAnchorIntact(lineUuids) {
     getTeleportCacheState().status === "active" && describeAnchorSnapshotMismatch(lineUuids) === undefined
   );
 }
-//@ chunk-fft78xw8.js:3918-4211 placement
+//@ chunk-w83r403t.js:3951-4244 placement
 /**
  * 比较实时视图的锚点前行 uuid 与快照，返回不一致说明。
  */
@@ -297,7 +304,7 @@ function describeAnchorSnapshotMismatch(lineUuids) {
     if (lineUuids[j] !== preAnchorLineUuids[j]) return `pre-anchor line ${j} changed since arm`;
   return;
 }
-//@ chunk-fft78xw8.js:4211-4723 placement
+//@ chunk-w83r403t.js:4244-4756 placement
 /**
  * teleport 中继（提示缓存中继）的进程内状态：激活/回退、gzip 与 thinking 处理、启动判定。
  */
@@ -326,7 +333,7 @@ function verifyToolsBaselineIntact(model, fingerprint) {
   );
   return false;
 }
-//@ chunk-fft78xw8.js:4723-4937 placement
+//@ chunk-w83r403t.js:4756-4970 placement
 function toolsBaselineVerdict(model, fingerprint) {
   let latch = currentTeleportLatch();
   if (latch.state.status !== "active") return "not_comparable";
@@ -336,9 +343,20 @@ function toolsBaselineVerdict(model, fingerprint) {
   return toolsBaseline.fingerprint === fingerprint ? "intact" : "changed";
 }
 export {
-  closeOpenRelayBootVerdict,
   getTeleportCacheState,
+  activateTeleportCache,
+  noteRelayBootSettled,
+  closeOpenRelayBootVerdict,
+  holdRelayBootVerdictOpen,
+  noteHandoffMarkerStep,
+  isRelayBootVerdictOpen,
+  isRelayThinkingStripOwed,
+  takeOpenRelayBootVerdict,
+  oweRelayThinkingStrip,
+  takeHandoffMarkerStep,
   revertTeleportCache,
+  recordEnableStubCall,
+  chromeSwitchNote,
   noteRelayDispatch,
   noteForkWentDirect,
   logTeleportFallbackOnce,
@@ -352,17 +370,6 @@ export {
   relayTakesGzip,
   noteRelayRefusedGzip,
   registerRelayFetch,
-  activateTeleportCache,
-  noteRelayBootSettled,
-  holdRelayBootVerdictOpen,
-  recordEnableStubCall,
-  chromeSwitchNote,
-  noteHandoffMarkerStep,
-  isRelayBootVerdictOpen,
-  isRelayThinkingStripOwed,
-  takeOpenRelayBootVerdict,
-  oweRelayThinkingStrip,
-  takeHandoffMarkerStep,
   TeleportLatch,
   getLastDispatchFallback,
   isRelayedRequest,

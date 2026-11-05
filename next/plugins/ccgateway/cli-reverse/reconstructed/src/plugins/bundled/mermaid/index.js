@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：内置 mermaid 插件定义与 ui.render 钩子
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-yb0ajcmt.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q80fh8vc.js (9)
  * attribution: placement 9
  */
 import { __export } from "../../../../runtime/bun-runtime.js";
@@ -23,9 +23,9 @@ import { areHooksModulesAllowed } from "../../../services/analytics/growthbookCr
 import { isScreenReaderMode } from "../../../utils/accessibility/screenReader.js";
 import { getFeatureValue_SESSION_PINNED } from "../../../services/analytics/growthbook.js";
 
-//@ chunk-yb0ajcmt.js:3942-3952 placement
+//@ chunk-q80fh8vc.js:4250-4260 placement
 var mermaidPluginModule = {};
-//@ chunk-yb0ajcmt.js:3952-4083 placement
+//@ chunk-q80fh8vc.js:4260-4391 placement
 __export(mermaidPluginModule, {
   PLUGIN_DESCRIPTION: () => MERMAID_PLUGIN_DESCRIPTION,
   PLUGIN_NAME: () => CC_PLUGIN_MERMAID,
@@ -34,12 +34,12 @@ __export(mermaidPluginModule, {
   isOnByDefault: () => MERMAID_PLUGIN_DEFAULT_ON,
   registerPlugin: () => defineMermaidPlugin,
 });
-//@ chunk-yb0ajcmt.js:4083-4092 placement
+//@ chunk-q80fh8vc.js:4391-4400 placement
 /**
  * 空对象
  */
 var EMPTY_OBJECT = {};
-//@ chunk-yb0ajcmt.js:4092-4261 placement
+//@ chunk-q80fh8vc.js:4400-4569 placement
 __export(EMPTY_OBJECT, {
   MAX_REWRITTEN_LENGTH: () => MAX_RENDER_MS,
   MAX_ROWS: () => MIN_PLOT_WIDTH,
@@ -50,19 +50,19 @@ __export(EMPTY_OBJECT, {
   renderMermaid: () => renderMermaidSource,
   withDiagrams: () => renderMermaidFencesInText,
 });
-//@ chunk-yb0ajcmt.js:4261-4271 placement
+//@ chunk-q80fh8vc.js:4569-4579 placement
 var MERMAID_PLUGIN_DEFAULT_ON = false;
-//@ chunk-yb0ajcmt.js:4271-4322 placement
+//@ chunk-q80fh8vc.js:4579-4630 placement
 var isMermaidPluginAvailable = () =>
   areHooksModulesAllowed() &&
   !isScreenReaderMode() &&
   getFeatureValue_SESSION_PINNED("tengu_mermaid_mod", MERMAID_PLUGIN_DEFAULT_ON);
-//@ chunk-yb0ajcmt.js:4322-4470 placement
+//@ chunk-q80fh8vc.js:4630-4778 placement
 var MERMAID_PLUGIN_DESCRIPTION =
   "Mermaid diagrams in the terminal: flowcharts and sequence diagrams in a reply's mermaid code fences are drawn in place as box-drawing text";
-//@ chunk-yb0ajcmt.js:4470-4497 placement
+//@ chunk-q80fh8vc.js:4778-4805 placement
 var CC_PLUGIN_MERMAID = "cc-plugin-mermaid";
-//@ chunk-yb0ajcmt.js:4497-4703 placement
+//@ chunk-q80fh8vc.js:4805-5011 placement
 /**
  * 缓存渲染结果（单项与总量有上限，超出时淘汰最旧的）。
  */

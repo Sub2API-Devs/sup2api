@@ -3,16 +3,17 @@
  *
  * 2.1.316 新增：计算机操作摘要 schema
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (25)
  * attribution: placement 25
  */
-import { isPlainObject as isPlainObject_5 } from "../isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../isPlainObject.js";
 import {
   getFeatureValue_CACHED_MAY_BE_STALE,
   getFeatureValue_SESSION_PINNED,
 } from "../../services/analytics/growthbook.js";
+import { isCcsTenant } from "../../bootstrap/state.js";
 import { CHROME_TOOL_PREFIXES } from "../claudeInChrome/chromeToolNames.js";
 import { identity as identity_2 } from "../identity.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
@@ -23,29 +24,36 @@ import {
 } from "../../services/projects/threadRows.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { logError } from "../log.js";
-import { getMcpPrefix as getMcpPrefix_2 } from "../../services/mcp/mcpStringUtils.js";
+import { getMcpPrefix as getMcpPrefix_4 } from "../../services/mcp/mcpStringUtils.js";
 import { COMPUTER_USE_MCP_SERVER_NAME } from "../computerUse/common.js";
 import { REMOTE_DEVICES } from "../../services/mcp/firstPartyServerIds.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:990241-990271 placement
+//@ chunk-5xgkngpb.js:1003953-1004027 placement
 var TENGU_DRIFTING_REEF = "tengu_drifting_reef";
-//@ chunk-e6aww6q8.js:990271-990312 placement
+var BROWSER_ACTION_TOOLS = {
+  browserClicks: true,
+  computerUseChecks: true,
+};
+//@ chunk-5xgkngpb.js:1004027-1004068 placement
 function flagInFeatureConfig(config, flag) {
-  return isPlainObject_5(config) && config[flag] === true;
+  return isPlainObject_6(config) && config[flag] === true;
 }
-//@ chunk-e6aww6q8.js:990312-990354 placement
+//@ chunk-5xgkngpb.js:1004068-1004119 placement
 /**
  * isActionSummaryEnabled：动作摘要总开关。
  */
 function isActionSummaryEnabled(flag) {
-  return flagInFeatureConfig(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_DRIFTING_REEF, null), flag);
+  return flagInFeatureConfig(
+    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_DRIFTING_REEF, isCcsTenant() ? BROWSER_ACTION_TOOLS : null),
+    flag,
+  );
 }
-//@ chunk-e6aww6q8.js:990354-990397 placement
+//@ chunk-5xgkngpb.js:1004119-1004162 placement
 function isSessionPinnedActionSummary(flag) {
   return flagInFeatureConfig(getFeatureValue_SESSION_PINNED(TENGU_DRIFTING_REEF, null), flag);
 }
-//@ chunk-e6aww6q8.js:990397-991504 placement
+//@ chunk-5xgkngpb.js:1004162-1005269 placement
 /**
  * 计算机操作的 action_summary 字段说明与适用的操作。
  */
@@ -57,7 +65,7 @@ var formInputSummarySchema;
 var BATCH_ITEM_SUMMARY_INSTRUCTION;
 var ACTION_SUMMARY_SCHEMA_BY_TOOL;
 var BATCH_TOOLS_WITH_SUMMARY;
-deferInit("chunk-e6aww6q8.js:990397", () => {
+deferInit("chunk-5xgkngpb.js:1004162", () => {
   ACTION_SUMMARY_FIELD = "action_summary";
   ACTION_SUMMARY_STYLE_RULE =
     "State the effect only, and accurately: no reasons, nothing about what you were asked or allowed to do, no passwords or other secrets.";
@@ -87,13 +95,13 @@ deferInit("chunk-e6aww6q8.js:990397", () => {
   );
   BATCH_TOOLS_WITH_SUMMARY = new Set(CHROME_TOOL_PREFIXES.map((prefix) => prefix + "browser_batch"));
 });
-//@ chunk-e6aww6q8.js:991504-991693 placement
+//@ chunk-5xgkngpb.js:1005269-1005458 placement
 function getActionsSchemaParts(schema) {
   let actions = schema?.properties?.actions;
-  if (!isPlainObject_5(actions) || !isPlainObject_5(actions.items)) return;
+  if (!isPlainObject_6(actions) || !isPlainObject_6(actions.items)) return;
   let items = actions.items;
   let properties = items.properties;
-  if (!isPlainObject_5(properties) || !isPlainObject_5(properties.input)) return;
+  if (!isPlainObject_6(properties) || !isPlainObject_6(properties.input)) return;
   return {
     actions,
     items,
@@ -101,7 +109,7 @@ function getActionsSchemaParts(schema) {
     input: properties.input,
   };
 }
-//@ chunk-e6aww6q8.js:991693-991939 placement
+//@ chunk-5xgkngpb.js:1005458-1005704 placement
 function getActionSummaryLength(toolName, inputJSONSchema, input) {
   let summarySchema = ACTION_SUMMARY_SCHEMA_BY_TOOL.get(toolName);
   let properties = inputJSONSchema?.properties;
@@ -121,16 +129,16 @@ function getActionSummaryLength(toolName, inputJSONSchema, input) {
   let summary = toolInput?.[ACTION_SUMMARY_FIELD];
   return typeof summary === "string" ? summary.length : 0;
 }
-//@ chunk-e6aww6q8.js:991939-992038 placement
+//@ chunk-5xgkngpb.js:1005704-1005803 placement
 function isBrowserActionSummaryAwake() {
   return (
     getFeatureValue_SESSION_PINNED("tengu_auto_mode_config", {})?.chromeAgentNote === true ||
     isSessionPinnedActionSummary("browserSummary")
   );
 }
-//@ chunk-e6aww6q8.js:992038-992081 placement
+//@ chunk-5xgkngpb.js:1005803-1005846 placement
 var schemaSummaryLogState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:992038", () => {
+deferInit("chunk-5xgkngpb.js:1005803", () => {
   schemaSummaryLogState = identity_2(
     {
       logged: false,
@@ -140,7 +148,7 @@ deferInit("chunk-e6aww6q8.js:992038", () => {
     },
   );
 });
-//@ chunk-e6aww6q8.js:992081-992310 placement
+//@ chunk-5xgkngpb.js:1005846-1006075 placement
 /**
  * 在开关开启时给计算机操作类工具的输入 schema 加上操作摘要字段（批量动作工具改写 actions 描述）。
  */
@@ -164,14 +172,14 @@ function addActionSummaryToSchema(schema, mcpToolName, isEnabled = isBrowserActi
     },
   };
 }
-//@ chunk-e6aww6q8.js:992310-992381 placement
+//@ chunk-5xgkngpb.js:1006075-1006146 placement
 function logSchemaSummaryOnce() {
   if (!schemaSummaryLogState.logged) {
     schemaSummaryLogState.logged = true;
     logFeatureOk("chrome_action_summary");
   }
 }
-//@ chunk-e6aww6q8.js:992381-992725 placement
+//@ chunk-5xgkngpb.js:1006146-1006490 placement
 /**
  * 在批量动作工具的 actions.items.input 描述中追加操作摘要要求（已有时不重复）。
  */
@@ -210,7 +218,7 @@ function addActionSummaryToBatchDescription(schema, isEnabled) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:992725-993171 placement
+//@ chunk-5xgkngpb.js:1006490-1006936 placement
 /**
  * 统计批量动作调用中需要摘要的动作（form_input 与特定 computer 动作）数和实际填写了摘要的数量。
  */
@@ -220,9 +228,9 @@ function countBatchActionSummaries(toolName, schema, input) {
   if (typeof description !== "string" || !description.includes(BATCH_ITEM_SUMMARY_INSTRUCTION)) return;
   let expectedItems = 0;
   let filledItems = 0;
-  let actions = isPlainObject_5(input) && Array.isArray(input.actions) ? input.actions : [];
+  let actions = isPlainObject_6(input) && Array.isArray(input.actions) ? input.actions : [];
   for (let action of actions) {
-    if (!isPlainObject_5(action) || !isPlainObject_5(action.input)) continue;
+    if (!isPlainObject_6(action) || !isPlainObject_6(action.input)) continue;
     if (!(
       action.name === "form_input" ||
       (action.name === "computer" &&
@@ -239,7 +247,7 @@ function countBatchActionSummaries(toolName, schema, input) {
     filledItems,
   };
 }
-//@ chunk-e6aww6q8.js:993171-993330 placement
+//@ chunk-5xgkngpb.js:1006936-1007095 placement
 /**
  * 项目功能开启时，按根工具集判断项目角色（thread/overview/other）用于遥测；出错时返回空对象。
  */
@@ -257,7 +265,7 @@ function getProjectsRoleTelemetry(context) {
   }
   return {};
 }
-//@ chunk-e6aww6q8.js:994061-994922 placement
+//@ chunk-5xgkngpb.js:1007827-1008688 placement
 /**
  * COMPUTER_BATCH_EXEMPT_ACTIONS：computer_batch 不需要摘要的动作；APP_BATCH_EXEMPT_ACTIONS：app_batch 不需要摘要的动作；COMPUTER_USE_ACTION_NAMES：计算机使用类工具的动作名全集（同一声明共 7 个绑定）。
  */
@@ -272,7 +280,7 @@ var BATCH_SUMMARY_SCHEMA_BY_TOOL;
 var BATCH_EXEMPT_ACTIONS_BY_TOOL;
 var COMPUTER_USE_TOOL_PREFIX;
 var REMOTE_DEVICE_TOOL_PREFIX;
-deferInit("chunk-e6aww6q8.js:994061", () => {
+deferInit("chunk-5xgkngpb.js:1007827", () => {
   ACTION_SUMMARY_FIELD_2 =
     "A few words saying what this action does and to what, for example 'Sends the drafted reply to pat@example.com' or 'Opens the Filters menu'.";
   genericActionSummarySchema = Object.freeze({
@@ -315,10 +323,10 @@ deferInit("chunk-e6aww6q8.js:994061", () => {
     computer_batch: COMPUTER_BATCH_EXEMPT_ACTIONS,
     app_batch: APP_BATCH_EXEMPT_ACTIONS,
   };
-  COMPUTER_USE_TOOL_PREFIX = getMcpPrefix_2(COMPUTER_USE_MCP_SERVER_NAME);
-  REMOTE_DEVICE_TOOL_PREFIX = getMcpPrefix_2(REMOTE_DEVICES);
+  COMPUTER_USE_TOOL_PREFIX = getMcpPrefix_4(COMPUTER_USE_MCP_SERVER_NAME);
+  REMOTE_DEVICE_TOOL_PREFIX = getMcpPrefix_4(REMOTE_DEVICES);
 });
-//@ chunk-e6aww6q8.js:994922-995014 placement
+//@ chunk-5xgkngpb.js:1008688-1008780 placement
 function computerUseToolNames(actionName) {
   return [
     COMPUTER_USE_TOOL_PREFIX + actionName,
@@ -326,11 +334,11 @@ function computerUseToolNames(actionName) {
     ...(actionName.startsWith("computer_") ? [REMOTE_DEVICE_TOOL_PREFIX + actionName] : []),
   ];
 }
-//@ chunk-e6aww6q8.js:995014-995196 placement
+//@ chunk-5xgkngpb.js:1008780-1008962 placement
 var ACTION_SUMMARY_TOOLS; // deferred: uses ACTION_SUMMARY_FIELD_2 of its import cycle while loading; runs once the cycle is complete
 var ACTION_SUMMARY_ITEM_TOOLS;
 var ACTION_SUMMARY_EXEMPT_ACTIONS;
-deferInit("chunk-e6aww6q8.js:995014", () => {
+deferInit("chunk-5xgkngpb.js:1008780", () => {
   ACTION_SUMMARY_TOOLS = new Set(COMPUTER_USE_ACTION_NAMES.flatMap(computerUseToolNames));
   ACTION_SUMMARY_ITEM_TOOLS = new Map(
     Object.entries(BATCH_SUMMARY_SCHEMA_BY_TOOL).flatMap(([key, value]) =>
@@ -343,16 +351,16 @@ deferInit("chunk-e6aww6q8.js:995014", () => {
     ),
   );
 });
-//@ chunk-e6aww6q8.js:995196-995304 placement
+//@ chunk-5xgkngpb.js:1008962-1009070 placement
 function isComputerUseSummaryEnabled() {
   return (
     getFeatureValue_SESSION_PINNED("tengu_auto_mode_config", {})?.computerUseAgentNote === true ||
     isSessionPinnedActionSummary("computerUseSummary")
   );
 }
-//@ chunk-e6aww6q8.js:995304-995347 placement
+//@ chunk-5xgkngpb.js:1009070-1009113 placement
 var computerUseSummaryLogState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:995304", () => {
+deferInit("chunk-5xgkngpb.js:1009070", () => {
   computerUseSummaryLogState = identity_2(
     {
       logged: false,
@@ -362,7 +370,7 @@ deferInit("chunk-e6aww6q8.js:995304", () => {
     },
   );
 });
-//@ chunk-e6aww6q8.js:995347-995555 placement
+//@ chunk-5xgkngpb.js:1009113-1009321 placement
 /**
  * 计算机使用类工具开关开启时给 schema（或 actions.items）加操作摘要字段，首次生效记 computeruse_action_summary。
  */
@@ -380,7 +388,7 @@ function addComputerUseActionSummary(schema, mcpToolName, isEnabled = isComputer
   }
   return updatedSchema;
 }
-//@ chunk-e6aww6q8.js:995555-996091 placement
+//@ chunk-5xgkngpb.js:1009321-1009857 placement
 /**
  * 统计工具调用的操作摘要填写情况：单动作工具返回摘要长度；批量工具返回需摘要动作数与已填数。
  */
@@ -423,16 +431,16 @@ function measureActionSummaries(toolName, inputJSONSchema, input) {
     filledItems,
   };
 }
-//@ chunk-e6aww6q8.js:996091-996191 placement
+//@ chunk-5xgkngpb.js:1009857-1009957 placement
 function joinWithAnd(parts) {
   if (parts.length < 2) return parts.join("");
   return `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
 }
-//@ chunk-e6aww6q8.js:996191-996262 placement
+//@ chunk-5xgkngpb.js:1009957-1010028 placement
 function isNonNullRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-e6aww6q8.js:996262-996379 placement
+//@ chunk-5xgkngpb.js:1010028-1010145 placement
 function addSummaryProperty(schema, summarySchema) {
   if (!isNonNullRecord(schema.properties) || ACTION_SUMMARY_FIELD in schema.properties) return schema;
   return {
@@ -443,7 +451,7 @@ function addSummaryProperty(schema, summarySchema) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:996379-996568 placement
+//@ chunk-5xgkngpb.js:1010145-1010334 placement
 function addSummaryToActionItems(itemSchema, summarySchema) {
   let actions = itemSchema.properties?.actions;
   if (!isNonNullRecord(actions) || !isNonNullRecord(actions.items)) return itemSchema;

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：核对链接目标未变；通过 /proc/self/fd 核对打开的路径等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-t0gq9gyw.js (26)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-85eyj5gy.js (26)
  * attribution: placement 26
  */
 import { lstat, open, readlink, realpath, link, stat, unlink } from "fs/promises";
@@ -26,29 +26,29 @@ import { logForDebugging } from "../debug.js";
 import { isSentinelInode } from "../slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-t0gq9gyw.js:21441-21554 placement
+//@ chunk-85eyj5gy.js:21511-21624 placement
 /**
  * 视为“不存在”的错误码与视为暂时性资源不足的错误码。
  */
 var ABSENT_ERRNO_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TRANSIENT_ERRNO_CODES;
-deferInit("chunk-t0gq9gyw.js:21441", () => {
+deferInit("chunk-85eyj5gy.js:21511", () => {
   ABSENT_ERRNO_CODES = new Set(["ENOENT", "ENOTDIR"]);
   TRANSIENT_ERRNO_CODES = new Set(["EAGAIN", "EBUSY", "EMFILE", "ENFILE", "ENOSPC", "EDQUOT", "ENOMEM"]);
 });
-//@ chunk-t0gq9gyw.js:21554-21609 placement
+//@ chunk-85eyj5gy.js:21624-21679 placement
 function isAbsentError(error) {
   let errnoCode = getErrnoCode(error);
   return errnoCode !== undefined && ABSENT_ERRNO_CODES.has(errnoCode);
 }
-//@ chunk-t0gq9gyw.js:21609-21643 placement
+//@ chunk-85eyj5gy.js:21679-21713 placement
 /**
  * 判断错误的 errno 码是否等于给定值。
  */
 function isErrnoCode(error, code) {
   return getErrnoCode(error) === code;
 }
-//@ chunk-t0gq9gyw.js:21643-21699 placement
+//@ chunk-85eyj5gy.js:21713-21769 placement
 /**
  * 判断错误是否为可重试的瞬态 errno。
  */
@@ -56,7 +56,7 @@ function isTransientError(error) {
   let errnoCode = getErrnoCode(error);
   return errnoCode !== undefined && TRANSIENT_ERRNO_CODES.has(errnoCode);
 }
-//@ chunk-t0gq9gyw.js:21699-21763 placement
+//@ chunk-85eyj5gy.js:21769-21833 placement
 function classifyReadError(error) {
   return isAbsentError(error)
     ? {
@@ -67,14 +67,14 @@ function classifyReadError(error) {
         error,
       };
 }
-//@ chunk-t0gq9gyw.js:21763-21829 placement
+//@ chunk-85eyj5gy.js:21833-21899 placement
 /**
  * 把读取错误归一为标签（文件系统 errno 或 absent/unavailable 等 kind）。
  */
 function errorKindLabel(error) {
   return error.kind === "fs" ? (getErrnoCode(error.error) ?? "unknown") : error.kind;
 }
-//@ chunk-t0gq9gyw.js:21829-21899 placement
+//@ chunk-85eyj5gy.js:21899-21969 placement
 async function captureAsyncResult(produce) {
   try {
     return ok(await produce);
@@ -82,12 +82,12 @@ async function captureAsyncResult(produce) {
     return err(classifyReadError(error));
   }
 }
-//@ chunk-t0gq9gyw.js:21899-21911 placement
+//@ chunk-85eyj5gy.js:21969-21981 placement
 /**
  * 打开文件时的默认缓冲区字节数。
  */
 var DEFAULT_OPEN_BUFFER_BYTES = 384;
-//@ chunk-t0gq9gyw.js:21911-22090 placement
+//@ chunk-85eyj5gy.js:21981-22160 placement
 /**
  * 先 lstat 确认是普通文件，再以 O_NOFOLLOW 打开。
  */
@@ -97,7 +97,7 @@ async function openFileNoFollow(filePath, flags, bufferBytes = DEFAULT_OPEN_BUFF
   if (statResult.ok && !statResult.value.isFile()) return err(refusedFsError(filePath, statResult.value));
   return captureAsyncResult(open(filePath, flags | NOFOLLOW_NONBLOCK_FLAGS, bufferBytes));
 }
-//@ chunk-t0gq9gyw.js:22090-22190 placement
+//@ chunk-85eyj5gy.js:22160-22260 placement
 /**
  * 以不跟随链接方式打开文件。
  */
@@ -108,7 +108,7 @@ async function openNoFollow_2(filePath) {
     await captureAsyncResult(open(filePath, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS)),
   );
 }
-//@ chunk-t0gq9gyw.js:22190-22306 placement
+//@ chunk-85eyj5gy.js:22260-22376 placement
 /**
  * 打开结果为 ELOOP 时改写为针对该路径的 ELOOP 错误。
  */
@@ -120,21 +120,21 @@ function mapLoopToNoFollowError(path, result) {
       })
     : result;
 }
-//@ chunk-t0gq9gyw.js:22306-22367 placement
+//@ chunk-85eyj5gy.js:22376-22437 placement
 function withCodeAndPath(path, code) {
   return Object.assign(refusalError(code), {
     code,
     path,
   });
 }
-//@ chunk-t0gq9gyw.js:22367-22449 placement
+//@ chunk-85eyj5gy.js:22437-22519 placement
 function refusedFsError(path, stats) {
   return {
     kind: "fs",
     error: withCodeAndPath(path, stats.isSymbolicLink() ? "ELOOP" : "ENXIO"),
   };
 }
-//@ chunk-t0gq9gyw.js:22449-23021 placement
+//@ chunk-85eyj5gy.js:22519-23091 placement
 /**
  * 按 errno 生成拒绝读取的错误。
  */
@@ -158,7 +158,7 @@ function refusalError(code) {
       return Error("refusing a hardened read the host cannot verify");
   }
 }
-//@ chunk-t0gq9gyw.js:23021-23771 placement
+//@ chunk-85eyj5gy.js:23091-23841 placement
 /**
  * 通过 /proc/self/fd 核对打开的路径。
  */
@@ -205,7 +205,7 @@ async function verifyOpenedPath(handle, filePath) {
     ? ok("otherNames")
     : ok(true);
 }
-//@ chunk-t0gq9gyw.js:23771-24017 placement
+//@ chunk-85eyj5gy.js:23841-24085 placement
 /**
  * 比较重新 stat 的结果与打开的文件是否同一 inode（不可判断时返回 unavailable）。
  */
@@ -221,22 +221,22 @@ function sameInodeResult(pathResult, handleStats) {
     return ok("unavailable");
   return ok(pathResult.value.ino === handleStats.ino && pathResult.value.dev === handleStats.dev);
 }
-//@ chunk-t0gq9gyw.js:24017-24082 placement
+//@ chunk-85eyj5gy.js:24085-24150 placement
 class ProcFdProbeState {
   available = undefined;
   probing = undefined;
   procUnreadableLogged = false;
 }
-//@ chunk-t0gq9gyw.js:24082-24107 placement
+//@ chunk-85eyj5gy.js:24150-24175 placement
 var procFdProbeRegistry; // deferred: uses ProcFdProbeState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-t0gq9gyw.js:24082", () => {
+deferInit("chunk-85eyj5gy.js:24150", () => {
   procFdProbeRegistry = new HostScoped(() => new ProcFdProbeState());
 });
-//@ chunk-t0gq9gyw.js:24107-24144 placement
+//@ chunk-85eyj5gy.js:24175-24212 placement
 function currentProcFdProbeState() {
   return procFdProbeRegistry.of(getRootSession().host);
 }
-//@ chunk-t0gq9gyw.js:24144-24403 placement
+//@ chunk-85eyj5gy.js:24212-24471 placement
 /**
  * 探测 /proc/self/fd 是否可用（缓存结果，并发探测共享）。
  */
@@ -252,7 +252,7 @@ async function isProcFdAvailable() {
   });
   return state.probing;
 }
-//@ chunk-t0gq9gyw.js:24403-24597 placement
+//@ chunk-85eyj5gy.js:24471-24665 placement
 /**
  * /proc 描述符不可读时记录一次调试日志。
  */
@@ -264,17 +264,17 @@ function logProcFdUnreadable() {
     "storage: /proc descriptor record unreadable for hardened reads on this host; using the post-open recheck",
   );
 }
-//@ chunk-t0gq9gyw.js:24597-24626 placement
+//@ chunk-85eyj5gy.js:24665-24693 placement
 /**
  * 是否有有效 inode。
  */
 function hasInode(inode) {
   return !isSentinelInode(inode);
 }
-//@ chunk-t0gq9gyw.js:24626-24673 placement
+//@ chunk-85eyj5gy.js:24693-24740 placement
 var LINKMISDIRECTED = "LinkMisdirected";
 var LINKUNVERIFIED = "LinkUnverified";
-//@ chunk-t0gq9gyw.js:24673-25699 placement
+//@ chunk-85eyj5gy.js:24740-25764 placement
 /**
  * 核对链接目标未变。
  */
@@ -352,7 +352,7 @@ async function verifyLinkTarget(sourcePath, identity, targetPath) {
     }),
   });
 }
-//@ chunk-t0gq9gyw.js:25699-25882 placement
+//@ chunk-85eyj5gy.js:25764-25947 placement
 /**
  * 重新打开链接目标并核对其身份未变。
  */
@@ -370,20 +370,20 @@ async function linkTargetMatches(targetPath, identity) {
     await captureAsyncResult(openResult.value.close());
   }
 }
-//@ chunk-t0gq9gyw.js:25882-25952 placement
+//@ chunk-85eyj5gy.js:25947-26016 placement
 function statsMatchIdentity(stats, identity) {
   return hasInode(stats.ino) && stats.dev === identity.device && stats.ino === identity.inode;
 }
 export {
-  isErrnoCode,
   openNoFollow_2,
-  DEFAULT_OPEN_BUFFER_BYTES,
-  isTransientError,
+  isErrnoCode,
   hasInode,
-  openFileNoFollow,
+  LINKMISDIRECTED,
+  LINKUNVERIFIED,
   verifyOpenedPath,
   verifyLinkTarget,
   errorKindLabel,
-  LINKMISDIRECTED,
-  LINKUNVERIFIED,
+  DEFAULT_OPEN_BUFFER_BYTES,
+  isTransientError,
+  openFileNoFollow,
 };

@@ -1,22 +1,22 @@
 /**
  * zod/v4/core/parse.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: zod@4.6.2
- * pieces: chunk-7vp249v4.js (15)
+ * pieces: chunk-m4y44r15.js (15)
  * attribution: esm-fingerprint 12, esm-layout 3
  */
 import { $ZodAsyncError, config } from "./core.js";
 import { finalizeIssue, captureStackTrace } from "./util.js";
 import { $ZodRealError } from "./errors.js";
 
-//@ chunk-7vp249v4.js:2814-2870 esm-fingerprint
+//@ chunk-m4y44r15.js:2814-2870 esm-fingerprint
 function finalizeParams(callee, params) {
   return {
     callee: params?.callee ?? callee,
     Err: params?.Err,
   };
 }
-//@ chunk-7vp249v4.js:2870-3140 esm-fingerprint
+//@ chunk-m4y44r15.js:2870-3140 esm-fingerprint
 var _parse = (_Err) => {
   let fn = (schema, value, _ctx, _params) => {
     let ctx = _ctx
@@ -44,7 +44,7 @@ var _parse = (_Err) => {
   };
   return fn;
 };
-//@ chunk-7vp249v4.js:3140-3411 esm-fingerprint
+//@ chunk-m4y44r15.js:3140-3411 esm-fingerprint
 var _parseAsync = (_Err) => {
   let fn = async (schema, value, _ctx, params) => {
     let ctx = _ctx
@@ -72,7 +72,7 @@ var _parseAsync = (_Err) => {
   };
   return fn;
 };
-//@ chunk-7vp249v4.js:3411-3618 esm-fingerprint
+//@ chunk-m4y44r15.js:3411-3618 esm-fingerprint
 var _safeParse = (_Err) => (schema, value, _ctx) => {
   let ctx = _ctx
     ? {
@@ -98,7 +98,7 @@ var _safeParse = (_Err) => (schema, value, _ctx) => {
       };
 };
 var safeParseReal = _safeParse($ZodRealError);
-//@ chunk-7vp249v4.js:3618-3780 esm-fingerprint
+//@ chunk-m4y44r15.js:3618-3780 esm-fingerprint
 function failure(Err, issues, ctx) {
   let error;
   return {
@@ -118,7 +118,7 @@ function failure(Err, issues, ctx) {
     },
   };
 }
-//@ chunk-7vp249v4.js:3780-3979 esm-fingerprint
+//@ chunk-m4y44r15.js:3780-3979 esm-fingerprint
 var _safeParseAsync = (_Err) => async (schema, value, _ctx) => {
   let ctx = _ctx
     ? {
@@ -143,7 +143,7 @@ var _safeParseAsync = (_Err) => async (schema, value, _ctx) => {
         data: result.value,
       };
 };
-//@ chunk-7vp249v4.js:3979-4193 esm-fingerprint
+//@ chunk-m4y44r15.js:3979-4193 esm-fingerprint
 var COMPILE_INVALID = Symbol.for("zod.compile.invalid");
 var COMPILE_FALLBACK = Symbol.for("zod.compile.fallback");
 var validate = (schema, value, _ctx) => {
@@ -154,7 +154,7 @@ var validate = (schema, value, _ctx) => {
   }
   return validateFallback(schema, value, _ctx);
 };
-//@ chunk-7vp249v4.js:4193-4449 esm-fingerprint
+//@ chunk-m4y44r15.js:4193-4449 esm-fingerprint
 function validateFallback(schema, value, _ctx) {
   let ctx = _ctx
     ? {
@@ -188,7 +188,7 @@ function validateFallback(schema, value, _ctx) {
   if (result instanceof Promise) throw new $ZodAsyncError();
   return result.issues.length === 0;
 }
-//@ chunk-7vp249v4.js:4449-4761 esm-fingerprint
+//@ chunk-m4y44r15.js:4449-4761 esm-fingerprint
 var validateAsync = async (schema, value, _ctx) => {
   let ctx = _ctx
     ? {
@@ -225,13 +225,13 @@ var _encode = (_Err) => {
   };
   return fn;
 };
-//@ chunk-7vp249v4.js:4761-4826 esm-layout
+//@ chunk-m4y44r15.js:4761-4826 esm-layout
 var decodeFactory = (_Err) => {
   let parse = _parse(_Err);
   let fn = (schema, value, _ctx, _params) => parse(schema, value, _ctx, finalizeParams(fn, _params));
   return fn;
 };
-//@ chunk-7vp249v4.js:4826-4970 esm-fingerprint
+//@ chunk-m4y44r15.js:4826-4970 esm-fingerprint
 var _encodeAsync = (_Err) => {
   let parseAsync = _parseAsync(_Err);
   let fn = async (schema, value, _ctx, _params) => {
@@ -247,14 +247,14 @@ var _encodeAsync = (_Err) => {
   };
   return fn;
 };
-//@ chunk-7vp249v4.js:4970-5046 esm-layout
+//@ chunk-m4y44r15.js:4970-5046 esm-layout
 var decodeAsyncFactory = (_Err) => {
   let parseAsync = _parseAsync(_Err);
   let fn = async (schema, value, _ctx, _params) =>
     await parseAsync(schema, value, _ctx, finalizeParams(fn, _params));
   return fn;
 };
-//@ chunk-7vp249v4.js:5046-5147 esm-fingerprint
+//@ chunk-m4y44r15.js:5046-5147 esm-fingerprint
 var _safeEncode = (_Err) => (schema, value, _ctx) => {
   let ctx = _ctx
     ? {
@@ -266,9 +266,9 @@ var _safeEncode = (_Err) => (schema, value, _ctx) => {
       };
   return _safeParse(_Err)(schema, value, ctx);
 };
-//@ chunk-7vp249v4.js:5147-5180 esm-layout
+//@ chunk-m4y44r15.js:5147-5180 esm-layout
 var safeDecodeFactory = (_Err) => (schema, value, _ctx) => _safeParse(_Err)(schema, value, _ctx);
-//@ chunk-7vp249v4.js:5180-5287 esm-fingerprint
+//@ chunk-m4y44r15.js:5180-5287 esm-fingerprint
 var _safeEncodeAsync = (_Err) => async (schema, value, _ctx) => {
   let ctx = _ctx
     ? {
@@ -281,6 +281,7 @@ var _safeEncodeAsync = (_Err) => async (schema, value, _ctx) => {
   return _safeParseAsync(_Err)(schema, value, ctx);
 };
 export {
+  safeParseReal,
   _safeParseAsync,
   validate,
   validateAsync,
@@ -294,5 +295,4 @@ export {
   _safeEncode,
   safeDecodeFactory,
   _safeEncodeAsync,
-  safeParseReal,
 };

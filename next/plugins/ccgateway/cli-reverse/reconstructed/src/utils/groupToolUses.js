@@ -3,9 +3,9 @@
  *
  * 把同一消息中的同类并行工具调用合并为 grouped_tool_use 以便渲染
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/groupToolUses.ts
- * pieces: chunk-ag5x7vhf.js (5)
+ * pieces: chunk-hnxhr3bs.js (5)
  * attribution: placement 3, layout 1, fingerprint 1
  */
 import { hasMcpRenderOverride } from "../components/Message.js";
@@ -14,12 +14,12 @@ import { hasSubagentOverride } from "../tools/AgentTool/agentDisplay.js";
 import { arraysEqual } from "./collections.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:120727-120746 placement
+//@ chunk-hnxhr3bs.js:124918-124937 placement
 var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:120727", () => {
+deferInit("chunk-hnxhr3bs.js:124918", () => {
   weakMap = new WeakMap();
 });
-//@ chunk-ag5x7vhf.js:120746-120896 placement
+//@ chunk-hnxhr3bs.js:124937-125087 placement
 function getGroupableToolNames(tools) {
   let names = weakMap.get(tools);
   if (!names) {
@@ -32,8 +32,8 @@ function getGroupableToolNames(tools) {
   }
   return names;
 }
-//@ chunk-ag5x7vhf.js:120896-121759 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince_2(messages, tools, skip = false, activeAgents) {
+//@ chunk-hnxhr3bs.js:125087-125950 placement
+function groupToolUses(messages, tools, skip = false, activeAgents) {
   if (skip)
     return {
       messages,
@@ -90,12 +90,12 @@ function countToolCallsSince_2(messages, tools, skip = false, activeAgents) {
     messages: out,
   };
 }
-//@ chunk-ag5x7vhf.js:121759-121778 layout
+//@ chunk-hnxhr3bs.js:125950-125969 layout
 var weakMap_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:121759", () => {
+deferInit("chunk-hnxhr3bs.js:125950", () => {
   weakMap_2 = new WeakMap();
 });
-//@ chunk-ag5x7vhf.js:121778-122149 fingerprint (2.1.88 match: applyGrouping, 0.96)
+//@ chunk-hnxhr3bs.js:125969-126340 fingerprint (2.1.88 match: applyGrouping, 1)
 /**
  * 把同一 assistant 消息里的同类并行工具调用合并为 grouped_tool_use 以便一起渲染。
  */
@@ -126,4 +126,4 @@ function applyGrouping(messages, resultsById) {
   weakMap_2.set(first, groupedMessage);
   return groupedMessage;
 }
-export { countToolCallsSince_2 };
+export { groupToolUses };

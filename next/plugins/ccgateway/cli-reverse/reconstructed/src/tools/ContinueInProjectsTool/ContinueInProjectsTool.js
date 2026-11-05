@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Continue in Projects 工具主体
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dz3q485w.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jndyh8cy.js (28), chunk-qfmb95nn.js (1)
  * attribution: placement 29
  */
 import { randomBytes } from "crypto";
@@ -23,6 +23,7 @@ import { isForegroundRunning, runWhenTurnEnds } from "../../utils/plugins/hooksM
 import {
   sendToProjectEnabled,
   remoteControlRefusalText,
+  submitPlan,
   sendToProjectFeatureOn,
   canOfferSendToProject,
   HOST_WRITES,
@@ -79,31 +80,31 @@ import {
   stringSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 
-//@ chunk-dz3q485w.js:42510-42583 placement (2.1.88 match: detectMagicDocHeader, 0.654)
-function omitDisplayFields(content) {
-  let { name: displayName, icon, color, instructions, ...rest } = content;
+//@ chunk-qfmb95nn.js:6762-6836 placement
+function omitDisplayFields(fields) {
+  let { name: displayName, icon, color, instructions, ...rest } = fields;
   return rest;
 }
-//@ chunk-dz3q485w.js:73709-73847 placement
+//@ chunk-jndyh8cy.js:62347-62485 placement
 var PANE_APPROVED_ORIGIN_KEY = "approved_origin";
 var DETECTED_ORIGIN = "detected_origin";
 var PANE_APPROVED_ENVIRONMENT_KEY = "approved_environment";
 var DETECTED_ENVIRONMENT = "detected_environment";
 var MESSAGE_KEY = "message_from";
 var PANE_CONSENT_TOKEN_KEY = "pane_consent";
-//@ chunk-dz3q485w.js:73847-73949 placement
+//@ chunk-jndyh8cy.js:62485-62587 placement
 function drawnMessageFrom(messageFrom, message) {
   return (messageFrom === "typed" || messageFrom === "drafted") &&
     Object.keys(message).every((key) => key === "summary")
     ? messageFrom
     : null;
 }
-//@ chunk-dz3q485w.js:73949-73976 placement
+//@ chunk-jndyh8cy.js:62587-62614 placement
 /**
  * 按会话根保存窗格同意记录（令牌 + 提议摘要哈希），takePaneConsent 用它核对。
  */
 var paneConsentByRoot = new SessionRootSlot(() => new Map());
-//@ chunk-dz3q485w.js:73976-74277 placement
+//@ chunk-jndyh8cy.js:62614-62915 placement
 /**
  * 计算发送到项目的提议内容哈希（用于核对窗格同意）。
  */
@@ -129,7 +130,7 @@ function proposalDigest(input) {
     ]),
   );
 }
-//@ chunk-dz3q485w.js:74277-74424 placement
+//@ chunk-jndyh8cy.js:62915-63062 placement
 function mintPaneConsent(session, requestId, input, consentMeta) {
   let str = randomBytes(16).toString("hex");
   paneConsentByRoot.of(session).set(requestId, {
@@ -140,7 +141,7 @@ function mintPaneConsent(session, requestId, input, consentMeta) {
   });
   return str;
 }
-//@ chunk-dz3q485w.js:74424-74601 placement
+//@ chunk-jndyh8cy.js:63062-63239 placement
 /**
  * 取出并核对窗格同意令牌与提议哈希。
  */
@@ -157,7 +158,7 @@ function takePaneConsent(session, toolUseId, token, input) {
     ? consent
     : null;
 }
-//@ chunk-dz3q485w.js:74601-74673 placement
+//@ chunk-jndyh8cy.js:63239-63310 placement
 /**
  * 按会话根保存 /send-to-project 本回合的运行状态（turn、context、project、message），供命令与工具共享。
  */
@@ -167,7 +168,7 @@ var commandRunState = new SessionRootSlot(() => ({
   project: null,
   message: null,
 }));
-//@ chunk-dz3q485w.js:74673-74932 placement
+//@ chunk-jndyh8cy.js:63310-63568 placement
 function armCommandRun(session, context, project, message) {
   let runState = commandRunState.of(session);
   let turn = isForegroundRunning();
@@ -191,12 +192,12 @@ function armCommandRun(session, context, project, message) {
     }
   });
 }
-//@ chunk-dz3q485w.js:74932-75003 placement
+//@ chunk-jndyh8cy.js:63568-63638 placement
 function releaseTypedMessage(appStateSession) {
   let message = commandRunState.peek(appStateSession)?.message ?? null;
   if (message !== null) message.typed = "";
 }
-//@ chunk-dz3q485w.js:75003-75112 placement
+//@ chunk-jndyh8cy.js:63638-63747 placement
 /**
  * 本次是否只发送一条消息（不读上下文）。
  */
@@ -207,7 +208,7 @@ function isMessageOnlySend(input) {
       (sendToProjectEnabled() && Object.keys(input.proposal ?? {}).every((key) => key === "summary")))
   );
 }
-//@ chunk-dz3q485w.js:75112-75298 placement
+//@ chunk-jndyh8cy.js:63747-63932 placement
 /**
  * 本回合是否由用户运行了 /send-to-project（必要时清空运行状态）。
  */
@@ -224,12 +225,12 @@ function isCommandTurnActive(session, agentId, forceClear) {
   }
   return isActive;
 }
-//@ chunk-dz3q485w.js:75298-75337 placement
+//@ chunk-jndyh8cy.js:63932-63971 placement
 /**
  * 不知道项目名时使用的占位称呼。
  */
 var PROJECT_PLACEHOLDER_NAME = "the Claude Project you picked";
-//@ chunk-dz3q485w.js:75337-75473 placement
+//@ chunk-jndyh8cy.js:63971-64106 placement
 /**
  * 待发送项目的显示名。
  */
@@ -239,7 +240,7 @@ function pendingProjectName(session, projectId) {
   let projectName = oneLineSummary(project.name);
   return projectName !== "" ? projectName : "Untitled project";
 }
-//@ chunk-dz3q485w.js:75473-75653 placement
+//@ chunk-jndyh8cy.js:64106-64286 placement
 /**
  * 未运行 /send-to-project 就调用工具的错误。
  */
@@ -247,7 +248,7 @@ function toolWithoutCommandError() {
   logFeatureBad("continue_in_projects_start", "tool_without_command");
   return "/send-to-project runs only when the user types it in this session, and it takes one call in that turn";
 }
-//@ chunk-dz3q485w.js:75653-75722 placement
+//@ chunk-jndyh8cy.js:64286-64355 placement
 /**
  * 构造“未创建项目”的结果 {created:false, reason, mayExist:false}。
  */
@@ -260,7 +261,7 @@ function sendNotCreatedResult(reasonText) {
     },
   };
 }
-//@ chunk-dz3q485w.js:75722-75897 placement
+//@ chunk-jndyh8cy.js:64355-64535 placement
 /**
  * Remote Control 不可用时的拒绝结果并记录。
  */
@@ -273,17 +274,17 @@ function remoteControlRefusal(refusal) {
         ? "conversation_withheld"
         : "conversation_unverified",
   );
-  return sendNotCreatedResult(remoteControlRefusalText(refusal, !getIsNonInteractiveSession()));
+  return sendNotCreatedResult(remoteControlRefusalText(refusal, submitPlan(!getIsNonInteractiveSession())));
 }
-//@ chunk-dz3q485w.js:75897-75937 placement
+//@ chunk-jndyh8cy.js:64535-64575 placement
 function desktopCardIsTheYes() {
   return getIsNonInteractiveSession() && isDesktopNonClaudecode() && returnFalsePermissionHook();
 }
-//@ chunk-dz3q485w.js:75937-76146 placement
+//@ chunk-jndyh8cy.js:64575-64784 placement
 var DRAFT_NEEDS_A_PERSON =
   "this app does not show that a person approved a message Claude drafted, so a draft is not posted from here. Run /send-to-project again with the message typed after it";
 var ENVIRONMENT_LOOKUP_FAILED_KEY = "environment_lookup_failed";
-//@ chunk-dz3q485w.js:76146-76221 placement
+//@ chunk-jndyh8cy.js:64784-64859 placement
 /**
  * 读取对象上记录的检测来源（origin）。
  */
@@ -291,7 +292,7 @@ function detectedOriginOf(input) {
   let origin = Reflect.get(input, DETECTED_ORIGIN);
   return typeof origin === "string" ? origin : undefined;
 }
-//@ chunk-dz3q485w.js:76221-76297 placement
+//@ chunk-jndyh8cy.js:64859-64935 placement
 /**
  * 读取窗格批准通过的来源（origin）。
  */
@@ -299,7 +300,7 @@ function paneApprovedOriginOf(input) {
   let origin = Reflect.get(input, PANE_APPROVED_ORIGIN_KEY);
   return typeof origin === "string" ? origin : undefined;
 }
-//@ chunk-dz3q485w.js:76297-76434 placement
+//@ chunk-jndyh8cy.js:64935-65072 placement
 /**
  * 选用的环境（窗格批准的或检测到的）。
  */
@@ -309,9 +310,9 @@ function resolveEnvironment(input, preferPane) {
   let detectedEnvironment = Reflect.get(input, DETECTED_ENVIRONMENT);
   return typeof detectedEnvironment === "string" ? detectedEnvironment : undefined;
 }
-//@ chunk-dz3q485w.js:76434-76453 placement
+//@ chunk-jndyh8cy.js:65072-65091 placement
 var weakMap = new WeakMap();
-//@ chunk-dz3q485w.js:76453-76535 placement
+//@ chunk-jndyh8cy.js:65091-65173 placement
 /**
  * 取显示名的第一个词（用于称呼用户的名字）。
  */
@@ -319,7 +320,7 @@ function firstDisplayNameWord(displayName) {
   let firstWord = displayName?.trim().split(/\s+/)[0];
   return firstWord !== undefined && firstWord !== "" ? firstWord : undefined;
 }
-//@ chunk-dz3q485w.js:76535-76574 placement
+//@ chunk-jndyh8cy.js:65173-65212 placement
 /**
  * 构造“已创建”的结果并合并其余字段。
  */
@@ -329,7 +330,7 @@ function createdResult(result) {
     ...result,
   };
 }
-//@ chunk-dz3q485w.js:76574-76680 placement
+//@ chunk-jndyh8cy.js:65212-65318 placement
 /**
  * 清理客户端请求 id（缺省生成新的）。
  */
@@ -337,7 +338,7 @@ function sanitizeRequestId(toolUseId) {
   let sliced = (toolUseId ?? "").replace(/[^A-Za-z0-9_.:-]/g, "").slice(0, 64);
   return sliced !== "" ? sliced : newRequestId().slice(0, 64);
 }
-//@ chunk-dz3q485w.js:76680-76833 placement
+//@ chunk-jndyh8cy.js:65318-65471 placement
 /**
  * 说明不会新建线程、每个线程都从设置卡开始。
  */
@@ -346,7 +347,7 @@ var MESSAGE_DISCLOSURE = [
   NOTHING_ELSE_SENT_NOTICE,
 ];
 var NO_THREAD_START_NOTE = "No thread starts: you start each one from the setup card.";
-//@ chunk-dz3q485w.js:76833-92859 placement
+//@ chunk-jndyh8cy.js:65471-81501 placement
 /**
  * 续接结果文本的长度上限（1500 字符）。
  */
@@ -691,9 +692,9 @@ ${body}`,
             logFeatureBad("continue_in_projects_send", "message_key_in_brief");
             return sendNotCreatedResult("the request was shown as one message, and this run sends the brief");
           }
-          let content = normalizeProposal(input.proposal);
+          let summary = normalizeProposal(input.proposal);
           let messageFrom =
-            content.summary ===
+            summary.summary ===
             normalizeProposal({
               summary: message?.typed ?? "",
             }).summary
@@ -706,13 +707,13 @@ ${body}`,
             );
           }
           let messageProblemText =
-            message !== null ? summaryProblem(content.summary ?? "", messageFrom) : null;
+            message !== null ? summaryProblem(summary.summary ?? "", messageFrom) : null;
           if (messageProblemText !== null) {
             logFeatureBad("continue_in_projects_send", "message_invalid");
             return sendNotCreatedResult(`the message cannot be sent: ${messageProblemText}`);
           }
           let proposalToSend =
-            message !== null ? {} : input.project_id !== undefined ? omitDisplayFields(content) : content;
+            message !== null ? {} : input.project_id !== undefined ? omitDisplayFields(summary) : summary;
           let approvedVia = hasPaneConsent
             ? "pane"
             : desktopCardIsTheYes() &&
@@ -736,7 +737,7 @@ ${body}`,
             !hasPaneConsent &&
             (message.asked === null ||
               message.asked.toolUseId !== callOptions.toolUseId ||
-              message.asked.summary !== (content.summary ?? "") ||
+              message.asked.summary !== (summary.summary ?? "") ||
               drawnMessageFrom(Reflect.get(input, MESSAGE_KEY), input.proposal) !== messageFrom)
           ) {
             logFeatureBad("continue_in_projects_send", "message_changed");
@@ -798,7 +799,7 @@ ${body}`,
               windowDays: readInfo.windowDays,
             }),
             ...(message !== null && {
-              message: content.summary ?? "",
+              message: summary.summary ?? "",
             }),
             sourceSessionId: sessionId,
             toolsUsed: consent?.toolsUsed ?? null,
@@ -995,7 +996,7 @@ var contextToolOutputSchema = DoctorLazy(() =>
     context: stringSchema().optional(),
   }),
 );
-//@ chunk-dz3q485w.js:92859-94825 placement
+//@ chunk-jndyh8cy.js:81501-83466 placement
 /**
  * /send-to-project 未运行时的提示与读取上下文工具。
  */
@@ -1119,6 +1120,11 @@ ${result.context ?? ""}`,
   },
 });
 export {
+  MESSAGE_DISCLOSURE,
+  RUN_CONTEXT_FACTS_MAX_CHARS,
+  desktopCardIsTheYes,
+  DRAFT_NEEDS_A_PERSON,
+  armCommandRun,
   drawnMessageFrom,
   MESSAGE_KEY,
   PANE_CONSENT_TOKEN_KEY,
@@ -1126,12 +1132,7 @@ export {
   PANE_APPROVED_ORIGIN_KEY,
   PANE_APPROVED_ENVIRONMENT_KEY,
   ENVIRONMENT_LOOKUP_FAILED_KEY,
-  MESSAGE_DISCLOSURE,
   releaseTypedMessage,
-  RUN_CONTEXT_FACTS_MAX_CHARS,
-  desktopCardIsTheYes,
-  DRAFT_NEEDS_A_PERSON,
-  armCommandRun,
   ContinueInProjectsContextTool,
   ContinueInProjectsTool,
 };

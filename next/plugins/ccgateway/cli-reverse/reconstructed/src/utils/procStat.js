@@ -3,20 +3,20 @@
  *
  * 2.1.316 新增：/proc stat 读取
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-v4n8v118.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ec6640wg.js (10)
  * attribution: placement 10
  */
 
-//@ chunk-v4n8v118.js:191-258 placement
+//@ chunk-ec6640wg.js:191-258 placement
 /**
  * procStatField：取 /proc/<pid>/stat 的某个字段。
  */
 function procStatField(file) {
   return file.slice(file.lastIndexOf(")") + 2).split(" ")[19];
 }
-//@ chunk-v4n8v118.js:258-395 placement
+//@ chunk-ec6640wg.js:258-395 placement
 /**
  * 从 /proc/<pid>/stat 内容取父进程 id。
  */
@@ -25,7 +25,7 @@ function statPpid(statText) {
   let ppid = ppidField === undefined ? NaN : Number.parseInt(ppidField, 10);
   return Number.isNaN(ppid) ? undefined : ppid;
 }
-//@ chunk-v4n8v118.js:395-532 placement
+//@ chunk-ec6640wg.js:395-532 placement
 /**
  * 从 /proc/<pid>/stat 内容取进程组 id。
  */
@@ -34,7 +34,7 @@ function statPgrp(statText) {
   let pgrp = pgrpField === undefined ? NaN : Number.parseInt(pgrpField, 10);
   return Number.isNaN(pgrp) ? undefined : pgrp;
 }
-//@ chunk-v4n8v118.js:532-669 placement
+//@ chunk-ec6640wg.js:532-669 placement
 /**
  * 从 /proc/<pid>/stat 内容取会话 id。
  */
@@ -43,7 +43,7 @@ function statSession(file) {
   let session = sessionField === undefined ? NaN : Number.parseInt(sessionField, 10);
   return Number.isNaN(session) ? undefined : session;
 }
-//@ chunk-v4n8v118.js:669-915 placement
+//@ chunk-ec6640wg.js:669-915 placement
 /**
  * 从 /proc stat 取 ppid、pgrp、session 与本进程加子进程的 CPU 时钟数。
  */
@@ -65,7 +65,7 @@ function parseStatCpu(stat) {
         cpuTicks,
       };
 }
-//@ chunk-v4n8v118.js:915-1220 placement
+//@ chunk-ec6640wg.js:915-1220 placement
 /**
  * 从 /proc stat 取 ppid、pgrp、session、启动时间，以及本进程与已回收子进程各自的 CPU 时钟数。
  */
@@ -93,7 +93,7 @@ function parseStatTimes(file) {
         childrenTicks,
       };
 }
-//@ chunk-v4n8v118.js:1220-1361 placement
+//@ chunk-ec6640wg.js:1220-1360 placement
 /**
  * 从 /proc stat 取进程状态字段。
  */
@@ -105,14 +105,14 @@ function statState(file) {
   let state = index_2 < 0 ? sliced : sliced.slice(0, index_2);
   return state.length === 0 ? undefined : state;
 }
-//@ chunk-v4n8v118.js:1361-1400 placement
+//@ chunk-ec6640wg.js:1360-1399 placement
 /**
  * isMinorFaultField：次缺页相关字段（Z/X）。
  */
 function isMinorFaultField(state) {
   return state === "Z" || state === "X";
 }
-//@ chunk-v4n8v118.js:1400-1727 placement
+//@ chunk-ec6640wg.js:1399-1726 placement
 /**
  * 从 /proc stat 取缺页次数（次/主、子进程次缺页）与子进程 CPU 时钟数。
  */
@@ -126,7 +126,7 @@ function parseStatFaults(file) {
   };
   return Object.values(faults).some(Number.isNaN) ? undefined : faults;
 }
-//@ chunk-v4n8v118.js:1727-1841 placement
+//@ chunk-ec6640wg.js:1726-1840 placement
 /**
  * 从 /proc/<pid>/io 取 read_bytes。
  */
@@ -136,13 +136,13 @@ function parseReadBytes(file) {
 }
 export {
   procStatField,
+  parseStatTimes,
   isMinorFaultField,
   statState,
-  statPgrp,
-  statPpid,
   statSession,
   parseStatCpu,
+  statPpid,
+  statPgrp,
   parseStatFaults,
   parseReadBytes,
-  parseStatTimes,
 };

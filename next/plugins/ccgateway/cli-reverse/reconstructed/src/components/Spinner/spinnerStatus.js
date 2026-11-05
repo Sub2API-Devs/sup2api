@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Spinner 状态存储：API 重试状态的解析与容错（MalformedRetryStatusError）、自动模式拒绝行的上下文
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hbc3mvx0.js (37)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2sbb399z.js (37)
  * attribution: placement 37
  */
 import {
@@ -30,19 +30,19 @@ import { mainAgentId } from "../../bootstrap/state.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hbc3mvx0.js:708-712 placement
+//@ chunk-2sbb399z.js:708-712 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hbc3mvx0.js:708", () => {
+deferInit("chunk-2sbb399z.js:708", () => {
   init_react_production();
 });
-//@ chunk-hbc3mvx0.js:712-732 placement
+//@ chunk-2sbb399z.js:712-732 placement
 var spinnerStatusSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SPINNER_STATUS_MAX_MS;
-deferInit("chunk-hbc3mvx0.js:712", () => {
+deferInit("chunk-2sbb399z.js:712", () => {
   spinnerStatusSlot = createContext(null);
   SPINNER_STATUS_MAX_MS = 20;
 });
-//@ chunk-hbc3mvx0.js:732-1331 placement
+//@ chunk-2sbb399z.js:732-1331 placement
 function AutoModeDenialsProvider(props) {
   let $ = useMemoCache(8);
   let { children } = props;
@@ -104,11 +104,11 @@ function AutoModeDenialsProvider(props) {
   } else spinnerStatusSlotElement = $[7];
   return spinnerStatusSlotElement;
 }
-//@ chunk-hbc3mvx0.js:1331-1357 placement
+//@ chunk-2sbb399z.js:1331-1357 placement
 function noopUnsubscribe() {
   return () => {};
 }
-//@ chunk-hbc3mvx0.js:1357-1549 placement
+//@ chunk-2sbb399z.js:1357-1549 placement
 function useHasAutoModeDenialFor(agentId) {
   let $ = useMemoCache(3);
   let store = useContext(spinnerStatusSlot);
@@ -122,7 +122,7 @@ function useHasAutoModeDenialFor(agentId) {
   let denial = hasDenial;
   return useSyncExternalStore(store?.subscribe ?? noopUnsubscribe, denial, denial);
 }
-//@ chunk-hbc3mvx0.js:1549-1748 placement
+//@ chunk-2sbb399z.js:1549-1748 placement
 function useAutoModeDenialsContext() {
   let store = useContext(spinnerStatusSlot);
   if (!store) {
@@ -132,76 +132,76 @@ function useAutoModeDenialsContext() {
   }
   return store;
 }
-//@ chunk-hbc3mvx0.js:1748-1774 placement
+//@ chunk-2sbb399z.js:1748-1774 placement
 /**
  * 函数 statusSnapshot（spinner 状态快照）。
  */
 function statusSnapshot() {
   return useAutoModeDenialsContext();
 }
-//@ chunk-hbc3mvx0.js:1774-1809 placement
+//@ chunk-2sbb399z.js:1774-1809 placement
 /**
  * 函数 statusRowTexts（spinner 行文本）。
  */
 function statusRowTexts() {
   return useAutoModeDenialsContext().rowTexts;
 }
-//@ chunk-hbc3mvx0.js:1809-1838 placement
+//@ chunk-2sbb399z.js:1809-1838 placement
 var { floor, random } = Math;
-//@ chunk-hbc3mvx0.js:1838-1881 placement
+//@ chunk-2sbb399z.js:1838-1881 placement
 function randomIntInclusive(min, max) {
   return min + floor(random() * (max - min + 1));
 }
-//@ chunk-hbc3mvx0.js:1881-1890 placement
+//@ chunk-2sbb399z.js:1881-1890 placement
 var randomInt = randomIntInclusive;
-//@ chunk-hbc3mvx0.js:1890-1948 placement
+//@ chunk-2sbb399z.js:1890-1948 placement
 function sampleOne(items) {
   var length = items.length;
   return length ? items[randomInt(0, length - 1)] : undefined;
 }
-//@ chunk-hbc3mvx0.js:1948-1957 placement
+//@ chunk-2sbb399z.js:1948-1957 placement
 var sample = sampleOne;
-//@ chunk-hbc3mvx0.js:1957-2013 placement
+//@ chunk-2sbb399z.js:1957-2013 placement
 function mapIndices(values, indices) {
   return import_arrayMap(indices, function (index) {
     return values[index];
   });
 }
-//@ chunk-hbc3mvx0.js:2013-2022 placement
+//@ chunk-2sbb399z.js:2013-2022 placement
 var mapValues = mapIndices;
-//@ chunk-hbc3mvx0.js:2022-2067 placement
+//@ chunk-2sbb399z.js:2022-2067 placement
 function valuesArray(record) {
   return record == null ? [] : mapValues(record, keysAlias(record));
 }
-//@ chunk-hbc3mvx0.js:2067-2076 placement
+//@ chunk-2sbb399z.js:2067-2076 placement
 var values = valuesArray;
-//@ chunk-hbc3mvx0.js:2076-2106 placement
+//@ chunk-2sbb399z.js:2076-2106 placement
 function sampleValue(record) {
   return sample(values(record));
 }
-//@ chunk-hbc3mvx0.js:2106-2115 placement
+//@ chunk-2sbb399z.js:2106-2115 placement
 var sampleValueAlias = sampleValue;
-//@ chunk-hbc3mvx0.js:2115-2158 placement
+//@ chunk-2sbb399z.js:2115-2158 placement
 function sampleBy(value) {
   var sampler = isArrayAlias(value) ? sample : sampleValueAlias;
   return sampler(value);
 }
-//@ chunk-hbc3mvx0.js:2158-2168 placement
+//@ chunk-2sbb399z.js:2158-2168 placement
 /**
  * 导出值：sampleAlias（sample 导出别名）。
  */
 var sampleAlias = sampleBy;
-//@ chunk-hbc3mvx0.js:2168-2172 placement
+//@ chunk-2sbb399z.js:2168-2172 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hbc3mvx0.js:2168", () => {
+deferInit("chunk-2sbb399z.js:2168", () => {
   init_react_production();
 });
-//@ chunk-hbc3mvx0.js:4751-4771 placement
+//@ chunk-2sbb399z.js:4751-4771 placement
 /**
  * 导出值：API_ERROR_TEXT（"API error"）。
  */
 var API_ERROR_TEXT = "API error";
-//@ chunk-hbc3mvx0.js:4771-5263 placement
+//@ chunk-2sbb399z.js:4771-5263 placement
 function classifyRetryStatus(spinnerState) {
   try {
     let retryStatus = readRetryStatus(spinnerState);
@@ -239,11 +239,11 @@ function classifyRetryStatus(spinnerState) {
     };
   }
 }
-//@ chunk-hbc3mvx0.js:5263-5293 placement
+//@ chunk-2sbb399z.js:5263-5293 placement
 function reportIgnoredRetryStatus(reason) {
   logError(new MalformedRetryStatusError(RETRY_STATUS_IGNORE_REASONS[reason]));
 }
-//@ chunk-hbc3mvx0.js:5293-6744 placement
+//@ chunk-2sbb399z.js:5293-6744 placement
 /**
  * Spinner 无法绘制 API 重试状态时的说明文本。
  */
@@ -288,9 +288,9 @@ var RETRY_STATUS_IGNORE_REASONS = {
     "error.formatted is undefined on an object that has the connection or isNetworkDown key of an error snapshot",
   error_is_another_object: REPLACED_STATUS_PREFIX + "error.formatted is undefined on another kind of object",
 };
-//@ chunk-hbc3mvx0.js:6744-6825 placement
+//@ chunk-2sbb399z.js:6744-6825 placement
 let MalformedRetryStatusError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hbc3mvx0.js:6744", () => {
+deferInit("chunk-2sbb399z.js:6744", () => {
   MalformedRetryStatusError = class MalformedRetryStatusError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -300,7 +300,7 @@ deferInit("chunk-hbc3mvx0.js:6744", () => {
     }
   };
 });
-//@ chunk-hbc3mvx0.js:6825-7782 placement
+//@ chunk-2sbb399z.js:6825-7782 placement
 function readRetryStatus(value) {
   if (value === null) return null;
   let kind = typeof value === "object" && "kind" in value ? value.kind : undefined;
@@ -334,17 +334,18 @@ function readRetryStatus(value) {
           ? "error_has_snapshot_keys"
           : "error_is_another_object";
 }
-//@ chunk-hbc3mvx0.js:7782-7844 placement
+//@ chunk-2sbb399z.js:7782-7844 placement
 function isKnownStatusKind(kind) {
   return typeof kind === "string" && Object.hasOwn(RETRY_STATUS_KINDS, kind);
 }
-//@ chunk-hbc3mvx0.js:7844-8182 placement
+//@ chunk-2sbb399z.js:7844-8196 placement
 var RESPONDING_STATE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hbc3mvx0.js:7844", () => {
+deferInit("chunk-2sbb399z.js:7844", () => {
   RESPONDING_STATE = Object.freeze({
     mode: "responding",
     overrideMessage: null,
     overrideHeading: null,
+    waitLine: null,
     overrideColor: null,
     overrideShimmerColor: null,
     isCompacting: false,
@@ -360,7 +361,7 @@ deferInit("chunk-hbc3mvx0.js:7844", () => {
     defaultVerb: "",
   });
 });
-//@ chunk-hbc3mvx0.js:8182-11886 placement
+//@ chunk-2sbb399z.js:8196-12015 placement
 /**
  * Spinner 状态存储（requesting/thinking/重试等，畸形重试状态回调，约 3.7 KB）。
  */
@@ -411,7 +412,17 @@ function createSpinnerStatusStore({ onMalformedRetryStatus = reportIgnoredRetryS
             },
       );
     }
-    function setOverrideColors(color, shimmerColor) {
+    function setWaitLine(waitLine) {
+      updateEntry(key, (entry) =>
+        entry.waitLine === waitLine
+          ? entry
+          : {
+              ...entry,
+              waitLine,
+            },
+      );
+    }
+    function setColors(color, shimmerColor) {
       updateEntry(key, (state) =>
         state.overrideColor === color && state.overrideShimmerColor === shimmerColor
           ? state
@@ -532,7 +543,7 @@ function createSpinnerStatusStore({ onMalformedRetryStatus = reportIgnoredRetryS
     function applyCompactProgress(progress) {
       switch (progress.type) {
         case "hooks_start":
-          setOverrideColors("claudeBlue_FOR_SYSTEM_SPINNER", "claudeBlueShimmer_FOR_SYSTEM_SPINNER");
+          setColors("claudeBlue_FOR_SYSTEM_SPINNER", "claudeBlueShimmer_FOR_SYSTEM_SPINNER");
           setOverrideMessage(
             progress.hookType === "pre_compact"
               ? "Running PreCompact hooks\u2026"
@@ -553,7 +564,8 @@ function createSpinnerStatusStore({ onMalformedRetryStatus = reportIgnoredRetryS
     return {
       setMode,
       setMessage: setOverrideMessage,
-      setColors: setOverrideColors,
+      setWaitLine,
+      setColors,
       setTurnEffort,
       setSentEffort,
       setRetryStatus,
@@ -566,6 +578,7 @@ function createSpinnerStatusStore({ onMalformedRetryStatus = reportIgnoredRetryS
   let main = {
     setMode: (mode, recovery) => makeUpdater(mainAgentId()).setMode(mode, recovery),
     setMessage: (message, heading) => makeUpdater(mainAgentId()).setMessage(message, heading),
+    setWaitLine: (waitLine) => makeUpdater(mainAgentId()).setWaitLine(waitLine),
     setColors: (color, shimmerColor) => makeUpdater(mainAgentId()).setColors(color, shimmerColor),
     setTurnEffort: (effort, model) => makeUpdater(mainAgentId()).setTurnEffort(effort, model),
     setSentEffort: (effort) => makeUpdater(mainAgentId()).setSentEffort(effort),
@@ -616,15 +629,15 @@ function createSpinnerStatusStore({ onMalformedRetryStatus = reportIgnoredRetryS
     },
   };
 }
-//@ chunk-hbc3mvx0.js:11886-11903 placement
+//@ chunk-2sbb399z.js:12015-12032 placement
 /**
  * 导出值：statusOverrideSlot（状态覆盖槽）。
  */
 var statusOverrideSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hbc3mvx0.js:11886", () => {
+deferInit("chunk-2sbb399z.js:12015", () => {
   statusOverrideSlot = createContext(null);
 });
-//@ chunk-hbc3mvx0.js:11903-12080 placement
+//@ chunk-2sbb399z.js:12032-12209 placement
 function useSpinnerStore() {
   let store = useContext(statusOverrideSlot);
   if (!store)
@@ -633,7 +646,7 @@ function useSpinnerStore() {
     );
   return store;
 }
-//@ chunk-hbc3mvx0.js:12080-12140 placement
+//@ chunk-2sbb399z.js:12209-12269 placement
 /**
  * 函数 useSpinnerStatus（取某会话的 spinner 状态）。
  */
@@ -641,7 +654,7 @@ function useSpinnerStatus(agentId) {
   let targetAgentId = agentId ?? mainAgentId();
   return useStoreSelector(useSpinnerStore(), (states) => states[targetAgentId] ?? RESPONDING_STATE);
 }
-//@ chunk-hbc3mvx0.js:12140-12206 placement
+//@ chunk-2sbb399z.js:12269-12335 placement
 /**
  * 函数 useThinkingStartedAt（思考开始时间）。
  */
@@ -651,14 +664,14 @@ function useThinkingStartedAt(agentId) {
     (states) => (states[agentId] ?? RESPONDING_STATE).thinkingStartedAt,
   );
 }
-//@ chunk-hbc3mvx0.js:12206-12266 placement
+//@ chunk-2sbb399z.js:12335-12395 placement
 /**
  * 函数 useRetryStatus（重试状态）。
  */
 function useRetryStatus(agentId) {
   return useStoreSelector(useSpinnerStore(), (state) => (state[agentId] ?? RESPONDING_STATE).retryStatus);
 }
-//@ chunk-hbc3mvx0.js:12266-12328 placement
+//@ chunk-2sbb399z.js:12395-12457 placement
 /**
  * 函数 useStatusField（取状态的某个字段）。
  */
@@ -667,17 +680,17 @@ function useStatusField(field) {
   return useStoreSelector(useSpinnerStore(), (states) => (states[agentId] ?? RESPONDING_STATE)[field]);
 }
 export {
-  useStatusField,
-  useSpinnerStore,
   API_ERROR_TEXT,
-  useRetryStatus,
-  statusSnapshot,
-  sampleAlias,
-  useSpinnerStatus,
-  statusOverrideSlot,
-  useHasAutoModeDenialFor,
-  useThinkingStartedAt,
   createSpinnerStatusStore,
   AutoModeDenialsProvider,
+  statusOverrideSlot,
+  sampleAlias,
+  useStatusField,
+  useSpinnerStore,
+  statusSnapshot,
+  useRetryStatus,
   statusRowTexts,
+  useSpinnerStatus,
+  useHasAutoModeDenialFor,
+  useThinkingStartedAt,
 };

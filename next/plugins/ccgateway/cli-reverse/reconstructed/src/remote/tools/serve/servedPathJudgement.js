@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：服务端调用涉及路径的判定（设置文件、点目录、规范化）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tr0s0d0k.js (19)
- * attribution: placement 19
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6d2p9h2d.js (20)
+ * attribution: placement 19, layout 1
  */
 import { dirname, basename, join } from "path";
 import { homedir, hostname } from "os";
@@ -20,11 +20,15 @@ import {
   classifyCredentialPath,
   readsCredentialStore,
   credentialCommandIn,
-  joinLineContinuations,
   unquoteShellWord,
+  joinLineContinuations,
 } from "./credentialPathGuards.js";
 import { readServedBackgroundOverride } from "./backgroundCommands.js";
-import { normalizeCaseForComparison, matchingRuleForInput } from "../../../utils/permissions/filesystem.js";
+import {
+  normalizeCaseForComparison,
+  normalizeCaseForComparison_2,
+  matchingRuleForInput,
+} from "../../../utils/permissions/filesystem.js";
 import { normalizeCommandForPlatform } from "../../../utils/git.js";
 import {
   withPathAliases,
@@ -32,9 +36,8 @@ import {
   claudeStateGlobEntries,
   claudeStateGlobs,
 } from "../../../utils/permissions/claudeStatePaths.js";
-import { uniq, count } from "../../../utils/collections.js";
 import { env } from "../../../utils/env.js";
-import { FILE_READ_TOOL_NAME } from "../../../tools/FileReadTool/constants.js";
+import { READ } from "../../../tools/FileReadTool/constants.js";
 import { getPathsForPermissionCheck } from "../../../utils/fsOperations.js";
 import { secondRootMounts } from "../../../utils/wslMounts.js";
 import { isSystemVolumePath } from "../../../utils/permissions/protectedDirs.js";
@@ -45,9 +48,10 @@ import { isUntrustedLinkPath } from "../../../utils/pathResolution.js";
 import { classifyHomeMount } from "../../../utils/networkPaths.js";
 import { isLocalHostname, matchesHostPattern, isLoopbackHost } from "../../../utils/localHostnames.js";
 import { logError } from "../../../utils/log.js";
+import { countWhere } from "../../../utils/collections.js";
 import { expandPath } from "../../../utils/path.js";
 import { runWithGuardOff } from "../../../utils/bash/bashParserFlags.js";
-import { parseShellCommand } from "../../../tools/BashTool/readOnlyShellCheck.js";
+import { parseShellCommand, readOnlyShellCheck } from "../../../tools/BashTool/readOnlyShellCheck.js";
 import {
   SHELL_PROGRAM_NAMES,
   POSIX_SHELL_NAMES,
@@ -59,7 +63,7 @@ import { safeParseToolInput } from "../../../Tool.js";
 import { runInRemoteCallFrameMain } from "../../remoteMode.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-tr0s0d0k.js:24209-24524 placement
+//@ chunk-6d2p9h2d.js:24456-24771 placement
 /**
  * 路径判定限额：嵌套输入深度 8、单条路径 512 字符、总扫描 131072 字符，以及绝对路径、通配符、URL 前缀、引号等形态正则。
  */
@@ -73,19 +77,19 @@ var PATH_EDGE_CHARS_RE =
 var LEADING_QUOTE_OPENERS = /^["'(<[{]+/;
 var TRAILING_QUOTE_CLOSERS = `"')>]}`;
 var TRAILING_TRIM_CHARS = ".,;:!?";
-//@ chunk-tr0s0d0k.js:24524-24571 placement
+//@ chunk-6d2p9h2d.js:24771-24817 placement
 function trimPathQuotes(text) {
   return trimEndChars(text.replace(LEADING_QUOTE_OPENERS, ""), TRAILING_QUOTE_CLOSERS);
 }
-//@ chunk-tr0s0d0k.js:24571-24635 placement
+//@ chunk-6d2p9h2d.js:24817-24881 placement
 function isBashShortFlagWithC(flag) {
   return /^[-+][a-zA-Z]+$/.test(flag) && flag.includes("c");
 }
-//@ chunk-tr0s0d0k.js:24635-24689 placement
+//@ chunk-6d2p9h2d.js:24881-24935 placement
 function dirnameIncludingSlash(path) {
   return path.slice(0, path.lastIndexOf("/") + 1);
 }
-//@ chunk-tr0s0d0k.js:24689-25608 placement
+//@ chunk-6d2p9h2d.js:24935-25854 placement
 /**
  * 路径形态正则集合：通配符/不安全字符/命令分隔/URL/普通名字/相对路径/proc、Data 卷、私有域名与数字主机等，用于判断云会话传来的路径是否可在本机处理。
  */
@@ -112,7 +116,7 @@ var PRIVATE_DOMAIN_RE =
 var NUMERIC_HOST_RE =
   /(?:^|\.)\d+(?:\.|$)|(?:^|[.-])(?:0x|[0-9a-f]{8}(?:[.-]|$))|(?:^|[^0-9])\d+(?:[.-]\d+){2}/;
 var MAX_HOST_URL_LENGTH = 2048;
-//@ chunk-tr0s0d0k.js:25608-31008 placement
+//@ chunk-6d2p9h2d.js:25854-31248 placement
 /**
  * 对云会话调用的 MCP 工具参数里的路径做本机判定：守护位置、相对路径、主机样式、/proc /dev/fd 等。
  */
@@ -131,7 +135,7 @@ function judgeServedMcpPaths(tool, input, permissionContext) {
         ? normalizeCommandForPlatform(path).replaceAll("\\", "/")
         : path;
   let mapped = withPathAliases(
-    uniq([
+    normalizeCaseForComparison_2([
       ...getClaudeConfigDirs(),
       ...claudeStateGlobEntries()
         .filter(({ tail }) => tail === "/**")
@@ -145,7 +149,7 @@ function judgeServedMcpPaths(tool, input, permissionContext) {
       source: HOST_CREDENTIAL_RULE_SOURCE,
       ruleBehavior: "deny",
       ruleValue: {
-        toolName: FILE_READ_TOOL_NAME,
+        toolName: READ,
         ruleContent,
       },
     },
@@ -179,7 +183,7 @@ function judgeServedMcpPaths(tool, input, permissionContext) {
           .map((candidate) => [candidate.slice(mountPoint.length) || "/", candidate]),
       ),
     );
-    let candidates = uniq([
+    let candidates = normalizeCaseForComparison_2([
       ...pathsForPermissionCheck,
       ...(isMac ? [isSystemVolumePath(path)] : []),
       ...mountToReal.keys(),
@@ -220,7 +224,7 @@ function judgeServedMcpPaths(tool, input, permissionContext) {
   };
   let driveLetters =
     platform === "windows"
-      ? uniq(
+      ? normalizeCaseForComparison_2(
           [...mapped, ...mapped_2.map(({ dir }) => dir)].flatMap(
             (dir) => /^([a-z]):\//.exec(dir)?.slice(1) ?? [],
           ),
@@ -321,7 +325,7 @@ function judgeServedMcpPaths(tool, input, permissionContext) {
   let relativeVerdicts = new Map();
   let trustedRoots = (permissionContext) => {
     let projectRoot = getProjectConfigRoot() ?? getProjectRootOrNull();
-    return uniq([
+    return normalizeCaseForComparison_2([
       ...(projectRoot === null ? [] : [projectRoot]),
       ...getAnnouncedDirectories(),
       ...hasAnnouncedDirs(),
@@ -458,7 +462,7 @@ function judgeServedMcpPaths(tool, input, permissionContext) {
     if (rawString === DEPTH_EXHAUSTED || ++scannedCount > MAX_NESTED_INPUT_LENGTH)
       return credentialDeny("(nested input this machine could not inspect)");
     let normalized = rawString.normalize("NFKC");
-    for (let candidate of uniq(
+    for (let candidate of normalizeCaseForComparison_2(
       [rawString, normalized].flatMap((source) => [
         source.replace(WHITESPACE_RUN_RE, " ").trim(),
         source.replace(WHITESPACE_RUN_RE, "").trim(),
@@ -482,7 +486,7 @@ function judgeServedMcpPaths(tool, input, permissionContext) {
       platform === "windows" &&
       askVerdict === undefined &&
       ((scannedChars += Math.max(rawString.length, normalized.length)) > MAX_TOTAL_SCANNED_CHARS ||
-        uniq(
+        normalizeCaseForComparison_2(
           [rawString, normalized].flatMap((source) => [
             source.replace(WHITESPACE_RUN_RE, " "),
             source.replace(WHITESPACE_RUN_RE, ""),
@@ -525,7 +529,7 @@ function judgeServedMcpPaths(tool, input, permissionContext) {
         : undefined)
   );
 }
-//@ chunk-tr0s0d0k.js:31008-31328 placement
+//@ chunk-6d2p9h2d.js:31248-31568 placement
 function matchesDirSegments(path, entries) {
   let parts = path.split("/");
   return entries.some(({ dir, segments }) => {
@@ -545,7 +549,7 @@ function matchesDirSegments(path, entries) {
     return false;
   });
 }
-//@ chunk-tr0s0d0k.js:31328-31770 placement
+//@ chunk-6d2p9h2d.js:31568-32010 placement
 function matchesDotDirSegments(path, dotDirPatterns) {
   let parts = path.split("/");
   return dotDirPatterns.some(({ dir, segments }) => {
@@ -563,7 +567,7 @@ function matchesDotDirSegments(path, dotDirPatterns) {
         let isShallow = j_2 + sliced.length < firstDotIndex;
         if (
           (j_2 >= firstDotIndex || isShallow) &&
-          count([...sliced.keys()], (index) => isLiteralPosition(j_2 + index)) >=
+          countWhere([...sliced.keys()], (index) => isLiteralPosition(j_2 + index)) >=
             (firstDotIndex === 0 || isShallow ? 1 : 2) &&
           sliced.every((segment, index) => matchesAt(j_2 + index, segment))
         )
@@ -572,7 +576,7 @@ function matchesDotDirSegments(path, dotDirPatterns) {
     return false;
   });
 }
-//@ chunk-tr0s0d0k.js:31770-32593 placement
+//@ chunk-6d2p9h2d.js:32010-32833 placement
 function normalizeServedPath(rawPath) {
   let path = rawPath;
   if (/^file:/i.test(path)) {
@@ -608,7 +612,7 @@ function normalizeServedPath(rawPath) {
     return;
   return expandPath(path, homedir());
 }
-//@ chunk-tr0s0d0k.js:32593-32938 placement
+//@ chunk-6d2p9h2d.js:32833-33178 placement
 function isWebAddress(text) {
   let match = text.length > MAX_HOST_URL_LENGTH ? null : HTTP_URL_RE.exec(text);
   if (match === null) return false;
@@ -632,12 +636,12 @@ function isWebAddress(text) {
     parsed.hostname === host
   );
 }
-//@ chunk-tr0s0d0k.js:32938-32971 placement
+//@ chunk-6d2p9h2d.js:33178-33211 placement
 var DEPTH_EXHAUSTED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tr0s0d0k.js:32938", () => {
+deferInit("chunk-6d2p9h2d.js:33178", () => {
   DEPTH_EXHAUSTED = Symbol("depth-exhausted");
 });
-//@ chunk-tr0s0d0k.js:32971-33219 placement
+//@ chunk-6d2p9h2d.js:33211-33459 placement
 function* iterateStringsDeep(value, depth) {
   if (typeof value === "string") {
     yield value;
@@ -654,9 +658,10 @@ function* iterateStringsDeep(value, depth) {
     yield* iterateStringsDeep(child, depth - 1);
   }
 }
-//@ chunk-tr0s0d0k.js:33219-33709 placement
+//@ chunk-6d2p9h2d.js:33459-33876 placement (2.1.88 match: parseForSecurity, 0.86)
 async function commandReachesSettings(command, depth) {
   let parsed = await runWithGuardOff(() => parseShellCommand(command));
+  if (getReservedShortcuts(command) && (await readOnlyShellCheck(command))) return true;
   if (parsed.kind !== "simple") return false;
   for (let command of parsed.commands) {
     let argv = normalizeArgv(command.argv);
@@ -666,14 +671,7 @@ async function commandReachesSettings(command, depth) {
     let replaced = program.replace(/\.exe$/, "");
     if (!SHELL_PROGRAM_NAMES.has(replaced)) continue;
     if (!POSIX_SHELL_NAMES.has(replaced)) {
-      if (
-        args.some((arg) => {
-          let unquoted = joinLineContinuations(unquoteShellWord(arg));
-          let folded = getPlatform() === "macos" ? unquoted.toUpperCase().toLowerCase() : unquoted;
-          return keychainCommands().some((name) => folded.includes(name));
-        })
-      )
-        return true;
+      if (args.some(getReservedShortcuts)) return true;
       continue;
     }
     if (!args.some(isBashShortFlagWithC)) continue;
@@ -682,7 +680,15 @@ async function commandReachesSettings(command, depth) {
   }
   return false;
 }
-//@ chunk-tr0s0d0k.js:33709-34192 placement
+//@ chunk-6d2p9h2d.js:33876-34037 layout (2.1.88 match: getReservedShortcuts, 0.807)
+function getReservedShortcuts(word) {
+  return [unquoteShellWord(word), word.replace(/['"]/g, "")].some((candidate) => {
+    let joined = joinLineContinuations(candidate);
+    let uppercased = getPlatform() === "macos" ? joined.toUpperCase().toLowerCase() : joined;
+    return keychainCommands().some((command) => uppercased.includes(command));
+  });
+}
+//@ chunk-6d2p9h2d.js:34037-34520 placement
 function normalizeArgv(argv) {
   let platform = getPlatform();
   let caseInsensitive = platform === "macos" || platform === "windows";
@@ -714,7 +720,7 @@ function normalizeArgv(argv) {
   }
   return;
 }
-//@ chunk-tr0s0d0k.js:34192-34592 placement
+//@ chunk-6d2p9h2d.js:34520-34920 placement
 function splitStringArgs(argv) {
   for (let j = 1; j < argv.length; j++) {
     let arg = argv[j];
@@ -732,7 +738,7 @@ function splitStringArgs(argv) {
   }
   return;
 }
-//@ chunk-tr0s0d0k.js:34592-34791 placement
+//@ chunk-6d2p9h2d.js:34920-35119 placement
 function hostCredentialRuleOf(decisionReason) {
   if (decisionReason?.type === "rule")
     return decisionReason.rule.source === HOST_CREDENTIAL_RULE_SOURCE ? decisionReason.rule : undefined;
@@ -743,7 +749,7 @@ function hostCredentialRuleOf(decisionReason) {
     }
   return;
 }
-//@ chunk-tr0s0d0k.js:34791-35157 placement
+//@ chunk-6d2p9h2d.js:35119-35485 placement
 function servedToolPath(tool, input, permissionContext, cwd) {
   if (tool.getPath === undefined) return;
   let parsed = safeParseToolInput(tool, input);
@@ -763,12 +769,12 @@ function servedToolPath(tool, input, permissionContext, cwd) {
     }
   return;
 }
-//@ chunk-tr0s0d0k.js:35157-35246 placement (2.1.88 match: getDenyRuleForAgent, 1)
+//@ chunk-6d2p9h2d.js:35485-35574 placement (2.1.88 match: getDenyRuleForAgent, 1)
 function stripDoubleSlashPrefix(rule) {
   let ruleContent = rule.ruleValue.ruleContent ?? "";
   return ruleContent.startsWith("//") ? ruleContent.slice(1) : ruleContent;
 }
-//@ chunk-tr0s0d0k.js:35246-35380 placement
+//@ chunk-6d2p9h2d.js:35574-35708 placement
 function isMountPointRule(rule) {
   let ruleContent = stripDoubleSlashPrefix(rule);
   return claudeStateGlobs(
@@ -780,9 +786,9 @@ function isMountPointRule(rule) {
 }
 export {
   commandReachesSettings,
-  servedToolPath,
-  isMountPointRule,
-  stripDoubleSlashPrefix,
   judgeServedMcpPaths,
   hostCredentialRuleOf,
+  stripDoubleSlashPrefix,
+  isMountPointRule,
+  servedToolPath,
 };

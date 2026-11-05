@@ -3,9 +3,9 @@
  *
  * 输入框页脚：左侧状态（模式/提示/后台任务/PR 状态）、右侧通知、建议列表；含 Bridge 状态指示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/PromptInputFooter.tsx
- * pieces: chunk-18hwfzwa.js (18), chunk-ag5x7vhf.js (2)
+ * pieces: chunk-czq1j3j2.js (18), chunk-hnxhr3bs.js (2)
  * attribution: placement 13, layout 5, fingerprint 2
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -14,9 +14,9 @@ import { getBridgeStatus } from "../../bridge/bridgeStatusUtil.js";
 import { useAppState } from "../../state/AppState.js";
 import { isBridgeEnabled } from "../../bridge/bridgeEntitlement.js";
 import {
+  init_react_production,
   useSyncExternalStore,
   useCallback,
-  init_react_production,
   useEffect,
   useRef,
   memo,
@@ -37,6 +37,7 @@ import {
 } from "../../utils/background/remote/remoteSession.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { memorySyncPolicyClosedStub } from "../../services/accountMemory/memoryContext.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { useSettingsState } from "../../hooks/useSettings.js";
 import { useIsFullscreen } from "../../ink/renderModeContext.js";
 import { showSwarmFooterGate } from "./footerGates.js";
@@ -64,9 +65,9 @@ import { clampCursorOffset } from "../../vim/operators.js";
 import { parsePastedRefs } from "../../history.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:47364-47375 placement
+//@ chunk-hnxhr3bs.js:46818-46829 placement
 var FOOTER_WIDE_COLUMNS = 60;
-//@ chunk-ag5x7vhf.js:47375-47788 fingerprint (2.1.88 match: BridgeStatusIndicator, 0.609)
+//@ chunk-hnxhr3bs.js:46829-47242 fingerprint (2.1.88 match: BridgeStatusIndicator, 0.608)
 /**
  * Remote Control（bridge）状态指示：连接/断开/重连中。
  */
@@ -97,7 +98,27 @@ function BridgeStatusIndicator(props) {
   } else bridgeStatus = $[3];
   return bridgeStatus;
 }
-//@ chunk-18hwfzwa.js:851815-851966 placement
+//@ chunk-czq1j3j2.js:852289-852293 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:852289", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:856440-856444 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:856440", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:873485-873489 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:873485", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:874081-874085 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:874081", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:884672-884823 placement
 function useFooterTranscript({ turn, transcript }) {
   let previewStore = turn.stream.previewStore;
   let hasRawState = useSyncExternalStore(
@@ -107,14 +128,9 @@ function useFooterTranscript({ turn, transcript }) {
   let selector = useCallback((store) => isIdleForBackground(store, hasRawState), [hasRawState]);
   return useStoreSelector(transcript, selector);
 }
-//@ chunk-18hwfzwa.js:851966-851970 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:851966", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:851970-851983 placement
+//@ chunk-czq1j3j2.js:884827-884840 placement
 var accountMemoryMarkerApi = null;
-//@ chunk-18hwfzwa.js:851983-852334 placement
+//@ chunk-czq1j3j2.js:884840-885191 placement
 function AccountMemoryMarker() {
   let memoryPaused = useSyncExternalStore(onMemoryPauseChange, getMemoryToggledOff);
   let autoMemoryOff = useSyncExternalStore(onAutoMemorySessionSwitchChange, getAutoMemoryOffThisSession);
@@ -139,27 +155,27 @@ function AccountMemoryMarker() {
             : []),
       ];
 }
-//@ chunk-18hwfzwa.js:852334-852367 layout
+//@ chunk-czq1j3j2.js:885191-885224 layout
 function selectDebug(state) {
   return state.debug;
 }
-//@ chunk-18hwfzwa.js:852367-852410 layout
+//@ chunk-czq1j3j2.js:885224-885267 layout
 function selectHideLoginNotice(state) {
   return state.hideLoginNotice;
 }
-//@ chunk-18hwfzwa.js:852410-852451 layout
+//@ chunk-czq1j3j2.js:885267-885333 layout
 function selectIsLoading_2(state) {
-  return state.isLoading && true;
+  return state.isLoading && !(codeModeAccepted() && state.stopWaitPending);
 }
-//@ chunk-18hwfzwa.js:852451-852496 layout
+//@ chunk-czq1j3j2.js:885333-885378 layout
 function selectIsExternalLoading(state) {
   return state.isExternalLoading;
 }
-//@ chunk-18hwfzwa.js:852496-852544 layout
+//@ chunk-czq1j3j2.js:885378-885426 layout
 function selectCoordinatorTaskIndex_2(state) {
   return state.coordinatorTaskIndex;
 }
-//@ chunk-18hwfzwa.js:852544-857891 fingerprint (2.1.88 match: PromptInputFooter, 0.503)
+//@ chunk-czq1j3j2.js:885426-890774 fingerprint (2.1.88 match: PromptInputFooter, 0.503)
 /**
  * 页脚组件：上方建议列表（有建议时），否则左侧 PromptInputFooterLeftSide + 右侧 Notifications；全屏与帮助菜单打开时布局不同。
  */
@@ -587,16 +603,16 @@ function PromptInputFooter(props) {
   } else content = $[91];
   return content;
 }
-//@ chunk-18hwfzwa.js:857891-857907 placement
+//@ chunk-czq1j3j2.js:890774-890790 placement
 var PromptInputFooterMemo; // deferred: uses PromptInputFooter of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:857891", () => {
+deferInit("chunk-czq1j3j2.js:890774", () => {
   PromptInputFooterMemo = memo(PromptInputFooter);
 });
-//@ chunk-18hwfzwa.js:857907-857990 placement
+//@ chunk-czq1j3j2.js:890790-890873 placement
 function shouldShowFooterStatus({ hasSuggestionContent, isFullscreen, helpOpen }) {
   return !(hasSuggestionContent && !isFullscreen) && !helpOpen;
 }
-//@ chunk-18hwfzwa.js:857990-858714 placement
+//@ chunk-czq1j3j2.js:890873-891597 placement
 function PromptFooter(props) {
   let $ = useMemoCache(13);
   let {
@@ -662,10 +678,10 @@ function PromptFooter(props) {
   } else footerElement = $[12];
   return footerElement;
 }
-//@ chunk-18hwfzwa.js:858714-858729 placement
+//@ chunk-czq1j3j2.js:891597-891612 placement
 var FOOTER_HORIZONTAL_PADDING = 2;
 var FOOTER_MESSAGES_GAP = 1;
-//@ chunk-18hwfzwa.js:858729-858865 placement (2.1.88 match: setCwdState, 1)
+//@ chunk-czq1j3j2.js:891612-891748 placement (2.1.88 match: setCwdState, 1)
 function setCwdState(nextValue, cursorOffset) {
   if (nextValue !== nextValue.normalize("NFC")) return cursorOffset;
   let clampedOffset = clampCursorOffset(nextValue, cursorOffset);
@@ -675,27 +691,12 @@ function setCwdState(nextValue, cursorOffset) {
     ? cursorOffset
     : clampedOffset;
 }
-//@ chunk-18hwfzwa.js:858865-858869 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:858865", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:858869-858873 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:858869", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:858873-858877 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:858873", () => {
-  init_react_production();
-});
 export {
   FOOTER_WIDE_COLUMNS,
   shouldShowFooterStatus,
   setCwdState,
   PromptInputFooterMemo,
-  BridgeStatusIndicator,
   useFooterTranscript,
+  BridgeStatusIndicator,
   AccountMemoryMarker,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：读取已发布 Artifact 中的文件（_files.json 清单、/_f/ 路径），本地直连或经云会话中继/挂载
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5e92hn02.js (17), chunk-jv307fw4.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-53h5bf9k.js (17), chunk-m0ks5273.js (1)
  * attribution: placement 18
  */
 import { createHash } from "crypto";
@@ -34,7 +34,7 @@ import {
 import { ARTIFACT_MOUNT } from "./artifactMount.js";
 import { env } from "../../utils/env.js";
 import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
-import { fetchArtifactBootWithProbe } from "./boot.js";
+import { fetchBoot } from "./boot.js";
 import {
   isFramePublicReadEnabled,
   PUBLIC_READ_UNASKED_REASON,
@@ -43,24 +43,24 @@ import {
 import { LIVE_DOC, isMeaningfulFlag } from "./textSanitize.js";
 import { getShareEntry, typeLockedFor, mayBeShared, triState, isForbiddenProxy } from "./shareEntries.js";
 import {
-  canReadViaFrame,
-  getViaFrameContent,
-  getViaMountOnce,
-  describeGatewayTransient,
-  contentTypeOfHeaders,
-  singleReadRetryBudget,
-  MAX_MOUNT_FILE_BYTES,
+  frameContentRoute,
+  getFromFrameContent,
+  getFromArtifactMount,
+  mountUnavailableWords,
+  passthroughContentType,
+  mountRetryBudget,
+  FILE_READ_BYTE_CAP,
 } from "./gatewayRead.js";
 import {
-  isWriterRole,
-  classifyArtifactOwnership,
-  canReadAssets,
-  isForeignOwnership,
-  AUDIENCE_QUERY_TIMEOUT_MS,
-  buildFrameFilePath,
+  isPublishingRole,
+  bootOrgRelation,
+  bootReadsSource,
+  isOffOrgRamp,
+  SERVED_CONTENT_TIMEOUT_MS,
+  storedSourcePath,
 } from "./audience.js";
 import { artifactDocs } from "./artifactToolGates.js";
-import { getFrameHost, describeFrameAllowlistHint } from "./frameHost.js";
+import { contentHostRequestBase, contentHostAllowlistRemedy } from "./frameHost.js";
 import { getLiveState } from "../liveReplica/liveReplica.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { isCancel } from "../../../vendor/axios/dist/esm/axios.js";
@@ -76,8 +76,8 @@ import {
   ARTIFACT_PROXY_DENIAL_TEXTS,
 } from "../../utils/sandbox/proxyDenial.js";
 import { findProxyError, describeHttpStatus } from "../../utils/proxy.js";
-import { isRetryableStatus } from "./liveSubscribe.js";
-import { redactFrameToken } from "./webfetchRead.js";
+import { isUnavailableStatus } from "./liveSubscribe.js";
+import { redactAssetToken } from "./webfetchRead.js";
 import { firstLineOf, isWellFormedString } from "../../utils/stringUtils.js";
 import { jsonParse } from "../../utils/slowOperations.js";
 import { MAX_PUBLISHED_PATH_LENGTH } from "./artifactUrl.js";
@@ -85,11 +85,11 @@ import { isServiceViewPath, validateReadPath } from "./publishPaths.js";
 import { MANIFEST_REQUEST_BUDGET } from "./publishInstanceFiles.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-jv307fw4.js:23668-23883 placement
+//@ chunk-m0ks5273.js:23685-23900 placement
 /**
  * 把文件清单数组转成按路径索引的 manifest，拆出类型文件部分；没有类型文件或格式不对时返回 undefined。
  */
-function splitManifestTypeFiles(files) {
+function bootManifestPaths(files) {
   if (!Array.isArray(files)) return;
   let manifest = {};
   for (let file of files) {
@@ -101,7 +101,7 @@ function splitManifestTypeFiles(files) {
   });
   return paths !== undefined && paths.type.length > 0 ? paths : undefined;
 }
-//@ chunk-5e92hn02.js:1232-1483 placement
+//@ chunk-53h5bf9k.js:1233-1484 placement
 /**
  * 已发布文件清单的常量：_files.json、最多 4096 个文件、读取上限 16 MB、90 s 超时、文档哈希与序号响应头及清单 schema。
  */
@@ -113,7 +113,7 @@ var FILE_FETCH_TIMEOUT_MS;
 var X_FRAME_DOC_SHA256;
 var X_FRAME_DOC_SEQ;
 var fileListSchema;
-deferInit("chunk-5e92hn02.js:1232", () => {
+deferInit("chunk-53h5bf9k.js:1233", () => {
   FILE_LIST_NAME = "_files.json";
   MAX_LISTED_FILES = 4096;
   MAX_FILE_SIZE = MAX_FRAME_RESPONSE_BYTES;
@@ -135,11 +135,11 @@ deferInit("chunk-5e92hn02.js:1232", () => {
     }),
   );
 });
-//@ chunk-5e92hn02.js:1483-1562 placement
+//@ chunk-53h5bf9k.js:1484-1563 placement
 function readTelemetryName(operation) {
   return operation === "file list" ? "artifact_file_list" : "artifact_file_read";
 }
-//@ chunk-5e92hn02.js:1562-1658 placement
+//@ chunk-53h5bf9k.js:1563-1659 placement (2.1.88 match: disableAllPluginsOp, 0.338)
 function readError(operation, reason, message, logIt = true) {
   if (logIt) logFeatureBad(readTelemetryName(operation), reason);
   return {
@@ -148,12 +148,12 @@ function readError(operation, reason, message, logIt = true) {
     reason,
   };
 }
-//@ chunk-5e92hn02.js:1658-1730 placement
+//@ chunk-53h5bf9k.js:1659-1731 placement
 function formatMib(bytes) {
   let size = bytes - 1;
   return size >= 1048576 ? `${size >> 20} MiB` : `${size >> 10} KiB`;
 }
-//@ chunk-5e92hn02.js:1730-1994 placement
+//@ chunk-53h5bf9k.js:1731-1995 placement
 /**
  * 已发布文件读取不可用的两种说明（需要本会话或带网关中继的云会话）。
  */
@@ -161,7 +161,7 @@ var PUBLISHED_FILE_READ_UNAVAILABLE_TEXT =
   "published-file reads run only from a local session or an Anthropic-hosted cloud session with its gateway relay enabled; retrying from here will not help";
 var RELAY_NOT_SERVED_TEXT =
   "published-file reads aren't available from this kind of session; retrying from here will not help";
-//@ chunk-5e92hn02.js:1994-4290 placement
+//@ chunk-53h5bf9k.js:1995-4291 placement
 /**
  * 获取 Artifact 的文件清单（校验 slug、中继不可用/拒绝/未授权等）。
  */
@@ -182,21 +182,21 @@ async function fetchPublishedFileList(
   let maySendDirect = runnerDirect || (isRemoteManagedEnvironment() && agentSessionMaySendDirect());
   if (relayBound && !frameVerbRelayActive(BOOT_RELAY_FAMILY) && !maySendDirect)
     return readError(operation, "relay_not_served", RELAY_NOT_SERVED_TEXT);
-  let artifactBootWithProbe = await fetchArtifactBootWithProbe(target, readTelemetryName(operation), signal, {
+  let boot = await fetchBoot(target, readTelemetryName(operation), signal, {
     gatePublicRead: false,
     relayOnly: !maySendDirect,
     credentials,
     probeToolUseId,
   });
-  if (artifactBootWithProbe.err !== null) {
-    let bootRelayError = artifactBootWithProbe.errorCode === "boot_relay_error";
-    if (bootRelayError && (artifactBootWithProbe.status === 403 || artifactBootWithProbe.status === 404))
+  if (boot.err !== null) {
+    let bootRelayError = boot.errorCode === "boot_relay_error";
+    if (bootRelayError && (boot.status === 403 || boot.status === 404))
       return {
         kind: "error",
         reason: "relay_refused",
         message: `${operation} failed: published-file reads from a cloud session go through the session gateway's artifact relay, which is not enabled for this session yet; retrying from here will not help`,
       };
-    if (bootRelayError && artifactBootWithProbe.status === 401)
+    if (bootRelayError && boot.status === 401)
       return {
         kind: "error",
         reason: "relay_unauthorized",
@@ -204,11 +204,11 @@ async function fetchPublishedFileList(
       };
     return {
       kind: "error",
-      message: artifactBootWithProbe.err.replace(/^artifact read/, operation),
-      reason: artifactBootWithProbe.errorCode,
+      message: boot.err.replace(/^artifact read/, operation),
+      reason: boot.errorCode,
     };
   }
-  let noAssetToken = artifactBootWithProbe.assetToken === undefined;
+  let noAssetToken = boot.assetToken === undefined;
   if (noAssetToken && !isFramePublicReadEnabled())
     return readError(
       operation,
@@ -220,60 +220,60 @@ async function fetchPublishedFileList(
     return readError(operation, PUBLIC_READ_UNASKED_REASON, PUBLIC_READ_UNASKED_WORDS, false);
   }
   let artifactState =
-    artifactBootWithProbe.data.cowritten === true ||
-    artifactBootWithProbe.data.artifactKind === LIVE_DOC ||
+    boot.data.cowritten === true ||
+    boot.data.artifactKind === LIVE_DOC ||
     getShareEntry(target.slug)?.cowritten === true ||
     getShareEntry(target.slug)?.artifactKind === LIVE_DOC;
-  let typeLocked = typeLockedFor(target.slug, artifactBootWithProbe.data.type);
+  let typeLocked = typeLockedFor(target.slug, boot.data.type);
   let shared = mayBeShared(
-    artifactBootWithProbe.data.perm?.role === "owner",
-    triState(artifactBootWithProbe.data.outsideWriter),
+    boot.data.perm?.role === "owner",
+    triState(boot.data.outsideWriter),
     getShareEntry(target.slug)?.outsideWriter,
   );
   return {
     kind: "ok",
     target,
-    ver: artifactBootWithProbe.ver,
-    assetToken: artifactBootWithProbe.assetToken,
+    ver: boot.ver,
+    assetToken: boot.assetToken,
     publicRead: noAssetToken,
     relay: relayBound && !noAssetToken,
-    frameContent: !relayBound && !noAssetToken && canReadViaFrame(artifactBootWithProbe.data),
+    frameContent: !relayBound && !noAssetToken && frameContentRoute(boot.data),
     credentials,
     agentDirect: maySendDirect,
     cowritten: artifactState,
     typeLocked,
-    writerClass: isWriterRole(artifactBootWithProbe.data.perm?.role),
+    writerClass: isPublishingRole(boot.data.perm?.role),
     foreign:
-      artifactBootWithProbe.data.authoredByOthers === true ||
+      boot.data.authoredByOthers === true ||
       getShareEntry(target.slug)?.authoredByOthers === true ||
-      isMeaningfulFlag(artifactBootWithProbe.data.outsidersMayHaveWritten) ||
+      isMeaningfulFlag(boot.data.outsidersMayHaveWritten) ||
       getShareEntry(target.slug)?.outsidersMayHaveWritten === true ||
-      artifactBootWithProbe.data.perm?.role !== "owner" ||
+      boot.data.perm?.role !== "owner" ||
       artifactState ||
       typeLocked ||
       shared,
     outsideOrg: shared,
-    orgRelation: classifyArtifactOwnership(artifactBootWithProbe),
-    livePaths: artifactDocs(artifactBootWithProbe.data).map((doc) => doc.path),
-    typePaths: splitManifestTypeFiles(artifactBootWithProbe.data.files)?.type ?? [],
-    source: canReadAssets(artifactBootWithProbe),
-    ...(typeof artifactBootWithProbe.data.title === "string" && {
-      title: artifactBootWithProbe.data.title,
+    orgRelation: bootOrgRelation(boot),
+    livePaths: artifactDocs(boot.data).map((doc) => doc.path),
+    typePaths: bootManifestPaths(boot.data.files)?.type ?? [],
+    source: bootReadsSource(boot),
+    ...(typeof boot.data.title === "string" && {
+      title: boot.data.title,
     }),
-    ...(artifactBootWithProbe.data.favicon !== undefined && {
-      favicon: artifactBootWithProbe.data.favicon,
+    ...(boot.data.favicon !== undefined && {
+      favicon: boot.data.favicon,
     }),
-    ...(artifactBootWithProbe.data.publishPreconditions === true && {
+    ...(boot.data.publishPreconditions === true && {
       publishPreconditions: true,
     }),
     filesCounted:
-      typeof artifactBootWithProbe.data.fileCount === "number" &&
-      Number.isSafeInteger(artifactBootWithProbe.data.fileCount) &&
-      artifactBootWithProbe.data.fileCount > 0,
-    reused: artifactBootWithProbe.reused === true,
+      typeof boot.data.fileCount === "number" &&
+      Number.isSafeInteger(boot.data.fileCount) &&
+      boot.data.fileCount > 0,
+    reused: boot.reused === true,
   };
 }
-//@ chunk-5e92hn02.js:4290-8446 placement
+//@ chunk-53h5bf9k.js:4291-8447 placement
 /**
  * 说明读取失败（出口被阻止、组织外公开 Artifact 的获取方式等，约 4 KB）。
  */
@@ -293,12 +293,12 @@ async function describePublishedReadError(
     status,
   });
   let { target, assetToken, relay } = publishedFileList;
-  let { host, base, headers } = getFrameHost(target);
+  let { host, base, headers } = contentHostRequestBase(target);
   let egressDenied = () => {
     getLiveState().contentHostEgressDenied.add(target.env);
     return fail(
       "egress_blocked",
-      `this environment's network allowlist blocks ${host}, so the file cannot be fetched (access to the artifact itself is fine). ${publishedFileList.publicRead ? `Public artifacts from outside your organization are fetched from that host directly, so it must be on this session's network allowlist. ${describeFrameAllowlistHint(target.env)}` : env.CLAUDE_CODE_REMOTE ? "This is a restriction of where this session runs; retrying from here will not help." : `To allow it, add *.frame.${target.env === "staging" ? "staging." : ""}claudeusercontent.com to the environment's allowed domains.`}`,
+      `this environment's network allowlist blocks ${host}, so the file cannot be fetched (access to the artifact itself is fine). ${publishedFileList.publicRead ? `Public artifacts from outside your organization are fetched from that host directly, so it must be on this session's network allowlist. ${contentHostAllowlistRemedy(target.env)}` : env.CLAUDE_CODE_REMOTE ? "This is a restriction of where this session runs; retrying from here will not help." : `To allow it, add *.frame.${target.env === "staging" ? "staging." : ""}claudeusercontent.com to the environment's allowed domains.`}`,
     );
   };
   let proxyDenied = (reason, detail) => {
@@ -312,7 +312,7 @@ async function describePublishedReadError(
   let okResult;
   if (publishedFileList.frameContent && assetToken !== undefined) {
     try {
-      okResult = await getViaFrameContent(target.slug, path, {
+      okResult = await getFromFrameContent(target.slug, path, {
         token: assetToken,
         timeout: FILE_FETCH_TIMEOUT_MS,
         maxContentLength: maxBytes,
@@ -339,24 +339,24 @@ async function describePublishedReadError(
           "internal",
           "internal error: a public artifact read was routed where it cannot be served \u2014 this is a bug in this build; do not retry",
         );
-      let viaMount = await getViaMountOnce(target.slug, path, {
+      let answer = await getFromArtifactMount(target.slug, path, {
         token: assetToken,
         timeout: FILE_FETCH_TIMEOUT_MS,
         maxContentLength: maxBytes,
         signal,
         retryBudget,
       });
-      if (!viaMount.ok)
+      if (!answer.ok)
         return fail(
-          viaMount.reason.replace(/-/g, "_"),
-          viaMount.reason === "no-auth"
-            ? noGatewayCredentialMessage(viaMount.detail)
-            : `artifact content is unreachable from this session (${viaMount.reason})`,
+          answer.reason.replace(/-/g, "_"),
+          answer.reason === "no-auth"
+            ? noGatewayCredentialMessage(answer.detail)
+            : `artifact content is unreachable from this session (${answer.reason})`,
         );
       response = {
-        status: viaMount.status,
-        headers: viaMount.response.headers,
-        data: viaMount.data,
+        status: answer.status,
+        headers: answer.response.headers,
+        data: answer.data,
       };
     } else {
       let tokenQuery = assetToken === undefined ? "" : `?__frame_t=${encodeURIComponent(assetToken)}`;
@@ -413,8 +413,8 @@ async function describePublishedReadError(
     return fail("relay_unavailable", PUBLISHED_FILE_READ_UNAVAILABLE_TEXT);
   if (relay && isMountNetworkOffRefusal(response.status, response.data))
     return fail("network_off", `${MOUNT_NETWORK_OFF_WORDS}; retrying from here will not help`);
-  if (relay && isRetryableStatus(response.status))
-    return fail(`http_${response.status}`, describeGatewayTransient(response.status));
+  if (relay && isUnavailableStatus(response.status))
+    return fail(`http_${response.status}`, mountUnavailableWords(response.status));
   if (relay) mountHopFailedForRunner(response.status);
   if (response.status === 404)
     return {
@@ -443,7 +443,7 @@ async function describePublishedReadError(
         status: response.status,
         headers: response.headers,
         data: response.data,
-        redact: (text) => redactFrameToken(text, assetToken),
+        redact: (text) => redactAssetToken(text, assetToken),
         label: `[artifact] ${operation}`,
       });
   if (res !== undefined) return fail(res, ARTIFACT_PROXY_DENIAL_TEXTS[res]);
@@ -461,7 +461,7 @@ async function describePublishedReadError(
     );
   if (relay) markRelayServed(ARTIFACT_MOUNT);
   let headers_2 = response.headers;
-  let contentType = relay || relayAttempted ? contentTypeOfHeaders(headers_2) : headers_2?.["content-type"];
+  let contentType = relay || relayAttempted ? passthroughContentType(headers_2) : headers_2?.["content-type"];
   let lower = String(headers_2?.[X_FRAME_DOC_SHA256] ?? "").toLowerCase();
   let docSeq = String(headers_2?.[X_FRAME_DOC_SEQ] ?? "");
   return {
@@ -477,7 +477,7 @@ async function describePublishedReadError(
     }),
   };
 }
-//@ chunk-5e92hn02.js:8446-9254 placement
+//@ chunk-53h5bf9k.js:8447-9255 placement
 async function parseFileListJson(publishedFileList, operation, signal, retryBudget, logIt = true) {
   let read = await describePublishedReadError(
     publishedFileList,
@@ -530,14 +530,14 @@ async function parseFileListJson(publishedFileList, operation, signal, retryBudg
     narrowed: parsed.data.narrowed === true,
   };
 }
-//@ chunk-5e92hn02.js:9254-11318 placement
+//@ chunk-53h5bf9k.js:9255-11319 placement
 /**
  * artifact_file_list：列出已发布 Artifact 的文件。
  */
 async function listArtifactFiles(target, signal, credentials, options = {}) {
   let publishedFileList = await fetchPublishedFileList(target, "file list", signal, credentials, options);
   if (publishedFileList.kind === "error") return publishedFileList;
-  let fileListJson = await parseFileListJson(publishedFileList, "file list", signal, singleReadRetryBudget());
+  let fileListJson = await parseFileListJson(publishedFileList, "file list", signal, mountRetryBudget());
   if (fileListJson.kind === "error") return fileListJson;
   if (fileListJson.kind === "status") {
     if (
@@ -632,7 +632,7 @@ async function listArtifactFiles(target, signal, credentials, options = {}) {
     }),
   };
 }
-//@ chunk-5e92hn02.js:11318-11640 placement
+//@ chunk-53h5bf9k.js:11319-11641 placement
 /**
  * 从已发布文件的读取结果中挑出读取上下文字段（版本、中继、直接写入者、共同写入、类型锁定、外部/组织外标记、公开读取与标题等）。
  */
@@ -649,14 +649,14 @@ function toReadContext(publishedFileList) {
     ...(publishedFileList.orgRelation === "external" && {
       external: true,
     }),
-    offOrgRamp: isForeignOwnership(publishedFileList.orgRelation),
+    offOrgRamp: isOffOrgRamp(publishedFileList.orgRelation),
     publicRead: publishedFileList.publicRead,
     ...(publishedFileList.title !== undefined && {
       title: publishedFileList.title,
     }),
   };
 }
-//@ chunk-5e92hn02.js:11640-12209 placement
+//@ chunk-53h5bf9k.js:11641-12210 placement
 function readFileViaMount(publishedFileList, status, logIt = true) {
   return readError(
     "file read",
@@ -669,18 +669,18 @@ function readFileViaMount(publishedFileList, status, logIt = true) {
     logIt,
   );
 }
-//@ chunk-5e92hn02.js:12209-12459 placement
+//@ chunk-53h5bf9k.js:12210-12460 placement
 /**
  * 对 artifact 内容主机发 HEAD /_f/<版本>/，判断该版本是否已在服务（200）；网络错误返回 false，取消时抛出。
  */
 async function isVersionServed(publishedFileList, signal) {
-  let { base, headers } = getFrameHost(publishedFileList.target);
+  let { base, headers } = contentHostRequestBase(publishedFileList.target);
   try {
     return (
       (
         await externalHttp.head(`${base}/_f/${publishedFileList.ver}/`, {
           signal,
-          timeout: AUDIENCE_QUERY_TIMEOUT_MS,
+          timeout: SERVED_CONTENT_TIMEOUT_MS,
           maxRedirects: 0,
           validateStatus: () => true,
           ...(headers && {
@@ -694,15 +694,15 @@ async function isVersionServed(publishedFileList, signal) {
     return false;
   }
 }
-//@ chunk-5e92hn02.js:12459-13579 placement
+//@ chunk-53h5bf9k.js:12460-13580 placement
 async function readFileViaRelay(publishedFileList, key, signal, retryBudget, fetchOnce, logIt = true) {
   let verValue = key.split("/").map(encodeURIComponent).join("/");
   let sourceRead = publishedFileList.source
     ? await describePublishedReadError(
         publishedFileList,
-        buildFrameFilePath(publishedFileList.ver, verValue),
+        storedSourcePath(publishedFileList.ver, verValue),
         "file read",
-        MAX_MOUNT_FILE_BYTES,
+        FILE_READ_BYTE_CAP,
         signal,
         retryBudget,
         logIt,
@@ -717,7 +717,7 @@ async function readFileViaRelay(publishedFileList, key, signal, retryBudget, fet
           publishedFileList,
           `/_f/${publishedFileList.ver}/${verValue}`,
           "file read",
-          MAX_MOUNT_FILE_BYTES,
+          FILE_READ_BYTE_CAP,
           signal,
           retryBudget,
           logIt,
@@ -731,11 +731,11 @@ async function readFileViaRelay(publishedFileList, key, signal, retryBudget, fet
       "the content host served the file with a type this tool does not save",
       logIt,
     );
-  if (read.bytes.length >= MAX_MOUNT_FILE_BYTES)
+  if (read.bytes.length >= FILE_READ_BYTE_CAP)
     return readError(
       "file read",
       "size",
-      `the file exceeds the ${formatMib(MAX_MOUNT_FILE_BYTES)} limit`,
+      `the file exceeds the ${formatMib(FILE_READ_BYTE_CAP)} limit`,
       logIt,
     );
   let sha256Hex = (data) => createHash("sha256").update(data).digest("hex");
@@ -789,13 +789,13 @@ async function readFileViaRelay(publishedFileList, key, signal, retryBudget, fet
     }),
   };
 }
-//@ chunk-5e92hn02.js:13579-13905 placement
+//@ chunk-53h5bf9k.js:13580-13906 placement
 async function validateArtifactFilePath(target, path, signal, credentials, options = {}) {
   let validated = validateReadPath(path);
   if ("errMsg" in validated) return readError("file read", "invalid_path", validated.errMsg);
   let publishedFileList = await fetchPublishedFileList(target, "file read", signal, credentials, options);
   if (publishedFileList.kind === "error") return publishedFileList;
-  let retryBudget = singleReadRetryBudget();
+  let retryBudget = mountRetryBudget();
   let fileViaRelay = await readFileViaRelay(publishedFileList, validated.key, signal, retryBudget, () =>
     parseFileListJson(publishedFileList, "file read", signal, retryBudget, false),
   );
@@ -806,17 +806,17 @@ async function validateArtifactFilePath(target, path, signal, credentials, optio
     ...toReadContext(publishedFileList),
   };
 }
-//@ chunk-5e92hn02.js:13905-13921 placement
+//@ chunk-53h5bf9k.js:13906-13923 placement
 /**
  * 导出常量或表 `FILE_READ_CONCURRENCY`：值为 4, ne = MANIFEST_REQUEST_BUDGET。
  */
 var FILE_READ_CONCURRENCY; // deferred: uses XML_CONTENT_TYPES (./publishInstanceFiles.js) of its import cycle while loading; runs once the cycle is complete
 var MANIFEST_REQUEST_BUDGET_FILES;
-deferInit("chunk-5e92hn02.js:13905", () => {
+deferInit("chunk-53h5bf9k.js:13906", () => {
   FILE_READ_CONCURRENCY = 4;
   MANIFEST_REQUEST_BUDGET_FILES = MANIFEST_REQUEST_BUDGET;
 });
-//@ chunk-5e92hn02.js:13921-14878 placement
+//@ chunk-53h5bf9k.js:13923-14880 placement
 /**
  * artifact_file_read：读取已发布 Artifact 中的一个文件。
  */
@@ -829,7 +829,7 @@ async function readArtifactFile(
 ) {
   let publishedFileList = await fetchPublishedFileList(target, "file read", signal, credentials, restOptions);
   if (publishedFileList.kind === "error") return publishedFileList;
-  let retryBudget = singleReadRetryBudget();
+  let retryBudget = mountRetryBudget();
   let fileListJson;
   let loadFileList = () =>
     (fileListJson ??= parseFileListJson(publishedFileList, "file read", signal, retryBudget, false).then(
@@ -866,7 +866,7 @@ async function readArtifactFile(
         publishedFileList,
         validated.key,
         signal,
-        singleReadRetryBudget(),
+        mountRetryBudget(),
         loadFileList,
         false,
       );
@@ -886,7 +886,7 @@ async function readArtifactFile(
     ...toReadContext(publishedFileList),
   };
 }
-//@ chunk-5e92hn02.js:14878-15068 placement
+//@ chunk-53h5bf9k.js:14880-15070 placement
 /**
  * 以给定并发数依次对数组元素执行异步函数，按原顺序返回结果。
  */
@@ -910,11 +910,11 @@ async function mapWithConcurrency(items, limit, fn) {
   return out;
 }
 export {
+  validateArtifactFilePath,
   MAX_FILE_SIZE,
   MAX_LISTED_FILES,
   listArtifactFiles,
-  validateArtifactFilePath,
-  FILE_READ_CONCURRENCY,
   readArtifactFile,
-  splitManifestTypeFiles,
+  bootManifestPaths,
+  FILE_READ_CONCURRENCY,
 };

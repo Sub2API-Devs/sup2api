@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：守护进程租约协议
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-y162pn60.js (22)
- * attribution: placement 22
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rmd7n4gq.js (23)
+ * attribution: placement 22, layout 1
  */
 import { delimiter, isAbsolute } from "path";
 import { ANY_CONTROL_CHAR_RE } from "../../utils/stringUtils.js";
@@ -32,19 +32,19 @@ import { SOCKET_IDLE_TIMEOUT_MS } from "../../utils/framedSocket.js";
 import { isValidPipeOrPath } from "../../utils/peerAddress.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-y162pn60.js:1832-1883 placement
+//@ chunk-rmd7n4gq.js:1897-1948 placement
 /**
  * 后台租约的来源类型（shell、slash、fleet、spare、respawn）。
  */
 var BG_LEASE_SOURCES = ["shell", "slash", "fleet", "spare", "respawn"];
-//@ chunk-y162pn60.js:1883-1921 placement
+//@ chunk-rmd7n4gq.js:1948-1986 placement
 /**
  * 判断字符串是否属于租约来源。
  */
 function isLeaseSource(source) {
   return BG_LEASE_SOURCES.includes(source);
 }
-//@ chunk-y162pn60.js:1921-2051 placement
+//@ chunk-rmd7n4gq.js:1986-2116 placement
 /**
  * tabs 落点失败的原因枚举（failed、taken、ended）。
  */
@@ -54,14 +54,14 @@ var SHORT_RE = /^[a-f0-9]{8}$/;
 var TABS_KEY_RE = /^[a-f0-9]{32}$/;
 var TABS_LANDING_REASONS = ["failed", "taken", "ended"];
 var CLOUD_SESSION_ID_RE = /^(?:cse|session)_[A-Za-z0-9_-]{1,128}$/;
-//@ chunk-y162pn60.js:2051-2084 placement
+//@ chunk-rmd7n4gq.js:2116-2149 placement
 /**
  * 判断字符串里没有控制字符。
  */
 function hasNoControlChars(text) {
   return !ANY_CONTROL_CHAR_RE.test(text);
 }
-//@ chunk-y162pn60.js:2084-2191 placement
+//@ chunk-rmd7n4gq.js:2149-2256 placement
 /**
  * 分离消息的 APC 前缀 ESC_cc-detach-msg;。
  */
@@ -69,25 +69,25 @@ var DAEMON_DETACH_APC = "\x1B_cc-daemon-detach\x1B\\";
 var APC_ST = "\x1B\\";
 var DETACH_MSG_PREFIX = "\x1B_cc-detach-msg;";
 var DAEMON_HINT_APC = "\x1B_cc-daemon-hint\x1B\\";
-//@ chunk-y162pn60.js:2191-2224 placement
+//@ chunk-rmd7n4gq.js:2256-2289 placement
 function wrapDaemonHint(hint) {
   return DAEMON_HINT_APC + hint + DAEMON_HINT_APC;
 }
-//@ chunk-y162pn60.js:2224-2278 placement
+//@ chunk-rmd7n4gq.js:2289-2343 placement
 /**
  * 交互标记 APC 前缀 ESC_cc-d-imark;。
  */
 var INTERACTIVE_MARK_PREFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var buffer;
-deferInit("chunk-y162pn60.js:2224", () => {
+deferInit("chunk-rmd7n4gq.js:2289", () => {
   INTERACTIVE_MARK_PREFIX = "\x1B_cc-d-imark;";
   buffer = Buffer.from(INTERACTIVE_MARK_PREFIX, "latin1");
 });
-//@ chunk-y162pn60.js:2278-2312 placement
+//@ chunk-rmd7n4gq.js:2343-2377 placement
 function interactiveMarkApc(mark) {
   return INTERACTIVE_MARK_PREFIX + jsonStringify(mark) + APC_ST;
 }
-//@ chunk-y162pn60.js:2312-3552 placement
+//@ chunk-rmd7n4gq.js:2377-3617 placement
 function extractInteractiveMarks(carry, chunk, options) {
   let maxPayload = options?.maxPayload ?? 512;
   let combined = carry.length > 0 ? Buffer.concat([carry, chunk]) : chunk;
@@ -174,18 +174,18 @@ function extractInteractiveMarks(carry, chunk, options) {
     cleaned: cleanParts.length === 1 ? cleanParts[0] : Buffer.concat(cleanParts),
   };
 }
-//@ chunk-y162pn60.js:3552-3638 placement
+//@ chunk-rmd7n4gq.js:3617-3703 placement
 function boundedMarkCountOrUndefined(value) {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= MAX_MSG_COUNT
     ? value
     : undefined;
 }
-//@ chunk-y162pn60.js:3638-3936 placement
+//@ chunk-rmd7n4gq.js:3703-4001 placement
 var MAX_MSG_COUNT; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var optionalCount;
 var interactiveMarkSchema;
 var strictInteractiveMarkSchema;
-deferInit("chunk-y162pn60.js:3638", () => {
+deferInit("chunk-rmd7n4gq.js:3703", () => {
   MAX_MSG_COUNT = 1e9;
   optionalCount = () => numberSchema().int().nonnegative().max(MAX_MSG_COUNT).optional();
   interactiveMarkSchema = DoctorLazy(() =>
@@ -205,7 +205,7 @@ deferInit("chunk-y162pn60.js:3638", () => {
     }),
   );
 });
-//@ chunk-y162pn60.js:3936-4144 placement
+//@ chunk-rmd7n4gq.js:4001-4209 placement
 function parseInteractiveMarkRv(frame) {
   let parsed = strictInteractiveMarkSchema().safeParse(frame);
   if (!parsed.success) return null;
@@ -216,12 +216,12 @@ function parseInteractiveMarkRv(frame) {
     msgsRenderedAtFirstPaint: parsed.data.msgsRenderedAtFirstPaint,
   };
 }
-//@ chunk-y162pn60.js:4144-4196 placement
+//@ chunk-rmd7n4gq.js:4209-4261 placement
 function daemonDetachApc(msg) {
   if (!msg) return DAEMON_DETACH_APC;
   return DETACH_MSG_PREFIX + msg + APC_ST + DAEMON_DETACH_APC;
 }
-//@ chunk-y162pn60.js:4196-4336 placement
+//@ chunk-rmd7n4gq.js:4261-4401 placement
 function parseDetachMsg(data) {
   let index = data.indexOf(DETACH_MSG_PREFIX);
   if (index < 0) return;
@@ -230,10 +230,19 @@ function parseDetachMsg(data) {
   if (index_2 < 0) return;
   return data.subarray(prefixEnd, index_2).toString("utf8");
 }
-//@ chunk-y162pn60.js:4336-4506 placement
+//@ chunk-rmd7n4gq.js:4401-4498 layout
+var AGENT_DISABLED_ENV; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-rmd7n4gq.js:4401", () => {
+  AGENT_DISABLED_ENV = new Set([
+    "CLAUDE_CODE_DISABLE_AGENT_PROGRESS_SUMMARIES",
+    "CLAUDE_CODE_DISABLE_MCP_TASKS",
+  ]);
+});
+//@ chunk-rmd7n4gq.js:4498-4714 placement
 function normalizePluginDirsEnv(env, extra) {
   let out = {};
-  for (let [key, value] of Object.entries(keepForwardableEnv(env, extra)))
+  for (let [key, value] of Object.entries(keepForwardableEnv(env, extra))) {
+    if (AGENT_DISABLED_ENV.has(key.toUpperCase()) && value !== "1") continue;
     out[key] =
       key.toUpperCase() === "CLAUDE_CODE_PLUGIN_DIRS"
         ? value
@@ -241,9 +250,10 @@ function normalizePluginDirsEnv(env, extra) {
             .map((dir) => stripLongPathPrefixes(dir.trim()))
             .join(delimiter)
         : value;
+  }
   return out;
 }
-//@ chunk-y162pn60.js:4506-6241 placement
+//@ chunk-rmd7n4gq.js:4714-6449 placement
 var BgDispatchSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var TRANSIENT_ATTACH_CODE;
 var RACED_SOCKET_GAP;
@@ -259,7 +269,7 @@ var HOST_DIED_EXEC_ATTACH_MESSAGE;
 var FATAL_ATTACH_CODE;
 var KICKED_ATTACH_CODE;
 var KICKED_NOTICE;
-deferInit("chunk-y162pn60.js:4506", () => {
+deferInit("chunk-rmd7n4gq.js:4714", () => {
   BgDispatchSchema = DoctorLazy(() =>
     objectSchema({
       proto: numberSchema().int().min(BG_PROTO_MIN).max(BG_PROTO),
@@ -331,27 +341,27 @@ deferInit("chunk-y162pn60.js:4506", () => {
   KICKED_ATTACH_CODE = /^EKICKED:\s*/;
   KICKED_NOTICE = "Session opened in another window";
 });
-//@ chunk-y162pn60.js:6241-6323 placement
+//@ chunk-rmd7n4gq.js:6449-6531 placement
 function streamDetachMessage(sessionId, sessionTabs, message) {
   return sessionTabs !== undefined && TABS_KEY_RE.test(sessionTabs)
     ? `${sessionId}:${sessionTabs}: ${message}`
     : `${sessionId}: ${message}`;
 }
-//@ chunk-y162pn60.js:6323-6343 placement
+//@ chunk-rmd7n4gq.js:6531-6551 placement
 var SUPERVISOR_DETACH_CODE = /^E[A-Z]+:/;
-//@ chunk-y162pn60.js:6343-6397 placement
+//@ chunk-rmd7n4gq.js:6551-6605 placement
 /**
  * 校验值是否为合法的管道/路径。
  */
 function pipeOrPathSchema() {
   return stringSchema().refine(isValidPipeOrPath, "remote IPC path");
 }
-//@ chunk-y162pn60.js:6397-7016 placement
+//@ chunk-rmd7n4gq.js:6605-7224 placement
 /**
  * 名册中单个后台 worker 的 schema：pid、会话 ID、各 socket、版本、尝试次数、cwd、派发信息、待重启、终端模式、交互标记与认证等。
  */
 var rosterWorkerSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-y162pn60.js:6397", () => {
+deferInit("chunk-rmd7n4gq.js:6605", () => {
   rosterWorkerSchema = DoctorLazy(() =>
     looseObject({
       pid: numberSchema(),
@@ -386,14 +396,14 @@ deferInit("chunk-y162pn60.js:6397", () => {
     }),
   );
 });
-//@ chunk-y162pn60.js:7016-7116 placement
+//@ chunk-rmd7n4gq.js:7224-7324 placement
 function rosterEntryExtras(entry) {
   let shape = rosterWorkerSchema().shape;
   let extras = {};
   for (let [key, value] of Object.entries(entry)) if (!(key in shape)) extras[key] = value;
   return extras;
 }
-//@ chunk-y162pn60.js:7116-9695 placement
+//@ chunk-rmd7n4gq.js:7324-9903 placement
 /**
  * 租约关闭原因的取值列表。
  */
@@ -405,7 +415,7 @@ var CLOSING_REASONS;
 var LeaseClosingNoticeSchema;
 var CLOUD_SESSION_LEASE_LABEL;
 var DAEMON_LEASE_LABELS;
-deferInit("chunk-y162pn60.js:7116", () => {
+deferInit("chunk-rmd7n4gq.js:7324", () => {
   RosterSchema = DoctorLazy(() =>
     looseObject({
       proto: numberSchema().int().min(BG_PROTO_MIN).max(BG_PROTO),
@@ -589,44 +599,44 @@ deferInit("chunk-y162pn60.js:7116", () => {
   DAEMON_LEASE_LABELS = ["cli-bg-dispatch", "claude agents", CLOUD_SESSION_LEASE_LABEL];
 });
 export {
-  daemonDetachApc,
   BG_PROTO,
-  SHORT_RE,
-  CLOUD_SESSION_ID_RE,
-  LeaseClosingNoticeSchema,
-  LeaseAcknowledgementSchema,
-  DAEMON_DETACH_APC,
-  interactiveMarkApc,
-  rosterEntryExtras,
-  wrapDaemonHint,
-  parseInteractiveMarkRv,
-  HOST_DIED_EXEC_DETAIL,
   HOST_DIED_DETAIL,
+  HOST_DIED_EXEC_DETAIL,
+  HOST_DIED_EXEC_ATTACH_MESSAGE,
+  HOST_DIED_ATTACH_MESSAGE,
+  RACED_SOCKET_GAP,
+  TRANSIENT_ATTACH_CODE,
+  FATAL_ATTACH_CODE,
+  HOST_DEAD_ATTACH_CODE,
+  KICKED_ATTACH_CODE,
+  SHORT_RE,
+  isLeaseSource,
+  boundedMarkCountOrUndefined,
+  SUPERVISOR_DETACH_CODE,
+  DAEMON_DETACH_APC,
+  DAEMON_HINT_APC,
+  extractInteractiveMarks,
+  parseDetachMsg,
+  CLOUD_SESSION_ID_RE,
+  daemonDetachApc,
+  BgDispatchSchema,
+  CLOUD_SESSION_LEASE_LABEL,
+  LeaseClientSchema,
   RESPAWNING_ATTACH_CODE,
   RESPAWN_REASON_UPGRADE,
   RESPAWN_REASON_STALL,
   RESPAWN_REASON_LEGACY,
-  TRANSIENT_ATTACH_CODE,
-  RACED_SOCKET_GAP,
-  SUPERVISOR_DETACH_CODE,
-  FATAL_ATTACH_CODE,
-  KICKED_ATTACH_CODE,
-  HOST_DEAD_ATTACH_CODE,
-  HOST_DIED_EXEC_ATTACH_MESSAGE,
-  HOST_DIED_ATTACH_MESSAGE,
-  LeaseClientSchema,
-  CLOUD_SESSION_LEASE_LABEL,
+  RosterSchema,
+  LeaseClosingNoticeSchema,
+  LeaseAcknowledgementSchema,
+  interactiveMarkApc,
+  rosterEntryExtras,
+  wrapDaemonHint,
+  parseInteractiveMarkRv,
   BG_PROTO_MIN,
   ControlRequestSchema,
   streamDetachMessage,
   KICKED_NOTICE,
   DAEMON_LEASE_LABELS,
-  BgDispatchSchema,
-  boundedMarkCountOrUndefined,
-  DAEMON_HINT_APC,
-  extractInteractiveMarks,
-  parseDetachMsg,
-  isLeaseSource,
-  RosterSchema,
   TABS_KEY_RE,
 };

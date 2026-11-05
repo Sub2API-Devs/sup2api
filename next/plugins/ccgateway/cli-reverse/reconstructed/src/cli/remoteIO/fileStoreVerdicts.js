@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。云 worker 文件存储写入裁决的下发。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6qtszw6g.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-m2ade8rx.js (12)
  * attribution: placement 12
  */
 import { createLazySignal, createSignal } from "../../utils/signal.js";
@@ -13,28 +13,28 @@ import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6qtszw6g.js:300-330 placement
+//@ chunk-m2ade8rx.js:333-363 placement
 /**
  * 按宿主懒创建的 rowStaged 信号。
  */
 var rowStagedSignal; // deferred: uses remoteIoFileStoreStateHandle of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-6qtszw6g.js:300", () => {
+deferInit("chunk-m2ade8rx.js:333", () => {
   rowStagedSignal = createLazySignal(() => remoteIoFileStoreStateHandle().rowStaged);
 });
-//@ chunk-6qtszw6g.js:330-377 placement
+//@ chunk-m2ade8rx.js:363-410 placement
 function attestationEnforcementState() {
   return remoteIoFileStoreStateHandle().attestationEnforcement;
 }
-//@ chunk-6qtszw6g.js:377-420 placement
+//@ chunk-m2ade8rx.js:410-453 placement
 /**
  * 判断当前 attestation 强制级别是否为 not_enforced。
  */
 function isAttestationNotEnforced() {
   return attestationEnforcementState() === "not_enforced";
 }
-//@ chunk-6qtszw6g.js:420-453 placement
+//@ chunk-m2ade8rx.js:453-486 placement
 var ERROR_NAME_PATTERN = /^[A-Za-z_$][\w$.]{0,63}$/;
-//@ chunk-6qtszw6g.js:453-587 placement
+//@ chunk-m2ade8rx.js:486-620 placement
 /**
  * 取错误的 name（不是 Error 时取 typeof），只接受符合白名单正则的名字，否则或出错时返回 "unnamed"。
  */
@@ -46,17 +46,17 @@ function safeErrorName(error) {
     return "unnamed";
   }
 }
-//@ chunk-6qtszw6g.js:587-717 placement
+//@ chunk-m2ade8rx.js:620-750 placement
 function nextVerdictDelivery(verdict, previous) {
   if (verdict === undefined) return "deliver";
   if (previous === verdict) return "repeat";
   return verdict === "served" && previous === "refused" ? "deliver" : "out_of_order";
 }
-//@ chunk-6qtszw6g.js:717-808 placement
+//@ chunk-m2ade8rx.js:750-841 placement
 function isThenable(value) {
   return typeof value === "object" && value !== null && "then" in value && typeof value.then === "function";
 }
-//@ chunk-6qtszw6g.js:808-897 placement
+//@ chunk-m2ade8rx.js:841-930 placement
 function ignoreRejectedPromise(promise, onRejected) {
   if (!isThenable(promise)) return;
   Promise.resolve(promise).catch((error) => {
@@ -65,7 +65,7 @@ function ignoreRejectedPromise(promise, onRejected) {
     } catch {}
   });
 }
-//@ chunk-6qtszw6g.js:897-1938 placement
+//@ chunk-m2ade8rx.js:930-1971 placement
 function deliverFileStoreVerdict() {
   let state;
   let listeners = [];
@@ -174,9 +174,9 @@ function deliverFileStoreVerdict() {
     },
   };
 }
-//@ chunk-6qtszw6g.js:1938-2042 placement
+//@ chunk-m2ade8rx.js:1971-2075 placement
 var remoteIOFileStoreState; // deferred: uses deliverFileStoreVerdict of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-6qtszw6g.js:1938", () => {
+deferInit("chunk-m2ade8rx.js:1971", () => {
   remoteIOFileStoreState = new HostScoped(() => ({
     rowStaged: createSignal(),
     streamReconnected: createSignal(),
@@ -184,17 +184,17 @@ deferInit("chunk-6qtszw6g.js:1938", () => {
     verdict: deliverFileStoreVerdict(),
   }));
 });
-//@ chunk-6qtszw6g.js:2042-2077 placement
+//@ chunk-m2ade8rx.js:2075-2110 placement
 function remoteIoFileStoreStateHandle() {
   return remoteIOFileStoreState.of(getRootSession().host);
 }
-//@ chunk-6qtszw6g.js:2077-2212 placement
+//@ chunk-m2ade8rx.js:2110-2245 placement
 /**
  * 发布文件存储裁决（verdict）到宿主状态，供订阅方读取。
  */
 var fileStoreVerdictChannel; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var publishFileStoreVerdict;
-deferInit("chunk-6qtszw6g.js:2077", () => {
+deferInit("chunk-m2ade8rx.js:2110", () => {
   fileStoreVerdictChannel = Object.freeze({
     current: () => remoteIoFileStoreStateHandle().verdict.current(),
     subscribe: (listener) => remoteIoFileStoreStateHandle().verdict.subscribe(listener),
@@ -204,8 +204,8 @@ deferInit("chunk-6qtszw6g.js:2077", () => {
 });
 export {
   safeErrorName,
-  rowStagedSignal,
-  fileStoreVerdictChannel,
   isAttestationNotEnforced,
+  fileStoreVerdictChannel,
   publishFileStoreVerdict,
+  rowStagedSignal,
 };

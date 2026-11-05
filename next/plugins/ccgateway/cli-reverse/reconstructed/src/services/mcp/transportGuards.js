@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。MCP 传输防护：限制 HTTP/SSE/stdio 响应大小与编码，claude.ai 代理的本地握手应答。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-z1n5m6nf.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h44h5gdv.js (16)
  * attribution: placement 16
  */
 import { MAX_STRUCTURED_RESULT_BYTES, sanitizeCallMark } from "./mcpCallConstants.js";
@@ -28,7 +28,7 @@ import { DoctorLazy } from "../../cli/handlers/util.js";
 import { looseObject, array, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-z1n5m6nf.js:34302-34474 placement
+//@ chunk-h44h5gdv.js:35724-35896 placement
 /**
  * 超出上限时的说明。
  */
@@ -37,8 +37,8 @@ var MAX_DECOMPRESSED_BODY_BYTES;
 var SSE_CONTENT_TYPE_RE;
 var MIN_LINE_CHARS;
 var COMPRESSION_ALIASES;
-var STOPPED_READING_NOTE_2;
-deferInit("chunk-z1n5m6nf.js:34302", () => {
+var STOPPED_READING_NOTE;
+deferInit("chunk-h44h5gdv.js:35724", () => {
   HTTP_BODY_LIMITS = MAX_STRUCTURED_RESULT_BYTES;
   MAX_DECOMPRESSED_BODY_BYTES = 4 * HTTP_BODY_LIMITS;
   SSE_CONTENT_TYPE_RE = /^\s*text\/event-stream\s*(?:;|$)/i;
@@ -48,22 +48,22 @@ deferInit("chunk-z1n5m6nf.js:34302", () => {
     ["x-gzip", "gzip"],
     ["deflate", "deflate"],
   ]);
-  STOPPED_READING_NOTE_2 = "so Claude Code stopped reading it";
+  STOPPED_READING_NOTE = "so Claude Code stopped reading it";
 });
-//@ chunk-z1n5m6nf.js:34474-34759 placement
-class HttpBodyOverflowError_2 extends Error {
+//@ chunk-h44h5gdv.js:35896-36181 placement
+class HttpBodyOverflowError extends Error {
   constructor(limitBytes, kind) {
     let rounded = Math.round(limitBytes / 1024 / 1024);
     super(
       (kind === "event"
         ? `sent more than ${rounded}MB in one event of an event stream (no blank line ended it)`
         : `sent a response larger than ${rounded}MB (counted after decompression)`) +
-        `, ${STOPPED_READING_NOTE_2}.`,
+        `, ${STOPPED_READING_NOTE}.`,
     );
     this.name = "HttpBodyOverflowError";
   }
 }
-//@ chunk-z1n5m6nf.js:34759-35428 placement
+//@ chunk-h44h5gdv.js:36181-36850 placement
 /**
  * 限制正文大小并让出事件循环的流
  */
@@ -82,7 +82,7 @@ function boundedBodyStream(maxEventBytes, maxBodyBytes) {
       }
       bodyBytes += chunk.length;
       if (bodyBytes > maxBodyBytes) {
-        controller.error(new HttpBodyOverflowError_2(maxBodyBytes, "body"));
+        controller.error(new HttpBodyOverflowError(maxBodyBytes, "body"));
         return;
       }
       if (bodyFitsOneChunk) {
@@ -123,14 +123,14 @@ function boundedBodyStream(maxEventBytes, maxBodyBytes) {
       }
       eventBytes = lastBlankLineAt >= 0 ? chunk.length - 1 - lastBlankLineAt : eventBytes + chunk.length;
       if (eventBytes > maxEventBytes) {
-        controller.error(new HttpBodyOverflowError_2(maxEventBytes, "event"));
+        controller.error(new HttpBodyOverflowError(maxEventBytes, "event"));
         return;
       }
       controller.enqueue(chunk);
     },
   });
 }
-//@ chunk-z1n5m6nf.js:35428-37449 placement
+//@ chunk-h44h5gdv.js:36850-38871 placement
 /**
  * 限制响应大小与编码的 fetch 包装
  */
@@ -239,12 +239,12 @@ function boundedFetch(fetchImpl, { refusesCodings = false } = {}) {
     return response_2;
   };
 }
-//@ chunk-z1n5m6nf.js:37449-37491 placement
+//@ chunk-h44h5gdv.js:38871-38913 placement
 var JSONRPC_ENVELOPE_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-z1n5m6nf.js:37449", () => {
+deferInit("chunk-h44h5gdv.js:38871", () => {
   JSONRPC_ENVELOPE_KEYS = new Set(["jsonrpc", "id", "method"]);
 });
-//@ chunk-z1n5m6nf.js:37491-37645 placement
+//@ chunk-h44h5gdv.js:38913-39067 placement
 /**
  * 文本是否为 JSON-RPC 请求或通知
  */
@@ -253,8 +253,8 @@ function isJsonRpcRequestOrNotification(body) {
   let topLevel = sliceTopLevelValues(body, JSONRPC_ENVELOPE_KEYS);
   return topLevel?.get("jsonrpc") === '"2.0"' && topLevel.has("method") !== topLevel.has("id");
 }
-//@ chunk-z1n5m6nf.js:37645-37948 placement
-class StdoutOverflowError_2 extends Error {
+//@ chunk-h44h5gdv.js:39067-39370 placement
+class StdoutOverflowError extends Error {
   constructor(capBytes) {
     super(
       `wrote >${Math.round(capBytes / 1024 / 1024)}MB to stdout without a JSON-RPC message boundary. The server is likely writing logs or other non-protocol data to stdout instead of stderr. Disconnecting to prevent unbounded memory growth.`,
@@ -262,7 +262,7 @@ class StdoutOverflowError_2 extends Error {
     this.name = "StdoutOverflowError";
   }
 }
-//@ chunk-z1n5m6nf.js:37948-38779 placement
+//@ chunk-h44h5gdv.js:39370-40201 placement
 /**
  * 有上限的读缓冲
  */
@@ -283,7 +283,7 @@ class BoundedReadBuffer {
       this.chunks = [];
       this.byteLength = 0;
       this.overflowed = true;
-      this.onOverflow(new StdoutOverflowError_2(this.capBytes));
+      this.onOverflow(new StdoutOverflowError(this.capBytes));
       return;
     }
     this.chunks.push(chunk);
@@ -293,7 +293,7 @@ class BoundedReadBuffer {
     if (this.overflowed) {
       if (this.overflowThrown) return null;
       this.overflowThrown = true;
-      throw new StdoutOverflowError_2(this.capBytes);
+      throw new StdoutOverflowError(this.capBytes);
     }
     if (this.chunks.length === 0) return null;
     let last = this.chunks.at(-1);
@@ -312,12 +312,12 @@ class BoundedReadBuffer {
     this.byteLength = 0;
   }
 }
-//@ chunk-z1n5m6nf.js:38779-39544 placement
+//@ chunk-h44h5gdv.js:40201-40966 placement
 /**
  * 限制输出大小的 stdio 传输
  */
 let BoundedStdioTransport; // deferred: uses StdioClientTransport (../../../vendor/@modelcontextprotocol/sdk/dist/esm/client/stdio.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-z1n5m6nf.js:38779", () => {
+deferInit("chunk-h44h5gdv.js:40201", () => {
   BoundedStdioTransport = class BoundedStdioTransport extends StdioClientTransport {
     overflowError;
     constructor(options) {
@@ -358,13 +358,13 @@ deferInit("chunk-z1n5m6nf.js:38779", () => {
     }
   };
 });
-//@ chunk-z1n5m6nf.js:39544-39617 placement
-function isStatelessClaudeAiProxy_2(serverRef) {
+//@ chunk-h44h5gdv.js:40966-41039 placement
+function isStatelessClaudeAiProxy(serverRef) {
   return serverRef.type === "claudeai-proxy" && serverRef.stateless === true && isStatelessSkipInitEnabled();
 }
-//@ chunk-z1n5m6nf.js:39617-40126 placement
-function getCachedInitializeResult_2(serverRef) {
-  if (!isStatelessClaudeAiProxy_2(serverRef) || serverRef.type !== "claudeai-proxy") return;
+//@ chunk-h44h5gdv.js:41039-41548 placement
+function getCachedInitializeResult(serverRef) {
+  if (!isStatelessClaudeAiProxy(serverRef) || serverRef.type !== "claudeai-proxy") return;
   if (serverRef.cachedInitResponse == null) return;
   let parseResult = InitializeResultSchema.safeParse(serverRef.cachedInitResponse);
   if (!parseResult.success) {
@@ -381,9 +381,9 @@ function getCachedInitializeResult_2(serverRef) {
   }
   return parseResult.data;
 }
-//@ chunk-z1n5m6nf.js:40126-40240 placement
+//@ chunk-h44h5gdv.js:41548-41662 placement
 var discoverResponseSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-z1n5m6nf.js:40126", () => {
+deferInit("chunk-h44h5gdv.js:41548", () => {
   discoverResponseSchema = DoctorLazy(() =>
     looseObject({
       supportedVersions: array(stringSchema()),
@@ -395,12 +395,12 @@ deferInit("chunk-z1n5m6nf.js:40126", () => {
     }),
   );
 });
-//@ chunk-z1n5m6nf.js:40240-40660 placement
+//@ chunk-h44h5gdv.js:41662-42082 placement
 /**
  * claude.ai 代理的缓存 discover 结果
  */
 function cachedDiscoverOutcome(serverRef) {
-  if (!isStatelessClaudeAiProxy_2(serverRef) || serverRef.type !== "claudeai-proxy") return;
+  if (!isStatelessClaudeAiProxy(serverRef) || serverRef.type !== "claudeai-proxy") return;
   if (serverRef.discoverSupport === "legacy") return "method-not-found";
   if (serverRef.discoverSupport !== "supported") return;
   if (serverRef.cachedDiscoverResponse == null) return;
@@ -415,8 +415,8 @@ function cachedDiscoverOutcome(serverRef) {
     result: parseResult.data,
   };
 }
-//@ chunk-z1n5m6nf.js:40660-41200 placement
-function answerHandshakeLocally_2(transport, cachedInitialize, discoverAnswer) {
+//@ chunk-h44h5gdv.js:42082-42622 placement
+function answerHandshakeLocally(transport, cachedInitialize, discoverAnswer) {
   let originalSend = transport.send.bind(transport);
   transport.send = async (message, requestOptions) => {
     if (cachedInitialize !== undefined && isJSONRPCRequest(message) && message.method === "initialize") {
@@ -451,8 +451,8 @@ function answerHandshakeLocally_2(transport, cachedInitialize, discoverAnswer) {
     return originalSend(message, requestOptions);
   };
 }
-//@ chunk-z1n5m6nf.js:41200-41489 placement
-function answerGetStreamLocally_2(originalFetch, proxyUrl) {
+//@ chunk-h44h5gdv.js:42622-42911 placement
+function answerGetStreamLocally(originalFetch, proxyUrl) {
   let href = new URL(proxyUrl).href;
   return async (input, init) => {
     if ((init?.method ?? "GET").toUpperCase() !== "GET") return originalFetch(input, init);
@@ -466,25 +466,25 @@ function answerGetStreamLocally_2(originalFetch, proxyUrl) {
     return originalFetch(input, init);
   };
 }
-//@ chunk-z1n5m6nf.js:41521-41559 placement
+//@ chunk-h44h5gdv.js:42943-42981 placement
 /**
  * 懒加载的网络相关模块（当前为 chunk 引用）。
  */
 var netModule; // deferred: loads other modules while loading; runs once its import cycle is complete
-deferInit("chunk-z1n5m6nf.js:41521", () => {
+deferInit("chunk-h44h5gdv.js:42943", () => {
   netModule = require("./callMcpToolWithAutoBackground.lazy.js");
 });
 export {
-  HttpBodyOverflowError_2,
+  HttpBodyOverflowError,
   boundedFetch,
-  isStatelessClaudeAiProxy_2,
-  answerGetStreamLocally_2,
+  isStatelessClaudeAiProxy,
+  answerGetStreamLocally,
   BoundedStdioTransport,
-  getCachedInitializeResult_2,
+  getCachedInitializeResult,
   cachedDiscoverOutcome,
-  answerHandshakeLocally_2,
-  StdoutOverflowError_2,
+  answerHandshakeLocally,
+  StdoutOverflowError,
   HTTP_BODY_LIMITS,
-  STOPPED_READING_NOTE_2,
+  STOPPED_READING_NOTE,
   netModule,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：函数钩子插件的"surface"客户端：在沙箱环境运行界面模块、测量与重绘、焦点、故障上报
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jv2zdrd7.js (41)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3b87bmyq.js (41)
  * attribution: placement 41
  */
 import * as vmModule from "vm";
@@ -73,14 +73,14 @@ import { reportPluginProblem } from "./hooksWorkerClient.js";
 import { stableStringifySafe } from "../../utils/hooks/hookSerialization.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-jv2zdrd7.js:1178-1189 placement
+//@ chunk-3b87bmyq.js:1211-1222 placement
 /**
  * 空对象
  */
 var EMPTY_SURFACE_CLIENTS = {};
-//@ chunk-jv2zdrd7.js:1189-1310 placement
+//@ chunk-3b87bmyq.js:1222-1343 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-jv2zdrd7.js:1189", () => {
+deferInit("chunk-3b87bmyq.js:1222", () => {
   __export(EMPTY_SURFACE_CLIENTS, {
     clientFocusStore: () => focusStore,
     default: () => EMPTY_SURFACE_CLIENTS,
@@ -89,7 +89,7 @@ deferInit("chunk-jv2zdrd7.js:1189", () => {
     releaseClientFocus: () => clearFocusedClient,
   });
 });
-//@ chunk-jv2zdrd7.js:1310-1809 placement
+//@ chunk-3b87bmyq.js:1343-1842 placement
 function createUiMessagePort(options = {}) {
   let run = options.run ?? dispatchUiMessage;
   let schedule =
@@ -141,20 +141,20 @@ function createUiMessagePort(options = {}) {
     dispatched: () => dispatchCount,
   };
 }
-//@ chunk-jv2zdrd7.js:1809-1822 placement
+//@ chunk-3b87bmyq.js:1842-1855 placement
 /**
  * UI 消息端口
  */
 var uiMessagePort; // deferred: uses createUiMessagePort of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-jv2zdrd7.js:1809", () => {
+deferInit("chunk-3b87bmyq.js:1842", () => {
   uiMessagePort = createUiMessagePort();
 });
-//@ chunk-jv2zdrd7.js:1822-1862 placement
+//@ chunk-3b87bmyq.js:1855-1895 placement
 /**
  * 客户端界面键
  */
 var clientSurfaceKey = (requestId, key) => `${requestId}\x00client\x00${key}`;
-//@ chunk-jv2zdrd7.js:1862-1951 placement
+//@ chunk-3b87bmyq.js:1895-1984 placement
 /**
  * 客户端描述
  */
@@ -163,18 +163,18 @@ var surfaceClientInfo = (drawn) => ({
   requestId: clientSurfaceKey(drawn.requestId, drawn.key),
   surface: drawn.surface,
 });
-//@ chunk-jv2zdrd7.js:1951-1996 placement
+//@ chunk-3b87bmyq.js:1984-2029 placement
 /**
  * 客户端失败说明
  */
 var clientFailureText = (caller, moduleName, reason) =>
   `Client ${moduleName}: ${describeClientFailure(caller, moduleName, reason)}`;
-//@ chunk-jv2zdrd7.js:1996-2069 placement
+//@ chunk-3b87bmyq.js:2029-2102 placement
 /**
  * 焦点 store
  */
 var focusStore; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-jv2zdrd7.js:1996", () => {
+deferInit("chunk-3b87bmyq.js:2029", () => {
   focusStore = identity(
     createStore({
       focusedId: null,
@@ -185,7 +185,7 @@ deferInit("chunk-jv2zdrd7.js:1996", () => {
       })),
   );
 });
-//@ chunk-jv2zdrd7.js:2069-2133 placement
+//@ chunk-3b87bmyq.js:2102-2166 placement
 /**
  * 设置焦点
  */
@@ -197,12 +197,12 @@ var setFocusedClient = (id) =>
           focusedId: id,
         },
   );
-//@ chunk-jv2zdrd7.js:2133-2169 placement
+//@ chunk-3b87bmyq.js:2166-2202 placement
 /**
  * 取焦点 id
  */
 var focusedClientId = () => focusStore.getState().focusedId;
-//@ chunk-jv2zdrd7.js:2169-2236 placement
+//@ chunk-3b87bmyq.js:2202-2269 placement
 /**
  * 清除焦点
  */
@@ -214,12 +214,12 @@ var clearFocusedClient = (id) =>
         }
       : state,
   );
-//@ chunk-jv2zdrd7.js:2236-2259 placement
+//@ chunk-3b87bmyq.js:2269-2292 placement
 /**
  * 引擎节点权重
  */
 var engineNodeWeight = (component) => (component === ONE_ENGINE_NODE_COMPONENT ? 1 : 0);
-//@ chunk-jv2zdrd7.js:2259-2383 placement
+//@ chunk-3b87bmyq.js:2292-2416 placement
 function createClientSite(drawn, component) {
   let site = {
     surface: drawn.drawing.surface,
@@ -232,7 +232,7 @@ function createClientSite(drawn, component) {
     holders: 0,
   };
 }
-//@ chunk-jv2zdrd7.js:2383-2419 placement
+//@ chunk-3b87bmyq.js:2416-2452 placement
 /**
  * 持有句柄
  */
@@ -240,7 +240,7 @@ var heldHandle = (plugin, handle) => ({
   plugin,
   handle,
 });
-//@ chunk-jv2zdrd7.js:2419-2785 placement
+//@ chunk-3b87bmyq.js:2452-2818 placement
 /**
  * 解析界面模块返回的元素树 JSON，把 held 句柄转为按键记录、悬停组归属到插件。
  */
@@ -264,27 +264,27 @@ function toClientTree(plugin, treeJson, handleOf) {
   }
   return deepFreezeInPlace(convert(wellFormed(jsonParse(treeJson))));
 }
-//@ chunk-jv2zdrd7.js:2785-2846 placement
+//@ chunk-3b87bmyq.js:2818-2879 placement
 /**
  * 客户端日志键
  */
 var clientLogKey = (client) => [client.plugin, client.surface, client.requestId, client.key].join(" ");
-//@ chunk-jv2zdrd7.js:2846-2856 placement
+//@ chunk-3b87bmyq.js:2879-2889 placement
 /**
  * 20
  */
 var MAX_CLIENT_MEASURE_TRIES = 20;
-//@ chunk-jv2zdrd7.js:2856-2865 placement
+//@ chunk-3b87bmyq.js:2889-2898 placement
 /**
  * 8
  */
 var MAX_CLIENT_SETTLE_TRIES = 8;
-//@ chunk-jv2zdrd7.js:2865-2874 placement
+//@ chunk-3b87bmyq.js:2898-2907 placement
 /**
  * 3
  */
 var MAX_CLIENT_REDRAW_TRIES = 3;
-//@ chunk-jv2zdrd7.js:2874-2988 placement
+//@ chunk-3b87bmyq.js:2907-3021 placement
 var clientKeyOf = (client) => ({
   plugin: client.plugin,
   module: client.module,
@@ -292,7 +292,7 @@ var clientKeyOf = (client) => ({
   requestId: client.requestId,
   key: client.element,
 });
-//@ chunk-jv2zdrd7.js:2988-3635 placement
+//@ chunk-3b87bmyq.js:3021-3668 placement
 var CLIENT_STATES = (drawn, renderTree) => ({
   id: clientLogKey(drawn),
   plugin: drawn.plugin,
@@ -334,25 +334,25 @@ var CLIENT_STATES = (drawn, renderTree) => ({
   heldIn: new Map(),
   environmentId: undefined,
 });
-//@ chunk-jv2zdrd7.js:3635-3772 placement
+//@ chunk-3b87bmyq.js:3668-3805 placement
 var tellClientProblem = (client, finding, note) =>
   sayPlainCode({
     key: [`${client.plugin}#${client.environmentId}`, `Client ${client.module}`, finding].join(" "),
     lead: client.plugin,
     text: clientFailureText(client.plugin, client.module, note),
   });
-//@ chunk-jv2zdrd7.js:3772-4249 placement
+//@ chunk-3b87bmyq.js:3805-4282 placement
 var UNSETTLED_MEASURE_NOTES = {
   instance: `its region changed size on each of ${MAX_CLIENT_SETTLE_TRIES} measurings in one frame, so it is drawn as last measured; give the Client a height and a width, or draw no more than surface.rows and surface.columns`,
   frame: `the Clients on screen were measured again in ${MAX_CLIENT_MEASURE_TRIES} passes of one frame, this one in the next, so it is drawn as last measured; some change their region at every measuring: give each a height and a width, or draw no more than surface.rows and surface.columns`,
 };
-//@ chunk-jv2zdrd7.js:4249-4291 placement
+//@ chunk-3b87bmyq.js:4282-4324 placement
 /**
  * 上报未结算
  */
 var reportUnsettled = (client, reason) =>
   tellClientProblem(client, `unsettled ${reason}`, UNSETTLED_MEASURE_NOTES[reason]);
-//@ chunk-jv2zdrd7.js:4291-4379 placement
+//@ chunk-3b87bmyq.js:4324-4412 placement
 /**
  * 视口键
  */
@@ -360,7 +360,7 @@ function surfaceViewportKey() {
   let host = paneHostSlot.get();
   return [host?.columns, host?.rows, host?.conversationColumns].join("x");
 }
-//@ chunk-jv2zdrd7.js:4379-4521 placement
+//@ chunk-3b87bmyq.js:4412-4554 placement
 function createFaultReporter(dispatch = desktopFaultDispatcher()) {
   return (request) =>
     void dispatch(request).catch((error) => {
@@ -370,7 +370,7 @@ function createFaultReporter(dispatch = desktopFaultDispatcher()) {
       );
     });
 }
-//@ chunk-jv2zdrd7.js:4521-4615 placement
+//@ chunk-3b87bmyq.js:4554-4648 placement
 /**
  * 客户端错误文本
  */
@@ -378,10 +378,10 @@ function clientErrorMessage(error, vmErrorDescriber) {
   let { name: errorName, message } = isVmError(error) ? error : vmErrorDescriber(error);
   return message.trim() !== "" ? message : errorName === "Error" ? DEFAULT_MODULE_FAILURE : errorName;
 }
-//@ chunk-jv2zdrd7.js:4615-4719 placement
+//@ chunk-3b87bmyq.js:4648-4752 placement
 var UNHANDLED_SURFACE_REJECTION_TEXT = (reason) =>
   `Client: a promise a surface module did not return was rejected: ${reason}; the session goes on`;
-//@ chunk-jv2zdrd7.js:4719-4994 placement
+//@ chunk-3b87bmyq.js:4752-5027 placement
 var CLIENT_FAULT_TEXTS = ({ pluginName, environmentId, owns }) =>
   claimPendingWriteLine((value, promiseOrContext) => {
     if (![promiseOrContext, value].some((candidate) => !isUntrustedObject(candidate) && owns(candidate)))
@@ -400,27 +400,27 @@ var CLIENT_FAULT_TEXTS = ({ pluginName, environmentId, owns }) =>
     }
     return `${pluginName}: ${text}`;
   });
-//@ chunk-jv2zdrd7.js:5016-5074 placement
+//@ chunk-3b87bmyq.js:5049-5107 placement
 /**
  * 是否脚本超时
  */
 var isScriptTimeout = (error) => isVmError(error) && getErrnoCode(error) === "ERR_SCRIPT_EXECUTION_TIMEOUT";
-//@ chunk-jv2zdrd7.js:5074-5086 placement
+//@ chunk-3b87bmyq.js:5107-5119 placement
 /**
  * 1000
  */
 var CLIENT_TICK_MS = 1000;
-//@ chunk-jv2zdrd7.js:5086-5099 placement
+//@ chunk-3b87bmyq.js:5119-5132 placement
 /**
  * 60000
  */
 var CLIENT_LOAD_TIMEOUT_MS = 60000;
-//@ chunk-jv2zdrd7.js:5099-5126 placement
+//@ chunk-3b87bmyq.js:5132-5159 placement
 /**
  * "__surface__.run()"
  */
 var SURFACE_RUN_LABEL = "__surface__.run()";
-//@ chunk-jv2zdrd7.js:5126-5171 placement
+//@ chunk-3b87bmyq.js:5159-5204 placement
 /**
  * 客户端运行时
  */
@@ -429,7 +429,7 @@ var clientRuntime = (client, tick) => ({
   timers: new Map(),
   tick,
 });
-//@ chunk-jv2zdrd7.js:5171-8615 placement
+//@ chunk-3b87bmyq.js:5204-8648 placement
 /**
  * 在隔离环境中加载插件的 surface 模块并建立客户端实例（约 3.4 KB）。
  */
@@ -661,7 +661,7 @@ async function loadSurfaceModule(args, bounds = {}) {
     isDisposed: () => isDisposed,
   };
 }
-//@ chunk-jv2zdrd7.js:8615-8673 placement
+//@ chunk-3b87bmyq.js:8648-8706 placement
 /**
  * 加载中的环境
  */
@@ -670,15 +670,15 @@ var loadingEnv = (environmentId, loading) => ({
   loading,
   loaded: undefined,
 });
-//@ chunk-jv2zdrd7.js:8673-8708 placement
+//@ chunk-3b87bmyq.js:8706-8741 placement
 /**
  * 界面宿主槽
  */
 var surfaceHostSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-jv2zdrd7.js:8673", () => {
+deferInit("chunk-3b87bmyq.js:8706", () => {
   surfaceHostSlot = identity(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-jv2zdrd7.js:8708-9958 placement
+//@ chunk-3b87bmyq.js:8741-9991 placement
 function createSurfaceEnvironmentPool() {
   let environmentsByPlugin = new Map();
   let signal = createSignal();
@@ -761,15 +761,15 @@ function createSurfaceEnvironmentPool() {
     count: () => environmentsByPlugin.size,
   };
 }
-//@ chunk-jv2zdrd7.js:9958-9970 placement
+//@ chunk-3b87bmyq.js:9991-10003 placement
 /**
  * 界面环境池
  */
 var surfaceEnvPool; // deferred: uses createSurfaceEnvironmentPool of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-jv2zdrd7.js:9958", () => {
+deferInit("chunk-3b87bmyq.js:9991", () => {
   surfaceEnvPool = createSurfaceEnvironmentPool();
 });
-//@ chunk-jv2zdrd7.js:9970-17440 placement
+//@ chunk-3b87bmyq.js:10003-17473 placement
 /**
  * 管理 surface 客户端：测量、重绘稳定性检测、异常上报（约 7.5 KB）。
  */
@@ -1278,12 +1278,12 @@ function createSurfaceClientHost(options = {}) {
     },
   };
 }
-//@ chunk-jv2zdrd7.js:17440-17454 placement
+//@ chunk-3b87bmyq.js:17473-17487 placement
 /**
  * 界面客户端宿主
  */
 var surfaceClientHost; // deferred: uses createSurfaceClientHost of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-jv2zdrd7.js:17440", () => {
+deferInit("chunk-3b87bmyq.js:17473", () => {
   surfaceClientHost = createSurfaceClientHost();
 });
 export {

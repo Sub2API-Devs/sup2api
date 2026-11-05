@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。任务详情对话框分派。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: placement 2
  */
 import { remoteSessionProgressLabel } from "./RemoteSessionProgress.js";
@@ -21,7 +21,7 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { Dialog } from "../design-system/Dialog.js";
 import { FocusColumn } from "../design-system/FocusColumn.js";
 
-//@ chunk-18hwfzwa.js:698928-699033 placement
+//@ chunk-czq1j3j2.js:719666-719771 placement
 /**
  * 远程任务状态短标签：completed→done，failed→error，否则取进度标签。
  */
@@ -30,7 +30,7 @@ function remoteTaskStatusLabel(task) {
   if (task.status === "failed") return "error";
   return remoteSessionProgressLabel(task);
 }
-//@ chunk-18hwfzwa.js:699033-700976 placement
+//@ chunk-czq1j3j2.js:719771-721714 placement
 function TaskDetailDialog(props) {
   let $ = useMemoCache(25);
   let { task, onDone, onBack, onKill } = props;

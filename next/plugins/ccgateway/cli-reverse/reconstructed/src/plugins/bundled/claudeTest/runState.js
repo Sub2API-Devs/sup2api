@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：Claude Test 运行状态（安装、检查、报告摘要、PASS/FAIL 统计）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ae5g0zb5.js (38)
- * attribution: placement 38
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mhn0amzz.js (39)
+ * attribution: placement 38, layout 1
  */
 import {
   isPlainObjectNonArray,
@@ -30,7 +30,7 @@ beginDeferredInits("src/plugins/bundled/claudeTest/appFacts.js");
 // This module is the first evaluated of an import cycle of 3 modules closed by ./appFacts.js (in the hooks worker thread);
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("worker:src/plugins/bundled/claudeTest/appFacts.js");
-//@ chunk-ae5g0zb5.js:38231-38606 placement
+//@ chunk-mhn0amzz.js:39469-39844 placement
 /**
  * 「 · see the chat」后缀，以及常见应用框架名表与对应状态标签——claude-test 用它判断打开的应用是否是自己认识的那一类。
  */
@@ -65,7 +65,33 @@ var REPORT_STATE_TEXT = {
   stopped: null,
   from: null,
 };
-//@ chunk-ae5g0zb5.js:39033-39267 placement (2.1.88 match: CompanionFloatingBubble, 0.32)
+//@ chunk-mhn0amzz.js:39844-40271 layout (2.1.88 match: capitalize, 1)
+function capitalize(configJson, fallbackName) {
+  let parsed = null;
+  try {
+    parsed = configJson === undefined ? null : JSON.parse(configJson);
+  } catch {
+    parsed = null;
+  }
+  let configuredName = isPlainObjectNonArray(parsed) ? parsed.name : null;
+  let safeConfiguredName =
+    typeof configuredName === "string" &&
+    configuredName.length <= 214 &&
+    /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/.test(configuredName)
+      ? configuredName
+      : null;
+  let safeFallbackName =
+    fallbackName.length <= 214 && /^[A-Za-z0-9][A-Za-z0-9-._~]*$/.test(fallbackName) ? fallbackName : null;
+  let trimmed = (safeConfiguredName ?? safeFallbackName ?? "")
+    .replace(/^@[^/]*\//, "")
+    .replace(/[-._~]+/g, " ")
+    .trim()
+    .slice(0, 30)
+    .trim();
+  let label = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  return APP_STATE_LABELS.test(label) ? label : null;
+}
+//@ chunk-mhn0amzz.js:40271-40505 placement (2.1.88 match: CompanionFloatingBubble, 0.322)
 /**
  * 解析服务健康状态 JSON：up / down / busy（端口占用）。
  */
@@ -92,12 +118,12 @@ function parsePortHealthStatus(json) {
     port: asPort(portBusy.port),
   };
 }
-//@ chunk-ae5g0zb5.js:39267-39280 placement
+//@ chunk-mhn0amzz.js:40505-40518 placement
 /**
  * 30000
  */
 var INSTALL_STALE_MS = 30000;
-//@ chunk-ae5g0zb5.js:39280-39647 placement
+//@ chunk-mhn0amzz.js:40518-40885 placement
 function describeInstallState(text, openedAt, now) {
   if (text === undefined) return null;
   let parsed;
@@ -125,13 +151,13 @@ function describeInstallState(text, openedAt, now) {
     at,
   };
 }
-//@ chunk-ae5g0zb5.js:39647-39688 placement
+//@ chunk-mhn0amzz.js:40885-40926 placement
 /**
  * .claude-test/runs
  */
 var RUNS_DIR = ".claude-test/runs";
 var REPORT_PREFIX = "Report: ";
-//@ chunk-ae5g0zb5.js:39688-39977 placement
+//@ chunk-mhn0amzz.js:40926-41215 placement
 /**
  * 环境能否打开浏览器：非 CI/SSH，未设 CLAUDE_TEST_NO_OPEN，且为 macOS/Windows 或有 DISPLAY/WAYLAND_DISPLAY。
  */
@@ -151,7 +177,7 @@ function canOpenBrowser(env, platform) {
     /^[A-Za-z0-9._-]{1,64}$/.test(env.WAYLAND_DISPLAY ?? "")
   );
 }
-//@ chunk-ae5g0zb5.js:39977-40236 placement
+//@ chunk-mhn0amzz.js:41215-41474 placement
 /**
  * 根据准备阶段与运行行数推算读代码/写测试状态。
  */
@@ -175,7 +201,7 @@ function resolveCodeReadingFlags(phase, proposedCount) {
     isWritingTests: isWritingTests === true || proposedCount > 0,
   };
 }
-//@ chunk-ae5g0zb5.js:40236-40366 placement
+//@ chunk-mhn0amzz.js:41474-41604 placement
 /**
  * 运行事实的初始对象。
  */
@@ -191,7 +217,7 @@ function createRunFacts(openedAt, phase) {
     run: null,
   };
 }
-//@ chunk-ae5g0zb5.js:40366-40471 placement
+//@ chunk-mhn0amzz.js:41604-41709 placement
 /**
  * 打开面板时的运行事实（含早期应用状态）。
  */
@@ -208,12 +234,12 @@ function createOpeningFacts(openedAt, app, isStartingApp = false, name = null) {
     }),
   };
 }
-//@ chunk-ae5g0zb5.js:40471-40483 placement
+//@ chunk-mhn0amzz.js:41709-41721 placement
 /**
  * 1000
  */
 var EARLY_CHECK_WINDOW_MS = 1000;
-//@ chunk-ae5g0zb5.js:40483-40662 placement
+//@ chunk-mhn0amzz.js:41721-41900 placement
 /**
  * 早期阶段尚未过期时把应用状态显示为 checking。
  */
@@ -237,7 +263,7 @@ function withCheckingAppState(facts, now) {
     },
   };
 }
-//@ chunk-ae5g0zb5.js:40662-40778 placement
+//@ chunk-mhn0amzz.js:41900-42016 placement
 /**
  * 去掉标签、压缩空白并截断到 n 个字符。
  */
@@ -245,43 +271,43 @@ function collapseAndTruncate(text, maxChars) {
   let trimmed = text.replace(regExp, " ").replace(/ {2,}/g, " ").trim();
   return trimmed.length > maxChars ? `${trimmed.slice(0, maxChars - 1)}\u2026` : trimmed;
 }
-//@ chunk-ae5g0zb5.js:40778-40837 placement (2.1.88 match: capitalize, 1)
-function capitalize(str) {
+//@ chunk-mhn0amzz.js:42016-42075 placement (2.1.88 match: capitalize, 1)
+function capitalize_2(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
-//@ chunk-ae5g0zb5.js:40837-40885 placement
+//@ chunk-mhn0amzz.js:42075-42123 placement
 function humanizeSlug(slug) {
-  return capitalize(slug.replaceAll("-", " "));
+  return capitalize_2(slug.replaceAll("-", " "));
 }
-//@ chunk-ae5g0zb5.js:40885-40949 placement
+//@ chunk-mhn0amzz.js:42123-42187 placement
 /**
  * 对象自有字符串键
  */
 function hasOwnString(value, key) {
   return typeof key === "string" && Object.hasOwn(value, key);
 }
-//@ chunk-ae5g0zb5.js:40949-40990 placement
+//@ chunk-mhn0amzz.js:42187-42228 placement
 /**
  * 白名单内的值
  */
 function knownValue(value, key) {
   return hasOwnString(value, key) ? key : undefined;
 }
-//@ chunk-ae5g0zb5.js:40990-41070 placement
+//@ chunk-mhn0amzz.js:42228-42308 placement
 /**
  * 0..9999 的整数
  */
 function clampedCount(value) {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < 1e4 ? value : 0;
 }
-//@ chunk-ae5g0zb5.js:41070-41156 placement
+//@ chunk-mhn0amzz.js:42308-42394 placement
 /**
  * 1..65535 的端口
  */
 function asPort(port) {
   return typeof port === "number" && Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
 }
-//@ chunk-ae5g0zb5.js:41156-42282 placement
+//@ chunk-mhn0amzz.js:42394-43520 placement
 function summarizeRunStart(runFile) {
   let jsonObject = parseJsonObject(runFile);
   if (jsonObject === null) return REPORT_STATE_TEXT;
@@ -369,7 +395,7 @@ function summarizeRunStart(runFile) {
     }),
   };
 }
-//@ chunk-ae5g0zb5.js:42282-42995 placement
+//@ chunk-mhn0amzz.js:43520-44233 placement
 function stripHtmlComments(stem, runFile) {
   let hasFrontmatter =
     typeof runFile === "string" &&
@@ -423,7 +449,7 @@ function stripHtmlComments(stem, runFile) {
     }),
   };
 }
-//@ chunk-ae5g0zb5.js:42995-43084 placement
+//@ chunk-mhn0amzz.js:44233-44322 placement
 /**
  * 合法的规格名
  */
@@ -435,7 +461,7 @@ function isValidSpecName(spec) {
     collapseAndTruncate(spec, 120) === spec
   );
 }
-//@ chunk-ae5g0zb5.js:43084-43202 placement
+//@ chunk-mhn0amzz.js:44322-44440 placement
 /**
  * 比较运行 id（时间戳部分，再按序号后缀）。
  */
@@ -445,7 +471,7 @@ function compareRunIds(runIdA, runIdB) {
     (Number(runIdA.slice(20)) || 1) - (Number(runIdB.slice(20)) || 1)
   );
 }
-//@ chunk-ae5g0zb5.js:43202-43282 placement
+//@ chunk-mhn0amzz.js:44440-44520 placement
 /**
  * 最近的运行 id
  */
@@ -454,12 +480,12 @@ function latestRunId(madeHereRuns) {
   filtered.sort(compareRunIds);
   return filtered.at(-1) ?? null;
 }
-//@ chunk-ae5g0zb5.js:43282-43291 placement
+//@ chunk-mhn0amzz.js:44520-44529 placement
 /**
  * 8
  */
 var MAX_PRIOR_RUNS = 8;
-//@ chunk-ae5g0zb5.js:43291-43386 placement
+//@ chunk-mhn0amzz.js:44529-44624 placement
 /**
  * 比给定运行更早的运行 id
  */
@@ -470,12 +496,12 @@ function earlierRunIds(madeHereRuns, currentRunId) {
     .slice(-(MAX_PRIOR_RUNS + 1))
     .reverse();
 }
-//@ chunk-ae5g0zb5.js:43386-43396 placement
+//@ chunk-mhn0amzz.js:44624-44634 placement
 /**
  * 50
  */
 var MAX_FIXED_SPECS = 50;
-//@ chunk-ae5g0zb5.js:43396-43634 placement
+//@ chunk-mhn0amzz.js:44634-44872 placement
 /**
  * 解析 fix.json 的 fixed 列表（全部合法才返回，去重）。
  */
@@ -493,7 +519,7 @@ function parseFixedSpecs(text) {
     return [];
   }
 }
-//@ chunk-ae5g0zb5.js:43634-43812 placement
+//@ chunk-mhn0amzz.js:44872-45050 placement
 /**
  * 找最近一个包含指定规格未通过的运行，并合并之前运行的结论。
  */
@@ -504,7 +530,7 @@ function findLatestFailingRun(runs, fixedStems) {
   let run = runs[index];
   return run === undefined ? null : mergeEarlierVerdicts(run, runs.slice(0, index).toReversed());
 }
-//@ chunk-ae5g0zb5.js:43812-44195 placement
+//@ chunk-mhn0amzz.js:45050-45433 placement
 /**
  * 用更早的运行补齐结论与耗时。
  */
@@ -539,12 +565,12 @@ function mergeEarlierVerdicts(run, reversed) {
         }),
       };
 }
-//@ chunk-ae5g0zb5.js:44195-44205 placement
+//@ chunk-mhn0amzz.js:45433-45443 placement
 /**
  * 16
  */
 var MAX_CHAIN_HOPS = 16;
-//@ chunk-ae5g0zb5.js:44205-44422 placement
+//@ chunk-mhn0amzz.js:45443-45660 placement
 /**
  * 找出与当前运行同一链（通过 from 链接）的更早运行。
  */
@@ -561,7 +587,7 @@ function findRunsInSameChain(runIds, runId, linkOf) {
     .sort(compareRunIds)
     .filter((id) => findChainRoot(graph, id) === chainRoot);
 }
-//@ chunk-ae5g0zb5.js:44422-44671 placement
+//@ chunk-mhn0amzz.js:45660-45909 placement
 /**
  * 沿 from 链找运行链的根（带缓存与深度上限）。
  */
@@ -586,7 +612,7 @@ function findChainRoot(graph, runId) {
   for (let id of visited) graph.roots.set(id, root);
   return root;
 }
-//@ chunk-ae5g0zb5.js:44671-45183 placement
+//@ chunk-mhn0amzz.js:45909-46421 placement
 function countResults(runs) {
   let [latest, ...earlier] = runs;
   if (latest === undefined) return null;
@@ -623,7 +649,7 @@ function countResults(runs) {
     }),
   };
 }
-//@ chunk-ae5g0zb5.js:45183-45334 placement
+//@ chunk-mhn0amzz.js:46421-46572 placement
 /**
  * 解析运行记录里的 from 字段（合法运行 id）。
  */
@@ -637,14 +663,14 @@ function parseRunFrom(text) {
     return null;
   }
 }
-//@ chunk-ae5g0zb5.js:45334-45403 placement
+//@ chunk-mhn0amzz.js:46572-46641 placement
 /**
  * .claude-test/specs
  */
 var SPECS_DIR = ".claude-test/specs";
 var OUTLINE_SUFFIX = ".outline.md";
 var OUTLINE_ASKED_JSON = "outline-asked.json";
-//@ chunk-ae5g0zb5.js:45403-45779 placement
+//@ chunk-mhn0amzz.js:46641-47017 placement
 function formatAskedSpecs(runFile) {
   if (typeof runFile !== "string" || runFile.length > 16384) return null;
   let tests;
@@ -664,7 +690,7 @@ function formatAskedSpecs(runFile) {
 `),
   );
 }
-//@ chunk-ae5g0zb5.js:45779-45847 placement
+//@ chunk-mhn0amzz.js:47017-47085 placement
 /**
  * 取较长的那个
  */
@@ -673,7 +699,7 @@ function longerOf(specOutline, otherOutline) {
     ? otherOutline
     : specOutline;
 }
-//@ chunk-ae5g0zb5.js:45847-46641 placement
+//@ chunk-mhn0amzz.js:47085-47879 placement
 function readSpecOutline(text) {
   if (typeof text !== "string" || text.length > 16384) return null;
   let mapped = text
@@ -714,8 +740,8 @@ function readSpecOutline(text) {
   return rows.length === 0 ? null : rows;
 }
 export {
-  APP_STATE_LABELS,
   SPECS_DIR,
+  capitalize,
   compareRunIds,
   createRunFacts,
   RUNS_DIR,
@@ -737,12 +763,13 @@ export {
   isValidSpecName,
   collapseAndTruncate,
   APP_STOPPED_LABELS,
+  APP_STATE_LABELS,
   REPORT_STATE_TEXT,
   SEE_THE_CHAT_SUFFIX,
   humanizeSlug,
   REPORT_PREFIX,
   withCheckingAppState,
-  capitalize,
+  capitalize_2,
   createOpeningFacts,
   canOpenBrowser,
   describeInstallState,

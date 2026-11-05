@@ -3,10 +3,10 @@
  *
  * 并入已有模块：OAuth 授权步骤
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/install-github-app/OAuthFlowStep.tsx
- * pieces: chunk-4r7nqnx2.js (1), chunk-4v9zy7gn.js (3)
- * attribution: fingerprint 2, placement 1, layout 1
+ * pieces: chunk-2xbvbqx2.js (3)
+ * attribution: placement 1, fingerprint 2
  */
 import {
   init_react_production,
@@ -41,13 +41,11 @@ import { FocusColumn } from "../../components/design-system/FocusColumn.js";
 import { Box, Text, Link } from "../../ink/components/Text.js";
 import { OAuthStatusPanel } from "./OptionalActionsSetupStep.js";
 
-//@ chunk-4r7nqnx2.js:5057-5096 fingerprint (2.1.88 match: PASTE_HERE_MSG, 1)
-var PASTE_HERE_MSG = "Paste code here if prompted > ";
-//@ chunk-4v9zy7gn.js:34294-34298 placement
+//@ chunk-2xbvbqx2.js:35337-35341 placement
 init_react_production();
-//@ chunk-4v9zy7gn.js:34298-34338 layout (2.1.88 match: PASTE_HERE_MSG, 1)
-var PASTE_HERE_MSG_2 = "Paste code here if prompted > ";
-//@ chunk-4v9zy7gn.js:34338-37793 fingerprint (2.1.88 match: OAuthFlowStep, 0.659)
+//@ chunk-2xbvbqx2.js:35341-35381 fingerprint (2.1.88 match: PASTE_HERE_MSG, 1)
+var PASTE_HERE_MSG = "Paste code here if prompted > ";
+//@ chunk-2xbvbqx2.js:35381-38836 fingerprint (2.1.88 match: OAuthFlowStep, 0.66)
 function OAuthFlowStep({ onSuccess, onCancel }) {
   let [oauthStatus, setOAuthStatus] = useState({
     state: "starting",
@@ -69,7 +67,7 @@ function OAuthFlowStep({ onSuccess, onCancel }) {
     return () => copiedTimer.abort();
   }, []);
   let terminalSize = useTerminalSize();
-  let textInputColumns = Math.max(50, terminalSize.columns - PASTE_HERE_MSG_2.length - 4);
+  let textInputColumns = Math.max(50, terminalSize.columns - PASTE_HERE_MSG.length - 4);
   function handleKeyDown(e) {
     if (oauthStatus.state !== "error") return;
     e.preventDefault();
@@ -319,4 +317,4 @@ function OAuthFlowStep({ onSuccess, onCancel }) {
     ],
   });
 }
-export { PASTE_HERE_MSG, PASTE_HERE_MSG_2, OAuthFlowStep };
+export { PASTE_HERE_MSG, OAuthFlowStep };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：后台 worktree 守卫入口：检查命令是否会改变目录或越出 worktree，以及 git 全局选项。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-63f0f3kd.js (26)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h2y5xkdx.js (26)
  * attribution: placement 26
  */
 import { basename, isAbsolute } from "path";
@@ -31,7 +31,7 @@ import { EXEC_LIKE_COMMANDS, COMMAND_PREFIX_WORDS } from "./commandTables.js";
 import { expandPath } from "../../../utils/path.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-63f0f3kd.js:95112-102498 placement
+//@ chunk-h2y5xkdx.js:107826-115212 placement
 /**
  * 后台 worktree 守卫入口（checkBgWorktreeCommandGuard）：会话隔离在 worktree 时，拒绝会把 git 操作指向主仓库（cd、GIT_DIR、-C、--git-dir 等）或无法证明留在 worktree 内的命令，并给出改写建议。
  */
@@ -80,9 +80,9 @@ function checkBgWorktreeCommandGuard(parsed, commandText, startCwd, worktreeDir)
     let hasGitFromHere = [];
     {
       let seenGit = false;
-      for (let idx = commands.length - 1; idx >= 0; idx--) {
-        seenGit = seenGit || mapped[idx] !== -1;
-        hasGitFromHere[idx] = seenGit;
+      for (let k = commands.length - 1; k >= 0; k--) {
+        seenGit = seenGit || mapped[k] !== -1;
+        hasGitFromHere[k] = seenGit;
       }
     }
     let currentDir = startCwd;
@@ -297,7 +297,7 @@ function checkBgWorktreeCommandGuard(parsed, commandText, startCwd, worktreeDir)
   }
   return null;
 }
-//@ chunk-63f0f3kd.js:102498-102808 placement
+//@ chunk-h2y5xkdx.js:115212-115522 placement
 /**
  * git 本身不处理、直接吃掉值的长选项（--namespace、--attr-source、--shallow-file），解析时跳过。
  */
@@ -307,7 +307,7 @@ var GIT_DIRECTORY_OPTIONS;
 var TENGU_GOLDEN_PANDA;
 var TENGU_ZESTY_MUFFIN;
 var GIT_INIT_LONG_OPTIONS;
-deferInit("chunk-63f0f3kd.js:102498", () => {
+deferInit("chunk-h2y5xkdx.js:115212", () => {
   GIT_LOCATION_ENV_VARS = new Set([
     "GIT_DIR",
     "GIT_WORK_TREE",
@@ -322,7 +322,7 @@ deferInit("chunk-63f0f3kd.js:102498", () => {
   TENGU_ZESTY_MUFFIN = "tengu_zesty_muffin";
   GIT_INIT_LONG_OPTIONS = ["--template", "--separate-git-dir", "--shared"];
 });
-//@ chunk-63f0f3kd.js:102808-102846 placement
+//@ chunk-h2y5xkdx.js:115522-115560 placement
 /**
  * 读取 tengu_zesty_muffin 开关：GIT_TEMPLATE_DIR、ARGV0 是否视为影响 git 仓库位置。
  */
@@ -331,14 +331,14 @@ function isGITemplateEnvStrict() {
     safe: true,
   });
 }
-//@ chunk-63f0f3kd.js:102846-102952 placement
+//@ chunk-h2y5xkdx.js:115560-115666 placement
 function expandGitLongOption(word) {
   let prefix = firstLineOf(word, "=");
   return prefix.length > 2 && prefix.startsWith("--")
     ? GIT_INIT_LONG_OPTIONS.find((option) => option.startsWith(prefix))
     : undefined;
 }
-//@ chunk-63f0f3kd.js:102952-103128 placement
+//@ chunk-h2y5xkdx.js:115666-115842 placement
 function findGitInitWord(argv, commandText, start, from) {
   for (let idx = from; idx < argv.length; idx++) {
     let word = argv[idx];
@@ -356,14 +356,14 @@ function findGitInitWord(argv, commandText, start, from) {
   }
   return null;
 }
-//@ chunk-63f0f3kd.js:103128-103197 placement
+//@ chunk-h2y5xkdx.js:115842-115911 placement
 /**
  * 子序列匹配 RSYNC_CONNECT_PROG 时视为“可跨过”的字符（$ ` { , } 与反斜杠）。
  */
 var TENGU_ENCHANTED_PEBBLE = "tengu_enchanted_pebble";
 var RSYNC_CONNECT_PROG = "RSYNC_CONNECT_PROG";
 var SUBSHELL_MARKER_CHARS = "$`{,}\\";
-//@ chunk-63f0f3kd.js:103197-103572 placement
+//@ chunk-h2y5xkdx.js:115911-116286 placement
 /**
  * 用子序列匹配检测命令文本或参数中是否（可能被分隔地）出现 RSYNC_CONNECT_PROG，开关 tengu_enchanted_pebble 开启时才生效。
  */
@@ -380,9 +380,9 @@ function mentionsRsyncConnectProg(commandText, parsed) {
     for (let char of text.toUpperCase()) {
       carry |= 1;
       let next = 0;
-      for (let idx = 0; idx < RSYNC_CONNECT_PROG.length; idx++)
-        if ((((carry | subshellCarry) >> idx) & 1) === 1 && char === RSYNC_CONNECT_PROG[idx])
-          next |= 1 << (idx + 1);
+      for (let k = 0; k < RSYNC_CONNECT_PROG.length; k++)
+        if ((((carry | subshellCarry) >> k) & 1) === 1 && char === RSYNC_CONNECT_PROG[k])
+          next |= 1 << (k + 1);
       if (((next >> RSYNC_CONNECT_PROG.length) & 1) === 1) {
         found = true;
         break t;
@@ -398,19 +398,19 @@ function mentionsRsyncConnectProg(commandText, parsed) {
     })
   );
 }
-//@ chunk-63f0f3kd.js:103572-103689 placement
+//@ chunk-h2y5xkdx.js:116286-116403 placement
 /**
  * 匹配 /dev/fd、/dev/stdin、/dev/stdout、/dev/stderr 路径。
  */
 var PROC_SELF_PATH_PATTERN = /(^|[\\/])proc[\\/](self|thread-self|\d+)([\\/]|$)/i;
 var DEV_FD_PATH_PATTERN = /(^|[\\/])dev[\\/](fd|stdin|stdout|stderr)([\\/]|$)/i;
-//@ chunk-63f0f3kd.js:103689-103806 placement
+//@ chunk-h2y5xkdx.js:116403-116520 placement
 function isProcOrDevFdPath(path) {
   let replaced = path.replace(/[\\/]\.(?=[\\/]|$)/g, "");
   replaced = replaced.replace(/[\\/]{2,}/g, "/");
   return PROC_SELF_PATH_PATTERN.test(replaced) || DEV_FD_PATH_PATTERN.test(replaced);
 }
-//@ chunk-63f0f3kd.js:103806-104068 placement
+//@ chunk-h2y5xkdx.js:116520-116782 placement
 function isMacVolumesPath(path) {
   if (/^[\\/]System[\\/]Volumes[\\/]/i.test(path)) return true;
   if (/^[\\/]Volumes[\\/]/i.test(path)) return true;
@@ -420,7 +420,7 @@ function isMacVolumesPath(path) {
   if (path.includes("~")) return true;
   return false;
 }
-//@ chunk-63f0f3kd.js:104068-104505 placement
+//@ chunk-h2y5xkdx.js:116782-117219 placement
 /**
  * 可设置环境变量的命令集合（含 make，因为命令行变量会传给子进程）。
  */
@@ -432,7 +432,7 @@ var TENGU_RECURSIVE_GLADE;
 var SHELL_DECLARE_BUILTINS;
 var SHELL_OPTION_BUILTINS;
 var SHELL_VAR_NAME_RE;
-deferInit("chunk-63f0f3kd.js:104068", () => {
+deferInit("chunk-h2y5xkdx.js:116782", () => {
   DIRECTORY_CHANGE_BUILTINS = new Set(["cd", "pushd", "popd", "chdir"]);
   ENV_SETTING_COMMANDS = new Set(["export", "declare", "typeset", "local", "readonly", "env", "make"]);
   DECLARATION_COMMANDS = new Set(["export", "declare", "typeset", "local", "readonly"]);
@@ -451,7 +451,7 @@ deferInit("chunk-63f0f3kd.js:104068", () => {
   SHELL_OPTION_BUILTINS = new Set(["set", "shopt", "setopt", "unsetopt", "emulate"]);
   SHELL_VAR_NAME_RE = /^([A-Za-z_][A-Za-z0-9_]*)(?:\+?=|$)/;
 });
-//@ chunk-63f0f3kd.js:104505-104862 placement
+//@ chunk-h2y5xkdx.js:117219-117576 placement
 /**
  * 判断 argv 中是否有 env/export 等命令设置了 git 配置相关环境变量（含占位符或 allexport 选项也视为是）。
  */
@@ -478,7 +478,7 @@ function setsGitConfigEnv(argv) {
     );
   });
 }
-//@ chunk-63f0f3kd.js:104862-105064 placement
+//@ chunk-h2y5xkdx.js:117576-117778 placement
 function isGitConfigEnvVar(name) {
   let upper = name.toUpperCase();
   return (
@@ -491,21 +491,21 @@ function isGitConfigEnvVar(name) {
     upper === "XDG_CONFIG_HOME"
   );
 }
-//@ chunk-63f0f3kd.js:105064-105180 placement
+//@ chunk-h2y5xkdx.js:117778-117894 placement
 /**
  * 会把字符串当命令执行的命令（eval 类，去掉 exec/nocorrect）。
  */
 var ARG_FEEDING_PROGRAMS; // deferred: uses EVAL_LIKE_BUILTINS (../../../utils/bash/ast.js) of its import cycle while loading; runs once the cycle is complete
 var EVAL_LIKE_COMMANDS;
 var FIND_EXECDIR_OPTIONS;
-deferInit("chunk-63f0f3kd.js:105064", () => {
+deferInit("chunk-h2y5xkdx.js:117778", () => {
   ARG_FEEDING_PROGRAMS = new Set(["xargs", "parallel"]);
   EVAL_LIKE_COMMANDS = new Set(
     [...EVAL_LIKE_BUILTINS].filter((builtinName) => !EXEC_LIKE_COMMANDS.has(builtinName)),
   );
   FIND_EXECDIR_OPTIONS = new Set(["-execdir", "-okdir"]);
 });
-//@ chunk-63f0f3kd.js:105180-105846 placement
+//@ chunk-h2y5xkdx.js:117894-118561 placement
 /**
  * 判断 git 是否经由 xargs/parallel、find -execdir 或字符串执行器运行而无法确认其目标仓库，返回原因文本或 null。
  */
@@ -527,32 +527,32 @@ function describeUnverifiableGitLaunch(argv) {
   }
   return null;
 }
-//@ chunk-63f0f3kd.js:105846-105907 placement
+//@ chunk-h2y5xkdx.js:118561-118622 placement
 /**
  * argv 的命令是否为变量声明内建。
  */
 function isDeclarationCommandArgv(command) {
   return DECLARATION_COMMANDS.has(basename(command.argv[0] ?? "").toLowerCase());
 }
-//@ chunk-63f0f3kd.js:105907-105993 placement
+//@ chunk-h2y5xkdx.js:118622-118709 placement
 function gitCommandIndices(argv) {
   let indices = [];
   for (let [idx, arg] of argv.entries()) if (GIT_COMMAND_PATTERN.test(basename(arg))) indices.push(idx);
   return indices;
 }
-//@ chunk-63f0f3kd.js:105993-106063 placement
+//@ chunk-h2y5xkdx.js:118709-118780 placement
 function firstGitIndex(argv) {
   return argv.findIndex((arg) => {
     let baseName = basename(arg);
     return GIT_COMMAND_PATTERN.test(baseName);
   });
 }
-//@ chunk-63f0f3kd.js:106063-106077 placement
+//@ chunk-h2y5xkdx.js:118780-118794 placement
 /**
  * 匹配命令名里含 git（git、git.exe 等）。
  */
 var GIT_COMMAND_NAME_RE = /git/i;
-//@ chunk-63f0f3kd.js:106077-106240 placement
+//@ chunk-h2y5xkdx.js:118794-118957 placement
 /**
  * 在 argv 中跳过前置包装命令，找到目录切换内建命令（cd/pushd 等）的下标，没有返回 -1。
  */
@@ -564,14 +564,14 @@ function findDirectoryChangeIndex(argv) {
   }
   return DIRECTORY_CHANGE_BUILTINS.has((argv[idx] ?? "").toLowerCase()) ? idx : -1;
 }
-//@ chunk-63f0f3kd.js:106240-106273 placement
+//@ chunk-h2y5xkdx.js:118957-118990 placement
 /**
  * argv 中是否含目录切换内建。
  */
 function hasDirectoryChange(argv) {
   return findDirectoryChangeIndex(argv) !== -1;
 }
-//@ chunk-63f0f3kd.js:106715-108070 placement
+//@ chunk-h2y5xkdx.js:119432-120787 placement
 /**
  * 收集命令前缀与 env 参数中影响 git 位置的环境变量赋值（GIT_DIR 等）与 env --chdir/-C 目录；出现 GIT_CONFIG*、HOME、CDPATH 等无法建模的变量时返回 opaque。
  */
@@ -615,11 +615,11 @@ function collectGitLocationEnv(command) {
       else if (/^-[a-zA-Z]/.test(arg)) {
         let sliced_2 = arg.slice(1);
         let isUnmodeled = false;
-        for (let idx_2 = 0; idx_2 < sliced_2.length; idx_2++) {
-          let flagChar = sliced_2[idx_2];
+        for (let k = 0; k < sliced_2.length; k++) {
+          let flagChar = sliced_2[k];
           if (flagChar === "i" || flagChar === "v") continue;
           if (flagChar === "C" || flagChar === "u") {
-            let sliced_3 = sliced_2.slice(idx_2 + 1);
+            let sliced_3 = sliced_2.slice(k + 1);
             let flagValue = sliced_3.length > 0 ? sliced_3 : sliced[idx + 1];
             chdirValueIdx = sliced_3.length > 0 ? chdirValueIdx : idx + 1;
             if (flagChar === "C" && flagValue !== undefined) envChdirs.push(flagValue);
@@ -670,7 +670,7 @@ function collectGitLocationEnv(command) {
     envUnmodeled,
   };
 }
-//@ chunk-63f0f3kd.js:108070-108150 placement
+//@ chunk-h2y5xkdx.js:120787-120867 placement
 /**
  * 参数里含占位符，或（在允许时）含通配符，说明值要到运行时才知道。
  */
@@ -679,13 +679,13 @@ function hasPlaceholderOrGlob(argv, unquotedGlobFlags, hasUnquotedGlob, idx) {
   let isGlobActive = unquotedGlobFlags ? unquotedGlobFlags[idx] === true : hasUnquotedGlob;
   return containsAnyPlaceholder(word) || (isGlobActive && firstGlobCharIndex(word) !== -1);
 }
-//@ chunk-63f0f3kd.js:108150-109575 placement
+//@ chunk-h2y5xkdx.js:120867-122292 placement
 function checkGitGlobalOptions(argv, gitIdx, start, argvUnquotedGlob) {
   let chdirs = [];
   let pins = [];
   let bare = false;
   let nextIdx = gitIdx + 1;
-  let flagWithOverride = readFlagWithOverride(TENGU_GOLDEN_PANDA, {
+  let statfsEnabled = readFlagWithOverride(TENGU_GOLDEN_PANDA, {
     safe: true,
   });
   let unquotedGlobs = argvUnquotedGlob?.length === argv.length ? argvUnquotedGlob : undefined;
@@ -728,7 +728,7 @@ function checkGitGlobalOptions(argv, gitIdx, start, argvUnquotedGlob) {
           opaque: `${firstLineOf(arg, "=")} <runtime-computed>`,
         };
       if (
-        flagWithOverride &&
+        statfsEnabled &&
         hasPlaceholderOrGlob(argv, unquotedGlobs, start, isInlineConfigEnv ? nextIdx : nextIdx + 1)
       )
         return {
@@ -747,7 +747,7 @@ function checkGitGlobalOptions(argv, gitIdx, start, argvUnquotedGlob) {
       continue;
     }
     if (GIT_PASSTHROUGH_VALUE_OPTIONS.has(arg)) {
-      if (flagWithOverride && hasPlaceholderOrGlob(argv, unquotedGlobs, start, nextIdx + 1))
+      if (statfsEnabled && hasPlaceholderOrGlob(argv, unquotedGlobs, start, nextIdx + 1))
         return {
           runtime: argv[nextIdx + 1] ?? "",
         };
@@ -758,7 +758,7 @@ function checkGitGlobalOptions(argv, gitIdx, start, argvUnquotedGlob) {
       nextIdx += 2;
       continue;
     }
-    if (flagWithOverride && hasPlaceholderOrGlob(argv, unquotedGlobs, start, nextIdx))
+    if (statfsEnabled && hasPlaceholderOrGlob(argv, unquotedGlobs, start, nextIdx))
       return {
         runtime: arg,
       };
@@ -795,7 +795,7 @@ function checkGitGlobalOptions(argv, gitIdx, start, argvUnquotedGlob) {
     bare,
   };
 }
-//@ chunk-63f0f3kd.js:109575-109870 placement
+//@ chunk-h2y5xkdx.js:122292-122587 placement
 function isRepositoryRedirectingConfig(configName) {
   return (
     configName === "core.worktree" ||
@@ -810,7 +810,7 @@ function isRepositoryRedirectingConfig(configName) {
     /^(?:protocol\.(?:\w+\.)?allow|core\.(?:sshcommand|gitproxy))$/.test(configName)
   );
 }
-//@ chunk-63f0f3kd.js:109870-110062 placement
+//@ chunk-h2y5xkdx.js:122587-122779 placement
 function resolveGuardPath(pathValue, baseDir, requireAbsolute, hasUnquotedGlob) {
   if (
     containsAnyPlaceholder(pathValue) ||

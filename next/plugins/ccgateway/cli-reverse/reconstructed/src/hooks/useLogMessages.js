@@ -3,9 +3,9 @@
  *
  * 把消息变化增量写入会话日志（transcript 持久化）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useLogMessages.ts
- * pieces: chunk-18hwfzwa.js (6)
+ * pieces: chunk-czq1j3j2.js (6)
  * attribution: placement 5, fingerprint 1
  */
 import { logEvent } from "../services/analytics/index.js";
@@ -35,12 +35,12 @@ import { useAppState } from "../state/AppState.js";
 import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import { useState, useRef, useEffect } from "../../vendor/react/cjs/react.production.js";
 
-//@ chunk-18hwfzwa.js:1618469-1618508 placement
+//@ chunk-czq1j3j2.js:1662627-1662666 placement
 var UNSETTLED_REPLAY_STATE = {
   isReplayed: false,
   settled: undefined,
 };
-//@ chunk-18hwfzwa.js:1618508-1618685 placement
+//@ chunk-czq1j3j2.js:1662666-1662843 placement
 function logTranscriptParentWait({ startedAt, overtaken, next, exitWaited }, extra) {
   if (next !== undefined)
     logEvent("tengu_transcript_parent_wait", {
@@ -50,7 +50,7 @@ function logTranscriptParentWait({ startedAt, overtaken, next, exitWaited }, ext
       ...extra,
     });
 }
-//@ chunk-18hwfzwa.js:1618685-1618794 placement
+//@ chunk-czq1j3j2.js:1662843-1662952 placement
 function endsWithCompactBoundary(messages) {
   let last = messages.findLast(
     (message) =>
@@ -58,7 +58,7 @@ function endsWithCompactBoundary(messages) {
   );
   return last !== undefined && isCompactBoundaryMessage_2(last);
 }
-//@ chunk-18hwfzwa.js:1618794-1618860 placement
+//@ chunk-czq1j3j2.js:1662952-1663018 placement
 function registerExitDrain(promise, wait) {
   let remove = registerTranscriptExitDrain(() => {
     wait.exitWaited = true;
@@ -66,7 +66,7 @@ function registerExitDrain(promise, wait) {
   });
   promise.finally(remove);
 }
-//@ chunk-18hwfzwa.js:1618860-1622007 placement
+//@ chunk-czq1j3j2.js:1663018-1666166 placement
 /**
  * TranscriptRecorder：把 REPL 消息写入会话转录文件。
  */
@@ -269,7 +269,7 @@ class TranscriptRecorder {
     return true;
   }
 }
-//@ chunk-18hwfzwa.js:1622007-1622704 fingerprint (2.1.88 match: useLogMessages, 0.317)
+//@ chunk-czq1j3j2.js:1666166-1666863 fingerprint (2.1.88 match: useLogMessages, 0.317)
 function useLogMessages(
   messages,
   ignore = false,

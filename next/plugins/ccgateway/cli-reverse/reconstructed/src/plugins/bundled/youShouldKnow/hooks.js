@@ -3,12 +3,20 @@
  *
  * 2.1.316 新增。youShouldKnow 的钩子。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bss4k1z9.js (5)
- * attribution: placement 5
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-775n2x67.js (6)
+ * attribution: placement 5, layout 1
  */
-import { semanticNumber } from "../../../utils/semanticNumber.js";
+import {
+  PROPOSED_OUTCOMES,
+  UNANSWERED_OUTCOMES,
+  OFF_COMMAND,
+  aboutShown,
+  aboutKeyOf,
+  aboutFrame,
+  toggleAbout,
+} from "./NoteCard.js";
 import {
   isPersonsPrompt,
   promptedAtTurnStart,
@@ -74,30 +82,34 @@ import {
   offerRow,
   debugRows,
 } from "./noteRender.js";
-import {
-  UNANSWERED_OUTCOMES,
-  OFF_COMMAND,
-  aboutShown,
-  aboutKeyOf,
-  aboutFrame,
-  toggleAbout,
-} from "./NoteCard.js";
-import { getUserType_2 } from "../../../utils/sessionStorage.js";
+import { offerOffAvailable } from "../../../utils/sessionStorage.js";
 
-//@ chunk-bss4k1z9.js:17961-18000 placement (2.1.88 match: getTokenUsage, 1)
+//@ chunk-775n2x67.js:18269-18308 placement (2.1.88 match: getTokenUsage, 1)
 /**
  * 对象有 usage 字段时返回它。错归（会话钩子插件代码）。
  */
 var getUsageField = (message) => ("usage" in message ? message.usage : null);
-//@ chunk-bss4k1z9.js:20123-20132 placement
+//@ chunk-775n2x67.js:20431-20440 placement
 var RECENT_NOTES_LIMIT = 3;
-//@ chunk-bss4k1z9.js:20331-20387 placement
+//@ chunk-775n2x67.js:20440-20639 layout
+function isProposalFrame(value) {
+  if (typeof value !== "object" || !value) return false;
+  let value_2 = value;
+  return (
+    Number.isFinite(value_2.number) &&
+    Number.isFinite(value_2.step) &&
+    Number.isFinite(value_2.latencyMs) &&
+    Number.isFinite(value_2.at) &&
+    PROPOSED_OUTCOMES.some((outcome) => outcome === value_2.outcome)
+  );
+}
+//@ chunk-775n2x67.js:20639-20695 placement
 var readRecentNotes = (checks) =>
-  Array.isArray(checks) ? checks.filter(semanticNumber).slice(-RECENT_NOTES_LIMIT) : [];
-//@ chunk-bss4k1z9.js:20387-20421 placement
+  Array.isArray(checks) ? checks.filter(isProposalFrame).slice(-RECENT_NOTES_LIMIT) : [];
+//@ chunk-775n2x67.js:20695-20729 placement
 var pushRecentNote = (recentNotes, recentNotes_2) =>
   [...recentNotes, recentNotes_2].slice(-RECENT_NOTES_LIMIT);
-//@ chunk-bss4k1z9.js:74264-84337 placement
+//@ chunk-775n2x67.js:74591-84664 placement
 /**
  * youShouldKnow 插件的钩子注册：在会话事件上触发提示挑选、渲染提示卡片并记录展示状态与遥测。
  */
@@ -391,7 +403,7 @@ function register(on) {
       let view = row?.view ?? null;
       let tag = tagOf(row?.tag ?? "");
       let isDebug = await debugFlagOf(ctx.env.get("CLAUDE_CODE_YOU_SHOULD_KNOW_DEBUG"));
-      let userType = getUserType_2(
+      let offerOff = offerOffAvailable(
         await ctx.env.get("USER_TYPE").catch(() => {
           return;
         }),
@@ -793,7 +805,7 @@ function register(on) {
             tag,
           );
         }
-        let offerOffAvailable = hasOwnComposer(payload.surface) || userType;
+        let offerOffAvailable = hasOwnComposer(payload.surface) || offerOff;
         return offerRow(
           hotkeys,
           line,
@@ -827,7 +839,7 @@ function register(on) {
           {
             isOpen: aboutShown_2 === aboutKeyOf(view),
             surface: payload.surface,
-            ...aboutFrame(hasOwnComposer(payload.surface), payload.props, userType),
+            ...aboutFrame(hasOwnComposer(payload.surface), payload.props, offerOff),
             onPress: () => {
               toggleAbout(ctx, {
                 sid: sessionId,
@@ -896,4 +908,4 @@ function register(on) {
     return next(payload);
   });
 }
-export { RECENT_NOTES_LIMIT, readRecentNotes, pushRecentNote, getUsageField, register };
+export { RECENT_NOTES_LIMIT, readRecentNotes, pushRecentNote, getUsageField, isProposalFrame, register };

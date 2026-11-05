@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：claude.ai 技能冲突处理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ygke3hz8.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sprn4z2j.js (12)
  * attribution: placement 12
  */
 import {
@@ -30,7 +30,7 @@ import { tildify } from "../utils/path.js";
 import { isSkillCommand } from "../components/skills/SkillsMenu.js";
 import { estimateSkillListingTokens } from "./loadSkillsDir.js";
 
-//@ chunk-ygke3hz8.js:796-1212 placement
+//@ chunk-sprn4z2j.js:796-1212 placement
 /**
  * 判断技能覆盖状态是否被锁定及来源：策略/flag 设置、保留名（不可调用模型）、作者声明仅用户可调用、插件；无锁定返回 undefined。
  */
@@ -60,7 +60,7 @@ function getLockedSkillOverride(skill) {
     };
   return;
 }
-//@ chunk-ygke3hz8.js:1212-1645 placement
+//@ chunk-sprn4z2j.js:1212-1645 placement
 /**
  * 从项目/用户（MCP 技能还看别名；同步技能还看本地设置的裸名）设置的 skillOverrides 里读取某技能的覆盖值。
  */
@@ -86,13 +86,13 @@ function getLowerTierSkillOverride(command, { skipLocalBareKey = false } = {}) {
     lookupTiers(command.name) ?? (bareName != null ? (localOverride ?? lookupTiers(bareName)) : undefined)
   );
 }
-//@ chunk-ygke3hz8.js:1645-1728 placement (2.1.88 match: filterMcpPromptsByServer, 0.787)
+//@ chunk-sprn4z2j.js:1645-1728 placement (2.1.88 match: filterMcpPromptsByServer, 0.787)
 function commandBelongsToServer(commands, serverName) {
   return commands.loadedFrom === "mcp"
     ? strongestOverride_2(serverName, [commands.name, ...qualifiedOverrideNames(commands)])
     : ownLookup(serverName, commands.name);
 }
-//@ chunk-ygke3hz8.js:1728-1978 placement
+//@ chunk-sprn4z2j.js:1728-1978 placement
 /**
  * 技能来源的显示标签：claude.ai 同步、mcp、plugin、memory store、built-in，或设置来源名。
  */
@@ -112,7 +112,7 @@ function getSkillSourceLabel({ source, loadedFrom, pluginInfo }) {
       return getSettingSourceName(source);
   }
 }
-//@ chunk-ygke3hz8.js:1978-2045 placement
+//@ chunk-sprn4z2j.js:1978-2045 placement
 /**
  * 给出 claude.ai 同步技能对外显示的名字（命令名可用时用命令名）。
  */
@@ -120,7 +120,7 @@ function claudeAiSkillDisplayName(command) {
   let alias = syncedSkillUnqualifiedAlias(command);
   return alias !== undefined && getCommandName(command) === alias ? alias : command.name;
 }
-//@ chunk-ygke3hz8.js:2045-4103 placement
+//@ chunk-sprn4z2j.js:2045-4103 placement
 /**
  * 说明哪些 claude.ai 同步技能的 /名字 在本会话被其他命令占用或不可用：单条时给出具体原因（被自己的技能/项目/组织/插件/内置命令占用，或名字太相近），多条时汇总并建议重命名或删除用户自己的同名技能。
  */
@@ -225,14 +225,14 @@ function describeSyncedSkillConflicts(commands, allCommands) {
   let onesWord = conflicts_2.length === 1 ? "one" : "ones";
   return `${summarySentence} ${renameVerb} or delete your own ${formatSlashList(conflicts_2)} to use the claude.ai ${onesWord}.`;
 }
-//@ chunk-ygke3hz8.js:4103-4301 placement
+//@ chunk-sprn4z2j.js:4103-4301 placement
 function formatSlashList(conflicts) {
   let mapped = conflicts.map((conflict) => `/${conflict.bare}`);
   if (mapped.length === 1) return mapped[0];
   if (mapped.length <= 4) return `${mapped.slice(0, -1).join(", ")} and ${mapped.at(-1)}`;
   return `${mapped.slice(0, 3).join(", ")} and ${mapped.length - 3} more`;
 }
-//@ chunk-ygke3hz8.js:4301-4563 placement
+//@ chunk-sprn4z2j.js:4301-4563 placement
 /**
  * 列出可配置的技能并排序：按估算 token 降序（可选），否则按来源标签再按名字。
  */
@@ -252,14 +252,14 @@ function sortSkillsForListing(commands, { sortByTokens = false } = {}) {
       claudeAiSkillDisplayName(left).localeCompare(claudeAiSkillDisplayName(right)),
   );
 }
-//@ chunk-ygke3hz8.js:4563-4656 placement
+//@ chunk-sprn4z2j.js:4563-4656 placement
 /**
  * 复制本地设置里的 skillOverrides 表。
  */
 function localSkillOverrides() {
   return Object.assign(Object.create(null), getSettingsForSource("localSettings")?.skillOverrides);
 }
-//@ chunk-ygke3hz8.js:4656-4827 placement
+//@ chunk-sprn4z2j.js:4656-4827 placement
 /**
  * 构建技能覆盖判断的上下文：本地覆盖、较低层级的同名技能与被锁定的技能。
  */
@@ -278,7 +278,7 @@ function buildSkillOverrideContext(commands, localOverrides = localSkillOverride
     locked,
   };
 }
-//@ chunk-ygke3hz8.js:4827-5019 placement
+//@ chunk-sprn4z2j.js:4827-5019 placement
 /**
  * 计算每个技能当前生效的覆盖值：锁定值 > 本地覆盖 > 低层设置 > on。
  */
@@ -294,7 +294,7 @@ function getEffectiveSkillStates(commands, context) {
   }
   return states;
 }
-//@ chunk-ygke3hz8.js:5019-6089 placement
+//@ chunk-sprn4z2j.js:5019-6089 placement
 /**
  * 计算要写入本地设置的技能覆盖差异：跳过锁定技能；MCP 技能处理别名键的迁移；同步技能处理裸名键；只在与低层值不同时写入。返回差异、写入数与生效值变化数。
  */

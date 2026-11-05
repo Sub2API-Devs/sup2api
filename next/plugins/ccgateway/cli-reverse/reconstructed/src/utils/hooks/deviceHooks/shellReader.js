@@ -3,19 +3,21 @@
  *
  * 2.1.316 新增：简化 shell 读取器（分词、管道、heredoc）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mthxbav8.js (32)
- * attribution: placement 32
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4z1ntdgk.js (40)
+ * attribution: placement 32, layout 7, affinity 1
  */
 import { COMMAND_WRAPPERS_2, WRAPPERS_WITH_TIMEOUT, WRAPPER_VALUE_OPTIONS } from "./vouching.js";
+import { quote } from "../../bash/shellQuote.js";
 import { readFlagWithOverride } from "../../../services/analytics/flagOverrides.js";
 import { isVersionOnlyFlag } from "../../bash/parser.js";
 import { INTERPRETER_NAME_PATTERN } from "../hookCommandAnalysis.js";
-import { TENGU_FEDERATED_HEARTH } from "./commandReach.js";
+import { TENGU_FEDERATED_HEARTH, TENGU_COMPOSED_KITE } from "./commandReach.js";
+import { firstLineOf } from "../../stringUtils.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-mthxbav8.js:49944-50122 placement
+//@ chunk-4z1ntdgk.js:50479-50657 placement
 function isAnchoredPath(program) {
   return (
     /^(?:\/|\$(?!\{?(?:CURDIR|PWD)\b)(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})\/)/.test(
@@ -23,13 +25,13 @@ function isAnchoredPath(program) {
     ) || /^~(?:[A-Za-z_][A-Za-z0-9._-]*)?\//.test(joinLineContinuations(program.raw))
   );
 }
-//@ chunk-mthxbav8.js:50122-50711 placement
+//@ chunk-4z1ntdgk.js:50657-51246 placement
 /**
  * 路径参数的解析规则集：哪些选项取下一个词、哪些启动器/带值选项、是否按 su 语义处理 runuser 等。
  */
 var PATH_ARG_RULES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PATH_ARG_RULESET;
-deferInit("chunk-mthxbav8.js:50122", () => {
+deferInit("chunk-4z1ntdgk.js:50657", () => {
   PATH_ARG_RULES = {
     anchored: isAnchoredPath,
     takesNext: (isAnchored, arg) =>
@@ -69,11 +71,11 @@ deferInit("chunk-mthxbav8.js:50122", () => {
     },
   ];
 });
-//@ chunk-mthxbav8.js:50711-50781 placement
+//@ chunk-4z1ntdgk.js:51246-51316 placement
 function isLauncherCommand(name) {
   return COMMAND_WRAPPERS_2.has(name) || PATH_ARG_RULESET.some((rules) => rules.alsoLaunchers.has(name));
 }
-//@ chunk-mthxbav8.js:50781-50952 placement
+//@ chunk-4z1ntdgk.js:51316-51487 placement
 function computeUserOptionFill(words) {
   let filled = Array(words.length + 1).fill(false);
   for (let wordIndex = words.length - 1; wordIndex >= 0; wordIndex -= 1) {
@@ -83,17 +85,36 @@ function computeUserOptionFill(words) {
   }
   return filled;
 }
-//@ chunk-mthxbav8.js:50952-51596 placement
+//@ chunk-4z1ntdgk.js:51487-51800 placement
 /**
  * shell 解析用关键字集合（then/do/else/if 等）、块结束词（fi/done/esac）、控制词、赋值词正则、命令替换嵌套上限与若干转义/续行正则。
  */
 var SHELL_KEYWORDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SHELL_BLOCK_CLOSERS;
 var TENGU_EVENTUAL_DRAGONFLY;
+var REPEAT_PREFIX_WORDS;
 var SHELL_CONTROL_WORDS;
 var SHELL_COMPOUND_OPENERS;
-var ASSIGNMENT_WORD_RE;
-var MAX_SUBSTITUTION_DEPTH;
+var LOOP_WORD_RE;
+deferInit("chunk-4z1ntdgk.js:51487", () => {
+  SHELL_KEYWORDS = new Set(["then", "do", "else", "elif", "if", "while", "until", "!"]);
+  SHELL_BLOCK_CLOSERS = new Set(["fi", "done", "esac", "}", "]]"]);
+  TENGU_EVENTUAL_DRAGONFLY = "tengu_eventual_dragonfly";
+  REPEAT_PREFIX_WORDS = new Set(["repeat", "noglob", "nocorrect", "-"]);
+  SHELL_CONTROL_WORDS = new Set(["time", "coproc", "function", "fi", "done", "esac"]);
+  SHELL_COMPOUND_OPENERS = new Set(["coproc", "function"]);
+  LOOP_WORD_RE = /^(?:for|foreach|select)$/;
+});
+//@ chunk-4z1ntdgk.js:51800-51896 layout (2.1.88 match: quote, 0.751)
+function quote_2(args) {
+  let index = args.findIndex((arg, argIndex) => argIndex > 0 && !arg.quoted && arg.text === "in");
+  return index === -1 ? args.length : index;
+}
+//@ chunk-4z1ntdgk.js:51896-51969 placement
+var ALNUM_NAME_RE = /^[A-Za-z0-9_]+$/;
+var ASSIGNMENT_WORD_RE = /^[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]*\])?\+?=/;
+//@ chunk-4z1ntdgk.js:52032-52397 affinity
+var MAX_SUBSTITUTION_DEPTH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var WHITESPACE_CHARS;
 var SHELL_META_CHARS;
 var IDENTIFIER_RE;
@@ -104,13 +125,7 @@ var PIPE_TERMINATORS;
 var BACKTICK;
 var CONTINUED_LINE_RE;
 var TRAILING_BACKSLASH_RE;
-deferInit("chunk-mthxbav8.js:50952", () => {
-  SHELL_KEYWORDS = new Set(["then", "do", "else", "elif", "if", "while", "until", "!"]);
-  SHELL_BLOCK_CLOSERS = new Set(["fi", "done", "esac", "}", "]]"]);
-  TENGU_EVENTUAL_DRAGONFLY = "tengu_eventual_dragonfly";
-  SHELL_CONTROL_WORDS = new Set(["time", "coproc", "function", "fi", "done", "esac"]);
-  SHELL_COMPOUND_OPENERS = new Set(["coproc", "function"]);
-  ASSIGNMENT_WORD_RE = /^[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]*\])?\+?=/;
+deferInit("chunk-4z1ntdgk.js:52032", () => {
   MAX_SUBSTITUTION_DEPTH = 6;
   WHITESPACE_CHARS = " \t";
   SHELL_META_CHARS = ` 	
@@ -126,7 +141,7 @@ deferInit("chunk-mthxbav8.js:50952", () => {
   CONTINUED_LINE_RE = /(?:^|[^\\])(?:\\\\)*\\\n/;
   TRAILING_BACKSLASH_RE = /(?:^|[^\\])(?:\\\\)*\\$/;
 });
-//@ chunk-mthxbav8.js:51596-51667 placement
+//@ chunk-4z1ntdgk.js:52397-52468 placement
 function skipLineContinuations(text, index) {
   let cursor = index;
   while (
@@ -138,7 +153,7 @@ function skipLineContinuations(text, index) {
     cursor += 2;
   return cursor;
 }
-//@ chunk-mthxbav8.js:51667-51911 placement
+//@ chunk-4z1ntdgk.js:52468-52712 placement
 function joinLineContinuations(raw) {
   if (!raw.includes("\\\n")) return raw;
   let parts = [];
@@ -165,7 +180,7 @@ function joinLineContinuations(raw) {
   parts.push(raw.slice(start));
   return parts.join("");
 }
-//@ chunk-mthxbav8.js:51911-52140 placement
+//@ chunk-4z1ntdgk.js:52712-52941 placement
 function unescapeDoubleQuoted(text) {
   if (!text.includes("\\")) return text;
   let out = "";
@@ -193,11 +208,11 @@ function unescapeDoubleQuoted(text) {
   }
   return copied === 0 ? text : out + text.slice(copied);
 }
-//@ chunk-mthxbav8.js:52140-52193 placement
+//@ chunk-4z1ntdgk.js:52941-52994 placement
 var WHITESPACE_OR_PIPE_RE = /[ \t\n|]/;
 var PARAMETER_EXPANSION_RE = /@P\}/;
 var QUOTED_BACKSLASH_RE = /\$'[^']*\\|"[^"]*\\/;
-//@ chunk-mthxbav8.js:52193-52402 placement
+//@ chunk-4z1ntdgk.js:52994-53226 placement
 function parseShellCommands(text, options = {}) {
   let reader = new ShellReader(
     text,
@@ -207,19 +222,23 @@ function parseShellCommands(text, options = {}) {
   );
   let tokens = reader.tokens("eof", 0);
   let commands = [];
-  for (let tokenList of [tokens, ...reader.bodies]) splitPipeline(tokenList, options, commands);
+  let firstResult = null;
+  for (let tokenList of [tokens, ...reader.bodies]) {
+    let result = splitPipeline(tokenList, options, commands);
+    firstResult ??= result;
+  }
   return {
     commands,
-    unreadable: reader.unreadable,
+    unreadable: reader.unreadable ?? firstResult,
   };
 }
-//@ chunk-mthxbav8.js:52402-52507 placement
+//@ chunk-4z1ntdgk.js:53226-53331 placement
 function shellComments(text, options = {}) {
   let reader = new ShellReader(text, false, options.quotedBackslashKept !== false, false);
   reader.tokens("eof", 0);
   return reader.comments;
 }
-//@ chunk-mthxbav8.js:52507-52607 placement
+//@ chunk-4z1ntdgk.js:53331-53431 placement
 function hasNonNewlineTokenAfter(tokens, from, to) {
   for (let index = from; index < to; index += 1) {
     let token = tokens[index];
@@ -233,8 +252,9 @@ function hasNonNewlineTokenAfter(tokens, from, to) {
   }
   return false;
 }
-//@ chunk-mthxbav8.js:52607-54329 placement
+//@ chunk-4z1ntdgk.js:53431-56941 placement
 function splitPipeline(tokens, options, commands) {
+  let splitReason = null;
   let index = 0;
   let caseDepth = 0;
   let skipToEsac = false;
@@ -310,7 +330,107 @@ function splitPipeline(tokens, options, commands) {
     }
     let piped = afterPipe || groupStart > 0;
     afterPipe = false;
-    let [first, ...rest] = collectAllHeredocCommands(words, options);
+    let commandList = heredocCommandLists(words, options);
+    let afterConditional = [];
+    let conditionalAt = options.commandAfterConditional === false ? -1 : words.findIndex(quote);
+    for (let firstPass = true; conditionalAt !== -1; firstPass = false) {
+      let wordIndex = conditionalAt;
+      let ok = true;
+      while (wordIndex < words.length && !words[wordIndex].quoted) {
+        let word = words[wordIndex];
+        if (word.text === "[[") {
+          wordIndex += 1;
+          while (wordIndex < words.length && (words[wordIndex].quoted || words[wordIndex].text !== "]]"))
+            wordIndex += 1;
+          if (wordIndex === words.length) {
+            ok = false;
+            break;
+          }
+        } else if (!SHELL_KEYWORDS.has(word.text) && word.text !== "]]") break;
+        wordIndex += 1;
+      }
+      if (!ok) break;
+      let commandLimit = wordIndex;
+      while (commandLimit < words.length && !quote(words[commandLimit])) commandLimit += 1;
+      for (let command of heredocCommandLists(
+        firstPass ? words.slice(wordIndex) : words.slice(wordIndex, commandLimit),
+        options,
+      ))
+        if (command.program.quoted || !SHELL_BLOCK_CLOSERS.has(command.program.text)) {
+          afterConditional.push(command);
+          commands.push({
+            ...command,
+            redirects,
+            piped,
+            ...(heredoc !== undefined && {
+              heredoc,
+            }),
+          });
+        }
+      conditionalAt = commandLimit < words.length ? commandLimit : -1;
+    }
+    let currentToken = tokens[index];
+    let allCommands = [...commandList, ...afterConditional];
+    let found = (options.commandAfterConditional === false ? commandList.slice(0, 1) : allCommands).find(
+      (command) => !command.program.quoted && LOOP_WORD_RE.test(command.program.text),
+    );
+    let quoteLimit = found === undefined ? 0 : quote_2(found.args);
+    if (
+      options.shortLoopLists !== false &&
+      currentToken?.kind === "op" &&
+      currentToken.op === "(" &&
+      found !== undefined &&
+      !found.program.quoted &&
+      LOOP_WORD_RE.test(found.program.text) &&
+      found.args.length > 0 &&
+      found.args.every(
+        (arg, argIndex) =>
+          argIndex === 0 || arg.quoted || argIndex > quoteLimit || !SHELL_KEYWORDS.has(arg.text),
+      )
+    ) {
+      let hasLoopWord = quoteLimit < found.args.length;
+      let loopWords = [];
+      for (let tokenIndex = index + 1; tokenIndex < tokens.length; tokenIndex += 1) {
+        let nextToken = tokens[tokenIndex];
+        if (nextToken.kind === "word") loopWords.push(nextToken.word);
+        else if (nextToken.kind === "op" && nextToken.op === ")") {
+          let afterToken = tokens[tokenIndex + 1];
+          if (
+            hasLoopWord &&
+            afterToken !== undefined &&
+            !(
+              afterToken.kind === "op" &&
+              (afterToken.op === ";" ||
+                afterToken.op ===
+                  `
+`)
+            )
+          ) {
+            splitReason ??=
+              "more text after a parenthesized group in a loop's 'in' list, which this reading does not follow: in zsh the group is part of a longer file pattern";
+            break;
+          }
+          for (let command of allCommands)
+            if (command.program === found.program) command.args.push(...loopWords);
+          break;
+        } else if (nextToken.kind === "op" && nextToken.op === "(") {
+          splitReason ??=
+            "a second parenthesis inside a loop's parenthesized word list, which this reading does not follow: in zsh it can be part of a file pattern or a substitution that runs a command";
+          break;
+        } else if (
+          nextToken.kind !== "op" ||
+          (nextToken.op !== ";" &&
+            nextToken.op !==
+              `
+`)
+        ) {
+          splitReason ??=
+            "a redirection or an operator inside a loop's parenthesized word list, which this reading does not follow: to zsh '(a|b)' and '<1-9>' there are patterns that match files";
+          break;
+        }
+      }
+    }
+    let [first, ...rest] = commandList;
     let command =
       first ??
       (redirects.length > 0 || heredoc !== undefined
@@ -392,9 +512,10 @@ function splitPipeline(tokens, options, commands) {
         }),
       });
   }
+  return splitReason;
 }
-//@ chunk-mthxbav8.js:54329-56016 placement
-function collectHeredocBodies(words, options, rules) {
+//@ chunk-4z1ntdgk.js:56941-58723 placement
+function collectHeredocBodies(words, options, rules, commandAfterConditional) {
   let kept = [];
   let userFill;
   let sawWrapper = false;
@@ -404,7 +525,13 @@ function collectHeredocBodies(words, options, rules) {
     while (index < words.length) {
       let word = words[index];
       if (ASSIGNMENT_WORD_RE.test(joinLineContinuations(word.raw))) kept.push(word);
-      else if (!(!word.quoted && SHELL_KEYWORDS.has(word.text))) break;
+      else if (commandAfterConditional && REPEAT_PREFIX_WORDS.has(word.text)) {
+        kept.push(word);
+        if (word.text === "repeat" && words[index + 1] !== undefined) {
+          index += 1;
+          kept.push(words[index]);
+        }
+      } else if (!(!word.quoted && SHELL_KEYWORDS.has(word.text))) break;
       index += 1;
     }
     let word = words[index];
@@ -530,23 +657,31 @@ function collectHeredocBodies(words, options, rules) {
     }
   }
 }
-//@ chunk-mthxbav8.js:56016-56200 placement
-function collectAllHeredocCommands(words, options) {
-  return PATH_ARG_RULESET.flatMap((rules) => {
-    let heredocBodies = collectHeredocBodies(words, options, rules);
-    return heredocBodies === undefined ? [] : [heredocBodies];
-  }).filter(
-    (command, commandIndex, all) =>
-      all.findIndex(
-        (other) => other.program.raw === command.program.raw && other.args.length === command.args.length,
-      ) === commandIndex,
-  );
+//@ chunk-4z1ntdgk.js:58723-58997 layout
+function heredocCommandLists(words, options) {
+  return (
+    options.commandAfterConditional !== false && words.some((word) => REPEAT_PREFIX_WORDS.has(word.text))
+      ? [false, true]
+      : [false]
+  )
+    .flatMap((commandAfterConditional) =>
+      PATH_ARG_RULESET.flatMap((rules) => {
+        let heredocBodies = collectHeredocBodies(words, options, rules, commandAfterConditional);
+        return heredocBodies === undefined ? [] : [heredocBodies];
+      }),
+    )
+    .filter(
+      (body, bodyIndex, matchIndex) =>
+        matchIndex.findIndex(
+          (entry) => entry.program.raw === body.program.raw && entry.args.length === body.args.length,
+        ) === bodyIndex,
+    );
 }
-//@ chunk-mthxbav8.js:56200-56231 placement
-function parseShellWords(words) {
-  return collectAllHeredocCommands(words, {});
+//@ chunk-4z1ntdgk.js:58997-59032 placement
+function parseShellWords(words, options = {}) {
+  return heredocCommandLists(words, options);
 }
-//@ chunk-mthxbav8.js:56231-69518 placement
+//@ chunk-4z1ntdgk.js:59032-72319 placement
 /**
  * 简化的 shell 词法/语法读取器：切分命令、引号、替换、heredoc，记录无法解析的位置。
  */
@@ -1387,7 +1522,7 @@ class ShellReader {
     return low < offsets.length ? offsets[low] : -1;
   }
 }
-//@ chunk-mthxbav8.js:69518-69753 placement
+//@ chunk-4z1ntdgk.js:72319-72554 placement
 function findArithmeticClose(text, start) {
   let min = Math.min(text.length, start + 4096);
   let index = start;
@@ -1408,7 +1543,7 @@ function findArithmeticClose(text, start) {
   }
   return -1;
 }
-//@ chunk-mthxbav8.js:69753-71241 placement
+//@ chunk-4z1ntdgk.js:72554-74042 placement
 /**
  * 会影响工具行为的敏感环境变量名单（编辑器、分页器、预加载、Go/Rust/JVM 相关），以及其前缀/精确名匹配正则。
  */
@@ -1417,7 +1552,7 @@ var TOOL_ENV_PREFIX_RE;
 var NULL_COMMAND_ENV_VARS;
 var TOOL_ENV_EXACT_RE;
 var SCRIPT_PATH_RE;
-deferInit("chunk-mthxbav8.js:69753", () => {
+deferInit("chunk-4z1ntdgk.js:72554", () => {
   TOOL_ENV_VARS = new Set([
     "DEVELOPER_DIR",
     "MAKEFILES",
@@ -1491,7 +1626,7 @@ deferInit("chunk-mthxbav8.js:69753", () => {
   SCRIPT_PATH_RE =
     /^(?!-)(?:[^\s]*\/[^\s]*|[^\s\/]+\.(?:sh|bash|zsh|fish|py|rb|pl|js|mjs|cjs|ts|php|lua|R|r|ps1|awk|tcl|exs?|jl))$/;
 });
-//@ chunk-mthxbav8.js:71241-71301 placement
+//@ chunk-4z1ntdgk.js:74042-74102 placement
 function isToolEnvVar(name, nullCommandHeld) {
   return (
     TOOL_ENV_VARS.has(name) ||
@@ -1499,11 +1634,11 @@ function isToolEnvVar(name, nullCommandHeld) {
     (nullCommandHeld && NULL_COMMAND_ENV_VARS.has(name))
   );
 }
-//@ chunk-mthxbav8.js:71301-71402 placement
+//@ chunk-4z1ntdgk.js:74102-74203 placement
 function splitQuotedWords(text) {
   return (text.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? []).map((word) => word.replace(/["']/g, ""));
 }
-//@ chunk-mthxbav8.js:71402-71665 placement
+//@ chunk-4z1ntdgk.js:74203-74466 placement
 function pathPrefixes(path, home) {
   let replaced = path.replace(/\/+$/, "");
   if (!replaced.startsWith("/") || replaced === "") return [];
@@ -1516,7 +1651,7 @@ function pathPrefixes(path, home) {
     ? [replaced]
     : [replaced, `~${tail}`, `$HOME${tail}`, `$HOME"${tail}`, `\${HOME}${tail}`, `\${HOME}"${tail}`];
 }
-//@ chunk-mthxbav8.js:71665-74438 placement
+//@ chunk-4z1ntdgk.js:74466-77447 placement
 /**
  * 均依赖 cwd 的命令模式（相对路径、process.cwd()、pwd、git rev-parse --show-toplevel 等），以及 shell 名、脚本解释器、构建工具与解释器取值选项表。
  */
@@ -1524,6 +1659,9 @@ var CWD_DEPENDENCE_PATTERN; // deferred: has load-time effects after a deferred 
 var PWD_REFERENCE_RE;
 var HISTCHARS_RE;
 var SHELL_NAME_RE;
+var CSH_SHELL_RE;
+var CSH_IN_TEXT_RE;
+var SHELL_SET_TO_CSH_RE;
 var SHELL_PROGRAMS;
 var SCRIPT_INTERPRETERS;
 var EXTENSION_INTERPRETERS;
@@ -1531,13 +1669,17 @@ var BUILD_TOOL_PROGRAMS;
 var VERSION_OR_HELP_FLAG_RE;
 var BUILD_SUBCOMMANDS;
 var INTERPRETER_EVAL_FLAGS;
-deferInit("chunk-mthxbav8.js:71665", () => {
+deferInit("chunk-4z1ntdgk.js:74466", () => {
   CWD_DEPENDENCE_PATTERN =
     /(?:^|[\s"'=(`:;&|<>])\.\.?\/|\bprocess\.cwd\(\)|\bos\.getcwd\(\)|\bPath\.cwd\(\)|\bDir\.pwd\b|\bgit\b[^\n]{0,12}\brev-parse\b[^\n]{0,6}--show-toplevel\b/im;
   PWD_REFERENCE_RE = /\$PWD\b|\$\{PWD\b|\$\(pwd(?:[ \t]+-[LP])?\)|`pwd`/im;
   HISTCHARS_RE = /histchars|HISTCHARS/;
   SHELL_NAME_RE =
     /^(?:bash|sh|zsh|dash|ash|(?:pd|lo|o|m|r)?ksh[0-9]*|rbash|fish|csh|tcsh|yash|posh|[oy]sh)$/i;
+  CSH_SHELL_RE = /^(?:t?csh|bsd-csh)$/;
+  CSH_IN_TEXT_RE =
+    /(?=(?:t?csh|bsd-csh)(?![\w.-]))(?:(?<![\w.-])|(?<=\$\{[^}\n]{1,128}[-=+?])|(?<=(?<![\w.])-[a-zA-Z]{0,64}[sc]))/i;
+  SHELL_SET_TO_CSH_RE = /^SHELL(?:\+=|=(?:.*\/)?(?:[tT]?|[bB][sS][dD]-)[cC][sS][hH]$)/;
   SHELL_PROGRAMS = new Set([
     "bash",
     "sh",
@@ -1763,7 +1905,7 @@ deferInit("chunk-mthxbav8.js:71665", () => {
     "ts-node": new Set(["-e", "--eval", "-r", "--require", "-P", "--project", "-O", "--compilerOptions"]),
   };
 });
-//@ chunk-mthxbav8.js:74438-74899 placement
+//@ chunk-4z1ntdgk.js:77447-77908 placement
 function isEvalFlag(interpreterName, text) {
   switch (interpreterName) {
     case "node":
@@ -1790,34 +1932,37 @@ function isEvalFlag(interpreterName, text) {
       return false;
   }
 }
-//@ chunk-mthxbav8.js:74899-74998 placement
+//@ chunk-4z1ntdgk.js:77908-78094 placement
 /**
  * Python/其它脚本中 import/exec/eval 相关正则。
  */
 var PYTHON_IMPORT_PATTERN = /\bimport\b|__import__/;
 var EXEC_OR_EVAL_RE = /\bexec(?:file)?\b|\beval\b/;
 var IMPORT_OR_EXEC_RE = /\bimport\b|__import__|\bexec\b/;
-//@ chunk-mthxbav8.js:74998-75077 placement
-function commandBaseName(program) {
-  let text = program.text;
+var PREFIX_WRAPPER_RE = /^(?:noglob|nocorrect|repeat|-)$/;
+var DISABLE_OR_ENABLE_RE = /disable|enable/i;
+var QUOTE_OR_CONTINUATION_RE = /\$(?=['"])|\\\n|['"\\]/g;
+//@ chunk-4z1ntdgk.js:78094-78173 placement
+function commandBaseName(word) {
+  let text = word.text;
   return text.slice(text.lastIndexOf("/") + 1).toLowerCase();
 }
-//@ chunk-mthxbav8.js:75077-75187 placement
+//@ chunk-4z1ntdgk.js:78173-78283 placement
 function normalizeInterpreterName(name) {
   return name.replace(/^(python|pypy|perl|ruby|php|lua|node|nodejs|ksh|tclsh|wish)[0-9.]+t?$/, "$1");
 }
-//@ chunk-mthxbav8.js:75187-75243 placement
+//@ chunk-4z1ntdgk.js:78283-78339 placement
 function isKnownInterpreter(name) {
   return SHELL_PROGRAMS.has(name) || SCRIPT_INTERPRETERS.has(name) || INTERPRETER_NAME_PATTERN.test(name);
 }
-//@ chunk-mthxbav8.js:75243-75306 placement
+//@ chunk-4z1ntdgk.js:78339-78402 placement
 /**
  * 绝对路径/疑似绝对路径/以 ~ 或 $ 开头的路径前缀正则。
  */
 var ABSOLUTE_PATH_PATTERN = /^[\/$]|^~(?=\/|$)/;
 var ABSOLUTE_LIKE_PATH_RE = /^[\/$]|^~(?![+-])/;
 var PATH_PREFIX_CHARS_RE = /^[\/~$]/;
-//@ chunk-mthxbav8.js:75306-75374 placement
+//@ chunk-4z1ntdgk.js:78402-78470 placement
 function isAbsoluteLike(text, extraPattern = ABSOLUTE_LIKE_PATH_RE) {
   return (
     ABSOLUTE_PATH_PATTERN.test(text) ||
@@ -1827,21 +1972,123 @@ function isAbsoluteLike(text, extraPattern = ABSOLUTE_LIKE_PATH_RE) {
       }))
   );
 }
-//@ chunk-mthxbav8.js:75374-75431 placement
-function isPathWord(word) {
-  return isAbsoluteLike(word.text) || /^[<>]\(/.test(word.text);
+//@ chunk-4z1ntdgk.js:78470-78870 layout
+var LEADING_EMPTY_QUOTES_RE = /^(?:''|""|\$''|\$"")+/;
+var UNQUOTED_VARIABLE_START_RE = /^(?:\$?")?\$(?=[\w{(\[@*#?!$-])/;
+var BRACED_DEFAULT_EXPANSION_RE = /^(\$?")?\$\{(?:!?\w+(?:\[[^\]]*\])?|[@*#?$!-]):?[-=+](.*)$/s;
+var TILDE_START_RE = /^~(?:\/|\}|$)/;
+var SPECIAL_PARAMETER_START_RE = /^(?:\$?")?\$(?:[#?$-]|[0-9@*!]"?(?:""|'')*(?!$|[\/}"]))/;
+var VARIABLE_WITH_SUFFIX_RE =
+  /^(?:\$?")?\$([A-Za-z_]\w*)((?:["'\\]|\$["'0-9@*#?$!-]|\$[A-Za-z_]\w*(?!\w)|\$\[[^\]]*\]|\$\{[^{}]*(?:\$\{[^{}]*\}[^{}]*)*\}|\$\([^()]*(?:\([^()]*\)[^()]*)*\)|`(?:[^`\\]|\\.)*`)+\w)?/;
+//@ chunk-4z1ntdgk.js:78870-79031 layout
+function variableReferenceHasSuffix(text, text_2) {
+  let match = VARIABLE_WITH_SUFFIX_RE.exec(text);
+  if (match === null) return false;
+  let variable = text_2 === undefined ? null : /^\$([A-Za-z_]\w*)/.exec(text_2);
+  return match[2] !== undefined || (variable !== null && match[1].length < variable[1].length);
 }
-//@ chunk-mthxbav8.js:75431-75510 placement
+//@ chunk-4z1ntdgk.js:79031-79291 layout
+function isBracedExpansionPathLike(text, startsWithPrefix) {
+  let match = BRACED_DEFAULT_EXPANSION_RE.exec(text);
+  if (match === null || match[2].startsWith("}")) return false;
+  let singleQuoted = match[1] === undefined;
+  let text_2 = match[2].replace(singleQuoted ? LEADING_EMPTY_QUOTES_RE : /^(?:"")+/, "");
+  return !(
+    /^"?[\/`]/.test(text_2) ||
+    (UNQUOTED_VARIABLE_START_RE.test(text_2) &&
+      !variableReferenceHasSuffix(text_2) &&
+      !SPECIAL_PARAMETER_START_RE.test(text_2)) ||
+    (singleQuoted && /^(?:['\\]|\$['"])\//.test(text_2)) ||
+    (singleQuoted && TILDE_START_RE.test(match[2])) ||
+    (startsWithPrefix && TILDE_START_RE.test(text_2))
+  );
+}
+//@ chunk-4z1ntdgk.js:79291-79608 layout
+function isTildeOrDollarWordChanged(word, allowTilde = false) {
+  let firstChar = word.text[0];
+  if (firstChar !== "~" && firstChar !== "$" && firstChar !== "<" && firstChar !== ">") return false;
+  let raw = joinLineContinuations(word.raw);
+  let text = raw.replace(LEADING_EMPTY_QUOTES_RE, "");
+  return (
+    (firstChar === "~"
+      ? /^(?:~|["'\\]|\$['"])/.test(raw) && firstLineOf(raw, "/") !== firstLineOf(word.text, "/")
+      : firstChar === "$"
+        ? /^(?:\$?["'])?\\?\$/.test(text) &&
+          (!UNQUOTED_VARIABLE_START_RE.test(text) ||
+            variableReferenceHasSuffix(text, word.text) ||
+            SPECIAL_PARAMETER_START_RE.test(text) ||
+            isBracedExpansionPathLike(text, allowTilde))
+        : !/^[<>]\(/.test(text)) &&
+    readFlagWithOverride(TENGU_COMPOSED_KITE, {
+      safe: true,
+    })
+  );
+}
+//@ chunk-4z1ntdgk.js:79608-80094 layout
+function attachedPathWord(word, path) {
+  let literalWord = path.startsWith("~")
+    ? {
+        ...word,
+        text: path,
+        raw: "\\" + path,
+      }
+    : {
+        ...word,
+        text: path,
+      };
+  let sliced = word.text.slice(0, word.text.length - path.length);
+  let raw = joinLineContinuations(word.raw);
+  let quoteChar = "";
+  let rawIndex = 0;
+  let textIndex = 0;
+  while (textIndex < sliced.length && rawIndex < raw.length) {
+    let rawChar = raw[rawIndex];
+    if (quoteChar === "") {
+      if (rawChar === "'" || rawChar === '"') {
+        quoteChar = rawChar;
+        rawIndex += 1;
+        continue;
+      }
+      if (rawChar === "\\") rawIndex += 1;
+    } else if (rawChar === quoteChar) {
+      quoteChar = "";
+      rawIndex += 1;
+      continue;
+    } else if (quoteChar === '"' && rawChar === "\\" && /[$`"\\]/.test(raw[rawIndex + 1] ?? ""))
+      rawIndex += 1;
+    if (raw[rawIndex] !== sliced[textIndex]) return literalWord;
+    rawIndex += 1;
+    textIndex += 1;
+  }
+  if (textIndex < sliced.length) return literalWord;
+  let sliced_2 = raw.slice(rawIndex);
+  let raw_2 = quoteChar === "" && sliced_2.startsWith("~") ? "\\" + sliced_2 : quoteChar + sliced_2;
+  return {
+    ...word,
+    text: path,
+    raw: raw_2,
+  };
+}
+//@ chunk-4z1ntdgk.js:80094-80160 placement
+function isPathWord(word) {
+  return (isAbsoluteLike(word.text) || /^[<>]\(/.test(word.text)) && !isTildeOrDollarWordChanged(word);
+}
+//@ chunk-4z1ntdgk.js:80160-80239 placement
 function isPlainArgument(word) {
   return word !== undefined && word.text !== "" && !isPathWord(word) && !word.text.startsWith("-");
 }
 export {
   commandBaseName,
+  SHELL_SET_TO_CSH_RE,
+  isTildeOrDollarWordChanged,
   isPlainArgument,
   isLauncherCommand,
   isAnchoredPath,
   normalizeInterpreterName,
   isPathWord,
+  CSH_SHELL_RE,
+  LOOP_WORD_RE,
+  ALNUM_NAME_RE,
   BUILD_TOOL_PROGRAMS,
   VERSION_OR_HELP_FLAG_RE,
   SHELL_PROGRAMS,
@@ -1850,11 +2097,16 @@ export {
   isAbsoluteLike,
   PATH_PREFIX_CHARS_RE,
   EXTENSION_INTERPRETERS,
+  SHELL_NAME_RE,
+  PREFIX_WRAPPER_RE,
+  DISABLE_OR_ENABLE_RE,
+  QUOTE_OR_CONTINUATION_RE,
   parseShellWords,
   BUILD_SUBCOMMANDS,
   isEvalFlag,
   parseShellCommands,
   INTERPRETER_EVAL_FLAGS,
+  attachedPathWord,
   splitQuotedWords,
   isToolEnvVar,
   TOOL_ENV_EXACT_RE,
@@ -1862,10 +2114,10 @@ export {
   EXEC_OR_EVAL_RE,
   IMPORT_OR_EXEC_RE,
   PYTHON_IMPORT_PATTERN,
-  SHELL_NAME_RE,
   pathPrefixes,
   CWD_DEPENDENCE_PATTERN,
   PWD_REFERENCE_RE,
   HISTCHARS_RE,
+  CSH_IN_TEXT_RE,
   shellComments,
 };

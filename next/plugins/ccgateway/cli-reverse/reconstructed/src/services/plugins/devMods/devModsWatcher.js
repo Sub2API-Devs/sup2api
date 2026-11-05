@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：dev mods 目录监视与热重载
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-zhrgwca4.js (36)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c3nwd9gm.js (36)
  * attribution: placement 36
  */
 import { utimes, mkdir } from "fs/promises";
@@ -46,11 +46,11 @@ import {
 import {
   pluginDirSlot,
   pluginDirWatchSlot,
-  reportPluginProblem,
   uiLog,
+  reportPluginProblem,
   pluginDirsOverride,
 } from "../../../plugins/functionHooks/hooksWorkerClient.js";
-import { MODS, describeModPresence } from "../../../plugins/functionHooks/devModsNotices.js";
+import { MODS, loadFailedLine, describeModPresence } from "../../../plugins/functionHooks/devModsNotices.js";
 import { describeReloadFailure, describeDirChanges } from "../../../plugins/functionHooks/devModsStatus.js";
 import { loadAllPluginsCacheOnly } from "../../../utils/plugins/pluginLoader.js";
 import { reloadControllerSlot, pendingReloadSlot } from "../../../plugins/functionHooks/pluginLifecycle.js";
@@ -62,8 +62,14 @@ import {
   getCurrentSessionDevModsFolder,
   isSessionFileAt,
 } from "../../../utils/sessionStorage.js";
+import { getPluginRegistry } from "../../../utils/plugins/pluginLoadState.js";
+import {
+  areBuiltinOnlyHooksModules,
+  shouldHoldPersonalModuleHooks,
+} from "../../../utils/hooks/hookPolicyHold.js";
+import { describeHooksModulesOffReason } from "../../../utils/plugins/hooksModulesRollout.js";
 import { hookNoticeTask, TASK_NOTICE_IS_META } from "../../../plugins/functionHooks/hooksWorkerHost.js";
-import { removeQueuedByFilter, enqueuePendingNotification } from "../../../utils/messageQueueManager.js";
+import { removeByFilter, enqueuePendingNotification } from "../../../utils/messageQueueManager.js";
 import { chokidar_default } from "../../../../vendor/chokidar/index.js";
 import { canAskForConsent, requestDevModsConsent, devModsFolderFor } from "./devModsConsent.js";
 import { CONSENT_DIALOG_DELAY_MS, devModsDialogNamespace } from "./DevModsConsentDialog.js";
@@ -71,7 +77,7 @@ import { registerCleanup } from "../../../utils/cleanupRegistry.js";
 import { isNotDotPrefixed } from "../../../utils/plugins/pluginManifestRead.js";
 import { PLUGIN_MANIFEST_PATH } from "../../../utils/plugins/commandSource.js";
 
-//@ chunk-zhrgwca4.js:3625-4128 placement
+//@ chunk-c3nwd9gm.js:4831-5334 placement
 var DEV_MODS_REFUSAL_CHECKS = [
   {
     refusal: "diskless",
@@ -114,14 +120,14 @@ var DEV_MODS_REFUSAL_CHECKS = [
     isRefused: () => !isProjectScopeTrustAccepted(),
   },
 ];
-//@ chunk-zhrgwca4.js:4128-4185 placement
+//@ chunk-c3nwd9gm.js:5334-5391 placement
 /**
  * 取当前生效的拒绝原因（没有返回 undefined）。
  */
 function currentRefusal() {
   return DEV_MODS_REFUSAL_CHECKS.find((refusalCheck) => refusalCheck.isRefused())?.refusal;
 }
-//@ chunk-zhrgwca4.js:4185-4306 placement
+//@ chunk-c3nwd9gm.js:5391-5512 placement
 function devModsOffReason() {
   let refusal = currentRefusal();
   if (refusal !== undefined) {
@@ -130,12 +136,12 @@ function devModsOffReason() {
   }
   return refusal;
 }
-//@ chunk-zhrgwca4.js:4343-4352 placement
+//@ chunk-c3nwd9gm.js:5549-5558 placement
 /**
  * 同一轮最多重载次数（3）。
  */
 var MAX_RELOADS = 3;
-//@ chunk-zhrgwca4.js:4352-6491 placement
+//@ chunk-c3nwd9gm.js:5558-7709 placement
 /**
  * 跟踪 dev mods 目录变化并决定何时热重载、何时报告加载/拒绝结果。
  */
@@ -336,12 +342,12 @@ function createDevModsReloadTracker(folder, host) {
     dispose,
   };
 }
-//@ chunk-zhrgwca4.js:6491-6551 placement
+//@ chunk-c3nwd9gm.js:7709-7752 placement
 /**
  * 本轮结束后才加载的提示。
  */
-var DEFERRED_NOTICE = "This session's mods will load once this turn ends.";
-//@ chunk-zhrgwca4.js:6551-6828 placement
+var DEFERRED_NOTICE = "They'll load when this turn ends.";
+//@ chunk-c3nwd9gm.js:7752-8029 placement
 function markDevModsWatchState(folder, outcome) {
   let state = skillWatchStateByHost.get();
   if (state?.stage !== "watching" || state.folder !== folder) return;
@@ -366,14 +372,14 @@ function markDevModsWatchState(folder, outcome) {
       return;
   }
 }
-//@ chunk-zhrgwca4.js:6866-6977 placement
+//@ chunk-c3nwd9gm.js:8067-8178 placement
 async function touchPath(filePath) {
   let date = new Date();
   await utimes(filePath, date, date).catch((error) =>
     logForDebugging(`dev mods: ${filePath} keeps its old time: ${errorMessage(error)}`),
   );
 }
-//@ chunk-zhrgwca4.js:6977-7180 placement
+//@ chunk-c3nwd9gm.js:8178-8381 placement
 function installTurnEndTouch() {
   if (skillWatchStateResetSlot.get() !== undefined) return;
   skillWatchStateResetSlot.set(
@@ -389,17 +395,18 @@ function installTurnEndTouch() {
     }),
   );
 }
-//@ chunk-zhrgwca4.js:7213-7395 placement
+//@ chunk-c3nwd9gm.js:8414-8642 placement
 function reportDevModsFailure(folder, error, reasonCode) {
   let phase = reasonCode === "enable_failed" ? "enabling" : "loading";
-  reportPluginProblem(MODS, describeReloadFailure(basename(folder), error));
+  if (reasonCode === "enable_failed") uiLog(MODS, loadFailedLine(errorMessage(error)));
+  else reportPluginProblem(MODS, describeReloadFailure(basename(folder), error));
   logFeatureBad("plugin_dev_mods", reasonCode);
   logForDebugging(`dev mods: ${phase} ${folder} failed: ${errorMessage(error)}`, {
     level: "error",
   });
   return "failed";
 }
-//@ chunk-zhrgwca4.js:7395-7506 placement
+//@ chunk-c3nwd9gm.js:8642-8753 placement
 function emptyReloadResult(root, outcome, changes) {
   return {
     root,
@@ -410,7 +417,7 @@ function emptyReloadResult(root, outcome, changes) {
     outcome,
   };
 }
-//@ chunk-zhrgwca4.js:7506-7825 placement
+//@ chunk-c3nwd9gm.js:8753-9072 placement
 async function reloadDevModsPlugins(root, outcome, options) {
   let present = (await listDirChildren(root)) ?? [];
   let pluginRegistry =
@@ -432,7 +439,7 @@ async function reloadDevModsPlugins(root, outcome, options) {
   ))
     uiLog(change.plugin, change.text);
 }
-//@ chunk-zhrgwca4.js:7825-8043 placement
+//@ chunk-c3nwd9gm.js:9072-9290 placement
 async function notifyDevModsReload(folder, load) {
   let toolContext = currentSurfaceBinding()?.toolContext(new AbortController());
   await reloadDevModsPlugins(folder, load, {
@@ -444,7 +451,7 @@ async function notifyDevModsReload(folder, load) {
     }),
   );
 }
-//@ chunk-zhrgwca4.js:8043-8659 placement
+//@ chunk-c3nwd9gm.js:9290-9995 placement
 async function joinDevModsPluginDir(folder) {
   try {
     await pendingReloadSlot.get()?.joinPluginDir(folder);
@@ -477,14 +484,23 @@ async function joinDevModsPluginDir(folder) {
     let toolContext = currentSurfaceBinding()?.toolContext(new AbortController());
     saveDevModsFolder(folder, toolContext?.storageV5);
     let load = await reloadBoundPlugins();
+    let registry = getPluginRegistry();
+    let enableResult =
+      load === "reloaded" && (areBuiltinOnlyHooksModules(registry) || shouldHoldPersonalModuleHooks(registry))
+        ? {
+            kind: "enabled",
+            load: "kept-out",
+            cause: describeHooksModulesOffReason(),
+          }
+        : {
+            kind: "enabled",
+            load,
+          };
     await notifyDevModsReload(folder, load);
     logFeatureOk("plugin_dev_mods", {
       enabled: true,
     });
-    return {
-      kind: "enabled",
-      load,
-    };
+    return enableResult;
   } catch (error) {
     return {
       kind: "enabled",
@@ -492,24 +508,26 @@ async function joinDevModsPluginDir(folder) {
     };
   }
 }
-//@ chunk-zhrgwca4.js:8659-9460 placement
-function devModsLoadedNotice(folder, load) {
-  switch (load) {
+//@ chunk-c3nwd9gm.js:9995-11210 placement
+function devModsLoadedNotice(folder, outcome) {
+  switch (outcome.load) {
     case "reloaded":
       return `The person enabled mod hot-reloading for this session and the mods under ${folder} loaded: they load and reload by themselves as their files change; the transcript names any mod that failed.`;
     case "held":
       return `The person enabled mod hot-reloading for this session, but the mods under ${folder} wait for /reload-plugins (the load would rewrite the prompt cache): they are NOT loaded yet.`;
+    case "kept-out":
+      return `The person enabled mod hot-reloading for this session, but the hooks modules of the mods under ${folder} had NOT loaded when this notice was written. They count as a person's hooks modules, not an organization's. The reason: ${outcome.cause}. You get no further notice about them, so do not say they are running, and /reload-plugins does not load them sooner. A mod with no hooks module did load.`;
     case "unbound":
       return `The person enabled mod hot-reloading for this session, but the mods under ${folder} did not load (this session cannot reload its plugins; only a restart loads them).`;
     case "failed":
       return `The person enabled mod hot-reloading for this session, but the mods under ${folder} did not load (the load failed; the transcript says why, and /reload-plugins tries again).`;
   }
 }
-//@ chunk-zhrgwca4.js:9460-10252 placement
+//@ chunk-c3nwd9gm.js:11210-11997 placement
 function devModsOutcomeNotice(folder, outcome) {
   switch (outcome.kind) {
     case "enabled":
-      return devModsLoadedNotice(folder, outcome.load);
+      return devModsLoadedNotice(folder, outcome);
     case "declined":
       return `The person declined mod hot-reloading: what this run wrote under ${folder} is written but NOT loaded (a mod that loaded when the session started keeps running as it loaded). Do not say the change is running. It loads the next time this session starts (/reload-plugins reloads only a mod that loaded at the start); the person can ask again.`;
     case "unanswered":
@@ -518,23 +536,23 @@ function devModsOutcomeNotice(folder, outcome) {
       return `Mod hot-reloading is off in this session (${outcome.reason}): mods under ${folder} are not loaded.`;
   }
 }
-//@ chunk-zhrgwca4.js:10252-10279 placement
+//@ chunk-c3nwd9gm.js:11997-12024 placement
 /**
  * 生成结果提示。
  */
 var noticeFor = (folder, outcome) => hookNoticeTask(devModsOutcomeNotice(folder, outcome));
-//@ chunk-zhrgwca4.js:10279-10305 placement
+//@ chunk-c3nwd9gm.js:12024-12050 placement
 /**
  * 表示“未回答”的结果对象。
  */
 var UNANSWERED_OUTCOME = {
   kind: "unanswered",
 };
-//@ chunk-zhrgwca4.js:10305-10527 placement
+//@ chunk-c3nwd9gm.js:12050-12272 placement
 function enqueueDevModsNotice(folder, outcome, timing = "wake") {
   let isEnabled = outcome.kind === "enabled";
   let isActive = isEnabled && timing === "wake";
-  if (isEnabled) removeQueuedByFilter((notice) => notice.value === noticeFor(folder, UNANSWERED_OUTCOME));
+  if (isEnabled) removeByFilter((notice) => notice.value === noticeFor(folder, UNANSWERED_OUTCOME));
   enqueuePendingNotification({
     agentId: mainAgentId(),
     value: noticeFor(folder, outcome),
@@ -547,9 +565,9 @@ function enqueueDevModsNotice(folder, outcome, timing = "wake") {
     priority: "next",
   });
 }
-//@ chunk-zhrgwca4.js:10527-10559 placement
+//@ chunk-c3nwd9gm.js:12272-12304 placement
 var NO_ONE_TO_ASK_TEXT = "nobody could be asked";
-//@ chunk-zhrgwca4.js:10559-10637 placement
+//@ chunk-c3nwd9gm.js:12304-12382 placement
 /**
  * 记录并提示“无人可问”。
  */
@@ -561,12 +579,12 @@ function markNoOneToAsk(folder) {
     reason: NO_ONE_TO_ASK_TEXT,
   });
 }
-//@ chunk-zhrgwca4.js:10637-10683 placement
+//@ chunk-c3nwd9gm.js:12382-12428 placement
 /**
  * 连续三次未选择时的说明。
  */
 var NO_PICK_TIMES_TEXT = "the question got no pick three times";
-//@ chunk-zhrgwca4.js:10683-11295 placement
+//@ chunk-c3nwd9gm.js:12428-13040 placement
 var DEV_MODS_REFUSAL_TEXT = {
   hooks_modules_off: "hooks modules are switched off in this process",
   all_hooks_disabled: "the organization disables all hooks",
@@ -579,7 +597,7 @@ var DEV_MODS_REFUSAL_TEXT = {
   bare_mode: "the session runs in bare mode",
   untrusted: "the workspace is not trusted",
 };
-//@ chunk-zhrgwca4.js:11295-11504 placement
+//@ chunk-c3nwd9gm.js:13040-13249 placement
 function devModsStateFor(outcome, refusal) {
   switch (outcome) {
     case "enabled":
@@ -602,7 +620,7 @@ function devModsStateFor(outcome, refusal) {
       };
   }
 }
-//@ chunk-zhrgwca4.js:11504-11591 placement
+//@ chunk-c3nwd9gm.js:13249-13336 placement
 /**
  * 根据结果发出相应提示。
  */
@@ -611,7 +629,7 @@ function reportOutcome(folder, outcome) {
   if (outcome === "no_one_to_ask") markNoOneToAsk(folder);
   else if (state !== undefined) enqueueDevModsNotice(folder, state);
 }
-//@ chunk-zhrgwca4.js:11591-11976 placement
+//@ chunk-c3nwd9gm.js:13336-13721 placement
 function watchDevModsFolder(folder, onChange) {
   let watcher = chokidar_default.watch(folder, {
     persistent: true,
@@ -638,7 +656,7 @@ function watchDevModsFolder(folder, onChange) {
     close: () => watcher.close(),
   };
 }
-//@ chunk-zhrgwca4.js:11976-12836 placement
+//@ chunk-c3nwd9gm.js:13721-14581 placement
 /**
  * 在用户希望开启且尚未运行时，检查条件后请求同意并开始监视 dev mods 目录。
  */
@@ -705,7 +723,7 @@ async function startDevModsIfWanted() {
     });
   }
 }
-//@ chunk-zhrgwca4.js:12930-13033 placement
+//@ chunk-c3nwd9gm.js:14675-14778 placement
 function isFileSafe(filePath) {
   try {
     return (
@@ -718,7 +736,7 @@ function isFileSafe(filePath) {
     throw error;
   }
 }
-//@ chunk-zhrgwca4.js:13033-13238 placement
+//@ chunk-c3nwd9gm.js:14778-14983 placement
 function listDevModDirs(folder) {
   try {
     return readdirSync(folder, {
@@ -733,7 +751,7 @@ function listDevModDirs(folder) {
     throw error;
   }
 }
-//@ chunk-zhrgwca4.js:13238-13749 placement
+//@ chunk-c3nwd9gm.js:14983-15494 placement
 async function initDevModsState(folder) {
   try {
     let children = listDevModDirs(folder);
@@ -778,7 +796,7 @@ async function initDevModsState(folder) {
     reportDevModsFailure(folder, error, "load_failed");
   }
 }
-//@ chunk-zhrgwca4.js:13749-14071 placement
+//@ chunk-c3nwd9gm.js:15494-15816 placement
 function resumeDevModsWatching() {
   try {
     let state = skillWatchStateByHost.get();
@@ -806,7 +824,7 @@ function resumeDevModsWatching() {
     });
   }
 }
-//@ chunk-zhrgwca4.js:14071-14466 placement
+//@ chunk-c3nwd9gm.js:15816-16211 placement
 async function switchDevModsFolder() {
   let previousState = skillWatchStateByHost.get();
   let folder = devModsFolderFor(getSessionId());
@@ -831,16 +849,16 @@ async function switchDevModsFolder() {
   }
   return folder;
 }
-//@ chunk-zhrgwca4.js:14466-14498 placement
+//@ chunk-c3nwd9gm.js:16211-16243 placement
 var DEV_MODS_DIR_PLACEHOLDER = "${CLAUDE_DEV_MODS_DIR}";
-//@ chunk-zhrgwca4.js:14498-14640 placement
+//@ chunk-c3nwd9gm.js:16243-16385 placement
 async function expandDevModsPlaceholder(text, options) {
   let { DEV_MODS_PLACEHOLDER } = devModsDialogNamespace;
   if (!text.includes(DEV_MODS_PLACEHOLDER)) return text;
   let folder = options.isPreload ? devModsFolderFor(getSessionId()) : await switchDevModsFolder();
   return text.replaceAll(DEV_MODS_PLACEHOLDER, folder);
 }
-//@ chunk-zhrgwca4.js:14640-14883 placement
+//@ chunk-c3nwd9gm.js:16385-16628 placement
 function resumeDevModsForSession() {
   let folder = devModsFolderFor(getSessionId());
   let state = skillWatchStateByHost.get();
@@ -856,7 +874,7 @@ function resumeDevModsForSession() {
   pluginDirsOverride.set(resumeDevModsWatching);
   resumeDevModsWatching();
 }
-//@ chunk-zhrgwca4.js:14915-15312 placement
+//@ chunk-c3nwd9gm.js:16660-17057 placement
 /**
  * 注册 ${CLAUDE_DEV_MODS_DIR} 占位展开器，并按当前会话 dev mods 目录同步状态。
  */
@@ -896,7 +914,7 @@ function installDevModsPlaceholderExpander() {
 }
 export {
   installDevModsPlaceholderExpander,
+  DEV_MODS_DIR_PLACEHOLDER,
   NO_ONE_TO_ASK_TEXT,
   expandDevModsPlaceholder,
-  DEV_MODS_DIR_PLACEHOLDER,
 };

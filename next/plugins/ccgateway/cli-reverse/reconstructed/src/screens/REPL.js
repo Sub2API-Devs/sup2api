@@ -3,10 +3,10 @@
  *
  * 主交互屏幕：组装会话控制器、消息列表、输入区、对话框、通知与全屏布局；transcript 模式与搜索栏。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/screens/REPL.tsx
- * pieces: chunk-18hwfzwa.js (92)
- * attribution: placement 8, layout 6, fingerprint 4, sole-consumer 70, affinity 1, file-local 1, facade-exports 1, callgraph-witnessed 1
+ * pieces: chunk-czq1j3j2.js (92)
+ * attribution: placement 38, layout 7, fingerprint 4, sole-consumer 39, affinity 1, file-local 1, facade-exports 1, callgraph-witnessed 1
  */
 import { resolve } from "path";
 import { randomUUID } from "crypto";
@@ -114,7 +114,7 @@ import { useNotifications } from "../context/notifications.js";
 import { isFullscreenEnvEnabled } from "../utils/fullscreen.js";
 import { useKeybinding } from "../keybindings/useKeybinding.js";
 import { todoToolsEnabled } from "../utils/sessionKind.js";
-import { count } from "../utils/collections.js";
+import { countWhere } from "../utils/collections.js";
 import { useThirdOverlayKeys } from "../context/overlayContext.js";
 import { useFeedIsWide, FullscreenLayout } from "../components/FullscreenLayout.js";
 import { useDragToScroll } from "../components/ScrollKeybindingHandler.js";
@@ -138,6 +138,7 @@ import { Divider } from "../components/design-system/Divider.js";
 import { truncateStartToWidth } from "../utils/format.js";
 import { diffLineToPlainText } from "../components/diff/diffText.js";
 import { BridgeChannelSlot } from "./repl/bridgeChannelSlot.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
 import {
   setDialogHostUnmounted,
   setBlockingToolProgress,
@@ -174,10 +175,9 @@ import { useMergedClients } from "../components/PromptInput/Notifications.js";
 import {
   runStartupNotificationSpecs,
   useStartupNotifications,
-  STARTUP_NOTIFICATION_SPECS,
 } from "../hooks/notifs/startupNotificationSpecs.js";
 import { FeatureOfTheWeekClaim } from "../components/FeatureOfTheWeekClaim.js";
-import { noopEffect_2 } from "../hooks/notifs/specs/sessionNotices.js";
+import { subscribeCodeModeNotices } from "../hooks/notifs/useNpmDeprecationNotification.js";
 import { refreshApiCreditLinkStatus } from "../components/LogoV2/ApiCreditLinkNotice.js";
 import { ReplSessionScope, runWithQueryParams } from "./repl/ReplSessionScope.js";
 import { invalidateUserContext } from "../context.js";
@@ -185,8 +185,8 @@ import { isWindowsTerminal } from "../ink/clearTerminal.js";
 import { TurnController, useBackgroundQuestionAnswer } from "./repl/TurnController.js";
 import { mergeTaskProgressIntoTranscript } from "../services/AgentSummary/agentSummary.js";
 import { setTranscriptMessages, transcriptMessagesStore, ReplEffects } from "./repl/ReplEffects.js";
-import { useTrustedDeviceEnrolledNotice } from "../hooks/notifs/useNpmDeprecationNotification.js";
 import {
+  useTrustedDeviceEnrolledNotice,
   ComposerChrome,
   isExiting,
   useExitCostReport,
@@ -201,7 +201,11 @@ import { TURN_BOUNDARIES_MODULE_EXPORTS } from "../cli/print/resumeTurnBoundarie
 import { SandboxNetworkPrompts } from "./repl/SandboxNetworkPrompts.js";
 import { applyValidatedPermissionUpdate } from "../utils/permissions/PermissionUpdate.js";
 import { SandboxStartup } from "./repl/SandboxStartup.js";
-import { DATE_RANGE_ORDER } from "../components/Stats.js";
+import {
+  shouldPauseForToolProgress,
+  hasVisibleProgress,
+  InlineProgressList,
+} from "./repl/InlineProgressList.js";
 import { useAwaySummaryController, useAwaySummaryOnce } from "../hooks/useAwaySummary.js";
 import { ScrollPin } from "./repl/ScrollPin.js";
 import { promptInputStoreFor, setPromptValue } from "../state/promptInputStore.js";
@@ -253,14 +257,14 @@ import {
 import { promptCacheExpiresAt } from "../services/compact/autoCompact.js";
 import { useScreenReaderBell } from "../hooks/useScreenReaderBell.js";
 import { useViewedAgentTranscript } from "./repl/useViewedAgentTranscript.js";
-import { hasVisibleProgress, InlineProgressList } from "./repl/InlineProgressList.js";
 import { useBackgroundAskEmitter, useSemanticPromptMarks } from "./repl/sessionPresence.js";
 import { useBridgeImmediateCommands } from "../bridge/replBridgeInbound.js";
 import { useIDEIntegration } from "../hooks/useIDEIntegration.js";
 import { PromptSubmitController, isCompactCommand } from "./repl/PromptSubmitController.js";
+import { QueuedEarlyPromptController, STARTUP_CHECKS } from "./repl/draftCallouts.js";
 import { COLD_RESUME_QUOTA, AUTOCOMPACT_OFFER } from "../components/nudges/nudgeIds.js";
 import { PromptArea, PromptDock } from "./repl/PromptArea.js";
-import { useCanUseToolReexport } from "../components/UsageLimitGraceNotice.js";
+import { useCanUseToolRef } from "../hooks/useCanUseTool.js";
 import { useSessionBackgrounding } from "../hooks/useSessionBackgrounding.js";
 import { useLeftArrowGesture } from "../components/PromptInput/promptInputState.js";
 import { registerBeforeInteractiveShutdown } from "../utils/gracefulShutdown.js";
@@ -291,27 +295,28 @@ import { WorkerPendingPermissions } from "./repl/WorkerPendingPermissions.js";
 import { runExitInterstitial } from "./repl/exitFlow.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:136066-136070 placement
+//@ chunk-czq1j3j2.js:137180-137184 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:136066", () => {
+deferInit("chunk-czq1j3j2.js:137180", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:136342-136374 placement
+//@ chunk-czq1j3j2.js:137456-137488 placement
 function isNonEmptyString(value) {
   return value !== "";
 }
-//@ chunk-18hwfzwa.js:136374-136401 placement
+//@ chunk-czq1j3j2.js:137488-137515 placement
 function negateBoolean(value) {
   return !value;
 }
-//@ chunk-18hwfzwa.js:136401-136428 placement
+//@ chunk-czq1j3j2.js:137515-137542 placement
 function notB(value) {
   return !value;
 }
-//@ chunk-18hwfzwa.js:136428-136451 layout
+//@ chunk-czq1j3j2.js:137542-137560 layout
 var VERBOSE_LABEL = "verbose ";
+//@ chunk-czq1j3j2.js:137560-137569 layout
 var FOOTER_PADDING = 2;
-//@ chunk-18hwfzwa.js:136451-138080 fingerprint (2.1.88 match: TranscriptModeFooter, 0.696)
+//@ chunk-czq1j3j2.js:137569-139223 fingerprint (2.1.88 match: TranscriptModeFooter, 0.683)
 /**
  * transcript 模式（ctrl+o）底部页脚：显示 "Showing detailed transcript"、切换快捷键、滚动/打开编辑器提示或搜索计数；宽度不足时退化为 "? for shortcuts"。
  */
@@ -368,7 +373,7 @@ function TranscriptModeFooter(props) {
   let toggleShortcutLabel;
   if ($[4] !== toggleShortcut) {
     toggleShortcutLabel = jsxProd_default_2(Fragment, {
-      children: [toggleShortcut, " to toggle"],
+      children: [toggleShortcut, " to ", "toggle"],
     });
     $[4] = toggleShortcut;
     $[5] = toggleShortcutLabel;
@@ -406,6 +411,7 @@ function TranscriptModeFooter(props) {
     footerStatus = jsxProd_default(TranscriptFooterStatus, {
       status,
       searchBadge,
+      showVerboseBadge: true,
     });
     $[11] = searchBadge;
     $[12] = status;
@@ -433,10 +439,10 @@ function TranscriptModeFooter(props) {
   } else footerRow = $[16];
   return footerRow;
 }
-//@ chunk-18hwfzwa.js:138080-138476 layout
+//@ chunk-czq1j3j2.js:139223-139671 layout
 function TranscriptFooterStatus(props) {
   let $ = useMemoCache(6);
-  let { status, searchBadge } = props;
+  let { status, searchBadge, showVerboseBadge } = props;
   if (status) {
     let statusText;
     if ($[0] !== status) {
@@ -461,6 +467,9 @@ function TranscriptFooterStatus(props) {
     } else searchBadgeText = $[4];
     return searchBadgeText;
   }
+  if (!showVerboseBadge) {
+    return null;
+  }
   let verboseLabel;
   if ($[5] === MEMO_CACHE_SENTINEL) {
     verboseLabel = jsxProd_default(Text, {
@@ -471,7 +480,7 @@ function TranscriptFooterStatus(props) {
   } else verboseLabel = $[5];
   return verboseLabel;
 }
-//@ chunk-18hwfzwa.js:138476-138802 layout
+//@ chunk-czq1j3j2.js:139671-139997 layout
 function SearchIndexStatus({ indexStatus, count, current, query }) {
   if (indexStatus === "building")
     return jsxProd_default(Text, {
@@ -495,7 +504,7 @@ function SearchIndexStatus({ indexStatus, count, current, query }) {
     });
   return null;
 }
-//@ chunk-18hwfzwa.js:138802-140845 layout
+//@ chunk-czq1j3j2.js:139997-142040 layout
 /**
  * transcript 模式按 ? 显示的快捷键帮助页脚（滚动、搜索、打印到 scrollback、用编辑器打开、退出）。
  */
@@ -670,7 +679,7 @@ function TranscriptHelpFooter() {
   } else helpRow = $[22];
   return helpRow;
 }
-//@ chunk-18hwfzwa.js:140845-142030 fingerprint (2.1.88 match: TranscriptSearchBar, 0.76)
+//@ chunk-czq1j3j2.js:142040-143225 fingerprint (2.1.88 match: TranscriptSearchBar, 0.755)
 /**
  * transcript 搜索栏（/）：useSearchInput 读输入，首次打开时预热搜索索引（indexing… / indexed in Nms），查询变化后调用 jumpRef.setSearchQuery 并高亮。
  */
@@ -767,29 +776,29 @@ function TranscriptSearchBar({ jumpRef, count, current, onClose, onCancel, setHi
     ],
   });
 }
-//@ chunk-18hwfzwa.js:1087735-1087772 sole-consumer
+//@ chunk-czq1j3j2.js:1121767-1121804 sole-consumer
 function selectTurnLoadingRepl(turn) {
   return turn.isLoading;
 }
-//@ chunk-18hwfzwa.js:1087772-1087809 sole-consumer
+//@ chunk-czq1j3j2.js:1121804-1121841 sole-consumer
 function selectTurnIsLoadingB(turn) {
   return turn.isLoading;
 }
-//@ chunk-18hwfzwa.js:1087809-1087852 sole-consumer
+//@ chunk-czq1j3j2.js:1121841-1121884 sole-consumer
 function selectInputOwnsEscapeReplB(repl) {
   return repl.inputOwnsEscape;
 }
-//@ chunk-18hwfzwa.js:1087852-1087898 sole-consumer
+//@ chunk-czq1j3j2.js:1121884-1121930 sole-consumer
 function selectInputRowReplaced(state) {
   return state.isInputRowReplaced;
 }
-//@ chunk-18hwfzwa.js:1087898-1088121 sole-consumer
+//@ chunk-czq1j3j2.js:1121930-1122153 sole-consumer
 var CLOSED_FRUSTRATION_SURVEY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var useFrustrationSurveyStub;
 var NullBand;
 var SURVEY_SLOT_KEYS;
 var SURVEY_KINDS;
-deferInit("chunk-18hwfzwa.js:1087898", () => {
+deferInit("chunk-czq1j3j2.js:1121930", () => {
   CLOSED_FRUSTRATION_SURVEY = {
     state: "closed",
     transcriptBundlePath: null,
@@ -808,7 +817,7 @@ deferInit("chunk-18hwfzwa.js:1087898", () => {
   };
   SURVEY_KINDS = Object.keys(SURVEY_SLOT_KEYS);
 });
-//@ chunk-18hwfzwa.js:1088121-1088308 sole-consumer
+//@ chunk-czq1j3j2.js:1122153-1122340 sole-consumer
 class SurveySlotStore {
   #e = createSignal();
   #t = null;
@@ -822,7 +831,7 @@ class SurveySlotStore {
     this.#e.emit();
   }
 }
-//@ chunk-18hwfzwa.js:1088308-1088547 sole-consumer
+//@ chunk-czq1j3j2.js:1122340-1122579 sole-consumer
 function hasActiveSurvey(storeSelector) {
   return (
     storeSelector !== null &&
@@ -837,12 +846,12 @@ function hasActiveSurvey(storeSelector) {
     }) !== null
   );
 }
-//@ chunk-18hwfzwa.js:1088547-1088662 sole-consumer
+//@ chunk-czq1j3j2.js:1122579-1122694 sole-consumer
 function shallowEqualObject(left, right) {
   let keys = Object.keys(left);
   return keys.length === Object.keys(right).length && keys.every((key) => Object.is(left[key], right[key]));
 }
-//@ chunk-18hwfzwa.js:1088662-1091274 sole-consumer
+//@ chunk-czq1j3j2.js:1122694-1125306 sole-consumer
 /**
  * 在 REPL 中依次运行各问卷 hook（压缩后、长上下文、插件、记忆、反馈、组织、挫败检测），后者在前者打开时让位，并把全部状态发布到 SurveySlotStore。
  */
@@ -1058,7 +1067,7 @@ function SurveyStatePublisher(props) {
   useLayoutEffect(publishSurveyState);
   return null;
 }
-//@ chunk-18hwfzwa.js:1091274-1093560 sole-consumer
+//@ chunk-czq1j3j2.js:1125306-1127593 sole-consumer
 /**
  * 输入框上方的提示带：有问卷时显示 SurveyHost，另有上方提示位、反馈草稿提示、web-setup 提示等，彼此通过 bandHeld 互斥。
  */
@@ -1227,19 +1236,19 @@ function AbovePromptBands(props) {
   } else bandsFragment = $[38];
   return bandsFragment;
 }
-//@ chunk-18hwfzwa.js:1093560-1093597 sole-consumer
+//@ chunk-czq1j3j2.js:1127593-1127630 sole-consumer
 function selectTurnIsLoadingC(turn) {
   return turn.isLoading;
 }
-//@ chunk-18hwfzwa.js:1093597-1093640 sole-consumer
+//@ chunk-czq1j3j2.js:1127630-1127673 sole-consumer
 function selectInputOwnsEscapeB(draft) {
   return draft.inputOwnsEscape;
 }
-//@ chunk-18hwfzwa.js:1093640-1093677 sole-consumer
+//@ chunk-czq1j3j2.js:1127673-1127710 sole-consumer
 function selectTurnIsLoadingD(turn) {
   return turn.isLoading;
 }
-//@ chunk-18hwfzwa.js:1093677-1094188 sole-consumer
+//@ chunk-czq1j3j2.js:1127710-1128222 sole-consumer
 /**
  * REPL 中内嵌面板与调查问卷区域的组件。
  */
@@ -1291,7 +1300,7 @@ function InlinePanesAndBands(props) {
   } else element = $[9];
   return element;
 }
-//@ chunk-18hwfzwa.js:1094188-1094819 placement
+//@ chunk-czq1j3j2.js:1128222-1128855 placement
 /**
  * REPL 提示区组件，附带后台会话提示。
  */
@@ -1354,23 +1363,23 @@ function PromptAreaWithBackgroundHint(props) {
   } else element = $[12];
   return element;
 }
-//@ chunk-18hwfzwa.js:1425895-1425936 sole-consumer
+//@ chunk-czq1j3j2.js:1466084-1466125 sole-consumer
 function selectTerminalTitle(titles) {
   return titles.terminalTitle;
 }
-//@ chunk-18hwfzwa.js:1425936-1425972 affinity
+//@ chunk-czq1j3j2.js:1466125-1466161 affinity
 function selectTitleDisabled(titles) {
   return titles.disabled;
 }
-//@ chunk-18hwfzwa.js:1425972-1426012 file-local
+//@ chunk-czq1j3j2.js:1466161-1466201 file-local
 function nextTitleFrame(f) {
   return (f + 1) % TITLE_SPINNER_FRAMES.length;
 }
-//@ chunk-18hwfzwa.js:1426012-1426059 layout
+//@ chunk-czq1j3j2.js:1466201-1466248 layout
 var TITLE_SPINNER_FRAMES = ["\u25D0", "\u25D1"];
 var TITLE_IDLE_PREFIX = "\u2733";
 var TITLE_FRAME_INTERVAL_MS = 960;
-//@ chunk-18hwfzwa.js:1426059-1426386 fingerprint (2.1.88 match: AnimatedTerminalTitle, 0.545)
+//@ chunk-czq1j3j2.js:1466248-1466575 fingerprint (2.1.88 match: AnimatedTerminalTitle, 0.545)
 /**
  * 终端标题组件：从 titles 存储取标题，工作中且终端聚焦时以 960ms 交替 ◐/◑ 前缀，否则 ✳；在 tmux 等复用器下受 tengu_static_title_under_mux 控制改为静态。
  */
@@ -1398,7 +1407,17 @@ function AnimatedTerminalTitle(props) {
   useTerminalTitle(disabled ? null : noPrefix ? terminalTitle : `${prefix} ${terminalTitle}`);
   return null;
 }
-//@ chunk-18hwfzwa.js:1666058-1666963 placement
+//@ chunk-czq1j3j2.js:1703363-1703367 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1703363", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1706878-1706882 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1706878", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1712095-1713000 placement
 /**
  * REPL 消息列表的外部存储：getSnapshot/subscribe 供 useSyncExternalStore；replace/apply/keep 修改列表（可延迟发布），flush 发布延迟的修改并调用 project 回调。
  */
@@ -1407,7 +1426,7 @@ class MessageListStore {
   #t;
   #o = false;
   #n;
-  #s = createSignal();
+  #r = createSignal();
   conversation = orderedRowSource({
     keep: (messages) =>
       this.keep({
@@ -1422,7 +1441,7 @@ class MessageListStore {
     this.#n = project;
   }
   getSnapshot = () => this.#e;
-  subscribe = (listener) => this.#s.subscribe(listener);
+  subscribe = (listener) => this.#r.subscribe(listener);
   replace = (next, defer = false) => {
     let previous = this.#e;
     this.#e = typeof next === "function" ? next(previous) : next;
@@ -1431,7 +1450,7 @@ class MessageListStore {
       this.#o ||= defer !== "held";
       return;
     }
-    this.#r(this.#t ?? previous);
+    this.#s(this.#t ?? previous);
   };
   apply = (op, defer = false) => {
     let batch = applyMessageListAppend(op, (row) => this.keep(row, defer));
@@ -1451,39 +1470,34 @@ class MessageListStore {
   cut = () => this.conversation.cut();
   getPublished = () => this.#t ?? this.#e;
   flush = () => {
-    if (this.#t !== undefined && this.#o) this.#r(this.#t);
+    if (this.#t !== undefined && this.#o) this.#s(this.#t);
   };
-  #r(next) {
+  #s(next) {
     this.#t = undefined;
     this.#o = false;
     let previous = this.#e;
     this.#n(previous, next);
-    if (previous !== next) this.#s.emit();
+    if (previous !== next) this.#r.emit();
   }
 }
-//@ chunk-18hwfzwa.js:1667001-1667005 placement
+//@ chunk-czq1j3j2.js:1864699-1864703 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1667001", () => {
+deferInit("chunk-czq1j3j2.js:1864699", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1667005-1667009 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1667005", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1822891-1822921 sole-consumer
+//@ chunk-czq1j3j2.js:1870873-1870903 placement
 function selectSessionId(state) {
   return state.id;
 }
-//@ chunk-18hwfzwa.js:1822921-1822956 sole-consumer
+//@ chunk-czq1j3j2.js:1870903-1870938 placement
 function selectReplTab(state) {
   return state.replTab;
 }
-//@ chunk-18hwfzwa.js:1822956-1823013 sole-consumer (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:1870938-1870995 placement (2.1.88 match: _temp, 1)
 function selectFileHistoryTrackedFilesSize(s) {
   return s.fileHistory.trackedFiles.size;
 }
-//@ chunk-18hwfzwa.js:1823013-1823084 sole-consumer
+//@ chunk-czq1j3j2.js:1870995-1871066 placement
 function switchReplTabToDiff(state) {
   return state.replTab === "convo"
     ? {
@@ -1492,27 +1506,27 @@ function switchReplTabToDiff(state) {
       }
     : state;
 }
-//@ chunk-18hwfzwa.js:1823084-1823114 sole-consumer
+//@ chunk-czq1j3j2.js:1871066-1871096 placement
 function selectSessionIdB(state) {
   return state.id;
 }
-//@ chunk-18hwfzwa.js:1823114-1823149 sole-consumer
+//@ chunk-czq1j3j2.js:1871096-1871131 placement
 function selectSessionCwd(session) {
   return getSessionProject(session).cwd;
 }
-//@ chunk-18hwfzwa.js:1823149-1823205 sole-consumer
+//@ chunk-czq1j3j2.js:1871131-1871187 placement
 function selectFileHistorySequence(state) {
   return state.fileHistory.trackSequence ?? 0;
 }
-//@ chunk-18hwfzwa.js:1823205-1823244 sole-consumer
+//@ chunk-czq1j3j2.js:1871187-1871226 placement (2.1.88 match: extractTodosFromTranscript, 1)
 function selectMainAgentTodos(state) {
   return state.todos[mainAgentId()];
 }
-//@ chunk-18hwfzwa.js:1823244-1823293 sole-consumer
+//@ chunk-czq1j3j2.js:1871226-1871275 placement
 function selectToolPermissionCtxRepl(state) {
   return state.toolPermissionContext;
 }
-//@ chunk-18hwfzwa.js:1823293-1823368 sole-consumer
+//@ chunk-czq1j3j2.js:1871275-1871350 placement
 function showDiffPanel(state) {
   return state.diffPanelVisible
     ? state
@@ -1521,7 +1535,7 @@ function showDiffPanel(state) {
         diffPanelVisible: true,
       };
 }
-//@ chunk-18hwfzwa.js:1823368-1823443 sole-consumer
+//@ chunk-czq1j3j2.js:1871350-1871425 placement
 function hideDiffPanel(state) {
   return state.diffPanelVisible
     ? {
@@ -1530,31 +1544,31 @@ function hideDiffPanel(state) {
       }
     : state;
 }
-//@ chunk-18hwfzwa.js:1823443-1823473 sole-consumer
+//@ chunk-czq1j3j2.js:1871425-1871455 placement
 function createReplayHandleSlot() {
   return new ReplayHandleSlot();
 }
-//@ chunk-18hwfzwa.js:1823473-1823521 sole-consumer (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:1871455-1871503 placement (2.1.88 match: _temp, 1)
 function isCompletedStatus(state) {
   return state.status === "completed";
 }
-//@ chunk-18hwfzwa.js:1823521-1823548 sole-consumer
+//@ chunk-czq1j3j2.js:1871503-1871530 placement
 function toggleFalse(value) {
   return !value;
 }
-//@ chunk-18hwfzwa.js:1823548-1823589 sole-consumer
+//@ chunk-czq1j3j2.js:1871530-1871571 placement
 function selectPanelFileViewRepl(state) {
   return state.panelFileView;
 }
-//@ chunk-18hwfzwa.js:1823589-1823616 sole-consumer
+//@ chunk-czq1j3j2.js:1871571-1871598 placement
 function toggleFalseB(value) {
   return !value;
 }
-//@ chunk-18hwfzwa.js:1823616-1823643 sole-consumer
+//@ chunk-czq1j3j2.js:1871598-1871625 placement
 function toggleFalseC(value) {
   return !value;
 }
-//@ chunk-18hwfzwa.js:1823643-1823704 sole-consumer
+//@ chunk-czq1j3j2.js:1871625-1871686 placement
 function renderDimText(children, key) {
   return jsxProd_default(
     Text,
@@ -1565,22 +1579,22 @@ function renderDimText(children, key) {
     key,
   );
 }
-//@ chunk-18hwfzwa.js:1823704-1823731 sole-consumer
+//@ chunk-czq1j3j2.js:1871686-1871713 placement
 function toggleFalseD(value) {
   return !value;
 }
-//@ chunk-18hwfzwa.js:1823731-1823758 sole-consumer
+//@ chunk-czq1j3j2.js:1871713-1871740 placement
 function toggleFalseE(value) {
   return !value;
 }
-//@ chunk-18hwfzwa.js:1823758-1823783 sole-consumer
+//@ chunk-czq1j3j2.js:1871740-1871765 placement
 /**
  * REPL 差异面板的显示限额：最多同时显示 8 个文件、超过 20 个文件折叠提示、加载提示延迟 300 ms 出现。
  */
 var MAX_VISIBLE_FILE_DIFFS = 8;
 var MAX_DIFF_FILES_BEFORE_HIDING = 20;
 var LOADING_HINT_DELAY_MS = 300;
-//@ chunk-18hwfzwa.js:1823783-1824383 sole-consumer
+//@ chunk-czq1j3j2.js:1871765-1872365 placement
 /**
  * 记录自动打开 diff 时的基线，关闭时切回对话标签。
  */
@@ -1634,7 +1648,7 @@ function useDiffAutoOpenBaseline(enabled, trackedCount) {
   useEffect(onEnabledChange, onEnabledChangeDeps);
   return baseline_2;
 }
-//@ chunk-18hwfzwa.js:1824383-1826508 sole-consumer
+//@ chunk-czq1j3j2.js:1872365-1874490 placement
 /**
  * 全屏 REPL 的 diff 侧栏：会话有文件改动且终端够宽时预取工作区 diff 并标记自动打开；注册 app:toggleReplTab 快捷键切换；在 diff 标签页渲染 DiffSidebarPanel。
  */
@@ -1830,7 +1844,7 @@ function DiffSidebar(props) {
   } else panel = $[39];
   return panel;
 }
-//@ chunk-18hwfzwa.js:1826508-1835163 sole-consumer
+//@ chunk-czq1j3j2.js:1874490-1883146 placement
 /**
  * diff 侧栏面板：读取本地工作区 diff（可切换基线 session/uncommitted/branch），隐藏被 read deny 规则保护的文件，列出改动文件与行数、会话前已编辑文件、测试/生成文件折叠，支持拖动滚动与选中内容提问。
  */
@@ -1938,7 +1952,7 @@ function DiffSidebarPanel(props) {
   let baselineStats = preSessionStats;
   let completedTodoCount;
   if ($[19] !== visibleTodos) {
-    completedTodoCount = visibleTodos ? count(visibleTodos, isCompletedStatus) : 0;
+    completedTodoCount = visibleTodos ? countWhere(visibleTodos, isCompletedStatus) : 0;
     $[19] = visibleTodos;
     $[20] = completedTodoCount;
   } else completedTodoCount = $[20];
@@ -2507,7 +2521,7 @@ function DiffSidebarPanel(props) {
   } else rootElement = $[84];
   return rootElement;
 }
-//@ chunk-18hwfzwa.js:1835163-1835430 sole-consumer
+//@ chunk-czq1j3j2.js:1883146-1883413 placement
 function diffBaseLabel(base, source, target) {
   let label;
   switch (base) {
@@ -2524,7 +2538,7 @@ function diffBaseLabel(base, source, target) {
   }
   return target ? `${label}\u2026` : label;
 }
-//@ chunk-18hwfzwa.js:1835430-1837025 sole-consumer
+//@ chunk-czq1j3j2.js:1883413-1885009 placement
 /**
  * diff 侧栏里"本次会话前已编辑的文件"折叠区：点击切换显示文件列表及各自 diff（文件过多时隐藏 diff）。
  */
@@ -2667,7 +2681,7 @@ function PreSessionFilesSection(props) {
   } else sectionBox = $[20];
   return sectionBox;
 }
-//@ chunk-18hwfzwa.js:1837025-1837437 sole-consumer
+//@ chunk-czq1j3j2.js:1885009-1885421 placement
 /**
  * 关闭按钮组件（悬停加粗）。
  */
@@ -2712,7 +2726,7 @@ function CloseButton(props) {
   } else buttonBox = $[7];
   return buttonBox;
 }
-//@ chunk-18hwfzwa.js:1837437-1838087 sole-consumer
+//@ chunk-czq1j3j2.js:1885421-1886071 placement
 /**
  * 显示/隐藏生成测试文件数量的切换组件。
  */
@@ -2768,7 +2782,7 @@ function GeneratedFilesToggle(props) {
   } else element = $[12];
   return element;
 }
-//@ chunk-18hwfzwa.js:1838087-1838906 sole-consumer
+//@ chunk-czq1j3j2.js:1886071-1886890 placement
 /**
  * diff 面板中单个文件的行组件：截断显示路径、悬停下划线，并显示增删行数。
  */
@@ -2841,107 +2855,98 @@ function DiffFileRow(props) {
   } else element = $[16];
   return element;
 }
-//@ chunk-18hwfzwa.js:1838906-1838910 sole-consumer
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1838906", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1838910-1839026 sole-consumer
+//@ chunk-czq1j3j2.js:1886894-1887010 sole-consumer
 function useDiffSnapshot() {
   let trackSequence = useAppState((state) => state.fileHistory.trackSequence ?? 0);
   let replTab = useAppState((state) => state.replTab);
   let diffCwd = getDiffCwd();
   return useMemo(() => isDiffPanelAvailable(), [diffCwd, trackSequence, replTab]);
 }
-//@ chunk-18hwfzwa.js:1839026-1839053 sole-consumer
+//@ chunk-czq1j3j2.js:1887010-1887037 sole-consumer
 function createNullStore() {
   return null;
 }
-//@ chunk-18hwfzwa.js:1839053-1839090 sole-consumer
+//@ chunk-czq1j3j2.js:1887037-1887074 sole-consumer
 function selectReplTabB(state) {
   return state.replTab;
 }
-//@ chunk-18hwfzwa.js:1839090-1839131 sole-consumer (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:1887074-1887113 sole-consumer (2.1.88 match: _temp, 1)
 function selectMcpClientsReplC(s) {
   return s.mcp.clients;
 }
-//@ chunk-18hwfzwa.js:1839131-1839179 sole-consumer (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:1887113-1887161 sole-consumer (2.1.88 match: _temp, 1)
 function selectPendingWorkerRequest_2(state) {
   return state.pendingWorkerRequest;
 }
-//@ chunk-18hwfzwa.js:1839179-1839218 sole-consumer
+//@ chunk-czq1j3j2.js:1887161-1887200 sole-consumer
 function selectIsBriefOnlyReplC(state) {
   return state.isBriefOnly;
 }
-//@ chunk-18hwfzwa.js:1839218-1839263 sole-consumer
+//@ chunk-czq1j3j2.js:1887200-1887243 sole-consumer
 function selectBriefTranscript(state) {
   return state.briefTranscript;
 }
-//@ chunk-18hwfzwa.js:1839263-1839303 sole-consumer
+//@ chunk-czq1j3j2.js:1887243-1887283 sole-consumer
 function selectIdeSelectionReplB(state) {
   return state.ideSelection;
 }
-//@ chunk-18hwfzwa.js:1839303-1839333 sole-consumer
+//@ chunk-czq1j3j2.js:1887283-1887313 sole-consumer
 function createBridgeChannelSlot() {
   return new BridgeChannelSlot();
 }
-//@ chunk-18hwfzwa.js:1839333-1839370 sole-consumer
+//@ chunk-czq1j3j2.js:1887313-1887350 sole-consumer
 function selectTurnIsLoadingE(turn) {
   return turn.isLoading;
 }
-//@ chunk-18hwfzwa.js:1839370-1839396 sole-consumer
-function alwaysFalseInRepl(state) {
-  return false;
+//@ chunk-czq1j3j2.js:1887350-1887399 sole-consumer
+function isStopWaitPending(turn) {
+  return codeModeAccepted() && turn.stopWaitPending;
 }
-//@ chunk-18hwfzwa.js:1839396-1839436 sole-consumer
+//@ chunk-czq1j3j2.js:1887399-1887439 sole-consumer
 function selectToolProgress(stream) {
   return stream.toolProgress;
 }
-//@ chunk-18hwfzwa.js:1839436-1839488 sole-consumer
+//@ chunk-czq1j3j2.js:1887439-1887489 sole-consumer
 function selectUserInputOnProcessingReplB(stream) {
   return !!stream.userInputOnProcessing;
 }
-//@ chunk-18hwfzwa.js:1839488-1839517 sole-consumer
+//@ chunk-czq1j3j2.js:1887489-1887518 sole-consumer
 function setTranscriptScreen() {
   return setDialogHostUnmounted(false);
 }
-//@ chunk-18hwfzwa.js:1839517-1839545 sole-consumer
+//@ chunk-czq1j3j2.js:1887518-1887546 sole-consumer
 function clearBlockingDialogNow() {
   return clearBlockingDialog();
 }
-//@ chunk-18hwfzwa.js:1839545-1839583 sole-consumer
+//@ chunk-czq1j3j2.js:1887546-1887584 sole-consumer
 function hasBlockingDialog(state) {
   return topBlockingDialog(state) !== null;
 }
-//@ chunk-18hwfzwa.js:1839583-1839638 sole-consumer
+//@ chunk-czq1j3j2.js:1887584-1887639 sole-consumer
 function selectIdleNotifThresholdMs() {
   return getGlobalConfig().messageIdleNotifThresholdMs;
 }
-//@ chunk-18hwfzwa.js:1839638-1839679 sole-consumer
+//@ chunk-czq1j3j2.js:1887639-1887682 sole-consumer
 function selectHasBashesDialog(state) {
   return !!state.bashesDialog;
 }
-//@ chunk-18hwfzwa.js:1839679-1839708 sole-consumer
+//@ chunk-czq1j3j2.js:1887682-1887711 sole-consumer
 function createSurveySlotStore() {
   return new SurveySlotStore();
 }
-//@ chunk-18hwfzwa.js:1839708-1839737 sole-consumer
+//@ chunk-czq1j3j2.js:1887711-1887740 sole-consumer
 function setPauseAnimation() {
   return setBlockingToolProgress(false);
 }
-//@ chunk-18hwfzwa.js:1839737-1839764 sole-consumer
-function createNullContextStore() {
-  return null;
-}
-//@ chunk-18hwfzwa.js:1839764-1839780 sole-consumer
+//@ chunk-czq1j3j2.js:1887740-1887756 sole-consumer
+function noop_5() {}
+//@ chunk-czq1j3j2.js:1887756-1887772 sole-consumer
 function noop_6() {}
-//@ chunk-18hwfzwa.js:1839780-1839796 sole-consumer
-function noop_7() {}
-//@ chunk-18hwfzwa.js:1839796-1839860 sole-consumer
+//@ chunk-czq1j3j2.js:1887772-1887838 sole-consumer
 function toggleScreen(screen) {
   return screen === "transcript" ? "prompt" : "transcript";
 }
-//@ chunk-18hwfzwa.js:1839860-1839991 sole-consumer
+//@ chunk-czq1j3j2.js:1887838-1887969 sole-consumer
 function logDiffSidebarRenderError(error, info) {
   logFeatureBad(
     "repl_diff_read",
@@ -2953,14 +2958,14 @@ function logDiffSidebarRenderError(error, info) {
       : undefined,
   );
 }
-//@ chunk-18hwfzwa.js:1839991-1840048 fingerprint (2.1.88 match: useScheduledTasks, 0.524)
+//@ chunk-czq1j3j2.js:1887969-1888026 fingerprint (2.1.88 match: useScheduledTasks, 0.524)
 var useScheduledTasks; // deferred: loads other modules while loading; runs once its import cycle is complete
-deferInit("chunk-18hwfzwa.js:1839991", () => {
+deferInit("chunk-czq1j3j2.js:1887969", () => {
   useScheduledTasks = require("../hooks/useScheduledTasks.js").useScheduledTasks;
 });
-//@ chunk-18hwfzwa.js:1840048-1840065 layout
+//@ chunk-czq1j3j2.js:1888026-1888043 layout
 var NullComponent = () => null;
-//@ chunk-18hwfzwa.js:1840065-1840431 facade-exports
+//@ chunk-czq1j3j2.js:1888043-1888409 facade-exports
 /**
  * REPL 外壳：用 props.messageQueue（缺省取全局消息队列）建队列 Provider，并提供写入节流上下文后渲染 REPL。
  */
@@ -2999,14 +3004,14 @@ function REPL(props) {
   } else queueWrapper = $[7];
   return queueWrapper;
 }
-//@ chunk-18hwfzwa.js:1840431-1878241 callgraph-witnessed (2.1.88 match: REPL, 0.129)
+//@ chunk-czq1j3j2.js:1888409-1927328 callgraph-witnessed (2.1.88 match: REPL, 0.128)
 /**
  * 主交互屏幕（316 重写为“控制器 + 外部 store”架构）。按 props 建立一组长生命周期控制器（useState 初始化器里 new）：ReplSessionScope、TurnController+转录 store、ComposerChrome、SessionController、PromptSubmitController、ScrollPin、PromptDraft、IdleNudge、BackgroundGesture 等，
  * 再用 useLayoutEffect 一次性 bindHost 把 mainLoopModel/canUseTool/通知等宿主能力注入各控制器。渲染：transcript 屏返回 gQ 转录视图；prompt 屏返回 FullscreenLayout{scrollable=Gee 消息列表, abovePrompt=通知/任务/权限区, bottom=y8 输入区, sidebar=diff 侧栏, dock=面板坞}，
  * 外层包 MCPConnectionManager、$A.Provider(tokenWarning)、LF、_F 屏幕框架。也挂 GlobalKeybindingHandlers、useQueueProcessor、useScheduledTasks、useMailboxBridge、useLogMessages 等副作用 hook。
  */
 function REPL_2(props) {
-  let $ = useMemoCache(686);
+  let $ = useMemoCache(705);
   let {
     commands,
     debug,
@@ -3083,7 +3088,7 @@ function REPL_2(props) {
   let replTab = useAppState(selectReplTabB);
   let hasGitRepo = useDiffSnapshot();
   let replTab_2 = useAppState(selectMcpClientsReplC);
-  let chromeClients = useAppState(selectPendingWorkerRequest_2);
+  let teamContext = useAppState(selectPendingWorkerRequest_2);
   let setAppState = useSetAppState();
   let setSessionState = useSetAppStateFn();
   let store = useAppStoreDirect();
@@ -3158,7 +3163,7 @@ function REPL_2(props) {
   let mergedMcpClients = useMergedClients(mcpClients, replTab_2);
   runStartupNotificationSpecs();
   FeatureOfTheWeekClaim(addNotification, removeNotification);
-  noopEffect_2(session, addNotification, removeNotification);
+  subscribeCodeModeNotices(session, addNotification, removeNotification);
   let refreshCredits;
   let deps;
   if ($[16] !== credentials || $[17] !== storageV5) {
@@ -3435,13 +3440,13 @@ function REPL_2(props) {
   } else scrollPinEffect = $[77];
   let [sandbox] = useState(scrollPinEffect);
   let isLoading = useStoreSelector(turn, selectTurnIsLoadingE);
-  useStoreSelector(turn, alwaysFalseInRepl);
+  let onStreamingText = useStoreSelector(turn, isStopWaitPending);
   let toolProgress = useStoreSelector(turn.stream, selectToolProgress);
   let userInputOnProcessing = useStoreSelector(turn.stream, selectUserInputOnProcessingReplB);
   let hasToolProgress = toolProgress.size > 0;
   let pauseAnimation;
   if ($[78] !== toolProgress) {
-    pauseAnimation = DATE_RANGE_ORDER(toolProgress);
+    pauseAnimation = shouldPauseForToolProgress(toolProgress);
     $[78] = toolProgress;
     $[79] = pauseAnimation;
   } else pauseAnimation = $[79];
@@ -3770,7 +3775,7 @@ function REPL_2(props) {
     subscribeRunning = $[157];
   }
   let isResponseRunning = useSyncExternalStore(guard.subscribe, readRunning, subscribeRunning);
-  let localOverlayHoldsQueue = hasLocalJsxOverlay && !isResponseRunning;
+  let hasLocalOverlay = hasLocalJsxOverlay && !isResponseRunning;
   let panelHoldsQueue = hasActiveLocalJsxUI && !isResponseRunning;
   let dialogOverPanel = useHasBlockingDialog();
   let topAutoDialogKind = useTopAutoDialogKind();
@@ -4192,61 +4197,65 @@ function REPL_2(props) {
   if (
     $[258] !== focusFoldHoldsPreview ||
     $[259] !== focused.isLoading ||
-    $[260] !== readFileState ||
-    $[261] !== hasDisplayedStreamingText ||
-    $[262] !== isBriefOnly ||
-    $[263] !== localOverlayHoldsQueue ||
-    $[264] !== chromeClients ||
-    $[265] !== tailBlank ||
-    $[266] !== toolProgress
+    $[260] !== focused.isMain ||
+    $[261] !== readFileState ||
+    $[262] !== hasDisplayedStreamingText ||
+    $[263] !== isBriefOnly ||
+    $[264] !== hasLocalOverlay ||
+    $[265] !== teamContext ||
+    $[266] !== onStreamingText ||
+    $[267] !== tailBlank ||
+    $[268] !== toolProgress
   ) {
     bridgeArgs =
       !hasVisibleProgress(toolProgress) &&
       !readFileState &&
-      !localOverlayHoldsQueue &&
+      !hasLocalOverlay &&
       focused.isLoading &&
-      true &&
-      !chromeClients &&
+      !(codeModeAccepted() && focused.isMain && onStreamingText) &&
+      !teamContext &&
       (!hasDisplayedStreamingText || tailBlank || isBriefOnly || focusFoldHoldsPreview);
     $[258] = focusFoldHoldsPreview;
     $[259] = focused.isLoading;
-    $[260] = readFileState;
-    $[261] = hasDisplayedStreamingText;
-    $[262] = isBriefOnly;
-    $[263] = localOverlayHoldsQueue;
-    $[264] = chromeClients;
-    $[265] = tailBlank;
-    $[266] = toolProgress;
-    $[267] = bridgeArgs;
-  } else bridgeArgs = $[267];
+    $[260] = focused.isMain;
+    $[261] = readFileState;
+    $[262] = hasDisplayedStreamingText;
+    $[263] = isBriefOnly;
+    $[264] = hasLocalOverlay;
+    $[265] = teamContext;
+    $[266] = onStreamingText;
+    $[267] = tailBlank;
+    $[268] = toolProgress;
+    $[269] = bridgeArgs;
+  } else bridgeArgs = $[269];
   let showSpinner = bridgeArgs;
   useBackgroundAskEmitter();
   useBackgroundQuestionAnswer();
   let bridgeCommandsArgs;
-  if ($[268] !== scope || $[269] !== store || $[270] !== transport || $[271] !== turn) {
+  if ($[270] !== scope || $[271] !== store || $[272] !== transport || $[273] !== turn) {
     bridgeCommandsArgs = {
       turn,
       scope,
       store,
       transport,
     };
-    $[268] = scope;
-    $[269] = store;
-    $[270] = transport;
-    $[271] = turn;
-    $[272] = bridgeCommandsArgs;
-  } else bridgeCommandsArgs = $[272];
+    $[270] = scope;
+    $[271] = store;
+    $[272] = transport;
+    $[273] = turn;
+    $[274] = bridgeCommandsArgs;
+  } else bridgeCommandsArgs = $[274];
   useBridgeImmediateCommands(bridgeCommandsArgs);
   let bridgeDeps;
   let bridgeDepsB;
   if (
-    $[273] !== gesture ||
-    $[274] !== idleCacheQuota ||
-    $[275] !== idleNudge ||
-    $[276] !== lowLatency ||
-    $[277] !== pollEventDelivery ||
-    $[278] !== scrollPin ||
-    $[279] !== titles
+    $[275] !== gesture ||
+    $[276] !== idleCacheQuota ||
+    $[277] !== idleNudge ||
+    $[278] !== lowLatency ||
+    $[279] !== pollEventDelivery ||
+    $[280] !== scrollPin ||
+    $[281] !== titles
   ) {
     bridgeDeps = () => {
       titles.connect();
@@ -4262,56 +4271,56 @@ function REPL_2(props) {
       };
     };
     bridgeDepsB = [idleNudge, idleCacheQuota, pollEventDelivery, gesture, lowLatency, titles, scrollPin];
-    $[273] = gesture;
-    $[274] = idleCacheQuota;
-    $[275] = idleNudge;
-    $[276] = lowLatency;
-    $[277] = pollEventDelivery;
-    $[278] = scrollPin;
-    $[279] = titles;
-    $[280] = bridgeDeps;
-    $[281] = bridgeDepsB;
+    $[275] = gesture;
+    $[276] = idleCacheQuota;
+    $[277] = idleNudge;
+    $[278] = lowLatency;
+    $[279] = pollEventDelivery;
+    $[280] = scrollPin;
+    $[281] = titles;
+    $[282] = bridgeDeps;
+    $[283] = bridgeDepsB;
   } else {
-    bridgeDeps = $[280];
-    bridgeDepsB = $[281];
+    bridgeDeps = $[282];
+    bridgeDepsB = $[283];
   }
   useEffect(bridgeDeps, bridgeDepsB);
   let [surveySlot] = useState(createSurveySlotStore);
   let ideArgs;
-  if ($[282] !== autoConnectIdeFlag || $[283] !== requestDialog || $[284] !== scope.addAutoConnectedIde) {
+  if ($[284] !== autoConnectIdeFlag || $[285] !== requestDialog || $[286] !== scope.addAutoConnectedIde) {
     ideArgs = {
       autoConnectIdeFlag,
       onAutoConnectIde: scope.addAutoConnectedIde,
       requestDialog,
     };
-    $[282] = autoConnectIdeFlag;
-    $[283] = requestDialog;
-    $[284] = scope.addAutoConnectedIde;
-    $[285] = ideArgs;
-  } else ideArgs = $[285];
+    $[284] = autoConnectIdeFlag;
+    $[285] = requestDialog;
+    $[286] = scope.addAutoConnectedIde;
+    $[287] = ideArgs;
+  } else ideArgs = $[287];
   let { installationStatus, installExtension } = useIDEIntegration(ideArgs);
   let onFileHistory;
-  if ($[286] !== setAppState) {
+  if ($[288] !== setAppState) {
     onFileHistory = (fileHistoryState) =>
       setAppState((prev) => ({
         ...prev,
         fileHistory: fileHistoryState,
       }));
-    $[286] = setAppState;
-    $[287] = onFileHistory;
-  } else onFileHistory = $[287];
+    $[288] = setAppState;
+    $[289] = onFileHistory;
+  } else onFileHistory = $[289];
   useAwaySummaryOnce(initialFileHistorySnapshots, onFileHistory);
   let sessionStartEffect;
   let sessionStartDeps;
-  if ($[288] !== sessionController) {
+  if ($[290] !== sessionController) {
     sessionStartEffect = () => sessionController.start();
     sessionStartDeps = [sessionController];
-    $[288] = sessionController;
-    $[289] = sessionStartEffect;
-    $[290] = sessionStartDeps;
+    $[290] = sessionController;
+    $[291] = sessionStartEffect;
+    $[292] = sessionStartDeps;
   } else {
-    sessionStartEffect = $[289];
-    sessionStartDeps = $[290];
+    sessionStartEffect = $[291];
+    sessionStartDeps = $[292];
   }
   useEffect(sessionStartEffect, sessionStartDeps);
   let exitState = useStoreSelector(chrome, isExiting);
@@ -4322,12 +4331,12 @@ function REPL_2(props) {
   let suppressedDialogsEffect;
   let suppressedDeps;
   if (
-    $[291] !== chrome ||
-    $[292] !== debug ||
-    $[293] !== isEmbedded ||
-    $[294] !== hasSuppressedDialogs ||
-    $[295] !== shouldHideLoginNotice ||
-    $[296] !== onDetachToCaller
+    $[293] !== chrome ||
+    $[294] !== debug ||
+    $[295] !== isEmbedded ||
+    $[296] !== hasSuppressedDialogs ||
+    $[297] !== shouldHideLoginNotice ||
+    $[298] !== onDetachToCaller
   ) {
     suppressedDialogsEffect = () => {
       chrome.setView({
@@ -4346,57 +4355,57 @@ function REPL_2(props) {
       hasSuppressedDialogs,
       shouldHideLoginNotice,
     ];
-    $[291] = chrome;
-    $[292] = debug;
-    $[293] = isEmbedded;
-    $[294] = hasSuppressedDialogs;
-    $[295] = shouldHideLoginNotice;
-    $[296] = onDetachToCaller;
-    $[297] = suppressedDialogsEffect;
-    $[298] = suppressedDeps;
+    $[293] = chrome;
+    $[294] = debug;
+    $[295] = isEmbedded;
+    $[296] = hasSuppressedDialogs;
+    $[297] = shouldHideLoginNotice;
+    $[298] = onDetachToCaller;
+    $[299] = suppressedDialogsEffect;
+    $[300] = suppressedDeps;
   } else {
-    suppressedDialogsEffect = $[297];
-    suppressedDeps = $[298];
+    suppressedDialogsEffect = $[299];
+    suppressedDeps = $[300];
   }
   useLayoutEffect(suppressedDialogsEffect, suppressedDeps);
   let pauseEffect;
   let pauseDeps;
-  if ($[299] !== pauseAnimation_2) {
+  if ($[301] !== pauseAnimation_2) {
     pauseEffect = () => {
       setBlockingToolProgress(pauseAnimation_2);
       return setPauseAnimation;
     };
     pauseDeps = [pauseAnimation_2];
-    $[299] = pauseAnimation_2;
-    $[300] = pauseEffect;
-    $[301] = pauseDeps;
+    $[301] = pauseAnimation_2;
+    $[302] = pauseEffect;
+    $[303] = pauseDeps;
   } else {
-    pauseEffect = $[300];
-    pauseDeps = $[301];
+    pauseEffect = $[302];
+    pauseDeps = $[303];
   }
   useLayoutEffect(pauseEffect, pauseDeps);
   let submitEffect;
   if (
-    $[302] !== addNotification ||
-    $[303] !== chrome ||
-    $[304] !== dialogStore ||
-    $[305] !== draft ||
-    $[306] !== idleNudge ||
-    $[307] !== lowLatency ||
-    $[308] !== messageQueue ||
-    $[309] !== presentation ||
-    $[310] !== scope ||
-    $[311] !== scrollPin ||
-    $[312] !== session ||
-    $[313] !== setAppState ||
-    $[314] !== setSessionState ||
-    $[315] !== spinnerStore ||
-    $[316] !== storageV5 ||
-    $[317] !== store ||
-    $[318] !== taskRegistry_2 ||
-    $[319] !== transcript ||
-    $[320] !== transport ||
-    $[321] !== turn
+    $[304] !== addNotification ||
+    $[305] !== chrome ||
+    $[306] !== dialogStore ||
+    $[307] !== draft ||
+    $[308] !== idleNudge ||
+    $[309] !== lowLatency ||
+    $[310] !== messageQueue ||
+    $[311] !== presentation ||
+    $[312] !== scope ||
+    $[313] !== scrollPin ||
+    $[314] !== session ||
+    $[315] !== setAppState ||
+    $[316] !== setSessionState ||
+    $[317] !== spinnerStore ||
+    $[318] !== storageV5 ||
+    $[319] !== store ||
+    $[320] !== taskRegistry_2 ||
+    $[321] !== transcript ||
+    $[322] !== transport ||
+    $[323] !== turn
   ) {
     submitEffect = () =>
       new PromptSubmitController({
@@ -4421,146 +4430,214 @@ function REPL_2(props) {
         lowLatency,
         addNotification,
       });
-    $[302] = addNotification;
-    $[303] = chrome;
-    $[304] = dialogStore;
-    $[305] = draft;
-    $[306] = idleNudge;
-    $[307] = lowLatency;
-    $[308] = messageQueue;
-    $[309] = presentation;
-    $[310] = scope;
-    $[311] = scrollPin;
-    $[312] = session;
-    $[313] = setAppState;
-    $[314] = setSessionState;
-    $[315] = spinnerStore;
-    $[316] = storageV5;
-    $[317] = store;
-    $[318] = taskRegistry_2;
-    $[319] = transcript;
-    $[320] = transport;
-    $[321] = turn;
-    $[322] = submitEffect;
-  } else submitEffect = $[322];
+    $[304] = addNotification;
+    $[305] = chrome;
+    $[306] = dialogStore;
+    $[307] = draft;
+    $[308] = idleNudge;
+    $[309] = lowLatency;
+    $[310] = messageQueue;
+    $[311] = presentation;
+    $[312] = scope;
+    $[313] = scrollPin;
+    $[314] = session;
+    $[315] = setAppState;
+    $[316] = setSessionState;
+    $[317] = spinnerStore;
+    $[318] = storageV5;
+    $[319] = store;
+    $[320] = taskRegistry_2;
+    $[321] = transcript;
+    $[322] = transport;
+    $[323] = turn;
+    $[324] = submitEffect;
+  } else submitEffect = $[324];
   let [submitController] = useState(submitEffect);
+  let queuedPromptController;
+  if (
+    $[325] !== addNotification ||
+    $[326] !== contextualTips ||
+    $[327] !== dialogStore ||
+    $[328] !== draft ||
+    $[329] !== removeNotification ||
+    $[330] !== store ||
+    $[331] !== submitController.submit ||
+    $[332] !== turn
+  ) {
+    queuedPromptController = () =>
+      new QueuedEarlyPromptController({
+        store,
+        dialogStore,
+        draft,
+        turn,
+        callouts: contextualTips,
+        submit: submitController.submit,
+        addNotification,
+        removeNotification,
+      });
+    $[325] = addNotification;
+    $[326] = contextualTips;
+    $[327] = dialogStore;
+    $[328] = draft;
+    $[329] = removeNotification;
+    $[330] = store;
+    $[331] = submitController.submit;
+    $[332] = turn;
+    $[333] = queuedPromptController;
+  } else queuedPromptController = $[333];
+  let [controller] = useState(queuedPromptController);
+  let startEffect;
+  let startDeps;
+  if ($[334] !== controller) {
+    startEffect = () => controller.start();
+    startDeps = [controller];
+    $[334] = controller;
+    $[335] = startEffect;
+    $[336] = startDeps;
+  } else {
+    startEffect = $[335];
+    startDeps = $[336];
+  }
+  useEffect(startEffect, startDeps);
   let cancelEffect;
-  if ($[323] !== cancelRef || $[324] !== submitController.cancelAndDrainPending) {
+  if ($[337] !== cancelRef || $[338] !== submitController.cancelAndDrainPending) {
     cancelEffect = () => {
       if (cancelRef) cancelRef.current = submitController.cancelAndDrainPending;
     };
-    $[323] = cancelRef;
-    $[324] = submitController.cancelAndDrainPending;
-    $[325] = cancelEffect;
-  } else cancelEffect = $[325];
+    $[337] = cancelRef;
+    $[338] = submitController.cancelAndDrainPending;
+    $[339] = cancelEffect;
+  } else cancelEffect = $[339];
   let cancelDeps;
-  if ($[326] !== cancelRef || $[327] !== submitController) {
+  if ($[340] !== cancelRef || $[341] !== submitController) {
     cancelDeps = [cancelRef, submitController];
-    $[326] = cancelRef;
-    $[327] = submitController;
-    $[328] = cancelDeps;
-  } else cancelDeps = $[328];
+    $[340] = cancelRef;
+    $[341] = submitController;
+    $[342] = cancelDeps;
+  } else cancelDeps = $[342];
   useEffect(cancelEffect, cancelDeps);
   const isColdResumeQuotaShowing = blockingDialogKind === COLD_RESUME_QUOTA;
   let idleReturnNode;
-  if ($[329] !== dialogStore || $[330] !== draft || $[331] !== isColdResumeQuotaShowing) {
+  if ($[343] !== dialogStore || $[344] !== draft || $[345] !== isColdResumeQuotaShowing) {
     idleReturnNode = jsxProd_default(useIdleReturnTypeThrough, {
       onScreen: isColdResumeQuotaShowing,
       dialogStore,
       draft,
     });
-    $[329] = dialogStore;
-    $[330] = draft;
-    $[331] = isColdResumeQuotaShowing;
-    $[332] = idleReturnNode;
-  } else idleReturnNode = $[332];
-  let remoteNode;
+    $[343] = dialogStore;
+    $[344] = draft;
+    $[345] = isColdResumeQuotaShowing;
+    $[346] = idleReturnNode;
+  } else idleReturnNode = $[346];
+  let stoppableWork;
+  if ($[347] !== scope.toolState) {
+    stoppableWork = codeModeAccepted()
+      ? (() => {
+          let { ReplSessions, mainThreadStoppableWork } = require("../state/replSessions.js");
+          return mainThreadStoppableWork(scope.toolState.get(ReplSessions));
+        })()
+      : undefined;
+    $[347] = scope.toolState;
+    $[348] = stoppableWork;
+  } else stoppableWork = $[348];
+  let topBarNode;
   if (
-    $[333] !== activeRemote.isRemoteMode ||
-    $[334] !== cancellableExternalLoading ||
-    $[335] !== chrome ||
-    $[336] !== draft ||
-    $[337] !== screen ||
-    $[338] !== submitController ||
-    $[339] !== transcript ||
-    $[340] !== turn
+    $[349] !== activeRemote.isRemoteMode ||
+    $[350] !== cancellableExternalLoading ||
+    $[351] !== chrome ||
+    $[352] !== draft ||
+    $[353] !== screen ||
+    $[354] !== submitController ||
+    $[355] !== stoppableWork ||
+    $[356] !== transcript ||
+    $[357] !== turn
   ) {
-    remoteNode = jsxProd_default(PromptArea, {
+    topBarNode = jsxProd_default(PromptArea, {
       turn,
       transcript,
       draft,
       chrome,
       submitController,
-      stoppableWork: undefined,
+      stoppableWork,
       screen,
       isExternalLoading: cancellableExternalLoading,
       sendsPromptsElsewhere: activeRemote.isRemoteMode,
     });
-    $[333] = activeRemote.isRemoteMode;
-    $[334] = cancellableExternalLoading;
-    $[335] = chrome;
-    $[336] = draft;
-    $[337] = screen;
-    $[338] = submitController;
-    $[339] = transcript;
-    $[340] = turn;
-    $[341] = remoteNode;
-  } else remoteNode = $[341];
-  let topBarNode;
-  if ($[342] !== idleReturnNode || $[343] !== remoteNode) {
-    topBarNode = jsxProd_default_2(Fragment, {
-      children: [idleReturnNode, remoteNode],
+    $[349] = activeRemote.isRemoteMode;
+    $[350] = cancellableExternalLoading;
+    $[351] = chrome;
+    $[352] = draft;
+    $[353] = screen;
+    $[354] = submitController;
+    $[355] = stoppableWork;
+    $[356] = transcript;
+    $[357] = turn;
+    $[358] = topBarNode;
+  } else topBarNode = $[358];
+  let topBarNode_2;
+  if ($[359] !== idleReturnNode || $[360] !== topBarNode) {
+    topBarNode_2 = jsxProd_default_2(Fragment, {
+      children: [idleReturnNode, topBarNode],
     });
-    $[342] = idleReturnNode;
-    $[343] = remoteNode;
-    $[344] = topBarNode;
-  } else topBarNode = $[344];
-  let promptEffects = topBarNode;
-  let canUseTool = useCanUseToolReexport();
-  let [mcpReconnectContext] = useState(createNullContextStore);
+    $[359] = idleReturnNode;
+    $[360] = topBarNode;
+    $[361] = topBarNode_2;
+  } else topBarNode_2 = $[361];
+  let promptEffects = topBarNode_2;
+  let canUseTool = useCanUseToolRef();
+  let runningScriptsSource;
+  if ($[362] !== scope.toolState) {
+    runningScriptsSource = () =>
+      codeModeAccepted()
+        ? require("../utils/codeMode/runningScripts.js").runningScriptsSource(scope.toolState)
+        : null;
+    $[362] = scope.toolState;
+    $[363] = runningScriptsSource;
+  } else runningScriptsSource = $[363];
+  let [mcpReconnectContext] = useState(runningScriptsSource);
   let connectEffect;
   let connectDeps;
-  if ($[345] !== scope) {
+  if ($[364] !== scope) {
     connectEffect = () => {
       scope.connect();
       return () => scope.dispose();
     };
     connectDeps = [scope];
-    $[345] = scope;
-    $[346] = connectEffect;
-    $[347] = connectDeps;
+    $[364] = scope;
+    $[365] = connectEffect;
+    $[366] = connectDeps;
   } else {
-    connectEffect = $[346];
-    connectDeps = $[347];
+    connectEffect = $[365];
+    connectDeps = $[366];
   }
   useLayoutEffect(connectEffect, connectDeps);
   let backgroundQueryArgs;
-  if ($[348] !== gesture.backgroundQuery) {
+  if ($[367] !== gesture.backgroundQuery) {
     backgroundQueryArgs = {
       onBackgroundQuery: gesture.backgroundQuery,
     };
-    $[348] = gesture.backgroundQuery;
-    $[349] = backgroundQueryArgs;
-  } else backgroundQueryArgs = $[349];
+    $[367] = gesture.backgroundQuery;
+    $[368] = backgroundQueryArgs;
+  } else backgroundQueryArgs = $[368];
   let { handleBackgroundSession } = useSessionBackgrounding(backgroundQueryArgs);
   let { markTurnStart, markTurnDone } = useSemanticPromptMarks();
   let leftArrowArgs;
-  if ($[350] !== gesture || $[351] !== onDetachToCaller || $[352] !== transcript || $[353] !== turn) {
+  if ($[369] !== gesture || $[370] !== onDetachToCaller || $[371] !== transcript || $[372] !== turn) {
     leftArrowArgs = {
       gesture,
       turn,
       transcript,
       onDetachToCaller,
     };
-    $[350] = gesture;
-    $[351] = onDetachToCaller;
-    $[352] = transcript;
-    $[353] = turn;
-    $[354] = leftArrowArgs;
-  } else leftArrowArgs = $[354];
+    $[369] = gesture;
+    $[370] = onDetachToCaller;
+    $[371] = transcript;
+    $[372] = turn;
+    $[373] = leftArrowArgs;
+  } else leftArrowArgs = $[373];
   useLeftArrowGesture(leftArrowArgs);
   let exitCostEffect;
-  if ($[355] !== guard.isRunning || $[356] !== storageV5 || $[357] !== transcript) {
+  if ($[374] !== guard.isRunning || $[375] !== storageV5 || $[376] !== transcript) {
     exitCostEffect = () => {
       registerBeforeInteractiveShutdown(() =>
         relaunchForExit(
@@ -4572,23 +4649,23 @@ function REPL_2(props) {
         ),
       );
     };
-    $[355] = guard.isRunning;
-    $[356] = storageV5;
-    $[357] = transcript;
-    $[358] = exitCostEffect;
-  } else exitCostEffect = $[358];
+    $[374] = guard.isRunning;
+    $[375] = storageV5;
+    $[376] = transcript;
+    $[377] = exitCostEffect;
+  } else exitCostEffect = $[377];
   let exitCostDeps;
-  if ($[359] !== guard || $[360] !== storageV5 || $[361] !== transcript) {
+  if ($[378] !== guard || $[379] !== storageV5 || $[380] !== transcript) {
     exitCostDeps = [transcript, guard, storageV5];
-    $[359] = guard;
-    $[360] = storageV5;
-    $[361] = transcript;
-    $[362] = exitCostDeps;
-  } else exitCostDeps = $[362];
+    $[378] = guard;
+    $[379] = storageV5;
+    $[380] = transcript;
+    $[381] = exitCostDeps;
+  } else exitCostDeps = $[381];
   useEffect(exitCostEffect, exitCostDeps);
   useExitCostReport(isTerminalInterested());
   let contextualTipsEffect;
-  if ($[363] !== writePacer || $[364] !== sessionController || $[365] !== transcript || $[366] !== turn) {
+  if ($[382] !== writePacer || $[383] !== sessionController || $[384] !== transcript || $[385] !== turn) {
     contextualTipsEffect = () =>
       writePacer
         ? {
@@ -4599,34 +4676,34 @@ function REPL_2(props) {
             isResponseInFlight: () => turn.getSnapshot().isLoading,
           }
         : undefined;
-    $[363] = writePacer;
-    $[364] = sessionController;
-    $[365] = transcript;
-    $[366] = turn;
-    $[367] = contextualTipsEffect;
-  } else contextualTipsEffect = $[367];
+    $[382] = writePacer;
+    $[383] = sessionController;
+    $[384] = transcript;
+    $[385] = turn;
+    $[386] = contextualTipsEffect;
+  } else contextualTipsEffect = $[386];
   let [restoredFlag] = useState(contextualTipsEffect);
   let isRestored;
-  if ($[368] !== messages || $[369] !== sessionController) {
+  if ($[387] !== messages || $[388] !== sessionController) {
     isRestored = sessionController.isAsRestored(messages);
-    $[368] = messages;
-    $[369] = sessionController;
-    $[370] = isRestored;
-  } else isRestored = $[370];
+    $[387] = messages;
+    $[388] = sessionController;
+    $[389] = isRestored;
+  } else isRestored = $[389];
   useLogMessages(messages, isRestored, isLoading, restoredFlag, headHooksPending);
   const spawnThinkingConfig = thinkingConfigExplicit ? thinkingConfig : undefined;
   let screenFrameEffect;
   if (
-    $[371] !== appendSystemPrompt ||
-    $[372] !== systemPrompt ||
-    $[373] !== permissionRelays ||
-    $[374] !== scope ||
-    $[375] !== systemPromptSnapshot ||
-    $[376] !== spawnThinkingConfig ||
-    $[377] !== thinkingDisplayFlag ||
-    $[378] !== transcript ||
-    $[379] !== transport ||
-    $[380] !== turn
+    $[390] !== appendSystemPrompt ||
+    $[391] !== systemPrompt ||
+    $[392] !== permissionRelays ||
+    $[393] !== scope ||
+    $[394] !== systemPromptSnapshot ||
+    $[395] !== spawnThinkingConfig ||
+    $[396] !== thinkingDisplayFlag ||
+    $[397] !== transcript ||
+    $[398] !== transport ||
+    $[399] !== turn
   ) {
     screenFrameEffect = {
       turn,
@@ -4640,87 +4717,87 @@ function REPL_2(props) {
       appendSystemPrompt,
       systemPromptSnapshot,
     };
-    $[371] = appendSystemPrompt;
-    $[372] = systemPrompt;
-    $[373] = permissionRelays;
-    $[374] = scope;
-    $[375] = systemPromptSnapshot;
-    $[376] = spawnThinkingConfig;
-    $[377] = thinkingDisplayFlag;
-    $[378] = transcript;
-    $[379] = transport;
-    $[380] = turn;
-    $[381] = screenFrameEffect;
-  } else screenFrameEffect = $[381];
+    $[390] = appendSystemPrompt;
+    $[391] = systemPrompt;
+    $[392] = permissionRelays;
+    $[393] = scope;
+    $[394] = systemPromptSnapshot;
+    $[395] = spawnThinkingConfig;
+    $[396] = thinkingDisplayFlag;
+    $[397] = transcript;
+    $[398] = transport;
+    $[399] = turn;
+    $[400] = screenFrameEffect;
+  } else screenFrameEffect = $[400];
   let { sendBridgeResult, stampBridgeReply } = ReplBridgeConnector(screenFrameEffect);
   let { columns, rows } = useTerminalSize();
   let viewportEffect;
   if (
-    $[382] !== activePlugins ||
-    $[383] !== activeRemote ||
-    $[384] !== addNotification ||
-    $[385] !== appendSystemPrompt ||
-    $[386] !== applyLocalConversationReset ||
-    $[387] !== axBell ||
-    $[388] !== briefTranscript ||
-    $[389] !== canUseTool ||
-    $[390] !== chrome ||
-    $[391] !== credentials ||
-    $[392] !== systemPrompt ||
-    $[393] !== debug ||
-    $[394] !== dialogStore ||
-    $[395] !== isQueryDisabled ||
-    $[396] !== isDisabled ||
-    $[397] !== draft ||
-    $[398] !== elicitationShowing_2 ||
-    $[399] !== fallbackModel ||
-    $[400] !== isFullscreen ||
-    $[401] !== gesture ||
-    $[402] !== buildToolUseContext ||
-    $[403] !== installationStatus ||
-    $[404] !== ideSelection ||
-    $[405] !== installExtension ||
-    $[406] !== isBriefOnly ||
-    $[407] !== isThinClient_2 ||
-    $[408] !== mainLoopModel ||
-    $[409] !== markTurnDone ||
-    $[410] !== markTurnStart ||
-    $[411] !== messageQueue ||
-    $[412] !== onBeforeQuery ||
-    $[413] !== onCaptureSnapshot ||
-    $[414] !== openMessageSelector ||
-    $[415] !== onTurnComplete ||
-    $[416] !== permissionRelays ||
-    $[417] !== presentation ||
-    $[418] !== removeNotification ||
-    $[419] !== scope ||
-    $[420] !== screen ||
-    $[421] !== scrollPin.reveal ||
-    $[422] !== scrollPin.rowHolding ||
-    $[423] !== sendBridgeResult ||
-    $[424] !== session ||
-    $[425] !== sessionController ||
-    $[426] !== sessionHooks ||
-    $[427] !== setAppState ||
-    $[428] !== setSessionState ||
-    $[429] !== spinnerStore ||
-    $[430] !== stampBridgeReply ||
-    $[431] !== storageV5 ||
-    $[432] !== store ||
-    $[433] !== submitController ||
-    $[434] !== systemPromptSnapshot ||
-    $[435] !== taskRegistry_2 ||
-    $[436] !== teammateColors_2 ||
-    $[437] !== terminal ||
-    $[438] !== columns ||
-    $[439] !== theme ||
-    $[440] !== thinkingConfig ||
-    $[441] !== thinkingDisplayFlag ||
-    $[442] !== titles ||
-    $[443] !== transcript ||
-    $[444] !== transport ||
-    $[445] !== turnEvents_2 ||
-    $[446] !== turn
+    $[401] !== activePlugins ||
+    $[402] !== activeRemote ||
+    $[403] !== addNotification ||
+    $[404] !== appendSystemPrompt ||
+    $[405] !== applyLocalConversationReset ||
+    $[406] !== axBell ||
+    $[407] !== briefTranscript ||
+    $[408] !== canUseTool ||
+    $[409] !== chrome ||
+    $[410] !== credentials ||
+    $[411] !== systemPrompt ||
+    $[412] !== debug ||
+    $[413] !== dialogStore ||
+    $[414] !== isQueryDisabled ||
+    $[415] !== isDisabled ||
+    $[416] !== draft ||
+    $[417] !== elicitationShowing_2 ||
+    $[418] !== fallbackModel ||
+    $[419] !== isFullscreen ||
+    $[420] !== gesture ||
+    $[421] !== buildToolUseContext ||
+    $[422] !== installationStatus ||
+    $[423] !== ideSelection ||
+    $[424] !== installExtension ||
+    $[425] !== isBriefOnly ||
+    $[426] !== isThinClient_2 ||
+    $[427] !== mainLoopModel ||
+    $[428] !== markTurnDone ||
+    $[429] !== markTurnStart ||
+    $[430] !== messageQueue ||
+    $[431] !== onBeforeQuery ||
+    $[432] !== onCaptureSnapshot ||
+    $[433] !== openMessageSelector ||
+    $[434] !== onTurnComplete ||
+    $[435] !== permissionRelays ||
+    $[436] !== presentation ||
+    $[437] !== removeNotification ||
+    $[438] !== scope ||
+    $[439] !== screen ||
+    $[440] !== scrollPin.reveal ||
+    $[441] !== scrollPin.rowHolding ||
+    $[442] !== sendBridgeResult ||
+    $[443] !== session ||
+    $[444] !== sessionController ||
+    $[445] !== sessionHooks ||
+    $[446] !== setAppState ||
+    $[447] !== setSessionState ||
+    $[448] !== spinnerStore ||
+    $[449] !== stampBridgeReply ||
+    $[450] !== storageV5 ||
+    $[451] !== store ||
+    $[452] !== submitController ||
+    $[453] !== systemPromptSnapshot ||
+    $[454] !== taskRegistry_2 ||
+    $[455] !== teammateColors_2 ||
+    $[456] !== terminal ||
+    $[457] !== columns ||
+    $[458] !== theme ||
+    $[459] !== thinkingConfig ||
+    $[460] !== thinkingDisplayFlag ||
+    $[461] !== titles ||
+    $[462] !== transcript ||
+    $[463] !== transport ||
+    $[464] !== turnEvents_2 ||
+    $[465] !== turn
   ) {
     viewportEffect = () => {
       transport.bindHost({
@@ -4802,6 +4879,7 @@ function REPL_2(props) {
         installIDEExtension: installExtension,
         resume: sessionController.resume,
         markConversationRemote: sessionController.markConversationRemote,
+        askAboutSessionOwner: sessionController.askAboutSessionOwner,
         applyConversationReset: applyLocalConversationReset,
         bumpConversationId: sessionController.bumpConversationId,
         openMessageSelector: chrome.openMessageSelector,
@@ -4816,6 +4894,8 @@ function REPL_2(props) {
         terminal,
         axBell,
         restoreMessageSync: sessionController.restoreMessageSync,
+        restoreDraftsFrom: sessionController.restoreDraftsFrom,
+        escTakeBack: transport.escTakeBack,
         draft,
         isThinClient: isThinClient_2,
         titles,
@@ -4839,80 +4919,80 @@ function REPL_2(props) {
         adoptedPrefillRef: sessionController.adoptedPrefillRef,
       });
     };
-    $[382] = activePlugins;
-    $[383] = activeRemote;
-    $[384] = addNotification;
-    $[385] = appendSystemPrompt;
-    $[386] = applyLocalConversationReset;
-    $[387] = axBell;
-    $[388] = briefTranscript;
-    $[389] = canUseTool;
-    $[390] = chrome;
-    $[391] = credentials;
-    $[392] = systemPrompt;
-    $[393] = debug;
-    $[394] = dialogStore;
-    $[395] = isQueryDisabled;
-    $[396] = isDisabled;
-    $[397] = draft;
-    $[398] = elicitationShowing_2;
-    $[399] = fallbackModel;
-    $[400] = isFullscreen;
-    $[401] = gesture;
-    $[402] = buildToolUseContext;
-    $[403] = installationStatus;
-    $[404] = ideSelection;
-    $[405] = installExtension;
-    $[406] = isBriefOnly;
-    $[407] = isThinClient_2;
-    $[408] = mainLoopModel;
-    $[409] = markTurnDone;
-    $[410] = markTurnStart;
-    $[411] = messageQueue;
-    $[412] = onBeforeQuery;
-    $[413] = onCaptureSnapshot;
-    $[414] = openMessageSelector;
-    $[415] = onTurnComplete;
-    $[416] = permissionRelays;
-    $[417] = presentation;
-    $[418] = removeNotification;
-    $[419] = scope;
-    $[420] = screen;
-    $[421] = scrollPin.reveal;
-    $[422] = scrollPin.rowHolding;
-    $[423] = sendBridgeResult;
-    $[424] = session;
-    $[425] = sessionController;
-    $[426] = sessionHooks;
-    $[427] = setAppState;
-    $[428] = setSessionState;
-    $[429] = spinnerStore;
-    $[430] = stampBridgeReply;
-    $[431] = storageV5;
-    $[432] = store;
-    $[433] = submitController;
-    $[434] = systemPromptSnapshot;
-    $[435] = taskRegistry_2;
-    $[436] = teammateColors_2;
-    $[437] = terminal;
-    $[438] = columns;
-    $[439] = theme;
-    $[440] = thinkingConfig;
-    $[441] = thinkingDisplayFlag;
-    $[442] = titles;
-    $[443] = transcript;
-    $[444] = transport;
-    $[445] = turnEvents_2;
-    $[446] = turn;
-    $[447] = viewportEffect;
-  } else viewportEffect = $[447];
+    $[401] = activePlugins;
+    $[402] = activeRemote;
+    $[403] = addNotification;
+    $[404] = appendSystemPrompt;
+    $[405] = applyLocalConversationReset;
+    $[406] = axBell;
+    $[407] = briefTranscript;
+    $[408] = canUseTool;
+    $[409] = chrome;
+    $[410] = credentials;
+    $[411] = systemPrompt;
+    $[412] = debug;
+    $[413] = dialogStore;
+    $[414] = isQueryDisabled;
+    $[415] = isDisabled;
+    $[416] = draft;
+    $[417] = elicitationShowing_2;
+    $[418] = fallbackModel;
+    $[419] = isFullscreen;
+    $[420] = gesture;
+    $[421] = buildToolUseContext;
+    $[422] = installationStatus;
+    $[423] = ideSelection;
+    $[424] = installExtension;
+    $[425] = isBriefOnly;
+    $[426] = isThinClient_2;
+    $[427] = mainLoopModel;
+    $[428] = markTurnDone;
+    $[429] = markTurnStart;
+    $[430] = messageQueue;
+    $[431] = onBeforeQuery;
+    $[432] = onCaptureSnapshot;
+    $[433] = openMessageSelector;
+    $[434] = onTurnComplete;
+    $[435] = permissionRelays;
+    $[436] = presentation;
+    $[437] = removeNotification;
+    $[438] = scope;
+    $[439] = screen;
+    $[440] = scrollPin.reveal;
+    $[441] = scrollPin.rowHolding;
+    $[442] = sendBridgeResult;
+    $[443] = session;
+    $[444] = sessionController;
+    $[445] = sessionHooks;
+    $[446] = setAppState;
+    $[447] = setSessionState;
+    $[448] = spinnerStore;
+    $[449] = stampBridgeReply;
+    $[450] = storageV5;
+    $[451] = store;
+    $[452] = submitController;
+    $[453] = systemPromptSnapshot;
+    $[454] = taskRegistry_2;
+    $[455] = teammateColors_2;
+    $[456] = terminal;
+    $[457] = columns;
+    $[458] = theme;
+    $[459] = thinkingConfig;
+    $[460] = thinkingDisplayFlag;
+    $[461] = titles;
+    $[462] = transcript;
+    $[463] = transport;
+    $[464] = turnEvents_2;
+    $[465] = turn;
+    $[466] = viewportEffect;
+  } else viewportEffect = $[466];
   useLayoutEffect(viewportEffect);
   let commandsEffect;
   if (
-    $[448] !== commands_2 ||
-    $[449] !== gesture.handOverInFlight ||
-    $[450] !== hasActiveLocalJsxUI ||
-    $[451] !== turn
+    $[467] !== commands_2 ||
+    $[468] !== gesture.handOverInFlight ||
+    $[469] !== hasActiveLocalJsxUI ||
+    $[470] !== turn
   ) {
     commandsEffect = {
       turn,
@@ -4920,21 +5000,21 @@ function REPL_2(props) {
       commands: commands_2,
       handOverInFlight: gesture.handOverInFlight,
     };
-    $[448] = commands_2;
-    $[449] = gesture.handOverInFlight;
-    $[450] = hasActiveLocalJsxUI;
-    $[451] = turn;
-    $[452] = commandsEffect;
-  } else commandsEffect = $[452];
+    $[467] = commands_2;
+    $[468] = gesture.handOverInFlight;
+    $[469] = hasActiveLocalJsxUI;
+    $[470] = turn;
+    $[471] = commandsEffect;
+  } else commandsEffect = $[471];
   useQueueProcessor(commandsEffect);
   let blocksBtwReopen = hasOpenDialog || hasLocalJsxOverlay;
   let reopenEffect;
   if (
-    $[453] !== blocksBtwReopen ||
-    $[454] !== session.btwHistory ||
-    $[455] !== store ||
-    $[456] !== submitController ||
-    $[457] !== turn
+    $[472] !== blocksBtwReopen ||
+    $[473] !== session.btwHistory ||
+    $[474] !== store ||
+    $[475] !== submitController ||
+    $[476] !== turn
   ) {
     reopenEffect = () => {
       let btwHistory = session.btwHistory;
@@ -4959,46 +5039,46 @@ function REPL_2(props) {
       });
       return () => btwHistory.setReopener(null);
     };
-    $[453] = blocksBtwReopen;
-    $[454] = session.btwHistory;
-    $[455] = store;
-    $[456] = submitController;
-    $[457] = turn;
-    $[458] = reopenEffect;
-  } else reopenEffect = $[458];
+    $[472] = blocksBtwReopen;
+    $[473] = session.btwHistory;
+    $[474] = store;
+    $[475] = submitController;
+    $[476] = turn;
+    $[477] = reopenEffect;
+  } else reopenEffect = $[477];
   let reopenDeps;
   if (
-    $[459] !== blocksBtwReopen ||
-    $[460] !== session ||
-    $[461] !== store ||
-    $[462] !== submitController ||
-    $[463] !== turn
+    $[478] !== blocksBtwReopen ||
+    $[479] !== session ||
+    $[480] !== store ||
+    $[481] !== submitController ||
+    $[482] !== turn
   ) {
     reopenDeps = [session, submitController, blocksBtwReopen, store, turn];
-    $[459] = blocksBtwReopen;
-    $[460] = session;
-    $[461] = store;
-    $[462] = submitController;
-    $[463] = turn;
-    $[464] = reopenDeps;
-  } else reopenDeps = $[464];
+    $[478] = blocksBtwReopen;
+    $[479] = session;
+    $[480] = store;
+    $[481] = submitController;
+    $[482] = turn;
+    $[483] = reopenDeps;
+  } else reopenDeps = $[483];
   useEffect(reopenEffect, reopenDeps);
   let scheduledArgs;
   if (
-    $[465] !== dialogStore ||
-    $[466] !== isDisabled ||
-    $[467] !== dynamicMcpConfig_2 ||
-    $[468] !== hasOpenDialog ||
-    $[469] !== installationStatus ||
-    $[470] !== isRemoteSession_2 ||
-    $[471] !== mainLoopModel ||
-    $[472] !== mergedMcpClients ||
-    $[473] !== requestDialog ||
-    $[474] !== screen ||
-    $[475] !== scrollPin.isAtBottom ||
-    $[476] !== submitController.submit ||
-    $[477] !== transcript ||
-    $[478] !== turn
+    $[484] !== dialogStore ||
+    $[485] !== isDisabled ||
+    $[486] !== dynamicMcpConfig_2 ||
+    $[487] !== hasOpenDialog ||
+    $[488] !== installationStatus ||
+    $[489] !== isRemoteSession_2 ||
+    $[490] !== mainLoopModel ||
+    $[491] !== mergedMcpClients ||
+    $[492] !== requestDialog ||
+    $[493] !== screen ||
+    $[494] !== scrollPin.isAtBottom ||
+    $[495] !== submitController.submit ||
+    $[496] !== transcript ||
+    $[497] !== turn
   ) {
     scheduledArgs = {
       mainLoopModel,
@@ -5016,33 +5096,33 @@ function REPL_2(props) {
       isRemoteSession: isRemoteSession_2,
       isTranscriptAtBottom: scrollPin.isAtBottom,
     };
-    $[465] = dialogStore;
-    $[466] = isDisabled;
-    $[467] = dynamicMcpConfig_2;
-    $[468] = hasOpenDialog;
-    $[469] = installationStatus;
-    $[470] = isRemoteSession_2;
-    $[471] = mainLoopModel;
-    $[472] = mergedMcpClients;
-    $[473] = requestDialog;
-    $[474] = screen;
-    $[475] = scrollPin.isAtBottom;
-    $[476] = submitController.submit;
-    $[477] = transcript;
-    $[478] = turn;
-    $[479] = scheduledArgs;
-  } else scheduledArgs = $[479];
+    $[484] = dialogStore;
+    $[485] = isDisabled;
+    $[486] = dynamicMcpConfig_2;
+    $[487] = hasOpenDialog;
+    $[488] = installationStatus;
+    $[489] = isRemoteSession_2;
+    $[490] = mainLoopModel;
+    $[491] = mergedMcpClients;
+    $[492] = requestDialog;
+    $[493] = screen;
+    $[494] = scrollPin.isAtBottom;
+    $[495] = submitController.submit;
+    $[496] = transcript;
+    $[497] = turn;
+    $[498] = scheduledArgs;
+  } else scheduledArgs = $[498];
   let idleThresholdMin = useStartupNotifications(scheduledArgs);
-  useEffectSlots(STARTUP_NOTIFICATION_SPECS, idleThresholdMin);
+  useEffectSlots(STARTUP_CHECKS, idleThresholdMin);
   const swarmEnabled = renderWithForceUpdate(isAgentSwarmsEnabled) && !isRemoteSession_2;
   const visibleDialogKind = topAutoDialogKind ?? (hasActiveLocalJsxUI ? LOCAL_JSX_DIALOG.kind : undefined);
   let props_2;
   if (
-    $[480] !== isLoading ||
-    $[481] !== requestDialog ||
-    $[482] !== swarmEnabled ||
-    $[483] !== visibleDialogKind ||
-    $[484] !== turn.submitIncomingPrompt
+    $[499] !== isLoading ||
+    $[500] !== requestDialog ||
+    $[501] !== swarmEnabled ||
+    $[502] !== visibleDialogKind ||
+    $[503] !== turn.submitIncomingPrompt
   ) {
     props_2 = {
       enabled: swarmEnabled,
@@ -5051,22 +5131,22 @@ function REPL_2(props) {
       onSubmitMessage: turn.submitIncomingPrompt,
       requestDialog,
     };
-    $[480] = isLoading;
-    $[481] = requestDialog;
-    $[482] = swarmEnabled;
-    $[483] = visibleDialogKind;
-    $[484] = turn.submitIncomingPrompt;
-    $[485] = props_2;
-  } else props_2 = $[485];
+    $[499] = isLoading;
+    $[500] = requestDialog;
+    $[501] = swarmEnabled;
+    $[502] = visibleDialogKind;
+    $[503] = turn.submitIncomingPrompt;
+    $[504] = props_2;
+  } else props_2 = $[504];
   useInboxPollerHook(props_2);
   useMailboxBridge(turn);
   let assistantMode = env.CLAUDE_CODE_PROACTIVE;
   let usageArgs;
   if (
-    $[486] !== isLoading ||
-    $[487] !== sessionController.runsNoModelTurn ||
-    $[488] !== storageV5 ||
-    $[489] !== transcript
+    $[505] !== isLoading ||
+    $[506] !== sessionController.runsNoModelTurn ||
+    $[507] !== storageV5 ||
+    $[508] !== transcript
   ) {
     usageArgs = {
       isLoading,
@@ -5075,51 +5155,51 @@ function REPL_2(props) {
       storageV5,
       disabled: sessionController.runsNoModelTurn,
     };
-    $[486] = isLoading;
-    $[487] = sessionController.runsNoModelTurn;
-    $[488] = storageV5;
-    $[489] = transcript;
-    $[490] = usageArgs;
-  } else usageArgs = $[490];
+    $[505] = isLoading;
+    $[506] = sessionController.runsNoModelTurn;
+    $[507] = storageV5;
+    $[508] = transcript;
+    $[509] = usageArgs;
+  } else usageArgs = $[509];
   useScheduledTasks(usageArgs);
   let usageDeps;
-  if ($[491] !== isLoading || $[492] !== transcript) {
+  if ($[510] !== isLoading || $[511] !== transcript) {
     usageDeps = {
       isLoading,
       transcript,
     };
-    $[491] = isLoading;
-    $[492] = transcript;
-    $[493] = usageDeps;
-  } else usageDeps = $[493];
+    $[510] = isLoading;
+    $[511] = transcript;
+    $[512] = usageDeps;
+  } else usageDeps = $[512];
   let tokenWarningState = useUsageLimitNotices(usageDeps);
   let usageDepsB;
-  if ($[494] === MEMO_CACHE_SENTINEL) {
+  if ($[513] === MEMO_CACHE_SENTINEL) {
     usageDepsB = [];
-    $[494] = usageDepsB;
-  } else usageDepsB = $[494];
-  useEffect(noop_6, usageDepsB);
+    $[513] = usageDepsB;
+  } else usageDepsB = $[513];
+  useEffect(noop_5, usageDepsB);
   let resumeDeps;
-  if ($[495] === MEMO_CACHE_SENTINEL) {
+  if ($[514] === MEMO_CACHE_SENTINEL) {
     resumeDeps = [];
-    $[495] = resumeDeps;
-  } else resumeDeps = $[495];
-  useEffect(noop_7, resumeDeps);
+    $[514] = resumeDeps;
+  } else resumeDeps = $[514];
+  useEffect(noop_6, resumeDeps);
   let suspendKey = useSuspendResume();
   let virtualScrollActive = isFullscreen && !CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL;
   let columnsProp = columns;
   let screenFrameProps;
   if (
-    $[496] !== dialogSurface_2 ||
-    $[497] !== draft ||
-    $[498] !== isEmbedded ||
-    $[499] !== gesture ||
-    $[500] !== localJsx ||
-    $[501] !== screen ||
-    $[502] !== scrollPin ||
-    $[503] !== titles ||
-    $[504] !== transcript ||
-    $[505] !== turn
+    $[515] !== dialogSurface_2 ||
+    $[516] !== draft ||
+    $[517] !== isEmbedded ||
+    $[518] !== gesture ||
+    $[519] !== localJsx ||
+    $[520] !== screen ||
+    $[521] !== scrollPin ||
+    $[522] !== titles ||
+    $[523] !== transcript ||
+    $[524] !== turn
   ) {
     screenFrameProps = {
       embedded: isEmbedded,
@@ -5133,26 +5213,26 @@ function REPL_2(props) {
       draft,
       scrollPin,
     };
-    $[496] = dialogSurface_2;
-    $[497] = draft;
-    $[498] = isEmbedded;
-    $[499] = gesture;
-    $[500] = localJsx;
-    $[501] = screen;
-    $[502] = scrollPin;
-    $[503] = titles;
-    $[504] = transcript;
-    $[505] = turn;
-    $[506] = screenFrameProps;
-  } else screenFrameProps = $[506];
+    $[515] = dialogSurface_2;
+    $[516] = draft;
+    $[517] = isEmbedded;
+    $[518] = gesture;
+    $[519] = localJsx;
+    $[520] = screen;
+    $[521] = scrollPin;
+    $[522] = titles;
+    $[523] = transcript;
+    $[524] = turn;
+    $[525] = screenFrameProps;
+  } else screenFrameProps = $[525];
   let screenFrameProps_2 = screenFrameProps;
   let frameNode;
   if (
-    $[507] !== isRemoteSession_2 ||
-    $[508] !== localJsx ||
-    $[509] !== surveySlot ||
-    $[510] !== transcript ||
-    $[511] !== turn
+    $[526] !== isRemoteSession_2 ||
+    $[527] !== localJsx ||
+    $[528] !== surveySlot ||
+    $[529] !== transcript ||
+    $[530] !== turn
   ) {
     frameNode = jsxProd_default(SurveyStatePublisher, {
       turn,
@@ -5161,20 +5241,20 @@ function REPL_2(props) {
       slot: surveySlot,
       localJsx,
     });
-    $[507] = isRemoteSession_2;
-    $[508] = localJsx;
-    $[509] = surveySlot;
-    $[510] = transcript;
-    $[511] = turn;
-    $[512] = frameNode;
-  } else frameNode = $[512];
+    $[526] = isRemoteSession_2;
+    $[527] = localJsx;
+    $[528] = surveySlot;
+    $[529] = transcript;
+    $[530] = turn;
+    $[531] = frameNode;
+  } else frameNode = $[531];
   let withChrome = frameNode;
   let wrappedNode;
   if (
-    $[513] !== chrome ||
-    $[514] !== initialMessages ||
-    $[515] !== isRemoteSession_2 ||
-    $[516] !== mergedMcpClients
+    $[532] !== chrome ||
+    $[533] !== initialMessages ||
+    $[534] !== isRemoteSession_2 ||
+    $[535] !== mergedMcpClients
   ) {
     wrappedNode = jsxProd_default(ReplEffects, {
       chrome,
@@ -5182,22 +5262,22 @@ function REPL_2(props) {
       initialMessages,
       isRemoteSession: isRemoteSession_2,
     });
-    $[513] = chrome;
-    $[514] = initialMessages;
-    $[515] = isRemoteSession_2;
-    $[516] = mergedMcpClients;
-    $[517] = wrappedNode;
-  } else wrappedNode = $[517];
+    $[532] = chrome;
+    $[533] = initialMessages;
+    $[534] = isRemoteSession_2;
+    $[535] = mergedMcpClients;
+    $[536] = wrappedNode;
+  } else wrappedNode = $[536];
   let providersNode = wrappedNode;
   let withProviders;
   if (
-    $[518] !== providersNode ||
-    $[519] !== dynamicMcpConfig_2 ||
-    $[520] !== permissionRelays ||
-    $[521] !== requestDialog ||
-    $[522] !== mcpReconnectContext ||
-    $[523] !== isStrictMcpConfig ||
-    $[524] !== withChrome
+    $[537] !== providersNode ||
+    $[538] !== dynamicMcpConfig_2 ||
+    $[539] !== permissionRelays ||
+    $[540] !== requestDialog ||
+    $[541] !== mcpReconnectContext ||
+    $[542] !== isStrictMcpConfig ||
+    $[543] !== withChrome
   ) {
     withProviders = function wrapNode(children) {
       return jsxProd_default_2(Fragment, {
@@ -5219,15 +5299,15 @@ function REPL_2(props) {
         ],
       });
     };
-    $[518] = providersNode;
-    $[519] = dynamicMcpConfig_2;
-    $[520] = permissionRelays;
-    $[521] = requestDialog;
-    $[522] = mcpReconnectContext;
-    $[523] = isStrictMcpConfig;
-    $[524] = withChrome;
-    $[525] = withProviders;
-  } else withProviders = $[525];
+    $[537] = providersNode;
+    $[538] = dynamicMcpConfig_2;
+    $[539] = permissionRelays;
+    $[540] = requestDialog;
+    $[541] = mcpReconnectContext;
+    $[542] = isStrictMcpConfig;
+    $[543] = withChrome;
+    $[544] = withProviders;
+  } else withProviders = $[544];
   let wrapWithProviders = withProviders;
   getViewedTeammateTask_2();
   useAgentsHintExpiry();
@@ -5238,13 +5318,13 @@ function REPL_2(props) {
   PaneDockNamespace.useBarToasts();
   let sidebarWidth;
   if (
-    $[526] !== diffSidebarEnabled ||
-    $[527] !== hasGitRepo ||
-    $[528] !== focused.isMain ||
-    $[529] !== isFullscreen ||
-    $[530] !== isThinClient_2 ||
-    $[531] !== replTab ||
-    $[532] !== columnsProp
+    $[545] !== diffSidebarEnabled ||
+    $[546] !== hasGitRepo ||
+    $[547] !== focused.isMain ||
+    $[548] !== isFullscreen ||
+    $[549] !== isThinClient_2 ||
+    $[550] !== replTab ||
+    $[551] !== columnsProp
   ) {
     sidebarWidth =
       replTab === "diff" &&
@@ -5258,62 +5338,62 @@ function REPL_2(props) {
       })
         ? computeMaxDockColumns(columnsProp)
         : 0;
-    $[526] = diffSidebarEnabled;
-    $[527] = hasGitRepo;
-    $[528] = focused.isMain;
-    $[529] = isFullscreen;
-    $[530] = isThinClient_2;
-    $[531] = replTab;
-    $[532] = columnsProp;
-    $[533] = sidebarWidth;
-  } else sidebarWidth = $[533];
+    $[545] = diffSidebarEnabled;
+    $[546] = hasGitRepo;
+    $[547] = focused.isMain;
+    $[548] = isFullscreen;
+    $[549] = isThinClient_2;
+    $[550] = replTab;
+    $[551] = columnsProp;
+    $[552] = sidebarWidth;
+  } else sidebarWidth = $[552];
   let sidebarWidth_2 = sidebarWidth;
   let toastWidth = isFullscreen && sidebarWidth_2 === 0 ? dockColumns : 0;
   let dockWidth = toastRegionWidth(hasOpenPanes, toastWidth, columnsProp);
   let reservedWidth = screen === "transcript" ? 0 : sidebarWidth_2 + dockWidth;
   useTerminalViewportNamespace.useTerminalViewport(columns, rows, reservedWidth);
   let trackedCountSelector;
-  if ($[534] !== diffSidebarEnabled) {
+  if ($[553] !== diffSidebarEnabled) {
     trackedCountSelector = (state) => (diffSidebarEnabled ? state.fileHistory.trackedFiles.size : 0);
-    $[534] = diffSidebarEnabled;
-    $[535] = trackedCountSelector;
-  } else trackedCountSelector = $[535];
+    $[553] = diffSidebarEnabled;
+    $[554] = trackedCountSelector;
+  } else trackedCountSelector = $[554];
   let userMessage = useAppState(trackedCountSelector);
   let autoOpenBaseline = useDiffAutoOpenBaseline(diffSidebarEnabled, userMessage);
   let baselineArgs;
-  if ($[536] !== hasToolProgress || $[537] !== renderingTools || $[538] !== toolProgress) {
+  if ($[555] !== hasToolProgress || $[556] !== renderingTools || $[557] !== toolProgress) {
     baselineArgs = hasToolProgress
       ? jsxProd_default(InlineProgressList, {
           progress: toolProgress,
           tools: renderingTools,
         })
       : null;
-    $[536] = hasToolProgress;
-    $[537] = renderingTools;
-    $[538] = toolProgress;
-    $[539] = baselineArgs;
-  } else baselineArgs = $[539];
+    $[555] = hasToolProgress;
+    $[556] = renderingTools;
+    $[557] = toolProgress;
+    $[558] = baselineArgs;
+  } else baselineArgs = $[558];
   let scrollViewport = baselineArgs;
   let scrollViewport_2 = isEmbedded || (virtualScrollActive && !dumpMode) ? scrollPin.viewport : undefined;
   let inlineRenderer = !isFullscreen && !isEmbedded && !isDecstbmRendererEnabled();
   let isTranscriptScreen = screen === "transcript";
   let promptAreaEffect;
   if (
-    $[540] !== commands_2 ||
-    $[541] !== dumpMode ||
-    $[542] !== isEmbedded ||
-    $[543] !== focused ||
-    $[544] !== hideWelcomeChrome ||
-    $[545] !== isRemoteSession_2 ||
-    $[546] !== renderingTools ||
-    $[547] !== scrollPin.onUserScrollWithoutDivider ||
-    $[548] !== scrollPin.revealRef ||
-    $[549] !== scrollViewport ||
-    $[550] !== scrollViewport_2 ||
-    $[551] !== isTranscriptScreen ||
-    $[552] !== turn ||
-    $[553] !== isUltraplanChoiceShowing ||
-    $[554] !== virtualScrollActive
+    $[559] !== commands_2 ||
+    $[560] !== dumpMode ||
+    $[561] !== isEmbedded ||
+    $[562] !== focused ||
+    $[563] !== hideWelcomeChrome ||
+    $[564] !== isRemoteSession_2 ||
+    $[565] !== renderingTools ||
+    $[566] !== scrollPin.onUserScrollWithoutDivider ||
+    $[567] !== scrollPin.revealRef ||
+    $[568] !== scrollViewport ||
+    $[569] !== scrollViewport_2 ||
+    $[570] !== isTranscriptScreen ||
+    $[571] !== turn ||
+    $[572] !== isUltraplanChoiceShowing ||
+    $[573] !== virtualScrollActive
   ) {
     promptAreaEffect =
       isTranscriptScreen &&
@@ -5335,75 +5415,75 @@ function REPL_2(props) {
         onDumpToScrollback: () => setDumpMode(true),
         onExit: exitTranscript,
       });
-    $[540] = commands_2;
-    $[541] = dumpMode;
-    $[542] = isEmbedded;
-    $[543] = focused;
-    $[544] = hideWelcomeChrome;
-    $[545] = isRemoteSession_2;
-    $[546] = renderingTools;
-    $[547] = scrollPin.onUserScrollWithoutDivider;
-    $[548] = scrollPin.revealRef;
-    $[549] = scrollViewport;
-    $[550] = scrollViewport_2;
-    $[551] = isTranscriptScreen;
-    $[552] = turn;
-    $[553] = isUltraplanChoiceShowing;
-    $[554] = virtualScrollActive;
-    $[555] = promptAreaEffect;
-  } else promptAreaEffect = $[555];
+    $[559] = commands_2;
+    $[560] = dumpMode;
+    $[561] = isEmbedded;
+    $[562] = focused;
+    $[563] = hideWelcomeChrome;
+    $[564] = isRemoteSession_2;
+    $[565] = renderingTools;
+    $[566] = scrollPin.onUserScrollWithoutDivider;
+    $[567] = scrollPin.revealRef;
+    $[568] = scrollViewport;
+    $[569] = scrollViewport_2;
+    $[570] = isTranscriptScreen;
+    $[571] = turn;
+    $[572] = isUltraplanChoiceShowing;
+    $[573] = virtualScrollActive;
+    $[574] = promptAreaEffect;
+  } else promptAreaEffect = $[574];
   let transcriptView = promptAreaEffect;
   if (isTranscriptScreen && !inlineRenderer) {
     const fullscreen = scrollViewport_2 !== undefined;
     let children;
-    if ($[556] !== promptEffects || $[557] !== transcriptView) {
+    if ($[575] !== promptEffects || $[576] !== transcriptView) {
       children = jsxProd_default_2(KeybindingRoot, {
         children: [promptEffects, transcriptView],
       });
-      $[556] = promptEffects;
-      $[557] = transcriptView;
-      $[558] = children;
-    } else children = $[558];
+      $[575] = promptEffects;
+      $[576] = transcriptView;
+      $[577] = children;
+    } else children = $[577];
     let children_2;
-    if ($[559] !== isEmbedded || $[560] !== children) {
+    if ($[578] !== isEmbedded || $[579] !== children) {
       children_2 = jsxProd_default(UnattendedNoticeProvider, {
         drawn: false,
         hideSessionTitle: isEmbedded,
         children,
       });
-      $[559] = isEmbedded;
-      $[560] = children;
-      $[561] = children_2;
-    } else children_2 = $[561];
+      $[578] = isEmbedded;
+      $[579] = children;
+      $[580] = children_2;
+    } else children_2 = $[580];
     let children_3;
-    if ($[562] !== tokenWarningState || $[563] !== children_2) {
+    if ($[581] !== tokenWarningState || $[582] !== children_2) {
       children_3 = jsxProd_default(noticeQueueStore.Provider, {
         value: tokenWarningState,
         children: children_2,
       });
-      $[562] = tokenWarningState;
-      $[563] = children_2;
-      $[564] = children_3;
-    } else children_3 = $[564];
+      $[581] = tokenWarningState;
+      $[582] = children_2;
+      $[583] = children_3;
+    } else children_3 = $[583];
     let screenFrame;
-    if ($[565] !== screenFrameProps_2 || $[566] !== fullscreen || $[567] !== children_3) {
+    if ($[584] !== screenFrameProps_2 || $[585] !== fullscreen || $[586] !== children_3) {
       screenFrame = jsxProd_default(ReplScreenFrame, {
         ...screenFrameProps_2,
         fullscreen,
         children: children_3,
       });
-      $[565] = screenFrameProps_2;
-      $[566] = fullscreen;
-      $[567] = children_3;
-      $[568] = screenFrame;
-    } else screenFrame = $[568];
+      $[584] = screenFrameProps_2;
+      $[585] = fullscreen;
+      $[586] = children_3;
+      $[587] = screenFrame;
+    } else screenFrame = $[587];
     let wrappedScreen;
-    if ($[569] !== screenFrame || $[570] !== wrapWithProviders) {
+    if ($[588] !== screenFrame || $[589] !== wrapWithProviders) {
       wrappedScreen = wrapWithProviders(screenFrame);
-      $[569] = screenFrame;
-      $[570] = wrapWithProviders;
-      $[571] = wrappedScreen;
-    } else wrappedScreen = $[571];
+      $[588] = screenFrame;
+      $[589] = wrapWithProviders;
+      $[590] = wrappedScreen;
+    } else wrappedScreen = $[590];
     return wrappedScreen;
   }
   let modalSlotActive = isModalOpen && modalVisibility === "visible";
@@ -5417,11 +5497,11 @@ function REPL_2(props) {
   });
   let modalNode;
   if (
-    $[572] !== modalVisibility ||
-    $[573] !== isEmbedded ||
-    $[574] !== hasTeamModal ||
-    $[575] !== isModalOpen ||
-    $[576] !== layoutSlots.inPane
+    $[591] !== modalVisibility ||
+    $[592] !== isEmbedded ||
+    $[593] !== hasTeamModal ||
+    $[594] !== isModalOpen ||
+    $[595] !== layoutSlots.inPane
   ) {
     modalNode = hasTeamModal
       ? {
@@ -5436,17 +5516,17 @@ function REPL_2(props) {
             : undefined,
         }
       : undefined;
-    $[572] = modalVisibility;
-    $[573] = isEmbedded;
-    $[574] = hasTeamModal;
-    $[575] = isModalOpen;
-    $[576] = layoutSlots.inPane;
-    $[577] = modalNode;
-  } else modalNode = $[577];
+    $[591] = modalVisibility;
+    $[592] = isEmbedded;
+    $[593] = hasTeamModal;
+    $[594] = isModalOpen;
+    $[595] = layoutSlots.inPane;
+    $[596] = modalNode;
+  } else modalNode = $[596];
   let modalNodeB = modalNode;
   let promptVisible = !dialogOverPanel && !exitState && !isDisabled;
   let focusedNode;
-  if ($[578] !== focused.messages || $[579] !== screen || $[580] !== isTranscriptScreen) {
+  if ($[597] !== focused.messages || $[598] !== screen || $[599] !== isTranscriptScreen) {
     focusedNode =
       !isTranscriptScreen &&
       jsxProd_default(GlobalKeybindingHandlers, {
@@ -5454,18 +5534,18 @@ function REPL_2(props) {
         onToggleTranscript: () => setScreen(toggleScreen),
         messageCount: focused.messages.length,
       });
-    $[578] = focused.messages;
-    $[579] = screen;
-    $[580] = isTranscriptScreen;
-    $[581] = focusedNode;
-  } else focusedNode = $[581];
+    $[597] = focused.messages;
+    $[598] = screen;
+    $[599] = isTranscriptScreen;
+    $[600] = focusedNode;
+  } else focusedNode = $[600];
   let focusedFrame;
   if (
-    $[582] !== focused.isMain ||
-    $[583] !== modalSlotActive ||
-    $[584] !== scrollPin ||
-    $[585] !== isTranscriptScreen ||
-    $[586] !== isUltraplanChoiceShowing
+    $[601] !== focused.isMain ||
+    $[602] !== modalSlotActive ||
+    $[603] !== scrollPin ||
+    $[604] !== isTranscriptScreen ||
+    $[605] !== isUltraplanChoiceShowing
   ) {
     focusedFrame =
       !isTranscriptScreen &&
@@ -5475,23 +5555,23 @@ function REPL_2(props) {
         ultraplanChoiceShowing: isUltraplanChoiceShowing,
         isMain: focused.isMain,
       });
-    $[582] = focused.isMain;
-    $[583] = modalSlotActive;
-    $[584] = scrollPin;
-    $[585] = isTranscriptScreen;
-    $[586] = isUltraplanChoiceShowing;
-    $[587] = focusedFrame;
-  } else focusedFrame = $[587];
+    $[601] = focused.isMain;
+    $[602] = modalSlotActive;
+    $[603] = scrollPin;
+    $[604] = isTranscriptScreen;
+    $[605] = isUltraplanChoiceShowing;
+    $[606] = focusedFrame;
+  } else focusedFrame = $[606];
   const modal = isTranscriptScreen ? undefined : modalNodeB;
   const hidePill = !focused.isMain;
   let sidebar;
   if (
-    $[588] !== chrome.setIdeSelection ||
-    $[589] !== autoOpenBaseline ||
-    $[590] !== diffSidebarEnabled ||
-    $[591] !== sidebarWidth_2 ||
-    $[592] !== isThinClient_2 ||
-    $[593] !== modalSlotActive
+    $[607] !== chrome.setIdeSelection ||
+    $[608] !== autoOpenBaseline ||
+    $[609] !== diffSidebarEnabled ||
+    $[610] !== sidebarWidth_2 ||
+    $[611] !== isThinClient_2 ||
+    $[612] !== modalSlotActive
   ) {
     sidebar = diffSidebarEnabled
       ? jsxProd_default(SentryErrorBoundary, {
@@ -5504,64 +5584,64 @@ function REPL_2(props) {
           }),
         })
       : null;
-    $[588] = chrome.setIdeSelection;
-    $[589] = autoOpenBaseline;
-    $[590] = diffSidebarEnabled;
-    $[591] = sidebarWidth_2;
-    $[592] = isThinClient_2;
-    $[593] = modalSlotActive;
-    $[594] = sidebar;
-  } else sidebar = $[594];
+    $[607] = chrome.setIdeSelection;
+    $[608] = autoOpenBaseline;
+    $[609] = diffSidebarEnabled;
+    $[610] = sidebarWidth_2;
+    $[611] = isThinClient_2;
+    $[612] = modalSlotActive;
+    $[613] = sidebar;
+  } else sidebar = $[613];
   const isOffered = toastWidth > 0;
   let dock;
-  if ($[595] !== draft || $[596] !== dockWidth || $[597] !== isOffered || $[598] !== turn) {
+  if ($[614] !== draft || $[615] !== dockWidth || $[616] !== isOffered || $[617] !== turn) {
     dock = jsxProd_default(PromptDock, {
       turn,
       draft,
       isOffered,
       width: dockWidth,
     });
-    $[595] = draft;
-    $[596] = dockWidth;
-    $[597] = isOffered;
-    $[598] = turn;
-    $[599] = dock;
-  } else dock = $[599];
+    $[614] = draft;
+    $[615] = dockWidth;
+    $[616] = isOffered;
+    $[617] = turn;
+    $[618] = dock;
+  } else dock = $[618];
   let dockTail;
   let transcriptOverlay;
-  if ($[600] === MEMO_CACHE_SENTINEL) {
+  if ($[619] === MEMO_CACHE_SENTINEL) {
     dockTail = jsxProd_default(PaneDockNamespace.DockTail, {});
     transcriptOverlay = jsxProd_default(ToastStackViewNamespace.ToastStackView, {});
-    $[600] = dockTail;
-    $[601] = transcriptOverlay;
+    $[619] = dockTail;
+    $[620] = transcriptOverlay;
   } else {
-    dockTail = $[600];
-    transcriptOverlay = $[601];
+    dockTail = $[619];
+    transcriptOverlay = $[620];
   }
   const toolProgress_2 = panelHidesPrompt ? null : scrollViewport;
-  const stateRowYields = localOverlayHoldsQueue || !!chromeClients;
+  const stateRowYields = hasLocalOverlay || !!teamContext;
   const hidePlaceholder = isDisabled || modalSlotActive;
   const hideWelcomeChrome_2 = hideWelcomeChrome ?? isEmbedded;
   let scrollable;
   if (
-    $[602] !== commands_2 ||
-    $[603] !== focused ||
-    $[604] !== isRemoteSession_2 ||
-    $[605] !== panelHoldsQueue ||
-    $[606] !== pauseAnimation_2 ||
-    $[607] !== promptVisible ||
-    $[608] !== renderingTools ||
-    $[609] !== scrollPin ||
-    $[610] !== showSpinner ||
-    $[611] !== submitController.remoteSendsNow ||
-    $[612] !== toolProgress_2 ||
-    $[613] !== stateRowYields ||
-    $[614] !== hidePlaceholder ||
-    $[615] !== hideWelcomeChrome_2 ||
-    $[616] !== isTranscriptScreen ||
-    $[617] !== transport.rowsDrawn ||
-    $[618] !== transport.waitingLines ||
-    $[619] !== turn
+    $[621] !== commands_2 ||
+    $[622] !== focused ||
+    $[623] !== isRemoteSession_2 ||
+    $[624] !== panelHoldsQueue ||
+    $[625] !== pauseAnimation_2 ||
+    $[626] !== promptVisible ||
+    $[627] !== renderingTools ||
+    $[628] !== scrollPin ||
+    $[629] !== showSpinner ||
+    $[630] !== submitController.remoteSendsNow ||
+    $[631] !== toolProgress_2 ||
+    $[632] !== stateRowYields ||
+    $[633] !== hidePlaceholder ||
+    $[634] !== hideWelcomeChrome_2 ||
+    $[635] !== isTranscriptScreen ||
+    $[636] !== transport.rowsDrawn ||
+    $[637] !== transport.waitingLines ||
+    $[638] !== turn
   ) {
     scrollable = jsxProd_default(MessageArea, {
       scrollPin,
@@ -5583,46 +5663,46 @@ function REPL_2(props) {
       hideWelcomeChrome: hideWelcomeChrome_2,
       historyHidden: isTranscriptScreen,
     });
-    $[602] = commands_2;
-    $[603] = focused;
-    $[604] = isRemoteSession_2;
-    $[605] = panelHoldsQueue;
-    $[606] = pauseAnimation_2;
-    $[607] = promptVisible;
-    $[608] = renderingTools;
-    $[609] = scrollPin;
-    $[610] = showSpinner;
-    $[611] = submitController.remoteSendsNow;
-    $[612] = toolProgress_2;
-    $[613] = stateRowYields;
-    $[614] = hidePlaceholder;
-    $[615] = hideWelcomeChrome_2;
-    $[616] = isTranscriptScreen;
-    $[617] = transport.rowsDrawn;
-    $[618] = transport.waitingLines;
-    $[619] = turn;
-    $[620] = scrollable;
-  } else scrollable = $[620];
+    $[621] = commands_2;
+    $[622] = focused;
+    $[623] = isRemoteSession_2;
+    $[624] = panelHoldsQueue;
+    $[625] = pauseAnimation_2;
+    $[626] = promptVisible;
+    $[627] = renderingTools;
+    $[628] = scrollPin;
+    $[629] = showSpinner;
+    $[630] = submitController.remoteSendsNow;
+    $[631] = toolProgress_2;
+    $[632] = stateRowYields;
+    $[633] = hidePlaceholder;
+    $[634] = hideWelcomeChrome_2;
+    $[635] = isTranscriptScreen;
+    $[636] = transport.rowsDrawn;
+    $[637] = transport.waitingLines;
+    $[638] = turn;
+    $[639] = scrollable;
+  } else scrollable = $[639];
   let abovePrompt;
   if (
-    $[621] !== chrome ||
-    $[622] !== draft ||
-    $[623] !== isEmbedded ||
-    $[624] !== isFullscreen ||
-    $[625] !== hasLocalJsxOverlay ||
-    $[626] !== hasActiveLocalJsxUI ||
-    $[627] !== blockingDialogKind ||
-    $[628] !== panelHoldsQueue ||
-    $[629] !== dockColumns ||
-    $[630] !== pinnedConsentShowing ||
-    $[631] !== promptVisible ||
-    $[632] !== layoutSlots.abovePrompt ||
-    $[633] !== showSpinner ||
-    $[634] !== submitController ||
-    $[635] !== surveySlot ||
-    $[636] !== isTranscriptScreen ||
-    $[637] !== transcript ||
-    $[638] !== turn
+    $[640] !== chrome ||
+    $[641] !== draft ||
+    $[642] !== isEmbedded ||
+    $[643] !== isFullscreen ||
+    $[644] !== hasLocalJsxOverlay ||
+    $[645] !== hasActiveLocalJsxUI ||
+    $[646] !== blockingDialogKind ||
+    $[647] !== panelHoldsQueue ||
+    $[648] !== dockColumns ||
+    $[649] !== pinnedConsentShowing ||
+    $[650] !== promptVisible ||
+    $[651] !== layoutSlots.abovePrompt ||
+    $[652] !== showSpinner ||
+    $[653] !== submitController ||
+    $[654] !== surveySlot ||
+    $[655] !== isTranscriptScreen ||
+    $[656] !== transcript ||
+    $[657] !== turn
   ) {
     abovePrompt =
       !isTranscriptScreen &&
@@ -5662,38 +5742,38 @@ function REPL_2(props) {
           }),
         ],
       });
-    $[621] = chrome;
-    $[622] = draft;
-    $[623] = isEmbedded;
-    $[624] = isFullscreen;
-    $[625] = hasLocalJsxOverlay;
-    $[626] = hasActiveLocalJsxUI;
-    $[627] = blockingDialogKind;
-    $[628] = panelHoldsQueue;
-    $[629] = dockColumns;
-    $[630] = pinnedConsentShowing;
-    $[631] = promptVisible;
-    $[632] = layoutSlots.abovePrompt;
-    $[633] = showSpinner;
-    $[634] = submitController;
-    $[635] = surveySlot;
-    $[636] = isTranscriptScreen;
-    $[637] = transcript;
-    $[638] = turn;
-    $[639] = abovePrompt;
-  } else abovePrompt = $[639];
+    $[640] = chrome;
+    $[641] = draft;
+    $[642] = isEmbedded;
+    $[643] = isFullscreen;
+    $[644] = hasLocalJsxOverlay;
+    $[645] = hasActiveLocalJsxUI;
+    $[646] = blockingDialogKind;
+    $[647] = panelHoldsQueue;
+    $[648] = dockColumns;
+    $[649] = pinnedConsentShowing;
+    $[650] = promptVisible;
+    $[651] = layoutSlots.abovePrompt;
+    $[652] = showSpinner;
+    $[653] = submitController;
+    $[654] = surveySlot;
+    $[655] = isTranscriptScreen;
+    $[656] = transcript;
+    $[657] = turn;
+    $[658] = abovePrompt;
+  } else abovePrompt = $[658];
   let bottom;
   if (
-    $[640] !== chrome ||
-    $[641] !== draft ||
-    $[642] !== gesture ||
-    $[643] !== handleBackgroundSession ||
-    $[644] !== promptVisible ||
-    $[645] !== scope ||
-    $[646] !== submitController ||
-    $[647] !== isTranscriptScreen ||
-    $[648] !== transcript ||
-    $[649] !== turn
+    $[659] !== chrome ||
+    $[660] !== draft ||
+    $[661] !== gesture ||
+    $[662] !== handleBackgroundSession ||
+    $[663] !== promptVisible ||
+    $[664] !== scope ||
+    $[665] !== submitController ||
+    $[666] !== isTranscriptScreen ||
+    $[667] !== transcript ||
+    $[668] !== turn
   ) {
     bottom =
       !isTranscriptScreen &&
@@ -5717,31 +5797,31 @@ function REPL_2(props) {
           }),
         }),
       });
-    $[640] = chrome;
-    $[641] = draft;
-    $[642] = gesture;
-    $[643] = handleBackgroundSession;
-    $[644] = promptVisible;
-    $[645] = scope;
-    $[646] = submitController;
-    $[647] = isTranscriptScreen;
-    $[648] = transcript;
-    $[649] = turn;
-    $[650] = bottom;
-  } else bottom = $[650];
+    $[659] = chrome;
+    $[660] = draft;
+    $[661] = gesture;
+    $[662] = handleBackgroundSession;
+    $[663] = promptVisible;
+    $[664] = scope;
+    $[665] = submitController;
+    $[666] = isTranscriptScreen;
+    $[667] = transcript;
+    $[668] = turn;
+    $[669] = bottom;
+  } else bottom = $[669];
   let layout;
   if (
-    $[651] !== sidebarWidth_2 ||
-    $[652] !== focused.isTeammate ||
-    $[653] !== dockWidth ||
-    $[654] !== scrollPin ||
-    $[655] !== modal ||
-    $[656] !== hidePill ||
-    $[657] !== sidebar ||
-    $[658] !== dock ||
-    $[659] !== scrollable ||
-    $[660] !== abovePrompt ||
-    $[661] !== bottom
+    $[670] !== sidebarWidth_2 ||
+    $[671] !== focused.isTeammate ||
+    $[672] !== dockWidth ||
+    $[673] !== scrollPin ||
+    $[674] !== modal ||
+    $[675] !== hidePill ||
+    $[676] !== sidebar ||
+    $[677] !== dock ||
+    $[678] !== scrollable ||
+    $[679] !== abovePrompt ||
+    $[680] !== bottom
   ) {
     layout = jsxProd_default(FullscreenLayout, {
       scrollViewport: scrollPin.viewport,
@@ -5762,21 +5842,21 @@ function REPL_2(props) {
       abovePrompt,
       bottom,
     });
-    $[651] = sidebarWidth_2;
-    $[652] = focused.isTeammate;
-    $[653] = dockWidth;
-    $[654] = scrollPin;
-    $[655] = modal;
-    $[656] = hidePill;
-    $[657] = sidebar;
-    $[658] = dock;
-    $[659] = scrollable;
-    $[660] = abovePrompt;
-    $[661] = bottom;
-    $[662] = layout;
-  } else layout = $[662];
+    $[670] = sidebarWidth_2;
+    $[671] = focused.isTeammate;
+    $[672] = dockWidth;
+    $[673] = scrollPin;
+    $[674] = modal;
+    $[675] = hidePill;
+    $[676] = sidebar;
+    $[677] = dock;
+    $[678] = scrollable;
+    $[679] = abovePrompt;
+    $[680] = bottom;
+    $[681] = layout;
+  } else layout = $[681];
   let suspendNode;
-  if ($[663] !== suspendKey || $[664] !== layout) {
+  if ($[682] !== suspendKey || $[683] !== layout) {
     suspendNode = jsxProd_default(
       fragmentTypeExport,
       {
@@ -5784,78 +5864,78 @@ function REPL_2(props) {
       },
       suspendKey,
     );
-    $[663] = suspendKey;
-    $[664] = layout;
-    $[665] = suspendNode;
-  } else suspendNode = $[665];
+    $[682] = suspendKey;
+    $[683] = layout;
+    $[684] = suspendNode;
+  } else suspendNode = $[684];
   let layoutNode;
   if (
-    $[666] !== promptEffects ||
-    $[667] !== focusedNode ||
-    $[668] !== focusedFrame ||
-    $[669] !== suspendNode ||
-    $[670] !== transcriptView
+    $[685] !== promptEffects ||
+    $[686] !== focusedNode ||
+    $[687] !== focusedFrame ||
+    $[688] !== suspendNode ||
+    $[689] !== transcriptView
   ) {
     layoutNode = jsxProd_default_2(KeybindingRoot, {
       children: [focusedNode, promptEffects, focusedFrame, suspendNode, transcriptView],
     });
-    $[666] = promptEffects;
-    $[667] = focusedNode;
-    $[668] = focusedFrame;
-    $[669] = suspendNode;
-    $[670] = transcriptView;
-    $[671] = layoutNode;
-  } else layoutNode = $[671];
+    $[685] = promptEffects;
+    $[686] = focusedNode;
+    $[687] = focusedFrame;
+    $[688] = suspendNode;
+    $[689] = transcriptView;
+    $[690] = layoutNode;
+  } else layoutNode = $[690];
   let children = layoutNode;
   let children_2;
-  if ($[672] !== isEmbedded || $[673] !== children || $[674] !== layoutSlots.drawn) {
+  if ($[691] !== isEmbedded || $[692] !== children || $[693] !== layoutSlots.drawn) {
     children_2 = jsxProd_default(UnattendedNoticeProvider, {
       drawn: layoutSlots.drawn,
       hideSessionTitle: isEmbedded,
       children,
     });
-    $[672] = isEmbedded;
-    $[673] = children;
-    $[674] = layoutSlots.drawn;
-    $[675] = children_2;
-  } else children_2 = $[675];
+    $[691] = isEmbedded;
+    $[692] = children;
+    $[693] = layoutSlots.drawn;
+    $[694] = children_2;
+  } else children_2 = $[694];
   let children_3;
-  if ($[676] !== tokenWarningState || $[677] !== children_2) {
+  if ($[695] !== tokenWarningState || $[696] !== children_2) {
     children_3 = jsxProd_default(noticeQueueStore.Provider, {
       value: tokenWarningState,
       children: children_2,
     });
-    $[676] = tokenWarningState;
-    $[677] = children_2;
-    $[678] = children_3;
-  } else children_3 = $[678];
+    $[695] = tokenWarningState;
+    $[696] = children_2;
+    $[697] = children_3;
+  } else children_3 = $[697];
   let screenFrameFull;
-  if ($[679] !== screenFrameProps_2 || $[680] !== isFullscreen || $[681] !== children_3) {
+  if ($[698] !== screenFrameProps_2 || $[699] !== isFullscreen || $[700] !== children_3) {
     screenFrameFull = jsxProd_default(ReplScreenFrame, {
       ...screenFrameProps_2,
       fullscreen: isFullscreen,
       children: children_3,
     });
-    $[679] = screenFrameProps_2;
-    $[680] = isFullscreen;
-    $[681] = children_3;
-    $[682] = screenFrameFull;
-  } else screenFrameFull = $[682];
+    $[698] = screenFrameProps_2;
+    $[699] = isFullscreen;
+    $[700] = children_3;
+    $[701] = screenFrameFull;
+  } else screenFrameFull = $[701];
   let wrappedScreenFull;
-  if ($[683] !== screenFrameFull || $[684] !== wrapWithProviders) {
+  if ($[702] !== screenFrameFull || $[703] !== wrapWithProviders) {
     wrappedScreenFull = wrapWithProviders(screenFrameFull);
-    $[683] = screenFrameFull;
-    $[684] = wrapWithProviders;
-    $[685] = wrappedScreenFull;
-  } else wrappedScreenFull = $[685];
+    $[702] = screenFrameFull;
+    $[703] = wrapWithProviders;
+    $[704] = wrappedScreenFull;
+  } else wrappedScreenFull = $[704];
   return wrappedScreenFull;
 }
 export {
+  REPL,
   negateBoolean,
   notB,
   TranscriptSearchBar,
   TranscriptHelpFooter,
   TranscriptModeFooter,
-  REPL,
   AnimatedTerminalTitle,
 };

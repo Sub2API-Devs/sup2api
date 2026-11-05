@@ -3,19 +3,13 @@
  *
  * 2.1.316 新增。停止任务的统一入口。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (8)
  * attribution: placement 8
  */
 import { isLocalAgent, stopOrDismissAgent, exitTeammateView } from "../../state/teammateViewHelpers.js";
-import {
-  hasCompletedWithFindings,
-  isObserverAgentTask,
-  markAgentNotified,
-  killAsyncAgent,
-  isInterruptibleBackgroundSubagent,
-} from "../../tasks/LocalAgentTask/LocalAgentTask.js";
+import { hasCompletedWithFindings } from "./RemoteSessionProgress.js";
 import {
   isSparedFromCascadeStop,
   isCascadeStopExempt,
@@ -24,6 +18,12 @@ import {
   stopTask as stopTask_2,
 } from "../../tasks/stopTask.js";
 import { isTaskOwnedBy, taskAbortController } from "../../tasks/taskKinds.js";
+import {
+  isObserverAgentTask,
+  markAgentNotified,
+  killAsyncAgent,
+  isInterruptibleBackgroundSubagent,
+} from "../../tasks/LocalAgentTask/LocalAgentTask.js";
 import { stopObserverPairing } from "../../services/agentObserver/agentObserver.js";
 import { killInProcessTeammate } from "../../utils/swarm/spawnInProcess.js";
 import { TASK_NOTIFICATION_DELAY_MS } from "../../utils/task/framework.js";
@@ -41,7 +41,7 @@ import { isInProcessTeammateTask } from "../../tasks/InProcessTeammateTask/types
 import { isTeammateWorking } from "../../utils/inProcessTeammateHelpers.js";
 import { emitTaskNotification } from "../../utils/task/taskNotifications.js";
 
-//@ chunk-18hwfzwa.js:463038-463486 placement
+//@ chunk-czq1j3j2.js:489103-489551 placement
 function stopAllTasks(agentTask, taskRegistry, options) {
   let killedBy = options.killedBy ?? "user";
   let allTasks = taskRegistry.all();
@@ -75,7 +75,7 @@ function stopAllTasks(agentTask, taskRegistry, options) {
   }
   emitCascadeSpared(agentTask.agentId, sparedAgentIds, killedBy, taskRegistry);
 }
-//@ chunk-18hwfzwa.js:463486-464254 placement
+//@ chunk-czq1j3j2.js:489551-490319 placement
 function stopTask(task, taskRegistry, setAppState, options) {
   let { session, source, storageV5 } = options;
   if (task.type === "in_process_teammate") {
@@ -129,7 +129,7 @@ function stopTask(task, taskRegistry, setAppState, options) {
   });
   return "killed";
 }
-//@ chunk-18hwfzwa.js:464254-464691 placement
+//@ chunk-czq1j3j2.js:490319-490756 placement
 function stopWorkflowTask({ taskId, taskStatus, taskRegistry, setAppState }) {
   let status = taskRegistry.get(taskId)?.status ?? taskStatus;
   if (status === "running") {
@@ -156,10 +156,10 @@ function stopWorkflowTask({ taskId, taskStatus, taskRegistry, setAppState }) {
   });
   return "dismissed";
 }
-//@ chunk-18hwfzwa.js:464691-464713 placement
+//@ chunk-czq1j3j2.js:490756-490778 placement
 var liveDocWatchController = null;
 var KILL_AGENTS_CONFIRM_MS = 3000;
-//@ chunk-18hwfzwa.js:464713-464827 placement (2.1.88 match: hasActiveInProcessTeammates, 0.883)
+//@ chunk-czq1j3j2.js:490778-490892 placement (2.1.88 match: hasActiveInProcessTeammates, 0.883)
 /**
  * 任务是否仍活动：运行中（或有存活工作）的本地代理，或运行中的同进程 teammate。
  */
@@ -169,13 +169,13 @@ function isLiveAgentOrTeammateTask(task) {
     (task.type === "in_process_teammate" && task.status === "running")
   );
 }
-//@ chunk-18hwfzwa.js:464827-464909 placement
+//@ chunk-czq1j3j2.js:490892-490974 placement
 function interruptIfStoppable(stoppableWork) {
   if (stoppableWork === undefined || stoppableWork.stoppable() === 0) return false;
   stoppableWork.interrupt();
   return true;
 }
-//@ chunk-18hwfzwa.js:464909-465053 placement (2.1.88 match: isPanelAgentTask, 0.809)
+//@ chunk-czq1j3j2.js:490974-491118 placement (2.1.88 match: isPanelAgentTask, 0.809)
 /**
  * 任务是否显示在代理面板：特性开启时为后台可中止子代理、运行中的 main-session、或运行中的 in-process teammate；否则退回 teammate 活动判断。
  */
@@ -188,7 +188,7 @@ function isAgentPanelTask(task) {
     );
   return isLiveAgentOrTeammateTask(task);
 }
-//@ chunk-18hwfzwa.js:465053-465224 placement
+//@ chunk-czq1j3j2.js:491118-491289 placement
 /**
  * 从 UI 停止子代理：属主不是本地代理时先标已通知，记录停止、kill，并发 stopped 通知。
  */

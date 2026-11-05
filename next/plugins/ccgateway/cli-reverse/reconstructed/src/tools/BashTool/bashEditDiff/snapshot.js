@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：bashEditDiff：命令前后工作区快照与 diff
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (61)
- * attribution: placement 62
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (64)
+ * attribution: placement 62, layout 3
  */
 import { join, relative, sep, dirname, isAbsolute, resolve as resolve_2, parse } from "path";
 import { randomBytes } from "crypto";
-import { mkdir, writeFile, lstat, unlink, readdir, rm as rm_2, open } from "fs/promises";
+import { mkdir, writeFile, lstat, unlink, readdir, rm, open } from "fs/promises";
 import { realpathSync, constants } from "fs";
 import { SPLIT_MAX_LEN, splitCommand, getCommandArgv } from "../../../utils/bash/commands.js";
 import { getParserModule } from "../../../utils/bash/bashParser.js";
@@ -60,13 +60,13 @@ import { GIT_SAFE_GLOBAL_ARGS, GIT_ALLOW_PROTOCOL_VALUE } from "../../../utils/g
 import { GIT_FILES_REF_BACKEND_ENV } from "../../../utils/git/gitLanes.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4773548-4773795 placement
+//@ chunk-5xgkngpb.js:4905888-4906135 placement
 /**
  * 会移动工作树的 git 子命令列表（checkout/switch/stash/pull/merge/rebase/reset 等）及匹配"只运行这类 git 命令"的正则。
  */
 var TREE_MOVING_GIT_SUBCOMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TREE_MOVING_GIT_COMMAND_RE;
-deferInit("chunk-e6aww6q8.js:4773548", () => {
+deferInit("chunk-5xgkngpb.js:4905888", () => {
   TREE_MOVING_GIT_SUBCOMMANDS = [
     "checkout",
     "switch",
@@ -84,14 +84,14 @@ deferInit("chunk-e6aww6q8.js:4773548", () => {
     String.raw`^[ \t]*(?:sudo[ \t]+)?git[ \t]+(?:${TREE_MOVING_GIT_SUBCOMMANDS.join("|")})(?:[ \t]+[A-Za-z0-9._/@~^][A-Za-z0-9._/@~^-]*){0,16}\s*$`,
   );
 });
-//@ chunk-e6aww6q8.js:4773795-4773830 placement
+//@ chunk-5xgkngpb.js:4906135-4906170 placement
 /**
  * 判断命令是否含会移动工作树的 git 子命令（checkout/switch/reset 等），这种命令之后不能复用旧快照。
  */
 function commandMovesWorkTree(command) {
   return TREE_MOVING_GIT_COMMAND_RE.test(command);
 }
-//@ chunk-e6aww6q8.js:4773830-4774111 placement
+//@ chunk-5xgkngpb.js:4906170-4906451 placement
 /**
  * 判断命令中是否有会移动工作树的 git 子命令（如 checkout、switch、reset 等）。
  */
@@ -111,7 +111,7 @@ function commandMovesWorkTree_2(command) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:4774111-4774298 placement
+//@ chunk-5xgkngpb.js:4906451-4906638 placement
 /**
  * bashEditDiff 的模块级缓存：按仓库的失败计数、共享快照仓库、各 git 目录的状态（预读、超大变更、对象目录、私有目录身份、期望文件）、串行链、共享读、读间隔、转换文件记录。
  */
@@ -126,7 +126,7 @@ var serialChainByRepo;
 var sharedReadsInFlight;
 var nextReadAtByRepo;
 var convertedFilesByGitDir;
-deferInit("chunk-e6aww6q8.js:4774111", () => {
+deferInit("chunk-5xgkngpb.js:4906451", () => {
   snapshotFailureCounts = new Map();
   sharedRepoByRoot = new Map();
   prefetchedTrees = new Map();
@@ -139,21 +139,21 @@ deferInit("chunk-e6aww6q8.js:4774111", () => {
   nextReadAtByRepo = identity_2(new Map(), (map) => map.clear());
   convertedFilesByGitDir = identity_2(new Map(), (map) => map.clear());
 });
-//@ chunk-e6aww6q8.js:4774298-4774340 placement
+//@ chunk-5xgkngpb.js:4906638-4906680 placement
 /**
  * 仓库快照失败次数超过上限（MAX_SNAPSHOT_FAILURES）时，该仓库放弃拍快照。
  */
 function isRepoSnapshotGivenUp(gitRoot) {
   return (snapshotFailureCounts.get(gitRoot) ?? 0) >= MAX_SNAPSHOT_FAILURES;
 }
-//@ chunk-e6aww6q8.js:4774340-4774389 placement
+//@ chunk-5xgkngpb.js:4906680-4906729 placement
 /**
  * 读取 tengu_lovely_locket 开关：拍工作树快照时是否走共享模式（合并并发读取）。
  */
 function isSharedSnapshotEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_lovely_locket", false);
 }
-//@ chunk-e6aww6q8.js:4774389-4774582 placement
+//@ chunk-5xgkngpb.js:4906729-4906922 placement
 /**
  * 命令执行前给所在 git 仓库拍工作树快照（共享模式下合并并发读取，否则按仓库串行）；仓库已放弃或无仓库返回 null，失败返回 unavailable。
  */
@@ -169,7 +169,7 @@ async function takeBashSnapshot(cwd) {
     return "unavailable";
   }
 }
-//@ chunk-e6aww6q8.js:4774582-4774810 placement
+//@ chunk-5xgkngpb.js:4906922-4907150 placement
 /**
  * 记录编辑差异等待时长遥测（超过 10 秒/60 秒/300 秒分档，区分共享等待）。
  */
@@ -186,7 +186,7 @@ function logEditDiffWait(waitMs, isSharedWait) {
     logFeatureSad(isSharedWait ? "bash_edit_diff_shared_wait" : "bash_edit_diff_wait", waitBucket);
   else logFeatureOk(isSharedWait ? "bash_edit_diff_shared_wait" : "bash_edit_diff_wait");
 }
-//@ chunk-e6aww6q8.js:4774810-4775041 placement
+//@ chunk-5xgkngpb.js:4907150-4907381 placement
 async function snapshotRepo(repoRoot, useSharedReads) {
   let gitDirectory = await getSharedSnapshotRepo(repoRoot);
   if (!gitDirectory) return "unavailable";
@@ -203,7 +203,7 @@ async function snapshotRepo(repoRoot, useSharedReads) {
       }
     : "unavailable";
 }
-//@ chunk-e6aww6q8.js:4775041-4775799 placement
+//@ chunk-5xgkngpb.js:4907381-4908139 placement
 /**
  * 命令结束后再拍快照并与命令前对比，生成文件 diff；共享读模式下按前后状态缓存 diff 并在多个调用者间错开间隔；出错时返回 unavailable。
  */
@@ -257,7 +257,7 @@ async function diffAfterCommand(before, onRead, options) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:4775799-4775934 placement
+//@ chunk-5xgkngpb.js:4908139-4908274 placement
 async function spaceSharedReads(repoRoot, options) {
   if (!options) return;
   let startTime = performance.now();
@@ -265,7 +265,7 @@ async function spaceSharedReads(repoRoot, options) {
   nextReadAtByRepo.set(repoRoot, max + SHARED_READ_SPACING_MS_2);
   if (max > startTime) await sleep(max - startTime, options.signal);
 }
-//@ chunk-e6aww6q8.js:4775934-4776087 placement
+//@ chunk-5xgkngpb.js:4908274-4908427 placement
 function oversizedOnlyResult(repoRoot, after) {
   return after.oversized > 0
     ? {
@@ -278,7 +278,7 @@ function oversizedOnlyResult(repoRoot, after) {
       }
     : null;
 }
-//@ chunk-e6aww6q8.js:4776087-4776302 placement
+//@ chunk-5xgkngpb.js:4908427-4908642 placement
 async function isPrivateDirIntact({ gitDirectory, sharesTreeReads }, options) {
   if (!sharesTreeReads) return true;
   let expectedObjectFiles = objectsDirByGitDir.get(gitDirectory);
@@ -290,7 +290,7 @@ async function isPrivateDirIntact({ gitDirectory, sharesTreeReads }, options) {
   logForDebugging("bashEditDiff: private directory changed or gone; git step skipped");
   return false;
 }
-//@ chunk-e6aww6q8.js:4776302-4776549 placement
+//@ chunk-5xgkngpb.js:4908642-4908889 placement
 function runDiffTree(before, tree, extraArgs, paths = []) {
   return runSnapshotGit(
     before.repoRoot,
@@ -316,7 +316,7 @@ function runDiffTree(before, tree, extraArgs, paths = []) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:4776549-4776858 placement
+//@ chunk-5xgkngpb.js:4908889-4909198 placement
 /**
  * 解析 git diff-tree --raw 输出，得到 路径 → 状态（A/D/M…）表，以及新建或删除的空文件集合。
  */
@@ -338,7 +338,7 @@ function parseRawDiffStatus(stdout) {
     emptyByPath,
   };
 }
-//@ chunk-e6aww6q8.js:4776858-4777177 placement
+//@ chunk-5xgkngpb.js:4909198-4909517 placement
 /**
  * 对比快照时去掉只有 CRLF 行尾差异的文件（git diff --ignore-cr-at-eol 无变化者）。
  */
@@ -357,7 +357,7 @@ async function dropCrlfOnlyChanges(before, after, sameSizeByPath, statusByPath, 
       }
   }
 }
-//@ chunk-e6aww6q8.js:4777177-4779054 placement
+//@ chunk-5xgkngpb.js:4909517-4911397 placement
 /**
  * 对比命令前后的快照树，列出改动文件；超时或超出输出上限时只列路径。
  */
@@ -466,17 +466,17 @@ async function diffSnapshotTrees(before, after) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:4779054-4779086 placement
+//@ chunk-5xgkngpb.js:4911397-4911429 placement
 /**
  * 记录各仓库上正在运行的命令，同一仓库有多个命令时把它们都标记为并发。
  */
 var commandsByRepo; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-var weakSet_9;
-deferInit("chunk-e6aww6q8.js:4779054", () => {
+var weakSet_10;
+deferInit("chunk-5xgkngpb.js:4911397", () => {
   commandsByRepo = new Map();
-  weakSet_9 = new WeakSet();
+  weakSet_10 = new WeakSet();
 });
-//@ chunk-e6aww6q8.js:4779086-4779209 placement
+//@ chunk-5xgkngpb.js:4911429-4911552 placement
 /**
  * 登记某仓库上正在运行的命令；同一仓库有多个时把它们都标记为并发。
  */
@@ -488,10 +488,10 @@ function registerConcurrentCommand(repoRoot) {
     commandsByRepo.set(repoRoot, tokens);
   }
   tokens.add(token);
-  if (tokens.size > 1) for (let token of tokens) weakSet_9.add(token);
+  if (tokens.size > 1) for (let token of tokens) weakSet_10.add(token);
   return token;
 }
-//@ chunk-e6aww6q8.js:4779209-4779304 placement
+//@ chunk-5xgkngpb.js:4911552-4911647 placement
 /**
  * 从仓库的命令集合里注销某命令，返回它此前是否被标记为并发。
  */
@@ -499,16 +499,16 @@ function unregisterConcurrentCommand(repoRoot, token) {
   let tokens = commandsByRepo.get(repoRoot);
   tokens?.delete(token);
   if (tokens?.size === 0) commandsByRepo.delete(repoRoot);
-  return weakSet_9.has(token);
+  return weakSet_10.has(token);
 }
-//@ chunk-e6aww6q8.js:4779304-4779341 placement
+//@ chunk-5xgkngpb.js:4911647-4911684 placement
 /**
  * 生成仓库的差异串行队列键，让差异计算与快照操作在同仓库不同队列上排队。
  */
 function diffSerialKey(repoRoot) {
   return `${repoRoot}\x00diff`;
 }
-//@ chunk-e6aww6q8.js:4779341-4779449 placement
+//@ chunk-5xgkngpb.js:4911684-4911792 placement
 function runSerialForRepo(repoRoot, task) {
   let chained = (serialChainByRepo.get(repoRoot) ?? Promise.resolve()).then(task, task);
   serialChainByRepo.set(
@@ -519,7 +519,7 @@ function runSerialForRepo(repoRoot, task) {
   );
   return chained;
 }
-//@ chunk-e6aww6q8.js:4779449-4779706 placement
+//@ chunk-5xgkngpb.js:4911792-4912049 placement
 /**
  * 共享读取工作树快照：同一 git 目录并发的读取合并为一次，记录调用者数量。
  */
@@ -550,7 +550,7 @@ function readSharedTree(repoRoot, gitDirectory) {
   sharedReadsInFlight.set(gitDirectory, sharedRead);
   return sharedRead.read;
 }
-//@ chunk-e6aww6q8.js:4779706-4780015 placement
+//@ chunk-5xgkngpb.js:4912049-4912358 placement
 /**
  * 为 git 目录生成工作树快照状态：快照树、超大文件统计、期望文件与转换计数。
  */
@@ -571,7 +571,7 @@ async function readTreeState(repoRoot, gitDirectory, useSharedReads) {
     convertedFound: convertedFilesByGitDir.get(gitDirectory)?.length ?? 0,
   };
 }
-//@ chunk-e6aww6q8.js:4780015-4780414 placement
+//@ chunk-5xgkngpb.js:4912358-4912757 placement
 /**
  * 用 git check-ignore 判断某目录是否被忽略（路径须在仓库内、仓库已被观察且有效）；无法判断返回 null。
  */
@@ -602,7 +602,7 @@ async function isDirectoryIgnored(root, directory) {
   );
   return code === 0 ? true : code === 1 ? false : null;
 }
-//@ chunk-e6aww6q8.js:4780414-4780943 placement
+//@ chunk-5xgkngpb.js:4912757-4913286 placement
 async function listIgnoredFiles(repoRoot) {
   let ignoredFiles = new Set();
   if (isRepoSnapshotGivenUp(repoRoot)) return ignoredFiles;
@@ -637,7 +637,7 @@ async function listIgnoredFiles(repoRoot) {
     return ignoredFiles;
   });
 }
-//@ chunk-e6aww6q8.js:4780943-4781127 placement
+//@ chunk-5xgkngpb.js:4913286-4913470 placement
 function getSharedSnapshotRepo(repoRoot) {
   if (isCleanupStarted()) return Promise.resolve(null);
   let sharedRepo = sharedRepoByRoot.get(repoRoot);
@@ -660,7 +660,7 @@ function getSharedSnapshotRepo(repoRoot) {
   }
   return sharedRepo;
 }
-//@ chunk-e6aww6q8.js:4781127-4781314 placement
+//@ chunk-5xgkngpb.js:4913470-4913657 placement
 function recordSnapshotFailure(repoRoot) {
   let failureCount = (snapshotFailureCounts.get(repoRoot) ?? 0) + 1;
   snapshotFailureCounts.set(repoRoot, failureCount);
@@ -672,7 +672,7 @@ function recordSnapshotFailure(repoRoot) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:4781314-4782991 placement
+//@ chunk-5xgkngpb.js:4913657-4915338 placement
 /**
  * 为多个命令共享的快照创建私有 git 仓库（支持 sha256 对象格式）。
  */
@@ -788,14 +788,14 @@ ${
     }
   }
 }
-//@ chunk-e6aww6q8.js:4782991-4783054 placement
+//@ chunk-5xgkngpb.js:4915338-4915401 placement
 /**
  * 给 git 配置值加双引号并转义反斜杠与引号，用于 core.excludesFile 之类的路径。
  */
 function quoteGitPath(excludesFile) {
   return `"${excludesFile.replace(/["\\]/g, (char) => `\\${char}`)}"`;
 }
-//@ chunk-e6aww6q8.js:4783054-4783367 placement
+//@ chunk-5xgkngpb.js:4915401-4915714 placement
 /**
  * 读取仓库 core.excludesFile 配置（在受控 git 环境中执行），返回路径或 null。
  */
@@ -821,13 +821,13 @@ async function readExcludesFile(snapshotDir) {
     cleanupSandboxAfterGit(snapshotGitEnv);
   }
 }
-//@ chunk-e6aww6q8.js:4783367-4783514 placement
+//@ chunk-5xgkngpb.js:4915714-4915861 placement
 async function usesSha256Objects(objectsDir, gitDir) {
   let commonConfig = await writeFileAtomically(join(objectsDir, "..", "config"), 1e6);
   let repoConfig = await writeFileAtomically(join(gitDir, "config"), 1e6);
   return /objectformat\s*=\s*sha256/i.test(commonConfig ?? repoConfig ?? "");
 }
-//@ chunk-e6aww6q8.js:4783514-4783689 placement
+//@ chunk-5xgkngpb.js:4915861-4916036 placement
 /**
  * 把根目录内的路径通过根目录的真实路径解析（根目录不安全或不在其中时原样返回）。
  */
@@ -847,7 +847,7 @@ function resolveThroughRoot(repoRoot, targetPath) {
     ? resolvedTarget
     : join(realRoot, resolvedTarget.slice(resolvedRoot.length));
 }
-//@ chunk-e6aww6q8.js:4783689-4784244 placement (2.1.88 match: writeRemoteEntriesToLocal, 0.346)
+//@ chunk-5xgkngpb.js:4916036-4916591 placement (2.1.88 match: writeRemoteEntriesToLocal, 0.345)
 async function isSafeGitObjectsDir(objectsDir, repoRoot, depth = 0, visited = new Set()) {
   if (depth > MAX_ALTERNATE_DEPTH || visited.has(objectsDir)) return false;
   visited.add(objectsDir);
@@ -886,7 +886,7 @@ async function isSafeGitObjectsDir(objectsDir, repoRoot, depth = 0, visited = ne
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:4784244-4784577 placement (2.1.88 match: isErrnoException, 0.582)
+//@ chunk-5xgkngpb.js:4916591-4916924 placement (2.1.88 match: isErrnoException, 0.583)
 async function isDirFreeOfSymlinks(dirPath) {
   let entries;
   try {
@@ -905,7 +905,7 @@ async function isDirFreeOfSymlinks(dirPath) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:4784577-4784814 placement
+//@ chunk-5xgkngpb.js:4916924-4917161 placement
 async function resolveDirNoLinks(rootDir, relativePath) {
   let currentDir = rootDir;
   for (let segment of relativePath.split(/[\\/]/)) {
@@ -920,7 +920,7 @@ async function resolveDirNoLinks(rootDir, relativePath) {
   }
   return currentDir;
 }
-//@ chunk-e6aww6q8.js:4784814-4784972 placement
+//@ chunk-5xgkngpb.js:4917161-4917319 placement
 function isStageZeroListing(stdout) {
   let pos = 0;
   while (pos < stdout.length) {
@@ -932,20 +932,20 @@ function isStageZeroListing(stdout) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:4784972-4785097 placement
+//@ chunk-5xgkngpb.js:4917319-4917444 placement
 function isStageZeroEntry(line) {
   let index = line.indexOf("\t");
   let path = index === -1 ? "" : line.slice(index + 1);
   return (index === -1 ? "" : line.slice(0, index).split(" ").at(-1)) === "0" && isSafeRepoPath(path);
 }
-//@ chunk-e6aww6q8.js:4785097-4785166 placement
+//@ chunk-5xgkngpb.js:4917444-4917513 placement
 /**
  * 按平台拆仓库内相对路径：Windows 上 \ 与 / 都是分隔符。
  */
 function splitRepoPath(path) {
   return getPlatform() === "windows" ? path.split(/[\\/]/) : path.split("/");
 }
-//@ chunk-e6aww6q8.js:4785166-4785349 placement
+//@ chunk-5xgkngpb.js:4917513-4917696 placement
 /**
  * 判断仓库内相对路径安全：非空、非绝对、无控制字符、Windows 下不含冒号，且各段不为空、. 或 ..，也不是保留名。
  */
@@ -960,7 +960,7 @@ function isSafeRepoPath(path) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:4785349-4785447 placement
+//@ chunk-5xgkngpb.js:4917696-4917794 placement
 /**
  * 判断路径段是否是 git 保留名（.git、git~1 之类）。
  */
@@ -968,7 +968,7 @@ function isReservedGitPathSegment(segment) {
   let replaced = segment.toLowerCase().replace(/[. ]+$/, "");
   return replaced === ".git" || /^git~\d+$/.test(replaced);
 }
-//@ chunk-e6aww6q8.js:4785447-4785679 placement
+//@ chunk-5xgkngpb.js:4917794-4918026 placement
 async function isRealDirectoryChain_2(dir) {
   let resolved = resolve_2(dir);
   let root = parse(resolved).root;
@@ -984,7 +984,7 @@ async function isRealDirectoryChain_2(dir) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:4785679-4785900 placement
+//@ chunk-5xgkngpb.js:4918026-4918247 placement
 async function verifyPrivateGitDir(gitDir, repoRoot, expectedFiles = expectedFilesByGitDir.get(gitDir)) {
   if (!expectedFiles) return false;
   for (let [key, value] of Object.entries(expectedFiles))
@@ -993,12 +993,12 @@ async function verifyPrivateGitDir(gitDir, repoRoot, expectedFiles = expectedFil
   if (entries === null || entries.some((entry) => !PRIVATE_GIT_DIR_ENTRIES.has(entry))) return false;
   return isSafeGitObjectsDir(repoRoot, gitDir);
 }
-//@ chunk-e6aww6q8.js:4785900-4785996 placement
+//@ chunk-5xgkngpb.js:4918247-4918343 placement
 /**
  * 私有 git 目录允许出现的顶层条目（HEAD、config、index、objects、refs 等）。
  */
 var PRIVATE_GIT_DIR_ENTRIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4785900", () => {
+deferInit("chunk-5xgkngpb.js:4918247", () => {
   PRIVATE_GIT_DIR_ENTRIES = new Set([
     "HEAD",
     "config",
@@ -1010,7 +1010,7 @@ deferInit("chunk-e6aww6q8.js:4785900", () => {
     "refs",
   ]);
 });
-//@ chunk-e6aww6q8.js:4785996-4786092 placement
+//@ chunk-5xgkngpb.js:4918343-4918439 placement
 /**
  * 已知仓库的私有对象目录时按其记录校验（.git 未被替换），否则返回 false。
  */
@@ -1020,7 +1020,7 @@ function verifyKnownPrivateGitDir(base) {
     ? verifyPrivateGitDir(base.gitDirectory, expectedObjectFiles)
     : Promise.resolve(false);
 }
-//@ chunk-e6aww6q8.js:4786092-4788314 placement
+//@ chunk-5xgkngpb.js:4918439-4920664 placement
 /**
  * 为工作区做快照：用 git status 收集改动与未跟踪文件。
  */
@@ -1156,7 +1156,7 @@ async function snapshotWorkingTree(repoRoot, gitDirectory, findConverted) {
   snapshotFailureCounts.delete(repoRoot);
   return tree;
 }
-//@ chunk-e6aww6q8.js:4788314-4789018 placement
+//@ chunk-5xgkngpb.js:4920664-4921370 placement
 /**
  * 找出索引中经换行/过滤转换后大小与对象大小不同的文件：ls-files --debug 取大小，cat-file --batch-check 对比 blob 大小。
  */
@@ -1199,7 +1199,7 @@ async function findConvertedFiles(repoRoot, gitDirectory, paths) {
   }
   return sizeByPath;
 }
-//@ chunk-e6aww6q8.js:4789018-4789190 placement
+//@ chunk-5xgkngpb.js:4921370-4921542 placement
 function* batchPathsForArgv(paths) {
   let batch = [];
   let batchChars = 0;
@@ -1216,7 +1216,7 @@ function* batchPathsForArgv(paths) {
   }
   if (batch.length > 0) yield batch;
 }
-//@ chunk-e6aww6q8.js:4789190-4789389 placement
+//@ chunk-5xgkngpb.js:4921542-4921741 placement
 function abandonSharedRepo(repoRoot, gitDirectory, reason) {
   logForDebugging(`bashEditDiff: ${reason}`);
   if (!expectedFilesByGitDir.has(gitDirectory)) return null;
@@ -1230,13 +1230,13 @@ function abandonSharedRepo(repoRoot, gitDirectory, reason) {
   );
   return null;
 }
-//@ chunk-e6aww6q8.js:4789389-4789621 placement
+//@ chunk-5xgkngpb.js:4921741-4921973 placement
 async function removePrivateGitDir(gitDirectory) {
   try {
     let identity = privateDirIdentity.get(gitDirectory);
     if (identity === undefined) return;
     if (await getFileIdentity_9(gitDirectory, identity))
-      await rm_2(gitDirectory, {
+      await rm(gitDirectory, {
         recursive: true,
         force: true,
       });
@@ -1247,12 +1247,12 @@ async function removePrivateGitDir(gitDirectory) {
     logForDebugging(`bashEditDiff: private directory not removed: ${String(error)}`);
   }
 }
-//@ chunk-e6aww6q8.js:4789621-4789633 placement
+//@ chunk-5xgkngpb.js:4921973-4921985 placement
 /**
  * 清理私有 git 目录的整体超时（300 毫秒）。
  */
 var PRIVATE_GIT_DIR_REMOVE_TIMEOUT_MS = 300;
-//@ chunk-e6aww6q8.js:4789633-4789751 placement
+//@ chunk-5xgkngpb.js:4921985-4922103 placement
 async function cleanupSnapshotRepos() {
   sharedRepoByRoot.clear();
   prefetchedTrees.clear();
@@ -1263,7 +1263,7 @@ async function cleanupSnapshotRepos() {
     PRIVATE_GIT_DIR_REMOVE_TIMEOUT_MS,
   );
 }
-//@ chunk-e6aww6q8.js:4789751-4790168 placement
+//@ chunk-5xgkngpb.js:4922103-4922520 placement
 /**
  * 以 O_NOFOLLOW 打开文件获取大小与 mtime；符号链接、缺失、不可读或非普通文件分别返回对应标记。
  */
@@ -1298,7 +1298,7 @@ async function statNoFollow(path) {
     await handle.close();
   }
 }
-//@ chunk-e6aww6q8.js:4790168-4790376 placement
+//@ chunk-5xgkngpb.js:4922520-4922728 placement
 async function parentDirsExist(repoRoot, path, existsCache) {
   let segments = splitRepoPath(path);
   let currentDir = repoRoot;
@@ -1314,14 +1314,14 @@ async function parentDirsExist(repoRoot, path, existsCache) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:4790376-4790537 placement
+//@ chunk-5xgkngpb.js:4922728-4922889 placement
 function isEmptyBlobId(blobId) {
   return (
     "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391".startsWith(blobId) ||
     "473a0f4c3be8a93681a267e3b1e9a7dcda1185436fe141f7749120a303721813".startsWith(blobId)
   );
 }
-//@ chunk-e6aww6q8.js:4790537-4790958 placement
+//@ chunk-5xgkngpb.js:4922889-4923310 placement
 /**
  * 解析 git status --porcelain=v2 -z 输出：变更/未跟踪文件、已删除文件、未跟踪目录（只保留安全路径）。
  */
@@ -1348,7 +1348,7 @@ function parsePorcelainStatus(stdout) {
     untrackedDirectories,
   };
 }
-//@ chunk-e6aww6q8.js:4790958-4791546 placement
+//@ chunk-5xgkngpb.js:4923310-4923898 placement
 async function commitSnapshotTree(repoRoot, gitDirectory, tree, timeout = GIT_STEP_TIMEOUT_MS) {
   let result = await runSnapshotGit(repoRoot, gitDirectory, ["commit-tree", tree, "-m", "snapshot"], {
     timeout,
@@ -1380,7 +1380,7 @@ async function commitSnapshotTree(repoRoot, gitDirectory, tree, timeout = GIT_ST
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:4791546-4791599 placement
+//@ chunk-5xgkngpb.js:4923898-4923951 placement
 /**
  * 用默认步骤超时在快照私有 git 目录上执行 git 命令的封装。
  */
@@ -1389,7 +1389,7 @@ function runSnapshotGitStep(repoRoot, gitDirectory, args, timeout = GIT_STEP_TIM
     timeout,
   });
 }
-//@ chunk-e6aww6q8.js:4791599-4792262 placement
+//@ chunk-5xgkngpb.js:4923951-4924621 placement
 /**
  * 在快照私有 git 目录上运行 git：加安全参数与隔离环境，共享模式下用延迟多次的 setImmediate 实现超时中止，返回执行结果（超时时 timedOut）。
  */
@@ -1453,7 +1453,7 @@ async function runSnapshotGit(repoRoot, gitDir, args, options) {
     cleanupSandboxAfterGit(snapshotGitEnv);
   }
 }
-//@ chunk-e6aww6q8.js:4792262-4792389 placement
+//@ chunk-5xgkngpb.js:4924621-4924748 placement
 /**
  * 快照 git 命令的通用参数：字面路径规格、安全配置、禁用 askPass 与路径转义等。
  */
@@ -1469,7 +1469,7 @@ function getSnapshotGitArgs() {
     "core.safecrlf=false",
   ];
 }
-//@ chunk-e6aww6q8.js:4792389-4792772 placement
+//@ chunk-5xgkngpb.js:4924748-4925131 placement
 /**
  * 构建快照用的隔离 git 环境：独立 GIT_DIR/工作树与全局配置，禁用系统配置、懒获取、替换对象、可选锁与终端提示，清除路径规格相关变量。
  */
@@ -1494,7 +1494,27 @@ function getSnapshotGitEnv(gitDirectory, repoRoot) {
     GIT_ICASE_PATHSPECS: undefined,
   };
 }
+//@ chunk-5xgkngpb.js:4925630-4925736 layout
+var editDiffCounters = {
+  edit_diff_watch_events: 0,
+  edit_diff_watch_dirs: 0,
+  relay_connections: 0,
+  relay_dials: 0,
+  relay_bytes: 0,
+};
+//@ chunk-5xgkngpb.js:4925736-4925766 layout
+function bumpCounter(counter, amount = 1) {
+  editDiffCounters[counter] += amount;
+}
+//@ chunk-5xgkngpb.js:4925766-4925796 layout
+function snapshotCounters() {
+  return {
+    ...editDiffCounters,
+  };
+}
 export {
+  snapshotCounters,
+  bumpCounter,
   commandMovesWorkTree,
   isRepoSnapshotGivenUp,
   takeBashSnapshot,

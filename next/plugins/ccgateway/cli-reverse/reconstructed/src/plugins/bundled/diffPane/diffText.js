@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：diff 面板询问文本截断。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wyqg6m3h.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c7hntn0y.js (3)
  * attribution: placement 3
  */
 import { MAX_LINES_PER_FILE } from "./hooks.js";
 
-//@ chunk-wyqg6m3h.js:11524-11748 placement
+//@ chunk-c7hntn0y.js:11888-12112 placement
 function armedAskOf(path, hunks) {
   let sliced = hunks
     .flatMap((hunk) => [`@@ -${hunk.oldStart} +${hunk.newStart} @@`, ...hunk.lines])
@@ -23,9 +23,9 @@ ${sliced.join(`
     lines: sliced.length,
   };
 }
-//@ chunk-wyqg6m3h.js:11748-11820 placement
+//@ chunk-c7hntn0y.js:12112-12184 placement
 var ASK_CUT_NOTE = "(The rest of this diff was cut: it did not fit in the prompt.)";
-//@ chunk-wyqg6m3h.js:11820-12004 placement
+//@ chunk-c7hntn0y.js:12184-12368 placement
 function fittedAskTextOf(text, maxChars) {
   if (text.length <= maxChars) return text;
   let lines = [];

@@ -3,9 +3,9 @@
  *
  * /diff 文件列表：每个文件的增删行统计与状态。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/diff/DiffFileList.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-mtx4csef.js (2)
+ * pieces: chunk-czq1j3j2.js (1), chunk-r1fypyw9.js (2)
  * attribution: callgraph-fingerprint 2, fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -27,7 +27,7 @@ import { isMenuOpen } from "../CustomSelect/select.js";
 import { diffLineToPlainText } from "./diffText.js";
 import { DiffStatCounts } from "../PrBadge.js";
 
-//@ chunk-18hwfzwa.js:1239149-1239902 callgraph-fingerprint (2.1.88 match: DiffFileList, 0.197)
+//@ chunk-czq1j3j2.js:1264326-1265079 callgraph-fingerprint (2.1.88 match: DiffFileList, 0.196)
 function DiffFileList(props) {
   let $ = useMemoCache(12);
   let { reason } = props;
@@ -96,7 +96,7 @@ function DiffFileList(props) {
   } else quote = $[11];
   return quote;
 }
-//@ chunk-mtx4csef.js:17588-18112 callgraph-fingerprint (2.1.88 match: FileItem, 0.322)
+//@ chunk-r1fypyw9.js:18764-19288 callgraph-fingerprint (2.1.88 match: FileItem, 0.322)
 function FileItem(props) {
   let $ = useMemoCache(11);
   let { file } = props;
@@ -147,7 +147,7 @@ function FileItem(props) {
   } else t6 = $[10];
   return t6;
 }
-//@ chunk-mtx4csef.js:18112-19087 fingerprint (2.1.88 match: FileStats, 0.494)
+//@ chunk-r1fypyw9.js:19288-20263 fingerprint (2.1.88 match: FileStats, 0.493)
 function FileStats(props) {
   let $ = useMemoCache(16);
   let { file, isSelected } = props;

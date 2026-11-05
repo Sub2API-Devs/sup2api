@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增。启动时通过存储后端预读设置各层，后续读取复用。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5x106wnr.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8cqtsqhy.js (29)
  * attribution: placement 29
  */
 import { basename, join, dirname } from "path";
 import {
   getSettingsFilePathForSource,
-  getSettingsWithErrors_2,
+  getSettingsWithErrors,
   projectSettingsAliasesUserSettings,
   getLegacyLocalSettingsFilePath,
   localSettingsStoreRootAwaitingOwnershipProbe,
@@ -42,10 +42,10 @@ import { wslInheritsSettings } from "./mdm/settings.js";
 import { PathSpace } from "../resultError.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-5x106wnr.js:598-610 placement
+//@ chunk-8cqtsqhy.js:598-610 placement
 var MAX_SETTINGS_PRIME_ATTEMPTS = 3;
 var SETTINGS_PRIME_BACKOFF_FACTOR = 8;
-//@ chunk-5x106wnr.js:610-694 placement (2.1.88 match: _temp5, 1)
+//@ chunk-8cqtsqhy.js:610-694 placement (2.1.88 match: _temp5, 1)
 function userSettingsFilePath() {
   let settingsFilePathForSource = getSettingsFilePathForSource("userSettings");
   return settingsFilePathForSource !== undefined &&
@@ -53,7 +53,7 @@ function userSettingsFilePath() {
     ? settingsFilePathForSource
     : undefined;
 }
-//@ chunk-5x106wnr.js:694-878 placement
+//@ chunk-8cqtsqhy.js:694-878 placement
 async function seedUserSettings(backend, context) {
   if (!isStorageV5Enabled()) return;
   let epoch = context.epoch;
@@ -64,7 +64,7 @@ async function seedUserSettings(backend, context) {
   ]);
   await trySeed("project/local layers", () => primeProjectLayers(backend, context, context.epoch));
 }
-//@ chunk-5x106wnr.js:878-1023 placement
+//@ chunk-8cqtsqhy.js:878-1023 placement
 async function trySeed(label, seed) {
   try {
     await seed();
@@ -77,7 +77,7 @@ async function trySeed(label, seed) {
     );
   }
 }
-//@ chunk-5x106wnr.js:1023-1197 placement
+//@ chunk-8cqtsqhy.js:1023-1197 placement
 /**
  * 安全预读根所有权
  */
@@ -93,7 +93,7 @@ async function primeRootOwnershipSafely(backend, context) {
     );
   }
 }
-//@ chunk-5x106wnr.js:1197-1855 placement
+//@ chunk-8cqtsqhy.js:1197-1855 placement
 /**
  * 预读用户设置
  */
@@ -127,7 +127,7 @@ async function seedUserSettingsUnchecked(backend, context) {
     });
   }
 }
-//@ chunk-5x106wnr.js:1855-5498 placement
+//@ chunk-8cqtsqhy.js:1855-5498 placement
 /**
  * 设置预读器
  */
@@ -226,7 +226,7 @@ class SettingsPrimer {
         return;
       this.consecutiveThrows = 0;
       try {
-        getSettingsWithErrors_2();
+        getSettingsWithErrors();
         this.loggedThrowMessages.clear();
       } catch (error) {
         if (!this.disposed) this.logThrowOnce(error);
@@ -338,7 +338,7 @@ class SettingsPrimer {
     }
   }
 }
-//@ chunk-5x106wnr.js:5498-5750 placement
+//@ chunk-8cqtsqhy.js:5498-5750 placement
 /**
  * 启动时通过存储后端预读设置层（用户、项目、本地、托管），之后的设置读取直接用预读结果。
  */
@@ -353,7 +353,7 @@ async function primeSettings(storageV5, store) {
   store.primer = new SettingsPrimer(storageV5, store);
   await store.primer.whenIdle();
 }
-//@ chunk-5x106wnr.js:5750-5900 placement
+//@ chunk-8cqtsqhy.js:5750-5900 placement
 async function resetSettingsCacheWithBackendRead(storageV5) {
   let commandNameState = commandSyncNameState();
   let backendReadResetTail = commandNameState.backendReadResetTail;
@@ -366,7 +366,7 @@ async function resetSettingsCacheWithBackendRead(storageV5) {
     releaseTail();
   }
 }
-//@ chunk-5x106wnr.js:5900-6195 placement
+//@ chunk-8cqtsqhy.js:5900-6195 placement
 /**
  * 预读全部设置层
  */
@@ -396,7 +396,7 @@ async function primeAllSettings(storageV5, store) {
     for (let unsubscribe of unsubscribers) unsubscribe();
   };
 }
-//@ chunk-5x106wnr.js:6195-6263 placement
+//@ chunk-8cqtsqhy.js:6195-6263 placement
 function settingsPrimeReads(storageV5) {
   let settingsPath = userSettingsFilePath();
   return [
@@ -404,7 +404,7 @@ function settingsPrimeReads(storageV5) {
     ...projectSettingsReads(storageV5),
   ];
 }
-//@ chunk-5x106wnr.js:6263-6587 placement
+//@ chunk-8cqtsqhy.js:6263-6587 placement
 /**
  * 项目与本地设置读取任务
  */
@@ -430,7 +430,7 @@ function projectSettingsReads(storageV5) {
   }
   return reads;
 }
-//@ chunk-5x106wnr.js:6587-7783 placement
+//@ chunk-8cqtsqhy.js:6587-7783 placement
 /**
  * 读托管设置文件层
  */
@@ -498,7 +498,7 @@ async function readManagedTier(storageV5, store) {
     ]),
   };
 }
-//@ chunk-5x106wnr.js:7783-7934 placement
+//@ chunk-8cqtsqhy.js:7783-7934 placement
 /**
  * 预读项目层
  */
@@ -510,12 +510,12 @@ async function primeProjectLayers(storageV5, store, epoch) {
   installProjectLayers(store, reads, results, epoch);
   return true;
 }
-//@ chunk-5x106wnr.js:7934-7958 placement
+//@ chunk-8cqtsqhy.js:7934-7958 placement
 var EMPTY_LIST; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-5x106wnr.js:7934", () => {
+deferInit("chunk-8cqtsqhy.js:7934", () => {
   EMPTY_LIST = Object.freeze([]);
 });
-//@ chunk-5x106wnr.js:7958-9054 placement
+//@ chunk-8cqtsqhy.js:7958-9054 placement
 /**
  * 已证实的托管层
  */
@@ -560,7 +560,7 @@ function attestedManagedLayers(storageV5, store, epoch) {
     })),
   };
 }
-//@ chunk-5x106wnr.js:9054-9260 placement
+//@ chunk-8cqtsqhy.js:9054-9260 placement
 /**
  * 刷新托管层
  */
@@ -577,7 +577,7 @@ async function refreshManagedTier(storageV5, store, epoch) {
   installSeededLayers(store, managedTier, reads, verdicts, epoch);
   return true;
 }
-//@ chunk-5x106wnr.js:9260-10314 placement
+//@ chunk-8cqtsqhy.js:9260-10314 placement
 /**
  * 安装预读的托管设置层
  */
@@ -634,7 +634,7 @@ function installSeededLayers(store, managedTier, reads, verdicts, epoch) {
     }
   return installed;
 }
-//@ chunk-5x106wnr.js:10314-10517 placement
+//@ chunk-8cqtsqhy.js:10314-10517 placement
 /**
  * 清除托管设置预读
  */
@@ -646,7 +646,7 @@ function clearManagedSeeds(store, epoch) {
   for (let settingsDir of managedFileSettingsDirs(wslInheritsSettings()))
     store.clearFolderListing(join(settingsDir, "managed-settings.d"), epoch);
 }
-//@ chunk-5x106wnr.js:10517-11192 placement
+//@ chunk-8cqtsqhy.js:10517-11192 placement
 /**
  * 安装 managed-settings.d 列表
  */
@@ -674,7 +674,7 @@ function installFolderListings(store, managedTier, epoch) {
     verdicts,
   };
 }
-//@ chunk-5x106wnr.js:11192-11713 placement
+//@ chunk-8cqtsqhy.js:11192-11713 placement
 /**
  * 安装项目层预读
  */
@@ -701,7 +701,7 @@ function installProjectLayers(store, reads, results, epoch) {
       );
   }
 }
-//@ chunk-5x106wnr.js:11713-12295 placement
+//@ chunk-8cqtsqhy.js:11713-12295 placement
 /**
  * 预读托管层
  */
@@ -739,11 +739,11 @@ async function primeManagedTier(storageV5, store) {
     return [];
   }
 }
-//@ chunk-5x106wnr.js:12295-12335 placement
+//@ chunk-8cqtsqhy.js:12295-12335 placement
 async function primeRootOwnership_2(storageV5, store) {
   primeRootOwnership(store, await readRootOwnershipAhead(storageV5, store));
 }
-//@ chunk-5x106wnr.js:12335-13082 placement
+//@ chunk-8cqtsqhy.js:12335-13082 placement
 /**
  * 预读根目录所有权
  */
@@ -783,7 +783,7 @@ async function readRootOwnershipAhead(storageV5, store) {
     uids: ownerUids.uids,
   };
 }
-//@ chunk-5x106wnr.js:13082-13263 placement
+//@ chunk-8cqtsqhy.js:13082-13263 placement
 /**
  * 预读本地设置根所有者
  */
@@ -794,7 +794,7 @@ function primeRootOwnership(store, ownership) {
   )
     logForDebugging("settingsPrime: ownership of the local settings root read ahead through the backend");
 }
-//@ chunk-5x106wnr.js:13263-13332 placement (2.1.88 match: extractQuotaStatusFromError, 1)
+//@ chunk-8cqtsqhy.js:13263-13332 placement (2.1.88 match: extractQuotaStatusFromError, 1)
 /**
  * Promise.allSettled 结果：rejected 抛出原因，否则返回值。旧版名错配；疑似归错文件。
  */
@@ -802,7 +802,7 @@ function unwrapSettledResult(error) {
   if (error.status === "rejected") throw error.reason;
   return error.value;
 }
-//@ chunk-5x106wnr.js:13332-13986 placement
+//@ chunk-8cqtsqhy.js:13332-13986 placement
 /**
  * 根、.git、.claude 的所有者 uid
  */
@@ -849,11 +849,11 @@ function ownerUidsOf(rootStat, gitStat, claudeStat) {
     },
   };
 }
-//@ chunk-5x106wnr.js:13986-14038 placement
+//@ chunk-8cqtsqhy.js:13986-14038 placement
 function ownershipUid(stat) {
   return stat.kind === "absent" ? undefined : stat.uid;
 }
-//@ chunk-5x106wnr.js:14038-14116 placement
+//@ chunk-8cqtsqhy.js:14038-14116 placement
 function failureCodeForTelemetry(error) {
   return error.code === "Failed" ? (error.telemetryCode ?? error.failureClass) : error.code;
 }

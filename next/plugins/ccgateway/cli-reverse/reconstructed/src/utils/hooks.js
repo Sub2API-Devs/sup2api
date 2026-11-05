@@ -3,10 +3,10 @@
  *
  * 钩子执行主流程（按事件收集、匹配、运行、合并结果）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks.ts
- * pieces: chunk-4nwcj4sh.js (2), chunk-7a5rgqvc.js (24), chunk-e6aww6q8.js (291), chunk-rxmpx0xj.js (1)
- * attribution: fingerprint 25, sole-consumer 36, placement 23, layout 150, affinity 6, facade-exports 78
+ * pieces: chunk-5xgkngpb.js (291), chunk-am4n5h4j.js (1), chunk-e698sy23.js (29), chunk-sr7jp7gh.js (2), chunk-v6cve82g.js (1)
+ * attribution: sole-consumer 22, affinity 8, fingerprint 26, layout 157, placement 32, facade-exports 79
  */
 import { randomUUID } from "crypto";
 import { isAbsolute, resolve as resolve_2, basename, win32 } from "path";
@@ -20,10 +20,8 @@ import {
   getRegisteredHooks,
   isSyncedPluginDirUnused,
   getMainThreadAgentHooks,
-  getMcpClientsFromAccessor,
-  getEnsureConnectedClient,
-  getRootSession,
   getSessionCronTasks,
+  getRootSession,
   getIsNonInteractiveSession,
   getMainThreadAgentType,
   getPromptId as getPromptId_2,
@@ -31,6 +29,7 @@ import {
   getHasStreamingInput,
   getBareMcpServerMatchersWarned,
   isCcsTenant,
+  getMcpClientsFromAccessor,
   getOriginalCwdOrNull,
   getFlagSettingsInline,
   getAttestedOfficialPluginMarketplace,
@@ -41,11 +40,13 @@ import {
   takeSdkHostOutOfReachNote,
 } from "../bootstrap/state.js";
 import {
-  permissionRuleValueFromString,
+  parseRuleString,
   canonicalToolName,
   legacyToolNamesFor,
   toolNameVariants,
+  isLegacyReplToolName,
   aliasesFor,
+  classifyRuleParens,
 } from "./permissions/permissionRuleParser.js";
 import {
   shouldDisableAllHooksIncludingManaged,
@@ -64,6 +65,7 @@ import {
   noSnapshotOverride,
   getEffectiveStatusLine,
 } from "./hooks/hooksConfigSnapshot.js";
+import { jsonStringify, jsonParse } from "./slowOperations.js";
 import { isCustomizationDisabled } from "./settings/customizationDisabled.js";
 import { isVouchedPolicyPluginId } from "./plugins/managedPlugins.js";
 import { isSafeMode } from "./envUtils.js";
@@ -112,35 +114,6 @@ import { ORGANIZATION_ANSWER_POLL_MS } from "./plugins/commandSource.js";
 import { GUARD_HOOK_EVENTS } from "../schemas/hookEntryValidation.js";
 import { shouldLoadPermissionRules, settingsGrantsConfined } from "./permissions/permissionsLoader.js";
 import { narrowerMode, isComputerUseTool, isAutoAllowedInMode } from "./permissions/browserToolNames.js";
-import {
-  createHookJsonReader,
-  findSyncJsonAnswer,
-  parseAsyncHookOutput,
-  hasUnparsedJsonLine,
-  createJsonParseBudget,
-  validateHookJsonOutput,
-  emptyHookOutputState,
-  scanHookOutputMarkers,
-  strongerExitStatus,
-} from "./hooks/hookOutputParsing.js";
-import { jsonStringify, jsonParse, slowLogging, jsonParseRaw } from "./slowOperations.js";
-import {
-  restrictHookOutputForMcpInbound,
-  anyTrustedMemoryToolSafe,
-  MAX_HOOK_METRIC_KEYS,
-  getToolNameField,
-  hookInputSummary,
-  writeHistoryEntry,
-} from "./hooks/hookEventHelpers.js";
-import {
-  errorMessage,
-  isAbortError,
-  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-  withTelemetryMessage,
-  getErrnoCode,
-  StreamClosedAbortError,
-} from "./errors.js";
-import { finalizeHook, registerPendingAsyncHook } from "./hooks/AsyncHookRegistry.js";
 import { env } from "./env.js";
 import { hasBackgroundBashWork } from "../tools/AgentTool/backgroundGates.js";
 import {
@@ -162,6 +135,13 @@ import {
   refusesRemoteBrowserCallOutsideChecks,
   isRemoteBrowserToolUnderModeFloor,
 } from "./permissions/remoteBrowser.js";
+import { UI_HOST_REQUEST_TIMEOUT_MS, MEMORY_SERVER_MAX } from "../plugins/functionHooks/uiApi.js";
+import { isInvalidValueIssue } from "./settings/validation.js";
+import {
+  normalizeCaseForComparison_2,
+  isScratchpadEnabled,
+  getScratchpadDir,
+} from "./permissions/filesystem.js";
 import {
   TOOL_HOOK_EXECUTION_TIMEOUT_MS,
   USER_PROMPT_SUBMIT_HOOK_TIMEOUT_MS,
@@ -169,23 +149,6 @@ import {
   TOOL_HOOK_EVENTS,
   emitHookResponse_2,
 } from "./hooks/hookEvents.js";
-import { releaseMcpCgroupAtHookFire } from "./hooks/mcpToolHookCgroup.js";
-import { HOOK_EVENT_NAMES, hooksSettingForEvent } from "./hooks/hookEventSets.js";
-import { getConnectionTimeoutMs } from "../services/mcp/client.js";
-import { isConnectedOrCached } from "../skills/bundled/scheduleRemoteAgents.js";
-import { createCombinedAbortSignal } from "./combinedAbortSignal.js";
-import {
-  isMemoryToolServer_2,
-  MEMORY_CALLER_META_KEY,
-  truncateMiddle as truncateMiddle_2,
-} from "../memdir/memoryTool.js";
-import {
-  isMemoryToolAllowed,
-  accountMemoryServerState,
-} from "../services/accountMemory/accountMemoryServer.js";
-import { subagentMemoryMode } from "../services/accountMemory/memoryContext.js";
-import { callMcpTool } from "../services/mcp/mcpWireUtils.js";
-import { uniq, count } from "./collections.js";
 import { isDelegatedObservationContext, mainAgentContext, isSubagentContext } from "./agentContext.js";
 import { RESULT_LIMIT_COUNT } from "../constants/outputLimits.js";
 import {
@@ -204,6 +167,7 @@ import {
   getCurrentSessionTitle,
   getAgentTranscriptPath,
   getTranscriptPathForSession,
+  ensurePluginDataDir,
 } from "./sessionStorage.js";
 import { waitForTaskCompletion } from "../tools/TaskOutputTool/TaskOutputTool.js";
 import { taskKindLabel } from "../tasks/taskKinds.js";
@@ -214,10 +178,19 @@ import {
   hookMembersFor,
   hookOriginFromStack,
 } from "../plugins/functionHooks/hookDispatch.js";
+import {
+  isAbortError,
+  errorMessage,
+  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+  withTelemetryMessage,
+  sanitizeErrnoForTelemetry,
+  getErrnoCode,
+  StreamClosedAbortError,
+} from "./errors.js";
 import { reportPreToolUseChainFailure } from "../plugins/functionHooks/sites/siteRules.js";
 import {
   getToolPermissionContext,
-  isSessionHoldFor,
+  getBaselineEffort,
   getEffortLayerOverride,
 } from "./permissions/toolPermissionContext.js";
 import {
@@ -227,18 +200,27 @@ import {
   withHeldPermissionBehavior,
   maybeWaitForHookPolicy,
 } from "./hooks/hookPolicyHold.js";
-import { findToolByName, getRemoteHookRunner } from "../Tool.js";
+import { findToolByName, matchesToolName, getRemoteHookRunner } from "../Tool.js";
 import { registerAgent } from "./telemetry/perfettoTracing.js";
 import { sameMessageOrShape } from "../plugins/functionHooks/sites/sessionSites.js";
 import { hasModuleHookingSite } from "../plugins/hooksModules/loadedModuleFilters.js";
-import { isPlainObject as isPlainObject_5 } from "./isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "./isPlainObject.js";
+import {
+  anyTrustedMemoryToolSafe,
+  MAX_HOOK_METRIC_KEYS,
+  getToolNameField,
+  hookInputSummary,
+  writeHistoryEntry,
+} from "./hooks/hookEventHelpers.js";
 import { mcpServerIdentityForHooks } from "../services/mcp/fileReference/fileReferencePolicy.js";
+import { isAccepted } from "./codeMode/accepted.js";
 import {
   hasWorktreeCreateHook,
   hasWorktreeRemoveHook as hasWorktreeRemoveHook_2,
 } from "./hooks/worktreeHooks.js";
 import { hasClassicHookSite, isClassicHooked } from "../plugins/functionHooks/toolCallHooks.js";
 import { getCwd, getCwdOrNull } from "./cwd.js";
+import { truncateMiddle as truncateMiddle_2 } from "../memdir/memoryTool.js";
 import { getSessionProject, SessionRootSlot, isNoProjectDirectoryError } from "../bootstrap/sessionSlices.js";
 import { preferRemoteValue, runInRemoteCallFrameMain } from "../remote/remoteMode.js";
 import {
@@ -252,8 +234,16 @@ import { pathPresence, pathExists } from "./fsSafety/atomicWriteStaging.js";
 import { printableLabel } from "./printableName.js";
 import { withHostEnvRestored, hostWrittenEnvNames } from "./settings/hostEnvWrites.js";
 import {
+  createJsonParseBudget,
+  validateHookJsonOutput,
+  emptyHookOutputState,
+  scanHookOutputMarkers,
+  strongerExitStatus,
+} from "./hooks/hookOutputParsing.js";
+import {
   isSyncHookJSONOutput,
   hookJSONOutputSchema,
+  isJsonLinesOutput,
   isAsyncHookJSONOutput,
   isSyncHookJSONOutput_2,
 } from "../types/hooks.js";
@@ -275,9 +265,32 @@ import {
   resolveHookCommand,
   EMPTY_PATH_DIR,
 } from "./hooks/hookCommandResolution.js";
+import { registerPendingAsyncHook } from "./hooks/AsyncHookRegistry.js";
 import { isProjectScopeTrustAccepted, checkHasTrustDialogAccepted } from "./config.js";
-import { resolveEffortLevel, modelSupportsEffort, getEffortLevelOrHigh } from "./effort.js";
-import { isScratchpadEnabled, getScratchpadDir } from "./permissions/filesystem.js";
+import { modelSupportsEffort, getEffortLevelOrHigh } from "./effort.js";
+import {
+  describeKillSwitchedHook,
+  isVastPlatypusOn,
+  blockingErrorResult,
+  hookInputSizeLimit,
+  isGuardedHookEvent,
+  isQuietHopcroftGateOn,
+  hookResolutionFaultMessage,
+  pluginHookRefusal,
+  unserializableInputBlockMessage,
+  hasPolicySetting,
+  resolveFileSuggestionHook,
+} from "./hooks/hookPolicy.js";
+import {
+  applyRemoteHookInputRewrite,
+  askContainerIfHookApplies,
+  isRewrittenInput,
+  markRewrittenInput,
+  unmarkRewrittenInput,
+  createHttpHookSender,
+  runMcpToolHook,
+  rewriteInputIfMarked,
+} from "./hooks/hookInputRewrite.js";
 import { HostScoped, mergeClients as mergeClients_3 } from "./hostScoped.js";
 import { logEvent } from "../services/analytics/index.js";
 import {
@@ -288,26 +301,16 @@ import {
 } from "../services/analytics/safeMetadata.js";
 import { renderTerminalSequences } from "./hooks/terminalSequence.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
-import {
-  parseVersionCachePath,
-  ensurePluginDataDir,
-  pluginDataDirPath,
-} from "./plugins/pluginDirectories.js";
+import { parseVersionCachePath, pluginDataDirPath } from "./plugins/pluginDirectories.js";
 import { projectPluginCacheDir } from "./plugins/pluginCachePaths.js";
 import {
-  blockingErrorResult,
-  hookInputSizeLimit,
-  isGuardedHookEvent,
-  isVastPlatypusOn,
-  isQuietHopcroftGateOn,
-  hookResolutionFaultMessage,
-  pluginHookRefusal,
-  describeKillSwitchedHook,
-  unserializableInputBlockMessage,
-  hasPolicySetting,
-  resolveFileSuggestionHook,
-} from "./hooks/hookPolicy.js";
-import { getHookDisplayText, getHookStatusText, getHookProgressDisplay } from "./hooks/hooksSettings.js";
+  getHookDisplayText,
+  hookTypeLabel,
+  hasRunnableHookType,
+  hookLabelsByType,
+  hookStatusLabel,
+  getHookProgressDisplay,
+} from "./hooks/hooksSettings.js";
 import { removeClaudeCodeHintLines } from "./claudeCodeHints.js";
 import { isDisklessSession as isDisklessSession_2 } from "./disklessSession.js";
 import { getPlatform } from "./platform.js";
@@ -318,13 +321,6 @@ import {
   substituteUserConfigVariables,
 } from "./plugins/pluginOptionsStorage.js";
 import { stripShellQuotes, prependDirToPathEnv } from "./path.js";
-import {
-  isRewrittenInput,
-  markRewrittenInput,
-  unmarkRewrittenInput,
-  rewriteInputIfMarked,
-  applyRemoteHookInputRewrite,
-} from "./hooks/hookInputRewrite.js";
 import { subprocessEnv, hipaaWithholdsChildCredentials } from "./subprocessEnv.js";
 import { hostOwnedEnvNames } from "./plugins/securityDefaultPlugin.js";
 import { getGlobBaseDirectory } from "./shell/bashProvider.js";
@@ -337,6 +333,7 @@ import {
   runScriptHookUnsupported,
 } from "./hooks/scriptHooks.js";
 import { shellQuoteArgs } from "./bash/bashPipeCommand.js";
+import { hooksSettingForEvent } from "./hooks/hookEventSets.js";
 import {
   findPowerShellForEnv,
   getWindowsEnvPaths,
@@ -352,6 +349,9 @@ import {
   EXIT_CODE_COMMAND_NOT_FOUND,
   hookPathRoots,
   hookProgramLabelForReport,
+  blocksOnFailure,
+  HookCallbackFailedError,
+  reportHookCallbackFailure,
   blocksWhenNonBlockingError,
   hasBlockingReason,
   isDenyDecisionOutput,
@@ -415,16 +415,20 @@ import { groupBySource } from "../components/ContextVisualization.js";
 import { isTerminalShutdown, heldUntilExit } from "./terminalShutdown.js";
 import { isAttachServeMode } from "../cli/headlessCloud/attachServe.js";
 import { isDeviceOwnedHook } from "./hooks/deviceHooks/templates.js";
+import { countWhere } from "./collections.js";
 import { shortHash } from "./shortHash.js";
 import { resolveHookPermissionResult } from "./hooks/hookPermissionResult.js";
 import {
   isWebToolRestrictedInRelay,
   filterPermissionUpdatePayload,
 } from "./permissions/permissionRulePayload.js";
-import { mcpInfoFromString } from "../services/mcp/mcpStringUtils.js";
+import { mcpInfoFromString, buildMcpToolName } from "../services/mcp/mcpStringUtils.js";
 import { filterRemoteBrowserAllowUpdates } from "./permissions/mcpRuleMatching.js";
 import { hasMcpToolAliases, requiresClassifierForHookAllow } from "./permissions/permissionSetup.js";
 import { isAutoClassifierActive } from "./permissions/autoModeState.js";
+import { isRemoteStatusLineInput } from "../cli/transportState.js";
+import { onceExport } from "../../vendor/lodash-es/once.js";
+import { noteHooks } from "./hooks/hookRunContext.js";
 import { countByPluginKey } from "../services/plugins/pluginOperations.js";
 import { hashEntries } from "./model/modelCatalog/maskedIds.js";
 import { persistLargeHookOutput, isPersistedHookOutputPath } from "./toolResultStorage.js";
@@ -432,24 +436,35 @@ import { isBetaTracingEnabled } from "./telemetry/betaSessionTracing.js";
 import { isPerfettoTracingEnabled, startHookSpan, endHookSpan } from "./telemetry/sessionTracing.js";
 import { recordPluginActivity } from "./pluginActivity.js";
 import { pinHookCommand } from "./hooks/servedHooks/hookPins.js";
+import { createCombinedAbortSignal } from "./combinedAbortSignal.js";
 import { MAX_TIMER_DELAY_MS } from "./timerDelayClamp.js";
 import { execPromptHook } from "./hooks/execPromptHook.js";
+import { isRemoteToolsForwardEnabled2 } from "../bridge/deviceRegistration.js";
 import { execAgentHook } from "./hooks/execAgentHook.js";
+import { executeMcpToolHook } from "./hooks/mcpToolHook.js";
+import { subagentMemoryMode } from "../services/accountMemory/memoryContext.js";
+import { recordToolUsed } from "../services/compact/keptTools.js";
 import { sequential } from "./sequential.js";
 import { isFlagSettingsSyncHook } from "./hooks/hookSettingsSources.js";
 import { hookSourceOf } from "./hooks/sessionHooks.js";
 import { all } from "./generators.js";
 import { HOST_CONTEXT_LINE_LIMIT } from "./permissions/classifierHostContext.js";
 import { attentionRegistryStore } from "../components/fleet/sessionAttention.js";
+import { filterMcpServersByPolicy } from "../services/mcp/config.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-7a5rgqvc.js:448-499 placement
+//@ chunk-e698sy23.js:483-522 affinity
+var PLAIN_OUTPUT_IS_CONTEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e698sy23.js:483", () => {
+  PLAIN_OUTPUT_IS_CONTEXT = Symbol("plainOutputIsContext");
+});
+//@ chunk-e698sy23.js:522-573 placement
 class NoAnswerInTimeError extends Error {
   name = "NoAnswerInTimeError";
 }
-//@ chunk-7a5rgqvc.js:499-557 placement
+//@ chunk-e698sy23.js:573-631 placement
 var MANAGED_PRIORITY_SOURCES = ["projectSettings", "flagSettings", "policySettings"];
-//@ chunk-7a5rgqvc.js:557-813 placement
+//@ chunk-e698sy23.js:631-887 placement
 /**
  * 取钩子来源标签：插件钩子运行器存在时，返回设置来源或由运行器持有的插件 id。
  */
@@ -472,18 +487,29 @@ function getHookOriginLabel(hookGroup) {
       }
     : undefined;
 }
-//@ chunk-7a5rgqvc.js:813-922 placement
-/**
- * 钩子是否可预过滤：command 类型，或没有带内容 if 条件的 prompt 类型。
- */
-function isPrefilterableHook(hook) {
+//@ chunk-e698sy23.js:887-946 layout
+function isCommandOrPromptHook(hook) {
+  return hook.type === "command" || hook.type === "prompt";
+}
+//@ chunk-e698sy23.js:946-1014 layout
+function hasNoRuleCondition(hook) {
+  return hook.if === undefined || parseRuleString(hook.if).ruleContent === undefined;
+}
+//@ chunk-e698sy23.js:1014-1085 layout
+function isProjectOrDefaultHook(owner, hook) {
+  return owner.settingsSource === "projectSettings" || !hasNoRuleCondition(hook);
+}
+//@ chunk-e698sy23.js:1085-1307 layout
+function isOwnerRunHook(owner, hook) {
   return (
-    hook.type === "command" ||
-    (hook.type === "prompt" &&
-      (hook.if === undefined || permissionRuleValueFromString(hook.if).ruleContent === undefined))
+    isCommandOrPromptHook(hook) ||
+    ((hook.type === "http" || hook.type === "prompt" || hook.type === "agent" || hook.type === "mcp_tool") &&
+      owner.settingsSource === "projectSettings") ||
+    (hook.type === "agent" && owner.pluginId !== undefined) ||
+    (hook.type === "http" && owner.pluginId !== undefined)
   );
 }
-//@ chunk-7a5rgqvc.js:922-1091 placement
+//@ chunk-e698sy23.js:1307-1476 placement
 /**
  * 收集各设置来源中插件运行器提供的钩子，按停用状态跳过项目或设备级来源；全部钩子被禁用时返回空。
  */
@@ -501,28 +527,32 @@ function getPluginSettingsHooks(event) {
       : pluginHookRunner.settingsHooks(source, event),
   );
 }
-//@ chunk-7a5rgqvc.js:1091-1256 placement
+//@ chunk-e698sy23.js:1476-1532 layout
+function hookInputKey(hookInput) {
+  return jsonStringify([hookInput.server, hookInput.tool, hookInput.input ?? {}]);
+}
+//@ chunk-e698sy23.js:1532-1697 placement
 var CLOUD_HOOK_UNSUPPORTED_REASON; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CLOUD_SAFE_HOOK_TYPES;
-deferInit("chunk-7a5rgqvc.js:1091", () => {
+deferInit("chunk-e698sy23.js:1532", () => {
   CLOUD_HOOK_UNSUPPORTED_REASON =
     "a cloud session does not run command, script, HTTP or MCP tool hooks from the shared server it runs on";
   CLOUD_SAFE_HOOK_TYPES = new Set(["prompt", "agent", "callback", "function"]);
 });
-//@ chunk-7a5rgqvc.js:1256-1291 placement
+//@ chunk-e698sy23.js:1697-1732 placement
 function isCloudSafeHook(hook) {
   return CLOUD_SAFE_HOOK_TYPES.has(hook.type);
 }
-//@ chunk-7a5rgqvc.js:1291-1460 placement
+//@ chunk-e698sy23.js:1732-1891 placement
 /**
  * 云会话中只保留 prompt/agent/callback/function 钩子（及可信来源的 command）。
  */
 function filterHooksForCloudSession(hookGroups) {
   if (!isDiskless()) return hookGroups;
   return hookGroups.flatMap((group) => {
-    let isLabeled = getHookOriginLabel(group) !== undefined;
+    let isLabeled = getHookOriginLabel(group);
     let filtered = group.hooks.filter(
-      (hook) => isCloudSafeHook(hook) || (isLabeled && hook.type === "command"),
+      (hook) => isCloudSafeHook(hook) || (isLabeled !== undefined && isOwnerRunHook(isLabeled, hook)),
     );
     return filtered.length > 0
       ? [
@@ -534,14 +564,14 @@ function filterHooksForCloudSession(hookGroups) {
       : [];
   });
 }
-//@ chunk-7a5rgqvc.js:1460-1534 placement
+//@ chunk-e698sy23.js:1891-1965 placement
 var HOOK_TYPE_LABELS = {
   command: "command",
   script: "script",
   http: "HTTP",
   mcp_tool: "MCP tool",
 };
-//@ chunk-7a5rgqvc.js:1534-1755 placement
+//@ chunk-e698sy23.js:1965-2186 placement
 function denyPermissionRequestHookInCloud(hook) {
   return {
     permissionRequestResult: {
@@ -552,11 +582,11 @@ function denyPermissionRequestHookInCloud(hook) {
     hook,
   };
 }
-//@ chunk-7a5rgqvc.js:1755-1818 placement
+//@ chunk-e698sy23.js:2186-2249 placement
 function getHooksForEvent(event, options) {
   return filterHooksForCloudSession(getRegisteredEventHooks(event, options?.withoutCheckoutHooks === true));
 }
-//@ chunk-7a5rgqvc.js:1818-2304 placement
+//@ chunk-e698sy23.js:2249-2735 placement
 /**
  * 汇总某事件已注册的钩子：快照中的设置钩子、插件设置钩子、主线程代理钩子与注册钩子（按插件状态、托管独占、设备钩子停用与已同步插件是否使用过滤）。
  */
@@ -585,30 +615,30 @@ function getRegisteredEventHooks(event, skipCheckoutHooks) {
     ),
   ];
 }
-//@ chunk-7a5rgqvc.js:2304-2322 placement
+//@ chunk-e698sy23.js:2735-2753 placement
 var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-7a5rgqvc.js:2304", () => {
+deferInit("chunk-e698sy23.js:2735", () => {
   weakMap = new WeakMap();
 });
-//@ chunk-7a5rgqvc.js:2322-2351 placement
+//@ chunk-e698sy23.js:2753-2782 placement
 /**
  * 为钩子登记"是否可运行"的判定函数。
  */
 function registerHookEligibility(hook, check) {
   weakMap.set(hook, check);
 }
-//@ chunk-7a5rgqvc.js:2351-2392 placement
+//@ chunk-e698sy23.js:2782-2823 placement
 /**
  * 判断钩子的可运行判定是否返回真。
  */
 function isHookEligible(hook) {
   return weakMap.get(hook)?.() === true;
 }
-//@ chunk-7a5rgqvc.js:2392-2424 placement
+//@ chunk-e698sy23.js:2823-2855 placement
 function hasHookEligibility(hook) {
   return weakMap.has(hook);
 }
-//@ chunk-7a5rgqvc.js:2424-2745 placement
+//@ chunk-e698sy23.js:2855-3174 placement
 /**
  * 过滤会话钩子 matcher：插件持有的技能钩子只在全部为可预过滤类型且未停用时保留（标记 pluginId）；策略要求跳过时只保留特定提示钩子。
  */
@@ -628,7 +658,7 @@ function filterSessionHookMatchers(groups, skipSessionHooks) {
             ]
           : [];
       }
-      return group.hooks.every(isPrefilterableHook) &&
+      return group.hooks.every(isCommandOrPromptHook) &&
         !pluginHookRunner.standsDown(group.skillRoot) &&
         !shouldDisableAllHooksIncludingManaged() &&
         !shouldHoldDeviceHooksByPolicy()
@@ -642,36 +672,36 @@ function filterSessionHookMatchers(groups, skipSessionHooks) {
     }),
   );
 }
-//@ chunk-7a5rgqvc.js:2745-2802 fingerprint (2.1.88 match: getHooksConfig, 0.848)
+//@ chunk-e698sy23.js:3174-3241 fingerprint (2.1.88 match: getHooksConfig, 0.847)
 function isPluginMatcherAllX(group) {
-  return "pluginRoot" in group && group.hooks.every(isPrefilterableHook);
+  return "pluginRoot" in group && group.hooks.every((hook) => isOwnerRunHook(group, hook));
 }
-//@ chunk-7a5rgqvc.js:2802-2832 layout
+//@ chunk-e698sy23.js:3241-3271 layout
 /**
  * 插件 id 是否为组织托管插件。
  */
 function isManagedPluginId(pluginId) {
   return isVouchedPolicyPluginId(pluginId);
 }
-//@ chunk-7a5rgqvc.js:2832-2909 placement
+//@ chunk-e698sy23.js:3271-3348 placement
 function managedHookState(managedOnly = shouldAllowManagedHooksOnly()) {
   return {
     managedOnly,
     managedPluginIds: managedOnly && !isSafeMode() ? getPolicyAllowedSet() : null,
   };
 }
-//@ chunk-7a5rgqvc.js:2909-2983 placement
+//@ chunk-e698sy23.js:3348-3422 placement
 function isHookAllowedByPolicy(pluginId, { managedOnly, managedPluginIds }) {
   return !managedOnly || managedPluginIds?.has(pluginId) === true;
 }
-//@ chunk-7a5rgqvc.js:2983-3017 placement
+//@ chunk-e698sy23.js:3422-3456 placement
 /**
  * 判断插件钩子在"仅托管"策略下是否允许。
  */
 function isManagedHookAllowed(pluginId) {
   return isHookAllowedByPolicy(pluginId, managedHookState(true));
 }
-//@ chunk-7a5rgqvc.js:3017-3063 placement
+//@ chunk-e698sy23.js:3456-3502 placement
 /**
  * 判断某来源的钩子当前是否允许运行（钩子总开关与策略）。
  */
@@ -680,21 +710,21 @@ function isHookSourceAllowed(pluginId) {
     areHooksEnabled() && !policySettingsUnreadable() && isHookAllowedByPolicy(pluginId, managedHookState())
   );
 }
-//@ chunk-7a5rgqvc.js:3063-3111 placement
+//@ chunk-e698sy23.js:3502-3550 placement
 /**
  * 判断钩子功能总体是否启用（未被设置/策略关闭）。
  */
 function areHooksEnabled() {
   return !isCustomizationDisabled("hooks") && !shouldDisableAllHooksIncludingManaged() && !isSafeMode();
 }
-//@ chunk-4nwcj4sh.js:6631-6701 fingerprint (2.1.88 match: isInternalHook, 1)
+//@ chunk-sr7jp7gh.js:460-530 fingerprint (2.1.88 match: isInternalHook, 1)
 /**
  * 是否为内部 callback 钩子（hook.internal=true），内部钩子不计入用户钩子遥测。
  */
 function isInternalHook(matched) {
   return matched.hook.type === "callback" && matched.hook.internal === true;
 }
-//@ chunk-4nwcj4sh.js:6701-6997 sole-consumer
+//@ chunk-sr7jp7gh.js:530-826 sole-consumer
 /**
  * claude mcp serve --transport http 下只保留内部钩子，丢弃设置/插件钩子并记日志与事件。
  */
@@ -717,7 +747,7 @@ function dropHooksInHttpServe(hooks, hookEvent) {
   }
   return hooks;
 }
-//@ chunk-rxmpx0xj.js:827-882 fingerprint (2.1.88 match: getHookTypeCounts, 0.698)
+//@ chunk-am4n5h4j.js:860-915 fingerprint (2.1.88 match: getHookTypeCounts, 0.697)
 function hasNonInternalHook(results) {
   return results.hooks.some(
     (hook) =>
@@ -726,14 +756,14 @@ function hasNonInternalHook(results) {
       }),
   );
 }
-//@ chunk-e6aww6q8.js:743796-743834 sole-consumer
+//@ chunk-5xgkngpb.js:754385-754423 sole-consumer
 var PERMISSION_DECISION_RANK = {
   deny: 3,
   ask: 2,
   allow: 1,
   none: 0,
 };
-//@ chunk-e6aww6q8.js:743834-744006 affinity
+//@ chunk-5xgkngpb.js:754423-754595 affinity
 function keepAskAndContext(pass) {
   let kept =
     pass.ask === undefined
@@ -745,21 +775,21 @@ function keepAskAndContext(pass) {
   if (pass.additionalContext) kept.additionalContext = pass.additionalContext;
   return kept;
 }
-//@ chunk-e6aww6q8.js:744006-744067 fingerprint (2.1.88 match: getPreToolHookBlockingMessage, 1)
+//@ chunk-5xgkngpb.js:754595-754656 fingerprint (2.1.88 match: getPreToolHookBlockingMessage, 1)
 function getPreToolHookBlockingMessage(hookName, blockingError) {
   return `${hookName} hook error: ${blockingError.blockingError}`;
 }
-//@ chunk-e6aww6q8.js:744067-744161 layout
+//@ chunk-5xgkngpb.js:754656-754750 layout
 /**
  * 匹配「PreToolUse:<tool> hook error: [...]: 」前缀的正则，用于剥离嵌套错误前缀。
  */
 var PRE_TOOL_HOOK_ERROR_PREFIX_RE =
   /^(PreToolUse:\S+ hook error: )\[(?:[^[\]]|\[[^[\]]*\])*\]: \s*(?=\S)(?![\s\S]*\]: )/;
-//@ chunk-e6aww6q8.js:744161-744309 layout
+//@ chunk-5xgkngpb.js:754750-754898 layout
 function getCloudDeferUnsupportedMessage(hookName) {
   return `A PreToolUse hook (${hookName}) deferred this call; deferral is not supported for calls served to a cloud session, so nothing ran.`;
 }
-//@ chunk-e6aww6q8.js:744309-745372 layout
+//@ chunk-5xgkngpb.js:754898-755963 layout
 /**
  * 合并一串 PreToolUse 钩子结果：deny > ask > allow，blockingError 视为 deny，defer 和其他字段转交回调；返回 {deny|ask|allow, updatedInput, additionalContext}。
  */
@@ -851,7 +881,7 @@ async function aggregatePreToolHookResults(results, toolName, onExtra) {
   if (contexts) out.additionalContext = contexts;
   return out;
 }
-//@ chunk-e6aww6q8.js:745372-745846 layout
+//@ chunk-5xgkngpb.js:755963-756437 layout
 /**
  * 跑一轮 PreToolUse 钩子并收集：合并结果、原样 yields、唯一的 ask、输入改写记录；钩子流抛错时把 deny 原因交给回调后再抛。
  */
@@ -901,7 +931,7 @@ async function collectPreToolHookPass(results, tool, onFailure) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:745846-746024 layout
+//@ chunk-5xgkngpb.js:756437-756615 layout
 var createCorePreToolStage = (runHooks, hooksExcluded, stepRecorder, onThrown) => ({
   name: "core",
   isCore: true,
@@ -920,7 +950,7 @@ var createCorePreToolStage = (runHooks, hooksExcluded, stepRecorder, onThrown) =
     return preToolHookPass.result;
   },
 });
-//@ chunk-e6aww6q8.js:746024-746431 layout
+//@ chunk-5xgkngpb.js:756615-757022 layout
 function mergePreToolStageResults(first, second) {
   let secondHasDeny = typeof second.deny === "string";
   let secondHasAsk = typeof second.ask === "string";
@@ -948,7 +978,7 @@ function mergePreToolStageResults(first, second) {
     out.additionalContext = (first.additionalContext ?? []).concat(second.additionalContext ?? []);
   return out;
 }
-//@ chunk-e6aww6q8.js:746431-746794 layout
+//@ chunk-5xgkngpb.js:757022-757385 layout
 var createManagedPreToolStage = (runHooks, managed) => ({
   name: MANAGED,
   isManaged: true,
@@ -974,7 +1004,7 @@ var createManagedPreToolStage = (runHooks, managed) => ({
     return mergePreToolStageResults(inputChanged ? keepAskAndContext(decision) : decision, stageResult);
   },
 });
-//@ chunk-e6aww6q8.js:746794-746939 layout
+//@ chunk-5xgkngpb.js:757385-757530 layout
 function createManagedStageController(runHooks, pass) {
   let state = {
     pass,
@@ -986,7 +1016,7 @@ function createManagedStageController(runHooks, pass) {
     covers: (input) => state.passedKey !== undefined && stableStringifySafe(input) === state.passedKey,
   };
 }
-//@ chunk-e6aww6q8.js:746939-747101 layout
+//@ chunk-5xgkngpb.js:757530-757692 layout
 function createCoreStageController(runHooks, hooksExcluded) {
   let stepRecorder = createStepRecorder();
   let lastFailure;
@@ -1001,53 +1031,53 @@ function createCoreStageController(runHooks, hooksExcluded) {
         : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:747101-747126 layout
+//@ chunk-5xgkngpb.js:757692-757717 layout
 var getPreToolStageOrder = () => [CORE_ORIGIN, MANAGED, ENGINE];
-//@ chunk-e6aww6q8.js:747126-747137 layout
+//@ chunk-5xgkngpb.js:757717-757728 layout
 var FRESH_HERON_DEFAULT = true;
-//@ chunk-e6aww6q8.js:747137-747181 layout
+//@ chunk-5xgkngpb.js:757728-757772 layout
 /**
  * GrowthBook 开关 tengu_fresh_heron（默认开）。
  */
 var isFreshHeronEnabled = () =>
   getFeatureValue_CACHED_MAY_BE_STALE("tengu_fresh_heron", FRESH_HERON_DEFAULT) !== false;
-//@ chunk-e6aww6q8.js:747181-747270 layout
+//@ chunk-5xgkngpb.js:757772-757861 layout
 let NotOrganizationPluginError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:747181", () => {
+deferInit("chunk-5xgkngpb.js:757772", () => {
   NotOrganizationPluginError = class NotOrganizationPluginError extends HooksError {
     constructor(pluginId, detail) {
       super(`${pluginId}: not the organization's plugin: ${detail}`);
     }
   };
 });
-//@ chunk-e6aww6q8.js:747270-747328 layout
+//@ chunk-5xgkngpb.js:757861-757919 layout
 let HookAdmissionError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:747270", () => {
+deferInit("chunk-5xgkngpb.js:757861", () => {
   HookAdmissionError = class HookAdmissionError extends HooksError {
     constructor(name, detail) {
       super(`${name}: ${detail}`);
     }
   };
 });
-//@ chunk-e6aww6q8.js:747328-747349 layout
+//@ chunk-5xgkngpb.js:757919-757940 layout
 let HookAdmissionRefusal; // deferred: uses HookAdmissionError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:747328", () => {
+deferInit("chunk-5xgkngpb.js:757919", () => {
   HookAdmissionRefusal = class HookAdmissionRefusal extends HookAdmissionError {};
 });
-//@ chunk-e6aww6q8.js:747349-747488 layout
+//@ chunk-5xgkngpb.js:757940-758079 layout
 var RESTRICT_PERSONAL_CONFIG_REASON =
   "it carries your claude.ai uploads, and this session doesn't let them run in-process hooks (CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG)";
-//@ chunk-e6aww6q8.js:747488-747501 layout
+//@ chunk-5xgkngpb.js:758079-758092 layout
 var moduleUnadmittedListener; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:747488", () => {
+deferInit("chunk-5xgkngpb.js:758079", () => {
   moduleUnadmittedListener = createValueSlot();
 });
-//@ chunk-e6aww6q8.js:747501-747514 layout
+//@ chunk-5xgkngpb.js:758092-758105 layout
 var admissionChangedListener; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:747501", () => {
+deferInit("chunk-5xgkngpb.js:758092", () => {
   admissionChangedListener = createValueSlot();
 });
-//@ chunk-e6aww6q8.js:747514-747808 layout
+//@ chunk-5xgkngpb.js:758105-758399 layout
 function applyAdmissionText(admissionText) {
   let pluginRegistry = getPluginRegistry();
   if (pluginRegistry.admissionText === admissionText) return false;
@@ -1069,7 +1099,7 @@ function applyAdmissionText(admissionText) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:747808-747879 layout
+//@ chunk-5xgkngpb.js:758399-758470 layout
 function computeAdmissionText() {
   if (!managedMarketplaceAnswerFlag()) return null;
   return stableStringifySafe([
@@ -1079,36 +1109,36 @@ function computeAdmissionText() {
     isProMaxWithoutSettings(),
   ]);
 }
-//@ chunk-e6aww6q8.js:747879-747929 layout
+//@ chunk-5xgkngpb.js:758470-758520 layout
 function refreshModAdmission() {
   let admissionText = computeAdmissionText();
   return admissionText !== null && applyAdmissionText(admissionText);
 }
-//@ chunk-e6aww6q8.js:747929-748177 layout
+//@ chunk-5xgkngpb.js:758520-758768 layout
 var HOOKS_SKIPPED_AT_START_MESSAGE =
   "Mods and hooks you set up didn't run at the start of this session: your organization's settings hadn't been read yet. They run from here on where your organization allows them; hooks that run when a session starts didn't run in this one.";
-//@ chunk-e6aww6q8.js:748177-748351 layout
+//@ chunk-5xgkngpb.js:758768-758942 layout
 /**
  * 组织设置读不到时，PreToolUse 钩子无法运行的提示文案（调用不被单独放行）。
  */
 var HOOK_CHECK_UNAVAILABLE_MESSAGE =
   "A hook you set up to check this tool call isn't running, because your organization's settings couldn't be read. Without the hook the call isn't allowed on its own.";
-//@ chunk-e6aww6q8.js:748351-748666 layout
+//@ chunk-5xgkngpb.js:758942-759257 layout
 var HOOKS_PENDING_POLICY_MESSAGE =
   "Mods and hooks you set up aren't running in this session yet, and neither are any checks they make on tool calls. Your organization's settings couldn't be read, so it isn't known whether it allows them. They'll start once the settings are read; hooks that run when a session starts won't run in this one.";
-//@ chunk-e6aww6q8.js:748666-748813 layout
+//@ chunk-5xgkngpb.js:759257-759404 layout
 var MODS_OFF_POLICY_CHANGED_MESSAGE =
   "Mods you installed are off for now. Your organization's policy on mods changed, and they stay off until they've been checked against it.";
-//@ chunk-e6aww6q8.js:748813-749005 layout
+//@ chunk-5xgkngpb.js:759404-759596 layout
 var SESSION_START_HOOKS_SKIPPED_REASON =
   "hooks a person set up are not run for this session's start: your organization's managed settings were not read when their fetch settled; hooks on later events run once they are read";
-//@ chunk-e6aww6q8.js:749005-749197 layout
+//@ chunk-5xgkngpb.js:759596-759788 layout
 var MODS_POLICY_UNKNOWN_REASON =
   "this session has not read your organization's managed settings, so whether mods you installed may run here is not known; they stay out until it has; built-in plugins load regardless";
-//@ chunk-e6aww6q8.js:749197-749428 layout
+//@ chunk-5xgkngpb.js:759788-760019 layout
 var HOOKS_POLICY_UNREADABLE_MESSAGE =
   "Mods and hooks you set up aren't running in this session, and neither are any checks they make on tool calls. This session can't read your organization's settings, so it isn't known whether your organization allows them.";
-//@ chunk-e6aww6q8.js:749428-749551 layout
+//@ chunk-5xgkngpb.js:760019-760142 layout
 function notifyModsRejudged(tell) {
   let pluginRegistry = getPluginRegistry();
   let any = pluginRegistry.loadedModules.some((loadedModule) => !isModuleAdmitted(loadedModule));
@@ -1116,7 +1146,7 @@ function notifyModsRejudged(tell) {
   pluginRegistry.isJudgedAgainTold = any;
   if (firstNotice) tell(MODS_OFF_POLICY_CHANGED_MESSAGE);
 }
-//@ chunk-e6aww6q8.js:749551-749767 layout
+//@ chunk-5xgkngpb.js:760142-760358 layout
 /**
  * managed settings 指纹变化后重新判定已加载的 mods，超时等待后通知用户被关掉的 mods。
  */
@@ -1136,19 +1166,19 @@ function rejudgeLoadedMods(reload, tell, timeoutMessage) {
     .then(() => notifyModsRejudged(tell))
     .catch(logError);
 }
-//@ chunk-e6aww6q8.js:749767-749899 layout
+//@ chunk-5xgkngpb.js:760358-760490 layout
 var hasConfiguredHooksForEvent = (event) =>
   (getHooksConfigFromSnapshot()?.[event]?.length ?? 0) > 0 ||
   (getMainThreadAgentHooks()?.[event]?.length ?? 0) > 0 ||
   (getRegisteredHooks()?.[event] ?? []).some((entry) => "pluginRoot" in entry || "deviceOwner" in entry);
-//@ chunk-e6aww6q8.js:749899-750089 layout
+//@ chunk-5xgkngpb.js:760490-760680 layout
 /**
  * 钩子子进程退出后等待 stdio 安静的窗口（500ms）与上限（10s），以及 PROMPT_GUARD_EVENTS（输出不可信时按阻断处理的事件集合）。
  */
 var STDIO_QUIET_WINDOW_MS; // deferred: uses GUARD_HOOK_EVENTS (../schemas/hookEntryValidation.js) of its import cycle while loading; runs once the cycle is complete
 var STDIO_SETTLE_CAP_MS;
 var PROMPT_GUARD_EVENTS;
-deferInit("chunk-e6aww6q8.js:749899", () => {
+deferInit("chunk-5xgkngpb.js:760490", () => {
   STDIO_QUIET_WINDOW_MS = 500;
   STDIO_SETTLE_CAP_MS = 1e4;
   PROMPT_GUARD_EVENTS = new Set([
@@ -1164,7 +1194,7 @@ deferInit("chunk-e6aww6q8.js:749899", () => {
     "PreCompact",
   ]);
 });
-//@ chunk-e6aww6q8.js:750089-750383 layout
+//@ chunk-5xgkngpb.js:760680-760976 layout
 /**
  * 子进程退出后等 stdout/stderr 结束或安静 quietWindowMs，总时长不超过 capMs；有数据持续到达则继续等。
  */
@@ -1188,19 +1218,19 @@ async function waitForStdioQuiet({
     if (lastDataAt() === seenLastData) return;
   }
 }
-//@ chunk-e6aww6q8.js:750383-750474 layout
+//@ chunk-5xgkngpb.js:760976-761067 layout
 function getRunnerJsonStdout(result) {
   let trimmed = result.resultStdout?.trim();
   return trimmed !== undefined && trimmed.startsWith("{") ? trimmed : undefined;
 }
-//@ chunk-e6aww6q8.js:750474-750558 layout
+//@ chunk-5xgkngpb.js:761067-761151 layout
 /**
  * Elicitation/ElicitationResult 钩子以 0、2 以外的码退出。
  */
 function isElicitationFailureExit(hookEvent, status) {
   return status !== 0 && status !== 2 && (hookEvent === "Elicitation" || hookEvent === "ElicitationResult");
 }
-//@ chunk-e6aww6q8.js:750558-750683 layout
+//@ chunk-5xgkngpb.js:761151-761276 layout
 /**
  * 判断钩子截获输出是否不可信；Elicitation 系事件非 0/2 退出时改用 stderr 再判一次。
  */
@@ -1220,7 +1250,7 @@ function getUntrustedCaptureReason(result, hookEvent, stdout, reason, reason_2) 
       : undefined)
   );
 }
-//@ chunk-e6aww6q8.js:750683-751435 layout
+//@ chunk-5xgkngpb.js:761276-762028 layout
 /**
  * stdio 未正常结束（stdioIncomplete/closedWithoutEnd）时，若输出不是惰性 JSON，返回拒绝采信的原因字符串。
  */
@@ -1240,10 +1270,10 @@ function checkIncompleteCapture(result, hookEvent, stdout, parsed) {
     return "hook output opens a JSON payload that never completed before its stdio went quiet; refusing to read the partial capture as a verdict";
   return;
 }
-//@ chunk-e6aww6q8.js:751435-751759 layout
+//@ chunk-5xgkngpb.js:762028-762352 layout
 var INERT_TOP_LEVEL_OUTPUT_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var INERT_SPECIFIC_OUTPUT_KEYS;
-deferInit("chunk-e6aww6q8.js:751435", () => {
+deferInit("chunk-5xgkngpb.js:762028", () => {
   INERT_TOP_LEVEL_OUTPUT_KEYS = new Set([
     "continue",
     "suppressOutput",
@@ -1268,7 +1298,7 @@ deferInit("chunk-e6aww6q8.js:751435", () => {
     "retry",
   ]);
 });
-//@ chunk-e6aww6q8.js:751759-751934 layout
+//@ chunk-5xgkngpb.js:762352-762527 layout
 /**
  * 为 UserPromptSubmit/UserPromptExpansion 构造 decision:block + suppressOriginalPrompt 的输出。
  */
@@ -1283,10 +1313,10 @@ function buildPromptBlockOutput(hookEvent, reason) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:751934-752144 layout
+//@ chunk-5xgkngpb.js:762527-762737 layout
 var CONTEXT_ON_SUCCESS_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var BLOCK_AS_FEEDBACK_EVENTS;
-deferInit("chunk-e6aww6q8.js:751934", () => {
+deferInit("chunk-5xgkngpb.js:762527", () => {
   CONTEXT_ON_SUCCESS_EVENTS = new Set([
     "UserPromptSubmit",
     "UserPromptExpansion",
@@ -1303,7 +1333,7 @@ deferInit("chunk-e6aww6q8.js:751934", () => {
     "PostToolUseFailure",
   ]);
 });
-//@ chunk-e6aww6q8.js:752144-752284 layout
+//@ chunk-5xgkngpb.js:762737-762877 layout
 /**
  * exit 2 且 stdio 不完整时，丢弃非惰性的 JSON 答复。
  */
@@ -1317,7 +1347,7 @@ function dropSuspectCaptureJson(result, hookEvent, json) {
     return;
   return json;
 }
-//@ chunk-e6aww6q8.js:752284-752904 layout
+//@ chunk-5xgkngpb.js:762877-763497 layout
 /**
  * 判断钩子 JSON 输出是否惰性（不批准、不阻断反馈类事件、不 allow/defer、不 accept、不 retry、不注入上下文），惰性输出即使截获不完整也可采信。
  */
@@ -1345,19 +1375,19 @@ function isInertHookOutput(output, hookEvent, status) {
   for (let key of Object.keys(hookSpecificOutput)) if (!INERT_SPECIFIC_OUTPUT_KEYS.has(key)) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:752904-752985 layout
+//@ chunk-5xgkngpb.js:763497-763578 layout
 /**
  * 守卫类与反馈类事件的并集（去掉 PreToolUse、StopFailure）。
  */
 var GUARD_AND_FEEDBACK_EVENTS; // deferred: uses STDIO_QUIET_WINDOW_MS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:752904", () => {
+deferInit("chunk-5xgkngpb.js:763497", () => {
   GUARD_AND_FEEDBACK_EVENTS = new Set(
     [...PROMPT_GUARD_EVENTS, ...BLOCK_AS_FEEDBACK_EVENTS].filter(
       (event) => event !== "PreToolUse" && event !== "StopFailure",
     ),
   );
 });
-//@ chunk-e6aww6q8.js:752985-753062 fingerprint (2.1.88 match: hasHookForEvent, 0.459)
+//@ chunk-5xgkngpb.js:763578-763655 fingerprint (2.1.88 match: hasHookForEvent, 0.461)
 /**
  * 按代理的 hooks/plugin 决定权限模式（有钩子时用 mj 调整）。旧版名 hasHookForEvent 存疑。
  */
@@ -1365,74 +1395,20 @@ var hasHookForEvent_2 = (agentDefinition, permissionMode) =>
   shouldLoadPermissionRules(agentDefinition.hooks, agentDefinition.plugin)
     ? narrowerMode(agentDefinition.permissionMode, permissionMode)
     : agentDefinition.permissionMode;
-//@ chunk-e6aww6q8.js:942378-943416 fingerprint (2.1.88 match: executeInBackground, 0.417)
-/**
- * 后台 async 钩子结束后读取 stdout：解析 {async:true} 之后的 JSON 答复，finalize 并返回附件数据；无输出且成功时返回 null。
- */
-async function executeInBackground(hook) {
-  let { shellCommand } = hook;
-  let stdout = await shellCommand.taskOutput.getStdout();
-  let stderr = shellCommand.taskOutput.getStderr();
-  let { code } = await shellCommand.result;
-  let response = {};
-  let emptyAnswer = true;
-  try {
-    let hookJsonReader = createHookJsonReader();
-    let syncJsonAnswer = findSyncJsonAnswer(stdout, hookJsonReader);
-    if (syncJsonAnswer !== undefined) {
-      logForDebugging(`Hooks: Found sync response from ${hook.processId}: ${jsonStringify(syncJsonAnswer)}`);
-      let asyncHookOutput = parseAsyncHookOutput(syncJsonAnswer, hook.hookName);
-      emptyAnswer = Object.keys(asyncHookOutput).length === 0;
-      response = restrictHookOutputForMcpInbound(asyncHookOutput);
-    } else if (hasUnparsedJsonLine(stdout, hookJsonReader))
-      logForDebugging(
-        `Hooks: async hook ${hook.processId} (${hook.hookName}) printed a stdout line that begins with { but no JSON answer could be read. After any {"async":true} line, print one JSON object and nothing else, or put the object on one line.`,
-        {
-          level: "error",
-        },
-      );
-  } catch (error) {
-    logForDebugging(
-      `Hooks: Failed to read the JSON answer of ${hook.processId} (${hook.hookName}), so it is dropped: ${errorMessage(error)}`,
-      {
-        level: "error",
-      },
-    );
-  }
-  await finalizeHook(hook, code, code === 0 ? "success" : "error");
-  if (emptyAnswer && code === 0 && !stderr.trim()) {
-    logForDebugging(
-      `Hooks: ${hook.processId} (${hook.hookName}) produced no response payload \u2014 skipping attachment`,
-    );
-    return null;
-  }
-  return {
-    processId: hook.processId,
-    response,
-    hookName: hook.hookName,
-    hookEvent: hook.hookEvent,
-    toolName: hook.toolName,
-    pluginId: hook.pluginId,
-    command: hook.command,
-    stdout,
-    stderr,
-    exitCode: code,
-  };
-}
-//@ chunk-e6aww6q8.js:3409333-3409474 sole-consumer
+//@ chunk-5xgkngpb.js:3497871-3498012 placement
 var HOOK_DISPATCH_HOLD; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var HOOK_KEEPALIVE_SLACK_MS;
 var MAX_HOOK_KEEPALIVE_MS;
 var noopRelease;
 var NON_HOLDING_HOOK_EVENTS;
-deferInit("chunk-e6aww6q8.js:3409333", () => {
+deferInit("chunk-5xgkngpb.js:3497871", () => {
   HOOK_DISPATCH_HOLD = "hook-dispatch-hold";
   HOOK_KEEPALIVE_SLACK_MS = 60000;
   MAX_HOOK_KEEPALIVE_MS = 1200000;
   noopRelease = () => {};
   NON_HOLDING_HOOK_EVENTS = new Set(["MessageDisplay", "SessionEnd", "PermissionRequest", "Notification"]);
 });
-//@ chunk-e6aww6q8.js:3409474-3410091 sole-consumer
+//@ chunk-5xgkngpb.js:3498012-3498631 placement
 /**
  * 远程会话开启保活时，在钩子执行期间维持会话活动：按钩子超时与并发批次估算上限时长，返回结束函数。
  */
@@ -1493,7 +1469,7 @@ function startHookKeepalive(hookEvent, hooks, timeoutMs) {
     return noopRelease;
   }
 }
-//@ chunk-e6aww6q8.js:3410091-3410140 sole-consumer
+//@ chunk-5xgkngpb.js:3498631-3498680 placement
 async function* withFinally(hookResultStream, hookKeepalive) {
   try {
     yield* hookResultStream;
@@ -1501,35 +1477,36 @@ async function* withFinally(hookResultStream, hookKeepalive) {
     hookKeepalive();
   }
 }
-//@ chunk-e6aww6q8.js:3410140-3410220 sole-consumer
+//@ chunk-5xgkngpb.js:3498680-3498760 placement
 function logKeepaliveExpiry(hookEvent, maxMs) {
   logForDiagnosticsNoPII("warn", "session_activity_hook_hold_expired", {
     max_ms: maxMs,
   });
   hookEvent();
 }
-//@ chunk-e6aww6q8.js:3410220-3410263 sole-consumer
+//@ chunk-5xgkngpb.js:3498760-3498803 placement
 var loadArtifactsMcpModule = () => require("../services/artifacts/artifactsMcpLaptop.js");
-//@ chunk-e6aww6q8.js:3410263-3410530 sole-consumer
+//@ chunk-5xgkngpb.js:3498803-3499070 placement
 function refuseArtifactsMcpHook(server, config) {
   return isRunnerDynamicServer(config) ||
     (isCliOwnedConfig(config) && loadArtifactsMcpModule()?.isArtifactsMcpLaptopEntry(config) === true)
     ? `Hooks can't call tools of MCP server '${server}' (the Artifacts MCP server), because a hook's call skips your permission rules. Remove this mcp_tool hook or point it at another server.`
     : null;
 }
-//@ chunk-e6aww6q8.js:3410530-3410777 sole-consumer
+//@ chunk-5xgkngpb.js:3499070-3499317 placement
 function refuseRemoteBrowserHook(tool) {
   return refusesRemoteBrowserCallOutsideChecks(tool)
     ? `Hooks can't call tools of MCP server '${tool}' (the cloud browser) in this session, because a hook's call skips auto mode's safety check and your approval. Remove this mcp_tool hook or point it at another server.`
     : null;
 }
-//@ chunk-e6aww6q8.js:3410777-3411230 sole-consumer
+//@ chunk-5xgkngpb.js:3499317-3499823 placement
 /**
  * 把 mcp_tool 钩子参数中的 ${path} 占位按钩子输入取值替换（对象转 JSON），递归处理数组与对象。
  */
-function interpolateHookInput(text, hookInput) {
-  let readPath = (path) => {
-    let cursor = hookInput;
+function interpolateHookInput(text, data, maxChars = 1 / 0) {
+  let usedChars = 0;
+  let lookup = (path) => {
+    let cursor = data;
     for (let segment of path.split(".")) {
       if (cursor == null || typeof cursor !== "object") return;
       cursor = cursor[segment];
@@ -1539,9 +1516,12 @@ function interpolateHookInput(text, hookInput) {
   let interpolate = (value) => {
     if (typeof value === "string")
       return value.replace(/\$\{([a-zA-Z_][a-zA-Z0-9_.]*)\}/g, (placeholder, placeholder_2) => {
-        let replacement = readPath(placeholder_2);
-        if (replacement === undefined || replacement === null) return "";
-        return typeof replacement === "object" ? jsonStringify(replacement) : String(replacement);
+        let replacement = lookup(placeholder_2);
+        if (usedChars > maxChars || replacement === undefined || replacement === null) return "";
+        let replacementText =
+          typeof replacement === "object" ? jsonStringify(replacement) : String(replacement);
+        usedChars += replacementText.length;
+        return replacementText;
       });
     if (Array.isArray(value)) return value.map(interpolate);
     if (value !== null && typeof value === "object") {
@@ -1551,233 +1531,18 @@ function interpolateHookInput(text, hookInput) {
     }
     return value;
   };
-  return interpolate(text);
+  let result = interpolate(text);
+  return usedChars > maxChars ? undefined : result;
 }
-//@ chunk-e6aww6q8.js:3411230-3414118 sole-consumer
-/**
- * 执行 mcp_tool 类型钩子：无磁盘会话不运行；找不到客户端或服务器未连接时跳过（连接中可短暂等待）；Artifacts、云浏览器与受限账号记忆工具拒绝；插值参数后调用 MCP 工具并返回文本结果或错误。
- */
-async function runMcpToolHook(
-  hook,
-  hookEvent,
-  hookInput,
-  mcpClients,
-  signal,
-  defaultTimeoutMs = TOOL_HOOK_EXECUTION_TIMEOUT_MS,
-  accountMemoryState,
-) {
-  if (isDiskless()) {
-    logError(Error("an MCP tool hook got past keepWhileDiskless in a diskless session and was not called"));
-    return {
-      ok: false,
-      body: "",
-      withheld: true,
-      error: `MCP tool hook not run: ${CLOUD_HOOK_UNSUPPORTED_REASON}`,
-    };
-  }
-  releaseMcpCgroupAtHookFire(hook.server, hookEvent);
-  let clients = mcpClients ?? getMcpClientsFromAccessor();
-  if (clients === undefined) {
-    let ensureConnected = `mcp_tool hooks are not available for the '${hookEvent}' hook event (no MCP client context)`;
-    logForDebugging(`Hooks: mcp_tool hook skipped \u2014 ${ensureConnected}`, {
-      level: "warn",
-    });
-    return {
-      ok: false,
-      body: "",
-      error: ensureConnected,
-    };
-  }
-  let timeoutMs = hook.timeout ? hook.timeout * 1000 : defaultTimeoutMs;
-  let deadline = Date.now() + timeoutMs;
-  let found = clients.find((client) => client.name === hook.server);
-  if (found === undefined && mcpClients !== undefined)
-    found = getMcpClientsFromAccessor()?.find((client) => client.name === hook.server);
-  if (found?.type === "pending" && !HOOK_EVENT_NAMES.has(hookEvent)) {
-    let min = Math.min(timeoutMs, getConnectionTimeoutMs());
-    logForDebugging(
-      `Hooks: mcp_tool hook for ${hookEvent} is waiting up to ${min}ms (less if the server is retrying) for MCP server '${hook.server}' to finish connecting`,
-    );
-    let connected = Date.now();
-    let readyClient = await waitForMcpClientReady(hook.server, min, signal);
-    if (signal?.aborted)
-      return {
-        ok: false,
-        body: "",
-        aborted: true,
-      };
-    let isMemoryServer = Date.now() - connected;
-    if (readyClient) {
-      found = readyClient;
-      logForDebugging(
-        `Hooks: MCP server '${hook.server}' is now ${readyClient.type} after ${isMemoryServer}ms`,
-      );
-    } else
-      logForDebugging(
-        isMemoryServer < MEMORY_SERVER_MAX
-          ? `Hooks: no live MCP client list tracks '${hook.server}'; not waiting for it`
-          : `Hooks: stopped waiting for MCP server '${hook.server}' after ${isMemoryServer}ms; it has not connected`,
-        {
-          level: "warn",
-        },
-      );
-  }
-  if (!found || !isConnectedOrCached(found)) {
-    let notConnectedMessage = `MCP server '${hook.server}' not connected`;
-    logForDebugging(`Hooks: mcp_tool hook skipped \u2014 ${notConnectedMessage}`, {
-      level: "warn",
-    });
-    return {
-      ok: false,
-      body: "",
-      error: notConnectedMessage,
-    };
-  }
-  let refusal = refuseArtifactsMcpHook(hook.server, found.config) ?? refuseRemoteBrowserHook(found.name);
-  if (refusal !== null) {
-    logForDebugging(`Hooks: mcp_tool hook refused \u2014 ${refusal}`, {
-      level: "warn",
-    });
-    return {
-      ok: false,
-      body: "",
-      error: refusal,
-      withheld: true,
-    };
-  }
-  let args = hook.input ? interpolateHookInput(hook.input, hookInput) : {};
-  let remainingMs = deadline - Date.now();
-  if (remainingMs <= 0)
-    return {
-      ok: false,
-      body: "",
-      aborted: true,
-    };
-  let { signal: signal_2, cleanup } = createCombinedAbortSignal(signal, {
-    timeoutMs: remainingMs,
-  });
-  try {
-    logForDebugging(
-      `Hooks: mcp_tool calling ${hook.server}/${hook.tool} with ${Object.keys(args).length} arg(s)`,
-    );
-    let ensureConnectedClient = getEnsureConnectedClient();
-    if (!ensureConnectedClient) {
-      cleanup();
-      let notConnectedMessage = `MCP server '${hook.server}' not connected`;
-      logForDebugging(`Hooks: mcp_tool hook skipped \u2014 ${notConnectedMessage}`, {
-        level: "warn",
-      });
-      return {
-        ok: false,
-        body: "",
-        error: notConnectedMessage,
-      };
-    }
-    let connectedClient = await ensureConnectedClient(found, {
-      signal,
-      timeoutMs: Math.min(remainingMs, getConnectionTimeoutMs()),
-      context: "mcp_tool hook",
-    });
-    let refusal =
-      refuseArtifactsMcpHook(hook.server, connectedClient.config) ??
-      refuseRemoteBrowserHook(connectedClient.name);
-    if (refusal !== null) {
-      cleanup();
-      logForDebugging(`Hooks: mcp_tool hook refused \u2014 ${refusal}`, {
-        level: "warn",
-      });
-      return {
-        ok: false,
-        body: "",
-        error: refusal,
-        withheld: true,
-      };
-    }
-    let isMemoryServer = isMemoryToolServer_2(connectedClient);
-    if (
-      isMemoryServer &&
-      isMemoryToolAllowed(
-        hook.tool,
-        accountMemoryServerState(
-          [connectedClient],
-          accountMemoryState ?? subagentMemoryMode(getRootSession().host),
-        ).mode,
-      )
-    ) {
-      cleanup();
-      let missingToolText = `The account memory server's ${hook.tool} is not available to a hook in this session`;
-      logForDebugging(`Hooks: mcp_tool hook refused \u2014 ${missingToolText}`, {
-        level: "warn",
-      });
-      return {
-        ok: false,
-        body: "",
-        error: missingToolText,
-        withheld: true,
-      };
-    }
-    let result = await callMcpTool(
-      connectedClient,
-      {
-        name: hook.tool,
-        arguments: args,
-        ...(isMemoryServer && {
-          _meta: {
-            [MEMORY_CALLER_META_KEY]: "worker",
-          },
-        }),
-      },
-      {
-        signal: signal_2,
-        timeout: remainingMs,
-      },
-    );
-    cleanup();
-    let text = Array.isArray(result.content)
-      ? result.content.map((content) => (content.type === "text" ? content.text : `[${content.type}]`)).join(`
-`)
-      : "";
-    if (result.isError)
-      return {
-        ok: false,
-        body: text,
-        error: text || "MCP tool returned an error",
-      };
-    return {
-      ok: true,
-      body: text,
-    };
-  } catch (error) {
-    cleanup();
-    if (signal_2.aborted)
-      return {
-        ok: false,
-        body: "",
-        aborted: true,
-      };
-    let errorText = errorMessage(error);
-    logForDebugging(`Hooks: mcp_tool hook error: ${errorText}`, {
-      level: "error",
-    });
-    return {
-      ok: false,
-      body: "",
-      error: errorText,
-    };
-  }
-}
-//@ chunk-e6aww6q8.js:3414118-3414138 sole-consumer
-var MEMORY_SERVER_MAX = 50;
-var RECONNECT_BUDGET_MS = 5000;
-//@ chunk-e6aww6q8.js:3414138-3414416 sole-consumer
-async function waitForMcpClientReady(server, waitMs, signal) {
+//@ chunk-5xgkngpb.js:3502716-3502995 placement
+async function waitForMcpClientReady(server, waitMs, signal, getClients) {
   let deadline = Date.now() + waitMs;
   let stalled = false;
   for (;;) {
-    let found = getMcpClientsFromAccessor()?.find((client) => client.name === server);
+    let found = getClients()?.find((client) => client.name === server);
     if (found === undefined || found.type !== "pending") return found;
     if (!stalled && found.reconnectAttempt !== undefined) {
-      deadline = Math.min(deadline, Date.now() + RECONNECT_BUDGET_MS);
+      deadline = Math.min(deadline, Date.now() + UI_HOST_REQUEST_TIMEOUT_MS);
       stalled = true;
     }
     let remaining = deadline - Date.now();
@@ -1785,19 +1550,14 @@ async function waitForMcpClientReady(server, waitMs, signal) {
     await sleep(Math.min(MEMORY_SERVER_MAX, remaining), signal);
   }
 }
-//@ chunk-e6aww6q8.js:3414416-3414519 sole-consumer
+//@ chunk-5xgkngpb.js:3502995-3503098 placement
 var HOOK_OUTPUT_INVALID_PREFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var HOOK_OUTPUT_META_KEYS;
-deferInit("chunk-e6aww6q8.js:3414416", () => {
+deferInit("chunk-5xgkngpb.js:3502995", () => {
   HOOK_OUTPUT_INVALID_PREFIX = "Hook JSON output validation failed \u2014 ";
   HOOK_OUTPUT_META_KEYS = new Set(["async", "hookEventName", "behavior"]);
 });
-//@ chunk-e6aww6q8.js:3414519-3414620 sole-consumer (2.1.88 match: isInvalidValueIssue, 1)
-function isInvalidValueIssue(issue) {
-  let last = issue.path.at(-1);
-  return issue.code === "invalid_value" && typeof last === "string" && HOOK_OUTPUT_META_KEYS.has(last);
-}
-//@ chunk-e6aww6q8.js:3414620-3415147 sole-consumer
+//@ chunk-5xgkngpb.js:3503199-3503726 sole-consumer
 /**
  * 把 zod 问题规整为 {path, message}：联合类型错误递归取第一个非 invalid_value 分支，或汇总可选值为 "expected one of ..."。
  */
@@ -1819,7 +1579,7 @@ function simplifyZodIssue(issue, pathPrefix) {
       path,
       message: issue.message,
     };
-  let allowedValues = uniq(
+  let allowedValues = normalizeCaseForComparison_2(
     flattened.flatMap((issue) =>
       issue.code === "invalid_value" ? issue.values.map((allowedValue) => jsonStringify(allowedValue)) : [],
     ),
@@ -1830,15 +1590,15 @@ function simplifyZodIssue(issue, pathPrefix) {
     message: `expected one of ${joined}${allowedValues.length > 6 ? " | \u2026" : ""}`,
   };
 }
-//@ chunk-e6aww6q8.js:3415147-3415204 sole-consumer
+//@ chunk-5xgkngpb.js:3503726-3503783 sole-consumer
 function issuePathLabel(path) {
   return path.map(String).join(".") || "(root)";
 }
-//@ chunk-e6aww6q8.js:3415204-3415276 sole-consumer
+//@ chunk-5xgkngpb.js:3503783-3503855 sole-consumer
 function isPlainObject_2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-e6aww6q8.js:3415276-3416415 sole-consumer
+//@ chunk-5xgkngpb.js:3503855-3504994 affinity
 /**
  * 生成钩子 JSON 输出校验失败的说明：首个问题加缺少 hookEventName、PermissionRequest decision 格式、旧版顶层 decision 用法等提示，列出其余问题并附原始输出。
  */
@@ -1879,7 +1639,7 @@ function formatHookOutputError(parsed, error) {
 
 The hook's output was: ${jsonStringify(parsed, null, 2)}`;
 }
-//@ chunk-e6aww6q8.js:3416415-3417708 fingerprint (2.1.88 match: parseHookOutput, 0.607)
+//@ chunk-5xgkngpb.js:3504994-3506287 fingerprint (2.1.88 match: parseHookOutput, 0.606)
 /**
  * 返回钩子 JSON 输出的期望 schema 说明文本（continue/suppressOutput/stopReason/decision/reason/systemMessage/terminalSequence/hookSpecificOutput…），用于校验失败时提示。
  */
@@ -1938,7 +1698,7 @@ function parseHookOutput_2() {
     2,
   );
 }
-//@ chunk-e6aww6q8.js:3417708-3417928 layout
+//@ chunk-5xgkngpb.js:3506287-3506507 layout
 function formatHookFailureLine(hookEvent, detail) {
   let firstLine =
     detail
@@ -1952,7 +1712,7 @@ function formatHookFailureLine(hookEvent, detail) {
     return `${hookEvent} hook output invalid: ${firstLine.slice(HOOK_OUTPUT_INVALID_PREFIX.length)}`;
   return firstLine ? `${hookEvent} hook failed: ${firstLine}` : `${hookEvent} hook failed to run`;
 }
-//@ chunk-e6aww6q8.js:3417928-3419240 facade-exports (2.1.88 match: executePreCompactHooks, 0.724)
+//@ chunk-5xgkngpb.js:3506507-3507823 facade-exports (2.1.88 match: executePreCompactHooks, 0.724)
 /**
  * 执行 PreCompact 钩子（matcher = manual/auto）：成功输出（超长截断）合并为 newCustomInstructions，失败与成功信息合成 userDisplayMessage，exit 2/block 的汇成 blockedBy 阻止压缩；子代理只返回 blockedBy。
  */
@@ -2038,7 +1798,7 @@ async function executePreCompactHooks(
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3419240-3419338 facade-exports
+//@ chunk-5xgkngpb.js:3507823-3507921 facade-exports
 /**
  * executePostCompactHooks 的容错包装：非中止错误只上报，返回 {}。
  */
@@ -2049,7 +1809,7 @@ function executePostCompactHooks(session, session_2, trigger, signal, timeoutMs)
     return {};
   });
 }
-//@ chunk-e6aww6q8.js:3419338-3420130 fingerprint (2.1.88 match: executePostCompactHooks, 0.946)
+//@ chunk-5xgkngpb.js:3507921-3508713 fingerprint (2.1.88 match: executePostCompactHooks, 0.946)
 /**
  * 执行 PostCompact 钩子（输入含 compact_summary），只生成给用户看的成功/失败信息；子代理或关闭钩子时跳过。
  */
@@ -2100,7 +1860,7 @@ async function executePostCompactHooks_2(
         : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:3420130-3420436 fingerprint (2.1.88 match: executeConfigChangeHooks, 1)
+//@ chunk-5xgkngpb.js:3508713-3509019 fingerprint (2.1.88 match: executeConfigChangeHooks, 1)
 /**
  * 执行 ConfigChange 钩子（matcher = source，如 user_settings/skills），policy_settings 来源的结果强制不阻断。
  */
@@ -2131,7 +1891,7 @@ async function executeConfigChangeHooks(
     }));
   return results;
 }
-//@ chunk-e6aww6q8.js:3420436-3420753 facade-exports
+//@ chunk-5xgkngpb.js:3509019-3509336 facade-exports
 /**
  * 执行 DirectoryAdded 钩子（316 新增；/add-dir 或 register_repo_root 之后），返回结果与 systemMessage 列表。
  */
@@ -2161,7 +1921,7 @@ async function executeDirectoryAddedHooks(
     systemMessages,
   };
 }
-//@ chunk-e6aww6q8.js:3420753-3421267 facade-exports (2.1.88 match: executeElicitationHooks, 1)
+//@ chunk-5xgkngpb.js:3509336-3509852 facade-exports (2.1.88 match: executeElicitationHooks, 1)
 /**
  * 执行 Elicitation 钩子（matcher = MCP 服务器名），钩子可直接给出 accept/decline/cancel 及 content，decline 视为阻断。
  */
@@ -2206,7 +1966,7 @@ async function executeElicitationHooks({
     blockingError,
   };
 }
-//@ chunk-e6aww6q8.js:3421267-3421765 facade-exports (2.1.88 match: executeElicitationResultHooks, 1)
+//@ chunk-5xgkngpb.js:3509852-3510353 facade-exports (2.1.88 match: executeElicitationResultHooks, 1)
 /**
  * 执行 ElicitationResult 钩子，可改写用户对 elicitation 的回答；decline 视为阻断。
  */
@@ -2249,7 +2009,7 @@ async function executeElicitationResultHooks({
     blockingError,
   };
 }
-//@ chunk-e6aww6q8.js:3421765-3422063 fingerprint (2.1.88 match: executeEnvHooks, 1)
+//@ chunk-5xgkngpb.js:3510353-3510651 fingerprint (2.1.88 match: executeEnvHooks, 1)
 /**
  * CwdChanged/FileChanged 共用：执行钩子后使会话 env 缓存失效，收集 watchPaths 与 systemMessage。
  */
@@ -2274,7 +2034,7 @@ async function executeEnvHooks(
     systemMessages,
   };
 }
-//@ chunk-e6aww6q8.js:3422063-3422177 facade-exports (2.1.88 match: executeCwdChangedHooks, 1)
+//@ chunk-5xgkngpb.js:3510651-3510765 facade-exports (2.1.88 match: executeCwdChangedHooks, 1)
 /**
  * 执行 CwdChanged 钩子（old_cwd/new_cwd），钩子可写 CLAUDE_ENV_FILE、返回 watchPaths。
  */
@@ -2287,7 +2047,7 @@ function executeCwdChangedHooks(session, oldCwd, newCwd, timeoutMs = {}) {
   };
   return executeEnvHooks(session, hookInput, timeoutMs);
 }
-//@ chunk-e6aww6q8.js:3422177-3422292 facade-exports (2.1.88 match: executeFileChangedHooks, 1)
+//@ chunk-5xgkngpb.js:3510765-3510880 facade-exports (2.1.88 match: executeFileChangedHooks, 1)
 /**
  * 执行 FileChanged 钩子（file_path/event: change|add|unlink）。
  */
@@ -2300,14 +2060,14 @@ function executeFileChangedHooks(session, filePath, event, timeoutMs = {}) {
   };
   return executeEnvHooks(session, hookInput, timeoutMs);
 }
-//@ chunk-e6aww6q8.js:3422292-3422338 facade-exports
+//@ chunk-5xgkngpb.js:3510880-3510926 facade-exports
 /**
  * executeInstructionsLoadedHooks 的容错包装。
  */
 function executeInstructionsLoadedHooks(...args) {
   return executeInstructionsLoadedHooks_2(...args).catch(logHookExecutionFailure);
 }
-//@ chunk-e6aww6q8.js:3422338-3422713 fingerprint (2.1.88 match: executeInstructionsLoadedHooks, 0.958)
+//@ chunk-5xgkngpb.js:3510926-3511303 fingerprint (2.1.88 match: executeInstructionsLoadedHooks, 0.958)
 /**
  * 执行 InstructionsLoaded 钩子（CLAUDE.md/规则文件加载时，matcher = load_reason），只观察不阻断。
  */
@@ -2340,7 +2100,7 @@ async function executeInstructionsLoadedHooks_2(session, filePath, memoryType, f
     credentials,
   });
 }
-//@ chunk-e6aww6q8.js:3428473-3428784 facade-exports (2.1.88 match: executeNotificationHooks, 0.946)
+//@ chunk-5xgkngpb.js:3517295-3517606 facade-exports (2.1.88 match: executeNotificationHooks, 0.946)
 /**
  * 执行 Notification 钩子（matcher = notification_type）。
  */
@@ -2367,7 +2127,7 @@ async function executeNotificationHooks(
     credentials,
   });
 }
-//@ chunk-e6aww6q8.js:3428822-3428925 layout
+//@ chunk-5xgkngpb.js:3517644-3517747 layout
 function createSessionEndRaiser() {
   let sessionEndSignal = subscribe();
   return {
@@ -2375,27 +2135,27 @@ function createSessionEndRaiser() {
     raiseSessionEnd: (end) => sessionEndSignal.get()?.(end) ?? end.end(),
   };
 }
-//@ chunk-e6aww6q8.js:3428925-3428939 layout
+//@ chunk-5xgkngpb.js:3517747-3517761 layout
 var sessionEndRaiser; // deferred: uses createSessionEndRaiser of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3428925", () => {
+deferInit("chunk-5xgkngpb.js:3517747", () => {
   sessionEndRaiser = createSessionEndRaiser();
 });
-//@ chunk-e6aww6q8.js:3428939-3428967 layout
+//@ chunk-5xgkngpb.js:3517761-3517789 layout
 var raiseSessionEnd; // deferred: uses sessionEndRaiser of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3428939", () => {
+deferInit("chunk-5xgkngpb.js:3517761", () => {
   raiseSessionEnd = sessionEndRaiser.raiseSessionEnd;
 });
-//@ chunk-e6aww6q8.js:3428967-3428999 layout
+//@ chunk-5xgkngpb.js:3517789-3517821 layout
 /**
  * 设置 SessionEnd 触发器（宿主可接管 SessionEnd 钩子的执行时机）。
  */
 var setSessionEndRaiser; // deferred: uses sessionEndRaiser of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3428967", () => {
+deferInit("chunk-5xgkngpb.js:3517789", () => {
   setSessionEndRaiser = sessionEndRaiser.setSessionEndRaiser;
 });
-//@ chunk-e6aww6q8.js:3428999-3429027 layout
+//@ chunk-5xgkngpb.js:3517821-3517849 layout
 var STARTUP_HOOK_HOLD = "startup-hook-hold";
-//@ chunk-e6aww6q8.js:3429027-3429383 facade-exports (2.1.88 match: executeSessionStartHooks, 0.768)
+//@ chunk-5xgkngpb.js:3517849-3518207 facade-exports (2.1.88 match: executeSessionStartHooks, 0.768)
 /**
  * 执行 SessionStart 钩子（source = startup/resume/clear/compact/fork，输入含 agent_type/model/session_title），期间持有 startup-hook-hold 活动；返回结果流。
  */
@@ -2444,7 +2204,7 @@ function executeSessionStartHooks(
     credentials,
   });
 }
-//@ chunk-e6aww6q8.js:3429383-3429739 layout
+//@ chunk-5xgkngpb.js:3518207-3518563 layout
 async function* runStartupHooksWithHold({
   session,
   hookInput,
@@ -2476,7 +2236,7 @@ async function* runStartupHooksWithHold({
     endActivity("hook_exec", STARTUP_HOOK_HOLD);
   }
 }
-//@ chunk-e6aww6q8.js:3429739-3430016 facade-exports (2.1.88 match: executeSetupHooks, 0.878)
+//@ chunk-5xgkngpb.js:3518563-3518840 facade-exports (2.1.88 match: executeSetupHooks, 0.877)
 /**
  * 执行 Setup 钩子（trigger = init/maintenance），期间持有 startup-hook-hold。
  */
@@ -2511,7 +2271,7 @@ async function* executeSetupHooks(
     endActivity("hook_exec", STARTUP_HOOK_HOLD);
   }
 }
-//@ chunk-e6aww6q8.js:3430016-3430348 facade-exports (2.1.88 match: executeSubagentStartHooks, 0.856)
+//@ chunk-5xgkngpb.js:3518840-3519172 facade-exports (2.1.88 match: executeSubagentStartHooks, 0.856)
 /**
  * 执行 SubagentStart 钩子（agent_id/agent_type，matcher = agent_type）。
  */
@@ -2545,7 +2305,7 @@ async function* executeSubagentStartHooks(
     credentials: toolUseContext.credentials,
   });
 }
-//@ chunk-e6aww6q8.js:3430348-3430847 facade-exports (2.1.88 match: executeSessionEndHooks, 0.895)
+//@ chunk-5xgkngpb.js:3519172-3519676 facade-exports (2.1.88 match: executeSessionEndHooks, 0.895)
 /**
  * 执行 SessionEnd 钩子（matcher = reason），时间预算由 CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS 与钩子 timeout 推出，失败写 stderr，最后清空会话钩子。
  */
@@ -2582,9 +2342,9 @@ async function executeSessionEndHooks(session, reason, options) {
 `);
   sessionHooks?.clear(session.id);
 }
-//@ chunk-e6aww6q8.js:3430885-3430898 layout
+//@ chunk-5xgkngpb.js:3519714-3519727 layout
 var STOP_HOOK_FIELD_MAX_CHARS = 1000;
-//@ chunk-e6aww6q8.js:3430898-3431521 layout
+//@ chunk-5xgkngpb.js:3519727-3520350 layout
 function summarizeBackgroundTasksForHook(tasks) {
   let list = [];
   for (let task of Object.values(tasks)) {
@@ -2626,7 +2386,7 @@ function summarizeBackgroundTasksForHook(tasks) {
   }
   return list;
 }
-//@ chunk-e6aww6q8.js:3431521-3431639 layout
+//@ chunk-5xgkngpb.js:3520350-3520468 layout
 function summarizeSessionCronsForHook(crons = getSessionCronTasks()) {
   return crons.map((cron) => ({
     id: cron.id,
@@ -2635,14 +2395,14 @@ function summarizeSessionCronsForHook(crons = getSessionCronTasks()) {
     prompt: truncateWithCount(cron.prompt, STOP_HOOK_FIELD_MAX_CHARS),
   }));
 }
-//@ chunk-e6aww6q8.js:3431639-3431685 facade-exports
+//@ chunk-5xgkngpb.js:3520468-3520514 facade-exports
 /**
  * executeStopFailureHooks 的容错包装。
  */
 function executeStopFailureHooks(...args) {
   return executeStopFailureHooks_2(...args).catch(logHookExecutionFailure);
 }
-//@ chunk-e6aww6q8.js:3431685-3432233 fingerprint (2.1.88 match: executeStopFailureHooks, 0.843)
+//@ chunk-5xgkngpb.js:3520514-3521117 fingerprint (2.1.88 match: executeStopFailureHooks, 0.755)
 /**
  * API 错误结束回合时执行 StopFailure 钩子（matcher = error 类型），输出与退出码被忽略。
  */
@@ -2656,6 +2416,7 @@ async function executeStopFailureHooks_2(
     toolUseContext.options?.settingsHooksOff === true
   )
     return;
+  if (toolUseContext.options?.querySource === "resume_cache_warm") return;
   if (!hasHookToRun("StopFailure", toolUseContext.sessionHooksRegistry, toolUseContext.session.id)) return;
   let lastAssistantText =
     extractTextContent_2(
@@ -2683,7 +2444,7 @@ async function executeStopFailureHooks_2(
     credentials: toolUseContext.credentials,
   });
 }
-//@ chunk-e6aww6q8.js:3432233-3433269 facade-exports (2.1.88 match: executeStopHooks, 0.605)
+//@ chunk-5xgkngpb.js:3521117-3522210 facade-exports (2.1.88 match: executeStopHooks, 0.57)
 /**
  * 执行 Stop/SubagentStop 钩子：输入含 stop_hook_active、last_assistant_message、background_tasks、session_crons，SubagentStop 另含 agent_id/agent_transcript_path/agent_type；turn_end_reactions 只跑会话 function 钩子。
  */
@@ -2704,6 +2465,7 @@ async function* executeStopHooks(
     toolUseContext.options.settingsHooksOff === true
   )
     return;
+  if (toolUseContext.options.querySource === "resume_cache_warm") return;
   let isWebFetchSubagent = isWebFetchSubagentContext(toolUseContext.agentContext);
   let sessionId = toolUseContext.agentId ?? toolUseContext.session.id;
   if (!isWebFetchSubagent && !hasHookToRun(eventName, toolUseContext.sessionHooksRegistry, sessionId)) return;
@@ -2763,7 +2525,7 @@ async function* executeStopHooks(
     sessionFunctionHooksOnly: requestPrompt === "turn_end_reactions",
   });
 }
-//@ chunk-e6aww6q8.js:3433307-3433575 facade-exports (2.1.88 match: executeTeammateIdleHooks, 0.913)
+//@ chunk-5xgkngpb.js:3522248-3522516 facade-exports (2.1.88 match: executeTeammateIdleHooks, 0.913)
 /**
  * 执行 TeammateIdle 钩子（teammate_name/team_name），exit 2 让队友继续工作。
  */
@@ -2794,7 +2556,7 @@ async function* executeTeammateIdleHooks(
     toolUseContext: hook,
   });
 }
-//@ chunk-e6aww6q8.js:3433575-3433892 facade-exports (2.1.88 match: executeTaskCreatedHooks, 0.971)
+//@ chunk-5xgkngpb.js:3522516-3522833 facade-exports (2.1.88 match: executeTaskCreatedHooks, 0.971)
 /**
  * 执行 TaskCreated 钩子（task_id/subject/description/teammate/team），exit 2 阻止创建。
  */
@@ -2831,7 +2593,7 @@ async function* executeTaskCreatedHooks(
     toolUseContext,
   });
 }
-//@ chunk-e6aww6q8.js:3433892-3434211 facade-exports (2.1.88 match: executeTaskCompletedHooks, 0.97)
+//@ chunk-5xgkngpb.js:3522833-3523152 facade-exports (2.1.88 match: executeTaskCompletedHooks, 0.97)
 /**
  * 执行 TaskCompleted 钩子，exit 2 阻止标记完成。
  */
@@ -2868,7 +2630,7 @@ async function* executeTaskCompletedHooks(
     toolUseContext,
   });
 }
-//@ chunk-e6aww6q8.js:3434211-3434359 layout
+//@ chunk-5xgkngpb.js:3523152-3523300 layout
 var isHeldAskResult = (permissionHookYield, expected) =>
   permissionHookYield.permissionBehavior === "ask" &&
   expected.some(
@@ -2876,7 +2638,7 @@ var isHeldAskResult = (permissionHookYield, expected) =>
       item.heldForServedCall === true &&
       item.hookPermissionDecisionReason === permissionHookYield.hookPermissionDecisionReason,
   );
-//@ chunk-e6aww6q8.js:3434359-3434731 layout
+//@ chunk-5xgkngpb.js:3523300-3523672 layout
 function toPermissionHookYield({ deny, ask, allow, updatedInput, additionalContext }) {
   let out = {};
   if (additionalContext && additionalContext.length > 0) out.additionalContexts = additionalContext;
@@ -2892,7 +2654,7 @@ function toPermissionHookYield({ deny, ask, allow, updatedInput, additionalConte
   if (updatedInput) out.updatedInput = updatedInput;
   return out;
 }
-//@ chunk-e6aww6q8.js:3434731-3436728 layout
+//@ chunk-5xgkngpb.js:3523672-3525671 layout
 /**
  * 有 mods（function-hook 链）时的 PreToolUse 流程：managed 阶段 → mods 链 → core 阶段，合并 deny/ask/allow、改写来源（local_code/mod/mixed）与 permissionDisplay 后产出一个汇总结果。
  */
@@ -3022,7 +2784,7 @@ async function* runPreToolUseFunctionChain({
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3436728-3437216 facade-exports
+//@ chunk-5xgkngpb.js:3525671-3526162 facade-exports
 /**
  * 执行 PreToolUse 钩子并在需要时补一个 held（为云端服务调用暂扣）结果。
  */
@@ -3080,7 +2842,7 @@ async function* executePreToolHooks(
   let reconciled = reconcileHeldHookResults(withHeldPermissionBehavior(managedHooksOnly, flushHeld), results);
   if (reconciled !== undefined) yield reconciled;
 }
-//@ chunk-e6aww6q8.js:3437216-3438478 fingerprint (2.1.88 match: executePreToolHooks, 0.581)
+//@ chunk-5xgkngpb.js:3526162-3527427 fingerprint (2.1.88 match: executePreToolHooks, 0.601)
 /**
  * 执行 PreToolUse 钩子（matcher = 工具名，输入含 tool_name/tool_input/tool_use_id/mcp_server）：复用 managed 预跑结果；有 mods 链时走 runPreToolUseFunctionChain，否则直接 executeHooks。
  */
@@ -3105,7 +2867,7 @@ async function* executePreToolHooks_2(
       : undefined;
   let hasModuleSite = hasModuleHookingSite("classic.PreToolUse");
   let passedKey =
-    !requestPrompt?.managedHooksOnly && (pass !== undefined || hasModuleSite) && isPlainObject_5(toolInput)
+    !requestPrompt?.managedHooksOnly && (pass !== undefined || hasModuleSite) && isPlainObject_6(toolInput)
       ? toolInput
       : undefined;
   let sessionId =
@@ -3173,7 +2935,7 @@ async function* executePreToolHooks_2(
   }
   yield* runFunctionSite();
 }
-//@ chunk-e6aww6q8.js:3438478-3438969 facade-exports (2.1.88 match: executePostToolHooks, 0.869)
+//@ chunk-5xgkngpb.js:3527427-3527918 facade-exports (2.1.88 match: executePostToolHooks, 0.869)
 /**
  * 执行 PostToolUse 钩子（输入含 tool_response/duration_ms），可返回 additionalContext、updatedToolOutput、classifierContext。
  */
@@ -3214,7 +2976,7 @@ async function* executePostToolHooks(
     managedHooksExcluded: options?.managedHooksExcluded,
   });
 }
-//@ chunk-e6aww6q8.js:3438969-3439376 facade-exports (2.1.88 match: executePostToolUseFailureHooks, 0.888)
+//@ chunk-5xgkngpb.js:3527918-3528325 facade-exports (2.1.88 match: executePostToolUseFailureHooks, 0.888)
 /**
  * 执行 PostToolUseFailure 钩子（error/is_interrupt/duration_ms）。
  */
@@ -3259,7 +3021,7 @@ async function* executePostToolUseFailureHooks(
     toolUseContext,
   });
 }
-//@ chunk-e6aww6q8.js:3439376-3439911 facade-exports
+//@ chunk-5xgkngpb.js:3528325-3528860 facade-exports
 /**
  * 执行 PostToolBatch 钩子（316 新增）：一批工具调用全部完成、下一次请求前触发一次，输入 tool_calls 数组；附件上附 accountMemoryBatch 标记。
  */
@@ -3309,7 +3071,7 @@ async function* executePostToolBatchHooks(
         }
       : hookResult;
 }
-//@ chunk-e6aww6q8.js:3439911-3440280 facade-exports (2.1.88 match: executePermissionDeniedHooks, 0.911)
+//@ chunk-5xgkngpb.js:3528860-3529229 facade-exports (2.1.88 match: executePermissionDeniedHooks, 0.911)
 /**
  * 执行 PermissionDenied 钩子（auto 模式拒绝后），钩子可返回 retry:true 让模型重试。
  */
@@ -3350,7 +3112,7 @@ async function* executePermissionDeniedHooks(
     toolUseContext,
   });
 }
-//@ chunk-e6aww6q8.js:3440280-3440613 facade-exports (2.1.88 match: executePermissionRequestHooks, 1)
+//@ chunk-5xgkngpb.js:3529229-3529562 facade-exports (2.1.88 match: executePermissionRequestHooks, 1)
 /**
  * 执行 PermissionRequest 钩子（权限对话框出现时，输入含 permission_suggestions），钩子可返回 allow（可带 updatedInput/updatedPermissions）或 deny。
  */
@@ -3383,7 +3145,7 @@ async function* executePermissionRequestHooks(
     toolUseContext,
   });
 }
-//@ chunk-e6aww6q8.js:3440613-3440700 affinity
+//@ chunk-5xgkngpb.js:3529562-3529649 affinity
 /**
  * 工具是 MCP 工具时给钩子输入加 mcp_server 字段。
  */
@@ -3395,7 +3157,7 @@ function getMcpServerHookField(toolName, toolUseContext) {
       }
     : {};
 }
-//@ chunk-e6aww6q8.js:3440738-3441128 affinity
+//@ chunk-5xgkngpb.js:3529687-3530077 affinity
 /**
  * 执行 UserPromptExpansion 钩子（316 新增；用户输入的斜杠命令展开成提示词时，matcher = command_name），exit 2 阻止展开。
  */
@@ -3408,8 +3170,8 @@ async function* executeUserPromptExpansionHooks(
   mode,
   context,
 ) {
-  let sessionId = context.agentId ?? context.session.id;
-  if (!hasHookToRun("UserPromptExpansion", context.sessionHooksRegistry, sessionId)) return;
+  let agentId = context.agentId ?? context.session.id;
+  if (!hasHookToRun("UserPromptExpansion", context.sessionHooksRegistry, agentId)) return;
   let hookInput = {
     ...createBaseHookInput(context.session, hookInputCwd(), mode),
     hook_event_name: "UserPromptExpansion",
@@ -3428,7 +3190,7 @@ async function* executeUserPromptExpansionHooks(
     toolUseContext: context,
   });
 }
-//@ chunk-e6aww6q8.js:3445264-3445551 placement
+//@ chunk-5xgkngpb.js:3534227-3534545 placement
 /**
  * 无 toolUseContext 时执行 UserPromptSubmit 钩子（只用会话钩子注册表），超时 30 秒。
  */
@@ -3446,7 +3208,9 @@ async function* executeUserPromptSubmitHooksForSession(
     ...createBaseHookInput(session, hookInputCwd(), mode),
     hook_event_name: "UserPromptSubmit",
     prompt,
-    ...false,
+    ...((isAccepted() || false) && {
+      source: "poll_event",
+    }),
     session_title: getCurrentSessionTitle(session.id),
   };
   yield* executeHooks({
@@ -3460,7 +3224,7 @@ async function* executeUserPromptSubmitHooksForSession(
     credentials,
   });
 }
-//@ chunk-e6aww6q8.js:3445551-3445934 facade-exports (2.1.88 match: executeUserPromptSubmitHooks, 0.764)
+//@ chunk-5xgkngpb.js:3534545-3534928 facade-exports (2.1.88 match: executeUserPromptSubmitHooks, 0.744)
 /**
  * 执行 UserPromptSubmit 钩子：输入含 prompt 与 session_title，超时 30 秒；exit 2 阻止并抹去原提示词。
  */
@@ -3485,17 +3249,17 @@ async function* executeUserPromptSubmitHooks(prompt, mode, context, requestPromp
     ...tiers,
   });
 }
-//@ chunk-e6aww6q8.js:3445985-3446035 facade-exports (2.1.88 match: hasWorktreeCreateHook, 0.551)
+//@ chunk-5xgkngpb.js:3534979-3535029 facade-exports (2.1.88 match: hasWorktreeCreateHook, 0.553)
 /**
  * 是否配置了 WorktreeCreate 钩子。
  */
 function dispatchesWorktreeCreate() {
   return hasWorktreeCreateHook() || hasClassicHookSite("WorktreeCreate");
 }
-//@ chunk-e6aww6q8.js:3446085-3446104 affinity
+//@ chunk-5xgkngpb.js:3535079-3535098 affinity
 var HOOK_ERROR_LINE_HEAD = 60;
 var HOOK_ERROR_LINE_TAIL = 100;
-//@ chunk-e6aww6q8.js:3446104-3447412 facade-exports (2.1.88 match: executeWorktreeCreateHook, 0.659)
+//@ chunk-5xgkngpb.js:3535098-3536406 facade-exports (2.1.88 match: executeWorktreeCreateHook, 0.66)
 /**
  * 执行 WorktreeCreate 钩子：command 钩子 stdout 输出路径，http/callback 返回 hookSpecificOutput.worktreePath；配置了却没跑、无路径或失败都抛错；相对路径按项目根解析。
  */
@@ -3548,7 +3312,7 @@ async function executeWorktreeCreateHook(session, name, { storageV5, credentials
     ),
   };
 }
-//@ chunk-e6aww6q8.js:3447412-3448547 facade-exports (2.1.88 match: executeWorktreeRemoveHook, 0.427)
+//@ chunk-5xgkngpb.js:3536406-3537548 facade-exports (2.1.88 match: executeWorktreeRemoveHook, 0.427)
 /**
  * 执行 WorktreeRemove 钩子：返回 not_configured/removed/failed；失败但目录已不存在时视为已删除。
  */
@@ -3626,7 +3390,7 @@ async function executeWorktreeRemoveHook(session, worktreePath, { storageV5, cre
     summary: stderr,
   };
 }
-//@ chunk-e6aww6q8.js:3448547-3448606 facade-exports
+//@ chunk-5xgkngpb.js:3537548-3537607 facade-exports
 /**
  * SessionEnd 时间预算常量：最小 1.5s、钩子 timeout 上限 60s、env 覆盖上限 1h，以及按宿主保存的待唤醒 asyncRewake 任务集合。
  */
@@ -3634,24 +3398,24 @@ var SESSION_END_HOOK_TIMEOUT_MS_DEFAULT; // deferred: uses SessionRootSlot (../b
 var SESSION_END_HOOK_TIMEOUT_CAP_MS;
 var SESSION_END_ENV_TIMEOUT_CAP_MS;
 var pendingRewakeHooksByHost;
-deferInit("chunk-e6aww6q8.js:3448547", () => {
+deferInit("chunk-5xgkngpb.js:3537548", () => {
   SESSION_END_HOOK_TIMEOUT_MS_DEFAULT = 1500;
   SESSION_END_HOOK_TIMEOUT_CAP_MS = 60000;
   SESSION_END_ENV_TIMEOUT_CAP_MS = 3600000;
   pendingRewakeHooksByHost = new SessionRootSlot(() => new Set());
 });
-//@ chunk-e6aww6q8.js:3448606-3448640 layout
+//@ chunk-5xgkngpb.js:3537607-3537641 layout
 function getPendingRewakeHooks() {
   return pendingRewakeHooksByHost.of(getRootSession());
 }
-//@ chunk-e6aww6q8.js:3448640-3448662 layout
+//@ chunk-5xgkngpb.js:3537641-3537663 layout
 var REWAKE_DRAIN_TIMEOUT_MS = 30000;
 var REWAKE_SUMMARY_MAX_CHARS = 300;
-//@ chunk-e6aww6q8.js:3448662-3448727 layout
+//@ chunk-5xgkngpb.js:3537663-3537728 layout
 function squashToSummaryLine(text) {
   return text.trim().replace(/\s+/g, " ").slice(0, REWAKE_SUMMARY_MAX_CHARS);
 }
-//@ chunk-e6aww6q8.js:3448727-3448863 facade-exports
+//@ chunk-5xgkngpb.js:3537728-3537864 facade-exports
 /**
  * 等待所有 asyncRewake 后台钩子完成，最多 30 秒。
  */
@@ -3666,7 +3430,7 @@ async function flushPendingAsyncRewakeHooks() {
     }),
   ]);
 }
-//@ chunk-e6aww6q8.js:3448863-3448912 facade-exports
+//@ chunk-5xgkngpb.js:3537864-3537913 facade-exports
 /**
  * SessionEnd 钩子总超时 = max(组织设定或 1.5s, env 覆盖)。
  */
@@ -3676,7 +3440,7 @@ function getSessionEndHookDefaultTimeoutMs() {
     getSessionEndHookTimeoutMs_2(),
   );
 }
-//@ chunk-e6aww6q8.js:3448912-3449382 layout
+//@ chunk-5xgkngpb.js:3537913-3538384 layout
 function getManagedSessionEndTimeoutMs() {
   let settled;
   try {
@@ -3702,7 +3466,7 @@ function getManagedSessionEndTimeoutMs() {
     ? withHostEnvRestored(() => env.CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS)
     : env.CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS;
 }
-//@ chunk-e6aww6q8.js:3449382-3449492 fingerprint (2.1.88 match: getSessionEndHookTimeoutMs, 0.793)
+//@ chunk-5xgkngpb.js:3538384-3538494 fingerprint (2.1.88 match: getSessionEndHookTimeoutMs, 1)
 /**
  * 读取 CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS（上限 1 小时），与组织值相同时视为未覆盖。
  */
@@ -3712,7 +3476,7 @@ function getSessionEndHookTimeoutMs_2() {
     ? Math.min(raw, SESSION_END_ENV_TIMEOUT_CAP_MS)
     : 0;
 }
-//@ chunk-e6aww6q8.js:3449492-3449820 facade-exports
+//@ chunk-5xgkngpb.js:3538494-3538822 facade-exports
 /**
  * SessionEnd 的结束时限：取各来源 SessionEnd 钩子 timeout 的最大值（上限 60s），不少于 1.5s。
  */
@@ -3740,10 +3504,10 @@ function getSessionEndHookTimeoutMs() {
     sessionEndHookTimeoutMs,
   );
 }
-//@ chunk-e6aww6q8.js:3449820-3449932 layout
+//@ chunk-5xgkngpb.js:3538822-3538934 layout
 var ACCOUNT_MEMORY_OUTPUT_WITHHELD =
   "(output withheld: this hook ran for an account memory tool, whose text stays out of the conversation)";
-//@ chunk-e6aww6q8.js:3449932-3452334 layout
+//@ chunk-5xgkngpb.js:3538934-3541416 fingerprint (2.1.88 match: executeInBackground, 0.387)
 /**
  * 把 command 钩子转为后台：asyncRewake 时等进程结束，exit 2 用 rewakeMessage/rewakeSummary 包装 stderr 作为下一条提醒唤醒模型（缺失脚本只报告一次）；普通 async 登记到 AsyncHookRegistry 由后续轮询收集。
  */
@@ -3755,6 +3519,7 @@ function backgroundHookProcess({
   hookEvent,
   hookName,
   command,
+  typeLabel,
   asyncRewake,
   rewakeMessage,
   rewakeSummary,
@@ -3763,6 +3528,7 @@ function backgroundHookProcess({
   toolName,
   ranForAccountMemory = false,
   missingScriptThere,
+  plainOutputIsContext,
 }) {
   if (asyncRewake) {
     let rewakeTask = shellCommand.result.then(async (settled) => {
@@ -3887,20 +3653,22 @@ ${command}`,
     hookEvent,
     hookName,
     command,
+    typeLabel,
     shellCommand,
     toolName,
     pluginId,
+    plainOutputIsContext,
   });
   return true;
 }
-//@ chunk-e6aww6q8.js:3452334-3452360 facade-exports
+//@ chunk-5xgkngpb.js:3541416-3541442 facade-exports
 /**
  * 工作区未被信任时返回 true（所有设置钩子跳过）。
  */
 function shouldSkipHookDueToTrust() {
   return !isProjectScopeTrustAccepted();
 }
-//@ chunk-e6aww6q8.js:3452360-3452596 layout
+//@ chunk-5xgkngpb.js:3541442-3541678 layout
 function shouldOmitCheckoutSessionEndHooks(session) {
   if (session !== "SessionEnd" || !getIsNonInteractiveSession()) return false;
   try {
@@ -3913,37 +3681,35 @@ function shouldOmitCheckoutSessionEndHooks(session) {
   logForDebugging(`Leaving out the checkout's ${session} hooks - workspace trust not accepted`);
   return true;
 }
-//@ chunk-e6aww6q8.js:3452596-3452641 facade-exports
+//@ chunk-5xgkngpb.js:3541678-3541723 facade-exports
 /**
  * 会话 id 的安全字符集正则。
  */
 var SAFE_CALLER_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,255}$/;
-//@ chunk-e6aww6q8.js:3452641-3452676 facade-exports
+//@ chunk-5xgkngpb.js:3541723-3541758 facade-exports
 /**
  * 钩子输入 cwd：无盘会话用 gl()，否则 getCwd()。
  */
 function hookInputCwd() {
   return isDiskless() ? getCwdOrNull() : getCwd();
 }
-//@ chunk-e6aww6q8.js:3452676-3452719 layout
+//@ chunk-5xgkngpb.js:3541758-3541801 layout
 function getHookProject(session) {
   return isDiskless() ? session.project : getSessionProject(session);
 }
-//@ chunk-e6aww6q8.js:3452719-3453338 facade-exports
+//@ chunk-5xgkngpb.js:3541801-3542380 facade-exports
 /**
  * 构造所有钩子输入的公共字段：session_id、transcript_path、cwd、scratchpad_dir、prompt_id、permission_mode、agent_id、agent_type、effort；云端服务调用时 session_id 为 served:<caller>、transcript_path 为空。
  */
 function createBaseHookInput(session, cwd, permissionMode, toolUseContext) {
   let agentType = toolUseContext?.agentType ?? getMainThreadAgentType();
   let mainLoopModel = toolUseContext?.options?.mainLoopModel;
-  let effortLevel = resolveEffortLevel(toolUseContext?.getAppState?.() ?? {}, mainLoopModel, {
-    withHold: isSessionHoldFor(toolUseContext ?? {}),
-  });
+  let baselineEffort = getBaselineEffort(toolUseContext ?? {});
   let effortLayerOverride = getEffortLayerOverride(toolUseContext?.permissionLayers);
   let effort =
     mainLoopModel && toolUseContext?.getAppState && modelSupportsEffort(mainLoopModel)
       ? {
-          level: getEffortLevelOrHigh(mainLoopModel, effortLevel, effortLayerOverride),
+          level: getEffortLevelOrHigh(mainLoopModel, baselineEffort, effortLayerOverride),
         }
       : undefined;
   let cwd_2 = cwd ?? "";
@@ -3969,7 +3735,7 @@ function createBaseHookInput(session, cwd, permissionMode, toolUseContext) {
     effort,
   };
 }
-//@ chunk-e6aww6q8.js:3453338-3453493 layout
+//@ chunk-5xgkngpb.js:3542380-3542535 layout
 function getHookRewriterKind(returned, value) {
   switch (returned.type) {
     case "command":
@@ -3981,7 +3747,7 @@ function getHookRewriterKind(returned, value) {
       return "remote";
   }
 }
-//@ chunk-e6aww6q8.js:3453493-3453685 fingerprint (2.1.88 match: validateHookJson, 0.727)
+//@ chunk-5xgkngpb.js:3542535-3542727 fingerprint (2.1.88 match: validateHookJson, 0.726)
 function validateHookJson(jsonString) {
   let parsed = jsonParse(jsonString);
   let validation = hookJSONOutputSchema().safeParse(parsed);
@@ -3996,7 +3762,7 @@ function validateHookJson(jsonString) {
     validationError: formatHookOutputError(parsed, validation.error),
   };
 }
-//@ chunk-e6aww6q8.js:3453685-3454517 facade-exports
+//@ chunk-5xgkngpb.js:3542727-3543559 facade-exports
 /**
  * 解析钩子 stdout：不以 { 开头视为纯文本；{async:true} 识别为异步；JSON 按输出 schema 校验，失败时返回纯文本 + 带期望 schema 的 validationError；多个 JSON 文档视为纯文本。
  */
@@ -4049,26 +3815,7 @@ ${parseHookOutput_2()}`;
     };
   }
 }
-//@ chunk-e6aww6q8.js:3454517-3454784 layout
-function isJsonLinesOutput(stdout) {
-  let filtered = stdout
-    .split(
-      `
-`,
-    )
-    .filter((line) => line.trim() !== "");
-  if (filtered.length < 2) return false;
-  using span = slowLogging`parseHookOutput: json lines (${filtered.length})`;
-  return filtered.every((line) => {
-    try {
-      let parsed = hookJSONOutputSchema().safeParse(jsonParseRaw(line.trim()));
-      return !parsed.success || Object.keys(parsed.data).length === 0;
-    } catch {
-      return false;
-    }
-  });
-}
-//@ chunk-e6aww6q8.js:3454784-3454946 facade-exports (2.1.88 match: isSyncHookJSONOutput, 1)
+//@ chunk-5xgkngpb.js:3543826-3543988 facade-exports (2.1.88 match: isSyncHookJSONOutput, 1)
 /**
  * 判断钩子 stdout 是否声明自己转为异步：去掉前后空白后是 JSON 对象且 `async === true`。
  */
@@ -4082,7 +3829,7 @@ function announcedAsync(json) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:3454946-3455042 facade-exports
+//@ chunk-5xgkngpb.js:3543988-3544084 facade-exports
 /**
  * 非 0 退出且有 stderr 时把 stderr 附到校验错误后。
  */
@@ -4095,15 +3842,178 @@ Hook exited ${status} with stderr:
 ${trimmed}`
     : validationError;
 }
-//@ chunk-e6aww6q8.js:3455042-3455100 layout
+//@ chunk-5xgkngpb.js:3544084-3544521 layout
+function standInHookResult(
+  { stdout, repairedInput },
+  { answerHeld, heldInput, hookInput, owner, hookEvent, hookName, hookCommand, toolUseID, pluginId },
+) {
+  let { json, validationError } = parseHookOutput(stdout);
+  if (validationError !== undefined)
+    return describeKillSwitchedHook(
+      hookEvent,
+      hookName,
+      validationError,
+      pluginId,
+      blocksWhenItCannotRunElsewhere(hookEvent),
+    );
+  let rewritten =
+    json &&
+    applyRemoteHookInputRewrite(json, hookInput, owner, {
+      repairedInput,
+    });
+  let restricted = rewritten && answerHeld ? restrictPersonalHookAnswer(rewritten, heldInput) : rewritten;
+  return {
+    ...(restricted !== undefined &&
+      isSyncHookJSONOutput(restricted) &&
+      processHookJSONOutput({
+        json: restricted,
+        command: hookCommand,
+        hookName,
+        toolUseID,
+        hookEvent,
+        expectedHookEvent: hookEvent,
+        stdout,
+        stderr: "",
+      })),
+    outcome: "success",
+  };
+}
+//@ chunk-5xgkngpb.js:3544521-3545545 layout
+async function runRewrittenHook({
+  hook,
+  owner,
+  runner,
+  jsonInput,
+  sent,
+  hookEvent,
+  hookName,
+  hookCommand,
+  hookIndex,
+  toolUseID,
+  pluginId,
+  signal,
+  answerHeld,
+  heldInput,
+  hookInput,
+  inputsThere,
+  defaultTimeoutS,
+}) {
+  if (owner === undefined || runner === undefined || !isProjectOrDefaultHook(owner, hook))
+    return {
+      jsonInput,
+    };
+  let applies = await askContainerIfHookApplies(runner, owner, sent, {
+    hook: {
+      ...hook,
+      command: hook.prompt,
+      timeout: hook.timeout ?? defaultTimeoutS,
+    },
+    hookEvent,
+    hookIndex,
+    toolUseID,
+    signal,
+  });
+  switch (applies.kind) {
+    case "applies": {
+      let { cwd } = applies;
+      if (cwd === undefined)
+        return {
+          jsonInput,
+        };
+      let cachedInput = inputsThere.get(jsonInput);
+      if (cachedInput?.cwd === cwd)
+        return {
+          jsonInput: cachedInput.there,
+        };
+      let withCwd = jsonStringify({
+        ...Object(jsonParse(jsonInput)),
+        cwd,
+      });
+      inputsThere.set(jsonInput, {
+        cwd,
+        there: withCwd,
+      });
+      return {
+        jsonInput: withCwd,
+      };
+    }
+    case "does_not_apply":
+      return {
+        ended: "silently",
+        jsonInput,
+      };
+    case "cancelled":
+      return {
+        ended: {
+          outcome: "cancelled",
+        },
+        jsonInput,
+      };
+    case "not_asked":
+      return {
+        ended: describeKillSwitchedHook(
+          hookEvent,
+          hookName,
+          applies.said,
+          pluginId,
+          blocksWhenItCannotRunElsewhere(hookEvent) &&
+            (owner.settingsSource === "projectSettings" || isVastPlatypusOn()),
+        ),
+        jsonInput,
+      };
+    case "stand_in":
+      return {
+        ended: standInHookResult(applies, {
+          answerHeld,
+          heldInput,
+          hookInput,
+          owner,
+          hookEvent,
+          hookName,
+          hookCommand,
+          toolUseID,
+          pluginId,
+        }),
+        jsonInput,
+      };
+  }
+}
+//@ chunk-5xgkngpb.js:3545545-3545681 layout
 function isWithheldGuardHttpHook(hook, hookEvent) {
+  if (hook.unanswered !== undefined)
+    return hook.unanswered === "lost"
+      ? PROMPT_GUARD_EVENTS.has(hookEvent)
+      : blocksWhenItCannotRunElsewhere(hookEvent) && isVastPlatypusOn();
   return hook.withheld === true && isHttpMcpServeInvocation() && PROMPT_GUARD_EVENTS.has(hookEvent);
 }
-//@ chunk-e6aww6q8.js:3455100-3455231 layout
-function httpHookUnreachableMessage(hookEvent, error) {
+//@ chunk-5xgkngpb.js:3545681-3545969 layout
+function withheldHookResult(hookEvent, { unanswered }, message, command) {
+  return {
+    blockingError: {
+      blockingError: message,
+      command,
+      ...(unanswered &&
+        promptEndingFields(hookEvent, {
+          noVerdict: unanswered === "lost" ? "output_distrusted" : "remote_run_failed",
+        })),
+    },
+    suppressOriginalPrompt: true,
+    ...(hookEvent === "PermissionRequest" && {
+      permissionRequestResult: {
+        behavior: "deny",
+        message,
+      },
+    }),
+    outcome: "blocking",
+  };
+}
+//@ chunk-5xgkngpb.js:3545969-3546220 layout
+function httpHookUnreachableMessage(hookEvent, { error, unanswered }) {
+  if (unanswered !== undefined)
+    return `Refused: the ${hookEvent} hook gave no answer that could be read. ${error ?? ""}`.trimEnd();
   return `Refused, and a retry will be too: an HTTP hook is set on ${hookEvent} and could not be asked. ${error ?? ""}`.trimEnd();
 }
-//@ chunk-e6aww6q8.js:3455231-3455743 facade-exports (2.1.88 match: parseHttpHookOutput, 1)
+//@ chunk-5xgkngpb.js:3546220-3546732 facade-exports (2.1.88 match: parseHttpHookOutput, 1)
 /**
  * 解析 HTTP 钩子响应体：空体当 {}，必须是 JSON 对象并通过输出 schema。
  */
@@ -4138,12 +4048,12 @@ function parseHttpHookOutput(body) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:3455743-3455770 layout
+//@ chunk-5xgkngpb.js:3546732-3546759 layout
 var loggedMcpOutputProbes; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3455743", () => {
+deferInit("chunk-5xgkngpb.js:3546732", () => {
   loggedMcpOutputProbes = new HostScoped(() => new Set());
 });
-//@ chunk-e6aww6q8.js:3455770-3455929 layout
+//@ chunk-5xgkngpb.js:3546759-3546918 layout
 function logUpdatedMcpToolOutputProbe(supported) {
   let label = supported ? "true" : "false";
   let logged = loggedMcpOutputProbes.of(getRootSession().host);
@@ -4153,7 +4063,7 @@ function logUpdatedMcpToolOutputProbe(supported) {
     with_new_field: fromEnum(label),
   });
 }
-//@ chunk-e6aww6q8.js:3455929-3462176 fingerprint (2.1.88 match: processHookJSONOutput, 0.8)
+//@ chunk-5xgkngpb.js:3546918-3553168 fingerprint (2.1.88 match: processHookJSONOutput, 0.8)
 /**
  * 把钩子 JSON 输出翻译成内部结果：continue:false → preventContinuation/stopReason；decision approve/block；systemMessage；terminalSequence（白名单 OSC）；按 hookSpecificOutput.hookEventName 处理 permissionDecision、updatedInput、additionalContext、sessionTitle、watchPaths、reloadSkills、updatedToolOutput、retry、PermissionRequest decision、elicitation action、displayContent 等；事件名不符抛错。
  */
@@ -4402,12 +4312,12 @@ function processHookJSONOutput({
         }),
   };
 }
-//@ chunk-e6aww6q8.js:3462176-3462542 sole-consumer
-async function pluginRootExists(storageV5, pluginRoot) {
-  if (isStorageV5Enabled() && storageV5 !== undefined) {
+//@ chunk-5xgkngpb.js:3553168-3553534 sole-consumer
+async function pluginRootExists(v5, pluginRoot) {
+  if (isStorageV5Enabled() && v5 !== undefined) {
     let versionCachePath = parseVersionCachePath(pluginRoot, projectPluginCacheDir());
     if (versionCachePath) {
-      let scopeKind = await storageV5.scopeKind(
+      let scopeKind = await v5.scopeKind(
         {
           namespace: "pluginCache",
           marketplace: versionCachePath.marketplace,
@@ -4434,11 +4344,11 @@ async function pluginRootExists(storageV5, pluginRoot) {
   }
   return pathExists(pluginRoot);
 }
-//@ chunk-e6aww6q8.js:3462542-3462582 sole-consumer
+//@ chunk-5xgkngpb.js:3553534-3553574 sole-consumer
 function getHookStdoutForParsing(result) {
   return getRunnerJsonStdout(result) ?? result.stdout;
 }
-//@ chunk-e6aww6q8.js:3462582-3462732 sole-consumer
+//@ chunk-5xgkngpb.js:3553574-3553724 sole-consumer
 function replaceTrailingResult(stdout, resultStdout, resultWasString) {
   let suffix = resultWasString
     ? resultStdout
@@ -4457,7 +4367,7 @@ function replaceTrailingResult(stdout, resultStdout, resultWasString) {
 `
       }${resultStdout}`;
 }
-//@ chunk-e6aww6q8.js:3462732-3462840 sole-consumer
+//@ chunk-5xgkngpb.js:3553724-3553832 sole-consumer
 function exitedByContract(hook) {
   return (
     hook.exitedNormally === true &&
@@ -4467,7 +4377,7 @@ function exitedByContract(hook) {
     hook.status !== 127
   );
 }
-//@ chunk-e6aww6q8.js:3462840-3463039 sole-consumer
+//@ chunk-5xgkngpb.js:3553832-3554031 sole-consumer
 function didScriptHookRun(hook) {
   if (hook.backgrounded) return true;
   if (hook.runnerConflict && hook.status !== 2) return false;
@@ -4475,7 +4385,7 @@ function didScriptHookRun(hook) {
   if (hook.aborted || hook.spawnFailed || hook.exitedNormally !== true) return false;
   return false;
 }
-//@ chunk-e6aww6q8.js:3463039-3463549 sole-consumer
+//@ chunk-5xgkngpb.js:3554031-3554541 sole-consumer
 function describeHookDidNotRun(hook) {
   if (hook.runnerConflict) return "no single verdict (re-runs disagreed, or a malformed result or exit line)";
   if (hook.aborted) return "timed out";
@@ -4485,7 +4395,7 @@ function describeHookDidNotRun(hook) {
     return `nothing from the runner reached this process (exit ${hook.status}) \u2014 a launcher that redirects the hook's stderr hides its verdict`;
   return `its launcher exited ${hook.status} before the hook ran`;
 }
-//@ chunk-e6aww6q8.js:3463549-3463779 sole-consumer
+//@ chunk-5xgkngpb.js:3554541-3554771 sole-consumer
 function guardScriptHookBlock(hook, hookEvent, command, reason) {
   if (hook.type !== "script" || !GUARD_HOOK_EVENTS.has(hookEvent)) return;
   let message = `[${command}]: did not run (${reason}) \u2014 a ${hookEvent} guard that cannot run blocks`;
@@ -4499,7 +4409,7 @@ function guardScriptHookBlock(hook, hookEvent, command, reason) {
     hook,
   };
 }
-//@ chunk-e6aww6q8.js:3463779-3463952 sole-consumer
+//@ chunk-5xgkngpb.js:3554771-3554944 sole-consumer
 function writeRemoteHookInput(hooks, hookInput) {
   try {
     return hooks(hookInput);
@@ -4515,11 +4425,11 @@ function writeRemoteHookInput(hooks, hookInput) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:3463952-3463999 sole-consumer
+//@ chunk-5xgkngpb.js:3554944-3554991 sole-consumer
 function isOversizedHookInput(hookEvent, inputText) {
   return inputText.length > hookInputSizeLimit() && isGuardedHookEvent(hookEvent);
 }
-//@ chunk-e6aww6q8.js:3463999-3464093 sole-consumer
+//@ chunk-5xgkngpb.js:3554991-3555085 sole-consumer
 function logHookMatchingFailure(hookEvent, cause) {
   logError(
     Error("Failed to match hooks", {
@@ -4528,7 +4438,7 @@ function logHookMatchingFailure(hookEvent, cause) {
   );
   logFeatureBad(hookFeature(hookEvent), "hook_matching_failed");
 }
-//@ chunk-e6aww6q8.js:3464175-3477576 fingerprint (2.1.88 match: execCommandHook, 0.531)
+//@ chunk-5xgkngpb.js:3555167-3569235 fingerprint (2.1.88 match: execCommandHook, 0.505)
 /**
  * 执行 command 钩子：云端设备转发、exec 形式（args）或 shell（bash/Git Bash/PowerShell）启动；注入 CLAUDE_PROJECT_DIR、CLAUDE_PLUGIN_ROOT/DATA、CLAUDE_PLUGIN_OPTION_*、CLAUDE_ENV_FILE 等环境变量；stdin 写入 JSON 输入；首行 {async:true} 或 async/asyncRewake 配置时转后台；返回 stdout/stderr/status 及 stdio 完整性标志。
  */
@@ -4543,6 +4453,7 @@ async function execCommandHook(
   cwd,
   signal,
   hookId,
+  execCommand,
   hookIndex,
   pluginRoot,
   pluginId,
@@ -4552,11 +4463,14 @@ async function execCommandHook(
   envExtra,
   servedEnv,
   toolInfo,
-  envOwnerId,
-  storageV5,
-  credentials,
+  bunOptionsFrom,
+  pluginRootPath,
+  pluginIdForOptions,
   wrapCommand,
 ) {
+  let isExecForm = execCommand !== undefined;
+  let command = execCommand ?? getHookDisplayText(hook);
+  let typeLabel = isExecForm ? undefined : hookTypeLabel(hook);
   let hookOriginLabel = getHookOriginLabel({
     pluginId,
     settingsSource,
@@ -4651,7 +4565,8 @@ async function execCommandHook(
         },
         hookEvent,
         hookName,
-        command: getHookDisplayText(hook),
+        command,
+        typeLabel,
         asyncRewake: hook.asyncRewake,
         rewakeMessage: hook.rewakeMessage,
         rewakeSummary: hook.rewakeSummary,
@@ -4659,6 +4574,7 @@ async function execCommandHook(
         toolName: toolInfo?.toolName,
         ranForAccountMemory: toolInfo?.accountMemory === true,
         missingScriptThere: () => missingScript,
+        plainOutputIsContext: PLAIN_OUTPUT_IS_CONTEXT in hook,
       });
       if (backgroundHandle)
         return {
@@ -4720,29 +4636,30 @@ async function execCommandHook(
   let isWindows = getPlatform() === "windows";
   let shellType = hook.shell ?? defaultShellKind();
   let isPowerShell = shellType === "powershell";
-  let isExecForm = hook.args !== undefined;
-  if (isExecForm && /\s/.test(hook.command) && !/[\\/]/.test(hook.command))
+  let isExecForm_2 = hook.args !== undefined;
+  if (isExecForm_2 && /\s/.test(hook.command) && !/[\\/]/.test(hook.command))
     logForDebugging(
-      `Hook command "${hook.command}" has both "args" and whitespace in "command". Exec form treats "command" as a single executable name; move the rest into "args". Example: { "command": "node", "args": ["script.js"] }.`,
+      `Hook command ${isExecForm ? "" : `"${hook.command}" `}has both "args" and whitespace in "command". Exec form treats "command" as a single executable name; move the rest into "args". Example: { "command": "node", "args": ["script.js"] }.`,
       {
         level: "warn",
       },
     );
   let expandPath =
-    isWindows && !isPowerShell && !isExecForm
+    isWindows && !isPowerShell && !isExecForm_2
       ? (pathArg) => pathArg.replaceAll("\\", "/")
       : (pathArg) => pathArg;
   let baseDir =
     wrapCommand === undefined && servedEnv?.startsOutsideProject !== true ? getProjectConfigRoot() : null;
   let projectDir = baseDir ?? project.projectRoot;
-  let command = hook.command;
+  let command_2 = hook.command;
   let userConfig;
-  if (!isExecForm && isPowerShell) {
+  if (!isExecForm_2 && isPowerShell) {
     if (hook.shell === undefined) describeNoBashFallback(hookEvent);
-    command = toPowerShellEnvRefs(command);
-    if (/\$CLAUDE_PROJECT_DIR\b/.test(command))
+    command_2 = toPowerShellEnvRefs(command_2);
+    if (/\$CLAUDE_PROJECT_DIR\b/.test(command_2))
       logForDebugging(
-        `PowerShell hook command references $CLAUDE_PROJECT_DIR, which PowerShell reads as an undefined variable ($null). Use $env:CLAUDE_PROJECT_DIR or \${CLAUDE_PROJECT_DIR} instead. Command: ${command}`,
+        "PowerShell hook command references $CLAUDE_PROJECT_DIR, which PowerShell reads as an undefined variable ($null). Use $env:CLAUDE_PROJECT_DIR or ${CLAUDE_PROJECT_DIR} instead." +
+          (isExecForm ? "" : ` Command: ${command_2}`),
         {
           level: "warn",
         },
@@ -4755,27 +4672,28 @@ async function execCommandHook(
     if (value) continue;
     let placeholder = "${" + name + "}";
     if (!hook.command.includes(placeholder) && !hook.args?.some((arg) => arg.includes(placeholder))) continue;
-    let rootPath = getHookDisplayText(hook);
+    let commandSuffix = isExecForm ? "" : ` Command: ${getHookDisplayText(hook)}`;
     throw Error(
       skillRoot
-        ? `Hook command references \${${name}} but only \${CLAUDE_PLUGIN_ROOT} is available for skill hooks (\${CLAUDE_PLUGIN_DATA} is plugin-only). Command: ${rootPath}`
-        : `Hook command references \${${name}} but the hook is not associated with a plugin. This variable is only available in hooks defined in a plugin's hooks/hooks.json file, not in settings.json. Command: ${rootPath}`,
+        ? `Hook command references \${${name}} but only \${CLAUDE_PLUGIN_ROOT} is available for skill hooks (\${CLAUDE_PLUGIN_DATA} is plugin-only).${commandSuffix}`
+        : `Hook command references \${${name}} but the hook is not associated with a plugin. This variable is only available in hooks defined in a plugin's hooks/hooks.json file, not in settings.json.${commandSuffix}`,
     );
   }
   if (pluginRoot) {
-    if (!(await pluginRootExists(storageV5, pluginRoot)))
+    if (!(await pluginRootExists(pluginRootPath, pluginRoot)))
       throw Error(
         `Plugin directory does not exist: ${pluginRoot}` +
           (pluginId ? ` (${pluginId} \u2014 run /plugin to reinstall)` : ""),
       );
-    if (pluginId) userConfig = await loadPluginOptions(pluginId, credentials);
-    if (!isExecForm && userConfig) {
-      if (hasUserConfigVariables(command, userConfig))
+    if (pluginId) userConfig = await loadPluginOptions(pluginId, pluginIdForOptions);
+    if (!isExecForm_2 && userConfig) {
+      if (hasUserConfigVariables(command_2, userConfig))
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           `Hook from ${pluginId ? `plugin ${pluginId}` : "a plugin"} references \${user_config.*} in a shell-form command. The substituted value would be re-parsed by the shell. Use exec ` +
             'form instead \u2014 {"command": "<executable>", "args": ' +
             '["${user_config.KEY}", ...]} \u2014 or read ' +
-            `$CLAUDE_PLUGIN_OPTION_<KEY> from the hook's environment. Command: ${getHookDisplayText(hook)}`,
+            "$CLAUDE_PLUGIN_OPTION_<KEY> from the hook's environment." +
+            (isExecForm ? "" : ` Command: ${getHookDisplayText(hook)}`),
           "plugin hook references ${user_config.*} in shell-form command",
         );
     }
@@ -4795,8 +4713,7 @@ async function execCommandHook(
     };
     execArgv = [expand(hook.command), hook.args.map(expand)];
   }
-  let dataPath = getHookDisplayText(hook);
-  if (isWindows && !isPowerShell && !isExecForm) command = stripShellQuotes(command);
+  if (isWindows && !isPowerShell && !isExecForm_2) command_2 = stripShellQuotes(command_2);
   let servedRewrite = servedEnv === undefined && isRewrittenInput(hook);
   let envBase = servedRewrite
     ? withHostEnvRestored(() => ({
@@ -4823,7 +4740,7 @@ async function execCommandHook(
         ? envBase.shellPrefix
         : env.CLAUDE_CODE_SHELL_PREFIX;
   let finalCommand =
-    !isPowerShell && !isExecForm && useShell ? getGlobBaseDirectory(useShell, command) : command;
+    !isPowerShell && !isExecForm_2 && useShell ? getGlobBaseDirectory(useShell, command_2) : command_2;
   let timeoutMs = hook.timeout ? hook.timeout * 1000 : TOOL_HOOK_EXECUTION_TIMEOUT_MS;
   let childEnv = {
     ...(servedEnv !== undefined
@@ -4853,7 +4770,7 @@ async function execCommandHook(
       childEnv[`CLAUDE_PLUGIN_OPTION_${envKey}`] = String(value);
     }
   if (skillRoot) childEnv.CLAUDE_PLUGIN_ROOT = expandPath(skillRoot);
-  checkPluginBunOptions(envOwnerId ?? pluginId, childEnv, childEnv);
+  checkPluginBunOptions(bunOptionsFrom ?? pluginId, childEnv, childEnv);
   if (
     !isPowerShell &&
     (hookEvent === "SessionStart" ||
@@ -4915,24 +4832,45 @@ async function execCommandHook(
       status: 1,
       aborted: true,
     };
+  let spawnFailureText = (error) => {
+    if (!isExecForm) return errorMessage(error);
+    let errnoText = sanitizeErrnoForTelemetry(error);
+    return `its program could not be started${errnoText === undefined ? "" : ` (${errnoText})`}`;
+  };
+  let spawnOnce = (spawnFn) => {
+    try {
+      return spawnFn();
+    } catch (error) {
+      throw isExecForm
+        ? new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+            spawnFailureText(error),
+            "hook program could not be started",
+          )
+        : error;
+    }
+  };
   let child;
   if (wrapped !== undefined)
-    child = spawn(wrapped.command, [], {
-      env: childEnv,
-      cwd: spawnCwd_2,
-      shell: true,
-      detached,
-      windowsHide: true,
-      ...hooksSettingForEvent(hookEvent),
-    });
+    child = spawnOnce(() =>
+      spawn(wrapped.command, [], {
+        env: childEnv,
+        cwd: spawnCwd_2,
+        shell: true,
+        detached,
+        windowsHide: true,
+        ...hooksSettingForEvent(hookEvent),
+      }),
+    );
   else if (execArgv)
-    child = spawn(execArgv[0], execArgv[1], {
-      env: childEnv,
-      cwd: spawnCwd_2,
-      detached,
-      windowsHide: true,
-      ...hooksSettingForEvent(hookEvent),
-    });
+    child = spawnOnce(() =>
+      spawn(execArgv[0], execArgv[1], {
+        env: childEnv,
+        cwd: spawnCwd_2,
+        detached,
+        windowsHide: true,
+        ...hooksSettingForEvent(hookEvent),
+      }),
+    );
   else if (shellType === "powershell") {
     let canRunHere = await (servedRewrite
       ? findPowerShellForEnv(withHostEnvRestored(getWindowsEnvPaths))
@@ -4947,7 +4885,7 @@ async function execCommandHook(
       };
     if (!canRunHere)
       throw Error(
-        `Hook "${hook.command}" has shell: 'powershell' but no PowerShell executable (pwsh or powershell) was found on PATH. Install PowerShell, or remove "shell": "powershell" to use bash.`,
+        `Hook ${isExecForm ? "" : `"${hook.command}" `}has shell: 'powershell' but no PowerShell executable (pwsh or powershell) was found on PATH. Install PowerShell, or remove "shell": "powershell" to use bash.`,
       );
     let execPath =
       hookEvent === "PermissionRequest" || requiresPowerShellScriptFile(finalCommand)
@@ -4973,33 +4911,37 @@ async function execCommandHook(
           ` }
 ; $claudeNoVerdict = $false`
         : execPath;
-    child = spawn(canRunHere, buildPowerShellCommandArgs(cmd), {
-      env: childEnv,
-      cwd: spawnCwd_2,
-      detached,
-      windowsHide: true,
-      ...hooksSettingForEvent(hookEvent),
-    });
+    child = spawnOnce(() =>
+      spawn(canRunHere, buildPowerShellCommandArgs(cmd), {
+        env: childEnv,
+        cwd: spawnCwd_2,
+        detached,
+        windowsHide: true,
+        ...hooksSettingForEvent(hookEvent),
+      }),
+    );
   } else {
     let gitBashPath = isWindows ? getGitBashPathCached() : null;
     if (isWindows && !gitBashPath)
       throw Error(
-        `Hook "${hook.command}" requires bash but Git Bash was not found. ${INSTALL_GIT_FOR_WINDOWS}, or ${NO_BASH_FIX_HINT}.`,
+        `Hook ${isExecForm ? "" : `"${hook.command}" `}requires bash but Git Bash was not found. ${INSTALL_GIT_FOR_WINDOWS}, or ${NO_BASH_FIX_HINT}.`,
       );
     let shell = isWindows ? gitBashPath : true;
     if (isWindows && gitBashPath) prependDirToPathEnv(childEnv, gitBashPath);
-    child = spawn(finalCommand, [], {
-      env: childEnv,
-      cwd: spawnCwd_2,
-      shell,
-      detached,
-      windowsHide: true,
-      ...hooksSettingForEvent(hookEvent),
-    });
+    child = spawnOnce(() =>
+      spawn(finalCommand, [], {
+        env: childEnv,
+        cwd: spawnCwd_2,
+        shell,
+        detached,
+        windowsHide: true,
+        ...hooksSettingForEvent(hookEvent),
+      }),
+    );
   }
   let hookTaskOutput = new TaskOutput(`hook_${child.pid}`, null);
   let shellCommand = wrapSpawn(child, signal, timeoutMs, hookTaskOutput);
-  let shellCommandTransferred = false;
+  let timedOut = false;
   let stdinWriteFailed = false;
   let stdinOpen = !getIsNonInteractiveSession() || getHasStreamingInput();
   if ((hook.async || (hook.asyncRewake && stdinOpen)) && !forceSyncExecution) {
@@ -5034,7 +4976,8 @@ async function execCommandHook(
         },
         hookEvent,
         hookName,
-        command: dataPath,
+        command,
+        typeLabel,
         toolName: toolInfo?.toolName,
         ranForAccountMemory: toolInfo?.accountMemory === true,
         asyncRewake: hook.asyncRewake,
@@ -5047,8 +4990,8 @@ async function execCommandHook(
               pluginRoot: pluginRoot ?? skillRoot,
               projectDir,
               homeDir: homedir(),
-              windowsBash: isWindows && !isPowerShell && !isExecForm,
-              posixShell: !isPowerShell && !isExecForm && !useShell,
+              windowsBash: isWindows && !isPowerShell && !isExecForm_2,
+              posixShell: !isPowerShell && !isExecForm_2 && !useShell,
             })
           : undefined,
         pluginId,
@@ -5119,12 +5062,13 @@ async function execCommandHook(
               asyncResponse: parsed,
               hookEvent,
               hookName,
-              command: dataPath,
+              command,
+              typeLabel,
               pluginId,
               toolName: toolInfo?.toolName,
             })
           ) {
-            shellCommandTransferred = true;
+            timedOut = true;
             child.stdout.removeListener("data", onStdout);
             child.stderr.removeListener("data", onStderr);
             asyncResolve?.({
@@ -5260,9 +5204,26 @@ async function execCommandHook(
     let result = await Promise.race([childIsAsyncPromise, childClosePromise, childErrorPromise]);
     status = result.status;
     diagAborted = result.aborted ?? false;
+    let stdoutText = removeClaudeCodeHintLines(result.stdout);
+    if (isExecForm && (result.status === 126 || result.status === 127)) {
+      let exitNote = `exit ${result.status}, a shell's code for a program it could not run; the hook's stderr is left out`;
+      return {
+        ...result,
+        stdout: stdoutText,
+        stderr: exitNote,
+        output: `${stdoutText}${
+          stdoutText === "" ||
+          stdoutText.endsWith(`
+`)
+            ? ""
+            : `
+`
+        }${exitNote}`,
+      };
+    }
     return {
       ...result,
-      stdout: removeClaudeCodeHintLines(result.stdout),
+      stdout: stdoutText,
       stderr: removeClaudeCodeHintLines(result.stderr),
       output: removeClaudeCodeHintLines(result.output),
     };
@@ -5288,7 +5249,7 @@ async function execCommandHook(
         aborted: true,
       };
     } else {
-      let errorMsg = errorMessage(error);
+      let errorMsg = spawnFailureText(error);
       logForDebugging(`Hook command failed to spawn (${hookName}): ${errorMsg}`, {
         level: "error",
       });
@@ -5312,10 +5273,10 @@ async function execCommandHook(
       });
     closeStreams();
     if (wrapped !== undefined && shellCommand.status === "running") shellCommand.kill();
-    if (!shellCommandTransferred) shellCommand.cleanup();
+    if (!timedOut) shellCommand.cleanup();
   }
 }
-//@ chunk-e6aww6q8.js:3477576-3478127 facade-exports
+//@ chunk-5xgkngpb.js:3569235-3569795 facade-exports
 /**
  * 为云端会话在本机运行 command 钩子的入口（device 模式），返回精简结果。
  */
@@ -5350,6 +5311,7 @@ async function execCommandHookForDevice({
       undefined,
       undefined,
       undefined,
+      undefined,
       true,
       envExtra,
       {
@@ -5377,9 +5339,9 @@ async function execCommandHookForDevice({
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3478127-3478196 layout
+//@ chunk-5xgkngpb.js:3569795-3569864 layout
 var CANNOT_RUN_ELSEWHERE_TEXT = "This hook runs on another machine, which could not run it.";
-//@ chunk-e6aww6q8.js:3478196-3478422 layout
+//@ chunk-5xgkngpb.js:3569864-3570090 layout
 function buildCannotRunElsewhereResult(hookEvent, hookEvent_2, hook = CANNOT_RUN_ELSEWHERE_TEXT) {
   if (
     !blocksWhenItCannotRunElsewhere(hookEvent) ||
@@ -5401,7 +5363,7 @@ function buildCannotRunElsewhereResult(hookEvent, hookEvent_2, hook = CANNOT_RUN
     noVerdict: hookEvent_2,
   };
 }
-//@ chunk-e6aww6q8.js:3478422-3478513 facade-exports
+//@ chunk-5xgkngpb.js:3570090-3570181 facade-exports
 /**
  * 判断某事件的钩子在"无法在别处运行"时是否应阻断：属于提示守护事件，但 PostToolBatch、TaskCreated、PreCompact 除外。
  */
@@ -5413,7 +5375,7 @@ function blocksWhenItCannotRunElsewhere(hookEvent) {
     hookEvent !== "PreCompact"
   );
 }
-//@ chunk-e6aww6q8.js:3478513-3478601 layout
+//@ chunk-5xgkngpb.js:3570181-3570269 layout
 function isOwnUserPromptHook(hookEvent, hook, hookOriginLabel) {
   return (
     hookEvent === "UserPromptSubmit" &&
@@ -5421,7 +5383,7 @@ function isOwnUserPromptHook(hookEvent, hook, hookOriginLabel) {
     getPluginHookRunner()?.isPersonsOwn?.(hookOriginLabel) === true
   );
 }
-//@ chunk-e6aww6q8.js:3478601-3479089 layout
+//@ chunk-5xgkngpb.js:3570269-3570757 layout
 /**
  * 为在另一台机器上运行的钩子构造后台任务对象：结果到达后写入输出并标记完成，失败时写入固定错误并以退出码 1 结束。
  */
@@ -5463,7 +5425,7 @@ function createRemoteHookTask(hook, abortController, abortController_2) {
   };
   return result;
 }
-//@ chunk-e6aww6q8.js:3479089-3480748 facade-exports
+//@ chunk-5xgkngpb.js:3570757-3572424 facade-exports
 /**
  * 执行插件/托管/技能/仓库来源的 command 钩子并收口输出：组织钩子按需转换；进程启动失败视为 status 1；输出不可信（stdio 截断等）时提示守护事件转成阻断、其余带说明返回；exit 2 但 stdio 不完整时清理可疑 JSON，脚本缺失的情况特判保留阻断。
  */
@@ -5498,6 +5460,7 @@ async function execPluginCommandHook({
     cwd,
     signal,
     randomUUID(),
+    hookTypeLabel(hook),
     hookIndex,
     plugin?.root,
     plugin?.id,
@@ -5625,7 +5588,7 @@ async function execPluginCommandHook({
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3480748-3481037 facade-exports
+//@ chunk-5xgkngpb.js:3572424-3572713 facade-exports
 /**
  * 判断 exit 2 是否其实是"脚本不存在"：Stop/SubagentStop/TaskCompleted/TeammateIdle（或插件的 UserPromptSubmit）钩子、stdout 为空、stderr 含 no such file / can't open，且 stdio 完整。
  */
@@ -5648,26 +5611,26 @@ function exitTwoMeansMissingScript({
     /no such file|can't open/i.test(stderr)
   );
 }
-//@ chunk-e6aww6q8.js:3481037-3481082 facade-exports
+//@ chunk-5xgkngpb.js:3572713-3572758 facade-exports
 /**
  * 计算钩子 `if` 条件（无法判定时视为不满足）。
  */
 function evaluateHookIfCondition(condition, tools, hookInput, matches) {
   return matchesHookIfCondition(condition, tools, hookInput, matches, false);
 }
-//@ chunk-e6aww6q8.js:3481082-3481129 facade-exports
+//@ chunk-5xgkngpb.js:3572758-3572805 facade-exports
 /**
  * 计算钩子 `if` 模式（无法判定时返回 null 表示未知）。
  */
 function evaluateHookIfPattern(rule, toolInput, cwd, matches) {
   return matchesHookIfCondition(rule, toolInput, cwd, matches, null);
 }
-//@ chunk-e6aww6q8.js:3481129-3481404 layout
+//@ chunk-5xgkngpb.js:3572805-3573080 layout
 function matchesHookIfCondition(condition, hookInput, hookInput_2, matches, cwd) {
   return runInRemoteCallFrameMain(matches, async () => {
     let matcher = await prepareIfConditionMatcher(hookInput, hookInput_2);
     if (matcher === undefined) return cwd;
-    let ruleValue = permissionRuleValueFromString(condition);
+    let ruleValue = parseRuleString(condition);
     if (!ruleNamesContainTool(matcher.names, condition, ruleValue.toolName)) return cwd;
     if (!ruleValue.ruleContent) return true;
     if (!matcher.judgeable) return null;
@@ -5675,7 +5638,7 @@ function matchesHookIfCondition(condition, hookInput, hookInput_2, matches, cwd)
     return matcher.patternMatcher(ruleValue.ruleContent);
   });
 }
-//@ chunk-e6aww6q8.js:3481404-3481466 facade-exports
+//@ chunk-5xgkngpb.js:3573080-3573142 facade-exports
 /**
  * 判断 PreToolUse 的 matcher 是否覆盖某工具（空 matcher 覆盖全部）。
  */
@@ -5685,7 +5648,7 @@ function preToolUseMatcherCoversTool(matcher, toolName) {
     matchesPattern(canonicalToolName(toolName), matcher, HOOK_EVENTS_WITH_MATCHER.has("PreToolUse"))
   );
 }
-//@ chunk-e6aww6q8.js:3481466-3481597 facade-exports
+//@ chunk-5xgkngpb.js:3573142-3573273 facade-exports
 /**
  * 列出 PreToolUse matcher 明确列举的工具名（含别名展开）；空或 `*` 返回 undefined。
  */
@@ -5694,14 +5657,14 @@ function preToolUseMatcherListedTools(matcher) {
   let matcherToolNames = parseMatcherToolNames(matcher, HOOK_EVENTS_WITH_MATCHER.has("PreToolUse"));
   return matcherToolNames === undefined
     ? undefined
-    : uniq(
+    : normalizeCaseForComparison_2(
         matcherToolNames.flatMap((matcherToolName) => [
           matcherToolName,
           ...legacyToolNamesFor(matcherToolName),
         ]),
       );
 }
-//@ chunk-e6aww6q8.js:3481597-3481783 layout
+//@ chunk-5xgkngpb.js:3573273-3573459 layout
 function parseMatcherToolNames(matcher, toolFilter, allTools, includeVariants = false) {
   if (!(toolFilter ? /^[a-zA-Z0-9_|, -]+$/ : /^[a-zA-Z0-9_|]+$/).test(matcher)) return;
   return matcher
@@ -5710,7 +5673,7 @@ function parseMatcherToolNames(matcher, toolFilter, allTools, includeVariants = 
     .filter(Boolean)
     .flatMap((name) => (includeVariants ? [name] : toolNameVariants(canonicalToolName(name), allTools)));
 }
-//@ chunk-e6aww6q8.js:3481783-3481901 facade-exports
+//@ chunk-5xgkngpb.js:3573459-3573608 facade-exports (2.1.88 match: isToolReferenceWithName, 0.823)
 /**
  * 判断钩子 matcher 是否匹配该事件输入：取事件的匹配字段（工具名、source、trigger 等），没有字段或没有 matcher 时为真；工具名不命中时再试 MCP 前缀变体。
  */
@@ -5718,9 +5681,15 @@ function hookMatcherMatches(toolName, matcher, matcher_2) {
   let matchQuery = hookMatchQuery(toolName);
   if (matchQuery === undefined || !matcher) return true;
   let hookMatcher = makeHookMatcher(toolName, matcher, matcher_2);
-  return hookMatcher(matchQuery) || getMcpPrefix(matchQuery, matcher, undefined).some(hookMatcher) || false;
+  return (
+    hookMatcher(matchQuery) ||
+    getMcpPrefix_3(matchQuery, matcher, undefined).some(hookMatcher) ||
+    ("tool_name" in toolName &&
+      isLegacyReplToolName(matchQuery) &&
+      hookMatcher(canonicalToolName(matchQuery)))
+  );
 }
-//@ chunk-e6aww6q8.js:3481901-3482036 layout
+//@ chunk-5xgkngpb.js:3573608-3573743 layout
 function makeHookMatcher(toolName, matcherAssembly, options) {
   return (hookInput) =>
     matchesPattern(
@@ -5732,7 +5701,7 @@ function makeHookMatcher(toolName, matcherAssembly, options) {
       "tool_input" in toolName ? toolName.tool_input : undefined,
     );
 }
-//@ chunk-e6aww6q8.js:3482036-3482244 facade-exports (2.1.88 match: isToolReferenceWithName, 1)
+//@ chunk-5xgkngpb.js:3573743-3573951 facade-exports (2.1.88 match: isToolReferenceWithName, 1)
 /**
  * 若 matcher 只在工具名的 MCP 前缀变体上命中，返回把 tool_name 改成命中变体的事件输入副本，否则原样返回；让钩子看到它所匹配的名字。
  */
@@ -5743,7 +5712,7 @@ function forwardedUnderMatchingToolName(toolName, matcherAssembly, matcher) {
   let hookMatcher = makeHookMatcher(toolName, matcherAssembly, matcher);
   let hookMatcher_2 = hookMatcher(matchQuery)
     ? undefined
-    : getMcpPrefix(matchQuery, matcherAssembly, hookToolInput).find(hookMatcher);
+    : getMcpPrefix_3(matchQuery, matcherAssembly, hookToolInput).find(hookMatcher);
   if (hookMatcher_2 === undefined) return toolName;
   return (
     (hookMatcher_2 === monitorCommandAsBash(matchQuery, hookToolInput) && withMatchedToolName(toolName)) || {
@@ -5752,7 +5721,7 @@ function forwardedUnderMatchingToolName(toolName, matcherAssembly, matcher) {
     }
   );
 }
-//@ chunk-e6aww6q8.js:3482244-3482427 layout
+//@ chunk-5xgkngpb.js:3573951-3574134 layout
 function withMatchedToolName(input) {
   if (!("tool_name" in input) || !("tool_input" in input)) return;
   let monitored = monitorCommandAsBash(input.tool_name, getHookToolInput(input));
@@ -5765,19 +5734,19 @@ function withMatchedToolName(input) {
         tool_input: commandAndDescription,
       };
 }
-//@ chunk-e6aww6q8.js:3482427-3482525 layout
+//@ chunk-5xgkngpb.js:3574134-3574232 layout
 function matchedToolNameInput(matcher, hookInput) {
   return matcher.throughFamilyOnly === true && matcher.matcherMetThroughOtherName === true
     ? withMatchedToolName(hookInput)
     : undefined;
 }
-//@ chunk-e6aww6q8.js:3482525-3482675 layout
+//@ chunk-5xgkngpb.js:3574232-3574382 layout
 function stripModelContextSuffix(name, suffix) {
   if (name !== "PreModelSwitch" && name !== "PostModelSwitch") return suffix;
   let replaced = suffix.replace(/\[[12]m\](?=\s*(?:[|,]|$))/gi, "");
   return replaced.trim() === "" ? suffix : replaced;
 }
-//@ chunk-e6aww6q8.js:3482675-3483665 facade-exports
+//@ chunk-5xgkngpb.js:3574382-3575372 facade-exports
 /**
  * 取各钩子事件用于 matcher 匹配的字段：工具类事件用 tool_name，UserPromptExpansion 用 command_name，SessionStart/ConfigChange/DirectoryAdded 用 source，Setup/PreCompact/PostCompact 用 trigger，模型切换用目标模型，Notification 用 notification_type，SessionEnd 用 reason，Elicitation 用服务器名，FileChanged 用文件 basename 等；无匹配字段的事件返回 undefined。
  */
@@ -5836,12 +5805,12 @@ function hookMatchQuery(hookInput) {
       return;
   }
 }
-//@ chunk-e6aww6q8.js:3483665-3484024 layout
+//@ chunk-5xgkngpb.js:3575372-3575731 layout
 /**
  * 支持 matcher 字段的钩子事件名集合。
  */
 var HOOK_EVENTS_WITH_MATCHER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3483665", () => {
+deferInit("chunk-5xgkngpb.js:3575372", () => {
   HOOK_EVENTS_WITH_MATCHER = new Set([
     "PreToolUse",
     "PostToolUse",
@@ -5866,7 +5835,7 @@ deferInit("chunk-e6aww6q8.js:3483665", () => {
     "DirectoryAdded",
   ]);
 });
-//@ chunk-e6aww6q8.js:3484024-3484186 layout (2.1.88 match: getMcpPrefix, 1)
+//@ chunk-5xgkngpb.js:3575731-3575893 layout (2.1.88 match: getMcpPrefix, 1)
 function isBareMcpServerMatcher(serverName) {
   if (!/^[a-zA-Z0-9_|, -]+$/.test(serverName)) return false;
   return serverName
@@ -5874,7 +5843,7 @@ function isBareMcpServerMatcher(serverName) {
     .map((part) => part.trim())
     .some((part) => part.startsWith("mcp__") && !part.slice(5).includes("__"));
 }
-//@ chunk-e6aww6q8.js:3484186-3484558 layout
+//@ chunk-5xgkngpb.js:3575893-3576265 layout
 /**
  * warnBareMcpServerMatcher：hook matcher 写成 mcp__server（只比较完整工具名，永远不匹配）时提示改用 mcp__server__.*（CHANGELOG v2.1.195），每个 matcher 只提示一次。
  */
@@ -5895,17 +5864,17 @@ function warnBareMcpServerMatcher(hookEvent, serverName) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:3484558-3484692 layout
+//@ chunk-5xgkngpb.js:3576265-3576399 layout
 function getFamilyParentToolName(toolName, tools) {
   let tool = tools === undefined ? undefined : findToolByName(tools, toolName);
   if (tool !== undefined) return tool.mcpInfo === undefined ? tool.familyParentToolName : undefined;
   return splitToolParentOf(toolName);
 }
-//@ chunk-e6aww6q8.js:3484692-3484778 layout
+//@ chunk-5xgkngpb.js:3576399-3576485 layout
 function isCliOwnedMcpTool(tool) {
   return tool?.mcpInfo?.cliOwned === true || tool?.mcpInfo?.standsInForBuiltIn === true;
 }
-//@ chunk-e6aww6q8.js:3484778-3485017 layout
+//@ chunk-5xgkngpb.js:3576485-3576724 layout
 /**
  * 计算 hook matcher 匹配用的工具族名（父工具名与 hookMatcherFamilyNames）。
  */
@@ -5923,21 +5892,21 @@ function getHookMatcherFamilyNames(matcher, tools, toolInput) {
   }
   return names;
 }
-//@ chunk-e6aww6q8.js:3485017-3485087 layout
+//@ chunk-5xgkngpb.js:3576724-3576794 layout
 function hookMatchQueries(toolName, hookToolInput) {
   let monitoredQuery = monitorCommandAsBash(toolName, hookToolInput);
   let variants = denyOrAskNamesFor(toolName);
   return monitoredQuery === undefined ? variants : [...variants, monitoredQuery];
 }
-//@ chunk-e6aww6q8.js:3485087-3485222 layout
+//@ chunk-5xgkngpb.js:3576794-3576929 layout
 function getHookToolInput(hookInput) {
   return (hookInput.hook_event_name === "PreToolUse" || hookInput.hook_event_name === "PermissionRequest") &&
     "tool_input" in hookInput
     ? hookInput.tool_input
     : undefined;
 }
-//@ chunk-e6aww6q8.js:3485222-3485384 layout (2.1.88 match: getMcpPrefix, 1)
-function getMcpPrefix(toolName, matcher, hookToolInput) {
+//@ chunk-5xgkngpb.js:3576929-3577091 layout (2.1.88 match: getMcpPrefix, 1)
+function getMcpPrefix_3(toolName, matcher, hookToolInput) {
   let queries = hookMatchQueries(toolName, hookToolInput);
   return matcher === undefined || !/\(\?<?!|\[\^/.test(matcher)
     ? queries
@@ -5945,18 +5914,19 @@ function getMcpPrefix(toolName, matcher, hookToolInput) {
         matcher.includes(query.startsWith("mcp__") ? query.slice(0, query.indexOf("__", 5) + 2) : query),
       );
 }
-//@ chunk-e6aww6q8.js:3485384-3485915 fingerprint (2.1.88 match: matchesPattern, 1)
+//@ chunk-5xgkngpb.js:3577091-3577738 fingerprint (2.1.88 match: matchesPattern, 0.611)
 /**
  * 判断 matcher 是否匹配：空或 * 全匹配；简单名单（A|B）精确匹配名字及别名；否则当正则匹配工具名、旧名和 MCP 名。
  */
-function matchesPattern(toolName, matcher, hasMatcher, allTools, matcher_2, toolInput) {
+function matchesPattern(toolName, matcher, toolFilter, allTools, matcher_2, toolInput) {
   if (!matcher || matcher === "*") return true;
-  let matcherToolNames = parseMatcherToolNames(matcher, hasMatcher, allTools);
+  let matcherToolNames = parseMatcherToolNames(matcher, toolFilter, allTools);
   let hookMatcherFamilyNames = getHookMatcherFamilyNames(toolName, matcher_2, toolInput);
   if (matcherToolNames !== undefined)
     return (
       matcherToolNames.includes(toolName) ||
-      false ||
+      (isLegacyReplToolName(toolName) &&
+        parseMatcherToolNames(matcher, toolFilter, undefined, true)?.includes(toolName) === true) ||
       hookMatcherFamilyNames.some((hookMatcherFamilyName) => matcherToolNames.includes(hookMatcherFamilyName))
     );
   try {
@@ -5975,7 +5945,11 @@ function matchesPattern(toolName, matcher, hasMatcher, allTools, matcher_2, tool
         : hookMatcherFamilyNames.length > 0 && cloudProblem.test(hookMatcherFamilyNames.at(-1) ?? ""))
     )
       return true;
-    for (let legacyName of legacyToolNamesFor(toolName)) if (cloudProblem.test(legacyName)) return true;
+    for (let entry of legacyToolNamesFor(toolName)) {
+      if (isLegacyReplToolName(entry) && !new RegExp(String.raw`(?:\\[bB]|\b)${entry}\b`).test(matcher))
+        continue;
+      if (cloudProblem.test(entry)) return true;
+    }
     for (let legacyName of aliasesFor(toolName, allTools)) if (cloudProblem.test(legacyName)) return true;
     return false;
   } catch (error) {
@@ -5984,25 +5958,30 @@ function matchesPattern(toolName, matcher, hasMatcher, allTools, matcher_2, tool
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:3485915-3485974 layout
+//@ chunk-5xgkngpb.js:3577738-3577870 layout
 function ruleNamesContainTool(names, toolName, toolName_2) {
   if (names.includes(canonicalToolName(toolName_2))) return true;
+  {
+    let parsed = classifyRuleParens(toolName);
+    let bareToolName = parsed.kind === "call" ? parsed.toolName : toolName;
+    return isLegacyReplToolName(bareToolName) && names.includes(bareToolName);
+  }
   return false;
 }
-//@ chunk-e6aww6q8.js:3485974-3486233 layout
+//@ chunk-5xgkngpb.js:3577870-3578129 layout
 async function createIfConditionMatcher(hookInput, tools, hookInput_2 = false) {
   let matcher = await prepareIfConditionMatcher(hookInput, tools, hookInput_2);
   if (matcher === undefined) return;
   let { names, patternMatcher, judgesPatterns } = matcher;
   return (ifCondition, condition) => {
-    let parsed = permissionRuleValueFromString(ifCondition);
+    let parsed = parseRuleString(ifCondition);
     if (!ruleNamesContainTool(names, ifCondition, parsed.toolName)) return false;
     if (!parsed.ruleContent) return true;
     if (condition) return judgesPatterns;
     return patternMatcher !== undefined && patternMatcher(parsed.ruleContent);
   };
 }
-//@ chunk-e6aww6q8.js:3486233-3486825 fingerprint (2.1.88 match: prepareIfConditionMatcher, 0.754)
+//@ chunk-5xgkngpb.js:3578129-3578790 fingerprint (2.1.88 match: prepareIfConditionMatcher, 0.736)
 /**
  * 为 if 条件准备匹配器：只对 PreToolUse/PostToolUse/PostToolUseFailure/PermissionRequest/PermissionDenied 生效，用工具的 preparePermissionMatcher 对输入求值。
  */
@@ -6015,7 +5994,9 @@ async function prepareIfConditionMatcher(hookInput, tools, cwd = false) {
     hookInput.hook_event_name !== "PermissionDenied"
   )
     return;
-  let toolOverride = undefined;
+  let toolOverride = isLegacyReplToolName(hookInput.tool_name)
+    ? tools?.find((tool) => tool.mcpInfo !== undefined && matchesToolName(tool, hookInput.tool_name))
+    : undefined;
   let tool = toolOverride ?? (tools && findToolByName(tools, hookInput.tool_name));
   let toolName = toolOverride ? hookInput.tool_name : canonicalToolName(hookInput.tool_name);
   let input = tool?.inputSchema.safeParse(hookInput.tool_input);
@@ -6034,7 +6015,7 @@ async function prepareIfConditionMatcher(hookInput, tools, cwd = false) {
     judgesPatterns: tool?.preparePermissionMatcher !== undefined,
   };
 }
-//@ chunk-e6aww6q8.js:3486825-3486989 layout
+//@ chunk-5xgkngpb.js:3578790-3578954 layout
 function getRewriterKindForHook(returned, hook) {
   return hook === undefined ||
     isCcsTenant() ||
@@ -6044,7 +6025,7 @@ function getRewriterKindForHook(returned, hook) {
     ? "remote"
     : getHookRewriterKind(returned, hook.registeredInSession === true);
 }
-//@ chunk-e6aww6q8.js:3486989-3487226 layout
+//@ chunk-5xgkngpb.js:3578954-3579191 layout
 function getHookIdentityKey(matchedHook) {
   if (matchedHook.hook.type === "callback" || matchedHook.hook.type === "function") return matchedHook.hook;
   let dedupKey =
@@ -6053,13 +6034,13 @@ function getHookIdentityKey(matchedHook) {
       : getHookDedupPayload(matchedHook.hook);
   return dedupKey === undefined ? undefined : hookDedupKey(matchedHook, dedupKey);
 }
-//@ chunk-e6aww6q8.js:3487226-3487324 layout
+//@ chunk-5xgkngpb.js:3579191-3579289 layout
 function canRunForServedCall(matched) {
   return (
     matched.hook.type !== "callback" && matched.hook.type !== "function" && matched.deviceForwarded !== true
   );
 }
-//@ chunk-e6aww6q8.js:3487324-3487678 layout
+//@ chunk-5xgkngpb.js:3579289-3579643 layout
 function holdModelHookForServedCall(hook, hookEvent) {
   logForDebugging(`Hooks: ${hook.type} hook not run for a call served to a cloud session (${hookEvent})`);
   logServedHookHeld(hookEvent, hook.type, "model_hook");
@@ -6078,7 +6059,7 @@ function holdModelHookForServedCall(hook, hookEvent) {
         heldForServedCall: true,
       };
 }
-//@ chunk-e6aww6q8.js:3487678-3487892 layout
+//@ chunk-5xgkngpb.js:3579643-3579857 layout
 function logServedHookHeld(hook, type, type_2, command, reason) {
   logEvent("tengu_remote_tool_serve_hook_held", {
     event: fromEnum(hook),
@@ -6093,7 +6074,7 @@ function logServedHookHeld(hook, type, type_2, command, reason) {
     outcome: fromEnum(hook === "PreToolUse" ? "ask" : "skipped"),
   });
 }
-//@ chunk-e6aww6q8.js:3487892-3488998 layout
+//@ chunk-5xgkngpb.js:3579857-3580965 layout
 /**
  * 为云端服务调用（served call）准备钩子运行环境：可达根目录、自有设置来源、env、home、spawnCwd、shellPrefix、MCP 服务器配置查询。
  */
@@ -6162,7 +6143,7 @@ async function buildServedCallHookEnv(remoteCall, servedHookEnv, boundRequestPro
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3488998-3489165 layout
+//@ chunk-5xgkngpb.js:3580965-3581132 layout
 async function resolveServedSpawnCwd(path, options, hook, servedHookEnv) {
   if (
     !isAbsolute(path) ||
@@ -6172,7 +6153,7 @@ async function resolveServedSpawnCwd(path, options, hook, servedHookEnv) {
   let kind = await statPathKind(path, servedHookEnv, PathSpace.home);
   return kind !== "absent" && kind !== undefined && kind.directory ? path : getFilesystemRoot(hook);
 }
-//@ chunk-e6aww6q8.js:3489165-3489571 facade-exports
+//@ chunk-5xgkngpb.js:3581132-3581538 facade-exports
 /**
  * 找出哪些设置来源文件可被（云端会话）写到，返回不可信来源集合。
  */
@@ -6199,7 +6180,7 @@ async function settingsSourcesInReach(roots, storageV5, distrustedSources = new 
   for (let source of results.flat()) distrustedSources.add(source);
   return new Set(distrustedSources);
 }
-//@ chunk-e6aww6q8.js:3489571-3490043 layout
+//@ chunk-5xgkngpb.js:3581538-3582010 layout
 async function statPathKind(path, storageV5, space) {
   if (isStorageV5Enabled() && storageV5 !== undefined) {
     let stats = await storageV5.hostFiles.stat(
@@ -6226,9 +6207,9 @@ async function statPathKind(path, storageV5, space) {
     (error) => (error.code === "ENOENT" || error.code === "ENOTDIR" ? "absent" : undefined),
   );
 }
-//@ chunk-e6aww6q8.js:3490043-3490053 layout
+//@ chunk-5xgkngpb.js:3582010-3582020 layout
 var NOT_HELD = {};
-//@ chunk-e6aww6q8.js:3490053-3494919 layout
+//@ chunk-5xgkngpb.js:3582020-3586905 layout
 /**
  * 判断一个钩子在服务调用中能否在本机运行：项目配置的、Windows 未解析的、脚本或程序位于可写范围内的、链接文件等都被扣住（held），返回原因。
  */
@@ -6583,7 +6564,7 @@ async function judgeHookForServedCall(hook, hook_2, servedHookEnv) {
         program: withArgsCommand,
       };
 }
-//@ chunk-e6aww6q8.js:3494919-3495341 layout
+//@ chunk-5xgkngpb.js:3586905-3587327 layout
 function rebasePluginRootForJudge(hook, pluginRoot, projectDir) {
   if (hook.args !== undefined) {
     let rebase = (command) => command.replaceAll("${CLAUDE_PLUGIN_ROOT}", () => pluginRoot);
@@ -6613,7 +6594,7 @@ function rebasePluginRootForJudge(hook, pluginRoot, projectDir) {
     projectDir: pluginRoot,
   };
 }
-//@ chunk-e6aww6q8.js:3495341-3495726 layout
+//@ chunk-5xgkngpb.js:3587327-3587712 layout
 function getHookDedupPayload(hook) {
   switch (hook.type) {
     case "command":
@@ -6628,7 +6609,7 @@ function getHookDedupPayload(hook) {
       return;
   }
 }
-//@ chunk-e6aww6q8.js:3495726-3495891 layout
+//@ chunk-5xgkngpb.js:3587712-3587877 layout
 function isSameHook(hook, hook_2) {
   if (
     hook.type === "callback" ||
@@ -6642,12 +6623,17 @@ function isSameHook(hook, hook_2) {
     ? hookDedupPayload === getHookDedupPayload(hook_2)
     : isDeepStrictEqual(hook, hook_2);
 }
-//@ chunk-e6aww6q8.js:3495891-3496298 layout
+//@ chunk-5xgkngpb.js:3587877-3588321 layout
 function isPersonalRestrictedHook(hookEvent, hookEvent_2) {
   let { hook } = hookEvent;
   if (
     !isPersonalConfigRestricted() ||
-    (hook.type !== "command" && hook.type !== "http" && hook.type !== "mcp_tool" && hook.type !== "script")
+    (hook.type !== "command" &&
+      hook.type !== "http" &&
+      hook.type !== "mcp_tool" &&
+      hook.type !== "prompt" &&
+      hook.type !== "agent" &&
+      hook.type !== "script")
   )
     return false;
   if (hookEvent.personal === true) return true;
@@ -6660,33 +6646,33 @@ function isPersonalRestrictedHook(hookEvent, hookEvent_2) {
     hook.hooks.some((hook) => getHookDedupPayload(hook) === hookDedupPayload),
   );
 }
-//@ chunk-e6aww6q8.js:3496298-3496734 layout
-function restrictPersonalHookAnswer(hookInput, hookInput_2) {
+//@ chunk-5xgkngpb.js:3588321-3588757 layout
+function restrictPersonalHookAnswer(hookInput, rawOutput) {
   if (isSyncHookJSONOutput_2(hookInput)) return hookInput;
-  let { answer, report } = parseHookJsonOutput(hookInput, hookInput_2.hook_event_name, {
+  let { answer, report } = parseHookJsonOutput(hookInput, rawOutput.hook_event_name, {
     personal: true,
-    ...("tool_name" in hookInput_2 && {
-      toolName: hookInput_2.tool_name,
+    ...("tool_name" in rawOutput && {
+      toolName: rawOutput.tool_name,
     }),
-    ...("tool_input" in hookInput_2 && {
-      toolInput: jsonParse(jsonStringify(hookInput_2.tool_input)),
+    ...("tool_input" in rawOutput && {
+      toolInput: jsonParse(jsonStringify(rawOutput.tool_input)),
     }),
-    ...("tool_response" in hookInput_2 &&
-      hookInput_2.tool_response !== undefined && {
-        toolResponse: jsonParse(jsonStringify(hookInput_2.tool_response)),
+    ...("tool_response" in rawOutput &&
+      rawOutput.tool_response !== undefined && {
+        toolResponse: jsonParse(jsonStringify(rawOutput.tool_response)),
       }),
   });
   if (report.dropped.length > 0)
     logForDebugging(
-      `${hookInput_2.hook_event_name} hook from your own files: ignored ${report.dropped.join(", ")} (CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG)`,
+      `${rawOutput.hook_event_name} hook from your own files: ignored ${report.dropped.join(", ")} (CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG)`,
     );
   return answer;
 }
-//@ chunk-e6aww6q8.js:3496734-3496810 layout
+//@ chunk-5xgkngpb.js:3588757-3588833 layout
 function isSyncHookConfig(hook) {
   return hook.type !== "command" || (hook.async !== true && hook.asyncRewake !== true);
 }
-//@ chunk-e6aww6q8.js:3496810-3497556 layout
+//@ chunk-5xgkngpb.js:3588833-3589584 layout
 function dedupeHooksPreferSettings(pairs, hookEvent, settingsHookSets) {
   let byKey = new Map(pairs);
   if (!isPersonalConfigRestricted()) return markContestedContinue(pairs, Array.from(byKey.values()));
@@ -6725,11 +6711,11 @@ function dedupeHooksPreferSettings(pairs, hookEvent, settingsHookSets) {
   });
   return markContestedContinue(pairs, list);
 }
-//@ chunk-e6aww6q8.js:3497556-3497620 layout
+//@ chunk-5xgkngpb.js:3589584-3589648 layout
 function isOnFailureContinue(hook) {
   return "onFailure" in hook && hook.onFailure === "continue";
 }
-//@ chunk-e6aww6q8.js:3497620-3497874 layout
+//@ chunk-5xgkngpb.js:3589648-3589902 layout
 function markContestedContinue(pairs, policyHooks) {
   if (!policyHooks.some((hook) => isOnFailureContinue(hook.hook))) return policyHooks;
   let byKey = new Map(pairs.map(([key, hook]) => [hook, key]));
@@ -6744,7 +6730,7 @@ function markContestedContinue(pairs, policyHooks) {
       : hook;
   });
 }
-//@ chunk-e6aww6q8.js:3497874-3498149 layout
+//@ chunk-5xgkngpb.js:3589902-3590177 layout
 function findSettingsHookDefinition(hook, hookEvent, hookEvent_2, sources) {
   if (hook.type === "callback" || hook.type === "function") return;
   let hookDedupPayload = getHookDedupPayload(hook);
@@ -6757,7 +6743,7 @@ function findSettingsHookDefinition(hook, hookEvent, hookEvent_2, sources) {
     }
   return;
 }
-//@ chunk-e6aww6q8.js:3498149-3498307 layout
+//@ chunk-5xgkngpb.js:3590177-3590335 layout
 function isNotFromOwnSettings(hook, hook_2, globalHooks, ownSources) {
   let matchesAnyWhere = (sources, matcherText) =>
     sources.some((source) =>
@@ -6769,7 +6755,7 @@ function isNotFromOwnSettings(hook, hook_2, globalHooks, ownSources) {
     );
   return !globalHooks.some((source) => matchesAnyWhere(ownSources, source));
 }
-//@ chunk-e6aww6q8.js:3498307-3498478 layout
+//@ chunk-5xgkngpb.js:3590335-3590506 layout
 function isManagedSnapshotHook(hook, hookEvent) {
   try {
     let policyHooksFromSnapshot = getPolicyHooksFromSnapshot();
@@ -6787,7 +6773,7 @@ function isManagedSnapshotHook(hook, hookEvent) {
     return true;
   }
 }
-//@ chunk-e6aww6q8.js:3498478-3498658 layout
+//@ chunk-5xgkngpb.js:3590506-3590686 layout
 function markHookOwnership(finalHooks, hook, finalHooks_2) {
   for (let { hook: hook_2, pluginRoot, pluginId, skillRoot } of finalHooks) {
     if (skillRoot !== undefined || hook_2.type === "function") continue;
@@ -6797,7 +6783,7 @@ function markHookOwnership(finalHooks, hook, finalHooks_2) {
     else unmarkRewrittenInput(hook_2);
   }
 }
-//@ chunk-e6aww6q8.js:3498658-3498853 layout
+//@ chunk-5xgkngpb.js:3590686-3590881 layout
 function isOrganizationHook(hook, hook_2, hookEvent, managedState) {
   try {
     return hookEvent
@@ -6813,7 +6799,7 @@ function isOrganizationHook(hook, hook_2, hookEvent, managedState) {
     return true;
   }
 }
-//@ chunk-e6aww6q8.js:3498853-3498991 layout
+//@ chunk-5xgkngpb.js:3590881-3591019 layout
 function httpHookHeadersEqual(hook, hook_2) {
   return (
     hook.type !== "http" ||
@@ -6822,7 +6808,7 @@ function httpHookHeadersEqual(hook, hook_2) {
       isDeepStrictEqual(hook.allowedEnvVars ?? [], hook_2.allowedEnvVars ?? []))
   );
 }
-//@ chunk-e6aww6q8.js:3498991-3499273 layout
+//@ chunk-5xgkngpb.js:3591019-3591302 layout
 function getManagedHttpHookEnv(hook) {
   if (!isRewrittenInput(hook)) return;
   try {
@@ -6843,14 +6829,14 @@ function getManagedHttpHookEnv(hook) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:3499273-3499361 layout
+//@ chunk-5xgkngpb.js:3591302-3591391 layout
 function resolveScriptHook(hook, options) {
   if (!isRewrittenInput(hook)) return runScriptHookUnsupported(hook, options);
   let withEnv = withHostEnvRestored(() => runScriptHookUnsupported(hook, options));
   markRewrittenInput(withEnv.hook);
   return withEnv;
 }
-//@ chunk-e6aww6q8.js:3499361-3499641 layout
+//@ chunk-5xgkngpb.js:3591391-3591671 layout
 async function getServedSessionOwnSources(storageV5) {
   if (isDiskless()) return POLICY_ONLY_SOURCES;
   try {
@@ -6867,12 +6853,12 @@ async function getServedSessionOwnSources(storageV5) {
     return POLICY_ONLY_SOURCES;
   }
 }
-//@ chunk-e6aww6q8.js:3499641-3499692 layout
+//@ chunk-5xgkngpb.js:3591671-3591722 layout
 var POLICY_ONLY_SOURCES = {
   roots: [POSIX_SEP_2],
   ownSources: ["policySettings"],
 };
-//@ chunk-e6aww6q8.js:3499692-3500305 layout
+//@ chunk-5xgkngpb.js:3591722-3592335 layout
 async function getUntrustedFolderSources(servedHookEnv) {
   let base = {
     roots: [POSIX_SEP_2],
@@ -6915,7 +6901,7 @@ async function getUntrustedFolderSources(servedHookEnv) {
     untrustedStart: await resolveServedSpawnCwd(options, roots, originalCwdOrNull ?? getCwd(), servedHookEnv),
   };
 }
-//@ chunk-e6aww6q8.js:3500305-3500991 layout
+//@ chunk-5xgkngpb.js:3592335-3593021 layout
 async function isWithheldFolderHook(hookGroup, toolInput, { roots, ownSources, untrustedFolder }) {
   let { hook } = hookGroup;
   if (hook.type !== "command" && hook.type !== "http" && hook.type !== "mcp_tool" && hook.type !== "script")
@@ -6942,25 +6928,25 @@ async function isWithheldFolderHook(hookGroup, toolInput, { roots, ownSources, u
   }
   return withheld;
 }
-//@ chunk-e6aww6q8.js:3500991-3501095 layout
+//@ chunk-5xgkngpb.js:3593021-3593125 layout
 async function filterWithheldFolderHooks(hooks, toolInput, hookEvent) {
   let results = await Promise.all(hooks.map((hook) => isWithheldFolderHook(hook, toolInput, hookEvent)));
   return hooks.filter((hook, index) => !results[index]);
 }
-//@ chunk-e6aww6q8.js:3501095-3501152 layout
+//@ chunk-5xgkngpb.js:3593125-3593182 layout
 function isAnchoredCommandPath(rawPath) {
   return /^(?:\/|~|\$\{?[A-Za-z_])/.test(rawPath);
 }
-//@ chunk-e6aww6q8.js:3501152-3501213 layout
+//@ chunk-5xgkngpb.js:3593182-3593243 layout
 function getFilesystemRoot(path) {
   return getPlatform() === "windows" ? win32.parse(path).root : "/";
 }
-//@ chunk-e6aww6q8.js:3501213-3501296 layout
+//@ chunk-5xgkngpb.js:3593243-3593326 layout
 async function realpathOrSelf_2(path) {
   let real = await realpathAllowMissing(path);
   return real === "absent" || real === "unreadable" ? path : real;
 }
-//@ chunk-e6aww6q8.js:3501296-3501667 layout
+//@ chunk-5xgkngpb.js:3593326-3593697 layout
 function holdHookForServedCall(hook, hookEvent, held, command, hook_2) {
   logForDebugging(
     `Hooks: ${hook.type} hook not run for a call served to a cloud session (${hookEvent}, ${command ?? held})`,
@@ -6982,10 +6968,9 @@ function holdHookForServedCall(hook, hookEvent, held, command, hook_2) {
         heldForServedCall: true,
       };
 }
-//@ chunk-e6aww6q8.js:3501667-3502078 layout
-function redactServedBlockingError(hook) {
+//@ chunk-5xgkngpb.js:3593697-3594189 layout
+function redactServedBlockingError(hook, label = hookTypeLabel(hook.hook)) {
   if (hook.blockingError === undefined) return hook;
-  let label = `${hook.hook.type} hook`;
   let prefix = `[${hook.blockingError.command}]:`;
   let blockingError = hook.blockingError.blockingError;
   let permissionRequestResult = hook.permissionRequestResult;
@@ -6996,6 +6981,8 @@ function redactServedBlockingError(hook) {
         ? `[${label}]:${blockingError.slice(prefix.length)}`
         : blockingError,
       command: label,
+      promptEnding: hook.blockingError.promptEnding,
+      hookDidNotFinish: hook.blockingError.hookDidNotFinish,
     },
     ...(permissionRequestResult?.behavior === "deny" &&
       permissionRequestResult.message?.startsWith(prefix) === true && {
@@ -7006,7 +6993,7 @@ function redactServedBlockingError(hook) {
       }),
   };
 }
-//@ chunk-e6aww6q8.js:3502078-3503312 layout
+//@ chunk-5xgkngpb.js:3594189-3595423 layout
 /**
  * PreToolUse 钩子超时或失败（未给结论）时改为阻断：onFailure:continue 且未被争议时放行；否则生成「the hook did not finish/failed, so this call was not run」。
  */
@@ -7073,14 +7060,14 @@ ${signal_2.advice}`,
     outcome: "blocking",
   };
 }
-//@ chunk-e6aww6q8.js:3503312-3503396 fingerprint (2.1.88 match: hookDedupKey, 0.791)
+//@ chunk-5xgkngpb.js:3595423-3595507 fingerprint (2.1.88 match: hookDedupKey, 0.793)
 /**
  * 钩子去重键：来源根（pluginRoot/skillRoot/settingsSource）+ 负载。
  */
 function hookDedupKey(m, payload) {
   return `${m.pluginRoot ?? m.skillRoot ?? m.settingsSource ?? ""}\x00${payload}`;
 }
-//@ chunk-e6aww6q8.js:3503396-3503531 layout
+//@ chunk-5xgkngpb.js:3595507-3595642 layout
 function isOfficialPluginId(rowId) {
   let index = rowId.lastIndexOf("@");
   if (index <= 0) return false;
@@ -7090,7 +7077,7 @@ function isOfficialPluginId(rowId) {
     return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:3503531-3503704 layout
+//@ chunk-5xgkngpb.js:3595642-3595815 layout
 function countHooksByPlugin(userHooks) {
   let filtered = userHooks.filter((hook) => hook.pluginId);
   if (filtered.length === 0) return;
@@ -7101,14 +7088,14 @@ function countHooksByPlugin(userHooks) {
   }
   return gatesByPlugin;
 }
-//@ chunk-e6aww6q8.js:3503704-3503840 layout
+//@ chunk-5xgkngpb.js:3595815-3595951 layout
 function shouldPassCredentialsToPluginHook(hook) {
   if (!isOfficialPluginId(hook)) return false;
   let index = hook.lastIndexOf("@");
   let sliced = hook.slice(0, index);
   return (getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_lattice", {}).plugins ?? []).includes(sliced);
 }
-//@ chunk-e6aww6q8.js:3503840-3504133 layout
+//@ chunk-5xgkngpb.js:3595951-3596244 layout
 /**
  * 为白名单中的官方插件钩子提供凭据环境变量（订阅用户给 OAuth 访问令牌，否则给 API key）；serve、会话令牌、非第一方、仅必要流量或 HIPAA 等情况下不给。
  */
@@ -7138,7 +7125,7 @@ function getPluginHookCredentialEnv(hook) {
     return {};
   }
 }
-//@ chunk-e6aww6q8.js:3504133-3504464 facade-exports
+//@ chunk-5xgkngpb.js:3596244-3596575 facade-exports
 /**
  * 上报插件钩子自报的指标：取输出对象前若干个布尔/数字字段，记 `tengu_hook_plugin_metrics` 并写 OTel 事件 hook_plugin_metrics。
  */
@@ -7164,7 +7151,7 @@ function emitHookMetrics(metrics, pluginId, hookEvent, metrics_2) {
     metrics_2,
   );
 }
-//@ chunk-e6aww6q8.js:3504464-3504565 layout
+//@ chunk-5xgkngpb.js:3596575-3596676 layout
 function countHooksByType(userHooks) {
   let countsByType = new Map();
   for (let hook of userHooks) {
@@ -7173,11 +7160,14 @@ function countHooksByType(userHooks) {
   }
   return countsByType;
 }
-//@ chunk-e6aww6q8.js:3504565-3504595 facade-exports
+//@ chunk-5xgkngpb.js:3596676-3596728 facade-exports
 var MANAGED_HOOKS_TIER = {
   managedHooksOnly: true,
 };
-//@ chunk-e6aww6q8.js:3504595-3504780 facade-exports
+var MANAGED_HOOKS_INCLUDED = {
+  held: "included",
+};
+//@ chunk-5xgkngpb.js:3596728-3596913 facade-exports
 /**
  * 判断托管层（managed）钩子情况：有托管钩子返回 some；确认没有托管钩子且策略已读好返回 none；无法确定返回 unknown。
  */
@@ -7194,7 +7184,7 @@ function managedTierHooks(hookEvent) {
     return "unknown";
   }
 }
-//@ chunk-e6aww6q8.js:3504780-3504902 sole-consumer
+//@ chunk-5xgkngpb.js:3596913-3597035 sole-consumer
 function excludeManagedHooks(settingsHooks, hookEvent) {
   let keyOf = (hook) =>
     stableStringifySafe({
@@ -7204,19 +7194,19 @@ function excludeManagedHooks(settingsHooks, hookEvent) {
   let managedKeys = new Set(getManagedHooksForEvent(hookEvent).map(keyOf));
   return settingsHooks.filter((hook) => !managedKeys.has(keyOf(hook)));
 }
-//@ chunk-e6aww6q8.js:3504902-3505019 sole-consumer
+//@ chunk-5xgkngpb.js:3597035-3597152 sole-consumer
 function getManagedHooksForEvent(hookEvent) {
   return filterHooksForCloudSession([
     ...(getSettingsForSource("policySettings")?.hooks?.[hookEvent] ?? []),
     ...(getPluginHookRunner()?.settingsHooks("policySettings", hookEvent) ?? []),
   ]);
 }
-//@ chunk-e6aww6q8.js:3505019-3505039 sole-consumer
-var weakSet_6; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3505019", () => {
-  weakSet_6 = new WeakSet();
+//@ chunk-5xgkngpb.js:3597152-3597172 sole-consumer
+var weakSet_7; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xgkngpb.js:3597152", () => {
+  weakSet_7 = new WeakSet();
 });
-//@ chunk-e6aww6q8.js:3505039-3505549 sole-consumer
+//@ chunk-5xgkngpb.js:3597172-3597685 sole-consumer
 /**
  * 收集某事件的钩子：仅托管时只取策略钩子；否则取设置钩子（可排除托管），加上会话钩子与函数钩子，最后按暂扣状态过滤。
  */
@@ -7238,7 +7228,7 @@ function collectEventHooks(context, hookEvent, sessionIds, skipSessionHooks) {
     let groups = context.get(sessionId, sessionIds).get(sessionIds);
     if (groups) {
       let kept = filterSessionHookMatchers(groups, skipSessionHooks_2);
-      for (let group of kept) for (let hook of group.hooks) weakSet_6.add(hook);
+      for (let group of kept) for (let hook of group.hooks) weakSet_7.add(hook);
       hooks.push(...kept);
     }
   }
@@ -7249,7 +7239,7 @@ function collectEventHooks(context, hookEvent, sessionIds, skipSessionHooks) {
   }
   return filterHooksByManagedHold(hooks, sessionIds, skipSessionHooks?.held);
 }
-//@ chunk-e6aww6q8.js:3505608-3506011 facade-exports
+//@ chunk-5xgkngpb.js:3597744-3598147 facade-exports
 /**
  * 计算 UserPromptSubmit 钩子集合的指纹键（托管层与全部钩子序列化，函数按宿主分配稳定编号）；没有钩子返回空串。用于判断钩子是否变化。
  */
@@ -7278,7 +7268,7 @@ function userPromptSubmitHooksKey(context) {
         typeof key === "function" ? `function#${grouped.host}:${tokenOf(key)}` : key,
       );
 }
-//@ chunk-e6aww6q8.js:3506011-3506082 facade-exports
+//@ chunk-5xgkngpb.js:3598147-3598219 facade-exports
 /**
  * 判断某事件是否有钩子：设置中有、存在函数钩子、或有待补跑（owed）的钩子。
  */
@@ -7289,7 +7279,7 @@ function hasHookForEvent(sessionHooksRegistry, hookEvent, sessionIds) {
     getPluginHookRunner()?.owedList(sessionHooksRegistry) !== undefined
   );
 }
-//@ chunk-e6aww6q8.js:3506082-3506132 facade-exports
+//@ chunk-5xgkngpb.js:3598219-3598270 facade-exports
 /**
  * 判断某事件是否有需要实际运行的钩子（有钩子且不全被跳过）。
  */
@@ -7299,13 +7289,13 @@ function hasHookToRun(hookEvent, sessionHooksRegistry, sessionIds) {
     !skipsEmptyDispatch(hookEvent, sessionHooksRegistry, sessionIds)
   );
 }
-//@ chunk-e6aww6q8.js:3506132-3506178 layout
+//@ chunk-5xgkngpb.js:3598270-3598316 layout
 function skipsEmptyDispatch(sessionHooks, sessionHooks_2, sessionIds) {
   return (
     canSkipEmptyDispatch(sessionHooks) && !hasSettingsHookForEvent(sessionHooks, sessionHooks_2, sessionIds)
   );
 }
-//@ chunk-e6aww6q8.js:3506178-3506301 layout
+//@ chunk-5xgkngpb.js:3598316-3598439 layout
 function canSkipEmptyDispatch(hookEvent, mark = false) {
   return (
     !isTerminalShutdown() &&
@@ -7314,7 +7304,7 @@ function canSkipEmptyDispatch(hookEvent, mark = false) {
     managedTierHooks(hookEvent) === "none"
   );
 }
-//@ chunk-e6aww6q8.js:3506301-3506760 facade-exports
+//@ chunk-5xgkngpb.js:3598439-3598899 facade-exports
 /**
  * 判断某事件是否只有调用方自己的回调钩子要运行（无远程调用、无 owed 钩子、无项目设置钩子，且全部钩子都是本进程回调或来自 flag 设置）；判断出错时记错误并返回 false。用于走快速路径。
  */
@@ -7361,7 +7351,7 @@ function hasOnlyOwnCallbacksToRun(
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:3506760-3507106 facade-exports
+//@ chunk-5xgkngpb.js:3598899-3599245 facade-exports
 /**
  * 判断一次工具调用对某事件是否没有任何要跑的钩子（只有自身回调且没有匹配该工具的钩子）；出错返回 false。
  */
@@ -7388,7 +7378,7 @@ function hasNoHookForToolCall(hookEvent, toolName, toolInput, sessionIds) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:3507106-3507244 layout
+//@ chunk-5xgkngpb.js:3599245-3599383 layout
 function matcherMatchesInput(suffix, toolName, toolInput, hookInput, toolAliases) {
   let hookEventName = hookInput.hook_event_name;
   return (
@@ -7404,7 +7394,7 @@ function matcherMatchesInput(suffix, toolName, toolInput, hookInput, toolAliases
     )
   );
 }
-//@ chunk-e6aww6q8.js:3507244-3507522 layout
+//@ chunk-5xgkngpb.js:3599383-3599661 layout
 function markOwnToolHooks(entries) {
   let keyOf = (entry) => hookDedupKey(entry, getHookDedupPayload(entry.hook) ?? "");
   let byKey = Map.groupBy(
@@ -7422,7 +7412,7 @@ function markOwnToolHooks(entries) {
       : entry;
   });
 }
-//@ chunk-e6aww6q8.js:3507522-3507892 layout
+//@ chunk-5xgkngpb.js:3599661-3600031 layout
 /**
  * 插件自有工具调用时，把钩子输入中的工具名换成插件看到的名字（PostToolBatch 逐个替换），返回新输入与工具。
  */
@@ -7452,7 +7442,7 @@ function resolveOwnToolHookInput(hookInput) {
         tools: [tool],
       };
 }
-//@ chunk-e6aww6q8.js:3507892-3507973 facade-exports
+//@ chunk-5xgkngpb.js:3600031-3600112 facade-exports
 /**
  * 判断是否有匹配该工具调用的钩子；判定中遇到无法确定的特定错误时保守返回 true。
  */
@@ -7464,7 +7454,7 @@ function hasToolHookMatching(toolName) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:3507973-3508547 layout
+//@ chunk-5xgkngpb.js:3600112-3600691 layout
 /**
  * 判断是否有钩子匹配该工具调用：有经典调度或欠运行钩子时直接为真；否则按 matcher 匹配工具名、MCP 前缀变体或插件自有工具名，可排除仅内部回调的钩子。
  */
@@ -7496,7 +7486,7 @@ function hasMatchingToolHooks({
     let matcher = stripModelContextSuffix(hookEvent, entry.matcher);
     return (
       matchesPattern(toolName, matcher, hasMatcher, toolAliases, tools, toolInput) ||
-      getMcpPrefix(
+      getMcpPrefix_3(
         toolName,
         matcher,
         hookEvent === "PreToolUse" || hookEvent === "PermissionRequest" ? toolInput : undefined,
@@ -7507,7 +7497,7 @@ function hasMatchingToolHooks({
     );
   });
 }
-//@ chunk-e6aww6q8.js:3508547-3508855 facade-exports
+//@ chunk-5xgkngpb.js:3600691-3600999 facade-exports
 /**
  * 判断设置层面某事件是否配置了钩子：依次看合并后的设置钩子、（非受限时）另一来源钩子、策略钩子、插件/注册钩子、owed 钩子，最后看会话钩子注册表。
  */
@@ -7530,7 +7520,7 @@ function hasSettingsHookForEvent(hookEvent, sessionIds, sessionHooksRegistry, ma
     (group) => sessionIds.has(group, hookEvent),
   );
 }
-//@ chunk-e6aww6q8.js:3508855-3509042 layout
+//@ chunk-5xgkngpb.js:3600999-3601186 layout
 function checkHookIfConditionSafely(condition) {
   try {
     return condition();
@@ -7539,7 +7529,7 @@ function checkHookIfConditionSafely(condition) {
     return `A hook's "if" condition names a file path, which can't be checked because this session has no working directory.`;
   }
 }
-//@ chunk-e6aww6q8.js:3509042-3515613 fingerprint (2.1.88 match: getMatchingHooks, 0.58)
+//@ chunk-5xgkngpb.js:3601186-3608079 fingerprint (2.1.88 match: getMatchingHooks, 0.575)
 /**
  * 取某事件匹配的钩子：汇总快照/插件/会话/SDK 来源的 matcher，按 matcher 匹配 matchQuery（工具名、别名、MCP 名），附加来源信息，按类型去重（同命令只跑一次，settings 优先），再按 if 条件（权限规则语法）过滤；SessionStart/Setup 不支持 http 钩子。
  */
@@ -7594,7 +7584,7 @@ async function getMatchingHooks(sessionHooks, sessionId, hookEvent, hookInput, t
         (eventHook) =>
           isMarked(eventHook) &&
           matchQuery !== undefined &&
-          getMcpPrefix(matchQuery, eventHook.matcher, getHookToolInput(hookInput)).some((eventHook_2) =>
+          getMcpPrefix_3(matchQuery, eventHook.matcher, getHookToolInput(hookInput)).some((eventHook_2) =>
             matcherMatches(eventHook, eventHook_2, undefined),
           ) &&
           !seenEventHooks.has(eventHook) &&
@@ -7613,9 +7603,9 @@ async function getMatchingHooks(sessionHooks, sessionId, hookEvent, hookInput, t
     let seenMatchers_2 = new Set([
       ...seenMatchers,
       ...(familyOnly !== undefined
-        ? filtered.filter((matcher) => {
+        ? filtered.filter((eventHook) => {
             try {
-              return !matcherMatchesInput(matcher.matcher, matchQuery, undefined, hookInput, toolAliases);
+              return !matcherMatchesInput(eventHook.matcher, matchQuery, undefined, hookInput, toolAliases);
             } catch (error) {
               if (!(error instanceof MatcherUnsupportableError)) throw error;
               return true;
@@ -7623,7 +7613,19 @@ async function getMatchingHooks(sessionHooks, sessionId, hookEvent, hookInput, t
           })
         : []),
     ]);
-    let seenHooks = new Set((getMainThreadAgentHooks()?.[hookEvent] ?? []).flatMap((group) => group.hooks));
+    let hooks = eventHooks.flatMap((eventHook) => eventHook.hooks);
+    let registeredTiers =
+      hooks.some(hasRunnableHookType) && options?.recordTypeNames?.()
+        ? hookLabelsByType(
+            hooks,
+            [MANAGED_HOOKS_TIER, MANAGED_HOOKS_INCLUDED].flatMap((matcher) =>
+              collectEventHooks(sessionHooks, sessionId, hookEvent, matcher).flatMap((group) => group.hooks),
+            ),
+          )
+        : undefined;
+    let mainThreadHooks = new Set(
+      (getMainThreadAgentHooks()?.[hookEvent] ?? []).flatMap((group) => group.hooks),
+    );
     let matchedHooks = filtered.flatMap((matcher) => {
       let pluginRoot = "pluginRoot" in matcher ? matcher.pluginRoot : undefined;
       let pluginId = "pluginId" in matcher ? matcher.pluginId : undefined;
@@ -7666,7 +7668,7 @@ async function getMatchingHooks(sessionHooks, sessionId, hookEvent, hookInput, t
           projectRoot,
         }),
         hookSource,
-        ...((weakSet_6.has(hook) || seenHooks.has(hook)) && {
+        ...((weakSet_7.has(hook) || mainThreadHooks.has(hook)) && {
           registeredInSession: true,
         }),
         matcherIsMatchAll,
@@ -7684,6 +7686,9 @@ async function getMatchingHooks(sessionHooks, sessionId, hookEvent, hookInput, t
         }),
         ...(personal && {
           personal,
+        }),
+        ...(registeredTiers?.has(hook) && {
+          typeName: registeredTiers.get(hook),
         }),
         ...(seenEventHooks.has(matcher) && {
           asOwnTool: true,
@@ -7818,7 +7823,7 @@ async function getMatchingHooks(sessionHooks, sessionId, hookEvent, hookInput, t
     let recordMatcher = (entry) => {
       if (options?.recordMatchers !== true) return entry;
       try {
-        let matcherTexts = uniq(
+        let matcherTexts = normalizeCaseForComparison_2(
           orderedHooks
             .filter(
               (orderedHook) =>
@@ -7890,7 +7895,13 @@ async function getMatchingHooks(sessionHooks, sessionId, hookEvent, hookInput, t
         );
         return [];
       }
-      let hasOrigin = dedupedHook.hook.type === "command" && getHookOriginLabel(dedupedHook) !== undefined;
+      let hasOrigin =
+        (dedupedHook.hook.type === "command" ||
+          dedupedHook.hook.type === "http" ||
+          dedupedHook.hook.type === "prompt" ||
+          dedupedHook.hook.type === "agent" ||
+          dedupedHook.hook.type === "mcp_tool") &&
+        getHookOriginLabel(dedupedHook) !== undefined;
       if (dedupedHook.asOwnTool && dedupeKey_2?.(ifCondition, true)) return [dedupedHook];
       let testResult = checkHookIfConditionSafely(
         () => (!dedupedHook.asOwnTool || dedupedHook.asStandIn === true) && ifMatcher(ifCondition, hasOrigin),
@@ -7909,7 +7920,7 @@ async function getMatchingHooks(sessionHooks, sessionId, hookEvent, hookInput, t
               asOwnTool: false,
             }
           : dedupedHook;
-        let toolName = permissionRuleValueFromString(ifCondition).toolName;
+        let toolName = parseRuleString(ifCondition).toolName;
         if (
           dedupedHook.matcherMetThroughOtherName === true &&
           toolName === matchQuery &&
@@ -7952,14 +7963,14 @@ async function getMatchingHooks(sessionHooks, sessionId, hookEvent, hookInput, t
         ? flattened.filter((hook) => {
             if (hook.hook.type === "http") {
               logForDebugging(
-                `Skipping HTTP hook ${hook.hook.url} \u2014 HTTP hooks are not supported for ${hookEvent}`,
+                `Skipping HTTP hook ${hook.typeName === undefined ? `${hook.hook.url} ` : ""}\u2014 HTTP hooks are not supported for ${hookEvent}`,
               );
               return false;
             }
             return true;
           })
         : flattened;
-    let internalCount = count(finalHooks, isInternalHook);
+    let internalCount = countWhere(finalHooks, isInternalHook);
     logForDebugging(
       `Matched ${finalHooks.length - internalCount} unique hooks for query "${matchQuery ?? "no match query"}" (${orderedHooks.length - internalCount} before deduplication)`,
       {
@@ -7977,35 +7988,35 @@ async function getMatchingHooks(sessionHooks, sessionId, hookEvent, hookInput, t
     return [];
   }
 }
-//@ chunk-e6aww6q8.js:3515613-3515668 facade-exports (2.1.88 match: getTeammateIdleHookMessage, 0.511)
+//@ chunk-5xgkngpb.js:3608079-3608134 facade-exports (2.1.88 match: getTeammateIdleHookMessage, 0.509)
 /**
  * 生成 Stop 钩子阻断后发给模型的反馈消息。旧版名 getTeammateIdleHookMessage 与本函数对调了。
  */
 function getStopHookMessage(blockingError) {
   return hookFeedbackText("Stop", scrubHookOutputTags(blockingError.blockingError));
 }
-//@ chunk-e6aww6q8.js:3515668-3515731 facade-exports
+//@ chunk-5xgkngpb.js:3608134-3608197 facade-exports
 /**
  * 生成 TeammateIdle 钩子阻断后发给队友的反馈消息。旧版名 getStopHookMessage 与本函数对调了。
  */
 function getTeammateIdleHookMessage(blockingError) {
   return hookFeedbackText("TeammateIdle", scrubHookOutputTags(blockingError.blockingError));
 }
-//@ chunk-e6aww6q8.js:3515731-3515793 facade-exports (2.1.88 match: getTaskCreatedHookMessage, 0.47)
+//@ chunk-5xgkngpb.js:3608197-3608259 facade-exports (2.1.88 match: getTaskCreatedHookMessage, 0.469)
 /**
  * 生成 TaskCreated 钩子阻断消息。
  */
 function getTaskCreatedHookMessage(blockingError) {
   return hookFeedbackText("TaskCreated", scrubHookOutputTags(blockingError.blockingError));
 }
-//@ chunk-e6aww6q8.js:3515793-3515857 facade-exports (2.1.88 match: getTaskCompletedHookMessage, 0.477)
+//@ chunk-5xgkngpb.js:3608259-3608323 facade-exports (2.1.88 match: getTaskCompletedHookMessage, 0.476)
 /**
  * 生成 TaskCompleted 钩子阻断消息。
  */
 function getTaskCompletedHookMessage(blockingError) {
   return hookFeedbackText("TaskCompleted", scrubHookOutputTags(blockingError.blockingError));
 }
-//@ chunk-e6aww6q8.js:3515857-3516023 facade-exports
+//@ chunk-5xgkngpb.js:3608323-3608489 facade-exports
 /**
  * 把阻断错误包装为 hook_non_blocking_error 附件消息（exit 2）。
  */
@@ -8021,7 +8032,7 @@ function getNonBlockableHookErrorMessage(hook, blockingError, hookName = hook) {
     command: blockingError.command,
   });
 }
-//@ chunk-e6aww6q8.js:3516023-3516110 facade-exports (2.1.88 match: getUserPromptSubmitHookBlockingMessage, 1)
+//@ chunk-5xgkngpb.js:3608489-3608576 facade-exports (2.1.88 match: getUserPromptSubmitHookBlockingMessage, 1)
 /**
  * UserPromptSubmit 阻断消息：「UserPromptSubmit operation blocked by hook: …」。
  */
@@ -8029,23 +8040,23 @@ function getUserPromptSubmitHookBlockingMessage(blockingError) {
   return `UserPromptSubmit operation blocked by hook:
 ${blockingError.blockingError}`;
 }
-//@ chunk-e6aww6q8.js:3516110-3516194 sole-consumer
-function firstSpawnFailureSurfaced(hookEvent, displayCommand) {
+//@ chunk-5xgkngpb.js:3608576-3608660 sole-consumer
+function firstSpawnFailureSurfaced(hookEvent, hookKey) {
   let surfacedHookSpawnFailures = getSurfacedHookSpawnFailures();
-  let key = `${hookEvent}:${displayCommand}`;
+  let key = `${hookEvent}:${hookKey}`;
   if (surfacedHookSpawnFailures.has(key)) return false;
   surfacedHookSpawnFailures.add(key);
   return true;
 }
-//@ chunk-e6aww6q8.js:3516194-3516248 sole-consumer
+//@ chunk-5xgkngpb.js:3608660-3608714 sole-consumer
 function hookTelemetryName(hookEvent, matchQuery) {
   return matchQuery
     ? concatSafe(fromEnum(hookEvent), lit_2(":"), shortHash(matchQuery))
     : fromEnum(hookEvent);
 }
-//@ chunk-e6aww6q8.js:3516248-3516372 sole-consumer
+//@ chunk-5xgkngpb.js:3608714-3608838 sole-consumer
 var HOLD_UNTIL_EXIT_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3516248", () => {
+deferInit("chunk-5xgkngpb.js:3608714", () => {
   HOLD_UNTIL_EXIT_EVENTS = new Set([
     "PreToolUse",
     "PermissionRequest",
@@ -8055,7 +8066,7 @@ deferInit("chunk-e6aww6q8.js:3516248", () => {
     "TeammateIdle",
   ]);
 });
-//@ chunk-e6aww6q8.js:3516433-3517403 facade-exports
+//@ chunk-5xgkngpb.js:3608899-3609869 facade-exports
 /**
  * 钩子执行总入口（异步生成器）：先等待被"暂扣"的钩子来源就绪；非 PreToolUse 且可以批处理、且不只是自身回调时走批量路径，否则逐个执行匹配的钩子，逐条 yield 结果。
  */
@@ -8113,7 +8124,7 @@ async function* executeHooks(options) {
   }
   yield* runClassicHooksHoldingExit(options);
 }
-//@ chunk-e6aww6q8.js:3517403-3517915 layout
+//@ chunk-5xgkngpb.js:3609869-3610381 layout
 /**
  * 经插件函数钩子链执行经典钩子：链中每环调用经典钩子执行（输入未变时沿用扩展输入），并对结果去掉受限审批、按观察上下文过滤。
  */
@@ -8145,7 +8156,7 @@ async function* runFunctionHookChain(options, hookInput) {
       stripConfinedHookApproval(event, chainLabel, hookInput, options.toolUseContext),
     );
 }
-//@ chunk-e6aww6q8.js:3517915-3518177 layout
+//@ chunk-5xgkngpb.js:3610381-3610643 layout
 async function* runClassicHooksHoldingExit(input) {
   let holding = () => isTerminalShutdown() && !input.signal?.aborted;
   if (!HOLD_UNTIL_EXIT_EVENTS.has(input.hookInput.hook_event_name)) {
@@ -8165,7 +8176,7 @@ async function* runClassicHooksHoldingExit(input) {
   }
   if (holding()) await heldUntilExit();
 }
-//@ chunk-e6aww6q8.js:3518177-3518386 layout
+//@ chunk-5xgkngpb.js:3610643-3610852 layout
 async function* runClassicHooks(call) {
   let { hookInput, toolUseContext } = call;
   for await (let result of executeHooks_2(call)) {
@@ -8174,7 +8185,7 @@ async function* runClassicHooks(call) {
     yield* keptForObservationContext(call, result);
   }
 }
-//@ chunk-e6aww6q8.js:3518386-3519367 facade-exports
+//@ chunk-5xgkngpb.js:3610852-3611833 facade-exports
 /**
  * 在代理上下文中只保留钩子结果里影响控制流的字段（权限行为、更新输入、阻止继续、改写输出等，PreToolUse 才带 blockingError），其余（如附加上下文）丢弃；非代理上下文原样 yield。
  */
@@ -8228,7 +8239,7 @@ function* keptForObservationContext(call, result) {
   };
   if (Object.keys(layer).length > 0) yield layer;
 }
-//@ chunk-e6aww6q8.js:3519367-3521232 facade-exports
+//@ chunk-5xgkngpb.js:3611833-3613698 facade-exports
 /**
  * 剥掉不允许的钩子批准：受限会话、Projects 会话里的 WebFetch/WebSearch、托管桌面工具、自动模式下的高风险工具、CCR 云端浏览器调用，钩子返回的 allow 一律作废并记日志；PermissionRequest 的 updatedPermissions 会被收紧，并在 Cowork 云会话等场景丢掉 setMode。
  */
@@ -8322,7 +8333,20 @@ function stripConfinedHookApproval(result, permissionRequest, hookInput, toolUse
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:3521232-3557798 fingerprint (2.1.88 match: executeHooks, 0.484)
+//@ chunk-5xgkngpb.js:3613698-3613742 facade-exports
+function hookTextLeavesThisMachine(toolUseContext) {
+  return isRemoteStatusLineInput(toolUseContext?.session ?? getRootSession());
+}
+//@ chunk-5xgkngpb.js:3613742-3613873 layout
+function hookTypeNamesOf(getLeavesMachine, userHooks) {
+  let filtered = userHooks.filter(({ hook }) => hasRunnableHookType(hook));
+  return new Map(
+    filtered.length > 0 && getLeavesMachine()
+      ? filtered.map(({ hook, typeName }) => [hook, typeName ?? hookTypeLabel(hook)])
+      : [],
+  );
+}
+//@ chunk-5xgkngpb.js:3613873-3652496 fingerprint (2.1.88 match: executeHooks, 0.469)
 /**
  * REPL 内钩子执行主体（异步生成器）：信任检查 → getMatchingHooks → 按类型分发（callback/function/prompt/agent/http/mcp_tool/command/script），并行执行（有槽位限制），逐个产出 message、blockingError、permissionBehavior、additionalContexts、updatedInput、updatedToolOutput 等；汇总 deny>defer>ask>allow，记 tengu_run_hook/tengu_repl_hook_finished 与 OTel。
  */
@@ -8362,10 +8386,11 @@ async function* executeHooks_2({
   let sessionHooks_2 = toolUseContext ? toolUseContext.sessionHooksRegistry : sessionHooks;
   let boundRequestPrompt = toolUseContext?.getAppState();
   let isServedCall = toolUseContext?.remoteCall !== undefined;
-  let hooksSessionId = registerAgent(toolUseContext, hookEvent, session.id);
+  let textLeavesMachine = onceExport(() => hookTextLeavesThisMachine(toolUseContext));
+  let sessionId = registerAgent(toolUseContext, hookEvent, session.id);
   let servedHookEnv =
     toolUseContext?.remoteCall !== undefined &&
-    collectEventHooks(sessionHooks_2, hooksSessionId, hookEvent, {
+    collectEventHooks(sessionHooks_2, sessionId, hookEvent, {
       managedHooksOnly,
     }).length > 0
       ? await buildServedCallHookEnv(toolUseContext.remoteCall, toolUseContext.storageV5, boundRequestPrompt)
@@ -8382,7 +8407,7 @@ async function* executeHooks_2({
   try {
     matchedHooksRaw = await getMatchingHooks(
       sessionHooks_2,
-      hooksSessionId,
+      sessionId,
       hookEvent,
       hookInput,
       toolUseContext?.options?.tools,
@@ -8392,6 +8417,7 @@ async function* executeHooks_2({
         getToolAliases: () => boundRequestPrompt?.toolPermissionContext.toolAliases,
         suppressTelemetry: suppressPerInvocationTelemetry,
         recordMatchers: isServedCall || servedOwnSources !== undefined,
+        recordTypeNames: textLeavesMachine,
         ...(servedHookEnv !== undefined && {
           ownSources: servedHookEnv.ownSources,
         }),
@@ -8459,15 +8485,17 @@ async function* executeHooks_2({
   );
   onMatched?.(newOwed, mapped.length);
   if (mapped.length === 0) return;
+  noteHooks(mapped);
   if (signal?.aborted) return;
   let hookNameForTelemetry = hookTelemetryName(hookEvent, matchQuery);
   let userHooks = mapped.filter((hook) => !isInternalHook(hook) || hook.notTested !== undefined);
+  let typeNames = hookTypeNamesOf(textLeavesMachine, userHooks);
   if (userHooks.length > 0) {
     if (!suppressPerInvocationTelemetry) {
       let pluginHookCounts = countHooksByPlugin(userHooks);
       let hookTypeCounts = countByPluginKey(userHooks);
       let byType = countHooksByType(userHooks);
-      let internalCount = count(userHooks, (hook) => hook.matcherIsMatchAll);
+      let internalCount = countWhere(userHooks, (hook) => hook.matcherIsMatchAll);
       logEvent("tengu_run_hook", {
         hookName: hookNameForTelemetry,
         numCommands: userHooks.length,
@@ -8518,7 +8546,7 @@ async function* executeHooks_2({
       if (processed.permissionBehavior === "deny") {
         succeeded++;
         logForDebugging(
-          `Hook ${hookEvent} (${getHookStatusText(hook_2)}) returned permissionDecision: deny${processed.hookPermissionDecisionReason ? ` (reason: ${processed.hookPermissionDecisionReason})` : ""}`,
+          `Hook ${hookEvent} (${hookStatusLabel(hook_2, typeNames.get(hook_2))}) returned permissionDecision: deny${processed.hookPermissionDecisionReason ? ` (reason: ${processed.hookPermissionDecisionReason})` : ""}`,
         );
         yield {
           permissionBehavior: "deny",
@@ -8557,8 +8585,8 @@ async function* executeHooks_2({
           }),
         };
     }
-    let totalDurationMs = Date.now() - batchStartTime;
-    getStatsStore()?.observe("hook_duration_ms", totalDurationMs);
+    let batchDurationMs = Date.now() - batchStartTime;
+    getStatsStore()?.observe("hook_duration_ms", batchDurationMs);
     logEvent("tengu_repl_hook_finished", {
       hookName: hookNameForTelemetry,
       numCommands: mapped.length,
@@ -8566,7 +8594,7 @@ async function* executeHooks_2({
       numBlocking: succeeded,
       numNonBlockingError: 0,
       numCancelled: 0,
-      totalDurationMs,
+      totalDurationMs: batchDurationMs,
     });
     return;
   }
@@ -8611,7 +8639,7 @@ async function* executeHooks_2({
           type: "hook_progress",
           hookEvent,
           hookName: hookDisplayName,
-          command: getHookStatusText(hook),
+          command: hookStatusLabel(hook, typeNames.get(hook)),
           ...(hook.type === "prompt" && {
             promptText: escapeControlCharsForDisplay(hook.prompt),
           }),
@@ -8628,10 +8656,11 @@ async function* executeHooks_2({
     };
   let batchStartTime = Date.now();
   let cacheElsewhere = {};
-  let cacheBase = {};
+  let inputsThere = new Map();
+  let inputByMode = {};
   let inputFailureReason;
   function stringifyHookInputCached(pluginId, asOwnTool = false, stdinWriter, inputOverride) {
-    let cache = stdinWriter === undefined ? cacheElsewhere : cacheBase;
+    let cache = stdinWriter === undefined ? cacheElsewhere : inputByMode;
     let cacheKind = inputOverride !== undefined ? "asBash" : asOwnTool ? "elsewhere" : "base";
     let cached = cache[cacheKind];
     if (cached !== undefined) return cached;
@@ -8674,7 +8703,9 @@ async function* executeHooks_2({
         value: "",
         sent: undefined,
       };
-    let isPromptOrigin = getHookOriginLabel(entry) !== undefined && entry.hook.type === "prompt";
+    let isPromptOrigin =
+      getHookOriginLabel(entry) !== undefined &&
+      (entry.hook.type === "prompt" || entry.hook.type === "agent");
     let input = matchedToolNameInput(entry, hookInput);
     let result = stringifyHookInputCached(
       entry.pluginId,
@@ -8803,6 +8834,7 @@ async function* executeHooks_2({
                   target.cwd,
                   target.signal,
                   randomUUID(),
+                  hookTypeLabel(target.hook),
                   hookIndex_2,
                   undefined,
                   undefined,
@@ -8873,6 +8905,32 @@ async function* executeHooks_2({
           toolUseContext,
         }).finally(cleanup);
       } catch (error) {
+        if (blocksOnFailure(hook) && !isAbortError(error)) {
+          let refusal;
+          if (error instanceof HookCallbackFailedError) refusal = error;
+          else {
+            refusal = new HookCallbackFailedError(hookDisplayName);
+            logForDebugging(`${hookDisplayName} callback answer refused: ${errorMessage(error)}`, {
+              level: "warn",
+            });
+            reportHookCallbackFailure(hookEvent, refusal, hook.onFailure);
+          }
+          yield {
+            message: createAttachmentMessage_2({
+              type: "hook_non_blocking_error",
+              hookName: hookDisplayName,
+              toolUseID,
+              hookEvent,
+              stderr: refusal.message,
+              stdout: "",
+              exitCode: 1,
+              command: getHookDisplayText(hook),
+            }),
+            outcome: "non_blocking_error",
+            hook,
+          };
+          return;
+        }
         if (error instanceof StreamClosedAbortError) {
           controlStreamClosedError = error;
           logForDebugging(
@@ -8972,6 +9030,11 @@ async function* executeHooks_2({
     let pluginHookRunner = getPluginHookRunner();
     let needsReady =
       hook.type === "command" && hookOriginLabel !== undefined && pluginHookRunner !== undefined;
+    let runsElsewhere =
+      (hook.type === "http" || hook.type === "mcp_tool") &&
+      hookOriginLabel !== undefined &&
+      isOwnerRunHook(hookOriginLabel, hook) &&
+      pluginHookRunner !== undefined;
     if (needsReady)
       await pluginHookRunner.ready(
         hookEvent,
@@ -8985,8 +9048,13 @@ async function* executeHooks_2({
         )
       : timeoutMs;
     let asyncPlugins = needsReady && !isAsyncHookJSONOutput(hook);
+    let skipCleanup =
+      isConsultHook(hook) &&
+      hookOriginLabel !== undefined &&
+      pluginHookRunner !== undefined &&
+      isProjectOrDefaultHook(hookOriginLabel, hook);
     let { signal: abortSignal, cleanup } = createCombinedAbortSignal(signal, {
-      timeoutMs: asyncPlugins ? undefined : hookTimeoutMs_2,
+      timeoutMs: asyncPlugins || skipCleanup ? undefined : hookTimeoutMs_2,
     });
     if (abortSignal.aborted && isConsultHook(hook)) {
       yield {
@@ -8997,18 +9065,20 @@ async function* executeHooks_2({
     }
     let hookId = randomUUID();
     let hookStartMs = Date.now();
-    let hookCommand = getHookStatusText(hook);
+    let displayCommand = hookStatusLabel(hook, typeNames.get(hook));
     let pluginBase = pluginRoot ?? skillRoot;
-    let hookDisplayText = getHookDisplayText(hook);
-    let displayCommand =
+    let hookCommand = getHookDisplayText(hook);
+    let localDisplay =
       pluginBase && (hook.type === "command" || (hook.type === "script" && hook.file !== undefined))
-        ? hookDisplayText.replace(
+        ? hookCommand.replace(
             hook.type === "command" && hook.args === undefined
               ? /\$\{CLAUDE_PLUGIN_ROOT\}|\$CLAUDE_PLUGIN_ROOT\b/g
               : /\$\{CLAUDE_PLUGIN_ROOT\}/g,
             () => pluginBase,
           )
-        : hookDisplayText;
+        : hookCommand;
+    let typeName = typeNames.get(hook);
+    let displayCommand_2 = typeName ?? localDisplay;
     let pluginNote =
       pluginId && !isServedCall
         ? `
@@ -9017,10 +9087,10 @@ This hook comes from the ${pluginId} plugin.`
     let ranScript = false;
     let exitedTwo = false;
     try {
-      let hookInputJson = getHookInputJson(mapped[hookIndex], needsReady);
+      let hookInputJson = getHookInputJson(mapped[hookIndex], needsReady || runsElsewhere);
       if (!hookInputJson.ok) {
         cleanup();
-        let command = isServedCall ? `${hook.type} hook` : displayCommand;
+        let command = isServedCall ? hookTypeLabel(hook) : displayCommand_2;
         let guardResult = blockingErrorResult(
           hookEvent,
           command,
@@ -9035,7 +9105,7 @@ This hook comes from the ${pluginId} plugin.`
           : (guardScriptHookBlock(
               hook,
               hookEvent,
-              isServedCall ? "script hook" : displayCommand,
+              isServedCall ? hookTypeLabel(hook) : displayCommand_2,
               isServedCall
                 ? "hook input could not be prepared"
                 : `hook input: ${errorMessage(hookInputJson.error)}`,
@@ -9046,7 +9116,7 @@ This hook comes from the ${pluginId} plugin.`
                 toolUseID,
                 hookEvent,
                 content: `Failed to prepare hook input: ${errorMessage(hookInputJson.error)}`,
-                command: hookCommand,
+                command: displayCommand,
                 durationMs: Date.now() - hookStartMs,
               }),
               outcome: "non_blocking_error",
@@ -9074,25 +9144,59 @@ This hook comes from the ${pluginId} plugin.`
           };
           return;
         }
-        let promptResult = await execPromptHook(
+        let promptResult = await runRewrittenHook({
+          hook,
+          owner: hookOriginLabel,
+          runner: pluginHookRunner,
+          jsonInput,
+          sent: hookInputJson.sent,
+          hookEvent,
+          hookName: hookDisplayName,
+          hookCommand: displayCommand,
+          hookIndex: hookIndex_2,
+          toolUseID,
+          pluginId,
+          signal: abortSignal,
+          answerHeld: isPersonalRestricted,
+          heldInput: matchedToolNameInput(mapped[hookIndex], hookInput) ?? hookInput,
+          hookInput,
+          inputsThere,
+          defaultTimeoutS: timeoutMs / 1000,
+        });
+        if (promptResult.ended !== undefined) {
+          cleanup();
+          if (promptResult.ended !== "silently")
+            yield {
+              ...promptResult.ended,
+              hook,
+            };
+          return;
+        }
+        if (skipCleanup) {
+          cleanup();
+          ({ signal: abortSignal, cleanup } = createCombinedAbortSignal(signal, {
+            timeoutMs: hookTimeoutMs_2,
+          }));
+        }
+        let result = await execPromptHook(
           hook,
           hookDisplayName,
           hookEvent,
-          jsonInput,
+          promptResult.jsonInput,
           abortSignal,
           toolUseContext,
           messages,
           toolUseID,
           hookTimeoutMs_2,
         );
-        if (promptResult.message?.type === "attachment") {
-          let att = promptResult.message.attachment;
-          if (att.type === "hook_success" || att.type === "hook_non_blocking_error") {
-            att.command = hookCommand;
-            att.durationMs = Date.now() - hookStartMs;
+        if (result.message?.type === "attachment") {
+          let attachment = result.message.attachment;
+          if (attachment.type === "hook_success" || attachment.type === "hook_non_blocking_error") {
+            attachment.command = displayCommand;
+            attachment.durationMs = Date.now() - hookStartMs;
           }
         }
-        yield promptResult;
+        yield result;
         cleanup?.();
         return;
       }
@@ -9119,30 +9223,91 @@ This hook comes from the ${pluginId} plugin.`
           };
           return;
         }
-        let agentResult = await execAgentHook(
+        let promptResult = await runRewrittenHook({
+          hook,
+          owner: hookOriginLabel,
+          runner: pluginHookRunner,
+          jsonInput,
+          sent: hookInputJson.sent,
+          hookEvent,
+          hookName: hookDisplayName,
+          hookCommand: displayCommand,
+          hookIndex: hookIndex_2,
+          toolUseID,
+          pluginId,
+          signal: abortSignal,
+          answerHeld: isPersonalRestricted,
+          heldInput: matchedToolNameInput(mapped[hookIndex], hookInput) ?? hookInput,
+          hookInput,
+          inputsThere,
+          defaultTimeoutS: timeoutMs / 1000,
+        });
+        if (promptResult.ended !== undefined) {
+          cleanup();
+          if (promptResult.ended !== "silently")
+            yield {
+              ...promptResult.ended,
+              hook,
+            };
+          return;
+        }
+        if (skipCleanup) {
+          cleanup();
+          ({ signal: abortSignal, cleanup } = createCombinedAbortSignal(signal, {
+            timeoutMs: hookTimeoutMs_2,
+          }));
+        }
+        let mcpRunner = hookOriginLabel?.pluginId === undefined ? undefined : pluginHookRunner;
+        let { options } = toolUseContext;
+        let allowedTools =
+          mcpRunner === undefined
+            ? options.tools
+            : options.tools.filter(
+                (tool) =>
+                  mcpRunner.runsTool(tool.name, undefined) &&
+                  (tool.isMcp === true || !isRemoteToolsForwardEnabled2()),
+              );
+        let mcpServers = new Set(allowedTools.map((serverName) => serverName.mcpInfo?.serverName));
+        let promptResult_2 = await execAgentHook(
           hook,
           hookDisplayName,
           hookEvent,
-          jsonInput,
+          promptResult.jsonInput,
           abortSignal,
-          toolUseContext,
+          mcpRunner === undefined
+            ? toolUseContext
+            : {
+                ...toolUseContext,
+                options: {
+                  ...options,
+                  tools: allowedTools,
+                  mcpClients: options.mcpClients.filter((mcpClient) => mcpServers.has(mcpClient.name)),
+                },
+              },
           toolUseID,
           "agent_type" in hookInput ? hookInput.agent_type : undefined,
         );
-        if (agentResult.message?.type === "attachment") {
-          let att = agentResult.message.attachment;
+        if (promptResult_2.message?.type === "attachment") {
+          let att = promptResult_2.message.attachment;
           if (att.type === "hook_success" || att.type === "hook_non_blocking_error") {
-            att.command = hookCommand;
+            att.command = displayCommand;
             att.durationMs = Date.now() - hookStartMs;
           }
         }
-        yield agentResult;
+        yield promptResult_2;
         cleanup?.();
         return;
       }
       if (hook.type === "http") {
         emitHookStarted(hookId, hookDisplayName, hookEvent);
-        let httpResult = await execHttpHook(
+        let httpResult = await (
+          runsElsewhere
+            ? createHttpHookSender(pluginHookRunner, hookInputJson.sent, hookOriginLabel, {
+                hookIndex: hookIndex_2,
+                toolUseID,
+              })
+            : execHttpHook
+        )(
           hook,
           hookEvent,
           jsonInput,
@@ -9150,6 +9315,7 @@ This hook comes from the ${pluginId} plugin.`
           timeoutMs,
           servedHookEnv && mergeHookEnv(servedHookEnv.env),
           servedHookEnv ? undefined : getManagedHttpHookEnv(hook),
+          typeName !== undefined,
         );
         cleanup?.();
         if (httpResult.aborted) {
@@ -9169,7 +9335,7 @@ This hook comes from the ${pluginId} plugin.`
               hookName: hookDisplayName,
               toolUseID,
               hookEvent,
-              command: hookCommand,
+              command: displayCommand,
               timedOut: !signal?.aborted,
               timeoutMs: hook.timeout ? hook.timeout * 1000 : timeoutMs,
             }),
@@ -9210,7 +9376,7 @@ This hook comes from the ${pluginId} plugin.`
             blockingError: {
               blockingError:
                 "The PreToolUse HTTP hook can't run in this cloud session, so this tool call is refused.",
-              command: displayCommand,
+              command: displayCommand_2,
             },
             outcome: "blocking",
             hook,
@@ -9218,43 +9384,34 @@ This hook comes from the ${pluginId} plugin.`
           return;
         }
         if (isWithheldGuardHttpHook(httpResult, hookEvent)) {
-          let unreachableMessage = httpHookUnreachableMessage(hookEvent, httpResult.error);
+          let message = httpHookUnreachableMessage(hookEvent, httpResult);
           emitHookResponse({
             hookId,
             hookName: hookDisplayName,
             hookEvent,
-            output: unreachableMessage,
+            output: message,
             stdout: "",
-            stderr: unreachableMessage,
+            stderr: message,
             exitCode: 2,
             outcome: "error",
           });
           yield {
-            blockingError: {
-              blockingError: unreachableMessage,
-              command: hook.url,
-            },
-            suppressOriginalPrompt: true,
-            ...(hookEvent === "PermissionRequest" && {
-              permissionRequestResult: {
-                behavior: "deny",
-                message: unreachableMessage,
-              },
-            }),
-            outcome: "blocking",
+            ...withheldHookResult(hookEvent, httpResult, message, displayCommand_2),
             hook,
           };
           return;
         }
         if (httpResult.error || !httpResult.ok) {
-          let stderr = httpResult.error || `HTTP ${httpResult.statusCode} from ${hook.url}`;
+          let text =
+            httpResult.error ||
+            `HTTP ${httpResult.statusCode} from ${typeName === undefined ? hook.url : "the hook's server"}`;
           emitHookResponse({
             hookId,
             hookName: hookDisplayName,
             hookEvent,
-            output: stderr,
+            output: text,
             stdout: "",
-            stderr,
+            stderr: text,
             exitCode: httpResult.statusCode,
             outcome: "error",
           });
@@ -9264,7 +9421,7 @@ This hook comes from the ${pluginId} plugin.`
               hookName: hookDisplayName,
               toolUseID,
               hookEvent,
-              stderr,
+              stderr: text,
               stdout: "",
               exitCode: httpResult.statusCode ?? 0,
             }),
@@ -9319,14 +9476,19 @@ This hook comes from the ${pluginId} plugin.`
           return;
         }
         if (json) {
+          let tools =
+            httpResult.ranElsewhere && mapped[hookIndex].throughFamilyOnly !== true
+              ? applyRemoteHookInputRewrite(json, hookInput, hookOriginLabel, httpResult.ranElsewhere)
+              : json;
+          let restricted = isSyncHookJSONOutput(tools) ? tools : json;
           let processed = processHookJSONOutput({
             json: isPersonalRestricted
               ? restrictPersonalHookAnswer(
-                  json,
+                  restricted,
                   matchedToolNameInput(mapped[hookIndex], hookInput) ?? hookInput,
                 )
-              : json,
-            command: hook.url,
+              : restricted,
+            command: displayCommand_2,
             hookName: hookDisplayName,
             toolUseID,
             hookEvent,
@@ -9357,7 +9519,14 @@ This hook comes from the ${pluginId} plugin.`
       }
       if (hook.type === "mcp_tool") {
         emitHookStarted(hookId, hookDisplayName, hookEvent);
-        let mcpResult = await runMcpToolHook(
+        let mcpResult = await (
+          (runsElsewhere &&
+            runMcpToolHook(pluginHookRunner, hookInputJson.sent, {
+              hookIndex: hookIndex_2,
+              toolUseID,
+            })) ||
+          executeMcpToolHook
+        )(
           hook,
           hookEvent,
           matchedToolNameInput(mapped[hookIndex], hookInput) ?? hookInput,
@@ -9369,6 +9538,24 @@ This hook comes from the ${pluginId} plugin.`
             : subagentMemoryMode(toolUseContext.session.host),
         );
         cleanup?.();
+        if (isWithheldGuardHttpHook(mcpResult, hookEvent)) {
+          let message = httpHookUnreachableMessage(hookEvent, mcpResult);
+          emitHookResponse({
+            hookId,
+            hookName: hookDisplayName,
+            hookEvent,
+            output: message,
+            stdout: "",
+            stderr: message,
+            exitCode: 2,
+            outcome: "error",
+          });
+          yield {
+            ...withheldHookResult(hookEvent, mcpResult, message, displayCommand_2),
+            hook,
+          };
+          return;
+        }
         let servedRefusal =
           isServedCall && hookEvent === "PreToolUse"
             ? mcpResult.aborted
@@ -9402,7 +9589,7 @@ This hook comes from the ${pluginId} plugin.`
           yield {
             blockingError: {
               blockingError: refusalText,
-              command: displayCommand,
+              command: displayCommand_2,
             },
             outcome: "blocking",
             hook,
@@ -9438,13 +9625,14 @@ This hook comes from the ${pluginId} plugin.`
           yield {
             blockingError: {
               blockingError: refusalText,
-              command: displayCommand,
+              command: displayCommand_2,
             },
             outcome: "blocking",
             hook,
           };
           return;
         }
+        if (mcpResult.body !== "") recordToolUsed(buildMcpToolName(hook.server, hook.tool));
         if (mcpResult.aborted) {
           emitHookResponse({
             hookId,
@@ -9462,7 +9650,7 @@ This hook comes from the ${pluginId} plugin.`
               hookName: hookDisplayName,
               toolUseID,
               hookEvent,
-              command: hookCommand,
+              command: displayCommand,
               timedOut: !signal?.aborted,
               timeoutMs: hook.timeout ? hook.timeout * 1000 : timeoutMs,
             }),
@@ -9537,14 +9725,19 @@ This hook comes from the ${pluginId} plugin.`
           outcome: "success",
         });
         if (httpJson && isSyncHookJSONOutput(httpJson)) {
+          let tools =
+            mcpResult.ranElsewhere && mapped[hookIndex].throughFamilyOnly !== true
+              ? applyRemoteHookInputRewrite(httpJson, hookInput, hookOriginLabel, mcpResult.ranElsewhere)
+              : httpJson;
+          let restricted = isSyncHookJSONOutput(tools) ? tools : httpJson;
           let processed = processHookJSONOutput({
             json: isPersonalRestricted
               ? restrictPersonalHookAnswer(
-                  httpJson,
+                  restricted,
                   matchedToolNameInput(mapped[hookIndex], hookInput) ?? hookInput,
                 )
-              : httpJson,
-            command: hookCommand,
+              : restricted,
+            command: displayCommand,
             hookName: hookDisplayName,
             toolUseID,
             hookEvent,
@@ -9570,7 +9763,7 @@ This hook comes from the ${pluginId} plugin.`
             content: `${sequential.bold(hookDisplayName)} completed`,
             stdout: mcpResult.body,
             stderr: "",
-            command: hookCommand,
+            command: displayCommand,
             durationMs: Date.now() - hookStartMs,
           }),
           outcome: "success",
@@ -9620,6 +9813,7 @@ This hook comes from the ${pluginId} plugin.`
           (hook.type === "script" ? (getHookProject(session)?.projectRoot ?? hookInput.cwd) : hookInput.cwd),
         abortSignal,
         hookId,
+        typeName,
         hookIndex_2,
         pluginRoot,
         pluginId,
@@ -9672,7 +9866,7 @@ This hook comes from the ${pluginId} plugin.`
               ? "failed to start"
               : `finished with status ${result.status}`;
       logForDebugging(
-        `Hooks: ${hookDisplayName} [${displayCommand}]${pluginId ? ` (plugin ${pluginId})` : ""} ${statusText} (${durationMs}ms)`,
+        `Hooks: ${hookDisplayName} [${displayCommand_2}]${pluginId ? ` (plugin ${pluginId})` : ""} ${statusText} (${durationMs}ms)`,
       );
       if (result.withheld === true && hookEvent === "PermissionRequest") {
         emitHookResponse({
@@ -9693,7 +9887,7 @@ This hook comes from the ${pluginId} plugin.`
         : guardScriptHookBlock(
             hook,
             hookEvent,
-            isServedCall ? "script hook" : displayCommand,
+            isServedCall ? hookTypeLabel(hook) : displayCommand_2,
             isServedCall || result.stderr.trim() === ""
               ? describeHookDidNotRun(result)
               : `${describeHookDidNotRun(result)}: ${result.stderr.trim()}`,
@@ -9732,7 +9926,7 @@ This hook comes from the ${pluginId} plugin.`
             stderr: `script hook did not run (${describeHookDidNotRun(result)})${result.stderr.trim() ? `: ${result.stderr.trim()}` : ""}`,
             stdout: result.stdout,
             exitCode: result.status,
-            command: hookCommand,
+            command: displayCommand,
             durationMs,
           }),
           outcome: "non_blocking_error",
@@ -9764,7 +9958,7 @@ This hook comes from the ${pluginId} plugin.`
             hookName: hookDisplayName,
             toolUseID,
             hookEvent,
-            command: hookCommand,
+            command: displayCommand,
             durationMs,
             timedOut: !cancelledBySignal,
             timeoutMs: hookTimeoutMs_2,
@@ -9802,8 +9996,8 @@ This hook comes from the ${pluginId} plugin.`
         if (PROMPT_GUARD_EVENTS.has(hookEvent)) {
           yield {
             blockingError: {
-              blockingError: `[${isServedCall ? `${hook.type} hook` : displayCommand}]: ${distrustReason}`,
-              command: displayCommand,
+              blockingError: `[${isServedCall ? hookTypeLabel(hook) : displayCommand_2}]: ${distrustReason}`,
+              command: displayCommand_2,
               ...promptEndingFields(hookEvent, {
                 noVerdict: "output_distrusted",
               }),
@@ -9823,7 +10017,7 @@ This hook comes from the ${pluginId} plugin.`
             stderr,
             stdout: result.stdout,
             exitCode: result.status,
-            command: hookCommand,
+            command: displayCommand,
             durationMs,
           }),
           outcome: "non_blocking_error",
@@ -9890,7 +10084,7 @@ This hook comes from the ${pluginId} plugin.`
             stderr,
             stdout: result.stdout,
             exitCode: result.status,
-            command: hookCommand,
+            command: displayCommand,
             durationMs,
           }),
           outcome: "non_blocking_error",
@@ -9913,8 +10107,8 @@ This hook comes from the ${pluginId} plugin.`
             });
             yield {
               blockingError: {
-                blockingError: `[${isServedCall ? `${hook.type} hook` : displayCommand}]: ${result.stderr || "No stderr output"}`,
-                command: displayCommand,
+                blockingError: `[${isServedCall ? hookTypeLabel(hook) : displayCommand_2}]: ${result.stderr || "No stderr output"}`,
+                command: displayCommand_2,
                 ...promptEndingFields(hookEvent, {
                   reason: result.stderr,
                 }),
@@ -9947,7 +10141,7 @@ This hook comes from the ${pluginId} plugin.`
                 stderr: `Announced async, then failed with status code ${result.status}: ${result.stderr.trim() || "No stderr output"}`,
                 stdout: result.stdout,
                 exitCode: result.status,
-                command: hookCommand,
+                command: displayCommand,
                 durationMs,
               }),
               outcome: "non_blocking_error",
@@ -9976,7 +10170,7 @@ This hook comes from the ${pluginId} plugin.`
         }
         let processed = processHookJSONOutput({
           json: finalJson,
-          command: hookCommand,
+          command: displayCommand,
           hookName: hookDisplayName,
           toolUseID,
           hookEvent,
@@ -10028,7 +10222,7 @@ This hook comes from the ${pluginId} plugin.`
                 stdout: result.stdout,
                 stderr: result.stderr,
                 exitCode: result.status,
-                command: hookCommand,
+                command: displayCommand,
                 durationMs,
               }),
             outcome: "success",
@@ -10038,8 +10232,8 @@ This hook comes from the ${pluginId} plugin.`
         }
         if (result.status === 2 && !processed.blockingError)
           processed.blockingError = {
-            blockingError: `[${isServedCall ? `${hook.type} hook` : displayCommand}]: ${result.stderr || "No stderr output"}${pluginNote}`,
-            command: displayCommand,
+            blockingError: `[${isServedCall ? hookTypeLabel(hook) : displayCommand_2}]: ${result.stderr || "No stderr output"}${pluginNote}`,
+            command: displayCommand_2,
             ...promptEndingFields(hookEvent, {
               reason: result.stderr,
             }),
@@ -10088,7 +10282,7 @@ This hook comes from the ${pluginId} plugin.`
             stdout: result.stdout,
             stderr: result.stderr,
             exitCode: result.status,
-            command: hookCommand,
+            command: displayCommand,
             durationMs,
           }),
           outcome: "success",
@@ -10109,13 +10303,14 @@ This hook comes from the ${pluginId} plugin.`
           stdioClosedWithoutEnd: result.stdioClosedWithoutEnd,
         })
       ) {
+        let stderr = typeName === undefined ? result.stderr : "";
         emitHookResponse({
           hookId,
           hookName: hookDisplayName,
           hookEvent,
-          output: result.output,
+          output: typeName === undefined ? result.output : "",
           stdout: result.stdout,
-          stderr: result.stderr,
+          stderr,
           exitCode: result.status,
           outcome: "error",
         });
@@ -10126,13 +10321,14 @@ This hook comes from the ${pluginId} plugin.`
             toolUseID,
             hookEvent,
             stderr:
-              `Hook script appears to be missing \u2014 "${displayCommand}" exited 2 with: ${result.stderr.trim()}. ${TREATING_NON_BLOCKING_PREFIX}` +
+              `Hook script appears to be missing \u2014 ${typeName === undefined ? `"${displayCommand_2}" exited 2 with: ${stderr.trim()}` : "the hook exited 2"}. ` +
+              TREATING_NON_BLOCKING_PREFIX +
               (pluginId
                 ? `Run \`/plugin\` to reinstall '${pluginId}' or remove it from settings.`
                 : "If this is a plugin hook, check the plugin install (run /plugin)."),
             stdout: result.stdout,
             exitCode: result.status,
-            command: hookCommand,
+            command: displayCommand,
             durationMs,
           }),
           outcome: "non_blocking_error",
@@ -10153,8 +10349,8 @@ This hook comes from the ${pluginId} plugin.`
         });
         yield {
           blockingError: {
-            blockingError: `[${isServedCall ? `${hook.type} hook` : displayCommand}]: ${result.stderr || "No stderr output"}${pluginNote}`,
-            command: displayCommand,
+            blockingError: `[${isServedCall ? hookTypeLabel(hook) : displayCommand_2}]: ${result.stderr || "No stderr output"}${pluginNote}`,
+            command: displayCommand_2,
             ...promptEndingFields(hookEvent, {
               reason: result.stderr,
             }),
@@ -10177,7 +10373,7 @@ This hook comes from the ${pluginId} plugin.`
         exitCode: result.status,
         outcome: "error",
       });
-      if (result.spawnFailed && !firstSpawnFailureSurfaced(hookEvent, displayCommand)) {
+      if (result.spawnFailed && !firstSpawnFailureSurfaced(hookEvent, localDisplay)) {
         yield {
           outcome: "non_blocking_error",
           hook,
@@ -10193,7 +10389,7 @@ This hook comes from the ${pluginId} plugin.`
           stderr: `${NON_BLOCKING_STATUS_PREFIX}${result.stderr.trim() || "No stderr output"}`,
           stdout: result.stdout,
           exitCode: result.status,
-          command: hookCommand,
+          command: displayCommand,
           durationMs,
         }),
         ...continuation,
@@ -10203,7 +10399,6 @@ This hook comes from the ${pluginId} plugin.`
           ranByContract: true,
         }),
       };
-      return;
     } catch (error) {
       cleanup?.();
       let message = error instanceof Error ? error.message : String(error);
@@ -10223,8 +10418,8 @@ This hook comes from the ${pluginId} plugin.`
       if (exitedTwo && GUARD_HOOK_EVENTS.has(hookEvent)) {
         yield {
           blockingError: {
-            blockingError: `[${isServedCall ? `${hook.type} hook` : displayCommand}]: blocked (exit 2); its output could not be processed`,
-            command: displayCommand,
+            blockingError: `[${isServedCall ? hookTypeLabel(hook) : displayCommand_2}]: blocked (exit 2); its output could not be processed`,
+            command: displayCommand_2,
           },
           outcome: "blocking",
           hook,
@@ -10236,14 +10431,14 @@ This hook comes from the ${pluginId} plugin.`
         : guardScriptHookBlock(
             hook,
             hookEvent,
-            isServedCall ? "script hook" : displayCommand,
+            isServedCall ? hookTypeLabel(hook) : displayCommand_2,
             isServedCall ? "setup failed" : message,
           );
       if (guardResult !== undefined) {
         yield guardResult;
         return;
       }
-      if (!firstSpawnFailureSurfaced(hookEvent, displayCommand)) {
+      if (!firstSpawnFailureSurfaced(hookEvent, localDisplay)) {
         yield {
           outcome: "non_blocking_error",
           hook,
@@ -10259,13 +10454,12 @@ This hook comes from the ${pluginId} plugin.`
           stderr: `Failed to run: ${message}`,
           stdout: "",
           exitCode: 1,
-          command: hookCommand,
+          command: displayCommand,
           durationMs: Date.now() - hookStartMs,
         }),
         outcome: "non_blocking_error",
         hook,
       };
-      return;
     }
   });
   let outcomes = {
@@ -10349,10 +10543,10 @@ This hook comes from the ${pluginId} plugin.`
       )
         ? getRemoteHookRunner(toolUseContext)
         : undefined;
-    let final = isServedCall
-      ? redactServedBlockingError(
-          hookEvent === "PreToolUse" ? refuseUnfinishedPreToolHook(summarized, signal) : summarized,
-        )
+    let hook = isServedCall
+      ? hookEvent === "PreToolUse"
+        ? refuseUnfinishedPreToolHook(summarized, signal)
+        : summarized
       : remoteRunner !== undefined
         ? refuseUnfinishedPreToolHook(summarized, signal, remoteRunner, {
             tool:
@@ -10363,6 +10557,12 @@ This hook comes from the ${pluginId} plugin.`
             continueIsContested: entry === undefined || entry.continueIsContested === true,
           })
         : summarized;
+    let final = isServedCall
+      ? redactServedBlockingError(hook)
+      : typeNames.has(hook.hook)
+        ? redactServedBlockingError(hook, typeNames.get(hook.hook))
+        : hook;
+    let outcomeEntry = hookStatusLabel(final.hook, typeNames.get(final.hook));
     outcomes[final.outcome]++;
     let hookIndex = byPlugin.get(result.hook);
     if (hookIndex !== undefined) runningHooks?.settle(hookIndex);
@@ -10388,15 +10588,13 @@ This hook comes from the ${pluginId} plugin.`
       if (stdout !== undefined && isPersistedHookOutputPath(stdout.trim(), content)) outputsPersistedCount++;
     }
     if (final.updatedToolOutput !== undefined) {
-      logForDebugging(`Hook ${hookEvent} (${getHookStatusText(final.hook)}) replaced tool output`);
+      logForDebugging(`Hook ${hookEvent} (${outcomeEntry}) replaced tool output`);
       yield {
         updatedToolOutput: final.updatedToolOutput,
       };
     }
     if (final.updatedMCPToolOutput !== undefined && final.updatedToolOutput === undefined) {
-      logForDebugging(
-        `Hook ${hookEvent} (${getHookStatusText(final.hook)}) replaced tool output (updatedMCPToolOutput)`,
-      );
+      logForDebugging(`Hook ${hookEvent} (${outcomeEntry}) replaced tool output (updatedMCPToolOutput)`);
       yield {
         updatedMCPToolOutput: final.updatedMCPToolOutput,
       };
@@ -10409,7 +10607,7 @@ This hook comes from the ${pluginId} plugin.`
     if (final.classifierContext) {
       let context = truncateToLength(final.classifierContext, HOST_CONTEXT_LINE_LIMIT);
       logForDebugging(
-        `Hook ${hookEvent} (${getHookStatusText(final.hook)}) provided classifierContext (${context.length} chars after cap)`,
+        `Hook ${hookEvent} (${outcomeEntry}) provided classifierContext (${context.length} chars after cap)`,
       );
       injectedCharCounts.classifierContextChars += context.length;
       addChars(final.hook, "classifierContextChars", context.length);
@@ -10437,7 +10635,7 @@ This hook comes from the ${pluginId} plugin.`
       };
     }
     if (final.preventContinuation) {
-      logForDebugging(`Hook ${hookEvent} (${getHookStatusText(final.hook)}) requested preventContinuation`);
+      logForDebugging(`Hook ${hookEvent} (${outcomeEntry}) requested preventContinuation`);
       yield {
         preventContinuation: true,
         stopReason: final.stopReason,
@@ -10514,7 +10712,7 @@ This hook comes from the ${pluginId} plugin.`
       injectedCharCounts.additionalContextChars += final.additionalContext.length;
       addChars(final.hook, "additionalContextChars", final.additionalContext.length);
       logForDebugging(
-        `Hook ${hookEvent} (${getHookStatusText(final.hook)}) provided additionalContext (${final.additionalContext.length} chars)`,
+        `Hook ${hookEvent} (${outcomeEntry}) provided additionalContext (${final.additionalContext.length} chars)`,
       );
       let content = await persistLargeHookOutput(
         final.additionalContext,
@@ -10533,7 +10731,7 @@ This hook comes from the ${pluginId} plugin.`
       injectedCharCounts.initialUserMessageChars += final.initialUserMessage.length;
       addChars(final.hook, "initialUserMessageChars", final.initialUserMessage.length);
       logForDebugging(
-        `Hook ${hookEvent} (${getHookStatusText(final.hook)}) provided initialUserMessage (${final.initialUserMessage.length} chars)`,
+        `Hook ${hookEvent} (${outcomeEntry}) provided initialUserMessage (${final.initialUserMessage.length} chars)`,
       );
       let content = await persistLargeHookOutput(
         final.initialUserMessage,
@@ -10549,22 +10747,20 @@ This hook comes from the ${pluginId} plugin.`
       };
     }
     if (final.watchPaths && final.watchPaths.length > 0) {
-      logForDebugging(
-        `Hook ${hookEvent} (${getHookStatusText(final.hook)}) provided ${final.watchPaths.length} watchPaths`,
-      );
+      logForDebugging(`Hook ${hookEvent} (${outcomeEntry}) provided ${final.watchPaths.length} watchPaths`);
       yield {
         watchPaths: final.watchPaths,
       };
     }
     if (final.reloadSkills) {
-      logForDebugging(`Hook ${hookEvent} (${getHookStatusText(final.hook)}) requested reloadSkills`);
+      logForDebugging(`Hook ${hookEvent} (${outcomeEntry}) requested reloadSkills`);
       yield {
         reloadSkills: true,
       };
     }
     if (final.sessionTitle) {
       logForDebugging(
-        `Hook ${hookEvent} (${getHookStatusText(final.hook)}) provided sessionTitle (${[...final.sessionTitle].length} chars)`,
+        `Hook ${hookEvent} (${outcomeEntry}) provided sessionTitle (${[...final.sessionTitle].length} chars)`,
       );
       yield {
         sessionTitle: final.sessionTitle,
@@ -10574,23 +10770,18 @@ This hook comes from the ${pluginId} plugin.`
       final.updatedInput = undefined;
       if (final.permissionBehavior === "allow") {
         logForDebugging(
-          `Hook ${hookEvent} (${getHookStatusText(final.hook)}) permissionDecision=allow ignored: it matched this tool only through another of its names, which can deny or ask but not allow`,
+          `Hook ${hookEvent} (${outcomeEntry}) permissionDecision=allow ignored: it matched this tool only through another of its names, which can deny or ask but not allow`,
         );
         final.permissionBehavior = undefined;
       }
       if (final.permissionRequestResult?.behavior === "allow") {
         logForDebugging(
-          `Hook ${hookEvent} (${getHookStatusText(final.hook)}) PermissionRequest allow ignored: it matched this tool only through another of its names, which can deny or ask but not allow`,
+          `Hook ${hookEvent} (${outcomeEntry}) PermissionRequest allow ignored: it matched this tool only through another of its names, which can deny or ask but not allow`,
         );
         final.permissionRequestResult = undefined;
       }
     }
-    stripConfinedHookApproval(
-      final,
-      `Hook ${hookEvent} (${getHookStatusText(final.hook)})`,
-      hookInput,
-      toolUseContext,
-    );
+    stripConfinedHookApproval(final, `Hook ${hookEvent} (${outcomeEntry})`, hookInput, toolUseContext);
     if (final.updatedInput !== undefined)
       toolUseContext?.remoteCall?.hookRewrites.push({
         byOwnHook: ownSettingsHooks.has(final.hook),
@@ -10600,7 +10791,7 @@ This hook comes from the ${pluginId} plugin.`
     if (final.permissionBehavior)
       switch (
         (logForDebugging(
-          `Hook ${hookEvent} (${getHookStatusText(final.hook)}) returned permissionDecision: ${final.permissionBehavior}${final.hookPermissionDecisionReason ? ` (reason: ${final.hookPermissionDecisionReason})` : ""}`,
+          `Hook ${hookEvent} (${outcomeEntry}) returned permissionDecision: ${final.permissionBehavior}${final.hookPermissionDecisionReason ? ` (reason: ${final.hookPermissionDecisionReason})` : ""}`,
         ),
         final.permissionBehavior)
       ) {
@@ -10627,7 +10818,7 @@ This hook comes from the ${pluginId} plugin.`
           : undefined;
       if (updatedInput)
         logForDebugging(
-          `Hook ${hookEvent} (${getHookStatusText(final.hook)}) modified tool input keys: [${Object.keys(updatedInput).join(", ")}]`,
+          `Hook ${hookEvent} (${outcomeEntry}) modified tool input keys: [${Object.keys(updatedInput).join(", ")}]`,
         );
       let permissionDisplay =
         final.permissionBehavior === "ask"
@@ -10656,7 +10847,7 @@ This hook comes from the ${pluginId} plugin.`
     }
     if (final.updatedInput && final.permissionBehavior === undefined) {
       logForDebugging(
-        `Hook ${hookEvent} (${getHookStatusText(final.hook)}) modified tool input keys: [${Object.keys(final.updatedInput).join(", ")}]`,
+        `Hook ${hookEvent} (${outcomeEntry}) modified tool input keys: [${Object.keys(final.updatedInput).join(", ")}]`,
       );
       let entry = matchedByHook.get(final.hook);
       yield {
@@ -10789,7 +10980,7 @@ This hook comes from the ${pluginId} plugin.`
   }
   if (controlStreamClosedError) throw controlStreamClosedError;
 }
-//@ chunk-e6aww6q8.js:3557798-3558093 facade-exports
+//@ chunk-5xgkngpb.js:3652496-3652791 facade-exports
 /**
  * 确定钩子运行目录：目标目录存在就用；否则依次退回原始 cwd、项目根、家目录，最后是临时目录，并对每个失效目录只警告一次。
  */
@@ -10813,21 +11004,21 @@ async function safeHookCwd(path, project) {
   }
   return fallbackDir;
 }
-//@ chunk-e6aww6q8.js:3558093-3558143 affinity
+//@ chunk-5xgkngpb.js:3652791-3652841 affinity
 var hookNameBlockedRegistry; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var hookNameSeenRegistry;
-deferInit("chunk-e6aww6q8.js:3558093", () => {
+deferInit("chunk-5xgkngpb.js:3652791", () => {
   hookNameBlockedRegistry = new HostScoped(() => new Set());
   hookNameSeenRegistry = new HostScoped(() => new Set());
 });
-//@ chunk-e6aww6q8.js:3558460-3558506 facade-exports
+//@ chunk-5xgkngpb.js:3653158-3653204 facade-exports
 /**
  * 判断钩子结果列表中是否有阻断结果。
  */
 function hasBlockingResult(results) {
   return results.some((result) => result.blocked);
 }
-//@ chunk-e6aww6q8.js:3558506-3558690 layout
+//@ chunk-5xgkngpb.js:3653204-3653388 layout
 function runOutsideReplFunctionChain(options, input) {
   return runOutsideReplHookChain({
     event: input.hook_event_name,
@@ -10845,7 +11036,7 @@ function runOutsideReplFunctionChain(options, input) {
       }),
   });
 }
-//@ chunk-e6aww6q8.js:3558690-3568751 facade-exports (2.1.88 match: executeHooksOutsideREPL, 0.59)
+//@ chunk-5xgkngpb.js:3653388-3663932 facade-exports (2.1.88 match: executeHooksOutsideREPL, 0.578)
 /**
  * REPL 外（无对话上下文）执行钩子，返回 [{command, succeeded, output, blocked, watchPaths, systemMessage}]；prompt/agent 钩子在这里不支持；工作区未信任时跳过（personsHooksRunUntrusted 除外）。SessionEnd/Notification/PreCompact/WorktreeCreate 等用它。
  */
@@ -10912,9 +11103,11 @@ async function executeHooksOutsideREPL(options) {
     ? undefined
     : getPluginHookRunner()?.whichCopyAsk?.(hookEvent, hookInput);
   if (copiedAsk !== undefined) await awaitWithHookTimeout(copiedAsk, hookEvent, signal, timeoutMs);
+  let textLeavesMachine = onceExport(() => hookTextLeavesThisMachine(undefined));
   let matched = await getMatchingHooks(sessionHooks, session.id, hookEvent, hookInput, undefined, {
     ...tier,
     getToolAliases: () => appState?.toolPermissionContext.toolAliases,
+    recordTypeNames: textLeavesMachine,
     ...(ownSources !== undefined && {
       recordMatchers: true,
       ownSources: ownSources.ownSources,
@@ -10929,13 +11122,15 @@ async function executeHooksOutsideREPL(options) {
       ownSources === undefined ? matched : filterWithheldFolderHooks(matched, hookEvent, ownSources),
     );
   if (matched.length === 0) return [];
+  noteHooks(matched);
   if (signal?.aborted) return [];
   let userHooks = matched.filter((hook) => !isInternalHook(hook));
+  let typeNames = hookTypeNamesOf(textLeavesMachine, userHooks);
   if (userHooks.length > 0) {
     let pluginHookCounts = countHooksByPlugin(userHooks);
     let hookTypeCounts = countByPluginKey(userHooks);
     let byType = countHooksByType(userHooks);
-    let matchAllCount = count(userHooks, (hook) => hook.matcherIsMatchAll);
+    let matchAllCount = countWhere(userHooks, (hook) => hook.matcherIsMatchAll);
     logEvent("tengu_run_hook", {
       hookName: hookTelemetryName(hookEvent, matchQuery),
       numCommands: userHooks.length,
@@ -10981,11 +11176,13 @@ async function executeHooksOutsideREPL(options) {
   let notRunIndexes = new Set();
   let hookPromises = matched.map(
     async ({ hook, pluginRoot, pluginId, skillRoot, settingsSource, projectRoot, notTested }, hookIndex) => {
-      let hookOriginLabel = getHookOriginLabel({
+      let typeName = typeNames.get(hook);
+      let label = typeName ?? getHookDisplayText(hook);
+      let originLabel = getHookOriginLabel({
         pluginId,
         settingsSource,
       });
-      let refusal = pluginHookRefusal(hookOriginLabel, hookEvent, hook);
+      let refusal = pluginHookRefusal(originLabel, hookEvent, hook);
       let holdReason = refusal ?? notTested;
       if (holdReason !== undefined) {
         failure ??= "hook_did_not_run";
@@ -10999,7 +11196,7 @@ async function executeHooksOutsideREPL(options) {
             (refusal !== undefined || !(hook.type === "command" && isAsyncHookJSONOutput(hook))),
         );
         return {
-          command: getHookDisplayText(hook),
+          command: label,
           succeeded: false,
           output: blockingError?.blockingError ?? holdReason,
           blocked: blockingError !== undefined,
@@ -11011,12 +11208,12 @@ async function executeHooksOutsideREPL(options) {
         let root = neverSkipSessionHooks(projectRoot) ? projectRoot : noSnapshotOverride();
         if (root === null) {
           let reason = `not run: it came from ${projectRoot}, which is no longer a working copy this session can use, and the session's directory is not in one either`;
-          logForDebugging(`Hooks: ${getHookDisplayText(hook)} for ${hookEvent} ${reason}`, {
+          logForDebugging(`Hooks: ${label} for ${hookEvent} ${reason}`, {
             level: "warn",
           });
           failure ??= "hook_did_not_run";
           return {
-            command: getHookDisplayText(hook),
+            command: label,
             succeeded: false,
             output: reason,
             blocked: false,
@@ -11100,27 +11297,44 @@ async function executeHooksOutsideREPL(options) {
       if (hook.type === "prompt") {
         failure ??= "hook_type_unsupported";
         return {
-          command: hook.prompt,
+          command: label,
           succeeded: false,
           output: "Prompt stop hooks are not yet supported outside REPL",
           blocked: false,
         };
       }
       if (hook.type === "mcp_tool") {
-        let label = `${hook.server}/${hook.tool}`;
+        let label_2 = label;
         try {
-          let result = await runMcpToolHook(
-            hook,
-            hookEvent,
-            hookInput,
-            getAppState?.().mcp.clients,
-            signal,
-            timeoutMs,
-          );
+          let pluginHookRunner = getPluginHookRunner();
+          let useMcpRunner =
+            originLabel?.settingsSource === "projectSettings" && pluginHookRunner !== undefined;
+          if (useMcpRunner && writtenInput === undefined)
+            writtenInput = {
+              sent: writeRemoteHookInput(pluginHookRunner.stdin, hookInput),
+            };
+          let result = await (
+            (useMcpRunner &&
+              runMcpToolHook(pluginHookRunner, writtenInput?.sent, {
+                hookIndex,
+              })) ||
+            executeMcpToolHook
+          )(hook, hookEvent, hookInput, getAppState?.().mcp.clients, signal, timeoutMs);
+          if (result.body !== "") recordToolUsed(buildMcpToolName(hook.server, hook.tool));
+          if (isWithheldGuardHttpHook(result, hookEvent)) {
+            let output = httpHookUnreachableMessage(hookEvent, result);
+            failure ??= "hook_mcp_tool_failed";
+            return {
+              command: label_2,
+              succeeded: false,
+              output,
+              blocked: true,
+            };
+          }
           if (result.aborted) {
             failure ??= "hook_cancelled";
             return {
-              command: label,
+              command: label_2,
               succeeded: false,
               output: "Hook cancelled",
               blocked: false,
@@ -11132,7 +11346,7 @@ async function executeHooksOutsideREPL(options) {
           if (result.error || !result.ok) {
             failure ??= "hook_mcp_tool_failed";
             return {
-              command: label,
+              command: label_2,
               succeeded: false,
               output: result.error || "MCP tool returned an error",
               blocked: false,
@@ -11147,7 +11361,7 @@ async function executeHooksOutsideREPL(options) {
           if (final) emitHookMetrics(final.metrics, pluginId, hookEvent);
           emitHookResponse_2(restricted ?? json, name);
           return {
-            command: label,
+            command: label_2,
             succeeded: true,
             output: blocked ? final?.reason || "" : result.body,
             blocked,
@@ -11159,12 +11373,12 @@ async function executeHooksOutsideREPL(options) {
           };
         } catch (error) {
           let message = error instanceof Error ? error.message : String(error);
-          logForDebugging(`${name} [${label}] failed to run: ${message}`, {
+          logForDebugging(`${name} [${label_2}] failed to run: ${message}`, {
             level: "error",
           });
           failure ??= "hook_mcp_exec_failed";
           return {
-            command: label,
+            command: label_2,
             succeeded: false,
             output: message,
             blocked: false,
@@ -11174,7 +11388,7 @@ async function executeHooksOutsideREPL(options) {
       if (hook.type === "agent") {
         failure ??= "hook_type_unsupported";
         return {
-          command: hook.prompt,
+          command: label,
           succeeded: false,
           output: "Agent stop hooks are not yet supported outside REPL",
           blocked: false,
@@ -11196,7 +11410,20 @@ async function executeHooksOutsideREPL(options) {
       }
       if (hook.type === "http")
         try {
-          let httpResult = await execHttpHook(
+          let pluginHookRunner = getPluginHookRunner();
+          let useHttpRunner =
+            originLabel !== undefined && isOwnerRunHook(originLabel, hook) && pluginHookRunner !== undefined;
+          if (useHttpRunner && writtenInput === undefined)
+            writtenInput = {
+              sent: writeRemoteHookInput(pluginHookRunner.stdin, hookInput),
+            };
+          let result = await (
+            useHttpRunner
+              ? createHttpHookSender(pluginHookRunner, writtenInput?.sent, originLabel, {
+                  hookIndex,
+                })
+              : execHttpHook
+          )(
             hook,
             hookEvent,
             serializedInput,
@@ -11204,12 +11431,13 @@ async function executeHooksOutsideREPL(options) {
             timeoutMs,
             undefined,
             getManagedHttpHookEnv(hook),
+            typeName !== undefined,
           );
-          if (httpResult.aborted) {
-            logForDebugging(`${name} [${hook.url}] cancelled`);
+          if (result.aborted) {
+            logForDebugging(`${name} [${label}] cancelled`);
             failure ??= "hook_cancelled";
             return {
-              command: hook.url,
+              command: label,
               succeeded: false,
               output: "Hook cancelled",
               blocked: false,
@@ -11218,33 +11446,35 @@ async function executeHooksOutsideREPL(options) {
               }),
             };
           }
-          if (isWithheldGuardHttpHook(httpResult, hookEvent)) {
-            let message = httpHookUnreachableMessage(hookEvent, httpResult.error);
-            logForDebugging(`${name} [${hook.url}] ${message}`, {
+          if (isWithheldGuardHttpHook(result, hookEvent)) {
+            let message = httpHookUnreachableMessage(hookEvent, result);
+            logForDebugging(`${name} [${label}] ${message}`, {
               level: "error",
             });
             failure ??= "hook_http_request_failed";
             return {
-              command: hook.url,
+              command: label,
               succeeded: false,
               output: message,
               blocked: true,
             };
           }
-          if (httpResult.error || !httpResult.ok) {
-            let errMsg = httpResult.error || `HTTP ${httpResult.statusCode} from ${hook.url}`;
-            logForDebugging(`${name} [${hook.url}] failed: ${errMsg}`, {
+          if (result.error || !result.ok) {
+            let errMsg =
+              result.error ||
+              `HTTP ${result.statusCode} from ${typeName === undefined ? hook.url : "the hook's server"}`;
+            logForDebugging(`${name} [${label}] failed: ${errMsg}`, {
               level: "error",
             });
             failure ??= "hook_http_request_failed";
             return {
-              command: hook.url,
+              command: label,
               succeeded: false,
               output: errMsg,
               blocked: false,
             };
           }
-          let { json: httpJson, validationError: httpValidationError } = parseHttpHookOutput(httpResult.body);
+          let { json: httpJson, validationError: httpValidationError } = parseHttpHookOutput(result.body);
           if (httpValidationError) throw Error(httpValidationError);
           let json = httpJson && isRestricted ? restrictPersonalHookAnswer(httpJson, hookInput) : httpJson;
           if (json && !isSyncHookJSONOutput_2(json))
@@ -11262,9 +11492,9 @@ async function executeHooksOutsideREPL(options) {
                 json.hookSpecificOutput?.hookEventName === "WorktreeCreate"
                 ? json.hookSpecificOutput.worktreePath
                 : ""
-              : httpResult.body;
+              : result.body;
           return {
-            command: hook.url,
+            command: label,
             succeeded: true,
             output,
             blocked: !!blocked,
@@ -11272,22 +11502,20 @@ async function executeHooksOutsideREPL(options) {
           };
         } catch (error) {
           let errorMessage = error instanceof Error ? error.message : String(error);
-          logForDebugging(`${name} [${hook.url}] failed to run: ${errorMessage}`, {
+          logForDebugging(`${name} [${label}] failed to run: ${errorMessage}`, {
             level: "error",
           });
           failure ??= "hook_http_exec_failed";
           return {
-            command: hook.url,
+            command: label,
             succeeded: false,
             output: errorMessage,
             blocked: false,
           };
         }
       let timeoutMs_2 = hook.timeout ? Math.min(hook.timeout * 1000, MAX_TIMER_DELAY_MS) : timeoutMs;
-      let hookDisplayText = getHookDisplayText(hook);
       let pluginHookRunner = getPluginHookRunner();
-      let needsReady =
-        hook.type === "command" && hookOriginLabel !== undefined && pluginHookRunner !== undefined;
+      let needsReady = hook.type === "command" && originLabel !== undefined && pluginHookRunner !== undefined;
       let asyncPlugins = needsReady && !isAsyncHookJSONOutput(hook);
       let { signal: abortSignal, cleanup } = createCombinedAbortSignal(signal, {
         timeoutMs: asyncPlugins ? undefined : timeoutMs_2,
@@ -11336,6 +11564,7 @@ async function executeHooksOutsideREPL(options) {
             (hook.type === "script" ? (project?.projectRoot ?? hookInput.cwd) : hookInput.cwd),
           abortSignal,
           randomUUID(),
+          typeName,
           hookIndex,
           pluginRoot,
           pluginId,
@@ -11358,10 +11587,10 @@ async function executeHooksOutsideREPL(options) {
         let guardBlock = !ranScript && hook.type === "script" && GUARD_HOOK_EVENTS.has(hookEvent);
         cleanup?.();
         if (result.aborted) {
-          logForDebugging(`${name} [${hookDisplayText}] cancelled`);
+          logForDebugging(`${name} [${label}] cancelled`);
           failure ??= "hook_cancelled";
           return {
-            command: hookDisplayText,
+            command: label,
             succeeded: false,
             output: "Hook cancelled",
             blocked: guardBlock,
@@ -11370,11 +11599,11 @@ async function executeHooksOutsideREPL(options) {
             }),
           };
         }
-        logForDebugging(`${name} [${hookDisplayText}] completed with status ${result.status}`);
+        logForDebugging(`${name} [${label}] completed with status ${result.status}`);
         if (!ranScript) {
           failure ??= "hook_did_not_run";
           return {
-            command: hookDisplayText,
+            command: label,
             succeeded: false,
             output: `script hook did not run (${describeHookDidNotRun(result)})${result.stderr.trim() ? `: ${result.stderr.trim()}` : ""}`,
             blocked: guardBlock,
@@ -11394,13 +11623,13 @@ async function executeHooksOutsideREPL(options) {
         if (untrustedCaptureReason !== undefined) {
           failure ??= "hook_stdio_incomplete";
           return {
-            command: hookDisplayText,
+            command: label,
             succeeded: false,
             output: withHookStderr(untrustedCaptureReason, result.status, result.stderr),
             blocked: PROMPT_GUARD_EVENTS.has(hookEvent),
           };
         }
-        let json =
+        let isGuardBlock =
           capturedJson !== undefined && isRestricted
             ? restrictPersonalHookAnswer(capturedJson, hookInput)
             : capturedJson;
@@ -11409,30 +11638,33 @@ async function executeHooksOutsideREPL(options) {
           failure ??= "hook_output_schema_invalid";
           throw Error(withHookStderr(validationError, result.status, result.stderr));
         }
-        if (json && !isSyncHookJSONOutput_2(json))
-          logForDebugging(`Parsed JSON output from hook: ${jsonStringify(json)}`, {
+        if (isGuardBlock && !isSyncHookJSONOutput_2(isGuardBlock))
+          logForDebugging(`Parsed JSON output from hook: ${jsonStringify(isGuardBlock)}`, {
             level: "verbose",
           });
-        if (json && isSyncHookJSONOutput(json)) emitHookMetrics(json.metrics, pluginId, hookEvent);
-        emitHookResponse_2(json, name);
-        let blockedBody = json && isSyncHookJSONOutput(json) && json.decision === "block";
+        if (isGuardBlock && isSyncHookJSONOutput(isGuardBlock))
+          emitHookMetrics(isGuardBlock.metrics, pluginId, hookEvent);
+        emitHookResponse_2(isGuardBlock, name);
+        let blockedBody =
+          isGuardBlock && isSyncHookJSONOutput(isGuardBlock) && isGuardBlock.decision === "block";
         let blocked = result.status === 2 || !!blockedBody || guardBlock;
         let output = blockedBody
-          ? (json && isSyncHookJSONOutput(json) && json.reason) || result.stderr || ""
+          ? (isGuardBlock && isSyncHookJSONOutput(isGuardBlock) && isGuardBlock.reason) || result.stderr || ""
           : result.status === 0
             ? result.stdout || ""
             : result.stderr || "";
         let watchPaths =
-          json &&
-          isSyncHookJSONOutput(json) &&
-          json.hookSpecificOutput &&
-          "watchPaths" in json.hookSpecificOutput
-            ? json.hookSpecificOutput.watchPaths
+          isGuardBlock &&
+          isSyncHookJSONOutput(isGuardBlock) &&
+          isGuardBlock.hookSpecificOutput &&
+          "watchPaths" in isGuardBlock.hookSpecificOutput
+            ? isGuardBlock.hookSpecificOutput.watchPaths
             : undefined;
-        let systemMessage = json && isSyncHookJSONOutput(json) ? json.systemMessage : undefined;
+        let systemMessage =
+          isGuardBlock && isSyncHookJSONOutput(isGuardBlock) ? isGuardBlock.systemMessage : undefined;
         if (result.status !== 0 && !blocked) failure ??= "hook_nonzero_exit";
         return {
-          command: hookDisplayText,
+          command: label,
           succeeded: result.status === 0,
           output,
           blocked,
@@ -11445,12 +11677,12 @@ async function executeHooksOutsideREPL(options) {
       } catch (error) {
         cleanup?.();
         let errorMessage = error instanceof Error ? error.message : String(error);
-        logForDebugging(`${name} [${hookDisplayText}] failed to run: ${errorMessage}`, {
+        logForDebugging(`${name} [${label}] failed to run: ${errorMessage}`, {
           level: "error",
         });
         failure ??= "hook_exec_failed";
         return {
-          command: hookDisplayText,
+          command: label,
           succeeded: false,
           output: errorMessage,
           blocked: GUARD_HOOK_EVENTS.has(hookEvent) && (exitedTwo || (!ranScript && hook.type === "script")),
@@ -11499,7 +11731,7 @@ async function executeHooksOutsideREPL(options) {
     if (pluginId) recordPluginUsage(pluginId);
   return outcomes;
 }
-//@ chunk-e6aww6q8.js:3568751-3569073 facade-exports (2.1.88 match: hasInstructionsLoadedHook, 0.849)
+//@ chunk-5xgkngpb.js:3663932-3664254 facade-exports (2.1.88 match: hasInstructionsLoadedHook, 0.851)
 /**
  * 是否存在 InstructionsLoaded 钩子（快照、主线程代理钩子、注册钩子、会话钩子、设备钩子）。
  */
@@ -11519,7 +11751,7 @@ function hasInstructionsLoadedHook() {
     return true;
   return hasClassicHookSite("InstructionsLoaded");
 }
-//@ chunk-e6aww6q8.js:3569073-3569228 layout
+//@ chunk-5xgkngpb.js:3664254-3664409 layout
 async function awaitWithHookTimeout(promise, hookEvent, signal, timeoutMs) {
   if (signal !== undefined || blocksWhenItCannotRunElsewhere(hookEvent)) {
     await promise(signal);
@@ -11535,7 +11767,7 @@ async function awaitWithHookTimeout(promise, hookEvent, signal, timeoutMs) {
     combinedAbortSignal.cleanup();
   }
 }
-//@ chunk-e6aww6q8.js:3569228-3570004 facade-exports (2.1.88 match: parseElicitationHookOutput, 0.9)
+//@ chunk-5xgkngpb.js:3664409-3665185 facade-exports (2.1.88 match: parseElicitationHookOutput, 0.901)
 /**
  * 把 REPL 外钩子结果解析为 elicitation 响应：blocked 或 decision:block 视为阻断，hookSpecificOutput.action/content 作为回答。
  */
@@ -11589,17 +11821,17 @@ function parseElicitationHookOutput(result, expectedEventName) {
     return {};
   }
 }
-//@ chunk-e6aww6q8.js:3570004-3570039 layout
+//@ chunk-5xgkngpb.js:3665185-3665220 layout
 class StatusLineLogState {
   okLogged = false;
   badLogged = false;
 }
-//@ chunk-e6aww6q8.js:3570039-3570066 layout
+//@ chunk-5xgkngpb.js:3665220-3665247 layout
 var statusLineLogStateByHost; // deferred: uses StatusLineLogState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3570039", () => {
+deferInit("chunk-5xgkngpb.js:3665220", () => {
   statusLineLogStateByHost = new HostScoped(() => new StatusLineLogState());
 });
-//@ chunk-e6aww6q8.js:3570066-3571131 facade-exports (2.1.88 match: executeStatusLineCommand, 0.656)
+//@ chunk-5xgkngpb.js:3665247-3666362 facade-exports (2.1.88 match: executeStatusLineCommand, 0.625)
 /**
  * 执行 statusLine 命令（复用 execCommandHook，事件名 StatusLine，stdin 为状态 JSON），返回非空输出行；禁用钩子或工作区未信任时不执行。
  */
@@ -11611,17 +11843,19 @@ async function executeStatusLineCommand(statusLineInput, signal, timeoutMs, logR
     logForDebugging("Skipping StatusLine command execution - workspace trust not accepted");
     return;
   }
-  let statusLine = getEffectiveStatusLine(getSettings_DEPRECATED()?.statusLine);
-  if (!statusLine || statusLine.type !== "command") return;
+  let effectiveStatusLine = getEffectiveStatusLine(getSettings_DEPRECATED()?.statusLine);
+  if (!effectiveStatusLine || effectiveStatusLine.type !== "command") return;
   try {
     let jsonInput = jsonStringify(signal);
     let now = Date.now();
+    let typeLabel = isRemoteStatusLineInput(statusLineInput) ? hookTypeLabel(effectiveStatusLine) : undefined;
+    let command = typeLabel === undefined ? effectiveStatusLine.command : "command left out";
     let result = await execCommandHook(
       hasPolicySetting("statusLine")
         ? markRewrittenInput({
-            ...statusLine,
+            ...effectiveStatusLine,
           })
-        : statusLine,
+        : effectiveStatusLine,
       "StatusLine",
       "statusLine",
       jsonInput,
@@ -11631,10 +11865,11 @@ async function executeStatusLineCommand(statusLineInput, signal, timeoutMs, logR
       signal.cwd,
       timeoutMs,
       randomUUID(),
+      typeLabel,
     );
     if (result.aborted) return;
     let trimmed = result.stderr.trim();
-    if (trimmed) logForDebugging(`StatusLine [${statusLine.command}] stderr: ${trimmed}`);
+    if (trimmed) logForDebugging(`StatusLine [${command}] stderr: ${trimmed}`);
     if (result.status === 0) {
       if (!logState.okLogged) {
         logState.okLogged = true;
@@ -11649,12 +11884,11 @@ async function executeStatusLineCommand(statusLineInput, signal, timeoutMs, logR
         .flatMap((line) => line.trim() || []).join(`
 `);
       if (output) {
-        if (logResult)
-          logForDebugging(`StatusLine [${statusLine.command}] completed with status ${result.status}`);
+        if (logResult) logForDebugging(`StatusLine [${command}] completed with status ${result.status}`);
         return output;
       }
     } else if (logResult)
-      logForDebugging(`StatusLine [${statusLine.command}] completed with status ${result.status}`, {
+      logForDebugging(`StatusLine [${command}] completed with status ${result.status}`, {
         level: "warn",
       });
     if (result.status !== 0 && !logState.badLogged) {
@@ -11680,7 +11914,7 @@ async function executeStatusLineCommand(statusLineInput, signal, timeoutMs, logR
     return;
   }
 }
-//@ chunk-e6aww6q8.js:3571131-3571754 facade-exports (2.1.88 match: executeFileSuggestionCommand, 0.843)
+//@ chunk-5xgkngpb.js:3666362-3667010 facade-exports (2.1.88 match: executeFileSuggestionCommand, 0.843)
 /**
  * 执行 fileSuggestion 命令（@ 文件补全），默认 5 秒超时，按行返回候选。
  */
@@ -11712,6 +11946,7 @@ async function executeFileSuggestionCommand(session, input, signal, timeoutMs = 
       input.cwd,
       abortSignal,
       randomUUID(),
+      hookTextLeavesThisMachine(undefined) ? hookTypeLabel(hook) : undefined,
     );
     if (result.aborted || result.status !== 0) return [];
     return result.stdout
@@ -11728,7 +11963,7 @@ async function executeFileSuggestionCommand(session, input, signal, timeoutMs = 
     return [];
   }
 }
-//@ chunk-e6aww6q8.js:3571754-3572702 fingerprint (2.1.88 match: executeFunctionHook, 1)
+//@ chunk-5xgkngpb.js:3667010-3667960 fingerprint (2.1.88 match: executeFunctionHook, 1)
 /**
  * 执行会话 function 钩子（内存回调，参数为消息列表），返回 false 时以 errorMessage 阻断；默认 5 秒超时。
  */
@@ -11796,7 +12031,7 @@ async function executeFunctionHook({ hook, messages, hookName, toolUseID, hookEv
     };
   }
 }
-//@ chunk-e6aww6q8.js:3572702-3573305 fingerprint (2.1.88 match: executeHookCallback, 0.848)
+//@ chunk-5xgkngpb.js:3667960-3668564 fingerprint (2.1.88 match: executeHookCallback, 0.848)
 /**
  * 执行 SDK callback 钩子（hook.callback），结果经 processHookJSONOutput 处理；internal 钩子不产生成功消息。
  */
@@ -11848,7 +12083,7 @@ async function executeHookCallback({
     hook,
   };
 }
-//@ chunk-e6aww6q8.js:3573305-3573644 layout
+//@ chunk-5xgkngpb.js:3668564-3668903 layout
 function getHookNameForTelemetry(hookEvent, matchQuery) {
   if (!matchQuery) return hookEvent;
   if (isToolDetailsLoggingEnabled()) return `${hookEvent}:${matchQuery}`;
@@ -11869,7 +12104,7 @@ function getHookNameForTelemetry(hookEvent, matchQuery) {
       return `${hookEvent}:${matchQuery}`;
   }
 }
-//@ chunk-e6aww6q8.js:3573644-3574174 fingerprint (2.1.88 match: getHookDefinitionsForTelemetry, 0.758)
+//@ chunk-5xgkngpb.js:3668903-3669433 fingerprint (2.1.88 match: getHookDefinitionsForTelemetry, 0.76)
 /**
  * 把匹配的钩子定义转成遥测用的 {type, command|prompt|name}。
  */
@@ -11915,7 +12150,7 @@ function getHookDefinitionsForTelemetry(matchedHooks) {
     };
   });
 }
-//@ chunk-e6aww6q8.js:3574174-3574322 affinity
+//@ chunk-5xgkngpb.js:3669433-3669581 affinity
 /**
  * PowerShell 钩子里把 ${CLAUDE_PROJECT_DIR} 等改写为 ${env:…}。
  */
@@ -11924,119 +12159,136 @@ function toPowerShellEnvRefs(command) {
     command = command.replaceAll("${" + name + "}", () => "${env:" + name + "}");
   return command;
 }
+//@ chunk-v6cve82g.js:22190-22257 fingerprint (2.1.88 match: hasBlockingResult, 0.505)
+function hasBlockingResult_2(message, options) {
+  return (
+    filterMcpServersByPolicy({
+      [`claude.ai ${message}`]: options,
+    }).blocked.length > 0
+  );
+}
 export {
   areHooksEnabled,
   executePermissionRequestHooks,
   managedTierHooks,
   hasSettingsHookForEvent,
+  flushPendingAsyncRewakeHooks,
+  executeNotificationHooks,
+  executeDirectoryAddedHooks,
   evaluateHookIfPattern,
   execPluginCommandHook,
   GUARD_AND_FEEDBACK_EVENTS,
   HOOK_CHECK_UNAVAILABLE_MESSAGE,
   isHookSourceAllowed,
   shouldSkipHookDueToTrust,
-  hasHookForEvent_2,
-  executeSubagentStartHooks,
-  getNonBlockableHookErrorMessage,
-  executeStopHooks,
-  createBaseHookInput,
-  hookInputCwd,
-  executeHooks,
-  hasHookForEvent,
-  setSessionEndRaiser,
-  executeNotificationHooks,
-  isManagedHookAllowed,
-  getSessionEndHookTimeoutMs,
-  executeSessionEndHooks,
-  executeStatusLineCommand,
-  flushPendingAsyncRewakeHooks,
-  executeDirectoryAddedHooks,
-  executeInBackground,
-  executeFileSuggestionCommand,
-  hasToolHookMatching,
-  isFreshHeronEnabled,
-  executePostToolBatchHooks,
-  executeStopFailureHooks,
-  MANAGED_HOOKS_TIER,
-  executeUserPromptSubmitHooks,
-  getUserPromptSubmitHookBlockingMessage,
-  getStopHookMessage,
-  executeUserPromptExpansionHooks,
-  executeConfigChangeHooks,
-  hasBlockingResult,
-  hasInstructionsLoadedHook,
-  executeInstructionsLoadedHooks,
-  settingsSourcesInReach,
-  userPromptSubmitHooksKey,
-  isPrefilterableHook,
-  getHooksForEvent,
-  hookMatcherMatches,
-  dispatchesWorktreeCreate,
-  executeWorktreeCreateHook,
-  executeWorktreeRemoveHook,
-  executePostCompactHooks,
-  executePreCompactHooks,
-  PRE_TOOL_HOOK_ERROR_PREFIX_RE,
-  preToolUseMatcherListedTools,
-  preToolUseMatcherCoversTool,
   executeElicitationHooks,
   executeElicitationResultHooks,
-  hasOnlyOwnCallbacksToRun,
-  getCloudDeferUnsupportedMessage,
-  executePermissionDeniedHooks,
-  registerHookEligibility,
+  executeUserPromptSubmitHooksForSession,
+  rejudgeLoadedMods,
+  getUserPromptSubmitHookBlockingMessage,
+  hasHookForEvent,
+  hasInstructionsLoadedHook,
+  executeInstructionsLoadedHooks,
   executePreToolHooks,
+  hookTextLeavesThisMachine,
   emitHookMetrics,
-  SAFE_CALLER_ID,
-  isElicitationFailureExit,
-  PROMPT_GUARD_EVENTS,
-  blocksWhenItCannotRunElsewhere,
+  executePreCompactHooks,
+  execCommandHookForDevice,
+  buildPromptBlockOutput,
+  parseHttpHookOutput,
+  exitTwoMeansMissingScript,
+  announcedAsync,
   parseHookOutput,
+  dropSuspectCaptureJson,
+  getUntrustedCaptureReason,
+  PROMPT_GUARD_EVENTS,
+  withHookStderr,
+  hookMatcherMatches,
+  evaluateHookIfCondition,
+  hookInputKey,
+  hasToolHookMatching,
   refreshModAdmission,
   MODS_POLICY_UNKNOWN_REASON,
   notifyModsRejudged,
   HookAdmissionError,
   getPreToolStageOrder,
   NotOrganizationPluginError,
+  isFreshHeronEnabled,
   admissionChangedListener,
   HookAdmissionRefusal,
   HOOKS_POLICY_UNREADABLE_MESSAGE,
   HOOKS_PENDING_POLICY_MESSAGE,
+  getHooksForEvent,
   HOOKS_SKIPPED_AT_START_MESSAGE,
   SESSION_START_HOOKS_SKIPPED_REASON,
   hasConfiguredHooksForEvent,
   RESTRICT_PERSONAL_CONFIG_REASON,
+  isOwnerRunHook,
+  getCloudDeferUnsupportedMessage,
   getPreToolHookBlockingMessage,
+  executePostCompactHooks,
   executeTaskCreatedHooks,
   getTaskCreatedHookMessage,
   executeFileChangedHooks,
   executeCwdChangedHooks,
   executeSessionStartHooks,
+  getNonBlockableHookErrorMessage,
   executeSetupHooks,
+  dispatchesWorktreeCreate,
+  executeWorktreeCreateHook,
+  executeWorktreeRemoveHook,
+  createBaseHookInput,
+  executeFileSuggestionCommand,
   CLOUD_HOOK_UNSUPPORTED_REASON,
+  waitForMcpClientReady,
+  refuseArtifactsMcpHook,
+  refuseRemoteBrowserHook,
+  interpolateHookInput,
+  HOOK_OUTPUT_META_KEYS,
+  hookInputCwd,
+  executeHooks,
+  executeStatusLineCommand,
+  hasOnlyOwnCallbacksToRun,
+  executePermissionDeniedHooks,
   collectPreToolHookPass,
   executePostToolHooks,
   executePostToolUseFailureHooks,
   moduleUnadmittedListener,
+  getPluginSettingsHooks,
+  isManagedHookAllowed,
+  hasNonInternalHook,
+  settingsSourcesInReach,
+  getSessionEndHookTimeoutMs,
+  executeSessionEndHooks,
+  registerHookEligibility,
   executeTaskCompletedHooks,
   getTaskCompletedHookMessage,
+  hasHookForEvent_2,
+  executeSubagentStartHooks,
+  executeStopHooks,
+  MANAGED_HOOKS_TIER,
+  executeUserPromptSubmitHooks,
+  getStopHookMessage,
+  executeUserPromptExpansionHooks,
+  isHookEligible,
+  executeConfigChangeHooks,
+  hasBlockingResult,
+  SAFE_CALLER_ID,
+  isElicitationFailureExit,
+  blocksWhenItCannotRunElsewhere,
+  setSessionEndRaiser,
+  executePostToolBatchHooks,
+  executeStopFailureHooks,
+  hasNoRuleCondition,
+  forwardedUnderMatchingToolName,
+  hasBlockingResult_2,
+  preToolUseMatcherListedTools,
+  preToolUseMatcherCoversTool,
   executeTeammateIdleHooks,
   getTeammateIdleHookMessage,
-  forwardedUnderMatchingToolName,
-  execCommandHookForDevice,
-  buildPromptBlockOutput,
-  parseHttpHookOutput,
-  exitTwoMeansMissingScript,
-  announcedAsync,
-  dropSuspectCaptureJson,
-  getUntrustedCaptureReason,
-  withHookStderr,
-  evaluateHookIfCondition,
-  hasNonInternalHook,
-  executeUserPromptSubmitHooksForSession,
-  rejudgeLoadedMods,
-  isHookEligible,
+  PRE_TOOL_HOOK_ERROR_PREFIX_RE,
   hookMatchQuery,
+  userPromptSubmitHooksKey,
   SESSION_END_HOOK_TIMEOUT_MS_DEFAULT,
   executeHooksOutsideREPL,
   getSessionEndHookDefaultTimeoutMs,

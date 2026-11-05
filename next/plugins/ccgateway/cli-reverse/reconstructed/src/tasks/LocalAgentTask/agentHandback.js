@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：子代理把控制交回父代理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (6)
  * attribution: placement 6
  */
 import { mainAgentId } from "../../bootstrap/state.js";
@@ -13,11 +13,11 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/gr
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { logError } from "../../utils/log.js";
 import { TASK_NOTIFICATION, TASK_ID, SUMMARY, AGENT_NOTIFICATION_PREFIX } from "../../constants/xml.js";
-import { formatTaskNotification, NEXT } from "../../utils/xmlTags.js";
+import { formatTaskNotification, peek as peek_2 } from "../../utils/xmlTags.js";
 import { escapeXml_2 as escapeXml, unescapeHtmlEntities } from "../../utils/confusables.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:579516-579783 placement
+//@ chunk-5xgkngpb.js:588084-588351 placement
 /**
  * 判断子代理结果是否可直接交回给某个接收者（单条内容、无警告、无 worktree 等），返回接收者。
  */
@@ -42,7 +42,7 @@ function handbackRecipientOf({
     return;
   return deliveries?.at(-1)?.recipient;
 }
-//@ chunk-e6aww6q8.js:579783-580032 placement
+//@ chunk-5xgkngpb.js:588351-588600 placement
 function shouldUseHandbackPointer({ handbackRecipient, routedAgentId }) {
   try {
     if (
@@ -60,16 +60,16 @@ function shouldUseHandbackPointer({ handbackRecipient, routedAgentId }) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:580032-580149 placement
-var RESUMED_BY_USER_SUFFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+//@ chunk-5xgkngpb.js:588600-588717 placement
+var RESUMED_BY_USER_SUFFIX; // deferred: uses COMMAND_NAME (../../constants/xml.js) of its import cycle while loading; runs once the cycle is complete
 var USER_RESUMED_NOTICE_PATTERN;
-deferInit("chunk-e6aww6q8.js:580032", () => {
+deferInit("chunk-5xgkngpb.js:588600", () => {
   RESUMED_BY_USER_SUFFIX = '" was resumed by the user';
   USER_RESUMED_NOTICE_PATTERN = new RegExp(
     `^<${TASK_NOTIFICATION}>\\n<${TASK_ID}>([^<]+)</${TASK_ID}>\\n<${SUMMARY}>[^<]*${RESUMED_BY_USER_SUFFIX}</${SUMMARY}>`,
   );
 });
-//@ chunk-e6aww6q8.js:580149-580647 placement
+//@ chunk-5xgkngpb.js:588717-589215 placement
 /**
  * 生成"用户已从转录视图恢复该代理"的任务通知。
  */
@@ -83,7 +83,7 @@ function buildUserResumedNotice({ agentId, description, to }) {
     }),
     mode: "task-notification",
     skipAttachments: true,
-    priority: NEXT,
+    priority: peek_2,
     agentId: to,
     taskId: agentId,
     userResumeNotice: true,
@@ -96,7 +96,7 @@ function buildUserResumedNotice({ agentId, description, to }) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:580647-580717 placement
+//@ chunk-5xgkngpb.js:589215-589285 placement
 /**
  * 从「用户已恢复」提示文本中取出任务 id。
  */
@@ -104,7 +104,7 @@ function userResumeNoticeTaskId(text) {
   let encodedId = USER_RESUMED_NOTICE_PATTERN.exec(text)?.[1];
   return encodedId === undefined ? undefined : unescapeHtmlEntities(encodedId);
 }
-//@ chunk-e6aww6q8.js:580717-580780 placement
+//@ chunk-5xgkngpb.js:589285-589348 placement
 /**
  * 判断通知是否是针对给定任务的用户恢复提示。
  */
@@ -112,9 +112,9 @@ function isUserResumeNoticeFor(message, taskId) {
   return message.userResumeNotice === true && message.taskId === taskId;
 }
 export {
-  handbackRecipientOf,
-  buildUserResumedNotice,
-  userResumeNoticeTaskId,
   shouldUseHandbackPointer,
   isUserResumeNoticeFor,
+  handbackRecipientOf,
+  userResumeNoticeTaskId,
+  buildUserResumedNotice,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：模型目录已发布下限（published-floor.json）的读写与合并，用于跨会话保留已发布的目录版本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sn6pxb4.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5a0qvva9.js (10)
  * attribution: placement 10
  */
 import { join } from "path";
@@ -25,13 +25,13 @@ import { safeParseJSON } from "../../json.js";
 import { jsonStringify } from "../../slowOperations.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-0sn6pxb4.js:483-682 placement
+//@ chunk-5a0qvva9.js:483-682 placement
 var PUBLISHED_FLOOR_JSON; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var FLOOR_FILE_VERSION;
 var MAX_FLOOR_ENTRIES;
 var MAX_FLOOR_FILE_BYTES;
 var publishedFloorSchema;
-deferInit("chunk-0sn6pxb4.js:483", () => {
+deferInit("chunk-5a0qvva9.js:483", () => {
   PUBLISHED_FLOOR_JSON = "published-floor.json";
   FLOOR_FILE_VERSION = 1;
   MAX_FLOOR_ENTRIES = 32;
@@ -50,15 +50,15 @@ deferInit("chunk-0sn6pxb4.js:483", () => {
     }),
   );
 });
-//@ chunk-0sn6pxb4.js:682-714 placement
+//@ chunk-5a0qvva9.js:682-714 placement
 function publishedFloorPath() {
   return join(modelCatalogCacheDir(), PUBLISHED_FLOOR_JSON);
 }
-//@ chunk-0sn6pxb4.js:714-766 placement
+//@ chunk-5a0qvva9.js:714-766 placement
 function publishedCatalogFloorMarks() {
   return getProviderState().publishedCatalogFloorMarks;
 }
-//@ chunk-0sn6pxb4.js:766-828 placement
+//@ chunk-5a0qvva9.js:766-828 placement
 /**
  * 读取已发布目录下限记录的版本号（缺省 0）。
  */
@@ -66,7 +66,7 @@ async function publishedFloorVersion(cacheKey) {
   await loadPublishedCatalogFloorOnce();
   return publishedCatalogFloorMarks().get(cacheKey)?.version ?? 0;
 }
-//@ chunk-0sn6pxb4.js:828-1028 placement
+//@ chunk-5a0qvva9.js:828-1028 placement
 /**
  * 读入已持久化的版本下限后，若该来源的新版本更高则记录（版本、签发时间、记录时间）并排队写回文件。
  */
@@ -81,13 +81,13 @@ async function recordPublishedCatalogFloor(cacheKey, record, recordedAt = Date.n
   });
   await writePublishedCatalogFloorQueued();
 }
-//@ chunk-0sn6pxb4.js:1028-1129 placement
+//@ chunk-5a0qvva9.js:1028-1129 placement
 function loadPublishedCatalogFloorOnce() {
   let providerState = getProviderState();
   providerState.publishedCatalogFloorRead ??= readPublishedCatalogFloorFile().then(mergeCatalogFloors);
   return providerState.publishedCatalogFloorRead;
 }
-//@ chunk-0sn6pxb4.js:1129-1248 placement
+//@ chunk-5a0qvva9.js:1129-1248 placement
 function mergeCatalogFloors(publishedCatalogFloorFile) {
   if (publishedCatalogFloorFile === undefined) return;
   for (let [cacheKey, mark] of publishedCatalogFloorFile) {
@@ -96,7 +96,7 @@ function mergeCatalogFloors(publishedCatalogFloorFile) {
       publishedCatalogFloorMarks().set(cacheKey, mark);
   }
 }
-//@ chunk-0sn6pxb4.js:1248-1691 placement
+//@ chunk-5a0qvva9.js:1248-1691 placement
 /**
  * 读版本下限文件（过大或无效时忽略并记日志）。
  */
@@ -123,7 +123,7 @@ async function readPublishedCatalogFloorFile() {
   }
   return new Map(Object.entries(parsed.data.sources));
 }
-//@ chunk-0sn6pxb4.js:1691-1817 placement
+//@ chunk-5a0qvva9.js:1691-1817 placement
 function writePublishedCatalogFloorQueued() {
   let providerState = getProviderState();
   let pending = (providerState.publishedCatalogFloorWrite ?? Promise.resolve()).then(
@@ -133,7 +133,7 @@ function writePublishedCatalogFloorQueued() {
   providerState.publishedCatalogFloorWrite = pending;
   return pending;
 }
-//@ chunk-0sn6pxb4.js:1817-2113 placement
+//@ chunk-5a0qvva9.js:1817-2113 placement
 async function writePublishedCatalogFloorFile() {
   try {
     mergeCatalogFloors(await readPublishedCatalogFloorFile());

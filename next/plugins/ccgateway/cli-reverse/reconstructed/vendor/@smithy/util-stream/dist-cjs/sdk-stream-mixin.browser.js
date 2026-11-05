@@ -1,8 +1,8 @@
 /**
  * @smithy/util-stream/dist-cjs/sdk-stream-mixin.browser.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/util-stream@4.4.0..4.5.8
- * pieces: chunk-wjd9n4jx.js (1)
+ * pieces: chunk-1fkvp0h1.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -12,7 +12,7 @@ import { require_util_hex_encoding } from "../../util-hex-encoding/dist-cjs/inde
 import { require_util_utf8 } from "../../util-utf8/dist-cjs/index.js";
 import { require_stream_type_check } from "./stream-type-check.js";
 
-//@ chunk-wjd9n4jx.js:7747-9158 cjs-fingerprint
+//@ chunk-1fkvp0h1.js:7747-9158 cjs-fingerprint
 var require_sdk_stream_mixin_browser = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

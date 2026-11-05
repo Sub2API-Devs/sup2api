@@ -1,13 +1,13 @@
 /**
  * jose/dist/webapi/jwe/compact/encrypt.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-5h78gfwc.js (1)
+ * pieces: chunk-0f6azspv.js (1)
  * attribution: esm-fingerprint 1
  */
 import { FlattenedEncrypt } from "../flattened/encrypt.js";
 
-//@ chunk-5h78gfwc.js:45018-45478 esm-fingerprint
+//@ chunk-0f6azspv.js:45018-45478 esm-fingerprint
 class CompactEncrypt {
   #e;
   constructor(plaintext) {

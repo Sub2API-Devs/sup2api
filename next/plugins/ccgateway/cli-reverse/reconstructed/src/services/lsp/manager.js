@@ -3,9 +3,9 @@
  *
  * LSP 管理器单例工厂：初始化状态机、代次、远程会话延后、插件刷新后重建、关闭；另混入两个与 LSP 无关的声明。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/lsp/manager.ts
- * pieces: chunk-aepeg2w5.js (1), chunk-e6aww6q8.js (3)
+ * pieces: chunk-5xgkngpb.js (3), chunk-exfmq47h.js (1)
  * attribution: placement 3, fingerprint 1
  */
 import { env } from "../../utils/env.js";
@@ -19,14 +19,14 @@ import { logPluginScopedError } from "../../utils/plugins/pluginScopedWrite.js";
 import { errorMessage } from "../../utils/errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:288956-288982 placement
+//@ chunk-exfmq47h.js:298579-298605 placement
 /**
  * LSP 管理器（外部构建为 null）。
  */
 function getLspManager() {
   return null;
 }
-//@ chunk-e6aww6q8.js:4641689-4641986 placement
+//@ chunk-5xgkngpb.js:4750272-4750569 placement
 /**
  * 远程会话（CLAUDE_CODE_REMOTE / REMOTE_SESSION_ID / REMOTE_ENVIRONMENT_TYPE）且 GrowthBook tengu_moonlit_panda 为 true 时，延后 LSP 初始化。
  */
@@ -43,7 +43,7 @@ function shouldDeferLspForRemoteSession() {
   );
   return remoteFlag.value === true;
 }
-//@ chunk-e6aww6q8.js:4641986-4644165 fingerprint (2.1.88 match: initializeLspServerManager, 0.49)
+//@ chunk-5xgkngpb.js:4750569-4752750 fingerprint (2.1.88 match: initializeLspServerManager, 0.49)
 /**
  * LSP 管理器单例工厂：持有 manager、initState(not-started/pending/success/failed)、代次号。initialize() 在 --bare 等禁用 lspServers 时跳过、远程会话按 tengu_moonlit_panda 延后，否则创建 LSPServerManager 并异步 initialize，成功后注册诊断处理器；reinitialize() 关掉旧实例按上次参数重建（插件刷新后）；另有 getStatus/isConnected/hasEverConnected/waitForInitialization/shutdown。
  */
@@ -191,7 +191,7 @@ function createLspManagerSingleton() {
     shutdown,
   };
 }
-//@ chunk-e6aww6q8.js:4644165-4644313 placement
+//@ chunk-5xgkngpb.js:4752750-4752898 placement
 /**
  * LSP 管理器单例，并解构导出 getLspServerManager/getInitializationStatus/isLspConnected/hasLspEverConnected/waitForLspInitialization/initializeLspServerManager/reinitializeLspServerManager/shutdownLspServerManager。
  */
@@ -204,7 +204,7 @@ var waitForLspInitialization;
 var initializeLspServerManager;
 var reinitializeLspServerManager;
 var shutdownLspServerManager;
-deferInit("chunk-e6aww6q8.js:4644165", () => {
+deferInit("chunk-5xgkngpb.js:4752750", () => {
   lspManagerSingleton = createLspManagerSingleton();
   ({
     get: getLspServerManager,
@@ -218,13 +218,13 @@ deferInit("chunk-e6aww6q8.js:4644165", () => {
   } = lspManagerSingleton);
 });
 export {
-  getLspManager,
-  reinitializeLspServerManager,
   hasLspEverConnected,
   getInitializationStatus,
+  reinitializeLspServerManager,
+  shouldDeferLspForRemoteSession,
+  getLspManager,
   getLspServerManager,
   initializeLspServerManager,
-  shouldDeferLspForRemoteSession,
   shutdownLspServerManager,
   waitForLspInitialization,
 };

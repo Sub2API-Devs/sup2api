@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 权限规则匹配
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (12)
  * attribution: placement 12
  */
 import { isRemoteBrowserToolUnderModeFloor, isRemoteBrowserModeFloorOn } from "./remoteBrowser.js";
@@ -13,16 +13,19 @@ import {
   getToolNameForPermissionCheck as getToolNameForPermissionCheck_4,
   mcpInfoFromString,
 } from "../../services/mcp/mcpStringUtils.js";
-import { permissionRuleValueFromString, hasWildcard } from "./permissionRuleParser.js";
+import {
+  parseRuleString,
+  permissionRuleValueFromString as permissionRuleValueFromString_2,
+  hasWildcard,
+} from "./permissionRuleParser.js";
 import { getRemoteBrowserCardRules, canonicalRuleString } from "./toolPermissionContext.js";
-import { formatPermissionRule } from "./disallowedToolsFlag.js";
 import { isPlanBypass } from "./browserToolNames.js";
 import { isAutoClassifierActive } from "./autoModeState.js";
 import { getAllowRules, toolMatchesWholeToolRule } from "./permissions.js";
 import { REMOTE_BROWSER_SERVER_NAME } from "../../services/mcp/remoteBrowserServer.js";
 import { filterRestrictedAllowUpdates } from "./permissionRulePayload.js";
 
-//@ chunk-e6aww6q8.js:933213-933603 placement
+//@ chunk-5xgkngpb.js:944408-944798 placement
 /**
  * 远程浏览器工具在模式地板下被回答后，把新加入的整工具会话 allow 规则记为远程浏览器卡片回答。
  */
@@ -33,7 +36,7 @@ function recordRemoteBrowserCardAnswers(tool, previousContext, toolPermissionCon
   let currentCounts = countRuleOccurrences(session);
   let toolNameForPermissionCheck = getToolNameForPermissionCheck_4(tool);
   let filtered = [...currentCounts.keys()].filter((key) => {
-    let ruleValue = permissionRuleValueFromString(key);
+    let ruleValue = parseRuleString(key);
     return (
       (currentCounts.get(key) ?? 0) > (previousCounts.get(key) ?? 0) &&
       ruleValue.toolName === toolNameForPermissionCheck &&
@@ -53,20 +56,20 @@ function recordRemoteBrowserCardAnswers(tool, previousContext, toolPermissionCon
     },
   };
 }
-//@ chunk-e6aww6q8.js:933603-933682 placement
+//@ chunk-5xgkngpb.js:944798-944877 placement
 function countRuleOccurrences(session) {
   let counts = new Map();
   for (let rule of session) counts.set(rule, (counts.get(rule) ?? 0) + 1);
   return counts;
 }
-//@ chunk-e6aww6q8.js:933682-933757 placement
+//@ chunk-5xgkngpb.js:944877-944952 placement
 function isRemoteBrowserCardRule(rule, toolPermissionContext) {
   return (
     rule.source === "session" &&
-    getRemoteBrowserCardRules(toolPermissionContext).has(formatPermissionRule(rule.ruleValue))
+    getRemoteBrowserCardRules(toolPermissionContext).has(permissionRuleValueFromString_2(rule.ruleValue))
   );
 }
-//@ chunk-e6aww6q8.js:933757-933873 placement
+//@ chunk-5xgkngpb.js:944952-945068 placement
 function isAutoAllowingMode(mode, toolPermissionContext) {
   return (
     mode === "bypassPermissions" ||
@@ -74,7 +77,7 @@ function isAutoAllowingMode(mode, toolPermissionContext) {
     isAutoClassifierActive(mode, toolPermissionContext.servedCall === true)
   );
 }
-//@ chunk-e6aww6q8.js:933873-933968 placement
+//@ chunk-5xgkngpb.js:945068-945163 placement
 function isAutoAllowingAnyMode(toolPermissionContext) {
   return (
     isAutoAllowingMode(toolPermissionContext.mode, toolPermissionContext) ||
@@ -82,7 +85,7 @@ function isAutoAllowingAnyMode(toolPermissionContext) {
       isAutoAllowingMode(toolPermissionContext.modeBeforeRewrite, toolPermissionContext))
   );
 }
-//@ chunk-e6aww6q8.js:933968-934047 placement
+//@ chunk-5xgkngpb.js:945163-945242 placement
 /**
  * shouldRelyOnModeFloorForBrowser：远程浏览器工具按模式地板处理。
  */
@@ -96,21 +99,21 @@ function shouldRelyOnModeFloorForBrowser(tool, toolPermissionContext) {
       ))
   );
 }
-//@ chunk-e6aww6q8.js:934047-934086 placement
+//@ chunk-5xgkngpb.js:945242-945281 placement
 /**
  * isRemoteBrowserToolModeFloorActive：远程浏览器工具处于模式地板。
  */
 function isRemoteBrowserToolModeFloorActive(tool, toolPermissionContext) {
   return isRemoteBrowserToolUnderModeFloor(tool) && isAutoAllowingAnyMode(toolPermissionContext);
 }
-//@ chunk-e6aww6q8.js:934086-934122 placement
+//@ chunk-5xgkngpb.js:945281-945317 placement
 /**
  * isRemoteBrowserUnderModeFloor：远程浏览器工具且模式地板开启。
  */
 function isRemoteBrowserUnderModeFloor(toolName) {
   return isRemoteBrowserToolName(toolName) && isRemoteBrowserModeFloorOn();
 }
-//@ chunk-e6aww6q8.js:934122-934198 placement (2.1.88 match: findMcpServerConnection, 1)
+//@ chunk-5xgkngpb.js:945317-945393 placement (2.1.88 match: findMcpServerConnection, 1)
 /**
  * 判断工具名属于远程浏览器 MCP 服务器（服务器名等于 REMOTE_BROWSER，或通配匹配 mcp__<remote-browser>__）。
  */
@@ -120,7 +123,7 @@ function isRemoteBrowserToolName(toolName) {
     (hasWildcard(toolName) && matchesWildcardSequence(toolName, `mcp__${REMOTE_BROWSER_SERVER_NAME}__`))
   );
 }
-//@ chunk-e6aww6q8.js:934198-934371 placement
+//@ chunk-5xgkngpb.js:945393-945566 placement
 function matchesWildcardSequence(pattern, text) {
   let positions = expandWildcardPositions(pattern, [0]);
   for (let character of text) {
@@ -133,7 +136,7 @@ function matchesWildcardSequence(pattern, text) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:934371-934467 placement
+//@ chunk-5xgkngpb.js:945566-945662 placement
 function expandWildcardPositions(pattern, positions) {
   let expanded = new Set();
   for (let position of positions) {
@@ -145,7 +148,7 @@ function expandWildcardPositions(pattern, positions) {
   }
   return expanded;
 }
-//@ chunk-e6aww6q8.js:934467-934527 placement
+//@ chunk-5xgkngpb.js:945662-945722 placement
 /**
  * filterRemoteBrowserAllowUpdates：去掉远程浏览器工具的 allow 更新。
  */
@@ -156,7 +159,7 @@ function filterRemoteBrowserAllowUpdates(updates, toolPermissionContext) {
 export {
   isRemoteBrowserToolModeFloorActive,
   shouldRelyOnModeFloorForBrowser,
-  filterRemoteBrowserAllowUpdates,
   recordRemoteBrowserCardAnswers,
+  filterRemoteBrowserAllowUpdates,
   isRemoteBrowserUnderModeFloor,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。后台任务状态名同步。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (8)
  * attribution: placement 8
  */
 import { watch } from "fs";
@@ -39,17 +39,17 @@ import { renameSessionName, saveSessionAgentName } from "../sessionTitle.js";
 import { getSessionNamingState, takePendingYield } from "../sessionNameUniqueness.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:360922-360949 placement
+//@ chunk-czq1j3j2.js:398335-398362 placement
 /**
  * 同步 job 状态名称时的轮询间隔（50 毫秒）。
  */
 var JOB_NAME_SYNC_POLL_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var weakMap;
-deferInit("chunk-18hwfzwa.js:360922", () => {
+deferInit("chunk-czq1j3j2.js:398335", () => {
   JOB_NAME_SYNC_POLL_MS = 50;
   weakMap = new WeakMap();
 });
-//@ chunk-18hwfzwa.js:360949-361171 placement
+//@ chunk-czq1j3j2.js:398362-398584 placement
 async function checkJobStorePresent(storage, jobId) {
   let listResult = await storage.listEntries(
     {
@@ -70,7 +70,7 @@ async function checkJobStorePresent(storage, jobId) {
     present: listResult.value.items.length > 0 || listResult.value.cursor !== undefined,
   };
 }
-//@ chunk-18hwfzwa.js:361171-361409 placement
+//@ chunk-czq1j3j2.js:398584-398822 placement
 function checkJobStorePresentCached(storage, jobId) {
   let cache = weakMap.get(storage);
   if (cache === undefined) {
@@ -88,7 +88,7 @@ function checkJobStorePresentCached(storage, jobId) {
   cacheRef.set(jobId, promise);
   return promise;
 }
-//@ chunk-18hwfzwa.js:361409-362477 placement
+//@ chunk-czq1j3j2.js:398822-399890 placement
 function watchJobStateFile(storage, ownJobShortId, readState, logLabel, options) {
   let disposed = false;
   let subscription;
@@ -207,7 +207,7 @@ function watchJobStateFile(storage, ownJobShortId, readState, logLabel, options)
     subscription = undefined;
   };
 }
-//@ chunk-18hwfzwa.js:362477-362851 placement
+//@ chunk-czq1j3j2.js:399890-400264 placement
 function syncJobStateName({ session, storageV5, credentials, setAppState, onYieldedName }) {
   let cleanups = [];
   let disposeAll = () => {
@@ -243,7 +243,7 @@ function syncJobStateName({ session, storageV5, credentials, setAppState, onYiel
   }
   return disposeAll;
 }
-//@ chunk-18hwfzwa.js:362851-364026 placement
+//@ chunk-czq1j3j2.js:400264-401439 placement
 function syncSessionNameWithJobState({ session, storageV5, credentials, setAppState }) {
   if (isRemoteSessionAvailable()) return () => {};
   let ownJobShortId = getOwnJobShortId();
@@ -321,7 +321,7 @@ function syncSessionNameWithJobState({ session, storageV5, credentials, setAppSt
   runSync();
   return () => fsWatcher?.close();
 }
-//@ chunk-18hwfzwa.js:364026-364180 placement
+//@ chunk-czq1j3j2.js:401439-401593 placement
 function syncRenameToPeers({ storageV5, credentials }) {
   if (isRemoteSessionAvailable()) return () => {};
   setOnRename((name) => {
@@ -331,7 +331,7 @@ function syncRenameToPeers({ storageV5, credentials }) {
   });
   return () => setOnRename(null);
 }
-//@ chunk-18hwfzwa.js:364180-364649 placement
+//@ chunk-czq1j3j2.js:401593-402062 placement
 /**
  * 接收后台任务让出的会话名称，并同步到应用状态。
  */
@@ -367,4 +367,4 @@ function adoptYieldedSessionName({ session, storageV5, credentials, setAppState,
     unsubscribe();
   };
 }
-export { syncJobStateName, watchJobStateFile };
+export { watchJobStateFile, syncJobStateName };

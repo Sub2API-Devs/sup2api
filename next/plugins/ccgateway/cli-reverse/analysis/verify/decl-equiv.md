@@ -1,30 +1,30 @@
 # 声明级等价校验（tools/verify/decl-equiv.mjs）
 
-阅读树 `reconstructed`，7325 个文件，用时 69 秒。
+阅读树 `reconstructed`，7562 个文件，用时 72 秒。
 
 | 项 | 数 |
 |---|---|
-| declarations | 81667 |
-| equal | 81662 |
+| declarations | 84503 |
+| equal | 84498 |
 | mismatch | 5 |
 | missing | 0 |
 | duplicated | 0 |
 | notOfficial | 0 |
-| unmarked | 88 |
+| unmarked | 85 |
 | unlocated | 0 |
 | uncoveredOfficialStatements | 0 |
 | kindChanged | 1 |
-| deferred | 5799 |
-| dropped | 6910 |
+| deferred | 5997 |
+| dropped | 7105 |
 
-## chunk-r1g76qsy.js:283435-286144
+## chunk-qq5knpkd.js:287840-290549
 
 阅读树文件 `reconstructed\vendor\@modelcontextprotocol\client\dist\index.mjs`
 
 官方（规范形）：
 
 ```js
-var hh = class e {
+var _h = class e {
   _pending;
   _probeCounter = 0;
   _transportKind;
@@ -45,9 +45,9 @@ var hh = class e {
     s._transportKind = r;
     t.onmessage = a => {
       let n = s._pending;
-      if (n !== void 0 && (GAe(a) || zAe(a)) && a.id === n.id) {
+      if (n !== void 0 && (oIe(a) || sIe(a)) && a.id === n.id) {
         s._pending = void 0;
-        if (GAe(a)) n.resolve({
+        if (oIe(a)) n.resolve({
           kind: "response",
           result: a.result
         });else n.resolve({
@@ -56,9 +56,9 @@ var hh = class e {
         });
         return;
       }
-      if (n !== void 0 && s._transportKind === "http" && (GAe(a) || zAe(a)) && !s._issuedIds.has(a.id)) {
+      if (n !== void 0 && s._transportKind === "http" && (oIe(a) || sIe(a)) && !s._issuedIds.has(a.id)) {
         s._pending = void 0;
-        let i = cc(JSON.stringify(a.id));
+        let i = uc(JSON.stringify(a.id));
         let l = Error(`server/discover probe reply did not echo the request id (expected ${JSON.stringify(n.id)}, got ${i}) \u2014 treating the server as pre-2026-07-28`);
         l.name = "McpProbeIdMismatchError";
         s._savedOnError?.(l);
@@ -71,7 +71,7 @@ var hh = class e {
     t.onerror = a => {
       if (s._pending !== void 0 && s._errorSinceSend === void 0) s._errorSinceSend = a;
       let n = s._pending;
-      if (n !== void 0 && s._transportKind === "http" && lc(a)) setTim
+      if (n !== void 0 && s._transportKind === "http" && dc(a)) setTim
 ```
 
 阅读树（规范形）：
@@ -125,14 +125,14 @@ class ProbeWindow {
 [(ClassDeclarationbody=(ClassBodybody=[(ClassPropertycomputed=falsekey=K:"_pending"static=falsevalue=~)(ClassPropertycomputed=falsekey=K:"_probeCounter"
 ```
 
-## chunk-r1g76qsy.js:18460-21533
+## chunk-qq5knpkd.js:20275-23348
 
 阅读树文件 `reconstructed\vendor\@modelcontextprotocol\client\dist\src-D_zzAWoS.mjs`
 
 官方（规范形）：
 
 ```js
-var Sue = function (e) {
+var Wme = function (e) {
   e.InvalidRequest = "invalid_request";
   e.InvalidClient = "invalid_client";
   e.InvalidGrant = "invalid_grant";
@@ -153,25 +153,25 @@ var Sue = function (e) {
   e.InvalidTarget = "invalid_target";
   return e;
 }({});
-var $5 = class e extends Error {
+var G3 = class e extends Error {
   static {
     Object.defineProperty(this, "mcpBrand", {
       value: "mcp.OAuthError"
     });
   }
   static [Symbol.hasInstance](t) {
-    return Ie(this, t);
+    return Ne(this, t);
   }
   static isInstance(t) {
     if (typeof this !== "function") throw TypeError("isInstance must be called on the class (e.g. `SdkError.isInstance(value)`); for callbacks use `v => SdkError.isInstance(v)`");
-    return Ie(this, t);
+    return Ne(this, t);
   }
   constructor(t, r, s) {
     super(r);
     this.code = t;
     this.errorUri = s;
     this.name = "OAuthError";
-    bt(this, new.target);
+    Et(this, new.target);
   }
   toResponseObject() {
     let t = {
@@ -226,14 +226,14 @@ class OAuthError extends Error {
 ="right=(StringLiteralvalue="invalid_target")))(ReturnStatementargument=(Identifier#1))]directives=[])generator=falseid=~params=[(Identifier#1)])))])(ClassDeclarationbody=(ClassBodybody=[(StaticBlockbody=[(ExpressionStatementexpression=(CallExpressionarguments=[(ThisExpression)(StringLiteralvalue="m
 ```
 
-## chunk-r1g76qsy.js:59805-62666
+## chunk-qq5knpkd.js:64287-67148
 
 阅读树文件 `reconstructed\vendor\@modelcontextprotocol\client\dist\src-D_zzAWoS.mjs`
 
 官方（规范形）：
 
 ```js
-var ma = function (e) {
+var xa = function (e) {
   e[e.ParseError = -32700] = "ParseError";
   e[e.InvalidRequest = -32600] = "InvalidRequest";
   e[e.MethodNotFound = -32601] = "MethodNotFound";
@@ -245,34 +245,34 @@ var ma = function (e) {
   e[e.UrlElicitationRequired = -32042] = "UrlElicitationRequired";
   return e;
 }({});
-var Yd = class e extends Error {
+var Ac = class e extends Error {
   static {
     Object.defineProperty(this, "mcpBrand", {
       value: "mcp.ProtocolError"
     });
   }
   static [Symbol.hasInstance](t) {
-    return Ie(this, t);
+    return Ne(this, t);
   }
   static isInstance(t) {
     if (typeof this !== "function") throw TypeError("isInstance must be called on the class (e.g. `SdkError.isInstance(value)`); for callbacks use `v => SdkError.isInstance(v)`");
-    return Ie(this, t);
+    return Ne(this, t);
   }
   constructor(t, r, s) {
     super(r);
     this.code = t;
     this.data = s;
     this.name = "ProtocolError";
-    bt(this, new.target);
+    Et(this, new.target);
   }
   static fromError(t, r, s) {
-    if (t === ma.UrlElicitationRequired && s) {
+    if (t === xa.UrlElicitationRequired && s) {
       let a = s;
-      if (a.elicitations) return new ui(a.elicitations, r);
+      if (a.elicitations) return new hi(a.elicitations, r);
     }
-    if (t === ma.UnsupportedProtocolVersion && s) {
+    if (t === xa.UnsupportedProtocolVersion && s) {
       let a = s;
-      if (Array.isArray(a.supported) && typeof a.requested === "string") return new ca({
+      if (Array.isArray(a.supported) && typeof a.requested === "string") return new ha({
         supported: a.supported,
         re
 ```
@@ -320,14 +320,14 @@ class ProtocolError extends Error {
 (StringLiteralvalue="UrlElicitationRequired")))(ReturnStatementargument=(Identifier#1))]directives=[])generator=falseid=~params=[(Identifier#1)])))])(ClassDeclarationbody=(ClassBodybody=[(StaticBlockbody=[(ExpressionStatementexpression=(CallExpressionarguments=[(ThisExpression)(StringLiteralvalue="m
 ```
 
-## chunk-ayrvc8dg.js:311-331
+## chunk-7tj1as7s.js:311-331
 
 阅读树文件 `reconstructed\vendor\@smithy\core\index.js`
 
 官方（规范形）：
 
 ```js
-EE();
+wv();
 ```
 
 阅读树（规范形）：
@@ -346,14 +346,14 @@ let defaultExport = require_core();
 [(VariableDeclarationdeclarations=[(VariableDeclaratorid=(Identifier#0)init=(CallExpressionarguments=[]callee=(Identifier#1)))])]
 ```
 
-## chunk-s61vbvea.js:378712-389047
+## chunk-7jxyna5q.js:303107-313442
 
 阅读树文件 `reconstructed\vendor\marked\lib\marked.esm.js`
 
 官方（规范形）：
 
 ```js
-var bn = {
+var ln = {
   codeRemoveIndent: /^(?: {1,4}| {0,3}\t)/gm,
   outputLinkReplace: /\\([\[\]])/g,
   indentCodeCompensation: /^(\s+)(?:```)/,

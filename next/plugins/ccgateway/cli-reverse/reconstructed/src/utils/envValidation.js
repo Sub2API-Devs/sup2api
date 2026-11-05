@@ -3,17 +3,17 @@
  *
  * 有界整数型环境变量的校验（非法值回退默认并告警）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/envValidation.ts
- * pieces: chunk-aepeg2w5.js (1), chunk-q4qb1h08.js (10)
- * attribution: fingerprint 1, placement 10
+ * pieces: chunk-71parphm.js (10), chunk-exfmq47h.js (1)
+ * attribution: placement 10, fingerprint 1
  */
 import { parseIntLoose } from "./envUtils.js";
 import { logForDebugging } from "./debug.js";
 import { PROVIDER_ENV_VARS } from "./managedEnvConstants.js";
 import { jsonStringifyRaw } from "./slowOperations.js";
 
-//@ chunk-aepeg2w5.js:341893-342255 fingerprint (2.1.88 match: validateBoundedIntEnvVar, 1)
+//@ chunk-exfmq47h.js:352380-352742 fingerprint (2.1.88 match: validateBoundedIntEnvVar, 1)
 function validateBoundedIntEnvVar(name, value, defaultValue, upperLimit) {
   if (!value)
     return {
@@ -44,7 +44,7 @@ function validateBoundedIntEnvVar(name, value, defaultValue, upperLimit) {
     status: "valid",
   };
 }
-//@ chunk-q4qb1h08.js:1252-1382 placement
+//@ chunk-71parphm.js:1267-1397 placement
 function envEntryProblem_2(name, value) {
   return PROVIDER_ENV_VARS.test(name)
     ? "invalid-name"
@@ -54,7 +54,7 @@ function envEntryProblem_2(name, value) {
         ? "nul-in-value"
         : undefined;
 }
-//@ chunk-q4qb1h08.js:1382-1550 placement
+//@ chunk-71parphm.js:1397-1565 placement
 /**
  * 环境变量条目被丢弃的原因文案：名称不合法、值不是字符串、值含 NUL 字符。
  */
@@ -63,7 +63,7 @@ var ENV_ENTRY_PROBLEM_TEXT = {
   "non-string-value": "its value isn't a string",
   "nul-in-value": "its value contains a NUL character",
 };
-//@ chunk-q4qb1h08.js:1550-1814 placement
+//@ chunk-71parphm.js:1565-1829 placement
 /**
  * 过滤环境变量对象中不合法的条目，返回保留的部分与被丢弃的条目及原因。
  */
@@ -91,19 +91,19 @@ function filterInvalidEnvEntries(entries) {
     dropped: flattened,
   };
 }
-//@ chunk-q4qb1h08.js:1814-1824 placement
+//@ chunk-71parphm.js:1829-1839 placement
 var MAX_DISPLAYED_ENV_CHARS = 200;
-//@ chunk-q4qb1h08.js:1824-1884 placement
+//@ chunk-71parphm.js:1839-1899 placement
 function describeCharCount(count) {
   return count === 1 ? "1 character" : `${count} characters`;
 }
-//@ chunk-q4qb1h08.js:1884-2006 placement
+//@ chunk-71parphm.js:1899-2021 placement
 function escapeForDisplay(text) {
   return jsonStringifyRaw(text)
     .slice(1, -1)
     .replace(/[^\x20-\x7e]/g, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }
-//@ chunk-q4qb1h08.js:2006-2194 placement
+//@ chunk-71parphm.js:2021-2209 placement
 /**
  * 生成环境变量条目的安全显示：转义并截断变量名，值不显示只给长度。
  */
@@ -116,16 +116,16 @@ function describeEnvEntryName(name) {
     ? display
     : `${display} (then '=' and ${describeCharCount(name.length - index - 1)}, not shown)`;
 }
-//@ chunk-q4qb1h08.js:2194-2205 placement
+//@ chunk-71parphm.js:2209-2220 placement
 var envEntryProblemCheck = null;
-//@ chunk-q4qb1h08.js:2205-2223 placement
+//@ chunk-71parphm.js:2220-2238 placement
 /**
  * 注册（或替换）环境项问题检查回调，供 envEntryProblem 调用。
  */
 function setEnvEntryProblemCheck(isSettingsSourcedEnvValue) {
   envEntryProblemCheck = isSettingsSourcedEnvValue;
 }
-//@ chunk-q4qb1h08.js:2223-2261 placement
+//@ chunk-71parphm.js:2238-2276 placement
 /**
  * 用已注册的检查回调判断某个环境变量项是否有问题，未注册时返回 false。
  */
@@ -134,11 +134,11 @@ function envEntryProblem(name, value) {
 }
 export {
   validateBoundedIntEnvVar,
-  escapeForDisplay,
-  envEntryProblem,
-  describeEnvEntryName,
-  filterInvalidEnvEntries,
   ENV_ENTRY_PROBLEM_TEXT,
   envEntryProblem_2,
+  describeEnvEntryName,
+  escapeForDisplay,
   setEnvEntryProblemCheck,
+  envEntryProblem,
+  filterInvalidEnvEntries,
 };

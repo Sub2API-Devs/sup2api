@@ -1,8 +1,8 @@
 /**
  * ajv/dist/vocabularies/applicator/properties.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: ajv@8.13.0
- * pieces: chunk-s82q9s4x.js (1)
+ * pieces: chunk-xcs4sv9h.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_code_2 } from "../code.js";
 import { require_util_2 } from "../../compile/util.js";
 import { require_additionalProperties } from "./additionalProperties.js";
 
-//@ chunk-s82q9s4x.js:100498-101484 cjs-fingerprint
+//@ chunk-xcs4sv9h.js:100498-101484 cjs-fingerprint
 var require_properties = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

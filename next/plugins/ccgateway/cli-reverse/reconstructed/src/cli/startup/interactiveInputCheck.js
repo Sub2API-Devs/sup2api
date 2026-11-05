@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：交互输入（TTY）检测与无法读取键盘时的退出说明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3wek6r2k.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hjswk319.js (6)
  * attribution: placement 6
  */
 import { fstat } from "fs";
@@ -13,7 +13,7 @@ import { logFeatureSadAsync } from "../../services/analytics/featureTelemetry.js
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { printCliError, cliErrorAfterAnalyticsFlush } from "../exit.js";
 
-//@ chunk-3wek6r2k.js:13428-14161 placement
+//@ chunk-hjswk319.js:14009-14742 placement
 /**
  * 无 TTY 时按平台给出提示行与备选输入读取器（Windows 说明无法回退到控制台）。
  */
@@ -42,12 +42,12 @@ var NO_TTY_GUIDANCE_BY_PLATFORM = {
     reader: "cat",
   },
 };
-//@ chunk-3wek6r2k.js:14161-14206 placement
+//@ chunk-hjswk319.js:14742-14787 placement
 function noTtyMessage(platform) {
   return NO_TTY_GUIDANCE_BY_PLATFORM[platform].lines.join(`
 `);
 }
-//@ chunk-3wek6r2k.js:14206-14307 placement
+//@ chunk-hjswk319.js:14787-14888 placement
 async function logInteractiveInputFailure(reason) {
   try {
     await logFeatureSadAsync("startup_interactive_input", reason, {
@@ -55,7 +55,7 @@ async function logInteractiveInputFailure(reason) {
     });
   } catch {}
 }
-//@ chunk-3wek6r2k.js:14307-14408 placement
+//@ chunk-hjswk319.js:14888-14989 placement
 /**
  * 交互模式下 stdin 不是终端（且无法回退 /dev/tty 或控制台）时打印说明并退出。
  */
@@ -68,11 +68,11 @@ async function exitWithoutInteractiveInput(platform) {
   await logInteractiveInputFailure(platform);
   return cliErrorAfterAnalyticsFlush();
 }
-//@ chunk-3wek6r2k.js:14408-14602 placement
+//@ chunk-hjswk319.js:14989-15183 placement
 function printModeHint(example) {
   return `To send text as a prompt and print the reply instead, add -p; it also works with --continue and --resume <session-id> (for example: ${example} notes.md | claude -p --continue).`;
 }
-//@ chunk-3wek6r2k.js:14602-14860 placement
+//@ chunk-hjswk319.js:15183-15441 placement
 async function detectStdinKind() {
   let promise = await new Promise((resolve) => {
     fstat(0, (error, stats) => resolve(error ? undefined : stats));

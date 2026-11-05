@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关 Google 组成员校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (2)
  * attribution: placement 2
  */
 import { readFile } from "fs/promises";
@@ -15,14 +15,14 @@ import { SignJWT } from "../../../../vendor/jose/dist/webapi/jwt/sign.js";
 import { fetchWithCa } from "../network.js";
 import { gatewayLog } from "../../gateway/gatewayBanner.js";
 
-//@ chunk-1ny7cxrt.js:1314722-1314895 placement
+//@ chunk-1hnjmk23.js:1315685-1315858 placement
 /**
  * 只读读取 Google 组信息的 OAuth scope。
  */
 var HTTPS_OAUTH2_GOOGLEAPIS_COM_TOKEN = "https://oauth2.googleapis.com/token";
 var GOOGLE_ADMIN_GROUPS_URL = "https://admin.googleapis.com/admin/directory/v1/groups";
 var GOOGLE_ADMIN_GROUP_READONLY_SCOPE = "https://www.googleapis.com/auth/admin.directory.group.readonly";
-//@ chunk-1ny7cxrt.js:1314895-1316760 placement
+//@ chunk-1hnjmk23.js:1315858-1317723 placement
 /**
  * 用 Google 服务账号（JWT bearer，代管理员身份）换取访问令牌（缓存到过期前 60 秒），返回按用户查询所属 Google 组邮箱的函数（分页最多 50 页）；失败抛 GOOGLE_GROUPS_UNAVAILABLE。
  */

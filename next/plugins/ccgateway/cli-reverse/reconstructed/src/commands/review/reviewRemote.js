@@ -3,10 +3,10 @@
  *
  * ultrareview 配额响应结构（reviews_used/limit/remaining、is_overage）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/review/reviewRemote.ts
- * pieces: chunk-twvgrhqz.js (1), chunk-zn8pzrw0.js (26)
- * attribution: fingerprint 1, placement 26
+ * pieces: chunk-53f0ndkv.js (6), chunk-a2r96cyy.js (1), chunk-pp134gqz.js (20)
+ * attribution: placement 26, fingerprint 1
  */
 import { homedir } from "os";
 import { resolve } from "path";
@@ -19,7 +19,7 @@ import { X_CLAUDE_CODE_SESSION_ID } from "../../services/api/requestHeaders.js";
 import { getSessionId } from "../../bootstrap/state.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
-import { isLimitEnabled, fetchUtilization } from "../../services/api/usage.js";
+import { isLimitEnabled } from "../../services/api/usage.js";
 import { isUsdCurrency } from "../../services/api/overageCreditGrant.js";
 import {
   typicalUltrareviewCost,
@@ -36,9 +36,7 @@ import {
   ultrareviewUnavailableReason,
   isUltrareviewPostEnabled,
 } from "./ultrareviewPreconditions.js";
-import { isTeamSubscriber, isEnterpriseSubscriber } from "../../utils/auth.js";
-import { withTimeout } from "../../utils/sleep.js";
-import { fetchPrepaidBalance } from "../../services/api/billing.js";
+import { readUsageCredits } from "./ultrareviewUsageCredits.js";
 import { formatCurrency } from "../../services/api/referral.js";
 import { isInGitRepo } from "../../utils/background/remote/preconditions.js";
 import { logEvent } from "../../services/analytics/index.js";
@@ -60,7 +58,7 @@ import { parseShortstat, parseRawNumstat } from "../../utils/gitDiff.js";
 import { gitReadInOwnWorkTree } from "../../utils/git/gitLanes.js";
 import { getFsImplementation } from "../../utils/fsOperations.js";
 import { plural, truncateToLength } from "../../utils/stringUtils.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { truncateToWidth } from "../../utils/format.js";
 import { withGitNoPromptEnv, SSH_BATCH_CONFIG_ARGS } from "../../utils/gitSafeExec.js";
 import { boundedEditDistance } from "../../utils/settings/managedEnvKeys.js";
@@ -84,9 +82,9 @@ import { samePath } from "../../utils/file.js";
 import { identity } from "../../utils/pathClassification.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-twvgrhqz.js:714-809 fingerprint (2.1.88 match: checkOverageGate, 0.329)
+//@ chunk-a2r96cyy.js:713-808 fingerprint (2.1.88 match: checkOverageGate, 0.329)
 var checkOverageGate_2; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-twvgrhqz.js:714", () => {
+deferInit("chunk-a2r96cyy.js:713", () => {
   checkOverageGate_2 = DoctorLazy(() =>
     create({
       reviews_used: create_3(),
@@ -96,12 +94,12 @@ deferInit("chunk-twvgrhqz.js:714", () => {
     }),
   );
 });
-//@ chunk-zn8pzrw0.js:1793-2103 placement
+//@ chunk-53f0ndkv.js:614-923 placement
 /**
  * ultrareview 预检响应 schema
  */
 var ultrareviewPreflightSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-zn8pzrw0.js:1793", () => {
+deferInit("chunk-53f0ndkv.js:614", () => {
   ultrareviewPreflightSchema = DoctorLazy(() =>
     create({
       action: create_26(["proceed", "confirm", "blocked"]),
@@ -123,7 +121,7 @@ deferInit("chunk-zn8pzrw0.js:1793", () => {
     }),
   );
 });
-//@ chunk-zn8pzrw0.js:2103-2190 placement
+//@ chunk-53f0ndkv.js:923-1009 placement
 function blockedRemoteResult(message, reason) {
   return {
     action: "blocked",
@@ -134,7 +132,7 @@ function blockedRemoteResult(message, reason) {
     },
   };
 }
-//@ chunk-zn8pzrw0.js:2190-3194 placement
+//@ chunk-53f0ndkv.js:1009-2009 placement
 /**
  * 调用 /v1/ultrareview/preflight
  */
@@ -185,9 +183,9 @@ async function fetchUltrareviewPreflight(credentials) {
     return null;
   }
 }
-//@ chunk-zn8pzrw0.js:3194-3206 placement
+//@ chunk-53f0ndkv.js:2009-2020 placement
 var REVIEW_REMOTE_POLL_MS = 3000;
-//@ chunk-zn8pzrw0.js:3206-3581 placement
+//@ chunk-53f0ndkv.js:2020-2392 placement
 /**
  * 剩余可用 overage 额度（USD）：未启用为 0，无上限为无穷，扣已用、再受余额/自动充值限制。
  */
@@ -207,40 +205,30 @@ function getRemainingOverageBudget(limit, prepaidBalance) {
   );
   return Number.isFinite(min) ? Math.max(0, min) : null;
 }
-//@ chunk-zn8pzrw0.js:3648-4172 placement
+//@ chunk-53f0ndkv.js:2717-3013 placement
 /**
  * 用量额度不足提示
  */
-async function lowCreditsNote(credentials) {
-  try {
-    let typicalCostUsd = typicalUltrareviewCost();
-    if (typicalCostUsd === null || isTeamSubscriber() || isEnterpriseSubscriber()) return null;
-    let [utilization, prepaidBalance] = await withTimeout(
-      Promise.all([fetchUtilization(credentials), fetchPrepaidBalance(credentials)]),
-      REVIEW_REMOTE_POLL_MS,
-      "ultrareview: usage credits read timed out",
-    );
-    let remainingOverageBudget = getRemainingOverageBudget(utilization?.extra_usage, prepaidBalance);
-    if (remainingOverageBudget === null || remainingOverageBudget >= typicalCostUsd * 100) return null;
-    let remainingLabel =
-      remainingOverageBudget < 100
-        ? "Less than $1"
-        : `About ${formatCurrency(Math.floor(remainingOverageBudget / 100) * 100, "USD", "whole")}`;
-    let costLabel = formatCurrency(typicalCostUsd * 100, "USD", "whole");
-    return `${remainingLabel} of usage credits left. A review usually uses about ${costLabel} and stops if credits run out.`;
-  } catch {
-    logForDebugging("ultrareview: could not read usage credits left, so no low-credits line");
+async function lowCreditsNote(context) {
+  let typicalCostUsd = typicalUltrareviewCost();
+  let remainingMinorUnits = await readUsageCredits(context);
+  if (typicalCostUsd === null || remainingMinorUnits === null || remainingMinorUnits >= typicalCostUsd * 100)
     return null;
-  }
+  let remainingLabel =
+    remainingMinorUnits < 100
+      ? "Less than $1"
+      : `About ${formatCurrency(Math.floor(remainingMinorUnits / 100) * 100, "USD", "whole")}`;
+  let costLabel = formatCurrency(typicalCostUsd * 100, "USD", "whole");
+  return `${remainingLabel} of usage credits left. A review usually uses about ${costLabel} and stops if credits run out.`;
 }
-//@ chunk-zn8pzrw0.js:4172-4222 placement
+//@ chunk-pp134gqz.js:1616-1666 placement
 var EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
-//@ chunk-zn8pzrw0.js:4222-4413 placement
+//@ chunk-pp134gqz.js:1666-1857 placement
 var POST_IGNORED_NOTE = `
 Note: --post was ignored \u2014 posting applies only to GitHub.com pull request reviews.`;
 var POST_DISABLED_NOTE = `
 Note: --post was ignored \u2014 posting findings to the PR is currently turned off.`;
-//@ chunk-zn8pzrw0.js:4413-4972 placement
+//@ chunk-pp134gqz.js:1857-2416 placement
 function parseUltrareviewArgs(args) {
   let buildFlagPattern = (maxFindingsValue) =>
     String.raw`--fix|--comment|--post|--no-post|--max-findings(?:\s*=\s*(?!--)\S*|\s*=\S*|\s+${maxFindingsValue})?`;
@@ -268,7 +256,7 @@ function parseUltrareviewArgs(args) {
     postReview: flags.has("--no-post") ? false : flags.has("--post") ? true : undefined,
   };
 }
-//@ chunk-zn8pzrw0.js:4972-20851 placement
+//@ chunk-pp134gqz.js:2416-18288 placement
 /**
  * ultrareview 启动前检查范围（仓库、分支、改动量、额度、预检）。
  */
@@ -284,13 +272,13 @@ async function precheckLaunchScope(scopeArg, invocation = "/code-review ultra", 
       error: noRepositoryAdvice(invocation, options?.confirmsBeforeLaunch !== true),
     };
   }
-  let trimmed = scopeArg.trim();
-  let prUrl = parsePrUrl(trimmed);
-  let prNumber = prUrl?.num.toString() ?? trimmed.match(/^(?:#|PR[\s#]*)(\d+)$/i)?.[1] ?? trimmed;
+  let refName = scopeArg.trim();
+  let prUrl = parsePrUrl(refName);
+  let prNumber = prUrl?.num.toString() ?? refName.match(/^(?:#|PR[\s#]*)(\d+)$/i)?.[1] ?? refName;
   if (/^\d+$/.test(prNumber)) {
     let logRecovery = (outcome) => {
       if (outcome === "succeeded" && options?.suppressSucceededRecoveryEvent) return;
-      if (prNumber !== trimmed)
+      if (prNumber !== refName)
         logEvent("tengu_review_remote_precondition_recovery", {
           reason: lit("base_ref_not_found"),
           method: lit("pr_arg_normalization"),
@@ -472,19 +460,19 @@ async function precheckLaunchScope(scopeArg, invocation = "/code-review ultra", 
         },
       )
     ).code === 0;
-  let matches = /\s/.test(trimmed);
-  let hasBaseRef = matches && ((await refExists(`origin/${trimmed}`)) || (await refExists(trimmed)));
-  let prUrlHint = matches && !hasBaseRef ? trimmed.match(/https:\/\/\S*\/pull\/\d+\b/) : null;
+  let matches = /\s/.test(refName);
+  let hasBaseRef = matches && ((await refExists(`origin/${refName}`)) || (await refExists(refName)));
+  let prUrlHint = matches && !hasBaseRef ? refName.match(/https:\/\/\S*\/pull\/\d+\b/) : null;
   let prNumberHint =
     matches && !hasBaseRef && !prUrlHint
-      ? (trimmed.match(/(?<![\w/#-])(?:#|PR)[-\s#]*(\d+)\b/i) ??
-        trimmed.match(/(?<![\w/#-])pull[\s-]+request[-\s#]*(\d+)\b/i) ??
-        trimmed.match(/\/pull\/(\d+)\b/i) ??
-        trimmed.match(/^(\d+)\b/))
+      ? (refName.match(/(?<![\w/#-])(?:#|PR)[-\s#]*(\d+)\b/i) ??
+        refName.match(/(?<![\w/#-])pull[\s-]+request[-\s#]*(\d+)\b/i) ??
+        refName.match(/\/pull\/(\d+)\b/i) ??
+        refName.match(/^(\d+)\b/))
       : null;
   if (prUrlHint || prNumberHint) {
     let prRefText = prUrlHint ? prUrlHint[0] : `#${prNumberHint[1]}`;
-    let _ = prUrlHint ? prUrlHint[0] : prNumberHint[1];
+    let commandRef = prUrlHint ? prUrlHint[0] : prNumberHint[1];
     logEvent("tengu_review_remote_precondition_recovery", {
       reason: lit("base_ref_not_found"),
       method: lit("embedded_pr_hint"),
@@ -492,10 +480,10 @@ async function precheckLaunchScope(scopeArg, invocation = "/code-review ultra", 
     });
     logEvent("tengu_review_remote_precondition_failed", {
       reason: lit("base_ref_not_found"),
-      looks_like_url: /^https?:/i.test(trimmed),
+      looks_like_url: /^https?:/i.test(refName),
       looks_like_sha: false,
-      starts_with_hash: trimmed.startsWith("#"),
-      has_slash: trimmed.includes("/"),
+      starts_with_hash: refName.startsWith("#"),
+      has_slash: refName.includes("/"),
       has_whitespace: true,
       has_pr_ref: true,
       has_remote: await hasRemoteRepository(),
@@ -504,12 +492,12 @@ async function precheckLaunchScope(scopeArg, invocation = "/code-review ultra", 
     return {
       ok: false,
       reason: "base_ref_not_found",
-      error: `Your request mentions what looks like a PR reference (${prRefText}). To review that PR, run \`${invocation} ${_}\`. To review your current branch instead, rerun without the PR-style reference.`,
+      error: `Your request mentions what looks like a PR reference (${prRefText}). To review that PR, run \`${invocation} ${commandRef}\`. To review your current branch instead, rerun without the PR-style reference.`,
     };
   }
-  let isProseInstructions = matches && !hasBaseRef && !trimmed.startsWith("-");
-  let instructions = isProseInstructions ? trimmed : undefined;
-  let baseRef = isProseInstructions ? "" : trimmed;
+  let isProseInstructions = matches && !hasBaseRef && !refName.startsWith("-");
+  let instructions = isProseInstructions ? refName : undefined;
+  let baseRef = isProseInstructions ? "" : refName;
   let fetchedFromRemote = false;
   if (baseRef) {
     if (!(await refExists(`origin/${baseRef}`)) && !(await refExists(baseRef))) {
@@ -539,8 +527,8 @@ async function precheckLaunchScope(scopeArg, invocation = "/code-review ultra", 
             error: `"${baseRef}" exists on origin but couldn't be fetched. Run \`git fetch origin ${baseRef}\` and try ${invocation} again.`,
           };
         }
-        let _ = await listBranchRefs(baseRef);
-        if (_)
+        let commandRef = await listBranchRefs(baseRef);
+        if (commandRef)
           logEvent("tengu_review_remote_precondition_recovery", {
             reason: lit("base_ref_not_found"),
             method: lit("branch_suggestion"),
@@ -556,7 +544,7 @@ async function precheckLaunchScope(scopeArg, invocation = "/code-review ultra", 
           has_remote: await hasRemoteRepository(),
           cwd_is_home: isCwdHomeDir(),
         });
-        let suggestion = _ ? ` Did you mean \`${_}\`?` : "";
+        let suggestion = commandRef ? ` Did you mean \`${commandRef}\`?` : "";
         return {
           ok: false,
           reason: "base_ref_not_found",
@@ -937,7 +925,7 @@ async function precheckLaunchScope(scopeArg, invocation = "/code-review ultra", 
     },
   };
 }
-//@ chunk-zn8pzrw0.js:20851-21701 placement
+//@ chunk-pp134gqz.js:18288-19138 placement
 /**
  * 读取 HEAD 父提交、符号引用等
  */
@@ -996,10 +984,10 @@ async function readHeadInfo(mergeBaseSha, baseBranch) {
     parentSha: extraParents.length ? undefined : parentSha || undefined,
     headIsRoot: headSha ? !parentSha : undefined,
     untrackedCount:
-      untrackedResult.code === 0 ? count(untrackedResult.stdout.split("\x00"), Boolean) : undefined,
+      untrackedResult.code === 0 ? countWhere(untrackedResult.stdout.split("\x00"), Boolean) : undefined,
   };
 }
-//@ chunk-zn8pzrw0.js:21701-21959 placement
+//@ chunk-pp134gqz.js:19138-19396 placement
 /**
  * 未跟踪文件提示
  */
@@ -1007,7 +995,7 @@ function untrackedFilesNote(untrackedCount, invocation) {
   if (!untrackedCount) return "";
   return ` Git also sees ${untrackedCount.toLocaleString()} untracked ${plural(untrackedCount, "file or folder", "files or folders")} here. New files aren't part of a review until git tracks them: run \`git add\` on the ones you want reviewed, then rerun ${invocation}.`;
 }
-//@ chunk-zn8pzrw0.js:21959-22300 placement
+//@ chunk-pp134gqz.js:19396-19737 placement
 /**
  * 改动最大的文件列表
  */
@@ -1029,11 +1017,11 @@ function largestFilesNote(stdout, maxFiles = 3) {
     )
     .join(", ")}.`;
 }
-//@ chunk-zn8pzrw0.js:22300-22363 placement
+//@ chunk-pp134gqz.js:19737-19800 placement
 function previewInstructions(instructions, maxWidth = 80) {
   return truncateToWidth(instructions.replace(/\s+/g, " ").trim(), maxWidth);
 }
-//@ chunk-zn8pzrw0.js:22363-23206 placement
+//@ chunk-pp134gqz.js:19800-20643 placement
 /**
  * 检查远端分支是否存在
  */
@@ -1102,7 +1090,7 @@ async function resolveRemoteBranch(branchName) {
     ? "recovered"
     : "fetch_failed";
 }
-//@ chunk-zn8pzrw0.js:23206-23834 placement
+//@ chunk-pp134gqz.js:20643-21271 placement
 /**
  * 列出本地与 origin 分支引用
  */
@@ -1148,13 +1136,13 @@ async function listBranchRefs(missingBranch) {
   }
   return bestRef;
 }
-//@ chunk-zn8pzrw0.js:23834-24046 placement
+//@ chunk-pp134gqz.js:21271-21483 placement
 /**
  * 预检失败时的提示
  */
 var PREFLIGHT_UNAVAILABLE_MESSAGE =
   "Couldn't check whether this review can run, so it stopped before uploading your code. Try again shortly; if this keeps happening, open a pull request for this branch and review the pull request instead.";
-//@ chunk-zn8pzrw0.js:24046-24881 placement
+//@ chunk-pp134gqz.js:21483-22320 placement
 async function checkOverageGate({
   overageConfirmed,
   credentials,
@@ -1215,9 +1203,9 @@ ${lowCreditsLine}`
     }
   }
 }
-//@ chunk-zn8pzrw0.js:24881-24890 placement
+//@ chunk-pp134gqz.js:22320-22329 placement
 var RESULT_RELAY_MARGIN_MINUTES = 3;
-//@ chunk-zn8pzrw0.js:24890-30797 placement (2.1.88 match: launchRemoteReview, 0.427)
+//@ chunk-pp134gqz.js:22329-28228 placement (2.1.88 match: launchRemoteReview, 0.421)
 async function launchRemoteReview(scope, context, billingNote, options) {
   let invocation = options?.invocation ?? "/code-review ultra";
   let failedResult = (text) => ({
@@ -1325,12 +1313,12 @@ ${joined}`);
         BUGHUNTER_REPOSITORY: `${prRepo.owner}/${prRepo.name}`,
         ...bughunterEnv,
       },
-      onCreateFail: (message, reason, _) => {
+      onCreateFail: (message, reason, commandRef) => {
         createFailMessage = message;
         failReason = fromEnum(reason);
-        failStatus = _?.status;
-        failServerType = fromEnumOpt(_?.serverType);
-        failServerReason = fromEnumOpt(_?.serverReason);
+        failStatus = commandRef?.status;
+        failServerType = fromEnumOpt(commandRef?.serverType);
+        failServerReason = fromEnumOpt(commandRef?.serverReason);
       },
     });
     launchCommand = `/ultrareview ${scope.prNumber}`;
@@ -1338,7 +1326,7 @@ ${joined}`);
   } else {
     let { headBranch, baseBranch, mergeBaseSha, diffStat: diffStat_2, noMergeBase } = scope;
     diffStat = diffStat_2;
-    let _;
+    let commandRef;
     let bundleFailKind;
     remoteSession = await teleportToRemote({
       initialMessage: null,
@@ -1357,7 +1345,7 @@ ${joined}`);
         ...bughunterEnv,
       },
       onBundleFail: (bundleFailMessage, bundleFailKindLocal) => {
-        _ = bundleFailMessage;
+        commandRef = bundleFailMessage;
         bundleFailKind = fromEnum(bundleFailKindLocal);
       },
       onBundleNotice: (notice) => {
@@ -1389,7 +1377,7 @@ ${joined}`);
         });
       if (!aborted) logFeatureBad("ultrareview_launch", "teleport_failed");
       return failedResult(
-        _ ??
+        commandRef ??
           (createFailMessage
             ? `Ultrareview could not start the cloud session: ${createFailMessage}`
             : `Repo is too large. Push a PR and use \`${invocation} <PR#>\` instead.`),
@@ -1497,13 +1485,13 @@ ${notice}`,
     ],
   };
 }
-//@ chunk-zn8pzrw0.js:30797-31345 placement
+//@ chunk-pp134gqz.js:28228-28775 placement
 function ultrareviewLaunchAcknowledgementNudge(applyFixes, noteText) {
   return `The output above is already visible to the user. Briefly acknowledge it without repeating the target or billing note. Findings will arrive via task-notification.${applyFixes ? " The user passed --fix: when the findings arrive, apply them to the local working tree." : ""}${noteText ? ` The user's argument was interpreted as a review note, not a base branch: "${truncateToLength(noteText, POST_POLL_MS)}". The cloud review runs its standard pass over the branch diff and does not see the note; when the findings arrive, prioritize and relate them to the user's request.` : ""}`;
 }
-//@ chunk-zn8pzrw0.js:31345-31377 placement
+//@ chunk-pp134gqz.js:28775-28807 placement
 var REASON_CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
-//@ chunk-zn8pzrw0.js:31377-35274 placement
+//@ chunk-pp134gqz.js:28807-32703 placement
 async function runUltrareviewHeadless(args, options) {
   if (!isUltrareviewWithBridge()) {
     let unavailableReason = ultrareviewUnavailableReason();
@@ -1686,12 +1674,12 @@ ${getReviewDurationNote()} \xB7 Est. cost ${getReviewCostNote()} USD`,
     lowCreditsNote: (options.singlePass && gate.kind === "needs-confirm" && gate.lowCreditsNote) || undefined,
   };
 }
-//@ chunk-zn8pzrw0.js:35274-35329 placement
+//@ chunk-pp134gqz.js:32703-32758 placement
 async function hasRemoteRepository() {
   let currentRepositoryWithHost = await detectCurrentRepositoryWithHost();
   return !!currentRepositoryWithHost && !isNestedGitLabProject(currentRepositoryWithHost);
 }
-//@ chunk-zn8pzrw0.js:35329-35934 placement
+//@ chunk-pp134gqz.js:32758-33363 placement
 /**
  * 非 git 仓库时的建议文字
  */
@@ -1704,7 +1692,7 @@ function noRepositoryAdvice(invocation, confirmsBeforeLaunch = false) {
     : `If your project already uses git, cd into its folder and rerun ${invocation}. If it doesn't yet, ${initAdvice}`;
   return `${invocation} reviews the changes a git branch makes on top of an earlier commit, but ${getCwd()} is not inside a git repository. ${leadAdvice}`;
 }
-//@ chunk-zn8pzrw0.js:35934-36027 placement
+//@ chunk-pp134gqz.js:33363-33456 placement
 function isCwdHomeDir() {
   try {
     let homeDir = homedir();
@@ -1715,7 +1703,6 @@ function isCwdHomeDir() {
   }
 }
 export {
-  previewInstructions,
   parseUltrareviewArgs,
   runUltrareviewHeadless,
   ultrareviewLaunchAcknowledgementNudge,
@@ -1724,5 +1711,9 @@ export {
   POST_IGNORED_NOTE,
   precheckLaunchScope,
   checkOverageGate,
+  previewInstructions,
+  REVIEW_REMOTE_POLL_MS,
+  getRemainingOverageBudget,
   checkOverageGate_2,
+  fetchUltrareviewPreflight,
 };

@@ -3,14 +3,14 @@
  *
  * 钩子渲染与 local-jsx 的桥接（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (7)
  * attribution: placement 7
  */
 import { createValueSlot } from "../../../utils/valueSlot.js";
 
-//@ chunk-s61vbvea.js:15043-15106 placement
+//@ chunk-7jxyna5q.js:15786-15849 placement
 /**
  * 渲染桥接状态
  */
@@ -19,7 +19,7 @@ var newRenderBridgeState = () => ({
   pending: new Set(),
   attached: new Map(),
 });
-//@ chunk-s61vbvea.js:15106-15198 placement
+//@ chunk-7jxyna5q.js:15849-15941 placement
 /**
  * 引擎元素
  */
@@ -33,7 +33,7 @@ var engineElement = (props) => ({
   clientModules: {},
   drawnBy: [],
 });
-//@ chunk-s61vbvea.js:15198-15968 placement
+//@ chunk-7jxyna5q.js:15941-16711 placement
 /**
  * 渲染门面：已安装实现时委托给它（run/press/input/select/client*），否则给默认结果；onInvalidate 在安装前暂存。
  */
@@ -60,7 +60,7 @@ var createRenderFacade = (renderBridgeState) => ({
     };
   },
 });
-//@ chunk-s61vbvea.js:15968-16125 placement
+//@ chunk-7jxyna5q.js:16711-16868 placement
 function createRenderBridge() {
   let renderBridgeState = newRenderBridgeState();
   return {
@@ -73,18 +73,18 @@ function createRenderBridge() {
     render: createRenderFacade(renderBridgeState),
   };
 }
-//@ chunk-s61vbvea.js:16125-16137 placement
+//@ chunk-7jxyna5q.js:16868-16880 placement
 /**
  * 渲染桥接
  */
 var renderBridge = createRenderBridge();
-//@ chunk-s61vbvea.js:16137-16165 placement
+//@ chunk-7jxyna5q.js:16880-16908 placement
 /**
  * 安装渲染桥接
  */
 var installRenderBridge = (bridge) => {
   renderBridge.install(bridge);
 };
-//@ chunk-s61vbvea.js:16165-16183 placement
+//@ chunk-7jxyna5q.js:16908-16926 placement
 var render = renderBridge.render;
 export { render, installRenderBridge, engineElement };

@@ -3,9 +3,9 @@
  *
  * Artifact 实时订阅管理（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aqdf5t3e.js (63)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tsrpnscb.js (63)
  * attribution: placement 63
  */
 import {
@@ -135,6 +135,8 @@ import {
 import { hasWatchArtifactArg, stripWatchArtifactArgs } from "../../cli/watchArtifactArgs.js";
 import {
   autoReactNoticeLatchedAt,
+  getShareEntry,
+  artifactForeign,
   markAutoReactNoticePending,
   recordUnaccountedComments,
 } from "./shareEntries.js";
@@ -170,7 +172,7 @@ import {
   getSessionId,
   getIsNonInteractiveSession,
 } from "../../bootstrap/state.js";
-import { enqueuePendingNotification, removeQueuedByFilter } from "../../utils/messageQueueManager.js";
+import { enqueuePendingNotification, removeByFilter } from "../../utils/messageQueueManager.js";
 import { formatTaskNotification } from "../../utils/xmlTags.js";
 import { ARTIFACT_WATCH_LIFECYCLE } from "../../constants/xml.js";
 import { escapeXml_2 as escapeXml } from "../../utils/confusables.js";
@@ -193,8 +195,8 @@ import { wsEgressDenyReason } from "../../tools/MonitorTool/MonitorTool.js";
 import { ARTIFACT_SLUG_RE } from "../../tools/ArtifactTool/constants.js";
 import { readFreshOauthAccountFromDisk } from "../../utils/config.js";
 import { sameOwnerAccount } from "../../utils/auth.js";
-import { renewWatchToken, fetchLiveSubscription, recordHeardVersion } from "./liveSubscribe.js";
-import { isOtherOrg } from "./orgScope.js";
+import { renewLiveChannelToken, fetchLiveChannelToken, recordHeardVersion } from "./liveSubscribe.js";
+import { isArtifactInOtherOrg } from "./orgScope.js";
 import { sanitizeArtifactTitle } from "../../tools/ArtifactTool/artifactUrls.js";
 import { newLaneNoticeId } from "./commentReads.js";
 import { getUserAgent } from "../../utils/http.js";
@@ -211,7 +213,7 @@ import { unexpectedWatchFailure, describeWatchError } from "./durableWatch.js";
 import { isArtifactsAvailable } from "./artifactAvailability.js";
 import { QUERY } from "../mcp/firstPartyServerIds.js";
 
-//@ chunk-aqdf5t3e.js:7727-7806 placement (2.1.88 match: listAllCronTasks, 0.609)
+//@ chunk-tsrpnscb.js:7767-7846 placement (2.1.88 match: listAllCronTasks, 0.609)
 function claimArmFailureAnnouncement(announce, reason) {
   return addWithLimit(
     getLiveState().durable.announcedArmFailures,
@@ -219,7 +221,7 @@ function claimArmFailureAnnouncement(announce, reason) {
     MAX_CRON_OWNERSHIP_KEYS,
   );
 }
-//@ chunk-aqdf5t3e.js:38633-38869 placement (2.1.88 match: splitCommandWithOperators, 0.316)
+//@ chunk-tsrpnscb.js:38728-38964 placement (2.1.88 match: splitCommandWithOperators, 0.316)
 /**
  * 返回逐行处理器：对以 { 开头的行解析 JSON，comment 类型回调 comment()，ver 字段回调 ver(v,'live')，其他忽略。旧版名 splitCommandWithOperators 误配，属 frameLive 相关模块。
  */
@@ -241,16 +243,16 @@ function makeLiveVersionLineHandler(command) {
     return null;
   };
 }
-//@ chunk-aqdf5t3e.js:38869-38889 placement
+//@ chunk-tsrpnscb.js:38964-38984 placement
 /**
  * 实时订阅消息里版本号字段的正则（1–15 位数字）。
  */
 var VERSION_NUMBER_RE = /^\d{1,15}$/;
-//@ chunk-aqdf5t3e.js:38889-38946 placement
+//@ chunk-tsrpnscb.js:38984-39041 placement
 function liveDocHeadSink(slug) {
   return getLiveState().liveDocWatch.headSinks.get(slug);
 }
-//@ chunk-aqdf5t3e.js:38946-39110 placement
+//@ chunk-tsrpnscb.js:39041-39205 placement
 /**
  * 更新实时订阅监督器的最近活动时间（已停止、经 MCP 写入布防或订阅进行中时不更新）。
  */
@@ -265,7 +267,7 @@ function touchSupervisorActivity(slug) {
   )
     supervisor.lastActivityAt = Date.now();
 }
-//@ chunk-aqdf5t3e.js:39110-40054 placement
+//@ chunk-tsrpnscb.js:39205-40149 placement
 function handleFrameLiveControl(sink, slug, handlers) {
   return (line) => {
     if (line.charCodeAt(0) !== 123) return null;
@@ -318,7 +320,7 @@ function handleFrameLiveControl(sink, slug, handlers) {
     }
   };
 }
-//@ chunk-aqdf5t3e.js:40054-40203 placement
+//@ chunk-tsrpnscb.js:40149-40298 placement
 function classifyMonitorTask(task, slug, commentVerbsInSchema, humanTurnWiring, supervisor, explicit) {
   if (!explicit(task, commentVerbsInSchema)) return "dead";
   return humanTurnWiring &&
@@ -328,11 +330,11 @@ function classifyMonitorTask(task, slug, commentVerbsInSchema, humanTurnWiring, 
     ? "replace"
     : "keep";
 }
-//@ chunk-aqdf5t3e.js:40203-40247 placement
+//@ chunk-tsrpnscb.js:40298-40342 placement
 function isMonitorTaskLive(task, slug) {
   return isMonitorSocketOpenNow(task.id) && isMonitorWsTaskLive(task, slug);
 }
-//@ chunk-aqdf5t3e.js:40247-40585 placement
+//@ chunk-tsrpnscb.js:40342-40680 placement
 /**
  * 整理某 slug 正在运行的监听任务：已失联的停掉（标记连接丢失），需要替换的安静停掉，返回保留下来的任务 id。
  */
@@ -366,23 +368,23 @@ function reconcileMonitorTasks(context, slug, humanTurnWiring, humanTurnWiring_2
   }
   return foundId;
 }
-//@ chunk-aqdf5t3e.js:40585-40694 placement
+//@ chunk-tsrpnscb.js:40680-40789 placement
 function hasRunningMonitor(registry, slug) {
   return Object.values(registry.all()).some(
     (task) => isMonitorWsTask(task) && task.status === "running" && task.frameLive?.slug === slug,
   );
 }
-//@ chunk-aqdf5t3e.js:40694-40750 placement
+//@ chunk-tsrpnscb.js:40789-40845 placement
 function isAutoreactTaskArmed(task) {
   return isAutoReactArmedTask(task, isAutoreactArmed, {
     includeStopLatched: true,
   });
 }
-//@ chunk-aqdf5t3e.js:40750-40783 placement
+//@ chunk-tsrpnscb.js:40845-40878 placement
 function isClaimableAutoReactSubscription(task) {
   return isAutoReactArmedTask(task, isAutoreactArmed);
 }
-//@ chunk-aqdf5t3e.js:40783-41789 placement
+//@ chunk-tsrpnscb.js:40878-41884 placement
 function killAutoReactSubscriptions(registry, options) {
   setLedgerStorage(options?.storageV5);
   clearSummonWakeTimers();
@@ -448,7 +450,7 @@ function killAutoReactSubscriptions(registry, options) {
     });
   return killed;
 }
-//@ chunk-aqdf5t3e.js:41789-42204 placement
+//@ chunk-tsrpnscb.js:41884-42299 placement
 /**
  * 解除某 slug 被清扫暂停的自动回复：仍有活跃自动回复监听任务时恢复召唤唤醒并广播；若有上次唤醒参数则重新安排扫描（返回 lifted），否则返回 cleared；不满足条件返回 null。
  */
@@ -476,7 +478,7 @@ function liftSweptPause(registry, registry_2, slug, outcome) {
   });
   return "lifted";
 }
-//@ chunk-aqdf5t3e.js:42204-42342 placement
+//@ chunk-tsrpnscb.js:42299-42437 placement
 /**
  * 找到为指定 slug 布防自动响应且正在运行的监视任务。
  */
@@ -490,7 +492,7 @@ function findArmedAutoReactMonitor(registry, slug) {
       isMonitorWsTaskLive(task),
   );
 }
-//@ chunk-aqdf5t3e.js:42342-42486 placement
+//@ chunk-tsrpnscb.js:42437-42581 placement
 function releaseNoticeLatchesOnTurn(registry, registry_2) {
   if (registry_2.ownWords) {
     let cleared = clearOrphanedAutoReactNotices(
@@ -503,12 +505,12 @@ function releaseNoticeLatchesOnTurn(registry, registry_2) {
   }
   return unpauseSweptOnHumanTurn(registry);
 }
-//@ chunk-aqdf5t3e.js:42486-42589 placement
+//@ chunk-tsrpnscb.js:42581-42684 placement
 function hasActivitySince(registry, since) {
   if (since === undefined) return false;
   return Object.values(registry.all()).some((task) => task.startTime >= since && isTaskActive(task));
 }
-//@ chunk-aqdf5t3e.js:42589-42952 placement
+//@ chunk-tsrpnscb.js:42684-43047 placement
 /**
  * 判断任务是否仍处于活跃状态：shell/监视任务看运行或等待；agent 任务另外包括因非空闲原因保活的已完成任务与正在恢复的任务。
  */
@@ -524,7 +526,7 @@ function isTaskActive(task) {
   let resumeState = "resuming" in task && task.resuming === true;
   return active || resuming || resumeState;
 }
-//@ chunk-aqdf5t3e.js:42952-43156 placement
+//@ chunk-tsrpnscb.js:43047-43251 placement
 /**
  * 人类发起新回合时记下扫描代次，并尝试解除所有被清扫暂停的 slug，打点解除数量。
  */
@@ -539,13 +541,13 @@ function unpauseSweptOnHumanTurn(registry) {
     });
   return count;
 }
-//@ chunk-aqdf5t3e.js:43156-43235 placement
+//@ chunk-tsrpnscb.js:43251-43330 placement
 function hasStoppableAutoReactSupervision() {
   return getLiveState().builtInArtifactHiddenForMcp
     ? hasActiveAutoReactWatch() && isAutoreactArmed()
     : isAutoreactArmed() && hasActiveAutoReactWatch();
 }
-//@ chunk-aqdf5t3e.js:43235-44062 placement
+//@ chunk-tsrpnscb.js:43330-44157 placement
 function frameLiveWatchRows(context, onlySlug) {
   let rows = [];
   let autoReact;
@@ -596,14 +598,14 @@ function frameLiveWatchRows(context, onlySlug) {
   }
   return rows.sort((a, b) => a.since - b.since);
 }
-//@ chunk-aqdf5t3e.js:44062-44271 placement
+//@ chunk-tsrpnscb.js:44157-44366 placement
 function getAutoReactArmState(slug) {
   let state = getLiveState().autoReact.artifacts.get(slug);
   let lastProbeDeniedBy = state?.lastProbeDeniedBy ?? null;
   if (lastProbeDeniedBy !== null) return lastProbeDeniedBy === "denied_by_auto_mode" ? "declined" : "denied";
   return state?.lastReplyDeclinedByAutoMode === true ? "declined" : "armed";
 }
-//@ chunk-aqdf5t3e.js:44271-44838 placement
+//@ chunk-tsrpnscb.js:44366-44933 placement
 function frameLiveStoppedRows(request, options) {
   let { live, autoReact, wakes } = getLiveState();
   let rows = [];
@@ -632,7 +634,7 @@ function frameLiveStoppedRows(request, options) {
   }
   return rows.sort((a, b) => (a.since ?? Number.POSITIVE_INFINITY) - (b.since ?? Number.POSITIVE_INFINITY));
 }
-//@ chunk-aqdf5t3e.js:44838-45394 placement
+//@ chunk-tsrpnscb.js:44933-45489 placement
 function classifyWatchReason(liveState, context, { forPublish = false } = {}) {
   let { supervisors } = liveState;
   let ranked = [];
@@ -664,7 +666,7 @@ function classifyWatchReason(liveState, context, { forPublish = false } = {}) {
     })
     .map((entry) => entry.row);
 }
-//@ chunk-aqdf5t3e.js:45394-46047 placement
+//@ chunk-tsrpnscb.js:45489-46142 placement
 /**
  * 为腾位置停掉一个监听：停止监听任务，若它在自动回复则忘掉其意图，并通知主会话（达到监听数上限、为新监听腾出位置）；打点。
  */
@@ -704,7 +706,7 @@ function evictWatch(live, candidate, context, options) {
     }),
   });
 }
-//@ chunk-aqdf5t3e.js:46047-46273 placement
+//@ chunk-tsrpnscb.js:46142-46368 placement
 function getWatchProtection(state, slug) {
   let supervisor = state.supervisors.get(slug);
   if (supervisor === undefined || supervisor.stopped) return null;
@@ -716,18 +718,18 @@ function getWatchProtection(state, slug) {
     ? "auto_reply"
     : null;
 }
-//@ chunk-aqdf5t3e.js:46273-46312 placement
+//@ chunk-tsrpnscb.js:46368-46407 placement
 function hasWatchProtection(state, slug) {
   return getWatchProtection(state, slug) !== null;
 }
-//@ chunk-aqdf5t3e.js:46312-46500 placement
+//@ chunk-tsrpnscb.js:46407-46595 placement
 function getWatchProtectionForRow(state, row, options) {
   let supervisor = state.supervisors.get(row.slug);
   if (supervisor !== undefined && !supervisor.stopped) return getWatchProtection(state, row.slug);
   let task = options.taskRegistry.all()[row.taskId];
   return row.explicit ? "explicit" : isClaimableAutoReactSubscription(task) ? "auto_reply" : null;
 }
-//@ chunk-aqdf5t3e.js:46500-46708 placement
+//@ chunk-tsrpnscb.js:46595-46803 placement
 function evictForProtectedReconnect(live, context) {
   let reasons = classifyWatchReason(live, context);
   if (reasons.length === 0) return false;
@@ -737,7 +739,7 @@ function evictForProtectedReconnect(live, context) {
   });
   return true;
 }
-//@ chunk-aqdf5t3e.js:46708-46943 placement
+//@ chunk-tsrpnscb.js:46803-47038 placement
 function teardownFrameLiveForProcessHandoff() {
   let live = getLiveState().live;
   live.handoffGeneration += 1;
@@ -754,7 +756,7 @@ function teardownFrameLiveForProcessHandoff() {
   live.announcedArmFailures.clear();
   closeAllMonitorSockets();
 }
-//@ chunk-aqdf5t3e.js:46943-48480 placement
+//@ chunk-tsrpnscb.js:47038-48575 placement
 function startFrameLiveWatch(options) {
   let live = getLiveState().live;
   live.handoffGeneration += 1;
@@ -805,7 +807,7 @@ function startFrameLiveWatch(options) {
   });
   return total;
 }
-//@ chunk-aqdf5t3e.js:48480-48827 placement
+//@ chunk-tsrpnscb.js:48575-48922 placement
 function unwatchFrameLive(slug, options, consentWriter) {
   let { wasWatching } = stopLiveWatch(slug, options);
   getLiveState().live.nonEditorSlugs.delete(slug);
@@ -828,7 +830,7 @@ function unwatchFrameLive(slug, options, consentWriter) {
     wasWatching,
   };
 }
-//@ chunk-aqdf5t3e.js:48827-48960 placement
+//@ chunk-tsrpnscb.js:48922-49055 placement
 function endFrameLiveWatchOfDeletedArtifact(slug, reason) {
   hasWatchArtifactArg(slug, reason.storageV5);
   let { wasWatching } = stopLiveWatch(slug, reason);
@@ -838,7 +840,7 @@ function endFrameLiveWatchOfDeletedArtifact(slug, reason) {
       artifact_deleted: true,
     });
 }
-//@ chunk-aqdf5t3e.js:48960-49375 placement
+//@ chunk-tsrpnscb.js:49055-49470 placement
 /**
  * 停止某 slug 的实时监听：清除布防结果与召唤状态，停掉对应任务（自动回复任务按用户停止处理并重置台账），返回之前是否在监听。
  */
@@ -876,7 +878,7 @@ function stopLiveWatch(slug, reason) {
     wasWatching,
   };
 }
-//@ chunk-aqdf5t3e.js:49375-50486 placement
+//@ chunk-tsrpnscb.js:49470-50581 placement
 async function watchFrameLive(options) {
   let { slug, url, publishContext, getKnownVer, context, tool, commentVerbsInSchema } = options;
   if (!isConsentUiKind(publishContext))
@@ -945,11 +947,11 @@ async function watchFrameLive(options) {
     };
   return outcome;
 }
-//@ chunk-aqdf5t3e.js:50486-50541 placement
+//@ chunk-tsrpnscb.js:50581-50636 placement
 function knownNonEditor(slug) {
   return getLiveState().live.nonEditorSlugs.has(slug);
 }
-//@ chunk-aqdf5t3e.js:54609-54762 placement
+//@ chunk-tsrpnscb.js:54704-54857 placement
 function onArmSettled(slug, waiter) {
   let { live } = getLiveState();
   if (!live.inFlightSubscribes.has(slug)) {
@@ -960,12 +962,12 @@ function onArmSettled(slug, waiter) {
   waiters.push(waiter);
   live.armSettleWaiters.set(slug, waiters);
 }
-//@ chunk-aqdf5t3e.js:54762-54871 placement
+//@ chunk-tsrpnscb.js:54857-54966 placement
 function slugRepliesWiredHere(slug) {
   let supervisor = getLiveState().live.supervisors.get(slug);
   return supervisor !== undefined && !supervisor.stopped && supervisor.autoReactWiring !== undefined;
 }
-//@ chunk-aqdf5t3e.js:54871-55323 placement
+//@ chunk-tsrpnscb.js:54966-55418 placement
 async function watchArtifactFromStartup(options) {
   let { slug, url, getKnownVer, tool, commentVerbsInSchema, context } = options;
   if (tool !== undefined && isActingAsBgJob())
@@ -997,7 +999,7 @@ async function watchArtifactFromStartup(options) {
     });
   return outcome;
 }
-//@ chunk-aqdf5t3e.js:55323-55535 placement
+//@ chunk-tsrpnscb.js:55418-55630 placement
 function explicitWatchOptions(options) {
   let { tool, commentVerbsInSchema, context } = options;
   return {
@@ -1014,7 +1016,7 @@ function explicitWatchOptions(options) {
       }),
   };
 }
-//@ chunk-aqdf5t3e.js:55535-57521 placement
+//@ chunk-tsrpnscb.js:55630-57616 placement
 async function maybeSubscribeFrameLive(options) {
   let { slug, url, version, publishContext, getKnownVer, tool, commentVerbsInSchema, title, context } =
     options;
@@ -1132,11 +1134,11 @@ async function maybeSubscribeFrameLive(options) {
     });
   return outcome;
 }
-//@ chunk-aqdf5t3e.js:57521-57577 placement
+//@ chunk-tsrpnscb.js:57616-57672 placement
 function isAutoReactActive() {
   return !getLiveState().autoReact.userDisarmed && isCommentAutoreactOptedIn();
 }
-//@ chunk-aqdf5t3e.js:57577-57678 placement
+//@ chunk-tsrpnscb.js:57672-57773 placement
 function armMonitorIntent(slug, options) {
   if (getLiveState().builtInArtifactHiddenForMcp) {
     markSlugTravelling(slug, {
@@ -1146,22 +1148,22 @@ function armMonitorIntent(slug, options) {
   }
   armCommentMonitorIntent(slug, options);
 }
-//@ chunk-aqdf5t3e.js:57678-57760 placement
+//@ chunk-tsrpnscb.js:57773-57855 placement
 function liveUpdatesTaskLabel(url, explicit, armedVia) {
   return `live updates for artifact ${url} (${armedViaWording(labelledArmedVia(explicit, armedVia)).task})`;
 }
-//@ chunk-aqdf5t3e.js:57760-57830 placement
+//@ chunk-tsrpnscb.js:57855-57925 placement
 function monitorContextAndSignal(context) {
   return {
     context: pickMonitorContext(context),
     signal: context.abortController.signal,
   };
 }
-//@ chunk-aqdf5t3e.js:57830-57869 placement
+//@ chunk-tsrpnscb.js:57925-57964 placement
 function makeArtifactReadVersionReader(getAppState, slug) {
   return () => mainObservedArtifactVersion(getAppState(), slug);
 }
-//@ chunk-aqdf5t3e.js:57869-57985 placement
+//@ chunk-tsrpnscb.js:57964-58080 placement
 /**
  * 判断实时订阅是否不可用：功能关闭、远程环境，或（控制面覆盖/WebSocket 出口被拒）；可用时返回 null。
  */
@@ -1176,11 +1178,11 @@ function getLiveSubscribeSkipReason(slug) {
     };
   return getEgressSkipReason(frameLiveWsUrl(slug));
 }
-//@ chunk-aqdf5t3e.js:57985-58036 placement
+//@ chunk-tsrpnscb.js:58080-58131 placement
 function canArmFrameLive(slug) {
   return isFrameLiveSubscribeEnabled() && presenceSkipReason(slug) === null && !isPresenceDeclined(slug);
 }
-//@ chunk-aqdf5t3e.js:58036-58175 placement
+//@ chunk-tsrpnscb.js:58131-58270 placement
 function getEgressSkipReason(state) {
   if (isClaudeAiCpOverride())
     return {
@@ -1194,7 +1196,7 @@ function getEgressSkipReason(state) {
     };
   return null;
 }
-//@ chunk-aqdf5t3e.js:58175-58405 placement
+//@ chunk-tsrpnscb.js:58270-58500 placement
 function frameLivePublishFindsConnected(context) {
   let { context: context_2, slug, wantWiring, canClearLatch } = context;
   let now = Date.now();
@@ -1208,13 +1210,13 @@ function frameLivePublishFindsConnected(context) {
       return true;
   return false;
 }
-//@ chunk-aqdf5t3e.js:58405-58569 placement
+//@ chunk-tsrpnscb.js:58500-58664 placement
 function frameLivePublishSkipReason(context) {
   if (getLiveState().durable.stopLatches.isStopped(context.slug)) return "stop_latched";
   if (!isConsentUiKind(context.publishContext)) return "publish_context";
   return getLiveSubscribeSkipReason(context.slug)?.reason ?? null;
 }
-//@ chunk-aqdf5t3e.js:64164-64360 placement
+//@ chunk-tsrpnscb.js:64259-64455 placement
 async function subscribeFrameLiveOnAttach(options) {
   let { slug, url, getKnownVer, context } = options;
   return FrameLiveWatchManager(getLiveState().live, {
@@ -1226,7 +1228,7 @@ async function subscribeFrameLiveOnAttach(options) {
     seedKnownVerFromBoot: true,
   });
 }
-//@ chunk-aqdf5t3e.js:64360-86204 placement
+//@ chunk-tsrpnscb.js:64455-86374 placement
 /**
  * 管理 Artifact 实时订阅：恢复、监听、mcp_write、自动回复
  */
@@ -1496,7 +1498,7 @@ async function FrameLiveWatchManager(live, opts) {
       try {
         let renewedSub;
         if (shouldRenew) {
-          let renewal = await renewWatchToken(slug, signal, context.credentials);
+          let renewal = await renewLiveChannelToken(slug, signal, context.credentials);
           if (renewal.err === null) {
             renewedSub = renewal;
             renewed = true;
@@ -1510,7 +1512,7 @@ async function FrameLiveWatchManager(live, opts) {
         requestStartAt = Date.now();
         subscription =
           renewedSub ??
-          (await fetchLiveSubscription(slug, signal, context.credentials, {
+          (await fetchLiveChannelToken(slug, signal, context.credentials, {
             syncLive: canSync,
             ...(opts.machineArm === true && {
               lean: live.supervisors.get(slug)?.bootedVersion,
@@ -1533,7 +1535,7 @@ async function FrameLiveWatchManager(live, opts) {
         ? "cancelled"
         : subscription.status === 404
           ? "not_found"
-          : isOtherOrg(subscription)
+          : isArtifactInOtherOrg(subscription)
             ? "other_org"
             : subscription.publicOutsideOrg === true
               ? "public_outside_org"
@@ -1559,15 +1561,27 @@ async function FrameLiveWatchManager(live, opts) {
       live.bootingWiredArms.delete(slug);
       if (!missingEditor && getLiveState().accountEpoch === accountEpoch) live.nonEditorSlugs.add(slug);
     }
-    let title = subscription.title === undefined ? null : sanitizeArtifactTitle(subscription.title);
+    let shareEntry = getShareEntry(slug);
+    let snapshot =
+      subscription.title === undefined ||
+      subscription.owner !== true ||
+      subscription.outsideWriter !== false ||
+      artifactForeign(
+        shareEntry && {
+          ...shareEntry,
+          role: "owner",
+        },
+      )
+        ? null
+        : sanitizeArtifactTitle(subscription.title);
     let wiring =
       notEditor || opts.autoReactWiring === undefined
         ? undefined
-        : title === null
+        : snapshot === null
           ? opts.autoReactWiring
           : {
               ...opts.autoReactWiring,
-              title,
+              title: snapshot,
             };
     let onOpen = notEditor ? undefined : opts.onOpen;
     let onGiveUp = notEditor ? undefined : opts.onGiveUp;
@@ -2506,7 +2520,7 @@ ${escapeXml(notice.detail)}`,
     freshPublish: opts.freshPublish === true || latePark.freshPublishWiring,
   });
 }
-//@ chunk-aqdf5t3e.js:86204-86285 placement
+//@ chunk-tsrpnscb.js:86374-86455 placement
 function recordArmFailureLive(state, slug, outcome, reason) {
   setWithLimit(
     state.armOutcomes,
@@ -2519,7 +2533,7 @@ function recordArmFailureLive(state, slug, outcome, reason) {
     MAX_CRON_OWNERSHIP_ENTRIES,
   );
 }
-//@ chunk-aqdf5t3e.js:86285-86647 placement
+//@ chunk-tsrpnscb.js:86455-86817 placement
 /**
  * 记录一次监听布防失败（忽略过期的交接代次与已撤销的布防）；已有定时器重试的只记最近失败；未被停止时登记失败结果，需要时向主会话通知。
  */
@@ -2535,14 +2549,14 @@ function recordArmFailure(state, slug, outcome, reason, extra) {
   if (!stopped) recordArmFailureLive(state, slug, "failed", reason);
   if (extra.announce && reason !== "cancelled" && !stopped) announceArmFailure(state, slug, extra, reason);
 }
-//@ chunk-aqdf5t3e.js:87895-87949 placement
+//@ chunk-tsrpnscb.js:88065-88119 placement
 function forgetArmOutcomeAndNotices(state, slug) {
   removeCronOwnedKeys(state.announcedArmFailures, slug);
   pullStaleWatchLifecycleNotices(slug);
 }
-//@ chunk-aqdf5t3e.js:87949-88105 placement
+//@ chunk-tsrpnscb.js:88119-88275 placement
 function pullStaleWatchLifecycleNotices(slug) {
-  removeQueuedByFilter(
+  removeByFilter(
     (reason) =>
       reason.origin?.kind === "task-notification" &&
       reason.origin.source === ARTIFACT_WATCH_LIFECYCLE &&
@@ -2550,7 +2564,7 @@ function pullStaleWatchLifecycleNotices(slug) {
       (reason.origin.armFailed === true || reason.origin.watchEnded === true),
   );
 }
-//@ chunk-aqdf5t3e.js:88105-88580 placement
+//@ chunk-tsrpnscb.js:88275-88750 placement
 /**
  * 实时订阅布防失败时向模型发一次通知（同一 slug 与原因只发一次），说明原因与不会再追踪新版本。
  */
@@ -2567,7 +2581,7 @@ function announceArmFailure(state, slug, outcome, reason) {
     event: `The live subscription for ${outcome.url} did not arm \u2014 ${phrase}. This session is NOT watching it and does not keep track of new versions of it; ${detail === undefined ? "do not claim to be watching it" : `${detail}, and do not claim to be watching it meanwhile`}.`,
   });
 }
-//@ chunk-aqdf5t3e.js:88580-88886 placement
+//@ chunk-tsrpnscb.js:88750-89056 placement
 /**
  * 把 artifact 监听生命周期事件作为任务通知排进下一条消息（可被动），附带 slug 与名称。
  */
@@ -2594,7 +2608,7 @@ function enqueueWatchLifecycleNotice(notice) {
     agentId: mainAgentId(),
   });
 }
-//@ chunk-aqdf5t3e.js:88886-89797 placement
+//@ chunk-tsrpnscb.js:89056-89967 placement
 function onDurablePublishArmSettled(outcome) {
   let { slug, url, liveDocLoss, claudeDoc, settlement } = outcome;
   if (settlement.settled === "registered") {
@@ -2628,7 +2642,7 @@ function onDurablePublishArmSettled(outcome) {
     event: `The durable wake subscription for ${url} was not registered (${reason}${detail !== undefined ? `: ${detail}` : ""}) \u2014 ${describeWatchError(reason, serverMessage)} ${detailText}${failure === null ? "" : `; ${failure}`} \u2014 do not claim to be subscribed to it meanwhile.`,
   });
 }
-//@ chunk-aqdf5t3e.js:89797-90232 placement
+//@ chunk-tsrpnscb.js:89967-90402 placement
 function noteClaudeDocWakeMissing(slug, url, slugValue, urlValue) {
   if (!claimArmFailureAnnouncement(slug, "claude_doc")) return;
   enqueueWatchLifecycleNotice({
@@ -2639,11 +2653,11 @@ function noteClaudeDocWakeMissing(slug, url, slugValue, urlValue) {
     passive: true,
   });
 }
-//@ chunk-aqdf5t3e.js:90232-90283 placement
+//@ chunk-tsrpnscb.js:90402-90453 placement
 function isFrameLiveRowConnecting(row) {
   return row.connected && !isMonitorSocketOpenNow(row.taskId);
 }
-//@ chunk-aqdf5t3e.js:90283-91453 placement
+//@ chunk-tsrpnscb.js:90453-91623 placement
 function frameLiveArmRows(request, options) {
   let live = getLiveState().live;
   let runningSlugs = new Set();
@@ -2710,29 +2724,23 @@ function frameLiveArmRows(request, options) {
   return rows;
 }
 export {
+  killAutoReactSubscriptions,
+  onDurablePublishArmSettled,
+  frameLivePublishSkipReason,
+  frameLivePublishFindsConnected,
   maybeSubscribeFrameLive,
-  slugRepliesWiredHere,
-  onArmSettled,
+  makeArtifactReadVersionReader,
+  noteClaudeDocWakeMissing,
   teardownFrameLiveForProcessHandoff,
   watchArtifactFromStartup,
   isClaimableAutoReactSubscription,
   hasStoppableAutoReactSupervision,
-  killAutoReactSubscriptions,
-  frameLiveArmRows,
-  frameLiveWatchRows,
-  knownNonEditor,
-  isFrameLiveRowConnecting,
-  frameLiveStoppedRows,
-  unwatchFrameLive,
-  pullStaleWatchLifecycleNotices,
-  watchFrameLive,
-  makeArtifactReadVersionReader,
-  onDurablePublishArmSettled,
-  frameLivePublishSkipReason,
-  frameLivePublishFindsConnected,
-  noteClaudeDocWakeMissing,
+  subscribeFrameLiveOnAttach,
+  slugRepliesWiredHere,
+  onArmSettled,
   liveUpdatesTaskLabel,
   liveDocHeadSink,
+  frameLiveWatchRows,
   recordArmFailureLive,
   recordArmFailure,
   FrameLiveWatchManager,
@@ -2741,6 +2749,12 @@ export {
   monitorContextAndSignal,
   findArmedAutoReactMonitor,
   liftSweptPause,
+  frameLiveArmRows,
+  knownNonEditor,
+  isFrameLiveRowConnecting,
+  frameLiveStoppedRows,
+  unwatchFrameLive,
+  pullStaleWatchLifecycleNotices,
+  watchFrameLive,
   endFrameLiveWatchOfDeletedArtifact,
-  subscribeFrameLiveOnAttach,
 };

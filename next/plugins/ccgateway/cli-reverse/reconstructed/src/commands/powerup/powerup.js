@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/powerup 教学的移动端二维码步骤组件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-19dk83fw.js (1), chunk-fxpvgzqn.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-je0zymfm.js (1), chunk-zpw2qypj.js (1)
  * attribution: placement 2
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -20,10 +20,10 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { LessonFooter, PowerupLessons } from "../../components/onboarding/PowerupLessons.js";
 import { Pane } from "../../components/design-system/Pane.js";
 
-//@ chunk-19dk83fw.js:18639-19401 placement (2.1.88 match: MobileQRCode, 0.23)
+//@ chunk-je0zymfm.js:19079-19885 placement (2.1.88 match: MobileQRCode, 0.225)
 function MobileQRCode(props) {
-  let $ = useMemoCache(15);
-  let { lesson, isUnlocked, onDone, onBack } = props;
+  let $ = useMemoCache(17);
+  let { lesson, isUnlocked, hint, onDone, onBack } = props;
   let confirmActions;
   if ($[0] !== onBack || $[1] !== onDone) {
     confirmActions = {
@@ -52,6 +52,7 @@ function MobileQRCode(props) {
     $[4] = status;
     $[5] = statusIcon;
   } else statusIcon = $[5];
+  let iconRow = statusIcon;
   let titleText;
   if ($[6] !== lesson.title) {
     titleText = jsxProd_default(Text, {
@@ -63,21 +64,24 @@ function MobileQRCode(props) {
     $[7] = titleText;
   } else titleText = $[7];
   let headerRow;
-  if ($[8] !== statusIcon || $[9] !== titleText) {
+  if ($[8] !== iconRow || $[9] !== titleText) {
     headerRow = jsxProd_default_2(Box, {
-      children: [statusIcon, titleText],
+      children: [iconRow, titleText],
     });
-    $[8] = statusIcon;
+    $[8] = iconRow;
     $[9] = titleText;
     $[10] = headerRow;
   } else headerRow = $[10];
   let footer;
-  if ($[11] === MEMO_CACHE_SENTINEL) {
-    footer = jsxProd_default(LessonFooter, {});
-    $[11] = footer;
-  } else footer = $[11];
+  if ($[11] !== hint) {
+    footer = jsxProd_default(LessonFooter, {
+      hint,
+    });
+    $[11] = hint;
+    $[12] = footer;
+  } else footer = $[12];
   let pane;
-  if ($[12] !== lesson.body || $[13] !== headerRow) {
+  if ($[13] !== lesson.body || $[14] !== headerRow || $[15] !== footer) {
     pane = jsxProd_default(Pane, {
       color: "claude",
       children: jsxProd_default_2(Box, {
@@ -86,13 +90,14 @@ function MobileQRCode(props) {
         children: [headerRow, lesson.body, footer],
       }),
     });
-    $[12] = lesson.body;
-    $[13] = headerRow;
-    $[14] = pane;
-  } else pane = $[14];
+    $[13] = lesson.body;
+    $[14] = headerRow;
+    $[15] = footer;
+    $[16] = pane;
+  } else pane = $[16];
   return pane;
 }
-//@ chunk-fxpvgzqn.js:13703-13764 placement (2.1.88 match: call, 0.635)
+//@ chunk-zpw2qypj.js:14963-15024 placement (2.1.88 match: call, 0.635)
 /**
  * /powerup 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

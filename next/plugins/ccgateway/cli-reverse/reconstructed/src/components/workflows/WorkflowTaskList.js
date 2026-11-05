@@ -3,31 +3,31 @@
  *
  * 2.1.316 新增。工作流任务列表。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-axsvbsqv.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-n6w10qzg.js (3)
  * attribution: placement 3
  */
 import { stripInvisibleChars } from "../../utils/invisibleChars.js";
 import { stripAnsiPerLine } from "../../utils/stripAnsi.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { truncateToWidth, splitByDisplayWidth } from "../../utils/format.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { StatusIcon_2 } from "../design-system/StatusIcon.js";
 
-//@ chunk-axsvbsqv.js:13272-13299 placement
+//@ chunk-n6w10qzg.js:14721-14748 placement
 var MAX_TASK_ROWS = 3;
 var MAX_TASK_LABEL_WIDTH = 100;
 var MAX_TASK_DETAIL_LINES = 12;
 var MIN_TASK_ROWS = 6;
-//@ chunk-axsvbsqv.js:13299-13371 placement
+//@ chunk-n6w10qzg.js:14748-14820 placement
 function normalizeTaskText(text) {
   return stripInvisibleChars(stripAnsiPerLine(text.replace(/\t/g, "  ")).trimEnd()).trimEnd();
 }
-//@ chunk-axsvbsqv.js:13371-14472 placement
+//@ chunk-n6w10qzg.js:14820-15921 placement
 function WorkflowTaskList({ tasks, expanded, width, indent }) {
   let lines = [];
-  let completedCount = count(tasks, (task) => task.status === "completed");
+  let completedCount = countWhere(tasks, (task) => task.status === "completed");
   lines.push([
     {
       text: "Tasks",
@@ -82,9 +82,9 @@ function WorkflowTaskList({ tasks, expanded, width, indent }) {
     if (expanded) moreSummary = `${hiddenTasks.length} more`;
     else {
       let summaryParts = [];
-      let inProgressCount = count(hiddenTasks, (task) => task.status === "in_progress");
-      let pendingCount = count(hiddenTasks, (task) => task.status === "pending");
-      let completedHiddenCount = count(hiddenTasks, (task) => task.status === "completed");
+      let inProgressCount = countWhere(hiddenTasks, (task) => task.status === "in_progress");
+      let pendingCount = countWhere(hiddenTasks, (task) => task.status === "pending");
+      let completedHiddenCount = countWhere(hiddenTasks, (task) => task.status === "completed");
       if (inProgressCount > 0) summaryParts.push(`${inProgressCount} in progress`);
       if (pendingCount > 0) summaryParts.push(`${pendingCount} pending`);
       if (completedHiddenCount > 0) summaryParts.push(`${completedHiddenCount} completed`);

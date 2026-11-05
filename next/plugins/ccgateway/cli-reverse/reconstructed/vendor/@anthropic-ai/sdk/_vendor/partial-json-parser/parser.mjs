@@ -1,11 +1,11 @@
 /**
  * @anthropic-ai/sdk/_vendor/partial-json-parser/parser.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (1)
+ * pieces: chunk-vn3g7zt8.js (1)
  * attribution: esm-fingerprint 1
  */
-//@ chunk-hwmsct5x.js:91960-94109 esm-fingerprint
+//@ chunk-vn3g7zt8.js:92340-94489 esm-fingerprint
 var tokenize = (input) => {
   let current = 0;
   let tokens = [];

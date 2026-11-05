@@ -1,14 +1,14 @@
 /**
  * @smithy/protocol-http/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/protocol-http@5.3.0..5.3.14
- * pieces: chunk-hq88884p.js (1)
+ * pieces: chunk-355mdh7x.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_types } from "../../types/dist-cjs/index.js";
 
-//@ chunk-hq88884p.js:2578-4952 cjs-fingerprint
+//@ chunk-355mdh7x.js:2588-4962 cjs-fingerprint
 var require_protocol_http = __commonJS(function (cjsExports) {
   var types = require_types();
   var getHttpHandlerExtensionConfiguration = (runtimeConfig) => ({

@@ -3,9 +3,9 @@
  *
  * runAgent：子代理主循环——模型/权限/工具/系统提示词/MCP/skills/钩子准备，调用 query 循环并记录 sidechain 转录
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/runAgent.ts
- * pieces: chunk-0h4e7gnq.js (41)
+ * pieces: chunk-frs14hy1.js (41)
  * attribution: placement 22, fingerprint 3, layout 7, facade-exports 5, file-local 1, sole-consumer 3
  */
 import { sep, join, resolve, basename } from "path";
@@ -101,6 +101,7 @@ import { isSafeMode, isEnvTruthy } from "../../utils/envUtils.js";
 import { reportOnce } from "../../utils/reportOnce.js";
 import {
   flattenToolNameList,
+  getSessionContextAttachmentData,
   withAgentDisallowedTools,
   resolveAgentTools,
   withWebFetchToolForAgent,
@@ -129,6 +130,7 @@ import {
   runningTurnRegistry,
 } from "../../utils/queryHelpers.js";
 import { makeSidecarReadFallback } from "../../utils/agentMetadata.js";
+import { codeModeAccepted, contextKeyAccepted } from "../../utils/codeMode/accepted.js";
 import { isEffortLevel } from "../../utils/effort.js";
 import { isBypassPermissionsModeDisabled } from "../../utils/permissions/permissionSetup.js";
 import {
@@ -152,6 +154,7 @@ import { makeSaltedName } from "../../utils/agentId.js";
 import {
   isDelegatedObservationContext,
   getAgentDepth,
+  isMainSpawnedSubagent,
   isHookOrPluginSteered,
 } from "../../utils/agentContext.js";
 import { isUnknownPluginSpawnedAgent } from "./pluginSpawnNote.js";
@@ -162,7 +165,7 @@ import {
   unregisterPerfettoAgent,
 } from "../../utils/telemetry/perfettoTracing.js";
 import {
-  isNullRenderingAttachment_4,
+  isNullRenderingAttachment_5,
   createUserMessage,
   wrapInSystemReminder,
   isReorderedRow,
@@ -202,9 +205,11 @@ import {
   memoryNoteIfEnabled,
   isServedAccountMemoryTool,
 } from "../../services/accountMemory/accountMemoryServer.js";
+import { matchesToolName } from "../../Tool.js";
+import { POLL } from "../PollTool/prompt.js";
 import { asSystemPrompt } from "../../utils/systemPromptType.js";
 import { env, antEnv } from "../../utils/env.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { insertCoworkMemoryContexts } from "../../services/AgentSummary/agentSummary.js";
 import { messagesSinceCompactBoundary } from "../../services/projects/threadRows.js";
 import {
@@ -214,10 +219,10 @@ import {
 } from "../../utils/hooks/registerFrontmatterHooks.js";
 import { warnMcpToolNameTooLong } from "../../services/mcp/toolNameLimits.js";
 import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
+import { countWhere } from "../../utils/collections.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
-import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
+import { parseRuleString } from "../../utils/permissions/permissionRuleParser.js";
 import { getMaxSubagentSpawnDepth } from "./spawnDepth.js";
-import { toolMatchesName } from "../../Tool.js";
 import { SUBAGENTHANDBACK, FORK } from "./constants.js";
 import { mcpInfoFromString } from "../../services/mcp/mcpStringUtils.js";
 import {
@@ -261,9 +266,14 @@ import {
 import { applySubagentThinkingDisplay } from "../../utils/thinking.js";
 import { isClaudeAiChatCowork } from "../../utils/entrypointKinds.js";
 import { buildVerifiedHumanTurns } from "../../utils/messages/apiNormalization.js";
-import { emptyList } from "../../services/mcp/mcpSkills.js";
+import { emptyList_2 } from "../../services/mcp/mcpSkills.js";
 import { getEnvironmentChangeAttachments } from "../../utils/attachments/environmentChange.js";
 import { isRemoteToolForwardingSwitchOn } from "../../services/remoteTools/servingGates.js";
+import {
+  UnsentMediaReporter,
+  letGoOfUnsentMediaInPlace,
+  forgetUnsentMediaReport,
+} from "../../services/api/toolSchemaWire.js";
 import { recordSpawnedAgentIsolation, recordCleanlyRemovedAgent } from "../../utils/concurrentSessions.js";
 import { recordSpawnProvenance, addUnnamedSteered } from "../../plugins/functionHooks/agentHooks.js";
 import { recordForwardedTurnsDelivered } from "../../utils/messageProvenance.js";
@@ -272,6 +282,7 @@ import {
   autoModeUnavailableNotes,
   buildAutoModeStoppedMessage,
 } from "../../utils/permissions/autoModeUnavailable.js";
+import { getTaskRunState } from "../../utils/task/taskNotifications.js";
 import { registerSandboxWriteDirectory, unregisterSandboxWriteDirectory } from "../../utils/Shell.js";
 import { executeInSpan, endSubagentSpan } from "../../utils/telemetry/sessionTracing.js";
 import { isStreamEvent } from "../../utils/messageKinds.js";
@@ -279,9 +290,11 @@ import { applyPreservedMessages } from "../../services/compact/compact.js";
 import { agentTypeForTelemetry } from "../../services/analytics/metadata.js";
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import { buildAgentStoppedUnavailableMessage } from "../../utils/permissions/serverClassifier/results.js";
-import { getTaskRunState } from "../../utils/task/taskNotifications.js";
+import { keepaliveReasons, neverTrue } from "../../tasks/taskKinds.js";
+import { removeKeepaliveReason } from "../../utils/task/framework.js";
 import { hasRunningBackgroundWorkForAgent } from "../../tasks/backgroundTaskKinds.js";
 import { ensureAgentDirectoryExists } from "../../components/agents/agentFileUtils.js";
+import { clearKeptSubagentBodies } from "../../services/api/incrementalRequestBody.js";
 import { isCoordinatorMode_2 } from "../../coordinator/coordinatorMode.js";
 import { INSTRUCTION_FILE_NAMES } from "../../utils/instructionFileAccess.js";
 import { classifyToolError } from "../../services/tools/toolExecution.js";
@@ -292,7 +305,7 @@ import { applyPromptAblation } from "../../utils/api.js";
 import { firstLineOf } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0h4e7gnq.js:81304-81708 placement
+//@ chunk-frs14hy1.js:90677-91081 placement
 /**
  * 恢复被续接子代理的基线状态（存储 V5 时换算存储键）。
  */
@@ -326,14 +339,14 @@ async function restoreResumedAgentBaseline(agentId, { resumed, storageV5 }) {
     logError(error);
   }
 }
-//@ chunk-0h4e7gnq.js:81708-81771 placement
+//@ chunk-frs14hy1.js:91081-91144 placement
 /**
  * 由代理转录路径得到 `.prefix.json` 路径。
  */
 function prefixTranscriptPath(agentId) {
   return getAgentTranscriptPath(agentId).replace(/\.jsonl$/, ".prefix.json");
 }
-//@ chunk-0h4e7gnq.js:81771-81846 placement
+//@ chunk-frs14hy1.js:91144-91219 placement
 /**
  * 由代理转录定位出 `.prefix.json` 的 sidecar 键。
  */
@@ -341,7 +354,7 @@ function prefixSidecarKey(agentId) {
   let transcriptPath = locateAgentTranscript(agentId);
   return transcriptPath === undefined ? undefined : subagentSidecarKey(transcriptPath, ".prefix.json");
 }
-//@ chunk-0h4e7gnq.js:81846-81912 placement
+//@ chunk-frs14hy1.js:91219-91285 placement
 /**
  * 把自动压缩上限包成 `{ceiling, inner}`。
  */
@@ -354,7 +367,7 @@ function withAutoCompactCeiling(autoCompactWindow, autoCompactWindow_2) {
         inner: innerWindow,
       };
 }
-//@ chunk-0h4e7gnq.js:81912-81962 placement
+//@ chunk-frs14hy1.js:91285-91335 placement
 /**
  * 杀掉该代理的 shell 任务并清理登记。
  */
@@ -362,7 +375,7 @@ function killAgentShellTasks(agentId, taskRegistry) {
   killShellTasksForAgent(agentId, taskRegistry);
   dequeueAllMatching((entry) => entry.agentId === agentId);
 }
-//@ chunk-0h4e7gnq.js:81962-82010 placement
+//@ chunk-frs14hy1.js:91335-91383 placement
 /**
  * 上报技能预加载遥测（异常吞掉）。
  */
@@ -373,7 +386,7 @@ function logAgentSkillPreloadSafely(skill, agentId, isBuiltIn) {
     logError(error);
   }
 }
-//@ chunk-0h4e7gnq.js:82010-82485 placement
+//@ chunk-frs14hy1.js:91383-91858 placement
 /**
  * 上报子代理预加载技能的遥测（tengu_skill_tool_invocation，execution_context=preload、invocation_trigger=agent-preload）；技能名按官方市场/MCP/内建/打包区分脱敏。
  */
@@ -400,7 +413,7 @@ function logAgentSkillPreload(skill, agentId, isBuiltIn) {
     ...buildServerAttributionFields(skill),
   });
 }
-//@ chunk-0h4e7gnq.js:82485-82634 placement (2.1.88 match: getDestructiveCommandWarning, 0.499)
+//@ chunk-frs14hy1.js:91858-92007 placement (2.1.88 match: getDestructiveCommandWarning, 0.5)
 /**
  * 取子代理最近一次自我报告的文本，有 warning 时拼在前面；报告来源与当前一致时不取，返回 undefined。被 runAgent 使用。
  */
@@ -417,8 +430,8 @@ function getLatestAgentReportText(task, agentId, previousHandback) {
 
 ${text}`;
 }
-//@ chunk-0h4e7gnq.js:82634-82937 placement
-function filterIncompleteToolCalls_2(toolUseContext, message) {
+//@ chunk-frs14hy1.js:92007-92310 placement
+function shouldForwardNestedToolCall(toolUseContext, message) {
   if (toolUseContext.options.forwardSubagentText) return true;
   if (toolUseContext.session.surfaceCapabilities.sdkForwardNestedSubagentToolCalls() !== true) return false;
   let content = message.data.message.message.content;
@@ -426,7 +439,7 @@ function filterIncompleteToolCalls_2(toolUseContext, message) {
   if (firstBlock?.type !== "tool_use" && firstBlock?.type !== "tool_result") return false;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_starry_squid", true);
 }
-//@ chunk-0h4e7gnq.js:82937-84075 placement
+//@ chunk-frs14hy1.js:92310-93448 placement
 class SidechainRecorder {
   sessionStorage;
   agentId;
@@ -478,14 +491,14 @@ class SidechainRecorder {
     this.abortSignal.removeEventListener("abort", this.flushHeld);
   }
 }
-//@ chunk-0h4e7gnq.js:84075-84139 placement
+//@ chunk-frs14hy1.js:93448-93512 placement
 /**
  * 记录 sidechain 转录写入失败。
  */
 function logSidechainFailure(error) {
   logForDebugging(`Failed to record sidechain transcript: ${error}`);
 }
-//@ chunk-0h4e7gnq.js:84139-84258 placement
+//@ chunk-frs14hy1.js:93512-93631 placement
 function assembleAgentToolPool(toolUseContext, permissionContext, mcpTools) {
   return toolUseContext.options.toolCatalog.assembleToolPool(
     permissionContext,
@@ -496,7 +509,7 @@ function assembleAgentToolPool(toolUseContext, permissionContext, mcpTools) {
     },
   );
 }
-//@ chunk-0h4e7gnq.js:84258-84347 placement
+//@ chunk-frs14hy1.js:93631-93720 placement
 /**
  * 生成可后挂工具池的审查工具集合。
  */
@@ -509,7 +522,7 @@ function createDeferredReviewTools(tools) {
     reviewTools: () => [...tools, ...getExtraTools()],
   };
 }
-//@ chunk-0h4e7gnq.js:84347-84657 placement
+//@ chunk-frs14hy1.js:93720-94030 placement
 /**
  * 创建随调用增长的工具列表获取函数。
  */
@@ -540,14 +553,14 @@ function createGrowingToolList(initialTools, getBaseTools, getMcpTools, filterTo
     return currentTools;
   };
 }
-//@ chunk-0h4e7gnq.js:84657-84772 placement
+//@ chunk-frs14hy1.js:94030-94145 placement
 function isOnlyPendingToolUse(messages, id) {
   let flattened = messages
     .slice(messages.findLastIndex((message) => message.type === "user") + 1)
     .flatMap(getToolUseIds);
   return flattened.length === 1 && flattened[0] === id;
 }
-//@ chunk-0h4e7gnq.js:84772-85087 placement
+//@ chunk-frs14hy1.js:94145-94460 placement
 /**
  * 在消息中找出正在等待结果的工具调用及其所属的助手消息。
  */
@@ -568,7 +581,7 @@ function findWaitingToolCall(messages, id, tools, { normalizeMessagesForAPI }) {
       .filter((message) => isSameAssistantMessage(message, assistantMessage)),
   };
 }
-//@ chunk-0h4e7gnq.js:85087-85666 placement
+//@ chunk-frs14hy1.js:94460-95039 placement
 async function* abortedToolResults(abortedCall, messageUtils, innerIterator, queryParams) {
   if (abortedCall === undefined) return yield* innerIterator(queryParams);
   let waitingToolCall = findWaitingToolCall(
@@ -608,30 +621,32 @@ async function* abortedToolResults(abortedCall, messageUtils, innerIterator, que
     });
   }
 }
-//@ chunk-0h4e7gnq.js:85666-85808 placement (2.1.88 match: countToolCallsSince, 1)
+//@ chunk-frs14hy1.js:95039-95181 placement
 function getToolUseIds(message) {
   return message.type === "assistant" && Array.isArray(message.message.content)
-    ? message.message.content.flatMap((block) => (block.type === "tool_use" ? [block.id] : []))
+    ? message.message.content.flatMap((skipFiltering) =>
+        skipFiltering.type === "tool_use" ? [skipFiltering.id] : [],
+      )
     : [];
 }
-//@ chunk-0h4e7gnq.js:85808-85882 placement
+//@ chunk-frs14hy1.js:95181-95255 placement
 /**
  * 判断两条消息是否是同一条 assistant 消息。
  */
 function isSameAssistantMessage(message, reference) {
   return message.type === "assistant" && message.message.id === reference.message.id;
 }
-//@ chunk-0h4e7gnq.js:85882-85958 placement
+//@ chunk-frs14hy1.js:95255-95331 placement
 /**
  * 惰性注入的 laptop 记忆工具引用（当前为 null）。
  */
 var laptopMemoryToolsRef; // deferred: uses SENDMESSAGE (../SendMessageTool/constants.js) of its import cycle while loading; runs once the cycle is complete
 var OTHER_AGENTS_NOTE;
-deferInit("chunk-0h4e7gnq.js:85882", () => {
+deferInit("chunk-frs14hy1.js:95255", () => {
   laptopMemoryToolsRef = null;
   OTHER_AGENTS_NOTE = `Other agents active in this session, addressable via ${SENDMESSAGE}`;
 });
-//@ chunk-0h4e7gnq.js:85958-86788 placement
+//@ chunk-frs14hy1.js:95331-96161 placement
 function resolveAgentMcpServers(agentType, agentSource, mcpServer) {
   if (typeof mcpServer === "string") {
     if (getStrictMcpConfig()) {
@@ -696,7 +711,7 @@ function resolveAgentMcpServers(agentType, agentSource, mcpServer) {
     isNewlyCreated: true,
   };
 }
-//@ chunk-0h4e7gnq.js:86788-89986 fingerprint (2.1.88 match: initializeAgentMcpServers, 0.321)
+//@ chunk-frs14hy1.js:96161-99357 fingerprint (2.1.88 match: initializeAgentMcpServers, 0.321)
 /**
  * 连接代理 frontmatter 中声明的 MCP 服务器：受 strictPluginOnlyCustomization、--strict-mcp-config、--bare/--safe-mode、远程模式、企业 MCP 配置、云会话、CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG、项目审批与托管策略限制；返回合并后的 clients、该代理专属工具和 cleanup。
  */
@@ -899,7 +914,7 @@ async function initializeAgentMcpServers(
     cleanup,
   };
 }
-//@ chunk-0h4e7gnq.js:89986-90133 fingerprint (2.1.88 match: isRecordableMessage, 1)
+//@ chunk-frs14hy1.js:99357-99504 fingerprint (2.1.88 match: isRecordableMessage, 1)
 /**
  * 可记录到子代理转录的消息类型：assistant/user/progress 与 compact_boundary 系统消息。
  */
@@ -911,15 +926,15 @@ function isRecordableMessage(msg) {
     (msg.type === "system" && "subtype" in msg && msg.subtype === "compact_boundary")
   );
 }
-//@ chunk-0h4e7gnq.js:90133-90193 layout
+//@ chunk-frs14hy1.js:99504-99564 layout
 function logForkContextRefFailure(error) {
   logForDebugging(`Failed to record fork-context-ref: ${error}`);
 }
-//@ chunk-0h4e7gnq.js:90193-90250 layout
+//@ chunk-frs14hy1.js:99564-99621 layout
 function logAgentMetadataWriteFailure(error) {
   logForDebugging(`Failed to write agent metadata: ${error}`);
 }
-//@ chunk-0h4e7gnq.js:90250-90436 facade-exports
+//@ chunk-frs14hy1.js:99621-99807 facade-exports
 function writeSubagentProgressToOutputSink(toolUseContext, progressMessage, toolOnly) {
   let active = transportStateByHost.of(toolUseContext.session).active;
   if (!active) return;
@@ -929,7 +944,7 @@ function writeSubagentProgressToOutputSink(toolUseContext, progressMessage, tool
     active.writeAfterInit(message);
   }
 }
-//@ chunk-0h4e7gnq.js:90436-91216 layout
+//@ chunk-frs14hy1.js:99807-100749 layout
 /**
  * 写入子代理元数据；恢复时先读取旧元数据并继承父代理、worktree、插件引导、workflow 阶段、请求形态、非交互与 effort 等字段。
  */
@@ -950,17 +965,21 @@ async function persistAgentMetadata(agentId, resumed, context, storageV5) {
       if (metadata.worktreeCleanlyRemoved === true) context.worktreeCleanlyRemoved = true;
       if (metadata.pluginSteered === true) context.pluginSteered = true;
       if (metadata.workflowPhase !== undefined) context.workflowPhase = metadata.workflowPhase;
+      if (codeModeAccepted() && metadata.enclosingToolUseId !== undefined)
+        context.enclosingToolUseId = metadata.enclosingToolUseId;
       if (metadata.requestShape === "foreground" || metadata.requestShape === "background")
         context.requestShape = metadata.requestShape;
       if (typeof metadata.requestNonInteractive === "boolean")
         context.requestNonInteractive = metadata.requestNonInteractive;
+      if (typeof metadata.pickedEffortModel === "string")
+        context.pickedEffortModel = metadata.pickedEffortModel;
       if (context.effort === undefined && metadata.effort !== undefined && isEffortLevel(metadata.effort))
         context.effort = metadata.effort;
     }
   }
   await writeAgentMetadata(agentId, context, storageV5);
 }
-//@ chunk-0h4e7gnq.js:91216-91503 placement (2.1.88 match: isDangerousFilePathToAutoEdit, 1)
+//@ chunk-frs14hy1.js:100749-101036 placement (2.1.88 match: isDangerousFilePathToAutoEdit, 1)
 /**
  * 把 .claude/worktrees/<名>/<相对路径> 映射回主仓库中的对应路径（防 .. 逃逸）；不在 worktree 下且位于允许根内返回 null，否则原样返回。旧版名 isDangerousFilePathToAutoEdit 误配，应归 worktree 相关模块。
  */
@@ -981,7 +1000,7 @@ function mapWorktreePathToRepo(path, allowedRoot) {
   if (!resolve(mappedPath).startsWith(absolutePath + sep)) return null;
   return mappedPath;
 }
-//@ chunk-0h4e7gnq.js:91503-91610 layout
+//@ chunk-frs14hy1.js:101036-101143 layout
 /**
  * 子代理声明或请求 bypassPermissions 时是否授权：会话未受限且父会话处于 bypassPermissions。
  */
@@ -991,13 +1010,13 @@ function isBypassPermissionsAuthorized(permissionContext) {
   if (permissionContext.mode === "bypassPermissions") return true;
   return false;
 }
-//@ chunk-0h4e7gnq.js:91610-91627 layout
+//@ chunk-frs14hy1.js:101143-101160 layout
 /**
  * runAgent 常量：流式 token 估算节流 500ms，frontmatter skills 最多预加载 32 个。
  */
 var STREAM_TOKEN_ESTIMATE_THROTTLE_MS = 500;
 var MAX_PRELOADED_SKILLS = 32;
-//@ chunk-0h4e7gnq.js:91627-118485 facade-exports (2.1.88 match: runAgent, 0.281)
+//@ chunk-frs14hy1.js:101160-129458 facade-exports (2.1.88 match: runAgent, 0.27)
 /**
  * runAgent：子代理主循环（async generator）。解析模型（uYs）、权限模式（spawn 模式/定义 permissionMode/bubble/bypass 授权）、工具集（resolveAgentTools，fork 时 useExactTools 原样继承）、系统提示词与 CLAUDE.md/附件、frontmatter MCP 服务器与 skills 预加载、SubagentStart/SubagentStop 钩子，创建子代理 ToolUseContext 后调用 query 循环，逐条 yield 消息并记录 sidechain 转录；结束时清理 MCP、钩子、监视任务与 worktree 根。
  */
@@ -1134,7 +1153,7 @@ async function* runAgent({
     ...promptMessages.map((promptMessage) =>
       recordedUuids?.has(promptMessage.uuid) === true
         ? promptMessage
-        : isNullRenderingAttachment_4(promptMessage),
+        : isNullRenderingAttachment_5(promptMessage),
     ),
   ];
   let forkPointUuid = forkContextMessages !== undefined ? forkPointUuidOf(messages) : undefined;
@@ -1161,6 +1180,14 @@ async function* runAgent({
         userContext,
         managedInstructionsOnly: false,
       };
+  let sessionContextAttachmentData = getSessionContextAttachmentData(initialMessages);
+  let hasUserEmailOrContext =
+    override?.userContext !== undefined ||
+    (sessionContextAttachmentData === undefined
+      ? useExactTools === true && forkContextMessages !== undefined
+      : sessionContextAttachmentData.userEmail !== undefined);
+  let { userEmail, ...userContextRest } = userContext_2;
+  let userContext_3 = hasUserEmailOrContext ? userContext_2 : userContextRest;
   let spawnModeOverride = narrowerMode(spawnMode, permissionMode);
   let effectiveMode = spawnModeOverride ?? hasHookForEvent_2(agentDefinition, permissionMode);
   let cachedPermissionContext;
@@ -1336,8 +1363,17 @@ async function* runAgent({
         agentDepth,
         memoryMode.mode,
       );
-  let repliedSuppressed = false;
-  let agentTools = resolvedAgentTools?.resolvedTools ?? availableTools;
+  let repliedSuppressed =
+    codeModeAccepted() &&
+    isMainSpawnedSubagent({
+      agentId,
+      agentContext: override?.agentContext ?? toolUseContext.agentContext,
+      teammateContext: teammateContext ?? toolUseContext.teammateContext,
+    });
+  let agentTools =
+    codeModeAccepted() && !repliedSuppressed
+      ? (resolvedAgentTools?.resolvedTools ?? availableTools).filter((tool) => !matchesToolName(tool, POLL))
+      : (resolvedAgentTools?.resolvedTools ?? availableTools);
   let toolScope = resolvedAgentTools ? agentDefinition : override?.agentToolScope;
   let agentSystemPromptBlocks = override?.systemPrompt
     ? override.systemPrompt
@@ -1378,7 +1414,7 @@ async function* runAgent({
   };
   let isContinuation = recordedUuids !== undefined && recordedUuids.size > 0;
   let hookMessages = [];
-  let skillNames = uniq(agentDefinition.skills ?? []);
+  let skillNames = normalizeCaseForComparison_2(agentDefinition.skills ?? []);
   let preloadNames = skillNames.slice(0, MAX_PRELOADED_SKILLS);
   if (skillNames.length > MAX_PRELOADED_SKILLS)
     logForDebugging(
@@ -1507,14 +1543,14 @@ async function* runAgent({
   );
   let agentToolPool =
     filtered_2.length > 0 ? uniqByExport([...agentTools, ...filtered_2], "name") : agentTools;
-  let memoryToolCount = count(availableTools, (tool) => tool.mcpInfo?.accountMemoryServer === true);
+  let memoryToolCount = countWhere(availableTools, (tool) => tool.mcpInfo?.accountMemoryServer === true);
   if (memoryToolCount > 0)
     logEvent("tengu_subagent_memory_tools", {
       mode: fromEnum(memoryMode.mode),
       mode_source: fromEnum(memoryMode.source),
       marked_as: fromEnum(memoryCaller),
       parent_tools: memoryToolCount,
-      kept_tools: count(agentToolPool, (tool) => tool.mcpInfo?.accountMemoryServer === true),
+      kept_tools: countWhere(agentToolPool, (tool) => tool.mcpInfo?.accountMemoryServer === true),
       exact_tools: useExactTools ?? false,
       note_appended: memoryNote !== undefined,
       block_attached: coworkMemoryAttachment?.content != null,
@@ -1570,11 +1606,11 @@ async function* runAgent({
     }
   }
   if (resolvedAgentTools !== undefined) {
-    let unavailableCount = count(
+    let unavailableCount = countWhere(
       resolvedAgentTools.unavailableTools,
       (name) =>
         !isToolDisallowed({
-          name: permissionRuleValueFromString(name).toolName,
+          name: parseRuleString(name).toolName,
         }),
     );
     let resolutionTelemetry = {
@@ -1603,8 +1639,10 @@ async function* runAgent({
         has_wildcard: resolvedAgentTools.hasWildcard,
       });
   }
-  let any = agentToolPool.some((tool) => toolMatchesName(tool, SUBAGENTHANDBACK) && tool !== handbackTool);
-  let handbackNameTaken = false;
+  let any = agentToolPool.some((tool) => matchesToolName(tool, SUBAGENTHANDBACK) && tool !== handbackTool);
+  let handbackNameTaken =
+    contextKeyAccepted() &&
+    require("../RefreshMcpToolsTool/CODE_MODE_ONLY_TOOLS.lazy.js").hasBuiltInEvalTool(agentToolPool);
   let handbackArmed =
     handbackOptIn === true &&
     !useExactTools &&
@@ -1630,7 +1668,11 @@ async function* runAgent({
                 ? "spawner_mode"
                 : !isAutoHandbackArmed(toolPermissionContext)
                   ? "switched_off"
-                  : "child_mode";
+                  : handbackNameTaken
+                    ? isDiskless()
+                      ? undefined
+                      : "handback_from_script"
+                    : "child_mode";
   recordHandbackContract(agentId, handbackArmed, handbackReason);
   if (handbackArmed && !agentToolPool.includes(handbackTool))
     agentToolPool = [...agentToolPool, handbackTool];
@@ -2025,6 +2067,7 @@ async function* runAgent({
     memoryCaller,
     agentType: agentDefinition.agentType,
     agentContext: override?.agentContext,
+    pickedEffortModel: override?.pickedEffortModel,
     requireCanUseTool: override?.requireCanUseTool,
     spawnedByWorkflowRunId,
     teammateContext,
@@ -2034,7 +2077,7 @@ async function* runAgent({
     inheritedMcpSkillMessages:
       forkContextMessages === toolUseContext.messages
         ? undefined
-        : [...(toolUseContext.inheritedMcpSkillMessages ?? []), ...emptyList(toolUseContext.messages)],
+        : [...(toolUseContext.inheritedMcpSkillMessages ?? []), ...emptyList_2(toolUseContext.messages)],
     readFileState,
     abortController: agentAbortController,
     getAppState: agentGetAppState,
@@ -2089,6 +2132,7 @@ async function* runAgent({
   if (preserveToolUseResults) subagentContext.preserveToolUseResults = true;
   if (persistedToolResultFiles) subagentContext.persistedToolResultFiles = persistedToolResultFiles;
   let pendingResult = null;
+  let telemetry = new UnsentMediaReporter(agentId);
   let pendingError = null;
   subagentContext.stickyBetas = deferredToolsState;
   let evictCacheOnComplete = isPlainSpawnShape({
@@ -2103,7 +2147,7 @@ async function* runAgent({
     onCacheSafeParams(
       {
         systemPrompt: systemPromptWithAppend,
-        userContext: userContext_2,
+        userContext: userContext_3,
         systemContext,
         toolUseContext: subagentContext,
         forkContextMessages: initialMessages,
@@ -2250,7 +2294,11 @@ async function* runAgent({
       ...(toolUseId && {
         toolUseId,
       }),
-      ...false,
+      ...(codeModeAccepted() &&
+        !recordSidechain &&
+        enclosingToolUseId !== undefined && {
+          enclosingToolUseId,
+        }),
       ...(toolUseContext.agentId && {
         parentAgentId: toolUseContext.agentId,
       }),
@@ -2271,6 +2319,9 @@ async function* runAgent({
         }),
       ...(effort && {
         effort,
+      }),
+      ...(subagentContext.pickedEffortModel && {
+        pickedEffortModel: subagentContext.pickedEffortModel,
       }),
       ...extraMetadata,
     },
@@ -2395,6 +2446,20 @@ async function* runAgent({
   let autoModeNotes = autoModeUnavailableNotes.of(activeSession.host);
   autoModeNotes.set(agentId, undefined);
   try {
+    if (
+      codeModeAccepted() &&
+      repliedSuppressed &&
+      toolUseContext.agentId === undefined &&
+      require("../RefreshMcpToolsTool/CODE_MODE_ONLY_TOOLS.lazy.js").isCodeModeExperimentEnabled()
+    )
+      getTaskRunState().mainThreadContexts.set(agentId, toolUseContext);
+    if (
+      codeModeAccepted() &&
+      override?.agentContext?.agentType === "subagent" &&
+      override.agentContext.agentId === agentId &&
+      override.agentContext.spawnedByMainThread === true
+    )
+      getTaskRunState().spawnedByMainThread.add(agentId);
     if (worktreePath && isSameRepoWorktree(worktreePath, [getOriginalCwd(), getProjectRoot()]))
       registerSandboxWriteDirectory(worktreePath, isolationKey);
     taskHandle = executeInSpan({
@@ -2442,7 +2507,7 @@ async function* runAgent({
     for await (let event of collectAborted({
       messages: initialMessages,
       systemPrompt: systemPromptWithAppend,
-      userContext: userContext_2,
+      userContext: userContext_3,
       systemContext,
       canUseTool,
       toolUseContext: subagentContext,
@@ -2538,6 +2603,10 @@ async function* runAgent({
         continue;
       }
       if (isRecordableMessage(event)) {
+        if (telemetry.hasNews()) {
+          letGoOfUnsentMediaInPlace(initialMessages, agentId);
+          if (pendingResult) letGoOfUnsentMediaInPlace(pendingResult, agentId);
+        }
         if (event.type !== "progress") {
           turnLifecycle.saw(event);
           if (pendingResult) {
@@ -2581,7 +2650,7 @@ async function* runAgent({
           else if (
             active &&
             extractAgentIdsFromMessages_2(event) &&
-            filterIncompleteToolCalls_2(toolUseContext, event)
+            shouldForwardNestedToolCall(toolUseContext, event)
           )
             for (let message of normalizeMessage(
               event,
@@ -2625,15 +2694,25 @@ async function* runAgent({
     }
     getTaskRunState().killAgentMonitors ??= stopMonitorWsTasksForAgent;
     let taskEntry = toolUseContext.taskRegistry.get(agentId);
-    let taskEntry2 = toolUseContext.taskRegistry.get(agentId);
+    if (codeModeAccepted() && abortedEarly && isLocalAgent(taskEntry)) {
+      for (let task of keepaliveReasons(taskEntry))
+        if (neverTrue(task)) removeKeepaliveReason(agentId, task, toolUseContext.taskRegistry);
+    }
+    let runningTask = toolUseContext.taskRegistry.get(agentId);
     let failureNote =
       isAsync &&
-      !(isLocalAgent(taskEntry2) && taskEntry2.isBackgrounded === false) &&
+      !(isLocalAgent(runningTask) && runningTask.isBackgrounded === false) &&
       gotResult &&
       !agentAbortController.signal.aborted &&
       (hasAnyKeepaliveReason(agentId, toolUseContext.taskRegistry) ||
         hasRunningBackgroundWorkForAgent(agentId, toolUseContext.taskRegistry));
-    let resultRecorded = false;
+    let replTeardown =
+      codeModeAccepted() &&
+      repliedSuppressed &&
+      failureNote &&
+      hasAnyKeepaliveReason(agentId, toolUseContext.taskRegistry) &&
+      require("../RefreshMcpToolsTool/CODE_MODE_ONLY_TOOLS.lazy.js").isCodeModeExperimentEnabled();
+    let isCodeModeOn = replTeardown && !abortedEarly;
     let toolResults = [];
     let flushResults = () => {
       for (let result of toolResults)
@@ -2646,6 +2725,35 @@ async function* runAgent({
           );
     };
     let stopHookQueue = [
+      ...(codeModeAccepted()
+        ? [
+            {
+              name: "replContext",
+              run: () => {
+                let stage = () =>
+                  require("../../utils/codeMode/replSessionEnd.js").endSubagentRepl(
+                    toolUseContext.toolState,
+                    toolUseContext.messageQueue,
+                    agentId,
+                  );
+                let { parkedTeardowns, mainThreadContexts } = getTaskRunState();
+                let replClose = parkedTeardowns.get(agentId);
+                parkedTeardowns.delete(agentId);
+                if (isCodeModeOn) {
+                  parkedTeardowns.set(agentId, () => {
+                    replClose?.();
+                    stage();
+                    flushResults();
+                  });
+                  return;
+                }
+                if (!replTeardown) mainThreadContexts.delete(agentId);
+                replClose?.();
+                stage();
+              },
+            },
+          ]
+        : []),
       {
         name: "SubagentStop",
         run: async () => {
@@ -2689,6 +2797,12 @@ async function* runAgent({
         },
       },
       {
+        name: "keptRequestBody",
+        run: () => {
+          clearKeptSubagentBodies(agentId);
+        },
+      },
+      {
         name: "tetherThreadState",
         run: () => {
           forgetAgentThread(agentId);
@@ -2727,6 +2841,10 @@ async function* runAgent({
         run: () => {
           initialMessages.length = 0;
         },
+      },
+      {
+        name: "unsentMedia",
+        run: () => forgetUnsentMediaReport(agentId),
       },
       {
         name: "liveMessages",
@@ -2778,7 +2896,7 @@ async function* runAgent({
     ];
     for (let entry of stopHookQueue) {
       if (failureNote && entry.keepaliveGated) continue;
-      if (resultRecorded && entry.deferredWhileParked) {
+      if (isCodeModeOn && entry.deferredWhileParked) {
         toolResults.push(entry);
         continue;
       }
@@ -2792,30 +2910,29 @@ async function* runAgent({
     }
   }
 }
-//@ chunk-0h4e7gnq.js:118485-118511 layout
+//@ chunk-frs14hy1.js:129458-129484 layout
 /**
  * 子代理退出时停止其非 shell 监视任务。
  */
 function stopMonitorWsTasksForAgent(agentId, taskRegistry) {
   stopOwnedMonitorTasks(agentId, taskRegistry);
 }
-//@ chunk-0h4e7gnq.js:118511-118625 layout
+//@ chunk-frs14hy1.js:129484-129598 layout
 /**
  * 本次派生是否为普通形态（无 stickyBetas/useExactTools/name/recordedUuids），决定完成后是否驱逐缓存。
  */
 function isPlainSpawnShape({ stickyBetas, useExactTools, name, recordedUuids }) {
   return stickyBetas === undefined && !useExactTools && name === undefined && recordedUuids === undefined;
 }
-//@ chunk-0h4e7gnq.js:118625-118977 facade-exports (2.1.88 match: countToolCallsSince, 1)
+//@ chunk-frs14hy1.js:129598-129950 facade-exports
 function filterIncompleteToolCalls(messages) {
   let resolvedToolUseIds = new Set();
   for (let message of messages)
     if (message?.type === "user") {
       let content = message.message.content;
       if (Array.isArray(content)) {
-        for (let message of content)
-          if (message.type === "tool_result" && message.tool_use_id)
-            resolvedToolUseIds.add(message.tool_use_id);
+        for (let block of content)
+          if (block.type === "tool_result" && block.tool_use_id) resolvedToolUseIds.add(block.tool_use_id);
       }
     }
   return messages.filter((message) => {
@@ -2829,7 +2946,7 @@ function filterIncompleteToolCalls(messages) {
     return true;
   });
 }
-//@ chunk-0h4e7gnq.js:118977-119175 fingerprint (2.1.88 match: getAgentSystemPrompt, 0.746)
+//@ chunk-frs14hy1.js:129950-130148 fingerprint (2.1.88 match: getAgentSystemPrompt, 0.746)
 /**
  * 渲染代理系统提示词（含已加载的代理记忆）；失败时回退默认子代理提示词。
  */
@@ -2853,7 +2970,7 @@ async function getAgentSystemPrompt(agent, toolUseContext, requestModel, budgetO
     );
   }
 }
-//@ chunk-0h4e7gnq.js:119175-119361 file-local
+//@ chunk-frs14hy1.js:130148-130334 file-local
 function findSkillForAgent(skillName, allSkills, agentDefinition) {
   let command = findCommand(skillName, allSkills);
   if (command) return command;
@@ -2866,7 +2983,7 @@ function findSkillForAgent(skillName, allSkills, agentDefinition) {
   let suffix = `:${skillName}`;
   return filtered.find((cmd) => cmd.name.endsWith(suffix));
 }
-//@ chunk-0h4e7gnq.js:119361-119493 facade-exports
+//@ chunk-frs14hy1.js:130334-130466 facade-exports
 function spawnRequestShape(isBackground, requestNonInteractive) {
   return isBackground
     ? {
@@ -2878,7 +2995,7 @@ function spawnRequestShape(isBackground, requestNonInteractive) {
         requestNonInteractive,
       };
 }
-//@ chunk-0h4e7gnq.js:119493-120116 facade-exports
+//@ chunk-frs14hy1.js:130466-131258 facade-exports
 async function clearWorktreeFromAgentMetadata({ agentId, removedWorktreePath, spawnMetadata, storageV5 }) {
   recordCleanlyRemovedAgent(agentId);
   let metadata = await readAgentMetadata(agentId, storageV5).catch(
@@ -2910,13 +3027,19 @@ async function clearWorktreeFromAgentMetadata({ agentId, removedWorktreePath, sp
       ...(typeof metadata?.requestNonInteractive === "boolean" && {
         requestNonInteractive: metadata.requestNonInteractive,
       }),
-      ...false,
+      ...(typeof metadata?.pickedEffortModel === "string" && {
+        pickedEffortModel: metadata.pickedEffortModel,
+      }),
+      ...(codeModeAccepted() &&
+        typeof metadata?.enclosingToolUseId === "string" && {
+          enclosingToolUseId: metadata.enclosingToolUseId,
+        }),
       worktreeCleanlyRemoved: true,
     },
     storageV5,
   );
 }
-//@ chunk-0h4e7gnq.js:120116-120602 sole-consumer
+//@ chunk-frs14hy1.js:131258-131744 sole-consumer
 /**
  * 扫描子代理的初始消息：是否已带 SubagentStart hook 的附加上下文、哪些预载技能已在消息中（避免恢复/续接时重复注入）。
  */
@@ -2947,7 +3070,7 @@ async function scanCarriedSubagentContext(initialMessages, preloadNames) {
     carriedPreloads,
   };
 }
-//@ chunk-0h4e7gnq.js:120602-120958 sole-consumer
+//@ chunk-frs14hy1.js:131744-132100 sole-consumer
 /**
  * 计算子代理的 userContext：内建或策略来源的代理去掉 CLAUDE.md；其它代理按会话取托管的 CLAUDE.md 覆盖，返回 {userContext, managedInstructionsOnly}。
  */
@@ -2978,7 +3101,7 @@ async function resolveAgentUserContext(agentDefinition, userContext, toolUseCont
     managedInstructionsOnly: true,
   };
 }
-//@ chunk-0h4e7gnq.js:120958-121177 sole-consumer
+//@ chunk-frs14hy1.js:132100-132319 sole-consumer
 function getLatestCoworkMemoryVersion(messages) {
   for (let j = messages.length - 1; j >= 0; j--) {
     let message = messages[j];
@@ -2992,15 +3115,15 @@ function getLatestCoworkMemoryVersion(messages) {
   return;
 }
 export {
-  createDeferredReviewTools,
+  withAutoCompactCeiling,
   runAgent,
+  shouldForwardNestedToolCall,
+  assembleAgentToolPool,
+  createDeferredReviewTools,
+  clearWorktreeFromAgentMetadata,
+  spawnRequestShape,
+  writeSubagentProgressToOutputSink,
   prefixTranscriptPath,
   filterIncompleteToolCalls,
   isOnlyPendingToolUse,
-  assembleAgentToolPool,
-  clearWorktreeFromAgentMetadata,
-  spawnRequestShape,
-  filterIncompleteToolCalls_2,
-  writeSubagentProgressToOutputSink,
-  withAutoCompactCeiling,
 };

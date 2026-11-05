@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。提议开启自动压缩的对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8prszgkd.js (5), chunk-czq1j3j2.js (4)
  * attribution: placement 9
  */
 import { wrapText } from "../ink/wrap-text.js";
@@ -50,7 +50,7 @@ import { useOnFirstReveal } from "./permissions/PermissionRequestTitle.js";
 import { useConfirmArmed, CONFIRM_ARM_DELAY_MS } from "./design-system/ConfirmSelect.js";
 import { useRefusalTracker } from "./CustomSelect/selectTypeahead.js";
 import { fitVisibleOptionCount, NO_COMMITTED_ROW } from "./CustomSelect/select.js";
-import { useIsFullscreen } from "../ink/renderModeContext.js";
+import { useGrownOverflow } from "./useMaxOverflow.js";
 import { useRefusableAnswer } from "../hooks/useRefusableAnswer.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { formatTokens } from "../utils/format.js";
@@ -62,7 +62,7 @@ import { Text, Box } from "../ink/components/Text.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { PermissionDialog_2 } from "./permissions/PermissionDialog.js";
 
-//@ chunk-18hwfzwa.js:1115692-1116037 placement
+//@ chunk-8prszgkd.js:16338-16659 placement
 /**
  * 把文本按宽度折行后截取不超过 maxRows 的窗口（从 start 行开始），返回文本、隐藏行数、上方隐藏行数与下一页起点。
  */
@@ -89,7 +89,7 @@ function fitTextToRows(text, width, maxRows, start = 0) {
     nextStart: hiddenAfter === 0 ? 0 : min + sliced.length,
   };
 }
-//@ chunk-18hwfzwa.js:1116037-1116609 placement
+//@ chunk-8prszgkd.js:16659-17222 placement
 /**
  * 计算自动压缩提议对话框的布局：是否显示常驻选项、是否保持常驻、正文可用行数与稳定后的模式。
  */
@@ -120,7 +120,7 @@ function planOfferLayout(measure, bodyRows, mode) {
     settles: measure.chromeWith === null ? null : "standing",
   };
 }
-//@ chunk-18hwfzwa.js:1116609-1119923 placement
+//@ chunk-8prszgkd.js:17222-20366 placement
 /**
  * 自动压缩提议对话框的正文（适配宽度）。
  */
@@ -341,7 +341,7 @@ function FittedOfferBody(text, { isActive, isCut, contentKey, maxRows, lateBody,
     isBodyOnScreen: currentMeasure?.isBodyOnScreen ?? null,
   };
 }
-//@ chunk-18hwfzwa.js:1119923-1120222 placement
+//@ chunk-8prszgkd.js:20366-20656 placement
 function useOfferRoom() {
   let boxRef = useRef(null);
   let terminalSize = useTerminalSize();
@@ -362,7 +362,7 @@ function useOfferRoom() {
     isCutFromTheBottom: contextSlot !== null,
   };
 }
-//@ chunk-18hwfzwa.js:1120222-1120776 placement
+//@ chunk-8prszgkd.js:20656-21182 placement
 /**
  * 自下而上测量节点之后的兄弟元素高度，求出该节点可用的终端行数；遇到可滚动父容器时以其内高为准。
  */
@@ -394,26 +394,26 @@ function measureRoomAbove(node, rows, reserve, withMargins = false) {
   }
   return rows - Math.max(reserve, SCROLL_COLUMN_MIN_ROWS + belowHeight);
 }
-//@ chunk-18hwfzwa.js:1120776-1120805 placement
+//@ chunk-czq1j3j2.js:1152145-1152174 placement
 function increment_2(value) {
   return value + 1;
 }
-//@ chunk-18hwfzwa.js:1120805-1120834 placement
+//@ chunk-czq1j3j2.js:1152174-1152203 placement
 function increment_2_2(value) {
   return value + 1;
 }
-//@ chunk-18hwfzwa.js:1120834-1121034 placement
+//@ chunk-czq1j3j2.js:1152203-1152403 placement
 var AUTOCOMPACT_OFFER_TITLE = "We recommend compacting earlier";
 var AUTOCOMPACT_OFFER_KEYS_HINT =
   "\u2191/\u2193 choose \xB7 \u2190/\u2192 change size \xB7 enter confirm \xB7 esc not now";
 var MORE_TEXT_ABOVE_HINT = "More text above: scroll up, or enlarge the terminal";
 var OFFER_MIN_ROWS = 2;
-//@ chunk-18hwfzwa.js:1121034-1127615 placement
+//@ chunk-czq1j3j2.js:1152403-1158397 placement
 /**
  * AutocompactOfferDialog：上下文接近上限时提议开启自动压缩的对话框。
  */
 function AutocompactOfferDialog(props) {
-  let $ = useMemoCache(101);
+  let $ = useMemoCache(91);
   let { payload, onDone } = props;
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let globalExitKeybindings = useGlobalExitKeybindings();
@@ -479,82 +479,29 @@ function AutocompactOfferDialog(props) {
     $[12] = box.current;
     $[13] = measureBoxHeight;
   } else measureBoxHeight = $[13];
-  let overflowRows = useMeasured(measureBoxHeight) - OFFER_MIN_ROWS - rows;
-  let { columns, rows: rows_2 } = useTerminalSize();
-  let initialOverflowState;
-  if ($[14] !== columns || $[15] !== rows_2) {
-    initialOverflowState = {
-      columns,
-      rows: rows_2,
-      overflow: -Infinity,
-    };
-    $[14] = columns;
-    $[15] = rows_2;
-    $[16] = initialOverflowState;
-  } else initialOverflowState = $[16];
-  let [overflowState, setOverflowState] = useState(initialOverflowState);
-  let sizeMatches = overflowState.columns === columns && overflowState.rows === rows_2;
-  let syncOverflow;
-  let syncOverflowDeps;
-  if (
-    $[17] !== columns ||
-    $[18] !== sizeMatches ||
-    $[19] !== overflowState.overflow ||
-    $[20] !== overflowRows ||
-    $[21] !== rows_2
-  ) {
-    syncOverflow = () => {
-      if (!sizeMatches)
-        setOverflowState({
-          columns,
-          rows: rows_2,
-          overflow: -Infinity,
-        });
-      else if (overflowRows > overflowState.overflow)
-        setOverflowState({
-          columns,
-          rows: rows_2,
-          overflow: overflowRows,
-        });
-    };
-    syncOverflowDeps = [sizeMatches, columns, rows_2, overflowRows, overflowState.overflow];
-    $[17] = columns;
-    $[18] = sizeMatches;
-    $[19] = overflowState.overflow;
-    $[20] = overflowRows;
-    $[21] = rows_2;
-    $[22] = syncOverflow;
-    $[23] = syncOverflowDeps;
-  } else {
-    syncOverflow = $[22];
-    syncOverflowDeps = $[23];
-  }
-  useLayoutEffect(syncOverflow, syncOverflowDeps);
-  let hasMoreAbove =
-    (useIsFullscreen()
-      ? overflowRows
-      : Math.max(overflowRows, sizeMatches ? overflowState.overflow : -Infinity)) > 0;
+  let measured = useMeasured(measureBoxHeight);
+  let hasMoreAbove = useGrownOverflow(measured - OFFER_MIN_ROWS - rows) > 0;
   let [strayKeys, setStrayKeys] = useState(0);
   let [pasteCount, setPasteCount] = useState(0);
   let recordStrayCached;
-  if ($[24] !== noteRefused) {
+  if ($[14] !== noteRefused) {
     recordStrayCached = function recordStrayInput(strayCount) {
       setIsAnswered(true);
       noteRefused();
       setStrayKeys((previous) => previous + strayCount);
       setPasteCount(increment_2_2);
     };
-    $[24] = noteRefused;
-    $[25] = recordStrayCached;
-  } else recordStrayCached = $[25];
+    $[14] = noteRefused;
+    $[15] = recordStrayCached;
+  } else recordStrayCached = $[15];
   let recordStray = recordStrayCached;
   let answerWithStats;
   if (
-    $[26] !== onDone ||
-    $[27] !== selectorState ||
-    $[28] !== selectedSize.tokens ||
-    $[29] !== stepperMoves ||
-    $[30] !== strayKeys
+    $[16] !== onDone ||
+    $[17] !== selectorState ||
+    $[18] !== selectedSize.tokens ||
+    $[19] !== stepperMoves ||
+    $[20] !== strayKeys
   ) {
     answerWithStats = (choice) =>
       onDone({
@@ -564,29 +511,29 @@ function AutocompactOfferDialog(props) {
         strayKeys,
         ...selectorState,
       });
-    $[26] = onDone;
-    $[27] = selectorState;
-    $[28] = selectedSize.tokens;
-    $[29] = stepperMoves;
-    $[30] = strayKeys;
-    $[31] = answerWithStats;
-  } else answerWithStats = $[31];
+    $[16] = onDone;
+    $[17] = selectorState;
+    $[18] = selectedSize.tokens;
+    $[19] = stepperMoves;
+    $[20] = strayKeys;
+    $[21] = answerWithStats;
+  } else answerWithStats = $[21];
   let refusableAnswer = useRefusableAnswer(answerWithStats);
   let inputClock = useInputClock();
   let lastArrowAtRef = useRef(null);
   let keyHandlerCached;
   if (
-    $[32] !== hasRoomForOptions ||
-    $[33] !== confirmArmed ||
-    $[34] !== inputClock ||
-    $[35] !== isInteractive ||
-    $[36] !== isScreenReaderEnabled ||
-    $[37] !== isAnswered ||
-    $[38] !== noteRefused ||
-    $[39] !== recordStray ||
-    $[40] !== refusedWithin ||
-    $[41] !== refusableAnswer ||
-    $[42] !== stepSelection
+    $[22] !== hasRoomForOptions ||
+    $[23] !== confirmArmed ||
+    $[24] !== inputClock ||
+    $[25] !== isInteractive ||
+    $[26] !== isScreenReaderEnabled ||
+    $[27] !== isAnswered ||
+    $[28] !== noteRefused ||
+    $[29] !== recordStray ||
+    $[30] !== refusedWithin ||
+    $[31] !== refusableAnswer ||
+    $[32] !== stepSelection
   ) {
     keyHandlerCached = (input, key, sequence) => {
       if (key.wheelUp || key.wheelDown) {
@@ -631,65 +578,65 @@ function AutocompactOfferDialog(props) {
       }
       return false;
     };
-    $[32] = hasRoomForOptions;
-    $[33] = confirmArmed;
-    $[34] = inputClock;
-    $[35] = isInteractive;
-    $[36] = isScreenReaderEnabled;
-    $[37] = isAnswered;
-    $[38] = noteRefused;
-    $[39] = recordStray;
-    $[40] = refusedWithin;
-    $[41] = refusableAnswer;
-    $[42] = stepSelection;
-    $[43] = keyHandlerCached;
-  } else keyHandlerCached = $[43];
+    $[22] = hasRoomForOptions;
+    $[23] = confirmArmed;
+    $[24] = inputClock;
+    $[25] = isInteractive;
+    $[26] = isScreenReaderEnabled;
+    $[27] = isAnswered;
+    $[28] = noteRefused;
+    $[29] = recordStray;
+    $[30] = refusedWithin;
+    $[31] = refusableAnswer;
+    $[32] = stepSelection;
+    $[33] = keyHandlerCached;
+  } else keyHandlerCached = $[33];
   usePreDispatchKeyHandler(keyHandlerCached);
   let [isRevealed, setIsRevealed] = useState(false);
   let revealEffect;
   let revealEffectDeps;
-  if ($[44] === MEMO_CACHE_SENTINEL) {
+  if ($[34] === MEMO_CACHE_SENTINEL) {
     revealEffect = () => {
       setIsRevealed(true);
     };
     revealEffectDeps = [];
-    $[44] = revealEffect;
-    $[45] = revealEffectDeps;
+    $[34] = revealEffect;
+    $[35] = revealEffectDeps;
   } else {
-    revealEffect = $[44];
-    revealEffectDeps = $[45];
+    revealEffect = $[34];
+    revealEffectDeps = $[35];
   }
   useEffect(revealEffect, revealEffectDeps);
   let defaultFocusValue =
     (refusableAnswer.refused === "esc" ? null : refusableAnswer.refused) ??
     (isRevealed ? undefined : defaultChoice);
   let tokensLabel;
-  if ($[46] !== selectedSize.tokens) {
+  if ($[36] !== selectedSize.tokens) {
     tokensLabel = formatTokens(selectedSize.tokens);
-    $[46] = selectedSize.tokens;
-    $[47] = tokensLabel;
-  } else tokensLabel = $[47];
+    $[36] = selectedSize.tokens;
+    $[37] = tokensLabel;
+  } else tokensLabel = $[37];
   let tokensText = tokensLabel;
   let currentWindowText;
-  if ($[48] !== payload) {
+  if ($[38] !== payload) {
     currentWindowText = describeCurrentWindow(payload);
-    $[48] = payload;
-    $[49] = currentWindowText;
-  } else currentWindowText = $[49];
+    $[38] = payload;
+    $[39] = currentWindowText;
+  } else currentWindowText = $[39];
   const whyParagraph = `Each message re-sends the whole conversation, so long conversations use up your plan's usage limits faster. With your current settings, Claude Code autocompacts (replaces older messages with a summary) at ${currentWindowText}. Compacting earlier can reduce usage, but it happens more often, and some details can be lost each time.`;
   const offerQuestion = `Want to autocompact at ${tokensText} tokens instead? Your model doesn't change. Switch back any time with /autocompact.`;
   let paragraphs;
-  if ($[50] !== whyParagraph || $[51] !== offerQuestion) {
+  if ($[40] !== whyParagraph || $[41] !== offerQuestion) {
     paragraphs = [whyParagraph, offerQuestion];
-    $[50] = whyParagraph;
-    $[51] = offerQuestion;
-    $[52] = paragraphs;
-  } else paragraphs = $[52];
+    $[40] = whyParagraph;
+    $[41] = offerQuestion;
+    $[42] = paragraphs;
+  } else paragraphs = $[42];
   let children = paragraphs.join(`
 
 `);
   let styleLabel;
-  if ($[53] !== isInteractive || $[54] !== isScreenReaderEnabled) {
+  if ($[43] !== isInteractive || $[44] !== isScreenReaderEnabled) {
     styleLabel = (text) =>
       isInteractive || isScreenReaderEnabled
         ? text
@@ -697,110 +644,110 @@ function AutocompactOfferDialog(props) {
             dimColor: true,
             children: text,
           });
-    $[53] = isInteractive;
-    $[54] = isScreenReaderEnabled;
-    $[55] = styleLabel;
-  } else styleLabel = $[55];
+    $[43] = isInteractive;
+    $[44] = isScreenReaderEnabled;
+    $[45] = styleLabel;
+  } else styleLabel = $[45];
   let styleLabelStable = styleLabel;
   const acceptLabelText = isScreenReaderEnabled
     ? `Autocompact at ${tokensText} tokens`
     : `Autocompact at \u2039 ${tokensText} \u203A tokens`;
   let label;
-  if ($[56] !== styleLabelStable || $[57] !== acceptLabelText) {
+  if ($[46] !== styleLabelStable || $[47] !== acceptLabelText) {
     label = styleLabelStable(acceptLabelText);
-    $[56] = styleLabelStable;
-    $[57] = acceptLabelText;
-    $[58] = label;
-  } else label = $[58];
+    $[46] = styleLabelStable;
+    $[47] = acceptLabelText;
+    $[48] = label;
+  } else label = $[48];
   let description;
-  if ($[59] !== payload.contextTokens || $[60] !== selectedSize.firesAt) {
+  if ($[49] !== payload.contextTokens || $[50] !== selectedSize.firesAt) {
     description =
       payload.contextTokens >= selectedSize.firesAt
         ? `This conversation is at ${formatTokens(payload.contextTokens)}, so it will be summarized on your next message.`
         : undefined;
-    $[59] = payload.contextTokens;
-    $[60] = selectedSize.firesAt;
-    $[61] = description;
-  } else description = $[61];
+    $[49] = payload.contextTokens;
+    $[50] = selectedSize.firesAt;
+    $[51] = description;
+  } else description = $[51];
   let acceptOption;
-  if ($[62] !== label || $[63] !== description) {
+  if ($[52] !== label || $[53] !== description) {
     acceptOption = {
       label,
       value: "accept",
       description,
     };
-    $[62] = label;
-    $[63] = description;
-    $[64] = acceptOption;
-  } else acceptOption = $[64];
+    $[52] = label;
+    $[53] = description;
+    $[54] = acceptOption;
+  } else acceptOption = $[54];
   let acceptOptionStable = acceptOption;
   let currentWindowName;
-  if ($[65] !== payload) {
+  if ($[55] !== payload) {
     currentWindowName = currentWindowLabel(payload);
-    $[65] = payload;
-    $[66] = currentWindowName;
-  } else currentWindowName = $[66];
+    $[55] = payload;
+    $[56] = currentWindowName;
+  } else currentWindowName = $[56];
   const keepLabelText = `Keep ${currentWindowName}`;
   let label_2;
-  if ($[67] !== styleLabelStable || $[68] !== keepLabelText) {
+  if ($[57] !== styleLabelStable || $[58] !== keepLabelText) {
     label_2 = styleLabelStable(keepLabelText);
-    $[67] = styleLabelStable;
-    $[68] = keepLabelText;
-    $[69] = label_2;
-  } else label_2 = $[69];
+    $[57] = styleLabelStable;
+    $[58] = keepLabelText;
+    $[59] = label_2;
+  } else label_2 = $[59];
   let keepOptionDraft;
-  if ($[70] !== label_2) {
+  if ($[60] !== label_2) {
     keepOptionDraft = {
       label: label_2,
       value: "keep",
     };
-    $[70] = label_2;
-    $[71] = keepOptionDraft;
-  } else keepOptionDraft = $[71];
+    $[60] = label_2;
+    $[61] = keepOptionDraft;
+  } else keepOptionDraft = $[61];
   let keepOption = keepOptionDraft;
   const ref = isScreenReaderEnabled ? undefined : box;
   let onPaste;
-  if ($[72] !== recordStray) {
+  if ($[62] !== recordStray) {
     onPaste = (pasteEvent) => recordStray(pasteEvent.text.length);
-    $[72] = recordStray;
-    $[73] = onPaste;
-  } else onPaste = $[73];
+    $[62] = recordStray;
+    $[63] = onPaste;
+  } else onPaste = $[63];
   let paragraphElement;
-  if ($[74] !== children) {
+  if ($[64] !== children) {
     paragraphElement = jsxProd_default(Box, {
       marginBottom: 1,
       children: jsxProd_default(Text, {
         children,
       }),
     });
-    $[74] = children;
-    $[75] = paragraphElement;
-  } else paragraphElement = $[75];
+    $[64] = children;
+    $[65] = paragraphElement;
+  } else paragraphElement = $[65];
   const selectorKey = `${refusableAnswer.attempts}:${isScreenReaderEnabled ? `${pasteCount}:${isInteractive}` : ""}`;
   const isDisabled = !isInteractive;
   let options;
-  if ($[76] !== acceptOptionStable || $[77] !== defaultChoice || $[78] !== keepOption) {
+  if ($[66] !== acceptOptionStable || $[67] !== defaultChoice || $[68] !== keepOption) {
     options =
       defaultChoice === "accept" ? [acceptOptionStable, keepOption] : [keepOption, acceptOptionStable];
-    $[76] = acceptOptionStable;
-    $[77] = defaultChoice;
-    $[78] = keepOption;
-    $[79] = options;
-  } else options = $[79];
+    $[66] = acceptOptionStable;
+    $[67] = defaultChoice;
+    $[68] = keepOption;
+    $[69] = options;
+  } else options = $[69];
   let onCancel;
-  if ($[80] !== refusableAnswer) {
+  if ($[70] !== refusableAnswer) {
     onCancel = () => refusableAnswer.answer("esc");
-    $[80] = refusableAnswer;
-    $[81] = onCancel;
-  } else onCancel = $[81];
+    $[70] = refusableAnswer;
+    $[71] = onCancel;
+  } else onCancel = $[71];
   let selectorElement;
   if (
-    $[82] !== defaultFocusValue ||
-    $[83] !== refusableAnswer.answer ||
-    $[84] !== selectorKey ||
-    $[85] !== isDisabled ||
-    $[86] !== options ||
-    $[87] !== onCancel
+    $[72] !== defaultFocusValue ||
+    $[73] !== refusableAnswer.answer ||
+    $[74] !== selectorKey ||
+    $[75] !== isDisabled ||
+    $[76] !== options ||
+    $[77] !== onCancel
   ) {
     selectorElement = jsxProd_default(
       ModelSelector,
@@ -818,16 +765,16 @@ function AutocompactOfferDialog(props) {
       },
       selectorKey,
     );
-    $[82] = defaultFocusValue;
-    $[83] = refusableAnswer.answer;
-    $[84] = selectorKey;
-    $[85] = isDisabled;
-    $[86] = options;
-    $[87] = onCancel;
-    $[88] = selectorElement;
-  } else selectorElement = $[88];
+    $[72] = defaultFocusValue;
+    $[73] = refusableAnswer.answer;
+    $[74] = selectorKey;
+    $[75] = isDisabled;
+    $[76] = options;
+    $[77] = onCancel;
+    $[78] = selectorElement;
+  } else selectorElement = $[78];
   let hintElement;
-  if ($[89] !== globalExitKeybindings || $[90] !== hasMoreAbove || $[91] !== isScreenReaderEnabled) {
+  if ($[79] !== globalExitKeybindings || $[80] !== hasMoreAbove || $[81] !== isScreenReaderEnabled) {
     hintElement =
       (!isScreenReaderEnabled || globalExitKeybindings.pending) &&
       jsxProd_default_2(Box, {
@@ -848,13 +795,13 @@ function AutocompactOfferDialog(props) {
             }),
         ],
       });
-    $[89] = globalExitKeybindings;
-    $[90] = hasMoreAbove;
-    $[91] = isScreenReaderEnabled;
-    $[92] = hintElement;
-  } else hintElement = $[92];
+    $[79] = globalExitKeybindings;
+    $[80] = hasMoreAbove;
+    $[81] = isScreenReaderEnabled;
+    $[82] = hintElement;
+  } else hintElement = $[82];
   let children_2;
-  if ($[93] !== paragraphElement || $[94] !== selectorElement || $[95] !== hintElement) {
+  if ($[83] !== paragraphElement || $[84] !== selectorElement || $[85] !== hintElement) {
     children_2 = jsxProd_default(PermissionDialog_2, {
       title: AUTOCOMPACT_OFFER_TITLE,
       srPrefix: null,
@@ -865,13 +812,13 @@ function AutocompactOfferDialog(props) {
         children: [paragraphElement, selectorElement, hintElement],
       }),
     });
-    $[93] = paragraphElement;
-    $[94] = selectorElement;
-    $[95] = hintElement;
-    $[96] = children_2;
-  } else children_2 = $[96];
+    $[83] = paragraphElement;
+    $[84] = selectorElement;
+    $[85] = hintElement;
+    $[86] = children_2;
+  } else children_2 = $[86];
   let dialogElement;
-  if ($[97] !== ref || $[98] !== onPaste || $[99] !== children_2) {
+  if ($[87] !== ref || $[88] !== onPaste || $[89] !== children_2) {
     dialogElement = jsxProd_default(Box, {
       ref,
       flexDirection: "column",
@@ -880,11 +827,11 @@ function AutocompactOfferDialog(props) {
       onPaste,
       children: children_2,
     });
-    $[97] = ref;
-    $[98] = onPaste;
-    $[99] = children_2;
-    $[100] = dialogElement;
-  } else dialogElement = $[100];
+    $[87] = ref;
+    $[88] = onPaste;
+    $[89] = children_2;
+    $[90] = dialogElement;
+  } else dialogElement = $[90];
   return dialogElement;
 }
-export { FittedOfferBody, AutocompactOfferDialog };
+export { useOfferRoom, fitTextToRows, FittedOfferBody, AutocompactOfferDialog };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：旁路提问进度
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mret17z7.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-e508t3a3.js (2)
  * attribution: placement 2
  */
 import { messagesSinceCompactBoundary } from "../services/projects/threadRows.js";
@@ -13,14 +13,14 @@ import { getLastCacheSafeParams } from "./forkedAgent.js";
 import { createAbortController } from "./abortController.js";
 import { runSideQuestion } from "./sideQuestion.js";
 
-//@ chunk-mret17z7.js:336-463 placement
+//@ chunk-e508t3a3.js:336-463 placement
 function isAwaitingReply(messages, includePlaceholder = true) {
   let last = messages.at(-1);
   let hasPendingAssistant =
     includePlaceholder && last?.type === "assistant" && last.message.stop_reason === null;
   return messagesSinceCompactBoundary(hasPendingAssistant ? messages.slice(0, -1) : [...messages]);
 }
-//@ chunk-mret17z7.js:463-1563 placement
+//@ chunk-e508t3a3.js:463-1563 placement
 /**
  * 运行旁路提问（/btw）：基于历史快照单独请求模型并报告进度。
  */

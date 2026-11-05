@@ -3,9 +3,9 @@
  *
  * 组织配置同意宿主组件（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3bfra2hw.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cnnx1tw4.js (3)
  * attribution: placement 3
  */
 import {
@@ -22,12 +22,12 @@ import { isWithinRecentInput, RECENT_INPUT_GUARD_MS } from "../hooks/useRecentIn
 import { ManagedSettingsSecurityDialogHost } from "./ManagedSettingsSecurityDialog/ManagedSettingsSecurityDialog.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3bfra2hw.js:451-455 placement
+//@ chunk-cnnx1tw4.js:451-455 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3bfra2hw.js:451", () => {
+deferInit("chunk-cnnx1tw4.js:451", () => {
   init_react_production();
 });
-//@ chunk-3bfra2hw.js:455-1150 placement
+//@ chunk-cnnx1tw4.js:455-1150 placement
 function OrgConfigConsentHost({ children }) {
   let [dialog, setDialog] = useState(null);
   let [isVisible, setIsVisible] = useState(false);
@@ -90,7 +90,7 @@ function OrgConfigConsentHost({ children }) {
     gate: gateRef.current,
   });
 }
-//@ chunk-3bfra2hw.js:1150-1633 placement
+//@ chunk-cnnx1tw4.js:1150-1633 placement
 function OrgConfigConsentHost_2({ review, gate }) {
   let inputClock = useInputClock();
   useEffect(() => {

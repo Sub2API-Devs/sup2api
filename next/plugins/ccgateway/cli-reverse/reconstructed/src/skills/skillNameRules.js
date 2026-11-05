@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：技能名合法性规则
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: placement 1
  */
 import { getHostState } from "../utils/hostEnvironment.js";
@@ -15,7 +15,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { claimOnce } from "../services/api/verificationRequired.js";
 import { logFeatureSad } from "../services/analytics/featureTelemetry.js";
 
-//@ chunk-e6aww6q8.js:983062-983407 placement
+//@ chunk-5xgkngpb.js:996773-997117 placement
 /**
  * 技能名不符合显示规则时记录（去重、有上限）。
  */

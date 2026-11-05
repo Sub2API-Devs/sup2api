@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：/code-review 参数解析（等级、--fix/--comment、目标、--max-findings）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hantmvxa.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ne2890fx.js (10)
  * attribution: placement 10
  */
 import { isVerifySkillRolloutOn } from "../../services/projectsRelay/relayGates.js";
-import { isProactiveLevel, toolMatchesName } from "../../Tool.js";
+import { isProactiveLevel, matchesToolName } from "../../Tool.js";
 import { SKILL } from "../../tools/SkillTool/skillToolNames.js";
 import { getSessionSkillCommands } from "../../services/mcp/mcpAccountKey.js";
 import { getProjectRoot } from "../../bootstrap/state.js";
@@ -21,34 +21,34 @@ import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { plural } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hantmvxa.js:83163-83410 placement
+//@ chunk-ne2890fx.js:83336-83583 placement
 async function afterReviewSection(context) {
   if (context.options?.isSkillPreload) return "";
   if (!isVerifySkillRolloutOn()) return "";
   if (!isProactiveLevel(context.getProactivityLevel())) return "";
   let tools = context.options?.tools;
-  if (tools && !tools.some((tool) => toolMatchesName(tool, SKILL))) return "";
+  if (tools && !tools.some((tool) => matchesToolName(tool, SKILL))) return "";
   return (await getSessionSkillCommands(getProjectRoot(), context.storageV5)).some(
     (command) => command.name === VERIFY,
   )
     ? AFTER_REVIEW_SECTION
     : "";
 }
-//@ chunk-hantmvxa.js:83410-83564 placement
+//@ chunk-ne2890fx.js:83583-83737 placement
 var REVIEW_LEVELS; // deferred: uses EFFORT_LEVELS (../../utils/effort.js) of its import cycle while loading; runs once the cycle is complete
 var LEVEL_PREFIX_RE;
 var MAX_FINDINGS_RE;
-deferInit("chunk-hantmvxa.js:83410", () => {
+deferInit("chunk-ne2890fx.js:83583", () => {
   REVIEW_LEVELS = EFFORT_LEVELS;
   LEVEL_PREFIX_RE = new RegExp(`^(${REVIEW_LEVELS.map((level) => level.slice(0, 3)).join("|")})[a-z]*$`, "i");
   MAX_FINDINGS_RE = /(^|\s)--max-findings(?:(?:\s*=\s*|\s+)(?!--)(\S+)|\s*=\S*)?(?=\s|$)/g;
 });
-//@ chunk-hantmvxa.js:83564-83673 placement
+//@ chunk-ne2890fx.js:83737-83846 placement
 function normalizeTargetTokens(tokens) {
   let [firstToken = "", ...restTokens] = tokens;
   return [firstToken.replaceAll("`", "").replace(/^#/, ""), ...restTokens].filter(Boolean).join(" ");
 }
-//@ chunk-hantmvxa.js:83673-84619 placement
+//@ chunk-ne2890fx.js:83846-84792 placement
 /**
  * 解析 /code-review 参数：等级、--fix/--comment/--post、目标（PR 号/分支/路径）、--max-findings。
  */
@@ -114,14 +114,14 @@ function parseReviewArgs(input) {
     maxFindingsIgnored,
   };
 }
-//@ chunk-hantmvxa.js:84619-84699 placement
+//@ chunk-ne2890fx.js:84792-84872 placement
 function lastReviewEffort() {
   let codeReviewLastEffort = getGlobalConfig().codeReviewLastEffort;
   return codeReviewLastEffort !== undefined && isEffortLevel(codeReviewLastEffort)
     ? codeReviewLastEffort
     : undefined;
 }
-//@ chunk-hantmvxa.js:84699-84786 placement
+//@ chunk-ne2890fx.js:84872-84959 placement
 function saveReviewEffort(explicit, storageV5) {
   saveGlobalConfig(
     (config) =>
@@ -134,14 +134,14 @@ function saveReviewEffort(explicit, storageV5) {
     storageV5,
   );
 }
-//@ chunk-hantmvxa.js:84786-84901 placement
+//@ chunk-ne2890fx.js:84959-85074 placement
 function defaultReviewLevel({ explicit, ultraFallback }, context) {
   if (context?.options?.isSkillPreload) return;
   return explicit === undefined && !ultraFallback ? lastReviewEffort() : undefined;
 }
-//@ chunk-hantmvxa.js:84901-84911 placement
+//@ chunk-ne2890fx.js:85074-85084 placement
 var MAX_REVIEW_FINDINGS = 32;
-//@ chunk-hantmvxa.js:84911-85253 placement
+//@ chunk-ne2890fx.js:85084-85426 placement
 function resolveMaxFindings({ maxFindings }, cell, hasReportFindingsTool, context) {
   let codeReviewLastMaxFindings = getGlobalConfig().codeReviewLastMaxFindings;
   let reusesLastLimit =
@@ -170,7 +170,7 @@ function resolveMaxFindings({ maxFindings }, cell, hasReportFindingsTool, contex
     reused: reusesLastLimit,
   };
 }
-//@ chunk-hantmvxa.js:85253-85992 placement
+//@ chunk-ne2890fx.js:85426-86165 placement
 function describeMaxFindings({ asked, stated, reused, ignored }, who) {
   let notes = [];
   if (ignored)

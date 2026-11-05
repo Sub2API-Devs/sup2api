@@ -3,15 +3,15 @@
  *
  * /remote-env 实现：选择云端代理默认环境
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/remote-env/remote-env.tsx
- * pieces: chunk-zj31az9x.js (1)
+ * pieces: chunk-h5403648.js (1)
  * attribution: callgraph-fingerprint 1
  */
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { RemoteEnvironmentDialog } from "../../components/RemoteEnvironmentDialog.js";
 
-//@ chunk-zj31az9x.js:19855-19900 callgraph-fingerprint (2.1.88 match: call, 1)
+//@ chunk-h5403648.js:21029-21074 callgraph-fingerprint (2.1.88 match: call, 1)
 /**
  * /remote-env 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

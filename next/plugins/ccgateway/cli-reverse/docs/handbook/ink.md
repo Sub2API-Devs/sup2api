@@ -1,6 +1,8 @@
 # Ink 渲染层、快捷键与 vim 模式（领域 ink）
 
-> 依据：`original/` 中 Claude Code 2.1.316 的代码；名字参考 2.1.88（`references/claude-code-analysis/src/`）。声明用 `chunk-xxx.js#压缩名` 标注，函数用 `重组路径 · 语义名` 标注。名字以 `naming/semantic-ink.jsonl` 为准，说明见 `naming/docs-ink.jsonl`。
+> 2026-11-05 升级到 2.1.318：本篇写于 2.1.316，代码引用（声明 id、路径、名字）已按 2.1.318 阅读树逐条校验，行为描述没有逐条重新核对；316 → 318 的变化见 [`research/versions/CLAUDE-CODE-2.1.318-CHANGES.md`](../../research/versions/CLAUDE-CODE-2.1.318-CHANGES.md)。
+>
+> 依据：`original/` 中 Claude Code 2.1.318 的代码（本篇写于 2.1.316）；名字参考 2.1.88（`references/claude-code-analysis/src/`）。声明用 `chunk-xxx.js#压缩名` 标注，函数用 `重组路径 · 语义名` 标注。名字以 `naming/semantic-ink.jsonl` 为准，说明见 `naming/docs-ink.jsonl`。
 
 ## 1. 概述
 
@@ -44,7 +46,7 @@
 | `vim/*` | vim 模式 |
 | `native-ts/color-diff`、`native-ts/file-index` | diff 渲染器、文件模糊索引 |
 
-> 注意：重组树里不少模块混进了别处的代码（例如 `ink/screen.ts` 有 114 个声明其实是 316 新增的图表渲染器，`keybindings/reservedShortcuts.ts` 有 34 个声明是路径/沙箱工具）。完整清单见 `docs/process/domain-ink.md`「给 lead 的建议」。另外大量 ink 代码写作时在 `_unattributed/` 的 `chunk-bzr73sfg`、`chunk-24t3dkzb` 段里（place-rest 后已落位到 `ink/` 下各文件）（输入读取器、终端能力探测、终端图片、LineCellSegmenter、屏幕阅读器等），本手册按功能讲到它们。
+> 注意：重组树里不少模块混进了别处的代码（例如 `ink/screen.ts` 有 114 个声明其实是 316 新增的图表渲染器，`keybindings/reservedShortcuts.ts` 有 34 个声明是路径/沙箱工具）。完整清单见 `docs/process/domain-ink.md`「给 lead 的建议」。另外大量 ink 代码写作时在 `_unattributed/` 的 `chunk-2avr6cej`、`chunk-xd1cb3xs` 段里（place-rest 后已落位到 `ink/` 下各文件）（输入读取器、终端能力探测、终端图片、LineCellSegmenter、屏幕阅读器等），本手册按功能讲到它们。
 
 ## 3. 渲染管线
 
@@ -78,9 +80,9 @@ terminal.ts · writeDiffToTerminal → 一次 stdout.write（DEC 2026 BSU…ESU 
 
 ### 3.2 React → DOM（reconciler）
 
-`ink/reconciler.ts · reconciler`（`chunk-bzr73sfg.js#$7` 同一声明里还有 `dispatcher`）：
+`ink/reconciler.ts · reconciler`（`chunk-2avr6cej.js#Ate` 同一声明里还有 `dispatcher`）：
 
-- `createInstance`：`<Box>` 不能嵌在 `<Text>` 里；`<Text>` 内的 `<Text>` 变成 `ink-virtual-text`；裸文字必须在 `<Text>` 里，否则报错并附组件所有者链（`getOwnerChain`/`formatOwnerChain`，`chunk-bzr73sfg.js#cg`/`#og`）。
+- `createInstance`：`<Box>` 不能嵌在 `<Text>` 里；`<Text>` 内的 `<Text>` 变成 `ink-virtual-text`；裸文字必须在 `<Text>` 里，否则报错并附组件所有者链（`getOwnerChain`/`formatOwnerChain`，`chunk-2avr6cej.js#ug`/`#rg`）。
 - `commitUpdate`：`applyProp`（`#h1`）只写变化的属性；`style` 走 `setStyleAndApplyLayout`（浅比较不变就跳过），事件处理器存进 `_eventHandlers`（不进 attributes，换处理器不触发重绘）。
 - `hideInstance/unhideInstance` 用 `display:none`；`commitMount` 处理 `autoFocus`。
 - **原始模式引用计数（316 新增）**：节点挂上键盘/粘贴/滚轮处理器（`RAW_MODE_HANDLER_PROPS`）时 `syncRawModeRef`（`#rg`）给根节点 +1，卸载时 -1（`releaseRawModeRefs`，`#ug`）；只有确实有处理器时才打开 stdin 原始模式。
@@ -96,7 +98,7 @@ terminal.ts · writeDiffToTerminal → 一次 stdout.write（DEC 2026 BSU…ESU 
 
 ### 3.4 DOM → Output（render-node-to-output）
 
-`ink/render-node-to-output.ts · renderNodeToOutput`（`chunk-bzr73sfg.js#ks`）每帧从根递归：
+`ink/render-node-to-output.ts · renderNodeToOutput`（`chunk-2avr6cej.js#zs`）每帧从根递归：
 
 1. `display:none`：清掉旧区域。
 2. **blit 复用**：节点未脏、位置尺寸背景不变 → `Output` 的 `blit` 从上一帧整块拷贝（再补拷越界的绝对定位子孙，`#DR`）。不能 blit 的情况：前面有脏的非裁剪兄弟、绝对定位子节点移动（`absoluteChildMoved`）、被越界兄弟覆盖（`collectSiblingsUnderEscapingChange`）、裁剪区变大（`advanceClips` 的 `grew`）、上一帧越界绝对定位矩形消失（`hasStaleAbsolutePaint`）。
@@ -108,7 +110,7 @@ terminal.ts · writeDiffToTerminal → 一次 stdout.write（DEC 2026 BSU…ESU 
 
 2.1.88 用 JS 写 `setCellAt` / `writeLineToScreen`（逐字素 `Intl.Segmenter` + `stringWidth`，自己处理宽字符占位与 SGR）。316 把这部分换成 **Anthropic 私有 Bun 运行时里的 `Bun.ant.CellSegmenter`**，公版 Bun 没有它，且**没有回退**。
 
-**构造**：`chunk-m4dvt8pp.js` 的 `$7n(substitute, screen)`：
+**构造**：`chunk-ngeq6w7y.js` 的 `$7n(substitute, screen)`：
 
 ```js
 if (typeof Bun > "u" || typeof Bun.ant?.CellSegmenter !== "function")
@@ -117,16 +119,16 @@ return new Bun.ant.CellSegmenter({ ambiguousIsNarrow: true, substitute: e, scree
 ```
 
 - `substitute`：要替换掉的码点区间，Ink 传 `q5e = [[1564,1564],[8234,8238],[8294,8297]]`（ALM U+061C、LRE..RLO U+202A–202E、LRI..PDI U+2066–2069 这些双向控制符）；`setCellAt` 用的单例传 `[]`。
-- `screen`（屏幕格编码约定，由 `ink/screen.ts · createScreenSegmenter`，`chunk-bzr73sfg.js#ps` 给出）：`{widthMask: 3, narrow: 0, wide: 1, spacerTail: 2, spacerHead: 3, emptyCharIndex: 0, spacerCharIndex: 1, emptyWord: packWord1(0,0,0), tabWidth: 8}`。
+- `screen`（屏幕格编码约定，由 `ink/screen.ts · createScreenSegmenter`，`chunk-2avr6cej.js#ys` 给出）：`{widthMask: 3, narrow: 0, wide: 1, spacerTail: 2, spacerHead: 3, emptyCharIndex: 0, spacerCharIndex: 1, emptyWord: packWord1(0,0,0), tabWidth: 8}`。
 
 **调用点**：
 
 | 调用方 | 用到的方法 | 作用 |
 |---|---|---|
-| `LineCellSegmenter`（`chunk-bzr73sfg.js` 的 `class pf`，未归属，应归 `ink/output.ts`） | `segment`、`paint`、驻留表 | Output 写行的主路径 |
+| `LineCellSegmenter`（`chunk-2avr6cej.js` 的 `class pf`，未归属，应归 `ink/output.ts`） | `segment`、`paint`、驻留表 | Output 写行的主路径 |
 | `ink/screen.ts · setCellAt`（`#T1`） | `setCell` | 写单个格（宽字符右半占位、覆盖宽字符时清孤儿格） |
 | `ink/screen.ts · paintSegments`（`#xg`） | `paint`（经 LineCellSegmenter） | 写一行并记 damage、图集 |
-| `chunk-e6aww6q8.js#jUt`（技能名清洗，非 ink 领域） | `segment` + `graphemes` | 只取字素串，去掉控制/双向字符 |
+| `chunk-5xgkngpb.js#Fzt`（技能名清洗，非 ink 领域） | `segment` + `graphemes` | 只取字素串，去掉控制/双向字符 |
 
 **接口形状**（从调用方反推）：
 
@@ -139,7 +141,7 @@ return new Bun.ant.CellSegmenter({ ambiguousIsNarrow: true, substitute: e, scree
 - 返回值打包：`结束列 + 改动起始列·2^20 + 改动结束列·2^36`；`addDamageFromPacked`（`#Eg`）取出改动区间并入 `screen.damage`，`paintSegments` 返回 `packed % 2^20`（结束列）。
 - 驻留表 `graphemes / sgrKeys / sgrCloseKeys / uris` 是原生对象上的数组，JS 侧只读。
 
-**LineCellSegmenter 的 JS 包装**（`class LineCellSegmenter`（`chunk-bzr73sfg.js#pf`））：维护字素→字符池映射（`charIndices`）、段号→styleId 缓存（`styleId()`：SGR 键拆成 AnsiCode 列表，经 `StylePool` 的 `intern` 得 id）、链接下标缓存；驻留表超过 16384（字素 65536）或样式池/chalk 换代且 sgrKeys > 2048 时 `resetNative` 重建原生对象。`width()` 算显示宽度（制表位展开），`keepColumns(x, x1, x2)` 只保留裁剪区内的格，`trailingSpaces()` 数尾随空格。
+**LineCellSegmenter 的 JS 包装**（`class LineCellSegmenter`（`chunk-2avr6cej.js#mf`））：维护字素→字符池映射（`charIndices`）、段号→styleId 缓存（`styleId()`：SGR 键拆成 AnsiCode 列表，经 `StylePool` 的 `intern` 得 id）、链接下标缓存；驻留表超过 16384（字素 65536）或样式池/chalk 换代且 sgrKeys > 2048 时 `resetNative` 重建原生对象。`width()` 算显示宽度（制表位展开），`keepColumns(x, x1, x2)` 只保留裁剪区内的格，`trailingSpaces()` 数尾随空格。
 
 **与 2.1.88 的差异**：字素切分、宽度计算（`ambiguousIsNarrow`）、SGR/OSC 8 解析、宽字符占位规则、制表位展开、双向重排全部进了原生代码；JS 侧只剩缓冲管理与池映射。验证环境用 `tools/verify/bun-ant-shim.js` 垫片补上（见 `docs/process/verify.md` 第 12 节，垫片不做双向重排）。
 
@@ -171,11 +173,11 @@ return new Bun.ant.CellSegmenter({ ambiguousIsNarrow: true, substitute: e, scree
   - 虚拟屏幕 `VirtualScreen`（`#af`）跟踪光标；`moveCursorTo` 换行时用 CR+相对移动，同行用 CHA。
   - 宽度补偿（`needsWidthCompensation`，`#NC`）：U+1FA70–1FAFF、带 VS16 的 emoji 终端可能算 1 列，先在后一列写空格再回到正确列。
   - 主屏模式下内容超过视口（`isFrameOverflowing`）进入回滚区；无法增量时整屏重置（`fullReset`，会闪烁）。
-  - DECSTBM 滚动区域优化：滚动容器整体平移时发 `CSI top;bottom r` + 滚动，少画很多行；由 `isDecstbmRendererEnabled()`（`chunk-bzr73sfg.js#bB`，`ink/nativeCursor.ts`）决定：需要 TTY、同步输出、终端无光标上移回滚 bug、非全屏环境、非后台守护进程，然后 `CLAUDE_CODE_DECSTBM` 或 GrowthBook `tengu_marlin_porch`（默认 false）；tmux/zellij/JetBrains/xterm.js/Windows Terminal 下禁用（`ink/terminal.ts` 的 `#JRr`）。
+  - DECSTBM 滚动区域优化：滚动容器整体平移时发 `CSI top;bottom r` + 滚动，少画很多行；由 `isDecstbmRendererEnabled()`（`chunk-2avr6cej.js#cj`，`ink/nativeCursor.ts`）决定：需要 TTY、同步输出、终端无光标上移回滚 bug、非全屏环境、非后台守护进程，然后 `CLAUDE_CODE_DECSTBM` 或 GrowthBook `tengu_marlin_porch`（默认 false）；tmux/zellij/JetBrains/xterm.js/Windows Terminal 下禁用（`ink/terminal.ts` 的 `#JRr`）。
 - `ink/optimizer.ts · optimize`（`#mf`）：去空输出/零移动，合并相邻 cursorMove 与 styleStr，连续 cursorTo/光标显隐只留最后一个，重复超链接去掉。
-- `ink/terminal.ts · writeDiffToTerminal`（`chunk-24t3dkzb.js#abo`）：拼成一个字符串一次写出，支持同步输出时包 `CSI ?2026h … CSI ?2026l`（BSU/ESU）。同步输出支持来自能力探测（DECRQM 2026），`CLAUDE_CODE_FORCE_SYNC_OUTPUT` 在非 tmux 下强制开。
+- `ink/terminal.ts · writeDiffToTerminal`（`chunk-xd1cb3xs.js#dDo`）：拼成一个字符串一次写出，支持同步输出时包 `CSI ?2026h … CSI ?2026l`（BSU/ESU）。同步输出支持来自能力探测（DECRQM 2026），`CLAUDE_CODE_FORCE_SYNC_OUTPUT` 在非 tmux 下强制开。
 - `Ink` 的 `onRender` 还会：叠加选区背景（`applySelectionOverlay`，`#Gg`）、搜索高亮（`applySearchHighlight`）、悬停超链接下划线（`underlineHyperlinkAt`）、备用屏锚点、声明光标定位（`useDeclaredCursor`，供 IME 和读屏器；原生光标由 `CLAUDE_CODE_NATIVE_CURSOR` / `CLAUDE_CODE_ACCESSIBILITY` / GrowthBook `tengu_native_cursor` 决定，DECSTBM 开时不用）、iTerm2 图片序列；stdout 积压时暂缓（`CLAUDE_CODE_NONBLOCKING_STDOUT` 或 `tengu_event_loop_stall` 开启非阻塞 stdout）。
-- 帧常量（`chunk-bzr73sfg.js#Ks`）：帧间隔 16ms、最多跳 5 帧、慢帧 50ms、列上限 8192、行上限 2048。
+- 帧常量（`chunk-2avr6cej.js#Ws`）：帧间隔 16ms、最多跳 5 帧、慢帧 50ms、列上限 8192、行上限 2048。
 
 ### 3.8 屏幕阅读器模式
 
@@ -183,18 +185,18 @@ return new Bun.ant.CellSegmenter({ ambiguousIsNarrow: true, substitute: e, scree
 
 ## 4. 全屏 / 备用屏幕与滚动
 
-- **全屏渲染器**：设置 `tui: "fullscreen"`（等价 `CLAUDE_CODE_NO_FLICKER=1`）启用「无闪烁的备用屏渲染器 + 虚拟化回滚」；`"default"` 是主屏经典渲染器（setting schema 在 `chunk-dcmhvw5a.js`）。相关环境变量还有 `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN`、`CLAUDE_CODE_DISABLE_MOUSE`、`CLAUDE_CODE_DISABLE_MOUSE_CLICKS`、`CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL`、`CLAUDE_CODE_SCROLL_SPEED`、`CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT`（每帧整屏重画，动画帧间隔至少 480ms）。
-- `<AlternateScreen>`（`chunk-2f336bka.js#zke`）：挂载时 DEC 1049 进备用屏，按 `mouseTracking`（默认 full）开鼠标跟踪，可设 surface 背景/前景色（OSC 11/10）；卸载 `leaveAlternateScreen`。
+- **全屏渲染器**：设置 `tui: "fullscreen"`（等价 `CLAUDE_CODE_NO_FLICKER=1`）启用「无闪烁的备用屏渲染器 + 虚拟化回滚」；`"default"` 是主屏经典渲染器（setting schema 在 `chunk-z20c443b.js`）。相关环境变量还有 `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN`、`CLAUDE_CODE_DISABLE_MOUSE`、`CLAUDE_CODE_DISABLE_MOUSE_CLICKS`、`CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL`、`CLAUDE_CODE_SCROLL_SPEED`、`CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT`（每帧整屏重画，动画帧间隔至少 480ms）。
+- `<AlternateScreen>`（`chunk-r6bx7z4z.js#txe`）：挂载时 DEC 1049 进备用屏，按 `mouseTracking`（默认 full）开鼠标跟踪，可设 surface 背景/前景色（OSC 11/10）；卸载 `leaveAlternateScreen`。
 - `Ink` 的 `setAltScreenActive`：进入前保存主屏帧并生成擦除序列（`eraseMainScreenFrame`，`#Gv`），退出时恢复；备用屏帧带锚点 cursor（`ALT_SCREEN_ANCHOR_*`）。
-- `TerminalModes`（`chunk-24t3dkzb.js#lgt`，316 新增）：按层记录已打开的终端模式（鼠标、像素鼠标 1016、表面颜色、括号粘贴 2004、主题报告 2031、焦点 1004、扩展键、备用屏），`suspend/resume` 在 Ctrl+Z 挂起或把终端交给子进程时成组关闭/重开；stdin 静默 5s 后重申（`STDIN_IDLE_REASSERT_MS`）。退出/崩溃时 `restoreTerminalModes`（`#YRr`）全部复位、kitty 键盘弹栈、显示光标、清进度条。
-- `<ScrollBox>`（`chunk-01xdq6fy.js#K`）：overflow scroll 的 box，默认作为 `selectionScope`；ref 暴露 `scrollTo/scrollBy/scrollToBottom` 等；滚轮事件、`stickyScroll`（粘底）、`scrollAnchor`。滚动跟踪调试 `ScrollTrace`（`#av`）。
-- JetBrains 终端（JediTerm）滚轮 bug 修正（`chunk-24t3dkzb.js#fIs`）：滚轮后 75ms 内的无修饰上下方向键视为触控板副产物丢弃；方向键连发检测（100ms 内 ≥8 个，`detectArrowBurst`）。
+- `TerminalModes`（`chunk-xd1cb3xs.js#Bwt`，316 新增）：按层记录已打开的终端模式（鼠标、像素鼠标 1016、表面颜色、括号粘贴 2004、主题报告 2031、焦点 1004、扩展键、备用屏），`suspend/resume` 在 Ctrl+Z 挂起或把终端交给子进程时成组关闭/重开；stdin 静默 5s 后重申（`STDIN_IDLE_REASSERT_MS`）。退出/崩溃时 `restoreTerminalModes`（`#eBr`）全部复位、kitty 键盘弹栈、显示光标、清进度条。
+- `<ScrollBox>`（`chunk-czgrs6px.js#K`）：overflow scroll 的 box，默认作为 `selectionScope`；ref 暴露 `scrollTo/scrollBy/scrollToBottom` 等；滚轮事件、`stickyScroll`（粘底）、`scrollAnchor`。滚动跟踪调试 `ScrollTrace`（`#av`）。
+- JetBrains 终端（JediTerm）滚轮 bug 修正（`chunk-xd1cb3xs.js#bVs`）：滚轮后 75ms 内的无修饰上下方向键视为触控板副产物丢弃；方向键连发检测（100ms 内 ≥8 个，`detectArrowBurst`）。
 
 ## 5. 输入事件解析
 
 ### 5.1 读取
 
-`ink/components/App.tsx`（`#As`）在原始模式下读 stdin。读取器（`chunk-bzr73sfg`，写作时未归属，现在 `ink/line-width-cache.ts`；`createInputReaderState`/`feedInputReader`/`flushInputReader`）：
+`ink/components/App.tsx`（`#As`）在原始模式下读 stdin。读取器（`chunk-2avr6cej`，写作时未归属，现在 `ink/line-width-cache.ts`；`createInputReaderState`/`feedInputReader`/`flushInputReader`）：
 
 - 半截转义序列等 50ms 后冲刷（单独的 ESC 才算 Esc 键），括号粘贴等 2s，截断的鼠标前缀 2s 后丢弃（`#Wn`）。
 - `EventLoopLagWatcher`（`#td`）：事件循环被阻塞 ≥50ms 后读到的 ESC 前缀打 `readLate` 标记（避免把迟到合并的 `ESC x` 误判为 Alt+x）。
@@ -217,7 +219,7 @@ return new Bun.ant.CellSegmenter({ ambiguousIsNarrow: true, substitute: e, scree
 
 ### 5.3 终端能力探测（316 新增）
 
-`probeTerminalCapabilities`（`chunk-bzr73sfg.js#bb`）进原始模式后分两轮查询（各 2s 超时，DA1 作哨兵：收到它说明前面的查询没有应答）：第一轮 XTVERSION（VTE<0.53 不问）、kitty 键盘标志 `CSI ?u`、OSC 7501 程序状态；第二轮 DECRQM 2026（同步输出）、DECRQM 1016（像素鼠标）、kitty 图形查询（id 31）、`CSI 16t` 单元格尺寸。能力表初值 `getInitialCapabilities`（`chunk-dxdtyerk.js#vQs`）由环境变量推断，每项 `{settled|likely, source}`；tmux 下额外 `tmux display-message` 取 pane 位置与 passthrough 设置（终端图片用）。`ink/terminal-querier.ts · TerminalQuerier`（`#fbo`）负责排队与匹配。
+`probeTerminalCapabilities`（`chunk-2avr6cej.js#bb`）进原始模式后分两轮查询（各 2s 超时，DA1 作哨兵：收到它说明前面的查询没有应答）：第一轮 XTVERSION（VTE<0.53 不问）、kitty 键盘标志 `CSI ?u`、OSC 7501 程序状态；第二轮 DECRQM 2026（同步输出）、DECRQM 1016（像素鼠标）、kitty 图形查询（id 31）、`CSI 16t` 单元格尺寸。能力表初值 `getInitialCapabilities`（`chunk-edrpfa7j.js#P_i`）由环境变量推断，每项 `{settled|likely, source}`；tmux 下额外 `tmux display-message` 取 pane 位置与 passthrough 设置（终端图片用）。`ink/terminal-querier.ts · TerminalQuerier`（`#fbo`）负责排队与匹配。
 
 ### 5.4 分发
 
@@ -235,11 +237,11 @@ return new Bun.ant.CellSegmenter({ ambiguousIsNarrow: true, substitute: e, scree
 - 取文字 `getSelectedText`（`#Ig`）：缓存的上方行 + 屏幕行 + 缓存的下方行，跳过 noSelect（`<NoSelect>`、行号栏）与宽字符占位格，按 softWrap 把折行拼回、补回被吞的分隔空格，硬换行去行尾空白。
 - 纯文本 URL 识别（`findPlainTextUrl`，`#Lg`）：http/https/file，沿软换行拼回，`…` 截断的不算，去尾标点与不配对右括号。悬停时同一 OSC 8 链接跨行加下划线。
 - 绘制：`applySelectionOverlay` 把选区内格换成 `withSelectionBg` 派生样式（`setSelectionBgColor` 可改色）。
-- **复制**（`ink/termio/osc.ts · setClipboard`，`chunk-dxdtyerk.js#IA`）：本地（非 SSH）先用原生方式——macOS `pbcopy`、Linux `wl-copy`（Wayland）或 `xclip`/`xsel`（同时写 clipboard 与 primary）或原生插件、Windows/WSL PowerShell `Set-Clipboard`；在 tmux 里写 tmux 粘贴缓冲（`load-buffer -w`）；再发 OSC 52（tmux/screen 透传包装）。VS Code 1.123/1.124 的 OSC 52 会把非 ASCII 弄乱，给出提示。`readClipboard` 供中键/右键粘贴。快捷键 `selection:copy` 默认 `ctrl+shift+c` / `cmd+c`（Scroll 上下文）。
+- **复制**（`ink/termio/osc.ts · setClipboard`，`chunk-edrpfa7j.js#BC`）：本地（非 SSH）先用原生方式——macOS `pbcopy`、Linux `wl-copy`（Wayland）或 `xclip`/`xsel`（同时写 clipboard 与 primary）或原生插件、Windows/WSL PowerShell `Set-Clipboard`；在 tmux 里写 tmux 粘贴缓冲（`load-buffer -w`）；再发 OSC 52（tmux/screen 透传包装）。VS Code 1.123/1.124 的 OSC 52 会把非 ASCII 弄乱，给出提示。`readClipboard` 供中键/右键粘贴。快捷键 `selection:copy` 默认 `ctrl+shift+c` / `cmd+c`（Scroll 上下文）。
 
 ## 7. 其他终端功能（316 新增为主）
 
-- **终端内联图片**：`TerminalImageManager`（`#hf`）为图片分配 id（kitty 小 id 池 + 24 位宽 id、iTerm2 位置复用），排队传输 kitty APC `G` 与删除，终端拒绝时记录；文本里用占位字素（U+2800 + 行/列/id 的组合附加符号，`encodeImagePlaceholder`）占位置；iTerm2 走 `OSC 1337;File=`（RGBA→PNG 编码在 JS 里做）。tmux 下需要 tmux ≥3.3、`allow-passthrough on`、`focus-events on`，外层终端 kitty ≥0.28 / Ghostty / iTerm2 ≥3.5，不满足时给出具体提示文字（`chunk-m4dvt8pp.js`）。`CLAUDE_CODE_FORCE_TERMINAL_IMAGES` 强制。
+- **终端内联图片**：`TerminalImageManager`（`#hf`）为图片分配 id（kitty 小 id 池 + 24 位宽 id、iTerm2 位置复用），排队传输 kitty APC `G` 与删除，终端拒绝时记录；文本里用占位字素（U+2800 + 行/列/id 的组合附加符号，`encodeImagePlaceholder`）占位置；iTerm2 走 `OSC 1337;File=`（RGBA→PNG 编码在 JS 里做）。tmux 下需要 tmux ≥3.3、`allow-passthrough on`、`focus-events on`，外层终端 kitty ≥0.28 / Ghostty / iTerm2 ≥3.5，不满足时给出具体提示文字（`chunk-ngeq6w7y.js`）。`CLAUDE_CODE_FORCE_TERMINAL_IMAGES` 强制。
 - **超链接**：`supportsHyperlinks`（npm supports-hyperlinks + 补充终端名单 + JetBrains + Windows Terminal），会话状态里的 `hyperlinks` 或 `FORCE_HYPERLINK` 优先；OSC 8 带由 URL 哈希得到的 id。
 - **通知/进度/标题**：`useTerminalNotification`（iTerm2 OSC 9、kitty OSC 99、Ghostty OSC 777、BEL、OSC 9;4 进度条——ConEmu、Ghostty ≥1.2.0、iTerm2 ≥3.6.6），`useTerminalTitle`（OSC 0，`CLAUDE_CODE_DISABLE_TERMINAL_TITLE` 关闭）。标签页状态 OSC 21337（`useTabStatus`）在 316 中 `isTabStatusEnabled` 恒为 false。
 - **颜色**：VS Code 终端 256 色提升为真彩；已知真彩 TERM（alacritty、ghostty、wezterm、xterm-kitty 等）提升；tmux 下降到 256 色（`CLAUDE_CODE_TMUX_TRUECOLOR` 不降）；`NO_COLOR`/`FORCE_COLOR` 优先。
@@ -252,7 +254,7 @@ return new Bun.ant.CellSegmenter({ ambiguousIsNarrow: true, substitute: e, scree
 
 - 文件：`<配置目录>/keybindings.json`（`getKeybindingsPath`），格式 `{"$schema": "...", "$docs": "...", "bindings": [{"context": "Chat", "bindings": {"ctrl+k": "chat:clearInput", "ctrl+x ctrl+e": null, "ctrl+g": "command:compact"}}]}`。`null` 解绑默认键；`command:<名字>` 执行斜杠命令（只能放 Chat 上下文）。
 - 总开关：GrowthBook `tengu_keybinding_customization_release`（默认 true）；策略禁止 `keybindings` 时也只用默认绑定（`isKeybindingCustomizationBlocked`）。
-- 进程级状态 `keybindingsState`（`createKeybindingsState`，`chunk-x1mwqya5.js#Fn`）：bindings、warnings、watcher、`changed` 信号、每日一次的 `tengu_custom_keybindings_loaded` 事件日期、`tengu_keybinding_fired` 节流表（同一动作 1s 一次）。
+- 进程级状态 `keybindingsState`（`createKeybindingsState`，`chunk-m2f3rb0f.js#jn`）：bindings、warnings、watcher、`changed` 信号、每日一次的 `tengu_custom_keybindings_loaded` 事件日期、`tengu_keybinding_fired` 节流表（同一动作 1s 一次）。
 - 流程：`KeybindingSetup` 首次渲染同步 `loadKeybindingsSync`（`#SVt`）→ 挂载后 `initializeKeybindingWatcher`（chokidar，轮询 2s、写入稳定 500ms；add/change → `loadKeybindingsAsync` 热重载，unlink → 默认绑定）→ 订阅 `changed` 更新。交互会话启动时可先从后端存储预热（`warmKeybindingsFromBackend`）。
 - 合并规则：默认绑定在前、用户绑定在后，**同上下文同和弦以列表中最后一条为准**。
 
@@ -260,7 +262,7 @@ return new Bun.ant.CellSegmenter({ ambiguousIsNarrow: true, substitute: e, scree
 
 `validateBindings` = 结构（必须 `bindings` 数组，块要有字符串 context 与对象 bindings）+ 上下文合法 + 动作合法（未知动作用编辑距离 ≤2 给建议，`suggestAction`）+ 按键串（316 新增 `validateKeystroke`：`+` 前面不是修饰键、`+` 两侧有空格、空的部分，给出 Did you mean）+ `command:` 名字格式与上下文 + `voice:pushToTalk` 绑无修饰字母警告 + 同上下文重复（`checkDuplicates`）+ 原始 JSON 重复键（`checkDuplicateKeysInJson`）+ 保留键（`checkReservedShortcuts`）。警告写调试日志并在 UI 提示。
 
-保留键（`chunk-6qssfmzs.js#X5e`）：
+保留键（`chunk-q6fxvjg8.js#GJe`）：
 - 不可重绑（error）：`ctrl+c`、`ctrl+d`（硬编码中断/退出）、`ctrl+m`（=Enter）、`ctrl+[`（=Esc）、`ctrl+i`（=Tab）、`ctrl+h`（=Backspace）、`capslock`。
 - 终端：`ctrl+z`（SIGTSTP，warning）、`ctrl+\`（SIGQUIT）。
 - macOS：`cmd+c/v/x/q/w/tab/space`。
@@ -271,21 +273,21 @@ return new Bun.ant.CellSegmenter({ ambiguousIsNarrow: true, substitute: e, scree
 
 ### 8.4 解析与分发
 
-- `resolveKeyWithChordState(event, contexts, bindings, pending)`（`chunk-x1mwqya5.js#Wrt`）：Esc 在和弦中取消；把按键（`keyEventToKeystroke`：大写字母隐含 shift，macOS Option 特殊字符还原为 alt+键）追加到待定和弦；有更长绑定以它为前缀且有非 null 动作 → `chord_started`；精确匹配 → `match`（null → `unbound`）；和弦中无匹配 → `chord_cancelled`；否则 `none`。
+- `resolveKeyWithChordState(event, contexts, bindings, pending)`（`chunk-m2f3rb0f.js#dct`）：Esc 在和弦中取消；把按键（`keyEventToKeystroke`：大写字母隐含 shift，macOS Option 特殊字符还原为 alt+键）追加到待定和弦；有更长绑定以它为前缀且有非 null 动作 → `chord_started`；精确匹配 → `match`（null → `unbound`）；和弦中无匹配 → `chord_cancelled`；否则 `none`。
 - `resolveKeyInScopeChain`（`#m5r`，316 新增）：按传入的上下文顺序取第一个上下文的胜者。
 - 和弦超时 3000ms（2.1.88 为 1000ms），超时弹 "… cancelled — no next key within 3s" 通知。
-- `ChordInterceptor`（`chunk-xe7zq1p4.js#Wt`）：挂在根 Box（`keybindingScope: "Global"`、`tabIndex=-1`）的 `onKeyDownCapture` / `onWheelCapture` 上，统一分发：
+- `ChordInterceptor`（`chunk-swe0kb5q.js#Wt`）：挂在根 Box（`keybindingScope: "Global"`、`tabIndex=-1`）的 `onKeyDownCapture` / `onWheelCapture` 上，统一分发：
   - **legacy 模式**：在「有处理器的上下文 + 活动上下文（`useRegisterKeybindingContext`）+ Global」里解析；匹配后调用 `useKeybinding` 注册的处理器（非回退优先；保留键或无修饰键时跳过回退处理器）。
   - **scopeChain 模式**（316 新增）：按焦点节点到根的 `keybindingScope` 链（及 `preemptiveScopes`）解析，匹配后先把动作作为事件派给 DOM 节点（`onAction`），没处理再落回注册表；焦点在文本输入（`attributes.textEntry`）上时无修饰单字符直接交给预分发处理器（`registerPreDispatch`）。
   - 消费的事件 `preventDefault + stopImmediatePropagation`；滚轮转成 `wheelup/wheeldown` 参与解析。
-- `KeybindingProvider`（`chunk-8pssrarc.js#L0t`）提供 `resolve`、`getDisplayText`、`registerHandler`、`hasHandler`、`runAction`、`registerPreDispatch`、`singleKeyEvent` 等；`useShortcutDisplay` 取显示文字，拿不到时用组件给的回退文字并发 `tengu_keybinding_fallback_used`。
+- `KeybindingProvider`（`chunk-7wgjt81y.js#uWt`）提供 `resolve`、`getDisplayText`、`registerHandler`、`hasHandler`、`runAction`、`registerPreDispatch`、`singleKeyEvent` 等；`useShortcutDisplay` 取显示文字，拿不到时用组件给的回退文字并发 `tengu_keybinding_fallback_used`。
 - `/keybindings` 模板生成 `generateKeybindingsTemplate`：`$schema` `https://www.schemastore.org/claude-code-keybindings.json`、`$docs` `https://code.claude.com/docs/en/keybindings`，去掉 FeedbackSurvey 与保留键。
 
 ### 8.5 上下文
 
 29 个（`KEYBINDING_CONTEXTS`）：Global、Chat、Autocomplete、Confirmation、Help、ProactivityMenu、Transcript、HistorySearch、Task、ThemePicker、Settings、Tabs、Attachments、Footer、AbovePrompt、AbovePromptInput、AbovePromptSelect、Pane、PaneField、MessageSelector、DiffDialog、DiffPanel、FeedbackSurvey、ModelPicker、EffortSlider、Select、Plugin、Scroll、Agents。2.1.88 的 schema 列了 18 个（默认表里另用了 Scroll、MessageActions）；316 把 Scroll 列入 schema，默认表不再有 MessageActions。
 
-### 8.6 默认绑定表（`keybindings/defaultBindings.ts`，`chunk-6qssfmzs.js#c`）
+### 8.6 默认绑定表（`keybindings/defaultBindings.ts`，`chunk-q6fxvjg8.js#c`）
 
 平台变量：`IMAGE_PASTE_KEY` 在 Windows/WSL 为 `alt+v`（WSL 另加 `ctrl+v`），其他 `ctrl+v`；`CYCLE_MODE_KEY` 在 Windows 上若运行时支持（Bun ≥1.2.23，或 Node 22.17+/24.2+）为 `shift+tab`，否则 `meta+m`，其他平台 `shift+tab`。
 
@@ -325,12 +327,12 @@ return new Bun.ant.CellSegmenter({ ambiguousIsNarrow: true, substitute: e, scree
 
 ### 9.1 状态
 
-- 模式：`INSERT`（初始，`createInitialVimState` = `{mode:"INSERT", insertedText:""}`）、`NORMAL`、`VISUAL`（316 新增，字符可视 v / 整行可视 V）。模式切换在 `hooks/useVimInput.ts`（ui 领域，`chunk-530hfzwb.js#M_o`）。
+- 模式：`INSERT`（初始，`createInitialVimState` = `{mode:"INSERT", insertedText:""}`）、`NORMAL`、`VISUAL`（316 新增，字符可视 v / 整行可视 V）。模式切换在 `hooks/useVimInput.ts`（ui 领域，`chunk-880p06ha.js#HMo`）。
 - 持久状态 `createInitialPersistentState`：`lastFind`（f/F/t/T + 字符）、`register`、`registerIsLinewise`。
 - 316 新增插入模式 Esc 映射：设置 `vimInsertModeRemaps` 中映射到 `<Esc>` 的两字符序列（如 `jk`）。
 - 计数上限 10000（`MAX_VIM_COUNT`）。
 
-### 9.2 普通模式状态机（`vim/transitions.ts · transition`，`chunk-530hfzwb.js#qe`）
+### 9.2 普通模式状态机（`vim/transitions.ts · transition`，`chunk-880p06ha.js#qe`）
 
 命令状态 `{type}`：
 
@@ -355,7 +357,7 @@ idle ──1-9──▶ count ──数字──▶ count
 
 返回 `{next: 新状态}` 或 `{execute: 动作, wanted?: 目标列}`（j/k 保持目标列，`$` 记为无穷）。
 
-### 9.3 可视模式（316 新增，`visualTransition`，`chunk-530hfzwb.js#Ht`）
+### 9.3 可视模式（316 新增，`visualTransition`，`chunk-880p06ha.js#$t`）
 
 状态 idle/count/find/g/replace/textObject；返回 `{next, move, wanted}` 或 `{exit: ...}`：x s X D C S R Y → 删除/修改/复制（大写强制整行）；r{char} 替换；~ u U 大小写；p P 用寄存器替换选区；> < 缩进；v V 切换种类；o 交换两端；J 合并；iw/a( 等扩到文本对象；移动键扩展选区。可视操作记录 `span`（行数或字素数），`.` 按同样大小重复（`getRepeatVisualRange`）。
 
@@ -363,12 +365,12 @@ idle ──1-9──▶ count ──数字──▶ count
 
 `applyOperator`（字符范围）、`applyLinewiseOperator`（行号范围）：内容写寄存器（整行补换行），yank 只移光标，delete 删除并修正光标（`clampCursorOffset`：普通模式光标不停在换行符上），change 删除后进插入模式。`getOperatorRange` 实现 vim 兼容细节（cw≈ce、dw 不越过行尾、包含式移动 e E $ %、跨行删除整行化），并把端点推出图片/粘贴占位符（`snapOutOfPlaceholder`）。其余：`executeX`、`executeSubstitute`、`executeReplace`、`executeToggleCase`、`executeJoinLines`/`executeJoin`、`executePaste`、`executeIndent`、`executeOpenLine`、`executeOperatorG/Gg`、`executeRepeatFind`。`recordRepeatableChange` 记录给 `.` 用（yank 不记）。
 
-文本对象（`findTextObject`，`chunk-530hfzwb.js#re`）：w/W 按字素分类，成对引号在同一行配对，括号按嵌套深度向外找（`PAIRS`）。
+文本对象（`findTextObject`，`chunk-880p06ha.js#re`）：w/W 按字素分类，成对引号在同一行配对，括号按嵌套深度向外找（`PAIRS`）。
 
 ## 10. native-ts 的另外两个库
 
-- **color-diff**（`ColorDiff`、`ColorFile`，`chunk-cwwxybjc.js#O`、`chunk-cwwxybjc.js#H`）：主题按界面主题名选（dark → Monokai Extended，light → GitHub，ansi → 16 色；daltonized 新增行用蓝色），用户主题的 `diffAdded/diffRemoved/diffAddedWord/diffRemovedWord` 可覆盖背景；语言识别按文件名、扩展名、shebang；highlight.js 高亮（长行降级、复杂度超阈值停高亮）；相邻删除/新增行配对做单词级 diff（改动占比 >40% 放弃）；折行、行号栏、`renderSplit` 分出行号与内容两列；颜色按 truecolor / 256 色输出。
-- **file-index**（`FileIndex`，`chunk-dcmhvw5a.js#NIn`）：路径小写 + a–z 位图预过滤，贪心子序列匹配，fzf 风格打分（匹配 16、边界 8、驼峰 6、连续 4、首字符 8、间隙 -3/-1），路径与文件名两种匹配取高，短路径加分，top-k 有序插入，名次归一化分数（含 test 的路径略降权）；异步构建每 4ms 让出事件循环、部分就绪即可查询；空查询返回顶层条目。
+- **color-diff**（`ColorDiff`、`ColorFile`，`chunk-td0w5pj1.js#O`、`chunk-td0w5pj1.js#H`）：主题按界面主题名选（dark → Monokai Extended，light → GitHub，ansi → 16 色；daltonized 新增行用蓝色），用户主题的 `diffAdded/diffRemoved/diffAddedWord/diffRemovedWord` 可覆盖背景；语言识别按文件名、扩展名、shebang；highlight.js 高亮（长行降级、复杂度超阈值停高亮）；相邻删除/新增行配对做单词级 diff（改动占比 >40% 放弃）；折行、行号栏、`renderSplit` 分出行号与内容两列；颜色按 truecolor / 256 色输出。
+- **file-index**（`FileIndex`，`chunk-z20c443b.js#PBn`）：路径小写 + a–z 位图预过滤，贪心子序列匹配，fzf 风格打分（匹配 16、边界 8、驼峰 6、连续 4、首字符 8、间隙 -3/-1），路径与文件名两种匹配取高，短路径加分，top-k 有序插入，名次归一化分数（含 test 的路径略降权）；异步构建每 4ms 让出事件循环、部分就绪即可查询；空查询返回顶层条目。
 
 ## 11. 配置项、环境变量与特性开关
 
@@ -401,7 +403,7 @@ idle ──1-9──▶ count ──数字──▶ count
 渲染：
 - 写屏改为私有原生 `Bun.ant.CellSegmenter`（第 3.5 节），无回退。
 - yoga 移植改为 Int32 存储、pointScaleFactor 0/1、缓存拆成布局 8 槽 + 测量 4 槽 + flex basis 缓存，模块级输出变量代替返回对象。
-- Screen 增加 `cells64` 视图、`damage` 驱动 diff、softWrap 打包含 `SW_ELIDED_SEP`、样式池按帧压缩与池子换代迁移、`StylePoolMonitor`（`chunk-bzr73sfg.js#Md`）。
+- Screen 增加 `cells64` 视图、`damage` 驱动 diff、softWrap 打包含 `SW_ELIDED_SEP`、样式池按帧压缩与池子换代迁移、`StylePoolMonitor`（`chunk-2avr6cej.js#Cd`）。
 - DECSTBM 滚动优化（受开关控制）、自适应/比例两种滚动排水、`selectionScope`、`hoverFollowsPaint`、`ImperativeTree`、屏幕阅读器输出、`LineWidthCache` 类、宽字素右边界修补。
 
 输入与终端：
@@ -420,17 +422,17 @@ vim：新增可视模式（v/V 及其全部操作与 `.` 重复）、`gj/gk` 屏
 
 ## 13. 未解之处
 
-- `Bun.ant.CellSegmenter` 的原生实现不可见：双向重排的具体规则、宽度表来源、制表符展开格的样式、未知转义的处理只能按调用方约定推断（`chunk-m4dvt8pp.js#$7n`、`chunk-bzr73sfg.js` 的 `class pf`）。
-- `chunk-bzr73sfg.js#Ks` 中 `RESIZE_SETTLE_MS/QUERY_TIMEOUT_MS/MAX_RESIZE_RETRIES/STDIN_RESUME_GAP_MS` 等名字按用途推测，置信度低。
-- `chunk-bzr73sfg.js#gf`（RenderDebugHud）、`runSelectionTakeDown`/`createSelectionTakeDownSignal`（`#_v`/`#Ov`，selection take-down 信号）、`setTranscriptFrontCut`/`takeTranscriptFrontCut`（`#tbo`/`#Tv`，transcript front cut）的用途只看了局部。
-- `chunk-x1mwqya5.js#gn`（预热绑定失效判断）语义不完全确定。
-- vim 可视模式的部分辅助（`chunk-530hfzwb.js#Ct`、`#Rt`、`#Wt`、`#Kt`、`#_t`、`#Dt`、`#Wn`、`#rt`）名字是按形状推的，置信度 0.5–0.65。
-- `chunk-3s7ydtfd.js` 66841–79265 的图表渲染器、`chunk-yb0ajcmt.js` 的盒线画布、`chunk-4121qate.js` 的声明式 UI 样式校验不属于 ink，具体归属待对应领域确认（只给了低置信度名字）。
+- `Bun.ant.CellSegmenter` 的原生实现不可见：双向重排的具体规则、宽度表来源、制表符展开格的样式、未知转义的处理只能按调用方约定推断（`chunk-ngeq6w7y.js#Tcr`、`chunk-2avr6cej.js` 的 `class pf`）。
+- `chunk-2avr6cej.js#Ws` 中 `RESIZE_SETTLE_MS/QUERY_TIMEOUT_MS/MAX_RESIZE_RETRIES/STDIN_RESUME_GAP_MS` 等名字按用途推测，置信度低。
+- `chunk-2avr6cej.js#yf`（RenderDebugHud）、`runSelectionTakeDown`/`createSelectionTakeDownSignal`（`#Hv`/`#Lv`，selection take-down 信号）、`setTranscriptFrontCut`/`takeTranscriptFrontCut`（`#rDo`/`#Av`，transcript front cut）的用途只看了局部。
+- `chunk-m2f3rb0f.js#gn`（预热绑定失效判断）语义不完全确定。
+- vim 可视模式的部分辅助（`chunk-880p06ha.js#Ct`、`#Rt`、`#Pt`、`#Ut`、`#Dt`、`#Kt`、`#Wn`、`#rt`）名字是按形状推的，置信度 0.5–0.65。
+- `chunk-7stfs6p0.js` 66841–79265 的图表渲染器、`chunk-q80fh8vc.js` 的盒线画布、`chunk-j8f885h1.js` 的声明式 UI 样式校验不属于 ink，具体归属待对应领域确认（只给了低置信度名字）。
 
 ## 14. 引用校验结果
 
-校验时间 2026-11-04 06:40（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-05 17:32（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
-- 共检查 722 处引用：路径 72/76（另 4 个只在 2.1.88 中存在），字面量 97/98（另 1 个只在 2.1.88 中存在），名字 444/444，声明id 104/104；占位符与含空格的说明性文字 107 处未检查。
+- 共检查 723 处引用：路径 73/77（另 4 个只在 2.1.88 中存在），字面量 97/98（另 1 个只在 2.1.88 中存在），名字 444/444，声明id 104/104；占位符与含空格的说明性文字 107 处未检查。
 - 只在 2.1.88 中存在（删除项或旧名，预期如此）：`ParsedInput[]`、`d/c/y`、`i/a`、`f/F/t/T`
 - 未通过：0 处。

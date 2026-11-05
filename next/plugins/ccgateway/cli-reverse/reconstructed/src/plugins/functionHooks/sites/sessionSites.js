@@ -3,9 +3,9 @@
  *
  * 钩子站点规则：session.compact/receive/send/append（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (38)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (38)
  * attribution: placement 38
  */
 import {
@@ -30,17 +30,17 @@ import { checkedListLength } from "../dispatch/valueSizing.js";
 import { stableStringifySafe } from "../../../utils/hooks/hookSerialization.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:196803-196885 placement
+//@ chunk-j8f885h1.js:177988-178070 placement
 /**
  * ui.scroll 固定键
  */
 var UI_SCROLL_PINNED_KEYS = ["component", "requestId", "by", "bodyRows", "contentRows", "origin", "pointer"];
-//@ chunk-4121qate.js:196885-197063 placement
+//@ chunk-j8f885h1.js:178070-178248 placement
 /**
  * ui.scroll 站点规则：固定站点字段，offset 必须是非负整数行号。
  */
 var UI_SCROLL_SITE; // deferred: uses createSimpleSite (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:196885", () => {
+deferInit("chunk-j8f885h1.js:178070", () => {
   UI_SCROLL_SITE = createSimpleSite({
     event: "ui.scroll",
     restored: UI_SCROLL_PINNED_KEYS,
@@ -54,7 +54,7 @@ deferInit("chunk-4121qate.js:196885", () => {
     check: checkDenyResult,
   });
 });
-//@ chunk-4121qate.js:197063-197764 placement
+//@ chunk-j8f885h1.js:178248-178949 placement
 function checkSessionMessage(message) {
   if (!isPlainObject(message)) return "is not an object";
   let { role, text, toolUses, toolResults, handle } = message;
@@ -85,7 +85,7 @@ function checkSessionMessage(message) {
     ? undefined
     : "has toolResults that are not a list of { tool_use_id, text, isError }";
 }
-//@ chunk-4121qate.js:197764-197978 placement
+//@ chunk-j8f885h1.js:178949-179163 placement
 /**
  * 校验 session.compact 的消息列表非空且形状正确。
  */
@@ -96,12 +96,12 @@ function checkCompactMessages(list) {
   let firstProblem = findFirstProblem(list, checkSessionMessage, length);
   return firstProblem && `messages[${firstProblem[0]}] that ${firstProblem[1]}`;
 }
-//@ chunk-4121qate.js:197978-198028 placement
+//@ chunk-j8f885h1.js:179163-179213 placement
 /**
  * 非负数
  */
 var isNonNegativeFiniteNumber = (value) => value === undefined || (typeof value === "number" && value >= 0);
-//@ chunk-4121qate.js:198028-198185 placement (2.1.88 match: getTokenCountFromUsage, 1)
+//@ chunk-j8f885h1.js:179213-179370 placement (2.1.88 match: getTokenCountFromUsage, 1)
 var getTokenCountFromUsage = (usage) =>
   usage === undefined ||
   (isPlainObject(usage) &&
@@ -111,22 +111,22 @@ var getTokenCountFromUsage = (usage) =>
       usage.cache_read_input_tokens,
       usage.cache_creation_input_tokens,
     ].every((count) => typeof count === "number" && count >= 0));
-//@ chunk-4121qate.js:198185-198241 placement
+//@ chunk-j8f885h1.js:179370-179426 placement
 /**
  * 有 toJSON 方法
  */
 var hasToJSON = (value) => typeof Reflect.get(value, "toJSON") === "function";
-//@ chunk-4121qate.js:198241-198342 placement
+//@ chunk-j8f885h1.js:179426-179527 placement
 var sameKeySet = (a, b) =>
   a.length === b.length &&
   (a.every((key, index) => key === b[index]) || a.every(Set.prototype.has, new Set(b)));
-//@ chunk-4121qate.js:198342-198447 placement
+//@ chunk-j8f885h1.js:179527-179632 placement
 var isJsonScalar = (value) =>
   value === null ||
   typeof value === "string" ||
   typeof value === "boolean" ||
   (typeof value === "number" && Number.isFinite(value));
-//@ chunk-4121qate.js:198447-199077 placement
+//@ chunk-j8f885h1.js:179632-180262 placement
 /**
  * 有预算（深度与字符量）的纯数据深比较：超出预算或遇到不可比较值返回 undefined。
  */
@@ -161,17 +161,17 @@ function boundedDeepEqual(left, right, budget) {
   budget.depth += 1;
   return true;
 }
-//@ chunk-4121qate.js:199077-199087 placement
+//@ chunk-j8f885h1.js:180262-180272 placement
 /**
  * 64
  */
 var MAX_DEEP_EQUAL_DEPTH = 64;
-//@ chunk-4121qate.js:199087-199102 placement
+//@ chunk-j8f885h1.js:180272-180287 placement
 /**
  * 8388608
  */
 var MAX_DEEP_EQUAL_CHARS = 8388608;
-//@ chunk-4121qate.js:199102-199173 placement
+//@ chunk-j8f885h1.js:180287-180358 placement
 /**
  * 有上限的深比较
  */
@@ -185,13 +185,13 @@ function boundedDeepEqualSafe(a, b) {
     return false;
   }
 }
-//@ chunk-4121qate.js:199173-199221 placement
+//@ chunk-j8f885h1.js:180358-180406 placement
 /**
  * 消息相同或不改
  */
 var sameMessageOrShape = (answer, row, inputKey = () => stableStringifySafe(answer)) =>
   boundedDeepEqualSafe(answer, row) ?? inputKey() === stableStringifySafe(row);
-//@ chunk-4121qate.js:199221-199378 placement
+//@ chunk-j8f885h1.js:180406-180563 placement
 /**
  * session.append 的消息必须是对象且 content 为块数组。
  */
@@ -203,12 +203,12 @@ function checkAppendMessage(message) {
       ? "a message whose content is not an array of blocks"
       : "a message that is not an object";
 }
-//@ chunk-4121qate.js:199378-199433 placement
+//@ chunk-j8f885h1.js:180563-180618 placement
 /**
  * 插件备注拒答
  */
 var isPluginNoteRefusal = (request) => request.door === "note" && request.origin.kind === "plugin";
-//@ chunk-4121qate.js:199433-199619 placement
+//@ chunk-j8f885h1.js:180618-180804 placement
 /**
  * 校验 session.append 的拒绝：需有原因，且只能拒绝插件追加的行。
  */
@@ -219,7 +219,7 @@ function checkAppendDeny(deny, request) {
     ? reasonProblem
     : "a deny of a row the engine appends (only a plugin's own append is refused)";
 }
-//@ chunk-4121qate.js:199619-199783 placement
+//@ chunk-j8f885h1.js:180804-180968 placement
 /**
  * 校验拒绝时机：next 已存储行后不能再拒绝。
  */
@@ -228,7 +228,7 @@ function checkAppendDenyTiming(deny, request, answers) {
     return "a deny after next stored the row (refuse in place of next)";
   return answers.some((answer) => answer.deny === deny) ? undefined : checkAppendDeny(deny, request);
 }
-//@ chunk-4121qate.js:199783-200223 placement
+//@ chunk-j8f885h1.js:180968-181408 placement
 function checkAppendAnswer(answer, request, answers) {
   let last = answers.findLast((answer) => answer.deny === undefined);
   if (answer.deny !== undefined) return checkAppendDenyTiming(answer.deny, request, answers);
@@ -239,12 +239,12 @@ function checkAppendAnswer(answer, request, answers) {
     ? checkAppendMessage(answer.message)
     : "a row other than what next answered (the answer is the row as stored)";
 }
-//@ chunk-4121qate.js:200223-200262 placement
+//@ chunk-j8f885h1.js:181408-181447 placement
 /**
  * type/name/role/isMeta
  */
 var MESSAGE_IDENTITY_KEYS = ["type", "name", "role", "isMeta"];
-//@ chunk-4121qate.js:200262-200405 placement
+//@ chunk-j8f885h1.js:181447-181590 placement
 /**
  * 校验消息身份字段未被改动。
  */
@@ -254,7 +254,7 @@ function checkMessageIdentity(message, message_2) {
   let found = MESSAGE_IDENTITY_KEYS.find((key) => Object.hasOwn(left, key) && left[key] !== right[key]);
   return found === undefined ? undefined : `a changed message.${found}`;
 }
-//@ chunk-4121qate.js:200405-200534 placement
+//@ chunk-j8f885h1.js:181590-181719 placement
 /**
  * 恢复 session.append 消息的身份字段。
  */
@@ -273,12 +273,12 @@ function restoreAppendIdentity(passed, received) {
         message: restoredMessage,
       };
 }
-//@ chunk-4121qate.js:200534-200795 placement
+//@ chunk-j8f885h1.js:181719-181980 placement
 /**
  * session.append 站点规则：固定 door、origin、agentId、uuid，校验消息。
  */
 var SESSION_APPEND_SITE; // deferred: uses restoreField (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:200534", () => {
+deferInit("chunk-j8f885h1.js:181719", () => {
   SESSION_APPEND_SITE = {
     event: "session.append",
     pinnedKeys: ["door", "origin", "agentId", "uuid"],
@@ -291,12 +291,12 @@ deferInit("chunk-4121qate.js:200534", () => {
     check: checkResultObject((result, next, answers) => checkAppendAnswer(result, next, answers ?? [])),
   };
 });
-//@ chunk-4121qate.js:200795-200945 placement
+//@ chunk-j8f885h1.js:181980-182130 placement
 /**
  * session.attach 站点规则：固定界面、客户端与视口。
  */
 var SESSION_ATTACH_SITE; // deferred: uses checkResultObject (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:200795", () => {
+deferInit("chunk-j8f885h1.js:181980", () => {
   SESSION_ATTACH_SITE = {
     event: "session.attach",
     restoreArgument: (passed, received) => restoreMissingKeys_2(["viewport"], passed, received),
@@ -305,9 +305,9 @@ deferInit("chunk-4121qate.js:200795", () => {
     check: checkResultObject(hasClientId),
   };
 });
-//@ chunk-4121qate.js:200945-201964 placement
+//@ chunk-j8f885h1.js:182130-183149 placement
 var SESSION_COMPACT_SITE; // deferred: uses checkResultObject (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:200945", () => {
+deferInit("chunk-j8f885h1.js:182130", () => {
   SESSION_COMPACT_SITE = {
     event: "session.compact",
     restoreArgument: (passed, received) => restoreMissingKeys_2(["trigger", "agentId"], passed, received),
@@ -340,41 +340,41 @@ deferInit("chunk-4121qate.js:200945", () => {
     }),
   };
 });
-//@ chunk-4121qate.js:201964-202068 placement
+//@ chunk-j8f885h1.js:183149-183253 placement
 /**
  * session.detach 站点规则：固定界面、客户端与原因。
  */
 var SESSION_DETACH_SITE; // deferred: uses checkResultObject (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:201964", () => {
+deferInit("chunk-j8f885h1.js:183149", () => {
   SESSION_DETACH_SITE = {
     event: "session.detach",
     checkArgument: (passed, received) => checkPinnedKeys(["surface", "clientId", "reason"], passed, received),
     check: checkResultObject(hasClientId),
   };
 });
-//@ chunk-4121qate.js:202068-202128 placement
+//@ chunk-j8f885h1.js:183253-183313 placement
 /**
  * session.end 站点规则
  */
 var SESSION_END_SITE; // deferred: uses pinnedSite (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:202068", () => {
+deferInit("chunk-j8f885h1.js:183253", () => {
   SESSION_END_SITE = pinnedSite("session.end", ["reason", "sessionId", "resume"], hasSessionId);
 });
-//@ chunk-4121qate.js:202128-202202 placement
+//@ chunk-j8f885h1.js:183313-183387 placement
 /**
  * session.measure 站点规则
  */
 var SESSION_MEASURE_SITE; // deferred: uses pinnedSite (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:202128", () => {
+deferInit("chunk-j8f885h1.js:183313", () => {
   SESSION_MEASURE_SITE = pinnedSite(
     "session.measure",
     ["context", "rateLimits", "cost", "changed"],
     hasChangedList,
   );
 });
-//@ chunk-4121qate.js:202202-202861 placement
+//@ chunk-j8f885h1.js:183387-184046 placement
 var SESSION_RECEIVE_SITE; // deferred: uses checkResultObject (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:202202", () => {
+deferInit("chunk-j8f885h1.js:183387", () => {
   SESSION_RECEIVE_SITE = {
     event: "session.receive",
     restoreArgument: (passed, received) => restoreMissingKeys_2(["agentId"], passed, received),
@@ -395,9 +395,9 @@ deferInit("chunk-4121qate.js:202202", () => {
     }),
   };
 });
-//@ chunk-4121qate.js:202861-203542 placement
+//@ chunk-j8f885h1.js:184046-184727 placement
 var SESSION_SEND_SITE; // deferred: uses checkResultObject (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:202861", () => {
+deferInit("chunk-j8f885h1.js:184046", () => {
   SESSION_SEND_SITE = {
     event: "session.send",
     restoreArgument: (passed, received) => restoreMissingKeys_2(["agentId"], passed, received),
@@ -422,7 +422,7 @@ deferInit("chunk-4121qate.js:202861", () => {
     }),
   };
 });
-//@ chunk-4121qate.js:203542-203833 placement
+//@ chunk-j8f885h1.js:184727-185018 placement
 /**
  * settings.read 结果只保留原有设置键。
  */
@@ -440,12 +440,12 @@ function keepSettingsKeys(answer, request, answers) {
         why: `an answer without ${filtered.join(", ")}: unset for the reader`,
       };
 }
-//@ chunk-4121qate.js:203833-204199 placement
+//@ chunk-j8f885h1.js:185018-185384 placement
 /**
  * settings.read 站点规则：固定来源，恢复层信息，校验值。
  */
 var SETTINGS_READ_SITE; // deferred: uses checkResultObject (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:203833", () => {
+deferInit("chunk-j8f885h1.js:185018", () => {
   SETTINGS_READ_SITE = {
     event: "settings.read",
     pinnedKeys: ["source"],
@@ -467,7 +467,7 @@ deferInit("chunk-4121qate.js:203833", () => {
     keptResult: keepSettingsKeys,
   };
 });
-//@ chunk-4121qate.js:204199-204361 placement
+//@ chunk-j8f885h1.js:185384-185546 placement
 /**
  * 校验状态引用（插件、键、id）未改动。
  */
@@ -476,7 +476,7 @@ function checkStateRefUnchanged(passed, received) {
     ? "a changed reference (plugin, key and id say which value; next(e) passes them on)"
     : undefined;
 }
-//@ chunk-4121qate.js:204361-204576 placement
+//@ chunk-j8f885h1.js:185546-185761 placement
 /**
  * 校验 state.set 参数：引用与 ifVersion、previous 未改动。
  */
@@ -489,24 +489,24 @@ function checkStateSetArgument(passed, received) {
     (hasChangedPrevious ? "a changed previous (the host stamps it)" : undefined)
   );
 }
-//@ chunk-4121qate.js:204576-204648 placement
+//@ chunk-j8f885h1.js:185761-185833 placement
 /**
  * state.get 站点规则
  */
 var STATE_GET_SITE; // deferred: uses valueOnlySite (./promptContextSites.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:204576", () => {
+deferInit("chunk-j8f885h1.js:185761", () => {
   STATE_GET_SITE = {
     event: "state.get",
     check: valueOnlySite("state.get").check,
     checkArgument: checkStateRefUnchanged,
   };
 });
-//@ chunk-4121qate.js:204648-204746 placement
+//@ chunk-j8f885h1.js:185833-185931 placement
 /**
  * state.set 站点规则
  */
 var STATE_SET_SITE; // deferred: uses checkValueOrDenyAfterNext (./promptContextSites.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:204648", () => {
+deferInit("chunk-j8f885h1.js:185833", () => {
   STATE_SET_SITE = {
     event: "state.set",
     check: checkValueOrDenyAfterNext,
@@ -514,12 +514,12 @@ deferInit("chunk-4121qate.js:204648", () => {
     checkArgument: checkStateSetArgument,
   };
 });
-//@ chunk-4121qate.js:204746-204948 placement
+//@ chunk-j8f885h1.js:185931-186133 placement
 /**
  * telemetry.log 站点规则：固定 to，校验条目。
  */
 var TELEMETRY_LOG_SITE; // deferred: uses restoreMissingKeys (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:204746", () => {
+deferInit("chunk-j8f885h1.js:185931", () => {
   TELEMETRY_LOG_SITE = {
     event: "telemetry.log",
     pinnedKeys: ["to"],
@@ -530,12 +530,12 @@ deferInit("chunk-4121qate.js:204746", () => {
     ),
   };
 });
-//@ chunk-4121qate.js:204948-205042 placement
+//@ chunk-j8f885h1.js:186133-186227 placement
 /**
  * telemetry.mark 站点规则
  */
 var TELEMETRY_MARK_SITE; // deferred: uses checkResultObject (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:204948", () => {
+deferInit("chunk-j8f885h1.js:186133", () => {
   TELEMETRY_MARK_SITE = {
     event: "telemetry.mark",
     check: checkResultObject((answer) =>
@@ -544,8 +544,9 @@ deferInit("chunk-4121qate.js:204948", () => {
   };
 });
 export {
-  checkAppendMessage,
+  sameMessageOrShape,
   isPluginNoteRefusal,
+  checkAppendMessage,
   MESSAGE_IDENTITY_KEYS,
   UI_SCROLL_PINNED_KEYS,
   SESSION_APPEND_SITE,
@@ -574,5 +575,4 @@ export {
   getTokenCountFromUsage,
   checkStateRefUnchanged,
   checkAppendDenyTiming,
-  sameMessageOrShape,
 };

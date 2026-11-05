@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：/goal 命令：设置、查看或清除会话目标（达成条件），长度有限制。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bnwcqde4.js (20), chunk-s4441tej.js (1)
- * attribution: placement 21
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-f14qge9c.js (19)
+ * attribution: placement 19
  */
 import { hasManagedSettings } from "../../utils/settings/managedRestrictionKeys.js";
 import { logError } from "../../utils/log.js";
@@ -17,7 +17,6 @@ import {
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum, fromEnumOpt, lit } from "../../services/analytics/safeMetadata.js";
-import { isCcsCoworkSurface } from "../../utils/entrypointKinds.js";
 import {
   isCcsTenant,
   getIsNonInteractiveSession,
@@ -34,10 +33,9 @@ import { registerHookEligibility } from "../../utils/hooks.js";
 import { checkHasTrustDialogAccepted } from "../../utils/config.js";
 import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { createAttachmentMessage } from "../../utils/attachments.js";
-import { plural, getFirstLine } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bnwcqde4.js:685-790 placement
+//@ chunk-f14qge9c.js:649-754 placement
 function isOrganizationHookPolicyPending() {
   let updated = false;
   try {
@@ -53,7 +51,7 @@ function isOrganizationHookPolicyPending() {
     return true;
   }
 }
-//@ chunk-bnwcqde4.js:790-879 placement
+//@ chunk-f14qge9c.js:754-843 placement
 function isHookPolicyUnanswered() {
   if (!isOrganizationHookPolicyPending()) return false;
   try {
@@ -63,7 +61,7 @@ function isHookPolicyUnanswered() {
     return true;
   }
 }
-//@ chunk-bnwcqde4.js:879-945 placement
+//@ chunk-f14qge9c.js:843-909 placement
 function markOrganizationAskHeld() {
   try {
     getPluginRegistry().organizationAsk.hasHeld = true;
@@ -71,7 +69,7 @@ function markOrganizationAskHeld() {
     logError(error);
   }
 }
-//@ chunk-bnwcqde4.js:945-1020 placement
+//@ chunk-f14qge9c.js:909-984 placement
 function buildGoalSentinelAttachment(met, condition) {
   return {
     type: "goal_status",
@@ -80,7 +78,7 @@ function buildGoalSentinelAttachment(met, condition) {
     condition,
   };
 }
-//@ chunk-bnwcqde4.js:1020-1306 placement
+//@ chunk-f14qge9c.js:984-1270 placement
 function findActiveGoalCondition(messages) {
   if (!messages) return null;
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -92,7 +90,7 @@ function findActiveGoalCondition(messages) {
   }
   return null;
 }
-//@ chunk-bnwcqde4.js:1306-1436 placement
+//@ chunk-f14qge9c.js:1270-1400 placement
 function logGoalCleared(condition, reason) {
   logEvent("tengu_goal_cleared", {
     reason: fromEnum(reason),
@@ -101,18 +99,18 @@ function logGoalCleared(condition, reason) {
     origin: fromEnumOpt(condition.origin),
   });
 }
-//@ chunk-bnwcqde4.js:1436-1507 placement
+//@ chunk-f14qge9c.js:1400-1471 placement
 var MAX_GOAL_CONDITION_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var GOAL_CLEAR_WORDS;
-deferInit("chunk-bnwcqde4.js:1436", () => {
+deferInit("chunk-f14qge9c.js:1400", () => {
   MAX_GOAL_CONDITION_CHARS = 4000;
   GOAL_CLEAR_WORDS = new Set(["clear", "stop", "off", "reset", "none", "cancel"]);
 });
-//@ chunk-bnwcqde4.js:1507-1553 placement
+//@ chunk-f14qge9c.js:1471-1517 placement
 function isGoalClearKeyword(arg) {
   return GOAL_CLEAR_WORDS.has(arg.toLowerCase());
 }
-//@ chunk-bnwcqde4.js:1553-1837 placement
+//@ chunk-f14qge9c.js:1517-1801 placement
 function findLastMetGoal(messages) {
   for (let i = messages.length - 1; i >= 0; i--) {
     let message = messages[i];
@@ -128,10 +126,10 @@ function findLastMetGoal(messages) {
   }
   return null;
 }
-//@ chunk-bnwcqde4.js:1837-2301 placement
+//@ chunk-f14qge9c.js:1801-2265 placement
 var buildGoalSetMessage = (condition) =>
   `A session-scoped Stop hook is now active with condition: "${condition}". Briefly acknowledge the goal, then immediately start (or continue) working toward it \u2014 treat the condition itself as your directive and do not pause to ask the user what to do. The hook will block stopping until the condition holds. It auto-clears once the condition is met \u2014 do not tell the user to run \`/goal clear\` after success; that's only for clearing a goal early.`;
-//@ chunk-bnwcqde4.js:2301-2484 placement
+//@ chunk-f14qge9c.js:2265-2448 placement
 function getSessionStopPromptHooks(sessionHooksRegistry, sessionId) {
   let hooks = [];
   for (let hook of sessionHooksRegistry.get(sessionId, "Stop").get("Stop") ?? []) {
@@ -140,7 +138,7 @@ function getSessionStopPromptHooks(sessionHooksRegistry, sessionId) {
   }
   return hooks;
 }
-//@ chunk-bnwcqde4.js:2484-2827 placement
+//@ chunk-f14qge9c.js:2448-3045 placement
 /**
  * /goal 无法运行的两条说明：组织设置未读取（hooks 是否允许未知）与 hooks 被限制（disableAllHooks/allowManagedHooksOnly）。
  */
@@ -150,20 +148,15 @@ var GOAL_HOOKS_POLICY_UNREAD_TEXT =
   "/goal can't run yet: your organization's settings haven't been read, so it isn't known whether it allows hooks.";
 var GOAL_HOOKS_RESTRICTED_TEXT =
   "/goal can't run while hooks are restricted (disableAllHooks or allowManagedHooksOnly is set in settings or by policy).";
-//@ chunk-bnwcqde4.js:2827-2852 placement
-function _() {
-  return !isCcsCoworkSurface();
-}
-//@ chunk-bnwcqde4.js:2852-2907 placement
+var GOAL_RELAYED_MESSAGE =
+  "This message was relayed from Slack, Teams or a project thread and may be someone else's, so /goal didn't set, clear or show the goal. To use /goal, send it yourself from the terminal, the Claude app, claude.ai/code or your own Remote Control app.";
+//@ chunk-f14qge9c.js:3045-3094 placement
 function areHooksRestrictedForGoal() {
   return isCcsTenant()
-    ? !_() ||
-        shouldDisableAllHooksIncludingManaged() ||
-        shouldHoldDeviceHooksByPolicy() ||
-        personTurnedHooksOff()
+    ? shouldDisableAllHooksIncludingManaged() || shouldHoldDeviceHooksByPolicy() || personTurnedHooksOff()
     : shouldSkipSessionHooksByPolicy();
 }
-//@ chunk-bnwcqde4.js:2907-2979 placement (2.1.88 match: getValueFromInput, 1)
+//@ chunk-f14qge9c.js:3094-3166 placement (2.1.88 match: getValueFromInput, 1)
 function getValueFromInput(input) {
   let message = {
     type: "prompt",
@@ -172,7 +165,7 @@ function getValueFromInput(input) {
   registerHookEligibility(message, () => !areHooksRestrictedForGoal());
   return message;
 }
-//@ chunk-bnwcqde4.js:2979-3152 placement
+//@ chunk-f14qge9c.js:3166-3339 placement
 function getGoalBlockedReason() {
   if (areHooksRestrictedForGoal())
     return {
@@ -193,7 +186,7 @@ function getGoalBlockedReason() {
     };
   return null;
 }
-//@ chunk-bnwcqde4.js:3152-3229 placement
+//@ chunk-f14qge9c.js:3339-3416 placement
 function queueGoalOrigin(setAppState, condition, origin) {
   setAppState((state) => ({
     ...state,
@@ -203,7 +196,7 @@ function queueGoalOrigin(setAppState, condition, origin) {
     },
   }));
 }
-//@ chunk-bnwcqde4.js:3229-3397 placement
+//@ chunk-f14qge9c.js:3416-3584 placement
 function consumeQueuedGoalOrigin(key, context) {
   let queuedGoalOrigin = context.getAppState().queuedGoalOrigin;
   if (queuedGoalOrigin === undefined || queuedGoalOrigin.condition !== key) return "user";
@@ -213,7 +206,7 @@ function consumeQueuedGoalOrigin(key, context) {
   }));
   return queuedGoalOrigin.origin;
 }
-//@ chunk-bnwcqde4.js:3397-3988 placement
+//@ chunk-f14qge9c.js:3584-4175 placement
 /**
  * 设置会话目标：检查钩子/信任门槛，替换旧目标，在 Stop 钩子注册表加入 prompt 型钩子并记录遥测。
  */
@@ -255,7 +248,7 @@ function setSessionGoal(condition, context, override) {
   logFeatureOk("goal_set");
   return null;
 }
-//@ chunk-bnwcqde4.js:3988-4394 placement
+//@ chunk-f14qge9c.js:4175-4581 placement
 function clearSessionGoal(context) {
   let sessionId = getSessionId();
   let sessionStopPromptHooks = getSessionStopPromptHooks(context.sessionHooksRegistry, sessionId);
@@ -282,74 +275,22 @@ function clearSessionGoal(context) {
   });
   return prompt;
 }
-//@ chunk-s4441tej.js:3789-4492 placement
-/**
- * /goal 命令：设置、查看或清除会话目标（达成条件），长度有限制。
- */
-var call = async (args, context) => {
-  let condition = args.trim();
-  if (condition === "") {
-    let activeGoal = context.options.activeGoal;
-    if (!activeGoal)
-      return {
-        type: "text",
-        value: "No goal set. Usage: `/goal <condition>`",
-      };
-    let statusLine =
-      activeGoal.iterations === 0
-        ? "not yet evaluated"
-        : `${activeGoal.iterations} ${plural(activeGoal.iterations, "turn")}`;
-    let reasonLine = activeGoal.lastReason
-      ? `
-Last check: ${getFirstLine(activeGoal.lastReason.trim())}`
-      : "";
-    return {
-      type: "text",
-      value: `Goal active: ${activeGoal.condition} (${statusLine})${reasonLine}`,
-    };
-  }
-  if (isGoalClearKeyword(condition)) {
-    let cleared = clearSessionGoal(context);
-    return {
-      type: "text",
-      value: cleared === null ? "No goal set" : `Goal cleared: ${cleared}`,
-    };
-  }
-  if (condition.length > MAX_GOAL_CONDITION_CHARS) {
-    logFeatureSad("goal_set", "too_long");
-    return {
-      type: "text",
-      value: `Goal condition is limited to ${MAX_GOAL_CONDITION_CHARS} characters (got ${condition.length})`,
-    };
-  }
-  let set = setSessionGoal(condition, context);
-  if (set !== null)
-    return {
-      type: "text",
-      value: set,
-    };
-  return {
-    type: "query",
-    value: `Goal set: ${condition}`,
-    prompt: buildGoalSetMessage(condition),
-  };
-};
 export {
   isHookPolicyUnanswered,
-  logGoalCleared,
-  isGoalClearKeyword,
-  getGoalBlockedReason,
   getSessionStopPromptHooks,
+  clearSessionGoal,
+  setSessionGoal,
   buildGoalSentinelAttachment,
+  queueGoalOrigin,
   findActiveGoalCondition,
+  logGoalCleared,
   isOrganizationHookPolicyPending,
   markOrganizationAskHeld,
-  queueGoalOrigin,
-  findLastMetGoal,
-  clearSessionGoal,
-  MAX_GOAL_CONDITION_CHARS,
-  setSessionGoal,
-  buildGoalSetMessage,
+  isGoalClearKeyword,
+  getGoalBlockedReason,
   getValueFromInput,
-  call,
+  GOAL_RELAYED_MESSAGE,
+  MAX_GOAL_CONDITION_CHARS,
+  buildGoalSetMessage,
+  findLastMetGoal,
 };

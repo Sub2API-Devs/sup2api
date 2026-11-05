@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：启动遥测（已注册钩子、命令、用户设置键、环境变量）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3wek6r2k.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hjswk319.js (10)
  * attribution: placement 10
  */
 import { resolve } from "path";
@@ -39,7 +39,7 @@ import { getEnabledSettingSources } from "../../utils/settings/constants.js";
 import {
   getSettingsFilePathForSource,
   getSettingsForSource,
-  getInitialSettings_2,
+  getInitialSettings,
 } from "../../utils/settings/settings.js";
 import { logOTelEvent } from "../../utils/telemetry/events.js";
 import { isSafeMode } from "../../utils/envUtils.js";
@@ -48,7 +48,7 @@ import { GLOBAL_CONFIG_KEYS, DEFAULT_GLOBAL_CONFIG } from "../../utils/config.js
 import { USER_INTENT_SETTING_KEYS } from "../../utils/settings/userIntentSettings.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3wek6r2k.js:91593-92252 placement
+//@ chunk-hjswk319.js:90992-91651 placement
 async function logStartupCommandTelemetry(command, session, storageV5, options, flag = false) {
   try {
     let commands = await getCommands(command, options);
@@ -86,7 +86,7 @@ async function logStartupCommandTelemetry(command, session, storageV5, options, 
     return null;
   }
 }
-//@ chunk-3wek6r2k.js:92284-93159 placement
+//@ chunk-hjswk319.js:91683-92558 placement
 function logRegisteredHooks(enabled, options) {
   if (shouldDisableAllHooksIncludingManaged()) return;
   if (isCustomizationDisabled("hooks")) return;
@@ -141,16 +141,16 @@ function logRegisteredHooks(enabled, options) {
           });
   }
 }
-//@ chunk-3wek6r2k.js:93159-93263 placement
+//@ chunk-hjswk319.js:92558-92662 placement
 var TELEMETRY_SKIP_ENV_VARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3wek6r2k.js:93159", () => {
+deferInit("chunk-hjswk319.js:92558", () => {
   TELEMETRY_SKIP_ENV_VARS = new Set([
     "CLAUDE_CODE_ENTRYPOINT",
     "CLAUDE_CODE_MESSAGING_SOCKET",
     "CLAUDE_CODE_MESSAGING_TOKEN",
   ]);
 });
-//@ chunk-3wek6r2k.js:93263-93441 placement
+//@ chunk-hjswk319.js:92662-92840 placement
 function envVarsForTelemetry(sourceEnv = process.env) {
   let names = [];
   for (let key in sourceEnv)
@@ -163,9 +163,9 @@ function envVarsForTelemetry(sourceEnv = process.env) {
       names.push(key);
   return names.sort();
 }
-//@ chunk-3wek6r2k.js:93441-93682 placement
+//@ chunk-hjswk319.js:92840-93081 placement
 var TELEMETRY_SKIP_CONFIG_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3wek6r2k.js:93441", () => {
+deferInit("chunk-hjswk319.js:92840", () => {
   TELEMETRY_SKIP_CONFIG_KEYS = new Set([
     "tipsHistory",
     "installMethod",
@@ -178,9 +178,9 @@ deferInit("chunk-3wek6r2k.js:93441", () => {
     "autoUpdatesProtectedForNative",
   ]);
 });
-//@ chunk-3wek6r2k.js:93682-93855 placement
+//@ chunk-hjswk319.js:93081-93254 placement
 function nonDefaultGlobalConfigKeys(globals) {
-  let initialSettings = getInitialSettings_2();
+  let initialSettings = getInitialSettings();
   let keys = [];
   for (let key of GLOBAL_CONFIG_KEYS) {
     if (TELEMETRY_SKIP_CONFIG_KEYS.has(key)) continue;
@@ -191,7 +191,7 @@ function nonDefaultGlobalConfigKeys(globals) {
   }
   return keys;
 }
-//@ chunk-3wek6r2k.js:93855-94500 placement
+//@ chunk-hjswk319.js:93254-93899 placement
 var USER_SETTING_KEYS_FOR_TELEMETRY = [
   "model",
   "outputStyle",
@@ -227,7 +227,7 @@ var USER_SETTING_KEYS_FOR_TELEMETRY = [
   "forceLoginMethod",
   "keybindingFlavor",
 ];
-//@ chunk-3wek6r2k.js:94500-94837 placement
+//@ chunk-hjswk319.js:93899-94236 placement
 function setUserSettingKeys(initialSettings) {
   let keys = [];
   for (let key of USER_SETTING_KEYS_FOR_TELEMETRY) if (initialSettings[key] !== undefined) keys.push(key);
@@ -241,13 +241,13 @@ function setUserSettingKeys(initialSettings) {
     keys.push("modelSettings.autoCompactWindow");
   return keys.sort();
 }
-//@ chunk-3wek6r2k.js:94837-94920 placement (2.1.88 match: getClientSurface, 0.78)
+//@ chunk-hjswk319.js:94236-94319 placement (2.1.88 match: getClientSurface, 0.779)
 function getClientSurface_2(value, surface) {
   let parts = [];
   for (let key in value) if (surface(key) === "cli") parts.push(key);
   return parts.sort();
 }
-//@ chunk-3wek6r2k.js:94920-95030 placement
+//@ chunk-hjswk319.js:94319-94429 placement
 function isDefaultConfigValue(value, defaultValue) {
   if (value === defaultValue) return true;
   if (typeof value === "object" && value !== null) return Object.keys(value).length === 0;

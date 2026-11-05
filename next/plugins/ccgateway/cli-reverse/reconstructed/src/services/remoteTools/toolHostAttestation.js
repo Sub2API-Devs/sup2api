@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工具宿主证明。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0ajrnwwf.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-162djxj7.js (6)
  * attribution: placement 6
  */
 import { isSecurityTierEnabled } from "../../utils/teleport/securityTier.js";
@@ -18,7 +18,7 @@ import { SERVED_CALLS_UNATTESTED } from "../../remote/tools/toolHostsNotice.js";
 import { REMOTE_TOOLS_CONSENT_TEXT } from "../../remote/tools/consentText.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-0ajrnwwf.js:418-625 placement
+//@ chunk-162djxj7.js:418-625 placement
 /**
  * 读取工具宿主认证模式：关闭、观察或强制（读取开关失败时为观察）。
  */
@@ -33,7 +33,7 @@ function attestationMode() {
     return "observe";
   }
 }
-//@ chunk-0ajrnwwf.js:625-815 placement
+//@ chunk-162djxj7.js:625-815 placement
 function attestationVerdict(status) {
   let attestationFilterPolicy = getAttestationFilterPolicy();
   let {
@@ -54,7 +54,7 @@ function attestationVerdict(status) {
           : "below_floor",
   };
 }
-//@ chunk-0ajrnwwf.js:815-889 placement
+//@ chunk-162djxj7.js:815-889 placement
 /**
  * 由宿主状态生成证明结论；证明模式为关闭时返回 undefined。
  */
@@ -67,14 +67,14 @@ function attestationFor(attestationStatus) {
         ...attestationVerdict(normalizeAttestationStatus(attestationStatus)),
       };
 }
-//@ chunk-0ajrnwwf.js:889-959 placement
+//@ chunk-162djxj7.js:889-959 placement
 /**
  * 是否处于强制模式且证明等级低于下限（需要暂扣调用）。
  */
 function isBelowFloorEnforced(attestation) {
   return attestation?.mode === "enforce" && attestation.verdict === "below_floor";
 }
-//@ chunk-0ajrnwwf.js:959-1037 placement
+//@ chunk-162djxj7.js:959-1037 placement
 /**
  * 以未知状态得出证明结果与是否需要暂扣。
  */
@@ -85,7 +85,7 @@ function unknownAttestationResult() {
     heldBack: isBelowFloorEnforced(attestation),
   };
 }
-//@ chunk-0ajrnwwf.js:1037-1200 placement
+//@ chunk-162djxj7.js:1037-1200 placement
 /**
  * 向通知通道报告"有未经认证的远程调用"，通道抛错时只记日志。
  */

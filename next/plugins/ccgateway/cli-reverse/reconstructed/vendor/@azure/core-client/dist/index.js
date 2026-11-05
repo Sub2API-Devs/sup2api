@@ -1,16 +1,16 @@
 /**
  * @azure/core-client/dist/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/core-client@1.9.2..1.10.0
- * pieces: chunk-mrx6y2r5.js (13)
+ * pieces: chunk-b5df2wx1.js (13)
  * attribution: esm-layout 2, esm-fingerprint 11
  */
 import { getOperationRequestInfo, getOperationArgumentValueFromParameter } from "./esm/operationHelpers.js";
 
-//@ chunk-mrx6y2r5.js:67078-67096 esm-layout
+//@ chunk-b5df2wx1.js:67078-67096 esm-layout
 var XML_ATTRKEY = "$";
 var SEP_SPECIAL = "_";
-//@ chunk-mrx6y2r5.js:67096-67355 esm-fingerprint
+//@ chunk-b5df2wx1.js:67096-67355 esm-fingerprint
 function isPrimitiveBody(value, mapperTypeName) {
   return (
     mapperTypeName !== "Composite" &&
@@ -25,7 +25,7 @@ function isPrimitiveBody(value, mapperTypeName) {
       value === null)
   );
 }
-//@ chunk-mrx6y2r5.js:67355-67618 esm-fingerprint
+//@ chunk-b5df2wx1.js:67355-67618 esm-fingerprint
 function handleNullableResponseAndWrappableBody(responseObject) {
   let combinedHeadersAndBody = Object.assign(Object.assign({}, responseObject.headers), responseObject.body);
   if (responseObject.hasNullableType && Object.getOwnPropertyNames(combinedHeadersAndBody).length === 0)
@@ -41,7 +41,7 @@ function handleNullableResponseAndWrappableBody(responseObject) {
         })
       : combinedHeadersAndBody;
 }
-//@ chunk-mrx6y2r5.js:67618-68479 esm-fingerprint
+//@ chunk-b5df2wx1.js:67618-68479 esm-fingerprint
 function flattenResponse(fullResponse, responseSpec) {
   var _a;
   var _b;
@@ -82,7 +82,7 @@ function flattenResponse(fullResponse, responseSpec) {
     shouldWrapBody: isPrimitiveBody(fullResponse.parsedBody, expectedBodyTypeName),
   });
 }
-//@ chunk-mrx6y2r5.js:68479-68798 esm-fingerprint
+//@ chunk-b5df2wx1.js:68479-68798 esm-fingerprint
 var MapperTypeNames = {
   Base64Url: "Base64Url",
   Boolean: "Boolean",
@@ -101,7 +101,7 @@ var MapperTypeNames = {
   TimeSpan: "TimeSpan",
   UnixTime: "UnixTime",
 };
-//@ chunk-mrx6y2r5.js:73790-73944 esm-fingerprint
+//@ chunk-b5df2wx1.js:73790-73944 esm-fingerprint
 function getStreamingResponseStatusCodes(operationSpec) {
   let result = new Set();
   for (let statusCode in operationSpec.responses) {
@@ -111,7 +111,7 @@ function getStreamingResponseStatusCodes(operationSpec) {
   }
   return result;
 }
-//@ chunk-mrx6y2r5.js:73944-74092 esm-fingerprint
+//@ chunk-b5df2wx1.js:73944-74092 esm-fingerprint
 function getPathStringFromParameter(parameter) {
   let { parameterPath, mapper } = parameter;
   let result;
@@ -120,9 +120,9 @@ function getPathStringFromParameter(parameter) {
   else result = mapper.serializedName;
   return result;
 }
-//@ chunk-mrx6y2r5.js:74092-74121 esm-fingerprint
+//@ chunk-b5df2wx1.js:74092-74121 esm-fingerprint
 var serializationPolicyName = "serializationPolicy";
-//@ chunk-mrx6y2r5.js:74121-74351 esm-fingerprint
+//@ chunk-b5df2wx1.js:74121-74351 esm-fingerprint
 function serializationPolicy(options = {}) {
   let stringifyXML = options.stringifyXML;
   return {
@@ -141,7 +141,7 @@ function serializationPolicy(options = {}) {
     },
   };
 }
-//@ chunk-mrx6y2r5.js:74351-74847 esm-fingerprint
+//@ chunk-b5df2wx1.js:74351-74847 esm-fingerprint
 function serializeHeaders(request, operationArguments, operationSpec) {
   var _a;
   var _b;
@@ -174,7 +174,7 @@ function serializeHeaders(request, operationArguments, operationSpec) {
     for (let customHeaderName of Object.keys(customHeaders))
       request.headers.set(customHeaderName, customHeaders[customHeaderName]);
 }
-//@ chunk-mrx6y2r5.js:74847-76365 esm-fingerprint
+//@ chunk-b5df2wx1.js:74847-76365 esm-fingerprint
 function serializeRequestBody(
   request,
   operationArguments,
@@ -293,7 +293,7 @@ function serializeRequestBody(
     }
   }
 }
-//@ chunk-mrx6y2r5.js:76365-76509 esm-fingerprint
+//@ chunk-b5df2wx1.js:76365-76509 esm-fingerprint
 function getXmlValueWithNamespace(xmlNamespace, xmlnsKey, typeName, serializedValue, options) {
   if (xmlNamespace && !["Composite", "Sequence", "Dictionary"].includes(typeName)) {
     let result = {};
@@ -305,7 +305,7 @@ function getXmlValueWithNamespace(xmlNamespace, xmlnsKey, typeName, serializedVa
   }
   return serializedValue;
 }
-//@ chunk-mrx6y2r5.js:76509-76618 esm-layout
+//@ chunk-b5df2wx1.js:76509-76618 esm-layout
 function prepareXMLRootList(obj, elementName, xmlnsKey, xmlNamespace) {
   if (!Array.isArray(obj)) obj = [obj];
   if (!xmlnsKey || !xmlNamespace)

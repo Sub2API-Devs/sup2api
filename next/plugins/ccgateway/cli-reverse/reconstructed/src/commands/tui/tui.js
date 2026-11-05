@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。/tui 命令（切换全屏/经典界面）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (10)
  * attribution: placement 10
  */
 import {
@@ -34,7 +34,7 @@ import { getForkReplayLaunchConfig, getForkRestrictedLaunchConfig } from "../../
 import { submittedMessages, isMidTurnStreaming } from "../../utils/promptSubmissionOrigin.js";
 import { hasRunningBackgroundTask } from "../../tasks/backgroundTaskLabels.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";
-import { updateSettingsForSource, getInitialSettings_2 } from "../../utils/settings/settings.js";
+import { updateSettingsForSource, getInitialSettings } from "../../utils/settings/settings.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 import { resetFullscreenAutoDisable } from "../../utils/fullscreenBootGuard.js";
 import { hasCursorUpViewportYankBug } from "../../ink/terminal.js";
@@ -70,9 +70,9 @@ import { ConfigurableShortcutHint } from "../../components/ConfigurableShortcutH
 import { Dialog } from "../../components/design-system/Dialog.js";
 import { TextInput } from "../../components/TextInput.js";
 
-//@ chunk-18hwfzwa.js:161401-161434 placement
+//@ chunk-czq1j3j2.js:165497-165530 placement
 var RENDERER_NAMES = ["default", "fullscreen"];
-//@ chunk-18hwfzwa.js:161434-161885 placement
+//@ chunk-czq1j3j2.js:165530-165980 placement
 async function relaunchInto(
   renderer,
   extraArgs,
@@ -111,23 +111,23 @@ async function relaunchInto(
     storageV5,
   );
 }
-//@ chunk-18hwfzwa.js:161885-162041 placement
+//@ chunk-czq1j3j2.js:165980-166136 placement
 function relaunchFailedMessage(error) {
   return `Couldn't switch renderers \u2014 ${error instanceof Error ? error.message : String(error)}. The setting was saved; restart Claude Code to apply it.`;
 }
-//@ chunk-18hwfzwa.js:162041-162287 placement
+//@ chunk-czq1j3j2.js:166136-166382 placement
 function cannotSwitchRendererMessage(renderer, uncarriedSettings) {
   return `Cannot switch renderers in this session \u2014 it has restrictions a restart can't carry over (${uncarriedSettings.join("; ")}). Nothing was changed. Running /tui ${renderer} in a session started without them switches every later session too.`;
 }
-//@ chunk-18hwfzwa.js:162287-162473 placement
+//@ chunk-czq1j3j2.js:166382-166568 placement
 function savedWithoutRestartMessage(uncarriedSettings) {
   return `Staying on the default renderer without a restart \u2014 this session now has restrictions a restart can't carry over (${uncarriedSettings.join("; ")}); the preference is saved.`;
 }
-//@ chunk-18hwfzwa.js:162473-162615 placement
+//@ chunk-czq1j3j2.js:166568-166710 placement
 function savedWithoutRestartForTasksMessage(renderer) {
   return `Staying on the ${renderer} renderer without a restart \u2014 work is now running in the background; the preference is saved.`;
 }
-//@ chunk-18hwfzwa.js:162615-166208 placement
+//@ chunk-czq1j3j2.js:166710-170302 placement
 /**
  * /tui 命令：查看或切换渲染器（fullscreen/default），处理全屏启动失败后自动关闭的情况。
  */
@@ -220,7 +220,7 @@ var call_2 = async (onDone, context, args) => {
   }
   let isFullscreen = renderer === "fullscreen";
   let alreadyActive = isFullscreen === isFullscreenEnvEnabled();
-  if (alreadyActive && getInitialSettings_2().tui === renderer) {
+  if (alreadyActive && getInitialSettings().tui === renderer) {
     await resetFullscreenAutoDisable(context.storageV5);
     onDone(`Already using the ${renderer} renderer.`, {
       display: "system",
@@ -357,7 +357,7 @@ var call_2 = async (onDone, context, args) => {
     return null;
   });
 };
-//@ chunk-18hwfzwa.js:166208-166320 placement
+//@ chunk-czq1j3j2.js:170302-170414 placement
 function refuseRendererSwitchWithTasks(renderer, onDone) {
   logEvent("tengu_tui_refused", {
     active_tasks: true,
@@ -368,11 +368,11 @@ function refuseRendererSwitchWithTasks(renderer, onDone) {
   });
   return null;
 }
-//@ chunk-18hwfzwa.js:166320-166366 placement
+//@ chunk-czq1j3j2.js:170414-170460 placement
 var EGCOULDNTCOPYTEXT = "egcouldntcopytext";
 var COPY_TEXT_TIMEOUT_MS = 5000;
 var MAX_DESCRIPTION_CHARS = 2000;
-//@ chunk-18hwfzwa.js:166366-169743 placement
+//@ chunk-czq1j3j2.js:170460-173836 placement
 /**
  * /tui 切换渲染器的执行流程：校验当前会话能否重启（有后台任务、受限会话等），保存偏好后用 relaunchInto 重启到新渲染器；不能重启时只保存并提示；记录 tengu_tui_optout_reason/tengu_tui_refused。
  */

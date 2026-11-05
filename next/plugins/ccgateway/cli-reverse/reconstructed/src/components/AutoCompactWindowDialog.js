@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自动压缩窗口设置对话框
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qqj12s77.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-f1yhb2jt.js (5)
  * attribution: placement 5
  */
 import { init_react_production, useState, useRef } from "../../vendor/react/cjs/react.production.js";
@@ -36,18 +36,18 @@ import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { logEvent } from "../services/analytics/index.js";
 import { lit } from "../services/analytics/safeMetadata.js";
 
-//@ chunk-qqj12s77.js:13233-13237 placement
+//@ chunk-f1yhb2jt.js:14381-14385 placement
 init_react_production();
-//@ chunk-qqj12s77.js:13237-13281 placement
+//@ chunk-f1yhb2jt.js:14385-14429 placement
 function selectAutoCompactWindow(appState) {
   return appState.autoCompactWindow;
 }
-//@ chunk-qqj12s77.js:13281-13307 placement
+//@ chunk-f1yhb2jt.js:14429-14455 placement
 var AUTOCOMPACT_STEP_BYTES = 1e5;
 var AUTOCOMPACT_MIN_BYTES = 1e5;
 var AUTOCOMPACT_MAX_BYTES = 1e6;
 var AUTOCOMPACT_DEFAULT_BYTES = 0;
-//@ chunk-qqj12s77.js:13307-17045 placement
+//@ chunk-f1yhb2jt.js:14455-18193 placement
 /**
  * 自动压缩窗口设置对话框：显示模型推荐窗口、当前配置与来源（env/设置），允许覆盖。
  */
@@ -366,7 +366,7 @@ function AutoCompactWindowDialog(props) {
   } else dialogElement = $[41];
   return dialogElement;
 }
-//@ chunk-qqj12s77.js:17045-17231 placement
+//@ chunk-f1yhb2jt.js:18193-18379 placement
 /**
  * /autocompact 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

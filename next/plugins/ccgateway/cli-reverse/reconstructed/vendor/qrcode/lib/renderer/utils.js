@@ -1,13 +1,13 @@
 /**
  * qrcode/lib/renderer/utils.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: qrcode@1.5.4
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-spjgqa4y.js:50618-52033 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:50618-52033 cjs-fingerprint
 var require_utils_2 = __commonJS(function (cjsExports) {
   function hex2rgba(hex) {
     if (typeof hex === "number") hex = hex.toString();

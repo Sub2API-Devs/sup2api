@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：权限上下文序列化。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2xp8150w.js (9)
- * attribution: placement 9
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nh073evr.js (10)
+ * attribution: placement 9, layout 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
@@ -26,6 +26,7 @@ import {
 import { EXTERNAL_PERMISSION_MODES } from "../../types/permissions.js";
 import { PERMISSION_RULE_SOURCES } from "./permissions.js";
 import { isPlainObject } from "../objectUtils.js";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { hasProtoKeys } from "../objectSafety.js";
 import { INVALID } from "../../../vendor/zod/v4/core/core.js";
 import { byteLengthOf } from "../../remote/tools/callResults.js";
@@ -33,7 +34,7 @@ import { getEmptyToolPermissionContext } from "../../Tool.js";
 import { pickAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-2xp8150w.js:517-2230 placement
+//@ chunk-nh073evr.js:550-2429 placement
 /**
  * 权限上下文序列化表：每个字段是序列化、作为限制序列化、由反序列化设置还是不序列化；默认限制值、限制键与需序列化字段列表；上限 512 KB。
  */
@@ -42,7 +43,7 @@ var PERMISSION_CONTEXT_FIELD_SERIALIZATION;
 var DEFAULT_RESTRICTIONS;
 var RESTRICTION_KEYS;
 var SERIALIZED_CONTEXT_FIELDS;
-deferInit("chunk-2xp8150w.js:517", () => {
+deferInit("chunk-nh073evr.js:550", () => {
   MAX_SERIALIZED_CONTEXT_BYTES = 524288;
   PERMISSION_CONTEXT_FIELD_SERIALIZATION = {
     mode: "serialized",
@@ -74,6 +75,8 @@ deferInit("chunk-2xp8150w.js:517", () => {
     awaitAutomatedChecksBeforeDialog: "not_serialized",
     mcpPermissionModeOverrides: "not_serialized",
     mcpAskForTools: "not_serialized",
+    mcpPolicyAsksLiftedInAcceptEdits: "not_serialized",
+    mcpPolicyFileAsksLiftedInAcceptEdits: "not_serialized",
     builtInToolsDisabled: "not_serialized",
     toolsKeptByLaunchList: "not_serialized",
     pollEventDeliveryGuard: "not_serialized",
@@ -83,6 +86,8 @@ deferInit("chunk-2xp8150w.js:517", () => {
     readBlockExemptPaths: "not_serialized",
     isRemoteMode: "not_serialized",
     remoteBrowserCardAnswers: "not_serialized",
+    connectorCardAllows: "not_serialized",
+    planDoc: "not_serialized",
   };
   DEFAULT_RESTRICTIONS = {
     restricted: false,
@@ -95,7 +100,7 @@ deferInit("chunk-2xp8150w.js:517", () => {
     ([key, value]) => (value === "serialized" ? [key] : []),
   );
 });
-//@ chunk-2xp8150w.js:2230-2601 placement
+//@ chunk-nh073evr.js:2429-2800 placement
 /**
  * 序列化权限上下文用到的 zod 片段：权限模式、规则来源（不含 mcpMount）、按来源的规则表、绝对路径（≤4096、无 NUL）、限制项。
  */
@@ -108,7 +113,7 @@ var MAX_DIRECTORY_PATH_LENGTH;
 var absolutePathSchema;
 var neutralRestrictionSchema;
 var restrictionsSchema;
-deferInit("chunk-2xp8150w.js:2230", () => {
+deferInit("chunk-nh073evr.js:2429", () => {
   permissionModeSchema = DoctorLazy(() => _enum(EXTERNAL_PERMISSION_MODES));
   SERIALIZABLE_RULE_SOURCES = PERMISSION_RULE_SOURCES.filter((source) => source !== "mcpMount");
   ruleSourceSchema = DoctorLazy(() => _enum(SERIALIZABLE_RULE_SOURCES));
@@ -130,17 +135,27 @@ deferInit("chunk-2xp8150w.js:2230", () => {
     }).catchall(neutralRestrictionSchema()),
   );
 });
-//@ chunk-2xp8150w.js:2725-2794 placement
+//@ chunk-nh073evr.js:2800-2924 layout
+function hasNonNeutralRestrictions(permissionContext) {
+  let restrictions = isPlainObject(permissionContext) ? permissionContext.restrictions : undefined;
+  return (
+    isPlainObject(restrictions) &&
+    Object.values(omitAlias(restrictions, RESTRICTION_KEYS)).some(
+      (restriction) => !neutralRestrictionSchema().safeParse(restriction).success,
+    )
+  );
+}
+//@ chunk-nh073evr.js:2924-2993 placement
 function hasUniqueMapKeys({ $map }) {
   return new Set($map.map(([key]) => key)).size === $map.length;
 }
-//@ chunk-2xp8150w.js:2794-3569 placement
+//@ chunk-nh073evr.js:2993-3768 placement
 /**
  * 序列化权限上下文的严格 schema，以及在其外包一层拒绝 __proto__ 键、只报告第一个问题的解析 schema。
  */
 var serializedPermissionContextSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var safeSerializedPermissionContextSchema;
-deferInit("chunk-2xp8150w.js:2794", () => {
+deferInit("chunk-nh073evr.js:2993", () => {
   serializedPermissionContextSchema = DoctorLazy(() =>
     zodStrictObject({
       mode: permissionModeSchema(),
@@ -194,7 +209,7 @@ deferInit("chunk-2xp8150w.js:2794", () => {
     }),
   );
 });
-//@ chunk-2xp8150w.js:3569-3720 placement
+//@ chunk-nh073evr.js:3768-3919 placement
 function buildMinimalSerializedContext(mode) {
   return {
     mode,
@@ -207,12 +222,12 @@ function buildMinimalSerializedContext(mode) {
     restrictions: restrictionsSchema().parse(DEFAULT_RESTRICTIONS),
   };
 }
-//@ chunk-2xp8150w.js:3720-3951 placement
+//@ chunk-nh073evr.js:3919-4150 placement
 /**
  * 接受只含模式、规则与目录均为空的最小权限上下文并转换为标准形状。
  */
 var minimalPermissionContextSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-2xp8150w.js:3720", () => {
+deferInit("chunk-nh073evr.js:3919", () => {
   minimalPermissionContextSchema = DoctorLazy(() =>
     unknown()
       .refine((value) => !hasProtoKeys(value))
@@ -231,21 +246,21 @@ deferInit("chunk-2xp8150w.js:3720", () => {
       .transform(({ mode }) => buildMinimalSerializedContext(mode)),
   );
 });
-//@ chunk-2xp8150w.js:3951-4001 placement
+//@ chunk-nh073evr.js:4150-4200 placement
 /**
  * isMinimalContextSerializable：序列化权限上下文可通过最小 schema。
  */
 function isMinimalContextSerializable(value) {
   return minimalPermissionContextSchema().safeParse(value).success;
 }
-//@ chunk-2xp8150w.js:4001-4043 placement
+//@ chunk-nh073evr.js:4200-4242 placement
 /**
  * exceedsSerializedContextLimit：序列化上下文是否超出上限。
  */
 function exceedsSerializedContextLimit(permissionContext) {
   return permissionContext !== undefined && byteLengthOf(permissionContext) > MAX_SERIALIZED_CONTEXT_BYTES;
 }
-//@ chunk-2xp8150w.js:4043-4315 placement
+//@ chunk-nh073evr.js:4242-4514 placement
 /**
  * 把序列化的权限上下文还原为 ToolPermissionContext：Map 字段还原、限制项展开，并标记 servedCall 与暂停沙箱自动放行。
  */
@@ -264,14 +279,13 @@ function deserializePermissionContext(serialized) {
   };
 }
 export {
-  RESTRICTION_KEYS,
-  neutralRestrictionSchema,
-  deserializePermissionContext,
   safeSerializedPermissionContextSchema,
+  minimalPermissionContextSchema,
   exceedsSerializedContextLimit,
+  hasNonNeutralRestrictions,
+  isMinimalContextSerializable,
+  deserializePermissionContext,
   SERIALIZABLE_RULE_SOURCES,
   MAX_DIRECTORY_PATH_LENGTH,
   absolutePathSchema,
-  minimalPermissionContextSchema,
-  isMinimalContextSerializable,
 };

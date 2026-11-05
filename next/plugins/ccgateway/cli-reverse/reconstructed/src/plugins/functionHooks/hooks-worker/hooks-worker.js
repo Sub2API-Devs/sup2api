@@ -1,6 +1,6 @@
 /**
  * plugins/functionHooks/hooks-worker/hooks-worker.js: the function-hooks worker (a worker thread's entry; a second program)
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64): the file of the same path in the
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64): the file of the same path in the
  * build. It is not one of the scanned chunks: its names come from naming/worker-hooks-worker.json
  * (renamed and checked by tools/emit/worker-names.mjs) and its imports name the reading tree's modules. Started by
  * plugins/functionHooks/hooksWorker.js; built as its own entry (build.mjs).

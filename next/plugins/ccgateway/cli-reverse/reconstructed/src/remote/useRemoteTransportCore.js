@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。远程传输核心 hook。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: placement 1
  */
 import {
@@ -58,7 +58,7 @@ import { lit as lit_2, fromEnum } from "../services/analytics/safeMetadata.js";
 import { isSystemInitMessage, toBackgroundTaskEvent } from "./backgroundTaskEvents.js";
 import { permissionModeOfSystemEvent } from "../utils/telemetry/memorySummary.js";
 
-//@ chunk-18hwfzwa.js:255183-262843 placement
+//@ chunk-czq1j3j2.js:260222-267882 placement
 /**
  * useRemoteTransportCore：REPL 远程传输核心 hook，连接远端会话、同步消息、权限请求与权限模式。
  */

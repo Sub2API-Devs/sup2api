@@ -1,12 +1,12 @@
 /**
  * @anthropic-ai/mcpb/dist/shared/config.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/mcpb@1.1.2..2.0.1
- * pieces: chunk-64s30qnv.js (4)
+ * pieces: chunk-vhxew9vz.js (4)
  * attribution: esm-fingerprint 3, esm-layout 1
  */
 
-//@ chunk-64s30qnv.js:2213-2869 esm-fingerprint
+//@ chunk-vhxew9vz.js:2213-2869 esm-fingerprint
 function replaceVariables(value, variables) {
   if (typeof value === "string") {
     let result = value;
@@ -40,7 +40,7 @@ function replaceVariables(value, variables) {
   }
   return value;
 }
-//@ chunk-64s30qnv.js:2869-3679 esm-fingerprint
+//@ chunk-vhxew9vz.js:2869-3679 esm-fingerprint
 async function getMcpConfigForManifest(options) {
   let { manifest, extensionPath, systemDirs, userConfig, pathSeparator, logger } = options;
   let baseConfig = manifest.server?.mcp_config;
@@ -86,11 +86,11 @@ async function getMcpConfigForManifest(options) {
   result = replaceVariables(result, variables);
   return result;
 }
-//@ chunk-64s30qnv.js:3679-3729 esm-layout
+//@ chunk-vhxew9vz.js:3679-3729 esm-layout
 function isInvalidSingleValue(value) {
   return value === undefined || value === null || value === "";
 }
-//@ chunk-64s30qnv.js:3729-3948 esm-fingerprint
+//@ chunk-vhxew9vz.js:3729-3948 esm-fingerprint
 function hasRequiredConfigMissing({ manifest, userConfig }) {
   if (!manifest.user_config) return false;
   let config = userConfig || {};

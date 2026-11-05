@@ -1,8 +1,8 @@
 /**
  * openid-client/lib/helpers/client.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: openid-client@5.7.1
- * pieces: chunk-1ny7cxrt.js (1)
+ * pieces: chunk-1hnjmk23.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -14,7 +14,7 @@ import { require_request } from "./request.js";
 import { require_weak_cache } from "./weak_cache.js";
 import { require_merge } from "./merge.js";
 
-//@ chunk-1ny7cxrt.js:27454-30880 cjs-fingerprint
+//@ chunk-1hnjmk23.js:27823-31249 cjs-fingerprint
 var require_client = __commonJS(function (cjsExports, cjsModule) {
   var jose = require("../../../jose/dist/node/esm/jwe/compact/CompactEncrypt.lazy.js");
   var { RPError } = require_errors();

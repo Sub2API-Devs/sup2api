@@ -3,15 +3,16 @@
  *
  * /stats 统计：遍历会话转录汇总每日活跃、模型 token、会话数。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/stats.ts
- * pieces: chunk-9h8dr0qb.js (21), chunk-e6aww6q8.js (2)
+ * pieces: chunk-5xgkngpb.js (2), chunk-j6tt9nsa.js (21)
  * attribution: affinity 3, fingerprint 10, layout 6, placement 4
  */
 import { basename, sep, join } from "path";
+import { isFileSnapshotMessage, isTranscriptMessage, getProjectsDir } from "./sessionStorage.js";
 import {
   toDateString,
-  getEmptyCache,
+  getEmptyCache_2,
   withStatsCacheLock,
   loadStatsCache,
   DAILY_MODEL_TOKENS_VERSION,
@@ -22,18 +23,17 @@ import { parseIsoDate, parseIsoDateTimePrefix } from "../components/Stats.js";
 import { logForDebugging } from "./debug.js";
 import { getFsImplementation } from "./fsOperations.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
-import { readJSONLFile_2 } from "./json.js";
+import { readJSONLFile } from "./json.js";
 import { errorMessage, isENOENT } from "./errors.js";
-import { isTranscriptMessage, getProjectsDir } from "./sessionStorage.js";
-import { SYNTHETIC_MODEL } from "../constants/messages.js";
+import { SYNTHETIC_MODEL } from "./messages.js";
 import { isValidKeySegment } from "./storage/storageSpaces.js";
 import { jsonStringify } from "./slowOperations.js";
 import { readAllPages, DEFAULT_MAX_PAGES } from "./pagedRead.js";
 import { listedProjectKey } from "./sessionStoragePortable.js";
 
-//@ chunk-e6aww6q8.js:302775-302788 affinity
+//@ chunk-5xgkngpb.js:303557-303570 affinity
 var SESSION_START_ENTRY_WINDOW_MS = 5000;
-//@ chunk-e6aww6q8.js:302788-303694 fingerprint (2.1.88 match: readSessionStartDate, 0.359)
+//@ chunk-5xgkngpb.js:303570-304509 fingerprint (2.1.88 match: readSessionStartDate, 0.359)
 function readSessionStartDate(cache, entries, currentMsg, seen) {
   let time = new Date(currentMsg.timestamp).getTime();
   if (Number.isNaN(time)) return;
@@ -43,6 +43,7 @@ function readSessionStartDate(cache, entries, currentMsg, seen) {
     let timedEntries = [];
     for (let entry of cache.entriesBySide.get(currentMsg.isSidechain) ?? []) {
       if (seen.has(entry.uuid)) continue;
+      if (isFileSnapshotMessage(entry)) continue;
       let time = new Date(entry.timestamp).getTime();
       if (!Number.isNaN(time))
         timedEntries.push({
@@ -82,33 +83,33 @@ function readSessionStartDate(cache, entries, currentMsg, seen) {
   let timedEntry = side.timedEntries[candidateIndex];
   return timedEntry && time - timedEntry.time <= SESSION_START_ENTRY_WINDOW_MS ? timedEntry.entry : undefined;
 }
-//@ chunk-9h8dr0qb.js:77179-77213 affinity
+//@ chunk-j6tt9nsa.js:77138-77172 affinity
 function todayDateString() {
   return toDateString(new Date());
 }
-//@ chunk-9h8dr0qb.js:77213-77280 fingerprint (2.1.88 match: getNextDay, 1)
+//@ chunk-j6tt9nsa.js:77172-77239 fingerprint (2.1.88 match: getNextDay, 1)
 function getNextDay() {
   let date = new Date();
   date.setDate(date.getDate() - 1);
   return toDateString(date);
 }
-//@ chunk-9h8dr0qb.js:77280-77308 layout
+//@ chunk-j6tt9nsa.js:77239-77267 layout
 function dateBefore(left, right) {
   return left < right;
 }
-//@ chunk-9h8dr0qb.js:77308-77379 layout
+//@ chunk-j6tt9nsa.js:77267-77338 layout
 function finiteOrUndefined(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
-//@ chunk-9h8dr0qb.js:77379-77450 placement
+//@ chunk-j6tt9nsa.js:77338-77409 placement
 function isPlainRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-9h8dr0qb.js:77450-77494 placement
+//@ chunk-j6tt9nsa.js:77409-77453 placement
 function isPrototypeKey(key) {
   return key in Object.prototype;
 }
-//@ chunk-9h8dr0qb.js:77795-79905 placement (2.1.88 match: mergeCacheWithNewStats, 0.85)
+//@ chunk-j6tt9nsa.js:77754-79864 placement (2.1.88 match: mergeCacheWithNewStats, 0.85)
 /**
  * 合并统计缓存与新统计（缓存日期不可用时重置为全量重扫）。
  */
@@ -189,7 +190,7 @@ function mergeCacheWithNewStats_2(parsed) {
       `Stats cache has no usable date (lastComputedDate: ${String(parsed.lastComputedDate)}); resetting aggregates for a full rescan`,
     );
     return {
-      ...getEmptyCache(),
+      ...getEmptyCache_2(),
       version: parsed.version,
       dailyModelTokensVersion: finiteOrUndefined(parsed.dailyModelTokensVersion),
       shotDistribution: shotDistribution && {},
@@ -210,7 +211,7 @@ function mergeCacheWithNewStats_2(parsed) {
     longestSession,
   };
 }
-//@ chunk-9h8dr0qb.js:79905-80025 placement (2.1.88 match: combineUsage, 1)
+//@ chunk-j6tt9nsa.js:79864-79984 placement (2.1.88 match: combineUsage, 1)
 function totalUsageTokens(usage) {
   return (
     (usage.inputTokens || 0) +
@@ -219,7 +220,7 @@ function totalUsageTokens(usage) {
     (usage.cacheCreationInputTokens || 0)
   );
 }
-//@ chunk-9h8dr0qb.js:80025-82770 fingerprint (2.1.88 match: processSessionFiles, 0.986)
+//@ chunk-j6tt9nsa.js:79984-82718 fingerprint (2.1.88 match: processSessionFiles, 0.986)
 async function processSessionFiles(sessionFiles, options = {}, firstMessageByFile, mtimeMsByFile) {
   let { fromDate, toDate } = options;
   let fs = getFsImplementation();
@@ -254,7 +255,7 @@ async function processSessionFiles(sessionFiles, options = {}, firstMessageByFil
                   skipped: true,
                 };
             } catch {}
-          let entries = await readJSONLFile_2(sessionFile);
+          let entries = await readJSONLFile(sessionFile);
           return {
             sessionFile,
             entries,
@@ -395,7 +396,7 @@ async function processSessionFiles(sessionFiles, options = {}, firstMessageByFil
     ...{},
   };
 }
-//@ chunk-9h8dr0qb.js:82770-83495 fingerprint (2.1.88 match: getAllSessionFiles, 1)
+//@ chunk-j6tt9nsa.js:82718-83443 fingerprint (2.1.88 match: getAllSessionFiles, 1)
 async function getAllSessionFiles(storage) {
   let projectsDir = getProjectsDir();
   if (isStorageV5Enabled() && storage !== undefined) return collectStatsFromTranscripts(storage, projectsDir);
@@ -448,7 +449,7 @@ async function getAllSessionFiles(storage) {
     ).flat(),
   };
 }
-//@ chunk-9h8dr0qb.js:83495-85174 layout
+//@ chunk-j6tt9nsa.js:83443-85120 layout
 async function collectStatsFromTranscripts(storage, projectsDir) {
   let mtimeMsByFile = new Map();
   let warnedNames = new Set();
@@ -564,7 +565,7 @@ async function collectStatsFromTranscripts(storage, projectsDir) {
     mtimeMsByFile,
   };
 }
-//@ chunk-9h8dr0qb.js:85174-87409 fingerprint (2.1.88 match: cacheToStats, 0.982)
+//@ chunk-j6tt9nsa.js:85120-87335 fingerprint (2.1.88 match: cacheToStats, 0.981)
 function cacheToStats(cache, todayStats) {
   let dailyActivityMap = new Map();
   for (let day of cache.dailyActivity)
@@ -679,14 +680,13 @@ function cacheToStats(cache, todayStats) {
     longestSession,
     modelUsage,
     firstSessionDate,
-    lastSessionDate,
     peakActivityDay,
     peakActivityHour,
   };
 }
-//@ chunk-9h8dr0qb.js:87409-87418 layout
+//@ chunk-j6tt9nsa.js:87335-87344 layout
 var CACHE_MAX_STALENESS_DAYS = 7;
-//@ chunk-9h8dr0qb.js:87418-88578 fingerprint (2.1.88 match: aggregateClaudeCodeStats, 0.582)
+//@ chunk-j6tt9nsa.js:87344-88504 fingerprint (2.1.88 match: aggregateClaudeCodeStats, 0.582)
 async function aggregateClaudeCodeStats(storage) {
   let { files: allSessionFiles, mtimeMsByFile } = await getAllSessionFiles(storage);
   if (allSessionFiles.length === 0) return getEmptyStats();
@@ -783,7 +783,7 @@ async function aggregateClaudeCodeStats(storage) {
   );
   return cacheToStats(updatedCache, todayStats);
 }
-//@ chunk-9h8dr0qb.js:88578-88824 fingerprint (2.1.88 match: aggregateClaudeCodeStatsForRange, 0.885)
+//@ chunk-j6tt9nsa.js:88504-88750 fingerprint (2.1.88 match: aggregateClaudeCodeStatsForRange, 0.885)
 async function aggregateClaudeCodeStatsForRange(range, storage) {
   if (range === "all") return aggregateClaudeCodeStats(storage);
   let { files: allSessionFiles, mtimeMsByFile } = await getAllSessionFiles(storage);
@@ -803,7 +803,7 @@ async function aggregateClaudeCodeStatsForRange(range, storage) {
   );
   return processedStatsToClaudeCodeStats(stats);
 }
-//@ chunk-9h8dr0qb.js:88824-89732 fingerprint (2.1.88 match: processedStatsToClaudeCodeStats, 0.973)
+//@ chunk-j6tt9nsa.js:88750-89640 fingerprint (2.1.88 match: processedStatsToClaudeCodeStats, 0.972)
 function processedStatsToClaudeCodeStats(stats) {
   let dailyActivitySorted = stats.dailyActivity
     .slice()
@@ -850,30 +850,27 @@ function processedStatsToClaudeCodeStats(stats) {
     longestSession,
     modelUsage: stats.modelUsage,
     firstSessionDate,
-    lastSessionDate,
     peakActivityDay,
     peakActivityHour,
   };
 }
-//@ chunk-9h8dr0qb.js:89732-89811 layout
+//@ chunk-j6tt9nsa.js:89640-89719 layout
 function addDaysToDateString(dateStr, days) {
   let date = new Date(dateStr);
   date.setUTCDate(date.getUTCDate() + days);
   return toDateString(date);
 }
-//@ chunk-9h8dr0qb.js:89811-89841 layout
+//@ chunk-j6tt9nsa.js:89719-89749 layout
 function nextDateString(dateStr) {
   return addDaysToDateString(dateStr, 1);
 }
-//@ chunk-9h8dr0qb.js:89841-90437 fingerprint (2.1.88 match: calculateStreaks, 0.822)
+//@ chunk-j6tt9nsa.js:89749-90203 fingerprint (2.1.88 match: calculateStreaks, 0.755)
 function calculateStreaks(dailyActivity) {
   if (dailyActivity.length === 0)
     return {
       currentStreak: 0,
       longestStreak: 0,
       currentStreakStart: null,
-      longestStreakStart: null,
-      longestStreakEnd: null,
     };
   let currentStreak = 0;
   let currentStreakStart = null;
@@ -885,41 +882,27 @@ function calculateStreaks(dailyActivity) {
     dateStr = addDaysToDateString(dateStr, -1);
   }
   let longestStreak = 0;
-  let longestStreakStart = null;
-  let longestStreakEnd = null;
   let sortedDates = Array.from(activeDates).sort();
   if (sortedDates.length > 0) {
     let tempStreak = 1;
-    let tempStart = sortedDates[0];
     for (let i = 1; i < sortedDates.length; i++) {
       let prevDate = new Date(sortedDates[i - 1]);
       let currDate = new Date(sortedDates[i]);
       if (Math.round((currDate.getTime() - prevDate.getTime()) / 86400000) === 1) tempStreak++;
       else {
-        if (tempStreak > longestStreak) {
-          longestStreak = tempStreak;
-          longestStreakStart = tempStart;
-          longestStreakEnd = sortedDates[i - 1];
-        }
+        if (tempStreak > longestStreak) longestStreak = tempStreak;
         tempStreak = 1;
-        tempStart = sortedDates[i];
       }
     }
-    if (tempStreak > longestStreak) {
-      longestStreak = tempStreak;
-      longestStreakStart = tempStart;
-      longestStreakEnd = sortedDates.at(-1);
-    }
+    if (tempStreak > longestStreak) longestStreak = tempStreak;
   }
   return {
     currentStreak,
     longestStreak,
     currentStreakStart,
-    longestStreakStart,
-    longestStreakEnd,
   };
 }
-//@ chunk-9h8dr0qb.js:90437-90785 fingerprint (2.1.88 match: getEmptyStats, 1)
+//@ chunk-j6tt9nsa.js:90203-90484 fingerprint (2.1.88 match: getEmptyStats, 1)
 function getEmptyStats() {
   return {
     totalSessions: 0,
@@ -930,21 +913,18 @@ function getEmptyStats() {
       currentStreak: 0,
       longestStreak: 0,
       currentStreakStart: null,
-      longestStreakStart: null,
-      longestStreakEnd: null,
     },
     dailyActivity: [],
     dailyModelTokens: [],
     longestSession: null,
     modelUsage: {},
     firstSessionDate: null,
-    lastSessionDate: null,
     peakActivityDay: null,
     peakActivityHour: null,
   };
 }
-//@ chunk-9h8dr0qb.js:90785-90886 affinity
+//@ chunk-j6tt9nsa.js:90484-90585 affinity
 function hasAnyStats(stats) {
   return stats.sessionStats.length > 0 || stats.dailyActivity.length > 0 || stats.dailyModelTokens.length > 0;
 }
-export { readSessionStartDate, aggregateClaudeCodeStatsForRange, totalUsageTokens, mergeCacheWithNewStats_2 };
+export { readSessionStartDate, mergeCacheWithNewStats_2, aggregateClaudeCodeStatsForRange, totalUsageTokens };

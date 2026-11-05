@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：无头云会话的宿主权限桥：拼创建选项、初始消息与宿主允许。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fe6rs39h.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-keyy05re.js (9)
  * attribution: placement 9
  */
 import { randomUUID } from "crypto";
@@ -44,7 +44,7 @@ import { isPlainObject } from "../../utils/objectUtils.js";
 import { stripHostOwnedInputKeys } from "../../utils/permissions/permissionAnswer.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fe6rs39h.js:36483-36617 placement
+//@ chunk-keyy05re.js:36767-36901 placement
 async function isServingConnected(args) {
   let session = await args.readSession().catch(() => {
     return;
@@ -54,15 +54,15 @@ async function isServingConnected(args) {
     isSameDevice(session?.bound_device_uuid, args)
   );
 }
-//@ chunk-fe6rs39h.js:36617-36682 placement
+//@ chunk-keyy05re.js:36901-36966 placement
 function isConnectedAndResumed(toolHostStatus) {
   return toolHostStatus?.state === "connected" && toolHostStatus.resumed_at != null;
 }
-//@ chunk-fe6rs39h.js:36682-36750 placement
+//@ chunk-keyy05re.js:36966-37034 placement
 function isSameDevice(boundDeviceUuid, uuid) {
   return boundDeviceUuid?.toLowerCase() === uuid.deviceId.toLowerCase();
 }
-//@ chunk-fe6rs39h.js:36750-37828 placement
+//@ chunk-keyy05re.js:37034-38112 placement
 /**
  * 根据启动参数、宿主设置与权限模式拼出云会话创建/附加时转发的配置（模型、权限、子进程环境）。
  */
@@ -129,7 +129,7 @@ function buildCloudCreateOptions(
     ...modeInfo,
   };
 }
-//@ chunk-fe6rs39h.js:37828-38193 placement
+//@ chunk-keyy05re.js:38112-38477 placement
 function buildInitialMessageOptions(openArgs) {
   let branch = openArgs.poolOnBranch ?? openArgs.poolRef ?? undefined;
   return {
@@ -148,16 +148,16 @@ function buildInitialMessageOptions(openArgs) {
     staysAttached: false,
   };
 }
-//@ chunk-fe6rs39h.js:38267-38355 placement
+//@ chunk-keyy05re.js:38551-38639 placement
 var FINAL_ANSWER_STATES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fe6rs39h.js:38267", () => {
+deferInit("chunk-keyy05re.js:38551", () => {
   FINAL_ANSWER_STATES = new Set(["answered", "failed_host_error", "failed_invalid_reply", "answer_failed"]);
 });
-//@ chunk-fe6rs39h.js:38355-38390 placement
+//@ chunk-keyy05re.js:38639-38673 placement
 function truncateForDisplay(requestId) {
   return sanitizeCloudText(truncateToLength(requestId, 64));
 }
-//@ chunk-fe6rs39h.js:38390-41184 placement
+//@ chunk-keyy05re.js:38673-41465 placement
 /**
  * 把云会话 worker 发来的 can_use_tool / 对话请求转给 SDK 宿主回答，处理重复 request_id、重问与撤回。
  */
@@ -321,7 +321,7 @@ class HostPermissionBridge {
     });
   }
 }
-//@ chunk-fe6rs39h.js:41184-41526 placement
+//@ chunk-keyy05re.js:41465-41807 placement
 function completeHostAllow(result, context) {
   let toolUseID = context.tool_use_id ?? result.toolUseID;
   if (result.behavior === "deny")

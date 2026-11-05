@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：重载插件时的市场对账与云插件补丁评估
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (9)
  * attribution: placement 9
  */
 import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
@@ -21,7 +21,7 @@ import { logError } from "../../utils/log.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 
-//@ chunk-tyg7f3ek.js:615453-615636 placement
+//@ chunk-0yw3taqg.js:657531-657714 placement
 function createPluginFlagTracker() {
   let keys = new Set();
   return {
@@ -37,11 +37,11 @@ function createPluginFlagTracker() {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:615636-615679 placement
+//@ chunk-0yw3taqg.js:657714-657757 placement
 function hasCloudPluginsKey(settings) {
   return Object.hasOwn(settings, CLOUD_PLUGINS_FORWARDED_KEY);
 }
-//@ chunk-tyg7f3ek.js:615679-616239 placement
+//@ chunk-0yw3taqg.js:657757-658317 placement
 async function evaluateCloudPluginsPatch(options) {
   let keys = Object.keys(options.settings);
   let patch = options.settings[CLOUD_PLUGINS_FORWARDED_KEY];
@@ -90,7 +90,7 @@ async function evaluateCloudPluginsPatch(options) {
     flagWaitMs,
   };
 }
-//@ chunk-tyg7f3ek.js:616239-616436 placement
+//@ chunk-0yw3taqg.js:658317-658514 placement
 async function splitCloudPluginsPatch(request) {
   let { [CLOUD_PLUGINS_FORWARDED_KEY]: pluginPatch, ...rest } = request.settings;
   let verdict = await evaluateCloudPluginsPatch({
@@ -112,7 +112,7 @@ async function splitCloudPluginsPatch(request) {
     siblingKeyCount,
   };
 }
-//@ chunk-tyg7f3ek.js:616436-616608 placement
+//@ chunk-0yw3taqg.js:658514-658686 placement
 function logMixedCloudPluginsPatch(patch) {
   logEvent("tengu_cloud_plugins_mixed_patch", {
     applied: patch.verdict.apply,
@@ -120,9 +120,9 @@ function logMixedCloudPluginsPatch(patch) {
     sibling_key_count: patch.siblingKeyCount,
   });
 }
-//@ chunk-tyg7f3ek.js:616608-616620 placement
+//@ chunk-0yw3taqg.js:658686-658698 placement
 var PLUGIN_INSTALL_WAIT_MS = 5000;
-//@ chunk-tyg7f3ek.js:616620-617394 placement
+//@ chunk-0yw3taqg.js:658698-659472 placement
 /**
  * reload_plugins 时在准入后等待开关并对齐 marketplace、补装插件（有超时）。
  */
@@ -187,7 +187,7 @@ async function reconcileMarketplacesOnReload(options) {
     failedCount,
   };
 }
-//@ chunk-tyg7f3ek.js:617394-617723 placement
+//@ chunk-0yw3taqg.js:659472-659801 placement
 function logLateInstallPass(report) {
   logForDebugging(
     `reload_plugins: the install pass the reload stopped waiting for ended ${report.outcome} after ${report.durationMs}ms (installed=${report.installedCount} failed=${report.failedCount})`,
@@ -199,7 +199,7 @@ function logLateInstallPass(report) {
     failed_count: report.failedCount,
   });
 }
-//@ chunk-tyg7f3ek.js:617723-618438 placement
+//@ chunk-0yw3taqg.js:659801-660516 placement
 function logMarketplaceReconcile(report) {
   if (!report.ran) {
     if (report.reason !== "not_admitted")

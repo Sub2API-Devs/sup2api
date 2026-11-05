@@ -3,9 +3,9 @@
  *
  * Windows junction 处理（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aat7wt0p.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-za46rn2f.js (24)
  * attribution: placement 24
  */
 import { realpathSync, realpath, readlinkSync } from "fs";
@@ -18,7 +18,7 @@ import { hasDotSegment, identity, isUncOrDevicePath } from "./pathClassification
 import { isReservedDeviceName } from "./windowsProfileFolders.js";
 import { passThroughPath, traversesOrResolvesUntrustedLink } from "./pathResolution.js";
 
-//@ chunk-aat7wt0p.js:17231-17309 placement
+//@ chunk-za46rn2f.js:17283-17361 placement
 /**
  * 同步求真实路径（转 UNC 长路径），返回 {real, code}。
  */
@@ -29,7 +29,7 @@ function realpathNativeLongSync(path) {
     code: result.code,
   };
 }
-//@ chunk-aat7wt0p.js:17309-17452 placement
+//@ chunk-za46rn2f.js:17361-17504 placement
 async function realpathNativeLong(path) {
   let result = await captureErrnoAsync(
     () =>
@@ -45,13 +45,13 @@ async function realpathNativeLong(path) {
     code: result.code,
   };
 }
-//@ chunk-aat7wt0p.js:17452-17554 placement (2.1.88 match: isConnectionError, 1)
+//@ chunk-za46rn2f.js:17504-17606 placement (2.1.88 match: isConnectionError, 1)
 function getErrnoCode_2(err) {
   return err != null && typeof err === "object" && "code" in err && typeof err.code === "string"
     ? err.code
     : undefined;
 }
-//@ chunk-aat7wt0p.js:17554-17620 placement
+//@ chunk-za46rn2f.js:17606-17673 placement
 /**
  * 执行同步函数并捕获 errno，返回 {value} 或 {code}。
  */
@@ -66,11 +66,11 @@ function captureSyncResult(fn) {
     };
   }
 }
-//@ chunk-aat7wt0p.js:17620-17655 placement
+//@ chunk-za46rn2f.js:17673-17709 placement
 function attemptSyncOnce(fn) {
   return attemptSync(fn, () => true);
 }
-//@ chunk-aat7wt0p.js:17655-17735 placement
+//@ chunk-za46rn2f.js:17709-17789 placement
 /**
  * 返回一个带字节预算的重试判定函数（超过预算后不再重试）。
  */
@@ -83,7 +83,7 @@ function byteBudgetedRetry(budget) {
       return true;
     });
 }
-//@ chunk-aat7wt0p.js:17735-17813 placement
+//@ chunk-za46rn2f.js:17789-17867 placement
 function attemptSync(fn, shouldRetry) {
   for (let i = 0; ; i++)
     try {
@@ -93,7 +93,7 @@ function attemptSync(fn, shouldRetry) {
       throw error;
     }
 }
-//@ chunk-aat7wt0p.js:17813-17937 placement
+//@ chunk-za46rn2f.js:17867-17991 placement
 function classifyReadlinkError(error) {
   let errnoCode_2 = getErrnoCode_2(error);
   return errnoCode_2 === "EINVAL"
@@ -110,7 +110,7 @@ function classifyReadlinkError(error) {
           error,
         };
 }
-//@ chunk-aat7wt0p.js:17937-18071 placement
+//@ chunk-za46rn2f.js:17991-18125 placement
 function readJunctionSync(dirPath) {
   let caughtError;
   let result = captureSyncResult(() => {
@@ -128,7 +128,7 @@ function readJunctionSync(dirPath) {
       }
     : classifyReadlinkError(caughtError);
 }
-//@ chunk-aat7wt0p.js:18071-18229 placement
+//@ chunk-za46rn2f.js:18125-18284 placement
 async function readJunction(dirPath) {
   let caughtError;
   let result = await captureErrnoAsync(async () => {
@@ -146,7 +146,7 @@ async function readJunction(dirPath) {
       }
     : classifyReadlinkError(caughtError);
 }
-//@ chunk-aat7wt0p.js:18229-18331 placement
+//@ chunk-za46rn2f.js:18284-18386 placement
 async function captureErrnoAsync(fn) {
   for (let i = 0; ; i++)
     try {
@@ -160,14 +160,14 @@ async function captureErrnoAsync(fn) {
       };
     }
 }
-//@ chunk-aat7wt0p.js:18331-18367 placement
+//@ chunk-za46rn2f.js:18386-18422 placement
 /**
  * 判断路径是否为网络路径或设备/UNC 拼写。
  */
 function isNetworkOrDevicePath(path) {
   return isUncOrDeviceSpelling(path) || isNetworkMountRoot(path);
 }
-//@ chunk-aat7wt0p.js:18367-18501 placement
+//@ chunk-za46rn2f.js:18422-18556 placement
 function hasAmbiguousWindowsPathSpelling(path) {
   return (
     hasDotSegment(path) ||
@@ -181,7 +181,7 @@ function hasAmbiguousWindowsPathSpelling(path) {
       )
   );
 }
-//@ chunk-aat7wt0p.js:18501-18686 placement
+//@ chunk-za46rn2f.js:18556-18741 placement
 function stripWin32DevicePrefix(path) {
   let match = /^(?:\\\\[?.]\\|\\\?\?\\)(?=[A-Za-z]:[\\/])/.exec(path);
   if (!match) return path;
@@ -191,7 +191,7 @@ function stripWin32DevicePrefix(path) {
     ? path
     : sliced;
 }
-//@ chunk-aat7wt0p.js:18686-19084 placement
+//@ chunk-za46rn2f.js:18741-19139 placement
 /**
  * 把路径转成可比较形式：去掉 Win32 设备前缀；UNC/设备路径或可疑路径只做 resolve；否则对最深已存在祖先求 realpath 后拼回剩余部分，NFC 规范化，foldCase 时转小写。
  */
@@ -219,7 +219,7 @@ function toComparablePath(path, { foldCase, knownNotSuspect = false } = {}) {
   let normalized = passThroughPath(realPath).normalize("NFC");
   return foldCase ? normalized.toLowerCase() : normalized;
 }
-//@ chunk-aat7wt0p.js:19084-19251 placement
+//@ chunk-za46rn2f.js:19139-19306 placement
 /**
  * 判断路径 t 是否等于或位于 n 之下（两者先转为可比较形式，除非 alreadyComparable），用 relative 结果判定，不受 .. 前缀误判。
  */
@@ -238,7 +238,7 @@ function isPathWithin(parentPath, childPath, { alreadyComparable = false, foldCa
   );
   return relPath === "" || (!isAbsolute(relPath) && relPath !== ".." && !relPath.startsWith(`..${sep}`));
 }
-//@ chunk-aat7wt0p.js:19251-19328 placement
+//@ chunk-za46rn2f.js:19306-19383 placement
 /**
  * 判断两个路径的 realpath 是否相同（都解析成功且可比较形式相等）。
  */
@@ -249,7 +249,7 @@ function isSameRealPath(leftPath, rightPath) {
     leftReal !== null && rightReal !== null && canonicalPathKey(leftReal) === canonicalPathKey(rightReal)
   );
 }
-//@ chunk-aat7wt0p.js:19328-19412 placement
+//@ chunk-za46rn2f.js:19383-19467 placement
 /**
  * 判断两个路径的 realpath 是否构成前缀关系。
  */
@@ -262,25 +262,25 @@ function isRealPathSegmentPrefix(prefixPath, fullPath) {
     isSegmentPrefix(canonicalPathKey(prefixReal), canonicalPathKey(fullReal), /\//)
   );
 }
-//@ chunk-aat7wt0p.js:19412-19575 placement
+//@ chunk-za46rn2f.js:19467-19630 placement
 function isSegmentPrefix(prefix, full, sepPattern) {
   let regExp = new RegExp(`(?:${sepPattern.source})+$`);
   let parts = prefix.replace(regExp, "").split(sepPattern);
   let parts_2 = full.replace(regExp, "").split(sepPattern);
   return parts.length <= parts_2.length && parts.every((prefixPart, index) => prefixPart === parts_2[index]);
 }
-//@ chunk-aat7wt0p.js:19575-19607 placement
+//@ chunk-za46rn2f.js:19630-19662 placement
 function canonicalPathKey(path) {
   return identity(passThroughPath(path));
 }
-//@ chunk-aat7wt0p.js:19607-19635 placement
+//@ chunk-za46rn2f.js:19662-19690 placement
 /**
  * 判断路径是否为 UNC 或设备路径拼写。
  */
 function isUncOrDeviceSpelling(path) {
   return isUncOrDevicePath(path);
 }
-//@ chunk-aat7wt0p.js:19635-19702 placement
+//@ chunk-za46rn2f.js:19690-19757 placement
 /**
  * 判断路径是否带 Win32 设备前缀（\\?\ 或 /\?\?/）。
  */
@@ -290,9 +290,9 @@ function hasWin32DevicePrefixSpelling(path) {
     (path.includes("??") && WIN32_DEVICE_PREFIX_RE.test(normalizeWin32Path(path)))
   );
 }
-//@ chunk-aat7wt0p.js:19702-19727 placement
+//@ chunk-za46rn2f.js:19757-19782 placement
 var WIN32_DEVICE_PREFIX_RE = /^[\\/]\?\?[\\/]/;
-//@ chunk-aat7wt0p.js:19727-19780 placement
+//@ chunk-za46rn2f.js:19782-19835 placement
 /**
  * 在 win32 语义下规范化路径。
  */
@@ -300,19 +300,19 @@ function normalizeWin32Path(path) {
   return pathModule.win32 ? pathModule.win32.normalize(path) : path;
 }
 export {
-  isPathWithin,
-  hasWin32DevicePrefixSpelling,
-  isUncOrDeviceSpelling,
+  realpathNativeLong,
   realpathNativeLongSync,
   isSameRealPath,
-  stripWin32DevicePrefix,
-  realpathNativeLong,
   toComparablePath,
-  captureSyncResult,
-  normalizeWin32Path,
-  isNetworkOrDevicePath,
-  isRealPathSegmentPrefix,
+  isPathWithin,
+  isUncOrDeviceSpelling,
+  stripWin32DevicePrefix,
+  hasWin32DevicePrefixSpelling,
   readJunction,
+  captureSyncResult,
   readJunctionSync,
   byteBudgetedRetry,
+  isNetworkOrDevicePath,
+  isRealPathSegmentPrefix,
+  normalizeWin32Path,
 };

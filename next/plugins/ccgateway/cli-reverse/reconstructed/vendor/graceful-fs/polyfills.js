@@ -1,13 +1,13 @@
 /**
  * graceful-fs/polyfills.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: graceful-fs@4.2.11
- * pieces: chunk-bmbhxpfm.js (1)
+ * pieces: chunk-3c7mkwg0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 
-//@ chunk-bmbhxpfm.js:301-4288 cjs-fingerprint
+//@ chunk-3c7mkwg0.js:301-4288 cjs-fingerprint
 var require_polyfills = __commonJS(function (cjsExports, cjsModule) {
   var constants = importMetaRequire("constants");
   var origCwd = process.cwd;

@@ -3,9 +3,9 @@
  *
  * EnterWorktree 工具：新建或进入 git worktree 并把会话（或子代理）工作目录切过去；含 zod custom() 误归代码
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/EnterWorktreeTool/EnterWorktreeTool.ts
- * pieces: chunk-kxyd0g16.js (3)
+ * pieces: chunk-fmnbrxwy.js (3)
  * attribution: sole-consumer 1, affinity 1, fingerprint 1
  */
 import { sep, resolve } from "path";
@@ -49,17 +49,17 @@ import { resetEnvironmentCaches } from "../../utils/contextAttachments/environme
 import { clearMemoryFilesCache } from "../../components/Message.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:120658-120763 sole-consumer
+//@ chunk-fmnbrxwy.js:135382-135487 sole-consumer
 var UNSAFE_DISPLAY_CHARS_REGEX =
   /[\p{Cc}\p{Cf}\p{Cn}\p{Co}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u2800]|(?!\u0020)\p{Zs}/gu;
-//@ chunk-kxyd0g16.js:120763-120808 affinity
+//@ chunk-fmnbrxwy.js:135487-135532 affinity
 /**
  * 把控制字符、不可见字符、私用区、非普通空白等替换为 U+FFFD，用于安全显示路径。
  */
 function sanitizeForDisplay(text) {
   return text.replace(UNSAFE_DISPLAY_CHARS_REGEX, "\uFFFD");
 }
-//@ chunk-kxyd0g16.js:120808-126914 fingerprint (2.1.88 match: EnterWorktreeTool, 0.302)
+//@ chunk-fmnbrxwy.js:135532-141639 fingerprint (2.1.88 match: EnterWorktreeTool, 0.303)
 /**
  * EnterWorktree 工具（shouldDefer，未声明 isEnabled）。输入 name（新建，按段校验，≤64）或 path（进入现有 worktree），二者互斥。validateInput：被固定 cwd 的子代理只能用 path；已在 worktree 会话中只能用 path 切换。checkPermissions：新建直接允许；path 在 .claude/worktrees 管理位置内直接允许，否则以 safetyCheck 询问（会迁移工作目录、写权限和项目配置来源，classifier 不可代批）。call：子代理场景只切换该代理 cwd 并返回 working_directory contextLayer；主会话新建/进入 worktree（git 或配置的 hooks），切 cwd、originalCwd，保存 worktree 状态并清缓存，消息区分 Created/Reused/Resumed/Entered。 EnterWorktree 输入 schema（name/path 互斥）与输出 schema（worktreePath/worktreeBranch/message）。
  */
@@ -67,7 +67,7 @@ var QUOTE_LIKE_CHARS_REGEX; // deferred: uses DoctorLazy (../../cli/handlers/uti
 var enterWorktreeInputSchema;
 var enterWorktreeOutputSchema;
 var EnterWorktreeTool;
-deferInit("chunk-kxyd0g16.js:120808", () => {
+deferInit("chunk-fmnbrxwy.js:135532", () => {
   QUOTE_LIKE_CHARS_REGEX =
     /["\u201C\u201D\u201F\u2033\u2036\uFF02\u301D\u301E\u301F\u02BA\u02EE\u02DD\u05F4]/g;
   enterWorktreeInputSchema = DoctorLazy(() =>

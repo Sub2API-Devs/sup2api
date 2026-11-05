@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：请求指纹。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1fgvxqz2.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q3c0tzex.js (4)
  * attribution: placement 4
  */
 
-//@ chunk-1fgvxqz2.js:191-269 placement
+//@ chunk-q3c0tzex.js:191-269 placement
 /**
  * 导出函数 `canonicalFingerprint`：参数 n, { omitCacheControl: t = !1 } = {}，返回 (feedCanonicalJson(n, s, t), s.join(""))。
  */
@@ -18,12 +18,12 @@ function canonicalFingerprint(input, { omitCacheControl = false } = {}) {
   feedCanonicalJson(input, parts, omitCacheControl);
   return parts.join("");
 }
-//@ chunk-1fgvxqz2.js:410-422 placement
+//@ chunk-q3c0tzex.js:410-422 placement
 /**
  * 请求指纹哈希分片阈值 64 KB：累积到该长度先 flush 一次。
  */
 var FLUSH_THRESHOLD_CHARS = 65536;
-//@ chunk-1fgvxqz2.js:422-700 placement
+//@ chunk-q3c0tzex.js:422-700 placement
 class HashFeeder {
   hashes;
   pieces = [];
@@ -44,7 +44,7 @@ class HashFeeder {
     this.length = 0;
   }
 }
-//@ chunk-1fgvxqz2.js:915-1596 placement
+//@ chunk-q3c0tzex.js:915-1596 placement
 /**
  * 按排序后的键把值序列化为规范 JSON 片段喂给哈希；长字符串分段（不拆代理对），可省略 cache_control 并记录是否出现过。
  */

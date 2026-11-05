@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：云会话启动参数的分类处理（转发/忽略/拒绝），生成创建选项
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3wek6r2k.js (44)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hjswk319.js (44)
  * attribution: placement 44
  */
 import {
@@ -34,7 +34,7 @@ import {
   splitRuleList,
   NEGATION_PREFIX,
 } from "../../utils/permissions/disallowedToolsFlag.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { isRunnerToolSpec } from "../../services/selfHostedRunner/runnerToolNames.js";
 import { MCP_TOOL_PREFIX } from "../../services/mcp/mcpStringUtils.js";
 import { normalizeCarveOutFlag } from "../../utils/settings/permissionRuleCarveOut.js";
@@ -50,7 +50,7 @@ import { sessionIdBody } from "../../bridge/sessionIdCompat.js";
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../../entrypoints/sdk/coreSchemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3wek6r2k.js:32425-37342 placement
+//@ chunk-hjswk319.js:31758-36676 placement
 /**
  * --cloud/--remote 启动时每个 CLI 选项的处理方式表：转给客户端、用于创建、忽略（丢失/偏好/保留）、无关或拒绝。
  */
@@ -62,7 +62,7 @@ var TOOL_RESTRICTION_REFUSAL_MESSAGE;
 var UNSUPPORTED_OPTION_REFUSAL_MESSAGE;
 var REFUSAL_GROUPS;
 var FLAG_GROUP_LABELS;
-deferInit("chunk-3wek6r2k.js:32425", () => {
+deferInit("chunk-hjswk319.js:31758", () => {
   CLOUD_FLAG_TREATMENTS = refusedFlag("bypass", "bypass");
   CLOUD_FLAG_TREATMENT_TABLE = {
     debug: FLAG_TREAT_CLIENT,
@@ -254,14 +254,14 @@ deferInit("chunk-3wek6r2k.js:32425", () => {
     "--tools": "the tools",
   };
 });
-//@ chunk-3wek6r2k.js:37342-37811 placement
+//@ chunk-hjswk319.js:36676-37145 placement
 function attachRestrictionError(flags) {
   let joined = flags.map((flag) => FLAG_GROUP_LABELS[flag] ?? flag).join(" and ");
   return flags.length === 1
     ? `Error: ${flags[0]} cannot change an existing cloud session, which keeps ${joined} it was created with. Drop the flag to continue this session, or start a new session with the flag to apply the list.`
     : `Error: ${flags.join(" and ")} cannot change an existing cloud session, which keeps ${joined} it was created with. Drop the flags to continue this session, or start a new session with them to apply the lists.`;
 }
-//@ chunk-3wek6r2k.js:37811-38084 placement
+//@ chunk-hjswk319.js:37145-37418 placement
 function cloudRefusalMessage(group, names) {
   switch (group) {
     case "bypass":
@@ -278,21 +278,21 @@ function cloudRefusalMessage(group, names) {
       return `${UNSUPPORTED_OPTION_REFUSAL_MESSAGE}${names.join(", ")}.`;
   }
 }
-//@ chunk-3wek6r2k.js:38084-38206 placement (2.1.88 match: isMcpServerFromProjectOrLocalSettings, 1)
+//@ chunk-hjswk319.js:37418-37540 placement (2.1.88 match: isMcpServerFromProjectOrLocalSettings, 1)
 function isMcpServerFromProjectOrLocalSettings(config) {
   let sources = new Set((config ?? "").split(",").map((source) => source.trim()));
   return ["user", "project", "local"].every((source) => sources.has(source));
 }
-//@ chunk-3wek6r2k.js:38206-38252 placement
+//@ chunk-hjswk319.js:37540-37586 placement
 var TOOL_NAME_PATTERN_2 = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 var MAX_CLOUD_TOOL_NAMES = 128;
-//@ chunk-3wek6r2k.js:38252-38999 placement
+//@ chunk-hjswk319.js:37586-38333 placement
 function parseToolsFlag(tokens) {
   if (tokens.length === 0 || tokens.join(" ").trim().toLowerCase() === "default")
     return {
       kind: "default",
     };
-  let names = uniq(joinNegationTokens(splitRuleList([...tokens])));
+  let names = normalizeCaseForComparison_2(joinNegationTokens(splitRuleList([...tokens])));
   if (names.length === 1 && names[0]?.toLowerCase() === "default")
     return {
       kind: "refused",
@@ -321,9 +321,9 @@ function parseToolsFlag(tokens) {
         names,
       };
 }
-//@ chunk-3wek6r2k.js:38999-39008 placement
+//@ chunk-hjswk319.js:38333-38342 placement
 var MAX_REFUSED_TOOLS_LISTED = 3;
-//@ chunk-3wek6r2k.js:39008-39146 placement
+//@ chunk-hjswk319.js:38342-38480 placement
 function toolsFlagRefusals(refused) {
   let joined = refused.slice(0, MAX_REFUSED_TOOLS_LISTED).map(toolsFlagRefusal).join(", ");
   let restCount = refused.length - MAX_REFUSED_TOOLS_LISTED;
@@ -331,7 +331,7 @@ function toolsFlagRefusals(refused) {
     ? `${joined}, and ${restCount} more --tools ${restCount === 1 ? "entry" : "entries"}`
     : joined;
 }
-//@ chunk-3wek6r2k.js:39146-39977 placement
+//@ chunk-hjswk319.js:38480-39311 placement
 function toolsFlagRefusal(name) {
   let safeName = printableName(name, 64);
   if (name.startsWith(NEGATION_PREFIX))
@@ -346,14 +346,14 @@ function toolsFlagRefusal(name) {
     return `--tools ${safeName} (a rule is not a tool name: list the tool by name, and put the rule in --allowed-tools or --disallowed-tools)`;
   return `--tools ${safeName} (a tool name is a letter followed by up to 63 letters, digits, _ or -)`;
 }
-//@ chunk-3wek6r2k.js:39977-40453 placement
+//@ chunk-hjswk319.js:39311-39787 placement
 /**
  * 判断设置项是否有实际作用的两组键：非空才算的拒绝类（deniedMcpServers 等），以及必须为 true 或非空数组的布尔类（disableAllHooks 等）。
  */
 var MANAGED_RESTRICTION_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NON_EMPTY_DENY_SETTING_KEYS;
 var BOOLEAN_TRUE_SETTING_KEYS;
-deferInit("chunk-3wek6r2k.js:39977", () => {
+deferInit("chunk-hjswk319.js:39311", () => {
   MANAGED_RESTRICTION_KEYS = new Set([
     "allowedMcpServers",
     "allowedHttpHookUrls",
@@ -380,7 +380,7 @@ deferInit("chunk-3wek6r2k.js:39977", () => {
     "enforceAvailableModels",
   ]);
 });
-//@ chunk-3wek6r2k.js:40453-40836 placement
+//@ chunk-hjswk319.js:39787-40170 placement
 function managedKeyRestricts(key, value) {
   if (MANAGED_RESTRICTION_KEYS.has(key)) return Array.isArray(value);
   if (NON_EMPTY_DENY_SETTING_KEYS.has(key)) return isNonEmptyValue_2(value);
@@ -391,7 +391,7 @@ function managedKeyRestricts(key, value) {
   if (key === "availableModelsMatch") return value === "exact";
   return key === "disableAutoMode" && value === "disable";
 }
-//@ chunk-3wek6r2k.js:40836-41190 placement
+//@ chunk-hjswk319.js:40170-40524 placement
 function restrictingPermissionKeys(permissions) {
   if (typeof permissions !== "object" || permissions === null) return ["permissions"];
   return Object.entries(permissions).flatMap(([key, value]) =>
@@ -405,7 +405,7 @@ function restrictingPermissionKeys(permissions) {
           : [],
   );
 }
-//@ chunk-3wek6r2k.js:41190-41624 placement
+//@ chunk-hjswk319.js:40524-40958 placement
 function settingsRestrictions(settings, permissionModeGiven) {
   let parsed = settings;
   let defaultMode = parsed.permissions?.defaultMode;
@@ -442,7 +442,7 @@ function settingsRestrictions(settings, permissionModeGiven) {
         keys,
       };
 }
-//@ chunk-3wek6r2k.js:41624-41839 placement
+//@ chunk-hjswk319.js:40958-41173 placement
 function settingsFlagRestrictions(settings, settings_2, permissionModeGiven) {
   let trimmed = settings?.trim();
   if (!trimmed) return;
@@ -458,7 +458,7 @@ function settingsFlagRestrictions(settings, settings_2, permissionModeGiven) {
         kind: "unreadable",
       };
 }
-//@ chunk-3wek6r2k.js:41839-41950 placement
+//@ chunk-hjswk319.js:41173-41284 placement
 function inlineSettingsRestrictions(managedSettings, permissionModeGiven) {
   let trimmed = managedSettings?.trim();
   if (!trimmed) return;
@@ -469,7 +469,7 @@ function inlineSettingsRestrictions(managedSettings, permissionModeGiven) {
     };
   return settingsRestrictions(parsed, permissionModeGiven);
 }
-//@ chunk-3wek6r2k.js:41950-42638 placement
+//@ chunk-hjswk319.js:41284-41972 placement
 function settingsFlagTreatment(flagName, restrictions) {
   switch (restrictions?.kind) {
     case "bypass":
@@ -501,7 +501,7 @@ function settingsFlagTreatment(flagName, restrictions) {
       return FLAG_TREAT_MOOT;
   }
 }
-//@ chunk-3wek6r2k.js:42638-43226 placement
+//@ chunk-hjswk319.js:41972-42560 placement
 function agentFlagTreatment(agentsJson, agentName, selectedAgentDefinition) {
   let agentFromJson = readAgentFromJson(agentsJson, agentName);
   let problem =
@@ -525,7 +525,7 @@ function agentFlagTreatment(agentsJson, agentName, selectedAgentDefinition) {
           : `--agent ${safeAgent} (its tool lists, hooks or permission mode in --agents)`,
   );
 }
-//@ chunk-3wek6r2k.js:43226-43619 placement
+//@ chunk-hjswk319.js:42560-42953 placement
 function agentsJsonTreatment(agents) {
   let trimmed = agents?.trim();
   if (!trimmed) return FLAG_TREAT_MOOT;
@@ -545,7 +545,7 @@ function agentsJsonTreatment(agents) {
       )
     : FLAG_TREAT_IGNORE_LOST;
 }
-//@ chunk-3wek6r2k.js:43619-43903 placement
+//@ chunk-hjswk319.js:42953-43237 placement
 function readAgentFromJson(agentsJson, agentName) {
   if (!agentName) return;
   if (!agentsJson) return "invisible";
@@ -558,14 +558,14 @@ function readAgentFromJson(agentsJson, agentName) {
   if (matchKeys.length === 0) return "invisible";
   return matchKeys.some((key) => agentDefinitionRestricts(byName[key])) ? "restricts" : undefined;
 }
-//@ chunk-3wek6r2k.js:43903-44059 placement
+//@ chunk-hjswk319.js:43237-43393 placement
 function mcpConfigForwarding(mcpConfigFlagServers) {
   let entries = Object.entries(mcpConfigFlagServers ?? {});
   let names = entries.filter(([, server]) => server.type === "sdk").map(([name]) => name);
   if (names.length > 0) return refusedFlag("sdk_mcp", listNamesCapped(names));
   return entries.length > 0 ? FLAG_TREAT_IGNORE_LOST : FLAG_TREAT_MOOT;
 }
-//@ chunk-3wek6r2k.js:44059-44348 placement
+//@ chunk-hjswk319.js:43393-43682 placement
 function cloudFlagTreatments(parsed, context) {
   return Object.keys(CLOUD_FLAG_TREATMENT_TABLE).flatMap((key) => {
     if (!(
@@ -585,7 +585,7 @@ function cloudFlagTreatments(parsed, context) {
     ];
   });
 }
-//@ chunk-3wek6r2k.js:44348-45426 placement
+//@ chunk-hjswk319.js:43682-44762 placement
 /**
  * 检查 --cloud 启动时给出的 CLI 选项：找出必须拒绝的组合并生成错误，其余标记为丢失/保留。
  */
@@ -648,7 +648,7 @@ function checkCloudLaunchFlags(parsed, context = {}) {
     forwarded: context.entry === "attach" ? {} : cloudSessionCreateOptions(parsed, context, rules),
   };
 }
-//@ chunk-3wek6r2k.js:45426-45722 placement
+//@ chunk-hjswk319.js:44762-45058 placement
 function mainThreadAgentTreatment(parsed, context) {
   let selectedAgentDefinition = context.selectedAgentDefinition;
   if (!selectedAgentDefinition || parsed.agent || !agentDefinitionRestricts(selectedAgentDefinition))
@@ -661,7 +661,7 @@ function mainThreadAgentTreatment(parsed, context) {
     },
   ];
 }
-//@ chunk-3wek6r2k.js:45722-45838 placement
+//@ chunk-hjswk319.js:45058-45174 placement
 function listNames(keys) {
   let joined = keys
     .slice(0, 8)
@@ -669,7 +669,7 @@ function listNames(keys) {
     .join(", ");
   return keys.length > 8 ? `${joined} (and ${keys.length - 8} more)` : joined;
 }
-//@ chunk-3wek6r2k.js:45838-46967 placement
+//@ chunk-hjswk319.js:45174-46303 placement
 function cloudSessionCreateOptions(parsed, context, rules) {
   let appendSystemPrompt = context.appendSystemPrompt ?? parsed.appendSystemPrompt;
   let systemPrompt = context.systemPrompt ?? parsed.systemPrompt;
@@ -743,7 +743,7 @@ function cloudSessionCreateOptions(parsed, context, rules) {
     }),
   };
 }
-//@ chunk-3wek6r2k.js:46967-47261 placement
+//@ chunk-hjswk319.js:46303-46597 placement
 function describeFlagTreatment(key, treatment) {
   let name = camelToCliFlag(key);
   switch (treatment.kind) {
@@ -778,34 +778,34 @@ function describeFlagTreatment(key, treatment) {
           }));
   }
 }
-//@ chunk-3wek6r2k.js:47261-47336 placement
+//@ chunk-hjswk319.js:46597-46672 placement
 function camelToCliFlag(key) {
   return `--${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
 }
-//@ chunk-3wek6r2k.js:47336-47345 placement
+//@ chunk-hjswk319.js:46672-46681 placement
 var MAX_LISTED_SETTING_KEYS = 8;
-//@ chunk-3wek6r2k.js:47345-47475 placement
+//@ chunk-hjswk319.js:46681-46811 placement
 function listNamesCapped(names) {
   let mapped = names.slice(0, MAX_LISTED_SETTING_KEYS).map((name) => printableName(name, 64));
   return names.length > MAX_LISTED_SETTING_KEYS
     ? `${mapped.join(", ")} (and ${names.length - MAX_LISTED_SETTING_KEYS} more)`
     : mapped.join(", ");
 }
-//@ chunk-3wek6r2k.js:47475-47600 placement
+//@ chunk-hjswk319.js:46811-46936 placement
 function isNonEmptyValue_2(value) {
   if (Array.isArray(value)) return value.length > 0;
   return typeof value === "object" && value !== null ? Object.keys(value).length > 0 : Boolean(value);
 }
-//@ chunk-3wek6r2k.js:47600-47688 placement
+//@ chunk-hjswk319.js:46936-47024 placement
 function cloudPermissionModeFrom(mode) {
   let parsed = mode ? permissionModeFromString(mode) : undefined;
   return parsed && isExternalPermissionMode(parsed) && parsed !== "bypassPermissions" ? parsed : undefined;
 }
-//@ chunk-3wek6r2k.js:47688-47760 placement
+//@ chunk-hjswk319.js:47024-47096 placement
 function describeBindingOutcome(outcome) {
   return outcome ? deviceBindingRefusalText(outcome) : "the binding outcome was never reported";
 }
-//@ chunk-3wek6r2k.js:47760-47841 placement (2.1.88 match: toCompatSessionId, 1)
+//@ chunk-hjswk319.js:47096-47177 placement (2.1.88 match: toCompatSessionId, 1)
 /**
  * 会话 ID 的展示形式（cse_ 转成 session_，截断到 128）。
  */
@@ -813,33 +813,33 @@ function displaySessionId(id) {
   let displayId = id.startsWith("cse_") ? `session_${sessionIdBody(id)}` : id;
   return printableName(displayId, 128);
 }
-//@ chunk-3wek6r2k.js:47841-47978 placement
+//@ chunk-hjswk319.js:47177-47314 placement
 /**
  * "云会话已创建但本机未能绑定"的错误文字。
  */
 function formatBindFailure(id, outcome, url, wasArchived) {
   return `Error: cloud session ${displaySessionId(id)} was created but this machine could not be bound to it: ${describeBindingOutcome(outcome)}. ${cloudSessionLeftNote(wasArchived, url)}`;
 }
-//@ chunk-3wek6r2k.js:47978-48150 placement
+//@ chunk-hjswk319.js:47314-47486 placement
 function formatServeSetupFailure(id, error, url, wasArchived) {
   return `Error: cloud session ${displaySessionId(id)} was created and bound to this machine, but this machine could not be set up to serve it (${printableName(error)}). ${cloudSessionLeftNote(wasArchived, url)}`;
 }
-//@ chunk-3wek6r2k.js:48150-48362 placement
+//@ chunk-hjswk319.js:47486-47698 placement
 function cloudSessionLeftNote(wasArchived, url) {
   let safeUrl = printableName(url, 200);
   return wasArchived
     ? `It was archived (nothing was left running); it is listed under Archived at ${safeUrl}.`
     : `It was left running and could not be archived from here; open or archive it at ${safeUrl}.`;
 }
-//@ chunk-3wek6r2k.js:48362-48487 placement
+//@ chunk-hjswk319.js:47698-47823 placement
 function formatArchivedSessionError(sessionId, remoteSessionUrl) {
   return `Error: cloud session ${displaySessionId(sessionId)} is archived and cannot accept new messages. View it at ${printableName(remoteSessionUrl, 200)}`;
 }
-//@ chunk-3wek6r2k.js:48487-48623 placement
+//@ chunk-hjswk319.js:47823-47959 placement
 function formatUnboundCreateError(outcome, description = describeBindingOutcome(outcome)) {
   return `Error: a cloud session started from here could not be bound to this machine: ${description}. Nothing was created.`;
 }
-//@ chunk-3wek6r2k.js:48623-48820 placement
+//@ chunk-hjswk319.js:47959-48156 placement
 function cloudSessionJsonSummary({ sessionId, viewUrl, device, directorySync, repositoryTrust }) {
   return {
     id: displaySessionId(sessionId),
@@ -852,9 +852,9 @@ function cloudSessionJsonSummary({ sessionId, viewUrl, device, directorySync, re
     }),
   };
 }
-//@ chunk-3wek6r2k.js:48820-48895 placement
+//@ chunk-hjswk319.js:48156-48231 placement
 var PROMPT_OPTION_KEYS = ["systemPrompt", "appendSystemPrompt", "appendSubagentSystemPrompt"];
-//@ chunk-3wek6r2k.js:48895-49356 placement
+//@ chunk-hjswk319.js:48231-48692 placement
 function cloudPromptOverrides(forwarded, initialize) {
   let systemPrompt =
     (initialize?.systemPrompt !== undefined ? joinSystemPromptLines(initialize.systemPrompt) : undefined) ??
@@ -886,7 +886,7 @@ function cloudPromptOverrides(forwarded, initialize) {
     }),
   };
 }
-//@ chunk-3wek6r2k.js:49356-49448 placement
+//@ chunk-hjswk319.js:48692-48784 placement
 function joinSystemPromptLines(systemPrompt) {
   let trimmed = systemPrompt
     .filter((line) => line !== "" && line !== SYSTEM_PROMPT_DYNAMIC_BOUNDARY)
@@ -898,7 +898,7 @@ function joinSystemPromptLines(systemPrompt) {
     .trim();
   return trimmed === "" ? undefined : trimmed;
 }
-//@ chunk-3wek6r2k.js:49448-49555 placement
+//@ chunk-hjswk319.js:48784-48891 placement
 /**
  * 表示“云会话启动”的根选项键（cloud、remote、teleport、attachServe、project、environment、pool、monorepo、noMonorepo）。
  */
@@ -913,7 +913,7 @@ var CLOUD_SESSION_OPTION_KEYS = [
   "monorepo",
   "noMonorepo",
 ];
-//@ chunk-3wek6r2k.js:49555-49686 placement
+//@ chunk-hjswk319.js:48891-49022 placement
 function parseTriBoolFlag(forwardHomeSettings) {
   switch (forwardHomeSettings) {
     case undefined:
@@ -929,11 +929,11 @@ function parseTriBoolFlag(forwardHomeSettings) {
   }
 }
 export {
+  displaySessionId,
   cloudPermissionModeFrom,
   CLOUD_SESSION_OPTION_KEYS,
   BYPASS_REFUSAL_MESSAGE,
   parseTriBoolFlag,
-  displaySessionId,
   PROMPT_OPTION_KEYS,
   cloudPromptOverrides,
   checkCloudLaunchFlags,

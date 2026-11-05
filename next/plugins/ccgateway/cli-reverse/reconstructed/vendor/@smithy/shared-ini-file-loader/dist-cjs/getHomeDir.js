@@ -1,13 +1,13 @@
 /**
  * @smithy/shared-ini-file-loader/dist-cjs/getHomeDir.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/shared-ini-file-loader@4.4.0..4.4.3
- * pieces: chunk-a1ttyqdw.js (1)
+ * pieces: chunk-g8stk5cd.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-a1ttyqdw.js:266-666 cjs-fingerprint
+//@ chunk-g8stk5cd.js:266-666 cjs-fingerprint
 var require_getHomeDir = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

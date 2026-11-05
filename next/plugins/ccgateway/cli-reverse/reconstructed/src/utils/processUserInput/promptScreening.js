@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：提示词筛查。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xx1vmpsq.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pwdsqzsj.js (6)
  * attribution: placement 6
  */
 import {
@@ -17,11 +17,11 @@ import { interruptedCommandResult } from "../../plugins/functionHooks/commandRun
 import { createUserInterruptionMessage } from "../messages.js";
 import { unwrapAbortReason } from "../abortController.js";
 
-//@ chunk-xx1vmpsq.js:60683-60725 placement
+//@ chunk-pwdsqzsj.js:61842-61884 placement
 function keepUnlessDropped(screened, needsRescreenNow) {
   return screened.dropped !== true && needsRescreenNow;
 }
-//@ chunk-xx1vmpsq.js:60725-60799 placement
+//@ chunk-pwdsqzsj.js:61884-61958 placement
 /**
  * needsRescreen：钩子注册变化时需要重新筛查。
  */
@@ -33,7 +33,7 @@ function needsRescreen({ since, isRunReached }) {
     })
   );
 }
-//@ chunk-xx1vmpsq.js:60799-60959 placement
+//@ chunk-pwdsqzsj.js:61958-62118 placement
 /**
  * 筛查结果仍有效时结算记录并回调，返回是否结算。
  */
@@ -47,7 +47,7 @@ function settleScreening({ recording, onScreened, screened, isRunReached, since 
   onScreened?.(screened);
   return true;
 }
-//@ chunk-xx1vmpsq.js:60959-61048 placement
+//@ chunk-pwdsqzsj.js:62118-62207 placement
 /**
  * withRewriteState：附加改写状态。
  */
@@ -58,7 +58,7 @@ function withRewriteState(screened, rewritten) {
         rewritten,
       };
 }
-//@ chunk-xx1vmpsq.js:61048-61175 placement
+//@ chunk-pwdsqzsj.js:62207-62334 placement
 /**
  * 结算筛查结果：结果未知时标为 noVerdict，否则结算记录并回调。
  */
@@ -70,7 +70,7 @@ function settleScreeningResult({ result, screened, isUnknown, recording, onScree
   recording?.settled(screened);
   onScreened?.(screened);
 }
-//@ chunk-xx1vmpsq.js:61175-61407 placement
+//@ chunk-pwdsqzsj.js:62334-62566 placement
 /**
  * 输入处理被中断时的结果：附加中断标记消息（关闭时不保留消息）。
  */

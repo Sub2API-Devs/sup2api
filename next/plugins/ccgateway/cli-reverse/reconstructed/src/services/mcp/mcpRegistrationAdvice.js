@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：添加 MCP 服务器时建议改用 claude.ai 连接器
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-etrfk54v.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-phjrnmh9.js (6)
  * attribution: placement 6
  */
 import { recursiveLobsterOn } from "../../utils/plugins/mcpPluginIntegration.js";
@@ -34,19 +34,19 @@ import { getMcpServerSignature, filterMcpServersByPolicy, isMcpServerDisabled } 
 import { pickByHelper } from "../../utils/git/gitSafeEnv.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-etrfk54v.js:630-716 placement
+//@ chunk-phjrnmh9.js:687-775 placement
 /**
  * 表示“组织会自动连接”的资格原因集合。
  */
 var CONNECTOR_AUTO_CONNECT_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-etrfk54v.js:630", () => {
+deferInit("chunk-phjrnmh9.js:687", () => {
   CONNECTOR_AUTO_CONNECT_REASONS = new Set([
     "id_jag_with_auto_connect",
     "auto_connect",
     "auth_allows_auto_connect",
   ]);
 });
-//@ chunk-etrfk54v.js:716-2222 placement
+//@ chunk-phjrnmh9.js:775-2280 placement
 /**
  * 对新添加的 sse/http MCP 服务器检查是否应改用 claude.ai 连接器，并给出建议。
  */
@@ -168,8 +168,8 @@ async function adviseMcpRegistration(error, serverName, config, site) {
   }
   return advice;
 }
-//@ chunk-etrfk54v.js:2222-2844 placement
-async function findMatchingConnector(config, startedAt, { storageV5, credentials }) {
+//@ chunk-phjrnmh9.js:2280-2903 placement
+async function findMatchingConnector(server, startedAt, { storageV5, credentials }) {
   let cliOwnedState = getCliOwnedState();
   if (cliOwnedState.claudeAiConnectorListStatus !== "settled")
     return logHandoffOutcome("list_unavailable", startedAt);
@@ -177,7 +177,7 @@ async function findMatchingConnector(config, startedAt, { storageV5, credentials
   clearClaudeAiConfigsFetch();
   let { connectorNames, connectors } = matchingConnectorsFor(
     await fetchClaudeAiConfigsOnce(credentials),
-    config,
+    server,
   );
   if (cliOwnedState.claudeAiConnectorListSettledSeq !== cliOwnedState.claudeAiConnectorListFetchSeq) {
     cliOwnedState.claudeAiConfigsFetch ??= claudeAiConfigsFetch;
@@ -191,7 +191,7 @@ async function findMatchingConnector(config, startedAt, { storageV5, credentials
     await clientModule.removeMcpAuthCacheEntry(connectorName, storageV5);
   return logHandoffOutcome(any ? "connected" : "state_unknown", startedAt);
 }
-//@ chunk-etrfk54v.js:2844-4437 placement
+//@ chunk-phjrnmh9.js:2903-4496 placement
 function registrationAdviceText(advice) {
   switch (advice.kind) {
     case "connected":
@@ -215,7 +215,7 @@ function registrationAdviceText(advice) {
       }
   }
 }
-//@ chunk-etrfk54v.js:4437-4670 placement
+//@ chunk-phjrnmh9.js:4496-4729 placement
 function logHandoffOutcome(outcome, startedAt) {
   let fields = {
     waited_ms: Date.now() - startedAt,
@@ -235,7 +235,7 @@ function logHandoffOutcome(outcome, startedAt) {
   }
   return outcome;
 }
-//@ chunk-etrfk54v.js:4670-4909 placement
+//@ chunk-phjrnmh9.js:4729-4970 placement
 function matchingConnectorsFor(configs, config) {
   let mcpServerSignature = getMcpServerSignature(config);
   let sameSignature = pickByHelper(
@@ -254,4 +254,10 @@ function matchingConnectorsFor(configs, config) {
     ),
   };
 }
-export { adviseMcpRegistration, registrationAdviceText, findMatchingConnector };
+export {
+  adviseMcpRegistration,
+  registrationAdviceText,
+  matchingConnectorsFor,
+  CONNECTOR_AUTO_CONNECT_REASONS,
+  findMatchingConnector,
+};

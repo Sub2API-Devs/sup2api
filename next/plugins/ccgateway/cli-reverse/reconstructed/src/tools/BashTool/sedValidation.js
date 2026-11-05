@@ -3,9 +3,9 @@
  *
  * sed 白名单：只打印（-n Np）或简单替换才放行，检测 w/e/r 等危险表达式，checkSedConstraints
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/sedValidation.ts
- * pieces: chunk-e6aww6q8.js (17)
+ * pieces: chunk-5xgkngpb.js (17)
  * attribution: file-local 3, fingerprint 6, placement 8
  */
 import {
@@ -24,7 +24,7 @@ import { stripSafeWrappers } from "./bashPermissions.js";
 import { getParserModule } from "../../utils/bash/bashParser.js";
 import { findCommandNode } from "../../utils/bash/parser.js";
 
-//@ chunk-e6aww6q8.js:1056387-1056585 file-local
+//@ chunk-5xgkngpb.js:1051633-1051831 file-local
 /**
  * 检查选项（含合并的短选项）是否都在允许列表中。
  */
@@ -38,7 +38,7 @@ function validateFlagsAgainstAllowlist(flags, allowedFlags) {
     else if (!allowedFlags.includes(flag)) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:1056585-1057089 fingerprint (2.1.88 match: isLinePrintingCommand, 0.892)
+//@ chunk-5xgkngpb.js:1051831-1052335 fingerprint (2.1.88 match: isLinePrintingCommand, 0.891)
 /**
  * sed -n 只打印行（表达式全是 Np / N,Mp / p）且选项在白名单内时为 true。
  */
@@ -79,12 +79,12 @@ function isLinePrintingCommand(command, expressions) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:1057089-1057156 file-local
+//@ chunk-5xgkngpb.js:1052335-1052402 file-local
 function isPrintCommand(cmd) {
   if (!cmd) return false;
   return /^(?:\d+|\d+,\d+)?p$/.test(cmd);
 }
-//@ chunk-e6aww6q8.js:1057156-1057746 fingerprint (2.1.88 match: isSubstitutionCommand, 0.862)
+//@ chunk-5xgkngpb.js:1052402-1052997 fingerprint (2.1.88 match: isSubstitutionCommand, 0.862)
 /**
  * 简单替换 s/a/b/flags：一个表达式、恰好三个分隔符、标志只含 gpimIM 与数字；allowFileWrites 时允许 -i。
  */
@@ -122,7 +122,7 @@ function isSubstitutionCommand(command, expressions, hasFileArguments, options) 
   if (!/^[gpimIM]*[1-9]?[gpimIM]*$/.test(exprFlags)) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:1057746-1058669 fingerprint (2.1.88 match: sedCommandIsAllowedByAllowlist, 0.753)
+//@ chunk-5xgkngpb.js:1052997-1053920 fingerprint (2.1.88 match: sedCommandIsAllowedByAllowlist, 0.753)
 /**
  * sed 命令是否在白名单内：只读打印或简单替换，表达式无危险操作；对 sed -i 的表达式再做一组更严格的形状检查（禁 w/e/r 命令、地址、;、[、\、..）。readOnlyValidation 与 pathValidation 也用它。
  */
@@ -177,7 +177,7 @@ function sedCommandIsAllowedByAllowlist(command, options) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:1058669-1059013 fingerprint (2.1.88 match: hasFileArgs, 0.709)
+//@ chunk-5xgkngpb.js:1053920-1054264 fingerprint (2.1.88 match: hasFileArgs, 0.709)
 /**
  * sed 是否带有文件参数（有 -e 时任何位置参数、无 -e 时第二个位置参数）。
  */
@@ -209,12 +209,12 @@ function hasFileArgs(command) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1059013-1059048 placement
+//@ chunk-5xgkngpb.js:1054264-1054299 placement
 /**
  * 提取 sed 表达式时表示“出现多个 -i 标志”的占位文本，遇到即判为危险。
  */
 var MULTIPLE_INPLACE_MARKER = "__SED_MULTIPLE_I_FLAGS__";
-//@ chunk-e6aww6q8.js:1059563-1060300 fingerprint (2.1.88 match: extractSedExpressions, 0.841)
+//@ chunk-5xgkngpb.js:1054814-1055551 fingerprint (2.1.88 match: extractSedExpressions, 0.841)
 /**
  * 提取 sed 的表达式列表；遇到 -ew/-we 等危险组合抛错。
  */
@@ -264,7 +264,7 @@ function extractSedExpressions(command) {
   }
   return expressions;
 }
-//@ chunk-e6aww6q8.js:1060300-1061634 file-local
+//@ chunk-5xgkngpb.js:1055551-1056885 file-local
 /**
  * sed 表达式是否包含危险操作：非 ASCII、花括号、换行、注释、! 取反、~ 步进、w/W 写文件、e 执行、s 的 w/e 标志、y 带 wWeE 等。
  */
@@ -323,7 +323,7 @@ function containsDangerousOperations(expression) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1061634-1062305 fingerprint (2.1.88 match: checkSedConstraints, 0.806)
+//@ chunk-5xgkngpb.js:1056885-1057556 fingerprint (2.1.88 match: checkSedConstraints, 0.797)
 /**
  * 逐个子命令检查 sed：先做路径约束（ask 时返回）；不在白名单的 sed 要求确认（bashMissKind=sed-dangerous）；开启读封锁时改为拒绝。acceptEdits 模式允许 sed -i。
  */
@@ -364,14 +364,14 @@ function checkSedConstraints(input, toolPermissionContext) {
     message: "No dangerous sed operations detected",
   };
 }
-//@ chunk-e6aww6q8.js:1062305-1062342 placement
+//@ chunk-5xgkngpb.js:1057556-1057593 placement
 /**
  * 判断命令里是否含 sed 调用。
  */
 function isSedCommand(segment) {
   return extractSedCommand(segment) !== null;
 }
-//@ chunk-e6aww6q8.js:1062342-1062483 placement
+//@ chunk-5xgkngpb.js:1057593-1057734 placement
 function extractSedCommand(segment) {
   let text = segment.trim();
   if (!text) return null;
@@ -380,7 +380,7 @@ function extractSedCommand(segment) {
   if (stripSafeWrappers(text).split(/\s+/)[0] === "sed") return stripLeadingRedirectsAndWrappers(text);
   return null;
 }
-//@ chunk-e6aww6q8.js:1062483-1063028 placement
+//@ chunk-5xgkngpb.js:1057734-1058279 placement
 /**
  * 用 Bash 解析器确认命令只有一条 sed 语句，并从命令名处截取 sed 文本；解析失败或差异时回退字符串处理。
  */
@@ -407,7 +407,7 @@ function extractSedFromParse(text) {
   let str = Buffer.from(text, "utf8").subarray(found.startIndex).toString("utf8");
   return asSedCommand(stripLeadingRedirectsAndWrappers(str));
 }
-//@ chunk-e6aww6q8.js:1063028-1063111 placement
+//@ chunk-5xgkngpb.js:1058279-1058362 placement
 /**
  * 反复剥掉命令文本开头的重定向词与安全包装，返回剩余命令（用于识别以重定向开头的命令）。
  */
@@ -420,7 +420,7 @@ function stripLeadingRedirectsAndWrappers(text) {
   }
   return trimmed;
 }
-//@ chunk-e6aww6q8.js:1063111-1063620 placement (2.1.88 match: walkHerestringRedirect, 0.827)
+//@ chunk-5xgkngpb.js:1058362-1058871 placement (2.1.88 match: walkHerestringRedirect, 0.827)
 /**
  * 反复剥掉命令文本开头的重定向词（<<< word、>file、2>&1 等），返回剩余部分；用于识别以重定向开头的命令。
  */
@@ -448,7 +448,7 @@ function stripLeadingRedirects(command) {
     rest = targetRest.slice(wordEnd).trimStart();
   }
 }
-//@ chunk-e6aww6q8.js:1063620-1063968 placement
+//@ chunk-5xgkngpb.js:1058871-1059219 placement
 function shellWordEnd(text) {
   let idx = 0;
   while (idx < text.length) {
@@ -482,7 +482,7 @@ function shellWordEnd(text) {
   }
   return idx;
 }
-//@ chunk-e6aww6q8.js:1063968-1064812 placement
+//@ chunk-5xgkngpb.js:1059219-1060063 placement
 /**
  * 检查 sed 命令：含危险操作或无法静态校验时需要批准。
  */
@@ -516,9 +516,9 @@ function checkSedCommand(input, toolPermissionContext, coveredSegments) {
   };
 }
 export {
+  MULTIPLE_INPLACE_MARKER,
+  sedCommandIsAllowedByAllowlist,
   checkSedConstraints,
   isSedCommand,
   checkSedCommand,
-  MULTIPLE_INPLACE_MARKER,
-  sedCommandIsAllowedByAllowlist,
 };

@@ -3,9 +3,9 @@
  *
  * 输入框左侧提示符（❯ 或 bash 模式 !），查看队友时显示队友名与颜色。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/PromptInputModeIndicator.tsx
- * pieces: chunk-h93cnm7e.js (3)
+ * pieces: chunk-4b7tnq3g.js (3)
  * attribution: file-local 1, fingerprint 2
  */
 import { isAgentSwarmsEnabled } from "../../utils/agentSwarmsEnabled.js";
@@ -23,7 +23,7 @@ import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js"
 import { useForceRender } from "../../hooks/useForceRender.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-h93cnm7e.js:797-888 file-local
+//@ chunk-4b7tnq3g.js:798-889 file-local
 function getTeammateThemeColor() {
   if (!isAgentSwarmsEnabled()) return;
   let colorName = getTeammateColor();
@@ -31,7 +31,7 @@ function getTeammateThemeColor() {
   if (AGENT_COLOR_NAMES.includes(colorName)) return AGENT_COLOR_TO_THEME_COLOR[colorName];
   return;
 }
-//@ chunk-h93cnm7e.js:888-1201 fingerprint (2.1.88 match: PromptChar, 0.67)
+//@ chunk-4b7tnq3g.js:889-1204 fingerprint (2.1.88 match: PromptChar, 0.67)
 function PromptChar(props) {
   let $ = useMemoCache(6);
   let { isLoading, isScreenReader, themeColor } = props;
@@ -62,7 +62,7 @@ function PromptChar(props) {
   } else promptProps = $[5];
   return promptProps;
 }
-//@ chunk-h93cnm7e.js:1201-1888 fingerprint (2.1.88 match: PromptInputModeIndicator, 0.824)
+//@ chunk-4b7tnq3g.js:1204-1891 fingerprint (2.1.88 match: PromptInputModeIndicator, 0.824)
 /**
  * 输入提示符：prompt 模式 ❯（读屏器下为 $），bash 模式 ! 并用 bashBorder 色；查看队友时用队友颜色并显示名字。
  */

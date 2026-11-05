@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Windows 沙箱里查找可读的 NuGet 包目录，以及需要放行的 NuGet 环境变量名集合。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 2
  */
 import { win32 } from "path";
@@ -20,7 +20,7 @@ import { getWindowsProfileReadStatusAsync } from "../../../vendor/@anthropic-ai/
 import { rgRunner } from "./windowsSandbox.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3047991-3048559 placement
+//@ chunk-5xgkngpb.js:3132088-3132656 placement
 /**
  * Windows 下判断沙箱命令能否读取 ~/.nuget/packages：环境变量已指定 NuGet 目录、路径含特殊字符或目录不存在时跳过；目录（或其父目录）在原生沙箱已授权路径中才返回该路径。
  */
@@ -52,11 +52,11 @@ async function findReadableNugetPackagesDir(env) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:3048559-3048857 placement
+//@ chunk-5xgkngpb.js:3132656-3132954 placement
 var NUGET_ENV_KEYS; // deferred: uses INJECTABLE_ENV_VARS (../shell/shellEnvironment.js) of its import cycle while loading; runs once the cycle is complete
 var UNSAFE_MSBUILD_PATH_RE;
 var getGrantedSandboxPaths;
-deferInit("chunk-e6aww6q8.js:3048559", () => {
+deferInit("chunk-5xgkngpb.js:3132656", () => {
   NUGET_ENV_KEYS = new Set(["NUGET_PACKAGES", RESTOREADDITIONALPROJECTFALLBACKFOLDERS.toUpperCase()]);
   UNSAFE_MSBUILD_PATH_RE = /[';]|[$%@]\(|%[0-9A-Fa-f]{2}/;
   getGrantedSandboxPaths = memoizeAlias(async () => {

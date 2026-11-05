@@ -1,13 +1,13 @@
 /**
  * @inquirer/figures/dist/esm/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @inquirer/figures@1.0.7..2.0.0
- * pieces: chunk-6rgkw5kr.js (1)
+ * pieces: chunk-g66qqkzw.js (1)
  * attribution: esm-fingerprint 1
  */
 import { isUnicodeSupported } from "../../../../is-unicode-supported/index.js";
 
-//@ chunk-6rgkw5kr.js:1041-7642 esm-fingerprint
+//@ chunk-g66qqkzw.js:1041-7642 esm-fingerprint
 var common = {
   circleQuestionMark: "(?)",
   questionMarkPrefix: "(?)",

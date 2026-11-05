@@ -3,33 +3,44 @@
  *
  * 2.1.316 新增：REPL 的进行中工具进度列表（去重后台提示、每个工具一行），无进度时不渲染。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (7)
- * attribution: placement 7
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (8)
+ * attribution: placement 7, layout 1
  */
+import { init_react_production, fragmentTypeExport } from "../../../vendor/react/cjs/react.production.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { BackgroundHint } from "../../tools/BashTool/UI.js";
 import { BashModeProgress } from "../../components/BashModeProgress.js";
 import { renderToolUseProgressMessage } from "../../tools/AgentTool/UI.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
-import { fragmentTypeExport, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { Box } from "../../ink/components/Text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1668638-1668742 placement
+//@ chunk-czq1j3j2.js:1711876-1711880 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1711876", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1714675-1714779 placement
 var DEFAULT_PROGRESS_DISPLAY = {
   background_hint: "nothing",
   bash_mode_progress: "all",
   agent_progress: "nothing",
   own_row: "spinner",
 };
-//@ chunk-18hwfzwa.js:1668823-1668908 placement
+//@ chunk-czq1j3j2.js:1714779-1714860 layout
+function shouldPauseForToolProgress(toolProgress) {
+  for (let toolProgressEntry of toolProgress.values())
+    if (DEFAULT_PROGRESS_DISPLAY[toolProgressEntry.kind] === "all") return true;
+  return false;
+}
+//@ chunk-czq1j3j2.js:1714860-1714945 placement
 function hasVisibleProgress(toolProgress) {
   for (let hint of toolProgress.values()) if (DEFAULT_PROGRESS_DISPLAY[hint.kind] !== "nothing") return true;
   return false;
 }
-//@ chunk-18hwfzwa.js:1668908-1669077 placement
+//@ chunk-czq1j3j2.js:1714945-1715114 placement
 function dedupeBackgroundHints(progress) {
   let kept = [];
   let sawHint = false;
@@ -44,7 +55,7 @@ function dedupeBackgroundHints(progress) {
   }
   return kept;
 }
-//@ chunk-18hwfzwa.js:1669077-1669334 placement
+//@ chunk-czq1j3j2.js:1715114-1715371 placement
 var PROGRESS_RENDERERS = {
   background_hint: (hint) =>
     jsxProd_default(BackgroundHint, {
@@ -64,7 +75,7 @@ var PROGRESS_RENDERERS = {
     }),
   own_row: () => null,
 };
-//@ chunk-18hwfzwa.js:1669334-1669602 placement
+//@ chunk-czq1j3j2.js:1715371-1715639 placement
 function renderProgressEntry(hint, context) {
   switch (hint.kind) {
     case "background_hint":
@@ -81,7 +92,7 @@ function renderProgressEntry(hint, context) {
     }
   }
 }
-//@ chunk-18hwfzwa.js:1669602-1669995 placement
+//@ chunk-czq1j3j2.js:1715639-1716032 placement
 /**
  * 渲染进行中的工具进度列表（每个工具一行），无进度时不渲染。
  */
@@ -126,9 +137,4 @@ function InlineProgressList(props) {
   } else listBox = $[6];
   return listBox;
 }
-//@ chunk-18hwfzwa.js:1669995-1669999 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1669995", () => {
-  init_react_production();
-});
-export { hasVisibleProgress, InlineProgressList, DEFAULT_PROGRESS_DISPLAY };
+export { shouldPauseForToolProgress, hasVisibleProgress, InlineProgressList };

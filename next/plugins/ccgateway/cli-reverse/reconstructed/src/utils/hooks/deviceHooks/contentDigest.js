@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设备钩子内容摘要与可展示判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mthxbav8.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4z1ntdgk.js (6)
  * attribution: placement 6
  */
 import { MAX_DISPLAY_UNITS, hasVisibleText } from "../../permissions/approvalPayloadSerialization.js";
@@ -14,9 +14,9 @@ import { createSignal } from "../../signal.js";
 import { HostScoped } from "../../hostScoped.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-mthxbav8.js:2800-2824 placement
+//@ chunk-4z1ntdgk.js:3157-3181 placement
 var SHA256_HEX_RE = /^[0-9a-f]{64}$/;
-//@ chunk-mthxbav8.js:2824-3075 placement
+//@ chunk-4z1ntdgk.js:3181-3432 placement
 function isShowableToolInput(call) {
   let { description } = call;
   let input = call.input;
@@ -32,12 +32,12 @@ function isShowableToolInput(call) {
     SHA256_HEX_RE.test(contentDigest)
   );
 }
-//@ chunk-mthxbav8.js:3075-3162 placement
+//@ chunk-4z1ntdgk.js:3432-3519 placement
 function deviceProofState(call, provesNoDevice) {
   if (!isShowableToolInput(call)) return "unshowable";
   return provesNoDevice === false ? "proves_no_device" : undefined;
 }
-//@ chunk-mthxbav8.js:3162-3309 placement
+//@ chunk-4z1ntdgk.js:3519-3666 placement
 function createGenerationCounter() {
   let counters = new Map();
   return {
@@ -53,7 +53,7 @@ function createGenerationCounter() {
     },
   };
 }
-//@ chunk-mthxbav8.js:3309-3431 placement
+//@ chunk-4z1ntdgk.js:3666-3788 placement
 function createDeviceProofState() {
   return {
     consentPin: emptyConsentState(),
@@ -65,12 +65,12 @@ function createDeviceProofState() {
     decided: createSignal(),
   };
 }
-//@ chunk-mthxbav8.js:3431-3449 placement
+//@ chunk-4z1ntdgk.js:3788-3806 placement
 /**
  * 宿主隔离的设备证明状态注册表。
  */
 var deviceProofStateRegistry; // deferred: uses createDeviceProofState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mthxbav8.js:3431", () => {
+deferInit("chunk-4z1ntdgk.js:3788", () => {
   deviceProofStateRegistry = new HostScoped(createDeviceProofState);
 });
 export { deviceProofState, deviceProofStateRegistry };

@@ -3,9 +3,9 @@
  *
  * 并入已有模块：插件校验，增加 contract 加载与写入检查、manifest 字段问题。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/validatePlugin.ts
- * pieces: chunk-6j594vm1.js (1), chunk-85kmkm1x.js (73)
+ * pieces: chunk-0fqk5atw.js (1), chunk-bfqsgtvj.js (73)
  * attribution: fingerprint 11, placement 15, layout 41, callgraph-fingerprint 1, affinity 2, sole-consumer 4
  */
 import * as pathModule from "path";
@@ -50,6 +50,7 @@ import {
   isRelativeSourcePath,
   ONE_MIB,
   PluginHooksSchema,
+  hasManifestFieldSchema,
 } from "./schemas.js";
 import { jsonParse } from "../slowOperations.js";
 import { stripBom } from "../json.js";
@@ -102,24 +103,26 @@ import {
 import { getHostState } from "../hostEnvironment.js";
 import { initBuiltinPlugins } from "../../plugins/builtinPlugins.js";
 import { initBundledSkills } from "../../skills/bundled/index.js";
-import { uniq, count } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { logForDebugging } from "../debug.js";
 import { hasToolSite } from "../../plugins/functionHooks/sites/siteRules.js";
 import { adviseUiRenderMatcher } from "../../plugins/functionHooks/sites/uiSites.js";
 import { loadSurfaceModules } from "../../plugins/functionHooks/hooksModuleLoader.js";
 import { getPluginRegistry } from "./pluginLoadState.js";
 import { unaddableTransportReason } from "../../services/mcp/config.js";
+import { countWhere } from "../collections.js";
+import { buildSecretScanResult } from "../../skills/bundled/pluginAuthoring/secretScanTool.js";
 import { PLATFORM_TARGETS, binaryBaseNameForTarget } from "../platformTargets.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6j594vm1.js:3309-3356 fingerprint (2.1.88 match: MARKETPLACE_ONLY_MANIFEST_FIELDS, 0.369)
+//@ chunk-0fqk5atw.js:3698-3745 fingerprint (2.1.88 match: MARKETPLACE_ONLY_MANIFEST_FIELDS, 0.369)
 /**
  * 按模式返回 schema（strict 或宽松）。名字配错，见 lead 建议。
  */
 function MARKETPLACE_ONLY_MANIFEST_FIELDS(kind) {
   return kind === "strict" ? permissionPromptResultSchemaCutting() : permissionPromptResultSchemaRefusing();
 }
-//@ chunk-85kmkm1x.js:10112-10629 placement
+//@ chunk-bfqsgtvj.js:10185-10702 placement
 async function loadPluginContract(typesEntry, pluginDir, pluginName) {
   let entryPath = typesEntry ?? TYPES_ENTRY;
   let absolutePath = resolve(pluginDir, entryPath);
@@ -147,7 +150,7 @@ async function loadPluginContract(typesEntry, pluginDir, pluginName) {
       }
     : refusedContract(...problems);
 }
-//@ chunk-85kmkm1x.js:10629-11512 placement
+//@ chunk-bfqsgtvj.js:10702-11585 placement
 function checkContractWrites({ names, owner, declared, others, contract, refusal }) {
   let declaredKeysByPlugin = new Map();
   for (let { plugin, keys } of [...declared, ...(others ?? [])]) {
@@ -192,7 +195,7 @@ function checkContractWrites({ names, owner, declared, others, contract, refusal
     unchecked: [...unchecked],
   };
 }
-//@ chunk-85kmkm1x.js:11512-12082 placement
+//@ chunk-bfqsgtvj.js:11585-12155 placement
 /**
  * 可放在 experimental 下的组件键与组件路径字段规格。
  */
@@ -247,7 +250,7 @@ var COMPONENT_PATH_SPECS = [
         : undefined,
   },
 ];
-//@ chunk-85kmkm1x.js:12082-12767 placement
+//@ chunk-bfqsgtvj.js:12155-12840 placement
 /**
  * 按组件规格遍历 manifest（monitors/themes 可来自 experimental）：数组逐项、对象按 recordPathProperty、其余整体， 收集字符串路径（允许 URL 的组件跳过 URL），返回 {spec, field, relPath}。
  */
@@ -288,7 +291,7 @@ function collectComponentPathFields(rawCandidate) {
   }
   return fields;
 }
-//@ chunk-85kmkm1x.js:12767-13022 placement
+//@ chunk-bfqsgtvj.js:12840-13095 placement
 /**
  * 上架信息里各类链接字段的键名。
  */
@@ -297,7 +300,7 @@ var SUPPORT_URL_KEYS;
 var TERMS_URL_KEYS;
 var DOCUMENTATION_URL_KEYS;
 var LISTING_FIELD_KEYS;
-deferInit("chunk-85kmkm1x.js:12767", () => {
+deferInit("chunk-bfqsgtvj.js:12840", () => {
   PRIVACY_POLICY_KEYS = ["privacyPolicyUrl", "privacy_policy", "privacyPolicy"];
   SUPPORT_URL_KEYS = ["supportUrl", "support", "bugs"];
   TERMS_URL_KEYS = ["termsOfServiceUrl", "terms_of_service"];
@@ -312,9 +315,9 @@ deferInit("chunk-85kmkm1x.js:12767", () => {
     ...DOCUMENTATION_URL_KEYS,
   ]);
 });
-//@ chunk-85kmkm1x.js:13022-13094 placement
+//@ chunk-bfqsgtvj.js:13095-13167 placement
 var PLUGIN_ENV_VARS = ["CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA", "CLAUDE_PROJECT_DIR"];
-//@ chunk-85kmkm1x.js:13094-13358 placement
+//@ chunk-bfqsgtvj.js:13167-13431 placement
 function findUnquotedHookPlaceholders(hooksByEvent) {
   let results = [];
   for (let [key, value] of Object.entries(hooksByEvent))
@@ -331,7 +334,7 @@ function findUnquotedHookPlaceholders(hooksByEvent) {
       }
   return results;
 }
-//@ chunk-85kmkm1x.js:13358-13718 placement
+//@ chunk-bfqsgtvj.js:13431-13791 placement
 /**
  * 扫描命令中不在引号内的 $VAR/${VAR} 插件变量。
  */
@@ -339,10 +342,10 @@ function findUnquotedPlaceholders(command) {
   let placeholders = new Set();
   let inSingleQuote = false;
   let inDoubleQuote = false;
-  for (let j = 0; j < command.length; j++) {
-    let char = command[j];
+  for (let idx = 0; idx < command.length; idx++) {
+    let char = command[idx];
     if (!inSingleQuote && char === "\\") {
-      j++;
+      idx++;
       continue;
     }
     if (char === "'" && !inDoubleQuote) {
@@ -355,9 +358,9 @@ function findUnquotedPlaceholders(command) {
     }
     if (char !== "$" || inSingleQuote || inDoubleQuote) continue;
     for (let envVar of PLUGIN_ENV_VARS) {
-      let withBraces = command.startsWith(`{${envVar}}`, j + 1);
+      let withBraces = command.startsWith(`{${envVar}}`, idx + 1);
       let bareName =
-        command.startsWith(envVar, j + 1) && !/[A-Za-z0-9_]/.test(command.charAt(j + 1 + envVar.length));
+        command.startsWith(envVar, idx + 1) && !/[A-Za-z0-9_]/.test(command.charAt(idx + 1 + envVar.length));
       if (withBraces || bareName) {
         placeholders.add(`\${${envVar}}`);
         break;
@@ -366,20 +369,20 @@ function findUnquotedPlaceholders(command) {
   }
   return [...placeholders];
 }
-//@ chunk-85kmkm1x.js:13810-13861 placement
+//@ chunk-bfqsgtvj.js:13883-13934 placement
 var stripTrailingSep = (path) => (path.endsWith(sep) ? path.slice(0, -sep.length) : path);
-//@ chunk-85kmkm1x.js:13861-13898 placement
+//@ chunk-bfqsgtvj.js:13934-13971 placement
 /**
  * isSameResolvedPath：解析后路径相同。
  */
 var isSameResolvedPath = (left, right) =>
   stripTrailingSep(resolve(left)) === stripTrailingSep(resolve(right));
-//@ chunk-85kmkm1x.js:13898-13976 placement
+//@ chunk-bfqsgtvj.js:13971-14049 placement
 function isRelativeToRoot(entry, root, expected) {
   let { source } = entry;
   return typeof source === "string" && isSameResolvedPath(resolve(root, source), expected);
 }
-//@ chunk-85kmkm1x.js:13976-14061 placement
+//@ chunk-bfqsgtvj.js:14049-14134 placement
 /**
  * matchesDirEntry：目录条目按 source 或名字匹配。
  */
@@ -388,7 +391,7 @@ function matchesDirEntry(entry, root, dirEntry) {
     ? isRelativeToRoot(entry, root, dirEntry.root)
     : entry.name === dirEntry.name;
 }
-//@ chunk-85kmkm1x.js:14101-14234 placement (2.1.88 match: readJsonFile, 1)
+//@ chunk-bfqsgtvj.js:14174-14307 placement (2.1.88 match: readJsonFile, 1)
 /**
  * 读取 JSON 文件并按 schema 校验，失败返回 undefined（插件校验用）。
  */
@@ -408,7 +411,7 @@ async function readJsonFile(path) {
     return;
   }
 }
-//@ chunk-85kmkm1x.js:14234-15854 placement
+//@ chunk-bfqsgtvj.js:14307-15927 placement
 /**
  * 市场条目额外允许的键与其他工具 manifest 字段提示。
  */
@@ -417,7 +420,7 @@ var FOREIGN_MANIFEST_FIELDS;
 var FOREIGN_MANIFEST_HINT;
 var MANIFEST_FIELD_HINTS;
 var MANIFEST_FIELD_HINT_SET;
-deferInit("chunk-85kmkm1x.js:14234", () => {
+deferInit("chunk-bfqsgtvj.js:14307", () => {
   MARKETPLACE_ENTRY_EXTRA_KEYS = new Set([
     "category",
     "source",
@@ -467,7 +470,7 @@ deferInit("chunk-85kmkm1x.js:14234", () => {
   MANIFEST_FIELD_HINTS = new Set(["themes", "monitors", "outputStyles", "evals", "syntaxHighlighting"]);
   MANIFEST_FIELD_HINT_SET = new Set(WORKER_ONLY_SKILL_NAMES.map(foldName));
 });
-//@ chunk-85kmkm1x.js:15854-15998 placement
+//@ chunk-bfqsgtvj.js:15927-16071 placement
 function summarizeValidationResults(results, options) {
   let all = results.every((result) => result.success);
   let any = results.some((result) => result.warnings.length > 0);
@@ -477,11 +480,11 @@ function summarizeValidationResults(results, options) {
     allSuccess: options.strict ? all && !any : all,
   };
 }
-//@ chunk-85kmkm1x.js:15998-16069 layout (2.1.88 match: getReceivedType, 0.776)
+//@ chunk-bfqsgtvj.js:16071-16142 layout (2.1.88 match: getReceivedType, 0.777)
 function getReceivedType(value) {
   return value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
 }
-//@ chunk-85kmkm1x.js:16069-16268 fingerprint (2.1.88 match: detectManifestType, 1)
+//@ chunk-bfqsgtvj.js:16142-16341 fingerprint (2.1.88 match: detectManifestType, 1)
 function detectManifestType(filePath) {
   let fileName = pathModule.basename(filePath);
   let dirName = pathModule.basename(pathModule.dirname(filePath));
@@ -490,7 +493,7 @@ function detectManifestType(filePath) {
   if (dirName === ".claude-plugin") return "plugin";
   return "unknown";
 }
-//@ chunk-85kmkm1x.js:16268-16373 fingerprint (2.1.88 match: formatZodErrors, 1)
+//@ chunk-bfqsgtvj.js:16341-16446 fingerprint (2.1.88 match: formatZodErrors, 1)
 /**
  * zod 错误转 [{path, message}]（空路径记 root）。
  */
@@ -501,7 +504,7 @@ function formatZodErrors(zodError) {
     code: error.code,
   }));
 }
-//@ chunk-85kmkm1x.js:16373-16589 layout
+//@ chunk-bfqsgtvj.js:16446-16662 layout
 function suggestSimilarField(field, knownFields) {
   if (FOREIGN_MANIFEST_FIELDS.has(field)) return;
   let maxDistance = field.length <= 3 ? 1 : 2;
@@ -519,7 +522,7 @@ function suggestSimilarField(field, knownFields) {
   }
   return best;
 }
-//@ chunk-85kmkm1x.js:16589-17454 layout
+//@ chunk-bfqsgtvj.js:16662-17527 layout
 function unknownFieldMessage(field, knownFields, marketplaceOnlyFields) {
   if (marketplaceOnlyFields?.has(field))
     return (
@@ -542,7 +545,7 @@ function unknownFieldMessage(field, knownFields, marketplaceOnlyFields) {
     return `Unknown field '${field}' (commonly seen in ${toolName}). Claude Code ignores unrecognized fields at load time, so it's safe to keep.`;
   return `Unknown field '${field}'. Claude Code ignores it at load time.`;
 }
-//@ chunk-85kmkm1x.js:17454-17589 layout
+//@ chunk-bfqsgtvj.js:17527-17662 layout
 function reportUnknownFields(candidate, knownFields, prefix, warnings, marketplaceOnlyFields, listingFields) {
   for (let key of Object.keys(candidate)) {
     if (knownFields.has(key) || listingFields?.has(key)) continue;
@@ -552,7 +555,7 @@ function reportUnknownFields(candidate, knownFields, prefix, warnings, marketpla
     });
   }
 }
-//@ chunk-85kmkm1x.js:17589-17658 layout
+//@ chunk-bfqsgtvj.js:17662-17731 layout
 /**
  * 路径（去盘符后）是否为绝对或含危险段。
  */
@@ -560,7 +563,7 @@ function isAbsoluteOrUnsafePath(path) {
   let replaced = path.replace(/^[a-zA-Z]:/, "");
   return hasDotDotSegment(replaced) || hasDotDotWithSpaceSegment(replaced);
 }
-//@ chunk-85kmkm1x.js:17658-17815 fingerprint (2.1.88 match: checkPathTraversal, 1)
+//@ chunk-bfqsgtvj.js:17731-17888 fingerprint (2.1.88 match: checkPathTraversal, 1)
 function checkPathTraversal(p, field, errors, hint) {
   if (isAbsoluteOrUnsafePath(p))
     errors.push({
@@ -570,12 +573,12 @@ function checkPathTraversal(p, field, errors, hint) {
         : `Path contains ".." which could be a path traversal attempt: ${p}`,
     });
 }
-//@ chunk-85kmkm1x.js:17815-18080 fingerprint (2.1.88 match: marketplaceSourceHint, 0.667)
+//@ chunk-bfqsgtvj.js:17888-18153 fingerprint (2.1.88 match: marketplaceSourceHint, 0.667)
 function marketplaceSourceHint(p) {
   let stripped = p.replace(/^(\.\.\/)+/, "");
   return `Plugin source paths are resolved relative to the marketplace root (the directory containing .claude-plugin/), not relative to marketplace.json. Use "${stripped !== p ? `./${stripped}` : "./plugins/my-plugin"}" instead of "${p}".`;
 }
-//@ chunk-85kmkm1x.js:18080-18144 layout
+//@ chunk-bfqsgtvj.js:18153-18217 layout
 /**
  * 校验单个 hooks.json 并整理结果。
  */
@@ -587,7 +590,7 @@ async function validateHooksJsonForDisplay(
 ) {
   return sanitizeValidationResult(await validateHooksJson(filePath, options));
 }
-//@ chunk-85kmkm1x.js:18144-18493 fingerprint (2.1.88 match: validateHooksJson, 0.561)
+//@ chunk-bfqsgtvj.js:18217-18566 fingerprint (2.1.88 match: validateHooksJson, 0.561)
 async function validateHooksJson(filePath, options) {
   let filePath_2 = pathModule.resolve(filePath);
   let content;
@@ -617,7 +620,7 @@ async function validateHooksJson(filePath, options) {
   }
   return validatePluginManifest(filePath_2, content, options);
 }
-//@ chunk-85kmkm1x.js:18493-23893 callgraph-fingerprint (2.1.88 match: validatePluginManifest, 0.251)
+//@ chunk-bfqsgtvj.js:18566-23966 callgraph-fingerprint (2.1.88 match: validatePluginManifest, 0.251)
 /**
  * claude plugin validate：校验 plugin.json（JSON 语法、schema、名字、marketplace-only 字段警告、组件路径存在性），返回 errors/warnings。
  */
@@ -883,7 +886,7 @@ async function validatePluginManifest(filePath, content, options) {
     }),
   };
 }
-//@ chunk-85kmkm1x.js:23893-24163 layout
+//@ chunk-bfqsgtvj.js:23966-24236 layout
 /**
  * 市场/插件名校验常量组：ht 是名称格式正则 /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/；Un 是保留市场名集合（org / org-provisioned / unknown）；$e 是 "UNRECORDABLE_NAME" finding code；UOr 是 plugin@marketplace 各分段允许字符的规则文案，拼进 message。
  */
@@ -891,24 +894,24 @@ var RECORDABLE_NAME_RE; // deferred: has load-time effects after a deferred stat
 var RESERVED_MARKETPLACE_NAMES;
 var UNRECORDABLE_NAME_CODE;
 var PLUGIN_ID_PART_RULE_TEXT;
-deferInit("chunk-85kmkm1x.js:23893", () => {
+deferInit("chunk-bfqsgtvj.js:23966", () => {
   RECORDABLE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
   RESERVED_MARKETPLACE_NAMES = new Set(["org", "org-provisioned", "unknown"]);
   UNRECORDABLE_NAME_CODE = "UNRECORDABLE_NAME";
   PLUGIN_ID_PART_RULE_TEXT =
     'Each part of a plugin id (plugin@marketplace) may use only the letters a-z and A-Z, digits, ".", "_" and "-", and must start with a letter or digit.';
 });
-//@ chunk-85kmkm1x.js:24163-24261 layout
+//@ chunk-bfqsgtvj.js:24236-24334 layout
 function hiddenCharacterNote(name) {
   return sanitizeForDisplay(name, name.length) === name
     ? ""
     : " The name holds a character that is not shown here.";
 }
-//@ chunk-85kmkm1x.js:24261-24305 layout
+//@ chunk-bfqsgtvj.js:24334-24378 layout
 async function validateMarketplaceForDisplay(filePath) {
   return sanitizeValidationResult(await validateMarketplaceManifest(filePath));
 }
-//@ chunk-85kmkm1x.js:24305-34228 fingerprint (2.1.88 match: validateMarketplaceManifest, 0.392)
+//@ chunk-bfqsgtvj.js:24378-34301 fingerprint (2.1.88 match: validateMarketplaceManifest, 0.392)
 /**
  * 校验 marketplace.json：schema、保留名、每个插件条目来源与路径、重复名字等。
  */
@@ -1341,14 +1344,14 @@ async function validateMarketplaceManifest(filePath) {
     fileType: "marketplace",
   };
 }
-//@ chunk-85kmkm1x.js:34228-34268 layout
+//@ chunk-bfqsgtvj.js:34301-34341 layout
 /**
  * 把校验信息里的用户输入清洗成可显示的单行（去控制字符、截断）。
  */
 function sanitizeForDisplay(text, maxChars) {
   return collapseWhitespace(truncateWithCount(stripCombiningRepeated(text), maxChars));
 }
-//@ chunk-85kmkm1x.js:34268-34677 layout
+//@ chunk-bfqsgtvj.js:34341-34750 layout
 /**
  * 校验结果展示前的清洗：路径截断到 200、消息截断到 1000 并去掉不可见字符。
  */
@@ -1377,7 +1380,7 @@ function sanitizeValidationResult(result) {
     }),
   };
 }
-//@ chunk-85kmkm1x.js:34677-37397 fingerprint (2.1.88 match: validateComponentFile, 0.696)
+//@ chunk-bfqsgtvj.js:34750-37470 fingerprint (2.1.88 match: validateComponentFile, 0.695)
 /**
  * 校验命令/代理/技能 markdown 文件的 frontmatter（必需字段、未知键、YAML 错误）。
  */
@@ -1508,7 +1511,7 @@ function validateComponentFile(filePath, content, fileType, scope) {
     fileType,
   };
 }
-//@ chunk-85kmkm1x.js:37397-42877 layout
+//@ chunk-bfqsgtvj.js:37470-42981 layout
 /**
  * 安全读取 hooks 文件（不跟随链接、限大小），解析 JSON 并按 schema 校验 hooks 与 modules；对声明的 hooks 模块 检查加载、注册、渲染匹配器、辅助调用等，返回校验结果与模块列表。
  */
@@ -1534,7 +1537,8 @@ async function validateHooksFile(filePath, pluginDir) {
   });
   let dir = pathModule.dirname(filePath);
   let pluginFile = await readPluginFileSafe(pathModule.dirname(dir), dir);
-  if (pluginFile === "refused") return refusedResult("The hooks directory is a symlink and was not read");
+  if (pluginFile === "refused")
+    return refusedResult("The hooks directory is a link (a symlink or a Windows junction) and was not read");
   if (pluginFile !== "ok") return emptyResult;
   let fileRead;
   try {
@@ -1688,7 +1692,7 @@ async function validateHooksFile(filePath, pluginDir) {
               ...filtered.filter((registration) => !registration.commands.some(isShippedName)),
             );
             mapped.push(
-              ...uniq(filtered.flatMap((registration) => registration.commands))
+              ...normalizeCaseForComparison_2(filtered.flatMap((registration) => registration.commands))
                 .filter(isShippedName)
                 .map((commandName) => ({
                   path: `modules.${moduleSpec}`,
@@ -1823,7 +1827,7 @@ async function validateHooksFile(filePath, pluginDir) {
     modules,
   };
 }
-//@ chunk-85kmkm1x.js:42877-43333 layout
+//@ chunk-bfqsgtvj.js:42981-43437 layout
 /**
  * 契约读取结果转为错误或说明（声明的名词与状态）。
  */
@@ -1862,7 +1866,7 @@ function contractCheckResult(pluginContract, { relPath, field }) {
         : [nounsNote],
   };
 }
-//@ chunk-85kmkm1x.js:43333-43420 layout
+//@ chunk-bfqsgtvj.js:43437-43524 layout
 var emptyPluginTypesContract = {
   name: undefined,
   nouns: [],
@@ -1871,7 +1875,7 @@ var emptyPluginTypesContract = {
   conventional: undefined,
   refusal: undefined,
 };
-//@ chunk-85kmkm1x.js:43420-44130 layout
+//@ chunk-bfqsgtvj.js:43524-44234 layout
 /**
  * 读插件 types 契约（显式声明或约定位置）。
  */
@@ -1925,7 +1929,7 @@ async function readPluginContractInfo(pluginDir) {
     ),
   };
 }
-//@ chunk-85kmkm1x.js:44130-44472 layout
+//@ chunk-bfqsgtvj.js:44234-44576 layout
 /**
  * 已加载的其他插件契约声明的状态键。
  */
@@ -1952,7 +1956,7 @@ async function collectLoadedContractState(pluginDir) {
   }
   return stateAtoms;
 }
-//@ chunk-85kmkm1x.js:44472-44900 layout
+//@ chunk-bfqsgtvj.js:44576-45004 layout
 /**
  * 插件的 hooks 文件路径（默认 hooks/hooks.json 与 manifest.hooks）。
  */
@@ -1979,7 +1983,7 @@ async function listHooksFilePaths(pluginDir) {
   }
   return paths;
 }
-//@ chunk-85kmkm1x.js:44900-45366 layout
+//@ chunk-bfqsgtvj.js:45004-45470 layout
 /**
  * 逐个校验 hooks 文件，多个文件都声明模块时报错。
  */
@@ -2010,7 +2014,7 @@ async function validateAllHooksFiles(pluginDir) {
   }
   return results;
 }
-//@ chunk-85kmkm1x.js:45366-45974 layout (2.1.88 match: expandEnvVars, 0.841)
+//@ chunk-bfqsgtvj.js:45470-46078 layout (2.1.88 match: expandEnvVars, 0.841)
 /**
  * MCP 服务器文件的校验常量组：Xn 是已知服务器类型集合（stdio/http/streamable-http/sse/ws/sdk/sse-ide/ws-ide/claudeai-proxy）；Qn 是 ${user_config.X} 占位符正则（全局）；xt 是任意 ${…} 模板占位正则，URL 里出现即判模板；Me 是最多检查的 MCP server 文件数 16；es 是 URL 长度上限 8192；ts/ns/ss 是机密值、键名与占位值的识别正则。
  */
@@ -2022,7 +2026,7 @@ var MAX_URL_LENGTH;
 var SECRET_VALUE_PATTERNS;
 var SECRET_KEY_NAME_PATTERN;
 var PLACEHOLDER_VALUE_PATTERN;
-deferInit("chunk-85kmkm1x.js:45366", () => {
+deferInit("chunk-bfqsgtvj.js:45470", () => {
   KNOWN_SERVER_TYPES = new Set([
     "stdio",
     "http",
@@ -2052,7 +2056,7 @@ deferInit("chunk-85kmkm1x.js:45366", () => {
   PLACEHOLDER_VALUE_PATTERN =
     /your[-_ ]|replace|example|changeme|placeholder|dummy|redacted|xxx|[<>]|\*\*\*/i;
 });
-//@ chunk-85kmkm1x.js:45974-46120 layout
+//@ chunk-bfqsgtvj.js:46078-46224 layout
 function shannonEntropy(text) {
   let charCounts = new Map();
   for (let char of text) charCounts.set(char, (charCounts.get(char) ?? 0) + 1);
@@ -2063,7 +2067,7 @@ function shannonEntropy(text) {
   }
   return entropy;
 }
-//@ chunk-85kmkm1x.js:46120-46368 layout
+//@ chunk-bfqsgtvj.js:46224-46472 layout
 function looksLikeSecretValue(headerName, value) {
   if (value.length > MAX_URL_LENGTH || URL_TEMPLATE_RE.test(value) || PLACEHOLDER_VALUE_PATTERN.test(value))
     return false;
@@ -2073,13 +2077,13 @@ function looksLikeSecretValue(headerName, value) {
   let credential = trimmed.match(/^(?:Bearer|Basic|Token|Bot)\s+(\S+)$/i)?.[1] ?? trimmed;
   return credential.length >= 20 && !/\s/.test(credential) && shannonEntropy(credential) >= 3;
 }
-//@ chunk-85kmkm1x.js:46368-46391 layout
+//@ chunk-bfqsgtvj.js:46472-46495 layout
 var USER_CONFIG_REF_RE = /\$\{[^}$]+\}/g;
-//@ chunk-85kmkm1x.js:46391-46450 layout
+//@ chunk-bfqsgtvj.js:46495-46554 layout
 function parseUrlWithConfig(url, replacement) {
   return URL.parse(url.replace(USER_CONFIG_REF_RE, replacement)) ?? undefined;
 }
-//@ chunk-85kmkm1x.js:46450-46990 layout
+//@ chunk-bfqsgtvj.js:46554-47094 layout
 /**
  * 远程 MCP url 用 http/ws 到非回环主机时的警告。
  */
@@ -2103,7 +2107,7 @@ function insecureRemoteUrlWarning(url) {
     `credentials travel in cleartext. Use ${secureScheme}://; plugin directories may reject insecure remote server urls.`
   );
 }
-//@ chunk-85kmkm1x.js:46990-47492 layout
+//@ chunk-bfqsgtvj.js:47094-47596 layout
 /**
  * 列出 MCP 服务器配置中可能含占位符的字符串字段。
  */
@@ -2145,11 +2149,11 @@ function listMcpStringFields(server) {
   }
   return fields;
 }
-//@ chunk-85kmkm1x.js:47492-47569 layout
+//@ chunk-bfqsgtvj.js:47596-47673 layout
 function isRemoteMcpType(type) {
   return type === "http" || type === "streamable-http" || type === "sse" || type === "ws";
 }
-//@ chunk-85kmkm1x.js:47569-49680 layout
+//@ chunk-bfqsgtvj.js:47673-49784 layout
 /**
  * 检查 MCP 配置中 ${user_config.*} 引用与 url/directory 问题。
  */
@@ -2218,7 +2222,7 @@ function checkMcpUserConfigRefs(fieldPath, server, declaredKeys) {
     warnings,
   };
 }
-//@ chunk-85kmkm1x.js:49680-50922 layout
+//@ chunk-bfqsgtvj.js:49784-51026 layout
 /**
  * 按类型校验单个 MCP 服务器配置（缺 type、未知类型、schema）。
  */
@@ -2276,7 +2280,7 @@ function validateMcpServerConfig(path, config, error) {
     }),
   );
 }
-//@ chunk-85kmkm1x.js:50922-53245 layout
+//@ chunk-bfqsgtvj.js:51026-53349 layout
 /**
  * 校验一个 MCP 服务器 JSON 文件。
  */
@@ -2386,7 +2390,7 @@ async function validateMcpJsonFile(filePath, displayPath, keysForServer) {
     fileType: "mcp",
   };
 }
-//@ chunk-85kmkm1x.js:53245-53586 layout (2.1.88 match: loadChannelUserConfig, 0.777)
+//@ chunk-bfqsgtvj.js:53349-53690 layout (2.1.88 match: loadChannelUserConfig, 0.777)
 /**
  * 由 manifest 构造“某 MCP 服务器可用的 userConfig 键集合”查询函数（插件级 + 频道级）。
  */
@@ -2410,11 +2414,11 @@ function buildUserConfigKeyLookup(manifest) {
         };
   };
 }
-//@ chunk-85kmkm1x.js:53586-53622 layout
+//@ chunk-bfqsgtvj.js:53690-53726 layout
 async function userConfigKeyLookup(manifest, pluginDir) {
   return buildUserConfigKeyLookup(manifest);
 }
-//@ chunk-85kmkm1x.js:53622-54876 layout
+//@ chunk-bfqsgtvj.js:53726-55011 layout
 /**
  * 校验插件的 .mcp.json 与 manifest 引用的 MCP 文件。
  */
@@ -2461,7 +2465,7 @@ async function validatePluginMcpFiles(pluginDir, entries) {
         directoryWarningResult(
           displayPath,
           "mcp",
-          "A directory on the way to this MCP servers file is a symlink or " +
+          "A directory on the way to this MCP servers file is a link (a symlink or a Windows junction) or " +
             "escapes the plugin, and the file was not read \u2014 the plugin loader " +
             "follows it, so validate the real file separately.",
         ),
@@ -2482,7 +2486,7 @@ async function validatePluginMcpFiles(pluginDir, entries) {
     );
   return results.filter((result) => result.errors.length > 0 || result.warnings.length > 0);
 }
-//@ chunk-85kmkm1x.js:54876-55407 fingerprint (2.1.88 match: collectMarkdown, 0.84)
+//@ chunk-bfqsgtvj.js:55011-55633 fingerprint (2.1.88 match: collectMarkdown, 0.84)
 async function collectMarkdown(dir, isSkillsDir) {
   let entries;
   try {
@@ -2498,30 +2502,39 @@ async function collectMarkdown(dir, isSkillsDir) {
       };
     throw e;
   }
-  let skippedSymlinks = count(entries, (entry) => entry.isSymbolicLink());
-  if (isSkillsDir)
+  let skippedSymlinks = countWhere(entries, (entry) => entry.isSymbolicLink());
+  if (isSkillsDir) {
+    let files = [];
+    for (let entry of entries.filter((e) => e.isDirectory()))
+      if (await buildSecretScanResult(pathModule.join(dir, entry.name))) skippedSymlinks++;
+      else files.push(pathModule.join(dir, entry.name, "SKILL.md"));
     return {
-      files: entries.filter((e) => e.isDirectory()).map((e) => pathModule.join(dir, e.name, "SKILL.md")),
+      files,
       skippedSymlinks,
     };
-  let out = [];
+  }
+  let files = [];
   for (let entry of entries) {
     let full = pathModule.join(dir, entry.name);
     if (entry.isDirectory()) {
+      if (await buildSecretScanResult(full)) {
+        skippedSymlinks++;
+        continue;
+      }
       let markdown = await collectMarkdown(full, false);
-      out.push(...markdown.files);
+      files.push(...markdown.files);
       skippedSymlinks += markdown.skippedSymlinks;
-    } else if (entry.isFile() && entry.name.toLowerCase().endsWith(".md")) out.push(full);
+    } else if (entry.isFile() && entry.name.toLowerCase().endsWith(".md")) files.push(full);
   }
   return {
-    files: out,
+    files,
     skippedSymlinks,
   };
 }
-//@ chunk-85kmkm1x.js:55407-55504 fingerprint (2.1.88 match: validatePluginContents, 0.558)
+//@ chunk-bfqsgtvj.js:55633-55730 fingerprint (2.1.88 match: validatePluginContents, 0.557)
 var NO_MANIFEST; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var COMPONENT_DIR_KINDS;
-deferInit("chunk-85kmkm1x.js:55407", () => {
+deferInit("chunk-bfqsgtvj.js:55633", () => {
   NO_MANIFEST = "NO_MANIFEST";
   COMPONENT_DIR_KINDS = new Map([
     ["skills", "skill"],
@@ -2529,11 +2542,11 @@ deferInit("chunk-85kmkm1x.js:55407", () => {
     ["commands", "command"],
   ]);
 });
-//@ chunk-85kmkm1x.js:55504-55555 layout
+//@ chunk-bfqsgtvj.js:55730-55781 layout
 function isProjectOrSkillScope(scope, fileType) {
   return scope === "project" || fileType === "skill";
 }
-//@ chunk-85kmkm1x.js:55555-55748 layout
+//@ chunk-bfqsgtvj.js:55781-55974 layout
 async function findComponentDirs(rootDir) {
   let mapped = [...COMPONENT_DIR_KINDS].map(([kind, baseName]) => [baseName, pathModule.join(rootDir, kind)]);
   let results = await Promise.all(mapped.map(([, relPath]) => readPluginFileSafe(rootDir, relPath)));
@@ -2542,7 +2555,7 @@ async function findComponentDirs(rootDir) {
     refused: mapped.filter((dir, index) => results[index] === "refused"),
   };
 }
-//@ chunk-85kmkm1x.js:55748-56057 layout
+//@ chunk-bfqsgtvj.js:55974-56283 layout
 /**
  * 目录是否像一个插件（有 .claude-plugin/，或有含 SKILL.md 的 skills/）。
  */
@@ -2566,7 +2579,7 @@ async function looksLikePluginDir(rootDir) {
       return true;
   return false;
 }
-//@ chunk-85kmkm1x.js:56057-56166 layout
+//@ chunk-bfqsgtvj.js:56283-56392 layout
 /**
  * 构造“目录级警告”的校验结果。
  */
@@ -2584,7 +2597,7 @@ function directoryWarningResult(filePath, fileType, message) {
     fileType,
   };
 }
-//@ chunk-85kmkm1x.js:56166-57630 layout
+//@ chunk-bfqsgtvj.js:56392-58718 layout
 /**
  * 校验插件目录下所有组件文件（commands/agents/skills…），符号链接目录不读取并给出警告。
  */
@@ -2597,8 +2610,10 @@ async function validateComponentDirs(dirs, refused, scope) {
       directoryWarningResult(
         dir,
         kind,
-        "This directory is a symlink and nothing in it was read \u2014 component " +
-          `directories are read without following symlinks. A session loading this ${scope === "plugin" ? "plugin" : "project"} does follow it, so validate the real directory separately.`,
+        scope === "plugin"
+          ? "This directory is a symlink, so the validator read nothing in it. An installed plugin loads it only if it points inside the plugin's installed folder, or, for a plugin read in place from a local marketplace folder, inside that folder; a project's .claude/skills plugin, only if it points inside the folder holding that .claude. Otherwise replace the link with a copy of the folder. To check its files, validate the folder it points to."
+          : "This directory is a symlink and nothing in it was read \u2014 " +
+              "component directories are read without following symlinks. A session loading this project does follow it, so validate the real directory separately.",
       ),
     );
   for (let [fileType, dir] of dirs) {
@@ -2636,17 +2651,17 @@ async function validateComponentDirs(dirs, refused, scope) {
       if (result.errors.length > 0 || result.warnings.length > 0) results.push(result);
     }
     skipped += symlinkSkipped + refusedSkipped + tooLargeSkipped;
-    let followNote =
-      "A session loading this " +
-      (scope === "plugin" ? "plugin" : "directory") +
-      " does follow them, so validate the real paths separately.";
+    let symlinkNote =
+      scope === "plugin"
+        ? "A session started with --plugin-dir on this plugin follows a symlink here. An installed plugin follows one only if it points inside the plugin's installed folder, or, for a plugin read in place from a local marketplace folder, inside that folder; a project's .claude/skills plugin, only if it points inside the folder holding that .claude. To check what a symlink points to, validate that path."
+        : "A session loading this directory does follow them, so validate the real paths separately.";
     if (symlinkSkipped > 0)
       results.push(
         directoryWarningResult(
           dir,
           fileType,
           `${symlinkSkipped} ${plural(symlinkSkipped, "entry", "entries")} here ${plural(symlinkSkipped, "is", "are")} ${plural(symlinkSkipped, "a symlink", "symlinks")} and ${plural(symlinkSkipped, "was", "were")} not read \u2014 components are read ` +
-            `without following symlinks. ${followNote}`,
+            `without following symlinks. ${symlinkNote}`,
         ),
       );
     if (refusedSkipped > 0)
@@ -2655,7 +2670,7 @@ async function validateComponentDirs(dirs, refused, scope) {
           dir,
           fileType,
           `${refusedSkipped} ${plural(refusedSkipped, "component")} here ${plural(refusedSkipped, "was", "were")} not read \u2014 the path is not a ` +
-            `regular file (a symlink, a FIFO, a directory). ${followNote}`,
+            `regular file (a symlink, a FIFO, a directory). ${scope === "plugin" ? "A FIFO or a directory is never read. " : ""}${symlinkNote}`,
         ),
       );
     if (tooLargeSkipped > 0)
@@ -2673,11 +2688,11 @@ async function validateComponentDirs(dirs, refused, scope) {
     skipped,
   };
 }
-//@ chunk-85kmkm1x.js:57630-57686 layout
+//@ chunk-bfqsgtvj.js:58718-58774 layout
 async function validateComponentDirectorySafe(dirPath) {
   return (await validateComponentDirectory(dirPath))?.map(sanitizeValidationResult) ?? null;
 }
-//@ chunk-85kmkm1x.js:57686-58831 layout
+//@ chunk-bfqsgtvj.js:58774-60006 layout
 /**
  * 校验组件目录（或 .claude、插件根下的组件目录）。
  */
@@ -2687,8 +2702,9 @@ async function validateComponentDirectory(dirPath) {
     let dir = pathModule.dirname(dirPath);
     let reason;
     if (pathModule.basename(dir) === ".claude" && !(await isDirectoryOrFalse(dir)))
-      reason = "The enclosing .claude directory is a symlink.";
-    else if (!(await isDirectoryOrFalse(dirPath))) reason = "This path is a symlink.";
+      reason = "The enclosing .claude directory is a link (a symlink or a Windows junction).";
+    else if (!(await isDirectoryOrFalse(dirPath)))
+      reason = "This path is a link (a symlink or a Windows junction).";
     if (reason)
       return [
         {
@@ -2696,7 +2712,7 @@ async function validateComponentDirectory(dirPath) {
           errors: [
             {
               path: "directory",
-              message: `${reason} Component directories are read without following symlinks, so nothing here was validated. Pass the real directory instead.`,
+              message: `${reason} Component directories are read without following links, so nothing here was validated. Pass the real directory instead.`,
             },
           ],
           warnings: [],
@@ -2739,13 +2755,13 @@ async function validateComponentDirectory(dirPath) {
       directoryWarningResult(
         rootDir,
         "plugin",
-        "This directory is a symlink and nothing in it was read \u2014 .claude is " +
-          "read without following symlinks. A session loading this project does follow it, so validate the real directory separately.",
+        "This directory is a link (a symlink or a Windows junction) and nothing in it was read \u2014 .claude is " +
+          "read without following links. A session loading this project does follow it, so validate the real directory separately.",
       ),
     );
   return scannedCount > 0 || skippedCount > 0 || results.length > 0 ? results : null;
 }
-//@ chunk-85kmkm1x.js:58831-59535 layout
+//@ chunk-bfqsgtvj.js:60006-60710 layout
 /**
  * 插件根目录里出现 CLAUDE.md / CLAUDE.local.md 时给出“插件不会加载它们”的警告。
  */
@@ -2784,7 +2800,7 @@ async function checkPluginRootClaudeMd(pluginDir) {
   results.push(...(await validatePluginMcpFiles(pluginDir, entries)));
   return results.map(sanitizeValidationResult);
 }
-//@ chunk-85kmkm1x.js:59535-59820 layout
+//@ chunk-bfqsgtvj.js:60710-60995 layout
 /**
  * 校验 manifest，可把“无法记录的名字”错误降级为警告。
  */
@@ -2805,7 +2821,7 @@ async function validateManifestForDisplay(filePath, options) {
     warnings: [...mapped, ...result.warnings],
   };
 }
-//@ chunk-85kmkm1x.js:59820-60756 fingerprint (2.1.88 match: validateManifest, 0.971)
+//@ chunk-bfqsgtvj.js:60995-62123 fingerprint (2.1.88 match: validateManifest, 0.89)
 /**
  * 按路径判断是 plugin.json 还是 marketplace.json（或目录）并调用对应校验。
  */
@@ -2842,7 +2858,7 @@ async function validateManifest(filePath) {
       fileType: "plugin",
     };
   }
-  switch (detectManifestType(filePath)) {
+  switch (detectManifestType(absolutePath)) {
     case "plugin":
       return validateHooksJsonForDisplay(filePath);
     case "marketplace":
@@ -2853,7 +2869,18 @@ async function validateManifest(filePath) {
           encoding: "utf-8",
         });
         let parsed = jsonParse(stripBom(content));
-        if (Array.isArray(parsed.plugins)) return validateMarketplaceForDisplay(filePath);
+        if (isPlainObject(parsed)) {
+          let keys = Object.keys(parsed);
+          let shape = PluginMarketplaceSchema().shape;
+          let any = keys.some((key) => Object.hasOwn(shape, key) && !hasManifestFieldSchema(key));
+          let any_2 = keys.some((key) => hasManifestFieldSchema(key) && !Object.hasOwn(shape, key));
+          if (
+            Array.isArray(parsed.plugins) ||
+            (Object.hasOwn(parsed, "plugins") && Object.hasOwn(parsed, "owner")) ||
+            (any && !any_2)
+          )
+            return validateMarketplaceForDisplay(filePath);
+        }
       } catch (e) {
         if (getErrnoCode(e) === "ENOENT")
           return {
@@ -2873,7 +2900,7 @@ async function validateManifest(filePath) {
     }
   }
 }
-//@ chunk-85kmkm1x.js:60756-61697 affinity
+//@ chunk-bfqsgtvj.js:62123-63064 affinity
 /**
  * validate 命令入口：没有 manifest 时尝试按“裸技能目录”解析，否则返回 manifest 与插件根目录。
  */
@@ -2947,17 +2974,17 @@ async function resolveValidateTarget(targetPath) {
     pluginRoot: dir_2,
   };
 }
-//@ chunk-85kmkm1x.js:61697-61751 affinity
+//@ chunk-bfqsgtvj.js:63064-63118 affinity
 async function safeValidateComponentFiles(filePath) {
   return readSmallFileText(filePath).catch(() => {
     return;
   });
 }
-//@ chunk-85kmkm1x.js:61751-61787 sole-consumer
+//@ chunk-bfqsgtvj.js:63118-63154 sole-consumer
 function asPlainObject(value) {
   return isPlainObject(value) ? value : undefined;
 }
-//@ chunk-85kmkm1x.js:61787-61837 sole-consumer
+//@ chunk-bfqsgtvj.js:63154-63204 sole-consumer
 function parsePlainObject(text) {
   try {
     return asPlainObject(jsonParse(text));
@@ -2965,7 +2992,7 @@ function parsePlainObject(text) {
     return;
   }
 }
-//@ chunk-85kmkm1x.js:61837-62358 sole-consumer
+//@ chunk-bfqsgtvj.js:63204-63725 sole-consumer
 /**
  * MCP command 引用的 bin/ 文件须存在或在 binaries 中声明。
  */
@@ -2988,7 +3015,7 @@ function checkBinCommandRefs(servers, shippedBins, declaredBins) {
   }
   return problems;
 }
-//@ chunk-85kmkm1x.js:62358-63527 sole-consumer
+//@ chunk-bfqsgtvj.js:63725-64894 sole-consumer
 /**
  * 检查 MCP 配置引用的插件二进制是否存在或可推导。
  */
@@ -3065,20 +3092,20 @@ async function validateBinaryReferences(pluginDir) {
   return results;
 }
 export {
+  MARKETPLACE_ONLY_MANIFEST_FIELDS,
+  resolveValidateTarget,
+  sanitizeForDisplay,
+  summarizeValidationResults,
+  validateManifestForDisplay,
+  PLUGIN_ID_PART_RULE_TEXT,
   PRIVACY_POLICY_KEYS,
   SUPPORT_URL_KEYS,
   TERMS_URL_KEYS,
   DOCUMENTATION_URL_KEYS,
-  MARKETPLACE_ONLY_MANIFEST_FIELDS,
-  sanitizeForDisplay,
-  resolveValidateTarget,
   NO_MANIFEST,
   validateHooksJsonForDisplay,
   checkPluginRootClaudeMd,
   readJsonFile,
   matchesDirEntry,
   isSameResolvedPath,
-  summarizeValidationResults,
-  validateManifestForDisplay,
-  PLUGIN_ID_PART_RULE_TEXT,
 };

@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/lib/credentials/token-cache.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-3wydcdvj.js (2)
+ * pieces: chunk-gjbr82c9.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import {
@@ -11,11 +11,11 @@ import {
   MIN_REFRESH_MARGIN_SECONDS,
 } from "./types.mjs";
 
-//@ chunk-3wydcdvj.js:3513-3561 esm-layout
+//@ chunk-gjbr82c9.js:3513-3561 esm-layout
 function nowSeconds() {
   return Math.floor(Date.now() / 1000);
 }
-//@ chunk-3wydcdvj.js:3561-4532 esm-fingerprint
+//@ chunk-gjbr82c9.js:3561-4532 esm-fingerprint
 class TokenCache {
   constructor(provider, onAdvisoryRefreshError) {
     this.cached = null;

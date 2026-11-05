@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。注册 artifact 评论自动回复的让出/接管持有者。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (1), chunk-grx66nns.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3b4rsbq5.js (18), chunk-czq1j3j2.js (1)
  * attribution: placement 19
  */
 import {
@@ -67,11 +67,11 @@ import { artifactViewerUrlFor } from "../../tools/ArtifactTool/artifactUrls.js";
 import { createSystemMessage } from "../../utils/messages.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-grx66nns.js:1086-1151 placement
+//@ chunk-3b4rsbq5.js:1086-1151 placement
 var SEND_RETRY_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SEND_STEP_MS;
 var EMPTY_ARMABLE_STATE;
-deferInit("chunk-grx66nns.js:1086", () => {
+deferInit("chunk-3b4rsbq5.js:1086", () => {
   SEND_RETRY_MS = 1000;
   SEND_STEP_MS = 200;
   EMPTY_ARMABLE_STATE = {
@@ -80,7 +80,7 @@ deferInit("chunk-grx66nns.js:1086", () => {
     undo: () => {},
   };
 });
-//@ chunk-grx66nns.js:1151-1282 placement
+//@ chunk-3b4rsbq5.js:1151-1282 placement
 async function findOwnSessionRecord() {
   let found = (await listRegisteredSessionRecords()).find((record) => record.pid === process.pid);
   return found === undefined
@@ -90,7 +90,7 @@ async function findOwnSessionRecord() {
         tmux: found.tmux,
       };
 }
-//@ chunk-grx66nns.js:1282-1592 placement
+//@ chunk-3b4rsbq5.js:1282-1592 placement
 async function requestReplyTakeover(options) {
   let result = await requestReplyTakeoverUnchecked(options).finally(() => options.claim?.end());
   if (result.kind === "took_over")
@@ -106,7 +106,7 @@ async function requestReplyTakeover(options) {
     });
   return result;
 }
-//@ chunk-grx66nns.js:1592-5932 placement
+//@ chunk-3b4rsbq5.js:1592-5932 placement
 /**
  * 向持有者请求接管自动回复
  */
@@ -406,22 +406,22 @@ async function requestReplyTakeoverUnchecked(options) {
     },
   };
 }
-//@ chunk-grx66nns.js:5932-6013 placement
+//@ chunk-3b4rsbq5.js:5932-6013 placement
 function isReplyHolderCandidate(context, record, slugs, opts) {
   let entry = slugs.get(context);
   return (
     (entry !== undefined && entry === udsAddressFromPath(record.sock)) || (!opts && !isSlugYielded(context))
   );
 }
-//@ chunk-grx66nns.js:6013-6045 placement
+//@ chunk-3b4rsbq5.js:6013-6045 placement
 function notifyTakenOverSlugStopped(slug, postWake = sendControlToUdsSocket) {
   handBackTakenSlugs(slug, true, postWake);
 }
-//@ chunk-grx66nns.js:6045-6077 placement
+//@ chunk-3b4rsbq5.js:6045-6077 placement
 function handBackTakenOverSlug(slug, sendControl = sendControlToUdsSocket) {
   handBackTakenSlugs(slug, false, sendControl);
 }
-//@ chunk-grx66nns.js:6077-6683 placement
+//@ chunk-3b4rsbq5.js:6077-6683 placement
 /**
  * 把接管的 slug 交还原持有者
  */
@@ -462,13 +462,13 @@ function handBackTakenSlugs(slug, stopped, postWake) {
     [stopped ? "takeover_stop_notified" : "takeover_released"]: taken.length,
   });
 }
-//@ chunk-grx66nns.js:6683-6786 placement (2.1.88 match: formatFailureDetails, 0.777)
+//@ chunk-3b4rsbq5.js:6683-6786 placement (2.1.88 match: formatFailureDetails, 0.776)
 function formatFailureDetails(failures) {
   let sliced = failures.slice(0, 2);
   let remaining = failures.length - sliced.length;
   return `${sliced.join(", ")}${remaining > 0 ? ` and ${remaining} more` : ""}`;
 }
-//@ chunk-grx66nns.js:6786-7291 placement
+//@ chunk-3b4rsbq5.js:6786-7291 placement
 /**
  * 交互会话的通知/恢复处理（与插件无关，见 lead 建议）。
  */
@@ -491,15 +491,15 @@ function repliesYieldedLine(slugs, holder, count, now) {
       : `another session of this conversation (${line}), which just published or resumed them there`;
   return `Automatic replies to comments on ${formatFailureDetails(slugs)} moved to ${out}; this session keeps watching for new versions only. To take them back here, publish the Artifact again or ask Claude to resume its replies.`;
 }
-//@ chunk-grx66nns.js:7291-7494 placement
+//@ chunk-3b4rsbq5.js:7291-7494 placement
 function repliesYieldRevertedLine(options) {
   return `Automatic replies to comments on ${formatFailureDetails(options)} are back in this session: the other session of this conversation did not keep them (it could not take them over, or it has since exited).`;
 }
-//@ chunk-grx66nns.js:7494-7728 placement
+//@ chunk-3b4rsbq5.js:7494-7728 placement
 function repliesStoppedElsewhereLine(options) {
   return `Automatic replies to comments on ${formatFailureDetails(options)} were stopped in the other session of this conversation, so they stay off here too. To turn them back on, publish the Artifact again or ask Claude to resume its replies.`;
 }
-//@ chunk-grx66nns.js:7728-8459 placement
+//@ chunk-3b4rsbq5.js:7728-8459 placement
 /**
  * 自动回复已移到其他会话的通知
  */
@@ -509,7 +509,7 @@ var REPLIES_STOPPED_NOTICE =
   "The automatic comment replies this session had handed to another session of this conversation were stopped by the user there; they stay stopped here too. Nothing to do unless the user asks to resume them or to publish again.";
 var REPLIES_RETURNED_NOTICE =
   "The automatic comment replies are back with this session: the other session of this conversation did not keep them (it could not take them over, or it has since exited).";
-//@ chunk-grx66nns.js:8459-8958 placement
+//@ chunk-3b4rsbq5.js:8459-8958 placement
 function notifyModelOfReplyYield(slugs, options) {
   let text =
     slugs === "yielded"
@@ -540,7 +540,7 @@ function notifyModelOfReplyYield(slugs, options) {
     agentId: mainAgentId(),
   });
 }
-//@ chunk-grx66nns.js:8958-9635 placement
+//@ chunk-3b4rsbq5.js:8958-9635 placement
 /**
  * 注册 artifact 评论自动回复的让出/接管持有者。
  */
@@ -585,7 +585,7 @@ function registerReplyYieldHolder(table) {
   );
   return () => setYieldHolder(null);
 }
-//@ chunk-grx66nns.js:9635-9996 placement
+//@ chunk-3b4rsbq5.js:9635-9996 placement
 /**
  * 按是否可让出分组 slug
  */
@@ -624,7 +624,7 @@ function partitionSlugsForYield(slugs, msgId) {
     newlyYielded: lost,
   };
 }
-//@ chunk-grx66nns.js:9996-10152 placement
+//@ chunk-3b4rsbq5.js:9996-10152 placement
 /**
  * 该 slug 的自动回复是否已接线
  */
@@ -637,7 +637,7 @@ function isReplyWired(slug) {
     getBootingAutoReactSlugs().has(slug)
   );
 }
-//@ chunk-grx66nns.js:10152-10631 placement
+//@ chunk-3b4rsbq5.js:10152-10631 placement
 /**
  * 释放已让出的 slug
  */
@@ -679,7 +679,7 @@ function releaseYieldedSlugs(entry, slugs) {
     });
   return released;
 }
-//@ chunk-18hwfzwa.js:348523-348815 placement
+//@ chunk-czq1j3j2.js:386245-386537 placement
 /**
  * 注册 Artifact 回复让出通知：让出/恢复时向转录追加带查看器链接的系统通知；与 newerModelOffer 无关，疑似放错文件。
  */

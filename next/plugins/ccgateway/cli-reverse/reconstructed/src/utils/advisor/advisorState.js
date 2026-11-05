@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：advisor 状态。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mw4q1ac2.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (1), chunk-yy7jv10y.js (12)
  * attribution: placement 13
  */
 import { classifyQuerySource } from "../../services/api/requestHeaders.js";
@@ -29,7 +29,20 @@ import { isModelKnownServedToOrg } from "../model/modelAllowlist.js";
 import { logForDebugging } from "../debug.js";
 import { isUsageCreditsOnlyModel, parseUserSpecifiedModel } from "../model/modelDisplay.js";
 
-//@ chunk-mw4q1ac2.js:422-506 placement
+//@ chunk-7jxyna5q.js:64566-64757 placement
+function lastAdvisorToolChange(messages) {
+  for (let j = messages.length - 1; j >= 0; j--) {
+    let message = messages[j];
+    if (
+      message.type === "attachment" &&
+      message.attachment.type === "advisor_tool" &&
+      message.attachment.toolChange !== undefined
+    )
+      return message.attachment.toolChange;
+  }
+  return;
+}
+//@ chunk-yy7jv10y.js:426-510 placement
 /**
  * 空的顾问状态（无附件、无模型、未推迟、未激活）。
  */
@@ -39,7 +52,7 @@ var EMPTY_ADVISOR_STATE = {
   advisorDeferred: false,
   advisorActive: false,
 };
-//@ chunk-mw4q1ac2.js:506-1628 placement
+//@ chunk-yy7jv10y.js:510-1632 placement
 /**
  * 为一次查询计算 advisor（顾问模型）状态：按查询来源（主线程/辅助）、恢复状态与配置模型确定 advisor 模型，处理经工具变更加入/移除与回退，返回 advisorModel、advisorDeferred、advisorActive 及需要发出的 advisor_tool 附件；出错时返回空状态。
  */
@@ -149,7 +162,7 @@ function resolveAdvisorState(
     return EMPTY_ADVISOR_STATE;
   }
 }
-//@ chunk-mw4q1ac2.js:1628-1747 placement
+//@ chunk-yy7jv10y.js:1632-1751 placement
 function advisorStateResult(model, isDeferred, isActive) {
   return {
     announcement: undefined,
@@ -158,7 +171,7 @@ function advisorStateResult(model, isDeferred, isActive) {
     advisorActive: model !== undefined && isActive,
   };
 }
-//@ chunk-mw4q1ac2.js:1747-1991 placement
+//@ chunk-yy7jv10y.js:1751-1995 placement
 function finalizeAdvisorState(heldAdvisor, toolAttachment, effectiveModel, configuredRuntimeModel) {
   if (
     heldAdvisor.model === undefined ||
@@ -177,7 +190,7 @@ function finalizeAdvisorState(heldAdvisor, toolAttachment, effectiveModel, confi
     return EMPTY_ADVISOR_STATE;
   return advisorStateResult(heldAdvisor.model, false, true);
 }
-//@ chunk-mw4q1ac2.js:1991-2060 placement
+//@ chunk-yy7jv10y.js:1995-2064 placement
 /**
  * 不需要工具变更时清掉 viaToolChange 标记。
  */
@@ -189,7 +202,7 @@ function clearToolChangeFlag(heldAdvisor, toolChangeAllowed) {
       }
     : heldAdvisor;
 }
-//@ chunk-mw4q1ac2.js:2060-2146 placement
+//@ chunk-yy7jv10y.js:2064-2150 placement
 /**
  * 把上一条 advisor_tool 附件转成内部“已持有”状态。
  */
@@ -200,7 +213,7 @@ function advisorAttachmentToHeld(advisorToolAttachment) {
     viaToolChange: advisorToolAttachment.toolChange,
   };
 }
-//@ chunk-mw4q1ac2.js:2146-2335 placement
+//@ chunk-yy7jv10y.js:2150-2339 placement
 function chooseAdvisorModel(advisorSetting, effectiveModel, configuredRuntimeModel, toolChangeAllowed) {
   let advisorModelFor = resolveAdvisorModelFor(advisorSetting, effectiveModel, configuredRuntimeModel);
   if (advisorModelFor !== undefined || !toolChangeAllowed || advisorSetting)
@@ -220,7 +233,7 @@ function chooseAdvisorModel(advisorSetting, effectiveModel, configuredRuntimeMod
         standby: true,
       };
 }
-//@ chunk-mw4q1ac2.js:2335-2624 placement
+//@ chunk-yy7jv10y.js:2339-2628 placement
 function findStandbyAdvisorModel(baseModel, configuredRuntimeModel) {
   if (!isFirstPartyApiBackend() || !isAdvisorToolEnabled() || !baseModelSupportsAdvisor(baseModel)) return;
   let validAdvisorAliases = getValidAdvisorAliases();
@@ -239,14 +252,14 @@ function findStandbyAdvisorModel(baseModel, configuredRuntimeModel) {
   }
   return;
 }
-//@ chunk-mw4q1ac2.js:2624-2656 placement
+//@ chunk-yy7jv10y.js:2628-2660 placement
 /**
  * 判断模型是否只能走 usage credits。
  */
 function isCreditsOnlyModel(validAdvisorAlias) {
   return isUsageCreditsOnlyModel(parseUserSpecifiedModel(validAdvisorAlias));
 }
-//@ chunk-mw4q1ac2.js:2656-4176 placement
+//@ chunk-yy7jv10y.js:2660-4182 placement
 /**
  * 根据当前 advisor 选择与上一条 advisor_tool 附件，决定是否需要发出新的 advisor_tool 附件（可用/不可用、add/remove 工具变更、简略形式），无变化时返回 undefined。
  */
@@ -379,20 +392,7 @@ function buildAdvisorAnnouncement(
   if (advisorToolAttachment.toolChange && !advisorToolAttachment.byBase) return;
   return hasFullNotice ? abbreviatedAnnouncement : fullAnnouncement;
 }
-//@ chunk-mw4q1ac2.js:4176-4365 placement
-function lastAdvisorToolChange(messages) {
-  for (let j = messages.length - 1; j >= 0; j--) {
-    let message = messages[j];
-    if (
-      message.type === "attachment" &&
-      message.attachment.type === "advisor_tool" &&
-      message.attachment.toolChange !== undefined
-    )
-      return message.attachment.toolChange;
-  }
-  return;
-}
-//@ chunk-mw4q1ac2.js:4365-4441 placement
+//@ chunk-yy7jv10y.js:4182-4258 placement
 /**
  * 给定基础模型与顾问模型能否启用顾问（家族相同用严格判断，否则宽松）。
  */
@@ -406,7 +406,7 @@ function canUseAdvisorFor(model, baseModel, configuredRuntimeModel) {
       : canAdviseModelLenient(baseModel, model))
   );
 }
-//@ chunk-mw4q1ac2.js:4441-4523 placement
+//@ chunk-yy7jv10y.js:4258-4340 placement
 /**
  * 解析可用的顾问模型（家族相同或宽松判断通过）。
  */
@@ -418,4 +418,4 @@ function resolveAdvisorModelFor(advisorSetting, effectiveModel, configuredRuntim
     ? advisorModel
     : undefined;
 }
-export { resolveAdvisorState, advisorAttachmentToHeld };
+export { lastAdvisorToolChange, advisorAttachmentToHeld, resolveAdvisorState };

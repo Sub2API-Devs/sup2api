@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：simplify 内置技能：清理改动代码（复用、简化、效率），按能否派子代理选 4 代理并行版或单代理版。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/simplify.ts
- * pieces: chunk-hantmvxa.js (2)
+ * pieces: chunk-ne2890fx.js (2)
  * attribution: placement 2
  */
 import {
@@ -21,13 +21,13 @@ import { registerBundledSkill } from "../bundledSkills.js";
 import { SIMPLIFY } from "./bundledSkillNames.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hantmvxa.js:187076-189778 placement
+//@ chunk-ne2890fx.js:187258-189960 placement
 /**
  * 无法并行派子代理时使用的单遍 /simplify 提示词。
  */
 var SIMPLIFY_AGENTS_PROMPT; // deferred: uses AGENT (../../tools/AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
 var SIMPLIFY_SINGLE_PASS_PROMPT;
-deferInit("chunk-hantmvxa.js:187076", () => {
+deferInit("chunk-ne2890fx.js:187258", () => {
   SIMPLIFY_AGENTS_PROMPT = `\`/simplify \u2192 4 cleanup agents in parallel \u2192 apply the fixes\`
 
 You are improving the quality of the changed code, not hunting for bugs. Review
@@ -93,7 +93,7 @@ review done without the ${AGENT} tool, not the full 4-agent
 fan-out, so whoever reads it isn't misled about what actually ran.
 `;
 });
-//@ chunk-hantmvxa.js:189778-190259 placement
+//@ chunk-ne2890fx.js:189960-190441 placement
 /**
  * 注册 simplify skill（"Clean up the changed code without changing behavior"）：按会话能否派子代理选 4 代理并行版或单代理版提示词，参数是审查目标。
  */

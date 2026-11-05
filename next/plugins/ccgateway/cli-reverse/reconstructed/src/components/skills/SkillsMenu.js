@@ -3,10 +3,10 @@
  *
  * /skills 菜单：按来源（用户/项目/插件/命令）列出技能及描述。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/skills/SkillsMenu.tsx
- * pieces: chunk-00qhwn8e.js (3), chunk-ae5g0zb5.js (1), chunk-e6aww6q8.js (1), chunk-vrb44rx7.js (1), chunk-ygke3hz8.js (1)
- * attribution: placement 2, callgraph-fingerprint 1, fingerprint 4
+ * pieces: chunk-4fw9ejgj.js (4), chunk-5xgkngpb.js (1), chunk-mhn0amzz.js (1), chunk-sprn4z2j.js (1), chunk-wb51jffc.js (1)
+ * attribution: placement 2, layout 1, callgraph-fingerprint 1, fingerprint 4
  */
 import { CLAUDE_TEST_3 } from "../../plugins/bundled/claudeTest/commandHook.js";
 import { getPluginDisplayName } from "../ManagedSettingsSecurityDialog/utils.js";
@@ -23,6 +23,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { stripInvisibleChars } from "../../utils/invisibleChars.js";
+import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../state/AppState.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
@@ -31,16 +32,14 @@ import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { Byline } from "../design-system/Byline.js";
 import { HintText } from "../design-system/HintText.js";
-import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
-import { renderSlashSkillItem } from "../ui/OrderedList.js";
 import { Dialog } from "../design-system/Dialog.js";
 
-//@ chunk-e6aww6q8.js:1476088-1476207 fingerprint (2.1.88 match: getSourceSubtitle, 0.733)
+//@ chunk-5xgkngpb.js:1476727-1476846 fingerprint (2.1.88 match: getSourceSubtitle, 0.733)
 function getSourceSubtitle(source, skills) {
   let found = source.find((source) => source.name === skills);
   return found?.loadedFrom === "skills" || found?.loadedFrom === "commands_DEPRECATED";
 }
-//@ chunk-ae5g0zb5.js:106214-106307 fingerprint (2.1.88 match: _temp3, 0.607)
+//@ chunk-mhn0amzz.js:107456-107549 fingerprint (2.1.88 match: _temp3, 0.607)
 /**
  * 函数 hasPluginSkill（有来自该插件的技能命令）；位于「/skills 菜单：按来源（用户/项目/插件/命令）列出技能及描述」模块。
  */
@@ -49,7 +48,7 @@ function hasPluginSkill(skill_0) {
     (state) => state.type === "prompt" && state.pluginInfo?.pluginManifest.name === CLAUDE_TEST_3,
   );
 }
-//@ chunk-ygke3hz8.js:583-796 fingerprint (2.1.88 match: _temp, 0.858)
+//@ chunk-sprn4z2j.js:583-796 fingerprint (2.1.88 match: _temp, 0.858)
 function isSkillCommand(cmd) {
   return (
     cmd.type === "prompt" &&
@@ -61,7 +60,7 @@ function isSkillCommand(cmd) {
       cmd.loadedFrom === "mcp")
   );
 }
-//@ chunk-vrb44rx7.js:141988-142243 fingerprint (2.1.88 match: getSourceTitle, 0.506)
+//@ chunk-wb51jffc.js:142187-142442 fingerprint (2.1.88 match: getSourceTitle, 0.505)
 function getSourceTitle({ items, healthByPluginName, columns }) {
   let maxWidth = 0;
   for (let item of items) {
@@ -76,11 +75,11 @@ function getSourceTitle({ items, healthByPluginName, columns }) {
     Math.max(MIN_TITLE_COLUMN_WIDTH, columns - TITLE_COLUMN_RESERVED_LEFT - TITLE_COLUMN_RESERVED_RIGHT),
   );
 }
-//@ chunk-00qhwn8e.js:17439-17489 placement
+//@ chunk-4fw9ejgj.js:18620-18670 placement
 function workerSkillInventory(state) {
   return state.workerInventory?.skills;
 }
-//@ chunk-00qhwn8e.js:17489-17541 placement
+//@ chunk-4fw9ejgj.js:18670-18722 placement
 function renderSlashSkill(skillName) {
   return jsxProd_default_2(
     Text,
@@ -90,7 +89,17 @@ function renderSlashSkill(skillName) {
     skillName,
   );
 }
-//@ chunk-00qhwn8e.js:17596-19170 callgraph-fingerprint (2.1.88 match: SkillsMenu, 0.279)
+//@ chunk-4fw9ejgj.js:18722-18777 layout
+function renderSlashSkillItem(command) {
+  return jsxProd_default(
+    OrderedListWithItem.Item,
+    {
+      label: `/${stripInvisibleChars(command)}`,
+    },
+    command,
+  );
+}
+//@ chunk-4fw9ejgj.js:18777-20351 callgraph-fingerprint (2.1.88 match: SkillsMenu, 0.279)
 /**
  * /skills：按来源分组列出技能（用户、项目、插件、旧 commands），显示描述与云会话中是否加载。
  */
@@ -203,4 +212,4 @@ function SkillsMenu_2(props) {
   } else dialogElement = $[18];
   return dialogElement;
 }
-export { SkillsMenu_2, hasPluginSkill, getSourceTitle, getSourceSubtitle, isSkillCommand };
+export { SkillsMenu_2, hasPluginSkill, getSourceSubtitle, isSkillCommand, getSourceTitle };

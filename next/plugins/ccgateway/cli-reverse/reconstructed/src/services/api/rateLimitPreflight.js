@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：请求前的限流预检
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (6)
  * attribution: placement 6
  */
 import {
@@ -30,7 +30,7 @@ import { getBareCheckModel } from "../../utils/model/smallFastModel.js";
 import { logError } from "../../utils/log.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2509323-2509749 placement
+//@ chunk-5xgkngpb.js:2551557-2551983 placement
 /**
  * 把预检得到的 429 分类：普通 429、超额、其他限额、重置时间不在未来，或真正被拒。
  */
@@ -49,7 +49,7 @@ function classifyPreflight429(headers, now) {
     return "reset_not_ahead";
   return "refused";
 }
-//@ chunk-e6aww6q8.js:2509749-2510095 placement
+//@ chunk-5xgkngpb.js:2551983-2552329 placement
 /**
  * 执行一次额度预检请求，把结果归类为放行、客户端/网络/HTTP 错误或各类 429。
  */
@@ -85,7 +85,7 @@ async function runPreflightProbe(model, credentials, signal) {
         };
   }
 }
-//@ chunk-e6aww6q8.js:2510095-2510278 placement
+//@ chunk-5xgkngpb.js:2552329-2552512 placement
 function stoppedPromise(stop, signal) {
   return new Promise((resolve) => {
     let stopResolve = () => resolve("stopped");
@@ -97,7 +97,7 @@ function stoppedPromise(stop, signal) {
     });
   });
 }
-//@ chunk-e6aww6q8.js:2510278-2510885 placement
+//@ chunk-5xgkngpb.js:2552512-2553121 placement
 /**
  * 发一次配额探测请求（有截止时间、可外部停止），返回 admitted/refused/deadline/stopped 等；refused 时提供 report 回调把拒绝写入额度状态。
  */
@@ -159,12 +159,12 @@ async function preflightRateLimitCore({
     abortController.abort();
   }
 }
-//@ chunk-e6aww6q8.js:2510885-2510905 placement
-var weakMap_9; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:2510885", () => {
-  weakMap_9 = new WeakMap();
+//@ chunk-5xgkngpb.js:2553121-2553141 placement
+var weakMap_11; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xgkngpb.js:2553121", () => {
+  weakMap_11 = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:2510905-2512232 placement
+//@ chunk-5xgkngpb.js:2553141-2554468 placement
 /**
  * 请求前的限流预检，按开关、必要流量、账号类型等决定是否跳过。
  */
@@ -180,9 +180,9 @@ async function preflightRateLimit({ rejection, nowMs, credentials, stop }) {
   }
   if (applied !== undefined) {
     logForDebugging(`[usage limit recheck] no probe sent (${applied}): the request sleeps on`);
-    let seenSet = weakMap_9.get(rejection) ?? new Set();
+    let seenSet = weakMap_11.get(rejection) ?? new Set();
     if (!seenSet.has(applied)) {
-      weakMap_9.set(rejection, seenSet.add(applied));
+      weakMap_11.set(rejection, seenSet.add(applied));
       logFeatureSad("usage_limit_wait_recheck", applied);
     }
     return false;

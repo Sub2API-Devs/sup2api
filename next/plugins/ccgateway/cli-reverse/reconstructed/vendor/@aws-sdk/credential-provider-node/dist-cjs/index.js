@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/credential-provider-node/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/credential-provider-node@3.936.0..3.972.2
- * pieces: chunk-j3x7ed1b.js (6)
+ * pieces: chunk-qrtqtj8x.js (6)
  * attribution: esm-layout 3, esm-fingerprint 3
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
@@ -10,10 +10,10 @@ import { require_property_provider } from "../../../@smithy/property-provider/di
 import { require_shared_ini_file_loader } from "../../../@smithy/shared-ini-file-loader/dist-cjs/index.js";
 import { ENV_KEY, ENV_SECRET, fromEnv } from "../../credential-provider-env/dist-cjs/index.js";
 
-//@ chunk-j3x7ed1b.js:1021-1047 esm-layout
+//@ chunk-qrtqtj8x.js:1021-1047 esm-layout
 var propertyProvider_2 = __toESM(require_property_provider());
 var sharedIniFileLoader = __toESM(require_shared_ini_file_loader());
-//@ chunk-j3x7ed1b.js:1047-1723 esm-layout
+//@ chunk-qrtqtj8x.js:1047-1723 esm-layout
 var import_property_provider = __toESM(require_property_provider());
 var ENV_IMDS_DISABLED = "AWS_EC2_METADATA_DISABLED";
 var remoteProvider = async (init) => {
@@ -36,7 +36,7 @@ var remoteProvider = async (init) => {
   init.logger?.debug("@aws-sdk/credential-provider-node - remoteProvider::fromInstanceMetadata");
   return fromInstanceMetadata(init);
 };
-//@ chunk-j3x7ed1b.js:1723-2018 esm-fingerprint
+//@ chunk-qrtqtj8x.js:1723-2018 esm-fingerprint
 function memoizeChain(providers, treatAsExpired) {
   let chain = internalCreateChain(providers);
   let activeLock;
@@ -66,7 +66,7 @@ function memoizeChain(providers, treatAsExpired) {
   };
   return provider;
 }
-//@ chunk-j3x7ed1b.js:2018-2140 esm-fingerprint
+//@ chunk-qrtqtj8x.js:2018-2140 esm-fingerprint
 var internalCreateChain = (providers) => async (awsIdentityProperties) => {
   let lastProviderError;
   for (let provider of providers)
@@ -79,7 +79,7 @@ var internalCreateChain = (providers) => async (awsIdentityProperties) => {
     }
   throw lastProviderError;
 };
-//@ chunk-j3x7ed1b.js:2140-4216 esm-layout
+//@ chunk-qrtqtj8x.js:2140-4216 esm-layout
 var multipleCredentialSourceWarningEmitted = false;
 var defaultProvider = (init = {}) =>
   memoizeChain(
@@ -158,7 +158,7 @@ var defaultProvider = (init = {}) =>
     ],
     credentialsTreatedAsExpired,
   );
-//@ chunk-j3x7ed1b.js:4216-4292 esm-fingerprint
+//@ chunk-qrtqtj8x.js:4216-4292 esm-fingerprint
 var credentialsTreatedAsExpired = (credentials) =>
   credentials?.expiration !== undefined && credentials.expiration.getTime() - Date.now() < 300000;
 export { defaultProvider };

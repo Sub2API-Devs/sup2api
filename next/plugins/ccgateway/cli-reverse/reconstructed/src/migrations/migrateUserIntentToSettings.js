@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：迁移：把全局配置里的用户意图类设置搬到 userSettings。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cjydagjy.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h61dq9nz.js (1)
  * attribution: placement 1
  */
 import { getGlobalConfig, DEFAULT_GLOBAL_CONFIG } from "../utils/config.js";
@@ -16,7 +16,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { logError } from "../utils/log.js";
 
-//@ chunk-cjydagjy.js:12267-12860 placement
+//@ chunk-h61dq9nz.js:12444-13037 placement
 /**
  * 迁移：把全局配置里的用户意图类设置搬到 userSettings。
  */

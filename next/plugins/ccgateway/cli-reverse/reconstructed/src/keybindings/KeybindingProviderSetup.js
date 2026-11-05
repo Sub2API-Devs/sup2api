@@ -3,9 +3,9 @@
  *
  * 并入已有模块：快捷键 Provider。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/keybindings/KeybindingProviderSetup.tsx
- * pieces: chunk-xe7zq1p4.js (15)
+ * pieces: chunk-swe0kb5q.js (15)
  * attribution: placement 8, fingerprint 2, layout 4, affinity 1
  */
 import {
@@ -51,17 +51,17 @@ import { isDescendantOf, getRootNode, getFocusManager } from "../ink/focus.js";
 import { BaseBox } from "../ink/components/Box.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-xe7zq1p4.js:3563-3567 placement
+//@ chunk-swe0kb5q.js:3565-3569 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-xe7zq1p4.js:3563", () => {
+deferInit("chunk-swe0kb5q.js:3565", () => {
   init_react_production();
 });
-//@ chunk-xe7zq1p4.js:3567-3990 placement
+//@ chunk-swe0kb5q.js:3569-3992 placement
 /**
  * 快捷键动作事件：冒泡、可取消，带动作名、原始按键事件、是否和弦完成与来源；consume 同时阻止原始事件。
  */
 let KeybindingActionEvent; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-xe7zq1p4.js:3567", () => {
+deferInit("chunk-swe0kb5q.js:3569", () => {
   KeybindingActionEvent = class KeybindingActionEvent extends TerminalEvent {
     action;
     sourceEvent;
@@ -87,12 +87,12 @@ deferInit("chunk-xe7zq1p4.js:3567", () => {
     }
   };
 });
-//@ chunk-xe7zq1p4.js:3990-4063 placement
+//@ chunk-swe0kb5q.js:3992-4065 placement
 /**
  * 记录各和弦按键使用次数的全局 store（重置时清空）。
  */
 var chordCountsStore; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-xe7zq1p4.js:3990", () => {
+deferInit("chunk-swe0kb5q.js:3992", () => {
   chordCountsStore = identity(
     createStore({
       counts: new Map(),
@@ -103,7 +103,7 @@ deferInit("chunk-xe7zq1p4.js:3990", () => {
       })),
   );
 });
-//@ chunk-xe7zq1p4.js:4063-4166 placement
+//@ chunk-swe0kb5q.js:4065-4168 placement
 function incrementContextCount(context) {
   chordCountsStore.setState((prevState) => {
     let nextCounts = new Map(prevState.counts);
@@ -113,7 +113,7 @@ function incrementContextCount(context) {
     };
   });
 }
-//@ chunk-xe7zq1p4.js:4166-4326 placement
+//@ chunk-swe0kb5q.js:4168-4328 placement
 function decrementContextCount(context) {
   chordCountsStore.setState((prevState) => {
     let currentCount = prevState.counts.get(context);
@@ -126,19 +126,19 @@ function decrementContextCount(context) {
     };
   });
 }
-//@ chunk-xe7zq1p4.js:4326-4367 placement
+//@ chunk-swe0kb5q.js:4328-4369 placement
 /**
  * 是否统计过该和弦
  */
 function hasChordCount(state, context) {
   return state.counts.has(context);
 }
-//@ chunk-xe7zq1p4.js:4367-4379 placement
+//@ chunk-swe0kb5q.js:4369-4381 placement
 /**
  * 和弦按键等待下一键的超时（3 秒），超时后取消和弦并提示。
  */
 var CHORD_PENDING_TIMEOUT_MS = 3000;
-//@ chunk-xe7zq1p4.js:4379-4577 placement
+//@ chunk-swe0kb5q.js:4381-4580 placement
 /**
  * 已在快捷键上下文中时直接渲染子元素，否则包一层快捷键初始化组件。
  */
@@ -166,7 +166,7 @@ function KeybindingRoot(props) {
   } else wrappedChildren = $[3];
   return wrappedChildren;
 }
-//@ chunk-xe7zq1p4.js:4577-5904 fingerprint (2.1.88 match: KeybindingSetup, 0.742)
+//@ chunk-swe0kb5q.js:4580-5923 fingerprint (2.1.88 match: KeybindingSetup, 0.71)
 /**
  * 快捷键系统根组件：首次渲染同步加载绑定，挂载后启动文件监视并订阅热重载；维护待定和弦（超时 Je 毫秒自动取消并弹出 "… cancelled" 通知）、活动上下文集合、动作处理器注册表、预分发处理器、单键事件引用；向下提供 KeybindingProvider，外面包一层 ChordInterceptor。
  */
@@ -208,10 +208,12 @@ function KeybindingSetup({ children }) {
           logForDebugging("[keybindings] Chord timeout - cancelling");
           pendingChordRef.current = null;
           setPendingChordState(null);
+          let pendingChordText = chordToDisplayString(pending, getShortcutDisplayPlatform());
           addNotification({
             key: "chord-timeout",
             kind: "feedback",
-            text: `${chordToDisplayString(pending, getShortcutDisplayPlatform())} cancelled \u2014 no next key within ${CHORD_PENDING_TIMEOUT_MS / 1000}s`,
+            text: `${pendingChordText} cancelled \u2014 no next key within ${CHORD_PENDING_TIMEOUT_MS / 1000}s`,
+            row1Hint: `${pendingChordText} timed out`,
             priority: "immediate",
             timeoutMs: 3000,
           });
@@ -238,7 +240,6 @@ function KeybindingSetup({ children }) {
     bindings,
     pendingChordRef,
     pendingChord,
-    setPendingChord,
     activeContexts: activeContextsRef.current,
     registerActiveContext,
     unregisterActiveContext,
@@ -259,7 +260,7 @@ function KeybindingSetup({ children }) {
     }),
   });
 }
-//@ chunk-xe7zq1p4.js:5904-6074 layout
+//@ chunk-swe0kb5q.js:5923-6093 layout
 /**
  * 处理器排序：非回退处理器在前；同动作已有非回退处理器时丢弃回退处理器。
  */
@@ -273,16 +274,16 @@ function orderNonFallbackFirst(registrations) {
     ...copy.filter((registration) => registration.fallback && !coveredActions.has(registration.action)),
   ];
 }
-//@ chunk-xe7zq1p4.js:6074-6125 layout
+//@ chunk-swe0kb5q.js:6093-6144 layout
 function isUnmodifiedKey(keyEvent) {
   return !keyEvent.ctrl && !keyEvent.meta && !keyEvent.superKey;
 }
-//@ chunk-xe7zq1p4.js:6125-6157 layout
+//@ chunk-swe0kb5q.js:6144-6176 layout
 var RESERVED_KEYSTROKES; // deferred: uses NON_REBINDABLE (./reservedShortcuts.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-xe7zq1p4.js:6125", () => {
+deferInit("chunk-swe0kb5q.js:6144", () => {
   RESERVED_KEYSTROKES = NON_REBINDABLE.map((entry) => parseKeystroke(entry.key));
 });
-//@ chunk-xe7zq1p4.js:6157-6225 layout
+//@ chunk-swe0kb5q.js:6176-6244 layout
 function isReservedKeyEvent(keyEvent) {
   let keystroke = keyEventToKeystroke(keyEvent);
   return (
@@ -290,7 +291,7 @@ function isReservedKeyEvent(keyEvent) {
     RESERVED_KEYSTROKES.some((reservedKeystroke) => keystrokesEqual(reservedKeystroke, keystroke))
   );
 }
-//@ chunk-xe7zq1p4.js:6225-10406 fingerprint (2.1.88 match: ChordInterceptor, 0.407)
+//@ chunk-swe0kb5q.js:6244-10425 fingerprint (2.1.88 match: ChordInterceptor, 0.408)
 /**
  * 根 Box（keybindingScope=Global、tabIndex=-1，始终在焦点链上）的捕获阶段键盘/滚轮处理器，统一做快捷键分发。两种模式：legacy——在「有处理器的上下文 + 活动上下文 + Global」里 resolveKeyWithChordState，处理和弦开始/取消/解绑/匹配，匹配后按注册表调用单键处理器（回退处理器在保留键或无修饰键时跳过）；scopeChain——按焦点节点到根的 keybindingScope 链（以及抢先作用域 preemptiveScopes）解析，匹配后先把动作作为事件派给 DOM 节点（onAction），未处理再落回注册表；文本输入框获得焦点时无修饰单字符直接交给预分发。消费的事件 preventDefault + stopImmediatePropagation。滚轮事件转成 wheelup/wheeldown 按键参与同一套解析。
  */
@@ -657,7 +658,7 @@ function ChordInterceptor({
     children,
   });
 }
-//@ chunk-xe7zq1p4.js:10406-10469 affinity
+//@ chunk-swe0kb5q.js:10425-10488 affinity
 function consumeKeyEvent(event) {
   event.preventDefault();
   event.stopImmediatePropagation();

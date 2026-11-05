@@ -3,15 +3,15 @@
  *
  * 合并多个 AbortSignal 与超时为一个 signal
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/combinedAbortSignal.ts
- * pieces: chunk-sthwtwzm.js (1)
+ * pieces: chunk-8k9d4m4r.js (1)
  * attribution: fingerprint 1
  */
 import { createAbortController } from "./abortController.js";
 import { MAX_TIMER_DELAY_MS } from "./timerDelayClamp.js";
 
-//@ chunk-sthwtwzm.js:263-731 fingerprint (2.1.88 match: createCombinedAbortSignal, 0.925)
+//@ chunk-8k9d4m4r.js:263-731 fingerprint (2.1.88 match: createCombinedAbortSignal, 0.926)
 /**
  * 合并多个 AbortSignal（及可选超时）为一个，任一触发即 abort，返回 signal 与清理函数。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。云 worker 的 WebSocket 传输（/worker/events）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-z4g2ta8k.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1kk50rk6.js (7)
  * attribution: placement 7
  */
 import {
@@ -49,7 +49,7 @@ import { X_CCR_SESSION_WRITERS } from "./streamEventCoalescing.js";
 import { getWebSocketProxyUrl } from "../../utils/proxy.js";
 import { getWebSocketTLSOptions } from "../../utils/mtls.js";
 
-//@ chunk-z4g2ta8k.js:59551-67720 placement
+//@ chunk-1kk50rk6.js:63196-71365 placement
 /**
  * WorkerSocket：云 worker 与会话服务之间的 WebSocket（/worker/events），负责连接、重连、心跳与事件收发。
  */
@@ -481,12 +481,12 @@ class WorkerSocket {
     } catch {}
   }
 }
-//@ chunk-z4g2ta8k.js:67720-67804 placement
+//@ chunk-1kk50rk6.js:71365-71449 placement
 function buildSocketFrame(connection, id, kind, body) {
   let frame = `{"id":${id},"${kind}":${body}}`;
   return connection.isCompressed ? appendWatermark(frame) : frame;
 }
-//@ chunk-z4g2ta8k.js:67804-67901 placement
+//@ chunk-1kk50rk6.js:71449-71546 placement
 function parseWorkerEventFrame(payload) {
   if (typeof payload !== "string") return;
   try {
@@ -495,7 +495,7 @@ function parseWorkerEventFrame(payload) {
     return;
   }
 }
-//@ chunk-z4g2ta8k.js:67901-68340 placement
+//@ chunk-1kk50rk6.js:71546-71985 placement
 /**
  * 把 WorkerSocket 收到的应答帧还原为 HTTP Response：无错误时返回指定字段的 JSON（缺失则 500），有错误时按 status（限 400–599）并带 retry-after、x-ccr-conflict-reason 头。
  */
@@ -525,7 +525,7 @@ function workerReplyToResponse(connection, reply) {
     },
   );
 }
-//@ chunk-z4g2ta8k.js:68340-68689 placement
+//@ chunk-1kk50rk6.js:71985-72334 placement
 /**
  * 按服务端返回的元数据构造 SSE 响应头：content-type、date、保活间隔等。
  */
@@ -542,7 +542,7 @@ function buildStreamResponseHeaders(connection) {
     headers.set(X_CCR_ATTESTATION_POLICY, connection.attestation_policy);
   return headers;
 }
-//@ chunk-z4g2ta8k.js:68689-68918 placement
+//@ chunk-1kk50rk6.js:72334-72563 placement
 function encodeSseEvents(event) {
   let text = "";
   for (let [key, value] of Object.entries(event)) {
@@ -560,7 +560,7 @@ ${body}data: ${jsonStringify(value)}
   }
   return text;
 }
-//@ chunk-z4g2ta8k.js:68918-69084 placement
+//@ chunk-1kk50rk6.js:72563-72729 placement
 /**
  * 用 Bun WebSocket 打开 worker 连接；wss 时套用 WebSocket 代理与 TLS 选项。
  */

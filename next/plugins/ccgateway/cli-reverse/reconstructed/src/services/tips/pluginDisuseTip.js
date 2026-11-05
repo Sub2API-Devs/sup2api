@@ -3,9 +3,9 @@
  *
  * 未使用插件提示（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4r6qcn1a.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nv0mx777.js (4)
  * attribution: placement 4
  */
 import { isPluginLoadCacheOnly } from "../../utils/plugins/pluginLoadState.js";
@@ -22,10 +22,10 @@ import {
 } from "../../utils/telemetry/pluginTelemetry.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-4r6qcn1a.js:462-476 placement
+//@ chunk-nv0mx777.js:462-476 placement
 var MIN_DISUSE_DAYS = 14;
 var MIN_DISUSE_SESSIONS = 10;
-//@ chunk-4r6qcn1a.js:476-1160 placement
+//@ chunk-nv0mx777.js:476-1160 placement
 async function computeDisusedPlugins() {
   try {
     let loadCache = isPluginLoadCacheOnly();
@@ -63,7 +63,7 @@ async function computeDisusedPlugins() {
     return [];
   }
 }
-//@ chunk-4r6qcn1a.js:1160-1312 placement
+//@ chunk-nv0mx777.js:1160-1312 placement
 /**
  * 返回插件距上次使用的天数（没有严格市场限制时）：找不到记录返回 null，当前正在使用返回 0。
  */
@@ -74,7 +74,7 @@ function getPluginDaysSinceUse(pluginId) {
   if (hasPendingUsage(pluginId)) return 0;
   return disuseStats(usage, getGlobalConfig().numStartups, Date.now()).daysSinceLastUse;
 }
-//@ chunk-4r6qcn1a.js:1312-1490 placement
+//@ chunk-nv0mx777.js:1312-1490 placement
 function hasNonSkillComponents(plugin) {
   return Boolean(
     plugin.themesPath ||

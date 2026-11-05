@@ -3,9 +3,9 @@
  *
  * GitHub App 安装向导：警告确认步骤
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/install-github-app/WarningsStep.tsx
- * pieces: chunk-4v9zy7gn.js (3)
+ * pieces: chunk-2xbvbqx2.js (3)
  * attribution: file-local 1, fingerprint 2
  */
 import {
@@ -21,7 +21,7 @@ import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/inde
 import { KeyboardShortcutHint } from "../../components/design-system/KeyboardShortcutHint.js";
 import { GITHUB_ACTION_SETUP_DOCS_URL } from "../../constants/github-app.js";
 
-//@ chunk-4v9zy7gn.js:47620-47693 file-local
+//@ chunk-2xbvbqx2.js:48665-48738 file-local
 function renderDimInstruction(instruction, i) {
   return jsxProd_default(
     BulletRow,
@@ -34,7 +34,7 @@ function renderDimInstruction(instruction, i) {
     i,
   );
 }
-//@ chunk-4v9zy7gn.js:47693-47961 fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-2xbvbqx2.js:48738-49006 fingerprint (2.1.88 match: _temp2, 1)
 function renderWarning(warning, index) {
   return jsxProd_default_2(
     Box,
@@ -62,7 +62,7 @@ function renderWarning(warning, index) {
     index,
   );
 }
-//@ chunk-4v9zy7gn.js:47961-48997 fingerprint (2.1.88 match: WarningsStep, 0.398)
+//@ chunk-2xbvbqx2.js:49006-50041 fingerprint (2.1.88 match: WarningsStep, 0.398)
 function WarningsStep(props) {
   let $ = useMemoCache(9);
   let { warnings, onContinue } = props;

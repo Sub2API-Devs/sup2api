@@ -3,10 +3,10 @@
  *
  * 对话压缩主体：compactConversation（整段摘要）、partialCompactConversation（按选中消息前/后部分摘要）、摘要请求（fork 共享缓存 / 直连回退）、压缩后附件重注入（文件、计划、技能、后台任务、钩子）与边界消息。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/compact/compact.ts
- * pieces: chunk-ag5x7vhf.js (1), chunk-e6aww6q8.js (81)
- * attribution: fingerprint 19, placement 36, sole-consumer 1, layout 26
+ * pieces: chunk-5xgkngpb.js (82), chunk-bvz8t570.js (1), chunk-hnxhr3bs.js (1)
+ * attribution: placement 36, sole-consumer 1, fingerprint 19, layout 28
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
@@ -46,6 +46,7 @@ import {
 } from "../projects/threadRows.js";
 import { isMainQuerySource, classifyQuerySource } from "../api/requestHeaders.js";
 import { estimateTokensWithAnchor, getAutoCompactThresholdTokens } from "./autoCompact.js";
+import { lastUnchangedInstructionsIndex } from "../../utils/contextAttachments/instructions.js";
 import { remoteFileStateToObject } from "../../utils/remoteFileState.js";
 import { resetPickerState } from "../../memdir/findRelevantMemories.js";
 import { notifyCompaction } from "../api/promptCacheBreakDetection.js";
@@ -70,7 +71,6 @@ import {
   computeThinkingStrippedScope,
   collectThinkingStripPlan,
   getAdvisorStrippedMessageIds,
-  API_REQUEST_ABORTED_MESSAGE,
   getLastAssistantMessage,
   resolveReminderFold_2,
   normalizeMessagesForAPI,
@@ -106,10 +106,12 @@ import { notePendingConversationEdit } from "../../utils/shell/shellToolUtils.js
 import { logEvent } from "../analytics/index.js";
 import { fromEnum, fromEnumOpt, lit as lit_2 } from "../analytics/safeMetadata.js";
 import { agentTypeForTelemetry } from "../analytics/metadata.js";
+import { shortHash } from "../../utils/shortHash.js";
 import { onLastMainRequestReplaced } from "../api/cacheKeepalive.js";
 import { isDelegatedObservationContext } from "../../utils/agentContext.js";
 import { processSessionStartHooks } from "../../utils/sessionStart.js";
 import { isObjectBlock } from "../../utils/toolResultStorage.js";
+import { hasPdfReads } from "../../utils/attachments/pdf.js";
 import {
   getPromptTooLongGap,
   PROMPT_TOO_LONG_ERROR_MESSAGE,
@@ -117,7 +119,7 @@ import {
   parsePromptTooLongTokenCounts,
 } from "../api/errors.js";
 import { logForDebugging, createAttachmentMessage_2 } from "../../utils/debug.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { getRuntimeMainLoopModel } from "../../utils/model/planModeModel.js";
 import { stripAnyVersatileSuffix } from "../../utils/model/modelIds.js";
 import { modelSupportsAdaptiveThinking } from "../../utils/thinking.js";
@@ -128,13 +130,21 @@ import {
   noopEndToolExecutionSpan,
   setSpanError,
 } from "../../utils/telemetry/sessionTracing.js";
-import { getCompactPrompt, getPartialCompactPrompt, hasSummaryBlock, hasSummaryTagLine } from "./prompt.js";
+import { getCompactPrompt, hasSummaryBlock, hasSummaryTagLine, getPartialCompactPrompt } from "./prompt.js";
+import {
+  streamPrefixesPresent,
+  hasAuthoredByOthersArtifact,
+  anyMessageHasMarker,
+  REMOTE_CONTROL_DEVICE_REPORT_ELEMENT,
+} from "../../utils/messages/untrustedArtifactContent.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { messagesContainUntrustedContent } from "../../utils/messages/untrustedArtifactContent.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import { isCodeModeEnabled } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { replBindingsKept } from "../../utils/codeMode.js";
 import { getToolsUsedForSummary } from "../../utils/agentListing.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { logCompactionEvent } from "../../utils/telemetry/thirdPartyEventRecords.js";
-import { enqueueTaskNotification as enqueueTaskNotification_2 } from "../../utils/task/taskNotifications.js";
+import { enqueueTaskNotification } from "../../utils/task/taskNotifications.js";
 import { swapShrinksContextWindow } from "../../utils/model/smallFastModel.js";
 import { runForkedAgent } from "../../utils/forkedAgent.js";
 import {
@@ -177,7 +187,7 @@ import {
   buildDeferredToolsLatchContext,
   buildToolRevocationClassifier,
   getAgentListingDeltaAttachment,
-  areAttachmentsDisabled,
+  areAttachmentsDisabled_2,
   getSkillListingAttachmentsLazy,
   getMcpInstructionsDeltaAttachment,
   getMcpDroppedToolsAttachment,
@@ -220,7 +230,7 @@ import { isIdleCompletedAgent } from "../../tasks/LocalAgentTask/keepalive.js";
 import { truncateWithCount } from "../../utils/stringUtils.js";
 import { stripIgnorables } from "../../utils/sanitization.js";
 import { isFileUnchangedStub } from "../../tools/FileReadTool/prompt.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { MEMORY_TYPE_VALUES } from "../../utils/memory/types.js";
 import { getAutoMemPathOrNull } from "../../memdir/paths.js";
 import { getMemoryPath } from "../../utils/config.js";
@@ -229,11 +239,16 @@ import { recoveryTimeoutForContextTokens } from "../../utils/abortController.js"
 import { env } from "../../utils/env.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1630181-1630292 placement
+//@ chunk-bvz8t570.js:10445-10577 fingerprint (2.1.88 match: ERROR_MESSAGE_USER_ABORT, 0.508)
+var API_REQUEST_ABORTED_MESSAGE = "API Error: Request was aborted.";
+var USER_SENT_MESSAGE_PREFIX = `The user sent a new message while you were working:
+`;
+var HOOK_STOPPED_MESSAGE = "Operation stopped by hook";
+//@ chunk-5xgkngpb.js:1697887-1697998 placement
 var SKILL_TRUNCATION_NOTE = `
 
 [... skill content truncated for compaction; use Read on the skill path if you need the full text]`;
-//@ chunk-e6aww6q8.js:1630292-1630550 placement
+//@ chunk-5xgkngpb.js:1697998-1698256 placement
 /**
  * meta 用户消息的纯文本内容（全是文本块时拼接）。
  */
@@ -248,7 +263,7 @@ function metaMessageText(message) {
 
 `);
 }
-//@ chunk-e6aww6q8.js:1652913-1653514 placement
+//@ chunk-5xgkngpb.js:1727228-1727829 placement
 /**
  * 错误文本自证。压缩后给 deferred_tools_delta 附件补 loadedBeforeSummaryNames（压缩前已加载、本次又新增的工具名）；开关 tengu_radiant_lemur。
  */
@@ -291,7 +306,7 @@ function withToolsLoadedBeforeSummary(deferredToolsDeltaAttachments, discoveredT
     return deferredToolsDeltaAttachments;
   }
 }
-//@ chunk-e6aww6q8.js:1653514-1653656 placement
+//@ chunk-5xgkngpb.js:1727829-1727971 placement
 /**
  * 压缩后若新消息里没有 proactivity 附件，保留历史中最后一个未撤回的 proactivity 附件。
  */
@@ -303,7 +318,7 @@ function getProactivityAttachmentToKeep(preCompactMessages, messagesToKeep) {
   }
   return [];
 }
-//@ chunk-e6aww6q8.js:1653656-1653817 placement
+//@ chunk-5xgkngpb.js:1727971-1728132 placement
 /**
  * 消息是 proactivity 附件，且已撤回或级别/工具有效。
  */
@@ -315,41 +330,41 @@ function isProactivityAttachment(message) {
     (isProactivityMode(attachment.level) && isProactivitySettingsValid(attachment.tools))
   );
 }
-//@ chunk-e6aww6q8.js:2085167-2085194 sole-consumer
+//@ chunk-5xgkngpb.js:2141766-2141793 sole-consumer
 /**
  * 按宿主保存的权限上下文日志状态。
  */
 var permissionContextLogState; // deferred: uses PermissionContextLogState (../internalLogging.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2085167", () => {
+deferInit("chunk-5xgkngpb.js:2141766", () => {
   permissionContextLogState = new HostScoped(() => new PermissionContextLogState());
 });
-//@ chunk-e6aww6q8.js:2085194-2085233 placement
+//@ chunk-5xgkngpb.js:2141793-2141832 placement
 /**
  * 取当前宿主的权限上下文日志状态。
  */
 function getPermissionContextLogState() {
   return permissionContextLogState.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:2085233-2085278 placement
+//@ chunk-5xgkngpb.js:2141832-2141877 placement
 /**
  * 取当前 OCI 容器 id（透传状态里的 ociContainerId）。
  */
 function getOciContainerId() {
   return getPermissionContextLogState().ociContainerId();
 }
-//@ chunk-e6aww6q8.js:2085278-2085309 placement
+//@ chunk-5xgkngpb.js:2141877-2141908 placement
 /**
  * 异步空实现（保留调用点，目前不做任何事）。
  */
 async function noopAsync_3(toolPermissionContext, context) {
   return;
 }
-//@ chunk-e6aww6q8.js:2085309-2085323 placement
+//@ chunk-5xgkngpb.js:2141908-2141922 placement
 /**
  * 压缩过程中状态提示的刷新间隔（30 秒）。
  */
 var COMPACTING_STATUS_INTERVAL_MS = 30000;
-//@ chunk-e6aww6q8.js:2085323-2085394 placement
+//@ chunk-5xgkngpb.js:2141922-2141993 placement
 /**
  * 启动压缩状态定时器，返回停止函数。
  */
@@ -357,7 +372,7 @@ function startCompactingStatusTicker(onCompactEvent) {
   let interval = setInterval(emitCompactingStatus, COMPACTING_STATUS_INTERVAL_MS, onCompactEvent);
   return () => clearInterval(interval);
 }
-//@ chunk-e6aww6q8.js:2085461-2085728 placement
+//@ chunk-5xgkngpb.js:2142060-2142328 placement
 /**
  * 按 API 回合（助手消息 id 变化）把消息分组。
  */
@@ -384,19 +399,19 @@ function groupByApiRound(messages) {
   if (currentRound.length > 0) rounds.push(currentRound);
   return rounds;
 }
-//@ chunk-e6aww6q8.js:2085728-2085802 placement (2.1.88 match: countUnseenAssistantTurns, 1)
+//@ chunk-5xgkngpb.js:2142328-2142403 placement (2.1.88 match: countUnseenAssistantTurns, 1)
 function countNonProgressMessages(messages) {
   let messages_2 = messagesSinceCompactBoundary(messages).filter((message) => message.type !== "progress");
   return groupByApiRound(messages_2);
 }
-//@ chunk-e6aww6q8.js:2085802-2085841 placement
+//@ chunk-5xgkngpb.js:2142403-2142442 placement
 /**
  * 非进度消息不足两条（没有可压缩的内容）。
  */
-function hasTooFewMessagesToCompact(messagesForQuery) {
-  return countNonProgressMessages(messagesForQuery).length < 2;
+function hasTooFewMessagesToCompact(messages) {
+  return countNonProgressMessages(messages).length < 2;
 }
-//@ chunk-e6aww6q8.js:2134246-2138079 placement (2.1.88 match: createCompactionResultFromSessionMemory, 0.132)
+//@ chunk-5xgkngpb.js:2187266-2191286 placement (2.1.88 match: createCompactionResultFromSessionMemory, 0.13)
 /**
  * 反应式/预计算压缩成功后组装 CompactionResult：清 readFileState、边界消息、保留消息（可剥 thinking）、压缩后附件、PostCompact 钩子、计算 postTokens，记 tengu_reactive_compact_succeeded。旧版名 createCompactionResultFromSessionMemory 为错配。
  */
@@ -420,14 +435,23 @@ async function buildReactiveCompactionResult(input) {
   let compactionKind = input.compactionKind ?? resolveCompactionKind(trigger, thresholdSource);
   let isMainThreadQuery = isMainQuerySource(querySource);
   let preCompactTokens = input.preCompactTokens ?? estimateTokensWithAnchor(preCompactMessages);
-  let preCompactReadFileState = remoteFileStateToObject(toolUseContext.readFileState);
+  let kind = lastUnchangedInstructionsIndex(input.messagesToPreserve);
+  let messagesToKeep = input.messagesToPreserve
+    .filter(
+      (preserved, position) =>
+        preserved.type !== "attachment" ||
+        preserved.attachment.type !== "instructions" ||
+        (kind !== -1 && position >= kind),
+    )
+    .map(getTokenCountFromUsage_6);
+  let preCompactDiscovered = remoteFileStateToObject(toolUseContext.readFileState);
   toolUseContext.readFileState.clear();
   resetPickerState(toolUseContext.memorySelector);
   notifyCompaction(toolUseContext.agentId);
   if (isMainThreadQuery) {
     await reAppendSessionMetadataAfterCompaction(toolUseContext.storageV5);
     markPostCompaction(
-      roughTokenCountEstimationForMessages([...compactResult.summaryMessages, ...input.messagesToPreserve]),
+      roughTokenCountEstimationForMessages([...compactResult.summaryMessages, ...messagesToKeep]),
     );
   }
   let uuid = preCompactMessages.at(-1)?.uuid;
@@ -438,11 +462,10 @@ async function buildReactiveCompactionResult(input) {
   if (discoveredToolNames.size > 0)
     boundaryMarker.compactMetadata.preCompactDiscoveredTools = [...discoveredToolNames].sort();
   stampPreCompactReadVersions(boundaryMarker, toolUseContext.agentId, toolUseContext.getAppState());
-  let messagesToKeep = input.messagesToPreserve.map(getTokenCountFromUsage_4);
   let keptThinking = decideKeptThinkingStrip(messagesToKeep, toolUseContext);
   let isMainQuery = isMainQueryCompaction(querySource, toolUseContext.agentId);
   let postCompactAttachments = await buildPostCompactAttachments(
-    preCompactReadFileState,
+    preCompactDiscovered,
     toolUseContext,
     messagesToKeep,
     "reactive_compact",
@@ -538,7 +561,10 @@ async function buildReactiveCompactionResult(input) {
     keptThinkingStripped: keptThinking.marker !== undefined,
     keptThinkingStripDecidedBy: fromEnumOpt(keptThinking.decidedBy),
     forkAssistantMessageCount: compactResult.forkAssistantMessageCount,
-    summaryPromptArm: fromEnumOpt(compactResult.promptArm),
+    summaryPromptTextHash:
+      compactResult.servedInstructions === undefined
+        ? undefined
+        : shortHash(compactResult.servedInstructions),
     summaryScopeWarned: compactResult.scopeWarned,
     trigger: fromEnum(trigger),
     thresholdSource: fromEnumOpt(thresholdSource),
@@ -557,7 +583,7 @@ async function buildReactiveCompactionResult(input) {
     precomputeLeadMs: precomputeTelemetry ? Math.round(precomputeTelemetry.leadMs) : undefined,
     precomputeTotalMs: precomputeTelemetry ? Math.round(precomputeTelemetry.totalMs) : undefined,
     messagesSincePrecompute: precomputed
-      ? messagesToKeep.length - compactResult.messagesToPreserve.length
+      ? input.messagesToPreserve.length - compactResult.messagesToPreserve.length
       : undefined,
     messagesSinceTokens: precomputeTelemetry?.messagesSinceTokens,
     precomputeRehydrated: precomputeTelemetry?.rehydrated,
@@ -583,7 +609,7 @@ async function buildReactiveCompactionResult(input) {
     result: compactionOutput,
   };
 }
-//@ chunk-e6aww6q8.js:2138079-2139711 placement
+//@ chunk-5xgkngpb.js:2191286-2192921 placement
 /**
  * 压缩前后运行压缩相关钩子，钩子可替换压缩结果。
  */
@@ -691,14 +717,14 @@ async function runCompactHooks(input) {
   });
   return result;
 }
-//@ chunk-e6aww6q8.js:2139711-2139787 placement
+//@ chunk-5xgkngpb.js:2192921-2192997 placement
 /**
  * 推断压缩类型：手动、自动（有阈值来源）或响应式。
  */
 function resolveCompactionKind(trigger, thresholdSource) {
   return trigger === "manual" ? "manual" : thresholdSource !== undefined ? "auto" : "reactive";
 }
-//@ chunk-e6aww6q8.js:2139787-2140059 placement
+//@ chunk-5xgkngpb.js:2192997-2193441 placement
 /**
  * 压缩附件生成失败时的兜底附件（计划模式、项目线程询问、目标、定时任务）。
  */
@@ -710,7 +736,7 @@ async function fallbackPostCompactAttachments(
   precompute,
 ) {
   logError(error);
-  let planAttachment = await createPlanModeAttachmentIfNeeded(context).catch((error) => {
+  let previous = await createPlanModeAttachmentIfNeeded(context).catch((error) => {
     logError(error);
     return null;
   });
@@ -731,12 +757,23 @@ async function fallbackPostCompactAttachments(
     messagesToKeep,
     precompute,
   );
+  let fallbackEntry = null;
+  try {
+    fallbackEntry = invokedSkillsAttachment([], preCompactMessages, messagesToKeep);
+  } catch {
+    logError(
+      Error(
+        "The fallback of a compaction wrote no entry of a loaded MCP skill, because the scan of its messages threw",
+      ),
+    );
+  }
   let announcementWalk = context.options.announcementWalk;
   let attachments = [
-    ...(planAttachment ? [planAttachment] : []),
+    ...(previous ? [previous] : []),
     ...(projectsThreadAskAttachmentIfNeeded ? [projectsThreadAskAttachmentIfNeeded] : []),
     ...(goalStatusAttachmentIfNeeded ? [goalStatusAttachmentIfNeeded] : []),
     ...(sessionCronCarryAttachmentIfNeeded ? [sessionCronCarryAttachmentIfNeeded] : []),
+    ...(fallbackEntry ? [fallbackEntry] : []),
   ];
   return {
     attachments: announcementWalk
@@ -745,8 +782,8 @@ async function fallbackPostCompactAttachments(
     hookResults: [],
   };
 }
-//@ chunk-e6aww6q8.js:2140059-2140258 placement (2.1.88 match: getTokenCountFromUsage, 0.899)
-function getTokenCountFromUsage_4(usage) {
+//@ chunk-5xgkngpb.js:2193441-2193640 placement (2.1.88 match: getTokenCountFromUsage, 0.899)
+function getTokenCountFromUsage_6(usage) {
   if (usage.type !== "assistant") return usage;
   return {
     ...usage,
@@ -762,7 +799,7 @@ function getTokenCountFromUsage_4(usage) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:2140258-2140520 placement
+//@ chunk-5xgkngpb.js:2193640-2193902 placement
 /**
  * 找出压缩边界保留的消息及锚点。
  */
@@ -776,7 +813,7 @@ function resolvePreservedMessages(messages, boundary, initialMessages) {
         initialMessages?.find((message) => message.uuid === uuid),
     )
     .filter((message) => message !== undefined)
-    .map(getTokenCountFromUsage_4);
+    .map(getTokenCountFromUsage_6);
   return mapped.length > 0
     ? {
         preserved: mapped,
@@ -784,7 +821,7 @@ function resolvePreservedMessages(messages, boundary, initialMessages) {
       }
     : null;
 }
-//@ chunk-e6aww6q8.js:2140520-2140841 placement
+//@ chunk-5xgkngpb.js:2193902-2194223 placement
 /**
  * 在消息列表中按锚点移动保留的消息。
  */
@@ -808,14 +845,14 @@ function applyPreservedMessages(messages, message, pending, initialMessages) {
   }
   return pending;
 }
-//@ chunk-e6aww6q8.js:2140841-2141025 placement (2.1.88 match: buildPostCompactMessages, 0.833)
+//@ chunk-5xgkngpb.js:2194223-2194407 placement (2.1.88 match: buildPostCompactMessages, 0.833)
 function buildPostCompactMessages_2(plan, placement) {
-  let mapped = plan.messagesToKeep.map(getTokenCountFromUsage_4);
+  let mapped = plan.messagesToKeep.map(getTokenCountFromUsage_6);
   let ordered =
     placement === "up_to" ? [...plan.summaryMessages, ...mapped] : [...mapped, ...plan.summaryMessages];
   return [plan.boundaryMarker, ...ordered, ...plan.attachments, ...plan.hookResults];
 }
-//@ chunk-e6aww6q8.js:2406920-2406984 placement
+//@ chunk-5xgkngpb.js:2462581-2462645 placement
 /**
  * 200：后台 shell 描述截断长度。
  */
@@ -826,7 +863,7 @@ var POST_COMPACT_MAX_TOKENS_PER_SKILL = 5000;
 var POST_COMPACT_SKILLS_TOKEN_BUDGET = 25000;
 var TASK_STATUS_COMMAND_MAX_CHARS = 500;
 var TASK_STATUS_DESCRIPTION_MAX_CHARS = 200;
-//@ chunk-e6aww6q8.js:2406984-2407546 placement
+//@ chunk-5xgkngpb.js:2462645-2463269 placement
 /**
  * 附件里的图片/文档换成 [image]/[document] 文本（queued_command 的 prompt、file 附件的 image/notebook/parts 内容）。
  */
@@ -874,9 +911,14 @@ function stripMediaFromAttachment(attachment) {
         },
       },
     };
+  if (attachment.type === "message_pdf_reads" && hasPdfReads(attachment))
+    return {
+      ...attachment,
+      reads: [],
+    };
   return attachment;
 }
-//@ chunk-e6aww6q8.js:2407546-2408279 fingerprint (2.1.88 match: stripImagesFromMessages, 0.888)
+//@ chunk-5xgkngpb.js:2463269-2464002 fingerprint (2.1.88 match: stripImagesFromMessages, 0.889)
 /**
  * 摘要请求前把消息里的 image/document 块（含 tool_result 内嵌）替换成 [image]/[document] 文本，附件同样处理。
  */
@@ -952,7 +994,7 @@ function stripImagesFromMessages(messages) {
     };
   });
 }
-//@ chunk-e6aww6q8.js:2408279-2408569 layout
+//@ chunk-5xgkngpb.js:2464002-2464292 layout
 /**
  * stripNonEssential（冷压缩）时只保留 queued_command/poll_events/dir_sync_notice/fork_briefing/thinking_stripped/advisor_stripped 附件。
  */
@@ -968,12 +1010,12 @@ function keepEssentialAttachmentsOnly(requestMessages) {
       message.attachment.type === "advisor_stripped",
   );
 }
-//@ chunk-e6aww6q8.js:2408569-2408581 layout
+//@ chunk-5xgkngpb.js:2464292-2464304 layout
 /**
  * 100。
  */
 var COLD_COMPACT_TRUNCATE_CHARS = 100;
-//@ chunk-e6aww6q8.js:2408581-2408748 layout
+//@ chunk-5xgkngpb.js:2464304-2464471 layout
 /**
  * 字符串超过 100 字符时截断并标注原长度（避开代理对）。
  */
@@ -984,7 +1026,7 @@ function truncateForColdCompact(text) {
   if (code >= 55296 && code <= 56319) cutIndex--;
   return `${text.slice(0, cutIndex)}\u2026[truncated, original ${text.length} chars]`;
 }
-//@ chunk-e6aww6q8.js:2408748-2409016 layout
+//@ chunk-5xgkngpb.js:2464471-2464739 layout
 /**
  * 递归截断对象/数组里的所有字符串（未变时返回原对象）。旧版名 shouldExcludeFromPostCompactRestore 为错配。
  */
@@ -1007,14 +1049,14 @@ function truncateStringsDeep(value) {
   }
   return value;
 }
-//@ chunk-e6aww6q8.js:2409016-2409053 layout
+//@ chunk-5xgkngpb.js:2464739-2464776 layout
 /**
  * 块是对象且为 thinking/redacted_thinking。
  */
 function isThinkingContentBlock(block) {
   return isObjectBlock(block) && isThinkingBlock(block);
 }
-//@ chunk-e6aww6q8.js:2409053-2409880 layout
+//@ chunk-5xgkngpb.js:2464776-2465603 layout
 /**
  * 冷压缩：去掉 assistant 的 thinking 块、截断 tool_use 输入与 tool_result 文本到 100 字符，丢弃 wire 回显字段。
  */
@@ -1079,21 +1121,21 @@ function stripNonEssentialContent(messages) {
     return message;
   });
 }
-//@ chunk-e6aww6q8.js:2409880-2409988 fingerprint (2.1.88 match: ERROR_MESSAGE_NOT_ENOUGH_MESSAGES, 0.667)
+//@ chunk-5xgkngpb.js:2465603-2465711 fingerprint (2.1.88 match: ERROR_MESSAGE_NOT_ENOUGH_MESSAGES, 0.667)
 /**
  * 截头后插在开头的 meta 用户消息文本。
  */
 var ERROR_MESSAGE_NOT_ENOUGH_MESSAGES = "Not enough messages to compact.";
 var MAX_PTL_RETRIES = 3;
 var PTL_RETRY_MARKER = "[earlier conversation truncated for compaction retry]";
-//@ chunk-e6aww6q8.js:2409988-2410031 layout
+//@ chunk-5xgkngpb.js:2465711-2465754 layout
 /**
  * 按错误里给出的超出量（getPromptTooLongGap）截掉开头的消息组。
  */
 function truncateHeadForPromptTooLong(messages, summaryResponse, bytesPerToken) {
   return truncateHeadForPTLRetry(messages, getPromptTooLongGap(summaryResponse), bytesPerToken);
 }
-//@ chunk-e6aww6q8.js:2410031-2410438 fingerprint (2.1.88 match: truncateHeadForPTLRetry, 1)
+//@ chunk-5xgkngpb.js:2465754-2466162 fingerprint (2.1.88 match: truncateHeadForPTLRetry, 1)
 /**
  * 摘要请求 prompt too long 时丢弃最早的若干 API 轮次组：有超出量就丢到够为止，否则丢 20%；至少保留一组；开头变成 assistant 时补 PTL_RETRY_MARKER 用户消息。
  */
@@ -1127,14 +1169,16 @@ function truncateHeadForPTLRetry(messages, budget, bytesPerToken) {
     ];
   return sliced;
 }
-//@ chunk-e6aww6q8.js:2410438-2410569 fingerprint (2.1.88 match: ERROR_MESSAGE_PROMPT_TOO_LONG, 0.667)
+//@ chunk-5xgkngpb.js:2466162-2466382 fingerprint (2.1.88 match: ERROR_MESSAGE_PROMPT_TOO_LONG, 0.5)
 /**
  * "Compaction blocked by PreCompact hook"。
  */
 var ERROR_MESSAGE_PROMPT_TOO_LONG =
   "Conversation too long. Press esc twice to go up a few messages and try again.";
 var COMPACTION_BLOCKED_BY_HOOK = "Compaction blocked by PreCompact hook";
-//@ chunk-e6aww6q8.js:2410569-2410874 layout
+var COMPACT_SUMMARY_FAILED =
+  "Failed to generate conversation summary - the model's reply has no <summary> block";
+//@ chunk-5xgkngpb.js:2466382-2466687 layout
 /**
  * PreCompact 钩子返回 blockedBy 时记日志、（非自动时）通知，并抛 CompactionError。
  */
@@ -1152,18 +1196,18 @@ function throwIfPreCompactHookBlocked(preCompactHookResult, onNotification, hook
     });
   throw new CompactionError(`${COMPACTION_BLOCKED_BY_HOOK}: ${preCompactHookResult.blockedBy}`);
 }
-//@ chunk-e6aww6q8.js:2410874-2410971 fingerprint (2.1.88 match: ERROR_MESSAGE_INCOMPLETE_RESPONSE, 1)
+//@ chunk-5xgkngpb.js:2466687-2466784 fingerprint (2.1.88 match: ERROR_MESSAGE_INCOMPLETE_RESPONSE, 1)
 /**
  * 压缩被中断（网络问题）的提示文本。
  */
 var ERROR_MESSAGE_INCOMPLETE_RESPONSE =
   "Compaction interrupted \xB7 This may be due to network issues \u2014 please try again.";
-//@ chunk-e6aww6q8.js:2410971-2410995 layout
+//@ chunk-5xgkngpb.js:2466784-2466808 layout
 /**
  * 压缩专用错误类（无摘要、API 错误、钩子阻断）。
  */
 class CompactionError extends Error {}
-//@ chunk-e6aww6q8.js:2410995-2411131 fingerprint (2.1.88 match: buildPostCompactMessages, 0.919)
+//@ chunk-5xgkngpb.js:2466808-2466944 fingerprint (2.1.88 match: buildPostCompactMessages, 0.919)
 /**
  * 按顺序拼出压缩后的消息：边界标记、摘要消息、替换段、保留消息、附件、钩子结果。
  */
@@ -1177,7 +1221,7 @@ function buildPostCompactMessages(result) {
     ...result.hookResults,
   ];
 }
-//@ chunk-e6aww6q8.js:2411131-2411731 layout
+//@ chunk-5xgkngpb.js:2466944-2467544 layout
 /**
  * 自动模式分类器因上下文过长无法审查而触发压缩时，生成 critical_system_reminder（说明哪些工具调用未执行）。
  */
@@ -1196,7 +1240,7 @@ function createClassifierOverflowReminder(callCount, names) {
     content: `Auto mode could not review ${description} because the conversation was too long for its classifier, so ${single ? "that call" : "those calls"} did not run. The conversation has now been compacted. If still needed, issue ${single ? "it" : "them"} again and ${single ? "it" : "they"} will be reviewed normally.`,
   });
 }
-//@ chunk-e6aww6q8.js:2411731-2411848 layout (2.1.88 match: buildPostCompactMessages, 0.801)
+//@ chunk-5xgkngpb.js:2467544-2467661 layout (2.1.88 match: buildPostCompactMessages, 0.801)
 /**
  * 同 buildPostCompactMessages 但不含 messagesToKeep（queryLoop 产出压缩后行用）。
  */
@@ -1209,7 +1253,7 @@ function buildPostCompactMessagesWithoutKept(result) {
     ...result.hookResults,
   ];
 }
-//@ chunk-e6aww6q8.js:2411848-2411982 layout
+//@ chunk-5xgkngpb.js:2467661-2467795 layout
 /**
  * 按出现顺序去重 uuid（重复时保留最后一次出现的位置）。
  */
@@ -1225,7 +1269,7 @@ function uniqueUuidsKeepLast(messages) {
   }
   return uuids.reverse();
 }
-//@ chunk-e6aww6q8.js:2411982-2412250 fingerprint (2.1.88 match: annotateBoundaryWithPreservedSegment, 0.786)
+//@ chunk-5xgkngpb.js:2467795-2468063 fingerprint (2.1.88 match: annotateBoundaryWithPreservedSegment, 0.785)
 /**
  * 在边界消息 compactMetadata 上记录保留段（preservedSegment head/anchor/tail）与保留消息 uuid。
  */
@@ -1252,14 +1296,15 @@ function annotateBoundaryWithPreservedSegment(boundary, anchorUuid, messages, fa
     },
   };
 }
-//@ chunk-e6aww6q8.js:2412250-2412873 layout
+//@ chunk-5xgkngpb.js:2468063-2468686 layout
 /**
  * 保留的尾部若含 thinking 块，按模型 thinking 模式决定是否全部剥离；剥离时返回 thinking_stripped 标记附件。
  */
 function decideKeptThinkingStrip(messagesToKeep, context) {
   let thinkingBlockCount = 0;
   for (let message of messagesToKeep)
-    if (message.type === "assistant") thinkingBlockCount += count(message.message.content, isThinkingBlock);
+    if (message.type === "assistant")
+      thinkingBlockCount += countWhere(message.message.content, isThinkingBlock);
   if (thinkingBlockCount === 0)
     return {
       marker: undefined,
@@ -1296,7 +1341,7 @@ function decideKeptThinkingStrip(messagesToKeep, context) {
     decidedBy: stripDecision.source,
   };
 }
-//@ chunk-e6aww6q8.js:2412873-2412948 layout
+//@ chunk-5xgkngpb.js:2468686-2468761 layout
 /**
  * 合并用户自定义压缩指令与 PreCompact 钩子新增指令（空行分隔）。
  */
@@ -1307,14 +1352,14 @@ function mergeHookInstructions(userInstructions, hookInstructions) {
 
 ${hookInstructions}`;
 }
-//@ chunk-e6aww6q8.js:2412948-2413032 layout
+//@ chunk-5xgkngpb.js:2468761-2468845 layout
 /**
  * 非 API 错误、非虚拟的 assistant 消息。
  */
 function isRealAssistantMessage(message) {
   return message.type === "assistant" && !message.isApiErrorMessage && message.isVirtual !== true;
 }
-//@ chunk-e6aww6q8.js:2413032-2413151 layout
+//@ chunk-5xgkngpb.js:2468845-2468964 layout
 /**
  * 最后一条真实 assistant 或 tool_result 用户消息之后的位置（摘要回复审计用）。
  */
@@ -1329,7 +1374,7 @@ function getIndexAfterLastAssistantOrToolResult(messages) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:2413151-2413235 layout
+//@ chunk-5xgkngpb.js:2468964-2469048 layout
 /**
  * 真实的用户输入消息（非 meta、非虚拟、非合成、非 tool_result）。
  */
@@ -1342,7 +1387,7 @@ function isHumanPromptMessage(message) {
     !isToolResultMessage(message)
   );
 }
-//@ chunk-e6aww6q8.js:2413235-2419147 fingerprint (2.1.88 match: compactConversation, 0.673)
+//@ chunk-5xgkngpb.js:2469048-2475343 fingerprint (2.1.88 match: compactConversation, 0.658)
 /**
  * 整段压缩：PreCompact 钩子 → 选摘要提示词变体（qee，tengu_curried_trinket）→ streamCompactSummary（prompt too long 时 truncateHeadForPTLRetry 最多 3 次）→ 校验摘要 → 清空 readFileState → buildPostCompactAttachments → 边界消息（compact_boundary，含 preTokens/postTokens）与摘要用户消息（isCompactSummary）→ tengu_compact 遥测 → PostCompact 钩子。返回 CompactionResult。
  */
@@ -1423,14 +1468,19 @@ async function compactConversation(messages, context, cacheSafeParams, suppressF
     let promptCacheSharingEnabled =
       !stripNonEssential && getFeatureValue_CACHED_MAY_BE_STALE("tengu_compact_cache_prefix", true);
     let summaryPromptArm = compactPromptVariant();
-    let transcriptPath = compactTranscriptPath(context);
-    let compactPromptText = getCompactPrompt(
-      customInstructions,
-      summaryPromptArm,
-      transcriptPath !== undefined,
-    );
+    let compactPrompt = compactTranscriptPath(context);
+    let compactPrompt_2 = getCompactPrompt(customInstructions, summaryPromptArm);
+    let cachePrefixEnabled =
+      compactPrompt_2 +
+      streamPrefixesPresent(messages)
+        .map(
+          (instructions) => `
+
+${instructions}`,
+        )
+        .join("");
     let summaryRequest = createUserMessage({
-      content: compactPromptText,
+      content: stripNonEssential ? cachePrefixEnabled : compactPrompt_2,
     });
     let messagesToSummarize = messages;
     let summaryCacheSafeParams = cacheSafeParams;
@@ -1473,6 +1523,9 @@ async function compactConversation(messages, context, cacheSafeParams, suppressF
         remainingMessages: truncatedMessages.length,
       });
       messagesToSummarize = truncatedMessages;
+      summaryRequest = createUserMessage({
+        content: cachePrefixEnabled,
+      });
       summaryCacheSafeParams = {
         ...summaryCacheSafeParams,
         forkContextMessages: truncatedMessages,
@@ -1516,10 +1569,23 @@ async function compactConversation(messages, context, cacheSafeParams, suppressF
       stopReason: summaryResponse.message.stop_reason,
       attempt: undefined,
     });
+    if (
+      context.compactionApiAttemptsLeft !== undefined &&
+      !hasSummaryBlock(summaryText) &&
+      !hasSummaryTagLine(summaryText)
+    ) {
+      logEvent("tengu_compact_failed", {
+        reason: lit_2("no_summary_block"),
+        preCompactTokenCount,
+        promptCacheSharingEnabled,
+      });
+      logFeatureBad(outcomeMetricKey, "compact_no_summary_block");
+      throw new CompactionError(COMPACT_SUMMARY_FAILED);
+    }
     let preCompactReadFileState = remoteFileStateToObject(context.readFileState);
     context.readFileState.clear();
     resetPickerState(context.memorySelector);
-    let { attachments, hookResults: hookMessages } = await buildPostCompactAttachments(
+    let { attachments, hookResults } = await buildPostCompactAttachments(
       preCompactReadFileState,
       context,
       [],
@@ -1541,11 +1607,14 @@ async function compactConversation(messages, context, cacheSafeParams, suppressF
       createUserMessage({
         ...buildCompactArtifactNote(summaryText, {
           suppressFollowUpQuestions,
-          promptArm: summaryPromptArm,
-          transcriptPath,
-          ...false,
+          transcriptPath: compactPrompt,
+          ...(codeModeAccepted() &&
+            isCodeModeEnabled() && {
+              replBindingsKept: replBindingsKept(context.toolState, context.agentId),
+            }),
           headTruncated: ptlAttempts > 0,
-          foreignArtifactContent: messagesContainUntrustedContent(messages),
+          foreignArtifactContent: hasAuthoredByOthersArtifact(messages),
+          remoteControlDeviceReport: anyMessageHasMarker(messages, REMOTE_CONTROL_DEVICE_REPORT_ELEMENT),
           toolNamesUsed: getToolsUsedForSummary(messages, context.agentContext, context.agentId),
         }),
         isCompactSummary: true,
@@ -1557,7 +1626,7 @@ async function compactConversation(messages, context, cacheSafeParams, suppressF
       boundaryMarker,
       ...summaryMessages,
       ...attachments,
-      ...hookMessages,
+      ...hookResults,
     ]);
     boundaryMarker.compactMetadata.postTokens = truePostCompactTokenCount;
     boundaryMarker.compactMetadata.durationMs = durationMs;
@@ -1602,7 +1671,7 @@ async function compactConversation(messages, context, cacheSafeParams, suppressF
           compactionUsage.output_tokens
         : 0,
       promptCacheSharingEnabled,
-      summaryPromptArm: fromEnum(summaryPromptArm),
+      summaryPromptTextHash: summaryPromptArm === undefined ? undefined : shortHash(summaryPromptArm),
       ...(() => {
         try {
           return tokenStatsToStatsigMetrics(analyzeContext(messages));
@@ -1649,7 +1718,7 @@ async function compactConversation(messages, context, cacheSafeParams, suppressF
       summaryMessages,
       messagesToKeep: [],
       attachments,
-      hookResults: hookMessages,
+      hookResults,
       userDisplayMessage: userDisplayMessages || undefined,
       preCompactTokenCount,
       postCompactTokenCount,
@@ -1713,7 +1782,7 @@ async function compactConversation(messages, context, cacheSafeParams, suppressF
     });
   }
 }
-//@ chunk-e6aww6q8.js:2419147-2424722 fingerprint (2.1.88 match: partialCompactConversation, 0.726)
+//@ chunk-5xgkngpb.js:2475343-2481154 fingerprint (2.1.88 match: partialCompactConversation, 0.716)
 /**
  * 部分压缩（消息选择器）：direction=from 摘要选中点之后、保留之前；up_to 摘要之前、保留之后（保留部分可能剥离 thinking）。流程同 compactConversation，用 getPartialCompactPrompt，边界消息记录 userFeedback 与摘要条数，tengu_partial_compact 遥测。
  */
@@ -1829,7 +1898,16 @@ async function partialCompactConversation(messages, pivotIndex, context, cacheSa
       messagesSummarized: messagesToSummarize.length,
     };
     let summaryInputMessages = direction === "up_to" ? messagesToSummarize : messages;
-    let summaryCacheSafeParams =
+    let content =
+      compactPrompt +
+      streamPrefixesPresent(summaryInputMessages)
+        .map(
+          (preserved) => `
+
+${preserved}`,
+        )
+        .join("");
+    let retryCacheSafeParams =
       direction === "up_to"
         ? {
             ...cacheSafeParams,
@@ -1846,7 +1924,7 @@ async function partialCompactConversation(messages, pivotIndex, context, cacheSa
         appState: context.getAppState(),
         context,
         preCompactTokenCount,
-        cacheSafeParams: summaryCacheSafeParams,
+        cacheSafeParams: retryCacheSafeParams,
         onResponseLength,
         thinkingStripPlan: collectThinkingStripPlan(messages),
         advisorStripPlan: getAdvisorStrippedMessageIds(messages),
@@ -1876,8 +1954,11 @@ async function partialCompactConversation(messages, pivotIndex, context, cacheSa
         path: lit_2("partial"),
       });
       summaryInputMessages = truncatedMessages;
-      summaryCacheSafeParams = {
-        ...summaryCacheSafeParams,
+      summaryRequest = createUserMessage({
+        content,
+      });
+      retryCacheSafeParams = {
+        ...retryCacheSafeParams,
         forkContextMessages: truncatedMessages,
       };
     }
@@ -1965,15 +2046,26 @@ async function partialCompactConversation(messages, pivotIndex, context, cacheSa
     stampPreCompactReadVersions(boundaryMarker, context.agentId, context.getAppState());
     boundaryMarker.compactMetadata.durationMs = Math.round(performance.now() - startTime);
     let transcriptPath = compactTranscriptPath(context);
+    let metadata =
+      direction === "up_to"
+        ? [
+            ...messagesToSummarize,
+            ...messages
+              .slice(pivotIndex)
+              .filter((message) => message.type === "user" && message.isCompactSummary),
+          ]
+        : messages;
     let summaryMessages = [
       createUserMessage({
         ...buildCompactArtifactNote(summaryText, {
           suppressFollowUpQuestions: false,
           transcriptPath,
-          ...false,
-          foreignArtifactContent: messagesContainUntrustedContent(
-            direction === "up_to" ? messagesToSummarize : messages,
-          ),
+          ...(codeModeAccepted() &&
+            isCodeModeEnabled() && {
+              replBindingsKept: replBindingsKept(context.toolState, context.agentId),
+            }),
+          foreignArtifactContent: hasAuthoredByOthersArtifact(metadata),
+          remoteControlDeviceReport: anyMessageHasMarker(metadata, REMOTE_CONTROL_DEVICE_REPORT_ELEMENT),
           toolNamesUsed: getToolsUsedForSummary(messages, context.agentContext, context.agentId),
         }),
         isCompactSummary: true,
@@ -2086,7 +2178,7 @@ async function partialCompactConversation(messages, pivotIndex, context, cacheSa
     });
   }
 }
-//@ chunk-e6aww6q8.js:2424722-2425057 fingerprint (2.1.88 match: addErrorNotificationIfNeeded, 0.853)
+//@ chunk-5xgkngpb.js:2481154-2481489 fingerprint (2.1.88 match: addErrorNotificationIfNeeded, 0.853)
 /**
  * 手动压缩失败时（非中止/消息不足/钩子阻断）弹出 "Error compacting conversation" 通知。
  */
@@ -2103,7 +2195,7 @@ function addErrorNotificationIfNeeded(error, context) {
     priority: "immediate",
     color: "error",
   });
-  enqueueTaskNotification_2({
+  enqueueTaskNotification({
     type: "system",
     subtype: "notification",
     key: "error-compacting-conversation",
@@ -2112,7 +2204,7 @@ function addErrorNotificationIfNeeded(error, context) {
     color: "error",
   });
 }
-//@ chunk-e6aww6q8.js:2425057-2425187 layout
+//@ chunk-5xgkngpb.js:2481489-2481619 layout
 /**
  * 遥测用：无 / api_error / 第一个内容块类型。
  */
@@ -2121,7 +2213,7 @@ function describeLastAssistantKind(lastAssistant) {
   if (lastAssistant.isApiErrorMessage) return lit_2("api_error");
   return fromEnum(lastAssistant.message.content[0]?.type ?? "empty");
 }
-//@ chunk-e6aww6q8.js:2425187-2425273 layout
+//@ chunk-5xgkngpb.js:2481619-2481705 layout
 /**
  * 从 fallback 模型列表里去掉与当前模型等同的项。
  */
@@ -2130,7 +2222,7 @@ function excludeSameModelFallbacks(modelInfo, fallbackModel) {
     Array.isArray(fallbackModel) ? fallbackModel : fallbackModel !== undefined ? [fallbackModel] : []
   ).filter((candidate) => !swapShrinksContextWindow(modelInfo, candidate));
 }
-//@ chunk-e6aww6q8.js:2425273-2425465 fingerprint (2.1.88 match: createCompactCanUseTool, 1)
+//@ chunk-5xgkngpb.js:2481705-2481897 fingerprint (2.1.88 match: createCompactCanUseTool, 1)
 /**
  * 压缩用的 canUseTool：一律拒绝（"Tool use is not allowed during compaction"）。
  */
@@ -2144,7 +2236,7 @@ function createCompactCanUseTool() {
     },
   });
 }
-//@ chunk-e6aww6q8.js:2425465-2434278 fingerprint (2.1.88 match: streamCompactSummary, 0.409)
+//@ chunk-5xgkngpb.js:2481897-2490752 fingerprint (2.1.88 match: streamCompactSummary, 0.404)
 /**
  * 发出摘要请求：默认（tengu_compact_cache_prefix 开）用 runForkedAgent 共享主会话缓存、单轮、拒绝工具；失败或无文本时回退到直连流式请求（去媒体、冷压缩去非必要内容、只带 Read/ToolSearch/MCP 工具定义、按模型/fallback 链与拒答回退重试）。返回 {response, mediaStripped}。
  */
@@ -2193,7 +2285,7 @@ async function streamCompactSummary({
         });
         let lastAssistant = getLastAssistantMessage(forkResult.messages);
         let forkSummaryText = summaryTextOf(forkResult.messages);
-        let forkAssistantMessageCount = count(
+        let forkAssistantMessageCount = countWhere(
           forkResult.messages,
           (message) => message.type === "assistant" && !message.isApiErrorMessage,
         );
@@ -2330,6 +2422,7 @@ async function streamCompactSummary({
         suppressionAlreadyLogged: true,
         requestDialog: context.requestDialog,
         isMainThread: isMainAgent,
+        isAgentThread: false,
         consumerLacksDialogCapability: true,
         preferenceQuestionPending: false,
         serverDefaultFallbacksEnabled: () => false,
@@ -2360,6 +2453,7 @@ async function streamCompactSummary({
               thinkingStripPlan,
               advisorStripPlan,
               reminderFold,
+              projectDocsAsRound: true,
             },
           ),
           systemPrompt: asSystemPrompt([
@@ -2571,7 +2665,7 @@ async function streamCompactSummary({
     compactingStatusTicker();
   }
 }
-//@ chunk-e6aww6q8.js:2434278-2434363 layout
+//@ chunk-5xgkngpb.js:2490752-2490836 layout
 /**
  * 从消息中提取已发现（ToolSearch 加载过）的工具名，压缩边界上记录。
  */
@@ -2580,12 +2674,12 @@ function getDiscoveredToolNames(messages, context) {
     surfaced: (context.stickyBetas ?? getStickyBetas()).surfacedOnWire,
   });
 }
-//@ chunk-e6aww6q8.js:2434363-2436079 layout
+//@ chunk-5xgkngpb.js:2490836-2492554 layout
 /**
  * 压缩后重新注入的附件：最近读过的文件、后台代理/shell 状态、peer handback 命令、计划文件、plan mode、已调用技能、延迟工具/代理列表/MCP 说明等增量公告、目标与 cron 携带，然后跑 SessionStart(compact) 钩子。返回 {attachments, hookResults}。
  */
 async function buildPostCompactAttachments(
-  preCompactReadFileState,
+  readFileState,
   context,
   messagesToKeep,
   callSite,
@@ -2595,7 +2689,7 @@ async function buildPostCompactAttachments(
 ) {
   let isSubagentContext = isDelegatedObservationContext(context.agentContext);
   let postCompactFileAttachments = await createPostCompactFileAttachments(
-    preCompactReadFileState,
+    readFileState,
     context,
     POST_COMPACT_MAX_FILES_TO_RESTORE,
     messagesToKeep,
@@ -2653,7 +2747,7 @@ async function buildPostCompactAttachments(
       getDiscoveredToolNames(preCompactMessages, context),
     ),
     ...(await getAgentListingDeltaAttachment(context, messagesToKeep)),
-    ...(areAttachmentsDisabled(context)
+    ...(areAttachmentsDisabled_2(context)
       ? []
       : await getSkillListingAttachmentsLazy(context, messagesToKeep).catch((error) => {
           logError(error);
@@ -2743,7 +2837,7 @@ async function buildPostCompactAttachments(
     hookResults,
   };
 }
-//@ chunk-e6aww6q8.js:2436079-2436651 fingerprint (2.1.88 match: createPostCompactFileAttachments, 0.969)
+//@ chunk-5xgkngpb.js:2492554-2493142 fingerprint (2.1.88 match: createPostCompactFileAttachments, 0.969)
 /**
  * 按时间倒序取最近读过的文件（排除保留段里已读的、计划/记忆等特殊文件），每个最多 5000 token 重新生成文件附件，总预算 50000。
  */
@@ -2753,7 +2847,7 @@ async function createPostCompactFileAttachments(
   maxFiles,
   preservedMessages = [],
 ) {
-  let preservedReadPaths = collectReadToolFilePaths(preservedMessages);
+  let preservedReadPaths = collectReadToolFilePaths_2(preservedMessages);
   let excludePlanFile = shouldExcludeFromPostCompactRestore();
   let restored = true;
   let recentFiles = Object.entries(readFileState)
@@ -2798,7 +2892,7 @@ async function createPostCompactFileAttachments(
     return false;
   });
 }
-//@ chunk-e6aww6q8.js:2436651-2436822 fingerprint (2.1.88 match: createPlanAttachmentIfNeeded, 1)
+//@ chunk-5xgkngpb.js:2493142-2493313 fingerprint (2.1.88 match: createPlanAttachmentIfNeeded, 1)
 /**
  * 有计划文件时生成 plan_file_reference 附件。
  */
@@ -2812,15 +2906,15 @@ async function createPlanAttachmentIfNeeded(agentId, storageV5) {
     planContent,
   });
 }
-//@ chunk-e6aww6q8.js:2436822-2438287 fingerprint (2.1.88 match: createSkillAttachmentIfNeeded, 0.537)
+//@ chunk-5xgkngpb.js:2493313-2494708 fingerprint (2.1.88 match: createSkillAttachmentIfNeeded, 0.551)
 /**
  * 已调用技能（含从对话中恢复的）按最近调用排序，单个截到 5000 token、总预算 25000，生成 invoked_skills 附件。
  */
-function createSkillAttachmentIfNeeded(agentId, messages = [], messages_2 = []) {
+function createSkillAttachmentIfNeeded(agentId, messagesToKeep = [], preCompactMessages = []) {
   let invokedSkills = getInvokedSkillsForAgent(agentId);
   let fromConversation = new Set();
   if (agentId === undefined && isSoftSparkEnabled())
-    for (let message of messagesSinceCompactBoundary([...messages_2])) {
+    for (let message of messagesSinceCompactBoundary([...preCompactMessages])) {
       let messageMs = Date.parse(message.timestamp) || 0;
       if (message.type === "attachment" && message.attachment.type === "invoked_skills") {
         let invokedAtMs = messageMs;
@@ -2866,7 +2960,6 @@ function createSkillAttachmentIfNeeded(agentId, messages = [], messages_2 = []) 
         });
       }
     }
-  if (invokedSkills.size === 0) return null;
   let usedTokens = 0;
   let skills = [];
   let sorted = Array.from(invokedSkills.entries()).sort(
@@ -2874,9 +2967,9 @@ function createSkillAttachmentIfNeeded(agentId, messages = [], messages_2 = []) 
   );
   for (let [skillKey, skill] of sorted) {
     if (!skill.content) continue;
-    let invokedMcpSkill = findInvokedMcpSkill(messages_2, skill.skillName, skill.content);
+    let invokedMcpSkill = findInvokedMcpSkill(preCompactMessages, skill.skillName, skill.content);
     if (skill.servedByMcp && invokedMcpSkill === undefined) continue;
-    let restoreState = restoreSkillStateFromMessages(messages, skill.content);
+    let restoreState = restoreSkillStateFromMessages(messagesToKeep, skill.content);
     if (restoreState === "attachment") continue;
     let keepFullContent = restoreState === "body" || fromConversation.has(skillKey);
     let content = truncateToTokens(skill.content, POST_COMPACT_MAX_TOKENS_PER_SKILL);
@@ -2896,25 +2989,40 @@ function createSkillAttachmentIfNeeded(agentId, messages = [], messages_2 = []) 
       }),
     });
   }
-  if (skills.length === 0) return null;
-  let fromConversationCount = count(skills, (skill) => fromConversation.has(`:${skill.name}`));
+  let fromConversationCount = countWhere(skills, (skill) => fromConversation.has(`:${skill.name}`));
   if (fromConversationCount > 0)
     logFeatureOk("compact_skill_from_conversation", {
       count: fromConversationCount,
     });
+  return invokedSkillsAttachment(skills, preCompactMessages, messagesToKeep);
+}
+//@ chunk-5xgkngpb.js:2494708-2494858 layout
+function invokedSkillsAttachment(skills, mcpEntries, options) {
+  let mcpSkillEntries = [];
+  if (skills.length === 0 && mcpSkillEntries.length === 0) return null;
   return createAttachmentMessage_2({
     type: "invoked_skills",
     skills,
+    ...(mcpSkillEntries.length > 0 && {
+      mcpSkillEntries,
+    }),
   });
 }
-//@ chunk-e6aww6q8.js:2438287-2438628 fingerprint (2.1.88 match: createPlanModeAttachmentIfNeeded, 0.836)
+//@ chunk-5xgkngpb.js:2494858-2495205 fingerprint (2.1.88 match: createPlanModeAttachmentIfNeeded, 0.836)
 /**
  * 处于 plan 模式时生成完整 plan_mode 提醒附件。
  */
 async function createPlanModeAttachmentIfNeeded(context) {
   if (getToolPermissionContext(context).mode !== "plan") return null;
   if (isDiskless())
-    return createAttachmentMessage_2(buildPlanModeAttachment("full", context.agentId, context.options.tools));
+    return createAttachmentMessage_2(
+      buildPlanModeAttachment(
+        "full",
+        context.agentId,
+        context.options.tools,
+        getToolPermissionContext(context),
+      ),
+    );
   let planFilePath = getPlanFilePath(context.agentId);
   let planExists = await planExistsAsync(context.agentId, context.storageV5);
   let planModeInstructions = context.options?.planModeInstructions;
@@ -2929,7 +3037,7 @@ async function createPlanModeAttachmentIfNeeded(context) {
     }),
   });
 }
-//@ chunk-e6aww6q8.js:2438628-2438816 layout
+//@ chunk-5xgkngpb.js:2495205-2495393 layout
 /**
  * 有活动目标或保留段之外有目标条件时生成 goal_status 附件。
  */
@@ -2942,7 +3050,7 @@ function createGoalStatusAttachmentIfNeeded(context, messagesToKeep, tools, carr
   if (condition === null || findActiveGoalCondition(messagesToKeep) === condition) return null;
   return createAttachmentMessage_2(buildGoalSentinelAttachment(true, condition));
 }
-//@ chunk-e6aww6q8.js:2438816-2438927 layout
+//@ chunk-5xgkngpb.js:2495393-2495504 layout
 /**
  * 把会话 cron/loop 唤醒等定时任务以 session_cron_carry 附件带过压缩。
  */
@@ -2956,7 +3064,7 @@ function createSessionCronCarryAttachmentIfNeeded(preCompactMessages, messagesTo
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:2438927-2439121 layout
+//@ chunk-5xgkngpb.js:2495504-2495698 layout
 /**
  * 自动模式 projects 线程中待回答请求的携带附件。
  */
@@ -2972,7 +3080,7 @@ function createProjectsThreadAskAttachmentIfNeeded(preCompactMessages, messagesT
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:2439121-2439640 fingerprint (2.1.88 match: createAsyncAgentAttachmentsIfNeeded, 0.903)
+//@ chunk-5xgkngpb.js:2495698-2496217 fingerprint (2.1.88 match: createAsyncAgentAttachmentsIfNeeded, 0.903)
 /**
  * 未取回的后台代理任务生成 task_status 附件（进度摘要或错误）。
  */
@@ -3003,7 +3111,7 @@ async function createAsyncAgentAttachmentsIfNeeded(context) {
     ];
   });
 }
-//@ chunk-e6aww6q8.js:2439640-2440117 layout
+//@ chunk-5xgkngpb.js:2496217-2496694 layout
 /**
  * 当前代理仍在运行的后台 shell 生成 task_status 附件（命令与描述截断）。
  */
@@ -3036,7 +3144,7 @@ function createBackgroundShellAttachments(context) {
     ];
   });
 }
-//@ chunk-e6aww6q8.js:2440117-2440475 layout
+//@ chunk-5xgkngpb.js:2496694-2497052 layout
 /**
  * 最后一条 assistant 之后、来自 peer 且 handback 的 queued_command 附件重新带上。
  */
@@ -3060,11 +3168,11 @@ function collectPeerHandbackCommands(preCompactMessages, messagesToKeep) {
       : [],
   );
 }
-//@ chunk-e6aww6q8.js:2440475-2441038 fingerprint (2.1.88 match: collectReadToolFilePaths, 1)
+//@ chunk-5xgkngpb.js:2497052-2497615 layout (2.1.88 match: collectReadToolFilePaths, 1)
 /**
  * 保留消息中 Read 工具读过的文件路径（排除结果已被清理为桩的）。
  */
-function collectReadToolFilePaths(messages) {
+function collectReadToolFilePaths_2(messages) {
   let stubIds = new Set();
   for (let message of messages) {
     if (message.type !== "user" || !Array.isArray(message.message.content)) continue;
@@ -3080,7 +3188,7 @@ function collectReadToolFilePaths(messages) {
   for (let message of messages) {
     if (message.type !== "assistant" || !Array.isArray(message.message.content)) continue;
     for (let block of message.message.content) {
-      if (block.type !== "tool_use" || block.name !== FILE_READ_TOOL_NAME || stubIds.has(block.id)) continue;
+      if (block.type !== "tool_use" || block.name !== READ || stubIds.has(block.id)) continue;
       let input = block.input;
       if (input && typeof input === "object" && "file_path" in input && typeof input.file_path === "string") {
         let expandedPath = expandPathOrNull(input.file_path);
@@ -3090,13 +3198,13 @@ function collectReadToolFilePaths(messages) {
   }
   return paths;
 }
-//@ chunk-e6aww6q8.js:2441038-2441122 placement
+//@ chunk-5xgkngpb.js:2497615-2497699 placement
 function truncateToTokens(content, maxTokens) {
   if (roughTokenCountEstimation(content) <= maxTokens) return content;
   let charBudget = maxTokens * 4 - SKILL_TRUNCATION_NOTE.length;
   return content.slice(0, charBudget) + SKILL_TRUNCATION_NOTE;
 }
-//@ chunk-e6aww6q8.js:2441122-2441315 placement
+//@ chunk-5xgkngpb.js:2497699-2497892 placement
 /**
  * 压缩后可恢复的记忆文件类型。
  */
@@ -3116,7 +3224,7 @@ function restorableMemoryTypes() {
     }
   });
 }
-//@ chunk-e6aww6q8.js:2441315-2441398 placement
+//@ chunk-5xgkngpb.js:2497892-2497976 placement
 function shouldExcludeFromPostCompactRestore() {
   try {
     return new Set(restorableMemoryTypes().map((type) => expandPath(getMemoryPath(type))));
@@ -3124,7 +3232,7 @@ function shouldExcludeFromPostCompactRestore() {
     return new Set();
   }
 }
-//@ chunk-e6aww6q8.js:2441398-2441491 placement
+//@ chunk-5xgkngpb.js:2497976-2498069 placement
 /**
  * 判断文件是否就是当前计划的文件（压缩时不保留）。
  */
@@ -3136,7 +3244,7 @@ function isPlanFile(filename, excludePlanFile, agentId) {
   } catch {}
   return excludePlanFile.has(expanded);
 }
-//@ chunk-e6aww6q8.js:2441491-2441623 placement
+//@ chunk-5xgkngpb.js:2498069-2498201 placement
 /**
  * 压缩失败的遥测码。
  */
@@ -3145,7 +3253,7 @@ function compactFailureCode(summaryResponse) {
     return formatApiErrorType("dlp_request_denied", summaryResponse.apiErrorStatus);
   return fromEnum(summaryResponse.error ?? "unknown");
 }
-//@ chunk-e6aww6q8.js:2441623-2442226 placement
+//@ chunk-5xgkngpb.js:2498201-2498803 placement
 /**
  * 记录压缩摘要回复的形态（摘要块、未回答的请求尾部、输出 token、停止原因）。
  */
@@ -3178,7 +3286,7 @@ function logSummaryReply({ path, reply, sent, outputTokens, stopReason, attempt,
     }),
   });
 }
-//@ chunk-e6aww6q8.js:2442226-2442339 placement
+//@ chunk-5xgkngpb.js:2498803-2498916 placement
 /**
  * 压缩时引用的 transcript 路径（无盘或关闭持久化时 undefined）。
  */
@@ -3186,7 +3294,7 @@ function compactTranscriptPath(context) {
   if (isDiskless() || isTranscriptPersistenceDisabled() || context.compactTranscriptUnavailable) return;
   return context.agentId !== undefined ? getAgentTranscriptPath(context.agentId) : getTranscriptPath();
 }
-//@ chunk-e6aww6q8.js:2442339-2442435 placement
+//@ chunk-5xgkngpb.js:2498916-2499012 placement
 /**
  * 按消息 token 数给出压缩恢复的超时。
  */
@@ -3195,7 +3303,7 @@ function recoveryTimeoutForMessages(messages, rawMessage) {
   let actual = (rawMessage !== undefined && parsePromptTooLongTokenCounts(rawMessage).actualTokens) || 0;
   return recoveryTimeoutForContextTokens(Math.max(estimated, actual));
 }
-//@ chunk-e6aww6q8.js:2442435-2442507 placement
+//@ chunk-5xgkngpb.js:2499012-2499084 placement
 /**
  * 判断错误是否属于压缩相关失败（CompactionError、API 错误前缀、prompt too long、不完整响应）。
  */
@@ -3207,12 +3315,12 @@ function isCompactionFailure(error) {
     hasExactErrorMessage(error, ERROR_MESSAGE_INCOMPLETE_RESPONSE)
   );
 }
-//@ chunk-e6aww6q8.js:2442507-2442517 placement
+//@ chunk-5xgkngpb.js:2499084-2499094 placement
 /**
  * 连续压缩失败的上限（3 次）触发熔断。
  */
 var MAX_CONSECUTIVE_COMPACT_FAILURES = 3;
-//@ chunk-e6aww6q8.js:2442517-2442973 placement
+//@ chunk-5xgkngpb.js:2499094-2499550 placement
 /**
  * 记一次自动压缩失败，连续失败达到上限时触发熔断。
  */
@@ -3243,7 +3351,7 @@ function autocompactFailure(state, reactive, reason, compactFailure) {
     compactFailure,
   };
 }
-//@ chunk-e6aww6q8.js:2442973-2443623 placement
+//@ chunk-5xgkngpb.js:2499550-2500203 placement
 /**
  * 实际输入超过阈值时分析前缀大小与文档/图片块数量。
  */
@@ -3283,14 +3391,14 @@ function analyzeOversizedPrefix(messages, modelInfo, autoCompactWindow, snipToke
     imageBlockCount,
   };
 }
-//@ chunk-e6aww6q8.js:2443623-2443672 placement
+//@ chunk-5xgkngpb.js:2500203-2500252 placement
 /**
  * 是否开启冷压缩（CLAUDE_CODE_COLD_COMPACT）。
  */
 function isColdCompactEnabled() {
   return env.CLAUDE_CODE_COLD_COMPACT;
 }
-//@ chunk-ag5x7vhf.js:27597-27676 fingerprint (2.1.88 match: stripReinjectedAttachments, 0.508)
+//@ chunk-hnxhr3bs.js:26630-26709 fingerprint (2.1.88 match: stripReinjectedAttachments, 0.51)
 /**
  * 附件类型为 skill_listing 或 agent_listing_delta（压缩后会重新注入的列表类附件）。旧版名 stripReinjectedAttachments 为错配（这里只是判断）。
  */
@@ -3298,35 +3406,33 @@ function isReinjectedListingAttachment(messages) {
   return messages.type === "skill_listing" || messages.type === "agent_listing_delta";
 }
 export {
-  applyPreservedMessages,
+  getTokenCountFromUsage_6,
   metaMessageText,
-  partialCompactConversation,
-  buildPostCompactMessages_2,
-  ERROR_MESSAGE_NOT_ENOUGH_MESSAGES,
-  buildPostCompactMessages,
-  getTokenCountFromUsage_4,
-  CompactionError,
-  noopAsync_3,
-  buildPostCompactMessagesWithoutKept,
-  recoveryTimeoutForMessages,
-  hasTooFewMessagesToCompact,
-  countNonProgressMessages,
   compactConversation,
+  buildPostCompactMessages,
   COMPACTION_BLOCKED_BY_HOOK,
+  API_REQUEST_ABORTED_MESSAGE,
+  applyPreservedMessages,
+  USER_SENT_MESSAGE_PREFIX,
+  ERROR_MESSAGE_NOT_ENOUGH_MESSAGES,
+  CompactionError,
+  mergeHookInstructions,
+  buildReactiveCompactionResult,
+  runCompactHooks,
   MAX_CONSECUTIVE_COMPACT_FAILURES,
   analyzeOversizedPrefix,
+  recoveryTimeoutForMessages,
   autocompactFailure,
   isColdCompactEnabled,
   isCompactionFailure,
   ERROR_MESSAGE_PROMPT_TOO_LONG,
   createClassifierOverflowReminder,
-  SKILL_TRUNCATION_NOTE,
-  isReinjectedListingAttachment,
   compactTranscriptPath,
   stripImagesFromMessages,
   createCompactCanUseTool,
   excludeSameModelFallbacks,
   logSummaryReply,
+  COMPACT_SUMMARY_FAILED,
   isRealAssistantMessage,
   POST_COMPACT_MAX_FILES_TO_RESTORE,
   POST_COMPACT_MAX_TOKENS_PER_FILE,
@@ -3335,10 +3441,16 @@ export {
   isHumanPromptMessage,
   MAX_PTL_RETRIES,
   truncateHeadForPTLRetry,
-  buildReactiveCompactionResult,
-  mergeHookInstructions,
-  runCompactHooks,
+  countNonProgressMessages,
+  noopAsync_3,
   resolveCompactionKind,
   startCompactingStatusTicker,
+  SKILL_TRUNCATION_NOTE,
   groupByApiRound,
+  partialCompactConversation,
+  buildPostCompactMessages_2,
+  HOOK_STOPPED_MESSAGE,
+  isReinjectedListingAttachment,
+  buildPostCompactMessagesWithoutKept,
+  hasTooFewMessagesToCompact,
 };

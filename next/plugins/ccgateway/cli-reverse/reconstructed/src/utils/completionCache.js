@@ -3,9 +3,9 @@
  *
  * shell 补全：检测 shell、生成并缓存补全脚本、安装到 shell 配置
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/completionCache.ts
- * pieces: chunk-7p2hc4jn.js (1), chunk-d0x4qj4e.js (3)
+ * pieces: chunk-42wa4pww.js (1), chunk-gazdcrw9.js (3)
  * attribution: callgraph-witnessed 1, fingerprint 2, layout 1
  */
 import { join } from "path";
@@ -29,7 +29,7 @@ import { env } from "./env.js";
 import { getLaunchCommand } from "./deepLink/registerProtocol.js";
 import { execFileNoThrow } from "./execFileNoThrow.js";
 
-//@ chunk-7p2hc4jn.js:7657-8767 callgraph-witnessed (2.1.88 match: setupShellCompletion, 0.201)
+//@ chunk-42wa4pww.js:7657-8767 callgraph-witnessed (2.1.88 match: setupShellCompletion, 0.201)
 async function setupShellCompletion(editor, productName, label) {
   let scrollHint = sequential.dim(
     `For smoother scrolling, set "${VSCODE_SCROLL_SENSITIVITY_KEY}": ${VSCODE_RECOMMENDED_SCROLL_SENSITIVITY} in ${productName} settings.`,
@@ -81,7 +81,7 @@ async function setupShellCompletion(editor, productName, label) {
     return `${color("warning", label)(`Couldn't update ${productName} settings.json.`)}${NEWLINE}${scrollHint}${NEWLINE}`;
   }
 }
-//@ chunk-d0x4qj4e.js:416-1116 fingerprint (2.1.88 match: detectShell, 1)
+//@ chunk-gazdcrw9.js:416-1116 fingerprint (2.1.88 match: detectShell, 1)
 /**
  * 检测用户 shell（zsh/bash/fish/PowerShell）及对应补全脚本的缓存路径。
  */
@@ -122,14 +122,14 @@ function detectShell() {
   }
   return null;
 }
-//@ chunk-d0x4qj4e.js:1116-1144 layout
+//@ chunk-gazdcrw9.js:1116-1144 layout
 /**
  * 重新生成 shell 补全缓存的占位函数（当前不做任何事）。
  */
 async function regenerateCompletionCache() {
   return;
 }
-//@ chunk-d0x4qj4e.js:1144-1255 fingerprint (2.1.88 match: regenerateCompletionCache, 0.766)
+//@ chunk-gazdcrw9.js:1144-1255 fingerprint (2.1.88 match: regenerateCompletionCache, 0.766)
 /**
  * 后台运行 claude completion --output 重新生成 shell 补全缓存。
  */

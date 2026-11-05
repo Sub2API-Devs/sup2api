@@ -24,7 +24,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { FAKE_API_KEY } from './run.mjs';
 
-const VERSION_LINE = '2.1.316 (Claude Code)';
+// The version under test and its commit, read from original/cli.js (the official build), so a new
+// version needs no edit here (2.1.316: cd7ceb45…; 2.1.318: ca1fa9de…).
+const BUILD = (() => {
+  const t = fs.readFileSync(new URL('../../original/cli.js', import.meta.url), 'utf8');
+  const fact = (k) => new RegExp(k + ':"([^"]+)"').exec(t)?.[1];
+  return { version: fact('VERSION'), sha: fact('GIT_SHA') };
+})();
+const VERSION = BUILD.version;
+const VERSION_LINE = `${VERSION} (Claude Code)`;
 const P = (c, f) => path.join(c.cwd, f);
 
 // ---- 断言小工具 ----
@@ -75,7 +83,7 @@ function seedInteractiveConfig(c) {
   const dir = path.join(c.home, '.claude');
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify({
-    hasCompletedOnboarding: true, lastOnboardingVersion: '2.1.316', theme: 'dark',
+    hasCompletedOnboarding: true, lastOnboardingVersion: VERSION, theme: 'dark',
     customApiKeyResponses: { approved: [FAKE_API_KEY.trim().slice(-20)], rejected: [] },
     projects: { [c.cwd]: { hasTrustDialogAccepted: true } },
   }, null, 2));
@@ -188,11 +196,13 @@ const ttyCfg = (steps) => ({ cols: 100, rows: 30, idleMs: 1500, expectExit: true
 // 屏幕文字：Ink 在提示符 ❯ 后面画的是 NBSP（U+00A0），断言前换成普通空格（waitFor 本来就按 \s+ 折叠）
 const screenText = (lines) => (lines || []).join('\n').replace(/\u00a0/g, ' ');
 // resumeHint：/exit 后是否应出现 "Resume this session with: claude --resume <id>"（只有发生过对话的会话才打印），默认 apiRequests > 0
+// 2.1.316 printed "claude --resume <id>"; 2.1.318 repeats launch flags first ("claude --permission-mode default --resume <id>")
+const RESUME_HINT = /claude (?:--[\w-]+ [^\s-]\S* )*--resume\b/;
 function ttyCheck(r, steps, { apiRequests, files, exit = 0, resumeHint = apiRequests > 0 } = {}) {
   const bad = check(r, { exit, apiRequests, external: 0, files });
   if (r.pty?.killed) bad.push('pty child killed (did not exit)');
   (r.pty?.steps || []).forEach((s, i) => { if (steps[i]?.waitFor !== TTY_PAUSE_TEXT && !s.matched) bad.push(`pty step ${i} waitFor ${JSON.stringify(steps[i]?.waitFor)} not matched`); });
-  if (resumeHint && !screenText(r.screen).includes('claude --resume')) bad.push('no resume hint after /exit');
+  if (resumeHint && !RESUME_HINT.test(screenText(r.screen))) bad.push('no resume hint after /exit');
   return bad;
 }
 // sequence 给出时，tty 步骤作为最后一步（args 是那一步的参数），前面的步骤不在伪终端里跑
@@ -207,10 +217,10 @@ function ttyScenario({ name, desc, script, args = [], steps: steps0, sequence, s
 
 export const scenarios = [
   // ---------- 离线、无请求 ----------
-  { name: 'version', desc: '--version 走 cli.js 快速路径：打印 "2.1.316 (Claude Code)"，退出 0，无网络请求。',
+  { name: 'version', desc: `--version 走 cli.js 快速路径：打印 "${VERSION} (Claude Code)"，退出 0，无网络请求。`,
     args: ['--version'], expect: (r) => check(r, { stdoutIs: VERSION_LINE + '\n', requests: 0 }) },
-  { name: 'version-verbose', desc: '--version --verbose：多打印一行 "Commit: <git sha>"（cd7ceb45…）。',
-    args: ['--version', '--verbose'], expect: (r) => check(r, { stdoutHas: [VERSION_LINE, 'Commit: cd7ceb459c6864567b16a11f60101b24421475c1'], requests: 0 }) },
+  { name: 'version-verbose', desc: `--version --verbose：多打印一行 "Commit: <git sha>"（${BUILD.sha.slice(0, 8)}…）。`,
+    args: ['--version', '--verbose'], expect: (r) => check(r, { stdoutHas: [VERSION_LINE, 'Commit: ' + BUILD.sha], requests: 0 }) },
   { name: 'help', desc: '--help：commander 生成的总帮助，含选项与子命令表，退出 0。',
     args: ['--help'], expect: (r) => check(r, { stdoutHas: ['Usage: claude [options] [command] [prompt]', 'Commands:', 'mcp'], requests: 0 }) },
   ...[
@@ -223,7 +233,7 @@ export const scenarios = [
 
   // ---------- 非 Ink 子命令 ----------
   { name: 'doctor', desc: 'claude doctor（非交互版）：打印安装与连接诊断文本，退出 0；自定义 base URL 下不取远程设置、不发请求。',
-    args: ['doctor'], expect: (r) => check(r, { stdoutHas: ['Claude Code doctor', 'Running: unknown (2.1.316)'], requests: 0 }) },
+    args: ['doctor'], expect: (r) => check(r, { stdoutHas: ['Claude Code doctor', `Running: unknown (${VERSION})`], requests: 0 }) },
   { name: 'plugin-list-json', desc: 'plugin list --json：空配置打印 []，退出 0。',
     args: ['plugin', 'list', '--json'], expect: (r) => check(r, { stdoutIs: '[]\n', requests: 0 }) },
   { name: 'agents-json', desc: 'agents --json：没有后台会话，打印 []，退出 0。',
@@ -362,7 +372,7 @@ export const scenarios = [
       return bad;
     } },
   // ---------- 验证环境补丁：bun-ant-shim.js（Ink 渲染）、win-append-shim.js（Bash 输出） ----------
-  // 这些场景带 shimAnt / shimWinAppend：结果反映的是"316 的 JS + 我们的垫片"，不是官方二进制本身（见 verify.md 第 12、13 节）。
+  // 这些场景带 shimAnt / shimWinAppend：结果反映的是"官方 JS + 我们的垫片"，不是官方二进制本身（见 verify.md 第 12、13 节）。
   { name: 'ink-mcp-list-empty', shimAnt: true, desc: '[垫片] mcp list（Ink 渲染）：空配置打印 "No MCP servers configured. Use `claude mcp add` to add a server."，退出 0。',
     args: ['mcp', 'list'], expect: (r) => check(r, { stdoutIs: 'No MCP servers configured. Use `claude mcp add` to add a server.\n', requests: 0 }) },
   { name: 'ink-mcp-lifecycle', shimAnt: true, timeoutMs: 60000,
@@ -410,12 +420,12 @@ export const scenarios = [
 
   // ---------- 伪终端（ConPTY）里的交互界面 ----------
   { name: 'tty-first-run', shimAnt: true, timeoutMs: 60000, env: { TERM: 'xterm-256color' },
-    desc: '[垫片+伪终端] 全新配置、交互模式启动：欢迎画面（"Welcome to Claude Code v2.1.316" + 字符画）后做首次联网检查，直连 api.anthropic.com / platform.claude.com 被黑洞代理拒绝，显示 "Unable to connect to Anthropic services … ERR_PROXY_TUNNEL"，退出 1。比较的是 vt-screen.mjs 还原的最终屏幕。',
+    desc: `[垫片+伪终端] 全新配置、交互模式启动：欢迎画面（"Welcome to Claude Code v${VERSION}" + 字符画）后做首次联网检查，直连 api.anthropic.com / platform.claude.com 被黑洞代理拒绝，显示 "Unable to connect to Anthropic services … ERR_PROXY_TUNNEL"，退出 1。比较的是 vt-screen.mjs 还原的最终屏幕。`,
     args: [], tty: { cols: 100, rows: 30, idleMs: 2500, expectExit: true, steps: [] },
     expect: (r) => {
       const bad = check(r, { exit: 1, apiRequests: 0, external: null });
       const scr = (r.screen || []).join('\n');
-      for (const t of ['Welcome to Claude Code v2.1.316', 'Unable to connect to Anthropic services']) if (!scr.includes(t)) bad.push(`screen lacks ${JSON.stringify(t)}`);
+      for (const t of [`Welcome to Claude Code v${VERSION}`, 'Unable to connect to Anthropic services']) if (!scr.includes(t)) bad.push(`screen lacks ${JSON.stringify(t)}`);
       return bad;
     } },
   { name: 'tty-session', shimAnt: true, timeoutMs: 90000, env: { TERM: 'xterm-256color' },
@@ -434,7 +444,7 @@ export const scenarios = [
       if ((r.pty?.steps || []).some((s) => !s.matched)) bad.push(`pty steps: ${JSON.stringify(r.pty?.steps)}`);
       const after = (r.snapshots?.[1] || []).join('\n');
       if (!after.includes('你好，世界！宽字符测试：ＡＢＣ 😀👍 done.')) bad.push('reply with wide chars not on screen');
-      if (!(r.screen || []).join('\n').includes('claude --resume')) bad.push('no resume hint after /exit');
+      if (!RESUME_HINT.test((r.screen || []).join('\n'))) bad.push('no resume hint after /exit');
       return bad;
     } },
 
@@ -507,7 +517,7 @@ export const scenarios = [
       wantResult(bad, tr[6], { error: false, has: 'File created successfully at:' }, 'nested write');
       return bad;
     } },
-  { name: 'tool-unavailable', desc: '316 默认没有的工具：一次回答里并行调用 Glob、Grep、TodoWrite → 三个 tool_result 都是 "<tool_use_error>Error: No such tool available: …"，并带各自的提示（Glob/Grep 提示改用 Bash 的 find/grep，TodoWrite 说本会话禁用）；之后模型照常收尾。',
+  { name: 'tool-unavailable', desc: '官方构建默认没有的工具：一次回答里并行调用 Glob、Grep、TodoWrite → 三个 tool_result 都是 "<tool_use_error>Error: No such tool available: …"，并带各自的提示（Glob/Grep 提示改用 Bash 的 find/grep，TodoWrite 说本会话禁用）；之后模型照常收尾。',
     args: ['-p', 'search'],
     script: { steps: [{ tools: [{ name: 'Glob', input: { pattern: '*' } }, { name: 'Grep', input: { pattern: 'x' } }, { name: 'TodoWrite', input: { todos: [] } }] }], final: 'No search tools.' },
     expect: (r) => {
@@ -1083,7 +1093,7 @@ export const scenarios = [
     args: ['--continue'],
     steps: [{ waitFor: 'No conversation found to continue', send: '' }], settle: false,
     check: { apiRequests: 1, exit: 1, resumeHint: false } }),
-  ttyScenario({ name: 'tty-bash-mode', shimWinAppend: true, desc: '[垫片+伪终端] ! 进入 bash 模式：输入 "!" 再输入 "echo tty-bang" 回车 → 在本地执行，屏幕显示 "! echo tty-bang" 和 "⎿ tty-bang"；316 随后把 <bash-input>echo tty-bang</bash-input> 与 <bash-stdout>tty-bang</bash-stdout> 作为一条 user 消息发给模型（第 1 个请求），再问一句是第 2 个请求。',
+  ttyScenario({ name: 'tty-bash-mode', shimWinAppend: true, desc: '[垫片+伪终端] ! 进入 bash 模式：输入 "!" 再输入 "echo tty-bang" 回车 → 在本地执行，屏幕显示 "! echo tty-bang" 和 "⎿ tty-bang"；官方构建随后把 <bash-input>echo tty-bang</bash-input> 与 <bash-stdout>tty-bang</bash-stdout> 作为一条 user 消息发给模型（第 1 个请求），再问一句是第 2 个请求。',
     script: { steps: [{ text: 'Bash noted.' }], final: 'Second answer.' },
     steps: [
       { waitFor: 'auto mode on', send: '!' }, ttyPause(600, 'echo tty-bang'), { waitFor: 'echo tty-bang', send: '\r' },

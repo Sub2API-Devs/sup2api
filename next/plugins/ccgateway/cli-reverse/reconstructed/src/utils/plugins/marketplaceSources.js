@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：市场来源
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (34)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (34)
  * attribution: placement 34
  */
 import { isAbsolute, resolve as resolve_2 } from "path";
@@ -18,9 +18,10 @@ import {
   getStorageArm,
   normalizeInstallLocation,
   getDeclaredMarketplaces,
+  getMarketplaceDeclaringSource,
 } from "./marketplaceManager.js";
 import {
-  getInitialSettings_2,
+  getInitialSettings,
   getSettingsForSource,
   getSettingsForSourceWriteSeed,
 } from "../settings/settings.js";
@@ -38,7 +39,7 @@ import {
   getLocalSourcePath,
 } from "./localMarketplacePaths.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
-import { isLocalMarketplaceSource } from "./reconciler.js";
+import { isLocalMarketplaceSource, PLUGIN_DIRECTORY_MARKETPLACE_NAMES } from "./schemas.js";
 import { pluginGitUrlError } from "./pluginDirectoryTelemetry.js";
 import { jsonStringify } from "../slowOperations.js";
 import { isFreshTimestamp as isFreshTimestamp_2 } from "./pluginCachePaths.js";
@@ -51,13 +52,11 @@ import { logForDebugging } from "../debug.js";
 import { MARKETPLACE_SOURCE_FIX_HINTS as MARKETPLACE_SOURCE_FIX_HINTS_2 } from "./marketplaceNames.js";
 import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { isPluginDirectoryModeOn } from "./pluginGates.js";
-import { PLUGIN_DIRECTORY_MARKETPLACE_NAMES } from "./schemas.js";
 import { hasClaudeAiReservedPrefix } from "./pluginDirectories.js";
 import { formatSourceForDisplay } from "./marketplaceHelpers.js";
-import { removeExtraMarketplace } from "../../commands/plugin/PluginSettings.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4233217-4233776 placement
+//@ chunk-5xgkngpb.js:4339650-4340209 placement
 /**
  * 对 url 源市场，在各设置层（以及受信时的初始设置）的 extraKnownMarketplaces 中找同一规范 URL 的声明， 返回其 headers、headersHelper 与作者（operator/repo）。
  */
@@ -90,10 +89,10 @@ function findUrlMarketplaceHeaders(source, name) {
   let inExtraMarketplacesByTier = findInExtraMarketplacesByTier(findInRecord);
   if (inExtraMarketplacesByTier !== undefined) return inExtraMarketplacesByTier;
   return isWorkspaceTrustedForMarketplace()
-    ? findInRecord(getInitialSettings_2().extraKnownMarketplaces ?? {}, "repo")
+    ? findInRecord(getInitialSettings().extraKnownMarketplaces ?? {}, "repo")
     : undefined;
 }
-//@ chunk-e6aww6q8.js:4233776-4233859 placement
+//@ chunk-5xgkngpb.js:4340209-4340292 placement
 /**
  * repoAuthoredMarketplaceHeaders：市场仓库自己声明的 headers。
  */
@@ -103,7 +102,7 @@ function repoAuthoredMarketplaceHeaders(name, marketplaceName) {
     ? urlMarketplaceHeaders
     : undefined;
 }
-//@ chunk-e6aww6q8.js:4233859-4233952 placement
+//@ chunk-5xgkngpb.js:4340292-4340385 placement
 function findInExtraMarketplacesByTier(finder) {
   for (let { tier, record } of getExtraMarketplacesByTier()) {
     let found = finder(record, tier);
@@ -111,7 +110,7 @@ function findInExtraMarketplacesByTier(finder) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:4233952-4234078 placement
+//@ chunk-5xgkngpb.js:4340385-4340511 placement
 function getExtraMarketplacesByTier() {
   let enabledSettingSources = getEnabledSettingSources();
   return sorted
@@ -121,7 +120,7 @@ function getExtraMarketplacesByTier() {
       record: getSettingsForSource(tier)?.extraKnownMarketplaces ?? {},
     }));
 }
-//@ chunk-e6aww6q8.js:4234078-4234367 placement
+//@ chunk-5xgkngpb.js:4340511-4340800 placement
 /**
  * 在设置声明的 settings 源市场中找插件的 archive 条目。
  */
@@ -132,19 +131,19 @@ function findSettingsArchiveEntry(name, pluginName) {
     if (entry !== undefined) return toArchiveEntryAuth(entry, pluginName, "settings", tier);
   }
   if (!isWorkspaceTrustedForMarketplace()) return;
-  let entry = ownPropertyOrUndefined(getInitialSettings_2().extraKnownMarketplaces ?? {}, name);
+  let entry = ownPropertyOrUndefined(getInitialSettings().extraKnownMarketplaces ?? {}, name);
   if (entry !== undefined) return toArchiveEntryAuth(entry, pluginName, "repo");
   let addDirEntry = ownPropertyOrUndefined(getAddDirExtraMarketplaces(), name);
   return addDirEntry === undefined ? undefined : toArchiveEntryAuth(addDirEntry, pluginName, "addDir");
 }
-//@ chunk-e6aww6q8.js:4234367-4234422 placement
+//@ chunk-5xgkngpb.js:4340800-4340855 placement
 /**
  * ownPropertyOrUndefined：安全读取自有属性。
  */
 function ownPropertyOrUndefined(target, key) {
   return Object.hasOwn(target, key) ? target[key] : undefined;
 }
-//@ chunk-e6aww6q8.js:4234422-4234796 placement
+//@ chunk-5xgkngpb.js:4340855-4341229 placement
 /**
  * settings 源市场中插件的 archive URL、headers 与 helper（--add-dir 不带 helper）。
  */
@@ -165,7 +164,7 @@ function toArchiveEntryAuth(entry, pluginName, origin, tier) {
         : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:4236730-4236803 placement
+//@ chunk-5xgkngpb.js:4343163-4343236 placement
 /**
  * marketplaceSourceOfPlugin：插件所属市场的设置来源。
  */
@@ -173,16 +172,16 @@ function marketplaceSourceOfPlugin(pluginId) {
   let { marketplace } = parsePluginIdentifier(pluginId);
   return marketplace === undefined ? undefined : settingsSourceOfMarketplace(marketplace);
 }
-//@ chunk-e6aww6q8.js:4236803-4236817 placement
+//@ chunk-5xgkngpb.js:4343236-4343250 placement
 var MARKETPLACE_ADMISSION_CACHE_TTL_MS = 60000;
-//@ chunk-e6aww6q8.js:4236817-4236874 placement
+//@ chunk-5xgkngpb.js:4343250-4343307 placement
 /**
  * clearMarketplaceAdmissionVerdicts：清空市场准入判定缓存。
  */
 function clearMarketplaceAdmissionVerdicts() {
   getPluginRegistry().marketplaceAdmissionVerdicts.clear();
 }
-//@ chunk-e6aww6q8.js:4236874-4237794 placement
+//@ chunk-5xgkngpb.js:4343307-4344227 placement
 function describeUnusableMarketplaceSource(entry, marketplaceName) {
   let isSafeLocalPath = (path) => {
     if (isAbsolute(path))
@@ -224,7 +223,7 @@ function describeUnusableMarketplaceSource(entry, marketplaceName) {
     };
   return;
 }
-//@ chunk-e6aww6q8.js:4237794-4238236 placement
+//@ chunk-5xgkngpb.js:4344227-4344669 placement
 /**
  * 不可用市场来源的修复建议与对应失败码。
  */
@@ -239,15 +238,15 @@ var MARKETPLACE_SOURCE_FAILURE_CODES = {
   source: "invalid_source",
   declaration: undefined,
 };
-//@ chunk-e6aww6q8.js:4238236-4238279 placement
+//@ chunk-5xgkngpb.js:4344669-4344712 placement
 function isMarketplaceAdmitted(pluginId, source) {
   return marketplaceAdmissionKind(pluginId, source) === undefined;
 }
-//@ chunk-e6aww6q8.js:4238279-4238319 placement
+//@ chunk-5xgkngpb.js:4344712-4344752 placement
 function marketplaceAdmissionKind(name, entry) {
   return checkMarketplaceAdmission(name, entry)?.kind;
 }
-//@ chunk-e6aww6q8.js:4238319-4239108 placement
+//@ chunk-5xgkngpb.js:4344752-4345541 placement
 /**
  * 判断一个已注册市场能否被使用：官方/保留拼写需合法来源；来源不可用（网络位置、无效来源、声明不符）则拒绝。 结果按（名字、位置、来源）缓存一段时间，首次拒绝记 warn。返回 {kind, cause} 或 undefined。
  */
@@ -316,28 +315,28 @@ function checkMarketplaceAdmission(name, entry) {
     cause: unusable.cause,
   };
 }
-//@ chunk-e6aww6q8.js:4239108-4239156 placement
+//@ chunk-5xgkngpb.js:4345541-4345589 placement
 /**
  * hiddenRegistryEntries：隐藏的市场条目。
  */
 function hiddenRegistryEntries() {
   return getPluginRegistry().hiddenRegistryEntries;
 }
-//@ chunk-e6aww6q8.js:4239156-4239207 placement
+//@ chunk-5xgkngpb.js:4345589-4345640 placement
 /**
  * releasedRegistryEntries：已放行的市场条目。
  */
 function releasedRegistryEntries() {
   return getPluginRegistry().releasedRegistryEntries;
 }
-//@ chunk-e6aww6q8.js:4239207-4239250 placement
+//@ chunk-5xgkngpb.js:4345640-4345683 placement
 /**
  * hiddenRegistryEntryFor：取某存储臂下隐藏的市场条目。
  */
 function hiddenRegistryEntryFor(name, storageV5) {
   return hiddenRegistryEntries()[getStorageArm(storageV5)].get(name);
 }
-//@ chunk-e6aww6q8.js:4239250-4239314 placement
+//@ chunk-5xgkngpb.js:4345683-4345747 placement
 /**
  * releaseRegistryEntry：把市场条目从隐藏移到已放行。
  */
@@ -346,7 +345,7 @@ function releaseRegistryEntry(name, storageV5) {
   hiddenRegistryEntries()[storageArm].delete(name);
   releasedRegistryEntries()[storageArm].add(name);
 }
-//@ chunk-e6aww6q8.js:4239314-4239410 placement
+//@ chunk-5xgkngpb.js:4345747-4345843 placement
 function isHttpUrl(url) {
   try {
     let { protocol } = new URL(url);
@@ -355,7 +354,7 @@ function isHttpUrl(url) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:4239410-4239649 placement
+//@ chunk-5xgkngpb.js:4345843-4346082 placement
 function isSourceConsistentWith(candidate, declaredSource) {
   if (declaredSource === undefined || isLocalMarketplaceSource(candidate)) return true;
   switch (candidate.source) {
@@ -381,14 +380,14 @@ function isSourceConsistentWith(candidate, declaredSource) {
       return true;
   }
 }
-//@ chunk-e6aww6q8.js:4239649-4239800 placement
+//@ chunk-5xgkngpb.js:4346082-4346233 placement
 function getAdmittedMarketplaceEntry(marketplaceName, config) {
   let entry = Object.hasOwn(config, marketplaceName) ? config[marketplaceName] : undefined;
   if (entry === undefined) return;
   entry.installLocation = normalizeInstallLocation(entry.source, entry.installLocation);
   return isMarketplaceAdmitted(marketplaceName, entry) ? entry : undefined;
 }
-//@ chunk-e6aww6q8.js:4239800-4240096 placement
+//@ chunk-5xgkngpb.js:4346233-4346529 placement
 function filterAdmittedMarketplaces(knownMarketplacesConfig, storageArm) {
   let admitted = knownMarketplacesConfig;
   let hidden = new Map();
@@ -409,41 +408,41 @@ function filterAdmittedMarketplaces(knownMarketplacesConfig, storageArm) {
   }
   hiddenRegistryEntries()[storageArm] = hidden;
   if (kinds.size > 0)
-    weakMap_11.set(admitted, {
+    weakMap_16.set(admitted, {
       kinds,
       causes,
     });
   return admitted;
 }
-//@ chunk-e6aww6q8.js:4240096-4240128 placement
-var weakMap_11; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+//@ chunk-5xgkngpb.js:4346529-4346561 placement
+var weakMap_16; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var admissionVerdictCache;
-deferInit("chunk-e6aww6q8.js:4240096", () => {
-  weakMap_11 = new WeakMap();
+deferInit("chunk-5xgkngpb.js:4346529", () => {
+  weakMap_16 = new WeakMap();
   admissionVerdictCache = new Map();
 });
-//@ chunk-e6aww6q8.js:4240128-4240173 placement
+//@ chunk-5xgkngpb.js:4346561-4346606 placement
 /**
  * admissionKindsFor：某市场的准入类别表。
  */
 function admissionKindsFor(config) {
-  return weakMap_11.get(config)?.kinds ?? admissionVerdictCache;
+  return weakMap_16.get(config)?.kinds ?? admissionVerdictCache;
 }
-//@ chunk-e6aww6q8.js:4240173-4240224 placement
+//@ chunk-5xgkngpb.js:4346606-4346657 placement
 /**
  * admissionCauseFor：某市场被拒的原因。
  */
 function admissionCauseFor(config, name) {
-  return weakMap_11.get(config)?.causes.get(name);
+  return weakMap_16.get(config)?.causes.get(name);
 }
-//@ chunk-e6aww6q8.js:4240224-4240272 placement
+//@ chunk-5xgkngpb.js:4346657-4346705 placement
 /**
  * isOfficialMarketplaceSourced：官方市场来源可用。
  */
 function isOfficialMarketplaceSourced(config) {
   return admissionKindsFor(config).get(OFFICIAL_MARKETPLACE_NAME) === "source";
 }
-//@ chunk-e6aww6q8.js:4240272-4240378 placement
+//@ chunk-5xgkngpb.js:4346705-4346811 placement
 function reservedMarketplaceNameMessage(name) {
   if (isOfficialMarketplaceSpelling(name))
     return reservedMarketplaceEntryMessage(name, isPluginDirectoryModeOn());
@@ -457,7 +456,7 @@ function reservedMarketplaceNameMessage(name) {
         !PLUGIN_DIRECTORY_MARKETPLACE_NAMES.has(lookalike),
       );
 }
-//@ chunk-e6aww6q8.js:4240378-4240515 placement
+//@ chunk-5xgkngpb.js:4346811-4346948 placement
 /**
  * 因来源被拒的保留名市场及说明。
  */
@@ -476,7 +475,7 @@ function listReservedNameRefusals(config) {
   }
   return refusals;
 }
-//@ chunk-e6aww6q8.js:4240515-4240630 placement
+//@ chunk-5xgkngpb.js:4346948-4347063 placement
 function logMarketplaceNoticeOnce(key, message, level = "warn") {
   let marketplaceResolutionNoticesLogged = getPluginRegistry().marketplaceResolutionNoticesLogged;
   if (marketplaceResolutionNoticesLogged.has(key)) return;
@@ -485,7 +484,7 @@ function logMarketplaceNoticeOnce(key, message, level = "warn") {
     level,
   });
 }
-//@ chunk-e6aww6q8.js:4240630-4241629 placement
+//@ chunk-5xgkngpb.js:4347063-4348062 placement
 function validateDeclaredMarketplaceSource(names, config) {
   let kinds = admissionKindsFor(config);
   let declared;
@@ -534,7 +533,7 @@ function validateDeclaredMarketplaceSource(names, config) {
     skipped,
   };
 }
-//@ chunk-e6aww6q8.js:4241629-4241740 placement
+//@ chunk-5xgkngpb.js:4348062-4348173 placement
 function getNonRepoExtraMarketplaces() {
   return getEnabledSettingSources()
     .filter((source) => !REPO_DIR_SETTING_SOURCES.has(source))
@@ -543,57 +542,57 @@ function getNonRepoExtraMarketplaces() {
       extras: getSettingsForSource(source)?.extraKnownMarketplaces,
     }));
 }
-//@ chunk-e6aww6q8.js:4241740-4242123 placement
+//@ chunk-5xgkngpb.js:4348173-4348556 placement
 /**
  * autoUpdate 被托管设置/--settings/--add-dir 固定时返回来源说明。
  */
 function findAutoUpdateOverrideSource(name) {
-  let entry = removeExtraMarketplace(getSettingsForSource("policySettings"), name);
+  let entry = getMarketplaceDeclaringSource(getSettingsForSource("policySettings"), name);
   if (entry !== undefined)
     return entry.autoUpdate !== undefined ? "managed settings (managed-settings.json)" : null;
-  let flagEntry = removeExtraMarketplace(getSettingsForSource("flagSettings"), name);
+  let flagEntry = getMarketplaceDeclaringSource(getSettingsForSource("flagSettings"), name);
   if (flagEntry !== undefined) return flagEntry.autoUpdate !== undefined ? "the --settings flag" : null;
   if (name === OFFICIAL_MARKETPLACE_NAME && isPluginDirectoryModeOn()) return null;
   if (
     ownPropertyOrUndefined(getAddDirExtraMarketplaces(), name)?.autoUpdate !== undefined &&
-    removeExtraMarketplace(getInitialSettings_2(), name) === undefined
+    getMarketplaceDeclaringSource(getInitialSettings(), name) === undefined
   )
     return "an --add-dir directory's settings";
   return null;
 }
-//@ chunk-e6aww6q8.js:4242123-4242257 placement (2.1.88 match: supportsPersistence, 1)
+//@ chunk-5xgkngpb.js:4348556-4348690 placement (2.1.88 match: supportsPersistence, 1)
 function supportsPersistence(destination) {
   let sources = ["localSettings", "projectSettings", "userSettings"];
   for (let source of sources) {
     let settingsForSourceWriteSeed = getSettingsForSourceWriteSeed(source);
-    if (removeExtraMarketplace(settingsForSourceWriteSeed, destination)) return source;
+    if (getMarketplaceDeclaringSource(settingsForSourceWriteSeed, destination)) return source;
   }
   return null;
 }
 export {
-  repoAuthoredMarketplaceHeaders,
-  ownPropertyOrUndefined,
-  clearMarketplaceAdmissionVerdicts,
-  hiddenRegistryEntries,
-  listReservedNameRefusals,
-  findSettingsArchiveEntry,
-  findUrlMarketplaceHeaders,
   admissionKindsFor,
   admissionCauseFor,
   validateDeclaredMarketplaceSource,
   logMarketplaceNoticeOnce,
   isOfficialMarketplaceSourced,
   marketplaceSourceOfPlugin,
+  findUrlMarketplaceHeaders,
+  findSettingsArchiveEntry,
+  repoAuthoredMarketplaceHeaders,
   getNonRepoExtraMarketplaces,
+  ownPropertyOrUndefined,
   filterAdmittedMarketplaces,
-  weakMap_11,
+  weakMap_16,
   releasedRegistryEntries,
+  hiddenRegistryEntries,
   isSourceConsistentWith,
   describeUnusableMarketplaceSource,
   MARKETPLACE_SOURCE_FIX_HINTS,
   MARKETPLACE_SOURCE_FAILURE_CODES,
   hiddenRegistryEntryFor,
+  listReservedNameRefusals,
   releaseRegistryEntry,
+  clearMarketplaceAdmissionVerdicts,
   reservedMarketplaceNameMessage,
   getAdmittedMarketplaceEntry,
   findAutoUpdateOverrideSource,

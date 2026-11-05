@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工具宿主通告常量
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3zy56vtn.js (13), chunk-jd7h5dfe.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3emqeq9c.js (13), chunk-9bkbpym9.js (1)
  * attribution: placement 14
  */
 import { lstat, stat } from "fs/promises";
@@ -28,6 +28,7 @@ import { inExcludedRepository } from "../../utils/git/excludedRepository.js";
 import { getBridgeTokenOverride } from "../../bridge/bridgeConfig.js";
 import { startupReadsStoredLogin } from "../../utils/auth.js";
 import { getSecureStorage } from "../../utils/secureStorage/index.js";
+import { isInGitRepo } from "../../utils/git/gitDirProbe.js";
 import { getErrnoCode, isFsInaccessible, toError } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
 import { onComplianceTaintsChanged } from "../../services/policyLimits/complianceTaints.js";
@@ -41,15 +42,15 @@ import {
   SIGKILL_GRACE_MS,
 } from "./toolHostHelper.js";
 
-//@ chunk-jd7h5dfe.js:227-260 placement
+//@ chunk-9bkbpym9.js:227-260 placement
 var scopedMap = identity(new Map(), (map) => map.clear());
-//@ chunk-3zy56vtn.js:14494-14548 placement
+//@ chunk-3emqeq9c.js:14575-14629 placement
 var PLATFORM_TO_NODE_NAME = {
   macos: "darwin",
   linux: "linux",
   windows: "win32",
 };
-//@ chunk-3zy56vtn.js:14548-15868 placement
+//@ chunk-3emqeq9c.js:14629-15949 placement
 async function advertiseToolHost(checks) {
   let gate = checks.gate();
   if (gate === false)
@@ -108,10 +109,10 @@ async function advertiseToolHost(checks) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
@@ -122,7 +123,7 @@ async function advertiseToolHost(checks) {
     }),
   };
 }
-//@ chunk-3zy56vtn.js:15868-16305 placement
+//@ chunk-3emqeq9c.js:15949-16386 placement
 function liveToolHostChecks(dir, credentials, gate = readRadiantHeron) {
   return {
     gate,
@@ -144,32 +145,36 @@ function liveToolHostChecks(dir, credentials, gate = readRadiantHeron) {
     inExcludedRepository: () => inExcludedRepository(dir),
   };
 }
-//@ chunk-3zy56vtn.js:16305-16437 placement
+//@ chunk-3emqeq9c.js:16386-16518 placement
 async function hasStoredLoginRefreshToken(credentials) {
   if (getBridgeTokenOverride() !== undefined || !startupReadsStoredLogin()) return false;
   let async = await getSecureStorage().readAsync(credentials);
   return Boolean(async?.claudeAiOauth?.refreshToken);
 }
-//@ chunk-3zy56vtn.js:16437-16693 placement
+//@ chunk-3emqeq9c.js:16518-16839 placement
 async function classifyGitEntry(dir) {
   try {
     let stats = await lstat(join(dir, ".git"));
-    return stats.isDirectory() || stats.isFile() ? "root" : "other";
+    if (!stats.isDirectory() && !stats.isFile()) return "other";
+    return (await isInGitRepo(dir)) ? "other" : "root";
   } catch (error) {
-    if (getErrnoCode(error) === "ENOENT")
-      return (
-        await stat(dir).catch((error) => {
-          if (!isFsInaccessible(error)) logError(toError(error));
-          return;
-        })
-      )?.isDirectory()
-        ? "absent"
-        : "other";
+    if (getErrnoCode(error) === "ENOENT") {
+      if (
+        !(
+          await stat(dir).catch((error) => {
+            if (!isFsInaccessible(error)) logError(toError(error));
+            return;
+          })
+        )?.isDirectory()
+      )
+        return "other";
+      return (await isInGitRepo(dir)) ? "other" : "absent";
+    }
     if (!isFsInaccessible(error)) logError(toError(error));
     return "other";
   }
 }
-//@ chunk-3zy56vtn.js:16693-16812 placement
+//@ chunk-3emqeq9c.js:16839-16958 placement
 var ADVERT_RETRY_DELAY_MS = 3000;
 var ADVERT_WAIT_BUDGET_MS = 120000;
 var WITHDRAW_BLOCKER_BY_WAIT = {
@@ -179,7 +184,7 @@ var WITHDRAW_BLOCKER_BY_WAIT = {
 };
 var MIN_READVERTISE_INTERVAL_MS = 1e4;
 var READVERTISE_WINDOW_MS = 60000;
-//@ chunk-3zy56vtn.js:16812-18426 placement
+//@ chunk-3emqeq9c.js:16958-18572 placement
 async function watchToolHostAdvert({
   dir,
   credentials,
@@ -321,14 +326,14 @@ async function watchToolHostAdvert({
     },
   };
 }
-//@ chunk-3zy56vtn.js:18426-18540 placement
+//@ chunk-3emqeq9c.js:18572-18686 placement
 function isSwitchedOffRemotely(verdict) {
   return (
     verdict.kind === "withdraw" &&
     (verdict.blocker === "gate_off" || verdict.blocker === "flag_off" || verdict.blocker === "muted")
   );
 }
-//@ chunk-3zy56vtn.js:18540-18888 placement
+//@ chunk-3emqeq9c.js:18686-19034 placement
 function liveToolHostSwitches({ dir, checks, isOfferingFolder, hasAccessToken }) {
   function offReasonIgnoringMute() {
     return remoteToolServingOffReason(dir, {
@@ -346,13 +351,13 @@ function liveToolHostSwitches({ dir, checks, isOfferingFolder, hasAccessToken })
     folderServed: () => offReasonIgnoringMute() !== "launched_from_home",
   };
 }
-//@ chunk-3zy56vtn.js:18888-19039 placement
+//@ chunk-3emqeq9c.js:19034-19185 placement
 function helperRefusal(envVars = getProcessEnv()) {
   let refusal = checkToolHostHelperPreconditions(envVars);
   if (refusal === undefined) return;
   return refusal.message.includes("signs in or sends its traffic elsewhere") ? "other_sign_in" : "no_helper";
 }
-//@ chunk-3zy56vtn.js:19039-19114 placement
+//@ chunk-3emqeq9c.js:19185-19260 placement
 function buildToolHostWorkHandler(options, spawnExtra) {
   return runToolHostLoop({
     ...options,
@@ -363,7 +368,7 @@ function buildToolHostWorkHandler(options, spawnExtra) {
       }),
   });
 }
-//@ chunk-3zy56vtn.js:19114-19191 placement
+//@ chunk-3emqeq9c.js:19260-19337 placement
 async function sweepToolHostForShutdown(toolHost) {
   try {
     await withDeadline(toolHost.sweep("shutdown"), SIGKILL_GRACE_MS);
@@ -371,7 +376,7 @@ async function sweepToolHostForShutdown(toolHost) {
     logError(toError(error));
   }
 }
-//@ chunk-3zy56vtn.js:19191-19224 placement
+//@ chunk-3emqeq9c.js:19337-19370 placement
 function getProcessEnv() {
   return process.env;
 }

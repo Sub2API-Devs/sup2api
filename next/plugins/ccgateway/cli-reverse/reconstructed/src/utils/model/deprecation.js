@@ -3,9 +3,9 @@
  *
  * 弃用模型表与提示：各提供商退役日期、旧 Opus 4/4.1 自动重映射到最新 Opus（CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP 可关）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/model/deprecation.ts
- * pieces: chunk-aepeg2w5.js (7)
+ * pieces: chunk-exfmq47h.js (7)
  * attribution: fingerprint 3, layout 4
  */
 import { getCanonicalName } from "./canonicalModelName.js";
@@ -18,7 +18,7 @@ import {
   getMarketingNameForModel,
 } from "./model.js";
 
-//@ chunk-aepeg2w5.js:404666-406067 fingerprint (2.1.88 match: DEPRECATED_MODELS, 0.677)
+//@ chunk-exfmq47h.js:416057-417458 fingerprint (2.1.88 match: DEPRECATED_MODELS, 0.677)
 /**
  * 弃用模型：opus-4-1、opus-4-0（重映射到最新 Opus）、sonnet-4-0、3-opus、3-7-sonnet、3-5-haiku，各提供商退役日期。
  */
@@ -104,7 +104,7 @@ var DEPRECATED_MODELS = {
     },
   },
 };
-//@ chunk-aepeg2w5.js:406067-406526 fingerprint (2.1.88 match: getDeprecatedModelInfo, 0.495)
+//@ chunk-exfmq47h.js:417458-417917 fingerprint (2.1.88 match: getDeprecatedModelInfo, 0.495)
 /**
  * 查模型弃用信息：命中表且当前提供商有退役日期或属于旧 Opus 重映射时返回 {isDeprecated, modelName, copy:{kind: remap/retirement/none}}。
  */
@@ -147,14 +147,14 @@ function getDeprecatedModelInfo(modelId) {
     isDeprecated: false,
   };
 }
-//@ chunk-aepeg2w5.js:406526-406568 layout
+//@ chunk-exfmq47h.js:417917-417959 layout
 /**
  * 是否在弃用表中且对当前提供商生效。
  */
 function isModelDeprecated(modelId) {
   return getDeprecatedModelInfo(modelId).isDeprecated;
 }
-//@ chunk-aepeg2w5.js:406568-406777 layout
+//@ chunk-exfmq47h.js:417959-418168 layout
 /**
  * 旧 Opus 将被重映射，或弃用且已重映射/已过退役日期。
  */
@@ -180,7 +180,7 @@ function isModelRemappedOrRetired(modelId) {
       return false;
   }
 }
-//@ chunk-aepeg2w5.js:406777-407140 layout
+//@ chunk-exfmq47h.js:418168-418531 layout
 /**
  * 弃用通知 {message, action}（"now runs as …" 或 "retired/retires …"）。
  */
@@ -203,7 +203,7 @@ function getDeprecationNotice(modelId) {
       return null;
   }
 }
-//@ chunk-aepeg2w5.js:407140-407383 layout
+//@ chunk-exfmq47h.js:418531-418774 layout
 /**
  * 简短弃用提示；remap 时 "⚠ X remaps to …"，否则走完整警告。
  */
@@ -216,7 +216,7 @@ function getDeprecationStatusLine(modelId) {
   let targetName = getMarketingNameForModel(defaultOpusModel) ?? defaultOpusModel;
   return `\u26A0 ${deprecatedModelInfo.modelName.replace(/^Claude /, "")} remaps to ${targetName}. CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP=1 opts out`;
 }
-//@ chunk-aepeg2w5.js:407383-407872 fingerprint (2.1.88 match: getModelDeprecationWarning, 0.531)
+//@ chunk-exfmq47h.js:418774-419263 fingerprint (2.1.88 match: getModelDeprecationWarning, 0.531)
 /**
  * 完整弃用警告文案（remap 指明目标模型与关闭变量；退役给出日期）。
  */
@@ -239,9 +239,9 @@ function getModelDeprecationWarning(modelId) {
   }
 }
 export {
-  isModelRemappedOrRetired,
   getModelDeprecationWarning,
   getDeprecationNotice,
-  getDeprecationStatusLine,
+  isModelRemappedOrRetired,
   isModelDeprecated,
+  getDeprecationStatusLine,
 };

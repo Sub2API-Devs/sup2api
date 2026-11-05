@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：沙箱网络分类器
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 2
  */
 import { isMisleadingConsentHost } from "../sandbox/sandbox-adapter.js";
@@ -14,7 +14,7 @@ import { formatActionForClassifier, classifyYoloAction } from "./yoloClassifier.
 import { SANDBOX_NETWORK_ACCESS_TOOL_NAME } from "../../cli/structuredIO.js";
 import { messagesSinceCompactBoundary } from "../../services/projects/threadRows.js";
 
-//@ chunk-e6aww6q8.js:2948397-2948477 placement
+//@ chunk-5xgkngpb.js:3018000-3018080 placement
 var SANDBOX_HOST_CLASSIFIER_THRESHOLDS = {
   "claude-sonnet-5": {
     t1: 25,
@@ -26,7 +26,7 @@ var SANDBOX_HOST_CLASSIFIER_THRESHOLDS = {
   },
   ...false,
 };
-//@ chunk-e6aww6q8.js:2948477-2949239 placement
+//@ chunk-5xgkngpb.js:3018080-3018846 placement
 /**
  * 沙箱网络分类器：判断主机能否访问，不可用时拒绝。
  */

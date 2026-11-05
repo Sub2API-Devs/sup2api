@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：记忆召回大小上限检查与提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (9)
  * attribution: placement 9
  */
 import { resolve as resolve_2, basename, relative, sep, dirname, join } from "path";
@@ -42,7 +42,7 @@ import { logFeatureSad } from "../services/analytics/featureTelemetry.js";
 import { isRecallCorpusFile } from "./memoryScan.js";
 import { formatFileSize } from "../utils/format.js";
 
-//@ chunk-e6aww6q8.js:1429809-1430559 placement
+//@ chunk-5xgkngpb.js:1429379-1430133 placement
 /**
  * 读取自动记忆索引（或 agent 记忆目录中的索引）时检查大小/行数上限，必要时按拼接后的内容计算，返回超限提示或 null。
  */
@@ -92,7 +92,7 @@ async function checkMemoryIndexReadSize(filePath) {
     }),
   });
 }
-//@ chunk-e6aww6q8.js:1430559-1430636 placement
+//@ chunk-5xgkngpb.js:1430133-1430210 placement
 /**
  * 从记忆条目里找出作用域为 user、文件名是 MEMORY.md 的那一条。
  */
@@ -101,20 +101,20 @@ function userMemoryIndexEntry() {
     (store) => store.scope === "user" && store.promptIndex === MEMORY_INDEX_FILENAME,
   );
 }
-//@ chunk-e6aww6q8.js:1430752-1430773 placement
+//@ chunk-5xgkngpb.js:1430326-1430347 placement
 /**
  * 32
  */
 var RECALL_LINE_SLACK = 32;
 var RECALL_BYTE_SLACK = 32768;
-//@ chunk-e6aww6q8.js:1430773-1430893 placement
+//@ chunk-5xgkngpb.js:1430347-1430467 placement
 function stripEmptyFrontmatterBlock(text) {
   let withoutEmptyBlock = normalizeFrontmatter(text);
   if (withoutEmptyBlock === undefined) return;
   let { frontmatter } = parseMemoryFile(withoutEmptyBlock);
   return Object.keys(claudeCodeItemMeta(frontmatter)).length > 0 ? undefined : withoutEmptyBlock;
 }
-//@ chunk-e6aww6q8.js:1430893-1430970 placement
+//@ chunk-5xgkngpb.js:1430467-1430544 placement
 /**
  * 用严格 frontmatter 正则去掉记忆文件开头的元数据块，返回正文。
  */
@@ -122,7 +122,7 @@ function stripFrontmatterOfMemory(content) {
   let match = STRICT_FRONTMATTER_REGEX.exec(content);
   return match === null ? undefined : content.slice(match[0].length);
 }
-//@ chunk-e6aww6q8.js:1430970-1432259 placement
+//@ chunk-5xgkngpb.js:1430544-1431836 placement
 /**
  * 读取记忆文件用于召回：按行数与字节上限截断；（不可达分支）去掉 claudeCodeItem 块并计算视图大小。
  */
@@ -209,13 +209,13 @@ async function readMemoryFileForRecall(filePath, signal) {
     viewLines: fileInRange.totalLines - (fileInRange.lineCount - sourceLines.length),
   };
 }
-//@ chunk-e6aww6q8.js:1432259-1432300 placement
+//@ chunk-5xgkngpb.js:1431836-1431877 placement
 /**
  * 带序号后缀的记忆文件名
  */
 var MEMORY_FILE_NUMBERED_RE = /^(.*\D)-(\d{1,2})\.md$/;
 var MAX_MEMORY_DESCRIPTION_CHARS = 300;
-//@ chunk-e6aww6q8.js:1432300-1434531 placement
+//@ chunk-5xgkngpb.js:1431877-1434111 placement
 /**
  * 写入记忆文件后检查是否超过召回大小上限，超过时返回提示，说明写入成功但召回只显示部分。
  */
@@ -281,7 +281,7 @@ async function checkMemoryRecallLimit(filePath, fileContent) {
     };
   return null;
 }
-//@ chunk-e6aww6q8.js:1434576-1435230 placement
+//@ chunk-5xgkngpb.js:1434156-1434810 placement
 /**
  * 团队记忆挂载点的索引文件读取大小检查，按挂载点配置的 promptIndexMaxBytes 判断。
  */

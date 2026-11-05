@@ -3,9 +3,9 @@
  *
  * 输入建议列表（命令/文件/MCP 资源/agent/emoji 等）：按类型取图标、高亮匹配字符、滚动窗口与对齐。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/PromptInputFooterSuggestions.tsx
- * pieces: chunk-8jypjjdf.js (19)
+ * pieces: chunk-tvbhy3tn.js (19)
  * attribution: placement 11, layout 5, fingerprint 3
  */
 import { DIAMOND_GLYPH } from "../../constants/figures.js";
@@ -35,9 +35,9 @@ import { TwoColumnRow } from "../CustomSelect/select.js";
 import { getGraphemeSegmenter } from "../../utils/intl.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-8jypjjdf.js:1642-1656 placement
+//@ chunk-tvbhy3tn.js:1643-1657 placement
 var WHITESPACE_RE = /\s+/g;
-//@ chunk-8jypjjdf.js:1656-1767 placement
+//@ chunk-tvbhy3tn.js:1657-1768 placement
 /**
  * 当前方向键选中的建议 id（与选中项一致时）。
  */
@@ -48,7 +48,7 @@ function getArrowedSuggestionId(state) {
     ? arrowedSuggestionId
     : null;
 }
-//@ chunk-8jypjjdf.js:1767-2112 layout
+//@ chunk-tvbhy3tn.js:1768-2113 layout
 /**
  * 计算建议列表的可见窗口：各项高度不一，在最大行数内从上次起点出发保证选中项可见，并尽量向上填满。
  */
@@ -84,9 +84,9 @@ function suggestionWindow(rowHeights, budgetRows, selectedIndex, columnWidth) {
   }
   return fillFrom(rowFillWindow.start);
 }
-//@ chunk-8jypjjdf.js:2112-2121 layout
+//@ chunk-tvbhy3tn.js:2113-2122 layout
 var MAX_VISIBLE_SUGGESTIONS = 5;
-//@ chunk-8jypjjdf.js:2121-2302 fingerprint (2.1.88 match: getIcon, 0.839)
+//@ chunk-tvbhy3tn.js:2122-2303 fingerprint (2.1.88 match: getIcon, 0.839)
 function getIcon(itemId) {
   if (itemId.startsWith("file-")) return "+";
   if (itemId.startsWith("mcp-resource-")) return DIAMOND_GLYPH;
@@ -94,7 +94,7 @@ function getIcon(itemId) {
   if (itemId.startsWith("agent-")) return "*";
   return "+";
 }
-//@ chunk-8jypjjdf.js:2302-2608 layout
+//@ chunk-tvbhy3tn.js:2303-2609 layout
 function findContiguousMatch(text, query, contiguousOnly = false) {
   let lower = text.toLowerCase();
   if (lower.length !== text.length) return [];
@@ -114,7 +114,7 @@ function findContiguousMatch(text, query, contiguousOnly = false) {
   }
   return snapRangesToGraphemes(text, ranges);
 }
-//@ chunk-8jypjjdf.js:2608-3288 layout
+//@ chunk-tvbhy3tn.js:2609-3290 layout
 function HighlightedSuggestionText(props) {
   let $ = useMemoCache(13);
   let { text, query, color, isSelected, bold, contiguousOnly } = props;
@@ -194,7 +194,7 @@ function HighlightedSuggestionText(props) {
   if (highlighted !== EARLY_RETURN_SENTINEL) return highlighted;
   return earlyResult;
 }
-//@ chunk-8jypjjdf.js:3288-3417 layout (2.1.88 match: getIcon, 0.839)
+//@ chunk-tvbhy3tn.js:3290-3419 layout (2.1.88 match: getIcon, 0.839)
 function getIcon_2(itemId) {
   return (
     itemId.startsWith("file-") ||
@@ -203,9 +203,9 @@ function getIcon_2(itemId) {
     itemId.startsWith("agent-")
   );
 }
-//@ chunk-8jypjjdf.js:3417-8103 fingerprint (2.1.88 match: SuggestionItemRow, 0.575)
+//@ chunk-tvbhy3tn.js:3419-8105 fingerprint (2.1.88 match: SuggestionItemRow, 0.575)
 var SuggestionItemRow; // deferred: uses useTerminalSize (../../hooks/useTerminalSize.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8jypjjdf.js:3417", () => {
+deferInit("chunk-tvbhy3tn.js:3419", () => {
   SuggestionItemRow = memo(function (props) {
     let $ = useMemoCache(101);
     let { item, maxColumnWidth, isSelected, allowWrap } = props;
@@ -610,7 +610,7 @@ deferInit("chunk-8jypjjdf.js:3417", () => {
     return content;
   });
 });
-//@ chunk-8jypjjdf.js:8103-9644 fingerprint (2.1.88 match: PromptInputFooterSuggestions, 0.494)
+//@ chunk-tvbhy3tn.js:8105-9646 fingerprint (2.1.88 match: PromptInputFooterSuggestions, 0.494)
 /**
  * 建议列表：根据终端宽高计算可见窗口，按类型（命令/文件/MCP/agent/emoji）渲染 SuggestionItemRow，选中项高亮。
  */
@@ -774,15 +774,15 @@ function PromptInputFooterSuggestions({
     ],
   });
 }
-//@ chunk-8jypjjdf.js:9644-9660 placement
+//@ chunk-tvbhy3tn.js:9646-9662 placement
 /**
  * 导出值：FooterSuggestionsMemo（memo 包装的建议列表）；位于「输入建议列表（命令/文件/MCP 资源/agent/emoji 等）：按类型取图标、高亮匹配字符、滚动窗口与对齐」模块。
  */
 var FooterSuggestionsMemo; // deferred: uses PromptInputFooterSuggestions of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8jypjjdf.js:9644", () => {
+deferInit("chunk-tvbhy3tn.js:9646", () => {
   FooterSuggestionsMemo = memo(PromptInputFooterSuggestions);
 });
-//@ chunk-8jypjjdf.js:9660-9875 placement
+//@ chunk-tvbhy3tn.js:9662-9877 placement
 function suggestionKindLabels(suggestion) {
   let kindLabel =
     suggestion.kind === undefined || suggestion.kind === "action"
@@ -799,14 +799,14 @@ function suggestionKindLabels(suggestion) {
     sourceText,
   };
 }
-//@ chunk-8jypjjdf.js:9875-9945 placement
+//@ chunk-tvbhy3tn.js:9877-9947 placement
 function fitSuggestionWidth(suggestion, columns, descriptionWidth, isScreenReader) {
   let floored = Math.floor(columns * 0.4);
   return descriptionWidth > floored
     ? floored + suggestionIndentWidth(suggestion, columns, isScreenReader)
     : descriptionWidth;
 }
-//@ chunk-8jypjjdf.js:9945-10181 placement
+//@ chunk-tvbhy3tn.js:9947-10183 placement
 function suggestionIndentWidth(suggestion, columns, isScreenReader) {
   if (isScreenReader || suggestion.id.startsWith("emoji:")) return 0;
   let tagWidth = suggestion.tag ? bunStringWidth(`[${suggestion.tag}] `) : 0;
@@ -822,7 +822,7 @@ function suggestionIndentWidth(suggestion, columns, isScreenReader) {
   let pointerWidth = bunStringWidth(`${figures_default.pointer} `);
   return availableWidth < 0 ? pointerWidth : Math.min(pointerWidth, availableWidth);
 }
-//@ chunk-8jypjjdf.js:10181-10434 placement
+//@ chunk-tvbhy3tn.js:10183-10436 placement
 function suggestionRowHeight(suggestion, columns, descriptionWidth, isScreenReader) {
   if (getIcon_2(suggestion.id) || !suggestion.description) return 1;
   let descriptionColumns = fitSuggestionWidth(suggestion, columns, descriptionWidth, isScreenReader);
@@ -836,7 +836,7 @@ function suggestionRowHeight(suggestion, columns, descriptionWidth, isScreenRead
   let trimmed = suggestion.description.replace(WHITESPACE_RE, " ").trim();
   return bunStringWidth(trimmed) > max ? 2 : 1;
 }
-//@ chunk-8jypjjdf.js:10434-10695 placement
+//@ chunk-tvbhy3tn.js:10436-10697 placement
 function sanitizeSuggestion(suggestion) {
   let displayText = stripLineBreaks(suggestion.displayText);
   let description = suggestion.description && collapseWhitespace(suggestion.description);
@@ -857,7 +857,7 @@ function sanitizeSuggestion(suggestion) {
     sourceTag,
   };
 }
-//@ chunk-8jypjjdf.js:10695-10900 placement
+//@ chunk-tvbhy3tn.js:10697-10902 placement
 function splitAtWordWidth(text, descriptionWidth) {
   if (descriptionWidth <= 0 || bunStringWidth(text) <= descriptionWidth) return [text, ""];
   let head = truncateToWidthNoEllipsis(text, descriptionWidth);
@@ -867,23 +867,23 @@ function splitAtWordWidth(text, descriptionWidth) {
   if (index > 0) return [head.slice(0, index), text.slice(index + 1)];
   return [head, sliced];
 }
-//@ chunk-8jypjjdf.js:10900-10926 placement
+//@ chunk-tvbhy3tn.js:10902-10928 placement
 var NON_LATIN_PATTERN = /[^\u0020-\u02ff]/;
-//@ chunk-8jypjjdf.js:10926-11218 placement (2.1.88 match: findWordObject, 1)
+//@ chunk-tvbhy3tn.js:10928-11220 placement
 function snapRangesToGraphemes(text, ranges) {
   if (ranges.length === 0 || !NON_LATIN_PATTERN.test(text)) return ranges;
   let boundaries = new Set();
   for (let { index } of getGraphemeSegmenter().segment(text)) boundaries.add(index);
-  let graphemes = [];
+  let snappedRanges = [];
   for (let [start, end] of ranges) {
     let nextStart = start;
     while (nextStart > 0 && !boundaries.has(nextStart)) nextStart--;
     let rangeEnd = end;
     while (rangeEnd < text.length && !boundaries.has(rangeEnd)) rangeEnd++;
-    let last = graphemes.at(-1);
+    let last = snappedRanges.at(-1);
     if (last && nextStart <= last[1]) last[1] = Math.max(last[1], rangeEnd);
-    else graphemes.push([nextStart, rangeEnd]);
+    else snappedRanges.push([nextStart, rangeEnd]);
   }
-  return graphemes;
+  return snappedRanges;
 }
-export { getArrowedSuggestionId, PromptInputFooterSuggestions, FooterSuggestionsMemo };
+export { PromptInputFooterSuggestions, getArrowedSuggestionId, FooterSuggestionsMemo };

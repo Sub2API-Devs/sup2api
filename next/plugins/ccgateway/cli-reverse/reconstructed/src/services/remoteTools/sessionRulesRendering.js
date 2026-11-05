@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。远程命令渲染时适用的会话规则（anthropic/renderUnderSessionRules）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-phzhvaxm.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6tycsy38.js (5)
  * attribution: placement 5
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -24,9 +24,9 @@ import { buildNativeDoctorDiagnostics } from "../../screens/Doctor.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-phzhvaxm.js:416-458 placement
+//@ chunk-6tycsy38.js:416-458 placement
 var ANTHROPIC_RENDERUNDERSESSIONRULES = "anthropic/renderUnderSessionRules";
-//@ chunk-phzhvaxm.js:458-506 placement
+//@ chunk-6tycsy38.js:458-506 placement
 function rendersUnderSessionRulesCapability() {
   return {
     experimental: {
@@ -36,9 +36,9 @@ function rendersUnderSessionRulesCapability() {
     },
   };
 }
-//@ chunk-phzhvaxm.js:506-558 placement
+//@ chunk-6tycsy38.js:506-558 placement
 var sessionRulesContractSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-phzhvaxm.js:506", () => {
+deferInit("chunk-6tycsy38.js:506", () => {
   sessionRulesContractSchema = DoctorLazy(() =>
     objectSchema({
       experimental: objectSchema({
@@ -49,9 +49,9 @@ deferInit("chunk-phzhvaxm.js:506", () => {
     }),
   );
 });
-//@ chunk-phzhvaxm.js:558-665 placement
+//@ chunk-6tycsy38.js:558-665 placement
 var SESSION_RULES_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-phzhvaxm.js:558", () => {
+deferInit("chunk-6tycsy38.js:558", () => {
   SESSION_RULES_SCHEMA = DoctorLazy(() =>
     zodStrictObject({
       v: literal(1),
@@ -62,7 +62,7 @@ deferInit("chunk-phzhvaxm.js:558", () => {
     }),
   );
 });
-//@ chunk-phzhvaxm.js:665-1254 placement
+//@ chunk-6tycsy38.js:665-1254 placement
 /**
  * 远程命令渲染时适用的会话规则（anthropic/renderUnderSessionRules）。
  */

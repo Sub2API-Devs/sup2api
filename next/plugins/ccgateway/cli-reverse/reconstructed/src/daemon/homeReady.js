@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。守护进程 home 目录就绪检查。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bmjfm2g6.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1695mf16.js (3)
  * attribution: placement 3
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -14,7 +14,7 @@ import { jsonStringify } from "../utils/slowOperations.js";
 import { safeParseJSON } from "../utils/json.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bmjfm2g6.js:341-635 placement
+//@ chunk-1695mf16.js:341-635 placement
 /**
  * home 就绪记录的版本号与 schema（含文件数、写入时间等）。
  */
@@ -23,7 +23,7 @@ var HOME_READY_MAX_BYTES;
 var COUNT_SCHEMA;
 var HOME_READY_VERSION_SCHEMA;
 var HOME_READY_ROW_SCHEMA;
-deferInit("chunk-bmjfm2g6.js:341", () => {
+deferInit("chunk-1695mf16.js:341", () => {
   HOME_READY_VERSION = 1;
   HOME_READY_MAX_BYTES = 65536;
   COUNT_SCHEMA = DoctorLazy(() => int().min(0).default(0));
@@ -46,7 +46,7 @@ deferInit("chunk-bmjfm2g6.js:341", () => {
     }),
   );
 });
-//@ chunk-bmjfm2g6.js:635-777 placement
+//@ chunk-1695mf16.js:635-777 placement
 /**
  * 校验并序列化 home 就绪记录，不合 schema 时抛错。
  */
@@ -58,7 +58,7 @@ function encodeHomeReadyRow(row) {
   if (!parsed.success) throw Error("home ready row is off-schema");
   return Buffer.from(jsonStringify(parsed.data));
 }
-//@ chunk-bmjfm2g6.js:777-1085 placement
+//@ chunk-1695mf16.js:777-1085 placement
 /**
  * 解析 home 就绪记录：超长、版本不支持、格式错误分别返回原因。
  */

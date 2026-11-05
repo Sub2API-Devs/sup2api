@@ -1,8 +1,8 @@
 /**
  * @bufbuild/protobuf/dist/commonjs/from-binary.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @bufbuild/protobuf@2.12.1
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-require-graph 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
@@ -12,7 +12,7 @@ import { require_reflect } from "../cjs/reflect/reflect.js";
 import { require_binary_encoding } from "./wire/binary-encoding.js";
 import { require_varint } from "../cjs/wire/varint.js";
 
-//@ chunk-fq0cr76a.js:410280-413424 cjs-require-graph
+//@ chunk-qg41pqt6.js:410850-413994 cjs-require-graph
 var require_from_binary = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

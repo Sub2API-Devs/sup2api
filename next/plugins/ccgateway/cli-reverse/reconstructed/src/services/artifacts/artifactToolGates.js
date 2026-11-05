@@ -3,23 +3,25 @@
  *
  * 2.1.316 新增：Artifact 工具集开关与文档清单
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-06y4szbn.js (12), chunk-4xpk3fhh.js (67)
- * attribution: placement 79
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0avm71bs.js (70), chunk-51jy8ztq.js (12)
+ * attribution: placement 81, layout 1
  */
 import {
   TRUSTED_SETTING_SOURCES,
+  REPO_SETTING_SOURCES,
+  isSettingSourceEnabled,
+} from "../../utils/settings/constants.js";
+import {
   getDurablePolicyTierSettings,
   isPolicySlotAdminOrParentComposed,
-  REPO_SETTING_SOURCES,
   getAllPolicyTierSettings,
   getSettingsForSource,
   getLegacyLocalSettingsOverlay,
   projectSettingsAliasesUserSettings,
   getAdminTierEnvValue,
 } from "../../utils/settings/settings.js";
-import { isSettingSourceEnabled } from "../../utils/settings/constants.js";
 import { env } from "../../utils/env.js";
 import { isEnvTruthy, isEnvDefinedFalsy } from "../../utils/envUtils.js";
 import { getLatchedPreSettingsEnvSnapshot, getAppliedGlobalConfigEnv } from "../../utils/managedEnvApply.js";
@@ -44,6 +46,12 @@ import { getShareEntry } from "./shareEntries.js";
 import { hasAnyGatewayCredential, isApiKeyGatewaySession } from "../../utils/gatewayCredential.js";
 import { getAPIProvider } from "../../utils/model/providers.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
+import { hasLiveState, getLiveState } from "../liveReplica/liveReplica.js";
+import { artifactsMcpClient } from "../mcp/client.js";
+import { isOwnCcrMcpServer } from "../analytics/metadata.js";
+import { isFirstPartyToolboxServer } from "../mcp/fileReference/fileReferencePolicy.js";
+import { ARTIFACTS_MCP_PATH, ARTIFACTS_SERVER_ID } from "../mcp/firstPartyServerIds.js";
+import { getSessionId, getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import {
   getArtifactPublishStubDir,
   ARTIFACT_COMMENTS_TOOL_NAME,
@@ -56,7 +64,7 @@ import {
   isPolicyLimitsEligible,
 } from "../policyLimits/policyState.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
-import { hasOpusAccess_2, getSubscriptionType, getStoredOAuthSubscriptionType } from "../../utils/auth.js";
+import { getSubscriptionType, getStoredOAuthSubscriptionType } from "../../utils/auth.js";
 import {
   policyDenyKind,
   isPolicyDeniedByRefusedCacheHint,
@@ -64,10 +72,8 @@ import {
   isPolicyRouteMissing,
   isPolicyAllowed,
 } from "../policyLimits/policyEvidence.js";
-import { getLiveState, hasLiveState } from "../liveReplica/liveReplica.js";
 import { mergedCommandNames } from "../../utils/settings/commandSyncNames.js";
 import { fromEnum, lit, fromEnumOpt } from "../analytics/safeMetadata.js";
-import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import { policyCacheStatus } from "../policyLimits/policyFetchStatus.js";
 import { logEvent } from "../analytics/index.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -77,7 +83,7 @@ import { TOOL_SEARCH_TOOL_NAME } from "../../tools/ToolSearchTool/prompt.js";
 import { fromParentArtifactInput } from "./artifactToolActions.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-4xpk3fhh.js:11176-11814 placement
+//@ chunk-0avm71bs.js:11778-12416 placement
 /**
  * 逐层（env/用户/项目/本地/策略设置）解析 Artifact 开关，返回是否启用、关闭来源与用户是否可控。
  */
@@ -120,7 +126,7 @@ function resolveArtifactSetting(spec) {
     userControllable: !any && !any_2 && isSettingSourceEnabled("userSettings"),
   };
 }
-//@ chunk-4xpk3fhh.js:11814-12044 placement
+//@ chunk-0avm71bs.js:12416-12646 placement
 /**
  * 取某个设置来源用于开关判定的设置对象列表：policy 含全部策略层；local 含旧版本地覆盖；项目设置只是用户设置别名且自身声明了开关时跳过（避免重复）。
  */
@@ -139,14 +145,14 @@ function getSettingsLayersForGate(key, source) {
     return [];
   return [settingsForSource];
 }
-//@ chunk-4xpk3fhh.js:12044-12157 placement
+//@ chunk-0avm71bs.js:12646-12759 placement
 function declaresGateKey(settingsForSource, name) {
   return (
     settingsForSource?.[name.enableKey] !== undefined ||
     (name.legacyDisableKey !== undefined && settingsForSource?.[name.legacyDisableKey] !== undefined)
   );
 }
-//@ chunk-4xpk3fhh.js:12157-12355 placement
+//@ chunk-0avm71bs.js:12759-12957 placement
 function collectGateDisables(gate, layer, layers, layerMap) {
   if (layers.some((layer) => layer?.[layerMap.enableKey] === false))
     gate.push({
@@ -160,7 +166,7 @@ function collectGateDisables(gate, layer, layers, layerMap) {
       via: "legacyDisableKey",
     });
 }
-//@ chunk-4xpk3fhh.js:12355-12522 placement
+//@ chunk-0avm71bs.js:12957-13123 placement
 /**
  * 判断某个环境变量在任何地方被设为真：进程 env、设置加载前快照、管理员层、全局配置 env，或启用的 flag/user 设置 env。
  */
@@ -180,7 +186,7 @@ function isEnvSetAnywhere(name) {
       return true;
   return false;
 }
-//@ chunk-4xpk3fhh.js:12522-12765 placement
+//@ chunk-0avm71bs.js:13123-13366 placement
 function getEnvCaseInsensitive(env, name) {
   if (env === undefined) return;
   if (name in env) return env[name];
@@ -192,12 +198,12 @@ function getEnvCaseInsensitive(env, name) {
     else weakMap.set(env, new Map([[name, entry]]));
   return entry;
 }
-//@ chunk-4xpk3fhh.js:12765-12783 placement
+//@ chunk-0avm71bs.js:13366-13384 placement
 var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4xpk3fhh.js:12765", () => {
+deferInit("chunk-0avm71bs.js:13366", () => {
   weakMap = new WeakMap();
 });
-//@ chunk-4xpk3fhh.js:12783-12920 placement
+//@ chunk-0avm71bs.js:13384-13521 placement
 var ARTIFACT_GATE_KEYS = {
   enableKey: "enableArtifact",
   legacyDisableKey: "disableArtifact",
@@ -207,25 +213,25 @@ var ARTIFACT_GATE_SPEC = {
   ...ARTIFACT_GATE_KEYS,
   envDisableVar: "CLAUDE_CODE_DISABLE_ARTIFACT",
 };
-//@ chunk-4xpk3fhh.js:12920-12947 placement
+//@ chunk-0avm71bs.js:13521-13548 placement
 function resolveArtifactEnableSetting() {
   return resolveArtifactSetting(ARTIFACT_GATE_SPEC);
 }
-//@ chunk-4xpk3fhh.js:12947-12981 placement
+//@ chunk-0avm71bs.js:13548-13582 placement
 /**
  * 判断 Artifact 总开关（用户设置）是否关闭。
  */
 function isArtifactSwitchedOff() {
   return !resolveArtifactEnableSetting().enabled;
 }
-//@ chunk-4xpk3fhh.js:12981-13057 placement
+//@ chunk-0avm71bs.js:13582-13658 placement
 function isArtifactSwitchedOffInSettings() {
   return (
     !resolveArtifactSetting(ARTIFACT_GATE_KEYS).enabled ||
     isEnvTruthy(getAdminTierEnvValue("CLAUDE_CODE_DISABLE_ARTIFACT"))
   );
 }
-//@ chunk-4xpk3fhh.js:13057-13159 placement
+//@ chunk-0avm71bs.js:13658-13760 placement
 function isArtifactSdkDefaultOff() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
   return (
@@ -234,11 +240,11 @@ function isArtifactSdkDefaultOff() {
     CLAUDE_CODE_ENTRYPOINT === "mcp"
   );
 }
-//@ chunk-4xpk3fhh.js:13159-13237 placement
+//@ chunk-0avm71bs.js:13760-13838 placement
 function isCoworkerEntrypoint(entrypoint) {
   return entrypoint === "local-agent" || entrypoint?.startsWith("claude-coworker") === true;
 }
-//@ chunk-4xpk3fhh.js:13237-13299 placement
+//@ chunk-0avm71bs.js:13838-13900 placement
 function isCoworkFramePublishSession() {
   return (
     getSessionEntrypoint() === "local-agent" &&
@@ -247,39 +253,39 @@ function isCoworkFramePublishSession() {
     coworkFrameArtifacts()
   );
 }
-//@ chunk-4xpk3fhh.js:13299-13338 placement
+//@ chunk-0avm71bs.js:13900-13939 placement
 function isCoworkHostSession() {
   return (isCoworkSession() && isLocalAgentTopSession()) || isCoworkFramePublishSession();
 }
-//@ chunk-4xpk3fhh.js:13338-13365 placement
+//@ chunk-0avm71bs.js:13939-13966 placement
 function othersArtifactReadConsentSurface() {
   return isCoworkAny();
 }
-//@ chunk-4xpk3fhh.js:13365-13413 placement
+//@ chunk-0avm71bs.js:13966-14014 placement
 function othersArtifactReadIsUserOnly(context) {
   return context !== undefined && othersArtifactReadConsentSurface() && artifactHostUnreachable(context);
 }
-//@ chunk-4xpk3fhh.js:13413-13462 placement
+//@ chunk-0avm71bs.js:14014-14063 placement
 function othersReadIsUserOnly(context, options) {
   return !context && (othersArtifactReadIsUserOnly(options) || outsideOrgReadIsUserOnly(options.slug));
 }
-//@ chunk-4xpk3fhh.js:13462-13526 placement
+//@ chunk-0avm71bs.js:14063-14127 placement
 function outsideOrgRead(shareEntry) {
   return shareEntry !== undefined && shareEntry.outsideOrgReader === true && isFramePublicReadEnabled();
 }
-//@ chunk-4xpk3fhh.js:13526-13573 placement
+//@ chunk-0avm71bs.js:14127-14174 placement
 function outsideOrgReadIsUserOnly(slug) {
   return PERSON === "person" && outsideOrgRead(getShareEntry(slug));
 }
-//@ chunk-4xpk3fhh.js:13573-13609 placement
+//@ chunk-0avm71bs.js:14174-14210 placement
 function otherOrgCopySource(shareEntry) {
   return outsideOrgRead(shareEntry) || invitedCopySource(shareEntry);
 }
-//@ chunk-4xpk3fhh.js:13609-13666 placement
+//@ chunk-0avm71bs.js:14210-14267 placement
 function invitedCopySource(source) {
   return source !== undefined && source.external === true && isFramePublicReadEnabled();
 }
-//@ chunk-4xpk3fhh.js:13666-13782 placement
+//@ chunk-0avm71bs.js:14267-14383 placement
 function placedInOwnOrg(shareEntry) {
   return (
     shareEntry !== undefined &&
@@ -288,25 +294,25 @@ function placedInOwnOrg(shareEntry) {
     (shareEntry.outsideOrgReader === false || shareEntry.role === "owner")
   );
 }
-//@ chunk-4xpk3fhh.js:13782-13875 placement (2.1.88 match: isAnalyticsToolDetailsLoggingEnabled, 0.772)
+//@ chunk-0avm71bs.js:14383-14476 placement (2.1.88 match: isAnalyticsToolDetailsLoggingEnabled, 0.773)
 function isAnalyticsToolDetailsLoggingEnabled() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
   if (CLAUDE_CODE_ENTRYPOINT === "local-agent" && isCoworkFramePublishSession()) return false;
   return isCoworkerEntrypoint(CLAUDE_CODE_ENTRYPOINT);
 }
-//@ chunk-4xpk3fhh.js:13875-13912 placement
+//@ chunk-0avm71bs.js:14476-14513 placement
 function isArtifactReadOnlySurface() {
   return isCoworkerEntrypoint(getSessionEntrypoint()) && !isCoworkFramePublishSession();
 }
-//@ chunk-4xpk3fhh.js:13912-13945 placement
+//@ chunk-0avm71bs.js:14513-14546 placement
 function isArtifactToolsReady() {
   return hasAnyGatewayCredential() && isArtifactProviderAvailable();
 }
-//@ chunk-4xpk3fhh.js:13945-13977 placement
+//@ chunk-0avm71bs.js:14546-14578 placement
 function isArtifactProviderAvailable() {
   return getArtifactProviderBlockReason() === null;
 }
-//@ chunk-4xpk3fhh.js:13977-14252 placement
+//@ chunk-0avm71bs.js:14578-14853 placement
 /**
  * 返回 Artifact 因环境不可用的原因：第三方提供商、仅必要流量、CLAUDE_CODE_ARTIFACT 显式关闭、SDK 默认关闭（且未显式开启）；可用时返回 null。
  */
@@ -322,25 +328,57 @@ function getArtifactProviderBlockReason() {
     return "sdk_default_off";
   return null;
 }
-//@ chunk-4xpk3fhh.js:14252-14283 placement
+//@ chunk-0avm71bs.js:14853-14884 placement
 function isArtifactEnvEnabled() {
   return hasAnyGatewayCredential() && isArtifactProviderUnblocked();
 }
-//@ chunk-4xpk3fhh.js:14283-14314 placement
+//@ chunk-0avm71bs.js:14884-14915 placement
 function isArtifactProviderUnblocked() {
   return artifactProviderBlockReason() === null;
 }
-//@ chunk-4xpk3fhh.js:14314-14371 placement
+//@ chunk-0avm71bs.js:14915-14972 placement
 function artifactProviderBlockReason() {
   if (isAnalyticsToolDetailsLoggingEnabled()) return "surface_excluded";
   return getArtifactProviderBlockReason();
 }
-//@ chunk-4xpk3fhh.js:14371-14413 placement
+//@ chunk-0avm71bs.js:14972-15014 placement
 function isArtifactToolEligible() {
   if (isArtifactSwitchedOff()) return false;
   return isArtifactEnvEnabled();
 }
-//@ chunk-4xpk3fhh.js:14413-14516 placement
+//@ chunk-0avm71bs.js:15014-15234 placement
+/**
+ * 是否要记录 Artifact 工具被扣留：CCR 环境下本会话首次进入该分支时记标记，之后按开关与状态返回。
+ */
+function isArtifactToolReplacedByCcrEntry() {
+  if (!(hasLiveState() && getLiveState().heldCcrArtifactsEntry)) {
+    if (!env.CLAUDE_CODE_REMOTE) return false;
+    let artifactClient = artifactsMcpClient();
+    if (
+      artifactClient === undefined ||
+      !isOwnCcrMcpServer(artifactClient.config) ||
+      !isFirstPartyToolboxServer(artifactClient, {
+        path: ARTIFACTS_MCP_PATH,
+        serverId: ARTIFACTS_SERVER_ID,
+      })
+    )
+      return false;
+    getLiveState().heldCcrArtifactsEntry = true;
+  }
+  return !isArtifactSwitchedOffInSettings() && isArtifactEnvEnabled();
+}
+//@ chunk-0avm71bs.js:15234-15356 placement
+/**
+ * 本会话是否还没为 CCR 条目起过 scratchpad；起过一次后返回 false。
+ */
+function claimScratchpadStartForCcrEntry() {
+  let liveState = getLiveState();
+  let sessionId = getSessionId();
+  if (liveState.scratchpadStartedForCcrEntry === sessionId) return false;
+  liveState.scratchpadStartedForCcrEntry = sessionId;
+  return true;
+}
+//@ chunk-0avm71bs.js:15356-15459 placement
 function shouldRefreshArtifactRoster() {
   return (
     env.CLAUDE_CODE_ARTIFACT_ASSETS === undefined &&
@@ -349,7 +387,7 @@ function shouldRefreshArtifactRoster() {
     !env.CLAUDE_CODE_REMOTE
   );
 }
-//@ chunk-4xpk3fhh.js:14516-14596 placement
+//@ chunk-0avm71bs.js:15459-15539 placement
 function isPolicyEligibleForArtifacts() {
   let policyLimitsIneligibleReason = getPolicyLimitsIneligibleReason();
   return (
@@ -358,22 +396,22 @@ function isPolicyEligibleForArtifacts() {
     policyLimitsIneligibleReason === "no_auth"
   );
 }
-//@ chunk-4xpk3fhh.js:14596-14678 placement
+//@ chunk-0avm71bs.js:15539-15621 placement
 function isArtifactGrowthbookOn() {
   return (
     (isEnvTruthy(env.CLAUDE_CODE_ARTIFACT) && false) ||
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth", isPolicyEligibleForArtifacts())
   );
 }
-//@ chunk-4xpk3fhh.js:14678-14709 placement
+//@ chunk-0avm71bs.js:15621-15652 placement
 function isArtifactAdminAllowedEnough() {
   return isArtifactGrowthbookOn() && isArtifactAdminAllowed();
 }
-//@ chunk-4xpk3fhh.js:14709-14741 placement
+//@ chunk-0avm71bs.js:15652-15684 placement
 function isArtifactGrowthbookUnblocked() {
   return getArtifactGrowthbookBlockReason() === null;
 }
-//@ chunk-4xpk3fhh.js:14741-14866 placement
+//@ chunk-0avm71bs.js:15684-15809 placement
 function getArtifactGrowthbookBlockReason() {
   if (!isArtifactGrowthbookOn()) return "growthbook_off";
   if (isApiKeyGatewaySession() || isArtifactAdminAllowed()) {
@@ -383,10 +421,10 @@ function getArtifactGrowthbookBlockReason() {
   if (artifactPolicyUnobtained() !== null) return null;
   return "admin_policy";
 }
-//@ chunk-4xpk3fhh.js:14866-15280 placement
+//@ chunk-0avm71bs.js:15809-16223 placement
 function artifactPolicyUnobtained() {
   if (isApiKeyGatewaySession()) return null;
-  if (!hasOpusAccess_2(getSubscriptionType())) return null;
+  if (!hasOpusAccess(getSubscriptionType())) return null;
   let denyKind = policyDenyKind("allow_cobalt_plinth");
   if (denyKind !== "cache_miss" && denyKind !== "route_missing") {
     clearArtifactPolicyFetchAnswer();
@@ -410,17 +448,17 @@ function artifactPolicyUnobtained() {
         outcome: answer,
       };
 }
-//@ chunk-4xpk3fhh.js:15280-15343 placement
+//@ chunk-0avm71bs.js:16223-16286 placement
 function heldArtifactPolicyFetchAnswer() {
   return hasLiveState() ? getLiveState().artifactPolicyFetchAnswer : null;
 }
-//@ chunk-4xpk3fhh.js:15343-15485 placement
+//@ chunk-0avm71bs.js:16286-16428 placement
 function artifactHeldPolicyDenyCause() {
   if (isPolicyDeniedByRefusedCacheHint("allow_cobalt_plinth")) return "org_denied";
   let denyKind = policyDenyKind("allow_cobalt_plinth");
   return denyKind === "org_denied" || denyKind === "latched" ? denyKind : null;
 }
-//@ chunk-4xpk3fhh.js:15485-15628 placement
+//@ chunk-0avm71bs.js:16428-16571 placement
 function shouldReportFetchFailure(outcome) {
   if (!outcome.retrying) return true;
   if (
@@ -430,32 +468,32 @@ function shouldReportFetchFailure(outcome) {
     return false;
   return !isTransientFetchFailure(outcome);
 }
-//@ chunk-4xpk3fhh.js:15628-15685 placement
+//@ chunk-0avm71bs.js:16571-16628 placement
 function clearArtifactPolicyFetchAnswer() {
   if (hasLiveState()) getLiveState().artifactPolicyFetchAnswer = null;
 }
-//@ chunk-4xpk3fhh.js:15685-15752 placement
+//@ chunk-0avm71bs.js:16628-16695 placement
 function isArtifactToolEnabled() {
   if (getArtifactPublishStubDir() !== null) return isArtifactToolRegistered();
   return hasAnyGatewayCredential() && isArtifactToolRegistered() && isArtifactAdminAllowed();
 }
-//@ chunk-4xpk3fhh.js:15752-15786 placement
+//@ chunk-0avm71bs.js:16695-16729 placement
 function isArtifactToolRegistered() {
   return artifactToolWithholdingGate() === null;
 }
-//@ chunk-4xpk3fhh.js:15786-15872 placement
+//@ chunk-0avm71bs.js:16729-16815 placement
 function artifactToolWithholdingGate() {
   if (isArtifactSwitchedOff()) return "switched_off";
   if (getArtifactPublishStubDir() !== null) return null;
   return artifactProviderBlockReason() ?? getArtifactGrowthbookBlockReason();
 }
-//@ chunk-4xpk3fhh.js:15872-15932 placement
+//@ chunk-0avm71bs.js:16815-16875 placement
 function isArtifactReadEnabled() {
   if (isArtifactSwitchedOff()) return false;
   if (!isArtifactToolsReady()) return false;
   return isArtifactAdminAllowedEnough();
 }
-//@ chunk-4xpk3fhh.js:15932-16374 placement
+//@ chunk-0avm71bs.js:16875-17317 placement
 function collectArtifactOffMechanisms() {
   let keys = new Set();
   let seen = false;
@@ -486,11 +524,11 @@ function collectArtifactOffMechanisms() {
   if (key !== undefined) return key;
   return seen || done ? "admin_managed" : null;
 }
-//@ chunk-4xpk3fhh.js:16374-16416 placement
+//@ chunk-0avm71bs.js:17317-17359 placement
 function isArtifactFullyAvailable() {
   return collectArtifactOffMechanisms() !== null && isArtifactEnvEnabled() && isArtifactAdminAllowedEnough();
 }
-//@ chunk-4xpk3fhh.js:16416-16741 placement
+//@ chunk-0avm71bs.js:17359-17684 placement
 function maybeLogArtifactDisabledSession() {
   let liveState = getLiveState();
   if (liveState.artifactDisabledSessionEvaluated) return;
@@ -507,7 +545,7 @@ function maybeLogArtifactDisabledSession() {
         : lit("noninteractive"),
   });
 }
-//@ chunk-4xpk3fhh.js:16741-17498 placement
+//@ chunk-0avm71bs.js:17684-18441 placement
 function maybeLogArtifactToolWithheld(toolName) {
   if (!coworkFrameArtifacts() || getSessionEntrypoint() !== "local-agent" || isClaudecodeSession()) return;
   let liveState = getLiveState();
@@ -542,7 +580,7 @@ function maybeLogArtifactToolWithheld(toolName) {
     ...describePolicyFetchState(state),
   });
 }
-//@ chunk-4xpk3fhh.js:17498-17858 placement
+//@ chunk-0avm71bs.js:18441-18801 placement
 function describePolicyFetchState(state) {
   if (
     state !== "org_policy_denied" &&
@@ -573,7 +611,7 @@ function describePolicyFetchState(state) {
     policy_fetch: fromEnum(eligible),
   };
 }
-//@ chunk-4xpk3fhh.js:17858-17940 placement
+//@ chunk-0avm71bs.js:18801-18883 placement
 function holdArtifactStartupTelemetry() {
   getLiveState().heldStartupTelemetry ??= [];
   return {
@@ -581,14 +619,14 @@ function holdArtifactStartupTelemetry() {
     [Symbol.dispose]: flushHeldStartupTelemetry,
   };
 }
-//@ chunk-4xpk3fhh.js:17940-18040 placement
+//@ chunk-0avm71bs.js:18883-18983 placement
 function flushHeldStartupTelemetry() {
   let liveState = getLiveState();
   let heldStartupTelemetry = liveState.heldStartupTelemetry;
   liveState.heldStartupTelemetry = null;
   for (let fn of heldStartupTelemetry ?? []) fn();
 }
-//@ chunk-4xpk3fhh.js:18040-18122 placement
+//@ chunk-0avm71bs.js:18983-19065 placement
 function emitArtifactStartupTelemetry(options) {
   let heldStartupTelemetry = getLiveState().heldStartupTelemetry;
   if (heldStartupTelemetry === null) {
@@ -597,17 +635,17 @@ function emitArtifactStartupTelemetry(options) {
   }
   heldStartupTelemetry.push(options);
 }
-//@ chunk-4xpk3fhh.js:18122-18156 placement
+//@ chunk-0avm71bs.js:19065-19099 placement
 function logArtifactTelemetry(...args) {
   emitArtifactStartupTelemetry(() => logEvent(...args));
 }
-//@ chunk-4xpk3fhh.js:18156-18509 placement
+//@ chunk-0avm71bs.js:19099-19452 placement
 function resolveWithheldReason(reason) {
   switch (reason) {
     case "surface_excluded":
       return isTopHostSession() ? "surface_excluded" : "nested_child_session";
     case "admin_policy": {
-      if (!hasOpusAccess_2(getSubscriptionType())) return "subscription_ineligible";
+      if (!hasOpusAccess(getSubscriptionType())) return "subscription_ineligible";
       let responseFromCache = getResponseFromCache();
       if (responseFromCache === null)
         return isPolicyRouteMissing() ? "policy_route_missing" : "policy_cache_miss";
@@ -619,33 +657,43 @@ function resolveWithheldReason(reason) {
       return reason;
   }
 }
-//@ chunk-4xpk3fhh.js:18509-18543 placement
+//@ chunk-0avm71bs.js:19452-19486 placement
 function getArtifactDefaultOn() {
   return ARTIFACT_GATE_SPEC.defaultOn;
 }
-//@ chunk-4xpk3fhh.js:18543-18574 placement
+//@ chunk-0avm71bs.js:19486-19517 placement
 function canUserControlArtifactSetting() {
   return isArtifactProviderUnblocked() && isArtifactGrowthbookUnblocked();
 }
-//@ chunk-4xpk3fhh.js:18574-18625 placement
+//@ chunk-0avm71bs.js:19517-19568 placement
 function isArtifactConfigToggleable() {
   return canUserControlArtifactSetting() && resolveArtifactEnableSetting().userControllable;
 }
-//@ chunk-4xpk3fhh.js:18625-18653 placement
+//@ chunk-0avm71bs.js:19568-19596 placement
 function isArtifactAdminAllowed() {
   return isArtifactAccountAllowed();
 }
-//@ chunk-4xpk3fhh.js:18653-18749 placement
+//@ chunk-0avm71bs.js:19596-19692 placement
 function isArtifactAccountAllowed() {
   if (isApiKeyGatewaySession()) return getAdminRefusalReason() === null;
-  if (!hasOpusAccess_2(getSubscriptionType())) return false;
+  if (!hasOpusAccess(getSubscriptionType())) return false;
   return isPolicyAllowed("allow_cobalt_plinth");
 }
-//@ chunk-4xpk3fhh.js:18830-18856 placement
+//@ chunk-0avm71bs.js:19692-19773 layout (2.1.88 match: hasOpusAccess, 1)
+function hasOpusAccess(subscriptionType) {
+  return (
+    subscriptionType === "team" ||
+    subscriptionType === "enterprise" ||
+    subscriptionType === "pro" ||
+    subscriptionType === "max" ||
+    subscriptionType == null
+  );
+}
+//@ chunk-0avm71bs.js:19773-19799 placement
 function artifactYieldAdminRefusal() {
   return getAdminRefusalReason();
 }
-//@ chunk-4xpk3fhh.js:18856-19235 placement
+//@ chunk-0avm71bs.js:19799-20178 placement
 function getAdminRefusalReason() {
   if (!isApiKeyGatewaySession()) return null;
   let storedOAuthSubscriptionType = getStoredOAuthSubscriptionType();
@@ -664,19 +712,19 @@ function getAdminRefusalReason() {
       return "policy_route_missing";
   }
 }
-//@ chunk-4xpk3fhh.js:19235-19297 placement
+//@ chunk-0avm71bs.js:20178-20240 placement
 function isRepublishInlinePromptEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth_thrift", false) === true;
 }
-//@ chunk-4xpk3fhh.js:19297-19324 placement
+//@ chunk-0avm71bs.js:20240-20267 placement
 function isPublishToolEnabled() {
   return isArtifactToolEnabled();
 }
-//@ chunk-4xpk3fhh.js:19324-19355 placement
+//@ chunk-0avm71bs.js:20267-20298 placement
 function isResumeFrameSeedEligible() {
   return !isArtifactSwitchedOff() && isArtifactProviderUnblocked();
 }
-//@ chunk-06y4szbn.js:35741-36119 placement
+//@ chunk-51jy8ztq.js:35741-36119 placement
 /**
  * artifact 文档清单的限额：最多 4096 项、路径 ≤512 字符且不得以 / 开头或含 .. 与转义控制字符，doc 名 ≤64。
  */
@@ -684,7 +732,7 @@ var ARTIFACT_DOC_LIMITS; // deferred: uses DoctorLazy (../../cli/handlers/util.j
 var SAFE_ARTIFACT_PATH_RE;
 var ARTIFACT_DOC_PATH_RE;
 var artifactDocsSchema;
-deferInit("chunk-06y4szbn.js:35741", () => {
+deferInit("chunk-51jy8ztq.js:35741", () => {
   ARTIFACT_DOC_LIMITS = 4096;
   SAFE_ARTIFACT_PATH_RE =
     /^(?!\/)(?!.*\/\/)(?!.*\/$)(?!(?:^|.*\/)\.\.?(?:\/|$))[^\p{Cc}\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069\u2028\u2029\\?#%:;]{1,512}$/u;
@@ -699,13 +747,13 @@ deferInit("chunk-06y4szbn.js:35741", () => {
     ).max(ARTIFACT_DOC_LIMITS),
   );
 });
-//@ chunk-06y4szbn.js:36119-36244 placement
+//@ chunk-51jy8ztq.js:36119-36244 placement
 function artifactDocsOrFiles(artifact) {
   if (artifact.docs !== undefined)
     return artifactDocsSchema().safeParse(artifact.docs).success ? artifactDocs(artifact) : undefined;
   return artifact.files !== undefined ? artifactDocs(artifact) : undefined;
 }
-//@ chunk-06y4szbn.js:36244-36544 placement
+//@ chunk-51jy8ztq.js:36244-36544 placement
 function artifactDocs(artifact) {
   let parsed = artifact.docs === undefined ? undefined : artifactDocsSchema().safeParse(artifact.docs);
   if (parsed?.success && parsed.data.length > 0) return parsed.data;
@@ -722,16 +770,16 @@ function artifactDocs(artifact) {
     },
   ];
 }
-//@ chunk-06y4szbn.js:36544-36714 placement
+//@ chunk-51jy8ztq.js:36544-36714 placement
 function hasHeadSubscription(artifact) {
   return (
     (typeof artifact.headSubscriptionToken === "string" && artifact.headSubscriptionToken !== "") ||
     (typeof artifact.headSeq === "number" && Number.isSafeInteger(artifact.headSeq) && artifact.headSeq >= 0)
   );
 }
-//@ chunk-06y4szbn.js:36714-36914 placement
+//@ chunk-51jy8ztq.js:36714-36914 placement
 var ARTIFACT_DOC_LIST_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-06y4szbn.js:36714", () => {
+deferInit("chunk-51jy8ztq.js:36714", () => {
   ARTIFACT_DOC_LIST_SCHEMA = DoctorLazy(() =>
     array(
       objectSchema({
@@ -746,7 +794,7 @@ deferInit("chunk-06y4szbn.js:36714", () => {
     ).max(ARTIFACT_DOC_LIMITS),
   );
 });
-//@ chunk-06y4szbn.js:36914-37244 placement
+//@ chunk-51jy8ztq.js:36914-37244 placement
 function artifactFileManifest(artifact) {
   if (artifact.files === undefined) return;
   let parsed = ARTIFACT_DOC_LIST_SCHEMA().safeParse(artifact.files);
@@ -765,7 +813,7 @@ function artifactFileManifest(artifact) {
     });
   return out;
 }
-//@ chunk-06y4szbn.js:37244-37451 placement
+//@ chunk-51jy8ztq.js:37244-37451 placement
 /**
  * Artifact 工具集是否拆分为独立的评论工具（CLAUDE_CODE_ARTIFACT_TOOLSET / tengu_artifact_toolset）。
  */
@@ -781,25 +829,25 @@ function isArtifactToolsetSplit() {
   }
   return liveState.toolsetLatch;
 }
-//@ chunk-06y4szbn.js:37451-37484 placement
+//@ chunk-51jy8ztq.js:37451-37484 placement
 function commentsToolName() {
   return isArtifactToolsetSplit() ? ARTIFACT_COMMENTS_TOOL_NAME : ARTIFACT_TOOL_NAME;
 }
-//@ chunk-06y4szbn.js:37484-37611 placement
+//@ chunk-51jy8ztq.js:37484-37611 placement
 function commentsToolReference() {
   return isArtifactToolsetSplit()
     ? `the ${ARTIFACT_COMMENTS_TOOL_NAME} tool (load it with ${TOOL_SEARCH_TOOL_NAME}, query \`select:${ARTIFACT_COMMENTS_TOOL_NAME}\`, if it is not loaded)`
     : `the ${ARTIFACT_TOOL_NAME} tool`;
 }
-//@ chunk-06y4szbn.js:37611-37682 placement
+//@ chunk-51jy8ztq.js:37611-37682 placement
 function commentsToolAction(action) {
   return `${ARTIFACT_COMMENTS_TOOL_NAME} tool, action "${action === "comments" ? "read" : action}"`;
 }
-//@ chunk-06y4szbn.js:37682-37717 placement
+//@ chunk-51jy8ztq.js:37682-37717 placement
 function pickByToolset(whenSplit, whenCombined) {
   return isArtifactToolsetSplit() ? whenCombined() : whenSplit;
 }
-//@ chunk-06y4szbn.js:37717-37798 placement
+//@ chunk-51jy8ztq.js:37717-37798 placement
 function commentsToolCall(name, action) {
   return isArtifactToolsetSplit()
     ? {
@@ -812,50 +860,52 @@ function commentsToolCall(name, action) {
       };
 }
 export {
-  artifactDocsOrFiles,
-  ARTIFACT_DOC_PATH_RE,
-  isArtifactToolRegistered,
-  isArtifactReadOnlySurface,
+  isResumeFrameSeedEligible,
+  isPublishToolEnabled,
   isCoworkFramePublishSession,
   pickByToolset,
   othersArtifactReadIsUserOnly,
-  isResumeFrameSeedEligible,
-  isPublishToolEnabled,
-  isArtifactToolEnabled,
-  isArtifactReadEnabled,
-  isArtifactToolsetSplit,
-  artifactDocs,
-  isArtifactAccountAllowed,
-  isArtifactAdminAllowed,
-  isArtifactConfigToggleable,
-  outsideOrgRead,
-  invitedCopySource,
-  otherOrgCopySource,
-  othersArtifactReadConsentSurface,
-  SAFE_ARTIFACT_PATH_RE,
+  othersReadIsUserOnly,
+  isArtifactToolRegistered,
+  isArtifactReadOnlySurface,
   maybeLogArtifactDisabledSession,
   artifactToolWithholdingGate,
   maybeLogArtifactToolWithheld,
   artifactYieldAdminRefusal,
+  isArtifactAdminAllowed,
   artifactPolicyUnobtained,
   artifactHeldPolicyDenyCause,
-  othersReadIsUserOnly,
+  othersArtifactReadConsentSurface,
+  outsideOrgRead,
   isCoworkHostSession,
+  otherOrgCopySource,
   isRepublishInlinePromptEnabled,
   placedInOwnOrg,
   artifactFileManifest,
+  invitedCopySource,
+  isArtifactSwitchedOffInSettings,
+  resolveArtifactEnableSetting,
+  isArtifactAccountAllowed,
+  outsideOrgReadIsUserOnly,
+  isArtifactToolsetSplit,
+  heldArtifactPolicyFetchAnswer,
+  isArtifactToolReplacedByCcrEntry,
+  isArtifactToolEnabled,
+  artifactDocsOrFiles,
+  ARTIFACT_DOC_PATH_RE,
+  artifactDocs,
+  isArtifactSdkDefaultOff,
+  isArtifactReadEnabled,
   commentsToolAction,
   commentsToolReference,
   commentsToolCall,
   commentsToolName,
+  isArtifactConfigToggleable,
   emitArtifactStartupTelemetry,
-  isArtifactSdkDefaultOff,
-  outsideOrgReadIsUserOnly,
-  resolveArtifactEnableSetting,
-  getArtifactDefaultOn,
   shouldRefreshArtifactRoster,
-  isArtifactSwitchedOffInSettings,
-  heldArtifactPolicyFetchAnswer,
+  getArtifactDefaultOn,
+  SAFE_ARTIFACT_PATH_RE,
+  claimScratchpadStartForCcrEntry,
   holdArtifactStartupTelemetry,
   isArtifactToolEligible,
 };

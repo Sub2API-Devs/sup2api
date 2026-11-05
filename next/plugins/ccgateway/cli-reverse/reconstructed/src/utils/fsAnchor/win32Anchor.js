@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Windows 文件系统锚点
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tb11za84.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cr1mmxrf.js (16)
  * attribution: placement 16
  */
 import { constants } from "fs";
@@ -31,7 +31,7 @@ import { getErrnoCode } from "../errors.js";
 import { retryTransient } from "../atomicPublishWrite.js";
 import { logError } from "../log.js";
 
-//@ chunk-tb11za84.js:919-1263 placement
+//@ chunk-cr1mmxrf.js:1036-1380 placement
 /**
  * Windows 锚定后端的访问掩码与打开选项常量、缓冲大小上限，以及表示文件不可用的 NTSTATUS 集合。
  */
@@ -44,14 +44,14 @@ var OPEN_REPARSE_OPTIONS = OPTIONS.FILE_OPEN_REPARSE_POINT | OPTIONS.FILE_SYNCHR
 var MAX_REPARSE_BUFFER = 4096;
 var MAX_READ_CHUNK = 4194304;
 var FILE_NOT_SERVED_STATUSES = new Set([2147483693, 3221226763]);
-//@ chunk-tb11za84.js:1263-1332 placement
+//@ chunk-cr1mmxrf.js:1380-1449 placement
 function hasOfflineAttributeFlags(attributes) {
   return (
     (attributes & MAX_READ_CHUNK) !== 0 ||
     ((attributes & MAX_REPARSE_BUFFER) !== 0 && (attributes & ATTRIBUTE.REPARSE_POINT) !== 0)
   );
 }
-//@ chunk-tb11za84.js:1332-1515 placement
+//@ chunk-cr1mmxrf.js:1449-1632 placement
 var TRAILING_DOT_SPACE_RE = /[. ]+$/;
 var READ_ATTR_ACCESS = ACCESS.FILE_READ_ATTRIBUTES | ACCESS.SYNCHRONIZE;
 var MAX_DIR_READ_BYTES = 1048576;
@@ -59,7 +59,7 @@ var READ_CHUNK_BYTES = 262144;
 var WRITE_OPEN_FLAGS = constants.O_WRONLY | constants.O_RDWR | constants.O_APPEND | constants.O_TRUNC;
 var NOFOLLOW_NONBLOCK_FLAGS = (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0);
 var FILETIME_EPOCH_OFFSET = 116444736000000000n;
-//@ chunk-tb11za84.js:1515-2575 placement
+//@ chunk-cr1mmxrf.js:1632-2692 placement
 /**
  * 把锚定后端的错误码转为说明性的 Error（文件已关闭、名字被占用、参数非法、非普通名字、被其他程序占用、链接/目录占位、根非规范路径、云同步/去重文件、仅在线文件等）。
  */
@@ -95,13 +95,13 @@ function win32AnchorError(code) {
       );
   }
 }
-//@ chunk-tb11za84.js:2575-2619 placement
+//@ chunk-cr1mmxrf.js:2692-2736 placement
 function win32AnchorErrorWithCode(code) {
   let error = win32AnchorError(code);
   error.code = code;
   return error;
 }
-//@ chunk-tb11za84.js:2619-2782 placement
+//@ chunk-cr1mmxrf.js:2736-2899 placement
 function assertPlainWin32Name(name, allowShortName = false) {
   if (
     name === "" ||
@@ -116,15 +116,15 @@ function assertPlainWin32Name(name, allowShortName = false) {
     throw win32AnchorErrorWithCode("WORKING_NAME_NOT_PLAIN");
   return name;
 }
-//@ chunk-tb11za84.js:2782-2814 placement
+//@ chunk-cr1mmxrf.js:2899-2931 placement
 function filetimeToUnixNs(filetime) {
   return (filetime - FILETIME_EPOCH_OFFSET) * 100n;
 }
-//@ chunk-tb11za84.js:2814-2868 placement
+//@ chunk-cr1mmxrf.js:2931-2985 placement
 function unixMsToFiletime(unixMs) {
   return BigInt(Math.round(unixMs * 1e6)) * 10n + FILETIME_EPOCH_OFFSET;
 }
-//@ chunk-tb11za84.js:2868-3628 placement
+//@ chunk-cr1mmxrf.js:2985-3745 placement
 /**
  * 由 NT 文件信息构造 bigint 形式的 fs.Stats 对象：按重解析点/目录/普通文件设置模式与只读位，时间由纳秒换算。
  */
@@ -168,7 +168,7 @@ function buildWin32Stats(dev, identity, times, allocationSize) {
     isSocket: () => false,
   };
 }
-//@ chunk-tb11za84.js:3628-4144 placement
+//@ chunk-cr1mmxrf.js:3745-4261 placement
 /**
  * 把 bigint 形式的 stats 转为数字形式的 fs.Stats（时间换算为毫秒，设备类判断恒为 false）。
  */
@@ -202,7 +202,7 @@ function toNumberStats(stats) {
     isSocket: () => false,
   };
 }
-//@ chunk-tb11za84.js:4144-4669 placement
+//@ chunk-cr1mmxrf.js:4261-4786 placement
 /**
  * 查询 NT 句柄的文件信息（属性、重解析标签、文件 ID、卷序列号与时间），返回原始字段与按设备号来源生成 stats 的函数。
  */
@@ -238,14 +238,14 @@ function queryWin32FileInfo(nt, handle) {
       ),
   };
 }
-//@ chunk-tb11za84.js:4669-4744 placement
+//@ chunk-cr1mmxrf.js:4786-4861 placement
 function isReparseNameSurrogate(directoryEntry) {
   return (
     (directoryEntry.attributes & ATTRIBUTE.REPARSE_POINT) !== 0 &&
     isReparseTagNameSurrogate(directoryEntry.reparseTag)
   );
 }
-//@ chunk-tb11za84.js:4744-4869 placement
+//@ chunk-cr1mmxrf.js:4861-4986 placement
 function queryAttributesAndTag(nt, handle) {
   let attributes = nt.queryAttributes(handle);
   return (attributes & ATTRIBUTE.REPARSE_POINT) !== 0
@@ -255,7 +255,7 @@ function queryAttributesAndTag(nt, handle) {
         reparseTag: 0,
       };
 }
-//@ chunk-tb11za84.js:4869-5160 placement
+//@ chunk-cr1mmxrf.js:4986-5277 placement
 function matchIdentityBridge(fileInfo, pathStats) {
   let matchesSerial = (serial) =>
     serial !== null &&
@@ -272,7 +272,7 @@ function matchIdentityBridge(fileInfo, pathStats) {
   );
   return bridgeKind;
 }
-//@ chunk-tb11za84.js:5281-13060 placement
+//@ chunk-cr1mmxrf.js:5398-13177 placement
 /**
  * Windows 下为根目录建立锚定文件句柄（网络共享等情况降级为不锚定）。
  */
@@ -797,7 +797,7 @@ async function openWin32Anchor(host, nt, options) {
     ops,
   };
 }
-//@ chunk-tb11za84.js:13060-13192 placement
+//@ chunk-cr1mmxrf.js:13177-13309 placement
 function logWin32AnchorFailure(message, error) {
   let status = statusOf(error);
   if (status === undefined) {

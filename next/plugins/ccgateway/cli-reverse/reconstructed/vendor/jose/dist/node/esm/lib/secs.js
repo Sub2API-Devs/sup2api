@@ -1,15 +1,15 @@
 /**
  * jose/dist/node/esm/lib/secs.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (3)
+ * pieces: chunk-pd6th42n.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
 import { __esm } from "../../../../../../runtime/bun-runtime.js";
 
-//@ chunk-2tyrgda4.js:38867-38881 esm-layout
+//@ chunk-pd6th42n.js:38867-38881 esm-layout
 var noopJwtClaims = () => {};
-//@ chunk-2tyrgda4.js:38881-39404 esm-layout
+//@ chunk-pd6th42n.js:38881-39404 esm-layout
 var timePeriodRegex;
 var parseSecs = (str) => {
   let matched = timePeriodRegex.exec(str);
@@ -46,7 +46,7 @@ var parseSecs = (str) => {
       return Math.round(value * 31557600);
   }
 };
-//@ chunk-2tyrgda4.js:39404-39526 esm-fingerprint
+//@ chunk-pd6th42n.js:39404-39526 esm-fingerprint
 var init_secs = __esm(() => {
   timePeriodRegex =
     /^(\d+|\d+\.\d+) ?(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)$/i;

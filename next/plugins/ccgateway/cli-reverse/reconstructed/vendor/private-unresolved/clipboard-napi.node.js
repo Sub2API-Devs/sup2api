@@ -1,13 +1,13 @@
 /**
  * private-unresolved/./clipboard-napi.node
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: private-unresolved/./clipboard-napi.node
- * pieces: chunk-dwnmc1nr.js (1)
+ * pieces: chunk-3q4dvstv.js (1)
  * attribution: native-addon 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 
-//@ chunk-dwnmc1nr.js:229-298 native-addon
+//@ chunk-3q4dvstv.js:229-298 native-addon
 var require_clipboard_napi_node = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = require("./clipboard-napi.node");
 });

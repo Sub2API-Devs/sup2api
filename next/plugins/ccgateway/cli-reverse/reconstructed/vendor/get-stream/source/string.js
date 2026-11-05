@@ -1,18 +1,18 @@
 /**
  * get-stream/source/string.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: get-stream@8.0.1
- * pieces: chunk-m4p5zn6n.js (2)
+ * pieces: chunk-t889g22j.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { getStreamContents } from "./contents.js";
 import { identity, throwObjectStream, getLengthProp, getContentsProp } from "./utils.js";
 
-//@ chunk-m4p5zn6n.js:24141-24181 esm-layout
+//@ chunk-t889g22j.js:24140-24180 esm-layout
 async function getStreamContentsImpl(stream, options) {
   return getStreamContents(stream, stringMethods, options);
 }
-//@ chunk-m4p5zn6n.js:24181-24564 esm-fingerprint
+//@ chunk-t889g22j.js:24180-24563 esm-fingerprint
 var initString = () => ({
   contents: "",
   textDecoder: new TextDecoder(),

@@ -3,9 +3,9 @@
  *
  * 通用工具权限请求（无专用组件的工具/MCP 工具）：工具名 + 参数表格 + 允许/不再询问/拒绝选项。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/FallbackPermissionRequest.tsx
- * pieces: chunk-0e8j1zzj.js (5), chunk-qgcqa405.js (2)
+ * pieces: chunk-8prszgkd.js (5), chunk-vqg4n5r2.js (2)
  * attribution: placement 4, layout 2, fingerprint 1
  */
 import {
@@ -63,7 +63,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { DiffFrame } from "../FileEditToolDiff.js";
 import { Box, Text } from "../../ink/components/Text.js";
-import { PermissionPrompt } from "./PermissionPrompt.js";
+import { permissionChoicePrompt } from "./PermissionPrompt.js";
 import { PermissionDialog_2 } from "./PermissionDialog.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { Blockquote } from "../Blockquote.js";
@@ -71,19 +71,19 @@ import { MAX_EXPLANATION_LINES, PermissionRuleExplanation } from "./PermissionRu
 import { useDialogKeybindings } from "../../keybindings/dialogKeyHints.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-qgcqa405.js:301-305 placement
+//@ chunk-vqg4n5r2.js:301-305 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-qgcqa405.js:301", () => {
+deferInit("chunk-vqg4n5r2.js:301", () => {
   init_react_production();
 });
-//@ chunk-qgcqa405.js:305-337 placement
+//@ chunk-vqg4n5r2.js:305-337 placement
 /**
  * 函数 useFallbackPermission（订阅兜底权限请求）；位于「通用工具权限请求（无专用组件的工具/MCP 工具）：工具名 + 参数表格 + 允许/不再询问/拒绝选项」模块。
  */
 function useFallbackPermission() {
   return useSyncExternalStore(onAttacherCapsChange, supportsHyperlinks);
 }
-//@ chunk-0e8j1zzj.js:44119-44356 placement
+//@ chunk-8prszgkd.js:53499-53737 placement
 /**
  * 是否不能提供"总是允许"
  */
@@ -97,22 +97,24 @@ function isAlwaysAllowUnavailable(props) {
     isRemoteOrPluginAgent(props.requestSource)
   );
 }
-//@ chunk-0e8j1zzj.js:44356-44421 placement
-function shouldOfferAlwaysAllow(props) {
-  return props.showAlwaysAllow && !isAlwaysAllowUnavailable(props) && isRuleableToolName(props.toolName);
+//@ chunk-8prszgkd.js:53737-53803 placement
+function shouldOfferAlwaysAllow(payload) {
+  return (
+    payload.showAlwaysAllow && !isAlwaysAllowUnavailable(payload) && isRuleableToolName(payload.toolName)
+  );
 }
-//@ chunk-0e8j1zzj.js:44421-44448 layout
+//@ chunk-8prszgkd.js:53803-53830 layout
 var FALLBACK_MIN_ROWS = 2;
 var FALLBACK_MAX_ROWS = 16;
 var FALLBACK_ROWS_RESERVED = 24;
 var FALLBACK_MIN_COLUMNS = 80;
-//@ chunk-0e8j1zzj.js:44448-44528 layout
+//@ chunk-8prszgkd.js:53830-53911 layout
 function fallbackDialogRows(isCompact, terminalSize) {
   return isCompact && terminalSize.columns >= FALLBACK_MIN_COLUMNS
     ? Math.max(FALLBACK_MIN_ROWS, Math.min(FALLBACK_MAX_ROWS, terminalSize.rows - FALLBACK_ROWS_RESERVED))
     : FALLBACK_MIN_ROWS;
 }
-//@ chunk-0e8j1zzj.js:44528-54584 fingerprint (2.1.88 match: FallbackPermissionRequest, 0.322)
+//@ chunk-8prszgkd.js:53911-63980 fingerprint (2.1.88 match: FallbackPermissionRequest, 0.322)
 /**
  * 通用权限请求：渲染工具的 renderToolUseMessage 摘要（失败时退回参数表格），显示规则解释；选项允许一次/不再询问（工具级规则）/启用 auto/拒绝并反馈。
  */
@@ -159,7 +161,7 @@ function FallbackPermissionRequest(props) {
   let parameterRows_2 = parameterRows;
   let [theme] = useTheme();
   let renderOutcome;
-  b: {
+  T: {
     if (payload.renderedToolUseMessage != null) {
       let renderedResult;
       if ($[11] !== payload.renderedToolUseMessage) {
@@ -171,7 +173,7 @@ function FallbackPermissionRequest(props) {
         $[12] = renderedResult;
       } else renderedResult = $[12];
       renderOutcome = renderedResult;
-      break b;
+      break T;
     }
     try {
       let node;
@@ -364,14 +366,14 @@ function FallbackPermissionRequest(props) {
   } else descriptionText = $[53];
   let descriptionText_2 = descriptionText;
   let renderedContent;
-  Tn: {
+  or: {
     if (serializedNode === null) {
       renderedContent = node;
-      break Tn;
+      break or;
     }
     if (serializedNode.kind === "withheld") {
       renderedContent = serializedNode.marker;
-      break Tn;
+      break or;
     }
     let collapsedText;
     if ($[54] !== serializedNode.text) {
@@ -573,7 +575,7 @@ function FallbackPermissionRequest(props) {
       $[99] !== toolAnalyticsContext_2
     ) {
       children_2 = jsxProd_default(
-        PermissionPrompt,
+        permissionChoicePrompt,
         {
           question: null,
           options: options_2,
@@ -844,7 +846,7 @@ function FallbackPermissionRequest(props) {
     $[150] !== toolAnalyticsContext_2
   ) {
     permissionPrompt = jsxProd_default(
-      PermissionPrompt,
+      permissionChoicePrompt,
       {
         options: options_2,
         defaultFocusValue,
@@ -911,4 +913,10 @@ function FallbackPermissionRequest(props) {
   } else dialogElement = $[163];
   return dialogElement;
 }
-export { useFallbackPermission, FallbackPermissionRequest, shouldOfferAlwaysAllow };
+export {
+  shouldOfferAlwaysAllow,
+  useFallbackPermission,
+  isAlwaysAllowUnavailable,
+  fallbackDialogRows,
+  FallbackPermissionRequest,
+};

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Powerup 发现步骤。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e1ykjvh2.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fhwwffkd.js (2)
  * attribution: placement 2
  */
 import { init_react_production, useState } from "../../vendor/react/cjs/react.production.js";
@@ -24,9 +24,9 @@ import { POWERUP_DISCOVERY_COPY } from "../commands/powerup/discoveryCopy.js";
 import { ProgressBar } from "./design-system/ProgressBar.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 
-//@ chunk-e1ykjvh2.js:13928-13932 placement
+//@ chunk-fhwwffkd.js:15188-15192 placement
 init_react_production();
-//@ chunk-e1ykjvh2.js:13932-14858 placement
+//@ chunk-fhwwffkd.js:15192-16118 placement
 function PowerupDiscoveryStep(props) {
   let $ = useMemoCache(9);
   let { onDone } = props;

@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：claude gateway 的压测模式：返回合成的流式回复（msg_loadtest）、检查花费数据库为空、读 /dev/zero 生成负载
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hde10cf2.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-f1tj8bd3.js (11)
  * attribution: placement 11
  */
 import { openSync, fstatSync, closeSync, writeSync, readSync } from "fs";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { gatewayLog } from "./gatewayBanner.js";
 
-//@ chunk-hde10cf2.js:1529-1811 placement
+//@ chunk-f1tj8bd3.js:1641-1923 placement
 var LOAD_TEST_REPLY_PREFIX =
   "[This Claude apps gateway is in load-test mode. This is a canned reply and your request was not sent to a model. If you did not expect this, tell your gateway administrator.] ";
 var LOAD_TEST = "load-test";
@@ -26,14 +26,14 @@ var ZERO_USAGE = {
   input_tokens: 0,
   output_tokens: 0,
 };
-//@ chunk-hde10cf2.js:1811-1860 placement
+//@ chunk-f1tj8bd3.js:1923-1972 placement
 /**
  * 按负载测试分块大小算出需要多少块。
  */
 function loadTestChunks(replyTokens) {
   return Math.max(1, Math.ceil(replyTokens / LOAD_TEST_CHUNKS));
 }
-//@ chunk-hde10cf2.js:1860-2381 placement
+//@ chunk-f1tj8bd3.js:1972-2493 placement
 function buildLoadTestMessage(replyTokens) {
   let testChunks = loadTestChunks(replyTokens);
   return [
@@ -90,7 +90,7 @@ function buildLoadTestMessage(replyTokens) {
     },
   ];
 }
-//@ chunk-hde10cf2.js:2381-2891 placement
+//@ chunk-f1tj8bd3.js:2493-3003 placement
 function encodeEventStreamFrame(payload) {
   let buffer = Buffer.concat(
     [
@@ -115,7 +115,7 @@ function encodeEventStreamFrame(payload) {
   frame.writeUInt32BE(Bun.hash.crc32(frame.subarray(0, frame.length - 4)), frame.length - 4);
   return frame;
 }
-//@ chunk-hde10cf2.js:2891-3277 placement
+//@ chunk-f1tj8bd3.js:3003-3389 placement
 async function checkSpendTableEmpty(url, sql) {
   if ((await sql`SELECT 1 FROM spend WHERE cents > 0 LIMIT 1`).length > 0)
     throw Error(
@@ -123,14 +123,14 @@ async function checkSpendTableEmpty(url, sql) {
     );
   return streamLoadTestReply(url);
 }
-//@ chunk-hde10cf2.js:3277-3329 placement
+//@ chunk-f1tj8bd3.js:3389-3441 placement
 /**
  * 按数量选择单复数形式（"1 reply" / "2 replies"）。
  */
 function plural(count, singular, pluralForm = `${singular}s`) {
   return `${count} ${count === 1 ? singular : pluralForm}`;
 }
-//@ chunk-hde10cf2.js:3329-7759 placement
+//@ chunk-f1tj8bd3.js:3441-7871 placement
 /**
  * 生成 load-test 模式的 SSE/事件流回复（按 reply_tokens 与 reply_seconds 节奏）。
  */
@@ -435,7 +435,7 @@ data: ${jsonStringify(event)}
     socketCostSimulated: loadTestDevices.real,
   };
 }
-//@ chunk-hde10cf2.js:7759-8852 placement
+//@ chunk-f1tj8bd3.js:7871-8964 placement
 function openLoadTestDevices() {
   let nullFd = -1;
   let zeroFd = -1;
@@ -497,13 +497,13 @@ function openLoadTestDevices() {
     },
   };
 }
-//@ chunk-hde10cf2.js:8852-8867 placement
+//@ chunk-f1tj8bd3.js:8964-8979 placement
 /**
  * 方括号开启的字符码（92）。
  */
 var BRACKET_CLOSE_CODE = 34;
 var BRACKET_OPEN_CODE = 92;
-//@ chunk-hde10cf2.js:8867-9064 placement
+//@ chunk-f1tj8bd3.js:8979-9176 placement
 function jsonDepthDelta(text, from, to) {
   let depth = 0;
   let inString = false;
@@ -518,7 +518,7 @@ function jsonDepthDelta(text, from, to) {
   }
   return depth;
 }
-//@ chunk-hde10cf2.js:9064-9413 placement
+//@ chunk-f1tj8bd3.js:9176-9525 placement
 function toLatin1(body) {
   let rawBody =
     typeof body === "string"

@@ -3,9 +3,9 @@
  *
  * 并入旧版已有路径：/add-dir 命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/add-dir/add-dir.tsx
- * pieces: chunk-74n7apcd.js (1), chunk-efagea6a.js (1), chunk-x4gf1bcz.js (2)
+ * pieces: chunk-47gvxd8g.js (1), chunk-hh5fnyrf.js (1), chunk-kaf2hmxw.js (2)
  * attribution: fingerprint 2, placement 1, sole-consumer 1
  */
 import { validateDirectoryForWorkspace, addDirHelpMessage } from "./validation.js";
@@ -23,7 +23,7 @@ import { MessageResponse } from "../../components/MessageResponse.js";
 import { sequential } from "../../utils/sequential.js";
 import { AddWorkspaceDirectory } from "../../components/permissions/rules/AddWorkspaceDirectory.js";
 
-//@ chunk-efagea6a.js:11929-12226 placement
+//@ chunk-hh5fnyrf.js:13105-13402 placement
 /**
  * /add-dir 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -48,7 +48,7 @@ async function addDirHeadlessCall(args, context) {
     value: await addWorkingDirectory(context, validated.absolutePath, false),
   };
 }
-//@ chunk-x4gf1bcz.js:13922-14285 sole-consumer
+//@ chunk-kaf2hmxw.js:15098-15461 sole-consumer
 /**
  * /add-dir 结果的 React 组件：显示命令回显和结果消息，挂载后立刻调用 onDone。
  */
@@ -87,7 +87,7 @@ function AddDirResultMessage(props) {
   } else combined = $[6];
   return combined;
 }
-//@ chunk-x4gf1bcz.js:14285-14960 fingerprint (2.1.88 match: call, 0.614)
+//@ chunk-kaf2hmxw.js:15461-16136 fingerprint (2.1.88 match: call, 0.614)
 /**
  * /add-dir 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -133,7 +133,7 @@ async function call(onDone, context, args) {
     },
   });
 }
-//@ chunk-74n7apcd.js:18826-19188 fingerprint (2.1.88 match: AddDirError, 0.553)
+//@ chunk-47gvxd8g.js:20193-20555 fingerprint (2.1.88 match: AddDirError, 0.553)
 function AddDirError(props) {
   let $ = useMemoCache(7);
   let { message, args, onDone } = props;
@@ -169,4 +169,4 @@ function AddDirError(props) {
   } else t5 = $[6];
   return t5;
 }
-export { AddDirError, call, addDirHeadlessCall };
+export { AddDirError, addDirHeadlessCall, call };

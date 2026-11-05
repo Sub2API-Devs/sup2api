@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：session.append/prompt.attachment 是否可走快捷路径；事件只被 sec-default 监听时可走快捷路径（可用环境变量关闭）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-w2teref8.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-v4c4w92q.js (7)
  * attribution: placement 7
  */
 import { env } from "../../utils/env.js";
@@ -22,21 +22,22 @@ import { DEFAULT_SECURITY_SEAT_PLUGIN } from "../../services/remoteManagedSettin
 import { stableStringifySafe } from "../../utils/hooks/hookSerialization.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-w2teref8.js:521-617 placement
+//@ chunk-v4c4w92q.js:521-633 placement
 /**
  * 可走快捷路径的事件
  */
 var FAST_PATH_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-w2teref8.js:521", () => {
+deferInit("chunk-v4c4w92q.js:521", () => {
   FAST_PATH_EVENTS = new Set([
     "agent.offer",
     "attribution.text",
     "command.describe",
     "env.get",
     "prompt.section",
+    "tool.describe",
   ]);
 });
-//@ chunk-w2teref8.js:617-799 placement
+//@ chunk-v4c4w92q.js:633-815 placement
 /**
  * 事件只被 sec-default 监听时可走快捷路径（可用环境变量关闭）。
  */
@@ -53,12 +54,12 @@ function isLoneSecDefaultShortcut(event, payload, among) {
   });
   return modules.length > 0 && modules.every(isSecDefaultModule);
 }
-//@ chunk-w2teref8.js:799-847 placement
+//@ chunk-v4c4w92q.js:815-863 placement
 var MANAGED_MOD_OPTIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-w2teref8.js:799", () => {
+deferInit("chunk-v4c4w92q.js:815", () => {
   MANAGED_MOD_OPTIONS = Object.freeze(["allowManagedModsOnly"]);
 });
-//@ chunk-w2teref8.js:847-964 placement
+//@ chunk-v4c4w92q.js:863-980 placement
 /**
  * 策略设置中与 mods 准入有关的选项（allowManagedModsOnly）的稳定序列化，用于判断准入文本是否变化。
  */
@@ -67,13 +68,13 @@ function managedModsPolicyKey() {
     getSettingsForSource("policySettings")?.pluginConfigs?.[DEFAULT_SECURITY_SEAT_PLUGIN]?.options ?? {};
   return stableStringifySafe(MANAGED_MOD_OPTIONS.map((optionKey) => [optionKey, options[optionKey] ?? null]));
 }
-//@ chunk-w2teref8.js:964-1021 placement
+//@ chunk-v4c4w92q.js:980-1037 placement
 /**
  * 分发 classic.<名字> 事件。
  */
 var dispatchClassicEvent = (event) =>
   hasModuleHookingSite(`classic.${event}`, undefined, getLoadedModulesForSite(`classic.${event}`));
-//@ chunk-w2teref8.js:1021-1191 placement
+//@ chunk-v4c4w92q.js:1037-1207 placement
 /**
  * classic 事件只有空实现时可跳过分发。
  */
@@ -87,7 +88,7 @@ function canSkipEmptyClassicDispatch(event) {
   let modules = modulesHookingEvent(`classic.${event}`);
   return modules.length > 0 && modules.every(isSecDefaultModule);
 }
-//@ chunk-w2teref8.js:1191-1462 placement
+//@ chunk-v4c4w92q.js:1207-1478 placement
 /**
  * session.append/prompt.attachment 是否可走快捷路径。
  */
@@ -104,9 +105,9 @@ function canShortcutAppend(event) {
 }
 export {
   dispatchClassicEvent,
-  canShortcutAppend,
+  MANAGED_MOD_OPTIONS,
   managedModsPolicyKey,
   canSkipEmptyClassicDispatch,
   isLoneSecDefaultShortcut,
-  MANAGED_MOD_OPTIONS,
+  canShortcutAppend,
 };

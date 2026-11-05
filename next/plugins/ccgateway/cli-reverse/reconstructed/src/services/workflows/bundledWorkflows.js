@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：内置工作流注册，目前是 deep-research（拆角度→并行搜索→抓取→对抗验证→汇总）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-k2dqfxa4.js (2), chunk-p9mapmve.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a2dkh2en.js (2), chunk-t6khx287.js (5)
  * attribution: placement 7
  */
 import { getHostState } from "../../utils/hostEnvironment.js";
@@ -16,7 +16,7 @@ import {
 } from "../../skills/bundledSkillsGate.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 
-//@ chunk-k2dqfxa4.js:270-401 placement
+//@ chunk-a2dkh2en.js:270-401 placement
 /**
  * 注册一个内置工作流（脚本与元数据）到宿主状态。
  */
@@ -28,7 +28,7 @@ function registerBundledWorkflow(script, fields, options) {
     disableModelInvocation: options?.disableModelInvocation,
   });
 }
-//@ chunk-k2dqfxa4.js:401-513 placement
+//@ chunk-a2dkh2en.js:401-513 placement
 /**
  * 获取可用的内置工作流列表（工作流关闭时为空，部分情况下过滤被禁用的）。
  */
@@ -39,7 +39,7 @@ function getBundledWorkflows() {
     return bundledWorkflows.filter((workflow) => !isSkillOutsideCorePolicy(workflow.name));
   return bundledWorkflows;
 }
-//@ chunk-p9mapmve.js:3371-4299 placement
+//@ chunk-t6khx287.js:3679-4607 placement
 /**
  * deep-research 内置工作流的适用场景、阶段表与脚本常量。
  */
@@ -71,9 +71,9 @@ var DEEP_RESEARCH_PHASES = [
     detail: "Merge semantic dupes, rank by confidence, cite sources",
   },
 ];
-//@ chunk-p9mapmve.js:4299-4327 placement
+//@ chunk-t6khx287.js:4607-4635 placement
 var TENGU_SORREL_AVOCET = "tengu_sorrel_avocet";
-//@ chunk-p9mapmve.js:4327-4369 placement
+//@ chunk-t6khx287.js:4635-4677 placement
 /**
  * 判断是否注册 deep-research 工作流（灰度开关关闭时启用）。
  */
@@ -81,7 +81,7 @@ function isDeepResearchWorkflowEnabled() {
   if (getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SORREL_AVOCET, false)) return false;
   return true;
 }
-//@ chunk-p9mapmve.js:4369-28733 placement
+//@ chunk-t6khx287.js:4677-29041 placement
 /**
  * 注册内置 deep-research 工作流：Scope（拆 5 个搜索角度）→ Search（5 个并行 WebSearch 代理）→ Fetch（抓取前 15 个来源）→ Verify（每条结论 3 票对抗验证）→ 汇总报告。
  */
@@ -536,7 +536,7 @@ return {
     },
   );
 }
-//@ chunk-p9mapmve.js:28733-28750 placement
+//@ chunk-t6khx287.js:29041-29058 placement
 function initBundledWorkflows() {
   registerDeepResearchWorkflow();
 }

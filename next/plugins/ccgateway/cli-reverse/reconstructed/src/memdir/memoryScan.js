@@ -3,9 +3,9 @@
  *
  * 扫描记忆目录下的 .md 记忆文件，读取 frontmatter（描述、类型、mtime）并格式化为清单。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/memdir/memoryScan.ts
- * pieces: chunk-s61vbvea.js (20)
+ * pieces: chunk-7jxyna5q.js (20)
  * attribution: placement 20
  */
 import { join, sep, resolve, basename, relative, isAbsolute } from "path";
@@ -33,13 +33,13 @@ import { logForDebugging } from "../utils/debug.js";
 import { formatStorageError } from "../utils/storage/storageErrors.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:417201-417225 placement
+//@ chunk-7jxyna5q.js:341592-341616 placement
 /**
  * 200
  */
 var MAX_RECALL_HEADERS = 200;
 var ACCOUNT = "account";
-//@ chunk-s61vbvea.js:417225-417624 placement (2.1.88 match: getTeamMemEntrypoint, 0.566)
+//@ chunk-7jxyna5q.js:341616-342015 placement (2.1.88 match: getTeamMemEntrypoint, 0.567)
 /**
  * 根据 CLAUDE_MEMORY_STORES 计算扫描时要排除的索引文件（各 store 的 promptIndex、MEMORY.md）和 skills 目录前缀。
  */
@@ -69,7 +69,7 @@ function loadedIndexExclusions() {
     excludedPrefixes,
   };
 }
-//@ chunk-s61vbvea.js:417624-417778 placement (2.1.88 match: isTeamSubscriber, 0.758)
+//@ chunk-7jxyna5q.js:342015-342169 placement (2.1.88 match: isTeamSubscriber, 0.758)
 function recallVisibleTeamMounts(dir) {
   if (resolve(dir) !== resolve(getAutoMemPath())) return null;
   let mounts = new Set();
@@ -79,14 +79,14 @@ function recallVisibleTeamMounts(dir) {
   } catch {}
   return mounts;
 }
-//@ chunk-s61vbvea.js:417778-417916 placement (2.1.88 match: isTeamSubscriber, 1)
+//@ chunk-7jxyna5q.js:342169-342307 placement (2.1.88 match: isTeamSubscriber, 1)
 function isRecallVisiblePath(relativePath, teamMounts) {
   if (teamMounts === null) return true;
   let parts = relativePath.split(/[\\/]/);
   if (normalizeKeySegment(parts[0]) === "team") return parts.length < 3 || teamMounts.has(parts[1]);
   return !isExcludedMemoryKey(parts.join("/"));
 }
-//@ chunk-s61vbvea.js:417916-418062 placement
+//@ chunk-7jxyna5q.js:342307-342453 placement
 function isRecallableMemoryFile(relativePath, exclusions, teamMounts) {
   return (
     relativePath.endsWith(".md") &&
@@ -97,7 +97,7 @@ function isRecallableMemoryFile(relativePath, exclusions, teamMounts) {
     isRecallVisiblePath(relativePath, teamMounts)
   );
 }
-//@ chunk-s61vbvea.js:418062-418173 placement (2.1.88 match: isSessionPlanFile, 1)
+//@ chunk-7jxyna5q.js:342453-342564 placement (2.1.88 match: isSessionPlanFile, 1)
 function isRecallCorpusFile(absolutePath) {
   let autoMemPath = getAutoMemPath();
   let expectedPrefix = relative(autoMemPath, absolutePath);
@@ -108,9 +108,9 @@ function isRecallCorpusFile(absolutePath) {
     isRecallableMemoryFile(expectedPrefix, loadedIndexExclusions(), recallVisibleTeamMounts(autoMemPath))
   );
 }
-//@ chunk-s61vbvea.js:418173-418184 placement
+//@ chunk-7jxyna5q.js:342564-342575 placement
 var MAX_MEMORY_TITLE_CHARS = 120;
-//@ chunk-s61vbvea.js:418184-418304 placement
+//@ chunk-7jxyna5q.js:342575-342695 placement
 /**
  * 取文本第一行非空内容（去掉标题井号），截断到 120 字，作为记忆标题。
  */
@@ -122,7 +122,7 @@ function firstHeadingOrLine(body) {
   }
   return null;
 }
-//@ chunk-s61vbvea.js:418304-419514 placement (2.1.88 match: scanMemoryFiles, 0.316)
+//@ chunk-7jxyna5q.js:342695-343905 placement
 /**
  * 扫描记忆目录下的 .md 文件（排除 MEMORY.md 与 memory store 的索引/skills），读取头部 frontmatter 得到 filename/description/type/mtime；可要求 no-follow 打开且单硬链接。
  */
@@ -134,12 +134,12 @@ async function scanMemoryHeaders(dir, client, options = {}, storeClient) {
   }
   let exclusions = loadedIndexExclusions();
   let teamMounts = recallVisibleTeamMounts(dir);
-  let mdFiles = (await readMemoryDirEntries(dir, options.regularFilesOnly ?? false)).filter((relativePath) =>
+  let filtered = (await readMemoryDirEntries(dir, options.regularFilesOnly ?? false)).filter((relativePath) =>
     isRecallableMemoryFile(relativePath, exclusions, teamMounts),
   );
   return (
     await Promise.allSettled(
-      mdFiles.map(async (relativePath) => {
+      filtered.map(async (relativePath) => {
         let filePath = join(dir, relativePath);
         let handle;
         if (options.regularFilesOnly ?? false) {
@@ -202,7 +202,7 @@ async function scanMemoryHeaders(dir, client, options = {}, storeClient) {
     .map((settled) => settled.value)
     .sort((headA, headB) => headB.mtimeMs - headA.mtimeMs);
 }
-//@ chunk-s61vbvea.js:419514-419730 placement
+//@ chunk-7jxyna5q.js:343905-344121 placement
 async function scanMemoryFiles(memoryDir, signal, storageV5, options = {}) {
   try {
     let sliced = (await scanMemoryHeaders(memoryDir, signal, options, storageV5)).slice(
@@ -219,22 +219,22 @@ async function scanMemoryFiles(memoryDir, signal, storageV5, options = {}) {
     return [];
   }
 }
-//@ chunk-s61vbvea.js:419730-419804 placement
+//@ chunk-7jxyna5q.js:344121-344195 placement
 /**
  * 按是否只要普通文件决定用归一化读取还是递归 readdir 列出记忆目录。
  */
 async function readMemoryDirEntries(source, normalize) {
   return normalize
-    ? await normalizeSource_3(source, "")
+    ? await normalizeSource(source, "")
     : await readdir(source, {
         recursive: true,
       });
 }
-//@ chunk-s61vbvea.js:419804-420044 placement (2.1.88 match: normalizeSource, 0.771)
+//@ chunk-7jxyna5q.js:344195-344435 placement (2.1.88 match: normalizeSource, 0.77)
 /**
  * 读目录项（名字配错）。
  */
-async function normalizeSource_3(source, projectRoot) {
+async function normalizeSource(source, projectRoot) {
   let dirents = await readdir(join(source, projectRoot), {
     withFileTypes: true,
   });
@@ -243,14 +243,13 @@ async function normalizeSource_3(source, projectRoot) {
       dirents.map(async (dirent) => {
         let relativePath = projectRoot ? join(projectRoot, dirent.name) : dirent.name;
         let kind = await entryKind(source, relativePath, dirent);
-        if (kind === "directory")
-          return await normalizeSource_3(source, relativePath).catch(skipUnreadableDir);
+        if (kind === "directory") return await normalizeSource(source, relativePath).catch(skipUnreadableDir);
         return kind === "file" ? [relativePath] : [];
       }),
     )
   ).flat();
 }
-//@ chunk-s61vbvea.js:420044-420152 placement
+//@ chunk-7jxyna5q.js:344435-344543 placement
 function skipUnreadableDir(error) {
   if (isFsInaccessible(error)) {
     if (!isENOENT(error))
@@ -259,7 +258,7 @@ function skipUnreadableDir(error) {
   }
   throw error;
 }
-//@ chunk-s61vbvea.js:420152-420492 placement
+//@ chunk-7jxyna5q.js:344543-344883 placement
 /**
  * 判定目录项类型（file/directory/other）；Dirent 类型未知时用 lstat 再判断，文件已消失返回 other。
  */
@@ -281,22 +280,22 @@ async function entryKind(source, relativePath, dirent) {
   if (!entryStat) return "other";
   return entryStat.isFile() ? "file" : entryStat.isDirectory() ? "directory" : "other";
 }
-//@ chunk-s61vbvea.js:420492-420509 placement
+//@ chunk-7jxyna5q.js:344883-344900 placement
 /**
  * 4 倍 frontmatter 上限 + 256
  */
 var MAX_FRONTMATTER_READ_BYTES = 4 * MAX_UNTRUSTED_FRONTMATTER_BYTES + 256;
-//@ chunk-s61vbvea.js:420509-420529 placement
+//@ chunk-7jxyna5q.js:344900-344920 placement
 /**
  * 记忆扫描失败时抛出的错误类型（区分存储列表失败与 readdir 失败）。
  */
 let MemoryScanError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:420509", () => {
+deferInit("chunk-7jxyna5q.js:344900", () => {
   MemoryScanError = class MemoryScanError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {};
 });
-//@ chunk-s61vbvea.js:420529-420955 placement
+//@ chunk-7jxyna5q.js:344920-345346 placement
 /**
  * 通过存储接口列出记忆目录
  */
@@ -330,7 +329,7 @@ async function listMemoryFiles(storeClient, projectKey, skipSymlinks) {
   } while (cursor !== undefined);
   return files;
 }
-//@ chunk-s61vbvea.js:420955-421449 placement
+//@ chunk-7jxyna5q.js:345346-345840 placement
 /**
  * 从不可信记忆文件的字节中取出前若干行（去 BOM、去行尾 \r），总字节不超过上限；内容被截断时最后一行不完整则丢弃。
  */
@@ -378,19 +377,19 @@ function parseUntrustedFrontmatter(buffer, totalBytes) {
   return lines.join(`
 `);
 }
-//@ chunk-s61vbvea.js:421449-422368 placement
+//@ chunk-7jxyna5q.js:345840-346761 placement (2.1.88 match: scanMemoryFiles, 0.321)
 /**
  * 读取记忆文件头（frontmatter），处理文件在列出与读取间消失
  */
 async function readMemoryHeads(storeClient, projectKey, memoryDir, signal, includeSymlinks) {
   let exclusions = loadedIndexExclusions();
   let visibleTeamMounts = recallVisibleTeamMounts(memoryDir);
-  let filtered = (await listMemoryFiles(storeClient, projectKey, includeSymlinks)).filter((file) =>
+  let mdFiles = (await listMemoryFiles(storeClient, projectKey, includeSymlinks)).filter((file) =>
     isRecallableMemoryFile(file.relativePath, exclusions, visibleTeamMounts),
   );
   return (
     await Promise.allSettled(
-      filtered.map(async (file) => {
+      mdFiles.map(async (file) => {
         signal.throwIfAborted();
         let filePath = join(memoryDir, file.relativePath);
         let readResult = await storeClient.read([
@@ -428,7 +427,7 @@ async function readMemoryHeads(storeClient, projectKey, memoryDir, signal, inclu
     .map((fulfilled) => fulfilled.value)
     .sort((memoryA, memoryB) => memoryB.mtimeMs - memoryA.mtimeMs);
 }
-//@ chunk-s61vbvea.js:422368-422561 placement (2.1.88 match: formatMemoryManifest, 1)
+//@ chunk-7jxyna5q.js:346761-346954 placement (2.1.88 match: formatMemoryManifest, 1)
 /**
  * 把记忆列表格式化为 `- [type] file (ISO 时间): description` 清单，供提取/选择提示使用。
  */
@@ -442,11 +441,11 @@ function formatMemoryManifest(memories) {
 `);
 }
 export {
-  formatMemoryManifest,
-  scanMemoryFiles,
   scanMemoryHeaders,
   isRecallCorpusFile,
+  scanMemoryFiles,
   recallVisibleTeamMounts,
   loadedIndexExclusions,
   isRecallVisiblePath,
+  formatMemoryManifest,
 };

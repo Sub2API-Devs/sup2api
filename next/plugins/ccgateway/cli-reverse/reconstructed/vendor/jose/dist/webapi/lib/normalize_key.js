@@ -1,16 +1,16 @@
 /**
  * jose/dist/webapi/lib/normalize_key.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-5h78gfwc.js (2)
+ * pieces: chunk-0f6azspv.js (2)
  * attribution: esm-fingerprint 2
  */
 import { jwkToKey } from "./jwk_to_key.js";
 import { isCryptoKey, isKeyObject } from "./key.js";
 import { isJWK } from "./type_checks.js";
-import { decode_2 } from "../util/base64url.js";
+import { decode } from "../util/base64url.js";
 
-//@ chunk-5h78gfwc.js:17878-19745 esm-fingerprint
+//@ chunk-0f6azspv.js:17878-19745 esm-fingerprint
 var unusableForAlg = "given KeyObject instance cannot be used for this algorithm";
 var cache;
 var handleJWK = async (key, jwk, alg, freeze = false) => {
@@ -149,7 +149,7 @@ var handleKeyObject = (keyObject, alg) => {
   else cached[alg] = cryptoKey;
   return cryptoKey;
 };
-//@ chunk-5h78gfwc.js:19745-20113 esm-fingerprint
+//@ chunk-0f6azspv.js:19745-20113 esm-fingerprint
 async function normalizeKey(key, alg) {
   if (key instanceof Uint8Array) return key;
   if (isCryptoKey(key)) return key;
@@ -167,7 +167,7 @@ async function normalizeKey(key, alg) {
     return handleJWK(key, jwk, alg);
   }
   if (isJWK(key)) {
-    if (key.k) return decode_2(key.k);
+    if (key.k) return decode(key.k);
     return handleJWK(key, key, alg, true);
   }
   throw Error("unreachable");

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：copy_from 动作
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (5)
  * attribution: placement 5
  */
 import { readUntrustedArrayOrUndefined } from "../../../utils/untrustedArray.js";
@@ -101,14 +101,14 @@ import {
   planModeCardNote,
 } from "../promptText.js";
 import { inputSchema, artifactCopyFromFrozen } from "../../../services/artifacts/artifactToolSchema.js";
-import { parseSessionArtifactUrl } from "../../../services/artifacts/orgScope.js";
+import { validateSessionArtifactUrl } from "../../../services/artifacts/orgScope.js";
 import { urlSubPathError } from "../permissions/dbWriteInputs.js";
 import { isFramePublicReadEnabled } from "../../../services/artifacts/frameFlags.js";
 import { isPlainObject } from "../../../utils/isPlainObject.js";
 import { capResultRows, peerOrFallback, numberText } from "../../../services/artifacts/artifactPeople.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
 
-//@ chunk-8wvtd8sr.js:81989-82230 placement
+//@ chunk-xzmy9dn4.js:82306-82547 placement
 function readCopyFromInput(input) {
   let readField = (key) => (input === undefined ? undefined : Reflect.get(input, key));
   let readString = (key) => {
@@ -126,7 +126,7 @@ function readCopyFromInput(input) {
         : undefined,
   };
 }
-//@ chunk-8wvtd8sr.js:82230-82741 placement
+//@ chunk-xzmy9dn4.js:82547-83058 placement
 /**
  * 校验 copy_from 的 asset_ids：必须 1–yue 个、32 位资产 id、不重复；不合法时返回错误文案。
  */
@@ -141,14 +141,14 @@ function assetIdsInputError(assetIds) {
     return "`asset_ids` repeats an id \u2014 name each asset once.";
   return;
 }
-//@ chunk-8wvtd8sr.js:82741-82786 placement
+//@ chunk-xzmy9dn4.js:83058-83103 placement
 /**
  * 把集合去重排序后用逗号连接。
  */
 function sortedJoinedKeys(ids) {
   return [...ids].sort().join(",");
 }
-//@ chunk-8wvtd8sr.js:82786-83636 placement
+//@ chunk-xzmy9dn4.js:83103-83953 placement
 /**
  * 为 copy_from 的权限询问补一句归属说明：源/目标 Artifact 是共写的、外组织公开、外组织共享、他人的或无法确认。
  */
@@ -168,7 +168,7 @@ function copyOwnershipNote(side, share) {
     ? " The source artifact belongs to someone else \u2014 approving reads its assets into this copy."
     : " The destination artifact belongs to someone else \u2014 approving writes these assets into their artifact.";
 }
-//@ chunk-8wvtd8sr.js:83636-94022 placement
+//@ chunk-xzmy9dn4.js:83953-94354 placement
 /**
  * copy_from 动作模块：cu 为跨组织拒绝文案，Yg 为会话内已批准提示，uu 为动作处理器（checkPermissions / call / toAutoClassifierInput / getToolUseSummary），fu 渲染复制结果。
  */
@@ -449,14 +449,14 @@ into: ${artifactViewerUrlFor(destUrl)}`;
           message: `action "copy_from" requires \`${fieldName}\` \u2014 the ${fieldName === "url" ? "DESTINATION" : "SOURCE"} Artifact's claude.ai URL (find it with action: "list").`,
           errorCode: 7,
         };
-      let sessionArtifactUrl = parseSessionArtifactUrl(fieldValue, {
+      let urlField = validateSessionArtifactUrl(fieldValue, {
         field: fieldName,
       });
-      if (!sessionArtifactUrl.ok)
+      if (!urlField.ok)
         return {
           result: false,
-          message: `\`${fieldName}\`: ${sessionArtifactUrl.message}`,
-          errorCode: sessionArtifactUrl.errorCode,
+          message: `\`${fieldName}\`: ${urlField.message}`,
+          errorCode: urlField.errorCode,
         };
       let urlError = urlSubPathError(fieldValue, "", fieldName);
       if (urlError !== undefined) return urlError;
@@ -486,9 +486,9 @@ into: ${artifactViewerUrlFor(destUrl)}`;
         "copy_from_disabled",
       );
     let { url, fromUrl, ids } = readCopyFromInput(input);
-    let destUrl = url !== undefined && parseSessionArtifactUrl(url).ok ? parseArtifactUrl(url) : null;
+    let destUrl = url !== undefined && validateSessionArtifactUrl(url).ok ? parseArtifactUrl(url) : null;
     let sourceUrl =
-      fromUrl !== undefined && parseSessionArtifactUrl(fromUrl).ok ? parseArtifactUrl(fromUrl) : null;
+      fromUrl !== undefined && validateSessionArtifactUrl(fromUrl).ok ? parseArtifactUrl(fromUrl) : null;
     if (destUrl === null || sourceUrl === null || destUrl.slug === sourceUrl.slug)
       throw new ArtifactInputError(
         'url and from_url must be two different artifact URLs for action "copy_from"',

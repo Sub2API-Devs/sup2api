@@ -1,19 +1,19 @@
 /**
  * jose/dist/webapi/lib/content_encryption.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (15), chunk-5h78gfwc.js (16)
- * attribution: esm-layout 10, esm-fingerprint 20
+ * pieces: chunk-0f6azspv.js (16), chunk-pd6th42n.js (15)
+ * attribution: esm-fingerprint 20, esm-layout 10
  */
 import { JOSENotSupported_2, JWEInvalid_2, JWEDecryptionFailed_2 } from "../../node/esm/util/errors.js";
-import { message_3 } from "../../node/esm/lib/invalid_key_input.js";
+import { message_2 } from "../../node/esm/lib/invalid_key_input.js";
 import { concat, uint64be, init_buffer_utils, cryptoModule } from "./buffer_utils.js";
 import { checkEncCryptoKey } from "./crypto_key.js";
 import { isCryptoKey } from "./key.js";
 import { __esm } from "../../../../../runtime/bun-runtime.js";
 import { init_base64url } from "../../browser/runtime/base64url.js";
 
-//@ chunk-5h78gfwc.js:7205-7443 esm-fingerprint
+//@ chunk-0f6azspv.js:7205-7443 esm-fingerprint
 function cekBitsForAlg(alg) {
   switch (alg) {
     case "A128GCM":
@@ -31,9 +31,9 @@ function cekBitsForAlg(alg) {
       throw new JOSENotSupported_2(`Unsupported JWE Algorithm: ${alg}`);
   }
 }
-//@ chunk-5h78gfwc.js:7443-7503 esm-fingerprint
+//@ chunk-0f6azspv.js:7443-7503 esm-fingerprint
 var generateCek_2 = (alg) => crypto.getRandomValues(new Uint8Array(cekBitsForAlg(alg) >> 3));
-//@ chunk-5h78gfwc.js:7503-7639 esm-fingerprint
+//@ chunk-0f6azspv.js:7503-7639 esm-fingerprint
 function checkCekLength_2(cek, expected) {
   let actual = cek.byteLength << 3;
   if (actual !== expected)
@@ -41,7 +41,7 @@ function checkCekLength_2(cek, expected) {
       `Invalid Content Encryption Key length. Expected ${expected} bits, got ${actual} bits`,
     );
 }
-//@ chunk-5h78gfwc.js:7639-7891 esm-fingerprint
+//@ chunk-0f6azspv.js:7639-7891 esm-fingerprint
 function ivBitLength(alg) {
   switch (alg) {
     case "A128GCM":
@@ -59,15 +59,15 @@ function ivBitLength(alg) {
       throw new JOSENotSupported_2(`Unsupported JWE Algorithm: ${alg}`);
   }
 }
-//@ chunk-5h78gfwc.js:7891-7952 esm-fingerprint
+//@ chunk-0f6azspv.js:7891-7952 esm-fingerprint
 var generateIv_2 = (alg) => crypto.getRandomValues(new Uint8Array(ivBitLength(alg) >> 3));
-//@ chunk-5h78gfwc.js:7952-8044 esm-fingerprint
+//@ chunk-0f6azspv.js:7952-8044 esm-fingerprint
 function checkIvLength_2(enc, iv) {
   if (iv.length << 3 !== ivBitLength(enc)) throw new JWEInvalid_2("Invalid Initialization Vector length");
 }
-//@ chunk-5h78gfwc.js:8044-8378 esm-fingerprint
+//@ chunk-0f6azspv.js:8044-8378 esm-fingerprint
 async function cbcKeySetup(enc, cek, usage) {
-  if (!(cek instanceof Uint8Array)) throw TypeError(message_3(cek, "Uint8Array"));
+  if (!(cek instanceof Uint8Array)) throw TypeError(message_2(cek, "Uint8Array"));
   let keySize = parseInt(enc.slice(1, 4), 10);
   let encKey = await crypto.subtle.importKey("raw", cek.subarray(keySize >> 3), "AES-CBC", false, [usage]);
   let macKey = await crypto.subtle.importKey(
@@ -86,11 +86,11 @@ async function cbcKeySetup(enc, cek, usage) {
     keySize,
   };
 }
-//@ chunk-5h78gfwc.js:8378-8479 esm-fingerprint
+//@ chunk-0f6azspv.js:8378-8479 esm-fingerprint
 async function cbcHmacTag(macKey, macData, keySize) {
   return new Uint8Array((await crypto.subtle.sign("HMAC", macKey, macData)).slice(0, keySize >> 3));
 }
-//@ chunk-5h78gfwc.js:8479-8715 esm-fingerprint
+//@ chunk-0f6azspv.js:8479-8715 esm-fingerprint
 async function cbcEncrypt(enc, plaintext, cek, iv, aad) {
   let { encKey, macKey, keySize } = await cbcKeySetup(enc, cek, "encrypt");
   let ciphertext = new Uint8Array(
@@ -111,7 +111,7 @@ async function cbcEncrypt(enc, plaintext, cek, iv, aad) {
     iv,
   };
 }
-//@ chunk-5h78gfwc.js:8715-9133 esm-fingerprint
+//@ chunk-0f6azspv.js:8715-9133 esm-fingerprint
 async function timingSafeEqual(a_2, b) {
   if (!(a_2 instanceof Uint8Array)) throw TypeError("First argument must be a buffer");
   if (!(b instanceof Uint8Array)) throw TypeError("Second argument must be a buffer");
@@ -127,7 +127,7 @@ async function timingSafeEqual(a_2, b) {
   while (++i < 32) out |= aHmac[i] ^ bHmac[i];
   return out === 0;
 }
-//@ chunk-5h78gfwc.js:9133-9430 esm-fingerprint
+//@ chunk-0f6azspv.js:9133-9430 esm-fingerprint
 async function cbcDecrypt(enc, cek, ciphertext, iv, tag, aad) {
   let { encKey, macKey, keySize } = await cbcKeySetup(enc, cek, "decrypt");
   let macData = concat(aad, iv, ciphertext, uint64be(aad.length << 3));
@@ -153,7 +153,7 @@ async function cbcDecrypt(enc, cek, ciphertext, iv, tag, aad) {
   if (!plaintext) throw new JWEDecryptionFailed_2();
   return plaintext;
 }
-//@ chunk-5h78gfwc.js:9430-9752 esm-fingerprint
+//@ chunk-0f6azspv.js:9430-9752 esm-fingerprint
 async function gcmEncrypt(enc, plaintext, cek, iv, aad) {
   let encKey;
   if (cek instanceof Uint8Array)
@@ -181,7 +181,7 @@ async function gcmEncrypt(enc, plaintext, cek, iv, aad) {
     iv,
   };
 }
-//@ chunk-5h78gfwc.js:9752-10045 esm-fingerprint
+//@ chunk-0f6azspv.js:9752-10045 esm-fingerprint
 async function gcmDecrypt(enc, cek, ciphertext, iv, tag, aad) {
   let encKey;
   if (cek instanceof Uint8Array)
@@ -207,12 +207,12 @@ async function gcmDecrypt(enc, cek, ciphertext, iv, tag, aad) {
     throw new JWEDecryptionFailed_2();
   }
 }
-//@ chunk-5h78gfwc.js:10045-10099 esm-fingerprint
+//@ chunk-0f6azspv.js:10045-10099 esm-fingerprint
 var unsupportedEnc = "Unsupported JWE Content Encryption Algorithm";
-//@ chunk-5h78gfwc.js:10099-10561 esm-fingerprint
+//@ chunk-0f6azspv.js:10099-10561 esm-fingerprint
 async function encrypt(enc, plaintext, cek, iv, aad) {
   if (!isCryptoKey(cek) && !(cek instanceof Uint8Array))
-    throw TypeError(message_3(cek, "CryptoKey", "KeyObject", "Uint8Array", "JSON Web Key"));
+    throw TypeError(message_2(cek, "CryptoKey", "KeyObject", "Uint8Array", "JSON Web Key"));
   if (iv) checkIvLength_2(enc, iv);
   else iv = generateIv_2(enc);
   switch (enc) {
@@ -230,10 +230,10 @@ async function encrypt(enc, plaintext, cek, iv, aad) {
       throw new JOSENotSupported_2(unsupportedEnc);
   }
 }
-//@ chunk-5h78gfwc.js:10561-11118 esm-fingerprint
+//@ chunk-0f6azspv.js:10561-11118 esm-fingerprint
 async function decrypt(enc, cek, ciphertext, iv, tag, aad) {
   if (!isCryptoKey(cek) && !(cek instanceof Uint8Array))
-    throw TypeError(message_3(cek, "CryptoKey", "KeyObject", "Uint8Array", "JSON Web Key"));
+    throw TypeError(message_2(cek, "CryptoKey", "KeyObject", "Uint8Array", "JSON Web Key"));
   if (!iv) throw new JWEInvalid_2("JWE Initialization Vector missing");
   if (!tag) throw new JWEInvalid_2("JWE Authentication Tag missing");
   switch ((checkIvLength_2(enc, iv), enc)) {
@@ -251,21 +251,21 @@ async function decrypt(enc, cek, ciphertext, iv, tag, aad) {
       throw new JOSENotSupported_2(unsupportedEnc);
   }
 }
-//@ chunk-2tyrgda4.js:1828-1848 esm-layout
+//@ chunk-pd6th42n.js:1828-1848 esm-layout
 var init_content_encryption = __esm(() => {
   init_base64url();
 });
-//@ chunk-2tyrgda4.js:1848-1874 esm-layout
+//@ chunk-pd6th42n.js:1848-1874 esm-layout
 var JOSEError;
 var JOSEAlgNotAllowed;
-var JOSENotSupported;
+var JOSENotSupported_3;
 var JWEDecryptionFailed;
-var JWEInvalid;
-var JWSInvalid;
+var JWEInvalid_3;
+var JWSInvalid_2;
 var JWTInvalid;
 var JWKInvalid;
 var JWSSignatureVerificationFailed;
-//@ chunk-2tyrgda4.js:1874-3334 esm-layout
+//@ chunk-pd6th42n.js:1874-3334 esm-layout
 var init_content_encryption_2 = __esm(() => {
   JOSEError = class JOSEError extends Error {
     static get code() {
@@ -289,7 +289,7 @@ var init_content_encryption_2 = __esm(() => {
       return "ERR_JOSE_ALG_NOT_ALLOWED";
     }
   };
-  JOSENotSupported = class JOSENotSupported extends JOSEError {
+  JOSENotSupported_3 = class JOSENotSupported extends JOSEError {
     constructor() {
       super(...arguments);
       this.code = "ERR_JOSE_NOT_SUPPORTED";
@@ -308,7 +308,7 @@ var init_content_encryption_2 = __esm(() => {
       return "ERR_JWE_DECRYPTION_FAILED";
     }
   };
-  JWEInvalid = class JWEInvalid extends JOSEError {
+  JWEInvalid_3 = class JWEInvalid extends JOSEError {
     constructor() {
       super(...arguments);
       this.code = "ERR_JWE_INVALID";
@@ -317,7 +317,7 @@ var init_content_encryption_2 = __esm(() => {
       return "ERR_JWE_INVALID";
     }
   };
-  JWSInvalid = class JWSInvalid extends JOSEError {
+  JWSInvalid_2 = class JWSInvalid extends JOSEError {
     constructor() {
       super(...arguments);
       this.code = "ERR_JWS_INVALID";
@@ -355,14 +355,14 @@ var init_content_encryption_2 = __esm(() => {
     }
   };
 });
-//@ chunk-2tyrgda4.js:3334-3340 esm-layout
+//@ chunk-pd6th42n.js:3334-3340 esm-layout
 var generateCek;
-//@ chunk-2tyrgda4.js:3340-3389 esm-layout
+//@ chunk-pd6th42n.js:3340-3389 esm-layout
 var init_content_encryption_3 = __esm(() => {
   init_buffer_utils();
   generateCek = cryptoModule.getRandomValues.bind(cryptoModule);
 });
-//@ chunk-2tyrgda4.js:3389-3641 esm-fingerprint
+//@ chunk-pd6th42n.js:3389-3641 esm-fingerprint
 function cekBits(enc) {
   switch (enc) {
     case "A128GCM":
@@ -377,47 +377,47 @@ function cekBits(enc) {
     case "A256CBC-HS512":
       return 128;
     default:
-      throw new JOSENotSupported(`Unsupported JWE Algorithm: ${enc}`);
+      throw new JOSENotSupported_3(`Unsupported JWE Algorithm: ${enc}`);
   }
 }
-//@ chunk-2tyrgda4.js:3641-3681 esm-layout
+//@ chunk-pd6th42n.js:3641-3681 esm-layout
 var generateIv = (enc) => generateCek(new Uint8Array(cekBits(enc) >> 3));
-//@ chunk-2tyrgda4.js:3681-3707 esm-layout
+//@ chunk-pd6th42n.js:3681-3707 esm-layout
 var init_content_encryption_4 = __esm(() => {
   init_content_encryption_2();
   init_content_encryption_3();
 });
-//@ chunk-2tyrgda4.js:3707-3801 esm-fingerprint
+//@ chunk-pd6th42n.js:3707-3801 esm-fingerprint
 var checkIvLength = (enc, iv) => {
-  if (iv.length << 3 !== cekBits(enc)) throw new JWEInvalid("Invalid Initialization Vector length");
+  if (iv.length << 3 !== cekBits(enc)) throw new JWEInvalid_3("Invalid Initialization Vector length");
 };
 var checkIvLengthInit;
-//@ chunk-2tyrgda4.js:3801-3833 esm-layout
+//@ chunk-pd6th42n.js:3801-3833 esm-layout
 var init_content_encryption_5 = __esm(() => {
   init_content_encryption_2();
   init_content_encryption_4();
   checkIvLengthInit = checkIvLength;
 });
-//@ chunk-2tyrgda4.js:3833-3970 esm-fingerprint
+//@ chunk-pd6th42n.js:3833-3970 esm-fingerprint
 var checkCekLength = (cek, expected) => {
   let actual = cek.byteLength << 3;
   if (actual !== expected)
-    throw new JWEInvalid(
+    throw new JWEInvalid_3(
       `Invalid Content Encryption Key length. Expected ${expected} bits, got ${actual} bits`,
     );
 };
 var checkCekLengthInit;
-//@ chunk-2tyrgda4.js:3970-3996 esm-layout (moved: shares a binding it assigns)
+//@ chunk-pd6th42n.js:3970-3996 esm-layout (moved: shares a binding it assigns)
 var init_timing_safe_equal = __esm(() => {
   init_content_encryption_2();
   checkCekLengthInit = checkCekLength;
 });
-//@ chunk-2tyrgda4.js:9860-9873 esm-layout
+//@ chunk-pd6th42n.js:9860-9873 esm-layout
 var noopClaims = () => {};
-//@ chunk-2tyrgda4.js:9873-9883 esm-layout
+//@ chunk-pd6th42n.js:9873-9883 esm-layout
 var hmacAlgorithm;
 var hmacSubmitAlgorithm;
-//@ chunk-2tyrgda4.js:9883-9952 esm-fingerprint
+//@ chunk-pd6th42n.js:9883-9952 esm-fingerprint
 var init_content_encryption_6 = __esm(() => {
   hmacAlgorithm = [
     {
@@ -430,28 +430,28 @@ var init_content_encryption_6 = __esm(() => {
   hmacSubmitAlgorithm = hmacAlgorithm;
 });
 export {
-  JWEDecryptionFailed,
-  checkIvLengthInit,
-  checkCekLengthInit,
-  JOSENotSupported,
-  init_content_encryption_5,
-  init_timing_safe_equal,
-  init_content_encryption_2,
-  hmacSubmitAlgorithm,
-  init_content_encryption_6,
-  JWEInvalid,
-  generateCek,
   decrypt,
   cekBitsForAlg,
   generateCek_2,
   init_content_encryption_3,
   init_content_encryption,
-  noopClaims,
+  JOSENotSupported_3,
+  init_content_encryption_2,
   encrypt,
   generateIv,
+  noopClaims,
+  JWEInvalid_3,
+  JWSInvalid_2,
+  JWEDecryptionFailed,
+  checkIvLengthInit,
+  checkCekLengthInit,
+  init_content_encryption_5,
+  init_timing_safe_equal,
+  hmacSubmitAlgorithm,
+  init_content_encryption_6,
+  generateCek,
   init_content_encryption_4,
   JOSEAlgNotAllowed,
-  JWSInvalid,
   JWSSignatureVerificationFailed,
   JWTInvalid,
   JWKInvalid,

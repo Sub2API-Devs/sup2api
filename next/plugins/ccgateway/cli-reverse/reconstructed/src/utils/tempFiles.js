@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：临时文件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kjv7wcqr.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kxr4gemz.js (3)
  * attribution: placement 3
  */
 import { join, dirname, basename } from "path";
@@ -19,9 +19,9 @@ import { pinWriteTarget, rethrowWithPath } from "./fsSafety/pathRevalidation.js"
 import { assertPathSafeAsync } from "./atomicPublishWrite.js";
 import { READ_LIMITS, O_NOFOLLOW_FLAG } from "./fsBoundRead.js";
 
-//@ chunk-kjv7wcqr.js:561-587 placement
+//@ chunk-kxr4gemz.js:561-587 placement
 var TENGU_MOSSY_KNUTH = "tengu_mossy_knuth";
-//@ chunk-kjv7wcqr.js:587-896 placement
+//@ chunk-kxr4gemz.js:587-896 placement
 /**
  * 写入临时文件（校验临时目录所有权，随机名）。
  */
@@ -54,7 +54,7 @@ async function writeTempFile(prefix, suffix, content, subdir) {
   await writeNewFileExclusive(filePath, content);
   return filePath;
 }
-//@ chunk-kjv7wcqr.js:896-1128 placement
+//@ chunk-kxr4gemz.js:896-1128 placement
 /**
  * 以排他方式创建并写入文件（权限 600）。
  */

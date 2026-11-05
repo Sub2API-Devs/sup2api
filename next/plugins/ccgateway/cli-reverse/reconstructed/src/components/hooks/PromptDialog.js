@@ -3,9 +3,9 @@
  *
  * 通用输入对话框（被 7 处使用）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/hooks/PromptDialog.tsx
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: callgraph-fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -18,7 +18,7 @@ import {
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { Text } from "../../ink/components/Text.js";
 
-//@ chunk-18hwfzwa.js:415192-415610 callgraph-fingerprint (2.1.88 match: PromptDialog, 0.182)
+//@ chunk-czq1j3j2.js:322653-323071 callgraph-fingerprint (2.1.88 match: PromptDialog, 0.182)
 function PromptDialog(props) {
   let $ = useMemoCache(6);
   let { message, onCancel, escAction } = props;

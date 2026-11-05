@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/credential-provider-login/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/credential-provider-login@3.936.0..3.972.52
- * pieces: chunk-hecvqqcj.js (5)
+ * pieces: chunk-jghy7hde.js (5)
  * attribution: esm-layout 3, esm-fingerprint 2
  */
 import { promises } from "fs";
@@ -15,17 +15,17 @@ import { require_property_provider } from "../../../@smithy/property-provider/di
 import { require_shared_ini_file_loader } from "../../../@smithy/shared-ini-file-loader/dist-cjs/index.js";
 import { require_protocol_http } from "../../../@smithy/protocol-http/dist-cjs/index.js";
 
-//@ chunk-hecvqqcj.js:3742-3757 esm-layout
+//@ chunk-jghy7hde.js:3742-3757 esm-layout
 var import_client_2 = __toESM(require_client());
-//@ chunk-hecvqqcj.js:3757-3794 esm-layout
+//@ chunk-jghy7hde.js:3757-3794 esm-layout
 var import_client_3 = __toESM(require_client());
 var import_property_provider_3 = __toESM(require_property_provider());
 var import_shared_ini_file_loader_2 = __toESM(require_shared_ini_file_loader());
-//@ chunk-hecvqqcj.js:3794-3831 esm-layout
+//@ chunk-jghy7hde.js:3794-3831 esm-layout
 var config = __toESM(require_property_provider());
 var protocols = __toESM(require_protocol_http());
 var import_shared_ini_file_loader_3 = __toESM(require_shared_ini_file_loader());
-//@ chunk-hecvqqcj.js:4026-9353 esm-fingerprint
+//@ chunk-jghy7hde.js:4026-9353 esm-fingerprint
 class LoginCredentialsFetcher {
   profileData;
   init;
@@ -299,7 +299,7 @@ class LoginCredentialsFetcher {
     }
   }
 }
-//@ chunk-hecvqqcj.js:9353-9813 esm-fingerprint
+//@ chunk-jghy7hde.js:9353-9813 esm-fingerprint
 var fromLoginCredentials =
   (init) =>
   async ({ callerClientConfig } = {}) => {

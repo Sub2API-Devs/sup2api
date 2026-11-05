@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：回合尾部分析的实际逻辑；自压缩边界以来是否有人工回合等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (19)
- * attribution: placement 19
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (20)
+ * attribution: placement 19, affinity 1
  */
 import { logEvent } from "../services/analytics/index.js";
 import {
@@ -15,25 +15,25 @@ import {
   isToolResultContinuation,
   isToolResultMessage,
 } from "./messageProvenance.js";
-import { extractPromptText } from "./permissions/yoloClassifier.js";
 import { replacedTurnStartSymbol } from "./messageKinds.js";
-import { SYNTHETIC_MODEL, NO_CONTENT_MESSAGE } from "../constants/messages.js";
+import { SYNTHETIC_MODEL } from "./messages.js";
+import { NO_CONTENT_MESSAGE } from "../constants/messages.js";
 
-//@ chunk-aepeg2w5.js:600991-601031 placement
+//@ chunk-exfmq47h.js:613504-613544 placement
 /**
  * 来源是否为人。
  */
 function isHumanOrigin(origin) {
   return origin?.kind === "human";
 }
-//@ chunk-aepeg2w5.js:601031-601114 placement
+//@ chunk-exfmq47h.js:613544-613627 placement
 /**
  * 是否可视为用户自己输入的回合。
  */
 function isOwnWordTurn(msg) {
   return msg.ownWord === true || (isHumanOrigin(msg.origin) && msg.verifiedSlackHumanTurn !== true);
 }
-//@ chunk-aepeg2w5.js:601114-601404 placement
+//@ chunk-exfmq47h.js:613627-613917 placement
 /**
  * 消息是否为人输入的回合。
  */
@@ -56,7 +56,7 @@ function isHumanTurn(msg) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:601404-601537 placement
+//@ chunk-exfmq47h.js:613917-614050 placement
 /**
  * 是否为非用户亲手输入（meta、交接、跳过附件等）。
  */
@@ -69,7 +69,7 @@ function isNonTypedInput(msg) {
     msg.queueTranscriptOnly === true
   );
 }
-//@ chunk-aepeg2w5.js:601537-601629 placement
+//@ chunk-exfmq47h.js:614050-614142 placement
 /**
  * 当前回合是否严格由人发起。
  */
@@ -79,7 +79,7 @@ function isStrictHumanTurn(messages) {
     analyzeTurnTail(messages).replacedTurnStart?.bySessionUsersOwnWords === true
   );
 }
-//@ chunk-aepeg2w5.js:601629-601750 placement
+//@ chunk-exfmq47h.js:614142-614263 placement
 /**
  * 若回合尾部的决定者是严格意义上的人工回合，返回该消息。
  */
@@ -89,14 +89,14 @@ function strictHumanDeciderTurn(msg) {
   let deciderMessage = msg[decider.index];
   return deciderMessage !== undefined && isHumanTurn(deciderMessage) ? deciderMessage : undefined;
 }
-//@ chunk-aepeg2w5.js:601750-601822 placement
+//@ chunk-exfmq47h.js:614263-614335 placement
 /**
  * 起点是人或自动续接的回合。
  */
 function isHumanDrivenOrigin(origin) {
   return origin?.kind === "human" || origin?.kind === "auto-continuation";
 }
-//@ chunk-aepeg2w5.js:601822-601924 placement
+//@ chunk-exfmq47h.js:614335-614437 placement
 /**
  * 当前回合是否由用户驱动。
  */
@@ -104,7 +104,7 @@ function isUserDrivenTurn(messages) {
   let { decider, replacedTurnStart } = analyzeTurnTail(messages);
   return decider === null ? replacedTurnStart?.byHuman === true : decider.userDriven;
 }
-//@ chunk-aepeg2w5.js:601924-602251 placement
+//@ chunk-exfmq47h.js:614437-614764 placement
 /**
  * 当前回合是否由本终端用户驱动。
  */
@@ -121,13 +121,13 @@ function isUserDrivenHere(messages) {
     deciderMessage.attachment.verifiedSlackHumanTurn !== true
   );
 }
-//@ chunk-aepeg2w5.js:602251-602313 placement
+//@ chunk-exfmq47h.js:614764-614826 placement
 var LAST_TURN_TAIL = {
   decider: null,
   referentTail: undefined,
   scheduledTrigger: false,
 };
-//@ chunk-aepeg2w5.js:602313-602395 placement
+//@ chunk-exfmq47h.js:614826-614908 placement
 /**
  * 分析消息尾部决定回合发起者（失败时降级并上报）。
  */
@@ -142,13 +142,13 @@ function analyzeTurnTail(messages) {
     };
   }
 }
-//@ chunk-aepeg2w5.js:602395-602463 placement
+//@ chunk-exfmq47h.js:614908-614976 placement
 function logDegradedTurnTail() {
   try {
     logEvent("tengu_turn_tail_analysis_degraded", {});
   } catch {}
 }
-//@ chunk-aepeg2w5.js:602463-602793 placement (2.1.88 match: buildTranscriptEntries, 0.777)
+//@ chunk-exfmq47h.js:614976-615306 placement (2.1.88 match: buildTranscriptEntries, 0.902)
 /**
  * 回合是否由定时触发。
  */
@@ -174,7 +174,7 @@ function isScheduledTriggerTurn(messages) {
     }
   return false;
 }
-//@ chunk-aepeg2w5.js:602793-603978 placement
+//@ chunk-exfmq47h.js:615306-616491 placement
 /**
  * 从后往前找最近一条“决定性”人类回合（user 消息或人类 queued_command），返回 {decider:{index,origin,text,userDriven,strictHuman,scheduledTrigger}, referentTail: 其前一条 assistant 文本, scheduledTrigger}。
  */
@@ -272,7 +272,7 @@ function analyzeTurnTailUnsafe(messages) {
     scheduledTrigger,
   };
 }
-//@ chunk-aepeg2w5.js:603978-604521 placement
+//@ chunk-exfmq47h.js:616491-617033 placement
 /**
  * 自压缩边界以来是否有人工回合。
  */
@@ -304,16 +304,16 @@ function allUserTurnsSatisfy(messages, predicate) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:604521-604607 placement
+//@ chunk-exfmq47h.js:617033-617119 placement
 function isScheduledTriggerOrigin(origin) {
   return origin?.kind === "task-notification" && origin.subkind === "scheduled-trigger";
 }
-//@ chunk-aepeg2w5.js:604607-604662 placement
+//@ chunk-exfmq47h.js:617119-617174 placement
 function nonEmptyPromptText(text) {
   let trimmed = text?.trim();
   return trimmed && trimmed !== NO_CONTENT_MESSAGE ? text : null;
 }
-//@ chunk-aepeg2w5.js:604662-604896 placement
+//@ chunk-exfmq47h.js:617174-617408 placement
 function getAssistantText(message) {
   let content = message.message?.content;
   if (!Array.isArray(content)) return null;
@@ -330,7 +330,7 @@ function getAssistantText(message) {
 `);
   return joined.trim() !== "" ? joined : null;
 }
-//@ chunk-aepeg2w5.js:604896-605151 placement
+//@ chunk-exfmq47h.js:617408-617663 placement
 function getUserMessageText(message) {
   let content = message.message?.content;
   if (typeof content === "string") return content;
@@ -349,17 +349,38 @@ function getUserMessageText(message) {
 `)
     : null;
 }
+//@ chunk-exfmq47h.js:617663-617893 affinity
+/**
+ * 从 prompt（字符串或内容块数组）中取出文本，多块用换行连接，没有文本返回 null。
+ */
+function extractPromptText(prompt) {
+  if (typeof prompt === "string") return prompt;
+  if (!Array.isArray(prompt)) return null;
+  let texts = [];
+  for (let block of prompt)
+    if (
+      typeof block === "object" &&
+      block !== null &&
+      block.type === "text" &&
+      typeof block.text === "string"
+    )
+      texts.push(block.text);
+  return texts.length > 0
+    ? texts.join(`
+`)
+    : null;
+}
 export {
-  isHumanTurn,
   isHumanOrigin,
-  isOwnWordTurn,
-  allUserTurnsSatisfy,
   analyzeTurnTail,
-  isHumanDrivenOrigin,
-  isNonTypedInput,
+  isHumanTurn,
   isUserDrivenHere,
-  isStrictHumanTurn,
   isUserDrivenTurn,
   isScheduledTriggerOrigin,
+  isOwnWordTurn,
+  isHumanDrivenOrigin,
+  allUserTurnsSatisfy,
+  isStrictHumanTurn,
+  isNonTypedInput,
   strictHumanDeciderTurn,
 };

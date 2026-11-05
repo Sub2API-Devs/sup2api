@@ -3,10 +3,10 @@
  *
  * 错误类型与工具：AbortError、TelemetrySafeError、errno 分类、axios 错误分类、错误消息/栈格式化。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/errors.ts
- * pieces: chunk-06y4szbn.js (1), chunk-24t3dkzb.js (1), chunk-2g090z7k.js (68), chunk-e6aww6q8.js (1), chunk-hm0ce8vc.js (1), chunk-sycgf9xs.js (1)
- * attribution: fingerprint 3, placement 69, callgraph-witnessed 1
+ * pieces: chunk-51jy8ztq.js (1), chunk-5xgkngpb.js (1), chunk-63094ahz.js (68), chunk-asf5gh8x.js (1), chunk-hb44av3w.js (1), chunk-xd1cb3xs.js (1)
+ * attribution: fingerprint 3, callgraph-witnessed 1, placement 68, facade-majority 1
  */
 import { dirname, join, relative } from "path";
 import { realpath, lstat } from "fs/promises";
@@ -16,32 +16,32 @@ import { stripStackHeader } from "./errorStackSanitize.js";
 import { ARTIFACT_DOC_PATH_RE } from "../services/artifacts/artifactToolGates.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-2g090z7k.js:2325-2406 placement
+//@ chunk-63094ahz.js:2325-2406 placement
 class ClaudeError extends Error {
   constructor(message) {
     super(message);
     this.name = this.constructor.name;
   }
 }
-//@ chunk-2g090z7k.js:2406-2430 placement
+//@ chunk-63094ahz.js:2406-2430 placement
 class MalformedCommandError extends Error {}
-//@ chunk-2g090z7k.js:2430-2473 placement
+//@ chunk-63094ahz.js:2430-2473 placement
 class CliUserError extends Error {
   name = "CliUserError";
 }
-//@ chunk-2g090z7k.js:2473-2544 placement (2.1.88 match: AbortError, 1)
+//@ chunk-63094ahz.js:2473-2544 placement (2.1.88 match: AbortError, 1)
 class AbortError extends Error {
   constructor(message) {
     super(message);
     this.name = "AbortError";
   }
 }
-//@ chunk-2g090z7k.js:2544-2565 placement
+//@ chunk-63094ahz.js:2544-2565 placement
 let StreamClosedAbortError; // deferred: uses AbortError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-2g090z7k.js:2544", () => {
+deferInit("chunk-63094ahz.js:2544", () => {
   StreamClosedAbortError = class StreamClosedAbortError extends AbortError {};
 });
-//@ chunk-2g090z7k.js:2565-2728 placement (2.1.88 match: isAbortError, 0.47)
+//@ chunk-63094ahz.js:2565-2728 placement (2.1.88 match: isAbortError, 0.469)
 /**
  * 判断是否为中断错误（AbortError、内部取消、name=AbortError 或 axios __CANCEL__）。
  */
@@ -56,7 +56,7 @@ function isAbortError(e) {
     return false;
   }
 }
-//@ chunk-2g090z7k.js:2728-2869 placement (2.1.88 match: ConfigParseError, 1)
+//@ chunk-63094ahz.js:2728-2869 placement (2.1.88 match: ConfigParseError, 1)
 class ConfigParseError extends Error {
   filePath;
   defaultConfig;
@@ -67,7 +67,7 @@ class ConfigParseError extends Error {
     this.defaultConfig = defaultConfig;
   }
 }
-//@ chunk-2g090z7k.js:2869-3251 placement (2.1.88 match: ShellError, 0.698)
+//@ chunk-63094ahz.js:2869-3251 placement (2.1.88 match: ShellError, 0.704)
 class ShellError extends Error {
   stdout;
   stderr;
@@ -88,7 +88,7 @@ class ShellError extends Error {
     this.sandboxed = details.sandboxed;
   }
 }
-//@ chunk-2g090z7k.js:3251-3377 placement (2.1.88 match: TeleportOperationError, 0.815)
+//@ chunk-63094ahz.js:3251-3377 placement (2.1.88 match: TeleportOperationError, 0.814)
 class TeleportOperationError extends Error {
   formattedMessage;
   constructor(message, formattedMessage) {
@@ -97,7 +97,7 @@ class TeleportOperationError extends Error {
     this.name = "TeleportOperationError";
   }
 }
-//@ chunk-2g090z7k.js:3377-3532 placement (2.1.88 match: TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, 0.878)
+//@ chunk-63094ahz.js:3377-3532 placement (2.1.88 match: TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, 0.878)
 /**
  * 可上报遥测的错误类型：构造时显式给出不含代码和路径的遥测消息。
  */
@@ -111,18 +111,18 @@ class TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS extends Error 
     this.errorClass = defaultConfig;
   }
 }
-//@ chunk-2g090z7k.js:3532-3552 placement
+//@ chunk-63094ahz.js:3532-3552 placement
 let WireSafeControlError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-2g090z7k.js:3532", () => {
+deferInit("chunk-63094ahz.js:3532", () => {
   WireSafeControlError = class WireSafeControlError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {};
 });
-//@ chunk-2g090z7k.js:3552-3851 placement
+//@ chunk-63094ahz.js:3552-3851 placement
 var withTelemetryMessage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var BUILTIN_ERROR_NAMES;
 var LANGUAGE_ERROR_NAMES;
-deferInit("chunk-2g090z7k.js:3552", () => {
+deferInit("chunk-63094ahz.js:3552", () => {
   withTelemetryMessage = (error, telemetryMessage) => {
     try {
       if (
@@ -150,7 +150,7 @@ deferInit("chunk-2g090z7k.js:3552", () => {
   ];
   LANGUAGE_ERROR_NAMES = new Set(BUILTIN_ERROR_NAMES);
 });
-//@ chunk-2g090z7k.js:3851-4006 placement
+//@ chunk-63094ahz.js:3851-4006 placement
 function languageErrorNameOf(error) {
   try {
     let errorName = error instanceof Error ? error.name : undefined;
@@ -159,14 +159,14 @@ function languageErrorNameOf(error) {
   } catch {}
   return "a value that is not a built-in error";
 }
-//@ chunk-2g090z7k.js:4006-4446 placement
+//@ chunk-63094ahz.js:4006-4446 placement
 /**
  * 把非空的附加字段并入一个可扩展对象（只补缺失键，失败时原样返回），用于给错误对象附加退出状态等元信息。
  */
 var withTelemetryFacts; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CHILD_EXIT_STATUS_SYMBOL;
 var withTelemetryChildExitStatus;
-deferInit("chunk-2g090z7k.js:4006", () => {
+deferInit("chunk-63094ahz.js:4006", () => {
   withTelemetryFacts = (target, facts) => {
     try {
       if (target !== null && typeof target === "object" && Object.isExtensible(target)) {
@@ -199,7 +199,7 @@ deferInit("chunk-2g090z7k.js:4006", () => {
     return target;
   };
 });
-//@ chunk-2g090z7k.js:4446-4600 placement
+//@ chunk-63094ahz.js:4446-4600 placement
 /**
  * 读取错误对象上附加的 telemetryMessage（可安全上报的描述）。
  */
@@ -215,25 +215,22 @@ function getTelemetryMessage(value) {
   } catch {}
   return;
 }
-//@ chunk-2g090z7k.js:4600-4658 placement
+//@ chunk-63094ahz.js:4600-4658 placement
 function hasExactErrorMessage(error, message) {
   return error instanceof Error && error.message === message;
 }
-//@ chunk-2g090z7k.js:4658-4717 placement
+//@ chunk-63094ahz.js:4658-4717 placement
 /**
  * 非 Error 值包装成 Error。
  */
 function toError(e) {
   return e instanceof Error ? e : Error(String(e));
 }
-//@ chunk-2g090z7k.js:4717-4777 placement (2.1.88 match: errorMessage, 0)
-/**
- * 把任意值转成错误消息字符串。
- */
+//@ chunk-63094ahz.js:4717-4777 facade-majority (2.1.88 match: errorMessage, 0)
 function errorMessage(e) {
   return e instanceof Error ? e.message : String(e);
 }
-//@ chunk-2g090z7k.js:4777-4876 placement (2.1.88 match: isConnectionError, 1)
+//@ chunk-63094ahz.js:4777-4876 placement (2.1.88 match: isConnectionError, 1)
 /**
  * 取错误对象的字符串 code（如 ENOENT），没有返回 undefined。全项目大量使用。
  */
@@ -241,20 +238,20 @@ function getErrnoCode(err) {
   if (err && typeof err === "object" && "code" in err && typeof err.code === "string") return err.code;
   return;
 }
-//@ chunk-2g090z7k.js:4876-4907 placement
+//@ chunk-63094ahz.js:4876-4907 placement
 function sanitizeErrnoForTelemetry(error) {
   return sanitizeErrnoTokenForTelemetry(getErrnoCode(error));
 }
-//@ chunk-2g090z7k.js:4907-4978 placement
+//@ chunk-63094ahz.js:4907-4978 placement
 function sanitizeErrnoTokenForTelemetry(token) {
   return token && /^[A-Z][A-Z0-9_]{0,63}$/.test(token)
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(token)
     : undefined;
 }
-//@ chunk-2g090z7k.js:4978-5009 placement
+//@ chunk-63094ahz.js:4978-5009 placement
 var MIN_INT32 = -2147483648;
 var MAX_UINT32 = 4294967295;
-//@ chunk-2g090z7k.js:5009-5249 placement
+//@ chunk-63094ahz.js:5009-5249 placement
 function getTelemetryChildExitStatus(target) {
   try {
     if (target === null || typeof target !== "object") return;
@@ -273,74 +270,74 @@ function getTelemetryChildExitStatus(target) {
     return;
   }
 }
-//@ chunk-2g090z7k.js:5249-5383 placement
+//@ chunk-63094ahz.js:5249-5383 placement
 var DAEMON_UNREACHABLE_TIMEOUT_PHRASE = "did not become reachable within";
 var DAEMON_EXITED_BEFORE_REACHABLE_PHRASE = "exited before it became reachable";
 var BUN_CONNECTION_CLOSED_MESSAGE_PREFIX = "The socket connection was closed unexpectedly";
-//@ chunk-2g090z7k.js:5383-5508 placement
+//@ chunk-63094ahz.js:5383-5508 placement
 function extractErrnoTokens(text) {
   return [...text.matchAll(/\bE\d?[A-Z]{2,14}\b/g)]
     .filter((match) => !"/\\".includes(text[match.index - 1] ?? "."))
     .map((match) => match[0]);
 }
-//@ chunk-2g090z7k.js:5508-5610 placement
+//@ chunk-63094ahz.js:5508-5610 placement
 function sanitizeErrorName(error) {
   let errorName = error?.name;
   return typeof errorName === "string" && /^[A-Z][a-zA-Z]{0,63}$/.test(errorName)
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(errorName)
     : undefined;
 }
-//@ chunk-2g090z7k.js:5610-5645 placement
+//@ chunk-63094ahz.js:5610-5645 placement
 function sanitizedErrCodeForTelemetry(error) {
   return sanitizeErrnoForTelemetry(error) ?? sanitizeErrorName(error);
 }
-//@ chunk-2g090z7k.js:5645-5701 placement
+//@ chunk-63094ahz.js:5645-5701 placement
 function sanitizedErrnoLowerForTelemetry(error) {
   return fromSanitizer_SANITIZER_OUTPUT_ONLY(sanitizeErrnoForTelemetry(error)?.toLowerCase() ?? "other");
 }
-//@ chunk-2g090z7k.js:5701-5729 placement
+//@ chunk-63094ahz.js:5701-5729 placement
 function sanitizedErrorNameForTelemetry(error) {
   return sanitizeErrorName(error);
 }
-//@ chunk-2g090z7k.js:5729-5813 placement
+//@ chunk-63094ahz.js:5729-5813 placement
 function sanitizedConnectionCodeForTelemetry(code) {
   return code !== undefined && /^[A-Z][A-Za-z0-9_]{0,63}$/.test(code)
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(code)
     : undefined;
 }
-//@ chunk-2g090z7k.js:5813-5887 placement
+//@ chunk-63094ahz.js:5813-5887 placement
 function sanitizedConnectionCodeLowerForTelemetry(errnoCode) {
   let sanitizedCode = sanitizedConnectionCodeForTelemetry(errnoCode);
   return sanitizedCode === undefined
     ? undefined
     : fromSanitizer_SANITIZER_OUTPUT_ONLY(sanitizedCode.toLowerCase());
 }
-//@ chunk-2g090z7k.js:5887-5975 placement
+//@ chunk-63094ahz.js:5887-5975 placement
 function sanitizeClassName(className) {
   return typeof className === "string" && /^[A-Z][a-zA-Z]{0,63}$/.test(className)
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(className)
     : undefined;
 }
-//@ chunk-2g090z7k.js:5975-6072 placement
+//@ chunk-63094ahz.js:5975-6072 placement
 function sanitizedOAuthErrorTypeForTelemetry(errorType) {
   return typeof errorType === "string" && /^[a-z][a-z_]{0,39}$/.test(errorType)
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(errorType)
     : lit("unparseable");
 }
-//@ chunk-2g090z7k.js:6072-6149 placement
+//@ chunk-63094ahz.js:6072-6149 placement
 function sanitizedMachineReasonForTelemetry(reason) {
   return /^[a-z][a-z0-9_]{0,39}$/.test(reason)
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(reason)
     : lit("unparseable");
 }
-//@ chunk-2g090z7k.js:6149-6265 placement
+//@ chunk-63094ahz.js:6149-6265 placement
 function sanitizedFeatureErrorCodeForTelemetry(errorCode) {
   if (typeof errorCode !== "string") return;
   return /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(errorCode)
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(errorCode)
     : lit("nonconforming");
 }
-//@ chunk-2g090z7k.js:6265-6531 placement
+//@ chunk-63094ahz.js:6265-6531 placement
 function sanitizedBgExitCauseForTelemetry(cause) {
   if (cause === undefined) return;
   let index = cause.indexOf(":");
@@ -354,47 +351,47 @@ function sanitizedBgExitCauseForTelemetry(cause) {
     (sliced === "string" || sliced === "non-error" ? sliced : "Error");
   return fromSanitizer_SANITIZER_OUTPUT_ONLY(`${causeKind}:${causeDetail}`);
 }
-//@ chunk-2g090z7k.js:6531-6560 placement
+//@ chunk-63094ahz.js:6531-6560 placement
 function sanitizedClassNameForTelemetry(name) {
   return sanitizeClassName(name);
 }
-//@ chunk-2g090z7k.js:6560-6693 placement
+//@ chunk-63094ahz.js:6560-6693 placement
 function sanitizedErrorClassNameForTelemetry(error) {
   let className = error?.constructor?.name;
   return typeof className === "string" && /^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(className)
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(className)
     : lit("unparseable");
 }
-//@ chunk-2g090z7k.js:6693-6739 placement
+//@ chunk-63094ahz.js:6693-6739 placement
 function sanitizeTopFrame(frame) {
   return STACK_FRAME_FILE_RE.test(frame) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(frame) : undefined;
 }
-//@ chunk-2g090z7k.js:6739-7221 placement
+//@ chunk-63094ahz.js:6739-7221 placement
 /**
  * 匹配堆栈帧文件名的正则（用户代码、常见脚本扩展名、node 内部模块等），以及表示资源耗尽的 errno 集合。
  */
 var STACK_FRAME_FILE_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var RESOURCE_EXHAUSTION_CODES;
-deferInit("chunk-2g090z7k.js:6739", () => {
+deferInit("chunk-63094ahz.js:6739", () => {
   STACK_FRAME_FILE_RE =
     /^(?:<user-code>|(?:[\w$.\-<>[\]]{1,72}\.(?:[cm]?[jt]sx?|json|node|wasm|exe)|node:internal(?:\/[a-z0-9_-]{1,40}){1,4}|node:[a-z0-9_]{1,30}(?:\/(?:promises|web|consumers|posix|win32|types|strict|reporters))?|bun:[a-z0-9_]{1,20}|internal:[a-z0-9_-]{1,30}(?:\/[a-z0-9_-]{1,40}){0,3}|<anonymous>|\[eval\](?:-wrapper)?|native|unknown|cli|claude|ws|undici|node-fetch|isomorphic-fetch|vercel_fetch|utf-8-validate)(?::\d{1,8}){2})$/;
   RESOURCE_EXHAUSTION_CODES = new Set(["ENOSPC", "EDQUOT", "ENFILE", "EMFILE"]);
 });
-//@ chunk-2g090z7k.js:7221-7282 placement
+//@ chunk-63094ahz.js:7221-7282 placement
 function isDiskFullErrno(error) {
   let errnoCode = getErrnoCode(error);
   return errnoCode === "ENOSPC" || errnoCode === "EDQUOT";
 }
-//@ chunk-2g090z7k.js:7282-7326 placement
+//@ chunk-63094ahz.js:7282-7326 placement
 var PERMISSION_DENIED_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-2g090z7k.js:7282", () => {
+deferInit("chunk-63094ahz.js:7282", () => {
   PERMISSION_DENIED_CODES = new Set(["EACCES", "EPERM", "EROFS"]);
 });
-//@ chunk-2g090z7k.js:7326-7418 placement
+//@ chunk-63094ahz.js:7326-7418 placement
 function isSyscallError(error) {
   return error !== null && typeof error === "object" && "errno" in error && typeof error.errno === "number";
 }
-//@ chunk-2g090z7k.js:7418-7534 placement
+//@ chunk-63094ahz.js:7418-7534 placement
 function findInCauseChain(error, matches, maxDepth = 5) {
   let current = error;
   for (let i = 0; i < maxDepth; i++) {
@@ -404,27 +401,27 @@ function findInCauseChain(error, matches, maxDepth = 5) {
   }
   return;
 }
-//@ chunk-2g090z7k.js:7534-7571 placement (2.1.88 match: getErrnoCode, 0)
+//@ chunk-63094ahz.js:7534-7571 placement (2.1.88 match: getErrnoCode, 0)
 /**
  * 取错误的 errno code（如 ENOENT）。
  */
 function isENOENT(e) {
   return getErrnoCode(e) === "ENOENT";
 }
-//@ chunk-2g090z7k.js:7571-7632 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-63094ahz.js:7571-7632 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isPathAbsent(realCandidate) {
   let code = getErrnoCode(realCandidate);
   return code === "ENOENT" || code === "ENOTDIR";
 }
-//@ chunk-2g090z7k.js:7632-7670 placement
+//@ chunk-63094ahz.js:7632-7670 placement
 function isEISDIR(error) {
   return getErrnoCode(error) === "EISDIR";
 }
-//@ chunk-2g090z7k.js:7670-7708 placement
+//@ chunk-63094ahz.js:7670-7708 placement
 function isE2BIG(error) {
   return getErrnoCode(error) === "E2BIG";
 }
-//@ chunk-2g090z7k.js:7708-7956 placement
+//@ chunk-63094ahz.js:7708-7956 placement
 function isHttpServerConnReset(error) {
   try {
     if (getErrnoCode(error) !== "ECONNRESET") return false;
@@ -441,12 +438,12 @@ function isHttpServerConnReset(error) {
     return false;
   }
 }
-//@ chunk-2g090z7k.js:7956-8057 placement (2.1.88 match: getErrnoPath, 1)
+//@ chunk-63094ahz.js:7956-8057 placement (2.1.88 match: getErrnoPath, 1)
 function getErrnoPath(e) {
   if (e && typeof e === "object" && "path" in e && typeof e.path === "string") return e.path;
   return;
 }
-//@ chunk-2g090z7k.js:8057-8284 placement
+//@ chunk-63094ahz.js:8057-8284 placement
 /**
  * 格式化 `name: message` 加调用栈。
  */
@@ -462,23 +459,23 @@ function errorStackOrMessage(error) {
   return [header, ...bodyLines].join(`
 `);
 }
-//@ chunk-2g090z7k.js:8284-8368 placement
+//@ chunk-63094ahz.js:8284-8368 placement
 var FS_ACCESS_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-2g090z7k.js:8284", () => {
+deferInit("chunk-63094ahz.js:8284", () => {
   FS_ACCESS_ERRNOS = new Set(["ENOENT", "EACCES", "EPERM", "ENOTDIR", "ELOOP", "ENAMETOOLONG", "EROFS"]);
 });
-//@ chunk-2g090z7k.js:8368-8399 placement
+//@ chunk-63094ahz.js:8368-8399 placement
 function isFsInaccessible(error) {
   return isFsInaccessibleCode(getErrnoCode(error));
 }
-//@ chunk-2g090z7k.js:8399-8442 placement
+//@ chunk-63094ahz.js:8399-8442 placement
 /**
  * errno 是否属于文件访问类错误（ENOENT/EACCES/EPERM/ENOTDIR/ELOOP/ENAMETOOLONG/EROFS）。
  */
 function isFsInaccessibleCode(code) {
   return code !== undefined && FS_ACCESS_ERRNOS.has(code);
 }
-//@ chunk-2g090z7k.js:8442-8625 placement
+//@ chunk-63094ahz.js:8442-8625 placement
 /**
  * 读取 error.cause.telemetryCode（存储层错误的遥测码）。
  */
@@ -487,16 +484,16 @@ function storageCauseErrnoCode(error) {
   if (typeof cause !== "object" || cause === null || !("telemetryCode" in cause)) return;
   return typeof cause.telemetryCode === "string" ? cause.telemetryCode : undefined;
 }
-//@ chunk-2g090z7k.js:8625-8675 placement
+//@ chunk-63094ahz.js:8625-8675 placement
 var FS_RESOURCE_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-2g090z7k.js:8625", () => {
+deferInit("chunk-63094ahz.js:8625", () => {
   FS_RESOURCE_ERRNOS = new Set(["ENOSPC", "EDQUOT", "ENFILE", "EIO"]);
 });
-//@ chunk-2g090z7k.js:8675-8707 placement
+//@ chunk-63094ahz.js:8675-8707 placement
 function isEnvFsErrno(error) {
   return isEnvFsErrnoCode(getErrnoCode(error));
 }
-//@ chunk-2g090z7k.js:8707-8880 placement
+//@ chunk-63094ahz.js:8707-8880 placement
 function isEnvFsErrnoCode(code) {
   return (
     code === "EDEADLK" ||
@@ -511,11 +508,11 @@ function isEnvFsErrnoCode(code) {
     (code !== undefined && isUnknownSystemError(code))
   );
 }
-//@ chunk-2g090z7k.js:8880-8953 placement
+//@ chunk-63094ahz.js:8880-8953 placement
 function isUnknownSystemError(error) {
   return error === "UNKNOWN" || error.startsWith("Unknown system error");
 }
-//@ chunk-2g090z7k.js:8953-9074 placement
+//@ chunk-63094ahz.js:8953-9074 placement
 function isWin32ReadEbadf(error, platform = "linux") {
   if (platform !== "win32") return false;
   try {
@@ -524,29 +521,29 @@ function isWin32ReadEbadf(error, platform = "linux") {
     return false;
   }
 }
-//@ chunk-2g090z7k.js:9074-9163 placement
+//@ chunk-63094ahz.js:9074-9163 placement
 function errnoShapedCode(telemetryCode) {
   if (typeof telemetryCode !== "string") return;
   return /^E[A-Z0-9]+$/.test(telemetryCode) || isUnknownSystemError(telemetryCode)
     ? telemetryCode
     : undefined;
 }
-//@ chunk-2g090z7k.js:9163-9218 placement
+//@ chunk-63094ahz.js:9163-9218 placement
 function isSadResourceErrno(error) {
   let errnoCode = getErrnoCode(error);
   return errnoCode !== undefined && FS_RESOURCE_ERRNOS.has(errnoCode);
 }
-//@ chunk-2g090z7k.js:9218-9250 placement
+//@ chunk-63094ahz.js:9218-9250 placement
 function isSadFsErrno(error) {
   return isSadFsErrnoCode(getErrnoCode(error));
 }
-//@ chunk-2g090z7k.js:9250-9320 placement
+//@ chunk-63094ahz.js:9250-9320 placement
 function isSadFsErrnoCode(code) {
   return (
     code !== undefined && (FS_ACCESS_ERRNOS.has(code) || code === "EISDIR" || FS_RESOURCE_ERRNOS.has(code))
   );
 }
-//@ chunk-2g090z7k.js:9320-9502 placement
+//@ chunk-63094ahz.js:9320-9502 placement
 /**
  * axios 错误是否为认证/限流类（无状态码、401、403、429），可由调用方追加判断。
  */
@@ -556,11 +553,11 @@ function isExpectedApiError(error, apiError) {
   let status = error.response?.status;
   return status === undefined || status === 401 || status === 403 || status === 429;
 }
-//@ chunk-2g090z7k.js:9502-9599 placement
+//@ chunk-63094ahz.js:9502-9599 placement
 function isMaxContentLengthError(error) {
   return error instanceof Error && /maxContentLength size of .* exceeded/.test(error.message);
 }
-//@ chunk-2g090z7k.js:9599-10010 placement (2.1.88 match: classifyAxiosError, 1)
+//@ chunk-63094ahz.js:9599-10010 placement (2.1.88 match: classifyAxiosError, 1)
 /**
  * 把 axios 错误分类为 auth/timeout/network/http/other 并给出状态码。
  */
@@ -597,7 +594,7 @@ function classifyAxiosError(e_2) {
     message,
   };
 }
-//@ chunk-2g090z7k.js:10010-10086 placement
+//@ chunk-63094ahz.js:10010-10086 placement
 function isNonRetryableClientError(status) {
   return (
     status !== undefined &&
@@ -608,7 +605,7 @@ function isNonRetryableClientError(status) {
     status !== 429
   );
 }
-//@ chunk-sycgf9xs.js:3842-4108 fingerprint (2.1.88 match: shortErrorStack, 0.88)
+//@ chunk-hb44av3w.js:3875-4141 fingerprint (2.1.88 match: shortErrorStack, 0.88)
 function shortErrorStack(error, maxFrames) {
   try {
     let stack = typeof error.stack === "string" ? error.stack : "";
@@ -625,13 +622,13 @@ function shortErrorStack(error, maxFrames) {
   } catch {}
   return error;
 }
-//@ chunk-06y4szbn.js:173375-173506 fingerprint (2.1.88 match: getErrnoPath, 1)
+//@ chunk-51jy8ztq.js:179130-179261 fingerprint (2.1.88 match: getErrnoPath, 1)
 function getErrnoPath_2(error) {
   if (error === null || typeof error !== "object" || !("path" in error)) return;
   let path = error.path;
   return typeof path === "string" && ARTIFACT_DOC_PATH_RE.test(path) ? path : undefined;
 }
-//@ chunk-e6aww6q8.js:1386147-1386405 callgraph-witnessed (2.1.88 match: isENOENT, 0)
+//@ chunk-5xgkngpb.js:1385664-1385922 callgraph-witnessed (2.1.88 match: isENOENT, 0)
 async function isENOENT_2(filePath) {
   let parentDir = dirname(filePath);
   try {
@@ -658,87 +655,87 @@ async function isENOENT_2(filePath) {
       });
   }
 }
-//@ chunk-24t3dkzb.js:4838-4916 placement (2.1.88 match: isConnectionError, 1)
+//@ chunk-xd1cb3xs.js:4838-4916 placement (2.1.88 match: isConnectionError, 1)
 function getErrorCodeString(err) {
   return err && typeof err === "object" && "code" in err ? String(err.code) : undefined;
 }
-//@ chunk-hm0ce8vc.js:32169-32240 fingerprint (2.1.88 match: isFsInaccessible, 0.878)
+//@ chunk-asf5gh8x.js:33574-33645 fingerprint (2.1.88 match: isFsInaccessible, 0.878)
 var isFsInaccessible_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hm0ce8vc.js:32169", () => {
+deferInit("chunk-asf5gh8x.js:33574", () => {
   isFsInaccessible_2 = new Set(["ENOENT", "ELOOP", "ENOTDIR", "EISDIR", "EACCES", "EPERM"]);
 });
 export {
-  errorMessage,
-  withTelemetryMessage,
+  sanitizeErrnoForTelemetry,
+  sanitizeClassName,
+  sanitizeTopFrame,
   toError,
-  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-  isFsInaccessible,
-  isENOENT,
-  getErrnoPath_2,
+  errorMessage,
   isAbortError,
-  languageErrorNameOf,
   AbortError,
-  getErrnoCode,
-  TeleportOperationError,
   sanitizeErrorName,
-  sanitizedMachineReasonForTelemetry,
-  errnoShapedCode,
-  storageCauseErrnoCode,
-  isSadFsErrnoCode,
-  isEnvFsErrnoCode,
-  classifyAxiosError,
-  isSyscallError,
-  isFsInaccessibleCode,
-  StreamClosedAbortError,
-  ConfigParseError,
+  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+  withTelemetryMessage,
+  getErrnoCode,
+  findInCauseChain,
+  isENOENT,
+  sanitizedErrorNameForTelemetry,
+  sanitizedConnectionCodeForTelemetry,
+  sanitizedClassNameForTelemetry,
+  languageErrorNameOf,
+  isExpectedApiError,
+  isFsInaccessible,
   isPathAbsent,
+  isSyscallError,
   sanitizedErrnoLowerForTelemetry,
   isSadFsErrno,
   isEnvFsErrno,
   isWin32ReadEbadf,
-  sanitizedOAuthErrorTypeForTelemetry,
-  CliUserError,
-  sanitizeErrnoTokenForTelemetry,
-  sanitizeErrnoForTelemetry,
-  isExpectedApiError,
-  sanitizedConnectionCodeForTelemetry,
+  errnoShapedCode,
+  TeleportOperationError,
   WireSafeControlError,
-  isEISDIR,
-  isDiskFullErrno,
-  sanitizedErrorNameForTelemetry,
-  hasExactErrorMessage,
+  storageCauseErrnoCode,
+  isMaxContentLengthError,
   sanitizedFeatureErrorCodeForTelemetry,
   sanitizedErrorClassNameForTelemetry,
-  sanitizedConnectionCodeLowerForTelemetry,
+  isEISDIR,
+  StreamClosedAbortError,
   isNonRetryableClientError,
-  sanitizedErrCodeForTelemetry,
+  ShellError,
+  LANGUAGE_ERROR_NAMES,
+  isFsInaccessibleCode,
+  getErrnoPath,
+  sanitizedMachineReasonForTelemetry,
+  sanitizeErrnoTokenForTelemetry,
+  classifyAxiosError,
+  sanitizedOAuthErrorTypeForTelemetry,
+  getTelemetryMessage,
+  isSadFsErrnoCode,
+  isEnvFsErrnoCode,
   RESOURCE_EXHAUSTION_CODES,
-  sanitizedClassNameForTelemetry,
+  hasExactErrorMessage,
+  errorStackOrMessage,
+  getErrnoPath_2,
+  sanitizedErrCodeForTelemetry,
+  isE2BIG,
+  isDiskFullErrno,
+  ConfigParseError,
+  isSadResourceErrno,
+  isHttpServerConnReset,
+  ClaudeError,
+  MalformedCommandError,
   isENOENT_2,
   withTelemetryFacts,
-  getErrorCodeString,
-  MalformedCommandError,
-  errorStackOrMessage,
-  getErrnoPath,
-  isMaxContentLengthError,
-  ShellError,
-  getTelemetryMessage,
-  ClaudeError,
-  findInCauseChain,
   BUN_CONNECTION_CLOSED_MESSAGE_PREFIX,
-  sanitizedBgExitCauseForTelemetry,
-  withTelemetryChildExitStatus,
+  shortErrorStack,
+  CliUserError,
+  isFsInaccessible_2,
+  sanitizedConnectionCodeLowerForTelemetry,
   DAEMON_UNREACHABLE_TIMEOUT_PHRASE,
   extractErrnoTokens,
   DAEMON_EXITED_BEFORE_REACHABLE_PHRASE,
-  sanitizeClassName,
   getTelemetryChildExitStatus,
   PERMISSION_DENIED_CODES,
-  isSadResourceErrno,
-  isHttpServerConnReset,
-  isE2BIG,
-  isFsInaccessible_2,
-  shortErrorStack,
-  LANGUAGE_ERROR_NAMES,
-  sanitizeTopFrame,
+  getErrorCodeString,
+  withTelemetryChildExitStatus,
+  sanitizedBgExitCauseForTelemetry,
 };

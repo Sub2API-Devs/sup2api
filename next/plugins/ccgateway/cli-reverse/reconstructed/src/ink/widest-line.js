@@ -3,9 +3,9 @@
  *
  * 并入已有模块：记录滚轮输入事件与实时状态（滚动速度调试/演示标尺）；订阅滚轮实时状态的辅助函数组。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/widest-line.ts
- * pieces: chunk-bzr73sfg.js (13)
+ * pieces: chunk-2avr6cej.js (13)
  * attribution: placement 12, callgraph-fingerprint 1
  */
 import { HostScoped } from "../utils/hostScoped.js";
@@ -13,9 +13,9 @@ import { getRootSession } from "../bootstrap/state.js";
 import { lineWidth } from "./line-width-cache.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bzr73sfg.js:290208-290219 placement
+//@ chunk-2avr6cej.js:289789-289800 placement
 var MAX_SCROLL_TRACE_EVENTS = 256;
-//@ chunk-bzr73sfg.js:290219-291919 placement
+//@ chunk-2avr6cej.js:289800-291500 placement
 /**
  * 记录滚轮输入事件与实时状态（滚动速度调试/演示标尺）。
  */
@@ -132,51 +132,51 @@ class ScrollTrace {
     for (let listener of this.listeners) listener();
   }
 }
-//@ chunk-bzr73sfg.js:291919-291944 placement
+//@ chunk-2avr6cej.js:291500-291525 placement
 var scrollTraceByHost; // deferred: uses ScrollTrace of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-bzr73sfg.js:291919", () => {
+deferInit("chunk-2avr6cej.js:291500", () => {
   scrollTraceByHost = new HostScoped(() => new ScrollTrace());
 });
-//@ chunk-bzr73sfg.js:291944-291981 placement
+//@ chunk-2avr6cej.js:291525-291562 placement
 function getScrollTrace() {
   return scrollTraceByHost.of(getRootSession().host);
 }
-//@ chunk-bzr73sfg.js:291981-292025 placement
+//@ chunk-2avr6cej.js:291562-291606 placement
 function setScrollTraceLiveWatching(enabled, liveWatching) {
   getScrollTrace().setLiveWatching(enabled, liveWatching);
 }
-//@ chunk-bzr73sfg.js:292025-292070 placement
+//@ chunk-2avr6cej.js:291606-291651 placement
 /**
  * 订阅滚轮实时状态的辅助函数组。
  */
 function subscribeScrollTraceLive(listener) {
   return getScrollTrace().subscribeLive(listener);
 }
-//@ chunk-bzr73sfg.js:292070-292112 placement
+//@ chunk-2avr6cej.js:291651-291693 placement
 function getScrollTraceLiveState() {
   return getScrollTrace().getLiveState();
 }
-//@ chunk-bzr73sfg.js:292112-292156 placement
+//@ chunk-2avr6cej.js:291693-291737 placement
 function isScrollTraceLiveWatching() {
   return getScrollTrace().isLiveWatching();
 }
-//@ chunk-bzr73sfg.js:292156-292204 placement
+//@ chunk-2avr6cej.js:291737-291785 placement
 function isScrollTraceDemoRuler() {
   return getScrollTrace().isDemoRulerEnabled();
 }
-//@ chunk-bzr73sfg.js:292204-292252 placement
+//@ chunk-2avr6cej.js:291785-291833 placement
 function recordScrollInput(dir, rows, state, inputTs) {
   getScrollTrace().recordInput(dir, rows, state, inputTs);
 }
-//@ chunk-bzr73sfg.js:292252-292293 placement
+//@ chunk-2avr6cej.js:291833-291874 placement
 function recordScrollOut(delta, pending, mode) {
   getScrollTrace().recordOut(delta, pending, mode);
 }
-//@ chunk-bzr73sfg.js:292293-292332 placement
+//@ chunk-2avr6cej.js:291874-291913 placement
 function recordScrollPosition(viewportMetrics) {
   getScrollTrace().recordPosition(viewportMetrics);
 }
-//@ chunk-bzr73sfg.js:292332-292494 callgraph-fingerprint (2.1.88 match: widestLine, 1)
+//@ chunk-2avr6cej.js:291913-292075 callgraph-fingerprint (2.1.88 match: widestLine, 1)
 /**
  * 多行文本中最宽一行的显示宽度。
  */
@@ -199,11 +199,11 @@ function widestLine(string) {
 export {
   recordScrollPosition,
   recordScrollInput,
-  subscribeScrollTraceLive,
-  isScrollTraceLiveWatching,
-  isScrollTraceDemoRuler,
   widestLine,
   recordScrollOut,
   setScrollTraceLiveWatching,
+  subscribeScrollTraceLive,
   getScrollTraceLiveState,
+  isScrollTraceLiveWatching,
+  isScrollTraceDemoRuler,
 };

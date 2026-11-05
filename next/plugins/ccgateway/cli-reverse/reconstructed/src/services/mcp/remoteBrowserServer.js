@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：remote-browser MCP 服务器常量与开关
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1wpnxx5r.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hfc4cfnt.js (5)
  * attribution: placement 5
  */
 import {
@@ -20,13 +20,13 @@ import { BF7C680D_5FDC_5EF4_B4A0_ABADB619BF0A } from "./ccrMetaMcp.js";
 import { identity } from "../../utils/identity.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1wpnxx5r.js:2276-2323 placement
+//@ chunk-hfc4cfnt.js:2282-2328 placement
 /**
  * 上述列表加上 docs 服务器 id。
  */
 var RESERVED_BROWSER_SERVER_IDS; // deferred: uses MEMORY_SERVER_ID_2 (./firstPartyServerIds.js) of its import cycle while loading; runs once the cycle is complete
 var RESERVED_SERVER_IDS_WITH_DOCS;
-deferInit("chunk-1wpnxx5r.js:2276", () => {
+deferInit("chunk-hfc4cfnt.js:2282", () => {
   RESERVED_BROWSER_SERVER_IDS = [
     MEMORY_SERVER_ID_2,
     MEMORY_SERVER_ID,
@@ -37,7 +37,7 @@ deferInit("chunk-1wpnxx5r.js:2276", () => {
   ];
   RESERVED_SERVER_IDS_WITH_DOCS = [...RESERVED_BROWSER_SERVER_IDS, DOCS_SERVER_ID];
 });
-//@ chunk-1wpnxx5r.js:2323-2982 placement
+//@ chunk-hfc4cfnt.js:2328-2987 placement
 /**
  * 远程浏览器是否被允许的状态。
  */
@@ -48,7 +48,7 @@ var TENGU_RECURSIVE_PUDDLE;
 var remoteBrowserFlagReader;
 var remoteBrowserEnabledState;
 var remoteBrowserAllowedState;
-deferInit("chunk-1wpnxx5r.js:2323", () => {
+deferInit("chunk-hfc4cfnt.js:2328", () => {
   REMOTE_BROWSER_SERVER_NAME = "remote-browser";
   REMOTE_BROWSER_SERVER_ID = "972fb542-4a76-509d-9058-f6b954ee456c";
   REMOTE_BROWSER_TOOL_NAMES = [
@@ -95,33 +95,33 @@ deferInit("chunk-1wpnxx5r.js:2323", () => {
     },
   );
 });
-//@ chunk-1wpnxx5r.js:2982-3027 placement
+//@ chunk-hfc4cfnt.js:2987-3032 placement
 function setRemoteBrowserFlagReader(getFeatureValue_CACHED_MAY_BE_STALE) {
   let previous = remoteBrowserFlagReader;
   remoteBrowserFlagReader = getFeatureValue_CACHED_MAY_BE_STALE;
   remoteBrowserEnabledState.on = false;
   return previous;
 }
-//@ chunk-1wpnxx5r.js:3027-3087 placement
+//@ chunk-hfc4cfnt.js:3032-3092 placement
 function isRemoteBrowserEnabled() {
   let on = remoteBrowserFlagReader?.(TENGU_RECURSIVE_PUDDLE, false) === true;
   if (on) remoteBrowserEnabledState.on = true;
   return on;
 }
-//@ chunk-1wpnxx5r.js:3087-3119 placement
+//@ chunk-hfc4cfnt.js:3092-3124 placement
 function isRemoteBrowserAllowed() {
   return remoteBrowserAllowedState.allowed;
 }
 export {
   REMOTE_BROWSER_SERVER_NAME,
-  RESERVED_SERVER_IDS_WITH_DOCS,
   isRemoteBrowserEnabled,
-  remoteBrowserEnabledState,
-  remoteBrowserAllowedState,
+  RESERVED_SERVER_IDS_WITH_DOCS,
   RESERVED_BROWSER_SERVER_IDS,
   isRemoteBrowserAllowed,
   REMOTE_BROWSER_SERVER_ID,
-  setRemoteBrowserFlagReader,
+  remoteBrowserEnabledState,
+  remoteBrowserAllowedState,
   REMOTE_BROWSER_TOOL_NAMES,
   TENGU_RECURSIVE_PUDDLE,
+  setRemoteBrowserFlagReader,
 };

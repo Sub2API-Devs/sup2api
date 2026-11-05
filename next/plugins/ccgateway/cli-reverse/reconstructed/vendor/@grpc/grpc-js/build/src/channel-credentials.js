@@ -1,8 +1,8 @@
 /**
  * @grpc/grpc-js/build/src/channel-credentials.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @grpc/grpc-js@1.14.4
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
@@ -13,7 +13,7 @@ import { require_resolver } from "./resolver.js";
 import { require_logging } from "./logging.js";
 import { require_constants } from "./constants.js";
 
-//@ chunk-pwh5dx3n.js:12568-19811 cjs-fingerprint
+//@ chunk-3k21nfa0.js:12568-19811 cjs-fingerprint
 var require_channel_credentials = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设置文件解析（托管文档不可解析的处理、wslInheritsWindowsSettings）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (31)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (31)
  * attribution: placement 31
  */
 import { dirname, resolve, join, basename } from "path";
@@ -28,19 +28,20 @@ import { buildPolicyTolerantSettingsSchema, getSettingsSchemaForDocument } from 
 import { collectSettingsIssue, dropManagedOnlyKeys, handleFileSystemError } from "./managedFileSettings.js";
 import { formatZodError } from "./validation.js";
 import { explainedPolicyChange, documentHasPolicyContent, authoredPolicyContent } from "./policySettings.js";
-import { getClaudeConfigDirOrNull, getClaudeConfigDir } from "../envUtils.js";
+import { getClaudeConfigDirOrNull } from "../envUtils.js";
 import { identity } from "../pathClassification.js";
 import { nativeRealpathLong } from "../windowsUncPaths.js";
 import { logForDebugging } from "../debug.js";
 import { cleanForDisplay } from "../stringUtils.js";
 import { mergeClients } from "../hostScoped.js";
 import { WSL_MANAGED_SETTINGS_DIR } from "./mdm/wslRegistry.js";
+import { getClaudeConfigDir } from "../markdownConfigLoader.js";
 import { NoProjectDirectoryError } from "../../bootstrap/sessionSlices.js";
 import { commandSyncNameState } from "./commandSyncNames.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { env } from "../env.js";
 
-//@ chunk-dcmhvw5a.js:470784-471242 placement (2.1.88 match: parseSettingsFileUncached, 0.417)
+//@ chunk-z20c443b.js:469419-469877 placement
 function parseSettingsFileIfChanged(path, cache, pinned = false) {
   let text;
   try {
@@ -75,18 +76,18 @@ function parseSettingsFileIfChanged(path, cache, pinned = false) {
     textRead: text,
   };
 }
-//@ chunk-dcmhvw5a.js:471242-471331 placement
+//@ chunk-z20c443b.js:469877-469966 placement
 function settingsFileRedirectedError(file) {
   return makeFatalSettingsLoadResult(file, `Settings file leads to another host and was not read: ${file}`);
 }
-//@ chunk-dcmhvw5a.js:471331-471458 placement
+//@ chunk-z20c443b.js:469966-470093 placement
 function settingsFileUnverifiedError(file) {
   return makeFatalSettingsLoadResult(
     file,
     `Settings file could not be verified against the route its check resolved, and was not read: ${file}`,
   );
 }
-//@ chunk-dcmhvw5a.js:471458-471573 placement
+//@ chunk-z20c443b.js:470093-470208 placement
 function makeFatalSettingsLoadResult(file, message) {
   return {
     settings: null,
@@ -101,7 +102,7 @@ function makeFatalSettingsLoadResult(file, message) {
     loadState: "didNotLoad",
   };
 }
-//@ chunk-dcmhvw5a.js:471573-472322 placement
+//@ chunk-z20c443b.js:470208-470957 placement
 /**
  * 把设置文件文本解析成对象并用 zod 校验；托管文档走宽容 schema（无效值按限制性值处理，记录 documentHasPolicyContent），普通文档校验失败返回 settings:null 与格式化错误。
  */
@@ -165,7 +166,7 @@ function parseSettingsContent(text, file, policy) {
     errors: issues,
   };
 }
-//@ chunk-dcmhvw5a.js:472322-472732 placement
+//@ chunk-z20c443b.js:470957-471367 placement
 function unparseablePolicyDocumentError(file, { userWritable = false } = {}) {
   return userWritable
     ? {
@@ -184,7 +185,7 @@ function unparseablePolicyDocumentError(file, { userWritable = false } = {}) {
         startupFatal: true,
       };
 }
-//@ chunk-dcmhvw5a.js:472732-472835 placement
+//@ chunk-z20c443b.js:471367-471470 placement
 function isInClaudeConfigHome(path) {
   let claudeConfigDirOrNull = getClaudeConfigDirOrNull();
   if (claudeConfigDirOrNull === null) return false;
@@ -192,9 +193,9 @@ function isInClaudeConfigHome(path) {
   let configDir = resolve(claudeConfigDirOrNull);
   return parentDir === identity(configDir) || parentDir === getPhysicalPathCached(configDir);
 }
-//@ chunk-dcmhvw5a.js:472835-472842 placement
+//@ chunk-z20c443b.js:471470-471477 placement
 var settingsParseFailure;
-//@ chunk-dcmhvw5a.js:472842-472955 placement
+//@ chunk-z20c443b.js:471477-471590 placement
 function getPhysicalPathCached(path) {
   if (settingsParseFailure?.lexical !== path) {
     let parent = dirname(path);
@@ -205,13 +206,13 @@ function getPhysicalPathCached(path) {
   }
   return settingsParseFailure.physical;
 }
-//@ chunk-dcmhvw5a.js:472955-473055 placement (2.1.88 match: handleFileSystemError, 0.788)
+//@ chunk-z20c443b.js:471590-471690 placement (2.1.88 match: handleFileSystemError, 0.788)
 function logMissingSettingsFile(path) {
   logForDebugging(
     cleanForDisplay(`Broken symlink or missing file encountered for settings.json at path: ${path}`),
   );
 }
-//@ chunk-dcmhvw5a.js:473055-473121 placement
+//@ chunk-z20c443b.js:471690-471756 placement
 function missingSettingsFileResult() {
   return {
     settings: null,
@@ -219,7 +220,7 @@ function missingSettingsFileResult() {
     loadState: "absent",
   };
 }
-//@ chunk-dcmhvw5a.js:473121-473249 placement
+//@ chunk-z20c443b.js:471756-471884 placement
 function settingsReadErrorResult(error, path) {
   if (mergeClients(error)) throw error;
   handleFileSystemError(error, path);
@@ -230,7 +231,7 @@ function settingsReadErrorResult(error, path) {
     loadState: "didNotLoad",
   };
 }
-//@ chunk-dcmhvw5a.js:473249-473514 placement
+//@ chunk-z20c443b.js:471884-472149 placement
 function unreadableSettingsFileError(file, error, kind = "file") {
   return {
     file,
@@ -243,7 +244,7 @@ function unreadableSettingsFileError(file, error, kind = "file") {
     }),
   };
 }
-//@ chunk-dcmhvw5a.js:473514-474089 placement
+//@ chunk-z20c443b.js:472149-472724 placement
 function unreadableWslFlagWithoutPolicyError(file) {
   return {
     file,
@@ -253,11 +254,11 @@ function unreadableWslFlagWithoutPolicyError(file) {
     statusOnly: true,
   };
 }
-//@ chunk-dcmhvw5a.js:474089-474171 placement
+//@ chunk-z20c443b.js:472724-472806 placement
 function isWslInheritsFatal(issue) {
   return issue.path === "wslInheritsWindowsSettings" && issue.severity === "fatal";
 }
-//@ chunk-dcmhvw5a.js:474171-474380 placement
+//@ chunk-z20c443b.js:472806-473015 placement
 function mdmPolicyErrors(mdm, remote, file) {
   let errors =
     mdm.withheldFlagRecord && file().heldOnly === true ? [...mdm.errors, mdm.withheldFlagRecord] : mdm.errors;
@@ -272,7 +273,7 @@ function mdmPolicyErrors(mdm, remote, file) {
       : issue,
   );
 }
-//@ chunk-dcmhvw5a.js:474380-474729 placement
+//@ chunk-z20c443b.js:473015-473364 placement
 function getSettingsRootPathForSource(source, context) {
   switch (source) {
     case "userSettings":
@@ -289,19 +290,19 @@ function getSettingsRootPathForSource(source, context) {
       return context.flagPath ? dirname(resolve(context.flagPath)) : resolve(requireCwd(context));
   }
 }
-//@ chunk-dcmhvw5a.js:474729-474787 placement
+//@ chunk-z20c443b.js:473364-473422 placement
 function requireCwd(context) {
   if (context.cwd === null) throw new NoProjectDirectoryError();
   return context.cwd;
 }
-//@ chunk-dcmhvw5a.js:474787-474909 placement
+//@ chunk-z20c443b.js:473422-473544 placement
 function resolveLocalSettingsStoreRoot(cwd, canonicalRoot) {
   let result = localSettingsStoreRootBeforeOwnership(cwd, canonicalRoot);
   if (result.decided !== undefined) return result.decided;
   if (!canonicalRootIsOwnedByProcessUser(result.root)) return result.cwdResolved;
   return result.root;
 }
-//@ chunk-dcmhvw5a.js:474909-475128 placement
+//@ chunk-z20c443b.js:473544-473763 placement
 function localSettingsStoreRootBeforeOwnership(cwd, canonicalRoot) {
   let root = canonicalRoot?.(cwd);
   if (!root)
@@ -332,11 +333,11 @@ function localSettingsStoreRootBeforeOwnership(cwd, canonicalRoot) {
     cwdResolved: resolvedCwd,
   };
 }
-//@ chunk-dcmhvw5a.js:475128-475202 placement
+//@ chunk-z20c443b.js:473763-473837 placement
 function canonicalRootOwnerUids(canonicalRoot) {
   return commandSyncNameState().localStoreProbes.canonicalRootOwnerUids(canonicalRoot, canonicalRootOwners);
 }
-//@ chunk-dcmhvw5a.js:475202-475369 placement
+//@ chunk-z20c443b.js:473837-474004 placement
 function canonicalRootOwners(root) {
   let fsImplementation = getFsImplementation();
   let claudeEntryUid = null;
@@ -351,7 +352,7 @@ function canonicalRootOwners(root) {
     claudeEntryUid,
   };
 }
-//@ chunk-dcmhvw5a.js:475369-475454 placement
+//@ chunk-z20c443b.js:474004-474089 placement
 function gitDirOwnerUid(root) {
   let fsImplementation = getFsImplementation();
   try {
@@ -360,7 +361,7 @@ function gitDirOwnerUid(root) {
     throw error;
   }
 }
-//@ chunk-dcmhvw5a.js:475454-476578 placement
+//@ chunk-z20c443b.js:474089-475213 placement
 function canonicalRootIsOwnedByProcessUser(canonicalRoot) {
   if (typeof process.getuid !== "function" && typeof process.geteuid !== "function") {
     logForDebugging(
@@ -397,38 +398,38 @@ function canonicalRootIsOwnedByProcessUser(canonicalRoot) {
     return false;
   }
 }
-//@ chunk-dcmhvw5a.js:476578-476648 placement
+//@ chunk-z20c443b.js:475213-475283 placement
 function normalizedRealHomeDir() {
   return commandSyncNameState().localStoreProbes.normalizedRealHomeDir(normalizedRealHome);
 }
-//@ chunk-dcmhvw5a.js:476648-476753 placement
+//@ chunk-z20c443b.js:475283-475388 placement
 function normalizedRealHome() {
   let realHome = nativeRealpathLong(homedir());
   if (realHome === null) throw Error("home directory realpath unavailable");
   return identity(realHome);
 }
-//@ chunk-dcmhvw5a.js:476753-476841 placement (2.1.88 match: isApiKeyHelperFromProjectOrLocalSettings, 0.831)
+//@ chunk-z20c443b.js:475388-475476 placement (2.1.88 match: isApiKeyHelperFromProjectOrLocalSettings, 0.83)
 function getRuleAnchorRootForSource(source, settingsContext) {
   return source === "localSettings" || source === "projectSettings"
     ? resolve(requireCwd(settingsContext))
     : getSettingsRootPathForSource(source, settingsContext);
 }
-//@ chunk-dcmhvw5a.js:476841-476892 placement (2.1.88 match: isInGlobalClaudeFolder, 1)
+//@ chunk-z20c443b.js:475476-475527 placement (2.1.88 match: isInGlobalClaudeFolder, 1)
 function userSettingsHomes() {
-  return uniq([getClaudeConfigDir(), join(homedir(), ".claude")]);
+  return normalizeCaseForComparison_2([getClaudeConfigDir(), join(homedir(), ".claude")]);
 }
-//@ chunk-dcmhvw5a.js:476892-476955 placement (2.1.88 match: getUserSettingsFilePath, 0.786)
+//@ chunk-z20c443b.js:475527-475590 placement (2.1.88 match: getUserSettingsFilePath, 0.786)
 var USER_SETTINGS_FILE_NAMES = {
   default: "settings.json",
   cowork: "cowork_settings.json",
 };
-//@ chunk-dcmhvw5a.js:476955-477058 placement
+//@ chunk-z20c443b.js:475590-475693 placement
 function getUserSettingsFileName(settingsContext) {
   if (settingsContext.coworkPlugins || env.CLAUDE_CODE_USE_COWORK_PLUGINS)
     return USER_SETTINGS_FILE_NAMES.cowork;
   return USER_SETTINGS_FILE_NAMES.default;
 }
-//@ chunk-dcmhvw5a.js:477058-477334 placement (2.1.88 match: getSettingsFilePathForSource, 0.792)
+//@ chunk-z20c443b.js:475693-475969 placement (2.1.88 match: getSettingsFilePathForSource, 0.792)
 /**
  * 来源 → 设置文件路径：user=<配置目录>/settings.json（cowork 模式 cowork_settings.json）；project=<项目>/.claude/settings.json；local=<项目>/.claude/settings.local.json；policy=<托管目录>/managed-settings.json；flag=--settings 指定的路径。diskless 或无项目时 project/local 返回 undefined。
  */
@@ -458,10 +459,16 @@ function getSettingsFilePathForSource_3(source, settingsContext) {
   }
 }
 export {
-  resolveLocalSettingsStoreRoot,
-  USER_SETTINGS_FILE_NAMES,
   isInClaudeConfigHome,
+  USER_SETTINGS_FILE_NAMES,
+  resolveLocalSettingsStoreRoot,
+  normalizedRealHomeDir,
+  unparseablePolicyDocumentError,
+  unreadableWslFlagWithoutPolicyError,
   parseSettingsContent,
+  unreadableSettingsFileError,
+  missingSettingsFileResult,
+  logMissingSettingsFile,
   settingsReadErrorResult,
   getSettingsFilePathForSource_3,
   getSettingsRootPathForSource,
@@ -470,12 +477,6 @@ export {
   parseSettingsFileIfChanged,
   userSettingsHomes,
   mdmPolicyErrors,
-  logMissingSettingsFile,
-  missingSettingsFileResult,
-  unreadableSettingsFileError,
-  unparseablePolicyDocumentError,
-  unreadableWslFlagWithoutPolicyError,
-  normalizedRealHomeDir,
   canonicalRootIsOwnedByProcessUser,
   canonicalRootOwnerUids,
   requireCwd,

@@ -3,30 +3,13 @@
  *
  * 2.1.316 新增：无头模式下被中断子代理的恢复、停放的代理询问与重启提醒
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-m5det47h.js (1), chunk-tyg7f3ek.js (37)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (37), chunk-k5kg7g4a.js (1)
  * attribution: placement 38
  */
 import { randomUUID } from "crypto";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import {
-  isThreadAgentEnabled,
-  spawnOrJoinThreadAgent,
-} from "../../services/artifacts/comments/backgroundAgent.js";
-import { isArtifactsAvailable } from "../../services/artifacts/artifactAvailability.js";
-import { artifactViewerUrlFor } from "../../tools/ArtifactTool/artifactUrls.js";
-import { getLastCacheSafeParams } from "../../utils/forkedAgent.js";
-import { getLocalSourcePath } from "../../services/artifacts/comments/autoreact.js";
-import {
-  buildThreadAgentPrompt,
-  buildThreadFollowUpPrompt,
-} from "../../services/artifacts/comments/threadPrompts.js";
-import { emitArtifactSummonStatus } from "../../services/artifacts/artifactNotices.js";
-import { logError } from "../../utils/log.js";
-import { getPromptText, parseCommentNotification } from "../../services/artifacts/comments/autoreactState.js";
-import { parseArtifactUrl } from "../../tools/ArtifactTool/constants.js";
-import { ARTIFACT_LINE_PREFIX } from "../../services/artifacts/comments/commentNotifications.js";
 import { isAgentOrTaskTool } from "../../utils/transcript/deserialize.js";
 import { dedupeTasksById } from "../remoteIO/gates.js";
 import { SENDMESSAGE } from "../../tools/SendMessageTool/constants.js";
@@ -36,18 +19,11 @@ import { rememberResumableAgents } from "../../tools/AgentTool/agentLaunch.js";
 import { wrapInSystemReminder, createSystemMessage } from "../../utils/messages.js";
 import { escapeXml_2 as escapeXml } from "../../utils/confusables.js";
 import { sanitizeMetadataText, validateAgentMetadata } from "../../utils/agentMetadata.js";
-import { requestIdOf } from "../../utils/sessionState.js";
-import { CONFIRM } from "../../utils/permissions/confirmWithUser.js";
-import { isSubagentToolRequest } from "../../remote/wireFrameShape.js";
-import { PermissionCardAsk } from "./wakeRouter.js";
-import { PERMISSION_ANSWER_WAIT_MS, MAX_PARKED_ANSWER_AGE_MS } from "./parkedPrompts.js";
-import { withDeadline } from "../../utils/sleep.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import { AGENT, MAX_AGENT_FORK_DEPTH } from "../../tools/AgentTool/constants.js";
 import {
   getDenyRuleForTool,
-  getAskRuleForTool,
+  findAskRuleForTool,
   findDenyRuleWithContent,
   findAskRuleWithContent,
   matchToolRule,
@@ -63,10 +39,11 @@ import {
   AgentResumeInProgressError,
 } from "../../tools/AgentTool/resumeAgent.js";
 import { isTurnHandoffResumeEnabled } from "../remoteIO/turnHandoff.js";
-import { normalizeAgentIdOrNull } from "../../utils/agentId.js";
+import { normalizeAgentIdOrNull, identityAgentId2 } from "../../utils/agentId.js";
 import {
   readAgentMetadata,
   updateAgentMetadata,
+  landStoppedByUser,
   getCurrentSessionBridge,
   getMaterializedSessionFile,
   clearBridgeSession,
@@ -76,7 +53,10 @@ import {
 import { isRestorableDefaultLaunchedAgent } from "../remoteIO/orphanAgentRestore.js";
 import { WEB_FETCH_AGENT } from "../../tools/WebFetchTool/harnessNotes.js";
 import { maxConcurrentSubagents } from "../../plugins/functionHooks/toolCallHooks.js";
+import { logError } from "../../utils/log.js";
 import { createAbortController } from "../../utils/abortController.js";
+import { logForDebugging } from "../../utils/debug.js";
+import { errorMessage, AbortError, isAbortError } from "../../utils/errors.js";
 import { runSafely } from "./followUpPreempt.js";
 import { formatTaskNotification } from "../../utils/xmlTags.js";
 import {
@@ -93,8 +73,29 @@ import {
   formatOrphanedAgentNotification,
   withResumeCapabilities,
 } from "../../tasks/resumeOrphanedTasks.js";
-import { logForDebugging } from "../../utils/debug.js";
-import { errorMessage, AbortError, isAbortError } from "../../utils/errors.js";
+import {
+  isThreadAgentEnabled,
+  spawnOrJoinThreadAgent,
+} from "../../services/artifacts/comments/backgroundAgent.js";
+import { isArtifactsAvailable } from "../../services/artifacts/artifactAvailability.js";
+import { artifactViewerUrlFor } from "../../tools/ArtifactTool/artifactUrls.js";
+import { getLastCacheSafeParams } from "../../utils/forkedAgent.js";
+import { getLocalSourcePath } from "../../services/artifacts/comments/autoreact.js";
+import {
+  buildThreadAgentPrompt,
+  buildThreadFollowUpPrompt,
+} from "../../services/artifacts/comments/threadPrompts.js";
+import { emitArtifactSummonStatus } from "../../services/artifacts/artifactNotices.js";
+import { getPromptText, parseCommentNotification } from "../../services/artifacts/comments/autoreactState.js";
+import { parseArtifactUrl } from "../../tools/ArtifactTool/constants.js";
+import { ARTIFACT_LINE_PREFIX } from "../../services/artifacts/comments/commentNotifications.js";
+import { requestIdOf } from "../../utils/sessionState.js";
+import { CONFIRM } from "../../utils/permissions/confirmWithUser.js";
+import { isSubagentToolRequest } from "../../remote/wireFrameShape.js";
+import { PermissionCardAsk } from "./wakeRouter.js";
+import { PERMISSION_ANSWER_WAIT_MS, MAX_PARKED_ANSWER_AGE_MS } from "./parkedPrompts.js";
+import { withDeadline } from "../../utils/sleep.js";
+import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { MAX_LOOP_AGE_SECONDS } from "../../utils/loop/loopWakeups.js";
 import { isTeleportedSession } from "../../bridge/createSession.js";
 import { getOauthAccountInfo, sameOwnerAccount } from "../../utils/auth.js";
@@ -107,136 +108,25 @@ import {
   markNotConnectedByPriorWorker,
 } from "../../utils/claudeInChrome/phoneAnswer.js";
 import { processStartTuningFields, garbageCollectionFields } from "../../utils/queryProfiler.js";
+import { credentialExpiresAtField } from "../../utils/auth/credentialExpiry.js";
 import { isClaudecodeSession, hostScheduledRun } from "../../utils/sessionShape.js";
 import { memoryFileLimits } from "../../utils/claudemd.js";
 import { isTransportBacked } from "../transportState.js";
 import { informationalSystemMessage } from "./sdkMessageStream.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-m5det47h.js:226-278 placement
+//@ chunk-k5kg7g4a.js:226-278 placement
 function isIterativeHavenGateOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_iterative_haven", false);
 }
-//@ chunk-tyg7f3ek.js:396442-396583 placement
-/**
- * 从用户消息中解析 artifact 线程回复头（带 viewer URL），仅在已声明且开关开启时返回。
- */
-function readArtifactThreadHeader(message) {
-  if (
-    message.declared !== true ||
-    !isPlainPersonMessage(message) ||
-    !isThreadAgentEnabled() ||
-    !isArtifactsAvailable()
-  )
-    return null;
-  let artifactThreadMessage = parseArtifactThreadMessage(message.value);
-  return artifactThreadMessage === null
-    ? null
-    : {
-        ...artifactThreadMessage.header,
-        url: artifactViewerUrlFor(artifactThreadMessage.artifact),
-      };
-}
-//@ chunk-tyg7f3ek.js:396583-396699 placement
-function classifyArtifactThreadMessage(message) {
-  if (!isPlainPersonMessage(message) || parseArtifactThreadMessage(message.value) === null) return;
-  if (message.declared !== true) return "unmarked";
-  return isArtifactsAvailable() ? "seeded" : undefined;
-}
-//@ chunk-tyg7f3ek.js:396699-397362 placement
-/**
- * 处理来自 artifact 评论线程的后续消息：查找持有该线程的子代理并恢复执行。
- */
-async function resumeArtifactThreadAgent(target, options) {
-  if (options.exiting) return false;
-  let { slug, threadId, url } = target;
-  let summon = {
-    slug,
-    threadId,
-    gestureAt: target.gestureAt,
-    suppressed: false,
-    storageV5: options.storageV5,
-  };
-  let toolUseContext = getLastCacheSafeParams()?.toolUseContext;
-  let sourcePath =
-    toolUseContext === undefined
-      ? undefined
-      : getLocalSourcePath(slug, toolUseContext.artifactRegistries.recordedPages);
-  if (
-    (
-      await spawnOrJoinThreadAgent({
-        slug,
-        threadId,
-        url,
-        artifactName: `artifact ${slug.slice(0, 8)}`,
-        directive: buildThreadAgentPrompt({
-          trigger: "fresh",
-          summonCount: 1,
-          url,
-          threadId,
-          sourcePath,
-          resolved: "unknown",
-        }),
-        followUp: buildThreadFollowUpPrompt({
-          url,
-          threadId,
-        }),
-        canUseTool: options.canUseTool,
-        summon,
-        onSettled: (lifecycleEvent) => options.onLifecycle(lifecycleEvent),
-        route: "seeded",
-      })
-    ).outcome === "fallback"
-  )
-    return false;
-  try {
-    options.onLifecycle("queued");
-    options.onLifecycle("started");
-    emitArtifactSummonStatus(summon, {
-      status: "working",
-    });
-  } catch (error) {
-    logError(error);
-  }
-  return true;
-}
-//@ chunk-tyg7f3ek.js:397362-397486 placement
-function isPlainPersonMessage(message) {
-  return (
-    message.isSynthetic !== true &&
-    !message.peerDelivered &&
-    message.inboundOrigin === undefined &&
-    message.shouldQuery !== false &&
-    !message.hasAttachments
-  );
-}
-//@ chunk-tyg7f3ek.js:397486-397675 placement
-function parseArtifactThreadMessage(message) {
-  let promptText = getPromptText(message);
-  let commentHeader = promptText === null ? null : parseCommentNotification(promptText);
-  if (promptText === null || commentHeader === null) return null;
-  let secondLine =
-    promptText.split(
-      `
-`,
-      2,
-    )[1] ?? "";
-  let artifactUrl = parseArtifactUrl(secondLine.slice(ARTIFACT_LINE_PREFIX.length).trim());
-  return artifactUrl === null
-    ? null
-    : {
-        header: commentHeader,
-        artifact: artifactUrl,
-      };
-}
-//@ chunk-tyg7f3ek.js:397675-397753 placement
+//@ chunk-0yw3taqg.js:36636-36714 placement
 function collectResumableAgentIds(supersededToolNames) {
   let agentIds = new Set();
   for (let [toolName, descriptor] of supersededToolNames ?? [])
     if (isAgentOrTaskTool(descriptor)) agentIds.add(toolName);
   return agentIds;
 }
-//@ chunk-tyg7f3ek.js:397753-397961 placement
+//@ chunk-0yw3taqg.js:36714-36922 placement
 function recordedAgentCallsFor(tasks, agentCallIds) {
   let filtered = dedupeTasksById(Array.isArray(tasks) ? tasks : []).filter(
     (task) => typeof task.tool_use_id === "string" && agentCallIds.has(task.tool_use_id),
@@ -244,7 +134,7 @@ function recordedAgentCallsFor(tasks, agentCallIds) {
   let byToolUseId = Map.groupBy(filtered, (task) => task.tool_use_id);
   return filtered.filter((task) => byToolUseId.get(task.tool_use_id)?.length === 1);
 }
-//@ chunk-tyg7f3ek.js:397961-398370 placement
+//@ chunk-0yw3taqg.js:36922-37331 placement
 /**
  * 容器重启后，从转录中找出上一轮未回答的 Agent 调用，规划自动恢复。
  */
@@ -269,13 +159,13 @@ async function planRecordedAgentResumes({ recorded, agentCallIds, known, hasTool
   rememberResumableAgents(filtered_2.map((call) => call.task_id));
   return filtered_2;
 }
-//@ chunk-tyg7f3ek.js:398370-398791 placement
+//@ chunk-0yw3taqg.js:37331-37752 placement
 function containerRestartAgentsNote(unnamed) {
   return wrapInSystemReminder(
     `The container was restarted in the middle of a turn. Every Agent call that turn left unanswered is being resumed automatically from its saved transcript, as these agents: ${unnamed.join(", ")}. Wait for their notifications, which name each agent's task and give its result, before you do that work again. If one does not report back, send a message to its agent id with the ${SENDMESSAGE} tool to resume it.`,
   );
 }
-//@ chunk-tyg7f3ek.js:398791-399897 placement
+//@ chunk-0yw3taqg.js:37752-38858 placement
 /**
  * 生成"容器在一轮中途重启，以下 Agent 调用正自动从保存的转录恢复"的系统提醒。
  */
@@ -294,149 +184,13 @@ ${mapped.join(`
 `)}
 If you still need an agent's result, resume it rather than launch it again: send a message to its agent id with the ${SENDMESSAGE} tool. It continues from its saved transcript, which still holds its task, so it is enough to ask it to continue from where it stopped. You get its result when it is done. If the resume fails, launch the agent again.`);
 }
-//@ chunk-tyg7f3ek.js:399897-399990 placement
-var UNDERIVABLE_AGENT_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tyg7f3ek.js:399897", () => {
-  UNDERIVABLE_AGENT_REASONS = new Set([
-    "underivable_no_superseded",
-    "underivable_leaf_only",
-    "underivable_excluded",
-  ]);
-});
-//@ chunk-tyg7f3ek.js:399990-400673 placement
-function findParkedAgentAsk(restored, bootPark, agentCallIds) {
-  let pendingAction = restored?.external?.pending_action;
-  let requestId = requestIdOf(pendingAction);
-  let { pendingActionClass } = bootPark;
-  if (
-    !isIterativeHavenGateOn() ||
-    !pendingAction ||
-    requestId === undefined ||
-    pendingAction.request_id !== requestId ||
-    typeof pendingAction.tool_use_id !== "string" ||
-    pendingAction.tool_use_id.startsWith(CONFIRM) ||
-    typeof pendingAction.agent_id !== "string" ||
-    typeof pendingAction.tool_name !== "string" ||
-    !isSubagentToolRequest({
-      agent_id: pendingAction.agent_id,
-      tool_name: pendingAction.tool_name,
-    }) ||
-    typeof pendingAction.input !== "object" ||
-    pendingAction.input === null ||
-    Array.isArray(pendingAction.input)
-  )
-    return;
-  let runningBackgroundTasks = restored?.internal?.running_background_tasks;
-  let task = [
-    ...(pendingActionClass === "underivable_adoptable"
-      ? recordedAgentCallsFor(restored?.internal?.running_foreground_agents, agentCallIds)
-      : []),
-    ...(UNDERIVABLE_AGENT_REASONS.has(pendingActionClass) && Array.isArray(runningBackgroundTasks)
-      ? dedupeTasksById(runningBackgroundTasks)
-      : []),
-  ].find((task) => task.task_id === pendingAction.agent_id);
-  if (task === undefined || !getTaskOutputData(task)) return;
-  return {
-    card: {
-      request_id: requestId,
-      tool_use_id: pendingAction.tool_use_id,
-      details: pendingAction,
-    },
-    agent: task,
-  };
-}
-//@ chunk-tyg7f3ek.js:400673-401810 placement
-class ParkedAgentAskHold {
-  ask;
-  card;
-  agentId;
-  io;
-  ended = false;
-  constructor(card, agentId, answerKind, io, answerOff) {
-    this.card = card;
-    this.agentId = agentId;
-    this.io = io;
-    this.ask = new PermissionCardAsk({
-      card,
-      answerKind,
-      waitMs: PERMISSION_ANSWER_WAIT_MS,
-      maxAnswerAgeMs: MAX_PARKED_ANSWER_AGE_MS,
-      allowWithoutInputIsEcho: true,
-      withdrawCard: (requestId) =>
-        io.write({
-          type: "control_cancel_request",
-          request_id: requestId,
-        }),
-      unreadAnswersRead: () => {
-        let answersRead = io.whenReceivedAnswersRead();
-        return answersRead && withDeadline(answersRead, PERMISSION_ANSWER_WAIT_MS);
-      },
-      answerOff: async () => (await answerOff?.()) ?? "absent",
-    });
-    this.ask.startTimer();
-    io.holdKeptAsk(this);
-  }
-  async answerFor(ask) {
-    try {
-      if (!ask.usable()) this.end("ask_needs_own_card");
-      if (ask.toolName !== this.card.details?.tool_name) this.end("tool_differs");
-      if (this.ended) return;
-      let { answer, unused } = await this.ask.answerFor(ask);
-      if (answer === undefined || unused !== undefined) this.end(unused ?? "no_answer");
-      if (!ask.usable()) this.end("ask_needs_own_card");
-      if (this.ended || answer === undefined) return;
-      this.ended = true;
-      this.io.holdKeptAsk(undefined);
-      logFeatureOk("ccr_subagent_ask_hold", {
-        answer_behavior: fromEnum(answer.behavior),
-      });
-      return answer;
-    } catch (error) {
-      logError(error);
-      this.end("answer_threw");
-      return;
-    }
-  }
-  end(reason) {
-    if (this.ended) return;
-    this.ended = true;
-    this.io.holdKeptAsk(undefined);
-    this.ask.stop(reason === "stopped" || reason === "shutdown" ? reason : "not_asked");
-    if (reason === "answer_threw") logFeatureBad("ccr_subagent_ask_hold", reason);
-    else logFeatureSad("ccr_subagent_ask_hold", reason);
-  }
-}
-//@ chunk-tyg7f3ek.js:401810-402136 placement
-function holdParkedAgentAsk({ restored, bootPark, cutOffCallIds, planned, answerKind, io, answerOff }) {
-  try {
-    let parkedAgentAsk = findParkedAgentAsk(restored, bootPark, cutOffCallIds);
-    if (
-      parkedAgentAsk === undefined ||
-      bootPark.parkedPermission !== undefined ||
-      answerKind === "strict" ||
-      !planned.some((plan) => plan.agentId === parkedAgentAsk.agent.task_id)
-    )
-      return;
-    return new ParkedAgentAskHold(
-      parkedAgentAsk.card,
-      parkedAgentAsk.agent.task_id,
-      answerKind,
-      io,
-      answerOff,
-    );
-  } catch (error) {
-    logFeatureBad("ccr_subagent_ask_hold", "boot_threw");
-    logError(error);
-    return;
-  }
-}
-//@ chunk-tyg7f3ek.js:402173-402417 placement
+//@ chunk-0yw3taqg.js:41589-41833 placement
 function isAgentToolAllowedByRules(tools, context, agentType, model) {
-  let found = tools.find((rule) => toolMatchesName(rule, AGENT));
+  let found = tools.find((rule) => matchesToolName(rule, AGENT));
   return (
     found !== undefined &&
     getDenyRuleForTool(context, found) === null &&
-    getAskRuleForTool(context, found) === null &&
+    findAskRuleForTool(context, found) === null &&
     findDenyRuleWithContent(context, AGENT, agentType) === null &&
     findAskRuleWithContent(context, AGENT, agentType) === null &&
     (model === undefined ||
@@ -455,27 +209,18 @@ function isAgentToolAllowedByRules(tools, context, agentType, model) {
       ))
   );
 }
-//@ chunk-tyg7f3ek.js:402417-402459 placement
+//@ chunk-0yw3taqg.js:41833-41875 placement
 function canResumeAgentsInBackground(tools, toolPermissionContext, agentType) {
   return !isForegroundAgentMoveOff() && isAgentToolAllowedByRules(tools, toolPermissionContext, agentType);
 }
-//@ chunk-tyg7f3ek.js:402459-402539 placement
-function parkedAskHandle(hold) {
-  return (
-    hold && {
-      id: hold.card.tool_use_id,
-      settled: () => hold.end("not_asked"),
-    }
-  );
-}
-//@ chunk-tyg7f3ek.js:402539-402722 placement
+//@ chunk-0yw3taqg.js:41875-42058 placement
 function assertAgentResumeAllowed(context, agentType) {
   if (!canResumeAgentsInBackground(context.options.tools, getToolPermissionContext(context), agentType))
     throw new ResumeAgentStateError(
       "This session's permission rules now block this agent's type or require approval for it, or background agents are off.",
     );
 }
-//@ chunk-tyg7f3ek.js:402722-404055 placement
+//@ chunk-0yw3taqg.js:42058-43458 placement
 /**
  * 恢复被容器重启切断的后台 Agent 调用；检查权限规则、卡片等待与预算，逐个后台恢复。
  */
@@ -487,6 +232,7 @@ async function resumeCutOffAgents({
   alsoResumable,
   cardWaits,
   owesATurn,
+  onlyAgent,
   startsSpent,
   tools,
   toolPermissionContext,
@@ -505,7 +251,7 @@ async function resumeCutOffAgents({
           agent,
           toolUseID: undefined,
         })),
-    ];
+    ].filter(({ agent }) => onlyAgent === undefined || agent.task_id === onlyAgent);
     let sliced = (
       await Promise.all(
         candidates.map(async ({ agent, toolUseID }) => {
@@ -570,7 +316,7 @@ async function resumeCutOffAgents({
     return [];
   }
 }
-//@ chunk-tyg7f3ek.js:404055-408941 placement
+//@ chunk-0yw3taqg.js:43458-49058 placement
 /**
  * 一次已记录 Agent 恢复的运行状态：在后台/前台恢复各调用、跟踪运行集合并在结束时汇报。
  */
@@ -582,14 +328,40 @@ class RecordedAgentResumeRun {
   noteUuid;
   setUpAbort = createAbortController();
   planned;
+  offered;
   host;
   keptAsk;
-  constructor(plan, host, abort, keptSubagentAsk) {
+  constructor(plan, host, abort, keptSubagentAsk, offered = []) {
     this.planned = plan;
+    this.offered = offered;
     this.inBackground = plan.filter((entry) => entry.call === undefined);
     this.host = host;
     this.keptAsk = keptSubagentAsk;
-    if (keptSubagentAsk !== undefined) abort.then(() => keptSubagentAsk.end("shutdown"));
+    if (keptSubagentAsk !== undefined) {
+      abort.then(() => keptSubagentAsk.end("shutdown"));
+      keptSubagentAsk.answerUsed.promise
+        .then(async () => {
+          let agentId = identityAgentId2(keptSubagentAsk.agentId);
+          if (
+            (await readAgentMetadata(agentId, host.storageV5))?.restartResumesSetBackBy !==
+            keptSubagentAsk.card.request_id
+          )
+            await updateAgentMetadata(
+              agentId,
+              {
+                restartResumes: 0,
+                restartResumesSetBackBy: keptSubagentAsk.card.request_id,
+              },
+              host.storageV5,
+            );
+        })
+        .catch((error) => {
+          logForDebugging(`[recordedAgentResume] the resume count was not set back: ${errorMessage(error)}`, {
+            level: "warn",
+          });
+          logFeatureSad("ccr_recorded_agent_resume", "count_not_set_back");
+        });
+    }
     for (let entry of plan)
       if (entry.call !== undefined)
         host.cutOffAgentCalls.adopt(entry.call.toolUseID, entry.agentId, (context) =>
@@ -767,6 +539,7 @@ ${containerRestartAgentsNote(this.unnamed)}`,
   }
   async noteTurnEnd(deferred) {
     this.inStartingTurn = false;
+    if (!deferred) this.offered = [];
     try {
       if (this.noteUuid !== undefined && !this.withdrawNote()) this.unnamed = [];
       if (
@@ -827,8 +600,23 @@ ${containerRestartAgentsNote(this.unnamed)}`,
       if (agentIds.size > 0) this.host.stopAgents(agentIds);
     });
   }
+  notePersonsStop() {
+    runSafely(() => {
+      let filtered = this.offered.filter((offeredEntry) => !this.host.tracksAgent(offeredEntry.task_id));
+      this.offered = [];
+      for (let { task_id: taskId, agent_type: agentType } of filtered) {
+        let agentId = normalizeAgentIdOrNull(taskId);
+        if (agentId !== null && agentType !== undefined)
+          landStoppedByUser(agentId, agentType, this.host.storageV5);
+      }
+      if (filtered.length > 0)
+        logFeatureSad("ccr_cut_off_agents", "stopped_by_person", {
+          agents_offered: filtered.length,
+        });
+    });
+  }
 }
-//@ chunk-tyg7f3ek.js:408941-409147 placement
+//@ chunk-0yw3taqg.js:49058-49264 placement
 function reportAgentResumeOutcome(error, aborted) {
   let outcome =
     aborted || isAbortError(error)
@@ -844,27 +632,291 @@ function reportAgentResumeOutcome(error, aborted) {
   } else logFeatureSad("ccr_recorded_agent_resume", outcome);
   return outcome;
 }
-//@ chunk-tyg7f3ek.js:409147-409164 placement
+//@ chunk-0yw3taqg.js:49264-49344 placement
+function parkedAskHandle(hold) {
+  return (
+    hold && {
+      id: hold.card.tool_use_id,
+      settled: () => hold.end("not_asked"),
+    }
+  );
+}
+//@ chunk-0yw3taqg.js:110217-110255 placement
+var chromeSetupModule; // deferred: loads other modules while loading; runs once its import cycle is complete
+deferInit("chunk-0yw3taqg.js:110217", () => {
+  chromeSetupModule = require("../../services/teleport/relayState.js");
+});
+//@ chunk-0yw3taqg.js:430189-430330 placement
+/**
+ * 从用户消息中解析 artifact 线程回复头（带 viewer URL），仅在已声明且开关开启时返回。
+ */
+function readArtifactThreadHeader(message) {
+  if (
+    message.declared !== true ||
+    !isPlainPersonMessage(message) ||
+    !isThreadAgentEnabled() ||
+    !isArtifactsAvailable()
+  )
+    return null;
+  let artifactThreadMessage = parseArtifactThreadMessage(message.value);
+  return artifactThreadMessage === null
+    ? null
+    : {
+        ...artifactThreadMessage.header,
+        url: artifactViewerUrlFor(artifactThreadMessage.artifact),
+      };
+}
+//@ chunk-0yw3taqg.js:430330-430446 placement
+function classifyArtifactThreadMessage(message) {
+  if (!isPlainPersonMessage(message) || parseArtifactThreadMessage(message.value) === null) return;
+  if (message.declared !== true) return "unmarked";
+  return isArtifactsAvailable() ? "seeded" : undefined;
+}
+//@ chunk-0yw3taqg.js:430446-431109 placement
+/**
+ * 处理来自 artifact 评论线程的后续消息：查找持有该线程的子代理并恢复执行。
+ */
+async function resumeArtifactThreadAgent(target, options) {
+  if (options.exiting) return false;
+  let { slug, threadId, url } = target;
+  let summon = {
+    slug,
+    threadId,
+    gestureAt: target.gestureAt,
+    suppressed: false,
+    storageV5: options.storageV5,
+  };
+  let toolUseContext = getLastCacheSafeParams()?.toolUseContext;
+  let sourcePath =
+    toolUseContext === undefined
+      ? undefined
+      : getLocalSourcePath(slug, toolUseContext.artifactRegistries.recordedPages);
+  if (
+    (
+      await spawnOrJoinThreadAgent({
+        slug,
+        threadId,
+        url,
+        artifactName: `artifact ${slug.slice(0, 8)}`,
+        directive: buildThreadAgentPrompt({
+          trigger: "fresh",
+          summonCount: 1,
+          url,
+          threadId,
+          sourcePath,
+          resolved: "unknown",
+        }),
+        followUp: buildThreadFollowUpPrompt({
+          url,
+          threadId,
+        }),
+        canUseTool: options.canUseTool,
+        summon,
+        onSettled: (lifecycleEvent) => options.onLifecycle(lifecycleEvent),
+        route: "seeded",
+      })
+    ).outcome === "fallback"
+  )
+    return false;
+  try {
+    options.onLifecycle("queued");
+    options.onLifecycle("started");
+    emitArtifactSummonStatus(summon, {
+      status: "working",
+    });
+  } catch (error) {
+    logError(error);
+  }
+  return true;
+}
+//@ chunk-0yw3taqg.js:431109-431233 placement
+function isPlainPersonMessage(message) {
+  return (
+    message.isSynthetic !== true &&
+    !message.peerDelivered &&
+    message.inboundOrigin === undefined &&
+    message.shouldQuery !== false &&
+    !message.hasAttachments
+  );
+}
+//@ chunk-0yw3taqg.js:431233-431422 placement
+function parseArtifactThreadMessage(message) {
+  let promptText = getPromptText(message);
+  let commentHeader = promptText === null ? null : parseCommentNotification(promptText);
+  if (promptText === null || commentHeader === null) return null;
+  let secondLine =
+    promptText.split(
+      `
+`,
+      2,
+    )[1] ?? "";
+  let artifactUrl = parseArtifactUrl(secondLine.slice(ARTIFACT_LINE_PREFIX.length).trim());
+  return artifactUrl === null
+    ? null
+    : {
+        header: commentHeader,
+        artifact: artifactUrl,
+      };
+}
+//@ chunk-0yw3taqg.js:431422-431515 placement
+var UNDERIVABLE_AGENT_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0yw3taqg.js:431422", () => {
+  UNDERIVABLE_AGENT_REASONS = new Set([
+    "underivable_no_superseded",
+    "underivable_leaf_only",
+    "underivable_excluded",
+  ]);
+});
+//@ chunk-0yw3taqg.js:431515-432198 placement
+function findParkedAgentAsk(restored, bootPark, agentCallIds) {
+  let pendingAction = restored?.external?.pending_action;
+  let requestId = requestIdOf(pendingAction);
+  let { pendingActionClass } = bootPark;
+  if (
+    !isIterativeHavenGateOn() ||
+    !pendingAction ||
+    requestId === undefined ||
+    pendingAction.request_id !== requestId ||
+    typeof pendingAction.tool_use_id !== "string" ||
+    pendingAction.tool_use_id.startsWith(CONFIRM) ||
+    typeof pendingAction.agent_id !== "string" ||
+    typeof pendingAction.tool_name !== "string" ||
+    !isSubagentToolRequest({
+      agent_id: pendingAction.agent_id,
+      tool_name: pendingAction.tool_name,
+    }) ||
+    typeof pendingAction.input !== "object" ||
+    pendingAction.input === null ||
+    Array.isArray(pendingAction.input)
+  )
+    return;
+  let runningBackgroundTasks = restored?.internal?.running_background_tasks;
+  let found = [
+    ...(pendingActionClass === "underivable_adoptable"
+      ? recordedAgentCallsFor(restored?.internal?.running_foreground_agents, agentCallIds)
+      : []),
+    ...(UNDERIVABLE_AGENT_REASONS.has(pendingActionClass) && Array.isArray(runningBackgroundTasks)
+      ? dedupeTasksById(runningBackgroundTasks)
+      : []),
+  ].find((task) => task.task_id === pendingAction.agent_id);
+  if (found === undefined || !getTaskOutputData(found)) return;
+  return {
+    card: {
+      request_id: requestId,
+      tool_use_id: pendingAction.tool_use_id,
+      details: pendingAction,
+    },
+    agent: found,
+  };
+}
+//@ chunk-0yw3taqg.js:432198-433396 placement
+class ParkedAgentAskHold {
+  ask;
+  card;
+  agentId;
+  answerUsed = Promise.withResolvers();
+  io;
+  ended = false;
+  constructor(card, agentId, answerKind, io, answerOff) {
+    this.card = card;
+    this.agentId = agentId;
+    this.io = io;
+    this.ask = new PermissionCardAsk({
+      card,
+      answerKind,
+      waitMs: PERMISSION_ANSWER_WAIT_MS,
+      maxAnswerAgeMs: MAX_PARKED_ANSWER_AGE_MS,
+      allowWithoutInputIsEcho: true,
+      withdrawCard: (requestId) =>
+        io.write({
+          type: "control_cancel_request",
+          request_id: requestId,
+        }),
+      unreadAnswersRead: () => {
+        let answersRead = io.whenReceivedAnswersRead();
+        return answersRead && withDeadline(answersRead, PERMISSION_ANSWER_WAIT_MS);
+      },
+      answerOff: async () => (await answerOff?.()) ?? "absent",
+    });
+    this.ask.startTimer();
+    io.holdKeptAsk(this);
+  }
+  async answerFor(ask) {
+    try {
+      if (!ask.usable()) this.end("ask_needs_own_card");
+      if (ask.toolName !== this.card.details?.tool_name) this.end("tool_differs");
+      if (this.ended) return;
+      let { answer, unused } = await this.ask.answerFor(ask);
+      if (answer === undefined || unused !== undefined) this.end(unused ?? "no_answer");
+      if (!ask.usable()) this.end("ask_needs_own_card");
+      if (this.ended || answer === undefined) return;
+      this.ended = true;
+      this.io.holdKeptAsk(undefined);
+      this.answerUsed.resolve();
+      logFeatureOk("ccr_subagent_ask_hold", {
+        answer_behavior: fromEnum(answer.behavior),
+      });
+      return answer;
+    } catch (error) {
+      logError(error);
+      this.end("answer_threw");
+      return;
+    }
+  }
+  end(reason) {
+    if (this.ended) return;
+    this.ended = true;
+    this.io.holdKeptAsk(undefined);
+    this.ask.stop(reason === "stopped" || reason === "shutdown" ? reason : "not_asked");
+    if (reason === "answer_threw") logFeatureBad("ccr_subagent_ask_hold", reason);
+    else logFeatureSad("ccr_subagent_ask_hold", reason);
+  }
+}
+//@ chunk-0yw3taqg.js:433396-433722 placement
+function holdParkedAgentAsk({ restored, bootPark, cutOffCallIds, planned, answerKind, io, answerOff }) {
+  try {
+    let parkedAgentAsk = findParkedAgentAsk(restored, bootPark, cutOffCallIds);
+    if (
+      parkedAgentAsk === undefined ||
+      bootPark.parkedPermission !== undefined ||
+      answerKind === "strict" ||
+      !planned.some((plan) => plan.agentId === parkedAgentAsk.agent.task_id)
+    )
+      return;
+    return new ParkedAgentAskHold(
+      parkedAgentAsk.card,
+      parkedAgentAsk.agent.task_id,
+      answerKind,
+      io,
+      answerOff,
+    );
+  } catch (error) {
+    logFeatureBad("ccr_subagent_ask_hold", "boot_threw");
+    logError(error);
+    return;
+  }
+}
+//@ chunk-0yw3taqg.js:433722-433739 placement
 var AGENT_RESUME_WAIT_MS; // deferred: uses LOOP_WAKE_LIMITS (../../utils/loop/loopWakeups.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:409147", () => {
+deferInit("chunk-0yw3taqg.js:433722", () => {
   AGENT_RESUME_WAIT_MS = MAX_LOOP_AGE_SECONDS * 1000;
 });
-//@ chunk-tyg7f3ek.js:409164-409196 placement
+//@ chunk-0yw3taqg.js:433739-433771 placement
 async function listResumableAgentsStub(options, host) {
   return [];
 }
-//@ chunk-tyg7f3ek.js:409196-409217 placement
+//@ chunk-0yw3taqg.js:433771-433792 placement
 var MAX_BRIDGE_SESSION_LOG; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var renderedDialogKinds;
-deferInit("chunk-tyg7f3ek.js:409196", () => {
+deferInit("chunk-0yw3taqg.js:433771", () => {
   MAX_BRIDGE_SESSION_LOG = 32;
   renderedDialogKinds = new Set();
 });
-//@ chunk-tyg7f3ek.js:409217-409261 placement
+//@ chunk-0yw3taqg.js:433792-433836 placement
 function isBridgeSessionLive(target) {
   return isTeleportedSession(target.bridgeSessionId);
 }
-//@ chunk-tyg7f3ek.js:409261-413645 placement
+//@ chunk-0yw3taqg.js:433836-438243 placement
 /**
  * headless 模式下 Remote Control 桥（bridge:sdk）的启停与登录变化监控；在令牌未被服务器背书或登录变化时撤下桥。
  */
@@ -976,8 +1028,8 @@ function createBridgeSdkController(options) {
     return verdict !== "retry";
   }
   function dropStaleRecords(bridge) {
-    for (let j = retiredRecords.length - 1; j >= 0; j--)
-      if (retireRecord(bridge, retiredRecords[j])) retiredRecords.splice(j, 1);
+    for (let idx = retiredRecords.length - 1; idx >= 0; idx--)
+      if (retireRecord(bridge, retiredRecords[idx])) retiredRecords.splice(idx, 1);
   }
   function rememberRecord(record) {
     let index = retiredRecords.findIndex((entry) => entry.sessionId === record.sessionId);
@@ -985,7 +1037,7 @@ function createBridgeSdkController(options) {
     retiredRecords.push(record);
     if (retiredRecords.length > MAX_BRIDGE_SESSION_LOG) retiredRecords.shift();
   }
-  function persist(bridge) {
+  function persist(bridge, exitInfo) {
     let record = currentRecord();
     if (!record || !canPersist() || isBridgeSessionLive(bridge)) return;
     let suppressed = bridge.noHistoryBackfill || record.recordFlag;
@@ -1001,6 +1053,7 @@ function createBridgeSdkController(options) {
       owner,
       {
         targetExists: true,
+        atExit: exitInfo?.atExit,
       },
       storageV5,
     );
@@ -1162,7 +1215,7 @@ function createBridgeSdkController(options) {
     dispose,
   };
 }
-//@ chunk-tyg7f3ek.js:413645-413777 placement
+//@ chunk-0yw3taqg.js:438243-438375 placement
 function applyHostRendersChromeSetupOffer(rendersChromeSetupOffer, session) {
   if (rendersChromeSetupOffer !== true || getHostRendersChromeSetupOffer()) return;
   setHostRendersChromeSetupOffer(true);
@@ -1170,11 +1223,11 @@ function applyHostRendersChromeSetupOffer(rendersChromeSetupOffer, session) {
     host_renders_chrome_setup_offer: true,
   });
 }
-//@ chunk-tyg7f3ek.js:413777-413807 placement
+//@ chunk-0yw3taqg.js:438375-438405 placement
 function markHostRendersChromeSetupOffer() {
   if (isClaudeAiChatCowork()) setHostRendersChromeSetupOffer(true);
 }
-//@ chunk-tyg7f3ek.js:413807-414223 placement
+//@ chunk-0yw3taqg.js:438405-438821 placement
 function chromeSetupOfferKey(sessionState) {
   isChromeSetupOfferEnabled();
   let chromeState = claudeInChromeSession();
@@ -1195,7 +1248,7 @@ function chromeSetupOfferKey(sessionState) {
   }
   return `${disconnected}:${chromeSetupOfferArm}`;
 }
-//@ chunk-tyg7f3ek.js:414223-414594 placement
+//@ chunk-0yw3taqg.js:438821-439192 placement
 function restoreChromeSetupOfferState(chromeSetupState) {
   if (chromeSetupState?.readFailed === true) {
     claudeInChromeSession().chromeSetupOfferStateUnread = true;
@@ -1217,7 +1270,7 @@ function restoreChromeSetupOfferState(chromeSetupState) {
     chromeState.chromeSetupOfferArmMirrored = true;
   }
 }
-//@ chunk-tyg7f3ek.js:414594-414807 placement
+//@ chunk-0yw3taqg.js:439192-439414 placement
 /**
  * 为 SDK result 消息加 result_index 与自上次结果以来的模型用量，并去重。
  */
@@ -1236,6 +1289,7 @@ function createResultStamper(takeUsageSinceLastResult) {
         }),
         ...processStartTuningFields(),
         ...garbageCollectionFields(),
+        ...credentialExpiresAtField(),
       };
       weakSet.add(stamped);
       return stamped;
@@ -1245,15 +1299,15 @@ function createResultStamper(takeUsageSinceLastResult) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:414881-414909 placement
+//@ chunk-0yw3taqg.js:439488-439516 placement
 var CONTEXT_INSTRUCTIONS_NOTICE_FLAG = "tengu_jolly_aurora";
-//@ chunk-tyg7f3ek.js:414909-414956 placement
+//@ chunk-0yw3taqg.js:439516-439564 placement
 function isHeadlessNoticeEligible() {
   return (
     getIsNonInteractiveSession() && isDesktopTopSession() && !isClaudecodeSession() && !hostScheduledRun()
   );
 }
-//@ chunk-tyg7f3ek.js:414956-415179 placement
+//@ chunk-0yw3taqg.js:439564-439787 placement
 function contextInstructionsOverLimitPayload(report) {
   if (!report.totalOverLimit) return null;
   return {
@@ -1266,7 +1320,7 @@ function contextInstructionsOverLimitPayload(report) {
       }),
   };
 }
-//@ chunk-tyg7f3ek.js:415179-415693 placement
+//@ chunk-0yw3taqg.js:439787-440301 placement
 /**
  * headless 会话启动时检查 CLAUDE.md 等上下文指令是否超长，超出则返回提示载荷。
  */
@@ -1301,7 +1355,7 @@ async function checkContextInstructionsSize(limitsPromise, sessionId, options) {
     return null;
   }
 }
-//@ chunk-tyg7f3ek.js:415693-416169 placement
+//@ chunk-0yw3taqg.js:440301-440777 placement
 function gatewayCodeTabRulesNotice(session) {
   try {
     let gatewayAuth = getGatewayAuth();
@@ -1327,13 +1381,7 @@ function gatewayCodeTabRulesNotice(session) {
     return null;
   }
 }
-//@ chunk-tyg7f3ek.js:416169-416207 placement
-var chromeSetupModule; // deferred: loads other modules while loading; runs once its import cycle is complete
-deferInit("chunk-tyg7f3ek.js:416169", () => {
-  chromeSetupModule = require("../../services/teleport/relayState.js");
-});
 export {
-  isIterativeHavenGateOn,
   createResultStamper,
   collectResumableAgentIds,
   planRecordedAgentResumes,
@@ -1350,7 +1398,10 @@ export {
   resumeArtifactThreadAgent,
   readArtifactThreadHeader,
   applyHostRendersChromeSetupOffer,
+  canResumeAgentsInBackground,
+  isIterativeHavenGateOn,
   chromeSetupModule,
+  isHeadlessNoticeEligible,
   checkContextInstructionsSize,
   gatewayCodeTabRulesNotice,
 };

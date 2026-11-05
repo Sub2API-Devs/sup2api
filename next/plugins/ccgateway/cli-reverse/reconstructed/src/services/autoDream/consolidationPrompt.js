@@ -3,15 +3,15 @@
  *
  * dream 整理代理的提示（合并、去重、与 CLAUDE.md 对齐、团队记忆段）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/autoDream/consolidationPrompt.ts
- * pieces: chunk-rsht1tdj.js (2)
+ * pieces: chunk-arvn22xd.js (2)
  * attribution: affinity 1, fingerprint 1
  */
 import { DIR_EXISTS_GUIDANCE, MEMORY_INDEX_FILENAME, MAX_ENTRYPOINT_LINES } from "../../memdir/memdir.js";
 import { MEMORY_LIST_TOOL_NAME, MEMORY_READ, MEMORY_WRITE } from "../../tools/MemoryTool/memoryToolNames.js";
 
-//@ chunk-rsht1tdj.js:1348-3670 affinity
+//@ chunk-arvn22xd.js:1348-3670 affinity
 /**
  * dream 提示词里“把记忆与 CLAUDE.md 对照”的段落：记忆过时就删或改写，CLAUDE.md 过时只标注不修改，不算冲突就保留。
  */
@@ -26,7 +26,7 @@ Project CLAUDE.md instructions are loaded in your system prompt. For each memory
 - **Not a conflict** \u2014 the memory adds detail CLAUDE.md doesn't cover, or narrows a CLAUDE.md rule with a stated reason. Leave it.
 
 A \`feedback\` memory's "Why: the user corrected me" framing is not evidence it's newer than CLAUDE.md \u2014 CLAUDE.md may have been updated since.`;
-//@ chunk-rsht1tdj.js:3670-6613 fingerprint (2.1.88 match: buildConsolidationPrompt, 0.585)
+//@ chunk-arvn22xd.js:3670-6613 fingerprint (2.1.88 match: buildConsolidationPrompt, 0.585)
 /**
  * dream 整理提示：合并重复、删除过时、与 CLAUDE.md 对齐、可选团队记忆段。
  */

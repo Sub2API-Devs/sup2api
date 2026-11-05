@@ -1,8 +1,8 @@
 /**
  * ajv/dist/vocabularies/unevaluated/unevaluatedProperties.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: ajv@8.13.0
- * pieces: chunk-1r4fv9mg.js (1)
+ * pieces: chunk-1jdkttw7.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_codegen_2 as require_codegen } from "../../compile/codegen/inde
 import { require_util_2 as require_util } from "../../compile/util.js";
 import { require_names } from "../../compile/names.js";
 
-//@ chunk-1r4fv9mg.js:3452-4567 cjs-fingerprint
+//@ chunk-1jdkttw7.js:3453-4568 cjs-fingerprint
 var require_unevaluatedProperties = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

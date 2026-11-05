@@ -3,13 +3,13 @@
  *
  * TodoWrite 工具名常量
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TodoWriteTool/constants.ts
- * pieces: chunk-tdjxcxnv.js (1)
- * attribution: fingerprint 1
+ * pieces: chunk-s9tw9jt9.js (1)
+ * attribution: placement 1
  */
 
-//@ chunk-tdjxcxnv.js:191-210 fingerprint (2.1.88 match: TODO_WRITE_TOOL_NAME, 1)
+//@ chunk-s9tw9jt9.js:191-210 placement (2.1.88 match: TODO_WRITE_TOOL_NAME, 1)
 /**
  * "TodoWrite"。
  */

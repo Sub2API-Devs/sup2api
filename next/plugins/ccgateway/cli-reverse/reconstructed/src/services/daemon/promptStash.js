@@ -3,9 +3,9 @@
  *
  * 后台提示暂存（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-nfave34y.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xmpgk2cc.js (9)
  * attribution: placement 9
  */
 import { rm } from "fs/promises";
@@ -31,12 +31,12 @@ import { logFeatureBad, logFeatureSad, logFeatureOk } from "../analytics/feature
 import { env } from "../../utils/env.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-nfave34y.js:665-905 placement
+//@ chunk-xmpgk2cc.js:697-937 placement
 var PROMPT_STASH_NAME; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_PROMPT_STASH_BYTES;
 var MAX_STASHED_PASTES;
 var promptStashSchema;
-deferInit("chunk-nfave34y.js:665", () => {
+deferInit("chunk-xmpgk2cc.js:697", () => {
   PROMPT_STASH_NAME = ".prompt-stash";
   MAX_PROMPT_STASH_BYTES = 262144;
   MAX_STASHED_PASTES = 256;
@@ -52,7 +52,7 @@ deferInit("chunk-nfave34y.js:665", () => {
     }),
   );
 });
-//@ chunk-nfave34y.js:905-1091 placement
+//@ chunk-xmpgk2cc.js:937-1123 placement
 function serializePromptStash(stash) {
   return jsonStringify({
     text: stash.text,
@@ -64,7 +64,7 @@ function serializePromptStash(stash) {
     launchWarning: stash.launchWarning,
   });
 }
-//@ chunk-nfave34y.js:1091-1343 placement
+//@ chunk-xmpgk2cc.js:1123-1375 placement (2.1.88 match: _temp18, 0.75)
 /**
  * 规整暂存文本：统一换行、制表符换空格、去掉不可见字符（以 ZWNJ 分段并在必要处保留分隔）。
  */
@@ -89,7 +89,7 @@ function normalizeStashText(text) {
   }
   return parts.join("");
 }
-//@ chunk-nfave34y.js:1343-1485 placement
+//@ chunk-xmpgk2cc.js:1375-1517 placement
 /**
  * 删除旧文件后以独占方式写新文件（权限 600），再按重试规则落位，失败时清理临时文件。
  */
@@ -107,7 +107,7 @@ async function replaceFileExclusive(path, content) {
     throw error;
   }
 }
-//@ chunk-nfave34y.js:1485-1913 placement
+//@ chunk-xmpgk2cc.js:1517-1944 placement
 /**
  * 解析暂存的输入：校验 schema，去掉已不存在的粘贴占位，空文本返回 null，返回可恢复的输入状态。
  */
@@ -140,7 +140,7 @@ function parsePromptStash(smallFileOrNull) {
     launchWarning,
   };
 }
-//@ chunk-nfave34y.js:1913-2199 placement
+//@ chunk-xmpgk2cc.js:1944-2230 placement
 /**
  * 把输入框状态暂存到作业目录的 .prompt-stash（超过上限只保留在内存）；为空时删除文件。
  */
@@ -169,7 +169,7 @@ async function writePromptStash(jobDir, stash) {
     if (!isENOENT(error)) logJobWriteError(error);
   }
 }
-//@ chunk-nfave34y.js:2199-2413 placement
+//@ chunk-xmpgk2cc.js:2230-2444 placement
 async function readPromptStash(jobDir) {
   let smallFileOrNull = await readSmallFileOrNull(join(jobDir, PROMPT_STASH_NAME), MAX_PROMPT_STASH_BYTES);
   if (!smallFileOrNull) return null;
@@ -182,7 +182,7 @@ async function readPromptStash(jobDir) {
   }
   return promptStash;
 }
-//@ chunk-nfave34y.js:2413-3019 placement
+//@ chunk-xmpgk2cc.js:2444-3050 placement
 class PromptStash {
   #t;
   #e;
@@ -227,7 +227,7 @@ class PromptStash {
     this.#o();
   }
 }
-//@ chunk-nfave34y.js:3019-3064 placement
+//@ chunk-xmpgk2cc.js:3050-3095 placement
 /**
  * 取要展示的暂存草稿：已被回填过（cameBack）的返回 null。
  */

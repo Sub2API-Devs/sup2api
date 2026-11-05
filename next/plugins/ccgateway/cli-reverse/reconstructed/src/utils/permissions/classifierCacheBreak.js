@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：分类器缓存破坏检测
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (12)
  * attribution: placement 12
  */
 import { isDiskless } from "../../bootstrap/state.js";
@@ -28,19 +28,19 @@ import { telemetrySafeModelName } from "../model/telemetryModelName.js";
 import { sanitizeMarkName } from "../startupMarks.js";
 import { logForDebugging } from "../debug.js";
 import { logError } from "../log.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "./filesystem.js";
 import { getAutoModeTierFromEnv } from "./yoloClassifier.js";
 
-//@ chunk-e6aww6q8.js:2818085-2818162 placement
+//@ chunk-5xgkngpb.js:2886951-2887028 placement
 /**
  * isOutputLimitStop：停止原因是否因输出上限。
  */
 function isOutputLimitStop(stopReason) {
   return stopReason === "max_tokens" || stopReason === "model_context_window_exceeded";
 }
-//@ chunk-e6aww6q8.js:2818162-2818189 placement
+//@ chunk-5xgkngpb.js:2887028-2887055 placement
 var USER_TAG_UNSAFE_RE = /[^a-zA-Z0-9._-]/g;
-//@ chunk-e6aww6q8.js:2818189-2818395 placement
+//@ chunk-5xgkngpb.js:2887055-2887261 placement
 /**
  * 取分类器用的用户标识：GITHUB_ACTOR/USER/USERNAME，或 git 邮箱的用户名部分，清洗后截到 64 字符；无盘模式返回 null。
  */
@@ -53,7 +53,7 @@ async function getClassifierUserTag() {
     null
   );
 }
-//@ chunk-e6aww6q8.js:2818395-2818851 placement
+//@ chunk-5xgkngpb.js:2887261-2887717 placement
 /**
  * 缓存失效说明的常量：说明长度上限、失效类型、失效区域与请求变化字段的显示标签。
  */
@@ -78,7 +78,7 @@ var CACHE_BREAK_CHANGE_LABELS = {
   extraBodyChanged: "extra body fields",
   thinkingChanged: "thinking",
 };
-//@ chunk-e6aww6q8.js:2818851-2822012 placement
+//@ chunk-5xgkngpb.js:2887717-2890891 placement
 /**
  * 检测分类器提示缓存被破坏的原因（首次写入、读取丢失、改写一半等）。
  */
@@ -205,7 +205,7 @@ function detectClassifierCacheBreak(cacheBreakState, requestOptions, usage, requ
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:2822012-2822942 placement
+//@ chunk-5xgkngpb.js:2890891-2891826 placement
 /**
  * 把请求拆成 system / CLAUDE.md / 转录三个区域的块列表，用于定位提示缓存失效发生在哪个区域。
  */
@@ -280,7 +280,7 @@ function buildPromptCacheRegions(requestOptions, leadingMessageCount) {
   }));
   return outline;
 }
-//@ chunk-e6aww6q8.js:2822942-2823120 placement (2.1.88 match: isBase64ImageBlock, 0.848)
+//@ chunk-5xgkngpb.js:2891826-2892004 placement (2.1.88 match: isBase64ImageBlock, 0.846)
 function isBase64ImageBlock_2(block) {
   if (block.type === "text") return block.text;
   let hashSource =
@@ -292,7 +292,7 @@ function isBase64ImageBlock_2(block) {
         });
   return `\x00${block.type}:${bunHashOf(hashSource)}\x00`;
 }
-//@ chunk-e6aww6q8.js:2823120-2823237 placement
+//@ chunk-5xgkngpb.js:2892004-2892121 placement
 function getPrefixHash(regions, offset) {
   let cachedHash = regions.prefixHashes.get(offset);
   if (cachedHash === undefined) {
@@ -301,12 +301,12 @@ function getPrefixHash(regions, offset) {
   }
   return cachedHash;
 }
-//@ chunk-e6aww6q8.js:2823237-2823336 placement
+//@ chunk-5xgkngpb.js:2892121-2892220 placement
 function getBlockBoundaryHash(regions, offset) {
   let blockIndex = regions.blockIndexByEnd.get(offset) ?? -1;
   return bunHashOf(regions.blockEnds.slice(0, blockIndex + 1).join(","));
 }
-//@ chunk-e6aww6q8.js:2823336-2823789 placement
+//@ chunk-5xgkngpb.js:2892220-2892673 placement
 function locateCacheBreakRegion(breakpoints, regions) {
   let matchingBreakpoint;
   let edgesMoved = false;
@@ -342,13 +342,13 @@ function locateCacheBreakRegion(breakpoints, regions) {
     edgesMoved,
   };
 }
-//@ chunk-e6aww6q8.js:2823789-2823852 placement
+//@ chunk-5xgkngpb.js:2892673-2892736 placement
 function stableJsonKey(cacheControls) {
-  return uniq(cacheControls.map((cacheControl) => jsonStringify(cacheControl)))
+  return normalizeCaseForComparison_2(cacheControls.map((cacheControl) => jsonStringify(cacheControl)))
     .sort()
     .join("\x00");
 }
-//@ chunk-e6aww6q8.js:2823852-2823886 placement
+//@ chunk-5xgkngpb.js:2892736-2892770 placement
 /**
  * currentAutoModeTier：当前 auto 模式等级。
  */

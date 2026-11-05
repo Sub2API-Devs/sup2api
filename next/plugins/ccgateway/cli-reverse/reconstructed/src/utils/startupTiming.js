@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增。启动阶段计时。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mgevbrsn.js (45)
- * attribution: placement 45
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-e0saccbx.js (46)
+ * attribution: placement 45, layout 1
  */
 import { readFileSync } from "fs";
 import { jsonParse } from "./slowOperations.js";
@@ -24,7 +24,7 @@ import { isProfilingSampled } from "./headlessProfiler.js";
 import { logEvent } from "../services/analytics/index.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-mgevbrsn.js:673-1022 placement
+//@ chunk-e0saccbx.js:673-1022 placement
 /**
  * 启动计时常量：runner 准备阶段字段、各字段上限（一周秒数、包数量等）、阶段时长上限（1 小时 / runner 10 分钟）。
  */
@@ -34,7 +34,7 @@ var FIELD_CAPS;
 var PHASE_CAP_MS;
 var RUNNER_PHASE_CAP_MS;
 var RUNNER_PREP_FIELD_SET;
-deferInit("chunk-mgevbrsn.js:673", () => {
+deferInit("chunk-e0saccbx.js:673", () => {
   RUNNER_PREP_FIELDS = [
     "runner_prep_total_ms",
     "runner_prep_git_proxy_config_ms",
@@ -55,30 +55,30 @@ deferInit("chunk-mgevbrsn.js:673", () => {
   RUNNER_PHASE_CAP_MS = 600000;
   RUNNER_PREP_FIELD_SET = new Set(RUNNER_PREP_FIELDS);
 });
-//@ chunk-mgevbrsn.js:1022-1062 placement
+//@ chunk-e0saccbx.js:1022-1062 placement
 function hasFieldCap(field) {
   return Object.hasOwn(FIELD_CAPS, field);
 }
-//@ chunk-mgevbrsn.js:1062-1092 placement
+//@ chunk-e0saccbx.js:1062-1092 placement
 function isRunnerPrepField(field) {
   return RUNNER_PREP_FIELD_SET.has(field);
 }
-//@ chunk-mgevbrsn.js:1092-1115 placement
+//@ chunk-e0saccbx.js:1092-1115 placement
 function isParityField(field) {
   return false;
 }
-//@ chunk-mgevbrsn.js:1115-1234 placement
+//@ chunk-e0saccbx.js:1115-1234 placement
 function clampMetric(value, cap) {
   if (typeof value !== "number" || !Number.isFinite(value)) return;
   let rounded = Math.round(value);
   return rounded < 0 ? undefined : Math.min(rounded, cap);
 }
-//@ chunk-mgevbrsn.js:1234-1345 placement
+//@ chunk-e0saccbx.js:1234-1345 placement
 function objectField(object, field) {
   let value = Object.hasOwn(object, field) ? Reflect.get(object, field) : undefined;
   return typeof value === "object" && value !== null ? value : undefined;
 }
-//@ chunk-mgevbrsn.js:1345-1741 placement
+//@ chunk-e0saccbx.js:1345-1741 placement
 /**
  * 解析预热备用进程上报的计时：只保留已知字段与阶段名，数值按各自上限校验；全部为空时返回 undefined。
  */
@@ -105,9 +105,9 @@ function parseSpareTiming(timing) {
     phases,
   };
 }
-//@ chunk-mgevbrsn.js:1741-1752 placement
+//@ chunk-e0saccbx.js:1741-1752 placement
 var MAX_SPARE_TIMING_CHARS = 8192;
-//@ chunk-mgevbrsn.js:1752-1825 placement
+//@ chunk-e0saccbx.js:1752-1825 placement
 function parseSpareTimingEnv(json) {
   if (!json || json.length > MAX_SPARE_TIMING_CHARS) return;
   try {
@@ -116,7 +116,7 @@ function parseSpareTimingEnv(json) {
     return;
   }
 }
-//@ chunk-mgevbrsn.js:1859-2071 placement
+//@ chunk-e0saccbx.js:1859-2071 placement
 var SPARE_TIMING_MARKS = [
   "to_spare_loaded",
   "to_claim",
@@ -136,7 +136,7 @@ var ZERO_PROCESS_SAMPLE = {
   },
   storageReadBytes: 0,
 };
-//@ chunk-mgevbrsn.js:2071-2372 placement
+//@ chunk-e0saccbx.js:2071-2372 placement
 /**
  * 采样当前进程状态：时刻、CPU 毫秒、/proc/self/stat 与 /proc/self/io 中的统计（无盘模式跳过，失败记诊断日志）。
  */
@@ -164,11 +164,11 @@ function sampleProcess() {
     return;
   }
 }
-//@ chunk-mgevbrsn.js:2372-2423 placement
+//@ chunk-e0saccbx.js:2372-2423 placement
 function diffClamped(from, to) {
   return Math.max(0, Math.round(to - from));
 }
-//@ chunk-mgevbrsn.js:2423-3189 placement
+//@ chunk-e0saccbx.js:2423-3189 placement
 class PhaseSample {
   sample;
   ends = {};
@@ -209,7 +209,7 @@ class PhaseSample {
     return wire.to_input_ready && wire.to_first_turn ? wire : undefined;
   }
 }
-//@ chunk-mgevbrsn.js:3189-3528 placement
+//@ chunk-e0saccbx.js:3189-3528 placement
 /**
  * 计时字段到启动标记名的映射（input_ready、first_message），以及启动各阶段的计时字段名列表。
  */
@@ -233,7 +233,7 @@ var STARTUP_PHASE_FIELDS = [
   "await_initialize_ms",
   "init_emit_ms",
 ];
-//@ chunk-mgevbrsn.js:3528-10594 placement
+//@ chunk-e0saccbx.js:3528-11967 placement
 /**
  * 启动阶段计时记录器（tengu_startup_timing）。
  */
@@ -250,6 +250,7 @@ class StartupTimingRecorder {
   resumeHydrateDeltaFetchAttempted = undefined;
   resumeHydrateAnchorWalkback = undefined;
   resumeTranscriptScan = undefined;
+  resumeTranscriptReadAhead = undefined;
   pluginFullLoads = 0;
   userContextBuilds = 0;
   sdkMcpDialRuns = 0;
@@ -383,7 +384,17 @@ class StartupTimingRecorder {
   markResumeTranscriptScan(scan) {
     if (this.resumeTranscriptScan !== undefined) return;
     this.resumeTranscriptScan = scan;
-    this.recordPhase("resume_transcript_scan_ms", scan.scanMs, scan.scanStartMs);
+    this.recordPhase(
+      "resume_transcript_scan_ms",
+      scan.scanMs + (this.resumeTranscriptReadAhead?.durationMs ?? 0),
+      this.resumeTranscriptReadAhead?.startMs ?? scan.scanStartMs,
+    );
+  }
+  markResumeTranscriptReadAhead(durationMs, startMs) {
+    this.resumeTranscriptReadAhead = {
+      durationMs,
+      startMs,
+    };
   }
   recordFirstMessageReadFromSpawn() {
     let spawnTimestamp = Number.parseInt(process.env.CCR_SPAWN_TIMESTAMP_MS ?? "", 10);
@@ -425,6 +436,21 @@ class StartupTimingRecorder {
       resume_transcript_kept_bytes: this.resumeTranscriptScan?.keptBytes,
       resume_transcript_earlier_metadata_bytes: this.resumeTranscriptScan?.earlierMetadataBytes,
       resume_transcript_boundary: this.resumeTranscriptScan?.boundary,
+      resume_transcript_plain_kept_bytes: this.resumeTranscriptScan?.plainKeptBytes,
+      resume_transcript_boundary_other_key_order: this.resumeTranscriptScan?.boundaryOtherKeyOrder,
+      resume_transcript_keeping_boundaries: this.resumeTranscriptScan?.keepingBoundaries,
+      resume_transcript_reach_bytes: this.resumeTranscriptScan?.reachBytes,
+      resume_transcript_backfilled_all: this.resumeTranscriptScan?.backfilledAll,
+      resume_transcript_rows: this.resumeTranscriptScan?.rows,
+      resume_transcript_rows_other_key_order: this.resumeTranscriptScan?.rowsOtherKeyOrder,
+      resume_transcript_rows_unindexed: this.resumeTranscriptScan?.rowsUnindexed,
+      resume_transcript_listed_rows: this.resumeTranscriptScan?.listedRows,
+      resume_transcript_listed_rows_bytes: this.resumeTranscriptScan?.listedRowsBytes,
+      resume_transcript_listed_rows_other_key_order: this.resumeTranscriptScan?.listedRowsOtherKeyOrder,
+      resume_transcript_listed_span_bytes: this.resumeTranscriptScan?.listedSpanBytes,
+      resume_transcript_straggler_ancestors: this.resumeTranscriptScan?.stragglerAncestors,
+      resume_transcript_parents_not_found: this.resumeTranscriptScan?.parentsNotFound,
+      resume_transcript_list_unused: this.resumeTranscriptScan?.listUnused,
       resume_transcript_tool_copy_chars: this.resumeTranscriptScan?.toolCopyChars,
       delta_reset: antEnv.CCR_DELTA_RESET,
       plugin_full_loads: this.pluginFullLoads,
@@ -513,194 +539,198 @@ class StartupTimingRecorder {
     };
   }
 }
-//@ chunk-mgevbrsn.js:10594-10619 placement
+//@ chunk-e0saccbx.js:11967-11992 placement
 /**
  * 按宿主缓存的启动计时记录器。
  */
 var startupTimingRecorderByHost; // deferred: uses StartupTimingRecorder of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mgevbrsn.js:10594", () => {
+deferInit("chunk-e0saccbx.js:11967", () => {
   startupTimingRecorderByHost = new HostScoped(() => new StartupTimingRecorder());
 });
-//@ chunk-mgevbrsn.js:10619-10656 placement
+//@ chunk-e0saccbx.js:11992-12029 placement
 function startupTimingRecorder() {
   return startupTimingRecorderByHost.of(getRootSession().host);
 }
-//@ chunk-mgevbrsn.js:10656-10698 placement
+//@ chunk-e0saccbx.js:12029-12071 placement
 /**
  * 记录一个启动阶段耗时。
  */
 function recordPhase(field, ms, startMs) {
   startupTimingRecorder().recordPhase(field, ms, startMs);
 }
-//@ chunk-mgevbrsn.js:10698-10745 placement
+//@ chunk-e0saccbx.js:12071-12118 placement
 /**
  * 记录 session-start 钩子初始化等待。
  */
 function recordHooksInitWait(waitedMs, startMs) {
   startupTimingRecorder().recordHooksInitWait(waitedMs, startMs);
 }
-//@ chunk-mgevbrsn.js:10745-10792 placement
+//@ chunk-e0saccbx.js:12118-12165 placement
 /**
  * 读取已记录的某阶段耗时。
  */
 function getRecordedPhase(field) {
   return startupTimingRecorder().getRecordedPhase(field);
 }
-//@ chunk-mgevbrsn.js:10792-10831 placement
+//@ chunk-e0saccbx.js:12165-12204 placement
 /**
  * 记录 spawn 到 exec 的耗时。
  */
 function recordSpawnToExec() {
   startupTimingRecorder().recordSpawnToExec();
 }
-//@ chunk-mgevbrsn.js:10831-10873 placement
+//@ chunk-e0saccbx.js:12204-12246 placement
 /**
  * 标记已认领热备会话。
  */
 function markWarmSpareClaimed() {
   startupTimingRecorder().markWarmSpareClaimed();
 }
-//@ chunk-mgevbrsn.js:10873-10910 placement
+//@ chunk-e0saccbx.js:12246-12283 placement
 /**
  * 标记热备已加载。
  */
 function markSpareLoaded() {
   startupTimingRecorder().markSpareLoaded();
 }
-//@ chunk-mgevbrsn.js:10910-10947 placement
+//@ chunk-e0saccbx.js:12283-12320 placement
 /**
  * 标记回合开始。
  */
 function markTurnBegan(isProcessTelemetryEnabled) {
   startupTimingRecorder().markTurnBegan(isProcessTelemetryEnabled);
 }
-//@ chunk-mgevbrsn.js:10947-10987 placement
+//@ chunk-e0saccbx.js:12320-12360 placement
 /**
  * 记录插件全量加载。
  */
 function notePluginFullLoad() {
   startupTimingRecorder().notePluginFullLoad();
 }
-//@ chunk-mgevbrsn.js:10987-11029 placement
+//@ chunk-e0saccbx.js:12360-12402 placement
 /**
  * 记录用户上下文构建。
  */
 function noteUserContextBuild() {
   startupTimingRecorder().noteUserContextBuild();
 }
-//@ chunk-mgevbrsn.js:11029-11077 placement
+//@ chunk-e0saccbx.js:12402-12450 placement
 /**
  * 是否已认领热备。
  */
 function wasWarmSpareClaimed() {
   return startupTimingRecorder().wasWarmSpareClaimed();
 }
-//@ chunk-mgevbrsn.js:11077-11118 placement
+//@ chunk-e0saccbx.js:12450-12491 placement
 /**
  * 记录特性开关拉取的启动时机。
  */
 function markFlagFetchKick(kick) {
   startupTimingRecorder().markFlagFetchKick(kick);
 }
-//@ chunk-mgevbrsn.js:11118-11163 placement
+//@ chunk-e0saccbx.js:12491-12536 placement
 /**
  * 取特性开关拉取的启动时机。
  */
 function getFlagFetchKick() {
   return startupTimingRecorder().getFlagFetchKick();
 }
-//@ chunk-mgevbrsn.js:11163-11208 placement
+//@ chunk-e0saccbx.js:12536-12581 placement
 /**
  * 记录热缓存 kick 请求。
  */
 function markWarmCacheKickAsks(asks) {
   startupTimingRecorder().markWarmCacheKickAsks(asks);
 }
-//@ chunk-mgevbrsn.js:11208-11251 placement
+//@ chunk-e0saccbx.js:12581-12624 placement
 /**
  * 记录钩子初始化来源。
  */
 function markHooksInitSource(source) {
   startupTimingRecorder().markHooksInitSource(source);
 }
-//@ chunk-mgevbrsn.js:11251-11300 placement
+//@ chunk-e0saccbx.js:12624-12673 placement
 /**
  * 记录恢复会话钩子等待的影子值。
  */
 function markResumeHooksWaitShadow(shadow) {
   startupTimingRecorder().markResumeHooksWaitShadow(shadow);
 }
-//@ chunk-mgevbrsn.js:11300-11341 placement
+//@ chunk-e0saccbx.js:12673-12714 placement
 /**
  * 记录等待特性开关的时长。
  */
 function noteFlagFetchWait(waitMs) {
   startupTimingRecorder().noteFlagFetchWait(waitMs);
 }
-//@ chunk-mgevbrsn.js:11341-11390 placement
+//@ chunk-e0saccbx.js:12714-12763 placement
 /**
  * 取等待特性开关的毫秒数。
  */
 function getFlagFetchWaitedMs() {
   return startupTimingRecorder().getFlagFetchWaitedMs();
 }
-//@ chunk-mgevbrsn.js:11390-11428 placement
+//@ chunk-e0saccbx.js:12763-12801 placement
 /**
  * 记录 SDK MCP 拨号。
  */
 function noteSdkMcpDial(dialMs) {
   startupTimingRecorder().noteSdkMcpDial(dialMs);
 }
-//@ chunk-mgevbrsn.js:11428-11476 placement
+//@ chunk-e0saccbx.js:12801-12849 placement
 /**
  * 标记 hydrate 预取完成。
  */
 function markHydratePrefetchSettled() {
   startupTimingRecorder().markHydratePrefetchSettled();
 }
-//@ chunk-mgevbrsn.js:11476-11529 placement
+//@ chunk-e0saccbx.js:12849-12902 placement
 /**
  * 记录恢复时 hydrate 预取。
  */
 function markResumeHydratePrefetch(anchor, settledAt) {
   startupTimingRecorder().markResumeHydratePrefetch(anchor, settledAt);
 }
-//@ chunk-mgevbrsn.js:11529-11577 placement
+//@ chunk-e0saccbx.js:12902-12950 placement
 /**
  * 记录恢复时转录扫描耗时。
  */
 function markResumeTranscriptScan(scan) {
   startupTimingRecorder().markResumeTranscriptScan(scan);
 }
-//@ chunk-mgevbrsn.js:11577-11643 placement
+//@ chunk-e0saccbx.js:12950-13007 layout
+function noteResumeReadAhead(bytes, atMs) {
+  startupTimingRecorder().markResumeTranscriptReadAhead(bytes, atMs);
+}
+//@ chunk-e0saccbx.js:13007-13073 placement
 /**
  * 记录恢复 hydrate 的增量字段。
  */
 function markResumeHydrateDelta(bytesTotal, bytesRead, linesRead, readMs, parseMs, walkback) {
   startupTimingRecorder().markResumeHydrateDelta(bytesTotal, bytesRead, linesRead, readMs, parseMs, walkback);
 }
-//@ chunk-mgevbrsn.js:11643-11696 placement
+//@ chunk-e0saccbx.js:13073-13126 placement
 /**
  * 记录从 spawn 到读到首条消息。
  */
 function recordFirstMessageReadFromSpawn() {
   startupTimingRecorder().recordFirstMessageReadFromSpawn();
 }
-//@ chunk-mgevbrsn.js:11696-11743 placement
+//@ chunk-e0saccbx.js:13126-13173 placement
 /**
  * 记录从 spawn 到输入就绪。
  */
 function recordInputReadyFromSpawn() {
   startupTimingRecorder().recordInputReadyFromSpawn();
 }
-//@ chunk-mgevbrsn.js:11743-11779 placement
+//@ chunk-e0saccbx.js:13173-13209 placement
 /**
  * 取出并清空启动计时记录。
  */
 function consumeStartupTiming() {
   return startupTimingRecorder().consume();
 }
-//@ chunk-mgevbrsn.js:11779-11904 placement
+//@ chunk-e0saccbx.js:13209-13334 placement
 /**
  * 采样命中时记录 tengu_startup_timing 启动计时事件。
  */
@@ -713,14 +743,14 @@ function logStartupTiming(site) {
     site: fromEnum(site),
   });
 }
-//@ chunk-mgevbrsn.js:11904-11955 placement
+//@ chunk-e0saccbx.js:13334-13385 placement
 /**
  * 记录从 spawn 到发出首个 API 请求。
  */
 function recordApiRequestSentFromSpawn() {
   startupTimingRecorder().recordApiRequestSentFromSpawn();
 }
-//@ chunk-mgevbrsn.js:11955-12014 placement
+//@ chunk-e0saccbx.js:13385-13444 placement
 /**
  * 取出并清空 API 请求已发送的标记。
  */
@@ -728,33 +758,34 @@ function consumeApiRequestSentFromSpawn() {
   return startupTimingRecorder().consumeApiRequestSentFromSpawn();
 }
 export {
+  recordApiRequestSentFromSpawn,
   recordPhase,
   markResumeHydrateDelta,
   markResumeTranscriptScan,
-  markFlagFetchKick,
-  recordSpawnToExec,
-  wasWarmSpareClaimed,
-  logStartupTiming,
   noteSdkMcpDial,
   recordInputReadyFromSpawn,
   markResumeHydratePrefetch,
   consumeApiRequestSentFromSpawn,
-  recordApiRequestSentFromSpawn,
-  noteFlagFetchWait,
-  markWarmCacheKickAsks,
-  getFlagFetchKick,
   notePluginFullLoad,
-  getFlagFetchWaitedMs,
-  markWarmSpareClaimed,
-  markSpareLoaded,
+  recordFirstMessageReadFromSpawn,
+  getRecordedPhase,
+  markResumeHooksWaitShadow,
+  recordHooksInitWait,
+  noteResumeReadAhead,
+  markFlagFetchKick,
+  recordSpawnToExec,
+  wasWarmSpareClaimed,
+  logStartupTiming,
+  markHydratePrefetchSettled,
+  markTurnBegan,
   startupTimingRecorderByHost,
   noteUserContextBuild,
   markHooksInitSource,
-  markTurnBegan,
+  noteFlagFetchWait,
+  markWarmCacheKickAsks,
+  getFlagFetchKick,
   consumeStartupTiming,
-  getRecordedPhase,
-  recordFirstMessageReadFromSpawn,
-  markResumeHooksWaitShadow,
-  recordHooksInitWait,
-  markHydratePrefetchSettled,
+  markWarmSpareClaimed,
+  getFlagFetchWaitedMs,
+  markSpareLoaded,
 };

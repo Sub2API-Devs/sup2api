@@ -3,10 +3,10 @@
  *
  * /sandbox 依赖检查：ripgrep、bubblewrap、socat、seatbelt、Windows WFP 等是否就绪与安装提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/sandbox/SandboxDependenciesTab.tsx
- * pieces: chunk-55w3ydvj.js (14), chunk-rtnapjwv.js (1)
- * attribution: placement 1, fingerprint 3, layout 9, callgraph-fingerprint 1, file-local 1
+ * pieces: chunk-ex0jqs9a.js (1), chunk-y07105e8.js (14)
+ * attribution: fingerprint 3, placement 1, layout 9, callgraph-fingerprint 1, file-local 1
  */
 import { getSandboxBwrapPath } from "../../utils/subprocessEnv.js";
 import { bunWhichSync } from "../../utils/which.js";
@@ -31,7 +31,7 @@ import { getPlatform } from "../../utils/platform.js";
 import { SandboxDepCheckLine } from "./WindowsSandboxStatus.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-rtnapjwv.js:2100-2164 fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-ex0jqs9a.js:2100-2164 fingerprint (2.1.88 match: _temp2, 1)
 /**
  * 函数 sandboxBinaryPath（取沙箱二进制路径）；位于「/sandbox 依赖检查：ripgrep、bubblewrap、socat、seatbelt、Windows WFP 等是否就绪与安装提示」模块。
  */
@@ -40,30 +40,30 @@ function sandboxBinaryPath() {
   if (sandboxBwrapPath) return bunWhichSync(sandboxBwrapPath);
   return bunWhichSync("bwrap");
 }
-//@ chunk-55w3ydvj.js:16494-16498 placement
+//@ chunk-y07105e8.js:17671-17675 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-55w3ydvj.js:16494", () => {
+deferInit("chunk-y07105e8.js:17671", () => {
   init_react_production();
 });
-//@ chunk-55w3ydvj.js:16498-16542 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-y07105e8.js:17675-17719 fingerprint (2.1.88 match: _temp, 1)
 function hasRipgrep(e) {
   return e.includes("ripgrep");
 }
-//@ chunk-55w3ydvj.js:16542-16589 layout
+//@ chunk-y07105e8.js:17719-17766 layout
 function isBubblewrapMissing(output) {
   return output.startsWith(`${BWRAP_LABEL}not `);
 }
-//@ chunk-55w3ydvj.js:16589-16638 layout
+//@ chunk-y07105e8.js:17766-17815 layout
 function isSocatMissing(output) {
   return output.startsWith(`${SOCAT_LABEL}not `);
 }
-//@ chunk-55w3ydvj.js:16638-16736 callgraph-fingerprint (2.1.88 match: _temp4, 0.413)
+//@ chunk-y07105e8.js:17815-17913 callgraph-fingerprint (2.1.88 match: _temp4, 0.413)
 function isOtherMissingDep(e_2) {
   return (
     !e_2.includes("ripgrep") && !e_2.startsWith(`${BWRAP_LABEL}not `) && !e_2.startsWith(`${SOCAT_LABEL}not `)
   );
 }
-//@ chunk-55w3ydvj.js:16736-16792 file-local
+//@ chunk-y07105e8.js:17913-17969 file-local
 function renderErrorLine(err) {
   return jsxProd_default(
     Text,
@@ -74,7 +74,7 @@ function renderErrorLine(err) {
     err,
   );
 }
-//@ chunk-55w3ydvj.js:16792-16955 layout
+//@ chunk-y07105e8.js:17969-18132 layout
 function withWindowsTlsCaStatus(state) {
   let caTrusted = null;
   let caManaged = true;
@@ -89,7 +89,7 @@ function withWindowsTlsCaStatus(state) {
     caManaged,
   };
 }
-//@ chunk-55w3ydvj.js:16955-17016 layout
+//@ chunk-y07105e8.js:18132-18193 layout
 function probeErrorResult(error) {
   return {
     probeError: describeWindowsSandboxRemedy(errorMessage(error), {
@@ -97,7 +97,7 @@ function probeErrorResult(error) {
     }),
   };
 }
-//@ chunk-55w3ydvj.js:17016-17075 layout
+//@ chunk-y07105e8.js:18193-18252 layout
 function probeSandboxDependencies() {
   return checkWindowsSandboxStatusAsync({
     srtWin: rgRunner(),
@@ -105,17 +105,17 @@ function probeSandboxDependencies() {
     .then(withWindowsTlsCaStatus)
     .catch(probeErrorResult);
 }
-//@ chunk-55w3ydvj.js:17075-17189 layout
+//@ chunk-y07105e8.js:18252-18366 layout
 function isWindowsSandboxBlockingError(message) {
   return (
     !message.startsWith("Sandbox user is not provisioned") && !message.startsWith("WFP filters not installed")
   );
 }
-//@ chunk-55w3ydvj.js:17189-17217 layout
+//@ chunk-y07105e8.js:18366-18394 layout
 function describeProbeResult(output) {
   return describeWindowsSandboxRemedy(output);
 }
-//@ chunk-55w3ydvj.js:17217-17273 layout
+//@ chunk-y07105e8.js:18394-18450 layout
 function renderProbeError(err) {
   return jsxProd_default(
     Text,
@@ -126,11 +126,11 @@ function renderProbeError(err) {
     err,
   );
 }
-//@ chunk-55w3ydvj.js:17273-17331 layout
+//@ chunk-y07105e8.js:18450-18507 layout
 var BWRAP_LABEL = "bubblewrap (bwrap) ";
 var SOCAT_LABEL = "socat ";
 var NOT_INSTALLED_LABEL = "not installed";
-//@ chunk-55w3ydvj.js:17331-19789 fingerprint (2.1.88 match: SandboxDependenciesTab, 0.369)
+//@ chunk-y07105e8.js:18507-20964 fingerprint (2.1.88 match: SandboxDependenciesTab, 0.369)
 function SandboxDependenciesTab(props) {
   let $ = useMemoCache(26);
   let { depCheck } = props;

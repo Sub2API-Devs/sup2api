@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增。鼠标滚轮滚动处理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-24t3dkzb.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xd1cb3xs.js (7)
  * attribution: placement 7
  */
 import { hasCursorUpViewportYankBug } from "./terminal.js";
 
-//@ chunk-24t3dkzb.js:5424-5550 placement
+//@ chunk-xd1cb3xs.js:5424-5550 placement
 function createJediTermInputState() {
   return {
     lastWheelTime: 0,
@@ -21,24 +21,24 @@ function createJediTermInputState() {
     pendingArrowBoost: 0,
   };
 }
-//@ chunk-24t3dkzb.js:5550-5626 placement
+//@ chunk-xd1cb3xs.js:5550-5626 placement
 function confirmJediTermScrollBug(state) {
   state.bugConfirmed = true;
   state.trackpadGesture = true;
   state.pendingArrowBoost++;
 }
-//@ chunk-24t3dkzb.js:5626-5683 placement
+//@ chunk-xd1cb3xs.js:5626-5683 placement
 function resetJediTermGesture(state) {
   state.trackpadGesture = false;
   state.pendingArrowBoost = 0;
 }
-//@ chunk-24t3dkzb.js:5683-5756 placement
+//@ chunk-xd1cb3xs.js:5683-5756 placement
 function takeArrowBoost(jediTerm) {
   let pendingArrowBoost = jediTerm.pendingArrowBoost;
   jediTerm.pendingArrowBoost = 0;
   return pendingArrowBoost;
 }
-//@ chunk-24t3dkzb.js:5756-5957 placement
+//@ chunk-xd1cb3xs.js:5756-5957 placement
 function isJediTermScrollBugConfirmed(state) {
   if (state.bugConfirmed) return true;
   if (
@@ -50,11 +50,11 @@ function isJediTermScrollBugConfirmed(state) {
   }
   return false;
 }
-//@ chunk-24t3dkzb.js:5957-5982 placement
+//@ chunk-xd1cb3xs.js:5957-5982 placement
 var ARROW_AFTER_WHEEL_MS = 75;
 var WHEEL_FLIP_MS = 250;
 var WHEEL_GESTURE_GAP_MS = 200;
-//@ chunk-24t3dkzb.js:5982-6596 placement
+//@ chunk-xd1cb3xs.js:5982-6596 placement
 /**
  * 修正 JetBrains 终端的滚轮问题（设置 jediTerm 打开时）：滚轮后 75ms 内出现的无修饰上下方向键视为触控板滚动的副产物丢弃并计数；向下滚动后 250ms 内的 wheelup 在确认是该终端时翻转成 wheeldown；首次发现时回调通知。
  */

@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：endpoints 动作
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (3)
  * attribution: placement 3
  */
 import { throwUnroutedArtifactAction } from "../../../services/artifacts/artifactPeople.js";
 import { ArtifactInputError } from "../constants.js";
 import { isPlainObject } from "../../../utils/isPlainObject.js";
 
-//@ chunk-8wvtd8sr.js:249767-250851 placement
+//@ chunk-xzmy9dn4.js:251992-253076 placement
 /**
  * 端点动作（get_endpoints/call_endpoint/run_script）：In 为可选的处理器实现模块；Th 为动作处理器（不可用时拒绝），md 为不可用文案。
  * （endpoints 处理器在本构建中不可用时的占位，所有方法拒绝或报错）
@@ -74,7 +74,7 @@ var ARTIFACT_ENDPOINTS_ACTION_HANDLER = {
     );
   },
 };
-//@ chunk-8wvtd8sr.js:250851-250958 placement
+//@ chunk-xzmy9dn4.js:253076-253183 placement
 function unreadableRecordResult(toolUseId) {
   return {
     tool_use_id: toolUseId,
@@ -82,7 +82,7 @@ function unreadableRecordResult(toolUseId) {
     content: "This record is unreadable in this build.",
   };
 }
-//@ chunk-8wvtd8sr.js:250958-252085 placement
+//@ chunk-xzmy9dn4.js:253183-254310 placement
 /**
  * 端点结果渲染与存储瘦身：Ha 代理到实现模块的渲染器；Eh / Ph 在存储时去掉 script_result / handler_result 的返回值、正文、头与错误详情，日志清空为占位。
  */

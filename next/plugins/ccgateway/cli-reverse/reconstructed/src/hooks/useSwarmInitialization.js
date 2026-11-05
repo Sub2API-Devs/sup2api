@@ -3,9 +3,9 @@
  *
  * swarm（团队）初始化：根据 teamName/agentName 设置队友上下文。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useSwarmInitialization.ts
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { useSession } from "../context/session.js";
@@ -18,7 +18,7 @@ import { readTeamFileAsync } from "../utils/swarm/teamHelpers.js";
 import { initializeTeammateHooks } from "../utils/swarm/teammateInit.js";
 import { getDynamicTeamContext } from "../utils/teammate.js";
 
-//@ chunk-18hwfzwa.js:220439-221010 fingerprint (2.1.88 match: useSwarmInitialization, 1)
+//@ chunk-czq1j3j2.js:225477-226048 fingerprint (2.1.88 match: useSwarmInitialization, 1)
 function useSwarmInitialization(initialMessages, { enabled = true } = {}) {
   let session = useSession();
   let setAppState = useSetAppState();

@@ -3,17 +3,17 @@
  *
  * 2.1.316 新增：冷启动时等待远程托管设置加载后再加载插件；当前是否为插件命令上下文。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cjydagjy.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7zw1900d.js (2), chunk-h61dq9nz.js (4)
  * attribution: placement 6
  */
+import { initBuiltinPlugins as initBuiltinPlugins_2 } from "../../plugins/builtinPlugins.js";
 import { getPolicyMemoryFingerprint } from "../../main.js";
 import { serializeCalls } from "../promiseQueue.js";
 import { clearMemoryFilesCache } from "../../components/Message.js";
 import { invalidateUserContext } from "../../context.js";
 import { logError } from "../log.js";
-import { initBuiltinPlugins as initBuiltinPlugins_2 } from "../../plugins/builtinPlugins.js";
 import { marketplaceNameAnswerState } from "./marketplaceNames.js";
 import {
   waitForRemoteManagedSettingsFetchToSettle,
@@ -33,7 +33,17 @@ import {
 } from "../../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-cjydagjy.js:15659-15889 placement
+//@ chunk-7zw1900d.js:228-246 placement
+/**
+ * initBuiltinPlugins：初始化内置插件。
+ */
+var initBuiltinPlugins = () => initBuiltinPlugins_2();
+//@ chunk-7zw1900d.js:246-264 placement
+/**
+ * 当前是否为插件命令上下文。
+ */
+var isPluginCommandContext = () => initBuiltinPlugins_2();
+//@ chunk-h61dq9nz.js:15837-16067 placement
 function watchManagedMemoryPolicy(rootSession) {
   let lastFingerprint = "";
   let lastResponse = "[]";
@@ -57,19 +67,9 @@ function watchManagedMemoryPolicy(rootSession) {
   watch(true);
   return () => watch(false);
 }
-//@ chunk-cjydagjy.js:15889-15906 placement
-/**
- * initBuiltinPlugins：初始化内置插件。
- */
-var initBuiltinPlugins = () => initBuiltinPlugins_2();
-//@ chunk-cjydagjy.js:15906-15924 placement
-/**
- * 当前是否为插件命令上下文。
- */
-var isPluginCommandContext = () => initBuiltinPlugins_2();
-//@ chunk-cjydagjy.js:15924-16004 placement
+//@ chunk-h61dq9nz.js:16067-16147 placement
 var READ_ONLY_PLUGIN_SUBCOMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-cjydagjy.js:15924", () => {
+deferInit("chunk-h61dq9nz.js:16067", () => {
   READ_ONLY_PLUGIN_SUBCOMMANDS = new Set([
     "list",
     "marketplace list",
@@ -79,7 +79,7 @@ deferInit("chunk-cjydagjy.js:15924", () => {
     "eval init",
   ]);
 });
-//@ chunk-cjydagjy.js:16004-16142 placement
+//@ chunk-h61dq9nz.js:16147-16285 placement
 /**
  * commander 动作是否为会修改插件状态的 plugin 子命令（list、marketplace list、validate、tag、test、eval init 除外）。
  */
@@ -88,7 +88,7 @@ function isPluginMutationCommand(command) {
   for (let node = command; node.parent !== null; node = node.parent) parts.unshift(node.name());
   return parts[0] === "plugin" && !READ_ONLY_PLUGIN_SUBCOMMANDS.has(parts.slice(1).join(" "));
 }
-//@ chunk-cjydagjy.js:16142-16952 placement
+//@ chunk-h61dq9nz.js:16285-17095 placement
 /**
  * 冷启动时等待远程托管设置加载后再加载插件。
  */

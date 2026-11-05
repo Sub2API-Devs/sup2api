@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。/plugin 命令参数补全。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-rkhcn3s2.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-btxqr26k.js (6)
  * attribution: placement 6
  */
 import { isPluginDirectoryModeOn, lanternPrismEnabled } from "../../utils/plugins/pluginGates.js";
@@ -28,7 +28,7 @@ import { HostScoped } from "../../utils/hostScoped.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { isPluginBlockedByPolicy } from "../../utils/plugins/marketplacePolicy.js";
 
-//@ chunk-rkhcn3s2.js:11904-12316 placement
+//@ chunk-btxqr26k.js:13052-13464 placement
 /**
  * /plugin 参数补全的候选：list 的 --enabled/--disabled 过滤项，以及 marketplace 子命令（add/remove/update/list）。
  */
@@ -63,7 +63,7 @@ var MARKETPLACE_SUBCOMMAND_COMPLETIONS = [
     isFinal: true,
   },
 ];
-//@ chunk-rkhcn3s2.js:12316-14075 placement
+//@ chunk-btxqr26k.js:13464-15223 placement
 async function pluginArgCompletions(arg, context, storage) {
   if (arg.length === 0) {
     let completions = [
@@ -189,7 +189,7 @@ async function pluginArgCompletions(arg, context, storage) {
   }
   return [];
 }
-//@ chunk-rkhcn3s2.js:14075-14197 placement
+//@ chunk-btxqr26k.js:15223-15345 placement
 class SingleEntryCache {
   key = null;
   candidates = [];
@@ -201,9 +201,9 @@ class SingleEntryCache {
     this.candidates = candidates;
   }
 }
-//@ chunk-rkhcn3s2.js:14197-14220 placement
+//@ chunk-btxqr26k.js:15345-15368 placement
 var INSTALLABLE_COMPLETIONS_CACHE = new HostScoped(() => new SingleEntryCache());
-//@ chunk-rkhcn3s2.js:14220-14774 placement
+//@ chunk-btxqr26k.js:15368-15922 placement
 /**
  * 从已知市场的本地缓存汇总可安装插件（按市场状态做缓存键），排除已安装和被策略屏蔽的，返回 /plugin install 的补全候选。
  */
@@ -247,7 +247,7 @@ async function getInstallablePluginCompletions(cache, storage) {
       isFinal: true,
     }));
 }
-//@ chunk-rkhcn3s2.js:14774-14961 placement
+//@ chunk-btxqr26k.js:15922-16109 placement
 function filterCompletionsByPrefix(completions, prefix) {
   if (!prefix) return completions;
   let lower = prefix.toLowerCase();

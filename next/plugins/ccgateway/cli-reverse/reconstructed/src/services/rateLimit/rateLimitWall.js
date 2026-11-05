@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：达到上限时领取重置并刷新限额；未达上限时提前领取重置等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fm6h4dv7.js (90)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sp3m4m72.js (90)
  * attribution: placement 90
  */
 import { randomUUID } from "crypto";
@@ -104,11 +104,11 @@ import { createSignal } from "../../utils/signal.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fm6h4dv7.js:10953-10984 placement
+//@ chunk-sp3m4m72.js:10955-10986 placement
 function now() {
   return Date.now();
 }
-//@ chunk-fm6h4dv7.js:10984-11306 placement
+//@ chunk-sp3m4m72.js:10986-11308 placement
 /**
  * 是否需要重新查询重置资格。
  */
@@ -132,7 +132,7 @@ function shouldRecheckResetStatus(offer, limits, surface, nowMs) {
       return shouldRetry && (offer.status === null || hasPendingGrants(limits));
   }
 }
-//@ chunk-fm6h4dv7.js:11306-11705 placement
+//@ chunk-sp3m4m72.js:11308-11707 placement
 /**
  * 按种类汇总可用的限额重置授权。
  */
@@ -166,7 +166,7 @@ function groupResetGrants(limits, limitType, nowMs) {
     (a, b) => rankResetKindForLimit(a.kind, limitType) - rankResetKindForLimit(b.kind, limitType),
   );
 }
-//@ chunk-fm6h4dv7.js:11705-12155 placement
+//@ chunk-sp3m4m72.js:11707-12157 placement
 /**
  * 当前达到上限时可用的重置提议。
  */
@@ -200,11 +200,11 @@ function availableResetOffers(limits, nowMs = Date.now()) {
       });
   return offers;
 }
-//@ chunk-fm6h4dv7.js:12155-12202 placement
+//@ chunk-sp3m4m72.js:12157-12204 placement
 function firstAvailableResetOffer(limits, nowMs = Date.now()) {
   return availableResetOffers(limits, nowMs)[0];
 }
-//@ chunk-fm6h4dv7.js:12202-12332 placement
+//@ chunk-sp3m4m72.js:12204-12334 placement
 /**
  * 当前限额下不能使用的重置及原因。
  */
@@ -213,7 +213,7 @@ function unusableResetsFor(limits, nowMs = Date.now()) {
   if (status === undefined || status === null || limits.rateLimitType === undefined) return [];
   return unusableResetOffers(status, limits.rateLimitType, nowMs);
 }
-//@ chunk-fm6h4dv7.js:12332-12673 placement
+//@ chunk-sp3m4m72.js:12334-12675 placement
 /**
  * 不能用于当前限额的重置及原因。
  */
@@ -236,7 +236,7 @@ function unusableResetOffers(limits, rateLimitType, nowMs) {
   }
   return offers;
 }
-//@ chunk-fm6h4dv7.js:12673-13325 placement
+//@ chunk-sp3m4m72.js:12675-13327 placement
 /**
  * 重置不可用的原因码。
  */
@@ -269,7 +269,7 @@ function resetUnavailableReason(grant, limits) {
     return "cannot_clear";
   return grant.useRequiresLimit ? "needs_limit" : "unavailable";
 }
-//@ chunk-fm6h4dv7.js:13325-14034 placement
+//@ chunk-sp3m4m72.js:13327-14036 placement
 /**
  * 重置不可用原因的说明。
  */
@@ -297,7 +297,7 @@ function describeResetUnavailable(grant, limits) {
       return "can't be used right now";
   }
 }
-//@ chunk-fm6h4dv7.js:14034-14195 placement
+//@ chunk-sp3m4m72.js:14036-14197 placement
 /**
  * 重置提议的标签文本（Fable 在周限额墙时附加后缀）。
  */
@@ -308,11 +308,11 @@ function resetOfferLabel(offer) {
     ? `${label} \xB7 ${cedarEmberCopy.fableAtWeeklySuffix}`
     : label;
 }
-//@ chunk-fm6h4dv7.js:14195-14258 placement
+//@ chunk-sp3m4m72.js:14197-14260 placement
 function totalResetsLeft(limits) {
   return limits.grants.reduce((acc, grant) => acc + grant.resetsLeft, 0);
 }
-//@ chunk-fm6h4dv7.js:14258-14383 placement
+//@ chunk-sp3m4m72.js:14260-14385 placement
 /**
  * 重置额度可直接使用：不要求先触达限额，且清除的限额都未耗尽。
  */
@@ -324,7 +324,7 @@ function isGrantUsable(grant, limits) {
     )
   );
 }
-//@ chunk-fm6h4dv7.js:14383-14855 placement
+//@ chunk-sp3m4m72.js:14385-14857 placement
 /**
  * 重置相关的用量标识。
  */
@@ -362,13 +362,13 @@ function resetUsageBadge(grant, limits) {
     percentUsedMax: best.percentUsed,
   };
 }
-//@ chunk-fm6h4dv7.js:14855-14913 placement
+//@ chunk-sp3m4m72.js:14857-14915 placement
 function resetLimitDisplayName(rateLimitType) {
   return rateLimitType === "seven_day_sonnet"
     ? getWeeklyModelLimitName()
     : getRateLimitDisplayName(rateLimitType);
 }
-//@ chunk-fm6h4dv7.js:14913-15148 placement
+//@ chunk-sp3m4m72.js:14915-15150 placement
 /**
  * 可重置限额类型的显示名（cowork/omelette/oauth 应用类型返回 null）。
  */
@@ -386,7 +386,7 @@ function limitDisplayName(claimType) {
       return null;
   }
 }
-//@ chunk-fm6h4dv7.js:15148-15347 placement
+//@ chunk-sp3m4m72.js:15150-15349 placement
 /**
  * 未到墙时提前使用重置的说明行（有编号/无编号）。
  */
@@ -400,7 +400,7 @@ function earlyUseLine(offer) {
       return formatLimitResetTemplate(cedarEmberCopy.earlyNoNumberLine, resetOfferFields(offer));
   }
 }
-//@ chunk-fm6h4dv7.js:15347-15460 placement
+//@ chunk-sp3m4m72.js:15349-15462 placement
 /**
  * 是否正在领取重置。
  */
@@ -413,14 +413,14 @@ function isClaimingReset() {
       hasRecentUnsettledClaim(state))
   );
 }
-//@ chunk-fm6h4dv7.js:15460-15513 placement
+//@ chunk-sp3m4m72.js:15462-15515 placement
 /**
  * 判断额度墙上是否可提供重置。
  */
 function isResetOfferAvailable(limits, nowMs = Date.now()) {
   return firstAvailableResetOffer(limits, nowMs) !== undefined;
 }
-//@ chunk-fm6h4dv7.js:15513-15761 placement
+//@ chunk-sp3m4m72.js:15515-15763 placement
 /**
  * 重置用完时的说明行。
  */
@@ -442,14 +442,14 @@ function resetsUsedUpLine(limits, nowMs = Date.now()) {
     left: 0,
   });
 }
-//@ chunk-fm6h4dv7.js:15761-15819 placement
+//@ chunk-sp3m4m72.js:15763-15821 placement
 /**
  * 是否存在覆盖最近结束时间的重置授权。
  */
 function hasResetGrantCoveringLatestEnd(limits, nowMs = Date.now()) {
   return getLatestResetGrantEnd(usableStatusForWall(limits), nowMs) !== undefined;
 }
-//@ chunk-fm6h4dv7.js:15819-15956 placement
+//@ chunk-sp3m4m72.js:15821-15958 placement
 /**
  * 有资格、当前无可用额度但仍有剩余重置次数。
  */
@@ -463,7 +463,7 @@ function hasPendingGrants(limits) {
     status.grants.some((grant) => grant.resetsLeft > 0)
   );
 }
-//@ chunk-fm6h4dv7.js:15956-16296 placement
+//@ chunk-sp3m4m72.js:15958-16298 placement
 /**
  * 重置提议的显示字段。
  */
@@ -485,7 +485,7 @@ function resetOfferFields(offer) {
       }),
   };
 }
-//@ chunk-fm6h4dv7.js:16296-16859 placement
+//@ chunk-sp3m4m72.js:16298-16861 placement
 /**
  * 重置能清除哪些限额。
  */
@@ -519,28 +519,28 @@ function resetClearsLimits(grant) {
   if (lastName === undefined) return "limits";
   return listed.length === 0 ? `${lastName} limit` : `${listed.join(", ")} and ${lastName} limits`;
 }
-//@ chunk-fm6h4dv7.js:16859-16944 placement
+//@ chunk-sp3m4m72.js:16861-16946 placement
 function latestGrantStartLine(endsAt) {
   let timestampOrUndefined = parseTimestampOrUndefined(endsAt);
   return timestampOrUndefined === undefined
     ? undefined
     : formatResetTimeWithLocale(Math.floor(timestampOrUndefined / 1000), false, false, true);
 }
-//@ chunk-fm6h4dv7.js:16944-17029 placement
+//@ chunk-sp3m4m72.js:16946-17031 placement
 function latestGrantEndLine(endsAt) {
   let timestampOrUndefined = parseTimestampOrUndefined(endsAt);
   return timestampOrUndefined === undefined
     ? undefined
     : formatResetTimeWithLocale(Math.floor(timestampOrUndefined / 1000), false, true, true);
 }
-//@ chunk-fm6h4dv7.js:17029-17074 placement
+//@ chunk-sp3m4m72.js:17031-17076 placement
 function isResetAtWallOffered() {
   return (
     isCedarEmberEnabled() ||
     isOnlyIfUnusedResetNote(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_WISE_BEAR_COPY, null))
   );
 }
-//@ chunk-fm6h4dv7.js:17074-17136 placement
+//@ chunk-sp3m4m72.js:17076-17138 placement
 /**
  * 在额度墙上从菜单里提供重置入口。
  */
@@ -548,7 +548,7 @@ function offerResetAtWallFromMenu(limits, credentials) {
   if (!isResetAtWallOffered() || !canAutoResumeLimitType(limits)) return;
   askResetAtWall(limits, credentials, "cli_menu");
 }
-//@ chunk-fm6h4dv7.js:17136-17268 placement
+//@ chunk-sp3m4m72.js:17138-17270 placement
 /**
  * 周限额（含超额）触墙时询问可用的重置。
  */
@@ -562,7 +562,7 @@ function offerCreditsResetAtWall(credentials) {
     return;
   askResetAtWall(limits, credentials, "cli_credits_required");
 }
-//@ chunk-fm6h4dv7.js:17268-17400 placement
+//@ chunk-sp3m4m72.js:17270-17402 placement
 /**
  * 在限额墙询问重置状态（订阅会话切换、清理过期的未结算领取）。
  */
@@ -573,7 +573,7 @@ function askResetAtWall(limits, credentials, surface) {
   if (state.unsettledClaimEpoch !== getLimitsAccountEpoch()) clearUnsettledClaim(state);
   askResetStatus(limits, credentials, "wall", surface);
 }
-//@ chunk-fm6h4dv7.js:17400-18383 placement
+//@ chunk-sp3m4m72.js:17402-18385 placement
 /**
  * 查询重置资格（按阶段去重）。
  */
@@ -657,7 +657,7 @@ function askResetStatus(limits, credentials, surfaceKind, eventSurface) {
   creditState.pendingAsk = ask;
   return ask;
 }
-//@ chunk-fm6h4dv7.js:18383-20100 placement
+//@ chunk-sp3m4m72.js:18385-20102 placement
 /**
  * 处理重置资格查询结果。
  */
@@ -746,7 +746,7 @@ function settleResetStatus({ wall, failures, previous, result: askResult, autoAr
     extra_usage_state: fromEnumOpt(status.eventProps?.extraUsageState),
   });
 }
-//@ chunk-fm6h4dv7.js:20100-20310 placement
+//@ chunk-sp3m4m72.js:20102-20312 placement
 /**
  * 核对未结算的重置领取：账号变化或额度已不可用时清除。
  */
@@ -760,17 +760,17 @@ function settleUnsettledClaim(state, status, credentials) {
   probeOrFireQuotaResume(credentials);
   if (status !== null && !isCooldownActive(status)) clearUnsettledClaim(state);
 }
-//@ chunk-fm6h4dv7.js:20310-20324 placement
+//@ chunk-sp3m4m72.js:20312-20326 placement
 var UNRESOLVED_CLAIM_TTL_MS = 600000;
-//@ chunk-fm6h4dv7.js:20324-20403 placement
+//@ chunk-sp3m4m72.js:20326-20405 placement
 function hasRecentUnsettledClaim(state) {
   return state.unsettledClaimAtMs !== null && now() - state.unsettledClaimAtMs < UNRESOLVED_CLAIM_TTL_MS;
 }
-//@ chunk-fm6h4dv7.js:20403-20485 placement
+//@ chunk-sp3m4m72.js:20405-20487 placement
 function resetFlowPhase(result) {
   return result.kind === "answered" ? (result.status === null ? "absent" : "block") : result.kind;
 }
-//@ chunk-fm6h4dv7.js:20485-20574 placement
+//@ chunk-sp3m4m72.js:20487-20576 placement
 function isClaimForGrant(state, id) {
   return (
     state.unsettledClaimGrantId === id &&
@@ -778,7 +778,7 @@ function isClaimForGrant(state, id) {
     hasRecentUnsettledClaim(state)
   );
 }
-//@ chunk-fm6h4dv7.js:20574-20701 placement
+//@ chunk-sp3m4m72.js:20576-20703 placement
 /**
  * 清空未结算的重置领取记录。
  */
@@ -788,7 +788,7 @@ function clearUnsettledClaim(state) {
   state.unsettledClaimEpoch = null;
   state.unsettledClaimAtMs = null;
 }
-//@ chunk-fm6h4dv7.js:20701-20858 placement
+//@ chunk-sp3m4m72.js:20703-20860 placement
 /**
  * 记录一次未结算的重置领取（额度 id、请求 id、账号代数、时间）。
  */
@@ -798,13 +798,13 @@ function recordUnsettledClaim(state, unsettledClaimGrantId, requestId, unsettled
   state.unsettledClaimRequestId = requestId;
   state.unsettledClaimEpoch = unsettledClaimEpoch;
 }
-//@ chunk-fm6h4dv7.js:20858-20955 placement
+//@ chunk-sp3m4m72.js:20860-20957 placement
 function claimRequestIdFor(state, id) {
   return isClaimForGrant(state, id) && state.unsettledClaimRequestId !== null
     ? state.unsettledClaimRequestId
     : randomUUID();
 }
-//@ chunk-fm6h4dv7.js:20955-21404 placement
+//@ chunk-sp3m4m72.js:20957-21406 placement
 /**
  * 首次显示重置提议时上报。
  */
@@ -827,7 +827,7 @@ function reportResetOfferShown(limits, surface) {
     config_version: cedarEmberVersion(),
   });
 }
-//@ chunk-fm6h4dv7.js:21404-21516 placement
+//@ chunk-sp3m4m72.js:21406-21518 placement
 /**
  * 对话框打开时需要时重新查询重置状态。
  */
@@ -841,7 +841,7 @@ function refreshResetStatusForDialog(limits, credentials) {
   )
     askResetStatus(limits, credentials, "dialog");
 }
-//@ chunk-fm6h4dv7.js:21516-21650 placement
+//@ chunk-sp3m4m72.js:21518-21652 placement
 /**
  * 执行重置流程，异常时返回 unavailable。
  */
@@ -859,7 +859,7 @@ async function startResetFlowSafe(entry, credentials, eventSurface) {
     };
   }
 }
-//@ chunk-fm6h4dv7.js:21650-21753 placement
+//@ chunk-sp3m4m72.js:21652-21755 placement
 /**
  * 查询重置状态；之前有进行中的查询且仍需刷新时再查一次。
  */
@@ -869,7 +869,7 @@ async function askResetStatusTwice(surface, credentials) {
   if (wasAsking && RainbowText(getCurrentLimits()))
     await askResetStatus(getCurrentLimits(), credentials, surface);
 }
-//@ chunk-fm6h4dv7.js:21753-22153 placement
+//@ chunk-sp3m4m72.js:21755-22155 placement
 /**
  * /reset 流程入口：检查是否可用并给出提议。
  */
@@ -911,7 +911,7 @@ async function startResetFlow(entry, credentials, eventSurface) {
   }
   return chooseResetOffer(entry, offers, unusableResetsFor(limits), eventSurface);
 }
-//@ chunk-fm6h4dv7.js:22153-22669 placement
+//@ chunk-sp3m4m72.js:22155-22671 placement
 /**
  * 选择或确认重置提议。
  */
@@ -953,7 +953,7 @@ function chooseResetOffer(entry, offers, unusable, requestedKind) {
     },
   };
 }
-//@ chunk-fm6h4dv7.js:22669-22798 placement
+//@ chunk-sp3m4m72.js:22671-22800 placement
 /**
  * 把可选重置列为 “a X, a Y or a Z”。
  */
@@ -962,7 +962,7 @@ function formatResetChoices(kinds) {
   let last = mapped.pop();
   return last === undefined ? "nothing here" : mapped.length === 0 ? last : `${mapped.join(", ")} or ${last}`;
 }
-//@ chunk-fm6h4dv7.js:22798-23114 placement
+//@ chunk-sp3m4m72.js:22800-23116 placement
 /**
  * 上报选择的重置。
  */
@@ -980,7 +980,7 @@ function reportResetSelected(entry, offer) {
     config_version: cedarEmberVersion(),
   });
 }
-//@ chunk-fm6h4dv7.js:23114-23825 placement
+//@ chunk-sp3m4m72.js:23116-23827 placement
 /**
  * 向服务端查询重置资格并上报。
  */
@@ -1037,7 +1037,7 @@ async function checkResetEligibility(entry, credentials, eventSurface) {
     };
   return chooseResetOffer(entry, offers, unusableResetOffers(status, null, nowMs), eventSurface);
 }
-//@ chunk-fm6h4dv7.js:23825-24148 placement
+//@ chunk-sp3m4m72.js:23827-24150 placement
 /**
  * 非上限时可用的重置提议。
  */
@@ -1059,7 +1059,7 @@ function anytimeResetOffers(limits, nowMs) {
       });
   return offers;
 }
-//@ chunk-fm6h4dv7.js:24148-24740 placement
+//@ chunk-sp3m4m72.js:24150-24742 placement
 /**
  * 重置状态说明（无可用、未在上限等）。
  */
@@ -1099,7 +1099,7 @@ function describeResetState(status) {
     text: formatLimitResetTemplate(`${reasonText} \xB7 {resets} left \xB7 use by {date}`, fields),
   };
 }
-//@ chunk-fm6h4dv7.js:24740-25025 placement
+//@ chunk-sp3m4m72.js:24742-25027 placement
 /**
  * 不提供重置时的结果（已用完、状态未知、当前额度足够或其他原因）。
  */
@@ -1128,7 +1128,7 @@ function resetNotOfferedResult(limits) {
     text: withLimitResetTime(resetStatusLine(limits), limits),
   };
 }
-//@ chunk-fm6h4dv7.js:25025-25166 placement
+//@ chunk-sp3m4m72.js:25027-25168 placement
 /**
  * 是否有可直接用于当前限额的重置额度。
  */
@@ -1140,12 +1140,12 @@ function hasUsableGrantFor(status, limits) {
     status.grants.some((grant) => grant.usableNow && !grant.paused && clearsLimit(grant, rateLimitType))
   );
 }
-//@ chunk-fm6h4dv7.js:25166-25233 placement
+//@ chunk-sp3m4m72.js:25168-25235 placement
 function isCooldownActive(status) {
   let timestampOrUndefined = parseTimestampOrUndefined(status.cooldownUntil);
   return timestampOrUndefined !== undefined && timestampOrUndefined > now();
 }
-//@ chunk-fm6h4dv7.js:25233-25832 placement
+//@ chunk-sp3m4m72.js:25235-25834 placement
 /**
  * 当前限额下的重置状态行。
  */
@@ -1173,7 +1173,7 @@ function resetStatusLine(limits) {
   if (isCooldownActive(status)) return `${RESET_NOT_FOR_THIS_LIMIT_LINE} \xB7 try again in a minute`;
   return RESET_NOT_FOR_THIS_LIMIT_LINE;
 }
-//@ chunk-fm6h4dv7.js:25832-25954 placement
+//@ chunk-sp3m4m72.js:25834-25956 placement
 /**
  * 在说明后附上限额重置时间。
  */
@@ -1183,7 +1183,7 @@ function withLimitResetTime(line, limits) {
     ? `${line} \xB7 this limit resets ${resetText}`
     : `${line} \xB7 ${NOT_AT_LIMIT_LINE}`;
 }
-//@ chunk-fm6h4dv7.js:25954-26328 placement
+//@ chunk-sp3m4m72.js:25956-26330 placement
 /**
  * 上报用户拒绝重置。
  */
@@ -1208,7 +1208,7 @@ function reportResetDeclined(entry, offer) {
     ),
   };
 }
-//@ chunk-fm6h4dv7.js:26328-26781 placement
+//@ chunk-sp3m4m72.js:26330-26783 placement
 /**
  * 用户保留重置时的结果。
  */
@@ -1238,7 +1238,7 @@ function keepResetForLater(entry, offers) {
     text: formatLimitResetTemplate(getCedarEmberCopy().keptChoiceLine, resetOfferFields(reduced)),
   };
 }
-//@ chunk-fm6h4dv7.js:26781-27116 placement
+//@ chunk-sp3m4m72.js:26783-27118 placement
 /**
  * 领取重置（防重入）。
  */
@@ -1268,7 +1268,7 @@ async function claimReset(entry, credentials, offer) {
     creditState.claiming = false;
   }
 }
-//@ chunk-fm6h4dv7.js:27116-30155 placement
+//@ chunk-sp3m4m72.js:27118-30157 placement
 /**
  * 达到上限时领取重置并刷新限额。
  */
@@ -1503,15 +1503,15 @@ async function claimResetAtWall(wall, credentials, offer) {
     }
   }
 }
-//@ chunk-fm6h4dv7.js:30155-30240 placement
+//@ chunk-sp3m4m72.js:30157-30242 placement
 function earlyUsePercentUsedMax(offer) {
   return offer.origin === "anytime" ? (offer.earlyUse?.percentUsedMax ?? undefined) : undefined;
 }
-//@ chunk-fm6h4dv7.js:30240-30302 placement
+//@ chunk-sp3m4m72.js:30242-30304 placement
 function hasEarlyUse(offer) {
   return offer.origin === "anytime" && offer.earlyUse !== null;
 }
-//@ chunk-fm6h4dv7.js:30302-32325 placement
+//@ chunk-sp3m4m72.js:30304-32327 placement
 /**
  * 未达上限时提前领取重置。
  */
@@ -1674,7 +1674,7 @@ async function claimResetEarly(entry, credentials, offer) {
     }
   }
 }
-//@ chunk-fm6h4dv7.js:32325-33122 placement
+//@ chunk-sp3m4m72.js:32327-33124 placement
 /**
  * 重置流程的提示文本。
  */
@@ -1692,14 +1692,14 @@ var RESET_UNAVAILABLE_LINE = "Your reset can't be used right now";
 var LOW_PRIORITY_RESETS_BLOCKED_LINE = `Resets can't be used while you continue at lower priority \xB7 run /${LIMIT_RESET} after that ends`;
 var RESET_ONLY_AT_LIMIT_LINE =
   "Your reset only works at a usage limit, and you're not at one now \xB7 nothing was used";
-//@ chunk-fm6h4dv7.js:33122-33220 placement
+//@ chunk-sp3m4m72.js:33124-33222 placement
 /**
  * 说明「这个重置不补回某个限额，要等它自己重置」。
  */
 function noRefillUntilResetLine(limitName) {
   return `Your reset doesn't refill your ${limitName}, so it can't be used until that resets`;
 }
-//@ chunk-fm6h4dv7.js:33220-34433 placement
+//@ chunk-sp3m4m72.js:33222-34435 placement
 /**
  * 查询/领取重置的状态文本。
  */
@@ -1725,14 +1725,14 @@ var RESET_GONE_MAYBE_APPLIED_LINE =
 var SEND_MESSAGE_TO_CONTINUE_LINE = "send a message to continue";
 var LIMITS_ALREADY_RESETTING_LINE = "Your limits are already being reset \xB7 one moment";
 var RESET_LOGIN_ERROR_LINE = "Couldn't reset your limits with this login \xB7 run /login, then try again";
-//@ chunk-fm6h4dv7.js:34433-34472 placement
+//@ chunk-sp3m4m72.js:34435-34474 placement
 /**
  * 在重置成功文案后追加「发一条消息继续」。
  */
 function appendContinueHint(text) {
   return `${text} \xB7 ${SEND_MESSAGE_TO_CONTINUE_LINE}`;
 }
-//@ chunk-fm6h4dv7.js:34472-34585 placement
+//@ chunk-sp3m4m72.js:34474-34587 placement
 /**
  * 取出并清除“可继续”的墙标记。
  */
@@ -1741,7 +1741,7 @@ function consumeContinuableWall(state, wall) {
   state.continuableWallResetsAt = null;
   return isContinuable;
 }
-//@ chunk-fm6h4dv7.js:34585-34849 placement
+//@ chunk-sp3m4m72.js:34587-34851 placement
 /**
  * 过滤出可重置的限额类型。
  */
@@ -1763,7 +1763,7 @@ function resettableLimitTypes(cleared) {
     }
   return types;
 }
-//@ chunk-fm6h4dv7.js:34849-35084 placement
+//@ chunk-sp3m4m72.js:34851-35086 placement
 /**
  * 领取重置后的收尾：取消自动续接、结束低优先级、释放限额、清空状态、发出 reset 事件（每步独立容错）。
  */
@@ -1795,7 +1795,7 @@ function applyClaimedReset(state, wall, clearedTypes, entry, shouldContinue) {
       logError(toError(error));
     }
 }
-//@ chunk-fm6h4dv7.js:35084-35285 placement
+//@ chunk-sp3m4m72.js:35086-35287 placement
 /**
  * 忘记被清除的限额窗口；当前被拒的限额已清除时改为 allowed。
  */
@@ -1815,7 +1815,7 @@ function releaseClearedLimits(clearedTypes) {
     resetsAt: undefined,
   });
 }
-//@ chunk-fm6h4dv7.js:35285-35357 placement
+//@ chunk-sp3m4m72.js:35287-35359 placement
 function probeOrFireQuotaResume(credentials) {
   if (isQuotaAutoResumeArmed()) {
     confirmAndFire();
@@ -1825,7 +1825,7 @@ function probeOrFireQuotaResume(credentials) {
     logError(toError(error));
   });
 }
-//@ chunk-fm6h4dv7.js:35357-35501 placement
+//@ chunk-sp3m4m72.js:35359-35503 placement
 /**
  * 当前墙已处理时把重置状态置为 idle。
  */
@@ -1840,7 +1840,7 @@ function resetWallPhase(wall) {
       phase: "idle",
     });
 }
-//@ chunk-fm6h4dv7.js:35501-35845 placement
+//@ chunk-sp3m4m72.js:35503-35847 placement
 /**
  * 更新已答复的重置状态。
  */
@@ -1871,7 +1871,7 @@ function refreshAnsweredStatus(wall, id) {
     },
   });
 }
-//@ chunk-fm6h4dv7.js:35845-35979 placement
+//@ chunk-sp3m4m72.js:35847-35981 placement
 /**
  * 订阅会话切换以在对话重置时清除可继续标记（只订阅一次）。
  */
@@ -1882,7 +1882,7 @@ function subscribeWallReset(state) {
     if (isConversationResetSwitch(to)) state.continuableWallResetsAt = null;
   });
 }
-//@ chunk-fm6h4dv7.js:35979-37293 placement
+//@ chunk-sp3m4m72.js:35981-37295 placement
 /**
  * juniper_tide（重置额度）状态 schema。
  */
@@ -1891,7 +1891,7 @@ var RESET_CLAIM_TIMEOUT_MS;
 var juniperTideEventSchema;
 var juniperTideStatusSchema;
 var juniperTideClaimResultSchema;
-deferInit("chunk-fm6h4dv7.js:35979", () => {
+deferInit("chunk-sp3m4m72.js:35981", () => {
   JUNIPER_TIDE_PROGRAM = "juniper_tide";
   RESET_CLAIM_TIMEOUT_MS = 25000;
   juniperTideEventSchema = DoctorLazy(() =>
@@ -1943,7 +1943,7 @@ deferInit("chunk-fm6h4dv7.js:35979", () => {
     }),
   );
 });
-//@ chunk-fm6h4dv7.js:37293-37933 placement
+//@ chunk-sp3m4m72.js:37295-37935 placement
 /**
  * 解析 juniper_tide 状态块。
  */
@@ -1977,7 +1977,7 @@ function parseJuniperTideStatus(juniperTide) {
       : null,
   };
 }
-//@ chunk-fm6h4dv7.js:37933-38373 placement
+//@ chunk-sp3m4m72.js:37935-38375 placement
 /**
  * 获取限额重置状态。
  */
@@ -2016,7 +2016,7 @@ async function fetchJuniperTideStatus(credentials) {
     };
   }
 }
-//@ chunk-fm6h4dv7.js:38373-39539 placement
+//@ chunk-sp3m4m72.js:38375-39541 placement
 /**
  * 调用 /api/organizations/{org}/reset_rate_limit 领取重置。
  */
@@ -2106,7 +2106,7 @@ async function claimJuniperTide(credentials) {
     };
   }
 }
-//@ chunk-fm6h4dv7.js:39539-39746 placement
+//@ chunk-sp3m4m72.js:39541-39748 placement
 /**
  * 重置流程的初始状态。
  */
@@ -2125,29 +2125,29 @@ function createResetFlowState() {
     events: createSignal(),
   };
 }
-//@ chunk-fm6h4dv7.js:39746-39763 placement
+//@ chunk-sp3m4m72.js:39748-39765 placement
 /**
  * 按 host 隔离的重置流程状态容器。
  */
 var resetFlowStateSlots; // deferred: uses createResetFlowState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fm6h4dv7.js:39746", () => {
+deferInit("chunk-sp3m4m72.js:39748", () => {
   resetFlowStateSlots = new HostScoped(createResetFlowState);
 });
-//@ chunk-fm6h4dv7.js:39763-39799 placement
+//@ chunk-sp3m4m72.js:39765-39801 placement
 /**
  * 取当前 host 的重置流程状态容器。
  */
 function currentResetFlowState() {
   return resetFlowStateSlots.of(getRootSession().host);
 }
-//@ chunk-fm6h4dv7.js:39799-39830 placement
+//@ chunk-sp3m4m72.js:39801-39833 placement
 /**
  * 当前的重置流程状态（阶段、墙重置点、状态文本等）。
  */
 function getResetFlowPhase() {
   return currentResetFlowState().state;
 }
-//@ chunk-fm6h4dv7.js:39830-39882 placement
+//@ chunk-sp3m4m72.js:39833-39885 placement
 /**
  * 写入重置流程状态并发出变更信号。
  */
@@ -2156,32 +2156,32 @@ function setResetFlowState(state) {
   flow.state = state;
   flow.changed.emit();
 }
-//@ chunk-fm6h4dv7.js:39882-39930 placement
+//@ chunk-sp3m4m72.js:39885-39933 placement
 /**
  * 订阅重置状态变化。
  */
 function subscribeResetChanges(listener) {
   return currentResetFlowState().changed.subscribe(listener);
 }
-//@ chunk-fm6h4dv7.js:39930-39977 placement
+//@ chunk-sp3m4m72.js:39933-39980 placement
 /**
  * 订阅重置流程事件（用于界面刷新）。
  */
 function onResetFlowEvent(listener) {
   return currentResetFlowState().events.subscribe(listener);
 }
-//@ chunk-fm6h4dv7.js:39977-40004 placement
+//@ chunk-sp3m4m72.js:39980-40007 placement
 var MAX_STATUS_ATTEMPTS = 3;
 var STATUS_RETRY_DELAY_MS = 12000;
 var STATUS_REQUEST_TIMEOUT_MS = 35000;
-//@ chunk-fm6h4dv7.js:40004-40079 placement
+//@ chunk-sp3m4m72.js:40007-40082 placement
 /**
  * 当前重置流程记录是否对应该墙（重置点相同且账号 epoch 未变）。
  */
 function isFlowForWall(flow, limits) {
   return limits.resetsAt === flow.wallResetsAt && flow.accountEpoch === getLimitsAccountEpoch();
 }
-//@ chunk-fm6h4dv7.js:40079-40158 placement
+//@ chunk-sp3m4m72.js:40082-40162 placement
 /**
  * 该墙的重置流程已答复时返回其状态文本。
  */
@@ -2189,7 +2189,7 @@ function answeredStatusForWall(limits) {
   let flow = getResetFlowPhase();
   return flow.phase === "answered" && isFlowForWall(flow, limits) ? flow.status : undefined;
 }
-//@ chunk-fm6h4dv7.js:40158-40219 placement
+//@ chunk-sp3m4m72.js:40162-40224 placement
 /**
  * 该墙的重置流程是否处于失败阶段。
  */
@@ -2197,7 +2197,7 @@ function isFailedForWall(limits) {
   let flow = getResetFlowPhase();
   return flow.phase === "failed" && isFlowForWall(flow, limits);
 }
-//@ chunk-fm6h4dv7.js:40219-40379 placement (2.1.88 match: getMockStatus, 0.387)
+//@ chunk-sp3m4m72.js:40224-40385 placement (2.1.88 match: getMockStatus, 0.388)
 /**
  * 被拒且可在重置点提供低优先级等待时为真。旧版名错配；疑似归错文件。
  */
@@ -2216,24 +2216,28 @@ function canArmLowPriorityReset(limits, nowMs = Date.now()) {
   );
 }
 export {
-  onResetFlowEvent,
-  offerResetAtWallFromMenu,
-  offerCreditsResetAtWall,
-  availableResetOffers,
-  resetOfferFields,
-  resetsUsedUpLine,
-  isClaimingReset,
-  subscribeResetChanges,
-  canArmLowPriorityReset,
-  reportResetOfferShown,
-  getResetFlowPhase,
-  isResetOfferAvailable,
-  hasResetGrantCoveringLatestEnd,
   resetOfferLabel,
+  subscribeResetChanges,
+  getResetFlowPhase,
+  availableResetOffers,
+  isClaimingReset,
+  canArmLowPriorityReset,
+  resetsUsedUpLine,
+  reportResetOfferShown,
   refreshResetStatusForDialog,
   startResetFlowSafe,
   RESET_STATUS_MESSAGES,
   CHECKING_FOR_RESET_LINE,
+  resetOfferFields,
+  earlyUseLine,
+  reportResetDeclined,
+  claimReset,
+  keepResetForLater,
+  reportResetSelected,
+  isResetOfferAvailable,
+  onResetFlowEvent,
+  offerResetAtWallFromMenu,
+  offerCreditsResetAtWall,
   answeredStatusForWall,
   currentResetFlowState,
   isFlowForWall,
@@ -2244,9 +2248,5 @@ export {
   isFailedForWall,
   claimJuniperTide,
   STATUS_REQUEST_TIMEOUT_MS,
-  earlyUseLine,
-  reportResetDeclined,
-  claimReset,
-  keepResetForLater,
-  reportResetSelected,
+  hasResetGrantCoveringLatestEnd,
 };

@@ -1,15 +1,15 @@
 /**
  * jose/dist/webapi/jwt/sign.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-5h78gfwc.js (1)
+ * pieces: chunk-0f6azspv.js (1)
  * attribution: esm-fingerprint 1
  */
 import { JWTClaimsSetVerifier } from "../lib/jwt_claims_set.js";
 import { CompactSign } from "../jws/compact/sign.js";
 import { JWTInvalid } from "../../node/esm/util/errors.js";
 
-//@ chunk-5h78gfwc.js:46950-47558 esm-fingerprint
+//@ chunk-0f6azspv.js:46950-47558 esm-fingerprint
 class SignJWT {
   #e;
   #t;

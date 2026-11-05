@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：服务端远程工具调用的准入与闸门
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ad2e1aj6.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nvm0wye1.js (7)
  * attribution: placement 7
  */
-import { createExplanationPromise } from "../../../components/permissions/PermissionExplanation.js";
+import { splitRemoteMeta } from "../protocolSchemas.js";
 import { isPlainObject, isSessionDenial, failedEnvelope } from "./callStatusQuery.js";
 import {
   unknownAttestationResult,
@@ -32,12 +32,15 @@ import {
   sanitizeToolNameForAnalytics,
   getUnknownToolAnalyticsName,
 } from "../../../services/analytics/metadata.js";
-import { refusedEnvelope } from "./backgroundCommands.js";
+import { isMarkedMode, refusedEnvelope } from "./backgroundCommands.js";
+import { compareWithStated, REMOTE_TOOL_PROTOCOL_VERSION } from "../protocolConstants.js";
+import { MINIMAL_INTERFACE_VERSION } from "../protocolNegotiation.js";
 import { callerKey, decidingInput } from "./servedShellSettings.js";
 import { withdrawAskedCall } from "./pendingAsks.js";
 import {
   withdrawnRequestMessage,
   lateCallMessage,
+  formatRefusal,
   protocolMismatchMessage,
   untrustedRepositoriesMessage,
   unattestedSenderMessage,
@@ -46,17 +49,14 @@ import {
   notStartedUpMessage,
 } from "../../../services/remoteTools/hostRefusals.js";
 import { logRemoteTools } from "../../../services/remoteTools/remoteToolsDebug.js";
-import { REMOTE_TOOL_PROTOCOL_VERSION } from "../protocolConstants.js";
 import { joinKnownCall, joinRetry, lookupCallerCall, callDeadlineMs } from "./callLedger.js";
 import { withDeadline } from "../../../utils/sleep.js";
 import { logForDebugging } from "../../../utils/debug.js";
 import { errorMessage } from "../../../utils/errors.js";
 
-//@ chunk-ad2e1aj6.js:71537-71828 placement
+//@ chunk-nvm0wye1.js:73047-73338 placement
 async function admitServedCall(toolName, toolInput, ctx, deps, arrivedOver, options) {
-  let { request, toolInput: toolInput_2 } = createExplanationPromise(
-    isPlainObject(toolInput) ? toolInput : {},
-  );
+  let { request, toolInput: toolInput_2 } = splitRemoteMeta(isPlainObject(toolInput) ? toolInput : {});
   let attestation = arrivedOver === "bridge" ? unknownAttestationResult() : undefined;
   return serveRemoteToolCall(toolName, toolInput_2, request, ctx, deps, arrivedOver, {
     requestBytes: () => byteLengthOf(toolInput ?? {}),
@@ -70,13 +70,15 @@ async function admitServedCall(toolName, toolInput, ctx, deps, arrivedOver, opti
     }),
   });
 }
-//@ chunk-ad2e1aj6.js:71828-79282 placement
+//@ chunk-nvm0wye1.js:73338-81431 placement
 /**
  * 远程工具服务端处理一次调用：协议解析、准入、重试合并、权限判定、执行与结果整形。
  */
 async function serveRemoteToolCall(toolName, toolInput, request, ctx, deps, arrivedOver, options = {}) {
-  let requestBytes =
+  let arrivedBytes = options.sharedRequest?.arrivedBytes;
+  let arrivedSize =
     options.requestBytes ??
+    (arrivedBytes !== undefined ? () => arrivedBytes : undefined) ??
     (() =>
       byteLengthOf({
         toolInput,
@@ -91,6 +93,12 @@ async function serveRemoteToolCall(toolName, toolInput, request, ctx, deps, arri
   let wireArguments = servedMcpWireArgs(deps, toolName);
   let normalizedInput = renameInputFields(toolInput, wireArguments);
   let toolNameForText = truncateToLength(stripControlChars(toolName), MAX_TELEMETRY_STRING);
+  let statedInterface =
+    request.ok && arrivedOver !== "relay"
+      ? (request.sessionInterface ?? {
+          kind: "none",
+        })
+      : undefined;
   let facts = {
     arrivedOver,
     workerEpoch: ctx.workerEpoch,
@@ -138,6 +146,7 @@ async function serveRemoteToolCall(toolName, toolInput, request, ctx, deps, arri
     ...(options.modeStamp !== undefined && {
       modeStamp: options.modeStamp,
     }),
+    requestForm: options.sharedRequest === undefined ? "call_envelope" : "shared_request",
     serverVerdict:
       arrivedOver !== "session" ||
       !request.ok ||
@@ -146,11 +155,17 @@ async function serveRemoteToolCall(toolName, toolInput, request, ctx, deps, arri
         ? {
             kind: "absent",
           }
-        : options.modeStamp === "present"
+        : isMarkedMode(options.modeStamp)
           ? request.serverVerdict
           : {
               kind: "unmarked",
             },
+    ...(statedInterface !== undefined && {
+      sessionInterface: {
+        stated: statedInterface,
+        fit: compareWithStated(deps.interfaceRange ?? MINIMAL_INTERFACE_VERSION, statedInterface),
+      },
+    }),
   };
   let refuse = (code, message, extra = {}) => {
     if (facts.secondLeg) facts.askStillPending = true;
@@ -205,7 +220,21 @@ async function serveRemoteToolCall(toolName, toolInput, request, ctx, deps, arri
   };
   let envelope = await (async () => {
     if (deps.callLog !== undefined && !deps.callLog.priorLoaded) await deps.callLog.loadPrior();
-    if (requestBytes() > deps.policy.limits.max_request_bytes)
+    if (!request.ok && request.sharedRequestRefusal !== undefined) {
+      facts.sharedRequestRefusal = request.sharedRequestRefusal.what;
+      facts.refusedToolUseId = options.toolUseId;
+      if (request.sharedRequestRefusal.what === "not_honoured")
+        facts.sharedRequestPart = request.sharedRequestRefusal.part;
+      return refuse(
+        "invalid_request",
+        formatRefusal({
+          refusal: request.sharedRequestRefusal,
+          toolName: toolNameForText,
+          targetName: deps.targetName,
+        }),
+      );
+    }
+    if (arrivedSize() > deps.policy.limits.max_request_bytes)
       return refuse(
         "invalid_request",
         `The call is larger than ${deps.targetName} accepts (${deps.policy.limits.max_request_bytes} bytes) \u2014 it was not run.`,
@@ -527,12 +556,12 @@ async function serveRemoteToolCall(toolName, toolInput, request, ctx, deps, arri
   logServedCallTelemetry(envelope.envelope, facts, deps, sessionAfter);
   return buildRemoteToolCallResult(envelope);
 }
-//@ chunk-ad2e1aj6.js:79282-79375 placement
+//@ chunk-nvm0wye1.js:81431-81524 placement (2.1.88 match: _temp, 0.751)
 function hasSettledOutcome(result) {
   let { outcome } = result.envelope;
   return outcome === "completed" || outcome === "refused" || outcome === "failed";
 }
-//@ chunk-ad2e1aj6.js:79375-79680 placement
+//@ chunk-nvm0wye1.js:81524-81829 placement
 function gateServedCall({ toolName, ctx, deps, target, facts, refuse, answer }) {
   if (deps.policy.admission === "none") return Promise.resolve(answer());
   if (!deps.gate)
@@ -549,7 +578,7 @@ function gateServedCall({ toolName, ctx, deps, target, facts, refuse, answer }) 
     }),
   );
 }
-//@ chunk-ad2e1aj6.js:79680-79889 placement
+//@ chunk-nvm0wye1.js:81829-82039 placement
 function createAdmissionOutcomes({ target, facts, refuse, ctx, serve }) {
   return {
     refuse: (code, message) => refuse(admissionRefusalCode(code), message),
@@ -559,11 +588,11 @@ function createAdmissionOutcomes({ target, facts, refuse, ctx, serve }) {
     serve,
   };
 }
-//@ chunk-ad2e1aj6.js:79889-79987 placement
+//@ chunk-nvm0wye1.js:82039-82137 placement
 function refusalTargetNotAcceptingText(toolName, targetName) {
   return `${toolName} refused: ${targetName} is not accepting calls from cloud sessions right now.`;
 }
-//@ chunk-ad2e1aj6.js:79987-80196 placement
+//@ chunk-nvm0wye1.js:82137-82346 placement
 function admissionRefusalCode(code) {
   switch (code) {
     case "no_session":

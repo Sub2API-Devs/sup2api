@@ -3,9 +3,9 @@
  *
  * 组织记忆库选择（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-82kqcve8.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a2q0x549.js (13)
  * attribution: placement 13
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
@@ -17,64 +17,64 @@ import {
 import { getCurrentProjectConfig, saveCurrentProjectConfig } from "../../utils/config.js";
 import { logFeatureSad } from "../analytics/featureTelemetry.js";
 
-//@ chunk-82kqcve8.js:38209-38309 placement
+//@ chunk-a2q0x549.js:39375-39475 placement
 function isOrgMemoryDiscoveryEnabled() {
   if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_haze_glass", false)) return false;
   return !process.env.CLAUDE_MEMORY_STORES?.trim();
 }
-//@ chunk-82kqcve8.js:38309-38336 placement
+//@ chunk-a2q0x549.js:39475-39502 placement
 /**
  * 取当前的选择账号键。
  */
 function selectionAccountKey() {
   return getOrgMemoryAccountKey();
 }
-//@ chunk-82kqcve8.js:38336-38380 placement
+//@ chunk-a2q0x549.js:39502-39546 placement
 /**
  * 判断 id 是否为 silo（cagt_ 前缀）。
  */
 function isSiloId(selection) {
   return selection.startsWith("cagt_");
 }
-//@ chunk-82kqcve8.js:38380-38424 placement
+//@ chunk-a2q0x549.js:39546-39590 placement
 /**
  * 判断 id 是否为分组（sgrp_ 前缀）。
  */
 function isGroupingId(value) {
   return value.startsWith("sgrp_");
 }
-//@ chunk-82kqcve8.js:38424-38528 placement
+//@ chunk-a2q0x549.js:39590-39694 placement
 function classifySelectionKind(selection) {
   if (selection === null) return "none";
   if (isPublicProjects(selection)) return "public_projects";
   return isSiloId(selection) ? "silo" : "project";
 }
-//@ chunk-82kqcve8.js:38528-38576 placement
+//@ chunk-a2q0x549.js:39694-39742 placement
 /**
  * 显式关闭选择的特殊值。
  */
 var PUBLIC_PROJECTS = "public_projects";
 var EXPLICIT_OFF_SELECTION = "__explicit_off__";
-//@ chunk-82kqcve8.js:38576-38606 placement
+//@ chunk-a2q0x549.js:39742-39772 placement
 /**
  * 判断选择是否被显式关闭。
  */
 function isExplicitOff(selection) {
   return selection === EXPLICIT_OFF_SELECTION;
 }
-//@ chunk-82kqcve8.js:38606-38636 placement
+//@ chunk-a2q0x549.js:39772-39802 placement
 /**
  * 判断选择是否为公共项目。
  */
 function isPublicProjects(selection) {
   return selection === PUBLIC_PROJECTS;
 }
-//@ chunk-82kqcve8.js:38636-38668 placement
+//@ chunk-a2q0x549.js:39802-39834 placement
 /**
  * 选择 id 的合法格式正则。
  */
 var SELECTION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
-//@ chunk-82kqcve8.js:38668-38851 placement
+//@ chunk-a2q0x549.js:39834-40017 placement
 /**
  * 读取项目配置里保存的组织记忆选择：账号不匹配或格式无效时返回 null。
  */
@@ -88,7 +88,7 @@ function readSavedSelection() {
   let orgMemorySelection = currentProjectConfig.orgMemorySelection ?? null;
   return orgMemorySelection !== null && SELECTION_ID_RE.test(orgMemorySelection) ? orgMemorySelection : null;
 }
-//@ chunk-82kqcve8.js:38851-38957 placement
+//@ chunk-a2q0x549.js:40017-40123 placement
 /**
  * 取生效的组织记忆选择：已失效的返回 null，可用的直接返回，否则视条件返回保存值或 null。
  */
@@ -98,7 +98,7 @@ function getEffectiveSelection() {
   if (selection !== null && isPublicProjects(selection)) return selection;
   return isOrgMemoryDiscoveryEnabled() ? selection : null;
 }
-//@ chunk-82kqcve8.js:38957-39605 placement
+//@ chunk-a2q0x549.js:40123-40771 placement
 function saveOrgMemorySelection(selection, storageV5) {
   let accountKey = selectionAccountKey();
   if (selection !== null && accountKey === null) return "refused";
@@ -137,7 +137,7 @@ function saveOrgMemorySelection(selection, storageV5) {
   }, storageV5);
   return selection !== null ? "saved" : "cleared";
 }
-//@ chunk-82kqcve8.js:39605-39889 placement
+//@ chunk-a2q0x549.js:40771-41055 placement
 /**
  * 当保存的组织记忆选择仍对应当前账号时清除它，并记 org_memory_picker selection_dropped。
  */

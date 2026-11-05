@@ -1,13 +1,13 @@
 /**
  * highlight.js/lib/languages/protobuf.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: highlight.js@11.11.1
- * pieces: chunk-egr0twnb.js (1)
+ * pieces: chunk-636gp747.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-egr0twnb.js:374067-374758 cjs-fingerprint
+//@ chunk-636gp747.js:374067-374758 cjs-fingerprint
 var require_protobuf = __commonJS(function (cjsExports, cjsModule) {
   function protobuf(hljs) {
     let KEYWORDS = ["package", "import", "option", "optional", "required", "repeated", "group", "oneof"];

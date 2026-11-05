@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：记忆召回候选选择（相关性下限、索引扫描）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (9)
  * attribution: placement 9
  */
 import { relative } from "path";
@@ -46,17 +46,21 @@ import { EMPTY_USAGE } from "../services/api/emptyUsage.js";
 import { isModelNotFoundError, isModelPermissionDeniedError } from "../services/api/withRetry.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3302627-3302679 placement
+//@ chunk-5xgkngpb.js:3387701-3387784 placement
 /**
  * 记忆选择器按会话保存的两张表（已展示条目与已用会话）。
  */
 var memoryPickerMaps; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
 var memoryPickerSets;
-deferInit("chunk-e6aww6q8.js:3302627", () => {
+var pdfPickerSlot;
+deferInit("chunk-5xgkngpb.js:3387701", () => {
   memoryPickerMaps = new SessionRootSlot(() => new Map());
   memoryPickerSets = new SessionRootSlot(() => new Set());
+  pdfPickerSlot = new SessionRootSlot(() => ({
+    pdf: undefined,
+  }));
 });
-//@ chunk-e6aww6q8.js:3302713-3304053 placement
+//@ chunk-5xgkngpb.js:3387818-3389158 placement
 /**
  * 记忆召回选择器的系统提示（最多选 5 个、谨慎对待用户/项目概况记忆）及其输出 token 上限。
  */
@@ -71,7 +75,7 @@ Return a list of filenames for the memories that will clearly be useful to Claud
 Reply with only a JSON object of the form {"selected_memories": ["<filename>", ...]}.
 `;
 var SELECTOR_MAX_TOKENS = 512;
-//@ chunk-e6aww6q8.js:3304053-3306754 placement
+//@ chunk-5xgkngpb.js:3389158-3391861 placement
 /**
  * 记忆召回选择：按相关性下限从索引候选中挑选可返回的记忆，并记录无候选、扫描不完整等结果。
  */
@@ -265,22 +269,22 @@ async function selectMemoryRecall(
   }
   return selected;
 }
-//@ chunk-e6aww6q8.js:3306754-3306853 placement
+//@ chunk-5xgkngpb.js:3391861-3391960 placement
 /**
  * 没有本地记忆时给模型看的占位文字，以及“记忆类型前缀”的匹配正则。
  */
 var NO_LOCAL_MEMORY_TEXT; // deferred: uses MEMORY_TYPES (./memoryTypes.js) of its import cycle while loading; runs once the cycle is complete
-var regExp_16;
-deferInit("chunk-e6aww6q8.js:3306754", () => {
+var regExp_18;
+deferInit("chunk-5xgkngpb.js:3391861", () => {
   NO_LOCAL_MEMORY_TEXT = "(no local memory files)";
-  regExp_16 = new RegExp(`^\\[(?:${[...MEMORY_TYPES, "account"].join("|")})\\]\\s+`);
+  regExp_18 = new RegExp(`^\\[(?:${[...MEMORY_TYPES, "account"].join("|")})\\]\\s+`);
 });
-//@ chunk-e6aww6q8.js:3308623-3308633 placement
+//@ chunk-5xgkngpb.js:3393732-3393742 placement
 /**
  * 2
  */
 var YIELD_EVERY_N = 2;
-//@ chunk-e6aww6q8.js:3308633-3308829 placement
+//@ chunk-5xgkngpb.js:3393742-3393938 placement
 function* iterateSelectorModels() {
   let model = getDefaultSonnetModel();
   yield model;
@@ -300,7 +304,7 @@ function* iterateSelectorModels() {
     }
   }
 }
-//@ chunk-e6aww6q8.js:3308829-3308946 placement
+//@ chunk-5xgkngpb.js:3393938-3394055 placement
 function getMillionTokenCost(model) {
   let { usd, pricing } = calculateCostWithPricingSource(model, {
     ...EMPTY_USAGE,
@@ -309,7 +313,7 @@ function getMillionTokenCost(model) {
   });
   return pricing === "default" ? undefined : usd;
 }
-//@ chunk-e6aww6q8.js:3308946-3309282 placement
+//@ chunk-5xgkngpb.js:3394055-3394391 placement
 /**
  * 依次用候选模型执行请求，遇到 API 拒绝时换下一个模型；全部拒绝后抛出最后的错误。
  */
@@ -338,7 +342,7 @@ async function tryModelsUntilAccepted(models, attempt, signal) {
     }
   throw lastError;
 }
-//@ chunk-e6aww6q8.js:3309282-3309320 placement
+//@ chunk-5xgkngpb.js:3394391-3394429 placement
 /**
  * 模型不存在或无权限
  */
@@ -346,13 +350,14 @@ function isUnusableSelectorModel(error) {
   return isModelNotFoundError(error) || isModelPermissionDeniedError(error);
 }
 export {
+  memoryPickerMaps,
+  memoryPickerSets,
+  selectMemoryRecall,
   MEMORY_SELECTOR_PROMPT,
   SELECTOR_MAX_TOKENS,
   tryModelsUntilAccepted,
   iterateSelectorModels,
-  regExp_16,
+  regExp_18,
   isUnusableSelectorModel,
-  memoryPickerMaps,
-  memoryPickerSets,
-  selectMemoryRecall,
+  pdfPickerSlot,
 };

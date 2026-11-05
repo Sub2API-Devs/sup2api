@@ -3,11 +3,18 @@
  *
  * 2.1.316 新增。云任务对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (7)
  * attribution: placement 7
  */
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useLayoutEffect,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
@@ -16,13 +23,6 @@ import {
 import { Text, Box } from "../../ink/components/Text.js";
 import { isMenuOpen } from "../CustomSelect/select.js";
 import { RemoteAgentTaskLabel } from "./RemoteSessionProgress.js";
-import {
-  init_react_production,
-  useState,
-  useRef,
-  useLayoutEffect,
-  useEffect,
-} from "../../../vendor/react/cjs/react.production.js";
 import { useRegisterOverlay } from "../../context/overlayContext.js";
 import { useAppState } from "../../state/AppState.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
@@ -39,7 +39,12 @@ import { Dialog } from "../design-system/Dialog.js";
 import { FocusColumn } from "../design-system/FocusColumn.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:765561-765801 placement
+//@ chunk-czq1j3j2.js:729338-729342 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:729338", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:786586-786826 placement
 /**
  * 列表分组标题："标签 (数量)"。
  */
@@ -67,7 +72,7 @@ function SectionHeading(props) {
   } else headingElement = $[4];
   return headingElement;
 }
-//@ chunk-18hwfzwa.js:765801-766213 placement
+//@ chunk-czq1j3j2.js:786826-787238 placement
 /**
  * 任务列表项的标签：队友与远程代理用 RemoteAgentTaskLabel，其他直接显示 label。
  */
@@ -101,22 +106,17 @@ function TaskItemLabel(props) {
   } else labelElement = $[6];
   return labelElement;
 }
-//@ chunk-18hwfzwa.js:766213-766217 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:766213", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:766217-766266 placement
+//@ chunk-czq1j3j2.js:787242-787291 placement
 function selectRemoteBackgroundTasks(appState) {
   return appState.remoteBackgroundTasks;
 }
-//@ chunk-18hwfzwa.js:766266-766318 placement
+//@ chunk-czq1j3j2.js:787291-787343 placement
 function selectRemoteWorkerReportedGone_2(appState) {
   return appState.remoteWorkerReportedGone;
 }
-//@ chunk-18hwfzwa.js:766318-766334 placement
+//@ chunk-czq1j3j2.js:787343-787359 placement
 function noopCloudTaskChange() {}
-//@ chunk-18hwfzwa.js:766334-769919 placement
+//@ chunk-czq1j3j2.js:787359-790944 placement
 /**
  * CloudTasksDialog：查看云端任务的对话框。
  */

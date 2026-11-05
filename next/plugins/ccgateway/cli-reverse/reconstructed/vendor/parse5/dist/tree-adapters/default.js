@@ -1,13 +1,13 @@
 /**
  * parse5/dist/tree-adapters/default.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: parse5@7.2.0..7.2.1
- * pieces: chunk-6ja29j2n.js (1)
+ * pieces: chunk-p9ac6cnb.js (1)
  * attribution: esm-fingerprint 1
  */
 import { DOCUMENT_MODE } from "../../lib/common/html.js";
 
-//@ chunk-6ja29j2n.js:123774-126135 esm-fingerprint
+//@ chunk-p9ac6cnb.js:123774-126135 esm-fingerprint
 var defaultTreeAdapter = {
   createDocument() {
     return {

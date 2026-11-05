@@ -3,12 +3,13 @@
  *
  * 2.1.316 新增：云会话下行流过滤：worker 就绪前缓存、规范化会话信息、为宿主展平内容。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fe6rs39h.js (20)
- * attribution: placement 20
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-keyy05re.js (18), chunk-qqnmjrpr.js (4)
+ * attribution: placement 20, affinity 1, layout 1
  */
 import { randomUUID } from "crypto";
+import { START_REFUSAL_NOTICE } from "../../remote/startRefusalNotice.js";
 import { logForDebugging } from "../../utils/debug.js";
 import {
   sanitizeCloudText,
@@ -22,7 +23,7 @@ import { scopeKey } from "../transports/ccrClient.js";
 import { hasToolResultContent } from "../../remote/controlRequestShape.js";
 import { mapToolResultImages } from "../transports/ccrMessageMapping.js";
 import { CLOUD_LOCAL_CONTROL_TYPES } from "../cloudSession/hostedSessionRestrictions.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import {
   readSetupStepFields,
@@ -38,22 +39,13 @@ import {
   OMITTED_DOCUMENT_PLACEHOLDER,
   SUPPORTED_IMAGE_MIME_TYPES,
 } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
+import { countWhere } from "../../utils/collections.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { sessionIdBody } from "../../bridge/sessionIdCompat.js";
 import { HEADLESS_FEATURE_NAMES } from "./headlessFeatures.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fe6rs39h.js:44698-45093 placement
-/**
- * 云会话下行流过滤的限额常量：限流余量、持有/保留的对端消息条数、worker 就绪窗口、UUID 去重容量，以及各帧类型是否转发的表。
- */
-var STREAM_FILTER_LIMITS = 250;
-var STREAM_FILTER_SLACK_MS = 1000;
-var MAX_HELD_PEER_MESSAGES = 1000;
-var MAX_KEPT_PEER_MESSAGES = 200;
-var WORKER_READY_WINDOW_MS = 30000;
-var MAX_EMITTED_UUIDS = 200000;
-var MAX_EMITTED_PEER_UUIDS = 2048;
+//@ chunk-qqnmjrpr.js:376-713 affinity
 var STREAM_FRAME_TYPE_FILTER = {
   assistant: true,
   user: true,
@@ -75,13 +67,35 @@ var STREAM_FRAME_TYPE_FILTER = {
   control_response: false,
   control_cancel_request: false,
 };
-//@ chunk-fe6rs39h.js:45093-45148 placement
+//@ chunk-qqnmjrpr.js:713-767 placement
 function isForwardedMessageType(type) {
   return Object.hasOwn(STREAM_FRAME_TYPE_FILTER, type) ? STREAM_FRAME_TYPE_FILTER[type] : undefined;
 }
-//@ chunk-fe6rs39h.js:45148-45361 placement
-var HELD_SYSTEM_SUBTYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fe6rs39h.js:45148", () => {
+//@ chunk-qqnmjrpr.js:767-806 layout
+function isKnownForwardedMessageType(type) {
+  return isForwardedMessageType(type) !== undefined;
+}
+//@ chunk-qqnmjrpr.js:806-831 placement
+var WORKER_READY_WINDOW_MS = 30000;
+var STARTUP_WATCHDOG_MS = 120000;
+//@ chunk-keyy05re.js:44979-45244 placement
+/**
+ * 云会话下行流过滤的限额常量：限流余量、持有/保留的对端消息条数、worker 就绪窗口、UUID 去重容量，以及各帧类型是否转发的表。
+ */
+var STREAM_FILTER_LIMITS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var STREAM_FILTER_SLACK_MS;
+var MAX_HELD_PEER_MESSAGES;
+var MAX_KEPT_PEER_MESSAGES;
+var MAX_EMITTED_UUIDS;
+var MAX_EMITTED_PEER_UUIDS;
+var HELD_SYSTEM_SUBTYPES;
+deferInit("chunk-keyy05re.js:44979", () => {
+  STREAM_FILTER_LIMITS = 250;
+  STREAM_FILTER_SLACK_MS = 1000;
+  MAX_HELD_PEER_MESSAGES = 1000;
+  MAX_KEPT_PEER_MESSAGES = 200;
+  MAX_EMITTED_UUIDS = 200000;
+  MAX_EMITTED_PEER_UUIDS = 2048;
   HELD_SYSTEM_SUBTYPES = new Set([
     "synced_file_changed",
     "mcp_auth_required",
@@ -92,13 +106,14 @@ deferInit("chunk-fe6rs39h.js:45148", () => {
     "queued_notification",
     "heartbeat_probe",
     "classifier_verdict",
+    START_REFUSAL_NOTICE,
   ]);
 });
-//@ chunk-fe6rs39h.js:45361-45457 placement
+//@ chunk-keyy05re.js:45244-45340 placement
 function isTransientStreamMessage(frame) {
   return frame.type === "stream_event" || (frame.type === "system" && frame.subtype === "thinking_tokens");
 }
-//@ chunk-fe6rs39h.js:45457-45712 placement
+//@ chunk-keyy05re.js:45340-45595 placement
 class BoundedUuidSet {
   ceiling;
   uuids = new Set();
@@ -117,7 +132,7 @@ class BoundedUuidSet {
     return this.uuids.has(uuid);
   }
 }
-//@ chunk-fe6rs39h.js:45712-56002 placement
+//@ chunk-keyy05re.js:45595-55880 placement
 /**
  * 过滤云会话下行帧：等 worker 就绪前缓存、去掉 __proto__/cloud_session 等不允许的键、丢弃对端伪造标签，再交给宿主。
  */
@@ -542,7 +557,7 @@ class CloudStreamFilter {
     let normalized = normalizeCloudSessionInfo(info);
     let next = entriesToStringMap(normalized);
     let lastBlock = this.lastBlock;
-    let filtered = uniq([...lastBlock.keys(), ...next.keys()]).filter(
+    let filtered = normalizeCaseForComparison_2([...lastBlock.keys(), ...next.keys()]).filter(
       (key) => lastBlock.get(key) !== next.get(key),
     );
     if (filtered.length === 0) return;
@@ -628,7 +643,7 @@ class CloudStreamFilter {
     if (stepId === "start_cc" && stepStatus === "completed") this.signalWorkerReady("start_cc");
   }
 }
-//@ chunk-fe6rs39h.js:56002-56627 placement
+//@ chunk-keyy05re.js:55880-56505 placement
 function userMessageForHost(message, { keepUuid, sessionId }) {
   let keptUuid = keepUuid && typeof message.uuid === "string" ? normalizeUuidOrNull(message.uuid) : null;
   let toolUses = extractInboundAttachments(message).length;
@@ -677,7 +692,7 @@ function userMessageForHost(message, { keepUuid, sessionId }) {
     documentsAsText,
   };
 }
-//@ chunk-fe6rs39h.js:56983-58336 placement
+//@ chunk-keyy05re.js:56861-58214 placement
 function flattenContentForHost(content) {
   if (typeof content === "string")
     return {
@@ -787,14 +802,14 @@ function flattenContentForHost(content) {
         : flattened,
     omitted: dropped,
     omittedToolUse,
-    documentsAsText: count(mapped, (keptBlock) => keptBlock !== null),
+    documentsAsText: countWhere(mapped, (keptBlock) => keptBlock !== null),
   };
 }
-//@ chunk-fe6rs39h.js:58336-58421 placement
+//@ chunk-keyy05re.js:58214-58299 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function isToolUseBlock(block) {
   return typeof block === "object" && block !== null && "type" in block && block.type === "tool_use";
 }
-//@ chunk-fe6rs39h.js:58421-58649 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-keyy05re.js:58299-58527 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function hasSplitTextMatch(data) {
   let flattened = data.flatMap((block) =>
     typeof block === "object" &&
@@ -822,7 +837,7 @@ function hasSplitTextMatch(data) {
     )
   );
 }
-//@ chunk-fe6rs39h.js:58649-58940 placement
+//@ chunk-keyy05re.js:58527-58818 placement
 function base64ImageSource(source) {
   let source_2 = "source" in source ? source.source : undefined;
   if (
@@ -845,7 +860,7 @@ function base64ImageSource(source) {
         data: source_2.data,
       };
 }
-//@ chunk-fe6rs39h.js:58940-59086 placement
+//@ chunk-keyy05re.js:58818-58964 placement
 function isIsoTimestamp(timestamp) {
   return (
     typeof timestamp === "string" &&
@@ -854,19 +869,19 @@ function isIsoTimestamp(timestamp) {
     !Number.isNaN(Date.parse(timestamp))
   );
 }
-//@ chunk-fe6rs39h.js:59086-59181 placement
+//@ chunk-keyy05re.js:58964-59059 placement
 function stripProtoKey(frame) {
   if (!Object.hasOwn(frame, "__proto__")) return frame;
   let { ["__proto__"]: proto, ...rest } = frame;
   return rest;
 }
-//@ chunk-fe6rs39h.js:59181-59280 placement
+//@ chunk-keyy05re.js:59059-59158 placement
 function stripCloudSessionKey(frame) {
   if (!Object.hasOwn(frame, "cloud_session")) return frame;
   let { cloud_session: cloudSession, ...session } = frame;
   return session;
 }
-//@ chunk-fe6rs39h.js:59280-59318 placement
+//@ chunk-keyy05re.js:59158-59196 placement
 /**
  * 原样返回输入（只为解构 tag 字段做类型检查）的恒等函数。
  */
@@ -874,7 +889,7 @@ function identity(tag) {
   let { tag: tag_2 } = tag;
   return tag;
 }
-//@ chunk-fe6rs39h.js:59318-59410 placement
+//@ chunk-keyy05re.js:59196-59288 placement
 function entriesToStringMap(object) {
   return new Map(
     Object.entries(object).flatMap(([key, value]) =>
@@ -882,7 +897,7 @@ function entriesToStringMap(object) {
     ),
   );
 }
-//@ chunk-fe6rs39h.js:59410-61114 placement
+//@ chunk-keyy05re.js:59288-60992 placement
 function normalizeCloudSessionInfo(info) {
   let id = info.id.startsWith("cse_") ? `session_${sessionIdBody(info.id)}` : info.id;
   let directorySync = info.directory_sync;
@@ -988,7 +1003,7 @@ function normalizeCloudSessionInfo(info) {
     ...pickFeatureReports(info),
   };
 }
-//@ chunk-fe6rs39h.js:61114-61449 placement
+//@ chunk-keyy05re.js:60992-61327 placement
 function pickFeatureReports(feature) {
   let info = feature;
   return Object.fromEntries(
@@ -1018,13 +1033,13 @@ function pickFeatureReports(feature) {
     }),
   );
 }
-//@ chunk-fe6rs39h.js:61449-61543 placement
+//@ chunk-keyy05re.js:61327-61421 placement
 function stripApiErrorOrigin(origin) {
   if (!("api_error_origin" in origin)) return origin;
   let { api_error_origin: apiErrorOrigin, ...rest } = origin;
   return rest;
 }
-//@ chunk-fe6rs39h.js:61543-61774 placement
+//@ chunk-keyy05re.js:61421-61652 placement
 function filterResultErrors(errors) {
   if (errors.type !== "result" || !("errors" in errors)) return errors;
   let errors_2 = errors.errors;
@@ -1040,10 +1055,13 @@ function filterResultErrors(errors) {
       };
 }
 export {
+  isKnownForwardedMessageType,
   filterResultErrors,
   stripCloudSessionKey,
   identity,
   stripApiErrorOrigin,
   stripProtoKey,
+  WORKER_READY_WINDOW_MS,
+  STARTUP_WATCHDOG_MS,
   CloudStreamFilter,
 };

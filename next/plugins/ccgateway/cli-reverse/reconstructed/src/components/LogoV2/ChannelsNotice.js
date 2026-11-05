@@ -3,11 +3,13 @@
  *
  * 启动横幅里的 Channels 提示：列出 --channels/开发频道插件、策略未放行或第三方提供商不可用的告警。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/LogoV2/ChannelsNotice.tsx
- * pieces: chunk-ag5x7vhf.js (7)
- * attribution: fingerprint 3, layout 2, callgraph-fingerprint 1, placement 1
+ * pieces: chunk-hnxhr3bs.js (7), chunk-hs37d1w3.js (1)
+ * attribution: fingerprint 4, layout 2, callgraph-fingerprint 1, placement 1
  */
+import { sortKeysDeep } from "../../services/mcp/driveFileReferences.js";
+import { withFilledReferences } from "../../services/mcp/fileReference/wrapFileReferenceTool.js";
 import { getAllowedChannels, getHasDevChannels } from "../../bootstrap/state.js";
 import { getSettingsForSource } from "../../utils/settings/settings.js";
 import {
@@ -29,7 +31,13 @@ import { getMcpConfigsByScope } from "../../services/mcp/config.js";
 import { getInstalledPlugins } from "../../utils/plugins/installedPluginsManager.js";
 import { findPluginName, parsePluginIdentifier_2 } from "../../utils/plugins/pluginIdentifier.js";
 
-//@ chunk-ag5x7vhf.js:70603-71065 fingerprint (2.1.88 match: _temp, 0.498)
+//@ chunk-hs37d1w3.js:11456-11546 fingerprint (2.1.88 match: _temp4, 0.502)
+function noticeFingerprint(references, values, entries) {
+  return JSON.stringify(
+    sortKeysDeep(withFilledReferences(references, values, new Map(entries.map(({ entry }) => [entry, ""])))),
+  );
+}
+//@ chunk-hnxhr3bs.js:70160-70622 fingerprint (2.1.88 match: _temp, 0.498)
 /**
  * 汇总启动横幅 Channels 提示所需的状态：允许的频道列表、本会话是否关闭、策略判定是否待定、是否第三方提供商、是否被策略屏蔽、显示文本以及不在允许列表里的条目。
  */
@@ -61,11 +69,11 @@ function getChannelsNoticeState() {
     unmatched: findUnmatched(ch, allowlist),
   };
 }
-//@ chunk-ag5x7vhf.js:71065-71095 layout
+//@ chunk-hnxhr3bs.js:70622-70652 layout
 function hasNonDevChannel(channel) {
   return !channel.dev;
 }
-//@ chunk-ag5x7vhf.js:71095-71209 callgraph-fingerprint (2.1.88 match: _temp3, 0.662)
+//@ chunk-hnxhr3bs.js:70652-70766 callgraph-fingerprint (2.1.88 match: _temp3, 0.66)
 function renderChannelWarningRow(u) {
   return jsxProd_default_2(
     Text,
@@ -76,7 +84,7 @@ function renderChannelWarningRow(u) {
     `${formatChannelEntry(u.entry)}:${u.why}`,
   );
 }
-//@ chunk-ag5x7vhf.js:71209-71323 layout
+//@ chunk-hnxhr3bs.js:70766-70880 layout
 function renderChannelWarningRowAlt(entry) {
   return jsxProd_default_2(
     Text,
@@ -87,7 +95,7 @@ function renderChannelWarningRowAlt(entry) {
     `${formatChannelEntry(entry.entry)}:${entry.why}`,
   );
 }
-//@ chunk-ag5x7vhf.js:71323-73721 fingerprint (2.1.88 match: ChannelsNotice, 0.375)
+//@ chunk-hnxhr3bs.js:70880-73278 fingerprint (2.1.88 match: ChannelsNotice, 0.375)
 function ChannelsNotice() {
   let $ = useMemoCache(38);
   let [t0] = useState(getChannelsNoticeState);
@@ -278,11 +286,11 @@ function ChannelsNotice() {
   } else activeBox = $[37];
   return activeBox;
 }
-//@ chunk-ag5x7vhf.js:73721-73816 placement (2.1.88 match: _temp2, 1)
+//@ chunk-hnxhr3bs.js:73278-73373 placement (2.1.88 match: _temp2, 1)
 function formatChannelEntry(c) {
   return c.kind === "plugin" ? `plugin:${c.name}@${c.marketplace}` : `server:${c.name}`;
 }
-//@ chunk-ag5x7vhf.js:73816-74592 fingerprint (2.1.88 match: findUnmatched, 0.97)
+//@ chunk-hnxhr3bs.js:73373-74149 fingerprint (2.1.88 match: findUnmatched, 0.97)
 function findUnmatched(entries, allowlist) {
   let scopes = ["enterprise", "managed", "user", "project", "local"];
   let configured = new Set();
@@ -328,4 +336,4 @@ function findUnmatched(entries, allowlist) {
   }
   return out;
 }
-export { ChannelsNotice };
+export { ChannelsNotice, noticeFingerprint };

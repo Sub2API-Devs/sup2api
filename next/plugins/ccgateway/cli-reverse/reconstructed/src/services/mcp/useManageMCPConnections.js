@@ -3,10 +3,10 @@
  *
  * 并入旧版已有路径：管理 MCP 连接 hook。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/useManageMCPConnections.ts
- * pieces: chunk-18hwfzwa.js (14), chunk-7nse75qx.js (1)
- * attribution: placement 7, layout 5, fingerprint 3
+ * pieces: chunk-a8hqqf13.js (1), chunk-czq1j3j2.js (14)
+ * attribution: fingerprint 3, placement 7, sole-consumer 2, affinity 1, layout 2
  */
 import {
   init_react_production,
@@ -42,6 +42,7 @@ import {
   emptyString_2,
   filterUnapprovedMcpServers,
   dialsClaudeInChromeBridge,
+  isOffInCodeMode,
   shouldSkipClaudeAiFetchForEnterpriseLockdown,
   filterMcpServersByPolicy,
   dedupClaudeAiMcpServers,
@@ -64,7 +65,6 @@ import { getHostState } from "../../utils/hostEnvironment.js";
 import {
   getIsRemoteMode,
   getAllowedChannels,
-  mainAgentId,
   setConnectedClientWiring,
   getSessionId,
   getOriginalCwd,
@@ -112,7 +112,7 @@ import {
   gateChannelServer,
   findChannelEntry,
   ChannelMessageNotificationSchema,
-  wrapChannelMessage,
+  queuedChannelPush,
   ChannelPermissionNotificationSchema,
   isChannelGateHardRevocation,
   CHANNEL_PERMISSION_METHOD,
@@ -149,7 +149,9 @@ import { mcpAuthToolsFor, deleteNeedsAuthCache } from "./needsAuthCache.js";
 import { isToolFromMcpServer } from "./mcpStringUtils.js";
 import { bareModePluginAllow } from "../../utils/plugins/refresh.js";
 import { CLAUDE_IN_CHROME_MCP_SERVER_NAME } from "../../utils/claudeInChrome/common.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { getOwn } from "../../utils/objectSafety.js";
+import { offInCodeModeToast } from "../../utils/codeMode.js";
 import { plural } from "../../utils/stringUtils.js";
 import { primeDiscoveryCacheFlag } from "./elicitationDialogs.js";
 import { isBareMode } from "../../utils/envUtils.js";
@@ -160,25 +162,30 @@ import { revokeStoredMcpTokens } from "./revokeTokens.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-7nse75qx.js:307-453 fingerprint (2.1.88 match: getErrorKey, 0.72)
+//@ chunk-a8hqqf13.js:308-454 fingerprint (2.1.88 match: getErrorKey, 0.72)
 function getErrorKey(error) {
   let plugin = "plugin" in error ? error.plugin : "no-plugin";
   let serverSuffix = error.type === "mcpb-needs-config" ? `:${error.serverName}` : "";
   return `${error.type}:${error.source}:${plugin}${serverSuffix}`;
 }
-//@ chunk-18hwfzwa.js:1709347-1709351 placement
+//@ chunk-czq1j3j2.js:1736657-1736661 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1709347", () => {
+deferInit("chunk-czq1j3j2.js:1736657", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1709351-1709379 placement
+//@ chunk-czq1j3j2.js:1739342-1739346 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1739342", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1755650-1755678 placement
 /**
  * 路径段的最大字符数（8）。
  */
 var MAX_TOKEN_STORED_RETRIES = 10;
 var DIAL_RESULT_TTL_MS = 600000;
 var MAX_PATH_SEGMENT_CHARS = 8;
-//@ chunk-18hwfzwa.js:1709379-1710878 placement
+//@ chunk-czq1j3j2.js:1755678-1757178 placement
 function redialFailedMcpServers(reconnectMcpServer) {
   let { searchRedialFailures } = getCliOwnedState();
   let inFlight = new Map();
@@ -270,7 +277,7 @@ function redialFailedMcpServers(reconnectMcpServer) {
     },
   };
 }
-//@ chunk-18hwfzwa.js:1710878-1711114 placement
+//@ chunk-czq1j3j2.js:1757178-1757414 placement
 function keptConnectionOrFailed(client, kept) {
   return client.type !== "connected" || (kept?.type === "connected" && kept.client === client.client)
     ? client
@@ -281,16 +288,11 @@ function keptConnectionOrFailed(client, kept) {
         error: "The connection was not kept: the server was removed, changed, disabled or refused meanwhile",
       };
 }
-//@ chunk-18hwfzwa.js:1711114-1711118 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1711114", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1711118-1711157 layout
+//@ chunk-czq1j3j2.js:1757418-1757457 sole-consumer
 function clearSkillIndex() {
   getHostState().skillIndex.clear();
 }
-//@ chunk-18hwfzwa.js:1711157-1711287 layout
+//@ chunk-czq1j3j2.js:1757457-1757587 sole-consumer
 var SCOPE_TO_TELEMETRY_SOURCE = {
   enterprise: "enterprise",
   user: "global",
@@ -300,10 +302,10 @@ var SCOPE_TO_TELEMETRY_SOURCE = {
   agent: "agent",
   claudeai: "claudeai",
 };
-//@ chunk-18hwfzwa.js:1711287-1711320 layout
+//@ chunk-czq1j3j2.js:1757587-1757620 affinity
 var MAX_INITIAL_CONNECT_RETRIES = 3;
 var CLAUDEAI_LIST_RETRY_DELAYS_MS = [5000, 15000, 45000];
-//@ chunk-18hwfzwa.js:1711320-1737581 fingerprint (2.1.88 match: useManageMCPConnections, 0.547)
+//@ chunk-czq1j3j2.js:1757620-1783958 fingerprint (2.1.88 match: useManageMCPConnections, 0.53)
 /**
  * useManageMCPConnections：REPL 中管理 MCP 连接的 React hook。初始化时 getMcpToolsCommandsAndResources 批量连接并写入 AppState.mcp；注册 list_changed（工具/提示词/资源）处理、channel 通知、elicitation、远程传输断线自动重连（最多 5 次，指数退避 1s 起、上限 30s）、首次连接瞬时错误重试 3 次、claude.ai 连接器列表后台重试；对外提供 reconnectMcpServer 与 toggleMcpServer。
  */
@@ -656,19 +658,7 @@ function useManageMCPConnections(configs, isStrictMcpConfig, permissionRelays, r
                   is_dev: timer?.dev ?? false,
                   plugin,
                 });
-                commandQueueOrDefault.enqueue({
-                  mode: "prompt",
-                  agentId: mainAgentId(),
-                  value: wrapChannelMessage(client.name, content, meta),
-                  priority: "next",
-                  isMeta: true,
-                  origin: {
-                    kind: "channel",
-                    server: client.name,
-                  },
-                  skipSlashCommands: true,
-                  skipAttachments: true,
-                });
+                commandQueueOrDefault.enqueue(queuedChannelPush(client.name, content, meta));
               },
             );
             if (hasExperimentalCapability(client.capabilities, "claude/channel/permission"))
@@ -1394,11 +1384,25 @@ function useManageMCPConnections(configs, isStrictMcpConfig, permissionRelays, r
         let joined = blocked.join(",");
         if (lastBlockedKey.current !== joined) {
           lastBlockedKey.current = joined;
-          let prevStateDedup = [];
+          let prevStateDedup = codeModeAccepted()
+            ? blocked.filter((prevState) => {
+                let generation = configs && getOwn(configs, prevState);
+                return generation !== undefined && isOffInCodeMode(prevState, generation);
+              })
+            : [];
+          if (codeModeAccepted() && prevStateDedup.some((next) => !isMcpServerDisabled(next)))
+            addNotification({
+              key: "mcp-off-in-repl-mode",
+              kind: "warning",
+              priority: "high",
+              text: offInCodeModeToast(),
+              color: "warning",
+              timeoutMs: 20000,
+            });
           let filtered = blocked.filter(
-            (prevState) =>
-              !prevStateDedup.includes(prevState) &&
-              !(prevState === CLAUDE_ARTIFACTS && isCliOwnedConfig(configs && getOwn(configs, prevState))),
+            (next) =>
+              !prevStateDedup.includes(next) &&
+              !(next === CLAUDE_ARTIFACTS && isCliOwnedConfig(configs && getOwn(configs, next))),
           );
           if (filtered.length > 0)
             addNotification({
@@ -2074,21 +2078,21 @@ function useManageMCPConnections(configs, isStrictMcpConfig, permissionRelays, r
     toggleMcpServer,
   };
 }
-//@ chunk-18hwfzwa.js:1737581-1737678 layout
+//@ chunk-czq1j3j2.js:1783958-1784055 layout
 function detachClientAndClearCache(client) {
   identityId2(client.client).onclose = undefined;
   getMcpClientModule()
     .clearServerCache(client.name, client.config)
     .catch(() => {});
 }
-//@ chunk-18hwfzwa.js:1737678-1737748 layout
+//@ chunk-czq1j3j2.js:1784055-1784125 layout
 /**
  * getMcpClientModule：经 chunk-asne9cp8 按 MCP_SDK_GENERATION 取 v1/v2 客户端模块（mcpClientModule）。
  */
 function getMcpClientModule() {
   return require("./emitTripwireEvent.lazy.js").mcpClientModule();
 }
-//@ chunk-18hwfzwa.js:1737748-1737859 fingerprint (2.1.88 match: getTransportDisplayName, 1)
+//@ chunk-czq1j3j2.js:1784125-1784236 fingerprint (2.1.88 match: getTransportDisplayName, 1)
 /**
  * getTransportDisplayName：http → HTTP，ws/ws-ide → WebSocket，其他 → SSE。
  */
@@ -2103,7 +2107,7 @@ function getTransportDisplayName(type) {
       return "SSE";
   }
 }
-//@ chunk-18hwfzwa.js:1737859-1738004 placement
+//@ chunk-czq1j3j2.js:1784236-1784381 placement
 function mcpPolicySnapshotKey(settings) {
   return jsonStringify([
     settings.allowedMcpServers ?? null,
@@ -2113,6 +2117,6 @@ function mcpPolicySnapshotKey(settings) {
     getEffectiveMcpPolicyKey(),
   ]);
 }
-//@ chunk-18hwfzwa.js:1738004-1738045 placement
+//@ chunk-czq1j3j2.js:1784381-1784422 placement
 var ALLOW_CLAUDE_BROWSER_EXTENSION = "allow_claude_browser_extension";
 export { ALLOW_CLAUDE_BROWSER_EXTENSION, useManageMCPConnections, redialFailedMcpServers, getErrorKey };

@@ -3,10 +3,10 @@
  *
  * 命令注册表：内建命令表（约 145 项）、运行时门控组、技能/插件/工作流/MCP 命令合并与保留名处理、availability 与启用过滤、远程与桥接安全集合、SDK 命令列表转换、缓存清理；并混入 findCommand/isCommandEnabled 等基础查找（chunk-s61vbvea）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands.ts
- * pieces: chunk-e6aww6q8.js (102), chunk-s61vbvea.js (25)
- * attribution: facade-exports 39, fingerprint 7, layout 47, affinity 2, callgraph-fingerprint 1, placement 30, file-local 1
+ * pieces: chunk-1z79zgep.js (2), chunk-5xgkngpb.js (101), chunk-7jxyna5q.js (23)
+ * attribution: placement 32, facade-exports 39, fingerprint 6, layout 44, affinity 2, callgraph-fingerprint 1, sole-consumer 1, file-local 1
  */
 import { resolve as resolve_2, basename, dirname, relative, sep, isAbsolute } from "path";
 import { commandPolicyGateAllows } from "./services/policyLimits/policyVerdicts.js";
@@ -71,17 +71,6 @@ import { isSkillAttributionEnabled } from "./utils/telemetry/skillAttribution.js
 import { normalizeServerNameShort } from "./services/api/deferredToolsState.js";
 import { isPathWithin as isPathWithin_2 } from "./utils/fsJunctions.js";
 import { markInPlaceWriteForced } from "./utils/plugins/safeCopy.js";
-import { loginCommand_2 } from "./commands/login/index.js";
-import { stubTerminalSetupCommand, terminalSetupCommand } from "./commands/terminalSetup/index.js";
-import { commitPushPrCommand } from "./commands/commit-push-pr.js";
-import { stubAntTraceCommand } from "./commands/ant-trace/index.js";
-import { versionCommand, versionNonInteractiveCommand } from "./commands/version.js";
-import {
-  stubScrollSpeedCommand_2,
-  stubScrollSpeedCommand,
-  scrollSpeedCommand,
-} from "./commands/scroll-speed/index.js";
-import { stubC4EUpsellCommand, ENTERPRISE_UPSELL_COMMANDS } from "./commands/c4eUpsell.js";
 import { isAgentsFleetEnabled, isDaemonWorkerRegistryEnabled } from "./utils/fleetGates.js";
 import { isEnvTruthy } from "./utils/envUtils.js";
 import { env } from "./utils/env.js";
@@ -91,13 +80,42 @@ import {
   forkSubagentCommand,
   agentsRemovedCommand,
 } from "./commands/agents/index.js";
-import { lanternPrismEnabled } from "./utils/plugins/pluginGates.js";
 import {
-  skillDoctorCommand,
-  skillDoctorNonInteractiveCommand,
-  usageCommand,
-  usageNonInteractiveCommand,
-} from "./commands/usage/index.js";
+  backgroundCommand,
+  stopCommand,
+  desktopCmdModule,
+  gatedCommandSlot_4,
+  usageReport,
+  webSetupCommand,
+  briefCommand,
+  remoteControlCommand,
+  recapCommand,
+  goalCommand,
+  goalNonInteractive,
+  loginCommand,
+  listAgentsCommand,
+  gatedCommandSlot_12,
+  EMPTY_COMMAND_LIST,
+  diffCmdModule,
+  gatedCommandSlot_8,
+  gatedCommandSlot_9,
+  gatedCommandSlot_10,
+  gatedCommandSlot_11,
+  gatedCommandSlot_6,
+  antGatedCmdA,
+  antGatedCmdB,
+  sandboxRuntimeConfig,
+  gatedInPlaceWriteCommand,
+  promoteMemoryCommands,
+  accountMemoryCommands,
+  gatedCommandSlot_5,
+  gatedCommandSlot_1,
+  gatedCommandSlot_14,
+  internalGatedCmdB,
+  stopNonInteractive,
+} from "./utils/shell/bashProvider.js";
+import { lanternPrismEnabled } from "./utils/plugins/pluginGates.js";
+import { skillDoctorCommand, skillDoctorNonInteractiveCommand } from "./commands/skill-doctor/index.js";
 import { logoutCommand } from "./commands/logout/index.js";
 import { addDirCommand, addDirNonInteractiveCommand } from "./commands/add-dir/index.js";
 import { cloudPluginsCommand } from "./commands/cloud-plugins/index.js";
@@ -111,9 +129,9 @@ import { branchCommand } from "./commands/branch/index.js";
 import { btwCommand } from "./commands/btw/index.js";
 import { cdCommand } from "./commands/cd/index.js";
 import { chromeCommand } from "./commands/chrome/index.js";
-import { clearCommand } from "./commands/clear/index.js";
+import { clearCommandAlias } from "./commands/clear/index.js";
 import { colorCommand, colorNonInteractiveCommand } from "./commands/color/index.js";
-import { compactCommand } from "./commands/compact/index.js";
+import { compactNonInteractiveCommand } from "./commands/compact/index.js";
 import { configCommand, configNonInteractiveCommand } from "./commands/config/index.js";
 import {
   vimMovedToConfigCommand,
@@ -122,12 +140,12 @@ import {
 import { outputStyleCommand } from "./commands/output-style/index.js";
 import { copyCommand } from "./commands/copy/index.js";
 import { desktopCommand } from "./commands/desktop/index.js";
-import { contextCommand, contextNonInteractiveCommand } from "./commands/context/index.js";
-import { diffCommand } from "./commands/diff/index.js";
-import { effortCommand, effortNonInteractiveCommand } from "./commands/effort/index.js";
+import { contextCommandDefinition, contextNonInteractiveCommand } from "./commands/context/index.js";
+import { diffCommandDefinition } from "./commands/diff/index.js";
+import { effortNonInteractiveCommand2, effortNonInteractiveCommand } from "./commands/effort/index.js";
 import { wellbeingCommand } from "./commands/wellbeing/index.js";
 import { exitCommand, exitNonInteractiveCommand } from "./commands/exit/index.js";
-import { fastCommand, fastNonInteractiveCommand } from "./commands/fast/index.js";
+import { versionCommand, fastNonInteractiveCommand } from "./commands/fast/index.js";
 import { focusCommand, focusNonInteractiveCommand } from "./commands/focus/index.js";
 import { heapdumpCommand } from "./commands/heapdump/index.js";
 import { helpCommand } from "./commands/help/index.js";
@@ -136,33 +154,41 @@ import { initCommand } from "./commands/init.js";
 import { keybindingsCommand } from "./commands/keybindings/index.js";
 import { installGithubAppCommand } from "./commands/install-github-app/index.js";
 import { installSlackAppCommand } from "./commands/install-slack-app/index.js";
-import { mcpCommand, mcpNonInteractiveCommand } from "./commands/mcp/index.js";
-import { memoryCommand } from "./commands/memory/index.js";
+import { mcpCommandTwin, mcpNonInteractiveCommand } from "./commands/mcp/index.js";
+import { memoryCommandAlias } from "./commands/memory/index.js";
 import { importCommand, importNonInteractiveCommand } from "./commands/import/index.js";
 import { mobileCommand } from "./commands/mobile/index.js";
 import { pauseMemoryCommand } from "./commands/pause-memory/index.js";
-import { modelCommand, modelNonInteractiveCommand } from "./commands/model/index.js";
+import { modelInteractiveCommand, modelNonInteractiveCommand } from "./commands/model/index.js";
 import { remoteEnvCommand } from "./commands/remote-env/index.js";
-import { remoteWorkflowCommand, workflowLaunchExecCommand } from "./commands/remote-workflow/index.js";
-import { pluginCommand } from "./commands/plugin/index.js";
-import { releaseNotesCommand } from "./commands/release-notes/index.js";
-import { reloadPluginsCommand } from "./commands/reload-plugins/index.js";
-import { reloadSkillsCommand } from "./commands/reload-skills/index.js";
-import { renameCommand, renameNonInteractiveCommand } from "./commands/rename/index.js";
-import { resumeCommand } from "./commands/resume/index.js";
-import { setupBedrockCommand, setupVertexCommand } from "./commands/setup-vertex/index.js";
-import { sessionCommand } from "./commands/session/index.js";
-import { skillsCommand } from "./commands/skills/index.js";
-import { statusCommand } from "./commands/status/index.js";
+import {
+  remoteWorkflowCommand,
+  workflowLaunchExecCommand,
+  workflowLaunchExecCommandAlias,
+} from "./commands/remote-workflow/index.js";
+import { pluginCommandAlias } from "./commands/plugin/index.js";
+import { projectCommandAlias } from "./commands/project/index.js";
+import { releaseNotesCommandAlias } from "./commands/release-notes/index.js";
+import { reloadPluginsCommandAlias } from "./commands/reload-plugins/index.js";
+import { reloadSkillsCommandAlias } from "./commands/reload-skills/index.js";
+import { resumeCommand, renameNonInteractiveCommand } from "./commands/rename/index.js";
+import { resumeCommandAlias } from "./commands/resume/index.js";
+import { setupBedrockCommand } from "./commands/setup-bedrock/index.js";
+import { setupVertexCommand } from "./commands/setup-vertex/index.js";
+import { sessionCommandAlias } from "./commands/session/index.js";
+import { skillsCommandAlias } from "./commands/skills/index.js";
+import { statusCommandAlias } from "./commands/status/index.js";
 import { statuslineCommand } from "./commands/statusline.js";
-import { stickersCommand } from "./commands/stickers/index.js";
-import { themeCommand } from "./commands/theme/index.js";
-import { tuiCommand } from "./commands/tui/index.js";
-import { feedbackCommand, bugCommand } from "./commands/feedback/index.js";
+import { tuiCommand } from "./commands/stickers/index.js";
+import { themeCommandAlias } from "./commands/theme/index.js";
+import { tuiCommandAlias } from "./commands/tui/index.js";
+import { feedbackNonInteractiveCommand, bugNonInteractiveCommand } from "./commands/feedback/index.js";
 import { ultrareviewCommand, ultrareviewNonInteractiveCommand } from "./commands/review.js";
 import { ultraplanCommand } from "./commands/ultraplan.js";
-import { rewindCommand } from "./commands/rewind/index.js";
-import { securityReviewCommand } from "./commands/security-review.js";
+import { rewindCommandAlias } from "./commands/rewind/index.js";
+import { scrollSpeedCommand } from "./commands/security-review.js";
+import { terminalSetupCommandAlias } from "./commands/terminalSetup/index.js";
+import { scrollSpeedCommandAlias } from "./commands/scroll-speed/index.js";
 import { restartCommand } from "./commands/restart/index.js";
 import { upgradeCommand } from "./commands/upgrade/index.js";
 import {
@@ -176,27 +202,30 @@ import { lowPriorityCommand } from "./commands/low-priority/index.js";
 import { limitResetCommand } from "./commands/limit-reset/index.js";
 import { claimCreditCommand } from "./commands/claim-credit/index.js";
 import { proTrialExpiredCommand } from "./commands/pro-trial-expired/index.js";
+import { usageCommand, usageNonInteractiveCommand } from "./commands/usage/index.js";
 import { voiceCommand } from "./commands/voice/index.js";
-import { permissionsCommand } from "./commands/permissions/index.js";
-import { planCommand } from "./commands/plan/index.js";
+import { permissionsCommandAlias } from "./commands/permissions/index.js";
+import { planCommandAlias } from "./commands/plan/index.js";
 import { powerupCommand } from "./commands/powerup/index.js";
 import { privacySettingsCommand } from "./commands/privacy-settings/index.js";
 import { hooksCommand } from "./commands/hooks/index.js";
 import { loopsCommand } from "./commands/loops/index.js";
 import { exportCommand } from "./commands/export/index.js";
-import { sandboxCommand } from "./commands/sandbox-toggle/index.js";
+import { sandboxCommandAlias } from "./commands/sandbox-toggle/index.js";
 import {
   createDesignLoginCommand,
   designConsentCommand,
   designRevokeCommand,
 } from "./commands/design/index.js";
 import { passesCommand } from "./commands/passes/index.js";
-import { tasksCommand } from "./commands/tasks/index.js";
+import { tasksCommandAlias } from "./commands/tasks/index.js";
 import { autofixPrCommand } from "./commands/autofix-pr/index.js";
 import { teleportCommand } from "./commands/teleport/index.js";
 import { artifactsCommand } from "./commands/artifacts/index.js";
 import { teamOnboardingCommand } from "./commands/team-onboarding/index.js";
 import { radioCommand } from "./commands/radio/index.js";
+import { ENTERPRISE_UPSELL_COMMANDS } from "./commands/c4eUpsell.js";
+import { internalCmdA, versionNonInteractiveCommand } from "./commands/version.js";
 import { CLAUDE_AI_SYNC_LABEL } from "./utils/settings/commandSyncNames.js";
 import { getPluginDisplayName } from "./components/ManagedSettingsSecurityDialog/utils.js";
 import { getSettingSourceName } from "./utils/settings/constants.js";
@@ -233,69 +262,7 @@ import { getBuiltinPlugins } from "./plugins/builtinPlugins.js";
 import { lit as lit_2 } from "./services/analytics/safeMetadata.js";
 import { deferInit } from "../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:17411-17462 facade-exports (2.1.88 match: getCommandName, 1)
-/**
- * getCommandName：命令显示名（userFacingName?.() ?? name）。
- */
-function getCommandName(cmd) {
-  return cmd.userFacingName?.() ?? cmd.name;
-}
-//@ chunk-s61vbvea.js:17462-17606 layout
-/**
- * clearUserFacingName：把 userFacingName 挪进 shedAliases 后清空。
- */
-function clearUserFacingName(command) {
-  if (command.type === "prompt" && command.userFacingName !== undefined)
-    command.shedAliases = [...(command.shedAliases ?? []), command.userFacingName()];
-  command.userFacingName = undefined;
-}
-//@ chunk-s61vbvea.js:17606-17668 facade-exports
-/**
- * isCommandEnabled：先检查 policyGate（commandPolicyGateAllows，getter 抛错按 false），再 isEnabled?.() ?? true。
- */
-function isCommandEnabled(cmd) {
-  if (!passesPolicyGate(cmd)) return false;
-  return cmd.isEnabled?.() ?? true;
-}
-//@ chunk-s61vbvea.js:17668-17765 layout
-/**
- * passesPolicyGate：policyGate.policy 由 commandPolicyGateAllows 判定。
- */
-function passesPolicyGate(cmd) {
-  let policyGate;
-  try {
-    policyGate = cmd.policyGate;
-  } catch {
-    return false;
-  }
-  if (policyGate == null) return true;
-  return commandPolicyGateAllows(policyGate.policy);
-}
-//@ chunk-s61vbvea.js:17765-17984 layout
-function inputStartsWithMatchingCommand(input, command) {
-  let trimmed = input.trimStart();
-  if (!trimmed.startsWith("/")) return false;
-  let name = trimmed.slice(1).match(/^[a-zA-Z0-9:_-]+/)?.[0];
-  let word = trimmed.slice(1).split(/\s/, 1)[0];
-  if (name !== undefined && command(name)) return true;
-  return word !== undefined && word !== name && word.length > 0 && command(word);
-}
-//@ chunk-s61vbvea.js:17984-18052 layout
-/**
- * getCommandContextMode：getContext?.() ?? context ?? "inline"（inline/fork）。
- */
-function getCommandContextMode(cmd, args, context) {
-  return cmd.getContext?.(args, context) ?? cmd.context ?? "inline";
-}
-//@ chunk-s61vbvea.js:18052-18134 layout
-/**
- * isImmediateCommand：immediate 可为布尔或 (args, presentation) 函数。
- */
-function isImmediateCommand(cmd, args, presentation) {
-  let immediate = cmd?.immediate;
-  return typeof immediate === "function" ? immediate(args, presentation) : immediate === true;
-}
-//@ chunk-s61vbvea.js:18134-18287 layout
+//@ chunk-1z79zgep.js:374-527 placement
 /**
  * splitSlashCommandInput："/name args" → {name, args}。
  */
@@ -312,7 +279,7 @@ function splitSlashCommandInput(input) {
     args: body.slice(spaceIndex + 1).trim(),
   };
 }
-//@ chunk-s61vbvea.js:18287-18483 layout
+//@ chunk-1z79zgep.js:527-723 placement
 /**
  * looksLikeSlashInput：字符串或最后一个文本块以 / 开头。
  */
@@ -322,30 +289,92 @@ function looksLikeSlashInput(inputContent) {
   let last = inputContent.at(-1);
   return last?.type === "text" && typeof last.text === "string" && last.text.trim().startsWith("/");
 }
-//@ chunk-s61vbvea.js:18483-18673 layout
+//@ chunk-7jxyna5q.js:18335-18386 facade-exports (2.1.88 match: getCommandName, 1)
+/**
+ * getCommandName：命令显示名（userFacingName?.() ?? name）。
+ */
+function getCommandName(cmd) {
+  return cmd.userFacingName?.() ?? cmd.name;
+}
+//@ chunk-7jxyna5q.js:18386-18530 layout
+/**
+ * clearUserFacingName：把 userFacingName 挪进 shedAliases 后清空。
+ */
+function clearUserFacingName(command) {
+  if (command.type === "prompt" && command.userFacingName !== undefined)
+    command.shedAliases = [...(command.shedAliases ?? []), command.userFacingName()];
+  command.userFacingName = undefined;
+}
+//@ chunk-7jxyna5q.js:18530-18592 facade-exports
+/**
+ * isCommandEnabled：先检查 policyGate（commandPolicyGateAllows，getter 抛错按 false），再 isEnabled?.() ?? true。
+ */
+function isCommandEnabled(cmd) {
+  if (!passesPolicyGate(cmd)) return false;
+  return cmd.isEnabled?.() ?? true;
+}
+//@ chunk-7jxyna5q.js:18592-18689 layout
+/**
+ * passesPolicyGate：policyGate.policy 由 commandPolicyGateAllows 判定。
+ */
+function passesPolicyGate(cmd) {
+  let policyGate;
+  try {
+    policyGate = cmd.policyGate;
+  } catch {
+    return false;
+  }
+  if (policyGate == null) return true;
+  return commandPolicyGateAllows(policyGate.policy);
+}
+//@ chunk-7jxyna5q.js:18689-18908 layout
+function inputStartsWithMatchingCommand(input, command) {
+  let trimmed = input.trimStart();
+  if (!trimmed.startsWith("/")) return false;
+  let name = trimmed.slice(1).match(/^[a-zA-Z0-9:_-]+/)?.[0];
+  let word = trimmed.slice(1).split(/\s/, 1)[0];
+  if (name !== undefined && command(name)) return true;
+  return word !== undefined && word !== name && word.length > 0 && command(word);
+}
+//@ chunk-7jxyna5q.js:18908-18976 layout
+/**
+ * getCommandContextMode：getContext?.() ?? context ?? "inline"（inline/fork）。
+ */
+function getCommandContextMode(cmd, args, context) {
+  return cmd.getContext?.(args, context) ?? cmd.context ?? "inline";
+}
+//@ chunk-7jxyna5q.js:18976-19058 layout
+/**
+ * isImmediateCommand：immediate 可为布尔或 (args, presentation) 函数。
+ */
+function isImmediateCommand(cmd, args, presentation) {
+  let immediate = cmd?.immediate;
+  return typeof immediate === "function" ? immediate(args, presentation) : immediate === true;
+}
+//@ chunk-7jxyna5q.js:19058-19248 layout
 /**
  * TEAM_SETUP_GUIDE_LABEL："✦ Team setup guide"。
  */
 var TEAM_SETUP_GUIDE_LABEL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PLACEHOLDER_LABELS_PATTERN;
 var regExp;
-deferInit("chunk-s61vbvea.js:18483", () => {
+deferInit("chunk-7jxyna5q.js:19058", () => {
   TEAM_SETUP_GUIDE_LABEL = "\u2726 Team setup guide";
   PLACEHOLDER_LABELS_PATTERN = String.raw`Pasted text|Image|\.\.\.Truncated text|${"\u2726 Team setup guide"}`;
   regExp = new RegExp(String.raw`\[(${PLACEHOLDER_LABELS_PATTERN}) #(\d+)(?: \+\d+ lines)?(\.)*\]`, "g");
 });
-//@ chunk-s61vbvea.js:18673-18719 layout
+//@ chunk-7jxyna5q.js:19248-19294 layout
 function isImagePlaceholder(match) {
   return match.startsWith("[Image");
 }
-//@ chunk-s61vbvea.js:18719-18795 layout
+//@ chunk-7jxyna5q.js:19294-19370 layout
 /**
  * commandMatchesName：name、显示名或 aliases 命中。
  */
 function commandMatchesName(cmd, name) {
   return cmd.name === name || getCommandName(cmd) === name || (cmd.aliases?.includes(name) ?? false);
 }
-//@ chunk-s61vbvea.js:18795-19014 facade-exports
+//@ chunk-7jxyna5q.js:19370-19589 facade-exports
 /**
  * findCommand：先按 name 精确匹配，再按显示名或 aliases，最后按 directoryListingName。
  */
@@ -366,7 +395,7 @@ function findCommand(commandName, commands) {
     undefined
   );
 }
-//@ chunk-s61vbvea.js:19014-19178 layout
+//@ chunk-7jxyna5q.js:19589-19753 layout
 /**
  * buildCommandLookup：name/显示名/aliases → 命令 的 Map。
  */
@@ -378,14 +407,14 @@ function buildCommandLookup(commands) {
       if (!lookup.has(name)) lookup.set(name, command);
   return lookup;
 }
-//@ chunk-s61vbvea.js:19178-19220 facade-exports
+//@ chunk-7jxyna5q.js:19753-19795 facade-exports
 /**
  * hasCommand：findCommand 是否找到。
  */
 function hasCommand(commandName, commands) {
   return findCommand(commandName, commands) !== undefined;
 }
-//@ chunk-s61vbvea.js:19220-19326 layout
+//@ chunk-7jxyna5q.js:19795-19901 layout
 /**
  * hasSensitiveArgs：isSensitive 为布尔或函数。
  */
@@ -394,7 +423,7 @@ function hasSensitiveArgs(cmd, args) {
   let { isSensitive } = cmd;
   return typeof isSensitive === "function" ? isSensitive(args) : isSensitive === true;
 }
-//@ chunk-s61vbvea.js:19326-19440 layout
+//@ chunk-7jxyna5q.js:19901-20015 layout
 /**
  * buildCommandRunInfo：{command, args（敏感则 ***）, plugin}。
  */
@@ -408,20 +437,20 @@ function buildCommandRunInfo(cmd, args, plugin) {
     }),
   };
 }
-//@ chunk-s61vbvea.js:19440-19582 layout
+//@ chunk-7jxyna5q.js:20015-20157 layout
 var regExp_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var regExp_3;
-deferInit("chunk-s61vbvea.js:19440", () => {
+deferInit("chunk-7jxyna5q.js:20015", () => {
   regExp_2 = new RegExp(String.raw`\[(?:Pasted text|\.\.\.Truncated text|${TEAM_SETUP_GUIDE_LABEL}) #\d+`);
   regExp_3 = new RegExp(String.raw`^(\/[^\s[]+)\[(?=(?:${PLACEHOLDER_LABELS_PATTERN}) #\d+)`);
 });
-//@ chunk-s61vbvea.js:19582-19604 layout
+//@ chunk-7jxyna5q.js:20157-20179 layout
 /**
  * SECRET_SCAN_CHUNK：65536。
  */
 var SECRET_SCAN_CHUNK = 65536;
 var SECRET_SCAN_PATTERN_SPAN = 2 * SECRET_REDACTION_PATTERNS;
-//@ chunk-s61vbvea.js:19604-19913 layout
+//@ chunk-7jxyna5q.js:20179-20488 layout
 /**
  * shouldRedactInput：粘贴内容或命令参数命中敏感模式时不写入历史。
  */
@@ -438,7 +467,7 @@ function shouldRedactInput(value, commands, { pastedTexts = [] } = {}) {
   if (!command?.isSensitive) return containsSecretPattern(text.slice(1));
   return hasSensitiveArgs(command, args) || (pastedTexts.length > 0 && regExp_2.test(args));
 }
-//@ chunk-s61vbvea.js:19913-20093 layout
+//@ chunk-7jxyna5q.js:20488-20668 layout
 function filterCommandsByAllowlist(commands, allowlist) {
   if (allowlist === undefined) return commands;
   return commands.filter((command) =>
@@ -451,7 +480,7 @@ function filterCommandsByAllowlist(commands, allowlist) {
     ),
   );
 }
-//@ chunk-s61vbvea.js:20093-20225 layout
+//@ chunk-7jxyna5q.js:20668-20800 layout
 /**
  * 判断命令不是用户来源技能，也不是 memoryStore/mcp 来源或只允许按全名调用的提示词命令。
  */
@@ -466,7 +495,7 @@ function isProjectScopedCommand(command) {
     )
   );
 }
-//@ chunk-s61vbvea.js:20225-20540 layout
+//@ chunk-7jxyna5q.js:20800-21115 layout
 /**
  * resolveBarePluginSkillName：{kind: none|ambiguous|unique}。
  */
@@ -495,7 +524,7 @@ function resolveBarePluginSkillName(name, commands) {
     command: match,
   };
 }
-//@ chunk-s61vbvea.js:20540-20788 facade-exports (2.1.88 match: getCommand, 1)
+//@ chunk-7jxyna5q.js:21115-21363 facade-exports (2.1.88 match: getCommand, 1)
 /**
  * getCommand：findCommand，找不到时抛出列出全部可用命令的 ReferenceError。
  */
@@ -513,7 +542,7 @@ function getCommand(commandName, commands) {
     );
   return command;
 }
-//@ chunk-s61vbvea.js:20788-20915 affinity
+//@ chunk-7jxyna5q.js:21363-21490 affinity
 /**
  * containsSecretPattern：按 64KB 分段（带重叠）扫描。
  */
@@ -524,11 +553,11 @@ function containsSecretPattern(text) {
     if (containsSecret(text.slice(index, index + SECRET_SCAN_CHUNK))) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:953787-953824 facade-exports
+//@ chunk-5xgkngpb.js:965569-965606 facade-exports
 function isSkillOff(name) {
   return getSkillOverrideState(name) === "off";
 }
-//@ chunk-e6aww6q8.js:953824-954135 fingerprint (2.1.88 match: meetsAvailabilityRequirement, 0.639)
+//@ chunk-5xgkngpb.js:965606-965917 fingerprint (2.1.88 match: meetsAvailabilityRequirement, 0.638)
 /**
  * meetsAvailabilityRequirement：命令 availability 要求是否满足。宿主可通过 commandsOffHere 关闭；claude-ai 需 claude.ai 订阅登录；console 需一方 API 且非 claude.ai 订阅；console-profile 需 user_oauth 档案登录。
  */
@@ -553,28 +582,28 @@ function meetsAvailabilityRequirement(cmd) {
     }
   return false;
 }
-//@ chunk-e6aww6q8.js:954135-954170 layout
+//@ chunk-5xgkngpb.js:965917-965952 layout
 /**
  * joinScopedName：返回 `${scope}:${name}`。
  */
 function joinScopedName(scope, name) {
   return `${scope}:${name}`;
 }
-//@ chunk-e6aww6q8.js:954170-954267 layout
+//@ chunk-5xgkngpb.js:965952-966049 layout
 /**
  * matchesUnqualifiedName：prompt 且非 syncedSkills 且 unqualifiedName===n。
  */
 function matchesUnqualifiedName(cmd, name) {
   return cmd.type === "prompt" && cmd.loadedFrom !== "syncedSkills" && cmd.unqualifiedName === name;
 }
-//@ chunk-e6aww6q8.js:954267-954357 layout
+//@ chunk-5xgkngpb.js:966049-966139 layout
 /**
  * getBareCommandName：prompt 有 unqualifiedName 时返回它，否则 name。
  */
 function getBareCommandName(cmd) {
   return cmd.type === "prompt" && cmd.unqualifiedName != null ? cmd.unqualifiedName : cmd.name;
 }
-//@ chunk-e6aww6q8.js:954357-954479 layout
+//@ chunk-5xgkngpb.js:966139-966261 layout
 /**
  * getBareCommandNameUnlessSynced：同 EF，但 syncedSkills 不取 unqualifiedName。
  */
@@ -583,7 +612,7 @@ function getBareCommandNameUnlessSynced(cmd) {
     ? cmd.unqualifiedName
     : cmd.name;
 }
-//@ chunk-e6aww6q8.js:954479-955011 fingerprint (2.1.88 match: getMcpSkillCommands, 0.47)
+//@ chunk-5xgkngpb.js:966261-966793 fingerprint (2.1.88 match: getMcpSkillCommands, 0.469)
 /**
  * dropShadowedFallbackSkills：旧版名 getMcpSkillCommands 不符：316 里按 ":后缀" 收集插件/内置/MCP 技能名，丢弃同名 fallback 技能。
  */
@@ -612,7 +641,7 @@ function dropShadowedFallbackSkills(commands) {
     return false;
   });
 }
-//@ chunk-e6aww6q8.js:955011-955309 layout
+//@ chunk-5xgkngpb.js:966793-967091 layout
 /**
  * dedupeBundledSkills：按名去重 source=bundled 的 prompt；结果缓存在 state.shadowedBundledSkills。
  */
@@ -636,12 +665,12 @@ function dedupeBundledSkills(commands) {
   };
   return result;
 }
-//@ chunk-e6aww6q8.js:955309-955350 layout
+//@ chunk-5xgkngpb.js:967091-967132 layout
 function hiddenCommandsWhenSlashDisabled(x) {
   if (getDisableSlashCommands()) return [];
   return [];
 }
-//@ chunk-e6aww6q8.js:955350-955649 fingerprint (2.1.88 match: getSkillToolCommands, 0.859)
+//@ chunk-5xgkngpb.js:967132-967431 fingerprint (2.1.88 match: getSkillToolCommands, 0.859)
 /**
  * isSkillToolCommand：SkillTool 列表的单条谓词；门面把 getSkillToolCommands 给了 YI。
  */
@@ -660,7 +689,7 @@ function isSkillToolCommand(cmd) {
       !!cmd.whenToUse)
   );
 }
-//@ chunk-e6aww6q8.js:959638-959723 affinity
+//@ chunk-5xgkngpb.js:971424-971510 affinity
 /**
  * addSpelling：规范化（Gy）后加入集合，跳过 claude.ai 同步技能保留名。
  */
@@ -669,7 +698,7 @@ function addSpelling(spellings, name, allowReserved = false) {
   if (!allowReserved && usesReservedSkillNamespace(name)) return;
   spellings.add(foldName_2(name));
 }
-//@ chunk-e6aww6q8.js:959723-959841 callgraph-fingerprint (2.1.88 match: findCommand, 1)
+//@ chunk-5xgkngpb.js:971510-971628 callgraph-fingerprint (2.1.88 match: findCommand, 1)
 /**
  * addCommandSpellings：把 name、显示名、aliases 规范化后加入集合；旧版名 findCommand 配错（门面 findCommand=s61vbvea Zs）。
  */
@@ -680,7 +709,7 @@ function addCommandSpellings(spellings, cmd) {
   if (displayName !== cmd.name) addSpelling(spellings, displayName, allowReserved);
   for (let alias of cmd.aliases ?? []) addSpelling(spellings, alias, allowReserved);
 }
-//@ chunk-e6aww6q8.js:961188-961361 placement (2.1.88 match: buildTool, 0.402)
+//@ chunk-5xgkngpb.js:972976-973149 placement (2.1.88 match: buildTool, 0.401)
 /**
  * （旧版名 buildTool 是错配）过滤命令（Skill）的 aliases：保留谓词为真的别名；syncedSkills 来源的命令若规范名与 userFacingName 不一致，再改写 userFacingName。
  */
@@ -699,7 +728,7 @@ function filterCommandAliases(command, keepAlias) {
     userFacingName: () => prefixed,
   };
 }
-//@ chunk-e6aww6q8.js:1661511-1661811 placement
+//@ chunk-5xgkngpb.js:1735832-1736132 placement
 /**
  * 根据上次同步的 lane 负载，返回"技能被插件接管"的插件表 pluginId → {pluginName, heldBack}；功能关闭或没有数据时返回共享空表。
  */
@@ -722,7 +751,7 @@ function getHeldBackSyncedPlugins() {
       });
   return held.size === 0 ? EMPTY_COMMAND_CACHE : held;
 }
-//@ chunk-e6aww6q8.js:1661811-1661890 placement
+//@ chunk-5xgkngpb.js:1736132-1736211 placement
 /**
  * 判断某插件目录是否尚未出现在最近一次完整同步的插件列表里（用于触发补充加载）。
  */
@@ -734,11 +763,11 @@ function isPluginDirMissingFromSyncedList(bucket, pluginId) {
     lastCompleteSyncedPluginList.dirsById.has(pluginId)
   );
 }
-//@ chunk-e6aww6q8.js:1661890-1661969 placement
+//@ chunk-5xgkngpb.js:1736211-1736290 placement
 function hidePrefixForSkills(hiddenPlugins) {
   return hiddenPlugins.size === 0 ? "" : `hide=${[...hiddenPlugins.keys()].sort().join(",")}:`;
 }
-//@ chunk-e6aww6q8.js:1661969-1662547 placement
+//@ chunk-5xgkngpb.js:1736290-1736868 placement
 /**
  * 把被同名插件接管的同步技能标成隐藏（isHidden + hiddenBehindPlugin，可带替代技能名）；用户自有同名技能或带本地归属的技能不动。没有变化时返回原数组。
  */
@@ -781,7 +810,7 @@ function hideSkillsBehindPlugins(commands, heldBackPlugins, userCommands) {
   });
   return changed ? mappedCommands : commands;
 }
-//@ chunk-e6aww6q8.js:1662547-1662736 placement
+//@ chunk-5xgkngpb.js:1736868-1737057 placement
 function findPluginReplacementSkill(commands, pluginName, command) {
   let name = foldName_2(command.unqualifiedName ?? command.name);
   return commands.find(
@@ -792,7 +821,7 @@ function findPluginReplacementSkill(commands, pluginName, command) {
       (command.aliases ?? []).some((alias) => foldName_2(alias) === name),
   )?.name;
 }
-//@ chunk-e6aww6q8.js:1662736-1663073 placement
+//@ chunk-5xgkngpb.js:1737057-1737394 placement
 /**
  * 为被插件接管而隐藏的技能生成提示："现在是插件技能 /X" 或 "属于已关闭的插件 X，去 /plugin 打开"。
  */
@@ -805,7 +834,7 @@ function describeSkillHiddenBehindPlugin(command) {
     return `${name} is now the plugin skill ${safe(replacement)}. Use /${safe(replacement)}.`;
   return `${name} is now part of the plugin ${safe(plugin)}, which is turned off. Check /plugin to turn it on and run it.`;
 }
-//@ chunk-e6aww6q8.js:1683563-1683709 placement
+//@ chunk-5xgkngpb.js:1758455-1758601 placement
 function findAdditionalDirRoot(path) {
   let resolved = resolve_2(path);
   let best = null;
@@ -821,7 +850,7 @@ function findAdditionalDirRoot(path) {
   }
   return best;
 }
-//@ chunk-e6aww6q8.js:1683709-1683961 placement
+//@ chunk-5xgkngpb.js:1758601-1758853 placement
 function getAdditionalDirRelativeLabel(path) {
   let additionalDirRoot = findAdditionalDirRoot(path);
   if (additionalDirRoot === null) return null;
@@ -836,19 +865,19 @@ function getAdditionalDirRelativeLabel(path) {
   let rest = relative(additionalDirRoot, resolve_2(path));
   return rest === "" ? label : [label, ...rest.split(sep)].join("/");
 }
-//@ chunk-e6aww6q8.js:1732452-1732503 placement (2.1.88 match: default, 1)
+//@ chunk-5xgkngpb.js:1807904-1807955 placement (2.1.88 match: default, 1)
 var stubCommand_1 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:1733123-1733174 placement (2.1.88 match: default, 1)
+//@ chunk-5xgkngpb.js:1808575-1808626 placement (2.1.88 match: default, 1)
 var stubCommand_2 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:1750075-1750424 placement
+//@ chunk-5xgkngpb.js:1826764-1827114 placement
 /**
  * getCommandOriginKind：builtin/plugin/mcp/user。
  */
@@ -872,242 +901,103 @@ function getCommandOriginKind(command) {
       return "user";
   }
 }
-//@ chunk-e6aww6q8.js:2031344-2031395 placement (2.1.88 match: default, 1)
+//@ chunk-5xgkngpb.js:2087161-2087212 placement (2.1.88 match: default, 1)
 var stubCommand_3 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2033346-2033397 placement (2.1.88 match: default, 1)
+//@ chunk-5xgkngpb.js:2089163-2089214 placement (2.1.88 match: default, 1)
 var stubCommand_4 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2033397-2033417 placement
+//@ chunk-5xgkngpb.js:2089214-2089234 placement
 var stubCommand_4a = stubCommand_4;
 var stubCommand_4b = stubCommand_4;
-//@ chunk-e6aww6q8.js:2033417-2033468 placement (2.1.88 match: default, 1)
+//@ chunk-5xgkngpb.js:2089234-2089285 placement (2.1.88 match: default, 1)
 var stubCommand_5 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2033468-2033480 placement
+//@ chunk-5xgkngpb.js:2089285-2089297 placement
 var stubCommand_5a = stubCommand_5;
-//@ chunk-e6aww6q8.js:2033480-2033531 placement (2.1.88 match: default, 1)
+//@ chunk-5xgkngpb.js:2089297-2089348 placement (2.1.88 match: default, 1)
 var stubCommand_6 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2033531-2033543 placement
+//@ chunk-5xgkngpb.js:2089348-2089360 placement
 var stubCommand_6a = stubCommand_6;
-//@ chunk-e6aww6q8.js:2033543-2033594 placement (2.1.88 match: default, 1)
+//@ chunk-5xgkngpb.js:2089360-2089411 placement (2.1.88 match: default, 1)
 var stubCommand_7 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2033594-2033645 placement (2.1.88 match: default, 1)
+//@ chunk-5xgkngpb.js:2089411-2089462 placement (2.1.88 match: default, 1)
 var stubCommand_8 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2033645-2033696 placement (2.1.88 match: default, 1)
+//@ chunk-5xgkngpb.js:2089462-2089513 placement (2.1.88 match: default, 1)
 var stubCommand_9 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2033696-2033747 placement (2.1.88 match: default, 1)
+//@ chunk-5xgkngpb.js:2089513-2089564 placement (2.1.88 match: default, 1)
 var stubCommand_10 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2053003-2053054 placement (2.1.88 match: default, 1)
+//@ chunk-5xgkngpb.js:2109145-2109196 placement (2.1.88 match: default, 1)
 var stubCommand_11 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2053054-2053105 placement (2.1.88 match: default, 1)
+//@ chunk-5xgkngpb.js:2109196-2109247 placement (2.1.88 match: default, 1)
 var stubCommand_12 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2053105-2053156 placement (2.1.88 match: default, 1)
+//@ chunk-5xgkngpb.js:2109247-2109298 placement (2.1.88 match: default, 1)
 var stubCommand_13 = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:2053156-2053236 placement
+//@ chunk-5xgkngpb.js:2109298-2109378 placement
 /**
  * WORKER_ONLY_SKILL_NAMES：autopilot/bugfix/dashboard/deep-research/docs/investigate。
  */
 var WORKER_ONLY_SKILL_NAMES = ["autopilot", "bugfix", "dashboard", "deep-research", "docs", "investigate"];
-//@ chunk-e6aww6q8.js:2053236-2053280 placement
+//@ chunk-5xgkngpb.js:2109378-2109422 placement
 /**
  * 把名字匹配到仅 worker 可用的技能名（autopilot/bugfix/dashboard/deep-research/docs/investigate）。
  */
 function workerOnlySkillName(name) {
   return WORKER_ONLY_SKILL_NAMES.find((candidate) => candidate === name);
 }
-//@ chunk-e6aww6q8.js:2053280-2053302 placement
+//@ chunk-5xgkngpb.js:2109422-2109444 placement
 /**
  * gatedInternalCommand：构建期为 null。
  */
 var gatedInternalCommand = null;
-var gatedInPlaceWriteCommand = null;
-//@ chunk-e6aww6q8.js:2053302-2053315 placement
+var gatedCommandSlot_2 = null;
+//@ chunk-5xgkngpb.js:2109444-2109457 placement
 // deferred: uses markInPlaceWriteForced (./utils/plugins/safeCopy.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2053302", () => {
-  if (gatedInPlaceWriteCommand) markInPlaceWriteForced();
+deferInit("chunk-5xgkngpb.js:2109444", () => {
+  if (gatedCommandSlot_2) markInPlaceWriteForced();
 });
-//@ chunk-e6aww6q8.js:2053315-2054702 fingerprint (2.1.88 match: usageReport, 0.431)
-/**
- * promoteMemoryCommands：构建期为 null；注册表里取 .promoteMemory/.promoteMemoryNonInteractive。
- */
-var promoteMemoryCommands; // deferred: loads other modules while loading; runs once its import cycle is complete
-var accountMemoryCommands;
-var gatedCommandSlot_1;
-var gatedCommandSlot_5;
-var gatedCommandSlot_2;
-var gatedCommandSlot_3;
-var gatedCommandSlot_4;
-var briefCommand;
-var remoteControlCommand;
-var daemonCommand;
-var gatedCommandSlot_6;
-var gatedCommandSlot_7;
-var recapCommand;
-var gatedCommandSlot_8;
-var gatedCommandSlot_9;
-var gatedCommandSlot_10;
-var gatedCommandSlot_11;
-var goalCommandModule;
-var goalCommand;
-var goalNonInteractive;
-var workflowsCommand;
-var webSetupCommand;
-var EMPTY_COMMAND_LIST;
-var listAgentsCommand;
-var gatedCommandSlot_12;
-var gatedCommandSlot_13;
-var gatedCommandSlot_14;
-var gatedCommandSlot_15;
-var backgroundCommand;
-var stopCommandModule;
-var stopCommand;
-var stopNonInteractive;
-var gatedCommandSlot_16;
-var loginCommand;
-var usageReport;
-var INTERNAL_ONLY_COMMANDS;
-var filtered;
-deferInit("chunk-e6aww6q8.js:2053315", () => {
-  promoteMemoryCommands = null;
-  accountMemoryCommands = null;
-  gatedCommandSlot_1 = null;
-  gatedCommandSlot_5 = null;
-  gatedCommandSlot_2 = null;
-  gatedCommandSlot_3 = null;
-  gatedCommandSlot_4 = null;
-  briefCommand = require("./commands/default.lazy.js").default;
-  remoteControlCommand = require("./commands/bridge/default.lazy.js").default;
-  daemonCommand = require("./commands/daemon/default.lazy.js").default;
-  gatedCommandSlot_6 = null;
-  gatedCommandSlot_7 = null;
-  recapCommand = require("./commands/recap/default.lazy.js").default;
-  gatedCommandSlot_8 = null;
-  gatedCommandSlot_9 = null;
-  gatedCommandSlot_10 = null;
-  gatedCommandSlot_11 = null;
-  goalCommandModule = require("./commands/goal/default.lazy.js");
-  goalCommand = goalCommandModule.default;
-  goalNonInteractive = goalCommandModule.goalNonInteractive;
-  workflowsCommand = require("./commands/workflows/default.lazy.js").default;
-  webSetupCommand = require("./services/cloudSessions/connectGithubUrl.lazy.js").default;
-  EMPTY_COMMAND_LIST = [];
-  listAgentsCommand = require("./commands/list-agents/default.lazy.js").default;
-  gatedCommandSlot_12 = null;
-  gatedCommandSlot_13 = null;
-  gatedCommandSlot_14 = null;
-  gatedCommandSlot_15 = null;
-  backgroundCommand = require("./commands/background/default.lazy.js").default;
-  stopCommandModule = require("./commands/stop/default.lazy.js");
-  stopCommand = stopCommandModule?.default ?? null;
-  stopNonInteractive = stopCommandModule?.stopNonInteractive ?? null;
-  gatedCommandSlot_16 = null;
-  loginCommand = loginCommand_2();
-  usageReport = {
-    type: "prompt",
-    name: "insights",
-    description: "Generate a report analyzing your Claude Code sessions",
-    contentLength: 0,
-    progressMessage: "analyzing your sessions",
-    source: "builtin",
-    disableModelInvocation: true,
-    policyGate: {
-      policy: "allow_insights",
-    },
-    requires: {
-      workspace: true,
-    },
-    async getPromptForCommand(args, context) {
-      let real = (await import("./commands/default_2.lazy.js")).default;
-      if (real.type !== "prompt") throw Error("unreachable");
-      return real.getPromptForCommand(args, context);
-    },
-  };
-  INTERNAL_ONLY_COMMANDS = [
-    ...(gatedCommandSlot_2 ? [gatedCommandSlot_2] : []),
-    ...(gatedCommandSlot_3 ? [gatedCommandSlot_3] : []),
-    ...(gatedCommandSlot_1 ? [gatedCommandSlot_1] : []),
-    stubCommand_1,
-    stubTerminalSetupCommand,
-    commitPushPrCommand,
-    stubAntTraceCommand,
-    ...(gatedCommandSlot_16 ? [gatedCommandSlot_16] : []),
-    stubCommand_3,
-    versionCommand,
-    versionNonInteractiveCommand,
-    stubCommand_4a,
-    stubCommand_4b,
-    stubCommand_8,
-    stubCommand_5a,
-    stubCommand_6a,
-    stubCommand_2,
-    stubScrollSpeedCommand_2,
-    stubScrollSpeedCommand,
-    stubCommand_7,
-    stubCommand_9,
-    stubCommand_10,
-    stubC4EUpsellCommand,
-    stubCommand_11,
-    stubCommand_12,
-    stubCommand_13,
-    gatedInternalCommand,
-    ...(gatedCommandSlot_13 ? [gatedCommandSlot_13] : []),
-    ...(gatedCommandSlot_14 ? [gatedCommandSlot_14] : []),
-  ].filter(Boolean);
-  filtered = [
-    gatedInPlaceWriteCommand,
-    gatedCommandSlot_8,
-    gatedCommandSlot_9,
-    gatedCommandSlot_10,
-    gatedCommandSlot_11,
-    gatedCommandSlot_6,
-    gatedCommandSlot_15,
-    gatedCommandSlot_5,
-    gatedCommandSlot_7,
-  ].filter(Boolean);
-});
-//@ chunk-e6aww6q8.js:2054702-2055052 layout
+//@ chunk-5xgkngpb.js:2110899-2111249 sole-consumer
 /**
  * getRuntimeGatedCommandGroups：fleetFork/fleetBackground/daemon/skillDoctor/logout 五组 {open, whenOpen, whenClosed}。
  */
@@ -1125,7 +1015,7 @@ function getRuntimeGatedCommandGroups() {
     },
     daemon: {
       open: () => isDaemonWorkerRegistryEnabled(),
-      whenOpen: [daemonCommand],
+      whenOpen: [desktopCmdModule],
       whenClosed: [],
     },
     skillDoctor: {
@@ -1140,14 +1030,14 @@ function getRuntimeGatedCommandGroups() {
     },
   };
 }
-//@ chunk-e6aww6q8.js:2055052-2055101 file-local
+//@ chunk-5xgkngpb.js:2111249-2111298 file-local
 /**
  * compactCommandList：filter(Boolean)；旧版名 filterCommandsForRemoteMode 配错（门面把它给了 gjo）。
  */
 function compactCommandList(commands) {
   return commands.filter((cmd) => Boolean(cmd));
 }
-//@ chunk-e6aww6q8.js:2055101-2055176 layout
+//@ chunk-5xgkngpb.js:2111298-2111374 layout
 /**
  * getRuntimeGatedGroup：按组 open() 取 whenOpen 或 whenClosed。
  */
@@ -1155,7 +1045,7 @@ function getRuntimeGatedGroup(groupName) {
   let group = getRuntimeGatedCommandGroups()[groupName];
   return compactCommandList(group.open() ? group.whenOpen : group.whenClosed);
 }
-//@ chunk-e6aww6q8.js:2055176-2055270 facade-exports
+//@ chunk-5xgkngpb.js:2111374-2111468 facade-exports
 /**
  * getRuntimeGatedBuiltinCommands：五个运行时门控组（fleetFork、fleetBackground、daemon、skillDoctor、logout）的 whenOpen 与 whenClosed 全部成员。
  */
@@ -1164,7 +1054,7 @@ function getRuntimeGatedBuiltinCommands() {
     compactCommandList([...group.whenOpen, ...group.whenClosed]),
   );
 }
-//@ chunk-e6aww6q8.js:2055270-2056322 facade-exports
+//@ chunk-5xgkngpb.js:2111468-2112570 facade-exports
 /**
  * buildBuiltinCommandTable：按固定顺序列出全部内建命令对象（约 145 项，含运行时门控组与构建期为 null 的占位），filter(Boolean) 后返回；结果由 getBuiltinCommandTable 缓存在 state.builtinCommandTable。
  */
@@ -1185,10 +1075,10 @@ function buildBuiltinCommandTable() {
     btwCommand,
     cdCommand,
     chromeCommand,
-    clearCommand,
+    clearCommandAlias,
     colorCommand,
     colorNonInteractiveCommand,
-    compactCommand,
+    compactNonInteractiveCommand,
     configCommand,
     configNonInteractiveCommand,
     vimMovedToConfigCommand,
@@ -1196,15 +1086,15 @@ function buildBuiltinCommandTable() {
     outputStyleCommand,
     copyCommand,
     desktopCommand,
-    contextCommand,
+    contextCommandDefinition,
     contextNonInteractiveCommand,
-    diffCommand,
+    diffCommandDefinition,
     ...getRuntimeGatedGroup("fleetBackground"),
-    effortCommand,
+    effortNonInteractiveCommand2,
     effortNonInteractiveCommand,
     wellbeingCommand,
     exitCommand,
-    fastCommand,
+    versionCommand,
     fastNonInteractiveCommand,
     focusCommand,
     focusNonInteractiveCommand,
@@ -1215,43 +1105,45 @@ function buildBuiltinCommandTable() {
     keybindingsCommand,
     installGithubAppCommand,
     installSlackAppCommand,
-    mcpCommand,
+    mcpCommandTwin,
     mcpNonInteractiveCommand,
-    memoryCommand,
+    memoryCommandAlias,
     importCommand,
     importNonInteractiveCommand,
     mobileCommand,
     pauseMemoryCommand,
-    modelCommand,
+    modelInteractiveCommand,
     modelNonInteractiveCommand,
     remoteEnvCommand,
     remoteWorkflowCommand,
     workflowLaunchExecCommand,
-    pluginCommand,
-    releaseNotesCommand,
-    reloadPluginsCommand,
-    reloadSkillsCommand,
-    renameCommand,
-    renameNonInteractiveCommand,
+    workflowLaunchExecCommandAlias,
+    pluginCommandAlias,
+    projectCommandAlias,
+    releaseNotesCommandAlias,
+    reloadPluginsCommandAlias,
+    reloadSkillsCommandAlias,
     resumeCommand,
+    renameNonInteractiveCommand,
+    resumeCommandAlias,
     setupBedrockCommand,
     setupVertexCommand,
-    sessionCommand,
-    skillsCommand,
-    statusCommand,
+    sessionCommandAlias,
+    skillsCommandAlias,
+    statusCommandAlias,
     statuslineCommand,
-    stickersCommand,
-    themeCommand,
     tuiCommand,
-    feedbackCommand,
-    bugCommand,
+    themeCommandAlias,
+    tuiCommandAlias,
+    feedbackNonInteractiveCommand,
+    bugNonInteractiveCommand,
     ultrareviewCommand,
     ultrareviewNonInteractiveCommand,
     ultraplanCommand,
-    rewindCommand,
-    securityReviewCommand,
-    terminalSetupCommand,
+    rewindCommandAlias,
     scrollSpeedCommand,
+    terminalSetupCommandAlias,
+    scrollSpeedCommandAlias,
     restartCommand,
     ...(gatedCommandSlot_4 ? [gatedCommandSlot_4] : []),
     upgradeCommand,
@@ -1274,8 +1166,8 @@ function buildBuiltinCommandTable() {
     voiceCommand,
     ...(recapCommand ? [recapCommand] : []),
     ...getRuntimeGatedGroup("skillDoctor"),
-    permissionsCommand,
-    planCommand,
+    permissionsCommandAlias,
+    planCommandAlias,
     powerupCommand,
     privacySettingsCommand,
     goalCommand,
@@ -1283,7 +1175,7 @@ function buildBuiltinCommandTable() {
     hooksCommand,
     loopsCommand,
     exportCommand,
-    sandboxCommand,
+    sandboxCommandAlias,
     loginCommand,
     createDesignLoginCommand(),
     designConsentCommand,
@@ -1292,12 +1184,12 @@ function buildBuiltinCommandTable() {
     passesCommand,
     ...(listAgentsCommand ? [listAgentsCommand] : []),
     ...(gatedCommandSlot_12 ? [gatedCommandSlot_12] : []),
-    tasksCommand,
+    tasksCommandAlias,
     autofixPrCommand,
     ...[],
     ...EMPTY_COMMAND_LIST,
     teleportCommand,
-    workflowsCommand,
+    diffCmdModule,
     artifactsCommand,
     teamOnboardingCommand,
     radioCommand,
@@ -1306,10 +1198,12 @@ function buildBuiltinCommandTable() {
     ...(gatedCommandSlot_10 ? [gatedCommandSlot_10] : []),
     ...(gatedCommandSlot_11 ? [gatedCommandSlot_11] : []),
     ...(gatedCommandSlot_6 ? [gatedCommandSlot_6] : []),
-    ...(gatedCommandSlot_15 ? [gatedCommandSlot_15] : []),
-    ...(gatedCommandSlot_7 ? [gatedCommandSlot_7] : []),
-    ...ENTERPRISE_UPSELL_COMMANDS,
+    ...(antGatedCmdA ? [antGatedCmdA] : []),
+    ...(antGatedCmdB ? [antGatedCmdB] : []),
+    ...(sandboxRuntimeConfig ? [sandboxRuntimeConfig] : []),
     ...(gatedInPlaceWriteCommand ? [gatedInPlaceWriteCommand] : []),
+    ...ENTERPRISE_UPSELL_COMMANDS,
+    ...(gatedCommandSlot_2 ? [gatedCommandSlot_2] : []),
     ...(promoteMemoryCommands && !isEnvTruthy(env.IS_DEMO)
       ? [promoteMemoryCommands.promoteMemory, promoteMemoryCommands.promoteMemoryNonInteractive]
       : []),
@@ -1325,35 +1219,35 @@ function buildBuiltinCommandTable() {
     ...[],
   ];
 }
-//@ chunk-e6aww6q8.js:2056322-2056969 facade-exports
+//@ chunk-5xgkngpb.js:2112570-2113268 facade-exports
 /**
  * REMOTE_SAFE_COMMANDS：远程模式（--remote）下仍可在本地执行的命令集合。
  */
 var REMOTE_SAFE_COMMANDS; // deferred: uses colorCommandDefinition (./commands/color/index.js) of its import cycle while loading; runs once the cycle is complete
 var BRIDGE_SAFE_COMMANDS;
-deferInit("chunk-e6aww6q8.js:2056322", () => {
+deferInit("chunk-5xgkngpb.js:2112570", () => {
   REMOTE_SAFE_COMMANDS = new Set([
-    sessionCommand,
+    sessionCommandAlias,
     exitCommand,
     helpCommand,
-    themeCommand,
+    themeCommandAlias,
     colorCommand,
-    ...(gatedCommandSlot_15 ? [gatedCommandSlot_15] : []),
+    ...(antGatedCmdB ? [antGatedCmdB] : []),
     usageCommand,
     copyCommand,
-    feedbackCommand,
-    bugCommand,
+    feedbackNonInteractiveCommand,
+    bugNonInteractiveCommand,
     mobileCommand,
-    releaseNotesCommand,
+    releaseNotesCommandAlias,
     exportCommand,
-    terminalSetupCommand,
+    terminalSetupCommandAlias,
     privacySettingsCommand,
     focusCommand,
     wellbeingCommand,
     cloudPluginsCommand,
     hooksCommand,
     configCommand,
-    statusCommand,
+    statusCommandAlias,
     vimMovedToConfigCommand,
     keybindingsCommand,
     ...(gatedCommandSlot_1 ? [gatedCommandSlot_1] : []),
@@ -1368,51 +1262,54 @@ deferInit("chunk-e6aww6q8.js:2056322", () => {
     claimCreditCommand,
     ...(gatedInternalCommand ? [gatedInternalCommand] : []),
     ...(gatedCommandSlot_6 ? [gatedCommandSlot_6] : []),
-    ...(gatedCommandSlot_7 ? [gatedCommandSlot_7] : []),
+    ...(antGatedCmdA ? [antGatedCmdA] : []),
+    ...(sandboxRuntimeConfig ? [sandboxRuntimeConfig] : []),
+    ...(gatedInPlaceWriteCommand ? [gatedInPlaceWriteCommand] : []),
     ...[],
-    ...(daemonCommand ? [daemonCommand] : []),
-    renameCommand,
+    ...(desktopCmdModule ? [desktopCmdModule] : []),
+    resumeCommand,
     btwCommand,
-    contextCommand,
-    diffCommand,
-    planCommand,
+    contextCommandDefinition,
+    diffCommandDefinition,
+    planCommandAlias,
     advisorCommand,
-    effortCommand,
-    fastCommand,
-    modelCommand,
+    effortNonInteractiveCommand2,
     versionCommand,
-    clearCommand,
-    compactCommand,
+    modelInteractiveCommand,
+    internalCmdA,
+    clearCommandAlias,
+    compactNonInteractiveCommand,
     autocompactNonInteractiveCommand,
     goalNonInteractive,
     ...(gatedCommandSlot_14 ? [gatedCommandSlot_14] : []),
     recapCommand,
-    reloadSkillsCommand,
+    reloadSkillsCommandAlias,
     pauseMemoryCommand,
     agentsRemovedCommand,
-    reloadPluginsCommand,
-    ...(gatedCommandSlot_16 ? [gatedCommandSlot_16] : []),
+    reloadPluginsCommandAlias,
+    ...(gatedCommandSlot_8 ? [gatedCommandSlot_8] : []),
+    ...(internalGatedCmdB ? [internalGatedCmdB] : []),
     skillDoctorCommand,
     skillDoctorNonInteractiveCommand,
-    mcpCommand,
+    mcpCommandTwin,
     mcpNonInteractiveCommand,
     addDirCommand,
     addDirNonInteractiveCommand,
-    permissionsCommand,
-    sandboxCommand,
-    tasksCommand,
-    workflowsCommand,
-    rewindCommand,
-    memoryCommand,
+    permissionsCommandAlias,
+    sandboxCommandAlias,
+    tasksCommandAlias,
+    diffCmdModule,
+    rewindCommandAlias,
+    memoryCommandAlias,
     ...(accountMemoryCommands ? [accountMemoryCommands.memoryNotes] : []),
-    skillsCommand,
-    pluginCommand,
+    skillsCommandAlias,
+    pluginCommandAlias,
   ]);
   BRIDGE_SAFE_COMMANDS = new Set([
     autoModeSetupNonInteractiveCommand,
-    compactCommand,
+    compactNonInteractiveCommand,
     autocompactNonInteractiveCommand,
-    clearCommand,
+    clearCommandAlias,
     usageNonInteractiveCommand,
     contextNonInteractiveCommand,
     configNonInteractiveCommand,
@@ -1437,12 +1334,12 @@ deferInit("chunk-e6aww6q8.js:2056322", () => {
     skillDoctorNonInteractiveCommand,
     ...(listAgentsCommand ? [listAgentsCommand] : []),
     ...(gatedCommandSlot_8 ? [gatedCommandSlot_8] : []),
-    reloadPluginsCommand,
-    reloadSkillsCommand,
+    reloadPluginsCommandAlias,
+    reloadSkillsCommandAlias,
     restartCommand,
   ]);
 });
-//@ chunk-e6aww6q8.js:2056969-2057141 facade-exports (2.1.88 match: isBridgeSafeCommand, 0.82)
+//@ chunk-5xgkngpb.js:2113268-2113440 facade-exports (2.1.88 match: isBridgeSafeCommand, 0.82)
 /**
  * isBridgeSafeCommand：prompt 命令一律可桥接；local-jsx 不可；local 命令需在 BRIDGE_SAFE_COMMANDS 里。
  */
@@ -1452,7 +1349,7 @@ function isBridgeSafeCommand(cmd) {
   if (BRIDGE_SAFE_COMMANDS.has(cmd)) return cmd !== restartCommand || false;
   return isPluginLocalCommand(cmd) && findBridgeFallback(cmd) === undefined;
 }
-//@ chunk-e6aww6q8.js:2057141-2057229 facade-exports
+//@ chunk-5xgkngpb.js:2113440-2113528 facade-exports
 /**
  * admitsBridgeAuthor：判断桥接端提交的斜杠命令是否允许执行（插件注册的 local 命令需要能找到桥接安全的孪生命令）。
  */
@@ -1460,15 +1357,15 @@ function admitsBridgeAuthor(cmd, submission) {
   if (!isPluginLocalCommand(cmd)) return true;
   return submission.origin?.kind === "human" && !submission.relayAuthored;
 }
-//@ chunk-e6aww6q8.js:2057229-2057252 layout
+//@ chunk-5xgkngpb.js:2113528-2113551 layout
 /**
  * BRIDGE_TWINS_FOR_PLUGIN_COMMANDS：new Set([contextNonInteractive])：插件同名 local 命令也可由这些桥接安全孪生代答。
  */
 var BRIDGE_TWINS_FOR_PLUGIN_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:2057229", () => {
+deferInit("chunk-5xgkngpb.js:2113528", () => {
   BRIDGE_TWINS_FOR_PLUGIN_COMMANDS = new Set([contextNonInteractiveCommand]);
 });
-//@ chunk-e6aww6q8.js:2057252-2057408 facade-exports
+//@ chunk-5xgkngpb.js:2113551-2113707 facade-exports
 /**
  * findBridgeFallback：为插件注册的同名 local 命令找到可代答的桥接安全内建孪生命令。
  */
@@ -1480,14 +1377,14 @@ function findBridgeFallback(cmd) {
       return isPluginLocal && !BRIDGE_TWINS_FOR_PLUGIN_COMMANDS.has(twin) ? undefined : twin;
   return;
 }
-//@ chunk-e6aww6q8.js:2057408-2057455 facade-exports
+//@ chunk-5xgkngpb.js:2113707-2113754 facade-exports
 /**
  * isBridgeDispatchable：命令能否通过桥接派发（综合 isBridgeSafeCommand 与插件孪生回退）。
  */
 function isBridgeDispatchable(command) {
   return isBridgeSafeCommand(command) || findBridgeFallback(command) !== undefined;
 }
-//@ chunk-e6aww6q8.js:2057455-2057577 facade-exports
+//@ chunk-5xgkngpb.js:2113754-2113876 facade-exports
 /**
  * filterCommandsForRemoteMode：只保留 REMOTE_SAFE_COMMANDS 中的命令。
  */
@@ -1500,7 +1397,7 @@ function filterCommandsForRemoteMode(commands) {
       REMOTE_SAFE_COMMANDS.has(cmd),
   );
 }
-//@ chunk-e6aww6q8.js:2057577-2057965 facade-exports (2.1.88 match: command, 0.607)
+//@ chunk-5xgkngpb.js:2113876-2114264 facade-exports (2.1.88 match: command, 0.607)
 /**
  * withWorkerOnlyCommands：在命令列表后补上 Worker 环境专有的技能名（不与一方命令重名时）。
  */
@@ -1530,7 +1427,7 @@ function withWorkerOnlyCommands(commands, workerCommandNames) {
     }));
   return extras.length > 0 ? [...commands, ...extras] : commands;
 }
-//@ chunk-e6aww6q8.js:2057965-2058072 facade-exports
+//@ chunk-5xgkngpb.js:2114264-2114371 facade-exports
 /**
  * getHumanFacingDescription：取命令面向用户的描述（技能优先用 description，过长时截断）。
  */
@@ -1538,7 +1435,7 @@ function getHumanFacingDescription(cmd) {
   if (cmd.type !== "prompt" || !isBuiltinCommand(cmd)) return cmd.description;
   return cmd.menuDescription || cmd.description;
 }
-//@ chunk-e6aww6q8.js:2058072-2058536 facade-exports (2.1.88 match: formatDescriptionWithSource, 0.774)
+//@ chunk-5xgkngpb.js:2114371-2114835 facade-exports (2.1.88 match: formatDescriptionWithSource, 0.774)
 /**
  * formatDescriptionWithSource：描述后附加来源标注，例如 (plugin X)、(user)、(project)、(MCP)。
  */
@@ -1562,7 +1459,7 @@ function formatDescriptionWithSource(cmd, description = cmd.description) {
   if (cmd.loadedFrom === "syncedSkills") return `${description} (${CLAUDE_AI_SYNC_LABEL})`;
   return `${description} (${getSettingSourceName(cmd.source)})`;
 }
-//@ chunk-e6aww6q8.js:2058536-2058596 facade-exports
+//@ chunk-5xgkngpb.js:2114835-2114896 facade-exports
 /**
  * toSlashCommands：把命令列表转换为 SDK/控制协议用的 slash_commands 条目（name、description、argumentHint、aliases）。
  */
@@ -1570,7 +1467,7 @@ function toSlashCommands(clients) {
   let isFolderAlias = folderNameAliasCheck();
   return mergeClients(clients).map((client) => toSlashCommand(client, isFolderAlias));
 }
-//@ chunk-e6aww6q8.js:2058596-2058962 facade-exports
+//@ chunk-5xgkngpb.js:2114896-2115262 facade-exports
 /**
  * toSlashCommand：单条转换；目录同名别名（named-folder alias）与内建命令的 aliases 会展开为额外拼写。
  */
@@ -1598,21 +1495,21 @@ function toSlashCommand(cmd, isFolderAlias) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:2058962-2059003 facade-exports (2.1.88 match: BUILTIN_MARKETPLACE_NAME, 1)
+//@ chunk-5xgkngpb.js:2115262-2115304 facade-exports (2.1.88 match: BUILTIN_MARKETPLACE_NAME, 1)
 /**
  * 插件 ID 的市场部分是否为 builtin（内置插件）。
  */
 function isBuiltinCommand(command) {
   return getCommandOriginKind(command) === "builtin";
 }
-//@ chunk-e6aww6q8.js:2059003-2059045 facade-exports
+//@ chunk-5xgkngpb.js:2115304-2115346 facade-exports
 /**
  * bridgeAdvertisedCommands：向桥接端（claude.ai 远程会话）公布的命令列表，只含可桥接派发者。
  */
 function bridgeAdvertisedCommands(commands) {
   return mergeClients(commands).filter(isBridgeDispatchable);
 }
-//@ chunk-e6aww6q8.js:2059045-2059523 facade-exports
+//@ chunk-5xgkngpb.js:2115346-2115827 facade-exports
 /**
  * toBridgeSlashCommands：把可桥接命令转换为带来源和描述的公布条目。
  */
@@ -1651,14 +1548,14 @@ function toBridgeSlashCommands(commands) {
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:2059523-2059588 layout
+//@ chunk-5xgkngpb.js:2115827-2115892 layout
 /**
  * isPluginLocalCommand：type=local 且 loadedFrom=plugin（函数钩子插件注册的命令）。
  */
 function isPluginLocalCommand(cmd) {
   return cmd.type === "local" && cmd.loadedFrom === "plugin";
 }
-//@ chunk-e6aww6q8.js:2059588-2059665 layout
+//@ chunk-5xgkngpb.js:2115892-2115969 layout
 /**
  * addShippedCommandSpellings：运行时门控内建、内建技能、内建插件技能名都加入集合。
  */
@@ -1667,14 +1564,14 @@ function addShippedCommandSpellings(spellings) {
   for (let skill of getRegisteredBundledSkillsIgnoringKillSwitch()) addCommandSpellings(spellings, skill);
   for (let name of builtinPluginSkillNames()) addSpelling(spellings, name);
 }
-//@ chunk-e6aww6q8.js:2059665-2059708 layout
+//@ chunk-5xgkngpb.js:2115969-2116012 layout
 /**
  * addRuntimeGatedCommandSpellings：对 getRuntimeGatedBuiltinCommands() 逐个 addCommandSpellings。
  */
 function addRuntimeGatedCommandSpellings(spellings) {
   for (let command of getRuntimeGatedBuiltinCommands()) addCommandSpellings(spellings, command);
 }
-//@ chunk-e6aww6q8.js:2059708-2059852 layout
+//@ chunk-5xgkngpb.js:2116012-2116156 layout
 /**
  * getReservedSpellingsFor：state.reservedSpellingsFor 缓存：命令列表占用的全部拼写。
  */
@@ -1687,7 +1584,7 @@ function getReservedSpellingsFor(allCommands) {
     return names;
   });
 }
-//@ chunk-e6aww6q8.js:2059852-2059936 layout
+//@ chunk-5xgkngpb.js:2116156-2116240 layout
 /**
  * getBuiltinCommandTable：state.builtinCommandTable ??= buildBuiltinCommandTable()。
  */
@@ -1696,7 +1593,7 @@ function getBuiltinCommandTable() {
   state.builtinCommandTable ??= buildBuiltinCommandTable();
   return state.builtinCommandTable;
 }
-//@ chunk-e6aww6q8.js:2059936-2060068 facade-exports
+//@ chunk-5xgkngpb.js:2116240-2116372 facade-exports
 /**
  * builtInCommandNames：内建命令占用的全部拼写（name、显示名、aliases，规范化后）的集合，用于技能/插件命名冲突检查。
  */
@@ -1707,7 +1604,7 @@ function builtInCommandNames() {
   );
   return hostState.builtinCommandNames;
 }
-//@ chunk-e6aww6q8.js:2060068-2060223 facade-exports
+//@ chunk-5xgkngpb.js:2116372-2116527 facade-exports
 /**
  * shippedCommandNames：内建表 + 运行时门控命令 + 发行内建技能/内建插件技能的全部拼写，用于遥测时判断命令名是否可原样上报。
  */
@@ -1720,14 +1617,14 @@ function shippedCommandNames() {
   ]);
   return hostState.shippedCommandNames;
 }
-//@ chunk-e6aww6q8.js:2060223-2060255 facade-exports
+//@ chunk-5xgkngpb.js:2116527-2116559 facade-exports
 /**
  * isFirstPartyCommandName：名字是否属于一方命令拼写。
  */
 function isFirstPartyCommandName(name) {
   return firstPartyCommandNameCheck()(name);
 }
-//@ chunk-e6aww6q8.js:2060255-2060306 facade-exports
+//@ chunk-5xgkngpb.js:2116559-2116610 facade-exports
 /**
  * firstPartyCommandNameCheck：名字是否被一方（内建/发行技能）命令占用的检查器。
  */
@@ -1735,7 +1632,7 @@ function firstPartyCommandNameCheck() {
   let builtinCommandSpellings = collectBuiltinCommandSpellings();
   return (name) => builtinCommandSpellings.has(foldName_2(name));
 }
-//@ chunk-e6aww6q8.js:2060306-2060368 facade-exports
+//@ chunk-5xgkngpb.js:2116610-2116672 facade-exports
 /**
  * folderNameAliasCheck：插件命名目录别名（named-folder）是否与已有命令冲突。
  */
@@ -1745,7 +1642,7 @@ function folderNameAliasCheck() {
     isSafeSkillName(name) &&
     !isQualifiedToolReference(foldName_2(name), (spellings ??= collectBuiltinCommandSpellings()));
 }
-//@ chunk-e6aww6q8.js:2060368-2060439 layout
+//@ chunk-5xgkngpb.js:2116672-2116743 layout
 /**
  * collectBuiltinCommandSpellings：内建表 + 发行内建技能的所有拼写。
  */
@@ -1755,21 +1652,21 @@ function collectBuiltinCommandSpellings() {
   addShippedCommandSpellings(spellings);
   return spellings;
 }
-//@ chunk-e6aww6q8.js:2060439-2060481 facade-exports
+//@ chunk-5xgkngpb.js:2116743-2116785 facade-exports
 /**
  * shippedCommandNameForAnalytics：命令名属于发行内建拼写时原样返回，否则返回 "custom"，避免上报用户自定义命令名。
  */
 function shippedCommandNameForAnalytics(name) {
   return parentCommandName(name, shippedCommandNames().has(name));
 }
-//@ chunk-e6aww6q8.js:2060481-2060507 facade-exports
+//@ chunk-5xgkngpb.js:2116785-2116811 facade-exports
 /**
  * getBuiltinCommands：返回缓存的内建命令表（不含技能、插件、MCP）。
  */
 function getBuiltinCommands() {
   return getBuiltinCommandTable();
 }
-//@ chunk-e6aww6q8.js:2060507-2061509 fingerprint (2.1.88 match: getSkills, 0.755)
+//@ chunk-5xgkngpb.js:2116811-2117813 fingerprint (2.1.88 match: getSkills, 0.755)
 /**
  * getSkills：并发加载技能目录、插件技能、发行内建技能与内建插件技能；任一来源失败只记日志并返回空。
  */
@@ -1827,18 +1724,18 @@ async function getSkills(cwd, storage) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:2061509-2061615 fingerprint (2.1.88 match: getWorkflowCommands, 0.344)
+//@ chunk-5xgkngpb.js:2117813-2117919 fingerprint (2.1.88 match: getWorkflowCommands, 0.344)
 var getWorkflowCommands; // deferred: loads other modules while loading; runs once its import cycle is complete
 var invalidateWorkflowCache;
 var warmWorkflows;
-deferInit("chunk-e6aww6q8.js:2061509", () => {
+deferInit("chunk-5xgkngpb.js:2117813", () => {
   ({
     getWorkflowCommands,
     invalidateWorkflowCache,
     warmWorkflows,
   } = require("./commands/workflows/getWorkflowCommands.lazy.js"));
 });
-//@ chunk-e6aww6q8.js:2061615-2061737 facade-exports
+//@ chunk-5xgkngpb.js:2117919-2118041 facade-exports
 /**
  * commandsMemoKey：命令缓存键，由 cwd、存储 v5 开关与隐藏插件列表组成。
  */
@@ -1849,7 +1746,7 @@ function commandsMemoKey(
 ) {
   return `${getDynamicSkillStateKeyExport()}:${bundledSkillsGateKey()}:${getIsNonInteractiveSession()}:${getSkillsSyncVetoed()}:${getAccountCacheKey()}:${isSkillsSyncEnvOn()}:${storageV5}:${hidePrefixForSkills(hiddenPlugins)}${managedFolderCondition()}${keyOrNull(cwd)}`;
 }
-//@ chunk-e6aww6q8.js:2061737-2061820 layout
+//@ chunk-5xgkngpb.js:2118041-2118124 layout
 /**
  * loadAllCommands：同旧版 loadAllCommands：按 commandsMemoKey 缓存 loadAllCommandsUncached。
  */
@@ -1858,7 +1755,7 @@ function loadAllCommands(cwd, storage, storageV5) {
     loadAllCommandsUncached(cwd, storage, storageV5),
   );
 }
-//@ chunk-e6aww6q8.js:2061820-2062015 facade-exports
+//@ chunk-5xgkngpb.js:2118124-2118319 facade-exports
 /**
  * warmCommandSourceCaches：启动时并发预热技能目录、插件命令/技能与内建技能的缓存，记录耗时。
  */
@@ -1874,7 +1771,7 @@ async function warmCommandSourceCaches(cwd, storage) {
     ]);
   } catch {}
 }
-//@ chunk-e6aww6q8.js:2062015-2062187 layout
+//@ chunk-5xgkngpb.js:2118319-2118491 layout
 /**
  * markBareNameReserved：syncedSkills 命令加 bareNameReserved:true。
  */
@@ -1892,7 +1789,7 @@ function markBareNameReserved(cmd) {
     bareNameReserved: true,
   };
 }
-//@ chunk-e6aww6q8.js:2062187-2063538 layout
+//@ chunk-5xgkngpb.js:2118491-2119845 layout
 /**
  * loadAllCommandsUncached：合并技能目录、附加目录技能、工作流、插件命令、插件技能、内建技能、内建插件技能与内建表；校验名字、处理 claude.ai 同步技能与保留名、丢弃被遮蔽的 fallback 技能、剥离冲突别名，并上报冲突遥测。
  */
@@ -1977,7 +1874,7 @@ async function loadAllCommandsUncached(cwd, storage, storageV5) {
   logRefusedReservedSkillNames();
   return result;
 }
-//@ chunk-e6aww6q8.js:2063538-2063886 layout
+//@ chunk-5xgkngpb.js:2119845-2120193 layout
 /**
  * logRefusedReservedSkillNames：一次性上报 skill_reserved_namespace 遥测。
  */
@@ -1996,7 +1893,7 @@ function logRefusedReservedSkillNames() {
   }
   logFeatureSad("skill_reserved_namespace", "names_refused", counts);
 }
-//@ chunk-e6aww6q8.js:2063886-2063994 facade-exports
+//@ chunk-5xgkngpb.js:2120193-2120301 facade-exports
 /**
  * getCommands：会话可用的全部斜杠命令。内部调用 assembleCommands（加载、可用性/启用过滤、动态技能插入），再经命令集钩子（插件 hookedCommands）与插件隐藏表处理；按 cwd+存储+隐藏插件做键缓存。
  */
@@ -2011,7 +1908,7 @@ async function getCommands(
     ? commands
     : hideSkillsBehindPlugins(commands, hiddenPlugins, getSyncedSkillCommands());
 }
-//@ chunk-e6aww6q8.js:2063994-2064129 facade-exports
+//@ chunk-5xgkngpb.js:2120301-2120436 facade-exports
 /**
  * getHiddenSyncedSkills：被保留名挡住而未提供的 claude.ai 同步技能。
  */
@@ -2021,7 +1918,7 @@ async function getHiddenSyncedSkills(cwd, storage, hiddenPlugins) {
     (command) => command.type === "prompt" && command.hiddenBehindPlugin !== undefined,
   );
 }
-//@ chunk-e6aww6q8.js:2064129-2067775 layout
+//@ chunk-5xgkngpb.js:2120436-2124086 layout
 /**
  * assembleCommands：getCommands 的主体。按 availability 与 isCommandEnabled 过滤；附加目录里的项目技能去重；处理条件技能、同步技能；嵌套 .claude/skills 的技能按目录加作用域前缀；把动态技能插入到第一个内建命令之前。
  */
@@ -2257,7 +2154,7 @@ async function assembleCommands(cwd, storage, storageV5) {
     ...unshadowed,
   ]);
 }
-//@ chunk-e6aww6q8.js:2067775-2068260 layout
+//@ chunk-5xgkngpb.js:2124086-2124571 layout
 /**
  * dropAmbiguousScopedSkills：同名且无法加作用域前缀的嵌套技能不提供。
  */
@@ -2282,7 +2179,7 @@ function dropAmbiguousScopedSkills(skills, scopeOf, filteredBase) {
     reportRefusedSkillName(joinScopedName(scopeOf(skill) ?? "", skill.name), "is not offered");
   return skills.filter((skill) => !ambiguous.has(skill));
 }
-//@ chunk-e6aww6q8.js:2068260-2068343 layout
+//@ chunk-5xgkngpb.js:2124571-2124654 layout
 /**
  * canOfferUnscoped：无作用域、同步技能或作用域名被保留时返回 true。
  */
@@ -2293,7 +2190,7 @@ function canOfferUnscoped(skill, scope) {
     isSkillFilePathOrIdentifier(joinScopedName(scope, skill.name))
   );
 }
-//@ chunk-e6aww6q8.js:2068343-2068533 layout
+//@ chunk-5xgkngpb.js:2124654-2124844 layout
 /**
  * getSkillScopeLabel：技能所在项目相对 cwd 的路径（或目录名）作为作用域。
  */
@@ -2306,7 +2203,7 @@ function getSkillScopeLabel(skill, cwd) {
     return getAdditionalDirRelativeLabel(skillProjectRoot);
   return relativeRoot.split(sep).join("/");
 }
-//@ chunk-e6aww6q8.js:2068533-2068691 layout
+//@ chunk-5xgkngpb.js:2124844-2125002 layout
 /**
  * getSkillProjectRoot：skillRoot 中 /.claude/ 之前的部分。
  */
@@ -2315,7 +2212,7 @@ function getSkillProjectRoot(skill) {
   let index = skill.skillRoot.lastIndexOf(`${sep}.claude${sep}`);
   return index === -1 ? null : skill.skillRoot.slice(0, index);
 }
-//@ chunk-e6aww6q8.js:2068691-2068859 layout
+//@ chunk-5xgkngpb.js:2125002-2125170 layout
 /**
  * withNestedSkillDescription：描述追加 "(from X/.claude/skills — applies when working on files under X/)"。
  */
@@ -2326,7 +2223,7 @@ function withNestedSkillDescription(description, nested) {
     description: `${description.description} (from ${nested}/.claude/skills \u2014 applies when working on files under ${nested}/)`,
   };
 }
-//@ chunk-e6aww6q8.js:2068859-2069423 layout
+//@ chunk-5xgkngpb.js:2125170-2125734 layout
 /**
  * toScopedSkillCommand：生成 "scope:name" 形式的嵌套技能命令。
  */
@@ -2359,7 +2256,7 @@ function toScopedSkillCommand(skill, scope, base, cwd) {
     description: `${skill.description} (${sourceLabel})`,
   };
 }
-//@ chunk-e6aww6q8.js:2069423-2069469 facade-exports
+//@ chunk-5xgkngpb.js:2125734-2125780 facade-exports
 /**
  * clearCommandMemoizationCaches：清空 getCommands/loadAllCommands/技能列表等的记忆化缓存，但不清技能目录缓存。
  */
@@ -2367,7 +2264,7 @@ function clearCommandMemoizationCaches() {
   getHostState().invalidateCommands();
   invalidateWorkflowCache();
 }
-//@ chunk-e6aww6q8.js:2069469-2069505 facade-exports
+//@ chunk-5xgkngpb.js:2125780-2125816 facade-exports
 /**
  * clearCommandsCache：清空命令相关的全部缓存（含技能目录、插件命令、插件技能）。
  */
@@ -2377,15 +2274,15 @@ function clearCommandsCache() {
   clearPluginSkillsCache();
   clearSkillCaches();
 }
-//@ chunk-e6aww6q8.js:2069505-2069542 facade-exports (2.1.88 match: COMMON_HELP_ARGS, 0.53)
+//@ chunk-5xgkngpb.js:2125816-2125853 facade-exports (2.1.88 match: COMMON_HELP_ARGS, 0.53)
 /**
  * HEADLESS_YIELDABLE_NAMES：无头模式下内建命令可以让给插件/技能的名字（help、feedback）。
  */
 var HEADLESS_YIELDABLE_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:2069505", () => {
+deferInit("chunk-5xgkngpb.js:2125816", () => {
   HEADLESS_YIELDABLE_NAMES = new Set(["help", "feedback"]);
 });
-//@ chunk-e6aww6q8.js:2069542-2071229 layout
+//@ chunk-5xgkngpb.js:2125853-2127574 layout
 /**
  * shedReservedAliases：插件/同步技能的别名若与内建/保留名冲突则移入 shedAliases；无头模式让出 help/feedback。
  */
@@ -2472,7 +2369,7 @@ function shedReservedAliases(commands, checkNamedFolders) {
     });
   return mapped;
 }
-//@ chunk-e6aww6q8.js:2071229-2071542 facade-exports
+//@ chunk-5xgkngpb.js:2127574-2127887 facade-exports
 /**
  * withNamedFolderYieldsRestored：恢复插件命名目录让出的别名（用于展示完整命令列表）。
  */
@@ -2497,7 +2394,7 @@ function withNamedFolderYieldsRestored(commands) {
     };
   });
 }
-//@ chunk-e6aww6q8.js:2071542-2071642 facade-exports
+//@ chunk-5xgkngpb.js:2127887-2127987 facade-exports
 /**
  * getSkillToolCommands：Skill 工具可调用的技能列表（prompt、非内建、模型可调用、有描述或 whenToUse）。
  */
@@ -2507,7 +2404,7 @@ function getSkillToolCommands(cwd, storage, hiddenPlugins = getHeldBackSyncedPlu
     getSkillToolCommandsUncached(cwd, storage, hiddenPlugins, storageV5),
   );
 }
-//@ chunk-e6aww6q8.js:2071642-2071739 layout
+//@ chunk-5xgkngpb.js:2127987-2128084 layout
 /**
  * getSkillToolCommandsUncached：getCommands 后用 isSkillToolCommand 过滤。
  */
@@ -2516,7 +2413,7 @@ async function getSkillToolCommandsUncached(cwd, storage, hiddenPlugins, storage
   let commands = await getCommands(cwd, storage, hiddenPlugins, storageV5);
   return hideShadowedCommands(commands.filter(isSkillToolCommand), commands);
 }
-//@ chunk-e6aww6q8.js:2071739-2071840 facade-exports
+//@ chunk-5xgkngpb.js:2128084-2128185 facade-exports
 /**
  * getSlashCommandToolSkills：系统提示里列出的技能清单（来自技能目录、插件、内建技能，按设置过滤）。
  */
@@ -2526,7 +2423,7 @@ function getSlashCommandToolSkills(cwd, storage) {
     getSlashCommandToolSkillsUncached(cwd, storage, storageV5),
   );
 }
-//@ chunk-e6aww6q8.js:2071840-2072348 fingerprint (2.1.88 match: getSlashCommandToolSkills, 0.755)
+//@ chunk-5xgkngpb.js:2128185-2128693 fingerprint (2.1.88 match: getSlashCommandToolSkills, 0.755)
 /**
  * getSlashCommandToolSkillsUncached：旧版 getSlashCommandToolSkills 的过滤逻辑；门面名给了缓存层 G0e。
  */
@@ -2558,6 +2455,13 @@ async function getSlashCommandToolSkillsUncached(cwd, storage, options) {
 export {
   getSkillToolCommands,
   clearCommandMemoizationCaches,
+  bridgeAdvertisedCommands,
+  getSlashCommandToolSkills,
+  getCommands,
+  toSlashCommands,
+  clearCommandsCache,
+  WORKER_ONLY_SKILL_NAMES,
+  firstPartyCommandNameCheck,
   looksLikeSlashInput,
   inputStartsWithMatchingCommand,
   hasCommand,
@@ -2566,64 +2470,73 @@ export {
   findCommand,
   isCommandEnabled,
   isSkillOff,
-  regExp,
-  TEAM_SETUP_GUIDE_LABEL,
-  matchesUnqualifiedName,
-  isSkillToolCommand,
-  getBareCommandName,
-  getCommands,
-  getHeldBackSyncedPlugins,
-  withNamedFolderYieldsRestored,
-  getHiddenSyncedSkills,
-  builtInCommandNames,
-  isProjectScopedCommand,
-  describeSkillHiddenBehindPlugin,
-  getBareCommandNameUnlessSynced,
-  toBridgeSlashCommands,
+  shippedCommandNameForAnalytics,
+  isImmediateCommand,
+  admitsBridgeAuthor,
   getCommandName,
-  bridgeAdvertisedCommands,
-  isImagePlaceholder,
-  REMOTE_SAFE_COMMANDS,
-  filterCommandsForRemoteMode,
-  withWorkerOnlyCommands,
-  clearCommandsCache,
-  toSlashCommands,
-  shippedCommandNames,
-  buildCommandRunInfo,
+  folderNameAliasCheck,
+  buildCommandLookup,
+  toSlashCommand,
+  isBuiltinCommand,
   formatDescriptionWithSource,
   getHumanFacingDescription,
   dedupeBundledSkills,
   getCommand,
-  getSlashCommandToolSkills,
-  isImmediateCommand,
-  shippedCommandNameForAnalytics,
-  isBridgeSafeCommand,
-  admitsBridgeAuthor,
-  findBridgeFallback,
-  BRIDGE_SAFE_COMMANDS,
-  warmCommandSourceCaches,
-  getBuiltinCommands,
-  meetsAvailabilityRequirement,
-  hasSensitiveArgs,
-  getCommandContextMode,
-  WORKER_ONLY_SKILL_NAMES,
-  firstPartyCommandNameCheck,
-  dropShadowedFallbackSkills,
-  passesPolicyGate,
+  regExp,
+  TEAM_SETUP_GUIDE_LABEL,
+  withNamedFolderYieldsRestored,
   filterCommandsByAllowlist,
-  isFirstPartyCommandName,
-  resolveBarePluginSkillName,
   hiddenCommandsWhenSlashDisabled,
-  isBridgeDispatchable,
+  dropShadowedFallbackSkills,
+  stubCommand_1,
+  stubCommand_3,
+  stubCommand_4a,
+  stubCommand_4b,
+  stubCommand_8,
+  stubCommand_5a,
+  stubCommand_6a,
+  stubCommand_2,
+  stubCommand_7,
+  stubCommand_9,
+  stubCommand_10,
+  stubCommand_11,
+  stubCommand_12,
+  stubCommand_13,
+  gatedInternalCommand,
+  gatedCommandSlot_2,
   addCommandSpellings,
   filterCommandAliases,
   clearUserFacingName,
-  buildCommandLookup,
+  meetsAvailabilityRequirement,
+  getBareCommandNameUnlessSynced,
+  isSkillToolCommand,
+  isFirstPartyCommandName,
+  matchesUnqualifiedName,
+  resolveBarePluginSkillName,
+  getBareCommandName,
+  builtInCommandNames,
+  shippedCommandNames,
+  getCommandContextMode,
+  isProjectScopedCommand,
+  describeSkillHiddenBehindPlugin,
   getCommandOriginKind,
+  getBuiltinCommands,
+  hasSensitiveArgs,
+  buildCommandRunInfo,
+  isBridgeSafeCommand,
+  findBridgeFallback,
+  isImagePlaceholder,
+  isBridgeDispatchable,
+  toBridgeSlashCommands,
+  warmCommandSourceCaches,
+  passesPolicyGate,
+  REMOTE_SAFE_COMMANDS,
+  filterCommandsForRemoteMode,
+  withWorkerOnlyCommands,
+  BRIDGE_SAFE_COMMANDS,
   isPluginDirMissingFromSyncedList,
-  folderNameAliasCheck,
-  toSlashCommand,
-  isBuiltinCommand,
+  getHeldBackSyncedPlugins,
+  getHiddenSyncedSkills,
   workerOnlySkillName,
   HEADLESS_YIELDABLE_NAMES,
   commandsMemoKey,

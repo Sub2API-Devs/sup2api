@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：解析一条 deniedModels 条目（忽略上下文标签、空条目警告）；生成 availableModels 条目被忽略或受限的说明等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (18)
  * attribution: affinity 1, placement 17
  */
 import {
@@ -21,22 +21,22 @@ import {
 } from "./modelIds.js";
 import { boundedEditDistance } from "../settings/managedEnvKeys.js";
 
-//@ chunk-dcmhvw5a.js:417298-417414 affinity
+//@ chunk-z20c443b.js:415761-415877 affinity
 function sanitizeEntryForDisplay(entry) {
   let replaced = entry.replace(/[\u0000-\u001f\u007f-\u009f]/g, "?");
   return replaced.length > 128 ? `${replaced.slice(0, 128)}\u2026` : replaced;
 }
-//@ chunk-dcmhvw5a.js:417414-417504 placement
+//@ chunk-z20c443b.js:415877-415967 placement
 function formatModelFamilyList() {
   let names = [...MODEL_KEY_NAMES];
   let last = names.pop();
   return names.length === 0 ? (last ?? "") : `${names.join(", ")} or ${last}`;
 }
-//@ chunk-dcmhvw5a.js:417504-417563 placement (2.1.88 match: capitalize, 1)
+//@ chunk-z20c443b.js:415967-416026 placement (2.1.88 match: capitalize, 1)
 function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
-//@ chunk-dcmhvw5a.js:417563-418499 placement
+//@ chunk-z20c443b.js:416026-416962 placement
 /**
  * 解析 deniedModels 的一个条目：族名（如 opus）、具体版本或字面量，并给出说明其屏蔽范围的警告文字；忽略 [1m] 等上下文标签。
  */
@@ -95,14 +95,14 @@ function parseDeniedModelEntry(raw) {
     warning: getExactModelBlockWarning(raw, trimmed),
   };
 }
-//@ chunk-dcmhvw5a.js:418499-418649 placement
+//@ chunk-z20c443b.js:416962-417112 placement
 function describeVersionBlock(version) {
   let familyLabel = capitalize(version.family);
   return version.minor === undefined
     ? `every ${familyLabel} ${version.major}.x model`
     : `${familyLabel} ${version.major}.${version.minor} in every spelling and snapshot`;
 }
-//@ chunk-dcmhvw5a.js:418649-419484 placement
+//@ chunk-z20c443b.js:417112-417947 placement
 /**
  * deniedModels 条目只按精确名字阻止时的提示（建议其他拼写）。
  */
@@ -129,7 +129,7 @@ function getExactModelBlockWarning(raw, value) {
   }
   return base;
 }
-//@ chunk-dcmhvw5a.js:419484-419709 placement
+//@ chunk-z20c443b.js:417947-418172 placement
 function versionEntryMatches(id, parsed) {
   if (id.family !== parsed.family || id.major !== parsed.major) return false;
   if (id.minor !== undefined && (parsed.minor ?? 0) !== id.minor) return false;
@@ -137,7 +137,7 @@ function versionEntryMatches(id, parsed) {
   let trailer = parsed.trailer ?? "";
   return trailer === id.trailer || trailer.startsWith(`${id.trailer}-`);
 }
-//@ chunk-dcmhvw5a.js:419709-420118 placement
+//@ chunk-z20c443b.js:418172-418581 placement
 /**
  * 把模型名条目解析为 family / model / literal / ignored，供 availableModels 匹配。
  */
@@ -176,16 +176,16 @@ function classifyModelListEntry(entry) {
         value: lower,
       };
 }
-//@ chunk-dcmhvw5a.js:420118-420223 placement
+//@ chunk-z20c443b.js:418581-418686 placement
 function getModelIdTrailer(text, modelId) {
   let lower = text.toLowerCase();
   let index = lower.lastIndexOf(modelId.base);
   return index === -1 ? "" : lower.slice(index + modelId.base.length);
 }
-//@ chunk-dcmhvw5a.js:420223-420394 placement
+//@ chunk-z20c443b.js:418686-418857 placement
 var PROVIDER_MODEL_ID_PREFIX_PATTERN =
   /^(?:arn:aws(?:-[a-z]+)*:bedrock:[a-z0-9-]*:\d*:(?:foundation-model|inference-profile)\/|(?:projects\/[^/]+\/locations\/[^/]+\/)?publishers\/anthropic\/models\/)$/;
-//@ chunk-dcmhvw5a.js:420394-420543 placement
+//@ chunk-z20c443b.js:418857-419006 placement
 function hasProviderModelPrefix(text, modelId) {
   let lower = text.toLowerCase();
   let index = lower.lastIndexOf(modelId.base);
@@ -193,11 +193,11 @@ function hasProviderModelPrefix(text, modelId) {
   let sliced = lower.slice(0, lower.lastIndexOf("/", index) + 1);
   return sliced === "" || PROVIDER_MODEL_ID_PREFIX_PATTERN.test(sliced);
 }
-//@ chunk-dcmhvw5a.js:420543-420618 placement
+//@ chunk-z20c443b.js:419006-419081 placement
 function isLatestAlias(text, modelId) {
   return modelId.trailer === undefined && getModelIdTrailer(text, modelId).startsWith("-latest");
 }
-//@ chunk-dcmhvw5a.js:420618-420711 placement
+//@ chunk-z20c443b.js:419081-419174 placement
 function modelEntryMatches(entry, modelId, latestOnly) {
   return (
     isSameModelVersion(entry.id, modelId) &&
@@ -205,7 +205,7 @@ function modelEntryMatches(entry, modelId, latestOnly) {
     (!latestOnly || entry.latest)
   );
 }
-//@ chunk-dcmhvw5a.js:420711-420864 placement
+//@ chunk-z20c443b.js:419174-419327 placement
 function anyEntryHasModelPrefix(base, entries) {
   for (let entry of entries) {
     if (isBaseModelKey(entry)) continue;
@@ -216,11 +216,11 @@ function anyEntryHasModelPrefix(base, entries) {
   }
   return false;
 }
-//@ chunk-dcmhvw5a.js:420864-420923 placement (2.1.88 match: capitalize, 1)
+//@ chunk-z20c443b.js:419327-419386 placement (2.1.88 match: capitalize, 1)
 function capitalize_2(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
-//@ chunk-dcmhvw5a.js:420923-421068 placement
+//@ chunk-z20c443b.js:419386-419531 placement
 function findLatestLegacyBase(family) {
   let best;
   for (let id of LEGACY_MODEL_IDS_2) {
@@ -235,7 +235,7 @@ function findLatestLegacyBase(family) {
   }
   return best?.base;
 }
-//@ chunk-dcmhvw5a.js:421068-421939 placement
+//@ chunk-z20c443b.js:419531-420402 placement
 /**
  * 生成 availableModels 条目被忽略或受限的说明。
  */
@@ -262,7 +262,7 @@ function availableModelsEntryWarning(raw, availableModels) {
       return exactAvailableNameWarning(raw, classified.value);
   }
 }
-//@ chunk-dcmhvw5a.js:421939-422424 placement
+//@ chunk-z20c443b.js:420402-420887 placement
 /**
  * availableModels 条目只允许精确名字时的提示。
  */

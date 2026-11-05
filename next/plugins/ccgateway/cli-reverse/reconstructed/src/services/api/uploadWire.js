@@ -3,21 +3,21 @@
  *
  * 2.1.316 新增：上传连接复用统计：给 http.Agent 的 free 事件记录 socket 空闲起点，用于判断连接是否可复用。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (3)
  * attribution: placement 3
  */
 import http from "http";
 import https from "https";
 
-//@ chunk-aepeg2w5.js:801932-802001 placement
+//@ chunk-exfmq47h.js:823043-823112 placement
 /**
  * （误归 computerUse）上传连接统计用的 Symbol。
  */
 var SOCKET_FREED_AT = Symbol("uploadWire.freedAt");
 var AGENT_STAMPING = Symbol("uploadWire.stamping");
-//@ chunk-aepeg2w5.js:802001-802128 placement (2.1.88 match: checkComputerUseLock, 0.351)
+//@ chunk-exfmq47h.js:823112-823239 placement (2.1.88 match: checkComputerUseLock, 0.352)
 /**
  * （误归 computerUse）给 http.Agent 的 free 事件记录 socket 空闲起点。
  */
@@ -30,7 +30,7 @@ function stampAgentSocketFreeTime(agent) {
     socket[SOCKET_FREED_AT] = performance.now();
   });
 }
-//@ chunk-aepeg2w5.js:802128-802859 placement
+//@ chunk-exfmq47h.js:823239-823970 placement
 /**
  * （误归 computerUse）上传请求 transport：记录 socket 是否复用、空闲时长、地址族、是否已开始响应、已写字节数。
  */

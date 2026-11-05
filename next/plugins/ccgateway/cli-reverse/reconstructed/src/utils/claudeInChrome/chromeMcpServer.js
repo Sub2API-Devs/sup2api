@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Claude in Chrome MCP 服务器的工具调用入口：本地处理切换/列出/选择浏览器，其余经 socket 转发给扩展，截图落盘。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-w2264jxg.js (39)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tvg2fa4x.js (39)
  * attribution: placement 39
  */
 import { mkdtemp, mkdir, lstat, writeFile } from "fs/promises";
@@ -23,7 +23,7 @@ import {
   RequestTooLargeError,
 } from "./socketClient.js";
 
-//@ chunk-w2264jxg.js:426-541 placement
+//@ chunk-tvg2fa4x.js:426-541 placement
 var SCREENSHOT_EXT_BY_MIME = {
   "image/png": "png",
   "image/jpeg": "jpg",
@@ -33,7 +33,7 @@ var SCREENSHOT_EXT_BY_MIME = {
 var SCREENSHOT_SAVED_PREFIX = "Screenshot saved to: ";
 var screenshotCounter = 0;
 var cachedScreenshotDir;
-//@ chunk-w2264jxg.js:541-637 placement
+//@ chunk-tvg2fa4x.js:541-637 placement
 /**
  * 确定截图保存目录：宿主提供时用它（0700），否则用缓存的私有临时目录。
  */
@@ -44,7 +44,7 @@ function screenshotSaveDir() {
   });
   return cachedScreenshotDir;
 }
-//@ chunk-w2264jxg.js:637-936 placement
+//@ chunk-tvg2fa4x.js:637-936 placement
 /**
  * 确定截图保存目录：宿主提供 getScreenshotSaveDir 时用它（建目录 0700）；否则用缓存的私有临时目录，属主或权限不对时重新创建。
  */
@@ -71,7 +71,7 @@ async function resolveScreenshotSaveDir(host) {
   cachedScreenshotDir = undefined;
   return screenshotSaveDir();
 }
-//@ chunk-w2264jxg.js:936-2348 placement
+//@ chunk-tvg2fa4x.js:936-2348 placement
 async function saveScreenshotsToDisk(result, host) {
   if (result.isError || !result.content.some((block) => block.type === "image")) return result;
   let saveDir;
@@ -151,9 +151,9 @@ async function saveScreenshotsToDisk(result, host) {
     content,
   };
 }
-//@ chunk-w2264jxg.js:2348-2366 placement
+//@ chunk-tvg2fa4x.js:2348-2366 placement
 var weakMap = new WeakMap();
-//@ chunk-w2264jxg.js:2366-2415 placement
+//@ chunk-tvg2fa4x.js:2366-2415 placement
 /**
  * 清除浏览器选择记录并收起选择界面。
  */
@@ -161,7 +161,7 @@ function releaseBrowserSelection(socketClient) {
   weakMap.delete(socketClient);
   socketClient.clearSelection?.();
 }
-//@ chunk-w2264jxg.js:2415-2665 placement
+//@ chunk-tvg2fa4x.js:2415-2665 placement
 /**
  * 生成给模型看的浏览器名称：去控制/格式字符、统一引号、折叠空白，把 "this computer" 替换为 [?]，为空时用 "Browser N"。
  */
@@ -175,13 +175,13 @@ function sanitizeBrowserLabel(extension, index) {
       .trim() || `Browser ${index + 1}`
   );
 }
-//@ chunk-w2264jxg.js:2665-2820 placement
+//@ chunk-tvg2fa4x.js:2665-2820 placement
 function browserDisplayName(extension, index) {
   let trimmed = (extension.name ?? "").replace(/[\r\n\t\u0000-\u001f]/g, " ").trim();
   if (!trimmed) return `Browser ${index + 1}`;
   return trimmed.length > 50 ? `${trimmed.slice(0, 50)}\u2026` : trimmed;
 }
-//@ chunk-w2264jxg.js:2820-3104 placement
+//@ chunk-tvg2fa4x.js:2820-3104 placement
 var OS_DISPLAY_NAMES = new Map([
   ["macOS", "macOS"],
   ["Windows", "Windows"],
@@ -196,14 +196,14 @@ var OS_DISPLAY_NAMES = new Map([
   ["Linux aarch64", "Linux"],
   ["Linux armv8l", "Linux"],
 ]);
-//@ chunk-w2264jxg.js:3104-3160 placement
+//@ chunk-tvg2fa4x.js:3104-3160 placement
 /**
  * 把 OS 平台代码转成展示名（未知返回 unknown OS）。
  */
 function osDisplayName(osPlatform) {
   return (osPlatform !== undefined && OS_DISPLAY_NAMES.get(osPlatform)) || "unknown OS";
 }
-//@ chunk-w2264jxg.js:3160-4418 placement
+//@ chunk-tvg2fa4x.js:3160-4418 placement
 /**
  * 工具调用前检查是否需要先让用户选浏览器：连接了多个扩展且未选定时，返回列出本机与其他设备浏览器（最多 8 个）的提示；已选或不需询问时返回 null 并记入 WeakMap。
  */
@@ -261,24 +261,24 @@ ${localChoices}${remoteChoices}`,
     isError: true,
   };
 }
-//@ chunk-w2264jxg.js:4418-4529 placement
+//@ chunk-tvg2fa4x.js:4418-4529 placement
 function jsonForLog(value) {
   return JSON.stringify(value, (key, value) =>
     typeof value === "string" && value.length > 256 ? `<${value.length} chars elided>` : value,
   );
 }
-//@ chunk-w2264jxg.js:4529-4552 placement
+//@ chunk-tvg2fa4x.js:4529-4552 placement
 /**
  * 工具被禁用时抛出的错误类型。
  */
 class ChromeToolDisabledError extends Error {}
-//@ chunk-w2264jxg.js:4552-4675 placement
+//@ chunk-tvg2fa4x.js:4552-4675 placement
 function callBridgeTool(host, bridge, toolName, args, options) {
   if (host.isDisabled?.())
     return Promise.reject(new ChromeToolDisabledError(`disabled: ${toolName} not sent`));
   return bridge.callTool(toolName, args, options);
 }
-//@ chunk-w2264jxg.js:4675-5485 placement
+//@ chunk-tvg2fa4x.js:4675-5485 placement
 async function fetchActiveTab(host, bridge, options) {
   if (host.isDisabled?.()) return;
   try {
@@ -343,13 +343,13 @@ async function fetchActiveTab(host, bridge, options) {
     return;
   }
 }
-//@ chunk-w2264jxg.js:5485-5614 placement
+//@ chunk-tvg2fa4x.js:5485-5614 placement
 function errorContentOf(result) {
   if (typeof result !== "object" || result === null) return "";
   let content = result.error?.content;
   return typeof content === "string" || Array.isArray(content) ? content : "";
 }
-//@ chunk-w2264jxg.js:5614-6397 placement
+//@ chunk-tvg2fa4x.js:5614-6397 placement
 /**
  * 通过扩展的 computer 工具向指定标签页输入文字（跳过权限检查），可带 expected_origin；返回 {ok} 或失败原因（disabled/disconnected/origin_mismatch/tool_error/transport）。
  */
@@ -413,7 +413,7 @@ async function typeIntoTabViaBridge(host, bridge, callOptions, tabId, text, expe
     };
   }
 }
-//@ chunk-w2264jxg.js:6397-6552 placement
+//@ chunk-tvg2fa4x.js:6397-6552 placement
 function hostToolContext(host, bridge, callOptions, sessionId) {
   return {
     sessionId,
@@ -423,7 +423,7 @@ function hostToolContext(host, bridge, callOptions, sessionId) {
       typeIntoTabViaBridge(host, bridge, callOptions, tabId, text, expectedOrigin),
   };
 }
-//@ chunk-w2264jxg.js:6552-7042 placement
+//@ chunk-tvg2fa4x.js:6552-7042 placement
 /**
  * 从参数（含 browser_batch 内每个动作）中去掉 save_to_disk，并返回是否需要把截图落盘。
  */
@@ -461,7 +461,7 @@ function stripSaveToDiskArgs(toolName, rawArgs) {
     wantsSave: toolName === "computer" && saveToDisk === true,
   };
 }
-//@ chunk-w2264jxg.js:7042-7455 placement
+//@ chunk-tvg2fa4x.js:7042-7455 placement
 /**
  * 被宿主排除的工具（含 browser_batch 内的动作）返回 "Unknown tool" 错误；batch 内动作缺名或嵌套 batch 也报错。
  */
@@ -479,7 +479,7 @@ function excludedToolError(host, toolName, args) {
   }
   return;
 }
-//@ chunk-w2264jxg.js:7455-7604 placement
+//@ chunk-tvg2fa4x.js:7455-7604 placement
 function guardPermissionRequests(host, callOptions) {
   let onPermissionRequest = callOptions?.onPermissionRequest;
   let isDisabled = host.isDisabled;
@@ -490,7 +490,7 @@ function guardPermissionRequests(host, callOptions) {
       !isDisabled() && (await onPermissionRequest(request)) && !isDisabled(),
   };
 }
-//@ chunk-w2264jxg.js:7604-8608 placement
+//@ chunk-tvg2fa4x.js:7604-8608 placement
 /**
  * Claude in Chrome MCP 的工具调用入口：去 save_to_disk、排除检查，本地处理 switch_browser / list_connected_browsers / select_browser 与宿主工具，
  * 其余确保连接后经 socket 桥转发（navigate 前补 tabs_context），出错交给 chromeToolErrorResult。
@@ -545,7 +545,7 @@ var handleChromeToolCall = async (host, bridge, toolName, rawArgs, callOptions) 
     return appendTabContext(state, chromeToolErrorResult_2(error, toolName, host));
   }
 };
-//@ chunk-w2264jxg.js:8608-8690 placement
+//@ chunk-tvg2fa4x.js:8608-8690 placement
 /**
  * 构造给模型的 Chrome 工具错误结果（文本 + isError）。
  */
@@ -563,7 +563,7 @@ function chromeToolErrorResult(text, meta) {
     }),
   };
 }
-//@ chunk-w2264jxg.js:8690-10253 placement
+//@ chunk-tvg2fa4x.js:8690-10253 placement
 /**
  * 把工具调用异常映射为给模型的错误结果：禁用、未连接扩展、路由未确认/超时、被取代、发送失败等，各给出不同指引。
  */
@@ -600,7 +600,7 @@ function chromeToolErrorResult_2(error, toolName, host) {
     `The "${toolName}" tool call failed unexpectedly. This is usually transient \u2014 retry the same call in a few seconds.`,
   );
 }
-//@ chunk-w2264jxg.js:10253-11036 placement
+//@ chunk-tvg2fa4x.js:10253-11036 placement
 function toolTimeoutMessage(toolName, error) {
   let headline = `The "${toolName}" tool did not respond in time.`;
   let lighterHint = 'a lighter operation (e.g., "get_page_text" instead of a screenshot)';
@@ -608,7 +608,7 @@ function toolTimeoutMessage(toolName, error) {
     return `${headline} The page or Chrome may be unresponsive, or Chrome may be waiting for the user. Try a lighter operation (e.g., "get_page_text" instead of a screenshot), or ask the user to check Chrome.`;
   return `${headline} If Chrome is on another computer, that computer may be closed or asleep. The page may also be loading or unresponsive, or Chrome may be waiting for the user. Try a lighter operation (e.g., "get_page_text" instead of a screenshot) once. If that also gets no response, ask the user to check that the computer running Chrome is awake, that Chrome is open, and that nothing in Chrome is waiting for them.`;
 }
-//@ chunk-w2264jxg.js:11036-11462 placement
+//@ chunk-tvg2fa4x.js:11036-11462 placement
 /**
  * 从 tabs_context_mcp 结果文本中解析出第一个 tabId、tabGroupId 和原始 JSON。
  */
@@ -638,12 +638,12 @@ function parseTabsContextResult(response) {
   }
   return {};
 }
-//@ chunk-w2264jxg.js:11462-11488 placement
+//@ chunk-tvg2fa4x.js:11462-11488 placement
 /**
  * 表示“超时”的特殊标记值。
  */
 var TIMED_OUT_SENTINEL = Symbol("timed-out");
-//@ chunk-w2264jxg.js:11488-11636 placement
+//@ chunk-tvg2fa4x.js:11488-11636 placement
 async function raceTimeoutSentinel(promise, timeoutMs) {
   let timer;
   try {
@@ -657,13 +657,13 @@ async function raceTimeoutSentinel(promise, timeoutMs) {
     if (timer !== undefined) clearTimeout(timer);
   }
 }
-//@ chunk-w2264jxg.js:11636-11661 placement
+//@ chunk-tvg2fa4x.js:11636-11661 placement
 /**
  * 隐式取标签页的超时（8 秒）。
  */
 var weakMap_2 = new WeakMap();
 var MAX_IMPLICIT_TABS_TIMEOUT_MS = 8000;
-//@ chunk-w2264jxg.js:11661-12885 placement
+//@ chunk-tvg2fa4x.js:11661-12885 placement
 /**
  * navigate 未带 tabId 时，按会话先隐式调用 tabs_context_mcp（同会话复用进行中的请求、带超时）取得标签页，再补到参数里；back/forward 必须显式给 tabId。
  */
@@ -753,7 +753,7 @@ async function frontLoadTabContext(host, bridge, toolName, args, callOptions) {
     tabGroupId,
   };
 }
-//@ chunk-w2264jxg.js:12885-13397 placement
+//@ chunk-tvg2fa4x.js:12885-13397 placement
 /**
  * 给 Chrome 工具结果附上预载的标签页上下文（并提醒任务结束前关闭本组标签页），以及在 _meta 中记录预载标签组 id。
  */
@@ -783,7 +783,7 @@ Tabs in this group were opened for this task and are yours to clean up: close ea
     };
   return augmented;
 }
-//@ chunk-w2264jxg.js:13397-14705 placement
+//@ chunk-tvg2fa4x.js:13397-14705 placement
 /**
  * 经 socket 桥调用扩展工具并把结果规范成 MCP 内容：处理错误内容、认证失效回调、图片/文本内容与 notices 元数据。
  */
@@ -892,7 +892,7 @@ async function forwardToolCall(host, bridge, toolName, args, callOptions) {
     }),
   };
 }
-//@ chunk-w2264jxg.js:14705-14783 placement
+//@ chunk-tvg2fa4x.js:14705-14783 placement
 /**
  * 扩展未连接时的结果文本。
  */
@@ -906,7 +906,7 @@ function disconnectedResult(host) {
     ],
   };
 }
-//@ chunk-w2264jxg.js:14783-15520 placement
+//@ chunk-tvg2fa4x.js:14783-15520 placement
 async function switchBrowser(host, bridge) {
   if (!host.bridgeConfig)
     return {
@@ -952,7 +952,7 @@ async function switchBrowser(host, bridge) {
     isError: true,
   };
 }
-//@ chunk-w2264jxg.js:15520-16223 placement
+//@ chunk-tvg2fa4x.js:15520-16223 placement
 async function listConnectedBrowsers(options, selector) {
   if (!options.bridgeConfig || !selector.listConnectedExtensions)
     return {
@@ -996,7 +996,7 @@ async function listConnectedBrowsers(options, selector) {
     content,
   };
 }
-//@ chunk-w2264jxg.js:16223-17098 placement
+//@ chunk-tvg2fa4x.js:16223-17098 placement
 /**
  * 描述多浏览器连接时的选择情况：已选定（本机唯一、本会话正在用或上次选的）时说明无需询问；需询问时提示先列出本机浏览器，再按预检说明让用户选择。
  */
@@ -1014,7 +1014,7 @@ function describeBrowserSelection(options, selector, browsers, decision) {
     return `${browsers.length} browsers are connected, ${decision.localCount} of them on this computer (onThisComputer: true), and none is selected for this session. ${browserPreflightInstruction(options.askUserToolName)} List the browsers on this computer first.`;
   return `${browsers.length} browsers are connected and none is selected for this session. ${browserPreflightInstruction(options.askUserToolName)}`;
 }
-//@ chunk-w2264jxg.js:17098-17836 placement
+//@ chunk-tvg2fa4x.js:17098-17836 placement
 async function selectBrowser(host, bridge, args) {
   let deviceId = typeof args.deviceId === "string" ? args.deviceId : "";
   if (!host.bridgeConfig || !bridge.selectExtensionById || !bridge.listConnectedExtensions || !deviceId)
@@ -1053,7 +1053,7 @@ async function selectBrowser(host, bridge, args) {
     ],
   };
 }
-//@ chunk-w2264jxg.js:17836-18045 placement
+//@ chunk-tvg2fa4x.js:17836-18045 placement
 function contentText(value) {
   if (!Array.isArray(value)) return String(value);
   return value
@@ -1065,7 +1065,7 @@ function contentText(value) {
     })
     .join(" ");
 }
-//@ chunk-w2264jxg.js:18045-18114 placement
+//@ chunk-tvg2fa4x.js:18045-18114 placement
 /**
  * 判断结果文本是否提示已重新认证。
  */

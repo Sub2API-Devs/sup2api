@@ -3,13 +3,13 @@
  *
  * 用户与 CLI 活动时间记录（recordUserActivity/startCLIActivity/endCLIActivity），供活跃时长统计
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/activityManager.ts
- * pieces: chunk-3jjz3v21.js (13)
+ * pieces: chunk-q1n8g25m.js (13)
  * attribution: placement 8, fingerprint 1, layout 3, callgraph-witnessed 1
  */
 import { join } from "path";
-import { getClaudeConfigDir } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { STORAGE_SPACES } from "./storage/storageSpaces.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
 import { logForDebugging } from "./debug.js";
@@ -22,15 +22,15 @@ import { HostScoped } from "./hostScoped.js";
 import { getActiveTimeCounter, getRootSession } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3jjz3v21.js:618-643 placement
+//@ chunk-q1n8g25m.js:618-643 placement
 var ACTIVE_TIME_JSON = "active-time.json";
-//@ chunk-3jjz3v21.js:643-666 placement
+//@ chunk-q1n8g25m.js:643-666 placement
 /**
  * 活跃时长统计的时间窗口回溯（1 年）。
  */
 var ACTIVITY_WINDOW_LOOKBACK_MS = 31536000000;
 var DEFAULT_BREAK_THRESHOLD_MINUTES = 10;
-//@ chunk-3jjz3v21.js:666-708 placement
+//@ chunk-q1n8g25m.js:666-708 placement
 /**
  * 空账本（版本 1、无时间窗口）。
  */
@@ -40,21 +40,21 @@ function emptyLedger() {
     windows: [],
   };
 }
-//@ chunk-3jjz3v21.js:708-738 placement
+//@ chunk-q1n8g25m.js:708-738 placement
 /**
  * 活跃时长账本文件路径。
  */
 function activeTimeFilePath() {
   return join(getClaudeConfigDir(), ACTIVE_TIME_JSON);
 }
-//@ chunk-3jjz3v21.js:738-789 placement
+//@ chunk-q1n8g25m.js:738-789 placement
 /**
  * 活跃时长账本在 v5 存储里的位置。
  */
 function activeTimeLedgerStore() {
   return STORAGE_SPACES.state("active-time-ledger");
 }
-//@ chunk-3jjz3v21.js:789-1388 placement
+//@ chunk-q1n8g25m.js:789-1388 placement
 /**
  * 读取活跃时长账本（v5 存储或本地文件），只保留结构正确的时间窗口；不存在或格式不对时返回空账本，读取失败抛出。
  */
@@ -94,7 +94,7 @@ async function readActiveTimeLedger(storage) {
     return emptyLedger();
   }
 }
-//@ chunk-3jjz3v21.js:1388-3521 placement
+//@ chunk-q1n8g25m.js:1388-3521 placement
 class ActiveTimeLedger {
   pendingSeconds = 0;
   activeStretch = null;
@@ -200,15 +200,15 @@ class ActiveTimeLedger {
     this.#t = undefined;
   }
 }
-//@ chunk-3jjz3v21.js:3521-3544 placement
+//@ chunk-q1n8g25m.js:3521-3544 placement
 /**
  * 按宿主隔离的活跃时长账本（当前无引用）。
  */
 var activeTimeLedgerByHost; // deferred: uses ActiveTimeLedger of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-3jjz3v21.js:3521", () => {
+deferInit("chunk-q1n8g25m.js:3521", () => {
   activeTimeLedgerByHost = new HostScoped(() => new ActiveTimeLedger());
 });
-//@ chunk-3jjz3v21.js:3544-5126 fingerprint (2.1.88 match: ActivityManager, 0.953)
+//@ chunk-q1n8g25m.js:3544-5067 fingerprint (2.1.88 match: ActivityManager, 0.98)
 class ActivityManager {
   activeOperations = new Set();
   lastUserActivityTime = 0;
@@ -284,9 +284,6 @@ class ActivityManager {
       this.endCLIActivity(operationId);
     }
   }
-  getLastUserActivityTime() {
-    return this.lastUserActivityTime;
-  }
   getActivityStates() {
     return {
       isUserActive: (this.getNow() - this.lastUserActivityTime) / 1000 < this.USER_ACTIVITY_TIMEOUT_MS / 1000,
@@ -295,23 +292,23 @@ class ActivityManager {
     };
   }
 }
-//@ chunk-3jjz3v21.js:5126-5147 layout
+//@ chunk-q1n8g25m.js:5067-5088 layout
 class ActivityState {
   current = null;
 }
-//@ chunk-3jjz3v21.js:5147-5170 layout
+//@ chunk-q1n8g25m.js:5088-5111 layout
 /**
  * 按宿主隔离的活动状态。
  */
 var activityStateByHost; // deferred: uses ActivityState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-3jjz3v21.js:5147", () => {
+deferInit("chunk-q1n8g25m.js:5088", () => {
   activityStateByHost = new HostScoped(() => new ActivityState());
 });
-//@ chunk-3jjz3v21.js:5170-5205 layout
+//@ chunk-q1n8g25m.js:5111-5146 layout
 function getActivityState() {
   return activityStateByHost.of(getRootSession().host);
 }
-//@ chunk-3jjz3v21.js:5205-5386 callgraph-witnessed (2.1.88 match: activityManager, 0.357)
+//@ chunk-q1n8g25m.js:5146-5327 callgraph-witnessed (2.1.88 match: activityManager, 0.357)
 var activityManager = {
   recordUserActivity: () => ActivityManager.getInstance().recordUserActivity(),
   startCLIActivity: (operationId) => ActivityManager.getInstance().startCLIActivity(operationId),

@@ -3,9 +3,9 @@
  *
  * Shell 工具路径参数校验：拒绝 UNC、~ 变体、shell 展开、.. 遍历、写目标的花括号/glob，读 glob 按基目录判定，并提供沙箱写允许列表判定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/pathValidation.ts
- * pieces: chunk-fq0cr76a.js (29), chunk-s61vbvea.js (2)
+ * pieces: chunk-1h674sqv.js (29), chunk-fepf8jp6.js (2)
  * attribution: affinity 1, facade-exports 14, layout 12, file-local 1, callgraph-fingerprint 1, placement 2
  */
 import { isAbsolute, resolve, dirname, parse } from "path";
@@ -36,7 +36,8 @@ import {
   checkReadableInternalPath,
   untypeDenyReasonForAskPropagation,
   matchingAllowRuleForAllPaths,
-  normalizeCaseForComparison as normalizeCaseForComparison_2,
+  normalizeCaseForComparison_2,
+  normalizeCaseForComparison,
 } from "./filesystem.js";
 import { getSessionPathsCache } from "../sessionPathsCache.js";
 import {
@@ -45,7 +46,6 @@ import {
 } from "../../types/permissions.js";
 import { unresolvablePathMessage } from "../invisibleChars.js";
 import { isHttpMcpServeInvocation } from "../../entrypoints/mcpServeArgs.js";
-import { uniq } from "../collections.js";
 import {
   normalizeWindowsDevicePath,
   profileRelativeRemainders,
@@ -58,14 +58,14 @@ import {
 } from "../hooks/hookCommandAnalysis.js";
 import { stripTrailingDotsSpaces } from "../ignorePatterns.js";
 import { normalizeDosDevicePath } from "../pathClassification.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { expandTildeWithHome } from "../networkPaths.js";
 import { containsVulnerableUncPath } from "../shell/readOnlyCommandValidation.js";
 
-//@ chunk-fq0cr76a.js:1064037-1064057 affinity
+//@ chunk-1h674sqv.js:817-834 affinity
 var MAX_LISTED_DIRECTORIES = 5;
 var BRACE_PATTERN = /[{}]/;
-//@ chunk-fq0cr76a.js:1064057-1064209 facade-exports (2.1.88 match: formatDirectoryList, 1)
+//@ chunk-1h674sqv.js:834-983 facade-exports (2.1.88 match: formatDirectoryList, 1)
 /**
  * 把目录列表格式化为 'a', 'b', and N more（最多显示若干个）。
  */
@@ -77,7 +77,7 @@ function formatDirectoryList(directories) {
     .map((dir) => `'${dir}'`)
     .join(", ")}, and ${dirCount - MAX_LISTED_DIRECTORIES} more`;
 }
-//@ chunk-fq0cr76a.js:1064209-1064414 facade-exports (2.1.88 match: getGlobBaseDirectory, 1)
+//@ chunk-1h674sqv.js:983-1188 facade-exports (2.1.88 match: getGlobBaseDirectory, 1)
 /**
  * 返回通配符之前的目录部分（Windows 上兼顾反斜杠）。
  */
@@ -92,7 +92,7 @@ function getGlobBaseDirectory(filePath) {
   if (lastSepIndex === -1) return ".";
   return beforeGlob.substring(0, lastSepIndex) || "/";
 }
-//@ chunk-fq0cr76a.js:1064414-1064720 facade-exports (2.1.88 match: isPathInSandboxWriteAllowlist, 0.719)
+//@ chunk-1h674sqv.js:1188-1492 facade-exports (2.1.88 match: isPathInSandboxWriteAllowlist, 0.72)
 /**
  * 沙箱开启且 deny 列表完整时，路径的每种拼写都在沙箱写允许列表内（且不在 denyWithinAllow 内）才返回 true；用于沙箱下自动放行 Bash 写操作。
  */
@@ -112,7 +112,7 @@ function isPathInSandboxWriteAllowlist(path, pathsToCheck) {
     );
   });
 }
-//@ chunk-fq0cr76a.js:1064720-1064840 layout
+//@ chunk-1h674sqv.js:1492-1611 layout
 function getSandboxConfigPathSpellings(configPath) {
   let { resolvedSandboxConfigPaths } = getSessionPathsCache();
   let cached = resolvedSandboxConfigPaths.get(configPath);
@@ -121,7 +121,7 @@ function getSandboxConfigPathSpellings(configPath) {
   resolvedSandboxConfigPaths.set(configPath, pathsForPermissionCheck);
   return pathsForPermissionCheck;
 }
-//@ chunk-fq0cr76a.js:1064840-1064922 facade-exports
+//@ chunk-1h674sqv.js:1611-1693 facade-exports
 /**
  * 从内部路径拒绝原因中取可展示的文字（safetyCheck/other 的 reason）。
  */
@@ -130,7 +130,7 @@ function internalPathDenyWords(decisionReason) {
     ? decisionReason.reason
     : undefined;
 }
-//@ chunk-fq0cr76a.js:1064922-1065027 facade-exports
+//@ chunk-1h674sqv.js:1693-1798 facade-exports
 /**
  * 若拒绝原因是只能由宿主上的人确认的 safetyCheck，返回其熔断标签。
  */
@@ -141,7 +141,7 @@ function hostPersonOnlyTag(decisionReason) {
     ? decisionReason.circuitBreaker
     : undefined;
 }
-//@ chunk-fq0cr76a.js:1065027-1065469 facade-exports
+//@ chunk-1h674sqv.js:1798-2240 facade-exports
 /**
  * 把内部路径硬拒绝转换为 Shell 命令的 safetyCheck 询问原因：附加符号链接说明；restricted 模式下标 restrictedMode 并在 also 中记 internalHardDeny；宿主专属时沿用其熔断；否则标 internalHardDeny，是否允许分类器批准取决于是否必须由人确认。
  */
@@ -172,7 +172,7 @@ function internalDenyShellAskReason(denial, restricted, redirect) {
           }),
   };
 }
-//@ chunk-fq0cr76a.js:1065469-1065577 facade-exports
+//@ chunk-1h674sqv.js:2240-2348 facade-exports
 /**
  * 判断路径检查结果是否“仅因在工作目录外而被默认拒绝”（没有具体原因），这类可以给出 addDirectories 建议。
  */
@@ -184,7 +184,7 @@ function isOnlyOutsideWorkingFoldersRefusal(result) {
     result.isInWorkingDir === false
   );
 }
-//@ chunk-fq0cr76a.js:1065577-1068271 facade-exports (2.1.88 match: isPathAllowed, 0.56)
+//@ chunk-1h674sqv.js:2348-5032 facade-exports (2.1.88 match: isPathAllowed, 0.547)
 /**
  * （文件系统权限）判断路径是否允许：先查各种拼写的 deny 规则；路径无法解析时按读封锁返回安全检查；再判断是否在工作目录/允许规则内。被 Bash、PowerShell 与文件工具共用。
  */
@@ -400,13 +400,13 @@ function isPathAllowed(path, toolPermissionContext, operationType, pathsToCheck,
     refusedByDefault: true,
   };
 }
-//@ chunk-fq0cr76a.js:1068271-1068354 layout
+//@ chunk-1h674sqv.js:5032-5114 layout
 function hasAnyDenyRules(toolPermissionContext) {
   return Object.values(toolPermissionContext.alwaysDenyRules).some(
     (alwaysDenyRule) => (alwaysDenyRule?.length ?? 0) > 0,
   );
 }
-//@ chunk-fq0cr76a.js:1068354-1068603 layout
+//@ chunk-1h674sqv.js:5114-5355 layout
 function checkGlobWriteAllowed(filePath, cwd, toolPermissionContext, operationType) {
   let fsImplementation = getFsImplementation();
   let globBaseDirectory = getGlobBaseDirectory(filePath);
@@ -431,7 +431,7 @@ function checkGlobWriteAllowed(filePath, cwd, toolPermissionContext, operationTy
     currentPath = parentDir;
   }
 }
-//@ chunk-fq0cr76a.js:1068603-1068856 layout
+//@ chunk-1h674sqv.js:5355-5595 layout
 var WINDOWS_DRIVE_ROOT = /^[A-Za-z]:\/?$/;
 var WINDOWS_DRIVE_TOP_DIR_RE = /^[A-Za-z]:\/[^/]+$/;
 var WINDOWS_DRIVE_PREFIX_RE = /^[A-Za-z]:\//;
@@ -439,7 +439,7 @@ var UNC_ADMIN_SHARE = /^\\\\([^\\]+)\\([a-z])\$(?=$|\\)/;
 var MACOS_VOL_FILE_PATH_RE = /^\/\.(?:vol|file)(?:\/|$)/i;
 var WINDOWS_ABSOLUTE_PREFIX_RE = /^(?:[A-Za-z]:[\\/]|[\\/]{2}|[\\/]\?\?[\\/])/;
 var WINDOWS_DEVICE_OR_ADMIN_PATH_RE = /^[\\/]{2}(?:[?.][\\/]|;|[^\\/]+[\\/]admin\$(?=$|[\\/]))/i;
-//@ chunk-fq0cr76a.js:1068856-1069027 facade-exports (2.1.88 match: getReservedShortcuts, 1)
+//@ chunk-1h674sqv.js:5595-5755 facade-exports (2.1.88 match: getReservedShortcuts, 1)
 /**
  * 判断路径（含各种拼写）是否为受保护系统路径：Windows 设备或管理路径、macOS /.vol 等内核重定向路径、其他系统根。旧版名 getReservedShortcuts 误配。
  */
@@ -453,7 +453,7 @@ function isDangerousRemovalPath(resolvedPath) {
     return isBroadSandboxWritePath(inputPath);
   });
 }
-//@ chunk-fq0cr76a.js:1069027-1069309 file-local
+//@ chunk-1h674sqv.js:5755-6031 file-local
 function isDangerousRemovalPath_2(resolvedPath) {
   let variants = [
     resolvedPath,
@@ -463,7 +463,10 @@ function isDangerousRemovalPath_2(resolvedPath) {
       .join("/") || (resolvedPath.startsWith("/") ? "/" : ""),
   ];
   if (WINDOWS_ABSOLUTE_PREFIX_RE.test(resolvedPath) || getPlatform() === "windows")
-    for (let spelling of uniq([resolvedPath, normalizeWindowsDevicePath(resolvedPath)]))
+    for (let spelling of normalizeCaseForComparison_2([
+      resolvedPath,
+      normalizeWindowsDevicePath(resolvedPath),
+    ]))
       variants.push(
         ...expandAdminSharePath(normalizeWindowsPathForCompare(spelling)),
         ...expandAdminSharePath(
@@ -475,27 +478,27 @@ function isDangerousRemovalPath_2(resolvedPath) {
           ),
         ),
       );
-  return uniq(variants);
+  return normalizeCaseForComparison_2(variants);
 }
-//@ chunk-fq0cr76a.js:1069309-1069428 layout
+//@ chunk-1h674sqv.js:6031-6147 layout
 function expandAdminSharePath(sharePath) {
   let match = UNC_ADMIN_SHARE.exec(sharePath);
   return match !== null && classifyUncHost(match[1]) === "own_host"
     ? [sharePath, `${match[2]}:${sharePath.slice(match[0].length) || "\\"}`]
     : [sharePath];
 }
-//@ chunk-fq0cr76a.js:1069428-1069468 layout
+//@ chunk-1h674sqv.js:6147-6186 layout
 function classifyUncHost(host) {
   return classifyUncPath(`\\\\${host}\\`);
 }
-//@ chunk-fq0cr76a.js:1069468-1069608 layout
+//@ chunk-1h674sqv.js:6186-6322 layout
 function isSuspiciousUncHost(path) {
   if (!/^[\\/]{2}/.test(path)) return false;
   let match = UNC_ADMIN_SHARE.exec(normalizeWindowsPathForCompare(path));
   let hostKind = match === null ? undefined : classifyUncHost(match[1]);
   return hostKind === "numeric_host" || hostKind === "odd_host";
 }
-//@ chunk-fq0cr76a.js:1069608-1070312 layout
+//@ chunk-1h674sqv.js:6322-7009 layout
 /**
  * 沙箱写允许路径是否过于宽泛：通配、根目录、盘符根、主目录（含真实路径与管理共享形式）及其祖先、根下一级目录。
  */
@@ -512,9 +515,9 @@ function isBroadSandboxWritePath(inputPath) {
     /\/$/,
     "",
   );
-  if (normalizeCaseForComparison_2(normalized) === normalizeCaseForComparison_2(replaced)) return true;
+  if (normalizeCaseForComparison(normalized) === normalizeCaseForComparison(replaced)) return true;
   let canonicalHome = getCanonicalHomedir(homedir());
-  let homeSpellings = uniq([
+  let homeSpellings = normalizeCaseForComparison_2([
     replaced,
     canonicalHome,
     ...(/^[\\/]{2}/.test(homedir())
@@ -527,7 +530,7 @@ function isBroadSandboxWritePath(inputPath) {
     homeSpellings.some(
       (homeSpelling) =>
         homeSpelling !== replaced &&
-        normalizeCaseForComparison_2(normalized) === normalizeCaseForComparison_2(homeSpelling),
+        normalizeCaseForComparison(normalized) === normalizeCaseForComparison(homeSpelling),
     )
   )
     return true;
@@ -535,8 +538,8 @@ function isBroadSandboxWritePath(inputPath) {
     let drivePrefix = WINDOWS_DRIVE_PREFIX_RE.exec(homeSpelling)?.[0];
     if (
       drivePrefix !== undefined &&
-      normalizeCaseForComparison_2(normalized.slice(0, drivePrefix.length)) ===
-        normalizeCaseForComparison_2(drivePrefix) &&
+      normalizeCaseForComparison(normalized.slice(0, drivePrefix.length)) ===
+        normalizeCaseForComparison(drivePrefix) &&
       profileRelativeRemainders(
         homeSpelling.slice(drivePrefix.length),
         normalized.slice(drivePrefix.length),
@@ -548,13 +551,13 @@ function isBroadSandboxWritePath(inputPath) {
   if (WINDOWS_DRIVE_TOP_DIR_RE.test(normalized)) return true;
   return false;
 }
-//@ chunk-fq0cr76a.js:1070312-1070370 layout
+//@ chunk-1h674sqv.js:7009-7066 layout
 function normalizePathForRules(inputPath) {
   return normalizeDosDevicePath(
     uncAdminShareToDrive(normalizeWindowsDevicePath(inputPath).replace(WSL_MNT_UNC_RE, "$1:")),
   );
 }
-//@ chunk-fq0cr76a.js:1070370-1070550 layout
+//@ chunk-1h674sqv.js:7066-7243 layout
 function getCanonicalHomedir(homeDir) {
   let { canonicalHomedirByHome } = getSessionPathsCache();
   let cached = canonicalHomedirByHome.get(homeDir);
@@ -565,7 +568,7 @@ function getCanonicalHomedir(homeDir) {
   canonicalHomedirByHome.set(homeDir, replaced);
   return replaced;
 }
-//@ chunk-fq0cr76a.js:1070550-1070640 facade-exports
+//@ chunk-1h674sqv.js:7243-7333 facade-exports
 /**
  * 按 / 切分路径段；Windows 上同时按 \ 和 / 切分并合并两种结果。
  */
@@ -573,7 +576,7 @@ function shellPathSegments(inputPath) {
   let parts = inputPath.split(/\/+/);
   return getPlatform() === "windows" ? [...inputPath.split(/[\\/]+/), ...parts] : parts;
 }
-//@ chunk-fq0cr76a.js:1070640-1070794 facade-exports
+//@ chunk-1h674sqv.js:7333-7487 facade-exports
 /**
  * 路径中是否有出现在普通段之后的 ..（向上逃逸），开头的 .. 不算。
  */
@@ -588,7 +591,7 @@ function hasInteriorDotDot(inputPath) {
   }
   return false;
 }
-//@ chunk-fq0cr76a.js:1070794-1070981 facade-exports
+//@ chunk-1h674sqv.js:7487-7674 facade-exports
 /**
  * 是否在 glob 字符（或未闭合的 [）之后出现 ..，这种路径无法静态确定落点，需人工确认。
  */
@@ -607,15 +610,13 @@ function globBeforeInteriorDotDot(inputPath) {
     );
   });
 }
-//@ chunk-fq0cr76a.js:1070981-1071093 layout
+//@ chunk-1h674sqv.js:7674-7784 layout
 function hasReadDenyRule(toolPermissionContext) {
   return Object.values(toolPermissionContext.alwaysDenyRules).some((alwaysDenyRule) =>
-    alwaysDenyRule?.some(
-      (ruleString) => ruleString === FILE_READ_TOOL_NAME || ruleString.startsWith(`${FILE_READ_TOOL_NAME}(`),
-    ),
+    alwaysDenyRule?.some((ruleString) => ruleString === READ || ruleString.startsWith(`${READ}(`)),
   );
 }
-//@ chunk-fq0cr76a.js:1071093-1071666 callgraph-fingerprint (2.1.88 match: isPathAllowed, 0.429)
+//@ chunk-1h674sqv.js:7784-8351 callgraph-fingerprint (2.1.88 match: isPathAllowed, 0.403)
 /**
  * 处理含 “目录/..” 的路径：逐段解析符号链接后再判定（Windows 直接 undefined）；读操作若 .. 前有 glob 且开启了外部读拦截或有 Read deny 规则，返回不可判定的 safetyCheck。
  */
@@ -641,7 +642,7 @@ function checkTraversalPath(path, cwd, toolPermissionContext, operationType) {
     };
   return traversalAndCheck;
 }
-//@ chunk-fq0cr76a.js:1071666-1072315 layout
+//@ chunk-1h674sqv.js:8351-8994 layout
 function resolveTraversalAndCheck(path, cwd, toolPermissionContext, operationType) {
   let fsImplementation = getFsImplementation();
   let absoluteInput = isAbsolute(path) ? path : `${cwd}/${path}`;
@@ -693,7 +694,7 @@ function resolveTraversalAndCheck(path, cwd, toolPermissionContext, operationTyp
     resolvedPath,
   };
 }
-//@ chunk-fq0cr76a.js:1072315-1073578 facade-exports (2.1.88 match: validatePath, 0.837)
+//@ chunk-1h674sqv.js:8994-10249 facade-exports (2.1.88 match: validatePath, 0.831)
 /**
  * Bash/PowerShell 路径参数校验入口：UNC、~user/~+/~-、$ % ` = 等 shell 展开、目录后的 .. 遍历、写目标含花括号、写目标含 glob 一律要人工确认；读的 glob 按基目录判定；其余解析为绝对路径后交给 isPathAllowed。返回 {allowed, resolvedPath, decisionReason}。
  */
@@ -768,7 +769,7 @@ function validatePath(path, cwd, toolPermissionContext, operationType) {
   let absolutePath = isAbsolute(cleanPath) ? cleanPath : resolve(cwd, cleanPath);
   return validateResolvedOperand(absolutePath, toolPermissionContext, operationType);
 }
-//@ chunk-fq0cr76a.js:1073578-1073878 facade-exports
+//@ chunk-1h674sqv.js:10249-10548 facade-exports
 /**
  * 对一个已展开的 Shell 路径参数做许可判定：写操作按符号链接落点检查并在被拒时给出实际落点；读操作先解析真实路径，必要时连同原拼写一起交给 isPathAllowed。
  */
@@ -797,12 +798,12 @@ function validateResolvedOperand(inputPath, toolPermissionContext, operationType
     resolvedPath,
   };
 }
-//@ chunk-s61vbvea.js:208056-208075 placement
+//@ chunk-fepf8jp6.js:2641-2660 placement
 /**
  * GLOB_PATTERN_REGEX：同旧版 utils/permissions/pathValidation.ts（误归 commands.ts）。
  */
 var GLOB_PATTERN_REGEX = /[*?[\]{}]/;
-//@ chunk-s61vbvea.js:208075-208341 placement (2.1.88 match: getCommands, 0.674)
+//@ chunk-fepf8jp6.js:2660-2926 placement (2.1.88 match: getCommands, 0.674)
 /**
  * getGlobBaseDirectory：同旧版 pathValidation.getGlobBaseDirectory；旧版名 getCommands 配错。
  */
@@ -819,17 +820,17 @@ function getGlobBaseDirectory_2(path) {
 }
 export {
   isPathAllowed,
+  getGlobBaseDirectory_2,
   hasInteriorDotDot,
   validatePath,
   shellPathSegments,
-  globBeforeInteriorDotDot,
-  isPathInSandboxWriteAllowlist,
-  getGlobBaseDirectory_2,
   formatDirectoryList,
   internalPathDenyWords,
   hostPersonOnlyTag,
   internalDenyShellAskReason,
+  globBeforeInteriorDotDot,
   isDangerousRemovalPath,
+  isPathInSandboxWriteAllowlist,
   validateResolvedOperand,
   isOnlyOutsideWorkingFoldersRefusal,
   getGlobBaseDirectory,

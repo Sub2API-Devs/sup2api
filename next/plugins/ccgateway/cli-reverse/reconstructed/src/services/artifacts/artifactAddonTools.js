@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Artifact addon 工具定义。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cqgek8qx.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fey5mp6z.js (14)
  * attribution: placement 14
  */
 import {
@@ -52,18 +52,18 @@ import {
   verifyPreviewInputSchemaLazy,
 } from "../../tools/ArtifactTool/inputSchema.js";
 
-//@ chunk-cqgek8qx.js:13430-13481 placement
+//@ chunk-fey5mp6z.js:14606-14657 placement
 function legacyHostModule() {
   return require("../../tools/ArtifactTool/ArtifactTool.js");
 }
-//@ chunk-cqgek8qx.js:13481-13524 placement
+//@ chunk-fey5mp6z.js:14657-14700 placement
 /**
  * 各 addon（comments/data/check）工具对旧 Artifact 动作的改写规则与“动作在本工具里怎么写”的映射，均委托 artifactLegacyHost。
  */
 function artifactLegacyHost() {
   return legacyHostModule().artifactLegacyHost;
 }
-//@ chunk-cqgek8qx.js:13524-14395 placement
+//@ chunk-fey5mp6z.js:14700-15571 placement
 /**
  * 各 addon 工具（comments/data/check）里旧 Artifact 动作名的改写规则（把提示词里的旧动作改成新工具的写法），以及校验失败时告诉模型"该动作在本工具里怎么写"的映射。
  */
@@ -95,13 +95,13 @@ var LEGACY_VERB_STEERS = {
   },
   check: {},
 };
-//@ chunk-cqgek8qx.js:14395-14465 placement
+//@ chunk-fey5mp6z.js:15571-15641 placement
 function rewriteLegacyVerb(addon, message) {
   let promptText = message;
   for (let [from, to] of LEGACY_VERB_REWRITES[addon]) promptText = promptText.replace(from, to);
   return promptText;
 }
-//@ chunk-cqgek8qx.js:14465-14895 placement
+//@ chunk-fey5mp6z.js:15641-16071 placement
 /**
  * 把评论工具提示词改写为合并后 artifact 工具写法的替换表（comments→read、status→watch 列表、unwatch→watch on:false 等）。
  */
@@ -114,13 +114,13 @@ var COMMENTS_PROMPT_REWRITES = [
   ["that artifact's `status` row says", "that artifact's row in that listing says"],
   ["a watch result, `status`, or", "a watch result, that listing, or"],
 ];
-//@ chunk-cqgek8qx.js:14895-14971 placement
+//@ chunk-fey5mp6z.js:16071-16147 placement
 function buildArtifactCommentsPrompt(watchRail) {
   let paragraph = republishWatchParagraph(true, watchRail);
   for (let [from, to] of COMMENTS_PROMPT_REWRITES) paragraph = paragraph.replaceAll(from, to);
   return paragraph;
 }
-//@ chunk-cqgek8qx.js:14971-16198 placement
+//@ chunk-fey5mp6z.js:16147-17374 placement
 /**
  * 生成 ArtifactComments 工具的提示词：读/答评论线程与管理监听的说明、按 watchRail 改写的评论段落、监听段落；live 时附"恢复自动回复"说明。
  */
@@ -141,7 +141,7 @@ function buildCommentsToolPrompt(gates) {
 
 `);
 }
-//@ chunk-cqgek8qx.js:16198-16499 placement
+//@ chunk-fey5mp6z.js:17374-17675 placement
 /**
  * 把数据库读写提示词改写为合并后 artifact 工具写法的替换表（read_db/write_db 改为按 action 区分）。
  */
@@ -152,7 +152,7 @@ var DATA_PROMPT_REWRITES = [
   ],
   ['Pass `action: "write_db"` with `db_op`:', "To write, pass `action`:"],
 ];
-//@ chunk-cqgek8qx.js:16499-16674 placement
+//@ chunk-fey5mp6z.js:17675-17850 placement
 /**
  * 生成 ArtifactData 工具的提示词：说明它是页面共享数据库，附改写后的数据库操作段落与 profiles 段落。
  */
@@ -165,7 +165,7 @@ function buildDataToolPrompt(spec) {
 
 `);
 }
-//@ chunk-cqgek8qx.js:16674-16904 placement
+//@ chunk-fey5mp6z.js:17850-18080 placement
 /**
  * 生成 ArtifactCheck 工具的提示词：按 preview/verify 开关说明发布前预览（本地或模拟器）与发布后校验。
  */
@@ -180,7 +180,7 @@ function buildCheckToolPrompt(spec) {
 
 `);
 }
-//@ chunk-cqgek8qx.js:16904-17153 placement
+//@ chunk-fey5mp6z.js:18080-18329 placement
 function getAddonSearchHint(spec) {
   let mapped = Object.entries(ADDON_OF_LEGACY_ACTION)
     .filter(([key, value]) => value === spec.addon && (spec.offersLegacyVerb?.(key) ?? true))
@@ -190,12 +190,12 @@ function getAddonSearchHint(spec) {
     ? hint
     : `${hint} (formerly the ${ARTIFACT_TOOL_NAME} tool's ${mapped.join(", ")})`;
 }
-//@ chunk-cqgek8qx.js:17153-17283 placement
+//@ chunk-fey5mp6z.js:18329-18459 placement
 function runWithEngine(engine, input) {
   if (!engine.runEngine) throw Error("Artifact: this member needs the executor (call.runEngine)");
   return engine.runEngine(input, {});
 }
-//@ chunk-cqgek8qx.js:17283-19830 placement
+//@ chunk-fey5mp6z.js:18459-21006 placement
 /**
  * 用 Artifact 主工具的实现包装出一个 addon 工具（comments/data/check）：输入先转成主工具输入，权限检查、校验、调用、摘要、分类器输入等全部委托主工具，错误消息改写成本工具的动作名；不可用旧动作时给出拼写提示。
  */
@@ -314,7 +314,7 @@ function buildArtifactAddonTool(spec) {
   });
   return withAskDecisionRecording(tool);
 }
-//@ chunk-cqgek8qx.js:19830-20590 placement
+//@ chunk-fey5mp6z.js:21006-21766 placement
 /**
  * 三个 Artifact addon 工具实例：ArtifactComments（读/答评论、监听重发布，watch 时 on:false 与 replies:true 互斥）、ArtifactData（共享数据库读写）、ArtifactCheck（预览/运行时诊断）；ARTIFACT_ADDON_TOOLS 为三者列表。
  */

@@ -3,15 +3,15 @@
  *
  * protobuf 生成代码：GrowthbookExperimentEvent（实验曝光事件）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/types/generated/events_mono/growthbook/v1/growthbook_experiment_event.ts
- * pieces: chunk-aepeg2w5.js (5)
+ * pieces: chunk-exfmq47h.js (5)
  * attribution: fingerprint 2, sole-consumer 3
  */
 import { PublicApiAuth, PublicApiAuth_2 } from "../../common/v1/auth.js";
 import { Timestamp } from "../../../google/protobuf/timestamp.js";
 
-//@ chunk-aepeg2w5.js:679042-679380 fingerprint (2.1.88 match: createBaseGrowthbookExperimentEvent, 0.815)
+//@ chunk-exfmq47h.js:691648-691986 fingerprint (2.1.88 match: createBaseGrowthbookExperimentEvent, 0.815)
 function createBaseGrowthbookExperimentEvent() {
   return {
     event_id: "",
@@ -33,7 +33,7 @@ function createBaseGrowthbookExperimentEvent() {
     prompt_id: undefined,
   };
 }
-//@ chunk-aepeg2w5.js:679380-682497 fingerprint (2.1.88 match: GrowthbookExperimentEvent, 0.867)
+//@ chunk-exfmq47h.js:691986-695103 fingerprint (2.1.88 match: GrowthbookExperimentEvent, 0.867)
 var GrowthbookExperimentEvent = {
   fromJSON(object) {
     return {
@@ -117,19 +117,19 @@ var GrowthbookExperimentEvent = {
     return message;
   },
 };
-//@ chunk-aepeg2w5.js:682497-682588 sole-consumer (2.1.88 match: fromTimestamp, 1)
+//@ chunk-exfmq47h.js:695103-695194 sole-consumer (2.1.88 match: fromTimestamp, 1)
 function fromTimestamp_2(t) {
   let millis = (t.seconds || 0) * 1000;
   millis += (t.nanos || 0) / 1e6;
   return new globalThis.Date(millis);
 }
-//@ chunk-aepeg2w5.js:682588-682733 sole-consumer (2.1.88 match: fromJsonTimestamp, 1)
+//@ chunk-exfmq47h.js:695194-695339 sole-consumer (2.1.88 match: fromJsonTimestamp, 1)
 function fromJsonTimestamp_2(o) {
   if (o instanceof globalThis.Date) return o;
   else if (typeof o === "string") return new globalThis.Date(o);
   else return fromTimestamp_2(Timestamp.fromJSON(o));
 }
-//@ chunk-aepeg2w5.js:682733-682776 sole-consumer
+//@ chunk-exfmq47h.js:695339-695382 sole-consumer
 /**
  * 判断值既不是 null 也不是 undefined（protobuf 生成代码用）。
  */

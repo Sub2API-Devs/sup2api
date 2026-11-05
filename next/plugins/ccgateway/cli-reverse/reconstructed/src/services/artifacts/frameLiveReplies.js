@@ -3,9 +3,9 @@
  *
  * Artifact 实时订阅回复（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aqdf5t3e.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tsrpnscb.js (12)
  * attribution: placement 12
  */
 import { getLiveState } from "../liveReplica/liveReplica.js";
@@ -33,7 +33,7 @@ import { quoteArtifactName } from "./comments/threadScanner.js";
 import { logFeatureOk } from "../analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aqdf5t3e.js:50541-51040 placement
+//@ chunk-tsrpnscb.js:50636-51135 placement
 function settleRepliesConsent(options, slug, toolUseId, messages) {
   let repliesConsent = getLiveState().live.repliesConsent;
   let outstanding = repliesConsent.outstanding.get(slug);
@@ -63,12 +63,12 @@ function settleRepliesConsent(options, slug, toolUseId, messages) {
     approved: repliesConsent.approved.has(slug),
   };
 }
-//@ chunk-aqdf5t3e.js:51040-51105 placement
+//@ chunk-tsrpnscb.js:51135-51200 placement
 function lastHumanMessageUuidWith(messages, text) {
   let index = lastHumanMessageIndexContaining(messages, text);
   return index >= 0 ? (messages[index]?.uuid ?? null) : null;
 }
-//@ chunk-aqdf5t3e.js:51105-51311 placement
+//@ chunk-tsrpnscb.js:51200-51406 placement
 function noteRepliesConsentAsk(options, text, toolUseId, messages, all = false) {
   if (options === undefined) return;
   getLiveState().live.repliesConsent.outstanding.set(text, {
@@ -83,7 +83,7 @@ function noteRepliesConsentAsk(options, text, toolUseId, messages, all = false) 
     ),
   });
 }
-//@ chunk-aqdf5t3e.js:51311-51477 placement
+//@ chunk-tsrpnscb.js:51406-51572 placement
 function takeRepliesConsentAsk(slug, toolUseId) {
   if (slug === undefined || toolUseId === undefined) return;
   let { outstanding } = getLiveState().live.repliesConsent;
@@ -96,7 +96,7 @@ function takeRepliesConsentAsk(slug, toolUseId) {
     }
   return;
 }
-//@ chunk-aqdf5t3e.js:51477-51646 placement
+//@ chunk-tsrpnscb.js:51572-51741 placement
 function approveTakenRepliesConsent(consentWriter, takenRepliesAsk, slug, toolUseId) {
   let repliesConsent = getLiveState().live.repliesConsent;
   if (consentWriter === undefined) return false;
@@ -107,17 +107,17 @@ function approveTakenRepliesConsent(consentWriter, takenRepliesAsk, slug, toolUs
   }
   return matches || repliesConsent.approved.has(slug);
 }
-//@ chunk-aqdf5t3e.js:51646-51710 placement
+//@ chunk-tsrpnscb.js:51741-51805 placement
 function repliesConsentDeclined(state) {
   return getLiveState().live.repliesConsent.declined.has(state);
 }
-//@ chunk-aqdf5t3e.js:51710-51836 placement
+//@ chunk-tsrpnscb.js:51805-51931 placement
 function repliesConsentUnapproved(slug) {
   let { declined, outstanding } = getLiveState().live.repliesConsent;
   let outstandingMap = outstanding.get(slug);
   return declined.has(slug) || (outstandingMap !== undefined && outstandingMap.allowed !== true);
 }
-//@ chunk-aqdf5t3e.js:51836-51944 placement
+//@ chunk-tsrpnscb.js:51931-52039 placement
 function getMcpWriteSlugState(live, liveState) {
   let state = live.mcpWriteSlugs.get(liveState);
   if (state === undefined) {
@@ -128,10 +128,10 @@ function getMcpWriteSlugState(live, liveState) {
   }
   return state;
 }
-//@ chunk-aqdf5t3e.js:51944-52048 placement
+//@ chunk-tsrpnscb.js:52039-52143 placement
 var NON_RETRYABLE_ARM_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ARM_RETRY_DELAY_MS;
-deferInit("chunk-aqdf5t3e.js:51944", () => {
+deferInit("chunk-tsrpnscb.js:52039", () => {
   NON_RETRYABLE_ARM_REASONS = new Set([
     "not_found",
     "no_subscription_token",
@@ -141,7 +141,7 @@ deferInit("chunk-aqdf5t3e.js:51944", () => {
   ]);
   ARM_RETRY_DELAY_MS = 5000;
 });
-//@ chunk-aqdf5t3e.js:52048-52119 placement
+//@ chunk-tsrpnscb.js:52143-52214 placement
 function markPublishInFlightWithTimer(ownPublishes, slug) {
   markPublishInFlight(ownPublishes, slug);
   setTimeout(
@@ -151,7 +151,7 @@ function markPublishInFlightWithTimer(ownPublishes, slug) {
     slug,
   ).unref?.();
 }
-//@ chunk-aqdf5t3e.js:52119-53076 placement
+//@ chunk-tsrpnscb.js:52214-53171 placement
 async function touchFrameLiveForMcpWrite(slug, options, getKnownVer) {
   try {
     if (!ARTIFACT_SLUG_RE.test(slug)) return;
@@ -216,7 +216,7 @@ async function touchFrameLiveForMcpWrite(slug, options, getKnownVer) {
     logError(error);
   }
 }
-//@ chunk-aqdf5t3e.js:53076-54609 placement
+//@ chunk-tsrpnscb.js:53171-54704 placement
 async function resumeFrameLiveAutoReplies(options) {
   let { slug, url, publishContext, getKnownVer, context } = options;
   if (getLiveState().autoReact.userDisarmed)
@@ -308,12 +308,12 @@ async function resumeFrameLiveAutoReplies(options) {
   });
 }
 export {
+  takeRepliesConsentAsk,
+  repliesConsentUnapproved,
   repliesConsentDeclined,
   settleRepliesConsent,
   noteRepliesConsentAsk,
   approveTakenRepliesConsent,
   resumeFrameLiveAutoReplies,
-  takeRepliesConsentAsk,
-  repliesConsentUnapproved,
   touchFrameLiveForMcpWrite,
 };

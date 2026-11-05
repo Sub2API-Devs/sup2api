@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：计划批准唤醒
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-phrnybk8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2dv3kn8z.js (2)
  * attribution: placement 2
  */
 import { isInProcessTeammateTask } from "../../tasks/InProcessTeammateTask/types.js";
@@ -15,7 +15,7 @@ import {
 } from "../../tasks/InProcessTeammateTask/InProcessTeammateTask.js";
 import { agentAddress } from "./teammateIds.js";
 
-//@ chunk-phrnybk8.js:874-1123 placement
+//@ chunk-2dv3kn8z.js:874-1123 placement
 function exitTeammatePlanMode(taskId, taskRegistry) {
   let task = taskRegistry.get(taskId);
   if (!isInProcessTeammateTask(task) || !task.awaitingPlanApproval) return;
@@ -33,7 +33,7 @@ function exitTeammatePlanMode(taskId, taskRegistry) {
     },
   );
 }
-//@ chunk-phrnybk8.js:1123-1209 placement
+//@ chunk-2dv3kn8z.js:1123-1209 placement
 /**
  * 计划批准后唤醒仍在运行的队友任务。
  */
@@ -41,4 +41,4 @@ function wakeTeammateOnPlanApproval(tasks, agentId, teamName) {
   let teammateTaskByAgentId = findTeammateTaskByAgentId(agentAddress(agentId, teamName), tasks);
   if (teammateTaskByAgentId?.status === "running") teammateTaskByAgentId.retryWake?.emit();
 }
-export { exitTeammatePlanMode, wakeTeammateOnPlanApproval };
+export { wakeTeammateOnPlanApproval, exitTeammatePlanMode };

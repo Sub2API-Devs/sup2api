@@ -1,8 +1,8 @@
 /**
  * @grpc/grpc-js/build/src/resolving-load-balancer.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @grpc/grpc-js@1.14.4
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
@@ -18,7 +18,7 @@ import { require_logging } from "./logging.js";
 import { require_uri_parser } from "./uri-parser.js";
 import { require_load_balancer_child_handler } from "./load-balancer-child-handler.js";
 
-//@ chunk-pwh5dx3n.js:35999-41007 cjs-fingerprint
+//@ chunk-3k21nfa0.js:35999-41007 cjs-fingerprint
 var require_resolving_load_balancer = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

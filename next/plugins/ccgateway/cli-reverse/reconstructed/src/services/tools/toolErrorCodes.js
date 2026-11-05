@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工具错误码
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (7)
  * attribution: placement 7
  */
 import { getTaggedObject, authExpiredBlock } from "../policyLimits/capabilityBlocks.js";
@@ -18,7 +18,7 @@ import { configHasAuthorizationHeader } from "../mcp/auth.js";
 import { isCliOwnedConfig, hasCliOwnedAuthProvider } from "../mcp/cliOwnedClients.js";
 import { getClaudeAIOAuthTokenOriginAsync } from "../../utils/auth.js";
 
-//@ chunk-e6aww6q8.js:2497868-2498229 placement
+//@ chunk-5xgkngpb.js:2539168-2539529 placement
 /**
  * 把工具执行错误归类为错误码：已知分类、MCP 认证（单一服务器时细分）、沙箱违规、MCP 服务器已禁用。
  */
@@ -44,7 +44,7 @@ async function getToolErrorCode(error, name, mcpClients) {
     };
   return;
 }
-//@ chunk-e6aww6q8.js:2498229-2498538 placement
+//@ chunk-5xgkngpb.js:2539529-2539838 placement
 /**
  * 把拒绝结果映射为错误代码：读取外部路径被拦（附路径与是否受管）、记忆暂停，其他不映射。
  */
@@ -68,7 +68,7 @@ function getDenialErrorCode(permissionDecision) {
       return;
   }
 }
-//@ chunk-e6aww6q8.js:2498538-2498742 placement
+//@ chunk-5xgkngpb.js:2539838-2540042 placement
 async function getMcpAuthErrorCode(error, mcpClient) {
   if (error.firstPartyBearer !== undefined)
     return error.authErrorKind === "token_expired"
@@ -81,7 +81,7 @@ async function getMcpAuthErrorCode(error, mcpClient) {
         servers: [error.serverName],
       };
 }
-//@ chunk-e6aww6q8.js:2498742-2498886 placement
+//@ chunk-5xgkngpb.js:2540042-2540186 placement
 function getNeedsAuthServers(connections) {
   let mapped = connections
     .filter((connection) => connection.type === "needs-auth" && !hasCustomMcpAuth(connection))
@@ -93,7 +93,7 @@ function getNeedsAuthServers(connections) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:2498886-2499163 placement
+//@ chunk-5xgkngpb.js:2540186-2540463 placement
 /**
  * MCP 服务器是否使用自定义认证（Authorization 头、headersHelper 等）而无需 OAuth 重新授权。
  */
@@ -118,7 +118,7 @@ function hasCustomMcpAuth(mcpClient) {
       return false;
   }
 }
-//@ chunk-e6aww6q8.js:2499163-2499478 placement
+//@ chunk-5xgkngpb.js:2540463-2540778 placement
 /**
  * 按登录失败类型给出认证过期信息：设计凭证或无凭证时指明提供方；登录类型下令牌来自存储或无时返回认证过期块，来自环境变量/fd 时不处理。
  */
@@ -146,7 +146,7 @@ async function getAuthExpiredCode(firstPartyBearer, config) {
       }
   }
 }
-//@ chunk-e6aww6q8.js:2499478-2499615 placement
+//@ chunk-5xgkngpb.js:2540778-2540915 placement
 function isDesignMcpUrl(config) {
   if (config.type !== "http" && config.type !== "sse") return false;
   try {
@@ -155,4 +155,4 @@ function isDesignMcpUrl(config) {
     return false;
   }
 }
-export { getDenialErrorCode, getToolErrorCode, getNeedsAuthServers };
+export { getNeedsAuthServers, getDenialErrorCode, getToolErrorCode };

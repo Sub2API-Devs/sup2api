@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：函数钩子（plugin function hooks）的会话事件：session.attach/detach/start/append/measure/end/send、prompt.edit
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sfjpx19.js (62)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nh1pvp1m.js (62)
  * attribution: placement 62
  */
 import { sanitizePromptText } from "../../utils/promptTextSanitize.js";
@@ -36,7 +36,7 @@ import { queueRecordTextBuilder, trackQueueRecordChain } from "../../utils/messa
 import { submitMarksSlot } from "./promptSubmit.js";
 import { raceWithAbortSignal } from "../../utils/sleep.js";
 import { isNonResetExitReason } from "../../entrypoints/sdk/coreSchemas.js";
-import { resetPluginState } from "./api/state.js";
+import { clearStateSession } from "./api/state.js";
 import { setSessionEndRaiser } from "../../utils/hooks.js";
 import { pluginsMatchingEvent } from "./hookDispatch.js";
 import { DELIVERED_RESULT, setSessionSendRunner } from "../../tools/SendMessageTool/deliveryResults.js";
@@ -45,7 +45,7 @@ import { SESSION_LIVENESS_TIMEOUT_MS } from "../../services/remoteTools/awayTimi
 import { SSE_CONNECT_TIMEOUT_MS } from "../../cli/transports/SSETransport.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0sfjpx19.js:118583-118974 placement
+//@ chunk-nh1pvp1m.js:113557-113948 placement
 function collectSurfaceHandles(node) {
   if (node === undefined || typeof node === "string" || node.type === "engine") return [];
   if (node.type === "Button" || node.type === "Input" || node.type === "Select") {
@@ -68,7 +68,7 @@ function collectSurfaceHandles(node) {
   }
   return (node.children ?? []).flatMap(collectSurfaceHandles);
 }
-//@ chunk-0sfjpx19.js:118974-119190 placement
+//@ chunk-nh1pvp1m.js:113948-114164 placement
 /**
  * 清洗 prompt.autocomplete 建议：文本去控制字符（空则丢弃），标签压成单行。
  */
@@ -91,7 +91,7 @@ function normalizeAutocompleteSuggestions(suggestions) {
         };
   });
 }
-//@ chunk-0sfjpx19.js:119190-119245 placement
+//@ chunk-nh1pvp1m.js:114164-114219 placement
 /**
  * 无核心时的自动补全
  */
@@ -99,7 +99,7 @@ var autocompleteWithNoCore = (request, signal) =>
   NO_CORE_AT_CHAIN_BOTTOM("prompt.autocomplete", {
     signal,
   })(request);
-//@ chunk-0sfjpx19.js:119245-119438 placement
+//@ chunk-nh1pvp1m.js:114219-114412 placement
 /**
  * 取光标前连续的非空白片段作为当前词（光标夹到文本内），无则 undefined。
  */
@@ -116,14 +116,14 @@ function currentToken(draft) {
         start: tokenStart,
       };
 }
-//@ chunk-0sfjpx19.js:119438-119479 placement
+//@ chunk-nh1pvp1m.js:114412-114453 placement
 var COMPOSER_EDIT_ORIGIN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0sfjpx19.js:119438", () => {
+deferInit("chunk-nh1pvp1m.js:114412", () => {
   COMPOSER_EDIT_ORIGIN = Object.freeze({
     kind: "composer",
   });
 });
-//@ chunk-0sfjpx19.js:119479-119745 placement
+//@ chunk-nh1pvp1m.js:114453-114719 placement
 function applyEditKeepingCursor(draft, edit) {
   let { text } = applyTextInsertion({
     origin: COMPOSER_EDIT_ORIGIN,
@@ -144,7 +144,7 @@ function applyEditKeepingCursor(draft, edit) {
     cursor: Math.max(0, Math.min(nextCursor, text.length)),
   };
 }
-//@ chunk-0sfjpx19.js:119745-119826 placement
+//@ chunk-nh1pvp1m.js:114719-114800 placement
 /**
  * 把光标夹到文本内
  */
@@ -152,7 +152,7 @@ var clampCursor = (draft) => ({
   text: draft.text,
   cursor: Math.max(0, Math.min(draft.cursor, draft.text.length)),
 });
-//@ chunk-0sfjpx19.js:119826-119868 placement
+//@ chunk-nh1pvp1m.js:114800-114842 placement
 /**
  * 光标移到末尾
  */
@@ -160,7 +160,7 @@ var cursorAtEnd = (draft) => ({
   ...draft,
   cursor: draft.text.length,
 });
-//@ chunk-0sfjpx19.js:119868-120020 placement
+//@ chunk-nh1pvp1m.js:114842-114994 placement
 function summarizeEditBatch(batch) {
   let [firstEdit] = batch;
   let before = firstEdit?.before ?? {
@@ -177,14 +177,14 @@ function summarizeEditBatch(batch) {
     }),
   };
 }
-//@ chunk-0sfjpx19.js:120020-120132 placement
+//@ chunk-nh1pvp1m.js:114994-115106 placement
 var sameEdit = (a, b) =>
   a.text === b.text &&
   a.cursor === b.cursor &&
   a.start === b.start &&
   a.end === b.end &&
   a.inputText === b.inputText;
-//@ chunk-0sfjpx19.js:120132-120214 placement
+//@ chunk-nh1pvp1m.js:115106-115188 placement
 /**
  * prompt.edit 核心步骤
  */
@@ -194,7 +194,7 @@ var editCoreStep = (promptEditEvent, after) => ({
   budgetMs: 0,
   run: async (request) => (sameEdit(request, promptEditEvent) ? after : applyTextInsertion(request)),
 });
-//@ chunk-0sfjpx19.js:120214-120432 placement
+//@ chunk-nh1pvp1m.js:115188-115406 placement
 function describeEditKey(key) {
   let isSingleChar = [...key.key].length === 1;
   let isNamedKey = key.name !== "" && !isSingleChar;
@@ -214,7 +214,7 @@ function describeEditKey(key) {
     }),
   });
 }
-//@ chunk-0sfjpx19.js:120432-120514 placement
+//@ chunk-nh1pvp1m.js:115406-115488 placement
 /**
  * 编辑键参数
  */
@@ -226,7 +226,7 @@ function editKeyArgs(options) {
         key: keyInfo,
       };
 }
-//@ chunk-0sfjpx19.js:120514-120577 placement
+//@ chunk-nh1pvp1m.js:115488-115551 placement
 /**
  * 连续满足的次数
  */
@@ -235,7 +235,7 @@ function countUntilFalse(limit, isSame) {
   for (; count < limit; count += 1) if (!isSame(count)) break;
   return count;
 }
-//@ chunk-0sfjpx19.js:120577-120983 placement
+//@ chunk-nh1pvp1m.js:115551-115957 placement
 /**
  * 比较两段文本（以光标限定公共前缀），求出最小替换区间 {start, end, inputText}。
  */
@@ -262,7 +262,7 @@ function diffTextEdit(before, after) {
     inputText: after.text.slice(prefixLen, after.text.length - suffixLen),
   };
 }
-//@ chunk-0sfjpx19.js:120983-121086 placement
+//@ chunk-nh1pvp1m.js:115957-116060 placement
 var toPromptEditEvent = (batch) => ({
   origin: COMPOSER_EDIT_ORIGIN,
   ...editKeyArgs(batch),
@@ -270,7 +270,7 @@ var toPromptEditEvent = (batch) => ({
   cursor: batch.before.cursor,
   ...diffTextEdit(batch.before, batch.after),
 });
-//@ chunk-0sfjpx19.js:121086-121190 placement
+//@ chunk-nh1pvp1m.js:116060-116164 placement
 /**
  * 对一批输入编辑触发 prompt.edit 钩子链，核心处理器在未改写时保持原结果。
  */
@@ -283,7 +283,7 @@ function dispatchPromptEdit(batch, signal) {
     },
   })(promptEditEvent);
 }
-//@ chunk-0sfjpx19.js:121190-121396 placement
+//@ chunk-nh1pvp1m.js:116164-116370 placement
 function rebaseEdit(edit, applied) {
   if ((applied.start === applied.end && applied.inputText === "") || edit.end <= applied.start) return edit;
   let deltaChars = applied.inputText.length - (applied.end - applied.start);
@@ -294,7 +294,7 @@ function rebaseEdit(edit, applied) {
     inputText: edit.inputText,
   };
 }
-//@ chunk-0sfjpx19.js:121396-121699 placement
+//@ chunk-nh1pvp1m.js:116370-116673 placement
 /**
  * 根据钩子改写结果与当前草稿计算新的输入框状态；草稿已移动无法套用时给出原因。
  */
@@ -317,7 +317,7 @@ function resolveEditedBox(after, hookedBox, liveBox) {
     box: applyEditKeepingCursor(liveBox, rebased),
   };
 }
-//@ chunk-0sfjpx19.js:121699-122470 placement
+//@ chunk-nh1pvp1m.js:116673-117444 placement
 /**
  * 应用 prompt.edit 钩子对草稿的改写（草稿已变或用户正在输入时放弃）。
  */
@@ -379,14 +379,17 @@ function applyPromptEdit(options) {
     },
   };
 }
-//@ chunk-0sfjpx19.js:122470-122745 placement
-async function raiseSessionAttach(client, answers) {
+//@ chunk-nh1pvp1m.js:117444-117747 placement
+async function raiseSessionAttach(client, answers, draws) {
   if (
     !clientRegistry.attach({
       ...client,
       attachedAt: Date.now(),
       ...(answers !== undefined && {
         answers,
+      }),
+      ...(draws !== undefined && {
+        draws,
       }),
     })
   )
@@ -402,14 +405,14 @@ async function raiseSessionAttach(client, answers) {
   }
   return true;
 }
-//@ chunk-0sfjpx19.js:122745-122773 placement
+//@ chunk-nh1pvp1m.js:117747-117775 placement
 /**
  * 会话作用域的默认键 <x>:default，用于没有指定 session 的场景。
  */
 var defaultScopeKey = (surface) => `${surface}:default`;
-//@ chunk-0sfjpx19.js:122773-122789 placement
+//@ chunk-nh1pvp1m.js:117775-117791 placement
 var DETACH = "detach";
-//@ chunk-0sfjpx19.js:122789-123047 placement
+//@ chunk-nh1pvp1m.js:117791-118050 placement
 async function raiseSessionDetach(clientId, reason, rootEvent) {
   let detached = clientRegistry.detach(clientId);
   if (detached === undefined) return;
@@ -428,7 +431,7 @@ async function raiseSessionDetach(clientId, reason, rootEvent) {
   }
   return detached;
 }
-//@ chunk-0sfjpx19.js:123047-123275 placement
+//@ chunk-nh1pvp1m.js:118050-118278 placement
 /**
  * 对所有已附着客户端触发 session.detach，记录失败并返回失败数。
  */
@@ -444,14 +447,14 @@ async function detachAllClients_2() {
     });
   return flattened.length;
 }
-//@ chunk-0sfjpx19.js:123275-123350 placement
+//@ chunk-nh1pvp1m.js:118278-118353 placement
 /**
  * 结束所有客户端会话
  */
 async function detachAllClients(rootEvent) {
   for (let client of clientRegistry.list()) await raiseSessionDetach(client.clientId, "end", rootEvent);
 }
-//@ chunk-0sfjpx19.js:123350-123705 placement
+//@ chunk-nh1pvp1m.js:118353-118708 placement
 /**
  * 为加载的插件触发 session.start（同一加载只触发一次）。
  */
@@ -480,7 +483,7 @@ function raiseSessionStart(modules, weakSet, facts) {
       });
   }
 }
-//@ chunk-0sfjpx19.js:123705-124155 placement
+//@ chunk-nh1pvp1m.js:118708-119158 placement
 async function describeInteractivity({ loaded, surface, isInteractive }, isStillCurrent) {
   await Promise.resolve(loaded).catch(() => {
     return;
@@ -510,13 +513,13 @@ async function describeInteractivity({ loaded, surface, isInteractive }, isStill
     });
   }
 }
-//@ chunk-0sfjpx19.js:124155-124235 placement
+//@ chunk-nh1pvp1m.js:119158-119238 placement
 /**
  * 运行提及链
  */
 var runMentionChain = async (request) =>
   (await import("../../engine/CONTEXT_DROPPED_NOTE.lazy.js")).runPromptMentionChain(request);
-//@ chunk-0sfjpx19.js:124235-124532 placement
+//@ chunk-nh1pvp1m.js:119238-119535 placement
 function raiseSessionAppend(text, hookOrigin) {
   if (
     !hasModuleHookingSite("session.append", {
@@ -552,7 +555,7 @@ function raiseSessionAppend(text, hookOrigin) {
     () => text,
   );
 }
-//@ chunk-0sfjpx19.js:124532-124614 placement
+//@ chunk-nh1pvp1m.js:119535-119617 placement
 /**
  * 用量窗口是否变化
  */
@@ -561,23 +564,23 @@ var usageWindowChanged = (context, context_2) =>
   context.tokens !== context_2.tokens ||
   context.window !== context_2.window ||
   context.percent !== context_2.percent;
-//@ chunk-0sfjpx19.js:124614-124668 placement
+//@ chunk-nh1pvp1m.js:119617-119671 placement
 /**
  * 成本是否变化
  */
 var costChanged = (previous, cost) =>
   previous ? previous.usage.cost?.usd !== cost?.usd : cost !== undefined;
-//@ chunk-0sfjpx19.js:124668-124687 placement
+//@ chunk-nh1pvp1m.js:119671-119690 placement
 /**
  * 1e-9
  */
 var NEGLIGIBLE_COST = 0.000000001;
-//@ chunk-0sfjpx19.js:124687-124696 placement
+//@ chunk-nh1pvp1m.js:119690-119699 placement
 /**
  * 1
  */
 var MIN_COST_DELTA = 1;
-//@ chunk-0sfjpx19.js:124696-124973 placement
+//@ chunk-nh1pvp1m.js:119699-119976 placement
 function rateLimitsChanged(previous, next) {
   let rateLimits = next.usage.rateLimits;
   if (!previous) return rateLimits.length > 0;
@@ -596,7 +599,7 @@ function rateLimitsChanged(previous, next) {
     })
   );
 }
-//@ chunk-0sfjpx19.js:124973-125135 placement
+//@ chunk-nh1pvp1m.js:119976-120138 placement
 /**
  * 比较两次会话度量，列出变化的类别（context、rateLimits、cost）。
  */
@@ -607,15 +610,15 @@ function changedMeasures(previous, next) {
   if (costChanged(previous, next.usage.cost)) changed.push("cost");
   return changed;
 }
-//@ chunk-0sfjpx19.js:125135-125170 placement
+//@ chunk-nh1pvp1m.js:120138-120173 placement
 /**
  * 会话度量槽
  */
 var sessionMeasureSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0sfjpx19.js:125135", () => {
+deferInit("chunk-nh1pvp1m.js:120138", () => {
   sessionMeasureSlot = identity(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-0sfjpx19.js:125170-125238 placement
+//@ chunk-nh1pvp1m.js:120173-120241 placement
 /**
  * 默认度量结果
  */
@@ -623,7 +626,7 @@ var measureDefault = async () => ({
   usage: await sessionUsageOp({}, ENGINE),
   limitStatus: getCurrentLimits().status,
 });
-//@ chunk-0sfjpx19.js:125238-125331 placement
+//@ chunk-nh1pvp1m.js:120241-120334 placement
 /**
  * 并入限流信息
  */
@@ -634,14 +637,14 @@ var withRateLimits = (previous, next) => ({
   },
   limitStatus: previous.limitStatus,
 });
-//@ chunk-0sfjpx19.js:125331-125395 placement
+//@ chunk-nh1pvp1m.js:120334-120398 placement
 /**
  * 按需保留限流
  */
 function keepRateLimits(previous, next, changed) {
   return !previous || changed.includes("rateLimits") ? next : withRateLimits(previous, next);
 }
-//@ chunk-0sfjpx19.js:125395-125737 placement
+//@ chunk-nh1pvp1m.js:120398-120740 placement
 async function raiseSessionMeasure(trigger) {
   try {
     let measures = await measureDefault();
@@ -664,15 +667,15 @@ async function raiseSessionMeasure(trigger) {
     });
   }
 }
-//@ chunk-0sfjpx19.js:125737-125772 placement
+//@ chunk-nh1pvp1m.js:120740-120775 placement
 /**
  * 会话结束槽
  */
 var sessionEndSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0sfjpx19.js:125737", () => {
+deferInit("chunk-nh1pvp1m.js:120740", () => {
   sessionEndSlot = identity(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-0sfjpx19.js:125772-125890 placement
+//@ chunk-nh1pvp1m.js:120775-120893 placement
 async function runMeasureLoop(loop, trigger) {
   let current = trigger;
   try {
@@ -685,15 +688,15 @@ async function runMeasureLoop(loop, trigger) {
     if (sessionEndSlot.get() === loop) sessionEndSlot.set(undefined);
   }
 }
-//@ chunk-0sfjpx19.js:125890-125903 placement
+//@ chunk-nh1pvp1m.js:120893-120906 placement
 /**
  * 宿主状态槽
  */
 var hostStateSlot; // deferred: uses createHostStateSlot (./devModsStatus.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0sfjpx19.js:125890", () => {
+deferInit("chunk-nh1pvp1m.js:120893", () => {
   hostStateSlot = createHostStateSlot();
 });
-//@ chunk-0sfjpx19.js:125903-125966 placement
+//@ chunk-nh1pvp1m.js:120906-120969 placement
 /**
  * session.measure 是否有钩子
  */
@@ -704,7 +707,7 @@ function isSessionMeasureHooked() {
     return false;
   }
 }
-//@ chunk-0sfjpx19.js:125966-126174 placement
+//@ chunk-nh1pvp1m.js:120969-121177 placement
 /**
  * 合并触发 session.measure：已在度量中则排队下一次（turn 优先），否则启动循环。
  */
@@ -723,12 +726,12 @@ var scheduleSessionMeasure = (trigger) => {
   newLoop.running = runMeasureLoop(newLoop, trigger);
   return newLoop.running;
 };
-//@ chunk-0sfjpx19.js:126174-126182 placement
+//@ chunk-nh1pvp1m.js:121177-121185 placement
 // deferred: uses setSessionMeasurer (../../query/turnHooks.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0sfjpx19.js:126174", () => {
+deferInit("chunk-nh1pvp1m.js:121177", () => {
   setSessionMeasurer(scheduleSessionMeasure);
 });
-//@ chunk-0sfjpx19.js:126182-126330 placement
+//@ chunk-nh1pvp1m.js:121185-121333 placement
 /**
  * 订阅限额状态变化以触发 session.measure（只订阅一次）。
  */
@@ -746,7 +749,7 @@ function watchLimitsForMeasure() {
   hostStateSlot.set(release);
   registerCleanup(release);
 }
-//@ chunk-0sfjpx19.js:126330-126600 placement
+//@ chunk-nh1pvp1m.js:121333-121606 placement
 /**
  * 会话就绪时启动函数钩子：订阅限额、设置提及运行器与追加触发器，描述交互能力（触发 session.start），只执行一次。
  */
@@ -774,7 +777,7 @@ function startSessionHooks(options) {
   trackQueueRecordChain(loaded);
   return started;
 }
-//@ chunk-0sfjpx19.js:126600-126653 placement
+//@ chunk-nh1pvp1m.js:121606-121659 placement
 /**
  * 中止时静默
  */
@@ -782,7 +785,7 @@ var raceWithAbortSilently = (promise, signal) =>
   raceWithAbortSignal(promise, signal, () => new AbortError()).catch(() => {
     return;
   });
-//@ chunk-0sfjpx19.js:126653-126752 placement
+//@ chunk-nh1pvp1m.js:121659-121758 placement
 /**
  * session.end 核心步骤
  */
@@ -797,7 +800,7 @@ var sessionEndCoreStep = (endSession) => ({
     };
   },
 });
-//@ chunk-0sfjpx19.js:126790-126861 placement
+//@ chunk-nh1pvp1m.js:121796-121867 placement
 /**
  * session.end 是否有钩子
  */
@@ -810,7 +813,7 @@ function isSessionEndHooked(reason) {
     return false;
   }
 }
-//@ chunk-0sfjpx19.js:126861-127375 placement
+//@ chunk-nh1pvp1m.js:121867-122381 placement
 /**
  * 触发 session.end：在 SessionEnd 时限内运行，超时则结束会话不等待。
  */
@@ -859,15 +862,15 @@ var raiseSessionEnd = async ({ reason, sessionId, boundMs, end }) => {
     }
     await raceWithAbortSilently(detachClients(), deadlineSignal);
   } finally {
-    resetPluginState();
+    clearStateSession();
   }
 };
-//@ chunk-0sfjpx19.js:127375-127383 placement
+//@ chunk-nh1pvp1m.js:122381-122389 placement
 // deferred: uses setSessionEndRaiser (../../utils/hooks.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0sfjpx19.js:127375", () => {
+deferInit("chunk-nh1pvp1m.js:122381", () => {
   setSessionEndRaiser(raiseSessionEnd);
 });
-//@ chunk-0sfjpx19.js:127383-127520 placement
+//@ chunk-nh1pvp1m.js:122389-122526 placement
 var createSendOutcome = (coreHandoff) => ({
   delivered: () =>
     coreHandoff.done({
@@ -880,10 +883,10 @@ var createSendOutcome = (coreHandoff) => ({
     }),
   [Symbol.dispose]: coreHandoff[Symbol.dispose],
 });
-//@ chunk-0sfjpx19.js:127520-127620 placement
+//@ chunk-nh1pvp1m.js:122526-122626 placement
 var SEND_NOT_DELIVERED_MESSAGE =
   "session.send: the message was not delivered (the send failed after the hooks passed it on)";
-//@ chunk-0sfjpx19.js:127620-128279 placement
+//@ chunk-nh1pvp1m.js:122626-123285 placement
 /**
  * 触发 session.send：钩子可改写、拒绝或自行投递消息。
  */
@@ -929,27 +932,27 @@ async function raiseSessionSend(request) {
     delivering: createSendOutcome(coreHandoff),
   };
 }
-//@ chunk-0sfjpx19.js:128279-128287 placement
+//@ chunk-nh1pvp1m.js:123285-123293 placement
 // deferred: uses setSessionSendRunner (../../tools/SendMessageTool/deliveryResults.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0sfjpx19.js:128279", () => {
+deferInit("chunk-nh1pvp1m.js:123285", () => {
   setSessionSendRunner(raiseSessionSend);
 });
-//@ chunk-0sfjpx19.js:128287-128300 placement
+//@ chunk-nh1pvp1m.js:123293-123306 placement
 /**
  * 15000
  */
 var SESSION_END_GRACE_MS = 15000;
-//@ chunk-0sfjpx19.js:128300-128318 placement
+//@ chunk-nh1pvp1m.js:123306-123324 placement
 /**
  * 总等待时长
  */
 var SESSION_END_WAIT_MS = SESSION_LIVENESS_TIMEOUT_MS + SSE_CONNECT_TIMEOUT_MS + SESSION_END_GRACE_MS;
-//@ chunk-0sfjpx19.js:128318-128332 placement
+//@ chunk-nh1pvp1m.js:123324-123338 placement
 /**
  * 300000
  */
 var SESSION_END_HARD_CAP_MS = 300000;
-//@ chunk-0sfjpx19.js:128332-128792 placement
+//@ chunk-nh1pvp1m.js:123338-123798 placement
 function raiseViewerAbsence(setHandler, isViewerPresent, onAbsent) {
   let absenceStart;
   let lastSeen;
@@ -1002,20 +1005,20 @@ function raiseViewerAbsence(setHandler, isViewerPresent, onAbsent) {
   };
 }
 export {
-  collectSurfaceHandles,
-  COMPOSER_EDIT_ORIGIN,
   startSessionHooks,
-  diffTextEdit,
-  autocompleteWithNoCore,
-  normalizeAutocompleteSuggestions,
-  currentToken,
   raiseSessionDetach,
   detachAllClients_2,
   raiseViewerAbsence,
   detachAllClients,
   defaultScopeKey,
-  applyPromptEdit,
+  collectSurfaceHandles,
+  autocompleteWithNoCore,
+  currentToken,
+  normalizeAutocompleteSuggestions,
+  diffTextEdit,
   dispatchPromptEdit,
   clampCursor,
   raiseSessionAttach,
+  COMPOSER_EDIT_ORIGIN,
+  applyPromptEdit,
 };

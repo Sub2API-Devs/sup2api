@@ -3,23 +3,23 @@
  *
  * 2.1.316 新增：提示来源
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (15)
  * attribution: placement 15
  */
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 
-//@ chunk-e6aww6q8.js:1812930-1813001 placement
+//@ chunk-5xgkngpb.js:1889835-1889906 placement
 /**
  * wakeupSourceForKind：由 kind 得到唤醒来源。
  */
 function wakeupSourceForKind(source) {
   return source.kind === "loop" ? "loop_wakeup" : "schedule_wakeup";
 }
-//@ chunk-e6aww6q8.js:1813001-1813052 placement
+//@ chunk-5xgkngpb.js:1889906-1889957 placement
 var WAKEUP_SOURCES = ["handoff", "handback", "seeded", "unmarked"];
-//@ chunk-e6aww6q8.js:1813052-1813237 placement
+//@ chunk-5xgkngpb.js:1889957-1890142 placement
 /**
  * 把提示来源转为钩子看到的来源（唤醒来源优先，否则 sdk、system 或 user）。
  */
@@ -36,7 +36,7 @@ function promptOriginForHooks({ promptSource, wakeupSource }) {
       return "user";
   }
 }
-//@ chunk-e6aww6q8.js:1813237-1813365 placement
+//@ chunk-5xgkngpb.js:1890142-1890270 placement
 /**
  * 确定提示来源：元消息或系统调用为 system，非交互为 sdk，否则为调用方来源或 typed。
  */
@@ -45,7 +45,7 @@ function resolvePromptSource({ isNonInteractive, isMeta, callerSource }) {
   if (isNonInteractive) return "sdk";
   return callerSource ?? "typed";
 }
-//@ chunk-e6aww6q8.js:1813365-1813676 placement
+//@ chunk-5xgkngpb.js:1890270-1890581 placement
 /**
  * 提示来源类别与唤醒来源的取值列表。
  */
@@ -73,16 +73,16 @@ var WAKEUP_SOURCES_2 = [
   "side-session-wake",
   "other",
 ];
-//@ chunk-e6aww6q8.js:1813676-1813715 placement
+//@ chunk-5xgkngpb.js:1890581-1890620 placement
 function isWakeupSource(source) {
   return WAKEUP_SOURCES_2.includes(source);
 }
-//@ chunk-e6aww6q8.js:1813715-1813784 placement
+//@ chunk-5xgkngpb.js:1890620-1890689 placement
 function normalizeWakeupSource(source) {
   if (source === undefined || source === "") return;
   return isWakeupSource(source) ? source : "other";
 }
-//@ chunk-e6aww6q8.js:1813784-1813857 placement
+//@ chunk-5xgkngpb.js:1890689-1890762 placement
 /**
  * originKindForWakeup：唤醒来源对应的来源种类。
  */
@@ -90,7 +90,7 @@ function originKindForWakeup(source) {
   let source_2 = normalizeWakeupSource(source);
   return source_2 === undefined || source_2 === "user" ? undefined : originKindOfWakeup(source_2);
 }
-//@ chunk-e6aww6q8.js:1813857-1814183 placement
+//@ chunk-5xgkngpb.js:1890762-1891088 placement
 /**
  * 把唤醒来源映射为提示来源类别（定时、自动继续、对端、宿主合成）。
  */
@@ -112,7 +112,7 @@ function originKindOfWakeup(source) {
       return "host_synthetic";
   }
 }
-//@ chunk-e6aww6q8.js:1814183-1814274 placement
+//@ chunk-5xgkngpb.js:1891088-1891179 placement
 function scheduledWakeupKind(wakeupSource) {
   switch (wakeupSource) {
     case "loop_wakeup":
@@ -122,7 +122,7 @@ function scheduledWakeupKind(wakeupSource) {
       return;
   }
 }
-//@ chunk-e6aww6q8.js:1814274-1814521 placement
+//@ chunk-5xgkngpb.js:1891179-1891426 placement
 /**
  * 生成提示相关的遥测字段：唤醒来源、宿主发起方、Artifact 评论回合。
  */
@@ -144,7 +144,7 @@ function promptTelemetryFields({ wakeupSource, hostInitiator, artifactCommentTur
     ...undefined,
   };
 }
-//@ chunk-e6aww6q8.js:1814521-1815207 placement
+//@ chunk-5xgkngpb.js:1891426-1892112 placement
 /**
  * 判断提示来源（人工、自动继续、定时触发、对等发送等）。
  */
@@ -179,19 +179,19 @@ function classifyPromptSource({ origin, isMeta, wakeupSource, promptSource, host
   if (promptSource === "sdk") return "sdk";
   return "unknown";
 }
-//@ chunk-e6aww6q8.js:1815207-1815219 placement
+//@ chunk-5xgkngpb.js:1892112-1892124 placement
 /**
  * WAKEUP_ORIGIN_TTL_MS：唤醒来源记录的有效期。
  */
 var WAKEUP_ORIGIN_TTL_MS = 1e4;
-//@ chunk-e6aww6q8.js:1815219-1815274 placement
+//@ chunk-5xgkngpb.js:1892124-1892179 placement
 /**
  * wakeupDedupKey：唤醒去重键。
  */
 function wakeupDedupKey(uuid, turnId) {
   return `${String(uuid)}\x00${String(turnId)}`;
 }
-//@ chunk-e6aww6q8.js:1815274-1815469 placement
+//@ chunk-5xgkngpb.js:1892179-1892374 placement
 function singleToolResultId(message) {
   let content = message.message?.content;
   if (!Array.isArray(content)) return;
@@ -201,14 +201,14 @@ function singleToolResultId(message) {
   return toolUseId === undefined ? undefined : String(toolUseId);
 }
 export {
+  wakeupSourceForKind,
+  originKindForWakeup,
   singleToolResultId,
   wakeupDedupKey,
   WAKEUP_ORIGIN_TTL_MS,
-  wakeupSourceForKind,
   resolvePromptSource,
+  PROMPT_ORIGIN_KINDS,
   promptTelemetryFields,
   promptOriginForHooks,
   classifyPromptSource,
-  PROMPT_ORIGIN_KINDS,
-  originKindForWakeup,
 };

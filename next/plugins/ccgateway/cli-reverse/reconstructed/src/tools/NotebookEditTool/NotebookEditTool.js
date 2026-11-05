@@ -3,9 +3,9 @@
  *
  * NotebookEdit 工具：替换/插入/删除 .ipynb 单元（延迟加载，先读与修改检测）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/NotebookEditTool/NotebookEditTool.ts
- * pieces: chunk-e6aww6q8.js (2)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: fingerprint 2
  */
 import { extname } from "path";
@@ -32,7 +32,7 @@ import {
 } from "../../utils/permissions/filesystem.js";
 import { clipText } from "../../remote/tools/protocolSchemas.js";
 import { buildUnfinishedCheckDecision } from "../../utils/permissions/unfinishedWriteCheck.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { walkPermissionCheckPaths, getFsImplementation } from "../../utils/fsOperations.js";
 import {
   rejectNullBytes,
@@ -78,10 +78,10 @@ import { formatFileSize } from "../../utils/format.js";
 import { replaceLineBreaks } from "../../utils/permissions/approvalPayloadSerialization.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4663432-4664942 fingerprint (2.1.88 match: outputSchema, 0.748)
+//@ chunk-5xgkngpb.js:4772030-4773540 fingerprint (2.1.88 match: outputSchema, 0.748)
 var notebookEditInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var notebookEditOutputSchema;
-deferInit("chunk-e6aww6q8.js:4663432", () => {
+deferInit("chunk-5xgkngpb.js:4772030", () => {
   notebookEditInputSchema = DoctorLazy(() =>
     zodStrictObject({
       notebook_path: stringSchema().describe(
@@ -122,12 +122,12 @@ deferInit("chunk-e6aww6q8.js:4663432", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:4665018-4672012 fingerprint (2.1.88 match: NotebookEditTool, 0.807)
+//@ chunk-5xgkngpb.js:4773616-4780615 fingerprint (2.1.88 match: NotebookEditTool, 0.81)
 /**
  * NotebookEdit 工具定义（name "NotebookEdit"，shouldDefer）。替换/插入/删除单元；必须先 Read 且未被修改；按 cell_id 或数字下标定位；nbformat 4.5 及以上时新单元生成 8 位 id；code 单元替换后清空输出；写前检查大小上限。
  */
 var NotebookEditTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4665018", () => {
+deferInit("chunk-5xgkngpb.js:4773616", () => {
   NotebookEditTool = buildTool({
     name: NOTEBOOK_EDIT_TOOL_NAME,
     ruleContentField: "notebook_path",
@@ -248,7 +248,7 @@ deferInit("chunk-e6aww6q8.js:4665018", () => {
         permissionCheckFailureDecision(input) {
           return buildUnfinishedCheckDecision(
             NOTEBOOK_EDIT_TOOL_NAME,
-            isPlainObject_5(input) ? input.notebook_path : undefined,
+            isPlainObject_6(input) ? input.notebook_path : undefined,
             toolContext.permissions(),
           );
         },

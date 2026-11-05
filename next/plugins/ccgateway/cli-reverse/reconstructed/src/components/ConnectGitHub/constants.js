@@ -1,14 +1,17 @@
 /**
  * components/ConnectGitHub/constants.ts
  *
- * ConnectGitHub 组件常量（2.1.316 新增）
+ * ConnectGitHub 组件的名字常量（2.1.318 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jtfz0a2c.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g1ycq87v.js (1)
  * attribution: placement 1
  */
 
-//@ chunk-jtfz0a2c.js:191-215 placement
+//@ chunk-g1ycq87v.js:191-215 placement
+/**
+ * ConnectGitHub 组件的名字常量。
+ */
 var CONNECTGITHUB = "ConnectGitHub";
 export { CONNECTGITHUB };

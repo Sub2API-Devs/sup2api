@@ -1,14 +1,14 @@
 /**
  * @mixmark-io/domino/lib/attributes.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @mixmark-io/domino@2.2.0
- * pieces: chunk-vwj6ccer.js (1)
+ * pieces: chunk-w04z664w.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_utils } from "./utils.js";
 
-//@ chunk-vwj6ccer.js:26129-28295 cjs-fingerprint
+//@ chunk-w04z664w.js:26129-28295 cjs-fingerprint
 var require_attributes = __commonJS(function (cjsExports) {
   var utils = require_utils();
   cjsExports.property = function (attr) {
@@ -89,12 +89,12 @@ var require_attributes = __commonJS(function (cjsExports) {
     }
     return {
       get: function () {
-        var v_2 = this._getattr(a_2.name);
-        var n = a_2.float ? parseFloat(v_2) : parseInt(v_2, 10);
-        if (v_2 === null || !isFinite(n) || (min !== undefined && n < min) || (max !== undefined && n > max))
+        var v = this._getattr(a_2.name);
+        var n = a_2.float ? parseFloat(v) : parseInt(v, 10);
+        if (v === null || !isFinite(n) || (min !== undefined && n < min) || (max !== undefined && n > max))
           return def.call(this);
         if (unsigned_long || signed_long || unsigned_fallback) {
-          if (!/^[ \t\n\f\r]*[-+]?[0-9]/.test(v_2)) return def.call(this);
+          if (!/^[ \t\n\f\r]*[-+]?[0-9]/.test(v)) return def.call(this);
           n = n | 0;
         }
         return n;

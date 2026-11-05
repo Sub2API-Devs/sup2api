@@ -3,13 +3,13 @@
  *
  * HTTP 头：User-Agent（claude-cli/<版本> (external, entrypoint…)）、MCP/WebFetch UA、Anthropic 自有 API 的认证头、WIF 头、401 重试包装。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/http.ts
- * pieces: chunk-9vvvg0d3.js (1), chunk-aepeg2w5.js (10), chunk-bvbc7k4d.js (3), chunk-zs9sd2e8.js (4)
+ * pieces: chunk-3wgj3rdg.js (1), chunk-exfmq47h.js (10), chunk-kd978n4z.js (4), chunk-m0y4n1hb.js (3)
  * attribution: fingerprint 1, placement 7, facade-exports 10
  */
 import { workloadStorage, getWorkload } from "./workloadContext.js";
-import { cliError_2 } from "../cli/exit.js";
+import { runInOutermostCallFrame } from "../cli/exit.js";
 import { getEntrypointOnRequests } from "../bootstrap/state.js";
 import { env } from "./env.js";
 import {
@@ -29,7 +29,7 @@ import { isGatewayUrlAllowed } from "../services/gateway/constants.js";
 import { axios_default } from "../../vendor/axios/dist/esm/axios.js";
 import { runDeferredInits } from "../../runtime/deferred-init.js";
 
-//@ chunk-zs9sd2e8.js:191-715 placement
+//@ chunk-kd978n4z.js:191-715 placement
 /**
  * 返回 claude-code/<版本> 形式的 User-Agent。
  */
@@ -39,16 +39,16 @@ function claudeCodeUserAgent() {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION
   }`;
 }
-//@ chunk-zs9sd2e8.js:715-1361 facade-exports
+//@ chunk-kd978n4z.js:715-1361 facade-exports
 function getClientPlatform(entrypoint = process.env.CLAUDE_CODE_ENTRYPOINT) {
   switch (entrypoint) {
     case "claude-vscode":
@@ -81,7 +81,7 @@ function getClientPlatform(entrypoint = process.env.CLAUDE_CODE_ENTRYPOINT) {
       return "claude_code_cli";
   }
 }
-//@ chunk-zs9sd2e8.js:1361-1911 placement
+//@ chunk-kd978n4z.js:1361-1911 placement
 /**
  * 生成 AI_AGENT 环境变量值 claude-code_<版本（点换成横线）>_<后缀>。
  */
@@ -90,15 +90,15 @@ function aiAgentEnvValue(suffix) {
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
-    VERSION: "2.1.316",
+    VERSION: "2.1.318",
     FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-    BUILD_TIME: "2026-10-30T23:28:13Z",
-    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
     HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
     DD_SOURCEMAP_GROUP: "default",
   }.VERSION.replace(/\./g, "-")}_${suffix}`;
 }
-//@ chunk-zs9sd2e8.js:1911-2085 placement
+//@ chunk-kd978n4z.js:1911-2085 placement
 function setAiAgentEnv() {
   if (
     !process.env.AI_AGENT ||
@@ -107,14 +107,14 @@ function setAiAgentEnv() {
   )
     process.env.AI_AGENT = aiAgentEnvValue("harness");
 }
-//@ chunk-aepeg2w5.js:592522-592568 placement
+//@ chunk-exfmq47h.js:605004-605050 placement
 /**
  * 在指定 workload 的 AsyncLocalStorage 中运行回调，用于生成带 workload 的 User-Agent。
  */
-function withWorkloadStorage(storage, msg) {
-  return workloadStorage.run(storage, () => cliError_2(msg));
+function withWorkloadStorage(storage, url) {
+  return workloadStorage.run(storage, () => runInOutermostCallFrame(url));
 }
-//@ chunk-aepeg2w5.js:592568-593403 facade-exports (2.1.88 match: getUserAgent, 0.584)
+//@ chunk-exfmq47h.js:605050-605886 facade-exports (2.1.88 match: getUserAgent, 0.584)
 /**
  * API 请求 User-Agent：claude-cli/<版本> (external, <entrypoint>[, agent-sdk/<CLAUDE_AGENT_SDK_VERSION>][, client-app/<CLAUDE_AGENT_SDK_CLIENT_APP>][, workload/<workload>])，entrypoint 默认 cli。
  */
@@ -132,16 +132,16 @@ function getUserAgent(options) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION
   } (external, ${entrypoint}${sdkSuffix}${clientApp}${workloadSuffix})`;
 }
-//@ chunk-aepeg2w5.js:593403-594216 facade-exports (2.1.88 match: getMCPUserAgent, 0.567)
+//@ chunk-exfmq47h.js:605886-606700 facade-exports (2.1.88 match: getMCPUserAgent, 0.567)
 /**
  * MCP 请求的 User-Agent（claude-code/<版本>，带 agent-sdk/client-app 后缀）。
  */
@@ -157,23 +157,23 @@ function getMCPUserAgent() {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION
   }${suffix}`;
 }
-//@ chunk-aepeg2w5.js:594216-594294 facade-exports (2.1.88 match: getWebFetchUserAgent, 1)
+//@ chunk-exfmq47h.js:606700-606778 facade-exports (2.1.88 match: getWebFetchUserAgent, 1)
 /**
  * WebFetch 用 UA：Claude-User (claude-code/<版本>; +https://support.anthropic.com/)。
  */
 function getWebFetchUserAgent() {
   return `Claude-User (${claudeCodeUserAgent()}; +https://support.anthropic.com/)`;
 }
-//@ chunk-aepeg2w5.js:594294-594774 facade-exports
+//@ chunk-exfmq47h.js:606778-607258 facade-exports
 /**
  * WIF（workload identity federation，profile 来源）时取联合身份令牌作为认证头。
  */
@@ -206,7 +206,7 @@ async function getAuthHeadersAsync(options = {}) {
     }
   return getAuthHeaders(options);
 }
-//@ chunk-aepeg2w5.js:594774-595468 facade-exports (2.1.88 match: getAuthHeaders, 0.621)
+//@ chunk-exfmq47h.js:607258-607952 facade-exports (2.1.88 match: getAuthHeaders, 0.622)
 /**
  * Anthropic 自有 API（profile、remote settings、sessions 等）的认证头：第三方提供方返回错误；订阅用户用 Bearer OAuth + oauth-2025-04-20 beta；网关不可用；否则 x-api-key，可选回退 ANTHROPIC_AUTH_TOKEN Bearer。
  */
@@ -266,7 +266,7 @@ function getAuthHeaders(options = {}) {
     },
   };
 }
-//@ chunk-aepeg2w5.js:595468-595593 facade-exports
+//@ chunk-exfmq47h.js:607952-608077 facade-exports
 async function countOAuth401Recovery(latch, fn) {
   let recoveries = latch?.recoveries;
   if (!recoveries) return fn();
@@ -278,15 +278,15 @@ async function countOAuth401Recovery(latch, fn) {
     recoveries.running--;
   }
 }
-//@ chunk-aepeg2w5.js:595593-595643 facade-exports
+//@ chunk-exfmq47h.js:608077-608127 facade-exports
 function oauthRefreshLatchStamp(recoveries) {
   return recoveries.running > 0 ? undefined : recoveries.begun;
 }
-//@ chunk-aepeg2w5.js:595643-595702 facade-exports
+//@ chunk-exfmq47h.js:608127-608186 facade-exports
 function restoreOAuthRefreshLatch(options, begunCount) {
   if (begunCount === options.recoveries.begun) options.attempted = false;
 }
-//@ chunk-aepeg2w5.js:595702-596653 facade-exports
+//@ chunk-exfmq47h.js:608186-609137 facade-exports
 async function withOAuth401Retry(fn, options) {
   let gatedAccessToken;
   if (options?.gateToSessionOAuthCredential) {
@@ -348,16 +348,16 @@ async function withOAuth401Retry(fn, options) {
     return await fn();
   }
 }
-//@ chunk-bvbc7k4d.js:191-204 placement
+//@ chunk-m0y4n1hb.js:191-204 placement
 /**
  * 排空响应体的默认超时（毫秒）。
  */
 var DEFAULT_DRAIN_TIMEOUT_MS = 3000;
-//@ chunk-bvbc7k4d.js:204-243 placement
+//@ chunk-m0y4n1hb.js:204-243 placement
 function cancelBody(body) {
   body.cancel().catch(() => {});
 }
-//@ chunk-bvbc7k4d.js:243-552 placement
+//@ chunk-m0y4n1hb.js:243-552 placement
 /**
  * 读完并丢弃响应体（可设字节上限与超时，超过时取消读取），用于释放连接。
  */
@@ -385,7 +385,7 @@ async function drainResponseBody(response, { maxBytes = 65536, timeoutMs } = {})
     if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
   }
 }
-//@ chunk-9vvvg0d3.js:24960-25161 fingerprint (2.1.88 match: withOAuth401Retry, 0.79)
+//@ chunk-3wgj3rdg.js:25309-25510 fingerprint (2.1.88 match: withOAuth401Retry, 0.789)
 /**
  * 包装请求：遇 401 触发 OAuth 刷新后重试一次（令牌被吊销时报错）。
  */
@@ -400,25 +400,25 @@ function withOAuth401Retry_2(error) {
   );
 }
 
-// The import cycle this module closes (3677 modules) is complete: run the load-time work its statements
+// The import cycle this module closes (3771 modules) is complete: run the load-time work its statements
 // marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
 runDeferredInits("src/utils/http.js");
 export {
-  drainResponseBody,
-  getClientPlatform,
   claudeCodeUserAgent,
   withOAuth401Retry,
   getAuthHeaders,
-  setAiAgentEnv,
-  getMCPUserAgent,
-  withWorkloadStorage,
-  getUserAgent,
-  oauthRefreshLatchStamp,
+  getClientPlatform,
   getAuthHeadersAsync,
+  withWorkloadStorage,
+  getMCPUserAgent,
+  setAiAgentEnv,
+  oauthRefreshLatchStamp,
   restoreOAuthRefreshLatch,
-  getWebFetchUserAgent,
   countOAuth401Recovery,
+  drainResponseBody,
   withOAuth401Retry_2,
-  DEFAULT_DRAIN_TIMEOUT_MS,
+  getWebFetchUserAgent,
   aiAgentEnvValue,
+  getUserAgent,
+  DEFAULT_DRAIN_TIMEOUT_MS,
 };

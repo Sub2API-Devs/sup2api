@@ -3,9 +3,9 @@
  *
  * 脚本钩子路径锚定（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (6)
  * attribution: placement 6
  */
 import { isAbsolute, join } from "path";
@@ -16,16 +16,16 @@ import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../
 import { escapeControlChars, truncateToLength } from "../stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:373842-373962 placement
+//@ chunk-7jxyna5q.js:298509-298628 placement
 var SCRIPT_HOOK_ACK_ENV; // deferred: uses HOOK_COMMAND_MAX_LENGTH (../../schemas/hooks.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_SCRIPT_HOOK_PATH_CHARS;
 var SCRIPT_HOOK_PATH_VARS;
-deferInit("chunk-s61vbvea.js:373842", () => {
+deferInit("chunk-7jxyna5q.js:298509", () => {
   SCRIPT_HOOK_ACK_ENV = "CLAUDE_SCRIPT_HOOK_ACK";
   MAX_SCRIPT_HOOK_PATH_CHARS = HOOK_COMMAND_MAX_LENGTH * 3;
   SCRIPT_HOOK_PATH_VARS = ["${CLAUDE_PROJECT_DIR}", "${CLAUDE_PLUGIN_ROOT}", "${CLAUDE_PLUGIN_DATA}"];
 });
-//@ chunk-s61vbvea.js:373962-374228 placement
+//@ chunk-7jxyna5q.js:298628-298894 placement
 function anchorScriptHookPath(command) {
   let problem = checkHookCommandExpansion(command);
   if (problem !== undefined)
@@ -38,7 +38,7 @@ function anchorScriptHookPath(command) {
   if (command === "~" || /^~[\\/]/.test(command)) return join(homedir(), command.slice(2));
   return `\${CLAUDE_PROJECT_DIR}/${command}`;
 }
-//@ chunk-s61vbvea.js:374228-374504 placement
+//@ chunk-7jxyna5q.js:298894-299170 placement
 function expandScriptHookPathVars(path, roots) {
   let replaced = path.replaceAll("${CLAUDE_PROJECT_DIR}", () => roots.projectDir);
   if (roots.pluginRoot !== undefined)
@@ -47,16 +47,16 @@ function expandScriptHookPathVars(path, roots) {
     replaced = replaced.replaceAll("${CLAUDE_PLUGIN_DATA}", () => roots.pluginData);
   return replaced.includes("${") ? undefined : replaced;
 }
-//@ chunk-s61vbvea.js:374504-374582 placement
+//@ chunk-7jxyna5q.js:299170-299248 placement
 /**
  * 此构建不支持脚本钩子，直接抛错。
  */
 function runScriptHookUnsupported(hook, options) {
   throw Error("script hooks are not available in this build");
 }
-//@ chunk-s61vbvea.js:374582-374592 placement
+//@ chunk-7jxyna5q.js:299248-299258 placement
 var MAX_SCRIPT_HOOK_LABEL_CHARS = 60;
-//@ chunk-s61vbvea.js:374592-374768 placement
+//@ chunk-7jxyna5q.js:299258-299433 placement
 function scriptHookDisplayLabel(hook) {
   let firstLine =
     escapeControlChars(hook)
@@ -74,9 +74,9 @@ function scriptHookDisplayLabel(hook) {
   return `script: ${label}${truncated ? "\u2026" : ""}`;
 }
 export {
+  scriptHookDisplayLabel,
   SCRIPT_HOOK_ACK_ENV,
   expandScriptHookPathVars,
   anchorScriptHookPath,
   runScriptHookUnsupported,
-  scriptHookDisplayLabel,
 };

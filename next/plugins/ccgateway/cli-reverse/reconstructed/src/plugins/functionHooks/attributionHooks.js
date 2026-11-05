@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：attribution.text 事件钩子（提交署名文本）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 2
  */
 import { textPassthroughEvent } from "./coreHandlers.js";
@@ -14,15 +14,15 @@ import { isLoneSecDefaultShortcut } from "./modAdmission.js";
 import { NO_CORE_AT_CHAIN_BOTTOM } from "./eventCatalog.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:59096-59127 placement
+//@ chunk-5xgkngpb.js:61624-61655 placement
 /**
  * attribution.text 事件定义
  */
 var ATTRIBUTION_TEXT_EVENT; // deferred: uses textPassthroughEvent (./coreHandlers.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:59096", () => {
+deferInit("chunk-5xgkngpb.js:61624", () => {
   ATTRIBUTION_TEXT_EVENT = textPassthroughEvent("attribution.text");
 });
-//@ chunk-e6aww6q8.js:59127-59263 placement
+//@ chunk-5xgkngpb.js:61655-61791 placement
 /**
  * 有 attribution.text 钩子时让它改写提交/PR 署名文本，否则原样返回。
  */
@@ -40,4 +40,4 @@ var applyAttributionTextHooks = async (kind, text) =>
         })
       ).text
     : text;
-export { ATTRIBUTION_TEXT_EVENT, applyAttributionTextHooks };
+export { applyAttributionTextHooks, ATTRIBUTION_TEXT_EVENT };

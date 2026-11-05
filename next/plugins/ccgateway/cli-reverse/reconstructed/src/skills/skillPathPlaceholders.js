@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：技能路径占位符
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 2
  */
 import { identityPath_2 } from "./loadSkillsDir.js";
 import { isSkillShownToModel } from "./skillSources.js";
 import { getProjectConfigRoot, getProjectRoot, getSessionId } from "../bootstrap/state.js";
 
-//@ chunk-e6aww6q8.js:3124614-3124728 placement
+//@ chunk-5xgkngpb.js:3211142-3211256 placement
 /**
  * 技能正文中的路径占位符与检测正则。
  */
@@ -20,7 +20,7 @@ var PROJECT_DIR_PLACEHOLDER = "${CLAUDE_PROJECT_DIR}";
 var SKILL_DIR_PLACEHOLDER = "${CLAUDE_SKILL_DIR}";
 var PROJECT_DIR_REF_RE = /\bCLAUDE_PROJECT_DIR\b/;
 var SKILL_DIR_REF_RE = /\bCLAUDE_SKILL_DIR\b/;
-//@ chunk-e6aww6q8.js:3150334-3150675 placement
+//@ chunk-5xgkngpb.js:3236953-3237294 placement
 /**
  * 替换技能正文中的 ${CLAUDE_SKILL_DIR}、${CLAUDE_PROJECT_DIR}、${CLAUDE_SESSION_ID}、${CLAUDE_EFFORT}。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：异步钩子响应附件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: placement 3
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -19,12 +19,12 @@ import {
 import { getHookMessageTexts } from "../hooks/hookEventHelpers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3290286-3290634 placement
+//@ chunk-5xgkngpb.js:3376079-3376427 placement
 /**
  * SessionStart 钩子记录的 schema：异步钩子响应、附加上下文与成功消息三类附件。
  */
 var sessionStartHookRecordSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3290286", () => {
+deferInit("chunk-5xgkngpb.js:3376079", () => {
   sessionStartHookRecordSchema = DoctorLazy(() => {
     let hookEvent = literal("SessionStart");
     return discriminatedUnion("type", [
@@ -49,7 +49,7 @@ deferInit("chunk-e6aww6q8.js:3290286", () => {
     ]);
   });
 });
-//@ chunk-e6aww6q8.js:3290634-3290919 placement
+//@ chunk-5xgkngpb.js:3376427-3376712 placement
 function parseHookRecordTexts(record) {
   let parseResult = sessionStartHookRecordSchema().safeParse(record);
   if (!parseResult.success) return;
@@ -69,7 +69,7 @@ function parseHookRecordTexts(record) {
       };
   }
 }
-//@ chunk-e6aww6q8.js:3290919-3291241 placement
+//@ chunk-5xgkngpb.js:3376712-3377034 placement
 /**
  * 判断异步钩子响应是否与历史中同一命令/插件的钩子输出重复：从后向前查找，文本都已出现过即为重复，遇到成功退出则停止。
  */

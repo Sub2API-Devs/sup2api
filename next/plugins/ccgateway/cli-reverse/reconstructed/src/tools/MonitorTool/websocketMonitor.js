@@ -3,9 +3,9 @@
  *
  * Monitor 的 WebSocket 事件源（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b91jfdd4.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-dew2fy99.js (23)
  * attribution: placement 23
  */
 import { isIP } from "net";
@@ -47,7 +47,7 @@ import {
 import { isAllPrintable } from "../../utils/truncateGraphemes.js";
 import { hasBackgroundBashStopAfterReply } from "../AgentTool/backgroundGates.js";
 import { TASKSTOP } from "../TaskStopTool/prompt.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   areCommandNetworkListsOffered_2,
   allowedDomainsInputSchema,
@@ -55,14 +55,14 @@ import {
   commandNetworkListsInput,
 } from "../BashTool/sandboxNetwork.js";
 
-//@ chunk-b91jfdd4.js:1510-1598 placement
+//@ chunk-dew2fy99.js:1609-1697 placement
 class MonitorWsPreconditionError extends Error {
   constructor(message) {
     super(message);
     this.name = "MonitorWsPreconditionError";
   }
 }
-//@ chunk-b91jfdd4.js:1598-1816 placement
+//@ chunk-dew2fy99.js:1697-1915 placement
 /**
  * 把 http(s)/ws(s) 地址规范为 ws:/wss: 协议，其他协议抛前置条件错误。
  */
@@ -81,14 +81,14 @@ function toWebSocketUrl(parsedUrl) {
   }
   return parsedUrl.toString();
 }
-//@ chunk-b91jfdd4.js:1816-1862 placement
+//@ chunk-dew2fy99.js:1915-1961 placement
 /**
  * 去掉主机名两端的方括号（IPv6 字面量）。
  */
 function stripIpv6Brackets(hostname) {
   return hostname.replace(/^\[|\]$/g, "");
 }
-//@ chunk-b91jfdd4.js:1862-2557 placement
+//@ chunk-dew2fy99.js:1961-2656 placement
 async function checkWebSocketHost(url, options) {
   let parsedUrl = new URL(url);
   let hostname = stripIpv6Brackets(parsedUrl.hostname);
@@ -137,18 +137,18 @@ async function checkWebSocketHost(url, options) {
     tls: options.tls,
   };
 }
-//@ chunk-b91jfdd4.js:2557-2594 placement
+//@ chunk-dew2fy99.js:2656-2693 placement
 /**
  * WebSocket 握手的默认超时（30 秒）。
  */
 var DEFAULT_HANDSHAKE_TIMEOUT_MS = 30000;
 var HANDSHAKE_TIMEOUT = "handshake_timeout";
-//@ chunk-b91jfdd4.js:2594-2709 placement
+//@ chunk-dew2fy99.js:2693-2808 placement
 function formatUpgradeRejection(statusCode, cfMitigated) {
   let status = Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599 ? statusCode : 0;
   return `${cfMitigated ? "cf_mitigated" : "upgrade_rejected"}_${status}`;
 }
-//@ chunk-b91jfdd4.js:2709-2875 placement
+//@ chunk-dew2fy99.js:2808-2974 placement
 /**
  * 解析 "cf_mitigated_NNN" 或 "upgrade_rejected_NNN" 形式的拒绝原因，返回状态码与是否 Cloudflare 拦截。
  */
@@ -160,18 +160,18 @@ function parseUpgradeRejection(reasonCode) {
     cfMitigated: match[1] === "cf_mitigated",
   };
 }
-//@ chunk-b91jfdd4.js:2875-2889 placement
+//@ chunk-dew2fy99.js:2974-2988 placement
 /**
  * 单个 WebSocket 帧的上限（1 MiB），超过则丢弃并关闭。
  */
 var MAX_WS_FRAME_BYTES = 1048576;
-//@ chunk-b91jfdd4.js:2889-3025 placement
+//@ chunk-dew2fy99.js:2988-3124 placement
 function messageByteLength(data) {
   if (Array.isArray(data)) return data.reduce((acc, chunk) => acc + chunk.length, 0);
   if (data instanceof ArrayBuffer) return data.byteLength;
   return data.length;
 }
-//@ chunk-b91jfdd4.js:3025-3223 placement
+//@ chunk-dew2fy99.js:3124-3322 placement
 /**
  * 从工具上下文中挑出 Monitor 需要的字段（任务表、工具调用 id、代理 id、存储、凭证、钩子调用者）。
  */
@@ -186,7 +186,7 @@ function pickMonitorContext(toolContext) {
     hookServesModel: toolContext.hookServesModel,
   };
 }
-//@ chunk-b91jfdd4.js:3223-3298 placement (2.1.88 match: sendKeepalive, 1)
+//@ chunk-dew2fy99.js:3322-3397 placement (2.1.88 match: sendKeepalive, 1)
 function sendKeepalive(ws_2) {
   return (frame) => {
     if (ws_2.readyState === ws.OPEN)
@@ -195,7 +195,7 @@ function sendKeepalive(ws_2) {
       } catch {}
   };
 }
-//@ chunk-b91jfdd4.js:3298-7197 placement
+//@ chunk-dew2fy99.js:3397-7296 placement
 /**
  * 用 WebSocket 订阅事件流作为 Monitor 事件源
  */
@@ -499,7 +499,7 @@ async function runWebSocketMonitor(input, context) {
     },
   };
 }
-//@ chunk-b91jfdd4.js:7197-8187 placement
+//@ chunk-dew2fy99.js:7296-8286 placement
 /**
  * 命令含控制字符时会隐藏真实内容，作为拒绝原因。
  */
@@ -539,7 +539,7 @@ var monitorWsInputSchema = () =>
   );
 var MONITOR_DESCRIPTION_TEXT =
   "Short human-readable description of what you are monitoring (shown in notifications).";
-//@ chunk-b91jfdd4.js:8187-8763 placement
+//@ chunk-dew2fy99.js:8286-8862 placement
 /**
  * Monitor 输入字段（可选 persistent）：description、timeout_ms（默认值、上限）、persistent 说明随环境区分。
  */
@@ -563,7 +563,7 @@ function persistentMonitorInputFields() {
       ),
   };
 }
-//@ chunk-b91jfdd4.js:8763-9075 placement
+//@ chunk-dew2fy99.js:8862-9174 placement
 /**
  * Monitor 输入字段（无 persistent）：timeout_ms 有上限，超过上限会被截到上限并在到期时通知。
  */
@@ -581,7 +581,7 @@ function boundedMonitorInputFields() {
       ),
   };
 }
-//@ chunk-b91jfdd4.js:9075-9147 placement
+//@ chunk-dew2fy99.js:9174-9246 placement
 /**
  * timeout_ms 超过上限时的校验错误。
  */
@@ -589,40 +589,40 @@ var MONITOR_TIMEOUT_LIMIT_ERROR = {
   message: `timeout_ms must be \u2264 ${MONITOR_ABSOLUTE_MAX_TIMEOUT_MS}`,
   path: ["timeout_ms"],
 };
-//@ chunk-b91jfdd4.js:9147-9201 placement
+//@ chunk-dew2fy99.js:9246-9300 placement
 /**
  * 超时是否合法（persistent 或不超过上限）。
  */
 function isValidMonitorTimeout(input) {
   return input.persistent || input.timeout_ms <= MONITOR_ABSOLUTE_MAX_TIMEOUT_MS;
 }
-//@ chunk-b91jfdd4.js:9201-9243 placement
+//@ chunk-dew2fy99.js:9300-9342 placement
 /**
  * 判断参数里恰好有一个为真。
  */
 function exactlyOneSet(...values) {
-  return count(values, Boolean) === 1;
+  return countWhere(values, Boolean) === 1;
 }
-//@ chunk-b91jfdd4.js:9243-9279 placement
+//@ chunk-dew2fy99.js:9342-9378 placement
 /**
  * 会话允许命令级网络白名单时返回其输入字段，否则空对象。
  */
 function allowedDomainsFieldsIfOffered() {
   return areCommandNetworkListsOffered_2() ? allowedDomainsInputSchema() : {};
 }
-//@ chunk-b91jfdd4.js:9279-9338 placement
+//@ chunk-dew2fy99.js:9378-9437 placement
 /**
  * allowed_domains 只适用于命令 monitor 的提示。
  */
 var ALLOWED_DOMAINS_COMMAND_ONLY = "allowed_domains applies only to a command monitor";
-//@ chunk-b91jfdd4.js:9338-9396 placement
+//@ chunk-dew2fy99.js:9437-9495 placement
 /**
  * 指定了命令，或没有网络白名单（两者不冲突）。
  */
 function hasNoConflictingNetworkLists(input) {
   return input.command !== undefined || getCommandNetworkLists(input) === undefined;
 }
-//@ chunk-b91jfdd4.js:9396-9485 placement
+//@ chunk-dew2fy99.js:9495-9584 placement
 /**
  * 把命令的网络白名单并入输入对象。
  */
@@ -635,18 +635,12 @@ function mergeCommandNetworkLists(input) {
         ...networkLists,
       };
 }
-//@ chunk-b91jfdd4.js:9485-9523 placement
+//@ chunk-dew2fy99.js:9584-9622 placement
 /**
  * command 与 ws 必须恰好给一个的提示。
  */
 var EXACTLY_ONE_SOURCE_MESSAGE = "exactly one of command or ws";
 export {
-  pickMonitorContext,
-  runWebSocketMonitor,
-  parseUpgradeRejection,
-  MonitorWsPreconditionError,
-  toWebSocketUrl,
-  HANDSHAKE_TIMEOUT,
   printableCommandSchema,
   MONITOR_INPUT_DESCRIPTIONS,
   allowedDomainsFieldsIfOffered,
@@ -661,4 +655,10 @@ export {
   boundedMonitorInputFields,
   stripIpv6Brackets,
   mergeCommandNetworkLists,
+  runWebSocketMonitor,
+  pickMonitorContext,
+  parseUpgradeRejection,
+  MonitorWsPreconditionError,
+  toWebSocketUrl,
+  HANDSHAKE_TIMEOUT,
 };

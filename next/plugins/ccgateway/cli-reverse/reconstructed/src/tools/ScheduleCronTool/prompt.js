@@ -3,18 +3,18 @@
  *
  * Cron 工具名、开关（tengu_kairos_cron / tengu_kairos_cron_durable / CLAUDE_CODE_DISABLE_CRON）、description 与 prompt
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ScheduleCronTool/prompt.ts
- * pieces: chunk-gzp2tk59.js (11)
- * attribution: facade-exports 11
+ * pieces: chunk-7kayq7nc.js (1), chunk-ga95v15r.js (11)
+ * attribution: facade-exports 12
  */
-import { DEFAULT_CRON_JITTER_CONFIG } from "../../utils/cronTasks.js";
+import { DEFAULT_CRON_JITTER_CONFIG, hasCronTasksSync } from "../../utils/cronTasks.js";
 import { env } from "../../utils/env.js";
 import { getFeatureValue_CACHED_WITH_REFRESH } from "../../services/analytics/growthbook.js";
 import { MONITOR } from "../MonitorTool/constants.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-gzp2tk59.js:334-463 facade-exports (2.1.88 match: CRON_CREATE_TOOL_NAME, 0.4)
+//@ chunk-7kayq7nc.js:166432-166561 facade-exports (2.1.88 match: CRON_CREATE_TOOL_NAME, 0.4)
 /**
  * Cron 三个工具名常量（CronCreate/CronDelete/CronList）与 nextFireAt 字段说明。
  */
@@ -22,17 +22,17 @@ var CRON_CREATE_TOOL_NAME = "CronCreate";
 var CRON_DELETE_TOOL_NAME = "CronDelete";
 var CRON_LIST_TOOL_NAME = "CronList";
 var NEXT_FIRE_AT_DESCRIPTION = "Epoch ms of the job's next run, the scheduler's per-job offset included";
-//@ chunk-gzp2tk59.js:463-510 facade-exports (2.1.88 match: DEFAULT_MAX_AGE_DAYS, 1)
+//@ chunk-ga95v15r.js:381-428 facade-exports (2.1.88 match: DEFAULT_MAX_AGE_DAYS, 1)
 /**
  * Cron 门控缓存刷新间隔（5 分钟）；f$e 为循环任务自动过期天数（来自默认抖动配置 recurringMaxAgeMs）。
  */
 var CRON_GATE_REFRESH_MS; // deferred: uses DEFAULT_CRON_JITTER_CONFIG (../../utils/cronTasks.js) of its import cycle while loading; runs once the cycle is complete
 var DEFAULT_MAX_AGE_DAYS;
-deferInit("chunk-gzp2tk59.js:463", () => {
+deferInit("chunk-ga95v15r.js:381", () => {
   CRON_GATE_REFRESH_MS = 300000;
   DEFAULT_MAX_AGE_DAYS = DEFAULT_CRON_JITTER_CONFIG.recurringMaxAgeMs / 86400000;
 });
-//@ chunk-gzp2tk59.js:510-588 facade-exports (2.1.88 match: isKairosCronEnabled, 1)
+//@ chunk-ga95v15r.js:428-506 facade-exports (2.1.88 match: isKairosCronEnabled, 1)
 /**
  * Cron 功能总开关：未设置 CLAUDE_CODE_DISABLE_CRON 且 GrowthBook tengu_kairos_cron（默认 true）。
  */
@@ -42,14 +42,18 @@ function isKairosCronEnabled() {
     getFeatureValue_CACHED_WITH_REFRESH("tengu_kairos_cron", true, CRON_GATE_REFRESH_MS)
   );
 }
-//@ chunk-gzp2tk59.js:588-647 facade-exports (2.1.88 match: isDurableCronEnabled, 1)
+//@ chunk-ga95v15r.js:506-540 facade-exports
+function isCronManagementEnabled() {
+  return isKairosCronEnabled() || hasCronTasksSync();
+}
+//@ chunk-ga95v15r.js:540-599 facade-exports (2.1.88 match: isDurableCronEnabled, 1)
 /**
  * durable（跨会话持久化）任务开关：GrowthBook tengu_kairos_cron_durable（默认 true）。
  */
 function isDurableCronEnabled() {
   return getFeatureValue_CACHED_WITH_REFRESH("tengu_kairos_cron_durable", true, CRON_GATE_REFRESH_MS);
 }
-//@ chunk-gzp2tk59.js:647-1018 facade-exports (2.1.88 match: buildCronCreateDescription, 1)
+//@ chunk-ga95v15r.js:599-970 facade-exports (2.1.88 match: buildCronCreateDescription, 1)
 /**
  * CronCreate description，按 durable 是否可用给两版。
  */
@@ -58,7 +62,7 @@ function buildCronCreateDescription(durableEnabled) {
     ? "Schedule a prompt to run at a future time \u2014 either recurring on a cron schedule, or once at a specific time. Pass durable: true to persist to .claude/scheduled_tasks.json; otherwise session-only."
     : "Schedule a prompt to run at a future time within this Claude session \u2014 either recurring on a cron schedule, or once at a specific time.";
 }
-//@ chunk-gzp2tk59.js:1018-1390 facade-exports
+//@ chunk-ga95v15r.js:970-1342 facade-exports
 /**
  * durable 参数的说明文本（可用/不可用两版）。
  */
@@ -67,7 +71,7 @@ function buildDurableParamDescription(durableAvailable) {
     ? "true = persist to .claude/scheduled_tasks.json and survive restarts. false (default) = in-memory only, dies when this Claude session ends. Use true only when the user asks the task to survive across sessions."
     : "Has no effect \u2014 durable persistence is not available. All jobs are session-only (in-memory, gone when this Claude session ends).";
 }
-//@ chunk-gzp2tk59.js:1390-5114 facade-exports (2.1.88 match: buildCronCreatePrompt, 0.434)
+//@ chunk-ga95v15r.js:1342-5066 facade-exports (2.1.88 match: buildCronCreatePrompt, 0.434)
 /**
  * CronCreate prompt：一次性与循环任务写法、避开 :00/:30 整点、持久化说明、不用于实时监控（应改用 Monitor 工具）、只在 REPL 空闲时触发、循环任务 N 天自动过期。
  */
@@ -120,12 +124,12 @@ Recurring tasks auto-expire after ${DEFAULT_MAX_AGE_DAYS} days \u2014 they fire 
 
 Returns a job ID you can pass to ${CRON_DELETE_TOOL_NAME}.`;
 }
-//@ chunk-gzp2tk59.js:5114-5158 facade-exports (2.1.88 match: CRON_DELETE_DESCRIPTION, 1)
+//@ chunk-ga95v15r.js:5066-5110 facade-exports (2.1.88 match: CRON_DELETE_DESCRIPTION, 1)
 /**
  * CronDelete 的 description；_5o 为其 prompt。
  */
 var CRON_DELETE_DESCRIPTION = "Cancel a scheduled cron job by ID";
-//@ chunk-gzp2tk59.js:5158-5446 facade-exports (2.1.88 match: buildCronDeletePrompt, 1)
+//@ chunk-ga95v15r.js:5110-5398 facade-exports (2.1.88 match: buildCronDeletePrompt, 1)
 /**
  * CronDelete 的 prompt（按 durable 是否可用给两版）。
  */
@@ -134,12 +138,12 @@ function buildCronDeletePrompt(durableEnabled) {
     ? `Cancel a cron job previously scheduled with ${CRON_CREATE_TOOL_NAME}. Removes it from .claude/scheduled_tasks.json (durable jobs) or the in-memory session store (session-only jobs).`
     : `Cancel a cron job previously scheduled with ${CRON_CREATE_TOOL_NAME}. Removes it from the in-memory session store.`;
 }
-//@ chunk-gzp2tk59.js:5446-5481 facade-exports (2.1.88 match: CRON_LIST_DESCRIPTION, 1)
+//@ chunk-ga95v15r.js:5398-5433 facade-exports (2.1.88 match: CRON_LIST_DESCRIPTION, 1)
 /**
  * CronList 的 description；S5o 为其 prompt。
  */
 var CRON_LIST_DESCRIPTION = "List scheduled cron jobs";
-//@ chunk-gzp2tk59.js:5481-5668 facade-exports (2.1.88 match: buildCronListPrompt, 1)
+//@ chunk-ga95v15r.js:5433-5620 facade-exports (2.1.88 match: buildCronListPrompt, 1)
 /**
  * CronList 的 prompt（按 durable 是否可用给两版）。
  */
@@ -150,10 +154,11 @@ function buildCronListPrompt(durableEnabled) {
 }
 export {
   CRON_CREATE_TOOL_NAME,
-  CRON_DELETE_TOOL_NAME,
-  CRON_LIST_TOOL_NAME,
   isKairosCronEnabled,
+  CRON_DELETE_TOOL_NAME,
   NEXT_FIRE_AT_DESCRIPTION,
+  CRON_LIST_TOOL_NAME,
+  isCronManagementEnabled,
   CRON_LIST_DESCRIPTION,
   buildCronListPrompt,
   isDurableCronEnabled,

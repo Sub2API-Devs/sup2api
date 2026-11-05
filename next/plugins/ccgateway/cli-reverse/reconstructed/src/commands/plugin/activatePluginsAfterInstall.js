@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：安装插件后自动激活（加载、检查是否需要配置），失败时回退为需要刷新
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vrb44rx7.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wb51jffc.js (6)
  * attribution: placement 6
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -22,15 +22,15 @@ import { getPluginNameFromError } from "./PluginSettings.js";
 import { firstLineOf } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrb44rx7.js:36255-36259 placement
+//@ chunk-wb51jffc.js:36379-36383 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:36255", () => {
+deferInit("chunk-wb51jffc.js:36379", () => {
   init_react_production();
 });
-//@ chunk-vrb44rx7.js:36259-36406 placement
+//@ chunk-wb51jffc.js:36383-36530 placement
 var NEEDS_CONFIG_NOTE =
   " Its bundled MCP server needs configuration before it can start \u2014 select the plugin in /plugin's Installed tab and choose Configure.";
-//@ chunk-vrb44rx7.js:36406-36891 placement
+//@ chunk-wb51jffc.js:36530-37015 placement
 /**
  * 安装后自动激活插件并记录 tengu_plugin_install_auto_activate；需要配置时返回 needs_config。
  */
@@ -52,7 +52,7 @@ async function activatePluginsAfterInstall(names, activePlugins, context, storag
   activePlugins.markNeedsRefresh();
   return "reload-required";
 }
-//@ chunk-vrb44rx7.js:36891-37510 placement
+//@ chunk-wb51jffc.js:37015-37636 placement
 async function activateInstalledPlugin(pluginName, activePlugins, context, storageV5) {
   let previous = context;
   try {
@@ -82,7 +82,7 @@ async function activateInstalledPlugin(pluginName, activePlugins, context, stora
     return "refresh_failed";
   }
 }
-//@ chunk-vrb44rx7.js:37510-37815 placement
+//@ chunk-wb51jffc.js:37636-37941 placement
 function findOrphanedPluginEntries(error, known) {
   if ("orphan" in error && error.orphan) return false;
   if (getPluginNameFromError(error) === undefined) return false;
@@ -102,9 +102,9 @@ function findOrphanedPluginEntries(error, known) {
     ? known.includes(errorPluginId)
     : known.some((name) => firstLineOf(name, "@") === errorPluginId);
 }
-//@ chunk-vrb44rx7.js:37815-37819 placement
+//@ chunk-wb51jffc.js:37941-37945 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:37815", () => {
+deferInit("chunk-wb51jffc.js:37941", () => {
   init_react_production();
 });
 export { NEEDS_CONFIG_NOTE, activatePluginsAfterInstall };

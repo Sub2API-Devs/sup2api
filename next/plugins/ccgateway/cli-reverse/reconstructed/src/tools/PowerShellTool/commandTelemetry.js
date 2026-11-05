@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：PowerShell 命令错误分类遥测
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (16)
  * attribution: placement 16
  */
 import {
@@ -20,7 +20,7 @@ import { COMMON_ALIASES } from "../../utils/powershell/parser.js";
 import { COMMON_BACKGROUND_COMMANDS } from "../BashTool/BashTool.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3106355-3106689 placement
+//@ chunk-5xgkngpb.js:3192875-3193209 placement
 /**
  * 解析命令的基础名：去掉调用运算符与引号，取路径最后一段转小写，并剥离 .exe/.cmd/.bat 原生扩展名（记录是否有扩展名）。
  */
@@ -36,7 +36,7 @@ function parseCommandBase(command) {
     nativeExt: nativeExtension,
   };
 }
-//@ chunk-e6aww6q8.js:3106689-3108024 placement
+//@ chunk-5xgkngpb.js:3193209-3194547 placement
 /**
  * 按 PowerShell 语法（引号、注释、; | && & 换行）切分命令，返回最后一个非空段、它是否由 && 门控，以及经过直通 cmdlet 管道时真正产生输出的上游段（feeder）。
  */
@@ -174,7 +174,7 @@ function lastCommandSegment(command) {
     feeder: feederIndex !== lastIndex && text.trim() ? text : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:3108024-3108353 placement
+//@ chunk-5xgkngpb.js:3194547-3194876 placement
 /**
  * 若命令是 git，返回其子命令（跳过选项，-C/-c 连同参数一起跳过）。
  */
@@ -194,13 +194,13 @@ function gitSubcommand(command) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:3108353-3108707 placement
+//@ chunk-5xgkngpb.js:3194876-3195230 placement
 /**
  * 命令遥测分类用表：已知的外部/网络命令名（winget、choco、az、robocopy、certutil 等）与 cmdlet 动词列表。
  */
 var KNOWN_EXTERNAL_COMMANDS; // deferred: uses COMMON_BACKGROUND_COMMANDS (../BashTool/BashTool.js) of its import cycle while loading; runs once the cycle is complete
 var CMDLET_VERBS;
-deferInit("chunk-e6aww6q8.js:3108353", () => {
+deferInit("chunk-5xgkngpb.js:3194876", () => {
   KNOWN_EXTERNAL_COMMANDS = [
     ...COMMON_BACKGROUND_COMMANDS,
     "Invoke-WebRequest",
@@ -245,14 +245,14 @@ deferInit("chunk-e6aww6q8.js:3108353", () => {
     "convertfrom",
   ];
 });
-//@ chunk-e6aww6q8.js:3108707-3108892 placement (2.1.88 match: DIRECTORY_CHANGE_CMDLETS, 0.655)
+//@ chunk-5xgkngpb.js:3195230-3195415 placement (2.1.88 match: DIRECTORY_CHANGE_CMDLETS, 0.655)
 /**
  * PowerShell 命令遥测分类用的三张表：已知外部/网络命令小写→原名、cmdlet 动词→cmdlet_<动词> 标签、只作后备标签的 location/write 类 cmdlet。属于命令分析遥测，不是 parser 本身（旧版名 DIRECTORY_CHANGE_CMDLETS 错配）。
  */
 var KNOWN_PS_COMMANDS_BY_LOWER; // deferred: uses KNOWN_EXTERNAL_COMMANDS of its import cycle while loading; runs once the cycle is complete
 var CMDLET_VERB_TELEMETRY_LABELS;
 var LOW_SIGNAL_CMDLETS;
-deferInit("chunk-e6aww6q8.js:3108707", () => {
+deferInit("chunk-5xgkngpb.js:3195230", () => {
   KNOWN_PS_COMMANDS_BY_LOWER = new Map(
     KNOWN_EXTERNAL_COMMANDS.map((commandName) => [commandName.toLowerCase(), commandName]),
   );
@@ -265,7 +265,7 @@ deferInit("chunk-e6aww6q8.js:3108707", () => {
     "write-host",
   ]);
 });
-//@ chunk-e6aww6q8.js:3108892-3109350 placement
+//@ chunk-5xgkngpb.js:3195415-3195873 placement
 /**
  * 为遥测给 PowerShell 命令归类：先找已知外部/网络命令，其次按 cmdlet 动词映射成 cmdlet_<动词> 标签（location/write 类仅作后备），都不匹配返回 other。
  */
@@ -296,7 +296,7 @@ function classifyPowerShellCommand(command) {
   }
   return (onlyLowSignal ? lowSignalLabel : undefined) ?? "other";
 }
-//@ chunk-e6aww6q8.js:3109350-3113826 placement
+//@ chunk-5xgkngpb.js:3195873-3200349 placement
 /**
  * 匹配“不是 cmdlet/命令名”的 PowerShell 错误。
  */
@@ -393,7 +393,7 @@ var POWERFUL_ERROR_KIND_RULES = [
   ["native_error_prefix", /^(?:\S+ : )?(?:\x1b\[[0-9;]*m)*Error: /m],
   ["native_command_error", /NativeCommandError|RemoteException/],
 ];
-//@ chunk-e6aww6q8.js:3113826-3114014 placement
+//@ chunk-5xgkngpb.js:3200349-3200537 placement
 /**
  * 对 PowerShell 错误输出分类：空、匹配已知模式、被杀（143/137）、命令未找到（9009/49）或其他。
  */
@@ -404,13 +404,13 @@ function classifyPowerShellError(output, code) {
   if (code === 9009 || code === 49) return "exit_9009_not_found";
   return "other";
 }
-//@ chunk-e6aww6q8.js:3114014-3114522 placement
+//@ chunk-5xgkngpb.js:3200537-3201045 placement
 /**
  * 命令遥测分类用的两张表：Bash 内置/常见 Unix 命令名（在 PowerShell 中误用时识别），以及常见开发工具名。
  */
 var BASH_BUILTIN_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DEV_TOOL_NAMES;
-deferInit("chunk-e6aww6q8.js:3114014", () => {
+deferInit("chunk-5xgkngpb.js:3200537", () => {
   BASH_BUILTIN_NAMES = new Set([
     "head",
     "tail",
@@ -480,7 +480,7 @@ deferInit("chunk-e6aww6q8.js:3114014", () => {
     "code",
   ]);
 });
-//@ chunk-e6aww6q8.js:3114522-3114777 placement
+//@ chunk-5xgkngpb.js:3201045-3201300 placement
 /**
  * 对"命令未识别"错误分类：Bash 内置命令、开发工具或其他。
  */
@@ -493,7 +493,7 @@ function classifyNotRecognizedCommand(output) {
   if (DEV_TOOL_NAMES.has(replaced)) return "dev_tool";
   return "other";
 }
-//@ chunk-e6aww6q8.js:3114777-3115579 placement
+//@ chunk-5xgkngpb.js:3201300-3202102 placement
 var POWERSHELL_PARSE_ERROR_KINDS = [
   ["redirection_reserved", /RedirectionNotSupported|The '<{1,2}' operator is reserved for future use/],
   ["ampersand_reserved", /AmpersandNotAllowed|The ampersand \(&\) character is not allowed/],
@@ -508,7 +508,7 @@ var POWERSHELL_PARSE_ERROR_KINDS = [
   ["redirection_reserved", /MissingFileSpecification|Missing file specification after redirection operator/],
   ["unexpected_token", /UnexpectedToken|Unexpected token '[^']{0,40}' in expression or statement/],
 ];
-//@ chunk-e6aww6q8.js:3115579-3115648 placement
+//@ chunk-5xgkngpb.js:3202102-3202171 placement
 /**
  * 按错误文本判断属于哪种 PowerShell 解析错误。
  */
@@ -516,7 +516,7 @@ function classifyPowerShellParseErrorKind(output) {
   for (let [kind, pattern] of POWERSHELL_PARSE_ERROR_KINDS) if (pattern.test(output)) return kind;
   return null;
 }
-//@ chunk-e6aww6q8.js:3115648-3116007 placement
+//@ chunk-5xgkngpb.js:3202171-3202530 placement
 /**
  * 识别 PowerShell 命令中误用的 Bash 语法：heredoc、[ ] 测试、结尾 & 后台、&&/|| 链、< 输入重定向；都没有返回 none。
  */
@@ -529,7 +529,7 @@ function detectBashSyntax(command) {
   if (/\s<\s/.test(command)) return "input_redirect";
   return "none";
 }
-//@ chunk-e6aww6q8.js:3116007-3116289 placement
+//@ chunk-5xgkngpb.js:3202530-3202812 placement
 /**
  * 按命令语义解释 PowerShell 退出码：取最后一段（或管道上游）命令的基名，git grep/diff 与已知命令用专门解释器，否则用默认解释器。
  */
@@ -549,7 +549,7 @@ function interpretCommandResult(command, exitCode, stdout, stderr) {
     defaultExitInterpreter
   )(exitCode, stdout, stderr);
 }
-//@ chunk-e6aww6q8.js:3116289-3116462 placement
+//@ chunk-5xgkngpb.js:3202812-3202985 placement
 /**
  * 在 interpretCommandResult 基础上：非零退出且命令由 && 门控、输出含解析/未找到错误或 FINDSTR 报错时，退回默认（视为错误）解释。
  */
@@ -565,7 +565,7 @@ ${stderr}`;
     ? defaultExitInterpreter(exitCode, stdout, stderr)
     : result;
 }
-//@ chunk-e6aww6q8.js:3116462-3116579 placement
+//@ chunk-5xgkngpb.js:3202985-3203102 placement
 function mentionsKnownPath(text) {
   if (PARSER_ERROR_RE.test(text)) return true;
   for (let [, innerMessage] of text.matchAll(INVOKE_EXPRESSION_ERROR_RE))
@@ -573,11 +573,11 @@ function mentionsKnownPath(text) {
   return false;
 }
 export {
+  interpretPowerShellResult,
   interpretCommandResult,
   classifyPowerShellError,
   classifyPowerShellCommand,
   classifyNotRecognizedCommand,
   classifyPowerShellParseErrorKind,
   detectBashSyntax,
-  interpretPowerShellResult,
 };

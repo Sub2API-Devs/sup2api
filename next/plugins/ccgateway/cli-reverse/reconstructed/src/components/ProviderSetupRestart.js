@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：切换 API 提供方后的设置向导与重启
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9c09fw6j.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q7tnebyw.js (7)
  * attribution: placement 7
  */
 import { init_react_production, useState, useRef } from "../../vendor/react/cjs/react.production.js";
@@ -45,9 +45,9 @@ import { Text, Box } from "../ink/components/Text.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { logEvent } from "../services/analytics/index.js";
 
-//@ chunk-9c09fw6j.js:1061-1065 placement
+//@ chunk-q7tnebyw.js:1059-1063 placement
 init_react_production();
-//@ chunk-9c09fw6j.js:1065-1325 placement
+//@ chunk-q7tnebyw.js:1063-1323 placement
 function currentProviderSnapshot() {
   return {
     provider: getAPIProvider(),
@@ -65,7 +65,7 @@ function currentProviderSnapshot() {
     ),
   };
 }
-//@ chunk-9c09fw6j.js:1325-1866 placement
+//@ chunk-q7tnebyw.js:1323-1864 placement
 function isProviderUnchanged(before, after) {
   let current = currentProviderSnapshot();
   let isSame =
@@ -80,9 +80,9 @@ function isProviderUnchanged(before, after) {
   );
   return isSame;
 }
-//@ chunk-9c09fw6j.js:1866-1941 placement
+//@ chunk-q7tnebyw.js:1864-1939 placement
 var SETTINGS_SAVED_RESTART_TEXT = "Your settings were saved \u2014 restart Claude Code to apply them.";
-//@ chunk-9c09fw6j.js:1941-2619 placement
+//@ chunk-q7tnebyw.js:1939-2616 placement
 /**
  * 切换 API 提供方后尝试重启会话：后台会话或受限启动时拒绝并给出原因。
  */
@@ -132,7 +132,7 @@ async function restartWithProvider(context, after, nextProvider) {
     return `Couldn't restart Claude Code (${errorMessage(error)}). ${SETTINGS_SAVED_RESTART_TEXT}`;
   }
 }
-//@ chunk-9c09fw6j.js:2619-2921 placement
+//@ chunk-q7tnebyw.js:2616-2917 placement
 function restrictedLaunchReason(context) {
   let reasons = listUncarriedLaunchSettings(
     getToolPermissionContext(context),
@@ -144,7 +144,7 @@ function restrictedLaunchReason(context) {
     return `Work is running in the background, and restarting would orphan it (wait for it to finish, or stop it via /tasks). ${SETTINGS_SAVED_RESTART_TEXT}`;
   return;
 }
-//@ chunk-9c09fw6j.js:2921-4088 placement
+//@ chunk-q7tnebyw.js:2917-4084 placement
 function ProviderSetupWizard(props) {
   let $ = useMemoCache(21);
   let { Wizard, cancelledEvent, targetProvider, onDone, context } = props;

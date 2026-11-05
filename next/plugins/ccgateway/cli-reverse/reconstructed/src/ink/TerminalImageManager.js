@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：终端图片管理器与占位格扫描：图片 id 分配、传输与删除排队、终端拒绝记录、tmux 透传、按占位格放置 iTerm2 图片。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bzr73sfg.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2avr6cej.js (7)
  * attribution: placement 7
  */
 import { randomInt } from "crypto";
@@ -15,12 +15,12 @@ import { tmuxPassthroughChunked, wrapItermImageForTmux } from "./termio/osc.js";
 import { csi } from "./termio/csi.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bzr73sfg.js:268093-268112 placement
+//@ chunk-2avr6cej.js:267674-267693 placement
 var placeholderDecodeCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bzr73sfg.js:268093", () => {
+deferInit("chunk-2avr6cej.js:267674", () => {
   placeholderDecodeCache = new WeakMap();
 });
-//@ chunk-bzr73sfg.js:268112-268251 placement
+//@ chunk-2avr6cej.js:267693-267832 placement
 function decodePlaceholderCached(charPool, charIndex) {
   let decodedByChar = placeholderDecodeCache.get(charPool);
   if (decodedByChar === undefined) {
@@ -34,7 +34,7 @@ function decodePlaceholderCached(charPool, charIndex) {
   }
   return decoded;
 }
-//@ chunk-bzr73sfg.js:268251-268759 placement
+//@ chunk-2avr6cej.js:267832-268340 placement
 /**
  * 扫描屏幕里的图片占位格，按图片 id 汇总：左上角原点、格数、最大行列、所有格下标、各格是否与同一原点一致（被裁剪/错位时不一致）。
  */
@@ -70,14 +70,14 @@ function scanImagePlaceholders(screen) {
   }
   return images;
 }
-//@ chunk-bzr73sfg.js:268759-268849 placement
+//@ chunk-2avr6cej.js:268340-268430 placement
 function cellChangedAt(prev, next, index) {
   let cellIndex = index << 1;
   return (
     prev.cells[cellIndex] !== next.cells[cellIndex] || prev.cells[cellIndex + 1] !== next.cells[cellIndex + 1]
   );
 }
-//@ chunk-bzr73sfg.js:268849-269023 placement (2.1.88 match: diff, 1)
+//@ chunk-2avr6cej.js:268430-268604 placement (2.1.88 match: diff, 1)
 function indexesToRuns(indexes, width) {
   let runs = [];
   for (let index of indexes) {
@@ -94,7 +94,7 @@ function indexesToRuns(indexes, width) {
   }
   return runs;
 }
-//@ chunk-bzr73sfg.js:270186-270252 placement
+//@ chunk-2avr6cej.js:269767-269833 placement
 var SMALL_IMAGE_IDS = 8;
 var MAX_WIDE_IMAGE_ID = 16777216;
 var MAX_TRANSMIT_BYTES = 3145728;
@@ -102,7 +102,7 @@ var MAX_PENDING = 8;
 var MAX_ITERM_FREE = 256;
 var DECSC = "\x1B7";
 var DECRC = "\x1B8";
-//@ chunk-bzr73sfg.js:270252-275127 placement
+//@ chunk-2avr6cej.js:269833-274708 placement
 /**
  * 终端图片管理器（App 的 terminalImages）：为图片分配 id（kitty 小 id 池与 24 位宽 id、iTerm2 位置复用）、排队传输（kitty APC G）与删除、终端拒绝时记录（refused）、tmux 透传与 pane 位置修正、在帧之后按占位格位置放置 iTerm2 图片（placeIterm/keepIterm）、resendAll/redrawInline/requestDraw。
  */

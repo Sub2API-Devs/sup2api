@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。托管配置拒绝时退出：stream-json 下作为一回合回复，记 3P 遥测。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-y43msawm.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3pjeap7v.js (10)
  * attribution: placement 10
  */
 import { randomUUID } from "crypto";
@@ -56,13 +56,13 @@ import { printCliError, flushAnalyticsBeforeExit, cliExit, cliError } from "./ex
 import { emitManagedConfigReadyAtExit } from "../services/policyLimits/startupGate.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-y43msawm.js:959-1154 placement
+//@ chunk-3pjeap7v.js:960-1155 placement
 /**
  * 拒绝消息发送超时与首条用户消息 schema
  */
 var REFUSAL_SEND_TIMEOUT_MS; // deferred: uses DoctorLazy (./handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var userMessageLineSchema;
-deferInit("chunk-y43msawm.js:959", () => {
+deferInit("chunk-3pjeap7v.js:960", () => {
   REFUSAL_SEND_TIMEOUT_MS = 1000;
   userMessageLineSchema = DoctorLazy(() =>
     looseObject({
@@ -76,7 +76,7 @@ deferInit("chunk-y43msawm.js:959", () => {
     }),
   );
 });
-//@ chunk-y43msawm.js:1154-1369 placement
+//@ chunk-3pjeap7v.js:1155-1370 placement
 /**
  * stdin 行是否为需要应答的用户消息
  */
@@ -95,7 +95,7 @@ function isPromptBearingUserLine(line) {
     return false;
   }
 }
-//@ chunk-y43msawm.js:1369-1607 placement (2.1.88 match: returnValue, 0.8)
+//@ chunk-3pjeap7v.js:1370-1608 placement (2.1.88 match: returnValue, 0.801)
 async function returnValue(stream, timeoutMs) {
   let pending = (async () => {
     let buffer = "";
@@ -116,7 +116,7 @@ async function returnValue(stream, timeoutMs) {
   })().catch(() => false);
   return (await withDeadline(pending, timeoutMs)) ?? false;
 }
-//@ chunk-y43msawm.js:1607-2255 placement
+//@ chunk-3pjeap7v.js:1608-2257 placement
 /**
  * stream-json 下把未启动的拒绝作为一回合发回
  */
@@ -154,9 +154,9 @@ async function sendStartupRefusalTurn(message, lines = REFUSAL_SEND_TIMEOUT_MS) 
     },
   ]);
 }
-//@ chunk-y43msawm.js:2255-2266 placement
+//@ chunk-3pjeap7v.js:2257-2268 placement
 var REFUSAL_FLUSH_TIMEOUT_MS = 2000;
-//@ chunk-y43msawm.js:2266-2405 placement
+//@ chunk-3pjeap7v.js:2268-2407 placement
 async function sendManagedSettingsRefusal(reason) {
   try {
     logManagedSettingsRefused(reason);
@@ -167,19 +167,19 @@ async function sendManagedSettingsRefusal(reason) {
     });
   }
 }
-//@ chunk-y43msawm.js:2405-2553 placement
+//@ chunk-3pjeap7v.js:2407-2555 placement
 async function sendOrgValidationRefusal(refusal) {
   if (refusal.policyUnreadable) await sendManagedSettingsRefusal("policy_invalid");
   else if (refusal.reason === "provider_not_allowed")
     await sendManagedSettingsRefusal("provider_not_allowed");
 }
-//@ chunk-y43msawm.js:2553-2614 placement
+//@ chunk-3pjeap7v.js:2555-2616 placement
 function recordManagedSettingsRefusal(reason) {
   logManagedSettingsRefused(reason);
   if (getEventLogger() === null && (isOtlpLogsConfigured() || isOtlpLogsConfiguredByPolicy()))
     registerCleanup(flushRefusalTelemetry);
 }
-//@ chunk-y43msawm.js:2614-2890 placement
+//@ chunk-3pjeap7v.js:2616-2892 placement
 /**
  * 导出托管设置拒绝的 3P 遥测
  */
@@ -202,7 +202,7 @@ async function flushRefusalTelemetry() {
     });
   }
 }
-//@ chunk-y43msawm.js:2890-3200 placement
+//@ chunk-3pjeap7v.js:2892-3202 placement
 /**
  * 托管配置拒绝时退出：stream-json 下作为一回合回复，记 3P 遥测。
  */

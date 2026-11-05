@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/client-bedrock/dist-cjs/runtimeConfig.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/client-bedrock@3.936.0..3.938.0
- * pieces: chunk-0dmzgg46.js (1)
+ * pieces: chunk-gkj73j15.js (1)
  * attribution: esm-layout 1
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
@@ -26,12 +26,12 @@ import { defaultProvider } from "../../credential-provider-node/dist-cjs/index.j
 import { fromEnvSigningName, fromSsoClient } from "../../token-providers/dist-cjs/index.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-0dmzgg46.js:8876-10758 esm-layout
+//@ chunk-gkj73j15.js:8876-10758 esm-layout
 var import_client_3; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var import_node_config_provider_2;
 var import_client_4;
 var getRuntimeConfig_2;
-deferInit("chunk-0dmzgg46.js:8876", () => {
+deferInit("chunk-gkj73j15.js:8876", () => {
   import_client_3 = __toESM(require_client());
   import_node_config_provider_2 = __toESM(require_node_config_provider_2());
   import_client_4 = __toESM(require_client());

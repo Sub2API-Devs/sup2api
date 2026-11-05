@@ -3,9 +3,9 @@
  *
  * 跨会话检索（send-to-project）：挑选干净的近期会话、截取转写摘要、汇总工具与 MCP 调用
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/agenticSessionSearch.ts
- * pieces: chunk-dz3q485w.js (3)
+ * pieces: chunk-jndyh8cy.js (3)
  * attribution: fingerprint 1, layout 1, callgraph-witnessed 1
  */
 import {
@@ -26,9 +26,9 @@ import { errorMessage } from "./errors.js";
 import { formatTranscriptForFacets } from "../commands/insights.js";
 import { stripAnsiAndControls } from "./printableName.js";
 import { localIsoDate } from "../services/projects/contextFile.js";
-import { tagUntrustedArtifactContent } from "./messages/untrustedArtifactContent.js";
+import { collectToolsUsedBeforeSummary } from "./messages/untrustedArtifactContent.js";
 
-//@ chunk-dz3q485w.js:25436-25549 fingerprint (2.1.88 match: logContainsQuery, 0.517)
+//@ chunk-jndyh8cy.js:25188-25301 fingerprint (2.1.88 match: logContainsQuery, 0.518)
 /**
  * 会话标题：自定义标题 > AI 标题 > 摘要 > 首条提示 > "untitled session"。
  */
@@ -40,14 +40,14 @@ function getSessionDisplayTitle(log) {
     (log.firstPrompt !== "" ? log.firstPrompt : "untitled session")
   );
 }
-//@ chunk-dz3q485w.js:25549-25692 layout
+//@ chunk-jndyh8cy.js:25301-25443 layout
 function elideMiddle(text) {
   if (text.length <= SESSION_HEAD_CHARS + SESSION_TAIL_CHARS) return text;
   return `${truncateToLength(text, SESSION_HEAD_CHARS).trimEnd()}
 [\u2026 middle of the session omitted \u2026]
 ${takeLastChars(text, SESSION_TAIL_CHARS).trimStart()}`;
 }
-//@ chunk-dz3q485w.js:25692-26683 callgraph-witnessed (2.1.88 match: agenticSessionSearch, 0.059)
+//@ chunk-jndyh8cy.js:25443-26433 callgraph-witnessed (2.1.88 match: agenticSessionSearch, 0.059)
 /**
  * 读取最近的会话日志（只取通过检查的），生成标题/日期/分支/转写摘要列表，汇总 MCP 调用、使用过的工具与时间跨度。
  */
@@ -106,7 +106,7 @@ async function collectSessionsForProject(context, storageV5) {
   for (let { log } of nonMatchingLogs)
     for (let toolName of [
       ...(log.toolsUsed ?? []),
-      ...tagUntrustedArtifactContent(log.messages, undefined, true, true),
+      ...collectToolsUsedBeforeSummary(log.messages, undefined, true, true),
     ])
       toolsUsed.add(toolName);
   return {

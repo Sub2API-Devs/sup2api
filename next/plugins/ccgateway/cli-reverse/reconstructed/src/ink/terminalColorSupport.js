@@ -3,22 +3,22 @@
  *
  * 2.1.316 新增：终端环境识别（JetBrains、Windows Terminal、VS Code、ghostty 等）；把 RGB 颜色转换为 256 色索引等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-g3xfp0ds.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hhr6kfwg.js (13)
  * attribution: placement 13
  */
 import { csi } from "./termio/csi.js";
 import { sequential } from "../utils/sequential.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-g3xfp0ds.js:387-611 placement
+//@ chunk-hhr6kfwg.js:387-611 placement
 /**
  * 终端支持的标准 ANSI 颜色名表。
  */
 var ANSI_COLOR_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ANSI_COLOR_NAME_SET;
-deferInit("chunk-g3xfp0ds.js:387", () => {
+deferInit("chunk-hhr6kfwg.js:387", () => {
   ANSI_COLOR_NAMES = {
     black: true,
     red: true,
@@ -39,24 +39,24 @@ deferInit("chunk-g3xfp0ds.js:387", () => {
   };
   ANSI_COLOR_NAME_SET = new Set(Object.keys(ANSI_COLOR_NAMES));
 });
-//@ chunk-g3xfp0ds.js:611-641 placement
+//@ chunk-hhr6kfwg.js:611-641 placement
 /**
  * SGR 30
  */
 var ANSI_FG_BLACK; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ANSI_FG_WHITE;
-deferInit("chunk-g3xfp0ds.js:611", () => {
+deferInit("chunk-hhr6kfwg.js:611", () => {
   ANSI_FG_BLACK = csi(30, "m");
   ANSI_FG_WHITE = csi(37, "m");
 });
-//@ chunk-g3xfp0ds.js:641-677 placement
+//@ chunk-hhr6kfwg.js:641-677 placement
 /**
  * 判断 SGR 序列是否为前景色 30 或 37（用作“默认色”近似）。
  */
 function isDefaultFgColor(color) {
   return color === ANSI_FG_WHITE || color === ANSI_FG_BLACK;
 }
-//@ chunk-g3xfp0ds.js:677-2321 placement
+//@ chunk-hhr6kfwg.js:677-2321 placement
 /**
  * 终端环境识别（JetBrains、Windows Terminal、VS Code、ghostty 等）。
  */
@@ -132,34 +132,34 @@ class TerminalDetector {
     return (this.proc.env.TERM ?? "").startsWith("screen");
   }
 }
-//@ chunk-g3xfp0ds.js:2321-2443 placement
+//@ chunk-hhr6kfwg.js:2321-2443 placement
 function parseVersionNumber(versionText) {
   if (!versionText) return null;
   let match = /^(\d+)\.(\d+)\.(\d+)/.exec(versionText);
   if (!match) return null;
   return +match[1] * 1e6 + +match[2] * 1000 + +match[3];
 }
-//@ chunk-g3xfp0ds.js:2443-2483 placement
+//@ chunk-hhr6kfwg.js:2443-2483 placement
 /**
  * 去空白后非空
  */
 function isNonEmptyString(text) {
   return (text ?? "").trim() !== "";
 }
-//@ chunk-g3xfp0ds.js:2483-2496 placement
+//@ chunk-hhr6kfwg.js:2483-2496 placement
 /**
  * 终端识别单例。
  */
 var terminalDetector; // deferred: uses TerminalDetector of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-g3xfp0ds.js:2483", () => {
+deferInit("chunk-hhr6kfwg.js:2483", () => {
   terminalDetector = new TerminalDetector();
 });
-//@ chunk-g3xfp0ds.js:2496-2541 placement
+//@ chunk-hhr6kfwg.js:2496-2541 placement
 /**
  * 24 位颜色 SGR 正则
  */
 var TRUECOLOR_SGR_RE = /^\x1b\[([34]8);2;(\d+);(\d+);(\d+)m$/;
-//@ chunk-g3xfp0ds.js:2541-2798 placement
+//@ chunk-hhr6kfwg.js:2541-2798 placement
 /**
  * 终端不支持真彩色时，把样式中的 24 位颜色代码降级为可用的颜色。
  */
@@ -180,12 +180,12 @@ function downgradeTrueColorCodes(codes) {
   }
   return downgradedCodes ?? codes;
 }
-//@ chunk-g3xfp0ds.js:2798-2815 placement
+//@ chunk-hhr6kfwg.js:2798-2815 placement
 /**
  * ESC[23m
  */
 var ANSI_ITALIC_OFF = "\x1B[23m";
-//@ chunk-g3xfp0ds.js:2815-2939 placement
+//@ chunk-hhr6kfwg.js:2815-2939 placement
 /**
  * 终端把斜体显示为反显时，去掉样式中的斜体。
  */
@@ -197,9 +197,9 @@ function dropItalicIfStandout(codes) {
         : codes;
   return codes;
 }
-//@ chunk-g3xfp0ds.js:2939-2968 placement
+//@ chunk-hhr6kfwg.js:2939-2968 placement
 var _ = [0, 95, 135, 175, 215, 255];
-//@ chunk-g3xfp0ds.js:2968-3306 placement
+//@ chunk-hhr6kfwg.js:2968-3306 placement
 /**
  * 把 RGB 颜色转换为 256 色索引。
  */
@@ -225,8 +225,8 @@ function rgbToAnsi256(red, green, blue) {
     : cubeIndex;
 }
 export {
-  terminalDetector,
   isDefaultFgColor,
+  terminalDetector,
   dropItalicIfStandout,
   downgradeTrueColorCodes,
   ANSI_COLOR_NAME_SET,

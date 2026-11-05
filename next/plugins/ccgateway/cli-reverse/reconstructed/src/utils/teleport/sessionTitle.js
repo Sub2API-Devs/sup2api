@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：会话标题
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (4)
  * attribution: placement 4
  */
 import { truncateMiddle } from "../stringUtils.js";
@@ -20,13 +20,13 @@ import { OAUTH_BETA_HEADER } from "../../constants/oauth.js";
 import { errorMessage } from "../errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1938185-1938207 placement
+//@ chunk-5xgkngpb.js:1993353-1993375 placement
 /**
  * 标题消息上限（2000），保留头部 1500 字符。
  */
 var MAX_TITLE_MESSAGE_CHARS = 2000;
 var TITLE_HEAD_CHARS = 1500;
-//@ chunk-e6aww6q8.js:1938207-1938351 placement
+//@ chunk-5xgkngpb.js:1993375-1993518 placement
 function truncateFirstSessionMessage(message) {
   if (message.length <= MAX_TITLE_MESSAGE_CHARS) return message;
   let suffixFor = (omitted) => `
@@ -39,9 +39,9 @@ function truncateFirstSessionMessage(message) {
     suffixFor,
   );
 }
-//@ chunk-e6aww6q8.js:1938351-1938397 placement
+//@ chunk-5xgkngpb.js:1993518-1993564 placement
 var sessionTitleResponseSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1938351", () => {
+deferInit("chunk-5xgkngpb.js:1993518", () => {
   sessionTitleResponseSchema = DoctorLazy(() =>
     objectSchema({
       title: stringSchema(),
@@ -49,7 +49,7 @@ deferInit("chunk-e6aww6q8.js:1938351", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:1938397-1939213 placement
+//@ chunk-5xgkngpb.js:1993564-1994380 placement
 async function checkSessionTitlePolicyTaint(options, signal, credentials) {
   let verdict = isPolicyVerdictAbsent()
     ? "no organization policy verdict held"

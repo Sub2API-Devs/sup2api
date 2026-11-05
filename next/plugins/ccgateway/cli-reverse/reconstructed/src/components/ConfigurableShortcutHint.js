@@ -3,9 +3,9 @@
  *
  * 可配置快捷键提示：按 keybinding 动作取用户当前绑定的键显示 "<键> to <动作>"（被 70+ 处使用）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ConfigurableShortcutHint.tsx
- * pieces: chunk-4dnha4dk.js (1)
+ * pieces: chunk-m3n67xkd.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -13,7 +13,7 @@ import { useShortcutDisplay } from "../keybindings/useKeybindingDisplay.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 
-//@ chunk-4dnha4dk.js:332-644 fingerprint (2.1.88 match: ConfigurableShortcutHint, 0.556)
+//@ chunk-m3n67xkd.js:332-644 fingerprint (2.1.88 match: ConfigurableShortcutHint, 0.558)
 function ConfigurableShortcutHint(props) {
   let $ = useMemoCache(7);
   let { action, context, fallback, description, parens, bold, terse, format } = props;

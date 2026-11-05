@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：插件 prompt 相关接口
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (16)
- * attribution: placement 16
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (16)
+ * attribution: placement 15, layout 1
  */
 import { isDeepStrictEqual } from "util";
 import { requireLoadedPluginArgs } from "./apiDispatch.js";
@@ -15,7 +15,7 @@ import { isPromptSectionMode, PROMPT_SECTION_MODES } from "./hookApiSurface.js";
 import { isPersonInputEvent } from "./uiHooks.js";
 import { lentModulesByChain } from "./hooksWorkerClient.js";
 import { DEFAULT_HOOK_TIMEOUT_MS } from "./dispatch/streamChain.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { isNonNegativeInt } from "./sites/siteRules.js";
 import { surfaceComposer } from "./surfaceBinding.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -24,7 +24,7 @@ import { createValueSlot } from "../../utils/valueSlot.js";
 import { isPlainDataObject } from "../../utils/hooks/functionHookMatchers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3716716-3716888 placement
+//@ chunk-5xgkngpb.js:3812425-3812597 placement
 /**
  * $.audio.play 表项：以插件根目录与存储 id 交给播放预算器播放。
  */
@@ -42,7 +42,7 @@ var AUDIO_PLAY_API = (apiEntry) => ({
     );
   },
 });
-//@ chunk-e6aww6q8.js:3716888-3717391 placement
+//@ chunk-5xgkngpb.js:3812597-3813100 placement
 /**
  * 为 prompt.fill/submit 等生成表项：校验 {text} 并告警超长文本，run 时带上 mode、decorations、cursor 与插件来源。
  */
@@ -83,7 +83,7 @@ var createPromptTextApi = (apiName, checkSize, promptSuggestOp) => ({
     );
   },
 });
-//@ chunk-e6aww6q8.js:3717391-3717478 placement
+//@ chunk-5xgkngpb.js:3813100-3813187 placement
 /**
  * 校验 prompt.section 参数
  */
@@ -92,14 +92,14 @@ function checkPromptSectionArgs(mode) {
     ? undefined
     : `takes { mode } of ${PROMPT_SECTION_MODES.join(", ")}`;
 }
-//@ chunk-e6aww6q8.js:3717478-3717600 placement
+//@ chunk-5xgkngpb.js:3813187-3813309 placement
 var dispatchFactsOf = (caller) => ({
   cwd: caller.cwd,
   turnHeld: caller.turnHeld,
   rootEvent: isPersonInputEvent(caller.rootEvent) ? undefined : caller.rootEvent,
   isDispatching: caller.isDispatching,
 });
-//@ chunk-e6aww6q8.js:3717600-3717961 placement
+//@ chunk-5xgkngpb.js:3813309-3813670 placement
 /**
  * 构造插件间接口调用的"幕后"信息：调用者链、借用帧（有效期上限）、分发事实与评判上下文。
  */
@@ -128,27 +128,27 @@ function interfaceCallBehind(caller) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3991212-3991254 placement
+//@ chunk-5xgkngpb.js:4094102-4094144 placement
 var EMPTY_PROMPT_DRAFT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3991212", () => {
+deferInit("chunk-5xgkngpb.js:4094102", () => {
   EMPTY_PROMPT_DRAFT = Object.freeze({
     text: "",
     cursor: 0,
   });
 });
-//@ chunk-e6aww6q8.js:3991254-3991356 placement
+//@ chunk-5xgkngpb.js:4094144-4094246 placement
 /**
  * 规整输入框内容为 {text, cursor}，不合法时为空。
  */
 function normalizePromptBox(box) {
-  return isPlainObject_5(box) && typeof box.text === "string" && isNonNegativeInt(box.cursor)
+  return isPlainObject_6(box) && typeof box.text === "string" && isNonNegativeInt(box.cursor)
     ? {
         text: box.text,
         cursor: box.cursor,
       }
     : EMPTY_PROMPT_DRAFT;
 }
-//@ chunk-e6aww6q8.js:3991356-3991505 placement
+//@ chunk-5xgkngpb.js:4094246-4094395 placement
 /**
  * $.prompt.read 核心：读取当前绑定输入框的 {text, cursor}，没有输入框时返回空。
  */
@@ -158,7 +158,7 @@ async function readPromptBox(plugin) {
     logForDebugging(`$.prompt.read (${plugin}): no prompt box bound; the empty box`);
   return (await composer?.read()) ?? EMPTY_PROMPT_DRAFT;
 }
-//@ chunk-e6aww6q8.js:3991505-3991568 placement
+//@ chunk-5xgkngpb.js:4094395-4094458 placement
 /**
  * 各事件是否记录 session.start
  */
@@ -167,22 +167,19 @@ var RECORDS_SESSION_START = {
   "command.run": false,
   "agent.spawn": true,
 };
-//@ chunk-e6aww6q8.js:3991568-3991603 placement
+//@ chunk-5xgkngpb.js:4094458-4094493 placement
 /**
  * 会话开始调用记录槽
  */
 var sessionStartCallsSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3991568", () => {
+deferInit("chunk-5xgkngpb.js:4094458", () => {
   sessionStartCallsSlot = identity_2(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-e6aww6q8.js:3991603-3991639 placement
-/**
- * 忘掉某次调用
- */
+//@ chunk-5xgkngpb.js:4094493-4094529 layout
 function forgetSessionStartCall(name) {
   sessionStartCallsSlot.get()?.delete(name);
 }
-//@ chunk-e6aww6q8.js:3991682-3991751 placement
+//@ chunk-5xgkngpb.js:4094572-4094641 placement
 /**
  * 各事件空调用表
  */
@@ -191,7 +188,7 @@ var emptySessionCalls = () => ({
   "command.run": [],
   "agent.spawn": [],
 });
-//@ chunk-e6aww6q8.js:3991751-3991970 placement
+//@ chunk-5xgkngpb.js:4094641-4094860 placement
 /**
  * 记录插件在 session.start 中的一次加载（参数与展示信息）；与上次相同返回 true，否则重置该插件的调用记录。
  */
@@ -212,7 +209,7 @@ function recordSessionStartLoad({ name, args, shown, environmentId }) {
   byName.get(name)?.copies.add(environmentId);
   return isSameLoad;
 }
-//@ chunk-e6aww6q8.js:3991970-3992071 placement
+//@ chunk-5xgkngpb.js:4094860-4094961 placement
 /**
  * 判断调用结果是否因中止而结束（拒绝或出错）。
  */
@@ -222,7 +219,7 @@ function isAbortedCallResult(result, value) {
     (!isPlainDataObject(value) || Object.hasOwn(value, "deny") || value.isError === true)
   );
 }
-//@ chunk-e6aww6q8.js:3992071-3992146 placement
+//@ chunk-5xgkngpb.js:4094961-4095036 placement
 /**
  * 移除一次调用
  */
@@ -232,7 +229,7 @@ function removeCall(entry, key, call) {
     [key]: entry.calls[key].filter((existing) => existing !== call),
   };
 }
-//@ chunk-e6aww6q8.js:3992146-3992217 placement
+//@ chunk-5xgkngpb.js:4095036-4095107 placement
 /**
  * 会话加载记录
  */
@@ -243,18 +240,18 @@ var sessionLoadRecord = (environmentId, args, result) => ({
   isRepeated: false,
 });
 export {
-  recordSessionStartLoad,
+  EMPTY_PROMPT_DRAFT,
   forgetSessionStartCall,
   sessionStartCallsSlot,
   sessionLoadRecord,
   RECORDS_SESSION_START,
   isAbortedCallResult,
   removeCall,
-  readPromptBox,
-  normalizePromptBox,
-  EMPTY_PROMPT_DRAFT,
   AUDIO_PLAY_API,
   interfaceCallBehind,
   createPromptTextApi,
   checkPromptSectionArgs,
+  readPromptBox,
+  normalizePromptBox,
+  recordSessionStartLoad,
 };

@@ -3,9 +3,9 @@
  *
  * policyHelper 静态设置载荷（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q8cqcff6.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5fn9rb8r.js (23)
  * attribution: placement 23
  */
 import {
@@ -41,7 +41,7 @@ import {
 import { jsonStringify } from "../../slowOperations.js";
 import { sortKeysDeep } from "../settingsSourceTrust.js";
 
-//@ chunk-q8cqcff6.js:69996-70148 placement
+//@ chunk-5fn9rb8r.js:70259-70411 placement
 function addSelectionWarning(message) {
   policyHelperRunner.selectionWarnings.push({
     file: "policyHelper",
@@ -55,7 +55,7 @@ function addSelectionWarning(message) {
     level: "warn",
   });
 }
-//@ chunk-q8cqcff6.js:70148-70174 placement
+//@ chunk-5fn9rb8r.js:70411-70437 placement
 /**
  * clearRemotePayloadWarnings：清空远程载荷相关警告。
  */
@@ -63,7 +63,7 @@ function clearRemotePayloadWarnings() {
   clearAllRemoteWarnings();
   clearSelectionWarnings(REMOTE_HELPER_PAYLOAD_SKIPPED_PREFIX);
 }
-//@ chunk-q8cqcff6.js:70174-70226 placement
+//@ chunk-5fn9rb8r.js:70437-70489 placement
 /**
  * clearAllRemoteWarnings：清空全部远程警告。
  */
@@ -72,9 +72,9 @@ function clearAllRemoteWarnings() {
   clearSelectionWarnings(REMOTE_PAYLOAD_NOT_APPLIED_PREFIX);
   policyHelperRunner.retireRemoteFailure();
 }
-//@ chunk-q8cqcff6.js:70226-70266 placement
+//@ chunk-5fn9rb8r.js:70489-70529 placement
 var HELPER_REFRESH_FAILING_PREFIX = "policyHelper refresh failing: ";
-//@ chunk-q8cqcff6.js:70266-70675 placement
+//@ chunk-5fn9rb8r.js:70529-70938 placement
 function warnPolicyHelperRefresh(error, suffix, usesPl) {
   let suffixNote = `; ${suffix}`;
   let detail = truncateWarning(
@@ -100,19 +100,19 @@ function warnPolicyHelperRefresh(error, suffix, usesPl) {
   ];
   if (!removed) invalidatePolicyLayer();
 }
-//@ chunk-q8cqcff6.js:70675-70696 placement
+//@ chunk-5fn9rb8r.js:70938-70959 placement
 /**
  * clearHelperRefreshWarning：清空 helper 刷新失败警告。
  */
 function clearHelperRefreshWarning() {
   clearSelectionWarnings(HELPER_REFRESH_FAILING_PREFIX);
 }
-//@ chunk-q8cqcff6.js:70696-70764 placement
+//@ chunk-5fn9rb8r.js:70959-71027 placement
 /**
  * NO_PLATFORM_ENTRY_TEXT：没有当前平台条目的说明。
  */
 var NO_PLATFORM_ENTRY_TEXT = "policyHelpers is configured but has no entry for platform ";
-//@ chunk-q8cqcff6.js:70764-70918 placement
+//@ chunk-5fn9rb8r.js:71027-71181 placement
 function clearSelectionWarnings(prefix) {
   let filtered = policyHelperRunner.selectionWarnings.filter(
     (selectionWarning) => !selectionWarning.message.startsWith(prefix),
@@ -121,7 +121,7 @@ function clearSelectionWarnings(prefix) {
   policyHelperRunner.selectionWarnings = filtered;
   invalidatePolicyLayer();
 }
-//@ chunk-q8cqcff6.js:70918-71131 placement
+//@ chunk-5fn9rb8r.js:71181-71394 placement
 function validatePayloadAndLog(raw, field) {
   let result = validatePolicyHelperConfig(raw, field);
   for (let strippedKey of result.strippedKeys)
@@ -134,7 +134,7 @@ function validatePayloadAndLog(raw, field) {
     });
   return result;
 }
-//@ chunk-q8cqcff6.js:71131-71641 placement
+//@ chunk-5fn9rb8r.js:71394-71904 placement
 function mergeDefaultSettingsPayload(helpers, onChain) {
   let payloads = [];
   for (let key of onChain) {
@@ -167,7 +167,7 @@ function mergeDefaultSettingsPayload(helpers, onChain) {
     });
   return payloads;
 }
-//@ chunk-q8cqcff6.js:71641-72078 placement
+//@ chunk-5fn9rb8r.js:71904-72341 placement
 function validateStaticPayload(payload, log) {
   if (payload.raw !== null && typeof payload.raw === "object" && !Array.isArray(payload.raw)) {
     let { policyHelper, policyHelpers, ...rest } = payload.raw;
@@ -194,7 +194,7 @@ function validateStaticPayload(payload, log) {
     mergesOutput: payload.mergesOutput,
   };
 }
-//@ chunk-q8cqcff6.js:72078-72443 placement
+//@ chunk-5fn9rb8r.js:72341-72706 placement
 /**
  * 校验 policyHelpers 默认设置载荷，记录链上第一个有效的作为默认回退；任何一个无效则返回阻止启动的错误。
  */
@@ -213,7 +213,7 @@ function applyDefaultPayloads(helpers, onChain) {
   policyHelperRunner.defaultFallback = fallback;
   return null;
 }
-//@ chunk-q8cqcff6.js:72443-72630 placement
+//@ chunk-5fn9rb8r.js:72706-72893 placement
 function pickStaticPayload(payloads) {
   let winner = null;
   let skipped = [];
@@ -235,20 +235,20 @@ function pickStaticPayload(payloads) {
     skipped,
   };
 }
-//@ chunk-q8cqcff6.js:72630-72735 placement
+//@ chunk-5fn9rb8r.js:72893-72998 placement
 function applyStaticPayloadChoice(choice) {
   clearSelectionWarnings(REMOTE_HELPER_PAYLOAD_SKIPPED_PREFIX);
   policyHelperRunner.defaultFallback = choice.winner;
   for (let { field, error } of choice.skipped) warnInvalidStaticPayload(field, error, choice.verified);
 }
-//@ chunk-q8cqcff6.js:72735-72805 placement
+//@ chunk-5fn9rb8r.js:72998-73068 placement
 function hasRiskyManagedSettings(settings, winner) {
   return (
     hasPayloadSlot(summarizeManagedSettingsRisk(settings), winner.sourceField) ||
     hasDangerousManagedSettings(summarizeManagedSettingsRisk(winner.settings))
   );
 }
-//@ chunk-q8cqcff6.js:72805-72896 placement
+//@ chunk-5fn9rb8r.js:73068-73159 placement
 function remoteSettingsPayload(settings) {
   let policyHelpers = settings?.policyHelpers;
   return policyHelpers
@@ -257,7 +257,7 @@ function remoteSettingsPayload(settings) {
       )
     : [];
 }
-//@ chunk-q8cqcff6.js:72896-72988 placement
+//@ chunk-5fn9rb8r.js:73159-73251 placement
 /**
  * hasStaticPayload：是否有静态载荷。
  */
@@ -266,14 +266,14 @@ function hasStaticPayload(settings) {
   let { winner } = pickStaticPayload(remoteSettingsPayload(settings));
   return winner !== null && hasRiskyManagedSettings(settings, winner);
 }
-//@ chunk-q8cqcff6.js:72988-73029 placement
+//@ chunk-5fn9rb8r.js:73251-73292 placement
 /**
  * withholdUnverifiedCacheKeys：未验证缓存时扣留键。
  */
 function withholdUnverifiedCacheKeys(settings, candidates, verified) {
   return candidates && !verified ? withholdUnverifiedCacheKeys_2(settings) : settings;
 }
-//@ chunk-q8cqcff6.js:73029-73441 placement
+//@ chunk-5fn9rb8r.js:73292-73704 placement
 /**
  * 汇总远程托管设置中 policyHelper 的关键状态：是否已验证、命令、能否执行、是否合并输出/失败拒绝、载荷键、选中的静态载荷与跳过项、载荷能否使用。
  */
@@ -304,7 +304,7 @@ function remotePolicySnapshot(settings) {
         (!hasRiskyManagedSettings(settings, winner) && (verified || policyHelperCommand === undefined))),
   };
 }
-//@ chunk-q8cqcff6.js:73441-73709 placement
+//@ chunk-5fn9rb8r.js:73704-73972 placement
 function sameRemoteSnapshot(remoteDecision, other) {
   return (
     remoteDecision.verified === other.verified &&
@@ -316,14 +316,14 @@ function sameRemoteSnapshot(remoteDecision, other) {
     remoteDecision.payloadServable === other.payloadServable
   );
 }
-//@ chunk-q8cqcff6.js:73709-73782 placement
+//@ chunk-5fn9rb8r.js:73972-74045 placement
 /**
  * mergesOutputBehavior：远程输出是否参与合并。
  */
 function mergesOutputBehavior(config, defaultFallback) {
   return config.outputBehavior === "merge" || defaultFallback?.mergesOutput === true;
 }
-//@ chunk-q8cqcff6.js:73782-74229 placement
+//@ chunk-5fn9rb8r.js:74045-74492 placement
 function applyStaticPayload(choice, mergesOutput, fromRemote) {
   let defaultFallback = policyHelperRunner.defaultFallback;
   if (!defaultFallback) return;
@@ -346,7 +346,7 @@ function applyStaticPayload(choice, mergesOutput, fromRemote) {
     },
   );
 }
-//@ chunk-q8cqcff6.js:74229-74436 placement
+//@ chunk-5fn9rb8r.js:74492-74699 placement
 /**
  * 判断设置中是否配置了适用于本平台的 policyHelper 或静态载荷。
  */
@@ -364,8 +364,6 @@ function hasPolicyHelperConfig(settings) {
   );
 }
 export {
-  hasPolicyHelperConfig,
-  hasStaticPayload,
   validatePayloadAndLog,
   warnPolicyHelperRefresh,
   mergesOutputBehavior,
@@ -374,6 +372,7 @@ export {
   clearRemotePayloadWarnings,
   clearSelectionWarnings,
   NO_PLATFORM_ENTRY_TEXT,
+  hasPolicyHelperConfig,
   remotePolicySnapshot,
   applyStaticPayloadChoice,
   applyDefaultPayloads,
@@ -381,4 +380,5 @@ export {
   addSelectionWarning,
   clearAllRemoteWarnings,
   sameRemoteSnapshot,
+  hasStaticPayload,
 };

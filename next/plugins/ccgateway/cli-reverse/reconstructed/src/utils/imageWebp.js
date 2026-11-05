@@ -3,9 +3,9 @@
  *
  * WebP 编码选择（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mvvq2nx1.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nw81sbzb.js (8)
  * attribution: placement 8
  */
 import { isDiskless } from "../bootstrap/state.js";
@@ -26,7 +26,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { logFeatureOk, logFeatureSad } from "../services/analytics/featureTelemetry.js";
 
-//@ chunk-mvvq2nx1.js:15548-15650 placement
+//@ chunk-nw81sbzb.js:15559-15661 placement
 function getWebpMode() {
   if (isDiskless()) return "off";
   let mode = isFirstPartyApiBackend()
@@ -34,14 +34,14 @@ function getWebpMode() {
     : "off";
   return mode === "lossless" || mode === "all" ? mode : "off";
 }
-//@ chunk-mvvq2nx1.js:15650-15694 placement
+//@ chunk-nw81sbzb.js:15661-15705 placement
 /**
  * WebP 模式关闭时返回 undefined，否则返回原值。
  */
 function webpMaxBytesIfOn(maxBytes) {
   return getWebpMode() === "off" ? undefined : maxBytes;
 }
-//@ chunk-mvvq2nx1.js:15694-15835 placement
+//@ chunk-nw81sbzb.js:15705-15846 placement
 async function tryImageEncode(run) {
   try {
     return await run();
@@ -54,7 +54,7 @@ async function tryImageEncode(run) {
     return;
   }
 }
-//@ chunk-mvvq2nx1.js:15835-16018 placement
+//@ chunk-nw81sbzb.js:15846-16029 placement
 function encodeWebp(getImage, options) {
   return tryImageEncode(async () => {
     let encoded = await (await getImage()).webp(options).toBuffer();
@@ -63,7 +63,7 @@ function encodeWebp(getImage, options) {
     return encoded;
   });
 }
-//@ chunk-mvvq2nx1.js:16018-16325 placement
+//@ chunk-nw81sbzb.js:16029-16336 placement
 /**
  * 无损编码 WebP，并在可疑情况下把原图与 WebP 解码结果都转 PNG 逐字节比较，不一致返回 not_exact。
  */
@@ -87,7 +87,7 @@ async function encodeExactLosslessWebp(getImage) {
   if (originalPng === undefined || roundtripPng === undefined) return;
   return roundtripPng.equals(originalPng) ? encoded : "not_exact";
 }
-//@ chunk-mvvq2nx1.js:16325-16826 placement
+//@ chunk-nw81sbzb.js:16336-16837 placement
 /**
  * 在大小上限内选择 WebP 变体：无损版足够小直接用；mode 为 all 时再试 90 质量有损版，并与同质量 JPEG 比较，只有更小时才用，返回结果种类与选中的数据。
  */
@@ -142,7 +142,7 @@ async function chooseWebpVariant(getImage, losslessWebp, maxBytes, mode) {
         webp: lossyWebp,
       };
 }
-//@ chunk-mvvq2nx1.js:16826-17255 placement
+//@ chunk-nw81sbzb.js:16837-17266 placement
 /**
  * 图片缩放流程中的 WebP 直出：按开关模式尝试无损/有损 WebP，记录结果与耗时遥测，成功返回 webp，否则返回无损编码结果供后续判断。
  */
@@ -180,7 +180,7 @@ async function tryWebpEncoding(getImage, maxBytes) {
     webp,
   };
 }
-//@ chunk-mvvq2nx1.js:17255-18060 placement
+//@ chunk-nw81sbzb.js:17266-18071 placement
 async function chooseImageEncoding(originalBuffer, bytes, buffer, maxBytes, allowWebp, losslessWebp) {
   let webpMode = getWebpMode();
   let imageFormatFromBuffer = detectImageFormatFromBuffer(bytes);

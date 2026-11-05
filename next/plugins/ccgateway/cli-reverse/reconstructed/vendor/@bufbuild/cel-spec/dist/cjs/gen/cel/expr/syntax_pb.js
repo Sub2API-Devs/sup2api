@@ -1,8 +1,8 @@
 /**
  * @bufbuild/cel-spec/dist/cjs/gen/cel/expr/syntax_pb.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @bufbuild/cel-spec@0.0.1..0.6.1
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import {
   require_error_4,
 } from "../../../../../../../@anthropic-ai/bedrock-sdk/core/error.js";
 
-//@ chunk-fq0cr76a.js:520301-525169 cjs-fingerprint
+//@ chunk-qg41pqt6.js:520875-525743 cjs-fingerprint
 var require_syntax_pb = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

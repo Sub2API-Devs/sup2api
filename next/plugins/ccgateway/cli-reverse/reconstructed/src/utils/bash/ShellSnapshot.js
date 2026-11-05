@@ -3,9 +3,9 @@
  *
  * shell 快照：执行用户 rc 导出函数/选项/别名/PATH，注入内置 rg/bfs/ugrep 包装和 pkill 防护，生成供每次 Bash 命令 source 的快照文件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/bash/ShellSnapshot.ts
- * pieces: chunk-e6aww6q8.js (19)
+ * pieces: chunk-5xgkngpb.js (19)
  * attribution: placement 2, layout 9, fingerprint 7, callgraph-witnessed 1
  */
 import { join } from "path";
@@ -26,7 +26,7 @@ import { isAssignmentNameUnsafeForSandbox } from "./ast.js";
 import { env } from "../env.js";
 import { isDisklessSession as isDisklessSession_2 } from "../disklessSession.js";
 import { pathExists } from "../fsSafety/atomicWriteStaging.js";
-import { getClaudeConfigDir } from "../envUtils.js";
+import { getClaudeConfigDir } from "../markdownConfigLoader.js";
 import { safeSessionIdForSnapshot } from "../Shell.js";
 import { getSessionId } from "../../bootstrap/state.js";
 import { isDesktopNonClaudecode } from "../entrypointKinds.js";
@@ -37,7 +37,7 @@ import { getFsImplementation } from "../fsOperations.js";
 import { reportShellExports } from "../shell/shellEnvSnapshot.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3051940-3052177 placement
+//@ chunk-5xgkngpb.js:3136037-3136274 placement
 function appendPluginBinPaths(currentPath, extraDirs, delimiter) {
   let existing = new Set((currentPath ?? "").split(delimiter));
   let filtered = extraDirs.filter((dir) => {
@@ -52,7 +52,7 @@ function appendPluginBinPaths(currentPath, extraDirs, delimiter) {
     path: [currentPath, ...filtered].filter(Boolean).join(delimiter),
   };
 }
-//@ chunk-e6aww6q8.js:3052177-3052304 placement
+//@ chunk-5xgkngpb.js:3136274-3136401 placement
 /**
  * 计算追加插件 bin 目录后的 PATH 环境变量（保持原变量名大小写）。
  */
@@ -66,14 +66,14 @@ function getPluginPathEnv(env, extraDirs, delimiter) {
       }
     : {};
 }
-//@ chunk-e6aww6q8.js:3052304-3052376 layout
+//@ chunk-5xgkngpb.js:3136401-3136473 layout
 /**
  * Shell 快照超时 10 秒，以及传给子 shell 的环境变量名 CLAUDE_CODE_EXECPATH、CLAUDE_CODE_INVOKED_SKILLS。
  */
 var SNAPSHOT_TIMEOUT_MS = 1e4;
 var CLAUDE_CODE_EXECPATH = "CLAUDE_CODE_EXECPATH";
 var CLAUDE_CODE_INVOKED_SKILLS = "CLAUDE_CODE_INVOKED_SKILLS";
-//@ chunk-e6aww6q8.js:3052376-3053131 fingerprint (2.1.88 match: createArgv0ShellFunction, 0.373)
+//@ chunk-5xgkngpb.js:3136473-3137228 fingerprint (2.1.88 match: createArgv0ShellFunction, 0.373)
 /**
  * 生成同名 shell 函数，以 ARGV0（zsh/Windows）或 exec -a（bash）把内置二进制伪装成 rg/bfs/ugrep 执行；CLAUDE_CODE_EXECPATH 不可执行时回落到系统命令；可指定遇到某些参数时直接走系统命令。
  */
@@ -108,7 +108,7 @@ function createArgv0ShellFunction(funcName, argv0, binaryPath = [], prependArgs 
   ].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:3053131-3053339 fingerprint (2.1.88 match: createRipgrepShellIntegration, 1)
+//@ chunk-5xgkngpb.js:3137228-3137436 fingerprint (2.1.88 match: createRipgrepShellIntegration, 1)
 function createRipgrepShellIntegration() {
   let rgCommand = ripgrepCommand();
   if (rgCommand.argv0)
@@ -123,13 +123,13 @@ function createRipgrepShellIntegration() {
     snippet: rgCommand.rgArgs.length > 0 ? `${quotedPath} ${quotedArgs.join(" ")}` : quotedPath,
   };
 }
-//@ chunk-e6aww6q8.js:3053339-3053451 layout (2.1.88 match: VCS_DIRECTORIES_TO_EXCLUDE, 0.903)
+//@ chunk-5xgkngpb.js:3137436-3137548 layout (2.1.88 match: VCS_DIRECTORIES_TO_EXCLUDE, 0.903)
 /**
  * shell 片段（rg 不存在时的判断）与内嵌 ugrep 的 VCS 排除目录列表。
  */
 var RG_NOT_AVAILABLE_TEST = "! hash rg 2>/dev/null && ! typeset -f rg >/dev/null 2>&1";
 var VCS_DIRECTORIES_FOR_UGREP = [".git", ".svn", ".hg", ".bzr", ".jj", ".sl"];
-//@ chunk-e6aww6q8.js:3053451-3053883 fingerprint (2.1.88 match: createFindGrepShellIntegration, 0.613)
+//@ chunk-5xgkngpb.js:3137548-3137980 fingerprint (2.1.88 match: createFindGrepShellIntegration, 0.613)
 /**
  * 内置 find/grep 替换开启时，生成 find→bfs、grep→ugrep 的包装函数（ugrep 默认 -G --ignore-files --hidden -I 并排除 VCS 目录，危险选项回落系统 grep）。
  */
@@ -167,7 +167,7 @@ function createFindGrepShellIntegration() {
   ].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:3053883-3054873 layout
+//@ chunk-5xgkngpb.js:3137980-3138976 layout
 /**
  * 生成 pkill 包装函数：用 pgrep 预演同样的模式，若会匹配 CLAUDE_PID 则拒绝并提示用 pkill -P $$。
  */
@@ -193,25 +193,26 @@ function createPkillGuardFunction() {
     "      printf 'pkill: refusing to run \u2014 this pattern matches the Claude CLI process (PID %s). Narrow the pattern, or target your own children with `pkill -P $$ ...`.\\n' \"${CLAUDE_PID}\" >&2",
     "      return 1",
     "    fi",
+    ...[],
     "  fi",
     '  command pkill ${1+"$@"}',
     "}",
   ].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:3054873-3054898 layout
+//@ chunk-5xgkngpb.js:3138976-3139001 layout
 function emptySnapshotPath(arg) {
   return "";
 }
-//@ chunk-e6aww6q8.js:3054898-3054925 layout
+//@ chunk-5xgkngpb.js:3139001-3139028 layout
 function getExtraSnapshotSnippet() {
   return null;
 }
-//@ chunk-e6aww6q8.js:3054925-3054952 layout
+//@ chunk-5xgkngpb.js:3139028-3139055 layout
 function getSnapshotOverride() {
   return null;
 }
-//@ chunk-e6aww6q8.js:3054952-3055069 fingerprint (2.1.88 match: getConfigFile, 1)
+//@ chunk-5xgkngpb.js:3139055-3139172 fingerprint (2.1.88 match: getConfigFile, 1)
 /**
  * 按 shell 路径选择配置文件：含 zsh→~/.zshrc，含 bash→~/.bashrc，否则 ~/.profile。
  */
@@ -219,7 +220,7 @@ function getConfigFile(shellPath) {
   let fileName = shellPath.includes("zsh") ? ".zshrc" : shellPath.includes("bash") ? ".bashrc" : ".profile";
   return join(osModule.homedir(), fileName);
 }
-//@ chunk-e6aww6q8.js:3055069-3058104 fingerprint (2.1.88 match: getUserSnapshotContent, 0.476)
+//@ chunk-5xgkngpb.js:3139172-3142207 fingerprint (2.1.88 match: getUserSnapshotContent, 0.476)
 /**
  * 导出用户 shell 状态的脚本片段：zsh 用 typeset -f / setopt，bash 用 shopt -p、逐函数 eval %q、set -o；别名最多 1000 条（Windows 去掉 winpty 别名）。
  */
@@ -293,7 +294,7 @@ function getUserSnapshotContent(configFile) {
   `;
   return content;
 }
-//@ chunk-e6aww6q8.js:3058104-3058748 layout
+//@ chunk-5xgkngpb.js:3142207-3142851 layout
 /**
  * Windows 下运行 shell -lc 'echo "$PATH"' 取登录 PATH；输出不可用时记日志并上报 tengu_shell_snapshot_path_probe_failed，返回 undefined。
  */
@@ -327,11 +328,11 @@ async function probeLoginShellPath(shellPath) {
   });
   return;
 }
-//@ chunk-e6aww6q8.js:3058748-3059280 layout
+//@ chunk-5xgkngpb.js:3142851-3143383 layout
 var SHELL_EXPORTS_MARKER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var IGNORED_EXPORT_VARS;
 var DUMP_ENV_SCRIPT;
-deferInit("chunk-e6aww6q8.js:3058748", () => {
+deferInit("chunk-5xgkngpb.js:3142851", () => {
   SHELL_EXPORTS_MARKER = "--- claude-code-shell-exports ---";
   IGNORED_EXPORT_VARS = new Set("PWD OLDPWD SHLVL _ GIT_EDITOR CLAUDECODE AWKPATH AWKLIBPATH".split(" "));
   DUMP_ENV_SCRIPT = `
@@ -347,7 +348,7 @@ deferInit("chunk-e6aww6q8.js:3058748", () => {
       printf '%s\\n' '${SHELL_EXPORTS_MARKER}'
 `;
 });
-//@ chunk-e6aww6q8.js:3059280-3059672 layout
+//@ chunk-5xgkngpb.js:3143383-3143775 layout
 /**
  * 解析快照 stdout 中两个标记之间的 NAME=value 行，得到环境变量 Map（跳过已在进程环境中的、PWD/SHLVL 等、受保护变量、含 U+FFFD 的；还原 %25/%0A/%0D）。
  */
@@ -384,7 +385,7 @@ function parseShellExports(stdout) {
   }
   return exportedVars;
 }
-//@ chunk-e6aww6q8.js:3059672-3061032 callgraph-witnessed (2.1.88 match: getClaudeCodeSnapshotContent, 0.156)
+//@ chunk-5xgkngpb.js:3143775-3145142 callgraph-witnessed (2.1.88 match: getClaudeCodeSnapshotContent, 0.156)
 /**
  * Claude Code 自带的快照内容：rg 别名或函数（内置 ripgrep）、可选 find/grep 用内置 bfs/ugrep 替换、pkill 防误杀函数、PATH（Windows 下从登录 shell 探测，失败则在运行时追加插件目录）。
  */
@@ -458,7 +459,7 @@ ${heredocMarker}
   }
   return content;
 }
-//@ chunk-e6aww6q8.js:3061032-3062052 fingerprint (2.1.88 match: getSnapshotScript, 1)
+//@ chunk-5xgkngpb.js:3145142-3146162 fingerprint (2.1.88 match: getSnapshotScript, 1)
 /**
  * 拼装快照脚本：source 用户配置（< /dev/null）、可选导出环境、清空快照文件、unalias -a、用户函数/选项/别名、Claude Code 自带内容，最后校验文件存在。
  */
@@ -495,7 +496,7 @@ async function getSnapshotScript(shellPath, snapshotPath, hasUserConfig, extraPa
       fi
     `;
 }
-//@ chunk-e6aww6q8.js:3062052-3064610 fingerprint (2.1.88 match: createAndSaveSnapshot, 0.99)
+//@ chunk-5xgkngpb.js:3146162-3148723 fingerprint (2.1.88 match: createAndSaveSnapshot, 0.99)
 /**
  * 创建 shell 快照：按 shell 选择 .zshrc/.bashrc/.profile，在 Claude 配置目录 shell-snapshots/ 下生成 snapshot-<shell>-<时间>-<随机>.sh，用 shell -c -l 执行快照脚本（10s 超时，env 带 SHELL、GIT_EDITOR=true、CLAUDECODE=1，CLAUDE_CODE_DONT_INHERIT_ENV 时不继承环境）；成功后注册退出清理，并可解析导出的环境变量；失败上报 tengu_shell_snapshot_failed 等事件。返回快照路径或 undefined。
  */
@@ -626,10 +627,10 @@ ${stdout.split(SHELL_EXPORTS_MARKER)[0]}`);
 };
 var ENV_ASSIGNMENT_RE_4 = /^([A-Za-z_][A-Za-z0-9_]*)=/;
 export {
+  getPluginPathEnv,
   SNAPSHOT_TIMEOUT_MS,
   ENV_ASSIGNMENT_RE_4,
   createAndSaveSnapshot,
   getSnapshotOverride,
   CLAUDE_CODE_EXECPATH,
-  getPluginPathEnv,
 };

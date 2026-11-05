@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 列表分页。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8t8n4kdh.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sywnjtqb.js (3)
  * attribution: placement 3
  */
 import {
@@ -24,7 +24,7 @@ import { logEvent } from "../analytics/index.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { SdkError, SdkErrorCode } from "../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs";
 
-//@ chunk-8t8n4kdh.js:48365-49332 placement
+//@ chunk-sywnjtqb.js:48384-49344 placement
 async function listAllPages_2(
   connection,
   name,
@@ -111,7 +111,7 @@ async function listAllPages_2(
     }
   }
 }
-//@ chunk-8t8n4kdh.js:49332-49456 placement
+//@ chunk-sywnjtqb.js:49344-49468 placement
 function logListPaginated(method, pageCount, itemCount, outcome, source = "pages") {
   logEvent("tengu_mcp_list_paginated", {
     method: fromEnum(method),
@@ -121,7 +121,7 @@ function logListPaginated(method, pageCount, itemCount, outcome, source = "pages
     source: fromEnum(source),
   });
 }
-//@ chunk-8t8n4kdh.js:49456-49905 placement
+//@ chunk-sywnjtqb.js:49468-49917 placement
 async function listToolsModern(connection, name, config) {
   for (let j = 0; ; j++)
     try {

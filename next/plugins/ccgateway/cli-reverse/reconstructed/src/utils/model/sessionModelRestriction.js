@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：运行中模型被缓存拒绝时重新询问服务端后再降级。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (6)
  * attribution: placement 6
  */
 import { getProviderState } from "./providerCaches.js";
@@ -17,17 +17,17 @@ import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../services/analy
 import { formatModelRestrictedNotice } from "./validateModel.js";
 import { enqueueTaskNotification } from "../task/taskNotifications.js";
 
-//@ chunk-aepeg2w5.js:408194-408238 placement
+//@ chunk-exfmq47h.js:419585-419629 placement
 var SESSION_MODEL_DENY_TTL_MS = 60000;
 var SESSION_MODEL_RESTRICTED = "session-model-restricted";
-//@ chunk-aepeg2w5.js:408238-408293 placement
+//@ chunk-exfmq47h.js:419629-419684 placement
 /**
  * 设置会话模型拒绝的复查函数。
  */
 function setSessionModelReprobe(reprobe) {
   getProviderState().sessionModelDenyReprobe.reprobe = reprobe;
 }
-//@ chunk-aepeg2w5.js:408293-408569 placement
+//@ chunk-exfmq47h.js:419684-419960 placement
 /**
  * 运行中的会话模型被缓存的拒绝规则命中时，标记争议并向服务端复查。
  */
@@ -47,7 +47,7 @@ function reprobeDeniedSessionModel({ model, rowDenyKeys, describeFallbackModel }
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:408569-409538 placement
+//@ chunk-exfmq47h.js:419960-420929 placement
 /**
  * 运行中模型被缓存拒绝时重新询问服务端后再降级。
  */
@@ -101,7 +101,7 @@ async function recheckDeniedRunningModel(sessionModelDenyReprobe, model, rowDeny
     for (let key of rowDenyKeys) sessionModelDenyReprobe.contestedDenies.set(key, until);
   }
 }
-//@ chunk-aepeg2w5.js:409538-409789 placement
+//@ chunk-exfmq47h.js:420929-421180 placement
 /**
  * 清除权益拒绝缓存与会话模型复查状态（登录变化时）。
  */
@@ -115,7 +115,7 @@ function resetEntitlementDenies() {
   sessionModelDenyReprobe.refusedModels.clear();
   sessionModelDenyReprobe.generation += 1;
 }
-//@ chunk-aepeg2w5.js:409789-409865 placement
+//@ chunk-exfmq47h.js:421180-421256 placement
 /**
  * 订阅会话模型受限状态。
  */
@@ -123,9 +123,9 @@ function subscribeSessionModelRestriction(listener) {
   return getProviderState().sessionModelDenyReprobe.restricted.subscribe(listener);
 }
 export {
+  resetEntitlementDenies,
   SESSION_MODEL_RESTRICTED,
   subscribeSessionModelRestriction,
-  setSessionModelReprobe,
-  resetEntitlementDenies,
   reprobeDeniedSessionModel,
+  setSessionModelReprobe,
 };

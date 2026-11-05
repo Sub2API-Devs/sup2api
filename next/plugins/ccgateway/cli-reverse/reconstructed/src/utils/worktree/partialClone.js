@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：部分克隆
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (14)
- * attribution: placement 14
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (15)
+ * attribution: placement 14, sole-consumer 1
  */
 import { join, resolve as resolve_2 } from "path";
 import { lstat } from "fs/promises";
@@ -16,18 +16,21 @@ import { execFileNoThrowWithCwd } from "../execFileNoThrow.js";
 import { GIT_SAFE_GLOBAL_ARGS, GIT_ALLOW_PROTOCOL_VALUE } from "../git/gitSafeEnv.js";
 import { getRemoteHostSessionCount } from "../../commands/insights.js";
 import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
-import { resolveGitDirsOrPlaceholder, NOT_A_GIT_REPO_PATH } from "../git/gitDirResolution.js";
+import {
+  resolveGitDirsOrPlaceholder,
+  NOT_A_GIT_REPO_PATH,
+  buildGitEnvForRepo,
+} from "../git/gitDirResolution.js";
 import { readPartialCloneConfig, withSafeGitConfig } from "../git/gitLanes.js";
 import { readLinkTextSafe, readBoundedSync, GIT_POINTER_MAX_BYTES } from "../git/gitFilesystem.js";
 import { hideUnsafePath, hideUnsafeText } from "../unsafePathGlyphs.js";
-import { reconcileSparseCheckout } from "../plugins/marketplaceManager.js";
 import { writeSparsePatterns, uploadPackArgForRemote } from "./sparseCheckout.js";
 import { logForDebugging } from "../debug.js";
 import { SAFE_UPLOAD_PACK_ARG, SAFE_UPLOAD_PACK_ARG_2 } from "../gitSafeExec.js";
 import { redactUrlsInMessage } from "../redaction/urlRedaction.js";
 import { truncateMiddle as truncateMiddle_2 } from "../../memdir/memoryTool.js";
 
-//@ chunk-e6aww6q8.js:3583881-3584208 placement
+//@ chunk-5xgkngpb.js:3679157-3679484 placement
 /**
  * 检查 git 版本是否不低于 2.36（按 git 可执行文件缓存结果）。
  */
@@ -58,23 +61,23 @@ function gitSupportsPartialCloneFetch(cwd) {
   }
   return versionPromise;
 }
-//@ chunk-e6aww6q8.js:3584409-3584489 placement
+//@ chunk-5xgkngpb.js:3679685-3679765 placement
 var MISSING_LIST_SLACK = 2;
 var MAX_LISTED_MISSING_BYTES = 67108864;
 var MISSING_TOO_MANY_TEXT = "more objects are missing than can be listed";
 var MAX_LISTED_MISSING_OBJECTS = 10;
-//@ chunk-e6aww6q8.js:3584489-3584547 placement
+//@ chunk-5xgkngpb.js:3679765-3679823 placement
 function isEagerBalloonEnabled() {
   return readFlagWithOverride("tengu_eager_balloon", {
     safe: true,
   });
 }
-//@ chunk-e6aww6q8.js:3584547-3584581 placement
+//@ chunk-5xgkngpb.js:3679823-3679857 placement
 var NO_PARTIAL_CLONE = {
   inForce: false,
   promisors: [],
 };
-//@ chunk-e6aww6q8.js:3584581-3584953 placement
+//@ chunk-5xgkngpb.js:3679857-3680229 placement
 /**
  * 检查目录是否是部分克隆：解析 git 目录、判断是否为子模块（找出上层仓库）、读取 promisor 远程顺序。
  */
@@ -114,7 +117,7 @@ async function inspectPartialClone(a, b) {
         promisors,
       };
 }
-//@ chunk-e6aww6q8.js:3584953-3585179 placement
+//@ chunk-5xgkngpb.js:3680229-3680455 placement
 async function resolveCommonDirFromPointer(a, commonDir) {
   if (commonDir !== NOT_A_GIT_REPO_PATH) return commonDir;
   let gitDirPath = join(a, ".git");
@@ -126,12 +129,12 @@ async function resolveCommonDirFromPointer(a, commonDir) {
       : null;
   return pointerTarget?.trim() ? resolve_2(a, pointerTarget.trim()) : commonDir;
 }
-//@ chunk-e6aww6q8.js:3585179-3585290 placement
+//@ chunk-5xgkngpb.js:3680455-3680566 placement
 function classifyGitDirOwnership({ gitDir, workTree }) {
   if (workTree === null || gitDir === NOT_A_GIT_REPO_PATH) return "other";
   return gitDir === join(workTree, ".git") ? "own" : "pointer";
 }
-//@ chunk-e6aww6q8.js:3585290-3585639 placement
+//@ chunk-5xgkngpb.js:3680566-3680915 placement
 /**
  * 从子模块 git 目录路径推断上层仓库位置。
  */
@@ -154,7 +157,7 @@ function findSuperproject(commonDirFromPointer, a) {
       }
     : null;
 }
-//@ chunk-e6aww6q8.js:3585639-3587324 placement
+//@ chunk-5xgkngpb.js:3680915-3682600 placement
 /**
  * 检出时关闭了按需拉取导致失败的说明。
  */
@@ -172,7 +175,7 @@ This checkout ran with git's on-demand fetching switched off, and git needed an 
   return `
 This checkout ran with git's on-demand fetching switched off, and git needed an object this repository does not have. If the repository is a partial clone, run "git archive -o objects.tar ${shortSha}" (git fetches the commit's missing files \u2014 in a sparse checkout, the whole tree's; delete objects.tar afterwards) in its main checkout and try again; otherwise check it with "git fsck".`;
 }
-//@ chunk-e6aww6q8.js:3587324-3587409 placement
+//@ chunk-5xgkngpb.js:3682600-3682685 placement
 function partialCloneFetchEnv({ inForce }) {
   return inForce
     ? {
@@ -181,12 +184,12 @@ function partialCloneFetchEnv({ inForce }) {
       }
     : {};
 }
-//@ chunk-e6aww6q8.js:3587409-3590734 placement
+//@ chunk-5xgkngpb.js:3682685-3686011 placement
 /**
  * 部分克隆仓库缺少对象时的错误说明。
  */
 async function explainPartialCloneFailure(
-  cwd,
+  repoDir,
   baseSha,
   { promisors },
   sparseConfig = null,
@@ -200,10 +203,10 @@ async function explainPartialCloneFailure(
   let sliced = baseSha.slice(0, 12);
   let fetchableRemotes = [];
   for (let promisor of promisors)
-    if (!promisor.startsWith("-") && (await reconcileSparseCheckout(cwd, promisor)))
+    if (!promisor.startsWith("-") && (await promisorRemoteUrlExists(repoDir, promisor)))
       fetchableRemotes.push(promisor);
   await using patterns = await writeSparsePatterns(
-    cwd,
+    repoDir,
     typeof sparseConfig === "function" ? await sparseConfig() : sparseConfig,
   );
   let hasFetchable = fetchableRemotes.length > 0;
@@ -244,7 +247,7 @@ async function explainPartialCloneFailure(
         "-c",
         "fetch.negotiationAlgorithm=noop",
         "fetch",
-        (await uploadPackArgForRemote(cwd, remote)) ?? SAFE_UPLOAD_PACK_ARG_2,
+        (await uploadPackArgForRemote(repoDir, remote)) ?? SAFE_UPLOAD_PACK_ARG_2,
         "--no-tags",
         "--no-write-fetch-head",
         "--recurse-submodules=no",
@@ -253,8 +256,8 @@ async function explainPartialCloneFailure(
         remote,
       ],
       {
-        cwd,
-        env: withSafeGitConfig(cwd),
+        cwd: repoDir,
+        env: withSafeGitConfig(repoDir),
         input: `${missing.join(`
 `)}
 `,
@@ -282,21 +285,37 @@ async function explainPartialCloneFailure(
     fetches--;
   }
 }
-//@ chunk-e6aww6q8.js:3590734-3590799 placement
+//@ chunk-5xgkngpb.js:3686011-3686076 placement
 function isSafeRemoteName(name) {
   return /^[A-Za-z0-9][A-Za-z0-9._\/@+-]*$/.test(name);
 }
-//@ chunk-e6aww6q8.js:3590799-3590961 placement
+//@ chunk-5xgkngpb.js:3686076-3686238 placement
 function describePromisorRemote(name) {
   return isSafeRemoteName(name)
     ? `"${name}"`
     : "(name not shown: it does not begin with a letter or digit, or has characters other than letters, digits and . _ / @ + -)";
 }
-//@ chunk-e6aww6q8.js:3590961-3591085 placement
+//@ chunk-5xgkngpb.js:3686238-3686362 placement
 function orderPromisorRemotes(partialCloneConfig) {
   if (partialCloneConfig === null || partialCloneConfig === undefined) return [];
   let { extension, remotes } = partialCloneConfig;
   return extension === null ? remotes : [...remotes.filter((remote) => remote !== extension), extension];
+}
+//@ chunk-5xgkngpb.js:3686362-3686523 sole-consumer
+/**
+ * 已有克隆的 remote URL 与 sparse-checkout 配置是否需要重新对齐。
+ */
+async function promisorRemoteUrlExists(repoDir, promisor) {
+  let result = await execFileNoThrowWithCwd(
+    gitExe(),
+    [...GIT_SAFE_GLOBAL_ARGS, "config", "--get", `remote.${promisor}.url`],
+    {
+      cwd: repoDir,
+      env: buildGitEnvForRepo(repoDir),
+      stdin: "ignore",
+    },
+  );
+  return result.code === 0 && result.stdout.trim() !== "";
 }
 export {
   inspectPartialClone,

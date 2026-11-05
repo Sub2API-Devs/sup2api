@@ -3,9 +3,9 @@
  *
  * 数字键防抖输入（避免误触提交）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FeedbackSurvey/useDebouncedDigitInput.ts
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -19,7 +19,7 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { Box } from "../../ink/components/Text.js";
 import { SurveyOption } from "./FeedbackSurveyView.js";
 
-//@ chunk-18hwfzwa.js:995118-995644 fingerprint (2.1.88 match: useDebouncedDigitInput, 0.727)
+//@ chunk-czq1j3j2.js:1029153-1029679 fingerprint (2.1.88 match: useDebouncedDigitInput, 0.728)
 function useDebouncedDigitInput(props) {
   let $ = useMemoCache(10);
   let { onSelect, inputValue, setInputValue } = props;

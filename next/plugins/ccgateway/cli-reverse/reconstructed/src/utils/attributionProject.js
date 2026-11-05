@@ -3,10 +3,10 @@
  *
  * 归因 Project 解析（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-m3nv29vw.js (5)
- * attribution: placement 5
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-x5s1qnh1.js (6)
+ * attribution: affinity 1, placement 5
  */
 import { isCcsTenant, getIsNonInteractiveSession, getOriginalCwdOrNull } from "../bootstrap/state.js";
 import {
@@ -27,7 +27,11 @@ import { isPathTrusted, checkHasTrustDialogAccepted } from "./config.js";
 import { identity } from "./identity.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-m3nv29vw.js:655-789 placement
+//@ chunk-x5s1qnh1.js:697-738 affinity
+function currentAttributionProject() {
+  return getSubscriberAttributionProject() ? resolveAttributionProject() : undefined;
+}
+//@ chunk-x5s1qnh1.js:738-867 placement
 /**
  * 非 CCS 租户且订阅用户符合归因条件时，解析归因 Project。
  */
@@ -37,25 +41,22 @@ function getSubscriberAttributionProject() {
       anthropicAuthEnabled: isAnthropicAuthEnabled(),
       oauthScopes: hasOAuthScope(CLAUDE_AI_INFERENCE_SCOPE) ? [CLAUDE_AI_INFERENCE_SCOPE] : [],
     });
-    if (
-      isSubscriberAttributionEligible({
-        isSubscriber,
-      })
-    )
-      return resolveAttributionProject();
+    return isSubscriberAttributionEligible({
+      isSubscriber,
+    });
   }
-  return;
+  return false;
 }
-//@ chunk-m3nv29vw.js:789-1462 placement
+//@ chunk-x5s1qnh1.js:867-1540 placement
 function parseAttributionProject() {
   try {
-    let subscriberAttributionProject = getSubscriberAttributionProject();
+    let resolved = currentAttributionProject();
     let resolvedLabel =
-      subscriberAttributionProject === undefined
+      resolved === undefined
         ? NOT_SENT_LABEL
-        : `${subscriberAttributionProject.project?.taggedId}|${subscriberAttributionProject.project?.source}|${subscriberAttributionProject.ignored.join(",")}`;
-    if (subscriberAttributionProject !== undefined && resolvedLabel !== lastAttributionState.last) {
-      let { project, ignored } = subscriberAttributionProject;
+        : `${resolved.project?.taggedId}|${resolved.project?.source}|${resolved.ignored.join(",")}`;
+    if (resolved !== undefined && resolvedLabel !== lastAttributionState.last) {
+      let { project, ignored } = resolved;
       if (ignored.length > 0) {
         logForDebugging(
           `Attribution Project: ignored a value that names no Project (from ${ignored.join(", ")})`,
@@ -70,7 +71,7 @@ function parseAttributionProject() {
         logForDebugging(`Attribution Project: ${project.taggedId} (from ${project.source})`);
     }
     lastAttributionState.last = resolvedLabel;
-    return subscriberAttributionProject?.project;
+    return resolved?.project;
   } catch (error) {
     if (lastAttributionState.last !== FAILED_LABEL) {
       lastAttributionState.last = FAILED_LABEL;
@@ -80,7 +81,7 @@ function parseAttributionProject() {
     return;
   }
 }
-//@ chunk-m3nv29vw.js:1462-2486 placement
+//@ chunk-x5s1qnh1.js:1540-2572 placement
 function resolveAttributionProject() {
   let ignoredSources = [];
   let CLAUDE_CODE_ATTRIBUTION_PROJECT = env.CLAUDE_CODE_ATTRIBUTION_PROJECT;
@@ -159,7 +160,7 @@ function resolveAttributionProject() {
     ignored: ignoredSources,
   };
 }
-//@ chunk-m3nv29vw.js:2486-2766 placement
+//@ chunk-x5s1qnh1.js:2572-2854 placement
 /**
  * 把 UUID 转为 claude_proj_01<base58> 形式的项目 ID（或校验已是该形式）。与插件无关，见 lead 建议。
  */
@@ -180,7 +181,7 @@ function normalizeAttributionProjectId(rawId) {
     value = value * 58n + BigInt(BASE58_ALPHABET.indexOf(char));
   return value <= MAX_UINT128 ? trimmed : undefined;
 }
-//@ chunk-m3nv29vw.js:2766-3104 placement (2.1.88 match: SETTING_SOURCE_TO_SCOPE, 0.811)
+//@ chunk-x5s1qnh1.js:3710-4048 placement (2.1.88 match: SETTING_SOURCE_TO_SCOPE, 0.812)
 /**
  * 归因 Project 的常量：设置来源标签、UUID 正则、base58 字母表与编码长度、128 位上限、状态文字与上次结果缓存。
  */
@@ -192,7 +193,7 @@ var MAX_UINT128;
 var NOT_SENT_LABEL;
 var FAILED_LABEL;
 var lastAttributionState;
-deferInit("chunk-m3nv29vw.js:2766", () => {
+deferInit("chunk-x5s1qnh1.js:3710", () => {
   SETTING_SOURCE_LABELS = {
     userSettings: "user",
     projectSettings: "project",
@@ -215,4 +216,10 @@ deferInit("chunk-m3nv29vw.js:2766", () => {
     },
   );
 });
-export { parseAttributionProject, getSubscriberAttributionProject };
+export {
+  parseAttributionProject,
+  currentAttributionProject,
+  getSubscriberAttributionProject,
+  resolveAttributionProject,
+  normalizeAttributionProjectId,
+};

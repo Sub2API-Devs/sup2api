@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：认证来源提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (1)
  * attribution: placement 1
  */
 import { env } from "../../utils/env.js";
@@ -29,7 +29,7 @@ import {
 import { getWIFPrecedenceSource } from "../../utils/wifProfile.js";
 import { getSettingsForSource } from "../../utils/settings/settings.js";
 
-//@ chunk-8wvtd8sr.js:23245-24363 placement
+//@ chunk-xzmy9dn4.js:23556-24674 placement
 /**
  * Artifact 需要 claude.ai 登录而当前认证来源会遮蔽登录时给出说明与补救：Unix socket 代理、宿主管理的文件描述符令牌、ANTHROPIC_API_KEY、apiKeyHelper 等。
  */

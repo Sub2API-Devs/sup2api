@@ -1,8 +1,8 @@
 /**
  * @azure/core-rest-pipeline/dist/esm/createPipelineFromOptions.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/core-rest-pipeline@1.21.0
- * pieces: chunk-mrx6y2r5.js (1)
+ * pieces: chunk-b5df2wx1.js (1)
  * attribution: esm-fingerprint 1
  */
 import { createEmptyHttpPipeline } from "../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";
@@ -22,7 +22,7 @@ import { tracingPolicy } from "./policies/tracingPolicy.js";
 import { getUserAgentPlatform } from "./util/userAgentPlatform.js";
 import { logPolicy_2 } from "./policies/logPolicy.js";
 
-//@ chunk-mrx6y2r5.js:62009-62693 esm-fingerprint
+//@ chunk-b5df2wx1.js:62009-62693 esm-fingerprint
 function createPipelineFromOptions(options) {
   var _a;
   let pipeline = createEmptyHttpPipeline();

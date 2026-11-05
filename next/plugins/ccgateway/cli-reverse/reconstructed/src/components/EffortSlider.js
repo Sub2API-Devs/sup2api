@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/effort 交互滑块（low…max、Ultracode 开关、仅本会话）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3rwvzn82.js (40)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-n2cdp9nk.js (40)
  * attribution: placement 39, sole-consumer 1
  */
 import {
@@ -80,21 +80,21 @@ import { Pane } from "./design-system/Pane.js";
 import { Select } from "./CustomSelect/selectTypeahead.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3rwvzn82.js:14223-14227 placement
+//@ chunk-n2cdp9nk.js:15373-15377 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3rwvzn82.js:14223", () => {
+deferInit("chunk-n2cdp9nk.js:15373", () => {
   init_react_production();
 });
-//@ chunk-3rwvzn82.js:14227-14231 placement
+//@ chunk-n2cdp9nk.js:15377-15381 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3rwvzn82.js:14227", () => {
+deferInit("chunk-n2cdp9nk.js:15377", () => {
   init_react_production();
 });
-//@ chunk-3rwvzn82.js:14231-14262 placement
+//@ chunk-n2cdp9nk.js:15381-15412 placement
 function arrayLength(list) {
   return list.length;
 }
-//@ chunk-3rwvzn82.js:14262-14350 placement
+//@ chunk-n2cdp9nk.js:15412-15500 placement
 function renderSelectedBar(bar, key) {
   return bar.startsWith("\u2587")
     ? jsxProd_default(
@@ -107,72 +107,72 @@ function renderSelectedBar(bar, key) {
       )
     : bar;
 }
-//@ chunk-3rwvzn82.js:14350-14384 placement
+//@ chunk-n2cdp9nk.js:15500-15534 placement
 function selectUltracode(state) {
   return state.ultracode;
 }
-//@ chunk-3rwvzn82.js:14384-14418 placement
+//@ chunk-n2cdp9nk.js:15534-15568 placement
 function selectUltracode_2(state) {
   return state.ultracode;
 }
-//@ chunk-3rwvzn82.js:14418-14471 placement
+//@ chunk-n2cdp9nk.js:15568-15621 placement
 function selectCacheMissAck(state) {
   return state.cacheMissAckedAtOutputTokens;
 }
-//@ chunk-3rwvzn82.js:14471-14522 placement
+//@ chunk-n2cdp9nk.js:15621-15672 placement
 function selectMode(state) {
   return state.toolPermissionContext.mode;
 }
-//@ chunk-3rwvzn82.js:14522-14577 placement
+//@ chunk-n2cdp9nk.js:15672-15727 placement
 function selectCacheMissAck_2(state) {
   return state.cacheMissAckedAtOutputTokens;
 }
-//@ chunk-3rwvzn82.js:14577-14630 placement
+//@ chunk-n2cdp9nk.js:15727-15780 placement
 function selectMode_2(state) {
   return state.toolPermissionContext.mode;
 }
-//@ chunk-3rwvzn82.js:14630-14666 placement
+//@ chunk-n2cdp9nk.js:15780-15816 placement
 function selectUltracode_3(state) {
   return state.ultracode;
 }
-//@ chunk-3rwvzn82.js:14666-14689 placement
+//@ chunk-n2cdp9nk.js:15816-15839 placement
 function returnFalse() {
   return false;
 }
-//@ chunk-3rwvzn82.js:14689-14715 placement
+//@ chunk-n2cdp9nk.js:15839-15865 placement
 function not(value) {
   return !value;
 }
-//@ chunk-3rwvzn82.js:14715-14770 placement
+//@ chunk-n2cdp9nk.js:15865-15920 placement
 function selectCacheMissAck_3(state) {
   return state.cacheMissAckedAtOutputTokens;
 }
-//@ chunk-3rwvzn82.js:14770-14823 placement
+//@ chunk-n2cdp9nk.js:15920-15973 placement
 function selectMode_3(state) {
   return state.toolPermissionContext.mode;
 }
-//@ chunk-3rwvzn82.js:14823-14859 placement
+//@ chunk-n2cdp9nk.js:15973-16009 placement
 function selectUltracode_4(state) {
   return state.ultracode;
 }
-//@ chunk-3rwvzn82.js:14859-14882 placement
+//@ chunk-n2cdp9nk.js:16009-16032 placement
 function returnFalse_2() {
   return false;
 }
-//@ chunk-3rwvzn82.js:14882-14905 placement
+//@ chunk-n2cdp9nk.js:16032-16055 placement
 function returnFalse_3() {
   return false;
 }
-//@ chunk-3rwvzn82.js:14998-15078 sole-consumer
+//@ chunk-n2cdp9nk.js:16148-16228 sole-consumer
 async function applyEffortAndReport(value, context, setAppState, onDone, storageV5, closeDialog = true) {
   let result = await applyEffortCommand(value, context, setAppState, closeDialog, storageV5);
   onDone(result.message, ApplyEffortAndClose(result));
 }
-//@ chunk-3rwvzn82.js:15078-15136 placement
+//@ chunk-n2cdp9nk.js:16228-16286 placement
 function levelChangedOnly(change) {
   return change.levelChanged || !change.ultracodeChanged;
 }
-//@ chunk-3rwvzn82.js:15136-15554 placement
+//@ chunk-n2cdp9nk.js:16286-16704 placement
 async function applyEffortSelection(selection, context, setAppState, onDone, storageV5, showMessages = true) {
   let { level, ultracode, ultracodeChanged } = selection;
   let messages = [];
@@ -210,7 +210,7 @@ async function applyEffortSelection(selection, context, setAppState, onDone, sto
   }
   onDone(messages.join(" \xB7 "), closeAfterApply);
 }
-//@ chunk-3rwvzn82.js:15554-16836 placement
+//@ chunk-n2cdp9nk.js:16704-17981 placement
 function EffortCommandView(props) {
   let $ = useMemoCache(29);
   let { args, route, ultracodeConfirmed, getMessages, onDone, storageV5 } = props;
@@ -335,7 +335,7 @@ function EffortCommandView(props) {
   }
   return null;
 }
-//@ chunk-3rwvzn82.js:16836-17222 placement
+//@ chunk-n2cdp9nk.js:17981-18367 placement
 var EFFORT_TITLE = "Effort";
 var SLIDER_MAX_WIDTH = 42;
 var SLIDER_TICK_WIDTH = 14;
@@ -370,7 +370,7 @@ var EFFORT_LEVEL_OPTIONS = [
 ];
 var SLIDER_MIN_WIDTH = 3;
 var EFFORT_CAPPED_TEXT = "Higher effort levels are capped by your settings or organization.";
-//@ chunk-3rwvzn82.js:17222-17511 placement
+//@ chunk-n2cdp9nk.js:18367-18656 placement
 function computeEffortSliderLayout(count) {
   let min = Math.min(Math.max(count, 1), EFFORT_LEVEL_OPTIONS.length);
   let levels = EFFORT_LEVEL_OPTIONS.slice(0, min);
@@ -392,13 +392,13 @@ function computeEffortSliderLayout(count) {
     spacers,
   };
 }
-//@ chunk-3rwvzn82.js:17511-17603 placement
+//@ chunk-n2cdp9nk.js:18656-18748 placement
 function labelOffsets(levels, spacers) {
   return levels.map((level, index) =>
     levels.slice(0, index).reduce((acc, level, index) => acc + level.label.length + spacers[index], 0),
   );
 }
-//@ chunk-3rwvzn82.js:17603-17665 placement
+//@ chunk-n2cdp9nk.js:18748-18810 placement
 function hasEffortOverride(level) {
   return (
     level !== undefined &&
@@ -406,7 +406,7 @@ function hasEffortOverride(level) {
     effortCostRatio(level, getDefaultEffortLevel(level)) !== null
   );
 }
-//@ chunk-3rwvzn82.js:17665-17990 placement
+//@ chunk-n2cdp9nk.js:18810-19135 placement
 function describeEffortLevel(model, level) {
   let defaultEffortLevel = getDefaultEffortLevel(model);
   if (level === "max" && modelSupportsMaxEffort(model)) {
@@ -424,7 +424,7 @@ function describeEffortLevel(model, level) {
     ? ""
     : `${formatCostMultiplier(price)} the estimated cost of ${defaultEffortLevel} (the default)`;
 }
-//@ chunk-3rwvzn82.js:17990-18511 placement
+//@ chunk-n2cdp9nk.js:19135-19656 placement
 /**
  * 计算当前模型可选的 effort 档位、组织默认值与上限说明，供 effort 滑块使用。
  */
@@ -454,7 +454,7 @@ function getEffortSliderModel(model) {
     orgNote,
   };
 }
-//@ chunk-3rwvzn82.js:18511-18994 placement
+//@ chunk-n2cdp9nk.js:19656-20139 placement
 function EffortLevelLabel(props) {
   let $ = useMemoCache(9);
   let { level, selected } = props;
@@ -506,7 +506,7 @@ function EffortLevelLabel(props) {
   } else coloredLabel = $[8];
   return coloredLabel;
 }
-//@ chunk-3rwvzn82.js:18994-19271 placement
+//@ chunk-n2cdp9nk.js:20139-20416 placement
 function ShimmerText(props) {
   let $ = useMemoCache(5);
   let { text } = props;
@@ -540,7 +540,7 @@ function ShimmerText(props) {
   } else textNode = $[4];
   return textNode;
 }
-//@ chunk-3rwvzn82.js:19271-19676 placement (2.1.88 match: RARITY_COLORS, 0.418)
+//@ chunk-n2cdp9nk.js:20416-20821 placement (2.1.88 match: RARITY_COLORS, 0.417)
 /**
  * 文字逐字符"闪光"高亮动画组件。
  */
@@ -583,7 +583,7 @@ function ShimmerText_2(props) {
   } else textNode = $[5];
   return textNode;
 }
-//@ chunk-3rwvzn82.js:19676-19899 placement
+//@ chunk-n2cdp9nk.js:20821-21044 placement
 /**
  * 计算 effort 滑块的初始位置：先看环境变量覆盖或当前设定值，再取已应用/默认 effort 等级，找不到时用默认下标。
  */
@@ -598,9 +598,9 @@ function resolveInitialEffortIndex(mainLoopModel, queuedMessageText, slider) {
   let index = slider.levels.findIndex((level) => level.value === appliedLevel);
   return index === -1 ? SLIDER_MIN_WIDTH : index;
 }
-//@ chunk-3rwvzn82.js:19899-19908 placement
+//@ chunk-n2cdp9nk.js:21044-21053 placement
 var NO_SELECTION = -1;
-//@ chunk-3rwvzn82.js:19908-20079 placement
+//@ chunk-n2cdp9nk.js:21053-21224 placement
 function EffortSliderOrPicker(props) {
   let $ = useMemoCache(4);
   if (useIsScreenReaderEnabled()) {
@@ -624,7 +624,7 @@ function EffortSliderOrPicker(props) {
   } else slider = $[3];
   return slider;
 }
-//@ chunk-3rwvzn82.js:20079-28776 placement
+//@ chunk-n2cdp9nk.js:21224-29919 placement
 /**
  * /effort 交互滑块：在 low…max 间切换，支持 Ultracode 开关和"仅本会话"。
  */
@@ -1421,11 +1421,11 @@ function EffortSlider(props) {
   } else sliderElement = $[169];
   return sliderElement;
 }
-//@ chunk-3rwvzn82.js:28776-28797 placement
+//@ chunk-n2cdp9nk.js:29919-29940 placement
 var SLIDER_TOTAL_WIDTH = 70;
 var SLIDER_GAP = 6;
 var SLIDER_LABEL_WIDTH = 14;
-//@ chunk-3rwvzn82.js:28797-29349 placement
+//@ chunk-n2cdp9nk.js:29940-30493 placement
 function UltracodeToggle(props) {
   let $ = useMemoCache(9);
   let { on, chord, width, hint } = props;
@@ -1486,10 +1486,10 @@ function UltracodeToggle(props) {
   } else toggleElement = $[8];
   return toggleElement;
 }
-//@ chunk-3rwvzn82.js:29425-29461 placement
+//@ chunk-n2cdp9nk.js:30569-30605 placement
 var ULTRACODE_TOGGLE = "ultracode-toggle";
 var AUTO = "auto";
-//@ chunk-3rwvzn82.js:29461-32366 placement
+//@ chunk-n2cdp9nk.js:30605-33509 placement
 function EffortPicker(props) {
   let $ = useMemoCache(63);
   let { getMessages, onDone, storageV5 } = props;
@@ -1787,7 +1787,7 @@ function EffortPicker(props) {
   } else pickerElement = $[62];
   return pickerElement;
 }
-//@ chunk-3rwvzn82.js:32366-32635 placement
+//@ chunk-n2cdp9nk.js:33509-33778 placement
 /**
  * /effort 命令的 JSX 入口：带参数时显示 EffortCommandView，否则显示交互滑块（屏幕阅读器下为选择列表）。
  */
@@ -1816,4 +1816,4 @@ function EffortCommand(props) {
   } else contentElement = $[4];
   return contentElement;
 }
-export { hasEffortOverride, describeEffortLevel, selectUltracode, EffortCommand, getEffortSliderModel };
+export { selectUltracode, EffortCommand, hasEffortOverride, describeEffortLevel, getEffortSliderModel };

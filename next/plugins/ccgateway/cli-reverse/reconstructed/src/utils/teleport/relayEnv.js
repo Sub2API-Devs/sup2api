@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增。校验 teleport 中继的 SESSION_INGRESS_URL 来源（必须 https、无额外部分）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2nwtj5hg.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3e78gx3d.js (6)
  * attribution: placement 6
  */
 import { env } from "../env.js";
 import { isFirstPartyProvider } from "../model/providers.js";
 
-//@ chunk-2nwtj5hg.js:262-624 placement
+//@ chunk-3e78gx3d.js:262-624 placement
 /**
  * 校验 teleport 中继的 SESSION_INGRESS_URL 来源（必须 https、无额外部分）。
  */
@@ -51,9 +51,9 @@ function validateIngressOrigin(origin) {
     origin: url.origin,
   };
 }
-//@ chunk-2nwtj5hg.js:624-652 placement
+//@ chunk-3e78gx3d.js:624-652 placement
 var SESSION_ID_RE = /^cse_[A-Za-z0-9_]+$/;
-//@ chunk-2nwtj5hg.js:652-1189 placement
+//@ chunk-3e78gx3d.js:652-1189 placement
 /**
  * 读取 teleport 中继环境变量
  */
@@ -104,23 +104,23 @@ function readTeleportRelayEnv() {
     },
   };
 }
-//@ chunk-2nwtj5hg.js:1189-1240 placement
+//@ chunk-3e78gx3d.js:1189-1240 placement
 function getTeleportRelayEnvConfig() {
   let teleportRelayEnv = readTeleportRelayEnv();
   return teleportRelayEnv.ok ? teleportRelayEnv.config : null;
 }
-//@ chunk-2nwtj5hg.js:1240-1290 placement
+//@ chunk-3e78gx3d.js:1240-1290 placement
 function explainTeleportEnvRefusal() {
   let teleportRelayEnv = readTeleportRelayEnv();
   return teleportRelayEnv.ok ? null : teleportRelayEnv.cause;
 }
-//@ chunk-2nwtj5hg.js:1290-1334 placement
+//@ chunk-3e78gx3d.js:1290-1334 placement
 function teleportRelayCarrierPresent() {
   return env.CCR_SESSION_PROFILE;
 }
 export {
-  validateIngressOrigin,
-  getTeleportRelayEnvConfig,
   teleportRelayCarrierPresent,
+  getTeleportRelayEnvConfig,
   explainTeleportEnvRefusal,
+  validateIngressOrigin,
 };

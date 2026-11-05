@@ -1,13 +1,13 @@
 /**
  * asciichart/asciichart.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: asciichart@1.5.25
- * pieces: chunk-9h8dr0qb.js (1)
+ * pieces: chunk-j6tt9nsa.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 
-//@ chunk-9h8dr0qb.js:4572-6534 cjs-fingerprint
+//@ chunk-j6tt9nsa.js:4574-6529 cjs-fingerprint
 var require_asciichart = __commonJS(function (cjsExports) {
   (function (colors) {
     colors.black = "\x1B[30m";

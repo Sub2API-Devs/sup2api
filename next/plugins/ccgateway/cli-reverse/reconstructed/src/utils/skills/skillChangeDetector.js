@@ -3,10 +3,10 @@
  *
  * 并入旧版已有路径：skill 变更检测。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/skills/skillChangeDetector.ts
- * pieces: chunk-1rckdhfn.js (1), chunk-2njac0sx.js (5), chunk-5634v5r7.js (1), chunk-g3mpnrhd.js (1)
- * attribution: fingerprint 2, placement 4, sole-consumer 2
+ * pieces: chunk-3n0n2sf6.js (5), chunk-f3md3zsc.js (1), chunk-s24mfyjz.js (1), chunk-wtefc7a6.js (1)
+ * attribution: placement 4, fingerprint 2, sole-consumer 2
  */
 import * as pathModule from "path";
 import { complianceTaintState } from "../../services/policyLimits/complianceTaints.js";
@@ -17,11 +17,11 @@ import {
   SKILL_WATCH_MIN_MS,
   SKILL_WATCH_SETTLE_MS,
   SKILL_WATCH_POLL_MS,
+  SKILL_WATCH_IDLE_MS,
   collectPromptCommandHashes,
   SKILL_WATCH_ENABLED,
   SKILL_WATCH_MAX_IDLE_MS,
   SKILL_WATCH_RETRY_MS,
-  SKILL_WATCH_IDLE_MS,
   SKILL_WATCH_TIMEOUT_MS,
   SKILL_WATCHER_IDLE_WAKE_TAG,
   SKILL_WATCH_BACKOFF_MS,
@@ -46,11 +46,12 @@ import {
 import { clearCommandMemoizationCaches, clearCommandsCache } from "../../commands.js";
 import { logForDebugging } from "../debug.js";
 import { registerCleanup } from "../cleanupRegistry.js";
+import { isSlowSkillsWatchOn } from "./ccrSlowSkillsWatch.js";
 import { chokidar_default } from "../../../vendor/chokidar/index.js";
 import { SYNCED_SUBDIR, SYNCED_DIR } from "../plugins/syncedItems.js";
 import { errorMessage, withTelemetryMessage, toError } from "../errors.js";
 import { logError } from "../log.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { sleep } from "../sleep.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
@@ -64,14 +65,14 @@ import { refreshSkillsSyncVeto } from "../claudeAiSync/skillsSync.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1rckdhfn.js:1589-1626 fingerprint (2.1.88 match: skillChangeDetector, 0.599)
+//@ chunk-f3md3zsc.js:1589-1626 fingerprint (2.1.88 match: skillChangeDetector, 0.599)
 /**
  * 测试用：重置 skill 变更检测器。
  */
 function skillChangeDetector() {
   complianceTaintState().resetForTesting();
 }
-//@ chunk-g3mpnrhd.js:2629-3044 placement
+//@ chunk-s24mfyjz.js:2662-3077 placement
 /**
  * 比较技能变化需要停止/启动/重启的服务。
  */
@@ -112,7 +113,7 @@ function diffSkillServers(currentConfig, config) {
   }
   return changes;
 }
-//@ chunk-2njac0sx.js:1112-5402 placement
+//@ chunk-3n0n2sf6.js:1149-5552 placement
 /**
  * skill 变更检测器：chokidar 监听上述目录（depth 2，只看 .md，忽略 .git），按交互活跃度切换轮询间隔，变化去抖后先跑 ConfigChange 钩子（可阻断），再清 skill 缓存并通知重载。
  */
@@ -121,6 +122,7 @@ function createSkillChangeDetector(changedPath) {
   let pollInterval = changedPath?.pollInterval ?? SKILL_WATCH_MIN_MS;
   let reloadDebounce = changedPath?.reloadDebounce ?? SKILL_WATCH_SETTLE_MS;
   let chokidarInterval = changedPath?.chokidarInterval ?? SKILL_WATCH_POLL_MS;
+  let idleChokidarInterval = changedPath?.idleChokidarInterval ?? SKILL_WATCH_IDLE_MS;
   let skillRoot;
   let getFingerprint = changedPath?.getFingerprint ?? (() => collectPromptCommandHashes(skillRoot));
   let now = changedPath?.now ?? Date.now;
@@ -169,13 +171,16 @@ function createSkillChangeDetector(changedPath) {
     lastFingerprint = await getFingerprint().catch(() => null);
     if (disposed || generation !== startGeneration) return;
     logForDebugging(`Watching for changes in skill/command directories: ${watchedPaths.join(", ")}...`);
-    watcher = createWatcher(chokidarInterval);
+    watcher = createWatcher(currentInterval());
     let readyWatcher = watcher;
     await new Promise((resolve) => readyWatcher.once("ready", () => resolve()));
     if (SKILL_WATCH_ENABLED) startInteractionWatch();
     unregisterCleanup = registerCleanup(dispose);
   }
-  function createWatcher(watchPollInterval) {
+  function currentInterval() {
+    return isSlowSkillsWatchOn() ? idleChokidarInterval : chokidarInterval;
+  }
+  function createWatcher(interval) {
     mergerEpoch = now();
     watcherReady = false;
     let skillsPath = getSkillsPath("userSettings", "skills");
@@ -196,8 +201,8 @@ function createSkillChangeDetector(changedPath) {
       },
       ignorePermissionErrors: true,
       usePolling: SKILL_WATCH_ENABLED,
-      interval: watchPollInterval,
-      binaryInterval: watchPollInterval,
+      interval,
+      binaryInterval: interval,
       atomic: true,
     });
     chokidarWatcher.on("add", handleChange);
@@ -265,7 +270,7 @@ function createSkillChangeDetector(changedPath) {
     let idleNow = now() - lastInteractionTime() > SKILL_WATCH_MAX_IDLE_MS;
     if (idleNow === isIdle) return;
     isIdle = idleNow;
-    let nextInterval = idleNow ? SKILL_WATCH_IDLE_MS : chokidarInterval;
+    let nextInterval = idleNow ? idleChokidarInterval : currentInterval();
     logForDebugging(
       `[skills] ${idleNow ? "idle" : "active"} \u2014 switching poll interval to ${nextInterval}ms`,
     );
@@ -296,7 +301,7 @@ function createSkillChangeDetector(changedPath) {
     if (!started || disposed) return;
     let watchablePaths = await getWatchablePaths(skillRoot);
     if (disposed) return;
-    let nextPaths = uniq([...watchedPaths, ...watchablePaths]);
+    let nextPaths = normalizeCaseForComparison_2([...watchedPaths, ...watchablePaths]);
     if (nextPaths.length === watchedPaths.length) return;
     let generation = ++startGeneration;
     watchedPaths = nextPaths;
@@ -304,7 +309,7 @@ function createSkillChangeDetector(changedPath) {
       `[skills] session moved \u2014 watching skill/command directories: ${watchedPaths.join(", ")}`,
     );
     if (watcher) watcher.close();
-    watcher = createWatcher(isIdle ? SKILL_WATCH_IDLE_MS : chokidarInterval);
+    watcher = createWatcher(isIdle ? idleChokidarInterval : currentInterval());
     let newWatcher = watcher;
     let promise = new Promise((resolve) => newWatcher.once("ready", () => resolve()));
     await Promise.race([
@@ -370,6 +375,9 @@ function createSkillChangeDetector(changedPath) {
     logForDiagnosticsNoPII("info", "skill_watch_saw_change", {
       in_synced_skills_folder: any,
       within_40s_of_announced_reload: recentlyAnnounced,
+      ...(isSlowSkillsWatchOn() && {
+        kept_at_idle_poll_interval: true,
+      }),
     });
   }
   function queueReload(path) {
@@ -447,15 +455,15 @@ function createSkillChangeDetector(changedPath) {
     _checkIdleTransitionForTest: updateIdleState,
   };
 }
-//@ chunk-2njac0sx.js:5402-5415 placement
+//@ chunk-3n0n2sf6.js:5552-5565 placement
 /**
  * 全局共享的 skill 变更检测器，支持 rehome。
  */
 var sharedSkillChangeDetector; // deferred: uses createSkillChangeDetector of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-2njac0sx.js:5402", () => {
+deferInit("chunk-3n0n2sf6.js:5552", () => {
   sharedSkillChangeDetector = createSkillChangeDetector();
 });
-//@ chunk-2njac0sx.js:5415-6543 fingerprint (2.1.88 match: getWatchablePaths, 0.908)
+//@ chunk-3n0n2sf6.js:5565-6693 fingerprint (2.1.88 match: getWatchablePaths, 0.908)
 /**
  * 列出 skill 热加载要监听的目录：用户 skills（含 synced）、用户/项目 commands、项目 skills（git worktree 时回退主仓库）、用户/项目 agents、--add-dir 的 .claude/skills；只返回存在的。
  */
@@ -546,12 +554,12 @@ async function getWatchablePaths(hostFiles) {
   }
   return paths;
 }
-//@ chunk-2njac0sx.js:6543-6648 sole-consumer
+//@ chunk-3n0n2sf6.js:6693-6798 sole-consumer
 async function hostPathExists(fs, hostPath) {
   let stats = await fs.hostFiles.stat(PathSpace.workspace(hostPath));
   return stats.ok && stats.value.kind !== "absent";
 }
-//@ chunk-2njac0sx.js:6648-6758 sole-consumer
+//@ chunk-3n0n2sf6.js:6798-6908 sole-consumer
 async function pathExists(fs, hostFiles, path) {
   try {
     if (isStorageV5Enabled() && hostFiles !== undefined) return await hostPathExists(hostFiles, path);
@@ -561,7 +569,7 @@ async function pathExists(fs, hostFiles, path) {
     return false;
   }
 }
-//@ chunk-5634v5r7.js:346-618 placement
+//@ chunk-wtefc7a6.js:346-618 placement
 /**
  * 工作目录变化后重新加载技能：清缓存、通知变化并让技能监视器重新定位。
  */
@@ -583,4 +591,4 @@ async function reloadSkillsAfterDirectoryChange() {
     logFeatureSad("skill_directory_reload", "rehome_failed");
   }
 }
-export { reloadSkillsAfterDirectoryChange, sharedSkillChangeDetector, skillChangeDetector, diffSkillServers };
+export { sharedSkillChangeDetector, reloadSkillsAfterDirectoryChange, diffSkillServers, skillChangeDetector };

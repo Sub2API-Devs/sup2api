@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Claude 自身状态路径模式（防止被工具改写）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9ncz9ams.js (22), chunk-cdz6g143.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9k0gzm2y.js (22), chunk-c4qa5qn0.js (1)
  * attribution: placement 23
  */
 import { dirname, join, basename, sep, isAbsolute } from "path";
@@ -15,7 +15,7 @@ import { keychainProjectDirs } from "../secureStorage/macOsKeychainHelpers.js";
 import { getDeviceKeysFilePath, CREDENTIALS_FILE_NAME, DEVICE_KEYS_FILE_NAME } from "../auth.js";
 import { getGlobalClaudeFile, mapped, LEGACY_CONFIG_JSON, getDefaultGlobalClaudeFile, env } from "../env.js";
 import { toStringExport } from "../../../vendor/lodash-es/toString.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2, toPosixPath, matchingRuleForInput } from "./filesystem.js";
 import { REMOTE_SETTINGS_CONSENT_FILE } from "../../services/remoteManagedSettings/consentRecords.js";
 import {
   HELPER_CONSENT_STATE_ID,
@@ -36,15 +36,13 @@ import { getPlatform } from "../platform.js";
 import { getSessionsDir } from "../sessionRecords.js";
 import { getLatchedPreSettingsEnvSnapshot } from "../managedEnvApply.js";
 import { getPathsForPermissionCheck } from "../fsOperations.js";
-import { escapeRuleContent } from "./permissionRuleParser.js";
-import { toPosixPath, matchingRuleForInput } from "./filesystem.js";
+import { escapeRuleContent, permissionRuleValueFromString } from "./permissionRuleParser.js";
 import { expandPath } from "../path.js";
 import { getEmptyToolPermissionContext } from "../../Tool.js";
-import { formatPermissionRule } from "./disallowedToolsFlag.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-cdz6g143.js:632-772 placement
+//@ chunk-c4qa5qn0.js:632-772 placement
 /**
  * Claude 状态文件路径（全局配置、旧配置、凭证、设备密钥）。
  */
@@ -60,33 +58,33 @@ function claudeStateFilePaths() {
     getDeviceKeysFilePath(),
   ];
 }
-//@ chunk-9ncz9ams.js:1126-1173 placement
+//@ chunk-9k0gzm2y.js:1126-1173 placement
 var REGEX_SPECIAL_CHARS_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var REGEX_SPECIAL_CHARS_PROBE;
-deferInit("chunk-9ncz9ams.js:1126", () => {
+deferInit("chunk-9k0gzm2y.js:1126", () => {
   REGEX_SPECIAL_CHARS_RE = /[\\^$.*+?()[\]{}|]/g;
   REGEX_SPECIAL_CHARS_PROBE = RegExp(REGEX_SPECIAL_CHARS_RE.source);
 });
-//@ chunk-9ncz9ams.js:1173-1238 placement (2.1.88 match: urlPatternToRegex, 1)
+//@ chunk-9k0gzm2y.js:1173-1238 placement (2.1.88 match: urlPatternToRegex, 1)
 function urlPatternToRegex(pattern) {
   pattern = toStringExport(pattern);
   return pattern && REGEX_SPECIAL_CHARS_PROBE.test(pattern)
     ? pattern.replace(REGEX_SPECIAL_CHARS_RE, "\\$&")
     : pattern;
 }
-//@ chunk-9ncz9ams.js:1238-1246 placement
+//@ chunk-9k0gzm2y.js:1238-1246 placement
 var urlPatternToRegexCached = urlPatternToRegex;
-//@ chunk-9ncz9ams.js:1246-1322 placement (2.1.88 match: isInGlobalClaudeFolder, 1)
+//@ chunk-9k0gzm2y.js:1246-1322 placement (2.1.88 match: isInGlobalClaudeFolder, 1)
 function getClaudeConfigDirs() {
-  return uniq(
+  return normalizeCaseForComparison_2(
     [getClaudeConfigDirOrNull(), join(homedir(), ".claude"), keychainProjectDirs()].filter(
       (dir) => dir !== null,
     ),
   );
 }
-//@ chunk-9ncz9ams.js:1322-1348 placement
+//@ chunk-9k0gzm2y.js:1322-1348 placement
 var CLAUDE_STATE_FILENAMES; // deferred: uses REMOTE_SETTINGS_CONSENT_FILE (../../services/remoteManagedSettings/consentRecords.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-9ncz9ams.js:1322", () => {
+deferInit("chunk-9k0gzm2y.js:1322", () => {
   CLAUDE_STATE_FILENAMES = [
     REMOTE_SETTINGS_CONSENT_FILE,
     HELPER_CONSENT_STATE_ID,
@@ -94,7 +92,7 @@ deferInit("chunk-9ncz9ams.js:1322", () => {
     POLICY_LIMITS_CACHE_FILENAME,
   ];
 });
-//@ chunk-9ncz9ams.js:1348-1551 placement
+//@ chunk-9k0gzm2y.js:1348-1551 placement
 function claudeStatePathsCacheKey() {
   return [
     homedir(),
@@ -108,7 +106,7 @@ function claudeStatePathsCacheKey() {
     readLatchedEnv("LOCALAPPDATA") ?? "",
   ].join("\x00");
 }
-//@ chunk-9ncz9ams.js:1551-3381 placement
+//@ chunk-9k0gzm2y.js:1551-3381 placement
 /**
  * Claude 自身状态文件/目录（配置目录、全局配置、设置、策略缓存等）的路径模式集合，用于防止工具改写。
  */
@@ -116,10 +114,13 @@ var claudeStatePathPatterns; // deferred: uses getClaudeConfigDirs of its import
 var claudeStateGlobPatterns;
 var claudeStateGlobEntries;
 var claudeStateGlobEntriesExact;
-deferInit("chunk-9ncz9ams.js:1551", () => {
+deferInit("chunk-9k0gzm2y.js:1551", () => {
   claudeStatePathPatterns = memoizeAlias(() => {
     let claudeConfigDirs = getClaudeConfigDirs();
-    let homeDirs = uniq([...(isDiskless() ? [] : [dirname(getDefaultGlobalClaudeFile())]), homedir()]);
+    let homeDirs = normalizeCaseForComparison_2([
+      ...(isDiskless() ? [] : [dirname(getDefaultGlobalClaudeFile())]),
+      homedir(),
+    ]);
     return withPathAliases([
       ...claudeStateFilePaths(),
       ...claudeConfigDirs.flatMap((claudeConfigDir) => [
@@ -257,7 +258,7 @@ deferInit("chunk-9ncz9ams.js:1551", () => {
     );
   }, claudeStatePathsCacheKey);
 });
-//@ chunk-9ncz9ams.js:3381-3493 placement
+//@ chunk-9k0gzm2y.js:3381-3493 placement
 function uniqueLiteralTailPatterns(entries) {
   return uniqByExport(
     entries.map(({ literal, tail }) => ({
@@ -267,10 +268,10 @@ function uniqueLiteralTailPatterns(entries) {
     ({ literal, tail }) => `${literal}\x00${tail}`,
   );
 }
-//@ chunk-9ncz9ams.js:3493-3726 placement
+//@ chunk-9k0gzm2y.js:3493-3726 placement
 function getWindowsCredentialStoreDirs() {
   let { local, roaming } = getWindowsAppDataDirs();
-  return uniq([
+  return normalizeCaseForComparison_2([
     ...local.flatMap((localDir) => [
       join(localDir, "Microsoft", "Credentials"),
       join(localDir, "Microsoft", "Vault"),
@@ -282,44 +283,46 @@ function getWindowsCredentialStoreDirs() {
     ]),
   ]);
 }
-//@ chunk-9ncz9ams.js:3726-3918 placement
+//@ chunk-9k0gzm2y.js:3726-3918 placement
 function getWindowsAppDataDirs() {
   return {
-    local: uniq(
+    local: normalizeCaseForComparison_2(
       [readLatchedEnv("LOCALAPPDATA"), join(homedir(), "AppData", "Local")].filter(
         (dir) => dir !== undefined && dir !== "",
       ),
     ),
-    roaming: uniq(
+    roaming: normalizeCaseForComparison_2(
       [readLatchedEnv("APPDATA"), join(homedir(), "AppData", "Roaming")].filter(
         (dir) => dir !== undefined && dir !== "",
       ),
     ),
   };
 }
-//@ chunk-9ncz9ams.js:3918-3971 placement
+//@ chunk-9k0gzm2y.js:3918-3971 placement
 function readLatchedEnv(name) {
   let latchedPreSettingsEnvSnapshot = getLatchedPreSettingsEnvSnapshot();
   return latchedPreSettingsEnvSnapshot !== undefined ? latchedPreSettingsEnvSnapshot[name] : env[name];
 }
-//@ chunk-9ncz9ams.js:3971-4151 placement
+//@ chunk-9k0gzm2y.js:3971-4151 placement
 function getTempRootDirs() {
-  let roots = uniq(
+  let roots = normalizeCaseForComparison_2(
     [tmpdir(), env.TMPDIR, ...(isDiskless() ? [readLatchedEnv("TMPDIR")] : []), "/tmp", "/var/tmp"]
       .filter((dir) => dir !== undefined && isAbsolute(dir))
       .map(stripTrailingSlashes),
   );
   return isDiskless()
-    ? uniq(roots.map((dir) => (basename(dirname(dir)).startsWith(CC_TENANT) ? dirname(dirname(dir)) : dir)))
+    ? normalizeCaseForComparison_2(
+        roots.map((dir) => (basename(dirname(dir)).startsWith(CC_TENANT) ? dirname(dirname(dir)) : dir)),
+      )
     : roots;
 }
-//@ chunk-9ncz9ams.js:4151-4170 placement
+//@ chunk-9k0gzm2y.js:4151-4170 placement
 var CC_TENANT = "cc-tenant-";
-//@ chunk-9ncz9ams.js:4170-4248 placement
+//@ chunk-9k0gzm2y.js:4170-4248 placement
 function editorBackupVariants(name) {
   return [name, `.${name}`, `#${name}#`, `.#${name}`].flatMap((base) => [base, `${base}~`]);
 }
-//@ chunk-9ncz9ams.js:4248-4491 placement
+//@ chunk-9k0gzm2y.js:4248-4491 placement
 function tempFileVariants(name) {
   let index = name.lastIndexOf(".");
   let stem = index === -1 ? name : name.slice(0, index);
@@ -334,11 +337,11 @@ function tempFileVariants(name) {
     `#${name}#~*`,
   ];
 }
-//@ chunk-9ncz9ams.js:4491-4545 placement
+//@ chunk-9k0gzm2y.js:4491-4545 placement
 function withPathAliases(paths) {
-  return uniq(paths.flatMap((path) => [path, ...getPathsForPermissionCheck(path)]));
+  return normalizeCaseForComparison_2(paths.flatMap((path) => [path, ...getPathsForPermissionCheck(path)]));
 }
-//@ chunk-9ncz9ams.js:4545-5360 placement
+//@ chunk-9k0gzm2y.js:4545-5360 placement
 function createRealpathCache(source) {
   let platform = getPlatform();
   let isLinuxLike = platform === "linux" || platform === "wsl";
@@ -365,7 +368,7 @@ function createRealpathCache(source) {
       .flatMap(({ literal }) => [literal, dirname(literal)])
       .filter((literalPath) => configDirs.has(dirname(literalPath))),
   );
-  return uniq(
+  return normalizeCaseForComparison_2(
     claudeStateGlobEntries().flatMap(({ literal, tail }) => {
       let parentDir = dirname(literal);
       let resolvedParent =
@@ -385,9 +388,9 @@ function createRealpathCache(source) {
     }),
   );
 }
-//@ chunk-9ncz9ams.js:5360-5501 placement
+//@ chunk-9k0gzm2y.js:5360-5501 placement
 function claudeStateGlobs(entries = claudeStateGlobEntries()) {
-  return uniq(
+  return normalizeCaseForComparison_2(
     entries.map(
       ({ literal, tail }) =>
         `${ensureLeadingSlash(
@@ -398,7 +401,7 @@ function claudeStateGlobs(entries = claudeStateGlobEntries()) {
     ),
   );
 }
-//@ chunk-9ncz9ams.js:5501-5683 placement
+//@ chunk-9k0gzm2y.js:5501-5683 placement
 function isClaudeStatePath(inputPath) {
   if (isDiskless()) return false;
   let expanded = expandPath(inputPath);
@@ -410,14 +413,14 @@ function isClaudeStatePath(inputPath) {
     }) !== null
   );
 }
-//@ chunk-9ncz9ams.js:5683-5940 placement
-var claudeStatePathRegex; // deferred: uses urlPatternToRegexCached of its import cycle while loading; runs once the cycle is complete
+//@ chunk-9k0gzm2y.js:5683-5940 placement
+var claudeStatePathRegex; // deferred: uses normalizeCaseForComparison_2 (./filesystem.js) of its import cycle while loading; runs once the cycle is complete
 var claudeStateDenyContext;
-deferInit("chunk-9ncz9ams.js:5683", () => {
+deferInit("chunk-9k0gzm2y.js:5683", () => {
   claudeStatePathRegex = memoizeAlias(
     (entries) =>
       new RegExp(
-        `^(?:${uniq(
+        `^(?:${normalizeCaseForComparison_2(
           entries.map(({ literal, tail }) =>
             (tail === "" || tail === ".*" ? dirname(literal) : literal).replaceAll("\\", "/"),
           ),
@@ -432,8 +435,8 @@ deferInit("chunk-9ncz9ams.js:5683", () => {
       ...getEmptyToolPermissionContext(),
       alwaysDenyRules: {
         hostCredential: ruleContents.map((ruleContent) =>
-          formatPermissionRule({
-            toolName: FILE_READ_TOOL_NAME,
+          permissionRuleValueFromString({
+            toolName: READ,
             ruleContent,
           }),
         ),
@@ -442,20 +445,20 @@ deferInit("chunk-9ncz9ams.js:5683", () => {
     (ruleContents) => ruleContents.join("\x00"),
   );
 });
-//@ chunk-9ncz9ams.js:5940-5997 placement
+//@ chunk-9k0gzm2y.js:5940-5997 placement
 function ensureLeadingSlash(text) {
   return text === "" || text.startsWith("/") ? `/${text}` : text;
 }
-//@ chunk-9ncz9ams.js:5997-6045 placement
+//@ chunk-9k0gzm2y.js:5997-6045 placement
 function stripTrailingSlashes(text) {
   return text.replace(/[\\/]+$/, "") || text;
 }
 export {
-  claudeStateFilePaths,
   withPathAliases,
   getClaudeConfigDirs,
   createRealpathCache,
   claudeStatePathPatterns,
+  claudeStateFilePaths,
   claudeStateGlobs,
   isClaudeStatePath,
   editorBackupVariants,

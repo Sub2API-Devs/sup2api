@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。claude rc（Remote Control）启动前的工作区信任询问与警告排版。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p3rkx9n6.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jc9ry9f9.js (14)
  * attribution: placement 14
  */
 import { isDemoOrClaubbet } from "../plugins/functionHooks/policyGate.js";
@@ -41,7 +41,7 @@ import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.j
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { truncateToWidth } from "../utils/format.js";
 
-//@ chunk-p3rkx9n6.js:12247-12630 placement
+//@ chunk-jc9ry9f9.js:991-1374 placement
 /**
  * Remote Control（claude rc）工作区信任提示的文案。
  */
@@ -54,11 +54,11 @@ var REMOTE_CONTROL_TRUST_COPY = {
     "Sessions started here can read, edit, and execute files, and this folder's project settings (hooks, MCP servers, permission rules, helper commands) apply to them.",
   unattendedRemedy: "",
 };
-//@ chunk-p3rkx9n6.js:12630-12731 placement
+//@ chunk-jc9ry9f9.js:1374-1476 placement
 /**
  * stdin/stdout 都是 TTY、非某种无头模式且不在 CI 时才能交互询问。
  */
-function canPromptInteractively() {
+function canPromptForWorkspaceTrust() {
   return (
     process.stdin.isTTY === true &&
     process.stdout.isTTY === true &&
@@ -66,8 +66,8 @@ function canPromptInteractively() {
     !isEnvTruthy(getEnvCaseInsensitive(getPreSettingsEnvSnapshot(), "CI"))
   );
 }
-//@ chunk-p3rkx9n6.js:12731-14945 placement
-async function promptWorkspaceTrustForRemoteControl({
+//@ chunk-jc9ry9f9.js:1476-3691 placement
+async function offerBridgeWorkspaceTrust({
   dir,
   isHomeDir,
   canPrompt,
@@ -190,7 +190,7 @@ ${untrustedMessage}`,
     trusted: true,
   };
 }
-//@ chunk-p3rkx9n6.js:14945-16666 placement
+//@ chunk-jc9ry9f9.js:3691-5412 placement
 function workspaceTrustWarnings(cwd) {
   let otelHeadersHelperSources = getOtelHeadersHelperSources(cwd);
   let projectAliasesUser = projectSettingsAliasesUserSettings();
@@ -275,9 +275,9 @@ function workspaceTrustWarnings(cwd) {
         },
       ];
 }
-//@ chunk-p3rkx9n6.js:16666-16753 placement
+//@ chunk-jc9ry9f9.js:5412-5499 placement
 var TRUST_PROMPT_FOOTNOTE = "These will apply without asking. Only proceed if you trust this configuration.";
-//@ chunk-p3rkx9n6.js:16753-16906 placement
+//@ chunk-jc9ry9f9.js:5499-5652 placement
 /**
  * 读终端行列数；拿不到时返回 24×80 并标 assumed。
  */
@@ -295,7 +295,7 @@ function getTerminalSize() {
         assumed: true,
       };
 }
-//@ chunk-p3rkx9n6.js:16906-17374 placement
+//@ chunk-jc9ry9f9.js:5652-6120 placement
 /**
  * 终端太小（或尺寸未知）无法完整显示信任警告时的错误文本。
  */
@@ -305,20 +305,20 @@ function formatTerminalTooSmallError(screen, displayPath, isHomeDir, command) {
     ? `Error: Workspace not trusted. This terminal did not report its size, so the warnings for ${displayPath} can't be fitted to the screen. Run \`${command}\` again in a normal terminal window${nextStep}`
     : `Error: Workspace not trusted. This terminal (${screen.columns} columns \xD7 ${screen.rows} rows) is too small to show what trusting ${displayPath} turns on. Enlarge it and run \`${command}\` again${nextStep}`;
 }
-//@ chunk-p3rkx9n6.js:17374-17470 placement
+//@ chunk-jc9ry9f9.js:6120-6216 placement
 function countWrappedRows(lines, columns) {
   let max = Math.max(1, columns - 1);
   return lines.reduce((acc, line) => acc + Math.max(1, Math.ceil(textWidth(line) / max)), 0);
 }
-//@ chunk-p3rkx9n6.js:17470-17559 placement
+//@ chunk-jc9ry9f9.js:6216-6305 placement
 function textWidth(text) {
   let width = 0;
   for (let char of text) width += char.charCodeAt(0) < 128 ? 1 : 2;
   return Math.max(width, bunStringWidth(text));
 }
-//@ chunk-p3rkx9n6.js:17559-17567 placement
+//@ chunk-jc9ry9f9.js:6305-6313 placement
 var MAX_LIST_ITEM_ROWS = 3;
-//@ chunk-p3rkx9n6.js:17567-17693 placement
+//@ chunk-jc9ry9f9.js:6313-6439 placement
 /**
  * 逐步缩短文本直到折行后不超过指定行数。
  */
@@ -331,7 +331,7 @@ function truncateToFitRows(text, maxRows, columns) {
   }
   return truncated;
 }
-//@ chunk-p3rkx9n6.js:17693-18429 placement
+//@ chunk-jc9ry9f9.js:6439-7175 placement
 function fitTrustWarnings(warnings, screen, reservedRows) {
   if (screen === undefined) return warnings.map((warning) => warning.text);
   let { rows, columns } = screen;
@@ -363,9 +363,9 @@ function fitTrustWarnings(warnings, screen, reservedRows) {
   let droppedCount = mapped.length - kept.length;
   return [...kept, ...(droppedCount > 0 ? [overflowLine(droppedCount)] : []), text];
 }
-//@ chunk-p3rkx9n6.js:18429-18459 placement
+//@ chunk-jc9ry9f9.js:7175-7205 placement
 var PROJECT_SETTINGS_RELATIVE_PATH = ".claude/settings.json";
-//@ chunk-p3rkx9n6.js:18459-18821 placement
+//@ chunk-jc9ry9f9.js:7205-7567 placement
 /**
  * 去掉只来自某个来源的 allow 规则、附加目录，以及该来源的钩子/命令助手来源。
  */
@@ -392,4 +392,4 @@ function dropSourceOnlyWarnings(otelHeadersHelperSources) {
     commandHelperSources: otelHeadersHelperSources.commandHelperSources.filter(notProject),
   };
 }
-export { canPromptInteractively, promptWorkspaceTrustForRemoteControl };
+export { canPromptForWorkspaceTrust, offerBridgeWorkspaceTrust };

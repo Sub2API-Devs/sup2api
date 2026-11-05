@@ -3,14 +3,14 @@
  *
  * 把当前会话转为后台运行的 hook（handleBackgroundSession）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useSessionBackgrounding.ts
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { useCallback } from "../../vendor/react/cjs/react.production.js";
 
-//@ chunk-18hwfzwa.js:1709261-1709347 fingerprint (2.1.88 match: useSessionBackgrounding, 0.344)
+//@ chunk-czq1j3j2.js:1755560-1755646 fingerprint (2.1.88 match: useSessionBackgrounding, 0.36)
 function useSessionBackgrounding({ onBackgroundQuery }) {
   return {
     handleBackgroundSession: useCallback(() => {

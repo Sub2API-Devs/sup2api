@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增（门面模块 hostLaunchedGatewayRefusal）。远程托管设置加载与网关拒绝。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4pc1m5n9.js (46)
- * attribution: placement 46
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a28agxjs.js (47)
+ * attribution: placement 47
  */
 import { rm, unlink } from "fs/promises";
 import { hostname } from "os";
@@ -17,7 +17,12 @@ import {
   beginStartupBlock,
 } from "../policyLimits/startupGate.js";
 import { HostScoped } from "../../utils/hostScoped.js";
-import { getRootSession, getGatewayAuth, isHostVerifiedGatewayAuth } from "../../bootstrap/state.js";
+import {
+  getRootSession,
+  getGatewayAuth,
+  isHostVerifiedGatewayAuth,
+  isGatewayRequiredByHostPolicy,
+} from "../../bootstrap/state.js";
 import {
   computeRemoteSettingsEligibility,
   resetRemoteSettingsSyncCache,
@@ -107,7 +112,7 @@ import { settingsPresenceSignal } from "./seating.js";
 import { registerCleanup } from "../../utils/cleanupRegistry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-4pc1m5n9.js:4155-4191 placement
+//@ chunk-a28agxjs.js:4164-4200 placement
 /**
  * 探测托管设置是否可用的默认超时（10 秒）。
  */
@@ -115,7 +120,7 @@ var PROBE_TIMEOUT_MS = 1e4;
 var MAX_BACKGROUND_FETCH_RETRIES = 5;
 var POLL_INTERVAL_MS = 3600000;
 var LOADING_BACKSTOP_MS = 30000;
-//@ chunk-4pc1m5n9.js:4191-5287 placement
+//@ chunk-a28agxjs.js:4200-5296 placement
 class RemoteManagedSettingsState {
   poller = null;
   loadingCompletePromise = null;
@@ -177,22 +182,22 @@ class RemoteManagedSettingsState {
     this.poller = null;
   }
 }
-//@ chunk-4pc1m5n9.js:5287-5312 placement
+//@ chunk-a28agxjs.js:5296-5321 placement
 /**
  * 按 host 隔离的远程托管设置状态容器。
  */
 var remoteSettingsStateSlots; // deferred: uses RemoteManagedSettingsState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4pc1m5n9.js:5287", () => {
+deferInit("chunk-a28agxjs.js:5296", () => {
   remoteSettingsStateSlots = new HostScoped(() => new RemoteManagedSettingsState());
 });
-//@ chunk-4pc1m5n9.js:5312-5348 placement
+//@ chunk-a28agxjs.js:5321-5357 placement
 /**
  * 取当前 host 的远程托管设置状态（缓存、加载/拉取屏障、签名缓存影子等）。
  */
 function currentRemoteSettingsState() {
   return remoteSettingsStateSlots.of(getRootSession().host);
 }
-//@ chunk-4pc1m5n9.js:5348-5745 placement
+//@ chunk-a28agxjs.js:5357-5754 placement
 function initializeRemoteManagedSettingsLoadingPromise() {
   registerRemoteSettingsStartupWait();
   let state = currentRemoteSettingsState();
@@ -222,9 +227,9 @@ function initializeRemoteManagedSettingsLoadingPromise() {
       );
     });
 }
-//@ chunk-4pc1m5n9.js:5745-5761 placement
+//@ chunk-a28agxjs.js:5754-5770 placement
 function declareNoHybridTokenRefresh() {}
-//@ chunk-4pc1m5n9.js:5761-6088 placement
+//@ chunk-a28agxjs.js:5770-6097 placement
 function prefetchRemoteManagedSettings(credentials) {
   if (
     getGatewayAuth() ||
@@ -263,7 +268,7 @@ function prefetchRemoteManagedSettings(credentials) {
     (result) => result.success,
   );
 }
-//@ chunk-4pc1m5n9.js:6088-6198 placement
+//@ chunk-a28agxjs.js:6097-6207 placement
 function clearRemoteManagedSettingsPrefetch() {
   let state = currentRemoteSettingsState();
   state.prefetch.clear();
@@ -275,11 +280,11 @@ function clearRemoteManagedSettingsPrefetch() {
     },
   };
 }
-//@ chunk-4pc1m5n9.js:8688-8715 placement
+//@ chunk-a28agxjs.js:8697-8724 placement
 function isEligibleForRemoteManagedSettings() {
   return computeRemoteSettingsEligibility();
 }
-//@ chunk-4pc1m5n9.js:8715-8820 placement
+//@ chunk-a28agxjs.js:8724-8829 placement
 /**
  * 等待远程托管设置首次加载完成（若已启动）。
  */
@@ -288,7 +293,7 @@ async function waitForRemoteManagedSettingsToLoad() {
   let state = currentRemoteSettingsState();
   if (state.loadingCompletePromise) await state.loadingCompletePromise;
 }
-//@ chunk-4pc1m5n9.js:8820-9025 placement
+//@ chunk-a28agxjs.js:8829-9034 placement
 function getRemoteManagedSettingsSignatureFacts() {
   let state = currentRemoteSettingsState();
   let storedCopyAtStart = state.storedCopyAtStart;
@@ -304,53 +309,53 @@ function getRemoteManagedSettingsSignatureFacts() {
     }),
   };
 }
-//@ chunk-4pc1m5n9.js:9025-9108 placement
+//@ chunk-a28agxjs.js:9034-9117 placement
 async function waitForRemoteManagedSettingsFetchToSettle() {
   let state = currentRemoteSettingsState();
   if (state.fetchSettledPromise) await state.fetchSettledPromise;
 }
-//@ chunk-4pc1m5n9.js:9108-9120 placement
+//@ chunk-a28agxjs.js:9117-9129 placement
 // deferred: uses setRemotePolicySettler (../../utils/model/allowedProviders.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4pc1m5n9.js:9108", () => {
+deferInit("chunk-a28agxjs.js:9117", () => {
   setRemotePolicySettler(waitForRemoteManagedSettingsFetchToSettle, noteStoredLoginSurface);
 });
-//@ chunk-4pc1m5n9.js:9120-9131 placement
+//@ chunk-a28agxjs.js:9129-9140 placement
 // deferred: uses organizationAnswerState (../../utils/plugins/commandSource.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4pc1m5n9.js:9120", () => {
+deferInit("chunk-a28agxjs.js:9129", () => {
   organizationAnswerState.wait = waitForRemoteManagedSettingsFetchToSettle;
 });
-//@ chunk-4pc1m5n9.js:9131-9147 placement
+//@ chunk-a28agxjs.js:9140-9156 placement
 // deferred: uses organizationAnswerState (../../utils/plugins/commandSource.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4pc1m5n9.js:9131", () => {
+deferInit("chunk-a28agxjs.js:9140", () => {
   organizationAnswerState.ask = () => pollRemoteSettings();
 });
-//@ chunk-4pc1m5n9.js:9147-9161 placement
+//@ chunk-a28agxjs.js:9156-9170 placement
 // deferred: uses organizationAnswerState (../../utils/plugins/commandSource.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4pc1m5n9.js:9147", () => {
+deferInit("chunk-a28agxjs.js:9156", () => {
   organizationAnswerState.fetches = computeRemoteSettingsEligibility;
 });
-//@ chunk-4pc1m5n9.js:9161-9204 placement
+//@ chunk-a28agxjs.js:9170-9213 placement
 function didRemoteManagedSettingsBackstopRelease() {
   return currentRemoteSettingsState().backstopReleased;
 }
-//@ chunk-4pc1m5n9.js:9204-9236 placement
+//@ chunk-a28agxjs.js:9213-9245 placement
 function isRemoteManagedSettingsColdStartPending() {
   return holdsNoServedSettings(computeRemoteSettingsEligibility());
 }
-//@ chunk-4pc1m5n9.js:9236-9277 placement
+//@ chunk-a28agxjs.js:9245-9286 placement
 function isRemoteManagedProvisionPending() {
   return (
     !isSdkEntrypoint() && computeRemoteSettingsEligibility() && unverifiedRemoteCacheWithholdsProvisions()
   );
 }
-//@ chunk-4pc1m5n9.js:9277-9352 placement
+//@ chunk-a28agxjs.js:9286-9361 placement
 function registerRemoteSettingsStartupWait() {
   setPolicyColdStartWaiter(async () => {
     if (isRemoteManagedProvisionPending()) await waitForRemoteManagedSettingsFetchToSettle();
     else if (isRemoteManagedSettingsColdStartPending()) await waitForRemoteManagedSettingsToLoad();
   });
 }
-//@ chunk-4pc1m5n9.js:22630-23210 placement
+//@ chunk-a28agxjs.js:22640-23219 placement
 async function clearRemoteManagedSettingsCache(storageV5) {
   stopBackgroundPolling();
   resetRemoteSettingsSyncCache();
@@ -391,9 +396,9 @@ async function clearRemoteManagedSettingsCache(storageV5) {
   }
   if (isStorageV5Enabled()) remoteSettingsFileWritten("cache", null);
 }
-//@ chunk-4pc1m5n9.js:23210-23217 placement
+//@ chunk-a28agxjs.js:23219-23226 placement
 var lastOutcomeReason;
-//@ chunk-4pc1m5n9.js:23217-23311 placement
+//@ chunk-a28agxjs.js:23226-23321 placement
 async function fetchAndLoadRemoteManagedSettingsAndNotify(options = {}) {
   try {
     return await fetchAndLoadRemoteManagedSettings(options);
@@ -403,7 +408,7 @@ async function fetchAndLoadRemoteManagedSettingsAndNotify(options = {}) {
     applyRemotePolicyMidSession(currentSettings);
   }
 }
-//@ chunk-4pc1m5n9.js:33728-34222 placement
+//@ chunk-a28agxjs.js:33778-34273 placement
 function recordRemoteSettingsStatus(result) {
   if (!computeRemoteSettingsEligibility()) {
     let ineligibleReason = getIneligibleReason();
@@ -444,14 +449,14 @@ function recordRemoteSettingsStatus(result) {
     if (hadRulings || result.failure.rulings !== undefined) invalidateCommandNames();
   }
 }
-//@ chunk-4pc1m5n9.js:34222-34325 placement
+//@ chunk-a28agxjs.js:34273-34376 placement
 function lastFailureRulings() {
   let lastLoadStatus = getLastLoadStatus();
   return lastLoadStatus?.state === "failed" || lastLoadStatus?.state === "stale_cache"
     ? lastLoadStatus.failure.rulings
     : undefined;
 }
-//@ chunk-4pc1m5n9.js:34325-35257 placement
+//@ chunk-a28agxjs.js:34376-35308 placement
 async function loadRemoteManagedSettings(showSecurityDialog, storageV5, options) {
   markLoadCycleBegun();
   registerRemoteSettingsStartupWait();
@@ -518,7 +523,7 @@ async function loadRemoteManagedSettings(showSecurityDialog, storageV5, options)
     startupBlock?.("completed");
   }
 }
-//@ chunk-4pc1m5n9.js:35257-35375 placement
+//@ chunk-a28agxjs.js:35308-35427 placement
 function settingsOutcomeFields() {
   let ineligibleReason = getIneligibleReason();
   let outcomeReason = computeRemoteSettingsEligibility()
@@ -529,7 +534,7 @@ function settingsOutcomeFields() {
     settings_ineligible_reason: fromEnumOpt(ineligibleReason),
   };
 }
-//@ chunk-4pc1m5n9.js:35375-35771 placement
+//@ chunk-a28agxjs.js:35427-35823 placement
 function getRemoteSettingsSourceLabel({ resolution, settings }) {
   switch (resolution) {
     case "applied":
@@ -553,7 +558,7 @@ function getRemoteSettingsSourceLabel({ resolution, settings }) {
       return "ineligible";
   }
 }
-//@ chunk-4pc1m5n9.js:35771-35867 placement
+//@ chunk-a28agxjs.js:35823-35919 placement
 /**
  * 如果传入的结算回调仍是当前加载的回调，就释放加载/拉取屏障。
  */
@@ -561,7 +566,7 @@ function releaseBarrierIfSame(fetchSettledResolve) {
   let state = currentRemoteSettingsState();
   if (state.fetchSettledResolve && state.fetchSettledResolve === fetchSettledResolve) state.releaseBarrier();
 }
-//@ chunk-4pc1m5n9.js:35867-35936 placement
+//@ chunk-a28agxjs.js:35919-35989 placement
 /**
  * 后台刷新远程托管设置，成功后让设置缓存失效并通知变更。
  */
@@ -569,9 +574,9 @@ async function refreshRemoteManagedSettings(showSecurityDialog, storageV5, crede
   return (await refreshRemoteManagedSettingsWithOutcome(showSecurityDialog, storageV5, credentials, options))
     .fetchSucceeded;
 }
-//@ chunk-4pc1m5n9.js:35936-35948 placement
+//@ chunk-a28agxjs.js:35989-36001 placement
 var STARTUP_AWAIT_DEADLINE_MS = 5000;
-//@ chunk-4pc1m5n9.js:35948-36411 placement
+//@ chunk-a28agxjs.js:36001-36464 placement
 async function refreshRemoteManagedSettingsForStartup(showSecurityDialog, storageV5, credentials) {
   let releaseConsent;
   let promise = new Promise((resolve) => {
@@ -603,7 +608,7 @@ async function refreshRemoteManagedSettingsForStartup(showSecurityDialog, storag
     startupBlock("completed");
   }
 }
-//@ chunk-4pc1m5n9.js:36411-36890 placement
+//@ chunk-a28agxjs.js:36464-36943 placement
 async function probeManagedSettingsForBearer(bearer, { timeoutMs = PROBE_TIMEOUT_MS } = {}) {
   let response = await axios_default.get(`${getOauthConfig().BASE_API_URL}/api/claude_code/settings`, {
     headers: {
@@ -627,7 +632,7 @@ async function probeManagedSettingsForBearer(bearer, { timeoutMs = PROBE_TIMEOUT
     requestIdPresent: hasSessionsTokenRequestId(headers),
   };
 }
-//@ chunk-4pc1m5n9.js:36890-37968 placement
+//@ chunk-a28agxjs.js:36943-38028 placement
 async function refreshRemoteManagedSettingsWithOutcome(showSecurityDialog, storageV5, credentials, options) {
   let awaited = options?.startupAwaited === true;
   stopBackgroundPolling();
@@ -644,6 +649,7 @@ async function refreshRemoteManagedSettingsWithOutcome(showSecurityDialog, stora
       fetchSucceeded: true,
       resolution: "ineligible",
     });
+    markLoadCycleEnded();
     recordManagedConfigResult("settings", {
       source: "ineligible",
       hadCache: false,
@@ -708,7 +714,7 @@ async function refreshRemoteManagedSettingsWithOutcome(showSecurityDialog, stora
   loadRemoteManagedSettings_2();
   return outcome;
 }
-//@ chunk-4pc1m5n9.js:38764-38908 placement (2.1.88 match: formatDirectoryList, 1)
+//@ chunk-a28agxjs.js:38824-38968 placement (2.1.88 match: formatDirectoryList, 1)
 /**
  * （切分错误）格式化首个目录问题："(<路径>: <消息>, and N more)"。
  */
@@ -718,7 +724,7 @@ function firstRulingClause(directories) {
   let moreCount = directories.length - 1;
   return ` (${first.path}: ${first.message}${moreCount > 0 ? `, and ${moreCount} more` : ""})`;
 }
-//@ chunk-4pc1m5n9.js:38908-38994 placement
+//@ chunk-a28agxjs.js:38968-39054 placement
 /**
  * 把 URL 规范成 origin + 路径（去掉结尾斜杠），用于错误与日志里指代网关。
  */
@@ -726,11 +732,11 @@ function originWithPath(url) {
   let { origin, pathname } = new URL(url);
   return `${origin}${pathname.replace(/\/$/, "")}`;
 }
-//@ chunk-4pc1m5n9.js:38994-39116 placement
+//@ chunk-a28agxjs.js:39054-39176 placement
 function gatewayPolicyPrefix(url) {
   return `Claude Desktop runs Claude Code under your organization's policy from the gateway at ${originWithPath(url)}, but`;
 }
-//@ chunk-4pc1m5n9.js:39116-40272 placement
+//@ chunk-a28agxjs.js:39176-40332 placement
 function hostLaunchedGatewayRefusal(initialMainLoopModel) {
   let gatewayAuth = getGatewayAuth();
   let hostVerdict = gatewayAuth?.hostVerdict;
@@ -756,7 +762,7 @@ function hostLaunchedGatewayRefusal(initialMainLoopModel) {
   );
   return;
 }
-//@ chunk-4pc1m5n9.js:40272-41082 placement
+//@ chunk-a28agxjs.js:40332-41142 placement
 function hostLaunchedGatewayLoadRefusal(remoteManagedSettings) {
   let gatewayAuth = getGatewayAuth();
   if (!gatewayAuth || !isHostVerifiedGatewayAuth(gatewayAuth)) return;
@@ -777,7 +783,7 @@ function hostLaunchedGatewayLoadRefusal(remoteManagedSettings) {
   noteHostLaunchedGatewayWithoutPolicy();
   return;
 }
-//@ chunk-4pc1m5n9.js:41082-41387 placement
+//@ chunk-a28agxjs.js:41142-41447 placement
 function noteHostLaunchedGatewayWithoutPolicy() {
   let gatewayAuth = getGatewayAuth();
   if (!gatewayAuth || !isHostVerifiedGatewayAuth(gatewayAuth)) return;
@@ -787,7 +793,7 @@ function noteHostLaunchedGatewayWithoutPolicy() {
       `the gateway at ${gatewayAuth.url} has no Claude Code policy for this Desktop session (self-hosted gateway admins: set \`serve_to_desktop: true\` on this user's policy, or change \`cli\` to \`code\` in every policy)`,
     );
 }
-//@ chunk-4pc1m5n9.js:41387-41525 placement
+//@ chunk-a28agxjs.js:41447-41585 placement
 function warnStartingWithoutSettings(reason) {
   let message = `Starting without your organization's managed settings: ${reason}.`;
   logForDebugging(`Remote settings: ${message}`, {
@@ -796,13 +802,22 @@ function warnStartingWithoutSettings(reason) {
   writeToStderr(`${message}
 `);
 }
-//@ chunk-4pc1m5n9.js:41525-41624 placement
+//@ chunk-a28agxjs.js:41585-41684 placement
 /**
  * 组织要求远程托管设置、但本次加载失败时的提示前缀。
  */
 var REQUIRED_SETTINGS_LOAD_FAILED_MESSAGE =
   "Your organization requires remote managed settings to load, but they could not be loaded.";
-//@ chunk-4pc1m5n9.js:41624-42156 placement
+//@ chunk-a28agxjs.js:41684-42000 placement
+/**
+ * 宿主启动的网关连不上时的提示文案（证书错误与一般连接错误两种）。
+ */
+function gatewayRequiredLoadFailedSteps(failure) {
+  return failure?.errno === "CERT_ERROR"
+    ? "Could not verify the gateway's TLS certificate. Check your connection, and join your organization's network if the gateway needs it."
+    : "Check your connection, and join your organization's network if the gateway needs it. If it still fails, try again in a few minutes.";
+}
+//@ chunk-a28agxjs.js:42000-42671 placement
 async function validateForceRemoteSettingsRefresh(isSettingsLoaded, machineForcedRefresh) {
   try {
     if (await isSettingsLoaded()) {
@@ -826,15 +841,24 @@ async function validateForceRemoteSettingsRefresh(isSettingsLoaded, machineForce
       message: `${REQUIRED_SETTINGS_LOAD_FAILED_MESSAGE} None of the settings the server returned could be applied as written${firstRulingClause(directories)}; ask your administrator to fix them.`,
     };
   let loginCommand = "claude auth login";
-  let hint = isArtifactMountMode()
+  let lastLoadStatus = getLastLoadStatus();
+  let failure =
+    lastLoadStatus?.state === "failed" || lastLoadStatus?.state === "stale_cache"
+      ? lastLoadStatus.failure
+      : undefined;
+  let failureHintText = isArtifactMountMode()
     ? "You can check your network connection or contact your admin."
-    : `Run \`${loginCommand}\` to re-authenticate, check your network connection, or contact your administrator.`;
+    : isGatewayRequiredByHostPolicy() &&
+        failure?.errorKind !== "http_401" &&
+        failure?.errorKind !== "http_403"
+      ? gatewayRequiredLoadFailedSteps(failure)
+      : `Run \`${loginCommand}\` to re-authenticate, check your network connection, or contact your administrator.`;
   return {
     valid: false,
-    message: `${REQUIRED_SETTINGS_LOAD_FAILED_MESSAGE} ${hint}`,
+    message: `${REQUIRED_SETTINGS_LOAD_FAILED_MESSAGE} ${failureHintText}`,
   };
 }
-//@ chunk-4pc1m5n9.js:42156-42744 placement
+//@ chunk-a28agxjs.js:42671-43259 placement
 /**
  * 后台轮询远程设置，有变化时通知。
  */
@@ -877,7 +901,7 @@ async function pollRemoteSettings(showSecurityDialog, storageV5, credentials) {
     }
   } catch {}
 }
-//@ chunk-4pc1m5n9.js:42744-42882 placement
+//@ chunk-a28agxjs.js:43259-43397 placement
 function startRemoteSettingsPoller(showSecurityDialog, storageV5, credentials) {
   let state = currentRemoteSettingsState();
   if (state.poller !== null) return;
@@ -892,35 +916,36 @@ function startRemoteSettingsPoller(showSecurityDialog, storageV5, credentials) {
   state.startPoller(interactionAwarePoll);
   registerCleanup(interactionAwarePoll);
 }
-//@ chunk-4pc1m5n9.js:42882-42914 placement
+//@ chunk-a28agxjs.js:43397-43429 placement
 function stopBackgroundPolling() {
   currentRemoteSettingsState().stopPoller();
 }
 export {
-  declareNoHybridTokenRefresh,
   waitForRemoteManagedSettingsFetchToSettle,
+  waitForRemoteManagedSettingsToLoad,
+  refreshRemoteManagedSettings,
+  declareNoHybridTokenRefresh,
   getRemoteManagedSettingsSignatureFacts,
   hostLaunchedGatewayRefusal,
   validateForceRemoteSettingsRefresh,
   loadRemoteManagedSettings,
   hostLaunchedGatewayLoadRefusal,
   noteHostLaunchedGatewayWithoutPolicy,
-  refreshRemoteManagedSettings,
   refreshRemoteManagedSettingsForStartup,
-  waitForRemoteManagedSettingsToLoad,
+  isRemoteManagedSettingsColdStartPending,
+  didRemoteManagedSettingsBackstopRelease,
   MAX_BACKGROUND_FETCH_RETRIES,
   PROBE_TIMEOUT_MS,
   currentRemoteSettingsState,
   clearRemoteManagedSettingsCache,
+  isRemoteManagedProvisionPending,
+  probeManagedSettingsForBearer,
   isEligibleForRemoteManagedSettings,
   initializeRemoteManagedSettingsLoadingPromise,
   prefetchRemoteManagedSettings,
-  isRemoteManagedSettingsColdStartPending,
-  didRemoteManagedSettingsBackstopRelease,
   stopBackgroundPolling,
   clearRemoteManagedSettingsPrefetch,
   firstRulingClause,
+  gatewayRequiredLoadFailedSteps,
   refreshRemoteManagedSettingsWithOutcome,
-  isRemoteManagedProvisionPending,
-  probeManagedSettingsForBearer,
 };

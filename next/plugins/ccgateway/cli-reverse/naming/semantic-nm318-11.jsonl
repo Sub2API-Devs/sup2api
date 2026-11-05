@@ -1,0 +1,135 @@
+{"file":"chunk-qg41pqt6.js","key":"@704124","name":"MAX_PORT_ATTEMPTS","source":"semantic","confidence":0.7,"note":"mux: listenFrontEnd 里 for(let n=MAX_PORT_ATTEMPTS;;) 与 --n===0，最多尝试端口次数"}
+{"file":"chunk-qg41pqt6.js","key":"@704129","name":"backendSeq","source":"semantic","confidence":0.85,"note":"npm @anthropic-ai/sandbox-runtime 0.0.81 mux-proxy.js 原名 backendSeq；unixSocketPath 里自增拼 srt-mux-<pid>-<seq>.sock"}
+{"file":"chunk-qg41pqt6.js","key":"@704226","name":"createMuxProxyServer","source":"semantic","confidence":0.9,"note":"npm mux-proxy.js 导出的 createMuxProxyServer，按首字节分流 SOCKS/HTTP"}
+{"file":"chunk-qg41pqt6.js","key":"@704881","name":"handleClientConnection","source":"semantic","confidence":0.75,"note":"createServer 的连接回调：登记 socket、设首字节超时、peek 一字节后转 handleSocksConnection 或 dispatchHttp"}
+{"file":"chunk-qg41pqt6.js","key":"@705315","name":"listenOnIpv6","source":"semantic","confidence":0.7,"note":"在 [::1] 上试监听并返回错误码/undefined，调用方按 EADDRNOTAVAIL 等决定是否重试"}
+{"file":"chunk-qg41pqt6.js","key":"@705349","name":"onErrorHandler","source":"semantic","confidence":0.7,"note":"promise 里的 error 回调：移除 listening 监听后以错误码收尾"}
+{"file":"chunk-qg41pqt6.js","key":"@705352","name":"error","source":"semantic","confidence":0.75,"note":"listen 失败的错误对象，取 .code"}
+{"file":"chunk-qg41pqt6.js","key":"@705411","name":"onListeningHandler","source":"semantic","confidence":0.7,"note":"promise 里的 listening 回调：移除 error 监听并以 void 0 收尾"}
+{"file":"chunk-qg41pqt6.js","key":"@705649","name":"reservedPorts","source":"semantic","confidence":0.65,"note":"backend Tcp 端口非空时作为已占用端口初值，只用于构造排除集合与长度比较"}
+{"file":"chunk-qg41pqt6.js","key":"@705690","name":"remainingAttempts","source":"semantic","confidence":0.7,"note":"for(let n=MAX_PORT_ATTEMPTS;;) 的计数，递减到 0 后报错"}
+{"file":"chunk-qg41pqt6.js","key":"@705714","name":"port","source":"semantic","confidence":0.7,"note":"listenInRange 的 listen 回调参数，就是候选端口"}
+{"file":"chunk-qg41pqt6.js","key":"@705850","name":"ipv6Error","source":"semantic","confidence":0.7,"note":"await listenOnIpv6 的返回，与 EADDRNOTAVAIL/EAFNOSUPPORT 比较决定放行方式"}
+{"file":"chunk-qg41pqt6.js","key":"@706971","name":"netServer","source":"semantic","confidence":0.7,"note":"close() 里 [frontEnd, ipv6Server].map 的回调参数，逐个 close"}
+{"file":"chunk-qq5knpkd.js","key":"@1594","name":"materializeSchema","source":"semantic","confidence":0.75,"note":"@babel/runtime importDeferProxy 变体：首次访问时把 build() 的结果缓存进 schema 并清掉 build"}
+{"file":"chunk-qq5knpkd.js","key":"@1597","name":"target","source":"semantic","confidence":0.7,"note":"Proxy target，承载 build/schema"}
+{"file":"chunk-qq5knpkd.js","key":"@1674","name":"schemaProxyHandlers","source":"semantic","confidence":0.75,"note":"延迟构建 schema 的 ProxyHandler 字面量，全部 trap 先 materializeSchema(target)"}
+{"file":"chunk-qq5knpkd.js","key":"@1683","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@1685","name":"prop","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@1687","name":"receiver","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@1719","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@1721","name":"prop","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@1743","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@1745","name":"prop","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@1747","name":"value","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@1790","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@1792","name":"prop","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@1794","name":"descriptor","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@1848","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@1850","name":"prop","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@1902","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@1944","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@2021","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@2023","name":"prop","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24406","name":"materializeDeferredSchema","source":"semantic","confidence":0.75,"note":"与那段 materializeSchema 同体的第二份拷贝（另一 chunk 合并进来）"}
+{"file":"chunk-qq5knpkd.js","key":"@24409","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24486","name":"deferredSchemaHandlers","source":"semantic","confidence":0.75,"note":"第二份 ProxyHandler 字面量"}
+{"file":"chunk-qq5knpkd.js","key":"@24495","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24497","name":"prop","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24499","name":"receiver","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24531","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24533","name":"prop","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24555","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24557","name":"prop","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24559","name":"value","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24602","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24604","name":"prop","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24606","name":"descriptor","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24660","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24662","name":"prop","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24714","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24756","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24833","name":"target","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@24835","name":"prop","source":"semantic","confidence":0.7}
+{"file":"chunk-qq5knpkd.js","key":"@2118","name":"deferSchema","source":"semantic","confidence":0.8,"note":"new Proxy({build:e,schema:void 0}, schemaProxyHandlers)，把 schema 构建推迟到首次访问"}
+{"file":"chunk-qq5knpkd.js","key":"@24930","name":"lazySchema","source":"semantic","confidence":0.8,"note":"与 deferSchema 同形的第二份；调用点成片出现（P(()=>...)）"}
+{"file":"chunk-qq5knpkd.js","key":"@24998","name":"JSONValueSchemaClient","source":"semantic","confidence":0.85,"note":"Fc 返回对象里 JSONValueSchema:e；自引用只出现在 thunk 里（TDZ 安全）；core 包的 auth 段已有同名 schema，这里属于 client 包，加 Client 后缀区分"}
+{"file":"chunk-qq5knpkd.js","key":"@25331","name":"RequestSchemaClient","source":"semantic","confidence":0.85,"note":"u({method:o(),params:l.loose().optional()})，返回对象里映射为 RequestSchema；core 包的 auth 段已有同名 schema，这里属于 client 包，加 Client 后缀区分"}
+{"file":"chunk-qq5knpkd.js","key":"@27686","name":"PaginatedResultSchemaClient","source":"semantic","confidence":0.85,"note":"w.extend({nextCursor:s.optional()})，返回对象里映射为 PaginatedResultSchema；core 包的 auth 段已有同名 schema，这里属于 client 包，加 Client 后缀区分"}
+{"file":"chunk-qq5knpkd.js","key":"@29130","name":"PromptSchemaClient","source":"semantic","confidence":0.85,"note":"由内容块与提示参数 shape 合成，返回对象里映射为 PromptSchema；core 包的 auth 段已有同名 schema，这里属于 client 包，加 Client 后缀区分"}
+{"file":"chunk-qq5knpkd.js","key":"@35101","name":"RootSchemaClient","source":"semantic","confidence":0.85,"note":"u({uri:o().startsWith(\"file://\"),name:o().optional(),_meta:...})，返回对象里映射为 RootSchema；core 包的 auth 段已有同名 schema，这里属于 client 包，加 Client 后缀区分"}
+{"file":"chunk-qq5knpkd.js","key":"@53203","name":"RootSchemaClient2026","source":"semantic","confidence":0.8,"note":"与 @35101 同形，但在 2026 版 schema 表里映射为 RootSchema（2026 命名空间）；core 包的 auth 段已有同名 schema，这里属于 client 包，加 Client 后缀区分"}
+{"file":"chunk-qq5knpkd.js","key":"@54294","name":"wireResult","source":"semantic","confidence":0.8,"note":"npm @modelcontextprotocol/client 里同名函数 wireResult(shape)：loose 结果加 _meta 与 resultType 默认值"}
+{"file":"chunk-qq5knpkd.js","key":"@56640","name":"dispatchRequest","source":"semantic","confidence":0.8,"note":"npm 参考同名 dispatchRequest(method, paramsShape)：method 用字面量、params 可省略"}
+{"file":"chunk-qq5knpkd.js","key":"@58191","name":"liftedResult","source":"semantic","confidence":0.8,"note":"npm 参考同名 liftedResult(shape)：loose 结果只补 _meta，供 dispatchResultSchemas 使用"}
+{"file":"chunk-qq5knpkd.js","key":"@59984","name":"wireResultResponse","source":"semantic","confidence":0.8,"note":"npm 参考同名 wireResultResponse(result)：{jsonrpc:\"2.0\",id,result}.strict()"}
+{"file":"chunk-qq5knpkd.js","key":"@19686","name":"stampErrorBrands","source":"semantic","confidence":0.85,"note":"npm 参考同名 stampErrorBrands(instance, ctor)：沿原型链收集 mcpBrand 并写成 Symbol.for 属性"}
+{"file":"chunk-qq5knpkd.js","key":"@2172","name":"JSONValueSchema","source":"semantic","confidence":0.85,"note":"z.lazy(()=>union([string,number,boolean,null,record(JSONValueSchema),array(JSONValueSchema)]))，参考 schemas 源同名"}
+{"file":"chunk-qq5knpkd.js","key":"@2304","name":"TaskMetadataSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@2430","name":"BaseRequestParamsSchema","source":"semantic","confidence":0.85,"note":"u({_meta:RequestMeta.optional()})"}
+{"file":"chunk-qq5knpkd.js","key":"@2507","name":"RequestSchema","source":"semantic","confidence":0.85,"note":"u({method:o(),params:BaseRequestParams.loose().optional()})"}
+{"file":"chunk-qq5knpkd.js","key":"@2562","name":"NotificationsParamsSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@2597","name":"NotificationSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@2715","name":"ResultSchema","source":"semantic","confidence":0.85,"note":"Rt({_meta:ResultMetaObject.optional()})"}
+{"file":"chunk-qq5knpkd.js","key":"@5280","name":"ProgressNotificationParamsSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@5448","name":"PaginatedRequestSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@5492","name":"PaginatedResultSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@5540","name":"ResourceContentsSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@5955","name":"ResourceSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@6282","name":"ListResourcesResultSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@6323","name":"ListResourceTemplatesRequestSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@6383","name":"ListResourceTemplatesResultSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@6469","name":"ReadResourceRequestSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@7296","name":"ResourceUpdatedNotificationSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@7434","name":"PromptSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@7579","name":"ListPromptsResultSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@7618","name":"GetPromptRequestParamsSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@8439","name":"PromptListChangedNotificationSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@9116","name":"ListToolsResultSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@9306","name":"CallToolRequestParamsSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@9854","name":"LoggingMessageNotificationSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@11191","name":"BooleanSchemaSchema","source":"semantic","confidence":0.85,"note":"type 为字面量 boolean 的 JSON Schema 片段"}
+{"file":"chunk-qq5knpkd.js","key":"@12060","name":"SingleSelectEnumSchemaSchema","source":"semantic","confidence":0.85,"note":"union(LegacyTitledEnum, TitledSingleSelect)"}
+{"file":"chunk-qq5knpkd.js","key":"@12473","name":"MultiSelectEnumSchemaSchema","source":"semantic","confidence":0.85,"note":"union(UntitledMultiSelect, TitledMultiSelect)"}
+{"file":"chunk-qq5knpkd.js","key":"@12711","name":"ElicitRequestURLParamsSchema","source":"semantic","confidence":0.85,"note":"mode 为字面量 url，带 elicitationId 与 url()"}
+{"file":"chunk-qq5knpkd.js","key":"@12793","name":"ElicitRequestParamsSchema","source":"semantic","confidence":0.85,"note":"union(form 版, url 版)"}
+{"file":"chunk-qq5knpkd.js","key":"@12923","name":"ElicitationCompleteNotificationSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@13191","name":"PromptReferenceSchema","source":"semantic","confidence":0.85,"note":"type 为字面量 ref/prompt"}
+{"file":"chunk-qq5knpkd.js","key":"@13236","name":"CompleteRequestParamsSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@13529","name":"RootSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@13691","name":"ListRootsResultSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@13726","name":"RootsListChangedNotificationSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@14083","name":"CreateTaskResultSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@14114","name":"TaskStatusNotificationParamsSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@14285","name":"GetTaskResultSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@14387","name":"GetTaskPayloadResultSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@14454","name":"ListTasksResultSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@14489","name":"CancelTaskRequestSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@14568","name":"CancelTaskResultSchema","source":"semantic","confidence":0.85}
+{"file":"chunk-qq5knpkd.js","key":"@15152","name":"OAuthProtectedResourceMetadataSchema","source":"semantic","confidence":0.85,"note":"RFC 9728，resource/authorization_servers/jwks_uri 等"}
+{"file":"chunk-qq5knpkd.js","key":"@18875","name":"OAuthClientMetadataSchema","source":"semantic","confidence":0.85,"note":"redirect_uris/client_name/software_statement 等"}
+{"file":"chunk-qq5knpkd.js","key":"@19342","name":"OAuthClientInformationSchema","source":"semantic","confidence":0.85,"note":"client_id/client_secret 等"}
+{"file":"chunk-qq5knpkd.js","key":"@19483","name":"OAuthClientInformationFullSchema","source":"semantic","confidence":0.85,"note":"OAuthClientMetadataSchema.merge(OAuthClientInformationSchema)"}
+{"file":"chunk-3k21nfa0.js","key":"@78185","name":"resolvedModule","source":"semantic","confidence":0.85,"note":"npm @protobufjs/aspromise inquire() 里的 var mod = …，解析到的模块对象，失败返回 null"}
+{"file":"chunk-sdd6eajv.js","key":"@365","name":"noop","source":"semantic","confidence":0.75,"note":"空函数，createParser 里作为 onEvent/onError/onRetry/onComment 的默认值"}
+{"file":"chunk-z20c443b.js","key":"@32328","name":"textIdx","source":"semantic","confidence":0.8,"note":"fuse.js bitap 内层 for(let j=finish;j>=start;j-=1)，j-1 为文本下标，j 即 textIdx"}
+{"file":"chunk-zsz062c7.js","key":"@3931","name":"useRef","source":"semantic","confidence":0.9,"note":"hints：2.1.316 同名；s.H.useRef 的包装"}
+{"file":"chunk-zsz062c7.js","key":"@3967","name":"useState","source":"semantic","confidence":0.9,"note":"hints：2.1.316 同名；s.H.useState 的包装"}
+{"file":"chunk-6n4z8qxn.js","key":"@489","name":"Fragment","source":"semantic","confidence":0.9,"note":"hints：2.1.316 同名；var ne=x，x 是 Symbol.for(\"react.fragment\")"}
+{"file":"chunk-tp1gh0pb.js","key":"@25558","name":"PROMPT_HOLD_SUBTYPES","source":"semantic","confidence":0.7,"note":"new Set([\"interrupt\",\"cancel_async_message\"])，writePrompt 时这些 subtype 要在 promptHold 之后写"}
+{"file":"chunk-tp1gh0pb.js","key":"@28590","name":"promise","source":"semantic","confidence":0.7,"note":"writeBehindPromptHold(promise, writeFn) 的 tie promise"}
+{"file":"chunk-tp1gh0pb.js","key":"@28592","name":"writeFn","source":"semantic","confidence":0.7,"note":"promise 落定且未中止时执行的写入函数"}
+{"file":"chunk-tp1gh0pb.js","key":"@28599","name":"tied","source":"semantic","confidence":0.7,"note":"promise.then 后的结果，表示是否真的写了"}
+{"file":"chunk-tp1gh0pb.js","key":"@28614","name":"ready","source":"semantic","confidence":0.7,"note":"promise 的解析值，false 或已 abort 时跳过写入"}
+{"file":"chunk-tp1gh0pb.js","key":"@28694","name":"chained","source":"semantic","confidence":0.7,"note":"tied 的 catch/then 链结果，赋回 this.promptHold"}
+{"file":"chunk-tp1gh0pb.js","key":"@28718","name":"written","source":"semantic","confidence":0.7,"note":"chained 的解析值，true 时才清 this.promptHold"}
+{"file":"chunk-tp1gh0pb.js","key":"@28873","name":"hookList","source":"semantic","confidence":0.7,"note":"Object.values(this.hooks) 的元素，同一事件的 hook 定义数组"}
+{"file":"chunk-tp1gh0pb.js","key":"@28903","name":"hook","source":"semantic","confidence":0.75,"note":"单个 hook 定义，检查 onFailure 是否为 block"}
+{"file":"chunk-tp1gh0pb.js","key":"@42036","name":"hookSupportError","source":"semantic","confidence":0.75,"note":"initialize 后若上游不支持 hook_on_failure，构造的错误消息再 cleanup"}
+{"file":"chunk-tp1gh0pb.js","key":"@56287","name":"message","source":"semantic","confidence":0.8,"note":"writePrompt(message) 的待写消息"}
+{"file":"chunk-tp1gh0pb.js","key":"@57246","name":"options","source":"semantic","confidence":0.7,"note":"mcpAuthenticate(serverName, redirectUri, options)，读 options.redirectUriOnly"}
+{"file":"chunk-tp1gh0pb.js","key":"@61386","name":"writePromises","source":"semantic","confidence":0.75,"note":"streamInput 里收集的写入 promise，最后 Promise.all"}
+{"file":"chunk-tp1gh0pb.js","key":"@61576","name":"line","source":"semantic","confidence":0.75,"note":"jsonStringify 后加换行的一整行，交给 writeStreamMessage"}
+{"file":"chunk-tp1gh0pb.js","key":"@62274","name":"text","source":"semantic","confidence":0.75,"note":"writeStreamMessage(text) 的文本，transport.write 后 flush"}
+{"file":"chunk-qq5knpkd.js","key":"@1561","name":"JSONRPC_VERSION","source":"semantic","confidence":0.9,"note":"\"2.0\"，参考 schemas 源同名常量"}
+{"file":"chunk-e8d3a8an.js","key":"@35232","name":"thisBigNumber","source":"semantic","confidence":0.6,"note":"npm bignumber.js toFraction 里的 this 别名（压缩名已是 x，但 x 与压缩名同字面，改叫 thisBigNumber 便于区分）"}

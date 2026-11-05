@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Claude for Enterprise 升级提示命令与文案
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (9)
  * attribution: placement 9
  */
 import { isFirstPartyAnthropicBaseUrl } from "../utils/model/providers.js";
@@ -24,7 +24,7 @@ import { isRemoteControlHardDisabled } from "../bridge/bridgeEntitlement.js";
 import { REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE } from "../bridge/remoteControlPolicy.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2035684-2035730 placement
+//@ chunk-5xgkngpb.js:2091501-2091547 placement
 /**
  * isApiKeyOnlyUser：Oi() 且 Slt()。
  */
@@ -32,7 +32,7 @@ function is1PApiCustomerOnFirstParty() {
   if (!isFirstPartyAnthropicBaseUrl()) return false;
   return is1PApiCustomer();
 }
-//@ chunk-e6aww6q8.js:2035730-2035804 placement
+//@ chunk-5xgkngpb.js:2091547-2091621 placement
 /**
  * isEnterpriseUpsellEnabled：tengu_c4e_slash_upsell。
  */
@@ -44,14 +44,14 @@ function isEnterpriseUpsellEnabled() {
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_c4e_slash_upsell", false)
   );
 }
-//@ chunk-e6aww6q8.js:2035804-2035841 placement
+//@ chunk-5xgkngpb.js:2091621-2091658 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:2035804", () => {
+deferInit("chunk-5xgkngpb.js:2091621", () => {
   registerC4EUpsellGate({
     isC4EUpsellCommandEnabled: isEnterpriseUpsellEnabled,
   });
 });
-//@ chunk-e6aww6q8.js:2035841-2035964 placement (2.1.88 match: hasAnthropicApiKeyAuth, 1)
+//@ chunk-5xgkngpb.js:2091658-2091781 placement (2.1.88 match: hasAnthropicApiKeyAuth, 1)
 /**
  * isSignedOut：无 OAuth 也无 API key。
  */
@@ -67,7 +67,7 @@ function isSignedOut() {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:2035964-2036363 placement
+//@ chunk-5xgkngpb.js:2091781-2092180 placement
 /**
  * getEnterpriseUpsellMessage：policy_disabled / signed_out / c4e 三种文案。
  */
@@ -87,7 +87,7 @@ function getEnterpriseUpsellMessage(spec) {
     value: `/${spec.name} is available with Claude for Enterprise \u2014 ask your admin about migrating from API-key access.`,
   };
 }
-//@ chunk-e6aww6q8.js:2036363-2036726 placement
+//@ chunk-5xgkngpb.js:2092180-2092543 placement
 /**
  * createEnterpriseUpsellCommand：隐藏 local 命令，提示需要 Claude for Enterprise。
  */
@@ -116,19 +116,19 @@ function createEnterpriseUpsellCommand(spec) {
       }),
   };
 }
-//@ chunk-e6aww6q8.js:2036726-2036753 placement
+//@ chunk-5xgkngpb.js:2092543-2092570 placement
 /**
  * isClaudeAiSubscriberForUpsell：vt()。
  */
 function isSubscriber() {
   return isClaudeAISubscriber();
 }
-//@ chunk-e6aww6q8.js:2036753-2037425 placement
+//@ chunk-5xgkngpb.js:2092570-2093241 placement
 /**
  * ENTERPRISE_UPSELL_COMMANDS：ultraplan/ultrareview/teleport/remote-control/schedule/autofix-pr 的升级提示存根。
  */
 var ENTERPRISE_UPSELL_COMMANDS; // deferred: uses createEnterpriseUpsellCommand of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2036753", () => {
+deferInit("chunk-5xgkngpb.js:2092570", () => {
   ENTERPRISE_UPSELL_COMMANDS = [
     createEnterpriseUpsellCommand({
       name: "ultraplan",
@@ -163,10 +163,10 @@ deferInit("chunk-e6aww6q8.js:2036753", () => {
     }),
   ];
 });
-//@ chunk-e6aww6q8.js:2037425-2037476 placement (2.1.88 match: default, 1)
+//@ chunk-5xgkngpb.js:2093241-2093292 placement (2.1.88 match: default, 1)
 var stubC4EUpsellCommand = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-export { is1PApiCustomerOnFirstParty, stubC4EUpsellCommand, ENTERPRISE_UPSELL_COMMANDS };
+export { ENTERPRISE_UPSELL_COMMANDS, stubC4EUpsellCommand, is1PApiCustomerOnFirstParty };

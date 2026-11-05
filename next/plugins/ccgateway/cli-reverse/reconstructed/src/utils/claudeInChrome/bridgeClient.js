@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Claude in Chrome 桥接 WebSocket 客户端：连接、认证、设备发现、工具调用、重连；本地 Chrome 扩展连接池（多客户端、标签路由、主动配对、重拨）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4dj0g7y4.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wpz18a52.js (18)
  * attribution: placement 18
  */
 import ws from "ws";
@@ -34,19 +34,19 @@ import {
   classifyToolError,
 } from "./toolErrorClassification.js";
 
-//@ chunk-4dj0g7y4.js:345-374 placement
+//@ chunk-wpz18a52.js:345-374 placement
 /**
  * 设备 id 的合法形式（字母数字与短横，1 到 64 个字符）。
  */
 var DEVICE_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
-//@ chunk-4dj0g7y4.js:374-456 placement
+//@ chunk-wpz18a52.js:374-456 placement
 /**
  * 平台名转成展示名（darwin→macOS、win32→Windows、其余 Linux）。
  */
 function platformDisplayName(platform = "linux") {
   return platform === "darwin" ? "macOS" : platform === "win32" ? "Windows" : "Linux";
 }
-//@ chunk-4dj0g7y4.js:456-676 placement
+//@ chunk-wpz18a52.js:456-676 placement
 function wrapWebSocket(socket) {
   return {
     on: (eventName, listener) => {
@@ -63,7 +63,7 @@ function wrapWebSocket(socket) {
     },
   };
 }
-//@ chunk-4dj0g7y4.js:676-870 placement
+//@ chunk-wpz18a52.js:676-870 placement
 var PING_INTERVAL_MS = 30000;
 var IDLE_TIMEOUT_MS = 90000;
 var SELECTION_REASON_WORDS = {
@@ -74,13 +74,13 @@ var SELECTION_REASON_WORDS = {
 var DISCOVERY_TIMEOUT_MS = 30000;
 var EXTERNAL_MESSAGE_TYPES = new Set(["external_message", "external_message_result", "external_config"]);
 var RESPONSE_TIMEOUT_MS = 30000;
-//@ chunk-4dj0g7y4.js:870-1013 placement
+//@ chunk-wpz18a52.js:870-1013 placement
 function cleanDeviceText(text, maxLength) {
   if (typeof text !== "string") return;
   let trimmed = text.replace(/[\r\n\t\u0000-\u001f]/g, " ").trim();
   return trimmed.length > maxLength ? `${trimmed.slice(0, maxLength)}\u2026` : trimmed;
 }
-//@ chunk-4dj0g7y4.js:1013-1223 placement
+//@ chunk-wpz18a52.js:1013-1223 placement
 function parseConnectedExtension(extension) {
   if (typeof extension.deviceId !== "string" || !DEVICE_ID_RE.test(extension.deviceId)) return;
   return {
@@ -90,12 +90,12 @@ function parseConnectedExtension(extension) {
     connectedAt: typeof extension.connectedAt === "number" ? extension.connectedAt : 0,
   };
 }
-//@ chunk-4dj0g7y4.js:1223-1231 placement
+//@ chunk-wpz18a52.js:1223-1231 placement
 /**
  * 桥接通知清洗后保留的条数上限（4）。
  */
 var MAX_BRIDGE_NOTICES = 4;
-//@ chunk-4dj0g7y4.js:1231-1850 placement
+//@ chunk-wpz18a52.js:1231-1850 placement
 /**
  * 清洗桥接通知列表（种类、域名，有上限）。
  */
@@ -133,7 +133,7 @@ function sanitizeBridgeNotices(notices, onCapReached) {
   }
   return byKey.size > 0 ? Array.from(byKey.values()) : undefined;
 }
-//@ chunk-4dj0g7y4.js:1850-29137 placement
+//@ chunk-wpz18a52.js:1850-29137 placement
 /**
  * Claude in Chrome 桥接 WebSocket 客户端：连接、认证、设备发现、工具调用、重连。
  */
@@ -1337,14 +1337,14 @@ class ChromeBridgeClient {
     this.reconnectAttempts = 0;
   }
 }
-//@ chunk-4dj0g7y4.js:29137-29171 placement
+//@ chunk-wpz18a52.js:29137-29171 placement
 /**
  * 创建 Chrome 桥接客户端。
  */
 function createChromeBridgeClient(options) {
   return new ChromeBridgeClient(options);
 }
-//@ chunk-4dj0g7y4.js:29171-29339 placement
+//@ chunk-wpz18a52.js:29171-29339 placement
 var MAX_QUEUED_MESSAGES = 300;
 var RECONNECT_BASE_MS = 1000;
 var RECONNECT_MAX_MS = 30000;
@@ -1362,7 +1362,7 @@ var MISMATCH_CADENCE = {
   thenMs: 1e4,
 };
 var exponentialBackoff = (baseMs, attempt, maxMs) => Math.min(baseMs * 1.5 ** (attempt - 1), maxMs);
-//@ chunk-4dj0g7y4.js:29339-29428 placement
+//@ chunk-wpz18a52.js:29339-29428 placement
 /**
  * 按累计毫秒在节奏表里选出下一次延迟。
  */
@@ -1374,7 +1374,7 @@ function pickCadenceDelay({ steps, thenMs }, elapsedMs) {
   }
   return thenMs;
 }
-//@ chunk-4dj0g7y4.js:29428-29572 placement
+//@ chunk-wpz18a52.js:29428-29572 placement
 function reconnectDelayMs(cadence, elapsedMs) {
   switch (cadence) {
     case "transport":
@@ -1387,7 +1387,7 @@ function reconnectDelayMs(cadence, elapsedMs) {
       return pickCadenceDelay(TOKEN_CADENCE, elapsedMs);
   }
 }
-//@ chunk-4dj0g7y4.js:29572-29724 placement
+//@ chunk-wpz18a52.js:29572-29724 placement
 var RETRY_KIND_BY_REASON = {
   peer_not_ready: "not_ready",
   awaits_token: "token",
@@ -1400,7 +1400,7 @@ var newRetryState = (cadence) => ({
   wanted: false,
   cadence,
 });
-//@ chunk-4dj0g7y4.js:29724-29882 placement
+//@ chunk-wpz18a52.js:29724-29882 placement
 function escapeJsonForHtml(json) {
   return json
     .replace(/</g, "\\u003c")
@@ -1409,7 +1409,7 @@ function escapeJsonForHtml(json) {
     .replace(/\u2029/g, "\\u2029")
     .replace(/\u0085/g, "\\u0085");
 }
-//@ chunk-4dj0g7y4.js:29882-30202 placement
+//@ chunk-wpz18a52.js:29882-30202 placement
 /**
  * 生成可用标签页上下文的工具结果。
  */
@@ -1443,7 +1443,7 @@ ${joined}`,
     },
   };
 }
-//@ chunk-4dj0g7y4.js:30202-37178 placement
+//@ chunk-wpz18a52.js:30202-37178 placement
 /**
  * 本地 Chrome 扩展连接池（多客户端、标签路由、主动配对、重拨）。
  */
@@ -1777,7 +1777,7 @@ class LocalChromeBridgePool {
       else this.removeClient(socketPath, client);
   }
 }
-//@ chunk-4dj0g7y4.js:37178-37210 placement
+//@ chunk-wpz18a52.js:37178-37210 placement
 /**
  * 创建本机 Chrome 桥接连接池。
  */

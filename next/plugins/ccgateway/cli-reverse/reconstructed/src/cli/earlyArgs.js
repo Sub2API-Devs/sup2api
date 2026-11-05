@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：生成版本报告对象（--version 等使用）；提前扫描 argv 中的 --cwd/--settings/--plugin-dir/--mcp-config 等，返回结构化结果与剩余参数等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-spfbd54s.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-svdpxfd7.js (7)
  * attribution: placement 7
  */
 
-//@ chunk-spfbd54s.js:191-1065 placement
+//@ chunk-svdpxfd7.js:191-1065 placement
 /**
  * 提前扫描 argv 中的 --cwd/--settings/--plugin-dir/--mcp-config 等，返回结构化结果与剩余参数。
  */
@@ -75,7 +75,7 @@ function parseEarlyArgs(argv) {
     rest,
   };
 }
-//@ chunk-spfbd54s.js:1065-1131 placement
+//@ chunk-svdpxfd7.js:1065-1131 placement
 /**
  * 判断路径是否为 ~ 或 ~/ 开头（早期参数里保留原样、不做绝对化）。
  */
@@ -83,7 +83,7 @@ function isHomeRelativePath(path) {
   let trimmed = path.trim();
   return trimmed === "~" || trimmed.startsWith("~/");
 }
-//@ chunk-spfbd54s.js:1131-1568 placement
+//@ chunk-svdpxfd7.js:1131-1568 placement
 /**
  * 把早期参数中的路径（settings、plugin-dir 等）按给定函数解析为绝对路径，内联 JSON 保持原样。
  */
@@ -102,7 +102,7 @@ function resolveEarlyArgPaths(config, resolve) {
     settingSources: config.settingSources,
   };
 }
-//@ chunk-spfbd54s.js:1568-2056 placement
+//@ chunk-svdpxfd7.js:1568-2056 placement
 /**
  * 把结构化的早期参数重新序列化为 argv 片段（用于转发给子进程）。
  */
@@ -121,7 +121,7 @@ function earlyArgsToArgv(earlyArgPaths) {
     ...(earlyArgPaths.restricted ? ["--restricted"] : []),
   ];
 }
-//@ chunk-spfbd54s.js:2056-2218 placement
+//@ chunk-svdpxfd7.js:2056-2218 placement
 function getDaemonArgs(argv) {
   let index = 0;
   while (
@@ -131,7 +131,7 @@ function getDaemonArgs(argv) {
     index++;
   return argv[index] === "daemon" ? argv.slice(index + 1) : null;
 }
-//@ chunk-spfbd54s.js:2218-2736 placement
+//@ chunk-svdpxfd7.js:2218-2736 placement
 /**
  * 返回构建信息常量（版本 2.1.316、反馈渠道、包名、构建时间等）。
  */
@@ -140,17 +140,17 @@ function getBuildRefSuffix(
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
-    VERSION: "2.1.316",
+    VERSION: "2.1.318",
     FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-    BUILD_TIME: "2026-10-30T23:28:13Z",
-    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
     HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
     DD_SOURCEMAP_GROUP: "default",
   }.BUILD_REF_NAME,
 ) {
   return "";
 }
-//@ chunk-spfbd54s.js:2736-3766 placement
+//@ chunk-svdpxfd7.js:2736-3766 placement
 /**
  * 生成版本报告对象（--version 等使用）。
  */
@@ -161,10 +161,10 @@ function getVersionReport() {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION
@@ -173,10 +173,10 @@ function getVersionReport() {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.BUILD_TIME,
@@ -184,9 +184,9 @@ function getVersionReport() {
 }
 export {
   getBuildRefSuffix,
+  isHomeRelativePath,
   earlyArgsToArgv,
   resolveEarlyArgPaths,
-  isHomeRelativePath,
   getVersionReport,
   parseEarlyArgs,
   getDaemonArgs,

@@ -3,9 +3,9 @@
  *
  * 迁移：默认提供 auto 模式时清除旧的 skipAutoPermissionPrompt
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/migrations/resetAutoModeOptInForDefaultOffer.ts
- * pieces: chunk-cjydagjy.js (1)
+ * pieces: chunk-h61dq9nz.js (1)
  * attribution: fingerprint 1
  */
 import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
@@ -15,7 +15,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { logError } from "../utils/log.js";
 
-//@ chunk-cjydagjy.js:12860-13529 fingerprint (2.1.88 match: resetAutoModeOptInForDefaultOffer, 0.841)
+//@ chunk-h61dq9nz.js:13037-13706 fingerprint (2.1.88 match: resetAutoModeOptInForDefaultOffer, 0.841)
 /**
  * 迁移：自动模式默认提供时，重置旧的 skipAutoPermissionPrompt（只做一次）。
  */

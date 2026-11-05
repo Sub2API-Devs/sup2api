@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：提示文本清理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (9)
  * attribution: placement 9
  */
 import { parsePastedRefs, getPastedTextRefNumLines, nfcVariants, formatPastedTextRef } from "../history.js";
@@ -17,7 +17,7 @@ import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { stripInvisibleChars_2 } from "./invisibleChars.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 
-//@ chunk-e6aww6q8.js:67247-67365 placement
+//@ chunk-5xgkngpb.js:69788-69906 placement
 /**
  * 去除提示中的不可见字符并记录移除统计。
  */
@@ -29,7 +29,7 @@ function sanitizePromptText_2(text, surface) {
     removedTotal: removed.removedTotal,
   };
 }
-//@ chunk-e6aww6q8.js:67365-68313 placement
+//@ chunk-5xgkngpb.js:69906-70862 placement
 /**
  * 展开粘贴文本引用（[Pasted text #N]）。
  */
@@ -95,21 +95,21 @@ function expandPastedTextRefs(input, pastedContents) {
     removed,
   };
 }
-//@ chunk-e6aww6q8.js:68313-68434 placement
+//@ chunk-5xgkngpb.js:70862-70983 placement
 /**
  * 判断是否不需要提示"已移除不可见字符"：非 prompt 模式、空文本、含双向控制字符、斜杠/叹号命令或内置命令。
  */
-function skipInvisibleCharsNotice(text, removed, mode) {
+function skipInvisibleCharsNotice(text, stripReport, kind) {
   let trimmed = text.trim();
   return (
-    mode !== "prompt" ||
+    kind !== "prompt" ||
     trimmed === "" ||
-    removed.removedByClass.bidi > 0 ||
+    stripReport.removedByClass.bidi > 0 ||
     /^[/!]/.test(trimmed) ||
     EXIT_COMMAND_WORDS.includes(trimmed)
   );
 }
-//@ chunk-e6aww6q8.js:68434-68504 placement
+//@ chunk-5xgkngpb.js:70983-71053 placement
 /**
  * forceRedraw：强制重绘。
  */
@@ -118,7 +118,7 @@ function forceRedraw() {
     flushReact: true,
   });
 }
-//@ chunk-e6aww6q8.js:68504-69013 placement
+//@ chunk-5xgkngpb.js:71053-71562 placement
 function stripInvisiblePromptChars(removed, surface) {
   logEvent("tengu_prompt_invisible_strip", {
     surface: fromEnum(surface),
@@ -142,7 +142,7 @@ function stripInvisiblePromptChars(removed, surface) {
   });
   logFeatureOk("input_invisible_strip");
 }
-//@ chunk-e6aww6q8.js:69013-69273 placement
+//@ chunk-5xgkngpb.js:71562-71821 placement
 function stripInvisiblePromptText(text) {
   let stripped = stripInvisibleChars_2(text);
   if (stripped.text === text || !tranquilCloudOn())
@@ -170,7 +170,7 @@ function stripInvisiblePromptText(text) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:69273-69470 placement
+//@ chunk-5xgkngpb.js:71821-72018 placement
 function addRemovalCounts(removed, removed_2) {
   removed.removedTotal += removed_2.removedTotal;
   removed.keptConditional += removed_2.keptConditional;
@@ -178,11 +178,11 @@ function addRemovalCounts(removed, removed_2) {
   for (let key of Object.keys(removed_2.removedByClass))
     removed.removedByClass[key] += removed_2.removedByClass[key];
 }
-//@ chunk-e6aww6q8.js:69470-69521 placement
+//@ chunk-5xgkngpb.js:72018-72069 placement
 function tranquilCloudOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_tranquil_cloud", true);
 }
-//@ chunk-e6aww6q8.js:69521-69575 placement
+//@ chunk-5xgkngpb.js:72069-72122 placement
 /**
  * sanitizePromptText：按开关清洗提示词文本。
  */
@@ -194,7 +194,7 @@ export {
   sanitizePromptText,
   expandPastedTextRefs,
   stripInvisiblePromptChars,
-  skipInvisibleCharsNotice,
-  sanitizePromptText_2,
   forceRedraw,
+  sanitizePromptText_2,
+  skipInvisibleCharsNotice,
 };

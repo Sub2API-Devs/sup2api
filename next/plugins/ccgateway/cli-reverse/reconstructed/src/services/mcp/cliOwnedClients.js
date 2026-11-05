@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：CLI 自有 MCP 客户端
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wztb57wq.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cdyva2jv.js (17)
  * attribution: placement 17
  */
 import { createSignal } from "../../utils/signal.js";
@@ -14,7 +14,7 @@ import { getRootSession } from "../../bootstrap/state.js";
 import { identityId2 } from "../../types/ids.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-wztb57wq.js:333-3409 placement
+//@ chunk-cdyva2jv.js:333-3434 placement
 class CliOwnedMcpClientState {
   reconnect = null;
   toggle = null;
@@ -35,6 +35,7 @@ class CliOwnedMcpClientState {
   cliOwnedWithheldBearerRefusals = new WeakMap();
   cliOwnedResendDeciders = new WeakMap();
   ccrInjectedConfigs = new WeakSet();
+  ccrLaunchMcpUrls = new Map();
   ccrMetaEntries = new WeakSet();
   ownToolContainerConfigs = new WeakSet();
   ownReplyServerConfigs = new WeakSet();
@@ -117,29 +118,29 @@ class CliOwnedMcpClientState {
   cachedAdopt = createSignal();
   cachedDialFailed = createSignal();
 }
-//@ chunk-wztb57wq.js:3409-3432 placement
+//@ chunk-cdyva2jv.js:3434-3457 placement
 /**
  * 按宿主保存的 CLI 自有 MCP 客户端状态。
  */
 var cliOwnedStateSlot; // deferred: uses CliOwnedMcpClientState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-wztb57wq.js:3409", () => {
+deferInit("chunk-cdyva2jv.js:3434", () => {
   cliOwnedStateSlot = new HostScoped(() => new CliOwnedMcpClientState());
 });
-//@ chunk-wztb57wq.js:3432-3468 placement
+//@ chunk-cdyva2jv.js:3457-3493 placement
 /**
  * 取当前宿主的 CLI 自有状态。
  */
 function getCliOwnedState() {
   return cliOwnedStateSlot.of(getRootSession().host);
 }
-//@ chunk-wztb57wq.js:3468-3534 placement
+//@ chunk-cdyva2jv.js:3493-3559 placement
 /**
  * 该客户端是否已登记 bearer 提供者。
  */
 function hasCliOwnedAuthProvider(connection) {
   return getCliOwnedState().clientAuthProviders.has(identityId2(connection.client));
 }
-//@ chunk-wztb57wq.js:3534-4429 placement
+//@ chunk-cdyva2jv.js:3559-4455 placement
 /**
  * 把一个 MCP 服务器配置对象登记为 CLI 自有：按需记录一方服务器 id 与文件上传开关、同步/异步 bearer 提供者、响应观察者、请求头提供者、请求前钩子、凭据请求头集合、重发判定与扣留 bearer 的拒绝文案（都按配置对象做键）。
  */
@@ -169,7 +170,7 @@ function registerCliOwnedConfig(config, options) {
     state.cliOwnedWithheldBearerRefusals.set(config, options.withheldBearerRefusal);
   return config;
 }
-//@ chunk-wztb57wq.js:4429-4532 placement
+//@ chunk-cdyva2jv.js:4455-4558 placement
 /**
  * 取 CLI 自有 MCP 客户端被扣留的 bearer 令牌拒绝信息。
  */
@@ -178,14 +179,14 @@ function withheldBearerRefusalFor(config) {
     ? getCliOwnedState().cliOwnedWithheldBearerRefusals.get(config)
     : undefined;
 }
-//@ chunk-wztb57wq.js:4532-4613 placement
+//@ chunk-cdyva2jv.js:4558-4639 placement
 /**
  * 判断配置对象是否属于 CLI 自有。
  */
 function isCliOwnedConfig(config) {
   return typeof config === "object" && config !== null && getCliOwnedState().cliOwnedConfigs.has(config);
 }
-//@ chunk-wztb57wq.js:4613-4713 placement
+//@ chunk-cdyva2jv.js:4639-4739 placement
 /**
  * 取 CLI 自有 MCP 客户端对应的一方服务器 id。
  */
@@ -194,7 +195,7 @@ function firstPartyServerIdFor(config) {
     ? getCliOwnedState().cliOwnedFirstPartyServerIds.get(config)
     : undefined;
 }
-//@ chunk-wztb57wq.js:4713-4864 placement
+//@ chunk-cdyva2jv.js:4739-4890 placement
 /**
  * 判断 CLI 自有 MCP 客户端是否允许文件上传（有开关时按开关，无开关时非一方服务器允许）。
  */
@@ -204,7 +205,7 @@ function allowsFileUploadFor(config) {
   if (uploadSwitch === undefined) return firstPartyServerIdFor(config) === undefined;
   return uploadSwitch();
 }
-//@ chunk-wztb57wq.js:4864-5012 placement
+//@ chunk-cdyva2jv.js:4890-5038 placement
 /**
  * 判断 MCP 配置是否由 CLI 提供 bearer 令牌（同步或异步提供者）。
  */
@@ -216,7 +217,7 @@ function hasCliOwnedBearer(config) {
     cliOwnedState.cliOwnedAsyncBearerProviders.has(config)
   );
 }
-//@ chunk-wztb57wq.js:5012-5171 placement
+//@ chunk-cdyva2jv.js:5038-5197 placement
 function syncBearerTokenFor(config) {
   if (typeof config !== "object" || config === null) return null;
   let provider = getCliOwnedState().cliOwnedBearerProviders.get(config);
@@ -227,7 +228,7 @@ function syncBearerTokenFor(config) {
     return null;
   }
 }
-//@ chunk-wztb57wq.js:5171-5349 placement
+//@ chunk-cdyva2jv.js:5197-5375 placement
 /**
  * 获取 CLI 自有 MCP 客户端的 bearer 令牌（优先异步提供者，失败返回 null）。
  */
@@ -241,7 +242,7 @@ async function resolveBearerTokenFor(config) {
     return null;
   }
 }
-//@ chunk-wztb57wq.js:5349-5475 placement
+//@ chunk-cdyva2jv.js:5375-5501 placement
 /**
  * 在 CLI 自有 MCP 客户端发请求前运行注册的钩子（出错忽略）。
  */
@@ -251,7 +252,7 @@ async function runBeforeRequestHook(config, requestInfo) {
     await getCliOwnedState().cliOwnedBeforeRequestHooks.get(config)?.(requestInfo);
   } catch {}
 }
-//@ chunk-wztb57wq.js:5475-5631 placement
+//@ chunk-cdyva2jv.js:5501-5657 placement
 /**
  * 取 CLI 自有 MCP 客户端的额外请求头（出错返回空对象）。
  */
@@ -265,7 +266,7 @@ function cliOwnedRequestHeaders(config, requestInfo) {
     return {};
   }
 }
-//@ chunk-wztb57wq.js:5631-5760 placement
+//@ chunk-cdyva2jv.js:5657-5786 placement
 /**
  * 判断请求头是否是 CLI 自有 MCP 客户端声明的凭据头。
  */
@@ -276,7 +277,7 @@ function isCredentialRequestHeader(config, headerName) {
     (getCliOwnedState().cliOwnedCredentialRequestHeaders.get(config)?.has(headerName.toLowerCase()) ?? false)
   );
 }
-//@ chunk-wztb57wq.js:5760-5957 placement
+//@ chunk-cdyva2jv.js:5786-5983 placement
 /**
  * 询问 CLI 自有 MCP 客户端是否需要按响应重发请求（出错视为否）。
  */
@@ -297,7 +298,7 @@ async function shouldResendRequest(config, response, owned) {
     return false;
   }
 }
-//@ chunk-wztb57wq.js:5957-6209 placement
+//@ chunk-cdyva2jv.js:5983-6235 placement
 /**
  * 把请求与响应摘要（方法、状态、头、令牌指纹）通知 CLI 自有 MCP 客户端的观察者。
  */
@@ -316,10 +317,10 @@ function notifyResponseObserver(config, observation) {
   } catch {}
 }
 export {
+  getCliOwnedState,
+  firstPartyServerIdFor,
   isCliOwnedConfig,
   registerCliOwnedConfig,
-  getCliOwnedState,
-  hasCliOwnedBearer,
   runBeforeRequestHook,
   resolveBearerTokenFor,
   withheldBearerRefusalFor,
@@ -327,7 +328,7 @@ export {
   isCredentialRequestHeader,
   notifyResponseObserver,
   shouldResendRequest,
-  firstPartyServerIdFor,
+  hasCliOwnedBearer,
   hasCliOwnedAuthProvider,
   allowsFileUploadFor,
 };

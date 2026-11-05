@@ -3,10 +3,10 @@
  *
  * 并入已有模块：/commit 命令的提示片段
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/commit.ts
- * pieces: chunk-dcmhvw5a.js (1), chunk-hantmvxa.js (5)
- * attribution: fingerprint 2, placement 1, layout 3
+ * pieces: chunk-5xgkngpb.js (1), chunk-ne2890fx.js (3), chunk-z20c443b.js (1)
+ * attribution: placement 3, layout 1, fingerprint 1
  */
 import {
   CERTIFIED_GIT_ADD,
@@ -28,14 +28,22 @@ import { COMMIT } from "../skills/bundled/bundledSkillNames.js";
 import { isCommitSkillRolloutOn } from "../services/projectsRelay/relayGates.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:422424-422494 fingerprint (2.1.88 match: getPromptContent, 0.303)
-function getPromptContent(args) {
+//@ chunk-z20c443b.js:420887-420957 placement
+function hasCommitOrPrArg(args) {
   return args !== undefined && (args.commit !== undefined || args.pr !== undefined);
 }
-//@ chunk-hantmvxa.js:95240-95355 placement
+//@ chunk-5xgkngpb.js:1763310-1763334 placement
+/**
+ * getExtraCommitTools：构建期返回 []。
+ */
+function emptyList() {
+  return [];
+}
+//@ chunk-ne2890fx.js:95447-95600 placement
 var COMMIT_GIT_COMMANDS; // deferred: uses toPowerShellRules (../utils/git.js) of its import cycle while loading; runs once the cycle is complete
 var COMMIT_ALLOWED_TOOLS;
-deferInit("chunk-hantmvxa.js:95240", () => {
+var COMMIT_ALLOWED_TOOLS_2;
+deferInit("chunk-ne2890fx.js:95447", () => {
   COMMIT_GIT_COMMANDS = ["git add *", "git status *", "git commit -m *"];
   COMMIT_ALLOWED_TOOLS = [
     `Bash(${CERTIFIED_GIT_ADD})`,
@@ -43,23 +51,12 @@ deferInit("chunk-hantmvxa.js:95240", () => {
     `Bash(${CERTIFIED_GIT_COMMIT})`,
     ...toPowerShellRules(COMMIT_GIT_COMMANDS),
   ];
-});
-//@ chunk-hantmvxa.js:95355-95378 layout
-/**
- * getExtraCommitTools：构建期返回 []。
- */
-function emptyList() {
-  return [];
-}
-//@ chunk-hantmvxa.js:95378-95419 layout
-var COMMIT_ALLOWED_TOOLS_2; // deferred: uses emptyList of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hantmvxa.js:95378", () => {
   COMMIT_ALLOWED_TOOLS_2 = [
     ...bashAndPowerShellRules([...GIT_ADD_FORCE_RULES, ...GIT_COMMIT_FILE_ARG_RULES]),
     ...emptyList(),
   ];
 });
-//@ chunk-hantmvxa.js:95419-98758 layout
+//@ chunk-ne2890fx.js:95600-98939 layout
 /**
  * getCommitPromptContent：/commit 内建技能提示词。
  */
@@ -138,7 +135,7 @@ The closing \`'@\` MUST be at column 0 with no leading whitespace.`
 
 You have the capability to call multiple tools in a single response. Stage and create the commit using a single message. Do not run additional commands to read or explore code beyond the git context above, and do not use any non-git tools for this task.`;
 }
-//@ chunk-hantmvxa.js:98758-99414 fingerprint (2.1.88 match: command, 0.439)
+//@ chunk-ne2890fx.js:98939-99595 fingerprint (2.1.88 match: command, 0.439)
 function command() {
   registerBundledSkill({
     name: COMMIT,
@@ -175,4 +172,4 @@ function command() {
     },
   });
 }
-export { getPromptContent, command, emptyList };
+export { hasCommitOrPrArg, emptyList, command };

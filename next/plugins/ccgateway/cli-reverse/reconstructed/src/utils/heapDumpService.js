@@ -3,9 +3,9 @@
  *
  * 堆快照与内存诊断（/proc smaps、fd 数）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/heapDumpService.ts
- * pieces: chunk-0ffn6ajs.js (3)
+ * pieces: chunk-7d1pj5cy.js (3)
  * attribution: fingerprint 2, facade-exports 1
  */
 import { getHeapStatistics, getHeapSpaceStatistics } from "v8";
@@ -23,7 +23,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { toError, isSyscallError } from "./errors.js";
 import { logError } from "./log.js";
 
-//@ chunk-0ffn6ajs.js:683-3241 fingerprint (2.1.88 match: captureMemoryDiagnostics, 0.836)
+//@ chunk-7d1pj5cy.js:716-3274 fingerprint (2.1.88 match: captureMemoryDiagnostics, 0.836)
 /**
  * 采集内存诊断：/proc/self/smaps_rollup、fd 数、堆统计。
  */
@@ -127,16 +127,16 @@ async function captureMemoryDiagnostics(trigger, dumpNumber = 0) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
   };
 }
-//@ chunk-0ffn6ajs.js:3241-4354 facade-exports (2.1.88 match: performHeapDump, 0.807)
+//@ chunk-7d1pj5cy.js:3274-4387 facade-exports (2.1.88 match: performHeapDump, 0.806)
 /**
  * 写堆快照与内存诊断（/heapdump 或内存超限触发）。
  */
@@ -199,7 +199,7 @@ async function performHeapDump(trigger = "manual", dumpNumber = 0) {
     };
   }
 }
-//@ chunk-0ffn6ajs.js:4354-4446 fingerprint (2.1.88 match: writeHeapSnapshot, 0.846)
+//@ chunk-7d1pj5cy.js:4387-4479 fingerprint (2.1.88 match: writeHeapSnapshot, 0.846)
 async function writeHeapSnapshot(filepath) {
   writeFileSync(filepath, Bun.generateHeapSnapshot("v8", "arraybuffer"), {
     mode: 384,

@@ -1,17 +1,17 @@
 /**
  * @azure/core-rest-pipeline/dist/esm/policies/bearerTokenAuthenticationPolicy.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/core-rest-pipeline@1.21.0
- * pieces: chunk-mrx6y2r5.js (8)
+ * pieces: chunk-b5df2wx1.js (8)
  * attribution: esm-fingerprint 8
  */
 import { createSpan } from "./tracingPolicy.js";
 import { coreRestPipelineLogger } from "../../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";
 import { createTokenCycler } from "../util/tokenCycler.js";
 
-//@ chunk-mrx6y2r5.js:64307-64348 esm-fingerprint
+//@ chunk-b5df2wx1.js:64307-64348 esm-fingerprint
 var bearerTokenAuthenticationPolicyName = "bearerTokenAuthenticationPolicy";
-//@ chunk-mrx6y2r5.js:64348-64466 esm-fingerprint
+//@ chunk-b5df2wx1.js:64348-64466 esm-fingerprint
 async function trySendRequest(request, next) {
   try {
     return [await next(request), undefined];
@@ -20,7 +20,7 @@ async function trySendRequest(request, next) {
     else throw e;
   }
 }
-//@ chunk-mrx6y2r5.js:64466-64684 esm-fingerprint
+//@ chunk-b5df2wx1.js:64466-64684 esm-fingerprint
 async function defaultAuthorizeRequest(options) {
   let { scopes, getAccessToken, request } = options;
   let getTokenOptions = {
@@ -31,11 +31,11 @@ async function defaultAuthorizeRequest(options) {
   let accessToken = await getAccessToken(scopes, getTokenOptions);
   if (accessToken) options.request.headers.set("Authorization", `Bearer ${accessToken.token}`);
 }
-//@ chunk-mrx6y2r5.js:64684-64756 esm-fingerprint
+//@ chunk-b5df2wx1.js:64684-64756 esm-fingerprint
 function isChallengeResponse(response) {
   return response.status === 401 && response.headers.has("WWW-Authenticate");
 }
-//@ chunk-mrx6y2r5.js:64756-64979 esm-fingerprint
+//@ chunk-b5df2wx1.js:64756-64979 esm-fingerprint
 async function authorizeRequestOnCaeChallenge(onChallengeOptions, caeClaims) {
   var _a;
   let { scopes } = onChallengeOptions;
@@ -50,7 +50,7 @@ async function authorizeRequestOnCaeChallenge(onChallengeOptions, caeClaims) {
   );
   return true;
 }
-//@ chunk-mrx6y2r5.js:64979-66674 esm-fingerprint
+//@ chunk-b5df2wx1.js:64979-66674 esm-fingerprint
 function bearerTokenAuthenticationPolicy(options) {
   var _a;
   var _b;
@@ -156,7 +156,7 @@ function bearerTokenAuthenticationPolicy(options) {
     },
   };
 }
-//@ chunk-mrx6y2r5.js:66674-66898 esm-fingerprint
+//@ chunk-b5df2wx1.js:66674-66898 esm-fingerprint
 function parseChallenges(challenges) {
   let challengeRegex = /(\w+)\s+((?:\w+=(?:"[^"]*"|[^,]*),?\s*)+)/g;
   let paramRegex = /(\w+)="([^"]*)"/g;
@@ -175,7 +175,7 @@ function parseChallenges(challenges) {
   }
   return parsedChallenges;
 }
-//@ chunk-mrx6y2r5.js:66898-67078 esm-fingerprint
+//@ chunk-b5df2wx1.js:66898-67078 esm-fingerprint
 function getCaeChallengeClaims(challenges) {
   var _a;
   if (!challenges) return;

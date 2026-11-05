@@ -3,9 +3,9 @@
  *
  * 钩子站点规则：turn.start/step/complete（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (10)
  * attribution: placement 10
  */
 import { isPlainObject } from "../../../utils/isPlainObject.js";
@@ -21,7 +21,7 @@ import { restoreKeepLongTexts } from "./promptContextSites.js";
 import { EFFORT_LEVELS } from "../../../utils/effort.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:213329-213458 placement
+//@ chunk-j8f885h1.js:194514-194643 placement
 var STOP_REASONS = [
   "end_turn",
   "max_tokens",
@@ -32,7 +32,7 @@ var STOP_REASONS = [
   "refusal",
   "model_context_window_exceeded",
 ];
-//@ chunk-4121qate.js:213458-213596 placement (2.1.88 match: getTokenCountFromUsage, 0.911)
+//@ chunk-j8f885h1.js:194643-194781 placement (2.1.88 match: getTokenCountFromUsage, 1)
 var getTokenCountFromUsage_2 = (usage) =>
   isPlainObject(usage) &&
   [
@@ -41,7 +41,7 @@ var getTokenCountFromUsage_2 = (usage) =>
     usage.cache_read_input_tokens,
     usage.cache_creation_input_tokens,
   ].every((count) => Number.isFinite(count));
-//@ chunk-4121qate.js:213596-214347 placement
+//@ chunk-j8f885h1.js:194781-195532 placement
 /**
  * 按种类校验 turn.step 流的块：text/thinking、tool、input、stop（停止原因与用量）、engine（引用不可改）。
  */
@@ -74,7 +74,7 @@ function checkTurnStepChunkFields(chunk) {
       return "known kind (text, thinking, tool, input, stop, engine)";
   }
 }
-//@ chunk-4121qate.js:214347-214517 placement
+//@ chunk-j8f885h1.js:195532-195702 placement
 /**
  * 描述 turn.step 块的问题（不是对象或字段不符合种类）。
  */
@@ -84,7 +84,7 @@ function describeTurnStepChunkProblem(chunk) {
   let fieldsProblem = checkTurnStepChunkFields(chunk);
   return fieldsProblem === undefined ? undefined : `kind ${String(chunk.kind)} but no ${fieldsProblem}`;
 }
-//@ chunk-4121qate.js:214517-214629 placement
+//@ chunk-j8f885h1.js:195702-195814 placement
 /**
  * 取引擎块的引用与种类。
  */
@@ -93,7 +93,7 @@ function engineChunkRef(chunk) {
   let { ref, kind } = chunk;
   return typeof ref === "number" && typeof kind === "string" ? [ref, kind] : undefined;
 }
-//@ chunk-4121qate.js:214629-214720 placement
+//@ chunk-j8f885h1.js:195814-195905 placement
 /**
  * 工具步骤 id
  */
@@ -101,7 +101,7 @@ function toolStepId(chunk) {
   let id = isPlainObject(chunk) && chunk.kind === "tool" ? chunk.id : undefined;
   return typeof id === "string" ? id : undefined;
 }
-//@ chunk-4121qate.js:214720-215323 placement
+//@ chunk-j8f885h1.js:195905-196508 placement
 function checkTurnStepChunk() {
   let pulledKinds = new Map();
   let passedRefs = new Set();
@@ -133,9 +133,9 @@ function checkTurnStepChunk() {
     },
   };
 }
-//@ chunk-4121qate.js:215323-215740 placement
+//@ chunk-j8f885h1.js:196508-196925 placement
 var TURN_COMPLETE_SITE; // deferred: uses simpleSite (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:215323", () => {
+deferInit("chunk-j8f885h1.js:196508", () => {
   TURN_COMPLETE_SITE = {
     ...simpleSite({
       event: "turn.complete",
@@ -162,12 +162,12 @@ deferInit("chunk-4121qate.js:215323", () => {
     restoreArgument: restoreKeepLongTexts(["agentId"], ["answer"]),
   };
 });
-//@ chunk-4121qate.js:215740-215954 placement
+//@ chunk-j8f885h1.js:196925-197139 placement
 /**
  * turn.start 站点规则：agentId 不可改。
  */
 var TURN_START_SITE; // deferred: uses simpleSite (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:215740", () => {
+deferInit("chunk-j8f885h1.js:196925", () => {
   TURN_START_SITE = {
     ...simpleSite({
       event: "turn.start",
@@ -183,9 +183,9 @@ deferInit("chunk-4121qate.js:215740", () => {
     restoreArgument: restoreMissingKeys(["agentId"]),
   };
 });
-//@ chunk-4121qate.js:215954-216757 placement
+//@ chunk-j8f885h1.js:197139-197942 placement
 var TURN_STEP_SITE; // deferred: uses restoreMissingKeys (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:215954", () => {
+deferInit("chunk-j8f885h1.js:197139", () => {
   TURN_STEP_SITE = {
     event: "turn.step",
     chunkChecker: checkTurnStepChunk,

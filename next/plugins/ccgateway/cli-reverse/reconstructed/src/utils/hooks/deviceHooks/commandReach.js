@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：设备钩子命令可达路径分析与执行判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mthxbav8.js (82)
- * attribution: placement 82
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4z1ntdgk.js (98)
+ * attribution: placement 82, layout 16
  */
 import { posix, isAbsolute } from "path";
 import { realpath } from "fs/promises";
@@ -22,15 +22,20 @@ import {
   isPathUnderForPlatform,
   readShebang as readShebang_2,
 } from "../hookCommandAnalysis.js";
+import { scriptHookDisplayLabel } from "../scriptHooks.js";
 import { sanitizeDisplayText } from "../../resultError.js";
-import { getContentFieldValue } from "../../../components/hooks/ViewHookMode.js";
 import {
   commandBaseName,
+  SHELL_SET_TO_CSH_RE,
+  isTildeOrDollarWordChanged,
   isPlainArgument,
   isLauncherCommand,
   isAnchoredPath,
   normalizeInterpreterName,
   isPathWord,
+  CSH_SHELL_RE,
+  LOOP_WORD_RE,
+  ALNUM_NAME_RE,
   BUILD_TOOL_PROGRAMS,
   VERSION_OR_HELP_FLAG_RE,
   SHELL_PROGRAMS,
@@ -39,11 +44,16 @@ import {
   isAbsoluteLike,
   PATH_PREFIX_CHARS_RE,
   EXTENSION_INTERPRETERS,
+  SHELL_NAME_RE,
+  PREFIX_WRAPPER_RE,
+  DISABLE_OR_ENABLE_RE,
+  QUOTE_OR_CONTINUATION_RE,
   parseShellWords,
   BUILD_SUBCOMMANDS,
   isEvalFlag,
   parseShellCommands,
   INTERPRETER_EVAL_FLAGS,
+  attachedPathWord,
   splitQuotedWords,
   isToolEnvVar,
   TOOL_ENV_EXACT_RE,
@@ -51,18 +61,17 @@ import {
   EXEC_OR_EVAL_RE,
   IMPORT_OR_EXEC_RE,
   PYTHON_IMPORT_PATTERN,
-  SHELL_NAME_RE,
   pathPrefixes,
   CWD_DEPENDENCE_PATTERN,
   PWD_REFERENCE_RE,
   HISTCHARS_RE,
+  CSH_IN_TEXT_RE,
   shellComments,
 } from "./shellReader.js";
 import { hasAnyShortFlagChar } from "../../bash/parser.js";
 import { readFlagWithOverride } from "../../../services/analytics/flagOverrides.js";
-import { tildeOperandAt } from "../../bash/shellQuote.js";
 import { firstLineOf, urlPatternToRegex } from "../../stringUtils.js";
-import { uniq } from "../../collections.js";
+import { normalizeCaseForComparison_2 } from "../../permissions/filesystem.js";
 import { COMMAND_WRAPPERS } from "./vouching.js";
 import { BUILD_TOOL_ENV_VARS } from "../../git/builderGit/gitEnv.js";
 import { MAX_HOOKS_PER_EVENT } from "./runDeviceHook.js";
@@ -87,7 +96,7 @@ import {
 import { findTemplateByDigest, hookTemplateIds, getHookTemplate, alwaysTrue } from "../hookTemplates.js";
 import { TOOL_HOOK_EVENTS } from "../hookEvents.js";
 import { BASH_TOOL_NAME } from "../../../tools/BashTool/toolName.js";
-import { FILE_READ_TOOL_NAME } from "../../../tools/FileReadTool/constants.js";
+import { READ } from "../../../tools/FileReadTool/constants.js";
 import { formatDeviceHookId, parseDeviceHookId } from "../deviceHookId.js";
 import {
   attestationFor as attestationFor_2,
@@ -112,9 +121,9 @@ import { fromEnum } from "../../../services/analytics/safeMetadata.js";
 import { hasFreshGrowthBookFeatures } from "../../../services/analytics/growthbook.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-mthxbav8.js:3489-3523 placement
+//@ chunk-4z1ntdgk.js:3846-3880 placement
 var REMOTE_ROOT_RE = /^[a-z_]{2,}:\[?[^/]*\]?$/;
-//@ chunk-mthxbav8.js:3523-3966 placement
+//@ chunk-4z1ntdgk.js:3880-4323 placement
 /**
  * 设备 hook 命令可达的根目录
  */
@@ -139,13 +148,13 @@ function commandReachRoots(context) {
   }
   return filtered.map((root) => normalizeCommandForPlatform(root.replace(/\/+$/, "")) || "/");
 }
-//@ chunk-mthxbav8.js:3966-4035 placement
+//@ chunk-4z1ntdgk.js:4323-4392 placement
 function reachesEverything(roots, paths) {
   return (
     (roots.length === 1 && roots[0] === POSIX_SEP_2) || paths.some((path) => !isAbsolutePlatformPath(path))
   );
 }
-//@ chunk-mthxbav8.js:4035-4119 placement
+//@ chunk-4z1ntdgk.js:4392-4476 placement
 function commandReachesPath(paths, context) {
   let roots = commandReachRoots(context);
   return (
@@ -153,7 +162,7 @@ function commandReachesPath(paths, context) {
     paths.some((path) => roots.some((root) => isReachableOrSamePath(root, normalizeCommandForPlatform(path))))
   );
 }
-//@ chunk-mthxbav8.js:4119-4203 placement
+//@ chunk-4z1ntdgk.js:4476-4560 placement
 function pathWithinReach(paths, context) {
   let roots = commandReachRoots(context);
   return (
@@ -161,16 +170,32 @@ function pathWithinReach(paths, context) {
     paths.some((path) => roots.some((root) => isReachableOrSamePath(normalizeCommandForPlatform(path), root)))
   );
 }
-//@ chunk-mthxbav8.js:4469-4520 placement
+//@ chunk-4z1ntdgk.js:4560-4826 layout
+function hookContentText(hook) {
+  switch (hook.type) {
+    case "command":
+      return hook.args === undefined ? hook.command : [hook.command, ...hook.args].join(" ");
+    case "http":
+      return hook.url;
+    case "prompt":
+    case "agent":
+      return hook.prompt;
+    case "mcp_tool":
+      return `${hook.server}/${hook.tool}`;
+    case "script":
+      return hook.file ?? scriptHookDisplayLabel(hook.script ?? "");
+  }
+}
+//@ chunk-4z1ntdgk.js:4826-4877 placement
 /**
  * 取钩子内容的可展示文本（去不可见字符并截断 200）。
  */
 function hookContentLabel(hook) {
-  return sanitizeDisplayText(getContentFieldValue(hook), {
+  return sanitizeDisplayText(hookContentText(hook), {
     maxCodeUnits: 200,
   });
 }
-//@ chunk-mthxbav8.js:4520-6517 placement
+//@ chunk-4z1ntdgk.js:4877-6874 placement
 /**
  * 判断一个设备钩子能否转发给云会话运行：钩子配置文件或插件根目录处于云会话可写范围内时拒绝；非 command 类型、无法分析的命令分别标注；脚本型命令再检查脚本位置与摘要。
  */
@@ -250,7 +275,7 @@ async function classifyDeviceHookReach(hook, context, fs, options = {}) {
     ...pinnedInfo,
   };
 }
-//@ chunk-mthxbav8.js:6517-6715 placement
+//@ chunk-4z1ntdgk.js:6874-7072 placement
 async function locateScriptCached(path, state, deps, resolved) {
   let cached = resolved?.get(path);
   if (cached) return cached;
@@ -265,7 +290,7 @@ async function locateScriptCached(path, state, deps, resolved) {
   resolved?.set(path, pending);
   return pending;
 }
-//@ chunk-mthxbav8.js:75510-86063 placement
+//@ chunk-4z1ntdgk.js:80239-92786 placement
 /**
  * 分析一条 shell 命令（程序、参数、重定向、heredoc、管道）会读写或执行哪些路径，用于判定设备钩子能否在本机执行。
  */
@@ -280,8 +305,13 @@ function analyzeCommandReach(
     zshNullCommandHeld: true,
     rubyAttachedPattern: true,
     forNameDo: true,
+    cShellsHeld: true,
+    commandAfterConditional: true,
     runsTextHeld: true,
+    shortLoopLists: true,
+    disableHeld: true,
     substitutionHeredocs: true,
+    unexpandedTilde: true,
   },
 ) {
   let startIndex = assignments.findIndex((assignment) => commandBaseName(assignment) === "flock");
@@ -290,6 +320,11 @@ function analyzeCommandReach(
     ...assignments.filter((assignment, assignmentIndex) => assignmentIndex !== flockArg?.at),
     ...(/^(?:export|declare|typeset|local|readonly)$/.test(program.text) ? args : []),
   ];
+  if (
+    state.cShellsHeld &&
+    slicedAssignments.some((slicedAssignment) => SHELL_SET_TO_CSH_RE.test(slicedAssignment.text))
+  )
+    return noteStanding(CSH_SHELL_SET_TEXT, state);
   let assignmentReason = analyzeAssignments(
     slicedAssignments,
     state.shell === "zsh",
@@ -299,7 +334,14 @@ function analyzeCommandReach(
   if (assignmentReason !== undefined && state.standing === undefined) return assignmentReason;
   let found = assignments.find((assignment) => isUnderRoots(assignment, state));
   if (found !== undefined) return "it names " + found.text;
-  let splitReason = splitArgsByOperands(assignments, sources, [program, ...args], relativeNamesOf(state));
+  let splitReason = splitArgsByOperands(
+    assignments,
+    sources,
+    [program, ...args],
+    relativeNamesOf(state),
+    state.unexpandedTilde,
+    state.shell,
+  );
   if (splitReason !== undefined && (state.standing === undefined || STANDING_REASON_TEXTS.has(splitReason)))
     return noteStanding(splitReason, state);
   let sudoIndex =
@@ -333,7 +375,7 @@ function analyzeCommandReach(
   if (program.text === "setenv" || (program.text === "set" && /^-[a-zA-Z]*x/.test(args[0]?.text ?? ""))) {
     let valueIndex = program.text === "setenv" ? 0 : 1;
     let valueWord = args[valueIndex];
-    let setenvReason = analyzeAssignments(
+    let assignments =
       valueWord === undefined
         ? []
         : [
@@ -347,12 +389,16 @@ function analyzeCommandReach(
                   .map((arg) => arg.text)
                   .join(":"),
             },
-          ],
+          ];
+    if (state.cShellsHeld && assignments.some((assignment) => SHELL_SET_TO_CSH_RE.test(assignment.text)))
+      return noteStanding(CSH_SHELL_SET_TEXT, state);
+    let assignmentReason = analyzeAssignments(
+      assignments,
       false,
       state.zshNullCommandHeld,
       relativeNamesOf(state),
     );
-    if (setenvReason !== undefined) return setenvReason;
+    if (assignmentReason !== undefined) return assignmentReason;
   }
   if (program.text === "unset" && args.some((arg) => arg.text.startsWith("GIT_CONFIG")))
     return "it unsets a GIT_CONFIG variable";
@@ -363,6 +409,10 @@ function analyzeCommandReach(
     return "it runs a command held in a variable or produced by another command";
   if (/^\$/.test(program.text)) {
     if (isUnderRoots(program, state)) return "it names " + program.text;
+    if (program.text.includes("/") && isTildeOrDollarWordChanged(program)) {
+      let foundReason = noteStandingReason("it runs a file by a relative path", program, state);
+      if (foundReason !== undefined) return foundReason;
+    }
     let variableName = /^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?\//.exec(program.text)?.[1];
     if (variableName !== undefined && state.relativeNames?.has(variableName) === true)
       return "it runs a file by a relative path";
@@ -388,8 +438,10 @@ function analyzeCommandReach(
         found !== undefined &&
         isPlainArgument(found) &&
         (found.text.includes("/") || /\.[A-Za-z0-9]{1,5}$/.test(found.text))
-      )
-        return "it runs a file by a relative path";
+      ) {
+        let splitReason = noteStandingReason("it runs a file by a relative path", found, state);
+        if (splitReason !== undefined) return splitReason;
+      }
       if (!/^\/(?:.*\/)?[^\/$]+$/.test(replaced)) return;
       let programName = commandBaseName(program);
       if (isLauncherCommand(programName) && programName !== "runuser")
@@ -424,10 +476,13 @@ function analyzeCommandReach(
     isUnderRoots(word, state),
   );
   if (found_2 !== undefined) return "it names " + found_2.text;
-  if (program.text.includes("/") && !isPathWord(program) && !program.text.endsWith("/"))
-    return "it runs a file by a relative path";
+  if (program.text.includes("/") && !isPathWord(program) && !program.text.endsWith("/")) {
+    let standingReason = noteStandingReason("it runs a file by a relative path", program, state);
+    if (standingReason !== undefined) return standingReason;
+  }
   if (state.standing === undefined && /(?:^|[^$])\{[-+]?\d*[.\/#%+]{0,4}\}/.test(program.text))
     return "it runs a file by a relative path";
+  if (state.cShellsHeld && CSH_SHELL_RE.test(interpreterName)) return noteStanding(CSH_MAY_RUN_TEXT, state);
   if (state.forNameDo && state.standing === undefined) {
     if (interpreterName === "function" && args.slice(1).some((arg) => arg.text === "do" && !arg.quoted))
       return "it defines a function whose loop has no ';' or line break before its 'do', so what the loop runs cannot be checked; written with '; do' it can be";
@@ -453,12 +508,27 @@ function analyzeCommandReach(
     )
       return "it starts a coprocess whose loop has no ';' or line break before its 'do', so what the loop runs cannot be checked; written with '; do' it can be";
   }
-  if (interpreterName === "for" || interpreterName === "select")
+  if (!state.shortLoopLists && (interpreterName === "for" || interpreterName === "select"))
     return args
       .slice(args.findIndex((arg) => arg.text === "in") + 1)
       .some((arg) => isPlainArgument(arg) && /[\/*?[]/.test(arg.text))
       ? "it loops over files by a relative name"
       : undefined;
+  if (state.shortLoopLists && LOOP_WORD_RE.test(interpreterName)) {
+    let index = 0;
+    while (
+      index < args.length &&
+      !args[index].quoted &&
+      args[index].text !== "in" &&
+      ALNUM_NAME_RE.test(args[index].text)
+    )
+      index += 1;
+    return args
+      .slice(args[index]?.text === "in" ? index + 1 : index)
+      .some((arg) => isPlainArgument(arg) && /[\/*?[]/.test(arg.text))
+      ? "it loops over files by a relative name"
+      : undefined;
+  }
   if (interpreterName === "source" || program.text === ".") {
     let sourceArg = args[0]?.text === "--" ? args[1] : args[0];
     if (sourceArg !== undefined && isStdinLikePath(sourceArg)) {
@@ -470,12 +540,23 @@ function analyzeCommandReach(
     }
     return isPlainArgument(sourceArg) ? "it sources a file by a relative name" : undefined;
   }
-  let unwrapped = unwrapLauncherArgs(interpreterName, args, relativeNamesOf(state));
+  let unwrapped = unwrapLauncherArgs(
+    interpreterName,
+    args,
+    relativeNamesOf(state),
+    state.unexpandedTilde,
+    state.shell,
+  );
   if (unwrapped === "reads_input") return noteStanding(WRAPPER_NEEDS_COMMAND_TEXTS[interpreterName], state);
   if (unwrapped !== undefined) {
     if (unwrapped !== "held") for (let line of unwrapped.lines ?? []) sources.push(line);
+    let nestedReason = "it runs " + interpreterName + " with a command or file this machine cannot verify";
+    if (unwrapped !== "held" && unwrapped.heldStanding === true) {
+      let nestedAssignments = noteStandingIfComposedKite(nestedReason, state);
+      if (nestedAssignments !== undefined) return nestedAssignments;
+    }
     return unwrapped === "held" || unwrapped.held
-      ? "it runs " + interpreterName + " with a command or file this machine cannot verify"
+      ? nestedReason
       : (unwrapped.words ?? [])
           .map((words) => analyzeWrappedCommand(words, piped, sources, state))
           .find((reason) => reason !== undefined);
@@ -706,7 +787,8 @@ function analyzeCommandReach(
       : undefined;
   if (dartScript !== undefined && dartScript.text.endsWith(".dart") && isPlainArgument(dartScript))
     return "it runs a script by a relative name";
-  if (interpreterName === "git") return analyzeEnvCommand(args, assignments, sources, relativeNamesOf(state));
+  if (interpreterName === "git")
+    return analyzeEnvCommand(args, assignments, sources, relativeNamesOf(state), state.unexpandedTilde);
   if (interpreterName === "java") {
     let index = args.findIndex((arg) => arg.text === "-jar");
     let index_2 = args.findIndex((arg) => /^(?:-cp|-classpath|--class-path)$/.test(arg.text));
@@ -714,6 +796,15 @@ function analyzeCommandReach(
       index_2 === -1
         ? args.find((arg) => arg.text.startsWith("--class-path="))?.text.slice(13)
         : args[index_2 + 1]?.text;
+    let markerIndex = index_2 === -1 || (args[index_2 + 1]?.quoted ?? false);
+    let pieces =
+      index_2 === -1
+        ? (args.find((arg) => arg.text.startsWith("--class-path="))?.raw ?? "").replace(
+            /^(["']?)--class-path=/,
+            "$1",
+          )
+        : (args[index_2 + 1]?.raw ?? "");
+    let matches = DOLLAR_LITERAL_ESCAPE_RE.test(pieces);
     if (index !== -1)
       return isPlainArgument(args[index + 1]) ? "it runs a file by a relative path" : undefined;
     return args.length > 0 && args.every((arg) => VERSION_OR_HELP_FLAG_RE.test(arg.text))
@@ -721,7 +812,20 @@ function analyzeCommandReach(
       : classPath !== undefined &&
           classPath
             .split(":")
-            .every((classPathEntry) => isResolvableAbsolutePath(classPathEntry, relativeNamesOf(state)))
+            .every(
+              (classPathEntry, arg, argText) =>
+                isResolvableAbsolutePath(classPathEntry, relativeNamesOf(state)) &&
+                !(
+                  state.unexpandedTilde &&
+                  (isUnexpandedTildePath(
+                    classPathEntry,
+                    markerIsTildeLiteral(markerIndex, argText, arg),
+                    isPosixShellName(state.shell),
+                  ) ||
+                    tildeIsLiteralHere(classPathEntry, pieces, arg > 0 ? matches : undefined) ||
+                    (arg === 0 && bracedDefaultHoldsColon(pieces)))
+                ),
+            )
         ? undefined
         : "it runs java with the working directory on its class path";
   }
@@ -755,6 +859,30 @@ function analyzeCommandReach(
     }
     return;
   }
+  if (state.disableHeld) {
+    let reason =
+      state.fromPayload ||
+      state.shell === undefined ||
+      state.shell === "zsh" ||
+      !SHELL_NAME_RE.test(state.shell);
+    let matches = PREFIX_WRAPPER_RE.test(interpreterName);
+    let nextIndex = matches ? args.findIndex((arg) => commandBaseName(arg) === "disable") : -1;
+    let rest =
+      matches && nextIndex === -1 ? args.findIndex((arg) => commandBaseName(arg) === "enable") : nextIndex;
+    let tail = rest === -1 ? interpreterName : commandBaseName(args[rest]);
+    if (tail === "disable" || (tail === "enable" && reason))
+      return rest === -1
+        ? `it runs ${tail}, which can change how the shell reads the lines after it, so they cannot be checked`
+        : `it has ${tail} behind ${interpreterName === "-" ? "'-'" : interpreterName}, where zsh may run it as a command that changes how the shell reads the lines after it, so they cannot be checked`;
+    let valueIndex = matches ? args.findIndex((arg) => commandBaseName(arg) === "emulate") : -1;
+    if (
+      (interpreterName === "emulate" || valueIndex !== -1) &&
+      args
+        .slice(valueIndex + 1)
+        .some((arg) => DISABLE_OR_ENABLE_RE.test(arg.text.replace(QUOTE_OR_CONTINUATION_RE, "")))
+    )
+      return "it hands emulate a text that names disable or enable, which can change how the shell reads the lines after it, so they cannot be checked";
+  }
   if (interpreterName === "enable" || interpreterName === "hash") {
     let index = args.findIndex((arg) => arg.text === (interpreterName === "enable" ? "-f" : "-p"));
     return index !== -1 && isPlainArgument(args[index + 1]) ? "it runs a file by a relative path" : undefined;
@@ -770,7 +898,10 @@ function analyzeCommandReach(
       if (words.length === 0) continue;
       let execReason = analyzeWrappedCommand(words, false, sources, state);
       findReasons.push(
-        words[0].text === "{}" || parseShellWords(words).some((word) => word.program.text === "{}")
+        words[0].text === "{}" ||
+          parseShellWords(words, {
+            commandAfterConditional: state.commandAfterConditional,
+          }).some((word) => word.program.text === "{}")
           ? "it runs a file by a relative path"
           : execReason,
       );
@@ -780,7 +911,7 @@ function analyzeCommandReach(
   }
   return;
 }
-//@ chunk-mthxbav8.js:86063-86192 placement
+//@ chunk-4z1ntdgk.js:92786-92915 placement
 function findEvalStyleFlag(programName, args) {
   let subcommands = BUILD_SUBCOMMANDS[programName];
   if (subcommands === undefined) return;
@@ -788,7 +919,7 @@ function findEvalStyleFlag(programName, args) {
     subcommands.has(arg.text.startsWith("--") ? firstLineOf(arg.text, "=") : arg.text),
   )?.text;
 }
-//@ chunk-mthxbav8.js:86192-86634 placement
+//@ chunk-4z1ntdgk.js:92915-93720 placement
 /**
  * 命令包装相关文案：嵌套超限提示、env -P 相对目录提示，以及各包装器"缺少命令"的说明集合。
  */
@@ -796,8 +927,13 @@ var MAX_WRAP_NESTING; // deferred: has load-time effects after a deferred statem
 var WRAP_NESTING_TOO_DEEP_TEXT;
 var ENV_RELATIVE_DIR_TEXT;
 var WRAPPER_NEEDS_COMMAND_TEXTS;
+var CSH_TEXT_UNVERIFIABLE;
+var CSH_MAY_RUN_TEXT;
+var CSH_SHELL_SET_TEXT;
+var CSH_NAMED_TEXT;
+var CSH_REASON_TEXTS;
 var STANDING_REASON_TEXTS;
-deferInit("chunk-mthxbav8.js:86192", () => {
+deferInit("chunk-4z1ntdgk.js:92915", () => {
   MAX_WRAP_NESTING = 4;
   WRAP_NESTING_TOO_DEEP_TEXT =
     "it wraps a command in more than four layers of commands such as find -exec or parallel";
@@ -809,18 +945,34 @@ deferInit("chunk-mthxbav8.js:86192", () => {
     runuser: "it runs runuser with no command",
     sudo: "it starts a shell through sudo or doas with no command",
   };
+  CSH_TEXT_UNVERIFIABLE = "it is written for csh or tcsh, whose text this machine cannot verify";
+  CSH_MAY_RUN_TEXT = "it may run commands through csh or tcsh, whose text this machine cannot verify";
+  CSH_SHELL_SET_TEXT =
+    "it sets SHELL in a way that may point it at csh or tcsh, whose text this machine cannot verify";
+  CSH_NAMED_TEXT = "it names csh or tcsh, so it may run text this machine cannot verify";
+  CSH_REASON_TEXTS = new Set([CSH_TEXT_UNVERIFIABLE, CSH_MAY_RUN_TEXT, CSH_SHELL_SET_TEXT, CSH_NAMED_TEXT]);
   STANDING_REASON_TEXTS = new Set([
     WRAP_NESTING_TOO_DEEP_TEXT,
     ENV_RELATIVE_DIR_TEXT,
+    CSH_MAY_RUN_TEXT,
+    CSH_SHELL_SET_TEXT,
     ...Object.values(WRAPPER_NEEDS_COMMAND_TEXTS),
   ]);
 });
-//@ chunk-mthxbav8.js:86634-86693 placement
-function noteStanding(reason, state) {
-  if (STANDING_REASON_TEXTS.has(reason)) state.standing?.push(reason);
+//@ chunk-4z1ntdgk.js:93720-93783 placement
+function noteStanding(reason, state, hook = STANDING_REASON_TEXTS.has(reason)) {
+  if (hook) state.standing?.push(reason);
   return reason;
 }
-//@ chunk-mthxbav8.js:86693-87068 placement
+//@ chunk-4z1ntdgk.js:93783-93860 layout
+function noteStandingReason(expression, state, state_2) {
+  if (state_2.standing !== undefined && isTildeOrDollarWordChanged(state)) {
+    noteStanding(expression, state_2, true);
+    return;
+  }
+  return expression;
+}
+//@ chunk-4z1ntdgk.js:93860-94287 placement
 function analyzeWrappedCommand(words, piped, sources, state, skipDirect = false) {
   let nesting = (state.nesting ?? 0) + 1;
   if (nesting > MAX_WRAP_NESTING) return noteStanding(WRAP_NESTING_TOO_DEEP_TEXT, state);
@@ -835,7 +987,9 @@ function analyzeWrappedCommand(words, piped, sources, state, skipDirect = false)
             assignments: [],
           },
         ]),
-    ...parseShellWords(words).filter((command) => skipDirect || command.args.length !== words.length - 1),
+    ...parseShellWords(words, {
+      commandAfterConditional: state.commandAfterConditional,
+    }).filter((command) => skipDirect || command.args.length !== words.length - 1),
   ];
   let reasons = [];
   for (let command of candidates) {
@@ -856,22 +1010,22 @@ function analyzeWrappedCommand(words, piped, sources, state, skipDirect = false)
   }
   return reasons.find((reason) => reason !== undefined);
 }
-//@ chunk-mthxbav8.js:87068-87140 placement
+//@ chunk-4z1ntdgk.js:94287-94359 placement
 var INTERPRETER_VARIANTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mthxbav8.js:87068", () => {
+deferInit("chunk-4z1ntdgk.js:94287", () => {
   INTERPRETER_VARIANTS = new Set(["bun", "deno", "tsx", "ts-node", "lua", "rscript", "r", "bb"]);
 });
-//@ chunk-mthxbav8.js:87140-87212 placement
+//@ chunk-4z1ntdgk.js:94359-94431 placement
 function relativeNamesOf(state) {
   return state.relativeNamedValues === false ? undefined : state.relativeNames;
 }
-//@ chunk-mthxbav8.js:87212-87283 placement
+//@ chunk-4z1ntdgk.js:94431-94502 placement
 function isResolvableAbsolutePath(text, relativeNames) {
   let isAbsolute = isAbsoluteLike(text);
   if (relativeNames === undefined) return isAbsolute;
   return isAbsolute && !isUnresolvedVariablePath(text, relativeNames);
 }
-//@ chunk-mthxbav8.js:87283-87504 placement
+//@ chunk-4z1ntdgk.js:94502-94723 placement
 function isUnresolvedVariablePath(text, relativeNames) {
   if (relativeNames === undefined) return false;
   let variableName = /^\$\{?([A-Za-z_][A-Za-z0-9_]*)/.exec(text)?.[1];
@@ -881,7 +1035,71 @@ function isUnresolvedVariablePath(text, relativeNames) {
     (replaced !== text && /^[^\/~$].*\//.test(replaced))
   );
 }
-//@ chunk-mthxbav8.js:87620-87784 placement
+//@ chunk-4z1ntdgk.js:94723-94901 layout
+function isUnexpandedTildePath(expression, state, analyzeNested = true) {
+  if (expression.startsWith("~")) return state || /^~[+-]?\d+(?:\/|$)/.test(expression);
+  return (
+    expression.startsWith("$") &&
+    (TILDE_AFTER_VAR_RE.test(expression) ||
+      (expression.includes("${") &&
+        expression.includes("~") &&
+        (state || !analyzeNested || !TILDE_BRACED_DEFAULT_RE.test(expression))))
+  );
+}
+//@ chunk-4z1ntdgk.js:94901-94961 layout
+var TILDE_AFTER_VAR_RE = /[})\]]~|\$(?:[A-Za-z_][A-Za-z0-9_]*|[0-9@*#?$!-])~/;
+//@ chunk-4z1ntdgk.js:94961-95062 layout
+function isPosixShellName(shellName) {
+  return !shellName || /^(?:bash|rbash|sh|dash|ash|(?:pd|lo|o|m|r)?ksh[0-9]*|yash|posh)$/i.test(shellName);
+}
+//@ chunk-4z1ntdgk.js:95062-95137 layout
+var TILDE_BRACED_DEFAULT_RE = /^\$\{[^}:=+?\/#%"'\\-]+:?[-+=]~(?:\/[^}"'\\$`]*)?\}[^~"'\\$`{}]*$/;
+//@ chunk-4z1ntdgk.js:95137-95215 layout
+function tildeIsLiteralHere(text, nextWord, tildeIsLiteral) {
+  return text.startsWith("$") && (tildeIsLiteral ?? !/^"?\$[A-Za-z_{(]/.test(nextWord));
+}
+//@ chunk-4z1ntdgk.js:95215-95256 layout
+var DOLLAR_LITERAL_ESCAPE_RE = /'[^']*\$|\\\$|\$(?![A-Za-z_{(])/;
+//@ chunk-4z1ntdgk.js:95256-95580 layout
+function bracedDefaultHoldsColon(text) {
+  let depth = 0;
+  for (let charIndex = 0; charIndex < text.length; charIndex += 1) {
+    let char = text[charIndex];
+    if (char === "\\") {
+      if (depth > 0 && text[charIndex + 1] === ":") return true;
+      charIndex += 1;
+    } else if (depth > 0 && (char === "'" || char === '"')) {
+      let index = text.indexOf(char, charIndex + 1);
+      if (index === -1 || text.slice(charIndex + 1, index).includes(":")) return true;
+      charIndex = index;
+    } else if (text.startsWith("${", charIndex)) {
+      depth += 1;
+      charIndex += 1;
+    } else if (depth > 0 && char === "}") depth -= 1;
+    else if (depth > 0 && char === ":") return true;
+  }
+  return false;
+}
+//@ chunk-4z1ntdgk.js:95580-95646 layout
+function markerIsTildeLiteral(found, args, quoteIndex) {
+  return found || quoteIndex > 0 || (args.length > 1 && !args[0].includes("/"));
+}
+//@ chunk-4z1ntdgk.js:95646-95762 layout
+/**
+ * 取 ~ 之后的操作数：同一词里有后缀则用后缀，否则用下一个词的文本，并标记是否按字面处理（下一个词带引号）。旧版名 quote 误配。
+ */
+function tildeOperandAt(words, literalText, wordIndex) {
+  return literalText !== ""
+    ? {
+        value: literalText,
+        tildeLiteral: true,
+      }
+    : {
+        value: words[wordIndex + 1]?.text ?? "",
+        tildeLiteral: words[wordIndex + 1]?.quoted ?? false,
+      };
+}
+//@ chunk-4z1ntdgk.js:95762-95926 placement
 function operandReachesBeyondRoots({ value, tildeLiteral }, state) {
   return (
     (tildeLiteral && value.startsWith("~")) ||
@@ -897,14 +1115,14 @@ function operandReachesBeyondRoots({ value, tildeLiteral }, state) {
     )
   );
 }
-//@ chunk-mthxbav8.js:87784-87911 placement
+//@ chunk-4z1ntdgk.js:95926-96053 placement
 function isStdinLikePath(word) {
   return (
     word !== undefined &&
     /^(?:\/dev\/(?:stdin|fd\/\d+)|\/proc\/(?:self|\d+)\/fd\/\d+|-|[<>]\(\u2026\))$/.test(word.text)
   );
 }
-//@ chunk-mthxbav8.js:87911-88235 placement
+//@ chunk-4z1ntdgk.js:96053-96377 placement
 function isUnderRoots(word, state) {
   if (state.roots.length === 0) return false;
   let text = word.text;
@@ -914,7 +1132,7 @@ function isUnderRoots(word, state) {
   let normalized = posix.normalize(text);
   return state.roots.some((root) => isSameCommandPath(normalized, root));
 }
-//@ chunk-mthxbav8.js:88235-89629 placement
+//@ chunk-4z1ntdgk.js:96377-97930 placement
 function analyzeInterpreterInput(shellName, args, sources, state, input) {
   let readsStdin =
     input.piped ||
@@ -933,8 +1151,8 @@ function analyzeInterpreterInput(shellName, args, sources, state, input) {
       if (nextArg === undefined) return;
       return sawCommandFlag
         ? nestReason(nextArg)
-        : !isAbsoluteLike(nextArg.text)
-          ? "it runs a script by a relative name"
+        : !isAbsoluteLike(nextArg.text) || isTildeOrDollarWordChanged(nextArg)
+          ? noteStandingReason("it runs a script by a relative name", nextArg, state)
           : undefined;
     }
     if (shellName === "fish") {
@@ -965,50 +1183,82 @@ function analyzeInterpreterInput(shellName, args, sources, state, input) {
         text: text.slice(10),
       });
     if (/^--(?:rcfile|init-file)=/.test(text)) {
-      if (!isResolvableAbsolutePath(text.slice(text.indexOf("=") + 1), relativeNamesOf(state)))
-        return "it runs " + shellName + " with an rc file by a relative name";
+      if (!isResolvableAbsolutePath(text.slice(text.indexOf("=") + 1), relativeNamesOf(state))) {
+        let nestedReason = noteStandingIfComposedKite(rcFileRelativeText(shellName), state);
+        if (nestedReason !== undefined) return nestedReason;
+      }
       continue;
     }
     let arity = shellFlagArity(shellName, text);
     if (arity > 0) {
-      let text_2 = args[argIndex + 1]?.text;
+      let nextArg = args[argIndex + 1];
       argIndex += arity;
       if (
         /^--(?:rcfile|init-file)$/.test(text) &&
-        text_2 !== undefined &&
-        !isResolvableAbsolutePath(text_2, relativeNamesOf(state))
-      )
-        return "it runs " + shellName + " with an rc file by a relative name";
+        nextArg !== undefined &&
+        (!isResolvableAbsolutePath(nextArg.text, relativeNamesOf(state)) ||
+          (nextArg.text.startsWith("$") && isTildeOrDollarWordChanged(nextArg, true)))
+      ) {
+        let nestedReason = noteStandingIfComposedKite(rcFileRelativeText(shellName), state);
+        if (nestedReason !== undefined) return nestedReason;
+      }
       continue;
     }
     if (text.startsWith("-") || text.startsWith("+")) continue;
     if (sawCommandFlag) {
       let reason = nestReason(arg);
-      return shellName === "pwsh" && argIndex + 1 < args.length
-        ? (reason ??
-            nestReason({
-              ...arg,
-              text: args
-                .slice(argIndex)
-                .map((arg) => arg.text)
-                .join(" "),
-            }))
-        : reason;
+      if (!state.shortLoopLists)
+        return shellName === "pwsh" && argIndex + 1 < args.length
+          ? (reason ??
+              nestReason({
+                ...arg,
+                text: args
+                  .slice(argIndex)
+                  .map((arg) => arg.text)
+                  .join(" "),
+              }))
+          : reason;
+      if (shellName !== "pwsh" || argIndex + 1 === args.length) return reason;
+      let spokenArg = nestReason({
+        ...arg,
+        text: args
+          .slice(argIndex)
+          .map((arg) => arg.text)
+          .join(" "),
+      });
+      return reason ?? spokenArg;
     }
     return isStdinLikePath(arg)
       ? "it runs a shell whose program arrives on a pipe, a heredoc or a file descriptor"
       : isPlainArgument(arg)
-        ? "it runs a script by a relative name"
+        ? noteStandingReason("it runs a script by a relative name", arg, state)
         : undefined;
   }
   return;
 }
-//@ chunk-mthxbav8.js:89629-89699 placement
+//@ chunk-4z1ntdgk.js:97930-98000 placement
 var POSIX_SHELL_PROGRAMS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mthxbav8.js:89629", () => {
+deferInit("chunk-4z1ntdgk.js:97930", () => {
   POSIX_SHELL_PROGRAMS = new Set(["bash", "sh", "dash", "ash", "ksh", "mksh", "zsh", "rbash"]);
 });
-//@ chunk-mthxbav8.js:89699-90340 placement
+//@ chunk-4z1ntdgk.js:98000-98072 layout
+function rcFileRelativeText(shellName) {
+  return "it runs " + shellName + " with an rc file by a relative name";
+}
+//@ chunk-4z1ntdgk.js:98072-98158 layout
+function noteStandingIfComposedKite(reason, state) {
+  if (
+    state.standing !== undefined &&
+    readFlagWithOverride(TENGU_COMPOSED_KITE, {
+      safe: true,
+    })
+  ) {
+    noteStanding(reason, state, true);
+    return;
+  }
+  return reason;
+}
+//@ chunk-4z1ntdgk.js:98158-98799 placement
 function shellFlagArity(shellName, text) {
   if (/^--(?:rcfile|init-file)$/.test(text)) return 1;
   if (POSIX_SHELL_PROGRAMS.has(shellName)) {
@@ -1032,7 +1282,7 @@ function shellFlagArity(shellName, text) {
       : 0;
   return text === "-o" || text === "+o" || text === "-O" || text === "+O" ? 1 : 0;
 }
-//@ chunk-mthxbav8.js:90340-90537 placement
+//@ chunk-4z1ntdgk.js:98799-98996 placement
 function flagArgumentIndexes(shellName, args) {
   let indexes = new Set();
   for (let argIndex = 0; argIndex < args.length; argIndex += 1) {
@@ -1046,7 +1296,7 @@ function flagArgumentIndexes(shellName, args) {
   }
   return indexes;
 }
-//@ chunk-mthxbav8.js:90537-90855 placement
+//@ chunk-4z1ntdgk.js:98996-99314 placement
 function findScriptArgument(shellName, args) {
   let optionArgIndexes = flagArgumentIndexes(shellName, args);
   let index = args.findIndex((arg, argIndex) => !optionArgIndexes.has(argIndex) && !/^[-+]./.test(arg.text));
@@ -1062,37 +1312,40 @@ function findScriptArgument(shellName, args) {
     leadingArgs.some((arg) => hasAnyShortFlagChar(arg.text, "s"));
   return index !== -1 && !isStdinLikePath(args[index]) && !afterScriptFlag;
 }
-//@ chunk-mthxbav8.js:90855-90998 placement
+//@ chunk-4z1ntdgk.js:99314-99457 placement
 function isShellCommandFlag(shellName, text) {
   return shellName === "pwsh"
     ? /^-(?:c|command|cwa|commandwithargs|e|ec|encodedcommand)$/i.test(text)
     : hasAnyShortFlagChar(text, "c") || /^--command(?:=|$)/.test(text);
 }
-//@ chunk-mthxbav8.js:90998-91166 placement
+//@ chunk-4z1ntdgk.js:99457-99628 placement
 function runsInlineProgram(interpreterName, args, rubyAttachedPattern) {
-  let interpreterScript = findInterpreterScript(interpreterName, args, rubyAttachedPattern);
+  let interpreterScript = findInterpreterScript(interpreterName, args, rubyAttachedPattern, false);
   return (
     args.some((arg) => isEvalFlag(interpreterName, arg.text)) ||
     (/^(?:[gnm]?awk|g?sed)$/.test(interpreterName) && args.some((arg) => !arg.text.startsWith("-"))) ||
     (typeof interpreterScript === "object" && !isStdinLikePath(interpreterScript))
   );
 }
-//@ chunk-mthxbav8.js:91166-91319 placement
+//@ chunk-4z1ntdgk.js:99628-99781 placement
 function collectNestedShellCommand(word, sources) {
   if (/^\$/.test(word.text.trim()))
     return "it hands a shell a command held in a variable or produced by another command";
   sources.push(word.text);
   return;
 }
-//@ chunk-mthxbav8.js:91319-91809 placement
+//@ chunk-4z1ntdgk.js:99781-100439 placement
 function analyzeNestedScript(text, input, sources, state) {
   let { commands, unreadable } = parseShellCommands(text, {
     make: false,
+    commandAfterConditional: state.commandAfterConditional,
     quotedBackslashKept: state.quotedBackslashKept,
+    shortLoopLists: state.shortLoopLists,
     substitutionHeredocs: state.substitutionHeredocs,
   });
-  if (unreadable !== null) return `it could not be read to the end as shell (${unreadable})`;
-  return commands
+  if (unreadable !== null && !state.shortLoopLists)
+    return `it could not be read to the end as shell (${unreadable})`;
+  let found = commands
     .map((command) =>
       analyzeCommandReach(
         command.program.text === ":" && command.args.length === 0 && command.redirects.length === 0
@@ -1114,21 +1367,42 @@ function analyzeNestedScript(text, input, sources, state) {
       ),
     )
     .find((reason) => reason !== undefined);
+  return unreadable === null ? found : `it could not be read to the end as shell (${unreadable})`;
 }
-//@ chunk-mthxbav8.js:91809-93326 placement
-function splitArgsByOperands(assignments, sources, args = [], relativeNames) {
+//@ chunk-4z1ntdgk.js:100439-102396 placement
+function splitArgsByOperands(assignments, sources, args = [], relativeNames, unexpandedTilde, shell) {
   let splitStrings = Array(assignments.length + 1);
   let readsFromFile = Array(assignments.length + 1).fill(false);
   let envRelativeText = Array(assignments.length + 3).fill(false);
   for (let argIndex = assignments.length - 1; argIndex >= 0; argIndex -= 1) {
     let text = assignments[argIndex].text;
     let arity = /^(?:-[iv0]*[uCP]|--unset|--chdir)$/.test(text) ? 2 : 1;
+    let tildeResult = /^-[iv0]*P/.test(text)
+      ? tildeOperandAt(assignments, text.replace(/^-[iv0]*P/, ""), argIndex)
+      : undefined;
+    let rawOperand = /^-[iv0]*P./.test(text)
+      ? assignments[argIndex].raw.replace(/^(["']?)-[iv0]*P/, "$1")
+      : (assignments[argIndex + 1]?.raw ?? "");
+    let tildeIsLiteral = tildeResult !== undefined && DOLLAR_LITERAL_ESCAPE_RE.test(rawOperand);
     envRelativeText[argIndex] =
       text.startsWith("-") &&
-      ((/^-[iv0]*P/.test(text) &&
-        !(text.replace(/^-[iv0]*P/, "") || (assignments[argIndex + 1]?.text ?? ""))
+      ((tildeResult !== undefined &&
+        !tildeResult.value
           .split(":")
-          .every((entry) => isResolvableAbsolutePath(entry, relativeNames))) ||
+          .every(
+            (entry, entryIndex, entryCount) =>
+              isResolvableAbsolutePath(entry, relativeNames) &&
+              !(
+                unexpandedTilde &&
+                (isUnexpandedTildePath(
+                  entry,
+                  markerIsTildeLiteral(tildeResult.tildeLiteral, entryCount, entryIndex),
+                  isPosixShellName(shell),
+                ) ||
+                  tildeIsLiteralHere(entry, rawOperand, entryIndex > 0 ? tildeIsLiteral : undefined) ||
+                  (entryIndex === 0 && bracedDefaultHoldsColon(rawOperand)))
+              ),
+          )) ||
         envRelativeText[argIndex + arity]);
     splitStrings[argIndex] = /^(?:-S.|--split-string=)/.test(text)
       ? text.replace(/^(?:-S|--split-string=)/, "")
@@ -1143,8 +1417,20 @@ function splitArgsByOperands(assignments, sources, args = [], relativeNames) {
           : match !== null
             ? match[1] || assignments[argIndex + 1]?.text
             : undefined;
+    let argFileQuoted =
+      /^(?:-a|--arg-file)$/.test(text) || (match !== null && !match[1])
+        ? (assignments[argIndex + 1]?.quoted ?? false)
+        : true;
+    let argFileRaw =
+      /^(?:-a|--arg-file)$/.test(text) || (match !== null && !match[1])
+        ? (assignments[argIndex + 1]?.raw ?? "")
+        : assignments[argIndex].raw.replace(/^(["']?)(?:--arg-file=|-[0oprtx]*a)/, "$1");
     readsFromFile[argIndex] =
-      (argFilePath !== undefined && !isResolvableAbsolutePath(argFilePath, relativeNames)) ||
+      (argFilePath !== undefined &&
+        (!isResolvableAbsolutePath(argFilePath, relativeNames) ||
+          (unexpandedTilde &&
+            (isUnexpandedTildePath(argFilePath, argFileQuoted, isPosixShellName(shell)) ||
+              tildeIsLiteralHere(argFilePath, argFileRaw))))) ||
       readsFromFile[argIndex + 1];
   }
   let mapped = assignments.map((word) => word.text.slice(word.text.lastIndexOf("/") + 1).toLowerCase());
@@ -1152,7 +1438,7 @@ function splitArgsByOperands(assignments, sources, args = [], relativeNames) {
   let replacementWords =
     index === -1
       ? []
-      : uniq(
+      : normalizeCaseForComparison_2(
           assignments.slice(index + 1).flatMap((word, wordIndex, words) => {
             let match = /^-[0oprtx]*([IJi])([\s\S]*)$/.exec(word.text);
             if (match === null)
@@ -1190,7 +1476,7 @@ function splitArgsByOperands(assignments, sources, args = [], relativeNames) {
     mapped_2.find((reason) => reason !== undefined)
   );
 }
-//@ chunk-mthxbav8.js:93326-93621 placement
+//@ chunk-4z1ntdgk.js:102396-102691 placement
 function findSubcommandArg(assignments, startIndex) {
   let sliced = assignments.slice(startIndex + 1);
   let index = sliced.findIndex(
@@ -1211,13 +1497,13 @@ function findSubcommandArg(assignments, startIndex) {
       }
     : undefined;
 }
-//@ chunk-mthxbav8.js:93621-94492 placement
+//@ chunk-4z1ntdgk.js:102691-103562 placement
 /**
  * xargs 的并行/取值类选项集合与 strace 等带值选项集合。
  */
 var XARGS_PARALLEL_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var STRACE_OPTIONS_WITH_VALUE;
-deferInit("chunk-mthxbav8.js:93621", () => {
+deferInit("chunk-4z1ntdgk.js:102691", () => {
   XARGS_PARALLEL_FLAGS = new Set([
     "-j",
     "-P",
@@ -1305,7 +1591,7 @@ deferInit("chunk-mthxbav8.js:93621", () => {
     "--output-limit",
   ]);
 });
-//@ chunk-mthxbav8.js:94492-94668 placement
+//@ chunk-4z1ntdgk.js:103562-103738 placement
 function skipOptionWords(words, optionsWithValue, allowBundled = false) {
   let wordIndex = 0;
   while (wordIndex < words.length && words[wordIndex].text.startsWith("-")) {
@@ -1318,11 +1604,11 @@ function skipOptionWords(words, optionsWithValue, allowBundled = false) {
   }
   return words.slice(wordIndex);
 }
-//@ chunk-mthxbav8.js:94668-98210 placement
+//@ chunk-4z1ntdgk.js:103738-107558 placement
 /**
  * 展开 env/sudo/xargs/parallel/find -exec 等包装命令，得到真正要执行的命令词。
  */
-function unwrapLauncherArgs(launcherName, args, relativeNames) {
+function unwrapLauncherArgs(launcherName, args, relativeNames, unexpandedTilde, shell) {
   let singleWord = (at) =>
     at >= 0 && at < args.length
       ? {
@@ -1347,11 +1633,22 @@ function unwrapLauncherArgs(launcherName, args, relativeNames) {
       });
       let any = args.some((arg, argIndex) => {
         let match = /^(?:-[flmpPT]*s|--shell)(?:=?([\s\S]+))?$/.exec(arg.text);
-        let shellWord = match === null ? undefined : (match[1] ?? args[argIndex + 1]?.text);
+        if (match === null) return false;
+        if (match[1] === undefined && args[argIndex + 1] === undefined) return unexpandedTilde;
+        let { value: words, tildeLiteral } = tildeOperandAt(args, match[1] ?? "", argIndex);
+        let wordList =
+          unexpandedTilde && match[1] !== undefined && /^-[flmpPT]*s=/.test(arg.text) ? "=" + words : words;
+        let replaced = (match[1] === undefined ? (args[argIndex + 1]?.raw ?? "") : arg.raw).replace(
+          /^(["']?)(?:-[flmpPT]*s|--shell)=?/,
+          "$1",
+        );
         return (
-          shellWord !== undefined &&
-          (!isAbsoluteLike(shellWord, PATH_PREFIX_CHARS_RE) ||
-            isUnresolvedVariablePath(shellWord, relativeNames))
+          (unexpandedTilde && isUnexpandedTildePath(wordList, tildeLiteral, isPosixShellName(shell))) ||
+          (unexpandedTilde && tildeIsLiteralHere(wordList, replaced)) ||
+          (unexpandedTilde
+            ? !isResolvableAbsolutePath(wordList, relativeNames)
+            : !isAbsoluteLike(wordList, PATH_PREFIX_CHARS_RE) ||
+              isUnresolvedVariablePath(wordList, relativeNames))
         );
       });
       if (flattened.length === 0) {
@@ -1392,7 +1689,7 @@ function unwrapLauncherArgs(launcherName, args, relativeNames) {
       };
     }
     case "watch": {
-      let filtered = uniq(
+      let filtered = normalizeCaseForComparison_2(
         [
           /^(?:-n|--interval|-d|--differences|-q|--equexit)$/,
           /^(?:-[a-zA-Z]*[nq]|--interval|--equexit)$/,
@@ -1446,8 +1743,13 @@ function unwrapLauncherArgs(launcherName, args, relativeNames) {
     case "direnv": {
       if (args[0]?.text !== "exec") return;
       let commandWord = args[1];
-      return commandWord === undefined || !isResolvableAbsolutePath(commandWord.text, relativeNames)
-        ? "held"
+      return commandWord === undefined ||
+        !isResolvableAbsolutePath(commandWord.text, relativeNames) ||
+        isTildeOrDollarWordChanged(commandWord)
+        ? {
+            ...singleWord(2),
+            heldStanding: true,
+          }
         : singleWord(2);
     }
     case "op": {
@@ -1532,8 +1834,8 @@ function unwrapLauncherArgs(launcherName, args, relativeNames) {
       return;
   }
 }
-//@ chunk-mthxbav8.js:98210-99362 placement
-function findInterpreterScript(interpreterName, args, rubyAttachedPattern) {
+//@ chunk-4z1ntdgk.js:107558-108935 placement
+function findInterpreterScript(interpreterName, args, rubyAttachedPattern, rubyPattern = true) {
   if (interpreterName === "deno")
     return args[0]?.text === "run" ? args.slice(1).find((arg) => !arg.text.startsWith("-")) : undefined;
   if (interpreterName === "php") {
@@ -1542,12 +1844,7 @@ function findInterpreterScript(interpreterName, args, rubyAttachedPattern) {
       let text = args[argIndex].text;
       let match = /^(?:-[fF]|--file)(?:=?([\s\S]+))?$/.exec(text);
       if (match !== null)
-        return match[1] !== undefined
-          ? {
-              ...args[argIndex],
-              text: match[1],
-            }
-          : args[argIndex + 1];
+        return match[1] !== undefined ? attachedPathWord(args[argIndex], match[1]) : args[argIndex + 1];
       if (!text.startsWith("-") || text === "-" || text === "--") break;
       if (php.has(text)) argIndex += 1;
     }
@@ -1556,21 +1853,28 @@ function findInterpreterScript(interpreterName, args, rubyAttachedPattern) {
     let isAwk = interpreterName.endsWith("awk");
     let separateFlagPattern = isAwk ? /^-[a-zA-Z]*[fE]$/ : /^-[a-zA-Z]*f$/;
     let attachedFlagPattern = isAwk ? /^-[fE]./ : /^-f./;
-    for (let argIndex = 0; argIndex < args.length; argIndex += 1) {
-      let text = args[argIndex].text;
-      if (separateFlagPattern.test(text)) return args[argIndex + 1];
-      if (attachedFlagPattern.test(text))
-        return {
-          ...args[argIndex],
-          text: text.slice(2),
-        };
-      if (text.startsWith("--file="))
-        return {
-          ...args[argIndex],
-          text: text.slice(7),
-        };
+    let evalFlagPattern = isAwk ? /^-[bcCghIkMnNOPrsStV]*[fE](?=[\s\S])/ : /^-[abnErsuz]*f(?=[\s\S])/;
+    let argIndex;
+    for (let argIndex_2 = 0; argIndex_2 < args.length; argIndex_2 += 1) {
+      let text = args[argIndex_2].text;
+      if (separateFlagPattern.test(text)) return args[argIndex_2 + 1];
+      if (attachedFlagPattern.test(text)) return attachedPathWord(args[argIndex_2], text.slice(2));
+      if (text.startsWith("--file=")) return attachedPathWord(args[argIndex_2], text.slice(7));
+      if (!rubyPattern || isPlainArgument(argIndex) || isStdinLikePath(argIndex) || argIndex?.text === "{}")
+        continue;
+      let fileFlag = text === "--file" ? text : evalFlagPattern.exec(text)?.[0];
+      if (
+        fileFlag !== undefined &&
+        readFlagWithOverride(TENGU_COMPOSED_KITE, {
+          safe: true,
+        })
+      )
+        argIndex =
+          fileFlag === "--file"
+            ? args[argIndex_2 + 1]
+            : attachedPathWord(args[argIndex_2], text.slice(fileFlag.length));
     }
-    return;
+    return argIndex;
   }
   let evalFlags = INTERPRETER_EVAL_FLAGS[interpreterName] ?? new Set();
   let sawUnknownFlag = false;
@@ -1603,13 +1907,13 @@ function findInterpreterScript(interpreterName, args, rubyAttachedPattern) {
   }
   return;
 }
-//@ chunk-mthxbav8.js:99362-100463 placement
+//@ chunk-4z1ntdgk.js:108935-110036 placement
 /**
  * 各解释器的无害选项正则，以及 Node 内置模块名单。
  */
 var INTERPRETER_NOOP_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NODE_BUILTIN_MODULES;
-deferInit("chunk-mthxbav8.js:99362", () => {
+deferInit("chunk-4z1ntdgk.js:108935", () => {
   INTERPRETER_NOOP_FLAGS = {
     python: /^-[bBdEhiIOPqRsSuvVxE]+$|^--(?:version|help)$/,
     pypy: /^-[bBdEhiIOqRsSuvVx]+$/,
@@ -1671,7 +1975,7 @@ deferInit("chunk-mthxbav8.js:99362", () => {
     "sqlite",
   ]);
 });
-//@ chunk-mthxbav8.js:100463-100772 placement
+//@ chunk-4z1ntdgk.js:110036-110345 placement
 function scanJsImports(text) {
   for (let match of text.matchAll(
     /(?:\brequire\s*(?:\?\.)?\s*\(|\bimport\s*\(|\bimport\s+(?:[\w*{}\s,]+\s+from\s+)?|\bfrom\s+|\bcreateRequire\b[^'"]*)\s*['"]([^'"]+)['"]/g,
@@ -1682,7 +1986,7 @@ function scanJsImports(text) {
   }
   return /\bcreateRequire\b/.test(text);
 }
-//@ chunk-mthxbav8.js:100772-102198 placement
+//@ chunk-4z1ntdgk.js:110345-111771 placement
 function analyzeAssignments(assignments, zshPathArray, nullCommandHeld, relativeNames) {
   for (let assignment of assignments) {
     let match = /^([A-Za-z_][A-Za-z0-9_]*)(?:\[[^\]]*\])?\+?=([\s\S]*)$/.exec(assignment.text);
@@ -1728,8 +2032,13 @@ function analyzeAssignments(assignments, zshPathArray, nullCommandHeld, relative
   }
   return;
 }
-//@ chunk-mthxbav8.js:102198-103809 placement
-function analyzeEnvCommand(args, assignments, sources, relativeNames) {
+//@ chunk-4z1ntdgk.js:111771-111996 layout
+var GIT_EXEC_PATH_LAUNCH_DIR_TEXT =
+  "it runs git with an exec path in the launch directory (git-* commands come from there)";
+var GIT_EXEC_PATH_UNVERIFIABLE_TEXT =
+  "it runs git with an exec path this check cannot confirm is absolute (git-* commands come from there; write it out from '/')";
+//@ chunk-4z1ntdgk.js:111996-114037 placement
+function analyzeEnvCommand(args, assignments, sources, relativeNames, unexpandedTilde) {
   if (
     assignments.some(
       (assignment) =>
@@ -1739,6 +2048,7 @@ function analyzeEnvCommand(args, assignments, sources, relativeNames) {
     )
   )
     return "it runs git with the environment that switches its repository hooks off cleared or edited";
+  let reason;
   for (let argIndex = 0; argIndex < args.length; argIndex += 1) {
     let text = args[argIndex].text;
     let configArg;
@@ -1747,19 +2057,34 @@ function analyzeEnvCommand(args, assignments, sources, relativeNames) {
       configArg = args[argIndex]?.text;
     } else if (text.startsWith("--config-env=")) configArg = text.slice(13);
     else if (/^-c./.test(text)) configArg = text.slice(2);
-    else if (/^--exec-path=(?![\/~])/.test(text))
-      return "it runs git with an exec path in the launch directory (git-* commands come from there)";
+    else if (/^--exec-path=(?!\/)/.test(text))
+      if (!unexpandedTilde) {
+        if (!text.startsWith("--exec-path=~")) return GIT_EXEC_PATH_LAUNCH_DIR_TEXT;
+      } else
+        reason = text.startsWith("--exec-path=~")
+          ? "it runs git with an exec path in the launch directory (git-* commands come from there; this '~' is not your home directory)"
+          : GIT_EXEC_PATH_UNVERIFIABLE_TEXT;
     if (configArg === undefined) {
       if (/^(?:bisect|submodule|rebase)$/.test(text)) {
         let sliced = args.slice(argIndex + 1);
         let index = sliced.findIndex((arg) => /^(?:run|foreach|-x|--exec)$/.test(arg.text));
-        if (index !== -1 && sliced[index + 1] !== undefined)
-          sources.push(
-            sliced
-              .slice(index + 1)
-              .map((arg) => arg.text)
-              .join(" "),
-          );
+        if (index !== -1 && sliced[index + 1] !== undefined) {
+          let sliced_2 = sliced.slice(index + 1);
+          let joined = sliced_2.map((leftText) => leftText.text).join(" ");
+          sources.push(joined);
+          if (unexpandedTilde) {
+            let text_2 = sliced[index].text;
+            let reason;
+            if (text === "bisect" && text_2 === "run")
+              reason = sliced_2.map((rightText) => rightText.raw).join(" ");
+            else if (text === "submodule" && text_2 === "foreach") {
+              let index = sliced_2.findIndex((arg) => !/^(?:-q|--quiet|--recursive)$/.test(arg.text));
+              if (index !== -1)
+                reason = [sliced_2[index].text, ...sliced_2.slice(index + 1).map((arg) => arg.raw)].join(" ");
+            }
+            if (reason !== undefined && reason !== joined) sources.push(reason);
+          }
+        }
         break;
       }
       continue;
@@ -1786,12 +2111,12 @@ function analyzeEnvCommand(args, assignments, sources, relativeNames) {
     )
       return `it runs git with ${configKey} set on the command line to something that runs from the checkout`;
   }
-  return;
+  return reason;
 }
-//@ chunk-mthxbav8.js:103809-104005 placement
+//@ chunk-4z1ntdgk.js:114037-114233 placement
 var PHP_INI_CODE_LOADING_RE =
   /^(?:auto_prepend_file|auto_append_file|include_path|extension_dir|(?:zend_)?extension|opcache\.(?:preload|file_cache)|ffi\.preload|phar\.cache_list|sendmail_path|sqlite3\.extension_dir)$/;
-//@ chunk-mthxbav8.js:104005-104855 placement
+//@ chunk-4z1ntdgk.js:114233-115083 placement
 function analyzePhpCommand(args, state) {
   let interpreterScript = findInterpreterScript("php", args, state.rubyAttachedPattern);
   let scriptIndex = typeof interpreterScript === "object" ? args.indexOf(interpreterScript) : -1;
@@ -1828,7 +2153,7 @@ function analyzePhpCommand(args, state) {
     ? "it runs php with -z, -c or a -d setting that loads a file"
     : undefined;
 }
-//@ chunk-mthxbav8.js:104855-104993 placement
+//@ chunk-4z1ntdgk.js:115083-115221 placement
 function collectHeredocInput(heredoc, redirects) {
   let inputs = [
     ...(heredoc === undefined ? [] : [heredoc]),
@@ -1839,13 +2164,13 @@ function collectHeredocInput(heredoc, redirects) {
 `)
     : undefined;
 }
-//@ chunk-mthxbav8.js:104993-105136 placement
+//@ chunk-4z1ntdgk.js:115221-115364 placement
 function pythonHeredocExecReason(heredocInput) {
   return heredocInput !== undefined && EXEC_OR_EVAL_RE.test(heredocInput)
     ? "it runs python with a heredoc or herestring program that mentions exec, eval or execfile"
     : undefined;
 }
-//@ chunk-mthxbav8.js:105136-106469 placement
+//@ chunk-4z1ntdgk.js:115364-116697 placement
 function analyzePythonCommand(args, state, heredocInput) {
   let interpreterScript = findInterpreterScript("python", args, state.rubyAttachedPattern);
   let index = args.findIndex((arg) => arg === interpreterScript || isEvalFlag("python", arg.text));
@@ -1910,11 +2235,19 @@ function analyzePythonCommand(args, state, heredocInput) {
     ? pythonHeredocExecReason(heredocInput)
     : "it runs python with -m, -c or a program on stdin, without -P or -I";
 }
-//@ chunk-mthxbav8.js:106469-106655 placement
-var MAKE_AWK_INCLUDE_RE =
-  /^[ \t]*-?(?:s?include|load)[ \t]+(?!=)([^\n]*)$|^[ \t]*\.[ \t]*[ds-]?include[ \t]*("[^\n]*)$|^[ \t]*@(?:include|load)[ \t]*("[^\n]*)$/gm;
-var MAKE_OR_AWK_RE = /^(?:[gbp]|gnu)?(?:make|[gnm]?awk)$/i;
-//@ chunk-mthxbav8.js:106655-106933 placement
+//@ chunk-4z1ntdgk.js:116697-116942 placement
+var MAKE_AWK_INCLUDE_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var GNU_TOOL_PREFIX_SOURCE;
+var regExp;
+var regExp_2;
+deferInit("chunk-4z1ntdgk.js:116697", () => {
+  MAKE_AWK_INCLUDE_RE =
+    /^[ \t]*-?(?:s?include|load)[ \t]+(?!=)([^\n]*)$|^[ \t]*\.[ \t]*[ds-]?include[ \t]*("[^\n]*)$|^[ \t]*@(?:include|load)[ \t]*("[^\n]*)$/gm;
+  GNU_TOOL_PREFIX_SOURCE = "(?:[gbp]|gnu)?";
+  regExp = new RegExp(`^${GNU_TOOL_PREFIX_SOURCE}(?:make|[gnm]?awk)$`, "i");
+  regExp_2 = new RegExp(`^${GNU_TOOL_PREFIX_SOURCE}make$`, "i");
+});
+//@ chunk-4z1ntdgk.js:116942-117220 placement
 function shebangInterpreter(line) {
   let parts = line.trim().split(/[ \t]+/);
   let index = 0;
@@ -1929,43 +2262,66 @@ function shebangInterpreter(line) {
   let program = parts[index] ?? "";
   return program.slice(program.lastIndexOf("/") + 1);
 }
-//@ chunk-mthxbav8.js:106933-107335 placement
+//@ chunk-4z1ntdgk.js:117220-118027 placement
 /**
  * CLAUDE_PROJECT_DIR 引用正则、shell 注释行正则与若干 bot_protected 特性名常量。
  */
 var CLAUDE_PROJECT_DIR_PATTERN = /\bCLAUDE_PROJECT_DIR\b/i;
 var SHELL_COMMENT_LINE_RE = /^[ \t]*#.*$/gm;
 var BOT_PROTECTED_TENGU_PLUMED_HERON = "bot_protected_tengu_plumed_heron";
+var BOT_PROTECTED_TENGU_KEEN_CERF = "bot_protected_tengu_keen_cerf";
 var BOT_PROTECTED_TENGU_COMPOSED_FALCON = "bot_protected_tengu_composed_falcon";
 var BOT_PROTECTED_TENGU_BANDED_KINGFISHER = "bot_protected_tengu_banded_kingfisher";
 var BOT_PROTECTED_TENGU_QUIET_FIELDFARE = "bot_protected_tengu_quiet_fieldfare";
+var TENGU_FLUTTERING_SCONE = "tengu_fluttering_scone";
 var BOT_PROTECTED_TENGU_MOSSY_CHIPMUNK = "bot_protected_tengu_mossy_chipmunk";
+var BOT_PROTECTED_TENGU_OCHRE_KITTIWAKE = "bot_protected_tengu_ochre_kittiwake";
+var BOT_PROTECTED_TENGU_MISTY_SPROUT = "bot_protected_tengu_misty_sprout";
 var BOT_PROTECTED_TENGU_SEQUENTIAL_POND = "bot_protected_tengu_sequential_pond";
+var BOT_PROTECTED_TENGU_QUIET_ANVIL = "bot_protected_tengu_quiet_anvil";
+var MAKEFILE_UNCHECKED_TEXT = "it is a makefile, and what make would run from it cannot be checked here";
+var AWK_SCRIPT_UNCHECKED_TEXT = "it is an awk script, and what awk would run from it cannot be checked here";
+var BOT_PROTECTED_TENGU_VALIDATED_CUPCAKE = "bot_protected_tengu_validated_cupcake";
 var TENGU_FEDERATED_HEARTH = "tengu_federated_hearth";
 var BOT_PROTECTED_TENGU_GLITTERY_POND = "bot_protected_tengu_glittery_pond";
 var BOT_PROTECTED_TENGU_PLAITED_OSIER = "bot_protected_tengu_plaited_osier";
-//@ chunk-mthxbav8.js:107335-109001 placement
+var TENGU_COMPOSED_KITE = "tengu_composed_kite";
+//@ chunk-4z1ntdgk.js:118027-120904 placement
 function analyzeScriptFile(bytes, roots, home, interpreter, options = {}) {
   let str = (bytes.includes(0) ? Buffer.from(bytes.filter((byte) => byte !== 0)) : bytes).toString("utf8");
   let index = str.indexOf(`
 `);
-  let shebang = str.startsWith("#!") ? str.slice(2, index === -1 ? undefined : index) : "";
-  let shebangInterpreterName = shebangInterpreter(shebang);
+  let source = str.startsWith("#!") ? str.slice(2, index === -1 ? undefined : index) : "";
+  let shebangInterpreterName = shebangInterpreter(
+    options.makeHooksHeld !== false
+      ? source.replace(
+          /^([ \t]*(?:[^ \t]*\/)?)env(?=[ \t]|$)/i,
+          (prefix, matchedPrefix) => `${matchedPrefix}env`,
+        )
+      : source,
+  );
+  if (
+    options.makeHooksHeld !== false &&
+    (interpreter === undefined || interpreter === null) &&
+    regExp.test(shebangInterpreterName)
+  )
+    return regExp_2.test(shebangInterpreterName) ? MAKEFILE_UNCHECKED_TEXT : AWK_SCRIPT_UNCHECKED_TEXT;
   let isShellScript =
     interpreter !== undefined && interpreter !== null
       ? /^(?:bash|sh|zsh|dash|ash|ksh|mksh|rbash|fish)$/i.test(interpreter)
       : shebangInterpreterName === "" ||
         SHELL_NAME_RE.test(shebangInterpreterName) ||
-        MAKE_OR_AWK_RE.test(shebangInterpreterName);
+        regExp.test(shebangInterpreterName);
   let body = str.startsWith("#!") ? (index === -1 ? "" : str.slice(index + 1)) : str;
   let quotedBackslashKept = options.quotedBackslashKept !== false;
-  let scanned =
-    shebang +
+  let unexpandedTilde = options.unexpandedTilde !== false;
+  let scriptText =
+    source +
     `
 ` +
     (isShellScript ? stripShellComments(body, quotedBackslashKept) : str.replace(SHELL_COMMENT_LINE_RE, ""));
-  let normalized = normalizeCommandForPlatform(scanned);
-  let found = uniq(roots)
+  let normalized = normalizeCommandForPlatform(scriptText);
+  let found = normalizeCaseForComparison_2(roots)
     .flatMap((root) => pathPrefixes(root, home))
     .find((rootSpelling) =>
       new RegExp(
@@ -1979,6 +2335,8 @@ function analyzeScriptFile(bytes, roots, home, interpreter, options = {}) {
   if (options.histcharsHeld !== false && HISTCHARS_RE.test(str.replace(/\$(?=['"])|\\\n|['"\\]/g, "")))
     return "it names zsh's histchars, which can make zsh run lines that look like comments";
   let lower = (interpreter ?? shebangInterpreterName).toLowerCase();
+  let cShellsHeld = options.cShellsHeld !== false;
+  if (cShellsHeld && CSH_SHELL_RE.test(lower)) return CSH_TEXT_UNVERIFIABLE;
   if (
     /^t?csh$/.test(lower) &&
     Array.from(body.matchAll(/^[ \t]*set[ \t]+path[ \t]*=[ \t]*\(([^)\n]*)\)/gm)).some((match) =>
@@ -1989,7 +2347,7 @@ function analyzeScriptFile(bytes, roots, home, interpreter, options = {}) {
   let reason;
   try {
     let state = {
-      roots: uniq(roots),
+      roots: normalizeCaseForComparison_2(roots),
       home,
       fromPayload: false,
       shell: lower,
@@ -1997,23 +2355,64 @@ function analyzeScriptFile(bytes, roots, home, interpreter, options = {}) {
       zshNullCommandHeld: options.zshNullCommandHeld !== false,
       rubyAttachedPattern: options.rubyAttachedPattern !== false,
       forNameDo: options.forNameDo !== false,
+      cShellsHeld,
+      commandAfterConditional: options.commandAfterConditional !== false,
       runsTextHeld: options.runsTextHeld !== false,
+      shortLoopLists: options.shortLoopLists !== false,
       relativeNamedValues: options.relativeNamedValues,
+      disableHeld: options.disableHeld !== false,
       substitutionHeredocs: options.substitutionHeredocs !== false,
+      unexpandedTilde,
     };
+    let matches = regExp.test(shebangInterpreterName);
+    let makeHooksHeld =
+      matches && options.makeHooksHeld !== false && interpreter !== undefined && interpreter !== null;
     reason =
       (isShellScript
-        ? analyzeCommandText(body, MAKE_OR_AWK_RE.test(shebangInterpreter(shebang)), state)
-        : undefined) ?? collectCommandReach(shebang, state);
+        ? (analyzeCommandText(body, matches, state) ??
+          (makeHooksHeld ? analyzeCommandText(body, false, state) : undefined))
+        : undefined) ?? collectCommandReach(source, state);
   } catch {
     reason = "it could not be read as shell";
   }
   if (reason !== undefined) return reason;
-  if (MAKE_OR_AWK_RE.test(shebangInterpreter(shebang)) && hasRelativeInclude(scanned))
+  if (cShellsHeld && isShellScript) {
+    let text = expandVariableRefs(scriptText).replace(
+      /\\[xXuU]0*([0-9a-fA-F]{1,2})|\\0*([0-7]{1,3})/g,
+      (quote, value, codePoint) =>
+        String.fromCharCode(value !== undefined ? parseInt(value, 16) : parseInt(codePoint ?? "0", 8) & 255),
+    );
+    let replaced = expandVariableRefs(text)
+      .replace(/\\[abefnrtv]/g, " ")
+      .replace(/\$(?=['"])|["']/g, "")
+      .replace(/\\c-?.(?=t?csh|bsd-csh)/gi, " ")
+      .replace(/\\/g, "");
+    let SIMPLE_SUBST_RE = /\$\([^()\n]*\)|`[^`\n]*`/g;
+    let replaced_2 = replaced.replace(/\$\{\w+\}/g, "");
+    let replaced_3 = replaced_2.replace(/\$\{[^-=+?{}\n]*[-=+?]([^{}\n]*)\}/g, "$1");
+    if (
+      [
+        scriptText,
+        scriptText.replace(/\$[=~^]?\w+\[(?:"[^"\n]*"|'[^'\n]*')\]/g, ""),
+        text.replace(/\\/g, ""),
+        scriptText.replace(/\$[^({$\n]/g, ""),
+        scriptText.replace(/\\\n/g, "").replace(/\$[^({$\n]/g, ""),
+        replaced.replace(/\$\{\w+\}/g, " "),
+        stripDollarRefs(replaced),
+        stripDollarRefs(replaced_2),
+        stripDollarRefs(replaced_3),
+        stripDollarRefs(replaced_2.replace(/\$\{[^{}\n]*[-=+?]([^-=+?{}\n]*)\}/g, "$1")),
+        stripDollarRefs(replaced_2.replace(SIMPLE_SUBST_RE, "")),
+        stripDollarRefs(replaced_3.replace(SIMPLE_SUBST_RE, "")),
+      ].some((text) => CSH_IN_TEXT_RE.test(text))
+    )
+      return CSH_NAMED_TEXT;
+  }
+  if (regExp.test(shebangInterpreterName) && hasRelativeInclude(scriptText))
     return "it includes another build file, plugin or awk source by a relative name";
   return;
 }
-//@ chunk-mthxbav8.js:109001-109138 placement
+//@ chunk-4z1ntdgk.js:120904-121041 placement
 function stripShellComments(source, quotedBackslashKept) {
   let parts = [];
   let start = 0;
@@ -2026,7 +2425,7 @@ function stripShellComments(source, quotedBackslashKept) {
   parts.push(source.slice(start));
   return parts.join("");
 }
-//@ chunk-mthxbav8.js:109138-109374 placement
+//@ chunk-4z1ntdgk.js:121041-121277 placement
 function hasRelativeInclude(source) {
   for (let match of source.matchAll(MAKE_AWK_INCLUDE_RE)) {
     let filtered = (match[1] ?? match[2] ?? match[3] ?? "")
@@ -2042,12 +2441,14 @@ function hasRelativeInclude(source) {
   }
   return false;
 }
-//@ chunk-mthxbav8.js:109374-109808 placement
+//@ chunk-4z1ntdgk.js:121277-121964 placement
 function collectCommandReach(source, state) {
   let sources = [];
   let standing = [];
   for (let command of parseShellCommands(source, {
+    commandAfterConditional: state.commandAfterConditional,
     quotedBackslashKept: state.quotedBackslashKept,
+    shortLoopLists: state.shortLoopLists,
   }).commands)
     analyzeCommandReach(command, sources, {
       roots: [],
@@ -2058,12 +2459,17 @@ function collectCommandReach(source, state) {
       zshNullCommandHeld: state.zshNullCommandHeld,
       rubyAttachedPattern: state.rubyAttachedPattern,
       forNameDo: state.forNameDo,
+      cShellsHeld: state.cShellsHeld,
+      commandAfterConditional: state.commandAfterConditional,
       runsTextHeld: state.runsTextHeld,
+      shortLoopLists: state.shortLoopLists,
+      disableHeld: state.disableHeld,
       substitutionHeredocs: false,
+      unexpandedTilde: state.unexpandedTilde,
     });
   return (
     standing[0] ??
-    sources
+    normalizeCaseForComparison_2(sources)
       .map((text) =>
         analyzeCommandText(
           text,
@@ -2078,11 +2484,13 @@ function collectCommandReach(source, state) {
       .find((reason) => reason !== undefined)
   );
 }
-//@ chunk-mthxbav8.js:109808-110592 placement
+//@ chunk-4z1ntdgk.js:121964-122839 placement
 function analyzeCommandText(source, make, state, depth = 0) {
   let { commands, unreadable } = parseShellCommands(source, {
     make,
+    commandAfterConditional: state.commandAfterConditional,
     quotedBackslashKept: state.quotedBackslashKept,
+    shortLoopLists: state.shortLoopLists,
     substitutionHeredocs: state.substitutionHeredocs,
   });
   let sources = [];
@@ -2105,7 +2513,7 @@ function analyzeCommandText(source, make, state, depth = 0) {
     if (reason !== undefined) return reason;
   }
   if (unreadable !== null) return `it could not be read to the end as shell (${unreadable})`;
-  for (let text of sources) {
+  for (let text of new Set(sources)) {
     let reason =
       depth >= 3
         ? "it hands shell code to a shell too many layers deep"
@@ -2128,7 +2536,15 @@ function analyzeCommandText(source, make, state, depth = 0) {
   }
   return;
 }
-//@ chunk-mthxbav8.js:110592-110728 placement
+//@ chunk-4z1ntdgk.js:122839-122949 layout
+function expandVariableRefs(text) {
+  return text.replace(/\\\n/g, "").replace(/\$[=~^]?([A-Za-z_]\w*)(?:\[[^\][\s;&|<>]*\])?/g, "${$1}");
+}
+//@ chunk-4z1ntdgk.js:122949-123056 layout
+function stripDollarRefs(text) {
+  return text.replace(/\$\{[^{}\n]*\}|\$\(\s*\)|`[ \t]*`|\$[1-9@*!-]/g, "").replaceAll("\x00", "");
+}
+//@ chunk-4z1ntdgk.js:123056-123192 placement
 var MAX_FORWARDED_HOOKS_2 = 128;
 var MAX_FORWARDED_HOOKS_PER_EVENT = MAX_HOOKS_PER_EVENT;
 var MAX_DEVICE_HOOK_TEMPLATES = 8;
@@ -2139,7 +2555,7 @@ var HOOK_SOURCE_DESCRIPTIONS = {
   local: "this folder's settings.local.json",
   flag: "the --settings file",
 };
-//@ chunk-mthxbav8.js:110728-110907 placement
+//@ chunk-4z1ntdgk.js:123192-123371 placement
 function deviceHookKey(site, hook, defaultShell) {
   let commandKey =
     hook.type === "command"
@@ -2147,11 +2563,11 @@ function deviceHookKey(site, hook, defaultShell) {
       : hook.url;
   return `${site.event}\x00${site.matcher ?? ""}\x00${hook.type}\x00${commandKey}\x00${hook.if ?? ""}`;
 }
-//@ chunk-mthxbav8.js:110907-110967 placement
+//@ chunk-4z1ntdgk.js:123371-123431 placement
 function clampHookTimeout(timeout) {
   return timeout !== undefined && timeout > 0 ? Math.min(timeout, MAX_DEVICE_HOOK_TIMEOUT_S) : undefined;
 }
-//@ chunk-mthxbav8.js:110967-111053 placement
+//@ chunk-4z1ntdgk.js:123431-123517 placement
 async function realpathOrSelf(fs, path) {
   try {
     let realPath = await fs.realpath(path);
@@ -2160,7 +2576,7 @@ async function realpathOrSelf(fs, path) {
     return path;
   }
 }
-//@ chunk-mthxbav8.js:111053-111359 placement
+//@ chunk-4z1ntdgk.js:123517-123823 placement
 /**
  * "来源在云会话可写范围"的三种拒绝原因对象。
  */
@@ -2176,7 +2592,7 @@ var SYNC_ROOT_IS_CONFIG_DIR_REASON = {
   reason: "sync_root_is_config_dir",
   cause: "a directory the cloud session can write on this machine is a Claude config directory",
 };
-//@ chunk-mthxbav8.js:111359-112660 placement
+//@ chunk-4z1ntdgk.js:123823-125124 placement
 async function checkHookSourceReach(source, ctx) {
   let rootReal = ctx.opts.sync?.rootReal;
   let reachMemory = source.source === "local" ? undefined : ctx.opts.reachMemory;
@@ -2238,7 +2654,9 @@ async function checkHookSourceReach(source, ctx) {
     ),
   );
   if (flattened.length === 0) return reachMemory?.everInReach.has(source.source) ? SYNC_ROOT_REASON : null;
-  let configRoots = uniq([ctx.roots.configHomeReal, ctx.opts.configHome].map(normalizeCommandForPlatform));
+  let configRoots = normalizeCaseForComparison_2(
+    [ctx.roots.configHomeReal, ctx.opts.configHome].map(normalizeCommandForPlatform),
+  );
   if (
     filtered.some(
       (root) =>
@@ -2254,7 +2672,7 @@ async function checkHookSourceReach(source, ctx) {
   let all = flattened.every((relative) => relative.split(sep).some((segment) => segment.startsWith(".")));
   return source.source === "local" && all ? null : SYNC_ROOT_REASONS;
 }
-//@ chunk-mthxbav8.js:112660-112810 placement (2.1.88 match: convertToHookMatchers, 0.839)
+//@ chunk-4z1ntdgk.js:125124-125274 placement (2.1.88 match: convertToHookMatchers, 0.839)
 /**
  * 把 {hooks:{事件:[matcher]}} 展平成 {source, event, matcher, hook} 列表。
  */
@@ -2270,23 +2688,23 @@ function flattenHookEntries(sessionMatchers) {
     ),
   );
 }
-//@ chunk-mthxbav8.js:112810-112927 placement
+//@ chunk-4z1ntdgk.js:125274-125391 placement
 function isSimpleScriptCommand(command, interpreter) {
   let parts = command.trim().split(/ +/);
   return interpreter === null
     ? parts.length === 1
     : (interpreter === "python3" || interpreter === "python") && parts.length === 2;
 }
-//@ chunk-mthxbav8.js:112927-112964 placement
+//@ chunk-4z1ntdgk.js:125391-125428 placement
 function isKnownHookEvent(event) {
   return HOOK_EVENTS.includes(event);
 }
-//@ chunk-mthxbav8.js:112964-113008 placement
+//@ chunk-4z1ntdgk.js:125428-125472 placement
 var ENV_PROGRAM_PATHS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mthxbav8.js:112964", () => {
+deferInit("chunk-4z1ntdgk.js:125428", () => {
   ENV_PROGRAM_PATHS = new Set(["/usr/bin/env", "/bin/env"]);
 });
-//@ chunk-mthxbav8.js:113008-113703 placement
+//@ chunk-4z1ntdgk.js:125472-126167 placement
 function readShebang(bytes) {
   let str = bytes.subarray(0, 512).toString("utf8");
   if (!str.startsWith("#!")) return null;
@@ -2316,15 +2734,15 @@ function readShebang(bytes) {
     return DOT_DOT_SEGMENT_RE.test(programWord) ? "unjudgeable" : posix.normalize(programWord);
   return /^[\w.+-]+$/.test(programWord) ? null : "unjudgeable";
 }
-//@ chunk-mthxbav8.js:113703-113857 placement
+//@ chunk-4z1ntdgk.js:126167-126321 placement
 var DOT_DOT_SEGMENT_RE = /(?:^|\/)\.\.(?:\/|$)/;
 var SAFE_DEVICE_PATH_RE =
   /^\/dev\/(?:null|zero|full|u?random|tty\d*|pts(?:\/.*)?|ptmx|std(?:in|out|err)|fd(?:\/.*)?|dtracehelper|autofs_nowait)$/;
-//@ chunk-mthxbav8.js:113857-113891 placement (2.1.88 match: filterManagedDisabledPlugins, 1)
+//@ chunk-4z1ntdgk.js:126321-126355 placement (2.1.88 match: filterManagedDisabledPlugins, 1)
 function filterManagedDisabledPlugins(plugins) {
   return plugins === "local";
 }
-//@ chunk-mthxbav8.js:113891-121853 placement
+//@ chunk-4z1ntdgk.js:126355-134599 placement
 /**
  * 判定一个钩子是否能在设备上执行（held/run 等），检查事件、命令可达路径、同步根与证明。
  */
@@ -2476,7 +2894,7 @@ async function decideDeviceHook(site, ctx, afterEditOnly = false, skipTemplates 
           };
       authorOptIn = authorOptIn || (inReach && isCloudDevice);
       if (!inReach) {
-        let flagWithOverride = readFlagWithOverride(BOT_PROTECTED_TENGU_GLITTERY_POND, {
+        let strict = readFlagWithOverride(BOT_PROTECTED_TENGU_GLITTERY_POND, {
           safe: true,
         });
         let loadReason = analyzeScriptFile(
@@ -2507,11 +2925,29 @@ async function decideDeviceHook(site, ctx, afterEditOnly = false, skipTemplates 
             forNameDo: readFlagWithOverride(BOT_PROTECTED_TENGU_MOSSY_CHIPMUNK, {
               safe: true,
             }),
+            cShellsHeld: readFlagWithOverride(BOT_PROTECTED_TENGU_OCHRE_KITTIWAKE, {
+              safe: true,
+            }),
+            commandAfterConditional: readFlagWithOverride(BOT_PROTECTED_TENGU_MISTY_SPROUT, {
+              safe: true,
+            }),
             runsTextHeld: readFlagWithOverride(BOT_PROTECTED_TENGU_SEQUENTIAL_POND, {
               safe: true,
             }),
-            relativeNamedValues: flagWithOverride,
+            shortLoopLists: readFlagWithOverride(TENGU_FLUTTERING_SCONE, {
+              safe: true,
+            }),
+            relativeNamedValues: strict,
+            disableHeld: readFlagWithOverride(BOT_PROTECTED_TENGU_VALIDATED_CUPCAKE, {
+              safe: true,
+            }),
             substitutionHeredocs: readFlagWithOverride(BOT_PROTECTED_TENGU_PLAITED_OSIER, {
+              safe: true,
+            }),
+            makeHooksHeld: readFlagWithOverride(BOT_PROTECTED_TENGU_QUIET_ANVIL, {
+              safe: true,
+            }),
+            unexpandedTilde: readFlagWithOverride(BOT_PROTECTED_TENGU_KEEN_CERF, {
               safe: true,
             }),
           },
@@ -2520,12 +2956,21 @@ async function decideDeviceHook(site, ctx, afterEditOnly = false, skipTemplates 
           holdResult = {
             kind: "held",
             reason: "loads_from_reach",
-            notice: `${label}: its script may load files the cloud session can change. ${(flagWithOverride
+            ...(CSH_REASON_TEXTS.has(loadReason) && {
+              cause: "c_shell",
+            }),
+            notice: `${label}: its script may load files the cloud session can change. ${(strict
               ? sanitizeDisplayText(loadReason, {
                   maxCodeUnits: 400,
                 })
               : loadReason
             ).replace(/^it /, "The script ")}.${pluginNote}`,
+            ...(loadReason === MAKEFILE_UNCHECKED_TEXT && {
+              cause: "makefile",
+            }),
+            ...(loadReason === AWK_SCRIPT_UNCHECKED_TEXT && {
+              cause: "awk",
+            }),
           };
         else if (loadReason !== undefined && isCloudDevice) authorOptIn = true;
       }
@@ -2679,7 +3124,7 @@ async function decideDeviceHook(site, ctx, afterEditOnly = false, skipTemplates 
         {
           maxCodeUnits: 200,
         },
-      )}".${isPluginOnly ? "" : ` List the names to match${TOOL_HOOK_EVENTS.has(site.event) ? `, such as ${BASH_TOOL_NAME}|${FILE_READ_TOOL_NAME}` : ""}.`}`,
+      )}".${isPluginOnly ? "" : ` List the names to match${TOOL_HOOK_EVENTS.has(site.event) ? `, such as ${BASH_TOOL_NAME}|${READ}` : ""}.`}`,
     };
   if (holdResult !== undefined) return holdResult;
   if (hook.type === "command" && !isPinned) {
@@ -2726,15 +3171,15 @@ async function decideDeviceHook(site, ctx, afterEditOnly = false, skipTemplates 
     }),
   };
 }
-//@ chunk-mthxbav8.js:121853-121916 placement
+//@ chunk-4z1ntdgk.js:134599-134662 placement
 function isShortSingleLine(matcher) {
   return matcher.length <= MAX_FORWARDED_HOOKS && !/[\p{Cc}\p{Cf}]/u.test(matcher);
 }
-//@ chunk-mthxbav8.js:121916-121998 placement
+//@ chunk-4z1ntdgk.js:134662-134744 placement
 function duplicateHookText(templateId) {
   return `${templateId} is configured more than once; the cloud runs it once.`;
 }
-//@ chunk-mthxbav8.js:121998-122137 placement
+//@ chunk-4z1ntdgk.js:134744-134883 placement
 function createDeviceHookAttestations() {
   return {
     forwarded: [],
@@ -2750,7 +3195,7 @@ function createDeviceHookAttestations() {
     notices: [],
   };
 }
-//@ chunk-mthxbav8.js:122137-127931 placement
+//@ chunk-4z1ntdgk.js:134883-140679 placement
 /**
  * 收集本机所有钩子的证明信息（可转发/被扣留的原因），供远程会话使用。
  */
@@ -2761,7 +3206,7 @@ async function collectDeviceHookAttestations(captured, opts, deps) {
     launchDirReal: await realpathOrSelf(deps, opts.launchDir),
     projectDirReal: await realpathOrSelf(deps, opts.projectDir),
     configHomeReal: await realpathOrSelf(deps, opts.configHome),
-    extraReach: uniq(
+    extraReach: normalizeCaseForComparison_2(
       (
         await Promise.all(
           [...(opts.repoRoot !== undefined ? [opts.repoRoot] : []), ...(opts.extraReachRoots ?? [])].map(
@@ -3117,7 +3562,7 @@ async function collectDeviceHookAttestations(captured, opts, deps) {
   });
   return deviceHookAttestations;
 }
-//@ chunk-mthxbav8.js:127931-128016 placement
+//@ chunk-4z1ntdgk.js:140679-140764 placement
 function attestationFor(site) {
   let attestation = attestationFor_2(site);
   return attestation === undefined
@@ -3127,18 +3572,18 @@ function attestationFor(site) {
         heldBack: isBelowFloorEnforced(attestation),
       };
 }
-//@ chunk-mthxbav8.js:128016-128269 placement
+//@ chunk-4z1ntdgk.js:140764-141017 placement
 function heldHooksNotice(report) {
   let count = report.forwarded + report.templateNames.length;
   return `${count === 1 ? "One of your hooks" : `${count} of your hooks`} could run for cloud sessions started from this machine \u2014 run /hooks to decide (nothing from this machine runs for them until you do).`;
 }
-//@ chunk-mthxbav8.js:128269-128335 placement
+//@ chunk-4z1ntdgk.js:141017-141083 placement
 function shellPrefixOf(env) {
   return env.CLAUDE_CODE_SHELL_PREFIX?.trim() || undefined;
 }
-//@ chunk-mthxbav8.js:128335-128348 placement
+//@ chunk-4z1ntdgk.js:141083-141096 placement
 var LOCATE_RETRY_DELAY_MS = 30000;
-//@ chunk-mthxbav8.js:128348-128709 placement
+//@ chunk-4z1ntdgk.js:141096-141457 placement
 function resolveConfigFile(
   globalClaudeFile,
   env,
@@ -3174,11 +3619,11 @@ function resolveConfigFile(
   state.locate();
   return state;
 }
-//@ chunk-mthxbav8.js:128709-128786 placement
+//@ chunk-4z1ntdgk.js:141457-141534 placement
 function retryLocateIfDue(legacyConfigFile, now = Date.now()) {
   if (legacyConfigFile.retryAt !== undefined && now >= legacyConfigFile.retryAt) legacyConfigFile.locate?.();
 }
-//@ chunk-mthxbav8.js:128786-128894 placement
+//@ chunk-4z1ntdgk.js:141534-141641 placement
 function legacyConfigFileOf(memory) {
   memory.legacyConfigFile ??= resolveConfigFile(
     getGlobalClaudeFile(),
@@ -3187,7 +3632,7 @@ function legacyConfigFileOf(memory) {
   retryLocateIfDue(memory.legacyConfigFile);
   return memory.legacyConfigFile;
 }
-//@ chunk-mthxbav8.js:128894-129273 placement
+//@ chunk-4z1ntdgk.js:141641-142020 placement
 function settingsEnvInReach(sender, configFile, envOf = (source) => getSettingsForSource(source)?.env) {
   let isOwnScope = (source) =>
     sender.pinnedScopes.has(source) ||
@@ -3207,11 +3652,11 @@ function settingsEnvInReach(sender, configFile, envOf = (source) => getSettingsF
     ),
   );
 }
-//@ chunk-mthxbav8.js:129273-129304 placement
+//@ chunk-4z1ntdgk.js:142020-142051 placement
 function projectConfigRootOr(launchDir) {
   return getProjectConfigRoot() ?? launchDir;
 }
-//@ chunk-mthxbav8.js:129304-129389 placement
+//@ chunk-4z1ntdgk.js:142051-142136 placement
 function unrefTimeout(callback, delayMs) {
   let timer = setTimeout(callback, delayMs);
   timer.unref();
@@ -3219,7 +3664,7 @@ function unrefTimeout(callback, delayMs) {
     clear: () => clearTimeout(timer),
   };
 }
-//@ chunk-mthxbav8.js:129389-129658 placement
+//@ chunk-4z1ntdgk.js:142136-142405 placement
 function isHookForwardingEnabled() {
   if (!(
     getPlatform() !== "windows" &&
@@ -3241,7 +3686,7 @@ function isHookForwardingEnabled() {
   });
   return false;
 }
-//@ chunk-mthxbav8.js:129658-130516 placement
+//@ chunk-4z1ntdgk.js:142405-143263 placement
 function createForwardedHookHandler(ctx) {
   let state = null;
   let disposed = false;
@@ -3295,16 +3740,17 @@ function createForwardedHookHandler(ctx) {
   };
 }
 export {
-  isHookForwardingEnabled,
-  settingsEnvInReach,
-  legacyConfigFileOf,
-  collectDeviceHookAttestations,
-  projectConfigRootOr,
-  shellPrefixOf,
-  unrefTimeout,
   commandReachRoots,
   TENGU_FEDERATED_HEARTH,
+  TENGU_COMPOSED_KITE,
+  projectConfigRootOr,
+  legacyConfigFileOf,
+  settingsEnvInReach,
+  unrefTimeout,
   attestationFor,
+  shellPrefixOf,
   createForwardedHookHandler,
+  collectDeviceHookAttestations,
   heldHooksNotice,
+  isHookForwardingEnabled,
 };

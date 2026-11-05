@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：宿主（桌面/VS Code）OTel 事件转发的信封校验、限流与丢弃上报，以及反馈问卷的事件枚举与显示配置。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (27)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (27)
  * attribution: placement 27
  */
 import {
@@ -31,12 +31,12 @@ import { env } from "../../utils/env.js";
 import { shouldSkipFeedbackSurvey } from "../../utils/hostEnvironment.js";
 import { isPolicyAllowed } from "../../services/policyLimits/policyEvidence.js";
 import { DEFAULT_SURVEY_TIMING } from "../../components/FeedbackSurvey/useFeedbackSurvey.js";
-import { getInitialSettings_2 } from "../../utils/settings/settings.js";
+import { getInitialSettings } from "../../utils/settings/settings.js";
 import { getGlobalConfig } from "../../utils/config.js";
 import { isConsumerSubscriber } from "../../utils/auth.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:526932-527124 placement
+//@ chunk-0yw3taqg.js:567108-567300 placement
 var HOST_OTEL_LIMITS = /^(?=[\s\S]{1,64}$)[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/;
 var HOST_OTEL_KEY_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
 var MAX_OTEL_ATTRIBUTES = 32;
@@ -47,7 +47,7 @@ var HOST = "host.";
 var SDK_HOST = "sdk_host.";
 var HOST_OTEL_REFILL_PER_MINUTE = 120;
 var HOST_OTEL_BUCKET_SIZE = 240;
-//@ chunk-tyg7f3ek.js:527124-527271 placement
+//@ chunk-0yw3taqg.js:567300-567447 placement
 function reportHostOtelDrop(reason) {
   let hostOtelState = getHostOtelState();
   if (hostOtelState.reportedDropReasons.has(reason)) return;
@@ -55,7 +55,7 @@ function reportHostOtelDrop(reason) {
   if (getEventLoggerOwner() === "beta") return;
   logFeatureSad("mcp_host_otel_route", reason);
 }
-//@ chunk-tyg7f3ek.js:527271-527320 placement
+//@ chunk-0yw3taqg.js:567447-567496 placement
 function logHostOtelDrop(reason, message, level) {
   reportHostOtelDrop(reason);
   logForDebugging(
@@ -67,7 +67,7 @@ function logHostOtelDrop(reason, message, level) {
       : undefined,
   );
 }
-//@ chunk-tyg7f3ek.js:527320-527424 placement
+//@ chunk-0yw3taqg.js:567496-567600 placement
 function logHostOtelDropOnce(reason, message, level) {
   if (getHostOtelState().reportedDropReasons.has(reason)) return;
   try {
@@ -82,7 +82,7 @@ function logHostOtelDropOnce(reason, message, level) {
     );
   } catch {}
 }
-//@ chunk-tyg7f3ek.js:527424-527538 placement
+//@ chunk-0yw3taqg.js:567600-567714 placement
 function logOnceByReason(reason, message) {
   let hostOtelState = getHostOtelState();
   if (hostOtelState.reportedDropReasons.has(reason)) return;
@@ -91,7 +91,7 @@ function logOnceByReason(reason, message) {
     logForDebugging(message);
   } catch {}
 }
-//@ chunk-tyg7f3ek.js:527538-527647 placement
+//@ chunk-0yw3taqg.js:567714-567823 placement
 function markHostOtelRouteOk() {
   let hostOtelState = getHostOtelState();
   if (!hostOtelState.featureOkLogged && getEventLoggerOwner() === "org") {
@@ -99,7 +99,7 @@ function markHostOtelRouteOk() {
     logFeatureOk("mcp_host_otel_route");
   }
 }
-//@ chunk-tyg7f3ek.js:527647-527856 placement
+//@ chunk-0yw3taqg.js:567823-568032 placement
 function takeHostOtelRateToken(nowMs) {
   let hostOtelState = getHostOtelState();
   let rateTokens = hostOtelState.rateTokens ?? HOST_OTEL_BUCKET_SIZE;
@@ -113,7 +113,7 @@ function takeHostOtelRateToken(nowMs) {
   hostOtelState.rateTokens -= 1;
   return true;
 }
-//@ chunk-tyg7f3ek.js:527856-528822 placement
+//@ chunk-0yw3taqg.js:568032-568998 placement
 function canRouteHostOtel(kind) {
   let reasons =
     kind === "survey"
@@ -160,7 +160,7 @@ function canRouteHostOtel(kind) {
   }
   return true;
 }
-//@ chunk-tyg7f3ek.js:528822-529886 placement
+//@ chunk-0yw3taqg.js:568998-570062 placement
 /**
  * 校验宿主转发的 OTLP 事件名与属性（命名规则、长度、禁止 claude_code./host. 前缀）。
  */
@@ -240,7 +240,7 @@ function validateHostOtelEvent(eventName, attributes, serverName) {
     attributes: normalized,
   };
 }
-//@ chunk-tyg7f3ek.js:529886-530299 placement
+//@ chunk-0yw3taqg.js:570062-570475 placement
 function routeHostOtelEnvelope(params, serverName) {
   try {
     if (typeof params !== "object" || params === null || Array.isArray(params)) {
@@ -261,7 +261,7 @@ function routeHostOtelEnvelope(params, serverName) {
     );
   }
 }
-//@ chunk-tyg7f3ek.js:530299-530736 placement
+//@ chunk-0yw3taqg.js:570475-570911 placement
 function emitHostOtelEvent(eventName, attributes, serverName) {
   try {
     if (!canRouteHostOtel("route")) return;
@@ -293,7 +293,7 @@ function emitHostOtelEvent(eventName, attributes, serverName) {
     } catch {}
   }
 }
-//@ chunk-tyg7f3ek.js:530736-530984 placement
+//@ chunk-0yw3taqg.js:570911-571158 placement
 function notificationErrorReporter(reason, channelLabel) {
   return (error) => {
     try {
@@ -310,7 +310,7 @@ function notificationErrorReporter(reason, channelLabel) {
     } catch {}
   };
 }
-//@ chunk-tyg7f3ek.js:530984-531139 placement
+//@ chunk-0yw3taqg.js:571158-571313 placement
 function hookClientNotificationErrors(client, reason, channelLabel) {
   let notificationErrorHookedClients = getCliOwnedState().notificationErrorHookedClients;
   if (notificationErrorHookedClients.has(client)) return;
@@ -324,7 +324,7 @@ function hookClientNotificationErrors(client, reason, channelLabel) {
     report(error);
   };
 }
-//@ chunk-tyg7f3ek.js:531139-532023 placement
+//@ chunk-0yw3taqg.js:571313-572197 placement
 /**
  * 宿主 OTel 调查问卷的事件类型与各字段合法取值集合，以及按集合净化的 enum 构造函数。
  */
@@ -337,7 +337,7 @@ var SURVEY_NO_FOLLOWUP_REASON_VALUES;
 var SURVEY_ERROR_CODE_VALUES;
 var MESSAGE_RATING_SENTIMENT_VALUES;
 var MESSAGE_RATING_SURFACE_VALUES;
-deferInit("chunk-tyg7f3ek.js:531139", () => {
+deferInit("chunk-0yw3taqg.js:571313", () => {
   SURVEY_EVENT_TYPES = new Set([
     "appeared",
     "responded",
@@ -384,53 +384,53 @@ deferInit("chunk-tyg7f3ek.js:531139", () => {
   MESSAGE_RATING_SENTIMENT_VALUES = new Set(["positive", "negative"]);
   MESSAGE_RATING_SURFACE_VALUES = new Set(["tool_use", "assistant_text"]);
 });
-//@ chunk-tyg7f3ek.js:532023-532090 placement
+//@ chunk-0yw3taqg.js:572197-572264 placement
 function sanitizeEnum(value, allowed) {
   return typeof value === "string" && allowed.has(value)
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(value)
     : undefined;
 }
-//@ chunk-tyg7f3ek.js:532090-532121 placement
+//@ chunk-0yw3taqg.js:572264-572295 placement
 function surveyEventType(eventType) {
   return sanitizeEnum(eventType, SURVEY_EVENT_TYPES);
 }
-//@ chunk-tyg7f3ek.js:532121-532152 placement
+//@ chunk-0yw3taqg.js:572295-572326 placement
 function surveyResponse(response) {
   return sanitizeEnum(response, SURVEY_RESPONSE_VALUES);
 }
-//@ chunk-tyg7f3ek.js:532152-532183 placement
+//@ chunk-0yw3taqg.js:572326-572357 placement
 function surveyResponseEnum(surveyType) {
   return sanitizeEnum(surveyType, SURVEY_TYPE_VALUES);
 }
-//@ chunk-tyg7f3ek.js:532183-532214 placement
+//@ chunk-0yw3taqg.js:572357-572388 placement
 function surveySurfaceEnum(surface) {
   return sanitizeEnum(surface, SURVEY_SURFACE_VALUES);
 }
-//@ chunk-tyg7f3ek.js:532214-532245 placement
+//@ chunk-0yw3taqg.js:572388-572419 placement
 function surveyReasonEnum(followupBox) {
   return sanitizeEnum(followupBox, SURVEY_FOLLOWUP_BOX_VALUES);
 }
-//@ chunk-tyg7f3ek.js:532245-532276 placement
+//@ chunk-0yw3taqg.js:572419-572450 placement
 function surveyFollowupEnum(noFollowupReason) {
   return sanitizeEnum(noFollowupReason, SURVEY_NO_FOLLOWUP_REASON_VALUES);
 }
-//@ chunk-tyg7f3ek.js:532276-532307 placement
+//@ chunk-0yw3taqg.js:572450-572481 placement
 function surveyTriggerEnum(errorCode) {
   return sanitizeEnum(errorCode, SURVEY_ERROR_CODE_VALUES);
 }
-//@ chunk-tyg7f3ek.js:532307-532338 placement
+//@ chunk-0yw3taqg.js:572481-572512 placement
 function surveyOutcomeEnum(sentiment) {
   return sanitizeEnum(sentiment, MESSAGE_RATING_SENTIMENT_VALUES);
 }
-//@ chunk-tyg7f3ek.js:532338-532369 placement
+//@ chunk-0yw3taqg.js:572512-572543 placement
 function surveySourceEnum(surface) {
   return sanitizeEnum(surface, MESSAGE_RATING_SURFACE_VALUES);
 }
-//@ chunk-tyg7f3ek.js:532369-532420 placement
+//@ chunk-0yw3taqg.js:572543-572594 placement
 function stringOrUndefined(value) {
   return typeof value === "string" ? value : undefined;
 }
-//@ chunk-tyg7f3ek.js:532420-532782 placement
+//@ chunk-0yw3taqg.js:572594-572956 placement
 function vscodeSurveyConfig() {
   if (!isVsCodeTopSession() && !isTopHostSession()) return;
   if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_vscode_feedback_survey", false)) return;
@@ -443,11 +443,11 @@ function vscodeSurveyConfig() {
   );
   return {
     ...featureValue_CACHED_MAY_BE_STALE,
-    probability: getInitialSettings_2().feedbackSurveyRate ?? featureValue_CACHED_MAY_BE_STALE.probability,
+    probability: getInitialSettings().feedbackSurveyRate ?? featureValue_CACHED_MAY_BE_STALE.probability,
     lastSurveyShownTime: getGlobalConfig().feedbackSurveyState?.lastShownTime ?? null,
   };
 }
-//@ chunk-tyg7f3ek.js:532782-532948 placement
+//@ chunk-0yw3taqg.js:572956-573122 placement
 function feedbackSurveyCapabilities() {
   let isVsCode = isVsCodeTopSession();
   if (!isVsCode && !isTopHostSession()) return;

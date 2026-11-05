@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：观察者代理（agentObserver）的派生：写入观察者标记、首次运行
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3h5pdzw6.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cdks58w4.js (3)
  * attribution: placement 3
  */
 import { writeAgentMetadata, readAgentMetadata } from "../utils/sessionStorage.js";
@@ -36,7 +36,7 @@ import { resumeAgentInline } from "../tools/AgentTool/resumeAgent.js";
 import { setObserverSpawner } from "../services/agentObserver/agentObserver.js";
 import { logForDebugging } from "../utils/debug.js";
 
-//@ chunk-3h5pdzw6.js:12970-13139 placement
+//@ chunk-cdks58w4.js:14146-14315 placement
 /**
  * 写入并回读观察者代理的元数据标记。
  */
@@ -52,7 +52,7 @@ async function writeObserverMarker(observerTaskId, observerDefinition, storageV5
   if ((await readAgentMetadata(identityAgentId2(observerTaskId), storageV5))?.isObserver !== true)
     throw Error("observer marker read-back failed");
 }
-//@ chunk-3h5pdzw6.js:13139-15350 placement
+//@ chunk-cdks58w4.js:14315-16526 placement
 /**
  * 观察者代理的派生器：首次运行时写观察者标记、构造框架提示词并启动代理任务。
  */
@@ -213,7 +213,7 @@ var OBSERVER_SPAWNER = {
     });
   },
 };
-//@ chunk-3h5pdzw6.js:15350-15443 placement
+//@ chunk-cdks58w4.js:16526-16619 placement
 function registerObserverSpawner(rootSession) {
   try {
     setObserverSpawner(rootSession, OBSERVER_SPAWNER);

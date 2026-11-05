@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/feedback 提交与反馈包落盘：深度脱敏、组装 init 字段、POST 并记录。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xx1vmpsq.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pwdsqzsj.js (20)
  * attribution: placement 20
  */
 import { randomBytes, randomUUID } from "crypto";
@@ -39,7 +39,7 @@ import { logEvent } from "../analytics/index.js";
 import { fromEnum, lit, fromNumber, fromNumberOpt } from "../analytics/safeMetadata.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { logEventTo1P as logEventTo1P_2 } from "../analytics/firstPartyEventLogger.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { retryTransient } from "../../utils/atomicPublishWrite.js";
 import { logError } from "../../utils/log.js";
 import { errorMessage, isPathAbsent, isFsInaccessible, isEISDIR, getErrnoCode } from "../../utils/errors.js";
@@ -59,13 +59,13 @@ import { memoryScopeForPath } from "../../utils/memoryFileDetection.js";
 import { isCommentNotificationText } from "../artifacts/comments/autoreactState.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-xx1vmpsq.js:20766-20827 placement (2.1.88 match: logEventTo1P, 1)
+//@ chunk-pwdsqzsj.js:21140-21201 placement (2.1.88 match: logEventTo1P, 1)
 function logEventTo1P() {
   return isFeedbackAllowed() && getAPIProvider() === "firstParty" && feedbackCredentialStatus() === null;
 }
-//@ chunk-xx1vmpsq.js:20827-21189 placement
+//@ chunk-pwdsqzsj.js:21201-21568 placement
 var FEEDBACK_META_FIELDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-xx1vmpsq.js:20827", () => {
+deferInit("chunk-pwdsqzsj.js:21201", () => {
   FEEDBACK_META_FIELDS = new Set([
     "latestAssistantMessageId",
     "latestAssistantAPIMessageId",
@@ -81,7 +81,7 @@ deferInit("chunk-xx1vmpsq.js:20827", () => {
     "remoteSessionId",
     "version",
     "hostEnvironment",
-    ...[],
+    "replMode",
     "transcript",
     "subagentTranscripts",
     "rawTranscriptJsonl",
@@ -89,7 +89,7 @@ deferInit("chunk-xx1vmpsq.js:20827", () => {
     "debugLog",
   ]);
 });
-//@ chunk-xx1vmpsq.js:21189-22269 placement
+//@ chunk-pwdsqzsj.js:21568-22647 placement
 async function submitFeedbackReport({
   description,
   messages,
@@ -124,10 +124,10 @@ async function submitFeedbackReport({
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -136,7 +136,7 @@ async function submitFeedbackReport({
   };
   return submitFeedback(payload, signal, undefined, credentials);
 }
-//@ chunk-xx1vmpsq.js:22269-22708 placement
+//@ chunk-pwdsqzsj.js:22647-23086 placement
 async function submitSurveyFollowup({
   description,
   appearanceId,
@@ -162,7 +162,7 @@ async function submitSurveyFollowup({
   else logFeatureBad("feedback_survey_followup", cr.failureReason ?? "unknown");
   return cr;
 }
-//@ chunk-xx1vmpsq.js:22708-24811 placement
+//@ chunk-pwdsqzsj.js:23086-25189 placement
 /**
  * 提交 /feedback：组装载荷、POST 到反馈接口、记 tengu_bug_report_submitted，返回反馈 id 或拒绝/失败信息。
  */
@@ -289,7 +289,7 @@ async function postFeedbackSubmission({
     refusal: result.refusal,
   };
 }
-//@ chunk-xx1vmpsq.js:24811-24873 placement
+//@ chunk-pwdsqzsj.js:25189-25251 placement
 /**
  * 流转录文件时的字节上限（3.5 GiB）。
  */
@@ -299,7 +299,7 @@ var CANCELLED_RESULT = {
 };
 var MAX_INLINE_TRANSCRIPT_BYTES = 262144;
 var MAX_TRANSCRIPT_STREAM_BYTES = 3758096384;
-//@ chunk-xx1vmpsq.js:24873-26066 placement
+//@ chunk-pwdsqzsj.js:25251-26444 placement
 /**
  * 把反馈内容写成本地 zip 包（feedback.json + transcript.jsonl），供无法上传时手动分享。
  */
@@ -391,33 +391,33 @@ async function writeFeedbackBundle(text, entryName = "feedback.json", signal, tr
     };
   }
 }
-//@ chunk-xx1vmpsq.js:26066-26113 placement
+//@ chunk-pwdsqzsj.js:26444-26491 placement
 /**
  * 反馈载荷里原样保留的字段名（type、description、title）。
  */
 var KEEP_VERBATIM_FIELDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-xx1vmpsq.js:26066", () => {
+deferInit("chunk-pwdsqzsj.js:26444", () => {
   KEEP_VERBATIM_FIELDS = new Set(["type", "description", "title"]);
 });
-//@ chunk-xx1vmpsq.js:26113-26201 placement (2.1.88 match: redactSecrets, 0.815)
+//@ chunk-pwdsqzsj.js:26491-26579 placement (2.1.88 match: redactSecrets, 0.814)
 function redactSecrets(content) {
   return typeof content === "string" || (content !== null && typeof content === "object")
     ? "[REDACTED]"
     : content;
 }
-//@ chunk-xx1vmpsq.js:26201-26249 placement
+//@ chunk-pwdsqzsj.js:26579-26627 placement
 /**
  * 匹配 64 位十六进制摘要的正则。
  */
 var SHA256_HEX_RE = /(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])/g;
-//@ chunk-xx1vmpsq.js:26249-26328 placement
+//@ chunk-pwdsqzsj.js:26627-26706 placement
 /**
  * 对 api-request 类型的内容把 64 位哈希替换成 [REDACTED]。
  */
 function redactHashInApiRequest(text, line) {
   return line.includes("api-request") ? text.replace(SHA256_HEX_RE, "[REDACTED]") : text;
 }
-//@ chunk-xx1vmpsq.js:26328-27242 placement
+//@ chunk-pwdsqzsj.js:26706-27620 placement
 function redactSecretsInValue(value, mode = "data") {
   if (typeof value === "string") return redactHashInApiRequest(redactSecrets_2(value), value);
   if (Array.isArray(value)) return value.map((entry) => redactSecretsInValue(entry));
@@ -460,11 +460,11 @@ function redactSecretsInValue(value, mode = "data") {
   }
   return copy;
 }
-//@ chunk-xx1vmpsq.js:27242-27271 placement
+//@ chunk-pwdsqzsj.js:27620-27649 placement
 function redactFeedbackValue(value) {
   return redactSecretsInValue(value);
 }
-//@ chunk-xx1vmpsq.js:27271-27435 placement
+//@ chunk-pwdsqzsj.js:27649-27813 placement
 function redactJsonlLines(text) {
   return text
     .split(
@@ -483,7 +483,7 @@ function redactJsonlLines(text) {
     }).join(`
 `);
 }
-//@ chunk-xx1vmpsq.js:27435-28144 placement
+//@ chunk-pwdsqzsj.js:27813-28522 placement
 async function* streamTranscriptFile(
   filePath,
   inPlay,
@@ -553,14 +553,14 @@ async function* streamTranscriptFile(
   else logError(error);
   transcriptPath("transcript_incomplete");
 }
-//@ chunk-xx1vmpsq.js:28144-28178 placement
+//@ chunk-pwdsqzsj.js:28522-28556 placement
 /**
  * 先按行脱敏再对整段做 JSON 行脱敏。
  */
 function redactTranscript(text) {
   return redactJsonlLines(redactTranscriptLines(text));
 }
-//@ chunk-xx1vmpsq.js:28178-29008 placement
+//@ chunk-pwdsqzsj.js:28556-29386 placement
 async function saveFeedbackBundle({
   messages,
   description,
@@ -626,7 +626,7 @@ async function saveFeedbackBundle({
   }
   return writeFeedbackBundle(payloadText, undefined, signal, transcriptSource);
 }
-//@ chunk-xx1vmpsq.js:29008-29865 placement
+//@ chunk-pwdsqzsj.js:29386-30243 placement
 function buildInitMessageFields(initParams) {
   return {
     commands: initParams.commands ?? [],
@@ -646,16 +646,16 @@ function buildInitMessageFields(initParams) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
   };
 }
-//@ chunk-xx1vmpsq.js:29902-30092 placement
+//@ chunk-pwdsqzsj.js:30280-30470 placement
 function memoryRecallMessage(memories) {
   if (memories.length === 0) return;
   return {
@@ -670,20 +670,20 @@ function memoryRecallMessage(memories) {
     session_id: getSessionId(),
   };
 }
-//@ chunk-xx1vmpsq.js:30129-30208 placement
+//@ chunk-pwdsqzsj.js:30507-30586 placement
 function hasSeededComment(content) {
   if (!Array.isArray(content)) return isCommentNotificationText(content);
   return content.some((block) => isCommentNotificationText([block]));
 }
 export {
-  logEventTo1P,
-  submitSurveyFollowup,
-  submitFeedbackReport,
   postFeedbackSubmission,
+  saveFeedbackBundle,
+  logEventTo1P,
+  submitFeedbackReport,
   redactTranscript,
   redactFeedbackValue,
   writeFeedbackBundle,
-  saveFeedbackBundle,
+  submitSurveyFollowup,
   hasSeededComment,
   buildInitMessageFields,
   memoryRecallMessage,

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。artifact 读取的同意路径与通知通道判定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vm0jn40f.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-k0wpq966.js (19)
  * attribution: placement 19
  */
 import { getLiveState } from "../../../services/liveReplica/liveReplica.js";
@@ -60,15 +60,15 @@ import { isDelegatedObservationContext } from "../../../utils/agentContext.js";
 import { artifactViewerUrlFor } from "../artifactUrls.js";
 import { WEBFETCH } from "../../WebFetchTool/prompt.js";
 
-//@ chunk-vm0jn40f.js:688-737 placement
+//@ chunk-k0wpq966.js:689-738 placement
 function artifactFilesOnForSession() {
   return getLiveState().frozenMultiFile ?? isFrameMultiFileEnabled();
 }
-//@ chunk-vm0jn40f.js:737-771 placement
+//@ chunk-k0wpq966.js:738-772 placement
 function coworkConsentMustDeny(context) {
   return isCoworkFramePublishSession() && consentMustDeny(context);
 }
-//@ chunk-vm0jn40f.js:771-1255 placement
+//@ chunk-k0wpq966.js:772-1256 placement
 function coworkSurfacelessSourceDeny() {
   return {
     behavior: "deny",
@@ -82,7 +82,7 @@ function coworkSurfacelessSourceDeny() {
     },
   };
 }
-//@ chunk-vm0jn40f.js:1255-1719 placement
+//@ chunk-k0wpq966.js:1256-1720 placement
 function coworkSurfacelessUnreadableSourceDeny(unreadable, fieldName = "file_path") {
   return {
     behavior: "deny",
@@ -95,7 +95,7 @@ function coworkSurfacelessUnreadableSourceDeny(unreadable, fieldName = "file_pat
     },
   };
 }
-//@ chunk-vm0jn40f.js:1719-2152 placement
+//@ chunk-k0wpq966.js:1720-2153 placement
 function artifactFilesConsentHeld(context, target, owned) {
   if (
     attestedReadConsented(context, target.slug) ||
@@ -129,7 +129,7 @@ function artifactFilesConsentHeld(context, target, owned) {
     target.slug,
   );
 }
-//@ chunk-vm0jn40f.js:2152-2313 placement
+//@ chunk-k0wpq966.js:2153-2315 placement
 function copySourceConsented(context, target, surface, kind = "copy") {
   let shareEntry = getShareEntry(target.slug);
   if (kind === "copy" && otherOrgCopySource(shareEntry)) return outsideOrgYesStands(context, target.slug);
@@ -141,18 +141,18 @@ function copySourceConsented(context, target, surface, kind = "copy") {
     artifactFilesConsentHeld(context, target, owned)
   );
 }
-//@ chunk-vm0jn40f.js:2313-2354 placement
+//@ chunk-k0wpq966.js:2315-2356 placement
 function attestedReadConsented(context, slug) {
   return needsAttestedConsent(getToolPermissionContext(context).mode, slug);
 }
-//@ chunk-vm0jn40f.js:2354-2394 placement
+//@ chunk-k0wpq966.js:2356-2396 placement
 /**
  * 判断是否需要证明式读取同意（plan 调用除外）。
  */
 function needsAttestedConsent(mode, slug) {
   return mode !== "plan" && needsAttestedReadConsent(slug);
 }
-//@ chunk-vm0jn40f.js:2394-2506 placement
+//@ chunk-k0wpq966.js:2396-2508 placement
 function needsAttestedReadConsent(slug) {
   let shareEntry = getShareEntry(slug);
   return (
@@ -163,19 +163,19 @@ function needsAttestedReadConsent(slug) {
     isAttestedArtifact(slug)
   );
 }
-//@ chunk-vm0jn40f.js:2506-2549 placement
+//@ chunk-k0wpq966.js:2508-2551 placement
 function attestedDataReadConsented(context, slug) {
   return attestedDataReadConsentedInMode(getToolPermissionContext(context).mode, slug);
 }
-//@ chunk-vm0jn40f.js:2549-2593 placement
+//@ chunk-k0wpq966.js:2551-2595 placement
 function attestedDataReadConsentedInMode(mode, slug) {
   return mode !== "plan" && attestedDataReadVouched(slug);
 }
-//@ chunk-vm0jn40f.js:2593-2627 placement
+//@ chunk-k0wpq966.js:2595-2629 placement
 function attestedDataReadVouched(slug) {
   return isOrgSharedEntry(slug) && needsAttestedReadConsent(slug);
 }
-//@ chunk-vm0jn40f.js:2627-2707 placement
+//@ chunk-k0wpq966.js:2629-2709 placement
 /**
  * 判断共享条目是否为组织可见。
  */
@@ -183,7 +183,7 @@ function isOrgSharedEntry(slug) {
   let shareEntry = getShareEntry(slug);
   return shareEntry !== undefined && shareEntry.probeFailed !== true && shareEntry.mode === "org";
 }
-//@ chunk-vm0jn40f.js:2707-2885 placement
+//@ chunk-k0wpq966.js:2709-2887 placement
 /**
  * 第一方类型探测失败且已消失
  */
@@ -198,7 +198,7 @@ function isGoneFirstPartyTypeProbe(context, slug) {
     getAttestationKind(slug) === "first_party_type"
   );
 }
-//@ chunk-vm0jn40f.js:2885-3022 placement
+//@ chunk-k0wpq966.js:2887-3024 placement
 function readRulingFor(target, context, isDataRead = false) {
   let facts = classFactsFor("read", target, context);
   return (
@@ -213,7 +213,7 @@ function readRulingFor(target, context, isDataRead = false) {
       }
     : classifyArtifactConsent(facts);
 }
-//@ chunk-vm0jn40f.js:3022-3199 placement
+//@ chunk-k0wpq966.js:3024-3201 placement
 function copySourceRulingFor(target, context) {
   let shareEntry = getShareEntry(target.slug);
   let ruling = otherOrgCopySource(shareEntry)
@@ -231,7 +231,7 @@ function copySourceRulingFor(target, context) {
       }
     : ruling;
 }
-//@ chunk-vm0jn40f.js:3199-3429 placement
+//@ chunk-k0wpq966.js:3201-3431 placement
 function filesConsentRoute(context, target) {
   if (planConsentMustDeny(context) || coworkConsentMustDeny(context)) return () => "none";
   let userOnly = othersArtifactReadIsUserOnly(target) || outsideOrgReadIsUserOnly(target.slug);
@@ -243,7 +243,7 @@ function filesConsentRoute(context, target) {
   return (classifierApproved) =>
     isAuto && !(userOnly && !classifierApproved) ? "save" : avoidPrompts ? "none" : "ask";
 }
-//@ chunk-vm0jn40f.js:3429-4230 placement
+//@ chunk-k0wpq966.js:3431-4232 placement
 /**
  * artifact 读取的同意路径与通知通道判定。
  */
@@ -282,7 +282,7 @@ function artifactFetchNoticeLane(context, target, findRule) {
     };
   };
 }
-//@ chunk-vm0jn40f.js:4230-4311 placement
+//@ chunk-k0wpq966.js:4232-4313 placement
 function artifactFetchConsumesNotice(context, target) {
   if (
     noticeReadDisclosed("webfetch", context, target.slug, false) &&
@@ -298,12 +298,12 @@ export {
   coworkSurfacelessSourceDeny,
   attestedDataReadVouched,
   attestedDataReadConsentedInMode,
+  artifactFilesOnForSession,
   copySourceConsented,
   attestedReadConsented,
-  artifactFilesOnForSession,
-  filesConsentRoute,
   artifactFilesConsentHeld,
   copySourceRulingFor,
+  filesConsentRoute,
   artifactFetchConsumesNotice,
   artifactFetchNoticeLane,
 };

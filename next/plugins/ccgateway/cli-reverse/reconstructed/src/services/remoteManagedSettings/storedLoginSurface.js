@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：计算远程托管设置资格（hermetic、网关、第一方、自定义 base URL 等）；判断当前凭据来源是否跳过存储登录面（文件描述符令牌、自定义头等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mdb2vxrz.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pqw3c7pj.js (12)
  * attribution: placement 12
  */
 import {
@@ -51,7 +51,7 @@ import { resolveOrgConfigPlan } from "../policyLimits/index.js";
 import { identity } from "../../utils/identity.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-mdb2vxrz.js:6591-6686 placement (2.1.88 match: isBigQueryMetricsEnabled, 1)
+//@ chunk-pqw3c7pj.js:6551-6646 placement (2.1.88 match: isBigQueryMetricsEnabled, 1)
 function isBigQueryMetricsEnabled_2() {
   if (!hasStoredOAuthToken()) return false;
   let subscriptionType = getStoredOAuthSubscriptionType();
@@ -61,7 +61,7 @@ function isBigQueryMetricsEnabled_2() {
     heldMachinePinsSignIn(machineAdminPinsSignInOrg, hasMdmResult)
   );
 }
-//@ chunk-mdb2vxrz.js:6686-6904 placement
+//@ chunk-pqw3c7pj.js:6646-6864 placement
 function hasStoredClaudeAiLogin() {
   try {
     return hasStoredOAuthToken() && !isClaudeAIOAuthTokenHostInjected();
@@ -75,14 +75,14 @@ function hasStoredClaudeAiLogin() {
     return true;
   }
 }
-//@ chunk-mdb2vxrz.js:6904-7012 placement
+//@ chunk-pqw3c7pj.js:6864-6972 placement
 function isLocalAgentEntrypoint() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
   return (
     CLAUDE_CODE_ENTRYPOINT === "local-agent" || CLAUDE_CODE_ENTRYPOINT?.startsWith("claude-coworker") === true
   );
 }
-//@ chunk-mdb2vxrz.js:7012-7087 placement
+//@ chunk-pqw3c7pj.js:6972-7047 placement
 /**
  * 判断是否应跳过存储登录面：hermetic 远程会话、托管设置下备用鉴权不合格、本地代理入口，或 chat/teams 的存储登录被取代。
  */
@@ -94,15 +94,15 @@ function isStoredLoginSurfaceShortcut() {
     isStoredLoginSurfaceSuperseded("for_stored_login")
   );
 }
-//@ chunk-mdb2vxrz.js:7087-7128 placement
+//@ chunk-pqw3c7pj.js:7047-7088 placement
 /**
  * 判断存储登录面是否被跳过时要检查的环境变量清单（含自定义头）。
  */
 var STORED_LOGIN_SURFACE_ENV_VARS; // deferred: uses ARTIFACT_PROVIDER_ENV_VARS (../../utils/managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mdb2vxrz.js:7087", () => {
+deferInit("chunk-pqw3c7pj.js:7047", () => {
   STORED_LOGIN_SURFACE_ENV_VARS = [...PROVIDER_CREDENTIAL_ENV_VARS, "ANTHROPIC_CUSTOM_HEADERS"];
 });
-//@ chunk-mdb2vxrz.js:7128-7789 placement
+//@ chunk-pqw3c7pj.js:7088-7749 placement
 /**
  * 判断当前凭据来源是否跳过存储登录面（文件描述符令牌、自定义头等）。
  */
@@ -152,7 +152,7 @@ function isStoredLoginSurfaceSkipped() {
     return true;
   }
 }
-//@ chunk-mdb2vxrz.js:7789-7861 placement
+//@ chunk-pqw3c7pj.js:7749-7821 placement
 /**
  * 判断 chat/teams 会话里存储登录面是否已不适用（远程 OAuth、已跳过登录面，或会话内没有存储登录）。
  */
@@ -165,7 +165,7 @@ function isStoredLoginSurfaceSuperseded(way) {
       (way === "for_session" && !hasStoredClaudeAiLogin()))
   );
 }
-//@ chunk-mdb2vxrz.js:7861-8991 placement
+//@ chunk-pqw3c7pj.js:7821-8951 placement
 /**
  * 计算远程托管设置资格（hermetic、网关、第一方、自定义 base URL 等）。
  */
@@ -266,16 +266,16 @@ function computeRemoteSettingsEligibilityUncached() {
     ineligibleReason: hasStoredOAuthToken() ? "unsupported_subscription" : "no_auth",
   };
 }
-//@ chunk-mdb2vxrz.js:8991-9019 placement
+//@ chunk-pqw3c7pj.js:8951-8979 placement
 /**
  * 恒返回 false 的开关：BigQuery 指标是否启用（预留）。
  */
 function isBigQueryMetricsEnabled(defaultValue = true) {
   return false;
 }
-//@ chunk-mdb2vxrz.js:9019-9167 placement
+//@ chunk-pqw3c7pj.js:8979-9127 placement
 var storedLoginNoteState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mdb2vxrz.js:9019", () => {
+deferInit("chunk-pqw3c7pj.js:8979", () => {
   storedLoginNoteState = identity(
     {
       isNoted: false,
@@ -289,14 +289,14 @@ deferInit("chunk-mdb2vxrz.js:9019", () => {
     },
   );
 });
-//@ chunk-mdb2vxrz.js:9167-9189 placement
+//@ chunk-pqw3c7pj.js:9127-9149 placement
 /**
  * 记录登录界面的存储位置（供后续提示）。
  */
 function noteStoredLoginSurface() {
   return;
 }
-//@ chunk-mdb2vxrz.js:9189-9215 placement
+//@ chunk-pqw3c7pj.js:9149-9175 placement
 function eligibilityOverride(wantEligible) {
   return null;
 }

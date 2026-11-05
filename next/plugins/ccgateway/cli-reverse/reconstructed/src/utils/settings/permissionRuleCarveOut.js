@@ -3,21 +3,21 @@
  *
  * 2.1.316 新增：max effort 的说明文本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (3)
  * attribution: placement 3
  */
 
-//@ chunk-dcmhvw5a.js:189681-189802 placement
+//@ chunk-z20c443b.js:188625-188746 placement
 /**
  * max effort 的说明文本。
  */
 var MAX_EFFORT_DESCRIPTION =
   "May use excessive tokens resulting in long response times or overthinking. Use sparingly for the hardest tasks.";
-//@ chunk-dcmhvw5a.js:189802-189838 placement
+//@ chunk-z20c443b.js:188746-188782 placement
 var PATH_RULE_CARVE_OUT_RE = /^(?:Read|Edit)\((?:\.\/)?!/;
-//@ chunk-dcmhvw5a.js:189838-189885 placement
+//@ chunk-z20c443b.js:188782-188829 placement
 /**
  * normalizeCarveOutFlag：覆盖开关归一（undefined/false 保留）。
  */

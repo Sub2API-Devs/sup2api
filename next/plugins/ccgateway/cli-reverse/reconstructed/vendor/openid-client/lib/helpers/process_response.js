@@ -1,15 +1,15 @@
 /**
  * openid-client/lib/helpers/process_response.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: openid-client@5.7.1
- * pieces: chunk-1ny7cxrt.js (1)
+ * pieces: chunk-1hnjmk23.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_errors } from "../errors.js";
 import { require_www_authenticate_parser } from "./www_authenticate_parser.js";
 
-//@ chunk-1ny7cxrt.js:9227-10006 cjs-fingerprint
+//@ chunk-1hnjmk23.js:9596-10375 cjs-fingerprint
 var require_process_response = __commonJS(function (cjsExports, cjsModule) {
   var { STATUS_CODES } = importMetaRequire("http");
   var { format } = importMetaRequire("util");

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：发布到本地桩目录（测试用）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-06y4szbn.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-51jy8ztq.js (3)
  * attribution: placement 3
  */
 import { randomUUID } from "crypto";
@@ -18,7 +18,7 @@ import { isENOENT } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-06y4szbn.js:32806-35522 placement
+//@ chunk-51jy8ztq.js:32806-35522 placement
 /**
  * 测试/离线桩：发布时不连服务器，把页面与支撑文件写入 CLAUDE_CODE_ARTIFACT_PUBLISH_STUB_DIR 下的 slug 目录。
  */
@@ -195,7 +195,7 @@ async function publishToStubDir(dirPath, html, options) {
     err: null,
   };
 }
-//@ chunk-06y4szbn.js:35522-35655 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
+//@ chunk-51jy8ztq.js:35522-35655 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 /**
  * 确保路径是目录（非目录先删）。名字配错。
  */
@@ -212,7 +212,7 @@ async function ensureDirectory(dirPath) {
     recursive: true,
   });
 }
-//@ chunk-06y4szbn.js:35655-35741 placement (2.1.88 match: convertDirectoryToZipInPlace, 0.776)
+//@ chunk-51jy8ztq.js:35655-35741 placement (2.1.88 match: convertDirectoryToZipInPlace, 0.776)
 /**
  * 删除目标路径（递归、忽略不存在）后以独占方式（wx）写入新内容。通用文件替换工具，与插件 zip 缓存无关；旧版名 convertDirectoryToZipInPlace 与参数含义都不符。
  */

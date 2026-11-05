@@ -1,12 +1,12 @@
 /**
  * p-map/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: p-map/index.js
- * pieces: chunk-rbe666af.js (2)
+ * pieces: chunk-mnmtaqy0.js (2)
  * attribution: placement 2
  */
 
-//@ chunk-rbe666af.js:376-1750 placement
+//@ chunk-mnmtaqy0.js:191-1565 placement
 /**
  * p-map 默认导出（第三方）：限制并发的异步 map
  */
@@ -113,7 +113,7 @@ async function pMap(
       })();
     };
     (async () => {
-      for (let idx = 0; idx < concurrency; idx++) {
+      for (let j = 0; j < concurrency; j++) {
         try {
           await next();
         } catch (error) {
@@ -125,6 +125,6 @@ async function pMap(
     })();
   });
 }
-//@ chunk-rbe666af.js:1750-1771 placement (2.1.88 match: call, 0.709)
+//@ chunk-mnmtaqy0.js:1565-1586 placement (2.1.88 match: call, 0.708)
 var call = Symbol("skip");
 export { pMap };

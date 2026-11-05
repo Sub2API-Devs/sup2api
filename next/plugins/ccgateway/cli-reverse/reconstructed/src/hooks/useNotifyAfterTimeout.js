@@ -3,9 +3,9 @@
  *
  * 等待用户输入超过阈值后发送终端/系统通知。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useNotifyAfterTimeout.ts
- * pieces: chunk-18hwfzwa.js (2)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: file-local 1, fingerprint 1
  */
 import { getLastInteractionTime } from "../bootstrap/state.js";
@@ -16,11 +16,11 @@ import { useInterval } from "../ink/components/Input.js";
 import { HOOK_PROGRESS_INTERVAL_MS } from "../utils/hooks/hookEvents.js";
 import { notifyAsync } from "../utils/terminalProbe.js";
 
-//@ chunk-18hwfzwa.js:1445194-1445250 file-local
+//@ chunk-czq1j3j2.js:1486079-1486135 file-local
 function getTimeSinceLastInteraction(minimumIdleMs, sinceMs) {
   return Date.now() - Math.max(getLastInteractionTime(), sinceMs) >= minimumIdleMs;
 }
-//@ chunk-18hwfzwa.js:1445250-1445523 fingerprint (2.1.88 match: useNotifyAfterTimeout, 1)
+//@ chunk-czq1j3j2.js:1486135-1486408 fingerprint (2.1.88 match: useNotifyAfterTimeout, 1)
 function useNotifyAfterTimeout(text, notificationType, isActive) {
   let terminal = useTerminalNotification();
   let { storageV5, credentials } = useTheme_2();

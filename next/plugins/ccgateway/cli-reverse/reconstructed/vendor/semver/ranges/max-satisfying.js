@@ -1,15 +1,15 @@
 /**
  * semver/ranges/max-satisfying.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: semver@7.7.3..7.7.4
- * pieces: chunk-bwbq4xvm.js (2)
+ * pieces: chunk-7kayq7nc.js (2)
  * attribution: cjs-fingerprint 2
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_semver } from "../classes/semver.js";
 import { require_range } from "../classes/range.js";
 
-//@ chunk-bwbq4xvm.js:21935-22158 cjs-fingerprint
+//@ chunk-7kayq7nc.js:22018-22241 cjs-fingerprint
 var require_max_satisfying = __commonJS(function (cjsExports, cjsModule) {
   var SemVer = require_semver();
   var Range = require_range();
@@ -34,7 +34,7 @@ var require_max_satisfying = __commonJS(function (cjsExports, cjsModule) {
   };
   cjsModule.exports = maxSatisfying;
 });
-//@ chunk-bwbq4xvm.js:22158-22380 cjs-fingerprint
+//@ chunk-7kayq7nc.js:22241-22463 cjs-fingerprint
 var require_max_satisfying_2 = __commonJS(function (cjsExports, cjsModule) {
   var SemVer = require_semver();
   var Range = require_range();

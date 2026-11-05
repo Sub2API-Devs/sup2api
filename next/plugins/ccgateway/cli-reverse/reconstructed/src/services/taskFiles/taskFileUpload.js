@@ -3,12 +3,19 @@
  *
  * 2.1.316 新增。上传本地文件为任务文件；本模块还提供删除与下载。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-edh48dyx.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5f5dn73z.js (18), chunk-a2q0x549.js (1)
  * attribution: placement 19
  */
 import { posix, normalize, sep } from "path";
+import {
+  getDenyRuleForTool,
+  findAskRuleForTool,
+  deniedBashRules,
+  askedBashRules,
+} from "../../utils/permissions/permissions.js";
+import { READ_PATH_PROBE, matchingRuleForInput } from "../../utils/permissions/filesystem.js";
 import { REPO_RULES_UNREAD } from "../mcpServe/uploadRules.js";
 import {
   START_TASK_FILE_UPLOAD_WORDS,
@@ -58,64 +65,77 @@ import {
 } from "../../utils/permissions/sensitivePaths.js";
 import { env } from "../../utils/env.js";
 import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
-import {
-  getDenyRuleForTool,
-  getDenyRules,
-  getAskRuleForTool,
-  getAskRules,
-} from "../../utils/permissions/permissions.js";
-import { READ_PATH_PROBE, matchingRuleForInput } from "../../utils/permissions/filesystem.js";
 import { walkPermissionCheckPaths } from "../../utils/fsOperations.js";
 import { REPO_DIR_SETTING_SOURCE_LIST } from "../../utils/settings/constants.js";
 import { defaultOutputRoots, isSyncedAttachPath } from "../../utils/readFileInRange.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-edh48dyx.js:1201-1326 placement
+//@ chunk-a2q0x549.js:272682-272738 placement
+function holdsWholeToolReadRule(permissionCtx) {
+  return (
+    getDenyRuleForTool(permissionCtx, READ_PATH_PROBE) !== null ||
+    findAskRuleForTool(permissionCtx, READ_PATH_PROBE) !== null
+  );
+}
+//@ chunk-5f5dn73z.js:1201-1326 placement
 /**
  * 上传失败码集合。
  */
-var UPLOAD_FAILURE_CODES = new Set([
-  "canceled",
-  "policy_pending",
-  "egress_blocked",
-  "essential_traffic",
-  "unexpected",
-  "credential_name",
-  REPO_RULES_UNREAD,
-  ...START_TASK_FILE_UPLOAD_WORDS,
-]);
-//@ chunk-edh48dyx.js:1326-1371 placement
+var UPLOAD_FAILURE_CODES; // deferred: uses START_TASK_FILE_UPLOAD_WORDS (./startTaskFiles.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-5f5dn73z.js:1201", () => {
+  UPLOAD_FAILURE_CODES = new Set([
+    "canceled",
+    "policy_pending",
+    "egress_blocked",
+    "essential_traffic",
+    "unexpected",
+    "credential_name",
+    REPO_RULES_UNREAD,
+    ...START_TASK_FILE_UPLOAD_WORDS,
+  ]);
+});
+//@ chunk-5f5dn73z.js:1326-1371 placement
 /**
  * 含 not_uploaded_here 的失败码集合。
  */
-var NOT_UPLOADED_HERE_CODES = new Set(["not_uploaded_here", ...START_TASK_FILE_DELETE_WORDS]);
-//@ chunk-edh48dyx.js:1371-1622 placement
+var NOT_UPLOADED_HERE_CODES; // deferred: uses RETRYABLE_UPLOAD_CODES (./startTaskFiles.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-5f5dn73z.js:1326", () => {
+  NOT_UPLOADED_HERE_CODES = new Set(["not_uploaded_here", ...START_TASK_FILE_DELETE_WORDS]);
+});
+//@ chunk-5f5dn73z.js:1371-1622 placement
 /**
  * 上传错误码集合与输入输出 schema
  */
-var taskFileUploadSchemas = new Set(["canceled", "no_token", "bad_name", "unexpected", ...keys]);
-var taskFileUploadSessionSlot = new SessionRootSlot(() => ({
-  last: Promise.resolve(),
-  uploaded: new Set(),
-}));
-var uploadInputSchema = DoctorLazy(() =>
-  zodStrictObject({
-    path: stringSchema().min(1).max(MAX_FILE_PATH_CHARS),
-  }),
-);
-var uploadOutputSchema = DoctorLazy(() =>
-  union([
-    objectSchema({
-      ok: literal(true),
-      file_id: stringSchema(),
-      name: stringSchema(),
+var taskFileUploadSchemas; // deferred: uses TASK_FILE_CONSTANTS (./taskFileDownload.js) of its import cycle while loading; runs once the cycle is complete
+var taskFileUploadSessionSlot;
+var uploadInputSchema;
+var uploadOutputSchema;
+deferInit("chunk-5f5dn73z.js:1371", () => {
+  taskFileUploadSchemas = new Set(["canceled", "no_token", "bad_name", "unexpected", ...keys]);
+  taskFileUploadSessionSlot = new SessionRootSlot(() => ({
+    last: Promise.resolve(),
+    uploaded: new Set(),
+  }));
+  uploadInputSchema = DoctorLazy(() =>
+    zodStrictObject({
+      path: stringSchema().min(1).max(MAX_FILE_PATH_CHARS),
     }),
-    objectSchema({
-      ok: literal(false),
-      code: stringSchema().max(64),
-    }),
-  ]),
-);
-//@ chunk-edh48dyx.js:1622-1923 placement
+  );
+  uploadOutputSchema = DoctorLazy(() =>
+    union([
+      objectSchema({
+        ok: literal(true),
+        file_id: stringSchema(),
+        name: stringSchema(),
+      }),
+      objectSchema({
+        ok: literal(false),
+        code: stringSchema().max(64),
+      }),
+    ]),
+  );
+});
+//@ chunk-5f5dn73z.js:1622-1923 placement
 /**
  * 上传本地文件为任务文件；本模块还提供删除与下载。
  */
@@ -140,27 +160,31 @@ async function uploadTaskFile(input, signal, sessionCtx, host, repoRulesUnread) 
     output: result,
   };
 }
-//@ chunk-edh48dyx.js:1923-2031 placement
+//@ chunk-5f5dn73z.js:1923-2031 placement
 /**
  * 删除任务文件的输入/输出 schema。
  */
-var DELETE_INPUT_SCHEMA = DoctorLazy(() =>
-  zodStrictObject({
-    file_id: stringSchema().min(1).max(256),
-  }),
-);
-var DELETE_OUTPUT_SCHEMA = DoctorLazy(() =>
-  union([
-    objectSchema({
-      ok: literal(true),
+var DELETE_INPUT_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var DELETE_OUTPUT_SCHEMA;
+deferInit("chunk-5f5dn73z.js:1923", () => {
+  DELETE_INPUT_SCHEMA = DoctorLazy(() =>
+    zodStrictObject({
+      file_id: stringSchema().min(1).max(256),
     }),
-    objectSchema({
-      ok: literal(false),
-      code: stringSchema().max(64),
-    }),
-  ]),
-);
-//@ chunk-edh48dyx.js:2031-2329 placement
+  );
+  DELETE_OUTPUT_SCHEMA = DoctorLazy(() =>
+    union([
+      objectSchema({
+        ok: literal(true),
+      }),
+      objectSchema({
+        ok: literal(false),
+        code: stringSchema().max(64),
+      }),
+    ]),
+  );
+});
+//@ chunk-5f5dn73z.js:2031-2329 placement
 async function deleteTaskFile(input, sessionCtx) {
   let { file_id: fileId } = DELETE_INPUT_SCHEMA().parse(input);
   if (!taskFileUploadSessionSlot.of(sessionCtx).uploaded.delete(fileId))
@@ -187,33 +211,37 @@ async function deleteTaskFile(input, sessionCtx) {
         },
       };
 }
-//@ chunk-edh48dyx.js:2329-2600 placement
+//@ chunk-5f5dn73z.js:2329-2600 placement
 /**
  * 下载输入输出 schema
  */
-var taskFileDownloadSchemas = DoctorLazy(() =>
-  zodStrictObject({
-    file_id: stringSchema().regex(FILE_ID_RE),
-    save_as: stringSchema().min(1).max(255),
-    bytes: numberSchema().int().min(0).max(FILES_API_MAX_FILE_BYTES),
-    session_folder: guidSchema(),
-  }),
-);
-var downloadOutputSchema = DoctorLazy(() =>
-  union([
-    objectSchema({
-      ok: literal(true),
-      path: stringSchema().max(MAX_FILE_PATH_CHARS),
-      bytes: numberSchema().int().min(0),
+var taskFileDownloadSchemas; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var downloadOutputSchema;
+deferInit("chunk-5f5dn73z.js:2329", () => {
+  taskFileDownloadSchemas = DoctorLazy(() =>
+    zodStrictObject({
+      file_id: stringSchema().regex(FILE_ID_RE),
+      save_as: stringSchema().min(1).max(255),
+      bytes: numberSchema().int().min(0).max(FILES_API_MAX_FILE_BYTES),
+      session_folder: guidSchema(),
     }),
-    objectSchema({
-      ok: literal(false),
-      code: stringSchema().max(64),
-      status: numberSchema().int().min(100).max(599).optional(),
-    }),
-  ]),
-);
-//@ chunk-edh48dyx.js:2600-2775 placement
+  );
+  downloadOutputSchema = DoctorLazy(() =>
+    union([
+      objectSchema({
+        ok: literal(true),
+        path: stringSchema().max(MAX_FILE_PATH_CHARS),
+        bytes: numberSchema().int().min(0),
+      }),
+      objectSchema({
+        ok: literal(false),
+        code: stringSchema().max(64),
+        status: numberSchema().int().min(100).max(599).optional(),
+      }),
+    ]),
+  );
+});
+//@ chunk-5f5dn73z.js:2600-2775 placement
 async function downloadTaskFile(input, signal, sessionCtx, host) {
   let parsed = taskFileDownloadSchemas().parse(input);
   let slot = taskFileUploadSessionSlot.of(sessionCtx);
@@ -226,7 +254,7 @@ async function downloadTaskFile(input, signal, sessionCtx, host) {
     output: result,
   };
 }
-//@ chunk-edh48dyx.js:2775-3765 placement
+//@ chunk-5f5dn73z.js:2775-3765 placement
 /**
  * 下载任务文件到会话目录
  */
@@ -332,7 +360,7 @@ async function downloadTaskFileUnchecked(
     download?.close();
   }
 }
-//@ chunk-edh48dyx.js:3765-4524 placement
+//@ chunk-5f5dn73z.js:3765-4525 placement
 /**
  * 上传本地文件为任务文件
  */
@@ -411,14 +439,14 @@ async function uploadTaskFileUnchecked(requestedPath, signal, sessionCtx, host, 
     };
   }
 }
-//@ chunk-edh48dyx.js:4524-4585 placement
+//@ chunk-5f5dn73z.js:4525-4585 placement
 /**
  * 远程会话下且位于默认暂存根下。
  */
 function isRemoteStagedPath(filePath) {
   return Boolean(env.CLAUDE_CODE_REMOTE) && isWithinDir(filePath, DEFAULT_STAGE_FILE_ROOT);
 }
-//@ chunk-edh48dyx.js:4585-4810 placement
+//@ chunk-5f5dn73z.js:4585-4810 placement
 async function attachableFileAt(requestedPath, sessionCtx, host, permissionCtx, sandboxPaths = []) {
   let realPath;
   try {
@@ -439,7 +467,7 @@ async function attachableFileAt(requestedPath, sessionCtx, host, permissionCtx, 
     ? undefined
     : realPath;
 }
-//@ chunk-edh48dyx.js:4810-5039 placement
+//@ chunk-5f5dn73z.js:4810-5039 placement
 /**
  * 路径是否在项目根之外
  */
@@ -460,7 +488,7 @@ async function isOutsideProjectRoot(
     realHome !== originalCwd && !isWithinDir(realHome, originalCwd) && isWithinDir(realPath, originalCwd)
   );
 }
-//@ chunk-edh48dyx.js:5039-5296 placement
+//@ chunk-5f5dn73z.js:5039-5296 placement
 /**
  * 路径是否命中 read 的 deny/ask 规则
  */
@@ -470,12 +498,12 @@ function hasReadDenyRule(requestedPath, realPath, permissionCtx) {
     getDenyRuleForTool(
       permissionCtx,
       READ_PATH_PROBE,
-      filterRulesForRemoteSynced(getDenyRules(permissionCtx), requestedPath, realPath),
+      filterRulesForRemoteSynced(deniedBashRules(permissionCtx), requestedPath, realPath),
     ) ||
-    getAskRuleForTool(
+    findAskRuleForTool(
       permissionCtx,
       READ_PATH_PROBE,
-      filterRulesForRemoteSynced(getAskRules(permissionCtx), requestedPath, realPath),
+      filterRulesForRemoteSynced(askedBashRules(permissionCtx), requestedPath, realPath),
     )
   )
     return true;
@@ -489,21 +517,14 @@ function hasReadDenyRule(requestedPath, realPath, permissionCtx) {
     ),
   );
 }
-//@ chunk-edh48dyx.js:5296-5352 placement
-function holdsWholeToolReadRule(permissionCtx) {
-  return (
-    getDenyRuleForTool(permissionCtx, READ_PATH_PROBE) !== null ||
-    getAskRuleForTool(permissionCtx, READ_PATH_PROBE) !== null
-  );
-}
-//@ chunk-edh48dyx.js:5352-5398 placement
+//@ chunk-5f5dn73z.js:5296-5342 placement
 /**
  * 远程同步路径时过滤掉非用户/仓库来源的规则。
  */
 function filterRulesForRemoteSynced(rules, requestedPath, realPath) {
   return isRemoteSyncedPath(requestedPath, realPath) ? rules.filter(isUserOrRepoSource) : rules;
 }
-//@ chunk-edh48dyx.js:5398-5469 placement (2.1.88 match: _temp5, 1)
+//@ chunk-5f5dn73z.js:5342-5413 placement (2.1.88 match: _temp5, 1)
 /**
  * 规则来源不是用户设置也不是仓库目录来源。
  */
@@ -512,7 +533,7 @@ function isUserOrRepoSource({ source }) {
     source !== "userSettings" && !REPO_DIR_SETTING_SOURCE_LIST.some((repoSource) => repoSource === source)
   );
 }
-//@ chunk-edh48dyx.js:5469-5645 placement
+//@ chunk-5f5dn73z.js:5413-5589 placement
 /**
  * 远程会话下路径是否在同步根
  */
@@ -528,11 +549,11 @@ function isRemoteSyncedPath(requestedPath, realPath, syncedPaths = []) {
     )
   );
 }
-//@ chunk-edh48dyx.js:5645-5686 placement
+//@ chunk-5f5dn73z.js:5589-5630 placement
 /**
  * 路径是否位于指定目录之下。
  */
 function isWithinDir(childPath, parentDir) {
   return childPath.startsWith(parentDir + sep);
 }
-export { attachableFileAt, holdsWholeToolReadRule, deleteTaskFile, downloadTaskFile, uploadTaskFile };
+export { holdsWholeToolReadRule, attachableFileAt, deleteTaskFile, downloadTaskFile, uploadTaskFile };

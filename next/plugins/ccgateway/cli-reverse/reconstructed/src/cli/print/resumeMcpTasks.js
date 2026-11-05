@@ -3,18 +3,18 @@
  *
  * 2.1.316 新增：恢复时处理 MCP 任务的结束通知与迟到通知
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sfjpx19.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nh1pvp1m.js (12)
  * attribution: placement 12
  */
-import { normalizeMessages } from "../../utils/messages.js";
+import { normalizeMessages, SYNTHETIC_MODEL } from "../../utils/messages.js";
 import { MAX_LIST_ITEMS } from "../../bridge/controlRequests.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { isMcpTasksEnabled } from "../../services/mcp/mcpTaskWorker.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { getSessionId, mainAgentId } from "../../bootstrap/state.js";
-import { removeQueuedByFilter, enqueuePendingNotification } from "../../utils/messageQueueManager.js";
+import { removeByFilter, enqueuePendingNotification } from "../../utils/messageQueueManager.js";
 import {
   getMcpTaskProjectDir,
   listMcpTaskOutcomes,
@@ -35,10 +35,9 @@ import { recordToolUsed } from "../../services/compact/keptTools.js";
 import { logError } from "../../utils/log.js";
 import { isTaskIdOfType } from "../../Task.js";
 import { BRIEF_TOOL_NAME } from "../../tools/BriefTool/prompt.js";
-import { SYNTHETIC_MODEL } from "../../constants/messages.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0sfjpx19.js:76977-77132 placement
+//@ chunk-nh1pvp1m.js:69739-69894 placement
 /**
  * 判断某条消息是否被另一条声明 supersedesUuids 的消息取代（按 uuid 或规范化后的 uuid）。
  */
@@ -48,7 +47,7 @@ function supersedesMessage(message, base) {
   if (supersedesUuids.includes(base.uuid)) return true;
   return normalizeMessages([base]).some((message) => supersedesUuids.includes(message.uuid));
 }
-//@ chunk-0sfjpx19.js:77132-77373 placement
+//@ chunk-nh1pvp1m.js:69894-70135 placement
 function logBridgeDialogKindsDeclared(kinds, next, source, onChanged) {
   let size = kinds.size;
   for (let kind of next) {
@@ -62,9 +61,9 @@ function logBridgeDialogKindsDeclared(kinds, next, source, onChanged) {
   });
   onChanged();
 }
-//@ chunk-0sfjpx19.js:77373-77382 placement
+//@ chunk-nh1pvp1m.js:70135-70144 placement
 var MAX_RESUME_TASK_NOTIFICATIONS = 8;
-//@ chunk-0sfjpx19.js:77382-77547 placement
+//@ chunk-nh1pvp1m.js:70144-70309 placement
 async function loadMcpTaskModule({ sessionId, conversation, ...options }) {
   if (!isMcpTasksEnabled()) return;
   await deliverMcpTaskEndings(sessionId, conversation, options);
@@ -72,7 +71,7 @@ async function loadMcpTaskModule({ sessionId, conversation, ...options }) {
     .mcpTaskWatcherModule()
     .restoreMcpTasks(options);
 }
-//@ chunk-0sfjpx19.js:77547-79140 placement
+//@ chunk-nh1pvp1m.js:70309-71899 placement
 /**
  * 列出并投递上次进程期间结束的 MCP 任务通知（列不出时等下次恢复）。
  */
@@ -83,7 +82,7 @@ async function deliverMcpTaskEndings(sessionId, messages, { taskRegistry, storag
     });
   try {
     if (getSessionId() !== sessionId) return;
-    removeQueuedByFilter(isMcpTaskNotification);
+    removeByFilter(isMcpTaskNotification);
     let mcpTaskProjectDir = getMcpTaskProjectDir();
     let filtered = (
       (await listMcpTaskOutcomes(storageV5).catch(
@@ -174,7 +173,7 @@ async function deliverMcpTaskEndings(sessionId, messages, { taskRegistry, storag
     logError(error);
   }
 }
-//@ chunk-0sfjpx19.js:79140-79268 placement
+//@ chunk-nh1pvp1m.js:71899-72027 placement
 function isMcpTaskNotification(queued) {
   return (
     queued.mode === "task-notification" &&
@@ -184,7 +183,7 @@ function isMcpTaskNotification(queued) {
     isTaskIdOfType("mcp_task", queued.taskId)
   );
 }
-//@ chunk-0sfjpx19.js:79268-79601 placement
+//@ chunk-nh1pvp1m.js:72027-72360 placement
 function formatLateNotificationPreamble(outcome) {
   try {
     let { buildSep2663EndingNotice } = require("../../services/mcp/buildSep2663EndingNotice.lazy.js");
@@ -195,7 +194,7 @@ This notification was written at ${new Date(outcome.endedAt).toISOString()}. It 
     return;
   }
 }
-//@ chunk-0sfjpx19.js:79601-79706 placement
+//@ chunk-nh1pvp1m.js:72360-72465 placement
 function taskNotificationRunKeys(messages) {
   let keys = new Set();
   for (let message of messages) {
@@ -204,21 +203,21 @@ function taskNotificationRunKeys(messages) {
   }
   return keys;
 }
-//@ chunk-0sfjpx19.js:79743-79776 placement
+//@ chunk-nh1pvp1m.js:72502-72535 placement
 /**
  * 恢复会话时通知的最大年龄 2 小时，以及仅含 BRIEF_TOOL_NAME 的集合（恢复时特别处理该工具）。
  */
 var RESUME_NOTIFICATION_MAX_AGE_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var BRIEF_TOOL_NAME_SET;
-deferInit("chunk-0sfjpx19.js:79743", () => {
+deferInit("chunk-nh1pvp1m.js:72502", () => {
   RESUME_NOTIFICATION_MAX_AGE_MS = 7200000;
   BRIEF_TOOL_NAME_SET = new Set([BRIEF_TOOL_NAME]);
 });
-//@ chunk-0sfjpx19.js:79776-79810 placement
+//@ chunk-nh1pvp1m.js:72535-72569 placement
 function hasNonWhitespace(text) {
   return /\S/.test(text);
 }
-//@ chunk-0sfjpx19.js:79810-79911 placement
+//@ chunk-nh1pvp1m.js:72569-72670 placement
 /**
  * 判断流事件是否为内容为标记文本的 text_delta。
  */
@@ -229,17 +228,17 @@ function isMarkerTextDelta(event) {
     hasNonWhitespace(event.delta.text)
   );
 }
-//@ chunk-0sfjpx19.js:79911-79975 placement
+//@ chunk-nh1pvp1m.js:72670-72734 placement
 function isRealAssistantReply(message) {
   return !message.isApiErrorMessage && message.message.model !== SYNTHETIC_MODEL;
 }
 export {
-  isRealAssistantReply,
-  hasNonWhitespace,
-  RESUME_NOTIFICATION_MAX_AGE_MS,
-  BRIEF_TOOL_NAME_SET,
   loadMcpTaskModule,
   supersedesMessage,
   logBridgeDialogKindsDeclared,
   isMarkerTextDelta,
+  BRIEF_TOOL_NAME_SET,
+  isRealAssistantReply,
+  hasNonWhitespace,
+  RESUME_NOTIFICATION_MAX_AGE_MS,
 };

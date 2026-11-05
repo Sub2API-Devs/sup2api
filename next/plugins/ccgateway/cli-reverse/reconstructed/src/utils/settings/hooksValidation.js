@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：校验设置中的 hooks 结构（事件、匹配器、命令）；校验 modelPricing 设置等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (32)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (32)
  * attribution: placement 32
  */
 import { HOOK_EVENTS } from "../../entrypoints/sdk/coreSchemas.js";
@@ -49,12 +49,12 @@ import { isAnthropicProviderId, API_PROVIDER_KINDS } from "../permissions/autoMo
 import { applySettingAliases } from "./marketplaceSettingsAliases.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:443201-443220 placement
+//@ chunk-z20c443b.js:441663-441682 placement
 var HOOK_EVENT_NAME_SET; // deferred: uses HOOK_EVENTS (../../entrypoints/sdk/coreSchemas.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:443201", () => {
+deferInit("chunk-z20c443b.js:441663", () => {
   HOOK_EVENT_NAME_SET = new Set(HOOK_EVENTS);
 });
-//@ chunk-dcmhvw5a.js:443220-443525 placement
+//@ chunk-z20c443b.js:441682-441987 placement
 /**
  * 检查 hooks 中 PreToolUse/PermissionRequest 的配置问题。
  */
@@ -75,7 +75,7 @@ function validateHookOutputs(doc, file) {
     ...validateHooksSettings(doc, file),
   ];
 }
-//@ chunk-dcmhvw5a.js:443525-446258 placement
+//@ chunk-z20c443b.js:441987-444720 placement
 /**
  * 校验设置中的 hooks 结构（事件、匹配器、命令）。
  */
@@ -205,9 +205,9 @@ function validateHooksSettings(doc, file) {
   if (issues.length > 0 && Object.keys(hooks).length === 0) delete doc.hooks;
   return issues;
 }
-//@ chunk-dcmhvw5a.js:446258-446338 placement
+//@ chunk-z20c443b.js:444720-444800 placement
 var MCP_SERVER_LIST_SETTINGS; // deferred: uses PermissionsSettingsSchema (./types.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:446258", () => {
+deferInit("chunk-z20c443b.js:444720", () => {
   MCP_SERVER_LIST_SETTINGS = [
     {
       key: "allowedMcpServers",
@@ -219,7 +219,7 @@ deferInit("chunk-dcmhvw5a.js:446258", () => {
     },
   ];
 });
-//@ chunk-dcmhvw5a.js:446338-446986 placement
+//@ chunk-z20c443b.js:444800-445448 placement
 /**
  * 按 schema 校验列表类设置项。
  */
@@ -260,14 +260,14 @@ function validateListSettings(doc, file, options) {
   }
   return issues;
 }
-//@ chunk-dcmhvw5a.js:446986-447043 placement
+//@ chunk-z20c443b.js:445448-445505 placement
 var MARKETPLACE_LIST_SETTINGS = ["strictKnownMarketplaces", "blockedMarketplaces"];
-//@ chunk-dcmhvw5a.js:447043-447119 placement
+//@ chunk-z20c443b.js:445505-445581 placement
 function dropNullRestrictionKeys(doc) {
   if (!isPlainObject_2(doc)) return;
   for (let key of RESTRICTIVE_TOP_LEVEL_SETTINGS()) if (doc[key] === null) delete doc[key];
 }
-//@ chunk-dcmhvw5a.js:447119-447791 placement
+//@ chunk-z20c443b.js:445581-446253 placement
 /**
  * 校验权限规则列表（逐条解析）。
  */
@@ -317,7 +317,7 @@ function validatePermissionRuleLists(doc, file, marketplacePatternIndexMapOut) {
   }
   return issues;
 }
-//@ chunk-dcmhvw5a.js:447791-448291 placement
+//@ chunk-z20c443b.js:446253-446753 placement
 /**
  * 收集权限规则的警告。
  */
@@ -339,7 +339,7 @@ function collectRuleWarnings(doc) {
   }
   return warnings;
 }
-//@ chunk-dcmhvw5a.js:448291-448439 placement
+//@ chunk-z20c443b.js:446753-446901 placement
 function remapIssuePath(path, map) {
   let key = path[0];
   let index = path[1];
@@ -347,7 +347,7 @@ function remapIssuePath(path, map) {
   let mapped = map.get(key)?.[index];
   return mapped === undefined ? path : [key, mapped, ...path.slice(2)];
 }
-//@ chunk-dcmhvw5a.js:448439-448762 placement
+//@ chunk-z20c443b.js:446901-447224 placement
 /**
  * 校验 managedMcpServers。
  */
@@ -366,7 +366,7 @@ function validateManagedMcpServers(doc, file) {
   else doc.managedMcpServers = managedMcpServers;
   return issues;
 }
-//@ chunk-dcmhvw5a.js:448762-448911 placement
+//@ chunk-z20c443b.js:447224-447373 placement
 function marketplaceSourceType(entry) {
   if (!entry || typeof entry !== "object") return;
   let source = entry.source;
@@ -374,7 +374,7 @@ function marketplaceSourceType(entry) {
   let source_2 = source.source;
   return typeof source_2 === "string" ? source_2 : undefined;
 }
-//@ chunk-dcmhvw5a.js:448911-449065 placement
+//@ chunk-z20c443b.js:447373-447527 placement
 function hasUnknownPluginSourceType(entry) {
   if (!entry || typeof entry !== "object") return false;
   let source = entry.source;
@@ -382,14 +382,14 @@ function hasUnknownPluginSourceType(entry) {
   let plugins = source.plugins;
   return Array.isArray(plugins) && plugins.some(hasUnknownSourceType);
 }
-//@ chunk-dcmhvw5a.js:449065-449182 placement
+//@ chunk-z20c443b.js:447527-447644 placement
 function settingsMarketplaceName(entry) {
   let source = isPlainObject_2(entry) ? entry.source : undefined;
   return isPlainObject_2(source) && source.source === "settings" && typeof source.name === "string"
     ? source.name
     : undefined;
 }
-//@ chunk-dcmhvw5a.js:449182-450456 placement
+//@ chunk-z20c443b.js:447644-448919 placement
 /**
  * 校验 extraKnownMarketplaces。
  */
@@ -452,7 +452,7 @@ function validateExtraMarketplaces(doc, file) {
   }
   return issues;
 }
-//@ chunk-dcmhvw5a.js:450456-451570 placement
+//@ chunk-z20c443b.js:448919-450033 placement
 /**
  * 校验 modelPicker 设置。
  */
@@ -508,7 +508,7 @@ function validateModelPicker(doc, file) {
   if (validOptions.length !== options.length) value.options = validOptions;
   return issues;
 }
-//@ chunk-dcmhvw5a.js:451570-452878 placement
+//@ chunk-z20c443b.js:450033-451341 placement
 /**
  * 校验 modelPricing 设置。
  */
@@ -569,12 +569,12 @@ function validateModelPricing(doc, file) {
   }
   return issues;
 }
-//@ chunk-dcmhvw5a.js:452878-453021 placement
+//@ chunk-z20c443b.js:451341-451484 placement
 function modelPickerIssueText(issue) {
   if (!issue) return "Invalid modelPicker row";
   return `modelPicker row ${issue.path.length > 0 ? `"${issue.path.join(".")}" ` : ""}${issue.message}`.trim();
 }
-//@ chunk-dcmhvw5a.js:453021-453277 placement
+//@ chunk-z20c443b.js:451484-451740 placement
 function sanitizeCrossSessionInbound(doc, file, options) {
   if (!doc || typeof doc !== "object" || Array.isArray(doc)) return [];
   let target = doc;
@@ -584,13 +584,13 @@ function sanitizeCrossSessionInbound(doc, file, options) {
   else delete target.crossSessionInbound;
   return [unknownValueWarning(crossSessionInbound, file, options?.policySource === true)];
 }
-//@ chunk-dcmhvw5a.js:453277-453336 placement
+//@ chunk-z20c443b.js:451740-451799 placement
 function isKnownHookEvent(crossSessionInbound) {
   return typeof crossSessionInbound === "string" && POLICY_HELPER_ON_FAILURE.includes(crossSessionInbound);
 }
-//@ chunk-dcmhvw5a.js:453336-453366 placement
+//@ chunk-z20c443b.js:451799-451829 placement
 var CROSSSESSIONINBOUND = "crossSessionInbound";
-//@ chunk-dcmhvw5a.js:453366-453467 placement
+//@ chunk-z20c443b.js:451829-451930 placement
 /**
  * 校验 crossSessionInbound 设置值，不合法时返回错误说明。
  */
@@ -600,7 +600,7 @@ function crossSessionInboundError(doc) {
   if (crossSessionInbound === undefined || isKnownHookEvent(crossSessionInbound)) return;
   return crossSessionInboundExpected(crossSessionInbound);
 }
-//@ chunk-dcmhvw5a.js:453467-453685 placement
+//@ chunk-z20c443b.js:451930-452148 placement
 /**
  * 校验 strictPluginOnlyCustomization 设置（布尔或数组），不合法时返回错误说明。
  */
@@ -616,7 +616,7 @@ function strictPluginOnlyCustomizationError(doc) {
     return;
   return `must be true, false, or an array of surface names; received ${getReceivedType(strictPluginOnlyCustomization)}`;
 }
-//@ chunk-dcmhvw5a.js:453685-454139 placement
+//@ chunk-z20c443b.js:452148-452602 placement
 /**
  * 校验 allowedProviders。
  */
@@ -634,14 +634,14 @@ function validateAllowedProviders(doc) {
     ? undefined
     : `unknown provider ${plural(filtered.length, "name")} ${filtered.map((name) => JSON.stringify(name)).join(", ")}; known names: ${API_PROVIDER_KINDS.join(", ")}`;
 }
-//@ chunk-dcmhvw5a.js:454139-454274 placement
+//@ chunk-z20c443b.js:452602-452737 placement
 function copyAllowedProviders(doc, target) {
   if (!isPlainObject_2(doc) || !Array.isArray(doc.allowedProviders)) return;
   Object.assign(target, {
     allowedProviders: doc.allowedProviders.filter(isAnthropicProviderId),
   });
 }
-//@ chunk-dcmhvw5a.js:454274-454442 placement
+//@ chunk-z20c443b.js:452737-452905 placement
 function crossSessionInboundExpected(value) {
   let joined = POLICY_HELPER_ON_FAILURE.map((allowed) => `"${allowed}"`).join(", ");
   let received =
@@ -650,7 +650,7 @@ function crossSessionInboundExpected(value) {
       : getReceivedType(value);
   return `must be one of ${joined}; received ${received}`;
 }
-//@ chunk-dcmhvw5a.js:454442-454970 placement
+//@ chunk-z20c443b.js:452905-453433 placement
 /**
  * 无法识别的取值的警告（托管设置视为拒绝）。
  */
@@ -670,9 +670,9 @@ function unknownValueWarning(crossSessionInbound, file, policySource = false) {
     }),
   };
 }
-//@ chunk-dcmhvw5a.js:454970-455011 placement
+//@ chunk-z20c443b.js:453433-453474 placement
 var REMOTECONTROL_SHAREHOSTPROFILE = "remoteControl.shareHostProfile";
-//@ chunk-dcmhvw5a.js:455011-456257 placement
+//@ chunk-z20c443b.js:453474-454720 placement
 /**
  * 校验 remoteControl 设置。
  */
@@ -739,10 +739,10 @@ function validateRemoteControlSetting(doc, file, options) {
   }
   return issues;
 }
-//@ chunk-dcmhvw5a.js:456257-456337 placement
+//@ chunk-z20c443b.js:454720-454800 placement
 var MCP_SERVER_ENABLED_SETTINGS = ["enabledMcpjsonServers", "disabledMcpjsonServers"];
 var MCP_SERVER_NAME_RE = /^[A-Za-z0-9_-]+$/;
-//@ chunk-dcmhvw5a.js:456337-456442 placement
+//@ chunk-z20c443b.js:454800-454905 placement
 /**
  * 把应为数组的字符串设置包成数组。
  */
@@ -753,7 +753,7 @@ function coerceStringListSettings(doc) {
     if (typeof value === "string" && MCP_SERVER_NAME_RE.test(value)) doc[key] = [value];
   }
 }
-//@ chunk-dcmhvw5a.js:456442-456962 placement
+//@ chunk-z20c443b.js:454905-455425 placement
 /**
  * 校验整份设置文档（别名、hooks、规则等）。
  */
@@ -789,14 +789,14 @@ function validateSettingsDocument(doc, file, options) {
   return issues;
 }
 export {
+  coerceStringListSettings,
   collectRuleWarnings,
   crossSessionInboundError,
   strictPluginOnlyCustomizationError,
   validateAllowedProviders,
-  REMOTECONTROL_SHAREHOSTPROFILE,
-  coerceStringListSettings,
-  CROSSSESSIONINBOUND,
   validateSettingsDocument,
+  CROSSSESSIONINBOUND,
   remapIssuePath,
   copyAllowedProviders,
+  REMOTECONTROL_SHAREHOSTPROFILE,
 };

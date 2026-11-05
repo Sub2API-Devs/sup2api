@@ -3,22 +3,22 @@
  *
  * 2.1.316 新增。远程工具服务的挂载安全分类。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e2fknt7w.js (18)
- * attribution: placement 17, affinity 1
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2214fejy.js (18)
+ * attribution: placement 17, sole-consumer 1
  */
 import { homedir } from "os";
 import { posix } from "path";
 import { statSync } from "fs";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { getProjectDirsUpToHome } from "../../utils/secureStorage/macOsKeychainHelpers.js";
 import { isAbsolutePlatformPath, normalizeCommandForPlatform } from "../../utils/git.js";
 import { servingBasesFor, realpathOrSpelling_2 } from "./servingGates.js";
-import { getWslWindowsUserDirs } from "../../utils/tmuxSocket.js";
+import { touchesWindowsRootFromWsl } from "../../utils/tmuxSocket.js";
 import { withPathAliases, getClaudeConfigDirs } from "../../utils/permissions/claudeStatePaths.js";
 import { getPlatform } from "../../utils/platform.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import {
   classifyUncPath,
   uncAdminShareToDrive,
@@ -39,9 +39,11 @@ import {
 } from "../../utils/wslMounts.js";
 import { windowsPowerShellProfileDirs, windowsAutoRunDirs } from "./windowsProfileDirs.js";
 import { isUnderSensitiveProfileDir, isAncestorOfSensitiveProfileDir } from "../../utils/wslPaths.js";
+import { countWhere } from "../../utils/collections.js";
 import {
-  profileSpellings,
   WINDOWS_PROFILE_FOLDER_NAMES,
+  foldCaseSimple,
+  profileSpellings,
   foldedPathSegments,
 } from "../../utils/windowsProfileFolders.js";
 import { foldCaseBasic } from "../../utils/pathIdentity.js";
@@ -49,7 +51,7 @@ import { identity } from "../../utils/identity.js";
 import { getErrnoCode } from "../../utils/errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e2fknt7w.js:18342-19169 placement
+//@ chunk-2214fejy.js:18345-19172 placement
 function classifyMountForServing(cwd, otherSide) {
   let homeDir = homedir();
   let claudeConfigDir = getClaudeConfigDir();
@@ -70,7 +72,7 @@ function classifyMountForServing(cwd, otherSide) {
   let mountedHomeBases = filterWslMountedPaths(homeBases);
   let configDirs = withPathAliases(getClaudeConfigDirs());
   let configRealDirs = getPlatform() === "windows" ? configDirs.map((dir) => realpathOrSpelling_2(dir)) : [];
-  let allConfigDirs = uniq([...configDirs, ...configRealDirs]);
+  let allConfigDirs = normalizeCaseForComparison_2([...configDirs, ...configRealDirs]);
   if (
     getPlatform() === "windows" &&
     ([...homeBases_2, ...allConfigDirs].some((path) => {
@@ -83,7 +85,7 @@ function classifyMountForServing(cwd, otherSide) {
   )
     return true;
   let mapped = homeBases.map((base) => normalizeCommandForPlatform(base));
-  let aliasedBases = uniq(bases.flatMap(pathWithMountAliases));
+  let aliasedBases = normalizeCaseForComparison_2(bases.flatMap(pathWithMountAliases));
   return (
     [...homeBases_2, ...allConfigDirs.flatMap(pathWithMountAliases)].some((path) =>
       bases.some((base) => isSameOrUnder(path, base)),
@@ -117,7 +119,7 @@ function classifyMountForServing(cwd, otherSide) {
     anyPairSameOrUnder([...windowsPowerShellProfileDirs(), ...windowsAutoRunDirs()], bases)
   );
 }
-//@ chunk-e2fknt7w.js:19169-19284 placement (2.1.88 match: execTmux, 0.805)
+//@ chunk-2214fejy.js:19172-19287 placement (2.1.88 match: execTmux, 0.805)
 function filterWslMountedPaths(paths) {
   return getPlatform() === "wsl"
     ? paths.filter((path) => {
@@ -126,10 +128,10 @@ function filterWslMountedPaths(paths) {
       })
     : [];
 }
-//@ chunk-e2fknt7w.js:19284-19486 placement
+//@ chunk-2214fejy.js:19287-19489 placement
 function profileMountPointsUnder(bases, scope) {
   let mountedBases = filterWslMountedPaths(bases);
-  return uniq([
+  return normalizeCaseForComparison_2([
     ...bases
       .flatMap((base) => pathWithMountAliases(base).slice(1))
       .filter((alias) => isUnderAny(alias, bases, mountedBases)),
@@ -143,7 +145,7 @@ function profileMountPointsUnder(bases, scope) {
       ),
   ]);
 }
-//@ chunk-e2fknt7w.js:19486-19634 placement
+//@ chunk-2214fejy.js:19489-19637 placement
 function windowsRootMountPoints(scope) {
   return pathWithMountAliases("/")
     .slice(1)
@@ -156,7 +158,7 @@ function windowsRootMountPoints(scope) {
         })),
     );
 }
-//@ chunk-e2fknt7w.js:19634-19737 placement
+//@ chunk-2214fejy.js:19637-19740 placement
 function isUnderAny(path, bases, mountedBases = []) {
   return (
     isUnderSensitiveProfileDir(path, bases) ||
@@ -164,7 +166,7 @@ function isUnderAny(path, bases, mountedBases = []) {
     (mountedBases.length > 0 && isUnderSensitiveProfileDir(path, mountedBases, "windows_on_wsl"))
   );
 }
-//@ chunk-e2fknt7w.js:19737-19844 placement
+//@ chunk-2214fejy.js:19740-19847 placement
 function isSameOrUnder(first, second) {
   let normalizedSecond = normalizeCommandForPlatform(second);
   let rewrittenFirst = rewriteUncHostFromReference(normalizeCommandForPlatform(first), normalizedSecond);
@@ -176,7 +178,7 @@ function isSameOrUnder(first, second) {
     isOnSameWslMount(first, second)
   );
 }
-//@ chunk-e2fknt7w.js:19844-20000 placement
+//@ chunk-2214fejy.js:19847-20003 placement
 function isRemoteUncHost(path) {
   switch (classifyUncPath(path)) {
     case undefined:
@@ -188,14 +190,24 @@ function isRemoteUncHost(path) {
       return true;
   }
 }
-//@ chunk-e2fknt7w.js:20000-20091 placement
+//@ chunk-2214fejy.js:20003-20094 placement
 var IPV4_PATTERN = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d?)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
-//@ chunk-e2fknt7w.js:20376-20453 affinity (2.1.88 match: execTmux, 1)
-function touchesWindowsRootFromWsl(args, opts) {
-  if (getPlatform() !== "wsl") return false;
-  return args.some((arg) => windowsProfileRoots(arg, opts).some(isRootOrSensitiveProfileAncestor));
+//@ chunk-2214fejy.js:20094-20379 sole-consumer
+function getWslWindowsUserDirs(dirs) {
+  if (getPlatform() !== "wsl") return [];
+  return normalizeCaseForComparison_2(
+    dirs.flatMap((dir) =>
+      driveMountsForPath(posix.normalize(dir)).flatMap((mount) => {
+        let filtered = mount.beneath.split("/").filter(Boolean);
+        let path = countWhere(mount.within.split("/"), Boolean);
+        return filtered.length >= 2 && path <= 2 && WINDOWS_PROFILE_FOLDER_NAMES(foldCaseSimple(filtered[0]))
+          ? [[mount.mountPoint, ...filtered.slice(path, 2)].join("/").replace(/^\/\//, "/")]
+          : [];
+      }),
+    ),
+  );
 }
-//@ chunk-e2fknt7w.js:20453-20545 placement
+//@ chunk-2214fejy.js:20456-20548 placement
 /**
  * 路径是根目录，或是敏感用户目录的祖先/包含者。
  */
@@ -206,7 +218,7 @@ function isRootOrSensitiveProfileAncestor(path) {
     isAncestorOfSensitiveProfileDir(path, ["/"], "windows_on_wsl")
   );
 }
-//@ chunk-e2fknt7w.js:20545-20727 placement
+//@ chunk-2214fejy.js:20548-20730 placement
 function windowsProfileRoots(path, scope) {
   let normalized = posix.normalize(path);
   return (
@@ -219,7 +231,7 @@ function windowsProfileRoots(path, scope) {
     ),
   );
 }
-//@ chunk-e2fknt7w.js:20727-21443 placement
+//@ chunk-2214fejy.js:20730-21446 placement
 function mountsUnderLaunch(bases, scope) {
   if (getPlatform() !== "wsl") return false;
   return bases.some((base) => {
@@ -269,14 +281,14 @@ ${otherWindowsMountLines}`;
     );
   });
 }
-//@ chunk-e2fknt7w.js:21443-21482 placement
+//@ chunk-2214fejy.js:21446-21485 placement
 /**
  * 路径里没有 Windows 用户目录片段。
  */
 function hasNoWindowsProfilePath(within) {
   return foldedPathSegments(within).length === 0;
 }
-//@ chunk-e2fknt7w.js:21482-21539 placement
+//@ chunk-2214fejy.js:21485-21542 placement
 /**
  * 路径首个片段是 Windows 用户目录名。
  */
@@ -284,17 +296,17 @@ function startsWithWindowsProfileFolder(within) {
   let segments = foldedPathSegments(within);
   return segments.length > 0 && WINDOWS_PROFILE_FOLDER_NAMES(segments[0]);
 }
-//@ chunk-e2fknt7w.js:21539-21598 placement
+//@ chunk-2214fejy.js:21542-21601 placement
 /**
  * WSL 挂载安全检查的辅助常量：Windows 用户目录判定缓存，以及直接当作根挂载的路径集合。
  */
 var windowsProfileMountCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ROOT_MOUNT_POINTS;
-deferInit("chunk-e2fknt7w.js:21539", () => {
+deferInit("chunk-2214fejy.js:21542", () => {
   windowsProfileMountCache = identity(new Map(), (cache) => cache.clear());
   ROOT_MOUNT_POINTS = new Set(["/", "/mnt"]);
 });
-//@ chunk-e2fknt7w.js:21598-21732 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-2214fejy.js:21601-21735 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function hasWindowsUserProfileDirs(realCandidate) {
   return WINDOWS_PROFILE_ROOT_NAMES.some((name) => {
     try {
@@ -305,12 +317,19 @@ function hasWindowsUserProfileDirs(realCandidate) {
     }
   });
 }
-//@ chunk-e2fknt7w.js:21732-21804 placement
+//@ chunk-2214fejy.js:21735-21807 placement
 var WINDOWS_PROFILE_ROOT_NAMES = ["Users", "Documents and Settings", "Dokumente und Einstellungen"];
-//@ chunk-e2fknt7w.js:21804-21869 placement
+//@ chunk-2214fejy.js:21807-21872 placement
 function anyPairSameOrUnder(first, second) {
   return first.some((left) =>
     second.some((right) => isSameOrUnder(right, left) || isSameOrUnder(left, right)),
   );
 }
-export { classifyMountForServing, isRemoteUncHost, profileMountPointsUnder, windowsRootMountPoints };
+export {
+  classifyMountForServing,
+  isRemoteUncHost,
+  profileMountPointsUnder,
+  windowsRootMountPoints,
+  windowsProfileRoots,
+  isRootOrSensitiveProfileAncestor,
+};

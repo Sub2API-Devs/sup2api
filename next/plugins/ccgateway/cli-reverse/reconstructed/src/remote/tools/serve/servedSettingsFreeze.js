@@ -3,9 +3,9 @@
  *
  * 提供工具期间冻结项目/本地设置（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-g4k0hvs5.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gw6tgnv9.js (8)
  * attribution: placement 8
  */
 import { readFlagWithOverride } from "../../../services/analytics/flagOverrides.js";
@@ -33,21 +33,18 @@ import { hasCommand } from "../../../services/voice.js";
 import { stripBomAndCarriageReturns } from "../../../utils/settings/settingsReview.js";
 import { REMOTE_TOOLS_CONSENT_TEXT } from "../consentText.js";
 import { lit, fromEnum } from "../../../services/analytics/safeMetadata.js";
-import { count } from "../../../utils/collections.js";
-import { deferInit, beginDeferredInits, runDeferredInits } from "../../../../runtime/deferred-init.js";
+import { countWhere } from "../../../utils/collections.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
-// This module is the first evaluated of an import cycle of 2 modules closed by ../../../services/voice.js;
-// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
-beginDeferredInits("src/services/voice.js");
-//@ chunk-g4k0hvs5.js:918-950 placement
+//@ chunk-gw6tgnv9.js:918-950 placement
 var TENGU_SYNCHRONOUS_BUNNY = "tengu_synchronous_bunny";
-//@ chunk-g4k0hvs5.js:950-986 placement
+//@ chunk-gw6tgnv9.js:950-986 placement
 function isSynchronousBunnyEnabled() {
   return readFlagWithOverride(TENGU_SYNCHRONOUS_BUNNY, {
     safe: true,
   });
 }
-//@ chunk-g4k0hvs5.js:986-1135 placement
+//@ chunk-gw6tgnv9.js:986-1135 placement
 /**
  * 仓库层设置冻结的事件名与最短刷新间隔：changed、changed-between、taken-as-found、record-unavailable 四种，及 5 s 间隔。
  */
@@ -56,13 +53,13 @@ var SERVED_SETTINGS_CHANGED_BETWEEN = "served-settings-changed-between";
 var SERVED_SETTINGS_TAKEN_AS_FOUND = "served-settings-taken-as-found";
 var SERVED_SETTINGS_RECORD_UNAVAILABLE = "served-settings-record-unavailable";
 var SETTINGS_FREEZE_MIN_REFRESH_MS = 5000;
-//@ chunk-g4k0hvs5.js:1437-1516 placement
+//@ chunk-gw6tgnv9.js:1437-1516 placement
 var RULE_SOURCE_TO_SETTINGS_NAME = {
   project: "projectSettings",
   local: "localSettings",
   legacy: "localSettings",
 };
-//@ chunk-g4k0hvs5.js:1516-1671 placement
+//@ chunk-gw6tgnv9.js:1516-1671 placement
 function notifySettingsSourcesChanged(sources) {
   try {
     invalidateCommandNames();
@@ -84,14 +81,14 @@ function notifySettingsSourcesChanged(sources) {
       logError(toError(error));
     }
 }
-//@ chunk-g4k0hvs5.js:1671-1696 placement
+//@ chunk-gw6tgnv9.js:1671-1696 placement
 var SETTINGS_REFRESH_DEBOUNCE_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var weakSet;
-deferInit("chunk-g4k0hvs5.js:1671", () => {
+deferInit("chunk-gw6tgnv9.js:1671", () => {
   SETTINGS_REFRESH_DEBOUNCE_MS = 2000;
   weakSet = new WeakSet();
 });
-//@ chunk-g4k0hvs5.js:1696-2097 placement
+//@ chunk-gw6tgnv9.js:1696-2097 placement
 /**
  * 创建仓库层设置刷新器：设置变化时异步重新读取 projectSettings 与 localSettings。
  */
@@ -131,7 +128,7 @@ function createRepoTiersRefresher(store, initialKey, initialTiers) {
     return lastTiers;
   };
 }
-//@ chunk-g4k0hvs5.js:2097-4073 placement
+//@ chunk-gw6tgnv9.js:2097-4073 placement
 /**
  * 远程提供工具期间冻结项目/本地设置，自己的写入除外
  */
@@ -208,7 +205,7 @@ function freezeServedSettings(onNotice, store = createAcceptedSettingsStore()) {
     let any = ownerSettings.firstSeen.some((file) => file.widening);
     logFreeze({
       op: lit("baseline"),
-      files_present: count(ownerSettings.firstSeen, (file) => file.present),
+      files_present: countWhere(ownerSettings.firstSeen, (file) => file.present),
       prior_serving: priorServing,
       widening_keys: any,
     });
@@ -307,8 +304,4 @@ function freezeServedSettings(onNotice, store = createAcceptedSettingsStore()) {
     },
   };
 }
-
-// The import cycle this module closes (2 modules) is complete: run the load-time work its statements
-// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
-runDeferredInits("src/remote/tools/serve/servedSettingsFreeze.js");
-export { freezeServedSettings, SETTINGS_FREEZE_MIN_REFRESH_MS };
+export { SETTINGS_FREEZE_MIN_REFRESH_MS, freezeServedSettings };

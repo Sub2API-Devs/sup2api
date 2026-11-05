@@ -3,19 +3,19 @@
  *
  * 2.1.316 新增：文本换行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7p2hc4jn.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-42wa4pww.js (2)
  * attribution: placement 2
  */
 import { wrapAnsi } from "../ink/wrapAnsi.js";
 import { expandTabs } from "../ink/tabstops.js";
 import { wrapByDisplayWidth } from "./Cursor.js";
 
-//@ chunk-7p2hc4jn.js:19065-19109 placement
+//@ chunk-42wa4pww.js:19065-19109 placement
 var ANSI_OR_C1_RE = /[\u001b\u0080-\u009f]/g;
 var WORD_JOINER = "\u2060";
-//@ chunk-7p2hc4jn.js:19109-19521 placement
+//@ chunk-42wa4pww.js:19109-19521 placement
 /**
  * 把文本按宽度折行成行列表，折行结果与原文不一致时退回简单切分。
  */

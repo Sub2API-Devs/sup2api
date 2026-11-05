@@ -3,12 +3,11 @@
  *
  * 从消息中按 tool_use_id 找到对应工具与 tool_use 的 hook。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserToolResultMessage/utils.tsx
- * pieces: chunk-ah34pb7m.js (3)
- * attribution: sole-consumer 2, fingerprint 1
+ * pieces: chunk-wjygkcr4.js (2)
+ * attribution: sole-consumer 1, fingerprint 1
  */
-import { init_react_production } from "../../../../vendor/react/cjs/react.production.js";
 import { BRIEF_TOOL_NAME } from "../../../tools/BriefTool/prompt.js";
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { useHost } from "../../../context/session.js";
@@ -16,17 +15,12 @@ import { displayOnlyMcpTool } from "../../../tools/MCPTool/displayOnlyTool.js";
 import { findToolByName, getAllBaseToolsFromRegistry } from "../../../Tool.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:220401-220405 sole-consumer
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:220401", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:220405-220426 sole-consumer
+//@ chunk-wjygkcr4.js:227350-227371 sole-consumer
 var BRIEF_TOOL_NAME_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:220405", () => {
+deferInit("chunk-wjygkcr4.js:227350", () => {
   BRIEF_TOOL_NAME_SET = new Set([BRIEF_TOOL_NAME]);
 });
-//@ chunk-ah34pb7m.js:220426-220929 fingerprint (2.1.88 match: useGetToolFromMessages, 1)
+//@ chunk-wjygkcr4.js:227371-227874 fingerprint (2.1.88 match: useGetToolFromMessages, 1)
 function useGetToolFromMessages(toolUseID, tools, lookups) {
   let $ = useMemoCache(8);
   let toolName = lookups.toolUseByToolUseID.get(toolUseID)?.name;

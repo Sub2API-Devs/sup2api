@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：doctor/checkup 内置技能：安装与配置自检提示词（含 prompt-audit 子命令），不受 bundled skill 总开关影响。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hantmvxa.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ne2890fx.js (5)
  * attribution: placement 5
  */
 import { isArtifactMountMode } from "../../services/artifacts/artifactMount.js";
@@ -27,13 +27,13 @@ import { matchSubcommand, PROMPT_AUDIT_ARGS } from "./claudeApiSkill.js";
 import { isCommandEnabled, isSkillOff } from "../../commands.js";
 import { getEffortValue, getUltracodeRequested } from "../../utils/permissions/toolPermissionContext.js";
 
-//@ chunk-hantmvxa.js:112722-113160 placement
+//@ chunk-ne2890fx.js:112903-113341 placement
 /**
  * "/doctor prompt-audit" 在 claude-api skill 不可用（被禁用、skillOverrides 关闭、disableBundledSkills 或 CLAUDE_CODE_DISABLE_BUNDLED_SKILLS）时发给模型的说明。
  */
 var PROMPT_AUDIT_UNAVAILABLE_PROMPT =
   "I ran `/doctor prompt-audit`, which hands off to the bundled claude-api skill's prompt audit. That skill is not available in this session: it is disabled, set to off in the skillOverrides setting, or turned off with every other bundled skill by the disableBundledSkills setting or CLAUDE_CODE_DISABLE_BUNDLED_SKILLS. Tell me that in a sentence or two, including that undoing whichever applies restores the audit, and stop there.";
-//@ chunk-hantmvxa.js:113160-160402 placement
+//@ chunk-ne2890fx.js:113341-160583 placement
 /**
  * 生成 /doctor（checkup）的完整提示词（约 47 KB）：安装健康、未用扩展、本地记忆去重、CLAUDE.md 瘦身、慢 hooks、权限等检查步骤；参数决定检查编号是否含第 10 项。
  */
@@ -144,10 +144,10 @@ ${
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION
@@ -205,14 +205,14 @@ Then, only if check 8 or 9 proposed anything, the permission question \u2014 exp
 
 If a check has no findings, say so in one line and move on. Keep the report tight \u2014 no padding, no restating these instructions.`;
 }
-//@ chunk-hantmvxa.js:160402-160444 placement
+//@ chunk-ne2890fx.js:160583-160625 placement
 /**
  * 判断会话是桥接/传输会话，或非交互会话且传输可能持久。
  */
 function sessionCannotTakeOver(session) {
   return isBridgeOrTransport(session) || (getIsNonInteractiveSession() && mayTransportPersist(session));
 }
-//@ chunk-hantmvxa.js:160444-161738 placement
+//@ chunk-ne2890fx.js:160625-161919 placement
 /**
  * 生成 /doctor 第 10 项"what /usage flagged"：满足开关与会话条件时读最近 7 天本地会话的用量证据，逐行 JSON 列出 /usage 标记的问题；否则返回空串。
  */
@@ -255,7 +255,7 @@ ${flagged.map((item) =>
 \`\`\`
 `;
 }
-//@ chunk-hantmvxa.js:161738-163716 placement
+//@ chunk-ne2890fx.js:161919-163897 placement
 /**
  * 注册 doctor（别名 checkup）bundled skill：DISABLE_DOCTOR_COMMAND 关闭；不受 bundled skill 总开关影响；需要工作区；"prompt-audit [<path>]" 子模式转交 claude-api skill。
  */

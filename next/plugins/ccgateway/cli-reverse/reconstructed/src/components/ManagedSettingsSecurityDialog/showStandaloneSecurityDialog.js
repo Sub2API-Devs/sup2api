@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。在 REPL 之外单独渲染托管设置安全确认对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kz1epgqe.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ax9wtj1f.js (2)
  * attribution: placement 2
  */
 import { isWithinRecentInput } from "../../hooks/useRecentInputGuard.js";
@@ -18,7 +18,7 @@ import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useInputClock } from "../../ink/components/Input.js";
 import { ManagedSettingsSecurityDialogHost } from "./ManagedSettingsSecurityDialog.js";
 
-//@ chunk-kz1epgqe.js:480-1002 placement (2.1.88 match: checkManagedSettingsSecurity, 0.439)
+//@ chunk-ax9wtj1f.js:480-1002 placement (2.1.88 match: checkManagedSettingsSecurity, 0.44)
 /**
  * 在 REPL 之外单独渲染托管设置安全确认对话框。
  */
@@ -69,7 +69,7 @@ var showStandaloneSecurityDialog = (settings, keepOpen, baseline) =>
       reject(error);
     });
   });
-//@ chunk-kz1epgqe.js:1002-1401 placement
+//@ chunk-ax9wtj1f.js:1002-1401 placement
 /**
  * 独立渲染的托管设置安全确认对话框
  */

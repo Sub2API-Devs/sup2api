@@ -3,9 +3,9 @@
  *
  * 本模块实际只剩"是否为带标签的系统性用户文本"判定函数；真正的 UserTextMessage 组件是未归属的 chunk-ah34pb7m.js#I7（见过程文档）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserTextMessage.tsx
- * pieces: chunk-ah34pb7m.js (8)
+ * pieces: chunk-wjygkcr4.js (8)
  * attribution: placement 8
  */
 import { NO_CONTENT_MESSAGE } from "../../constants/messages.js";
@@ -76,7 +76,7 @@ import {
 import { CtrlOToExpandHint } from "../CtrlOToExpand.js";
 import { Text } from "../../ink/components/Text.js";
 
-//@ chunk-ah34pb7m.js:119088-119201 placement
+//@ chunk-wjygkcr4.js:120780-120893 placement
 /**
  * 判断用户消息是否属于系统产生（无内容、非计划、非对等/观察者且为带标签的系统文本）。
  */
@@ -86,7 +86,7 @@ function isSystemishUserText(message, text) {
   if (isPeerOrObserver(message.origin)) return false;
   return isTaggedSystemUserText(text);
 }
-//@ chunk-ah34pb7m.js:119201-119899 placement
+//@ chunk-wjygkcr4.js:120893-121592 placement
 /**
  * 判断用户文本是否是系统产生的带标签文本（唤醒、命令输出、通知等）。
  */
@@ -118,7 +118,7 @@ function isTaggedSystemUserText(text) {
     return parseUpdates(text).length === 0;
   return false;
 }
-//@ chunk-ah34pb7m.js:119899-126618 placement
+//@ chunk-wjygkcr4.js:121592-128326 placement
 /**
  * 用户文本消息总渲染（计划、命令、插件提示、任务投递、发言人标签等分支）。
  */
@@ -728,7 +728,7 @@ function UserTextMessage(props) {
   } else promptText = $[139];
   return promptText;
 }
-//@ chunk-ah34pb7m.js:126618-127031 placement
+//@ chunk-wjygkcr4.js:128326-128739 placement
 /**
  * 用户文本内容或系统行显示。
  */
@@ -770,7 +770,7 @@ function UserTextContent(props) {
   } else userLocalCommandOutputMessageElement = $[8];
   return userLocalCommandOutputMessageElement;
 }
-//@ chunk-ah34pb7m.js:127031-127180 placement
+//@ chunk-wjygkcr4.js:128739-128888 placement
 /**
  * 渲染队友消息项：panel 直接返回节点，否则渲染 TeammateMessageContent。
  */
@@ -788,7 +788,7 @@ function renderTeammateContentItem(item, key) {
         key,
       );
 }
-//@ chunk-ah34pb7m.js:127180-127346 placement
+//@ chunk-wjygkcr4.js:128888-129054 placement
 /**
  * 渲染合并后的队友消息项：panel 直接返回，否则显示 ctrl+o 展开提示（含未验证标记与计数）。
  */
@@ -806,11 +806,11 @@ function renderCoalescedTeammateItem(item, key) {
         key,
       );
 }
-//@ chunk-ah34pb7m.js:127346-127377 placement
+//@ chunk-wjygkcr4.js:129054-129085 placement
 function hookDisplayName(hook) {
   return hook.name;
 }
-//@ chunk-ah34pb7m.js:127377-127634 placement
+//@ chunk-wjygkcr4.js:129085-129344 placement
 /**
  * "Async hook X completed" / "N async X hooks completed" 片段（多个时以逗号连接）。
  */
@@ -848,9 +848,9 @@ function renderAsyncHookCompletedItem(group, index) {
   );
 }
 export {
+  UserTextMessage,
   isTaggedSystemUserText,
   isSystemishUserText,
-  UserTextMessage,
   renderTeammateContentItem,
   renderCoalescedTeammateItem,
   hookDisplayName,

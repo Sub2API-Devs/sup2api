@@ -1,13 +1,13 @@
 /**
  * json-schema-traverse/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: json-schema-traverse@1.0.0
- * pieces: chunk-s82q9s4x.js (1)
+ * pieces: chunk-xcs4sv9h.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 
-//@ chunk-s82q9s4x.js:38567-39807 cjs-fingerprint
+//@ chunk-xcs4sv9h.js:38567-39807 cjs-fingerprint
 var require_json_schema_traverse = __commonJS(function (cjsExports, cjsModule) {
   var traverse = (cjsModule.exports = function (schema, opts, cb) {
     if (typeof opts == "function") {

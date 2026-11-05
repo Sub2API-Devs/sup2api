@@ -3,10 +3,10 @@
  *
  * 明文凭据存储 ~/.claude/.credentials.json（0600），以及宿主托管凭据后端与 diskless 空后端的选择。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/secureStorage/plainTextStorage.ts
- * pieces: chunk-b29hdd5e.js (20)
- * attribution: placement 2, fingerprint 2, layout 16
+ * pieces: chunk-5me9t3vk.js (20)
+ * attribution: placement 14, fingerprint 2, layout 4
  */
 import { join } from "path";
 import { chmod } from "fs/promises";
@@ -16,14 +16,15 @@ import { READ_FAILED, mutateSecureStorage } from "./storageWriteLock.js";
 import { getFsImplementation } from "../fsOperations.js";
 import { jsonParse, jsonStringify } from "../slowOperations.js";
 import { getErrnoCode } from "../errors.js";
-import { writeFileAtomic } from "../atomicPublishWrite.js";
+import { filePath } from "../atomicPublishWrite.js";
+import { preservedTmpOf } from "./preservedTmpNotice.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
 import { HostScoped } from "../hostScoped.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-b29hdd5e.js:2212-2218 placement
+//@ chunk-5me9t3vk.js:2249-2255 placement
 var plainTextStoragePromise;
-//@ chunk-b29hdd5e.js:2218-2287 placement
+//@ chunk-5me9t3vk.js:2255-2324 placement
 /**
  * isPlainTextStorageAvailable：明文凭据存储是否可用。
  */
@@ -32,7 +33,7 @@ function isPlainTextStorageAvailable() {
   plainTextStoragePromise = Promise.resolve(false);
   return plainTextStoragePromise;
 }
-//@ chunk-b29hdd5e.js:2351-2455 fingerprint (2.1.88 match: getStoragePath, 1)
+//@ chunk-5me9t3vk.js:2388-2492 fingerprint (2.1.88 match: getStoragePath, 1)
 /**
  * 明文凭据位置：<配置目录>/.credentials.json。
  */
@@ -44,23 +45,23 @@ function getStoragePath() {
     storagePath: join(storageDir, ".credentials.json"),
   };
 }
-//@ chunk-b29hdd5e.js:2455-2500 layout
+//@ chunk-5me9t3vk.js:2492-2537 layout
 function getStoragePathIfDiskful() {
   return isDiskless() ? null : getStoragePath().storagePath;
 }
-//@ chunk-b29hdd5e.js:2500-2553 layout
+//@ chunk-5me9t3vk.js:2537-2590 layout
 var PLAINTEXT_STORAGE_WARNING = "Warning: Storing credentials in plaintext.";
-//@ chunk-b29hdd5e.js:2553-2692 layout
+//@ chunk-5me9t3vk.js:2590-2729 layout
 function classifyReadErrorLenient(code, platform) {
   if (code === "ENOENT" || code === "EISDIR" || code === "ENOTDIR") return null;
   if ((code === "EACCES" || code === "EPERM") && platform !== "win32") return null;
   return READ_FAILED;
 }
-//@ chunk-b29hdd5e.js:2692-2736 layout
+//@ chunk-5me9t3vk.js:2729-2773 layout
 function classifyReadErrorStrict(code, platform) {
   return code === "ENOENT" ? null : READ_FAILED;
 }
-//@ chunk-b29hdd5e.js:2736-3475 layout
+//@ chunk-5me9t3vk.js:2773-3567 fingerprint (2.1.88 match: plainTextStorage, 0.398)
 /**
  * 明文凭据文件后端（read/readStrict/write(权限 0600)/remove）与 diskless 会话的空后端。
  */
@@ -97,13 +98,18 @@ var fileCredentialBackend = {
     try {
       let { storageDir, storagePath } = getStoragePath();
       await getFsImplementation().mkdir(storageDir);
-      await writeFileAtomic(storagePath, jsonStringify(data), 384);
+      await filePath(storagePath, jsonStringify(data), {
+        mode: 384,
+        flush: true,
+        flushForgivesEbadf: true,
+      });
       await chmod(storagePath, 384);
       return {
         success: true,
         warning: PLAINTEXT_STORAGE_WARNING,
       };
-    } catch {
+    } catch (error) {
+      await preservedTmpOf(error);
       return {
         success: false,
       };
@@ -132,7 +138,7 @@ var disklessCredentialBackend = {
   }),
   remove: async () => true,
 };
-//@ chunk-b29hdd5e.js:3475-3651 layout
+//@ chunk-5me9t3vk.js:3567-3743 placement
 function storeReadToValue(result) {
   switch (result.state) {
     case "present":
@@ -149,7 +155,7 @@ function storeReadToValue(result) {
     }
   }
 }
-//@ chunk-b29hdd5e.js:3651-4385 layout
+//@ chunk-5me9t3vk.js:3743-4477 placement
 /**
  * 宿主托管凭据存储后端：读写走宿主提供的 readCredentials/writeCredentials/deleteCredentials，并维护本地副本与代数。
  */
@@ -204,7 +210,7 @@ function createHostStoreBackend(store) {
     },
   };
 }
-//@ chunk-b29hdd5e.js:4385-4449 layout
+//@ chunk-5me9t3vk.js:4477-4541 placement
 async function trackStoreOp(promise, storeCopyState) {
   try {
     return await promise;
@@ -213,21 +219,21 @@ async function trackStoreOp(promise, storeCopyState) {
     throw error;
   }
 }
-//@ chunk-b29hdd5e.js:4449-4482 layout
+//@ chunk-5me9t3vk.js:4541-4574 placement
 class StoreCopyState {
   copy = undefined;
   generation = 0;
 }
-//@ chunk-b29hdd5e.js:4482-4505 layout
+//@ chunk-5me9t3vk.js:4574-4597 placement
 var STORE_COPY_PER_HOST; // deferred: uses StoreCopyState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-b29hdd5e.js:4482", () => {
+deferInit("chunk-5me9t3vk.js:4574", () => {
   STORE_COPY_PER_HOST = new HostScoped(() => new StoreCopyState());
 });
-//@ chunk-b29hdd5e.js:4505-4540 layout
+//@ chunk-5me9t3vk.js:4597-4632 placement
 function getStoreCopyState() {
   return STORE_COPY_PER_HOST.of(getRootSession().host);
 }
-//@ chunk-b29hdd5e.js:4540-4603 layout
+//@ chunk-5me9t3vk.js:4632-4695 placement
 function setStoreCopy(storeCopyState, storagePath, text) {
   storeCopyState.copy = {
     storagePath,
@@ -235,7 +241,7 @@ function setStoreCopy(storeCopyState, storagePath, text) {
   };
   storeCopyState.generation++;
 }
-//@ chunk-b29hdd5e.js:4603-4832 layout
+//@ chunk-5me9t3vk.js:4695-4924 placement
 function recordStoreRead(storeCopyState, read, storagePathIfDiskful, generation) {
   if (generation !== storeCopyState.generation) {
     invalidateStoreCopy(storeCopyState);
@@ -259,16 +265,16 @@ function recordStoreRead(storeCopyState, read, storagePathIfDiskful, generation)
     }
   }
 }
-//@ chunk-b29hdd5e.js:4832-4875 layout
+//@ chunk-5me9t3vk.js:4924-4967 placement
 function invalidateStoreCopy(state) {
   state.copy = undefined;
   state.generation++;
 }
-//@ chunk-b29hdd5e.js:4875-4897 layout
+//@ chunk-5me9t3vk.js:4967-4989 placement
 function invalidatePlainTextStoreCopy() {
   invalidateStoreCopy(getStoreCopyState());
 }
-//@ chunk-b29hdd5e.js:4897-4947 layout
+//@ chunk-5me9t3vk.js:4989-5039 placement
 function getCredentialBackend(store) {
   return isStorageV5Enabled() && store !== undefined
     ? createHostStoreBackend(store)
@@ -276,11 +282,11 @@ function getCredentialBackend(store) {
       ? disklessCredentialBackend
       : fileCredentialBackend;
 }
-//@ chunk-b29hdd5e.js:4947-5478 fingerprint (2.1.88 match: plainTextStorage, 0.372)
+//@ chunk-5me9t3vk.js:5039-5570 placement
 /**
  * 明文安全存储（name=plaintext）：同步 read 读 .credentials.json（宿主托管时可读本地副本）；readAsync/readAsyncStrict/update/delete 按情况选宿主后端、文件后端或 diskless 空后端；写入返回 "Warning: Storing credentials in plaintext."。
  */
-var plainTextStorage = {
+var plainTextStore = {
   name: "plaintext",
   osGuarded: false,
   read(options) {
@@ -311,7 +317,7 @@ var plainTextStorage = {
     return getCredentialBackend(store).readStrict(options?.unreadableFileAs === "failure");
   },
   mutate(mutate, options) {
-    return mutateSecureStorage(plainTextStorage, mutate, options);
+    return mutateSecureStorage(plainTextStore, mutate, options);
   },
   update(data, store) {
     return getCredentialBackend(store).write(data);
@@ -321,8 +327,8 @@ var plainTextStorage = {
   },
 };
 export {
+  plainTextStore,
   invalidatePlainTextStoreCopy,
-  isPlainTextStorageAvailable,
-  plainTextStorage,
   PLAINTEXT_STORAGE_WARNING,
+  isPlainTextStorageAvailable,
 };

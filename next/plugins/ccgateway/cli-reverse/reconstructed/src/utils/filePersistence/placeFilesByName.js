@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。按名字把文件放到用户 home 工作文件夹。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-x1hcas72.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hab8hy4a.js (9)
  * attribution: placement 9
  */
 import { posix } from "path";
@@ -40,7 +40,7 @@ import { isFirstPartyRemoteSession } from "../userDataRoots.js";
 import { env } from "../env.js";
 import { waitForAttachmentFiles } from "../../bridge/attachmentFilesWait.js";
 
-//@ chunk-x1hcas72.js:1158-1434 placement
+//@ chunk-hab8hy4a.js:1158-1434 placement
 /**
  * placeFilesByName 的预算常量：PLACEMENT_TIME_BUDGET_MS=3000 是单次放置的默认时间预算（不是文件数），MAX_COPIED_BYTES=134217728 是字节预算；名字曾按“文件类型/复制上限”误起。
  */
@@ -74,7 +74,7 @@ var PROJECT_FILE_NAMES = new Set([
   "requirements.txt",
 ]);
 var TEST_TEXT_FILE_RE = /^test.*\.txt$/;
-//@ chunk-x1hcas72.js:1434-1754 placement
+//@ chunk-hab8hy4a.js:1434-1754 placement
 function fileNameRefusal(name) {
   if (name.includes(posix.sep)) return "has_directory";
   if (Buffer.byteLength(name) > MAX_HOME_FILE_NAME_LENGTH) return "too_long";
@@ -87,7 +87,7 @@ function fileNameRefusal(name) {
   if (!PLACEABLE_DATA_EXTENSIONS.has(folded.slice(index + 1))) return "not_data";
   return PROJECT_FILE_NAMES.has(folded) || TEST_TEXT_FILE_RE.test(folded) ? "project_file" : undefined;
 }
-//@ chunk-x1hcas72.js:1754-2415 placement
+//@ chunk-hab8hy4a.js:1754-2415 placement
 /**
  * 按名放置单个文件
  */
@@ -141,13 +141,13 @@ async function placeOneFile(homeDir, { fileUuid, name }, maxBytes) {
         bytes: placeResult.outcome === "placed" ? bytes.length : 0,
       };
 }
-//@ chunk-x1hcas72.js:2415-2485 placement
+//@ chunk-hab8hy4a.js:2415-2485 placement
 async function placeBytesAsHomeFile(homeDir, relativePath, bytes, judgedPaths) {
   return await withBytesInTemporaryFile(homeDir, relativePath, bytes, (stagePath) =>
     publishHomeFile(stagePath, homeDir, relativePath, judgedPaths),
   );
 }
-//@ chunk-x1hcas72.js:2485-2748 placement
+//@ chunk-hab8hy4a.js:2485-2748 placement
 async function withBytesInTemporaryFile(homeDir, relativePath, bytes, fn) {
   let joined = posix.join(
     homeDir,
@@ -169,7 +169,7 @@ async function withBytesInTemporaryFile(homeDir, relativePath, bytes, fn) {
     await unlink(joined).catch(() => {});
   }
 }
-//@ chunk-x1hcas72.js:2748-3151 placement
+//@ chunk-hab8hy4a.js:2748-3151 placement
 async function notePlacedCopy(homeDir, { fileUuid, name }, { size, sha256 }) {
   let registry = filesPlacedByNameRegistry();
   let registryKey = nfc(name);
@@ -196,7 +196,7 @@ async function notePlacedCopy(homeDir, { fileUuid, name }, { size, sha256 }) {
       }),
   });
 }
-//@ chunk-x1hcas72.js:3151-3283 placement
+//@ chunk-hab8hy4a.js:3151-3283 placement
 var EMPTY_PLACEMENT_STATS = {
   filesWait: "not_reached",
   filesWaitMs: 0,
@@ -206,7 +206,7 @@ var EMPTY_PLACEMENT_STATS = {
   namedInCallAlreadyPresent: 0,
   counts: {},
 };
-//@ chunk-x1hcas72.js:3283-4680 placement
+//@ chunk-hab8hy4a.js:3283-4680 placement
 /**
  * 按名字把文件放到用户 home 工作文件夹。
  */
@@ -268,7 +268,7 @@ async function placeFilesByName(
   else if (placedOrPresent > 0) logFeatureSad("ccr_turn_handoff_files_by_name", "some_files_absent");
   else logFeatureBad("ccr_turn_handoff_files_by_name", "all_files_absent");
 }
-//@ chunk-x1hcas72.js:4680-6337 placement
+//@ chunk-hab8hy4a.js:4680-6337 placement
 /**
  * 按名放置文件的主流程
  */
@@ -371,10 +371,10 @@ async function placeFilesUnchecked(fileNames, args, runContext, timeBudgetMs, by
   };
 }
 export {
-  placeBytesAsHomeFile,
   COPIED_BYTES_LIMIT,
   fileNameRefusal,
   withBytesInTemporaryFile,
   notePlacedCopy,
+  placeBytesAsHomeFile,
   placeFilesByName,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：后台会话派发：确保守护进程运行（必要时询问安装为系统服务）、经守护进程启动会话、工作区信任与清理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bg51yd13.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gwh0qn2w.js (29)
  * attribution: placement 29
  */
 import { createInterface } from "readline";
@@ -89,11 +89,11 @@ import { stripInvisibleChars } from "../../utils/invisibleChars.js";
 import { setShellIfWindows } from "../../utils/windowsPaths.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bg51yd13.js:4049-4108 placement
+//@ chunk-gwh0qn2w.js:4120-4179 placement
 var startDaemonStderrNotice = () =>
   process.stderr.write(`Starting ${bgSupervisorNoun()}\u2026
 `);
-//@ chunk-bg51yd13.js:4108-6811 placement
+//@ chunk-gwh0qn2w.js:4179-6882 placement
 /**
  * 确保后台守护进程在运行；未运行时询问是否安装为服务（y/N/never/once）。
  */
@@ -239,7 +239,7 @@ Run 'claude daemon uninstall' to undo.
       return daemon;
   }
 }
-//@ chunk-bg51yd13.js:6811-7117 placement
+//@ chunk-gwh0qn2w.js:6882-7188 placement
 async function readServiceInstallAnswer(question) {
   let rl = createInterface({
     input: process.stdin,
@@ -262,7 +262,7 @@ async function readServiceInstallAnswer(question) {
     rl.close();
   }
 }
-//@ chunk-bg51yd13.js:7117-7779 placement
+//@ chunk-gwh0qn2w.js:7188-7850 placement
 function describeServiceInstallBlocked(serverLockStatus) {
   switch (serverLockStatus.outcome) {
     case "eperm":
@@ -273,12 +273,12 @@ function describeServiceInstallBlocked(serverLockStatus) {
       return `Not installing the background service: ${lockHolderProblemText(serverLockStatus)} \u2014 connecting to whichever daemon is available. If this repeats, kill pid ${serverLockStatus.pid} (or run 'claude daemon stop' again), then re-run to install.`;
   }
 }
-//@ chunk-bg51yd13.js:7779-7807 placement
+//@ chunk-gwh0qn2w.js:7850-7878 placement
 /**
  * 当前构建里函数体为空（恒返回 undefined）：按查询词给后台会话打匹配分的占位。
  */
 async function placeholderJobNameScore(storage, isQuiet = false) {}
-//@ chunk-bg51yd13.js:7807-8006 placement
+//@ chunk-gwh0qn2w.js:7878-8077 placement
 /**
  * 按查询词给后台会话打匹配分：名字完全相同 3、名字包含 2、任务文本（displayIntent/intent）包含 1、否则 0；查询为空返回 0。
  */
@@ -291,7 +291,7 @@ function rankJobNameMatch(state, needle) {
     ? 1
     : 0;
 }
-//@ chunk-bg51yd13.js:8006-8163 placement
+//@ chunk-gwh0qn2w.js:8077-8234 placement
 class InFlightPromiseTracker {
   #e = new Map();
   get(key) {
@@ -305,16 +305,16 @@ class InFlightPromiseTracker {
     });
   }
 }
-//@ chunk-bg51yd13.js:8163-8188 placement
+//@ chunk-gwh0qn2w.js:8234-8259 placement
 var IN_FLIGHT_DISPATCH_SLOT; // deferred: uses InFlightPromiseTracker of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-bg51yd13.js:8163", () => {
+deferInit("chunk-gwh0qn2w.js:8234", () => {
   IN_FLIGHT_DISPATCH_SLOT = new HostScoped(() => new InFlightPromiseTracker());
 });
-//@ chunk-bg51yd13.js:8188-8225 placement
+//@ chunk-gwh0qn2w.js:8259-8296 placement
 function inFlightDispatches() {
   return IN_FLIGHT_DISPATCH_SLOT.of(getRootSession().host);
 }
-//@ chunk-bg51yd13.js:8225-8365 placement
+//@ chunk-gwh0qn2w.js:8296-8436 placement
 /**
  * 把一次后台派发的 Promise 按 short id 登记进在途表（结果归一成 {ok,error,alive}），原样返回该 Promise。
  */
@@ -341,16 +341,16 @@ function trackBgDispatch(key, promise) {
   );
   return promise;
 }
-//@ chunk-bg51yd13.js:8365-8399 placement
+//@ chunk-gwh0qn2w.js:8436-8470 placement
 function getInFlightDispatch(key) {
   return inFlightDispatches().get(key);
 }
-//@ chunk-bg51yd13.js:8399-8425 placement
+//@ chunk-gwh0qn2w.js:8470-8496 placement
 var TRUNCATE_MIDDLE_HEAD_TAIL = {
   head: 60,
   tail: 180,
 };
-//@ chunk-bg51yd13.js:8425-19618 placement
+//@ chunk-gwh0qn2w.js:8496-19689 placement
 /**
  * 生成 claude rm 的结果与后续指引（未推送提交、强制移除工作树等，约 11 KB）。
  */
@@ -602,10 +602,10 @@ function formatRmOutcome(outcome, { worktree, jobId }) {
     }
   }
 }
-//@ chunk-bg51yd13.js:19618-19950 placement
+//@ chunk-gwh0qn2w.js:19689-20021 placement
 var CRON_MATCH_OPERATORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var keys;
-deferInit("chunk-bg51yd13.js:19618", () => {
+deferInit("chunk-gwh0qn2w.js:19689", () => {
   CRON_MATCH_OPERATORS = {
     is: {
       op: "eq",
@@ -654,7 +654,7 @@ deferInit("chunk-bg51yd13.js:19618", () => {
   };
   keys = Object.keys(CRON_MATCH_OPERATORS);
 });
-//@ chunk-bg51yd13.js:19950-20128 placement
+//@ chunk-gwh0qn2w.js:20021-20199 placement
 function describeRoutineTrigger(trigger) {
   switch (trigger.type) {
     case "cron":
@@ -665,11 +665,11 @@ function describeRoutineTrigger(trigger) {
     }
   }
 }
-//@ chunk-bg51yd13.js:20128-20171 placement
+//@ chunk-gwh0qn2w.js:20199-20242 placement
 function describeRoutineTriggers(triggers) {
   return triggers.map(describeRoutineTrigger).join(", ");
 }
-//@ chunk-bg51yd13.js:20288-23363 placement
+//@ chunk-gwh0qn2w.js:20359-23434 placement
 /**
  * 通过守护进程派发后台会话（shell/spare/slash），守护进程不可达时回退。
  */
@@ -871,7 +871,7 @@ async function dispatchViaDaemon(descriptor, isRetry = false, startedAt = Date.n
     daemonLease();
   }
 }
-//@ chunk-bg51yd13.js:23363-23770 placement
+//@ chunk-gwh0qn2w.js:23434-23841 placement
 function logBgDispatch(descriptor, pid, messagingSock, startedAt, via, reattachEnvDropped) {
   getSpawnLauncherState().daemonConfirmedUp = true;
   logEvent("tengu_bg_dispatch", {
@@ -893,7 +893,7 @@ function logBgDispatch(descriptor, pid, messagingSock, startedAt, via, reattachE
     reattachEnvDropped,
   };
 }
-//@ chunk-bg51yd13.js:23770-23936 placement
+//@ chunk-gwh0qn2w.js:23841-24007 placement
 function describeCwdGone(error, source, startedAt, nonce) {
   logDispatchFallback("cwd-gone", "ECWDGONE", source, startedAt);
   logForDebugging(`bg: daemon refused dispatch (cwd-gone): ${error}`, {
@@ -906,7 +906,7 @@ function describeCwdGone(error, source, startedAt, nonce) {
     nonce,
   };
 }
-//@ chunk-bg51yd13.js:23936-24456 placement
+//@ chunk-gwh0qn2w.js:24007-24527 placement
 function logDispatchFallback(reason, detail, source, startedAt, causeCode) {
   let platform = getPlatform();
   logEvent("tengu_bg_dispatch_fallback", {
@@ -927,7 +927,7 @@ function logDispatchFallback(reason, detail, source, startedAt, causeCode) {
     detail: describeDaemonExit(detail, causeCode),
   });
 }
-//@ chunk-bg51yd13.js:24456-24910 placement
+//@ chunk-gwh0qn2w.js:24527-24981 placement
 function describeDaemonExit(detail, causeCode) {
   let flattened = extractErrnoTokens(detail).flatMap((token) => sanitizeErrnoTokenForTelemetry(token) ?? []);
   if (flattened.length > 0) return joinSafe(flattened);
@@ -948,13 +948,13 @@ function describeDaemonExit(detail, causeCode) {
   if (causeCode === undefined) return lit("other");
   return sanitizeErrnoTokenForTelemetry(causeCode) ?? sanitizedMachineReasonForTelemetry(causeCode);
 }
-//@ chunk-bg51yd13.js:24910-25062 placement
+//@ chunk-gwh0qn2w.js:24981-25133 placement
 function getDispatchErrorDetail(error) {
   if ("cause" in error && error.cause !== undefined) return errorMessage(error.cause);
   if ("telemetryCode" in error && error.telemetryCode !== undefined) return error.telemetryCode;
   return error.code;
 }
-//@ chunk-bg51yd13.js:25141-25966 placement
+//@ chunk-gwh0qn2w.js:25212-26037 placement
 /**
  * 判断工作目录是否可信（Windows 网络路径、沙箱等）。
  */
@@ -1026,7 +1026,7 @@ function checkWorkspaceTrust(cwd) {
     };
   }
 }
-//@ chunk-bg51yd13.js:25966-26359 placement
+//@ chunk-gwh0qn2w.js:26037-26430 placement
 function formatWorkspaceUntrusted(unresolved) {
   let displayCwd = stripInvisibleChars(unresolved.cwd);
   if (unresolved.unresolvable) return `Workspace not trusted. ${displayCwd} could not be resolved on disk.`;
@@ -1034,7 +1034,7 @@ function formatWorkspaceUntrusted(unresolved) {
     ? "Workspace not trusted. The home directory is trusted one session at a time \u2014 start this from an interactive terminal there, or from a project directory."
     : `Workspace not trusted. Run \`claude\` in ${displayCwd} once and accept the trust prompt, then retry.`;
 }
-//@ chunk-bg51yd13.js:26359-26707 placement
+//@ chunk-gwh0qn2w.js:26430-26778 placement
 /**
  * 后台 PTY 输出的终端转义清洗常量：擦除参数集合、可重放的 ESC 序列、备用屏模式 1049/1047/47 与逐字节 ESC 解析正则。
  */
@@ -1043,7 +1043,7 @@ var ERASE_DISPLAY_PARAMS;
 var PRINTABLE_ESC_SEQUENCES;
 var ALT_SCREEN_MODES;
 var TERMINAL_ESCAPE_SEQUENCE_PATTERN;
-deferInit("chunk-bg51yd13.js:26359", () => {
+deferInit("chunk-gwh0qn2w.js:26430", () => {
   TERMINAL_RESPONSE_CHARS = new Set("ABCDEFGHJKLMPSTXZ@`adefm");
   ERASE_DISPLAY_PARAMS = new Set([0, 1, 2]);
   PRINTABLE_ESC_SEQUENCES = new Set("78DEM");
@@ -1051,7 +1051,7 @@ deferInit("chunk-bg51yd13.js:26359", () => {
   TERMINAL_ESCAPE_SEQUENCE_PATTERN =
     /\x1b\[(?<params>[<-?]?[0-;]*)(?<intermediates>[ -/]*)(?<final>[@-~])|\x1b[\]PX^_][^\x07\x18\x1a\x1b\x9c]*(?:\x07|\x1b\\|\x9c)?|\x1b(?:\[[0-?]*[ -/]*|[ -/]*)$|\x1b(?<esc>[ -/]*[0-~])|\x1b|[\x00-\x07\x0e-\x1a\x1c-\x1f\x7f-\x9f]/g;
 });
-//@ chunk-bg51yd13.js:26707-26915 placement
+//@ chunk-gwh0qn2w.js:26778-26986 placement
 function isTerminalResponseSequence(params, final) {
   if (!TERMINAL_RESPONSE_CHARS.has(final)) return false;
   if (final !== "J" && final !== "T") return true;
@@ -1060,7 +1060,7 @@ function isTerminalResponseSequence(params, final) {
     ? mapped.every((param) => ERASE_DISPLAY_PARAMS.has(param))
     : mapped.length === 1 && !Number.isNaN(mapped[0]);
 }
-//@ chunk-bg51yd13.js:26915-27375 placement
+//@ chunk-gwh0qn2w.js:26986-27446 placement
 function waitForDaemonReady(data) {
   let isCursorAddressed = false;
   let replay = "";
@@ -1086,9 +1086,9 @@ function waitForDaemonReady(data) {
     cursorAddressed: isCursorAddressed,
   };
 }
-//@ chunk-bg51yd13.js:27375-27406 placement
+//@ chunk-gwh0qn2w.js:27446-27477 placement
 var BG_FLAG_NAMES = ["--bg", "--background"];
-//@ chunk-bg51yd13.js:27406-27567 placement
+//@ chunk-gwh0qn2w.js:27477-27638 placement
 function defaultShellForPlatform(exec) {
   setShellIfWindows();
   return env.SHELL
@@ -1107,10 +1107,10 @@ function defaultShellForPlatform(exec) {
         };
 }
 export {
-  placeholderJobNameScore,
-  trackBgDispatch,
   rankJobNameMatch,
   formatRmOutcome,
+  placeholderJobNameScore,
+  trackBgDispatch,
   checkWorkspaceTrust,
   formatWorkspaceUntrusted,
   describeRoutineTriggers,

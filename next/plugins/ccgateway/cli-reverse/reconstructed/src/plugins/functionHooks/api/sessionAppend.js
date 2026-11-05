@@ -3,9 +3,9 @@
  *
  * $.session.append：向会话追加消息块的校验（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3xb70ww4.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-aka0gnqq.js (23)
  * attribution: placement 23
  */
 import { randomUUID } from "crypto";
@@ -29,18 +29,17 @@ import { isNonConversationMessage } from "../../../bootstrap/sessionSlices.js";
 import { normalizeUuidOrNull } from "../../../utils/agentId.js";
 import { HooksError } from "../hooksErrors.js";
 import { safeDeepEqual } from "../apiDispatch.js";
-import { KEYLESS_BLOCK_TYPES } from "../../../services/api/claude.js";
-import { contentBlockStableKeys } from "../../../engine/renderedRows.js";
-import { count } from "../../../utils/collections.js";
+import { KEYLESS_BLOCK_TYPES, contentBlockStableKeys } from "../../../engine/renderedRows.js";
+import { countWhere } from "../../../utils/collections.js";
 import { NO_CONTENT_MESSAGE } from "../../../constants/messages.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-3xb70ww4.js:474-526 placement
+//@ chunk-aka0gnqq.js:474-526 placement
 /**
  * text 块 schema
  */
 var TEXT_BLOCK_SCHEMA; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-3xb70ww4.js:474", () => {
+deferInit("chunk-aka0gnqq.js:474", () => {
   TEXT_BLOCK_SCHEMA = DoctorLazy(() =>
     looseObject({
       type: literal("text"),
@@ -48,12 +47,12 @@ deferInit("chunk-3xb70ww4.js:474", () => {
     }),
   );
 });
-//@ chunk-3xb70ww4.js:526-585 placement
+//@ chunk-aka0gnqq.js:526-585 placement
 /**
  * 插件块的名字
  */
 var pluginNameOf = (origin) => (origin.kind === "plugin" && "name" in origin ? origin.name : undefined);
-//@ chunk-3xb70ww4.js:585-1408 placement
+//@ chunk-aka0gnqq.js:585-1408 placement
 function checkAppendBlock(entry, uuid) {
   let { message } = entry;
   let flattened = message.content.flatMap((block) => {
@@ -104,7 +103,7 @@ function checkAppendBlock(entry, uuid) {
           " (a plugin appends a user-role isMeta row or a system notice; a prompt is $.prompt.submit)",
       };
 }
-//@ chunk-3xb70ww4.js:1408-1600 placement
+//@ chunk-aka0gnqq.js:1408-1600 placement
 /**
  * $.session.append 被拒原因：会话不允许插件塑形、会话不保留对话、或指定 agent 没有运行中的循环。
  */
@@ -114,7 +113,7 @@ function describeAppendRefusal(agentId, hasMessage) {
   if (agentId === undefined) return "this session keeps no conversation to append to";
   return `no running loop is ${agentId}`;
 }
-//@ chunk-3xb70ww4.js:1600-1669 placement
+//@ chunk-aka0gnqq.js:1600-1669 placement
 /**
  * 把附件展开为 {content} 消息列表。
  */
@@ -122,7 +121,7 @@ var attachmentToContents = (attachment) =>
   attachmentToMessages(attachment).messages.map((message) => ({
     content: message.message.content,
   }));
-//@ chunk-3xb70ww4.js:1669-1777 placement
+//@ chunk-aka0gnqq.js:1669-1777 placement
 /**
  * 取消息内容中的全部文本片段。
  */
@@ -132,7 +131,7 @@ function contentTextParts(entry) {
     ? [content]
     : content.flatMap((block) => (block.type === "text" ? [block.text] : []));
 }
-//@ chunk-3xb70ww4.js:1777-1874 placement
+//@ chunk-aka0gnqq.js:1777-1874 placement
 /**
  * 取系统消息的 content 文本（非空字符串时）。
  */
@@ -140,7 +139,7 @@ function systemMessageText(message) {
   let content = "content" in message ? message.content : undefined;
   return typeof content === "string" && content !== "" ? content : undefined;
 }
-//@ chunk-3xb70ww4.js:1874-2112 placement (2.1.88 match: sanitizeFileName, 1)
+//@ chunk-aka0gnqq.js:1874-2112 placement (2.1.88 match: sanitizeFileName, 1)
 /**
  * 把各类消息（user/assistant/attachment/system）转成纯文本块列表。
  */
@@ -169,7 +168,7 @@ function messageToTextBlocks(message) {
     }
   }
 }
-//@ chunk-3xb70ww4.js:2112-2390 placement
+//@ chunk-aka0gnqq.js:2112-2390 placement
 /**
  * 生成消息的摘要描述（type、name、role、isMeta 等），用于导出/调试。
  */
@@ -194,7 +193,7 @@ function summarizeMessageForExport(message) {
     content: messageToTextBlocks(message),
   };
 }
-//@ chunk-3xb70ww4.js:2390-2501 placement
+//@ chunk-aka0gnqq.js:2390-2501 placement
 /**
  * 判断要追加的内容是否全为文本块（且该来源允许）。
  */
@@ -204,7 +203,7 @@ var isTextOnlyAppend = (type, contentBlocks) =>
   contentBlocks.every(
     ({ content }) => typeof content === "string" || content.every((block) => block.type === "text"),
   );
-//@ chunk-3xb70ww4.js:2501-2887 placement
+//@ chunk-aka0gnqq.js:2501-2887 placement
 async function refuseSessionAppend(entry, info) {
   let hookable = info?.isHookable === true ? info : undefined;
   let uuid = normalizeUuidOrNull(entry.uuid);
@@ -226,19 +225,19 @@ async function refuseSessionAppend(entry, info) {
     uuid: check.row.uuid,
   };
 }
-//@ chunk-3xb70ww4.js:3238-3268 placement
+//@ chunk-aka0gnqq.js:3238-3268 placement
 /**
  * 带 type 的块 schema
  */
 var TYPED_BLOCK_SCHEMA; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-3xb70ww4.js:3238", () => {
+deferInit("chunk-aka0gnqq.js:3238", () => {
   TYPED_BLOCK_SCHEMA = DoctorLazy(() =>
     looseObject({
       type: stringSchema(),
     }),
   );
 });
-//@ chunk-3xb70ww4.js:3268-3373 placement
+//@ chunk-aka0gnqq.js:3268-3373 placement
 /**
  * 从数组中筛出带 type 字段的块，非数组返回空数组。
  */
@@ -249,7 +248,7 @@ var parseTypedBlocks = (content) =>
         return parsed.success ? [parsed.data] : [];
       })
     : [];
-//@ chunk-3xb70ww4.js:3373-3471 placement
+//@ chunk-aka0gnqq.js:3373-3471 placement
 /**
  * 按索引取块
  */
@@ -258,7 +257,7 @@ var resolveBlocks = (content, blocks) =>
     let resolved = block.kind === "text" ? block.text : content[block.index];
     return resolved === undefined ? [] : [resolved];
   });
-//@ chunk-3xb70ww4.js:3471-3760 placement
+//@ chunk-aka0gnqq.js:3471-3760 placement
 /**
  * 把插件返回的内容与原块对齐：能在原内容中找到相同块的保留原块，其余只接受文本块。
  */
@@ -286,12 +285,12 @@ function reconcileAppendContent(original, next) {
       : [];
   });
 }
-//@ chunk-3xb70ww4.js:3760-3824 placement (2.1.88 match: hasThinkingContent, 1)
+//@ chunk-aka0gnqq.js:3760-3824 placement
 var THINKING_AND_RESULT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3xb70ww4.js:3760", () => {
+deferInit("chunk-aka0gnqq.js:3760", () => {
   THINKING_AND_RESULT_TYPES = new Set(["thinking", "redacted_thinking", "tool_result"]);
 });
-//@ chunk-3xb70ww4.js:3824-4037 placement
+//@ chunk-aka0gnqq.js:3824-4037 placement
 /**
  * 在追加的内容块中找出与给定块对应的那一块（已匹配的跳过）；找不到时按 tool_result 形状解析。
  */
@@ -317,12 +316,12 @@ function matchAppendBlock(block, content, used) {
       }
     : undefined;
 }
-//@ chunk-3xb70ww4.js:4037-4049 placement
+//@ chunk-aka0gnqq.js:4037-4049 placement
 /**
  * 会话块排序表里表示「列表开头」的键 "^"，用于把已应答的工具结果块插到第一个不可改写块之前或消息末尾。
  */
 var START_KEY = "^";
-//@ chunk-3xb70ww4.js:4049-4134 placement
+//@ chunk-aka0gnqq.js:4049-4134 placement
 /**
  * 构造 tool-result 块
  */
@@ -334,12 +333,12 @@ var toolResultBlock = (index, content, isError) => ({
   }),
   isError,
 });
-//@ chunk-3xb70ww4.js:4134-4248 placement
+//@ chunk-aka0gnqq.js:4134-4248 placement
 /**
  * session.append 中 tool_result 块的 schema（content 为字符串或块列表，is_error 可选）。
  */
 var toolResultBlockSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-3xb70ww4.js:4134", () => {
+deferInit("chunk-aka0gnqq.js:4134", () => {
   toolResultBlockSchema = DoctorLazy(() =>
     looseObject({
       type: literal("tool_result"),
@@ -355,7 +354,7 @@ deferInit("chunk-3xb70ww4.js:4134", () => {
     }),
   );
 });
-//@ chunk-3xb70ww4.js:4248-4375 placement
+//@ chunk-aka0gnqq.js:4248-4375 placement
 /**
  * 把追加的 tool_result 解析为结果记录；形状不合法时视为原样引发的块。
  */
@@ -368,7 +367,7 @@ function parseAppendedToolResult(index, result, isError) {
         index,
       };
 }
-//@ chunk-3xb70ww4.js:4375-5262 placement
+//@ chunk-aka0gnqq.js:4375-5262 placement
 function normalizeAppendedToolResult(original, typedBlocks) {
   if (original.length === 0) return [];
   let stableKeys = contentBlockStableKeys(original);
@@ -378,8 +377,10 @@ function normalizeAppendedToolResult(original, typedBlocks) {
   );
   let nextKeys = contentBlockStableKeys(typedBlocks);
   let allToolResultsKeyless =
-    count(typedBlocks, (block) => block.type === "tool_result" && typeof block.tool_use_id !== "string") ===
-    filtered.length;
+    countWhere(
+      typedBlocks,
+      (block) => block.type === "tool_result" && typeof block.tool_use_id !== "string",
+    ) === filtered.length;
   let raisedAfter = new Map();
   let toolResultByKey = new Map();
   let usedIndices = new Set();
@@ -430,7 +431,7 @@ function normalizeAppendedToolResult(original, typedBlocks) {
         },
       ];
 }
-//@ chunk-3xb70ww4.js:5299-5501 placement
+//@ chunk-aka0gnqq.js:5299-5501 placement
 /**
  * 把插件追加的消息构造成会话行：user 消息标为 meta，door=note，来源为插件，附 uuid 与可选 agentId。
  */
@@ -454,6 +455,7 @@ var buildPluginAppendRow = ({ message, agentId }, name) => ({
   }),
 });
 export {
+  buildPluginAppendRow,
   TYPED_BLOCK_SCHEMA,
   THINKING_AND_RESULT_TYPES,
   START_KEY,
@@ -468,7 +470,6 @@ export {
   isTextOnlyAppend,
   checkAppendBlock,
   resolveBlocks,
-  buildPluginAppendRow,
   pluginNameOf,
   contentTextParts,
   normalizeAppendedToolResult,

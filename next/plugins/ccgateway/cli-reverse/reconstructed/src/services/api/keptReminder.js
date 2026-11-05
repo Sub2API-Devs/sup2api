@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：跨请求保留的系统提醒
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (16)
  * attribution: placement 16
  */
 import { canSendFirstPartyBetas } from "../../utils/betas.js";
@@ -29,12 +29,12 @@ import { fromEnum } from "../analytics/safeMetadata.js";
 import { logFeatureOk } from "../analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2592973-2593012 placement
+//@ chunk-5xgkngpb.js:2648144-2648183 placement
 var thinkingRelayModuleKept; // deferred: loads other modules while loading; runs once its import cycle is complete
-deferInit("chunk-e6aww6q8.js:2592973", () => {
+deferInit("chunk-5xgkngpb.js:2648144", () => {
   thinkingRelayModuleKept = require("../teleport/relayState.js");
 });
-//@ chunk-e6aww6q8.js:2593012-2593228 placement
+//@ chunk-5xgkngpb.js:2648183-2648399 placement
 function isTetherLive() {
   if (!canSendFirstPartyBetas()) return false;
   if (getAPIProvider() !== "firstParty") return false;
@@ -45,20 +45,20 @@ function isTetherLive() {
   sessionFeatureValues.tetherLiveGate ??= tetherLiveFlag();
   return sessionFeatureValues.tetherLiveGate;
 }
-//@ chunk-e6aww6q8.js:2593228-2593360 placement
+//@ chunk-5xgkngpb.js:2648399-2648531 placement
 function tetherLiveFlag() {
   let CLAUDE_CODE_TETHER_LIVE = tetherEnvAccessor.CLAUDE_CODE_TETHER_LIVE;
   if (CLAUDE_CODE_TETHER_LIVE !== undefined) return CLAUDE_CODE_TETHER_LIVE;
   if (!isCcsTenant() && !isActualFirstPartyAnthropicBaseUrl()) return false;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_curious_tower", false);
 }
-//@ chunk-e6aww6q8.js:2593360-2593398 placement
+//@ chunk-5xgkngpb.js:2648531-2648569 placement
 function disableTetherLiveGate() {
   getSessionFeatureValues().tetherLiveGate = false;
 }
-//@ chunk-e6aww6q8.js:2593398-2593431 placement
+//@ chunk-5xgkngpb.js:2648569-2648602 placement
 var TENGU_SLEEPY_SNOWFLAKE = "tengu_sleepy_snowflake";
-//@ chunk-e6aww6q8.js:2593431-2594176 placement
+//@ chunk-5xgkngpb.js:2648602-2649347 placement
 /**
  * 决定保留提醒（kept reminder）的范围 off/threads/all：env 优先，其次 transcript 记录值，再次 client_data 中按模型匹配的值，最后 GrowthBook tengu_sleepy_snowflake。
  */
@@ -110,11 +110,11 @@ function keptReminderScope(model, recorded) {
     source: "growthbook",
   };
 }
-//@ chunk-e6aww6q8.js:2594176-2594218 placement
+//@ chunk-5xgkngpb.js:2649347-2649389 placement
 function isKeptReminderModeNotOff(model, querySource) {
   return keptReminderModeSafe(model, querySource) !== "off";
 }
-//@ chunk-e6aww6q8.js:2594218-2594368 placement
+//@ chunk-5xgkngpb.js:2649389-2649539 placement
 function keptReminderModeSafe(model, seed) {
   try {
     return keptReminderMode(model, seed);
@@ -128,7 +128,7 @@ function keptReminderModeSafe(model, seed) {
     return "off";
   }
 }
-//@ chunk-e6aww6q8.js:2594368-2594544 placement
+//@ chunk-5xgkngpb.js:2649539-2649715 placement
 function keptReminderDelivery(sessionId) {
   let sessionFeatureValues = getSessionFeatureValues();
   if (sessionFeatureValues.keptReminderDelivery?.conversationId !== sessionId)
@@ -139,7 +139,7 @@ function keptReminderDelivery(sessionId) {
     };
   return sessionFeatureValues.keptReminderDelivery;
 }
-//@ chunk-e6aww6q8.js:2594544-2595348 placement
+//@ chunk-5xgkngpb.js:2649715-2650523 placement
 /**
  * 按模型计算并缓存保留提醒模式：仅第一方 Anthropic；首次可用记录的种子值；threads 模式需 tether 可用；记录 seeded/applied 事件。
  */
@@ -189,29 +189,29 @@ function keptReminderMode(model, seed) {
     });
   return effectiveScope;
 }
-//@ chunk-e6aww6q8.js:2595348-2595391 placement
+//@ chunk-5xgkngpb.js:2650523-2650566 placement
 function retireKeptReminder() {
   getSessionFeatureValues().keptReminderRetired = true;
 }
-//@ chunk-e6aww6q8.js:2595391-2595445 placement
+//@ chunk-5xgkngpb.js:2650566-2650620 placement
 function hasClearAtProbeBudget() {
   return (getSessionFeatureValues().clearAtProbeFailures ?? 0) < 2;
 }
-//@ chunk-e6aww6q8.js:2595445-2595524 placement
+//@ chunk-5xgkngpb.js:2650620-2650699 placement
 function noteClearAtProbeFailure() {
   let sessionFeatureValues = getSessionFeatureValues();
   sessionFeatureValues.clearAtProbeFailures = (sessionFeatureValues.clearAtProbeFailures ?? 0) + 1;
 }
-//@ chunk-e6aww6q8.js:2595524-2595578 placement
+//@ chunk-5xgkngpb.js:2650699-2650753 placement
 function hasThreadsProbeBudget() {
   return (getSessionFeatureValues().threadsProbeFailures ?? 0) < 2;
 }
-//@ chunk-e6aww6q8.js:2595578-2595657 placement
+//@ chunk-5xgkngpb.js:2650753-2650832 placement
 function noteThreadsProbeFailure() {
   let sessionFeatureValues = getSessionFeatureValues();
   sessionFeatureValues.threadsProbeFailures = (sessionFeatureValues.threadsProbeFailures ?? 0) + 1;
 }
-//@ chunk-e6aww6q8.js:2595657-2595772 placement
+//@ chunk-5xgkngpb.js:2650832-2650947 placement
 function logKeptReminderOk() {
   let sessionFeatureValues = getSessionFeatureValues();
   if (sessionFeatureValues.keptReminderOkLogged !== true) {

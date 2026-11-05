@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：权限决定同一性与失败原因判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-zzvfscb1.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qk1ra0xe.js (3)
  * attribution: placement 3
  */
 import {
@@ -17,11 +17,11 @@ import {
 } from "../../types/permissions.js";
 import { isUnforwardedHostAsk } from "../../services/tools/hostWordedAsks.js";
 
-//@ chunk-zzvfscb1.js:281-355 placement
+//@ chunk-qk1ra0xe.js:281-355 placement
 function isSameDecision(decision, otherDecision) {
   return decision === otherDecision || (decision.behavior === "ask" && decision.forcedByCaller === true);
 }
-//@ chunk-zzvfscb1.js:355-430 placement
+//@ chunk-qk1ra0xe.js:355-430 placement
 function isCanUseToolFailureReason(reason) {
   return (
     reason === CAN_USE_TOOL_STREAM_CLOSED_REASON ||
@@ -32,8 +32,8 @@ function isCanUseToolFailureReason(reason) {
     isUnforwardedHostAsk(reason)
   );
 }
-//@ chunk-zzvfscb1.js:430-461 placement
+//@ chunk-qk1ra0xe.js:430-461 placement
 function isRequestFailedReason(reason) {
   return reason === CAN_USE_TOOL_REQUEST_FAILED_REASON;
 }
-export { isSameDecision, isCanUseToolFailureReason, isRequestFailedReason };
+export { isSameDecision, isRequestFailedReason, isCanUseToolFailureReason };

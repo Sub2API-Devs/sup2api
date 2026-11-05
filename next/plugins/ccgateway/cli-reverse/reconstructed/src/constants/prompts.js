@@ -3,13 +3,13 @@
  *
  * 系统提示词的组装：按"事实→会话分段决策→渲染"三步生成各分段（intro/system/doing_tasks/actions/tools/tone 共享段 + communication/pronouns/环境/记忆/上下文管理等会话段），带 __SYSTEM_PROMPT_DYNAMIC_BOUNDARY__ 静态/动态分界；另含环境信息块、模型身份行、输出风格/语言段落文本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/constants/prompts.ts
- * pieces: build-report-lite-jwtbvm49.mjs (1), chunk-e6aww6q8.js (112)
+ * pieces: build-report-lite-jwtbvm49.mjs (1), chunk-5xgkngpb.js (112)
  * attribution: fingerprint 17, callgraph-witnessed 2, layout 64, placement 27, affinity 1, callgraph-fingerprint 1, sole-consumer 1
  */
 import { basename, join } from "path";
-import { version, release as release_3, type as eio } from "os";
+import { version, release as release_3, type as ndo } from "os";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import {
   objectSchema,
@@ -144,8 +144,8 @@ import { TASK_CREATE_TOOL_NAME } from "../tools/TaskCreateTool/constants.js";
 import { TODO_WRITE_TOOL_NAME } from "../tools/TodoWriteTool/constants.js";
 import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../tools/PowerShellTool/toolName.js";
-import { FILE_READ_TOOL_NAME } from "../tools/FileReadTool/constants.js";
-import { FILE_EDIT_TOOL_NAME } from "../tools/FileEditTool/constants.js";
+import { READ } from "../tools/FileReadTool/constants.js";
+import { EDIT } from "../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../tools/FileWriteTool/prompt.js";
 import { GLOB_TOOL_NAME } from "../tools/GlobTool/prompt.js";
 import { GREP_TOOL_NAME } from "../tools/GrepTool/prompt.js";
@@ -159,6 +159,9 @@ import { SKILL } from "../tools/SkillTool/skillToolNames.js";
 import { hasEmbeddedSearchTools } from "../utils/embeddedTools.js";
 import { getEntrypoint } from "../utils/sessionStorage.js";
 import { isExplorePlanAgentsEnabled } from "../tools/AgentTool/builtInAgentGate.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
+import { isCodeModeEnabled, memorySectionForWire } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { REPL_TOOL_NAME } from "../tools/REPLTool/constants.js";
 import { isUltrareviewWithBridge } from "../commands/review/ultrareviewPreconditions.js";
 import { EXPLORE_AGENT_MIN_QUERIES, EXPLORE_AGENT } from "../tools/AgentTool/built-in/exploreAgent.js";
 import { logForDebugging } from "../utils/debug.js";
@@ -182,13 +185,12 @@ import { getSkillToolCommands } from "../commands.js";
 import { getCwd, getCwdOrNull } from "../utils/cwd.js";
 import { getOutputStyleConfig } from "./outputStyles.js";
 import { isPewterOwlTool } from "../tools/BriefTool/pewterOwl.js";
-import { count } from "../utils/collections.js";
+import { countWhere } from "../utils/collections.js";
 import { logError } from "../utils/log.js";
 import { currentSessionDate } from "../utils/sessionTimeZone.js";
 import { memoizeAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { toolParamStrictnessConfig } from "../services/analytics/juniperShoalConfig.js";
 import { isBundledSkillsDisabled } from "../skills/bundledSkillsGate.js";
-import { identityTool, alwaysFalseFlag } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { loadMemoryPrompt, autoMemorySection, buildMemoryDirectoryLine } from "../memdir/memdir.js";
 import { mainLoopCanonicalModel } from "../utils/model/telemetryModelName.js";
 import { isVirtualPancakeEnabled } from "../utils/permissions/permissionSetup.js";
@@ -201,11 +203,11 @@ import { getContextWindow } from "../utils/model/configs.js";
 import { getBgIsolationSetting } from "../utils/worktreeIsolation.js";
 import { getSettingsForSource } from "../utils/settings/settings.js";
 import { isFocusModeEnabled } from "../utils/focusMode.js";
-import { toolMatchesName } from "../Tool.js";
+import { matchesToolName } from "../Tool.js";
 import { BRIEF_TOOL_NAME, briefEnablementModule } from "../utils/conversationRecovery.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:95319-95409 callgraph-witnessed (2.1.88 match: prependBullets, 0)
+//@ chunk-5xgkngpb.js:98124-98214 callgraph-witnessed (2.1.88 match: prependBullets, 0)
 /**
  * 把字符串或字符串数组转成 " - " 前缀的项目符号行（嵌套数组展开为同级）。
  */
@@ -214,12 +216,12 @@ function prependBullets(items) {
     Array.isArray(item) ? item.map((subitem) => `  - ${subitem}`) : [` - ${item}`],
   );
 }
-//@ chunk-e6aww6q8.js:95409-95495 layout
+//@ chunk-5xgkngpb.js:98214-98300 layout
 /**
  * Windows 上 PowerShell 为主 shell 时附加的说明：Bash 工具也可用于 POSIX 脚本。
  */
 var POWERSHELL_BASH_NOTE = "Bash tool also available for POSIX scripts \u2014 each takes its own syntax";
-//@ chunk-e6aww6q8.js:95495-97239 layout
+//@ chunk-5xgkngpb.js:98300-100044 layout
 /**
  * 环境信息块常量："# Environment" 标题、引导语、"# Environment update" 更新标题；worktree 下 git stash 警告与 worktree 提示；工作目录 / gh / 代理不再适用的更新语；envInfo 事实与变更的 zod schema。
  */
@@ -235,7 +237,7 @@ var GH_API_NOT_ACTIVE_NOTE;
 var AGENT_PROXY_NOT_ACTIVE_NOTE;
 var envInfoFactsSchema;
 var envInfoChangeSchema;
-deferInit("chunk-e6aww6q8.js:95495", () => {
+deferInit("chunk-5xgkngpb.js:98300", () => {
   ENVIRONMENT_HEADER = "# Environment";
   ENVIRONMENT_INTRO = "You have been invoked in the following environment: ";
   ENVIRONMENT_UPDATE_HEADER = "# Environment update";
@@ -292,7 +294,7 @@ deferInit("chunk-e6aww6q8.js:95495", () => {
     ]),
   );
 });
-//@ chunk-e6aww6q8.js:97239-97318 layout
+//@ chunk-5xgkngpb.js:100044-100123 layout
 /**
  * 带进程级缓存的 shell 描述（getShellInfoLine 的结果）。
  */
@@ -301,7 +303,7 @@ function getShellDescription() {
   sessionFeatureValues.shellDescription ??= getShellInfoLine();
   return sessionFeatureValues.shellDescription;
 }
-//@ chunk-e6aww6q8.js:97318-97651 fingerprint (2.1.88 match: getShellInfoLine, 0.576)
+//@ chunk-5xgkngpb.js:100123-100456 fingerprint (2.1.88 match: getShellInfoLine, 0.577)
 /**
  * 环境块 Shell 行：Windows 下 PowerShell（可附 Bash 说明）；否则 zsh/bash，若登录 shell 与 SHELL 不同注明 login shell。
  */
@@ -319,7 +321,7 @@ function getShellInfoLine() {
   if (!env.SHELL || basename(env.SHELL) === shellBasename) return shellBasename;
   return `${shellBasename} (login shell: ${basename(env.SHELL)})`;
 }
-//@ chunk-e6aww6q8.js:97651-97759 placement
+//@ chunk-5xgkngpb.js:100456-100564 placement
 /**
  * 带缓存的代理（agent proxy）说明文本。
  */
@@ -329,22 +331,22 @@ function getAgentProxyNote() {
     sessionFeatureValues.agentProxyNote = getAgentProxyNoteText() ?? null;
   return sessionFeatureValues.agentProxyNote;
 }
-//@ chunk-e6aww6q8.js:97759-97818 placement
+//@ chunk-5xgkngpb.js:100564-100623 placement
 /**
  * envInfo 里有 agentProxy 时格式化为说明文本。
  */
 function formatAgentProxyNote(envInfo) {
   return envInfo.agentProxy ? buildAgentProxyCliSection(envInfo.agentProxy) : null;
 }
-//@ chunk-e6aww6q8.js:97818-97909 placement (2.1.88 match: getUnameSR, 1)
+//@ chunk-5xgkngpb.js:100623-100714 placement (2.1.88 match: getUnameSR, 1)
 /**
  * OS Version 行：Windows 为 os.version()+release()，其余为 os.type()+release()（类似 uname -sr）。
  */
 function getUnameSR() {
   if (env.platform === "win32") return `${version()} ${release_3()}`;
-  return `${eio()} ${release_3()}`;
+  return `${ndo()} ${release_3()}`;
 }
-//@ chunk-e6aww6q8.js:100128-100804 fingerprint (2.1.88 match: computeSimpleEnvInfo, 0.43)
+//@ chunk-5xgkngpb.js:102933-103609 fingerprint (2.1.88 match: computeSimpleEnvInfo, 0.43)
 /**
  * 生成环境块要点：主工作目录、worktree 说明、是否 git 仓库、附加目录、Platform、Shell、OS Version、scratchpad、代理与 gh 说明，逐条加 " - " 前缀。
  */
@@ -377,7 +379,7 @@ function computeSimpleEnvInfo(envInfo) {
   return prependBullets(envItems).join(`
 `);
 }
-//@ chunk-e6aww6q8.js:100804-100853 affinity
+//@ chunk-5xgkngpb.js:103609-103658 affinity
 /**
  * "# Environment" + 引导语 + computeSimpleEnvInfo，即实测 role=system 消息中的环境块。
  */
@@ -385,7 +387,7 @@ function getEnvironmentSection(envInfo) {
   return [ENVIRONMENT_HEADER, ENVIRONMENT_INTRO, computeSimpleEnvInfo(envInfo)].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:105481-105658 fingerprint (2.1.88 match: computeEnvInfo, 0.45)
+//@ chunk-5xgkngpb.js:108287-108464 fingerprint (2.1.88 match: computeEnvInfo, 0.451)
 /**
  * "You are powered by the model named X. The exact model ID is Y."（无营销名时只给 ID）。旧版名 computeEnvInfo 为错配。
  */
@@ -394,14 +396,14 @@ function getModelIdentityLine(modelInfo) {
     ? `You are powered by the model named ${modelInfo.marketingName}. The exact model ID is ${modelInfo.modelId}.`
     : `You are powered by the model ${modelInfo.modelId}.`;
 }
-//@ chunk-e6aww6q8.js:105658-105758 layout
+//@ chunk-5xgkngpb.js:108464-108564 layout
 /**
  * "Assistant knowledge cutoff is …"。
  */
 function getKnowledgeCutoffLine(modelInfo) {
   return modelInfo.knowledgeCutoff ? `Assistant knowledge cutoff is ${modelInfo.knowledgeCutoff}.` : null;
 }
-//@ chunk-e6aww6q8.js:105758-105828 layout
+//@ chunk-5xgkngpb.js:108564-108634 layout
 /**
  * 模型身份行 + 知识截止行。
  */
@@ -410,7 +412,7 @@ function getModelEnvInfoText(modelInfo) {
     .filter((line) => line !== null)
     .join(" ");
 }
-//@ chunk-e6aww6q8.js:105828-105984 layout
+//@ chunk-5xgkngpb.js:108634-108790 layout
 /**
  * 生成 {type:"model", identity, text} 附件；lean 改写模型用另一套文案；文本经 env_info_model 段缓存。
  */
@@ -427,7 +429,7 @@ async function buildModelEnvInfoAttachment(modelInfo) {
     text,
   };
 }
-//@ chunk-e6aww6q8.js:105984-106087 layout
+//@ chunk-5xgkngpb.js:108790-108893 layout
 /**
  * 附件里存的文本合法则用，否则重新生成。
  */
@@ -437,7 +439,7 @@ function getModelEnvInfoTextFromAttachment(attachment) {
     ? parsedInfo.data
     : getModelEnvInfoText(attachment.identity);
 }
-//@ chunk-e6aww6q8.js:106087-106198 layout
+//@ chunk-5xgkngpb.js:108893-109004 layout
 /**
  * 两个模型身份（规范 id、营销名、知识截止）是否相同，用于判断是否需要重发模型附件。
  */
@@ -448,7 +450,7 @@ function isSameModelIdentity(modelInfo, nextIdentity) {
     modelInfo.knowledgeCutoff === nextIdentity.knowledgeCutoff
   );
 }
-//@ chunk-e6aww6q8.js:106198-106317 layout
+//@ chunk-5xgkngpb.js:109004-109123 layout
 /**
  * 比较用营销名：去掉 " (1M context)" 后缀。
  */
@@ -457,14 +459,14 @@ function getComparableMarketingName(modelInfo) {
     ? modelInfo.marketingName
     : (modelInfo.marketingName?.replace(/ \(1M context\)$/, "") ?? null);
 }
-//@ chunk-e6aww6q8.js:106317-106391 layout
+//@ chunk-5xgkngpb.js:109123-109197 layout
 /**
  * 消息是 type=model 的附件。
  */
 function isModelAttachment(message) {
   return message.type === "attachment" && message.attachment.type === "model";
 }
-//@ chunk-e6aww6q8.js:106391-106540 layout
+//@ chunk-5xgkngpb.js:109197-109346 layout
 /**
  * 历史中最后一个 model 附件（解析 identity）。
  */
@@ -479,20 +481,20 @@ function getLastModelAttachment(messages) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:106540-106580 layout
+//@ chunk-5xgkngpb.js:109346-109386 layout
 /**
  * 最后一个 model 附件的 identity。
  */
 function getLastModelIdentity(messages) {
   return getLastModelAttachment(messages)?.identity;
 }
-//@ chunk-e6aww6q8.js:106580-106671 layout
+//@ chunk-5xgkngpb.js:109386-109477 layout
 /**
  * {name,prompt}|null 的输出风格附件 schema；o9 为语言偏好 schema。
  */
 var outputStyleAttachmentSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var languagePreferenceSchema;
-deferInit("chunk-e6aww6q8.js:106580", () => {
+deferInit("chunk-5xgkngpb.js:109386", () => {
   outputStyleAttachmentSchema = DoctorLazy(() =>
     objectSchema({
       name: stringSchema().max(MAX_CLEAN_IDENTIFIER_LENGTH),
@@ -501,7 +503,7 @@ deferInit("chunk-e6aww6q8.js:106580", () => {
   );
   languagePreferenceSchema = DoctorLazy(() => stringSchema().max(MAX_CLEAN_IDENTIFIER_LENGTH).nullable());
 });
-//@ chunk-e6aww6q8.js:106671-106723 fingerprint (2.1.88 match: getOutputStyleSection, 1)
+//@ chunk-5xgkngpb.js:109477-109529 fingerprint (2.1.88 match: getOutputStyleSection, 1)
 /**
  * "# Output Style: <名字>" 换行 + 提示词。
  */
@@ -509,7 +511,7 @@ function getOutputStyleSection(outputStyleConfig, prompt) {
   return `# Output Style: ${outputStyleConfig}
 ${prompt}`;
 }
-//@ chunk-e6aww6q8.js:106723-106863 layout
+//@ chunk-5xgkngpb.js:109529-109669 layout
 /**
  * 输出风格变更的附件文本；null 表示恢复默认。
  */
@@ -518,7 +520,7 @@ function getOutputStyleChangeText(outputStyleConfig) {
     return "The output style was reset to the default. Respond in your usual style.";
   return getOutputStyleSection(escapeXmlText(outputStyleConfig.name), outputStyleConfig.prompt);
 }
-//@ chunk-e6aww6q8.js:106863-106981 layout
+//@ chunk-5xgkngpb.js:109669-109787 layout
 /**
  * 语言偏好变更的附件文本；null 表示改为跟随用户语言。
  */
@@ -526,7 +528,7 @@ function getLanguageChangeText(languagePreference) {
   if (languagePreference === null) return "The language preference was cleared. Match the user's language.";
   return getLanguageSection(escapeXmlText(languagePreference));
 }
-//@ chunk-e6aww6q8.js:106981-107472 fingerprint (2.1.88 match: getLanguageSection, 0.667)
+//@ chunk-5xgkngpb.js:109787-110278 fingerprint (2.1.88 match: getLanguageSection, 0.66)
 /**
  * "# Language" 段：始终用指定语言回复，技术术语保留原文，注意变音符号。
  */
@@ -535,17 +537,17 @@ function getLanguageSection(languagePreference) {
 Always respond in ${languagePreference}. Use ${languagePreference} for all explanations, comments, and communications with the user. Technical terms and code identifiers should remain in their original form.
 Maintain full orthographic correctness for ${languagePreference}, including all required diacritical marks, accents, and special characters. Never substitute accented characters with their ASCII equivalents (e.g., never write "nao" for "n\xE3o", "fur" for "f\xFCr", or "loeschen" for "l\xF6schen").`;
 }
-//@ chunk-e6aww6q8.js:2241227-2241325 fingerprint (2.1.88 match: BRIEF_PROACTIVE_SECTION, 0.398)
+//@ chunk-5xgkngpb.js:2296322-2296420 fingerprint (2.1.88 match: BRIEF_PROACTIVE_SECTION, 0.398)
 /**
  * require chunk-cv3kgbt2（isBriefEnabled）；同语句的 Blr 为 BRIEF_PROACTIVE_SECTION。
  */
 var BRIEF_PROACTIVE_SECTION; // deferred: loads other modules while loading; runs once its import cycle is complete
 var briefToolModule_2;
-deferInit("chunk-e6aww6q8.js:2241227", () => {
+deferInit("chunk-5xgkngpb.js:2296322", () => {
   BRIEF_PROACTIVE_SECTION = require("../tools/BriefTool/prompt.js").BRIEF_PROACTIVE_SECTION;
   briefToolModule_2 = require("../tools/BriefTool/BriefTool.js");
 });
-//@ chunk-e6aww6q8.js:2241325-2241432 layout
+//@ chunk-5xgkngpb.js:2296420-2296527 layout
 /**
  * 模型目录 latest_per_family → [{name,id}]。
  */
@@ -555,7 +557,7 @@ function getLatestModelsPerFamily() {
     id: family,
   }));
 }
-//@ chunk-e6aww6q8.js:2241432-2241696 layout
+//@ chunk-5xgkngpb.js:2296527-2296791 layout
 /**
  * "The most recent Claude models are the Claude 5 family. Model IDs — …" 一句。
  */
@@ -564,19 +566,19 @@ function getLatestModelsLine(pairs, useLineFormat) {
   if (useLineFormat) return latestModelsLine(modelPairs);
   return `The most recent Claude models are the Claude 5 family. Model IDs \u2014 ${modelPairs.join(", ")}. When building AI applications, default to the latest and most capable Claude models.`;
 }
-//@ chunk-e6aww6q8.js:2241696-2241717 layout
+//@ chunk-5xgkngpb.js:2296791-2296812 layout
 /**
  * 判断是否用 readable 沟通段的谓词列表。
  */
 var READABLE_COMMUNICATION_GATES = [needsFableMitigations, neverTierCapability, neverTierCapabilityB];
-//@ chunk-e6aww6q8.js:2241717-2241764 layout
+//@ chunk-5xgkngpb.js:2296812-2296859 layout
 /**
  * READABLE_COMMUNICATION_GATES 任一为真。
  */
 function usesReadableCommunication(canonicalName, promptModel) {
   return READABLE_COMMUNICATION_GATES.some((gate) => gate(canonicalName, promptModel));
 }
-//@ chunk-e6aww6q8.js:2241764-2242476 layout
+//@ chunk-5xgkngpb.js:2296859-2297571 layout
 /**
  * turn-updates 模式的沟通段文本（开场一句、过程简报、结尾总结）；san 为"结论必须放在最后一条消息"附加段。
  */
@@ -585,7 +587,7 @@ var TURN_UPDATES_COMMUNICATION =
 var FINAL_MESSAGE_ONLY_NOTE = `
 
 Text you write between tool calls may not be shown to the user. Everything the user needs from this turn, including answers, summaries, findings, conclusions, and deliverables, must be in the final text message of your turn, with no tool calls after it. Keep text between tool calls to brief status notes. If something important appeared only mid-turn or in your thinking, restate it in that final message.`;
-//@ chunk-e6aww6q8.js:2242476-2242749 layout
+//@ chunk-5xgkngpb.js:2297571-2297844 layout
 /**
  * 沟通段模式：rewrite(-final-message)/turn-updates/readable(-final-message)/none/standard，由 lean 改写、CLAUDE_CODE_TURN_UPDATES、模型能力决定。
  */
@@ -603,7 +605,7 @@ function getCommunicationMode(promptModel, sendsUserMessages) {
       : "readable";
   return leanPromptFor(promptModel) ? "none" : "standard";
 }
-//@ chunk-e6aww6q8.js:2242749-2246490 layout
+//@ chunk-5xgkngpb.js:2297844-2301585 layout
 /**
  * 按沟通模式返回 "# Communicating with the user" 段文本。
  */
@@ -648,7 +650,7 @@ Match responses to the task: a simple question gets a direct answer, not headers
 In code: default to writing no comments. Never write multi-paragraph docstrings or multi-line comment blocks \u2014 one short line max. Don't create planning, decision, or analysis documents unless the user asks for them \u2014 work from conversation context, not intermediate files.`;
   }
 }
-//@ chunk-e6aww6q8.js:2246490-2247071 layout
+//@ chunk-5xgkngpb.js:2301585-2302166 layout
 /**
  * 谨慎操作段（难以撤销/对外可见的动作先确认）；lean 改写时换另一版。
  */
@@ -657,7 +659,7 @@ function getActionCautionSection(enabled, hasSkills) {
   if (hasSkills) return CAUTIOUS_ACTIONS_SECTION;
   return "For actions that are hard to reverse or outward-facing, confirm first unless durably authorized or explicitly told to proceed without asking; approval in one context doesn't extend to the next. Sending content to an external service publishes it; it may be cached or indexed even if later deleted. Before deleting or overwriting, look at the target. Report outcomes faithfully: if tests fail, say so with the output; if a step was skipped, say that; when something is done and verified, state it plainly without hedging.";
 }
-//@ chunk-e6aww6q8.js:2247071-2247576 layout
+//@ chunk-5xgkngpb.js:2302166-2302671 layout
 /**
  * 任务已获同意后连续执行、不反复确认的段落。
  */
@@ -665,7 +667,7 @@ function getTaskContinuitySection(enabled) {
   if (!enabled) return null;
   return "When a task has been agreed, the approval covers it end to end \u2014 in-scope steps don't need re-confirmation (irreversible or shared-system actions still do). Announcing a step without the tool call in the same turn hands control back with the work still pending; if the next step is decided, run it. Hand back only when done, waiting on something external, or the next step needs the user's decision. If the user asks something mid-task, answer and continue.";
 }
-//@ chunk-e6aww6q8.js:2247576-2248876 layout
+//@ chunk-5xgkngpb.js:2302671-2303971 layout
 /**
  * Claude Fable 5.1 / Fable 5 身份说明段（fable_identity）。
  */
@@ -674,7 +676,7 @@ var FABLE_5_1_IDENTITY =
   "This iteration of Claude is Claude Fable 5.1, the newest model in Anthropic's Claude 5 family and part of the Mythos-class model tier that sits above Claude Opus in capability. Claude Fable 5.1 and Claude Mythos 5.1 share the same underlying model. Claude Fable 5.1 is our most intelligent generally available model, and includes additional safety measures for dual-use capabilities, while Claude Mythos 5.1 is available without those measures to only approved organizations. Fable 5.1 is the most advanced generally available Claude model. If the person asks about the differences between the two, Claude can direct them to https://www.anthropic.com/claude/fable for more information.";
 var FABLE_5_IDENTITY =
   "This iteration of Claude is Claude Fable 5, the first model in Anthropic's new Claude 5 family and part of a new Mythos-class model tier that sits above Claude Opus in capability. Claude Fable 5 and Claude Mythos 5 share the same underlying model. Claude Fable 5 includes additional safety measures for dual-use capabilities, while Claude Mythos 5 is available without those measures to only approved organizations. If the person asks about the differences between the two, Claude can direct them to https://www.anthropic.com/news/claude-fable-5-mythos-5 for more information.";
-//@ chunk-e6aww6q8.js:2248876-2249000 layout
+//@ chunk-5xgkngpb.js:2303971-2304095 layout
 /**
  * 模型是 claude-fable-5-1 返回 "5.1"，Fable 5 族返回 "5"，否则 null。
  */
@@ -685,7 +687,7 @@ function getFableIdentityVersion(promptModel) {
     return anyModelDescribed(promptModel, canonicalName) ? null : "5";
   return null;
 }
-//@ chunk-e6aww6q8.js:2249000-2249089 layout
+//@ chunk-5xgkngpb.js:2304095-2304184 layout
 /**
  * 版本 → 对应 Fable 身份段文本。
  */
@@ -699,7 +701,7 @@ function getFableIdentitySection(version) {
       return null;
   }
 }
-//@ chunk-e6aww6q8.js:2249089-2249596 layout
+//@ chunk-5xgkngpb.js:2304184-2304691 layout
 /**
  * 对象/数组参数必须是单个 JSON 值的规则（tool_param_json 段）；Odr 为代词默认 they/them 段（pronouns）。
  */
@@ -707,14 +709,14 @@ var TOOL_PARAM_JSON_RULE =
   "Object and array parameter values must be a single JSON value \u2014 never write parameter-tag markup inside a JSON value.";
 var PRONOUNS_GUIDANCE =
   "When you use a pronoun for someone \u2014 the user or anyone else you mention \u2014 and their pronouns haven't been stated, use they/them. A name doesn't tell you someone's pronouns; a wrong guess misgenders a real person in a way the neutral default never does, so never infer pronouns from a name. This applies to all user-visible text, including visible thinking.";
-//@ chunk-e6aww6q8.js:2249596-2249981 fingerprint (2.1.88 match: getHooksSection, 1)
+//@ chunk-5xgkngpb.js:2304691-2305076 fingerprint (2.1.88 match: getHooksSection, 1)
 /**
  * Hooks 说明段（把 hook 反馈视为用户、被拦截时调整或请用户检查配置）。
  */
 function getHooksSection() {
   return "Users may configure 'hooks', shell commands that execute in response to events like tool calls, in settings. Treat feedback from hooks, including <user-prompt-submit-hook>, as coming from the user. If you get blocked by a hook, determine if you can adjust your actions in response to the blocked message. If not, ask the user to check their hooks configuration.";
 }
-//@ chunk-e6aww6q8.js:2249981-2250207 placement
+//@ chunk-5xgkngpb.js:2305076-2305302 placement
 function readHeronBrookOverride() {
   let tenguHeronBrook = getCachedClientData()?.tengu_heron_brook;
   if (typeof tenguHeronBrook === "string" && tenguHeronBrook.trim() !== "")
@@ -730,7 +732,7 @@ function readHeronBrookOverride() {
     };
   return null;
 }
-//@ chunk-e6aww6q8.js:2250207-2250340 placement
+//@ chunk-5xgkngpb.js:2305302-2305435 placement
 function applyHeronBrookOverride(override) {
   if (!override) return null;
   logEvent("tengu_heron_brook_applied", {
@@ -739,7 +741,7 @@ function applyHeronBrookOverride(override) {
   });
   return override.value;
 }
-//@ chunk-e6aww6q8.js:2250340-2253141 placement
+//@ chunk-5xgkngpb.js:2305435-2308236 placement
 /**
  * 关于推理强度不等于任务完成度的系统提示段：回合要做完任务、什么时候才先问、阻塞时先完成其余部分、最后列出自主决定。
  */
@@ -752,12 +754,12 @@ Ask before you start only when you cannot name the most likely reading of the re
 The user can inspect and undo edits to files in the working tree. Such edits are not hard-to-reverse or outward-facing actions, unless they would overwrite changes the user has in progress. That leaves the open choices to you: how to build the change, how to split it up, how to handle a case the request did not cover. Pick what you would recommend, and keep to what the user wrote where they were specific. List your choices in the final message so the user can redirect you. Start editing once you know the first change. A design worked out in files persists, while a long stretch of thinking can be cut off and lost.
 
 When one part of a task is blocked, unclear, or apparently wrong, the rest usually is not. If you suspect a step will fail, try it before you report it. Finish everything that does not depend on the stuck part, and open your final message with what is stuck. Finished parts are useful to the user even when the whole task is not done. Setting up the project so you can build and test it, such as installing its declared dependencies, is part of the work. If the code still cannot be built or run here, say so and make the changes you can verify by reading. If you investigate a problem and cannot find the cause, report what you ruled out and what would settle it. A question at the end of finished work costs the user one reply, the same as a question asked before any work.`;
-//@ chunk-e6aww6q8.js:2253141-2253254 placement
+//@ chunk-5xgkngpb.js:2308236-2308349 placement
 function shouldUseEarlyStoppingGuidance(canonicalName, model) {
   if (!isModelCapabilityEnabled("haiku_5_5_early_stopping_guidance", canonicalName, model)) return false;
   return getFeatureValue_SESSION_PINNED("tengu_idempotent_wolf", true);
 }
-//@ chunk-e6aww6q8.js:2253254-2255081 placement
+//@ chunk-5xgkngpb.js:2308349-2310176 placement
 /**
  * 系统提示里的"Writing for the user"段：最终消息要独立可读，先说结论、短句、不用破折号与括号、代码与数字不进正文、列表与标题的用法。
  */
@@ -775,7 +777,7 @@ Rules for that message:
 - Use a bulleted or numbered list for parallel items: findings, steps, options, files to look at. One or two sentences per bullet, never a paragraph. Bold the first few words of a bullet or paragraph, never a whole sentence. A single point or a line of argument stays in prose.
 - No headers in a message under about 500 words. Above that, at most three. If the user asks for no formatting, use none.
 - Stop when the content stops. No closing offer, no restating what you did.`;
-//@ chunk-e6aww6q8.js:2255081-2255194 placement
+//@ chunk-5xgkngpb.js:2310176-2310289 placement
 function shouldApplyWillowTern(model) {
   if (leanRewriteFor(model) || !isWillowTernEnabled(model)) return false;
   logEvent("tengu_willow_tern_applied", {
@@ -783,20 +785,22 @@ function shouldApplyWillowTern(model) {
   });
   return true;
 }
-//@ chunk-e6aww6q8.js:2255194-2255560 placement
+//@ chunk-5xgkngpb.js:2310289-2310780 placement
 /**
  * 系统提示词片段：不经要求不要使用 Agent 工具、工作流或 deep-research 的指示（及其旧版前缀），以及关于游戏开发只做原创、不复刻现有游戏的指示。
  */
 var NO_AGENT_UNLESS_ASKED_LINE; // deferred: uses AGENT (../tools/AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
 var NO_AGENT_TOOL_PREFIX;
 var ORIGINAL_GAMES_LINE;
-deferInit("chunk-e6aww6q8.js:2255194", () => {
+var ORIGINAL_GAMES_SHORT;
+deferInit("chunk-5xgkngpb.js:2310289", () => {
   NO_AGENT_UNLESS_ASKED_LINE = `Do not use the ${AGENT} tool, workflows, or deep-research unless the user, a CLAUDE.md file, or a skill asks for it`;
   NO_AGENT_TOOL_PREFIX = "Do not call the AgentTool unless the user";
   ORIGINAL_GAMES_LINE =
-    "Do build original games, games in a genre, and games from the user's own designs and assets. Don't build a recreation of a specific existing game, even if it is renamed or called original.";
+    "Do build original games, games in a genre or with similar mechanics, and games from the user's own designs and assets. Don't build a recreation of a specific existing game (its name, characters, art, music, levels or look), even if it is renamed or called original.";
+  ORIGINAL_GAMES_SHORT = "Do build original games, games in a genre";
 });
-//@ chunk-e6aww6q8.js:2255560-2255725 placement
+//@ chunk-5xgkngpb.js:2310780-2310945 placement
 function effortGuidanceForModel(model) {
   let mainLoopEffortState = getMainLoopEffortState();
   let effortLevelIfSupported = getEffortLevelIfSupported(
@@ -811,12 +815,12 @@ function effortGuidanceForModel(model) {
   });
   return effortLevel;
 }
-//@ chunk-e6aww6q8.js:2255725-2255807 placement
+//@ chunk-5xgkngpb.js:2310945-2311027 placement
 function shouldUseAutonomousPrompt(canonicalName, model) {
   if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_sextant", true)) return false;
   return needsFableMitigations(canonicalName, model) || isAmberAstrolabeEnabled(model);
 }
-//@ chunk-e6aww6q8.js:2255807-2257233 placement
+//@ chunk-5xgkngpb.js:2311027-2312453 placement
 /**
  * 自主运行模式的系统提示段：用户不实时观看，可逆操作直接做不必询问；问题/思考类请求只报告评估；回合结束前检查最后一段是否是未完成的计划；改系统状态前核实证据。非自主时返回 null。
  */
@@ -831,12 +835,12 @@ Before ending your turn, check your last paragraph. If it is a plan, an analysis
 Before running a command that changes system state (such as restarts, deletes, or config edits), check that the evidence actually supports that specific action. A signal that pattern-matches to a known failure may have a different cause.`;
   return null;
 }
-//@ chunk-e6aww6q8.js:2257233-2257483 placement
+//@ chunk-5xgkngpb.js:2312453-2312703 placement
 var DEFAULT_AGENT_IDENTITY_LINE =
   "You are an agent working with the user toward their goals, using your own judgment along the way.";
 var OUTPUT_STYLE_IDENTITY_LINE =
   'You are an interactive agent that helps users according to your "Output Style", which describes how you should respond to user queries.';
-//@ chunk-e6aww6q8.js:2257565-2257902 fingerprint (2.1.88 match: getSimpleIntroSection, 1)
+//@ chunk-5xgkngpb.js:2312785-2313122 fingerprint (2.1.88 match: getSimpleIntroSection, 1)
 /**
  * intro 段：身份开场（默认或输出风格）+ 安全测试说明 + 不要臆造 URL。
  */
@@ -847,13 +851,13 @@ ${outputStyle(outputStyleConfig)} Use the instructions below and the tools avail
 ${SECURITY_TESTING_POLICY}
 IMPORTANT: You must NEVER generate or guess URLs for the user unless you are confident that the URLs are for helping the user with programming. You may use URLs provided by the user in their messages or local files.`;
 }
-//@ chunk-e6aww6q8.js:2257902-2258067 layout
+//@ chunk-5xgkngpb.js:2313122-2313287 layout
 /**
  * 说明系统可能通过对话中途 system 轮次发送更新（支持 system 轮次的模型）。
  */
 var SYSTEM_TURNS_EXPLAINER =
   "The system may send updates, reminders, or modifications to rules via mid-conversation system turns. These are system-controlled, unlike function results.";
-//@ chunk-e6aww6q8.js:2258067-2258119 layout
+//@ chunk-5xgkngpb.js:2313287-2313338 layout
 /**
  * 模型是否接收对话中途 role=system 消息。
  */
@@ -864,7 +868,7 @@ function usesMidConversationSystemTurns(promptModel) {
     !isOpus48Model(getCanonicalName(promptModel))
   );
 }
-//@ chunk-e6aww6q8.js:2258119-2258491 layout
+//@ chunk-5xgkngpb.js:2313338-2313710 layout
 /**
  * system 段里关于 system-reminder 标签/系统轮次的说明句。
  */
@@ -874,7 +878,7 @@ function getSystemReminderExplainer(midConversationTurns, hasSkills) {
     ? "Tool results and user messages may include <system-reminder> or other tags. Tags contain information from the system. They bear no direct relation to the specific tool results or user messages in which they appear."
     : "`<system-reminder>` tags in messages and tool results are injected by the harness, not the user.";
 }
-//@ chunk-e6aww6q8.js:2258491-2259623 fingerprint (2.1.88 match: getSimpleSystemSection, 0.823)
+//@ chunk-5xgkngpb.js:2313710-2314842 fingerprint (2.1.88 match: getSimpleSystemSection, 0.823)
 /**
  * system 段（"# System"）：输出显示方式、权限模式、system-reminder、提示注入、hooks、自动压缩等要点。
  */
@@ -891,7 +895,7 @@ function getSimpleSystemSection(midConversationTurns, namesPastedContentTag) {
   return ["# System", ...prependBullets(items)].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:2259623-2263176 fingerprint (2.1.88 match: getSimpleDoingTasksSection, 0.753)
+//@ chunk-5xgkngpb.js:2314842-2318395 fingerprint (2.1.88 match: getSimpleDoingTasksSection, 0.753)
 /**
  * doing_tasks 段（"# Doing tasks"）：不加多余功能/错误处理、先读后改、验证与反馈渠道等。
  */
@@ -928,7 +932,7 @@ function getSimpleDoingTasksSection(separatesVerifiedFromAssumed, feedback) {
   return ["# Doing tasks", ...prependBullets(items)].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:2263176-2266801 layout
+//@ chunk-5xgkngpb.js:2318395-2322020 layout
 /**
  * actions 段 "# Executing actions with care"：可逆性与影响范围、危险操作先确认。
  */
@@ -945,7 +949,7 @@ Examples of the kind of risky actions that warrant user confirmation:
 
 When you encounter an obstacle, do not use destructive actions as a shortcut to simply make it go away. For instance, try to identify root causes and fix underlying issues rather than bypassing safety checks (e.g. --no-verify). If you discover unexpected state like unfamiliar files, branches, or configuration, investigate before deleting or overwriting, as it may represent the user's in-progress work. If you're unsure whether the user would want something kept, prefer a reversible step (move it aside, rename it, or stash it) over deleting; files you created yourself this session (scratch outputs, experiment intermediates) are yours to clean up freely. For example, typically resolve merge conflicts rather than discarding changes; similarly, if a lock file exists, investigate what process holds it rather than deleting it. In a git repository, run \`git status\` before any command that could discard uncommitted work (git checkout/restore/reset/clean, rm -rf on a repo path, restoring from a snapshot), and stash (with \`-u\` for untracked) or commit anything you find first. And when staging or committing: review what's included (\`git status\` after a broad \`git add\`), and if you see anything suspicious that might reveal secrets \u2014 even if the filename looks innocuous \u2014 double-check the file's contents before pushing. In short: only take risky actions carefully, and when in doubt, ask before acting. Follow both the spirit and letter of these instructions - measure twice, cut once.`;
 }
-//@ chunk-e6aww6q8.js:2266801-2266865 layout
+//@ chunk-5xgkngpb.js:2322020-2322084 layout
 /**
  * tengu_wobbly_dahl 开时在末尾加 user_pays 段。
  */
@@ -953,13 +957,13 @@ function shouldCloseOnWhoPays(isReplMode) {
   if (isReplMode) return false;
   return getFeatureValue_SESSION_PINNED("tengu_wobbly_dahl", false);
 }
-//@ chunk-e6aww6q8.js:2266865-2266969 layout
+//@ chunk-5xgkngpb.js:2322084-2322188 layout
 /**
  * "The user pays per token for your turns…"。
  */
 var USER_PAYS_NOTE =
   "The user pays per token for your turns, and wants the job done for what it needs and no more.";
-//@ chunk-e6aww6q8.js:2266969-2268283 fingerprint (2.1.88 match: getUsingYourToolsSection, 0.51)
+//@ chunk-5xgkngpb.js:2322188-2323502 fingerprint (2.1.88 match: getUsingYourToolsSection, 0.51)
 /**
  * tools 段 "# Using your tools"：任务工具、专用工具优先于 Bash、并行调用等；REPL 模式另一版。
  */
@@ -979,8 +983,8 @@ function getUsingYourToolsSection(enabledTools, isReplMode, hasEmbeddedSearch) {
   let hasBash = enabledTools.has(BASH_TOOL_NAME);
   let shellToolName = hasBash ? BASH_TOOL_NAME : POWERSHELL_TOOL_NAME;
   let joined = [
-    FILE_READ_TOOL_NAME,
-    FILE_EDIT_TOOL_NAME,
+    READ,
+    EDIT,
     FILE_WRITE_TOOL_NAME,
     ...(embedded && hasBash ? [] : [GLOB_TOOL_NAME, GREP_TOOL_NAME]),
   ].join(", ");
@@ -994,7 +998,7 @@ function getUsingYourToolsSection(enabledTools, isReplMode, hasEmbeddedSearch) {
   return ["# Using your tools", ...prependBullets(items)].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:2268283-2268409 layout
+//@ chunk-5xgkngpb.js:2323502-2323628 layout
 /**
  * Agent 工具说明模式：none/fork/fork-background/with-nudge/plain。
  */
@@ -1003,7 +1007,7 @@ function getAgentGuidanceMode(hasSkills) {
   if (isForkSubagentEnabled()) return forkGateForcesBackground() ? "fork-background" : "fork";
   return getSubagentSteer() === "default" ? "with-nudge" : "plain";
 }
-//@ chunk-e6aww6q8.js:2268409-2269823 fingerprint (2.1.88 match: getAgentToolSection, 0.327)
+//@ chunk-5xgkngpb.js:2323628-2325042 fingerprint (2.1.88 match: getAgentToolSection, 0.327)
 /**
  * 按模式生成 Agent 工具使用段（fork 说明、子代理委派提示）。
  */
@@ -1020,7 +1024,7 @@ function getAgentToolSection(agentGuidance) {
       return `Use the ${AGENT} tool with specialized agents when the task at hand matches the agent's description. Importantly, avoid duplicating work that subagents are already doing - if you delegate research to a subagent, do not also perform the same searches yourself.`;
   }
 }
-//@ chunk-e6aww6q8.js:2269823-2270186 layout
+//@ chunk-5xgkngpb.js:2325042-2325438 layout
 /**
  * session_guidance 段的事实：是否提示 ! 命令、App 跟随、Agent 指导模式、搜索方式、Explore 代理、Skill 工具、ultrareview。
  */
@@ -1040,7 +1044,12 @@ function getSessionGuidanceFacts(enabledToolNames, skillToolCommands, isLean, is
     isExplorePlanAgentsEnabled() &&
     getSubagentSteer() === "default" &&
     !isForkSubagentEnabled();
-  let skills = hasSkills && !isStatic ? "skill-tool" : "none";
+  let skills =
+    hasSkills && !isStatic
+      ? codeModeAccepted() && isCodeModeEnabled() && enabledToolNames.has(REPL_TOOL_NAME)
+        ? "script"
+        : "skill-tool"
+      : "none";
   let explainsUltrareview = isUltrareviewWithBridge() && !isStatic;
   return {
     offersShellEscape,
@@ -1052,7 +1061,7 @@ function getSessionGuidanceFacts(enabledToolNames, skillToolCommands, isLean, is
     explainsUltrareview,
   };
 }
-//@ chunk-e6aww6q8.js:2270186-2272002 fingerprint (2.1.88 match: getSessionSpecificGuidanceSection, 0.517)
+//@ chunk-5xgkngpb.js:2325438-2327437 fingerprint (2.1.88 match: getSessionSpecificGuidanceSection, 0.48)
 /**
  * session_guidance 段（"# Session-specific guidance"）文本。
  */
@@ -1076,9 +1085,11 @@ function getSessionSpecificGuidanceSection(enabledTools, skillToolCommands) {
         ]
       : []),
     enabledTools.skills !== "none"
-      ? skillToolCommands
-        ? SKILL_INVOKE_NOTE
-        : `When the user types \`/<skill-name>\`, invoke it via ${SKILL}. Only use skills listed in the user-invocable skills section \u2014 don't guess.`
+      ? enabledTools.skills === "script"
+        ? "When the user types `/<skill-name>`, invoke it with `tools.Skill` from a script. Only use skills listed in the user-invocable skills section \u2014 don't guess."
+        : skillToolCommands
+          ? SKILL_INVOKE_NOTE
+          : `When the user types \`/<skill-name>\`, invoke it via ${SKILL}. Only use skills listed in the user-invocable skills section \u2014 don't guess.`
       : null,
     enabledTools.explainsUltrareview
       ? 'If the user asks about "ultrareview" or how to run it, explain that /code-review ultra launches a multi-agent cloud review of the current branch (or /code-review ultra <PR#> for a GitHub PR); /ultrareview is a deprecated alias for the same command. It is user-triggered and billed; you cannot launch it yourself, so do not attempt to via Bash or otherwise. It needs a git repository (offer to "git init" if not in one); the no-arg form bundles the local branch and does not need a GitHub remote.'
@@ -1088,7 +1099,7 @@ function getSessionSpecificGuidanceSection(enabledTools, skillToolCommands) {
   return ["# Session-specific guidance", ...prependBullets(items)].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:2272002-2272628 fingerprint (2.1.88 match: getSimpleToneAndStyleSection, 0.889)
+//@ chunk-5xgkngpb.js:2327437-2328063 fingerprint (2.1.88 match: getSimpleToneAndStyleSection, 0.889)
 /**
  * tone 段 "# Tone and style"：不用 emoji、简洁、file:line 引用、工具调用前不加冒号。
  */
@@ -1102,7 +1113,7 @@ function getSimpleToneAndStyleSection() {
   return ["# Tone and style", ...prependBullets(items)].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:2272628-2273359 layout
+//@ chunk-5xgkngpb.js:2328063-2328794 layout
 /**
  * lean 模型用的合并正文（Harness/工具/输出要点）；lean 改写模式另一版。
  */
@@ -1128,7 +1139,7 @@ ${SECURITY_TESTING_POLICY}
  - Prefer the dedicated file/search tools over shell commands when one fits. Independent tool calls can run in parallel in one response.
  - Reference code as \`file_path:line_number\` \u2014 it's clickable.`;
 }
-//@ chunk-e6aww6q8.js:2273359-2273534 layout
+//@ chunk-5xgkngpb.js:2328794-2328969 layout
 /**
  * CLAUDE_CODE_ACT_DONT_REDERIVE 或 tengu_cedar_lantern（默认开）。
  */
@@ -1141,7 +1152,7 @@ function isActDontRederiveEnabled() {
     );
   return flag;
 }
-//@ chunk-e6aww6q8.js:2273534-2277128 layout
+//@ chunk-5xgkngpb.js:2328969-2332563 layout
 /**
  * act_dont_rederive / "# Delivering work" / "# Corrections" 三段文本。
  */
@@ -1157,7 +1168,7 @@ var CORRECTIONS_SECTION = `# Corrections
 Avoid unnecessary or excessive self-correction. Only correct an earlier statement in your user-facing text when the error would change the user's code, conclusions, or decisions. State corrections plainly and concisely, and continue the task; combine multiple corrections rather than enumerating them all. For slips that change nothing for the user, simply make the correction and move on - no need to note it explicitly. Don't add apologies or preambles, don't be overly self-critical, and don't ruminate or give a detailed account of the mistake or tally past errors. Sometimes, other agents will report incorrect or misleading results - don't always take them at face value immediately. If other agents correct your statements and they are right, then simply update your approach without narrating too much about the correction to the user. This instruction does not apply to thinking blocks.
 
 A follow-up question about your earlier work is not, by itself, a signal that you got something wrong \u2014 answer what was asked. A statement that was accurate needs no correction: don't re-audit how you phrased it, how you verified it, or limits you already stated. When the user does point to a real error, correct it plainly as above.`;
-//@ chunk-e6aww6q8.js:2277128-2277861 layout
+//@ chunk-5xgkngpb.js:2332563-2333297 layout
 /**
  * 由入口（CLAUDE_CODE_ENTRYPOINT 等）推出界面：desktop/vscode/web/mobile/slack/…。
  */
@@ -1203,7 +1214,7 @@ function getSurfaceName() {
       return getIsNonInteractiveSession() ? "sdk" : "terminal";
   }
 }
-//@ chunk-e6aww6q8.js:2277861-2278004 layout
+//@ chunk-5xgkngpb.js:2333297-2333440 layout
 /**
  * {surface, workspace: unnamed/local/remote}。
  */
@@ -1219,7 +1230,7 @@ function getSurfaceFacts() {
     workspace: isCcsTenant() || isHeadlessHostEntrypoint() || isRemoteEntrypoint() ? "remote" : "local",
   };
 }
-//@ chunk-e6aww6q8.js:2278004-2278190 layout
+//@ chunk-5xgkngpb.js:2333440-2333626 layout
 /**
  * "# Surface" 段。
  */
@@ -1238,7 +1249,7 @@ ${ENV_DESCRIPTIONS[surface]}
 ${REMOTE_SANDBOX_SECTION}`;
   }
 }
-//@ chunk-e6aww6q8.js:2278190-2278634 layout
+//@ chunk-5xgkngpb.js:2333626-2334070 layout
 /**
  * lean 改写时段 id → XML 标签名（env_info→environment 等）。
  */
@@ -1254,7 +1265,7 @@ function getLeanSectionTagName(text) {
     .replace(/^opus5_reduced_delegation$/, "additional_guidance")
     .replace(/^original_games$/, "additional_guidance");
 }
-//@ chunk-e6aww6q8.js:2278634-2278741 layout
+//@ chunk-5xgkngpb.js:2334070-2334177 layout
 /**
  * 用 <tag>…</tag> 包住非空文本。
  */
@@ -1264,22 +1275,22 @@ function wrapInTag(tag, text) {
 ${text.replace(/^\n+|\n+$/g, "")}
 </${tag}>`;
 }
-//@ chunk-e6aww6q8.js:2278741-2278788 layout
+//@ chunk-5xgkngpb.js:2334177-2334224 layout
 /**
  * brook_heron/willow_tern 不加标签。
  */
 var UNTAGGED_LEAN_SECTIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:2278741", () => {
+deferInit("chunk-5xgkngpb.js:2334177", () => {
   UNTAGGED_LEAN_SECTIONS = new Set(["brook_heron", "willow_tern"]);
 });
-//@ chunk-e6aww6q8.js:2278788-2278848 layout
+//@ chunk-5xgkngpb.js:2334224-2334284 layout
 /**
  * lean 改写时给段落加 XML 标签（例外段不加）。
  */
 function tagLeanSection(id, text) {
   return UNTAGGED_LEAN_SECTIONS.has(firstLineOf(id, ":")) ? text : wrapInTag(getLeanSectionTagName(id), text);
 }
-//@ chunk-e6aww6q8.js:2278848-2279004 layout
+//@ chunk-5xgkngpb.js:2334284-2334440 layout
 /**
  * 旧版 getSystemPrompt 的 316 对应：经 composeSections 计算事实并组合分段，shared 段在前、动态分界标记（全局缓存开时）、session 段在后，再做提示词消融替换，返回字符串数组。
  */
@@ -1296,7 +1307,7 @@ async function getSystemPrompt(tools, requestModel, options) {
     shouldUseGlobalCacheScope() ? SYSTEM_PROMPT_DYNAMIC_BOUNDARY : null,
   ).map((section) => applyPromptAblation(section));
 }
-//@ chunk-e6aww6q8.js:2279004-2279263 callgraph-fingerprint (2.1.88 match: getProactiveSection, 0.216)
+//@ chunk-5xgkngpb.js:2334440-2334699 callgraph-fingerprint (2.1.88 match: getProactiveSection, 0.215)
 /**
  * 计算系统提示词"事实"（模型、工具、输出风格、bare/lean/sdk-preset 等特征）。旧版名 getProactiveSection 为错配。
  */
@@ -1318,7 +1329,7 @@ async function computePromptFacts(tools, requestModel, options) {
     isSendingUserMessages: briefToolModule_2.isBriefEnabled() || isPewterOwlTool(),
   });
 }
-//@ chunk-e6aww6q8.js:2279263-2279786 layout
+//@ chunk-5xgkngpb.js:2334699-2335222 layout
 /**
  * 组装事实对象 {model,promptModel,tools,outputStyle,traits}。
  */
@@ -1357,7 +1368,7 @@ function buildPromptFacts({
     traits: traitPairs.filter(([, enabled]) => enabled).map(([trait]) => trait),
   };
 }
-//@ chunk-e6aww6q8.js:2279786-2280066 layout
+//@ chunk-5xgkngpb.js:2335222-2335502 layout
 /**
  * 按记录的事实（工具名、特征）重新组合分段（分离运行，如后台/hook 代理）。
  */
@@ -1375,7 +1386,7 @@ function composeDetachedSections_2(detachedFactsKey, tools, isDetached, hookOrig
     },
   );
 }
-//@ chunk-e6aww6q8.js:2280066-2280125 layout
+//@ chunk-5xgkngpb.js:2335502-2335561 layout
 /**
  * 登记提示词模型并为 opus5 提示包注册 no_nudges 下限。
  */
@@ -1383,12 +1394,12 @@ function registerPromptModel(model) {
   registerSteerModelFloor((model) => (usesOpus5PromptBundle(model) ? "no_nudges" : undefined));
   recordSteerPromptModel(model);
 }
-//@ chunk-e6aww6q8.js:2280125-2280246 layout
+//@ chunk-5xgkngpb.js:2335561-2335682 layout
 /**
  * 模块加载时注册提示词组合器（setPromptComposer）：facts 与 detachedSections 两个回调。
  */
 // deferred: uses setPromptComposer (../plugins/functionHooks/promptComposition.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2280125", () => {
+deferInit("chunk-5xgkngpb.js:2335561", () => {
   setPromptComposer({
     facts: (tools, requestModel) => computePromptFacts(tools, requestModel),
     detachedSections: (detachedFactsKey, tools, hookOrigin) => {
@@ -1397,7 +1408,7 @@ deferInit("chunk-e6aww6q8.js:2280125", () => {
     },
   });
 });
-//@ chunk-e6aww6q8.js:2280246-2280379 layout
+//@ chunk-5xgkngpb.js:2335682-2335815 layout
 /**
  * 会话段决策：已记录（同会话前次）则回放；否则计算决策并记录渲染文本。
  */
@@ -1411,7 +1422,7 @@ async function decideSection(context, sectionId, getApplies, render) {
     decision: applies,
   };
 }
-//@ chunk-e6aww6q8.js:2280379-2280514 layout
+//@ chunk-5xgkngpb.js:2335815-2335950 layout
 /**
  * decideSection 的异步决策版本。
  */
@@ -1425,7 +1436,7 @@ async function decideSectionAsync(context, sectionId, getApplies) {
     decision: await applies,
   };
 }
-//@ chunk-e6aww6q8.js:2280514-2280667 layout
+//@ chunk-5xgkngpb.js:2335950-2336103 layout
 /**
  * 会话里已记录过该段时返回回放结果。
  */
@@ -1443,7 +1454,7 @@ function replayRecordedSection(context, sectionId) {
     text: recorded,
   };
 }
-//@ chunk-e6aww6q8.js:2280667-2280856 layout
+//@ chunk-5xgkngpb.js:2336103-2336292 layout
 /**
  * 计算并记录该段文本（systemPromptSection 缓存）。
  */
@@ -1460,21 +1471,21 @@ async function recordSectionAnswer(context, name, compute) {
     answer: resolved ?? null,
   });
 }
-//@ chunk-e6aww6q8.js:2280856-2280914 layout
+//@ chunk-5xgkngpb.js:2336292-2336350 layout
 /**
  * 回放用记录文本，否则调用渲染函数。
  */
 function renderSectionDecision(decision, render) {
   return decision.isReplayed ? decision.text : render(decision.decision);
 }
-//@ chunk-e6aww6q8.js:2280914-2281290 layout
+//@ chunk-5xgkngpb.js:2336350-2336730 layout
 /**
  * decideSystemPromptSections → buildSystemPromptSectionList → 每段替换为记录的答案，lean 改写时加标签，转为带 scope 的段。
  */
 async function composeSessionSystemPrompt(tools, requestModel, options) {
   let { facts, decisions, record } = await decideSystemPromptSections(tools, requestModel, options);
   let systemPromptSectionList = buildSystemPromptSectionList(facts, decisions);
-  if (count(systemPromptSectionList, (section) => record.has(section.id)) !== record.size)
+  if (countWhere(systemPromptSectionList, (section) => record.has(section.id)) !== record.size)
     logError(Error("System prompt: a session section the engine decided for was not composed"));
   let leanRewrite = decisions.kind === "full" && decisions.leanRewrite;
   return systemPromptSectionList.flatMap(({ id, scope, text }) => {
@@ -1485,7 +1496,7 @@ async function composeSessionSystemPrompt(tools, requestModel, options) {
     ]);
   });
 }
-//@ chunk-e6aww6q8.js:2281290-2286356 layout
+//@ chunk-5xgkngpb.js:2336730-2341807 layout
 /**
  * 对每个会话段（communication、pronouns、fable_identity、session_guidance、memory、surface、env_info、bg-session、context_management、system_messages、brief、focus_mode、delivering_work、overcorrection、heron_brook 等）做开关决策；CLAUDE_CODE_SIMPLE 时只给 CWD/Date。
  */
@@ -1592,7 +1603,7 @@ async function decideSystemPromptSections(tools, requestModel, options) {
   let memoryDecision = options?.excludeDynamicSections
     ? undefined
     : decideSectionAsync(sectionContext, `memory${leanSuffix}`, async () =>
-        identityTool(
+        memorySectionForWire(
           await loadMemoryPrompt(promptModel, {
             analysisOnly: options?.analysisOnly || options?.isDetached,
           }),
@@ -1681,7 +1692,7 @@ async function decideSystemPromptSections(tools, requestModel, options) {
     "original_games",
     () =>
       isModelCapabilityEnabled("original_games_guidance", canonicalName, promptModel) &&
-      readOverride()?.value.includes(ORIGINAL_GAMES_LINE) !== true,
+      readOverride()?.value.includes(ORIGINAL_GAMES_SHORT) !== true,
     sectionRenderers.hasOriginalGamesGuidance,
   );
   let heronBrookDecision = decideSection(
@@ -1777,11 +1788,11 @@ async function decideSystemPromptSections(tools, requestModel, options) {
     !isLean &&
     (!hasOutputStyle || outputStyleConfig.keepCodingInstructions === true) &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_verified_vs_assumed", false);
-  let isReplMode = !isLean && alwaysFalseFlag();
+  let isReplMode = !isLean && isCodeModeEnabled();
   let hasEmbeddedSearch = !isLean && !isReplMode && hasEmbeddedSearchTools();
   let memoryStatic = options?.excludeDynamicSections ? autoMemorySection(promptModel) : null;
   let totalTokens = contextWindowReminderConfig(requestModel, undefined);
-  let autonomousMode = false;
+  let autonomousMode = codeModeAccepted() && isCodeModeEnabled();
   return {
     facts: buildPromptFacts({
       tools,
@@ -1805,10 +1816,10 @@ async function decideSystemPromptSections(tools, requestModel, options) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.ISSUES_EXPLAINER,
@@ -1870,7 +1881,7 @@ async function decideSystemPromptSections(tools, requestModel, options) {
     record,
   };
 }
-//@ chunk-e6aww6q8.js:2286356-2288941 callgraph-witnessed (2.1.88 match: getSystemPrompt, 0.118)
+//@ chunk-5xgkngpb.js:2341807-2344394 callgraph-witnessed (2.1.88 match: getSystemPrompt, 0.118)
 /**
  * 把决策渲染成 [{id,scope,text}]：shared 段（intro/system/doing_tasks/actions/tools/tone 或 lean_body）、session 段、total_tokens 等。旧版名 getSystemPrompt 实际对应 #KI。
  */
@@ -1998,7 +2009,7 @@ ${wrapInTag("intro", getLeanBodySection(decisions))}`
     ...toScopedSections("session", tailSections),
   ];
 }
-//@ chunk-e6aww6q8.js:2288941-2289753 layout
+//@ chunk-5xgkngpb.js:2344394-2345206 layout
 /**
  * 会话段 id → 渲染函数表。
  */
@@ -2039,14 +2050,14 @@ function getSectionRenderers(isLean, excludeDynamic, isLeanRewrite) {
     endConversationHint: (text) => text,
   };
 }
-//@ chunk-e6aww6q8.js:2289753-2289807 layout
+//@ chunk-5xgkngpb.js:2345206-2345260 layout
 /**
  * 决策存在时产出 [id, 文本] 一项，否则空。
  */
 function optionalSectionEntry(id, decision, render) {
   return decision === undefined ? [] : [[id, renderSectionDecision(decision, render)]];
 }
-//@ chunk-e6aww6q8.js:2289807-2289872 layout
+//@ chunk-5xgkngpb.js:2345260-2345325 layout
 /**
  * [id,text] → {id,scope,text}。
  */
@@ -2057,7 +2068,7 @@ function toScopedSections(scope, sections) {
     text,
   }));
 }
-//@ chunk-e6aww6q8.js:2289872-2289986 layout
+//@ chunk-5xgkngpb.js:2345325-2345439 layout
 /**
  * heron_brook 段：服务端下发文本、或 early-stopping 提示、或无。
  */
@@ -2071,21 +2082,23 @@ function getServedGuidanceText(served) {
       return null;
   }
 }
-//@ chunk-e6aww6q8.js:2289986-2290016 layout
+//@ chunk-5xgkngpb.js:2345439-2345742 layout
 /**
  * 恒为 null（构建时裁掉）。
  */
 function getReplWorkingSection(isReplMode, isLean) {
+  if (isReplMode && !isLean)
+    return "Few, full scripts: do a turn's investigating in as few REPL calls as the dependencies between its steps allow, reading and searching more widely than you strictly need, because each extra call is a round trip and each extra read inside one is nearly free.";
   return null;
 }
-//@ chunk-e6aww6q8.js:2290016-2290077 layout
+//@ chunk-5xgkngpb.js:2345742-2345803 layout
 /**
  * <total_tokens>…</total_tokens> 段。
  */
 function getTotalTokensSection(totalTokens) {
   return totalTokens === null ? null : formatTotalTokensTag(totalTokens.mode, totalTokens.remaining);
 }
-//@ chunk-e6aww6q8.js:2290077-2290282 placement
+//@ chunk-5xgkngpb.js:2345803-2346008 placement
 function contextWindowReminderConfig(requestModel, budgetOverride) {
   if (env.CLAUDE_CODE_DISABLE_ATTACHMENTS || env.CLAUDE_CODE_SIMPLE) return null;
   let totalTokensReminderMode = getTotalTokensReminderMode(requestModel, budgetOverride);
@@ -2099,7 +2112,7 @@ function contextWindowReminderConfig(requestModel, budgetOverride) {
     remaining,
   };
 }
-//@ chunk-e6aww6q8.js:2290282-2290378 placement
+//@ chunk-5xgkngpb.js:2346008-2346104 placement
 /**
  * 函数 buildMemoryDirectorySection（生成记忆目录提示段）；位于「系统提示词的组装：按"事实→会话分段决策→渲染"三步生成各分段（intro/system/doing_tasks/actions/tools/tone 共享段 + communication/pronouns/环境/记忆/上下文管理等会话段），带 __SYSTEM_PROMPT_DYNAMIC_BOUNDARY__ 静态/动态分界；另含环境信息块、模型身份行、输出风格/语言段落文本」模块。
  */
@@ -2112,7 +2125,7 @@ async function buildMemoryDirectorySection(mainLoopModel, options = {}) {
   }
   return sections;
 }
-//@ chunk-e6aww6q8.js:2290378-2290623 placement
+//@ chunk-5xgkngpb.js:2346104-2346349 placement
 function splitSectionHeading(memoryDirectoryLine) {
   let index = memoryDirectoryLine.indexOf(`
 `);
@@ -2123,7 +2136,7 @@ function splitSectionHeading(memoryDirectoryLine) {
     );
   return [firstLine.slice(2), index === -1 ? "" : memoryDirectoryLine.slice(index + 1)];
 }
-//@ chunk-e6aww6q8.js:2290623-2291005 placement
+//@ chunk-5xgkngpb.js:2346349-2346731 placement
 /**
  * 系统提示里的 Claude Code 可用形态段：最新模型行、CLI/桌面/网页/IDE 形态说明，以及（未开 fast 时）fast 模式说明。
  */
@@ -2138,13 +2151,13 @@ function claudeCodeEnvironmentSection(facts, excludeDynamic, isLeanRewrite) {
   return [ENVIRONMENT_HEADER, ...prependBullets(filtered)].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:2291005-2291428 placement
+//@ chunk-5xgkngpb.js:2346731-2347154 placement
 /**
  * 默认子代理系统提示开头："You are an agent for Claude Code…"，要求完整做完任务并给出简洁报告。
  */
 var DEFAULT_SUBAGENT_PROMPT =
   "You are an agent for Claude Code, Anthropic's official CLI for Claude. Given the user's message, you should use the tools available to complete the task. Complete the task fully\u2014don't gold-plate, but don't leave it half-done. When you complete the task, respond with a concise report covering what was done and any key findings \u2014 the caller will relay this to the user, so it only needs the essentials.";
-//@ chunk-e6aww6q8.js:2291428-2292836 placement
+//@ chunk-5xgkngpb.js:2347154-2348562 placement
 /**
  * 生成子代理系统提示末尾的 Notes 段（cwd 会重置、只认上级代理的消息、不要写报告文件等）。
  */
@@ -2173,7 +2186,7 @@ ${cwdNote}
     ),
   ];
 }
-//@ chunk-e6aww6q8.js:2292836-2293100 placement
+//@ chunk-5xgkngpb.js:2348562-2348826 placement
 function backgroundJobContext() {
   {
     if (env.CLAUDE_CODE_SESSION_KIND !== "bg") return null;
@@ -2192,7 +2205,7 @@ function backgroundJobContext() {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:2293100-2295740 placement
+//@ chunk-5xgkngpb.js:2348826-2351466 placement
 /**
  * 生成子代理隔离方式说明段：就地编辑或先进入 worktree（isolation: worktree）。
  */
@@ -2230,15 +2243,15 @@ End the job with a report the user can act on: what you did, where it lives \u20
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:2295740-2296036 placement
+//@ chunk-5xgkngpb.js:2351466-2351762 placement
 var CONTEXT_MANAGEMENT_PROMPT_SECTION = `# Context management
 When the conversation grows long, some or all of the current context is summarized; the summary, along with any remaining unsummarized context, is provided in the next context window so work can continue \u2014 you don't need to wrap up early or hand off mid-task.`;
-//@ chunk-e6aww6q8.js:2296036-2296081 placement
+//@ chunk-5xgkngpb.js:2351762-2351807 placement
 function briefSection(enabled) {
   if (!enabled) return null;
   return BRIEF_PROACTIVE_SECTION;
 }
-//@ chunk-e6aww6q8.js:2296081-2296973 placement
+//@ chunk-5xgkngpb.js:2351807-2352699 placement
 /**
  * 专注模式的系统提示段（两个版本）：用户只看到每次回复的最终文本，中途不要叙述进度，把调查、发现、改动、决定和下一步都写进最终消息。
  */
@@ -2246,20 +2259,20 @@ var FOCUS_MODE_SECTION = `# Focus mode
 The user has focus mode enabled. In focus mode, the user only sees your final text message in each response. They do not see tool calls, tool results, or any text you emit between tool calls. This overrides earlier guidance about giving short updates between tool calls \u2014 skip those updates and put everything the user needs to know in your final message. Do not assume they saw earlier progress updates.`;
 var FOCUS_MODE_SECTION_V2 = `# Focus mode
 The user has focus mode enabled. They only see your final text message in each response \u2014 not tool calls, tool results, or any text you write between tool calls. Anything you say mid-turn is not seen, so don't narrate progress between tool calls. Put everything the user needs into your final message: what you investigated, what you found, what you changed, decisions you made, and what's next. Do not assume they saw earlier output.`;
-//@ chunk-e6aww6q8.js:2296973-2297044 placement
+//@ chunk-5xgkngpb.js:2352699-2352770 placement
 function focusModeSection(enabled, isLean, isLeanRewrite) {
   if (!enabled) return null;
   if (isLeanRewrite) return FOCUS_MODE_SECTION_2;
   return isLean ? FOCUS_MODE_SECTION_V2 : FOCUS_MODE_SECTION;
 }
-//@ chunk-e6aww6q8.js:2297044-2297152 placement
+//@ chunk-5xgkngpb.js:2352770-2352878 placement
 function isFocusModeOn() {
   if (getIsNonInteractiveSession()) {
     if (getSettingsForSource("flagSettings")?.viewMode !== "focus") return false;
   } else if (!isFocusModeEnabled()) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:2324273-2324498 fingerprint (2.1.88 match: CLAUDE_CODE_DOCS_MAP_URL, 0.333)
+//@ chunk-5xgkngpb.js:2379674-2379899 fingerprint (2.1.88 match: CLAUDE_CODE_DOCS_MAP_URL, 0.333)
 /**
  * 文档地址常量（claude-code-guide 代理用）。
  */
@@ -2268,19 +2281,19 @@ var HTTPS_PLATFORM_CLAUDE_COM_LLMS_TXT = "https://platform.claude.com/llms.txt";
 var HTTPS_CLAUDE_COM_DOCS_LLMS_TXT = "https://claude.com/docs/llms.txt";
 var CLAUDE_TAG_DOCS_URL = "https://claude.com/docs/claude-tag/overview.md";
 var CLAUDE_CODE_GUIDE = "claude-code-guide";
-//@ chunk-e6aww6q8.js:3374459-3374509 sole-consumer
+//@ chunk-5xgkngpb.js:3462204-3462254 sole-consumer
 /**
  * GrowthBook 开关 tengu_humble_zephyr；关闭时只要工具列表里有 Brief 工具就视为启用，打开时再看 isBriefEnabled()。
  */
 function isBriefGateEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_humble_zephyr", false);
 }
-//@ chunk-e6aww6q8.js:3374509-3374608 fingerprint (2.1.88 match: getBriefSection, 1)
+//@ chunk-5xgkngpb.js:3462254-3462353 fingerprint (2.1.88 match: getBriefSection, 1)
 /**
  * 工具中有 Brief 工具且（无开关或）Brief 已开启。旧版名 getBriefSection 不准确。
  */
 function isBriefToolActive(tools) {
-  if (!tools.some((tool) => toolMatchesName(tool, BRIEF_TOOL_NAME))) return false;
+  if (!tools.some((tool) => matchesToolName(tool, BRIEF_TOOL_NAME))) return false;
   if (!isBriefGateEnabled()) return true;
   return briefEnablementModule.isBriefEnabled();
 }
@@ -2302,14 +2315,10 @@ export {
   getOutputStyleChangeText,
   languagePreferenceSchema,
   getLanguageChangeText,
-  getLastModelIdentity,
-  isSameModelIdentity,
-  buildModelEnvInfoAttachment,
-  buildSubagentNotesSection,
-  DEFAULT_SUBAGENT_PROMPT,
-  getSystemPrompt,
   isBriefToolActive,
-  buildMemoryDirectorySection,
+  getSystemPrompt,
+  getLastModelIdentity,
+  POWERSHELL_BASH_NOTE,
   getUnameSR,
   getShellDescription,
   formatAgentProxyNote,
@@ -2322,6 +2331,8 @@ export {
   AGENT_PROXY_NOT_ACTIVE_NOTE,
   ENVIRONMENT_UPDATE_HEADER,
   prependBullets,
+  isSameModelIdentity,
+  buildModelEnvInfoAttachment,
   OUTPUT_STYLE_IDENTITY_LINE,
   DEFAULT_AGENT_IDENTITY_LINE,
   CLAUDE_CODE_DOCS_MAP_URL,
@@ -2330,5 +2341,7 @@ export {
   CLAUDE_TAG_DOCS_URL,
   CLAUDE_CODE_GUIDE,
   getLastModelAttachment,
-  POWERSHELL_BASH_NOTE,
+  buildSubagentNotesSection,
+  DEFAULT_SUBAGENT_PROMPT,
+  buildMemoryDirectorySection,
 };

@@ -3,9 +3,9 @@
  *
  * 订阅 IDE selection_changed 通知，维护当前选区（文件、行数、文本）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useIdeSelection.ts
- * pieces: chunk-18hwfzwa.js (2)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: fingerprint 2
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -16,9 +16,9 @@ import { onMcpNotification } from "../services/mcp/mcpWireUtils.js";
 import { logError } from "../utils/log.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:208035-208244 fingerprint (2.1.88 match: SelectionChangedSchema, 0.834)
+//@ chunk-czq1j3j2.js:212834-213043 fingerprint (2.1.88 match: SelectionChangedSchema, 0.834)
 var SelectionChangedSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:208035", () => {
+deferInit("chunk-czq1j3j2.js:212834", () => {
   SelectionChangedSchema = DoctorLazy(() =>
     objectSchema({
       method: literal("selection_changed"),
@@ -41,7 +41,7 @@ deferInit("chunk-18hwfzwa.js:208035", () => {
     }),
   );
 });
-//@ chunk-18hwfzwa.js:208244-208743 fingerprint (2.1.88 match: useIdeSelection, 0.876)
+//@ chunk-czq1j3j2.js:213043-213542 fingerprint (2.1.88 match: useIdeSelection, 0.876)
 function useIdeSelection(mcpClients, onSelect) {
   let handlersRegistered = useRef(false);
   let currentIDERef = useRef(null);

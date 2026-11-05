@@ -3,9 +3,9 @@
  *
  * 非交互模式剖析：CLAUDE_CODE_PROFILE_STARTUP 或 5% 采样，记录每轮检查点并上报。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/headlessProfiler.ts
- * pieces: chunk-eweqvj83.js (13)
+ * pieces: chunk-948bfvqt.js (13)
  * attribution: fingerprint 6, layout 5, affinity 2
  */
 import { env } from "./env.js";
@@ -20,27 +20,27 @@ import { logEvent } from "../services/analytics/index.js";
 import { jsonStringify } from "./slowOperations.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-eweqvj83.js:2697-2760 fingerprint (2.1.88 match: DETAILED_PROFILING, 0.771)
+//@ chunk-948bfvqt.js:2219-2280 fingerprint (2.1.88 match: DETAILED_PROFILING, 0.771)
 var PROFILE_STARTUP; // deferred: uses env (./env.js) of its import cycle while loading; runs once the cycle is complete
 var PROFILING_SAMPLE_RATE;
 var isProfilingSampledByRandom;
-deferInit("chunk-eweqvj83.js:2697", () => {
+deferInit("chunk-948bfvqt.js:2219", () => {
   PROFILE_STARTUP = env.CLAUDE_CODE_PROFILE_STARTUP;
   PROFILING_SAMPLE_RATE = 0.05;
   isProfilingSampledByRandom = Math.random() < PROFILING_SAMPLE_RATE;
 });
-//@ chunk-eweqvj83.js:2760-2784 layout
+//@ chunk-948bfvqt.js:2280-2304 layout
 function isProfilingSampled() {
   return isProfilingSampledByRandom;
 }
-//@ chunk-eweqvj83.js:2784-2810 fingerprint (2.1.88 match: MARK_PREFIX, 1)
+//@ chunk-948bfvqt.js:2304-2329 fingerprint (2.1.88 match: MARK_PREFIX, 1)
 var HEADLESS_PROFILING_ENABLED; // deferred: uses PROFILE_STARTUP of its import cycle while loading; runs once the cycle is complete
 var HEADLESS;
-deferInit("chunk-eweqvj83.js:2784", () => {
+deferInit("chunk-948bfvqt.js:2304", () => {
   HEADLESS_PROFILING_ENABLED = PROFILE_STARTUP || isProfilingSampledByRandom;
   HEADLESS = "headless_";
 });
-//@ chunk-eweqvj83.js:2810-2869 layout
+//@ chunk-948bfvqt.js:2329-2388 layout
 class HeadlessProfilerState {
   current = -1;
   turn0Marks = [];
@@ -48,26 +48,26 @@ class HeadlessProfilerState {
     this.current++;
   }
 }
-//@ chunk-eweqvj83.js:2869-2893 layout
+//@ chunk-948bfvqt.js:2388-2411 layout
 var headlessProfilerStateByHost; // deferred: uses HeadlessProfilerState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-eweqvj83.js:2869", () => {
+deferInit("chunk-948bfvqt.js:2388", () => {
   headlessProfilerStateByHost = new HostScoped(() => new HeadlessProfilerState());
 });
-//@ chunk-eweqvj83.js:2893-2929 layout
+//@ chunk-948bfvqt.js:2411-2446 layout
 function getHeadlessProfilerState() {
   return headlessProfilerStateByHost.of(getRootSession().host);
 }
-//@ chunk-eweqvj83.js:2929-2964 layout
+//@ chunk-948bfvqt.js:2446-2483 layout
 function getTurn0Marks() {
   return getHeadlessProfilerState().turn0Marks;
 }
-//@ chunk-eweqvj83.js:2964-3079 fingerprint (2.1.88 match: clearHeadlessMarks, 1)
+//@ chunk-948bfvqt.js:2483-2597 fingerprint (2.1.88 match: clearHeadlessMarks, 1)
 function clearHeadlessMarks() {
   let perf = getPerformance();
   let allMarks = perf.getEntriesByType("mark");
   for (let mark of allMarks) if (mark.name.startsWith(HEADLESS)) perf.clearMarks(mark.name);
 }
-//@ chunk-eweqvj83.js:3079-3220 fingerprint (2.1.88 match: headlessProfilerStartTurn, 0.907)
+//@ chunk-948bfvqt.js:2597-2737 fingerprint (2.1.88 match: headlessProfilerStartTurn, 0.907)
 function headlessProfilerStartTurn() {
   if (!isHeadlessProfilingActive()) return;
   let perf = getHeadlessProfilerState();
@@ -76,7 +76,7 @@ function headlessProfilerStartTurn() {
   getPerformance().mark(`${HEADLESS}turn_start`);
   if (PROFILE_STARTUP) logForDebugging(`[headlessProfiler] Started turn ${perf.current}`);
 }
-//@ chunk-eweqvj83.js:3220-3361 fingerprint (2.1.88 match: headlessProfilerCheckpoint, 1)
+//@ chunk-948bfvqt.js:2737-2878 fingerprint (2.1.88 match: headlessProfilerCheckpoint, 1)
 /**
  * 记录 headless 剖析检查点（performance.mark headless_<name>）。
  */
@@ -88,7 +88,7 @@ function headlessProfilerCheckpoint(name) {
   if (PROFILE_STARTUP)
     logForDebugging(`[headlessProfiler] Checkpoint: ${name} at ${perf.now().toFixed(1)}ms`);
 }
-//@ chunk-eweqvj83.js:3361-5160 fingerprint (2.1.88 match: logHeadlessProfilerTurn, 0.595)
+//@ chunk-948bfvqt.js:2878-4676 fingerprint (2.1.88 match: logHeadlessProfilerTurn, 0.596)
 /**
  * 非交互模式下（CLAUDE_CODE_PROFILE_STARTUP 或 5% 采样）汇总一轮的各检查点耗时并发 tengu 事件。
  */
@@ -161,7 +161,7 @@ function logHeadlessProfilerTurn() {
   if (PROFILE_STARTUP)
     logForDebugging(`[headlessProfiler] Turn ${turnNumber} metrics: ${jsonStringify(metadata)}`);
 }
-//@ chunk-eweqvj83.js:5160-5623 affinity
+//@ chunk-948bfvqt.js:4676-5138 affinity
 function computeTurnMetrics(marks) {
   let rounds = [];
   for (let mark of marks) {
@@ -183,13 +183,13 @@ function computeTurnMetrics(marks) {
     }),
   }));
 }
-//@ chunk-eweqvj83.js:5623-5658 affinity
+//@ chunk-948bfvqt.js:5138-5172 affinity
 function isHeadlessProfilingActive() {
   return HEADLESS_PROFILING_ENABLED && getIsNonInteractiveSession() && !isDiskless();
 }
 export {
-  headlessProfilerStartTurn,
   headlessProfilerCheckpoint,
+  headlessProfilerStartTurn,
   logHeadlessProfilerTurn,
   getTurn0Marks,
   isProfilingSampled,

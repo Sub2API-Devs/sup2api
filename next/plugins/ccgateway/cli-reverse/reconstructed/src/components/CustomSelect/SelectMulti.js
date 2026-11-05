@@ -3,9 +3,9 @@
  *
  * 多选列表组件（复选、compact/compact-vertical 布局、可选输入项）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CustomSelect/SelectMulti.tsx
- * pieces: chunk-nq7jz8ya.js (4)
+ * pieces: chunk-jqr4ms5p.js (4)
  * attribution: placement 3, fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -31,13 +31,13 @@ import { SelectInputOption } from "./select-input-option.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { SelectOption } from "./select-option.js";
 
-//@ chunk-nq7jz8ya.js:3281-3319 placement
+//@ chunk-jqr4ms5p.js:3283-3321 placement
 function optionDescription(option) {
   return option.description;
 }
-//@ chunk-nq7jz8ya.js:3319-3334 placement
+//@ chunk-jqr4ms5p.js:3321-3336 placement
 function noop() {}
-//@ chunk-nq7jz8ya.js:3334-4044 placement
+//@ chunk-jqr4ms5p.js:3336-4046 placement
 function SelectMultiAccessible(props) {
   let $ = useMemoCache(12);
   if (useIsScreenReaderEnabled()) {
@@ -87,7 +87,7 @@ function SelectMultiAccessible(props) {
   } else selectMultiElement = $[11];
   return selectMultiElement;
 }
-//@ chunk-nq7jz8ya.js:4044-8883 fingerprint (2.1.88 match: SelectMulti, 0.732)
+//@ chunk-jqr4ms5p.js:4046-8885 fingerprint (2.1.88 match: SelectMulti, 0.733)
 /**
  * 多选：空格切换选中，回车提交选中集合，支持 compact 布局与可输入项。
  */

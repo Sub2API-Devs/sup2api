@@ -3,11 +3,12 @@
  *
  * 消息时间戳显示组件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/MessageTimestamp.tsx
- * pieces: chunk-ag5x7vhf.js (6)
+ * pieces: chunk-hnxhr3bs.js (6)
  * attribution: placement 4, callgraph-fingerprint 1, sole-consumer 1
  */
+import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { formatFullTimestamp, resolvedTimeFormat, formatClockTime } from "../utils/timeFormat.js";
 import { getLocale } from "../utils/formatBriefTimestamp.js";
 import { isPeerOrObserver, isHumanOrAutoContinuation, joinTextContent } from "../utils/messageProvenance.js";
@@ -18,22 +19,26 @@ import { EARLY_RETURN_SENTINEL } from "../../runtime/bun-runtime.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:139447-139548 placement
+//@ chunk-hnxhr3bs.js:122139-122143 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:122139", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:143637-143738 placement
 function formatMessageTimestamp(timestamp, timeFormat) {
   let date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return "";
   return formatFullTimestamp(resolvedTimeFormat(), date, getLocale(), timeFormat);
 }
-//@ chunk-ag5x7vhf.js:139548-139688 placement
-function messageTimestampOf(message) {
-  if (message.type === "attachment" && message.attachment.type === "queued_command")
-    return message.attachment.timestamp ?? message.timestamp;
-  return message.timestamp;
+//@ chunk-hnxhr3bs.js:143738-143878 placement (2.1.88 match: buildTranscriptEntries, 0.827)
+function messageTimestampOf(messages) {
+  if (messages.type === "attachment" && messages.attachment.type === "queued_command")
+    return messages.attachment.timestamp ?? messages.timestamp;
+  return messages.timestamp;
 }
-//@ chunk-ag5x7vhf.js:139688-140413 placement
+//@ chunk-hnxhr3bs.js:143878-144603 placement
 /**
  * 判断一条消息是否显示时间戳：排队的命令附件只对真人或对等方的提示显示；助手消息需含文本；用户消息排除压缩摘要、系统标签文本，图片总显示。
  */
@@ -65,7 +70,7 @@ function shouldShowMessageTimestamp(message, showAssistant, showUser, isContinua
   }
   return false;
 }
-//@ chunk-ag5x7vhf.js:140413-140985 callgraph-fingerprint (2.1.88 match: MessageTimestamp, 0.251)
+//@ chunk-hnxhr3bs.js:144603-145175 callgraph-fingerprint (2.1.88 match: MessageTimestamp, 0.252)
 function MessageTimestamp(props) {
   let $ = useMemoCache(12);
   let { message, isTranscriptMode, showMessageTimestamps, isSplitUserContinuation } = props;
@@ -86,14 +91,14 @@ function MessageTimestamp(props) {
   let rowElement;
   if ($[0] !== message || $[1] !== showUser) {
     rowElement = EARLY_RETURN_SENTINEL;
-    K: {
+    Y: {
       let timestampText = messageTimestampOf(message) ?? "";
       timeElement = showUser
         ? formatMessageTimestamp(timestampText)
         : formatHeuristicTimestamp(timestampText);
       if (!timeElement) {
         rowElement = null;
-        break K;
+        break Y;
       }
       dateElement = Box;
       minWidth = bunStringWidth(timeElement);
@@ -133,15 +138,10 @@ function MessageTimestamp(props) {
   } else t3 = $[11];
   return t3;
 }
-//@ chunk-ag5x7vhf.js:140985-141082 sole-consumer
+//@ chunk-hnxhr3bs.js:145175-145272 sole-consumer
 function formatHeuristicTimestamp(timestamp) {
   let date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return "";
   return formatClockTime(resolvedTimeFormat(), date, getLocale());
 }
-//@ chunk-ag5x7vhf.js:148064-148068 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:148064", () => {
-  init_react_production();
-});
 export { shouldShowMessageTimestamp, MessageTimestamp };

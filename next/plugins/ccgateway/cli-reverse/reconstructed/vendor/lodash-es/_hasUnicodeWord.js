@@ -1,17 +1,17 @@
 /**
  * lodash-es/_hasUnicodeWord.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: lodash-es@4.17.22..4.18.1
- * pieces: chunk-8nhse09v.js (3)
+ * pieces: chunk-47b8txen.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
 import { asciiWords } from "./_asciiWords.js";
 
-//@ chunk-8nhse09v.js:3197-3205 esm-layout
+//@ chunk-47b8txen.js:3197-3205 esm-layout
 var asciiWords_default = asciiWords;
-//@ chunk-8nhse09v.js:3205-3280 esm-fingerprint
+//@ chunk-47b8txen.js:3205-3280 esm-fingerprint
 var reHasUnicodeWord = /[a-z][A-Z]|[A-Z]{2}[a-z]|[0-9][a-zA-Z]|[a-zA-Z][0-9]|[^a-zA-Z0-9 ]/;
-//@ chunk-8nhse09v.js:3280-3312 esm-layout
+//@ chunk-47b8txen.js:3280-3312 esm-layout
 function hasUnicodeWord(string) {
   return reHasUnicodeWord.test(string);
 }

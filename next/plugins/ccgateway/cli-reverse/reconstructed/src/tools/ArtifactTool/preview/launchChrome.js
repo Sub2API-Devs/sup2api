@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：启动 headless Chrome
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (9)
  * attribution: placement 9
  */
 import {
@@ -29,11 +29,11 @@ import {
 import { getFirstLine, stripPrefix } from "../../../utils/stringUtils.js";
 import { MERMAID_RUNTIME_PATH } from "../../../services/artifacts/pageRuntimes.js";
 
-//@ chunk-8wvtd8sr.js:199726-199836 placement
+//@ chunk-xzmy9dn4.js:201917-202027 placement
 function hostResolverRules(allowedHosts) {
   return `MAP * ^NOTFOUND, EXCLUDE ${allowedHosts}, EXCLUDE fonts.googleapis.com, EXCLUDE fonts.gstatic.com`;
 }
-//@ chunk-8wvtd8sr.js:199836-200499 placement
+//@ chunk-xzmy9dn4.js:202027-202690 placement
 /**
  * 预览用 headless Chrome 的启动参数：管道远程调试、按规则屏蔽域名解析、关闭代理/扩展/同步/后台网络等，需要时加 --no-sandbox。
  */
@@ -63,7 +63,7 @@ function previewChromeArgs(noSandbox, allowedHosts) {
     ...(noSandbox ? ["--no-sandbox"] : []),
   ];
 }
-//@ chunk-8wvtd8sr.js:200499-200976 placement
+//@ chunk-xzmy9dn4.js:202690-203167 placement
 /**
  * 自检预览浏览器的网络封锁：起一个本地 HTTP 服务，访问 127.0.0.1 与 localhost 必须得到 ERR_NAME_NOT_RESOLVED，否则说明浏览器忽略了主机规则，抛错停止预览。
  */
@@ -92,7 +92,7 @@ async function assertNetworkLockdown(probeUrl, newProbe) {
     server.stop(true);
   }
 }
-//@ chunk-8wvtd8sr.js:200976-208758 placement
+//@ chunk-xzmy9dn4.js:203167-210979 placement
 /**
  * headless Chrome 预览会话：打开页面、收集控制台/网络错误并截图。
  */
@@ -485,14 +485,14 @@ function createChromePreviewSession(chromeHost, lease, launch = launchPreviewChr
           error instanceof Error &&
           (error.message.includes(PAGE_PROBE_ERROR_FRAME_LEFT) ||
             error.message.includes(PAGE_PROBE_ERROR_NO_ANSWER));
-        for (let j = 0; ; j++) {
+        for (let idx = 0; ; idx++) {
           let navigatedTo = await checkFrameNav();
           if (navigatedTo !== undefined) throw new PreviewNavigatedAway(navigatedTo, expectedUrl);
           try {
             return await evaluate(previewEvalScript(run, args));
           } catch (error) {
             if (!isRetriable(error)) throw error;
-            if (j === 1)
+            if (idx === 1)
               throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
                 "the page reloaded or rewrote itself during the checks",
                 "artifact preview: page reloaded during checks",
@@ -589,7 +589,7 @@ function createChromePreviewSession(chromeHost, lease, launch = launchPreviewChr
     },
   };
 }
-//@ chunk-8wvtd8sr.js:208758-209148 placement
+//@ chunk-xzmy9dn4.js:210979-211369 placement
 /**
  * 预览页面允许的请求：只放行无请求体的 GET/HEAD；页面自身来源、同源 mermaid 运行时脚本、data:/blob:/about:blank，以及白名单来源下的特定路径。
  */
@@ -616,7 +616,7 @@ function isAllowedPreviewRequest(url, pageUrl, method = "GET", hasBody = false, 
     return false;
   }
 }
-//@ chunk-8wvtd8sr.js:209148-209234 placement
+//@ chunk-xzmy9dn4.js:211369-211455 placement
 /**
  * 判断请求是否是可复用缓存的 GET/HEAD 且地址相同。
  */
@@ -628,12 +628,12 @@ function isSameUrlGetRequest(url, expectedUrl, method = "GET", hasBody = false) 
     urlsEqual(url, expectedUrl)
   );
 }
-//@ chunk-8wvtd8sr.js:209234-209293 placement
+//@ chunk-xzmy9dn4.js:211455-211514 placement
 /**
  * 预览代理的静态资源路径前缀。
  */
 var ASSET_PATH_PREFIXES = ["/css", "/icon", "/earlyaccess/", "/s/", "/l/", "/ea/"];
-//@ chunk-8wvtd8sr.js:209293-209375 placement
+//@ chunk-xzmy9dn4.js:211514-211596 placement
 /**
  * 比较两个 URL 是否等价（解析失败退回字符串比较）。
  */
@@ -644,7 +644,7 @@ function urlsEqual(left, right) {
     return left === right;
   }
 }
-//@ chunk-8wvtd8sr.js:209375-209605 placement
+//@ chunk-xzmy9dn4.js:211596-211826 placement
 function remoteObjectText(arg) {
   if (typeof arg === "string") return arg;
   let record = asProbeRecord(arg);

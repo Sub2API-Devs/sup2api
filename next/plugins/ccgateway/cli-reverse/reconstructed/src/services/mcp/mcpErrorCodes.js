@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP JSON-RPC 错误码判定（MethodNotFound、InvalidParams、UrlElicitationRequired）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-72dd9akm.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a5k4nhz1.js (7)
  * attribution: placement 7
  */
 import {
@@ -13,26 +13,26 @@ import {
   ProtocolError,
 } from "../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs";
 
-//@ chunk-72dd9akm.js:258-299 placement
+//@ chunk-a5k4nhz1.js:258-299 placement
 /**
  * 视为参数类错误的 JSON-RPC 码集合（-32002、InvalidParams）。
  */
 var PARAMS_ERROR_CODES = new Set([-32002, ProtocolErrorCode.InvalidParams]);
-//@ chunk-72dd9akm.js:299-350 placement
+//@ chunk-a5k4nhz1.js:299-350 placement
 /**
  * 取 ProtocolError 的 code。
  */
 function protocolErrorCode(error) {
   return error instanceof ProtocolError ? error.code : undefined;
 }
-//@ chunk-72dd9akm.js:350-415 placement
+//@ chunk-a5k4nhz1.js:350-415 placement
 /**
  * 判断是否为 MethodNotFound。
  */
 function isMethodNotFoundError(error) {
   return error instanceof ProtocolError && error.code === ProtocolErrorCode.MethodNotFound;
 }
-//@ chunk-72dd9akm.js:415-509 placement
+//@ chunk-a5k4nhz1.js:415-509 placement
 /**
  * 判断是否为 MethodNotFound 或 InvalidParams。
  */
@@ -42,21 +42,21 @@ function isMethodNotFoundOrInvalidParams(error) {
     (error.code === ProtocolErrorCode.MethodNotFound || error.code === ProtocolErrorCode.InvalidParams)
   );
 }
-//@ chunk-72dd9akm.js:509-561 placement
+//@ chunk-a5k4nhz1.js:509-561 placement
 /**
  * 判断是否属于参数类错误码。
  */
 function isParamsOrInvalidError(error) {
   return error instanceof ProtocolError && PARAMS_ERROR_CODES.has(error.code);
 }
-//@ chunk-72dd9akm.js:561-625 placement
+//@ chunk-a5k4nhz1.js:561-625 placement
 /**
  * 判断是否为 InvalidParams。
  */
 function isInvalidParamsError(error) {
   return error instanceof ProtocolError && error.code === ProtocolErrorCode.InvalidParams;
 }
-//@ chunk-72dd9akm.js:625-698 placement
+//@ chunk-a5k4nhz1.js:625-698 placement
 /**
  * 判断是否为 UrlElicitationRequired。
  */

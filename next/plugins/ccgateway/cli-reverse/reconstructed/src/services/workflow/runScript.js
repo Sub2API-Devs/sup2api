@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：运行工作流脚本
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-41w44bgm.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kd2wbncj.js (12)
  * attribution: placement 12
  */
 import "vm";
@@ -60,7 +60,7 @@ import { clone, jsonStringify } from "../../utils/slowOperations.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { runDeferredInits } from "../../../runtime/deferred-init.js";
 
-//@ chunk-41w44bgm.js:90673-90749 placement (2.1.88 match: countUnseenAssistantTurns, 1)
+//@ chunk-kd2wbncj.js:82901-82977 placement (2.1.88 match: countUnseenAssistantTurns, 1)
 function countUnseenAssistantTurns(onProgress) {
   return (event) => {
     onProgress(
@@ -73,14 +73,14 @@ function countUnseenAssistantTurns(onProgress) {
     );
   };
 }
-//@ chunk-41w44bgm.js:90749-90814 placement
+//@ chunk-kd2wbncj.js:82977-83042 placement
 /**
  * 以 AbortError 中止卡住的执行。
  */
 function abortStalled(controller) {
   controller.abort(new DOMException("stalled", "AbortError"));
 }
-//@ chunk-41w44bgm.js:90814-90879 placement
+//@ chunk-kd2wbncj.js:83042-83107 placement
 /**
  * 截断进度里的 label 与 phase。
  */
@@ -94,7 +94,7 @@ function truncateProgressFields(label, phase) {
     }),
   };
 }
-//@ chunk-41w44bgm.js:90879-91047 placement
+//@ chunk-kd2wbncj.js:83107-83275 placement
 function truncateProgressStrings(data) {
   let copy;
   for (let key of Object.keys(data)) {
@@ -110,7 +110,7 @@ function truncateProgressStrings(data) {
   }
   return copy ?? data;
 }
-//@ chunk-41w44bgm.js:91047-91246 placement
+//@ chunk-kd2wbncj.js:83275-83474 placement
 /**
  * 把结构化输出未获判定的原因（refused / unavailable）映射为给模型的警告文案与类型。
  */
@@ -132,7 +132,7 @@ function structuredOutputUnjudgedWarning(noVerdict) {
       };
   }
 }
-//@ chunk-41w44bgm.js:91246-91378 placement
+//@ chunk-kd2wbncj.js:83474-83606 placement
 /**
  * 给 agent 定义的系统提示词追加一段后缀（返回新定义）。
  */
@@ -147,7 +147,7 @@ function withSystemPromptSuffix(agent, suffix) {
         getSystemPrompt: (context) => agent.getSystemPrompt(context) + suffix,
       };
 }
-//@ chunk-41w44bgm.js:91378-92280 placement
+//@ chunk-kd2wbncj.js:83606-84504 placement
 /**
  * 汇总子代理结构化输出的分类器判定：交付的输出或其他调用被标记时返回拒绝结果；无判定、被 hook 改动、不是最后一步或判定模式变化时返回 undefined；全部通过返回 null。各分支记埋点。
  */
@@ -202,9 +202,9 @@ async function judgeStructuredOutputVerdict({ calls, deliveredId, delivered, las
   });
   return null;
 }
-//@ chunk-41w44bgm.js:92280-92309 placement
+//@ chunk-kd2wbncj.js:84504-84533 placement
 var TENGU_ZESTY_FEATHER = "tengu_zesty_feather";
-//@ chunk-41w44bgm.js:92309-92347 placement
+//@ chunk-kd2wbncj.js:84533-84571 placement
 /**
  * 读开关 tengu_zesty_feather。
  */
@@ -213,7 +213,7 @@ function isZestyFeatherOn() {
     safe: true,
   });
 }
-//@ chunk-41w44bgm.js:92347-94269 placement
+//@ chunk-kd2wbncj.js:84571-86529 placement
 /**
  * 为工作流脚本建立 VM 上下文：创建代理运行时（agent/parallel/pipeline/workflow 钩子）、console/log/phase/budget、确定性定时器、VM 字符串桥与 Promise 设施，注入 args，
  * 返回 {vmContext, hooks, ...}。
@@ -378,9 +378,9 @@ function createWorkflowVmContext(
     childWorkflow: childHooks,
   };
 }
-//@ chunk-41w44bgm.js:94269-94281 placement
+//@ chunk-kd2wbncj.js:86529-86541 placement
 var PROGRESS_TICK_MS = 1000;
-//@ chunk-41w44bgm.js:94281-96077 placement
+//@ chunk-kd2wbncj.js:86541-88611 placement
 /**
  * 在 VM 中运行已编译的工作流脚本：可选加载日志 journal，执行并等待结果（可被中断），清洗/克隆结果；
  * 返回 {result, agentCount, logs, failures, toolsUsed, usageLimitDenial, durationMs}，出错时 result 为 null 并带错误信息。
@@ -460,6 +460,12 @@ async function runWorkflowScript(compiledScript, context, canUseTool, options = 
       ...(vm.hooks.getForeignArtifactContent() && {
         foreignArtifactContent: true,
       }),
+      ...(vm.hooks.getPluginSteered() && {
+        pluginSteered: true,
+      }),
+      ...(vm.hooks.getRemoteControlDeviceReport() && {
+        remoteControlDeviceReport: true,
+      }),
       ...(toolsUsed.length > 0 && {
         toolsUsed,
       }),
@@ -484,6 +490,12 @@ ${stack}`,
       failures: vm.hooks.getFailures(),
       ...(vm.hooks.getForeignArtifactContent() && {
         foreignArtifactContent: true,
+      }),
+      ...(vm.hooks.getPluginSteered() && {
+        pluginSteered: true,
+      }),
+      ...(vm.hooks.getRemoteControlDeviceReport() && {
+        remoteControlDeviceReport: true,
       }),
       ...(toolsUsed.length > 0 && {
         toolsUsed,

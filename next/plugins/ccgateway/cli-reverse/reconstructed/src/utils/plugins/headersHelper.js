@@ -3,9 +3,9 @@
  *
  * 插件市场 headersHelper（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-21ppfwx8.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5hddsdew.js (29)
  * attribution: placement 29
  */
 import { hasHeadersHelper } from "../../services/mcp/types.js";
@@ -31,12 +31,12 @@ import { isHttpMcpServeInvocation } from "../../entrypoints/mcpServeArgs.js";
 import { marketplaceNameAnswerState } from "./marketplaceNames.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { getPluginRegistry } from "./pluginLoadState.js";
-import { getClaudeConfigDir } from "../envUtils.js";
+import { getClaudeConfigDir } from "../markdownConfigLoader.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../errors.js";
 import { sameOrigin } from "../network/privateHostCheck.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-21ppfwx8.js:22803-22915 placement
+//@ chunk-5hddsdew.js:22839-22951 placement
 /**
  * 安装时 headersHelper 同意不匹配的失败码映射（unshown/command/archive_url）。
  */
@@ -45,7 +45,7 @@ var HELPER_CONSENT_MISMATCH_CODES = {
   command: "entry_helper_changed",
   archive_url: "entry_archive_url_changed",
 };
-//@ chunk-21ppfwx8.js:22915-23076 placement
+//@ chunk-5hddsdew.js:22951-23112 placement
 /**
  * 条目声明了 headersHelper（且满足内联要求）时返回待同意的命令与归档 URL。
  */
@@ -60,7 +60,7 @@ function getEntryHelperConsentSubject(consentRequest, archiveUrl) {
       }
     : null;
 }
-//@ chunk-21ppfwx8.js:23076-23285 placement
+//@ chunk-5hddsdew.js:23112-23321 placement
 /**
  * 比较展示过的与当前的 helper 同意内容，返回 unshown/command/archive_url/null。
  */
@@ -72,12 +72,12 @@ function diffEntryHelperConsent(shownConsent, consent) {
     return "archive_url";
   return null;
 }
-//@ chunk-21ppfwx8.js:23285-23338 placement
+//@ chunk-5hddsdew.js:23321-23374 placement
 function canonicalMarketplaceUrl(text) {
   let originUrl = safeOriginUrlRedacted(text);
   return originUrl === null ? text : canonicalFetchSourceUrl(originUrl);
 }
-//@ chunk-21ppfwx8.js:23338-24313 placement
+//@ chunk-5hddsdew.js:23374-24349 placement
 function checkHeadersHelperConsent(pluginName, refusalKind = "lockdown") {
   let quotedName = quotedPrintable(pluginName);
   if (refusalKind === "organization_unanswered")
@@ -91,7 +91,7 @@ function checkHeadersHelperConsent(pluginName, refusalKind = "lockdown") {
       : "ask your admin to allow it.")
   );
 }
-//@ chunk-21ppfwx8.js:24313-24549 placement
+//@ chunk-5hddsdew.js:24349-24585 placement
 /**
  * helper 被拒原因转失败码。
  */
@@ -105,7 +105,7 @@ function helperRefusalFailureCode(refusalKind) {
       return "entry_helper_disabled_by_policy";
   }
 }
-//@ chunk-21ppfwx8.js:24549-25434 placement
+//@ chunk-5hddsdew.js:24585-25470 placement
 /**
  * 各 entry_helper_* 失败码的遥测安全消息。
  */
@@ -121,11 +121,11 @@ var ENTRY_HELPER_FAILURE_MESSAGES = {
     "plugin entry helper declared by remote managed settings not yet verified and approved for the session",
   entry_helper_organization_unanswered: "plugin entry helper held for the organization answer",
 };
-//@ chunk-21ppfwx8.js:25434-25471 placement
+//@ chunk-5hddsdew.js:25470-25507 placement
 function isSadHelperFailure(failureCode) {
   return ENTRY_HELPER_FAILURE_SEVERITY[failureCode] === "sad";
 }
-//@ chunk-21ppfwx8.js:25471-25783 placement
+//@ chunk-5hddsdew.js:25507-25819 placement
 /**
  * 各 entry_helper_* 失败码的严重度（sad/bad）。
  */
@@ -140,7 +140,7 @@ var ENTRY_HELPER_FAILURE_SEVERITY = {
   entry_helper_organization_unanswered: "sad",
   entry_helper_not_inlined: "bad",
 };
-//@ chunk-21ppfwx8.js:25783-25930 placement
+//@ chunk-5hddsdew.js:25819-25966 placement
 /**
  * 命令源拒绝错误转 {code, kind}。
  */
@@ -155,12 +155,12 @@ function classifyCommandSourceError(error) {
     kind: "sad",
   };
 }
-//@ chunk-21ppfwx8.js:25930-26015 placement
+//@ chunk-5hddsdew.js:25966-26051 placement
 /**
  * EntryHelperError：市场 header helper 错误类。
  */
 let EntryHelperError; // deferred: uses CommandSourceError (./commandSource.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-21ppfwx8.js:25930", () => {
+deferInit("chunk-5hddsdew.js:25966", () => {
   EntryHelperError = class EntryHelperError extends CommandSourceError {
     failureCode;
     constructor(message, failureCode) {
@@ -169,7 +169,7 @@ deferInit("chunk-21ppfwx8.js:25930", () => {
     }
   };
 });
-//@ chunk-21ppfwx8.js:26015-26645 placement
+//@ chunk-5hddsdew.js:26051-26681 placement
 function describeHelperReview(diffKind, name, action) {
   let quotedName = quotedPrintable(name);
   let retryHint =
@@ -184,7 +184,7 @@ function describeHelperReview(diffKind, name, action) {
     ? `The headersHelper command for "${quotedName}" changed since it was shown. ${retryHint}`
     : `The archive URL for "${quotedName}" changed since its headersHelper command was shown. ${retryHint}`;
 }
-//@ chunk-21ppfwx8.js:26645-27507 placement
+//@ chunk-5hddsdew.js:26681-27543 placement
 function headersHelperNotRunReason(options) {
   let trustedSettingsEntryAuth =
     options.trustedSettingsEntryAuth !== undefined &&
@@ -233,7 +233,7 @@ function headersHelperNotRunReason(options) {
     requireInlinedManifest: true,
   };
 }
-//@ chunk-21ppfwx8.js:27507-29861 placement
+//@ chunk-5hddsdew.js:27543-29897 placement
 async function describeHelperDeclaration(source, options) {
   if (source?.source !== "url") return {};
   let trustedDeclaration = options.trustedDeclaration;
@@ -313,9 +313,9 @@ async function describeHelperDeclaration(source, options) {
     ...sanitize(helperHeaders, "helper output"),
   };
 }
-//@ chunk-21ppfwx8.js:29861-29874 placement
+//@ chunk-5hddsdew.js:29897-29910 placement
 var HELPER_TIMEOUT_MS = 60000;
-//@ chunk-21ppfwx8.js:29874-30155 placement
+//@ chunk-5hddsdew.js:29910-30191 placement
 async function runMarketplaceHeadersHelperCached(command, url, marketplaceName, operatorAuthored) {
   let memoKey = `${command}\x00${url}\x00${marketplaceName ?? ""}\x00${operatorAuthored ? "operator" : "repo"}`;
   let now = Date.now();
@@ -334,7 +334,7 @@ async function runMarketplaceHeadersHelperCached(command, url, marketplaceName, 
     throw error;
   }
 }
-//@ chunk-21ppfwx8.js:30155-30537 placement
+//@ chunk-5hddsdew.js:30191-30573 placement
 /**
  * 以配置目录为 cwd 运行市场声明的 headersHelper（非运营方声明时擦除凭证环境），注入 CLAUDE_CODE_MARKETPLACE_URL/NAME； 失败记 feature bad 并抛错，成功记 ok 返回 header。
  */
@@ -361,7 +361,7 @@ async function runMarketplaceHeadersHelper(command, url, marketplaceName, operat
   logFeatureOk("plugin_headers_helper");
   return result.headers;
 }
-//@ chunk-21ppfwx8.js:30537-31205 placement
+//@ chunk-5hddsdew.js:30573-31241 placement
 /**
  * 运行插件市场声明的 headersHelper 取得下载请求头
  */
@@ -399,14 +399,14 @@ async function runHeadersHelper(entry, options) {
     ...sanitize(result.headers),
   };
 }
-//@ chunk-21ppfwx8.js:31205-31583 placement
+//@ chunk-5hddsdew.js:31241-31619 placement
 /**
  * helper 不得设置的 header（host/cookie/转发 IP/逐跳头等）。
  */
 var FORBIDDEN_HELPER_HEADERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var FORBIDDEN_HELPER_HEADER_PREFIXES;
 var HTTP_TOKEN_RE;
-deferInit("chunk-21ppfwx8.js:31205", () => {
+deferInit("chunk-5hddsdew.js:31241", () => {
   FORBIDDEN_HELPER_HEADERS = new Set([
     "host",
     "cookie",
@@ -433,7 +433,7 @@ deferInit("chunk-21ppfwx8.js:31205", () => {
   FORBIDDEN_HELPER_HEADER_PREFIXES = ["x-forwarded-", "x-original-", "proxy-"];
   HTTP_TOKEN_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 });
-//@ chunk-21ppfwx8.js:31583-31689 placement
+//@ chunk-5hddsdew.js:31619-31725 placement
 /**
  * header 名（_ 视为 -）在禁止列表或以禁止前缀开头。
  */
@@ -444,7 +444,7 @@ function isForbiddenHelperHeader(headerName) {
     FORBIDDEN_HELPER_HEADER_PREFIXES.some((prefix) => replaced.startsWith(prefix))
   );
 }
-//@ chunk-21ppfwx8.js:31689-32076 placement
+//@ chunk-5hddsdew.js:31725-32112 placement
 function dropMalformedHeader(headers, context, { operatorAuthored = false } = {}) {
   let kept = {};
   for (let [key, value] of Object.entries(headers)) {
@@ -467,11 +467,11 @@ function dropMalformedHeader(headers, context, { operatorAuthored = false } = {}
   }
   return kept;
 }
-//@ chunk-21ppfwx8.js:32076-32103 placement
+//@ chunk-5hddsdew.js:32112-32139 placement
 function printableQuoted(pluginName) {
   return quotedPrintable(pluginName);
 }
-//@ chunk-21ppfwx8.js:32103-32894 placement
+//@ chunk-5hddsdew.js:32139-32930 placement
 function checkHeadersHelperStrict(entry, options) {
   if (options.disabledByPolicy !== null) {
     if (options.disabledByPolicy === "organization_unanswered") noteHeldForTheAnswer();
@@ -492,7 +492,7 @@ function checkHeadersHelperStrict(entry, options) {
       "entry_helper_deferred",
     );
 }
-//@ chunk-21ppfwx8.js:32894-33863 placement
+//@ chunk-5hddsdew.js:32930-33900 placement
 /**
  * archive 源插件下载前计算请求头：检查条目 helper 的 strict 约束与策略拒绝；归档 URL 与市场 URL 同源时带上市场声明的 header， 再合并条目 headersHelper 的结果。无 header 返回 undefined，否则 {url, headers}。
  */
@@ -541,7 +541,7 @@ async function resolveArchiveDownloadHeaders(options) {
     headers,
   };
 }
-//@ chunk-21ppfwx8.js:33863-33922 placement
+//@ chunk-5hddsdew.js:33900-33959 placement
 /**
  * marketplaceSourceOfEntry：某市场条目的来源。
  */
@@ -549,7 +549,7 @@ function marketplaceSourceOfEntry(pluginId, knownMarketplaces) {
   let marketplaceName = marketplaceNameOfId(pluginId);
   return marketplaceName ? knownMarketplaces[marketplaceName]?.source : undefined;
 }
-//@ chunk-21ppfwx8.js:33922-33994 placement
+//@ chunk-5hddsdew.js:33959-34031 placement
 /**
  * marketplaceNameOfId：从插件 id 取市场名。
  */
@@ -557,11 +557,11 @@ function marketplaceNameOfId(pluginId) {
   let parts = pluginId.split("@");
   return parts.length === 2 && parts[1] ? parts[1] : undefined;
 }
-//@ chunk-21ppfwx8.js:33994-34034 placement
+//@ chunk-5hddsdew.js:34031-34071 placement
 function isSameFetchSource(archiveUrl, archiveUrl_2) {
   return canonicalFetchSourceUrl(archiveUrl) === canonicalFetchSourceUrl(archiveUrl_2);
 }
-//@ chunk-21ppfwx8.js:34034-34096 placement
+//@ chunk-5hddsdew.js:34071-34133 placement
 /**
  * urlHostname：取 URL 主机名，失败返回空串。
  */
@@ -572,7 +572,7 @@ function urlHostname(url) {
     return "";
   }
 }
-//@ chunk-21ppfwx8.js:34096-34205 placement
+//@ chunk-5hddsdew.js:34133-34242 placement
 /**
  * 沿 cause 链（最多 5 层）找 TelemetrySafeError。
  */
@@ -585,22 +585,22 @@ function findTelemetrySafeCause(error) {
   return;
 }
 export {
-  classifyCommandSourceError,
-  marketplaceSourceOfEntry,
-  ENTRY_HELPER_FAILURE_SEVERITY,
+  isForbiddenHelperHeader,
   marketplaceNameOfId,
+  resolveArchiveDownloadHeaders,
+  findTelemetrySafeCause,
+  urlHostname,
+  describeHelperDeclaration,
+  marketplaceSourceOfEntry,
   EntryHelperError,
-  headersHelperNotRunReason,
   getEntryHelperConsentSubject,
+  headersHelperNotRunReason,
   checkHeadersHelperConsent,
   helperRefusalFailureCode,
   diffEntryHelperConsent,
   describeHelperReview,
   HELPER_CONSENT_MISMATCH_CODES,
-  resolveArchiveDownloadHeaders,
-  findTelemetrySafeCause,
-  urlHostname,
-  isForbiddenHelperHeader,
-  describeHelperDeclaration,
+  ENTRY_HELPER_FAILURE_SEVERITY,
+  classifyCommandSourceError,
   dropMalformedHeader,
 };

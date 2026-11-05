@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：按 id 选择本会话可用的记忆存储（写入时检查权限）；把文件系统错误转为记忆存储结果等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-a477qqne.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b3a6nm9h.js (25)
  * attribution: placement 25
  */
 import { open, lstat, unlink } from "fs/promises";
@@ -43,7 +43,7 @@ import { truncateToLength } from "../../utils/stringUtils.js";
 import { memoryIndexDirPrefix, MEMORY_INDEX_FILENAME } from "../../memdir/memdir.js";
 import { validateMemoryPath } from "../../tools/MemoryTool/memoryWrite.js";
 
-//@ chunk-a477qqne.js:22609-22918 placement
+//@ chunk-b3a6nm9h.js:22646-22955 placement
 /**
  * 独占创建记忆文件并写入。
  */
@@ -69,7 +69,7 @@ async function createMemoryFileExclusive(filePath, content) {
     throw error;
   }
 }
-//@ chunk-a477qqne.js:22918-23208 placement
+//@ chunk-b3a6nm9h.js:22955-23246 placement
 /**
  * 读取已有记忆文档的文件权限模式；路径被非文档占用时抛出永久错误。
  */
@@ -86,14 +86,14 @@ async function readExistingMemoryMode(filePath, displayPath, retried = false) {
     `something that is not a memory document occupies ${displayPath}`,
   );
 }
-//@ chunk-a477qqne.js:23208-23244 placement
+//@ chunk-b3a6nm9h.js:23246-23282 placement
 /**
  * 删除文件并重试瞬时错误。
  */
 function unlinkQuietly(filePath) {
   return retryTransient(() => unlink(filePath));
 }
-//@ chunk-a477qqne.js:23244-23549 placement
+//@ chunk-b3a6nm9h.js:23282-23588 placement
 /**
  * 判断路径被非文档占用的冲突。
  */
@@ -115,7 +115,7 @@ async function classifyMemoryPathConflict(filePath, displayPath, mustNotExist) {
     ? new MemoryConflictError(displayPath, null)
     : null;
 }
-//@ chunk-a477qqne.js:23549-23875 placement
+//@ chunk-b3a6nm9h.js:23588-23914 placement
 /**
  * 把文件系统错误转为记忆存储结果。
  */
@@ -130,7 +130,7 @@ function memoryFsErrorToResult(error, displayPath) {
     return new MemoryPermanentError("access_denied", `${errnoCode}: ${displayPath}`);
   return error;
 }
-//@ chunk-a477qqne.js:23875-23930 placement
+//@ chunk-b3a6nm9h.js:23914-23969 placement
 /**
  * 路径不存在时返回 null，其他错误抛出。
  */
@@ -138,14 +138,14 @@ function ignoreMissingOrThrow(error) {
   if (MISSING_PATH_ERRORS.has(getErrnoCode(error) ?? "")) return null;
   throw error;
 }
-//@ chunk-a477qqne.js:23930-23980 placement
+//@ chunk-b3a6nm9h.js:23969-24019 placement
 /**
  * 路径不存在或无权限时返回 null，其他错误抛出。
  */
 function missingOrPermissionAsNull(error) {
   return PERMISSION_ERRORS.has(getErrnoCode(error) ?? "") ? null : ignoreMissingOrThrow(error);
 }
-//@ chunk-a477qqne.js:23980-24059 placement
+//@ chunk-b3a6nm9h.js:24019-24098 placement
 /**
  * 取记忆条目的对外字段（内容、哈希、更新时间）。
  */
@@ -156,16 +156,16 @@ function publicMemoryEntry(file) {
     updatedAt: file.updatedAt,
   };
 }
-//@ chunk-a477qqne.js:24059-24078 placement
+//@ chunk-b3a6nm9h.js:24098-24117 placement
 var PERSONAL = "personal";
-//@ chunk-a477qqne.js:24078-24126 placement
+//@ chunk-b3a6nm9h.js:24117-24165 placement
 /**
  * 自动记忆目录下的完整路径。
  */
 function autoMemFilePath(key) {
   return join(getAutoMemPath(), ...key.split("/"));
 }
-//@ chunk-a477qqne.js:24126-24328 placement
+//@ chunk-b3a6nm9h.js:24165-24367 placement
 function createPersonalStoreEntry() {
   return {
     id: PERSONAL,
@@ -182,7 +182,7 @@ function createPersonalStoreEntry() {
       }),
   };
 }
-//@ chunk-a477qqne.js:24328-24388 placement
+//@ chunk-b3a6nm9h.js:24367-24427 placement
 /**
  * 给项目作用域加 project- 前缀。
  */
@@ -190,7 +190,7 @@ function projectScopeLabel(scope) {
   let storeScopeLabel = getStoreScopeLabel(scope);
   return storeScopeLabel === PERSONAL ? `project-${storeScopeLabel}` : storeScopeLabel;
 }
-//@ chunk-a477qqne.js:24388-24540 placement
+//@ chunk-b3a6nm9h.js:24427-24579 placement
 function createProjectStoreEntry(scope) {
   let mount = projectScopeLabel(scope);
   let writable = isStoreWritable(scope);
@@ -204,7 +204,7 @@ function createProjectStoreEntry(scope) {
     backend: () => makeStoreClient(scope, writable, mount),
   };
 }
-//@ chunk-a477qqne.js:24540-24600 placement
+//@ chunk-b3a6nm9h.js:24579-24639 placement
 /**
  * 列出可用的记忆存储条目。
  */
@@ -213,19 +213,19 @@ function listMemoryStoreEntries() {
     ? [createPersonalStoreEntry(), ...sortRootFirst(readableOrgMemoryStores()).map(createProjectStoreEntry)]
     : [];
 }
-//@ chunk-a477qqne.js:24600-24679 placement
+//@ chunk-b3a6nm9h.js:24639-24718 placement
 /**
  * 项目记忆库仍在连接时的提示。
  */
 var PROJECT_STORE_CONNECTING_TEXT = "The project memory store is still connecting; try again in a moment.";
-//@ chunk-a477qqne.js:24679-24757 placement
+//@ chunk-b3a6nm9h.js:24718-24796 placement
 /**
  * 判断是否仍在连接且尚无项目存储。
  */
 function isProjectStoreConnecting(stores) {
   return memorySyncAvailability_2() === "connecting" && !stores.some((store) => store.kind === "project");
 }
-//@ chunk-a477qqne.js:24757-24835 placement
+//@ chunk-b3a6nm9h.js:24796-24874 placement
 /**
  * 记忆不可用时的补救说明。
  */
@@ -238,7 +238,7 @@ function memoryUnavailableRemedy(memoryStore) {
       }
     : {};
 }
-//@ chunk-a477qqne.js:24835-25117 placement
+//@ chunk-b3a6nm9h.js:24874-25156 placement
 /**
  * 检查记忆工具是否可用：自动记忆暂停或工作区未授信时拒绝并说明。
  */
@@ -258,7 +258,7 @@ function checkMemoryToolsAllowed() {
     };
   return null;
 }
-//@ chunk-a477qqne.js:25117-26063 placement
+//@ chunk-b3a6nm9h.js:25156-26102 placement
 /**
  * 按 id 选择本会话可用的记忆存储（写入时检查权限）。
  */
@@ -303,7 +303,7 @@ function resolveMemoryStore({ storeId, write = false }) {
     backend: found.backend(),
   };
 }
-//@ chunk-a477qqne.js:26063-26288 placement
+//@ chunk-b3a6nm9h.js:26102-26327 placement
 /**
  * 个人记忆路径必须以 .md 结尾，否则返回拒绝结果。
  */
@@ -316,12 +316,12 @@ function checkPersonalMemoryPath(storeId, path) {
       }
     : null;
 }
-//@ chunk-a477qqne.js:26288-26300 placement
+//@ chunk-b3a6nm9h.js:26327-26339 placement
 /**
  * 提示中引用记忆路径的最大字符数（1024）。
  */
 var MAX_MEMORY_PATH_CHARS = 1024;
-//@ chunk-a477qqne.js:26300-26432 placement
+//@ chunk-b3a6nm9h.js:26339-26470 placement
 /**
  * 为提示信息引用记忆路径（替换控制字符，过长时截断并注明总字节数）。
  */
@@ -332,7 +332,7 @@ function quoteMemoryPath(filePath) {
     ? `"${shortened}\u2026" (${Buffer.byteLength(filePath, "utf8")} bytes in all)`
     : `"${safeText}"`;
 }
-//@ chunk-a477qqne.js:26432-26721 placement
+//@ chunk-b3a6nm9h.js:26470-26759 placement
 /**
  * 记忆路径必须是以 / 开头的绝对路径，否则拒绝并给出建议路径。
  */
@@ -347,7 +347,7 @@ function checkAbsoluteMemoryPath(path, promptIndex) {
     message: `Memory paths are absolute and start with "/" \u2014 use ${quoteMemoryPath(suggestion)}.${dirNote}`,
   };
 }
-//@ chunk-a477qqne.js:26721-26849 placement
+//@ chunk-b3a6nm9h.js:26759-26887 placement
 /**
  * 列出记忆存储的描述信息（id、说明、是否可写、索引）。
  */
@@ -359,7 +359,7 @@ function describeMemoryStores(stores) {
     index: resolveIndexPath(store.promptIndex, store.writable),
   }));
 }
-//@ chunk-a477qqne.js:26849-26963 placement
+//@ chunk-b3a6nm9h.js:26887-27001 placement
 function resolveIndexPath(promptIndex, rejectUnsafeSegments) {
   return (
     [
@@ -374,21 +374,21 @@ function resolveIndexPath(promptIndex, rejectUnsafeSegments) {
   );
 }
 export {
+  autoMemFilePath,
+  resolveMemoryStore,
+  memoryUnavailableRemedy,
+  checkAbsoluteMemoryPath,
+  PERSONAL,
+  unlinkQuietly,
   missingOrPermissionAsNull,
   publicMemoryEntry,
   readExistingMemoryMode,
   createMemoryFileExclusive,
   classifyMemoryPathConflict,
   memoryFsErrorToResult,
-  unlinkQuietly,
   ignoreMissingOrThrow,
   quoteMemoryPath,
-  autoMemFilePath,
   checkPersonalMemoryPath,
-  PERSONAL,
-  resolveMemoryStore,
-  memoryUnavailableRemedy,
-  checkAbsoluteMemoryPath,
   checkMemoryToolsAllowed,
   listMemoryStoreEntries,
   describeMemoryStores,

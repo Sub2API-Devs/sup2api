@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：追加系统提示词头部的解析、读取与插入
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3wek6r2k.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hjswk319.js (4)
  * attribution: placement 4
  */
 import { createHash } from "crypto";
@@ -22,7 +22,7 @@ import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../../entrypoints/sdk/coreSchema
 import { joinCacheablePrompt, isUncachedPromptBoundary } from "../../utils/configDirPathShape.js";
 import { withAddedSections } from "../../utils/systemPromptBoundary.js";
 
-//@ chunk-3wek6r2k.js:66663-67121 placement
+//@ chunk-hjswk319.js:66087-66545 placement
 function parseAppendPromptHead(designator, append) {
   if (!env.CLAUDE_CODE_REMOTE)
     return {
@@ -63,7 +63,7 @@ function parseAppendPromptHead(designator, append) {
     head: str,
   };
 }
-//@ chunk-3wek6r2k.js:67121-67409 placement
+//@ chunk-hjswk319.js:66545-66833 placement
 /**
  * 读取 CLAUDE_CODE_APPEND_PROMPT_HEAD（仅远程会话），解析追加系统提示的"头"标识并上报。
  */
@@ -84,7 +84,7 @@ function readAppendPromptHead(append) {
     env.unset("CLAUDE_CODE_APPEND_PROMPT_HEAD");
   }
 }
-//@ chunk-3wek6r2k.js:67409-67649 placement
+//@ chunk-hjswk319.js:66833-67073 placement
 function renderAppendPromptHead(base, append, head, scope) {
   if (!head) return;
   try {
@@ -104,7 +104,7 @@ function renderAppendPromptHead(base, append, head, scope) {
     return;
   }
 }
-//@ chunk-3wek6r2k.js:67649-68365 placement
+//@ chunk-hjswk319.js:67073-67789 placement
 function insertAppendPromptHead(base, append, head, scope) {
   if (!scope)
     return {

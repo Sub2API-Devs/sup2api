@@ -3,9 +3,9 @@
  *
  * MCP 批量连接、重试与插件/连接器去重（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-zdgk9dc6.js (21)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nkjcc801.js (21)
  * attribution: placement 21
  */
 import { getRecordedPhase, recordPhase } from "../../utils/startupTiming.js";
@@ -62,14 +62,14 @@ import { omitKeys } from "../../utils/hooks/hookCommandResolution.js";
 import { isDiscoveryCacheOn } from "./mcpAccountKey.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-zdgk9dc6.js:5102-5171 placement
+//@ chunk-nkjcc801.js:5134-5203 placement
 /**
  * 懒加载 MCP 客户端模块。
  */
 function mcpClientModule() {
   return require("./emitTripwireEvent.lazy.js").mcpClientModule();
 }
-//@ chunk-zdgk9dc6.js:5171-5389 placement
+//@ chunk-nkjcc801.js:5203-5421 placement
 function loadMcpClientModuleTimed(phaseLabel) {
   let startTime = performance.now();
   try {
@@ -83,19 +83,19 @@ function loadMcpClientModuleTimed(phaseLabel) {
     return;
   }
 }
-//@ chunk-zdgk9dc6.js:5389-5450 placement
+//@ chunk-nkjcc801.js:5421-5482 placement
 /**
  * 连接重试的退避序列（500/1500/4000 毫秒）。
  */
 var CONNECT_RETRY_BASE_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CONNECT_RETRY_DELAYS_MS;
 var reduced;
-deferInit("chunk-zdgk9dc6.js:5389", () => {
+deferInit("chunk-nkjcc801.js:5421", () => {
   CONNECT_RETRY_BASE_MS = 1000;
   CONNECT_RETRY_DELAYS_MS = [500, 1500, 4000];
   reduced = CONNECT_RETRY_DELAYS_MS.reduce((acc, delayMs) => acc + delayMs, 0);
 });
-//@ chunk-zdgk9dc6.js:5450-6321 placement
+//@ chunk-nkjcc801.js:5482-6353 placement
 function MCP_CONNECT_PHASES(options) {
   let {
     regularMcpConfigs,
@@ -162,7 +162,7 @@ function MCP_CONNECT_PHASES(options) {
     connect: connectAll,
   };
 }
-//@ chunk-zdgk9dc6.js:6321-6416 placement
+//@ chunk-nkjcc801.js:6353-6448 placement
 /**
  * 是否要先等 MCP 连接再进入输入（环境变量开启且有会话）。
  */
@@ -171,7 +171,7 @@ function shouldJoinBeforeInput(sdkUrl) {
     env.CLAUDE_CODE_MCP_ALWAYS_LOAD_JOIN_BEFORE_INPUT === true && Boolean(sdkUrl) && !isBridgeEnvironment()
   );
 }
-//@ chunk-zdgk9dc6.js:6416-7176 placement
+//@ chunk-nkjcc801.js:6448-7208 placement
 /**
  * 连接 --mcp-config 指定的 MCP 服务器：alwaysLoad 或已有清单的视为必需并等待（动态 alwaysLoad 可交给调用方稍后等待），其余按 nonBlocking 决定是否后台连接。
  */
@@ -265,7 +265,7 @@ function connectMcpConfigServers(options) {
     ),
   ]).then(() => {});
 }
-//@ chunk-zdgk9dc6.js:7176-8638 placement
+//@ chunk-nkjcc801.js:7208-8670 placement
 function connectMcpServerBatch(
   configs,
   label,
@@ -377,7 +377,7 @@ function connectMcpServerBatch(
   else startDial();
   return mapped;
 }
-//@ chunk-zdgk9dc6.js:8638-10341 placement
+//@ chunk-nkjcc801.js:8670-10373 placement
 function applyConnectionResult(state, update) {
   let { client, tools, commands, attemptEpoch } = update;
   let finalize;
@@ -476,7 +476,7 @@ function applyConnectionResult(state, update) {
   finalize?.();
   return outcome;
 }
-//@ chunk-zdgk9dc6.js:10341-10534 placement
+//@ chunk-nkjcc801.js:10373-10566 placement
 /**
  * 找出配置未变且客户端已连接（或可接受的失败状态）的服务器，可直接复用而无需重连。
  */
@@ -491,7 +491,7 @@ function findReusableClients(configs, state, includeForbidden = true) {
     );
   });
 }
-//@ chunk-zdgk9dc6.js:10534-10710 placement
+//@ chunk-nkjcc801.js:10566-10742 placement
 /**
  * 登记一组服务器正处于瞬时错误重试轮次中，返回可 dispose 的对象在结束时撤销。
  */
@@ -509,7 +509,7 @@ function trackTransientRetryPass(names) {
     [Symbol.dispose]: () => bump(-1),
   };
 }
-//@ chunk-zdgk9dc6.js:10710-12322 placement
+//@ chunk-nkjcc801.js:10742-12354 placement
 async function retryRemoteMcpServers(
   configs,
   state,
@@ -609,7 +609,7 @@ async function retryRemoteMcpServers(
       `[MCP] Retry: ${remaining.length} remote server(s) still failed after all retries: ${remaining.map(([name]) => name).join(", ")}`,
     );
 }
-//@ chunk-zdgk9dc6.js:12322-13112 placement
+//@ chunk-nkjcc801.js:12354-13144 placement
 /**
  * 等待一批 MCP 连接：非阻塞时直接后台运行；否则在截止时间内等配置获取完成，再逐个等待拨号，超时只记日志、后台继续连接。
  */
@@ -658,7 +658,7 @@ async function awaitConnectBatch(nonBlocking, startBatch, label) {
       `[MCP] ${label}: ${unsettledCount}/${dials.length} not ready after ${deadlineMs}ms \u2014 proceeding; background connection continues`,
     );
 }
-//@ chunk-zdgk9dc6.js:13112-13767 placement
+//@ chunk-nkjcc801.js:13144-13798 placement
 function fetchClaudeAiConnectors(adapter, storageV5, credentials) {
   clearClaudeAiConfigsFetch();
   resetClaudeAiSessionConnections();
@@ -697,14 +697,14 @@ function fetchClaudeAiConnectors(adapter, storageV5, credentials) {
       .then(() => {}),
   };
 }
-//@ chunk-zdgk9dc6.js:13767-13896 placement
+//@ chunk-nkjcc801.js:13798-13927 placement
 function supersededByAccountSwitch(stage) {
   logForDebugging(
     `[MCP] claude.ai connector list superseded by an account switch (${stage}) \u2014 not mounting`,
   );
   return "superseded";
 }
-//@ chunk-zdgk9dc6.js:13896-14130 placement
+//@ chunk-nkjcc801.js:13927-14161 placement
 async function mountClaudeAiConnectors(params) {
   if (!isCurrentIdentityEpoch(params.epoch)) return supersededByAccountSwitch("list fetch");
   let dedup = await dedupPluginServersAgainstConnectors(params);
@@ -719,7 +719,7 @@ async function mountClaudeAiConnectors(params) {
     ...connectDedupedConnectors(dedup, params.state, params.deferConnect, params.storageV5),
   ];
 }
-//@ chunk-zdgk9dc6.js:14130-14612 placement
+//@ chunk-nkjcc801.js:14161-14643 placement
 /**
  * 找出仍可恢复的被抑制插件服务器：插件仍安装启用的返回其配置，已不存在的从抑制列表中移除。
  */
@@ -752,7 +752,7 @@ async function restorableSuppressedPlugins(adapter, storageV5) {
   }
   return restorable;
 }
-//@ chunk-zdgk9dc6.js:14612-15123 placement
+//@ chunk-nkjcc801.js:14643-15154 placement
 /**
  * 账号切换后不再与 claude.ai 连接器重复的插件服务器：从抑制列表移除并重新连接。
  */
@@ -779,7 +779,7 @@ function restorePluginServers(restorable, stillSuppressed, mcpState, storageV5) 
     );
   return connectMcpServerBatch(toConnect, "plugin-restore", mcpState, false, storageV5);
 }
-//@ chunk-zdgk9dc6.js:15123-16567 placement
+//@ chunk-nkjcc801.js:15154-16598 placement
 async function dedupPluginServersAgainstConnectors(params) {
   let { claudeaiConfigs, regularMcpConfigs, state } = params;
   let suppressed = new Set();
@@ -852,13 +852,13 @@ async function dedupPluginServersAgainstConnectors(params) {
       });
     }
   }
-  let manualServers = filterObject(regularMcpConfigs, (name, entryName) => !entryName.startsWith("plugin:"));
+  let mcpServer = filterObject(regularMcpConfigs, (name, entryName) => !entryName.startsWith("plugin:"));
   return {
-    ...(await dedupClaudeAiMcpServers(claudeaiConfigs, manualServers)),
+    ...(await dedupClaudeAiMcpServers(claudeaiConfigs, mcpServer)),
     suppressedPlugins: suppressed,
   };
 }
-//@ chunk-zdgk9dc6.js:16567-16745 placement
+//@ chunk-nkjcc801.js:16598-16776 placement
 function connectDedupedConnectors({ servers, suppressed }, state, deferConnect, storageV5) {
   state.applyMcpUpdate((state) =>
     suppressedConnectorsEqual(state.suppressedClaudeAiConnectors ?? [], suppressed)
@@ -870,7 +870,7 @@ function connectDedupedConnectors({ servers, suppressed }, state, deferConnect, 
   );
   return connectMcpServerBatch(servers, "claudeai", state, deferConnect, storageV5);
 }
-//@ chunk-zdgk9dc6.js:16745-17001 placement
+//@ chunk-nkjcc801.js:16776-17032 placement
 function replaceClientInState(state, client) {
   let mcpPrefix = getMcpPrefix(client.name);
   return {
@@ -882,7 +882,7 @@ function replaceClientInState(state, client) {
     resourceTemplates: omitKeys(state.resourceTemplates, client.name),
   };
 }
-//@ chunk-zdgk9dc6.js:17001-17115 placement
+//@ chunk-nkjcc801.js:17032-17146 placement
 function discardClient(client) {
   if (isDiscoveryCacheOn()) setMcpOnClose(client, undefined);
   client.cleanup().catch(() => {});
@@ -891,14 +891,14 @@ function discardClient(client) {
     .catch(() => {});
 }
 export {
-  MCP_CONNECT_PHASES,
-  shouldJoinBeforeInput,
-  connectMcpConfigServers,
   applyConnectionResult,
   findReusableClients,
   retryRemoteMcpServers,
   CONNECT_RETRY_BASE_MS,
-  fetchClaudeAiConnectors,
   trackTransientRetryPass,
   CONNECT_RETRY_DELAYS_MS,
+  MCP_CONNECT_PHASES,
+  shouldJoinBeforeInput,
+  connectMcpConfigServers,
+  fetchClaudeAiConnectors,
 };

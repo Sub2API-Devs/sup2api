@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工作流日志存储
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-41w44bgm.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kd2wbncj.js (8)
  * attribution: placement 8
  */
 import { isPlainObject } from "../../utils/isPlainObject.js";
@@ -16,7 +16,7 @@ import { LocalFileJournal } from "./localFileJournal.js";
 import { getSessionId } from "../../bootstrap/state.js";
 import { storagePort } from "../../utils/sessionStorage.js";
 
-//@ chunk-41w44bgm.js:96223-96318 placement
+//@ chunk-kd2wbncj.js:88757-88852 placement
 /**
  * 工作流 journal 存储用的常量：两个存储键，以及脚本文件名与脚本引用正则。
  */
@@ -24,14 +24,14 @@ var WORKFLOW_JOURNAL = "workflow-journal";
 var WORKFLOW_SCRIPT = "workflow-script";
 var WORKFLOW_SCRIPT_FILE_REGEX = /^[a-z0-9_-]+\.js$/;
 var WORKFLOW_SCRIPT_REF_REGEX = /^v\d+:[0-9a-f]{64}$/;
-//@ chunk-41w44bgm.js:96318-96377 placement
+//@ chunk-kd2wbncj.js:88852-88911 placement
 /**
  * 判断文件名是否是给定工作流的脚本文件。
  */
 function isWorkflowScriptFileFor(fileName, runId) {
   return WORKFLOW_SCRIPT_FILE_REGEX.test(fileName) && fileName.endsWith(`-${runId}.js`);
 }
-//@ chunk-41w44bgm.js:96377-97169 placement
+//@ chunk-kd2wbncj.js:88911-89810 placement
 /**
  * 校验并规范一条工作流 journal 条目（launched / started / result / failed），key 与 agentId 格式不对或类型未知返回 undefined。
  */
@@ -84,6 +84,9 @@ function parseJournalEntry(entry) {
         ...(entry.foreignArtifactContent === true && {
           foreignArtifactContent: true,
         }),
+        ...(typeof entry.remoteControlDeviceReport === "boolean" && {
+          remoteControlDeviceReport: entry.remoteControlDeviceReport,
+        }),
         ...(Array.isArray(entry.toolsUsed) && {
           toolsUsed: entry.toolsUsed.filter((toolName) => typeof toolName === "string"),
         }),
@@ -98,7 +101,7 @@ function parseJournalEntry(entry) {
       return;
   }
 }
-//@ chunk-41w44bgm.js:97169-97247 placement
+//@ chunk-kd2wbncj.js:89810-89888 placement
 /**
  * 镜像工作流运行到 CCR 失败时记一条警告。
  */
@@ -107,7 +110,7 @@ function logJournalMirrorFailure(error) {
     level: "warn",
   });
 }
-//@ chunk-41w44bgm.js:97247-97411 placement
+//@ chunk-kd2wbncj.js:89888-90052 placement
 /**
  * 创建本地文件日志，并在每次追加时把条目镜像到远程存储（失败只记录）。
  */
@@ -133,12 +136,12 @@ function createMirroredJournal(workflowRunId, storageV5) {
     },
   };
 }
-//@ chunk-41w44bgm.js:97411-97420 placement
+//@ chunk-kd2wbncj.js:90052-90061 placement
 /**
  * 恢复时补写 launched 标记的最多尝试次数。
  */
 var LAUNCH_MARK_APPEND_ATTEMPTS = 2;
-//@ chunk-41w44bgm.js:97420-97648 placement
+//@ chunk-kd2wbncj.js:90061-90289 placement
 async function appendLaunchMarkOnResume(journal, markEntry) {
   for (let j = 0; j < LAUNCH_MARK_APPEND_ATTEMPTS; j++) {
     if ((await journal.load()).hiddenScriptSha256 !== undefined) return;
@@ -147,7 +150,7 @@ async function appendLaunchMarkOnResume(journal, markEntry) {
   if ((await journal.load()).hiddenScriptSha256 === undefined)
     throw Error("the journal holds no mark after it was written");
 }
-//@ chunk-41w44bgm.js:97648-98035 placement
+//@ chunk-kd2wbncj.js:90289-90676 placement
 /**
  * 打开带隐藏脚本哈希标记的 journal：写入 launched 标记（恢复时确保只写一次），首个标记镜像成功后，后续追加也镜像到会话存储。
  */

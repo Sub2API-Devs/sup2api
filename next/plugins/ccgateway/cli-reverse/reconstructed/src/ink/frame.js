@@ -3,9 +3,9 @@
  *
  * 并入已有模块：粘贴事件（文本、是否为空、是否带焦点尾）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/frame.ts
- * pieces: chunk-bzr73sfg.js (4)
+ * pieces: chunk-2avr6cej.js (4)
  * attribution: placement 3, fingerprint 1
  */
 import { TerminalEvent } from "./events/terminal-event.js";
@@ -14,18 +14,18 @@ import { normalizeFullWidthSpace } from "../utils/stringUtils.js";
 import { createScreen } from "./screen.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bzr73sfg.js:252585-252844 placement
+//@ chunk-2avr6cej.js:252261-252520 placement
 var C1_CONTROL_RE = /[\u0090\u0098\u009b\u009d-\u009f]/;
 var ESC_C1_RE = /\u001b[\u0090\u0098\u009b\u009d-\u009f]/g;
 var C1_CONTROL_GLOBAL_RE = /[\u0090\u0098\u009b\u009d-\u009f]/g;
 var C1_STRING_BEL_RE = /([\u0090\u0098\u009d-\u009f][^\u0007\u001b\u0090\u0098\u009d-\u009f\r\n]*)\u0007/g;
 var ESC_STRING_BEL_RE = /(\u001b[PX^_][^\u0007\u001b]*)\u0007/g;
-//@ chunk-bzr73sfg.js:252844-253358 placement
+//@ chunk-2avr6cej.js:252520-253034 placement
 /**
  * 粘贴事件（文本、是否为空、是否带焦点尾）。
  */
 let PasteEvent; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bzr73sfg.js:252844", () => {
+deferInit("chunk-2avr6cej.js:252520", () => {
   PasteEvent = class PasteEvent extends TerminalEvent {
     text;
     rawEmpty;
@@ -54,12 +54,12 @@ deferInit("chunk-bzr73sfg.js:252844", () => {
     }
   };
 });
-//@ chunk-bzr73sfg.js:253358-253610 placement
+//@ chunk-2avr6cej.js:253034-253286 placement
 /**
  * 滚轮事件（wheel，冒泡、可取消）：deltaY/deltaX、修饰键、鼠标格坐标。
  */
 let WheelEvent; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bzr73sfg.js:253358", () => {
+deferInit("chunk-2avr6cej.js:253034", () => {
   WheelEvent = class WheelEvent extends TerminalEvent {
     deltaY;
     deltaX;
@@ -83,7 +83,7 @@ deferInit("chunk-bzr73sfg.js:253358", () => {
     }
   };
 });
-//@ chunk-bzr73sfg.js:253610-253719 fingerprint (2.1.88 match: emptyFrame, 1)
+//@ chunk-2avr6cej.js:253286-253395 fingerprint (2.1.88 match: emptyFrame, 1)
 /**
  * 空帧：0×0 屏幕、给定视口、光标在原点可见。
  */
@@ -101,4 +101,4 @@ function emptyFrame(rows, columns, stylePool, charPool, hyperlinkPool) {
     },
   };
 }
-export { PasteEvent, emptyFrame, WheelEvent };
+export { emptyFrame, PasteEvent, WheelEvent };

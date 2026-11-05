@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Artifact 工具权限规则匹配与输入校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qxvqcab6.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nfkwcnxd.js (29)
  * attribution: placement 29
  */
 import {
@@ -69,11 +69,11 @@ import {
 } from "../promptText.js";
 import { outsideOrgRead } from "../../../services/artifacts/artifactToolGates.js";
 import { AUTO_OPEN_HOOK, autoOpenArtifactPreview } from "../../../services/artifacts/autoOpen.js";
-import { parseSessionArtifactUrl } from "../../../services/artifacts/orgScope.js";
+import { validateSessionArtifactUrl } from "../../../services/artifacts/orgScope.js";
 import { registerLazyWriter } from "../actionNames.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-qxvqcab6.js:15043-15735 placement
+//@ chunk-nfkwcnxd.js:15018-15710 placement
 function isApprovableFileWrite(input, options) {
   if (typeof input !== "object" || input === null) return false;
   let servableTypes = options.documents ? APPROVABLE_CONTENT_TYPES : SERVABLE_CONTENT_TYPES;
@@ -103,50 +103,50 @@ function isApprovableFileWrite(input, options) {
     return isApprovableFile(key, value.contentType, servableTypes);
   });
 }
-//@ chunk-qxvqcab6.js:15735-15792 placement
+//@ chunk-nfkwcnxd.js:15710-15767 placement
 function hasReadFileAction() {
   return zodEnumFieldIncludes(inputSchema().shape.action, "read_file");
 }
-//@ chunk-qxvqcab6.js:15792-15846 placement
+//@ chunk-nfkwcnxd.js:15767-15821 placement
 function hasDeleteAction() {
   return zodEnumFieldIncludes(inputSchema().shape.action, "delete");
 }
-//@ chunk-qxvqcab6.js:15846-15898 placement
+//@ chunk-nfkwcnxd.js:15821-15873 placement
 function hasOpenAction() {
   return zodEnumFieldIncludes(inputSchema().shape.action, "open");
 }
-//@ chunk-qxvqcab6.js:15898-15949 placement
+//@ chunk-nfkwcnxd.js:15873-15924 placement
 function hasPinAction() {
   return zodEnumFieldIncludes(inputSchema().shape.action, "pin");
 }
-//@ chunk-qxvqcab6.js:15949-16002 placement
+//@ chunk-nfkwcnxd.js:15924-15977 placement
 function hasShareAction() {
   return zodEnumFieldIncludes(inputSchema().shape.action, "share");
 }
-//@ chunk-qxvqcab6.js:16002-16046 placement
+//@ chunk-nfkwcnxd.js:15977-16021 placement
 function hasVersionField() {
   return "version" in inputSchema().shape;
 }
-//@ chunk-qxvqcab6.js:16046-16179 placement
+//@ chunk-nfkwcnxd.js:16021-16154 placement
 function artifactTitleForUrl(match, url) {
   if (match?.title === undefined) return;
   if (url === undefined) return match.title;
   let slug = uuidSlugFromUrl(url);
   return slug !== null && uuidSlugFromUrl(match.url) === slug ? match.title : undefined;
 }
-//@ chunk-qxvqcab6.js:16179-16242 placement
+//@ chunk-nfkwcnxd.js:16154-16217 placement
 var IMAGE_EXTENSIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-qxvqcab6.js:16179", () => {
+deferInit("chunk-nfkwcnxd.js:16154", () => {
   IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"]);
 });
-//@ chunk-qxvqcab6.js:16242-16369 placement
+//@ chunk-nfkwcnxd.js:16217-16344 placement
 function artifactSurfaceRefusal(context) {
   if (getToolPermissionContext(context).mode === "plan") return "plan";
   if (coworkConsentMustDeny(context)) return "cowork_no_surface";
   if (consentMustDeny(context)) return "no_surface";
   return null;
 }
-//@ chunk-qxvqcab6.js:16369-16566 placement
+//@ chunk-nfkwcnxd.js:16344-16541 placement
 function artifactReadBlockedMessage(rule, subject, isCopy) {
   let lead = isCopy
     ? "Copying from this artifact is"
@@ -156,7 +156,7 @@ function artifactReadBlockedMessage(rule, subject, isCopy) {
   let whyText = subject === "" ? "" : ` \u2014 ${subject}`;
   return `${lead} blocked by ${denyRulePhrase(rule)}${whyText}`;
 }
-//@ chunk-qxvqcab6.js:16566-16674 placement
+//@ chunk-nfkwcnxd.js:16541-16649 placement
 function denyByArtifactRule(rule, why = "", isCopy = false) {
   return {
     behavior: "deny",
@@ -167,7 +167,7 @@ function denyByArtifactRule(rule, why = "", isCopy = false) {
     },
   };
 }
-//@ chunk-qxvqcab6.js:16674-16796 placement
+//@ chunk-nfkwcnxd.js:16649-16771 placement
 function readDeniedByRule(context, target, url, why, fields) {
   let rule = artifactCallReadRule(getToolPermissionContext(context), target, url, "deny", fields);
   return rule === null
@@ -177,13 +177,13 @@ function readDeniedByRule(context, target, url, why, fields) {
         "read_denied",
       );
 }
-//@ chunk-qxvqcab6.js:16796-16951 placement
+//@ chunk-nfkwcnxd.js:16771-16926 placement
 function askRuleCoverageNote(rule) {
   return rule.ruleValue.toolName === WEBFETCH
     ? ` (your ${WEBFETCH} ask rule covers artifact reads)`
     : ` (your ${rule.ruleValue.toolName} ask rule covers this url)`;
 }
-//@ chunk-qxvqcab6.js:16951-17368 placement
+//@ chunk-nfkwcnxd.js:16926-17343 placement
 function isRoomPublishCall(input) {
   if (!artifactRoomSurfaceOpen() || input === null || input === undefined) return false;
   if (input.action !== undefined && input.action !== "publish") return false;
@@ -209,28 +209,28 @@ function isRoomPublishCall(input) {
   }
   return shareEntry?.capabilities?.room !== undefined;
 }
-//@ chunk-qxvqcab6.js:17368-17415 placement
+//@ chunk-nfkwcnxd.js:17343-17390 placement
 var EMPTY_COMMENT_SETS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-qxvqcab6.js:17368", () => {
+deferInit("chunk-nfkwcnxd.js:17343", () => {
   EMPTY_COMMENT_SETS = {
     threadIds: new Set(),
     commentIds: new Set(),
   };
 });
-//@ chunk-qxvqcab6.js:17415-17472 placement
+//@ chunk-nfkwcnxd.js:17390-17447 placement
 function artifactReleaseInfo(release) {
   return {
     url: artifactViewerUrl(release.slug),
     release: release.current,
   };
 }
-//@ chunk-qxvqcab6.js:17472-17603 placement
+//@ chunk-nfkwcnxd.js:17447-17578 placement
 function parseArtifactUrlOrThrow(url) {
   let artifactUrl = typeof url === "string" ? parseArtifactUrl(url) : null;
   if (!artifactUrl) throw new ArtifactInputError(`not an artifact URL: ${String(url)}`, "invalid_url");
   return artifactUrl;
 }
-//@ chunk-qxvqcab6.js:17603-17917 placement
+//@ chunk-nfkwcnxd.js:17578-17892 placement
 function findBatchWriteRule(tool, context, input, behavior) {
   if (typeof input !== "object" || input === null || !isArtifactBatchWrite(input)) return;
   let { writes, ...rest } = input;
@@ -260,7 +260,7 @@ function findBatchWriteRule(tool, context, input, behavior) {
   }
   return;
 }
-//@ chunk-qxvqcab6.js:17917-18041 placement
+//@ chunk-nfkwcnxd.js:17892-18016 placement
 function findStrReplaceRule(tool, context, input, behavior) {
   if (typeof input !== "object" || input === null || input.db_op !== STR_REPLACE) return;
   return (
@@ -275,13 +275,13 @@ function findStrReplaceRule(tool, context, input, behavior) {
     ) ?? undefined
   );
 }
-//@ chunk-qxvqcab6.js:18041-18154 placement (2.1.88 match: getDenyRuleForAgent, 1)
+//@ chunk-nfkwcnxd.js:18016-18129 placement (2.1.88 match: getDenyRuleForAgent, 1)
 function formatRuleForDisplay(rule) {
   return rule.ruleValue.ruleContent === undefined
     ? rule.ruleValue.toolName
     : `${rule.ruleValue.toolName}(${formatRuleContentForDisplay(rule)})`;
 }
-//@ chunk-qxvqcab6.js:18154-18443 placement
+//@ chunk-nfkwcnxd.js:18129-18418 placement
 function denyArtifactBatchByRule(tool, toolPermissionContext, input) {
   let batchWriteRule = findBatchWriteRule(tool, toolPermissionContext, input, "deny");
   return batchWriteRule === undefined
@@ -295,7 +295,7 @@ function denyArtifactBatchByRule(tool, toolPermissionContext, input) {
         },
       };
 }
-//@ chunk-qxvqcab6.js:18443-18705 placement
+//@ chunk-nfkwcnxd.js:18418-18680 placement
 function denyArtifactStrReplaceByRule(tool, toolPermissionContext, input) {
   let strReplaceRule = findStrReplaceRule(tool, toolPermissionContext, input, "deny");
   return strReplaceRule === undefined
@@ -309,7 +309,7 @@ function denyArtifactStrReplaceByRule(tool, toolPermissionContext, input) {
         },
       };
 }
-//@ chunk-qxvqcab6.js:18705-19225 placement
+//@ chunk-nfkwcnxd.js:18680-19200 placement
 function askArtifactBatchByRule(tool, context, toolPermissionContext, input) {
   let batchWriteRule = findBatchWriteRule(tool, toolPermissionContext, input, "ask");
   if (batchWriteRule === undefined || typeof input !== "object" || input === null) return;
@@ -330,7 +330,7 @@ function askArtifactBatchByRule(tool, context, toolPermissionContext, input) {
     },
   };
 }
-//@ chunk-qxvqcab6.js:19225-19388 placement
+//@ chunk-nfkwcnxd.js:19200-19363 placement
 function denyOtherOrgArtifact(target, outcome) {
   if (!probedOtherOrg(getShareEntry(target.slug))) return null;
   return {
@@ -342,7 +342,7 @@ function denyOtherOrgArtifact(target, outcome) {
     },
   };
 }
-//@ chunk-qxvqcab6.js:19388-19586 placement
+//@ chunk-nfkwcnxd.js:19363-19561 placement
 function denyOutsideOrgRead(target, outcome) {
   let otherOrgDenial = denyOtherOrgArtifact(target, outcome);
   if (otherOrgDenial !== null) return otherOrgDenial;
@@ -356,7 +356,7 @@ function denyOutsideOrgRead(target, outcome) {
     },
   };
 }
-//@ chunk-qxvqcab6.js:19586-20355 placement
+//@ chunk-nfkwcnxd.js:19561-20330 placement
 /**
  * 校验 Artifact 工具输入里的 path/url（watch 的 live path、artifact URL 内的子路径等）。
  */
@@ -394,20 +394,20 @@ function validateArtifactPathInput(action, input, url) {
   }
   let urlError = urlSubPathError(url);
   if (urlError) return urlError;
-  let sessionArtifactUrl = parseSessionArtifactUrl(url);
-  if (!sessionArtifactUrl.ok)
+  let urlCheck = validateSessionArtifactUrl(url);
+  if (!urlCheck.ok)
     return {
       result: false,
-      message: sessionArtifactUrl.message,
-      errorCode: sessionArtifactUrl.errorCode,
+      message: urlCheck.message,
+      errorCode: urlCheck.errorCode,
     };
   return {
     result: true,
   };
 }
-//@ chunk-qxvqcab6.js:20355-20496 placement
+//@ chunk-nfkwcnxd.js:20330-20471 placement
 // deferred: uses registerLazyWriter (../actionNames.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-qxvqcab6.js:20355", () => {
+deferInit("chunk-nfkwcnxd.js:20330", () => {
   registerLazyWriter({
     addOpenedFrameRow: openArtifactFrame,
     forgetArtifactDeletedThroughMcp: updateFrameState,
@@ -416,7 +416,7 @@ deferInit("chunk-qxvqcab6.js:20355", () => {
     surfacePublishedArtifact: autoOpenArtifactPreview,
   });
 });
-//@ chunk-qxvqcab6.js:20496-20523 placement
+//@ chunk-nfkwcnxd.js:20471-20498 placement
 /**
  * 制品权限规则相关请求的超时与响应上限。
  */
@@ -434,23 +434,23 @@ export {
   findBatchWriteRule,
   findStrReplaceRule,
   formatRuleForDisplay,
-  denyOtherOrgArtifact,
-  EMPTY_COMMENT_SETS,
-  hasPinAction,
-  parseArtifactUrlOrThrow,
-  hasVersionField,
-  hasOpenAction,
-  validateArtifactPathInput,
-  artifactSurfaceRefusal,
-  hasShareAction,
   artifactTitleForUrl,
   IMAGE_EXTENSIONS,
   isRoomPublishCall,
   askArtifactBatchByRule,
+  denyOtherOrgArtifact,
+  artifactSurfaceRefusal,
   isApprovableFileWrite,
   hasDeleteAction,
+  hasOpenAction,
+  hasPinAction,
+  hasShareAction,
   hasReadFileAction,
+  validateArtifactPathInput,
+  parseArtifactUrlOrThrow,
   artifactReleaseInfo,
   ARTIFACT_RULE_TIMEOUT_MS,
   ARTIFACT_RULE_MAX_BYTES,
+  EMPTY_COMMENT_SETS,
+  hasVersionField,
 };

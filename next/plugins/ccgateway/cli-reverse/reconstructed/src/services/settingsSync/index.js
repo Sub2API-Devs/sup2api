@@ -3,14 +3,12 @@
  *
  * 用户设置/记忆在云端会话与本机之间同步（CLAUDE.md、rules 等文件条目的打包与回写），以及若干混入的远程会话辅助代码。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/settingsSync/index.ts
- * pieces: chunk-aepeg2w5.js (1), chunk-axmbhcjg.js (1), chunk-e4xept39.js (2), chunk-e6aww6q8.js (1), chunk-s61vbvea.js (1)
- * attribution: callgraph-fingerprint 4, sole-consumer 1, fingerprint 1
+ * pieces: chunk-5xgkngpb.js (1), chunk-7jxyna5q.js (1), chunk-fwegbnps.js (2), chunk-vb7ng9fr.js (1)
+ * attribution: callgraph-fingerprint 3, sole-consumer 1, fingerprint 1
  */
 import { sep, join } from "path";
-import { hostOfUrl } from "../analytics/telemetryCredentialGuard.js";
-import { getOauthConfig } from "../../constants/oauth.js";
 import { ReferralEligibilityUnavailableError } from "../api/referral.js";
 import { classifyAxiosError } from "../../utils/errors.js";
 import { getMemoryPath, getUserClaudeRulesDir, getManagedClaudeRulesDir } from "../../utils/config.js";
@@ -23,15 +21,7 @@ import { isInstructionsMemoryType_3, MAX_INCLUDE_DEPTH, processMdRules } from ".
 import { INCLUDE_EXTERNAL, MAX_INCLUDE_READS } from "../homeSeed/homeInventory.js";
 import { CLAUDE_MD, RULES } from "../homeSeed/workingFiles.js";
 
-//@ chunk-aepeg2w5.js:129791-129852 callgraph-fingerprint (2.1.88 match: getSettingsSyncEndpoint, 1)
-function getSettingsSyncEndpoint() {
-  try {
-    return hostOfUrl(getOauthConfig().BASE_API_URL);
-  } catch {
-    return;
-  }
-}
-//@ chunk-s61vbvea.js:500862-501122 callgraph-fingerprint (2.1.88 match: fetchUserSettingsOnce, 0.351)
+//@ chunk-7jxyna5q.js:417965-418225 callgraph-fingerprint (2.1.88 match: fetchUserSettingsOnce, 0.351)
 function fetchUserSettingsOnce(error) {
   if (error instanceof ReferralEligibilityUnavailableError) return error.errorCode;
   let { kind, status } = classifyAxiosError(error);
@@ -47,7 +37,7 @@ function fetchUserSettingsOnce(error) {
       return "request_failed";
   }
 }
-//@ chunk-e6aww6q8.js:3156204-3156535 callgraph-fingerprint (2.1.88 match: buildEntriesFromLocalFiles, 0.234)
+//@ chunk-5xgkngpb.js:3346945-3347277 callgraph-fingerprint (2.1.88 match: buildEntriesFromLocalFiles, 0.234)
 function buildEntriesFromLocalFiles(projectId) {
   if (projectId === getMemoryPath("User")) return STORAGE_SPACES.state("user-memory");
   let rulesPrefix = getUserClaudeRulesDir() + sep;
@@ -65,21 +55,21 @@ function buildEntriesFromLocalFiles(projectId) {
   }
   return;
 }
-//@ chunk-e4xept39.js:335-379 sole-consumer
+//@ chunk-fwegbnps.js:363-407 sole-consumer
 /**
  * 把云端会话横幅与「在此处…」提示拼起来，供会话状态消息使用。
  */
 function bannerWithCodeHere(bannerKind, codeUrl) {
   return `${CLOUD_SESSION_BANNERS[bannerKind]}${CODE_HERE_OR_AT}${codeUrl}`;
 }
-//@ chunk-e4xept39.js:379-445 fingerprint (2.1.88 match: tryReadFileForSync, 1)
+//@ chunk-fwegbnps.js:407-473 fingerprint (2.1.88 match: tryReadFileForSync, 1)
 function tryReadFileForSync(sessionId, remoteSessionUrl, isCloudSession) {
   let content = bannerWithCodeHere(sessionId, remoteSessionUrl);
   return isCloudSession
     ? createCloudSessionStatusMessage(sessionId, remoteSessionUrl, content)
     : createSystemMessage(content, "info");
 }
-//@ chunk-axmbhcjg.js:8417-8926 callgraph-fingerprint (2.1.88 match: applyRemoteEntriesToLocal, 0.178)
+//@ chunk-vb7ng9fr.js:8451-8961 callgraph-fingerprint (2.1.88 match: applyRemoteEntriesToLocal, 0.179)
 async function applyRemoteEntriesToLocal(configDir, counters, signal) {
   let includeReader = (rulesDir, ruleType) => () =>
     isInstructionsMemoryType_3(
@@ -121,10 +111,4 @@ async function applyRemoteEntriesToLocal(configDir, counters, signal) {
   }
   return entries;
 }
-export {
-  tryReadFileForSync,
-  getSettingsSyncEndpoint,
-  fetchUserSettingsOnce,
-  applyRemoteEntriesToLocal,
-  buildEntriesFromLocalFiles,
-};
+export { tryReadFileForSync, fetchUserSettingsOnce, buildEntriesFromLocalFiles, applyRemoteEntriesToLocal };

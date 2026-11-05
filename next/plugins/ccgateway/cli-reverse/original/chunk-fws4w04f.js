@@ -1,7 +1,0 @@
-
-// @bun @bytecode
-// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
-
-// Version: 2.1.316
-import{Nar}from"./chunk-sfy7bm1n.js";import{rse}from"./chunk-e6aww6q8.js";var _Oo=new Set(["invoke-command","start-job","start-threadjob","register-scheduledjob"]),bOo=new Set(["invoke-command","invoke-expression","start-job","start-threadjob","register-scheduledjob","register-engineevent","register-objectevent","register-wmievent","new-pssession","enter-pssession"]),SOo=new Set(["import-module","ipmo","install-module","save-module","update-module","install-script","save-script"]),o=["pwsh","powershell","cmd","bash","wsl","sh","start-process","start","add-type","new-object"];function s(t){return Object.entries(rse).filter(([,e])=>t.has(e.toLowerCase())).map(([e])=>e)}var r=new Set(["invoke-webrequest","invoke-restmethod"]),n=new Set(["set-alias","sal","new-alias","nal","set-variable","sv","new-variable","nv"]),i=new Set(["invoke-wmimethod","iwmi","invoke-cimmethod","icim","wmic","wmic.exe"]),a=new Set(["select-object","sort-object","group-object","where-object","measure-object","write-output","write-host","start-sleep","format-table","format-list","format-wide","format-custom","out-string","out-host","ipconfig","hostname","route","arp"]),pWs=(()=>{let t=new Set([...o,..._Oo,...bOo,...SOo,...r,...n,...i,...a,"foreach-object",...Nar.filter((e)=>!e.includes(" "))]);return new Set([...t,...s(t)])})();
-export{_Oo,bOo,SOo,pWs};

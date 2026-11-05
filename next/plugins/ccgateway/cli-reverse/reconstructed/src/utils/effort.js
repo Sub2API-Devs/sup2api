@@ -3,10 +3,10 @@
  *
  * effort（推理强度）：级别 low/medium/high/xhigh/max、模型是否支持 effort/xhigh/max、默认 effort 的来源顺序、环境变量与 /effort 覆盖、组织上限截断、按模型保存的 effort 设置。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/effort.ts
- * pieces: chunk-18hwfzwa.js (2), chunk-3rwvzn82.js (1), chunk-dcmhvw5a.js (2), chunk-kcvmr83c.js (2), chunk-kswt4qha.js (100)
- * attribution: callgraph-fingerprint 4, placement 25, callgraph-witnessed 2, layout 68, file-local 3, fingerprint 5
+ * pieces: chunk-5dqwe9kx.js (2), chunk-bc4jcw5z.js (100), chunk-czq1j3j2.js (2), chunk-n2cdp9nk.js (1), chunk-z20c443b.js (2)
+ * attribution: placement 56, callgraph-fingerprint 4, layout 40, fingerprint 5, callgraph-witnessed 2
  */
 import { resolve } from "path";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
@@ -15,7 +15,6 @@ import {
   sameEffort,
   approvalLayers,
   getCarriedRefusalEffort,
-  isVirtualPancakeEnabled,
   parseEffortOrKeyword,
   isReservedEffortKeyword,
 } from "./permissions/permissionSetup.js";
@@ -23,6 +22,9 @@ import {
   getRefusalFallbackModelLatch,
   releaseRefusalFallbackCarriedEffort,
   isEffortMarkedUnsupported,
+  getFlagSettingsInline,
+  getFlagSettingsExpectedContent,
+  getFlagSettingsFilePinnedContent,
   getIsNonInteractiveSession,
   getTotalOutputTokens,
   setMainLoopEffortState,
@@ -35,10 +37,16 @@ import { env } from "./env.js";
 import { hasFirstPartyCapabilities, getProviderForModel, getAPIProvider } from "./model/providers.js";
 import { isWorkflowsAvailable } from "./workflows/workflowGates.js";
 import {
+  THINKING_DISABLED_EFFORT_CAP,
+  resolveModelOptionValue,
+  defaultEffortForModel,
+} from "../components/ModelPicker.js";
+import {
   getAllPolicyTierSettings,
   getSettingsForSource,
-  getInitialSettings_2,
+  getInitialSettings,
   getSettingsFilePathForSource,
+  parseSettingsFile,
   updateSettingsForSource,
 } from "./settings/settings.js";
 import { getEnabledSettingSources } from "./settings/constants.js";
@@ -63,53 +71,54 @@ import { isAutoCompactOfferAnswered } from "../services/compact/autocompactOffer
 import { getDefaultMainLoopModel } from "./model/modelFallback.js";
 import { usesPerTurnEffortBeta } from "./betas.js";
 import { isUltrathinkEnabled } from "./thinking.js";
-import { isVsCodeOrDesktop } from "./sessionShape.js";
+import { isVsCodeOrDesktop, getSessionEntrypoint, isDesktopTopNonClaudecode } from "./sessionShape.js";
+import { REMOTE_ENTRYPOINT_NAMES } from "./entrypointKinds.js";
+import { isTopLevelBridgeSession } from "./remoteEnvironment.js";
 import { MAX_EFFORT_DESCRIPTION } from "./settings/permissionRuleCarveOut.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { record, stringSchema, unknown } from "../../vendor/zod/v4/classic/schemas.js";
 import { safeParseJSON } from "./json.js";
-import { resolveModelOptionValue, defaultEffortForModel } from "../components/ModelPicker.js";
 import { hasEffortOverride, describeEffortLevel } from "../components/EffortSlider.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:189583-189628 callgraph-witnessed (2.1.88 match: EFFORT_LEVELS, 0.879)
+//@ chunk-z20c443b.js:188527-188572 callgraph-witnessed (2.1.88 match: EFFORT_LEVELS, 0.879)
 /**
  * effort 级别从低到高：low、medium、high、xhigh、max。
  */
 var EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"];
-//@ chunk-dcmhvw5a.js:189628-189681 placement
+//@ chunk-z20c443b.js:188572-188625 placement
 /**
  * 级别 a 是否高于 b（按 EFFORT_LEVELS 顺序）。
  */
 function isEffortHigherThan(leftLevel, rightLevel) {
   return EFFORT_LEVELS.indexOf(leftLevel) > EFFORT_LEVELS.indexOf(rightLevel);
 }
-//@ chunk-kswt4qha.js:16069-16098 placement
+//@ chunk-bc4jcw5z.js:16358-16387 placement
 function isEffortCarryDisabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_LOGGIA_PASSAGE, false);
 }
-//@ chunk-kswt4qha.js:16729-16793 placement
+//@ chunk-bc4jcw5z.js:17018-17082 placement
 /**
  * carriedEffortForModel：该模型可沿用的 effort。
  */
 function carriedEffortForModel(model, loopEffort) {
   return loopEffort !== undefined && loopEffort.model === model ? loopEffort.level : undefined;
 }
-//@ chunk-kswt4qha.js:16793-16843 placement
+//@ chunk-bc4jcw5z.js:17082-17132 placement
 /**
  * hasCarriedRefusalEffort：回退锁存里带了 effort。
  */
 function hasCarriedRefusalEffort() {
   return getRefusalFallbackModelLatch()?.carriedEffort !== undefined;
 }
-//@ chunk-kswt4qha.js:17321-17357 placement
+//@ chunk-bc4jcw5z.js:17610-17646 placement
 /**
  * releaseCarriedEffortForEffortChange：effort 改变时释放携带值。
  */
 function releaseCarriedEffortForEffortChange() {
   releaseRefusalFallbackCarriedEffort("effort_change");
 }
-//@ chunk-kswt4qha.js:17357-17443 placement
+//@ chunk-bc4jcw5z.js:17646-17732 placement
 /**
  * releaseCarriedEffortIfModelChanged：模型不再是回退模型时释放。
  */
@@ -118,14 +127,14 @@ function releaseCarriedEffortIfModelChanged(model) {
   if (refusalFallbackModelLatch !== undefined && !sameEffort(model, refusalFallbackModelLatch.fallbackModel))
     releaseRefusalFallbackCarriedEffort("model_change");
 }
-//@ chunk-kswt4qha.js:17687-17711 placement
+//@ chunk-bc4jcw5z.js:17976-18000 placement
 /**
  * isSpecialEffortKeywordDisabled：恒 false（构建时裁掉的关键字检查）。
  */
 function isSpecialEffortKeywordDisabled() {
   return false;
 }
-//@ chunk-kswt4qha.js:17736-18187 callgraph-fingerprint (2.1.88 match: modelSupportsEffort, 0.2)
+//@ chunk-bc4jcw5z.js:18025-18476 callgraph-fingerprint (2.1.88 match: modelSupportsEffort, 0.2)
 /**
  * 模型是否支持 effort：被 API 拒绝过的模型为 false；3P 能力覆盖 → CLAUDE_CODE_MODEL_CAPABILITIES → 服务端目录 effort_levels → 旧模型黑名单 → CLAUDE_CODE_ALWAYS_ENABLE_EFFORT → catalog 能力 effort → 第一方类提供商默认支持。
  */
@@ -152,7 +161,7 @@ function modelSupportsEffort(model) {
     return true;
   return hasFirstPartyCapabilities(getProviderForModel(model));
 }
-//@ chunk-kswt4qha.js:18187-18635 callgraph-fingerprint (2.1.88 match: modelSupportsMaxEffort, 0.162)
+//@ chunk-bc4jcw5z.js:18476-18924 callgraph-fingerprint (2.1.88 match: modelSupportsMaxEffort, 0.162)
 /**
  * 模型是否支持 max effort，判定顺序同 modelSupportsEffort（能力 max_effort）。
  */
@@ -179,7 +188,7 @@ function modelSupportsMaxEffort(model) {
     return true;
   return hasFirstPartyCapabilities(getProviderForModel(model));
 }
-//@ chunk-kswt4qha.js:18635-19139 layout
+//@ chunk-bc4jcw5z.js:18924-19428 placement
 /**
  * 模型是否支持 xhigh effort：被 API 拒过 effort → 否；能力覆盖；catalog 能力 xhigh_effort；服务端 effort_levels；早于 opus-4-7 的老模型否；mythos-5 是；其余第一方系提供商是。
  */
@@ -208,7 +217,7 @@ function modelSupportsXhighEffort(model) {
     return true;
   return hasFirstPartyCapabilities(getProviderForModel(model));
 }
-//@ chunk-kswt4qha.js:19139-19243 layout
+//@ chunk-bc4jcw5z.js:19428-19532 placement
 /**
  * catalog 能力查询，且 effort 能力没被关闭（effort=false 时直接 false）。
  */
@@ -218,28 +227,28 @@ function getCatalogEffortCapability(model, canonicalName, canonicalName_2) {
   if (entry === undefined) return;
   return entry && modelSupportsEffort(canonicalName);
 }
-//@ chunk-kswt4qha.js:19243-19272 layout
+//@ chunk-bc4jcw5z.js:19532-19561 placement
 /**
  * 同 modelSupportsXhighEffort（ultracode 映射到 xhigh）。
  */
 function modelSupportsUltracode(model) {
   return modelSupportsXhighEffort(model);
 }
-//@ chunk-kswt4qha.js:19272-19320 layout
+//@ chunk-bc4jcw5z.js:19561-19609 placement
 /**
  * 工作流（Workflow）可用且模型支持 xhigh（模型未给时只看工作流）。
  */
 function isUltracodeAvailable(model) {
   return isWorkflowsAvailable() && (model === undefined || modelSupportsUltracode(model));
 }
-//@ chunk-kswt4qha.js:19320-19358 layout
+//@ chunk-bc4jcw5z.js:19609-19647 placement
 /**
  * ultracode 设置为 true 且可用。
  */
 function isUltracodeActive(ultracode, model) {
   return ultracode === true && isUltracodeAvailable(model);
 }
-//@ chunk-kswt4qha.js:19358-19528 layout
+//@ chunk-bc4jcw5z.js:19647-19817 placement
 /**
  * 新 effort 与会话 effort（或当前生效值）是否不同（考虑上限夹取）。
  */
@@ -257,7 +266,7 @@ function isEffortChangedFromSession(model, session, effortValue) {
     getEffortLevelOrHigh(model, resolveEffortLevel(session)) !== getEffortLevelOrHigh(model, effortValue)
   );
 }
-//@ chunk-kswt4qha.js:19528-19708 layout
+//@ chunk-bc4jcw5z.js:19817-19997 placement
 /**
  * 请求的级别等于“带 hold 的生效 effort”且与不带 hold 时不同（即该级别只是被保持而来）。
  */
@@ -275,33 +284,28 @@ function isRequestedEffortTheHeldLevel(model, effortLevel, session) {
   );
   return parseEffortLevel(effortLevel) === effortValue && effortValue !== effortValue_2;
 }
-//@ chunk-kswt4qha.js:19708-19745 file-local
+//@ chunk-bc4jcw5z.js:19997-20034 placement
 /**
  * 是否是 low/medium/high/xhigh/max 之一（旧版同名）。
  */
 function isEffortLevel(value) {
   return EFFORT_LEVELS.includes(value);
 }
-//@ chunk-kswt4qha.js:19745-19780 layout
+//@ chunk-bc4jcw5z.js:20034-20069 placement
 /**
  * effort 级别在 EFFORT_LEVELS 中的序号。
  */
 function effortRank(level) {
   return EFFORT_LEVELS.indexOf(level);
 }
-//@ chunk-kswt4qha.js:19780-19795 layout
-/**
- * "high"：thinking 关闭时部分模型的 effort 上限（claude.ts 里 clamp 用）。
- */
-var THINKING_DISABLED_EFFORT_CAP = "high";
-//@ chunk-kswt4qha.js:19795-19837 layout
+//@ chunk-bc4jcw5z.js:20084-20126 placement
 /**
  * 级别高于 high（xhigh/max）。
  */
 function isAboveHighEffort(level) {
   return isEffortLevel(level) && effortRank(level) > effortRank(THINKING_DISABLED_EFFORT_CAP);
 }
-//@ chunk-kswt4qha.js:19837-19932 layout
+//@ chunk-bc4jcw5z.js:20126-20221 placement
 /**
  * thinking 关闭时是否限制 effort（catalog 能力 thinking_disabled_effort_cap，默认 opus-5）。
  */
@@ -312,7 +316,7 @@ function modelCapsEffortWhenThinkingDisabled(model) {
     canonicalName === "claude-opus-5"
   );
 }
-//@ chunk-kswt4qha.js:19932-20366 layout
+//@ chunk-bc4jcw5z.js:20221-20655 placement
 /**
  * 各设置来源（含 modelSettings.<模型>.maxEffortLevel）中最严格的 maxEffortLevel；max 视为不设上限。
  */
@@ -349,7 +353,7 @@ function getSettingsMaxEffort(model) {
   }
   return lowestCap;
 }
-//@ chunk-kswt4qha.js:20366-20677 layout
+//@ chunk-bc4jcw5z.js:20655-20966 placement
 /**
  * 本模型的 effort 上限：设置上限与组织模型访问表（firstParty/gateway 的 maxEffortLevel）取更严格者；max 返回 null。
  */
@@ -379,7 +383,7 @@ function getEffortCap(model) {
           : orgCap;
   return cap === "max" ? null : cap;
 }
-//@ chunk-kswt4qha.js:20677-20943 layout
+//@ chunk-bc4jcw5z.js:20966-21232 placement
 /**
  * 组织默认模型缓存与该模型一致时返回其 default_effort_level（仅第一方）。
  */
@@ -398,14 +402,14 @@ function getOrgDefaultEffort(model) {
     ? defaultEffortLevel
     : null;
 }
-//@ chunk-kswt4qha.js:20943-21014 layout
+//@ chunk-bc4jcw5z.js:21232-21303 placement
 /**
  * 组织设置 override_user_effort 且该模型有组织默认 effort。
  */
 function orgOverridesUserEffort(model) {
   return getOrgModelDefaultCache()?.override_user_effort === true && getOrgDefaultEffort(model) !== null;
 }
-//@ chunk-kswt4qha.js:21014-21073 layout
+//@ chunk-bc4jcw5z.js:21303-21362 placement
 /**
  * 级别不超过上限（无上限为真）。
  */
@@ -413,7 +417,7 @@ function isEffortWithinCap(level, modelOptionValue) {
   let effortCap = getEffortCap(modelOptionValue);
   return effortCap === null || effortRank(level) <= effortRank(effortCap);
 }
-//@ chunk-kswt4qha.js:21073-21146 layout
+//@ chunk-bc4jcw5z.js:21362-21435 placement
 /**
  * 上限以内的 effort 级别列表。
  */
@@ -421,7 +425,7 @@ function getAllowedEffortLevels(model) {
   let effortCap = getEffortCap(model);
   return EFFORT_LEVELS.filter((level) => effortCap === null || effortRank(level) <= effortRank(effortCap));
 }
-//@ chunk-kswt4qha.js:21146-21208 layout
+//@ chunk-bc4jcw5z.js:21435-21497 placement
 /**
  * 超过上限时降到上限。
  */
@@ -429,7 +433,7 @@ function clampEffortToCap(level, model) {
   let effortCap = getEffortCap(model);
   return effortCap !== null && effortRank(level) > effortRank(effortCap) ? effortCap : level;
 }
-//@ chunk-kswt4qha.js:21208-21289 layout
+//@ chunk-bc4jcw5z.js:21497-21578 placement
 /**
  * xhigh/max 需要模型支持，其他级别都可。
  */
@@ -438,52 +442,28 @@ function modelSupportsEffortLevel(model, level) {
   if (level === "max") return modelSupportsMaxEffort(model);
   return true;
 }
-//@ chunk-kswt4qha.js:21289-21416 layout (2.1.88 match: getRequestTooLargeErrorMessage, 0.801)
-/**
- * 在模型可用 effort 级别中找比当前高(1)/低一级的级别。应归 utils/effort.ts。
- */
-function findAdjacentEffortLevel(model, level, direction) {
-  let filtered = getAllowedEffortLevels(model).filter(
-    (level) => level !== "max" && modelSupportsEffortLevel(model, level),
-  );
-  return direction === 1
-    ? filtered.find((level_2) => effortRank(level_2) > effortRank(level))
-    : filtered.findLast((level_2) => effortRank(level_2) < effortRank(level));
-}
-//@ chunk-kswt4qha.js:21416-21494 layout (2.1.88 match: getRequestTooLargeErrorMessage, 1)
-/**
- * 当前之上只剩 max 且模型支持 max。应归 utils/effort.ts。
- */
-function isOnlyMaxAboveEffort(model, level) {
-  return (
-    level !== "max" &&
-    findAdjacentEffortLevel(model, level, 1) === undefined &&
-    isEffortWithinCap("max", model) &&
-    modelSupportsMaxEffort(model)
-  );
-}
-//@ chunk-kswt4qha.js:21494-21544 layout
+//@ chunk-bc4jcw5z.js:21783-21833 placement
 /**
  * 模型支持 effort、非受限会话且未被 CLAUDE_CODE_EFFORT_LEVEL 覆盖。
  */
 function isEffortAdjustable(model) {
   return modelSupportsEffort(model) && !isRemoteSessionAvailable() && getEffortEnvOverride() === undefined;
 }
-//@ chunk-kswt4qha.js:21544-21580 layout
+//@ chunk-bc4jcw5z.js:21833-21869 placement
 /**
  * isEffortAdjustable 且 GrowthBook tengu_velvety_kay（帮助菜单、提示中显示 effort 入口）。
  */
 function shouldShowEffortHint(model) {
   return isEffortAdjustable(model) && isEffortHintFlagOn();
 }
-//@ chunk-kswt4qha.js:21580-21628 layout
+//@ chunk-bc4jcw5z.js:21869-21917 placement
 /**
  * GrowthBook tengu_velvety_kay（默认关）。
  */
 function isEffortHintFlagOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_velvety_kay", false);
 }
-//@ chunk-kswt4qha.js:21628-21706 layout
+//@ chunk-bc4jcw5z.js:21917-21995 placement
 /**
  * 模型本可支持高于上限的级别（/effort 提示受限）。
  */
@@ -496,7 +476,7 @@ function hasEffortLevelsAboveCap(model) {
     )
   );
 }
-//@ chunk-kswt4qha.js:21706-21932 layout
+//@ chunk-bc4jcw5z.js:21995-22221 placement
 /**
  * 请求的 effort 超上限时的提示 "Effort 'x' exceeds the cap … using 'y'."。
  */
@@ -507,7 +487,7 @@ function getEffortCapWarning(effortLevel, resolvedInitialModel) {
   let clamped = resolveEffortValue(resolvedInitialModel, effortLevel) ?? effortCap;
   return `Effort '${effortLevel}' exceeds the cap for ${resolvedInitialModel} set by your settings or organization; using '${clamped}'.`;
 }
-//@ chunk-kswt4qha.js:21932-21977 file-local
+//@ chunk-bc4jcw5z.js:22221-22266 placement
 /**
  * 关键字别名 {ultracode: "xhigh"}。
  */
@@ -517,7 +497,7 @@ var EFFORT_LEVEL_ALIASES = {
 var EFFORT_KEYWORD_ALIASES = {
   ultracode: "xhigh",
 };
-//@ chunk-kswt4qha.js:21977-22088 layout
+//@ chunk-bc4jcw5z.js:22266-22377 placement
 /**
  * 识别 effort 关键字（ultracode）。
  */
@@ -526,7 +506,7 @@ function parseEffortKeyword(value) {
   let lower = value.trim().toLowerCase();
   return Object.hasOwn(EFFORT_KEYWORD_ALIASES, lower) ? lower : undefined;
 }
-//@ chunk-kswt4qha.js:22088-22148 layout
+//@ chunk-bc4jcw5z.js:22377-22437 placement
 /**
  * 关键字 → 对应级别。
  */
@@ -534,14 +514,14 @@ function resolveEffortKeyword(value) {
   let effortKeyword = parseEffortKeyword(value);
   return effortKeyword === undefined ? undefined : EFFORT_KEYWORD_ALIASES[effortKeyword];
 }
-//@ chunk-kswt4qha.js:22148-22180 layout
+//@ chunk-bc4jcw5z.js:22437-22469 placement
 /**
  * String(effort)。
  */
 function effortValueToString(value) {
   return String(value);
 }
-//@ chunk-kswt4qha.js:22180-22257 layout
+//@ chunk-bc4jcw5z.js:22469-22546 placement
 /**
  * 字符串（含 med 别名）→ 合法级别，否则 undefined。
  */
@@ -550,7 +530,7 @@ function parseEffortLevel(value) {
   let canonical = EFFORT_LEVEL_ALIASES[lower] ?? lower;
   return isEffortLevel(canonical) ? canonical : undefined;
 }
-//@ chunk-kswt4qha.js:22257-22530 layout
+//@ chunk-bc4jcw5z.js:22546-22819 placement
 /**
  * 解析 --effort：级别或关键字；未知值给出警告 "Unknown --effort value …"。
  */
@@ -572,7 +552,7 @@ function parseEffortFlag(value) {
     warning: `Unknown --effort value '${value}' \u2014 ignoring it and using the default effort. Valid values: ${EFFORT_LEVELS.join(", ")}.`,
   };
 }
-//@ chunk-kswt4qha.js:22530-22739 file-local
+//@ chunk-bc4jcw5z.js:22819-23028 placement
 /**
  * 解析设置/参数里的 effort：整数或级别（含别名、数字字符串），空值为 undefined（旧版同名）。
  */
@@ -586,7 +566,7 @@ function parseEffortValue(value) {
   if (!isNaN(numericValue) && isIntegerEffort(numericValue)) return numericValue;
   return;
 }
-//@ chunk-kswt4qha.js:22739-22823 callgraph-fingerprint (2.1.88 match: toPersistableEffort, 0.601)
+//@ chunk-bc4jcw5z.js:23028-23112 callgraph-fingerprint (2.1.88 match: toPersistableEffort, 0.601)
 /**
  * 可写入设置的 effort（low/medium/high/xhigh；max 只在会话内）。
  */
@@ -594,14 +574,14 @@ function toPersistableEffort(value) {
   if (value === "low" || value === "medium" || value === "high" || value === "xhigh") return value;
   return;
 }
-//@ chunk-kswt4qha.js:22823-22888 layout
+//@ chunk-bc4jcw5z.js:23112-23177 layout
 /**
  * settings.ultracode 为 true 或 effort 参数为 ultracode（ultracode → xhigh 的别名）。
  */
 function isUltracodeEnabled(effort) {
-  return getInitialSettings_2().ultracode === true || parseEffortKeyword(effort) === "ultracode";
+  return getInitialSettings().ultracode === true || parseEffortKeyword(effort) === "ultracode";
 }
-//@ chunk-kswt4qha.js:22888-22970 layout
+//@ chunk-bc4jcw5z.js:23177-23259 layout
 /**
  * CLAUDE_CODE_SUBAGENT_EFFORT 解析后的子代理 effort。
  */
@@ -611,7 +591,7 @@ function getSubagentEffortOverride() {
     ? undefined
     : parseEffortLevel(CLAUDE_CODE_SUBAGENT_EFFORT);
 }
-//@ chunk-kswt4qha.js:22970-23089 fingerprint (2.1.88 match: getEffortEnvOverride, 1)
+//@ chunk-bc4jcw5z.js:23259-23378 fingerprint (2.1.88 match: getEffortEnvOverride, 1)
 /**
  * CLAUDE_CODE_EFFORT_LEVEL：unset/auto 返回 null（强制不设），否则解析出的级别或数字；未设置为 undefined。
  */
@@ -621,13 +601,13 @@ function getEffortEnvOverride() {
     ? null
     : parseEffortValue(envOverride);
 }
-//@ chunk-kswt4qha.js:23089-23164 layout (2.1.88 match: resolveAgentModelDisplay, 0.819)
+//@ chunk-bc4jcw5z.js:23378-23453 layout (2.1.88 match: resolveAgentModelDisplay, 0.818)
 /**
  * 模型选择常量 {kind:"inherit"} 与 {kind:"default"}。
  */
 var INHERIT_EFFORT_SETTING; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DEFAULT_EFFORT_SETTING;
-deferInit("chunk-kswt4qha.js:23089", () => {
+deferInit("chunk-bc4jcw5z.js:23378", () => {
   INHERIT_EFFORT_SETTING = Object.freeze({
     kind: "inherit",
   });
@@ -635,7 +615,7 @@ deferInit("chunk-kswt4qha.js:23089", () => {
     kind: "default",
   });
 });
-//@ chunk-kswt4qha.js:23164-23209 layout
+//@ chunk-bc4jcw5z.js:23453-23498 layout
 /**
  * {kind:"level", value}。
  */
@@ -645,35 +625,35 @@ function levelEffortSetting(value) {
     value,
   };
 }
-//@ chunk-kswt4qha.js:23209-23253 layout
+//@ chunk-bc4jcw5z.js:23498-23542 layout
 /**
  * undefined → default，否则 level。
  */
 function toEffortSettingOrDefault(value) {
   return value === undefined ? DEFAULT_EFFORT_SETTING : levelEffortSetting(value);
 }
-//@ chunk-kswt4qha.js:23253-23297 layout
+//@ chunk-bc4jcw5z.js:23542-23586 layout
 /**
  * undefined → inherit，否则 level。
  */
 function toEffortSettingOrInherit(effortOrKeyword) {
   return effortOrKeyword === undefined ? INHERIT_EFFORT_SETTING : levelEffortSetting(effortOrKeyword);
 }
-//@ chunk-kswt4qha.js:23297-23358 layout
+//@ chunk-bc4jcw5z.js:23586-23647 layout
 /**
  * 级别设置返回其字符串，否则 null。
  */
 function effortSettingToString(sessionEffort) {
   return sessionEffort.kind === "level" ? String(sessionEffort.value) : null;
 }
-//@ chunk-kswt4qha.js:23358-23431 layout
+//@ chunk-bc4jcw5z.js:23647-23720 layout
 /**
  * 非空且不超过 128 字符的字符串，否则 null。
  */
 function toBoundedLabel(label) {
   return typeof label === "string" && label !== "" && label.length <= MAX_REQUEST_ID_LENGTH ? label : null;
 }
-//@ chunk-kswt4qha.js:23431-23536 layout
+//@ chunk-bc4jcw5z.js:23720-23825 layout
 /**
  * 两个会话 effort 设置是否相同。
  */
@@ -685,13 +665,13 @@ function isSameEffortSetting(sessionEffort, sessionEffort_2) {
         (sessionEffort_2.kind === "level" && sessionEffort.value === sessionEffort_2.value)))
   );
 }
-//@ chunk-kswt4qha.js:23536-23919 layout
+//@ chunk-bc4jcw5z.js:23825-24208 layout
 /**
  * isLegacyUserEffortModel 的结果缓存。
  */
 var LEGACY_USER_EFFORT_MODELS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var legacyUserEffortCache;
-deferInit("chunk-kswt4qha.js:23536", () => {
+deferInit("chunk-bc4jcw5z.js:23825", () => {
   LEGACY_USER_EFFORT_MODELS = new Set([
     "claude-3-5-haiku",
     "claude-3-5-sonnet",
@@ -715,7 +695,7 @@ deferInit("chunk-kswt4qha.js:23536", () => {
   ]);
   legacyUserEffortCache = new Map();
 });
-//@ chunk-kswt4qha.js:23919-24010 layout
+//@ chunk-bc4jcw5z.js:24208-24299 layout
 /**
  * 模型在旧式名单内或名字无法解析为版本化模型时，顶层用户 effortLevel 对其生效。
  */
@@ -728,7 +708,7 @@ function isLegacyUserEffortModel(modelSettingsKey) {
   }
   return legacyValue;
 }
-//@ chunk-kswt4qha.js:24010-24367 layout
+//@ chunk-bc4jcw5z.js:24299-24656 layout
 /**
  * 首次启动版本未记录时、尚未解除“发布期默认 effort 固定”的模型（opus-4-7、opus-4-8、fable-5 及 ANTHROPIC_DEFAULT_FABLE_MODEL）。
  */
@@ -754,7 +734,7 @@ function getLaunchEffortPinnedModels() {
   }
   return list;
 }
-//@ chunk-kswt4qha.js:24367-24738 layout
+//@ chunk-bc4jcw5z.js:24656-25027 layout
 /**
  * 按优先级列出带设置的来源（flagSettings 展开为 project/local；去重同一文件）。
  */
@@ -790,45 +770,68 @@ function getEffortSettingsSources() {
   }
   return rows;
 }
-//@ chunk-kswt4qha.js:24738-25757 layout
+//@ chunk-bc4jcw5z.js:25027-26364 layout
 /**
  * 构建 effort 设置表：{default（非用户来源的顶层 effortLevel）, legacyUserEffort（用户设置顶层）, byModel（各来源 modelSettings.<模型>.effortLevel，按优先级取第一个）}；组织覆盖与发布期固定模型强制为 undefined。
  */
-function buildEffortSettingsTable() {
+function buildEffortSettingsTable({ flagLayerAsLaunched = false } = {}) {
   let effortSettingsSources = getEffortSettingsSources();
-  let orgModelDefaultCache = getOrgModelDefaultCache();
+  let flagSettings = flagLayerAsLaunched ? getFlagSettingsInline() : null;
+  if (flagSettings !== null && ("effortLevel" in flagSettings || "modelSettings" in flagSettings)) {
+    let flagSettingsPath = getSettingsFilePathForSource("flagSettings");
+    let flagSettingsParsed =
+      flagSettingsPath === undefined
+        ? null
+        : parseSettingsFile(
+            flagSettingsPath,
+            getFlagSettingsExpectedContent() ?? getFlagSettingsFilePinnedContent(),
+          ).settings;
+    effortSettingsSources = effortSettingsSources.map((sourceEntry) =>
+      sourceEntry.source === "flagSettings"
+        ? {
+            source: sourceEntry.source,
+            settings: {
+              ...sourceEntry.settings,
+              effortLevel: flagSettingsParsed?.effortLevel,
+              modelSettings: flagSettingsParsed?.modelSettings,
+            },
+          }
+        : sourceEntry,
+    );
+  }
+  let orgDefaultCache = getOrgModelDefaultCache();
   let values =
-    orgModelDefaultCache !== null && orgOverridesUserEffort(orgModelDefaultCache.name)
-      ? getModelSettingsKey(orgModelDefaultCache.name)
+    orgDefaultCache !== null && orgOverridesUserEffort(orgDefaultCache.name)
+      ? getModelSettingsKey(orgDefaultCache.name)
       : undefined;
   let modelKey;
   let level;
   let rows = [];
-  for (let { source, settings } of effortSettingsSources) {
-    let hasGlobalLevel = settings.effortLevel !== undefined;
+  for (let { source, settings: entry } of effortSettingsSources) {
+    let hasGlobalLevel = entry.effortLevel !== undefined;
     if (source === "userSettings") {
-      modelKey = toPersistableEffort(settings.effortLevel);
+      modelKey = toPersistableEffort(entry.effortLevel);
       rows.push({
         source,
         setsTopLevel: false,
-        settings,
+        settings: entry,
       });
       continue;
     }
     if (hasGlobalLevel)
       level = {
-        level: toPersistableEffort(settings.effortLevel),
+        level: toPersistableEffort(entry.effortLevel),
       };
     rows.push({
       source,
       setsTopLevel: hasGlobalLevel,
-      settings,
+      settings: entry,
     });
   }
   rows.reverse();
-  let mapped = rows.map(({ settings }) => {
+  let mapped = rows.map(({ settings: row }) => {
     let byModel = new Map();
-    for (let [key, value] of Object.entries(settings.modelSettings ?? {})) {
+    for (let [key, value] of Object.entries(row.modelSettings ?? {})) {
       let effortLevel = value?.effortLevel;
       if (effortLevel === undefined) continue;
       let modelSettingsKey = getModelSettingsKey(key);
@@ -843,15 +846,15 @@ function buildEffortSettingsTable() {
   let settings = {};
   for (let modelKey of modelKeys) {
     if (modelKey === values) settings[modelKey] = undefined;
-    for (let k = 0; k < rows.length; k++) {
-      if (modelKey === values && !isReadOnlySettingSource(rows[k].source)) continue;
-      let modelSettings = mapped[k].get(modelKey);
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+      if (modelKey === values && !isReadOnlySettingSource(rows[rowIndex].source)) continue;
+      let modelSettings = mapped[rowIndex].get(modelKey);
       if (modelSettings !== undefined) {
         settings[modelKey] = toPersistableEffort(modelSettings);
         break;
       }
-      if (rows[k].setsTopLevel) {
-        settings[modelKey] = toPersistableEffort(rows[k].settings.effortLevel);
+      if (rows[rowIndex].setsTopLevel) {
+        settings[modelKey] = toPersistableEffort(rows[rowIndex].settings.effortLevel);
         break;
       }
     }
@@ -868,14 +871,14 @@ function buildEffortSettingsTable() {
     byModel: settings,
   };
 }
-//@ chunk-kswt4qha.js:25757-25820 layout (2.1.88 match: getEnabledSettingSources, 1)
+//@ chunk-bc4jcw5z.js:26364-26427 layout (2.1.88 match: getEnabledSettingSources, 1)
 /**
  * policySettings 或 flagSettings。旧版名错配。
  */
 function isReadOnlySettingSource(source) {
   return source === "policySettings" || source === "flagSettings";
 }
-//@ chunk-kswt4qha.js:25820-25898 layout
+//@ chunk-bc4jcw5z.js:26427-26505 layout
 /**
  * 组织强制 effort 时该模型的生效级别。
  */
@@ -888,7 +891,7 @@ function getOrgOverriddenEffort(model) {
     ),
   );
 }
-//@ chunk-kswt4qha.js:25898-26086 layout
+//@ chunk-bc4jcw5z.js:26505-26693 layout
 /**
  * 从 effort 设置表取模型的 effort：byModel → default → 旧式用户设置（仅旧模型）。
  */
@@ -898,7 +901,7 @@ function lookupEffortSetting(model, fallback) {
   if (model.default !== undefined || model.legacyUserEffort === undefined) return model.default;
   return isLegacyUserEffortModel(modelSettingsKey) ? model.legacyUserEffort : undefined;
 }
-//@ chunk-kswt4qha.js:26086-26182 layout
+//@ chunk-bc4jcw5z.js:26693-26789 layout
 /**
  * 设置表没有旧式用户值也没有按模型条目。
  */
@@ -907,7 +910,7 @@ function isEffortSettingsTableEmpty(settingsEffortTable) {
   for (let key in settingsEffortTable.byModel) return false;
   return true;
 }
-//@ chunk-kswt4qha.js:26182-26250 layout
+//@ chunk-bc4jcw5z.js:26789-26857 layout
 /**
  * 模型在 settings.modelSettings 里的键（去 [1m]、确定性规范名）。
  */
@@ -919,7 +922,7 @@ function getModelSettingsKey(model) {
     }),
   );
 }
-//@ chunk-kswt4qha.js:26250-26313 fingerprint (2.1.88 match: getInitialEffortSetting, 1)
+//@ chunk-bc4jcw5z.js:26857-26920 fingerprint (2.1.88 match: getInitialEffortSetting, 1)
 /**
  * 生成按模型保存 effort 的设置补丁 {modelSettings:{<模型键>:{effortLevel}}}。
  */
@@ -934,7 +937,7 @@ function getInitialEffortSetting(model, effortLevel) {
     },
   );
 }
-//@ chunk-kswt4qha.js:26313-26412 layout
+//@ chunk-bc4jcw5z.js:26920-27019 layout
 /**
  * 模型键是 Object.prototype 上的名字时用回退补丁，防原型污染。
  */
@@ -948,7 +951,7 @@ function buildModelSettingsPatch(model, level, extra) {
         },
       };
 }
-//@ chunk-kswt4qha.js:26412-26483 placement
+//@ chunk-bc4jcw5z.js:27019-27090 placement
 /**
  * 按当前账号从全局配置取该模型的 effort 设置。
  */
@@ -956,7 +959,7 @@ function userEffortForAccount(accountId) {
   let accountUuid = getOauthAccountInfo()?.accountUuid;
   return accountUuid !== undefined && isAutoCompactOfferAnswered(getGlobalConfig(), accountUuid, accountId);
 }
-//@ chunk-kswt4qha.js:26483-26864 placement (2.1.88 match: _temp8, 0.203)
+//@ chunk-bc4jcw5z.js:27090-27471 placement (2.1.88 match: _temp8, 0.203)
 /**
  * 取当前会话生效的推理强度：会话显式等级直接返回，default 返回 undefined；inherit 时按设置里的按模型强度表查当前主循环模型（withHold 时若模型自带强度则不覆盖）。
  */
@@ -982,14 +985,23 @@ function resolveEffortLevel(session, model, { withHold = true } = {}) {
     }
   }
 }
-//@ chunk-kswt4qha.js:26864-26903 placement
+//@ chunk-bc4jcw5z.js:27471-27510 placement
 /**
  * 判断两个模型是否共用同一设置键。
  */
-function isSameModelSettings(model, mainLoopModel) {
-  return getModelSettingsKey(model) === getModelSettingsKey(mainLoopModel);
+function isSameModelSettings(model, otherModel) {
+  return getModelSettingsKey(model) === getModelSettingsKey(otherModel);
 }
-//@ chunk-kswt4qha.js:26903-26955 placement
+//@ chunk-bc4jcw5z.js:27510-27612 layout
+function dropSessionLevelIfModelDiffers(appState, model, pickedModel) {
+  return appState.sessionEffort?.kind !== "level" ||
+    model === undefined ||
+    pickedModel === undefined ||
+    isSameModelSettings(model, pickedModel)
+    ? appState
+    : withoutSessionLevel(appState);
+}
+//@ chunk-bc4jcw5z.js:27612-27664 placement
 /**
  * 解析 effort 级别（不做保留）。
  */
@@ -998,7 +1010,7 @@ function resolveEffortWithoutHold(appState, model) {
     withHold: false,
   });
 }
-//@ chunk-kswt4qha.js:26955-27037 placement
+//@ chunk-bc4jcw5z.js:27664-27746 placement
 /**
  * 把会话里的显式级别改为继承，再解析 effort。
  */
@@ -1010,14 +1022,14 @@ function withoutSessionLevel(appState) {
       }
     : appState;
 }
-//@ chunk-kswt4qha.js:27037-27119 placement
+//@ chunk-bc4jcw5z.js:27746-27828 placement
 /**
  * 取 effort 级别值。
  */
 function effortLevelValue(value) {
   return value.kind === "level" && typeof value.value === "string" ? value.value : undefined;
 }
-//@ chunk-kswt4qha.js:27119-27430 layout
+//@ chunk-bc4jcw5z.js:27828-28139 layout
 /**
  * 本次请求的 effort（output_config.effort 的来源）：模型不支持 → undefined；钩子值 > CLAUDE_CODE_EFFORT_LEVEL（unset/auto → 不发）> 本轮 effort > 会话设置 > 默认（getDefaultEffortForModel）；最后经 resolveAppliedEffort 夹取。
  */
@@ -1047,7 +1059,7 @@ function resolveEffortValue(
   if (typeof chosen === "number" && hasSettingsCap) chosen = normalizeEffortLevel(chosen);
   return resolveAppliedEffort(chosen, model);
 }
-//@ chunk-kswt4qha.js:27430-27562 layout
+//@ chunk-bc4jcw5z.js:28139-28271 layout
 /**
  * 模型支持 effort 且无环境覆盖时：给定字符串按组织上限截断；未给且组织默认 effort 存在时用模型默认 effort。
  */
@@ -1057,7 +1069,7 @@ function getModelPickerEffortDefault(model, preferred) {
   if (preferred === undefined && getOrgDefaultEffort(model)) return getDefaultEffortLevel(model);
   return;
 }
-//@ chunk-kswt4qha.js:27562-27702 fingerprint (2.1.88 match: resolveAppliedEffort, 0.778)
+//@ chunk-bc4jcw5z.js:28271-28411 fingerprint (2.1.88 match: resolveAppliedEffort, 0.777)
 /**
  * 把请求的 effort 落到模型能接受的值：先按组织上限截断，max/xhigh 不支持时降为 high。
  */
@@ -1069,28 +1081,55 @@ function resolveAppliedEffort(model, appStateEffortValue) {
   if (resolved === "xhigh" && !modelSupportsXhighEffort(appStateEffortValue)) resolved = "high";
   return resolved;
 }
-//@ chunk-kswt4qha.js:27702-27743 layout
+//@ chunk-bc4jcw5z.js:28411-28452 layout
 /**
  * 模型默认 effort（规范为级别）。
  */
 function getDefaultEffortLevel(model) {
   return normalizeEffortLevel(resolveAppliedEffort(getDefaultEffortForModel(model), model));
 }
-//@ chunk-kswt4qha.js:27743-27779 layout
+//@ chunk-bc4jcw5z.js:28452-28488 layout
 /**
  * 模型支持每轮 effort 控制（per-turn-control beta）且会话未关闭它。
  */
 function modelSupportsPerTurnEffortControl(model) {
   return usesPerTurnEffortBeta(model, getCanonicalName(model));
 }
-//@ chunk-kswt4qha.js:27779-27914 layout
-/**
- * ultrathink 可用（tengu_turtle_carbon 等）、模型可调 effort 且把本轮 effort 设为 xhigh 能生效。
- */
-function isUltrathinkEffective(model, appState) {
+//@ chunk-bc4jcw5z.js:28488-28544 layout
+function ultrathinkRaisesEffort(model, appState) {
   return (
     isUltrathinkEnabled() &&
-    (!getIsNonInteractiveSession() || (isVsCodeOrDesktop() && isVirtualPancakeEnabled())) &&
+    (!getIsNonInteractiveSession() || isVsCodeOrDesktop()) &&
+    canRaiseEffortToXhigh(model, appState)
+  );
+}
+//@ chunk-bc4jcw5z.js:28544-28647 layout
+function ultrathinkRaisesEffortInSession(model, appState) {
+  let entrypoint = getSessionEntrypoint();
+  return (
+    isUltrathinkEnabled() &&
+    (!getIsNonInteractiveSession() ||
+      isVsCodeOrDesktop() ||
+      (isDesktopTopNonClaudecode() && REMOTE_ENTRYPOINT_NAMES.some((name) => name === entrypoint)) ||
+      isTopLevelBridgeSession()) &&
+    canRaiseEffortToXhigh(model, appState)
+  );
+}
+//@ chunk-bc4jcw5z.js:28647-28721 layout
+/**
+ * ultrathink 有效且当前 effort 低于 xhigh。
+ */
+function shouldUltrathinkRaiseEffort(model, appState, bridgeSession = false) {
+  return (
+    (bridgeSession
+      ? ultrathinkRaisesEffortInSession(model, appState)
+      : ultrathinkRaisesEffort(model, appState)) &&
+    effortRank(getEffortLevelOrHigh(model, appState)) < effortRank("xhigh")
+  );
+}
+//@ chunk-bc4jcw5z.js:28721-28826 layout
+function canRaiseEffortToXhigh(model, appState) {
+  return (
     isEffortAdjustable(model) &&
     modelSupportsPerTurnEffortControl(model) &&
     typeof resolveEffortValue(model, appState) === "string" &&
@@ -1099,17 +1138,7 @@ function isUltrathinkEffective(model, appState) {
     }) === "xhigh"
   );
 }
-//@ chunk-kswt4qha.js:27914-27971 layout
-/**
- * ultrathink 有效且当前 effort 低于 xhigh。
- */
-function shouldUltrathinkRaiseEffort(model, appState) {
-  return (
-    isUltrathinkEffective(model, appState) &&
-    effortRank(getEffortLevelOrHigh(model, appState)) < effortRank("xhigh")
-  );
-}
-//@ chunk-kswt4qha.js:27971-28273 layout
+//@ chunk-bc4jcw5z.js:28826-29128 layout
 /**
  * 会话中途 effort 实际值发生变化（已有输出、模型支持、非受限）时为真，用于提示 effort 变更。
  */
@@ -1138,7 +1167,7 @@ function shouldShowEffortChangeNotice(target, previous, model, ackedAtOutputToke
     return false;
   return true;
 }
-//@ chunk-kswt4qha.js:28273-28341 layout (2.1.88 match: _temp5, 1)
+//@ chunk-bc4jcw5z.js:29128-29196 layout (2.1.88 match: _temp5, 1)
 /**
  * 写 userSettings 的 effortLevel。
  */
@@ -1150,7 +1179,7 @@ async function saveEffortToUserSettings(effortLevel, model, storageV5) {
     storageV5,
   );
 }
-//@ chunk-kswt4qha.js:28341-28497 layout
+//@ chunk-bc4jcw5z.js:29196-29352 layout
 /**
  * 需要持久化且级别可保存时写用户设置，返回错误（如有）。
  */
@@ -1162,7 +1191,7 @@ async function persistEffortSetting(level, model, persistToSettings = true, stor
   }
   return;
 }
-//@ chunk-kswt4qha.js:28497-28588 layout
+//@ chunk-bc4jcw5z.js:29352-29443 layout
 /**
  * 初始会话 effort 状态 {sessionEffort, settingsEffortTable}。
  */
@@ -1174,7 +1203,7 @@ function createSessionEffortState(effort) {
   setMainLoopEffortState(state);
   return state;
 }
-//@ chunk-kswt4qha.js:28588-28668 layout
+//@ chunk-bc4jcw5z.js:29443-29523 layout
 /**
  * resolveEffortValue 的级别形式。
  */
@@ -1184,14 +1213,14 @@ function getAppliedEffortLevel(model, appState, turnEffort) {
   });
   return effortValue === undefined ? undefined : normalizeEffortLevel(effortValue);
 }
-//@ chunk-kswt4qha.js:28668-28713 layout (2.1.88 match: getDefaultEffortLevelForOption, 1)
+//@ chunk-bc4jcw5z.js:29523-29568 layout (2.1.88 match: getDefaultEffortLevelForOption, 1)
 /**
  * 生效的 effort 级别，未设置时视为 high。
  */
 function getEffortLevelOrHigh(model, appState, turnEffort) {
   return getAppliedEffortLevel(model, appState, turnEffort) ?? "high";
 }
-//@ chunk-kswt4qha.js:28713-28762 layout
+//@ chunk-bc4jcw5z.js:29568-29617 layout
 /**
  * 模型支持 effort 时返回生效级别（默认 high），否则 undefined。
  */
@@ -1200,7 +1229,7 @@ function getEffortLevelIfSupported(mainLoopModel, appState, effortLayerOverride)
     ? getEffortLevelOrHigh(mainLoopModel, appState, effortLayerOverride)
     : undefined;
 }
-//@ chunk-kswt4qha.js:28762-28908 fingerprint (2.1.88 match: getEffortSuffix, 0.86)
+//@ chunk-bc4jcw5z.js:29617-29763 fingerprint (2.1.88 match: getEffortSuffix, 0.861)
 /**
  * 显示用后缀 " with <level> effort"。
  */
@@ -1214,14 +1243,14 @@ function getEffortSuffix(model, effortValue, turnEffort, resolvedEffort) {
   if (resolved === undefined) return "";
   return ` with ${effortValueToString(normalizeEffortLevel(resolved))} effort`;
 }
-//@ chunk-kswt4qha.js:28908-28950 layout
+//@ chunk-bc4jcw5z.js:29763-29805 layout
 /**
  * 数值 effort（旧版 isValidNumericEffort）。
  */
 function isIntegerEffort(value) {
   return Number.isInteger(value);
 }
-//@ chunk-kswt4qha.js:28950-29023 layout (2.1.88 match: getDefaultEffortLevelForOption, 1)
+//@ chunk-bc4jcw5z.js:29805-29878 layout (2.1.88 match: getDefaultEffortLevelForOption, 1)
 /**
  * 数值或非法值统一当作 high，合法级别原样返回。
  */
@@ -1229,7 +1258,7 @@ function normalizeEffortLevel(value) {
   if (typeof value === "string") return isEffortLevel(value) ? value : "high";
   return "high";
 }
-//@ chunk-kswt4qha.js:29023-29452 fingerprint (2.1.88 match: getEffortLevelDescription, 0.802)
+//@ chunk-bc4jcw5z.js:29878-30307 fingerprint (2.1.88 match: getEffortLevelDescription, 0.802)
 /**
  * effort 级别的说明文字（/effort 与选择器用）。
  */
@@ -1247,7 +1276,7 @@ function getEffortLevelDescription_2(level) {
       return `Maximum capability with deepest reasoning. ${MAX_EFFORT_DESCRIPTION}`;
   }
 }
-//@ chunk-kswt4qha.js:29452-29693 callgraph-witnessed (2.1.88 match: getEffortValueDescription, 0.328)
+//@ chunk-bc4jcw5z.js:30307-30548 callgraph-witnessed (2.1.88 match: getEffortValueDescription, 0.328)
 /**
  * effort 值说明；high 在 Pro 订阅且 tengu_slate_finch 时提示“消耗最快”。
  */
@@ -1264,7 +1293,7 @@ function getEffortValueDescription(value) {
   }
   return "Balanced approach with standard implementation and testing";
 }
-//@ chunk-kswt4qha.js:29693-29782 layout
+//@ chunk-bc4jcw5z.js:30548-30637 layout
 /**
  * 模型默认 effort：GrowthBook tengu_witty_wand 按模型配置 > 组织默认 > fallback 携带的 effort > 服务端目录 > 配置 default_effort > catalog default_effort（缺省 high）。
  */
@@ -1279,7 +1308,7 @@ function getDefaultEffortForModel(model, carriedEffort) {
     getDisplayedEffortLevel(model)
   );
 }
-//@ chunk-kswt4qha.js:29782-29876 layout
+//@ chunk-bc4jcw5z.js:30637-30731 layout
 /**
  * 配置里该模型的 default_effort（模型需支持该级别）。
  */
@@ -1291,7 +1320,7 @@ function getConfiguredDefaultEffort(model) {
     ? defaultEffort
     : undefined;
 }
-//@ chunk-kswt4qha.js:29876-29945 placement
+//@ chunk-bc4jcw5z.js:30731-30800 placement
 /**
  * 只有沿用的 effort 时返回它。
  */
@@ -1301,7 +1330,7 @@ function carriedEffortOnly(model) {
     ? carriedRefusalEffort
     : undefined;
 }
-//@ chunk-kswt4qha.js:29945-30012 placement
+//@ chunk-bc4jcw5z.js:30800-30867 placement
 /**
  * 判断是否存在组织默认、远端默认或携带的 effort。
  */
@@ -1312,17 +1341,17 @@ function hasAnyDefaultEffort(model) {
     getCarriedRefusalEffort(model) !== undefined
   );
 }
-//@ chunk-kswt4qha.js:30012-30061 placement
+//@ chunk-bc4jcw5z.js:30867-30916 placement
 /**
  * effort 覆盖值的 schema。
  */
 var TENGU_WITTY_WAND; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var effortOverrideSchema;
-deferInit("chunk-kswt4qha.js:30012", () => {
+deferInit("chunk-bc4jcw5z.js:30867", () => {
   TENGU_WITTY_WAND = "tengu_witty_wand";
   effortOverrideSchema = DoctorLazy(() => record(stringSchema(), unknown()));
 });
-//@ chunk-kswt4qha.js:30061-30279 placement
+//@ chunk-bc4jcw5z.js:30916-31134 placement
 function remoteDefaultEffort(model) {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_WITTY_WAND, {});
   if (typeof featureValue_CACHED_MAY_BE_STALE === "string")
@@ -1333,7 +1362,7 @@ function remoteDefaultEffort(model) {
   let normalized = typeof value === "string" ? value.trim().toLowerCase() : undefined;
   return normalized !== undefined && isEffortLevel(normalized) ? normalized : undefined;
 }
-//@ chunk-kswt4qha.js:30279-30347 placement
+//@ chunk-bc4jcw5z.js:31134-31202 placement
 /**
  * 取模型的 effort 覆盖值（只接受合法级别）。
  */
@@ -1341,11 +1370,11 @@ function modelEffortOverride(model) {
   let served = servedDefaultEffort(model, getCanonicalName(model));
   return served !== undefined && isEffortLevel(served) ? served : undefined;
 }
-//@ chunk-kswt4qha.js:30347-30403 placement
+//@ chunk-bc4jcw5z.js:31202-31258 placement
 function getDisplayedEffortLevel(model) {
   return getCatalogEntry(getCanonicalName(model))?.default_effort ?? "high";
 }
-//@ chunk-kswt4qha.js:30403-30502 placement
+//@ chunk-bc4jcw5z.js:31258-31357 placement
 /**
  * 判断环境与携带值都没有设置 effort。
  */
@@ -1356,19 +1385,19 @@ function isEffortUnset(queuedMessageText, mainLoopModel) {
     carriedEffortOnly(mainLoopModel) === undefined
   );
 }
-//@ chunk-kswt4qha.js:30502-30527 placement
+//@ chunk-bc4jcw5z.js:31357-31382 placement
 /**
  * 恒返回 undefined 的 effort 提示（占位）。
  */
 function noEffortHint(model, appState) {
   return;
 }
-//@ chunk-kcvmr83c.js:1382-1457 placement (2.1.88 match: getEffortEnvOverride, 0.817)
+//@ chunk-5dqwe9kx.js:1382-1457 placement (2.1.88 match: getEffortEnvOverride, 0.816)
 function getEffortEnvOverride_2(value) {
   let keyword = value.toLowerCase();
   return keyword === "auto" || keyword === "unset" || isReservedEffortKeyword(keyword);
 }
-//@ chunk-kcvmr83c.js:1457-1538 placement
+//@ chunk-5dqwe9kx.js:1457-1538 placement
 function parseEffortArg(value) {
   if (getEffortEnvOverride_2(value))
     return {
@@ -1381,7 +1410,7 @@ function parseEffortArg(value) {
       }
     : null;
 }
-//@ chunk-18hwfzwa.js:675600-675889 callgraph-fingerprint (2.1.88 match: convertEffortValueToLevel, 0.529)
+//@ chunk-czq1j3j2.js:696329-696618 callgraph-fingerprint (2.1.88 match: convertEffortValueToLevel, 0.529)
 /**
  * 模型选择器某选项的 effort 能力：是否支持 effort/max/xhigh、可选级别（受组织上限）与默认 effort。旧版名 convertEffortValueToLevel 为错配。
  */
@@ -1404,7 +1433,7 @@ function getEffortCapabilitiesForOption(value) {
     defaultEffort: clampEffortToCap(defaultEffort, modelOptionValue),
   };
 }
-//@ chunk-18hwfzwa.js:1101574-1101734 placement
+//@ chunk-czq1j3j2.js:1135547-1135707 placement
 /**
  * 某推理强度相对默认强度的成本比。
  */
@@ -1417,7 +1446,7 @@ function effortCostRatio(model, effortLevel) {
   if (levelCostRatio === undefined || !defaultCostRatio) return null;
   return levelCostRatio / defaultCostRatio;
 }
-//@ chunk-3rwvzn82.js:29349-29425 placement (2.1.88 match: getRequestTooLargeErrorMessage, 1)
+//@ chunk-n2cdp9nk.js:30493-30569 placement (2.1.88 match: getRequestTooLargeErrorMessage, 1)
 /**
  * effort 级别说明：模型有特定说明时用之，max 级用"May use excessive tokens..."提示。旧版名 getRequestTooLargeErrorMessage 为错配；应归 utils/effort.ts。
  */
@@ -1428,86 +1457,88 @@ function getEffortLevelDescription(mainLoopModel, effortOption) {
 export {
   getEffortLevelIfSupported,
   resolveEffortLevel,
+  ultrathinkRaisesEffort,
+  ultrathinkRaisesEffortInSession,
+  isEffortHigherThan,
+  EFFORT_LEVELS,
+  getModelSettingsKey,
+  modelSupportsXhighEffort,
   resolveEffortValue,
   modelSupportsEffort,
-  EFFORT_LEVELS,
-  modelSupportsMaxEffort,
-  modelSupportsXhighEffort,
+  normalizeEffortLevel,
+  getDefaultEffortLevel,
+  resolveAppliedEffort,
+  isAboveHighEffort,
   isEffortLevel,
-  getEffortEnvOverride,
-  INHERIT_EFFORT_SETTING,
-  buildEffortSettingsTable,
-  modelSupportsPerTurnEffortControl,
   isUltracodeActive,
-  parseEffortValue,
-  findAdjacentEffortLevel,
+  toBoundedLabel,
+  getEffortEnvOverride,
+  isUltracodeAvailable,
   parseEffortLevel,
+  persistEffortSetting,
+  modelSupportsMaxEffort,
+  modelSupportsPerTurnEffortControl,
+  isRequestedEffortTheHeldLevel,
+  parseEffortValue,
+  resolveEffortKeyword,
+  toEffortSettingOrDefault,
+  parseEffortKeyword,
+  isEffortChangedFromSession,
+  isSameEffortSetting,
+  buildEffortSettingsTable,
   createSessionEffortState,
   isUltracodeEnabled,
   parseEffortFlag,
-  effortLevelValue,
-  persistEffortSetting,
-  levelEffortSetting,
-  getAppliedEffortLevel,
-  isUltrathinkEffective,
-  getModelSettingsKey,
-  orgOverridesUserEffort,
-  getEffortLevelOrHigh,
-  getEffortSettingsSources,
-  isLegacyUserEffortModel,
-  normalizeEffortLevel,
-  getEffortCapabilitiesForOption,
+  getAllowedEffortLevels,
   clampEffortToCap,
-  getDefaultEffortLevel,
-  toBoundedLabel,
-  isUltracodeAvailable,
-  shouldShowEffortHint,
-  shouldShowEffortChangeNotice,
-  effortValueToString,
-  isOnlyMaxAboveEffort,
   toPersistableEffort,
-  effortCostRatio,
-  noEffortHint,
-  getModelPickerEffortDefault,
-  isEffortHintFlagOn,
-  isEffortHigherThan,
-  resolveAppliedEffort,
-  isAboveHighEffort,
-  THINKING_DISABLED_EFFORT_CAP,
-  getEffortCapWarning,
-  carriedEffortForModel,
-  shouldUltrathinkRaiseEffort,
-  getEffortSuffix,
-  parseEffortArg,
+  effortValueToString,
+  getEffortValueDescription,
+  getOrgOverriddenEffort,
+  carriedEffortOnly,
+  getAppliedEffortLevel,
   getOrgDefaultEffort,
+  noEffortHint,
+  getEffortEnvOverride_2,
+  releaseCarriedEffortForEffortChange,
+  isEffortCarryDisabled,
+  carriedEffortForModel,
+  releaseCarriedEffortIfModelChanged,
+  effortSettingToString,
+  effortLevelValue,
+  userEffortForAccount,
+  buildModelSettingsPatch,
+  shouldUltrathinkRaiseEffort,
+  dropSessionLevelIfModelDiffers,
+  modelSupportsEffortLevel,
+  effortRank,
+  isEffortWithinCap,
+  getEffortLevelOrHigh,
+  modelCapsEffortWhenThinkingDisabled,
+  getSubagentEffortOverride,
+  getEffortSettingsSources,
+  shouldShowEffortHint,
+  getModelPickerEffortDefault,
+  isSameModelSettings,
+  withoutSessionLevel,
+  levelEffortSetting,
+  resolveEffortWithoutHold,
+  lookupEffortSetting,
+  getEffortCapabilitiesForOption,
+  getEffortCapWarning,
+  orgOverridesUserEffort,
+  isLegacyUserEffortModel,
+  shouldShowEffortChangeNotice,
+  effortCostRatio,
+  getDefaultEffortForModel,
+  hasAnyDefaultEffort,
+  getEffortSuffix,
+  isEffortHintFlagOn,
+  parseEffortArg,
   getEffortCap,
   hasEffortLevelsAboveCap,
-  getOrgOverriddenEffort,
   isSpecialEffortKeywordDisabled,
   isEffortUnset,
   getEffortLevelDescription,
-  getAllowedEffortLevels,
-  getEffortValueDescription,
-  carriedEffortOnly,
-  getEffortEnvOverride_2,
-  releaseCarriedEffortForEffortChange,
-  toEffortSettingOrDefault,
-  isSameEffortSetting,
-  getDefaultEffortForModel,
-  hasAnyDefaultEffort,
-  resolveEffortKeyword,
-  isEffortCarryDisabled,
-  releaseCarriedEffortIfModelChanged,
-  effortSettingToString,
-  isRequestedEffortTheHeldLevel,
-  parseEffortKeyword,
-  isEffortChangedFromSession,
-  lookupEffortSetting,
-  isSameModelSettings,
-  resolveEffortWithoutHold,
-  modelCapsEffortWhenThinkingDisabled,
-  getSubagentEffortOverride,
-  withoutSessionLevel,
-  userEffortForAccount,
-  buildModelSettingsPatch,
+  INHERIT_EFFORT_SETTING,
 };

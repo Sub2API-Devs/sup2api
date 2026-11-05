@@ -3,10 +3,10 @@
  *
  * /usage 标签页：当前会话、本周（全部模型/Sonnet/Opus）用量条与重置时间、额外用量（usage credits）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Settings/Usage.tsx
- * pieces: chunk-9689amr8.js (1), chunk-9h8dr0qb.js (52)
- * attribution: fingerprint 3, placement 49, layout 1
+ * pieces: chunk-j6tt9nsa.js (52), chunk-z03ry4rj.js (1)
+ * attribution: placement 49, fingerprint 3, layout 1
  */
 import { formatResetText, formatTokens, formatRelativeTimeAgo, formatResetTime } from "../../utils/format.js";
 import {
@@ -84,7 +84,7 @@ import { usageCreditsCommand } from "../../commands/extra-usage/index.js";
 import { require_asciichart } from "../../../vendor/asciichart/asciichart.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-9689amr8.js:12028-12675 fingerprint (2.1.88 match: Usage, 0.427)
+//@ chunk-z03ry4rj.js:13176-13823 fingerprint (2.1.88 match: Usage, 0.428)
 /**
  * /usage：当前会话与本周用量条（全部模型/Sonnet/Opus）、重置时间，团队/企业的额外用量区。
  */
@@ -130,11 +130,11 @@ function Usage(usage) {
 `)
     : null;
 }
-//@ chunk-9h8dr0qb.js:42676-42716 placement
+//@ chunk-j6tt9nsa.js:42619-42657 placement
 function selectMainLoopModel(state) {
   return state.mainLoopModel;
 }
-//@ chunk-9h8dr0qb.js:42716-42972 placement
+//@ chunk-j6tt9nsa.js:42657-42913 placement
 function renderPluginSkillTokensRow(plugin) {
   return jsxProd_default_2(
     Box,
@@ -165,7 +165,7 @@ function renderPluginSkillTokensRow(plugin) {
     plugin.pluginName,
   );
 }
-//@ chunk-9h8dr0qb.js:42972-44139 placement
+//@ chunk-j6tt9nsa.js:42913-44080 placement
 /**
  * 显示各插件技能描述每轮占用的 token。
  */
@@ -262,21 +262,21 @@ function renderPluginSkillFootprint() {
   } else column = $[14];
   return column;
 }
-//@ chunk-9h8dr0qb.js:44139-44143 placement
+//@ chunk-j6tt9nsa.js:44080-44084 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-9h8dr0qb.js:44139", () => {
+deferInit("chunk-j6tt9nsa.js:44080", () => {
   init_react_production();
 });
-//@ chunk-9h8dr0qb.js:44143-44147 placement
+//@ chunk-j6tt9nsa.js:44084-44088 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-9h8dr0qb.js:44143", () => {
+deferInit("chunk-j6tt9nsa.js:44084", () => {
   init_react_production();
 });
-//@ chunk-9h8dr0qb.js:44147-44181 placement
+//@ chunk-j6tt9nsa.js:44088-44122 placement
 function selectUltracode(state) {
   return state.ultracode;
 }
-//@ chunk-9h8dr0qb.js:44181-44389 placement
+//@ chunk-j6tt9nsa.js:44122-44330 placement
 function renderUsageShareRow(row) {
   return jsxProd_default_2(
     Box,
@@ -305,16 +305,16 @@ function renderUsageShareRow(row) {
     row.key,
   );
 }
-//@ chunk-9h8dr0qb.js:44389-44405 placement
+//@ chunk-j6tt9nsa.js:44330-44346 placement
 var usageDataSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-9h8dr0qb.js:44389", () => {
+deferInit("chunk-j6tt9nsa.js:44330", () => {
   usageDataSlot = createContext(null);
 });
-//@ chunk-9h8dr0qb.js:44405-44433 placement
+//@ chunk-j6tt9nsa.js:44346-44374 placement
 function useUsageData() {
   return useContext(usageDataSlot);
 }
-//@ chunk-9h8dr0qb.js:44433-45315 placement
+//@ chunk-j6tt9nsa.js:44374-45251 placement
 /**
  * 执行用量修复建议（Remote Control 下不可用）。
  */
@@ -404,9 +404,9 @@ function applyUsageFix(props) {
   } else usageDataSlotElement = $[17];
   return usageDataSlotElement;
 }
-//@ chunk-9h8dr0qb.js:45315-45324 placement
+//@ chunk-j6tt9nsa.js:45251-45260 placement
 var USAGE_EVIDENCE_WINDOW_DAYS = 5;
-//@ chunk-9h8dr0qb.js:45324-45836 placement
+//@ chunk-j6tt9nsa.js:45260-45772 placement
 function renderFixUsageButton(props) {
   let $ = useMemoCache(10);
   let { recommendations, fix, maxWidth } = props;
@@ -459,7 +459,7 @@ function renderFixUsageButton(props) {
   } else boxElement = $[9];
   return boxElement;
 }
-//@ chunk-9h8dr0qb.js:45836-45912 placement
+//@ chunk-j6tt9nsa.js:45772-45848 placement
 function resetUsageData(error) {
   logError(error);
   return {
@@ -471,11 +471,11 @@ function resetUsageData(error) {
     },
   };
 }
-//@ chunk-9h8dr0qb.js:45912-45943 placement
+//@ chunk-j6tt9nsa.js:45848-45879 placement
 function slashLabel(commandName) {
   return `/${commandName}`;
 }
-//@ chunk-9h8dr0qb.js:45943-46092 placement
+//@ chunk-j6tt9nsa.js:45879-46028 placement
 var EMPTY_USAGE_BREAKDOWN = {
   totalCost: 0,
   requestCount: 0,
@@ -491,7 +491,7 @@ var EMPTY_USAGE_BREAKDOWN = {
 var USAGE_LIST_MAX_ROWS = 8;
 var USAGE_NAME_COLUMN_WIDTH = 28;
 var PERCENT_COLUMN_WIDTH = 6;
-//@ chunk-9h8dr0qb.js:46203-47126 placement
+//@ chunk-j6tt9nsa.js:46139-47062 placement
 /**
  * 用量归因：技能、子代理、插件、MCP 服务器各占多少（扫描本地会话）。
  */
@@ -585,14 +585,14 @@ function UsageAttributionView(props) {
   } else foElement = $[13];
   return foElement;
 }
-//@ chunk-9h8dr0qb.js:47126-47229 placement
+//@ chunk-j6tt9nsa.js:47062-47165 placement
 function getSignificantBehaviors(usage) {
   if (usage.totalCost === 0) return [];
   return usage.behaviors.filter(
     (behavior) => (behavior.cost / usage.totalCost) * 100 >= MIN_RECOMMENDATION_PCT,
   );
 }
-//@ chunk-9h8dr0qb.js:47229-47349 placement
+//@ chunk-j6tt9nsa.js:47165-47285 placement
 function hasUsageBreakdownEntries(state) {
   return (
     state.agents.length > 0 ||
@@ -602,7 +602,7 @@ function hasUsageBreakdownEntries(state) {
     state.loops.length > 0
   );
 }
-//@ chunk-9h8dr0qb.js:47349-50015 placement
+//@ chunk-j6tt9nsa.js:47285-49948 placement
 function renderAttributionPeriod(props) {
   let $ = useMemoCache(36);
   let { maxWidth, scanPromise } = props;
@@ -839,12 +839,12 @@ function renderAttributionPeriod(props) {
   } else content = $[35];
   return content;
 }
-//@ chunk-9h8dr0qb.js:50015-50120 placement
+//@ chunk-j6tt9nsa.js:49948-50053 placement
 function formatFixCountLabel(index, total) {
   if (index < total) return `fix ${index} of ${total}`;
   return index === 1 ? "fix this" : index === 2 ? "fix both" : `fix all ${index}`;
 }
-//@ chunk-9h8dr0qb.js:50120-50529 placement
+//@ chunk-j6tt9nsa.js:50053-50462 placement
 function renderAttributionHeader(props) {
   let $ = useMemoCache(5);
   let { withSubtitle } = props;
@@ -881,7 +881,7 @@ function renderAttributionHeader(props) {
   } else boxElement = $[4];
   return boxElement;
 }
-//@ chunk-9h8dr0qb.js:50529-51614 placement
+//@ chunk-j6tt9nsa.js:50462-51547 placement
 function renderAttributionRows(props) {
   let $ = useMemoCache(23);
   let { title, rows, label } = props;
@@ -1001,7 +1001,7 @@ function renderAttributionRows(props) {
   } else containerComponentElement = $[22];
   return containerComponentElement;
 }
-//@ chunk-9h8dr0qb.js:51614-51671 placement
+//@ chunk-j6tt9nsa.js:51547-51604 placement
 var USAGE_SECTION_HEADER_ROWS = 10;
 var USAGE_SECTION_SPARK_ROWS = 6;
 var USAGE_SECTION_DETAIL_ROWS = 8;
@@ -1014,7 +1014,7 @@ var USAGE_TOTAL_ROWS =
   USAGE_SECTION_TABLE_ROWS +
   USAGE_SECTION_FOOTER_ROWS;
 var USAGE_SHELL_ROWS = USAGE_TOTAL_ROWS + 24;
-//@ chunk-9h8dr0qb.js:51671-52084 placement
+//@ chunk-j6tt9nsa.js:51604-52017 placement
 /**
  * 把循环任务的 cron 表达式缩写成 "5m"/"2h"/"1d"/"at HH:MM"；动态循环返回 dynamic，其他表达式用 cronToHuman 转成文字。
  */
@@ -1032,7 +1032,7 @@ function formatLoopSchedule(schedule) {
   }
   return cronToHuman(schedule.cron).toLowerCase();
 }
-//@ chunk-9h8dr0qb.js:52084-53661 placement
+//@ chunk-j6tt9nsa.js:52017-53589 placement
 function renderLoopsAttribution(props) {
   let $ = useMemoCache(28);
   let { rows, maxWidth } = props;
@@ -1212,7 +1212,7 @@ function renderLoopsAttribution(props) {
   } else containerComponentElement = $[27];
   return containerComponentElement;
 }
-//@ chunk-9h8dr0qb.js:53661-53922 placement
+//@ chunk-j6tt9nsa.js:53589-53850 placement
 function RightAlignedDimText(props) {
   let $ = useMemoCache(5);
   let { width, text } = props;
@@ -1239,9 +1239,9 @@ function RightAlignedDimText(props) {
   } else renderCache = $[4];
   return renderCache;
 }
-//@ chunk-9h8dr0qb.js:53922-53937 placement
+//@ chunk-j6tt9nsa.js:53850-53865 placement
 function noopUsageCallback() {}
-//@ chunk-9h8dr0qb.js:53937-54010 placement
+//@ chunk-j6tt9nsa.js:53865-53938 placement
 function clearEnrichError(state) {
   return state.enrichError === null
     ? state
@@ -1250,14 +1250,14 @@ function clearEnrichError(state) {
         enrichError: null,
       };
 }
-//@ chunk-9h8dr0qb.js:54010-54064 placement
+//@ chunk-j6tt9nsa.js:53938-53992 placement
 function toUsageNoticeRow(notice) {
   return {
     text: notice.text,
     color: notice.variant,
   };
 }
-//@ chunk-9h8dr0qb.js:54064-54177 placement
+//@ chunk-j6tt9nsa.js:53992-54105 placement
 function toLimitBarSpec(limit) {
   let { title, displayName, limit: limit_2 } = limit;
   return {
@@ -1267,7 +1267,7 @@ function toLimitBarSpec(limit) {
     alwaysShowDateInReset: true,
   };
 }
-//@ chunk-9h8dr0qb.js:54177-56348 fingerprint (2.1.88 match: LimitBar, 0.788)
+//@ chunk-j6tt9nsa.js:54105-56258 fingerprint (2.1.88 match: LimitBar, 0.787)
 function LimitBar(props) {
   let $ = useMemoCache(41);
   let {
@@ -1463,7 +1463,7 @@ function LimitBar(props) {
     return t8;
   }
 }
-//@ chunk-9h8dr0qb.js:56348-56454 placement
+//@ chunk-j6tt9nsa.js:56258-56364 placement
 function renderColoredLines({ lines }) {
   return (lines ?? []).map((line, index) =>
     jsxProd_default(
@@ -1477,7 +1477,7 @@ function renderColoredLines({ lines }) {
     ),
   );
 }
-//@ chunk-9h8dr0qb.js:56454-57121 placement
+//@ chunk-j6tt9nsa.js:56364-57031 placement
 function renderGatewayUsageNotice() {
   let $ = useMemoCache(7);
   let emptyState;
@@ -1555,13 +1555,13 @@ function renderGatewayUsageNotice() {
   } else boxElement = $[6];
   return boxElement;
 }
-//@ chunk-9h8dr0qb.js:57121-57890 placement (2.1.88 match: _temp2, 0.477)
+//@ chunk-j6tt9nsa.js:57031-57800 placement
 /**
  * 用量设置里的额度面板：读取凭据对应的额度，失败时回退显示消费上限，底部 Esc 取消提示。
  */
-function UsageCreditsPanel(exitState) {
+function UsageCreditsPanel(props) {
   let $ = useMemoCache(15);
-  let { maxWidth } = exitState;
+  let { maxWidth } = props;
   let emptyState;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     emptyState = stableEmptyObject(false);
@@ -1637,7 +1637,7 @@ function UsageCreditsPanel(exitState) {
   } else boxElement = $[14];
   return boxElement;
 }
-//@ chunk-9h8dr0qb.js:57890-58054 placement
+//@ chunk-j6tt9nsa.js:57800-57964 placement
 /**
  * 在 Suspense 下读取额度花费数据并渲染支出上限行。
  */
@@ -1657,7 +1657,7 @@ function SpendLimitReading(props) {
   } else element = $[2];
   return element;
 }
-//@ chunk-9h8dr0qb.js:58054-58854 placement
+//@ chunk-j6tt9nsa.js:57964-58764 placement
 function renderSpendLimit(props) {
   let $ = useMemoCache(10);
   let { spend, maxWidth } = props;
@@ -1722,7 +1722,7 @@ function renderSpendLimit(props) {
   } else limitBarElement = $[9];
   return limitBarElement;
 }
-//@ chunk-9h8dr0qb.js:58854-59430 placement
+//@ chunk-j6tt9nsa.js:58764-59340 placement
 function renderRemoteCost(props) {
   let $ = useMemoCache(10);
   let { isThinClient } = props;
@@ -1780,7 +1780,7 @@ function renderRemoteCost(props) {
   } else boxElement = $[9];
   return boxElement;
 }
-//@ chunk-9h8dr0qb.js:59430-59573 placement
+//@ chunk-j6tt9nsa.js:59340-59483 placement
 function RemoteCostText(props) {
   let $ = useMemoCache(2);
   let { costPromise } = props;
@@ -1796,7 +1796,7 @@ function RemoteCostText(props) {
   } else costElement = $[1];
   return costElement;
 }
-//@ chunk-9h8dr0qb.js:59573-59768 placement
+//@ chunk-j6tt9nsa.js:59483-59678 placement
 async function fetchRemoteSessionCost() {
   let remoteCaps = getRemoteCaps();
   if (!remoteCaps) return "Remote cost unavailable";
@@ -1810,22 +1810,22 @@ async function fetchRemoteSessionCost() {
     return `Remote cost unavailable (${errorMessage(error)})`;
   }
 }
-//@ chunk-9h8dr0qb.js:59768-59803 placement
+//@ chunk-j6tt9nsa.js:59678-59713 placement
 var USAGE_LOAD_FAILED_TEXT = "Failed to load usage data";
-//@ chunk-9h8dr0qb.js:59803-59885 placement
+//@ chunk-j6tt9nsa.js:59713-59795 placement
 function asOfSuffix(timestamp, now) {
   if (timestamp === undefined) return "";
   return ` as of ${formatRelativeTimeAgo(new Date(timestamp), {
     now,
   })}`;
 }
-//@ chunk-9h8dr0qb.js:59885-60028 placement
+//@ chunk-j6tt9nsa.js:59795-59938 placement
 function describeRateLimitWait(heldUntilMs) {
   return heldUntilMs === undefined
     ? "requests temporarily limited \u2014 try again in a moment"
     : `rate limited until ${formatResetTime(Math.ceil(heldUntilMs / 60000) * 60)}`;
 }
-//@ chunk-9h8dr0qb.js:60028-65969 placement
+//@ chunk-j6tt9nsa.js:59938-65874 placement
 /**
  * 加载用量与额度数据（远程会话成本、gateway 花费上限、限流、刷新失败回退到上次已知数据，约 6 KB）。
  */
@@ -2313,9 +2313,9 @@ function loadUsageData(props) {
   } else content = $[66];
   return content;
 }
-//@ chunk-9h8dr0qb.js:65969-65992 layout
+//@ chunk-j6tt9nsa.js:65874-65897 layout
 var USAGE_CREDITS_LABEL = "Usage credits";
-//@ chunk-9h8dr0qb.js:65992-67685 fingerprint (2.1.88 match: ExtraUsageSection, 0.698)
+//@ chunk-j6tt9nsa.js:65897-67584 fingerprint (2.1.88 match: ExtraUsageSection, 0.698)
 function ExtraUsageSection(props) {
   let $ = useMemoCache(27);
   let { extraUsage, maxWidth } = props;
@@ -2455,14 +2455,14 @@ function ExtraUsageSection(props) {
   } else t10 = $[26];
   return t10;
 }
-//@ chunk-9h8dr0qb.js:67685-67776 placement (2.1.88 match: formatPeakDay, 0.789)
+//@ chunk-j6tt9nsa.js:67584-67675 placement (2.1.88 match: formatPeakDay, 0.787)
 function formatPeakDay(dateStr) {
   return new Date(dateStr).toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
   });
 }
-//@ chunk-9h8dr0qb.js:67776-68119 placement
+//@ chunk-j6tt9nsa.js:67675-68018 placement
 function formatCreditLine(wattleEmber) {
   let parts = [];
   if (wattleEmber.limit_dollars != null) {
@@ -2479,7 +2479,7 @@ function formatCreditLine(wattleEmber) {
   }
   return parts.join(" \xB7 ");
 }
-//@ chunk-9h8dr0qb.js:68119-68564 placement
+//@ chunk-j6tt9nsa.js:68018-68529 placement
 function formatFableCredit(wattleEmber) {
   let periods = Array.isArray(wattleEmber.periods) ? wattleEmber.periods : [];
   let [firstPeriod, secondPeriod] = periods;
@@ -2497,17 +2497,20 @@ function formatFableCredit(wattleEmber) {
   let firstStart = formatPeakDay(firstPeriod.starts_at);
   let firstEnd = formatPeakDay(firstPeriod.ends_at);
   let secondEnd = formatPeakDay(secondPeriod.ends_at);
+  let coveredModelsLabel = wattleEmber.covered_models_label;
+  let creditLabel =
+    typeof coveredModelsLabel === "string" && coveredModelsLabel.trim() ? coveredModelsLabel : "Fable";
   return [
     {
-      text: `You have ${limitLabel} USD of Fable usage for each of two periods: ${firstStart} to ${firstEnd}, and ${firstEnd} to ${secondEnd}. Unused credit doesn't carry over.`,
+      text: `You have ${limitLabel} USD of ${creditLabel} usage for each of two periods: ${firstStart} to ${firstEnd}, and ${firstEnd} to ${secondEnd}. Unused credit doesn't carry over.`,
     },
   ];
 }
-//@ chunk-9h8dr0qb.js:68564-68646 placement
+//@ chunk-j6tt9nsa.js:68529-68611 placement
 function creditExpiryLabel(resetsAt) {
   return resetsAt ? `One-time credit \xB7 Expires ${formatPeakDay(resetsAt)}` : "One-time credit";
 }
-//@ chunk-9h8dr0qb.js:68646-68732 placement
+//@ chunk-j6tt9nsa.js:68611-68697 placement
 function formatUsageUSD(limitDollars) {
   return formatCurrency(
     Math.round(limitDollars * 100),
@@ -2515,14 +2518,14 @@ function formatUsageUSD(limitDollars) {
     Number.isInteger(limitDollars) ? "fit" : "precise",
   );
 }
-//@ chunk-9h8dr0qb.js:68732-68750 placement
+//@ chunk-j6tt9nsa.js:68697-68715 placement
 var usageRefreshSignal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-9h8dr0qb.js:68732", () => {
+deferInit("chunk-j6tt9nsa.js:68697", () => {
   usageRefreshSignal = __toESM(require_asciichart(), 1);
 });
-//@ chunk-9h8dr0qb.js:68750-68754 placement
+//@ chunk-j6tt9nsa.js:68715-68719 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-9h8dr0qb.js:68750", () => {
+deferInit("chunk-j6tt9nsa.js:68715", () => {
   init_react_production();
 });
-export { usageRefreshSignal, Usage, UsageAttributionView, renderGatewayUsageNotice, applyUsageFix };
+export { UsageAttributionView, usageRefreshSignal, renderGatewayUsageNotice, applyUsageFix, Usage };

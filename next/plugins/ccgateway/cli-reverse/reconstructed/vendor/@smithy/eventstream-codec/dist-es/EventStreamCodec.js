@@ -1,15 +1,15 @@
 /**
  * @smithy/eventstream-codec/dist-es/EventStreamCodec.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/eventstream-codec@4.2.13..4.2.14
- * pieces: chunk-3cddmtk7.js (1)
+ * pieces: chunk-ayc8mk37.js (1)
  * attribution: esm-fingerprint 1
  */
 import { HeaderMarshaller } from "../dist-cjs/index.js";
 import { Crc32 } from "../../../@aws-crypto/crc32/build/module/index.js";
 import { splitMessage } from "./splitMessage.js";
 
-//@ chunk-3cddmtk7.js:9036-10073 esm-fingerprint
+//@ chunk-ayc8mk37.js:9036-10073 esm-fingerprint
 class EventStreamCodec {
   headerMarshaller;
   messageBuffer;

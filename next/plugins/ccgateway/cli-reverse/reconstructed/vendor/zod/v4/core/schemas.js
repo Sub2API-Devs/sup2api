@@ -1,8 +1,8 @@
 /**
  * zod/v4/core/schemas.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: zod@4.6.2
- * pieces: chunk-7vp249v4.js (58)
+ * pieces: chunk-m4y44r15.js (58)
  * attribution: esm-fingerprint 55, esm-layout 3
  */
 import { $constructor, $ZodAsyncError, config, globalConfig, $ZodEncodeError } from "./core.js";
@@ -62,7 +62,7 @@ import {
 import { $ZodCheckStringFormat, $ZodCheckNumberFormat, $ZodCheck } from "./checks.js";
 import { Doc } from "./doc.js";
 
-//@ chunk-7vp249v4.js:14398-15969 esm-fingerprint
+//@ chunk-m4y44r15.js:14398-15969 esm-fingerprint
 var $ZodType = $constructor(
   "$ZodType",
   (inst, def) => {
@@ -167,7 +167,7 @@ var toStandardResult = (r, ctx) =>
     : {
         value: r.value,
       };
-//@ chunk-7vp249v4.js:15969-16062 esm-fingerprint
+//@ chunk-m4y44r15.js:15969-16062 esm-fingerprint
 async function validateAsync_2(inst, value) {
   let ctx = {
     async: true,
@@ -183,7 +183,7 @@ async function validateAsync_2(inst, value) {
     ctx,
   );
 }
-//@ chunk-7vp249v4.js:16062-16252 esm-fingerprint
+//@ chunk-m4y44r15.js:16062-16252 esm-fingerprint
 function standardProps(inst) {
   return {
     validate: (value) => {
@@ -206,7 +206,7 @@ function standardProps(inst) {
     version: 1,
   };
 }
-//@ chunk-7vp249v4.js:16252-16962 esm-fingerprint
+//@ chunk-m4y44r15.js:16252-16962 esm-fingerprint
 var $ZodString = $constructor("$ZodString", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.pattern = def.pattern ?? anyString;
@@ -256,7 +256,7 @@ var $ZodEmail = $constructor("$ZodEmail", (inst, def) => {
 });
 var URL_BAD_FORMAT = 1;
 var URL_UNPARSEABLE = 2;
-//@ chunk-7vp249v4.js:16962-17102 esm-fingerprint
+//@ chunk-m4y44r15.js:16962-17102 esm-fingerprint
 function parseURLObject(trimmed, def) {
   if (!def.normalize && def.protocol?.source === httpProtocol.source && !/^https?:\/\//i.test(trimmed))
     return URL_BAD_FORMAT;
@@ -266,23 +266,23 @@ function parseURLObject(trimmed, def) {
     return URL_UNPARSEABLE;
   }
 }
-//@ chunk-7vp249v4.js:17102-17121 esm-fingerprint
+//@ chunk-m4y44r15.js:17102-17121 esm-fingerprint
 var asciiTabOrNewline = /[\t\n\r]/g;
-//@ chunk-7vp249v4.js:17121-17160 esm-layout
+//@ chunk-m4y44r15.js:17121-17160 esm-layout
 function stripTabAndNewline(value) {
   return value.replace(asciiTabOrNewline, "");
 }
-//@ chunk-7vp249v4.js:17160-17217 esm-fingerprint
+//@ chunk-m4y44r15.js:17160-17217 esm-fingerprint
 function urlHostnameOk(url, hostname) {
   hostname.lastIndex = 0;
   return hostname.test(url.hostname);
 }
-//@ chunk-7vp249v4.js:17217-17322 esm-fingerprint
+//@ chunk-m4y44r15.js:17217-17322 esm-fingerprint
 function urlProtocolOk(url, protocol) {
   protocol.lastIndex = 0;
   return protocol.test(url.protocol.endsWith(":") ? url.protocol.slice(0, -1) : url.protocol);
 }
-//@ chunk-7vp249v4.js:17322-19131 esm-fingerprint
+//@ chunk-m4y44r15.js:17322-19131 esm-fingerprint
 var $ZodURL = $constructor("$ZodURL", (inst, def) => {
   $ZodStringFormat.init(inst, def);
   inst._zod.check = (payload) => {
@@ -394,7 +394,7 @@ var $ZodIPv4 = $constructor("$ZodIPv4", (inst, def) => {
   $ZodStringFormat.init(inst, def);
 });
 var ipv6Alphabet = /^[0-9a-fA-F:.]+$/;
-//@ chunk-7vp249v4.js:19131-19225 esm-fingerprint
+//@ chunk-m4y44r15.js:19131-19225 esm-fingerprint
 function isValidIPv6(value) {
   if (!ipv6Alphabet.test(value)) return false;
   try {
@@ -404,7 +404,7 @@ function isValidIPv6(value) {
     return false;
   }
 }
-//@ chunk-7vp249v4.js:19225-19422 esm-fingerprint
+//@ chunk-m4y44r15.js:19225-19422 esm-fingerprint
 var $ZodIPv6 = $constructor("$ZodIPv6", (inst, def) => {
   def.pattern ?? (def.pattern = ipv6);
   $ZodStringFormat.init(inst, def);
@@ -419,12 +419,12 @@ var $ZodIPv6 = $constructor("$ZodIPv6", (inst, def) => {
       });
   };
 });
-//@ chunk-7vp249v4.js:19422-19493 esm-fingerprint
+//@ chunk-m4y44r15.js:19422-19493 esm-fingerprint
 var $ZodCIDRv4 = $constructor("$ZodCIDRv4", (inst, def) => {
   def.pattern ?? (def.pattern = cidrv4);
   $ZodStringFormat.init(inst, def);
 });
-//@ chunk-7vp249v4.js:19493-19653 esm-layout
+//@ chunk-m4y44r15.js:19493-19653 esm-layout
 function isValidCIDRv6(value) {
   let parts = value.split("/");
   if (parts.length !== 2) return false;
@@ -435,7 +435,7 @@ function isValidCIDRv6(value) {
   if (prefixNum < 0 || prefixNum > 128) return false;
   return isValidIPv6(address);
 }
-//@ chunk-7vp249v4.js:19653-19854 esm-fingerprint
+//@ chunk-m4y44r15.js:19653-19854 esm-fingerprint
 var $ZodCIDRv6 = $constructor("$ZodCIDRv6", (inst, def) => {
   def.pattern ?? (def.pattern = cidrv6);
   $ZodStringFormat.init(inst, def);
@@ -450,7 +450,7 @@ var $ZodCIDRv6 = $constructor("$ZodCIDRv6", (inst, def) => {
       });
   };
 });
-//@ chunk-7vp249v4.js:19854-19978 esm-fingerprint
+//@ chunk-m4y44r15.js:19854-19978 esm-fingerprint
 function isValidBase64(data) {
   if (data === "") return true;
   if (/\s/.test(data)) return false;
@@ -462,7 +462,7 @@ function isValidBase64(data) {
     return false;
   }
 }
-//@ chunk-7vp249v4.js:19978-20235 esm-fingerprint
+//@ chunk-m4y44r15.js:19978-20235 esm-fingerprint
 var base64Charset = /^[0-9a-zA-Z+/]*={0,2}$/;
 var $ZodBase64 = $constructor("$ZodBase64", (inst, def) => {
   def.pattern ?? (def.pattern = base64Charset);
@@ -479,14 +479,14 @@ var $ZodBase64 = $constructor("$ZodBase64", (inst, def) => {
   };
 });
 var base64urlCharset = /^[A-Za-z0-9_-]*$/;
-//@ chunk-7vp249v4.js:20235-20373 esm-fingerprint
+//@ chunk-m4y44r15.js:20235-20373 esm-fingerprint
 function isValidBase64URL(data) {
   if (!base64urlCharset.test(data)) return false;
   let base64 = data.replace(/[-_]/g, (c) => (c === "-" ? "+" : "/"));
   let padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
   return isValidBase64(padded);
 }
-//@ chunk-7vp249v4.js:20373-20651 esm-fingerprint
+//@ chunk-m4y44r15.js:20373-20651 esm-fingerprint
 var $ZodBase64URL = $constructor("$ZodBase64URL", (inst, def) => {
   def.pattern ?? (def.pattern = base64urlCharset);
   $ZodStringFormat.init(inst, def);
@@ -505,7 +505,7 @@ var $ZodE164 = $constructor("$ZodE164", (inst, def) => {
   def.pattern ?? (def.pattern = e164);
   $ZodStringFormat.init(inst, def);
 });
-//@ chunk-7vp249v4.js:20651-20894 esm-fingerprint
+//@ chunk-m4y44r15.js:20651-20894 esm-fingerprint
 function isValidJWT(token, algorithm = null) {
   try {
     let tokensParts = token.split(".");
@@ -521,7 +521,7 @@ function isValidJWT(token, algorithm = null) {
     return false;
   }
 }
-//@ chunk-7vp249v4.js:20894-21075 esm-fingerprint
+//@ chunk-m4y44r15.js:20894-21075 esm-fingerprint
 var $ZodJWT = $constructor("$ZodJWT", (inst, def) => {
   $ZodStringFormat.init(inst, def);
   inst._zod.check = (payload) => {
@@ -535,7 +535,7 @@ var $ZodJWT = $constructor("$ZodJWT", (inst, def) => {
     });
   };
 });
-//@ chunk-7vp249v4.js:21075-21808 esm-fingerprint
+//@ chunk-m4y44r15.js:21075-21808 esm-fingerprint
 var $ZodNumber = $constructor("$ZodNumber", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.pattern = number;
@@ -591,7 +591,7 @@ var $ZodBoolean = $constructor("$ZodBoolean", (inst, def) => {
     return payload;
   };
 });
-//@ chunk-7vp249v4.js:21808-22534 esm-fingerprint
+//@ chunk-m4y44r15.js:21808-22534 esm-fingerprint
 var $ZodUndefined = $constructor("$ZodUndefined", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.pattern = _undefined;
@@ -644,12 +644,12 @@ var $ZodNever = $constructor("$ZodNever", (inst, def) => {
     return payload;
   };
 });
-//@ chunk-7vp249v4.js:22534-22625 esm-fingerprint
+//@ chunk-m4y44r15.js:22534-22625 esm-fingerprint
 function handleArrayResult(result, final, index) {
   if (result.issues.length) final.issues.push(...prefixIssues(index, result.issues));
   final.value[index] = result.value;
 }
-//@ chunk-7vp249v4.js:22625-23167 esm-fingerprint
+//@ chunk-m4y44r15.js:22625-23167 esm-fingerprint
 var $ZodArray = $constructor("$ZodArray", (inst, def) => {
   $ZodType.init(inst, def);
   let memo = globalConfig.memoizer;
@@ -688,7 +688,7 @@ var $ZodArray = $constructor("$ZodArray", (inst, def) => {
     return payload;
   };
 });
-//@ chunk-7vp249v4.js:23167-23553 esm-fingerprint
+//@ chunk-m4y44r15.js:23167-23553 esm-fingerprint
 function handlePropertyResult(result, final, key, input, optin, optout) {
   let isPresent = key in input;
   let isOptionalOut = optout === "optional";
@@ -711,9 +711,9 @@ function handlePropertyResult(result, final, key, input, optin, optout) {
     if (isPresent || (optin === "defaulted" && !isOptionalOut)) final.value[key] = undefined;
   } else final.value[key] = result.value;
 }
-//@ chunk-7vp249v4.js:23553-23563 esm-layout
+//@ chunk-m4y44r15.js:23553-23563 esm-layout
 var NO_SYMBOL_KEYS = [];
-//@ chunk-7vp249v4.js:23563-23939 esm-fingerprint
+//@ chunk-m4y44r15.js:23563-23939 esm-fingerprint
 function normalizeDef(def) {
   let keys = Object.keys(def.shape);
   let ownSymbols = Object.getOwnPropertySymbols(def.shape);
@@ -732,7 +732,7 @@ function normalizeDef(def) {
     optionalKeys: new Set(okeys),
   };
 }
-//@ chunk-7vp249v4.js:23939-24495 esm-fingerprint
+//@ chunk-m4y44r15.js:23939-24495 esm-fingerprint
 function handleCatchallKeys(pendingPromises, input, payload, ctx, normalizedDef, inst, isAbortEarly) {
   let unrecognizedKeys = [];
   let keySet = normalizedDef.keySet;
@@ -780,7 +780,7 @@ function handleCatchallKeys(pendingPromises, input, payload, ctx, normalizedDef,
   if (!pendingPromises.length) return payload;
   return Promise.all(pendingPromises).then(() => payload);
 }
-//@ chunk-7vp249v4.js:24495-28381 esm-fingerprint
+//@ chunk-m4y44r15.js:24495-28381 esm-fingerprint
 var $ZodObject = $constructor("$ZodObject", (inst, def) => {
   $ZodType.init(inst, def);
   let desc = Object.getOwnPropertyDescriptor(def, "shape");
@@ -985,7 +985,7 @@ var $ZodObjectJIT = $constructor("$ZodObjectJIT", (inst, def) => {
     return superParse(payload, ctx);
   };
 });
-//@ chunk-7vp249v4.js:28381-28662 esm-fingerprint
+//@ chunk-m4y44r15.js:28381-28662 esm-fingerprint
 function mergeUnionResults(results, payload, inst, ctx) {
   for (let unionResult of results)
     if (unionResult.issues.length === 0) {
@@ -1005,7 +1005,7 @@ function mergeUnionResults(results, payload, inst, ctx) {
   });
   return payload;
 }
-//@ chunk-7vp249v4.js:28662-29607 esm-fingerprint
+//@ chunk-m4y44r15.js:28662-29607 esm-fingerprint
 var $ZodUnion = $constructor("$ZodUnion", (inst, def) => {
   $ZodType.init(inst, def);
   defineLazyInternal(inst, "optin", (zod) =>
@@ -1055,7 +1055,7 @@ var $ZodUnion = $constructor("$ZodUnion", (inst, def) => {
     return Promise.all(results).then((results) => mergeUnionResults(results, payload, inst, ctx));
   };
 });
-//@ chunk-7vp249v4.js:29607-29947 esm-fingerprint
+//@ chunk-m4y44r15.js:29607-29947 esm-fingerprint
 function discriminatorMap(def) {
   let map = new Map();
   for (let option of def.options) {
@@ -1070,7 +1070,7 @@ function discriminatorMap(def) {
   }
   return map;
 }
-//@ chunk-7vp249v4.js:29947-31503 esm-fingerprint
+//@ chunk-m4y44r15.js:29947-31503 esm-fingerprint
 var $ZodDiscriminatedUnion = $constructor("$ZodDiscriminatedUnion", (inst, def) => {
   def.inclusive = false;
   $ZodUnion.init(inst, def);
@@ -1150,7 +1150,7 @@ var $ZodIntersection = $constructor("$ZodIntersection", (inst, def) => {
     return handleIntersectionResults(payload, left, right);
   };
 });
-//@ chunk-7vp249v4.js:31503-32274 esm-fingerprint
+//@ chunk-m4y44r15.js:31503-32274 esm-fingerprint
 function mergeValues(a, b) {
   if (a === b)
     return {
@@ -1213,7 +1213,7 @@ function mergeValues(a, b) {
     mergeErrorPath: [],
   };
 }
-//@ chunk-7vp249v4.js:32274-33101 esm-fingerprint
+//@ chunk-m4y44r15.js:32274-33101 esm-fingerprint
 function handleIntersectionResults(result, left, right) {
   let unrecKeys = new Map();
   let unrecIssue;
@@ -1255,7 +1255,7 @@ function handleIntersectionResults(result, left, right) {
   result.value = merged.data;
   return result;
 }
-//@ chunk-7vp249v4.js:33101-34211 esm-fingerprint
+//@ chunk-m4y44r15.js:33101-34211 esm-fingerprint
 var $ZodTuple = $constructor("$ZodTuple", (inst, def) => {
   $ZodType.init(inst, def);
   let items = def.items;
@@ -1348,19 +1348,19 @@ var $ZodTuple = $constructor("$ZodTuple", (inst, def) => {
     return handleTupleResults(itemResults, payload, items, input, optoutStart);
   };
 });
-//@ chunk-7vp249v4.js:34211-34351 esm-fingerprint
+//@ chunk-m4y44r15.js:34211-34351 esm-fingerprint
 function getTupleOptStart(items, key) {
   for (let i = items.length - 1; i >= 0; i--)
     if (!(key === "optin" ? items[i]._zod.optin !== undefined : items[i]._zod.optout === "optional"))
       return i + 1;
   return 0;
 }
-//@ chunk-7vp249v4.js:34351-34442 esm-fingerprint
+//@ chunk-m4y44r15.js:34351-34442 esm-fingerprint
 function handleTupleResult(result, final, index) {
   if (result.issues.length) final.issues.push(...prefixIssues(index, result.issues));
   final.value[index] = result.value;
 }
-//@ chunk-7vp249v4.js:34442-34826 esm-fingerprint
+//@ chunk-m4y44r15.js:34442-34826 esm-fingerprint
 function handleTupleResults(itemResults, final, items, input, optoutStart) {
   for (let i = 0; i < items.length; i++) {
     let r = itemResults[i];
@@ -1383,7 +1383,7 @@ function handleTupleResults(itemResults, final, items, input, optoutStart) {
     else break;
   return final;
 }
-//@ chunk-7vp249v4.js:34826-37256 esm-fingerprint
+//@ chunk-m4y44r15.js:34826-37256 esm-fingerprint
 var $ZodRecord = $constructor("$ZodRecord", (inst, def) => {
   $ZodType.init(inst, def);
   let memo = globalConfig.memoizer;
@@ -1543,7 +1543,7 @@ var $ZodRecord = $constructor("$ZodRecord", (inst, def) => {
     return payload;
   };
 });
-//@ chunk-7vp249v4.js:37256-38038 esm-fingerprint
+//@ chunk-m4y44r15.js:37256-38038 esm-fingerprint
 var $ZodEnum = $constructor("$ZodEnum", (inst, def) => {
   $ZodType.init(inst, def);
   let values = getEnumValues(def.entries);
@@ -1593,7 +1593,7 @@ var $ZodLiteral = $constructor("$ZodLiteral", (inst, def) => {
     return payload;
   };
 });
-//@ chunk-7vp249v4.js:38038-38390 esm-fingerprint
+//@ chunk-m4y44r15.js:38038-38390 esm-fingerprint
 var $ZodTransform = $constructor("$ZodTransform", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.optin = "optional";
@@ -1611,12 +1611,12 @@ var $ZodTransform = $constructor("$ZodTransform", (inst, def) => {
     return payload;
   };
 });
-//@ chunk-7vp249v4.js:38390-38455 esm-fingerprint
+//@ chunk-m4y44r15.js:38390-38455 esm-fingerprint
 function handleOptionalResult(payload, result) {
   payload.value = result.issues.length ? undefined : result.value;
   return payload;
 }
-//@ chunk-7vp249v4.js:38455-40043 esm-fingerprint
+//@ chunk-m4y44r15.js:38455-40043 esm-fingerprint
 var $ZodOptional = $constructor("$ZodOptional", (inst, def) => {
   $ZodType.init(inst, def);
   defineLazyInternal(inst, "optin", (zod) =>
@@ -1684,12 +1684,12 @@ var $ZodDefault = $constructor("$ZodDefault", (inst, def) => {
     return handleDefaultResult(result, def);
   };
 });
-//@ chunk-7vp249v4.js:40043-40112 esm-fingerprint
+//@ chunk-m4y44r15.js:40043-40112 esm-fingerprint
 function handleDefaultResult(payload, def) {
   if (payload.value === undefined) payload.value = def.defaultValue;
   return payload;
 }
-//@ chunk-7vp249v4.js:40112-40672 esm-fingerprint
+//@ chunk-m4y44r15.js:40112-40672 esm-fingerprint
 var $ZodPrefault = $constructor("$ZodPrefault", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.optin = "defaulted";
@@ -1712,7 +1712,7 @@ var $ZodNonOptional = $constructor("$ZodNonOptional", (inst, def) => {
     return handleNonOptionalResult(result, inst);
   };
 });
-//@ chunk-7vp249v4.js:40672-40817 esm-fingerprint
+//@ chunk-m4y44r15.js:40672-40817 esm-fingerprint
 function handleNonOptionalResult(payload, inst) {
   if (!payload.issues.length && payload.value === undefined)
     payload.issues.push({
@@ -1723,7 +1723,7 @@ function handleNonOptionalResult(payload, inst) {
     });
   return payload;
 }
-//@ chunk-7vp249v4.js:40817-41019 esm-fingerprint
+//@ chunk-m4y44r15.js:40817-41019 esm-fingerprint
 function handleCatchResult(payload, result, def, ctx) {
   if (!result.issues.length) {
     payload.value = result.value;
@@ -1740,7 +1740,7 @@ function handleCatchResult(payload, result, def, ctx) {
   });
   return payload;
 }
-//@ chunk-7vp249v4.js:41019-41457 esm-fingerprint
+//@ chunk-m4y44r15.js:41019-41457 esm-fingerprint
 var $ZodCatch = $constructor("$ZodCatch", (inst, def) => {
   $ZodType.init(inst, def);
   defineLazyInternal(inst, "optin", (zod) =>
@@ -1762,7 +1762,7 @@ var $ZodCatch = $constructor("$ZodCatch", (inst, def) => {
     return handleCatchResult(payload, result, def, ctx);
   };
 });
-//@ chunk-7vp249v4.js:41457-41930 esm-fingerprint
+//@ chunk-m4y44r15.js:41457-41930 esm-fingerprint
 var $ZodPipe = $constructor("$ZodPipe", (inst, def) => {
   $ZodType.init(inst, def);
   defineLazyInternal(inst, "values", (zod) => zod.def.in._zod.values);
@@ -1780,7 +1780,7 @@ var $ZodPipe = $constructor("$ZodPipe", (inst, def) => {
     return handlePipeResult(left, def.out, ctx);
   };
 });
-//@ chunk-7vp249v4.js:41930-42076 esm-fingerprint
+//@ chunk-m4y44r15.js:41930-42076 esm-fingerprint
 function handlePipeResult(left, next, ctx) {
   if (left.issues.some((iss) => iss.code !== "unrecognized_keys")) {
     left.aborted = true;
@@ -1794,7 +1794,7 @@ function handlePipeResult(left, next, ctx) {
     ctx,
   );
 }
-//@ chunk-7vp249v4.js:42076-42542 esm-fingerprint
+//@ chunk-m4y44r15.js:42076-42542 esm-fingerprint
 var $ZodPreprocess = $constructor("$ZodPreprocess", (inst, def) => {
   $ZodPipe.init(inst, def);
 });
@@ -1811,12 +1811,12 @@ var $ZodReadonly = $constructor("$ZodReadonly", (inst, def) => {
     return freezeZodValue(result);
   };
 });
-//@ chunk-7vp249v4.js:42542-42608 esm-fingerprint
+//@ chunk-m4y44r15.js:42542-42608 esm-fingerprint
 function freezeZodValue(payload) {
   if (!payload.memo) payload.value = Object.freeze(payload.value);
   return payload;
 }
-//@ chunk-7vp249v4.js:42608-43213 esm-fingerprint
+//@ chunk-m4y44r15.js:42608-43213 esm-fingerprint
 var $ZodLazy = $constructor("$ZodLazy", (inst, def) => {
   $ZodType.init(inst, def);
   defineLazy(inst._zod, "innerType", () => {
@@ -1842,7 +1842,7 @@ var $ZodCustom = $constructor("$ZodCustom", (inst, def) => {
     return;
   };
 });
-//@ chunk-7vp249v4.js:43213-43406 esm-fingerprint
+//@ chunk-m4y44r15.js:43213-43406 esm-fingerprint
 function handleRefineResult(result, payload, input, inst) {
   if (!result) {
     let _iss = {
@@ -1856,11 +1856,11 @@ function handleRefineResult(result, payload, input, inst) {
     payload.issues.push(issue(_iss));
   }
 }
-//@ chunk-7vp249v4.js:43406-43478 esm-fingerprint
+//@ chunk-m4y44r15.js:43406-43478 esm-fingerprint
 function handlePropertiesResult(result, payload, key) {
   if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
 }
-//@ chunk-7vp249v4.js:43478-44335 esm-fingerprint
+//@ chunk-m4y44r15.js:43478-44335 esm-fingerprint
 var $ZodProperties = $constructor(
   "$ZodProperties",
   (inst, def) => {

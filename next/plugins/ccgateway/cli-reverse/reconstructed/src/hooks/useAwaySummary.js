@@ -3,10 +3,10 @@
  *
  * 终端失焦后再聚焦时生成"离开期间摘要"的 hook。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useAwaySummary.ts
- * pieces: chunk-18hwfzwa.js (12), chunk-fpjsca9n.js (1)
- * attribution: fingerprint 2, placement 11
+ * pieces: chunk-czq1j3j2.js (12), chunk-mjq27gpa.js (1)
+ * attribution: placement 11, fingerprint 2
  */
 import { unlink } from "fs/promises";
 import { join } from "path";
@@ -16,6 +16,12 @@ import {
   getLastMainThreadCacheTtlMs,
   getLastMainThreadCacheRenewedAt,
 } from "../bootstrap/state.js";
+import {
+  init_react_production,
+  useState,
+  useEffect,
+  useRef,
+} from "../../vendor/react/cjs/react.production.js";
 import { isToolUseResultMessage, createAwaySummaryMessage } from "../utils/messages.js";
 import {
   isRealUserMessage,
@@ -30,7 +36,7 @@ import {
   STARTUP_SESSION_BUDGET_MS,
   STARTUP_CHECK_STEP_MS,
 } from "./notifs/startupNotificationSpecs.js";
-import { countToolCallsSince_2 } from "../tools/SyntheticOutputTool/SyntheticOutputTool.js";
+import { structuredOutputText } from "../tools/SyntheticOutputTool/SyntheticOutputTool.js";
 import { isStorageV5Enabled } from "../utils/hoverRest.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import {
@@ -38,36 +44,26 @@ import {
   jsxProd_default_2,
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../utils/debug.js";
-import {
-  stringSchema,
-  objectSchema,
-  literal,
-  booleanSchema,
-  array,
-} from "../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, objectSchema, literal, array } from "../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../ink/components/Text.js";
-import { fromEnum, lit as lit_2 } from "../services/analytics/safeMetadata.js";
-import { env } from "../utils/env.js";
 import { logEvent } from "../services/analytics/index.js";
+import { env } from "../utils/env.js";
 import { logError } from "../utils/log.js";
+import { logFeatureSad, logFeatureBad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import {
   errorMessage,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   getErrnoCode,
 } from "../utils/errors.js";
-import { logFeatureBad, logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
-import {
-  useState,
-  useRef,
-  useEffect,
-  init_react_production,
-} from "../../vendor/react/cjs/react.production.js";
+import { fromEnum, lit as lit_2 } from "../services/analytics/safeMetadata.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { getCurrentLimits } from "../services/claudeAiLimits.js";
 import { hasLoopTask } from "../utils/loop/loopWakeups.js";
+import { getPlatform } from "../utils/platform.js";
 import { jsonStringify } from "../utils/slowOperations.js";
+import { plural } from "../utils/stringUtils.js";
 import { isBgSession } from "../utils/concurrentSessions.js";
 import { RECAP_TRIGGER_FILE } from "../daemon/jobs/killJob.js";
 import { jobKeyFor } from "../services/daemon/jobState.js";
@@ -86,10 +82,9 @@ import { countPendingBackgroundWork } from "../components/messages/SystemTextMes
 import { promptInputStoreFor } from "../state/promptInputStore.js";
 import { fileHistoryEnabled, fileHistoryRestoreStateFromLog } from "../utils/fileHistory.js";
 import { HostScoped } from "../utils/hostScoped.js";
-import { getPlatform } from "../utils/platform.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-fpjsca9n.js:264-441 fingerprint (2.1.88 match: useAwaySummary, 0.66)
+//@ chunk-mjq27gpa.js:264-441 fingerprint (2.1.88 match: useAwaySummary, 0.66)
 function useAwaySummary(isFocused) {
   if (isFocused) uiSignals.terminalFocusGainedAt = Date.now();
   if (!isFocused && uiSignals.terminalFocus === "blurred") return;
@@ -97,33 +92,43 @@ function useAwaySummary(isFocused) {
   setTerminalFocusForState(isFocused);
   uiSignals.terminalFocusChanged.emit();
 }
-//@ chunk-18hwfzwa.js:1792115-1792200 fingerprint (2.1.88 match: hasSummarySinceLastUserTurn, 0.725)
+//@ chunk-czq1j3j2.js:1798856-1798860 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1798856", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1837750-1837754 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1837750", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1840094-1840179 fingerprint (2.1.88 match: hasSummarySinceLastUserTurn, 0.726)
 function hasSummarySinceLastUserTurn(messages) {
   let last = messages.at(-1);
   return last?.type === "system" && last.subtype === "away_summary";
 }
-//@ chunk-18hwfzwa.js:1792200-1792532 placement
+//@ chunk-czq1j3j2.js:1840179-1840511 placement
 /**
  * 最近一轮是否以工具错误收尾
  */
 function isLastTurnFailing(messages) {
-  let sinceUuid = new Set();
+  let erroredToolUseIds = new Set();
   for (let idx = messages.length - 1; idx >= 0; idx--) {
     let message = messages[idx];
     if (message.type === "user") {
       if (isToolUseResultMessage(message)) {
         for (let block of message.message.content)
-          if (block.type === "tool_result" && block.is_error) sinceUuid.add(block.tool_use_id);
+          if (block.type === "tool_result" && block.is_error) erroredToolUseIds.add(block.tool_use_id);
       } else if (isRealUserMessage(message)) return false;
       continue;
     }
     if (message.type !== "assistant") continue;
     for (let block of message.message.content)
-      if (countToolCallsSince_2(block, sinceUuid) !== null) return true;
+      if (structuredOutputText(block, erroredToolUseIds) !== null) return true;
   }
   return false;
 }
-//@ chunk-18hwfzwa.js:1792532-1792785 placement
+//@ chunk-czq1j3j2.js:1840511-1840764 placement
 /**
  * 自上次摘要以来人类回合是否足够
  */
@@ -142,7 +147,7 @@ function hasEnoughTurnsForAwaySummary(messages) {
     if (isRealUserMessage(messages[idx])) turnsSinceSummary++;
   return turnsSinceSummary >= STARTUP_GRACE_TURNS_MIN;
 }
-//@ chunk-18hwfzwa.js:1792785-1792985 placement
+//@ chunk-czq1j3j2.js:1840764-1840964 placement
 /**
  * 删除离开摘要标记后强制刷新
  */
@@ -165,7 +170,7 @@ async function clearAwaySummaryMarker(markerPath, isBusy, generate, markerStorag
     force: true,
   });
 }
-//@ chunk-18hwfzwa.js:1792985-1793128 placement
+//@ chunk-czq1j3j2.js:1840964-1841107 placement
 function getAwaySummaryDelayMs() {
   let delayMs = getFeatureValue_CACHED_MAY_BE_STALE("tengu_sedge_lantern_config", {
     delayMs: STARTUP_FLAG_TTL_MS,
@@ -174,7 +179,7 @@ function getAwaySummaryDelayMs() {
     ? Math.max(STARTUP_MIN_INTERVAL_MS, delayMs)
     : STARTUP_FLAG_TTL_MS;
 }
-//@ chunk-18hwfzwa.js:1793128-1796873 placement
+//@ chunk-czq1j3j2.js:1841107-1844852 placement
 /**
  * 离开摘要的状态机：判定跳过原因、生成与追加摘要
  */
@@ -183,16 +188,16 @@ class AwaySummaryController {
   #t = false;
   #o = false;
   #n = null;
-  #s = null;
   #r = null;
-  #c = false;
+  #s = null;
+  #l = false;
   #i = 0;
   #a = 0;
-  #l = 0;
+  #c = 0;
   #d = null;
-  #m = null;
-  #p = null;
   #u = null;
+  #p = null;
+  #m = null;
   #f = null;
   #S = null;
   #h = null;
@@ -204,11 +209,11 @@ class AwaySummaryController {
   }
   setInputs({ enabled, isLoading }) {
     let loadingChanged = isLoading !== this.#o;
-    if (!this.#o && isLoading && !this.#c) this.#T();
+    if (!this.#o && isLoading && !this.#l) this.#T();
     if (this.#o && !isLoading) {
       this.#n = this.#e.now();
       this.#i = 0;
-      this.#s = getLastMainThreadCacheTtlMs();
+      this.#r = getLastMainThreadCacheTtlMs();
     }
     this.#o = isLoading;
     let enabledChanged = enabled !== this.#t;
@@ -220,7 +225,7 @@ class AwaySummaryController {
     if (loadingChanged || enabledChanged) this.#k();
   }
   markUserScrolled() {
-    this.#l = this.#e.now();
+    this.#c = this.#e.now();
   }
   dispose() {
     if (this.#t) {
@@ -232,7 +237,7 @@ class AwaySummaryController {
   async #v(options) {
     if (!this.#t) return;
     let lastActiveAt = this.#n;
-    let cacheTtlMs = this.#s;
+    let cacheTtlMs = this.#r;
     if (lastActiveAt === null || cacheTtlMs === null) {
       logForDebugging("[awaySummary] skipped: cache age unknown");
       return;
@@ -261,7 +266,7 @@ class AwaySummaryController {
       logForDebugging("[awaySummary] skipped: loop wakeup pending");
       return;
     }
-    if (!options?.force && this.#r !== null) {
+    if (!options?.force && this.#s !== null) {
       logForDebugging("[awaySummary] skipped: generation in flight");
       return;
     }
@@ -278,15 +283,15 @@ class AwaySummaryController {
     }
     this.#T();
     let abortController = new AbortController();
-    this.#r = abortController;
-    this.#c = options?.force === true;
+    this.#s = abortController;
+    this.#l = options?.force === true;
     let result;
     try {
       result = await this.#e.generate(abortController.signal);
     } finally {
-      if (this.#r === abortController) {
-        this.#r = null;
-        this.#c = false;
+      if (this.#s === abortController) {
+        this.#s = null;
+        this.#l = false;
       }
     }
     if (abortController.signal.aborted) return;
@@ -307,29 +312,29 @@ class AwaySummaryController {
   }
   #C() {
     this.#p = this.#e.focus.subscribe(this.#R);
-    this.#u = this.#e.transcript.subscribe(this.#P);
+    this.#m = this.#e.transcript.subscribe(this.#P);
     this.#R();
     this.#A();
   }
   #w() {
     this.#p?.();
     this.#p = null;
-    this.#u?.();
-    this.#u = null;
     this.#m?.();
     this.#m = null;
+    this.#u?.();
+    this.#u = null;
     this.#T();
     this.#i = 0;
     this.#S = null;
     this.#_();
   }
   #T() {
-    this.#r?.abort();
-    this.#r = null;
-    this.#c = false;
+    this.#s?.abort();
+    this.#s = null;
+    this.#l = false;
   }
   #x() {
-    let cacheTtl = this.#s ?? STARTUP_MAX_INTERVAL_MS;
+    let cacheTtl = this.#r ?? STARTUP_MAX_INTERVAL_MS;
     return Math.min(getAwaySummaryDelayMs(), cacheTtl * 0.8);
   }
   #k() {
@@ -389,7 +394,7 @@ class AwaySummaryController {
       msSinceFocus: this.#e.now() - focusedAt,
       blurDurationMs: this.#y ?? 0,
       hadRecap: this.#g,
-      scrolledBeforeSubmit: this.#l > focusedAt,
+      scrolledBeforeSubmit: this.#c > focusedAt,
       isFullscreen: this.#e.presentation === "fullscreen",
     });
     this.#_();
@@ -428,11 +433,11 @@ class AwaySummaryController {
           cancelPoll = clock.setTimeout(pollMarker, STARTUP_CHECK_STEP_MS);
         }
       }, STARTUP_CHECK_STEP_MS);
-      this.#m = () => cancelPoll();
+      this.#u = () => cancelPoll();
     }
   }
 }
-//@ chunk-18hwfzwa.js:1796873-1797385 placement
+//@ chunk-czq1j3j2.js:1844852-1845364 placement
 /**
  * 离开摘要控制器 hook，连接焦点、时钟与存储
  */
@@ -475,12 +480,7 @@ function useAwaySummaryController(transcript, isLoading, enabled = true) {
   useEffect(() => () => controller.dispose(), [controller]);
   return controller;
 }
-//@ chunk-18hwfzwa.js:1797385-1797389 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1797385", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1797389-1797488 placement
+//@ chunk-czq1j3j2.js:1845368-1845467 placement
 function useAwaySummaryOnce(fileHistorySnapshots, onUpdateState) {
   let hasRestoredRef = useRef(false);
   useEffect(() => {
@@ -489,12 +489,7 @@ function useAwaySummaryOnce(fileHistorySnapshots, onUpdateState) {
     if (fileHistorySnapshots) fileHistoryRestoreStateFromLog(fileHistorySnapshots, onUpdateState);
   }, [fileHistorySnapshots, onUpdateState]);
 }
-//@ chunk-18hwfzwa.js:1797521-1797525 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1797521", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1797558-1797664 placement
+//@ chunk-czq1j3j2.js:1845537-1845643 placement
 class InstalledSummaryRegistry {
   installed = new Map();
   lookup(key) {
@@ -504,12 +499,12 @@ class InstalledSummaryRegistry {
     this.installed.set(key, summary);
   }
 }
-//@ chunk-18hwfzwa.js:1797664-1797785 placement
+//@ chunk-czq1j3j2.js:1845643-1845764 placement
 var installedSummaries; // deferred: uses InstalledSummaryRegistry of its import cycle while loading; runs once the cycle is complete
 var SAFE_PATH_RE;
-deferInit("chunk-18hwfzwa.js:1797664", () => {
+deferInit("chunk-czq1j3j2.js:1845643", () => {
   installedSummaries = new HostScoped(() => new InstalledSummaryRegistry());
   SAFE_PATH_RE =
     getPlatform() === "windows" ? /^[A-Za-z0-9/\\][A-Za-z0-9_.+:\\?/-]*$/ : /^[A-Za-z0-9/][A-Za-z0-9_.+/-]*$/;
 });
-export { useAwaySummaryController, useAwaySummaryOnce, SAFE_PATH_RE, installedSummaries, useAwaySummary };
+export { useAwaySummary, useAwaySummaryController, useAwaySummaryOnce, SAFE_PATH_RE, installedSummaries };

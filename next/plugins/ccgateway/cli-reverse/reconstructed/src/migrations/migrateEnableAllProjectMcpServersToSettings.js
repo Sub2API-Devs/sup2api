@@ -3,21 +3,21 @@
  *
  * 迁移：项目配置里的 MCP 服务器批准字段挪到本地设置（每次启动按项目跑）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/migrations/migrateEnableAllProjectMcpServersToSettings.ts
- * pieces: chunk-cjydagjy.js (1)
+ * pieces: chunk-h61dq9nz.js (1)
  * attribution: fingerprint 1
  */
 import { getRawCurrentProjectConfigEntry, deleteCurrentProjectConfigFields } from "../utils/config.js";
 import { blockingLocalSettingsErrors } from "../utils/settings/settingsNotices.js";
 import { logForDebugging } from "../utils/debug.js";
 import { updateSettingsForSourceWithTransform } from "../utils/settings/settings.js";
-import { uniq } from "../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../utils/permissions/filesystem.js";
 import { logEvent } from "../services/analytics/index.js";
 import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { logError } from "../utils/log.js";
 
-//@ chunk-cjydagjy.js:5288-7110 fingerprint (2.1.88 match: migrateEnableAllProjectMcpServersToSettings, 0.662)
+//@ chunk-h61dq9nz.js:5465-7287 fingerprint (2.1.88 match: migrateEnableAllProjectMcpServersToSettings, 0.662)
 /**
  * 迁移：项目配置里的 enableAllProjectMcpServers/enabledMcpjsonServers/disabledMcpjsonServers → .claude/settings.local.json；local 设置无效时推迟。
  */
@@ -62,7 +62,7 @@ async function migrateEnableAllProjectMcpServersToSettings() {
               (enabledMcpjsonServer) => !existingEnabled.has(enabledMcpjsonServer),
             )
           )
-            updates.enabledMcpjsonServers = uniq([
+            updates.enabledMcpjsonServers = normalizeCaseForComparison_2([
               ...enabledMcpjsonServers,
               ...projectConfig.enabledMcpjsonServers,
             ]);
@@ -71,7 +71,7 @@ async function migrateEnableAllProjectMcpServersToSettings() {
           let disabledMcpjsonServers = currentSettings.disabledMcpjsonServers || [];
           let existingDisabled = new Set(disabledMcpjsonServers);
           if (projectConfig.disabledMcpjsonServers.some((current) => !existingDisabled.has(current)))
-            updates.disabledMcpjsonServers = uniq([
+            updates.disabledMcpjsonServers = normalizeCaseForComparison_2([
               ...disabledMcpjsonServers,
               ...projectConfig.disabledMcpjsonServers,
             ]);

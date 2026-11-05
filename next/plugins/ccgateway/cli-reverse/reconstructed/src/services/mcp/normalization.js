@@ -3,44 +3,39 @@
  *
  * 服务器/工具名规范化（非 [a-zA-Z0-9_-] 换成 _，claude.ai 连接器名额外折叠下划线）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/normalization.ts
- * pieces: chunk-ah34pb7m.js (1), chunk-e6aww6q8.js (1), chunk-knckn35w.js (7)
- * attribution: fingerprint 1, placement 7, callgraph-witnessed 1
+ * pieces: chunk-5xgkngpb.js (1), chunk-ja2b06pa.js (7)
+ * attribution: placement 7, fingerprint 1
  */
-import { stripPrefix } from "../../utils/stringUtils.js";
-
-//@ chunk-knckn35w.js:191-228 placement
+//@ chunk-ja2b06pa.js:191-228 placement
 /**
  * claude.ai 连接器名在规范化前的显示前缀（"claude.ai "）。
  */
 var CLAUDE_AI_NAME_PREFIX = "claude.ai ";
 var CLAUDE_AI = "claude_ai_";
-//@ chunk-knckn35w.js:228-365 callgraph-witnessed (2.1.88 match: normalizeNameForMCP, 0)
-/**
- * normalizeNameForMCP：把服务器/工具名中非 [a-zA-Z0-9_-] 的字符换成 _；claude.ai 连接器名再折叠连续下划线并去掉首尾 _。
- */
-function normalizeNameForMCP(name) {
+//@ chunk-ja2b06pa.js:228-365 fingerprint (2.1.88 match: CLAUDEAI_SERVER_PREFIX, 1)
+function CLAUDEAI_SERVER_PREFIX(name) {
   let normalized = name.replace(/[^a-zA-Z0-9_-]/g, "_");
   if (name.startsWith("claude.ai ")) normalized = normalized.replace(/_+/g, "_").replace(/^_|_$/g, "");
   return normalized;
 }
-//@ chunk-knckn35w.js:365-383 placement
+//@ chunk-ja2b06pa.js:365-383 placement
 var CLAUDEAI = "claudeai_";
-//@ chunk-knckn35w.js:383-468 placement
+//@ chunk-ja2b06pa.js:383-468 placement
 /**
  * 规范化服务器名：转小写、连字符与下划线折叠成单下划线、去首尾下划线。
  */
 function normalizedKey(name) {
-  return normalizeNameForMCP(name).toLowerCase().replace(/[-_]+/g, "_").replace(/^_|_$/g, "");
+  return CLAUDEAI_SERVER_PREFIX(name).toLowerCase().replace(/[-_]+/g, "_").replace(/^_|_$/g, "");
 }
-//@ chunk-knckn35w.js:468-501 placement
+//@ chunk-ja2b06pa.js:468-501 placement
 /**
  * 服务器名的最大字符数（128）。
  */
 var ORG_CONNECTOR = "org-connector-";
 var MAX_SERVER_NAME_CHARS = 128;
-//@ chunk-knckn35w.js:501-629 placement
+//@ chunk-ja2b06pa.js:501-629 placement
 /**
  * 判断服务器名是否是组织连接器名（org_connector_ 或 orgconnector_ 前缀）。
  */
@@ -49,7 +44,7 @@ function isOrgConnectorName(name) {
   let prefixed = `${normalizedKey(name)}_`;
   return prefixed.startsWith("org_connector_") || prefixed.startsWith("orgconnector_");
 }
-//@ chunk-knckn35w.js:629-714 placement
+//@ chunk-ja2b06pa.js:629-714 placement
 /**
  * 判断服务器名是否属于 claude.ai 连接器。
  */
@@ -57,30 +52,22 @@ function isClaudeAiServerName(name) {
   let prefixed = `${normalizedKey(name)}_`;
   return prefixed.startsWith("claude_ai_") || prefixed.startsWith(CLAUDEAI);
 }
-//@ chunk-e6aww6q8.js:3289161-3289283 placement
+//@ chunk-5xgkngpb.js:3374954-3375076 placement
 /**
  * 按名称查找 MCP 客户端（精确匹配优先，否则按规范化名匹配）。
  */
 function findServersByName(clients, serverName) {
   let filtered = clients.filter((client) => client.name === serverName);
   if (filtered.length > 0) return filtered;
-  let normalized = normalizeNameForMCP(serverName);
-  return clients.filter((client) => normalizeNameForMCP(client.name) === normalized);
-}
-//@ chunk-ah34pb7m.js:157437-157480 fingerprint (2.1.88 match: CLAUDEAI_SERVER_PREFIX, 1)
-/**
- * CLAUDEAI_SERVER_PREFIX（实为判断）：名字是否以 "claude.ai " 开头。
- */
-function CLAUDEAI_SERVER_PREFIX(name) {
-  return stripPrefix(name, "claude.ai ");
+  let normalized = CLAUDEAI_SERVER_PREFIX(serverName);
+  return clients.filter((client) => CLAUDEAI_SERVER_PREFIX(client.name) === normalized);
 }
 export {
-  CLAUDE_AI_NAME_PREFIX,
-  normalizeNameForMCP,
-  CLAUDE_AI,
-  normalizedKey,
-  findServersByName,
   CLAUDEAI_SERVER_PREFIX,
+  CLAUDE_AI_NAME_PREFIX,
+  CLAUDE_AI,
+  findServersByName,
+  normalizedKey,
   isClaudeAiServerName,
   isOrgConnectorName,
   ORG_CONNECTOR,

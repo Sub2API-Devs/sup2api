@@ -3,9 +3,9 @@
  *
  * /mcp 主组件：列表 → 服务器菜单 → 工具列表/详情的多级导航。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/mcp/MCPSettings.tsx
- * pieces: chunk-cpqpnzp4.js (8)
+ * pieces: chunk-h6004nzv.js (8)
  * attribution: callgraph-fingerprint 3, layout 4, fingerprint 1
  */
 import { isArtifacts404Failure } from "../../services/mcp/redactMcpErrors.js";
@@ -23,27 +23,27 @@ import { RemoteServerMenuLoader, MCPToolListView } from "./MCPToolListView.js";
 import { MCPToolDetailView } from "./MCPToolDetailView.js";
 import { MCPAgentServerMenu } from "./MCPAgentServerMenu.js";
 
-//@ chunk-cpqpnzp4.js:32585-32615 callgraph-fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-h6004nzv.js:33777-33807 callgraph-fingerprint (2.1.88 match: _temp, 1)
 function selectMcp(s) {
   return s.mcp;
 }
-//@ chunk-cpqpnzp4.js:32615-32658 callgraph-fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-h6004nzv.js:33807-33850 callgraph-fingerprint (2.1.88 match: _temp2, 1)
 function selectAgentDefinitions(s_0) {
   return s_0.agentDefinitions;
 }
-//@ chunk-cpqpnzp4.js:32658-32697 layout (2.1.88 match: _temp2, 1)
+//@ chunk-h6004nzv.js:33850-33889 layout (2.1.88 match: _temp2, 1)
 function isNotIdeServer(c) {
   return c.name !== "ide";
 }
-//@ chunk-cpqpnzp4.js:32697-32727 layout
+//@ chunk-h6004nzv.js:33889-33919 layout
 function isNotSelectedServer(client) {
   return !isArtifacts404Failure(client);
 }
-//@ chunk-cpqpnzp4.js:32727-32784 callgraph-fingerprint (2.1.88 match: _temp4, 1)
+//@ chunk-h6004nzv.js:33919-33976 callgraph-fingerprint (2.1.88 match: _temp4, 1)
 function compareServerNames(a, b) {
   return a.name.localeCompare(b.name);
 }
-//@ chunk-cpqpnzp4.js:32784-33273 layout
+//@ chunk-h6004nzv.js:33976-34475 layout
 /**
  * MCP 客户端转为设置界面的服务器信息（按传输类型，SSE/HTTP 查询认证状态）。
  */
@@ -88,16 +88,16 @@ async function toServerInfo(client) {
     }
   }
 }
-//@ chunk-cpqpnzp4.js:33273-33299 layout
+//@ chunk-h6004nzv.js:34475-34501 layout
 function negate(value) {
   return !value;
 }
-//@ chunk-cpqpnzp4.js:33299-37993 fingerprint (2.1.88 match: MCPSettings, 0.774)
+//@ chunk-h6004nzv.js:34501-38953 fingerprint (2.1.88 match: MCPSettings, 0.658)
 /**
  * /mcp：服务器列表 → 服务器菜单（stdio/remote/agent）→ 工具列表 → 工具详情；无服务器时提示运行 claude doctor。
  */
 function MCPSettings(props) {
-  let $ = useMemoCache(78);
+  let $ = useMemoCache(73);
   let { onComplete } = props;
   let mcp = useAppState(selectMcp);
   let agentDefinitions = useAppState(selectAgentDefinitions);
@@ -251,7 +251,7 @@ function MCPSettings(props) {
         onToggleUnusedConnectors = () => setShowUnused(negate);
         $[28] = onToggleUnusedConnectors;
       } else onToggleUnusedConnectors = $[28];
-      let t11;
+      let view;
       if (
         $[29] !== agentServers ||
         $[30] !== mcp.reservedNameRefusals ||
@@ -259,10 +259,9 @@ function MCPSettings(props) {
         $[32] !== onComplete ||
         $[33] !== serverInfos ||
         $[34] !== showUnused ||
-        $[35] !== toolCountsByServer_2 ||
-        $[36] !== viewState.defaultTab
+        $[35] !== toolCountsByServer_2
       ) {
-        t11 = jsxProd_default(MCPListPanel, {
+        view = jsxProd_default(MCPListPanel, {
           servers: serverInfos,
           suppressedClaudeAiConnectors: mcp.suppressedClaudeAiConnectors,
           reservedNameRefusals: mcp.reservedNameRefusals,
@@ -271,7 +270,6 @@ function MCPSettings(props) {
           onSelectServer,
           onSelectAgentServer,
           onComplete,
-          defaultTab: viewState.defaultTab,
           showUnusedConnectors: showUnused,
           onToggleUnusedConnectors,
         });
@@ -282,49 +280,44 @@ function MCPSettings(props) {
         $[33] = serverInfos;
         $[34] = showUnused;
         $[35] = toolCountsByServer_2;
-        $[36] = viewState.defaultTab;
-        $[37] = t11;
-      } else t11 = $[37];
-      return t11;
+        $[36] = view;
+      } else view = $[36];
+      return view;
     }
     case "server-menu": {
       let t9;
-      if ($[38] !== mcp.tools || $[39] !== viewState.server.name) {
+      if ($[37] !== mcp.tools || $[38] !== viewState.server.name) {
         t9 = filterToolsByServer(mcp.tools, viewState.server.name);
-        $[38] = mcp.tools;
-        $[39] = viewState.server.name;
-        $[40] = t9;
-      } else t9 = $[40];
+        $[37] = mcp.tools;
+        $[38] = viewState.server.name;
+        $[39] = t9;
+      } else t9 = $[39];
       let serverTools = t9;
-      let defaultTab = viewState.server.transport === "claudeai-proxy" ? "claude.ai" : "Claude Code";
       if (viewState.server.transport === "stdio") {
         let onViewTools;
-        if ($[41] !== viewState.server) {
+        if ($[40] !== viewState.server) {
           onViewTools = () =>
             setViewState({
               type: "server-tools",
               server: viewState.server,
             });
-          $[41] = viewState.server;
-          $[42] = onViewTools;
-        } else onViewTools = $[42];
+          $[40] = viewState.server;
+          $[41] = onViewTools;
+        } else onViewTools = $[41];
         let onCancel;
-        if ($[43] !== defaultTab) {
+        if ($[42] === MEMO_CACHE_SENTINEL) {
           onCancel = () =>
             setViewState({
               type: "list",
-              defaultTab,
             });
-          $[43] = defaultTab;
-          $[44] = onCancel;
-        } else onCancel = $[44];
+          $[42] = onCancel;
+        } else onCancel = $[42];
         let t12;
         if (
-          $[45] !== onComplete ||
-          $[46] !== serverTools.length ||
-          $[47] !== onViewTools ||
-          $[48] !== onCancel ||
-          $[49] !== viewState.server
+          $[43] !== onComplete ||
+          $[44] !== serverTools.length ||
+          $[45] !== onViewTools ||
+          $[46] !== viewState.server
         ) {
           t12 = jsxProd_default(MCPStdioServerMenu, {
             server: viewState.server,
@@ -333,42 +326,38 @@ function MCPSettings(props) {
             onCancel,
             onComplete,
           });
-          $[45] = onComplete;
-          $[46] = serverTools.length;
-          $[47] = onViewTools;
-          $[48] = onCancel;
-          $[49] = viewState.server;
-          $[50] = t12;
-        } else t12 = $[50];
+          $[43] = onComplete;
+          $[44] = serverTools.length;
+          $[45] = onViewTools;
+          $[46] = viewState.server;
+          $[47] = t12;
+        } else t12 = $[47];
         return t12;
       } else {
         let onViewTools;
-        if ($[51] !== viewState.server) {
+        if ($[48] !== viewState.server) {
           onViewTools = () =>
             setViewState({
               type: "server-tools",
               server: viewState.server,
             });
-          $[51] = viewState.server;
-          $[52] = onViewTools;
-        } else onViewTools = $[52];
+          $[48] = viewState.server;
+          $[49] = onViewTools;
+        } else onViewTools = $[49];
         let onCancel;
-        if ($[53] !== defaultTab) {
+        if ($[50] === MEMO_CACHE_SENTINEL) {
           onCancel = () =>
             setViewState({
               type: "list",
-              defaultTab,
             });
-          $[53] = defaultTab;
-          $[54] = onCancel;
-        } else onCancel = $[54];
+          $[50] = onCancel;
+        } else onCancel = $[50];
         let t12;
         if (
-          $[55] !== onComplete ||
-          $[56] !== serverTools.length ||
-          $[57] !== onViewTools ||
-          $[58] !== onCancel ||
-          $[59] !== viewState.server
+          $[51] !== onComplete ||
+          $[52] !== serverTools.length ||
+          $[53] !== onViewTools ||
+          $[54] !== viewState.server
         ) {
           t12 = jsxProd_default(RemoteServerMenuLoader, {
             server: viewState.server,
@@ -377,20 +366,19 @@ function MCPSettings(props) {
             onCancel,
             onComplete,
           });
-          $[55] = onComplete;
-          $[56] = serverTools.length;
-          $[57] = onViewTools;
-          $[58] = onCancel;
-          $[59] = viewState.server;
-          $[60] = t12;
-        } else t12 = $[60];
+          $[51] = onComplete;
+          $[52] = serverTools.length;
+          $[53] = onViewTools;
+          $[54] = viewState.server;
+          $[55] = t12;
+        } else t12 = $[55];
         return t12;
       }
     }
     case "server-tools": {
       let onSelectTool;
       let onBack;
-      if ($[61] !== viewState.server) {
+      if ($[56] !== viewState.server) {
         onSelectTool = (tool) =>
           setViewState({
             type: "server-tool-detail",
@@ -402,73 +390,72 @@ function MCPSettings(props) {
             type: "server-menu",
             server: viewState.server,
           });
-        $[61] = viewState.server;
-        $[62] = onSelectTool;
-        $[63] = onBack;
+        $[56] = viewState.server;
+        $[57] = onSelectTool;
+        $[58] = onBack;
       } else {
-        onSelectTool = $[62];
-        onBack = $[63];
+        onSelectTool = $[57];
+        onBack = $[58];
       }
       let t11;
-      if ($[64] !== onSelectTool || $[65] !== onBack || $[66] !== viewState.server) {
+      if ($[59] !== onSelectTool || $[60] !== onBack || $[61] !== viewState.server) {
         t11 = jsxProd_default(MCPToolListView, {
           server: viewState.server,
           onSelectTool,
           onBack,
         });
-        $[64] = onSelectTool;
-        $[65] = onBack;
-        $[66] = viewState.server;
-        $[67] = t11;
-      } else t11 = $[67];
+        $[59] = onSelectTool;
+        $[60] = onBack;
+        $[61] = viewState.server;
+        $[62] = t11;
+      } else t11 = $[62];
       return t11;
     }
     case "server-tool-detail": {
       let onBack;
-      if ($[68] !== viewState.server) {
+      if ($[63] !== viewState.server) {
         onBack = () =>
           setViewState({
             type: "server-tools",
             server: viewState.server,
           });
-        $[68] = viewState.server;
-        $[69] = onBack;
-      } else onBack = $[69];
+        $[63] = viewState.server;
+        $[64] = onBack;
+      } else onBack = $[64];
       let t11;
-      if ($[70] !== onBack || $[71] !== viewState.server || $[72] !== viewState.tool) {
+      if ($[65] !== onBack || $[66] !== viewState.server || $[67] !== viewState.tool) {
         t11 = jsxProd_default(MCPToolDetailView, {
           tool: viewState.tool,
           server: viewState.server,
           onBack,
         });
-        $[70] = onBack;
-        $[71] = viewState.server;
-        $[72] = viewState.tool;
-        $[73] = t11;
-      } else t11 = $[73];
+        $[65] = onBack;
+        $[66] = viewState.server;
+        $[67] = viewState.tool;
+        $[68] = t11;
+      } else t11 = $[68];
       return t11;
     }
     case "agent-server-menu": {
       let onCancel;
-      if ($[74] === MEMO_CACHE_SENTINEL) {
+      if ($[69] === MEMO_CACHE_SENTINEL) {
         onCancel = () =>
           setViewState({
             type: "list",
-            defaultTab: "Agents",
           });
-        $[74] = onCancel;
-      } else onCancel = $[74];
+        $[69] = onCancel;
+      } else onCancel = $[69];
       let t10;
-      if ($[75] !== onComplete || $[76] !== viewState.agentServer) {
+      if ($[70] !== onComplete || $[71] !== viewState.agentServer) {
         t10 = jsxProd_default(MCPAgentServerMenu, {
           agentServer: viewState.agentServer,
           onCancel,
           onComplete,
         });
-        $[75] = onComplete;
-        $[76] = viewState.agentServer;
-        $[77] = t10;
-      } else t10 = $[77];
+        $[70] = onComplete;
+        $[71] = viewState.agentServer;
+        $[72] = t10;
+      } else t10 = $[72];
       return t10;
     }
   }

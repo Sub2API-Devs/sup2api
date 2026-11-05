@@ -3,9 +3,9 @@
  *
  * 并入旧版已有路径：Ink Box。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/components/Box.tsx
- * pieces: chunk-24t3dkzb.js (3)
+ * pieces: chunk-xd1cb3xs.js (3)
  * attribution: fingerprint 1, placement 2
  */
 import { ifNotInteger } from "../warn.js";
@@ -14,7 +14,7 @@ import { buildAccessibility } from "../dom.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-24t3dkzb.js:6874-8555 fingerprint (2.1.88 match: Box, 0.8)
+//@ chunk-xd1cb3xs.js:6874-8485 fingerprint (2.1.88 match: Box, 0.794)
 /**
  * <Box>：Ink 的 flex 容器（ink-box）。默认 flexDirection row、flexWrap nowrap、flexGrow 0、flexShrink 1、overflow visible；margin/padding/gap 非整数告警。透传焦点（tabIndex/autoFocus）、键盘/粘贴/滚轮/action 事件（含捕获阶段）、点击、悬停、onPointer、keybindingScope、textEntry、aria-* 无障碍属性。
  */
@@ -25,9 +25,7 @@ function Box({
   autoFocus,
   onClick,
   onFocus,
-  onFocusCapture,
   onBlur,
-  onBlurCapture,
   onMouseEnter,
   onMouseLeave,
   onPointer,
@@ -84,9 +82,7 @@ function Box({
     autoFocus,
     onClick,
     onFocus,
-    onFocusCapture,
     onBlur,
-    onBlurCapture,
     onMouseEnter,
     onMouseLeave,
     onPointer,
@@ -112,11 +108,11 @@ function Box({
     children,
   });
 }
-//@ chunk-24t3dkzb.js:8555-8565 placement
+//@ chunk-xd1cb3xs.js:8485-8495 placement
 var BaseBox = Box;
-//@ chunk-24t3dkzb.js:8565-8569 placement
+//@ chunk-xd1cb3xs.js:8495-8499 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-24t3dkzb.js:8565", () => {
+deferInit("chunk-xd1cb3xs.js:8495", () => {
   init_react_production();
 });
 export { BaseBox };

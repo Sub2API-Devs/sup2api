@@ -1,13 +1,13 @@
 /**
  * protobufjs/src/util/base64.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: protobufjs@7.6.0
- * pieces: chunk-798ashq9.js (1)
+ * pieces: chunk-vxhm2nqe.js (1)
  * attribution: cjs-require-graph 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-798ashq9.js:6693-7914 cjs-require-graph
+//@ chunk-vxhm2nqe.js:6693-7914 cjs-require-graph
 var require_base64 = __commonJS(function (cjsExports) {
   var base64 = cjsExports;
   base64.length = function (string) {

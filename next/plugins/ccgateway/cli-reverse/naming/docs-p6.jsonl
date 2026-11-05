@@ -1,140 +1,140 @@
-{"id":"chunk-18hwfzwa.js#BG","doc":"闲置回来后的“新任务？/clear 省 token”提示控制器：订阅 turn 快照，按缓存冷却与五小时额度占比决定是否在输入框上方显示提示，记录 hint_shown/hint_converted 遥测。"}
-{"id":"chunk-18hwfzwa.js#ire","doc":"冷缓存续接额度提醒：会话闲置后再次提交时，若重新写入缓存的 token 占五小时额度比例超过阈值，弹 idle-return 对话框让用户选择继续/新会话；记录 cli_cold_resume_quota_warning。"}
-{"id":"chunk-18hwfzwa.js#lLe","doc":"开始新会话时生成“上一段对话指针”文本：取原会话最后一条用户输入与其后的助手回复，包进 <user>/<assistant> 标签，提示模型可按文件路径查阅旧转录。"}
-{"id":"chunk-18hwfzwa.js#UG","doc":"缓存失效计时器：每轮结束后按 expectedMissAt() 设定定时器，到点时（仍闲置）通知上层预先提醒或预热，dispose 时清理。"}
-{"id":"chunk-18hwfzwa.js#$G","doc":"闲置期的 poll 事件投递器：会话空闲时订阅事件队列，启动一轮查询来消费排队事件；若该轮未消费则报 \"Queued events were not delivered…\" 并保留。"}
-{"id":"chunk-18hwfzwa.js#ALe","doc":"后台 fork 子进程启动时读取父进程带过来的排队提示文件（adopt.json.queued-prompts），用环境变量里的 SHA256 校验未被篡改，返回 bound/unbound/altered 及提示列表。"}
-{"id":"chunk-18hwfzwa.js#vre","doc":"后台化（← 进入 agents 视图 / /background）前的确认对话框：列出将被停止的任务与可带到后台会话的任务数，选项 Stay / Background anyway。"}
-{"id":"chunk-18hwfzwa.js#kFe","doc":"/background 与退出时“移到后台”的完整流程组件：确认、生成种子名、调用 spawnBackgroundFork 把当前对话 fork 成后台作业，处理拒绝(tengu_background_declined)与失败提示。"}
-{"id":"chunk-18hwfzwa.js#_Fe","doc":"输入框为空时按 ← 的处理：检查会话持久化/--project 等前提，统计在途读取与排队提示，决定是否需要后台化确认，然后 fork 当前会话并切到 agents 视图；被阻止时给出原因。"}
-{"id":"chunk-18hwfzwa.js#gQ","doc":"转录模式（ctrl+o）视图：虚拟滚动渲染全部消息，支持显示全部/退出快捷键，把转录写入临时文件 cc-transcript-*.txt 并用 $VISUAL/$EDITOR 打开。"}
-{"id":"chunk-18hwfzwa.js#gHe","doc":"/tui 切换渲染器的执行流程：校验当前会话能否重启（有后台任务、受限会话等），保存偏好后用 relaunchInto 重启到新渲染器；不能重启时只保存并提示；记录 tengu_tui_optout_reason/tengu_tui_refused。"}
-{"id":"chunk-18hwfzwa.js#xQ","doc":"REPL 启动后的一次性提示控制器：根据渲染器/tmux 显示鼠标与焦点提示，按模型与 effort 判断是否弹 effort-medium 推荐，按条件弹 fullscreen 推荐。"}
-{"id":"chunk-18hwfzwa.js#MQ","doc":"沙箱网络访问询问器：沙箱运行时(srt)请求访问未在白名单的主机时，弹出 \"Allow network connection to …\" 对话框；拒绝 srt 会改写拼写的主机；可转发到 bridge/leader。"}
-{"id":"chunk-18hwfzwa.js#Hie","doc":"启动插件声明的 monitor（后台命令，输出作为事件送入会话）：按 always/on-skill-invoke 触发方式，未接受工作区信任时跳过，失败记录 plugin_arm_monitor。"}
-{"id":"chunk-18hwfzwa.js#qQ","doc":"把云会话/远端 worker 发来的 can_use_tool 请求还原成本地权限对话框：找到同名工具或生成 stub 工具，渲染参数，无法渲染时提示 \"deny unless expected\"。"}
-{"id":"chunk-18hwfzwa.js#WH","doc":"远端传输上的权限分派器：接收 can_use_tool/文件夹/仓库信任等 control_request，校验 request_id 与输入形状，排队弹本地对话框，把回答作为 control_response 发回，多设备时处理被别处回答的情况。"}
-{"id":"chunk-18hwfzwa.js#_Ue","doc":"云会话权限模式同步：本地按 shift+tab 改模式时推送 set_permission_mode 并等待 ack，远端广播模式变化时落地到本地，冲突/超时时回退并通知（remote-permission-mode-unsynced/rejected）。"}
-{"id":"chunk-18hwfzwa.js#HWe","doc":"唤醒路由：把 poll/monitor/artifact 等外部事件派发给对应代理（delivered_to_agent）或主线程，超时释放 inFlight，hook 可丢弃(dropped_by_hook)。"}
-{"id":"chunk-18hwfzwa.js#oje","doc":"跨会话入站消息审核：crossSessionInbound=hold 或权限模式不匹配时，把其他 Claude 会话发来的消息暂存，弹出 peer_inbound_approval 对话框，批准后投递、拒绝则告知发送方。"}
-{"id":"chunk-18hwfzwa.js#zY","doc":"输入框草稿模型类：持有 value/cursor/粘贴内容/stash，负责 prompt.edit/prompt.change 钩子转发、类型提前缓冲、shell 补全中止与外部编辑重写。"}
-{"id":"chunk-18hwfzwa.js#ff","doc":"对话框 kind → 元数据表：layout(fullscreen/modal/bottom/inline)、waitingFor 文案、终端通知（\"Claude needs your permission\" 等）、是否立即显示。"}
-{"id":"chunk-18hwfzwa.js#J3e","doc":"拼写检查器：在 PATH 中找 aspell/hunspell/ispell，以 -a 管道模式常驻子进程查询单词，带响应超时与状态机（resolving/starting/ready/unavailable）。"}
-{"id":"chunk-18hwfzwa.js#Oet","doc":"2.1.316 的主输入框组件（约 47 KB）：组合草稿、vim 模式、bash/模式切换、自动补全、页脚各胶囊、排队命令、提交到主线程或代理；取代旧版 PromptInput 的大部分逻辑。"}
-{"id":"chunk-18hwfzwa.js#fat","doc":"/extra-usage 内联对话框：加载账户余额与支付方式，支持购买预设/自定义额度、设置月上限、自动充值、无卡时回退浏览器（tengu_extra_usage_inline_dialog_fallback_browser）。"}
-{"id":"chunk-18hwfzwa.js#ZAe","doc":"对话框注册表：每个 kind 的定义对象经 gl(def, Component) 注册到这里，DialogHost 按 kind 查组件渲染；部分 kind 由可选 chunk 提供。"}
-{"id":"chunk-18hwfzwa.js#ste","doc":"TurnController：REPL 回合控制器，负责发起查询、跟踪进行中的回合、中断与结果收尾。"}
-{"id":"chunk-18hwfzwa.js#lz","doc":"SessionController：REPL 会话控制器，管理会话 ID、续接、分叉与会话级状态。"}
-{"id":"chunk-18hwfzwa.js#yte","doc":"提交控制器：处理 Enter 提交——斜杠命令（local/local-jsx/prompt）、bash 模式、/exit、建议接受、队列与发送到代理，记录 onSubmit 遥测。"}
-{"id":"chunk-18hwfzwa.js#ute","doc":"输入框外围（chrome）控制器：退出流程（interstitial/shutting-down）、IDE 选区、bash 对话框、rewind 在云会话不可用提示等。"}
-{"id":"chunk-18hwfzwa.js#XG","doc":"后台手势控制器（←/后台化）：处理“按 ← 打开 agents / 移到后台”的两段式手势、上限计时、对已停止回合的取消，以及各种不能后台化的原因提示。"}
-{"id":"chunk-18hwfzwa.js#NQ","doc":"REPL 会话作用域：持有 readFileState、会话环境变量、工具状态、MCP 初始客户端、对话框传输、API key 校验、插件状态 toast 等会话级单例。"}
-{"id":"chunk-18hwfzwa.js#Sae","doc":"远端传输（ccr-api / ssh / direct）：订阅云会话事件、权限模式广播、等待行、会话记录与能力查询；未绑定屏幕时报 \"RemoteTransport: used before…\"。"}
-{"id":"chunk-18hwfzwa.js#Yee","doc":"滚动钉住：管理视口自动滚动、未读分隔线、“输入后钉回底部”的各种触发（typed/suggestion_accepted/ownSubmitLanded）。"}
-{"id":"chunk-18hwfzwa.js#XC","doc":"对话框宿主：按 dialogStore 中打开的对话框与 DIALOG_REGISTRY 渲染，处理 inline/fullscreen 变体、草稿遮挡时延迟显示、首次显示时响铃通知。"}
-{"id":"chunk-08s5p3av.js#xe","doc":"续接会话时恢复 worktree 绑定：校验记录路径（网络路径、不可验证祖先、无效 linked worktree 等拒绝），worktree 已不存在则清除绑定并回到当前目录，返回 poisoned/cleared 状态供提示。"}
-{"id":"chunk-0ba63vr9.js#E","doc":"“本周功能”赠送额度资格查询：调用 /api/oauth/organizations/:orgUUID/overage_credit_grant?campaign=…，区分 claimant/viewer/excluded 受众并缓存结果。"}
-{"id":"chunk-0h4e7gnq.js#xr","doc":"函数钩子 turn.step 的执行器：把一次模型请求的流事件（message_start/content_block/message_delta…）交给插件链，允许插件改写模型、注入工具调用或伪造回复（isMadeUp），并合并回查询循环。"}
-{"id":"chunk-0h4e7gnq.js#Di","doc":"后台代理状态摘要：定时器触发时把代理最新消息整理后调用小模型生成一行标签（agent_summary），消息不够或未变化时跳过，结果写入任务的 summary。"}
-{"id":"chunk-1tz177x8.js#_p","doc":"`claude plugin test` 入口：在插件目录下查找 *.test.ts(x)，逐个在子进程中用测试 kit 加载插件与 hooks 模块，驱动引擎事件与 ui.render，汇总 pass/fail。"}
-{"id":"chunk-7n18p51h.js#me","doc":"预热备用进程（warm spare）被认领：校验进程是以备用模式启动的，接收会话凭证与设置（CLAUDE_CODE_OAUTH_TOKEN/SESSION_ACCESS_TOKEN 等），应用设置并记录启动耗时。"}
-{"id":"chunk-9a33p5tx.js#Ne","doc":"/send-to-project 命令：选择或新建 Claude Project，把当前会话的工作（对话摘要、仓库 origin、文档）作为提示交给模型，再由工具调用把内容送到 Project；不能在子代理中运行。"}
-{"id":"chunk-fy5kn7m3.js#It","doc":"内置 `gh api` 实现：在没有 GitHub CLI 的云会话中，经会话 GitHub 代理转发 REST 请求，填充 {owner}/{repo}/{branch}，校验主机与路径，支持分页、字段、--jq。"}
-{"id":"chunk-hme9amad.js#di","doc":"claude.ai skills 同步一轮：检查开关与账号选择、解析 bucket、下载 skill zip 解压到同步目录、清理过期目录、记录 skills_sync_round 遥测；支持睡眠唤醒后的重同步。"}
-{"id":"chunk-kczn6qx7.js#Ye","doc":"/teleport 移到云端：检查 Remote Control 连接、claude.ai 登录、git 仓库与未推送提交，确认后调用 move-to-cloud 接口，切换 Remote Control 会话并在本地记录 cloud_handoff。"}
-{"id":"chunk-z4g2ta8k.js#zDs","doc":"云 worker 接手回合（turn_handoff）：校验交接载荷（消息、tool_use_ids、记忆上下文、required rewind），把消息追加到本地转录并恢复在途写入，非法时返回 invalid_handoff。"}
-{"id":"chunk-7t4fmt2f.js#qts","doc":"PolicyLimitsClient：组织策略限制（policy limits）客户端。持有存储与凭证，负责冷启动等待、预取结果接纳、OAuth 刷新闩锁、定时轮询与主体变化时重载，产出 fail-open/fail-closed 判定供启动门控和工具使用。"}
-{"id":"chunk-y805ph4h.js#xe","doc":"Agent SDK 的 Query 对象：包装子进程传输，按消息流产出 SDK 消息，并提供 interrupt、setPermissionMode、setModel、MCP 控制等控制请求以及清理逻辑（[Query.cleanup]）。"}
-{"id":"chunk-y805ph4h.js#tt","doc":"Agent SDK 的 ProcessTransport：以子进程方式启动 Claude Code（stream-json 输入输出），负责参数/环境组装、stdin 写入、stdout 行解析与进程退出处理。"}
-{"id":"chunk-y805ph4h.js#ts","doc":"Agent SDK 的 query() 入口：解析选项、创建 ProcessTransport 与 Query，返回可异步迭代的消息流。"}
-{"id":"chunk-y805ph4h.js#Je","doc":"Agent SDK 的转录镜像批处理器：把会话转录行批量转发给宿主（日志前缀 [TranscriptMirrorBatcher]）。"}
-{"id":"chunk-bss4k1z9.js#un","doc":"内置插件 youShouldKnow 的提示词构造：根据当前会话与已展示过的提示，生成让小模型挑选“你应该知道”的功能提示的请求。"}
-{"id":"chunk-bss4k1z9.js#ns","doc":"youShouldKnow 插件的钩子注册：在会话事件上触发提示挑选、渲染提示卡片并记录展示状态与遥测。"}
-{"id":"chunk-z4g2ta8k.js#Q$","doc":"RemoteIO（云 worker 的 SDK I/O 类，继承自通用 I/O 基类）：管理与客户端表面的连接状态、会话写入者、表面策略（stands/leaving）、入站消息与回合交接，是云会话 worker 的核心。"}
-{"id":"chunk-z4g2ta8k.js#ht","doc":"WorkerSocket：云 worker 与会话服务之间的 WebSocket（/worker/events），负责连接、重连、心跳与事件收发。"}
-{"id":"chunk-z4g2ta8k.js#ir","doc":"启动云 worker：组装 RemoteIO 所需环境、认证与事件流，启动并接管会话。"}
-{"id":"chunk-fym4r1th.js#mt","doc":"Bash 命令分类表：按命令名/子命令把 shell 命令归入 vcs、github_cli、network、包管理、测试等类别，用于遥测与权限提示。"}
-{"id":"chunk-aqpr1420.js#h","doc":"自托管 runner 诊断提示词：指导模型检查 runner 环境（网络、认证、目录、服务状态）并给出修复建议。"}
-{"id":"chunk-aqpr1420.js#M","doc":"selfHostedRunnerDoctorMain：自托管 runner 诊断命令入口，收集环境信息后用诊断提示词运行模型。"}
-{"id":"chunk-z1n5m6nf.js#Ar","doc":"获取 MCP 服务器工具：调用 tools/list，按权限上限、提示词覆盖、描述长度限制、插件来源等把 MCP 工具转换成 Claude Code 工具定义，失败时记 tengu_mcp_degraded。"}
-{"id":"chunk-z1n5m6nf.js#Jo","doc":"把单个 MCP 工具定义包装成 Claude Code 工具：计算工具全名、权限键、延迟加载、描述截断、显示名/图标、账号记忆与首方设计服务器等标记。"}
-{"id":"chunk-1eqzjhyp.js#t","doc":"/setup-cowork 命令的提示词，引导模型为 cowork 环境做初始化配置。"}
-{"id":"chunk-5wjwnxna.js#j","doc":"插件评测 HTML 报告的内嵌 CSS。"}
-{"id":"chunk-5wjwnxna.js#Ce","doc":"renderEvalReportFragment：把插件评测结果渲染成 HTML 片段（用例分节、每个用例的运行详情）。"}
+{"id":"chunk-czq1j3j2.js#SG","doc":"闲置回来后的“新任务？/clear 省 token”提示控制器：订阅 turn 快照，按缓存冷却与五小时额度占比决定是否在输入框上方显示提示，记录 hint_shown/hint_converted 遥测。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#$re","doc":"冷缓存续接额度提醒：会话闲置后再次提交时，若重新写入缓存的 token 占五小时额度比例超过阈值，弹 idle-return 对话框让用户选择继续/新会话；记录 cli_cold_resume_quota_warning。"}
+{"id":"chunk-czq1j3j2.js#zLe","doc":"开始新会话时生成“上一段对话指针”文本：取原会话最后一条用户输入与其后的助手回复，包进 <user>/<assistant> 标签，提示模型可按文件路径查阅旧转录。"}
+{"id":"chunk-czq1j3j2.js#wG","doc":"缓存失效计时器：每轮结束后按 expectedMissAt() 设定定时器，到点时（仍闲置）通知上层预先提醒或预热，dispose 时清理。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#CG","doc":"闲置期的 poll 事件投递器：会话空闲时订阅事件队列，启动一轮查询来消费排队事件；若该轮未消费则报 \"Queued events were not delivered…\" 并保留。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#gFe","doc":"后台 fork 子进程启动时读取父进程带过来的排队提示文件（adopt.json.queued-prompts），用环境变量里的 SHA256 校验未被篡改，返回 bound/unbound/altered 及提示列表。"}
+{"id":"chunk-czq1j3j2.js#ise","doc":"后台化（← 进入 agents 视图 / /background）前的确认对话框：列出将被停止的任务与可带到后台会话的任务数，选项 Stay / Background anyway。"}
+{"id":"chunk-czq1j3j2.js#d0e","doc":"/background 与退出时“移到后台”的完整流程组件：确认、生成种子名、调用 spawnBackgroundFork 把当前对话 fork 成后台作业，处理拒绝(tengu_background_declined)与失败提示。"}
+{"id":"chunk-czq1j3j2.js#m0e","doc":"输入框为空时按 ← 的处理：检查会话持久化/--project 等前提，统计在途读取与排队提示，决定是否需要后台化确认，然后 fork 当前会话并切到 agents 视图；被阻止时给出原因。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#sQ","doc":"转录模式（ctrl+o）视图：虚拟滚动渲染全部消息，支持显示全部/退出快捷键，把转录写入临时文件 cc-transcript-*.txt 并用 $VISUAL/$EDITOR 打开。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#cUe","doc":"/tui 切换渲染器的执行流程：校验当前会话能否重启（有后台任务、受限会话等），保存偏好后用 relaunchInto 重启到新渲染器；不能重启时只保存并提示；记录 tengu_tui_optout_reason/tengu_tui_refused。"}
+{"id":"chunk-czq1j3j2.js#yQ","doc":"REPL 启动后的一次性提示控制器：根据渲染器/tmux 显示鼠标与焦点提示，按模型与 effort 判断是否弹 effort-medium 推荐，按条件弹 fullscreen 推荐。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#bQ","doc":"沙箱网络访问询问器：沙箱运行时(srt)请求访问未在白名单的主机时，弹出 \"Allow network connection to …\" 对话框；拒绝 srt 会改写拼写的主机；可转发到 bridge/leader。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#dae","doc":"启动插件声明的 monitor（后台命令，输出作为事件送入会话）：按 always/on-skill-invoke 触发方式，未接受工作区信任时跳过，失败记录 plugin_arm_monitor。"}
+{"id":"chunk-czq1j3j2.js#IQ","doc":"把云会话/远端 worker 发来的 can_use_tool 请求还原成本地权限对话框：找到同名工具或生成 stub 工具，渲染参数，无法渲染时提示 \"deny unless expected\"。"}
+{"id":"chunk-czq1j3j2.js#BH","doc":"远端传输上的权限分派器：接收 can_use_tool/文件夹/仓库信任等 control_request，校验 request_id 与输入形状，排队弹本地对话框，把回答作为 control_response 发回，多设备时处理被别处回答的情况。"}
+{"id":"chunk-czq1j3j2.js#hWe","doc":"云会话权限模式同步：本地按 shift+tab 改模式时推送 set_permission_mode 并等待 ack，远端广播模式变化时落地到本地，冲突/超时时回退并通知（remote-permission-mode-unsynced/rejected）。"}
+{"id":"chunk-czq1j3j2.js#Vje","doc":"唤醒路由：把 poll/monitor/artifact 等外部事件派发给对应代理（delivered_to_agent）或主线程，超时释放 inFlight，hook 可丢弃(dropped_by_hook)。"}
+{"id":"chunk-czq1j3j2.js#iqe","doc":"跨会话入站消息审核：crossSessionInbound=hold 或权限模式不匹配时，把其他 Claude 会话发来的消息暂存，弹出 peer_inbound_approval 对话框，批准后投递、拒绝则告知发送方。"}
+{"id":"chunk-czq1j3j2.js#c2","doc":"输入框草稿模型类：持有 value/cursor/粘贴内容/stash，负责 prompt.edit/prompt.change 钩子转发、类型提前缓冲、shell 补全中止与外部编辑重写。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#$f","doc":"对话框 kind → 元数据表：layout(fullscreen/modal/bottom/inline)、waitingFor 文案、终端通知（\"Claude needs your permission\" 等）、是否立即显示。"}
+{"id":"chunk-czq1j3j2.js#S4e","doc":"拼写检查器：在 PATH 中找 aspell/hunspell/ispell，以 -a 管道模式常驻子进程查询单词，带响应超时与状态机（resolving/starting/ready/unavailable）。"}
+{"id":"chunk-czq1j3j2.js#Yot","doc":"2.1.316 的主输入框组件（约 47 KB）：组合草稿、vim 模式、bash/模式切换、自动补全、页脚各胶囊、排队命令、提交到主线程或代理；取代旧版 PromptInput 的大部分逻辑。"}
+{"id":"chunk-czq1j3j2.js#Ndt","doc":"/extra-usage 内联对话框：加载账户余额与支付方式，支持购买预设/自定义额度、设置月上限、自动充值、无卡时回退浏览器（tengu_extra_usage_inline_dialog_fallback_browser）。"}
+{"id":"chunk-czq1j3j2.js#BMe","doc":"对话框注册表：每个 kind 的定义对象经 gl(def, Component) 注册到这里，DialogHost 按 kind 查组件渲染；部分 kind 由可选 chunk 提供。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#Xee","doc":"TurnController：REPL 回合控制器，负责发起查询、跟踪进行中的回合、中断与结果收尾。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#cz","doc":"SessionController：REPL 会话控制器，管理会话 ID、续接、分叉与会话级状态。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#ste","doc":"提交控制器：处理 Enter 提交——斜杠命令（local/local-jsx/prompt）、bash 模式、/exit、建议接受、队列与发送到代理，记录 onSubmit 遥测。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#tte","doc":"输入框外围（chrome）控制器：退出流程（interstitial/shutting-down）、IDE 选区、bash 对话框、rewind 在云会话不可用提示等。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#EG","doc":"后台手势控制器（←/后台化）：处理“按 ← 打开 agents / 移到后台”的两段式手势、上限计时、对已停止回合的取消，以及各种不能后台化的原因提示。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#CQ","doc":"REPL 会话作用域：持有 readFileState、会话环境变量、工具状态、MCP 初始客户端、对话框传输、API key 校验、插件状态 toast 等会话级单例。"}
+{"id":"chunk-czq1j3j2.js#tle","doc":"远端传输（ccr-api / ssh / direct）：订阅云会话事件、权限模式广播、等待行、会话记录与能力查询；未绑定屏幕时报 \"RemoteTransport: used before…\"。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#$ee","doc":"滚动钉住：管理视口自动滚动、未读分隔线、“输入后钉回底部”的各种触发（typed/suggestion_accepted/ownSubmitLanded）。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#k_","doc":"对话框宿主：按 dialogStore 中打开的对话框与 DIALOG_REGISTRY 渲染，处理 inline/fullscreen 变体、草稿遮挡时延迟显示、首次显示时响铃通知。","carry":"fallback-c"}
+{"id":"chunk-2snqx25v.js#xe","doc":"续接会话时恢复 worktree 绑定：校验记录路径（网络路径、不可验证祖先、无效 linked worktree 等拒绝），worktree 已不存在则清除绑定并回到当前目录，返回 poisoned/cleared 状态供提示。"}
+{"id":"chunk-a76zrsb5.js#M","doc":"“本周功能”赠送额度资格查询：调用 /api/oauth/organizations/:orgUUID/overage_credit_grant?campaign=…，区分 claimant/viewer/excluded 受众并缓存结果。"}
+{"id":"chunk-frs14hy1.js#qr","doc":"函数钩子 turn.step 的执行器：把一次模型请求的流事件（message_start/content_block/message_delta…）交给插件链，允许插件改写模型、注入工具调用或伪造回复（isMadeUp），并合并回查询循环。","carry":"fallback-c"}
+{"id":"chunk-frs14hy1.js#ta","doc":"后台代理状态摘要：定时器触发时把代理最新消息整理后调用小模型生成一行标签（agent_summary），消息不够或未变化时跳过，结果写入任务的 summary。"}
+{"id":"chunk-f284hj51.js#_p","doc":"`claude plugin test` 入口：在插件目录下查找 *.test.ts(x)，逐个在子进程中用测试 kit 加载插件与 hooks 模块，驱动引擎事件与 ui.render，汇总 pass/fail。"}
+{"id":"chunk-ea3gc4y9.js#me","doc":"预热备用进程（warm spare）被认领：校验进程是以备用模式启动的，接收会话凭证与设置（CLAUDE_CODE_OAUTH_TOKEN/SESSION_ACCESS_TOKEN 等），应用设置并记录启动耗时。"}
+{"id":"chunk-46zjpx8m.js#Ke","doc":"/send-to-project 命令：选择或新建 Claude Project，把当前会话的工作（对话摘要、仓库 origin、文档）作为提示交给模型，再由工具调用把内容送到 Project；不能在子代理中运行。"}
+{"id":"chunk-ntm2y5qw.js#Mt","doc":"内置 `gh api` 实现：在没有 GitHub CLI 的云会话中，经会话 GitHub 代理转发 REST 请求，填充 {owner}/{repo}/{branch}，校验主机与路径，支持分页、字段、--jq。"}
+{"id":"chunk-daqvrkkv.js#Li","doc":"claude.ai skills 同步一轮：检查开关与账号选择、解析 bucket、下载 skill zip 解压到同步目录、清理过期目录、记录 skills_sync_round 遥测；支持睡眠唤醒后的重同步。"}
+{"id":"chunk-8as4prnp.js#po","doc":"/teleport 移到云端：检查 Remote Control 连接、claude.ai 登录、git 仓库与未推送提交，确认后调用 move-to-cloud 接口，切换 Remote Control 会话并在本地记录 cloud_handoff。"}
+{"id":"chunk-1kk50rk6.js#o5s","doc":"云 worker 接手回合（turn_handoff）：校验交接载荷（消息、tool_use_ids、记忆上下文、required rewind），把消息追加到本地转录并恢复在途写入，非法时返回 invalid_handoff。"}
+{"id":"chunk-pcv9zvvv.js#qbs","doc":"PolicyLimitsClient：组织策略限制（policy limits）客户端。持有存储与凭证，负责冷启动等待、预取结果接纳、OAuth 刷新闩锁、定时轮询与主体变化时重载，产出 fail-open/fail-closed 判定供启动门控和工具使用。"}
+{"id":"chunk-tp1gh0pb.js#xe","doc":"Agent SDK 的 Query 对象：包装子进程传输，按消息流产出 SDK 消息，并提供 interrupt、setPermissionMode、setModel、MCP 控制等控制请求以及清理逻辑（[Query.cleanup]）。"}
+{"id":"chunk-tp1gh0pb.js#tt","doc":"Agent SDK 的 ProcessTransport：以子进程方式启动 Claude Code（stream-json 输入输出），负责参数/环境组装、stdin 写入、stdout 行解析与进程退出处理。"}
+{"id":"chunk-tp1gh0pb.js#rs","doc":"Agent SDK 的 query() 入口：解析选项、创建 ProcessTransport 与 Query，返回可异步迭代的消息流。"}
+{"id":"chunk-tp1gh0pb.js#Je","doc":"Agent SDK 的转录镜像批处理器：把会话转录行批量转发给宿主（日志前缀 [TranscriptMirrorBatcher]）。"}
+{"id":"chunk-775n2x67.js#un","doc":"内置插件 youShouldKnow 的提示词构造：根据当前会话与已展示过的提示，生成让小模型挑选“你应该知道”的功能提示的请求。"}
+{"id":"chunk-775n2x67.js#ns","doc":"youShouldKnow 插件的钩子注册：在会话事件上触发提示挑选、渲染提示卡片并记录展示状态与遥测。"}
+{"id":"chunk-1kk50rk6.js#FU","doc":"RemoteIO（云 worker 的 SDK I/O 类，继承自通用 I/O 基类）：管理与客户端表面的连接状态、会话写入者、表面策略（stands/leaving）、入站消息与回合交接，是云会话 worker 的核心。"}
+{"id":"chunk-1kk50rk6.js#wt","doc":"WorkerSocket：云 worker 与会话服务之间的 WebSocket（/worker/events），负责连接、重连、心跳与事件收发。"}
+{"id":"chunk-1kk50rk6.js#mr","doc":"启动云 worker：组装 RemoteIO 所需环境、认证与事件流，启动并接管会话。"}
+{"id":"chunk-wrq65rh8.js#pt","doc":"Bash 命令分类表：按命令名/子命令把 shell 命令归入 vcs、github_cli、network、包管理、测试等类别，用于遥测与权限提示。"}
+{"id":"chunk-kr40ydn7.js#h","doc":"自托管 runner 诊断提示词：指导模型检查 runner 环境（网络、认证、目录、服务状态）并给出修复建议。"}
+{"id":"chunk-kr40ydn7.js#M","doc":"selfHostedRunnerDoctorMain：自托管 runner 诊断命令入口，收集环境信息后用诊断提示词运行模型。"}
+{"id":"chunk-h44h5gdv.js#Ir","doc":"获取 MCP 服务器工具：调用 tools/list，按权限上限、提示词覆盖、描述长度限制、插件来源等把 MCP 工具转换成 Claude Code 工具定义，失败时记 tengu_mcp_degraded。"}
+{"id":"chunk-h44h5gdv.js#Xo","doc":"把单个 MCP 工具定义包装成 Claude Code 工具：计算工具全名、权限键、延迟加载、描述截断、显示名/图标、账号记忆与首方设计服务器等标记。"}
+{"id":"chunk-8s2k2kxy.js#t","doc":"/setup-cowork 命令的提示词，引导模型为 cowork 环境做初始化配置。"}
+{"id":"chunk-wsa1bbj1.js#C","doc":"插件评测 HTML 报告的内嵌 CSS。"}
+{"id":"chunk-wsa1bbj1.js#Ce","doc":"renderEvalReportFragment：把插件评测结果渲染成 HTML 片段（用例分节、每个用例的运行详情）。"}
 {"id":"build-report-lite-jwtbvm49.mjs#build","doc":"hillclimb skill 的轻量报告构建：读取迭代结果并生成报告数据。"}
 {"id":"build-report-lite-jwtbvm49.mjs#render","doc":"hillclimb 报告渲染：把构建好的数据输出成 HTML/文本报告。"}
-{"id":"chunk-kc2qkj8w.js#OSn","doc":"包装 MCP 工具以支持文件引用（桌面 Drive 填充）：在 validateInput/call 前检查服务器是否声明支持文件引用，解析引用、上传文件并在不可用时以 not_available 拒绝。"}
-{"id":"chunk-18hwfzwa.js#bIe","doc":"TranscriptStream：REPL 转录流，把引擎回合产生的消息增量追加到界面消息列表并处理批量刷新。"}
-{"id":"chunk-18hwfzwa.js#XQ","doc":"useRemoteTransportCore：REPL 远程传输核心 hook，连接远端会话、同步消息、权限请求与权限模式。"}
-{"id":"chunk-18hwfzwa.js#rdt","doc":"购买额度流程中的自动充值设置步骤。"}
-{"id":"chunk-18hwfzwa.js#ALt","doc":"FableUsageCreditsConsent：使用 Fable 模型会消耗用量额度时的同意界面。"}
-{"id":"chunk-18hwfzwa.js#kLt","doc":"派生后台分叉会话：从当前会话（或指定叶节点）复制转录、起名，并在新的后台会话中继续；协调者模式与分叉点丢失时拒绝。"}
-{"id":"chunk-18hwfzwa.js#a_e","doc":"AutocompactOfferDialog：上下文接近上限时提议开启自动压缩的对话框。"}
-{"id":"chunk-18hwfzwa.js#fct","doc":"MCP elicitation 表单：按服务器给出的 schema 渲染字段、校验输入并提交。"}
-{"id":"chunk-18hwfzwa.js#S4","doc":"SurveyHost：统一挂载反馈、长上下文、记忆、压缩后、插件、组织等各类调查，保证同一时间只显示一个。"}
-{"id":"chunk-18hwfzwa.js#b1e","doc":"AbovePromptBandView：插件在输入框上方的横幅带视图。"}
-{"id":"chunk-18hwfzwa.js#Vke","doc":"FeedbackDraftNotice：提示存在未提交的反馈草稿并允许继续或丢弃。"}
-{"id":"chunk-18hwfzwa.js#$de","doc":"PaneSite：插件面板停靠区中的单个面板位置，负责尺寸、焦点与渲染。"}
-{"id":"chunk-18hwfzwa.js#edt","doc":"购买额度流程中的确认购买步骤。"}
-{"id":"chunk-18hwfzwa.js#Gle","doc":"协调者模式代理状态面板中的单行任务。"}
-{"id":"chunk-18hwfzwa.js#ndt","doc":"购买额度流程中的花费上限设置步骤。"}
-{"id":"chunk-18hwfzwa.js#Gee","doc":"MessageArea：REPL 消息区，渲染转录、虚拟滚动与固定到底部。"}
-{"id":"chunk-18hwfzwa.js#avt","doc":"处理 Remote Control 发来的会话分叉请求（rc fork conversation）。"}
-{"id":"chunk-18hwfzwa.js#P4","doc":"useLongContextSurvey：长上下文使用后触发体验调查的 hook。"}
-{"id":"chunk-18hwfzwa.js#Vkt","doc":"读取引擎回合：消费查询引擎事件流，转成 REPL 消息、进度与结果。"}
-{"id":"chunk-18hwfzwa.js#HAe","doc":"GoalProposalPermissionRequest：模型提出目标（goal）时的确认界面。"}
-{"id":"chunk-18hwfzwa.js#Hyt","doc":"skill 使用权限请求对话框。"}
-{"id":"chunk-18hwfzwa.js#_F","doc":"ReplScreenFrame：REPL 屏幕框架（全屏/经典布局、消息区与输入区的排布）。"}
-{"id":"chunk-18hwfzwa.js#qCe","doc":"EffortMediumNudgeDialog：建议把 effort 调到 medium 的对话框。"}
-{"id":"chunk-18hwfzwa.js#Uji","doc":"/tui 命令：查看或切换渲染器（fullscreen/default），处理全屏启动失败后自动关闭的情况。"}
-{"id":"chunk-18hwfzwa.js#WZt","doc":"CloudTasksDialog：查看云端任务的对话框。"}
-{"id":"chunk-18hwfzwa.js#Xlt","doc":"UsageCreditsOverview：用量额度概览界面。"}
-{"id":"chunk-18hwfzwa.js#f4","doc":"SurveyCard：调查卡片外框与评分选项。"}
-{"id":"chunk-18hwfzwa.js#aCe","doc":"组织调查中的单个问题。"}
-{"id":"chunk-18hwfzwa.js#tWe","doc":"自动压缩提议对话框的正文（适配宽度）。"}
-{"id":"chunk-18hwfzwa.js#nre","doc":"斜杠命令到懒加载 chunk 的映射表，命令对话框打开时按需 import。"}
-{"id":"chunk-18hwfzwa.js#C0n","doc":"向管理员申请额度的确认对话框。"}
-{"id":"chunk-18hwfzwa.js#$ee","doc":"LiveStateRow：REPL 实时状态行（加载动画、任务、计时）。"}
-{"id":"chunk-18hwfzwa.js#Zlt","doc":"额度包选择器。"}
-{"id":"chunk-18hwfzwa.js#xIe","doc":"TranscriptRecorder：把 REPL 消息写入会话转录文件。"}
-{"id":"chunk-18hwfzwa.js#cz","doc":"SandboxStartup：REPL 启动时初始化沙箱并处理失败提示。"}
-{"id":"chunk-18hwfzwa.js#zyt","doc":"对话框种类到懒加载视图组件的映射表。"}
-{"id":"chunk-18hwfzwa.js#JZ","doc":"useSessionPresence：会话在线状态（同伴、远程客户端）hook。"}
-{"id":"chunk-18hwfzwa.js#J_t","doc":"会话通知规格：提议开启自动压缩。"}
-{"id":"chunk-18hwfzwa.js#K4","doc":"OrgSurveyDialog：组织调查问卷对话框。"}
-{"id":"chunk-1tz177x8.js#ut","doc":"插件测试中驱动 ui.render 的结果：提供 act/drawn/find/findAll/press 等操作，模拟用户与插件界面交互。"}
-{"id":"chunk-gbtb0mjv.js#y","doc":"/loop skill 中基于文件的循环提示词。"}
-{"id":"chunk-gbtb0mjv.js#R","doc":"/loop skill 中自定节奏（动态间隔）的循环提示词。"}
-{"id":"chunk-fy5kn7m3.js#c","doc":"内置 gh api 的帮助文本。"}
-{"id":"chunk-fy5kn7m3.js#re","doc":"内置 gh api 的仓库上下文（owner/repo/branch 推断与占位符填充）。"}
-{"id":"chunk-awy329vy.js#Tr","doc":"启动 agent 代理：读取 CCR_AGENT_PROXY_* 环境变量，启动本地中继、写入 CA 信任与 git 配置。"}
-{"id":"chunk-awy329vy.js#Ji","doc":"生成写给模型/用户看的 agent 代理说明文档（本地代理地址、CA 位置、快速诊断步骤）。"}
-{"id":"chunk-awy329vy.js#yGi","doc":"agent 代理初始化：读取并清除 CCR_AGENT_PROXY_* 环境变量，决定中继模式、包含主机、CA 监视等。"}
-{"id":"chunk-awy329vy.js#Ar","doc":"为 agent 代理安装 gh 垫片（gh shim），没有 gh 时提供替身。"}
-{"id":"chunk-awy329vy.js#jHi","doc":"安装/刷新系统 CA 信任（处理已有证书与 -2 链接、记录安装结果）。"}
-{"id":"chunk-awy329vy.js#je","doc":"为 Java、NSS、Bazel、gsutil 等工具配置 CA 信任。"}
-{"id":"chunk-08s5p3av.js#u1n","doc":"续接会话的主流程：匹配会话模式、恢复模型与 worktree、处理分叉与会话 ID 采纳、团队重绑定。"}
-{"id":"chunk-spwda8nt.js#yZn","doc":"用启发式规则判断会话状态（等待输入、运行中、出错等）。"}
-{"id":"chunk-spwda8nt.js#w","doc":"会话状态启发式规则用到的文本模式表。"}
-{"id":"chunk-vp5gef34.js#bt","doc":"反序列化记忆 BM25 索引并校验倒排数据。"}
-{"id":"chunk-vp5gef34.js#Qt","doc":"记忆索引分词：NFKD 归一化，支持 CJK 单字切分与英文词干。"}
-{"id":"chunk-vp5gef34.js#x","doc":"构建记忆文件倒排索引（posting 列表与位置）。"}
-{"id":"chunk-vp5gef34.js#Re","doc":"记忆索引 BM25 检索。"}
-{"id":"chunk-23fm9f0d.js#nt","doc":"按保留期清理旧会话转录（hipaa/zdr/桌面端等情况豁免）。"}
-{"id":"chunk-axsvbsqv.js#$pt","doc":"WorkflowDetailDialog：工作流详情对话框，阶段/代理两栏，支持暂停、恢复、跳过与重试代理。"}
-{"id":"chunk-axsvbsqv.js#vi","doc":"工作流详情中的代理卡片。"}
-{"id":"chunk-axsvbsqv.js#cHt","doc":"保存动态工作流的对话框。"}
-{"id":"chunk-axsvbsqv.js#Jr","doc":"工作流详情中的代理列表栏。"}
-{"id":"chunk-9a33p5tx.js#L","doc":"/send-to-project 给模型的操作说明（告诉 Project 这是哪个会话、如何读取）。"}
-{"id":"chunk-9a33p5tx.js#F","doc":"/send-to-project 的会话上下文（对话摘要与转录）。"}
-{"id":"chunk-zq2w8cvy.js#qNo","doc":"解析 Remote Control 桥接会话的所有者绑定。"}
-{"id":"chunk-kxdxf2f6.js#fKn","doc":"向 .git/info/exclude 追加条目（避免把 Claude 产生的文件纳入版本控制）。"}
-{"id":"chunk-tmx5d02z.js#ue","doc":"Artifact 发布调用：读取文件、上传资源并发布。"}
-{"id":"chunk-tmx5d02z.js#ji","doc":"AppifactRepl 工具：对 artifact 运行 appifact SDK JavaScript。"}
-{"id":"chunk-kczn6qx7.js#os","doc":"/teleport 菜单：选择移到云端或其他 teleport 操作。"}
-{"id":"chunk-y5m1jrzk.js#wA","doc":"plugin 子命令表（init/validate/tag 等）。"}
-{"id":"chunk-zw5xhxkf.js#D","doc":"推荐插件工具的定义。"}
-{"id":"chunk-8jbcmznm.js#Pe","doc":"在 session.start 时把 AGENTS.md 作为项目指令加载。"}
-{"id":"chunk-hnwmw0ks.js#tLe","doc":"后台会话需要携带的环境变量名单。"}
-{"id":"chunk-mgevbrsn.js#k","doc":"启动阶段计时记录器（tengu_startup_timing）。"}
-{"id":"chunk-v21qppnj.js#te","doc":"Windows 沙箱卸载（claude sandbox uninstall）：停止服务、删除账户与目录并检查残留。"}
+{"id":"chunk-xggcs0yq.js#KPn","doc":"包装 MCP 工具以支持文件引用（桌面 Drive 填充）：在 validateInput/call 前检查服务器是否声明支持文件引用，解析引用、上传文件并在不可用时以 not_available 拒绝。"}
+{"id":"chunk-czq1j3j2.js#kIe","doc":"TranscriptStream：REPL 转录流，把引擎回合产生的消息增量追加到界面消息列表并处理批量刷新。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#VQ","doc":"useRemoteTransportCore：REPL 远程传输核心 hook，连接远端会话、同步消息、权限请求与权限模式。"}
+{"id":"chunk-czq1j3j2.js#Rut","doc":"购买额度流程中的自动充值设置步骤。"}
+{"id":"chunk-czq1j3j2.js#JBt","doc":"FableUsageCreditsConsent：使用 Fable 模型会消耗用量额度时的同意界面。"}
+{"id":"chunk-czq1j3j2.js#YBt","doc":"派生后台分叉会话：从当前会话（或指定叶节点）复制转录、起名，并在新的后台会话中继续；协调者模式与分叉点丢失时拒绝。"}
+{"id":"chunk-czq1j3j2.js#STe","doc":"AutocompactOfferDialog：上下文接近上限时提议开启自动压缩的对话框。"}
+{"id":"chunk-czq1j3j2.js#Pmt","doc":"MCP elicitation 表单：按服务器给出的 schema 渲染字段、校验输入并提交。"}
+{"id":"chunk-czq1j3j2.js#N4","doc":"SurveyHost：统一挂载反馈、长上下文、记忆、压缩后、插件、组织等各类调查，保证同一时间只显示一个。"}
+{"id":"chunk-czq1j3j2.js#hKe","doc":"AbovePromptBandView：插件在输入框上方的横幅带视图。"}
+{"id":"chunk-czq1j3j2.js#dCe","doc":"FeedbackDraftNotice：提示存在未提交的反馈草稿并允许继续或丢弃。"}
+{"id":"chunk-czq1j3j2.js#aue","doc":"PaneSite：插件面板停靠区中的单个面板位置，负责尺寸、焦点与渲染。"}
+{"id":"chunk-czq1j3j2.js#kut","doc":"购买额度流程中的确认购买步骤。"}
+{"id":"chunk-czq1j3j2.js#Zde","doc":"协调者模式代理状态面板中的单行任务。"}
+{"id":"chunk-czq1j3j2.js#_ut","doc":"购买额度流程中的花费上限设置步骤。"}
+{"id":"chunk-czq1j3j2.js#Uee","doc":"MessageArea：REPL 消息区，渲染转录、虚拟滚动与固定到底部。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#v_t","doc":"处理 Remote Control 发来的会话分叉请求（rc fork conversation）。"}
+{"id":"chunk-czq1j3j2.js#z4","doc":"useLongContextSurvey：长上下文使用后触发体验调查的 hook。"}
+{"id":"chunk-czq1j3j2.js#s_t","doc":"读取引擎回合：消费查询引擎事件流，转成 REPL 消息、进度与结果。"}
+{"id":"chunk-czq1j3j2.js#lMe","doc":"GoalProposalPermissionRequest：模型提出目标（goal）时的确认界面。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#Nbt","doc":"skill 使用权限请求对话框。"}
+{"id":"chunk-czq1j3j2.js#VF","doc":"ReplScreenFrame：REPL 屏幕框架（全屏/经典布局、消息区与输入区的排布）。"}
+{"id":"chunk-czq1j3j2.js#rTe","doc":"EffortMediumNudgeDialog：建议把 effort 调到 medium 的对话框。"}
+{"id":"chunk-czq1j3j2.js#$ra","doc":"/tui 命令：查看或切换渲染器（fullscreen/default），处理全屏启动失败后自动关闭的情况。"}
+{"id":"chunk-czq1j3j2.js#Iln","doc":"CloudTasksDialog：查看云端任务的对话框。"}
+{"id":"chunk-czq1j3j2.js#but","doc":"UsageCreditsOverview：用量额度概览界面。"}
+{"id":"chunk-czq1j3j2.js#A4","doc":"SurveyCard：调查卡片外框与评分选项。"}
+{"id":"chunk-czq1j3j2.js#__e","doc":"组织调查中的单个问题。"}
+{"id":"chunk-8prszgkd.js#HSe","doc":"自动压缩提议对话框的正文（适配宽度）。"}
+{"id":"chunk-czq1j3j2.js#Wre","doc":"斜杠命令到懒加载 chunk 的映射表，命令对话框打开时按需 import。"}
+{"id":"chunk-czq1j3j2.js#v2n","doc":"向管理员申请额度的确认对话框。"}
+{"id":"chunk-czq1j3j2.js#Lee","doc":"LiveStateRow：REPL 实时状态行（加载动画、任务、计时）。"}
+{"id":"chunk-czq1j3j2.js#wut","doc":"额度包选择器。"}
+{"id":"chunk-czq1j3j2.js#PIe","doc":"TranscriptRecorder：把 REPL 消息写入会话转录文件。"}
+{"id":"chunk-czq1j3j2.js#uz","doc":"SandboxStartup：REPL 启动时初始化沙箱并处理失败提示。","carry":"fallback-c"}
+{"id":"chunk-czq1j3j2.js#qbt","doc":"对话框种类到懒加载视图组件的映射表。"}
+{"id":"chunk-czq1j3j2.js#tee","doc":"useSessionPresence：会话在线状态（同伴、远程客户端）hook。"}
+{"id":"chunk-czq1j3j2.js#Txt","doc":"会话通知规格：提议开启自动压缩。"}
+{"id":"chunk-czq1j3j2.js#T8","doc":"OrgSurveyDialog：组织调查问卷对话框。"}
+{"id":"chunk-f284hj51.js#ut","doc":"插件测试中驱动 ui.render 的结果：提供 act/drawn/find/findAll/press 等操作，模拟用户与插件界面交互。"}
+{"id":"chunk-x774raa9.js#y","doc":"/loop skill 中基于文件的循环提示词。"}
+{"id":"chunk-x774raa9.js#R","doc":"/loop skill 中自定节奏（动态间隔）的循环提示词。"}
+{"id":"chunk-ntm2y5qw.js#c","doc":"内置 gh api 的帮助文本。"}
+{"id":"chunk-ntm2y5qw.js#re","doc":"内置 gh api 的仓库上下文（owner/repo/branch 推断与占位符填充）。"}
+{"id":"chunk-9knfmvrf.js#kr","doc":"启动 agent 代理：读取 CCR_AGENT_PROXY_* 环境变量，启动本地中继、写入 CA 信任与 git 配置。"}
+{"id":"chunk-9knfmvrf.js#ua","doc":"生成写给模型/用户看的 agent 代理说明文档（本地代理地址、CA 位置、快速诊断步骤）。"}
+{"id":"chunk-9knfmvrf.js#vsa","doc":"agent 代理初始化：读取并清除 CCR_AGENT_PROXY_* 环境变量，决定中继模式、包含主机、CA 监视等。","carry":"fallback-c"}
+{"id":"chunk-9knfmvrf.js#Dr","doc":"为 agent 代理安装 gh 垫片（gh shim），没有 gh 时提供替身。"}
+{"id":"chunk-9knfmvrf.js#CXi","doc":"安装/刷新系统 CA 信任（处理已有证书与 -2 链接、记录安装结果）。"}
+{"id":"chunk-9knfmvrf.js#Je","doc":"为 Java、NSS、Bazel、gsutil 等工具配置 CA 信任。"}
+{"id":"chunk-2snqx25v.js#y5n","doc":"续接会话的主流程：匹配会话模式、恢复模型与 worktree、处理分叉与会话 ID 采纳、团队重绑定。"}
+{"id":"chunk-3bj63apf.js#sur","doc":"用启发式规则判断会话状态（等待输入、运行中、出错等）。"}
+{"id":"chunk-3bj63apf.js#A","doc":"会话状态启发式规则用到的文本模式表。"}
+{"id":"chunk-kbw92gv8.js#bt","doc":"反序列化记忆 BM25 索引并校验倒排数据。"}
+{"id":"chunk-kbw92gv8.js#Qt","doc":"记忆索引分词：NFKD 归一化，支持 CJK 单字切分与英文词干。"}
+{"id":"chunk-kbw92gv8.js#x","doc":"构建记忆文件倒排索引（posting 列表与位置）。"}
+{"id":"chunk-kbw92gv8.js#Re","doc":"记忆索引 BM25 检索。"}
+{"id":"chunk-pc3x100t.js#nt","doc":"按保留期清理旧会话转录（hipaa/zdr/桌面端等情况豁免）。"}
+{"id":"chunk-n6w10qzg.js#B1t","doc":"WorkflowDetailDialog：工作流详情对话框，阶段/代理两栏，支持暂停、恢复、跳过与重试代理。"}
+{"id":"chunk-n6w10qzg.js#Wi","doc":"工作流详情中的代理卡片。"}
+{"id":"chunk-n6w10qzg.js#U1t","doc":"保存动态工作流的对话框。"}
+{"id":"chunk-n6w10qzg.js#Ur","doc":"工作流详情中的代理列表栏。"}
+{"id":"chunk-46zjpx8m.js#Q","doc":"/send-to-project 给模型的操作说明（告诉 Project 这是哪个会话、如何读取）。"}
+{"id":"chunk-46zjpx8m.js#X","doc":"/send-to-project 的会话上下文（对话摘要与转录）。"}
+{"id":"chunk-8b8mbw6q.js#f6o","doc":"解析 Remote Control 桥接会话的所有者绑定。"}
+{"id":"chunk-2g3amcsc.js#GJn","doc":"向 .git/info/exclude 追加条目（避免把 Claude 产生的文件纳入版本控制）。"}
+{"id":"chunk-pjmrd77p.js#fe","doc":"Artifact 发布调用：读取文件、上传资源并发布。"}
+{"id":"chunk-pjmrd77p.js#Ni","doc":"AppifactRepl 工具：对 artifact 运行 appifact SDK JavaScript。"}
+{"id":"chunk-8as4prnp.js#ad","doc":"/teleport 菜单：选择移到云端或其他 teleport 操作。"}
+{"id":"chunk-6g88e2yt.js#xC","doc":"plugin 子命令表（init/validate/tag 等）。"}
+{"id":"chunk-vj5dz3jp.js#j","doc":"推荐插件工具的定义。"}
+{"id":"chunk-pyd7te4t.js#Pe","doc":"在 session.start 时把 AGENTS.md 作为项目指令加载。"}
+{"id":"chunk-s1nkafe4.js#Q$e","doc":"后台会话需要携带的环境变量名单。"}
+{"id":"chunk-e0saccbx.js#y","doc":"启动阶段计时记录器（tengu_startup_timing）。"}
+{"id":"chunk-3qtgj81y.js#te","doc":"Windows 沙箱卸载（claude sandbox uninstall）：停止服务、删除账户与目录并检查残留。"}

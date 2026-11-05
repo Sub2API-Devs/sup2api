@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/credential-provider-sso/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/credential-provider-sso@3.936.0..3.939.0
- * pieces: chunk-rs2k9kxx.js (6)
+ * pieces: chunk-eh62rjsw.js (6)
  * attribution: esm-layout 4, esm-fingerprint 2
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
@@ -11,10 +11,10 @@ import { require_shared_ini_file_loader } from "../../../@smithy/shared-ini-file
 import { require_client } from "../../core/dist-cjs/submodules/client/index.js";
 import { fromSso } from "../../token-providers/dist-cjs/index.js";
 
-//@ chunk-rs2k9kxx.js:372-398 esm-layout
+//@ chunk-eh62rjsw.js:372-398 esm-layout
 var import_property_provider = __toESM(require_property_provider());
 var sharedIniFileLoader = __toESM(require_shared_ini_file_loader());
-//@ chunk-rs2k9kxx.js:398-584 esm-fingerprint
+//@ chunk-eh62rjsw.js:398-584 esm-fingerprint
 var isSsoProfile = (arg) =>
   arg &&
   (typeof arg.sso_start_url === "string" ||
@@ -22,9 +22,9 @@ var isSsoProfile = (arg) =>
     typeof arg.sso_session === "string" ||
     typeof arg.sso_region === "string" ||
     typeof arg.sso_role_name === "string");
-//@ chunk-rs2k9kxx.js:584-599 esm-layout
+//@ chunk-eh62rjsw.js:584-599 esm-layout
 var client = __toESM(require_client());
-//@ chunk-rs2k9kxx.js:599-2516 esm-layout
+//@ chunk-eh62rjsw.js:599-2516 esm-layout
 var import_property_provider_2 = __toESM(require_property_provider());
 var import_shared_ini_file_loader = __toESM(require_shared_ini_file_loader());
 var SHOULD_FAIL_CREDENTIAL_CHAIN = false;
@@ -144,7 +144,7 @@ var resolveSSOCredentials = async ({
   else client.setCredentialFeature(credentials, "CREDENTIALS_SSO_LEGACY", "u");
   return credentials;
 };
-//@ chunk-rs2k9kxx.js:2516-2958 esm-layout
+//@ chunk-eh62rjsw.js:2516-2958 esm-layout
 var import_property_provider_3 = __toESM(require_property_provider());
 var validateSsoProfile = (profile, logger) => {
   let { sso_start_url, sso_account_id, sso_region, sso_role_name } = profile;
@@ -159,7 +159,7 @@ Reference: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.ht
     );
   return profile;
 };
-//@ chunk-rs2k9kxx.js:2958-4782 esm-fingerprint
+//@ chunk-eh62rjsw.js:2958-4782 esm-fingerprint
 var fromSSO =
   (init = {}) =>
   async ({ callerClientConfig } = {}) => {

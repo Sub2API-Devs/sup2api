@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：旧版权限兼容
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p98twse2.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s321jzex.js (4)
  * attribution: placement 4
  */
 import { findUrlContentRule } from "./ruleTarget.js";
@@ -13,7 +13,7 @@ import { getToolPermissionContext } from "../../../utils/permissions/toolPermiss
 import { formatRuleForDisplay } from "./artifactPermissionRules.js";
 import { CONSENT_ASK_TAG } from "./consentStamps.js";
 
-//@ chunk-p98twse2.js:20437-20539 placement
+//@ chunk-s321jzex.js:20461-20563 placement
 /**
  * 旧版权限检查中查找匹配的 url 内容 ask 规则（可先改写输入）。
  */
@@ -24,7 +24,7 @@ function legacyAskRule(context, input, ruleTargetInput) {
       : input;
   return findUrlContentRule(getToolPermissionContext(context), ruleInput, "ask");
 }
-//@ chunk-p98twse2.js:20539-21212 placement
+//@ chunk-s321jzex.js:20563-21236 placement
 /**
  * 旧版 Artifact 权限检查：先查 url 内容 deny 规则（拒绝），再调用基础检查，未拒绝时查 ask 规则决定是否询问。
  */
@@ -80,7 +80,7 @@ function legacyCheckPermissions(
         },
       };
 }
-//@ chunk-p98twse2.js:21212-21278 placement
+//@ chunk-s321jzex.js:21236-21302 placement
 /**
  * 取输入里的 action 字段（非字符串返回 undefined）。
  */
@@ -88,7 +88,7 @@ function actionNameOf(input) {
   let action = input?.action;
   return typeof action === "string" ? action : undefined;
 }
-//@ chunk-p98twse2.js:21278-21411 placement (2.1.88 match: getUpdatedInputOrFallback, 1)
+//@ chunk-s321jzex.js:21302-21435 placement (2.1.88 match: getUpdatedInputOrFallback, 1)
 function mapUpdatedInput(permissionResult, fallback) {
   if (
     permissionResult === undefined ||

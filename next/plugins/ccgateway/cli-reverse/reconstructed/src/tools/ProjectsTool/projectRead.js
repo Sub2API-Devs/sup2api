@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：Projects 工具读取（project_read、info、下载）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-eg496hkq.js (28)
- * attribution: placement 28
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y2k9w57g.js (31)
+ * attribution: placement 28, layout 3
  */
 import { join } from "path";
 import { cutProjectText } from "../../services/projectTexts.js";
@@ -33,7 +33,6 @@ import {
 } from "../../services/projects/projectMemory.js";
 import { projectReadInput } from "../../services/projects/projectReadRecords.js";
 import { truncateUtf8Bytes } from "../../utils/stringUtils.js";
-import { getPastePath } from "../../utils/pasteStore.js";
 import { getDefaultFileReadingLimits } from "../FileReadTool/limits.js";
 import { logForDebugging } from "../../utils/debug.js";
 import {
@@ -49,6 +48,7 @@ import { writeFileAtomic } from "../../utils/atomicPublishWrite.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { ProjectsPreconditionError } from "./projectsAuth.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { identity } from "../../utils/identity.js";
 import {
   PROJECT_CAPACITY_TEXT,
@@ -58,9 +58,9 @@ import {
 } from "./projectWrite.js";
 import { PROJECTS_MEMORY_NOTE } from "./prompt.js";
 
-//@ chunk-eg496hkq.js:39443-39454 placement
+//@ chunk-y2k9w57g.js:40829-40840 placement
 var MAX_LINE_CHUNK = 450;
-//@ chunk-eg496hkq.js:39454-39683 placement (2.1.88 match: needsSegmentation, 0.713)
+//@ chunk-y2k9w57g.js:40840-41069 placement (2.1.88 match: needsSegmentation, 0.714)
 function splitLongLines(text) {
   let rebuiltLines = [];
   for (let line of text.split(`
@@ -79,7 +79,7 @@ function splitLongLines(text) {
   return rebuiltLines.join(`
 `);
 }
-//@ chunk-eg496hkq.js:39683-41113 placement
+//@ chunk-y2k9w57g.js:41069-42499 placement
 async function getProjectInfoForTool(project, attachedProjectUuid, toolContext) {
   let description = project.description ?? "";
   let promptTemplate = project.prompt_template ?? "";
@@ -135,14 +135,14 @@ ${promptTemplate}
     instructions: "",
   };
 }
-//@ chunk-eg496hkq.js:41113-41177 placement
+//@ chunk-y2k9w57g.js:42499-42563 placement
 function canWriteToolFile(toolContext) {
   let store = toolResultStoreOrNull();
   return store === undefined ? poolCanRead(toolContext) : store.maxBytes > 0;
 }
-//@ chunk-eg496hkq.js:41177-41738 placement
+//@ chunk-y2k9w57g.js:42563-43124 placement
 var DOC_TOO_LARGE_WRITE_REFUSAL = `Write refused; nothing in the project was changed. The doc at this path holds more than ${MAX_PROJECT_FILE_CHUNK_BYTES} bytes, more than project_read shows inline, so a rewrite typed from what it showed you would drop the rest. Do not delete the doc to write it again unless the user asks: a delete cannot be undone here. If you have the whole new text in a file that this session accepts as \`local_path\`, pass that file, but not a file made from only part of the doc. Otherwise write the new text to a new path, and tell the user that this doc is too large to rewrite here.`;
-//@ chunk-eg496hkq.js:41738-42093 placement
+//@ chunk-y2k9w57g.js:43124-43479 placement
 async function readProjectDocContent(
   path,
   text,
@@ -192,7 +192,7 @@ async function readProjectDocContent(
     fileMeta,
   );
 }
-//@ chunk-eg496hkq.js:42093-43304 placement
+//@ chunk-y2k9w57g.js:43479-44690 placement
 /**
  * 项目文档在大小限制内直接返回文本，超限时改为下载到本地并返回路径说明。
  */
@@ -273,14 +273,14 @@ async function projectTextOrDownload(
     local_file: await downloadToPastePath(hash, fileUuid, text, session, storageV5, preferProjectDocs),
   };
 }
-//@ chunk-eg496hkq.js:43304-43429 placement
+//@ chunk-y2k9w57g.js:44690-44815 placement
 function estimateDocTokens(byteSize, tokenBudget, estimatedTokens) {
   let estimated = Math.ceil(byteSize / tokenBudget.bytesPerToken);
   return tokenBudget.claim !== undefined
     ? Math.max(estimatedTokens ?? 0, estimated)
     : Math.min(estimatedTokens !== null && estimatedTokens > 0 ? estimatedTokens : estimated, byteSize);
 }
-//@ chunk-eg496hkq.js:43429-43635 placement
+//@ chunk-y2k9w57g.js:44815-45021 placement
 function classifyReadSize(text, byteSize, tokenBudget, estimatedTokens) {
   let tokens = estimateDocTokens(byteSize, tokenBudget, estimatedTokens);
   if (tokens <= tokenBudget.maxTokens) return "within";
@@ -292,7 +292,7 @@ function classifyReadSize(text, byteSize, tokenBudget, estimatedTokens) {
     return "over_with_long_line";
   return "over";
 }
-//@ chunk-eg496hkq.js:43635-44035 placement
+//@ chunk-y2k9w57g.js:45021-45421 placement
 async function downloadToToolFile(text, byteSize, fileUuid, session, storageV5, preferProjectDocs) {
   let store = toolResultStoreOrNull();
   if (store !== undefined) {
@@ -334,7 +334,11 @@ async function downloadToToolFile(text, byteSize, fileUuid, session, storageV5, 
     };
   }
 }
-//@ chunk-eg496hkq.js:44104-44757 placement
+//@ chunk-y2k9w57g.js:45421-45490 layout (2.1.88 match: getPastePath, 1)
+function getPastePath(hash, id) {
+  return `${hash}-${id.replace(/[^a-zA-Z0-9-]/g, "_")}.txt`;
+}
+//@ chunk-y2k9w57g.js:45490-46142 placement
 async function downloadToPastePath(hash, fileUuid, text, session, storageV5, preferProjectDocs) {
   let cwdBeforeSwitch = getPastePath(hash, fileUuid);
   if (preferProjectDocs && getLocalUploadsRoot() !== null) {
@@ -379,7 +383,7 @@ async function downloadToPastePath(hash, fileUuid, text, session, storageV5, pre
   await writeToolResultFile(toolResultsPath, Buffer.from(text, "utf8"), 384);
   return toolResultsPath;
 }
-//@ chunk-eg496hkq.js:44757-45095 placement
+//@ chunk-y2k9w57g.js:46142-46480 placement
 async function writeThroughStore(storageV5, originalCwd, cwdBeforeSwitch, text, kind) {
   if (isStorageV5Enabled() && storageV5 !== undefined) {
     let key = toolResultsKey(originalCwd, cwdBeforeSwitch);
@@ -401,10 +405,11 @@ async function writeThroughStore(storageV5, originalCwd, cwdBeforeSwitch, text, 
   }
   return false;
 }
-//@ chunk-eg496hkq.js:45095-45269 placement
+//@ chunk-y2k9w57g.js:46480-46724 placement
 var ORIGINAL_UNREADABLE_HINT =
   "only its extracted text, if it has any, can be read here (project_read without `original`). If that is not enough, tell the user the original cannot be opened here.";
-//@ chunk-eg496hkq.js:45269-45619 placement
+var SAVED_TO_LOCAL_FILE_HINT = "were saved to local_file. Open it with file-appropriate tooling.";
+//@ chunk-y2k9w57g.js:46724-47074 placement
 function tooLargeForDownloadText(docPath, originalAsked, fileSizeBytes) {
   let limitText = `above the ${MAX_PROJECT_FILE_BYTES}-byte limit for in-session downloads`;
   let sizeText = fileSizeBytes === undefined ? `is ${limitText}` : `is ${fileSizeBytes} bytes, ${limitText}`;
@@ -418,7 +423,7 @@ function tooLargeForDownloadText(docPath, originalAsked, fileSizeBytes) {
         "project_upload_too_large",
       );
 }
-//@ chunk-eg496hkq.js:45619-45829 placement
+//@ chunk-y2k9w57g.js:47074-47284 placement
 async function downloadProjectFile({ projectUuid, path, fileUuid, signal, credentials, originalAsked }) {
   try {
     return await downloadProjectFile_2(projectUuid, fileUuid, signal, credentials);
@@ -428,7 +433,36 @@ async function downloadProjectFile({ projectUuid, path, fileUuid, signal, creden
     throw error;
   }
 }
-//@ chunk-eg496hkq.js:45829-47769 placement
+//@ chunk-y2k9w57g.js:47284-47519 layout
+function downloadLeafName(fileId, fileName) {
+  if (normalizeUuidOrNull(fileId) === null) throw Error("project_read: server returned a malformed file id.");
+  let safeName =
+    (fileName.split(/[/\\]/).pop() ?? "")
+      .replace(/[^a-zA-Z0-9._-]/g, "_")
+      .slice(-64)
+      .replace(/^\.+/, "") || "file";
+  return `project-file-${fileId}-${safeName}`;
+}
+//@ chunk-y2k9w57g.js:47519-47855 layout
+async function downloadIntoStore(fileId, fileName, store, session, signal, storageV5, credentials) {
+  if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_iterative_gray", false)) return null;
+  let leafName = downloadLeafName(fileId, fileName);
+  if (store !== undefined)
+    return (
+      (
+        await store.fetchFile?.({
+          leafName,
+          fileUuid: fileId,
+        })
+      )?.path ?? null
+    );
+  let { UPLOADED_FILE_MAX_BYTES, downloadFileById } = await import("../../bridge/inboundAttachments.js");
+  let downloaded = await downloadFileById(fileId, UPLOADED_FILE_MAX_BYTES, signal, credentials);
+  return "data" in downloaded && downloaded.data.byteLength > 0
+    ? saveProjectReadResult(leafName, downloaded.data, session, storageV5)
+    : null;
+}
+//@ chunk-y2k9w57g.js:47855-49973 placement
 /**
  * 执行 project_read：读取项目文档或文件，必要时下载到会话可访问的位置。
  */
@@ -463,8 +497,34 @@ async function projectReadMethod(
     credentials,
     originalAsked,
   };
-  let download = await downloadProjectFile(downloadRequest);
-  assertSizeOk(download.file_size_bytes);
+  let download;
+  try {
+    download = await downloadProjectFile(downloadRequest);
+    assertSizeOk(download.file_size_bytes);
+  } catch (error) {
+    let fallbackLocalFile =
+      error instanceof ProjectsPreconditionError &&
+      (error.reasonCode === "project_original_too_large" || error.reasonCode === "project_upload_too_large")
+        ? await downloadIntoStore(
+            projectFile.file_uuid,
+            projectFile.file_name ?? docPath,
+            store,
+            session,
+            signal,
+            storageV5,
+            credentials,
+          )
+        : null;
+    if (fallbackLocalFile === null) throw error;
+    return {
+      method: "project_read",
+      path: docPath,
+      file_kind: projectFile.file_kind,
+      local_file: fallbackLocalFile,
+      created_at: projectFile.created_at ?? null,
+      notice: `"${safeInline(docPath)}" is a ${safeInline(projectFile.file_kind)} upload${originalAsked ? "" : " with no text extract"}; its original bytes ${SAVED_TO_LOCAL_FILE_HINT}`,
+    };
+  }
   let buffer = Buffer.from(download.content_base64, "base64");
   if (buffer.byteLength !== download.file_size_bytes) {
     download = await downloadProjectFile(downloadRequest);
@@ -477,20 +537,21 @@ async function projectReadMethod(
       );
   }
   if (download.uuid !== projectFile.file_uuid) throw Error("project_read: server returned a different file.");
-  if (normalizeUuidOrNull(download.uuid) === null)
-    throw Error("project_read: server returned a malformed file id.");
-  let safeFileName =
-    (download.file_name.split(/[/\\]/).pop() ?? "")
-      .replace(/[^a-zA-Z0-9._-]/g, "_")
-      .slice(-64)
-      .replace(/^\.+/, "") || "file";
-  let leafName = `project-file-${download.uuid}-${safeFileName}`;
+  let leafName = downloadLeafName(download.uuid, download.file_name);
   let describePrefix = `"${safeInline(docPath)}" is a ${safeInline(download.file_kind)} upload${originalAsked ? "" : " with no text extract"}; its original bytes (${download.file_size_bytes}) `;
   let savedPath;
   let unsavedNotice = `${describePrefix}could not be saved to a file this session can open; ${originalAsked ? ORIGINAL_UNREADABLE_HINT : "tell the user this file could not be opened."}`;
   if (store === undefined) savedPath = await saveProjectReadResult(leafName, buffer, session, storageV5);
   else if (buffer.byteLength > store.maxBytes) {
-    savedPath = null;
+    savedPath = await downloadIntoStore(
+      download.uuid,
+      download.file_name,
+      store,
+      session,
+      signal,
+      storageV5,
+      credentials,
+    );
     unsavedNotice = `${describePrefix}are more than this session keeps in one file (${store.maxBytes} bytes), so they were not saved; ${originalAsked ? ORIGINAL_UNREADABLE_HINT : "tell the user this file cannot be opened here."}`;
   } else {
     let saved = await saveResultSafely(store, {
@@ -507,13 +568,10 @@ async function projectReadMethod(
       local_file: savedPath,
     }),
     created_at: download.created_at ?? null,
-    notice:
-      savedPath !== null
-        ? `${describePrefix}were saved to local_file. Open it with file-appropriate tooling.`
-        : unsavedNotice,
+    notice: savedPath !== null ? `${describePrefix}${SAVED_TO_LOCAL_FILE_HINT}` : unsavedNotice,
   };
 }
-//@ chunk-eg496hkq.js:47769-47905 placement
+//@ chunk-y2k9w57g.js:49973-50109 placement
 async function saveProjectReadResult(leafName, buffer, session, storageV5) {
   let originalCwd = getOriginalCwd_2(session);
   let toolResultsPath = join(originalCwd, leafName);
@@ -523,7 +581,7 @@ async function saveProjectReadResult(leafName, buffer, session, storageV5) {
   await writeToolResultFile(toolResultsPath, buffer, 384);
   return toolResultsPath;
 }
-//@ chunk-eg496hkq.js:47905-48017 placement
+//@ chunk-y2k9w57g.js:50109-50221 placement
 var PROJECT_REFRESH_MS = 600000;
 var projectLackState = identity(
   {
@@ -533,7 +591,7 @@ var projectLackState = identity(
     state.lackedUpdateAt = Number.NEGATIVE_INFINITY;
   },
 );
-//@ chunk-eg496hkq.js:48017-49486 placement
+//@ chunk-y2k9w57g.js:50221-51690 placement
 async function fetchProjectWithFallback(
   projectUuid,
   docUuid,
@@ -598,7 +656,7 @@ async function fetchProjectWithFallback(
   }
   return newDoc;
 }
-//@ chunk-eg496hkq.js:49486-49608 placement
+//@ chunk-y2k9w57g.js:51690-51812 placement
 function findProjectDoc(projectDetail, fileName) {
   let found = projectDetail.documents.find((doc) => doc.file_name === fileName);
   return found
@@ -608,19 +666,19 @@ function findProjectDoc(projectDetail, fileName) {
       }
     : undefined;
 }
-//@ chunk-eg496hkq.js:49608-49672 placement
+//@ chunk-y2k9w57g.js:51812-51876 placement
 function findProjectFile(projectDetail, fileName) {
   return (projectDetail.files ?? []).find((file) => file.file_name === fileName);
 }
-//@ chunk-eg496hkq.js:49672-49761 placement
+//@ chunk-y2k9w57g.js:51876-51965 placement
 function projectDocNames(projectDetail) {
   return projectDetail.documents.map((doc) => doc.file_name).filter((name) => typeof name === "string");
 }
-//@ chunk-eg496hkq.js:49761-49851 placement
+//@ chunk-y2k9w57g.js:51965-52055 placement
 function projectFileNames(projectDetail) {
   return (projectDetail.files ?? []).map((file) => file.file_name).filter((name) => typeof name === "string");
 }
-//@ chunk-eg496hkq.js:49851-50417 placement
+//@ chunk-y2k9w57g.js:52055-52621 placement
 function notFoundInProjectText(projectDetail, docPath, method) {
   let mapped = [...projectDocNames(projectDetail), ...projectFileNames(projectDetail)].map(safeInline);
   let availableText =
@@ -634,7 +692,7 @@ function notFoundInProjectText(projectDetail, docPath, method) {
         : " Files from the project's synced sources, such as GitHub or Google Drive, are not listed and cannot be read by name here.";
   return new ProjectsPreconditionError(`No doc or file at "${safeInline(docPath)}".${availableText}`);
 }
-//@ chunk-eg496hkq.js:50417-50662 placement
+//@ chunk-y2k9w57g.js:52621-52866 placement
 function notFoundInFilesText(memory, docPath) {
   let mapped = memory.files.map((file) => safeInline(file.path));
   let availableText =
@@ -643,7 +701,7 @@ function notFoundInFilesText(memory, docPath) {
       : " The project has no memory files.";
   return new ProjectsPreconditionError(`No memory file at "${safeInline(docPath)}".${availableText}`);
 }
-//@ chunk-eg496hkq.js:50662-51089 placement
+//@ chunk-y2k9w57g.js:52866-53293 placement
 function assertProjectMemoryAvailable(isBridgeSession) {
   if (isBridgeSession)
     throw new ProjectsPreconditionError(
@@ -652,7 +710,7 @@ function assertProjectMemoryAvailable(isBridgeSession) {
         : "Project memory is not available in this session: it runs through the remote-session bridge, which has no memory access. The project's docs are still available through the other methods.",
     );
 }
-//@ chunk-eg496hkq.js:51089-51424 placement
+//@ chunk-y2k9w57g.js:53293-53628 placement
 /**
  * 本会话拿不到项目记忆时的说明文本。
  */
@@ -661,7 +719,7 @@ var PROJECT_MEMORY_UNAVAILABLE_TEXT =
   "No project memory is available in this session. It may be turned off, or this server may not serve it yet. It is checked again when this session's context is next rebuilt (for example after /clear or a compaction) and in a new session.";
 var PROJECT_MEMORY_STALENESS_NOTE =
   "Memory as read at this session's start or its last context refresh; not live.";
-//@ chunk-eg496hkq.js:51424-51502 placement
+//@ chunk-y2k9w57g.js:53628-53706 placement
 function requireField(value, fieldName, method) {
   if (value === undefined) throw new ProjectsPreconditionError(`${method} requires "${fieldName}"`);
   return value;

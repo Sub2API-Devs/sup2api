@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。调查后续追问。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (9)
  * attribution: placement 9
  */
 import {
@@ -37,12 +37,12 @@ import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { uiSignals } from "../../state/uiSignals.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:990745-990749 placement
+//@ chunk-czq1j3j2.js:956438-956442 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:990745", () => {
+deferInit("chunk-czq1j3j2.js:956438", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:990749-991285 placement
+//@ chunk-czq1j3j2.js:1024781-1025317 placement
 /**
  * 按字符上限约束一次文本编辑：比较新旧文本的公共前后缀，只截断插入部分；返回新文本和光标处理（pass/keep/新位置）。
  */
@@ -89,10 +89,10 @@ function clampTextEdit(previous, next, maxLength) {
         caret: joined.length,
       };
 }
-//@ chunk-18hwfzwa.js:991285-991306 placement
+//@ chunk-czq1j3j2.js:1025317-1025338 placement
 var FOLLOWUP_RECENT_INPUT_MS = 600;
 var FOLLOWUP_AUTO_DISMISS_MS = 1500;
-//@ chunk-18hwfzwa.js:991306-991383 placement
+//@ chunk-czq1j3j2.js:1025338-1025415 placement
 /**
  * 函数 collapseToSingleLine（换行与制表符替换为空格）。
  */
@@ -101,7 +101,7 @@ function collapseToSingleLine(text) {
     .replace(/\r\n|\r|\n/g, " ")
     .replaceAll("\t", " ");
 }
-//@ chunk-18hwfzwa.js:991383-993610 placement
+//@ chunk-czq1j3j2.js:1025415-1027644 placement
 function SurveyFollowup({ onResolve, question, maxChars, autoDismissAfterMs, turnInProgress = false }) {
   let clock = useClock();
   let inputClock = useInputClock();
@@ -295,13 +295,13 @@ function SurveyFollowup({ onResolve, question, maxChars, autoDismissAfterMs, tur
     ],
   });
 }
-//@ chunk-18hwfzwa.js:993610-993624 placement
+//@ chunk-czq1j3j2.js:1027644-1027658 placement
 var PENDING_SOURCE_TTL_MS = 30000;
-//@ chunk-18hwfzwa.js:993624-993673 placement
+//@ chunk-czq1j3j2.js:1027658-1027707 placement
 function setPendingSurveyFeedbackSource(pendingSurveyFeedbackSource) {
   uiSignals.pendingSurveyFeedbackSource = pendingSurveyFeedbackSource;
 }
-//@ chunk-18hwfzwa.js:993673-993766 placement
+//@ chunk-czq1j3j2.js:1027707-1027800 placement
 /**
  * 函数 hasPendingSurveyFeedbackSource（待处理来源存在且未过期）。
  */
@@ -312,7 +312,7 @@ function hasPendingSurveyFeedbackSource() {
     Date.now() - pendingSurveyFeedbackSource.setAt <= PENDING_SOURCE_TTL_MS
   );
 }
-//@ chunk-18hwfzwa.js:993766-993905 placement
+//@ chunk-czq1j3j2.js:1027800-1027939 placement
 /**
  * 取出并清空待处理的调查反馈来源；超过 30 秒视为过期返回 null。
  */
@@ -324,9 +324,9 @@ function takePendingSurveyFeedbackSource() {
   return pendingSurveyFeedbackSource;
 }
 export {
-  FOLLOWUP_RECENT_INPUT_MS,
   SurveyFollowup,
   setPendingSurveyFeedbackSource,
+  FOLLOWUP_RECENT_INPUT_MS,
   collapseToSingleLine,
   clampTextEdit,
   takePendingSurveyFeedbackSource,

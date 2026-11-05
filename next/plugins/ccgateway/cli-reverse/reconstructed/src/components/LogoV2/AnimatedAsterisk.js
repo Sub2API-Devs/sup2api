@@ -3,13 +3,13 @@
  *
  * 欢迎区动画星号（颜色渐变到 SETTLED_GREY）；本模块混入了 fflate 解压表等第三方代码（切分误归）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/LogoV2/AnimatedAsterisk.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-ag5x7vhf.js (3)
- * attribution: fingerprint 2, placement 1, layout 1
+ * pieces: chunk-0fgj42c8.js (2), chunk-hnxhr3bs.js (3)
+ * attribution: fingerprint 2, affinity 1, placement 1, layout 1
  */
 import { isReducedMotion } from "../Spinner/spinnerFlags.js";
-import { getInitialSettings_2 } from "../../utils/settings/settings.js";
+import { getInitialSettings } from "../../utils/settings/settings.js";
 import { toRGBColor, snapTo360, hueToRgb } from "../Spinner/utils.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { TEARDROP_ASTERISK } from "../../constants/figures.js";
@@ -23,16 +23,42 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { isXtermJs } from "../../ink/terminal.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:83769-83820 placement
-function prefersReducedMotion() {
-  return isReducedMotion(getInitialSettings_2().prefersReducedMotion);
+//@ chunk-0fgj42c8.js:852-1135 fingerprint (2.1.88 match: SETTLED_GREY, 1)
+function SETTLED_GREY(color) {
+  let match = /^rgba?:([0-9a-f]{1,4})\/([0-9a-f]{1,4})\/([0-9a-f]{1,4})/i.exec(color);
+  if (match)
+    return {
+      r: hexPairToFraction(match[1]),
+      g: hexPairToFraction(match[2]),
+      b: hexPairToFraction(match[3]),
+    };
+  let match_2 = /^#([0-9a-f]+)$/i.exec(color);
+  if (match_2 && match_2[1].length % 3 === 0) {
+    let hex = match_2[1];
+    let pairLength = hex.length / 3;
+    return {
+      r: hexPairToFraction(hex.slice(0, pairLength)),
+      g: hexPairToFraction(hex.slice(pairLength, 2 * pairLength)),
+      b: hexPairToFraction(hex.slice(2 * pairLength)),
+    };
+  }
+  return;
 }
-//@ chunk-ag5x7vhf.js:83820-83873 layout (2.1.88 match: SETTLED_GREY, 1)
+//@ chunk-0fgj42c8.js:1135-1194 affinity
+function hexPairToFraction(hexPair) {
+  let maxPairValue = 16 ** hexPair.length - 1;
+  return parseInt(hexPair, 16) / maxPairValue;
+}
+//@ chunk-hnxhr3bs.js:83254-83305 placement
+function prefersReducedMotion() {
+  return isReducedMotion(getInitialSettings().prefersReducedMotion);
+}
+//@ chunk-hnxhr3bs.js:83305-83358 layout (2.1.88 match: SETTLED_GREY, 1)
 var ASTERISK_SPIN_MS; // deferred: uses toRGBColor (../Spinner/utils.js) of its import cycle while loading; runs once the cycle is complete
 var ASTERISK_TURN_COUNT;
 var ASTERISK_SETTLE_MS;
 var SETTLED_GREY_COLOR;
-deferInit("chunk-ag5x7vhf.js:83820", () => {
+deferInit("chunk-hnxhr3bs.js:83305", () => {
   ASTERISK_SPIN_MS = 1500;
   ASTERISK_TURN_COUNT = 2;
   ASTERISK_SETTLE_MS = ASTERISK_SPIN_MS * ASTERISK_TURN_COUNT;
@@ -42,7 +68,7 @@ deferInit("chunk-ag5x7vhf.js:83820", () => {
     b: 153,
   });
 });
-//@ chunk-ag5x7vhf.js:83873-84754 fingerprint (2.1.88 match: AnimatedAsterisk, 0.765)
+//@ chunk-hnxhr3bs.js:83358-84239 fingerprint (2.1.88 match: AnimatedAsterisk, 0.765)
 function AnimatedAsterisk(props) {
   let $ = useMemoCache(22);
   let { char } = props;
@@ -134,14 +160,4 @@ function AnimatedAsterisk(props) {
   } else spinner = $[21];
   return spinner;
 }
-//@ chunk-18hwfzwa.js:785671-785728 fingerprint (2.1.88 match: SETTLED_GREY, 1)
-var ASTERISK_RAY_COUNT = 20;
-var ASTERISK_SPIN_PERIOD_MS = 4000;
-var ASTERISK_TICK_MS = ASTERISK_SPIN_PERIOD_MS / ASTERISK_RAY_COUNT;
-var ASTERISK_FADE_FLOOR = 0.18;
-var SETTLED_GREY_RGB = {
-  r: 0,
-  g: 0,
-  b: 0,
-};
-export { ASTERISK_TICK_MS, ASTERISK_RAY_COUNT, ASTERISK_FADE_FLOOR, SETTLED_GREY_RGB, AnimatedAsterisk };
+export { SETTLED_GREY, AnimatedAsterisk };

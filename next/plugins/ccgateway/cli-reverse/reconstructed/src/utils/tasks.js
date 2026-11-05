@@ -3,10 +3,10 @@
  *
  * 任务列表存储：<配置目录>/tasks/<listId>/<id>.json（或 v5 存储）、文件锁、high-water mark、创建/读取/更新/删除/依赖/认领
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/tasks.ts
- * pieces: chunk-0n43rj0b.js (2), chunk-ah34pb7m.js (1), chunk-e6aww6q8.js (1), chunk-ha3km179.js (2), chunk-nw7jbebs.js (49), chunk-p7xejzdb.js (1)
- * attribution: placement 7, fingerprint 10, callgraph-fingerprint 5, affinity 1, layout 29, file-local 3, callgraph-witnessed 1
+ * pieces: chunk-3xs5443t.js (49), chunk-5xgkngpb.js (1), chunk-h8f0wgnn.js (1), chunk-hnsp0svy.js (2), chunk-w3ch4xq2.js (2)
+ * attribution: callgraph-fingerprint 5, affinity 1, fingerprint 10, layout 29, file-local 3, callgraph-witnessed 1, placement 6
  */
 import { join } from "path";
 import { readFile, writeFile, readdir, unlink } from "fs/promises";
@@ -31,9 +31,10 @@ import { storageErrorCode } from "./storage/storageErrors.js";
 import { logForDebugging } from "./debug.js";
 import { env } from "./env.js";
 import { releaseLockQuietly, lock } from "./lockfile.js";
-import { getTeammateContext, getTeamName } from "./teammate.js";
+import { getTeammateContext } from "./teammateContext.js";
+import { getTeamName } from "./teammate.js";
 import { getSessionId, isDiskless } from "../bootstrap/state.js";
-import { getClaudeConfigDir } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { readAllPages, DEFAULT_MAX_PAGES } from "./pagedRead.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
 import { getFsImplementation } from "./fsOperations.js";
@@ -41,10 +42,9 @@ import { jsonStringify, jsonParse } from "./slowOperations.js";
 import { createJitteredBackoff } from "./backoff.js";
 import { sleep } from "./sleep.js";
 import { todoToolsEnabled } from "./sessionKind.js";
-import { count } from "./collections.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-nw7jbebs.js:5306-5360 callgraph-fingerprint (2.1.88 match: notifyTasksUpdated, 0.391)
+//@ chunk-3xs5443t.js:6359-6413 callgraph-fingerprint (2.1.88 match: notifyTasksUpdated, 0.39)
 /**
  * 发出任务列表已更新事件（UI 刷新）。
  */
@@ -53,7 +53,7 @@ function notifyTasksUpdated() {
     swarmHostState().taskList.updated.emit();
   } catch {}
 }
-//@ chunk-nw7jbebs.js:5656-5773 affinity
+//@ chunk-3xs5443t.js:6709-6826 affinity
 function isClaimedIdConflict(error) {
   return (
     error.code === "AlreadyExists" ||
@@ -62,7 +62,7 @@ function isClaimedIdConflict(error) {
       ID_CONFLICT_ERRNO_CODES.has(error.telemetryCode))
   );
 }
-//@ chunk-nw7jbebs.js:5773-5855 fingerprint (2.1.88 match: LOCK_OPTIONS, 0.866)
+//@ chunk-3xs5443t.js:6826-6908 fingerprint (2.1.88 match: LOCK_OPTIONS, 0.866)
 /**
  * 任务文件锁选项（30 次重试，5–100ms）。
  */
@@ -74,15 +74,15 @@ var LOCK_OPTIONS_2 = {
   },
   onCompromised: (error) => logError(error),
 };
-//@ chunk-nw7jbebs.js:5855-5891 layout
+//@ chunk-3xs5443t.js:6908-6944 layout
 function getHighWaterMarkPath(taskListId) {
   return join(getTaskOutputDir(taskListId), HIGH_WATER_MARK_FILE);
 }
-//@ chunk-nw7jbebs.js:5891-5937 layout
+//@ chunk-3xs5443t.js:6944-6990 layout
 async function readHighWaterMark(taskListId, store) {
   return (await tryReadHighWaterMark(taskListId, store)) ?? 0;
 }
-//@ chunk-nw7jbebs.js:5937-6303 layout
+//@ chunk-3xs5443t.js:6990-7356 layout
 /**
  * 读取 high-water mark（失败返回 null）。
  */
@@ -106,7 +106,7 @@ async function tryReadHighWaterMark(taskListId, store) {
     return getErrnoCode(error) === "ENOENT" ? 0 : null;
   }
 }
-//@ chunk-nw7jbebs.js:6303-6663 layout
+//@ chunk-3xs5443t.js:7356-7717 layout
 /**
  * 写 high-water mark。
  */
@@ -140,7 +140,7 @@ async function writeHighWaterMark(taskListId, value, store) {
     encoding: "utf8",
   });
 }
-//@ chunk-nw7jbebs.js:6663-6795 layout
+//@ chunk-3xs5443t.js:7717-7850 layout
 async function recordSkippedTaskId(taskListId, taskId, store) {
   try {
     if (taskId > (await readHighWaterMark(taskListId, store)))
@@ -149,7 +149,7 @@ async function recordSkippedTaskId(taskListId, taskId, store) {
     logForDebugging(`[Tasks] could not record skipped task id ${taskId}: ${errorMessage(error)}`);
   }
 }
-//@ chunk-nw7jbebs.js:6795-6862 fingerprint (2.1.88 match: isTodoV2Enabled, 1)
+//@ chunk-3xs5443t.js:7850-7917 fingerprint (2.1.88 match: isTodoV2Enabled, 1)
 /**
  * 任务工具（TaskCreate/Get/Update/List）是否启用：CLAUDE_CODE_ENABLE_TASKS !== false。
  */
@@ -157,7 +157,7 @@ function isTaskToolsEnabled() {
   if (env.CLAUDE_CODE_ENABLE_TASKS === false) return false;
   return true;
 }
-//@ chunk-nw7jbebs.js:6862-7765 callgraph-fingerprint (2.1.88 match: resetTaskList, 0.191)
+//@ chunk-3xs5443t.js:7917-8822 callgraph-fingerprint (2.1.88 match: resetTaskList, 0.191)
 /**
  * 重置任务列表：全部任务已完成时才删除，并先把最大 id 记入 high-water mark，避免 id 复用。
  */
@@ -217,7 +217,7 @@ async function resetTaskList(taskListId, store) {
     await releaseLockQuietly(lock, "[Tasks] resetTaskList");
   }
 }
-//@ chunk-nw7jbebs.js:7765-7951 fingerprint (2.1.88 match: getTaskListId, 0.56)
+//@ chunk-3xs5443t.js:8822-9008 fingerprint (2.1.88 match: getTaskListId, 0.56)
 /**
  * 当前任务列表 id：CLAUDE_CODE_TASK_LIST_ID > 队友所属团队 > 团队名/会话列表/lead 团队 > 会话 id。
  */
@@ -228,29 +228,29 @@ function getTaskListId() {
   if (teammateCtx) return sessionListId ?? teammateCtx.teamName;
   return getTeamName() || sessionListId || leaderTeamName || getSessionId();
 }
-//@ chunk-nw7jbebs.js:7951-8006 file-local
+//@ chunk-3xs5443t.js:9008-9063 file-local
 /**
  * 把列表/任务 id 净化为安全路径段（非 [A-Za-z0-9_-] 换成 -）。
  */
 function sanitizePathComponent(input) {
   return input.replace(/[^a-zA-Z0-9_-]/g, "-");
 }
-//@ chunk-nw7jbebs.js:8006-8051 layout (2.1.88 match: getTaskOutputDir, 1)
+//@ chunk-3xs5443t.js:9063-9108 layout (2.1.88 match: getTaskOutputDir, 1)
 function getTaskOutputDir(taskId) {
   return join(getClaudeConfigDir(), "tasks", sanitizePathComponent(taskId));
 }
-//@ chunk-nw7jbebs.js:8051-8100 callgraph-fingerprint (2.1.88 match: getTaskPath, 1)
+//@ chunk-3xs5443t.js:9108-9157 callgraph-fingerprint (2.1.88 match: getTaskPath, 1)
 /**
  * 任务文件路径 <配置目录>/tasks/<listId>/<taskId>.json。
  */
 function getTaskPath(taskListId, taskId) {
   return join(getTaskOutputDir(taskListId), `${sanitizePathComponent(taskId)}.json`);
 }
-//@ chunk-nw7jbebs.js:8100-8144 layout
+//@ chunk-3xs5443t.js:9157-9201 layout
 function getTaskStorageKey(taskListId, taskId) {
   return STORAGE_SPACES.task(sanitizePathComponent(taskListId), sanitizePathComponent(taskId));
 }
-//@ chunk-nw7jbebs.js:8144-8612 layout
+//@ chunk-3xs5443t.js:9201-9669 layout
 async function listTaskIdsFromStore(store, taskListId) {
   let query = {
     namespace: "task",
@@ -282,7 +282,7 @@ async function listTaskIdsFromStore(store, taskListId) {
       return null;
   }
 }
-//@ chunk-nw7jbebs.js:8612-9339 layout
+//@ chunk-3xs5443t.js:9669-10396 layout
 async function listTasksFromStore(store, taskListId) {
   let query = {
     namespace: "task",
@@ -326,7 +326,7 @@ async function listTasksFromStore(store, taskListId) {
     .filter((key) => key !== null)
     .sort((value, entry_2) => Number(value.id) - Number(entry_2.id));
 }
-//@ chunk-nw7jbebs.js:9339-9410 layout
+//@ chunk-3xs5443t.js:10396-10467 layout
 /**
  * 供 UI 读取任务列表（v5 存储或文件）。
  */
@@ -334,7 +334,7 @@ async function listTasksForStore(taskListId, store) {
   if (isStorageV5Enabled() && store !== undefined) return listTasksFromStore(store, taskListId);
   return listTasks(taskListId);
 }
-//@ chunk-nw7jbebs.js:9410-9558 layout
+//@ chunk-3xs5443t.js:10467-10615 layout
 /**
  * 创建任务列表目录（或 v5 存储 scope）。
  */
@@ -351,7 +351,7 @@ async function ensureTaskListDir(taskListId, store) {
     await getFsImplementation().mkdir(taskOutputDir);
   } catch {}
 }
-//@ chunk-nw7jbebs.js:9558-9649 layout
+//@ chunk-3xs5443t.js:10615-10706 layout
 function maxNumericId(ids) {
   let highest = 0;
   for (let id of ids) {
@@ -360,7 +360,7 @@ function maxNumericId(ids) {
   }
   return highest;
 }
-//@ chunk-nw7jbebs.js:9649-9984 callgraph-fingerprint (2.1.88 match: findHighestTaskIdFromFiles, 0.53)
+//@ chunk-3xs5443t.js:10706-11041 callgraph-fingerprint (2.1.88 match: findHighestTaskIdFromFiles, 0.53)
 /**
  * 从文件名（或 v5 存储键）找最大任务 id。
  */
@@ -388,7 +388,7 @@ async function findHighestTaskIdFromFiles(taskListId, store) {
   }
   return highest;
 }
-//@ chunk-nw7jbebs.js:9984-10074 file-local
+//@ chunk-3xs5443t.js:11041-11131 file-local
 /**
  * 最高任务 id = max(现有文件最大 id, high-water mark)。
  */
@@ -399,7 +399,7 @@ async function findHighestTaskId(taskListId, store) {
   ]);
   return Math.max(fromFiles, fromMark);
 }
-//@ chunk-nw7jbebs.js:10074-11057 layout
+//@ chunk-3xs5443t.js:11131-12115 layout
 /**
  * 创建任务：在列表锁内取最高 id+1 写入（v5 存储 ifAbsent 冲突时递增重试），返回新 id。
  */
@@ -458,7 +458,7 @@ async function createTask(taskListId, taskData, store) {
     await releaseLockQuietly(lock, "[Tasks] createTask");
   }
 }
-//@ chunk-nw7jbebs.js:11057-11323 fingerprint (2.1.88 match: getTask, 0.498)
+//@ chunk-3xs5443t.js:12115-12381 fingerprint (2.1.88 match: getTask, 0.498)
 /**
  * 把 JSON 文本按 Task schema 解析。
  */
@@ -477,7 +477,7 @@ function parseTaskJson(taskId, json) {
     return null;
   }
 }
-//@ chunk-nw7jbebs.js:11323-11551 layout
+//@ chunk-3xs5443t.js:12381-12609 layout
 async function readTaskFromStore(store, taskListId, taskId) {
   let readResult = await store.read([getTaskStorageKey(taskListId, taskId)]);
   if (!readResult.ok) {
@@ -488,7 +488,7 @@ async function readTaskFromStore(store, taskListId, taskId) {
   if (!item.found) return null;
   return parseTaskJson(taskId, Buffer.from(item.value).toString("utf8"));
 }
-//@ chunk-nw7jbebs.js:11551-12559 layout
+//@ chunk-3xs5443t.js:12609-13619 layout
 /**
  * 把一组任务写回空任务列表（会话恢复用），wholeOrNothing 时部分失败会回滚。
  */
@@ -579,7 +579,7 @@ async function restoreTaskList(
     written: restoredCount,
   };
 }
-//@ chunk-nw7jbebs.js:12559-13092 layout
+//@ chunk-3xs5443t.js:13619-14154 layout
 /**
  * 按指定 id 写入任务（已存在不覆盖），并抬高 high-water mark。
  */
@@ -623,7 +623,7 @@ async function writeTaskUnderId(taskListId, task, store) {
     await releaseLockQuietly(lock, "[Tasks] writeTaskUnderId");
   }
 }
-//@ chunk-nw7jbebs.js:13092-13243 layout
+//@ chunk-3xs5443t.js:14154-14307 layout
 /**
  * 把 high-water mark 抬高到给定值（只增）。
  */
@@ -638,7 +638,7 @@ async function raiseTaskIdMark(taskListId, mark, store) {
     await releaseLockQuietly(lock, "[Tasks] raiseTaskIdMark");
   }
 }
-//@ chunk-nw7jbebs.js:13243-13636 layout
+//@ chunk-3xs5443t.js:14307-14700 layout
 /**
  * 读取单个任务（v5 存储或 JSON 文件，schema 校验），不存在或损坏返回 null。
  */
@@ -663,7 +663,7 @@ async function getTask(taskListId, taskId, store) {
     return null;
   }
 }
-//@ chunk-nw7jbebs.js:13636-13811 layout
+//@ chunk-3xs5443t.js:14700-14875 layout
 async function writeTaskMerged(taskListId, taskId, updates, store) {
   if (store) return updateTaskInStoreMerged(store, taskListId, taskId, updates);
   let existing = await getTask(taskListId, taskId);
@@ -680,14 +680,14 @@ async function writeTaskMerged(taskListId, taskId, updates, store) {
   notifyTasksUpdated();
   return updated;
 }
-//@ chunk-nw7jbebs.js:13811-13831 layout
+//@ chunk-3xs5443t.js:14875-14895 layout
 var MAX_STORE_UPDATE_ATTEMPTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var storeUpdateBackoff;
-deferInit("chunk-nw7jbebs.js:13811", () => {
+deferInit("chunk-3xs5443t.js:14875", () => {
   MAX_STORE_UPDATE_ATTEMPTS = 5;
   storeUpdateBackoff = createJitteredBackoff(50);
 });
-//@ chunk-nw7jbebs.js:13831-14550 layout
+//@ chunk-3xs5443t.js:14895-15614 layout
 async function updateTaskInStore(store, taskListId, taskId, mutate) {
   let taskStorageKey = getTaskStorageKey(taskListId, taskId);
   for (let idx = 1; ; idx++) {
@@ -726,7 +726,7 @@ async function updateTaskInStore(store, taskListId, taskId, mutate) {
       : storeUpdateBackoff(idx));
   }
 }
-//@ chunk-nw7jbebs.js:14550-14592 file-local
+//@ chunk-3xs5443t.js:15614-15656 file-local
 function mergeTaskFields(task, updates, taskId) {
   return {
     ...task,
@@ -734,7 +734,7 @@ function mergeTaskFields(task, updates, taskId) {
     id: taskId,
   };
 }
-//@ chunk-nw7jbebs.js:14592-14722 layout
+//@ chunk-3xs5443t.js:15656-15786 layout
 async function updateTaskInStoreMerged(store, taskListId, taskId, updates) {
   return (
     (await updateTaskInStore(store, taskListId, taskId, (task) => {
@@ -750,7 +750,7 @@ async function updateTaskInStoreMerged(store, taskListId, taskId, updates) {
     })) ?? null
   );
 }
-//@ chunk-nw7jbebs.js:14722-15016 layout
+//@ chunk-3xs5443t.js:15786-16080 layout
 /**
  * 更新任务：在任务锁内读出、合并更新并写回（v5 存储走原子 update）。
  */
@@ -775,7 +775,7 @@ async function updateTask(taskListId, taskId, updates, store) {
     await releaseLockQuietly(release, "[Tasks] updateTask");
   }
 }
-//@ chunk-nw7jbebs.js:15016-15578 callgraph-fingerprint (2.1.88 match: blockTask, 0.499)
+//@ chunk-3xs5443t.js:16080-16643 callgraph-fingerprint (2.1.88 match: blockTask, 0.498)
 /**
  * 删除任务：抬高 high-water mark、删除文件/条目，并从其他任务的 blocks/blockedBy 中移除该 id。
  */
@@ -822,7 +822,7 @@ async function deleteTask(taskListId, taskId, store) {
     return false;
   }
 }
-//@ chunk-nw7jbebs.js:15578-15859 callgraph-witnessed (2.1.88 match: listTasks, 1)
+//@ chunk-3xs5443t.js:16643-16924 callgraph-witnessed (2.1.88 match: listTasks, 1)
 /**
  * 列出任务列表中全部任务（按数字 id 排序）。
  */
@@ -840,14 +840,14 @@ async function listTasks(taskListId, store) {
     .filter((t) => t !== null)
     .sort((taskIds, files) => Number(taskIds.id) - Number(files.id));
 }
-//@ chunk-nw7jbebs.js:15859-15902 layout
+//@ chunk-3xs5443t.js:16924-16967 layout
 /**
  * 是否为规范任务 id（正整数字符串）。
  */
 function isCanonicalTaskId(id) {
   return /^[1-9]\d*$/.test(id);
 }
-//@ chunk-nw7jbebs.js:15902-16347 layout
+//@ chunk-3xs5443t.js:16967-17412 layout
 /**
  * 读取全部规范 id 的任务与最高 id（快照）。
  */
@@ -873,7 +873,7 @@ async function snapshotTaskList(taskListId, store) {
     highestId: Math.max(file_5, maxNumericId(ids)),
   };
 }
-//@ chunk-nw7jbebs.js:16347-16456 layout
+//@ chunk-3xs5443t.js:17412-17521 layout
 /**
  * 合并 metadata，值为 null 的键删除。
  */
@@ -886,7 +886,7 @@ function mergeTaskMetadata(metadata, patch) {
     else merged[key] = value;
   return merged;
 }
-//@ chunk-nw7jbebs.js:16456-16705 fingerprint (2.1.88 match: deleteTask, 1)
+//@ chunk-3xs5443t.js:17521-17770 fingerprint (2.1.88 match: deleteTask, 1)
 /**
  * 建立依赖：from.blocks 加 to、to.blockedBy 加 from。
  */
@@ -916,7 +916,7 @@ async function blockTask(taskListId, fromTaskId, toTaskId, store) {
     );
   return true;
 }
-//@ chunk-nw7jbebs.js:16705-16837 layout
+//@ chunk-3xs5443t.js:17770-17902 layout
 /**
  * 确保任务列表锁文件 <任务目录>/.lock 存在（wx 创建，已存在忽略），返回其路径。
  */
@@ -931,7 +931,7 @@ async function ensureTaskListLockFile(taskListId, store) {
   } catch {}
   return lockPath;
 }
-//@ chunk-nw7jbebs.js:16837-16919 layout
+//@ chunk-3xs5443t.js:17902-17985 layout
 /**
  * 锁定任务列表：v5 键值存储走内存锁，否则用锁文件加锁，返回释放函数。
  */
@@ -940,7 +940,7 @@ async function lockTaskList(taskListId, store) {
   let taskListLockFile = await ensureTaskListLockFile(taskListId, store);
   return lock(taskListLockFile, LOCK_OPTIONS_2);
 }
-//@ chunk-nw7jbebs.js:16919-17065 placement (2.1.88 match: markMessagesAsReadByPredicate, 0.489)
+//@ chunk-3xs5443t.js:17985-18131 placement (2.1.88 match: markMessagesAsReadByPredicate, 0.487)
 /**
  * 获取任务列表文件的锁（无盘会话用内存锁）。
  */
@@ -954,7 +954,7 @@ function lockTaskList_2(taskListId, taskId) {
     ...LOCK_OPTIONS_2,
   });
 }
-//@ chunk-nw7jbebs.js:17065-17172 placement
+//@ chunk-3xs5443t.js:18131-18238 placement
 function acquireInMemoryLock(key) {
   return new Promise((resolve) => {
     swarmHostState().taskList.locks.run(
@@ -963,7 +963,7 @@ function acquireInMemoryLock(key) {
     );
   });
 }
-//@ chunk-nw7jbebs.js:17172-18309 fingerprint (2.1.88 match: claimTask, 0.852)
+//@ chunk-3xs5443t.js:18238-19354 fingerprint (2.1.88 match: claimTask, 0.842)
 /**
  * 认领任务：检查存在、owner、是否完成、未完成的阻塞者，可选检查认领者是否已有进行中任务。
  */
@@ -989,12 +989,12 @@ async function claimTask(taskListId, taskId, claimantAgentId, options = {}, stor
             reason: "task_not_found",
           }
         );
-      let taskBeforeLock = await listTasks(taskListId, store);
-      let openTaskIds = new Set(
-        taskBeforeLock.filter((record) => record.status !== "completed").map((claimResult) => claimResult.id),
+      let task = await listTasks(taskListId, store);
+      let unresolvedTaskIds = new Set(
+        task.filter((record) => record.status !== "completed").map((claimResult) => claimResult.id),
       );
-      let ownerTask = await updateTaskInStore(store, taskListId, taskId, (task) =>
-        tryClaimTaskRecord(task, taskId, claimantAgentId, openTaskIds),
+      let ownerTask = await updateTaskInStore(store, taskListId, taskId, (id) =>
+        tryClaimTaskRecord(id, taskId, claimantAgentId, unresolvedTaskIds),
       );
       return ownerTask === undefined || ownerTask === "needs_open_blockers"
         ? {
@@ -1023,13 +1023,11 @@ async function claimTask(taskListId, taskId, claimantAgentId, options = {}, stor
       };
     let allTasks = await listTasks(taskListId, store);
     let unresolvedTaskIds = new Set(allTasks.filter((t) => t.status !== "completed").map((t) => t.id));
-    let blockedByTasks = task.blockedBy.filter((id) => unresolvedTaskIds.has(id));
-    if (blockedByTasks.length > 0)
+    if (task.blockedBy.filter((id) => unresolvedTaskIds.has(id)).length > 0)
       return {
         success: false,
         reason: "blocked",
         task,
-        blockedByTasks,
       };
     return {
       success: true,
@@ -1053,7 +1051,7 @@ async function claimTask(taskListId, taskId, claimantAgentId, options = {}, stor
     await releaseLockQuietly(release, "[Tasks] claimTask");
   }
 }
-//@ chunk-nw7jbebs.js:18309-18817 layout (2.1.88 match: claimTask, 0.787)
+//@ chunk-3xs5443t.js:19354-19837 layout (2.1.88 match: claimTask, 0.769)
 function tryClaimTaskRecord(task, taskId, claimantAgentId, openTaskIds) {
   if (!task)
     return {
@@ -1083,14 +1081,12 @@ function tryClaimTaskRecord(task, taskId, claimantAgentId, openTaskIds) {
       return {
         result: "needs_open_blockers",
       };
-    let blockedByTasks = task.blockedBy.filter((id) => openTaskIds.has(id));
-    if (blockedByTasks.length > 0)
+    if (task.blockedBy.filter((id) => openTaskIds.has(id)).length > 0)
       return {
         result: {
           success: false,
           reason: "blocked",
           task,
-          blockedByTasks,
         },
       };
   }
@@ -1109,7 +1105,7 @@ function tryClaimTaskRecord(task, taskId, claimantAgentId, openTaskIds) {
     },
   };
 }
-//@ chunk-nw7jbebs.js:18817-19678 fingerprint (2.1.88 match: claimTaskWithBusyCheck, 0.926)
+//@ chunk-3xs5443t.js:19837-20639 fingerprint (2.1.88 match: claimTaskWithBusyCheck, 0.917)
 /**
  * 带"代理忙碌"检查的认领（在列表锁内）。
  */
@@ -1137,23 +1133,20 @@ async function claimTaskWithBusyCheck(taskListId, taskId, claimantAgentId, store
         task,
       };
     let unresolvedTaskIds = new Set(allTasks.filter((t) => t.status !== "completed").map((t) => t.id));
-    let blockedByTasks = task.blockedBy.filter((id) => unresolvedTaskIds.has(id));
-    if (blockedByTasks.length > 0)
+    if (task.blockedBy.filter((id) => unresolvedTaskIds.has(id)).length > 0)
       return {
         success: false,
         reason: "blocked",
         task,
-        blockedByTasks,
       };
-    let agentOpenTasks = allTasks.filter(
-      (t) => t.status !== "completed" && t.owner === claimantAgentId && t.id !== taskId,
-    );
-    if (agentOpenTasks.length > 0)
+    if (
+      allTasks.filter((t) => t.status !== "completed" && t.owner === claimantAgentId && t.id !== taskId)
+        .length > 0
+    )
       return {
         success: false,
         reason: "agent_busy",
         task,
-        busyWithTasks: agentOpenTasks.map((t) => t.id),
       };
     return {
       success: true,
@@ -1177,7 +1170,7 @@ async function claimTaskWithBusyCheck(taskListId, taskId, claimantAgentId, store
     await releaseLockQuietly(release, "[Tasks] claimTaskWithBusyCheck");
   }
 }
-//@ chunk-nw7jbebs.js:19678-20333 fingerprint (2.1.88 match: unassignTeammateTasks, 0.956)
+//@ chunk-3xs5443t.js:20639-21294 fingerprint (2.1.88 match: unassignTeammateTasks, 0.956)
 /**
  * 队友退出/被终止时把其未完成任务改回 pending 无 owner，并生成通知文本。
  */
@@ -1211,14 +1204,14 @@ async function unassignTeammateTasks(teamName, teammateId, teammateName, reason,
     notificationMessage,
   };
 }
-//@ chunk-e6aww6q8.js:3232917-3232950 placement
+//@ chunk-5xgkngpb.js:3317556-3317589 placement
 /**
  * 任务工具与 todo 工具都启用时才可用。
  */
 function areTaskToolsEnabled() {
   return isTaskToolsEnabled() && todoToolsEnabled();
 }
-//@ chunk-0n43rj0b.js:5681-5789 placement
+//@ chunk-hnsp0svy.js:5681-5789 placement
 /**
  * 两个数组逐项全等。
  */
@@ -1227,20 +1220,20 @@ function arraysShallowEqual(firstArray, secondArray) {
   for (let idx = 0; idx < firstArray.length; idx++) if (firstArray[idx] !== secondArray[idx]) return false;
   return true;
 }
-//@ chunk-0n43rj0b.js:5789-5833 placement
+//@ chunk-hnsp0svy.js:5789-5833 placement
 function isNonEmptyString(value) {
   return value !== undefined && value.length > 0;
 }
-//@ chunk-ha3km179.js:76055-76143 placement
+//@ chunk-w3ch4xq2.js:85345-85433 placement
 function textFromTaskCreateInput(input) {
   let text = input.input?.text;
   return typeof text === "string" && text.trim().length > 0 ? text : null;
 }
-//@ chunk-ha3km179.js:76143-76331 fingerprint (2.1.88 match: TASK_STATUSES, 1)
+//@ chunk-w3ch4xq2.js:85433-85621 fingerprint (2.1.88 match: TASK_STATUSES, 1)
 var CHECKLIST_MARKER_STATUS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_CHECKLIST_LINE_CHARS;
 var MAX_CHECKLIST_LINES;
-deferInit("chunk-ha3km179.js:76143", () => {
+deferInit("chunk-w3ch4xq2.js:85433", () => {
   CHECKLIST_MARKER_STATUS = new Map([
     ["\u2713", "completed"],
     ["\u2714", "completed"],
@@ -1253,14 +1246,7 @@ deferInit("chunk-ha3km179.js:76143", () => {
   MAX_CHECKLIST_LINE_CHARS = 512;
   MAX_CHECKLIST_LINES = 32;
 });
-//@ chunk-ah34pb7m.js:12634-12714 placement
-/**
- * 统计既不是 ambient 也不是进程内队友的任务数。
- */
-function countNonAmbientTasks(tasks) {
-  return count(tasks, (task) => !task.ambient && task.taskType !== "in_process_teammate");
-}
-//@ chunk-p7xejzdb.js:14282-14352 fingerprint (2.1.88 match: getAgentStatuses, 0.532)
+//@ chunk-h8f0wgnn.js:15491-15561 fingerprint (2.1.88 match: getAgentStatuses, 0.534)
 /**
  * 把代理状态规范为 idle/waiting/busy。
  */
@@ -1278,26 +1264,25 @@ export {
   listTasksForStore,
   listTasks,
   resetTaskList,
+  snapshotTaskList,
+  mergeTaskMetadata,
+  isCanonicalTaskId,
+  writeTaskUnderId,
+  getTask,
+  deleteTask,
+  updateTask,
+  blockTask,
+  raiseTaskIdMark,
+  findHighestTaskId,
+  restoreTaskList,
+  unassignTeammateTasks,
   MAX_CHECKLIST_LINE_CHARS,
   CHECKLIST_MARKER_STATUS,
   MAX_CHECKLIST_LINES,
   textFromTaskCreateInput,
-  ensureTaskListDir,
-  countNonAmbientTasks,
-  snapshotTaskList,
-  unassignTeammateTasks,
   claimTask,
-  updateTask,
-  createTask,
-  deleteTask,
-  getTask,
-  mergeTaskMetadata,
-  blockTask,
   notifyTasksUpdated,
+  ensureTaskListDir,
+  createTask,
   getAgentStatuses,
-  isCanonicalTaskId,
-  writeTaskUnderId,
-  raiseTaskIdMark,
-  findHighestTaskId,
-  restoreTaskList,
 };

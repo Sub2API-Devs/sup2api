@@ -3,13 +3,13 @@
  *
  * 子代理进度行（树形 ├/└）：agent 类型、描述、工具数、token、"Running in the background"/"Done"。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/AgentProgressLine.tsx
- * pieces: chunk-ah34pb7m.js (2)
- * attribution: placement 1, fingerprint 1
+ * pieces: chunk-wjygkcr4.js (2)
+ * attribution: fingerprint 1, placement 1
  */
-import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
 import {
   jsxProd_default_2,
   Fragment,
@@ -19,14 +19,10 @@ import { Text, Box } from "../ink/components/Text.js";
 import { TagTabs } from "./TagTabs.js";
 import { formatNumber } from "../utils/format.js";
 import { TreeConnectorsRow } from "./design-system/TreeConnectors.js";
+import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:36053-36057 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:36053", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:36057-37715 fingerprint (2.1.88 match: AgentProgressLine, 0.716)
+//@ chunk-wjygkcr4.js:37024-38719 fingerprint (2.1.88 match: AgentProgressLine, 0.714)
 function AgentProgressLine(props) {
   let $ = useMemoCache(32);
   let {
@@ -44,32 +40,39 @@ function AgentProgressLine(props) {
     lastToolInfo,
     hideType,
   } = props;
-  let isAsync_2 = isAsync === undefined ? false : isAsync;
+  let isAsyncFlag = isAsync === undefined ? false : isAsync;
   let hideType_2 = hideType === undefined ? false : hideType;
-  let isBackgrounded = isAsync_2 && isResolved;
+  let isAsyncAndResolved = isAsyncFlag && isResolved;
+  let isScreenReaderEnabled = useIsScreenReaderEnabled();
+  let showsToolInfo = !isAsyncAndResolved && (isResolved || !isScreenReaderEnabled);
   let t3;
-  if ($[0] !== isBackgrounded || $[1] !== isResolved || $[2] !== lastToolInfo || $[3] !== taskDescription) {
+  if (
+    $[0] !== isAsyncAndResolved ||
+    $[1] !== isResolved ||
+    $[2] !== lastToolInfo ||
+    $[3] !== taskDescription
+  ) {
     t3 = () => {
       if (!isResolved) {
         return lastToolInfo || "Initializing\u2026";
       }
-      if (isBackgrounded) {
+      if (isAsyncAndResolved) {
         return taskDescription ?? "Running in the background";
       }
       return "Done";
     };
-    $[0] = isBackgrounded;
+    $[0] = isAsyncAndResolved;
     $[1] = isResolved;
     $[2] = lastToolInfo;
     $[3] = taskDescription;
     $[4] = t3;
   } else t3 = $[4];
   let getStatusText = t3;
-  const treeChar = isLast ? "last" : "branch";
+  const layoutVariant = isLast ? "last" : "branch";
   let connectors;
-  if ($[5] !== treeChar) {
-    connectors = [treeChar];
-    $[5] = treeChar;
+  if ($[5] !== layoutVariant) {
+    connectors = [layoutVariant];
+    $[5] = layoutVariant;
     $[6] = connectors;
   } else connectors = $[6];
   const dimColor = !isResolved;
@@ -126,9 +129,9 @@ function AgentProgressLine(props) {
     $[13] = t6;
   } else t6 = $[13];
   let t7;
-  if ($[14] !== isBackgrounded || $[15] !== tokens || $[16] !== toolUseCount) {
+  if ($[14] !== showsToolInfo || $[15] !== tokens || $[16] !== toolUseCount) {
     t7 =
-      !isBackgrounded &&
+      showsToolInfo &&
       jsxProd_default_2(Fragment, {
         children: [
           " \xB7 ",
@@ -141,7 +144,7 @@ function AgentProgressLine(props) {
             }),
         ],
       });
-    $[14] = isBackgrounded;
+    $[14] = showsToolInfo;
     $[15] = tokens;
     $[16] = toolUseCount;
     $[17] = t7;
@@ -168,9 +171,9 @@ function AgentProgressLine(props) {
     $[24] = headerRow;
   } else headerRow = $[24];
   let statusRow;
-  if ($[25] !== getStatusText || $[26] !== isBackgrounded || $[27] !== isLast) {
+  if ($[25] !== getStatusText || $[26] !== isAsyncAndResolved || $[27] !== isLast) {
     statusRow =
-      !isBackgrounded &&
+      !isAsyncAndResolved &&
       jsxProd_default(TreeConnectorsRow, {
         connectors: [isLast ? "space" : "pipe"],
         children: jsxProd_default_2(Text, {
@@ -179,7 +182,7 @@ function AgentProgressLine(props) {
         }),
       });
     $[25] = getStatusText;
-    $[26] = isBackgrounded;
+    $[26] = isAsyncAndResolved;
     $[27] = isLast;
     $[28] = statusRow;
   } else statusRow = $[28];
@@ -196,4 +199,9 @@ function AgentProgressLine(props) {
   } else t11 = $[31];
   return t11;
 }
+//@ chunk-wjygkcr4.js:38719-38723 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:38719", () => {
+  init_react_production();
+});
 export { AgentProgressLine };

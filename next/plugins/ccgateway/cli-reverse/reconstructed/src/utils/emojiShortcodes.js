@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：emoji 短码整表与旧名别名，以及按输入片段给出最多 20 条补全建议（前缀匹配优先）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (5)
  * attribution: placement 5
  */
 
-//@ chunk-18hwfzwa.js:560361-561290 placement
+//@ chunk-czq1j3j2.js:581042-581971 placement
 /**
  * emoji 短码别名映射（旧名到标准名）。
  */
@@ -61,7 +61,7 @@ var EMOJI_SHORTCODE_ALIASES = {
   woman_dancing: "dancer",
   woman_with_veil: "bride_with_veil",
 };
-//@ chunk-18hwfzwa.js:561290-607510 placement
+//@ chunk-czq1j3j2.js:581971-628191 placement
 /**
  * emoji 短码到字符的完整映射表。
  */
@@ -1633,7 +1633,7 @@ var EMOJI_BY_SHORTCODE = {
   zipper_mouth_face: "\uD83E\uDD10",
   zzz: "\uD83D\uDCA4",
 };
-//@ chunk-18hwfzwa.js:607510-607679 placement
+//@ chunk-czq1j3j2.js:628191-628360 placement
 var MAX_EMOJI_SUGGESTIONS = 20;
 var EMOJI_LOOKUP = new Map(
   Object.entries(EMOJI_BY_SHORTCODE).concat(
@@ -1645,11 +1645,11 @@ var EMOJI_LOOKUP = new Map(
   ),
 );
 var EMOJI_SHORTCODES = [...EMOJI_LOOKUP.keys()];
-//@ chunk-18hwfzwa.js:607679-607713 placement
+//@ chunk-czq1j3j2.js:628360-628394 placement
 function lookupEmoji(shortcode) {
   return EMOJI_LOOKUP.get(shortcode);
 }
-//@ chunk-18hwfzwa.js:607713-607982 placement
+//@ chunk-czq1j3j2.js:628394-628663 placement
 /**
  * 按输入片段（不区分大小写）过滤 emoji 短码，前缀匹配优先、再按长度排序，返回最多 20 条 {id: "emoji:名", displayText: emoji, description: ":名:"} 补全建议。
  */

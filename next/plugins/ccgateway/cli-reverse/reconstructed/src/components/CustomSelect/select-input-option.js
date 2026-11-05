@@ -3,10 +3,10 @@
  *
  * 带输入框的选项（"Other…" 类自由输入）：支持外部编辑器、图片粘贴与附件导航。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CustomSelect/select-input-option.tsx
- * pieces: chunk-ey2qag4x.js (5)
- * attribution: placement 1, layout 2, fingerprint 1, affinity 1
+ * pieces: chunk-0rd17ynw.js (1), chunk-p1yqn9ds.js (5)
+ * attribution: fingerprint 2, placement 1, layout 2, affinity 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useState, useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";
@@ -32,20 +32,20 @@ import { Byline } from "../design-system/Byline.js";
 import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 
-//@ chunk-ey2qag4x.js:26333-26392 placement
+//@ chunk-p1yqn9ds.js:26120-26179 placement
 function isEscapeKey(event) {
   return event?.name === "escape" && !event.ctrl && !event.meta;
 }
-//@ chunk-ey2qag4x.js:26392-26433 layout (2.1.88 match: _temp, 1)
+//@ chunk-p1yqn9ds.js:26179-26220 layout (2.1.88 match: _temp, 1)
 function isImagePaste_6(c) {
   return c.type === "image";
 }
-//@ chunk-ey2qag4x.js:26433-26493 layout
+//@ chunk-p1yqn9ds.js:26220-26280 layout
 function inputOptionWidth(columns, maxIndexWidth, extraWidth, rightWidth) {
   let chromeWidth = 2 + maxIndexWidth + 2;
   return Math.max(1, columns - chromeWidth - extraWidth - rightWidth);
 }
-//@ chunk-ey2qag4x.js:26493-33398 fingerprint (2.1.88 match: SelectInputOption, 0.907)
+//@ chunk-p1yqn9ds.js:26280-33172 fingerprint (2.1.88 match: SelectInputOption, 0.907)
 function SelectInputOption(props) {
   let $ = useMemoCache(107);
   let {
@@ -631,8 +631,12 @@ function SelectInputOption(props) {
   } else t38 = $[106];
   return t38;
 }
-//@ chunk-ey2qag4x.js:33398-33451 affinity
+//@ chunk-p1yqn9ds.js:33172-33225 affinity
 function stopEscapePropagation(event) {
   if (isEscapeKey(event)) event.stopImmediatePropagation();
 }
-export { SelectInputOption, isEscapeKey };
+//@ chunk-0rd17ynw.js:1363-1401 fingerprint (2.1.88 match: _temp, 1)
+function isImageBlock(c) {
+  return c.type === "image";
+}
+export { isImageBlock, SelectInputOption, isEscapeKey };

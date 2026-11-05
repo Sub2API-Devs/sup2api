@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：Continue in Projects 权限请求
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dkjq625a.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y0yspzpb.js (1)
  * attribution: placement 1
  */
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { deepFreezeToolName } from "../../utils/deepFreezePlainData.js";
 
-//@ chunk-dkjq625a.js:298-638 placement
+//@ chunk-y0yspzpb.js:298-638 placement
 /**
  * 发送到项目的权限对话框标题与对话框定义。
  */

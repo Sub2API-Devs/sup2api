@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：任务列表的启动恢复、交接与从记录重建，团队领导轮询
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (25)
- * attribution: placement 25
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (19), chunk-tmsx2mh0.js (8)
+ * attribution: placement 25, layout 2
  */
 import { randomUUID } from "crypto";
 import { AsyncLocalStorage } from "async_hooks";
@@ -56,19 +56,20 @@ import {
 } from "../../utils/teammateMailbox.js";
 import { dedupeMailboxMessages } from "../../utils/swarm/teammateMessageRepair.js";
 import { sleep } from "../../utils/sleep.js";
-import { removeTeammateFromTeamFile } from "../../utils/swarm/teamHelpers.js";
+import { isShutdownFrameStale, removeTeammateFromTeamFile } from "../../utils/swarm/teamHelpers.js";
 import { filterMailboxThroughReceiveHooks } from "../../utils/swarm/teammateMailbox.js";
 import { clearOwedIdleNotificationsOnShutdown } from "../../utils/inProcessTeammateHelpers.js";
-import { mainAgentId, getSessionId } from "../../bootstrap/state.js";
+import { mainAgentId, getSessionId, filesPlacedByNameRegistry } from "../../bootstrap/state.js";
 import { sessionTempDirRealpath } from "../../utils/tempDirRealpaths.js";
 import { getActiveMessageQueue } from "../../query/presenceCheck.js";
 import { errorMessage } from "../../utils/errors.js";
 import { ensurePlacedByNameRead } from "../../utils/filePersistence/placedByName.js";
 import { hasConflictingPlacedFile } from "../../utils/filePersistence/taskFileLookup.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
+import { isFilePersistenceEnabled } from "../../utils/filePersistence/filePersistence.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:216137-216339 placement
+//@ chunk-tmsx2mh0.js:9006-9209 placement
 function rebuildTaskListWithRestartFallback(messages) {
   let compactedIds = compactedTaskListIds(messages);
   let restored = rebuildTaskListFromTranscript(messages, compactedIds);
@@ -82,7 +83,7 @@ function rebuildTaskListWithRestartFallback(messages) {
     carriedList: "dropped_on_restart",
   };
 }
-//@ chunk-tyg7f3ek.js:216339-219195 placement
+//@ chunk-tmsx2mh0.js:9209-12362 placement
 /**
  * 从转录重建任务列表：处理 create/update、压缩标记里的任务快照与 blocks/blockedBy 关系。
  */
@@ -95,6 +96,7 @@ function rebuildTaskListFromTranscript(messages, options) {
   let highestTracker = new HighestResponseTracker();
   let dropResponseKey;
   let droppedKeys = [];
+  let seenIds = new Set();
   let byTaskId = new Map();
   let link = (taskId, otherTaskId) => {
     let blocks = byTaskId.get(taskId)?.blocks;
@@ -130,6 +132,17 @@ function rebuildTaskListFromTranscript(messages, options) {
     messages,
     options.fate === "used" ? options.isOlderRow : undefined,
   )) {
+    let taskNumber = parseTaskNumber(call.taskId);
+    if (
+      call.fromSubagent &&
+      (call.kind === "update"
+        ? byResponse.get(call.taskId) === undefined
+        : byResponse.has(call.taskId) ||
+          taskNumber === undefined ||
+          taskNumber <= highestId ||
+          taskNumber <= highestTracker.highestByOthersThan(call.response))
+    )
+      continue;
     visitCall(call.taskId);
     if (call.answeredEarlier) continue;
     if (call.kind === "update") {
@@ -160,7 +173,6 @@ function rebuildTaskListFromTranscript(messages, options) {
       for (let blockedTaskId of call.named.addBlockedBy ?? []) link(blockedTaskId, call.taskId);
       continue;
     }
-    let taskNumber = parseTaskNumber(call.taskId);
     if (
       call.askedEarlier &&
       byResponse.get(call.taskId) === TASK_CARRIED_BY_MARKER &&
@@ -189,17 +201,27 @@ function rebuildTaskListFromTranscript(messages, options) {
           byResponse.delete(responseKey);
           state.tasks.delete(responseKey);
           byTaskId.delete(responseKey);
+          seenIds.delete(responseKey);
         }
       highestTracker.keepOnly(call.response);
       dropResponseKey = call.response;
       droppedKeys = [];
+    }
+    if (seenIds.has(call.taskId)) {
+      for (let taskId of seenIds) {
+        byResponse.delete(taskId);
+        state.tasks.delete(taskId);
+        byTaskId.delete(taskId);
+      }
+      seenIds.clear();
     }
     if (byResponse.get(call.taskId) === undefined) state.tasks.delete(call.taskId);
     trackTaskToolUse(state, call.use);
     resolvePendingTaskCreate(state, call.result);
     byResponse.set(call.taskId, call.response);
     droppedKeys.push(call.taskId);
-    if (taskNumber !== undefined && call.response !== TASK_CARRIED_BY_MARKER)
+    if (call.fromSubagent) seenIds.add(call.taskId);
+    else if (taskNumber !== undefined && call.response !== TASK_CARRIED_BY_MARKER)
       highestTracker.add(call.response, taskNumber);
     byTaskId.set(call.taskId, {
       description: call.named.description ?? "",
@@ -242,9 +264,9 @@ function rebuildTaskListFromTranscript(messages, options) {
     carriedList: options.fate,
   };
 }
-//@ chunk-tyg7f3ek.js:219195-219226 placement
+//@ chunk-tmsx2mh0.js:12362-12393 placement
 var TASK_CARRIED_BY_MARKER = "carried by the marker";
-//@ chunk-tyg7f3ek.js:219226-219728 placement
+//@ chunk-tmsx2mh0.js:12393-12895 placement
 class HighestResponseTracker {
   byResponse = new Map();
   leader;
@@ -271,18 +293,18 @@ class HighestResponseTracker {
     if (value !== undefined) this.add(key, value);
   }
 }
-//@ chunk-tyg7f3ek.js:219728-219799 placement
+//@ chunk-tmsx2mh0.js:12895-12966 placement
 function lowercaseUuidOrEmpty(row) {
   return typeof row.uuid === "string" ? row.uuid.toLowerCase() : "";
 }
-//@ chunk-tyg7f3ek.js:219799-219970 placement
+//@ chunk-tmsx2mh0.js:12966-13137 placement
 function compactPreservedUuids(message) {
   let parsed = compactTaskListSchemas().safeParse(message.compactMetadata?.preservedMessages);
   return parsed.success
     ? [...(parsed.data?.uuids ?? []), ...(parsed.data?.allUuids ?? [])].map((uuid) => uuid.toLowerCase())
     : undefined;
 }
-//@ chunk-tyg7f3ek.js:219970-220866 placement
+//@ chunk-tmsx2mh0.js:13137-14044 placement
 function compactedTaskListIds(messages) {
   let preserved = new Set();
   let sawBoundary = true;
@@ -330,13 +352,13 @@ function compactedTaskListIds(messages) {
     isOlderRow: (a, b) => b < lastIndex || preservedSet.has(lowercaseUuidOrEmpty(a)),
   };
 }
-//@ chunk-tyg7f3ek.js:220866-221294 placement
+//@ chunk-tmsx2mh0.js:14044-14474 placement
 /**
  * 压缩时携带的任务清单 schema：uuids（及可选 allUuids）与任务数组（id/标题/描述等）。
  */
 var compactTaskListSchemas; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var compactTaskListSchema;
-deferInit("chunk-tyg7f3ek.js:220866", () => {
+deferInit("chunk-tmsx2mh0.js:14044", () => {
   compactTaskListSchemas = DoctorLazy(() =>
     objectSchema({
       uuids: array(stringSchema()),
@@ -364,12 +386,12 @@ deferInit("chunk-tyg7f3ek.js:220866", () => {
     }),
   );
 });
-//@ chunk-tyg7f3ek.js:221294-221318 placement
+//@ chunk-0yw3taqg.js:248421-248445 placement
 var TASK_LIST_HANDOFF_STATE; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:221294", () => {
+deferInit("chunk-0yw3taqg.js:248421", () => {
   TASK_LIST_HANDOFF_STATE = new SessionRootSlot(() => ({}));
 });
-//@ chunk-tyg7f3ek.js:221318-223078 placement
+//@ chunk-0yw3taqg.js:248445-250210 placement
 async function applyTaskListHandoff(messages, store) {
   let taskListId = getTaskListId();
   let counts = {
@@ -488,7 +510,7 @@ async function applyTaskListHandoff(messages, store) {
     }
   return counts;
 }
-//@ chunk-tyg7f3ek.js:223078-223424 placement
+//@ chunk-0yw3taqg.js:250210-250556 placement
 async function applyTaskListHandoffIfHonoured(restoredState, messages, store) {
   try {
     if (TASK_LIST_HANDOFF_STATE.peek(restoredState)?.honoured !== true) return;
@@ -503,7 +525,7 @@ async function applyTaskListHandoffIfHonoured(restoredState, messages, store) {
     logError(error);
   }
 }
-//@ chunk-tyg7f3ek.js:223424-223689 placement
+//@ chunk-0yw3taqg.js:250556-250821 placement
 function createTaskListCatchUp(restoredState, messages, mutableMessages, store) {
   if (TASK_LIST_HANDOFF_STATE.peek(restoredState)?.honoured !== true)
     return {
@@ -524,9 +546,9 @@ function createTaskListCatchUp(restoredState, messages, mutableMessages, store) 
     },
   };
 }
-//@ chunk-tyg7f3ek.js:223689-223794 placement
+//@ chunk-0yw3taqg.js:250821-250927 placement
 var taskListRestoreSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:223689", () => {
+deferInit("chunk-0yw3taqg.js:250821", () => {
   taskListRestoreSchema = DoctorLazy(() => {
     let schema = numberSchema().int().min(0).max(MAX_TASK_NUMBER).optional().catch(undefined);
     return objectSchema({
@@ -535,7 +557,7 @@ deferInit("chunk-tyg7f3ek.js:223689", () => {
     });
   });
 });
-//@ chunk-tyg7f3ek.js:223794-223972 placement
+//@ chunk-0yw3taqg.js:250927-251105 placement
 function readTaskListRestoreHint(entry) {
   if (entry === null || entry.readFailed === true) return;
   let parsed = taskListRestoreSchema().safeParse(entry.external?.task_list_restore);
@@ -546,7 +568,11 @@ function readTaskListRestoreHint(entry) {
       }
     : undefined;
 }
-//@ chunk-tyg7f3ek.js:223972-225451 placement
+//@ chunk-0yw3taqg.js:251105-251163 layout
+function requestedTaskListId(taskListRestoreHint) {
+  return Math.max(taskListRestoreHint.highestId ?? 0, taskListRestoreHint.count ?? 0);
+}
+//@ chunk-0yw3taqg.js:251163-252620 placement
 /**
  * 会话启动时从转录恢复任务列表（带压缩前快照与延续任务）。
  */
@@ -559,8 +585,8 @@ async function restoreTaskListAtBoot(host, messages, entry, store) {
   try {
     let { tasks, highestId, olderTasks, carriedTasks, carriedList } =
       rebuildTaskListWithRestartFallback(messages);
-    let max = Math.max(taskListRestoreHint.highestId ?? 0, taskListRestoreHint.count ?? 0);
-    if (highestId === 0 && max === 0) {
+    let requestedHighestId = requestedTaskListId(taskListRestoreHint);
+    if (highestId === 0 && requestedHighestId === 0) {
       restoreState.honoured = true;
       return;
     }
@@ -581,7 +607,7 @@ async function restoreTaskListAtBoot(host, messages, entry, store) {
       }),
     });
     if ((await findHighestTaskId(taskListId, store)) > 0) {
-      await raiseTaskIdMark(taskListId, Math.max(highestId, max), store);
+      await raiseTaskIdMark(taskListId, Math.max(highestId, requestedHighestId), store);
       restoreState.honoured = true;
       logFeatureSad("task_list_restore", "list_not_empty", logRestored(0));
       return;
@@ -589,7 +615,7 @@ async function restoreTaskListAtBoot(host, messages, entry, store) {
     let shouldKeep =
       highestId === 0
         ? "transcript_shows_no_task"
-        : highestId < max
+        : highestId < requestedHighestId
           ? "transcript_behind_request"
           : olderTasks > 0
             ? "older_tasks_not_in_transcript"
@@ -602,7 +628,7 @@ async function restoreTaskListAtBoot(host, messages, entry, store) {
     let { restored, written, refused, left } = await restoreTaskList(
       taskListId,
       tasks,
-      Math.max(highestId, max),
+      Math.max(highestId, requestedHighestId),
       store,
       {
         wholeOrNothing: true,
@@ -623,7 +649,7 @@ async function restoreTaskListAtBoot(host, messages, entry, store) {
       return;
     }
     if (!restored) {
-      await raiseTaskIdMark(taskListId, Math.max(highestId, max), store);
+      await raiseTaskIdMark(taskListId, Math.max(highestId, requestedHighestId), store);
       logFeatureSad("task_list_restore", "list_not_empty", logRestored(0));
     } else if (shouldKeep !== undefined) logFeatureSad("task_list_restore", shouldKeep, logRestored(written));
     else logFeatureOk("task_list_restore", logRestored(written));
@@ -636,7 +662,7 @@ async function restoreTaskListAtBoot(host, messages, entry, store) {
     logError(error);
   }
 }
-//@ chunk-tyg7f3ek.js:225488-229008 placement
+//@ chunk-0yw3taqg.js:252657-256245 placement
 /**
  * print 模式下 team-lead 轮询队友邮箱：读未读消息、入队、所有队友结束后停止并收尾。
  */
@@ -749,24 +775,33 @@ class TeamLeadPoller {
             if (shutdownApproval && isSelfApproval && teamName) {
               let from = shutdownApproval.from;
               logForDebugging(`[print.ts] Processing shutdown_approved from ${from}`);
-              let teammateId = state.teamContext?.teammates
+              let teammateAgentId = state.teamContext?.teammates
                 ? Object.entries(state.teamContext.teammates).find(([, value]) => value.name === from)?.[0]
                 : undefined;
-              if (teammateId) {
+              if (teammateAgentId) {
+                if (
+                  (yield isShutdownFrameStale(
+                    teamName,
+                    teammateAgentId,
+                    message.timestamp,
+                    this.storageV5,
+                  )) === true
+                )
+                  continue;
                 yield removeTeammateFromTeamFile(
                   teamName,
                   {
-                    agentId: teammateId,
+                    agentId: teammateAgentId,
                     name: from,
                   },
                   this.storageV5,
                 );
                 logForDebugging(`[print.ts] Removed ${from} from team file`);
-                yield unassignTeammateTasks(teamName, teammateId, from, "shutdown", this.storageV5);
+                yield unassignTeammateTasks(teamName, teammateAgentId, from, "shutdown", this.storageV5);
                 this.store.setState((state) => {
                   if (!state.teamContext?.teammates) return state;
-                  if (!(teammateId in state.teamContext.teammates)) return state;
-                  let { [teammateId]: ownStamp, ...otherTeammates } = state.teamContext.teammates;
+                  if (!(teammateAgentId in state.teamContext.teammates)) return state;
+                  let { [teammateAgentId]: ownStamp, ...otherTeammates } = state.teamContext.teammates;
                   return {
                     ...state,
                     teamContext: {
@@ -832,7 +867,7 @@ class TeamLeadPoller {
     return "done";
   }
 }
-//@ chunk-tyg7f3ek.js:229086-229166 placement
+//@ chunk-0yw3taqg.js:256323-256403 placement
 /**
  * 空实现的快照存储（snapshot 原样返回、restore 返回空对象）。
  */
@@ -845,22 +880,22 @@ class NoopSnapshotStore {
   }
   async flush() {}
 }
-//@ chunk-tyg7f3ek.js:229166-229190 placement
+//@ chunk-0yw3taqg.js:256403-256427 placement
 var snapshotStoreStorage; // deferred: uses NoopSnapshotStore of its import cycle while loading; runs once the cycle is complete
 var NOOP_SNAPSHOT_STORE;
-deferInit("chunk-tyg7f3ek.js:229166", () => {
+deferInit("chunk-0yw3taqg.js:256403", () => {
   snapshotStoreStorage = new AsyncLocalStorage();
   NOOP_SNAPSHOT_STORE = new NoopSnapshotStore();
 });
-//@ chunk-tyg7f3ek.js:229190-229229 placement (2.1.88 match: getAgentContext, 1)
+//@ chunk-0yw3taqg.js:256427-256466 placement
 function getSnapshotStore() {
   return snapshotStoreStorage.getStore() ?? NOOP_SNAPSHOT_STORE;
 }
-//@ chunk-tyg7f3ek.js:229229-229263 placement
+//@ chunk-0yw3taqg.js:256466-256500 placement
 function snapshotPathForSession() {
   return join(sessionTempDirRealpath(), getSessionId());
 }
-//@ chunk-tyg7f3ek.js:229263-229886 placement
+//@ chunk-0yw3taqg.js:256500-257123 placement
 class WorkerDirSyncReporter {
   workerDirSync;
   enqueueSdkEvent;
@@ -891,7 +926,7 @@ class WorkerDirSyncReporter {
     getSnapshotStore().snapshot(snapshotPathForSession(), {}).catch(logError);
   }
 }
-//@ chunk-tyg7f3ek.js:229886-230095 placement
+//@ chunk-0yw3taqg.js:257123-257332 placement
 function notifyTurnBeganBeforeInit({ sessionState, markStartupPhase }) {
   if (getActiveMessageQueue() !== undefined) return;
   try {
@@ -903,7 +938,7 @@ function notifyTurnBeganBeforeInit({ sessionState, markStartupPhase }) {
   }
   markStartupPhase?.("turn_began_before_init");
 }
-//@ chunk-tyg7f3ek.js:230095-230291 placement
+//@ chunk-0yw3taqg.js:257332-257528 placement
 async function placeFilesByNameForTurn(request, context) {
   if (request.fileNames === undefined) return;
   try {
@@ -914,12 +949,13 @@ async function placeFilesByNameForTurn(request, context) {
     logError(error);
   }
 }
-//@ chunk-tyg7f3ek.js:230291-230503 placement
+//@ chunk-0yw3taqg.js:257528-257740 placement
 async function refreshFilesPlacedByName(request) {
   try {
     await ensurePlacedByNameRead();
     if (!hasConflictingPlacedFile(request)) return;
-    let { refreshFilesPlacedByName } = await import("../../services/remoteTools/turnHandoffFiles.js");
+    let { refreshFilesPlacedByName } =
+      await import("../../services/remoteTools/refreshFilesPlacedByName.lazy.js");
     await refreshFilesPlacedByName(request);
   } catch (error) {
     logForDiagnosticsNoPII("warn", "turn_handoff_files_by_name_refresh", {
@@ -928,7 +964,26 @@ async function refreshFilesPlacedByName(request) {
     logError(error);
   }
 }
-//@ chunk-tyg7f3ek.js:230503-230577 placement
+//@ chunk-0yw3taqg.js:257740-258098 layout
+async function removePlacedCopiesOfDeletedFiles(deletedFileUuids) {
+  try {
+    if (deletedFileUuids.size === 0 || !isFilePersistenceEnabled()) return;
+    await ensurePlacedByNameRead();
+    if ([...filesPlacedByNameRegistry().values()].some((placed) => deletedFileUuids.has(placed.fileUuid))) {
+      let { removePlacedCopiesOf } =
+        await import("../../services/remoteTools/refreshFilesPlacedByName.lazy.js");
+      await removePlacedCopiesOf(deletedFileUuids);
+    }
+  } catch (error) {
+    logForDiagnosticsNoPII("warn", "turn_handoff_files_by_name_refresh", {
+      load_failed: 1,
+      of_deleted_uploads: 1,
+    });
+    logFeatureBad("bridge_attachment_deleted_copy", "placed_copies_load_failed");
+    logError(error);
+  }
+}
+//@ chunk-0yw3taqg.js:258098-258172 placement
 var UNPLANNABLE_REASONS = {
   peer: 1,
   file_kinds: 2,
@@ -938,6 +993,7 @@ var UNPLANNABLE_REASONS = {
 };
 export {
   restoreTaskListAtBoot,
+  removePlacedCopiesOfDeletedFiles,
   notifyTurnBeganBeforeInit,
   placeFilesByNameForTurn,
   WorkerDirSyncReporter,

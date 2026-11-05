@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：构造带安全环境与全局参数的 git 调用（禁用 hooks/危险配置），以及判断缺失哪些安全环境变量。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sycgf9xs.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hb44av3w.js (6)
  * attribution: placement 6
  */
 import { basename } from "path";
@@ -20,13 +20,13 @@ import {
 import { LFS_SKIP_ENV, pickByHelper } from "./gitSafeEnv.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-sycgf9xs.js:6640-6817 placement
+//@ chunk-hb44av3w.js:6676-6853 placement
 /**
  * （切分错误，git 安全）允许保留仓库钩子时可省略的配置键，以及强制的安全环境变量（GIT_NO_LAZY_FETCH、GIT_NO_REPLACE_OBJECTS、GIT_TERMINAL_PROMPT=0…）。
  */
 var GIT_SAFETY_CONFIG_KEYS; // deferred: uses NULL_HOOKS_PATH_PATTERN (../gitSafeExec.js) of its import cycle while loading; runs once the cycle is complete
 var GIT_SAFETY_ENV;
-deferInit("chunk-sycgf9xs.js:6640", () => {
+deferInit("chunk-hb44av3w.js:6676", () => {
   GIT_SAFETY_CONFIG_KEYS = new Set([
     "core.hooksPath",
     "core.askPass",
@@ -40,7 +40,7 @@ deferInit("chunk-sycgf9xs.js:6640", () => {
     ...LFS_SKIP_ENV,
   };
 });
-//@ chunk-sycgf9xs.js:6817-6930 placement
+//@ chunk-hb44av3w.js:6853-6966 placement
 /**
  * （切分错误，git 安全）返回尚未在环境中设置的 git 安全环境变量。
  */
@@ -51,7 +51,7 @@ function missingGitSafetyEnv(env, { allowGitTerminalPrompt = false } = {}) {
       !(allowGitTerminalPrompt && varName === "GIT_TERMINAL_PROMPT") && !hasEnvVar(env, varName),
   );
 }
-//@ chunk-sycgf9xs.js:6930-7398 placement
+//@ chunk-hb44av3w.js:6966-7434 placement
 /**
  * （切分错误，git 安全）若可执行文件是 git，返回加上安全 -c 配置的参数和安全环境（GIT_TERMINAL_PROMPT=0 等）；可选择保留仓库钩子。
  */
@@ -83,9 +83,9 @@ function buildSafeGitInvocation(
     },
   };
 }
-//@ chunk-sycgf9xs.js:7398-7523 placement (2.1.88 match: GIT_GLOBAL_FLAGS_WITH_VALUES, 0.848)
+//@ chunk-hb44av3w.js:7434-7559 placement (2.1.88 match: GIT_GLOBAL_FLAGS_WITH_VALUES, 0.848)
 var GIT_GLOBAL_FLAGS_WITH_VALUES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-sycgf9xs.js:7398", () => {
+deferInit("chunk-hb44av3w.js:7434", () => {
   GIT_GLOBAL_FLAGS_WITH_VALUES = new Set([
     "-C",
     "--git-dir",
@@ -97,7 +97,7 @@ deferInit("chunk-sycgf9xs.js:7398", () => {
     "--exec-path",
   ]);
 });
-//@ chunk-sycgf9xs.js:7523-7711 placement
+//@ chunk-hb44av3w.js:7559-7747 placement
 function findGitConfigArgIndexes(args) {
   let configArgIndexes = [];
   let index = 0;
@@ -112,7 +112,7 @@ function findGitConfigArgIndexes(args) {
   }
   return configArgIndexes;
 }
-//@ chunk-sycgf9xs.js:7711-7815 placement
+//@ chunk-hb44av3w.js:7747-7851 placement
 function rewriteNullHooksPath(args) {
   let out = [...args];
   for (let index of findGitConfigArgIndexes(out))

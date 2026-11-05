@@ -3,19 +3,19 @@
  *
  * 2.1.316 新增：Artifact 工具动作。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4v4n55c3.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7f790p0r.js (11)
  * attribution: placement 11
  */
 import { ASSET_ID_RE } from "../../tools/ArtifactTool/constants.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-4v4n55c3.js:227-304 placement
+//@ chunk-7f790p0r.js:227-304 placement
 function plainObjectOrNull(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value : null;
 }
-//@ chunk-4v4n55c3.js:304-372 placement
+//@ chunk-7f790p0r.js:304-372 placement
 function omitFields(fields, ...omitted) {
   let copy = {
     ...fields,
@@ -23,15 +23,15 @@ function omitFields(fields, ...omitted) {
   for (let field of omitted) delete copy[field];
   return copy;
 }
-//@ chunk-4v4n55c3.js:372-413 placement
+//@ chunk-7f790p0r.js:372-413 placement
 function isNonEmptyString(value) {
   return typeof value === "string";
 }
-//@ chunk-4v4n55c3.js:413-476 placement
+//@ chunk-7f790p0r.js:413-476 placement
 function isAssetPublishInput(fields) {
   return isNonEmptyString(fields.from_url) || Array.isArray(fields.asset_ids);
 }
-//@ chunk-4v4n55c3.js:476-812 placement
+//@ chunk-7f790p0r.js:476-812 placement
 /**
  * Artifact 工具的细分动作名列表，以及旧动作 → addon（comments/data/check）的归属表。
  */
@@ -59,24 +59,24 @@ var ADDON_OF_LEGACY_ACTION = {
   verify: "check",
   preview: "check",
 };
-//@ chunk-4v4n55c3.js:812-855 placement
+//@ chunk-7f790p0r.js:812-855 placement
 /**
  * 导出函数 `isLegacyArtifactAction`：参数 t，返回 Object.hasOwn(ADDON_OF_LEGACY_ACTION, t)。
  */
 function isLegacyArtifactAction(action) {
   return Object.hasOwn(ADDON_OF_LEGACY_ACTION, action);
 }
-//@ chunk-4v4n55c3.js:855-926 placement
+//@ chunk-7f790p0r.js:855-926 placement
 /**
  * 数据库写入动作名（set/update/str_replace/delete/batch），简写展开时归到 write_db。
  */
 var DB_WRITE_OPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DB_WRITE_OPS_SET;
-deferInit("chunk-4v4n55c3.js:855", () => {
+deferInit("chunk-7f790p0r.js:855", () => {
   DB_WRITE_OPS = ["set", "update", "str_replace", "delete", "batch"];
   DB_WRITE_OPS_SET = new Set(DB_WRITE_OPS);
 });
-//@ chunk-4v4n55c3.js:926-1741 placement
+//@ chunk-7f790p0r.js:926-1741 placement
 /**
  * 把 Artifact 工具的简写输入展开成细分动作：publish+asset → upload_asset/copy_from，read → describe_type/read_asset/read_file，list+scope → list_types/files/assets，delete+path → delete_asset；不认识时原样返回。
  */
@@ -147,7 +147,7 @@ function expandArtifactAction(input) {
     };
   return input;
 }
-//@ chunk-4v4n55c3.js:1741-2514 placement
+//@ chunk-7f790p0r.js:1741-2514 placement
 /**
  * qHe 的逆过程：把细分动作（upload_asset、read_file、list_files 等）折回简写形式（publish+asset、read、list+scope、delete+path）。
  */
@@ -223,7 +223,7 @@ function collapseArtifactAction(input) {
       return input;
   }
 }
-//@ chunk-4v4n55c3.js:2514-3043 placement
+//@ chunk-7f790p0r.js:2514-3043 placement
 /**
  * 把 addon 工具输入转成主 Artifact 工具输入：comments 的 read/watch（on:false、replies:true、无 url）对应 comments/unwatch/resume_replies/status/watch；data 的读写动作对应 read_db/write_db 加 db_op。
  */
@@ -278,7 +278,7 @@ function toParentArtifactInput(addon, input) {
   }
   return input;
 }
-//@ chunk-4v4n55c3.js:3043-3512 placement
+//@ chunk-7f790p0r.js:3043-3512 placement
 /**
  * YHe 的逆过程：把主 Artifact 工具输入转回 addon 工具的写法（comments → read，unwatch → watch on:false，read_db/write_db → db_op 本身）。
  */
@@ -330,11 +330,11 @@ function fromParentArtifactInput(parentInput, input) {
 }
 export {
   fromParentArtifactInput,
-  collapseArtifactAction,
-  toParentArtifactInput,
-  ADDON_OF_LEGACY_ACTION,
   expandArtifactAction,
+  toParentArtifactInput,
+  collapseArtifactAction,
   isLegacyArtifactAction,
-  ADVANCED_ACTIONS,
+  ADDON_OF_LEGACY_ACTION,
   DB_WRITE_OPS,
+  ADVANCED_ACTIONS,
 };

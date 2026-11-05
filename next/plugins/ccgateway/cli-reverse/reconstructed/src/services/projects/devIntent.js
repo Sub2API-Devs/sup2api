@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：项目开发意图探测的状态（会话开始、目录变化、回合）；开发意图追踪器单例。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-y304retf.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g8fgjzkk.js (3)
  * attribution: placement 3
  */
 import { getProjectFactsForStartup } from "../../utils/projectFacts.js";
@@ -17,7 +17,7 @@ import { withTelemetryMessage, toError } from "../../utils/errors.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-y304retf.js:448-564 placement
+//@ chunk-g8fgjzkk.js:448-564 placement
 var MOBILE_APP_PROBES = [
   {
     kind: "ios_app",
@@ -28,7 +28,7 @@ var MOBILE_APP_PROBES = [
     found: (facts) => facts.has_android_app_project,
   },
 ];
-//@ chunk-y304retf.js:564-1510 placement
+//@ chunk-g8fgjzkk.js:564-1510 placement
 /**
  * 项目开发意图探测的状态（会话开始、目录变化、回合）。
  */
@@ -104,12 +104,12 @@ class DevIntentTracker {
     }
   }
 }
-//@ chunk-y304retf.js:1510-1535 placement
+//@ chunk-g8fgjzkk.js:1510-1535 placement
 /**
  * 开发意图追踪器单例。
  */
 var devIntentTracker; // deferred: uses DevIntentTracker of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-y304retf.js:1510", () => {
+deferInit("chunk-g8fgjzkk.js:1510", () => {
   devIntentTracker = new HostScoped(() => new DevIntentTracker());
 });
 export { devIntentTracker };

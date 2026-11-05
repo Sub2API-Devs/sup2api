@@ -1,13 +1,13 @@
 /**
  * is-docker/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: is-docker@3.0.0
- * pieces: chunk-20ppca50.js (2)
+ * pieces: chunk-j8hasev3.js (2)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
 import fs from "fs";
 
-//@ chunk-20ppca50.js:578-647 esm-fingerprint
+//@ chunk-j8hasev3.js:578-647 esm-fingerprint
 function hasDockerEnv() {
   try {
     fs.statSync("/.dockerenv");
@@ -16,7 +16,7 @@ function hasDockerEnv() {
     return false;
   }
 }
-//@ chunk-20ppca50.js:647-749 esm-fingerprint
+//@ chunk-j8hasev3.js:647-749 esm-fingerprint
 function hasDockerCGroup() {
   try {
     return fs.readFileSync("/proc/self/cgroup", "utf8").includes("docker");

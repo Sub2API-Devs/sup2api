@@ -3,9 +3,9 @@
  *
  * 迁移：符合条件的用户把 opus 设置改为 opus[1m]
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/migrations/migrateOpusToOpus1m.ts
- * pieces: chunk-cjydagjy.js (1)
+ * pieces: chunk-h61dq9nz.js (1)
  * attribution: fingerprint 1
  */
 import { opus1mMergeTagsDefaultOpus } from "../utils/model/modelDisplay.js";
@@ -14,7 +14,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { logFeatureBad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { logEvent } from "../services/analytics/index.js";
 
-//@ chunk-cjydagjy.js:10386-10767 fingerprint (2.1.88 match: migrateOpusToOpus1m, 0.659)
+//@ chunk-h61dq9nz.js:10563-10944 fingerprint (2.1.88 match: migrateOpusToOpus1m, 0.659)
 /**
  * 迁移：userSettings.model 为 opus 且允许 1M 时改成 opus[1m]。
  */

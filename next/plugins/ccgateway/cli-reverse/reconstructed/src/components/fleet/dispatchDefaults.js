@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：计算新会话的模型、effort、快速模式默认值。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-93kwxas0.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-avy0g5d4.js (9)
  * attribution: placement 8, sole-consumer 1
  */
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { env } from "../../utils/env.js";
-import { getInitialSettings_2, getEffectiveSettingSource_2 } from "../../utils/settings/settings.js";
+import { getInitialSettings, getEffectiveSettingSource } from "../../utils/settings/settings.js";
 import { getDefaultMainLoopModel } from "../../utils/model/modelFallback.js";
 import { parseUserSpecifiedModel, renderModelSetting } from "../../utils/model/modelDisplay.js";
 import {
@@ -42,7 +42,7 @@ import {
   buildFastModeCheckOptions,
 } from "../../utils/fastMode.js";
 
-//@ chunk-93kwxas0.js:6143-6294 placement
+//@ chunk-avy0g5d4.js:6211-6362 placement
 /**
  * 取出并删除某会话的通知记录，返回距通知的毫秒数与通知类型（用于遥测）。
  */
@@ -55,7 +55,7 @@ function takeNotificationLatency(tracker, sessionId, now) {
     notified_kind: fromEnum(notified.kind),
   };
 }
-//@ chunk-93kwxas0.js:6294-6388 placement
+//@ chunk-avy0g5d4.js:6362-6456 placement
 function dispatchDefaultsFromJob(snapshot) {
   return {
     model: snapshot.sessionModel,
@@ -63,7 +63,7 @@ function dispatchDefaultsFromJob(snapshot) {
     fastMode: snapshot.sessionFastMode,
   };
 }
-//@ chunk-93kwxas0.js:6388-6610 placement
+//@ chunk-avy0g5d4.js:6456-6678 placement
 /**
  * 用派发时指定的 model/effort/fastMode 覆盖默认值。
  */
@@ -83,7 +83,7 @@ function applyDispatchOverrides(dispatchDefaults, overrides) {
     }),
   };
 }
-//@ chunk-93kwxas0.js:6610-7005 placement
+//@ chunk-avy0g5d4.js:6678-7073 placement
 /**
  * 计算新会话的模型、effort、快速模式默认值。
  */
@@ -92,7 +92,7 @@ function resolveDispatchDefaults({ launch, window: windowOptions }) {
     resolveFastFlagPlaceholder(
       windowOptions.model ??
         launch?.model ??
-        (env.ANTHROPIC_MODEL || getInitialSettings_2().model || undefined),
+        (env.ANTHROPIC_MODEL || getInitialSettings().model || undefined),
     ) ??
     windowOptions.model ??
     (launch?.model === undefined
@@ -119,7 +119,7 @@ function resolveDispatchDefaults({ launch, window: windowOptions }) {
     ...resolveFastModeForSession(fallback, windowOptions.fastMode),
   };
 }
-//@ chunk-93kwxas0.js:7005-7272 placement
+//@ chunk-avy0g5d4.js:7073-7340 placement
 /**
  * 计算派发默认值的指纹，和上次不同时触发备用会话刷新；出错时保留旧值。
  */
@@ -147,29 +147,29 @@ function checkDispatchDefaultsChanged(previousKey, launch, storage) {
     return previousKey;
   }
 }
-//@ chunk-93kwxas0.js:7272-7448 placement
+//@ chunk-avy0g5d4.js:7340-7516 placement
 /**
  * 新会话默认模型：策略/命令行设置优先，其次组织锁定默认模型、ANTHROPIC_MODEL，最后主循环默认模型。
  */
 function resolveDefaultDispatchModel() {
-  let effectiveSettingSource = getEffectiveSettingSource_2("model");
+  let effectiveSettingSource = getEffectiveSettingSource("model");
   let settingModel =
     effectiveSettingSource === "policySettings" || effectiveSettingSource === "flagSettings"
-      ? getInitialSettings_2().model
-      : (getOrgLockedDefaultModel()?.model ?? getInitialSettings_2().model);
+      ? getInitialSettings().model
+      : (getOrgLockedDefaultModel()?.model ?? getInitialSettings().model);
   let candidate = env.ANTHROPIC_MODEL || settingModel || undefined;
   return (candidate && resolveAllowedModel(candidate, "persisted")) || getDefaultMainLoopModel();
 }
-//@ chunk-93kwxas0.js:7448-7521 placement
+//@ chunk-avy0g5d4.js:7516-7589 placement
 function resolveAllowedModel(model, source) {
   if (!isModelAllowed(model)) return stepDownRestrictedFamilyAliasPick(model) ?? undefined;
   return isUnservedModelSpelling(model, source) ? undefined : model;
 }
-//@ chunk-93kwxas0.js:7521-7543 placement
+//@ chunk-avy0g5d4.js:7589-7611 placement
 function resolveFastFlagPlaceholder(model) {
   return;
 }
-//@ chunk-93kwxas0.js:7543-7781 sole-consumer
+//@ chunk-avy0g5d4.js:7611-7849 sole-consumer
 /**
  * 给定模型与会话选择（--fast 等标志）返回 {fast:"on"|"off", fastBlockedReason}，被托管设置或模型不支持挡住时给出原因。
  */

@@ -3,9 +3,9 @@
  *
  * 提交页："Review your answers"，未答完时警告。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/AskUserQuestionPermissionRequest/SubmitQuestionsView.tsx
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
@@ -25,7 +25,7 @@ import { figures_default } from "../../../../vendor/@inquirer/figures/dist/esm/i
 import { PermissionRuleExplanation } from "../PermissionRuleExplanation.js";
 import { ConfirmSelect } from "../../design-system/ConfirmSelect.js";
 
-//@ chunk-18hwfzwa.js:1293852-1295825 fingerprint (2.1.88 match: SubmitQuestionsView, 0.78)
+//@ chunk-czq1j3j2.js:1319811-1321784 fingerprint (2.1.88 match: SubmitQuestionsView, 0.781)
 function SubmitQuestionsView(props) {
   let $ = useMemoCache(24);
   let { questions, currentQuestionIndex, answers, allQuestionsAnswered, permissionResult, onFinalResponse } =

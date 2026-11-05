@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：auto mode 默认提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ag5x7vhf.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hnxhr3bs.js (5)
  * attribution: placement 5
  */
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
@@ -18,12 +18,12 @@ import { isAutoModeGateEnabled } from "../../utils/permissions/permissionSetup.j
 import { getSettingsForSource } from "../../utils/settings/settings.js";
 import { logEvent } from "../../services/analytics/index.js";
 
-//@ chunk-ag5x7vhf.js:86081-86419 placement
+//@ chunk-hnxhr3bs.js:85566-85904 placement
 var AUTO_DEFAULT_NOTICE_TITLE = "Auto mode is now Claude Code's default permission mode.";
 var AUTO_DEFAULT_NOTICE_BODY =
   "Auto mode lets Claude handle permission prompts automatically. Claude checks each tool call for risky actions and prompt injection before executing, runs the ones it assesses as lower-risk, and blocks the rest.";
 var AUTO_DEFAULT_NOTICE_URL = "https://code.claude.com/docs/en/permission-modes";
-//@ chunk-ag5x7vhf.js:86419-86600 placement
+//@ chunk-hnxhr3bs.js:85904-86085 placement
 function shouldShowAutoDefaultNotice(permissionMode) {
   let globalConfig = getGlobalConfig();
   return (
@@ -38,7 +38,7 @@ function shouldShowAutoDefaultNotice(permissionMode) {
     !globalConfig.hasSeenAutoDefaultNotice
   );
 }
-//@ chunk-ag5x7vhf.js:86600-86754 placement
+//@ chunk-hnxhr3bs.js:86085-86239 placement
 function shouldShowAutoModeEntryWarning() {
   return (
     !["policySettings", "userSettings", "flagSettings"].some(
@@ -46,9 +46,9 @@ function shouldShowAutoModeEntryWarning() {
     ) && !getGlobalConfig().hasSeenAutoModeEntryWarning
   );
 }
-//@ chunk-ag5x7vhf.js:86754-86782 placement
+//@ chunk-hnxhr3bs.js:86239-86267 placement
 var AUTO_MODE_DEFAULT = "auto-mode-default";
-//@ chunk-ag5x7vhf.js:86782-86912 placement
+//@ chunk-hnxhr3bs.js:86267-86397 placement
 function markAutoDefaultNoticeSeen(storageV5) {
   saveGlobalConfig(
     (config) =>

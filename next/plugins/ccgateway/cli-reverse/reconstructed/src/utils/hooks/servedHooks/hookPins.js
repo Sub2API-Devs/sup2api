@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：钩子命令固定（pin）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (15)
  * attribution: placement 15
  */
 import { join, dirname, relative, isAbsolute, basename } from "path";
-import { realpath, open, lstat, mkdtemp, writeFile, rm as rm_2 } from "fs/promises";
+import { realpath, open, lstat, mkdtemp, writeFile, rm } from "fs/promises";
 import { constants } from "fs";
 import { tmpdir as tmpdir_2 } from "os";
 import { randomUUID } from "crypto";
@@ -58,7 +58,7 @@ import {
   sandboxFallbackAsk,
   runServedHookProcess,
 } from "./runServedHook.js";
-import { uniq } from "../../collections.js";
+import { normalizeCaseForComparison_2 } from "../../permissions/filesystem.js";
 import {
   HOOK_NOT_RECORDED_QUESTION,
   hookScriptChangedQuestion,
@@ -73,10 +73,10 @@ import { createCombinedAbortSignal } from "../../combinedAbortSignal.js";
 import { shellQuoteArgs } from "../../bash/bashPipeCommand.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:906646-906863 placement
+//@ chunk-5xgkngpb.js:917131-917348 placement
 var HOOK_PINS_VERSION; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var hookPinsFileSchema;
-deferInit("chunk-e6aww6q8.js:906646", () => {
+deferInit("chunk-5xgkngpb.js:917131", () => {
   HOOK_PINS_VERSION = 1;
   hookPinsFileSchema = DoctorLazy(() =>
     objectSchema({
@@ -101,11 +101,11 @@ deferInit("chunk-e6aww6q8.js:906646", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:906863-906935 placement
+//@ chunk-5xgkngpb.js:917348-917420 placement
 function hookPinsPath(projectDir) {
   return join(servedCallsDir(), `hook-pins-${computeContentHash(projectDir).slice(0, 32)}.jsonl`);
 }
-//@ chunk-e6aww6q8.js:906935-907173 placement
+//@ chunk-5xgkngpb.js:917420-917658 placement
 async function readAcceptedHookPins(projectDir) {
   let rawText;
   try {
@@ -122,7 +122,7 @@ async function readAcceptedHookPins(projectDir) {
     return new Map();
   }
 }
-//@ chunk-e6aww6q8.js:907173-907314 placement
+//@ chunk-5xgkngpb.js:917658-917799 placement
 async function writeAcceptedHookPins(projectDir, pins) {
   await getFileReader().mkdir(servedCallsDir(), 448);
   await getFileReader().atomicWrite(
@@ -135,7 +135,7 @@ async function writeAcceptedHookPins(projectDir, pins) {
     384,
   );
 }
-//@ chunk-e6aww6q8.js:907314-907377 placement
+//@ chunk-5xgkngpb.js:917799-917862 placement
 /**
  * 项目钩子固定状态的附带临时目录与各类上限（超时、文件大小、标签字符数、重试次数）。
  */
@@ -146,7 +146,7 @@ var MAX_SEEN_HOOK_PINS = 256;
 var MAX_INLINE_CHECK_LABEL_CHARS = 120;
 var MAX_PROJECT_PIN_STRIKES = 3;
 var MAX_SET_ASIDE_ASKS = 3;
-//@ chunk-e6aww6q8.js:907377-907868 placement
+//@ chunk-5xgkngpb.js:917862-918353 placement
 /**
  * 接入时创建项目 hook 固定状态：记录项目命令 hook，失败时记录日志。
  */
@@ -180,7 +180,7 @@ function createProjectHookPinsState(projectAttach) {
     said: new Set(),
   };
 }
-//@ chunk-e6aww6q8.js:907868-908202 placement
+//@ chunk-5xgkngpb.js:918353-918687 placement
 /**
  * 汇总各设置源的 PreToolUse 命令 hook 并固定其脚本摘要。
  */
@@ -207,7 +207,7 @@ async function pinProjectCommandHooks(projectDir, launchDir, home) {
     accepted: await readAcceptedHookPins(projectDir),
   };
 }
-//@ chunk-e6aww6q8.js:908202-908576 placement
+//@ chunk-5xgkngpb.js:918687-919061 placement
 /**
  * 保存本次会话已见过的 hook 固定项。
  */
@@ -230,7 +230,7 @@ async function saveSeenHookPins(reach) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:908576-908631 placement
+//@ chunk-5xgkngpb.js:919061-919116 placement
 function hookPinKey(matcher, hook) {
   return computeContentHash(
     jsonStringify(
@@ -241,7 +241,7 @@ function hookPinKey(matcher, hook) {
     ),
   );
 }
-//@ chunk-e6aww6q8.js:908631-908777 placement
+//@ chunk-5xgkngpb.js:919116-919262 placement
 function isSameHookPin(left, right) {
   return (
     (left.kind === "inline" && right.kind === "inline") ||
@@ -251,7 +251,7 @@ function isSameHookPin(left, right) {
       foldPathSegments(left.path) === foldPathSegments(right.path))
   );
 }
-//@ chunk-e6aww6q8.js:908777-908933 placement
+//@ chunk-5xgkngpb.js:919262-919417 placement
 function describeHookPin(pin) {
   if (pin === undefined) return "none";
   switch (pin.kind) {
@@ -263,7 +263,7 @@ function describeHookPin(pin) {
       return "unknown";
   }
 }
-//@ chunk-e6aww6q8.js:908933-909023 placement
+//@ chunk-5xgkngpb.js:919417-919507 placement
 function openPinnedScript(scriptPath) {
   return open(
     scriptPath,
@@ -273,7 +273,7 @@ function openPinnedScript(scriptPath) {
       (O_NOFOLLOW_FLAG === 0 ? constants.O_NOFOLLOW : O_NOFOLLOW_FLAG),
   );
 }
-//@ chunk-e6aww6q8.js:909023-909459 placement
+//@ chunk-5xgkngpb.js:919507-919943 placement
 /**
  * 为一个项目 PreToolUse 命令钩子计算"固定标识"：无法分析的命令记为 inline；能解析到脚本且脚本在允许目录内、是唯一硬链接的稳定文件时记录路径与 sha256，否则 unpinnable。
  */
@@ -327,7 +327,7 @@ async function pinCommandHook(hook, projectDir, home, projectRealPaths) {
         },
       };
 }
-//@ chunk-e6aww6q8.js:909459-909916 placement
+//@ chunk-5xgkngpb.js:919943-920400 placement
 /**
  * 对稳定的脚本文件计算哈希：只接受无硬链接的普通文件且目录无符号链接。
  */
@@ -377,7 +377,7 @@ async function hashStableScriptFile(
     return;
   }
 }
-//@ chunk-e6aww6q8.js:909916-914278 placement
+//@ chunk-5xgkngpb.js:920400-924779 placement
 /**
  * 固定（pin）钩子命令：确定程序与脚本内容，Windows 下无法解析时标记。
  */
@@ -414,7 +414,7 @@ async function pinHookCommand(request) {
   if ("unavailable" in sandboxMode)
     return projectHookUnavailable(request, projectHooks, sandboxMode.unavailable);
   let { mode } = sandboxMode;
-  let readableDirs = uniq([
+  let readableDirs = normalizeCaseForComparison_2([
     ...request.readableDirs,
     ...(await Promise.all(
       request.readableDirs.map((readableDir) => realpath(readableDir).catch(() => readableDir)),
@@ -670,7 +670,7 @@ async function pinHookCommand(request) {
     );
   } finally {
     combinedAbortSignal.cleanup();
-    await rm_2(privateTmpDir, {
+    await rm(privateTmpDir, {
       recursive: true,
       force: true,
     }).catch(() => {});
@@ -678,10 +678,10 @@ async function pinHookCommand(request) {
 }
 export {
   pinHookCommand,
-  saveSeenHookPins,
   MAX_SEEN_HOOK_PINS,
   MAX_PINNED_SCRIPT_BYTES,
   MAX_SET_ASIDE_ASKS,
   MAX_PROJECT_PIN_STRIKES,
   createProjectHookPinsState,
+  saveSeenHookPins,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：把本机 MCP 服务器提供给云会话（同意检查、策略拒绝、工具变化重新同意、通知）；本机 MCP 透传相关的提示文本与通知键等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xqfbbyzk.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3k0vy2fe.js (10)
  * attribution: placement 10
  */
 import { settingsChangeDetector } from "../../utils/settings/changeDetector.js";
@@ -63,7 +63,7 @@ import { DEVICE_MCP_NOT_NOW_NOTICE_KEY } from "./deviceToolNotices.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { pickByHelper } from "../../utils/git/gitSafeEnv.js";
 
-//@ chunk-xqfbbyzk.js:15601-15777 placement
+//@ chunk-3k0vy2fe.js:16833-17009 placement
 function subscribeMcpConfigChanges(onChange, servedSettingsChanged) {
   let mcpConfigFingerprint = getMcpConfigFingerprint();
   let unsubscribes = [
@@ -83,7 +83,7 @@ function subscribeMcpConfigChanges(onChange, servedSettingsChanged) {
   ];
   return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
 }
-//@ chunk-xqfbbyzk.js:15777-15929 placement (2.1.88 match: isMcpServerDisabled, 0.857)
+//@ chunk-3k0vy2fe.js:17009-17161 placement (2.1.88 match: isMcpServerDisabled, 0.857)
 /**
  * getMcpConfigFingerprint：全局与项目 mcpServers 及启用/禁用表的序列化指纹，用于检测配置变化。
  */
@@ -101,9 +101,9 @@ function getMcpConfigFingerprint() {
     return;
   }
 }
-//@ chunk-xqfbbyzk.js:15929-15957 placement
+//@ chunk-3k0vy2fe.js:17161-17189 placement
 var DEVICE_MCP_CONSENT = "device-mcp-consent";
-//@ chunk-xqfbbyzk.js:15957-16482 placement
+//@ chunk-3k0vy2fe.js:17189-17714 placement
 /**
  * 用户选择"暂不"后关于本机 MCP 不共享的说明。
  */
@@ -116,7 +116,7 @@ function notNowConsentMessage(hadQuestion, putOff) {
     ? "This machine's MCP servers aren't shared with cloud sessions until you allow it here."
     : "This machine's MCP servers aren't shared with cloud sessions until you allow it. To choose, start a new claude --cloud session from a terminal.";
 }
-//@ chunk-xqfbbyzk.js:16482-17157 placement
+//@ chunk-3k0vy2fe.js:17714-18389 placement
 /**
  * 透传被撤回时返回给远端的错误与遥测。
  */
@@ -130,7 +130,7 @@ var POLICY_DENIED_RESULT = {
   telemetry: "MCP passthrough withdrawn: remote-devices added to deniedMcpServers since the announce",
 };
 var DEVICE_MCP_RECONSENT = "device-mcp-reconsent";
-//@ chunk-xqfbbyzk.js:17157-17506 placement
+//@ chunk-3k0vy2fe.js:18389-18738 placement
 /**
  * MCP 服务器工具变化后需重新同意的说明。
  */
@@ -140,14 +140,14 @@ function toolsChangedMessage(serverNames, hasQuestion) {
   let isSingle = serverNames.length === 1;
   return `MCP ${plural(serverNames.length, "server")} ${joined}${moreNote} changed the tools ${isSingle ? "it lists" : "they list"} since you approved offering ${isSingle ? "it" : "them"}; not offered to cloud sessions until re-approved${hasQuestion ? "." : " (claude --cloud asks at the next start)."}`;
 }
-//@ chunk-xqfbbyzk.js:17506-17556 placement
+//@ chunk-3k0vy2fe.js:18738-18788 placement
 /**
  * 同意状态是否属于未接受（declined/unset）。
  */
 function isDeclinedOrUnset(consent) {
   return consent === "declined" || consent === "unset";
 }
-//@ chunk-xqfbbyzk.js:17556-25038 placement
+//@ chunk-3k0vy2fe.js:18788-26270 placement
 /**
  * 把本机 MCP 服务器提供给云会话（同意检查、策略拒绝、工具变化重新同意、通知）。
  */
@@ -643,14 +643,14 @@ function passthroughServingGroupProvider(overrides = {}) {
     };
   };
 }
-//@ chunk-xqfbbyzk.js:25038-25082 placement
+//@ chunk-3k0vy2fe.js:26270-26314 placement
 /**
  * 过滤出可转发给远程设备的 MCP 服务器。
  */
 function forwardableServers(configs) {
   return pickByHelper(configs, (name, entry) => isForwardableDeviceMcp(entry, name));
 }
-//@ chunk-xqfbbyzk.js:25082-25148 placement
+//@ chunk-3k0vy2fe.js:26314-26380 placement
 /**
  * 把服务器映射转成稳定的键顺序 JSON（用于比较变化）。
  */

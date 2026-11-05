@@ -3,16 +3,16 @@
  *
  * 列表分页 Hook
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/usePagination.ts
- * pieces: chunk-vrb44rx7.js (2)
+ * pieces: chunk-wb51jffc.js (2)
  * attribution: affinity 1, fingerprint 1
  */
 import { useRef, useState, useMemo, useCallback } from "../../../vendor/react/cjs/react.production.js";
 
-//@ chunk-vrb44rx7.js:69906-69915 affinity
+//@ chunk-wb51jffc.js:70060-70069 affinity
 var DEFAULT_MAX_VISIBLE = 5;
-//@ chunk-vrb44rx7.js:69915-71007 fingerprint (2.1.88 match: usePagination, 0.7)
+//@ chunk-wb51jffc.js:70069-71161 fingerprint (2.1.88 match: usePagination, 0.702)
 function usePagination({
   totalItems,
   maxVisible = DEFAULT_MAX_VISIBLE,

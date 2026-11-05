@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：对话框按键提示与对话框作用域按键绑定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-thjvqmbc.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-zjxrz3f0.js (17)
  * attribution: placement 17
  */
 import {
@@ -35,17 +35,17 @@ import { BaseBox } from "../ink/components/Box.js";
 import { jsonStringify } from "../utils/slowOperations.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-thjvqmbc.js:963-967 placement
+//@ chunk-zjxrz3f0.js:964-968 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-thjvqmbc.js:963", () => {
+deferInit("chunk-zjxrz3f0.js:964", () => {
   init_react_production();
 });
-//@ chunk-thjvqmbc.js:967-971 placement
+//@ chunk-zjxrz3f0.js:968-972 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-thjvqmbc.js:967", () => {
+deferInit("chunk-zjxrz3f0.js:968", () => {
   init_react_production();
 });
-//@ chunk-thjvqmbc.js:971-3093 placement
+//@ chunk-zjxrz3f0.js:972-3100 placement
 var DIALOG_ACTION_HINTS = {
   "confirm:yes": {
     description: "confirm",
@@ -178,8 +178,9 @@ var DIALOG_ACTION_HINTS = {
     description: "switch diff panel base",
   },
   ...{},
+  ...{},
 };
-//@ chunk-thjvqmbc.js:3093-3180 placement
+//@ chunk-zjxrz3f0.js:3100-3187 placement
 /**
  * 取对话框动作的提示
  */
@@ -190,27 +191,27 @@ function dialogActionHint(action) {
     };
   return DIALOG_ACTION_HINTS[action];
 }
-//@ chunk-thjvqmbc.js:3180-3184 placement
+//@ chunk-zjxrz3f0.js:3187-3191 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-thjvqmbc.js:3180", () => {
+deferInit("chunk-zjxrz3f0.js:3187", () => {
   init_react_production();
 });
-//@ chunk-thjvqmbc.js:3184-3199 placement
+//@ chunk-zjxrz3f0.js:3191-3206 placement
 /**
  * 对话框作用域上下文
  */
 var DialogScopeContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-thjvqmbc.js:3184", () => {
+deferInit("chunk-zjxrz3f0.js:3191", () => {
   DialogScopeContext = createContext(null);
 });
-//@ chunk-thjvqmbc.js:3199-3313 placement
+//@ chunk-zjxrz3f0.js:3206-3320 placement
 var MAX_DIALOG_HINTS = 4;
 var PAIRED_HINT_ACTIONS = [
   ["select:previous", "select:next"],
   ["confirm:previous", "confirm:next"],
   ["tabs:next", "tabs:previous"],
 ];
-//@ chunk-thjvqmbc.js:3313-4186 placement
+//@ chunk-zjxrz3f0.js:3320-4193 placement
 /**
  * 对话框底部按键提示：按当前焦点与绑定生成“键 动作”列表，可限制数量与宽度。
  */
@@ -285,7 +286,7 @@ function DialogKeyHints({
     children: hints.text,
   });
 }
-//@ chunk-thjvqmbc.js:4186-6015 placement
+//@ chunk-zjxrz3f0.js:4193-6022 placement
 function collectKeyHints({
   ctx,
   activeElement,
@@ -326,9 +327,9 @@ function collectKeyHints({
     for (let layer of rendered.below[lastChainIndex]?.values() ?? [])
       if (layer.claimFocus && layer.chain.length > chain.length) chain = layer.chain;
     entries = [];
-    for (let k = chain.length - 1; k >= lastChainIndex; k--) {
-      let scope = chain[k];
-      if (scope) collectScopeHintEntries(entries, scope, chain.length - 1 - k, k === lastChainIndex);
+    for (let idx = chain.length - 1; idx >= lastChainIndex; idx--) {
+      let scope = chain[idx];
+      if (scope) collectScopeHintEntries(entries, scope, chain.length - 1 - idx, idx === lastChainIndex);
     }
   }
   if (!entries.some((entry) => !entry.isBoundary)) return emptyResult;
@@ -414,7 +415,7 @@ function collectKeyHints({
     hadEntryWithoutDescription,
   };
 }
-//@ chunk-thjvqmbc.js:6015-6171 placement
+//@ chunk-zjxrz3f0.js:6022-6178 placement
 function collectScopeHintEntries(out, { scope, entriesRef }, depth, isBoundary) {
   for (let entry of entriesRef.current) {
     if (!entry.action) continue;
@@ -427,12 +428,12 @@ function collectScopeHintEntries(out, { scope, entriesRef }, depth, isBoundary) 
     });
   }
 }
-//@ chunk-thjvqmbc.js:6171-6175 placement
+//@ chunk-zjxrz3f0.js:6178-6182 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-thjvqmbc.js:6171", () => {
+deferInit("chunk-zjxrz3f0.js:6178", () => {
   init_react_production();
 });
-//@ chunk-thjvqmbc.js:6175-7625 placement
+//@ chunk-zjxrz3f0.js:6182-7632 placement
 /**
  * 注册对话框作用域的按键绑定，可抢占、吞掉其他按键或获取焦点。
  */
@@ -570,7 +571,7 @@ function useDialogKeybindings({
     }),
   });
 }
-//@ chunk-thjvqmbc.js:7625-7781 placement
+//@ chunk-zjxrz3f0.js:7632-7788 placement
 function runMatchingKeyEntry(keyEntry, candidates) {
   for (let handler of candidates) {
     if (handler.action !== keyEntry.action) continue;
@@ -580,14 +581,14 @@ function runMatchingKeyEntry(keyEntry, candidates) {
     return;
   }
 }
-//@ chunk-thjvqmbc.js:7781-7823 placement
+//@ chunk-zjxrz3f0.js:7788-7830 placement
 /**
  * 计数 +1
  */
 function addRefCount(refCounts, scope) {
   refCounts.set(scope, (refCounts.get(scope) ?? 0) + 1);
 }
-//@ chunk-thjvqmbc.js:7823-7898 placement
+//@ chunk-zjxrz3f0.js:7830-7905 placement
 /**
  * 计数 −1，归零时删除
  */
@@ -596,7 +597,7 @@ function releaseRefCount(refCounts, scope) {
   if (nextCount <= 0) refCounts.delete(scope);
   else refCounts.set(scope, nextCount);
 }
-//@ chunk-thjvqmbc.js:7898-8004 placement
+//@ chunk-zjxrz3f0.js:7905-8011 placement
 function dialogHintsKey(scope, active, preemptive, swallowAll, entries) {
   return jsonStringify([
     scope ?? "",
@@ -606,9 +607,9 @@ function dialogHintsKey(scope, active, preemptive, swallowAll, entries) {
     entries.map((entry) => [entry.action ?? "", entry.hint ?? "", Boolean(entry.chordOnly)]),
   ]);
 }
-//@ chunk-thjvqmbc.js:8004-8008 placement
+//@ chunk-zjxrz3f0.js:8011-8015 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-thjvqmbc.js:8004", () => {
+deferInit("chunk-zjxrz3f0.js:8011", () => {
   init_react_production();
 });
 export { useDialogKeybindings, DialogKeyHints };

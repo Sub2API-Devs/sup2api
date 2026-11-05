@@ -3,10 +3,10 @@
  *
  * 执行 Skill/斜杠命令文本里的 !`cmd` 与 ```! 块：逐条权限检查（auto 模式可移交模型）、执行并把输出替换回文本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/promptShellExecution.ts
- * pieces: chunk-e6aww6q8.js (31)
- * attribution: placement 25, callgraph-fingerprint 1, fingerprint 3, layout 2
+ * pieces: chunk-5xgkngpb.js (30)
+ * attribution: placement 25, fingerprint 3, layout 2
  */
 import { randomUUID } from "crypto";
 import { repeatString } from "./stringUtils.js";
@@ -17,6 +17,7 @@ import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
 import { isToolResultMessage, createAssistantMessage } from "./messages.js";
 import { isBashAvailable, isPowerShellToolEnabled } from "./shell/shellToolUtils.js";
 import { INSTALL_GIT_FOR_WINDOWS, describeNoBashFallback } from "./hooks/hookCommandResolution.js";
+import { getPowerShellTool } from "../tools.js";
 import { BashTool } from "../tools/BashTool/BashTool.js";
 import { INNER_TASK_SUFFIX, PREAMBLE_TASK_SUFFIX } from "../tasks/LocalShellTask/backgroundNotices.js";
 import { findToolByName } from "../Tool.js";
@@ -31,9 +32,8 @@ import { recordToolUsed } from "../services/compact/keptTools.js";
 import { mapAndMaybePersistToolResult, toolResultsDirFor_2 } from "./toolResultStorage.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { stripNonPrintable } from "./truncateGraphemes.js";
-import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:983407-983529 placement
+//@ chunk-5xgkngpb.js:997117-997239 placement
 /**
  * 把文本中不是 !` 起头的行内代码段内容替换为空格（保留长度），避免其中的 !`命令` 被误识别为 shell 执行。
  */
@@ -43,7 +43,7 @@ function blankInlineCodeSpans(text) {
     return prevChar === "!" || prevChar === "`" ? match : "`" + repeatString(" ", match.length - 2) + "`";
   });
 }
-//@ chunk-e6aww6q8.js:983529-983624 placement
+//@ chunk-5xgkngpb.js:997239-997334 placement
 /**
  * escapeShellBangs：转义提示词里的感叹号。
  */
@@ -53,10 +53,10 @@ function escapeShellBangs(text) {
     .replace(/!`/g, "! `")
     .replace(/(^|\s)!/gm, "$1\\!");
 }
-//@ chunk-e6aww6q8.js:983624-983690 placement
+//@ chunk-5xgkngpb.js:997334-997400 placement
 var SHELL_BLOCK_PATTERN = /```!\s*\n?([\s\S]*?)\n?```/g;
 var INLINE_SHELL_COMMAND_PATTERN = /(?<=^|\s)!`([^`]+)`/gm;
-//@ chunk-e6aww6q8.js:983690-983744 placement
+//@ chunk-5xgkngpb.js:997400-997454 placement
 /**
  * normalizeShellCommandText：统一换行并去空白。
  */
@@ -68,7 +68,7 @@ function normalizeShellCommandText(text) {
 `,
   );
 }
-//@ chunk-e6aww6q8.js:983744-983929 placement
+//@ chunk-5xgkngpb.js:997454-997639 placement
 /**
  * 找出提示词中要执行的 shell 命令：```! 代码块与行内 !`命令`，返回原文、解析后的命令与位置。
  */
@@ -89,7 +89,7 @@ function findPromptShellCommands(text) {
   }
   return commands;
 }
-//@ chunk-e6aww6q8.js:989245-989472 placement
+//@ chunk-5xgkngpb.js:1002957-1003184 placement
 /**
  * 提示词 shell 执行的匹配正则（```! 代码块与行内 !`命令`）以及策略禁用/协调者只读加载时的替换文本。
  */
@@ -98,7 +98,7 @@ var INLINE_SHELL_RE = /(?<=^|\s)!`[^`]+`/gm;
 var SHELL_DISABLED_PLACEHOLDER = "[shell command execution disabled by policy]";
 var SHELL_DEFERRED_TO_WORKER_PLACEHOLDER =
   "[shell command not executed: read-only skill load on the coordinator \u2014 delegate to a worker to run it]";
-//@ chunk-e6aww6q8.js:989472-989633 placement
+//@ chunk-5xgkngpb.js:1003184-1003345 placement
 /**
  * 判断技能中的 shell 命令执行是否被禁用：Cowork 环境、策略设置或普通设置的 disableSkillShellExecution。
  */
@@ -107,7 +107,7 @@ function isSkillShellExecutionDisabled() {
   if (getSettingsForSource("policySettings")?.disableSkillShellExecution === true) return true;
   return getSettings_DEPRECATED().disableSkillShellExecution === true;
 }
-//@ chunk-e6aww6q8.js:989633-989815 placement
+//@ chunk-5xgkngpb.js:1003345-1003527 placement
 /**
  * 把提示词中的 shell 执行片段（代码块和行内 !`命令`）替换为占位文本。
  */
@@ -120,39 +120,39 @@ function replacePromptShellCommands(promptText, placeholder = SHELL_DISABLED_PLA
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:989815-989840 placement
+//@ chunk-5xgkngpb.js:1003527-1003552 placement
 var INVISIBLE_CMD_CHARS_RE = /[\u180e\ufeff]/;
-//@ chunk-e6aww6q8.js:989840-989875 placement
+//@ chunk-5xgkngpb.js:1003552-1003587 placement
 /**
  * hasInvisibleCommandChars：命令含不可见字符。
  */
 function hasInvisibleCommandChars(command) {
   return INVISIBLE_CMD_CHARS_RE.test(command);
 }
-//@ chunk-e6aww6q8.js:989875-989945 placement
+//@ chunk-5xgkngpb.js:1003587-1003657 placement
 function replaceInvisibleCommandChars(command) {
   return command.replace(new RegExp(INVISIBLE_CMD_CHARS_RE.source, "g"), "\uFFFD");
 }
-//@ chunk-e6aww6q8.js:989945-990241 placement
+//@ chunk-5xgkngpb.js:1003657-1003953 placement
 /**
  * 命令含不可见字符 U+FEFF 或 U+180E 而未执行时的拒绝说明。
  */
 var INVISIBLE_CHAR_REFUSAL =
   "command contains the invisible character U+FEFF (byte order mark) or U+180E (Mongolian vowel separator), and was not run. Remove the character, keep the text that needs it in a file that the command reads, or write it as $([char]0xFEFF) or $([char]0x180E) inside a double-quoted string";
-//@ chunk-e6aww6q8.js:3029403-3029433 placement
+//@ chunk-5xgkngpb.js:3105686-3105716 placement
 var TENGU_GLOWING_ORBIT = "tengu_glowing_orbit";
-//@ chunk-e6aww6q8.js:3029433-3029470 placement
+//@ chunk-5xgkngpb.js:3105716-3105753 placement
 /**
  * glowingOrbitOn：开关 tengu_glowing_orbit。
  */
 function glowingOrbitOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_GLOWING_ORBIT, true) !== false;
 }
-//@ chunk-e6aww6q8.js:3029470-3029535 placement
+//@ chunk-5xgkngpb.js:3105753-3105818 placement
 function iterativeFalconOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_iterative_falcon", true) !== false && glowingOrbitOn();
 }
-//@ chunk-e6aww6q8.js:3029535-3029793 placement
+//@ chunk-5xgkngpb.js:3105818-3106076 placement
 function formatRunFirstInstruction({ command, tool }) {
   let instruction =
     tool === BASH_TOOL_NAME
@@ -165,7 +165,7 @@ ${command}
 \`\`\``;
   return `[${instruction} \`${command}\`]`;
 }
-//@ chunk-e6aww6q8.js:3029793-3030284 placement
+//@ chunk-5xgkngpb.js:3106076-3106567 placement
 /**
  * 为多条需先执行的命令生成说明：若都用同一工具，提示可合并为一次调用（Bash 用 &&，否则用 ;）；逐条编号列出命令，含反引号或换行的用代码块。
  */
@@ -189,12 +189,12 @@ ${command}
   return [header, ...lines].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:3030284-3030407 placement
+//@ chunk-5xgkngpb.js:3106567-3106690 placement
 function formatCommandOutputRef({ command }, commandNumber) {
   if (/[`\n]/.test(command)) return `[output of command ${commandNumber}]`;
   return `[output of command ${commandNumber}, \`${command}\`]`;
 }
-//@ chunk-e6aww6q8.js:3030407-3030555 placement
+//@ chunk-5xgkngpb.js:3106690-3106838 placement
 /**
  * 找出最后一条真实用户提示（有提示来源，或非元消息、非堆叠展开、非工具结果）的下标，找不到为 0。
  */
@@ -209,15 +209,15 @@ function findLastPromptIndex(messages) {
     0,
   );
 }
-//@ chunk-e6aww6q8.js:3030555-3030591 placement
+//@ chunk-5xgkngpb.js:3106838-3106874 placement
 var MAX_SHELL_OUTPUT_BYTES = 262144;
 var MAX_SHELL_STREAM_BYTES = 134217728;
 var MAX_SHELL_HANDOFFS = 64;
-//@ chunk-e6aww6q8.js:3030591-3030643 placement
+//@ chunk-5xgkngpb.js:3106874-3106926 placement
 function collapseWhitespace(command) {
   return command.replace(/\s+/g, " ").trim();
 }
-//@ chunk-e6aww6q8.js:3030643-3030830 placement
+//@ chunk-5xgkngpb.js:3106926-3107113 placement
 function containsCommandToken(text, token) {
   let tokenSeparator = /[\s;&|()<>]/;
   for (let index = text.indexOf(token); index !== -1; index = text.indexOf(token, index + 1)) {
@@ -231,7 +231,7 @@ function containsCommandToken(text, token) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:3030830-3031654 placement
+//@ chunk-5xgkngpb.js:3107113-3107941 placement
 /**
  * 找出交接给指定 agent 的提示词 shell 命令中尚未被执行的：遍历用户消息记录交接命令，再检查助手的工具调用逐行抵消；超出长度/计算预算时放弃返回 undefined。
  */
@@ -285,14 +285,14 @@ ${command.command}`;
       }
   return [...pending.values()].map((state) => state.entry);
 }
-//@ chunk-e6aww6q8.js:3031654-3031700 placement
+//@ chunk-5xgkngpb.js:3107941-3107987 placement
 /**
  * pendingShellHandOffs：权限上下文中的待处理 shell 交接。
  */
 function pendingShellHandOffs(messages, extraMessages, agentId) {
   return findPendingShellHandOffs([...messages, ...extraMessages], agentId);
 }
-//@ chunk-e6aww6q8.js:3031700-3031957 placement
+//@ chunk-5xgkngpb.js:3107987-3108244 placement
 /**
  * 生成在权限上下文中加入命令允许规则的 AppState 读取函数（poll 事件投递保护开启时不改）。
  */
@@ -312,18 +312,7 @@ function withCommandAllowRules(context, commandRules) {
     };
   };
 }
-//@ chunk-e6aww6q8.js:3116579-3116678 callgraph-fingerprint (2.1.88 match: getPowerShellTool, 0.524)
-var getPowerShellTool; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3116579", () => {
-  getPowerShellTool = (() => {
-    let cached;
-    return () => {
-      if (!cached) cached = require("../tools/PowerShellTool/PowerShellTool.js").PowerShellTool;
-      return cached;
-    };
-  })();
-});
-//@ chunk-e6aww6q8.js:3116678-3119119 fingerprint (2.1.88 match: executeShellCommandsInPrompt, 0.36)
+//@ chunk-5xgkngpb.js:3203201-3205644 fingerprint (2.1.88 match: executeShellCommandsInPrompt, 0.368)
 /**
  * 执行 Skill/命令文件里的 !`cmd` 与 ```! 块：按 frontmatter shell 选 Bash/PowerShell 工具，逐条做权限检查（GE），auto 模式下需要询问的可移交模型（promptShellHandOff），不允许则抛错；允许则执行并把输出替换进文本。readOnlySkillLoad 时不执行。
  */
@@ -485,7 +474,7 @@ ${result}`;
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:3119119-3119806 layout
+//@ chunk-5xgkngpb.js:3205644-3206331 layout
 /**
  * 提取文本中的内联/块命令并用工具 inputSchema 校验；不合法（或含不可打印字符）时抛出带说明的错误，一条都不执行。
  */
@@ -513,11 +502,11 @@ function extractPromptShellCommands(text, tool, sourceName) {
     );
   });
 }
-//@ chunk-e6aww6q8.js:3119806-3119862 layout
+//@ chunk-5xgkngpb.js:3206331-3206387 layout
 function promptShellHandOffPlaceholder(index) {
   return `\x00promptShellHandOff:${index}\x00`;
 }
-//@ chunk-e6aww6q8.js:3119862-3120033 fingerprint (2.1.88 match: formatBashOutput, 1)
+//@ chunk-5xgkngpb.js:3206387-3206558 fingerprint (2.1.88 match: formatBashOutput, 1)
 function formatBashOutput(stdout, stderr, inline = false) {
   let parts = [];
   if (stdout.trim()) parts.push(stdout.trim());
@@ -533,7 +522,7 @@ ${stderr.trim()}`);
 `,
   );
 }
-//@ chunk-e6aww6q8.js:3120033-3120512 fingerprint (2.1.88 match: formatBashError, 0.783)
+//@ chunk-5xgkngpb.js:3206558-3207037 fingerprint (2.1.88 match: formatBashError, 0.782)
 function formatBashError(error, pattern, session, inline = false) {
   if (error instanceof ShellError) {
     if (error.interrupted)
@@ -559,16 +548,16 @@ ${message}`;
   throw new MalformedCommandError(formatted);
 }
 export {
-  hasInvisibleCommandChars,
-  INVISIBLE_CHAR_REFUSAL,
   escapeShellBangs,
-  executeShellCommandsInPrompt,
   isSkillShellExecutionDisabled,
   replacePromptShellCommands,
+  executeShellCommandsInPrompt,
   withCommandAllowRules,
+  hasInvisibleCommandChars,
+  INVISIBLE_CHAR_REFUSAL,
+  normalizeShellCommandText,
+  findPromptShellCommands,
   glowingOrbitOn,
   pendingShellHandOffs,
   findLastPromptIndex,
-  normalizeShellCommandText,
-  findPromptShellCommands,
 };

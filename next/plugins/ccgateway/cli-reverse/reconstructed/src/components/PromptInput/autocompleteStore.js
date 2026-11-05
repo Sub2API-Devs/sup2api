@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增。输入补全状态存储。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (25)
- * attribution: placement 25
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (26)
+ * attribution: placement 25, layout 1
  */
+import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { createStore } from "../../state/store.js";
 import { hasModuleHookingSite } from "../../plugins/hooksModules/loadedModuleFilters.js";
-import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import {
   autocompleteWithNoCore,
   normalizeAutocompleteSuggestions,
@@ -25,7 +25,12 @@ import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { renderVersions } from "../../plugins/functionHooks/ui/renderInstances.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:542676-542763 placement
+//@ chunk-czq1j3j2.js:556284-556288 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:556284", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:563362-563449 placement
 var subscribeOwnAndRows = (stores) => (listener) => {
   let unsubscribeOwn = stores.own.subscribe(listener);
   let unsubscribeRows = stores.rows.subscribe(listener);
@@ -34,14 +39,14 @@ var subscribeOwnAndRows = (stores) => (listener) => {
     unsubscribeRows();
   };
 };
-//@ chunk-18hwfzwa.js:542763-542855 placement
+//@ chunk-czq1j3j2.js:563449-563541 placement
 var buildLiveView = (own, rows, subscribe) => ({
   getSnapshot: rows.live,
   getState: rows.live,
   setState: own.own.setState,
   subscribe,
 });
-//@ chunk-18hwfzwa.js:542855-542943 placement
+//@ chunk-czq1j3j2.js:563541-563629 placement
 var createAutocompleteView = (own, rows) => ({
   ...own,
   ...buildLiveView(own, rows, subscribeOwnAndRows(own)),
@@ -50,26 +55,26 @@ var createAutocompleteView = (own, rows) => ({
     subscribe: subscribeOwnAndRows(own),
   },
 });
-//@ chunk-18hwfzwa.js:542943-542958 placement
+//@ chunk-czq1j3j2.js:563629-563644 placement
 var alwaysFalse = () => false;
-//@ chunk-18hwfzwa.js:542958-542983 placement
+//@ chunk-czq1j3j2.js:563644-563669 placement
 var EMPTY_SUGGESTION_ROWS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:542958", () => {
+deferInit("chunk-czq1j3j2.js:563644", () => {
   EMPTY_SUGGESTION_ROWS = Object.freeze([]);
 });
-//@ chunk-18hwfzwa.js:542983-543039 placement
+//@ chunk-czq1j3j2.js:563669-563725 placement
 var EMPTY_AUTOCOMPLETE_STATE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:542983", () => {
+deferInit("chunk-czq1j3j2.js:563669", () => {
   EMPTY_AUTOCOMPLETE_STATE = Object.freeze({
     rows: EMPTY_SUGGESTION_ROWS,
     isLive: alwaysFalse,
     isArrowed: false,
   });
 });
-//@ chunk-18hwfzwa.js:543039-543118 placement
+//@ chunk-czq1j3j2.js:563725-563804 placement
 var normalizeSelectedSuggestion = (state) =>
   state.selectedSuggestion < state.suggestions.length ? state.selectedSuggestion : -1;
-//@ chunk-18hwfzwa.js:543118-543417 placement
+//@ chunk-czq1j3j2.js:563804-564103 placement
 function mergeAutocompleteRows(state, rowState, suggestions) {
   let selectedIndex =
     rowState.selectedId !== undefined ? rowState.rows.findIndex((row) => row.id === rowState.selectedId) : -1;
@@ -87,7 +92,7 @@ function mergeAutocompleteRows(state, rowState, suggestions) {
         }),
       };
 }
-//@ chunk-18hwfzwa.js:543417-543503 placement
+//@ chunk-czq1j3j2.js:564103-564189 placement
 function freezeRowsIfEmpty(state) {
   return state.rows.length === 0
     ? state
@@ -97,7 +102,7 @@ function freezeRowsIfEmpty(state) {
         isArrowed: false,
       };
 }
-//@ chunk-18hwfzwa.js:543503-543635 placement
+//@ chunk-czq1j3j2.js:564189-564321 placement
 function clearHoverIfInRows(state, rows) {
   let hoveredSuggestionId = state.hoveredSuggestionId;
   return hoveredSuggestionId !== null &&
@@ -109,7 +114,7 @@ function clearHoverIfInRows(state, rows) {
       }
     : state;
 }
-//@ chunk-18hwfzwa.js:543635-544072 placement
+//@ chunk-czq1j3j2.js:564321-564758 placement
 /**
  * 把输入框建议状态与插件提供的补全行合成一个派生 store：live 时合并补全行与选中项，否则返回原状态；结果按输入引用缓存。
  */
@@ -155,7 +160,7 @@ function createAutocompleteStore(store) {
     },
   );
 }
-//@ chunk-18hwfzwa.js:544072-544192 placement
+//@ chunk-czq1j3j2.js:564758-564878 placement
 function createAutocompleteLogger() {
   let lastQuery;
   let isHooked = hasModuleHookingSite("prompt.autocomplete");
@@ -166,12 +171,12 @@ function createAutocompleteLogger() {
     return isHooked;
   };
 }
-//@ chunk-18hwfzwa.js:544192-544196 placement
+//@ chunk-czq1j3j2.js:564878-564882 layout
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:544192", () => {
+deferInit("chunk-czq1j3j2.js:564878", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:544196-544299 placement
+//@ chunk-czq1j3j2.js:564882-564985 placement
 var withAutocompleteSelection = (state, selectedRowId, arrowed) => ({
   rows: state.rows,
   isLive: state.isLive,
@@ -180,7 +185,7 @@ var withAutocompleteSelection = (state, selectedRowId, arrowed) => ({
     selectedId: selectedRowId,
   }),
 });
-//@ chunk-18hwfzwa.js:544299-544543 placement
+//@ chunk-czq1j3j2.js:564985-565229 placement
 function toAutocompleteSuggestions(items) {
   let seenCounts = new Map();
   return items.map(({ text, label, description }) => {
@@ -196,9 +201,9 @@ function toAutocompleteSuggestions(items) {
     };
   });
 }
-//@ chunk-18hwfzwa.js:544543-544555 placement
+//@ chunk-czq1j3j2.js:565229-565241 placement
 var AUTOCOMPLETE_TIMEOUT_MS = 150;
-//@ chunk-18hwfzwa.js:544555-545930 placement
+//@ chunk-czq1j3j2.js:565241-566616 placement
 function raisePromptAutocomplete(onSuggestions, options = {}, debounceMs = AUTOCOMPLETE_TIMEOUT_MS) {
   let raise = options.raise ?? autocompleteWithNoCore;
   let report =
@@ -296,18 +301,18 @@ function raisePromptAutocomplete(onSuggestions, options = {}, debounceMs = AUTOC
     },
   };
 }
-//@ chunk-18hwfzwa.js:545930-545997 placement
+//@ chunk-czq1j3j2.js:566616-566683 placement
 function liveRowsOf(shown) {
   let state = shown.rows.getState();
   return state.isLive() ? state.rows : EMPTY_SUGGESTION_ROWS;
 }
-//@ chunk-18hwfzwa.js:545997-546025 placement
+//@ chunk-czq1j3j2.js:566683-566711 placement
 var nextIndexWrap = (selectedSuggestion, total) =>
   selectedSuggestion >= total - 1 ? 0 : selectedSuggestion + 1;
-//@ chunk-18hwfzwa.js:546025-546053 placement
+//@ chunk-czq1j3j2.js:566711-566739 placement
 var prevIndexWrap = (selectedSuggestion, total) =>
   selectedSuggestion <= 0 ? total - 1 : selectedSuggestion - 1;
-//@ chunk-18hwfzwa.js:546053-546631 placement
+//@ chunk-czq1j3j2.js:566739-567317 placement
 /**
  * 在合并后的建议列表中上下移动选中项：落在自有建议区就更新 selectedSuggestion，落在补全行区就更新补全 store 的 selectedId 与 isArrowed。
  */
@@ -340,7 +345,7 @@ function moveAutocompleteSelection(store, direction, arrowed) {
   );
   return true;
 }
-//@ chunk-18hwfzwa.js:546631-546783 placement
+//@ chunk-czq1j3j2.js:567317-567469 placement
 function nextAutocompleteRowsState(previousState, rows, isLive) {
   let hasNoRows = rows.length === 0;
   let keepsSelection =
@@ -354,7 +359,7 @@ function nextAutocompleteRowsState(previousState, rows, isLive) {
         isLive,
       };
 }
-//@ chunk-18hwfzwa.js:546783-546989 placement
+//@ chunk-czq1j3j2.js:567469-567675 placement
 function activeAutocompleteRow(shown) {
   let liveRows = liveRowsOf(shown);
   let { selectedId } = shown.rows.getState();
@@ -364,7 +369,7 @@ function activeAutocompleteRow(shown) {
     : (liveRows.find((row) => row.id === hoveredSuggestionId) ??
         liveRows.find((row) => row.id === selectedId));
 }
-//@ chunk-18hwfzwa.js:546989-547105 placement
+//@ chunk-czq1j3j2.js:567675-567791 placement
 var autocompleteRowEdit = (input, inputText) =>
   applyTextInsertion({
     origin: COMPOSER_EDIT_ORIGIN,
@@ -374,7 +379,7 @@ var autocompleteRowEdit = (input, inputText) =>
     end: input.cursor,
     inputText,
   });
-//@ chunk-18hwfzwa.js:547105-548341 placement
+//@ chunk-czq1j3j2.js:567791-569027 placement
 function takeAutocompleteRow(props) {
   let { shown, draft, text, cursor, isOpen } = props;
   let [autocomplete] = useState(() =>

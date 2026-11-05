@@ -3,9 +3,9 @@
  *
  * 模型访问检查（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (12), chunk-w5ndchqs.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (12), chunk-7pwjpdkw.js (1)
  * attribution: placement 13
  */
 import { getAttributionHeader, getCLISyspromptPrefix } from "../../constants/system.js";
@@ -50,7 +50,7 @@ import { getAPIMetadata } from "../../services/api/claude.js";
 import { errorMessage } from "../errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-w5ndchqs.js:3418-3633 placement
+//@ chunk-7pwjpdkw.js:3616-3831 placement
 /**
  * 在内容块前加一个归因头文本块（可强制忽略环境变量的关闭设置），无头时原样返回。
  */
@@ -76,21 +76,21 @@ function prependAttributionHeader(content, options) {
     ...content,
   ];
 }
-//@ chunk-s61vbvea.js:520484-520522 placement
+//@ chunk-7jxyna5q.js:437587-437625 placement
 /**
  * 按模型所属提供商分类错误。
  */
 function classifyProviderErrorForModel(model, error) {
   return classifyProviderModelError(getProviderForModel(model), error);
 }
-//@ chunk-s61vbvea.js:520522-520557 placement
+//@ chunk-7jxyna5q.js:437625-437660 placement
 /**
  * 自动模式激活时判断模型是否支持自动模式。
  */
 function supportsAutoModeIfActive(model) {
   return !isAutoModeActive() || modelSupportsAutoMode(model);
 }
-//@ chunk-s61vbvea.js:520557-520644 placement
+//@ chunk-7jxyna5q.js:437660-437747 placement
 /**
  * 判断模型既未被拒绝，也不在已发送的阶梯中。
  */
@@ -98,7 +98,7 @@ function isRefusedOrSentModel(fromModel, toModel) {
   let targetModel = strip1mSuffix(fromModel) + toModel.slice(strip1mSuffix(toModel).length);
   return !isModelRefused(targetModel) && !ladderRungsToSend(toModel).includes(targetModel);
 }
-//@ chunk-s61vbvea.js:520644-520718 placement
+//@ chunk-7jxyna5q.js:437747-437821 placement
 /**
  * 判断回退会否丢失上下文（模型被拒或阶梯步缩小窗口）。
  */
@@ -112,7 +112,7 @@ function wouldLoseContextOnFallback(currentModel, fallbackModel) {
     )
   );
 }
-//@ chunk-s61vbvea.js:520718-520978 placement
+//@ chunk-7jxyna5q.js:437821-438081 placement
 /**
  * 为不可用模型在同族中找较旧、可用、上下文不缩小的模型作为回退（第一方后端且开关开启）。
  */
@@ -139,16 +139,16 @@ function findOlderAccessibleModel(model) {
     );
   return found === undefined ? undefined : found + sliced;
 }
-//@ chunk-s61vbvea.js:520978-521023 placement
+//@ chunk-7jxyna5q.js:438081-438126 placement
 var MODEL_ACCESS_BACKOFF_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MODEL_ACCESS_BACKOFF_SLACK_MS;
 var modelAccessMemo;
-deferInit("chunk-s61vbvea.js:520978", () => {
+deferInit("chunk-7jxyna5q.js:438081", () => {
   MODEL_ACCESS_BACKOFF_MS = 600000;
   MODEL_ACCESS_BACKOFF_SLACK_MS = 60000;
   modelAccessMemo = new HostScoped(() => new Map());
 });
-//@ chunk-s61vbvea.js:521023-521674 placement
+//@ chunk-7jxyna5q.js:438126-438777 placement
 function classifyModelAccess(model, error, kind = "denied", now = Date.now()) {
   if (!mayStepDownOnRefusal(model) || sessionHasOwnFallback()) return;
   let ladderRung = findLadderRung(model);
@@ -198,7 +198,7 @@ function classifyModelAccess(model, error, kind = "denied", now = Date.now()) {
     logForDebugging(`[model-access] background tier check failed: ${error}`);
   });
 }
-//@ chunk-s61vbvea.js:521674-522202 placement
+//@ chunk-7jxyna5q.js:438777-439305 placement
 function checkProviderModelAccess(model, cacheKey) {
   let baseModel = strip1mSuffix(model);
   let wireModelId;
@@ -241,7 +241,7 @@ function checkProviderModelAccess(model, cacheKey) {
     cacheKey,
   );
 }
-//@ chunk-s61vbvea.js:522202-522463 placement
+//@ chunk-7jxyna5q.js:439305-439566 placement
 /**
  * 把模型访问结论记到 Bedrock 或 Vertex 的访问记忆中。
  */
@@ -259,7 +259,7 @@ function rememberModelAccess(model, state) {
       .then((vertexModule) => vertexModule.rememberVertexModelAccess(baseModel, state))
       .catch(() => {});
 }
-//@ chunk-s61vbvea.js:522463-522645 placement
+//@ chunk-7jxyna5q.js:439566-439748 placement
 function getFirstUserText(messages) {
   let found = messages.find((message) => message.role === "user");
   if (!found) return "";
@@ -268,7 +268,7 @@ function getFirstUserText(messages) {
   let found_2 = content.find((block) => block.type === "text");
   return found_2?.type === "text" ? found_2.text : "";
 }
-//@ chunk-s61vbvea.js:522645-523454 placement
+//@ chunk-7jxyna5q.js:439748-440557 placement
 /**
  * 为旁路查询构建 system 块：按首条用户消息计算指纹，可选加 CLI 系统提示前缀，再追加调用方 system，交给计费/归因头组装函数。
  */
@@ -286,10 +286,10 @@ function buildSideQuerySystem({
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -325,7 +325,7 @@ function buildSideQuerySystem({
     },
   );
 }
-//@ chunk-s61vbvea.js:523454-523760 placement
+//@ chunk-7jxyna5q.js:440557-440863 placement
 function sendStartupModelCheck(model) {
   let messages = [
     {
@@ -360,12 +360,12 @@ function sendStartupModelCheck(model) {
 export {
   isRefusedOrSentModel,
   classifyProviderErrorForModel,
-  supportsAutoModeIfActive,
-  sendStartupModelCheck,
   wouldLoseContextOnFallback,
+  supportsAutoModeIfActive,
   rememberModelAccess,
   classifyModelAccess,
   checkProviderModelAccess,
   findOlderAccessibleModel,
   buildSideQuerySystem,
+  sendStartupModelCheck,
 };

@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：Windows 沙箱 git 身份
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (11)
  * attribution: placement 11
  */
 import { win32, join } from "path";
-import { open, rm as rm_2, lstat } from "fs/promises";
+import { open, rm, lstat } from "fs/promises";
 import { randomUUID } from "crypto";
 import { isUncOrDevicePath } from "../pathClassification.js";
 import { SandboxManager } from "./sandbox-adapter.js";
@@ -29,22 +29,22 @@ import { registerCleanup } from "../cleanupRegistry.js";
 import { errorMessage } from "../errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3045428-3045452 placement
+//@ chunk-5xgkngpb.js:3129525-3129549 placement
 var NON_CONTROL_TEXT_RE = /^[^\p{Cc}]+$/u;
-//@ chunk-e6aww6q8.js:3045452-3045558 placement
+//@ chunk-5xgkngpb.js:3129549-3129655 placement
 function pickSafeGitIdentity(identity) {
   return ["name", "email"].flatMap((field) => {
     let value = identity[field];
     return value !== null && NON_CONTROL_TEXT_RE.test(value) ? [[field, value]] : [];
   });
 }
-//@ chunk-e6aww6q8.js:3045558-3045686 placement
+//@ chunk-5xgkngpb.js:3129655-3129783 placement
 function formatGitUserSection(globalGitIdentity) {
   let quote = (value) => `"${value.replace(/[\\"]/g, "\\$&")}"`;
   return ["[user]", ...globalGitIdentity.map(([key, value]) => `	${key} = ${quote(value)}`), ""].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:3045686-3045890 placement
+//@ chunk-5xgkngpb.js:3129783-3129987 placement
 function getGitIdentityUnsafeReason(sandboxGitConfigPath) {
   if (isUncOrDevicePath(sandboxGitConfigPath) || !win32.isAbsolute(sandboxGitConfigPath))
     return "not_local_and_absolute";
@@ -55,11 +55,11 @@ function getGitIdentityUnsafeReason(sandboxGitConfigPath) {
     ? "sandbox_may_write"
     : undefined;
 }
-//@ chunk-e6aww6q8.js:3045890-3046085 placement
+//@ chunk-5xgkngpb.js:3129987-3130182 placement
 var readGlobalGitIdentity; // deferred: uses readGlobalGitConfigValue (../git.js) of its import cycle while loading; runs once the cycle is complete
 var getSandboxGitConfigPath;
 var OWNER_RIGHTS_SID;
-deferInit("chunk-e6aww6q8.js:3045890", () => {
+deferInit("chunk-5xgkngpb.js:3129987", () => {
   readGlobalGitIdentity = memoizeAlias(async (cwd) => {
     let [globalGitConfigValue, globalGitConfigValue_2] = await Promise.all([
       readGlobalGitConfigValue("user.name", cwd),
@@ -75,7 +75,7 @@ deferInit("chunk-e6aww6q8.js:3045890", () => {
   );
   OWNER_RIGHTS_SID = "S-1-3-4";
 });
-//@ chunk-e6aww6q8.js:3046085-3046712 placement
+//@ chunk-5xgkngpb.js:3130182-3130809 placement
 async function provisionWindowsGitIdentity(configPath) {
   let windowsSandboxUserStatus = await getWindowsSandboxUserStatusAsync({
     srtWin: rgRunner(),
@@ -109,18 +109,18 @@ async function provisionWindowsGitIdentity(configPath) {
   }
   return result.code === 0;
 }
-//@ chunk-e6aww6q8.js:3046712-3046772 placement (2.1.88 match: getFileIdentity, 0.794)
+//@ chunk-5xgkngpb.js:3130809-3130869 placement (2.1.88 match: getFileIdentity, 0.795)
 function getFileIdentity_6({ dev, ino }) {
   return isSentinelInode(ino) ? undefined : `${dev}:${ino}`;
 }
-//@ chunk-e6aww6q8.js:3046772-3047181 placement
+//@ chunk-5xgkngpb.js:3130869-3131278 placement
 /**
  * 独占创建沙箱用的 git 配置文件并设置 Windows 访问权限，确认文件未被替换且为空后写入内容，返回文件标识；任何一步异常都打点并放弃。
  */
 async function writeSandboxGitConfig(configPath, content) {
   await using handle = await open(configPath, "wx");
   registerCleanup(() =>
-    rm_2(configPath, {
+    rm(configPath, {
       force: true,
     }),
   );
@@ -145,12 +145,12 @@ async function writeSandboxGitConfig(configPath, content) {
   logFeatureOk("sandbox_windows_git_identity");
   return getFileIdentity_6(openedStat);
 }
-//@ chunk-e6aww6q8.js:3047181-3047197 placement
+//@ chunk-5xgkngpb.js:3131278-3131294 placement
 var sandboxGitConfigWriter; // deferred: uses writeSandboxGitConfig of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3047181", () => {
+deferInit("chunk-5xgkngpb.js:3131278", () => {
   sandboxGitConfigWriter = memoizeAlias(writeSandboxGitConfig);
 });
-//@ chunk-e6aww6q8.js:3047197-3047891 placement
+//@ chunk-5xgkngpb.js:3131294-3131988 placement
 async function prepareSandboxGitGlobalConfig(cwd, randomId = randomUUID) {
   try {
     let globalGitIdentity = await readGlobalGitIdentity(cwd);
@@ -188,7 +188,7 @@ async function prepareSandboxGitGlobalConfig(cwd, randomId = randomUUID) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:3048940-3049007 placement
+//@ chunk-5xgkngpb.js:3133037-3133104 placement
 /**
  * stripTrailingSlashIfLong：长度大于 1 时去掉末尾斜杠。
  */

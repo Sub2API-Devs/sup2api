@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件设置的可信来源与别名
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5a30rzw4.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ka5v9zxq.js (6)
  * attribution: placement 6
  */
 import { getEnabledSettingSources } from "../settings/constants.js";
@@ -13,9 +13,9 @@ import { getSettingsForSource } from "../settings/settings.js";
 import { legacyPluginIds, canonicalPluginId } from "./pluginIdentifier.js";
 import { INLINE_PLUGIN_MARKETPLACE } from "../telemetry/pluginTelemetry.js";
 
-//@ chunk-5a30rzw4.js:305-361 placement (2.1.88 match: TRUSTED_SETTING_SOURCES, 1)
+//@ chunk-ka5v9zxq.js:305-361 placement (2.1.88 match: TRUSTED_SETTING_SOURCES, 1)
 var TRUSTED_SETTING_SOURCES = ["userSettings", "flagSettings", "policySettings"];
-//@ chunk-5a30rzw4.js:361-664 placement
+//@ chunk-ka5v9zxq.js:361-664 placement
 function trustedPluginSetting(pluginId) {
   let enabledSources = new Set(getEnabledSettingSources());
   let aliases = pluginIdAliases(pluginId);
@@ -46,7 +46,7 @@ function trustedPluginSetting(pluginId) {
     mcpServers,
   };
 }
-//@ chunk-5a30rzw4.js:664-831 placement
+//@ chunk-ka5v9zxq.js:664-831 placement
 function pluginIdAliases(pluginId) {
   let legacyIds = legacyPluginIds(pluginId);
   if (legacyIds.length > 0) return [...legacyIds.toReversed(), pluginId];
@@ -54,7 +54,7 @@ function pluginIdAliases(pluginId) {
   let bareName = pluginId.endsWith(suffix) ? pluginId.slice(0, -suffix.length) : "";
   return bareName !== "" && !bareName.includes("@") ? [bareName, pluginId] : [pluginId];
 }
-//@ chunk-5a30rzw4.js:831-969 placement
+//@ chunk-ka5v9zxq.js:831-969 placement
 function trustedEnabledPlugins(pluginId) {
   let enabledSources = new Set(getEnabledSettingSources());
   let value;
@@ -65,7 +65,7 @@ function trustedEnabledPlugins(pluginId) {
   }
   return value;
 }
-//@ chunk-5a30rzw4.js:969-1165 placement
+//@ chunk-ka5v9zxq.js:969-1165 placement
 function pluginSettingWriteTarget(record, pluginId) {
   let canonical = canonicalPluginId(pluginId);
   let legacyIds = legacyPluginIds(canonical);
@@ -82,7 +82,7 @@ function pluginSettingWriteTarget(record, pluginId) {
     replaced: filtered,
   };
 }
-//@ chunk-5a30rzw4.js:1165-1254 placement
+//@ chunk-ka5v9zxq.js:1165-1254 placement
 function lookupByPluginAliases(enabledPlugins, pluginId) {
   let canonical = canonicalPluginId(pluginId);
   return [canonical, ...legacyPluginIds(canonical), pluginId]
@@ -90,10 +90,10 @@ function lookupByPluginAliases(enabledPlugins, pluginId) {
     .find((value) => value !== undefined);
 }
 export {
-  pluginSettingWriteTarget,
   lookupByPluginAliases,
   TRUSTED_SETTING_SOURCES,
-  trustedEnabledPlugins,
-  trustedPluginSetting,
   pluginIdAliases,
+  trustedPluginSetting,
+  pluginSettingWriteTarget,
+  trustedEnabledPlugins,
 };

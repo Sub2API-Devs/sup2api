@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：服务端 shell 调用前后设置文件变化追踪
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ad2e1aj6.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nvm0wye1.js (17)
  * attribution: placement 17
  */
 import { basename } from "path";
@@ -17,7 +17,11 @@ import {
   getFlagMcpConfigFilePaths,
   onProcessRootHost,
 } from "../../../bootstrap/state.js";
-import { managedDropInDirs, settingsLocationPaths } from "../../../utils/permissions/filesystem.js";
+import {
+  managedDropInDirs,
+  settingsLocationPaths,
+  normalizeCaseForComparison_2,
+} from "../../../utils/permissions/filesystem.js";
 import {
   getLegacyLocalSettingsFilePath,
   getSettingsFilePathForSource,
@@ -25,7 +29,6 @@ import {
 import { SETTING_SOURCES } from "../../../utils/settings/constants.js";
 import { vetRepoSettingsPathAsync, getFsImplementation } from "../../../utils/fsOperations.js";
 import { getErrnoCode, toError } from "../../../utils/errors.js";
-import { uniq } from "../../../utils/collections.js";
 import { HostScoped } from "../../../utils/hostScoped.js";
 import { logError } from "../../../utils/log.js";
 import { logEvent } from "../../../services/analytics/index.js";
@@ -41,7 +44,7 @@ import {
   runServedPostToolHook,
   callResultEnvelope,
 } from "./callOutcomeText.js";
-import { createChildAbortController } from "../../../utils/abortController.js";
+import { createChildAbortController as createChildAbortController_2 } from "../../../utils/abortController.js";
 import {
   SERVED_HOOK_CHANGED_KEEPS_RECORDED,
   KEEPS_RECORDED_HOOK_NOTICE,
@@ -70,7 +73,7 @@ import { allServedTools, servedShellToolName } from "./serveCall.js";
 import { sessionIdBody } from "../../../bridge/sessionIdCompat.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-ad2e1aj6.js:35252-35617 placement
+//@ chunk-nvm0wye1.js:35654-36019 placement
 function clipFullOutput(status, rewrite) {
   let fullOutput = status.fullOutput;
   let bytes = Buffer.byteLength(fullOutput);
@@ -100,14 +103,14 @@ function clipFullOutput(status, rewrite) {
     total_bytes: max,
   };
 }
-//@ chunk-ad2e1aj6.js:35650-35685 placement
+//@ chunk-nvm0wye1.js:36052-36087 placement
 /**
  * 设置文件的三种存在状态标记：empty:/absent，以及路径链分隔符 ">"。
  */
 var EMPTY = "empty:";
 var ABSENT = "absent";
 var CHAIN_SEPARATOR = ">";
-//@ chunk-ad2e1aj6.js:35685-36244 placement
+//@ chunk-nvm0wye1.js:36087-36646 placement
 function settingsFileOrigins() {
   let origins = new Map();
   for (let path of [...getFlagAgentsFilePaths(), ...getFlagMcpConfigFilePaths()]) origins.set(path, "launch");
@@ -140,7 +143,7 @@ function settingsFileOrigins() {
       origins.set(file, basename(file) === "managed-settings.json" ? "managed" : "user");
   return origins;
 }
-//@ chunk-ad2e1aj6.js:36244-36635 placement
+//@ chunk-nvm0wye1.js:36646-37037 placement
 async function statSettingsFiles(paths) {
   let results = await Promise.all(
     Array.from(paths, async (path) => {
@@ -161,7 +164,7 @@ async function statSettingsFiles(paths) {
   );
   return new Map(results);
 }
-//@ chunk-ad2e1aj6.js:36635-36785 placement
+//@ chunk-nvm0wye1.js:37037-37187 placement
 function statFingerprint(endStats) {
   if (endStats.isFile() && endStats.size === 0n)
     return `${EMPTY}${endStats.dev}:${endStats.ino}:${endStats.ctimeNs}`;
@@ -169,14 +172,14 @@ function statFingerprint(endStats) {
     ":",
   );
 }
-//@ chunk-ad2e1aj6.js:36785-36878 placement
+//@ chunk-nvm0wye1.js:37187-37280 placement
 function absentOrUnexamined(error) {
   let errnoCode = getErrnoCode(error);
   return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? ABSENT : `unexamined:${errnoCode ?? "unknown"}`;
 }
-//@ chunk-ad2e1aj6.js:36878-37214 placement
+//@ chunk-nvm0wye1.js:37280-37616 placement
 function changedSettingsFiles(before, after) {
-  return uniq([...before.keys(), ...after.keys()]).filter((path) => {
+  return normalizeCaseForComparison_2([...before.keys(), ...after.keys()]).filter((path) => {
     let beforeStamp = before.get(path);
     let afterStamp = after.get(path);
     if (beforeStamp === afterStamp) return false;
@@ -191,9 +194,9 @@ function changedSettingsFiles(before, after) {
     );
   });
 }
-//@ chunk-ad2e1aj6.js:37214-37244 placement
+//@ chunk-nvm0wye1.js:37616-37646 placement
 var processRootWeakMaps = new HostScoped(() => new WeakMap());
-//@ chunk-ad2e1aj6.js:37244-37332 placement
+//@ chunk-nvm0wye1.js:37646-37734 placement
 function refreshStampCache(stamps, reach) {
   try {
     let host = onProcessRootHost(processRootWeakMaps).get(reach);
@@ -202,7 +205,7 @@ function refreshStampCache(stamps, reach) {
     logError(toError(error));
   }
 }
-//@ chunk-ad2e1aj6.js:37332-38119 placement
+//@ chunk-nvm0wye1.js:37734-38521 placement
 async function noteServedSettingsChanges(before, name, reach) {
   try {
     let after = await statSettingsFiles(before.keys());
@@ -262,11 +265,11 @@ async function noteServedSettingsChanges(before, name, reach) {
     return;
   }
 }
-//@ chunk-ad2e1aj6.js:38119-38188 placement
+//@ chunk-nvm0wye1.js:38521-38590 placement
 function pruneChangedStamps(stamps, next) {
   for (let [path, afterStamp] of next) if (stamps.get(path)?.after !== afterStamp) stamps.delete(path);
 }
-//@ chunk-ad2e1aj6.js:38188-42590 placement
+//@ chunk-nvm0wye1.js:38590-43004 placement
 /**
  * 构造远程调用执行器：比较执行前后设置文件、运行 PostToolUse 钩子、整理输出与结果。
  */
@@ -349,7 +352,7 @@ function createServedCallRunner(kit) {
       session,
       servedTools: kit.tools(deps),
       cwd: startCwd,
-      abortController: createChildAbortController(controller),
+      abortController: createChildAbortController_2(controller),
       remoteCall: {
         origin: {
           kind: "remote",
@@ -542,12 +545,12 @@ function createServedCallRunner(kit) {
     };
   };
 }
-//@ chunk-ad2e1aj6.js:42590-42674 placement
+//@ chunk-nvm0wye1.js:43004-43088 placement
 function stringArrayValue(output, field) {
   let value = isPlainObject(output) ? output[field] : undefined;
   return typeof value === "string" && value !== "" ? [value] : [];
 }
-//@ chunk-ad2e1aj6.js:42674-42917 placement
+//@ chunk-nvm0wye1.js:43088-43331 placement
 function decidingInput(tool, input, startDir) {
   let remoteExecution = tool.remoteExecution;
   let decidingInputFields = remoteExecution?.supported ? remoteExecution.decidingInputFields : undefined;
@@ -564,21 +567,21 @@ function decidingInput(tool, input, startDir) {
     deciding,
   });
 }
-//@ chunk-ad2e1aj6.js:42917-43040 placement
+//@ chunk-nvm0wye1.js:43331-43454 placement
 function callFailedText(targetName) {
   return `The call failed on ${targetName} before it produced a result \u2014 details are in that machine's debug log.`;
 }
-//@ chunk-ad2e1aj6.js:43040-43094 placement
+//@ chunk-nvm0wye1.js:43454-43508 placement
 var ANONYMOUS_CALLER; // deferred: uses createServedCallRunner of its import cycle while loading; runs once the cycle is complete
 var defaultServedCallRunner;
-deferInit("chunk-ad2e1aj6.js:43040", () => {
+deferInit("chunk-nvm0wye1.js:43454", () => {
   ANONYMOUS_CALLER = "anonymous";
   defaultServedCallRunner = createServedCallRunner({
     tools: allServedTools,
     shellToolName: servedShellToolName,
   });
 });
-//@ chunk-ad2e1aj6.js:43094-43157 placement
+//@ chunk-nvm0wye1.js:43508-43571 placement
 function callerKey(ctx) {
   return ctx.sessionId === undefined ? ANONYMOUS_CALLER : sessionIdBody(ctx.sessionId);
 }

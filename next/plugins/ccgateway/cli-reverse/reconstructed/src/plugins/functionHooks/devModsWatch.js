@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：--plugin-dir 开发目录监视：文件变化触发 mod 重新加载
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (59)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (59)
  * attribution: placement 59
  */
 import { relative as relative_2, isAbsolute, sep, join, resolve as resolve_2, basename, dirname } from "path";
@@ -39,7 +39,7 @@ import {
   describeReloadFailure,
   devModHostState,
 } from "./devModsStatus.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { logError } from "../../utils/log.js";
 import {
   ReloadFailedError,
@@ -90,7 +90,7 @@ import { devModsDir } from "./devModsName.js";
 import { MAX_LISTED_MOD_CHANGES } from "./devModsNotices.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4127280-4127384 placement
+//@ chunk-5xgkngpb.js:4233251-4233355 placement
 /**
  * n 是 e 的直接子项时返回子项名，否则 undefined。
  */
@@ -100,32 +100,32 @@ function childNameUnder(root, path) {
     ? relative
     : undefined;
 }
-//@ chunk-e6aww6q8.js:4127445-4127486 placement
+//@ chunk-5xgkngpb.js:4233416-4233457 placement
 /**
  * 把变更路径映射到根下
  */
 var watchPathMapper = (root, base) => (path) => join(root, relative_2(base, resolve_2(path)));
-//@ chunk-e6aww6q8.js:4127486-4127500 placement
+//@ chunk-5xgkngpb.js:4233457-4233471 placement
 /**
  * 60000
  */
 var WATCH_IDLE_AFTER_MS = 60000;
-//@ chunk-e6aww6q8.js:4127500-4127512 placement
+//@ chunk-5xgkngpb.js:4233471-4233483 placement
 /**
  * 10000
  */
 var WATCH_CHECK_EVERY_MS = 1e4;
-//@ chunk-e6aww6q8.js:4127512-4127526 placement
+//@ chunk-5xgkngpb.js:4233483-4233497 placement
 /**
  * 30000
  */
 var WATCH_IDLE_MS = 30000;
-//@ chunk-e6aww6q8.js:4127526-4127558 placement
+//@ chunk-5xgkngpb.js:4233497-4233529 placement
 /**
  * 目录监视忽略的目录名：node_modules 与 .git。
  */
 var WATCH_IGNORED_DIRS = ["node_modules", ".git"];
-//@ chunk-e6aww6q8.js:4127668-4127824 placement
+//@ chunk-5xgkngpb.js:4233639-4233795 placement
 /**
  * 监视时忽略 node_modules、.git、点开头（.claude-plugin 除外）、.log 文件和调试日志路径。
  */
@@ -135,7 +135,7 @@ function isIgnoredWatchPath(path, root) {
   let isRootOrLatest = path === root || path === join(dirname(root), "latest");
   return WATCH_IGNORED_DIRS.includes(name) || isHiddenName || name.endsWith(".log") || isRootOrLatest;
 }
-//@ chunk-e6aww6q8.js:4127944-4128028 placement
+//@ chunk-5xgkngpb.js:4233915-4233999 placement
 /**
  * 路径是否在目录内
  */
@@ -143,7 +143,7 @@ function isWithinDir(dir, path) {
   let relative = relative_2(dir, path);
   return !(isAbsolute(relative) || relative === ".." || relative.startsWith(`..${sep}`));
 }
-//@ chunk-e6aww6q8.js:4128028-4128144 placement
+//@ chunk-5xgkngpb.js:4233999-4234115 placement
 function ancestorPathsWithin(root, path) {
   let relative = relative_2(root, path);
   let segments = relative === "" ? [] : relative.split(sep);
@@ -151,12 +151,12 @@ function ancestorPathsWithin(root, path) {
     ? segments.map((index, paths) => join(root, ...segments.slice(0, paths + 1)))
     : [path];
 }
-//@ chunk-e6aww6q8.js:4128402-4128433 placement
+//@ chunk-5xgkngpb.js:4234373-4234404 placement
 /**
  * 是否在 types 目录内
  */
 var isInsideTypesDir = (root, path) => isWithinDir(join(root, TYPES_DIR), path);
-//@ chunk-e6aww6q8.js:4128433-4128570 placement
+//@ chunk-5xgkngpb.js:4234404-4234541 placement
 /**
  * 生成 chokidar ignored 函数：路径链上有忽略目录、在插件缓存里或命中忽略规则（且非 manifest）时忽略。
  */
@@ -167,17 +167,17 @@ var createWatchIgnorer = (root, root_2, isIgnored) => (path) => {
   let any_2 = ancestors.some((ancestor) => isIgnoredWatchPath(ancestor, root_2));
   return any || isInsideTypesDir(root, resolved) || (any_2 && !isIgnored(resolved));
 };
-//@ chunk-e6aww6q8.js:4128570-4128606 placement
+//@ chunk-5xgkngpb.js:4234541-4234577 placement
 /**
  * 任一目录内
  */
 var anyWithinDirs = (path, dirs) => dirs.some((dir) => isWithinDir(path, dir));
-//@ chunk-e6aww6q8.js:4128606-4128618 placement
+//@ chunk-5xgkngpb.js:4234577-4234589 placement
 /**
  * 100
  */
 var WATCH_STABILITY_MS = 100;
-//@ chunk-e6aww6q8.js:4128618-4128977 placement
+//@ chunk-5xgkngpb.js:4234589-4234948 placement
 /**
  * 按用户最近交互切换监视轮询频率（活动/空闲），切换时回调以补扫。
  */
@@ -206,7 +206,7 @@ function createIdlePacer(root, pace, onIdle) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:4128977-4129155 placement
+//@ chunk-5xgkngpb.js:4234948-4235126 placement
 var watchOptionsFor = (root) => ({
   persistent: true,
   followSymlinks: false,
@@ -219,12 +219,12 @@ var watchOptionsFor = (root) => ({
     pollInterval: WATCH_STABILITY_MS / 2,
   },
 });
-//@ chunk-e6aww6q8.js:4129196-4129229 placement
+//@ chunk-5xgkngpb.js:4235167-4235200 placement
 /**
  * 真实路径或原值
  */
 var realpathOrSelf = (path) => realpath(path).catch(() => path);
-//@ chunk-e6aww6q8.js:4129229-4130260 placement
+//@ chunk-5xgkngpb.js:4235200-4236237 placement
 /**
  * 在一个插件目录上建立文件监视（chokidar 风格的 add/change/unlink 事件），失败时降级为轮询。
  */
@@ -293,7 +293,7 @@ function openPluginDirWatcher({ root, ignored, onChange, pace }) {
     rescan: reopen,
   };
 }
-//@ chunk-e6aww6q8.js:4130297-4130448 placement
+//@ chunk-5xgkngpb.js:4236274-4236425 placement
 var statFiles = async (paths) =>
   (
     await Promise.all(
@@ -313,7 +313,7 @@ var statFiles = async (paths) =>
       ),
     )
   ).filter((stat) => stat !== undefined);
-//@ chunk-e6aww6q8.js:4130448-4131608 placement
+//@ chunk-5xgkngpb.js:4236425-4237588 placement
 /**
  * 处理插件目录的文件变化事件，安排对应 mod 的重新加载。
  */
@@ -393,14 +393,14 @@ function handlePluginDirWatchEvent({ root, files, onChange, pace }) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:4131608-4131620 placement
+//@ chunk-5xgkngpb.js:4237588-4237600 placement
 /**
  * 监视器活跃时的轮询间隔 400 毫秒；空闲后按 idleMs 放慢。
  */
 var WATCH_ACTIVE_POLL_MS = 400;
-//@ chunk-e6aww6q8.js:4131620-4131723 placement
+//@ chunk-5xgkngpb.js:4237600-4237703 placement
 var WATCH_PACE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4131620", () => {
+deferInit("chunk-5xgkngpb.js:4237600", () => {
   WATCH_PACE = {
     activeMs: WATCH_ACTIVE_POLL_MS,
     idleMs: WATCH_IDLE_MS,
@@ -410,7 +410,7 @@ deferInit("chunk-e6aww6q8.js:4131620", () => {
     now: Date.now,
   };
 });
-//@ chunk-e6aww6q8.js:4131723-4131888 placement
+//@ chunk-5xgkngpb.js:4237703-4237868 placement
 /**
  * 按插件范围启动监视：folder 用目录监视，files 只监视指定文件。
  */
@@ -429,19 +429,19 @@ function startPluginWatch(collection, onChange, secondOnChange) {
         pace: WATCH_PACE,
       });
 }
-//@ chunk-e6aww6q8.js:4131888-4131899 placement
+//@ chunk-5xgkngpb.js:4237868-4237879 placement
 /**
  * 比较文件戳时预留的时钟误差 10 毫秒，避免同秒内的改动被漏掉。
  */
 var WATCH_CLOCK_SLACK_MS = 10;
-//@ chunk-e6aww6q8.js:4131899-4131965 placement
+//@ chunk-5xgkngpb.js:4237879-4237945 placement
 /**
  * 是否为关心的变更
  */
 var isChangedWatchTarget = (path, manifests, loadedModules) =>
   manifests.includes(path) ||
   (loadedModules === undefined ? isScriptFile(path) : loadedModules.includes(path));
-//@ chunk-e6aww6q8.js:4131965-4132024 placement
+//@ chunk-5xgkngpb.js:4237945-4238004 placement
 /**
  * 插件读取快照
  */
@@ -450,7 +450,7 @@ var pluginReadSnapshot = (taken, readStamp, defaultStamp) => ({
   isServed: readStamp !== undefined,
   taken,
 });
-//@ chunk-e6aww6q8.js:4132024-4132116 placement
+//@ chunk-5xgkngpb.js:4238004-4238096 placement
 /**
  * 优先把 manifest 变化当原因
  */
@@ -461,7 +461,7 @@ function preferManifestCause(collection, previousPath, nextPath) {
     ? previousPath
     : nextPath;
 }
-//@ chunk-e6aww6q8.js:4132116-4132514 placement
+//@ chunk-5xgkngpb.js:4238096-4238494 placement
 /**
  * 某插件文件变化时：非 manifest 文件直接重载；manifest 变化则重读 manifest，按"需重启/不再有入口/重载"给出状态。
  */
@@ -489,7 +489,7 @@ async function reloadOnChange(host, collection, path) {
   let unserved = await host.reload(name);
   return reloadedNotice(describeManifestReload(loaded, isManifest, unserved), unserved);
 }
-//@ chunk-e6aww6q8.js:4132514-4139257 placement
+//@ chunk-5xgkngpb.js:4238494-4245249 placement
 /**
  * plugin-dir 监视主循环：合并变化、节流频繁重载、调用 ConfigChange 钩子把关，然后重载 mod。
  */
@@ -538,7 +538,7 @@ function runPluginDirWatch({
   let offEnd = turn.onEnd(onTurnChange);
   function targetsOf(name, plugin) {
     let entry = watched.get(name) ?? plugin;
-    return uniq([
+    return normalizeCaseForComparison_2([
       ...entry.manifests,
       ...(filesOf(name) ?? []),
       ...(entry.entry === undefined ? [] : [entry.entry]),
@@ -882,7 +882,7 @@ function runPluginDirWatch({
     },
   };
 }
-//@ chunk-e6aww6q8.js:4139257-4139467 placement
+//@ chunk-5xgkngpb.js:4245249-4245459 placement
 /**
  * 记录插件选项重载结果（重载、拒绝或失败）。
  */
@@ -901,7 +901,7 @@ function logOptionsReloads(results) {
         break;
     }
 }
-//@ chunk-e6aww6q8.js:4139467-4139692 placement
+//@ chunk-5xgkngpb.js:4245459-4245684 placement
 function reportOptionsReloads(results) {
   let notices = [];
   for (let result of results) {
@@ -919,7 +919,7 @@ function reportOptionsReloads(results) {
   }
   logOptionsReloads(notices);
 }
-//@ chunk-e6aww6q8.js:4139692-4139912 placement
+//@ chunk-5xgkngpb.js:4245684-4245904 placement
 /**
  * 订阅受信设置来源的变化，变化时重载插件选项并报告结果（只订阅一次）。
  */
@@ -938,7 +938,7 @@ function watchPluginOptionChanges(refreshOptions) {
   devModHostState.set(unsubscribe);
   registerCleanup(unsubscribe);
 }
-//@ chunk-e6aww6q8.js:4139912-4140125 placement
+//@ chunk-5xgkngpb.js:4245904-4246117 placement
 /**
  * hooks 模块整体被禁止时记录原因与被排除的插件，返回空列表。
  */
@@ -953,7 +953,7 @@ function logHooksModulesDisabled(loadedModules) {
   );
   return [];
 }
-//@ chunk-e6aww6q8.js:4140125-4140179 placement
+//@ chunk-5xgkngpb.js:4246117-4246171 placement
 /**
  * 大小 + 哈希
  */
@@ -961,7 +961,7 @@ var fileStamp = (text) => ({
   size: Buffer.byteLength(text),
   hash: bunHashOf(text),
 });
-//@ chunk-e6aww6q8.js:4140253-4140430 placement
+//@ chunk-5xgkngpb.js:4246245-4246422 placement
 /**
  * 读取插件清单文件的戳（受门控的 fd 读取），不可读时为 undefined。
  */
@@ -974,7 +974,7 @@ async function readManifestStamp(manifestPath, root) {
     : null;
   return isInside === null ? undefined : fileStamp(isInside.content);
 }
-//@ chunk-e6aww6q8.js:4140463-4140593 placement
+//@ chunk-5xgkngpb.js:4246455-4246585 placement
 /**
  * 只保留被监视的插件目录。
  */
@@ -988,7 +988,7 @@ function filterWatchedPluginDirs(collections) {
   );
   return collections.filter((root) => roots.has(resolve_2(root)));
 }
-//@ chunk-e6aww6q8.js:4140638-4140809 placement
+//@ chunk-5xgkngpb.js:4246630-4246801 placement
 /**
  * 插件的 manifest 相关路径：plugin.json、.claude-plugin 清单、hooks/hooks.json 以及 manifest.hooks 指定的文件。
  */
@@ -997,19 +997,21 @@ function pluginManifestPaths(collection, loadedModules) {
     .flat()
     .filter((entry) => typeof entry === "string")
     .map((plugin) => resolve_2(loadedModules, plugin));
-  return uniq([
+  return normalizeCaseForComparison_2([
     join(loadedModules, PLUGIN_MANIFEST_PATH_2),
     join(loadedModules, PLUGIN_JSON),
     join(loadedModules, "hooks", "hooks.json"),
     ...mapped,
   ]);
 }
-//@ chunk-e6aww6q8.js:4140858-4141215 placement
+//@ chunk-5xgkngpb.js:4246850-4247207 placement
 /**
  * 为 --plugin-dir 集合目录建立监视项：目录下各子插件名映射，以及未被正确服务的子项。
  */
 function collectPluginDirRoots(collections, candidates) {
-  return uniq(candidates.filter((path) => !isZipPathCaseInsensitive(path)).map((entry) => resolve_2(entry)))
+  return normalizeCaseForComparison_2(
+    candidates.filter((path) => !isZipPathCaseInsensitive(path)).map((entry) => resolve_2(entry)),
+  )
     .filter((plugin) => !collections.some((modulePath) => relative_2(plugin, modulePath.path) === ""))
     .map((modulePath) => {
       let dir = new Map();
@@ -1032,7 +1034,7 @@ function collectPluginDirRoots(collections, candidates) {
       };
     });
 }
-//@ chunk-e6aww6q8.js:4141264-4141616 placement
+//@ chunk-5xgkngpb.js:4247256-4247608 placement
 /**
  * 为 --plugin-dir 下有 hooks 模块的插件生成 folder 范围的监视目标（根目录、manifest 列表、入口）。
  */
@@ -1059,7 +1061,7 @@ function folderWatchTargets(collections, roots) {
       ];
     });
 }
-//@ chunk-e6aww6q8.js:4141649-4141873 placement
+//@ chunk-5xgkngpb.js:4247641-4247865 placement
 var skillsWatchTargets = (loadedModules) =>
   loadedModules
     .filter((plugin) => plugin.modulePath !== undefined && plugin.source.endsWith(`@${SKILLS_DIR}`))
@@ -1076,7 +1078,7 @@ var skillsWatchTargets = (loadedModules) =>
         entry,
       };
     });
-//@ chunk-e6aww6q8.js:4141873-4141978 placement
+//@ chunk-5xgkngpb.js:4247865-4247970 placement
 /**
  * 监视用时钟：now 与可取消的 unref 定时器。
  */
@@ -1088,7 +1090,7 @@ var WATCH_CLOCK = {
     return () => clearTimeout(timer);
   },
 };
-//@ chunk-e6aww6q8.js:4141978-4142280 placement
+//@ chunk-5xgkngpb.js:4247970-4248272 placement
 /**
  * files 范围的重载先经 ConfigChange 钩子把关；钩子未接好或抛错时不重载。
  */
@@ -1111,7 +1113,7 @@ async function passesConfigChangeGate(kind, snapshot) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:4142280-4142446 placement
+//@ chunk-5xgkngpb.js:4248272-4248438 placement
 /**
  * 列出目录子项；目录不存在时为空列表，其他错误返回 undefined。
  */
@@ -1122,7 +1124,7 @@ async function listDirChildren(root) {
     ? []
     : undefined;
 }
-//@ chunk-e6aww6q8.js:4142446-4142550 placement
+//@ chunk-5xgkngpb.js:4248438-4248542 placement
 /**
  * 取内置插件某文件源码的戳。
  */
@@ -1131,7 +1133,7 @@ function bundledFileStamp(name, file) {
   let source = args && hooksModuleFiles(args).find((fileEntry) => fileEntry.file === file)?.source;
   return source === undefined ? undefined : fileStamp(source);
 }
-//@ chunk-e6aww6q8.js:4142550-4142628 placement
+//@ chunk-5xgkngpb.js:4248542-4248620 placement
 /**
  * 重载绑定的插件
  */
@@ -1139,39 +1141,39 @@ function reloadBoundPlugins() {
   let slot = pendingReloadSlot.get();
   return slot ? slot.reload() : Promise.resolve("unbound");
 }
-//@ chunk-e6aww6q8.js:4142628-4142639 placement
+//@ chunk-5xgkngpb.js:4248620-4248631 placement
 /**
  * false
  */
 var WATCH_AUTO_RELOAD_OFF = false;
-//@ chunk-e6aww6q8.js:4142673-4142709 placement
+//@ chunk-5xgkngpb.js:4248665-4248701 placement
 /**
  * 监视中的插件记录
  */
 var watchedPluginRecords; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4142673", () => {
+deferInit("chunk-5xgkngpb.js:4248665", () => {
   watchedPluginRecords = identity_2(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-e6aww6q8.js:4142709-4142723 placement
+//@ chunk-5xgkngpb.js:4248701-4248715 placement
 /**
  * 插件目录串行队列
  */
 var pluginDirQueue; // deferred: uses createSerialQueue (./panes.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4142709", () => {
+deferInit("chunk-5xgkngpb.js:4248701", () => {
   pluginDirQueue = createSerialQueue();
 });
-//@ chunk-e6aww6q8.js:4142723-4142821 placement
+//@ chunk-5xgkngpb.js:4248715-4248813 placement
 /**
  * 惰性创建设备树宿主
  */
 var lazyDeviceTreeHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4142723", () => {
+deferInit("chunk-5xgkngpb.js:4248715", () => {
   lazyDeviceTreeHost = memoizeAlias(async () => {
     let { createDeviceTreeHost } = await import("../../utils/fsAnchor/deviceTreeHost.js");
     return createDeviceTreeHost();
   });
 });
-//@ chunk-e6aww6q8.js:4142821-4142922 placement
+//@ chunk-5xgkngpb.js:4248813-4248914 placement
 function replacePluginRecord(plugin) {
   let records = watchedPluginRecords.get();
   if (records === undefined) return;
@@ -1179,7 +1181,7 @@ function replacePluginRecord(plugin) {
     records.map((record) => (record.path === plugin.path ? mergePluginRecord(record, plugin) : record)),
   );
 }
-//@ chunk-e6aww6q8.js:4142922-4143126 placement
+//@ chunk-5xgkngpb.js:4248914-4249118 placement
 var findHookLoadError = (errors) =>
   errors.find(
     (error) =>
@@ -1188,7 +1190,7 @@ var findHookLoadError = (errors) =>
       error.type === "manifest-validation-error" ||
       ((error.type === "path-not-found" || error.type === "path-traversal") && error.component === "hooks"),
   );
-//@ chunk-e6aww6q8.js:4143126-4143460 placement
+//@ chunk-5xgkngpb.js:4249118-4249498 placement
 /**
  * 重新读取插件（manifest 与 hooks 模块），有加载错误则抛出，成功后更新 manifest 列表与插件记录。
  */
@@ -1202,6 +1204,10 @@ async function retargetPluginModule(plugin) {
       previous.enabled ?? true,
       basename(previous.path),
       WATCH_AUTO_RELOAD_OFF,
+      undefined,
+      previous.entriesAnchor,
+      undefined,
+      previous.entriesAnchor,
     );
     let hookLoadError = findHookLoadError(errors);
     if (hookLoadError !== undefined)
@@ -1222,7 +1228,7 @@ async function retargetPluginModule(plugin) {
         manifests,
       };
 }
-//@ chunk-e6aww6q8.js:4143460-4143602 placement
+//@ chunk-5xgkngpb.js:4249498-4249640 placement
 /**
  * 回合状态探针：是否有回合运行、是否为人工发起，订阅回合开始/结束。
  */
@@ -1232,7 +1238,7 @@ var TURN_STATE_PROBE = {
   onBegin: (handler) => turnFinishedSignal.subscribe(handler),
   onEnd: (handler) => turnEndedSignal.subscribe(handler),
 };
-//@ chunk-e6aww6q8.js:4143650-4143756 placement
+//@ chunk-5xgkngpb.js:4249688-4249794 placement
 /**
  * 判断目录是否为当前 mods 文件夹或位于全局 mods 目录下。
  */
@@ -1243,7 +1249,7 @@ function isInModsFolder(path) {
     (!isDiskless() && dirname(resolve_2(path)) === resolve_2(devModsDir()))
   );
 }
-//@ chunk-e6aww6q8.js:4145928-4146092 placement
+//@ chunk-5xgkngpb.js:4251988-4252152 placement
 function isWatchedCollectionPath(path, root) {
   let [head, ...rest] = relative_2(root, path).split(sep);
   if (head === undefined || head === "") return true;
@@ -1251,7 +1257,7 @@ function isWatchedCollectionPath(path, root) {
   let joined = rest.join(sep);
   return joined === "" || joined === dirname(PLUGIN_MANIFEST_PATH_2) || joined === PLUGIN_MANIFEST_PATH_2;
 }
-//@ chunk-e6aww6q8.js:4146092-4146542 placement
+//@ chunk-5xgkngpb.js:4252152-4252602 placement
 /**
  * 监视 --plugin-dir 集合目录（深度 2，只关心子插件目录与清单），任何增删改都触发回调。
  */
@@ -1286,7 +1292,7 @@ function watchPluginCollection(root, name) {
     close: async () => (await watcher).close(),
   };
 }
-//@ chunk-e6aww6q8.js:4157047-4157494 placement
+//@ chunk-5xgkngpb.js:4263111-4263563 placement
 /**
  * 根据 --plugin-dir、技能目录与已有监视器，启动对开发中插件的文件监视与集合目录监视。
  */
@@ -1311,7 +1317,7 @@ function startPluginDirWatches(options, onChange, isServing) {
     `plugin-dir watch: watching ${dirEntry.watched().join(", ") || "nothing"}; folders of plugins ${dirEntry.watchedCollections().join(", ") || "none"}`,
   );
 }
-//@ chunk-e6aww6q8.js:4157532-4157595 placement
+//@ chunk-5xgkngpb.js:4263644-4263707 placement
 /**
  * URI 解码失败返回 undefined
  */
@@ -1322,23 +1328,17 @@ function decodeUriOrUndefined(uri) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:4157595-4157607 placement
+//@ chunk-5xgkngpb.js:4263707-4263719 placement
 /**
  * 405
  */
 var HTTP_METHOD_NOT_ALLOWED = 405;
-//@ chunk-e6aww6q8.js:4157607-4157619 placement
+//@ chunk-5xgkngpb.js:4263719-4263731 placement
 /**
  * 404
  */
 var HTTP_NOT_FOUND = 404;
 export {
-  childNameUnder,
-  WATCH_CLOCK_SLACK_MS,
-  isIgnoredWatchPath,
-  isInsideTypesDir,
-  WATCH_IGNORED_DIRS,
-  reloadBoundPlugins,
   logHooksModulesDisabled,
   WATCH_CLOCK,
   startPluginDirWatches,
@@ -1358,12 +1358,18 @@ export {
   TURN_STATE_PROBE,
   watchPluginCollection,
   listDirChildren,
+  reloadBoundPlugins,
   isInModsFolder,
   decodeUriOrUndefined,
   HTTP_NOT_FOUND,
   HTTP_METHOD_NOT_ALLOWED,
-  logOptionsReloads,
+  WATCH_IGNORED_DIRS,
+  isInsideTypesDir,
+  WATCH_CLOCK_SLACK_MS,
+  isIgnoredWatchPath,
   collectPluginDirRoots,
   createWatchIgnorer,
   WATCH_ACTIVE_POLL_MS,
+  childNameUnder,
+  logOptionsReloads,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：限流检查点 git 引用
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-89f54s6c.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qznkkbq5.js (3)
  * attribution: placement 3
  */
 import { promisify } from "util";
@@ -28,7 +28,7 @@ import {
 import { logForDebugging } from "../../utils/debug.js";
 import { readFlagWithOverride } from "../analytics/flagOverrides.js";
 
-//@ chunk-89f54s6c.js:13998-15119 placement
+//@ chunk-qznkkbq5.js:14421-15542 placement
 /**
  * 在沙箱中用 git update-ref --stdin 删除旧检查点引用。
  */
@@ -94,7 +94,7 @@ delete ${result}
     }
   }
 }
-//@ chunk-89f54s6c.js:15119-15675 placement
+//@ chunk-qznkkbq5.js:15542-16098 placement
 /**
  * 删除过期的检查点引用（沙箱开启时走沙箱）。
  */
@@ -137,7 +137,7 @@ async function pruneOldCheckpointRefs(cwd, gitDir, keepRef, git, options) {
       cwd,
     });
 }
-//@ chunk-89f54s6c.js:15675-16809 placement
+//@ chunk-qznkkbq5.js:16098-17232 placement
 /**
  * 生成检查点说明 markdown（恢复命令与 todo 列表）。
  */

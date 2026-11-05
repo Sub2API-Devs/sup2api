@@ -3,13 +3,14 @@
  *
  * 输入框提交处理：命令/bash/粘贴/图片/排队，执行用户输入并启动查询。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/handlePromptSubmit.ts
- * pieces: chunk-18hwfzwa.js (4), chunk-e6aww6q8.js (1)
- * attribution: fingerprint 2, layout 1, placement 2
+ * pieces: chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (4)
+ * attribution: placement 2, fingerprint 2, layout 1
  */
 import { randomUUID } from "crypto";
 import { startQueryProfile, queryCheckpoint } from "./queryProfiler.js";
+import { codeModeAccepted } from "./codeMode/accepted.js";
 import {
   parsePastedRefs,
   stripPlaceholdersWithOptions,
@@ -84,14 +85,14 @@ import { isAbortError, errorMessage } from "./errors.js";
 import { logForDebugging } from "./debug.js";
 import { appendLine } from "../screens/repl/SessionController.js";
 import {
-  isRefillableCommand,
+  isBatchHeadHumanCommand,
   firstSchedulingPlugin,
-  isReplayableHistoryEntry,
-  isRefillableInput,
-  inputDisplayText,
-  getRetainedPastedContents,
+  isTypedAtThisComposer,
+  isQueuedCommandEditable,
+  restoreTextForPop,
+  collectPastedContentsForPop,
   extractImagesFromValue,
-  isSlashCommand_2,
+  isSlashCommand as isSlashCommand_2,
 } from "./messageQueueManager.js";
 import { createPromptEntryTracker } from "./processUserInput/promptEntryWaiters.js";
 import { normalizeTaskNotificationOrigin, resolveTaskNotificationOrigin } from "./backgroundSessionResume.js";
@@ -127,12 +128,12 @@ import { isSkillModelOverrideAllowedInMode } from "./betas.js";
 import { resolveSkillModelOverride } from "./model/model.js";
 import { isScreeningPendingEntry } from "./historyFile.js";
 
-//@ chunk-e6aww6q8.js:67200-67247 placement
+//@ chunk-5xgkngpb.js:69741-69788 placement
 /**
  * 提交框里被视为"退出"的输入（exit、quit、:q 等）。
  */
 var EXIT_COMMAND_WORDS = ["exit", "quit", ":q", ":q!", ":wq", ":wq!"];
-//@ chunk-18hwfzwa.js:1475438-1483880 fingerprint (2.1.88 match: handlePromptSubmit, 0.391)
+//@ chunk-czq1j3j2.js:1516840-1525307 fingerprint (2.1.88 match: handlePromptSubmit, 0.385)
 /**
  * 处理输入框提交：斜杠命令、bash 模式、图片/粘贴、排队（正在运行时入队），最终调用 executeUserInput。
  */
@@ -186,7 +187,7 @@ async function handlePromptSubmit(params) {
     return;
   }
   let { guard, isExternalLoading } = turn;
-  let submitBlocked = false;
+  let submitBlocked = codeModeAccepted() && params.askOpenAtIdle === true;
   let input = params.input ?? "";
   let mode = params.mode ?? "prompt";
   let pastedContents = params.pastedContents ?? {};
@@ -678,7 +679,7 @@ async function handlePromptSubmit(params) {
     storageV5: params.storageV5,
   });
 }
-//@ chunk-18hwfzwa.js:1483880-1492425 fingerprint (2.1.88 match: executeUserInput, 0.357)
+//@ chunk-czq1j3j2.js:1525307-1533918 fingerprint (2.1.88 match: executeUserInput, 0.354)
 /**
  * 执行一次用户输入：处理成消息、写入历史与转录，启动查询循环。
  */
@@ -722,7 +723,7 @@ async function executeUserInput(params) {
   let turnUuids = (queuedCommands ?? []).flatMap((command) =>
     command.uuid === undefined ? [] : [command.uuid],
   );
-  let poseRun = (queuedCommands ?? []).some(isRefillableCommand) ? bumpClawdPoseRun() : undefined;
+  let poseRun = (queuedCommands ?? []).some(isBatchHeadHumanCommand) ? bumpClawdPoseRun() : undefined;
   let startTime = performance.now();
   let reduced = (queuedCommands ?? []).reduce(
     (acc, command) =>
@@ -742,6 +743,10 @@ async function executeUserInput(params) {
     return {
       ...turn.buildToolUseContext(messages, [], abortController, mainLoopModel),
       deferSlashToEngine: params.deferSlashToEngine,
+      remoteControlToggle: {
+        get: getAppState,
+        set: setAppState,
+      },
     };
   }
   let retireables = [];
@@ -781,7 +786,7 @@ async function executeUserInput(params) {
           : undefined,
       scheduledByPlugin: firstSchedulingPlugin(workCommands),
     };
-    let index = workCommands.findIndex(isRefillableCommand);
+    let index = workCommands.findIndex(isBatchHeadHumanCommand);
     let max = Math.max(0, index);
     let hasRefillable = index >= 0;
     let firstWorkload = workCommands[max]?.value;
@@ -939,6 +944,7 @@ async function executeUserInput(params) {
             ownFilePaths: command.ownFilePaths,
             noPersonArrived: command.noPersonArrived,
             composerEnter: command.composerEnter,
+            ultrathinkTyped: command.ultrathinkTyped,
             inlinedImagePaths: command.inlinedImagePaths,
             promptSubmitted: command.promptSubmitted,
             onScreened: (screened) =>
@@ -961,7 +967,7 @@ async function executeUserInput(params) {
                   idx_2 !== idx &&
                   !alreadyBatched.has(command) &&
                   command.origin?.kind !== "plugin" &&
-                  !isReplayableHistoryEntry(command)
+                  !isTypedAtThisComposer(command)
                 ) {
                   if (idx_2 === max && idx_2 < idx)
                     isNullRenderingAttachment_2(
@@ -1146,8 +1152,8 @@ async function executeUserInput(params) {
               willQuery &&
               (mode === "prompt" || mode === "bash") &&
               primaryCommand !== undefined &&
-              isRefillableCommand(primaryCommand),
-            humanCommandUuids: workCommands.filter(isRefillableCommand).map((command) => command.uuid),
+              isBatchHeadHumanCommand(primaryCommand),
+            humanCommandUuids: workCommands.filter(isBatchHeadHumanCommand).map((command) => command.uuid),
             willQuery,
           });
           batchHandedOff = true;
@@ -1209,7 +1215,7 @@ async function executeUserInput(params) {
     for (let handle of retireables) handle.close();
   }
 }
-//@ chunk-18hwfzwa.js:1492425-1493685 layout
+//@ chunk-czq1j3j2.js:1533918-1535179 layout
 /**
  * 处理被中断回合里截下的排队命令：保留部分追加回会话；若是用户取消，把纯文本提示交还输入框（含粘贴内容）；回合被替换时未写入的提示改为中断消息加历史记录，其余命令重新排在队首。
  */
@@ -1237,12 +1243,12 @@ function resurrectCutCommands({
   let requeued = [];
   for (let cutEntry of cut) {
     let command = cutEntry.command;
-    if (userCancelled && isRefillableInput(command) && typeof command.value === "string") {
-      handBack(inputDisplayText(command), command);
-      let retainedPastedContents = getRetainedPastedContents(command);
-      if (retainedPastedContents.length > 0)
-        composer.setPastedContents((currentPastes) => mergeTurnTags(currentPastes, retainedPastedContents));
-    } else if (turnReplaced && command.mode === "prompt" && isRefillableInput(command))
+    if (userCancelled && isQueuedCommandEditable(command) && typeof command.value === "string") {
+      handBack(restoreTextForPop(command), command);
+      let pastedContentsForPop = collectPastedContentsForPop(command);
+      if (pastedContentsForPop.length > 0)
+        composer.setPastedContents((currentPastes) => mergeTurnTags(currentPastes, pastedContentsForPop));
+    } else if (turnReplaced && command.mode === "prompt" && isQueuedCommandEditable(command))
       interruptedPrompts.push(cutEntry);
     else requeued.push(cutEntry);
   }
@@ -1264,7 +1270,7 @@ function resurrectCutCommands({
     let pendingScreening = new Set(
       interruptedPrompts.filter(
         ({ command, isWritten }) =>
-          !isWritten && isScreeningPendingEntry(command) && isReplayableHistoryEntry(command),
+          !isWritten && isScreeningPendingEntry(command) && isTypedAtThisComposer(command),
       ),
     );
     let screenedMap = new Map();
@@ -1276,7 +1282,7 @@ function resurrectCutCommands({
             (!interruptedPrompt.isWritten || !interruptedPrompt.command.historyEntry),
         )
         .map(({ command, screened }) => {
-          let display = inputDisplayText(command);
+          let display = restoreTextForPop(command);
           if (command.historyEntry) return command;
           let pastedContents = {
             ...(command.pastedContents ?? {}),
@@ -1305,7 +1311,7 @@ function resurrectCutCommands({
   }
   if (!turnReplaced) turn.setAbortController(null);
 }
-//@ chunk-18hwfzwa.js:1493685-1493732 placement (2.1.88 match: prependModeCharacterToInput, 1)
+//@ chunk-czq1j3j2.js:1535179-1535226 placement (2.1.88 match: prependModeCharacterToInput, 1)
 function prependModeCharacterToInput(command) {
   return command.mode === "bash" || isSlashCommand_2(command);
 }

@@ -1,17 +1,17 @@
 /**
  * @anthropic-ai/sdk/internal/utils/path.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (2)
+ * pieces: chunk-vn3g7zt8.js (2)
  * attribution: esm-fingerprint 2
  */
 import { AnthropicError } from "../../core/error.mjs";
 
-//@ chunk-hwmsct5x.js:44319-44406 esm-fingerprint
+//@ chunk-vn3g7zt8.js:44690-44777 esm-fingerprint
 function encodeURIPath(str) {
   return str.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
 }
-//@ chunk-hwmsct5x.js:44406-45437 esm-fingerprint
+//@ chunk-vn3g7zt8.js:44777-45808 esm-fingerprint
 var EMPTY = Object.freeze(Object.create(null));
 var createPathTagFunction = (pathEncoder = encodeURIPath) =>
   function (statics, ...params) {

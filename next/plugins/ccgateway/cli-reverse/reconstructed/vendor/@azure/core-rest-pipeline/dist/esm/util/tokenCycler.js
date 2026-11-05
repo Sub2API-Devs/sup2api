@@ -1,19 +1,19 @@
 /**
  * @azure/core-rest-pipeline/dist/esm/util/tokenCycler.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/core-rest-pipeline@1.21.0
- * pieces: chunk-mrx6y2r5.js (3)
+ * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-fingerprint 3
  */
 import { delay_3 } from "../../../../core-util/dist/esm/delay.js";
 
-//@ chunk-mrx6y2r5.js:63072-63158 esm-fingerprint
+//@ chunk-b5df2wx1.js:63072-63158 esm-fingerprint
 var DEFAULT_CYCLER_OPTIONS = {
   forcedRefreshWindowInMs: 1000,
   retryIntervalInMs: 3000,
   refreshWindowInMs: 120000,
 };
-//@ chunk-mrx6y2r5.js:63158-63414 esm-fingerprint
+//@ chunk-b5df2wx1.js:63158-63414 esm-fingerprint
 async function beginRefresh(getAccessToken, retryIntervalInMs, refreshTimeout) {
   async function tryGetAccessToken() {
     if (Date.now() < refreshTimeout)
@@ -35,7 +35,7 @@ async function beginRefresh(getAccessToken, retryIntervalInMs, refreshTimeout) {
   }
   return token;
 }
-//@ chunk-mrx6y2r5.js:63414-64307 esm-fingerprint
+//@ chunk-b5df2wx1.js:63414-64307 esm-fingerprint
 function createTokenCycler(credential, tokenCyclerOptions) {
   let refreshWorker = null;
   let token = null;

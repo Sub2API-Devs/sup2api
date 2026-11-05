@@ -3,9 +3,9 @@
  *
  * 主会话转后台：把当前查询作为 main-session 类型的 local_agent 任务在后台继续运行，带进度与 transcript 记录
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tasks/LocalMainSessionTask.ts
- * pieces: chunk-18hwfzwa.js (1), chunk-e6aww6q8.js (8)
+ * pieces: chunk-5xgkngpb.js (8), chunk-czq1j3j2.js (1)
  * attribution: fingerprint 7, file-local 1, layout 1
  */
 import { randomBytes } from "crypto";
@@ -23,9 +23,10 @@ import { isMainAgent } from "../utils/agentContext.js";
 import { runWithCwdOverride } from "../utils/cwd.js";
 import { runningTurnRegistry, orderedRowSource } from "../utils/queryHelpers.js";
 import { identityAgentId2 } from "../utils/agentId.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
 import { applyPreservedMessages } from "../services/compact/compact.js";
 import { roughTokenCountEstimation } from "../services/tokenEstimation.js";
-import { isExactReplToolName } from "../tools/REPLTool/constants.js";
+import { isEvalToolCallName } from "../tools/REPLTool/constants.js";
 import { logError } from "../utils/log.js";
 import { withTelemetryMessage, toError } from "../utils/errors.js";
 import { formatMonitorTerminalSummary } from "./LocalShellTask/LocalShellTask.js";
@@ -34,7 +35,7 @@ import { BACKGROUND_STOP_REASONS } from "./LocalShellTask/backgroundNotices.js";
 import { isPanelAgentTask } from "./taskKinds.js";
 import { FLAG_IDLE_WINDOW } from "./LocalAgentTask/keepalive.js";
 
-//@ chunk-e6aww6q8.js:4736672-4736826 fingerprint (2.1.88 match: DEFAULT_MAIN_SESSION_AGENT, 0.881)
+//@ chunk-5xgkngpb.js:4848771-4848925 fingerprint (2.1.88 match: DEFAULT_MAIN_SESSION_AGENT, 0.881)
 /**
  * 主会话后台任务的默认代理定义（agentType=main-session，系统提示词为空），以及 ID 随机部分字母表。
  */
@@ -45,7 +46,7 @@ var DEFAULT_MAIN_SESSION_AGENT = {
   getSystemPrompt: () => "",
 };
 var MAIN_SESSION_ID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
-//@ chunk-e6aww6q8.js:4736826-4736913 file-local
+//@ chunk-5xgkngpb.js:4848925-4849012 file-local
 /**
  * 生成主会话任务 ID："s" + 8 个随机 36 进制字符。
  */
@@ -55,7 +56,7 @@ function generateMainSessionTaskId() {
   for (let i = 0; i < 8; i++) id += MAIN_SESSION_ID_ALPHABET[bytes[i] % MAIN_SESSION_ID_ALPHABET.length];
   return id;
 }
-//@ chunk-e6aww6q8.js:4736913-4737478 fingerprint (2.1.88 match: registerMainSessionTask, 0.935)
+//@ chunk-5xgkngpb.js:4849012-4849577 fingerprint (2.1.88 match: registerMainSessionTask, 0.933)
 /**
  * 注册主会话后台任务（local_agent / agentType=main-session / isBackgrounded=true），返回 {taskId, abortSignal}。
  */
@@ -92,7 +93,7 @@ function registerMainSessionTask(description, taskRegistry, agentDefinition) {
     abortSignal: abortController.signal,
   };
 }
-//@ chunk-e6aww6q8.js:4737478-4737895 fingerprint (2.1.88 match: completeMainSessionTask, 0.554)
+//@ chunk-5xgkngpb.js:4849577-4849994 fingerprint (2.1.88 match: completeMainSessionTask, 0.523)
 /**
  * 主会话后台任务结束：标 completed/failed（notified=true），transcript 只留最后一条，回收输出，记计数并发终止通知。
  */
@@ -124,7 +125,7 @@ function completeMainSessionTask(taskId, success, taskRegistry) {
     summary: description,
   });
 }
-//@ chunk-e6aww6q8.js:4737895-4738048 fingerprint (2.1.88 match: isMainSessionTask, 1)
+//@ chunk-5xgkngpb.js:4849994-4850147 fingerprint (2.1.88 match: isMainSessionTask, 1)
 /**
  * 是否是主会话后台任务（local_agent 且 agentType=main-session）。
  */
@@ -132,12 +133,12 @@ function isMainSessionTask(task) {
   if (typeof task !== "object" || task === null || !("type" in task) || !("agentType" in task)) return false;
   return task.type === "local_agent" && task.agentType === "main-session";
 }
-//@ chunk-e6aww6q8.js:4738048-4738058 layout
+//@ chunk-5xgkngpb.js:4850147-4850157 layout
 /**
  * 主会话后台任务进度里保留的最近工具活动数（5）。
  */
 var MAX_MAIN_SESSION_ACTIVITIES = 5;
-//@ chunk-e6aww6q8.js:4738058-4740100 fingerprint (2.1.88 match: startBackgroundSession, 0.683)
+//@ chunk-5xgkngpb.js:4850157-4852574 fingerprint (2.1.88 match: startBackgroundSession, 0.614)
 /**
  * 把主会话查询转到后台：注册任务，以 main-session 子代理身份（isMainSession/isBackgroundAgent）在独立上下文里继续跑 runQuery，
  * 边跑边写 sidechain transcript、更新 token/工具计数；中止时发 stopped 通知；结束调用 completeMainSessionTask。返回 taskId。
@@ -226,6 +227,31 @@ function startBackgroundSession({
             });
           return;
         }
+        if (
+          codeModeAccepted() &&
+          event.type === "progress" &&
+          event.data.type === "repl_tool_call" &&
+          event.data.phase === "start"
+        ) {
+          recentActivities.push({
+            toolName: event.data.toolName,
+            input: event.data.toolInput,
+          });
+          if (recentActivities.length > MAX_MAIN_SESSION_ACTIVITIES) recentActivities.shift();
+          let last = recentActivities.at(-1);
+          taskRegistry.update(taskId, (task) => {
+            if (task.progress?.recentActivities?.at(-1) === last) return task;
+            return {
+              ...task,
+              progress: {
+                tokenCount,
+                toolUseCount,
+                recentActivities: [...recentActivities],
+              },
+            };
+          });
+          continue;
+        }
         if (event.type === "active_goal") {
           setAppState?.((err) =>
             err.activeGoal === event.value
@@ -246,7 +272,7 @@ function startBackgroundSession({
             if (block.type === "text") tokenCount += roughTokenCountEstimation(block.text);
             else if (block.type === "tool_use") {
               toolUseCount++;
-              if (isExactReplToolName(block.name)) continue;
+              if (isEvalToolCallName(block.name)) continue;
               let activity = {
                 toolName: block.name,
                 input: block.input,
@@ -290,7 +316,7 @@ function startBackgroundSession({
   });
   return taskId;
 }
-//@ chunk-e6aww6q8.js:4746602-4746907 fingerprint (2.1.88 match: enqueueMainSessionNotification, 0.43)
+//@ chunk-5xgkngpb.js:4865238-4865546 fingerprint (2.1.88 match: enqueueMainSessionNotification, 0.43)
 /**
  * 生成后台任务（shell/monitor）结束时的一行摘要："<前缀>"desc" completed / failed with exit code N / was stopped"；monitor 走专用文案。
  */
@@ -311,7 +337,7 @@ function formatTaskTerminalSummary(kind, description, status, exitCode, stdoutBy
       return `${BACKGROUND_COMMAND_PREFIX}"${description}" was ${killReason ? BACKGROUND_STOP_REASONS[killReason] : "stopped"}`;
   }
 }
-//@ chunk-18hwfzwa.js:441440-441612 fingerprint (2.1.88 match: foregroundMainSessionTask, 0.545)
+//@ chunk-czq1j3j2.js:467113-467285 fingerprint (2.1.88 match: foregroundMainSessionTask, 0.544)
 /**
  * 已完成、在后台、未静默停放、且只剩"空闲窗口"保活的面板子代理（可在 UI 中"拉回前台"查看）。
  */
@@ -326,4 +352,4 @@ function isIdleCompletedSubagent(task) {
     [...(task.keepaliveReasons ?? [])].every((prev) => prev === FLAG_IDLE_WINDOW)
   );
 }
-export { startBackgroundSession, isIdleCompletedSubagent, isMainSessionTask, formatTaskTerminalSummary };
+export { isIdleCompletedSubagent, formatTaskTerminalSummary, isMainSessionTask, startBackgroundSession };

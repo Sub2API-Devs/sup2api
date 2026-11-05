@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/core/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/core@3.936.0
- * pieces: chunk-0rkz0exm.js (3), chunk-edce4vxq.js (1)
+ * pieces: chunk-1yr4143q.js (3), chunk-3p78mpxm.js (1)
  * attribution: esm-layout 2, esm-fingerprint 1, cjs-fingerprint 1
  */
 import { __commonJS, __toESM } from "../../../../runtime/bun-runtime.js";
@@ -20,7 +20,7 @@ import { base64Module } from "../../credential-provider-web-identity/dist-cjs/in
 import { require_util_utf8 } from "../../../@smithy/util-utf8/dist-cjs/index.js";
 import { require_xml_builder } from "../../xml-builder/dist-cjs/index.js";
 
-//@ chunk-edce4vxq.js:75638-111841 cjs-fingerprint
+//@ chunk-3p78mpxm.js:75638-111841 cjs-fingerprint
 var require_core_2 = __commonJS(function (cjsExports) {
   var protocolHttp = require_protocol_http_2();
   var core = require_core_3();
@@ -1811,15 +1811,15 @@ More information can be found at: https://a.co/74kJMmI`);
   cjsExports.state = state;
   cjsExports.validateSigningProperties = validateSigningProperties;
 });
-//@ chunk-0rkz0exm.js:445-460 esm-layout
+//@ chunk-1yr4143q.js:445-460 esm-layout
 var import_client = __toESM(require_client_2());
-//@ chunk-0rkz0exm.js:460-500 esm-layout
+//@ chunk-1yr4143q.js:460-500 esm-layout
 var require_protocol_http = require_protocol_http_2();
 var require_core = require_core_3();
 var require_property_provider = require_property_provider_2();
 var require_client = require_client_2();
 var require_signature_v4 = require_signature_v4_2();
-//@ chunk-0rkz0exm.js:500-571 esm-fingerprint
+//@ chunk-1yr4143q.js:500-571 esm-fingerprint
 var bearerTokenEnvKey = (signingName) =>
   `AWS_BEARER_TOKEN_${signingName.replace(/[\s-]/g, "_").toUpperCase()}`;
-export { require_core_2, bearerTokenEnvKey, import_client };
+export { bearerTokenEnvKey, import_client, require_core_2 };

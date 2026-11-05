@@ -3,9 +3,9 @@
  *
  * 上下文用量告警：显示 "% context used / % until auto-compact" 或 "Context low"。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/TokenWarning.tsx
- * pieces: chunk-18hwfzwa.js (4)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: sole-consumer 1, affinity 1, fingerprint 2
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -22,15 +22,15 @@ import { Text } from "../ink/components/Text.js";
 import { isEnvTruthy } from "../utils/envUtils.js";
 import { Ansi } from "../ink/components/AnsiText.js";
 
-//@ chunk-18hwfzwa.js:784345-784390 sole-consumer
+//@ chunk-czq1j3j2.js:816964-817009 sole-consumer
 function selectAutoCompactWindow(appState) {
   return appState.autoCompactWindow;
 }
-//@ chunk-18hwfzwa.js:784390-784440 affinity
+//@ chunk-czq1j3j2.js:817009-817059 affinity
 function selectRemoteAutocompactState(appState) {
   return appState.remoteAutocompactState;
 }
-//@ chunk-18hwfzwa.js:784440-785667 fingerprint (2.1.88 match: TokenWarning, 0.715)
+//@ chunk-czq1j3j2.js:817059-818286 fingerprint (2.1.88 match: TokenWarning, 0.715)
 function TokenWarning(props) {
   let $ = useMemoCache(17);
   let { tokenUsage, model } = props;
@@ -68,7 +68,7 @@ function TokenWarning(props) {
     $[5] = upgradeMessage;
   } else upgradeMessage = $[5];
   let upgradeText = upgradeMessage;
-  let displayPercentLeft = pctLeft;
+  let percentLeft = pctLeft;
   let isWindowInexact = remoteAutocompactState
     ? !remoteAutocompactState.enforced
     : !hasExplicitWindow(getModelContextInfo(model), autoCompactWindow);
@@ -91,11 +91,11 @@ function TokenWarning(props) {
       $[11] = tokenUsage;
       $[12] = roundedPercentLeft;
     } else roundedPercentLeft = $[12];
-    displayPercentLeft = Math.max(0, roundedPercentLeft);
+    percentLeft = Math.max(0, roundedPercentLeft);
   }
   let usageLabel = isWindowInexact
-    ? `${100 - displayPercentLeft}% context used`
-    : `${displayPercentLeft}% until auto-compact`;
+    ? `${100 - percentLeft}% context used`
+    : `${percentLeft}% until auto-compact`;
   if (autoCompactEnabled) {
     const children = upgradeText ? `${usageLabel} \xB7 ${upgradeText}` : usageLabel;
     let warningElement;
@@ -128,7 +128,7 @@ function TokenWarning(props) {
   } else warningElement_ = $[16];
   return warningElement_;
 }
-//@ chunk-18hwfzwa.js:802616-802710 fingerprint (2.1.88 match: CollapseLabel, 0.376)
+//@ chunk-czq1j3j2.js:835238-835332 fingerprint (2.1.88 match: CollapseLabel, 0.375)
 function CollapseLabel(children, key) {
   return jsxProd_default(
     Text,
@@ -142,4 +142,4 @@ function CollapseLabel(children, key) {
     key,
   );
 }
-export { TokenWarning, CollapseLabel };
+export { CollapseLabel, TokenWarning };

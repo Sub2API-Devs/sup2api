@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：创建插件加载状态（加载、缓存、注册表等）；清除插件工作流缓存等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-yf5m6p65.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-90nja2dk.js (14)
  * attribution: placement 14
  */
 import { createStore } from "../../state/store.js";
@@ -14,9 +14,9 @@ import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-yf5m6p65.js:333-517 placement
+//@ chunk-90nja2dk.js:333-517 placement
 var EMPTY_PLUGIN_LOAD_LISTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-yf5m6p65.js:333", () => {
+deferInit("chunk-90nja2dk.js:333", () => {
   EMPTY_PLUGIN_LOAD_LISTS = Object.freeze({
     open: Object.freeze([]),
     unplaced: Object.freeze([]),
@@ -28,7 +28,7 @@ deferInit("chunk-yf5m6p65.js:333", () => {
     closing: Object.freeze([]),
   });
 });
-//@ chunk-yf5m6p65.js:517-812 placement
+//@ chunk-90nja2dk.js:517-812 placement
 /**
  * 创建插件状态存储（值、读者、挂载、折叠等）。
  */
@@ -54,7 +54,7 @@ var createPluginStateStore = () => ({
   bumps: 0,
   versionFloor: 0,
 });
-//@ chunk-yf5m6p65.js:812-859 placement
+//@ chunk-90nja2dk.js:812-859 placement
 /**
  * emptyPluginLoadState：插件加载状态初值。
  */
@@ -62,7 +62,7 @@ var emptyPluginLoadState = () => ({
   pending: undefined,
   pausedAt: undefined,
 });
-//@ chunk-yf5m6p65.js:859-3981 placement
+//@ chunk-90nja2dk.js:859-4001 placement
 /**
  * 创建插件加载状态（加载、缓存、注册表等）。
  */
@@ -136,6 +136,7 @@ function createPluginLoadState() {
     renderVersions: createStore(new Map()),
     panes: createStore(EMPTY_PLUGIN_LOAD_LISTS),
     placed: createSignal(),
+    backdrop: createStore(undefined),
     pluginState: createPluginStateStore(),
     toastClock: emptyPluginLoadState(),
     hoverGroups: createStore(new Map()),
@@ -200,48 +201,48 @@ function createPluginLoadState() {
     inlinePluginRootsComparableMemo: undefined,
   };
 }
-//@ chunk-yf5m6p65.js:3981-4002 placement
+//@ chunk-90nja2dk.js:4001-4022 placement
 class PluginRegistryHolder {
   registry = createPluginLoadState();
 }
-//@ chunk-yf5m6p65.js:4002-4025 placement
+//@ chunk-90nja2dk.js:4022-4045 placement
 var pluginRegistryHolder; // deferred: uses PluginRegistryHolder of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-yf5m6p65.js:4002", () => {
+deferInit("chunk-90nja2dk.js:4022", () => {
   pluginRegistryHolder = new HostScoped(() => new PluginRegistryHolder());
 });
-//@ chunk-yf5m6p65.js:4025-4060 placement
+//@ chunk-90nja2dk.js:4045-4080 placement
 function pluginRegistryHost() {
   return pluginRegistryHolder.of(getRootSession().host);
 }
-//@ chunk-yf5m6p65.js:4060-4094 placement
+//@ chunk-90nja2dk.js:4080-4114 placement
 /**
  * 取插件注册表。
  */
 function getPluginRegistry() {
   return pluginRegistryHost().registry;
 }
-//@ chunk-yf5m6p65.js:4094-4146 placement
+//@ chunk-90nja2dk.js:4114-4166 placement
 /**
  * isRegisteredAgent：代理是否已登记。
  */
 function isRegisteredAgent(agentType) {
   return getPluginRegistry().registeredAgents.has(agentType);
 }
-//@ chunk-yf5m6p65.js:4146-4193 placement
+//@ chunk-90nja2dk.js:4166-4213 placement
 /**
  * isPluginLoadCacheOnly：插件仅从缓存加载。
  */
 function isPluginLoadCacheOnly() {
   return getPluginRegistry().pluginLoadCacheOnly;
 }
-//@ chunk-yf5m6p65.js:4193-4229 placement
+//@ chunk-90nja2dk.js:4213-4249 placement
 /**
  * 清除插件命令缓存。
  */
 function clearPluginCommands() {
   getPluginRegistry().commands = undefined;
 }
-//@ chunk-yf5m6p65.js:4229-4289 placement
+//@ chunk-90nja2dk.js:4249-4309 placement
 /**
  * clearPluginSkillsCache：清除插件技能缓存。
  */
@@ -250,14 +251,14 @@ function clearPluginSkillsCache() {
   pluginRegistry.skills = undefined;
   pluginRegistry.skillsV5 = undefined;
 }
-//@ chunk-yf5m6p65.js:4289-4323 placement
+//@ chunk-90nja2dk.js:4309-4343 placement
 /**
  * 清除插件代理缓存。
  */
 function clearPluginAgents() {
   getPluginRegistry().agents = undefined;
 }
-//@ chunk-yf5m6p65.js:4363-4400 placement
+//@ chunk-90nja2dk.js:4383-4420 placement
 /**
  * 清除插件工作流缓存。
  */
@@ -266,13 +267,13 @@ function clearPluginWorkflows() {
 }
 export {
   getPluginRegistry,
-  clearPluginAgents,
-  emptyPluginLoadState,
-  isPluginLoadCacheOnly,
-  isRegisteredAgent,
   clearPluginCommands,
   clearPluginSkillsCache,
   clearPluginWorkflows,
+  isRegisteredAgent,
+  clearPluginAgents,
+  isPluginLoadCacheOnly,
   createPluginStateStore,
+  emptyPluginLoadState,
   EMPTY_PLUGIN_LOAD_LISTS,
 };

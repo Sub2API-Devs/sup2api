@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：WebSocket 摘要
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8ktrtjfp.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z5f9r17q.js (4)
  * attribution: placement 4
  */
 import { truncateToLength } from "./stringUtils.js";
 
-//@ chunk-8ktrtjfp.js:227-397 placement
+//@ chunk-z5f9r17q.js:226-396 placement
 /**
  * 从 WebSocket 选项中取出字符串子协议列表。
  */
@@ -21,7 +21,7 @@ function websocketSubprotocols(info) {
   let filtered = protocols.filter((protocol) => typeof protocol === "string");
   return filtered.length > 0 ? filtered : undefined;
 }
-//@ chunk-8ktrtjfp.js:397-509 placement
+//@ chunk-z5f9r17q.js:396-508 placement
 /**
  * 生成"(subprotocols: ...)"说明后缀，无子协议时为空串。
  */
@@ -30,13 +30,13 @@ function subprotocolsSuffix(info) {
   if (list === undefined) return "";
   return ` (subprotocols: ${list.map((protocol) => `"${protocol}"`).join(", ")})`;
 }
-//@ chunk-8ktrtjfp.js:509-524 placement
+//@ chunk-z5f9r17q.js:508-523 placement
 /**
  * 引号列表最多列出的项数与单项长度。
  */
 var MAX_QUOTED_ITEMS = 4;
 var MAX_QUOTED_ITEM_CHARS = 48;
-//@ chunk-8ktrtjfp.js:524-691 placement
+//@ chunk-z5f9r17q.js:523-689 placement
 /**
  * 把字符串列表格式化为带引号、逗号分隔的文本（限数量与单项长度，超出注明剩余数）。
  */

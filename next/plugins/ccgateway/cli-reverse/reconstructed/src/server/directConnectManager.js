@@ -3,9 +3,9 @@
  *
  * 直连会话管理器：经 WebSocket 连接 claude 服务端会话，收 SDK 帧、处理 can_use_tool 权限请求、发送用户消息/中断
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/server/directConnectManager.ts
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { jsonParse, jsonStringify } from "../utils/slowOperations.js";
@@ -15,7 +15,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { isControlFrame } from "../remote/sdkMessageAdapter.js";
 import { buildControlResponse } from "../utils/teleport/api.js";
 
-//@ chunk-18hwfzwa.js:223749-226114 fingerprint (2.1.88 match: DirectConnectSessionManager, 0.762)
+//@ chunk-czq1j3j2.js:228788-231153 fingerprint (2.1.88 match: DirectConnectSessionManager, 0.762)
 /**
  * WebSocket 直连：connect 时带 Bearer 头；逐行解析 NDJSON，control_request 只支持 can_use_tool（其余回 error），其余 SDK 消息交给 onMessage；提供 sendMessage、respondToPermissionRequest、sendInterrupt、disconnect。
  */

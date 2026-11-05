@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。同伴会话空闲通知。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (8)
  * attribution: placement 8
  */
 import {
@@ -32,17 +32,22 @@ import { useDebouncedCallback } from "../../ink/components/Input.js";
 import { completeLabelOrUndefined } from "./sessionPresence.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1426386-1426390 placement
+//@ chunk-czq1j3j2.js:1465036-1465040 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1426386", () => {
+deferInit("chunk-czq1j3j2.js:1465036", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1426390-1426423 placement
+//@ chunk-czq1j3j2.js:1466080-1466084 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1466080", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1466579-1466612 placement
 var DEBOUNCE_MS = 500;
 var MAX_BURST_NOTICES = 50;
 var MAX_NOTICES_PER_ROUND = 10;
 var MAX_REPLAYED_NOTICES = 10;
-//@ chunk-18hwfzwa.js:1426423-1428101 placement
+//@ chunk-czq1j3j2.js:1466612-1468290 placement
 function usePeerIdleNotices(transcript, messages, isSessionWorking) {
   let lines = useRef([]);
   let counters = useRef({
@@ -163,33 +168,28 @@ function usePeerIdleNotices(transcript, messages, isSessionWorking) {
     [],
   );
 }
-//@ chunk-18hwfzwa.js:1428101-1428217 placement
+//@ chunk-czq1j3j2.js:1468290-1468406 placement
 /**
  * “最近一分钟还有 N 条空闲订阅”提示。
  */
 function moreRecentIdleNotice(suppressed) {
   return `${suppressed} more idle ${plural(suppressed, "subscription was", "subscriptions were")} recorded in the last minute.`;
 }
-//@ chunk-18hwfzwa.js:1428217-1428338 placement
+//@ chunk-czq1j3j2.js:1468406-1468527 placement
 /**
  * “打开前还有 N 条空闲订阅”提示。
  */
 function moreEarlierIdleNotice(count) {
   return `${count} more idle ${plural(count, "subscription was", "subscriptions were")} recorded before this view opened.`;
 }
-//@ chunk-18hwfzwa.js:1428338-1428342 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1428338", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1428342-1428617 placement
+//@ chunk-czq1j3j2.js:1468531-1468806 placement
 /**
  * 阻塞原因到类型（permission/question）的映射、认证错误集合与上限。
  */
 var BLOCKED_ON_KIND; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var AUTH_ERROR_KINDS;
 var MAX_WAITERS;
-deferInit("chunk-18hwfzwa.js:1428342", () => {
+deferInit("chunk-czq1j3j2.js:1468531", () => {
   BLOCKED_ON_KIND = {
     "permission prompt": "permission",
     "sandbox request": "permission",
@@ -201,7 +201,7 @@ deferInit("chunk-18hwfzwa.js:1428342", () => {
   AUTH_ERROR_KINDS = new Set(["authentication_failed", "oauth_org_not_allowed", "cloud_credential_error"]);
   MAX_WAITERS = 32;
 });
-//@ chunk-18hwfzwa.js:1428617-1429198 placement
+//@ chunk-czq1j3j2.js:1468806-1469387 placement
 /**
  * 由会话状态得到展示状态（working/blocked/done/idle/error）。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。把对端通过 SendFile 发来的文件落到本地上传目录，校验完整性。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qcc88jq1.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fvs7r311.js (16)
  * attribution: placement 16
  */
 import { basename, join, isAbsolute, resolve, dirname } from "path";
@@ -24,7 +24,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { openRegularFileForRead, readHandleBounded } from "./fsSafety/boundOpen.js";
-import { getClaudeConfigDir } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { sessionUploadsDir } from "./uploadsDir.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { objectSchema, stringSchema, numberSchema, array } from "../../vendor/zod/v4/classic/schemas.js";
@@ -36,14 +36,14 @@ import { isNetworkPath_2 } from "./fsSafety/networkPathCheck.js";
 import { ensureAttachmentsDir } from "./safeMkdir.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-qcc88jq1.js:1013-1056 placement
+//@ chunk-fvs7r311.js:1012-1055 placement
 var STALE_SPOOL_TTL_MS = PEER_TRANSFER_VERSION * 24 * 60 * 60 * 1000;
 var FILE_TRANSFERS = "file-transfers";
-//@ chunk-qcc88jq1.js:1056-1101 placement
+//@ chunk-fvs7r311.js:1055-1100 placement
 function logPeerFileTransfer(message) {
   logForDebugging(`[peer-file-transfer] ${message}`);
 }
-//@ chunk-qcc88jq1.js:1101-1301 placement (2.1.88 match: sanitizeFileName, 0.785)
+//@ chunk-fvs7r311.js:1100-1300 placement (2.1.88 match: sanitizeFileName, 0.784)
 /**
  * 清洗附件文件名：取 basename、非法字符换 _、保留 ≤16 字符扩展名、总长 ≤200。
  */
@@ -55,20 +55,20 @@ function sanitizePeerFileName(fileName) {
   let maxStemLength = 200 - extension.length;
   return (stem.length > maxStemLength ? stem.slice(0, maxStemLength) : stem) + extension;
 }
-//@ chunk-qcc88jq1.js:1301-1381 placement
+//@ chunk-fvs7r311.js:1300-1380 placement
 function peerFileFailureNote(fileName, reason) {
   return `[SendFile: "${sanitizePeerFileName(fileName)}" was not delivered \u2014 ${reason}]`;
 }
-//@ chunk-qcc88jq1.js:1381-1490 placement
+//@ chunk-fvs7r311.js:1380-1489 placement
 function peerFileCountCapNote(count) {
   return `[SendFile: ${count} additional attachment(s) were dropped \u2014 max ${MAX_PEER_ATTACHMENTS} per message]`;
 }
-//@ chunk-qcc88jq1.js:1490-1598 placement
+//@ chunk-fvs7r311.js:1489-1597 placement
 function verifyPeerFileIntegrity(bytes, expected) {
   if (typeof expected.file_size === "number" && bytes.length !== expected.file_size) return false;
   return computeContentHash(bytes) === expected.sha256;
 }
-//@ chunk-qcc88jq1.js:1598-1820 placement
+//@ chunk-fvs7r311.js:1597-1819 placement
 function emitPeerFileReceiveTelemetry(transport, fileCount, verifiedCount) {
   logEvent("tengu_send_file_received", {
     transport: fromEnum(transport),
@@ -79,7 +79,7 @@ function emitPeerFileReceiveTelemetry(transport, fileCount, verifiedCount) {
   else if (verifiedCount > 0) logFeatureSad("peer_file_receive", "partial_failed");
   else logFeatureBad("peer_file_receive", "all_failed");
 }
-//@ chunk-qcc88jq1.js:1820-2141 placement
+//@ chunk-fvs7r311.js:1819-2140 placement
 async function readPeerFileBounded(filePath, maxBytes) {
   try {
     let stats = await stat(filePath);
@@ -104,28 +104,28 @@ async function readPeerFileBounded(filePath, maxBytes) {
     await handle.close().catch(() => {});
   }
 }
-//@ chunk-qcc88jq1.js:2141-2266 placement
+//@ chunk-fvs7r311.js:2140-2265 placement
 function injectPeerFilePrefix(text, prefix) {
   if (!prefix) return text;
   let match = /^<cross-session-message\b[^>]*>\n?/.exec(text);
   return match ? match[0] + prefix + text.slice(match[0].length) : prefix + text;
 }
-//@ chunk-qcc88jq1.js:2266-2298 placement
+//@ chunk-fvs7r311.js:2265-2297 placement
 function peerTransferSpoolDir() {
   return join(getClaudeConfigDir(), FILE_TRANSFERS);
 }
-//@ chunk-qcc88jq1.js:2298-2323 placement
+//@ chunk-fvs7r311.js:2297-2322 placement
 function getFileAttachmentsSchema() {
   return sessionUploadsDir();
 }
-//@ chunk-qcc88jq1.js:2323-2479 placement
+//@ chunk-fvs7r311.js:2322-2478 placement
 /**
  * 对端文件附件 schema
  */
 var SHA256_RE; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var fileAttachmentEntrySchema;
 var fileAttachmentsSchema;
-deferInit("chunk-qcc88jq1.js:2323", () => {
+deferInit("chunk-fvs7r311.js:2322", () => {
   SHA256_RE = /^[0-9a-f]{64}$/;
   fileAttachmentEntrySchema = DoctorLazy(() =>
     objectSchema({
@@ -138,7 +138,7 @@ deferInit("chunk-qcc88jq1.js:2323", () => {
   );
   fileAttachmentsSchema = DoctorLazy(() => array(fileAttachmentEntrySchema()));
 });
-//@ chunk-qcc88jq1.js:2479-2903 placement
+//@ chunk-fvs7r311.js:2478-2901 placement
 async function stageLocalPeerFile(sourcePath) {
   if (isDiskless())
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -173,7 +173,7 @@ async function stageLocalPeerFile(sourcePath) {
     media_type: getAttachmentMimeType(fileName),
   };
 }
-//@ chunk-qcc88jq1.js:2903-3104 placement
+//@ chunk-fvs7r311.js:2901-3102 placement
 async function sweepStaleSpoolEntries() {
   if (isDiskless()) return;
   let spoolDir = peerTransferSpoolDir();
@@ -189,13 +189,13 @@ async function sweepStaleSpoolEntries() {
     }
   } catch {}
 }
-//@ chunk-qcc88jq1.js:3104-3144 placement
+//@ chunk-fvs7r311.js:3102-3142 placement
 var emptyPeerFileReceiveStats = {
   prefix: "",
   received: 0,
   verified: 0,
 };
-//@ chunk-qcc88jq1.js:3144-4477 placement
+//@ chunk-fvs7r311.js:3142-4474 placement
 /**
  * 把对端通过 SendFile 发来的文件落到本地上传目录，校验完整性。
  */
@@ -288,7 +288,6 @@ async function materializeLocalPeerFiles(rawAttachments) {
   };
 }
 export {
-  peerTransferSpoolDir,
   sanitizePeerFileName,
   readPeerFileBounded,
   verifyPeerFileIntegrity,
@@ -296,6 +295,7 @@ export {
   peerFileCountCapNote,
   peerFileFailureNote,
   injectPeerFilePrefix,
+  peerTransferSpoolDir,
   stageLocalPeerFile,
   sweepStaleSpoolEntries,
   materializeLocalPeerFiles,

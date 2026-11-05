@@ -1,13 +1,13 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/http-proxy.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (4)
+ * pieces: chunk-qg41pqt6.js (4)
  * attribution: esm-fingerprint 4
  */
 import { createServer as createServer_2, Agent, request } from "http";
 import { connect, isIP } from "net";
-import { URL as dR } from "url";
+import { URL as o1 } from "url";
 import { request as request_2 } from "https";
 import {
   assertTlsTerminationSupported,
@@ -51,14 +51,14 @@ import { CRL_PATH } from "./mitm-ca.js";
 import { prepareBodySubstitution } from "./body-substitution.js";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-fq0cr76a.js:682727-682816 esm-fingerprint
+//@ chunk-qg41pqt6.js:683294-683383 esm-fingerprint
 var ALLOWLIST_DENY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var handedIn;
-deferInit("chunk-fq0cr76a.js:682727", () => {
+deferInit("chunk-qg41pqt6.js:683294", () => {
   ALLOWLIST_DENY = ["Connection blocked by network allowlist", "blocked-by-allowlist"];
   handedIn = new WeakSet();
 });
-//@ chunk-fq0cr76a.js:682816-693701 esm-fingerprint
+//@ chunk-qg41pqt6.js:683383-694285 esm-fingerprint
 function createHttpProxyServer(options) {
   if (options.mitmCA) assertTlsTerminationSupported();
   let server = createServer_2(
@@ -439,7 +439,7 @@ too many TLS-terminated tunnels at once`);
       res.socket?.destroy();
     });
     try {
-      if (options.mitmCA && req.method === "GET" && new dR(req.url ?? "", "http://x").pathname === CRL_PATH) {
+      if (options.mitmCA && req.method === "GET" && new o1(req.url ?? "", "http://x").pathname === CRL_PATH) {
         res.writeHead(200, {
           "Content-Type": "application/pkix-crl",
           "Content-Length": options.mitmCA.crlDer.length,
@@ -459,7 +459,7 @@ too many TLS-terminated tunnels at once`);
         respondDenied(res, "destination host is not plain ASCII", markFor("bad_request"), 400);
         return;
       }
-      let url = new dR(req.url);
+      let url = new o1(req.url);
       let isHttps = url.protocol === "https:";
       let defaultPort = isHttps ? 443 : 80;
       let requestedHost = stripBrackets(url.hostname);
@@ -725,7 +725,7 @@ too many TLS-terminated tunnels at once`);
   });
   return server;
 }
-//@ chunk-fq0cr76a.js:693701-693886 esm-fingerprint
+//@ chunk-qg41pqt6.js:694285-694470 esm-fingerprint
 function parseConnectTarget(target) {
   let m = /^\[([^\]]+)\]:(\d+)$/.exec(target) ?? /^([^:]+):(\d+)$/.exec(target);
   if (!m) return;
@@ -736,7 +736,7 @@ function parseConnectTarget(target) {
     port,
   };
 }
-//@ chunk-fq0cr76a.js:693886-694168 esm-fingerprint
+//@ chunk-qg41pqt6.js:694470-694752 esm-fingerprint
 function isAsciiAuthority(raw, absolute) {
   let m = absolute
     ? /^https?:\/\/(\[[^\]]*\]|[^/?#:@[\]]*)(?::\d+)?(?:[/?]|$)/i.exec(raw)

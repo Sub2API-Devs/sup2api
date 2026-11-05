@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：拆分逗号/空格分隔的规则列表（括号内不拆）；--disallowed-tools 规则括号未闭合的错误等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-gda5w2fs.js (9)
- * attribution: placement 9
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ap4nnw1y.js (8)
+ * attribution: placement 8
  */
-import { classifyRuleParens, escapeRuleText } from "./permissionRuleParser.js";
+import { classifyRuleParens } from "./permissionRuleParser.js";
 import { quotedPrintable } from "../printableName.js";
 
-//@ chunk-gda5w2fs.js:2810-2886 placement
+//@ chunk-ap4nnw1y.js:2944-3020 placement
 /**
  * ruleToolNameFromString：从规则串取工具名。
  */
@@ -19,21 +19,12 @@ function ruleToolNameFromString(value) {
   let parsed = classifyRuleParens(value);
   return parsed.kind === "call" && parsed.toolName ? parsed.toolName : value;
 }
-//@ chunk-gda5w2fs.js:2886-2988 placement
-/**
- * 把规则对象格式化为 Tool(content) 字符串。
- */
-function formatPermissionRule(ruleValue) {
-  if (!ruleValue.ruleContent) return ruleValue.toolName;
-  let escapedContent = escapeRuleText(ruleValue.ruleContent);
-  return `${ruleValue.toolName}(${escapedContent})`;
-}
-//@ chunk-gda5w2fs.js:2988-2999 placement
+//@ chunk-ap4nnw1y.js:3122-3133 placement
 /**
  * 规则取反前缀 !。
  */
 var NEGATION_PREFIX = "!";
-//@ chunk-gda5w2fs.js:2999-3206 placement
+//@ chunk-ap4nnw1y.js:3133-3340 placement
 /**
  * 把单独的否定前缀记号与后面的规则合并为一条。
  */
@@ -57,21 +48,21 @@ function joinNegationTokens(tokens) {
   }
   return result;
 }
-//@ chunk-gda5w2fs.js:3206-3267 placement
+//@ chunk-ap4nnw1y.js:3340-3401 placement
 /**
  * hasUnclosedRuleParen：规则括号是否未闭合。
  */
 function hasUnclosedRuleParen(text) {
   return text.lastIndexOf("(") > text.lastIndexOf(")");
 }
-//@ chunk-gda5w2fs.js:3267-3472 placement
+//@ chunk-ap4nnw1y.js:3401-3606 placement
 /**
  * --disallowed-tools 规则括号未闭合的错误。
  */
 function unclosedParenError(rule) {
   return `Error: the --disallowed-tools rule "${quotedPrintable(rule, 64)}" has an opening parenthesis that is never closed, so a cloud session would drop it. Close the parenthesis and run the command again.`;
 }
-//@ chunk-gda5w2fs.js:3472-3831 placement
+//@ chunk-ap4nnw1y.js:3606-3965 placement
 /**
  * 拆分逗号/空格分隔的规则列表（括号内不拆）。
  */
@@ -113,7 +104,7 @@ function splitRuleList(parts) {
   }
   return rules;
 }
-//@ chunk-gda5w2fs.js:3831-3962 placement
+//@ chunk-ap4nnw1y.js:3965-4096 placement
 function indexOfUnescaped(text, char) {
   for (let i = 0; i < text.length; i++)
     if (text[i] === char) {
@@ -127,7 +118,7 @@ function indexOfUnescaped(text, char) {
     }
   return -1;
 }
-//@ chunk-gda5w2fs.js:3962-4096 placement
+//@ chunk-ap4nnw1y.js:4096-4230 placement
 function lastIndexOfUnescaped(text, char) {
   for (let i = text.length - 1; i >= 0; i--)
     if (text[i] === char) {
@@ -142,13 +133,12 @@ function lastIndexOfUnescaped(text, char) {
   return -1;
 }
 export {
-  formatPermissionRule,
   ruleToolNameFromString,
-  splitRuleList,
   unclosedParenError,
-  hasUnclosedRuleParen,
-  joinNegationTokens,
+  splitRuleList,
   NEGATION_PREFIX,
   indexOfUnescaped,
   lastIndexOfUnescaped,
+  hasUnclosedRuleParen,
+  joinNegationTokens,
 };

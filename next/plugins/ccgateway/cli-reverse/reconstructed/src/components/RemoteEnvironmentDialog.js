@@ -3,10 +3,10 @@
  *
  * 远程（云）环境选择对话框：列出可用环境、设为默认。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/RemoteEnvironmentDialog.tsx
- * pieces: chunk-18hwfzwa.js (2), chunk-s61vbvea.js (1), chunk-zj31az9x.js (6)
- * attribution: sole-consumer 1, fingerprint 5, placement 1, layout 2
+ * pieces: chunk-7jxyna5q.js (1), chunk-czq1j3j2.js (2), chunk-h5403648.js (6)
+ * attribution: fingerprint 5, sole-consumer 1, placement 1, layout 2
  */
 import {
   jsxProd_default,
@@ -40,7 +40,7 @@ import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:589975-590211 fingerprint (2.1.88 match: _temp, 0.491)
+//@ chunk-7jxyna5q.js:507337-507573 fingerprint (2.1.88 match: _temp, 0.492)
 /**
  * 本地会话的计算机与目录是否一致。
  */
@@ -58,7 +58,7 @@ function isSameLocalFolder(computerFolder, target) {
     last === target.folder
   );
 }
-//@ chunk-18hwfzwa.js:1100666-1100715 sole-consumer
+//@ chunk-czq1j3j2.js:1134643-1134692 sole-consumer
 function renderParagraph(children, key) {
   return jsxProd_default(
     Text,
@@ -68,7 +68,7 @@ function renderParagraph(children, key) {
     key,
   );
 }
-//@ chunk-18hwfzwa.js:1100715-1101521 fingerprint (2.1.88 match: SingleEnvironmentContent, 0.394)
+//@ chunk-czq1j3j2.js:1134692-1135498 fingerprint (2.1.88 match: SingleEnvironmentContent, 0.395)
 function SingleEnvironmentContent(props) {
   let $ = useMemoCache(17);
   let { title, paragraphs, onDone } = props;
@@ -143,19 +143,19 @@ function SingleEnvironmentContent(props) {
   } else dialogElement = $[16];
   return dialogElement;
 }
-//@ chunk-zj31az9x.js:14567-14571 placement
+//@ chunk-h5403648.js:15742-15746 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-zj31az9x.js:14567", () => {
+deferInit("chunk-h5403648.js:15742", () => {
   init_react_production();
 });
-//@ chunk-zj31az9x.js:14571-14600 layout
+//@ chunk-h5403648.js:15746-15775 layout
 function isKnownEnvironment(environment) {
   return !isSelfHostedPoolEnv(environment);
 }
-//@ chunk-zj31az9x.js:14600-14688 fingerprint (2.1.88 match: SETUP_HINT, 0.667)
+//@ chunk-h5403648.js:15775-15863 fingerprint (2.1.88 match: SETUP_HINT, 0.667)
 var SELECT_ENV_TITLE = "Select remote environment";
 var CONFIGURE_ENV_HINT = "Configure environments at: https://claude.ai/code";
-//@ chunk-zj31az9x.js:14688-17534 fingerprint (2.1.88 match: RemoteEnvironmentDialog, 0.465)
+//@ chunk-h5403648.js:15863-18708 fingerprint (2.1.88 match: RemoteEnvironmentDialog, 0.465)
 /**
  * 远程环境选择：拉取环境列表，单个时确认、多个时选择并可设为默认（userSettings）。
  */
@@ -409,7 +409,7 @@ function RemoteEnvironmentDialog(props) {
   } else t5 = $[34];
   return t5;
 }
-//@ chunk-zj31az9x.js:17534-17749 layout
+//@ chunk-h5403648.js:18708-18923 layout
 function renderEnvironmentItem(environment, key) {
   let isPool = isSelfHostedPool(environment);
   let runnerLabel = isSelfHostedPoolEnv(environment)
@@ -431,7 +431,7 @@ function renderEnvironmentItem(environment, key) {
     isPool,
   );
 }
-//@ chunk-zj31az9x.js:17749-19855 fingerprint (2.1.88 match: MultipleEnvironmentsContent, 0.508)
+//@ chunk-h5403648.js:18923-21029 fingerprint (2.1.88 match: MultipleEnvironmentsContent, 0.508)
 function MultipleEnvironmentsContent(props) {
   let $ = useMemoCache(38);
   let {

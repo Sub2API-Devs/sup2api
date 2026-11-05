@@ -3,9 +3,9 @@
  *
  * TodoWrite 工具：会话内存中的待办清单（任务工具未启用时才可用）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TodoWriteTool/TodoWriteTool.ts
- * pieces: chunk-kxyd0g16.js (1)
+ * pieces: chunk-fmnbrxwy.js (1)
  * attribution: fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -19,14 +19,14 @@ import { todoToolsEnabled } from "../../utils/sessionKind.js";
 import { getSessionId } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:61420-62488 fingerprint (2.1.88 match: TodoWriteTool, 0.74)
+//@ chunk-fmnbrxwy.js:76134-77202 fingerprint (2.1.88 match: TodoWriteTool, 0.74)
 /**
  * TodoWrite 工具（strict、shouldDefer）：isEnabled = 任务工具未启用 且 todo 类工具可用；把整份 todos 存入按 agentId/会话的内存表，全部完成时清空。
  */
 var todoWriteInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var todoWriteOutputSchema;
 var TodoWriteTool;
-deferInit("chunk-kxyd0g16.js:61420", () => {
+deferInit("chunk-fmnbrxwy.js:76134", () => {
   todoWriteInputSchema = DoctorLazy(() =>
     zodStrictObject({
       todos: TodoListSchema().describe("The updated todo list"),

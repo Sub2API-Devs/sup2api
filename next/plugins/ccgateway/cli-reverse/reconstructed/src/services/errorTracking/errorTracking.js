@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：客户端错误追踪（claude-code-error-tracking）：构建版本信息、按错误类名分类、捆绑外抛出的错误识别
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-crrjgh95.js (21)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-n3hp20kk.js (21)
  * attribution: placement 21
  */
 import { createHash } from "crypto";
@@ -62,9 +62,9 @@ import { hasEmbeddedSearchTools_2 } from "../../utils/embeddedTools.js";
 import { isErrorReportingEnabled } from "../errorReportingGate.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-crrjgh95.js:802-837 placement
+//@ chunk-n3hp20kk.js:802-837 placement
 var CLAUDE_CODE_ERROR_TRACKING = "claude-code-error-tracking";
-//@ chunk-crrjgh95.js:837-1903 placement
+//@ chunk-n3hp20kk.js:837-1903 placement
 function buildErrorTrackingRelease(sourcemapGroup) {
   return sourcemapGroup
     ? {
@@ -73,10 +73,10 @@ function buildErrorTrackingRelease(sourcemapGroup) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION
@@ -88,22 +88,22 @@ function buildErrorTrackingRelease(sourcemapGroup) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
         sourcemapGroup: "none",
       };
 }
-//@ chunk-crrjgh95.js:1903-1912 placement
+//@ chunk-n3hp20kk.js:1903-1912 placement
 /**
  * 把用户 id 哈希映射到 30 个桶之一。
  */
 var USER_BUCKET_MODULUS = 30;
-//@ chunk-crrjgh95.js:1912-2116 placement
+//@ chunk-n3hp20kk.js:1912-2116 placement
 function getUserBucket() {
   let client = errorTrackingClient();
   if (client.cachedUserBucket !== undefined) return client.cachedUserBucket;
@@ -112,7 +112,7 @@ function getUserBucket() {
   client.cachedUserBucket = parseInt(digest.slice(0, 8), 16) % USER_BUCKET_MODULUS;
   return client.cachedUserBucket;
 }
-//@ chunk-crrjgh95.js:2116-2342 placement
+//@ chunk-n3hp20kk.js:2116-2342 placement
 function computeErrorFingerprint(message, frames) {
   let joined = frames
     .slice(0, 3)
@@ -130,15 +130,15 @@ ${joined}`,
     .digest("hex")
     .slice(0, 16);
 }
-//@ chunk-crrjgh95.js:2342-2361 placement
+//@ chunk-n3hp20kk.js:2342-2361 placement
 /**
  * 旧模型 id 集合（不在其中的归 other）。
  */
 var LEGACY_MODEL_SET; // deferred: uses LEGACY_MODEL_IDS_2 (../../utils/model/modelIds.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-crrjgh95.js:2342", () => {
+deferInit("chunk-n3hp20kk.js:2342", () => {
   LEGACY_MODEL_SET = new Set(LEGACY_MODEL_IDS_2);
 });
-//@ chunk-crrjgh95.js:2361-2472 placement
+//@ chunk-n3hp20kk.js:2361-2472 placement
 function getCanonicalModelForTracking() {
   try {
     let mainLoopModel = getMainLoopModel();
@@ -151,12 +151,12 @@ function getCanonicalModelForTracking() {
     return;
   }
 }
-//@ chunk-crrjgh95.js:2472-2481 placement
+//@ chunk-n3hp20kk.js:2472-2481 placement
 /**
  * 事件里最多附加的文件数（50）。
  */
 var MAX_ADDITIONAL_FILES = 50;
-//@ chunk-crrjgh95.js:2481-2642 placement
+//@ chunk-n3hp20kk.js:2481-2642 placement
 function getNonDefaultBooleanFlags() {
   try {
     let allGrowthBookFeatures = getAllGrowthBookFeatures();
@@ -173,7 +173,7 @@ function getNonDefaultBooleanFlags() {
     return {};
   }
 }
-//@ chunk-crrjgh95.js:2642-2843 placement
+//@ chunk-n3hp20kk.js:2642-2843 placement
 function summarizeZodIssues(error) {
   let issues = error.issues;
   if (!Array.isArray(issues) || issues.length === 0) return;
@@ -182,19 +182,19 @@ function summarizeZodIssues(error) {
     .filter((code) => typeof code === "string" && /^[a-z_]{1,40}$/.test(code));
   return `${issues.length} issue(s): ${filtered.join(",")}`;
 }
-//@ chunk-crrjgh95.js:2843-2857 placement
+//@ chunk-n3hp20kk.js:2843-2857 placement
 /**
  * 探测函数，用其名字是否被压缩判断构建是否保留类名。
  */
 function errorTrackingIdentifierProbe() {}
-//@ chunk-crrjgh95.js:2857-3369 placement
+//@ chunk-n3hp20kk.js:2857-3369 placement
 /**
  * 错误追踪：构建是否保留类名（探测函数名未被压缩）、SDK/客户端错误类名表（用 instanceof 识别）、"已验证无代码路径" 后缀正则。
  */
 var CLASS_NAMES_PRESERVED; // deferred: uses errorTrackingIdentifierProbe of its import cycle while loading; runs once the cycle is complete
 var KNOWN_ERROR_CLASSES;
 var VERIFIED_SAFE_SUFFIX_RE;
-deferInit("chunk-crrjgh95.js:2857", () => {
+deferInit("chunk-n3hp20kk.js:2857", () => {
   CLASS_NAMES_PRESERVED = !errorTrackingIdentifierProbe.name.startsWith("errorTrackingIdentifierProbe");
   KNOWN_ERROR_CLASSES = [
     ["APIUserAbortError", APIUserAbortError],
@@ -216,7 +216,7 @@ deferInit("chunk-crrjgh95.js:2857", () => {
   ];
   VERIFIED_SAFE_SUFFIX_RE = /_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS$/;
 });
-//@ chunk-crrjgh95.js:3369-3679 placement
+//@ chunk-n3hp20kk.js:3369-3679 placement
 function errorClassName(error, preserveKnown = CLASS_NAMES_PRESERVED) {
   let constructorName =
     typeof error.constructor?.name === "string"
@@ -232,12 +232,12 @@ function errorClassName(error, preserveKnown = CLASS_NAMES_PRESERVED) {
   ).replace(VERIFIED_SAFE_SUFFIX_RE, "");
   return sanitizeClassName(replaced) ?? "Error";
 }
-//@ chunk-crrjgh95.js:3679-3688 placement
+//@ chunk-n3hp20kk.js:3679-3688 placement
 /**
  * 错误事件里最多保留的栈帧数（20）。
  */
 var MAX_STACK_FRAMES = 20;
-//@ chunk-crrjgh95.js:3688-5589 placement
+//@ chunk-n3hp20kk.js:3688-5589 placement
 /**
  * 构造错误追踪事件（截取栈、标记捆绑外抛出、版本信息）。
  */
@@ -267,10 +267,10 @@ function buildErrorTrackingEvent(error, origin, kind) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.DD_SOURCEMAP_GROUP,
@@ -339,14 +339,14 @@ function buildErrorTrackingEvent(error, origin, kind) {
     feature_flags: getNonDefaultBooleanFlags(),
   };
 }
-//@ chunk-crrjgh95.js:5589-5873 placement
+//@ chunk-n3hp20kk.js:5589-5873 placement
 /**
  * 已知可忽略的系统栈帧（node 内部帧）。
  */
 var EXPECTED_ERROR_CLASSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var KNOWN_IGNORED_ERRORS;
 var KNOWN_IGNORED_SYSTEM_FRAMES;
-deferInit("chunk-crrjgh95.js:5589", () => {
+deferInit("chunk-n3hp20kk.js:5589", () => {
   EXPECTED_ERROR_CLASSES = new Set(["APIUserAbortError", "AuthenticationError", "McpSessionExpiredError"]);
   KNOWN_IGNORED_ERRORS = [
     {
@@ -365,7 +365,7 @@ deferInit("chunk-crrjgh95.js:5589", () => {
     },
   ];
 });
-//@ chunk-crrjgh95.js:5873-6005 placement
+//@ chunk-n3hp20kk.js:5873-6005 placement
 function isIgnoredTopFrame(error) {
   let sanitizedStackFrames = getSanitizedStackFrames(error, 20);
   let topFrame = sanitizedStackFrames[0];
@@ -374,7 +374,7 @@ function isIgnoredTopFrame(error) {
     (needle) => topFrame.file === needle.topFile && topFrame.function === needle.topFunction,
   );
 }
-//@ chunk-crrjgh95.js:6005-6141 placement
+//@ chunk-n3hp20kk.js:6005-6141 placement
 function isRemoteEnvironment() {
   return (
     env.CLAUDE_CODE_REMOTE === true ||
@@ -382,7 +382,7 @@ function isRemoteEnvironment() {
     Boolean(env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE)
   );
 }
-//@ chunk-crrjgh95.js:6141-6466 placement
+//@ chunk-n3hp20kk.js:6141-6466 placement
 function classifyFsSyscall(error, errorClass) {
   if (EXPECTED_ERROR_CLASSES.has(errorClass)) return true;
   if (
@@ -409,7 +409,7 @@ function classifyFsSyscall(error, errorClass) {
       ).includes(code.topFrameIncludes),
   );
 }
-//@ chunk-crrjgh95.js:6466-6547 placement
+//@ chunk-n3hp20kk.js:6466-6547 placement
 /**
  * 取版本的 major.minor，取不到返回 unknown。
  */
@@ -417,7 +417,7 @@ function getMajorMinorVersion(version) {
   let match = /^(\d+)\.(\d+)/.exec(version);
   return match ? `${match[1]}.${match[2]}` : "unknown";
 }
-//@ chunk-crrjgh95.js:6547-6766 placement
+//@ chunk-n3hp20kk.js:6547-6766 placement
 /**
  * 把错误上报到客户端错误追踪：判定开启后过滤文件系统系统调用错误、已知可忽略的未处理异常、达到上限，然后构建事件入队。
  */

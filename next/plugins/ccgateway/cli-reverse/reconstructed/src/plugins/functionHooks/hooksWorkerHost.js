@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：hooks worker 宿主：启动、心跳、卡死判定、重生与消息收发
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (83)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (83)
  * attribution: placement 83
  */
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
@@ -108,7 +108,7 @@ import {
   explainApiNotAvailable,
 } from "./apiDispatch.js";
 import { invalidateAll, createRenderInvalidator } from "./ui/renderInstances.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { logError } from "../../utils/log.js";
 import { identity as identity_2 } from "../../utils/identity.js";
@@ -180,7 +180,7 @@ import { createSignal } from "../../utils/signal.js";
 import { setMatcherLog } from "../../utils/hooks/functionHookMatchers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4080272-4082548 placement
+//@ chunk-5xgkngpb.js:4186171-4188464 placement
 /**
  * worker 重生后的重载流程：多次无归属崩溃时关闭 worker 内 mod；逐个重新描述模块、重建 $（engine.create），处理拒绝与再次折叠，最后替换已加载模块列表并退役旧模块。
  */
@@ -300,7 +300,7 @@ var reloadAfterRespawn = (host, reason, info) =>
     await resolveElementTables(admitted);
     invalidateAll();
   });
-//@ chunk-e6aww6q8.js:4082548-4083726 placement
+//@ chunk-5xgkngpb.js:4188464-4189645 placement
 /**
  * hooks worker 失去心跳时重生 worker 并重载声明集，记录遥测。
  */
@@ -311,7 +311,7 @@ function respawnHooksWorker(host, crash) {
   let plugin = culprit?.plugin ?? stacked;
   let dispatches = plugin === undefined ? [] : catchingDispatchesOf(host, plugin);
   let keptPlugin = dispatches.length > 0 ? plugin : undefined;
-  let events = uniq(dispatches.map(([, hop]) => hop.event));
+  let events = normalizeCaseForComparison_2(dispatches.map(([, hop]) => hop.event));
   let names = new Set(keptPlugin === undefined ? [plugin].filter((name) => name !== undefined) : []);
   let isAttributed = plugin !== undefined;
   let evidence = (plugin === culprit?.plugin ? culprit?.evidence : undefined) ?? "stack";
@@ -373,50 +373,50 @@ function respawnHooksWorker(host, crash) {
     .catch(logError)
     .then(loaded);
 }
-//@ chunk-e6aww6q8.js:4083726-4083748 placement
+//@ chunk-5xgkngpb.js:4189645-4189667 placement
 /**
  * 空回调
  */
 var noopCallback = (stuckCulprit) => {
   return;
 };
-//@ chunk-e6aww6q8.js:4083748-4083784 placement
+//@ chunk-5xgkngpb.js:4189667-4189703 placement
 /**
  * worker 时序槽
  */
 var workerTimingSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4083748", () => {
+deferInit("chunk-5xgkngpb.js:4189667", () => {
   workerTimingSlot = identity_2(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-e6aww6q8.js:4083784-4083797 placement
+//@ chunk-5xgkngpb.js:4189703-4189716 placement
 /**
  * 1000
  */
 var HEARTBEAT_POLL_MS = 1000;
-//@ chunk-e6aww6q8.js:4083797-4083810 placement
+//@ chunk-5xgkngpb.js:4189716-4189729 placement
 /**
  * 5000
  */
 var WORKER_START_TIMEOUT_MS = 5000;
-//@ chunk-e6aww6q8.js:4083810-4083846 placement
+//@ chunk-5xgkngpb.js:4189729-4189765 placement
 /**
  * worker 宿主槽
  */
 var workerHostSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4083810", () => {
+deferInit("chunk-5xgkngpb.js:4189729", () => {
   workerHostSlot = identity_2(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-e6aww6q8.js:4083846-4083856 placement
+//@ chunk-5xgkngpb.js:4189765-4189775 placement
 /**
  * 2
  */
 var MAX_STUCK_RETRIES = 2;
-//@ chunk-e6aww6q8.js:4083856-4083867 placement
+//@ chunk-5xgkngpb.js:4189775-4189786 placement
 /**
  * 12
  */
 var MAX_HEARTBEAT_MISSES = 12;
-//@ chunk-e6aww6q8.js:4083867-4084043 placement
+//@ chunk-5xgkngpb.js:4189786-4189962 placement
 function readWorkerCpu(worker) {
   try {
     let cpu = worker.spawned.thread?.();
@@ -431,19 +431,19 @@ function readWorkerCpu(worker) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:4084043-4084061 placement
+//@ chunk-5xgkngpb.js:4189962-4189980 placement
 /**
  * 恒 false
  */
 var never = (a, b) => false;
-//@ chunk-e6aww6q8.js:4084061-4084214 placement
+//@ chunk-5xgkngpb.js:4189980-4190133 placement
 function cpuUsedSince(read, workerCpu, heartbeatMs) {
   let used = (workerCpu?.usedMs ?? Number.NaN) - (read?.usedMs ?? Number.NaN);
   let isValid = read !== undefined && workerCpu !== undefined && used >= 0;
   let usedMs = isValid && never(read, workerCpu) ? heartbeatMs : Math.min(used, heartbeatMs);
   return isValid ? usedMs : undefined;
 }
-//@ chunk-e6aww6q8.js:4084214-4084264 placement
+//@ chunk-5xgkngpb.js:4190133-4190183 placement
 /**
  * worker 的 ready/timeout 参数
  */
@@ -452,12 +452,12 @@ var getWorkerTiming = () =>
     readyMs: HOOKS_READY_TIMEOUT_MS,
     timeoutMs: WORKER_START_TIMEOUT_MS,
   };
-//@ chunk-e6aww6q8.js:4084264-4084316 placement
+//@ chunk-5xgkngpb.js:4190183-4190235 placement
 /**
  * 当前心跳标记名
  */
 var currentMarkName = (probe) => probe.names.get(Atomics.load(probe.stamp, STAMP_CURRENT_CALL_SLOT));
-//@ chunk-e6aww6q8.js:4084316-4084924 placement
+//@ chunk-5xgkngpb.js:4190235-4190845 placement
 /**
  * 心跳超时时，若只有一个进行中的单模块分发且已收到心跳之后的标记，判定该模块为卡住 worker 的元凶。
  */
@@ -495,7 +495,7 @@ function loneDispatchCulprit(state) {
     ? state.names.get(onlyEnv)
     : undefined;
 }
-//@ chunk-e6aww6q8.js:4084924-4085133 placement
+//@ chunk-5xgkngpb.js:4190845-4191054 placement
 /**
  * 依次从调用栈、恢复标记、单一分发推断卡住 hooks worker 的插件。
  */
@@ -520,7 +520,7 @@ function findStuckCulprit(host) {
         evidence: "dispatch",
       };
 }
-//@ chunk-e6aww6q8.js:4085133-4085546 placement
+//@ chunk-5xgkngpb.js:4191054-4191467 placement
 /**
  * 描述心跳超时的判定（卡住的插件、未应答的分发等）。
  */
@@ -531,12 +531,12 @@ function describeHeartbeatVerdict(stuckCulprit, culprit) {
     ? `hooks worker: the heartbeat verdict names ${stuckCulprit.plugin} (evidence: ${stuckCulprit.evidence})`
     : `hooks worker: the heartbeat verdict names nobody (the thread stopped in ${stuckCulprit.plugin}, evidence: ${stuckCulprit.evidence}, and had not used a window of processor time)`;
 }
-//@ chunk-e6aww6q8.js:4085546-4085596 placement
+//@ chunk-5xgkngpb.js:4191467-4191517 placement
 /**
  * 未知卡住原因
  */
 var UNKNOWN_STUCK_REASON = "what held the hooks worker is not known";
-//@ chunk-e6aww6q8.js:4085596-4086616 placement
+//@ chunk-5xgkngpb.js:4191517-4192540 placement
 /**
  * hooks worker 心跳检查：启动超时或心跳无应答时判定 worker 卡死。
  */
@@ -583,7 +583,7 @@ function checkHooksWorkerHeartbeat(host, awaitingPong, pong) {
     culprit: beat,
   };
 }
-//@ chunk-e6aww6q8.js:4086616-4086934 placement
+//@ chunk-5xgkngpb.js:4192540-4192858 placement
 /**
  * 心跳定时器：空闲时停止；有未回的 ping 时判断是否卡死（卡死则重生 worker），否则发新 ping。
  */
@@ -614,7 +614,7 @@ function heartbeatTick(host) {
     n: host.awaitingPong.n,
   });
 }
-//@ chunk-e6aww6q8.js:4086934-4087120 placement
+//@ chunk-5xgkngpb.js:4192858-4193044 placement
 /**
  * 若未启动心跳则启动（间隔可配置），定时器 unref。
  */
@@ -627,7 +627,7 @@ function ensureHeartbeat(host) {
     host.heartbeat.unref();
   }
 }
-//@ chunk-e6aww6q8.js:4087120-4087314 placement
+//@ chunk-5xgkngpb.js:4193044-4193238 placement
 /**
  * 向某环境的消息端口请求 flush，完成时 resolve；端口不存在立即 resolve。
  */
@@ -644,13 +644,13 @@ function flushEnvironmentPort(host, envId, result) {
     flushId: host.flushCounter,
   });
 }
-//@ chunk-e6aww6q8.js:4087314-4087438 placement
+//@ chunk-5xgkngpb.js:4193238-4193362 placement
 function settleWorkerIdle(host) {
   if (host.inFlight.size === 0 && host.pendingCalls.size === 0 && host.pendingPresses.size === 0)
     host.worker.unref?.();
   if (isHostIdle(host)) stopHeartbeat(host);
 }
-//@ chunk-e6aww6q8.js:4087438-4087511 placement
+//@ chunk-5xgkngpb.js:4193362-4193435 placement
 /**
  * 记录空闲
  */
@@ -658,7 +658,7 @@ function markWorkerIdle(host) {
   if (host.awaitingPong !== undefined) host.awaitingPong.isOwed = true;
   settleWorkerIdle(host);
 }
-//@ chunk-e6aww6q8.js:4087511-4087896 placement
+//@ chunk-5xgkngpb.js:4193435-4193820 placement
 /**
  * 检查环境加载是否超时，超时则终止并报告。
  */
@@ -682,7 +682,7 @@ function checkLoadTimeout(host, n6Load) {
   rejectPendingCall(n6Load.pending, n6Load.environmentId, n6Load.reason(floored > 0 ? readyMs : message));
   markWorkerIdle(host);
 }
-//@ chunk-e6aww6q8.js:4087896-4088035 placement
+//@ chunk-5xgkngpb.js:4193820-4193959 placement
 function armLoadTimeout(host, n7Load) {
   let timer = setTimeout(checkLoadTimeout, getWorkerTiming().readyMs, host, {
     ...n7Load,
@@ -693,24 +693,24 @@ function armLoadTimeout(host, n7Load) {
   timer.unref();
   return timer;
 }
-//@ chunk-e6aww6q8.js:4088035-4088088 placement
+//@ chunk-5xgkngpb.js:4193959-4194012 placement
 /**
  * 在调用者上下文执行
  */
 var runInCallerScope = (holder, fn) => holder.inCallerContext(() => runInScope(holder.scope, fn));
-//@ chunk-e6aww6q8.js:4088088-4088192 placement
+//@ chunk-5xgkngpb.js:4194012-4194116 placement
 function callersOfServing(host, environmentId, serving) {
   let call = serving === undefined ? undefined : host.pendingCalls.get(serving);
   return call?.callee === environmentId ? call.callers : undefined;
 }
-//@ chunk-e6aww6q8.js:4088192-4088314 placement
+//@ chunk-5xgkngpb.js:4194116-4194238 placement
 function clearOverruns(host, dispatch) {
   for (let environment of dispatch.environments) {
     let name = host.names.get(environment);
     if (name !== undefined && !dispatch.failed.has(name)) host.overruns.delete(name);
   }
 }
-//@ chunk-e6aww6q8.js:4088314-4088405 placement
+//@ chunk-5xgkngpb.js:4194238-4194329 placement
 /**
  * 清定时器后 resolve/reject
  */
@@ -724,7 +724,7 @@ var withClearedTimeout = (timer, resolve, reject) => ({
     reject(error);
   },
 });
-//@ chunk-e6aww6q8.js:4088405-4089233 placement
+//@ chunk-5xgkngpb.js:4194329-4195157 placement
 /**
  * 启动 hooks worker（所有插件共用一个）并记录遥测。
  */
@@ -777,7 +777,7 @@ function spawnHooksWorker(host) {
     waitedUntil: 0,
   };
 }
-//@ chunk-e6aww6q8.js:4089233-4089379 placement
+//@ chunk-5xgkngpb.js:4195157-4195303 placement
 function releaseKeptHop(hooksWorker, hop, name) {
   let { kept } = hooksWorker;
   let released = kept?.hops.delete(hop) === true;
@@ -788,7 +788,7 @@ function releaseKeptHop(hooksWorker, hop, name) {
   }
   return !name && kept.hops.size === 0;
 }
-//@ chunk-e6aww6q8.js:4089379-4089749 placement
+//@ chunk-5xgkngpb.js:4195303-4195673 placement
 /**
  * worker 结束（close）或出错（error 事件）时以相应原因重生 worker。
  */
@@ -809,7 +809,7 @@ function respawnOnWorkerEnd(hooksWorker, event) {
     culprit: undefined,
   });
 }
-//@ chunk-e6aww6q8.js:4089749-4090395 placement
+//@ chunk-5xgkngpb.js:4195673-4196319 placement
 function validatePassedBySighting(sighting, fields) {
   let { link, plugins, event, by, count } = fields;
   if (!Number.isSafeInteger(count) || count < 1) return "its count is not a whole number of dispatches";
@@ -825,12 +825,12 @@ function validatePassedBySighting(sighting, fields) {
     ? undefined
     : "it names a plugin with no module loaded";
 }
-//@ chunk-e6aww6q8.js:4090395-4090406 placement
+//@ chunk-5xgkngpb.js:4196319-4196330 placement
 /**
  * 把插件钩子的提示作为 meta 任务通知投递（isMeta: true），主代理下一轮才会看到。
  */
 var TASK_NOTICE_IS_META = true;
-//@ chunk-e6aww6q8.js:4090406-4090452 placement
+//@ chunk-5xgkngpb.js:4196330-4196376 placement
 /**
  * 生成钩子提示任务
  */
@@ -840,7 +840,7 @@ function hookNoticeTask(text) {
 ${escapeXml(text)}`,
   });
 }
-//@ chunk-e6aww6q8.js:4090452-4090684 placement
+//@ chunk-5xgkngpb.js:4196376-4196608 placement
 /**
  * 先排队、待有处理器入座后再执行的队列（seat/queue/reset）。
  */
@@ -864,15 +864,15 @@ function createDeferredQueue() {
     },
   };
 }
-//@ chunk-e6aww6q8.js:4090684-4090717 placement
+//@ chunk-5xgkngpb.js:4196608-4196641 placement
 /**
  * 延迟通知队列
  */
 var noticeQueue; // deferred: uses createDeferredQueue of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4090684", () => {
+deferInit("chunk-5xgkngpb.js:4196608", () => {
   noticeQueue = identity_2(createDeferredQueue(), (queue) => queue.reset());
 });
-//@ chunk-e6aww6q8.js:4090717-4090854 placement
+//@ chunk-5xgkngpb.js:4196641-4196778 placement
 /**
  * 把一条关于插件钩子的提示作为 meta 任务通知排入主代理下一轮（被动、跳过附件）。
  */
@@ -887,7 +887,7 @@ function queueModelNotice(text) {
     priority: "next",
   });
 }
-//@ chunk-e6aww6q8.js:4090854-4090917 placement
+//@ chunk-5xgkngpb.js:4196778-4196841 placement
 /**
  * 审批标签或 unnamed
  */
@@ -895,7 +895,7 @@ function approvalLabelOrUnnamed(name) {
   let approvalLabel = toApprovalLabel(name);
   return approvalLabel === null ? "unnamed" : String(approvalLabel);
 }
-//@ chunk-e6aww6q8.js:4096791-4099085 placement
+//@ chunk-5xgkngpb.js:4202717-4205011 placement
 /**
  * 处理 hooks worker 发来的消息（online、pong、loaded、load_error、日志等），并识别失控插件。
  */
@@ -1046,7 +1046,7 @@ function handleHooksWorkerMessage(state, msg) {
       });
   }
 }
-//@ chunk-e6aww6q8.js:4099085-4099214 placement
+//@ chunk-5xgkngpb.js:4205011-4205140 placement
 async function waitForDeathsSettled(host) {
   let before;
   do {
@@ -1054,7 +1054,7 @@ async function waitForDeathsSettled(host) {
     await host.state.queue(() => Promise.resolve());
   } while (before !== host.state.workerDeaths);
 }
-//@ chunk-e6aww6q8.js:4099214-4099986 placement
+//@ chunk-5xgkngpb.js:4205140-4205917 placement
 /**
  * 向 worker 内另一插件发起接口调用：分配 callId、设超时、记录调用者与借用信息，序列化失败时拒绝。
  */
@@ -1114,7 +1114,7 @@ function callInterfaceInWorker(hooksWorker, { environmentId, call, behind }) {
     endScope(pending);
   });
 }
-//@ chunk-e6aww6q8.js:4099986-4100139 placement
+//@ chunk-5xgkngpb.js:4205917-4206070 placement
 function rejectAbandonedDispatch(host, id) {
   let pending = takePending(host.inFlight, id);
   if (pending === undefined) return;
@@ -1122,7 +1122,7 @@ function rejectAbandonedDispatch(host, id) {
   pending.reject(new HooksError(`did not settle within ${LINGER_GRACE_MS}ms of its signal aborting`));
   markWorkerIdle(host);
 }
-//@ chunk-e6aww6q8.js:4100139-4101943 placement
+//@ chunk-5xgkngpb.js:4206070-4207876 placement
 /**
  * 向 hooks worker 分发一次事件：序列化参数、处理中止和 DataCloneError。
  */
@@ -1253,7 +1253,7 @@ function dispatchToHooksWorker(hooksWorker, { request, next, signal }) {
     settleWorkerIdle(hooksWorker);
   });
 }
-//@ chunk-e6aww6q8.js:4101943-4103654 placement
+//@ chunk-5xgkngpb.js:4207876-4209591 placement
 /**
  * 把流式事件分发给 hooks worker（stream_pull/stream_close），检查参数是否为纯数据。
  */
@@ -1376,14 +1376,14 @@ function dispatchStreamToHooksWorker(host, { request, next, signal }) {
     }
   });
 }
-//@ chunk-e6aww6q8.js:4103654-4103758 placement
+//@ chunk-5xgkngpb.js:4209591-4209695 placement
 function runAsLoadedModule(environmentId, isLive, fn) {
   let any = getPluginRegistry().loadedModules.some(
     (loadedModule) => loadedModule.environmentId === environmentId,
   );
   return dispatchFrameStorage.run(any ? undefined : isLive, fn);
 }
-//@ chunk-e6aww6q8.js:4103758-4104203 placement
+//@ chunk-5xgkngpb.js:4209695-4210143 placement
 /**
  * 求插件调用的来源链（分发、注册、服务与根事件）。
  */
@@ -1404,7 +1404,7 @@ function callOriginFor(host, callee, { dispatchId, registration, serving, rootEv
     served: origin ? collectLentFrames(host.pendingCalls.values(), callee) : registered,
   });
 }
-//@ chunk-e6aww6q8.js:4104203-4105332 placement
+//@ chunk-5xgkngpb.js:4210143-4211276 placement
 /**
  * 为 worker 发起的宿主操作构造调用者上下文：插件、信号、来源链、cwd、根事件、按键担保、是否服务模型调用等。
  */
@@ -1467,7 +1467,7 @@ function buildOpCaller(host, { environmentId, plugin, frame, signal }) {
     callers: callersOfServing(host, environmentId, frame.serving),
   };
 }
-//@ chunk-e6aww6q8.js:4105332-4106035 placement
+//@ chunk-5xgkngpb.js:4211276-4211981 placement
 /**
  * 为 worker 的流式宿主操作打开流：绑定中止、经 qMe 调用宿主，失败时返回 HooksError。
  */
@@ -1518,7 +1518,7 @@ function openOpStream(host, { environmentId, key, frame }) {
     return error instanceof HooksError ? error : new HooksError(errorMessage(error));
   }
 }
-//@ chunk-e6aww6q8.js:4106035-4106933 placement
+//@ chunk-5xgkngpb.js:4211981-4212883 placement
 /**
  * 处理 worker 的 op_pull/op_close：拉取下一块并回传 op_result/op_error，关闭时中止并回收。
  */
@@ -1602,7 +1602,7 @@ function pumpOpStream(host, { environmentId, port, frame }) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:4106933-4108452 placement
+//@ chunk-5xgkngpb.js:4212883-4214406 placement
 /**
  * 处理 worker 侧操作流（op_pull/op_close/op_abort/op_result），环境已卸载时报错。
  */
@@ -1712,7 +1712,7 @@ function handleWorkerOpStream(host, { environmentId, port, frame }) {
       }),
   );
 }
-//@ chunk-e6aww6q8.js:4108452-4109085 placement
+//@ chunk-5xgkngpb.js:4214406-4215039 placement
 /**
  * 在 worker 中加载一个插件环境：建立专用消息端口、设置加载超时，发送 load 消息并等待注册结果。
  */
@@ -1767,7 +1767,7 @@ function loadEnvironmentInWorker(hooksWorker, envId, n8Load) {
     ensureHeartbeat(hooksWorker);
   });
 }
-//@ chunk-e6aww6q8.js:4109085-4109861 placement
+//@ chunk-5xgkngpb.js:4215039-4215815 placement
 function uiPressInWorker(host, { environmentId, handle, e }) {
   if (host.died !== undefined) return Promise.reject(new HooksError(host.died));
   let pressId = ++host.pressCounter;
@@ -1818,7 +1818,7 @@ function uiPressInWorker(host, { environmentId, handle, e }) {
     }
   });
 }
-//@ chunk-e6aww6q8.js:4109861-4110304 placement
+//@ chunk-5xgkngpb.js:4215815-4216258 placement
 /**
  * 请求 worker 解析某环境的 UI 元素表（带超时）。
  */
@@ -1844,7 +1844,7 @@ function resolveTablesInWorker(hooksWorker, environmentId, requests) {
     ensureHeartbeat(hooksWorker);
   });
 }
-//@ chunk-e6aww6q8.js:4110304-4110491 placement
+//@ chunk-5xgkngpb.js:4216258-4216445 placement
 /**
  * 卸载 worker 中的一个环境：清理名字、工作计数、按键记录与端口，并发送 unload。
  */
@@ -1861,7 +1861,7 @@ function unloadEnvironmentInWorker(state, envId) {
     environmentId: envId,
   });
 }
-//@ chunk-e6aww6q8.js:4110491-4112415 placement
+//@ chunk-5xgkngpb.js:4216445-4218369 placement
 /**
  * 终止 hooks worker 并卸载各插件环境，记录未能完成的卸载。
  */
@@ -1994,7 +1994,7 @@ function terminateHooksWorker(host) {
   hooksWorker.worker.unref?.();
   return input;
 }
-//@ chunk-e6aww6q8.js:4112415-4112612 placement
+//@ chunk-5xgkngpb.js:4218369-4218566 placement
 /**
  * 取得当前可用的环境宿主（worker 或同线程，按 CLAUDE_CODE_HOOKS_SAME_THREAD），宿主已死或类型变化时重建。
  */
@@ -2016,30 +2016,30 @@ function ensureEnvironmentHost(host) {
     return environmentHost;
   }
 }
-//@ chunk-e6aww6q8.js:4112612-4112726 placement
+//@ chunk-5xgkngpb.js:4218566-4218680 placement
 async function waitOpsDelivered(hooksHost) {
   await Promise.all(
     [hooksHost.state.environmentHost, hooksHost.state.nativeHost].map((host) => host?.opsDelivered()),
   );
 }
-//@ chunk-e6aww6q8.js:4112726-4112741 placement
+//@ chunk-5xgkngpb.js:4218680-4218695 placement
 /**
  * 原样返回
  */
 var passthroughInput = (value) => value;
-//@ chunk-e6aww6q8.js:4112741-4112830 placement
+//@ chunk-5xgkngpb.js:4218695-4218784 placement
 /**
  * 清掉死掉的宿主
  */
 function clearDeadEnvironmentHost(host) {
   if (host.state.environmentHost?.died !== undefined) host.state.environmentHost = undefined;
 }
-//@ chunk-e6aww6q8.js:4112830-4112845 placement
+//@ chunk-5xgkngpb.js:4218784-4218799 placement
 /**
  * 原样返回
  */
 var passthroughOutput = (value) => value;
-//@ chunk-e6aww6q8.js:4112845-4113140 placement
+//@ chunk-5xgkngpb.js:4218799-4219094 placement
 /**
  * 判断事件是否由人的操作触发：ui.press/input/select 总是；prompt.submit/command.run/ui.scroll 看 origin 是否来自输入框、桥接或人。
  */
@@ -2060,7 +2060,7 @@ function isPersonGestureEvent(event, payload) {
       return false;
   }
 }
-//@ chunk-e6aww6q8.js:4113140-4113371 placement
+//@ chunk-5xgkngpb.js:4219094-4219325 placement
 /**
  * prompt.submit 载荷里的附件 id 列表。
  */
@@ -2072,7 +2072,7 @@ function submittedAttachmentIds(event, payload) {
     return typeof id === "string" ? [id] : [];
   });
 }
-//@ chunk-e6aww6q8.js:4113371-4113524 placement
+//@ chunk-5xgkngpb.js:4219325-4219478 placement
 var createNativeHost = (host) => {
   logForDebugging("hooks native host made (for the plugins the binary carries)");
   return createSameThreadHost(host, {
@@ -2082,7 +2082,7 @@ var createNativeHost = (host) => {
     createEnvironment: assembleHooksModuleRuntime,
   });
 };
-//@ chunk-e6aww6q8.js:4113524-4113650 placement
+//@ chunk-5xgkngpb.js:4219478-4219604 placement
 /**
  * 取得原生（进程内、二进制自带插件）宿主，不存在或已死时创建。
  */
@@ -2095,7 +2095,7 @@ function ensureNativeHost(host) {
     return nativeHost_2;
   }
 }
-//@ chunk-e6aww6q8.js:4113650-4113746 placement (2.1.88 match: _temp0, 1)
+//@ chunk-5xgkngpb.js:4219604-4219700 placement (2.1.88 match: _temp0, 1)
 /**
  * 取事件来源插件
  */
@@ -2103,27 +2103,27 @@ function callerPluginOf(event, payload) {
   let plugin = "plugin" in payload ? payload.plugin : undefined;
   return isPersonInputEvent(event) && typeof plugin === "string" ? plugin : undefined;
 }
-//@ chunk-e6aww6q8.js:4113746-4113888 placement
+//@ chunk-5xgkngpb.js:4219700-4219842 placement
 function retireHosts(hooksHost) {
   hooksHost.state.environmentHost?.terminate();
   hooksHost.state.environmentHost = undefined;
   hooksHost.state.nativeHost?.terminate();
   hooksHost.state.nativeHost = undefined;
 }
-//@ chunk-e6aww6q8.js:4113888-4113926 placement
+//@ chunk-5xgkngpb.js:4219842-4219880 placement
 /**
  * 根事件分发
  */
 function rootEventDispatches(host, request) {
   return withInFlightDispatches(host, request, rootEventForOrigin);
 }
-//@ chunk-e6aww6q8.js:4113926-4114008 placement
+//@ chunk-5xgkngpb.js:4219880-4219962 placement
 /**
  * 未等待的 Promise 被拒
  */
 var UNAWAITED_REJECTION = (message) =>
   "hooks (same thread): a promise a plugin did not await rejected: " + message;
-//@ chunk-e6aww6q8.js:4114008-4114157 placement
+//@ chunk-5xgkngpb.js:4219962-4220111 placement
 /**
  * 同线程宿主的拒绝处理：把宿主操作失败与环境内值转换为对应错误。
  */
@@ -2136,7 +2136,7 @@ var createSameThreadRejectionHandler = (hookHostBridge) =>
       ? UNAWAITED_REJECTION(rejectionText(op))
       : undefined;
   });
-//@ chunk-e6aww6q8.js:4114157-4114226 placement
+//@ chunk-5xgkngpb.js:4220111-4220180 placement
 /**
  * 未等待拒绝的说明
  */
@@ -2145,24 +2145,24 @@ function unawaitedRejectionText(error) {
   if (payload === undefined) return;
   return UNAWAITED_REJECTION(unawaitedOpMessage(payload));
 }
-//@ chunk-e6aww6q8.js:4114226-4114247 placement
+//@ chunk-5xgkngpb.js:4220180-4220201 placement
 /**
  * 未处理拒绝处理器
  */
 var unhandledRejectionHandler = () => claimPendingWriteLine(unawaitedRejectionText);
-//@ chunk-e6aww6q8.js:4114247-4114285 placement
+//@ chunk-5xgkngpb.js:4220201-4220239 placement
 /**
  * 回合内分发
  */
 function turnHeldDispatches(host, request) {
   return withInFlightDispatches(host, request, turnHeldEventFor);
 }
-//@ chunk-e6aww6q8.js:4114285-4114329 placement
+//@ chunk-5xgkngpb.js:4220239-4220283 placement
 /**
  * 不是纯数据
  */
 var notPlainDataText = (label, detail) => `${label}: not plain data: ${detail}`;
-//@ chunk-e6aww6q8.js:4114329-4114400 placement
+//@ chunk-5xgkngpb.js:4220283-4220354 placement
 /**
  * 克隆失败转 HooksError
  */
@@ -2173,7 +2173,7 @@ function cloneOrThrow(value, message) {
     throw new HooksError(notPlainDataText(message, errorMessage(error)));
   }
 }
-//@ chunk-e6aww6q8.js:4114400-4114510 placement
+//@ chunk-5xgkngpb.js:4220354-4220464 placement
 /**
  * tool.call 的 next 结果无法回传时，若带 ref 则改成只带 ref 的空结果。
  */
@@ -2185,7 +2185,7 @@ function emptyToolCallResult(event, result) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:4114510-4114711 placement
+//@ chunk-5xgkngpb.js:4220464-4220665 placement
 function workInFlightAcrossHosts(hooksHost, key) {
   let mapped = [hooksHost.state.environmentHost, hooksHost.state.nativeHost]
     .filter((host) => host !== undefined)
@@ -2195,7 +2195,7 @@ function workInFlightAcrossHosts(hooksHost, key) {
     epoch: mapped.reduce((acc, secondWork) => acc + secondWork.epoch, 0),
   };
 }
-//@ chunk-e6aww6q8.js:4114711-4114766 placement
+//@ chunk-5xgkngpb.js:4220665-4220720 placement
 /**
  * 音频/派生/渲染宿主操作
  */
@@ -2204,7 +2204,7 @@ var createHostOps = () => ({
   spawns: createAgentSpawner(),
   renders: createRenderInvalidator(),
 });
-//@ chunk-e6aww6q8.js:4114766-4115500 placement
+//@ chunk-5xgkngpb.js:4220720-4221454 placement
 /**
  * 函数钩子宿主的全部状态：已知插件与参数、环境映射、崩溃计数、扣留记录、加载/折叠中的集合、环境宿主、调用链与预算等。
  */
@@ -2248,7 +2248,7 @@ var createHooksHostState = (queue = createSerialQueue()) => ({
   chainsAbove: new WeakMap(),
   budgets: createHostOps(),
 });
-//@ chunk-e6aww6q8.js:4115500-4115673 placement
+//@ chunk-5xgkngpb.js:4221454-4221627 placement
 function createHooksHost() {
   let state = identity_2(createHooksHostState(), (secondState) => {
     secondState.budgets.renders.drop();
@@ -2263,15 +2263,15 @@ function createHooksHost() {
     streamOps: PROCESS_SPAWN_API,
   };
 }
-//@ chunk-e6aww6q8.js:4115673-4115686 placement
+//@ chunk-5xgkngpb.js:4221627-4221640 placement
 /**
  * 宿主操作根
  */
 var hostOpsRoot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4115673", () => {
+deferInit("chunk-5xgkngpb.js:4221627", () => {
   hostOpsRoot = createValueSlot();
 });
-//@ chunk-e6aww6q8.js:4115686-4116682 placement
+//@ chunk-5xgkngpb.js:4221640-4222636 placement
 /**
  * 初始化函数钩子宿主：注册日志与 hookFailed 处理、越过记录，返回加载/重载/卸载、接口调用、宿主操作、退役等方法的门面。
  */
@@ -2338,9 +2338,6 @@ function initHooksHost() {
   };
 }
 export {
-  notPlainDataText,
-  cloneOrThrow,
-  hostOpsRoot,
   noticeQueue,
   ensureNativeHost,
   ensureEnvironmentHost,
@@ -2352,12 +2349,15 @@ export {
   isPersonGestureEvent,
   callerPluginOf,
   submittedAttachmentIds,
+  cloneOrThrow,
   emptyToolCallResult,
   approvalLabelOrUnnamed,
   queueModelNotice,
   validatePassedBySighting,
   runInCallerScope,
   flushEnvironmentPort,
+  hostOpsRoot,
   hookNoticeTask,
   TASK_NOTICE_IS_META,
+  notPlainDataText,
 };

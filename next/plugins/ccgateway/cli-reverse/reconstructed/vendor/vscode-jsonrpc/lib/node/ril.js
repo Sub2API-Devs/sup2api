@@ -1,14 +1,14 @@
 /**
  * vscode-jsonrpc/lib/node/ril.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: vscode-jsonrpc@8.2.0..8.2.1
- * pieces: chunk-t4ksmxzx.js (1)
+ * pieces: chunk-mvgr3jmb.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_api } from "../common/api.js";
 
-//@ chunk-t4ksmxzx.js:51933-54469 cjs-fingerprint
+//@ chunk-mvgr3jmb.js:52297-54833 cjs-fingerprint
 var require_ril = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

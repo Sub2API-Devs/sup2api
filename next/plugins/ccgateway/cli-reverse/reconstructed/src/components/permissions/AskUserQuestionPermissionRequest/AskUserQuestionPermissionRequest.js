@@ -3,10 +3,10 @@
  *
  * AskUserQuestion 工具的问答对话框：多问题导航、单选/多选/自由输入、图片附件与预览、提交生成答案结果。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/AskUserQuestionPermissionRequest/AskUserQuestionPermissionRequest.tsx
- * pieces: chunk-18hwfzwa.js (28), chunk-mvvq2nx1.js (1)
- * attribution: fingerprint 3, sole-consumer 3, file-local 1, layout 17, callgraph-fingerprint 2, placement 3
+ * pieces: chunk-czq1j3j2.js (28), chunk-nw81sbzb.js (1)
+ * attribution: placement 4, fingerprint 3, sole-consumer 2, file-local 1, layout 17, callgraph-fingerprint 2
  */
 import { sniffImageMediaType } from "../../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { maybeResizeAndDownsampleImageBlock, weakSet } from "../../../utils/imageResizer.js";
@@ -69,12 +69,13 @@ import { ownLookup } from "./QuestionNavigationBar.js";
 import { logEvent } from "../../../services/analytics/index.js";
 import { shortHash } from "../../../utils/shortHash.js";
 import { useIsScreenReaderEnabled } from "../../../ink/components/ErrorBoundary.js";
-import { count } from "../../../utils/collections.js";
+import { countWhere } from "../../../utils/collections.js";
 import { fromEnum } from "../../../services/analytics/safeMetadata.js";
 import { formatSelectionList } from "../../../tools/AskUserQuestionTool/answerValidation.js";
 import { MessageActionsKeybindings } from "../../messageActions.js";
 import { isBgSession } from "../../../utils/concurrentSessions.js";
 import { QuestionView } from "./QuestionView.js";
+import { MOD_HOT_RELOAD } from "../../../services/plugins/devMods/devModsConsent.js";
 import { SubmitQuestionsView } from "./SubmitQuestionsView.js";
 import { Ratchet } from "../../design-system/Ratchet.js";
 import { Text, Box } from "../../../ink/components/Text.js";
@@ -83,7 +84,7 @@ import { useStoreSelector } from "../../../hooks/useStoreSelector.js";
 import { formatSourceLine } from "../../../utils/messages/nonUserMessages.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-mvvq2nx1.js:18079-18303 fingerprint (2.1.88 match: convertImagesToBlocks, 0.466)
+//@ chunk-nw81sbzb.js:18090-18314 fingerprint (2.1.88 match: convertImagesToBlocks, 0.467)
 async function convertImagesToBlocks(block, limits, { timings } = {}) {
   let mediaType = sniffImageMediaType(block);
   if (mediaType === null) return null;
@@ -102,23 +103,23 @@ async function convertImagesToBlocks(block, limits, { timings } = {}) {
     return null;
   }
 }
-//@ chunk-18hwfzwa.js:1287178-1287222 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:1299937-1299941 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1299937", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1312970-1313014 fingerprint (2.1.88 match: _temp, 1)
 function hasOptionPreview(opt) {
   return opt.preview !== undefined;
 }
-//@ chunk-18hwfzwa.js:1295825-1295829 sole-consumer
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1295825", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1295829-1295851 sole-consumer
+//@ chunk-czq1j3j2.js:1321788-1321810 sole-consumer
 var AFK_TIMEOUT_MS; // deferred: uses NOTIF_ACTIVE_THRESHOLD_MS (../../../bootstrap/state.js) of its import cycle while loading; runs once the cycle is complete
 var AFK_COUNTDOWN_MS;
-deferInit("chunk-18hwfzwa.js:1295829", () => {
+deferInit("chunk-czq1j3j2.js:1321788", () => {
   AFK_TIMEOUT_MS = NOTIF_ACTIVE_THRESHOLD_MS;
   AFK_COUNTDOWN_MS = 20000;
 });
-//@ chunk-18hwfzwa.js:1295851-1296488 sole-consumer
+//@ chunk-czq1j3j2.js:1321810-1322447 sole-consumer
 /**
  * 无人值守自动继续计时：按最后交互时间与终端焦点计算剩余秒数，接近阈值时显示倒计时，到时调用 onTimeout（返回 false 则重新计时）；支持 CLAUDE_AFK_TIMEOUT_MS / CLAUDE_AFK_COUNTDOWN_MS。
  */
@@ -169,39 +170,39 @@ function useAfkTimeout({ enabled, timeoutMs, countdownThresholdMs, onTimeout }) 
     timeoutMs,
   };
 }
-//@ chunk-18hwfzwa.js:1296488-1296530 file-local
+//@ chunk-czq1j3j2.js:1322447-1322489 file-local
 function ownValues(contents) {
   return Object.values(contents);
 }
-//@ chunk-18hwfzwa.js:1296530-1296572 layout (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:1322489-1322531 layout (2.1.88 match: _temp, 1)
 function isImageBlock(c) {
   return c.type === "image";
 }
-//@ chunk-18hwfzwa.js:1296572-1296626 callgraph-fingerprint (2.1.88 match: _temp4, 1)
+//@ chunk-czq1j3j2.js:1322531-1322585 callgraph-fingerprint (2.1.88 match: _temp4, 1)
 function selectToolPermissionContextMode_2(s) {
   return s.toolPermissionContext.mode;
 }
-//@ chunk-18hwfzwa.js:1296626-1296668 layout
+//@ chunk-czq1j3j2.js:1322585-1322627 layout
 function getQuestionTextInput(questionState) {
   return questionState.textInputValue;
 }
-//@ chunk-18hwfzwa.js:1296668-1296746 layout
+//@ chunk-czq1j3j2.js:1322627-1322705 layout
 function reportBuildResultFailure(error) {
   logFeatureBad("ask_user_question_answer", "build_result_failed");
   throw error;
 }
-//@ chunk-18hwfzwa.js:1296746-1296788 layout (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:1322705-1322747 layout (2.1.88 match: _temp, 1)
 function isImageValue(c) {
   return c.type === "image";
 }
-//@ chunk-18hwfzwa.js:1296788-1296821 layout
+//@ chunk-czq1j3j2.js:1322747-1322780 layout
 function logErrorReturningFalse(error) {
   logError(error);
   return false;
 }
-//@ chunk-18hwfzwa.js:1296821-1296832 layout
+//@ chunk-czq1j3j2.js:1322780-1322791 layout
 var PREVIEW_MIN_COLUMNS = 40;
-//@ chunk-18hwfzwa.js:1296832-1297492 layout
+//@ chunk-czq1j3j2.js:1322791-1323451 layout
 /**
  * 把 AskUserQuestion 的问题转换为显示模型：问题/标题/选项标签去重、描述与预览（过长或可疑内容只显示 withheld）。
  */
@@ -250,11 +251,11 @@ function buildQuestionDisplays(questions, isEngineConfirm = false) {
     };
   });
 }
-//@ chunk-18hwfzwa.js:1297492-1297567 layout
+//@ chunk-czq1j3j2.js:1323451-1323526 layout
 function optionDisplayLabel(questionDisplay, optionValue) {
   return questionDisplay.options.find((option) => option.value === optionValue)?.displayLabel ?? optionValue;
 }
-//@ chunk-18hwfzwa.js:1297567-1297673 layout
+//@ chunk-czq1j3j2.js:1323526-1323632 layout
 function getAfkTimeoutMs(askUserQuestionTimeout) {
   switch (askUserQuestionTimeout) {
     case "60s":
@@ -266,7 +267,7 @@ function getAfkTimeoutMs(askUserQuestionTimeout) {
       return null;
   }
 }
-//@ chunk-18hwfzwa.js:1297673-1298701 callgraph-fingerprint (2.1.88 match: AskUserQuestionPermissionRequest, 0.242)
+//@ chunk-czq1j3j2.js:1323632-1324660 callgraph-fingerprint (2.1.88 match: AskUserQuestionPermissionRequest, 0.243)
 /**
  * AskUserQuestion 对话框入口：校验/改写问题后渲染 AskUserQuestionPermissionRequestBody。
  */
@@ -352,14 +353,14 @@ function AskUserQuestionPermissionRequest(props) {
   } else renderHook = $[11];
   return actionKeysNamespace.useRenderHook(renderInputHandle, renderHook);
 }
-//@ chunk-18hwfzwa.js:1298701-1298796 layout
+//@ chunk-czq1j3j2.js:1324660-1324755 layout
 function hasAnyAnswers(multipleChoiceState) {
   return (
     Object.keys(multipleChoiceState.answers).length > 0 ||
     Object.keys(multipleChoiceState.questionStates).length > 0
   );
 }
-//@ chunk-18hwfzwa.js:1298796-1299345 layout
+//@ chunk-czq1j3j2.js:1324755-1325304 layout
 /**
  * 问题被插件改写后，把 allow 结果中的 answers/annotations 映射回原问题文本与原选项标签。
  */
@@ -398,7 +399,7 @@ function remapAnswersToOriginalQuestions(result, drawnQuestions, originalQuestio
     },
   };
 }
-//@ chunk-18hwfzwa.js:1299345-1299858 layout
+//@ chunk-czq1j3j2.js:1325304-1325816 layout
 /**
  * 校验插件改写后的问题：须通过工具输入结构且只改文案（kEo 校验），否则记警告并沿用原问题。
  */
@@ -432,7 +433,7 @@ function resolveRenderedQuestions(args, drawnQuestions) {
   }
   return parsedInput.data.questions;
 }
-//@ chunk-18hwfzwa.js:1299858-1300676 layout
+//@ chunk-czq1j3j2.js:1325816-1326634 layout
 /**
  * 比较改写前后的问题，返回不允许的改动描述（数量、多选、选项、预览、重复文本），合法时返回 undefined。
  */
@@ -460,12 +461,12 @@ function describeQuestionRewriteViolation(questions, drawnQuestions) {
   }
   return;
 }
-//@ chunk-18hwfzwa.js:1300676-1310202 fingerprint (2.1.88 match: AskUserQuestionPermissionRequestBody, 0.68)
+//@ chunk-czq1j3j2.js:1326634-1336324 fingerprint (2.1.88 match: AskUserQuestionPermissionRequestBody, 0.678)
 /**
  * 问答主体：多问题状态（useMultipleChoiceState）、导航条、单问题/预览视图、粘贴图片附件、提交页；提交时把答案（与图片）组装为工具结果。
  */
 function AskUserQuestionPermissionRequestBody(props) {
-  let $ = useMemoCache(144);
+  let $ = useMemoCache(146);
   let { payload, asked, answer, wouldTakeAnswer, highlight, afkTimeoutMs, state } = props;
   let metadataSource = payload.metadataSource;
   let [theme] = useTheme();
@@ -755,7 +756,7 @@ function AskUserQuestionPermissionRequestBody(props) {
   let logSkipped;
   if ($[51] !== isPlanMode || $[52] !== metadataSource || $[53] !== questionDisplays_2) {
     logSkipped = (answersToSubmit, reason) => {
-      let skippedCount = count(questionDisplays_2, (q_2) => !ownLookup(answersToSubmit, q_2.key));
+      let skippedCount = countWhere(questionDisplays_2, (q_2) => !ownLookup(answersToSubmit, q_2.key));
       if (skippedCount === 0) {
         return;
       }
@@ -809,7 +810,7 @@ function AskUserQuestionPermissionRequestBody(props) {
           isInPlanMode: isPlanMode,
         });
       logSkippedStable(answersToSubmit, "user_submit");
-      if (count(questionDisplays_2, (opt_1) => !ownLookup(answersToSubmit, opt_1.key)) === 0)
+      if (countWhere(questionDisplays_2, (opt_1) => !ownLookup(answersToSubmit, opt_1.key)) === 0)
         logFeatureOk("ask_user_question_answer", {
           questionCount: questionDisplays_2.length,
         });
@@ -1105,13 +1106,15 @@ function AskUserQuestionPermissionRequestBody(props) {
     $[123] !== onImagePasteStable ||
     $[124] !== onRemoveImage ||
     $[125] !== imagesByQuestion ||
-    $[126] !== payload.permissionResult ||
-    $[127] !== planFilePath_2 ||
-    $[128] !== questionStates ||
-    $[129] !== questionDisplays_2 ||
-    $[130] !== setTextInputMode ||
-    $[131] !== updateQuestionState ||
-    $[132] !== wouldTakeAnswer
+    $[126] !== payload.isEngineConfirm ||
+    $[127] !== payload.metadataSource ||
+    $[128] !== payload.permissionResult ||
+    $[129] !== planFilePath_2 ||
+    $[130] !== questionStates ||
+    $[131] !== questionDisplays_2 ||
+    $[132] !== setTextInputMode ||
+    $[133] !== updateQuestionState ||
+    $[134] !== wouldTakeAnswer
   ) {
     viewElement = currentQuestion
       ? jsxProd_default(QuestionView, {
@@ -1122,6 +1125,7 @@ function AskUserQuestionPermissionRequestBody(props) {
           answers,
           questionStates,
           hideSubmitTab,
+          hideOtherRow: payload.isEngineConfirm && payload.metadataSource === MOD_HOT_RELOAD,
           minContentWidth,
           planFilePath: planFilePath_2,
           onUpdateQuestionState: updateQuestionState,
@@ -1164,17 +1168,19 @@ function AskUserQuestionPermissionRequestBody(props) {
     $[123] = onImagePasteStable;
     $[124] = onRemoveImage;
     $[125] = imagesByQuestion;
-    $[126] = payload.permissionResult;
-    $[127] = planFilePath_2;
-    $[128] = questionStates;
-    $[129] = questionDisplays_2;
-    $[130] = setTextInputMode;
-    $[131] = updateQuestionState;
-    $[132] = wouldTakeAnswer;
-    $[133] = viewElement;
-  } else viewElement = $[133];
+    $[126] = payload.isEngineConfirm;
+    $[127] = payload.metadataSource;
+    $[128] = payload.permissionResult;
+    $[129] = planFilePath_2;
+    $[130] = questionStates;
+    $[131] = questionDisplays_2;
+    $[132] = setTextInputMode;
+    $[133] = updateQuestionState;
+    $[134] = wouldTakeAnswer;
+    $[135] = viewElement;
+  } else viewElement = $[135];
   let afkCountdown;
-  if ($[134] !== showAfkCountdown_2 || $[135] !== afkTimeoutMs || $[136] !== onTimeout_2) {
+  if ($[136] !== showAfkCountdown_2 || $[137] !== afkTimeoutMs || $[138] !== onTimeout_2) {
     afkCountdown = showAfkCountdown_2
       ? jsxProd_default(AfkCountdown, {
           enabled: true,
@@ -1182,32 +1188,32 @@ function AskUserQuestionPermissionRequestBody(props) {
           onTimeout: onTimeout_2,
         })
       : null;
-    $[134] = showAfkCountdown_2;
-    $[135] = afkTimeoutMs;
-    $[136] = onTimeout_2;
-    $[137] = afkCountdown;
-  } else afkCountdown = $[137];
+    $[136] = showAfkCountdown_2;
+    $[137] = afkTimeoutMs;
+    $[138] = onTimeout_2;
+    $[139] = afkCountdown;
+  } else afkCountdown = $[139];
   let pluginNotice;
-  if ($[138] !== payload.requestId) {
+  if ($[140] !== payload.requestId) {
     pluginNotice = jsxProd_default(PluginNoticeLine, {
       toolUseId: payload.requestId,
     });
-    $[138] = payload.requestId;
-    $[139] = pluginNotice;
-  } else pluginNotice = $[139];
+    $[140] = payload.requestId;
+    $[141] = pluginNotice;
+  } else pluginNotice = $[141];
   let content;
-  if ($[140] !== viewElement || $[141] !== afkCountdown || $[142] !== pluginNotice) {
+  if ($[142] !== viewElement || $[143] !== afkCountdown || $[144] !== pluginNotice) {
     content = jsxProd_default_2(Ratchet, {
       children: [viewElement, afkCountdown, pluginNotice],
     });
-    $[140] = viewElement;
-    $[141] = afkCountdown;
-    $[142] = pluginNotice;
-    $[143] = content;
-  } else content = $[143];
+    $[142] = viewElement;
+    $[143] = afkCountdown;
+    $[144] = pluginNotice;
+    $[145] = content;
+  } else content = $[145];
   return content;
 }
-//@ chunk-18hwfzwa.js:1310202-1310738 layout
+//@ chunk-czq1j3j2.js:1336324-1336860 layout
 /**
  * 显示 "auto-continue in Ns" 倒计时的行。
  */
@@ -1252,7 +1258,7 @@ function AfkCountdown(props) {
   } else rowElement = $[8];
   return rowElement;
 }
-//@ chunk-18hwfzwa.js:1310738-1311224 layout
+//@ chunk-czq1j3j2.js:1336860-1337346 layout
 /**
  * 显示插件对该工具调用的提示文字的一行。
  */
@@ -1297,7 +1303,7 @@ function PluginNoticeLine(props) {
   } else noticeElement = $[7];
   return noticeElement;
 }
-//@ chunk-18hwfzwa.js:1311224-1311838 layout
+//@ chunk-czq1j3j2.js:1337346-1337960 layout
 /**
  * 生成 AskUserQuestion 的 allow 结果：answers + 每题的预览/备注注解、AFK 超时，并附上缩放后的图片块。
  */
@@ -1341,7 +1347,7 @@ async function buildAllowAnswerResult(args) {
       }),
   };
 }
-//@ chunk-18hwfzwa.js:1311838-1312370 layout
+//@ chunk-czq1j3j2.js:1337960-1338492 layout
 /**
  * 用户选择澄清时生成 deny 结果，反馈中列出已问问题与回答，并附图片。
  */
@@ -1364,7 +1370,7 @@ ${formatQuestionAnswers(questions, asked, answers, questionStates, args.isScreen
       }),
   };
 }
-//@ chunk-18hwfzwa.js:1312370-1312666 placement (2.1.88 match: generateSectionReminders, 0.324)
+//@ chunk-czq1j3j2.js:1338492-1338788 placement (2.1.88 match: generateSectionReminders, 0.324)
 function formatQuestionAnswers(questions, asked, answers, questionStates, isScreenReader) {
   return questions.map((question, index) => {
     let answer = ownLookup(answers, question.key);
@@ -1380,11 +1386,11 @@ function formatQuestionAnswers(questions, asked, answers, questionStates, isScre
   }).join(`
 `);
 }
-//@ chunk-18hwfzwa.js:1312666-1312744 placement
+//@ chunk-czq1j3j2.js:1338788-1338866 placement
 function isPreviewCapableQuestion(question) {
   return !question.multiSelect && question.options.some((option) => option.preview !== undefined);
 }
-//@ chunk-18hwfzwa.js:1312744-1312910 placement (2.1.88 match: parseDataUri, 0.518)
+//@ chunk-czq1j3j2.js:1338866-1339032 placement (2.1.88 match: parseDataUri, 0.516)
 /**
  * （切分错误）把一组图片按 limits 缩放成 image 块。
  */
@@ -1401,4 +1407,4 @@ async function resizeImageBlocks(imageAttachments, limits) {
     }),
   );
 }
-export { hasOptionPreview, AskUserQuestionPermissionRequest, convertImagesToBlocks };
+export { convertImagesToBlocks, hasOptionPreview, AskUserQuestionPermissionRequest };

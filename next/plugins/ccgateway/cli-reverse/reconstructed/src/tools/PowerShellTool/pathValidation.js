@@ -3,9 +3,9 @@
  *
  * PowerShell 路径约束：CMDLET_PATH_CONFIG、参数缩写解析、路径提取与校验、受保护路径删除（含 cmd /c rd/del）、读封锁下外部程序检查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/pathValidation.ts
- * pieces: chunk-v0yfsee9.js (45)
+ * pieces: chunk-6zpsr8vx.js (45)
  * attribution: sole-consumer 5, affinity 2, fingerprint 8, file-local 4, layout 26
  */
 import { homedir } from "os";
@@ -56,15 +56,15 @@ import { GIT_SAFETY_WRITE_CMDLETS } from "./powershellPermissions.js";
 import { createReadRuleSuggestion } from "../../utils/permissions/PermissionUpdate.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-v0yfsee9.js:21828-21856 sole-consumer
+//@ chunk-6zpsr8vx.js:23055-23083 sole-consumer
 var TENGU_CURIOUS_LAKE = "tengu_curious_lake";
-//@ chunk-v0yfsee9.js:21856-21987 sole-consumer
+//@ chunk-6zpsr8vx.js:23083-23214 sole-consumer
 function isCmdRmDenyEnabled() {
   if (env.CLAUDE_CODE_DISABLE_POWERSHELL_CMD_RM_DENY) return false;
   let flag = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_CURIOUS_LAKE, true);
   return !(flag.value === false && flag.source === "payload");
 }
-//@ chunk-v0yfsee9.js:21987-22151 sole-consumer
+//@ chunk-6zpsr8vx.js:23214-23378 sole-consumer
 /**
  * 匹配除普通空格与 BOM 之外的空白字符。
  */
@@ -72,7 +72,7 @@ var CMD_RUN_SWITCH_RE = /^\/[ckr](?:$|\s)/i;
 var CMD_REMOVE_VERB_RE = /^(rd|rmdir|del|erase)(?=$|[.:\\/+[\]",;=])/i;
 var CMD_CD_VERB_RE = /^(?:(?:cd|chdir|pushd|popd)(?=$|[.:\\/+[\]",;=])|[a-z]:$)/i;
 var NON_PRINTING_SPACE_RE = /[^\S\uFEFF]|\u0085/;
-//@ chunk-v0yfsee9.js:22151-22330 affinity
+//@ chunk-6zpsr8vx.js:23378-23557 affinity
 /**
  * 参数是否是 cmd / cmd.exe（去掉路径与尾随点空格）。
  */
@@ -85,12 +85,12 @@ function isCmdExecutableName(name) {
   );
   return /^cmd(?:\.exe)?$/i.test(sliced);
 }
-//@ chunk-v0yfsee9.js:22330-22447 fingerprint (2.1.88 match: SAFE_PATH_ELEMENT_TYPES, 0.33)
+//@ chunk-6zpsr8vx.js:23557-23674 fingerprint (2.1.88 match: SAFE_PATH_ELEMENT_TYPES, 0.33)
 function classifyElementType(elementType) {
   if (elementType === undefined || elementType === "StringConstant") return "literal";
   return elementType === "ExpandableString" ? "expands" : "unknown";
 }
-//@ chunk-v0yfsee9.js:22447-22582 file-local
+//@ chunk-6zpsr8vx.js:23674-23809 file-local
 function hasUnquotedWhitespace(text) {
   let inQuotes = false;
   for (let j = 0; j < text.length; j++) {
@@ -100,12 +100,12 @@ function hasUnquotedWhitespace(text) {
   }
   return false;
 }
-//@ chunk-v0yfsee9.js:22582-22703 layout
+//@ chunk-6zpsr8vx.js:23809-23930 layout
 function combineElementKinds(leftKind, kind) {
   if (leftKind === "unknown" || kind === "unknown") return "unknown";
   return leftKind === "expands" || kind === "expands" ? "expands" : "literal";
 }
-//@ chunk-v0yfsee9.js:22703-23207 layout
+//@ chunk-6zpsr8vx.js:23930-24434 layout
 function tokenizeCmdLine(chars) {
   let tokens = [];
   let current = "";
@@ -157,7 +157,7 @@ function tokenizeCmdLine(chars) {
   flushToken();
   return tokens;
 }
-//@ chunk-v0yfsee9.js:23207-23472 layout
+//@ chunk-6zpsr8vx.js:24434-24699 layout
 function findStopParsingToken(text) {
   let quoteChar = null;
   for (let j = 0; j < text.length; j++) {
@@ -175,7 +175,7 @@ function findStopParsingToken(text) {
   }
   return -1;
 }
-//@ chunk-v0yfsee9.js:23472-24434 layout
+//@ chunk-6zpsr8vx.js:24699-25661 layout
 /**
  * 从 PowerShell 调用 cmd.exe /c|/k 的命令里还原出 cmd 实际要执行的命令字符（处理 --% 停止解析、引号、元素是否可展开）。
  */
@@ -242,7 +242,7 @@ function getCmdInlineCommandChars(element) {
   }
   return commandChars;
 }
-//@ chunk-v0yfsee9.js:24434-24999 layout
+//@ chunk-6zpsr8vx.js:25661-26226 layout
 /**
  * 解析 cmd /c 命令行，收集其中 rd/rmdir/del/erase 的操作数（含 start、if exist、嵌套 cmd、cd 之后的状态）。
  */
@@ -293,9 +293,9 @@ function extractCmdRemovalOperands(element) {
   );
   return operands;
 }
-//@ chunk-v0yfsee9.js:24999-25008 layout
+//@ chunk-6zpsr8vx.js:26226-26235 layout
 var MAX_CMD_NESTING_DEPTH = 8;
-//@ chunk-v0yfsee9.js:25008-27204 layout
+//@ chunk-6zpsr8vx.js:26235-28431 layout
 /**
  * 遍历 cmd /c 命令行 token，收集 rd/rmdir/del/erase 的操作数：跟踪 cd 状态、if exist/defined 条件、start（含 /d）、嵌套 cmd /c /k 递归（有深度上限）与重定向。
  */
@@ -477,7 +477,7 @@ function walkCmdRemovalCommands(tokens, cdState, inStart, sink, depth = 0) {
     }
   }
 }
-//@ chunk-v0yfsee9.js:27204-27382 layout
+//@ chunk-6zpsr8vx.js:28431-28609 layout
 /**
  * 用给定环境展开 cmd 的 %NAME% 变量（大小写不敏感）。
  */
@@ -489,7 +489,7 @@ function expandCmdPercentVars(text, variables) {
     (wholeMatch, varName) => lowerByName.get(varName.toLowerCase()) ?? wholeMatch,
   );
 }
-//@ chunk-v0yfsee9.js:27382-27947 layout
+//@ chunk-6zpsr8vx.js:28609-29174 layout
 function parseCmdCdTarget(cdToken, tokens, startIndex) {
   let match = /^(cd|chdir|pushd)(?![a-z])/i.exec(cdToken.text);
   if (match === null) return null;
@@ -514,7 +514,7 @@ function parseCmdCdTarget(cdToken, tokens, startIndex) {
     .trim();
   return isDriveChange && /^(?:[A-Za-z]:[\\/]|%)/.test(trimmed) ? trimmed : null;
 }
-//@ chunk-v0yfsee9.js:27947-28092 layout
+//@ chunk-6zpsr8vx.js:29174-29319 layout
 function nextSeparatorIndex(tokens, startIndex, limitIndex = tokens.length) {
   let index = startIndex;
   while (index < limitIndex) {
@@ -525,7 +525,7 @@ function nextSeparatorIndex(tokens, startIndex, limitIndex = tokens.length) {
   }
   return index;
 }
-//@ chunk-v0yfsee9.js:28092-28230 layout
+//@ chunk-6zpsr8vx.js:29319-29457 layout
 function skipRedirection(tokens, index) {
   let targetIndex = index;
   while (tokens[targetIndex + 1]?.separator && ["<", ">", "&"].includes(tokens[targetIndex + 1].text))
@@ -534,7 +534,7 @@ function skipRedirection(tokens, index) {
     ? targetIndex + 1
     : targetIndex;
 }
-//@ chunk-v0yfsee9.js:28230-28444 layout
+//@ chunk-6zpsr8vx.js:29457-29671 layout
 function stripPsVariables(text, keepVariable = () => false) {
   let view = "";
   let literalPrefix = null;
@@ -554,7 +554,7 @@ function stripPsVariables(text, keepVariable = () => false) {
     literalPrefix,
   };
 }
-//@ chunk-v0yfsee9.js:28444-28781 layout
+//@ chunk-6zpsr8vx.js:29671-30008 layout
 function scanPsVariableEnd(text, startIndex) {
   let nextChar = text[startIndex + 1];
   if (nextChar === "{") {
@@ -573,7 +573,7 @@ function scanPsVariableEnd(text, startIndex) {
   while (index < text.length && /[\p{L}\p{Nd}_:]/u.test(text[index])) index++;
   return index === startIndex + 1 ? startIndex : index;
 }
-//@ chunk-v0yfsee9.js:28781-39050 fingerprint (2.1.88 match: CMDLET_PATH_CONFIG, 0.974)
+//@ chunk-6zpsr8vx.js:30008-40277 fingerprint (2.1.88 match: CMDLET_PATH_CONFIG, 0.974)
 /**
  * 每个 cmdlet 的路径参数配置 CMDLET_PATH_CONFIG：操作类型（read/write/create）、路径参数、仅叶名参数、已知开关和带值参数、位置参数跳过数，覆盖 Set/Add/Get-Content、Copy/Move/Remove/New-Item、Out-File、Export-*、Compress/Expand-Archive、Invoke-WebRequest 等。
  */
@@ -1014,7 +1014,7 @@ var CMDLET_PATH_CONFIG = {
     knownValueParams: ["-name", "-description", "-scope", "-as"],
   },
 };
-//@ chunk-v0yfsee9.js:39050-39213 layout
+//@ chunk-6zpsr8vx.js:40277-40440 layout
 function getParamCategories(config) {
   return [
     ["path", config.pathParams],
@@ -1023,7 +1023,7 @@ function getParamCategories(config) {
     ["value", [...config.knownValueParams, ...COMMON_VALUE_PARAMS]],
   ];
 }
-//@ chunk-v0yfsee9.js:39213-39633 layout
+//@ chunk-6zpsr8vx.js:40440-40860 layout
 /**
  * 把参数缩写解析到 path/leafOnly/switch/value 类别；匹配多个类别时为 ambiguous，未知为 unknown。
  */
@@ -1051,7 +1051,7 @@ function classifyParamAbbreviation(paramLower, paramCategories) {
   if (prefixCategory !== undefined) return prefixCategory;
   return "unknown";
 }
-//@ chunk-v0yfsee9.js:39633-39758 layout
+//@ chunk-6zpsr8vx.js:40860-40985 layout
 function normalizeWindowsPathCase(filePath) {
   if (getPlatform() !== "windows") return filePath;
   return filePath
@@ -1062,14 +1062,14 @@ function normalizeWindowsPathCase(filePath) {
     })
     .join("");
 }
-//@ chunk-v0yfsee9.js:39758-39786 layout
+//@ chunk-6zpsr8vx.js:40985-41013 layout
 /**
  * 跳过 PowerShell 文本开头的空白与注释。
  */
 function skipPsLeadingSpaceAndComments(rawValue) {
   return skipLeadingWhitespaceAndComments(rawValue);
 }
-//@ chunk-v0yfsee9.js:39786-40018 file-local
+//@ chunk-6zpsr8vx.js:41013-41245 file-local
 /**
  * 冒号绑定参数的值是否复杂（引号、逗号、括号、反引号、@、$），复杂值无法静态验证。
  */
@@ -1087,7 +1087,7 @@ function hasComplexColonValue(rawValue) {
     rawValue_2.includes("$")
   );
 }
-//@ chunk-v0yfsee9.js:40018-40169 layout (2.1.88 match: formatDirectoryList, 1)
+//@ chunk-6zpsr8vx.js:41245-41396 layout (2.1.88 match: formatDirectoryList, 1)
 function formatDirectoryList(directories) {
   let dirCount = directories.length;
   if (dirCount <= MAX_DIRS_TO_LIST) return directories.map((dir) => `'${dir}'`).join(", ");
@@ -1096,13 +1096,13 @@ function formatDirectoryList(directories) {
     .map((dir) => `'${dir}'`)
     .join(", ")}, and ${dirCount - MAX_DIRS_TO_LIST} more`;
 }
-//@ chunk-v0yfsee9.js:40169-40268 file-local
+//@ chunk-6zpsr8vx.js:41396-41495 file-local
 function expandTilde(filePath) {
   if (filePath === "~" || filePath.startsWith("~/") || filePath.startsWith("~\\"))
     return homedir() + filePath.slice(1);
   return filePath;
 }
-//@ chunk-v0yfsee9.js:40268-40408 layout
+//@ chunk-6zpsr8vx.js:41495-41636 layout
 /**
  * 路径（去提供程序前缀、各种拼写）是否是禁止删除的系统路径（盘根、盘根下一级、home 等）。
  */
@@ -1122,14 +1122,14 @@ function isDangerousRemovalPath(rawPath) {
   }
   return false;
 }
-//@ chunk-v0yfsee9.js:40408-40501 file-local
+//@ chunk-6zpsr8vx.js:41636-41729 file-local
 function isDangerousRemovalRawPath(filePath) {
   let expanded = expandTilde(filePath).replace(/\\/g, "/");
   let normalized = normalizeWindowsPathCase(expanded);
   if (isAbsolute(normalized)) normalized = normalize(normalized);
   return isDangerousRemovalPath_2(normalized) || isDangerousRemovalPath_2(expanded);
 }
-//@ chunk-v0yfsee9.js:40501-40849 layout
+//@ chunk-6zpsr8vx.js:41729-42078 layout
 function resolveDangerousRemovalPath(rawPath, cwd) {
   let variants = new Set([
     rawPath,
@@ -1153,14 +1153,14 @@ function resolveDangerousRemovalPath(rawPath, cwd) {
   }
   return null;
 }
-//@ chunk-v0yfsee9.js:40849-40881 layout
+//@ chunk-6zpsr8vx.js:42078-42110 layout
 /**
  * 判断基础规范化后与原值相同（表示路径未改写）。
  */
 function isUnchangedByBasicNormalize(pathArg) {
   return stripPsParameterPrefix(pathArg) === pathArg;
 }
-//@ chunk-v0yfsee9.js:40881-41126 fingerprint (2.1.88 match: dangerousRemovalDeny, 0.879)
+//@ chunk-6zpsr8vx.js:42110-42355 fingerprint (2.1.88 match: dangerousRemovalDeny, 0.871)
 /**
  * 构造"删除受保护系统路径"的 deny 结果（safetyCheck，分类器不可批准）。
  */
@@ -1178,7 +1178,7 @@ function dangerousRemovalDeny(
     },
   };
 }
-//@ chunk-v0yfsee9.js:41126-41363 layout
+//@ chunk-6zpsr8vx.js:42355-42592 layout
 function stripTrailingWildcardSegment(filePath) {
   let endIndex = filePath.length;
   while (endIndex > 0 && (filePath[endIndex - 1] === "\\" || filePath[endIndex - 1] === "/")) endIndex--;
@@ -1192,7 +1192,7 @@ function stripTrailingWildcardSegment(filePath) {
     return filePath;
   return segmentStart === 0 ? "." : filePath.slice(0, segmentStart);
 }
-//@ chunk-v0yfsee9.js:41363-41743 layout
+//@ chunk-6zpsr8vx.js:42592-42972 layout
 function findProtectedRemovalTarget(rawPath, cwd, compoundCommandHasCd, text, cmdVariables) {
   let normalizedPath = stripTrailingWildcardSegment(normalizeDosDevicePath(rawPath));
   if (isDangerousRemovalPath(normalizedPath))
@@ -1222,7 +1222,7 @@ function findProtectedRemovalTarget(rawPath, cwd, compoundCommandHasCd, text, cm
     }
   return null;
 }
-//@ chunk-v0yfsee9.js:41743-42674 layout
+//@ chunk-6zpsr8vx.js:42972-43903 layout
 /**
  * 开关 tengu_curious_lake（可用 CLAUDE_CODE_DISABLE_POWERSHELL_CMD_RM_DENY 关闭）打开时，检查 PowerShell 里通过 cmd /c 执行的 rd/del 是否删除受保护路径（考虑 %VAR%、$变量为空、cd 之后的相对路径），命中则 deny。
  */
@@ -1270,7 +1270,7 @@ function checkCmdRemovalOfProtectedPath(element, cwd, compoundCommandHasCd) {
   }
   return;
 }
-//@ chunk-v0yfsee9.js:42674-42919 fingerprint (2.1.88 match: checkDenyRuleForGuessedPath, 1)
+//@ chunk-6zpsr8vx.js:43903-44148 fingerprint (2.1.88 match: checkDenyRuleForGuessedPath, 1)
 /**
  * 对猜测出的路径拼写检查 read/edit deny 规则，返回命中的规则。
  */
@@ -1290,7 +1290,7 @@ function checkDenyRuleForGuessedPath(strippedPath, cwd, toolPermissionContext, o
   }
   return null;
 }
-//@ chunk-v0yfsee9.js:42919-46978 fingerprint (2.1.88 match: validatePath, 0.794)
+//@ chunk-6zpsr8vx.js:44148-48208 fingerprint (2.1.88 match: validatePath, 0.791)
 /**
  * PowerShell 路径校验：对提供程序路径、反引号转义、:: 前缀等多种拼写先查 deny 规则；再按操作类型判断是否在允许的工作目录内（含读封锁、UNC、设备路径等）。
  */
@@ -1536,7 +1536,7 @@ function validatePath(filePath, cwd, toolPermissionContext, operationType) {
     resolvedPath,
   };
 }
-//@ chunk-v0yfsee9.js:46978-47149 layout (2.1.88 match: getGlobBaseDirectory, 1)
+//@ chunk-6zpsr8vx.js:48208-48379 layout (2.1.88 match: getGlobBaseDirectory, 1)
 function getGlobBaseDirectory(filePath) {
   let globMatch = firstGlobCharIndex(filePath);
   if (globMatch === -1) return filePath;
@@ -1545,13 +1545,13 @@ function getGlobBaseDirectory(filePath) {
   if (lastSepIndex === -1) return ".";
   return beforeGlob.substring(0, lastSepIndex + 1) || "/";
 }
-//@ chunk-v0yfsee9.js:47149-47323 layout
+//@ chunk-6zpsr8vx.js:48379-48553 layout
 /**
  * 只读类路径 cmdlet 集合（get-childitem、resolve-path、test-path 等）。
  */
 var VALIDATABLE_ELEMENT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var READ_ONLY_PATH_CMDLETS;
-deferInit("chunk-v0yfsee9.js:47149", () => {
+deferInit("chunk-6zpsr8vx.js:48379", () => {
   VALIDATABLE_ELEMENT_TYPES = new Set(["StringConstant", "Parameter"]);
   READ_ONLY_PATH_CMDLETS = new Set([
     "get-childitem",
@@ -1564,7 +1564,7 @@ deferInit("chunk-v0yfsee9.js:47149", () => {
     "test-path",
   ]);
 });
-//@ chunk-v0yfsee9.js:47323-48577 fingerprint (2.1.88 match: extractPathsFromCommand, 0.595)
+//@ chunk-6zpsr8vx.js:48553-49807 fingerprint (2.1.88 match: extractPathsFromCommand, 0.595)
 /**
  * 按 CMDLET_PATH_CONFIG 从 cmdlet 参数中提取路径：识别参数缩写、冒号绑定值、位置参数，标记无法验证的参数（变量、表达式）与可选写入。
  */
@@ -1674,7 +1674,7 @@ function extractPathsFromCommand(cmd) {
     optionalWrite: config.optionalWrite ?? false,
   };
 }
-//@ chunk-v0yfsee9.js:48577-48932 fingerprint (2.1.88 match: checkPathConstraints, 0.962)
+//@ chunk-6zpsr8vx.js:49807-50162 fingerprint (2.1.88 match: checkPathConstraints, 1)
 /**
  * PowerShell 路径约束：逐条语句检查，deny 立即返回，优先返回安全检查类 ask。
  */
@@ -1702,7 +1702,7 @@ function checkPathConstraints(input, parsed, toolPermissionContext, compoundComm
     }
   );
 }
-//@ chunk-v0yfsee9.js:48932-50520 sole-consumer
+//@ chunk-6zpsr8vx.js:50162-51750 sole-consumer
 /**
  * 读封锁开启时检查外部程序（含内联代码解释器、cmd /c）的参数路径：内联代码直接拒绝，变量/表达式参数要求确认，路径命中 deny 规则拒绝，读出工作目录则 ask。
  */
@@ -1804,7 +1804,7 @@ function checkNativeCommandReads(command, cwd, permissionContext, hasCd) {
   }
   return runtimeAsk;
 }
-//@ chunk-v0yfsee9.js:50520-50839 sole-consumer (2.1.88 match: isItemTypeParamAbbrev, 0.791)
+//@ chunk-6zpsr8vx.js:51750-52069 sole-consumer (2.1.88 match: isItemTypeParamAbbrev, 0.791)
 /**
  * New-Item 参数中是否同时有 -ItemType *link/junction 与 -Value（创建链接到指定目标）。
  */
@@ -1826,7 +1826,7 @@ function isItemTypeParamAbbrev_2(cmd) {
   }
   return hasLinkType && hasValue;
 }
-//@ chunk-v0yfsee9.js:50968-51261 affinity
+//@ chunk-6zpsr8vx.js:52198-52491 affinity
 function askOutsideReadBlock(blockedPath, decisionReason, blockedPath_2) {
   return {
     behavior: "ask",
@@ -1835,7 +1835,7 @@ function askOutsideReadBlock(blockedPath, decisionReason, blockedPath_2) {
     decisionReason,
   };
 }
-//@ chunk-v0yfsee9.js:51261-58675 fingerprint (2.1.88 match: checkPathConstraintsForStatement, 0.91)
+//@ chunk-6zpsr8vx.js:52491-59906 fingerprint (2.1.88 match: checkPathConstraintsForStatement, 0.909)
 /**
  * 单条 PowerShell 语句的路径约束：cd 复合命令要询问；对每个命令提取路径并校验（读封锁、git 安全相关写 cmdlet、受保护删除路径、cmd /c 删除、管道/嵌套命令、重定向目标），返回 deny/ask/passthrough。
  */

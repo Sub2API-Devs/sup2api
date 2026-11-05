@@ -3,24 +3,24 @@
  *
  * 2.1.316 新增。目标（goal）提议的确认。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: placement 4
  */
-import { init_react_production, useRef } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../state/AppState.js";
 import { useMainLoopBusy } from "../LogoV2/Notices.js";
 import { stripNonPrintable } from "../../utils/truncateGraphemes.js";
 import { useInputClock } from "../../ink/components/Input.js";
-import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useRefusalTracker, useMountTime, settleKey } from "../CustomSelect/selectTypeahead.js";
 import {
   isWithinRecentInput,
   RECENT_INPUT_GUARD_MS as RECENT_INPUT_GUARD_MS_3,
 } from "../../hooks/useRecentInputGuard.js";
 import { useExitOnCtrlCD } from "../../hooks/useExitOnCtrlCD.js";
+import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { MessageActionsKeybindings } from "../messageActions.js";
 import { Pane } from "../design-system/Pane.js";
 import { Box, Text } from "../../ink/components/Text.js";
@@ -36,16 +36,16 @@ import { getFirstLine } from "../../utils/stringUtils.js";
 import { ConfirmSelect } from "../design-system/ConfirmSelect.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1386191-1386195 placement
+//@ chunk-czq1j3j2.js:1399844-1399848 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1386191", () => {
+deferInit("chunk-czq1j3j2.js:1399844", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1386195-1386233 placement
+//@ chunk-czq1j3j2.js:1409015-1409053 placement
 function selectActiveGoal(state) {
   return state.activeGoal;
 }
-//@ chunk-18hwfzwa.js:1386233-1389938 placement
+//@ chunk-czq1j3j2.js:1409053-1412707 placement
 /**
  * GoalProposalPermissionRequest：模型提出目标（goal）时的确认界面。
  */
@@ -56,19 +56,13 @@ function GoalProposalPermissionRequest(props) {
   let mainLoopBusy = useMainLoopBusy();
   let condition = stripNonPrintable(payload.condition);
   let inputClock = useInputClock();
-  let now;
-  if ($[0] === MEMO_CACHE_SENTINEL) {
-    now = Date.now();
-    $[0] = now;
-  } else now = $[0];
-  let lastShownAt = useRef(now);
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
-  let openedAt = useMountTime();
+  let mountTime = useMountTime();
   let refuseInput;
-  if ($[1] !== inputClock || $[2] !== noteRefused || $[3] !== refusedWithin) {
+  if ($[0] !== inputClock || $[1] !== noteRefused || $[2] !== refusedWithin || $[3] !== mountTime) {
     refuseInput = function shouldRefuseInput() {
       if (
-        isWithinRecentInput(inputClock, lastShownAt.current, RECENT_INPUT_GUARD_MS_3) ||
+        isWithinRecentInput(inputClock, mountTime(), RECENT_INPUT_GUARD_MS_3) ||
         refusedWithin(RECENT_INPUT_GUARD_MS_3)
       ) {
         noteRefused();
@@ -76,9 +70,10 @@ function GoalProposalPermissionRequest(props) {
       }
       return false;
     };
-    $[1] = inputClock;
-    $[2] = noteRefused;
-    $[3] = refusedWithin;
+    $[0] = inputClock;
+    $[1] = noteRefused;
+    $[2] = refusedWithin;
+    $[3] = mountTime;
     $[4] = refuseInput;
   } else refuseInput = $[4];
   let refuseInput_2 = refuseInput;
@@ -253,7 +248,7 @@ function GoalProposalPermissionRequest(props) {
   if (
     $[41] !== settle.remountKey ||
     $[42] !== refuseInput_2 ||
-    $[43] !== openedAt ||
+    $[43] !== mountTime ||
     $[44] !== onConfirm ||
     $[45] !== onCancel
   ) {
@@ -261,7 +256,7 @@ function GoalProposalPermissionRequest(props) {
       ConfirmSelect,
       {
         refuseInput: refuseInput_2,
-        openedAt,
+        openedAt: mountTime,
         confirmLabel: "Set this goal",
         cancelLabel: "Not now",
         hideIndexes: true,
@@ -276,7 +271,7 @@ function GoalProposalPermissionRequest(props) {
     );
     $[41] = settle.remountKey;
     $[42] = refuseInput_2;
-    $[43] = openedAt;
+    $[43] = mountTime;
     $[44] = onConfirm;
     $[45] = onCancel;
     $[46] = selector;
@@ -345,9 +340,9 @@ function GoalProposalPermissionRequest(props) {
   } else pane = $[63];
   return pane;
 }
-//@ chunk-18hwfzwa.js:1389938-1389942 placement
+//@ chunk-czq1j3j2.js:1412707-1412711 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1389938", () => {
+deferInit("chunk-czq1j3j2.js:1412707", () => {
   init_react_production();
 });
 export { GoalProposalPermissionRequest };

@@ -3,10 +3,10 @@
  *
  * 权限上下文：一次工具权限请求的 resolve-once、日志、持久化规则、取消/中止、buildAllow/cancelAndAbort。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/toolPermission/PermissionContext.ts
- * pieces: chunk-s4bxxzsw.js (3)
- * attribution: file-last-pair 1, fingerprint 2
+ * pieces: chunk-g4tsxwy3.js (3)
+ * attribution: placement 1, fingerprint 2
  */
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 import { logPermissionDecision_2 } from "./permissionLogging.js";
@@ -57,11 +57,11 @@ import {
 import { logShellAllowRuleAdded } from "../../utils/permissions/shellAllowRuleTelemetry.js";
 import { applyMcpServerAllowRule } from "../../services/mcp/mcpStandardKeys.js";
 
-//@ chunk-s4bxxzsw.js:32505-32586 file-last-pair
+//@ chunk-g4tsxwy3.js:32677-32758 placement
 function createPermissionQueueOps({ feedback, contentBlocks, isSubagent }) {
   return !feedback && !contentBlocks?.length && !isSubagent;
 }
-//@ chunk-s4bxxzsw.js:32586-32724 fingerprint (2.1.88 match: createResolveOnce, 1)
+//@ chunk-g4tsxwy3.js:32758-32896 fingerprint (2.1.88 match: createResolveOnce, 1)
 function createResolveOnce(resolve) {
   let claimed = false;
   let delivered = false;
@@ -82,7 +82,7 @@ function createResolveOnce(resolve) {
     },
   };
 }
-//@ chunk-s4bxxzsw.js:32724-37374 fingerprint (2.1.88 match: createPermissionContext, 0.746)
+//@ chunk-g4tsxwy3.js:32896-37546 fingerprint (2.1.88 match: createPermissionContext, 0.745)
 /**
  * 为一次权限请求创建上下文对象：logDecision、logCancelled、persistPermissions（写规则）、setModeFromBridge、resolveIfAborted、buildAllow、cancelAndAbort、runHooks。
  */
@@ -457,4 +457,4 @@ function createPermissionContext(
     },
   });
 }
-export { createPermissionQueueOps, createResolveOnce, createPermissionContext };
+export { createResolveOnce, createPermissionContext, createPermissionQueueOps };

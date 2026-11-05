@@ -3,21 +3,21 @@
  *
  * 2.1.316 新增：ScheduleWakeup 工具（/loop 动态模式唤醒）提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b56wj4av.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7kayq7nc.js (6)
  * attribution: placement 6
  */
 import { BRIEF_TOOL_NAME } from "../BriefTool/prompt.js";
 
-//@ chunk-b56wj4av.js:227-311 placement
+//@ chunk-7kayq7nc.js:170026-170110 placement
 /**
  * 自主 /loop（无用户提示）时应回传的固定提示词。
  */
 var SCHEDULE_WAKEUP_TOOL_NAME = "ScheduleWakeup";
 var AUTONOMOUS_LOOP_PROMPT = "<<autonomous-loop>>";
 var AUTONOMOUS_LOOP_DYNAMIC_PROMPT = "<<autonomous-loop-dynamic>>";
-//@ chunk-b56wj4av.js:311-963 placement
+//@ chunk-7kayq7nc.js:170110-170762 placement
 function wakeupPreArmParagraph({ preArmStatus, briefMode }) {
   let updateRule = briefMode
     ? `This session is in brief mode: plain response text is treated as unread \u2014 send the update via ${BRIEF_TOOL_NAME} with \`status: 'proactive'\`; an update left in plain text or thinking never reaches the user.`
@@ -27,13 +27,13 @@ function wakeupPreArmParagraph({ preArmStatus, briefMode }) {
     : " Make it the last thing in the turn, then end the turn.";
   return `${updateRule}${timingRule}`;
 }
-//@ chunk-b56wj4av.js:963-1212 placement
+//@ chunk-7kayq7nc.js:170762-171011 placement
 function loopOutcomeInstruction({ briefMode }) {
   return briefMode
     ? `send the loop's outcome to the user via ${BRIEF_TOOL_NAME} (\`status: 'proactive'\`) \u2014 plain response text is treated as unread in this session`
     : "write the loop's outcome for the user as ordinary visible response text";
 }
-//@ chunk-b56wj4av.js:1212-7267 placement
+//@ chunk-7kayq7nc.js:171011-177072 placement
 /**
  * /loop 关闭时的说明文本。
  */
@@ -81,7 +81,7 @@ var WAKEUP_PRE_ARM_PARAGRAPH = `## The reason field
 One short sentence on what you chose and why. Goes to telemetry and is shown back to the user. "watching CI run" beats "waiting." The user reads this to understand what you're doing without having to predict your cadence in advance \u2014 make it specific.`;
 var SCHEDULE_WAKEUP_PROMPT_SUFFIX =
   'Set `noop: true` if nothing changed \u2014 you checked and there\'s nothing to report ("no change", "still waiting", "quiet hold"). Set `noop: false` if something happened worth keeping \u2014 you edited a file, posted a message, advanced state, or surfaced a finding. Consecutive `noop: true` ticks are collapsed in the user\'s terminal view and tracked as a streak, so long quiet holds stay legible to the user without scrolling. Omit `noop` when stopping (`stop: true`).';
-//@ chunk-b56wj4av.js:7267-7333 placement
+//@ chunk-7kayq7nc.js:177072-177144 placement
 function scheduleWakeupPrompt(loopState) {
   return `${SCHEDULE_WAKEUP_PROMPT_BASE}
 
@@ -92,15 +92,15 @@ ${loopState === true ? LOOP_ON_INSTRUCTION : loopState === false ? LOOP_OFF_INST
 ${WAKEUP_PRE_ARM_PARAGRAPH}
 `;
 }
-//@ chunk-b56wj4av.js:7333-7546 placement
+//@ chunk-7kayq7nc.js:177144-177357 placement
 var SCHEDULE_WAKEUP_DESCRIPTION =
   "Schedule when to resume work in /loop dynamic mode (always pass the `prompt` arg unless stopping). Call before ending the turn to keep the loop alive; call with `stop: true` to end the loop immediately.";
 export {
   SCHEDULE_WAKEUP_TOOL_NAME,
-  loopOutcomeInstruction,
-  wakeupPreArmParagraph,
   AUTONOMOUS_LOOP_DYNAMIC_PROMPT,
   AUTONOMOUS_LOOP_PROMPT,
   SCHEDULE_WAKEUP_DESCRIPTION,
   scheduleWakeupPrompt,
+  loopOutcomeInstruction,
+  wakeupPreArmParagraph,
 };

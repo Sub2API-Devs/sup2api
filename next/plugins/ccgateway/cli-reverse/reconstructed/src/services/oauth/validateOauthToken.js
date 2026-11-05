@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：调用 /api/oauth/validate 校验令牌并取资料（分类网络错误、超时）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (6)
- * attribution: placement 6
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (7)
+ * attribution: placement 7
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { create_2 } from "../../../vendor/zod/lib/index.mjs";
@@ -21,21 +21,21 @@ import { claudeCodeUserAgent } from "../../utils/http.js";
 import { FAST_MODE_CHECK_HTTP_OPTIONS } from "../api/verificationRequired.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:293799-293883 placement
+//@ chunk-exfmq47h.js:303420-303504 placement
 /**
  * 套餐显示名的 schema（字母数字开头，允许空格与 .+-）。
  */
 var planDisplayNameSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:293799", () => {
+deferInit("chunk-exfmq47h.js:303420", () => {
   planDisplayNameSchema = DoctorLazy(() =>
     create_2().regex(/^[\p{L}\p{N}](?:[\p{L}\p{N} .+-]{0,38}[\p{L}\p{N}+])?$/u),
   );
 });
-//@ chunk-aepeg2w5.js:293883-293932 placement
+//@ chunk-exfmq47h.js:303504-303553 placement
 function isPlanDisplayName(planDisplayName) {
   return planDisplayNameSchema().safeParse(planDisplayName).success;
 }
-//@ chunk-aepeg2w5.js:293932-294143 placement
+//@ chunk-exfmq47h.js:303553-303764 placement
 function planDisplayNameFromProfile(profile) {
   let planDisplayName = profile?.organization?.plan_display_name;
   if (planDisplayName === undefined || planDisplayName === null) return null;
@@ -46,7 +46,7 @@ function planDisplayNameFromProfile(profile) {
   }
   return parsed.data;
 }
-//@ chunk-aepeg2w5.js:294143-294454 placement
+//@ chunk-exfmq47h.js:303764-304075 placement
 async function validateOauthToken(accessToken, retryDelaysMs = []) {
   let outcome = await validateOauthTokenWithOutcome(accessToken);
   for (let delayMs of retryDelaysMs) {
@@ -66,7 +66,40 @@ async function validateOauthToken(accessToken, retryDelaysMs = []) {
   else logError(outcome.error);
   return;
 }
-//@ chunk-aepeg2w5.js:294454-294752 placement
+//@ chunk-exfmq47h.js:304075-304558 placement
+/**
+ * 用 OAuth 令牌查询所属组织 UUID 并记遥测；utils/auth 在登录后调用。
+ */
+async function getOauthTokenOrgUuid(token) {
+  let url = `${getOauthConfig().BASE_API_URL}/api/oauth/org`;
+  try {
+    let response = (
+      await axios_default.post(url, null, {
+        headers: {
+          "User-Agent": claudeCodeUserAgent(),
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 1e4,
+        ...FAST_MODE_CHECK_HTTP_OPTIONS,
+      })
+    ).data?.organization_uuid;
+    if (typeof response === "string" && response) {
+      logFeatureOk("oauth_token_org");
+      return response;
+    }
+    logFeatureSad("oauth_token_org", "oauth_org_no_organization");
+  } catch (error) {
+    logFeatureSad("oauth_token_org", "oauth_org_failed");
+    if (isExpectedApiError(error))
+      logForDebugging(`Failed to look up the token's organization: ${error}`, {
+        level: "error",
+      });
+    else logError(error);
+  }
+  return;
+}
+//@ chunk-exfmq47h.js:304558-304856 placement
 function isTransientValidateFailure(outcome) {
   switch (outcome.reason) {
     case "timeout":
@@ -89,7 +122,7 @@ function isTransientValidateFailure(outcome) {
       return false;
   }
 }
-//@ chunk-aepeg2w5.js:294752-295624 placement
+//@ chunk-exfmq47h.js:304856-305728 placement
 async function validateOauthTokenWithOutcome(accessToken) {
   let validateUrl = `${getOauthConfig().BASE_API_URL}/api/oauth/validate`;
   try {
@@ -168,6 +201,7 @@ async function validateOauthTokenWithOutcome(accessToken) {
 }
 export {
   isPlanDisplayName,
+  getOauthTokenOrgUuid,
   validateOauthToken,
   planDisplayNameFromProfile,
   isTransientValidateFailure,

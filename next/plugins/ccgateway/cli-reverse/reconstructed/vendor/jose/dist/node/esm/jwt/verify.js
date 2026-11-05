@@ -1,17 +1,17 @@
 /**
  * jose/dist/node/esm/jwt/verify.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-5h78gfwc.js (1)
+ * pieces: chunk-0f6azspv.js (1)
  * attribution: esm-fingerprint 1
  */
-import { compactVerify_2 } from "../jws/compact/verify.js";
+import { compactVerify } from "../jws/compact/verify.js";
 import { JWTInvalid } from "../util/errors.js";
 import { validateClaimsSet } from "../../../webapi/lib/jwt_claims_set.js";
 
-//@ chunk-5h78gfwc.js:44123-44434 esm-fingerprint
+//@ chunk-0f6azspv.js:44123-44434 esm-fingerprint
 async function jwtVerify(jwt, key, options) {
-  let verified = await compactVerify_2(jwt, key, options);
+  let verified = await compactVerify(jwt, key, options);
   if (verified.protectedHeader.crit?.includes("b64") && verified.protectedHeader.b64 === false)
     throw new JWTInvalid("JWTs MUST NOT use unencoded payload");
   let result = {

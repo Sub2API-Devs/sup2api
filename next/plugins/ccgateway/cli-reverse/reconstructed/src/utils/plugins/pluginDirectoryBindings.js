@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件目录绑定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9qwbw2qr.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-d2msvdm6.js (17)
  * attribution: placement 17
  */
 import { join } from "path";
@@ -28,7 +28,7 @@ import { commandSourceSession } from "./commandSourceErrors.js";
 import { writeFileAtomic } from "../atomicPublishWrite.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-9qwbw2qr.js:8587-9509 placement
+//@ chunk-d2msvdm6.js:8587-9509 placement
 /**
  * 读取插件目录下的 JSON 文件：符号链接、非普通文件、超过上限都视为 unusable 并记 warn；不存在 absent； 读出返回 {state:"read", json}。无盘模式视为 absent。
  */
@@ -95,7 +95,7 @@ async function readPluginsDirJsonFile(fileName, maxBytes, label) {
     };
   }
 }
-//@ chunk-9qwbw2qr.js:9509-9686 placement
+//@ chunk-d2msvdm6.js:9509-9686 placement
 /**
  * 插件目录绑定文件的常量组：F 是文件名 plugin-directory-bindings.json；A 是 schema 版本 1；M 是读写体积上限 1 MiB；Y_n 是 repositoryKey 的字符上限 4096；ae 是绑定文件 schema。
  */
@@ -104,7 +104,7 @@ var PLUGIN_DIRECTORY_BINDINGS_VERSION;
 var MAX_BINDINGS_FILE_BYTES;
 var MAX_REPOSITORY_KEY_CHARS;
 var pluginDirectoryBindingsSchema;
-deferInit("chunk-9qwbw2qr.js:9509", () => {
+deferInit("chunk-d2msvdm6.js:9509", () => {
   PLUGIN_DIRECTORY_BINDINGS_JSON = "plugin-directory-bindings.json";
   PLUGIN_DIRECTORY_BINDINGS_VERSION = 1;
   MAX_BINDINGS_FILE_BYTES = 1048576;
@@ -123,7 +123,7 @@ deferInit("chunk-9qwbw2qr.js:9509", () => {
     }),
   );
 });
-//@ chunk-9qwbw2qr.js:9686-9751 placement
+//@ chunk-d2msvdm6.js:9686-9751 placement
 /**
  * isOfficialPluginDirectoryId：插件 id 属于官方市场。
  */
@@ -131,7 +131,7 @@ function isOfficialPluginDirectoryId(pluginId) {
   let parts = pluginId.split("@");
   return parts.length === 2 && parts[1] === OFFICIAL_MARKETPLACE_NAME;
 }
-//@ chunk-9qwbw2qr.js:9751-9885 placement
+//@ chunk-d2msvdm6.js:9751-9885 placement
 /**
  * 绑定表中与插件同目录名的键（精确匹配在前）。
  */
@@ -142,19 +142,19 @@ function findBindingKeysFor(keys, pluginId) {
   );
   return [...filtered.filter((key) => key === pluginId), ...filtered.filter((key) => key !== pluginId)];
 }
-//@ chunk-9qwbw2qr.js:9885-9903 placement
+//@ chunk-d2msvdm6.js:9885-9903 placement
 var weakSet; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-9qwbw2qr.js:9885", () => {
+deferInit("chunk-d2msvdm6.js:9885", () => {
   weakSet = new WeakSet();
 });
-//@ chunk-9qwbw2qr.js:9903-9935 placement
+//@ chunk-d2msvdm6.js:9903-9935 placement
 /**
  * isUnreadableBindings：该绑定表读失败过。
  */
 function isUnreadableBindings(set) {
   return weakSet.has(set);
 }
-//@ chunk-9qwbw2qr.js:9935-10024 placement
+//@ chunk-d2msvdm6.js:9935-10024 placement
 /**
  * bindingsWithReadFailure：读绑定表并记下读失败。
  */
@@ -163,7 +163,7 @@ async function bindingsWithReadFailure() {
   if (directoryBindings.readFailed) weakSet.add(directoryBindings.bindings);
   return directoryBindings.bindings;
 }
-//@ chunk-9qwbw2qr.js:10024-10232 placement
+//@ chunk-d2msvdm6.js:10024-10232 placement
 /**
  * 设置或删除插件的仓库绑定。
  */
@@ -177,7 +177,7 @@ async function setDirectoryBinding(pluginId, binding, options) {
       bindings.set(pluginId, binding);
   });
 }
-//@ chunk-9qwbw2qr.js:10232-10416 placement
+//@ chunk-d2msvdm6.js:10232-10416 placement
 /**
  * 释放插件目录绑定；只查询时返回 held/none/unreadable。
  */
@@ -191,14 +191,14 @@ async function releaseDirectoryBinding(pluginId, deleteBinding) {
   await setDirectoryBinding(pluginId, undefined);
   return "none";
 }
-//@ chunk-9qwbw2qr.js:10416-10464 placement
+//@ chunk-d2msvdm6.js:10416-10464 placement
 /**
  * seedBindingsFromInstall：从安装记录补齐绑定。
  */
 async function seedBindingsFromInstall(pluginId, installations) {
   return seedDirectoryBindings([[pluginId, installations ?? []]]);
 }
-//@ chunk-9qwbw2qr.js:10464-10793 placement
+//@ chunk-d2msvdm6.js:10464-10793 placement
 /**
  * 从安装记录补齐插件目录插件的仓库绑定。
  */
@@ -223,14 +223,14 @@ async function seedDirectoryBindings(entries) {
   }
   return new Map();
 }
-//@ chunk-9qwbw2qr.js:10793-10850 placement
+//@ chunk-d2msvdm6.js:10793-10850 placement
 /**
  * hasDirectoryRepositoryKey：是否带目录仓库键。
  */
 function hasDirectoryRepositoryKey(record) {
   return Boolean(record.directoryRepositoryKey);
 }
-//@ chunk-9qwbw2qr.js:10850-11283 placement
+//@ chunk-d2msvdm6.js:10850-11283 placement
 /**
  * 持久化插件目录绑定，返回 held/no-key/cannot-hold/not-persisted/not-directory。
  */
@@ -263,7 +263,7 @@ async function persistDirectoryBinding(pluginId, installations) {
   }
   return "not-directory";
 }
-//@ chunk-9qwbw2qr.js:11283-11409 placement
+//@ chunk-d2msvdm6.js:11283-11409 placement
 /**
  * 迁移时确保插件目录插件的绑定可持久化。
  */
@@ -274,11 +274,11 @@ async function ensureDirectoryBindingForMigration(pluginId, installations, remai
   await seedBindingsFromInstall(pluginId, installations);
   return true;
 }
-//@ chunk-9qwbw2qr.js:11409-11447 placement
+//@ chunk-d2msvdm6.js:11409-11447 placement
 function isDirectoryBindingsEnabled() {
   return isPluginDirectoryModeOn() && pluginDirectoryPolicyBlock() === null;
 }
-//@ chunk-9qwbw2qr.js:11447-11803 placement
+//@ chunk-d2msvdm6.js:11447-11803 placement
 /**
  * 读绑定文件，返回绑定表与是否读失败。
  */
@@ -310,7 +310,7 @@ async function readDirectoryBindings() {
     readFailed: false,
   };
 }
-//@ chunk-9qwbw2qr.js:11803-12797 placement
+//@ chunk-d2msvdm6.js:11803-12797 placement
 /**
  * 排在上一次写之后执行：读绑定表交给回调修改，去掉过长或空值项；有变化时写回（读失败、无盘或超过 1 MB 时不写并记日志）。返回修改后的表。
  */
@@ -373,17 +373,17 @@ async function updateDirectoryBindings(mutate) {
   return bindings;
 }
 export {
-  seedDirectoryBindings,
-  isOfficialPluginDirectoryId,
+  readPluginsDirJsonFile,
   bindingsWithReadFailure,
   isUnreadableBindings,
+  isOfficialPluginDirectoryId,
   findBindingKeysFor,
-  persistDirectoryBinding,
-  hasDirectoryRepositoryKey,
+  seedDirectoryBindings,
   releaseDirectoryBinding,
-  seedBindingsFromInstall,
-  MAX_REPOSITORY_KEY_CHARS,
-  readPluginsDirJsonFile,
   setDirectoryBinding,
   ensureDirectoryBindingForMigration,
+  hasDirectoryRepositoryKey,
+  persistDirectoryBinding,
+  seedBindingsFromInstall,
+  MAX_REPOSITORY_KEY_CHARS,
 };

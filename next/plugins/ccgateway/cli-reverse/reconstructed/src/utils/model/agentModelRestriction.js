@@ -3,24 +3,24 @@
  *
  * 2.1.316 新增：子代理模型受限时发通知。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-n0w240z3.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0dymc8c4.js (5)
  * attribution: placement 5
  */
 import { displayModelName, formatModelRestrictedNotice } from "./validateModel.js";
 import { createInformationalSystemMessage } from "../messages.js";
 
-//@ chunk-n0w240z3.js:266-330 placement
+//@ chunk-0dymc8c4.js:266-330 placement
 function agentDisplayName(agent) {
   let name = displayModelName(agent);
   return name === displayModelName("") ? "(unnamed agent)" : name;
 }
-//@ chunk-n0w240z3.js:330-382 placement
+//@ chunk-0dymc8c4.js:330-382 placement
 function agentRestrictedNoticeText(agent, requestedModel, resolvedModel) {
   return `${agentDisplayName(agent)} agent: ${formatModelRestrictedNotice(requestedModel, resolvedModel)}`;
 }
-//@ chunk-n0w240z3.js:382-551 placement
+//@ chunk-0dymc8c4.js:382-551 placement
 function buildAgentModelRestrictedNotice(agent, requestedModel, resolvedModel) {
   return {
     type: "notification",
@@ -33,7 +33,7 @@ function buildAgentModelRestrictedNotice(agent, requestedModel, resolvedModel) {
     },
   };
 }
-//@ chunk-n0w240z3.js:551-598 placement
+//@ chunk-0dymc8c4.js:551-598 placement
 /**
  * 生成"agent 模型受限"通知的上报回调。
  */
@@ -42,7 +42,7 @@ function agentModelRestrictedReporter(agent, notify) {
     notify?.(buildAgentModelRestrictedNotice(agent, requestedModel, reason));
   };
 }
-//@ chunk-n0w240z3.js:598-659 placement
+//@ chunk-0dymc8c4.js:598-659 placement
 /**
  * 子代理模型受限时发通知。
  */
@@ -53,4 +53,4 @@ function agentModelRestrictionNotifier(agent, appendSystemMessage) {
     );
   };
 }
-export { agentModelRestrictionNotifier, agentModelRestrictedReporter };
+export { agentModelRestrictedReporter, agentModelRestrictionNotifier };

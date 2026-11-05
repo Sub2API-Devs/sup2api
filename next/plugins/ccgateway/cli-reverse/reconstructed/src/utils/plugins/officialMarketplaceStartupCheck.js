@@ -3,9 +3,9 @@
  *
  * 启动时自动安装官方市场（GCS 优先、git 回退、指数退避重试、策略与开关检查）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/officialMarketplaceStartupCheck.ts
- * pieces: chunk-18hwfzwa.js (5)
+ * pieces: chunk-czq1j3j2.js (5)
  * attribution: fingerprint 5
  */
 import { join } from "path";
@@ -27,23 +27,23 @@ import { logFeatureOk, logFeatureBad, logFeatureSad } from "../../services/analy
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { isGitUsable, markGitUnavailable } from "./pluginManifestRead.js";
 
-//@ chunk-18hwfzwa.js:1765741-1765818 fingerprint (2.1.88 match: isOfficialMarketplaceAutoInstallDisabled, 1)
+//@ chunk-czq1j3j2.js:1813003-1813080 fingerprint (2.1.88 match: isOfficialMarketplaceAutoInstallDisabled, 1)
 function isOfficialMarketplaceAutoInstallDisabled() {
   return env.CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL;
 }
-//@ chunk-18hwfzwa.js:1765818-1765913 fingerprint (2.1.88 match: RETRY_CONFIG, 1)
+//@ chunk-czq1j3j2.js:1813080-1813175 fingerprint (2.1.88 match: RETRY_CONFIG, 1)
 var RETRY_CONFIG = {
   MAX_ATTEMPTS: 10,
   INITIAL_DELAY_MS: 3600000,
   BACKOFF_MULTIPLIER: 2,
   MAX_DELAY_MS: 604800000,
 };
-//@ chunk-18hwfzwa.js:1765913-1766027 fingerprint (2.1.88 match: calculateNextRetryDelay, 1)
+//@ chunk-czq1j3j2.js:1813175-1813289 fingerprint (2.1.88 match: calculateNextRetryDelay, 1)
 function calculateNextRetryDelay(retryCount) {
   let delay = RETRY_CONFIG.INITIAL_DELAY_MS * Math.pow(RETRY_CONFIG.BACKOFF_MULTIPLIER, retryCount);
   return Math.min(delay, RETRY_CONFIG.MAX_DELAY_MS);
 }
-//@ chunk-18hwfzwa.js:1766027-1766468 fingerprint (2.1.88 match: shouldRetryInstallation, 1)
+//@ chunk-czq1j3j2.js:1813289-1813730 fingerprint (2.1.88 match: shouldRetryInstallation, 1)
 function shouldRetryInstallation(config) {
   if (!config.officialMarketplaceAutoInstallAttempted) return true;
   if (config.officialMarketplaceAutoInstalled) return false;
@@ -61,7 +61,7 @@ function shouldRetryInstallation(config) {
     failReason === undefined
   );
 }
-//@ chunk-18hwfzwa.js:1766468-1771932 fingerprint (2.1.88 match: checkAndInstallOfficialMarketplace, 0.921)
+//@ chunk-czq1j3j2.js:1813730-1819194 fingerprint (2.1.88 match: checkAndInstallOfficialMarketplace, 0.921)
 /**
  * 启动时自动安装官方市场 claude-plugins-official：检查是否已装/被禁用（CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL）/策略阻止，优先 GCS 镜像，失败回退 git，失败按指数退避重试，结果记全局配置与 tengu_official_marketplace_auto_install。
  */

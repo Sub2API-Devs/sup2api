@@ -1,8 +1,8 @@
 /**
  * node-forge/lib/des.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: node-forge@1.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_cipher } from "./cipher.js";
 import { require_cipherModes } from "./cipherModes.js";
 import { require_util } from "./util.js";
 
-//@ chunk-fq0cr76a.js:70895-79887 cjs-fingerprint
+//@ chunk-qg41pqt6.js:70784-79783 cjs-fingerprint
 var require_des = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_cipher();
@@ -302,10 +302,10 @@ var require_des = __commonJS(function (cjsExports, cjsModule) {
     left ^= tmp << 1;
     left = (left << 1) | (left >>> 31);
     right = (right << 1) | (right >>> 31);
-    for (var j = 0; j < iterations; j += 3) {
-      var endloop = looping[j + 1];
-      var loopinc = looping[j + 2];
-      for (var i = looping[j]; i != endloop; i += loopinc) {
+    for (var j_2 = 0; j_2 < iterations; j_2 += 3) {
+      var endloop = looping[j_2 + 1];
+      var loopinc = looping[j_2 + 2];
+      for (var i = looping[j_2]; i != endloop; i += loopinc) {
         var right1 = right ^ keys[i];
         var right2 = ((right >>> 4) | (right << 28)) ^ keys[i + 1];
         tmp = left;

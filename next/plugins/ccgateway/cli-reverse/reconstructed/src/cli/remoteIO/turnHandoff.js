@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增。turn_handoff：worker 之间交接一个回合（消息、在途写入、rewind）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-z4g2ta8k.js (44)
- * attribution: placement 44
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1kk50rk6.js (45)
+ * attribution: placement 44, layout 1
  */
 import { posix } from "path";
 import { randomUUID } from "crypto";
@@ -28,7 +28,7 @@ import { withDeadline } from "../../utils/sleep.js";
 import { DoctorLazy } from "../handlers/util.js";
 import { zodStrictObject, stringSchema, record, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../../tools/NotebookEditTool/constants.js";
 import { findToolByName } from "../../Tool.js";
 import { homePathProblem, MAX_HOME_FILE_NAME_LENGTH } from "../../utils/filePersistence/homeFilePublish.js";
@@ -38,7 +38,7 @@ import { expandPathOrNull } from "../../utils/path.js";
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
 import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
 import { AGENT } from "../../tools/AgentTool/constants.js";
@@ -60,30 +60,32 @@ import {
   hasTeammateMessageEnvelope,
 } from "../../bridge/inboundMessageOrigin.js";
 import { SDKTurnHandoffTurnHandoffMessageSchema } from "../../entrypoints/sdk/controlSchemas.js";
-import { toInternalMessages } from "../../utils/messages/mappers.js";
+import { sdkMessagesToInternal } from "../../utils/messages/mappers.js";
 import { countImageParts } from "../../utils/attachments/bridgeAttachments.js";
 import { sanitizeTelemetryString } from "../../utils/sanitization.js";
 import { isClaudeCodeRemoteServer } from "../../services/mcp/agentRequestMeta.js";
 import { isPendingMcpToolName } from "../../services/tools/toolExecution.js";
 import { mcpInfoFromString, buildMcpToolName } from "../../services/mcp/mcpStringUtils.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { isToolResultMessage, isNotEmptyMessage } from "../../utils/messages.js";
 import { logForDebugging, createAttachmentMessage_2 as createAttachmentMessage } from "../../utils/debug.js";
 import { toToolUseIdSet } from "../../utils/permissions/permissions.js";
 import { isToolResultOnlyUserMessage } from "../../services/api/claude.js";
 import { normalizeAttestationStatus, meetsAttestationLevel } from "../../bridge/deviceAttestation.js";
+import { CLOUD_ALLOWED_SETTINGS_KEYS } from "../cloudSession/hostedSessionRestrictions.js";
 import { isUiSurfaceName } from "../sdkMcpManifests.js";
+import { asPlainObject } from "./servedCalls.js";
 import { CLOUD_PLUGINS_FORWARDED_KEY } from "../../utils/plugins/cloudPluginForwarding.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-z4g2ta8k.js:11186-11240 placement
+//@ chunk-1kk50rk6.js:11989-12043 placement
 /**
  * 是否允许回合交接恢复：非无盘且特性 tengu_steady_puppy 开启。
  */
 function isTurnHandoffResumeEnabled() {
   return !isDiskless() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_steady_puppy", false);
 }
-//@ chunk-z4g2ta8k.js:11361-11426 placement
+//@ chunk-1kk50rk6.js:12399-12464 placement
 function withEnvelopeFlag(featureValue_CACHED_MAY_BE_STALE, hosted) {
   if (!hosted) return featureValue_CACHED_MAY_BE_STALE;
   return {
@@ -91,9 +93,9 @@ function withEnvelopeFlag(featureValue_CACHED_MAY_BE_STALE, hosted) {
     envelope: true,
   };
 }
-//@ chunk-z4g2ta8k.js:11456-11510 placement
+//@ chunk-1kk50rk6.js:12494-12548 placement
 var GROWTHBOOK_REFRESH_INFLIGHT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-z4g2ta8k.js:11456", () => {
+deferInit("chunk-1kk50rk6.js:12494", () => {
   GROWTHBOOK_REFRESH_INFLIGHT = identity(
     {
       inFlight: undefined,
@@ -103,7 +105,7 @@ deferInit("chunk-z4g2ta8k.js:11456", () => {
     },
   );
 });
-//@ chunk-z4g2ta8k.js:11510-11658 placement
+//@ chunk-1kk50rk6.js:12548-12696 placement
 /**
  * 确保 GrowthBook 特性是新鲜的：初始化后若不新鲜则发起（合并并发的）刷新并等待。
  */
@@ -117,10 +119,10 @@ async function ensureFreshGrowthBook() {
     });
   await GROWTHBOOK_REFRESH_INFLIGHT.inFlight;
 }
-//@ chunk-z4g2ta8k.js:11658-11693 placement
+//@ chunk-1kk50rk6.js:12696-12731 placement
 var CARRIED_WRITES_FLAG_WAIT_MS = 3000;
 var TENGU_FIZZY_PETAL = "tengu_fizzy_petal";
-//@ chunk-z4g2ta8k.js:11693-11772 placement
+//@ chunk-1kk50rk6.js:12731-12810 placement
 function carriedWritesFlagState() {
   let { source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_FIZZY_PETAL, false);
   return {
@@ -130,14 +132,14 @@ function carriedWritesFlagState() {
     served: isServedFeatureSource(source),
   };
 }
-//@ chunk-z4g2ta8k.js:11772-11802 placement
+//@ chunk-1kk50rk6.js:12810-12840 placement
 /**
  * 是否开启携带写（carried writes）：读 tengu_fizzy_petal 并应用开关覆盖。
  */
 function isCarriedWritesEnabled() {
   return carriedWritesFlagState().on;
 }
-//@ chunk-z4g2ta8k.js:11802-11953 placement
+//@ chunk-1kk50rk6.js:12840-12991 placement
 function logHandoffFlagAdvert() {
   logEvent("tengu_turn_handoff_flag_wait", {
     capability: lit("carried_writes"),
@@ -146,7 +148,7 @@ function logHandoffFlagAdvert() {
     ended: lit(carriedWritesFlagState().served ? "served" : "not_served"),
   });
 }
-//@ chunk-z4g2ta8k.js:11953-12221 placement
+//@ chunk-1kk50rk6.js:12991-13259 placement
 /**
  * 回合开始时在时限内等待 carried_writes 特性开关就绪，记录等待耗时事件，返回该能力是否开启。
  */
@@ -163,9 +165,9 @@ async function awaitCarriedWritesFlag(waitMs = CARRIED_WRITES_FLAG_WAIT_MS) {
   }
   return isCarriedWritesEnabled();
 }
-//@ chunk-z4g2ta8k.js:12221-12285 placement
+//@ chunk-1kk50rk6.js:13259-13323 placement
 var SAID_CARRIED_WRITES_STATE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-z4g2ta8k.js:12221", () => {
+deferInit("chunk-1kk50rk6.js:13259", () => {
   SAID_CARRIED_WRITES_STATE = identity(
     {
       saidCarriedWrites: false,
@@ -175,18 +177,18 @@ deferInit("chunk-z4g2ta8k.js:12221", () => {
     },
   );
 });
-//@ chunk-z4g2ta8k.js:12285-12323 placement
+//@ chunk-1kk50rk6.js:13323-13361 placement
 function markSaidCarriedWrites() {
   SAID_CARRIED_WRITES_STATE.saidCarriedWrites = true;
 }
-//@ chunk-z4g2ta8k.js:12323-12366 placement
+//@ chunk-1kk50rk6.js:13361-13404 placement
 /**
  * 本轮是否已提示过"携带写"（避免重复提示）。
  */
 function hasSaidCarriedWrites() {
   return SAID_CARRIED_WRITES_STATE.saidCarriedWrites;
 }
-//@ chunk-z4g2ta8k.js:12366-13422 placement
+//@ chunk-1kk50rk6.js:13404-14460 placement
 /**
  * 携带写（carried writes）相关常量与 schema：单文件 8MiB、路径 1024 字节上限、权限拒绝文案表、handoff 与 tool_use 校验 schema、可携带写的工具名集合。
  */
@@ -198,7 +200,7 @@ var CARRIED_WRITE_REFUSAL_TEXT;
 var handoffMessageSchema;
 var toolUseInputSchema;
 var CARRIED_WRITE_TOOL_NAMES;
-deferInit("chunk-z4g2ta8k.js:12366", () => {
+deferInit("chunk-1kk50rk6.js:13404", () => {
   CARRIED_WRITE_REFUSALS = 16;
   MAX_CARRIED_WRITE_BYTES = 8388608;
   MAX_CARRIED_WRITE_PATH_BYTES = 1024;
@@ -228,11 +230,11 @@ deferInit("chunk-z4g2ta8k.js:12366", () => {
   toolUseInputSchema = DoctorLazy(() => record(stringSchema(), unknown()));
   CARRIED_WRITE_TOOL_NAMES = new Map([
     [FILE_WRITE_TOOL_NAME, "file_path"],
-    [FILE_EDIT_TOOL_NAME, "file_path"],
+    [EDIT, "file_path"],
     [NOTEBOOK_EDIT_TOOL_NAME, "notebook_path"],
   ]);
 });
-//@ chunk-z4g2ta8k.js:13422-13500 placement
+//@ chunk-1kk50rk6.js:14460-14538 placement
 /**
  * 在工具表里找非 MCP 的 Write 工具（携带写的落盘目标）。
  */
@@ -240,7 +242,7 @@ function findFileWriteTool(tools, toolAliases) {
   let toolByName = findToolByName(tools, FILE_WRITE_TOOL_NAME, toolAliases);
   return toolByName?.name === FILE_WRITE_TOOL_NAME && toolByName.isMcp !== true ? toolByName : undefined;
 }
-//@ chunk-z4g2ta8k.js:13500-15125 placement
+//@ chunk-1kk50rk6.js:14538-16163 placement
 function collectCarriedWrites(messages, carriedWrites, fileWriteTool) {
   let results = new Map();
   let errors = new Set();
@@ -325,7 +327,7 @@ function collectCarriedWrites(messages, carriedWrites, fileWriteTool) {
   if (totalBytes > MAX_CARRIED_WRITE_BYTES) return "too_large";
   return carriedWrites.cwd === carriedWrites.home ? [...writes.values()] : "not_home";
 }
-//@ chunk-z4g2ta8k.js:15125-15200 placement
+//@ chunk-1kk50rk6.js:16163-16238 placement
 /**
  * 根据权限模式判断携带写被拒的原因：auto 模式为 auto_mode，会询问时为 would_ask。
  */
@@ -333,12 +335,12 @@ function carriedWritePermissionRefusal(mode) {
   if (!isAutoClassifierActive(mode)) return;
   return mode === "auto" ? "auto_mode" : "would_ask";
 }
-//@ chunk-z4g2ta8k.js:15200-15302 placement
+//@ chunk-1kk50rk6.js:16238-16340 placement
 function homeRelativePath(path, { cwd, home }) {
   let expanded = expandPathOrNull(path, cwd);
   return expanded?.startsWith(home + posix.sep) ? expanded.slice(home.length + 1) : undefined;
 }
-//@ chunk-z4g2ta8k.js:15302-15499 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-1kk50rk6.js:16340-16537 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function getSoleTextContent(data) {
   if (typeof data === "string") return data;
   let block = data?.length === 1 ? data[0] : undefined;
@@ -351,7 +353,7 @@ function getSoleTextContent(data) {
     ? block.text
     : undefined;
 }
-//@ chunk-z4g2ta8k.js:15499-15540 placement
+//@ chunk-1kk50rk6.js:16537-16578 placement
 function callSafely(onBegan) {
   try {
     onBegan();
@@ -359,7 +361,7 @@ function callSafely(onBegan) {
     logError(toError(error));
   }
 }
-//@ chunk-z4g2ta8k.js:15540-16947 placement
+//@ chunk-1kk50rk6.js:16578-17985 placement
 function waitForTurnPromptUploads({ listTurnPromptsWaitedOn, write, now = () => performance.now() }) {
   let ahead = null;
   let state = {
@@ -478,14 +480,14 @@ function waitForTurnPromptUploads({ listTurnPromptsWaitedOn, write, now = () => 
     },
   };
 }
-//@ chunk-z4g2ta8k.js:16984-17071 placement
-var CARRIED_TOOL_NAMES; // deferred: uses GREP_TOOL_NAME (../../tools/GrepTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-z4g2ta8k.js:16984", () => {
+//@ chunk-1kk50rk6.js:18022-18109 placement
+var CARRIED_TOOL_NAMES; // deferred: uses GLOB_TOOL_NAME (../../tools/GlobTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-1kk50rk6.js:18022", () => {
   CARRIED_TOOL_NAMES = [
     BASH_TOOL_NAME,
     FILE_WRITE_TOOL_NAME,
-    FILE_EDIT_TOOL_NAME,
-    FILE_READ_TOOL_NAME,
+    EDIT,
+    READ,
     GLOB_TOOL_NAME,
     GREP_TOOL_NAME,
     AGENT,
@@ -501,7 +503,7 @@ deferInit("chunk-z4g2ta8k.js:16984", () => {
     ...[...TRIGGER_TOOL_NAMES, ...REPO_TOOL_NAMES].map(remoteMcpToolName),
   ];
 });
-//@ chunk-z4g2ta8k.js:17071-17307 placement
+//@ chunk-1kk50rk6.js:18109-18345 placement
 /**
  * 判断回合交接是否可用：仅限托管云 worker（有 SDK 地址与远程会话 id、非自定义环境）且未被禁用。
  */
@@ -522,7 +524,7 @@ function turnHandoffAdmission(options) {
     hydratesCarriedLines: false,
   };
 }
-//@ chunk-z4g2ta8k.js:17307-17410 placement
+//@ chunk-1kk50rk6.js:18345-18448 placement
 /**
  * 判断是否携带在途写入：交接已准入、配置了中继、持久化转录且不是共享后端。
  */
@@ -534,7 +536,7 @@ function shouldCarryWrites(options) {
     !options.sharedBackend
   );
 }
-//@ chunk-z4g2ta8k.js:17410-17785 placement
+//@ chunk-1kk50rk6.js:18448-18823 placement
 /**
  * 生成 worker 注册时声明的 turn_handoff 能力（工具、epoch、暂存文件、relay 标记、home 文件与携带写入等）；未准入且原因是 disabled 时显式发 null。
  */
@@ -570,7 +572,7 @@ function turnHandoffRegistration(admission, workerEpoch, relayMarker, carriesFil
       }
     : undefined;
 }
-//@ chunk-z4g2ta8k.js:17785-18332 placement
+//@ chunk-1kk50rk6.js:18823-19370 placement
 /**
  * 把外部元数据里的 turn_handoff 能力转成 system/turn_handoff_available 消息（带 uuid 与 session_id），只复制已声明为真的可选能力。
  */
@@ -608,10 +610,10 @@ function turnHandoffAvailableMessage(metadata, sessionId) {
     }),
   };
 }
-//@ chunk-z4g2ta8k.js:18332-18463 placement
+//@ chunk-1kk50rk6.js:19370-19501 placement
 var RECOVERED_BY_RESTART_NOTE =
   "recovered_by_restart: this worker restarted after the turn was appended and its recovery set the turn's unrun calls aside";
-//@ chunk-z4g2ta8k.js:18463-18528 placement
+//@ chunk-1kk50rk6.js:19501-19566 placement
 /**
  * 构造回合交接应答 {requestId, tipUuid}。
  */
@@ -621,7 +623,7 @@ function buildTurnHandoffReply(requestId, messages) {
     tipUuid: lastConversationMessage(messages)?.uuid ?? null,
   };
 }
-//@ chunk-z4g2ta8k.js:18528-18571 placement
+//@ chunk-1kk50rk6.js:19566-19609 placement
 /**
  * 回合交接/rewind 的限制常量：rewind 请求最大年龄 30 分钟、内容 4096 字节、消息 200 条、工具调用与结果各 16 个。
  */
@@ -630,7 +632,7 @@ var MAX_CONTENT_BYTES = 4096;
 var MAX_HANDOFF_MESSAGES = 200;
 var MAX_HANDOFF_TOOL_USE_IDS = 16;
 var MAX_HANDOFF_TOOL_RESULT_IDS = 16;
-//@ chunk-z4g2ta8k.js:18571-18691 placement
+//@ chunk-1kk50rk6.js:19609-19729 placement
 /**
  * 计算 rewind 请求的年龄：以服务端时间（或本机与最新帧时间的较大者）减去存储时间。
  */
@@ -638,7 +640,7 @@ function rewindRequestAge({ storedAt, serviceNow, newestFrameAt, machineNow }) {
   if (storedAt === undefined) return;
   return (serviceNow ?? Math.max(machineNow, newestFrameAt ?? machineNow)) - storedAt;
 }
-//@ chunk-z4g2ta8k.js:18691-18792 placement
+//@ chunk-1kk50rk6.js:19729-19830 placement
 /**
  * 把服务端时钟下的存储时间换算到本机时钟。
  */
@@ -646,7 +648,7 @@ function serviceClockStoredAt({ storedAt, serviceNow, machineNow }) {
   if (storedAt === undefined || serviceNow === undefined) return;
   return machineNow - (serviceNow - storedAt);
 }
-//@ chunk-z4g2ta8k.js:18792-31502 placement
+//@ chunk-1kk50rk6.js:19830-32538 placement
 /**
  * 云 worker 接手回合（turn_handoff）：校验交接载荷（消息、tool_use_ids、记忆上下文、required rewind），把消息追加到本地转录并恢复在途写入，非法时返回 invalid_handoff。
  */
@@ -736,7 +738,7 @@ function applyTurnHandoff(request, context) {
         error: `invalid_handoff: messages.${index} is not a plain conversation line`,
       };
   }
-  let mapped = toInternalMessages(
+  let messages_3 = sdkMessagesToInternal(
     messages_2.map((message) =>
       message.type === "user"
         ? {
@@ -780,20 +782,20 @@ function applyTurnHandoff(request, context) {
         }),
     };
   });
-  let last = mapped.at(-1);
-  let firstMessage = mapped[0];
+  let last = messages_3.at(-1);
+  let firstMessage = messages_3[0];
   let firstPlatform =
     clientPlatform !== undefined &&
     firstMessage?.type === "user" &&
     !hasTeammateMessageEnvelope(firstMessage.message.content)
       ? clientPlatform
       : undefined;
-  if (mapped.length !== messages_2.length || last?.type !== "assistant")
+  if (messages_3.length !== messages_2.length || last?.type !== "assistant")
     return {
       kind: "error",
       error: "invalid_handoff: the last message is not an assistant message",
     };
-  for (let handedMessage of mapped)
+  for (let handedMessage of messages_3)
     if (
       handedMessage.type === "user" &&
       Array.isArray(handedMessage.message.content) &&
@@ -876,7 +878,7 @@ function applyTurnHandoff(request, context) {
         kind: "error",
         error: RECOVERED_BY_RESTART_NOTE,
       };
-    let takenCount = count(toolUseIds, isTaken);
+    let takenCount = countWhere(toolUseIds, isTaken);
     if (takenCount === toolUseIds.length)
       return {
         kind: "duplicate",
@@ -886,7 +888,7 @@ function applyTurnHandoff(request, context) {
         kind: "error",
         error: "invalid_handoff: some of the named calls are already taken or answered",
       };
-    let firstMessage = mapped[0];
+    let firstMessage = messages_3[0];
     if (
       firstMessage?.type !== "user" ||
       isToolResultMessage(firstMessage) ||
@@ -913,13 +915,13 @@ function applyTurnHandoff(request, context) {
         kind: "error",
         error: "invalid_handoff: another handed-off turn is still running",
       };
-    if (mapped.some((message) => conversationUuids.has(message.uuid)))
+    if (messages_3.some((message) => conversationUuids.has(message.uuid)))
       return {
         kind: "error",
         error: "invalid_handoff: the turn carries messages the conversation already holds",
       };
   } else {
-    let lastToolUseAssistantMessage = findLastToolUseAssistantMessage(mapped);
+    let lastToolUseAssistantMessage = findLastToolUseAssistantMessage(messages_3);
     let isOlder = (message) =>
       findLastToolUseAssistantMessage(message.messages)?.uuid === lastToolUseAssistantMessage.uuid;
     if (context.runningHandoff && isOlder(context.runningHandoff))
@@ -940,14 +942,14 @@ function applyTurnHandoff(request, context) {
         messages.findIndex((message) => message.uuid === lastToolUseAssistantMessage.uuid) + 1 ||
         messages.length;
       if (
-        mapped.length < firstNewIndex ||
+        messages_3.length < firstNewIndex ||
         messages
           .slice(0, firstNewIndex)
           .some(
             (message, index) =>
-              mapped[index].uuid !== message.uuid ||
-              mapped[index].type !== message.type ||
-              !arraysEqual(getToolUseAndResultIds(mapped[index]), getToolUseAndResultIds(message)),
+              messages_3[index].uuid !== message.uuid ||
+              messages_3[index].type !== message.type ||
+              !arraysEqual(getToolUseAndResultIds(messages_3[index]), getToolUseAndResultIds(message)),
           )
       )
         return {
@@ -957,8 +959,8 @@ function applyTurnHandoff(request, context) {
       continues = true;
     }
     let byUuid = new Map(context.messages.map((message) => [message.uuid, message]));
-    while (firstNewIndex < mapped.length && byUuid.has(mapped[firstNewIndex].uuid)) {
-      let lookupUuid = mapped[firstNewIndex];
+    while (firstNewIndex < messages_3.length && byUuid.has(messages_3[firstNewIndex].uuid)) {
+      let lookupUuid = messages_3[firstNewIndex];
       let matched = byUuid.get(lookupUuid.uuid);
       if (
         matched.type !== lookupUuid.type ||
@@ -970,7 +972,7 @@ function applyTurnHandoff(request, context) {
         };
       firstNewIndex++;
     }
-    if (mapped.some((message, index) => index > firstNewIndex && conversationUuids.has(message.uuid)))
+    if (messages_3.some((message, index) => index > firstNewIndex && conversationUuids.has(message.uuid)))
       return {
         kind: "error",
         error: "invalid_handoff: the turn carries messages the conversation already holds out of order",
@@ -980,13 +982,13 @@ function applyTurnHandoff(request, context) {
       if (
         message.type === "user" &&
         Array.isArray(message.message.content) &&
-        !mapped.some((message_2, index) => index < firstNewIndex && message_2.uuid === message.uuid)
+        !messages_3.some((message_2, index) => index < firstNewIndex && message_2.uuid === message.uuid)
       ) {
         for (let block of message.message.content)
           if (block.type === "tool_result") answeredIds.add(block.tool_use_id);
       }
     let toolUseAndResultIds = getToolUseAndResultIds(lastToolUseAssistantMessage);
-    let unansweredCount = count(toolUseAndResultIds, (toolUseId) => answeredIds.has(toolUseId));
+    let unansweredCount = countWhere(toolUseAndResultIds, (toolUseId) => answeredIds.has(toolUseId));
     if (toolUseAndResultIds.length > 0 && unansweredCount === toolUseAndResultIds.length)
       return {
         kind: "duplicate",
@@ -997,7 +999,7 @@ function applyTurnHandoff(request, context) {
         error: "invalid_handoff: some of the calls are already answered",
       };
     if (
-      firstNewIndex < mapped.length &&
+      firstNewIndex < messages_3.length &&
       toolUseAndResultIds.length > 0 &&
       toolUseAndResultIds.every((toolUseAndResultId) => context.recoveredToolUseIds.has(toolUseAndResultId))
     )
@@ -1005,7 +1007,7 @@ function applyTurnHandoff(request, context) {
         kind: "error",
         error: RECOVERED_BY_RESTART_NOTE,
       };
-    for (let priorRow of mapped.slice(0, firstNewIndex)) {
+    for (let priorRow of messages_3.slice(0, firstNewIndex)) {
       let matched = byUuid.get(priorRow.uuid);
       if ((matched.type !== "assistant" && matched.type !== "user") || matched.handedOff !== true)
         return {
@@ -1015,8 +1017,8 @@ function applyTurnHandoff(request, context) {
     }
     if (
       firstNewIndex > 0 &&
-      !(kind === "history" && firstNewIndex === mapped.length) &&
-      lastConversationMessage(context.messages)?.uuid !== mapped[firstNewIndex - 1].uuid
+      !(kind === "history" && firstNewIndex === messages_3.length) &&
+      lastConversationMessage(context.messages)?.uuid !== messages_3[firstNewIndex - 1].uuid
     )
       return {
         kind: "error",
@@ -1063,7 +1065,7 @@ function applyTurnHandoff(request, context) {
       kind: "error",
       error: `invalid_handoff: a stopped turn ends with more than ${MAX_HANDOFF_TOOL_USE_IDS} calls`,
     };
-  let sliced = mapped.slice(firstNewIndex);
+  let sliced = messages_3.slice(firstNewIndex);
   let refusal = context.refusalOfAppended?.(sliced);
   if (refusal !== undefined)
     return {
@@ -1127,7 +1129,7 @@ function applyTurnHandoff(request, context) {
   }
   let callIds = new Set();
   let unansweredCalls = new Set();
-  for (let [index, handedMessage] of mapped.entries()) {
+  for (let [index, handedMessage] of messages_3.entries()) {
     if (
       (handedMessage.type !== "user" && handedMessage.type !== "assistant") ||
       !Array.isArray(handedMessage.message.content)
@@ -1186,7 +1188,7 @@ function applyTurnHandoff(request, context) {
   let memoryLine;
   if (
     (kind === "run" ||
-      (kind === "history" && !mapped.some((message) => conversationUuids.has(message.uuid)))) &&
+      (kind === "history" && !messages_3.some((message) => conversationUuids.has(message.uuid)))) &&
     memoryContext !== undefined &&
     memoryContext !== null
   ) {
@@ -1209,7 +1211,7 @@ function applyTurnHandoff(request, context) {
       );
     else if (
       conversationUuids.has(parsed.data.uuid) ||
-      mapped.some((message) => message.uuid === parsed.data.uuid) ||
+      messages_3.some((message) => message.uuid === parsed.data.uuid) ||
       parsed.data.uuid === relayMarker?.uuid
     )
       logForDebugging(
@@ -1250,7 +1252,7 @@ function applyTurnHandoff(request, context) {
   let carriedWrites;
   if (kind === "run" && context.carriedWrites) {
     let carriedWrites_2 = collectCarriedWrites(
-      mapped,
+      messages_3,
       context.carriedWrites,
       findFileWriteTool(context.tools, context.toolAliases),
     );
@@ -1277,15 +1279,15 @@ function applyTurnHandoff(request, context) {
     kind,
     messages:
       kind === "run"
-        ? mapped.map((handedMessage, index) =>
-            handedMessage.type === "assistant" && index === mapped.length - 1
+        ? messages_3.map((handedMessage, index) =>
+            handedMessage.type === "assistant" && index === messages_3.length - 1
               ? {
                   ...handedMessage,
                   handedOffLive: toToolUseIdSet(toolUseIds),
                 }
               : handedMessage,
           )
-        : mapped,
+        : messages_3,
     toolUseIDs: toolUseIds,
     ...(relayMark !== undefined && {
       relayMarker: relayMark,
@@ -1318,7 +1320,7 @@ function applyTurnHandoff(request, context) {
     }),
   };
 }
-//@ chunk-z4g2ta8k.js:31502-31631 placement
+//@ chunk-1kk50rk6.js:32538-32667 placement
 function requiredRewindError(code, text) {
   return {
     kind: "error",
@@ -1326,55 +1328,60 @@ function requiredRewindError(code, text) {
     requiredRewind: code,
   };
 }
-//@ chunk-z4g2ta8k.js:31631-31662 placement
+//@ chunk-1kk50rk6.js:32667-32698 placement
 function remoteMcpToolName(name) {
   return buildMcpToolName(CLAUDE_CODE_REMOTE, name);
 }
-//@ chunk-z4g2ta8k.js:31662-31861 placement (2.1.88 match: countToolCallsSince, 1)
+//@ chunk-1kk50rk6.js:32698-32897 placement
 function getToolUseAndResultIds(row) {
   return (row.type === "user" || row.type === "assistant") && Array.isArray(row.message.content)
-    ? row.message.content.flatMap((block) =>
-        block.type === "tool_use" ? [block.id] : block.type === "tool_result" ? [block.tool_use_id] : [],
+    ? row.message.content.flatMap((contentBlock) =>
+        contentBlock.type === "tool_use"
+          ? [contentBlock.id]
+          : contentBlock.type === "tool_result"
+            ? [contentBlock.tool_use_id]
+            : [],
       )
     : [];
 }
-//@ chunk-z4g2ta8k.js:31861-31949 placement
+//@ chunk-1kk50rk6.js:32897-32985 placement
 function isToolResultsOnlyForIds(row, callIds) {
   return (
     isToolResultOnlyUserMessage(row) &&
     row.message.content.every((block) => callIds.includes(block.tool_use_id))
   );
 }
-//@ chunk-z4g2ta8k.js:31949-32019 placement
+//@ chunk-1kk50rk6.js:32985-33055 placement
 function arraysEqual(toolUseAndResultIds, toolUseAndResultIds_2) {
   return (
     toolUseAndResultIds.length === toolUseAndResultIds_2.length &&
     toolUseAndResultIds.every((a, b) => a === toolUseAndResultIds_2[b])
   );
 }
-//@ chunk-z4g2ta8k.js:32019-32059 placement
+//@ chunk-1kk50rk6.js:33055-33095 placement
 var handoffWithoutMessagesSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-z4g2ta8k.js:32019", () => {
+deferInit("chunk-1kk50rk6.js:33055", () => {
   handoffWithoutMessagesSchema = DoctorLazy(() =>
     SDKTurnHandoffTurnHandoffMessageSchema().omit({
       messages: true,
     }),
   );
 });
-//@ chunk-z4g2ta8k.js:32059-32166 placement
+//@ chunk-1kk50rk6.js:33095-33202 placement
 function arrayTooBigMessage(value, limit) {
   return Array.isArray(value) && value.length > limit
     ? `Too big: expected array to have <=${limit} items`
     : undefined;
 }
-//@ chunk-z4g2ta8k.js:32166-32245 placement
+//@ chunk-1kk50rk6.js:33202-33281 placement
 function issuePathString(path) {
   return path !== undefined && path.length > 0 ? path.map(String).join(".") : "request";
 }
-//@ chunk-z4g2ta8k.js:32245-32283 placement
+//@ chunk-1kk50rk6.js:33281-33349 placement
 var VERIFIED_BY_GATE = "VERIFIED_BY_GATE";
 var REFUSE = "refuse";
-//@ chunk-z4g2ta8k.js:32283-32509 placement
+var TENGU_STRUCTURED_BLOSSOM = "tengu_structured_blossom";
+//@ chunk-1kk50rk6.js:33349-33575 placement
 /**
  * 按设备证明状态与等级下限判 pass/drop；状态缺省（UNSPECIFIED）时由 unstamped 选项决定是否放行。
  */
@@ -1395,7 +1402,7 @@ function judgeDeviceAttestationLevel(frame, { floor = VERIFIED_BY_GATE, unstampe
     status,
   };
 }
-//@ chunk-z4g2ta8k.js:32509-32596 placement
+//@ chunk-1kk50rk6.js:33575-33662 placement
 function dropServiceVouchedAttestation(frame) {
   let verdict = judgeDeviceAttestationLevel(frame);
   return verdict.status === "SERVICE_VOUCHED"
@@ -1405,17 +1412,24 @@ function dropServiceVouchedAttestation(frame) {
       }
     : verdict;
 }
-//@ chunk-z4g2ta8k.js:32596-32714 placement
-var ATTESTED_REQUEST_SUBTYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-z4g2ta8k.js:32596", () => {
+//@ chunk-1kk50rk6.js:33662-33822 placement
+var ATTESTED_REQUEST_SUBTYPES; // deferred: uses HOSTED_SESSION_REFUSAL_TEXT (../cloudSession/hostedSessionRestrictions.js) of its import cycle while loading; runs once the cycle is complete
+var UNAPPROVED_SETTINGS_KEYS;
+deferInit("chunk-1kk50rk6.js:33662", () => {
   ATTESTED_REQUEST_SUBTYPES = new Set([
     "remote_tools_announce",
     "register_device_hooks",
     "upload_device_hook_template",
     "apply_flag_settings",
   ]);
+  UNAPPROVED_SETTINGS_KEYS = new Set([...CLOUD_ALLOWED_SETTINGS_KEYS, "switchModelsOnFlag"]);
 });
-//@ chunk-z4g2ta8k.js:32714-33069 placement
+//@ chunk-1kk50rk6.js:33822-33904 layout
+function unapprovedSettingsKeys(settings) {
+  let allowedKeys = UNAPPROVED_SETTINGS_KEYS;
+  return Object.keys(settings).filter((key) => !allowedKeys.has(key) && settings[key] !== null);
+}
+//@ chunk-1kk50rk6.js:33904-34243 placement
 /**
  * 识别需要设备证明的 control_request 子类型：界面类返回 ui_surface，apply_flag_settings 只在带云插件转发键时算，其他非白名单子类型返回 undefined。
  */
@@ -1426,11 +1440,9 @@ function attestedRequestSubtype(payload) {
   if (isUiSurfaceName(subtype)) return "ui_surface";
   if (typeof subtype !== "string" || !ATTESTED_REQUEST_SUBTYPES.has(subtype)) return;
   if (subtype === "apply_flag_settings") {
-    let settings = request.settings;
-    return typeof settings === "object" &&
-      settings !== null &&
-      !Array.isArray(settings) &&
-      Object.hasOwn(settings, CLOUD_PLUGINS_FORWARDED_KEY)
+    let settings = asPlainObject(request.settings);
+    return settings !== undefined &&
+      (Object.hasOwn(settings, CLOUD_PLUGINS_FORWARDED_KEY) || unapprovedSettingsKeys(settings).length > 0)
       ? "apply_flag_settings"
       : undefined;
   }
@@ -1445,19 +1457,21 @@ export {
   buildTurnHandoffReply,
   rewindRequestAge,
   serviceClockStoredAt,
-  carriedWritePermissionRefusal,
-  findFileWriteTool,
   ensureFreshGrowthBook,
   awaitCarriedWritesFlag,
-  applyTurnHandoff,
   REWIND_REQUEST_MAX_AGE_MS,
+  applyTurnHandoff,
   attestedRequestSubtype,
+  unapprovedSettingsKeys,
   dropServiceVouchedAttestation,
   judgeDeviceAttestationLevel,
+  TENGU_STRUCTURED_BLOSSOM,
   turnHandoffAvailableMessage,
   waitForTurnPromptUploads,
   turnHandoffRegistration,
   logHandoffFlagAdvert,
   markSaidCarriedWrites,
   withEnvelopeFlag,
+  carriedWritePermissionRefusal,
+  findFileWriteTool,
 };

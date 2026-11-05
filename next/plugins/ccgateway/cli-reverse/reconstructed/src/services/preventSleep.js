@@ -3,9 +3,9 @@
  *
  * 防止系统睡眠（macOS caffeinate）的入口模块；实际实现类在 _unattributed/chunk-0sfjpx19，本模块里多为错配的进程组 kill、ssh 探测与 launchctl asuser 包装
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/preventSleep.ts
- * pieces: chunk-0sfjpx19.js (4)
+ * pieces: chunk-nh1pvp1m.js (4)
  * attribution: placement 4
  */
 import { spawn } from "child_process";
@@ -23,7 +23,7 @@ import { HostScoped } from "../utils/hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-0sfjpx19.js:47509-49786 placement
+//@ chunk-nh1pvp1m.js:67152-69429 placement
 /**
  * 防睡眠：引用计数 acquire/release；macOS 上 spawn caffeinate -i -t 300，每 4 分钟重启一次；计数归零 30 秒后杀掉进程；退出时清理。非 macOS 不做事（Linux 预留 systemd-inhibit 字段）。
  */
@@ -139,18 +139,18 @@ class SleepPreventer {
     }
   }
 }
-//@ chunk-0sfjpx19.js:49786-49811 placement
+//@ chunk-nh1pvp1m.js:69429-69454 placement
 var sleepPreventerByHost; // deferred: uses SleepPreventer of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0sfjpx19.js:49786", () => {
+deferInit("chunk-nh1pvp1m.js:69429", () => {
   sleepPreventerByHost = new HostScoped(() => new SleepPreventer());
 });
-//@ chunk-0sfjpx19.js:49811-49848 placement
+//@ chunk-nh1pvp1m.js:69454-69491 placement
 function getSleepPreventer() {
   return sleepPreventerByHost.of(getRootSession().host);
 }
-//@ chunk-0sfjpx19.js:49848-49898 placement (2.1.88 match: getReservedShortcuts, 1)
+//@ chunk-nh1pvp1m.js:69491-69541 placement (2.1.88 match: getReservedShortcuts, 1)
 function isMacOS() {
   if (getPlatform() === "macos") return true;
   return false;
 }
-export { getSleepPreventer, isMacOS };
+export { isMacOS, getSleepPreventer };

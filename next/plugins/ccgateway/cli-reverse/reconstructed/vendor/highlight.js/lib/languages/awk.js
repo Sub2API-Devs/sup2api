@@ -1,13 +1,13 @@
 /**
  * highlight.js/lib/languages/awk.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: highlight.js@11.11.1
- * pieces: chunk-egr0twnb.js (1)
+ * pieces: chunk-636gp747.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-egr0twnb.js:49028-49793 cjs-fingerprint
+//@ chunk-636gp747.js:49028-49793 cjs-fingerprint
 var require_awk = __commonJS(function (cjsExports, cjsModule) {
   function awk(hljs) {
     let VARIABLE = {

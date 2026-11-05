@@ -1,13 +1,13 @@
 /**
  * @aws/lambda-invoke-store/dist-cjs/invoke-store.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws/lambda-invoke-store@0.2.0..0.2.4
- * pieces: chunk-edce4vxq.js (1)
+ * pieces: chunk-3p78mpxm.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-edce4vxq.js:2273-4337 cjs-fingerprint
+//@ chunk-3p78mpxm.js:2273-4337 cjs-fingerprint
 var require_invoke_store = __commonJS(function (cjsExports) {
   var PROTECTED_KEYS = {
     REQUEST_ID: Symbol.for("_AWS_LAMBDA_REQUEST_ID"),

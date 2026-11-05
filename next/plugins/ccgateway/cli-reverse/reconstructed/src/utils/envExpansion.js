@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 配置中的环境变量展开
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (4)
  * attribution: placement 4
  */
 import { childScrubbedCredentialKeys, isChildScrubbedCredentialFamily } from "./subprocessEnv.js";
@@ -21,7 +21,7 @@ import {
 } from "./credentialEnvVars.js";
 import { logForDebugging } from "./debug.js";
 
-//@ chunk-e6aww6q8.js:595799-595922 placement
+//@ chunk-5xgkngpb.js:604660-604783 placement
 /**
  * 展开时屏蔽的凭证变量集合。
  */
@@ -35,7 +35,7 @@ function scrubbedEnvKeys() {
     remoteSink: new Set([...plainKeys, ...SECRET_ENV_VARS]),
   };
 }
-//@ chunk-e6aww6q8.js:595922-596026 placement
+//@ chunk-5xgkngpb.js:604783-604887 placement
 function isBlockedForExpansion(varName, liveValue, scrubKeys) {
   let upper = varName.toUpperCase();
   return (
@@ -45,14 +45,14 @@ function isBlockedForExpansion(varName, liveValue, scrubKeys) {
     shouldScrubEnvEntry(varName, liveValue)
   );
 }
-//@ chunk-e6aww6q8.js:596026-596074 placement
+//@ chunk-5xgkngpb.js:604887-604935 placement
 /**
  * 按环境变量名（忽略大小写）判断该变量是否禁止做 ${VAR} 形式的展开。
  */
 function isBlockedForExpansion_2(varName) {
   return PROTECTED_ENV_VARS.has(varName.toUpperCase());
 }
-//@ chunk-e6aww6q8.js:596433-597526 placement
+//@ chunk-5xgkngpb.js:605294-606391 placement
 /**
  * 展开 MCP 配置中的环境变量；引用凭据变量但读不到时按空值处理并警告。
  */

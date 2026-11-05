@@ -3,10 +3,10 @@
  *
  * /resume 屏幕：加载会话列表、按 PR/分支筛选、选中后恢复会话。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/screens/ResumeConversation.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-jde8wnzx.js (13)
- * attribution: callgraph-fingerprint 1, sole-consumer 8, file-local 3, layout 1, fingerprint 1
+ * pieces: chunk-agvpb1pj.js (14), chunk-czq1j3j2.js (1)
+ * attribution: sole-consumer 8, file-local 3, layout 2, fingerprint 1, callgraph-fingerprint 1
  */
 import { dirname } from "path";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -35,8 +35,9 @@ import { useSession } from "../context/session.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { isCloudSessionsDeniedByOrg } from "../services/cloudSessions/cloudSessionsPolicy.js";
 import { noopTrialEffect } from "../components/FullscreenUpsellTrial.js";
+import { env } from "../utils/env.js";
+import { useTerminalTitle, useTimeout } from "../ink/hooks/useTerminalHooks.js";
 import {
-  isCustomTitleEnabled,
   loadSameRepoMessageLogsProgressive,
   enrichLogs,
   loadAllProjectsMessageLogsProgressive,
@@ -52,8 +53,6 @@ import {
   adoptResumedSessionFileAsync,
   adoptResumedSessionFile,
 } from "../utils/sessionStorage.js";
-import { env } from "../utils/env.js";
-import { useTerminalTitle, useTimeout } from "../ink/hooks/useTerminalHooks.js";
 import { logFeatureOk, logFeatureBad, logFeatureSad } from "../services/analytics/featureTelemetry.js";
 import { logError, getLogDisplayTitle } from "../utils/log.js";
 import { sortLogs } from "../types/logs.js";
@@ -137,7 +136,7 @@ import { isSafeIdSegment_2 } from "../utils/agentId.js";
 import { shellQuoteArgs } from "../utils/bash/bashPipeCommand.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:651055-651381 callgraph-fingerprint (2.1.88 match: NoConversationsMessage, 0.241)
+//@ chunk-czq1j3j2.js:671736-672062 callgraph-fingerprint (2.1.88 match: NoConversationsMessage, 0.241)
 function NoConversationsMessage(props) {
   let $ = useMemoCache(5);
   let { cloudRowCheck } = props;
@@ -167,34 +166,34 @@ function NoConversationsMessage(props) {
   useKeybinding("app:openArtifact", check, keybindingOptions);
   return null;
 }
-//@ chunk-jde8wnzx.js:27371-27375 sole-consumer
+//@ chunk-agvpb1pj.js:29213-29217 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-jde8wnzx.js:27371", () => {
+deferInit("chunk-agvpb1pj.js:29213", () => {
   init_react_production();
 });
-//@ chunk-jde8wnzx.js:27407-27427 sole-consumer
+//@ chunk-agvpb1pj.js:29249-29269 sole-consumer
 function shutdownOnTimeout() {
   gracefulShutdown(1);
 }
-//@ chunk-jde8wnzx.js:27427-27479 sole-consumer
+//@ chunk-agvpb1pj.js:29269-29321 sole-consumer
 function shutdownWithoutResumeHint() {
   gracefulShutdown(1, "other", {
     suppressResumeHint: true,
   });
 }
-//@ chunk-jde8wnzx.js:27479-27509 file-local
+//@ chunk-agvpb1pj.js:29321-29351 file-local
 function exitNow() {
   process.exit(0);
 }
-//@ chunk-jde8wnzx.js:27509-27539 file-local
+//@ chunk-agvpb1pj.js:29351-29381 file-local
 function exitNowB() {
   process.exit(0);
 }
-//@ chunk-jde8wnzx.js:27539-27581 layout
+//@ chunk-agvpb1pj.js:29381-29423 layout
 function selectOriginalCwd(session) {
   return getSessionProject(session).originalCwd;
 }
-//@ chunk-jde8wnzx.js:27581-27790 file-local
+//@ chunk-agvpb1pj.js:29423-29632 file-local
 function parsePrIdentifier(value) {
   let directNumber = parseInt(value, 10);
   if (!isNaN(directNumber) && directNumber > 0) return directNumber;
@@ -204,7 +203,11 @@ function parsePrIdentifier(value) {
   if (urlMatch?.[1]) return parseInt(urlMatch[1], 10);
   return null;
 }
-//@ chunk-jde8wnzx.js:27790-35725 fingerprint (2.1.88 match: ResumeConversation, 0.539)
+//@ chunk-agvpb1pj.js:29632-29656 layout
+var LOAD_PAGE_SIZE = 50;
+var AUTO_LOAD_MORE_THRESHOLD = 10;
+var MAX_AUTO_LOAD_INDEX = 2000;
+//@ chunk-agvpb1pj.js:29656-37851 fingerprint (2.1.88 match: ResumeConversation, 0.539)
 function ResumeConversation({
   commands,
   worktreePaths,
@@ -248,7 +251,7 @@ function ResumeConversation({
   noopTrialEffect();
   let [logs, setLogs] = useState([]);
   let [loading, setLoading] = useState(true);
-  let [resuming, setResuming] = useState(false);
+  let [isResuming, setIsResuming] = useState(false);
   let resumeInFlight = useRef(false);
   let [crossProjectNotice, setCrossProjectNotice] = useState(null);
   let [showAllProjects, setShowAllProjects] = useState(false);
@@ -260,19 +263,17 @@ function ResumeConversation({
   let [reloadGeneration, bumpReloadGeneration] = useState(0);
   let nextLogIndex = useRef(0);
   let loadGeneration = useRef(0);
-  let filteredLogs = useMemo(() => {
+  let filterByPrValue =
+    typeof filterByPr === "string" ? (parsePrIdentifier(filterByPr) ?? undefined) : filterByPr || undefined;
+  let visibleLogs = useMemo(() => {
     let result = logs.filter((log) => !log.isSidechain);
-    if (filterByPr !== undefined) {
-      if (filterByPr === true) result = result.filter((l_0) => l_0.prNumber !== undefined);
-      else if (typeof filterByPr === "number") result = result.filter((l_1) => l_1.prNumber === filterByPr);
-      else if (typeof filterByPr === "string") {
-        let prNumber = parsePrIdentifier(filterByPr);
-        if (prNumber !== null) result = result.filter((l_2) => l_2.prNumber === prNumber);
-      }
-    }
+    if (filterByPrValue === true) result = result.filter((l_0) => l_0.prNumber !== undefined);
+    else if (typeof filterByPrValue === "number")
+      result = result.filter((l_1) => l_1.prNumber === filterByPrValue);
     return result;
-  }, [logs, filterByPr]);
-  let isResumeWithRenameEnabled = isCustomTitleEnabled();
+  }, [logs, filterByPrValue]);
+  let [isExhausted, setIsExhausted] = useState(false);
+  let [loadPageCount, setLoadPageCount] = useState(0);
   let disableTerminalTitle = useMemo(() => env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE, []);
   useTerminalTitle(titleOverride || disableTerminalTitle ? null : "claude \xB7 resume");
   useEffect(() => {
@@ -292,13 +293,13 @@ function ResumeConversation({
   }, [worktreePaths, storageV5]);
   let enrichInFlight = useRef(false);
   let loadMore = useCallback(
-    (count) => {
+    (count, signal) => {
       if (enrichInFlight.current) return;
       let ref = resumeResultRef.current;
       if (!ref || ref.nextIndex >= ref.allStatLogs.length) return;
       enrichInFlight.current = true;
       let morePending = false;
-      enrichLogs(ref.allStatLogs, ref.nextIndex, count, storageV5)
+      enrichLogs(ref.allStatLogs, ref.nextIndex, count, storageV5, signal)
         .then((result) => {
           if (resumeResultRef.current !== ref) return;
           ref.nextIndex = result.nextIndex;
@@ -309,16 +310,35 @@ function ResumeConversation({
             });
             setLogs((prev) => prev.concat(result.logs));
             nextLogIndex.current += result.logs.length;
-          } else if (ref.nextIndex < ref.allStatLogs.length) morePending = true;
+          } else if (signal === undefined && ref.nextIndex < ref.allStatLogs.length) morePending = true;
+        })
+        .catch((error) => {
+          logError(error);
+          if (resumeResultRef.current === ref) setIsExhausted(true);
         })
         .finally(() => {
           enrichInFlight.current = false;
+          if (filterByPrValue !== undefined) setLoadPageCount((count) => count + 1);
           if (morePending) loadMore(count);
         });
     },
-    [storageV5],
+    [filterByPrValue, storageV5],
   );
-  let loadLogs = useCallback(
+  useEffect(() => {
+    if (filterByPrValue === undefined || loading || isResuming || isExhausted) return;
+    let ref = resumeResultRef.current;
+    if (
+      !ref ||
+      visibleLogs.length >= AUTO_LOAD_MORE_THRESHOLD ||
+      ref.nextIndex >= ref.allStatLogs.length ||
+      ref.nextIndex >= MAX_AUTO_LOAD_INDEX
+    ) {
+      setIsExhausted(true);
+      return;
+    }
+    loadMore(LOAD_PAGE_SIZE, LOAD_PAGE_SIZE);
+  }, [filterByPrValue, loading, isResuming, isExhausted, loadPageCount, visibleLogs.length, loadMore]);
+  let onLogsChanged = useCallback(
     (allProjects) => {
       setLoading(true);
       let loadToken = ++loadGeneration.current;
@@ -334,6 +354,7 @@ function ResumeConversation({
           resumeResultRef.current = result;
           nextLogIndex.current = result.logs.length;
           setLogs(result.logs);
+          setIsExhausted(false);
         })
         .catch((error) => {
           if (loadGeneration.current !== loadToken) return;
@@ -351,15 +372,15 @@ function ResumeConversation({
   let handleToggleAllProjects = useCallback(() => {
     let newValue = !showAllProjects;
     setShowAllProjects(newValue);
-    loadLogs(newValue);
-  }, [showAllProjects, loadLogs]);
+    onLogsChanged(newValue);
+  }, [showAllProjects, onLogsChanged]);
   function onCancel() {
     process.exit(1);
   }
   async function onSelect(log_0) {
     if (resumeInFlight.current) return;
     resumeInFlight.current = true;
-    setResuming(true);
+    setIsResuming(true);
     let resumeStart = performance.now();
     try {
       let crossProjectCheck = await checkCrossProjectResume(log_0, showAllProjects, worktreePaths);
@@ -704,7 +725,7 @@ function ResumeConversation({
       onTurnComplete,
       onCaptureSnapshot,
     });
-  if (loading && (logs.length === 0 || filteredLogs.length === 0))
+  if (loading && (logs.length === 0 || visibleLogs.length === 0))
     return jsxProd_default(FullscreenSelectionScreen, {
       children: jsxProd_default(WorkerBadge, {
         message: "Loading conversations\u2026",
@@ -714,7 +735,7 @@ function ResumeConversation({
     return jsxProd_default(ResumeFailedMessage, {
       sessionId: crossProjectNotice.sessionId,
     });
-  if (resuming)
+  if (isResuming)
     return jsxProd_default(FullscreenSelectionScreen, {
       children: jsxProd_default(WorkerBadge, {
         message: "Resuming conversation\u2026",
@@ -722,15 +743,15 @@ function ResumeConversation({
     });
   return jsxProd_default(FullscreenSelectionScreen, {
     children: jsxProd_default(LogSelector, {
-      logs: filteredLogs,
+      logs: visibleLogs,
       currentSessionId: id,
       maxHeight: rows,
       onCancel,
       onSelect,
-      onLogsChanged: isResumeWithRenameEnabled ? () => loadLogs(showAllProjects) : undefined,
+      onLogsChanged: () => onLogsChanged(showAllProjects),
       onLoadMore: loadMore,
       initialSearchQuery,
-      isLoading: loading,
+      isLoading: loading || (filterByPrValue !== undefined && !isExhausted),
       reloadGeneration,
       showAllProjects,
       onToggleAllProjects: handleToggleAllProjects,
@@ -738,7 +759,7 @@ function ResumeConversation({
     }),
   });
 }
-//@ chunk-jde8wnzx.js:35725-36280 sole-consumer
+//@ chunk-agvpb1pj.js:37851-38406 sole-consumer
 /**
  * 全屏模式下的选择处理外壳：Ctrl/Cmd+C 复制或清除选区，其他按键按需清除选区，并用备用屏幕承载子元素。
  */
@@ -795,7 +816,7 @@ function FullscreenSelectionScreen(props) {
   } else screen = $[7];
   return screen;
 }
-//@ chunk-jde8wnzx.js:36280-36721 sole-consumer
+//@ chunk-agvpb1pj.js:38406-38847 sole-consumer
 /**
  * 恢复会话失败的提示：给出重试或新建会话的命令，稍后退出。
  */
@@ -836,7 +857,7 @@ function ResumeFailedMessage(props) {
   } else noticeBox = $[3];
   return noticeBox;
 }
-//@ chunk-jde8wnzx.js:36721-36885 sole-consumer
+//@ chunk-agvpb1pj.js:38847-39011 sole-consumer
 function ResumeExitMessage(props) {
   let $ = useMemoCache(3);
   let { message } = props;
@@ -856,7 +877,7 @@ function ResumeExitMessage(props) {
   } else text = $[2];
   return text;
 }
-//@ chunk-jde8wnzx.js:36885-37475 sole-consumer
+//@ chunk-agvpb1pj.js:39011-39601 sole-consumer
 /**
  * 会话来自其他目录时的提示：显示恢复命令并说明已复制到剪贴板，稍后退出。
  */
@@ -917,7 +938,7 @@ function DifferentDirectoryResumeMessage(props) {
   } else content = $[7];
   return content;
 }
-//@ chunk-jde8wnzx.js:37475-39038 sole-consumer
+//@ chunk-agvpb1pj.js:39601-41164 sole-consumer
 /**
  * 会话正在后台运行时的提示：给出 attach/stop 命令或用 claude agents 查找，并给出 --fork-session 分叉命令。
  */

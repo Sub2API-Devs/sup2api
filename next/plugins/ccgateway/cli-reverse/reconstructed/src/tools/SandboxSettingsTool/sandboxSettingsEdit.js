@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：由模型修改沙箱设置（mode、allowUnsandboxedCommands、excludedCommands）的校验与写入
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ht1p3xhv.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j4nstx0a.js (3)
  * attribution: placement 3
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -24,7 +24,7 @@ import {
 import { drainSettingsWrites } from "../../utils/settings/settings.js";
 import { invalidateCommandNames } from "../../utils/settings/commandSyncNames.js";
 
-//@ chunk-ht1p3xhv.js:5462-5820 placement
+//@ chunk-j4nstx0a.js:5854-6212 placement
 var SandboxSettingsEditSchema = DoctorLazy(() =>
   zodStrictObject({
     mode: _enum(["auto-allow", "regular", "disabled"]).optional(),
@@ -40,7 +40,7 @@ var SandboxSettingsEditSchema = DoctorLazy(() =>
     },
   ),
 );
-//@ chunk-ht1p3xhv.js:5820-5987 placement
+//@ chunk-j4nstx0a.js:6212-6379 placement
 async function applySandboxSettingsEditLogged(edit) {
   let result = await applySandboxSettingsEdit(edit);
   if (!result.ok) {
@@ -53,7 +53,7 @@ async function applySandboxSettingsEditLogged(edit) {
   }
   return result;
 }
-//@ chunk-ht1p3xhv.js:5987-9065 placement
+//@ chunk-j4nstx0a.js:6379-9457 placement
 /**
  * 校验并应用沙箱设置修改（平台不支持、被更高优先级锁定、依赖缺失、强制开启等）。
  */

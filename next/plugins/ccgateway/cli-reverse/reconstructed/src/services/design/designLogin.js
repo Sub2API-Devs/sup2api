@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Claude Design 登录（浏览器登录、状态查询、错误说明）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fbn843tx.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-79wsp6wa.js (3)
  * attribution: placement 3
  */
 import { awaitPolicyLimitsColdStart } from "../policyLimits/PolicyLimitsClient.js";
@@ -20,7 +20,7 @@ import { logFeatureBadAsync, logFeatureOkAsync } from "../analytics/featureTelem
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { safeParseJSON } from "../../utils/json.js";
 
-//@ chunk-fbn843tx.js:3839-4066 placement
+//@ chunk-79wsp6wa.js:4175-4402 placement
 /**
  * 返回 Claude Design 登录状态：是否可用、是否已登录、能否在此登录及原因。
  */
@@ -40,7 +40,7 @@ async function designLoginStatus(credentials) {
     }),
   };
 }
-//@ chunk-fbn843tx.js:4066-5126 placement
+//@ chunk-79wsp6wa.js:4402-5462 placement
 /**
  * 宿主侧的 Claude Design 登录：从 stdin 逐行读取手工粘贴的授权码（code#state），运行浏览器登录流程，把授权 URL 事件与最终结果以 JSON 行写出，并记录特性遥测。
  */
@@ -117,7 +117,7 @@ async function runDesignLoginHost({ stdin, write, signal }) {
   await write(jsonStringify(doneEvent));
   return doneEvent;
 }
-//@ chunk-fbn843tx.js:5126-5782 placement
+//@ chunk-79wsp6wa.js:5462-6118 placement
 /**
  * 把 Design 登录失败原因转为提示文字。
  */

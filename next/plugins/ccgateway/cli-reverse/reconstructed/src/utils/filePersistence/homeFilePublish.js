@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：发布文件到用户主目录
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jjyx5tf2.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5x3jy2xm.js (16)
  * attribution: placement 16
  */
 import { posix } from "path";
@@ -27,7 +27,7 @@ import { getPlatform } from "../platform.js";
 import { NOFOLLOW_NONBLOCK_FLAGS } from "../fsFlags.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-jjyx5tf2.js:920-1376 placement
+//@ chunk-5x3jy2xm.js:854-1310 placement
 /**
  * home 目录发布用的路径工具（basename/dirname/join/relative/sep 的绑定与平台分隔符），同语句还定义了指令文件名、厂商目录名等集合。
  */
@@ -44,7 +44,7 @@ var NON_ASCII_NAME_CHARS_RE;
 var regExp;
 var CONTROL_OR_FORMAT_CHARS_RE;
 var MAX_HOME_FILE_NAME_LENGTH;
-deferInit("chunk-jjyx5tf2.js:920", () => {
+deferInit("chunk-5x3jy2xm.js:854", () => {
   ({ basename, dirname, join, relative, sep } = posix);
   INSTRUCTION_FILE_BASENAMES = new Set(["claude.md", "claude.local.md", "agent.md"]);
   VENDOR_DIR_NAMES = new Set([
@@ -62,7 +62,7 @@ deferInit("chunk-jjyx5tf2.js:920", () => {
   CONTROL_OR_FORMAT_CHARS_RE = /[\p{Cc}\p{Zl}\p{Zp}]|(?![\u200c\u200d])\p{Cf}|(?:^|\p{ASCII})[\u200c\u200d]/u;
   MAX_HOME_FILE_NAME_LENGTH = 255;
 });
-//@ chunk-jjyx5tf2.js:1376-1667 placement
+//@ chunk-5x3jy2xm.js:1310-1601 placement
 function homeFileNameProblem(name, isLastSegment) {
   let folded = foldName(name);
   if (folded.startsWith(".")) return "dot_name";
@@ -87,7 +87,7 @@ function homeFileNameProblem(name, isLastSegment) {
     return "odd_spelling";
   return;
 }
-//@ chunk-jjyx5tf2.js:1667-1786 placement
+//@ chunk-5x3jy2xm.js:1601-1720 placement
 function homePathProblem(relativePath) {
   let parts = relativePath.split(sep);
   for (let [index, segment] of parts.entries()) {
@@ -96,7 +96,7 @@ function homePathProblem(relativePath) {
   }
   return;
 }
-//@ chunk-jjyx5tf2.js:1786-1904 placement
+//@ chunk-5x3jy2xm.js:1720-1838 placement
 async function realpathOfAncestor(path) {
   try {
     return await realpath(path);
@@ -105,7 +105,7 @@ async function realpathOfAncestor(path) {
     return join(await realpathOfAncestor(dirname(path)), basename(path));
   }
 }
-//@ chunk-jjyx5tf2.js:1904-2090 placement
+//@ chunk-5x3jy2xm.js:1838-2024 placement
 function homeTargetProblem(realHome, realParent, targetPath, judgedPaths) {
   if (!isAtOrUnderRoot(realHome, realParent)) return "outside_home";
   let expectedPath = join(realParent, basename(targetPath));
@@ -117,12 +117,12 @@ function homeTargetProblem(realHome, realParent, targetPath, judgedPaths) {
     (judgedPaths === undefined || judgedPaths.includes(expectedPath) ? undefined : "not_as_judged")
   );
 }
-//@ chunk-jjyx5tf2.js:2090-2135 placement
+//@ chunk-5x3jy2xm.js:2024-2069 placement
 var OCCUPIED_PATH_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-jjyx5tf2.js:2090", () => {
+deferInit("chunk-5x3jy2xm.js:2024", () => {
   OCCUPIED_PATH_ERRNOS = new Set(["EEXIST", "ENOTDIR", "ENOENT"]);
 });
-//@ chunk-jjyx5tf2.js:2135-2275 placement
+//@ chunk-5x3jy2xm.js:2069-2209 placement
 async function existingTargetState(targetPath) {
   try {
     return {
@@ -133,7 +133,7 @@ async function existingTargetState(targetPath) {
     throw error;
   }
 }
-//@ chunk-jjyx5tf2.js:2275-2505 placement
+//@ chunk-5x3jy2xm.js:2209-2439 placement
 async function checkHomeTarget(homeDir, relativePath) {
   let targetPath = join(homeDir, relativePath);
   let realHome = await realpath(homeDir);
@@ -155,7 +155,7 @@ async function checkHomeTarget(homeDir, relativePath) {
     throw error;
   }
 }
-//@ chunk-jjyx5tf2.js:2505-2925 placement
+//@ chunk-5x3jy2xm.js:2439-2859 placement
 async function linkIntoHome(sourcePath, sourceHandle, targetPath, mode) {
   try {
     await link(sourcePath, targetPath);
@@ -174,11 +174,11 @@ async function linkIntoHome(sourcePath, sourceHandle, targetPath, mode) {
   error.code = "HOME_SOURCE_EXCHANGED";
   throw error;
 }
-//@ chunk-jjyx5tf2.js:2925-2978 placement (2.1.88 match: getFileIdentity, 0.794)
+//@ chunk-5x3jy2xm.js:2859-2912 placement (2.1.88 match: getFileIdentity, 0.795)
 function getFileIdentity(left, right) {
   return left?.ino === right.ino && left.dev === right.dev;
 }
-//@ chunk-jjyx5tf2.js:2978-3061 placement
+//@ chunk-5x3jy2xm.js:2912-2995 placement
 async function statOrUndefined(promise) {
   try {
     return await promise;
@@ -187,7 +187,7 @@ async function statOrUndefined(promise) {
     throw error;
   }
 }
-//@ chunk-jjyx5tf2.js:3061-3185 placement
+//@ chunk-5x3jy2xm.js:2995-3119 placement
 async function removeIfUnchanged(targetPath, identity) {
   try {
     if (!getFileIdentity(await statOrUndefined(lstat(targetPath)), identity)) return false;
@@ -198,7 +198,7 @@ async function removeIfUnchanged(targetPath, identity) {
     return false;
   }
 }
-//@ chunk-jjyx5tf2.js:3185-3585 placement
+//@ chunk-5x3jy2xm.js:3119-3519 placement
 async function createExclusive(sourceHandle, targetPath, mode) {
   let handle;
   try {
@@ -235,7 +235,7 @@ async function createExclusive(sourceHandle, targetPath, mode) {
     throw error;
   }
 }
-//@ chunk-jjyx5tf2.js:3585-3776 placement
+//@ chunk-5x3jy2xm.js:3519-3710 placement
 async function withPinnedDirPath(dirPath, fn) {
   if (getPlatform() !== "linux") return fn(dirPath, () => realpath(dirPath));
   let dirHandle = await open(dirPath, constants.O_RDONLY | constants.O_DIRECTORY | READ_LIMITS);
@@ -246,9 +246,9 @@ async function withPinnedDirPath(dirPath, fn) {
     await dirHandle.close();
   }
 }
-//@ chunk-jjyx5tf2.js:3776-3786 placement
+//@ chunk-5x3jy2xm.js:3710-3720 placement
 var HOME_FILE_MODE = 420;
-//@ chunk-jjyx5tf2.js:3786-4602 placement
+//@ chunk-5x3jy2xm.js:3720-4536 placement
 /**
  * 把文件发布到用户主目录下的目标路径：校验路径分段、避免覆盖已变化的文件。
  */
@@ -318,13 +318,13 @@ async function publishHomeFile(sourcePath, homeDir, relativePath, judgedPaths) {
   });
 }
 export {
-  checkHomeTarget,
+  homePathProblem,
+  MAX_HOME_FILE_NAME_LENGTH,
   removeIfUnchanged,
+  checkHomeTarget,
   publishHomeFile,
   NON_ASCII_NAME_CHARS_RE,
   CONTROL_OR_FORMAT_CHARS_RE,
   linkIntoHome,
   homeFileNameProblem,
-  homePathProblem,
-  MAX_HOME_FILE_NAME_LENGTH,
 };

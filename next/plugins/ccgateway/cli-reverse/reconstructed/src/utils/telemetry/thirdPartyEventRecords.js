@@ -3,11 +3,14 @@
  *
  * 2.1.316 新增：第三方遥测事件记录与 OTel 事件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p52gp8zk.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a0xc6evk.js (14), chunk-s584m62r.js (9)
  * attribution: placement 23
  */
+import { HostScoped } from "../hostScoped.js";
+import { touchSetEntry } from "./accountMemoryRedaction.js";
+import { evictOldestIfAtCap } from "../imageStore.js";
 import { otelApi_3 } from "./repositoryAttributes.js";
 import { pickByHelper } from "../git/gitSafeEnv.js";
 import { logForDebugging } from "../debug.js";
@@ -15,19 +18,68 @@ import { errorMessage, sanitizeClassName, sanitizeErrnoForTelemetry, classifyAxi
 import { subscribe } from "../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
 import { MAX_DIAGNOSTIC_ERRORS } from "../../bootstrap/sessionSlices.js";
 import { withDeadline } from "../sleep.js";
-import { HostScoped } from "../hostScoped.js";
-import { touchSetEntry } from "./accountMemoryRedaction.js";
-import { evictOldestIfAtCap } from "../imageStore.js";
 import { getEventLogger, getRootSession, bufferPendingOTelEvent } from "../../bootstrap/state.js";
 import { otelEventStateByHost, logOTelEvent } from "./events.js";
 import { isEnvTruthy } from "../envUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-p52gp8zk.js:6901-7015 placement
+//@ chunk-s584m62r.js:445-464 placement
+var EVENT_RECORD_LIMITS = 8388608;
+var MAX_EVENT_RECORD_POOL = 24;
+//@ chunk-s584m62r.js:464-565 placement
+class ContentLoggingState {
+  shown = new Set();
+  toolTexts = new Set();
+  shownChars = 0;
+  toolTextChars = 0;
+  dropped = false;
+  genuine = false;
+  version = 0;
+}
+//@ chunk-s584m62r.js:565-588 placement
+var contentLoggingStateByHost; // deferred: uses ContentLoggingState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s584m62r.js:565", () => {
+  contentLoggingStateByHost = new HostScoped(() => new ContentLoggingState());
+});
+//@ chunk-s584m62r.js:588-643 placement
+function markRecordDropped(host) {
+  let state = contentLoggingStateByHost.of(host);
+  state.dropped = true;
+  state.version++;
+}
+//@ chunk-s584m62r.js:643-678 placement
+function markRecordGenuine(host) {
+  contentLoggingStateByHost.of(host).genuine = true;
+}
+//@ chunk-s584m62r.js:678-809 placement
+function noteShownText(host, text) {
+  let state = contentLoggingStateByHost.of(host);
+  if (text.trim() === "" || !touchSetEntry(state.shown, text)) return;
+  state.shownChars = evictOldestIfAtCap(state, state.shown, state.shownChars + text.length);
+  state.version++;
+}
+//@ chunk-s584m62r.js:809-954 placement
+function noteToolText(host, text) {
+  let state = contentLoggingStateByHost.of(host);
+  if (text.trim() === "" || !touchSetEntry(state.toolTexts, text)) return;
+  state.toolTextChars = evictOldestIfAtCap(state, state.toolTexts, state.toolTextChars + text.length);
+  state.version++;
+}
+//@ chunk-s584m62r.js:954-1071 placement
+function hasRecordedText(host) {
+  if (host === undefined) return true;
+  let state = contentLoggingStateByHost.of(host);
+  return state.shown.size > 0 || state.toolTexts.size > 0 || state.genuine || state.dropped;
+}
+//@ chunk-s584m62r.js:1071-1102 placement
+function recordStateOf(host) {
+  return contentLoggingStateByHost.of(host);
+}
+//@ chunk-a0xc6evk.js:7862-7975 placement
 var isPrimitiveAttribute = (value) =>
   ["string", "number", "boolean"].includes(typeof value) ||
   (Array.isArray(value) && value.every((item) => typeof item === "string"));
-//@ chunk-p52gp8zk.js:7015-7316 placement
+//@ chunk-a0xc6evk.js:7975-8274 placement
 function buildEventRecord({ event, attributes, loggedAt, eventContext }) {
   let spanContext = otelApi_3.trace.getSpanContext(eventContext ?? otelApi_3.context.active());
   let hasValidSpan = spanContext !== undefined && otelApi_3.isSpanContextValid(spanContext);
@@ -45,7 +97,7 @@ function buildEventRecord({ event, attributes, loggedAt, eventContext }) {
     }),
   };
 }
-//@ chunk-p52gp8zk.js:7316-7663 placement
+//@ chunk-a0xc6evk.js:8274-8620 placement
 function sendEventRecord(road, { entry, signal, hookOrigin }) {
   let onDropped = () =>
     logForDebugging(
@@ -67,7 +119,7 @@ function sendEventRecord(road, { entry, signal, hookOrigin }) {
         (error) => (signal.aborted ? onDropped() : onLost(error)),
       );
 }
-//@ chunk-p52gp8zk.js:7663-8568 placement
+//@ chunk-a0xc6evk.js:8620-9523 placement
 /**
  * 创建第三方遥测事件记录的发送队列：顺序发送、可中止、限制积压。
  */
@@ -135,64 +187,12 @@ function createEventRecordQueue() {
     settledWithin: (args) => withDeadline(waitForRoad(), args).then(dropRoad),
   };
 }
-//@ chunk-p52gp8zk.js:8568-8581 placement
+//@ chunk-a0xc6evk.js:9523-9535 placement
 var eventRecordQueue; // deferred: uses createEventRecordQueue of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-p52gp8zk.js:8568", () => {
+deferInit("chunk-a0xc6evk.js:9523", () => {
   eventRecordQueue = createEventRecordQueue();
 });
-//@ chunk-p52gp8zk.js:8618-8638 placement
-var EVENT_RECORD_LIMITS = 8388608;
-var MAX_EVENT_RECORD_POOL = 24;
-//@ chunk-p52gp8zk.js:8638-8740 placement
-class ContentLoggingState {
-  shown = new Set();
-  toolTexts = new Set();
-  shownChars = 0;
-  toolTextChars = 0;
-  dropped = false;
-  genuine = false;
-  version = 0;
-}
-//@ chunk-p52gp8zk.js:8740-8764 placement
-var contentLoggingStateByHost; // deferred: uses ContentLoggingState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-p52gp8zk.js:8740", () => {
-  contentLoggingStateByHost = new HostScoped(() => new ContentLoggingState());
-});
-//@ chunk-p52gp8zk.js:8764-8819 placement
-function markRecordDropped(host) {
-  let state = contentLoggingStateByHost.of(host);
-  state.dropped = true;
-  state.version++;
-}
-//@ chunk-p52gp8zk.js:8819-8854 placement
-function markRecordGenuine(host) {
-  contentLoggingStateByHost.of(host).genuine = true;
-}
-//@ chunk-p52gp8zk.js:8854-8987 placement
-function noteShownText(host, text) {
-  let state = contentLoggingStateByHost.of(host);
-  if (text.trim() === "" || !touchSetEntry(state.shown, text)) return;
-  state.shownChars = evictOldestIfAtCap(state, state.shown, state.shownChars + text.length);
-  state.version++;
-}
-//@ chunk-p52gp8zk.js:8987-9134 placement
-function noteToolText(host, text) {
-  let state = contentLoggingStateByHost.of(host);
-  if (text.trim() === "" || !touchSetEntry(state.toolTexts, text)) return;
-  state.toolTextChars = evictOldestIfAtCap(state, state.toolTexts, state.toolTextChars + text.length);
-  state.version++;
-}
-//@ chunk-p52gp8zk.js:9134-9251 placement
-function hasRecordedText(host) {
-  if (host === undefined) return true;
-  let state = contentLoggingStateByHost.of(host);
-  return state.shown.size > 0 || state.toolTexts.size > 0 || state.genuine || state.dropped;
-}
-//@ chunk-p52gp8zk.js:9251-9282 placement
-function recordStateOf(host) {
-  return contentLoggingStateByHost.of(host);
-}
-//@ chunk-p52gp8zk.js:16085-16202 placement
+//@ chunk-a0xc6evk.js:11684-11801 placement
 function otelLogRecord(event, attributes, timestamp, context) {
   return {
     timestamp,
@@ -204,7 +204,7 @@ function otelLogRecord(event, attributes, timestamp, context) {
     }),
   };
 }
-//@ chunk-p52gp8zk.js:16202-16475 placement
+//@ chunk-a0xc6evk.js:11801-12074 placement
 function emitOrBufferOtelEvent(event, event_2) {
   let eventLogger = getEventLogger();
   if (eventLogger) {
@@ -219,7 +219,7 @@ function emitOrBufferOtelEvent(event, event_2) {
     });
   }
 }
-//@ chunk-p52gp8zk.js:16475-16615 placement
+//@ chunk-a0xc6evk.js:12074-12214 placement
 function logPermissionModeChanged(change, agentContext) {
   if (change.from === change.to) return;
   logOTelEvent(
@@ -234,7 +234,7 @@ function logPermissionModeChanged(change, agentContext) {
     agentContext,
   );
 }
-//@ chunk-p52gp8zk.js:16615-16949 placement
+//@ chunk-a0xc6evk.js:12214-12548 placement
 function logCompactionEvent(event, agentContext) {
   logOTelEvent(
     "compaction",
@@ -258,7 +258,7 @@ function logCompactionEvent(event, agentContext) {
     agentContext,
   );
 }
-//@ chunk-p52gp8zk.js:16949-17796 placement
+//@ chunk-a0xc6evk.js:12548-13395 placement
 function logRetentionSweep(sweep) {
   logOTelEvent("retention_sweep", {
     result: sweep.result,
@@ -293,9 +293,9 @@ function logRetentionSweep(sweep) {
     }),
   });
 }
-//@ chunk-p52gp8zk.js:17796-17805 placement
+//@ chunk-a0xc6evk.js:13395-13404 placement
 var firstInternalErrorLogged = false;
-//@ chunk-p52gp8zk.js:17805-17981 placement
+//@ chunk-a0xc6evk.js:13404-13580 placement
 function logFirstInternalError(error) {
   if (firstInternalErrorLogged) return;
   firstInternalErrorLogged = true;
@@ -309,14 +309,14 @@ function logFirstInternalError(error) {
     firstInternalErrorLogged = false;
   }
 }
-//@ chunk-p52gp8zk.js:17981-18069 placement
+//@ chunk-a0xc6evk.js:13580-13668 placement
 function logAtMention(event) {
   logOTelEvent("at_mention", {
     mention_type: event.mentionType,
     success: String(event.success),
   });
 }
-//@ chunk-p52gp8zk.js:18069-18288 placement
+//@ chunk-a0xc6evk.js:13668-13887 placement
 function logAuthEvent(event) {
   let errorInfo = event.error !== undefined ? classifyAxiosError(event.error) : null;
   logOTelEvent("auth", {
@@ -333,21 +333,21 @@ function logAuthEvent(event) {
 }
 export {
   recordStateOf,
-  EVENT_RECORD_LIMITS,
   logPermissionModeChanged,
+  logAtMention,
+  EVENT_RECORD_LIMITS,
   logRetentionSweep,
-  logFirstInternalError,
-  logAuthEvent,
   eventRecordQueue,
   buildEventRecord,
   logCompactionEvent,
-  logAtMention,
+  logFirstInternalError,
   markRecordGenuine,
   noteToolText,
   markRecordDropped,
   otelLogRecord,
   emitOrBufferOtelEvent,
-  MAX_EVENT_RECORD_POOL,
   noteShownText,
+  logAuthEvent,
   hasRecordedText,
+  MAX_EVENT_RECORD_POOL,
 };

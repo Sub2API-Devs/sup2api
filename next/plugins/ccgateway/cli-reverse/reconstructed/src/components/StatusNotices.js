@@ -3,17 +3,11 @@
  *
  * 沿用旧版路径：启动状态通知。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/StatusNotices.tsx
- * pieces: chunk-18hwfzwa.js (41)
- * attribution: placement 41
+ * pieces: chunk-czq1j3j2.js (45)
+ * attribution: placement 41, sole-consumer 2, affinity 1, layout 1
  */
-import {
-  jsxProd_default,
-  jsxProd_default_2,
-  Fragment,
-} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { useLatchedBridgeNotice, SegmentedText } from "./PromptInput/Notifications.js";
 import {
   init_react_production,
   useState,
@@ -23,13 +17,21 @@ import {
   createContext,
   useReducer,
 } from "../../vendor/react/cjs/react.production.js";
+import { useInterval, useMeasured } from "../ink/components/Input.js";
+import { useAppState, useAppState_2 } from "../state/AppState.js";
+import { usePluginInstallationStatus } from "../hooks/notifs/usePluginInstallationStatus.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+  Fragment,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { useLatchedBridgeNotice, SegmentedText } from "./PromptInput/Notifications.js";
 import { HostScoped } from "../utils/hostScoped.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useHost } from "../context/session.js";
 import { getPersistenceSuppressionCause, getTranscriptWriterHealth } from "../utils/sessionStorage.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
-import { usePluginInstallationStatus } from "../hooks/notifs/usePluginInstallationStatus.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { windowsSandboxStartStore } from "../utils/sandbox/sandbox-adapter.js";
@@ -37,15 +39,17 @@ import { useStoreSelector } from "../hooks/useStoreSelector.js";
 import { useResetReached } from "./rateLimit/quotaAutoResume.js";
 import { PRIORITIES, isHeldNotice, holdsToasts as holdsToasts_2 } from "../context/notifications.js";
 import { usePrefilledPromptWarning } from "./PromptInput/usePrefilledPromptWarning.js";
-import { getDefaultEffortLevelForOption } from "./ModelPicker.js";
-import { useAppState, useAppState_2 } from "../state/AppState.js";
 import { WARNING_GLYPH } from "../constants/figures.js";
 import { getRemoteCaps, hasRemoteCap } from "../remote/remoteMode.js";
 import { renderWithForceUpdate } from "../hooks/useForceRender.js";
 import { ContextSlotA } from "../context/contextSlots.js";
-import { useMeasured, useInterval } from "../ink/components/Input.js";
 import { useVoiceAvailable, useVoiceLoginCompleted } from "../hooks/useVoiceIntegration.js";
 import { useHasSelection } from "../ink/hooks/use-selection.js";
+import { useStatusLineSuppressed } from "./StatusLine.js";
+import { canShowCloseSessionConfirm, hasPaneContext } from "./pluginUi/PaneBody.js";
+import { useKeybindingContext } from "../keybindings/KeybindingContext.js";
+import { chordToDisplayString } from "../keybindings/parser.js";
+import { getShortcutDisplayPlatform } from "../utils/keyboardShortcuts.js";
 import { PromptModeHints } from "./PromptInput/PromptInputModeHints.js";
 import { isBgSession } from "../utils/concurrentSessions.js";
 import { getGlobalConfig } from "../utils/config.js";
@@ -55,18 +59,82 @@ import { getSubscriptionType } from "../utils/auth.js";
 import { onMicroCompactFlag, getMicroCompactFlag } from "../services/compact/microCompact.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:773347-773396 placement
+//@ chunk-czq1j3j2.js:787238-787242 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:787238", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:790944-790948 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:790944", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:790948-790952 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:790948", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:790952-791021 placement
+/**
+ * 函数 useNowTicker（按间隔刷新的当前时间）；位于「沿用旧版路径：启动状态通知」模块。
+ */
+function useNowTicker(intervalMs) {
+  let [now, setNow] = useState(Date.now);
+  useInterval(() => setNow(Date.now()), intervalMs);
+  return now;
+}
+//@ chunk-czq1j3j2.js:791021-791025 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:791021", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:803415-803419 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:803415", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:805001-805005 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:805001", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:805005-805009 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:805005", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:805650-805675 sole-consumer
+function selectFalseAppState(state) {
+  return false;
+}
+//@ chunk-czq1j3j2.js:805675-805712 sole-consumer
+var LIVE_PREVIEW = "live-preview";
+var LIVE_PREVIEW_WRAP_OPTIONS = {
+  wrap: true,
+};
+//@ chunk-czq1j3j2.js:805712-805772 affinity (2.1.88 match: getDefaultEffortLevelForOption, 1)
+function getDefaultEffortLevelForOption() {
+  let defaultValue = useAppState(selectFalseAppState);
+  usePluginInstallationStatus(
+    LIVE_PREVIEW,
+    "high",
+    defaultValue ? true : null,
+    PinnedBridgeNotice,
+    LIVE_PREVIEW_WRAP_OPTIONS,
+  );
+}
+//@ chunk-czq1j3j2.js:805772-805821 placement
 function PinnedBridgeNotice() {
   return jsxProd_default(useLatchedBridgeNotice, {
     isPinnedNotice: true,
   });
 }
-//@ chunk-18hwfzwa.js:773396-773400 placement
+//@ chunk-czq1j3j2.js:805821-805825 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:773396", () => {
+deferInit("chunk-czq1j3j2.js:805821", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:773400-773481 placement
+//@ chunk-czq1j3j2.js:805825-805906 placement
 class OneShotGuard {
   emitted = false;
   claim() {
@@ -75,18 +143,18 @@ class OneShotGuard {
     return true;
   }
 }
-//@ chunk-18hwfzwa.js:773481-773508 placement
+//@ chunk-czq1j3j2.js:805906-805933 placement
 var persistenceSuppressedGuard; // deferred: uses OneShotGuard of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:773481", () => {
+deferInit("chunk-czq1j3j2.js:805906", () => {
   persistenceSuppressedGuard = new HostScoped(() => new OneShotGuard());
 });
-//@ chunk-18hwfzwa.js:773508-773549 placement
+//@ chunk-czq1j3j2.js:805933-805974 placement
 function claimPersistenceSuppression(host) {
   return persistenceSuppressedGuard.of(host).claim();
 }
-//@ chunk-18hwfzwa.js:773549-773582 placement
+//@ chunk-czq1j3j2.js:805974-806007 placement
 var PERSISTENCE_SUPPRESSED = "persistence-suppressed";
-//@ chunk-18hwfzwa.js:773582-773866 placement
+//@ chunk-czq1j3j2.js:806007-806291 placement
 function logPersistenceSuppressed() {
   let $ = useMemoCache(4);
   let host = useHost();
@@ -117,7 +185,7 @@ function logPersistenceSuppressed() {
     PersistenceOffNotice,
   );
 }
-//@ chunk-18hwfzwa.js:773866-774378 placement
+//@ chunk-czq1j3j2.js:806291-806805 placement
 function PersistenceOffNotice(reason) {
   if (reason === "skip_prompt_history")
     return jsxProd_default_2(Fragment, {
@@ -146,14 +214,14 @@ function PersistenceOffNotice(reason) {
     ],
   });
 }
-//@ chunk-18hwfzwa.js:774378-774382 placement
+//@ chunk-czq1j3j2.js:806805-806809 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:774378", () => {
+deferInit("chunk-czq1j3j2.js:806805", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:774382-774419 placement
+//@ chunk-czq1j3j2.js:806809-806846 placement
 var TRANSCRIPT_WRITER_DEGRADED = "transcript-writer-degraded";
-//@ chunk-18hwfzwa.js:774419-774558 placement
+//@ chunk-czq1j3j2.js:806846-806985 placement
 function useTranscriptWriterDegradedNotice() {
   let $ = useMemoCache(1);
   let health;
@@ -165,7 +233,7 @@ function useTranscriptWriterDegradedNotice() {
   let degraded = useSyncExternalStore(degradedStore.subscribe, degradedStore.getState);
   usePluginInstallationStatus(TRANSCRIPT_WRITER_DEGRADED, "high", degraded, TranscriptWriteFailingNotice);
 }
-//@ chunk-18hwfzwa.js:774558-774727 placement
+//@ chunk-czq1j3j2.js:806985-807154 placement
 var WRITE_ERROR_REASONS = {
   ENOSPC: "disk full",
   EROFS: "read-only filesystem",
@@ -174,7 +242,7 @@ var WRITE_ERROR_REASONS = {
   EACCES: "permission denied",
   EPERM: "permission denied",
 };
-//@ chunk-18hwfzwa.js:774727-774955 placement
+//@ chunk-czq1j3j2.js:807154-807383 placement
 function TranscriptWriteFailingNotice(error) {
   let reason = WRITE_ERROR_REASONS[error.code];
   return jsxProd_default_2(Fragment, {
@@ -193,12 +261,12 @@ function TranscriptWriteFailingNotice(error) {
     ],
   });
 }
-//@ chunk-18hwfzwa.js:774955-774959 placement
+//@ chunk-czq1j3j2.js:807383-807387 layout
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:774955", () => {
+deferInit("chunk-czq1j3j2.js:807383", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:774959-775053 placement
+//@ chunk-czq1j3j2.js:807387-807481 placement
 var WINDOWS_SANDBOX_STARTING = "windows-sandbox-starting";
 var SANDBOX_STARTING_GRACE_MS = 15000;
 var WINDOWS_SANDBOX_NOTICE_OPTIONS = {
@@ -206,7 +274,7 @@ var WINDOWS_SANDBOX_NOTICE_OPTIONS = {
   color: "inactive",
   wrap: true,
 };
-//@ chunk-18hwfzwa.js:775053-775171 placement (2.1.88 match: getDefaultEffortLevelForOption, 1)
+//@ chunk-czq1j3j2.js:807481-807599 placement (2.1.88 match: getDefaultEffortLevelForOption, 1)
 function getDefaultEffortLevelForOption_2() {
   let $ = useMemoCache(1);
   let startStore;
@@ -223,11 +291,11 @@ function getDefaultEffortLevelForOption_2() {
     WINDOWS_SANDBOX_NOTICE_OPTIONS,
   );
 }
-//@ chunk-18hwfzwa.js:775171-775203 placement
+//@ chunk-czq1j3j2.js:807599-807631 placement
 function WindowsSandboxStartingNotice() {
   return jsxProd_default(WindowsSandboxStartingNotice_2, {});
 }
-//@ chunk-18hwfzwa.js:775203-775515 placement
+//@ chunk-czq1j3j2.js:807631-807943 placement
 function WindowsSandboxStartingNotice_2() {
   let $ = useMemoCache(3);
   let startStore;
@@ -251,15 +319,15 @@ function WindowsSandboxStartingNotice_2() {
   } else textElement = $[2];
   return textElement;
 }
-//@ chunk-18hwfzwa.js:775515-775563 placement
+//@ chunk-czq1j3j2.js:807943-807991 placement
 function selectNotificationsPinned(state) {
   return state.notifications.pinned;
 }
-//@ chunk-18hwfzwa.js:775563-775624 placement
+//@ chunk-czq1j3j2.js:807991-808052 placement
 function compareNoticePriority(a, b) {
   return PRIORITIES[a.priority] - PRIORITIES[b.priority];
 }
-//@ chunk-18hwfzwa.js:775624-775674 placement
+//@ chunk-czq1j3j2.js:808052-808102 placement
 function renderNoticeRow(notice) {
   return jsxProd_default(
     StatusNoticeRow,
@@ -269,7 +337,7 @@ function renderNoticeRow(notice) {
     notice.key,
   );
 }
-//@ chunk-18hwfzwa.js:775674-776232 placement
+//@ chunk-czq1j3j2.js:808102-808660 placement
 function StatusNoticeList() {
   let $ = useMemoCache(13);
   usePrefilledPromptWarning();
@@ -333,7 +401,7 @@ function StatusNoticeList() {
   } else containerComponentElement = $[12];
   return containerComponentElement;
 }
-//@ chunk-18hwfzwa.js:776232-776533 placement
+//@ chunk-czq1j3j2.js:808660-808961 placement
 function StatusNotices({ status, next }) {
   return [status, next]
     .filter((notice) => notice !== null)
@@ -370,15 +438,15 @@ function StatusNotices({ status, next }) {
           ),
     );
 }
-//@ chunk-18hwfzwa.js:776533-776568 placement
+//@ chunk-czq1j3j2.js:808961-808996 placement
 var noticeQueueStore; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:776533", () => {
+deferInit("chunk-czq1j3j2.js:808961", () => {
   noticeQueueStore = createContext({
     status: null,
     next: null,
   });
 });
-//@ chunk-18hwfzwa.js:776568-777322 placement
+//@ chunk-czq1j3j2.js:808996-809750 placement
 function StatusNoticeRow(props) {
   let $ = useMemoCache(14);
   let { notice } = props;
@@ -438,21 +506,11 @@ function StatusNoticeRow(props) {
   } else textElement = $[13];
   return textElement;
 }
-//@ chunk-18hwfzwa.js:777322-777326 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:777322", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:777326-777330 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:777326", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:777330-777355 placement
+//@ chunk-czq1j3j2.js:809758-809783 placement
 function useStatusNoticeLines(deps) {
   return false;
 }
-//@ chunk-18hwfzwa.js:777355-777470 placement
+//@ chunk-czq1j3j2.js:809783-809898 placement
 /**
  * 订阅状态通知的变化并返回当前通知行（会话变化时刷新）。
  */
@@ -465,7 +523,7 @@ function useStatusNoticeLines_2(enabled) {
   }, [sessionId, lines]);
   return lines;
 }
-//@ chunk-18hwfzwa.js:777470-777563 placement
+//@ chunk-czq1j3j2.js:809898-809991 placement
 function shouldShowStatusNotices(enabled) {
   let contextSlot = useContext(ContextSlotA);
   let isOverflowing = useMeasured(() => {
@@ -474,7 +532,7 @@ function shouldShowStatusNotices(enabled) {
   });
   return enabled && !isOverflowing;
 }
-//@ chunk-18hwfzwa.js:777563-778316 placement
+//@ chunk-czq1j3j2.js:809991-811008 placement
 function PromptHintRow({
   enabled,
   exitMessage,
@@ -494,14 +552,36 @@ function PromptHintRow({
   let isTapMode = useAppState((state) => enabled && state.settings.voice?.mode === "tap");
   let hasSelection = useHasSelection(enabled);
   let shellRunsOnCloudMachine = useStatusNoticeLines_2(enabled && mode === "bash");
+  let statusLineSuppressed = useStatusLineSuppressed();
+  let showCloseSessionConfirm = canShowCloseSessionConfirm(statusLineSuppressed);
+  let keybindingContext = useKeybindingContext();
+  let pendingChord = keybindingContext?.pendingChord;
+  let displayText = keybindingContext?.getDisplayText("app:closeSession", "SessionTabs");
+  let pendingChordText = pendingChord
+    ? chordToDisplayString(pendingChord, getShortcutDisplayPlatform())
+    : undefined;
   if (!enabled) return null;
   return PromptModeHints({
     exitConfirm: exitMessage.show
       ? {
           keyName: exitMessage.key ?? "",
-          detaches: isBgSession() || hasRemoteCap("catchupReplay"),
+          leaves: statusLineSuppressed
+            ? "quit"
+            : isBgSession() || hasRemoteCap("catchupReplay")
+              ? "detach"
+              : "exit",
         }
       : null,
+    closeSessionConfirm:
+      showCloseSessionConfirm &&
+      keybindingContext !== null &&
+      !hasPaneContext(keybindingContext.activeContexts) &&
+      pendingChordText !== undefined &&
+      displayText === `${pendingChordText} ${pendingChordText}`
+        ? {
+            keyName: pendingChordText,
+          }
+        : null,
     isPasting,
     voice: !voiceAvailable
       ? null
@@ -521,12 +601,12 @@ function PromptHintRow({
     shellRunsOnCloudMachine,
   });
 }
-//@ chunk-18hwfzwa.js:778316-778351 placement
+//@ chunk-czq1j3j2.js:811008-811043 placement
 var MAX_EFFORT_NOTICE_KEY = "max-effort";
 var MAX_EFFORT_NOTICE_OPTIONS = {
   wrap: true,
 };
-//@ chunk-18hwfzwa.js:778351-778423 placement
+//@ chunk-czq1j3j2.js:811043-811115 placement
 function useMaxEffortNotice(level) {
   let noticeLevel = level === "max" && isMaxEffortReminderEnabled() ? level : null;
   usePluginInstallationStatus(
@@ -537,7 +617,7 @@ function useMaxEffortNotice(level) {
     MAX_EFFORT_NOTICE_OPTIONS,
   );
 }
-//@ chunk-18hwfzwa.js:778423-778557 placement
+//@ chunk-czq1j3j2.js:811115-811250 placement
 function MaxEffortNotice() {
   return jsxProd_default_2(Fragment, {
     children: [
@@ -551,45 +631,18 @@ function MaxEffortNotice() {
     ],
   });
 }
-//@ chunk-18hwfzwa.js:778557-778561 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:778557", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:778561-778565 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:778561", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:778565-778635 placement
-/**
- * 函数 useNowTicker（按间隔刷新的当前时间）；位于「沿用旧版路径：启动状态通知」模块。
- */
-function useNowTicker(intervalMs) {
-  let [now, setNow] = useState(Date.now);
-  useInterval(() => setNow(Date.now()), intervalMs);
-  return now;
-}
-//@ chunk-18hwfzwa.js:778635-778667 placement
+//@ chunk-czq1j3j2.js:811254-811286 placement
 function getSubscriptionTypeWithRefresh() {
   useVoiceLoginCompleted();
   return getSubscriptionType();
 }
-//@ chunk-18hwfzwa.js:778667-778671 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:778667", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:778671-778704 placement
+//@ chunk-czq1j3j2.js:811290-811323 placement
 function useMicroCompactFlag() {
   return useSyncExternalStore(onMicroCompactFlag, getMicroCompactFlag);
 }
-//@ chunk-18hwfzwa.js:778704-778708 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:778704", () => {
-  init_react_production();
-});
 export {
+  useStatusNoticeLines_2,
+  useNowTicker,
   shouldShowStatusNotices,
   PromptHintRow,
   useMaxEffortNotice,
@@ -597,7 +650,4 @@ export {
   noticeQueueStore,
   useMicroCompactFlag,
   getSubscriptionTypeWithRefresh,
-  useNowTicker,
-  PinnedBridgeNotice,
-  useStatusNoticeLines_2,
 };

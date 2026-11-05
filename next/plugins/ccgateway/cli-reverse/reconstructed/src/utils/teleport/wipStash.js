@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：上传前捕获未提交修改（WIP stash）：安全读取工作树文件、对比索引/HEAD、构造种子树与引用
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-gjx0rh1b.js (108)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sfy2wa1e.js (108)
  * attribution: placement 108
  */
 import { join, dirname, basename, isAbsolute } from "path";
@@ -38,7 +38,7 @@ import {
   hasDosShortNameSegment,
 } from "./gitBundleVerify.js";
 import { logEvent } from "../../services/analytics/index.js";
-import { uniq, count } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import {
   listIndexEntriesNamed,
   splitArgsIntoSlices,
@@ -73,6 +73,7 @@ import {
   GIT_LIST_ENV,
 } from "../git/builderGit/gitEnv.js";
 import { logForDebugging } from "../debug.js";
+import { countWhere } from "../collections.js";
 import { listGitRefs } from "../git/builderGit/gitConfigAudit.js";
 import { splitIndexOffArgs, indexFileEnv } from "../git/builderGit/repoCopy.js";
 import { createReachCollector } from "../git/builderGit/sandboxReach.js";
@@ -83,11 +84,11 @@ import { readJunction } from "../fsJunctions.js";
 import { sleep } from "../sleep.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-gjx0rh1b.js:14008-14041 placement
+//@ chunk-sfy2wa1e.js:14108-14141 placement
 var MAX_CONCURRENT_FILE_READS = 8;
 var MAX_FILE_READ_CHUNK_BYTES = 1048576;
 var DARWIN_NOFOLLOW_FLAG = 536870912;
-//@ chunk-gjx0rh1b.js:14041-17495 placement
+//@ chunk-sfy2wa1e.js:14141-17595 placement
 /**
  * 读取变更文件内容（只接受 git 会写的路径、累计大小上限、硬链接/变化检测）。
  */
@@ -353,7 +354,7 @@ async function readChangedFilesForStash(workTree, names, entries, sizeCap, ioHoo
     ),
   };
 }
-//@ chunk-gjx0rh1b.js:17495-17950 placement
+//@ chunk-sfy2wa1e.js:17595-18050 placement
 /**
  * 确认暂存副本在 git 读取期间未被改动（比较 inode、大小、ctime 等）。
  */
@@ -390,11 +391,11 @@ async function stagedCopiesUnchanged(workTree, copies) {
     )
   ).every(Boolean);
 }
-//@ chunk-gjx0rh1b.js:17950-18020 placement (2.1.88 match: getFileIdentity, 0.794)
+//@ chunk-sfy2wa1e.js:18050-18120 placement (2.1.88 match: getFileIdentity, 0.795)
 function getFileIdentity(filePath) {
   return filePath.dev === 0n || filePath.ino === 0n ? null : `${filePath.dev}:${filePath.ino}`;
 }
-//@ chunk-gjx0rh1b.js:18020-18228 placement
+//@ chunk-sfy2wa1e.js:18120-18328 placement
 async function compareFileIdentity(workTree, path, expected) {
   let stats = await lstat(join(workTree, path), {
     bigint: true,
@@ -404,7 +405,7 @@ async function compareFileIdentity(workTree, path, expected) {
     ? "changed"
     : "same";
 }
-//@ chunk-gjx0rh1b.js:18228-18489 placement
+//@ chunk-sfy2wa1e.js:18328-18589 placement
 async function hashFileWithinLimit(handle, maxBytes, limit, update) {
   let hash = createHash("sha256");
   let buffer = Buffer.allocUnsafe(Math.min(maxBytes + 1, MAX_FILE_READ_CHUNK_BYTES));
@@ -419,7 +420,7 @@ async function hashFileWithinLimit(handle, maxBytes, limit, update) {
   }
   return offset === maxBytes && hash.digest().equals(limit);
 }
-//@ chunk-gjx0rh1b.js:18489-18816 placement
+//@ chunk-sfy2wa1e.js:18589-18916 placement
 /**
  * 创建计算 blob 哈希的流式哈希器，把 CRLF 转为 LF 计算。
  */
@@ -448,7 +449,7 @@ function createLfBlobHasher(algorithm, size, headerLength) {
     },
   };
 }
-//@ chunk-gjx0rh1b.js:18816-18961 placement
+//@ chunk-sfy2wa1e.js:18916-19061 placement
 function isGitattributesPath(path) {
   let platform = getPlatform();
   let segment = splitPathSegments(path).at(-1) ?? "";
@@ -456,7 +457,7 @@ function isGitattributesPath(path) {
     ? segment.toLowerCase() === ".gitattributes"
     : segment === ".gitattributes";
 }
-//@ chunk-gjx0rh1b.js:18961-19101 placement
+//@ chunk-sfy2wa1e.js:19061-19201 placement
 function missingGitattributesPaths(paths) {
   let seen = new Set(paths);
   return (
@@ -465,21 +466,21 @@ function missingGitattributesPaths(paths) {
       : [".gitattributes", ...listAncestorDirs(paths).map((rel) => `${rel}/.gitattributes`)]
   ).filter((attributesPath) => !seen.has(attributesPath));
 }
-//@ chunk-gjx0rh1b.js:19101-19170 placement
+//@ chunk-sfy2wa1e.js:19201-19270 placement
 var TRANSIENT_STAT_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-gjx0rh1b.js:19101", () => {
+deferInit("chunk-sfy2wa1e.js:19201", () => {
   TRANSIENT_STAT_ERRNOS = new Set(["ENAMETOOLONG", "ENOTDIR", "EISDIR", "EINVAL", "ELOOP"]);
 });
-//@ chunk-gjx0rh1b.js:19170-19186 placement
+//@ chunk-sfy2wa1e.js:19270-19286 placement
 var BACKSLASH_BYTE = 92;
 var SLASH_BYTE = 47;
-//@ chunk-gjx0rh1b.js:19186-19267 placement
+//@ chunk-sfy2wa1e.js:19286-19367 placement
 function normalizeSymlinkBytes(viaProcFd, platform = getPlatform()) {
   return platform === "windows"
     ? Buffer.from(viaProcFd.map((segment) => (segment === BACKSLASH_BYTE ? SLASH_BYTE : segment)))
     : viaProcFd;
 }
-//@ chunk-gjx0rh1b.js:19267-19558 placement
+//@ chunk-sfy2wa1e.js:19367-19658 placement
 async function openViaProcFd(path, platform) {
   if (platform !== "linux")
     return readlink(path, {
@@ -500,7 +501,7 @@ async function openViaProcFd(path, platform) {
     await handle.close();
   }
 }
-//@ chunk-gjx0rh1b.js:19558-21423 placement
+//@ chunk-sfy2wa1e.js:19658-21523 placement
 /**
  * 以不跟随链接方式读取工作树文件，检测被替换、硬链接、变化。
  */
@@ -637,11 +638,11 @@ async function readWorktreeFileSafely(workTree, relPath, entry) {
     };
   }
 }
-//@ chunk-gjx0rh1b.js:21423-21498 placement
+//@ chunk-sfy2wa1e.js:21523-21598 placement
 function splitPathSegments(path) {
   return (getPlatform() === "windows" ? path.replaceAll("\\", "/") : path).split("/");
 }
-//@ chunk-gjx0rh1b.js:21498-21724 placement
+//@ chunk-sfy2wa1e.js:21598-21824 placement
 async function lstatOrAbsent(workTree, relPath) {
   let current = workTree;
   for (let segment of splitPathSegments(relPath).slice(0, -1)) {
@@ -656,7 +657,7 @@ async function lstatOrAbsent(workTree, relPath) {
   }
   return "clear";
 }
-//@ chunk-gjx0rh1b.js:21724-22254 placement
+//@ chunk-sfy2wa1e.js:21824-22354 placement
 /**
  * 安全地读取工作树内小文件（确认未被替换、无硬链接），计算它可能对应的 blob id 集合（含 CRLF、ident 变体）。
  */
@@ -692,13 +693,13 @@ async function readWorktreeBlobIds(workTree, relPath, oidLength, maxBytes, runGi
     await opened.handle.close().catch(() => {});
   }
 }
-//@ chunk-gjx0rh1b.js:22254-22359 placement
+//@ chunk-sfy2wa1e.js:22354-22459 placement
 function candidateBlobIds(content, oidLength) {
   let algorithm = oidLength === 64 ? "sha256" : "sha1";
   let ids = collapseIdentKeywords(content);
   return [content, ...(ids === null ? [] : [ids])].flatMap((extra) => blobIdsForContent(extra, algorithm));
 }
-//@ chunk-gjx0rh1b.js:22359-22575 placement
+//@ chunk-sfy2wa1e.js:22459-22675 placement
 function blobIdsForContent(content, algorithm) {
   let sha = createHash(algorithm).update(`blob ${content.length}\x00`).update(content).digest("hex");
   let crlf = countCrlf(content, false);
@@ -708,16 +709,16 @@ function blobIdsForContent(content, algorithm) {
     lfBlobHasher.update(content.subarray(offset, offset + MAX_FILE_READ_CHUNK_BYTES));
   return [sha, lfBlobHasher.digest()];
 }
-//@ chunk-gjx0rh1b.js:22575-22631 placement
+//@ chunk-sfy2wa1e.js:22675-22731 placement
 var DOLLAR_CHAR_CODE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var buffer_3;
 var buffer_4;
-deferInit("chunk-gjx0rh1b.js:22575", () => {
+deferInit("chunk-sfy2wa1e.js:22675", () => {
   DOLLAR_CHAR_CODE = 36;
   buffer_3 = Buffer.from("$Id:");
   buffer_4 = Buffer.from("$Id$");
 });
-//@ chunk-gjx0rh1b.js:22631-23004 placement
+//@ chunk-sfy2wa1e.js:22731-23104 placement
 /**
  * 把展开的 $Id$ 关键字还原为未展开形式，无变化返回 null。
  */
@@ -747,21 +748,21 @@ function collapseIdentKeywords(content) {
   }
   return keyword === content.length ? null : index_2.subarray(0, keyword);
 }
-//@ chunk-gjx0rh1b.js:23004-23138 placement
+//@ chunk-sfy2wa1e.js:23104-23238 placement
 function countCrlf(content, startsAtFirstLine) {
   let count = startsAtFirstLine && content[0] === 10 ? 1 : 0;
   if (!content.includes(13)) return count;
   for (let idx = 1; idx < content.length; idx++) if (content[idx] === 10 && content[idx - 1] === 13) count++;
   return count;
 }
-//@ chunk-gjx0rh1b.js:23576-23731 placement
+//@ chunk-sfy2wa1e.js:23676-23831 placement
 var SEED_READ_PROBLEMS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TREE_READ_TAMPERED;
 var TREE_READ_MISSING;
 var MAX_OBJECT_BYTES;
 var MAX_OBJECT_ENTRIES;
 var KNOWN_TREE_MODES;
-deferInit("chunk-gjx0rh1b.js:23576", () => {
+deferInit("chunk-sfy2wa1e.js:23676", () => {
   SEED_READ_PROBLEMS = {
     failed: "unreadable",
   };
@@ -775,7 +776,7 @@ deferInit("chunk-gjx0rh1b.js:23576", () => {
   MAX_OBJECT_ENTRIES = 4000000;
   KNOWN_TREE_MODES = new Set(["100644", "100755", "120000", "40000", "160000"]);
 });
-//@ chunk-gjx0rh1b.js:23731-23865 placement
+//@ chunk-sfy2wa1e.js:23831-23965 placement
 function isTreeReadFailure(value) {
   return (
     typeof value === "object" &&
@@ -786,14 +787,14 @@ function isTreeReadFailure(value) {
     typeof value.failed === "string"
   );
 }
-//@ chunk-gjx0rh1b.js:23865-23976 placement
+//@ chunk-sfy2wa1e.js:23965-24076 placement
 var TREE_MODE = "40000";
 var GITLINK_MODE_2 = "160000";
 var SYMLINK_MODE = "120000";
 var padFileMode = (mode) => mode.padStart(6, "0");
 var entryKindForMode = (mode) =>
   mode === GITLINK_MODE_2 ? "gitlink" : mode === SYMLINK_MODE ? "link" : "file";
-//@ chunk-gjx0rh1b.js:23976-24497 placement
+//@ chunk-sfy2wa1e.js:24076-24597 placement
 function batchCatFile(runGit, dir) {
   return async (paths) => {
     let tempDir = null;
@@ -829,7 +830,7 @@ function batchCatFile(runGit, dir) {
     }
   };
 }
-//@ chunk-gjx0rh1b.js:24497-26246 placement
+//@ chunk-sfy2wa1e.js:24597-26346 placement
 /**
  * 通过 git cat-file 批量读取对象，校验 sha1/sha256 哈希。
  */
@@ -851,7 +852,7 @@ class GitObjectReader {
     );
   }
   async trees(treeIds) {
-    let pending = uniq(treeIds.filter((treeId) => !this.listings.has(treeId)));
+    let pending = normalizeCaseForComparison_2(treeIds.filter((treeId) => !this.listings.has(treeId)));
     if (pending.length === 0) return true;
     let readResult = await this.read("tree", pending);
     if (isTreeReadFailure(readResult)) return readResult;
@@ -875,7 +876,7 @@ class GitObjectReader {
     return isTreeReadFailure(commitInfo) ? commitInfo : commitInfo.get(commitId);
   }
   async commits(commitIds) {
-    let pending = uniq([...commitIds]);
+    let pending = normalizeCaseForComparison_2([...commitIds]);
     let readResult = pending.length === 0 ? new Map() : await this.read("commit", pending);
     if (isTreeReadFailure(readResult)) return readResult;
     let parsed = new Map();
@@ -909,7 +910,7 @@ class GitObjectReader {
     return parsed;
   }
   async blobs(blobIds) {
-    return blobIds.length === 0 ? new Map() : this.read("blob", uniq([...blobIds]));
+    return blobIds.length === 0 ? new Map() : this.read("blob", normalizeCaseForComparison_2([...blobIds]));
   }
   async read(type, ids) {
     let response = await this.fetch(
@@ -943,7 +944,7 @@ class GitObjectReader {
     return bodies;
   }
 }
-//@ chunk-gjx0rh1b.js:26246-26718 placement
+//@ chunk-sfy2wa1e.js:26346-26818 placement
 function parseTreeEntries(buffer, hashLength) {
   let entries = new Map();
   let offset = 0;
@@ -974,7 +975,7 @@ function parseTreeEntries(buffer, hashLength) {
   }
   return invalid ? "malformed" : entries;
 }
-//@ chunk-gjx0rh1b.js:26718-26835 placement
+//@ chunk-sfy2wa1e.js:26818-26935 placement
 function isValidTreeEntryName(name) {
   return (
     name.length > 0 &&
@@ -983,7 +984,7 @@ function isValidTreeEntryName(name) {
     !(name.length === 2 && name[0] === 46 && name[1] === 46)
   );
 }
-//@ chunk-gjx0rh1b.js:26835-27035 placement
+//@ chunk-sfy2wa1e.js:26935-27135 placement
 function compareTreeEntries(left, right) {
   let min = Math.min(left.name.length, right.name.length);
   let limit = left.name.subarray(0, min).compare(right.name.subarray(0, min));
@@ -991,11 +992,11 @@ function compareTreeEntries(left, right) {
   let nextByte = (entry) => (entry.name.length > min ? entry.name[min] : entry.isTree ? 47 : 0);
   return nextByte(left) - nextByte(right);
 }
-//@ chunk-gjx0rh1b.js:27035-27075 placement
+//@ chunk-sfy2wa1e.js:27135-27175 placement
 function isOctalNumber(value) {
   return /^[0-7]+$/.test(value);
 }
-//@ chunk-gjx0rh1b.js:27075-27328 placement
+//@ chunk-sfy2wa1e.js:27175-27428 placement
 function GIT_FILE_MODES(octal) {
   let digits = isOctalNumber(octal)
     ? Array.from(octal.slice(-11)).reduce((acc, digit) => ((acc << 3) | Number(digit)) >>> 0, 0)
@@ -1013,7 +1014,7 @@ function GIT_FILE_MODES(octal) {
       return octal.replace(/^0+/, "");
   }
 }
-//@ chunk-gjx0rh1b.js:27328-28517 placement
+//@ chunk-sfy2wa1e.js:27428-28617 placement
 async function parseIndexEntries(reader, baseId, otherId) {
   let zeroId = "0".repeat(reader.idLength);
   let entries = [];
@@ -1045,7 +1046,7 @@ async function parseIndexEntries(reader, baseId, otherId) {
     for (let { prefix, base, other } of queue) {
       let baseListing = base === null ? new Map() : reader.listing(base);
       let otherListing = other === null ? new Map() : reader.listing(other);
-      let sorted = uniq([...baseListing.keys(), ...otherListing.keys()]).sort();
+      let sorted = normalizeCaseForComparison_2([...baseListing.keys(), ...otherListing.keys()]).sort();
       entryCount += sorted.length;
       if (entryCount > MAX_OBJECT_ENTRIES) return TREE_READ_TAMPERED;
       for (let name of sorted) {
@@ -1092,7 +1093,7 @@ async function parseIndexEntries(reader, baseId, otherId) {
   }
   return entries;
 }
-//@ chunk-gjx0rh1b.js:28517-29099 placement
+//@ chunk-sfy2wa1e.js:28617-29199 placement
 /**
  * 在 git 树中按路径逐段下钻，批量读取树对象，解析出给定路径对应的 blob/树 id 与模式。
  */
@@ -1139,13 +1140,13 @@ async function resolveTreePaths(reader, rootTree, paths) {
   }
   return byPath;
 }
-//@ chunk-gjx0rh1b.js:29099-29147 placement
+//@ chunk-sfy2wa1e.js:29199-29247 placement
 var BOM_BYTES = {
   latin1: "\xEF\xBB\xBF",
   utf8: "\uFEFF",
 };
 var pendingFilterCheck;
-//@ chunk-gjx0rh1b.js:29147-29612 placement
+//@ chunk-sfy2wa1e.js:29247-29712 placement
 function writeProbeBlob(runGit, extra) {
   let check = (pendingFilterCheck ??= (async () => {
     let buffer = Buffer.from([65, 233, 128, 255, 195, 40, 66]);
@@ -1170,14 +1171,14 @@ function writeProbeBlob(runGit, extra) {
     return "utf8";
   });
 }
-//@ chunk-gjx0rh1b.js:29612-29626 placement
+//@ chunk-sfy2wa1e.js:29712-29726 placement
 var deflateAsync; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-gjx0rh1b.js:29612", () => {
+deferInit("chunk-sfy2wa1e.js:29712", () => {
   deflateAsync = promisify(deflate);
 });
-//@ chunk-gjx0rh1b.js:29626-29676 placement
+//@ chunk-sfy2wa1e.js:29726-29776 placement
 var FILTER_ATTRIBUTES = ["filter", "working-tree-encoding", "ident"];
-//@ chunk-gjx0rh1b.js:29676-31456 placement
+//@ chunk-sfy2wa1e.js:29776-31556 placement
 /**
  * 用 read-tree/ls-files 读取指定路径在 HEAD 中的条目（老版本 git 兼容）。
  */
@@ -1188,10 +1189,10 @@ async function readTreeForPaths(runGit, paths, dirsByPath, indexOptions, options
   let variantsOf = (path) =>
     selfAndParents(path).flatMap((dirPath) =>
       options.normalizationBlind
-        ? uniq([dirPath, dirPath.normalize("NFC"), dirPath.normalize("NFD")])
+        ? normalizeCaseForComparison_2([dirPath, dirPath.normalize("NFC"), dirPath.normalize("NFD")])
         : [dirPath],
     );
-  let probePaths = uniq(paths.flatMap(variantsOf));
+  let probePaths = normalizeCaseForComparison_2(paths.flatMap(variantsOf));
   if (indexOptions?.prepareIndexAndStore !== undefined) {
     let prepared = await indexOptions.prepareIndexAndStore(probePaths, indexOptions);
     if (prepared !== true) return prepared;
@@ -1284,7 +1285,7 @@ async function readTreeForPaths(runGit, paths, dirsByPath, indexOptions, options
     (path) => directories.has(path) || variantsOf(path).some((variant) => filteredPaths.has(variant)),
   );
 }
-//@ chunk-gjx0rh1b.js:31456-33266 placement
+//@ chunk-sfy2wa1e.js:31556-33366 placement
 /**
  * 读取影响变更路径的 .gitattributes（检测篡改、子模块）。
  */
@@ -1296,7 +1297,7 @@ async function readGitattributesForPaths(
   textEncoding,
   refusesGitlinkedRules,
 ) {
-  let wantedPaths = uniq([
+  let wantedPaths = normalizeCaseForComparison_2([
     ...missingGitattributesPaths(missingPaths),
     ...missingPaths.filter((path) => path.split("/").at(-1) === ".gitattributes"),
   ]);
@@ -1406,7 +1407,7 @@ async function readGitattributesForPaths(
     blobs,
   };
 }
-//@ chunk-gjx0rh1b.js:33266-33607 placement
+//@ chunk-sfy2wa1e.js:33366-33707 placement
 /**
  * 按 git 模式解码 gitattributes 内容：符号链接、去 BOM 与非法输入判断。
  */
@@ -1435,7 +1436,7 @@ function decodeGitattributesBlob(content, mode, textEncoding) {
         markStripped: true,
       };
 }
-//@ chunk-gjx0rh1b.js:33607-34032 placement
+//@ chunk-sfy2wa1e.js:33707-34132 placement
 /**
  * 解码 git 加引号的路径（处理八进制与转义字符）。
  */
@@ -1471,13 +1472,13 @@ function unquoteGitPath(quoted) {
   }
   return Buffer.from(bytes);
 }
-//@ chunk-gjx0rh1b.js:34032-34167 placement
+//@ chunk-sfy2wa1e.js:34132-34267 placement
 async function supportsGit232(runGit) {
   let result = await runGit(["version"]);
   let version = result.code === 0 ? parseGitVersion(result.stdout) : null;
   return version !== null && (version.major > 2 || (version.major === 2 && version.minor >= 32));
 }
-//@ chunk-gjx0rh1b.js:34167-34774 placement
+//@ chunk-sfy2wa1e.js:34267-34874 placement
 /**
  * 读取 commit 对象并校验其哈希，判定是否被篡改。
  */
@@ -1506,16 +1507,16 @@ async function readObjectForTree(runGit, oid, oid_2) {
   if (treeId === undefined) return "tampered";
   return treeId;
 }
-//@ chunk-gjx0rh1b.js:34774-34884 placement
+//@ chunk-sfy2wa1e.js:34874-34984 placement
 async function readCommitTree(runGit, commit, oid, encoding = "utf8") {
   let entries = await readObjectForTree(runGit, commit, encoding);
   if (entries === null || entries === "tampered") return entries;
   return buildTreeObject(runGit, entries, oid);
 }
-//@ chunk-gjx0rh1b.js:34884-34905 placement
+//@ chunk-sfy2wa1e.js:34984-35005 placement
 var YIELD_EVERY_OBJECTS = 512;
 var YIELD_EVERY_BYTES = 262144;
-//@ chunk-gjx0rh1b.js:34905-36996 placement
+//@ chunk-sfy2wa1e.js:35005-37096 placement
 async function verifyObjectsByHash(objects, ids) {
   let algorithm = ids.length === 64 ? "sha256" : "sha1";
   let verify = (kind, content, expectedId) =>
@@ -1537,7 +1538,7 @@ async function verifyObjectsByHash(objects, ids) {
   };
   let readsInOneRun = (await writeProbeBlob(objects, {})) === "latin1";
   let listingsOf = async (treeIds) => {
-    let missing = uniq(treeIds.filter((treeId) => !listings.has(treeId)));
+    let missing = normalizeCaseForComparison_2(treeIds.filter((treeId) => !listings.has(treeId)));
     if (missing.length === 0) return true;
     if (!readsInOneRun) {
       for (let treeId of missing) {
@@ -1638,7 +1639,7 @@ async function verifyObjectsByHash(objects, ids) {
     readsManyTreesInOneRun: readsInOneRun,
   };
 }
-//@ chunk-gjx0rh1b.js:36996-37651 placement
+//@ chunk-sfy2wa1e.js:37096-37751 placement
 async function buildTreeObject(runGit, entries, paths) {
   let { listingsOf, listing } = await verifyObjectsByHash(runGit, entries);
   let found = new Map();
@@ -1684,7 +1685,7 @@ async function buildTreeObject(runGit, entries, paths) {
   }
   return found;
 }
-//@ chunk-gjx0rh1b.js:37651-38108 placement
+//@ chunk-sfy2wa1e.js:37751-38208 placement
 /**
  * diff --raw 行格式正则及 git 文件模式、空 blob id、上限等常量。
  */
@@ -1703,11 +1704,11 @@ var GIT_READ_CONCURRENCY = 8;
 var GIT_SIGPIPE_EXIT_CODE = 129;
 var TREE_READBACK_MISMATCH = "the trees just built could not be read back as what their ids name";
 var COMMIT_READBACK_MISMATCH = "a commit just made could not be read back as what its id names";
-//@ chunk-gjx0rh1b.js:38108-38196 placement
+//@ chunk-sfy2wa1e.js:38208-38296 placement
 function blobSha1(content) {
   return createHash("sha1").update(`blob ${content.length}\x00`).update(content).digest("hex");
 }
-//@ chunk-gjx0rh1b.js:38196-38421 placement
+//@ chunk-sfy2wa1e.js:38296-38521 placement
 var MAX_STASH_FILE_BYTES = 1048576;
 var MAX_COMPARE_BYTES = 67108864;
 var MAX_STASH_BYTES = 536870912;
@@ -1721,7 +1722,7 @@ var withLongPathsGit =
   (hardenedGitRunner) =>
   (args, ...rest) =>
     hardenedGitRunner(["-c", "core.longpaths=true", ...args], ...rest);
-//@ chunk-gjx0rh1b.js:38421-54648 placement
+//@ chunk-sfy2wa1e.js:38521-54748 placement
 /**
  * 捕获未提交修改为 stash 提交：读索引与工作树、处理 Windows 不能保存的名字、构造种子引用（约 16 KB）。
  */
@@ -1737,7 +1738,7 @@ async function captureWipStash(options, layout, opts = {}) {
       stdoutFd,
     );
   let shouldLeaveOut = (name) => (opts.neverRead ?? opts.alsoLeaveOut)?.(name) ?? false;
-  let filtered = uniq([toPosixSpelling(options), layout.workTree]).filter((root) =>
+  let filtered = normalizeCaseForComparison_2([toPosixSpelling(options), layout.workTree]).filter((root) =>
     CREDENTIAL_CONFIG_PATHS.some(([, relativePath]) =>
       isCredentialConfigPathActive(`${root}/${relativePath}`),
     ),
@@ -1785,7 +1786,7 @@ async function captureWipStash(options, layout, opts = {}) {
   let filtered_2 = headState.inspection.working.filter(
     (entry, entryIndex) => results[entryIndex] !== "unchanged",
   );
-  let openRefusedCount = count(results, (status) => status === "open_refused");
+  let openRefusedCount = countWhere(results, (status) => status === "open_refused");
   if (openRefusedCount > 0) opts.onOpenRefusedAtTheLook?.(openRefusedCount);
   let unchangedCount = headState.inspection.working.length - filtered_2.length;
   if (unchangedCount > 0)
@@ -1883,14 +1884,14 @@ async function captureWipStash(options, layout, opts = {}) {
       : [];
     let isIncludedPath = (path) =>
       !leftOutPaths.has(path) && (!opts.leaveOutUncommittedCredentialFiles || !shouldSkipName(path));
-    let changedPaths = uniq(
+    let changedPaths = normalizeCaseForComparison_2(
       filtered_2.flatMap(({ path, status, newMode, newId }) =>
         status === "D" || newMode === GITLINK_MODE_VALUE || !ZERO_OID_RE.test(newId) ? [path] : [],
       ),
     );
     let directoryPaths = new Set(await listDirectoriesAmong(workTree, changedPaths));
     let filePaths = new Set(changedPaths.filter((path) => !directoryPaths.has(path)));
-    let filtered = uniq(filtered_2.map(({ path }) => path)).filter(
+    let filtered = normalizeCaseForComparison_2(filtered_2.map(({ path }) => path)).filter(
       (path) => !filePaths.has(path) && isIncludedPath(path),
     );
     let filtered_3 = [...stagedPaths].filter(isIncludedPath);
@@ -1921,7 +1922,11 @@ async function captureWipStash(options, layout, opts = {}) {
           : "could not list the index",
       );
     let { elsewhere, withheldTracked } = indexListing;
-    let attrsPaths = uniq([...filtered_2.map(({ path }) => path), ...stagedPaths, ...elsewhere]);
+    let attrsPaths = normalizeCaseForComparison_2([
+      ...filtered_2.map(({ path }) => path),
+      ...stagedPaths,
+      ...elsewhere,
+    ]);
     let attrPaths = new Set();
     let verifiedAttrPaths = new Set();
     let caseVariants;
@@ -1971,7 +1976,10 @@ async function captureWipStash(options, layout, opts = {}) {
         );
       if (treeForPaths === null) return stepFailure("check-attr", HEAD_UNVERIFIABLE_TEXT);
       attrPaths = new Set(treeForPaths);
-      let treePathsToCheck = uniq([...attrsPaths.filter((path) => attrPaths.has(path)), ...leftOutPaths]);
+      let treePathsToCheck = normalizeCaseForComparison_2([
+        ...attrsPaths.filter((path) => attrPaths.has(path)),
+        ...leftOutPaths,
+      ]);
       if (treePathsToCheck.length > 0 || withheldTracked.size > 0) {
         let treePaths = await resolveTreePaths(reader, baseTree, treePathsToCheck);
         if (isTreeReadFailure(treePaths))
@@ -1998,7 +2006,7 @@ async function captureWipStash(options, layout, opts = {}) {
         });
         let blobIdLists = (
           await Promise.all(
-            uniq([...wantedPathSet, ...withheldTracked.keys()])
+            normalizeCaseForComparison_2([...wantedPathSet, ...withheldTracked.keys()])
               .filter((path) => !shouldLeaveOut(path))
               .map(readBlobIds),
           )
@@ -2124,7 +2132,7 @@ async function captureWipStash(options, layout, opts = {}) {
           extra,
         );
       let stagePathSet = new Set(stagePaths);
-      let attrsCandidates = uniq([
+      let attrsCandidates = normalizeCaseForComparison_2([
         ...stashChange.entries.flatMap((entry) =>
           entry.kind !== "absent" && stagePathSet.has(entry.path) ? [entry.path] : [],
         ),
@@ -2190,7 +2198,7 @@ async function captureWipStash(options, layout, opts = {}) {
         )
         .map(({ path }) => path);
       stagedBlobIds = new Set([...stagedBlobIds, ...newBlobIds]);
-      let attrPathList = uniq([
+      let attrPathList = normalizeCaseForComparison_2([
         ...liveAttrPaths,
         ...stagedAttrPaths,
         ...stashChange.entries.flatMap((entry) => (attrPaths.has(entry.path) ? [entry.path] : [])),
@@ -2199,7 +2207,10 @@ async function captureWipStash(options, layout, opts = {}) {
       let infoAttributes_2 = await readInfoAttributes(layout.commonDir);
       if (!infoAttributesUnchanged(infoAttributes, infoAttributes_2))
         return stepFailure("check-attr", ".git/info/attributes changed while the attributes were read");
-      let restorePaths = uniq([...filtered_3.filter((path) => newAttrPaths.has(path)), ...mapped]);
+      let restorePaths = normalizeCaseForComparison_2([
+        ...filtered_3.filter((path) => newAttrPaths.has(path)),
+        ...mapped,
+      ]);
       if (restorePaths.length > 0) {
         let restoreProblem = await restoreIndexEntries(
           runHardenedGit,
@@ -2466,7 +2477,7 @@ async function captureWipStash(options, layout, opts = {}) {
         leftOutCredentialFiles.push(...filtered);
       }
       let results = await Promise.all(
-        uniq([iTree_2, indexTree]).map((treeId) =>
+        normalizeCaseForComparison_2([iTree_2, indexTree]).map((treeId) =>
           describeIndexEntryChange(reader, baseTree, treeId, shouldSkipName, caseFolding),
         ),
       );
@@ -2646,7 +2657,7 @@ async function captureWipStash(options, layout, opts = {}) {
     ]);
   }
 }
-//@ chunk-gjx0rh1b.js:54648-55353 placement
+//@ chunk-sfy2wa1e.js:54748-55453 placement
 async function createStashCommit(runGit, ref, signal, pinnedIndexFile) {
   let result = await listGitRefs(
     runGit,
@@ -2701,7 +2712,7 @@ async function createStashCommit(runGit, ref, signal, pinnedIndexFile) {
         }
       : stepFailure("stash create", result.stderr, result);
 }
-//@ chunk-gjx0rh1b.js:55353-56266 placement
+//@ chunk-sfy2wa1e.js:55453-56366 placement
 async function restoreIndexEntries(runGit, reader, opts, baseTree, indexIds) {
   let treePaths = await resolveTreePaths(reader, baseTree, indexIds);
   if (isTreeReadFailure(treePaths))
@@ -2750,7 +2761,7 @@ async function restoreIndexEntries(runGit, reader, opts, baseTree, indexIds) {
       }
     : null;
 }
-//@ chunk-gjx0rh1b.js:56266-56361 placement
+//@ chunk-sfy2wa1e.js:56366-56461 placement
 async function sha256OfFile(path) {
   let hash = createHash("sha256");
   await readFileChunks(path, (chunk) => {
@@ -2758,11 +2769,11 @@ async function sha256OfFile(path) {
   });
   return hash.digest("hex");
 }
-//@ chunk-gjx0rh1b.js:56361-56417 placement
+//@ chunk-sfy2wa1e.js:56461-56517 placement
 function readTreeFailure({ detail, run }) {
   return stepFailure("read-tree", detail, run);
 }
-//@ chunk-gjx0rh1b.js:56417-57801 placement
+//@ chunk-sfy2wa1e.js:56517-57901 placement
 async function listSparseCheckout(cwd, indexPath, dir, reader, iTree, root) {
   let listingsDir = await mkdtemp(join(dir, "claude-seed-listings-"));
   try {
@@ -2865,7 +2876,7 @@ async function listSparseCheckout(cwd, indexPath, dir, reader, iTree, root) {
     }).catch(() => {});
   }
 }
-//@ chunk-gjx0rh1b.js:57801-58623 placement
+//@ chunk-sfy2wa1e.js:57901-58723 placement
 async function listIndexIds(cwd, indexPath, dir, shouldWithhold, tempRoot, root, signal) {
   let idsDir = await mkdtemp(join(tempRoot, "claude-seed-ids-"));
   try {
@@ -2921,11 +2932,11 @@ async function listIndexIds(cwd, indexPath, dir, shouldWithhold, tempRoot, root,
     }).catch(() => {});
   }
 }
-//@ chunk-gjx0rh1b.js:58623-58795 placement
+//@ chunk-sfy2wa1e.js:58723-58895 placement
 var HEAD_UNVERIFIABLE_TEXT = "HEAD's commit or its .gitattributes could not be read to be verified";
 var NO_GIT_DIR_TEXT =
   "internal error: no git directory was chosen for this linked worktree, so git was not run";
-//@ chunk-gjx0rh1b.js:58795-59238 placement
+//@ chunk-sfy2wa1e.js:58895-59338 placement
 /**
  * 创建在加固模式下运行 git 的执行函数；链接工作树缺少管理目录时直接返回拒绝结果。
  */
@@ -2973,7 +2984,7 @@ function createHardenedGitRunner(
       }),
     });
 }
-//@ chunk-gjx0rh1b.js:59238-61137 placement
+//@ chunk-sfy2wa1e.js:59338-61237 placement
 /**
  * 解析 HEAD（无提交、分离、分支），列出被省略的内容。
  */
@@ -3074,11 +3085,13 @@ async function resolveHeadState(runGit, opts) {
       staged,
       working,
       reader,
-      namesWindowsCannotHold: count(changedEntries, (entry) => isWindowsUnholdableDeletion(entry, treePaths)),
+      namesWindowsCannotHold: countWhere(changedEntries, (entry) =>
+        isWindowsUnholdableDeletion(entry, treePaths),
+      ),
     },
   };
 }
-//@ chunk-gjx0rh1b.js:61137-61273 placement
+//@ chunk-sfy2wa1e.js:61237-61373 placement
 function isWindowsUnholdableDeletion(entry, treePaths) {
   return (
     getPlatform() === "windows" &&
@@ -3090,9 +3103,9 @@ function isWindowsUnholdableDeletion(entry, treePaths) {
     !hasDosShortNameSegment(entry.path)
   );
 }
-//@ chunk-gjx0rh1b.js:61273-61436 placement
+//@ chunk-sfy2wa1e.js:61373-61536 placement
 function findSuspiciousChangedPaths({ staged, working }, state) {
-  return uniq([...staged, ...working].map(({ path }) => path))
+  return normalizeCaseForComparison_2([...staged, ...working].map(({ path }) => path))
     .sort()
     .flatMap((path) =>
       !isSafeRepoRelativePath(path, state)
@@ -3112,7 +3125,7 @@ function findSuspiciousChangedPaths({ staged, working }, state) {
           : [],
     );
 }
-//@ chunk-gjx0rh1b.js:61436-62405 placement
+//@ chunk-sfy2wa1e.js:61536-62505 placement
 async function classifyIndexEntry(
   workTree,
   { staged, working },
@@ -3120,7 +3133,7 @@ async function classifyIndexEntry(
   root,
   isAlreadyLeftOut = () => false,
 ) {
-  let allPaths = uniq([...staged, ...working].map(({ path }) => path));
+  let allPaths = normalizeCaseForComparison_2([...staged, ...working].map(({ path }) => path));
   let filtered = allPaths.filter((path) => !isSafeRepoRelativePath(path, root));
   let filtered_2 = allPaths.filter(
     (path) => isSafeRepoRelativePath(path, root) && hasDosShortNameSegment(path),
@@ -3137,17 +3150,17 @@ async function classifyIndexEntry(
       : [entry],
   );
   let changedWorking = (await Promise.all(working.filter(shouldKeepStagedPath).map(compareWorking))).flat();
-  let addedPaths = uniq(
+  let addedPaths = normalizeCaseForComparison_2(
     [...filtered_3, ...changedWorking].filter(({ status }) => status === "A").map(({ path }) => path),
   );
   let addedPathSet = new Set(addedPaths);
-  let changedPaths = uniq(
+  let changedPaths = normalizeCaseForComparison_2(
     [...filtered_3, ...changedWorking]
       .filter(({ path, status }) => status !== "D" && !addedPathSet.has(path))
       .map(({ path }) => path),
   );
   let keptPaths = new Set([...addedPaths, ...changedPaths]);
-  let remainingPaths = uniq(
+  let remainingPaths = normalizeCaseForComparison_2(
     [...filtered_3, ...changedWorking].map(({ path }) => path).filter((path) => !keptPaths.has(path)),
   );
   let probeDirectory = limitConcurrency(GIT_READ_CONCURRENCY, async (path) =>
@@ -3177,7 +3190,7 @@ async function classifyIndexEntry(
     })),
   ].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
 }
-//@ chunk-gjx0rh1b.js:62405-62717 placement
+//@ chunk-sfy2wa1e.js:62505-62817 placement
 async function describeIndexEntryChange(reader, baseTree, iTree, shouldLeaveOut, root) {
   let indexEntries = await parseIndexEntries(reader, baseTree, iTree);
   if (isTreeReadFailure(indexEntries)) return indexEntries;
@@ -3187,7 +3200,7 @@ async function describeIndexEntryChange(reader, baseTree, iTree, shouldLeaveOut,
       (!isSafeRepoRelativePath(path, root) || hasDosShortNameSegment(path) || shouldLeaveOut(path)),
   );
   let statusByPath = new Map(filtered.map(({ path, status }) => [path, status]));
-  return uniq(filtered.map(({ path }) => path))
+  return normalizeCaseForComparison_2(filtered.map(({ path }) => path))
     .sort()
     .map((path) => ({
       path,
@@ -3200,11 +3213,11 @@ async function describeIndexEntryChange(reader, baseTree, iTree, shouldLeaveOut,
             : "changed",
     }));
 }
-//@ chunk-gjx0rh1b.js:62717-62914 placement
+//@ chunk-sfy2wa1e.js:62817-63014 placement
 var MISSING_OBJECT_RE_2 =
   /invalid object \d+ [0-9a-f]+ for|could not fetch [0-9a-f]+ from promisor remote|lazy fetching disabled|missing blob/;
 var UNMERGED_INDEX_RE = /needs merge|you need to resolve your current index first|unmerged/i;
-//@ chunk-gjx0rh1b.js:62914-63057 placement
+//@ chunk-sfy2wa1e.js:63014-63157 placement
 function INDEX_PROBLEM_KINDS(stderr) {
   let firstLine = getFirstLine(seenStderr(stderr).trim());
   return MISSING_OBJECT_RE_2.test(firstLine)
@@ -3215,7 +3228,7 @@ function INDEX_PROBLEM_KINDS(stderr) {
         ? "index_locked"
         : undefined;
 }
-//@ chunk-gjx0rh1b.js:63057-63163 placement
+//@ chunk-sfy2wa1e.js:63157-63263 placement
 function stepFailure(step, detail, result) {
   let problem = result && INDEX_PROBLEM_KINDS(result);
   return {
@@ -3227,7 +3240,7 @@ function stepFailure(step, detail, result) {
     }),
   };
 }
-//@ chunk-gjx0rh1b.js:63163-63273 placement
+//@ chunk-sfy2wa1e.js:63263-63373 placement
 function sameBytesRefusal(paths) {
   return {
     kind: "refused",
@@ -3238,7 +3251,7 @@ function sameBytesRefusal(paths) {
     decidedOn: "tree",
   };
 }
-//@ chunk-gjx0rh1b.js:63273-63368 placement
+//@ chunk-sfy2wa1e.js:63373-63468 placement
 function ignoredPathLines(stdout, names) {
   let line = new Set(
     stdout.split(`
@@ -3246,7 +3259,7 @@ function ignoredPathLines(stdout, names) {
   );
   return names.filter((name) => line.has(`Ignoring path ${name}`));
 }
-//@ chunk-gjx0rh1b.js:63368-63490 placement
+//@ chunk-sfy2wa1e.js:63468-63590 placement
 function treeReadFailure(result, step, message) {
   return result.failed === "tampered"
     ? stepFailure("verify", message)
@@ -3254,13 +3267,13 @@ function treeReadFailure(result, step, message) {
       ? stepFailure("malformed-tree", result.dir ?? "")
       : stepFailure(step, message);
 }
-//@ chunk-gjx0rh1b.js:63490-63617 placement
+//@ chunk-sfy2wa1e.js:63590-63717 placement
 function formatDirectoryLabel(detail) {
   return detail === undefined || detail === ""
     ? "the top of the checkout"
     : `directory '${truncateCodePoints(detail.replace(/[\p{Cc}\p{Cf}']/gu, "?"), 120)}'`;
 }
-//@ chunk-gjx0rh1b.js:63617-63894 placement
+//@ chunk-sfy2wa1e.js:63717-63994 placement
 function parseDiffRawZ(stdout) {
   let parts = stdout.split("\x00");
   if (parts.pop() !== "" || parts.length % 2 !== 0) return null;
@@ -3284,7 +3297,7 @@ function parseDiffRawZ(stdout) {
   );
   return list.every((entry) => entry !== null) ? list : null;
 }
-//@ chunk-gjx0rh1b.js:63894-64051 placement
+//@ chunk-sfy2wa1e.js:63994-64151 placement
 function infoAttributesUnchanged(infoAttributes, infoAttributes_2) {
   return (
     infoAttributes.kind !== "unreadable" &&
@@ -3295,7 +3308,7 @@ function infoAttributesUnchanged(infoAttributes, infoAttributes_2) {
     sameFileStamp(infoAttributes.stamp, infoAttributes_2.stamp)
   );
 }
-//@ chunk-gjx0rh1b.js:64051-64177 placement
+//@ chunk-sfy2wa1e.js:64151-64277 placement
 function sameFileStamp(stamp, stamp_2) {
   return stamp === null || stamp_2 === null
     ? stamp === stamp_2
@@ -3304,7 +3317,7 @@ function sameFileStamp(stamp, stamp_2) {
         stamp.mtimeMs === stamp_2.mtimeMs &&
         stamp.ctimeMs === stamp_2.ctimeMs;
 }
-//@ chunk-gjx0rh1b.js:64177-64290 placement
+//@ chunk-sfy2wa1e.js:64277-64390 placement
 function fileStampFromBigStats(stats) {
   return {
     size: Number(stats.size),
@@ -3313,7 +3326,7 @@ function fileStampFromBigStats(stats) {
     ino: stats.ino,
   };
 }
-//@ chunk-gjx0rh1b.js:64290-64417 placement (2.1.88 match: isRealPathWithinTeamDir, 0.77)
+//@ chunk-sfy2wa1e.js:64390-64517 placement (2.1.88 match: isRealPathWithinTeamDir, 0.772)
 async function lstatBigintOrNull(path, stat = lstat) {
   try {
     return await stat(path, {
@@ -3324,11 +3337,11 @@ async function lstatBigintOrNull(path, stat = lstat) {
     throw error;
   }
 }
-//@ chunk-gjx0rh1b.js:64417-64527 placement
+//@ chunk-sfy2wa1e.js:64517-64627 placement
 var FILTER_ATTRIBUTE_RE = /(?:^|\s|")[-!]?(?:filter|working-tree-encoding|ident)(?:=|\s|$)/;
 var MACRO_OR_QUOTED_ATTR_RE = /^[ \t\r]*(?:\[attr\]|")/;
 var MAX_ATTRIBUTE_LINE_BYTES = 2048;
-//@ chunk-gjx0rh1b.js:64527-64598 placement
+//@ chunk-sfy2wa1e.js:64627-64698 placement
 function hasOverlongAttributeLine(text) {
   return text
     .split(
@@ -3337,7 +3350,7 @@ function hasOverlongAttributeLine(text) {
     )
     .some((line) => Buffer.byteLength(line) >= MAX_ATTRIBUTE_LINE_BYTES);
 }
-//@ chunk-gjx0rh1b.js:64598-64713 placement
+//@ chunk-sfy2wa1e.js:64698-64813 placement
 function attributeLines(text) {
   return text
     .replace(/^\uFEFF/, "")
@@ -3348,7 +3361,7 @@ function attributeLines(text) {
     .map((line) => firstLineOf(line, "\x00"))
     .filter((nonEmpty) => !/^[ \t\r]*#/.test(nonEmpty));
 }
-//@ chunk-gjx0rh1b.js:64713-65080 placement
+//@ chunk-sfy2wa1e.js:64813-65180 placement
 async function findGitDirCaseVariants(gitRoot, workTree) {
   let platform = getPlatform();
   let [dotGit, dotGitUpper] = await Promise.all([
@@ -3374,7 +3387,7 @@ async function findGitDirCaseVariants(gitRoot, workTree) {
     normalizationBlind: platform === "macos",
   };
 }
-//@ chunk-gjx0rh1b.js:65080-66184 placement
+//@ chunk-sfy2wa1e.js:65180-66284 placement
 async function readInfoAttributes(
   commonDir,
   { shouldStampAbove: options = false, shouldStopAtLink: stopAtLink = false } = {},
@@ -3473,7 +3486,7 @@ async function readInfoAttributes(
         };
   }
 }
-//@ chunk-gjx0rh1b.js:66184-66532 placement
+//@ chunk-sfy2wa1e.js:66284-66633 placement
 async function openGitInfoDir(gitDir, stopAtLink, followLink) {
   let stats = await lstatBigintOrNull(gitDir);
   let aboveStats = stopAtLink && stats === null ? await lstatBigintOrNull(dirname(gitDir)) : null;
@@ -3497,7 +3510,7 @@ async function openGitInfoDir(gitDir, stopAtLink, followLink) {
     }),
   };
 }
-//@ chunk-gjx0rh1b.js:66532-67173 placement
+//@ chunk-sfy2wa1e.js:66633-67274 placement
 async function checkAlternatesFile(gitDir, layout) {
   if (!isAbsolute(layout.objectsDir) || /[\r\n]/.test(layout.objectsDir) || /^["#]/.test(layout.objectsDir))
     return "the objects directory cannot be named in an alternates file";
@@ -3540,7 +3553,7 @@ async function checkAlternatesFile(gitDir, layout) {
   ]);
   return null;
 }
-//@ chunk-gjx0rh1b.js:67173-67819 placement
+//@ chunk-sfy2wa1e.js:67274-67920 placement
 async function readSymlinkTarget(root, indexPath, entries) {
   let filtered = entries.filter((entry) => entry.kind === "symlink");
   let targets = [];
@@ -3573,7 +3586,7 @@ async function readSymlinkTarget(root, indexPath, entries) {
       }
     : stepFailure("update-index", updateResult.stderr, updateResult);
 }
-//@ chunk-gjx0rh1b.js:67819-68548 placement
+//@ chunk-sfy2wa1e.js:67920-68649 placement
 async function listSkipWorktreeEntries(dir, indexPath, runGit, skippedPaths) {
   let skipWorktreeResult = await runGit(["--ignore-skip-worktree-entries"], indexPath);
   if (
@@ -3622,7 +3635,7 @@ async function listSkipWorktreeEntries(dir, indexPath, runGit, skippedPaths) {
   }
   return skippedPaths.every((path) => entries.has(path)) ? entries : null;
 }
-//@ chunk-gjx0rh1b.js:68548-68730 placement
+//@ chunk-sfy2wa1e.js:68649-68831 placement
 async function isNotPlainDirectory(workTree, relPath) {
   if (relPath.includes("\uFFFD") || (await lstatOrAbsent(workTree, relPath)) !== "clear") return true;
   try {
@@ -3632,7 +3645,7 @@ async function isNotPlainDirectory(workTree, relPath) {
     return errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR";
   }
 }
-//@ chunk-gjx0rh1b.js:68730-69762 placement
+//@ chunk-sfy2wa1e.js:68831-69863 placement
 async function compareWorktreeEntry(
   workTree,
   { path, status, oldMode, newMode, oldId, newId },
@@ -3697,7 +3710,7 @@ async function compareWorktreeEntry(
     return "changed";
   }
 }
-//@ chunk-gjx0rh1b.js:69762-70712 placement
+//@ chunk-sfy2wa1e.js:69863-70813 placement
 /**
  * 种子索引文件名模式与疑似凭据文件名模式（env、netrc、credential、密钥等）。
  */
@@ -3709,12 +3722,14 @@ var regExp;
 var replaced;
 var regExp_2;
 var regExp_3;
-deferInit("chunk-gjx0rh1b.js:69762", () => {
+deferInit("chunk-sfy2wa1e.js:69863", () => {
   SEED_INDEX_NAME_PATTERN = /^ccr-seed-([0-9]+)-[0-9a-f]{12}\.index(?:\.lock)?$/;
   CREDENTIAL_NAME_RE =
     /env|netrc|npmrc|yarnrc|pypirc|pgpass|\.cnf|terraform|tfvars|tfstate|boto|s3cfg|credential|gitconfig|mcp|claude|config|bash|profile|zsh|zlog|fish|history|consolehost|\.(?:pem|key|p12|pfx|keystore|jks|kdbx|ovpn|vars|ssh|aws|azure|gnupg|kube|docker|git)|_(?:rsa|dsa|ecdsa|ed25519)|secret|settings|gradle\.properties|device-keys|service.?account|deploy_key|htpasswd|htdigest|vault[-_](?:token|pass)|dockercfg|msmtprc|fetchmailrc|sentryclirc|clasprc|transifexrc|databrickscfg|remote-sync|wakatime/i;
   DRIVE_NAME_PREFIX_RE = `[${DECORATION_LEAD_CHARS.replace(/[\\\]^-]/g, "\\$&")}]|_${EDITOR_BACKUP_SUFFIX_SOURCE}_`;
-  credentialConfigPathSpellings = uniq(CREDENTIAL_CONFIG_PATHS.map(([configPath]) => configPath));
+  credentialConfigPathSpellings = normalizeCaseForComparison_2(
+    CREDENTIAL_CONFIG_PATHS.map(([configPath]) => configPath),
+  );
   regExp = new RegExp(
     `(?:^|/)(?:(?:${DRIVE_NAME_PREFIX_RE})[^/]*)?(?:\\.(?:ssh|aws|azure|gnupg|kube|docker|config|cargo|gem|m2|gradle|claude)|documents|appdata|library|(?:${credentialConfigPathSpellings.join("|")})(?![a-z0-9-]))|\\.git`,
     "i",
@@ -3723,7 +3738,7 @@ deferInit("chunk-gjx0rh1b.js:69762", () => {
   regExp_2 = new RegExp(`(?:[${replaced}][^/${replaced}]*){4}|${SYNC_CONFLICT_SUFFIX_PATTERN}`, "i");
   regExp_3 = new RegExp(`(?:^|/)[^/]{${MAX_NAME_READING_LENGTH + 1}}`);
 });
-//@ chunk-gjx0rh1b.js:70712-71692 placement
+//@ chunk-sfy2wa1e.js:70813-71793 placement
 function checkCredentialLikePaths() {
   let rules = new Map();
   let nameVerdicts = new Map();
@@ -3798,7 +3813,7 @@ function checkCredentialLikePaths() {
     return leafSensitive;
   };
 }
-//@ chunk-gjx0rh1b.js:71692-71852 placement
+//@ chunk-sfy2wa1e.js:71793-71953 placement
 function hasConfusableCredentialSegment(regExp, value) {
   return (
     value.includes(":") &&
@@ -3813,7 +3828,7 @@ function hasConfusableCredentialSegment(regExp, value) {
       })
   );
 }
-//@ chunk-gjx0rh1b.js:71852-71942 placement
+//@ chunk-sfy2wa1e.js:71953-72043 placement
 function looksLikeCredentialPath(path, extra) {
   return (
     (path.length > MAX_NAME_READING_LENGTH && regExp_3.test(path)) ||
@@ -3822,7 +3837,7 @@ function looksLikeCredentialPath(path, extra) {
     hasConfusableCredentialSegment(regExp_2, path)
   );
 }
-//@ chunk-gjx0rh1b.js:71942-72045 placement
+//@ chunk-sfy2wa1e.js:72043-72146 placement
 function hasAlternateCredentialSpelling(path, extra) {
   return (
     looksLikeCredentialPath(path, extra) &&
@@ -3831,16 +3846,16 @@ function hasAlternateCredentialSpelling(path, extra) {
       nameReadingFns(path).some((reader) => expandNameReadings(reader(path)).length > 1))
   );
 }
-//@ chunk-gjx0rh1b.js:72045-72121 placement
+//@ chunk-sfy2wa1e.js:72146-72222 placement
 var NON_ASCII_RE; // deferred: uses SEED_INDEX_NAME_PATTERN of its import cycle while loading; runs once the cycle is complete
 var ASCII_ONLY_RE;
 var regExp_4;
-deferInit("chunk-gjx0rh1b.js:72045", () => {
+deferInit("chunk-sfy2wa1e.js:72146", () => {
   NON_ASCII_RE = /[^\x20-\x7e]/gu;
   ASCII_ONLY_RE = /^[\x20-\x7e]*$/;
   regExp_4 = new RegExp(`^(?:${DRIVE_NAME_PREFIX_RE})`, "i");
 });
-//@ chunk-gjx0rh1b.js:72121-73074 placement
+//@ chunk-sfy2wa1e.js:72222-73175 placement
 async function lstatNoFollow(path, destinationPath) {
   let handle;
   try {
@@ -3896,10 +3911,10 @@ async function lstatNoFollow(path, destinationPath) {
     await handle.close().catch(() => {});
   }
 }
-//@ chunk-gjx0rh1b.js:73074-73122 placement
+//@ chunk-sfy2wa1e.js:73175-73223 placement
 var STALE_SEED_MAX_AGE_MS = 600000;
 var SEED_INDEX_PROCESS_RE = /^claude-seed-index-([0-9]+)-/;
-//@ chunk-gjx0rh1b.js:73122-73312 placement
+//@ chunk-sfy2wa1e.js:73223-73413 placement
 async function unlinkWithRetry(path) {
   for (let idx = 0; ; idx++)
     try {
@@ -3913,7 +3928,7 @@ async function unlinkWithRetry(path) {
       await sleep(50);
     }
 }
-//@ chunk-gjx0rh1b.js:73312-73562 placement (2.1.88 match: convertDirectoryToZipInPlace, 0.79)
+//@ chunk-sfy2wa1e.js:73413-73663 placement (2.1.88 match: convertDirectoryToZipInPlace, 0.79)
 /**
  * 清理以 PID 命名的过期目录：名字里的 PID 对应进程已不存在、且目录修改时间超过保留时限时递归删除；出错静默忽略。
  */
@@ -3938,7 +3953,7 @@ async function pruneStaleProcessDirs(tempDir) {
     );
   } catch {}
 }
-//@ chunk-gjx0rh1b.js:73562-73780 placement
+//@ chunk-sfy2wa1e.js:73663-73881 placement
 /**
  * 清理以 PID 命名的过期 seed 索引文件：文件名匹配 seed 索引格式、修改时间超过保留时限且对应进程已不存在时删除（只删文件，不是目录）；出错静默忽略。
  */
@@ -3960,7 +3975,7 @@ async function pruneStaleSeedIndexes(gitDir) {
     );
   } catch {}
 }
-//@ chunk-gjx0rh1b.js:73780-73859 placement
+//@ chunk-sfy2wa1e.js:73881-73960 placement
 function isProcessAlive(pid) {
   try {
     process.kill(pid, 0);
@@ -3969,11 +3984,11 @@ function isProcessAlive(pid) {
     return getErrnoCode(error) === "EPERM";
   }
 }
-//@ chunk-gjx0rh1b.js:73859-73919 placement
+//@ chunk-sfy2wa1e.js:73960-74020 placement
 async function listDirectoriesAmong(workTree, paths) {
   return (await classifyPathsAsDirectories(workTree, paths)).notDirectories;
 }
-//@ chunk-gjx0rh1b.js:73919-74140 placement
+//@ chunk-sfy2wa1e.js:74020-74241 placement
 async function classifyPathsAsDirectories(workTree, paths) {
   let limit = limitConcurrency(GIT_READ_CONCURRENCY, async (path) =>
     (await lstatOrAbsent(workTree, path)) === "clear" ? classifyDirEntry(join(workTree, path)) : "other",
@@ -3984,7 +3999,7 @@ async function classifyPathsAsDirectories(workTree, paths) {
     special: paths.filter((path, index) => results[index] === "special"),
   };
 }
-//@ chunk-gjx0rh1b.js:74140-74288 placement
+//@ chunk-sfy2wa1e.js:74241-74389 placement
 async function classifyDirEntry(path) {
   try {
     let stats = await lstat(path);
@@ -3993,7 +4008,7 @@ async function classifyDirEntry(path) {
     return "other";
   }
 }
-//@ chunk-gjx0rh1b.js:74288-74574 placement
+//@ chunk-sfy2wa1e.js:74389-74675 placement
 async function describeStashBase(runGit, base) {
   let [branch, commitLine] = await Promise.all([
     runGit(["symbolic-ref", "-q", "HEAD"]),
@@ -4012,7 +4027,7 @@ async function describeStashBase(runGit, base) {
       : "";
   return `${branchName}: ${subject}`;
 }
-//@ chunk-gjx0rh1b.js:74574-75644 placement
+//@ chunk-sfy2wa1e.js:74675-75745 placement
 async function describeStashEntryChange(
   changedFilesForStash,
   changedFiles,
@@ -4075,7 +4090,7 @@ async function describeStashEntryChange(
     ],
   };
 }
-//@ chunk-gjx0rh1b.js:75644-75810 placement
+//@ chunk-sfy2wa1e.js:75745-75911 placement
 async function markPathsIntentToAdd(runGit, indexFile, baseTree, paths) {
   return paths.length === 0
     ? {
@@ -4088,7 +4103,7 @@ async function markPathsIntentToAdd(runGit, indexFile, baseTree, paths) {
         paths.map((result) => `0 ${"0".repeat(baseTree.length)}	${result}\x00`).join(""),
       );
 }
-//@ chunk-gjx0rh1b.js:75810-76346 placement
+//@ chunk-sfy2wa1e.js:75911-76447 placement
 async function listFilesNoPrecompose(runGit, indexFile, args) {
   let results = await Promise.all(
     chunkArgsByBytes(args).map((chunk) =>
@@ -4124,7 +4139,7 @@ async function listFilesNoPrecompose(runGit, indexFile, args) {
     absent: new Set(args.filter((path) => !seenPaths.has(path))),
   };
 }
-//@ chunk-gjx0rh1b.js:76346-76493 placement
+//@ chunk-sfy2wa1e.js:76447-76594 placement
 async function hashFileOrAbsent(path) {
   try {
     return createHash("sha1")

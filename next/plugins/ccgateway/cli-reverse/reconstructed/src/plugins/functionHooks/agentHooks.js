@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：agent.offer/agent.spawn 事件的钩子接入
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (12)
  * attribution: placement 12
  */
 import { UI_ENV_SITE_RULES } from "./sites/siteRules.js";
@@ -22,12 +22,12 @@ import { spawnProvenanceOf, isUnnamedSteered } from "./inputHold.js";
 import { isUnknownPluginSpawnedAgent } from "../../tools/AgentTool/pluginSpawnNote.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:58326-58429 placement
+//@ chunk-5xgkngpb.js:60855-60958 placement
 /**
  * agent.offer 事件定义：site 规则与默认 core（总是提供）。
  */
 var AGENT_OFFER_EVENT; // deferred: uses UI_ENV_SITE_RULES (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:58326", () => {
+deferInit("chunk-5xgkngpb.js:60855", () => {
   AGENT_OFFER_EVENT = {
     site: UI_ENV_SITE_RULES["agent.offer"],
     core: {
@@ -40,12 +40,12 @@ deferInit("chunk-e6aww6q8.js:58326", () => {
     },
   };
 });
-//@ chunk-e6aww6q8.js:58429-58470 placement
+//@ chunk-5xgkngpb.js:60958-60998 placement
 /**
  * 是否来自钩子调用
  */
 var isHookCallerPresent = (callerId) => callerId !== undefined && getHookCaller(callerId) !== undefined;
-//@ chunk-e6aww6q8.js:58470-58779 placement
+//@ chunk-5xgkngpb.js:60998-61307 placement
 /**
  * 对可用代理逐个触发 agent.offer 钩子，过滤掉被钩子拒绝的；由钩子发起的调用或只有默认安全插件时跳过。
  */
@@ -74,20 +74,20 @@ async function filterOfferedAgents(agents, callerId) {
   );
   return agents.filter((agent, index) => results[index]?.isOffered === true);
 }
-//@ chunk-e6aww6q8.js:83794-83820 placement
+//@ chunk-5xgkngpb.js:86344-86370 placement
 /**
  * agent.spawn 的 UI 规则
  */
 var AGENT_SPAWN_SITE_RULES; // deferred: uses UI_ENV_SITE_RULES (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:83794", () => {
+deferInit("chunk-5xgkngpb.js:86344", () => {
   AGENT_SPAWN_SITE_RULES = UI_ENV_SITE_RULES["agent.spawn"];
 });
-//@ chunk-e6aww6q8.js:83820-83888 placement
+//@ chunk-5xgkngpb.js:86370-86438 placement
 /**
  * 钩子未放行的说明
  */
 var AGENT_SPAWN_UNPASSED = "agent.spawn: a hook answered without passing the spawn on";
-//@ chunk-e6aww6q8.js:83888-84068 placement
+//@ chunk-5xgkngpb.js:86438-86618 placement
 /**
  * agent.spawn 钩子拒绝时生成 deny 结果（已中止则抛 AbortError），并记调试日志。
  */
@@ -99,7 +99,7 @@ function agentSpawnDenied({ result: hookResult, input, signal }) {
     deny,
   };
 }
-//@ chunk-e6aww6q8.js:84127-84523 placement
+//@ chunk-5xgkngpb.js:86677-87073 placement
 /**
  * 记录 agent.spawn 钩子改写了哪些输入字段，以及模型的改动。
  */
@@ -118,12 +118,12 @@ function logAgentSpawnRewrites(spawnResult) {
     `agent.spawn ${input.subagentType}: model ${input.model ?? "(inherit)"} -> ${spawn.model ?? "(inherit)"} by a hook`,
   );
 }
-//@ chunk-e6aww6q8.js:84523-84602 placement
+//@ chunk-5xgkngpb.js:87073-87152 placement
 /**
  * 子代理未启动的说明
  */
 var AGENT_SPAWN_NOT_STARTED = "agent.spawn: the subagent did not start after the hooks passed it on";
-//@ chunk-e6aww6q8.js:4117078-4117287 placement
+//@ chunk-5xgkngpb.js:4223032-4223241 placement
 /**
  * 记录或清除某代理的派生来源（由哪个钩子发起、是否服务于模型）。
  */
@@ -141,14 +141,14 @@ function recordSpawnProvenance(agentTaskId, toolUseContext) {
     }),
   });
 }
-//@ chunk-e6aww6q8.js:4117287-4117330 placement
+//@ chunk-5xgkngpb.js:4223241-4223284 placement
 /**
  * 记入无名引导集合
  */
 function addUnnamedSteered(agentTaskId) {
   getPluginRegistry().unnamedSteered.add(agentTaskId);
 }
-//@ chunk-e6aww6q8.js:4117330-4117831 placement
+//@ chunk-5xgkngpb.js:4223284-4223784 placement
 /**
  * 恢复/续接代理时计算派生来源标记，并返回 admit() 在接纳时写回来源记录。
  */
@@ -189,7 +189,7 @@ function resolveSpawnProvenanceMarks(agentTaskId, meta, toolUseContext) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:4117831-4118038 placement
+//@ chunk-5xgkngpb.js:4223784-4223991 placement
 /**
  * 插件相关设置在读取后变化时，再读一次（必要时强制 reread）后返回读取器。
  */
@@ -202,12 +202,12 @@ async function rereadPluginSettings(settings, seenVersion) {
 }
 export {
   filterOfferedAgents,
-  recordSpawnProvenance,
-  addUnnamedSteered,
-  resolveSpawnProvenanceMarks,
   AGENT_OFFER_EVENT,
   AGENT_SPAWN_SITE_RULES,
+  resolveSpawnProvenanceMarks,
   rereadPluginSettings,
+  recordSpawnProvenance,
+  addUnnamedSteered,
   AGENT_SPAWN_NOT_STARTED,
   agentSpawnDenied,
   logAgentSpawnRewrites,

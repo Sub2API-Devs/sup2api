@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：按文件批量写日志
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-k7fgdyw5.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-p13f9wk2.js (3)
  * attribution: sole-consumer 1, placement 2
  */
 import { dirname } from "path";
@@ -16,7 +16,7 @@ import { appendToFile } from "../services/api/dumpPrompts.js";
 import { logForDebugging } from "./debug.js";
 import { registerCleanup, registerPreExitFlush } from "./cleanupRegistry.js";
 
-//@ chunk-k7fgdyw5.js:796-891 sole-consumer (2.1.88 match: createJsonlWriter, 1)
+//@ chunk-p13f9wk2.js:829-924 sole-consumer (2.1.88 match: createJsonlWriter, 1)
 function createJsonlWriter(options) {
   let writer = createBufferedWriter_2(options);
   return {
@@ -31,9 +31,9 @@ function createJsonlWriter(options) {
     dispose: writer.dispose,
   };
 }
-//@ chunk-k7fgdyw5.js:891-905 placement
+//@ chunk-p13f9wk2.js:924-938 placement
 function noop() {}
-//@ chunk-k7fgdyw5.js:905-1618 placement
+//@ chunk-p13f9wk2.js:938-1651 placement
 /**
  * 按文件批量追加写日志，同一文件的写入排队执行。
  */
@@ -84,4 +84,4 @@ class BatchedLogWriter {
     this.pendingWrites.clearForTest();
   }
 }
-export { noop, BatchedLogWriter };
+export { BatchedLogWriter, noop };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：本地文件日志
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-41w44bgm.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kd2wbncj.js (3)
  * attribution: placement 3
  */
 import { join, dirname } from "path";
@@ -28,19 +28,19 @@ import { writeFileAtomic } from "../../utils/atomicPublishWrite.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { formatStorageError } from "../../utils/storage/storageErrors.js";
 
-//@ chunk-41w44bgm.js:30489-30500 placement
+//@ chunk-kd2wbncj.js:22764-22775 placement
 /**
  * 空类占位（工作流日志相关，当前无字段）。
  */
 class WorkflowJournalStub {}
-//@ chunk-41w44bgm.js:30500-30619 placement
+//@ chunk-kd2wbncj.js:22775-22894 placement
 function workflowJournalKey(runId) {
   let projectKey = sessionProjectKey();
   if (projectKey === undefined) return;
   let key = STORAGE_SPACES.journal(projectKey, getSessionId(), ["workflows", runId]);
   return validateStorageKey(key) === undefined ? key : undefined;
 }
-//@ chunk-41w44bgm.js:30619-33596 placement
+//@ chunk-kd2wbncj.js:22894-25872 placement
 class LocalFileJournal {
   path;
   storageV5;

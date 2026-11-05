@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：plugin eval 评分器：正则、文件存在/内容、工具使用/顺序、mock 调用、LLM 评分
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (35)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (35)
  * attribution: placement 34, layout 1
  */
 import { lstat, realpath, open } from "fs/promises";
 import { constants } from "fs";
 import { default as path_2 } from "path";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../../tools/NotebookEditTool/constants.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
@@ -22,7 +22,7 @@ import { toolMatchesAnyName } from "../tools/permissionCheckGuard.js";
 import { ARTIFACT_TOOL_NAME } from "../../tools/ArtifactTool/constants.js";
 import { CLAUDE_ARTIFACTS } from "../mcp/firstPartyServerIds.js";
 import { mcpToolNames, PUBLISH_TOOL_NAMES } from "../artifacts/artifactsMcpServer.js";
-import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
+import { parseRuleString } from "../../utils/permissions/permissionRuleParser.js";
 import { mcpInfoFromString } from "../mcp/mcpStringUtils.js";
 import { SKILL } from "../../tools/SkillTool/skillToolNames.js";
 import { getTotalCostUSD } from "../../bootstrap/state.js";
@@ -31,7 +31,7 @@ import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   getErrnoCode,
 } from "../../utils/errors.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { checkCasePathInsideRoot, resolveCaseFileInsideSuite } from "./evalFence.js";
 import { sniffImageMediaType } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { stripBom } from "../../utils/json.js";
@@ -45,6 +45,8 @@ import { truncateMiddle } from "../../utils/stringUtils.js";
 import { readTextFile } from "./caseSchema.js";
 import { asSystemPrompt } from "../../utils/systemPromptType.js";
 import { mainAgentContext } from "../../utils/agentContext.js";
+import { recordToolUsed } from "../compact/keptTools.js";
+import { UNREADABLE_TOOLS_USED_BEFORE_SUMMARY } from "../../bootstrap/stateSlices.js";
 import { queryHaiku, queryHaikuWithFallback } from "../api/claude.js";
 import { extractTextContent_2 } from "../../utils/messages.js";
 import { isSyntheticModelApiErrorMessage } from "../../bootstrap/sessionSlices.js";
@@ -57,18 +59,18 @@ import { getPlatform } from "../../utils/platform.js";
 import { EVAL_ARTIFACTS_DIR } from "./artifactStub.js";
 import { isSameOrInside, pathSegments } from "./caseDiscovery.js";
 
-//@ chunk-qchp9vrd.js:226805-226838 placement
+//@ chunk-af1hzzme.js:228215-228248 placement
 /**
  * 会产生写入副作用的工具集合。
  */
 var WRITE_LIKE_TOOLS = new Set([
   FILE_WRITE_TOOL_NAME,
-  FILE_EDIT_TOOL_NAME,
+  EDIT,
   NOTEBOOK_EDIT_TOOL_NAME,
   BASH_TOOL_NAME,
   POWERSHELL_TOOL_NAME,
 ]);
-//@ chunk-qchp9vrd.js:226838-229800 placement
+//@ chunk-af1hzzme.js:228248-231210 placement
 /**
  * 检查评分器在授予的工具下能否通过（例如检查运行创建的文件却没有写工具）。
  */
@@ -175,23 +177,23 @@ function checkGradersSatisfiable(
   }
   return problems;
 }
-//@ chunk-qchp9vrd.js:229800-229867 placement
+//@ chunk-af1hzzme.js:231210-231277 placement
 /**
  * 判断工具是否为写入类或来自 MCP 服务器。
  */
 function isWriteLikeTool(rule) {
-  let toolName = permissionRuleValueFromString(rule).toolName;
+  let toolName = parseRuleString(rule).toolName;
   return WRITE_LIKE_TOOLS.has(toolName) || mcpInfoFromString(toolName) !== null;
 }
-//@ chunk-qchp9vrd.js:229867-229951 placement
+//@ chunk-af1hzzme.js:231277-231361 placement
 /**
  * 判断工具是否属于被扣留的服务器。
  */
 function isWithheldServerTool(toolName, withheldServers) {
-  let mcpInfo = mcpInfoFromString(permissionRuleValueFromString(toolName).toolName);
+  let mcpInfo = mcpInfoFromString(parseRuleString(toolName).toolName);
   return mcpInfo !== null && withheldServers.includes(mcpInfo.serverName);
 }
-//@ chunk-qchp9vrd.js:229951-230224 placement
+//@ chunk-af1hzzme.js:231361-231634 placement
 function gradeFileExists(grader, scaffolded) {
   switch (grader.type) {
     case "file_exists":
@@ -205,21 +207,21 @@ function gradeFileExists(grader, scaffolded) {
       return false;
   }
 }
-//@ chunk-qchp9vrd.js:230224-230313 placement
+//@ chunk-af1hzzme.js:231634-231723 placement
 /**
  * 判断匹配条件是否表示“永远不匹配”。
  */
 function isNeverMatched(match) {
   return match === "not_contains" || (match.startsWith("count:") && Number(match.slice(6)) === 0);
 }
-//@ chunk-qchp9vrd.js:230429-230501 placement
+//@ chunk-af1hzzme.js:231839-231911 placement
 /**
  * 判断评分器是否为无 arm 的 skill 工具使用检查。
  */
 function isSkillToolUsed(grader) {
   return grader.arm === undefined && grader.type === "tool_used" && grader.tool === SKILL;
 }
-//@ chunk-qchp9vrd.js:230501-231055 placement
+//@ chunk-af1hzzme.js:231911-232465 placement
 async function gradeCase(input) {
   let results = [];
   let totalCostUSD = getTotalCostUSD();
@@ -249,7 +251,7 @@ async function gradeCase(input) {
     paidGradersSkipped,
   };
 }
-//@ chunk-qchp9vrd.js:231055-231497 placement
+//@ chunk-af1hzzme.js:232465-232907 placement
 async function runGrader(grader, input) {
   try {
     switch (grader.type) {
@@ -283,7 +285,7 @@ async function runGrader(grader, input) {
     };
   }
 }
-//@ chunk-qchp9vrd.js:231497-232578 placement
+//@ chunk-af1hzzme.js:232907-233988 placement
 async function gradeLastMessage(grader, input) {
   let graderFocusFile = await readGraderFocusFile(grader.target, input);
   let targetLabel = describeTarget(grader.target);
@@ -325,7 +327,7 @@ async function gradeLastMessage(grader, input) {
     explanation,
   };
 }
-//@ chunk-qchp9vrd.js:232578-232979 placement
+//@ chunk-af1hzzme.js:233988-234389 placement
 function gradeToolOrder(grader, { run }) {
   let toolCallIndex = findToolCallIndex(run.toolCalls, grader.before);
   let toolCallIndex_2 = findToolCallIndex(run.toolCalls, grader.after);
@@ -341,13 +343,13 @@ function gradeToolOrder(grader, { run }) {
       : `${grader.before.tool}@${toolCallIndex} does NOT precede ${grader.after.tool}@${toolCallIndex_2}`,
   };
 }
-//@ chunk-qchp9vrd.js:232979-233278 placement
+//@ chunk-af1hzzme.js:234389-234688 placement
 function gradeToolCallCount(grader, { run }) {
   let expectation = {
     tool: grader.tool,
     input_match: grader.input_match,
   };
-  let callCount = count(run.toolCalls, (call) => matchesToolExpectation(call, expectation));
+  let callCount = countWhere(run.toolCalls, (call) => matchesToolExpectation(call, expectation));
   let min = grader.min ?? 1;
   let max = grader.max ?? Number.POSITIVE_INFINITY;
   let passed = callCount >= min && callCount <= max;
@@ -358,7 +360,7 @@ function gradeToolCallCount(grader, { run }) {
     explanation: `${grader.tool} called ${callCount}x (expected ${min}..${max === Number.POSITIVE_INFINITY ? "\u221E" : max})`,
   };
 }
-//@ chunk-qchp9vrd.js:233278-233599 placement
+//@ chunk-af1hzzme.js:234688-235009 placement
 function gradeFileState(grader, { cwdDiff }) {
   let pattern = fileGlobToRegExp(grader.path);
   let any = (cwdDiff ?? "")
@@ -378,25 +380,25 @@ function gradeFileState(grader, { cwdDiff }) {
       : `${grader.path} ${any ? "exists" : "missing"} (expected ${grader.exists ? "present" : "absent"})`,
   };
 }
-//@ chunk-qchp9vrd.js:233599-233649 placement
+//@ chunk-af1hzzme.js:235009-235059 placement
 /**
  * 找到第一个匹配工具期望的调用下标。
  */
 function findToolCallIndex(toolCalls, expectation) {
   return toolCalls.findIndex((toolCall) => matchesToolExpectation(toolCall, expectation));
 }
-//@ chunk-qchp9vrd.js:233649-233771 placement
+//@ chunk-af1hzzme.js:235059-235181 placement
 function matchesToolExpectation(toolCall, expectation) {
   if (toolCall.name !== expectation.tool) return false;
   if (expectation.input_match) return new RegExp(expectation.input_match).test(toolCall.inputText);
   return true;
 }
-//@ chunk-qchp9vrd.js:233771-233803 placement
+//@ chunk-af1hzzme.js:235181-235213 placement
 /**
  * 需要转义的正则元字符。
  */
 var REGEX_META_CHARS = new Set(".+^${}()|[]\\");
-//@ chunk-qchp9vrd.js:233803-234073 placement
+//@ chunk-af1hzzme.js:235213-235483 placement
 function fileGlobToRegExp(path) {
   let source = "^";
   for (let j = 0; j < path.length; j++) {
@@ -417,7 +419,7 @@ function fileGlobToRegExp(path) {
   }
   return new RegExp(`${source}$`);
 }
-//@ chunk-qchp9vrd.js:234073-234150 placement
+//@ chunk-af1hzzme.js:235483-235560 placement
 /**
  * 构造判失败的评分器结果。
  */
@@ -429,13 +431,13 @@ function failedGrader(grader, explanation) {
     explanation,
   };
 }
-//@ chunk-qchp9vrd.js:234150-234174 placement
+//@ chunk-af1hzzme.js:235560-235584 placement
 /**
  * 关注文件的最大字节数（10 MiB）。
  */
 var MAX_FOCUS_SPECS = 8000;
 var MAX_FOCUS_FILE_BYTES = 10485760;
-//@ chunk-qchp9vrd.js:234174-235454 placement
+//@ chunk-af1hzzme.js:235584-236864 placement
 /**
  * 读取评分关注的文件（防止链接逃逸、不存在或过大）。
  */
@@ -514,7 +516,7 @@ async function readGraderFocusFile(focus, { run, cwdDiff, sandboxCwd, stubPublis
 `),
   };
 }
-//@ chunk-qchp9vrd.js:235454-235714 placement
+//@ chunk-af1hzzme.js:236864-237124 placement
 function describeBinaryContent(head) {
   if (sniffDocumentType(head) !== null) return `it is a ${detectHtmlDocument(head)}`;
   let index = head.indexOf(0);
@@ -522,21 +524,21 @@ function describeBinaryContent(head) {
     return `it contains a NUL byte at offset ${index} (binary data, UTF-16 text \u2014 save such artifacts as UTF-8 \u2014 or NUL-separated output; leading bytes: ${detectHtmlDocument(head)})`;
   return;
 }
-//@ chunk-qchp9vrd.js:235714-235775 placement
+//@ chunk-af1hzzme.js:237124-237185 placement
 /**
  * 描述评分目标（文件路径或文本）。
  */
 function describeTarget(focus) {
   return typeof focus === "object" ? `file ${focus.path}` : focus;
 }
-//@ chunk-qchp9vrd.js:235775-235800 placement
+//@ chunk-af1hzzme.js:237185-237210 placement
 /**
  * trace 摘要的长度（20000）。
  */
 var MAX_JUDGE_ATTEMPTS = 3;
 var MAX_JUDGE_INPUT_CHARS = 1e5;
 var JUDGE_TRACE_CHARS = 20000;
-//@ chunk-qchp9vrd.js:235800-237977 placement
+//@ chunk-af1hzzme.js:237210-239386 placement
 /**
  * 用模型按标准评分（构建评分提示词、附图片与 trace 摘要）。
  */
@@ -632,7 +634,7 @@ ${answerInstruction}`;
       );
     throw error;
   }
-  let passed = count(votes, Boolean) > votes.length / 2;
+  let passed = countWhere(votes, Boolean) > votes.length / 2;
   return {
     name: grader.name,
     passed,
@@ -642,7 +644,7 @@ ${answerInstruction}`;
     evidence,
   };
 }
-//@ chunk-qchp9vrd.js:237977-238811 placement
+//@ chunk-af1hzzme.js:239386-240220 placement
 async function compareWithBaseline(grader, runContext) {
   let { case_, run } = runContext;
   let baselineTrace;
@@ -681,7 +683,7 @@ Does the NEW trajectory satisfy the criterion at least as well as the BASELINE?`
 
 `);
   let votes = await runEvalJudgeTrials(joined, runContext);
-  let passed = count(votes, Boolean) > votes.length / 2;
+  let passed = countWhere(votes, Boolean) > votes.length / 2;
   return {
     name: grader.name,
     passed,
@@ -690,7 +692,7 @@ Does the NEW trajectory satisfy the criterion at least as well as the BASELINE?`
     judge_votes: votes,
   };
 }
-//@ chunk-qchp9vrd.js:238811-238944 placement
+//@ chunk-af1hzzme.js:240220-240353 placement
 async function runEvalJudgeTrials(description, signal) {
   let votes = [];
   for (let j = 0; j < MAX_JUDGE_ATTEMPTS; j++) {
@@ -699,7 +701,7 @@ async function runEvalJudgeTrials(description, signal) {
   }
   return votes;
 }
-//@ chunk-qchp9vrd.js:238944-239610 placement (2.1.88 match: generateTitleAndBranch, 0.267)
+//@ chunk-af1hzzme.js:240353-241029 placement (2.1.88 match: generateTitleAndBranch, 0.267)
 async function runEvalJudge(description, signal) {
   let systemPrompt = asSystemPrompt(["You are a strict, terse evaluation judge for coding-agent traces."]);
   let reason;
@@ -716,6 +718,7 @@ async function runEvalJudge(description, signal) {
     credentials: signal.credentials,
   };
   let judgeModel = normalizeJudgeModel(signal.judgeModel);
+  recordToolUsed(UNREADABLE_TOOLS_USED_BEFORE_SUMMARY);
   let response = judgeModel
     ? await queryHaiku({
         systemPrompt,
@@ -741,7 +744,7 @@ async function runEvalJudge(description, signal) {
   if (reason !== undefined) throw new AttachedMediaRejectedError(reason);
   return parsed;
 }
-//@ chunk-qchp9vrd.js:239610-239753 layout
+//@ chunk-af1hzzme.js:241029-241172 layout
 class AttachedMediaRejectedError extends Error {
   reason;
   constructor(reason) {
@@ -750,7 +753,7 @@ class AttachedMediaRejectedError extends Error {
     this.name = "AttachedMediaRejectedError";
   }
 }
-//@ chunk-qchp9vrd.js:239753-239813 placement
+//@ chunk-af1hzzme.js:241172-241232 placement
 /**
  * 规范化判分模型名（用户指定时解析成实际模型）。
  */
@@ -759,7 +762,7 @@ function normalizeJudgeModel(judgeModel) {
     ? parseUserSpecifiedModel(judgeModel)
     : judgeModel;
 }
-//@ chunk-qchp9vrd.js:239813-240021 placement
+//@ chunk-af1hzzme.js:241232-241440 placement
 function elideMessages(messages) {
   if (messages.length <= 24)
     return messages.map((message) => jsonStringify(message)).join(`
@@ -769,7 +772,7 @@ function elideMessages(messages) {
   return [...mapped, `[\u2026${messages.length - 12 - 12} messages elided\u2026]`, ...mapped_2].join(`
 `);
 }
-//@ chunk-qchp9vrd.js:240021-241664 placement
+//@ chunk-af1hzzme.js:241440-243083 placement
 async function openFocusFileSafely(rootDir, focusPath, path) {
   let escapeError = () =>
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -848,12 +851,12 @@ async function openFocusFileSafely(rootDir, focusPath, path) {
     await handle.close().catch(() => {});
   }
 }
-//@ chunk-qchp9vrd.js:241664-241703 placement
+//@ chunk-af1hzzme.js:243083-243122 placement
 /**
  * 打开文件时额外使用的标志（非 Windows 非阻塞）。
  */
 var FILE_OPEN_EXTRA_FLAGS = getPlatform() === "windows" ? 0 : constants.O_NONBLOCK;
-//@ chunk-qchp9vrd.js:241703-241918 placement
+//@ chunk-af1hzzme.js:243122-243337 placement
 function EVAL_RUN_BASE_PATH(path) {
   let resolved = path_2.resolve("/eval-run-base");
   let resolved_2 = path_2.resolve(resolved, path.replaceAll("\\", "/"));
@@ -863,7 +866,7 @@ function EVAL_RUN_BASE_PATH(path) {
     ? null
     : relativePath.split(path_2.sep).join("/");
 }
-//@ chunk-qchp9vrd.js:241992-242163 placement
+//@ chunk-af1hzzme.js:243411-243582 placement
 /**
  * 从文件路径向上查找最近的、以指定段结尾的模拟基准目录（不超出根）。
  */
@@ -881,7 +884,7 @@ function findMockBaseDir(caseDir, pluginDir, suiteSegments) {
   }
   return pluginDir;
 }
-//@ chunk-qchp9vrd.js:242163-242327 placement
+//@ chunk-af1hzzme.js:243582-243746 placement
 /**
  * 列出路径在根目录内的祖先目录链。
  */

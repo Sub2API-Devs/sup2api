@@ -1,19 +1,19 @@
 /**
  * jose/dist/webapi/lib/ecdhes.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-5h78gfwc.js (5)
+ * pieces: chunk-0f6azspv.js (5)
  * attribution: esm-layout 1, esm-fingerprint 4
  */
 import { concat, uint32be, encode } from "./buffer_utils.js";
 import { digest } from "./helpers.js";
 import { checkEncCryptoKey } from "./crypto_key.js";
 
-//@ chunk-5h78gfwc.js:12812-12852 esm-layout
+//@ chunk-0f6azspv.js:12812-12852 esm-layout
 function lengthAndInput(input) {
   return concat(uint32be(input.length), input);
 }
-//@ chunk-5h78gfwc.js:12852-13109 esm-fingerprint
+//@ chunk-0f6azspv.js:12852-13109 esm-fingerprint
 async function concatKdf(Z, L, OtherInfo) {
   let dkLen = L >> 3;
   let hashLen = 32;
@@ -29,7 +29,7 @@ async function concatKdf(Z, L, OtherInfo) {
   }
   return dk.slice(0, dkLen);
 }
-//@ chunk-5h78gfwc.js:13109-13386 esm-fingerprint
+//@ chunk-0f6azspv.js:13109-13386 esm-fingerprint
 async function deriveKey(
   publicKey,
   privateKey,
@@ -58,12 +58,12 @@ async function deriveKey(
   );
   return concatKdf(Z, keyLength, otherInfo);
 }
-//@ chunk-5h78gfwc.js:13386-13512 esm-fingerprint
+//@ chunk-0f6azspv.js:13386-13512 esm-fingerprint
 function getEcdhBitLength(publicKey) {
   if (publicKey.algorithm.name === "X25519") return 256;
   return Math.ceil(parseInt(publicKey.algorithm.namedCurve.slice(-3), 10) / 8) << 3;
 }
-//@ chunk-5h78gfwc.js:13512-13647 esm-fingerprint
+//@ chunk-0f6azspv.js:13512-13647 esm-fingerprint
 function allowed(key) {
   switch (key.algorithm.namedCurve) {
     case "P-256":

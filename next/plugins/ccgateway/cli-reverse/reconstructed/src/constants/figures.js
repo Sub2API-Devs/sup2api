@@ -3,15 +3,15 @@
  *
  * 终端界面符号常量（桥接转圈帧、就绪/失败标记、三角、⎿、盲文转圈帧）；另混入一组路径规范化/显示辅助（应归别处）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/constants/figures.ts
- * pieces: chunk-dcmhvw5a.js (7)
+ * pieces: chunk-z20c443b.js (7)
  * attribution: placement 6, fingerprint 1
  */
 import { getPlatform } from "../utils/platform.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:202811-203165 placement (2.1.88 match: getReservedShortcuts, 1)
+//@ chunk-z20c443b.js:196937-197291 placement (2.1.88 match: getReservedShortcuts, 1)
 /**
  * 界面符号常量（圆点、星号等）。
  */
@@ -40,7 +40,7 @@ var FILLED_CIRCLE;
 var FISHEYE;
 var DIAMOND_IN_DIAMOND;
 var BULLSEYE;
-deferInit("chunk-dcmhvw5a.js:202811", () => {
+deferInit("chunk-z20c443b.js:196937", () => {
   BLACK_CIRCLE = getPlatform() === "macos" ? "\u23FA" : "\u25CF";
   BULLET_OPERATOR = "\u2219";
   BULLET = "\u2022";
@@ -67,7 +67,7 @@ deferInit("chunk-dcmhvw5a.js:202811", () => {
   DIAMOND_IN_DIAMOND = "\u25C8";
   BULLSEYE = "\u25CE";
 });
-//@ chunk-dcmhvw5a.js:203165-203239 placement
+//@ chunk-z20c443b.js:197291-197365 placement
 /**
  * 暂停/播放/刷新/箭头符号。
  */
@@ -76,7 +76,7 @@ var FAST_FORWARD_GLYPH = "\u23F5\u23F5";
 var REFRESH_GLYPH = "\u21BB";
 var BACK_ARROW_GLYPH = "\u2190";
 var CIRCLE_MARK_GLYPH = "\u2442";
-//@ chunk-dcmhvw5a.js:203239-203304 placement
+//@ chunk-z20c443b.js:197365-197430 placement
 /**
  * 菱形、警告等符号。
  */
@@ -85,27 +85,27 @@ var FILLED_DIAMOND_GLYPH = "\u25C6";
 var REFERENCE_GLYPH = "\u203B";
 var WARNING_GLYPH = "\u26A0";
 var BOXED_DIAMOND_GLYPH = "\u29C9";
-//@ chunk-dcmhvw5a.js:203304-203339 placement
+//@ chunk-z20c443b.js:197430-197465 placement
 /**
  * withBoxedDiamond：给文本加双线菱形前缀。
  */
 function withBoxedDiamond(text) {
   return `${BOXED_DIAMOND_GLYPH} ${text}`;
 }
-//@ chunk-dcmhvw5a.js:203339-203381 placement
+//@ chunk-z20c443b.js:197465-197507 placement
 /**
  * VERTICAL_LEFT_BAR_GLYPH：竖条符号（▎）；FULL_BLOCK_GLYPH：实心方块符号（█）；HORIZONTAL_LINE_GLYPH：横线符号（─）（同一声明共 3 个绑定）。
  */
 var VERTICAL_LEFT_BAR_GLYPH = "\u258E";
 var FULL_BLOCK_GLYPH = "\u2588";
 var HORIZONTAL_LINE_GLYPH = "\u2500";
-//@ chunk-dcmhvw5a.js:203381-203409 placement
+//@ chunk-z20c443b.js:197507-197535 placement
 /**
  * HEAVY_VERTICAL_BAR_GLYPH：粗竖线符号（┃）；NO_BREAK_SPACE：不换行空格常量（同一声明共 2 个绑定）。
  */
 var HEAVY_VERTICAL_BAR_GLYPH = "\u2503";
 var NO_BREAK_SPACE = "\xA0";
-//@ chunk-dcmhvw5a.js:203409-203657 fingerprint (2.1.88 match: BRIDGE_SPINNER_FRAMES, 0.889)
+//@ chunk-z20c443b.js:197535-197783 fingerprint (2.1.88 match: BRIDGE_SPINNER_FRAMES, 0.889)
 /**
  * Remote Control 桥接状态转圈帧与符号：就绪 ·✔·、失败 ×、✕、▸、⎿、⠿、盲文转圈帧。
  */
@@ -129,52 +129,52 @@ var BRAILLE_SPINNER_FRAMES = [
   "\u280F",
 ];
 export {
-  SPINNER_DOTS,
-  PROPORTION,
-  NO_BREAK_SPACE,
-  WARNING_GLYPH,
-  BLACK_CIRCLE,
-  HEAVY_MULTIPLICATION_X,
-  CIRCLE_MARK_GLYPH,
-  UP_ARROW,
-  DOWN_ARROW,
-  WHITE_CIRCLE,
-  HALF_CIRCLE,
-  FILLED_CIRCLE,
-  FISHEYE,
-  DIAMOND_IN_DIAMOND,
-  PAUSE_GLYPH,
-  BOXED_DIAMOND_GLYPH,
   TEARDROP_ASTERISK,
-  LIGHTNING,
-  BULLSEYE,
+  BOXED_DIAMOND_GLYPH,
+  WARNING_GLYPH,
+  DOWN_RIGHT_ARROW,
   BRIDGE_FAILED_INDICATOR,
   BRIDGE_READY_INDICATOR,
-  DOWN_RIGHT_ARROW,
-  FILLED_DIAMOND_GLYPH,
-  DIAMOND_GLYPH,
+  BRIDGE_SPINNER_FRAMES,
+  BLACK_CIRCLE,
+  TELEPHONE_RECORDER,
+  REFRESH_GLYPH,
+  NO_BREAK_SPACE,
   LEFT_ARROW,
-  FAST_FORWARD_GLYPH,
-  FULL_BLOCK_GLYPH,
-  SMALL_TRIANGLE_RIGHT,
-  HEAVY_VERTICAL_BAR_GLYPH,
+  UP_ARROW,
+  DOWN_ARROW,
+  DIAMOND_GLYPH,
+  FILLED_DIAMOND_GLYPH,
+  PAUSE_GLYPH,
+  HEAVY_MULTIPLICATION_X,
+  LIGHTNING,
+  SPINNER_DOTS,
+  PROPORTION,
+  CIRCLE_MARK_GLYPH,
   BULLET_OPERATOR,
+  FILLED_CIRCLE,
+  WHITE_CIRCLE,
+  SMALL_TRIANGLE_RIGHT,
+  FAST_FORWARD_GLYPH,
+  HALF_CIRCLE,
+  FISHEYE,
+  DIAMOND_IN_DIAMOND,
+  BULLSEYE,
+  REFERENCE_GLYPH,
+  FULL_BLOCK_GLYPH,
+  RIGHT_ARROW,
+  BRAILLE_FULL_BLOCK,
+  HORIZONTAL_LINE_GLYPH,
   DIAGONAL,
   FOUR_POINTED_STAR,
-  BACK_ARROW_GLYPH,
-  RETURN_SYMBOL,
-  THEREFORE,
-  REFERENCE_GLYPH,
-  REFRESH_GLYPH,
+  HEAVY_VERTICAL_BAR_GLYPH,
   BULLET,
   DOTTED_CIRCLE,
   RESPONSE_CONNECTOR,
-  HORIZONTAL_LINE_GLYPH,
-  BRAILLE_SPINNER_FRAMES,
-  TELEPHONE_RECORDER,
-  BRIDGE_SPINNER_FRAMES,
+  RETURN_SYMBOL,
   VERTICAL_LEFT_BAR_GLYPH,
   withBoxedDiamond,
-  RIGHT_ARROW,
-  BRAILLE_FULL_BLOCK,
+  BACK_ARROW_GLYPH,
+  THEREFORE,
+  BRAILLE_SPINNER_FRAMES,
 };

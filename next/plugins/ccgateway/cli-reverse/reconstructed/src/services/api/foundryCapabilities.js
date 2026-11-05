@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Azure Foundry 部署不支持能力的记录与剥离
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hwmsct5x.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vn3g7zt8.js (8)
  * attribution: placement 8
  */
 import { foundryModelKey, makeToolSchema } from "./clientHelpers.js";
@@ -16,7 +16,7 @@ import { APIError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { DEFERREDTOOLPLACEHOLDER, DEFERRED_PLACEHOLDER_NOTE } from "../../tools/ToolSearchTool/prompt.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hwmsct5x.js:248450-248718 placement
+//@ chunk-vn3g7zt8.js:252730-252998 placement
 /**
  * 记录某 Azure Foundry 部署不支持的能力（如 tool_search/structured_outputs），供后续请求剥离。
  */
@@ -33,13 +33,13 @@ function recordFoundryUnsupportedCapabilities(model, capabilities) {
     level: "warn",
   });
 }
-//@ chunk-hwmsct5x.js:248718-248799 placement
+//@ chunk-vn3g7zt8.js:252998-253079 placement
 function foundrySupportsCapability(model, capability) {
   let foundryDeploymentCapabilities = getFoundryDeploymentCapabilities();
   if (foundryDeploymentCapabilities.size === 0) return true;
   return !foundryDeploymentCapabilities.get(foundryModelKey(model))?.has(capability);
 }
-//@ chunk-hwmsct5x.js:248799-249081 placement
+//@ chunk-vn3g7zt8.js:253079-253361 placement
 function parseFoundryUnsupportedCapabilities(error) {
   if (getAPIProvider() !== "foundry") return null;
   if (!(error instanceof APIError) || error.status !== 400) return null;
@@ -51,14 +51,14 @@ function parseFoundryUnsupportedCapabilities(error) {
   }
   return makeToolSchema(error.message ?? "");
 }
-//@ chunk-hwmsct5x.js:249081-249190 placement
+//@ chunk-vn3g7zt8.js:253361-253470 placement
 var FOUNDRY_STRIPPABLE_CAPABILITIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var FAIL_FOUNDRY_PURPOSE_REQUEST;
-deferInit("chunk-hwmsct5x.js:249081", () => {
+deferInit("chunk-vn3g7zt8.js:253361", () => {
   FOUNDRY_STRIPPABLE_CAPABILITIES = new Set(["tool_search_server", "tool_search", "structured_outputs"]);
   FAIL_FOUNDRY_PURPOSE_REQUEST = "fail:foundry-purpose-request";
 });
-//@ chunk-hwmsct5x.js:249190-249378 placement
+//@ chunk-vn3g7zt8.js:253470-253658 placement
 function getFoundryRetryDirective(error, model, querySource) {
   let capabilities = parseFoundryUnsupportedCapabilities(error);
   if (!capabilities) return null;
@@ -68,22 +68,22 @@ function getFoundryRetryDirective(error, model, querySource) {
     return `retry:foundry-capability-strip:${capabilities.join(",")}`;
   return null;
 }
-//@ chunk-hwmsct5x.js:249378-249859 placement
+//@ chunk-vn3g7zt8.js:253658-254139 placement
 /**
  * 对已知不支持的 Foundry 部署，从请求参数中去掉 tool search / structured outputs 字段。
  */
-function stripUnsupportedFoundryCapabilities(allTools, model) {
-  if (getAPIProvider() !== "foundry") return allTools;
+function stripUnsupportedFoundryCapabilities(tools, model) {
+  if (getAPIProvider() !== "foundry") return tools;
   let foundryDeploymentCapabilities = getFoundryDeploymentCapabilities();
-  if (foundryDeploymentCapabilities.size === 0) return allTools;
+  if (foundryDeploymentCapabilities.size === 0) return tools;
   let caps = foundryDeploymentCapabilities.get(foundryModelKey(model));
-  if (!caps || caps.size === 0) return allTools;
+  if (!caps || caps.size === 0) return tools;
   let stripsToolSearch = caps.has("tool_search_server") || caps.has("tool_search");
   let stripsStrict = caps.has("structured_outputs");
-  if (!stripsToolSearch && !stripsStrict) return allTools;
+  if (!stripsToolSearch && !stripsStrict) return tools;
   let changed = false;
   let out = [];
-  for (let tool of allTools) {
+  for (let tool of tools) {
     let deferLoading = stripsToolSearch && tool.defer_loading;
     if (
       deferLoading &&
@@ -106,9 +106,9 @@ function stripUnsupportedFoundryCapabilities(allTools, model) {
     if (strict) delete copy.strict;
     out.push(copy);
   }
-  return changed ? out : allTools;
+  return changed ? out : tools;
 }
-//@ chunk-hwmsct5x.js:249859-249931 placement
+//@ chunk-vn3g7zt8.js:254139-254211 placement
 class FoundryCapabilityError extends Error {
   reason;
   constructor(message, reason) {
@@ -116,7 +116,7 @@ class FoundryCapabilityError extends Error {
     this.reason = reason;
   }
 }
-//@ chunk-hwmsct5x.js:249931-249957 placement
+//@ chunk-vn3g7zt8.js:254211-254237 placement
 var SAFE_FOUNDRY_KEY_RE = /^[A-Za-z0-9_-]+$/;
 export {
   foundrySupportsCapability,

@@ -3,11 +3,15 @@
  *
  * 2.1.316 新增：线程续接（tether）：只发增量请求、判断能否续接并记录决策
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (88)
- * attribution: placement 88
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (99)
+ * attribution: placement 88, layout 11
  */
+import { request } from "http";
+import { connect } from "tls";
+import { isIP } from "net";
+import { X509Certificate } from "crypto";
 import {
   isFoamySpringEnabled,
   isInlineToolsAllowed,
@@ -35,7 +39,7 @@ import {
 } from "../../bootstrap/state.js";
 import { logEvent } from "../analytics/index.js";
 import { logError } from "../../utils/log.js";
-import { toError } from "../../utils/errors.js";
+import { toError, withTelemetryMessage, errorMessage } from "../../utils/errors.js";
 import { objectSchema, literal, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { streamFallbackWarning, ROOT as ROOT_2, formatZodErrors } from "./streamFallbackWarning.js";
 import {
@@ -71,11 +75,18 @@ import { isObjectBlock } from "../../utils/toolResultStorage.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import { APIError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
-import { isPromptTooLongError, isCreditBalanceTooLow, isTetherBetaRejected } from "./errors.js";
+import {
+  isPromptTooLongError,
+  isCreditBalanceTooLow,
+  isProgramUseCaseNotHeldError,
+  isProgramUseCaseBetaRejected,
+  isTetherBetaRejected,
+} from "./errors.js";
 import { initFingerprint } from "./dumpPrompts.js";
 import { addWithLimit } from "../../utils/cronTasks.js";
 import { env } from "../../utils/env.js";
 import { takePendingConversationEdits } from "../../utils/shell/shellToolUtils.js";
+import { programUseCaseIdForWire } from "../../utils/programUseCase.js";
 import { stripSuffixNumber } from "./toolDefinitionShape.js";
 import { isTaskId } from "../../tasks/LocalShellTask/backgroundNotices.js";
 import { POLL as POLL_2 } from "../../utils/pollEvents.js";
@@ -83,9 +94,28 @@ import { HostScoped } from "../../utils/hostScoped.js";
 import { isFirstPartyApiBackend } from "../../utils/model/providers.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
 import { sleep } from "../../utils/sleep.js";
+import {
+  getProxyAuthFromHelperCached,
+  getUsableProxyUrl,
+  shouldBypassProxy as shouldBypassProxy_2,
+  clearProxyCache,
+  configureGlobalAgents,
+} from "../../utils/proxy.js";
+import {
+  getCACertificates,
+  cutLoopingCrossCertificateCount,
+  noteServedCertificates,
+  hasDroppedLoopingCrossCertificates,
+} from "../../utils/caCerts.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2584360-2585122 placement
+//@ chunk-5xgkngpb.js:344446-344496 placement
+var MAX_TRANSCRIPT_READ_BYTES = 52428800;
+var INDEX_HEAD_SCAN_BYTES = 256;
+var INDEX_BOUNDARY_SCAN_BYTES = 4096;
+var INDEX_LAST_PROMPT_SCAN_BYTES = 1024;
+var LAST_PROMPT_PREFIX_SCAN_BYTES = 64;
+//@ chunk-5xgkngpb.js:2639498-2640263 placement
 /**
  * 从 transcript 记录的请求形状恢复 beta 锁定：按记录启用/拒绝中途 system 消息、工具变更头与内联工具 beta，并记 tengu_wire_shape_seeded。
  */
@@ -135,12 +165,12 @@ function seedWireShapeFromRecord(betas, record, model) {
     logError(toError(error));
   }
 }
-//@ chunk-e6aww6q8.js:2585122-2585168 placement
+//@ chunk-5xgkngpb.js:2640263-2640309 placement
 function thinkingDropSummary(body) {
   let transformations = readInputTransformations(body);
   return transformations && parseThinkingDrops(transformations);
 }
-//@ chunk-e6aww6q8.js:2585168-2585321 placement
+//@ chunk-5xgkngpb.js:2640309-2640462 placement
 function readInputTransformations(body) {
   return typeof body === "object" &&
     body !== null &&
@@ -149,7 +179,7 @@ function readInputTransformations(body) {
     ? body.input_transformations
     : undefined;
 }
-//@ chunk-e6aww6q8.js:2585321-2585782 placement
+//@ chunk-5xgkngpb.js:2640462-2640923 placement
 /**
  * 从服务端警告中解析 thinking_dropped 条目，得到消息/块位置与原因类别。
  */
@@ -179,11 +209,11 @@ function parseThinkingDrops(transformations) {
   }
   return drops;
 }
-//@ chunk-e6aww6q8.js:2585782-2585839 placement
+//@ chunk-5xgkngpb.js:2640923-2640980 placement
 function xxhashBase36(text) {
   return Bun.hash.xxHash64(text).toString(36);
 }
-//@ chunk-e6aww6q8.js:2585839-2585892 placement
+//@ chunk-5xgkngpb.js:2640980-2641033 placement
 /**
  * 思考块被丢弃原因的严重度顺序（other < model_mismatch < prefix_mismatch），汇总时取最严重者。
  */
@@ -192,7 +222,7 @@ var THINKING_DROP_REASON_RANK = {
   model_mismatch: 1,
   prefix_mismatch: 2,
 };
-//@ chunk-e6aww6q8.js:2585892-2586534 placement
+//@ chunk-5xgkngpb.js:2641033-2641681 placement
 /**
  * 汇总被丢弃的思考块：去重已报告的块，统计块数、轮数、原因与首末位置。
  */
@@ -243,7 +273,7 @@ function summarizeThinkingDrops(drops, blockKeyAt, isMain, seen) {
     seenKeys: [...seenKeys],
   };
 }
-//@ chunk-e6aww6q8.js:2586534-2587915 placement
+//@ chunk-5xgkngpb.js:2641681-2643065 placement
 /**
  * 记录线程思考块被服务端丢弃的情况。
  */
@@ -322,18 +352,18 @@ function reportThinkingDrop({
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2587915-2588030 placement
+//@ chunk-5xgkngpb.js:2643065-2643180 placement
 function isBeforeBlock(left, right) {
   return (
     left.messageIndex < right.messageIndex ||
     (left.messageIndex === right.messageIndex && left.blockIndex < right.blockIndex)
   );
 }
-//@ chunk-e6aww6q8.js:2588030-2588056 placement
+//@ chunk-5xgkngpb.js:2643180-2643206 placement
 var MAX_MINTED_ONCE = 256;
 var MAX_TETHER_KEYS = 128;
 var DEFAULT_MIN_CONTINUES = 3;
-//@ chunk-e6aww6q8.js:2588056-2588225 placement
+//@ chunk-5xgkngpb.js:2643206-2643375 placement
 function tetherHealConfig() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_wondrous_acorn", null);
   let minContinues = featureValue_CACHED_MAY_BE_STALE?.min_continues;
@@ -345,15 +375,15 @@ function tetherHealConfig() {
         : DEFAULT_MIN_CONTINUES,
   };
 }
-//@ chunk-e6aww6q8.js:2588225-2588261 placement
+//@ chunk-5xgkngpb.js:2643375-2643411 placement
 function isTetherHealEnabled() {
   return tetherHealConfig().enabled;
 }
-//@ chunk-e6aww6q8.js:2588261-2588306 placement
+//@ chunk-5xgkngpb.js:2643411-2643456 placement
 function threadDropRecreate() {
   return streamFallbackWarning().threadDropRecreate;
 }
-//@ chunk-e6aww6q8.js:2588306-2588597 placement
+//@ chunk-5xgkngpb.js:2643456-2643747 placement
 function touchThreadHealState(key) {
   let states = threadDropRecreate();
   let state = states.get(key);
@@ -378,7 +408,7 @@ function touchThreadHealState(key) {
   states.set(key, state);
   return state;
 }
-//@ chunk-e6aww6q8.js:2588597-2588990 placement
+//@ chunk-5xgkngpb.js:2643747-2644140 placement
 /**
  * 记录线程分派：新建线程时重置状态，续用时累加次数并记下每条消息续用时的序号。
  */
@@ -407,19 +437,19 @@ function recordThreadDispatch(threadKey, dispatch) {
     mintedOnContinue.set(dispatch.messageId, state.continuesServed);
   }
 }
-//@ chunk-e6aww6q8.js:2588990-2589096 placement
+//@ chunk-5xgkngpb.js:2644140-2644246 placement
 function resetThreadHealState(agentId) {
   let state = threadDropRecreate().get(formatZodErrors(agentId));
   if (state === undefined) return;
   state.mintedOnContinue.clear();
   state.createdForDrop = false;
 }
-//@ chunk-e6aww6q8.js:2589096-2589173 placement
+//@ chunk-5xgkngpb.js:2644246-2644323 placement
 function noteLastDispatchHealed(agentId, lastDispatchHealed) {
   let state = threadDropRecreate().get(formatZodErrors(agentId));
   if (state !== undefined) state.lastDispatchHealed = lastDispatchHealed;
 }
-//@ chunk-e6aww6q8.js:2589173-2589263 placement
+//@ chunk-5xgkngpb.js:2644323-2644413 placement
 function isThreadArmed(agentId) {
   try {
     return threadDropRecreate().get(formatZodErrors(agentId))?.armed === true && isTetherHealEnabled();
@@ -428,7 +458,7 @@ function isThreadArmed(agentId) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:2589263-2589361 placement
+//@ chunk-5xgkngpb.js:2644413-2644511 placement
 function isThreadHeldStateless(agentId) {
   try {
     return (
@@ -439,7 +469,7 @@ function isThreadHeldStateless(agentId) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:2589361-2589556 placement
+//@ chunk-5xgkngpb.js:2644511-2644706 placement
 function takeThreadHealFacts(agentId) {
   let state = threadDropRecreate().get(formatZodErrors(agentId));
   let facts = {
@@ -449,14 +479,14 @@ function takeThreadHealFacts(agentId) {
   if (state !== undefined) state.reportUnmatched = false;
   return facts;
 }
-//@ chunk-e6aww6q8.js:2589556-2589692 placement
+//@ chunk-5xgkngpb.js:2644706-2644842 placement
 function hasPendingMintedReplies() {
   if (!isTetherHealEnabled()) return false;
   for (let state of threadDropRecreate().values())
     if (!state.heldStateless && !state.armed && state.mintedOnContinue.size > 0) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:2589692-2591079 placement
+//@ chunk-5xgkngpb.js:2644842-2646231 placement
 /**
  * 当服务端报告线程前缀不一致时给出警告（重发了旧字节、没发线程前缀等）。
  */
@@ -498,7 +528,7 @@ function warnTetherPrefixMismatch(mintedReplies, carrier, sentThreadPrefix) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:2591079-2591583 placement
+//@ chunk-5xgkngpb.js:2646231-2646741 placement
 /**
  * 线程续接请求返回 prefix_mismatch 的 thinking 丢弃时，找出这些块属于哪条回复，并发出前缀不一致告警。
  */
@@ -530,15 +560,15 @@ function checkTetherPrefixMismatch({ body, blockKeyAt, replyHolding, carrier, se
     sentThreadPrefix,
   );
 }
-//@ chunk-e6aww6q8.js:2591583-2591618 placement
+//@ chunk-5xgkngpb.js:2646741-2646776 placement
 function clearThreadArmed(agentId) {
   threadDropRecreate().delete(formatZodErrors(agentId));
 }
-//@ chunk-e6aww6q8.js:2591618-2591647 placement
+//@ chunk-5xgkngpb.js:2646776-2646805 placement
 var MAX_THREAD_TTLS = 128;
 var MIN_TTL_SECONDS = 300;
 var MAX_TTL_SECONDS = 3600;
-//@ chunk-e6aww6q8.js:2591647-2591736 placement
+//@ chunk-5xgkngpb.js:2646805-2646894 placement
 function validTtlSeconds(value) {
   return typeof value === "number" &&
     Number.isInteger(value) &&
@@ -547,9 +577,11 @@ function validTtlSeconds(value) {
     ? value
     : undefined;
 }
-//@ chunk-e6aww6q8.js:2591736-2591928 placement
+//@ chunk-5xgkngpb.js:2646894-2647099 placement
 function threadLifetimeMs(closedTurn) {
-  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_jaunty_charm", null);
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_jaunty_charm", {
+    ttl_seconds: MIN_TTL_SECONDS,
+  });
   let ttlSeconds = validTtlSeconds(featureValue_CACHED_MAY_BE_STALE?.ttl_seconds);
   let ccClosedTurnTtlSeconds = featureValue_CACHED_MAY_BE_STALE?.cc_closed_turn_ttl_seconds ?? undefined;
   let effectiveTtl =
@@ -557,11 +589,11 @@ function threadLifetimeMs(closedTurn) {
   if (ttlSeconds === undefined || effectiveTtl === undefined || effectiveTtl < ttlSeconds) return;
   return (closedTurn ? ttlSeconds : effectiveTtl) * 1000;
 }
-//@ chunk-e6aww6q8.js:2591928-2591973 placement
+//@ chunk-5xgkngpb.js:2647099-2647144 placement
 function threadRequestEnds() {
   return streamFallbackWarning().threadRequestEnds;
 }
-//@ chunk-e6aww6q8.js:2591973-2592171 placement
+//@ chunk-5xgkngpb.js:2647144-2647342 placement
 function touchThreadLastUse(agentId, clock) {
   try {
     let ends = threadRequestEnds();
@@ -581,7 +613,7 @@ function touchThreadLastUse(agentId, clock) {
     logError(toError(error));
   }
 }
-//@ chunk-e6aww6q8.js:2592171-2592544 placement
+//@ chunk-5xgkngpb.js:2647342-2647715 placement
 /**
  * 计算线程空闲时长（墙钟与单调时钟取大）、生命周期以及是否已过期。
  */
@@ -614,32 +646,32 @@ function threadIdleState(threadKey, closedTurn, clock) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:2592544-2592580 placement
+//@ chunk-5xgkngpb.js:2647715-2647751 placement
 function clearThreadRequestEnd(agentId) {
   threadRequestEnds().delete(formatZodErrors(agentId));
 }
-//@ chunk-e6aww6q8.js:2595772-2595824 placement (2.1.88 match: isSubagentContext, 0.815)
+//@ chunk-5xgkngpb.js:2650947-2650999 placement (2.1.88 match: isSubagentContext, 0.815)
 /**
  * 代理类型为 subagent 或未给出上下文。
  */
 function isSubagentOrUnknown(agentType, agentContext) {
   return agentType === "subagent" || agentContext === undefined;
 }
-//@ chunk-e6aww6q8.js:2595824-2595839 placement
+//@ chunk-5xgkngpb.js:2650999-2651014 placement
 var ROOT = "root";
-//@ chunk-e6aww6q8.js:2595839-2595877 placement
+//@ chunk-5xgkngpb.js:2651014-2651052 placement
 function markThreadUnsupported(agentId, model) {
   getUnsupportedThreadKeys().add(threadKey(agentId, model));
 }
-//@ chunk-e6aww6q8.js:2595877-2595922 placement
+//@ chunk-5xgkngpb.js:2651052-2651097 placement
 function isThreadUnsupported(agentId, model) {
   return getUnsupportedThreadKeys().has(threadKey(agentId, model));
 }
-//@ chunk-e6aww6q8.js:2595922-2595970 placement
+//@ chunk-5xgkngpb.js:2651097-2651145 placement
 function threadKey(agentId, model) {
   return `${agentId ?? ROOT}\x00${strippedCanonicalName(model)}`;
 }
-//@ chunk-e6aww6q8.js:2595970-2596197 placement
+//@ chunk-5xgkngpb.js:2651145-2651372 placement
 function isStatelessTetherModel(model) {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     "tengu_curious_tower_stateless_models",
@@ -657,32 +689,32 @@ function isStatelessTetherModel(model) {
   }
   return findModelKeyedEntry(keys, model) !== undefined;
 }
-//@ chunk-e6aww6q8.js:2596197-2596251 placement
+//@ chunk-5xgkngpb.js:2651372-2651426 placement
 function isLucidAnchorEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_lucid_anchor", false) === true;
 }
-//@ chunk-e6aww6q8.js:2596251-2596347 placement
+//@ chunk-5xgkngpb.js:2651426-2651522 placement
 function isQuietHeronEnabled() {
   return (
     !streamFallbackWarning().threadInheritedFields.breakerTripped &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_quiet_heron", false) === true
   );
 }
-//@ chunk-e6aww6q8.js:2596347-2596391 placement
+//@ chunk-5xgkngpb.js:2651522-2651566 placement
 function uncachedSystemBlocks(system) {
   return system.filter((block) => isUncachedSystemBlock(block));
 }
-//@ chunk-e6aww6q8.js:2596391-2596403 placement
+//@ chunk-5xgkngpb.js:2651566-2651578 placement
 var MAX_TOOLS_HASH_ENTRIES = 128;
-//@ chunk-e6aww6q8.js:2596403-2596485 placement
+//@ chunk-5xgkngpb.js:2651578-2651660 placement
 function isTeleportCacheActiveRoot(agentId) {
   return agentId === undefined && thinkingRelayModuleKept?.getTeleportCacheState().status === "active";
 }
-//@ chunk-e6aww6q8.js:2596485-2596529 placement
+//@ chunk-5xgkngpb.js:2651660-2651704 placement
 function isThreadsHeldForClassifier() {
   return isThreadsHeldForServerClassifier() && (isAutoModeClassified() || isServerArbiterActive());
 }
-//@ chunk-e6aww6q8.js:2596529-2596605 placement
+//@ chunk-5xgkngpb.js:2651704-2651780 placement
 function canTetherThread(agentId, model) {
   return (
     isTetherLive() &&
@@ -693,7 +725,7 @@ function canTetherThread(agentId, model) {
     !isThreadHeldStateless(agentId)
   );
 }
-//@ chunk-e6aww6q8.js:2596605-2596719 placement
+//@ chunk-5xgkngpb.js:2651780-2651894 placement
 function hasServerToolUse(messages) {
   return messages.some(
     (message) =>
@@ -701,10 +733,40 @@ function hasServerToolUse(messages) {
       message.message.content.some((block) => block.type === "server_tool_use"),
   );
 }
-//@ chunk-e6aww6q8.js:2596719-2596739 placement
-var MAX_TRUNCATED_ASSISTANT_IDS = 256;
+//@ chunk-5xgkngpb.js:2651894-2652113 layout
+function hasSearchResultInToolResult(messages) {
+  return messages.some(
+    (message) =>
+      message.type === "user" &&
+      Array.isArray(message.message.content) &&
+      message.message.content.some(
+        (block) =>
+          block.type === "tool_result" &&
+          Array.isArray(block.content) &&
+          block.content.some((item) => isObjectBlock(item) && item.type === "search_result"),
+      ),
+  );
+}
+//@ chunk-5xgkngpb.js:2652113-2652151 layout
+function hasServerToolHistory(messages) {
+  return hasServerToolUse(messages) || hasSearchResultInToolResult(messages);
+}
+//@ chunk-5xgkngpb.js:2652151-2652290 layout
+function needsTetherChannel(messages) {
+  return (
+    hasServerToolHistory(messages) ||
+    (!isLucidAnchorEnabled() &&
+      messages.some(
+        (message) =>
+          message.type === "api_system" &&
+          ((message.toolAdditions?.length ?? 0) > 0 || (message.toolRemovals?.length ?? 0) > 0),
+      ))
+  );
+}
+//@ chunk-5xgkngpb.js:2652290-2652310 layout
 var MAX_HELD_STATELESS_IDS = 256;
-//@ chunk-e6aww6q8.js:2596739-2603522 placement
+var MAX_TRACKED_TETHER_IDS = 256;
+//@ chunk-5xgkngpb.js:2652310-2658915 placement
 /**
  * 构造 tether 增量：只把上次之后新增的助手与工具结果消息发给服务端。
  */
@@ -747,17 +809,7 @@ function buildTetherDelta({
   let droppedThreadType = null;
   let threadUnsupported = isThreadUnsupported(agentId, model);
   let hasServerToolHistory = hasServerToolUse(messages);
-  let any = messages.some(
-    (message) =>
-      message.type === "user" &&
-      Array.isArray(message.message.content) &&
-      message.message.content.some(
-        (block) =>
-          block.type === "tool_result" &&
-          Array.isArray(block.content) &&
-          block.content.some((block) => isObjectBlock(block) && block.type === "search_result"),
-      ),
-  );
+  let hasSearchResults = hasSearchResultInToolResult(messages);
   let requestScopedStateless = false;
   let keptReminderClearAt = false;
   let hasToolAdditions = false;
@@ -811,7 +863,7 @@ function buildTetherDelta({
       toolResultClearingHeldStateless ||
       droppedThreadType !== null ||
       hasServerToolHistory ||
-      any ||
+      hasSearchResults ||
       hasToolChanges
     ) {
       plan = null;
@@ -1016,7 +1068,14 @@ function buildTetherDelta({
       if (!(error instanceof APIError)) return;
       if (error.status !== 400 && error.status !== 404) return;
       if (error.status === 404 && errorClass !== "not_found") return;
-      if (errorClass === null && (isPromptTooLongError(error) || isCreditBalanceTooLow(error))) return;
+      if (
+        errorClass === null &&
+        (isPromptTooLongError(error) ||
+          isCreditBalanceTooLow(error) ||
+          isProgramUseCaseNotHeldError(error) ||
+          isProgramUseCaseBetaRejected(error))
+      )
+        return;
       switch (errorClass) {
         case "not_found":
           replayed = true;
@@ -1063,7 +1122,7 @@ function buildTetherDelta({
     }
   }
   function noteClientTruncated(messageId) {
-    addWithLimitLogged(getClientTruncatedAssistantIds(), MAX_TRUNCATED_ASSISTANT_IDS, messageId);
+    addWithLimitLogged(getClientTruncatedAssistantIds(), MAX_HELD_STATELESS_IDS, messageId);
   }
   function settle(outcome, requestId, messageId) {
     if (settled) return;
@@ -1076,11 +1135,11 @@ function buildTetherDelta({
       creditRetryStateless ||
       dropHeldStateless ||
       toolResultClearingHeldStateless ||
-      any ||
+      hasSearchResults ||
       hasToolChanges ||
       droppedThreadType !== null
     )
-      addWithLimitLogged(getHeldStatelessReplyIds(), MAX_HELD_STATELESS_IDS, messageId);
+      addWithLimitLogged(getHeldStatelessReplyIds(), MAX_TRACKED_TETHER_IDS, messageId);
     if (plan !== null) touchThreadLastUse(agentId, clock);
     if (outcome.kind === "ok" && plan !== null)
       try {
@@ -1125,7 +1184,7 @@ function buildTetherDelta({
         creditRetryStateless,
         toolResultClearingHeldStateless,
         serverToolHistory: hasServerToolHistory,
-        searchResultHistory: any,
+        searchResultHistory: hasSearchResults,
         toolAdditionHistory: hasToolAdditions,
         toolRemovalHistory: hasToolRemovals,
         toolChangeHistory: hasToolChanges,
@@ -1175,11 +1234,11 @@ function buildTetherDelta({
     settle,
   };
 }
-//@ chunk-e6aww6q8.js:2603807-2603888 placement
+//@ chunk-5xgkngpb.js:2659200-2659281 placement
 function forgetThreadToolsHash(agentId) {
   streamFallbackWarning().threadInheritedFields.storedToolsHashByThread.delete(formatZodErrors(agentId));
 }
-//@ chunk-e6aww6q8.js:2603888-2604064 placement
+//@ chunk-5xgkngpb.js:2659281-2659457 placement
 function storeThreadToolsHash(agentId, hash) {
   let storedToolsHashByThread = streamFallbackWarning().threadInheritedFields.storedToolsHashByThread;
   let key = formatZodErrors(agentId);
@@ -1190,7 +1249,7 @@ function storeThreadToolsHash(agentId, hash) {
   }
   storedToolsHashByThread.set(key, hash);
 }
-//@ chunk-e6aww6q8.js:2604064-2604135 placement
+//@ chunk-5xgkngpb.js:2659457-2659528 placement
 function addWithLimitLogged(collection, limit, value) {
   if (value === undefined) return;
   try {
@@ -1199,7 +1258,7 @@ function addWithLimitLogged(collection, limit, value) {
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:2604135-2604788 placement
+//@ chunk-5xgkngpb.js:2659528-2660181 placement
 /**
  * 把线程续接接口的错误（线程不存在、请求不支持、指纹不一致）归类。
  */
@@ -1225,7 +1284,7 @@ function classifyThreadError(error) {
     return "other_thread_400";
   return null;
 }
-//@ chunk-e6aww6q8.js:2604788-2605055 placement
+//@ chunk-5xgkngpb.js:2660181-2660448 placement
 function readErrorCode(error) {
   let error_2 = error.error;
   if (typeof error_2 !== "object" || error_2 === null) return;
@@ -1236,7 +1295,7 @@ function readErrorCode(error) {
   let errorCode = details.error_code;
   return typeof errorCode === "string" ? errorCode : undefined;
 }
-//@ chunk-e6aww6q8.js:2605055-2605160 placement
+//@ chunk-5xgkngpb.js:2660448-2660553 placement
 var THREAD_INHERITED_FIELDS = [
   "model",
   "system",
@@ -1248,7 +1307,7 @@ var THREAD_INHERITED_FIELDS = [
   "effort",
   "extraBody",
 ];
-//@ chunk-e6aww6q8.js:2605160-2605274 placement
+//@ chunk-5xgkngpb.js:2660553-2660667 placement
 /**
  * 判断能否不发送临时提醒：子代理或未知来源、模型条件满足、未模拟代理。
  */
@@ -1262,7 +1321,7 @@ function canUseNoTransientReminders(querySource, threadId, model, usesToolResult
     !env.CLAUDE_CODE_SIMULATE_PROXY_USAGE
   );
 }
-//@ chunk-e6aww6q8.js:2605274-2605410 placement
+//@ chunk-5xgkngpb.js:2660667-2660828 placement
 /**
  * 决定提醒的投递方式：保留（kept）、不发（none）或临时（transient）。
  */
@@ -1278,7 +1337,7 @@ function reminderDeliveryMode(
     !isAutoModeQuerySource(querySource) &&
     isKeptReminderModeNotOff(
       ttlModel,
-      classifyQuerySource(querySource) === "main"
+      classifyQuerySource(querySource) === "main" || querySource === "resume_cache_warm"
         ? {
             recorded,
           }
@@ -1288,15 +1347,15 @@ function reminderDeliveryMode(
     return "kept";
   return canUseNoTransientReminders(querySource, betas, model, usesToolResultClearing) ? "none" : "transient";
 }
-//@ chunk-e6aww6q8.js:2605410-2605510 placement
+//@ chunk-5xgkngpb.js:2660828-2660928 placement
 function threadSourceKind(querySource) {
   if (querySource === "hook_agent") return null;
   let category = classifyQuerySource(querySource);
   return category === "main" || category === "subagent" ? category : null;
 }
-//@ chunk-e6aww6q8.js:2605510-2605522 placement
+//@ chunk-5xgkngpb.js:2660928-2660940 placement
 var MAX_TRACKED_IDS = 128;
-//@ chunk-e6aww6q8.js:2605522-2605675 placement
+//@ chunk-5xgkngpb.js:2660940-2661093 placement
 function threadPrefixHashes(request) {
   return {
     model: computeHash(request.model),
@@ -1307,7 +1366,7 @@ function threadPrefixHashes(request) {
     thinking: computeHash(request.thinkingConfig),
   };
 }
-//@ chunk-e6aww6q8.js:2605675-2607563 placement
+//@ chunk-5xgkngpb.js:2661093-2663046 placement
 /**
  * 决定本次请求能否作为线程续接（tether）发送：首个请求、无续接指针、配置变化、历史被改写都不能续接。
  */
@@ -1319,6 +1378,7 @@ function decideTetherContinuation() {
     let key = formatZodErrors(input.agentId);
     let claimedEdits = category === "main" ? takePendingConversationEdits() : [];
     let prefixHashes = threadPrefixHashes(input);
+    let programUseCaseId = programUseCaseIdForWire();
     let configHashes = {
       model: prefixHashes.model,
       system: computeHash([
@@ -1333,7 +1393,11 @@ function decideTetherContinuation() {
       latchedHeaders: computeHash(input.latchedHeaders),
       toolChoice: computeHash(input.toolChoice ?? null),
       effort: computeHash(input.effortValue ?? null),
-      extraBody: computeHash(input.extraBodyParams ?? null),
+      extraBody: computeHash(
+        programUseCaseId === null
+          ? (input.extraBodyParams ?? null)
+          : [input.extraBodyParams ?? null, programUseCaseId],
+      ),
     };
     let messageHashes = input.getMessageHashes();
     let prev = trackers.get(key);
@@ -1419,12 +1483,12 @@ function decideTetherContinuation() {
     forget,
   };
 }
-//@ chunk-e6aww6q8.js:2607563-2607628 placement
+//@ chunk-5xgkngpb.js:2663046-2663111 placement
 function evaluateTetherContinuation() {
   let warningState = streamFallbackWarning();
   return (warningState.threadDecisionTracker ??= decideTetherContinuation());
 }
-//@ chunk-e6aww6q8.js:2607628-2607766 placement
+//@ chunk-5xgkngpb.js:2663111-2663249 placement
 /**
  * 子代理结束时清除其线程决策、工具哈希等线程状态。
  */
@@ -1435,7 +1499,7 @@ function forgetAgentThread(agentId) {
   clearThreadArmed(agentId);
   clearThreadRequestEnd(agentId);
 }
-//@ chunk-e6aww6q8.js:2607766-2607941 placement
+//@ chunk-5xgkngpb.js:2663249-2663424 placement
 function createSentPrefixChecker(request) {
   let hashes;
   return (threadKey, messageIndex) => {
@@ -1456,7 +1520,7 @@ function createSentPrefixChecker(request) {
     }
   };
 }
-//@ chunk-e6aww6q8.js:2607941-2608002 placement
+//@ chunk-5xgkngpb.js:2663424-2663485 placement
 function logTetherDecisionSafely(args) {
   try {
     return logTetherDecision(args);
@@ -1465,7 +1529,7 @@ function logTetherDecisionSafely(args) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:2608002-2609515 placement
+//@ chunk-5xgkngpb.js:2663485-2664998 placement
 /**
  * 记录 tether 续接决策遥测。
  */
@@ -1532,7 +1596,7 @@ function logTetherDecision(args) {
   });
   return decision;
 }
-//@ chunk-e6aww6q8.js:2609515-2609768 placement
+//@ chunk-5xgkngpb.js:2664998-2665251 placement
 function emptyEchoDiffs() {
   return {
     reordered: 0,
@@ -1550,7 +1614,7 @@ function emptyEchoDiffs() {
     caller_dropped: 0,
   };
 }
-//@ chunk-e6aww6q8.js:2609768-2609895 placement
+//@ chunk-5xgkngpb.js:2665251-2665378 placement
 var STRUCTURAL_ECHO_DIFFS = [
   "added_tool_use_gettask",
   "added_tool_use_poll",
@@ -1559,14 +1623,14 @@ var STRUCTURAL_ECHO_DIFFS = [
   "turn_split",
   "turn_dropped",
 ];
-//@ chunk-e6aww6q8.js:2609895-2610017 placement
-function hasStructuralEchoDiff(effort, anchorId) {
+//@ chunk-5xgkngpb.js:2665378-2665500 placement
+function hasStructuralEchoDiff(diffState, anchorId) {
   if (anchorId === undefined) return false;
-  let classes = effort.classesById.get(anchorId);
+  let classes = diffState.classesById.get(anchorId);
   if (classes === undefined) return false;
   return STRUCTURAL_ECHO_DIFFS.some((diff) => classes.has(diff));
 }
-//@ chunk-e6aww6q8.js:2610017-2610262 placement
+//@ chunk-5xgkngpb.js:2665500-2665745 placement
 function blockShape(block) {
   let isTool = block.type === "tool_use" || block.type === "server_tool_use" || block.type === "mcp_tool_use";
   return {
@@ -1576,7 +1640,7 @@ function blockShape(block) {
     hasCaller: "caller" in block && block.caller !== undefined,
   };
 }
-//@ chunk-e6aww6q8.js:2610262-2610354 placement
+//@ chunk-5xgkngpb.js:2665745-2665837 placement
 function blockShapes(content) {
   if (typeof content === "string")
     return [
@@ -1587,7 +1651,7 @@ function blockShapes(content) {
     ];
   return content.map(blockShape);
 }
-//@ chunk-e6aww6q8.js:2610354-2610705 placement
+//@ chunk-5xgkngpb.js:2665837-2666188 placement
 /**
  * 把助手消息内容转成块形状列表，批量工具调用按原始调用合并去重。
  */
@@ -1614,11 +1678,11 @@ function assistantBlockShapes(message) {
   }
   return out;
 }
-//@ chunk-e6aww6q8.js:2610705-2610769 placement
+//@ chunk-5xgkngpb.js:2666188-2666252 placement
 function blockKey(shape) {
   return shape.id !== undefined ? `${shape.type}#${shape.id}` : shape.type;
 }
-//@ chunk-e6aww6q8.js:2610769-2610862 placement
+//@ chunk-5xgkngpb.js:2666252-2666345 placement
 function countBlockKeys(shapes) {
   let counts = new Map();
   for (let shape of shapes) {
@@ -1627,7 +1691,7 @@ function countBlockKeys(shapes) {
   }
   return counts;
 }
-//@ chunk-e6aww6q8.js:2610862-2610984 placement
+//@ chunk-5xgkngpb.js:2666345-2666467 placement
 function matchedBlockKeys(shapes, counts) {
   let remaining = new Map(counts);
   let keys = [];
@@ -1641,7 +1705,7 @@ function matchedBlockKeys(shapes, counts) {
   }
   return keys;
 }
-//@ chunk-e6aww6q8.js:2610984-2612031 placement
+//@ chunk-5xgkngpb.js:2666467-2667517 placement
 /**
  * 对比两次请求，分类新增的内容（工具调用、轮询、其他），供 tether 判断。
  */
@@ -1701,7 +1765,7 @@ function classifyAddedContent(sentShapes, shapes) {
   }
   return classes;
 }
-//@ chunk-e6aww6q8.js:2612031-2612836 placement
+//@ chunk-5xgkngpb.js:2667517-2668338 placement
 /**
  * 对比本地发送的 assistant 回合与服务端线程回显的内容：按消息 id 聚合块形状，统计重排、拆分、丢失、增删工具调用、thinking/文本丢失等差异类别。
  */
@@ -1761,7 +1825,7 @@ function auditTetherEcho(sent, echoed) {
     classesById,
   };
 }
-//@ chunk-e6aww6q8.js:2612836-2612901 placement
+//@ chunk-5xgkngpb.js:2668338-2668403 placement
 function auditTetherEchoSafely(sent, echoed) {
   try {
     return auditTetherEcho(sent, echoed);
@@ -1770,7 +1834,7 @@ function auditTetherEchoSafely(sent, echoed) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:2612901-2613755 placement
+//@ chunk-5xgkngpb.js:2668403-2669257 placement
 /**
  * 记录 tether 回声审计遥测：收到/一致/分歧的轮数及各类差异计数。
  */
@@ -1803,7 +1867,7 @@ function logTetherEchoAudit(audit, context) {
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:2613755-2614300 placement
+//@ chunk-5xgkngpb.js:2669257-2669802 placement
 /**
  * 把 api_system 消息中的临时提醒拆出：返回去掉临时内容的消息副本、需在下一条用户消息时清除的提醒位置与需整体丢弃的空消息。
  */
@@ -1845,7 +1909,7 @@ function liftEphemeralReminders(messages, clearAtNextUser) {
         dropBase,
       };
 }
-//@ chunk-e6aww6q8.js:2614300-2614553 placement
+//@ chunk-5xgkngpb.js:2669802-2670055 placement
 function buildWireWithClearAt(messages, lifted) {
   let wire = [];
   let wireIndexOf = [];
@@ -1866,7 +1930,7 @@ function buildWireWithClearAt(messages, lifted) {
     wireIndexOf,
   };
 }
-//@ chunk-e6aww6q8.js:2614553-2614712 placement
+//@ chunk-5xgkngpb.js:2670055-2670214 placement
 /**
  * ATIS 不一致时重新拉取 bootstrap 的参数：最小间隔 300 s（30–86400）、最大抖动 180 s（0–3600）与开关名、拉取时间槽。
  */
@@ -1877,7 +1941,7 @@ var DEFAULT_ATIS_MAX_JITTER_S;
 var ATIS_MAX_JITTER_RANGE;
 var TENGU_EXPRESSIVE_WHISTLE_CONFIG;
 var atisRefetchStateSlot;
-deferInit("chunk-e6aww6q8.js:2614553", () => {
+deferInit("chunk-5xgkngpb.js:2670055", () => {
   X_CC_ATIS_CURRENT = "x-cc-atis-current";
   DEFAULT_ATIS_MIN_INTERVAL_S = 300;
   ATIS_MIN_INTERVAL_RANGE = {
@@ -1894,15 +1958,15 @@ deferInit("chunk-e6aww6q8.js:2614553", () => {
     nextFetchAt: 0,
   }));
 });
-//@ chunk-e6aww6q8.js:2614712-2614751 placement
+//@ chunk-5xgkngpb.js:2670214-2670253 placement
 function atisRefetchState() {
   return atisRefetchStateSlot.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:2614751-2614806 placement
+//@ chunk-5xgkngpb.js:2670253-2670308 placement
 function isExpressiveWhistleEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_expressive_whistle", false);
 }
-//@ chunk-e6aww6q8.js:2614806-2615701 placement
+//@ chunk-5xgkngpb.js:2670308-2671205 placement
 /**
  * 主线程请求的响应头里服务端 ATIS 标记与本地 client_data 不一致时，按最小间隔加抖动重新拉取 bootstrap，并记 tengu_client_data_stale_refetch。
  */
@@ -1956,12 +2020,12 @@ async function refetchStaleClientData(headers, request, fallbackActive) {
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:2615701-2615760 placement
+//@ chunk-5xgkngpb.js:2671205-2671264 placement
 function clientDataAtisPin() {
   let clientDataAtis = getClientDataAtis();
   return clientDataAtis === undefined ? "none" : atisPin(clientDataAtis);
 }
-//@ chunk-e6aww6q8.js:2615760-2615903 placement
+//@ chunk-5xgkngpb.js:2671264-2671407 placement
 function staleRefetchTiming() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     TENGU_EXPRESSIVE_WHISTLE_CONFIG,
@@ -1984,26 +2048,257 @@ function staleRefetchTiming() {
       ),
   };
 }
-//@ chunk-e6aww6q8.js:2615903-2616006 placement
+//@ chunk-5xgkngpb.js:2671407-2671510 placement
 function clampNumber(value, fallback, bounds) {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.min(Math.max(value, bounds.min), bounds.max)
     : fallback;
 }
-//@ chunk-e6aww6q8.js:2616006-2616063 placement
+//@ chunk-5xgkngpb.js:2671510-2671595 layout
+function hasToolUse(messages) {
+  return messages.some((message) => message.message.content.some((block) => block.type === "tool_use"));
+}
+//@ chunk-5xgkngpb.js:2671595-2671732 layout
+function failedResponseStamp(messages, aborted) {
+  try {
+    return aborted || hasToolUse(messages)
+      ? {}
+      : {
+          failedResponseHadNoToolCall: true,
+        };
+  } catch (error) {
+    logError(withTelemetryMessage(toError(error), "failed response not stamped"));
+    return {};
+  }
+}
+//@ chunk-5xgkngpb.js:2671869-2672017 layout
+var CA_CERT_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var RECONNECT_BUDGET_MS;
+var MAX_SERVED_CHAIN_DEPTH;
+var weakMap_13;
+deferInit("chunk-5xgkngpb.js:2671869", () => {
+  CA_CERT_ERROR_CODES = new Set([
+    "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+    "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+    "UNABLE_TO_GET_ISSUER_CERT",
+  ]);
+  RECONNECT_BUDGET_MS = 5000;
+  MAX_SERVED_CHAIN_DEPTH = 8;
+  weakMap_13 = new WeakMap();
+});
+//@ chunk-5xgkngpb.js:2672017-2672601 layout
+function proxyConnect(proxyUrl, authority, signal) {
+  let headers = {
+    Host: authority,
+  };
+  let proxyAuthFromHelper = getProxyAuthFromHelperCached();
+  if (proxyUrl.username || proxyUrl.password)
+    headers["Proxy-Authorization"] =
+      "Basic " +
+      Buffer.from(
+        `${decodeURIComponent(proxyUrl.username)}:${decodeURIComponent(proxyUrl.password)}`,
+      ).toString("base64");
+  else if (proxyAuthFromHelper) headers["Proxy-Authorization"] = proxyAuthFromHelper;
+  return new Promise((resolve, reject) => {
+    let connectRequest = request({
+      host: proxyUrl.hostname.replace(/^\[|\]$/g, ""),
+      port: Number(proxyUrl.port) || 80,
+      method: "CONNECT",
+      path: authority,
+      headers,
+      signal,
+    });
+    connectRequest.once("connect", (response, socket) => {
+      if (response.statusCode === 200) resolve(socket);
+      else {
+        socket.destroy();
+        logForDebugging(`CA certs: The proxy answered CONNECT with ${response.statusCode}`);
+        reject(Error("proxy CONNECT refused"));
+      }
+    });
+    connectRequest.once("error", reject);
+    connectRequest.end();
+  });
+}
+//@ chunk-5xgkngpb.js:2672601-2673428 layout
+function readServedChain(host, port, proxySocket, signal) {
+  return new Promise((resolve) => {
+    let caCertificates = getCACertificates();
+    let socket_2 = connect({
+      host,
+      port,
+      ...(isIP(host) === 0 && {
+        servername: host,
+      }),
+      ...(proxySocket && {
+        socket: proxySocket,
+      }),
+      ...(caCertificates && {
+        ca: caCertificates,
+      }),
+      rejectUnauthorized: false,
+    });
+    let abortController = new AbortController();
+    let finish = (certificates, failed = false) => {
+      abortController.abort();
+      socket_2.destroy();
+      proxySocket?.destroy();
+      resolve({
+        certificates,
+        failed,
+      });
+    };
+    signal.addEventListener(
+      "abort",
+      () => {
+        logForDebugging("CA certs: Gave up reading the server's certificates");
+        finish([]);
+      },
+      {
+        once: true,
+        signal: abortController.signal,
+      },
+    );
+    for (let stream of [socket_2, ...(proxySocket ? [proxySocket] : [])]) {
+      stream.once("error", (reportedError) => {
+        logForDebugging(`CA certs: Could not read the server's certificates: ${errorMessage(reportedError)}`);
+        finish([], true);
+      });
+      stream.once("close", () => finish([], true));
+    }
+    socket_2.once("secureConnect", () => {
+      if (socket_2.authorized) {
+        finish([]);
+        return;
+      }
+      let certificates = [];
+      let chain = new Set();
+      let peerCertificate = socket_2.getPeerCertificate(true);
+      while (
+        peerCertificate?.raw &&
+        !chain.has(peerCertificate.fingerprint256) &&
+        certificates.length < MAX_SERVED_CHAIN_DEPTH
+      ) {
+        chain.add(peerCertificate.fingerprint256);
+        try {
+          certificates.push(new X509Certificate(peerCertificate.raw));
+        } catch {}
+        peerCertificate =
+          peerCertificate.issuerCertificate === peerCertificate
+            ? undefined
+            : peerCertificate.issuerCertificate;
+      }
+      finish(certificates);
+    });
+  });
+}
+//@ chunk-5xgkngpb.js:2673428-2674546 layout
+async function readServedChainForHost(baseURL, host, port) {
+  let signal = AbortSignal.timeout(RECONNECT_BUDGET_MS);
+  let proxySocket;
+  try {
+    let usableProxyUrl = getUsableProxyUrl();
+    let proxyUrl =
+      usableProxyUrl !== undefined && !shouldBypassProxy_2(baseURL) ? new URL(usableProxyUrl) : undefined;
+    if (proxyUrl && proxyUrl.protocol !== "http:") {
+      logForDebugging("CA certs: Not reading the server's certificates through an https:// proxy");
+      logFeatureSad("api_served_chain_read", "proxy_not_supported");
+      return "nothing";
+    }
+    logForDebugging(
+      "CA certs: Reading the certificates the server presents, to see whether its chain needs a system cross-certificate the CA list left out",
+    );
+    let authority = `${host.includes(":") ? `[${host}]` : host}:${port}`;
+    proxySocket = proxyUrl ? await proxyConnect(proxyUrl, authority, signal) : undefined;
+    let readResult = signal.aborted ? undefined : await readServedChain(host, port, proxySocket, signal);
+    if (readResult === undefined || signal.aborted) {
+      logFeatureSad("api_served_chain_read", "read_timed_out");
+      return "unread";
+    }
+    if (readResult.failed) {
+      logFeatureSad("api_served_chain_read", "read_failed");
+      return "unread";
+    }
+    getCACertificates();
+    let beforeCount = cutLoopingCrossCertificateCount();
+    if (!noteServedCertificates(readResult.certificates)) {
+      logFeatureSad("api_served_chain_read", "read_named_nothing");
+      return "nothing";
+    }
+    getCACertificates();
+    if (cutLoopingCrossCertificateCount() >= beforeCount) {
+      logFeatureSad("api_served_chain_read", "read_kept_conflicting");
+      return "nothing";
+    }
+    clearProxyCache();
+    configureGlobalAgents();
+    logFeatureOk("api_served_chain_read");
+    return "restored";
+  } catch (error) {
+    logForDebugging(`CA certs: Could not read the server's certificates: ${errorMessage(error)}`);
+    logFeatureSad("api_served_chain_read", signal.aborted ? "read_timed_out" : "read_failed");
+    return "unread";
+  } finally {
+    proxySocket?.destroy();
+  }
+}
+//@ chunk-5xgkngpb.js:2674546-2675156 layout
+async function restoreServedChainIfNeeded(baseURL, signal) {
+  let caCertificates = getCACertificates();
+  if (
+    !baseURL ||
+    !caCertificates ||
+    signal?.aborted ||
+    isEssentialTrafficOnly() ||
+    env.ANTHROPIC_UNIX_SOCKET ||
+    !hasDroppedLoopingCrossCertificates()
+  )
+    return false;
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(baseURL);
+  } catch {
+    return false;
+  }
+  if (parsedUrl.protocol !== "https:") return false;
+  let host = parsedUrl.hostname.replace(/^\[|\]$/g, "");
+  let port = Number(parsedUrl.port) || 443;
+  let authority = `${host}:${port}`;
+  let byAuthority = weakMap_13.get(caCertificates) ?? new Map();
+  weakMap_13.set(caCertificates, byAuthority);
+  let pendingRead = byAuthority.get(authority);
+  if (pendingRead === undefined) {
+    pendingRead = readServedChainForHost(baseURL, host, port).then((outcome) => {
+      if (outcome === "unread") byAuthority.delete(authority);
+      return outcome;
+    });
+    byAuthority.set(authority, pendingRead);
+  }
+  if (!signal) return (await pendingRead) === "restored";
+  let abortController = new AbortController();
+  let promise = new Promise((resolve) => {
+    signal.addEventListener("abort", () => resolve("unread"), {
+      once: true,
+      signal: abortController.signal,
+    });
+  });
+  let winner = await Promise.race([pendingRead, promise]);
+  abortController.abort();
+  return winner === "restored";
+}
+//@ chunk-5xgkngpb.js:2675156-2675213 placement
 class TetherHealSpendState {
   handlers = undefined;
   spent = undefined;
   lapsedAtMs = undefined;
 }
-//@ chunk-e6aww6q8.js:2616063-2616090 placement
+//@ chunk-5xgkngpb.js:2675213-2675240 placement
 var tetherHealSpendSlot; // deferred: uses TetherHealSpendState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2616063", () => {
+deferInit("chunk-5xgkngpb.js:2675213", () => {
   tetherHealSpendSlot = new HostScoped(() => new TetherHealSpendState());
 });
 export {
   seedWireShapeFromRecord,
-  forgetAgentThread,
   threadSourceKind,
   noteLastDispatchHealed,
   isStatelessTetherModel,
@@ -2018,11 +2313,23 @@ export {
   buildTetherDelta,
   hasStructuralEchoDiff,
   logTetherEchoAudit,
+  needsTetherChannel,
   checkTetherPrefixMismatch,
   createSentPrefixChecker,
   reportThinkingDrop,
   refetchStaleClientData,
+  hasToolUse,
+  failedResponseStamp,
   liftEphemeralReminders,
   buildWireWithClearAt,
+  INDEX_HEAD_SCAN_BYTES,
+  INDEX_BOUNDARY_SCAN_BYTES,
+  INDEX_LAST_PROMPT_SCAN_BYTES,
+  LAST_PROMPT_PREFIX_SCAN_BYTES,
+  MAX_TRANSCRIPT_READ_BYTES,
+  hasServerToolHistory,
+  CA_CERT_ERROR_CODES,
+  restoreServedChainIfNeeded,
+  forgetAgentThread,
   reminderDeliveryMode,
 };

@@ -3,10 +3,10 @@
  *
  * 高亮的回退实现：用 cli-highlight（语言不支持时退回 markdown 样式），带 LRU 缓存与工作量预算。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/HighlightedCode/Fallback.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-yqj79cx2.js (11)
- * attribution: fingerprint 3, placement 9
+ * pieces: chunk-abjyap5m.js (11), chunk-czq1j3j2.js (1)
+ * attribution: placement 9, fingerprint 3
  */
 import { extname } from "path";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -28,19 +28,19 @@ import { stripAnsi } from "../../utils/stripAnsi.js";
 import { listWindow } from "../pluginUi/render/RenderInstance.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-yqj79cx2.js:858-862 placement
+//@ chunk-abjyap5m.js:858-862 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-yqj79cx2.js:858", () => {
+deferInit("chunk-abjyap5m.js:858", () => {
   init_react_production();
 });
-//@ chunk-yqj79cx2.js:862-866 placement
+//@ chunk-abjyap5m.js:862-866 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-yqj79cx2.js:862", () => {
+deferInit("chunk-abjyap5m.js:862", () => {
   init_react_production();
 });
-//@ chunk-yqj79cx2.js:898-909 placement
+//@ chunk-abjyap5m.js:898-909 placement
 var HIGHLIGHT_CACHE_SIZE = 500;
-//@ chunk-yqj79cx2.js:909-1332 placement
+//@ chunk-abjyap5m.js:909-1332 placement
 function getCachedHighlight(
   highlightedCode,
   highlighter,
@@ -78,7 +78,7 @@ function getCachedHighlight(
   });
   return highlighted;
 }
-//@ chunk-yqj79cx2.js:1332-1539 placement
+//@ chunk-abjyap5m.js:1332-1539 placement
 function protectLongLines(code) {
   let markers = new Map();
   if (code.length <= MAX_CODE_CHARS)
@@ -104,7 +104,7 @@ function protectLongLines(code) {
     markers,
   };
 }
-//@ chunk-yqj79cx2.js:1539-1660 placement
+//@ chunk-abjyap5m.js:1539-1660 placement
 function restoreLongLines(text, markers) {
   if (markers.size === 0) return text;
   return text
@@ -118,7 +118,7 @@ function restoreLongLines(text, markers) {
     }).join(`
 `);
 }
-//@ chunk-yqj79cx2.js:1660-2341 fingerprint (2.1.88 match: HighlightedCodeFallback, 0.837)
+//@ chunk-abjyap5m.js:1660-2341 fingerprint (2.1.88 match: HighlightedCodeFallback, 0.837)
 function HighlightedCodeFallback(props) {
   let $ = useMemoCache(16);
   let { code, filePath, dim, skipColoring } = props;
@@ -188,7 +188,7 @@ function HighlightedCodeFallback(props) {
   } else t8 = $[15];
   return t8;
 }
-//@ chunk-yqj79cx2.js:2341-3066 fingerprint (2.1.88 match: Highlighted, 0.749)
+//@ chunk-abjyap5m.js:2341-3066 fingerprint (2.1.88 match: Highlighted, 0.748)
 function Highlighted(props) {
   let $ = useMemoCache(7);
   let { codeWithSpaces, language } = props;
@@ -243,7 +243,7 @@ function Highlighted(props) {
   } else t3 = $[6];
   return t3;
 }
-//@ chunk-yqj79cx2.js:3066-3131 placement
+//@ chunk-abjyap5m.js:3066-3131 placement
 function renderFallbackText(children, key) {
   return jsxProd_default(
     Text,
@@ -255,23 +255,23 @@ function renderFallbackText(children, key) {
     key,
   );
 }
-//@ chunk-yqj79cx2.js:3131-3154 placement
+//@ chunk-abjyap5m.js:3131-3154 placement
 function fallbackLineCount() {
   return 1;
 }
-//@ chunk-yqj79cx2.js:3154-3215 placement
+//@ chunk-abjyap5m.js:3154-3215 placement
 function visibleLineIndexes(line, lineIndex) {
   return lineIndex === 0 || stripAnsi(line).trim() !== "" ? [lineIndex] : [];
 }
-//@ chunk-18hwfzwa.js:483909-483958 fingerprint (2.1.88 match: cachedHighlight, 0.549)
-var cachedHighlight = (open, limit) => (open === null ? 0 : listWindow(limit, open.highlight).rows);
+//@ chunk-czq1j3j2.js:510385-510434 fingerprint (2.1.88 match: cachedHighlight, 0.55)
+var openListRows = (open, limit) => (open === null ? 0 : listWindow(limit, open.highlight).rows);
 export {
-  cachedHighlight,
   renderFallbackText,
   HighlightedCodeFallback,
   protectLongLines,
   restoreLongLines,
   fallbackLineCount,
   visibleLineIndexes,
+  openListRows,
   getCachedHighlight,
 };

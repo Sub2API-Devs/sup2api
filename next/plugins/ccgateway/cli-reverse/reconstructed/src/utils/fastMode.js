@@ -3,10 +3,10 @@
  *
  * Fast mode（内部代号 penguin）：仅第一方 API；组织开关预取（/api/claude_code_penguin_mode）、不可用原因与提示、运行期冷却、被 API 拒绝/超额拒绝后的处理，以及请求里 speed:"fast" 的判定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/fastMode.ts
- * pieces: chunk-93kwxas0.js (2), chunk-aepeg2w5.js (62), chunk-gptvg45j.js (1)
- * attribution: callgraph-fingerprint 1, affinity 1, callgraph-witnessed 1, layout 33, fingerprint 13, placement 16
+ * pieces: chunk-avy0g5d4.js (2), chunk-exfmq47h.js (63), chunk-x2n44e87.js (1)
+ * attribution: callgraph-fingerprint 1, affinity 1, callgraph-witnessed 1, layout 34, fingerprint 13, placement 16
  */
 import { getAPIProvider } from "./model/providers.js";
 import { env } from "./env.js";
@@ -31,7 +31,7 @@ import { isModelAllowed } from "./model/modelAllowlist.js";
 import { getDefaultMainLoopModelSetting } from "./model/planModeModel.js";
 import { getMainLoopModel, strip1mTag } from "./model/model.js";
 import { isRemoteControlChannelAvailable, isRemoteSessionAvailable } from "../remote/remoteMode.js";
-import { getSettingsForSource, getInitialSettings_2, updateSettingsForSource } from "./settings/settings.js";
+import { getSettingsForSource, getInitialSettings, updateSettingsForSource } from "./settings/settings.js";
 import {
   getIsNonInteractiveSession,
   preferThirdPartyAuthentication,
@@ -44,7 +44,6 @@ import {
   getPublicModelDisplayName,
   opus1mMergeTagsDefaultOpus,
 } from "./model/modelDisplay.js";
-import { refreshFastModeFromSettings } from "../commands/fast/fast.js";
 import { modelSupportsCapability } from "./model/modelCatalog.js";
 import { getCanonicalName, strippedCanonicalName } from "./model/canonicalModelName.js";
 import { logEvent } from "../services/analytics/index.js";
@@ -64,7 +63,7 @@ import { invalidateCommandNames } from "./settings/commandSyncNames.js";
 import { syncRespawnFlag } from "../services/daemon/jobState.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:354620-354705 callgraph-witnessed (2.1.88 match: isFastModeEnabled, 0.649)
+//@ chunk-exfmq47h.js:365202-365287 callgraph-witnessed (2.1.88 match: isFastModeEnabled, 0.65)
 /**
  * fast mode 总开关：只在第一方 API 且未设置 CLAUDE_CODE_DISABLE_FAST_MODE 时为真。
  */
@@ -72,28 +71,28 @@ function isFastModeEnabled() {
   if (getAPIProvider() !== "firstParty") return false;
   return !env.CLAUDE_CODE_DISABLE_FAST_MODE;
 }
-//@ chunk-aepeg2w5.js:354705-354739 layout
+//@ chunk-exfmq47h.js:365287-365321 layout
 /**
  * 当前令牌是代码代理/CCR session worker 身份（无账号 uuid、带 code_agent_id）时为真；此时跳过组织预取。
  */
 function isCcrSessionWorkerToken() {
   return isServiceAgentSession() || isAgentSessionWorker();
 }
-//@ chunk-aepeg2w5.js:354739-354806 layout
+//@ chunk-exfmq47h.js:365321-365388 layout
 /**
  * CLAUDE_CODE_SKIP_FAST_MODE_ORG_CHECK 且非远程托管入口时跳过组织检查。
  */
 function shouldSkipFastModeOrgCheck() {
   return env.CLAUDE_CODE_SKIP_FAST_MODE_ORG_CHECK && !isRemoteManagedEntrypoint();
 }
-//@ chunk-aepeg2w5.js:354806-354840 layout
+//@ chunk-exfmq47h.js:365388-365422 layout
 /**
  * fast mode 开且有 session ingress 令牌。
  */
 function hasSessionIngressAuthForFastMode() {
   return isFastModeEnabled() && hasSessionIngressAuthToken();
 }
-//@ chunk-aepeg2w5.js:354840-354906 layout
+//@ chunk-exfmq47h.js:365422-365488 layout
 /**
  * 有 profile scope，或 CCR 推理 scope 的会话令牌，可用 OAuth 查组织 fast 状态。
  */
@@ -103,28 +102,28 @@ function canFetchFastModeStatusWithOAuth() {
     (hasSessionIngressAuthForFastMode() && hasOAuthScope("user:ccr_inference") && !isCcrSessionWorkerToken())
   );
 }
-//@ chunk-aepeg2w5.js:354906-354938 layout
+//@ chunk-exfmq47h.js:365488-365520 layout
 /**
  * CLAUDE_CODE_REMOTE 且入口属于远程托管集合。
  */
 function isRemoteManagedEntrypoint() {
   return isRemoteManagedEnvironment() && isCoworkEntrypoint();
 }
-//@ chunk-aepeg2w5.js:354938-354997 layout
+//@ chunk-exfmq47h.js:365520-365579 layout
 /**
  * 非远程托管时读全局配置缓存 penguinModeOrgEnabled。
  */
 function isOrgFastModeEnabledCached() {
   return !isRemoteManagedEntrypoint() && getGlobalConfig().penguinModeOrgEnabled === true;
 }
-//@ chunk-aepeg2w5.js:354997-355056 layout
+//@ chunk-exfmq47h.js:365579-365638 layout
 /**
  * 远程托管入口下组织状态为 enabled。
  */
 function isRemoteOrgFastModeEnabled() {
   return isRemoteManagedEntrypoint() && fastModeState.orgStatus.status === "enabled";
 }
-//@ chunk-aepeg2w5.js:355056-355109 layout
+//@ chunk-exfmq47h.js:365638-365691 layout
 /**
  * fast mode 开且 getFastModeUnavailableReason 为空。
  */
@@ -132,7 +131,7 @@ function isFastModeAvailable(model) {
   if (!isFastModeEnabled()) return false;
   return getFastModeUnavailableMessage(model) === null;
 }
-//@ chunk-aepeg2w5.js:355109-355319 layout
+//@ chunk-exfmq47h.js:365691-365901 layout
 /**
  * "Fast mode requires usage credits" 加开启额度的指引。
  */
@@ -144,7 +143,7 @@ function getUsageCreditsRequiredMessage() {
     ? `${"Fast mode requires usage credits"} \xB7 ${getTurnOnUsageCreditsStep()}`
     : "Fast mode requires usage credits";
 }
-//@ chunk-aepeg2w5.js:355319-355741 fingerprint (2.1.88 match: getDisabledReasonMessage, 1)
+//@ chunk-exfmq47h.js:365901-366323 fingerprint (2.1.88 match: getDisabledReasonMessage, 1)
 /**
  * 组织层面禁用原因 → 提示文案（free/preference/extra_usage_disabled/network_error/unknown）。
  */
@@ -164,7 +163,7 @@ function getDisabledReasonMessage(disabledReason, authType) {
       return "Fast mode is currently unavailable";
   }
 }
-//@ chunk-aepeg2w5.js:355741-356509 layout
+//@ chunk-exfmq47h.js:366323-367091 layout
 /**
  * 不可用原因码：not_first_party/disabled_by_env、tengu_penguins_off、model_not_allowed（opus 不在 allowlist）、托管设置 fastMode=false 或 fastModePerSessionOptIn、SDK 需显式开启、pending、组织 disabled 原因；可用时 null。
  */
@@ -205,7 +204,7 @@ function getFastModeUnavailableReasonCode(
   }
   return null;
 }
-//@ chunk-aepeg2w5.js:356509-356621 layout
+//@ chunk-exfmq47h.js:367091-367203 layout
 /**
  * 原因码转文案并打调试日志，可用时 null。
  */
@@ -216,7 +215,7 @@ function getFastModeUnavailableMessage(model, fastModeCheckOptions = {}) {
   logForDebugging(`Fast mode unavailable: ${fastModeUnavailableReason}`);
   return fastModeUnavailableReason;
 }
-//@ chunk-aepeg2w5.js:356621-357208 fingerprint (2.1.88 match: getFastModeUnavailableReason, 0.439)
+//@ chunk-exfmq47h.js:367203-367790 fingerprint (2.1.88 match: getFastModeUnavailableReason, 0.44)
 /**
  * 原因码 → 面向用户文案。
  */
@@ -247,7 +246,7 @@ function getFastModeUnavailableReason(disabledReason) {
       );
   }
 }
-//@ chunk-aepeg2w5.js:357208-357267 placement
+//@ chunk-exfmq47h.js:367790-367849 placement
 /**
  * 默认 Opus 模型的显示名。
  */
@@ -255,14 +254,14 @@ function defaultOpusLabel() {
   let userSpecifiedModel = parseUserSpecifiedModel(strip1mTag(defaultOpusAlias()));
   return getPublicModelDisplayName(strip1mTag(userSpecifiedModel)) ?? "Opus";
 }
-//@ chunk-aepeg2w5.js:357267-357313 placement
+//@ chunk-exfmq47h.js:367849-367895 placement
 /**
  * 默认 Opus 别名（是否带 [1m]）。
  */
 function defaultOpusAlias() {
   return opus1mMergeTagsDefaultOpus() ? "opus[1m]" : "opus";
 }
-//@ chunk-aepeg2w5.js:357313-357384 placement
+//@ chunk-exfmq47h.js:367895-367966 placement
 /**
  * 判断某请求模型在给定条件下是否走快速模式（需快速模式可用且满足模型/账号条件）。
  */
@@ -272,7 +271,7 @@ function isFastModeOnForRequestModel(model, fastMode, options) {
     isFastModeOnForModel(model, options) && (isRemoteSessionAvailable() || isFastModeAvailable() || fastMode)
   );
 }
-//@ chunk-aepeg2w5.js:357384-357473 placement
+//@ chunk-exfmq47h.js:367966-368055 placement
 /**
  * 判断快速模式设置是否当前生效（开关、模型支持与组织设置均满足）。
  */
@@ -280,9 +279,9 @@ function isFastModeSettingActive(fastMode) {
   if (!isFastModeEnabled()) return false;
   if (!isFastModeAvailable(fastMode)) return false;
   if (!supportsFastMode(fastMode)) return false;
-  return isFastModeSettingOn(getInitialSettings_2());
+  return isFastModeSettingOn(getInitialSettings());
 }
-//@ chunk-aepeg2w5.js:357473-357680 placement
+//@ chunk-exfmq47h.js:368055-368262 placement
 /**
  * 判断设置中的 fast mode 是否生效：开启且不要求按会话选择，或按会话选择时由 --settings 打开（策略强制按会话选择时不算）。
  */
@@ -292,7 +291,23 @@ function isFastModeSettingOn(settings, fastMode) {
   if (getSettingsForSource("policySettings")?.fastModePerSessionOptIn === true) return false;
   return (fastMode ? fastMode.flagFastMode : getSettingsForSource("flagSettings")?.fastMode) === true;
 }
-//@ chunk-aepeg2w5.js:357806-357873 placement
+//@ chunk-exfmq47h.js:368262-368388 layout
+/**
+ * 按设置重算 fastMode 写回应用状态，开启时预取快速模式状态。
+ */
+function refreshFastModeFromSettings(session, setState, options) {
+  setState((prev) => {
+    let isOn = isFastModeSettingOn(prev.settings);
+    return prev.fastMode === isOn
+      ? prev
+      : {
+          ...prev,
+          fastMode: isOn,
+        };
+  });
+  if (isFastModeOrgPending(session().fastMode === true)) prefetchFastModeStatus(options);
+}
+//@ chunk-exfmq47h.js:368388-368455 placement
 /**
  * 比较设置中的快速模式与当前实际状态是否不一致。
  */
@@ -300,14 +315,14 @@ function fastModeSettingDiverges(input) {
   let settingOn = isFastModeSettingOn(input.settings);
   return settingOn !== input.fastMode || isFastModeOrgPending(settingOn);
 }
-//@ chunk-aepeg2w5.js:357873-357991 placement
+//@ chunk-exfmq47h.js:368455-368573 placement
 function isFastModeOrgPending(orgStatus) {
   let orgStatus_2 = fastModeState.orgStatus;
   let pending =
     orgStatus_2.status === "pending" || (orgStatus_2.status === "disabled" && orgStatus_2.source === "guess");
   return orgStatus && isRemoteManagedEntrypoint() && pending;
 }
-//@ chunk-aepeg2w5.js:357991-358070 placement
+//@ chunk-exfmq47h.js:368573-368652 placement
 /**
  * 订阅组织级快速模式变化，立即触发一次并返回退订函数。
  */
@@ -320,7 +335,7 @@ function subscribeOrgFastModeChange(listener, options, options_2) {
   onChange();
   return unsubscribe;
 }
-//@ chunk-aepeg2w5.js:358070-358248 placement
+//@ chunk-exfmq47h.js:368652-368830 placement
 /**
  * 模型是否支持快速模式。
  */
@@ -337,7 +352,7 @@ function supportsFastMode(model) {
   let lower = userSpecifiedModel.toLowerCase();
   return lower.includes("opus-4-8") || lower.includes("opus-5");
 }
-//@ chunk-aepeg2w5.js:358248-358350 placement
+//@ chunk-exfmq47h.js:368830-368932 placement
 /**
  * 快速模式是否生效。
  */
@@ -349,7 +364,7 @@ function isFastModeActive(model, fastMode) {
   if (!supportsFastMode(model)) return false;
   return !!fastMode || isFastModeSettingActive(model);
 }
-//@ chunk-aepeg2w5.js:358350-358498 placement
+//@ chunk-exfmq47h.js:368932-369080 placement
 /**
  * 模型切换导致快速模式开关时上报。
  */
@@ -361,7 +376,7 @@ function reportFastModeToggle(fastMode, enabled) {
     remote: isRemoteControlChannelAvailable(),
   });
 }
-//@ chunk-aepeg2w5.js:358498-359882 placement
+//@ chunk-exfmq47h.js:369080-370464 placement
 /**
  * 快速模式运行状态（冷却、组织状态、预取、额度用尽）。
  */
@@ -439,29 +454,29 @@ class FastModeState {
     if (this.inflightPrefetch === prefetchKey) this.inflightPrefetch = null;
   }
 }
-//@ chunk-aepeg2w5.js:359882-359915 placement
+//@ chunk-exfmq47h.js:370464-370497 placement
 /**
  * 按宿主隔离的快速模式状态（冷却触发/结束信号）。
  */
 var fastModeState; // deferred: uses FastModeState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:359882", () => {
+deferInit("chunk-exfmq47h.js:370464", () => {
   fastModeState = identity_2(new FastModeState(), (state) => state.reset());
 });
-//@ chunk-aepeg2w5.js:359915-359972 placement
+//@ chunk-exfmq47h.js:370497-370554 placement
 /**
  * 订阅"快速模式进入冷却"事件。
  */
 function onFastModeCooldownTriggered(cooldown) {
   return fastModeState.cooldownTriggered.subscribe(cooldown);
 }
-//@ chunk-aepeg2w5.js:359972-360027 placement
+//@ chunk-exfmq47h.js:370554-370609 placement
 /**
  * 订阅"快速模式冷却结束"事件。
  */
 function onFastModeCooldownExpired(cooldown) {
   return fastModeState.cooldownExpired.subscribe(cooldown);
 }
-//@ chunk-aepeg2w5.js:360027-360303 fingerprint (2.1.88 match: getFastModeRuntimeState, 0.617)
+//@ chunk-exfmq47h.js:370609-370885 fingerprint (2.1.88 match: getFastModeRuntimeState, 0.617)
 /**
  * 读运行期状态；冷却到期时自动清除并发 cooldownExpired。
  */
@@ -477,7 +492,7 @@ function getFastModeRuntimeState() {
   }
   return fastModeState.runtimeState;
 }
-//@ chunk-aepeg2w5.js:360303-360569 fingerprint (2.1.88 match: triggerFastModeCooldown, 0.795)
+//@ chunk-exfmq47h.js:370885-371151 fingerprint (2.1.88 match: triggerFastModeCooldown, 0.795)
 /**
  * 进入冷却（resetAt、原因），记 tengu_fast_mode_fallback_triggered。
  */
@@ -494,14 +509,14 @@ function triggerFastModeCooldown(resetTimestamp, reason) {
   });
   fastModeState.cooldownTriggered.emit(resetTimestamp, reason);
 }
-//@ chunk-aepeg2w5.js:360569-360602 layout
+//@ chunk-exfmq47h.js:371151-371184 layout
 /**
  * 清除运行期冷却。
  */
 function clearFastModeCooldown() {
   fastModeState.clearCooldown();
 }
-//@ chunk-aepeg2w5.js:360602-360946 fingerprint (2.1.88 match: handleFastModeRejectedByAPI, 0.739)
+//@ chunk-exfmq47h.js:371184-371528 fingerprint (2.1.88 match: handleFastModeRejectedByAPI, 0.738)
 /**
  * API 拒绝 fast mode：组织状态置 disabled/preference（server），清用户设置 fastMode 与缓存 penguinModeOrgEnabled，发 orgFastModeChange(false)。
  */
@@ -537,7 +552,7 @@ function handleFastModeRejectedByAPI(storageV5) {
   );
   fastModeState.orgFastModeChange.emit(false);
 }
-//@ chunk-aepeg2w5.js:360946-361262 layout
+//@ chunk-exfmq47h.js:371528-371844 layout
 /**
  * fallback 模型拒绝 fast 时记入本会话集合，该模型此后用标准速度，并发事件。
  */
@@ -550,7 +565,7 @@ function markFallbackModelFastRejected(model) {
   fastModeState.fallbackModelFastRejected.emit(model);
   fastModeState.fastRejectedFallbackModelsChanged.emit();
 }
-//@ chunk-aepeg2w5.js:361262-361408 layout
+//@ chunk-exfmq47h.js:371844-371990 layout
 /**
  * 清空 fast 被拒 fallback 模型集合并发变化事件。
  */
@@ -559,14 +574,14 @@ function clearFastRejectedFallbackModels() {
   fastModeState.fastRejectedFallbackModels.clear();
   fastModeState.fastRejectedFallbackModelsChanged.emit();
 }
-//@ chunk-aepeg2w5.js:361408-361481 layout
+//@ chunk-exfmq47h.js:371990-372063 layout
 /**
  * 订阅 fast 被拒 fallback 模型集合变化。
  */
 function onFastRejectedFallbackModelsChanged(models) {
   return fastModeState.fastRejectedFallbackModelsChanged.subscribe(models);
 }
-//@ chunk-aepeg2w5.js:361481-361577 layout
+//@ chunk-exfmq47h.js:372063-372159 layout
 /**
  * 该模型本会话是否因 fast 被拒而改用标准速度（queryModel 据此不发 speed:fast）。
  */
@@ -578,7 +593,7 @@ function isFallbackModelFastRejected(model) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:361577-361649 layout
+//@ chunk-exfmq47h.js:372159-372231 layout
 /**
  * 当前（或给定）模型是否在 fast 被拒集合中。
  */
@@ -592,7 +607,7 @@ function isMainModelFastRejected(modelName) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:361649-361787 layout
+//@ chunk-exfmq47h.js:372231-372369 layout
 /**
  * 该模型本进程是否曾被拒绝 fast。
  */
@@ -608,35 +623,35 @@ function wasEverFastRejected(model) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:361787-361824 layout
+//@ chunk-exfmq47h.js:372369-372406 layout
 /**
  * 会话开了 fast 且该模型未被拒。
  */
 function isFastModeOnForModel(model, fastMode) {
   return !!model && !isMainModelFastRejected(fastMode);
 }
-//@ chunk-aepeg2w5.js:361824-361884 layout
+//@ chunk-exfmq47h.js:372406-372466 layout
 /**
  * 开了 fast 但模型被拒时返回 model_not_allowed。
  */
 function getFastRejectedReason(model, fastMode) {
   return fastMode && isMainModelFastRejected(model) ? "model_not_allowed" : null;
 }
-//@ chunk-aepeg2w5.js:361884-361949 layout
+//@ chunk-exfmq47h.js:372466-372531 layout
 /**
  * 订阅 fallback 模型 fast 被拒事件。
  */
 function onFallbackModelFastRejected(model) {
   return fastModeState.fallbackModelFastRejected.subscribe(model);
 }
-//@ chunk-aepeg2w5.js:361949-362005 layout
+//@ chunk-exfmq47h.js:372531-372587 layout
 /**
  * 订阅超额拒绝事件（参数为提示文案）。
  */
 function onFastModeOverageRejection(model) {
   return fastModeState.overageRejection.subscribe(model);
 }
-//@ chunk-aepeg2w5.js:362005-362774 fingerprint (2.1.88 match: getOverageDisabledMessage, 0.709)
+//@ chunk-exfmq47h.js:372587-373356 fingerprint (2.1.88 match: getOverageDisabledMessage, 0.709)
 /**
  * 超额（usage credits）被拒原因 → "Fast mode disabled · …" 文案。
  */
@@ -663,7 +678,7 @@ function getOverageDisabledMessage(reason) {
       return "Fast mode disabled \xB7 Usage credits aren't available";
   }
 }
-//@ chunk-aepeg2w5.js:362774-362879 fingerprint (2.1.88 match: isOutOfCreditsReason, 0.794)
+//@ chunk-exfmq47h.js:373356-373461 fingerprint (2.1.88 match: isOutOfCreditsReason, 0.794)
 /**
  * 额度耗尽类原因（org_level_disabled_until/org_spend_cap_reached/out_of_credits）。
  */
@@ -672,14 +687,14 @@ function isOutOfCreditsReason(reason) {
     reason === "org_level_disabled_until" || reason === "org_spend_cap_reached" || reason === "out_of_credits"
   );
 }
-//@ chunk-aepeg2w5.js:362879-362927 layout
+//@ chunk-exfmq47h.js:373461-373509 layout
 /**
  * 新一轮开始时允许再次显示额度耗尽通知。
  */
 function rearmCreditsExhaustedNotice() {
   fastModeState.rearmCreditsExhaustedNotice();
 }
-//@ chunk-aepeg2w5.js:362927-363624 fingerprint (2.1.88 match: handleFastModeOverageRejection, 0.525)
+//@ chunk-exfmq47h.js:373509-374206 fingerprint (2.1.88 match: handleFastModeOverageRejection, 0.525)
 /**
  * API 以超额原因拒绝 fast：额度耗尽类只发一次通知；其他原因关闭用户 fast 设置并把组织状态置 extra_usage_disabled。
  */
@@ -730,14 +745,14 @@ function handleFastModeOverageRejection(reason, storageV5) {
   }
   fastModeState.overageRejection.emit(message);
 }
-//@ chunk-aepeg2w5.js:363624-363672 fingerprint (2.1.88 match: isFastModeCooldown, 1)
+//@ chunk-exfmq47h.js:374206-374254 fingerprint (2.1.88 match: isFastModeCooldown, 1)
 /**
  * 运行期状态是否 cooldown。
  */
 function isFastModeCooldown() {
   return getFastModeRuntimeState().status === "cooldown";
 }
-//@ chunk-aepeg2w5.js:363672-363781 fingerprint (2.1.88 match: getFastModeState, 1)
+//@ chunk-exfmq47h.js:374254-374363 fingerprint (2.1.88 match: getFastModeState, 1)
 /**
  * fast 状态：on / cooldown / off（总开关、可用、会话开启且模型支持）。
  */
@@ -751,12 +766,12 @@ function getFastModeState(model, fastModeUserEnabled) {
   if (enabled) return "on";
   return "off";
 }
-//@ chunk-aepeg2w5.js:363781-363859 layout
+//@ chunk-exfmq47h.js:374363-374441 layout
 /**
  * 服务端可能返回的禁用原因列表。
  */
 var FAST_MODE_DISABLED_REASONS = ["free", "preference", "extra_usage_disabled", "network_error", "unknown"];
-//@ chunk-aepeg2w5.js:363859-363942 layout
+//@ chunk-exfmq47h.js:374441-374524 layout
 /**
  * 空值视为 preference，未知值视为 unknown。
  */
@@ -764,28 +779,28 @@ function normalizeFastModeDisabledReason(disabledReason) {
   if (disabledReason == null) return "preference";
   return FAST_MODE_DISABLED_REASONS.find((knownReason) => knownReason === disabledReason) ?? "unknown";
 }
-//@ chunk-aepeg2w5.js:363942-363999 layout
+//@ chunk-exfmq47h.js:374524-374581 layout
 /**
  * 订阅组织 fast 启用状态变化。
  */
 function onOrgFastModeChange(listener) {
   return fastModeState.orgFastModeChange.subscribe(listener);
 }
-//@ chunk-aepeg2w5.js:363999-364086 layout
+//@ chunk-exfmq47h.js:374581-374668 layout
 /**
  * 组织状态是服务端给出的 disabled。
  */
 function isOrgFastModeDisabledByServer() {
   return fastModeState.orgStatus.status === "disabled" && fastModeState.orgStatus.source === "server";
 }
-//@ chunk-aepeg2w5.js:364086-364143 layout
+//@ chunk-exfmq47h.js:374668-374725 layout
 /**
  * network_error 或 unknown（可忽略的暂时性原因）。
  */
 function isTransientFastModeReason(reason) {
   return reason === "network_error" || reason === "unknown";
 }
-//@ chunk-aepeg2w5.js:364143-364430 fingerprint (2.1.88 match: resolveFastModeStatusFromCache, 0.631)
+//@ chunk-exfmq47h.js:374725-375012 fingerprint (2.1.88 match: resolveFastModeStatusFromCache, 0.63)
 /**
  * 更新组织状态，启用状态或禁用原因变化时发 orgFastModeChange。
  */
@@ -801,12 +816,12 @@ function resolveFastModeStatusFromCache(orgStatus) {
     replaced.status === "disabled" && orgStatus.status === "disabled" && replaced.reason !== orgStatus.reason;
   if (status !== isEnabled || reason) fastModeState.orgFastModeChange.emit(isEnabled);
 }
-//@ chunk-aepeg2w5.js:364430-364441 layout
+//@ chunk-exfmq47h.js:375012-375023 layout
 /**
  * 10 秒请求超时。
  */
 var FAST_MODE_STATUS_TIMEOUT_MS = 1e4;
-//@ chunk-aepeg2w5.js:364441-364700 fingerprint (2.1.88 match: fetchFastModeStatus, 0.923)
+//@ chunk-exfmq47h.js:375023-375282 fingerprint (2.1.88 match: fetchFastModeStatus, 0.924)
 /**
  * GET {BASE_API_URL}/api/claude_code_penguin_mode，OAuth（Bearer + oauth beta）或 x-api-key，返回 {enabled, disabled_reason}。
  */
@@ -830,12 +845,12 @@ async function fetchFastModeStatus(auth) {
     })
   ).data;
 }
-//@ chunk-aepeg2w5.js:364700-364713 layout
+//@ chunk-exfmq47h.js:375282-375295 layout
 /**
  * 30 秒内不重复预取。
  */
 var FAST_MODE_PREFETCH_MIN_INTERVAL_MS = 30000;
-//@ chunk-aepeg2w5.js:364713-364813 layout
+//@ chunk-exfmq47h.js:375295-375395 layout
 /**
  * 组织状态仍 pending 时先用缓存猜测值填入。
  */
@@ -844,14 +859,14 @@ function initFastModeOrgStatusGuess() {
   if (fastModeState.orgStatus.status !== "pending") return;
   fastModeState.replaceOrgStatus(guessOrgFastModeStatus());
 }
-//@ chunk-aepeg2w5.js:364813-364871 layout
+//@ chunk-exfmq47h.js:375395-375453 layout
 /**
  * 本轮是否已显示额度耗尽通知。
  */
 function wasCreditsExhaustedNotifiedThisTurn() {
   return fastModeState.creditsExhaustedNotifiedThisTurn;
 }
-//@ chunk-aepeg2w5.js:364871-365018 layout
+//@ chunk-exfmq47h.js:375453-375600 layout
 /**
  * 跳过检查或缓存说已启用 → enabled，否则 disabled/unknown（guess）。
  */
@@ -872,7 +887,7 @@ function guessOrgFastModeStatus() {
         source: "guess",
       };
 }
-//@ chunk-aepeg2w5.js:365018-367398 fingerprint (2.1.88 match: prefetchFastModeStatus, 0.705)
+//@ chunk-exfmq47h.js:375600-378016 fingerprint (2.1.88 match: prefetchFastModeStatus, 0.705)
 /**
  * 预取组织 fast 状态：essential-traffic、非第一方、CCR worker 时跳过；无可用认证时用缓存猜测；30 秒节流；401/撤销时刷新 OAuth 再试；结果写入组织状态、缓存 penguinModeOrgEnabled，必要时清除用户设置。
  */
@@ -977,10 +992,13 @@ async function prefetchFastModeStatus(credentials, credentials_2) {
             credentials,
           );
         await saveGlobalConfig(
-          (current) => ({
-            ...current,
-            penguinModeOrgEnabled: status.enabled,
-          }),
+          (current) =>
+            current.penguinModeOrgEnabled === status.enabled
+              ? current
+              : {
+                  ...current,
+                  penguinModeOrgEnabled: status.enabled,
+                },
           credentials,
         );
       }
@@ -1039,7 +1057,7 @@ async function prefetchFastModeStatus(credentials, credentials_2) {
   response.finally(() => fastModeState.clearInflightPrefetch(response));
   return response;
 }
-//@ chunk-gptvg45j.js:338-487 placement
+//@ chunk-x2n44e87.js:338-487 placement
 /**
  * 命令行带 --fast-mode 时同步内联 flag 设置与重启参数，使 fast mode 切换在重启后保持。
  */
@@ -1053,13 +1071,13 @@ function syncFastModeFlag(globalConfig, storageV5) {
   invalidateCommandNames();
   syncRespawnFlag("--fast-mode", [], globalConfig ? "on" : "off", undefined, storageV5);
 }
-//@ chunk-93kwxas0.js:7781-7961 callgraph-fingerprint (2.1.88 match: getInitialFastModeSetting, 0.251)
+//@ chunk-avy0g5d4.js:7849-8029 callgraph-fingerprint (2.1.88 match: getInitialFastModeSetting, 0.25)
 /**
  * 初始 fast 状态：fast mode 总开关开、设置（含 policySettings.fastMode 与 flag）要求、模型支持且无不可用原因时为 "on"。
  */
 function getInitialFastModeSetting(model, flagFastMode) {
   if (!isFastModeEnabled()) return;
-  let settings = getInitialSettings_2();
+  let settings = getInitialSettings();
   return (flagFastMode === undefined
     ? isFastModeSettingOn(settings)
     : isFastModeSettingOn(
@@ -1076,7 +1094,7 @@ function getInitialFastModeSetting(model, flagFastMode) {
     ? "on"
     : "off";
 }
-//@ chunk-93kwxas0.js:7961-8020 affinity
+//@ chunk-avy0g5d4.js:8029-8088 affinity
 /**
  * {orgStatus: 当前猜测的组织状态, sessionOptIn}。
  */
@@ -1087,50 +1105,50 @@ function buildFastModeCheckOptions(sessionOptIn) {
   };
 }
 export {
+  isFastModeEnabled,
+  isFastModeAvailable,
   supportsFastMode,
+  isFallbackModelFastRejected,
+  isFastModeCooldown,
+  wasEverFastRejected,
+  markFallbackModelFastRejected,
+  subscribeOrgFastModeChange,
   getFastModeState,
   getFastModeUnavailableReasonCode,
   getFastRejectedReason,
-  isFastModeEnabled,
-  isFastModeSettingActive,
-  getFastModeUnavailableMessage,
-  isFastModeAvailable,
-  isFastModeOnForRequestModel,
+  onOrgFastModeChange,
   onFastRejectedFallbackModelsChanged,
-  clearFastModeCooldown,
+  isMainModelFastRejected,
+  clearFastRejectedFallbackModels,
+  rearmCreditsExhaustedNotice,
   isFastModeActive,
   reportFastModeToggle,
-  isFastModeSettingOn,
-  isFastModeOrgPending,
-  prefetchFastModeStatus,
   defaultOpusAlias,
-  clearFastRejectedFallbackModels,
+  clearFastModeCooldown,
   hasSessionIngressAuthForFastMode,
   syncFastModeFlag,
+  getFastModeUnavailableMessage,
   defaultOpusLabel,
-  getFastModeRuntimeState,
-  isFastModeOnForModel,
-  isFastModeCooldown,
-  subscribeOrgFastModeChange,
-  onOrgFastModeChange,
   fastModeSettingDiverges,
-  isMainModelFastRejected,
-  onFastModeCooldownTriggered,
-  onFastModeCooldownExpired,
-  fastModeState,
-  rearmCreditsExhaustedNotice,
-  isOrgFastModeDisabledByServer,
-  onFastModeOverageRejection,
-  onFallbackModelFastRejected,
-  isOutOfCreditsReason,
-  isFallbackModelFastRejected,
-  wasEverFastRejected,
-  markFallbackModelFastRejected,
-  initFastModeOrgStatusGuess,
+  getFastModeRuntimeState,
+  prefetchFastModeStatus,
+  refreshFastModeFromSettings,
+  isFastModeSettingActive,
   wasCreditsExhaustedNotifiedThisTurn,
-  getInitialFastModeSetting,
-  buildFastModeCheckOptions,
   handleFastModeOverageRejection,
   triggerFastModeCooldown,
   handleFastModeRejectedByAPI,
+  isOutOfCreditsReason,
+  getInitialFastModeSetting,
+  buildFastModeCheckOptions,
+  initFastModeOrgStatusGuess,
+  isFastModeOnForRequestModel,
+  isFastModeSettingOn,
+  onFastModeCooldownTriggered,
+  onFastModeCooldownExpired,
+  fastModeState,
+  isFastModeOnForModel,
+  isOrgFastModeDisabledByServer,
+  onFastModeOverageRejection,
+  onFallbackModelFastRejected,
 };

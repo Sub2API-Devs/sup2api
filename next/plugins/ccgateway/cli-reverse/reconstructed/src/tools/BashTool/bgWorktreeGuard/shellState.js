@@ -3,29 +3,29 @@
  *
  * 2.1.316 新增：后台 worktree 守卫的 shell 程序分析入口与解析失败判定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-63f0f3kd.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h2y5xkdx.js (14)
  * attribution: placement 14
  */
 import { TOO_COMPLEX_SUFFIX, analyzeAssignment, STAT_VALUE_NOTE, DATE_VALUE_NOTE } from "./wordValues.js";
+import { MAX_SSH_TEXT_CHARS, programBaseName } from "./commandRules.js";
 import { withStdinState } from "./statementWalk.js";
-import { programBaseName } from "./commandRules.js";
 import { DECLARATION_BUILTINS } from "./commandTables.js";
 import { readFlagWithOverride } from "../../../services/analytics/flagOverrides.js";
 
-//@ chunk-63f0f3kd.js:3787-3818 placement
+//@ chunk-h2y5xkdx.js:4125-4156 placement
 /**
  * 对一条 shell 命令（tree-sitter AST）做后台 worktree 守卫分析：返回拒绝原因文本或 null。
  */
 function analyzeCommandForWorktree(tree) {
   return analyzeShellProgram(tree, false);
 }
-//@ chunk-63f0f3kd.js:3818-3888 placement
+//@ chunk-h2y5xkdx.js:4156-4226 placement
 function analyzeSimpleCommandForWorktree(tree) {
   return analyzeShellProgram(tree, true)?.replace(TOO_COMPLEX_SUFFIX, "in a plain command") ?? null;
 }
-//@ chunk-63f0f3kd.js:3888-4071 placement
+//@ chunk-h2y5xkdx.js:4226-4409 placement
 function isParseFailureNode(analysis) {
   return (
     analysis.nodeType === undefined ||
@@ -35,7 +35,7 @@ function isParseFailureNode(analysis) {
       !/^(?:heredoc_redirect|concatenation|word|string)$/.test(analysis.nodeType))
   );
 }
-//@ chunk-63f0f3kd.js:4071-4764 placement
+//@ chunk-h2y5xkdx.js:4409-5126 placement
 /**
  * 建立分析状态（变量种类、整数/数组名、绑定位置、cwd 等）并遍历整棵语法树，产出第一条拒绝原因。
  */
@@ -64,6 +64,9 @@ function analyzeShellProgram(tree, simple) {
     deviceLinked: false,
     scopes: [new Map()],
     depth: 0,
+    sshTextBudget: {
+      left: MAX_SSH_TEXT_CHARS,
+    },
   };
   state.pathAssigned = /(?:^|\W)(?:PATH|LD_\w*|DYLD_\w*)(?:\[[^\]]*\])?[+:]?=/i.test(tree.text);
   analyzeAssignment(tree, state, false);
@@ -75,7 +78,7 @@ function analyzeShellProgram(tree, simple) {
         (state.dateDirectiveDenied ? DATE_VALUE_NOTE : "")
     : reason;
 }
-//@ chunk-63f0f3kd.js:4764-4904 placement
+//@ chunk-h2y5xkdx.js:5126-5266 placement
 /**
  * “该值可静态确定且可安全当选项”的标志对象，与 DYNAMIC_VALUE_FLAGS 相对。
  */
@@ -93,11 +96,11 @@ var STATIC_VALUE_FLAGS = {
   optionSafe: true,
   written: false,
 };
-//@ chunk-63f0f3kd.js:4904-4956 placement
+//@ chunk-h2y5xkdx.js:5266-5318 placement
 function wordSet(words) {
   return new Set(words.trim().split(/\s+/));
 }
-//@ chunk-63f0f3kd.js:4956-5126 placement
+//@ chunk-h2y5xkdx.js:5318-5488 placement
 /**
  * 匹配“整词就是一个变量引用”（$name、${name}，可带引号）。
  */
@@ -105,7 +108,7 @@ var SHELL_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 var SINGLE_VAR_REF_RE = /^("?)\$(?:([A-Za-z_]\w*)|\{([A-Za-z_]\w*)\})\1$/;
 var SAFE_PATH_TOKEN_RE = /^[A-Za-z0-9_.\/+:@~][A-Za-z0-9_.\/+:@~-]*$/;
 var PLAIN_TEXT_RE = /^[A-Za-z0-9 _.,:\/=+@%^~#-]*$/;
-//@ chunk-63f0f3kd.js:5126-5273 placement
+//@ chunk-h2y5xkdx.js:5488-5636 placement
 function isPlainWordText(text) {
   return text
     .split(
@@ -121,7 +124,7 @@ function isPlainWordText(text) {
         }),
     );
 }
-//@ chunk-63f0f3kd.js:5273-6183 placement
+//@ chunk-h2y5xkdx.js:5636-6547 placement
 /**
  * 影响 git 位置或全局配置的环境变量（GIT_*、HOME、CDPATH、XDG_CONFIG_HOME）。
  */
@@ -137,7 +140,7 @@ var SAFE_QUOTED_TEXT_RE = /^[\s0-9A-Za-z_+\-*\/%()<>=!&|^~?:,#]*$/;
 var ZSH_MANAGED_VARIABLES =
   /^(?:jobtexts|jobdirs|history|historywords|funcstack|functrace|funcfiletrace|funcsourcetrace|zsh_scheduled_events|keymaps|widgets|modules|zcurses_windows|zgdbm_tied|mapfile|terminfo|termcap|langinfo|dis_patchars|ZFTP_(?:SESSION|HOST|USER|ACCOUNT|PWD|SYSTEM|REPLY|FILE)|ZSH_DEBUG_CMD|ZSH_EXECUTION_STRING|BASH_EXECUTION_STRING)$/;
 var TENGU_MOSSY_KESTREL = "tengu_mossy_kestrel";
-//@ chunk-63f0f3kd.js:6183-6247 placement
+//@ chunk-h2y5xkdx.js:6547-6611 placement
 function isStartupHazardVariable(name) {
   return (
     (ZSH_MANAGED_VARIABLES.test(name) || SHELL_STATE_SETTING_VARIABLES.test(name)) &&
@@ -146,10 +149,10 @@ function isStartupHazardVariable(name) {
     })
   );
 }
-//@ chunk-63f0f3kd.js:6247-6352 placement
+//@ chunk-h2y5xkdx.js:6611-6716 placement
 var COMPLETION_VARIABLE_PATTERN =
   /^(?:COMP_(?:CWORD|KEY|LINE|POINT|TYPE|WORDBREAKS|WORDS)|READLINE_(?:ARGUMENT|LINE|MARK|POINT))$/;
-//@ chunk-63f0f3kd.js:6352-6478 placement
+//@ chunk-h2y5xkdx.js:6716-6842 placement
 function isShellManagedVariable(name) {
   let upper = name.toUpperCase();
   return (
@@ -159,10 +162,10 @@ function isShellManagedVariable(name) {
     upper === "ARGV"
   );
 }
-//@ chunk-63f0f3kd.js:6478-6556 placement
+//@ chunk-h2y5xkdx.js:6842-6920 placement
 var SHELL_AUTO_VARIABLES = /^(?:RANDOM|SECONDS|LINENO|PPID|SHLVL|OPTIND)$/;
 var TENGU_EAGER_CHARM = "tengu_eager_charm";
-//@ chunk-63f0f3kd.js:6556-6594 placement
+//@ chunk-h2y5xkdx.js:6920-6958 placement
 /**
  * 读取 tengu_eager_charm 开关：是否追踪 shell 自身设置的变量名（用于整数变量与 for 循环绑定分析）。
  */

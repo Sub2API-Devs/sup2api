@@ -3,10 +3,10 @@
  *
  * 命令队列相关：优先级（now/next/later）、队列操作记录、可编辑命令弹回输入框、图片提取；本切片还混入了用量限额提示、权限模式循环与压缩元数据修复等代码（见过程记录）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/messageQueueManager.ts
- * pieces: chunk-0sfjpx19.js (1), chunk-18hwfzwa.js (2), chunk-e6aww6q8.js (73), chunk-ha3km179.js (11)
- * attribution: fingerprint 5, placement 79, layout 1, callgraph-fingerprint 1, sole-consumer 1
+ * pieces: chunk-1z79zgep.js (16), chunk-5xgkngpb.js (58), chunk-czq1j3j2.js (1), chunk-nh1pvp1m.js (1), chunk-w3ch4xq2.js (11)
+ * attribution: placement 79, fingerprint 3, facade-majority 3, callgraph-fingerprint 1, sole-consumer 1
  */
 import { randomUUID } from "crypto";
 import {
@@ -14,6 +14,7 @@ import {
   isDiskless,
   onProcessRootHost,
   getSessionId,
+  getConversationToolsUsed,
   getRootSession,
 } from "../bootstrap/state.js";
 import {
@@ -26,11 +27,11 @@ import { getQueuedNotificationMode } from "./attachments.js";
 import { isTextNotTyped } from "../entrypoints/sdk/coreSchemas.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { looksLikeSlashInput } from "../commands.js";
-import { isOwnWordTurn, allUserTurnsSatisfy } from "./turnOrigin.js";
+import { isOwnWordTurn, isHumanDrivenOrigin, allUserTurnsSatisfy } from "./turnOrigin.js";
 import { logForDebugging } from "./debug.js";
 import { recordQueueOperation } from "./sessionStorage.js";
 import { dropHopChain } from "./peerMessageHeaders.js";
-import { isHumanOrAutoContinuation, isPeerOrSlackPing } from "./messageProvenance.js";
+import { isHumanOrAutoContinuation } from "./messageProvenance.js";
 import { isPassiveOrAttachedCommand } from "./messages/messagePredicates.js";
 import {
   isPollEventMode,
@@ -41,6 +42,8 @@ import {
   POLL_KIND_DEFAULT_TIMEOUT_MS,
   isValidPollEventKind,
   mentionsReservedKind,
+  EVAL_SETTLE_EVENT_KIND,
+  REPL_STATUS_EVENT_KIND,
   pollEventMaxEnvelopeBytes,
   parsePollEventEnvelope,
   validatePollEvent,
@@ -49,6 +52,7 @@ import {
   isPollEventForAgent,
   discardPollEvent,
 } from "./pollEvents.js";
+import { codeModeAccepted } from "./codeMode/accepted.js";
 import { runIgnoringAbort } from "../plugins/functionHooks/dispatch/dispatchScope.js";
 import { clearScheduledByPlugin } from "./workloadContext.js";
 import { extractTextContent_2, getContentText } from "./messages.js";
@@ -66,7 +70,7 @@ import { unchangedOrUndefined } from "./historyFile.js";
 import { HostScoped } from "./hostScoped.js";
 import { createSignal, createLazySignal } from "./signal.js";
 import { createQueueRecorder, queueRecordText } from "./messageQueue/queueRecords.js";
-import { count } from "./collections.js";
+import { countWhere } from "./collections.js";
 import {
   isAbortError,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -102,20 +106,20 @@ import {
   textFromTaskCreateInput,
 } from "./tasks.js";
 import { aliasCanonicalNames } from "../services/mcp/ccrMetaMcp.js";
-import { NO_REPLY_TOOL_SUFFIX } from "../bridge/projectsReplyEvaluation.js";
+import { NO_REPLY_SUFFIX } from "../bridge/projectsReplyEvaluation.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { objectSchema, array, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { isMachineOnlyTurnRange } from "./messages/messageSource.js";
-import { getTerminalMcpTools } from "./transcript/deserialize.js";
+import { hasNoReplyTerminalTool, getTerminalMcpTools } from "./transcript/deserialize.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
-import { isExactReplToolName } from "../tools/REPLTool/constants.js";
+import { isEvalToolCallName } from "../tools/REPLTool/constants.js";
 import { parseExternalEventWake, isSessionInboxWake } from "./externalEventWake.js";
 import { isGeneratedToolCountSummary } from "./permissions/yoloClassifier.js";
 import { FETCH_INBOX_MESSAGE_TOOL_NAME } from "../tools/FetchInboxMessageTool/prompt.js";
 import { READNOTIFICATIONS } from "../tools/ReadNotificationsTool/ReadNotificationsTool.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:193960-194054 placement
+//@ chunk-1z79zgep.js:723-817 placement
 /**
  * 判断输入是否为需要唤醒的 poll-event 命令。
  */
@@ -127,7 +131,7 @@ function isPollEventWakeInput(input, pollEmptyDispatchStalled, forceWake) {
     !pollEmptyDispatchStalled
   );
 }
-//@ chunk-e6aww6q8.js:194054-194182 placement
+//@ chunk-1z79zgep.js:817-945 placement
 /**
  * 判断某模式是否可作为提示输入（prompt、bash、任务通知等）。
  */
@@ -140,14 +144,14 @@ function isPromptCapableMode(mode, clientBashCommand) {
     mode === "poll-event"
   );
 }
-//@ chunk-e6aww6q8.js:194182-194221 placement
+//@ chunk-1z79zgep.js:945-984 placement
 /**
  * 判断命令是否属于主 agent。
  */
 function isMainAgentCommand(command) {
   return command.agentId === mainAgentId();
 }
-//@ chunk-e6aww6q8.js:194221-194278 placement
+//@ chunk-1z79zgep.js:984-1041 placement
 /**
  * "目标检查"任务通知来源。
  */
@@ -155,14 +159,14 @@ var GOAL_CHECKIN_ORIGIN = {
   kind: "task-notification",
   source: "goal-checkin",
 };
-//@ chunk-e6aww6q8.js:194278-194372 placement
+//@ chunk-1z79zgep.js:1041-1135 placement
 /**
  * 判断来源是否为目标检查通知。
  */
 function isGoalCheckinNotification(origin) {
   return origin.origin?.kind === "task-notification" && origin.origin.source === "goal-checkin";
 }
-//@ chunk-e6aww6q8.js:194372-194431 placement
+//@ chunk-1z79zgep.js:1135-1194 placement
 /**
  * "worker 检查"任务通知来源。
  */
@@ -170,7 +174,7 @@ var WORKER_CHECKIN_ORIGIN = {
   kind: "task-notification",
   source: "worker-checkin",
 };
-//@ chunk-e6aww6q8.js:194431-194598 placement
+//@ chunk-1z79zgep.js:1194-1361 placement
 function isCheckinNotification(message) {
   return (
     message.origin?.kind === "task-notification" &&
@@ -179,11 +183,11 @@ function isCheckinNotification(message) {
       message.origin.source === "shell-checkin")
   );
 }
-//@ chunk-e6aww6q8.js:194598-194657 placement (2.1.88 match: processQueuedCommands, 1)
+//@ chunk-1z79zgep.js:1361-1420 placement (2.1.88 match: processQueuedCommands, 1)
 function processQueuedCommands(queuedCommands) {
   return isMainAgentCommand(queuedCommands) && queuedCommands.mode === "task-notification";
 }
-//@ chunk-e6aww6q8.js:194657-194735 placement
+//@ chunk-1z79zgep.js:1420-1497 placement
 /**
  * 归一化队列来源（检查通知做规范来源）。
  */
@@ -195,14 +199,14 @@ function normalizedQueueOrigin(command) {
     ? normalizeTaskNotificationOrigin(origin)
     : origin;
 }
-//@ chunk-e6aww6q8.js:194735-194783 placement
+//@ chunk-1z79zgep.js:1497-1543 placement
 /**
  * 取队列中的通知模式（显式 queueMode 或按来源推断）。
  */
 function queuedNotificationMode(command) {
   return command.queueMode ?? getQueuedNotificationMode(normalizedQueueOrigin(command));
 }
-//@ chunk-e6aww6q8.js:194783-194874 placement
+//@ chunk-1z79zgep.js:1543-1634 placement
 /**
  * 判断是否应跳过该队列附件的附加处理。
  */
@@ -211,7 +215,7 @@ function shouldSkipQueueAttachments(command) {
     ? true
     : undefined;
 }
-//@ chunk-e6aww6q8.js:194874-195172 placement
+//@ chunk-1z79zgep.js:1634-1932 placement
 function textNotTypedFlags(text, meta) {
   if (!isTextNotTyped(text)) return;
   if ("text_not_typed" in text && text.text_not_typed === true) logFeatureOk("input_text_not_typed");
@@ -225,7 +229,7 @@ function textNotTypedFlags(text, meta) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:195172-195424 placement
+//@ chunk-1z79zgep.js:1932-2184 placement
 /**
  * 计算入队命令的输入标志（跳过斜杠命令、非键入、仅排空等）。
  */
@@ -245,7 +249,7 @@ function queueInputFlags(message) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:195506-195658 placement
+//@ chunk-1z79zgep.js:2264-2416 placement
 function getSchedulingPlugin(input) {
   let { origin } = input;
   let originPlugin =
@@ -256,14 +260,14 @@ function getSchedulingPlugin(input) {
         : undefined;
   return input.scheduledByPlugin ?? originPlugin;
 }
-//@ chunk-e6aww6q8.js:195658-195699 placement
+//@ chunk-1z79zgep.js:2416-2457 placement
 /**
  * 判断两条命令是否来自同一调度插件。
  */
 function sameSchedulingPlugin(inputA, inputB) {
   return getSchedulingPlugin(inputA) === getSchedulingPlugin(inputB);
 }
-//@ chunk-e6aww6q8.js:195699-195774 placement
+//@ chunk-1z79zgep.js:2457-2532 placement
 /**
  * 找出这批命令的调度插件（混合来源时为 undefined）。
  */
@@ -272,7 +276,7 @@ function firstSchedulingPlugin(inputs) {
     ? undefined
     : inputs.map(getSchedulingPlugin).find((plugin) => plugin !== undefined);
 }
-//@ chunk-e6aww6q8.js:195774-195858 placement
+//@ chunk-5xgkngpb.js:194633-194717 placement
 class QueueInstallerHolder {
   current = null;
   register(installer) {
@@ -282,23 +286,23 @@ class QueueInstallerHolder {
     return this.current;
   }
 }
-//@ chunk-e6aww6q8.js:195858-195874 placement
+//@ chunk-5xgkngpb.js:194717-194733 placement
 var queueInstallerSingleton; // deferred: uses QueueInstallerHolder of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:195858", () => {
+deferInit("chunk-5xgkngpb.js:194717", () => {
   queueInstallerSingleton = new QueueInstallerHolder();
 });
-//@ chunk-e6aww6q8.js:195874-195906 placement
+//@ chunk-5xgkngpb.js:194733-194765 placement
 function setQueueInstaller(installer) {
   queueInstallerSingleton.register(installer);
 }
-//@ chunk-e6aww6q8.js:195906-195945 placement
+//@ chunk-5xgkngpb.js:194765-194804 placement
 /**
  * 取当前登记的队列安装器。
  */
 function getProcessedQueuedCommands() {
   return queueInstallerSingleton.registered();
 }
-//@ chunk-e6aww6q8.js:552455-552644 fingerprint (2.1.88 match: PRIORITY_ORDER, 0.375)
+//@ chunk-5xgkngpb.js:559235-559424 fingerprint (2.1.88 match: PRIORITY_ORDER, 0.375)
 /**
  * {now:0, next:1, later:2}。
  */
@@ -319,11 +323,11 @@ var PRIORITY_ORDER = {
   next: 1,
   later: 2,
 };
-//@ chunk-e6aww6q8.js:552644-552709 placement
+//@ chunk-5xgkngpb.js:559424-559489 placement
 function isPeerOrigin(origin) {
   return origin?.kind === "peer" && origin.senderTaskId === undefined;
 }
-//@ chunk-e6aww6q8.js:552709-552979 placement
+//@ chunk-5xgkngpb.js:559489-559759 placement
 function dropPeerHopChain(input) {
   if (!isPeerOrigin(input.origin)) return input;
   let rawValue = input.value;
@@ -354,31 +358,33 @@ function dropPeerHopChain(input) {
       }
     : input;
 }
-//@ chunk-e6aww6q8.js:552979-553049 placement
+//@ chunk-5xgkngpb.js:559759-559829 placement
 function isVouchedPeerOrigin(origin) {
   return origin.verifiedPeerPid !== undefined || origin.from !== "unknown";
 }
-//@ chunk-e6aww6q8.js:553049-553101 placement
+//@ chunk-5xgkngpb.js:559829-559881 placement
 var NON_EDITABLE_MODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:553049", () => {
+deferInit("chunk-5xgkngpb.js:559829", () => {
   NON_EDITABLE_MODES = new Set(["task-notification", "poll-event"]);
 });
-//@ chunk-e6aww6q8.js:553101-553135 placement
+//@ chunk-5xgkngpb.js:559881-559915 placement
 function isPromptInputModeEditable(mode) {
   return !NON_EDITABLE_MODES.has(mode);
 }
-//@ chunk-e6aww6q8.js:553135-553216 placement
+//@ chunk-5xgkngpb.js:559915-559996 placement
 /**
  * 判断历史条目是否可用于回填输入框（可改写且有字符串值）。
  */
-function isReplayableHistoryEntry(entry) {
-  return entry.historyEntry !== undefined && isRefillableInput(entry) && typeof entry.value === "string";
+function isTypedAtThisComposer(entry) {
+  return (
+    entry.historyEntry !== undefined && isQueuedCommandEditable(entry) && typeof entry.value === "string"
+  );
 }
-//@ chunk-e6aww6q8.js:553216-553284 placement
+//@ chunk-5xgkngpb.js:559996-560064 placement (2.1.88 match: isQueuedCommandEditable, 1)
 /**
  * 判断输入是否可回填（可编辑提示模式、非 meta、人类/自动续写来源）。
  */
-function isRefillableInput(input) {
+function isQueuedCommandEditable(input) {
   return (
     isPromptInputModeEditable(input.mode) &&
     !input.isMeta &&
@@ -386,11 +392,11 @@ function isRefillableInput(input) {
     !isPassiveOrAttachedCommand(input)
   );
 }
-//@ chunk-e6aww6q8.js:553284-553337 placement (2.1.88 match: prependModeCharacterToInput, 1)
-function shouldPrependModeChar(input, mode) {
-  return isRefillableInput(input) && (mode || input.mode !== "bash");
+//@ chunk-5xgkngpb.js:560064-560117 placement (2.1.88 match: prependModeCharacterToInput, 1)
+function isQueuedCommandPullableInto(input, mode) {
+  return isQueuedCommandEditable(input) && (mode || input.mode !== "bash");
 }
-//@ chunk-e6aww6q8.js:553337-553478 placement
+//@ chunk-5xgkngpb.js:560117-560258 placement
 function hasPreExpansionText(input) {
   return (
     (input.skipSlashCommands === true || input.pasteTagged === true) &&
@@ -398,24 +404,24 @@ function hasPreExpansionText(input) {
     input.preExpansionValue.trim() !== ""
   );
 }
-//@ chunk-e6aww6q8.js:553478-553551 placement
+//@ chunk-5xgkngpb.js:560258-560331 placement
 /**
  * 取输入的展示文本（展开前原文优先）。
  */
-function inputDisplayText(input) {
+function restoreTextForPop(input) {
   if (hasPreExpansionText(input)) return input.preExpansionValue;
   return extractTextFromValue(input.value);
 }
-//@ chunk-e6aww6q8.js:553551-553697 placement
-function getRetainedPastedContents(input) {
+//@ chunk-5xgkngpb.js:560331-560477 placement
+function collectPastedContentsForPop(input) {
   if (!input.pastedContents) return [];
   let keepAll = hasPreExpansionText(input);
   return Object.values(input.pastedContents).filter(
     (pastedContent) => pastedContent.type === "image" || pastedContent.inline === true || keepAll,
   );
 }
-//@ chunk-e6aww6q8.js:553697-553872 placement
-function isNonHumanQueuedCommand(command, meta) {
+//@ chunk-5xgkngpb.js:560477-560651 placement
+function isQueuedCommandVisible(command, meta) {
   let kind = command.origin?.kind;
   if (
     (kind === "task-notification" &&
@@ -424,60 +430,80 @@ function isNonHumanQueuedCommand(command, meta) {
     kind === "plugin"
   )
     return true;
-  return isNonHumanInboundOrigin(command.origin, meta) || isRefillableInput(command);
+  return isNonHumanInboundOrigin(command.origin, meta) || isQueuedCommandEditable(command);
 }
-//@ chunk-e6aww6q8.js:553872-553916 placement
+//@ chunk-5xgkngpb.js:560651-560695 placement
 /**
  * 判断是否为主 agent 的非被动命令。
  */
-function isActiveMainAgentCommand(command) {
+function isDrainableMainThreadCommand(command) {
   return isMainAgentCommand(command) && command.passive !== true;
 }
-//@ chunk-e6aww6q8.js:553916-553953 placement
+//@ chunk-5xgkngpb.js:560695-560731 placement
 /**
  * 判断该排队命令是否可发送（活跃且未被挂起）。
  */
-function isSendableQueuedCommand(command) {
-  return isActiveMainAgentCommand(command) && !isPollEventMode(command);
+function isIdleDrainableMainThreadCommand(command) {
+  return isDrainableMainThreadCommand(command) && !isPollEventMode(command);
 }
-//@ chunk-e6aww6q8.js:554106-554154 placement
+//@ chunk-5xgkngpb.js:560731-560825 facade-majority (2.1.88 match: canBatchWith, 0.666)
+/**
+ * 排队的命令能否与前一条合并发送（同为普通 prompt 且来源允许）。
+ */
+function isQueuedUserTurnCommand(command) {
+  return (
+    isIdleDrainableMainThreadCommand(command) &&
+    command.mode === "prompt" &&
+    command.shouldQuery !== false &&
+    !command.isMeta &&
+    isHumanDrivenOrigin(command.origin)
+  );
+}
+//@ chunk-5xgkngpb.js:560883-560943 placement
 /**
  * 判断是否为主 agent 的被动命令。
  */
-function isPassiveMainAgentCommand(command) {
-  return command.passive === true && isMainAgentCommand(command) && true;
+function isPassiveMainThreadCommand(command) {
+  return (
+    command.passive === true &&
+    isMainAgentCommand(command) &&
+    !(codeModeAccepted() && isPollEventMode(command))
+  );
 }
-//@ chunk-e6aww6q8.js:554154-554211 placement (2.1.88 match: isSlashCommand, 1)
-function isSlashCommand_2(cmd) {
+//@ chunk-5xgkngpb.js:560943-561000 placement (2.1.88 match: isSlashCommand, 1)
+function isSlashCommand(cmd) {
   return looksLikeSlashInput(cmd.value) && !cmd.skipSlashCommands;
 }
-//@ chunk-e6aww6q8.js:554211-554290 placement (2.1.88 match: getValueFromInput, 1)
-function getValueFromInput(commands, isMainThreadQuery) {
+//@ chunk-5xgkngpb.js:561000-561079 placement (2.1.88 match: getValueFromInput, 1)
+function unnameTurnPersonJoined(commands, isMainThreadQuery) {
   runIgnoringAbort(() => {
     if (isMainThreadQuery && commands.some((command) => command.mode === "prompt" && isOwnWordTurn(command)))
       clearScheduledByPlugin();
   });
 }
-//@ chunk-e6aww6q8.js:554290-554470 placement
-function filterQueuedCommandsForThread(commandsByMaxPriority, { isMainThread, currentAgentId }) {
+//@ chunk-5xgkngpb.js:561079-561284 placement
+function filterMidTurnDrainCommands(commandsByMaxPriority, { isMainThread, currentAgentId }) {
   let commands = commandsByMaxPriority.filter((command) => {
-    if (isSlashCommand_2(command)) return false;
+    if (isSlashCommand(command)) return false;
     if (isMainThread) return isMainAgentCommand(command);
-    return (command.mode === "task-notification" || false) && command.agentId === currentAgentId;
+    return (
+      (command.mode === "task-notification" || (codeModeAccepted() && command.mode === "poll-event")) &&
+      command.agentId === currentAgentId
+    );
   });
   return dedupePollEvents(commands);
 }
-//@ chunk-e6aww6q8.js:554470-554577 placement
-function createQueueFilterForThread(threadInfo) {
+//@ chunk-5xgkngpb.js:561284-561391 placement
+function midTurnFoldableFor(threadInfo) {
   return threadInfo.isMainThread
-    ? isActiveMainAgentCommand
+    ? isDrainableMainThreadCommand
     : (command) =>
-        filterQueuedCommandsForThread([command], {
+        filterMidTurnDrainCommands([command], {
           isMainThread: false,
           currentAgentId: threadInfo.agentId,
         }).length > 0;
 }
-//@ chunk-e6aww6q8.js:554577-554767 placement
+//@ chunk-5xgkngpb.js:561391-561581 placement
 function dedupePollEvents(commands) {
   let entries = commands.filter((command) => command.mode === "poll-event");
   if (entries.length === 0) return commands;
@@ -485,18 +511,18 @@ function dedupePollEvents(commands) {
   if (batchIds.size === entries.length) return commands;
   return commands.filter((command) => command.mode !== "poll-event" || batchIds.has(command));
 }
-//@ chunk-e6aww6q8.js:554767-554815 placement (2.1.88 match: getValueFromInput, 1)
-function isPromptModeQueuedCommand(input) {
+//@ chunk-5xgkngpb.js:561581-561629 placement (2.1.88 match: getValueFromInput, 1)
+function isQueuedUserPrompt(input) {
   return isMainAgentCommand(input) && input.mode === "prompt";
 }
-//@ chunk-e6aww6q8.js:554815-554844 placement
+//@ chunk-5xgkngpb.js:561629-561657 placement
 /**
  * 判断该命令是否尚未通过屏幕检查（可回填）。
  */
-function isRefillableCommand(input) {
-  return isRefillableInput(input);
+function isBatchHeadHumanCommand(input) {
+  return isQueuedCommandEditable(input);
 }
-//@ chunk-e6aww6q8.js:554844-554899 placement
+//@ chunk-5xgkngpb.js:561657-561712 placement
 function extractTextFromValue(value) {
   return typeof value === "string"
     ? value
@@ -506,7 +532,7 @@ function extractTextFromValue(value) {
 `,
       );
 }
-//@ chunk-e6aww6q8.js:554899-555159 fingerprint (2.1.88 match: extractImagesFromValue, 0.858)
+//@ chunk-5xgkngpb.js:561712-561972 facade-majority (2.1.88 match: extractImagesFromValue, 0.858)
 /**
  * 从内容块中取出 base64 图片为 paste 记录（id、mediaType、filename）。
  */
@@ -528,11 +554,11 @@ function extractImagesFromValue(value, startId) {
     }
   return images;
 }
-//@ chunk-e6aww6q8.js:555159-555410 layout
+//@ chunk-5xgkngpb.js:561972-562223 facade-majority
 /**
  * 图片块按是否有原 paste id 分成 stamped / manufactured。
  */
-function splitStampedImages(content, imagePasteIds) {
+function restorePastedImageContents(content, imagePasteIds) {
   let stamped = {};
   let manufactured = {};
   content.forEach((block, index) => {
@@ -553,7 +579,7 @@ function splitStampedImages(content, imagePasteIds) {
     manufactured,
   };
 }
-//@ chunk-e6aww6q8.js:555410-555554 callgraph-fingerprint (2.1.88 match: popAllEditable, 0.232)
+//@ chunk-5xgkngpb.js:562223-562367 callgraph-fingerprint (2.1.88 match: popAllEditable, 0.225)
 /**
  * 可编辑命令弹回输入框：图片换成 [Image #n] 引用并重新编号。
  */
@@ -567,7 +593,7 @@ function popAllEditable(text, images, pastePrefix, seq) {
     images: mapped,
   };
 }
-//@ chunk-e6aww6q8.js:555554-555706 placement
+//@ chunk-5xgkngpb.js:562367-562519 placement
 function joinWithCursor(leftText, rightText, rightCursor) {
   if (!leftText)
     return {
@@ -585,7 +611,7 @@ ${rightText}`,
     cursorOffset: leftText.length + 1 + rightCursor,
   };
 }
-//@ chunk-e6aww6q8.js:555706-555864 placement
+//@ chunk-5xgkngpb.js:562519-562677 placement
 function hasUnpassedScreening(command) {
   let { promptSubmitted, value } = command;
   return (
@@ -596,41 +622,41 @@ function hasUnpassedScreening(command) {
     unchangedOrUndefined(value, promptSubmitted.text) !== undefined
   );
 }
-//@ chunk-e6aww6q8.js:555864-555932 placement
+//@ chunk-5xgkngpb.js:562677-562745 placement
 var queueSignalsRegistry; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:555864", () => {
+deferInit("chunk-5xgkngpb.js:562677", () => {
   queueSignalsRegistry = new HostScoped(() => ({
     commandsDiscarded: createSignal(),
     commandsConsumed: createSignal(),
   }));
 });
-//@ chunk-e6aww6q8.js:555932-555962 placement
+//@ chunk-5xgkngpb.js:562745-562775 placement
 function currentQueueSignals() {
   return onProcessRootHost(queueSignalsRegistry);
 }
-//@ chunk-e6aww6q8.js:555962-556037 placement
+//@ chunk-5xgkngpb.js:562775-562850 placement
 /**
  * 队列事件信号：命令被丢弃与命令被消费。
  */
-var commandsDiscardedSignal; // deferred: uses currentQueueSignals of its import cycle while loading; runs once the cycle is complete
-var commandsConsumedSignal;
-deferInit("chunk-e6aww6q8.js:555962", () => {
-  commandsDiscardedSignal = createLazySignal(() => currentQueueSignals().commandsDiscarded);
-  commandsConsumedSignal = createLazySignal(() => currentQueueSignals().commandsConsumed);
+var commandsDiscarded; // deferred: uses currentQueueSignals of its import cycle while loading; runs once the cycle is complete
+var commandsConsumed;
+deferInit("chunk-5xgkngpb.js:562775", () => {
+  commandsDiscarded = createLazySignal(() => currentQueueSignals().commandsDiscarded);
+  commandsConsumed = createLazySignal(() => currentQueueSignals().commandsConsumed);
 });
-//@ chunk-e6aww6q8.js:556037-556126 placement
+//@ chunk-5xgkngpb.js:562850-562939 placement
 function queuedUnderPlugins(command) {
   return command.queuedUnder ?? (command.origin?.kind === "plugin" ? [command.origin.name] : undefined);
 }
-//@ chunk-e6aww6q8.js:556126-556148 placement
+//@ chunk-5xgkngpb.js:562939-562961 placement
 var PEER_ADMITTED = {
   admitted: true,
 };
-//@ chunk-e6aww6q8.js:556148-576253 placement
+//@ chunk-5xgkngpb.js:562961-584563 placement
 /**
  * 创建消息队列管理器：入队、暂扣、钩子丢弃、交回等操作。
  */
-function createMessageQueueManager(options) {
+function createMessageQueue(options) {
   let recordOperation = options?.recordOperation ?? createQueueRecorder(recordQueueOperation_2);
   let queueSignals = currentQueueSignals();
   function recordQueueOperation(operation, content, reason, commandUuid, deliveryId, queuedUnder) {
@@ -670,7 +696,7 @@ function createMessageQueueManager(options) {
   let signal = createSignal();
   let signal_2 = createSignal();
   let signal_3 = createSignal();
-  registerPasteCarrier(() => commands.filter(isRefillableInput).map(inputDisplayText));
+  registerPasteCarrier(() => commands.filter(isQueuedCommandEditable).map(restoreTextForPop));
   let cancelPending = new Set();
   let cancelPendingAcked = new Set();
   let maxCancelPending = 256;
@@ -696,7 +722,7 @@ function createMessageQueueManager(options) {
     };
     hold = newHold;
     try {
-      if (count(commands, markHeldPassive) > 0) emitQueueChanged();
+      if (countWhere(commands, markHeldPassive) > 0) emitQueueChanged();
     } catch (error) {
       if (hold === newHold) hold = undefined;
       for (let command of newHold.marked) delete command.passive;
@@ -810,7 +836,7 @@ function createMessageQueueManager(options) {
     return applyScreeningResult(commands.includes(command) ? command : undefined, result);
   }
   function handTypedBack(entries) {
-    let filtered = entries.filter(isReplayableHistoryEntry);
+    let filtered = entries.filter(isTypedAtThisComposer);
     if (filtered.length === 0) return;
     try {
       signal_3.emit(filtered);
@@ -840,6 +866,7 @@ function createMessageQueueManager(options) {
   function promoteToNow(uuid) {
     let found = commands.find((command) => command.uuid === uuid);
     if (found === undefined || found.priority === "now" || foldInFlight.has(uuid)) return false;
+    found.raisedFrom = found.priority ?? "next";
     found.priority = "now";
     emitQueueChanged();
     return true;
@@ -920,11 +947,12 @@ function createMessageQueueManager(options) {
     return commands.length;
   }
   function getMainThreadQueueLength() {
-    return count(commands, isSendableQueuedCommand);
+    return countWhere(commands, isIdleDrainableMainThreadCommand);
   }
   function getDrainableMainThreadQueueLength() {
     return (
-      getMainThreadQueueLength() + count(commands, (heldCommand) => hold?.marked.has(heldCommand) === true)
+      getMainThreadQueueLength() +
+      countWhere(commands, (heldCommand) => hold?.marked.has(heldCommand) === true)
     );
   }
   function hasCommandsInQueue() {
@@ -956,9 +984,9 @@ function createMessageQueueManager(options) {
     let isPeerCommand = (command) => isPeerOrigin(command.origin);
     let inFlightCount = 0;
     runIgnoringAbort(() => {
-      inFlightCount = inFlightDrainProbe.get()?.(isPeerCommand) ?? 0;
+      inFlightCount = heldByHold.get()?.(isPeerCommand) ?? 0;
     });
-    return count(commands, isPeerCommand) + inFlightCount;
+    return countWhere(commands, isPeerCommand) + inFlightCount;
   }
   function admitPeerCommand(command, receiptMode = "coalesced") {
     let origin = command.origin;
@@ -1043,7 +1071,7 @@ function createMessageQueueManager(options) {
     let queued = false;
     runIgnoringAbort(() => {
       let commitThunk = () => emitDiscarded([command]);
-      queued = receiptQueuedProbe.get()?.(command, commit, commitThunk) === true;
+      queued = entryHold.get()?.(command, commit, commitThunk) === true;
       if (queued) markReceiptQueued(command.uuid);
     });
     return queued;
@@ -1132,7 +1160,7 @@ function createMessageQueueManager(options) {
       command.stampThreadState ??
       (command.mode === "task-notification" &&
         command.handbackPointer !== true &&
-        isActiveMainAgentCommand(command) &&
+        isDrainableMainThreadCommand(command) &&
         shouldStampThreadState({
           isPeer: false,
         }));
@@ -1206,7 +1234,7 @@ function createMessageQueueManager(options) {
     await Promise.all(mapped.map(({ delivered }) => delivered));
   }
   function assertPollEventCapacity(incomingCount) {
-    let queuedCount = count(commands, isPollEventMode);
+    let queuedCount = countWhere(commands, isPollEventMode);
     if (queuedCount + incomingCount > POLL_KIND_DEFAULT_TIMEOUT_MS) {
       logFeatureBad("poll_event_delivery", "queue_cap");
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -1232,8 +1260,43 @@ function createMessageQueueManager(options) {
         "poll event rejected: reserved kind",
       );
     }
+    if (codeModeAccepted()) {
+      let found = [
+        ["following", "following_refused"],
+        ["displayRows", "display_rows_refused"],
+        ["media", "media_refused"],
+        ["passive", "passive_refused"],
+        ["replToolUseId", "repl_tool_use_id_refused"],
+        ["keepsRow", "keeps_row_refused"],
+        ["startsTurn", "starts_turn_refused"],
+      ].find(([field]) => event[field] !== undefined);
+      if (
+        found !== undefined &&
+        !(event.allowReservedKind === true && event.kind === EVAL_SETTLE_EVENT_KIND)
+      ) {
+        let [fieldName, eventName] = found;
+        logFeatureBad("poll_event_delivery", eventName);
+        throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+          `poll event rejected: only an in-process REPL eval-settle event (kind '${EVAL_SETTLE_EVENT_KIND}', allowReservedKind) may set the '${fieldName}' field`,
+          "poll event rejected: a settle-only field set on a non-settle event",
+        );
+      }
+      if (
+        event.agentId !== undefined &&
+        !(
+          event.allowReservedKind === true &&
+          (event.kind === EVAL_SETTLE_EVENT_KIND || event.kind === REPL_STATUS_EVENT_KIND)
+        )
+      ) {
+        logFeatureBad("poll_event_delivery", "agent_id_refused");
+        throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+          "poll event rejected: only an in-process REPL result or status event (allowReservedKind) may set the 'agentId' field",
+          "poll event rejected: a subagent address on a non-REPL event",
+        );
+      }
+    }
     let envelope;
-    let envelopeFormat = "element";
+    let kind = "element";
     let declaredFields;
     if (event.element !== undefined) {
       if (event.content !== undefined || event.declared !== undefined)
@@ -1273,7 +1336,7 @@ function createMessageQueueManager(options) {
         );
       }
       envelope = pollEventEnvelope.envelope;
-      envelopeFormat = "json";
+      kind = "json";
       declaredFields = {
         at: event.declared.at,
         fields: pollEventEnvelope.fields,
@@ -1286,7 +1349,7 @@ function createMessageQueueManager(options) {
       });
     else throw Error("poll event: content, element or declared is required");
     let nonce = randomEventNonce();
-    envelope = withEventNonce(envelope, nonce, envelopeFormat);
+    envelope = withEventNonce(envelope, nonce, kind);
     let stampedLength = Buffer.byteLength(envelope, "utf8");
     if (stampedLength > pollEventMaxEnvelopeBytes(event.kind)) {
       logFeatureBad("poll_event_delivery", "envelope_too_large");
@@ -1306,26 +1369,48 @@ function createMessageQueueManager(options) {
       command: {
         value: envelope,
         mode: "poll-event",
-        agentId: mainAgentId(),
+        agentId: codeModeAccepted() && event.agentId !== undefined ? event.agentId : mainAgentId(),
         priority: wake ? "next" : "later",
         uuid: randomUUID(),
         isMeta: true,
-        ...false,
+        ...(codeModeAccepted() &&
+          event.passive === true && {
+            passive: true,
+          }),
         timestamp: new Date().toISOString(),
         pollEvent: {
           kind: event.kind,
           envelope,
-          ...false,
+          toolsUsed: getConversationToolsUsed().names(),
+          ...(codeModeAccepted() && {
+            nonce,
+          }),
           ...(event.media !== undefined &&
             event.media.length > 0 && {
               media: event.media,
             }),
-          ...false,
-          ...false,
-          ...false,
+          ...(codeModeAccepted() &&
+            event.replToolUseId !== undefined && {
+              replToolUseId: event.replToolUseId,
+            }),
+          ...(codeModeAccepted() &&
+            event.displayRows !== undefined &&
+            event.displayRows.length > 0 && {
+              displayRows: event.displayRows,
+            }),
+          ...(codeModeAccepted() &&
+            event.keepsRow === true && {
+              keepsRow: true,
+            }),
           wake,
-          ...false,
-          ...false,
+          ...(codeModeAccepted() &&
+            event.startsTurn === false && {
+              startsTurn: false,
+            }),
+          ...(codeModeAccepted() &&
+            event.following !== undefined && {
+              following: event.following,
+            }),
           settleDelivered,
           settleDropped,
           provenance: event.provenance,
@@ -1388,10 +1473,10 @@ function createMessageQueueManager(options) {
   }
   function countRemainingWakePollEventsAfter(chunkCommands) {
     let agentId = chunkCommands.find(isPollEventMode)?.agentId;
-    let consumedWakeCount = count(chunkCommands, (command) => command.pollEvent?.wake === true);
+    let consumedWakeCount = countWhere(chunkCommands, (command) => command.pollEvent?.wake === true);
     return Math.max(
       0,
-      count(
+      countWhere(
         commands,
         (command) =>
           command.mode === "poll-event" &&
@@ -1401,7 +1486,7 @@ function createMessageQueueManager(options) {
     );
   }
   function countPendingWakePollEvents(agentId) {
-    return count(
+    return countWhere(
       commands,
       (command) => isPollEventForAgent(command, agentId) && command.pollEvent?.wake === true,
     );
@@ -1643,8 +1728,8 @@ function createMessageQueueManager(options) {
   }
   function claimPasteIds(commands, editorText, editorPastes) {
     let mapped = commands.map((command) => ({
-      text: inputDisplayText(command),
-      entries: getRetainedPastedContents(command),
+      text: restoreTextForPop(command),
+      entries: collectPastedContentsForPop(command),
     }));
     function findReferencedPasteIds(text, knownIds) {
       let referencedIds = new Set();
@@ -1682,7 +1767,7 @@ function createMessageQueueManager(options) {
   function popAllEditableCommands(editorText, cursorOffset, pastes = {}) {
     if (commands.length === 0) return;
     let isEditorEmpty = editorText === "";
-    let filtered = commands.filter((command) => shouldPrependModeChar(command, isEditorEmpty));
+    let filtered = commands.filter((command) => isQueuedCommandPullableInto(command, isEditorEmpty));
     if (filtered.length === 0) return;
     let mode = filtered.every((command) => command.mode === "bash") ? "bash" : "prompt";
     let poppedCommands = mode === "bash" ? filtered : filtered.filter((command) => command.mode !== "bash");
@@ -1721,9 +1806,9 @@ function createMessageQueueManager(options) {
     };
   }
   function popEditableAt(index, editorText, cursorOffset, pastes = {}) {
-    let command = commands.filter(isRefillableInput)[index];
+    let command = commands.filter(isQueuedCommandEditable)[index];
     if (!command) return;
-    if (!shouldPrependModeChar(command, editorText === "")) return;
+    if (!isQueuedCommandPullableInto(command, editorText === "")) return;
     let [claimed] = claimPasteIds([command], editorText, pastes);
     let { text, entries } = claimed;
     let popped = popAllEditable(text, command.value, editorText, pastes);
@@ -1772,7 +1857,19 @@ function createMessageQueueManager(options) {
     getCommandQueueLength,
     getMainThreadQueueLength,
     getDrainableMainThreadQueueLength,
-    ...{},
+    ...{
+      setPassive(predicate, on) {
+        let changed = 0;
+        for (let command of commands) {
+          if (!predicate(command) || (command.passive === true) === on) continue;
+          if (on) command.passive = true;
+          else delete command.passive;
+          changed++;
+        }
+        if (changed > 0) emitQueueChanged();
+        return changed;
+      },
+    },
     getQueuedPeerMessageCount,
     emitDiscarded,
     takeDiscardedNotice,
@@ -1844,20 +1941,20 @@ function createMessageQueueManager(options) {
     takeInboundEnqueueTurn,
   };
 }
-//@ chunk-e6aww6q8.js:576253-576302 placement
+//@ chunk-5xgkngpb.js:584563-584612 placement
 var sessionCommandQueueSlot; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:576253", () => {
+deferInit("chunk-5xgkngpb.js:584563", () => {
   sessionCommandQueueSlot = new SessionRootSlot(() => ({
-    queue: createMessageQueueManager(),
+    queue: createMessageQueue(),
     installed: false,
   }));
 });
-//@ chunk-e6aww6q8.js:576302-576336 placement
+//@ chunk-5xgkngpb.js:584612-584646 placement
 function currentSessionQueueState() {
   return sessionCommandQueueSlot.of(getRootSession());
 }
-//@ chunk-e6aww6q8.js:576336-576489 placement
-function installCommandQueue(options) {
+//@ chunk-5xgkngpb.js:584646-584799 placement
+function installProcessQueue(options) {
   let state = currentSessionQueueState();
   if (state.installed) return state.queue;
   let queue = state.queue;
@@ -1867,74 +1964,72 @@ function installCommandQueue(options) {
   state.installed = true;
   return installedQueue;
 }
-//@ chunk-e6aww6q8.js:576489-576522 placement
+//@ chunk-5xgkngpb.js:584799-584832 placement
 /**
  * 取当前会话的消息队列管理器。
  */
-function commandQueueManager() {
+function getProcessQueue() {
   return currentSessionQueueState().queue;
 }
-//@ chunk-e6aww6q8.js:576522-576590 placement
+//@ chunk-5xgkngpb.js:584832-584900 placement
 /**
  * 宿主隔离的"回执已入队/正在排空"探测函数槽。
  */
-var receiptQueuedProbe; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-var inFlightDrainProbe;
-deferInit("chunk-e6aww6q8.js:576522", () => {
-  receiptQueuedProbe = identity_2(createValueSlot(), (probeSlot) => probeSlot.set(undefined));
-  inFlightDrainProbe = identity_2(createValueSlot(), (probeSlot) => probeSlot.set(undefined));
+var entryHold; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var heldByHold;
+deferInit("chunk-5xgkngpb.js:584832", () => {
+  entryHold = identity_2(createValueSlot(), (probeSlot) => probeSlot.set(undefined));
+  heldByHold = identity_2(createValueSlot(), (probeSlot) => probeSlot.set(undefined));
 });
-//@ chunk-e6aww6q8.js:576590-576632 placement
+//@ chunk-5xgkngpb.js:584900-584942 placement
 /**
  * 判断是否正在折叠队列。
  */
-var isFoldInFlight = (...commandArgs) => commandQueueManager().isFoldInFlight(...commandArgs);
-//@ chunk-e6aww6q8.js:576632-576721 placement
+var isFoldInFlight = (...commandArgs) => getProcessQueue().isFoldInFlight(...commandArgs);
+//@ chunk-5xgkngpb.js:584942-585031 placement
 /**
  * 取命令队列快照与完整队列。
  */
-var getCommandQueueSnapshot = (...commandArgs) =>
-  commandQueueManager().getCommandQueueSnapshot(...commandArgs);
-var getCommandQueue = (...commandArgs) => commandQueueManager().getCommandQueue(...commandArgs);
-//@ chunk-e6aww6q8.js:576721-576773 placement
+var getCommandQueueSnapshot = (...commandArgs) => getProcessQueue().getCommandQueueSnapshot(...commandArgs);
+var getCommandQueue = (...commandArgs) => getProcessQueue().getCommandQueue(...commandArgs);
+//@ chunk-5xgkngpb.js:585031-585083 placement
 /**
  * 取主线程队列长度。
  */
-var getMainThreadQueueLength = (...commandArgs) =>
-  commandQueueManager().getMainThreadQueueLength(...commandArgs);
-//@ chunk-e6aww6q8.js:576773-576814 placement
+var getMainThreadQueueLength = (...commandArgs) => getProcessQueue().getMainThreadQueueLength(...commandArgs);
+//@ chunk-5xgkngpb.js:585083-585124 placement
 /**
  * 上报命令被丢弃。
  */
-var emitDiscardedCommand = (...commandArgs) => commandQueueManager().emitDiscarded(...commandArgs);
-//@ chunk-e6aww6q8.js:576814-576881 placement
+var discardUnqueued = (...commandArgs) => getProcessQueue().emitDiscarded(...commandArgs);
+//@ chunk-5xgkngpb.js:585124-585191 placement
 /**
  * 判断队列中是否存在可回填的主 agent 命令。
  */
-function hasRefillableMainAgentCommand(commands) {
+function hasEditableMainThreadCommand(commands) {
   return commands
     .getCommandQueue()
-    .some((command) => isMainAgentCommand(command) && isRefillableInput(command));
+    .some((command) => isMainAgentCommand(command) && isQueuedCommandEditable(command));
 }
-//@ chunk-e6aww6q8.js:576881-576946 placement
+//@ chunk-5xgkngpb.js:585191-585256 placement
 /**
  * 判断队列中是否有带模式字符的命令。
  */
-function hasModeCharCommand(store, modeChar) {
-  return store.getCommandQueue().some((command) => shouldPrependModeChar(command, modeChar));
+function hasPullableCommandInQueue(store, modeChar) {
+  return store.getCommandQueue().some((command) => isQueuedCommandPullableInto(command, modeChar));
 }
-//@ chunk-e6aww6q8.js:576946-577062 placement
-function hasQueuedTaskNotification(agentId, taskId) {
-  return commandQueueManager()
+//@ chunk-5xgkngpb.js:585256-585373 placement
+function isTaskNotificationQueuedFor(agentId, taskId) {
+  return getProcessQueue()
     .getCommandQueue()
     .some(
       (command) =>
         command.mode === "task-notification" && command.agentId === agentId && command.taskId === taskId,
     );
 }
-//@ chunk-e6aww6q8.js:577062-577199 placement
-function hasQueuedQueryingTaskNotification(recipientAgentId, taskId) {
-  return commandQueueManager()
+//@ chunk-5xgkngpb.js:585373-585510 placement
+function isWakingNotificationQueuedFor(recipientAgentId, taskId) {
+  return getProcessQueue()
     .getCommandQueue()
     .some(
       (command) =>
@@ -1944,39 +2039,39 @@ function hasQueuedQueryingTaskNotification(recipientAgentId, taskId) {
         command.shouldQuery !== false,
     );
 }
-//@ chunk-e6aww6q8.js:577199-577502 placement
+//@ chunk-5xgkngpb.js:585510-585813 placement
 /**
  * 消息队列管理器各方法的转发函数（取丢弃通知、重查命令队列、入队等）。
  */
-var takeDiscardedNotice = (...args) => commandQueueManager().takeDiscardedNotice(...args);
-var recheckCommandQueue = (...args) => commandQueueManager().recheckCommandQueue(...args);
-var enqueueCommand = (...args) => commandQueueManager().enqueue(...args);
-var enqueueReportingAdmission = (...args) => commandQueueManager().enqueueReportingAdmission(...args);
-var flushPeerDropReceipts = (...args) => commandQueueManager().flushPeerDropReceipts(...args);
-var enqueuePollEvent = (...args) => commandQueueManager().enqueuePollEvent(...args);
-var enqueuePendingNotification = (...args) => commandQueueManager().enqueuePendingNotification(...args);
-//@ chunk-e6aww6q8.js:577502-577576 placement
+var takeDiscardedNotice = (...args) => getProcessQueue().takeDiscardedNotice(...args);
+var recheckCommandQueue = (...args) => getProcessQueue().recheckCommandQueue(...args);
+var enqueue = (...args) => getProcessQueue().enqueue(...args);
+var enqueueReportingAdmission = (...args) => getProcessQueue().enqueueReportingAdmission(...args);
+var flushPeerDropReceipts = (...args) => getProcessQueue().flushPeerDropReceipts(...args);
+var enqueuePollEvent = (...args) => getProcessQueue().enqueuePollEvent(...args);
+var enqueuePendingNotification = (...args) => getProcessQueue().enqueuePendingNotification(...args);
+//@ chunk-5xgkngpb.js:585813-585887 placement
 /**
  * 查看队首命令与按条件批量出队。
  */
-var peekQueuedCommand = (...args) => commandQueueManager().peek(...args);
-var dequeueAllMatching = (...args) => commandQueueManager().dequeueAllMatching(...args);
-//@ chunk-e6aww6q8.js:577576-577617 placement
+var peek = (...args) => getProcessQueue().peek(...args);
+var dequeueAllMatching = (...args) => getProcessQueue().dequeueAllMatching(...args);
+//@ chunk-5xgkngpb.js:585887-585928 placement
 /**
  * 按过滤条件移除排队命令。
  */
-var removeQueuedByFilter = (...args) => commandQueueManager().removeByFilter(...args);
-//@ chunk-e6aww6q8.js:577617-577669 placement
+var removeByFilter = (...args) => getProcessQueue().removeByFilter(...args);
+//@ chunk-5xgkngpb.js:585928-585980 placement
 /**
  * 判断是否有正在排空的命令。
  */
-var someInFlightDrainCommand = (...args) => commandQueueManager().someInFlightDrainCommand(...args);
-//@ chunk-e6aww6q8.js:577669-577937 placement
+var someInFlightDrainCommand = (...args) => getProcessQueue().someInFlightDrainCommand(...args);
+//@ chunk-5xgkngpb.js:585980-586248 placement
 // deferred: uses setQueueInstaller of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:577669", () => {
+deferInit("chunk-5xgkngpb.js:585980", () => {
   setQueueInstaller((commandName, origin, discardWatch) => {
     let commandUuid = discardWatch === undefined ? undefined : randomUUID();
-    enqueueCommand({
+    enqueue({
       agentId: mainAgentId(),
       mode: "prompt",
       value: `/${commandName}`,
@@ -1984,7 +2079,7 @@ deferInit("chunk-e6aww6q8.js:577669", () => {
       uuid: commandUuid,
     });
     if (discardWatch === undefined || discardWatch.until.aborted) return;
-    let unsubscribe = commandsDiscardedSignal.subscribe((discarded) => {
+    let unsubscribe = commandsDiscarded.subscribe((discarded) => {
       if (discarded.some((command) => command.uuid === commandUuid)) {
         unsubscribe();
         discardWatch.onDiscarded();
@@ -1995,7 +2090,7 @@ deferInit("chunk-e6aww6q8.js:577669", () => {
     });
   });
 });
-//@ chunk-ha3km179.js:76331-76631 sole-consumer
+//@ chunk-w3ch4xq2.js:85621-85921 sole-consumer
 /**
  * 把带 ✓/○ 等符号的清单文本解析为 header 与 items（最多 32 条）。
  */
@@ -2030,20 +2125,20 @@ function parseChecklistText(text) {
       .slice(0, MAX_CHECKLIST_LINES),
   };
 }
-//@ chunk-ha3km179.js:76631-76961 placement
+//@ chunk-w3ch4xq2.js:85921-86251 placement
 /**
  * 协调者内部工具名列表。
  */
-var COORDINATOR_TOOL_NAMES; // deferred: uses PROJECTS_MOUNT_FIRST_COMMAND_WAIT_MS (../bridge/projectsReplyEvaluation.js) of its import cycle while loading; runs once the cycle is complete
+var COORDINATOR_TOOL_NAMES; // deferred: uses NO_REPLY_SUFFIX (../bridge/projectsReplyEvaluation.js) of its import cycle while loading; runs once the cycle is complete
 var COORDINATOR_TOOL_SUFFIXES;
 var mapped;
 var mapped_2;
 var REPORTING_NOTIFICATION_ORIGINS;
 var TOOL_RESULT_NOTIFICATIONS_SCHEMA;
 var REPORTING_WINDOW_MS;
-deferInit("chunk-ha3km179.js:76631", () => {
+deferInit("chunk-w3ch4xq2.js:85921", () => {
   COORDINATOR_TOOL_NAMES = aliasCanonicalNames(["update_status"]).map((name) => `__${name}`);
-  COORDINATOR_TOOL_SUFFIXES = [NO_REPLY_TOOL_SUFFIX, "__react", "__message_coordinator", "__message_thread"];
+  COORDINATOR_TOOL_SUFFIXES = [NO_REPLY_SUFFIX, "__react", "__message_coordinator", "__message_thread"];
   mapped = aliasCanonicalNames(["ask_decision"]).map((name) => `__${name}`);
   mapped_2 = aliasCanonicalNames(["close_decision", "set_thread_resolved"]).map((name) => `__${name}`);
   REPORTING_NOTIFICATION_ORIGINS = new Set(["github_webhook", "trigger_fire"]);
@@ -2058,7 +2153,7 @@ deferInit("chunk-ha3km179.js:76631", () => {
   );
   REPORTING_WINDOW_MS = 259200000;
 });
-//@ chunk-ha3km179.js:76961-77218 placement
+//@ chunk-w3ch4xq2.js:86251-86508 placement
 /**
  * 找出最近一次"已展示但未读"的出错工具行 id（供分类器提示）。
  */
@@ -2084,7 +2179,7 @@ function shownErroredToolRowId(messages) {
     return;
   }
 }
-//@ chunk-ha3km179.js:77218-77474 placement
+//@ chunk-w3ch4xq2.js:86508-86764 placement
 function logOperation(operation, content) {
   if (!isGracefulCakeEnabled()) return false;
   try {
@@ -2107,20 +2202,15 @@ function logOperation(operation, content) {
     return false;
   }
 }
-//@ chunk-ha3km179.js:77474-77566 placement
+//@ chunk-w3ch4xq2.js:86764-86820 placement
 function isGracefulCakeEnabled() {
-  return (
-    getTerminalMcpTools()
-      .values()
-      .some((toolName) => toolName.endsWith(NO_REPLY_TOOL_SUFFIX)) &&
-    getFeatureValue_CACHED_MAY_BE_STALE("tengu_graceful_cake", true)
-  );
+  return hasNoReplyTerminalTool() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_graceful_cake", true);
 }
-//@ chunk-ha3km179.js:77566-77617 placement
+//@ chunk-w3ch4xq2.js:86820-86871 placement
 function nameEndsWithAny(name, suffixes) {
   return suffixes.some((suffix) => name.endsWith(suffix));
 }
-//@ chunk-ha3km179.js:77617-78323 placement
+//@ chunk-w3ch4xq2.js:86871-87577 placement
 /**
  * 找出最近出错的工具调用。
  */
@@ -2137,7 +2227,7 @@ function findRecentErroredTools(messages) {
     if (message.type !== "assistant") continue;
     for (let block of message.message.content.toReversed()) {
       if (block.type !== "tool_use") continue;
-      if (isExactReplToolName(block.name))
+      if (isEvalToolCallName(block.name))
         return {
           row: j,
           id: block.id,
@@ -2178,7 +2268,7 @@ function findRecentErroredTools(messages) {
   }
   return;
 }
-//@ chunk-ha3km179.js:78323-78844 placement
+//@ chunk-w3ch4xq2.js:87577-88098 placement
 /**
  * 是否为自动任务通知（定时触发、会话任务）。
  */
@@ -2206,7 +2296,7 @@ function isAutomatedNotification(origin, message) {
     : !isSessionInboxWake(externalEventWake) &&
         (externalEventWake.from === undefined || externalEventWake.from === "system");
 }
-//@ chunk-ha3km179.js:78844-79310 placement
+//@ chunk-w3ch4xq2.js:88098-88563 placement
 /**
  * 回合是否只有等待类调用。
  */
@@ -2233,118 +2323,110 @@ function hasOnlyWaitCalls(messages) {
       }
   return pendingReadIds.size === 0;
 }
-//@ chunk-ha3km179.js:79416-79488 placement
+//@ chunk-w3ch4xq2.js:88669-88741 placement
 /**
  * 惰性加载的两个 chunk 模块引用。
  */
 var lazyChunkCv3; // deferred: loads other modules while loading; runs once its import cycle is complete
 var lazyChunkVsw;
-deferInit("chunk-ha3km179.js:79416", () => {
+deferInit("chunk-w3ch4xq2.js:88669", () => {
   lazyChunkCv3 = require("../tools/BriefTool/BriefTool.js");
   lazyChunkVsw = require("../tools/BriefTool/prompt.js");
 });
-//@ chunk-ha3km179.js:79488-79526 placement
+//@ chunk-w3ch4xq2.js:88741-88779 placement
 /**
  * 取已排队的对等消息数量。
  */
 var getQueuedPeerMessageCount; // deferred: loads other modules while loading; runs once its import cycle is complete
-deferInit("chunk-ha3km179.js:79488", () => {
+deferInit("chunk-w3ch4xq2.js:88741", () => {
   getQueuedPeerMessageCount = require("../bridge/projectsReplyEvaluation.js");
 });
-//@ chunk-0sfjpx19.js:15971-16045 fingerprint (2.1.88 match: enqueuePendingNotification, 0.592)
+//@ chunk-nh1pvp1m.js:43637-43711 fingerprint (2.1.88 match: enqueuePendingNotification, 0.592)
 /**
  * 已验证的 Slack 人类消息且优先级为 later。旧版名 enqueuePendingNotification 为错配。
  */
 function isSlackLaterNotification(command) {
   return command.verifiedSlackHumanTurn === true && command.priority === "later";
 }
-//@ chunk-18hwfzwa.js:1655060-1655107 fingerprint (2.1.88 match: snapshot, 0.673)
+//@ chunk-czq1j3j2.js:1700784-1700831 fingerprint (2.1.88 match: snapshot, 0.673)
 /**
  * {status:null,next:null}。旧版名 snapshot 为错配。
  */
 var EMPTY_LIMIT_NOTICES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1655060", () => {
+deferInit("chunk-czq1j3j2.js:1700784", () => {
   EMPTY_LIMIT_NOTICES = Object.freeze({
     status: null,
     next: null,
   });
 });
-//@ chunk-18hwfzwa.js:1661253-1661334 fingerprint (2.1.88 match: isSlashCommand, 1)
-/**
- * 值以 / 开头的命令；peer/slack 来源且 skipSlashCommands 时不算。
- */
-function isSlashCommand(cmd) {
-  if (cmd.skipSlashCommands && isPeerOrSlackPing(cmd.origin)) return false;
-  return looksLikeSlashInput(cmd.value);
-}
 export {
-  commandQueueManager,
-  getProcessedQueuedCommands,
-  dequeueAllMatching,
-  enqueueCommand,
-  flushPeerDropReceipts,
-  isSlackLaterNotification,
-  isMainAgentCommand,
-  getSchedulingPlugin,
-  emitDiscardedCommand,
-  removeQueuedByFilter,
-  isFoldInFlight,
-  receiptQueuedProbe,
-  inFlightDrainProbe,
-  getCommandQueue,
-  isRefillableInput,
-  enqueuePendingNotification,
-  getCommandQueueSnapshot,
-  isSendableQueuedCommand,
-  isPassiveMainAgentCommand,
-  commandsDiscardedSignal,
-  inputDisplayText,
-  isCheckinNotification,
-  processQueuedCommands,
-  isSlashCommand_2,
-  shouldPrependModeChar,
-  hasRefillableMainAgentCommand,
-  isNonHumanQueuedCommand,
-  splitStampedImages,
-  hasModeCharCommand,
-  hasQueuedTaskNotification,
+  isTaskNotificationQueuedFor,
   takeDiscardedNotice,
-  hasQueuedQueryingTaskNotification,
+  isWakingNotificationQueuedFor,
+  enqueuePendingNotification,
+  dequeueAllMatching,
   recheckCommandQueue,
-  isActiveMainAgentCommand,
+  commandsDiscarded,
   firstSchedulingPlugin,
+  isDrainableMainThreadCommand,
+  isQueuedUserTurnCommand,
   textNotTypedFlags,
-  isRefillableCommand,
-  isReplayableHistoryEntry,
-  getRetainedPastedContents,
-  extractImagesFromValue,
+  peek,
+  removeByFilter,
+  isQueuedUserPrompt,
+  filterMidTurnDrainCommands,
+  getCommandQueueSnapshot,
+  enqueuePollEvent,
+  sameSchedulingPlugin,
+  isMainAgentCommand,
+  isPassiveMainThreadCommand,
+  processQueuedCommands,
+  isSlashCommand,
+  isPollEventWakeInput,
+  isPromptCapableMode,
+  isBatchHeadHumanCommand,
+  commandsConsumed,
+  entryHold,
+  heldByHold,
+  getCommandQueue,
+  isQueuedCommandEditable,
   normalizedQueueOrigin,
-  queuedNotificationMode,
   shouldSkipQueueAttachments,
   queueInputFlags,
-  EMPTY_LIMIT_NOTICES,
-  isSlashCommand,
-  sameSchedulingPlugin,
-  filterQueuedCommandsForThread,
-  isPromptModeQueuedCommand,
-  createQueueFilterForThread,
-  getValueFromInput,
-  someInFlightDrainCommand,
-  installCommandQueue,
-  createMessageQueueManager,
-  commandsConsumedSignal,
-  peekQueuedCommand,
-  WORKER_CHECKIN_ORIGIN,
+  getProcessQueue,
+  installProcessQueue,
+  createMessageQueue,
+  isTypedAtThisComposer,
+  restoreTextForPop,
+  collectPastedContentsForPop,
+  extractImagesFromValue,
+  enqueue,
   isGoalCheckinNotification,
+  GOAL_CHECKIN_ORIGIN,
+  someInFlightDrainCommand,
+  WORKER_CHECKIN_ORIGIN,
+  isIdleDrainableMainThreadCommand,
+  enqueueReportingAdmission,
+  getProcessedQueuedCommands,
+  getSchedulingPlugin,
+  discardUnqueued,
+  isFoldInFlight,
+  isCheckinNotification,
+  isQueuedCommandPullableInto,
+  hasEditableMainThreadCommand,
+  isQueuedCommandVisible,
+  restorePastedImageContents,
+  hasPullableCommandInQueue,
+  queuedNotificationMode,
+  EMPTY_LIMIT_NOTICES,
+  getMainThreadQueueLength,
+  flushPeerDropReceipts,
+  isSlackLaterNotification,
+  midTurnFoldableFor,
+  unnameTurnPersonJoined,
   shownErroredToolRowId,
   logOperation,
   lazyChunkCv3,
   lazyChunkVsw,
   getQueuedPeerMessageCount,
-  GOAL_CHECKIN_ORIGIN,
-  enqueueReportingAdmission,
-  enqueuePollEvent,
-  isPollEventWakeInput,
-  isPromptCapableMode,
-  getMainThreadQueueLength,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件组件冲突警告文本与修复建议（MCP 重名、技能重名等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f3qhjfah.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5s0qaz1x.js (5)
  * attribution: placement 5
  */
 import { stripInvisibleKeepEmoji } from "../settings/marketplaceSettingsAliases.js";
@@ -15,11 +15,11 @@ import { firstLineOf } from "../stringUtils.js";
 import { claudeCommand } from "../worktreeResumeHint.js";
 import { formatOnlyWhileDisabledHint } from "./marketplaceNames.js";
 
-//@ chunk-f3qhjfah.js:19933-19966 placement
+//@ chunk-5s0qaz1x.js:20195-20228 placement
 function pluginWarningText(warning) {
   return stripInvisibleKeepEmoji(pluginWarningMessage(warning));
 }
-//@ chunk-f3qhjfah.js:19966-23045 placement
+//@ chunk-5s0qaz1x.js:20228-23307 placement
 /**
  * 插件组件冲突警告文本（manifest 遮蔽目录、MCP 服务器重名/重复、mcpb 需要配置、技能重名…）。
  */
@@ -87,11 +87,11 @@ function pluginWarningMessage(warning) {
     }
   }
 }
-//@ chunk-f3qhjfah.js:23045-23078 placement
+//@ chunk-5s0qaz1x.js:23307-23340 placement
 function pluginWarningFixText(warning) {
   return stripInvisibleKeepEmoji(pluginWarningFix(warning));
 }
-//@ chunk-f3qhjfah.js:23078-27079 placement
+//@ chunk-5s0qaz1x.js:23340-27341 placement
 function pluginWarningFix(warning) {
   switch (warning.type) {
     case "folder-shadowed-by-manifest": {
@@ -170,7 +170,7 @@ function pluginWarningFix(warning) {
       }
   }
 }
-//@ chunk-f3qhjfah.js:27079-27136 placement
+//@ chunk-5s0qaz1x.js:27341-27398 placement
 function quoteAndJoinNames(manifestFields) {
   return manifestFields.map((name) => `"${name}"`).join(" and ");
 }

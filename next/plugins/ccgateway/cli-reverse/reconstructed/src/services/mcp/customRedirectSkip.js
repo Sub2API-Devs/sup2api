@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP OAuth：服务器支持动态客户端注册时跳过宿主自定义回调 URI（tengu_sharded_globe）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sfjpx19.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nh1pvp1m.js (5)
  * attribution: placement 5
  */
 import { createCommitAttributionState } from "../../utils/commitAttribution.js";
@@ -24,15 +24,15 @@ import {
 import { logError } from "../../utils/log.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0sfjpx19.js:133572-133584 placement
+//@ chunk-nh1pvp1m.js:128578-128590 placement
 /**
  * 提交归因状态的实例（当前未使用）。
  */
 var commitAttributionState; // deferred: uses createCommitAttributionState (../../utils/commitAttribution.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0sfjpx19.js:133572", () => {
+deferInit("chunk-nh1pvp1m.js:128578", () => {
   commitAttributionState = createCommitAttributionState();
 });
-//@ chunk-0sfjpx19.js:133584-133669 placement
+//@ chunk-nh1pvp1m.js:128590-128675 placement
 /**
  * 按宿主保存的自定义重定向探测状态（probe、pathProbe）。
  */
@@ -44,17 +44,17 @@ class CustomRedirectProbeState {
     this.pathProbe = pathProbe;
   }
 }
-//@ chunk-0sfjpx19.js:133669-133694 placement
+//@ chunk-nh1pvp1m.js:128675-128700 placement
 /**
  * 上述状态的宿主作用域单例（当前未使用）。
  */
 var customRedirectProbeState; // deferred: uses CustomRedirectProbeState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0sfjpx19.js:133669", () => {
+deferInit("chunk-nh1pvp1m.js:128675", () => {
   customRedirectProbeState = new HostScoped(() => new CustomRedirectProbeState());
 });
-//@ chunk-0sfjpx19.js:133694-133723 placement
+//@ chunk-nh1pvp1m.js:128700-128729 placement
 var TENGU_SHARDED_GLOBE = "tengu_sharded_globe";
-//@ chunk-0sfjpx19.js:133723-134556 placement
+//@ chunk-nh1pvp1m.js:128729-129562 placement
 /**
  * 判断 MCP 服务器可否跳过宿主自定义 redirect URI 改走默认登录（读凭据存储失败时不跳过）。
  */

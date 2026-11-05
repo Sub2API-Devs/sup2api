@@ -3,13 +3,15 @@
  *
  * 2.1.316 新增：mcp serve 的 ReadCalls：记录调用运行状态与结果，支持停止/迁移后台命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-m8aeec95.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-78qefq0z.js (15), chunk-z0gd899m.js (7)
  * attribution: placement 22
  */
 import { randomUUID } from "crypto";
 import { join } from "path";
+import { mcpServeCallState, maxDefined, setWithEviction, toolUseIdSchema } from "./callClaims.js";
+import { MAX_PENDING_STARTS, ContainerStartRecord } from "./containerStart.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   zodStrictObject,
@@ -22,7 +24,7 @@ import {
   discriminatedUnion,
   _enum,
 } from "../../../vendor/zod/v4/classic/schemas.js";
-import { isPlainObject as isPlainObject_2 } from "../../utils/isPlainObject.js";
+import { isPlainObject } from "../../utils/isPlainObject.js";
 import { getOwn } from "../../utils/objectSafety.js";
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -36,15 +38,12 @@ import {
   appendTaskOutput,
   evictTaskOutput,
 } from "../../utils/task/diskOutput.js";
-import { mcpServeCallState, maxDefined, setWithEviction, toolUseIdSchema } from "./callClaims.js";
-import { MAX_PENDING_STARTS, ContainerStartRecord } from "./containerStart.js";
 import { createSignal } from "../../utils/signal.js";
 import { logForDebugging } from "../../utils/debug.js";
+import { logError } from "../../utils/log.js";
 import { env } from "../../utils/env.js";
-import { logEvent } from "../analytics/index.js";
 import { registerCleanup } from "../../utils/cleanupRegistry.js";
-import { fromEnum, lit, fromEnumOpt } from "../analytics/safeMetadata.js";
-import { logFeatureBad, logFeatureOk, logFeatureSad } from "../analytics/featureTelemetry.js";
+import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { getBackgroundTimeoutForDisplay } from "../../tools/BashTool/prompt.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import {
@@ -52,117 +51,20 @@ import {
   buildCommandTimingFields,
   thenIfPromise,
 } from "../../tools/BashTool/bashTelemetry.js";
-import { logError } from "../../utils/log.js";
+import { logEvent } from "../analytics/index.js";
+import { fromEnum, lit, fromEnumOpt } from "../analytics/safeMetadata.js";
 import { parentTaskId } from "../../tasks/LocalShellTask/backgroundNotices.js";
-import { DEFAULT_INSTRUCTIONS } from "../../commands/ultraplan.js";
+import { watchTaskOutputForPrompt } from "../../commands/ultraplan.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import { isBackgroundTasksDisabled } from "../../tools/AgentTool/AgentTool.js";
 import { sessionTempDirRealpath } from "../../utils/tempDirRealpaths.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { createCombinedAbortSignal } from "../../utils/combinedAbortSignal.js";
-import { count } from "../../utils/collections.js";
-import { deferInit, beginDeferredInits, runDeferredInits } from "../../../runtime/deferred-init.js";
+import { countWhere } from "../../utils/collections.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-// This module is the first evaluated of an import cycle of 3 modules closed by ./callClaims.js;
-// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
-beginDeferredInits("src/services/mcpServe/callClaims.js");
-//@ chunk-m8aeec95.js:1563-1838 placement
-/**
- * ReadCalls 的上限与输入结构（seen、life、hold_ms、told、tool_use_ids、接口版本）。
- */
-var MAX_READ_CALLS_HOLD_MS = 240000;
-var MAX_TOLD_ENTRIES = 32;
-var MAX_TOOL_USE_IDS = 32;
-var readCallsInputSchema = DoctorLazy(() =>
-  zodStrictObject({
-    seen: numberSchema().int().min(0).optional(),
-    life: stringSchema().max(64).optional(),
-    hold_ms: numberSchema().int().min(0).max(MAX_READ_CALLS_HOLD_MS).optional(),
-    told: array(stringSchema().max(64)).max(MAX_TOLD_ENTRIES).optional(),
-    tool_use_ids: array(stringSchema().min(1).max(256)).max(MAX_TOOL_USE_IDS).optional(),
-    tool_host_interface: unknown().optional(),
-  }),
-);
-//@ chunk-m8aeec95.js:1838-2140 placement
-/**
- * 校验 ReadCalls 输入：told 与 tool_use_ids 列表不能超过上限（超出抛出遥测安全错误），再按 schema 解析。
- */
-function parseReadCallsInput(input) {
-  let limits = {
-    told: MAX_TOLD_ENTRIES,
-    tool_use_ids: MAX_TOOL_USE_IDS,
-  };
-  let overflow = isPlainObject_2(input)
-    ? Object.entries(limits).find(([key, value]) => {
-        let entryValue = getOwn(input, key);
-        return Array.isArray(entryValue) && entryValue.length > value;
-      })
-    : undefined;
-  if (overflow !== undefined) {
-    let [field, limit] = overflow;
-    throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `ReadCalls: ${field} has more than ${limit} entries`,
-      "ReadCalls: a list has more entries than are taken",
-    );
-  }
-  return readCallsInputSchema().parse(input);
-}
-//@ chunk-m8aeec95.js:2338-3042 placement
-/**
- * 调用记录文件的常量（保留时长、上限、扩展名 .json）与记录结构 v1（container_start、listed 任务、起止时间、结束方式 exited/time_limit/stopped/killed）。
- */
-var CALL_RECORD_TICK_MS = 60000;
-var MAX_CALL_RECORDS = 256;
-var CALL_RECORD_RETENTION_MS = 604800000;
-var MAX_CALL_RECORD_SCAN = 4 * MAX_CALL_RECORDS;
-var MAX_CALL_RECORD_BATCH = 16;
-var MAX_CALL_RECORD_BYTES = 32768;
-var CALL_RECORD_EXT = ".json";
-var callRecordSchema = DoctorLazy(() => {
-  let timestamp = numberSchema().int().min(0).max(Number.MAX_SAFE_INTEGER);
-  return objectSchema({
-    v: literal(1),
-    container_start: stringSchema().min(1).max(64),
-    listed: objectSchema({
-      taskId: stringSchema().refine((taskId) => isTaskIdOfType("local_bash", taskId)),
-      output_path: stringSchema().max(4096),
-      limit_ms: numberSchema().min(0).max(Number.MAX_SAFE_INTEGER),
-    }).transform((record) =>
-      isTaskOutputPathFor(record.taskId, record.output_path)
-        ? record
-        : {
-            ...record,
-            output_path: "",
-          },
-    ),
-    started_at: timestamp,
-    written_at: timestamp,
-    ended: objectSchema({
-      how: discriminatedUnion("state", [
-        objectSchema({
-          state: literal("exited"),
-          exit_code: numberSchema().int(),
-        }),
-        objectSchema({
-          state: literal("time_limit"),
-        }),
-        objectSchema({
-          state: literal("stopped"),
-          stopped_by: literal("session"),
-        }),
-        objectSchema({
-          state: literal("killed"),
-          reason: _enum(["daemon_exit", "output_limit", "container_stopped"]).optional().catch(undefined),
-        }),
-      ]).catch({
-        state: "killed",
-      }),
-      at: timestamp,
-    }).optional(),
-  });
-});
-//@ chunk-m8aeec95.js:8490-8788 placement
+//@ chunk-z0gd899m.js:1860-2156 placement
 function describeRunState(session, toolUseId) {
   let callState = mcpServeCallState.of(session);
   let startedAt = callState.runningRuns.get(toolUseId);
@@ -185,11 +87,11 @@ function describeRunState(session, toolUseId) {
     barred: true,
   };
 }
-//@ chunk-m8aeec95.js:8788-8840 placement
+//@ chunk-z0gd899m.js:2156-2208 placement
 function isCallRunBarred(session, toolUseId) {
   return mcpServeCallState.of(session).barredRuns.has(toolUseId);
 }
-//@ chunk-m8aeec95.js:8840-8927 placement
+//@ chunk-z0gd899m.js:2208-2295 placement
 /**
  * 判断该 run 是否存在（运行中或已结束）。
  */
@@ -197,28 +99,28 @@ function isKnownRun(session, toolUseId) {
   let { runningRuns, finishedRuns } = mcpServeCallState.of(session);
   return runningRuns.has(toolUseId) || finishedRuns.has(toolUseId);
 }
-//@ chunk-m8aeec95.js:8927-8979 placement
+//@ chunk-z0gd899m.js:2295-2348 placement
 /**
  * 判断该 run 是否仍在运行。
  */
 function isRunningRun(session, toolUseId) {
   return mcpServeCallState.of(session).runningRuns.has(toolUseId);
 }
-//@ chunk-m8aeec95.js:8979-9034 placement
+//@ chunk-z0gd899m.js:2348-2404 placement
 /**
  * 订阅 run 结束事件。
  */
 function onRunEnded(session, listener) {
   return mcpServeCallState.of(session).runEnded.subscribe(listener);
 }
-//@ chunk-m8aeec95.js:9034-9088 placement
+//@ chunk-z0gd899m.js:2404-2459 placement
 /**
  * 列出正在运行的 run id。
  */
 function runningRunIds(session) {
   return [...mcpServeCallState.of(session).runningRuns.keys()];
 }
-//@ chunk-m8aeec95.js:9088-9182 placement
+//@ chunk-z0gd899m.js:2459-2554 placement
 /**
  * 距离最近一次丢弃记录过了多少毫秒。
  */
@@ -226,17 +128,136 @@ function msSinceNewestDropped(session) {
   let { newestDropped, now } = mcpServeCallState.of(session);
   return newestDropped === undefined ? undefined : Math.round(now() - newestDropped);
 }
-//@ chunk-m8aeec95.js:13591-13713 placement
+//@ chunk-78qefq0z.js:1307-1580 placement
+/**
+ * ReadCalls 的上限与输入结构（seen、life、hold_ms、told、tool_use_ids、接口版本）。
+ */
+var MAX_READ_CALLS_HOLD_MS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_TOLD_ENTRIES;
+var MAX_TOOL_USE_IDS;
+var readCallsInputSchema;
+deferInit("chunk-78qefq0z.js:1307", () => {
+  MAX_READ_CALLS_HOLD_MS = 240000;
+  MAX_TOLD_ENTRIES = 32;
+  MAX_TOOL_USE_IDS = 32;
+  readCallsInputSchema = DoctorLazy(() =>
+    zodStrictObject({
+      seen: numberSchema().int().min(0).optional(),
+      life: stringSchema().max(64).optional(),
+      hold_ms: numberSchema().int().min(0).max(MAX_READ_CALLS_HOLD_MS).optional(),
+      told: array(stringSchema().max(64)).max(MAX_TOLD_ENTRIES).optional(),
+      tool_use_ids: array(stringSchema().min(1).max(256)).max(MAX_TOOL_USE_IDS).optional(),
+      tool_host_interface: unknown().optional(),
+    }),
+  );
+});
+//@ chunk-78qefq0z.js:1580-1881 placement
+/**
+ * 校验 ReadCalls 输入：told 与 tool_use_ids 列表不能超过上限（超出抛出遥测安全错误），再按 schema 解析。
+ */
+function parseReadCallsInput(input) {
+  let limits = {
+    told: MAX_TOLD_ENTRIES,
+    tool_use_ids: MAX_TOOL_USE_IDS,
+  };
+  let overflow = isPlainObject(input)
+    ? Object.entries(limits).find(([key, value]) => {
+        let entryValue = getOwn(input, key);
+        return Array.isArray(entryValue) && entryValue.length > value;
+      })
+    : undefined;
+  if (overflow !== undefined) {
+    let [field, limit] = overflow;
+    throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+      `ReadCalls: ${field} has more than ${limit} entries`,
+      "ReadCalls: a list has more entries than are taken",
+    );
+  }
+  return readCallsInputSchema().parse(input);
+}
+//@ chunk-78qefq0z.js:2079-2783 placement
+/**
+ * 调用记录文件的常量（保留时长、上限、扩展名 .json）与记录结构 v1（container_start、listed 任务、起止时间、结束方式 exited/time_limit/stopped/killed）。
+ */
+var CALL_RECORD_TICK_MS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_CALL_RECORDS;
+var CALL_RECORD_RETENTION_MS;
+var MAX_CALL_RECORD_SCAN;
+var MAX_CALL_RECORD_BATCH;
+var MAX_CALL_RECORD_BYTES;
+var CALL_RECORD_EXT;
+var callRecordSchema;
+deferInit("chunk-78qefq0z.js:2079", () => {
+  CALL_RECORD_TICK_MS = 60000;
+  MAX_CALL_RECORDS = 256;
+  CALL_RECORD_RETENTION_MS = 604800000;
+  MAX_CALL_RECORD_SCAN = 4 * MAX_CALL_RECORDS;
+  MAX_CALL_RECORD_BATCH = 16;
+  MAX_CALL_RECORD_BYTES = 32768;
+  CALL_RECORD_EXT = ".json";
+  callRecordSchema = DoctorLazy(() => {
+    let timestamp = numberSchema().int().min(0).max(Number.MAX_SAFE_INTEGER);
+    return objectSchema({
+      v: literal(1),
+      container_start: stringSchema().min(1).max(64),
+      listed: objectSchema({
+        taskId: stringSchema().refine((taskId) => isTaskIdOfType("local_bash", taskId)),
+        output_path: stringSchema().max(4096),
+        limit_ms: numberSchema().min(0).max(Number.MAX_SAFE_INTEGER),
+      }).transform((record) =>
+        isTaskOutputPathFor(record.taskId, record.output_path)
+          ? record
+          : {
+              ...record,
+              output_path: "",
+            },
+      ),
+      started_at: timestamp,
+      written_at: timestamp,
+      ended: objectSchema({
+        how: discriminatedUnion("state", [
+          objectSchema({
+            state: literal("exited"),
+            exit_code: numberSchema().int(),
+          }),
+          objectSchema({
+            state: literal("time_limit"),
+          }),
+          objectSchema({
+            state: literal("stopped"),
+            stopped_by: literal("session"),
+          }),
+          objectSchema({
+            state: literal("killed"),
+            reason: _enum(["daemon_exit", "output_limit", "container_stopped"]).optional().catch(undefined),
+          }),
+        ]).catch({
+          state: "killed",
+        }),
+        at: timestamp,
+      }).optional(),
+    });
+  });
+});
+//@ chunk-78qefq0z.js:6822-6943 placement
 /**
  * 命令与描述的最大字符数（1000）。
  */
-var READ_CALLS_CALL = "ReadCalls";
-var STOP_BACKGROUND_COMMAND_CALL = "StopBackgroundCommand";
-var MOVE_RUNNING_COMMAND_CALL = "MoveRunningCommand";
-var MAX_FINISHED_RECORDS_KEPT = 3 * MAX_TOLD_ENTRIES;
-var MAX_COMMAND_CHARS = 1000;
-var ANTHROPIC_BACKGROUNDCOMMANDS = "anthropic/backgroundCommands";
-//@ chunk-m8aeec95.js:13713-13778 placement
+var READ_CALLS_CALL; // deferred: uses MAX_READ_CALLS_HOLD_MS of its import cycle while loading; runs once the cycle is complete
+var STOP_BACKGROUND_COMMAND_CALL;
+var MOVE_RUNNING_COMMAND_CALL;
+var MAX_FINISHED_RECORDS_KEPT;
+var MAX_COMMAND_CHARS;
+var ANTHROPIC_BACKGROUNDCOMMANDS;
+deferInit("chunk-78qefq0z.js:6822", () => {
+  READ_CALLS_CALL = "ReadCalls";
+  STOP_BACKGROUND_COMMAND_CALL = "StopBackgroundCommand";
+  MOVE_RUNNING_COMMAND_CALL = "MoveRunningCommand";
+  MAX_FINISHED_RECORDS_KEPT = 3 * MAX_TOLD_ENTRIES;
+  MAX_COMMAND_CHARS = 1000;
+  ANTHROPIC_BACKGROUNDCOMMANDS = "anthropic/backgroundCommands";
+});
+//@ chunk-78qefq0z.js:6943-7007 placement
 function keepsBackgroundCommandsCapability(life) {
   return {
     experimental: {
@@ -248,12 +269,12 @@ function keepsBackgroundCommandsCapability(life) {
     },
   };
 }
-//@ chunk-m8aeec95.js:13778-13832 placement
+//@ chunk-78qefq0z.js:7007-7060 placement
 /**
  * 后台命令能力声明的 schema。
  */
-var backgroundCommandsCapabilitySchema; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-m8aeec95.js:13778", () => {
+var backgroundCommandsCapabilitySchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-78qefq0z.js:7007", () => {
   backgroundCommandsCapabilitySchema = DoctorLazy(() =>
     objectSchema({
       experimental: objectSchema({
@@ -264,12 +285,12 @@ deferInit("chunk-m8aeec95.js:13778", () => {
     }),
   );
 });
-//@ chunk-m8aeec95.js:13832-13890 placement
+//@ chunk-78qefq0z.js:7060-7117 placement
 /**
  * 后台命令移动能力声明的 schema。
  */
-var backgroundCommandMovesSchema; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-m8aeec95.js:13832", () => {
+var backgroundCommandMovesSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-78qefq0z.js:7060", () => {
   backgroundCommandMovesSchema = DoctorLazy(() =>
     objectSchema({
       experimental: objectSchema({
@@ -280,10 +301,10 @@ deferInit("chunk-m8aeec95.js:13832", () => {
     }),
   );
 });
-//@ chunk-m8aeec95.js:13890-14000 placement
-var stopBackgroundCommandSchema; // deferred: uses CLAIM_FIELD_TRUST (./callClaims.js) of its import cycle while loading; runs once the cycle is complete
+//@ chunk-78qefq0z.js:7117-7229 placement
+var stopBackgroundCommandSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var moveRunningCommandSchema;
-deferInit("chunk-m8aeec95.js:13890", () => {
+deferInit("chunk-78qefq0z.js:7117", () => {
   stopBackgroundCommandSchema = DoctorLazy(() =>
     zodStrictObject({
       taskId: stringSchema().min(1).max(64),
@@ -296,7 +317,7 @@ deferInit("chunk-m8aeec95.js:13890", () => {
     }),
   );
 });
-//@ chunk-m8aeec95.js:14000-14147 placement
+//@ chunk-78qefq0z.js:7229-7376 placement
 function toEndedHow({ interrupted, code, outputFileSize }) {
   return !interrupted
     ? {
@@ -310,7 +331,7 @@ function toEndedHow({ interrupted, code, outputFileSize }) {
         }),
       };
 }
-//@ chunk-m8aeec95.js:14147-19670 placement
+//@ chunk-78qefq0z.js:7376-12897 placement
 /**
  * mcp serve 的 ReadCalls：记录已运行的调用（运行中/已完成/保留结果），供远端读取进度、停止或迁移后台命令。
  */
@@ -322,8 +343,8 @@ class ReadCallsLog {
   #s = createSignal();
   #t;
   #n;
-  #i = Promise.resolve();
-  #a;
+  #a = Promise.resolve();
+  #i;
   #d;
   constructor(clock = () => performance.now()) {
     this.#t = clock;
@@ -334,11 +355,11 @@ class ReadCallsLog {
       store,
       wallNow,
     };
-    this.#i = this.#p(store, wallNow);
+    this.#a = this.#p(store, wallNow);
     registerCleanup(() => store.settledAll());
   }
   get restored() {
-    return this.#i;
+    return this.#a;
   }
   get version() {
     return this.#o;
@@ -348,10 +369,10 @@ class ReadCallsLog {
       reserve: () => {
         return;
       },
-      listMove: (because) => this.#c(call.toolUseId, because),
+      listMove: (because) => this.#u(call.toolUseId, because),
       adopt: (task, requestedTimeoutMs, command, trigger) => {
         try {
-          let taskId = this.#m(task, requestedTimeoutMs, command, call, trigger);
+          let taskId = this.#c(task, requestedTimeoutMs, command, call, trigger);
           this.#r.delete(call.toolUseId ?? "");
           logFeatureOk("mcp_serve_background_command");
           return taskId;
@@ -368,7 +389,7 @@ class ReadCallsLog {
     return [...this.#e.values()].find(({ listed }) => listed.tool_use_id === toolUseId)?.listed.taskId;
   }
   msSinceNewestDropped() {
-    return this.#a === undefined ? undefined : Math.round(this.#t() - this.#a);
+    return this.#i === undefined ? undefined : Math.round(this.#t() - this.#i);
   }
   list() {
     let now = this.#t();
@@ -422,7 +443,7 @@ class ReadCallsLog {
   moveRunning(toolUseId, because) {
     return this.#r.get(toolUseId)?.(because) ?? this.taskIdOf(toolUseId) !== undefined;
   }
-  #c(toolUseId, shouldStop) {
+  #u(toolUseId, shouldStop) {
     if (toolUseId === undefined) return () => {};
     this.#r.set(toolUseId, shouldStop);
     return () => {
@@ -441,7 +462,7 @@ class ReadCallsLog {
     unsubscribe();
     signal.removeEventListener("abort", wake);
   }
-  #m(task, requestedTimeoutMs, command, call, trigger) {
+  #c(task, requestedTimeoutMs, command, call, trigger) {
     let taskId = task.taskOutput.taskId;
     let outputPath = getTaskOutputPath(taskId);
     if (
@@ -496,7 +517,7 @@ class ReadCallsLog {
       if (record.unwanted) this.#n?.store.remove(taskId);
       else {
         this.#e.set(taskId, record);
-        this.#u(record);
+        this.#m(record);
       }
       this.#l().forEach(() => logFeatureSad("mcp_serve_background_command", "ending_dropped"));
       deferred.resolve();
@@ -565,7 +586,7 @@ class ReadCallsLog {
       this.#o++;
       this.#s.emit();
     };
-    let stopWatchingStall = DEFAULT_INSTRUCTIONS(
+    let stopWatchingStall = watchTaskOutputForPrompt(
       taskId,
       (stallTail) => {
         setStallTail(stallTail);
@@ -586,7 +607,7 @@ class ReadCallsLog {
       }
     });
     this.#e.set(taskId, record);
-    this.#u(record);
+    this.#m(record);
     if (this.#n !== undefined)
       this.#d ??= setInterval(() => {
         let filtered = [...this.#e.values()].filter(({ ended, unwanted }) => !ended && !unwanted);
@@ -594,7 +615,7 @@ class ReadCallsLog {
           clearInterval(this.#d);
           this.#d = undefined;
         }
-        filtered.forEach((record) => this.#u(record));
+        filtered.forEach((record) => this.#m(record));
       }, CALL_RECORD_TICK_MS).unref();
     task.result
       .then(async (result) => {
@@ -611,7 +632,7 @@ class ReadCallsLog {
     this.#s.emit();
     return taskId;
   }
-  #u({ listed, startedAt, ended }) {
+  #m({ listed, startedAt, ended }) {
     if (this.#n === undefined) return;
     let { store, wallNow } = this.#n;
     let monotonicNow = this.#t();
@@ -638,7 +659,7 @@ class ReadCallsLog {
     sliced.forEach((record) => {
       this.#e.delete(record.listed.taskId);
       this.#n?.store.remove(record.listed.taskId);
-      this.#a = record.ended?.at;
+      this.#i = record.ended?.at;
     });
     return sliced;
   }
@@ -677,12 +698,12 @@ class ReadCallsLog {
     }
   }
 }
-//@ chunk-m8aeec95.js:19670-19696 placement
+//@ chunk-78qefq0z.js:12897-12923 placement
 var backgroundCommands; // deferred: uses ReadCallsLog of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-m8aeec95.js:19670", () => {
+deferInit("chunk-78qefq0z.js:12897", () => {
   backgroundCommands = new HostScoped(() => new ReadCallsLog());
 });
-//@ chunk-m8aeec95.js:19696-20200 placement
+//@ chunk-78qefq0z.js:12923-13426 placement
 function keepBackgroundCommandRecords(host, kind) {
   if (
     kind !== "tool-container" ||
@@ -712,7 +733,7 @@ function keepBackgroundCommandRecords(host, kind) {
     }),
   );
 }
-//@ chunk-m8aeec95.js:20200-21455 placement
+//@ chunk-78qefq0z.js:13426-14688 placement
 async function readCalls(input, signal, { session, callerGone }) {
   let { seen, life, hold_ms: holdMs, told, tool_use_ids: toolUseIds } = parseReadCallsInput(input ?? {});
   let [invalidId, ...otherInvalidIds] = (toolUseIds ?? []).filter(
@@ -760,7 +781,7 @@ async function readCalls(input, signal, { session, callerGone }) {
     };
   });
   if (toolUseIds !== undefined && toolUseIds.length > 0) {
-    let countOfState = (state) => count(mapped, (call) => call.state === state);
+    let countOfState = (state) => countWhere(mapped, (call) => call.state === state);
     logEvent("tengu_mcp_serve_calls_read_by_id", {
       background: countOfState("background"),
       running: countOfState("running"),
@@ -783,7 +804,7 @@ async function readCalls(input, signal, { session, callerGone }) {
     output,
   };
 }
-//@ chunk-m8aeec95.js:21455-21615 placement
+//@ chunk-78qefq0z.js:14688-14848 placement
 async function moveRunningCommand(input, signal, { session }) {
   let { tool_use_id: toolUseId, because } = moveRunningCommandSchema().parse(input);
   let moved = backgroundCommands.of(session.host).moveRunning(toolUseId, because);
@@ -794,7 +815,7 @@ async function moveRunningCommand(input, signal, { session }) {
     },
   };
 }
-//@ chunk-m8aeec95.js:21615-21755 placement
+//@ chunk-78qefq0z.js:14848-14988 placement
 async function stopBackgroundCommand(input, signal, { session }) {
   let { taskId } = stopBackgroundCommandSchema().parse(input);
   let stopped = backgroundCommands.of(session.host).stop(taskId);
@@ -805,15 +826,7 @@ async function stopBackgroundCommand(input, signal, { session }) {
     },
   };
 }
-
-// The import cycle this module closes (3 modules) is complete: run the load-time work its statements
-// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
-runDeferredInits("src/services/mcpServe/readCalls.js");
 export {
-  isKnownRun,
-  isCallRunBarred,
-  backgroundCommands,
-  keepBackgroundCommandRecords,
   CALL_RECORD_EXT,
   MAX_CALL_RECORD_SCAN,
   MAX_CALL_RECORDS,
@@ -821,6 +834,10 @@ export {
   MAX_CALL_RECORD_BYTES,
   callRecordSchema,
   CALL_RECORD_RETENTION_MS,
+  keepBackgroundCommandRecords,
+  isKnownRun,
+  isCallRunBarred,
+  backgroundCommands,
   READ_CALLS_CALL,
   readCalls,
   STOP_BACKGROUND_COMMAND_CALL,

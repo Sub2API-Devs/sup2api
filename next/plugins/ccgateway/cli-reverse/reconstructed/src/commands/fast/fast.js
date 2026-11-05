@@ -3,15 +3,12 @@
  *
  * 并入旧版已有路径：/fast 命令（快速模式切换、Opus 4.8 快速模式下线提示）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/fast/fast.tsx
- * pieces: chunk-18hwfzwa.js (10), chunk-1n1kvmcz.js (8), chunk-aepeg2w5.js (1), chunk-ag5x7vhf.js (1), chunk-d1cgs5na.js (2), chunk-jbv0t0w5.js (1)
- * attribution: callgraph-fingerprint 1, layout 7, facade-exports 2, placement 9, fingerprint 4
+ * pieces: chunk-0yw3taqg.js (1), chunk-5j7d17eb.js (1), chunk-73r4a0j7.js (1), chunk-czq1j3j2.js (10), chunk-n7hfhatx.js (8), chunk-wefvmrb3.js (2)
+ * attribution: fingerprint 4, callgraph-fingerprint 1, layout 7, facade-exports 2, placement 9
  */
 import {
-  isFastModeSettingOn,
-  isFastModeOrgPending,
-  prefetchFastModeStatus,
   isFastModeEnabled,
   isFastModeActive,
   reportFastModeToggle,
@@ -23,7 +20,9 @@ import {
   syncFastModeFlag,
   getFastModeUnavailableMessage,
   defaultOpusLabel,
+  fastModeSettingDiverges,
   getFastModeRuntimeState,
+  prefetchFastModeStatus,
   getFastModeUnavailableReasonCode,
 } from "../../utils/fastMode.js";
 import {
@@ -58,7 +57,7 @@ import { invalidateCommandNames } from "../../utils/settings/commandSyncNames.js
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage, toError } from "../../utils/errors.js";
 import { ControlRequestTimeoutError } from "../../remote/controlRequestErrors.js";
-import { updateSettingsForSource } from "../../utils/settings/settings.js";
+import { updateSettingsForSource, getInitialSettings } from "../../utils/settings/settings.js";
 import { isOpus48Model } from "../../utils/model/promptBundles.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { withDeadline } from "../../utils/sleep.js";
@@ -69,6 +68,7 @@ import { MODEL_SET_TO_INFIX, toInlineCode, FAST_MODE_ON_TEXT } from "../model/mo
 import { getMainLoopModel, isOpus5FamilyModel } from "../../utils/model/model.js";
 import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
 import { formatModelPricing, getFastModeCosts } from "../../utils/modelCost.js";
+import { getPickedEffortModel } from "../../utils/permissions/toolPermissionContext.js";
 import { FAST_TOGGLE_NOT_APPLIED, savedFastModeToggle } from "../config/configShorthand.js";
 import { logError } from "../../utils/log.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -93,23 +93,7 @@ import { formatDuration } from "../../utils/format.js";
 import { LearnMoreLink } from "../../components/LearnMoreLink.js";
 import { Dialog } from "../../components/design-system/Dialog.js";
 
-//@ chunk-aepeg2w5.js:357680-357806 fingerprint (2.1.88 match: _temp3, 0.717)
-/**
- * 按设置重算 fastMode 写回应用状态，开启时预取快速模式状态。
- */
-function refreshFastModeFromSettings(session, setState, options) {
-  setState((prev) => {
-    let isOn = isFastModeSettingOn(prev.settings);
-    return prev.fastMode === isOn
-      ? prev
-      : {
-          ...prev,
-          fastMode: isOn,
-        };
-  });
-  if (isFastModeOrgPending(session().fastMode === true)) prefetchFastModeStatus(options);
-}
-//@ chunk-jbv0t0w5.js:37202-37589 fingerprint (2.1.88 match: applyFastMode, 0.495)
+//@ chunk-73r4a0j7.js:37500-37887 fingerprint (2.1.88 match: applyFastMode, 0.494)
 function applyFastMode(enable, setAppState) {
   let enabled;
   let reason;
@@ -132,7 +116,7 @@ function applyFastMode(enable, setAppState) {
   if (reason !== undefined) reportFastModeToggle(enabled, reason);
   setMainLoopModelOverride(enable.overrideValue);
 }
-//@ chunk-d1cgs5na.js:1502-1699 placement
+//@ chunk-wefvmrb3.js:1569-1766 placement
 function formatFastModeSuffix(previousModel, isFastMode, model, options) {
   let fastModeOn = isFastModeEnabled();
   let announceKept = fastModeOn && isFastMode && (!previousModel || options?.announceKeptOn === true);
@@ -145,20 +129,20 @@ function formatFastModeSuffix(previousModel, isFastMode, model, options) {
     (announceOff ? " \xB7 Fast mode OFF" : "")
   );
 }
-//@ chunk-d1cgs5na.js:1699-1834 fingerprint (2.1.88 match: handleFastModeShortcut, 0.484)
+//@ chunk-wefvmrb3.js:1766-1901 fingerprint (2.1.88 match: handleFastModeShortcut, 0.484)
 function handleFastModeShortcut(enable, getAppState, setAppState) {
   if (!!enable === getAppState) return null;
   return getAppState
     ? `Fast mode ON${isBilledAsExtraUsage(setAppState, true, isOpus1mMergeEnabled()) ? " \xB7 Draws from usage credits" : ""}`
     : "Fast mode OFF";
 }
-//@ chunk-1n1kvmcz.js:1254-1305 placement
+//@ chunk-n7hfhatx.js:1255-1306 placement
 /**
  * 快速模式预取超时 8000ms，以及"Fast mode unchanged (cancelled)"的取消文案。
  */
 var FAST_MODE_PREFETCH_TIMEOUT_MS = 8000;
 var FAST_MODE_CANCELLED_TEXT = "Fast mode unchanged (cancelled)";
-//@ chunk-1n1kvmcz.js:1305-1429 placement
+//@ chunk-n7hfhatx.js:1306-1430 placement
 /**
  * 当前模型不支持快速模式时返回要切换到的 Opus 别名（与默认模型相同则返回 null）。
  */
@@ -179,7 +163,7 @@ function getFastModeSwitchModel(state) {
     ? null
     : fallbackModel;
 }
-//@ chunk-1n1kvmcz.js:1429-1779 placement
+//@ chunk-n7hfhatx.js:1430-1781 placement
 async function confirmFastModeSwitch(state, model, signal) {
   let fastModeSwitchModel = getFastModeSwitchModel(model());
   if (fastModeSwitchModel === undefined || isRemoteControlChannelAvailable() || !hasPreModelSwitchHook(state))
@@ -207,14 +191,14 @@ async function confirmFastModeSwitch(state, model, signal) {
     ),
   };
 }
-//@ chunk-1n1kvmcz.js:1779-1801 placement
+//@ chunk-n7hfhatx.js:1781-1803 placement
 /**
  * 未经校验的快速模式结果 {unvetted:true}，作为工作区切换的默认值。
  */
 var UNVETTED_FAST_MODE_RESULT = {
   unvetted: true,
 };
-//@ chunk-1n1kvmcz.js:1801-2144 placement
+//@ chunk-n7hfhatx.js:1803-2146 placement
 /**
  * 工作区快速模式切换失败（timeout/stale/refused）的提示文本。
  */
@@ -229,7 +213,7 @@ function describeWorkspaceFastModeFailure(failure, isFastMode) {
       return `Fast mode was not ${stateLabel} on the workspace: ${failure.reason}`;
   }
 }
-//@ chunk-1n1kvmcz.js:2144-3163 placement
+//@ chunk-n7hfhatx.js:2146-3165 placement
 function applyFastModeToWorkspace(
   fastSession,
   state,
@@ -338,7 +322,7 @@ function applyFastModeToWorkspace(
   runSwitch();
   return Promise.resolve(undefined);
 }
-//@ chunk-1n1kvmcz.js:3163-3567 placement
+//@ chunk-n7hfhatx.js:3165-3569 placement
 function opus48FastModeDeprecationNotice(model) {
   if (!isOpus48Model(model)) return null;
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
@@ -362,7 +346,7 @@ function opus48FastModeDeprecationNotice(model) {
     color: "warning",
   };
 }
-//@ chunk-1n1kvmcz.js:3567-4963 placement
+//@ chunk-n7hfhatx.js:3569-4965 placement
 async function toggleFastMode(
   session,
   fastSession,
@@ -465,42 +449,52 @@ ${outcome.hookMessages.map(sanitizeHookText).join(`
     return `${fastIconString} ${FAST_MODE_ON_TEXT}${promoteText} \xB7 ${pricing}${sessionSuffix}${content}`;
   } else return `Fast mode OFF${persist ? "" : " (this session only)"}`;
 }
-//@ chunk-ag5x7vhf.js:112894-112980 fingerprint (2.1.88 match: _temp, 0.398)
-function unknownModelWindowModel(s) {
-  return s.setupIssues.unknownModelWindowWarning ? s.mainLoopModel : null;
+//@ chunk-0yw3taqg.js:455263-455323 fingerprint (2.1.88 match: _temp3, 0.715)
+function shouldNudgeFastModeChange(prev) {
+  return (
+    isFastModeEnabled() &&
+    fastModeSettingDiverges({
+      settings: getInitialSettings(),
+      fastMode: prev,
+    })
+  );
 }
-//@ chunk-18hwfzwa.js:514768-514804 callgraph-fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-5j7d17eb.js:15694-15759 fingerprint (2.1.88 match: _temp, 0.664)
+function keepModelForEffort(context, model) {
+  return model === context.getAppState().mainLoopModel ? model : getPickedEffortModel(context);
+}
+//@ chunk-czq1j3j2.js:541246-541282 callgraph-fingerprint (2.1.88 match: _temp2, 1)
 function selectFastMode(s_0) {
   return s_0.fastMode;
 }
-//@ chunk-18hwfzwa.js:514804-514851 layout
+//@ chunk-czq1j3j2.js:541282-541329 layout
 function fastToggleNotAppliedIfUnset(result) {
   return result === undefined ? undefined : FAST_TOGGLE_NOT_APPLIED;
 }
-//@ chunk-18hwfzwa.js:514851-514894 layout
+//@ chunk-czq1j3j2.js:541329-541372 layout
 function dropNotAppliedResult(result) {
   return result === FAST_TOGGLE_NOT_APPLIED ? undefined : result;
 }
-//@ chunk-18hwfzwa.js:514894-514937 layout
+//@ chunk-czq1j3j2.js:541372-541415 layout
 function withFastModeOff(prev) {
   return {
     ...prev,
     fastMode: false,
   };
 }
-//@ chunk-18hwfzwa.js:514937-514970 layout
+//@ chunk-czq1j3j2.js:541415-541448 layout
 function logErrorOnly(error) {
   return logError(toError(error));
 }
-//@ chunk-18hwfzwa.js:514970-514997 layout
+//@ chunk-czq1j3j2.js:541448-541475 layout
 function negate_3(value) {
   return !value;
 }
-//@ chunk-18hwfzwa.js:514997-515039 layout
+//@ chunk-czq1j3j2.js:541475-541517 layout
 function newAbortController() {
   return new AbortController();
 }
-//@ chunk-18hwfzwa.js:515039-519401 facade-exports (2.1.88 match: FastModePicker, 0.729)
+//@ chunk-czq1j3j2.js:541517-545880 facade-exports (2.1.88 match: FastModePicker, 0.73)
 function FastModePicker(props) {
   let $ = useMemoCache(23);
   let { onDone, unavailableReason, storageV5 } = props;
@@ -873,7 +867,7 @@ ${hookMessages.map(sanitizeHookText).join(`
     children: [footerRow, lastRow],
   });
 }
-//@ chunk-18hwfzwa.js:519401-520970 layout
+//@ chunk-czq1j3j2.js:545880-547449 layout
 /**
  * /fast 切换中的进度界面：可取消阶段显示“Turning fast mode on/off…”，应用阶段显示等待工作区。
  */
@@ -1032,7 +1026,7 @@ function FastModeToggleProgress(props) {
     }
   }
 }
-//@ chunk-18hwfzwa.js:520970-521487 facade-exports (2.1.88 match: call, 0.791)
+//@ chunk-czq1j3j2.js:547449-547966 facade-exports (2.1.88 match: call, 0.791)
 async function call_3(onDone, context, args) {
   if (!isFastModeEnabled()) {
     onDone(getFastModeUnavailableMessage() ?? "Fast mode is not available");
@@ -1065,13 +1059,13 @@ async function call_3(onDone, context, args) {
   });
 }
 export {
+  shouldNudgeFastModeChange,
+  keepModelForEffort,
+  applyFastMode,
+  handleFastModeShortcut,
   formatFastModeSuffix,
   FastModePicker,
-  handleFastModeShortcut,
-  refreshFastModeFromSettings,
-  unknownModelWindowModel,
-  applyFastMode,
-  getFastModeSwitchModel,
   toggleFastMode,
+  getFastModeSwitchModel,
   call_3,
 };

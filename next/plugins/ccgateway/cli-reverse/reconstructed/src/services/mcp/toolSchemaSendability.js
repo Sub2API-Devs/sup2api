@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增。判断 MCP 工具 schema 能否发给 API（不支持则丢弃或规范化）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-rm24v4ew.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-d8kc7cr1.js (1)
  * attribution: placement 1
  */
 import { flattenInputSchema } from "../../remote/tools/inputSchemaFlatten.js";
 import { validateToolSchema } from "./toolSchemaValidation.js";
 
-//@ chunk-rm24v4ew.js:265-918 placement
+//@ chunk-d8kc7cr1.js:265-918 placement
 /**
  * 判断 MCP 工具 schema 能否发给 API（不支持则丢弃或规范化）。
  */

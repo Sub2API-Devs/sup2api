@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。带嵌套与属性预算的 HTML 扫描，用于检查 artifact 页面中的运行时块。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ktx79ksk.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nzh56fv5.js (4)
  * attribution: placement 4
  */
 import {
@@ -29,14 +29,14 @@ import {
 } from "../../../vendor/@mixmark-io/domino/lib/HTMLParser.js";
 import { Tokenizer } from "../../../vendor/parse5/dist/tokenizer/index.js";
 
-//@ chunk-ktx79ksk.js:2221-2282 placement
+//@ chunk-nzh56fv5.js:2221-2282 placement
 function nestingBudgetExceeded(budget) {
   return scanHtmlWithBudget(budget, {
     depth: MAX_TREE_DEPTH,
     totalOpens: MAX_TOTAL_OPENS,
   }).exceeded;
 }
-//@ chunk-ktx79ksk.js:2282-2416 placement
+//@ chunk-nzh56fv5.js:2282-2416 placement
 function budgetedTokenizer(budget, tokenizer) {
   let tokenCount = 0;
   let exhausted = false;
@@ -54,7 +54,7 @@ function budgetedTokenizer(budget, tokenizer) {
     overBudget: () => exhausted,
   };
 }
-//@ chunk-ktx79ksk.js:2416-6062 placement
+//@ chunk-nzh56fv5.js:2416-6062 placement
 /**
  * 在嵌套与属性预算内扫描 HTML
  */
@@ -345,7 +345,7 @@ function scanHtmlWithBudget(html, budget) {
     failClosed,
   };
 }
-//@ chunk-ktx79ksk.js:6062-6283 placement
+//@ chunk-nzh56fv5.js:6062-6283 placement
 /**
  * 计入属性预算的 HTML 分词器
  */

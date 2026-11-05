@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Memory 工具结果的渲染（按 memory_read/write 等分支，行式输出与错误回退）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-x5e9ztk0.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5zfjp4bd.js (8)
  * attribution: placement 8
  */
 import { truncateToLength } from "../../utils/stringUtils.js";
@@ -22,14 +22,14 @@ import { FallbackToolUseErrorMessage } from "../../components/FallbackToolUseErr
 import { replaceControlChars } from "../../utils/resultError.js";
 import { MAX_LINES_THRESHOLD } from "../../utils/messages/textLineCount.js";
 
-//@ chunk-x5e9ztk0.js:6572-6606 placement
+//@ chunk-5zfjp4bd.js:6852-6886 placement
 /**
  * 把空串替换成空格，避免渲染时塌陷。
  */
 function blankIfEmpty(text) {
   return text === "" ? " " : text;
 }
-//@ chunk-x5e9ztk0.js:6606-6664 placement
+//@ chunk-5zfjp4bd.js:6886-6944 placement
 /**
  * 记忆结果预览最多显示的行数（10）。
  */
@@ -37,7 +37,7 @@ var MEMORY_PREVIEW_MAX_LINES = 10;
 var MEMORY_PREVIEW_MAX_LINE_CHARS = 200;
 var TOOL_USE_ERROR_OPEN_TAG = "<tool_use_error>";
 var TOOL_USE_ERROR_CLOSE_TAG = "</tool_use_error>";
-//@ chunk-x5e9ztk0.js:6664-6746 placement
+//@ chunk-5zfjp4bd.js:6944-7026 placement
 /**
  * 去掉结果文本外层的 <tool_use_error> 标签。
  */
@@ -46,13 +46,13 @@ function unwrapToolUseError(result) {
     ? result.slice(TOOL_USE_ERROR_OPEN_TAG.length, -TOOL_USE_ERROR_CLOSE_TAG.length)
     : result;
 }
-//@ chunk-x5e9ztk0.js:6746-6799 placement
+//@ chunk-5zfjp4bd.js:7026-7078 placement
 function _(line) {
   return line.length > MEMORY_PREVIEW_MAX_LINE_CHARS
     ? `${truncateToLength(line, MEMORY_PREVIEW_MAX_LINE_CHARS)}\u2026`
     : line;
 }
-//@ chunk-x5e9ztk0.js:6799-7342 placement
+//@ chunk-5zfjp4bd.js:7078-7622 placement
 /**
  * 渲染多行文本（非 verbose 时截到 maxLines 并处理每行），超出部分显示"… +N more lines"；实际用于 Memory 工具读取结果。
  */
@@ -107,7 +107,7 @@ function QuotedLines(props) {
   } else content = $[11];
   return content;
 }
-//@ chunk-x5e9ztk0.js:7342-7479 placement
+//@ chunk-5zfjp4bd.js:7622-7759 placement
 function isLongMemoryRead(result) {
   if (result?.outcome !== "ok" || typeof result.content !== "string") return false;
   let lines = quoteLines(result.content);
@@ -116,7 +116,7 @@ function isLongMemoryRead(result) {
     lines.some((line) => line.length > MEMORY_PREVIEW_MAX_LINE_CHARS)
   );
 }
-//@ chunk-x5e9ztk0.js:7479-7680 placement
+//@ chunk-5zfjp4bd.js:7759-7960 placement
 function renderMemoryReadResult(result, progressMessages, { verbose }) {
   if (result.outcome !== "ok") return null;
   return jsxProd_default(MessageResponse, {
@@ -135,7 +135,7 @@ function renderMemoryReadResult(result, progressMessages, { verbose }) {
     }),
   });
 }
-//@ chunk-x5e9ztk0.js:7680-8000 placement (2.1.88 match: renderToolUseErrorMessage, 0.343)
+//@ chunk-5zfjp4bd.js:7960-8280 placement (2.1.88 match: renderToolUseErrorMessage, 0.343)
 function renderToolUseErrorMessage(result, { verbose }) {
   if (typeof result !== "string")
     return jsxProd_default(FallbackToolUseErrorMessage, {

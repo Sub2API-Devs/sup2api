@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。主动性（proactivity）设置菜单。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (10)
  * attribution: placement 10
  */
 import { init_react_production, memo, useEffect, useState } from "../../vendor/react/cjs/react.production.js";
@@ -27,25 +27,35 @@ import { usePreDispatchKeyHandler } from "../keybindings/useActionHandlers.js";
 import { useTimeout } from "../ink/hooks/useTerminalHooks.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:678371-678375 placement
+//@ chunk-czq1j3j2.js:675319-675323 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:678371", () => {
+deferInit("chunk-czq1j3j2.js:675319", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:678375-678379 placement
+//@ chunk-czq1j3j2.js:687549-687553 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:678375", () => {
+deferInit("chunk-czq1j3j2.js:687549", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:678379-678423 placement
+//@ chunk-czq1j3j2.js:687553-687557 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:687553", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:696809-696813 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:696809", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:699109-699153 placement
 function isViewingTeammate(state) {
   return isAgentSwarmsEnabled() && getViewedTeammateTask_2_2(state) !== undefined;
 }
-//@ chunk-18hwfzwa.js:678969-679013 placement
+//@ chunk-czq1j3j2.js:699699-699743 placement
 function selectProactivityLevel2(state) {
   return state.proactivityLevel;
 }
-//@ chunk-18hwfzwa.js:679013-679076 placement
+//@ chunk-czq1j3j2.js:699743-699806 placement
 function nextProactivityStepState(level, toolPermissionContext) {
   return {
     level,
@@ -53,11 +63,11 @@ function nextProactivityStepState(level, toolPermissionContext) {
     mode: null,
   };
 }
-//@ chunk-18hwfzwa.js:679076-681799 placement
+//@ chunk-czq1j3j2.js:699806-702529 placement
 var ProactivityMenu; // deferred: uses useRegisterOverlay (../context/overlayContext.js) of its import cycle while loading; runs once the cycle is complete
 var IGNORED_KEY_NAMES;
 var ALLOWED_CONTROL_CHARS;
-deferInit("chunk-18hwfzwa.js:679076", () => {
+deferInit("chunk-czq1j3j2.js:699806", () => {
   ProactivityMenu = memo(function (props) {
     let $ = useMemoCache(45);
     let { toolPermissionContext, vimCommandMode, onChange, onConfirm, onTypeThrough, onCancel } = props;
@@ -272,7 +282,7 @@ deferInit("chunk-18hwfzwa.js:679076", () => {
     "\t",
   ]);
 });
-//@ chunk-18hwfzwa.js:681799-682022 placement
+//@ chunk-czq1j3j2.js:702529-702752 placement
 function getPrintableKeyInput(input, key, pastedText) {
   if (IGNORED_KEY_NAMES.some((keyName) => key[keyName])) return null;
   let text = input !== "" ? input : pastedText;
@@ -283,12 +293,7 @@ function getPrintableKeyInput(input, key, pastedText) {
   }
   return text;
 }
-//@ chunk-18hwfzwa.js:682022-682026 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:682022", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:682026-682168 placement
+//@ chunk-czq1j3j2.js:702756-702898 placement
 /**
  * 跟踪主动性等级是否被单步调整过，并给出一个随等级变化重置的折叠计时状态。
  */
@@ -303,9 +308,4 @@ function useProactivityStepState() {
     collapsed,
   };
 }
-//@ chunk-18hwfzwa.js:682168-682172 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:682168", () => {
-  init_react_production();
-});
 export { useProactivityStepState, isViewingTeammate };

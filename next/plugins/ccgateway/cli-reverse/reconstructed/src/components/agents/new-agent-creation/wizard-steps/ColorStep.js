@@ -3,10 +3,10 @@
  *
  * 向导步骤：选择颜色（实际内容为通用选择步骤）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/agents/new-agent-creation/wizard-steps/ColorStep.tsx
- * pieces: chunk-9h8dr0qb.js (4)
- * attribution: placement 3, callgraph-fingerprint 1
+ * pieces: chunk-j6tt9nsa.js (4)
+ * attribution: placement 3, callgraph-witnessed 1
  */
 import { init_react_production } from "../../../../../vendor/react/cjs/react.production.js";
 import { notificationChannelLabel } from "../../../../commands/config/configSettings.js";
@@ -29,18 +29,18 @@ import { beginDeferredInits } from "../../../../../runtime/deferred-init.js";
 // This module is the first evaluated of an import cycle of 2 modules closed by ../../../Settings/Config.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("src/components/Settings/Config.js");
-//@ chunk-9h8dr0qb.js:11300-11304 placement
+//@ chunk-j6tt9nsa.js:11278-11282 placement
 init_react_production();
-//@ chunk-9h8dr0qb.js:11304-11348 placement
+//@ chunk-j6tt9nsa.js:11282-11326 placement
 function notificationChannelOption(channel) {
   return {
     value: channel,
     label: notificationChannelLabel(channel),
   };
 }
-//@ chunk-9h8dr0qb.js:11348-11363 placement
+//@ chunk-j6tt9nsa.js:11326-11341 placement
 function noop_4() {}
-//@ chunk-9h8dr0qb.js:11363-12815 callgraph-fingerprint (2.1.88 match: ColorStep, 0.188)
+//@ chunk-j6tt9nsa.js:11341-12786 callgraph-witnessed (2.1.88 match: ColorStep, 0.188)
 function ColorStep(props) {
   let $ = useMemoCache(26);
   let {

@@ -1,8 +1,8 @@
 /**
  * @smithy/core/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/core@3.30.0
- * pieces: chunk-83tv5s1x.js (1)
+ * pieces: chunk-vhcq2g1g.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -13,7 +13,7 @@ import { require_protocol_http } from "../../protocol-http/dist-cjs/index.js";
 import { require_protocols } from "./submodules/protocols/index.js";
 import { runDeferredInits } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-83tv5s1x.js:2070-7981 cjs-fingerprint
+//@ chunk-vhcq2g1g.js:2070-7981 cjs-fingerprint
 var require_core = __commonJS(function (cjsExports) {
   var HttpApiKeyAuthLocation = require_types();
   var getSmithyContext = require_util_middleware();

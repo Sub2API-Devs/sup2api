@@ -3,9 +3,9 @@
  *
  * 主题 Provider：themeSetting（含 auto 跟随系统）、预览主题、自定义/插件主题与覆盖色，提供 useTheme/useThemeSetting/usePreviewTheme。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/design-system/ThemeProvider.tsx
- * pieces: chunk-v9w831vx.js (16)
+ * pieces: chunk-t1ad9vmv.js (16)
  * attribution: placement 15, fingerprint 1
  */
 import {
@@ -32,32 +32,32 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { getSystemThemeName, onSystemThemeChange } from "../../utils/systemTheme.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-v9w831vx.js:557-561 placement
+//@ chunk-t1ad9vmv.js:557-561 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-v9w831vx.js:557", () => {
+deferInit("chunk-t1ad9vmv.js:557", () => {
   init_react_production();
 });
-//@ chunk-v9w831vx.js:561-565 placement
+//@ chunk-t1ad9vmv.js:561-565 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-v9w831vx.js:561", () => {
+deferInit("chunk-t1ad9vmv.js:561", () => {
   init_react_production();
 });
-//@ chunk-v9w831vx.js:565-590 placement
+//@ chunk-t1ad9vmv.js:565-590 placement
 var useStdin_2 = () => useContext(StdinContextAlias);
 var useStdin = useStdin_2;
-//@ chunk-v9w831vx.js:590-594 placement
+//@ chunk-t1ad9vmv.js:590-594 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-v9w831vx.js:590", () => {
+deferInit("chunk-t1ad9vmv.js:590", () => {
   init_react_production();
 });
-//@ chunk-v9w831vx.js:594-626 placement
+//@ chunk-t1ad9vmv.js:594-626 placement
 var EMPTY_THEME; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var THEME_CONTEXT;
-deferInit("chunk-v9w831vx.js:594", () => {
+deferInit("chunk-t1ad9vmv.js:594", () => {
   EMPTY_THEME = Object.freeze({});
   THEME_CONTEXT = createContext(EMPTY_THEME);
 });
-//@ chunk-v9w831vx.js:626-917 placement
+//@ chunk-t1ad9vmv.js:626-917 placement
 function StorageCredentialsProvider(props) {
   let $ = useMemoCache(6);
   let { storageV5, credentials, children } = props;
@@ -87,17 +87,17 @@ function StorageCredentialsProvider(props) {
   } else provider = $[5];
   return provider;
 }
-//@ chunk-v9w831vx.js:917-944 placement
+//@ chunk-t1ad9vmv.js:917-944 placement
 /**
  * 读主题 context 的 hook（useTheme），全站 160 多处使用。
  */
 function useTheme_2() {
   return useContext(THEME_CONTEXT);
 }
-//@ chunk-v9w831vx.js:944-1219 fingerprint (2.1.88 match: ThemeContext, 0.572)
+//@ chunk-t1ad9vmv.js:944-1194 fingerprint (2.1.88 match: ThemeContext, 0.608)
 var DARK; // deferred: uses getTheme (../../utils/theme.js) of its import cycle while loading; runs once the cycle is complete
 var ThemeContext;
-deferInit("chunk-v9w831vx.js:944", () => {
+deferInit("chunk-t1ad9vmv.js:944", () => {
   DARK = "dark";
   ThemeContext = createContext({
     themeSetting: DARK,
@@ -108,21 +108,20 @@ deferInit("chunk-v9w831vx.js:944", () => {
     resolvedTheme: getTheme(DARK),
     activeThemeOverrides: undefined,
     customThemes: [],
-    activeCustomTheme: undefined,
     reloadCustomThemes: () => Promise.resolve(),
     setPreviewOverrides: () => {},
   });
 });
-//@ chunk-v9w831vx.js:1219-1266 placement
+//@ chunk-t1ad9vmv.js:1194-1241 placement
 function getConfiguredTheme() {
   return resolveSetting("theme", "dark").value;
 }
-//@ chunk-v9w831vx.js:1266-3554 placement (2.1.88 match: ThemeProvider, 0.633)
+//@ chunk-t1ad9vmv.js:1241-3490 placement (2.1.88 match: ThemeProvider, 0.652)
 /**
  * 主题 Provider：从全局配置读 theme（默认 dark），auto 时跟随系统明暗；支持临时预览（setPreviewTheme/cancelPreview）、自定义主题（用户 + 插件）与覆盖色；保存时写入 theme 设置。
  */
 function ThemeProvider(props) {
-  let $ = useMemoCache(46);
+  let $ = useMemoCache(45);
   let { children, initialState, onThemeSave } = props;
   let { storageV5 } = useTheme_2();
   let saveThemeSetting;
@@ -260,11 +259,11 @@ function ThemeProvider(props) {
       : customSlug
         ? "dark"
         : effectiveSetting;
-  let activeThemeOverrides = previewOverrides ?? activeCustomTheme?.overrides;
+  let overrides = previewOverrides ?? activeCustomTheme?.overrides;
   let resolvedThemeCached;
-  if ($[27] !== activeThemeOverrides || $[28] !== currentTheme) {
-    resolvedThemeCached = mergeThemeOverrides(getTheme(currentTheme), activeThemeOverrides);
-    $[27] = activeThemeOverrides;
+  if ($[27] !== overrides || $[28] !== currentTheme) {
+    resolvedThemeCached = mergeThemeOverrides(getTheme(currentTheme), overrides);
+    $[27] = overrides;
     $[28] = currentTheme;
     $[29] = resolvedThemeCached;
   } else resolvedThemeCached = $[29];
@@ -296,14 +295,13 @@ function ThemeProvider(props) {
   } else setPreviewTheme = $[33];
   let contextValueCached;
   if (
-    $[34] !== activeCustomTheme ||
-    $[35] !== activeThemeOverrides ||
-    $[36] !== currentTheme ||
-    $[37] !== customThemes ||
-    $[38] !== reloadCustomThemes ||
-    $[39] !== resolvedTheme ||
-    $[40] !== setThemeSetting ||
-    $[41] !== themeSetting
+    $[34] !== overrides ||
+    $[35] !== currentTheme ||
+    $[36] !== customThemes ||
+    $[37] !== reloadCustomThemes ||
+    $[38] !== resolvedTheme ||
+    $[39] !== setThemeSetting ||
+    $[40] !== themeSetting
   ) {
     contextValueCached = {
       themeSetting,
@@ -312,36 +310,34 @@ function ThemeProvider(props) {
       cancelPreview: cancelPreview_2,
       currentTheme,
       resolvedTheme,
-      activeThemeOverrides,
+      activeThemeOverrides: overrides,
       customThemes,
-      activeCustomTheme,
       reloadCustomThemes,
       setPreviewOverrides,
     };
-    $[34] = activeCustomTheme;
-    $[35] = activeThemeOverrides;
-    $[36] = currentTheme;
-    $[37] = customThemes;
-    $[38] = reloadCustomThemes;
-    $[39] = resolvedTheme;
-    $[40] = setThemeSetting;
-    $[41] = themeSetting;
-    $[42] = contextValueCached;
-  } else contextValueCached = $[42];
+    $[34] = overrides;
+    $[35] = currentTheme;
+    $[36] = customThemes;
+    $[37] = reloadCustomThemes;
+    $[38] = resolvedTheme;
+    $[39] = setThemeSetting;
+    $[40] = themeSetting;
+    $[41] = contextValueCached;
+  } else contextValueCached = $[41];
   let value = contextValueCached;
   let providerElement;
-  if ($[43] !== children || $[44] !== value) {
+  if ($[42] !== children || $[43] !== value) {
     providerElement = jsxProd_default(ThemeContext.Provider, {
       value,
       children,
     });
-    $[43] = children;
-    $[44] = value;
-    $[45] = providerElement;
-  } else providerElement = $[45];
+    $[42] = children;
+    $[43] = value;
+    $[44] = providerElement;
+  } else providerElement = $[44];
   return providerElement;
 }
-//@ chunk-v9w831vx.js:3554-3694 placement (2.1.88 match: useTheme, 1)
+//@ chunk-t1ad9vmv.js:3490-3630 placement (2.1.88 match: useTheme, 1)
 /**
  * 返回 [currentTheme, setThemeSetting]（被 44 处使用）。
  */
@@ -357,11 +353,11 @@ function useTheme() {
   } else t0 = $[2];
   return t0;
 }
-//@ chunk-v9w831vx.js:3694-3735 placement (2.1.88 match: useThemeSetting, 1)
+//@ chunk-t1ad9vmv.js:3630-3671 placement (2.1.88 match: useThemeSetting, 1)
 function useThemeSetting() {
   return useContext(ThemeContext).themeSetting;
 }
-//@ chunk-v9w831vx.js:3735-3907 placement (2.1.88 match: usePreviewTheme, 1)
+//@ chunk-t1ad9vmv.js:3671-3843 placement (2.1.88 match: usePreviewTheme, 1)
 function usePreviewTheme() {
   let $ = useMemoCache(3);
   let { setPreviewTheme, cancelPreview } = useContext(ThemeContext);
@@ -377,49 +373,42 @@ function usePreviewTheme() {
   } else t0 = $[2];
   return t0;
 }
-//@ chunk-v9w831vx.js:3907-3948 placement
+//@ chunk-t1ad9vmv.js:3843-3884 placement
 function useResolvedTheme() {
   return useContext(ThemeContext).resolvedTheme;
 }
-//@ chunk-v9w831vx.js:3948-3997 placement
+//@ chunk-t1ad9vmv.js:3884-3933 placement
 function useActiveThemeOverrides() {
   return useContext(ThemeContext).activeThemeOverrides;
 }
-//@ chunk-v9w831vx.js:3997-4291 placement
+//@ chunk-t1ad9vmv.js:3933-4170 placement
 function useCustomThemes() {
-  let $ = useMemoCache(5);
-  let { customThemes, activeCustomTheme, reloadCustomThemes, setPreviewOverrides } = useContext(ThemeContext);
+  let $ = useMemoCache(4);
+  let { customThemes, reloadCustomThemes, setPreviewOverrides } = useContext(ThemeContext);
   let to;
-  if (
-    $[0] !== activeCustomTheme ||
-    $[1] !== customThemes ||
-    $[2] !== reloadCustomThemes ||
-    $[3] !== setPreviewOverrides
-  ) {
+  if ($[0] !== customThemes || $[1] !== reloadCustomThemes || $[2] !== setPreviewOverrides) {
     to = {
       customThemes,
-      activeCustomTheme,
       reloadCustomThemes,
       setPreviewOverrides,
     };
-    $[0] = activeCustomTheme;
-    $[1] = customThemes;
-    $[2] = reloadCustomThemes;
-    $[3] = setPreviewOverrides;
-    $[4] = to;
-  } else to = $[4];
+    $[0] = customThemes;
+    $[1] = reloadCustomThemes;
+    $[2] = setPreviewOverrides;
+    $[3] = to;
+  } else to = $[3];
   return to;
 }
 export {
   useTheme_2,
-  useTheme,
-  useActiveThemeOverrides,
   useStdin,
   useResolvedTheme,
-  useThemeSetting,
-  useCustomThemes,
-  usePreviewTheme,
-  getConfiguredTheme,
   ThemeProvider,
   StorageCredentialsProvider,
+  useTheme,
+  useActiveThemeOverrides,
+  useThemeSetting,
+  usePreviewTheme,
+  useCustomThemes,
+  getConfiguredTheme,
 };

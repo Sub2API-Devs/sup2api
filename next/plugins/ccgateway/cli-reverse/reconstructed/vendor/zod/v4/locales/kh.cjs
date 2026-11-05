@@ -1,15 +1,15 @@
 /**
  * zod/v4/locales/kh.cjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: zod@4.6.2
- * pieces: chunk-1ny7cxrt.js (2)
+ * pieces: chunk-1hnjmk23.js (2)
  * attribution: cjs-fingerprint 2
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_km } from "./km.cjs";
 import { require_uk } from "./uk.cjs";
 
-//@ chunk-1ny7cxrt.js:345460-345707 cjs-fingerprint
+//@ chunk-1hnjmk23.js:345829-346076 cjs-fingerprint
 var require_kh = __commonJS(function (cjsExports, cjsModule) {
   var __importDefault =
     (cjsExports && cjsExports.__importDefault) ||
@@ -30,7 +30,7 @@ var require_kh = __commonJS(function (cjsExports, cjsModule) {
   }
   cjsModule.exports = cjsExports.default;
 });
-//@ chunk-1ny7cxrt.js:473491-473738 cjs-fingerprint
+//@ chunk-1hnjmk23.js:473860-474107 cjs-fingerprint
 var require_kh_2 = __commonJS(function (cjsExports, cjsModule) {
   var __importDefault =
     (cjsExports && cjsExports.__importDefault) ||

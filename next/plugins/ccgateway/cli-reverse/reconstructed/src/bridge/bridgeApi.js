@@ -3,9 +3,9 @@
  *
  * Environments API 客户端（注册/轮询/ack/stop/heartbeat/注销/重连/归档、sessions watch）与 HTTP 错误分类；混入了大量各 chunk 的内容块/消息小助手
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/bridgeApi.ts
- * pieces: chunk-b30925fy.js (5)
+ * pieces: chunk-v3wm90pf.js (5)
  * attribution: fingerprint 4, layout 1
  */
 import { readUntrustedDeviceRefusal, shouldRemoteControlEnroll } from "./codeSessionApi.js";
@@ -30,7 +30,7 @@ import { getAPIProvider } from "../utils/model/providers.js";
 import { isEssentialTrafficOnly } from "../utils/privacyLevel.js";
 import { isPolicyAllowed } from "../services/policyLimits/policyVerdicts.js";
 
-//@ chunk-b30925fy.js:925-1092 fingerprint (2.1.88 match: BridgeFatalError, 0.843)
+//@ chunk-v3wm90pf.js:925-1092 fingerprint (2.1.88 match: BridgeFatalError, 0.843)
 /**
  * Remote Control 致命错误：带 HTTP 状态、服务端 error.type、是否可静默（suppressible）。
  */
@@ -46,7 +46,7 @@ class BridgeFatalError extends Error {
     this.suppressible = suppressible;
   }
 }
-//@ chunk-b30925fy.js:1092-1535 layout
+//@ chunk-v3wm90pf.js:1092-1535 layout
 /**
  * 403 untrusted_device 时注册本机为可信设备并重试一次；仍被拒则抛带提示的 BridgeFatalError。
  */
@@ -83,7 +83,7 @@ async function recoverUntrustedDevice(
     "untrusted_device",
   );
 }
-//@ chunk-b30925fy.js:1535-9755 fingerprint (2.1.88 match: createBridgeApiClient, 0.727)
+//@ chunk-v3wm90pf.js:1535-9755 fingerprint (2.1.88 match: createBridgeApiClient, 0.728)
 /**
  * 创建 Environments API 客户端：统一头（OAuth Bearer、anthropic-version、beta、x-environment-runner-version、X-Trusted-Device-Token），401 时刷新 token 重试，403 untrusted_device 注册设备重试；
  * 方法：registerBridgeEnvironment、pollForWork、acknowledgeWork、stopWork、deregisterEnvironment、markEnvironmentOffline、archiveSession、reconnectSession、heartbeatWork、refuseToolHost，以及 sessionsWatch（mintResumeToken、open SSE）。
@@ -538,7 +538,7 @@ function createBridgeApiClient(deps) {
   };
   return client;
 }
-//@ chunk-b30925fy.js:9755-10647 fingerprint (2.1.88 match: handleErrorStatus, 0.798)
+//@ chunk-v3wm90pf.js:9755-10647 fingerprint (2.1.88 match: handleErrorStatus, 0.798)
 /**
  * 非 200/204 状态转错误：401 认证失败、403（过期类型→会话过期；external_poll_sessions 可静默）、404 不可用、410 过期、429 带 retryAfterMs，其余带状态码。
  */
@@ -596,7 +596,7 @@ function handleErrorStatus(status, data, context, headers) {
       });
   }
 }
-//@ chunk-b30925fy.js:10647-10731 fingerprint (2.1.88 match: isExpiredErrorType, 1)
+//@ chunk-v3wm90pf.js:10647-10731 fingerprint (2.1.88 match: isExpiredErrorType, 1)
 /**
  * 错误类型是否表示会话过期（含 expired 或 lifetime）。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：恢复会话时处理上个进程遗留的后台任务（代理、shell、workflow）：重启、补发完成通知或标记孤儿
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sfjpx19.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nh1pvp1m.js (22)
  * attribution: placement 22
  */
 import { lstat, stat } from "fs/promises";
@@ -37,6 +37,7 @@ import {
   nonWebFetchOutputFile,
   RELAUNCH_ADVICE,
 } from "../utils/cronResume.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
 import { syncLiveInFlightSnapshot } from "../services/daemon/jobState.js";
 import { summarizeBackgroundWork } from "./backgroundTaskLabels.js";
 import { TASK_ID, TASK_NOTIFICATION, STATUS, NOTE, SUMMARY } from "../constants/xml.js";
@@ -73,12 +74,12 @@ import {
 } from "../utils/sessionStorage.js";
 import { logFeatureSad } from "../services/analytics/featureTelemetry.js";
 import { logForDebugging } from "../utils/debug.js";
-import { enqueueOrphanedTasksNotification } from "./RemoteAgentTask/RemoteAgentTask.js";
+import { enqueueOrphanedTasksNotification } from "../utils/task/framework.js";
 import { makeSidecarReadFallback } from "../utils/agentMetadata.js";
 import { WORKFLOW_RUN_ID_PATTERN } from "../tools/WorkflowTool/constants.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-0sfjpx19.js:51318-51404 placement
+//@ chunk-nh1pvp1m.js:13472-13558 placement
 /**
  * 判断排队命令里是否有提到该字符串的。
  */
@@ -87,7 +88,7 @@ function hasQueuedCommandMentioning(commandText) {
     (queuedCommand) => typeof queuedCommand.value === "string" && queuedCommand.value.includes(commandText),
   );
 }
-//@ chunk-0sfjpx19.js:51404-52114 placement
+//@ chunk-nh1pvp1m.js:13558-14762 placement
 async function formatOrphanSummary(
   messages,
   taskRegistry,
@@ -125,29 +126,76 @@ async function formatOrphanSummary(
   if (excludedRowUuids !== undefined)
     candidateMessages = candidateMessages.filter((message) => !excludedRowUuids.has(message.uuid));
   try {
-    let plan = planResumeOfBackgroundTasks(candidateMessages, {
+    let resumedSession = planResumeOfBackgroundTasks(candidateMessages, {
       carriedCrons: true,
     });
-    logResurrectedCrons(plan);
+    logResurrectedCrons(resumedSession);
     if (autoResumeAgents !== undefined)
       try {
-        await handleMissedLoopWakeups(plan);
+        await handleMissedLoopWakeups(resumedSession);
       } catch (error) {
         logError(error);
       }
-    await resumeAsyncAgents(plan, taskRegistry, autoResumeAgents, reportedAgentIds, storageV5, getResumePlan);
-    resumeLocalShellTasks(plan, taskRegistry);
-    resumeLocalWorkflows(plan, taskRegistry, adoptedWorkflowIds);
+    await resumeAsyncAgents(
+      resumedSession,
+      taskRegistry,
+      autoResumeAgents,
+      reportedAgentIds,
+      storageV5,
+      getResumePlan,
+    );
+    if (codeModeAccepted())
+      try {
+        let task = new Set([...resumedSession.asyncAgents.keys(), ...resumedSession.notifiedTaskIds]);
+        let taskEntry = await require("./codeModeSendMessageNote.lazy.js").listScriptLaunchedAgents(
+          candidateMessages,
+          task,
+          storageV5,
+        );
+        let localTask = new Map();
+        for (let entry of taskEntry) {
+          if (localTask.size === MAX_LISTED_ORPHANS) break;
+          if (
+            !isOrphanSummaryKey(entry.agentId) &&
+            !reportedAgentIds?.has(entry.agentId) &&
+            !taskRegistry.get(entry.agentId)
+          )
+            localTask.set(entry.agentId, {
+              ...entry,
+              canReadOutputFile: false,
+              canContinueAgent: true,
+              launchedByAgentTool: false,
+              foundThroughSidecar: true,
+            });
+        }
+        if (localTask.size > 0)
+          await resumeAsyncAgents(
+            {
+              ...resumedSession,
+              asyncAgents: localTask,
+            },
+            taskRegistry,
+            undefined,
+            reportedAgentIds,
+            storageV5,
+            getResumePlan,
+          );
+      } catch (error) {
+        logError(error);
+      }
+    resumeLocalShellTasks(resumedSession, taskRegistry);
+    resumeLocalWorkflows(resumedSession, taskRegistry, adoptedWorkflowIds);
+    if (codeModeAccepted()) require("../utils/codeMode/lostEvals.js").reportLostReplEvals(candidateMessages);
     syncLiveInFlightSnapshot(summarizeBackgroundWork(taskRegistry.all()), storageV5);
   } catch (error) {
     logError(error);
   }
 }
-//@ chunk-0sfjpx19.js:52114-52301 placement
+//@ chunk-nh1pvp1m.js:14762-14949 placement
 /**
  * 孤儿汇总解析用的标签与键前缀常量（任务通知/状态标签、条数上限、转录新鲜期、汇总键前缀）。
  */
-var TASK_NOTIFICATION_KILLED_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TASK_NOTIFICATION_KILLED_PATTERN; // deferred: uses COMMAND_NAME (../constants/xml.js) of its import cycle while loading; runs once the cycle is complete
 var TASK_NOTIFICATION_OPEN_TAG;
 var STATUS_OPEN_TAG;
 var regExp;
@@ -156,7 +204,7 @@ var ORPHAN_TRANSCRIPT_MAX_AGE_MS;
 var ORPHAN_SUMMARY_KEY;
 var ORPHAN_SUMMARY_AGGREGATE_PREFIX;
 var ORPHAN_SUMMARY_LIVE_PREFIX;
-deferInit("chunk-0sfjpx19.js:52114", () => {
+deferInit("chunk-nh1pvp1m.js:14762", () => {
   TASK_NOTIFICATION_KILLED_PATTERN = new RegExp(`<${TASK_ID}>([^<]+)</${TASK_ID}>`, "g");
   TASK_NOTIFICATION_OPEN_TAG = `<${TASK_NOTIFICATION}>`;
   STATUS_OPEN_TAG = `<${STATUS}>`;
@@ -167,14 +215,14 @@ deferInit("chunk-0sfjpx19.js:52114", () => {
   ORPHAN_SUMMARY_AGGREGATE_PREFIX = `${ORPHAN_SUMMARY_KEY}__:`;
   ORPHAN_SUMMARY_LIVE_PREFIX = `${ORPHAN_SUMMARY_KEY}_live__:`;
 });
-//@ chunk-0sfjpx19.js:52301-52340 placement
+//@ chunk-nh1pvp1m.js:14949-14988 placement
 /**
  * 判断键是否属于孤儿汇总。
  */
 function isOrphanSummaryKey(key) {
   return key.startsWith(ORPHAN_SUMMARY_KEY);
 }
-//@ chunk-0sfjpx19.js:52340-52523 placement
+//@ chunk-nh1pvp1m.js:14988-15171 placement
 /**
  * 孤儿汇总与「被停止或暂停」的说明文案。
  */
@@ -182,19 +230,19 @@ var ORPHAN_SUMMARY_NOTE =
   "Orphaned by a previous Claude Code process exit and reported in an aggregate summary.";
 var STOPPED_OR_PAUSED_NOTE =
   "stopped or paused (for example via the UI \u2014 this leaves no transcript marker)";
-//@ chunk-0sfjpx19.js:52523-52599 placement
+//@ chunk-nh1pvp1m.js:15171-15247 placement
 /**
  * 拼出「在上一会话结束前未完成」的说明。
  */
 function unfinishedNote(taskLabel) {
   return `${taskLabel} didn't finish before the previous session ended`;
 }
-//@ chunk-0sfjpx19.js:52599-52627 placement
+//@ chunk-nh1pvp1m.js:15247-15275 placement
 var TASK_STOP_TOOL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0sfjpx19.js:52599", () => {
+deferInit("chunk-nh1pvp1m.js:15247", () => {
   TASK_STOP_TOOL_NAMES = new Set([TASKSTOP, ...TASK_STOP_ALIASES]);
 });
-//@ chunk-0sfjpx19.js:52627-59889 placement
+//@ chunk-nh1pvp1m.js:15275-22534 placement
 /**
  * 恢复时清点上个进程的后台任务与 cron，规划重启、补通知、标记孤儿（约 7 KB）。
  */
@@ -613,12 +661,12 @@ function planResumeOfBackgroundTasks(messages, { carriedCrons: options = false }
     stoppedAt,
   };
 }
-//@ chunk-0sfjpx19.js:59889-59984 placement
+//@ chunk-nh1pvp1m.js:22534-22629 placement
 function timestampMsOrInfinity(message) {
   let timestamp = Date.parse(message.timestamp);
   return Number.isNaN(timestamp) ? Number.POSITIVE_INFINITY : timestamp;
 }
-//@ chunk-0sfjpx19.js:59984-60368 placement
+//@ chunk-nh1pvp1m.js:22629-23013 placement
 function taskKindLabel(noticeText, taskIds) {
   let result = {
     summarizedKinds: new Set(),
@@ -642,7 +690,7 @@ function taskKindLabel(noticeText, taskIds) {
   }
   return result;
 }
-//@ chunk-0sfjpx19.js:60368-60486 placement
+//@ chunk-nh1pvp1m.js:23013-23131 placement
 function messageContentToText(content) {
   if (typeof content === "string") return content;
   return content.map((block) =>
@@ -650,7 +698,7 @@ function messageContentToText(content) {
   ).join(`
 `);
 }
-//@ chunk-0sfjpx19.js:60486-60785 placement
+//@ chunk-nh1pvp1m.js:23131-23430 placement
 async function getAgentTranscriptMtime(agentId, storageV5, useLstat) {
   let agentTranscriptPath = getAgentTranscriptPath(agentId);
   if (isStorageV5Enabled() && storageV5 !== undefined)
@@ -668,7 +716,7 @@ async function getAgentTranscriptMtime(agentId, storageV5, useLstat) {
   let fileStats = await stat(agentTranscriptPath);
   return fileStats.size > 0 ? fileStats.mtimeMs : null;
 }
-//@ chunk-0sfjpx19.js:60785-64727 placement
+//@ chunk-nh1pvp1m.js:23430-27404 placement
 /**
  * 恢复后台代理：无完成记录的标记为 orphaned_on_resume 或重启。
  */
@@ -721,7 +769,11 @@ async function resumeAsyncAgents(
         };
       let mtimeMs;
       try {
-        mtimeMs = await getAgentTranscriptMtime(agentId, storageV5, false);
+        mtimeMs = await getAgentTranscriptMtime(
+          agentId,
+          storageV5,
+          codeModeAccepted() && agent.foundThroughSidecar === true,
+        );
       } catch {
         mtimeMs = null;
       }
@@ -842,7 +894,7 @@ async function resumeAsyncAgents(
     handOffResumableAgents(resumableAgents);
   }
 }
-//@ chunk-0sfjpx19.js:64727-65076 placement
+//@ chunk-nh1pvp1m.js:27404-27753 placement
 function formatAgentRestartedNotice(agent) {
   enqueueTaskNotification(
     agent,
@@ -851,7 +903,7 @@ function formatAgentRestartedNotice(agent) {
     "It had no completion record after the previous Claude Code process exited, and was automatically restarted from its saved transcript. It is running in the background again; its result will arrive as a separate task notification.",
   );
 }
-//@ chunk-0sfjpx19.js:65076-65175 placement
+//@ chunk-nh1pvp1m.js:27753-27852 placement
 /**
  * 主线程无代理类型且非 simple 模式时的启动替身计划。
  */
@@ -863,7 +915,7 @@ function startupStandInPlan(tools) {
       }
     : undefined;
 }
-//@ chunk-0sfjpx19.js:65175-65391 placement
+//@ chunk-nh1pvp1m.js:27852-28068 placement
 function withResumeCapabilities(agent, resumePlan) {
   let canReadWithoutWebFetch = agent.canReadOutputFile && !agent.isWebFetchLaunch;
   let canReadOutputFile;
@@ -881,7 +933,7 @@ function withResumeCapabilities(agent, resumePlan) {
     canReadOutputFile,
   };
 }
-//@ chunk-0sfjpx19.js:65391-66568 placement
+//@ chunk-nh1pvp1m.js:28068-29245 placement
 function formatOrphanedAgentNotification(agent, taskRegistry, notificationSource) {
   let task = taskRegistry.get(agent.agentId);
   let treatAsWebFetch =
@@ -907,7 +959,7 @@ function formatOrphanedAgentNotification(agent, taskRegistry, notificationSource
     notificationSource,
   );
 }
-//@ chunk-0sfjpx19.js:66568-67210 placement
+//@ chunk-nh1pvp1m.js:29245-29887 placement
 function formatAgentRestartFailedNotice(agent, errorText, notificationSource) {
   enqueueTaskNotification(
     agent,
@@ -921,10 +973,12 @@ function formatAgentRestartFailedNotice(agent, errorText, notificationSource) {
     notificationSource,
   );
 }
-//@ chunk-0sfjpx19.js:67210-67494 placement
+//@ chunk-nh1pvp1m.js:29887-30241 placement
 function enqueueTaskNotification(agent, status, summary, note, notificationSource) {
   let outputFile = agent.canReadOutputFile ? nonWebFetchOutputFile(agent) : undefined;
-  let reserved = "";
+  let reserved = codeModeAccepted()
+    ? require("./codeModeSendMessageNote.lazy.js").codeModeSendMessageNote(note, false)
+    : "";
   enqueuePendingNotification({
     value: formatTaskNotification({
       taskId: escapeXml(agent.agentId),
@@ -932,7 +986,7 @@ function enqueueTaskNotification(agent, status, summary, note, notificationSourc
       status,
       summary,
       body: `
-<${NOTE}>${note}</${NOTE}>`,
+<${NOTE}>${note}${reserved}</${NOTE}>`,
     }),
     agentId: mainAgentId(),
     mode: "task-notification",
@@ -943,7 +997,7 @@ function enqueueTaskNotification(agent, status, summary, note, notificationSourc
     }),
   });
 }
-//@ chunk-0sfjpx19.js:67494-69465 placement
+//@ chunk-nh1pvp1m.js:30241-32282 placement
 function formatStoppedAgentsNotice(status, agents) {
   let joined = agents.map((agent) => `<${TASK_ID}>${escapeXml(agent.agentId)}</${TASK_ID}>`).join(`
 `);
@@ -969,13 +1023,15 @@ function formatStoppedAgentsNotice(status, agents) {
     status === "stopped"
       ? `No completion record was found for them in the previous session. They may have been stopped, or they may have been running when the previous Claude Code process exited${all_2 ? " \u2014 either way their transcripts are saved, so their progress is not lost" : ""}. ${all_2 ? (allWebFetch ? `Resume any of them by sending a message to its id with ${SENDMESSAGE} to get its report.` : all ? `Resume any of them by sending a message to its id with ${SENDMESSAGE} and ask for a status report before assuming the task landed.` : `Resume any of them by sending a message to its id with ${SENDMESSAGE}, or check its worktree/output for partial work before assuming the task landed.`) : advice}`
       : `They were running when the previous Claude Code process exited and did not complete. Their in-process state was lost. ${advice}`;
-  let reserved = "";
+  let reserved = codeModeAccepted()
+    ? require("./codeModeSendMessageNote.lazy.js").codeModeSendMessageNote(note, true)
+    : "";
   enqueuePendingNotification({
     value: `<${TASK_NOTIFICATION}>
 ${joined}
 <${STATUS}>${status}</${STATUS}>
 <${SUMMARY}>${unfinishedNote(`${agents.length} background agents`)}: ${joined_2}.${webFetchNote}</${SUMMARY}>
-<${NOTE}>${note}</${NOTE}>
+<${NOTE}>${note}${reserved}</${NOTE}>
 </${TASK_NOTIFICATION}>`,
     agentId: mainAgentId(),
     mode: "task-notification",
@@ -984,7 +1040,7 @@ ${joined}
     shouldQuery: false,
   });
 }
-//@ chunk-0sfjpx19.js:69465-70634 placement
+//@ chunk-nh1pvp1m.js:32282-33451 placement
 function resumeLocalShellTasks({ bgShells, notifiedTaskIds, stoppedTaskIds }, taskRegistry) {
   let taskIds = [];
   let extraIds = [];
@@ -1039,7 +1095,7 @@ function resumeLocalShellTasks({ bgShells, notifiedTaskIds, stoppedTaskIds }, ta
     });
   }
 }
-//@ chunk-0sfjpx19.js:70634-71972 placement
+//@ chunk-nh1pvp1m.js:33451-34789 placement
 function resumeLocalWorkflows(
   { workflows, notifiedTaskIds, stoppedTaskIds },
   taskRegistry,
@@ -1114,18 +1170,18 @@ function resumeLocalWorkflows(
   }
 }
 export {
-  hasQueuedCommandMentioning,
+  planResumeOfBackgroundTasks,
   MAX_LISTED_ORPHANS,
   ORPHAN_SUMMARY_AGGREGATE_PREFIX,
   ORPHAN_SUMMARY_LIVE_PREFIX,
   STOPPED_OR_PAUSED_NOTE,
   unfinishedNote,
   ORPHAN_SUMMARY_KEY,
-  planResumeOfBackgroundTasks,
   formatOrphanSummary,
+  startupStandInPlan,
   formatAgentRestartFailedNotice,
   formatOrphanedAgentNotification,
-  formatAgentRestartedNotice,
   withResumeCapabilities,
-  startupStandInPlan,
+  formatAgentRestartedNotice,
+  hasQueuedCommandMentioning,
 };

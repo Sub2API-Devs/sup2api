@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：运行服务端下发的钩子
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (8)
  * attribution: placement 8
  */
 import { isSyncHookJSONOutput } from "../../../types/hooks.js";
@@ -34,7 +34,7 @@ import { logEvent } from "../../../services/analytics/index.js";
 import { fromEnum } from "../../../services/analytics/safeMetadata.js";
 import { onUnavailableNoop } from "./hostPaths.js";
 
-//@ chunk-e6aww6q8.js:914278-915466 placement
+//@ chunk-5xgkngpb.js:924779-925967 placement
 /**
  * 运行一个服务端下发的钩子进程，处理超时、启动失败、输出格式错误。
  */
@@ -92,7 +92,7 @@ function runServedHookProcess(match, checkLabel, pinChanged) {
     };
   return sandboxedSuccessResult(notes);
 }
-//@ chunk-e6aww6q8.js:915466-915564 placement
+//@ chunk-5xgkngpb.js:925967-926065 placement
 function sandboxedSuccessResult(notes) {
   return {
     outcome: "ran_sandboxed",
@@ -103,7 +103,7 @@ function sandboxedSuccessResult(notes) {
     notes,
   };
 }
-//@ chunk-e6aww6q8.js:915564-915761 placement
+//@ chunk-5xgkngpb.js:926065-926262 placement
 function sandboxedHookBlocked(checkLabel, reasonText, notes, isStale) {
   return {
     outcome: "ran_sandboxed",
@@ -120,7 +120,7 @@ function sandboxedHookBlocked(checkLabel, reasonText, notes, isStale) {
     notes,
   };
 }
-//@ chunk-e6aww6q8.js:915761-916187 placement
+//@ chunk-5xgkngpb.js:926262-926687 placement
 /**
  * 沙箱运行 hook 失败（超时、退出、格式错误等）时改为询问，并生成原因说明。
  */
@@ -145,13 +145,13 @@ function sandboxFallbackAsk(checkLabel, cause, stderr, status) {
     notes: stderrLine === "" ? [] : [hookCheckOutputNote(checkLabel, "stderr", stderrLine)],
   };
 }
-//@ chunk-e6aww6q8.js:916187-916305 placement
+//@ chunk-5xgkngpb.js:926687-926804 placement
 function clipHookOutputText(text) {
   let trimmed = printableText(text.replace(/\s+/g, " ")).trim();
   let clipped = truncateToLength(trimmed, MAX_PINNED_SCRIPT_BYTES);
   return clipped.length < trimmed.length ? `${clipped}\u2026(truncated)` : clipped;
 }
-//@ chunk-e6aww6q8.js:916305-917711 placement
+//@ chunk-5xgkngpb.js:926804-928210 placement
 /**
  * 运行服务端下发的钩子并解释结果（问用户、改写输入、在沙箱中运行等）。
  */
@@ -234,7 +234,7 @@ function runServedHook(request, projectHooks, hookKey, checkLabel, mode, pinChan
     }),
   };
 }
-//@ chunk-e6aww6q8.js:917711-918176 placement
+//@ chunk-5xgkngpb.js:928210-928675 placement
 /**
  * 上报服务端 hook 被搁置的遥测事件。
  */
@@ -263,7 +263,7 @@ function logServedHookHeld_2(request, outcomeKind, { cause, key, mode }) {
     }),
   });
 }
-//@ chunk-e6aww6q8.js:918176-918322 placement
+//@ chunk-5xgkngpb.js:928675-928821 placement
 function projectHookUnavailable(request, projectHooks, unavailable) {
   if (!projectHooks.said.has("feature_sad")) {
     projectHooks.said.add("feature_sad");

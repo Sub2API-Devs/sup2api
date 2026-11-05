@@ -3,15 +3,16 @@
  *
  * 2.1.316 新增：插件 $.env.get/set 接口
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (19)
  * attribution: placement 19
  */
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { isEnvApiCall } from "./eventPatterns.js";
 import { isHostOnlyEnvKey } from "../../utils/managedEnvSafety.js";
 import { forgetEnvWriteRestorer, snapshotHostEnvVar } from "../../utils/plugins/securityDefaultPlugin.js";
+import { proxyEnvFingerprint, rebuildGlobalAgentsAfterPluginWrite } from "../../utils/proxy.js";
 import { exitIfServeHelperMisconfigured } from "../../cli/headlessCloud/attachServe.js";
 import { admittedArgs } from "./apiDispatch.js";
 import { originPlugin } from "./hooksWorkerClient.js";
@@ -28,21 +29,21 @@ import { alwaysFalse } from "./api/operations.js";
 import { checkFlagValueArgs } from "./panes.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 
-//@ chunk-e6aww6q8.js:3721548-3721625 placement
+//@ chunk-5xgkngpb.js:3817259-3817336 placement
 /**
  * 取 $.env 参数里的名字
  */
 function envApiName(args) {
-  let name = isPlainObject_5(args) ? args.name : undefined;
+  let name = isPlainObject_6(args) ? args.name : undefined;
   return typeof name === "string" ? name : undefined;
 }
-//@ chunk-e6aww6q8.js:3721625-3722167 placement
+//@ chunk-5xgkngpb.js:3817336-3817878 placement
 function envGetForPlugin(scan, op, args) {
   if (!isEnvApiCall(op)) return;
   let name = envApiName(args);
   let isGet = op === "env.get";
   if (name === undefined) return `it carries no variable name a $.${op}("<name>") call passes`;
-  let value = isPlainObject_5(args) ? args.value : undefined;
+  let value = isPlainObject_6(args) ? args.value : undefined;
   if (!isGet && isHostOnlyEnvKey(name, typeof value === "string" ? value : undefined))
     return `only the environment Claude Code starts with, or Claude Code itself, sets ${name} (host rule)`;
   let problem = (isGet ? scan.env?.reads : scan.env?.writes) ?? [];
@@ -50,7 +51,7 @@ function envGetForPlugin(scan, op, args) {
     ? undefined
     : `its hooks module does not name ${name} in a $.${op}("<name>") call (host rule; the scan lists ${isGet ? "reads" : "writes"} of ${problem.length === 0 ? "nothing" : problem.join(", ")})`;
 }
-//@ chunk-e6aww6q8.js:3722167-3722293 placement
+//@ chunk-5xgkngpb.js:3817878-3818004 placement
 /**
  * $.env.get 核心：读取进程环境变量（USER_TYPE 固定为 external）。
  */
@@ -58,7 +59,7 @@ function envGetCore(args) {
   let value = args.name === "USER_TYPE" ? "external" : process.env[args.name];
   return Promise.resolve(value === undefined ? undefined : String(value));
 }
-//@ chunk-e6aww6q8.js:3722293-3722702 placement
+//@ chunk-5xgkngpb.js:3818004-3818413 placement
 /**
  * 校验 $.env.set 参数：变量名非空且不含 = 或 NUL，值为字符串或 undefined（不含 NUL）。
  */
@@ -66,23 +67,25 @@ function checkEnvSetArgs(args) {
   let name = envApiName(args);
   if (!(name !== undefined && name !== "" && !name.includes("=") && !name.includes("\x00")))
     return `takes a variable name on a plain object (got ${name === undefined ? typeof args?.name : JSON.stringify(name)})`;
-  let problem = isPlainObject_5(args) ? args.value : undefined;
+  let problem = isPlainObject_6(args) ? args.value : undefined;
   if (problem !== undefined && typeof problem !== "string")
     return `takes a string value, or undefined to unset (got ${typeof problem})`;
   return problem !== undefined && problem.includes("\x00")
     ? "takes a value with no NUL byte in it"
     : undefined;
 }
-//@ chunk-e6aww6q8.js:3722702-3722871 placement
+//@ chunk-5xgkngpb.js:3818413-3818597 placement
 function applyEnvSet(request, wasSet, writer) {
   let restore = wasSet ? forgetEnvWriteRestorer(request.name) : snapshotHostEnvVar(request.name, writer);
+  let envFingerprint = proxyEnvFingerprint();
   if (request.value === undefined) delete process.env[request.name];
   else process.env[request.name] = request.value;
   restore();
   exitIfServeHelperMisconfigured();
+  rebuildGlobalAgentsAfterPluginWrite(envFingerprint);
   return Promise.resolve();
 }
-//@ chunk-e6aww6q8.js:3722871-3723043 placement
+//@ chunk-5xgkngpb.js:3818597-3818769 placement
 var envCallChainArgs = (ctx, caller) => [
   admittedArgs(ctx, caller),
   ...(caller.callers ?? []).map((callerId) => ctx.environmentArgs.get(callerId)),
@@ -91,7 +94,7 @@ var envCallChainArgs = (ctx, caller) => [
     .filter((plugin) => plugin !== caller.plugin)
     .map((secondPlugin) => (secondPlugin === undefined ? undefined : ctx.knownArgs.get(secondPlugin))),
 ];
-//@ chunk-e6aww6q8.js:3723043-3723122 placement
+//@ chunk-5xgkngpb.js:3818769-3818848 placement
 /**
  * 链里有非官方插件
  */
@@ -100,7 +103,7 @@ function hasUntrustedEnvCaller(ctx, caller) {
     (args) => args === undefined || !isOfficialMarketplaceRef(args.pluginStorageId),
   );
 }
-//@ chunk-e6aww6q8.js:3723122-3723265 placement
+//@ chunk-5xgkngpb.js:3818848-3818991 placement
 function isEnvValueRewrittenByThirdParty(request, caller) {
   try {
     return (
@@ -114,7 +117,7 @@ function isEnvValueRewrittenByThirdParty(request, caller) {
     return true;
   }
 }
-//@ chunk-e6aww6q8.js:3723265-3723390 placement
+//@ chunk-5xgkngpb.js:3818991-3819116 placement
 function isEnvChainTrusted(ctx, caller) {
   try {
     return envCallChainArgs(ctx, caller).every(
@@ -126,7 +129,7 @@ function isEnvChainTrusted(ctx, caller) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:3723390-3723543 placement
+//@ chunk-5xgkngpb.js:3819116-3819269 placement
 function soleEnvCallerId(ctx, caller) {
   try {
     let [first, ...rest] = envCallChainArgs(ctx, caller);
@@ -137,10 +140,10 @@ function soleEnvCallerId(ctx, caller) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:3723543-3723801 placement
+//@ chunk-5xgkngpb.js:3819269-3819527 placement
 var ENV_UNTRUSTED_CALLER_TEXT = (name) =>
   `${name} is unchanged: a plugin that is not built in, or one with no load on record, stands behind this call, and in a session that takes its settings from its organization such a call can set only the variables a person's own settings file could`;
-//@ chunk-e6aww6q8.js:3723801-3723877 placement
+//@ chunk-5xgkngpb.js:3819527-3819603 placement
 /**
  * 拒绝并记录
  */
@@ -152,10 +155,10 @@ function denyEnvSet(plugin, reason) {
     deny: reason,
   };
 }
-//@ chunk-e6aww6q8.js:3723877-3724015 placement
+//@ chunk-5xgkngpb.js:3819603-3819741 placement
 var ENV_HOST_ONLY_TEXT = (name) =>
   `${name} is unchanged: only the environment Claude Code starts with, or Claude Code itself, may give it this value (host rule)`;
-//@ chunk-e6aww6q8.js:3724015-3724095 placement
+//@ chunk-5xgkngpb.js:3819741-3819821 placement
 /**
  * 记录并应用环境变量
  */
@@ -164,13 +167,13 @@ async function applyEnvSetWithRecord(request, recordPerson, wasSet, writer) {
   await applyEnvSet(request, wasSet, writer);
   return {};
 }
-//@ chunk-e6aww6q8.js:3724095-3724403 placement
+//@ chunk-5xgkngpb.js:3819821-3820129 placement
 /**
  * 环境变量值未生效的说明：钩子改写了值，而链中有非内置或无加载记录的插件。
  */
 var ENV_REWRITTEN_BY_UNTRUSTED_TEXT = (name) =>
   `${name} is unchanged: a hook changed the value on its way and a plugin that is not built in, or one with no load on record, is among the hooks of this call, and in a session that takes its settings from its organization such a plugin can set only the variables a person's own settings file could`;
-//@ chunk-e6aww6q8.js:3724403-3724661 placement
+//@ chunk-5xgkngpb.js:3820129-3820387 placement
 /**
  * $.env.set 表项：宿主专有变量拒绝；组织托管设置下，非内置或无加载记录的插件（或其改写的值）只能设置个人设置文件允许的变量。
  */
@@ -196,7 +199,7 @@ var ENV_SET_API = (runtime) => ({
         );
   },
 });
-//@ chunk-e6aww6q8.js:3724661-3724957 placement
+//@ chunk-5xgkngpb.js:3820387-3820683 placement
 /**
  * 取发起调用的 hooks 模块环境参数；模块已重载或移除时拒绝并记遥测。
  */
@@ -211,7 +214,7 @@ function requireCallingEnvironment(runtime, caller, { op, feature }) {
   }
   return callerArgs;
 }
-//@ chunk-e6aww6q8.js:3724957-3725095 placement
+//@ chunk-5xgkngpb.js:3820683-3820821 placement
 /**
  * $.flag.value 表项：读取特性开关值（构建无开关表时拒绝）。
  */
@@ -220,7 +223,7 @@ var FLAG_VALUE_API = {
     alwaysFalse() ? checkFlagValueArgs(args) : "reads a feature flag, which this build has no table of",
   run: (args) => Promise.resolve(getFeatureValue_CACHED_MAY_BE_STALE(args.name, args.fallback)),
 };
-//@ chunk-e6aww6q8.js:3725095-3725125 placement
+//@ chunk-5xgkngpb.js:3820821-3820851 placement
 /**
  * 冻结对象
  */

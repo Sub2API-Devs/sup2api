@@ -3,24 +3,18 @@
  *
  * 2.1.316 新增：服务端下发钩子的破坏性命令表
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (15)
- * attribution: placement 15
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (14)
+ * attribution: placement 14
  */
-import { uniq } from "../../collections.js";
+import { normalizeCaseForComparison_2 } from "../../permissions/filesystem.js";
 import { getDestructiveTargetCategory } from "../../../tools/BashTool/destructiveTargets.js";
 import { splitCommandStrict } from "../../bash/commands.js";
-import { toolMatchesName } from "../../../Tool.js";
-import { STRUCTUREDOUTPUT } from "../../../tools/SyntheticOutputTool/SyntheticOutputTool.js";
-import { toolMatchesAnyName } from "../../../services/tools/permissionCheckGuard.js";
-import { EXTERNAL_ALWAYS_AVAILABLE_TOOLS } from "../../toolPool.js";
-import { AGENT } from "../../../tools/AgentTool/constants.js";
-import { POLL } from "../../../tools/PollTool/prompt.js";
 import { BASH_TOOL_NAME } from "../../../tools/BashTool/toolName.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3393213-3394222 placement
+//@ chunk-5xgkngpb.js:3481426-3482435 placement
 /**
  * 检测破坏性命令的长度上限与正则集合（rm、git reset/clean、push、kubectl、terraform 等）。
  */
@@ -39,7 +33,7 @@ var DESTRUCTIVE_COMMAND_PATTERNS = [
 ];
 var COMMAND_PREFIX_WRAPPERS_RE =
   /^(?:[(`\s]+|\\|\S*\/(?=[^\s/])|(?:\w+=\S*\s+)+|(?:command|builtin|exec|nohup|sudo|doas|env|nice|time|xargs|stdbuf|busybox|timeout\s+\S+)\s+(?:-\S+\s+|\w+=\S*\s+)*)/;
-//@ chunk-e6aww6q8.js:3394222-3394410 placement
+//@ chunk-5xgkngpb.js:3482435-3482623 placement
 /**
  * 判断 Bash 命令是否可能具破坏性（rm -rf、git push --delete/force、git clean -f、find -delete、kubectl/terraform 等）：过长或嵌套过深时直接视为破坏性；会展开 sh -c、eval 与反引号里的命令递归检查。
  */
@@ -47,7 +41,7 @@ function isDestructiveCommand(command, depth = 0) {
   if (command.length > MAX_COMMAND_CHARS_TO_CHECK || depth > MAX_PIPE_HOPS) return true;
   let parts = splitCommandOrUndefined(command);
   if (parts === undefined) return true;
-  return uniq([command, ...parts]).some((part) => {
+  return normalizeCaseForComparison_2([command, ...parts]).some((part) => {
     let stripped = stripCommandWrappers(part);
     let command = extractNestedShellCommand(stripped);
     return (
@@ -57,9 +51,9 @@ function isDestructiveCommand(command, depth = 0) {
     );
   });
 }
-//@ chunk-e6aww6q8.js:3394410-3394420 placement
+//@ chunk-5xgkngpb.js:3482623-3482633 placement
 var MAX_PIPE_HOPS = 3;
-//@ chunk-e6aww6q8.js:3394420-3394885 placement
+//@ chunk-5xgkngpb.js:3482633-3483098 placement
 /**
  * 判断命令是否把输出管道给 shell 执行。
  */
@@ -89,10 +83,10 @@ function pipesIntoShell(command) {
       return SHELL_PROGRAM_RE.test(program);
     });
 }
-//@ chunk-e6aww6q8.js:3394885-3394961 placement
+//@ chunk-5xgkngpb.js:3483098-3483174 placement
 var SHELL_PROGRAM_RE = /^(?:\S*\/)?(?:ba|z|da|k|mk)?sh$/;
 var ASSIGNMENT_RE = /^[A-Za-z_][A-Za-z0-9_]*\+?=/;
-//@ chunk-e6aww6q8.js:3394961-3395080 placement
+//@ chunk-5xgkngpb.js:3483174-3483293 placement
 function matchesDestructivePattern(command) {
   let unquoted = stripQuotesAndSlashes(command);
   return [
@@ -107,12 +101,12 @@ function matchesDestructivePattern(command) {
       pipesIntoShell(candidate),
   );
 }
-//@ chunk-e6aww6q8.js:3395080-3395474 placement
+//@ chunk-5xgkngpb.js:3483293-3483687 placement
 /**
  * git、kubectl 等命令带值的全局选项集合。
  */
 var TOOL_OPTIONS_WITH_VALUE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3395080", () => {
+deferInit("chunk-5xgkngpb.js:3483293", () => {
   TOOL_OPTIONS_WITH_VALUE = new Set([
     "-C",
     "-c",
@@ -146,7 +140,7 @@ deferInit("chunk-e6aww6q8.js:3395080", () => {
     "--v",
   ]);
 });
-//@ chunk-e6aww6q8.js:3395474-3395781 placement
+//@ chunk-5xgkngpb.js:3483687-3483994 placement
 /**
  * 去掉 git、kubectl、terraform 的全局选项，便于识别子命令。
  */
@@ -166,11 +160,11 @@ function stripGitKubectlGlobalOptions(command) {
   }
   return kept.join(" ");
 }
-//@ chunk-e6aww6q8.js:3395781-3395836 placement
+//@ chunk-5xgkngpb.js:3483994-3484049 placement
 function stripQuotesAndSlashes(command) {
   return command.replace(/\\\r?\n|['"\\]/g, "");
 }
-//@ chunk-e6aww6q8.js:3395836-3396098 placement
+//@ chunk-5xgkngpb.js:3484049-3484311 placement
 function splitShellWords_2(command) {
   let words = [];
   let current = "";
@@ -195,12 +189,12 @@ function splitShellWords_2(command) {
     } else current += char;
   return current === "" ? words : [...words, current];
 }
-//@ chunk-e6aww6q8.js:3396098-3396174 placement
+//@ chunk-5xgkngpb.js:3484311-3484387 placement
 function stripCommandWrappers(command) {
   let command_2 = command.trim().replace(COMMAND_PREFIX_WRAPPERS_RE, "");
   return command_2 === command.trim() ? command_2 : stripCommandWrappers(command_2);
 }
-//@ chunk-e6aww6q8.js:3396174-3396353 placement
+//@ chunk-5xgkngpb.js:3484387-3484566 placement
 function extractNestedShellCommand(command) {
   return (
     (
@@ -210,24 +204,11 @@ function extractNestedShellCommand(command) {
     )?.at(-1) ?? undefined
   );
 }
-//@ chunk-e6aww6q8.js:3396353-3396391 placement
+//@ chunk-5xgkngpb.js:3484566-3484604 placement
 function splitCommandOrUndefined(command) {
   return splitCommandStrict(command) ?? undefined;
 }
-//@ chunk-e6aww6q8.js:3401496-3401578 placement
-/**
- * 从工具列表中剔除结构化输出、Agent、Poll 等非守卫工具，只留下需要评估的调用。
- */
-function filterNonGuardTools(tools) {
-  return tools.filter(
-    (tool) =>
-      !toolMatchesName(tool, STRUCTUREDOUTPUT) &&
-      !toolMatchesAnyName(tool, EXTERNAL_ALWAYS_AVAILABLE_TOOLS) &&
-      !toolMatchesName(tool, AGENT) &&
-      !toolMatchesName(tool, POLL),
-  );
-}
-//@ chunk-e6aww6q8.js:3401578-3401941 placement
+//@ chunk-5xgkngpb.js:3489852-3490215 placement
 /**
  * 包装权限检查：服务端 hook 代理评估时，拒绝其运行破坏性 Bash 命令。
  */
@@ -246,4 +227,4 @@ function denyDestructiveForHookAgent(hasPermissionsToUseTool) {
     return hasPermissionsToUseTool(tool, input, ...restArgs);
   };
 }
-export { filterNonGuardTools, denyDestructiveForHookAgent, isDestructiveCommand };
+export { denyDestructiveForHookAgent, isDestructiveCommand };

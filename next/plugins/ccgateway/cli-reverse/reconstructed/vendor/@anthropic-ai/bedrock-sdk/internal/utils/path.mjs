@@ -1,17 +1,17 @@
 /**
  * @anthropic-ai/bedrock-sdk/internal/utils/path.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/bedrock-sdk@0.33.7..0.34.3
- * pieces: chunk-h87x8cg3.js (2)
+ * pieces: chunk-b8zxeazh.js (2)
  * attribution: esm-fingerprint 2
  */
 import { AnthropicError } from "../../../sdk/core/error.mjs";
 
-//@ chunk-h87x8cg3.js:9374-9460 esm-fingerprint
+//@ chunk-b8zxeazh.js:9374-9460 esm-fingerprint
 function encodeURIPath(str) {
   return str.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
 }
-//@ chunk-h87x8cg3.js:9460-10486 esm-fingerprint
+//@ chunk-b8zxeazh.js:9460-10486 esm-fingerprint
 var EMPTY = Object.freeze(Object.create(null));
 var createPathTagFunction = (pathEncoder = encodeURIPath) =>
   function (statics, ...params) {

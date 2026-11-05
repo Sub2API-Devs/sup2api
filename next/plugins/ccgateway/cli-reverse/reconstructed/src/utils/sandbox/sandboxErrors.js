@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：沙箱不可用错误
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-67q125t6.js (1), chunk-fq0cr76a.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1vxka8te.js (1), chunk-qg41pqt6.js (11)
  * attribution: placement 12
  */
 import { HostScoped } from "../hostScoped.js";
@@ -16,24 +16,24 @@ import { logForDebugging } from "../debug.js";
 import { errorMessage, withTelemetryMessage, toError, getTelemetryMessage } from "../errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fq0cr76a.js:854253-854277 placement
+//@ chunk-qg41pqt6.js:855948-855972 placement
 var sandboxErrorSignalSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fq0cr76a.js:854253", () => {
+deferInit("chunk-qg41pqt6.js:855948", () => {
   sandboxErrorSignalSlot = new HostScoped(() => createSignal());
 });
-//@ chunk-fq0cr76a.js:854277-854316 placement
+//@ chunk-qg41pqt6.js:855972-856011 placement
 function sandboxErrorSignal() {
   return sandboxErrorSignalSlot.of(getRootSession().host);
 }
-//@ chunk-fq0cr76a.js:854316-854331 placement
+//@ chunk-qg41pqt6.js:856011-856026 placement
 /**
  * sandboxErrorSignalLazy：沙箱错误的惰性信号。
  */
 var sandboxErrorSignalLazy; // deferred: uses sandboxErrorSignal of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fq0cr76a.js:854316", () => {
+deferInit("chunk-qg41pqt6.js:856011", () => {
   sandboxErrorSignalLazy = createLazySignal(sandboxErrorSignal);
 });
-//@ chunk-fq0cr76a.js:854331-857015 placement
+//@ chunk-qg41pqt6.js:856026-858710 placement
 /**
  * 沙箱各类失败的遥测安全消息（无法包装命令、配置无法安装、清扫残留等）。
  */
@@ -73,7 +73,7 @@ var SANDBOX_TELEMETRY_MESSAGES = {
   unclassifiedIndicatorMovedAside:
     "sandbox: post-command scrub moved aside an indicator it could not classify at config build",
 };
-//@ chunk-fq0cr76a.js:857015-857237 placement
+//@ chunk-qg41pqt6.js:858710-858932 placement
 function reportSandboxErrorUnderStandIn(error, code) {
   let message = SANDBOX_TELEMETRY_MESSAGES[code];
   let wrapped = isTelemetryMessageWrapped(error, message);
@@ -88,7 +88,7 @@ function reportSandboxErrorUnderStandIn(error, code) {
   } catch {}
   logError(withTelemetryMessage(Error("sandbox error (details are in the debug log)"), message));
 }
-//@ chunk-fq0cr76a.js:857237-857397 placement
+//@ chunk-qg41pqt6.js:858932-859092 placement
 function describeUnreadableSandboxError(error, code) {
   let message = SANDBOX_TELEMETRY_MESSAGES[code];
   let wrapped = isTelemetryMessageWrapped(error, message);
@@ -99,14 +99,14 @@ function describeUnreadableSandboxError(error, code) {
   } catch {}
   return withTelemetryMessage(toError(text), message);
 }
-//@ chunk-fq0cr76a.js:857397-857431 placement
+//@ chunk-qg41pqt6.js:859092-859126 placement
 /**
  * reportSandboxTelemetryError：上报沙箱遥测错误。
  */
 function reportSandboxTelemetryError(code) {
   reportSandboxErrorUnderStandIn(Error(SANDBOX_TELEMETRY_MESSAGES[code]), code);
 }
-//@ chunk-fq0cr76a.js:857431-857514 placement
+//@ chunk-qg41pqt6.js:859126-859209 placement
 function isTelemetryMessageWrapped(error, message) {
   try {
     let wrapped = withTelemetryMessage(toError(error), message);
@@ -115,7 +115,7 @@ function isTelemetryMessageWrapped(error, message) {
     return;
   }
 }
-//@ chunk-fq0cr76a.js:903620-903734 placement
+//@ chunk-qg41pqt6.js:908440-908554 placement
 class SandboxInitFailedError extends Error {
   telemetryMessage = SANDBOX_TELEMETRY_MESSAGES.initFailed;
   constructor(message) {
@@ -123,7 +123,7 @@ class SandboxInitFailedError extends Error {
     this.name = "SandboxInitFailedError";
   }
 }
-//@ chunk-fq0cr76a.js:903734-904265 placement
+//@ chunk-qg41pqt6.js:908554-909085 placement
 class SandboxProtectionNotRenewedError extends Error {
   constructor() {
     super(
@@ -132,21 +132,21 @@ class SandboxProtectionNotRenewedError extends Error {
     this.name = "SandboxProtectionNotRenewedError";
   }
 }
-//@ chunk-fq0cr76a.js:904265-904355 placement
+//@ chunk-qg41pqt6.js:909085-909175 placement
 class SandboxBridgeUnavailableError extends Error {
   constructor(message) {
     super(message);
     this.name = "SandboxBridgeUnavailableError";
   }
 }
-//@ chunk-67q125t6.js:191-234 placement
+//@ chunk-1vxka8te.js:191-234 placement
 /**
  * SANDBOX_UNAVAILABLE_MESSAGE：需要沙箱但不可用的说明。
  */
 var SANDBOX_UNAVAILABLE_MESSAGE = "Sandbox required but unavailable";
 export {
-  reportSandboxErrorUnderStandIn,
   SANDBOX_UNAVAILABLE_MESSAGE,
+  reportSandboxErrorUnderStandIn,
   SANDBOX_TELEMETRY_MESSAGES,
   sandboxErrorSignalLazy,
   describeUnreadableSandboxError,

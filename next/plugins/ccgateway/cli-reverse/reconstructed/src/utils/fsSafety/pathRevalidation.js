@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：固定写入目标一次（检查拼写与目录身份）；打开文件读取，并确认打开的就是权限检查批准的路径等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-t0gq9gyw.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-85eyj5gy.js (25)
  * attribution: placement 25
  */
 import { open, lstat, readlink, mkdir } from "fs/promises";
@@ -31,13 +31,13 @@ import { logForDebugging } from "../debug.js";
 import { getPlatform } from "../platform.js";
 import { readFileHandleChecked } from "../fileRead.js";
 
-//@ chunk-t0gq9gyw.js:9127-9458 placement
+//@ chunk-85eyj5gy.js:9197-9528 placement
 /**
  * 可中止地打开文件。
  */
-async function openWithAbort(filePath, flags, platform, noFollow, signal) {
+async function openWithAbort(filePath, flags, mode, noFollow, signal) {
   signal?.throwIfAborted();
-  let openPromise = noFollow ? openNoFollow(filePath, flags, platform) : open(filePath, flags | READ_LIMITS);
+  let openPromise = noFollow ? openNoFollow(filePath, flags, mode) : open(filePath, flags | READ_LIMITS);
   if (!signal) return openPromise;
   let onAbort;
   let promise = new Promise((resolve, reject) => {
@@ -58,9 +58,9 @@ async function openWithAbort(filePath, flags, platform, noFollow, signal) {
     if (onAbort) signal.removeEventListener("abort", onAbort);
   }
 }
-//@ chunk-t0gq9gyw.js:9458-9534 placement
+//@ chunk-85eyj5gy.js:9528-9604 placement
 var DESCRIPTOR_PATH_RE = /^(?:\/dev\/(?:stdin|stdout|stderr|fd\/\d+)|\/proc\/self\/fd\/\d+)$/;
-//@ chunk-t0gq9gyw.js:9534-9643 placement
+//@ chunk-85eyj5gy.js:9604-9713 placement
 /**
  * 路径是否为本进程的 /proc/<pid>/fd/<n> 或同类描述符路径。
  */
@@ -70,16 +70,16 @@ function isProcFdPath(filePath) {
     (/^\/proc\/\d+\/fd\/\d+$/.test(filePath) && filePath.startsWith(`/proc/${process.pid}/fd/`))
   );
 }
-//@ chunk-t0gq9gyw.js:9643-9686 placement
+//@ chunk-85eyj5gy.js:9713-9756 placement
 /**
  * 拼出 /proc/self/fd/<n> 路径。
  */
 function procFdPath(fd) {
   return `/proc/self/fd/${fd}`;
 }
-//@ chunk-t0gq9gyw.js:9686-9701 placement
+//@ chunk-85eyj5gy.js:9756-9771 placement
 var O_NOFOLLOW_ANY = 2097152;
-//@ chunk-t0gq9gyw.js:9701-9808 placement (2.1.88 match: getReservedShortcuts, 0.773)
+//@ chunk-85eyj5gy.js:9771-9878 placement (2.1.88 match: getReservedShortcuts, 0.773)
 /**
  * macOS 上不跟随链接打开。
  */
@@ -87,7 +87,7 @@ async function openNoFollow(filePath, flags, platform) {
   if (platform !== "macos" || (await probeNoFollowAny())) return open(filePath, flags | READ_LIMITS);
   return open(filePath, (flags & ~constants.O_NOFOLLOW) | MAX_BOUND_READ_BYTES | READ_LIMITS);
 }
-//@ chunk-t0gq9gyw.js:9808-10177 placement
+//@ chunk-85eyj5gy.js:9878-10247 placement
 /**
  * 路径是否在 macOS 特殊卷上。
  */
@@ -126,7 +126,7 @@ async function isOnMacosVolume(dirPath, volumeHandle, platform) {
     await dirHandle.close();
   }
 }
-//@ chunk-t0gq9gyw.js:10177-10652 placement
+//@ chunk-85eyj5gy.js:10247-10722 placement
 /**
  * 打开后重新验证失败的原因说明。
  */
@@ -140,7 +140,7 @@ var REVALIDATION_MESSAGES = {
   openedElsewhere: "it opened at a different path than approved",
   afterOpen: "it re-resolved elsewhere once opened",
 };
-//@ chunk-t0gq9gyw.js:10652-10736 placement
+//@ chunk-85eyj5gy.js:10722-10806 placement
 /**
  * 读取文件描述符实际指向的路径；目标不存在时返回 undefined。
  */
@@ -152,7 +152,7 @@ async function readFdTargetPath(fd) {
     throw error;
   }
 }
-//@ chunk-t0gq9gyw.js:10736-11033 placement
+//@ chunk-85eyj5gy.js:10806-11103 placement
 /**
  * 读取描述符实际打开的路径；失败时按拼写模式放行或拒绝读取。
  */
@@ -166,7 +166,7 @@ async function readOpenedPath(handle, filePath, mode) {
     );
   }
 }
-//@ chunk-t0gq9gyw.js:11033-11251 placement
+//@ chunk-85eyj5gy.js:11103-11321 placement
 /**
  * 权限检查后符号链接解析发生变化的拒绝读取错误。
  */
@@ -175,9 +175,9 @@ function resolutionChangedError(filePath, reason) {
     `Refusing to read ${filePath}: its symlink resolution changed after permission was checked (${REVALIDATION_MESSAGES[reason]}). If a link in the working directory is being rewritten concurrently, stop that and retry.`,
   );
 }
-//@ chunk-t0gq9gyw.js:11251-11261 placement
+//@ chunk-85eyj5gy.js:11321-11331 placement
 var SKIP_STAT_CHAIN = false;
-//@ chunk-t0gq9gyw.js:11261-11983 placement
+//@ chunk-85eyj5gy.js:11331-12053 placement
 /**
  * 对路径链逐段 lstat。
  */
@@ -223,15 +223,15 @@ async function statChain(filePath) {
     }
     return;
   }
-  for (let j = 0; j < chainPaths.length - 1; j++) {
-    let recordedStats = chainStats[j];
+  for (let idx = 0; idx < chainPaths.length - 1; idx++) {
+    let recordedStats = chainStats[idx];
     if (recordedStats === undefined) continue;
     let recheckStats;
     try {
       recheckStats =
-        chainKinds[j] === "open"
-          ? await statDirNoFollow(chainPaths[j])
-          : await lstat(chainPaths[j], {
+        chainKinds[idx] === "open"
+          ? await statDirNoFollow(chainPaths[idx])
+          : await lstat(chainPaths[idx], {
               bigint: true,
             });
     } catch {
@@ -247,7 +247,7 @@ async function statChain(filePath) {
   }
   return chainStats.at(-1);
 }
-//@ chunk-t0gq9gyw.js:11983-12202 placement
+//@ chunk-85eyj5gy.js:12053-12272 placement
 /**
  * 以 O_DIRECTORY|O_NOFOLLOW 打开并 stat 目录（失败返回 undefined）。
  */
@@ -272,17 +272,17 @@ async function statDirNoFollow(dirPath) {
     await dirHandle.close().catch(() => {});
   }
 }
-//@ chunk-t0gq9gyw.js:12202-12246 placement
+//@ chunk-85eyj5gy.js:12272-12316 placement
 function isCheckableAbsolutePath(filePath) {
   return isAbsolute(filePath) && !isUntouchableSpelling(filePath) && !isProcFdPath(filePath);
 }
-//@ chunk-t0gq9gyw.js:12246-12393 placement (2.1.88 match: getFileIdentity, 0.794)
+//@ chunk-85eyj5gy.js:12316-12463 placement (2.1.88 match: getFileIdentity, 0.795)
 /**
  * 最后一个存在路径的身份（dev/ino）。
  */
 async function lastExistingIdentity(filePath) {
-  for (let j = filePath.length - 1; j >= 0; j--) {
-    let candidatePath = filePath[j];
+  for (let idx = filePath.length - 1; idx >= 0; idx--) {
+    let candidatePath = filePath[idx];
     if (!isCheckableAbsolutePath(candidatePath)) continue;
     let stats = await statChain(candidatePath);
     if (stats)
@@ -293,14 +293,14 @@ async function lastExistingIdentity(filePath) {
   }
   return null;
 }
-//@ chunk-t0gq9gyw.js:12393-13013 placement
+//@ chunk-85eyj5gy.js:12463-13083 placement
 /**
  * 沿路径链重新打开并核对。
  */
 async function reopenThroughChain(filePath, approvedSpellings, flags, signal, identity) {
   if (identity == null) return;
-  for (let j = approvedSpellings.length - 1; j >= 0; j--) {
-    let candidatePath = approvedSpellings[j];
+  for (let idx = approvedSpellings.length - 1; idx >= 0; idx--) {
+    let candidatePath = approvedSpellings[idx];
     if (!isCheckableAbsolutePath(candidatePath) || (!SKIP_STAT_CHAIN && !(await statChain(candidatePath))))
       continue;
     let handle;
@@ -338,7 +338,7 @@ async function reopenThroughChain(filePath, approvedSpellings, flags, signal, id
   }
   return;
 }
-//@ chunk-t0gq9gyw.js:13013-15665 placement
+//@ chunk-85eyj5gy.js:13083-15735 placement
 /**
  * 打开文件读取，并确认打开的就是权限检查批准的路径。
  */
@@ -532,7 +532,7 @@ async function openReadBoundToApproval(
     throw error;
   }
 }
-//@ chunk-t0gq9gyw.js:15665-15779 placement
+//@ chunk-85eyj5gy.js:15735-15849 placement
 /**
  * 持有的目录已消失的错误（带目录与是否已报告）。
  */
@@ -545,9 +545,9 @@ class HeldDirVanishedError extends Error {
     this.reported = reported;
   }
 }
-//@ chunk-t0gq9gyw.js:15779-15788 placement
+//@ chunk-85eyj5gy.js:15849-15858 placement
 var MAX_PIN_ATTEMPTS = 3;
-//@ chunk-t0gq9gyw.js:15788-15922 placement
+//@ chunk-85eyj5gy.js:15858-15992 placement
 /**
  * 权限检查后父目录符号链接解析发生变化的拒绝写入错误。
  */
@@ -556,7 +556,7 @@ function parentResolutionChangedError(filePath) {
     `Refusing to write ${filePath}: its parent-directory symlink resolution changed after permission was checked.`,
   );
 }
-//@ chunk-t0gq9gyw.js:15922-16465 placement
+//@ chunk-85eyj5gy.js:15992-16535 placement
 /**
  * 拒绝写入符号链接。
  */
@@ -593,26 +593,26 @@ async function refuseSymlinkWrite(filePath, linkedPath, platform, maxBytes, foll
     await handle.close();
   }
 }
-//@ chunk-t0gq9gyw.js:16465-16733 placement
+//@ chunk-85eyj5gy.js:16535-16803 placement
 /**
  * 固定写入目标（目录被删时重试）。
  */
 async function pinWriteTarget(filePath, approvedSpellings, options) {
-  for (let j = 1; ; j++)
+  for (let idx = 1; ; idx++)
     try {
       return await pinWriteTargetOnce(filePath, approvedSpellings, options);
     } catch (error) {
       if (!(error instanceof HeldDirVanishedError)) throw error;
       logForDebugging(
-        `pinWriteTarget: ${error.dir} was removed while held (attempt ${j}); ${j < MAX_PIN_ATTEMPTS ? "taking the pin again" : "refusing"}`,
+        `pinWriteTarget: ${error.dir} was removed while held (attempt ${idx}); ${idx < MAX_PIN_ATTEMPTS ? "taking the pin again" : "refusing"}`,
         {
           level: "warn",
         },
       );
-      if (j >= MAX_PIN_ATTEMPTS) throw error.reported ?? parentResolutionChangedError(filePath);
+      if (idx >= MAX_PIN_ATTEMPTS) throw error.reported ?? parentResolutionChangedError(filePath);
     }
 }
-//@ chunk-t0gq9gyw.js:16733-20898 placement
+//@ chunk-85eyj5gy.js:16803-20968 placement
 /**
  * 固定写入目标一次（检查拼写与目录身份）。
  */
@@ -944,7 +944,7 @@ async function pinWriteTargetOnce(filePath, approvedSpellings, options) {
     throw error;
   }
 }
-//@ chunk-t0gq9gyw.js:20898-21062 placement
+//@ chunk-85eyj5gy.js:20968-21132 placement
 /**
  * 把错误信息中的内部路径替换为显示路径后重抛。
  */
@@ -958,14 +958,14 @@ function rethrowWithPath(error, error_2, canonicalPath) {
   throw error;
 }
 export {
-  pinWriteTarget,
-  openNoFollow,
-  procFdPath,
-  refuseSymlinkWrite,
   openWithAbort,
   lastExistingIdentity,
   openReadBoundToApproval,
   rethrowWithPath,
-  statChain,
+  pinWriteTarget,
+  openNoFollow,
+  procFdPath,
+  refuseSymlinkWrite,
   readFdTargetPath,
+  statChain,
 };

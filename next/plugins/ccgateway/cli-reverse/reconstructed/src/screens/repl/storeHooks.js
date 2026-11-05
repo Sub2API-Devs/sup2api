@@ -3,18 +3,18 @@
  *
  * 2.1.316 新增。REPL 状态存储 hooks。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (18)
- * attribution: placement 18
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (12), chunk-hnxhr3bs.js (7)
+ * attribution: placement 18, layout 1
  */
 import { promptInputStoreFor } from "../../state/promptInputStore.js";
 import { useSession } from "../../context/session.js";
 import { useSyncExternalStore } from "../../../vendor/react/cjs/react.production.js";
 import { uiSignals } from "../../state/uiSignals.js";
-import { TMUX_SESSION } from "../../utils/terminalPanel.js";
 import {
   useTopAutoDialogHidden,
+  useTopUserDialog,
   useTopAutoDialog,
   useTopAutoDialogKind,
   topAutoDialog,
@@ -22,21 +22,21 @@ import {
   isDialogHiddenWhile,
 } from "../../state/dialogQueue.js";
 
-//@ chunk-18hwfzwa.js:328747-328777 placement
+//@ chunk-hnxhr3bs.js:94177-94207 placement
 function sessionStore() {
   return promptInputStoreFor(useSession());
 }
-//@ chunk-18hwfzwa.js:328777-328848 placement
+//@ chunk-hnxhr3bs.js:94207-94279 placement
 function useStoreValue() {
   let store = sessionStore();
   return useSyncExternalStore(store.subscribe, () => store.getState().value);
 }
-//@ chunk-18hwfzwa.js:328848-328873 placement
+//@ chunk-hnxhr3bs.js:94279-94303 placement
 /**
  * 草稿值订阅的占位文案 "[longer input]"（超过 1 个字符时复用固定字符串减少重渲染）。
  */
 var LONGER_INPUT_PLACEHOLDER = "[longer input]";
-//@ chunk-18hwfzwa.js:328873-328978 placement
+//@ chunk-hnxhr3bs.js:94303-94408 placement
 /**
  * 订阅草稿值（超过 1 个字符时返回固定占位，减少重渲染）。
  */
@@ -47,22 +47,22 @@ function useShortDraftValue() {
     return value.length <= 1 ? value : LONGER_INPUT_PLACEHOLDER;
   });
 }
-//@ chunk-18hwfzwa.js:328978-329051 placement
+//@ chunk-hnxhr3bs.js:94408-94482 placement
 function useVimMode() {
   let store = sessionStore();
   return useSyncExternalStore(store.subscribe, () => store.getState().vimMode);
 }
-//@ chunk-18hwfzwa.js:329051-329123 placement
+//@ chunk-hnxhr3bs.js:94482-94555 placement
 function useActive() {
   let store = sessionStore();
   return useSyncExternalStore(store.subscribe, () => store.getState().active);
 }
-//@ chunk-18hwfzwa.js:329123-329203 placement
+//@ chunk-hnxhr3bs.js:94555-94635 placement
 function useLaunchWarning() {
   let store = sessionStore();
   return useSyncExternalStore(store.subscribe, () => store.getState().launchWarning);
 }
-//@ chunk-18hwfzwa.js:329203-329283 placement
+//@ chunk-czq1j3j2.js:368227-368307 placement
 function setBlockingToolProgress(pauseAnimation) {
   uiSignals.blockingToolProgress.setState((state) =>
     state.active === pauseAnimation
@@ -72,15 +72,15 @@ function setBlockingToolProgress(pauseAnimation) {
         },
   );
 }
-//@ chunk-18hwfzwa.js:329283-329347 placement
+//@ chunk-czq1j3j2.js:368307-368371 placement
 function getBlockingToolProgress() {
   return uiSignals.blockingToolProgress.getState().active;
 }
-//@ chunk-18hwfzwa.js:329347-329411 placement
+//@ chunk-czq1j3j2.js:368371-368435 placement
 function useBlockingToolProgress() {
   return useSyncExternalStore(uiSignals.blockingToolProgress.subscribe, getBlockingToolProgress);
 }
-//@ chunk-18hwfzwa.js:329411-329496 placement
+//@ chunk-czq1j3j2.js:368435-368520 placement
 function setDialogHostUnmounted(unmounted) {
   uiSignals.dialogHostUnmounted.setState((state) =>
     state.unmounted === unmounted
@@ -90,19 +90,19 @@ function setDialogHostUnmounted(unmounted) {
         },
   );
 }
-//@ chunk-18hwfzwa.js:329496-329562 placement
+//@ chunk-czq1j3j2.js:368520-368586 placement
 function isDialogHostUnmounted() {
   return uiSignals.dialogHostUnmounted.getState().unmounted;
 }
-//@ chunk-18hwfzwa.js:329562-329625 placement
+//@ chunk-czq1j3j2.js:368586-368649 placement
 function useDialogHostUnmounted() {
   return useSyncExternalStore(uiSignals.dialogHostUnmounted.subscribe, isDialogHostUnmounted);
 }
-//@ chunk-18hwfzwa.js:329625-329730 placement
+//@ chunk-czq1j3j2.js:368649-368755 placement
 function getActiveBottomSurface() {
   let blockingToolProgress = useBlockingToolProgress();
   let active = useActive();
-  let tmux = TMUX_SESSION();
+  let tmux = isPanelObscured();
   let hasDraftText = useHasDraftText();
   return blockingToolProgress
     ? "progress"
@@ -114,7 +114,12 @@ function getActiveBottomSurface() {
           ? "typing"
           : null;
 }
-//@ chunk-18hwfzwa.js:329787-329889 placement
+//@ chunk-czq1j3j2.js:368755-368812 layout
+function isPanelObscured() {
+  let topAutoDialogHidden = useTopAutoDialogHidden("panel");
+  return useTopUserDialog() !== null && topAutoDialogHidden;
+}
+//@ chunk-czq1j3j2.js:368812-368914 placement
 /**
  * 草稿区域可见且有非空文本。
  */
@@ -126,21 +131,21 @@ function useHasDraftText() {
     () => topAutoDialogHidden && store.getState().value.trim() !== "",
   );
 }
-//@ chunk-18hwfzwa.js:329999-330066 placement
+//@ chunk-czq1j3j2.js:369024-369091 placement
 function useAutoDialogKind() {
   let topAutoDialog = useTopAutoDialog();
   let activeBottomSurface = getActiveBottomSurface();
   let dialogHostUnmounted = useDialogHostUnmounted();
   return activeBottomSurface !== null || dialogHostUnmounted ? null : topAutoDialog;
 }
-//@ chunk-18hwfzwa.js:330066-330135 placement
+//@ chunk-czq1j3j2.js:369091-369160 placement
 function useAutoDialogKindAlt() {
   let topAutoDialogKind = useTopAutoDialogKind();
   let activeBottomSurface = getActiveBottomSurface();
   let dialogHostUnmounted = useDialogHostUnmounted();
   return activeBottomSurface !== null || dialogHostUnmounted ? undefined : topAutoDialogKind;
 }
-//@ chunk-18hwfzwa.js:330135-330496 placement
+//@ chunk-czq1j3j2.js:369160-369521 placement
 /**
  * 订阅对话框与草稿，计算当前可以自动弹出的对话框种类。
  */
@@ -174,14 +179,14 @@ function createAutoDialogSelector(dialogStore, store) {
   };
 }
 export {
+  getActiveBottomSurface,
   sessionStore,
-  useActive,
   useShortDraftValue,
   useAutoDialogKindAlt,
   useVimMode,
   setDialogHostUnmounted,
   setBlockingToolProgress,
-  getActiveBottomSurface,
+  useActive,
   createAutoDialogSelector,
   useLaunchWarning,
   useStoreValue,

@@ -3,13 +3,13 @@
  *
  * 二进制文件扩展名表与判断。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/constants/files.ts
- * pieces: chunk-ahy3gsxp.js (2)
+ * pieces: chunk-2x8a0yk9.js (2)
  * attribution: fingerprint 1, callgraph-fingerprint 1
  */
 
-//@ chunk-ahy3gsxp.js:659-1577 fingerprint (2.1.88 match: BINARY_EXTENSIONS, 0.867)
+//@ chunk-2x8a0yk9.js:659-1577 fingerprint (2.1.88 match: BINARY_EXTENSIONS, 0.867)
 /**
  * 二进制扩展名集合（图片、音视频、压缩包、可执行、Office/PDF 等），读文件时跳过。
  */
@@ -136,7 +136,7 @@ var BINARY_EXTENSIONS = new Set([
   ".dat",
   ".data",
 ]);
-//@ chunk-ahy3gsxp.js:1577-1657 callgraph-fingerprint (2.1.88 match: hasBinaryExtension, 1)
+//@ chunk-2x8a0yk9.js:1577-1657 callgraph-fingerprint (2.1.88 match: hasBinaryExtension, 1)
 /**
  * 按扩展名判断是否为二进制文件。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：遥测插件 hooks 扫描清单。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4m46mxx9.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-08q4d92p.js (6)
  * attribution: placement 6
  */
 import { __commonJS, __export } from "../../../../runtime/bun-runtime.js";
@@ -45,7 +45,7 @@ import {
   isNonEmpty,
   isEnvTruthy,
   isDecisionKind,
-  _,
+  isPlainObjectValue,
   isTelemetryDenyError,
   isRetryableStatus,
   markToEvent,
@@ -101,12 +101,12 @@ import { VCS_MARKERS, detectVcs_2 } from "../../../utils/platform.js";
 import { isFirstPartyTelemetryBlocked } from "../../../utils/hostEnvironment.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4m46mxx9.js:2324-4853 placement
+//@ chunk-08q4d92p.js:2576-5105 placement
 /**
  * 遥测插件 hooks 扫描清单。
  */
 var TELEMETRY_HOOKS_SCAN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4m46mxx9.js:2324", () => {
+deferInit("chunk-08q4d92p.js:2576", () => {
   TELEMETRY_HOOKS_SCAN = __commonJS(function (requireFn, moduleObject) {
     moduleObject.exports = {
       scan: {
@@ -258,14 +258,14 @@ deferInit("chunk-4m46mxx9.js:2324", () => {
     };
   });
 });
-//@ chunk-4m46mxx9.js:4853-4863 placement
+//@ chunk-08q4d92p.js:5105-5115 placement
 /**
  * 空对象
  */
 var EMPTY_HOOKS_TELEMETRY = {};
-//@ chunk-4m46mxx9.js:4863-4965 placement
+//@ chunk-08q4d92p.js:5115-5217 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4m46mxx9.js:4863", () => {
+deferInit("chunk-08q4d92p.js:5115", () => {
   __export(EMPTY_HOOKS_TELEMETRY, {
     MOD_FOLDER: () => MOD_FOLDER,
     PLUGIN_LISTING: () => TELEMETRY_PLUGIN,
@@ -274,14 +274,14 @@ deferInit("chunk-4m46mxx9.js:4863", () => {
     registerPlugin: () => registerTelemetryPlugin,
   });
 });
-//@ chunk-4m46mxx9.js:4965-4974 placement
+//@ chunk-08q4d92p.js:5217-5226 placement
 /**
  * 空对象
  */
 var EMPTY_HOOKS_INDEX = {};
-//@ chunk-4m46mxx9.js:4974-6556 placement
+//@ chunk-08q4d92p.js:5226-6808 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4m46mxx9.js:4974", () => {
+deferInit("chunk-08q4d92p.js:5226", () => {
   __export(EMPTY_HOOKS_INDEX, {
     BATCH_ROWS: () => MAX_BATCH_EVENTS,
     BATCH_WINDOW_MS: () => SEND_TIMEOUT_MS,
@@ -338,7 +338,7 @@ deferInit("chunk-4m46mxx9.js:4974", () => {
     isEnvSet: () => isNonEmpty,
     isEnvTruthy: () => isEnvTruthy,
     isMarkKind: () => isDecisionKind,
-    isRecord: () => _,
+    isRecord: () => isPlainObjectValue,
     isRefusedEntry: () => isTelemetryDenyError,
     isRetriable: () => isRetryableStatus,
     linuxDistroOf: () => readDistro,
@@ -367,7 +367,7 @@ deferInit("chunk-4m46mxx9.js:4974", () => {
     wslVersionOf: () => detectWslVersion,
   });
 });
-//@ chunk-4m46mxx9.js:6556-6572 placement
+//@ chunk-08q4d92p.js:6808-6824 placement
 /**
  * 第一方遥测未被拦
  */

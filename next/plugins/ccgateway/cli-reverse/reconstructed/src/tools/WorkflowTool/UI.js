@@ -3,9 +3,9 @@
  *
  * Workflow 工具界面（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9hy503gy.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1wnh48wm.js (7)
  * attribution: placement 7
  */
 import {
@@ -34,7 +34,7 @@ import { isWorkflowsAvailable, isProSubscriber } from "../../utils/workflows/wor
 import { sessionWorkflowSize } from "../../utils/workflowSizeGuideline.js";
 import { getGlobalConfig } from "../../utils/config.js";
 
-//@ chunk-9hy503gy.js:6692-7020 placement
+//@ chunk-1wnh48wm.js:7029-7357 placement
 /**
  * 渲染 Workflow 工具运行中的进度：详细模式显示完整进度，否则显示一行摘要。
  */
@@ -61,7 +61,7 @@ function renderToolUseProgressMessage(progressMessages, options) {
     }),
   });
 }
-//@ chunk-9hy503gy.js:7020-7751 placement
+//@ chunk-1wnh48wm.js:7357-8088 placement
 /**
  * 工作流进度摘要行组件：完成数/总数、运行中数量、状态点（运行/完成/失败）与当前阶段标题。
  */
@@ -150,7 +150,7 @@ function WorkflowProgressSummary(props) {
   } else element = $[22];
   return element;
 }
-//@ chunk-9hy503gy.js:7751-8232 placement
+//@ chunk-1wnh48wm.js:8088-8569 placement
 /**
  * 渲染 Workflow 工具结果：错误、已在云会话启动（附会话链接与警告），或后台任务行。
  */
@@ -204,7 +204,7 @@ function renderToolResultMessage(result) {
     taskId: result.taskId,
   });
 }
-//@ chunk-9hy503gy.js:8232-9910 placement
+//@ chunk-1wnh48wm.js:8569-10247 placement
 function WorkflowTaskRow(props) {
   let $ = useMemoCache(23);
   let { taskId } = props;
@@ -348,7 +348,7 @@ function WorkflowTaskRow(props) {
   } else fallbackResult = $[22];
   return fallbackResult;
 }
-//@ chunk-9hy503gy.js:9910-10553 placement
+//@ chunk-1wnh48wm.js:10247-10890 placement
 /**
  * 工作流任务的查看提示：后台运行时提示用 /workflows（或 /tasks）监控，否则提示查看运行中的动态工作流。
  */
@@ -411,7 +411,7 @@ function WorkflowMonitorHint(props) {
   } else element = $[9];
   return element;
 }
-//@ chunk-9hy503gy.js:10553-10909 placement
+//@ chunk-1wnh48wm.js:10890-11247 placement
 /**
  * 默认工作流规模的附注：显示当前规模并提示可在 /config 修改（非默认或不受限时不显示）。
  */
@@ -448,7 +448,7 @@ function WorkflowSizeNote() {
   } else note = $[1];
   return note;
 }
-//@ chunk-9hy503gy.js:10909-11004 placement
+//@ chunk-1wnh48wm.js:11247-11342 placement
 /**
  * 渲染“工作流被拒绝”的工具结果；当前实现只输出 “Dynamic workflow cancelled” 一行（函数被复用来渲染拒绝状态）。
  */

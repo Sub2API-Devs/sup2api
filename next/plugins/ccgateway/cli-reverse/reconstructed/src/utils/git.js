@@ -3,15 +3,15 @@
  *
  * git 根/主仓库根查找（不 spawn，带缓存）、gitExe、分支/默认分支/远程 URL、git config 读取、危险命令前的 status 摘要、teleport stash、worktree 分支状态
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/git.ts
- * pieces: chunk-0sfjpx19.js (1), chunk-1r5nz6dk.js (1), chunk-ca06bv0t.js (1), chunk-e6aww6q8.js (19), chunk-qmzcskz6.js (6), chunk-t0gq9gyw.js (60), chunk-wyqg6m3h.js (1)
- * attribution: fingerprint 12, affinity 1, placement 14, layout 17, facade-exports 44, sole-consumer 1
+ * pieces: chunk-5xgkngpb.js (19), chunk-85eyj5gy.js (60), chunk-c7hntn0y.js (1), chunk-deax24jz.js (4), chunk-hma1b5gv.js (1), chunk-nh1pvp1m.js (1), chunk-s4mtq5zk.js (1)
+ * attribution: affinity 1, fingerprint 11, placement 14, layout 16, facade-exports 44, sole-consumer 1
  */
 import { resolve, sep, join, dirname, basename, isAbsolute, relative } from "path";
 import { lstat, realpath } from "fs/promises";
 import { readFileSync, realpathSync, lstatSync, statSync, accessSync, constants } from "fs";
-import { homedir, hostname, networkInterfaces } from "os";
+import { homedir, networkInterfaces } from "os";
 import { createHash } from "crypto";
 import { isDiskless, getRootSession, getSessionId } from "../bootstrap/state.js";
 import {
@@ -66,8 +66,6 @@ import { isSelfAddressableSessionId } from "../bridge/sessionIdCompat.js";
 import { getFsImplementation } from "./fsOperations.js";
 import { getPlatform } from "./platform.js";
 import {
-  foldWindowsPathComponent,
-  SHORT_WINDOWS_PATH_CHARS,
   stripWin32DevicePrefix,
   WIN32_DEVICE_NAMESPACE_RE,
   POSIX_SEP,
@@ -104,7 +102,7 @@ import {
 } from "../plugins/bundled/diffPane/gitDiffRead.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-t0gq9gyw.js:71536-72067 fingerprint (2.1.88 match: findGitRootImpl, 0.914)
+//@ chunk-85eyj5gy.js:72385-72916 fingerprint (2.1.88 match: findGitRootImpl, 0.914)
 /**
  * 从起始路径逐级向上 lstat `.git`（目录、文件或指向安全位置的符号链接）找 git 根，不 spawn git；diskless 时直接返回负结果。打 find_git_root_started/completed 诊断日志（耗时、stat 次数）。
  */
@@ -146,7 +144,7 @@ function findGitRootImpl(startPath) {
   });
   return REPO_NEGATIVE_RESULT;
 }
-//@ chunk-t0gq9gyw.js:72067-72136 facade-exports
+//@ chunk-85eyj5gy.js:72916-72985 facade-exports
 /**
  * findGitRoot：带 rootByPath 缓存的 git 根查找，未找到返回 null。
  */
@@ -154,12 +152,12 @@ function findGitRoot(startPath) {
   let root = memoizeMap(getGitRepoCache().rootByPath, startPath, findGitRootImpl);
   return root === REPO_NEGATIVE_RESULT ? null : root;
 }
-//@ chunk-t0gq9gyw.js:72136-72185 facade-exports
+//@ chunk-85eyj5gy.js:72985-73034 facade-exports
 function findGitRootUncached(startPath) {
   let result = findGitRootImpl(startPath);
   return result === REPO_NEGATIVE_RESULT ? null : result;
 }
-//@ chunk-t0gq9gyw.js:72185-72540 facade-exports
+//@ chunk-85eyj5gy.js:73034-73389 facade-exports
 async function findGitRootThroughBackendUncached(hostFiles, startPath) {
   if (isDiskless())
     return {
@@ -185,13 +183,13 @@ async function findGitRootThroughBackendUncached(hostFiles, startPath) {
     absolutePath = parentPath === absolutePath ? stopPath : parentPath;
   }
 }
-//@ chunk-t0gq9gyw.js:72540-72621 facade-exports
+//@ chunk-85eyj5gy.js:73389-73470 facade-exports
 function findGitRootRecheckingNegative(startPath) {
   let rootByPath = getGitRepoCache().rootByPath;
   if (rootByPath.peek(startPath) === REPO_NEGATIVE_RESULT) rootByPath.delete(startPath);
   return findGitRoot(startPath);
 }
-//@ chunk-t0gq9gyw.js:72621-72817 facade-exports
+//@ chunk-85eyj5gy.js:73470-73666 facade-exports
 async function findGitRootVerifyingPositive(startPath) {
   let gitRootRecheckingNegative = findGitRootRecheckingNegative(startPath);
   if (gitRootRecheckingNegative === null) return null;
@@ -205,7 +203,7 @@ async function findGitRootVerifyingPositive(startPath) {
     return findGitRootRecheckingNegative(startPath);
   }
 }
-//@ chunk-t0gq9gyw.js:72817-73139 facade-exports
+//@ chunk-85eyj5gy.js:73666-73988 facade-exports
 /**
  * 删除位于某目录下的所有 git 相关缓存（git 根、canonical 根、remote slug、monorepo 判定、gitDir、repository 等），在目录被移动/删除后调用。
  */
@@ -228,7 +226,7 @@ function forgetGitRootsUnder(dirPath) {
     for (let key of [...cacheMap.keys()])
       if (isPathWithin(resolvedDir, identity(resolve(key)))) cacheMap.delete(key);
 }
-//@ chunk-t0gq9gyw.js:73139-73211 layout
+//@ chunk-85eyj5gy.js:73988-74060 layout
 function getCanonicalRootUncached(gitRoot) {
   try {
     return resolveCanonicalRoot(gitRoot, readFileSync(join(gitRoot, ".git"), "utf-8"));
@@ -236,7 +234,7 @@ function getCanonicalRootUncached(gitRoot) {
     return gitRoot;
   }
 }
-//@ chunk-t0gq9gyw.js:73211-73844 fingerprint (2.1.88 match: resolveCanonicalRoot, 0.904)
+//@ chunk-85eyj5gy.js:74060-74693 fingerprint (2.1.88 match: resolveCanonicalRoot, 0.904)
 /**
  * 解析 worktree 的 `.git` 文件内容（gitdir:），校验 commondir、worktrees/<name>/gitdir 回指与 realpath 一致后返回主仓库根；任何一步不可信都退回原根，防止伪造 .git 文件把路径引到别处。
  */
@@ -271,13 +269,13 @@ function resolveCanonicalRoot(gitRoot, gitContent) {
     return gitRoot;
   }
 }
-//@ chunk-t0gq9gyw.js:73844-73976 layout
+//@ chunk-85eyj5gy.js:74693-74825 layout
 async function resolveCanonicalRootOnHost(hostFiles, gitRoot) {
   let text = await hostFiles.readText(PathSpace.workspace(join(gitRoot, ".git")));
   if (!text.ok || !text.value.found) return;
   return resolveCanonicalRoot(gitRoot, text.value.value);
 }
-//@ chunk-t0gq9gyw.js:73976-74063 facade-exports
+//@ chunk-85eyj5gy.js:74825-74912 facade-exports
 /**
  * findCanonicalGitRoot：git 根若是 linked worktree，则经 .git 文件的 gitdir/commondir 解析出主仓库根；结果缓存在 canonicalRootByRoot。
  */
@@ -286,13 +284,13 @@ function findCanonicalGitRoot(startPath) {
   if (!gitRoot) return null;
   return memoizeMap(getGitRepoCache().canonicalRootByRoot, gitRoot, getCanonicalRootUncached);
 }
-//@ chunk-t0gq9gyw.js:74063-74121 facade-exports
+//@ chunk-85eyj5gy.js:74912-74970 facade-exports
 function findCanonicalGitRootUncached(startPath) {
   let gitRoot = findGitRootUncached(startPath);
   if (!gitRoot) return null;
   return getCanonicalRootUncached(gitRoot);
 }
-//@ chunk-t0gq9gyw.js:74121-74592 facade-exports
+//@ chunk-85eyj5gy.js:74970-75441 facade-exports
 async function primeGitRootMemo(context, startPath) {
   if (context.hostFiles.serving("workspace") !== "host") return;
   let gitRepoCache = getGitRepoCache();
@@ -322,7 +320,7 @@ async function primeGitRootMemo(context, startPath) {
   seedGitRootMemo(startPath, seeded.gitRoot, seeded.canonicalRoot);
   return seeded;
 }
-//@ chunk-t0gq9gyw.js:74592-75090 facade-exports
+//@ chunk-85eyj5gy.js:75441-75939 facade-exports
 /**
  * 用已知结果预填 git 根缓存（findGitRoot 与 canonical 根）；已有不同答案时保留旧值并告警。
  */
@@ -351,7 +349,7 @@ function seedGitRootMemo(startPath, gitRoot, canonicalRoot) {
       },
     );
 }
-//@ chunk-t0gq9gyw.js:75090-75144 facade-exports
+//@ chunk-85eyj5gy.js:75939-75993 facade-exports
 /**
  * 当前路径是否在 linked worktree 中（git 根与 canonical 根不同）。
  */
@@ -359,12 +357,12 @@ function isLinkedWorktree(startPath) {
   let gitRoot = findGitRoot(startPath);
   return gitRoot !== null && findCanonicalGitRoot(startPath) !== gitRoot;
 }
-//@ chunk-t0gq9gyw.js:75144-75199 facade-exports
+//@ chunk-85eyj5gy.js:75993-76048 facade-exports
 function isLinkedWorktreeUncached(canonical) {
   let gitRoot = findGitRootUncached(canonical);
   return gitRoot !== null && getCanonicalRootUncached(gitRoot) !== gitRoot;
 }
-//@ chunk-t0gq9gyw.js:75199-75331 facade-exports
+//@ chunk-85eyj5gy.js:76048-76180 facade-exports
 /**
  * 若 git dir 位于 <common>/worktrees/<name> 下，返回 worktree 名。
  */
@@ -374,10 +372,10 @@ async function getGitWorktreeName(startPath) {
   if (!gitDir || basename(gitDir) === ".git" || basename(dirname(gitDir)) !== "worktrees") return null;
   return basename(gitDir);
 }
-//@ chunk-t0gq9gyw.js:75331-75448 facade-exports
+//@ chunk-85eyj5gy.js:76180-76297 facade-exports
 var RAW_BLOB_DIFF_FLAGS = ["--no-ext-diff", "--no-textconv"];
 var PLAIN_PATCH_FLAGS = ["--no-color", "--src-prefix=a/", "--dst-prefix=b/", "--submodule=short"];
-//@ chunk-t0gq9gyw.js:75448-75821 facade-exports
+//@ chunk-85eyj5gy.js:76297-76670 facade-exports
 /**
  * gitExe：返回要执行的 git 可执行文件（which git 结果缓存，Windows 下识别启动器后的真实程序），diskless 时为 "git"。
  */
@@ -401,18 +399,18 @@ function gitExe() {
     ? gitBehindLauncher.program
     : gitRepoCache.gitExecutable;
 }
-//@ chunk-t0gq9gyw.js:75821-75849 layout
+//@ chunk-85eyj5gy.js:76670-76698 layout
 var MSYS_GIT_SUBDIRS = ["mingw64", "ucrt64"];
-//@ chunk-t0gq9gyw.js:75849-75882 layout
+//@ chunk-85eyj5gy.js:76698-76731 layout
 async function probeGitLauncher(gitExecutable) {
   return null;
 }
-//@ chunk-t0gq9gyw.js:75882-75909 layout
+//@ chunk-85eyj5gy.js:76731-76758 layout
 var isGitCacheBySession; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-t0gq9gyw.js:75882", () => {
+deferInit("chunk-85eyj5gy.js:76731", () => {
   isGitCacheBySession = new SessionRootSlot(() => new Map());
 });
-//@ chunk-t0gq9gyw.js:75909-76095 fingerprint (2.1.88 match: getIsGit, 1)
+//@ chunk-85eyj5gy.js:76758-76944 fingerprint (2.1.88 match: getIsGit, 1)
 /**
  * 当前 cwd 是否在 git 仓库内（基于 findGitRoot，不 spawn），打 is_git_check_* 诊断日志。
  */
@@ -427,11 +425,11 @@ async function getIsGit_2() {
   });
   return isGit;
 }
-//@ chunk-t0gq9gyw.js:76095-76120 layout
+//@ chunk-85eyj5gy.js:76944-76969 layout
 function getCurrentHost() {
   return getRootSession();
 }
-//@ chunk-t0gq9gyw.js:76120-76223 facade-exports
+//@ chunk-85eyj5gy.js:76969-77072 facade-exports
 /**
  * 按会话缓存 getIsGit() 的 promise。
  */
@@ -444,20 +442,20 @@ function getIsGit() {
   cache.set(sessionId, isGit);
   return isGit;
 }
-//@ chunk-t0gq9gyw.js:76223-76288 facade-exports
+//@ chunk-85eyj5gy.js:77072-77137 facade-exports
 function clearIsGitMemoFor(host) {
   isGitCacheBySession.of(host).clear();
   getGitRepoCache().diffCheckoutIsRepo.clear();
 }
-//@ chunk-t0gq9gyw.js:76288-76313 facade-exports
+//@ chunk-85eyj5gy.js:77137-77162 facade-exports
 function clearIsGitMemo() {
   clearIsGitMemoFor(getCurrentHost());
 }
-//@ chunk-t0gq9gyw.js:76313-76341 facade-exports
+//@ chunk-85eyj5gy.js:77162-77191 facade-exports
 function getGitDir(startPath) {
   return resolveGitDir(startPath);
 }
-//@ chunk-t0gq9gyw.js:76341-76599 facade-exports (2.1.88 match: preserveGitStateForIssue, 0.512)
+//@ chunk-85eyj5gy.js:77191-77449 facade-exports (2.1.88 match: preserveGitStateForIssue, 0.511)
 /**
  * dirIsInGitRepo 及同语句的 getHead（读缓存的 HEAD sha）、getBranch（git rev-parse --abbrev-ref HEAD，失败为 "HEAD"）。
  */
@@ -481,7 +479,7 @@ var getBranch = async (
   );
   return code === 0 ? stdout.trim() || "HEAD" : "HEAD";
 };
-//@ chunk-t0gq9gyw.js:76599-76770 facade-exports
+//@ chunk-85eyj5gy.js:77449-77620 facade-exports
 async function isBranchOnOrigin(branch, cwd) {
   return (
     (
@@ -497,7 +495,7 @@ async function isBranchOnOrigin(branch, cwd) {
     ).code === 0
   );
 }
-//@ chunk-t0gq9gyw.js:76770-77468 facade-exports
+//@ chunk-85eyj5gy.js:77620-78318 facade-exports
 /**
  * getDefaultBranch：先读 refs/remotes/origin/HEAD 指向的分支并确认存在，否则依次尝试 main/master 的远程分支，最后默认 "main"。不带目录时读 GitFileWatcher 的缓存。
  */
@@ -560,7 +558,7 @@ var getDefaultBranchIfKnown = async (
     : null;
 };
 var BRANCH_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-//@ chunk-t0gq9gyw.js:77468-77660 facade-exports
+//@ chunk-85eyj5gy.js:78318-78510 facade-exports
 /**
  * git config --get <key>（cwd 仓库），无值返回 null。
  */
@@ -574,7 +572,7 @@ async function readGitConfigValue(key) {
   let trimmed = stdout.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
-//@ chunk-t0gq9gyw.js:77660-77856 facade-exports
+//@ chunk-85eyj5gy.js:78510-78706 facade-exports
 /**
  * git config --global --includes --get <key>。
  */
@@ -591,14 +589,14 @@ async function readGlobalGitConfigValue(key, cwd) {
   let trimmed = stdout.trim();
   return code === 0 && trimmed.length > 0 ? trimmed : null;
 }
-//@ chunk-t0gq9gyw.js:77856-77990 layout
+//@ chunk-85eyj5gy.js:78706-78840 layout
 async function getPushRemote(remotes) {
   let gitConfigValue = await readGitConfigValue("remote.pushDefault");
   if (gitConfigValue && remotes.includes(gitConfigValue)) return gitConfigValue;
   if (remotes.length === 1) return remotes[0] ?? null;
   return null;
 }
-//@ chunk-t0gq9gyw.js:77990-78289 facade-exports
+//@ chunk-85eyj5gy.js:78840-79139 facade-exports
 /**
  * 列出可推送的远程：origin 与 remote.pushDefault（或唯一远程），用于生成 git push 权限规则。
  */
@@ -622,20 +620,20 @@ async function getGitPushRemotes() {
   if (pushRemote && BRANCH_NAME_RE.test(pushRemote)) result.add(pushRemote);
   return [...result];
 }
-//@ chunk-t0gq9gyw.js:78289-78369 facade-exports
+//@ chunk-85eyj5gy.js:79139-79219 facade-exports
 /**
  * 为远程生成 `git push <r> *`、`git push -u <r> *` 权限规则模式。
  */
 function gitPushShellPatternsForRemotes(gitPushRemotes) {
   return gitPushRemotes.flatMap((remote) => [`git push ${remote} *`, `git push -u ${remote} *`]);
 }
-//@ chunk-t0gq9gyw.js:78369-78444 facade-exports
+//@ chunk-85eyj5gy.js:79219-79294 facade-exports
 function toPowerShellRules(rules) {
   return stripCheckoutBaseRule(bashAndPowerShellRules(rules)).filter((rule) =>
     rule.startsWith("PowerShell("),
   );
 }
-//@ chunk-t0gq9gyw.js:78444-78566 facade-exports
+//@ chunk-85eyj5gy.js:79294-79416 facade-exports
 /**
  * getRemoteUrl：GitFileWatcher 缓存的 origin URL；同语句 $lo 在仓库根是 home 目录时返回 null（避免把 dotfiles 仓库当项目）。
  */
@@ -646,7 +644,7 @@ var getRemoteUrlForBridge = async () => {
   if (gitRoot === null || (await isHomeDirectoryGitRoot(gitRoot))) return null;
   return getCachedRemoteUrl();
 };
-//@ chunk-t0gq9gyw.js:78566-78728 facade-exports
+//@ chunk-85eyj5gy.js:79416-79578 facade-exports
 /**
  * 路径是否就是 home 目录（含 realpath 比较）。
  */
@@ -665,7 +663,7 @@ async function isHomeDirectoryGitRoot(gitRoot) {
   );
   return realHome !== null && gitRoot === realHome;
 }
-//@ chunk-t0gq9gyw.js:78728-78842 facade-exports
+//@ chunk-85eyj5gy.js:79578-79692 facade-exports
 var snapshotGitEvidenceForBridge = async () => {
   let [branch, remoteUrlForBridge, cachedDefaultBranchIfKnown] = await Promise.all([
     getBranch(),
@@ -678,14 +676,14 @@ var snapshotGitEvidenceForBridge = async () => {
     defaultBranch: cachedDefaultBranchIfKnown,
   };
 };
-//@ chunk-t0gq9gyw.js:78842-78910 facade-exports
+//@ chunk-85eyj5gy.js:79692-79760 facade-exports
 /**
  * 把 URL 中的 user:pass@ 凭证替换为 ***@，用于日志。
  */
 function redactGitRemoteCredentials(remoteUrl) {
   return remoteUrl == null ? remoteUrl : remoteUrl.replace(/:\/\/[^/]*@/, "://***@");
 }
-//@ chunk-t0gq9gyw.js:78910-79453 facade-exports (2.1.88 match: normalizeGitRemoteUrl, 1)
+//@ chunk-85eyj5gy.js:79760-80304 facade-exports (2.1.88 match: normalizeGitRemoteUrl, 1)
 /**
  * 把 ssh/https/git 等多种远程 URL 归一化为 host/owner/repo 形式，用于比较与遥测。
  */
@@ -712,7 +710,7 @@ function normalizeGitRemoteUrl(url) {
   }
   return null;
 }
-//@ chunk-t0gq9gyw.js:79453-79888 layout
+//@ chunk-85eyj5gy.js:80304-80739 layout
 /**
  * 按远程 URL 的主机名把 git 托管平台归类为 github、ghe、gitlab、bitbucket、azure、other 或 none。
  */
@@ -732,7 +730,7 @@ function classifyGitHost(remoteUrl) {
     return "azure";
   return "other";
 }
-//@ chunk-t0gq9gyw.js:79888-80083 facade-exports
+//@ chunk-85eyj5gy.js:80739-80934 facade-exports
 async function getGitPresenceForAnalytics() {
   if (isRemoteSessionAvailable()) return null;
   let [isGit, remoteUrl] = await Promise.all([getIsGit(), getRemoteUrl()]).catch(() => [false, null]);
@@ -743,22 +741,22 @@ async function getGitPresenceForAnalytics() {
     remote_host_class: classifyGitHost(normalizedRemote ? firstLineOf(normalizedRemote, "/") : null),
   };
 }
-//@ chunk-t0gq9gyw.js:80537-80591 sole-consumer
+//@ chunk-85eyj5gy.js:81388-81442 sole-consumer
 function getRemoteUrlForDirCached(dirPath) {
   return memoizeMap(getGitRepoCache().remoteSlugByRoot, dirPath, getRemoteUrlForDir_2);
 }
-//@ chunk-t0gq9gyw.js:80591-80653 facade-exports
+//@ chunk-85eyj5gy.js:81442-81504 facade-exports
 function findRepoRemoteSlug(dirPath) {
   let remoteUrlForDir = getRemoteUrlForDirCached(dirPath);
   return typeof remoteUrlForDir === "string" ? remoteUrlForDir : null;
 }
-//@ chunk-t0gq9gyw.js:80653-80687 facade-exports
+//@ chunk-85eyj5gy.js:81504-81538 facade-exports
 function isRepoConfigUnreadable(dirPath) {
   return getRemoteUrlForDirCached(dirPath) === REPO_UNREADABLE_RESULT;
 }
-//@ chunk-t0gq9gyw.js:80687-80701 layout
+//@ chunk-85eyj5gy.js:81538-81552 layout
 var MAX_REPO_CONFIG_BYTES = 128000;
-//@ chunk-t0gq9gyw.js:80701-80973 facade-exports
+//@ chunk-85eyj5gy.js:81552-81824 facade-exports
 function readRepoConfig(gitRoot, maxBytes) {
   try {
     let useDotGitDir = true;
@@ -791,7 +789,7 @@ function readRepoConfig(gitRoot, maxBytes) {
     };
   }
 }
-//@ chunk-t0gq9gyw.js:80973-81214 layout
+//@ chunk-85eyj5gy.js:81824-82065 layout
 function readSmallTextFile(filePath, gitRoot, maxBytes) {
   if (readPositionIsUnsafe(filePath, gitRoot))
     return {
@@ -820,20 +818,30 @@ function readSmallTextFile(filePath, gitRoot, maxBytes) {
         text: file,
       };
 }
-//@ chunk-t0gq9gyw.js:81214-81296 facade-exports
+//@ chunk-85eyj5gy.js:82065-82147 facade-exports
 function readRepoConfigText(gitRoot) {
   let repoConfig = readRepoConfig(gitRoot, MAX_REPO_CONFIG_BYTES);
   return repoConfig.ok && !repoConfig.text.includes("\x00") ? repoConfig.text : null;
 }
-//@ chunk-t0gq9gyw.js:81296-81444 facade-exports (2.1.88 match: getServerKey, 1)
+//@ chunk-85eyj5gy.js:82147-82419 facade-exports (2.1.88 match: getServerKey, 0.82)
 async function getRepoRemoteHash() {
   let remoteUrl = await getRemoteUrl();
-  if (!remoteUrl) return null;
-  let configJson = normalizeGitRemoteUrl(remoteUrl);
-  if (!configJson) return null;
-  return createHash("sha256").update(configJson).digest("hex").substring(0, 16);
+  let gitRepoCache = getGitRepoCache();
+  if (!remoteUrl) {
+    gitRepoCache.lastRemoteHash = undefined;
+    return null;
+  }
+  let cacheKey = `${isCcrGitProxySession()} ${remoteUrl}`;
+  if (gitRepoCache.lastRemoteHash?.key !== cacheKey) {
+    let configJson = normalizeGitRemoteUrl(remoteUrl);
+    gitRepoCache.lastRemoteHash = {
+      key: cacheKey,
+      hash: configJson ? createHash("sha256").update(configJson).digest("hex").substring(0, 16) : null,
+    };
+  }
+  return gitRepoCache.lastRemoteHash.hash;
 }
-//@ chunk-t0gq9gyw.js:81444-82405 facade-exports
+//@ chunk-85eyj5gy.js:82419-83380 facade-exports
 var getIsHeadOnRemote = async () => {
   let { code } = await execFileNoThrow(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, "rev-parse", "@{u}"], {
     preserveOutputOnError: false,
@@ -911,7 +919,7 @@ var getFileStatus = async (
   };
 };
 var getWorktreeCount = async () => getWorktreeCountFromFs();
-//@ chunk-t0gq9gyw.js:82405-82685 facade-exports (2.1.88 match: getGitState, 0.748)
+//@ chunk-85eyj5gy.js:83380-83660 facade-exports (2.1.88 match: getGitState, 0.748)
 /**
  * 汇总 git 状态（提交、分支、远程、是否 dirty 等）用于 issue/反馈附带信息。
  */
@@ -939,7 +947,7 @@ async function getGitState() {
     return null;
   }
 }
-//@ chunk-t0gq9gyw.js:82685-82968 facade-exports (2.1.88 match: getGithubRepo, 0.763)
+//@ chunk-85eyj5gy.js:83660-83943 facade-exports (2.1.88 match: getGithubRepo, 0.763)
 /**
  * 从 origin URL 解析 GitHub owner/repo，非 GitHub 返回 null。
  */
@@ -959,7 +967,7 @@ async function getGithubRepo() {
   logForDebugging("Local GitHub repo: unknown");
   return null;
 }
-//@ chunk-t0gq9gyw.js:82968-83093 facade-exports
+//@ chunk-85eyj5gy.js:83943-84068 facade-exports
 function isCcrGitProxySession() {
   return (
     env.CLAUDE_CODE_REMOTE ||
@@ -967,7 +975,7 @@ function isCcrGitProxySession() {
       env.CLAUDE_CODE_ENVIRONMENT_KIND === undefined)
   );
 }
-//@ chunk-t0gq9gyw.js:83093-83283 facade-exports (2.1.88 match: isLocalHost, 1)
+//@ chunk-85eyj5gy.js:84068-84258 facade-exports (2.1.88 match: isLocalHost, 1)
 function isLocalHost(host) {
   let index = host.indexOf(":");
   let hostPart = index === -1 ? host : host.slice(0, index);
@@ -975,9 +983,9 @@ function isLocalHost(host) {
   if (portPart !== "" && !/^\d+$/.test(portPart)) return false;
   return hostPart === "localhost" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostPart);
 }
-//@ chunk-t0gq9gyw.js:83283-83295 layout
+//@ chunk-85eyj5gy.js:84258-84270 layout
 var MAX_LINK_TARGET_BYTES = 4096;
-//@ chunk-t0gq9gyw.js:83295-83859 layout
+//@ chunk-85eyj5gy.js:84270-84834 layout
 /**
  * 逐段解析路径并展开符号链接（最多 64 次，处理 . 与 ..），遇到不安全位置、读取失败或链接目标不安全时返回 null，返回最终真实路径。
  */
@@ -1028,7 +1036,7 @@ function resolvePathWithoutSymlinks(fs, path, roots) {
   }
   return resolved;
 }
-//@ chunk-t0gq9gyw.js:83859-86395 facade-exports
+//@ chunk-85eyj5gy.js:84834-87370 facade-exports
 function isCurrentDirectoryBareGitRepo() {
   let fsImplementation = getFsImplementation();
   let cwd = getCwd();
@@ -1181,32 +1189,7 @@ function isCurrentDirectoryBareGitRepo() {
   logFeatureOk("git_bare_repo_gate");
   return false;
 }
-//@ chunk-qmzcskz6.js:7821-8135 fingerprint (2.1.88 match: isLocalHost, 1)
-/**
- * 判断主机名是否指向本机（localhost、127.x、本机 hostname 及其短名、本机网卡 IP/ipv6-literal.net 形式）。
- */
-function isLocalHost_2(hostnameCandidate, allowShortNames = true) {
-  let replaced = hostnameCandidate.toLowerCase().replace(/\.$/, "");
-  let isWindows = getPlatform() === "windows";
-  let fold = isWindows && allowShortNames ? foldWindowsPathComponent : (value) => value.toLowerCase();
-  let localHost = fold(hostname());
-  let localShortName = firstLineOf(localHost, ".");
-  return (
-    replaced === "localhost" ||
-    /^127(?:\.\d{1,3}){3}$/.test(replaced) ||
-    replaced === localHost ||
-    (isWindows &&
-      (replaced === localShortName ||
-        (allowShortNames &&
-          (replaced === localShortName.slice(0, SHORT_WINDOWS_PATH_CHARS) ||
-            replaced === fold(firstLineOf(hostname(), ".").slice(0, SHORT_WINDOWS_PATH_CHARS)))))) ||
-    replaced.startsWith(`${localShortName}.`) ||
-    (IP_LITERAL_PATTERN.test(replaced) && (getLocalInterfaceAddresses()?.has(replaced) ?? allowShortNames))
-  );
-}
-//@ chunk-qmzcskz6.js:8135-8191 layout
-var IP_LITERAL_PATTERN = /^\d{1,3}(?:\.\d{1,3}){3}$|\.ipv6-literal\.net$/;
-//@ chunk-qmzcskz6.js:8191-8416 placement
+//@ chunk-deax24jz.js:8191-8416 placement
 function getLocalInterfaceAddresses() {
   let networkInterfaces = getNetworkInterfacesSafe();
   if (networkInterfaces === null) return null;
@@ -1219,7 +1202,7 @@ function getLocalInterfaceAddresses() {
     ),
   );
 }
-//@ chunk-qmzcskz6.js:8416-8465 placement
+//@ chunk-deax24jz.js:8416-8465 placement
 function getNetworkInterfacesSafe() {
   try {
     return networkInterfaces();
@@ -1227,7 +1210,7 @@ function getNetworkInterfacesSafe() {
     return null;
   }
 }
-//@ chunk-qmzcskz6.js:8465-8581 placement
+//@ chunk-deax24jz.js:8465-8581 placement
 /**
  * 判断路径在当前平台是否为绝对路径（Windows 下识别盘符与 UNC 形式）。
  */
@@ -1239,7 +1222,7 @@ function isAbsolutePlatformPath(filePath) {
     (POSIX_SEP.test(strippedPath) || WIN32_UNC_HOST_RE.test(strippedPath))
   );
 }
-//@ chunk-qmzcskz6.js:8581-8678 placement (2.1.88 match: getReservedShortcuts, 1)
+//@ chunk-deax24jz.js:8581-8678 placement (2.1.88 match: getReservedShortcuts, 1)
 function normalizeCommandForPlatform(cwd) {
   switch (getPlatform()) {
     case "macos":
@@ -1250,7 +1233,7 @@ function normalizeCommandForPlatform(cwd) {
       return cwd;
   }
 }
-//@ chunk-e6aww6q8.js:1257182-1257363 affinity
+//@ chunk-5xgkngpb.js:1255022-1255203 affinity
 function getGitSubcommandPath(args) {
   let subcommandPath = [];
   let sliced = args.slice(1);
@@ -1262,7 +1245,7 @@ function getGitSubcommandPath(args) {
   }
   return subcommandPath;
 }
-//@ chunk-e6aww6q8.js:1257363-1257695 fingerprint (2.1.88 match: gitExe, 1)
+//@ chunk-5xgkngpb.js:1255203-1255541 fingerprint (2.1.88 match: gitExe, 1)
 function isGitArgMatchingFlagRule(programName, args) {
   let exclusions = getOwn(GIT_SUBCOMMAND_EXCLUSIONS, programName);
   if (exclusions === undefined) return false;
@@ -1286,7 +1269,7 @@ function isGitArgMatchingFlagRule(programName, args) {
     );
   });
 }
-//@ chunk-e6aww6q8.js:1260478-1260686 fingerprint (2.1.88 match: getIsHeadOnRemote, 0.489)
+//@ chunk-5xgkngpb.js:1258324-1258532 fingerprint (2.1.88 match: getIsHeadOnRemote, 0.487)
 function hasDangerousGitGlobalOption(args, commandText) {
   let gitSubcommandIndex = findGitSubcommandIndex(args);
   return (
@@ -1302,9 +1285,9 @@ function hasDangerousGitGlobalOption(args, commandText) {
     ),
   );
 }
-//@ chunk-e6aww6q8.js:1260686-1260971 placement
+//@ chunk-5xgkngpb.js:1258532-1258817 placement
 var SAFE_GIT_GLOBAL_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1260686", () => {
+deferInit("chunk-5xgkngpb.js:1258532", () => {
   SAFE_GIT_GLOBAL_FLAGS = new Set([
     "-p",
     "-P",
@@ -1326,7 +1309,7 @@ deferInit("chunk-e6aww6q8.js:1260686", () => {
     "--help",
   ]);
 });
-//@ chunk-e6aww6q8.js:1874180-1874593 placement
+//@ chunk-5xgkngpb.js:1952999-1953413 placement
 /**
  * 为 git 网络操作构建环境：固定 git 目录、读取 sshCommand 配置；非 Windows 且未显式设置时禁止 SSH_ASKPASS，始终脱离控制终端。
  */
@@ -1362,7 +1345,7 @@ async function getGitSshEnv(cwd) {
     withoutControllingTerminal: true,
   };
 }
-//@ chunk-e6aww6q8.js:2833370-2833884 placement
+//@ chunk-5xgkngpb.js:2902255-2902769 placement
 /**
  * 以只读方式运行 git（无可选锁、有超时与 1MB 输出上限），返回 {ok, stdout} 或失败信息（退出码、是否超时、是否溢出）；受限评估环境直接失败。
  */
@@ -1410,14 +1393,14 @@ async function runGitReadOnly(cwd, args, { abortSignal, userLocale } = {}) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:2833884-2833918 placement
+//@ chunk-5xgkngpb.js:2902769-2902803 placement
 /**
  * 读取"自动模式 git status 开关"的设置值。
  */
 function autoModeGitStatusSettingValue() {
   return getAutoModeGitStatusSetting().value;
 }
-//@ chunk-e6aww6q8.js:2833918-2834113 placement
+//@ chunk-5xgkngpb.js:2902803-2902998 placement
 function getAutoModeGitStatusSetting() {
   let CLAUDE_CODE_AUTO_MODE_GIT_STATUS = antEnv.CLAUDE_CODE_AUTO_MODE_GIT_STATUS;
   if (CLAUDE_CODE_AUTO_MODE_GIT_STATUS !== undefined)
@@ -1436,14 +1419,14 @@ function getAutoModeGitStatusSetting() {
         src: "default",
       };
 }
-//@ chunk-e6aww6q8.js:2834113-2834147 placement
+//@ chunk-5xgkngpb.js:2902998-2903032 placement
 /**
  * 读取"自动模式 git status 上传开关"的设置值。
  */
 function autoModeGitStatusUploadsValue() {
   return getAutoModeGitStatusUploads().value;
 }
-//@ chunk-e6aww6q8.js:2834147-2834353 placement
+//@ chunk-5xgkngpb.js:2903032-2903238 placement
 function getAutoModeGitStatusUploads() {
   let CLAUDE_CODE_AUTO_MODE_GIT_STATUS_UPLOADS = antEnv.CLAUDE_CODE_AUTO_MODE_GIT_STATUS_UPLOADS;
   if (CLAUDE_CODE_AUTO_MODE_GIT_STATUS_UPLOADS !== undefined)
@@ -1462,16 +1445,16 @@ function getAutoModeGitStatusUploads() {
         src: "default",
       };
 }
-//@ chunk-e6aww6q8.js:2834353-2834366 placement
+//@ chunk-5xgkngpb.js:2903238-2903251 placement
 var DEFAULT_GIT_STATUS_LIMIT = 2000;
-//@ chunk-e6aww6q8.js:2834366-2834400 placement
+//@ chunk-5xgkngpb.js:2903251-2903285 placement
 /**
  * 读取"自动模式 git status 输出上限"的设置值。
  */
 function autoModeGitStatusLimitValue() {
   return getAutoModeGitStatusLimit().value;
 }
-//@ chunk-e6aww6q8.js:2834400-2834632 placement
+//@ chunk-5xgkngpb.js:2903285-2903517 placement
 function getAutoModeGitStatusLimit() {
   let CLAUDE_CODE_AUTO_MODE_GIT_STATUS_LIMIT = antEnv.CLAUDE_CODE_AUTO_MODE_GIT_STATUS_LIMIT;
   if (CLAUDE_CODE_AUTO_MODE_GIT_STATUS_LIMIT !== undefined)
@@ -1490,10 +1473,10 @@ function getAutoModeGitStatusLimit() {
         src: "default",
       };
 }
-//@ chunk-e6aww6q8.js:2834632-2834908 layout
+//@ chunk-5xgkngpb.js:2903517-2903793 layout
 var DESTRUCTIVE_COMMAND_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var GIT_STAGE_COMMIT_PUSH_PATTERN;
-deferInit("chunk-e6aww6q8.js:2834632", () => {
+deferInit("chunk-5xgkngpb.js:2903517", () => {
   DESTRUCTIVE_COMMAND_KINDS = new Set([
     "git_reset_hard",
     "git_checkout_dot",
@@ -1509,12 +1492,12 @@ deferInit("chunk-e6aww6q8.js:2834632", () => {
   ]);
   GIT_STAGE_COMMIT_PUSH_PATTERN = /\bgit\s+(?:add|stage|commit|push)\b/i;
 });
-//@ chunk-e6aww6q8.js:2834908-2834979 layout
+//@ chunk-5xgkngpb.js:2903793-2903864 layout
 function isGitStageCommitPushCommand(command) {
   let head = command.length > 1e4 ? command.slice(0, 1e4) : command;
   return GIT_STAGE_COMMIT_PUSH_PATTERN.test(head);
 }
-//@ chunk-e6aww6q8.js:2834979-2835192 layout
+//@ chunk-5xgkngpb.js:2903864-2904077 layout
 /**
  * 统计 porcelain 输出中的 staged、modified、untracked 文件数。
  */
@@ -1540,7 +1523,7 @@ function countPorcelainStatus(stdout) {
     untracked: untrackedCount,
   };
 }
-//@ chunk-e6aww6q8.js:2835192-2835471 layout
+//@ chunk-5xgkngpb.js:2904077-2904356 layout
 function truncateLinesToChars(text, maxChars) {
   let filtered = text
     .split(
@@ -1570,7 +1553,7 @@ function truncateLinesToChars(text, maxChars) {
     : `${kept}
 ${moreMarker}`;
 }
-//@ chunk-e6aww6q8.js:2835471-2836366 fingerprint (2.1.88 match: getFileStatus, 0.353)
+//@ chunk-5xgkngpb.js:2904356-2905255 fingerprint (2.1.88 match: getFileStatus, 0.353)
 /**
  * Bash/PowerShell 工具执行破坏性命令（git reset --hard、rm -rf 等）或 git add/commit/push 时，取 git status --porcelain 摘要（clean / staged+modified+untracked 计数 / 截断的 porcelain 文本），随工具结果一起给模型；受两个开关控制。
  */
@@ -1648,7 +1631,7 @@ async function getGitStatusForDestructiveCommand(name, toolInput, abortSignal) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:3651488-3651656 fingerprint (2.1.88 match: hasUnpushedCommits, 0.699)
+//@ chunk-5xgkngpb.js:3746863-3747031 fingerprint (2.1.88 match: hasUnpushedCommits, 0.699)
 /**
  * git rev-list --count <refs> ^<bases>，返回提交数或 null。
  */
@@ -1663,10 +1646,10 @@ async function hasUnpushedCommits_2(worktreePath, baseRefs, excludeRefs) {
   let trimmed = countResult.stdout.trim();
   return countResult.code === 0 && /^\d+$/.test(trimmed) ? Number(trimmed) : null;
 }
-//@ chunk-0sfjpx19.js:132639-132835 fingerprint (2.1.88 match: getIsClean, 0.581)
+//@ chunk-nh1pvp1m.js:127645-127841 fingerprint (2.1.88 match: getIsClean, 0.581)
 var GIT_STATUS_CLEAN_ARGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var GIT_STATUS_CLEAN_IGNORING_DIRTY_ARGS;
-deferInit("chunk-0sfjpx19.js:132639", () => {
+deferInit("chunk-nh1pvp1m.js:127645", () => {
   GIT_STATUS_CLEAN_ARGS = [
     "--no-optional-locks",
     "status",
@@ -1681,7 +1664,7 @@ deferInit("chunk-0sfjpx19.js:132639", () => {
     "--ignore-submodules=dirty",
   ];
 });
-//@ chunk-wyqg6m3h.js:21370-21570 fingerprint (2.1.88 match: captureUntrackedFiles, 0.54)
+//@ chunk-c7hntn0y.js:21734-21934 fingerprint (2.1.88 match: captureUntrackedFiles, 0.534)
 /**
  * git ls-files --others --exclude-standard 列未跟踪文件，生成 diff 条目（区分会话前已存在的文件）。
  */
@@ -1703,7 +1686,7 @@ async function untrackedFiles(gitRunner, limits) {
       )
     : null;
 }
-//@ chunk-1r5nz6dk.js:2902-3074 fingerprint (2.1.88 match: isCurrentDirectoryBareGitRepo, 0.807)
+//@ chunk-hma1b5gv.js:4121-4294 fingerprint (2.1.88 match: isCurrentDirectoryBareGitRepo, 0.806)
 async function isCurrentDirectoryBareGitRepo_2(gitDir) {
   try {
     let [headStats, objectsStats, refsStats] = await Promise.all([
@@ -1716,7 +1699,7 @@ async function isCurrentDirectoryBareGitRepo_2(gitDir) {
     return false;
   }
 }
-//@ chunk-ca06bv0t.js:15476-15758 fingerprint (2.1.88 match: getChangedFiles, 0.789)
+//@ chunk-s4mtq5zk.js:15480-15762 fingerprint (2.1.88 match: getChangedFiles, 0.79)
 /**
  * git status --porcelain 限定给定路径，返回变更文件列表。
  */
@@ -1751,75 +1734,74 @@ async function getChangedFiles(gitRoot, paths) {
     .filter((line) => line.length > 0);
 }
 export {
-  getBranch,
-  clearIsGitMemo,
-  findGitRoot,
-  runGitReadOnly,
-  findGitRootUncached,
-  findGitRootThroughBackendUncached,
-  findGitRootRecheckingNegative,
-  findCanonicalGitRoot,
-  isBranchOnOrigin,
   gitExe,
+  findGitRoot,
+  PLAIN_PATCH_FLAGS,
+  RAW_BLOB_DIFF_FLAGS,
+  findGitRootRecheckingNegative,
+  getGitDir,
+  getBranch,
+  getDefaultBranch,
+  getRepoRemoteHash,
+  snapshotGitEvidenceForBridge,
   getGitPresenceForAnalytics,
   getIsGit,
   getWorktreeCount,
-  isLinkedWorktree,
-  getGitWorktreeName,
-  getRemoteUrl,
-  getHead,
-  getIsClean,
-  getGitSshEnv,
-  getFileStatus,
-  redactGitRemoteCredentials,
-  getDefaultBranch,
-  getDefaultBranchIfKnown,
-  snapshotGitEvidenceForBridge,
-  getRepoRemoteHash,
-  normalizeGitRemoteUrl,
-  isCurrentDirectoryBareGitRepo_2,
-  clearIsGitMemoFor,
-  getGitStatusForDestructiveCommand,
-  findCanonicalGitRootUncached,
-  getGitState,
-  primeGitRootMemo,
-  seedGitRootMemo,
-  getGitDir,
-  normalizeCommandForPlatform,
+  findCanonicalGitRoot,
   isAbsolutePlatformPath,
-  readGitConfigValue,
-  hasUnpushedCommits,
+  findGitRootUncached,
+  findCanonicalGitRootUncached,
+  normalizeCommandForPlatform,
+  clearIsGitMemo,
   getGithubRepo,
-  PLAIN_PATCH_FLAGS,
-  RAW_BLOB_DIFF_FLAGS,
-  isCurrentDirectoryBareGitRepo,
-  findRepoRemoteSlug,
-  hasUnpushedCommits_2,
-  findGitRootVerifyingPositive,
-  getChangedFiles,
-  getLocalInterfaceAddresses,
+  getFileStatus,
+  getRemoteUrl,
+  dirIsInGitRepo,
   forgetGitRootsUnder,
-  toPowerShellRules,
-  isHomeDirectoryGitRoot,
+  isLinkedWorktree,
+  readGitConfigValue,
+  normalizeGitRemoteUrl,
+  isCurrentDirectoryBareGitRepo,
   isGitArgMatchingFlagRule,
   hasDangerousGitGlobalOption,
   getGitSubcommandPath,
   SAFE_GIT_GLOBAL_FLAGS,
+  getGitStatusForDestructiveCommand,
   isLinkedWorktreeUncached,
+  toPowerShellRules,
   getGitPushRemotes,
   gitPushShellPatternsForRemotes,
+  getLocalInterfaceAddresses,
+  getIsClean,
+  getGitSshEnv,
+  redactGitRemoteCredentials,
+  getDefaultBranchIfKnown,
+  hasUnpushedCommits_2,
+  findGitRootVerifyingPositive,
   readGlobalGitConfigValue,
+  isBranchOnOrigin,
+  getGitWorktreeName,
+  isCcrGitProxySession,
+  isLocalHost,
+  findRepoRemoteSlug,
+  primeGitRootMemo,
+  seedGitRootMemo,
+  getRemoteUrlForBridge,
+  clearIsGitMemoFor,
+  getGitState,
+  untrackedFiles,
+  findGitRootThroughBackendUncached,
+  getHead,
+  hasUnpushedCommits,
+  isCurrentDirectoryBareGitRepo_2,
+  runGitReadOnly,
+  getChangedFiles,
   autoModeGitStatusSettingValue,
   autoModeGitStatusUploadsValue,
   autoModeGitStatusLimitValue,
   truncateLinesToChars,
   countPorcelainStatus,
-  getRemoteUrlForBridge,
-  dirIsInGitRepo,
-  isLocalHost_2,
-  isCcrGitProxySession,
-  isLocalHost,
-  untrackedFiles,
+  isHomeDirectoryGitRoot,
   getIsHeadOnRemote,
   isRepoConfigUnreadable,
   readRepoConfig,

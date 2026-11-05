@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：网关网络配置
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (9)
- * attribution: placement 9
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (10)
+ * attribution: placement 9, layout 1
  */
 import * as tlsModule from "tls";
 import { getCACertificates, splitPemBlocks, setDefaultCaFor } from "../../utils/caCerts.js";
@@ -17,7 +17,7 @@ import { getUsableProxyUrl, getNoProxy_2, getProxyFetchOptions } from "../../uti
 import { withTimeout } from "../../utils/sleep.js";
 import { ssrfSafeFetch } from "./ssrfGuard.js";
 
-//@ chunk-1ny7cxrt.js:1312313-1312506 placement
+//@ chunk-1hnjmk23.js:1312764-1312957 placement
 /**
  * 没有可用 CA 证书的错误。
  */
@@ -26,7 +26,7 @@ function noCaCertificatesError() {
     "network: no CA certificate could be loaded, so the gateway cannot verify the servers it connects to. Check CLAUDE_CODE_CERT_STORE and the NODE_EXTRA_CA_CERTS file",
   );
 }
-//@ chunk-1ny7cxrt.js:1312578-1312654 placement
+//@ chunk-1hnjmk23.js:1313029-1313105 placement
 /**
  * 用 tls.createSecureContext 试建上下文，判断一段 CA 证书是否可用。
  */
@@ -40,7 +40,7 @@ function isValidCaCertificate(ca) {
     return false;
   }
 }
-//@ chunk-1ny7cxrt.js:1312654-1312793 placement
+//@ chunk-1hnjmk23.js:1313105-1313244 placement
 /**
  * 系统 CA 证书块（缓存）。
  */
@@ -53,7 +53,7 @@ function nativeCaBlocks() {
     };
   return nativeCaState.nativeCAs.blocks;
 }
-//@ chunk-1ny7cxrt.js:1312793-1312854 placement
+//@ chunk-1hnjmk23.js:1313244-1313305 placement
 /**
  * 取系统原生 CA 证书块；一块都没有时报错（不能静默跳过校验）。
  */
@@ -62,7 +62,7 @@ function getNativeCaBlocks() {
   if (blocks.length === 0) throw noCaCertificatesError();
   return blocks;
 }
-//@ chunk-1ny7cxrt.js:1312854-1312918 placement
+//@ chunk-1hnjmk23.js:1313305-1313369 placement
 /**
  * 带系统 CA 的 fetch 封装（透传 tls 选项）。
  */
@@ -75,7 +75,7 @@ function fetchWithCa(url, init) {
     },
   });
 }
-//@ chunk-1ny7cxrt.js:1312918-1312996 placement
+//@ chunk-1hnjmk23.js:1313369-1313447 placement
 /**
  * 给 openai 风格客户端返回带自定义 CA fetch 的传输选项（超时 10 秒）。
  */
@@ -87,7 +87,25 @@ function createCaTransporterOptions() {
     },
   };
 }
-//@ chunk-1ny7cxrt.js:1312996-1314641 placement
+//@ chunk-1hnjmk23.js:1313447-1313959 layout
+async function warnShortLivedGoogleTokens(googleAuth, name) {
+  let authClient = await googleAuth.getClient().catch(() => {
+    return;
+  });
+  if (!authClient || googleAuth.jsonContent?.type !== "external_account") return;
+  let warned = false;
+  authClient.on("tokens", (tokens) => {
+    let expiresInMs = (tokens.expiry_date ?? 1 / 0) - Date.now();
+    let expiring = expiresInMs <= authClient.eagerRefreshThresholdMillis;
+    if (expiring && !warned)
+      gatewayLog(
+        "warn",
+        `upstream ${name}: Google issued an access token that expires in ${Math.round(expiresInMs / 1000)}s, because the token exchanged for it (credential_source in the Google credentials file) expires then. Unless that token is renewed first, requests to this upstream will fail.`,
+      );
+    warned = expiring;
+  });
+}
+//@ chunk-1hnjmk23.js:1313959-1315604 placement
 /**
  * 设置默认 CA；CLAUDE_GATEWAY_PROXY_IS_EGRESS_BOUNDARY 时在条件满足（有代理、无回环、NO_PROXY 为空）后启用代理作为出口边界。
  */
@@ -133,7 +151,7 @@ function configureGatewayNetwork() {
     `network: proxy ${new URL(usableProxyUrl).host} is the egress boundary; outbound requests hand it hostnames and rely on its allowlist instead of the gateway's own address check`,
   );
 }
-//@ chunk-1ny7cxrt.js:1314641-1314722 placement
+//@ chunk-1hnjmk23.js:1315604-1315685 placement
 /**
  * 代理是否作为出口边界生效：启用且有代理、未配 NO_PROXY、未允许回环。
  */
@@ -142,7 +160,7 @@ function isEgressBoundaryActive() {
     nativeCaState.enabled && !!getUsableProxyUrl() && !getNoProxy_2() && !env.CLAUDE_GATEWAY_ALLOW_LOOPBACK
   );
 }
-//@ chunk-1ny7cxrt.js:1320363-1320472 placement
+//@ chunk-1hnjmk23.js:1321326-1321435 placement
 /**
  * 带代理选项与超时的 fetch。
  */
@@ -166,5 +184,6 @@ export {
   isEgressBoundaryActive,
   fetchWithTimeout,
   createCaTransporterOptions,
+  warnShortLivedGoogleTokens,
   configureGatewayNetwork,
 };

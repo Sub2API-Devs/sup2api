@@ -3,9 +3,9 @@
  *
  * 工作目录标签页：原始工作目录与追加目录列表。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/rules/WorkspaceTab.tsx
- * pieces: chunk-p2qwpk2k.js (6)
+ * pieces: chunk-h5wy8vq5.js (6)
  * attribution: placement 1, layout 2, fingerprint 2, file-local 1
  */
 import { init_react_production, useEffect } from "../../../../vendor/react/cjs/react.production.js";
@@ -23,13 +23,13 @@ import { Text, Box } from "../../../ink/components/Text.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { ModelSelector } from "../../agents/ModelSelector.js";
 
-//@ chunk-p2qwpk2k.js:33366-33370 placement
+//@ chunk-h5wy8vq5.js:34486-34490 placement
 init_react_production();
-//@ chunk-p2qwpk2k.js:33370-33408 layout
+//@ chunk-h5wy8vq5.js:34490-34528 layout
 function selectOriginalCwd(state) {
   return state.originalCwd;
 }
-//@ chunk-p2qwpk2k.js:33408-33468 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-h5wy8vq5.js:34528-34588 fingerprint (2.1.88 match: _temp, 1)
 function toWorkspaceDirRow(path) {
   return {
     path,
@@ -37,15 +37,15 @@ function toWorkspaceDirRow(path) {
     isDeletable: true,
   };
 }
-//@ chunk-p2qwpk2k.js:33468-33499 file-local
+//@ chunk-h5wy8vq5.js:34588-34619 file-local
 function dirPath(dir) {
   return dir.path;
 }
-//@ chunk-p2qwpk2k.js:33499-33529 layout
+//@ chunk-h5wy8vq5.js:34619-34649 layout
 function displayDirPath(dirPath) {
   return stripInvisibleChars(dirPath);
 }
-//@ chunk-p2qwpk2k.js:33529-35210 fingerprint (2.1.88 match: WorkspaceTab, 0.849)
+//@ chunk-h5wy8vq5.js:34649-36330 fingerprint (2.1.88 match: WorkspaceTab, 0.849)
 function WorkspaceTab(props) {
   let $ = useMemoCache(29);
   let {

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：发布前页面准备（能力解析、正文处理、元数据）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-06y4szbn.js (35)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-51jy8ztq.js (35)
  * attribution: placement 35
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -60,7 +60,7 @@ import {
 import { unwrapSkeletonDocument, repairNestedPage, hasRuntimeSentinelsInHead } from "./composePage.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-06y4szbn.js:48149-49246 placement
+//@ chunk-51jy8ztq.js:50399-51496 placement
 /**
  * 页面准备的基础样式与发布状态/契约/阻塞清单的 schema，以及 echo manifest 的路径 1024 / 条目上限。
  */
@@ -75,7 +75,7 @@ var blockedStatusSchema;
 var MAX_ECHO_MANIFEST_PATH;
 var MAX_ECHO_MANIFEST_ENTRIES;
 var echoManifestSchema;
-deferInit("chunk-06y4szbn.js:48149", () => {
+deferInit("chunk-51jy8ztq.js:50399", () => {
   PAGE_BASE_STYLES =
     "body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>";
   BASE_STYLE_HEAD = "<style>:root{color-scheme:light}" + PAGE_BASE_STYLES;
@@ -125,7 +125,7 @@ deferInit("chunk-06y4szbn.js:48149", () => {
     }),
   );
 });
-//@ chunk-06y4szbn.js:49246-49429 placement
+//@ chunk-51jy8ztq.js:51496-51679 placement
 function splitManifestPaths(body) {
   let parsed = echoManifestSchema().safeParse(body);
   if (!parsed.success) return;
@@ -138,7 +138,7 @@ function splitManifestPaths(body) {
     type: typePaths.sort(),
   };
 }
-//@ chunk-06y4szbn.js:49429-49921 placement
+//@ chunk-51jy8ztq.js:51679-52171 placement
 function typeLockFromWire(type) {
   if (type == null) return;
   let publishParsed = publishStatusSchema().safeParse(type);
@@ -175,7 +175,7 @@ function typeLockFromWire(type) {
         }),
   };
 }
-//@ chunk-06y4szbn.js:49921-50107 placement
+//@ chunk-51jy8ztq.js:52171-52357 placement
 function readBackTelemetry(frameDecl) {
   if (frameDecl.status !== undefined)
     return {
@@ -191,7 +191,7 @@ function readBackTelemetry(frameDecl) {
       }
     : frameDecl.request;
 }
-//@ chunk-06y4szbn.js:50107-50233 placement
+//@ chunk-51jy8ztq.js:52357-52483 placement
 function isRetryableReadBack(frameDecl) {
   return (
     frameDecl.request?.transport === true ||
@@ -199,9 +199,9 @@ function isRetryableReadBack(frameDecl) {
     (frameDecl.relayStatus !== undefined && frameDecl.relayStatus >= 500)
   );
 }
-//@ chunk-06y4szbn.js:50233-50244 placement
+//@ chunk-51jy8ztq.js:52483-52494 placement
 var READBACK_RETRY_MS = 500;
-//@ chunk-06y4szbn.js:50244-50371 placement
+//@ chunk-51jy8ztq.js:52494-52621 placement
 function usesLocalMcpServers(tool) {
   let servers = tool?.mcp?.servers;
   return (
@@ -211,7 +211,7 @@ function usesLocalMcpServers(tool) {
     )
   );
 }
-//@ chunk-06y4szbn.js:50371-51021 placement
+//@ chunk-51jy8ztq.js:52621-53273 placement
 function publishMetadataFields(response) {
   return {
     ...(response.slug && {
@@ -260,14 +260,14 @@ function publishMetadataFields(response) {
     ...requestIdMeta(response.requestId),
   };
 }
-//@ chunk-06y4szbn.js:51021-51086 placement
+//@ chunk-51jy8ztq.js:53273-53338 placement
 function carriesDeadline(request) {
   return isHotUpdateFrozenOn() && request.deadline !== undefined && request.slug !== undefined;
 }
-//@ chunk-06y4szbn.js:51086-51255 placement
+//@ chunk-51jy8ztq.js:53338-53507 placement
 var CONTRACT_FETCH_SUBJECT =
   "a session that is allowed to fetch the contract (when this session is a sandboxed agent acting for the user, the user's own Claude Code session usually is one)";
-//@ chunk-06y4szbn.js:51255-55026 placement
+//@ chunk-51jy8ztq.js:53507-57278 placement
 /**
  * 解析发布请求的能力集：未知能力报错、按契约固定/升级、与页面大小一并决定。
  */
@@ -418,7 +418,7 @@ async function resolvePublishCapabilities(request) {
     fields: {},
   };
 }
-//@ chunk-06y4szbn.js:55026-55254 placement
+//@ chunk-51jy8ztq.js:57278-57506 placement
 /**
  * 页面运行时（frame-runtime / base href / preamble）识别的窗口 8192 字符、最大跨度 5 分钟与相关正则。
  */
@@ -427,7 +427,7 @@ var FRAME_RUNTIME_MAX_SPAN;
 var FRAME_PREAMBLE_PREFIX;
 var BASE_HREF_TAG_RE;
 var BASE_HREF_STRIP_RE;
-deferInit("chunk-06y4szbn.js:55026", () => {
+deferInit("chunk-51jy8ztq.js:57278", () => {
   FRAME_RUNTIME_HEAD_WINDOW = 8192;
   FRAME_RUNTIME_MAX_SPAN = 300000;
   FRAME_PREAMBLE_PREFIX = 'window.__FRAME_PREAMBLE={"v":1';
@@ -439,7 +439,7 @@ deferInit("chunk-06y4szbn.js:55026", () => {
     "gi",
   );
 });
-//@ chunk-06y4szbn.js:55254-55624 placement
+//@ chunk-51jy8ztq.js:57506-57876 placement
 function isFramePreambleOnly(html) {
   let rest = trimHtmlWhitespace(html);
   let match = rest.match(BASE_HREF_TAG_RE);
@@ -465,35 +465,35 @@ function isFramePreambleOnly(html) {
   }
   return true;
 }
-//@ chunk-06y4szbn.js:55624-55738 placement
+//@ chunk-51jy8ztq.js:57876-57990 placement
 function isFrameHeadPreambleOnly(html) {
   let trimmed = trimHtmlWhitespace(html);
   if (trimmed.startsWith("<head>") && trimmed.endsWith("</head>"))
     return isFramePreambleOnly(trimmed.slice(6, -7));
   return isFramePreambleOnly(trimmed);
 }
-//@ chunk-06y4szbn.js:55738-56021 placement (2.1.88 match: resolveMetadataBuf, 0.737)
-function exciseFrameAssetServeBlock(carry, chunkBuf = () => true) {
+//@ chunk-51jy8ztq.js:57990-58273 placement
+function exciseFrameAssetServeBlock(bytes, accept = () => true) {
   let offset = 4;
-  let firstNl = carry.indexOf(FRAME_RUNTIME_SENTINELS);
-  while (firstNl >= 0 && firstNl < FRAME_RUNTIME_HEAD_WINDOW && offset > 0) {
-    let sentinelsStart = firstNl + FRAME_RUNTIME_SENTINELS.length;
-    let index = carry
-      .subarray(0, firstNl + FRAME_RUNTIME_MAX_SPAN + FRAME_RUNTIME_END_MARKER.length)
+  let index = bytes.indexOf(FRAME_RUNTIME_SENTINELS);
+  while (index >= 0 && index < FRAME_RUNTIME_HEAD_WINDOW && offset > 0) {
+    let sentinelsStart = index + FRAME_RUNTIME_SENTINELS.length;
+    let index_2 = bytes
+      .subarray(0, index + FRAME_RUNTIME_MAX_SPAN + FRAME_RUNTIME_END_MARKER.length)
       .indexOf(FRAME_RUNTIME_END_MARKER, sentinelsStart);
-    if (index >= 0 && isFrameHeadPreambleOnly(carry.toString("utf8", sentinelsStart, index))) {
+    if (index_2 >= 0 && isFrameHeadPreambleOnly(bytes.toString("utf8", sentinelsStart, index_2))) {
       let buffer = Buffer.concat([
-        carry.subarray(0, firstNl),
-        carry.subarray(index + FRAME_RUNTIME_END_MARKER.length),
+        bytes.subarray(0, index),
+        bytes.subarray(index_2 + FRAME_RUNTIME_END_MARKER.length),
       ]);
-      if (chunkBuf(buffer)) return buffer;
+      if (accept(buffer)) return buffer;
       offset--;
     }
-    firstNl = carry.indexOf(FRAME_RUNTIME_SENTINELS, sentinelsStart);
+    index = bytes.indexOf(FRAME_RUNTIME_SENTINELS, sentinelsStart);
   }
   return;
 }
-//@ chunk-06y4szbn.js:56021-56187 placement
+//@ chunk-51jy8ztq.js:58273-58439 placement
 /**
  * HTML 开标签识别正则（body、base、原始文本元素）。
  */
@@ -501,7 +501,7 @@ var HTML_TAG_PATTERNS = /^<body(?=[\t\n\f\r />])/i;
 var BASE_TAG_RE = /^<base(?=[\t\n\f\r />])/i;
 var RAW_TEXT_TAG_RE =
   /^<(script|style|title|textarea|xmp|iframe|noembed|noframes|noscript|plaintext)(?=[\t\n\f\r />])/i;
-//@ chunk-06y4szbn.js:56187-57125 placement
+//@ chunk-51jy8ztq.js:58439-59377 placement
 function findTagOutsideComments(text, pattern, from) {
   let nameEndRe = /[\t\n\f\r />]/g;
   let index = from;
@@ -551,18 +551,18 @@ function findTagOutsideComments(text, pattern, from) {
     } else index++;
   }
 }
-//@ chunk-06y4szbn.js:57125-57173 placement
+//@ chunk-51jy8ztq.js:59377-59425 placement
 function stripStaleInjections(html) {
   return stripUntilStable(html, findRuntimeBlocks, newStripBudget(STRIP_LIMITS, "blocks"));
 }
-//@ chunk-06y4szbn.js:57173-57195 placement
+//@ chunk-51jy8ztq.js:59425-59447 placement
 /**
  * 去除运行时标记时的迭代上限（64/96/64）。
  */
 var STRIP_LIMITS = 64;
 var MAX_STRIP_AUTHOR_PASSES = 96;
 var MAX_NESTED_SKELETON_LEVELS = 64;
-//@ chunk-06y4szbn.js:57195-57246 placement
+//@ chunk-51jy8ztq.js:59447-59498 placement
 function newStripBudget(cap, exhausted) {
   return {
     spent: 0,
@@ -570,14 +570,14 @@ function newStripBudget(cap, exhausted) {
     exhausted,
   };
 }
-//@ chunk-06y4szbn.js:57246-57325 placement
+//@ chunk-51jy8ztq.js:59498-59577 placement
 function spendStripPass(budget) {
   if (budget.spent === budget.cap) throw new StripUnsettledError(budget.exhausted, budget.spent);
   budget.spent++;
 }
-//@ chunk-06y4szbn.js:57325-57413 placement
+//@ chunk-51jy8ztq.js:59577-59665 placement
 let StripUnsettledError; // deferred: uses ArtifactInputError (../../tools/ArtifactTool/constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-06y4szbn.js:57325", () => {
+deferInit("chunk-51jy8ztq.js:59577", () => {
   StripUnsettledError = class StripUnsettledError extends ArtifactInputError {
     passes;
     constructor(mode = "blocks", passes) {
@@ -586,7 +586,7 @@ deferInit("chunk-06y4szbn.js:57325", () => {
     }
   };
 });
-//@ chunk-06y4szbn.js:57413-58831 placement
+//@ chunk-51jy8ztq.js:59665-61083 placement
 /**
  * 页面剥除运行时标记失败的错误说明：blocks/author 两类说明与嵌套层级超限说明。
  */
@@ -602,7 +602,7 @@ var STRIP_FAILURE_TEXT_BY_KIND = {
     'This page carries runtime-marker comment blocks (`<!-- frame-runtime -->\u2026<!-- /frame-runtime -->`, `<!-- chart-runtime -->\u2026<!-- /chart-runtime -->`, `<!--claude-mermaid-runtime-begin\u2026`, `<!--claude-hljs-runtime-begin\u2026`), `data-frame-runtime` attributes, `<base href="/_f/\u2026">` tags, or repeated artifact skeletons (`<!doctype html><html><head>\u2026` wrapped around the page again and again) nested so that removing one keeps exposing another \u2014 nothing a genuine page or a fetched artifact contains. Delete every such comment block, attribute, tag, and repeated outer skeleton from the source, keep the innermost document, and publish again.',
   levels: `This page is a published artifact page wrapped inside more than ${MAX_NESTED_SKELETON_LEVELS} nested copies of the artifact skeleton (\`<!doctype html><html><head><!-- frame-runtime -->\u2026\` repeated) \u2014 nothing a genuine page contains. Publish the innermost document on its own: delete the repeated outer skeletons from the source and publish again.`,
 };
-//@ chunk-06y4szbn.js:58831-58898 placement
+//@ chunk-51jy8ztq.js:61083-61150 placement
 function stripUntilStable(html, stripOnce, budget) {
   for (;;) {
     spendStripPass(budget);
@@ -611,7 +611,7 @@ function stripUntilStable(html, stripOnce, budget) {
     html = next;
   }
 }
-//@ chunk-06y4szbn.js:58898-59272 placement
+//@ chunk-51jy8ztq.js:61150-61524 placement
 function findRuntimeBlocks(html) {
   let ranges = [];
   let scannedSpan = 0;
@@ -647,11 +647,11 @@ function findRuntimeBlocks(html) {
   html = findMermaidSentinelBlocks(html);
   return html.replace(BASE_HREF_STRIP_RE, "").replace(/\sdata-frame-runtime="[^">]*"/gi, "");
 }
-//@ chunk-06y4szbn.js:59272-59306 placement
+//@ chunk-51jy8ztq.js:61524-61558 placement
 function strippedAuthorBody(html) {
   return stripAuthorInjections(html).body;
 }
-//@ chunk-06y4szbn.js:59306-59647 placement
+//@ chunk-51jy8ztq.js:61558-61899 placement
 function stripAuthorInjections(html) {
   let stripOnce = (value) => stripMermaidRuntime(findRuntimeBlocks(value));
   let stripBudget = newStripBudget(MAX_STRIP_AUTHOR_PASSES, "author");
@@ -679,7 +679,7 @@ function stripAuthorInjections(html) {
     }),
   };
 }
-//@ chunk-06y4szbn.js:59647-59768 placement
+//@ chunk-51jy8ztq.js:61899-62020 placement
 function servedPageLooksNested(html) {
   let inputHtml;
   try {
@@ -691,13 +691,13 @@ function servedPageLooksNested(html) {
   let unwrapped = unwrapSkeletonDocument(inputHtml);
   return unwrapped !== null && hasRuntimeSentinelsInHead(unwrapped.body);
 }
-//@ chunk-06y4szbn.js:59768-59813 placement
+//@ chunk-51jy8ztq.js:62020-62065 placement
 var LANGUAGE_TAG_RE = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/;
-//@ chunk-06y4szbn.js:59813-59860 placement
+//@ chunk-51jy8ztq.js:62065-62112 placement
 function isValidLangTag(tag) {
   return tag.length <= 35 && LANGUAGE_TAG_RE.test(tag);
 }
-//@ chunk-06y4szbn.js:59860-60853 placement
+//@ chunk-51jy8ztq.js:62112-63105 placement
 async function prepareArtifactBody(html, options = {}) {
   let { injectDiagramRuntime, injectHighlightRuntime, expectRoundTrippedPage } = options;
   let stripped = stripAuthorInjections(html);
@@ -765,15 +765,15 @@ async function prepareArtifactBody(html, options = {}) {
     }),
   };
 }
-//@ chunk-06y4szbn.js:60853-60884 placement
+//@ chunk-51jy8ztq.js:63105-63136 placement
 function findChartSentinelBlocks(html) {
   return findSentinelBlocks(html, MERMAID_SENTINEL_LIMITS);
 }
-//@ chunk-06y4szbn.js:60884-60915 placement
+//@ chunk-51jy8ztq.js:63136-63167 placement
 function findMermaidSentinelBlocks(html) {
   return findSentinelBlocks(html, CHART_SENTINEL_LIMITS);
 }
-//@ chunk-06y4szbn.js:60915-61420 placement
+//@ chunk-51jy8ztq.js:63167-63672 placement
 function findSentinelBlocks(html, spec) {
   let ranges = [];
   let index = html.indexOf(spec.beginPrefix);
@@ -823,11 +823,14 @@ function findSentinelBlocks(html, spec) {
   }
   return removeRanges(html, ranges);
 }
-//@ chunk-06y4szbn.js:61420-61435 placement
+//@ chunk-51jy8ztq.js:63672-63687 placement
 var MAX_PAGE_BYTES_FOR_STRIP = 2097152;
 export {
-  contractInputSchema,
+  MAX_ECHO_MANIFEST_PATH,
+  MERGED_CHANGED_KEEP,
+  MAX_ECHO_MANIFEST_ENTRIES,
   typeLockFromWire,
+  contractInputSchema,
   MAX_PAGE_BYTES_FOR_STRIP,
   findTagOutsideComments,
   BASE_TAG_RE,
@@ -850,11 +853,8 @@ export {
   carriesDeadline,
   publishMetadataFields,
   splitManifestPaths,
-  MAX_ECHO_MANIFEST_PATH,
-  MAX_ECHO_MANIFEST_ENTRIES,
   strippedAuthorBody,
   stripStaleInjections,
   exciseFrameAssetServeBlock,
-  MERGED_CHANGED_KEEP,
   servedPageLooksNested,
 };

@@ -3,16 +3,16 @@
  *
  * 协调者模式的权限处理：先跑自动检查，失败或需要时再交互。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/toolPermission/handlers/coordinatorHandler.ts
- * pieces: chunk-s4bxxzsw.js (1)
+ * pieces: chunk-g4tsxwy3.js (1)
  * attribution: fingerprint 1
  */
 import { logError } from "../../../utils/log.js";
 import { withTelemetryMessage } from "../../../utils/errors.js";
 import { logFeatureBad, logFeatureOk } from "../../../services/analytics/featureTelemetry.js";
 
-//@ chunk-s4bxxzsw.js:3950-4589 fingerprint (2.1.88 match: handleCoordinatorPermission, 0.46)
+//@ chunk-g4tsxwy3.js:4126-4765 fingerprint (2.1.88 match: handleCoordinatorPermission, 0.47)
 /**
  * 协调者模式：先运行自动权限检查，检查失败或需要人工时回到交互流程（reprompted）。
  */

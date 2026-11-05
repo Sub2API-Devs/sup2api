@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：恢复时的首回合公告
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (23)
  * attribution: placement 23
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, stringSchema, booleanSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
-import { isPlainObject as isPlainObject_5 } from "../isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../isPlainObject.js";
 import {
   contentHasBlockType,
   buildChildrenIndex,
@@ -28,12 +28,12 @@ import { logEvent } from "../../services/analytics/index.js";
 import { SKIP_PRECOMPACT_THRESHOLD } from "../sessionStoragePortable.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:304122-304177 placement
+//@ chunk-5xgkngpb.js:304937-304992 placement
 /**
  * 公告附件 schema（content + 可选 changed）。
  */
 var announcementSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:304122", () => {
+deferInit("chunk-5xgkngpb.js:304937", () => {
   announcementSchema = DoctorLazy(() =>
     objectSchema({
       content: stringSchema(),
@@ -41,12 +41,12 @@ deferInit("chunk-e6aww6q8.js:304122", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:304177-304297 placement
+//@ chunk-5xgkngpb.js:304992-305112 placement
 /**
  * 恢复/压缩后需重新公告的附件类型。
  */
 var REANNOUNCED_ATTACHMENT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:304177", () => {
+deferInit("chunk-5xgkngpb.js:304992", () => {
   REANNOUNCED_ATTACHMENT_TYPES = new Set([
     "instructions",
     "session_context",
@@ -56,12 +56,12 @@ deferInit("chunk-e6aww6q8.js:304177", () => {
     "date",
   ]);
 });
-//@ chunk-e6aww6q8.js:304297-304352 placement
+//@ chunk-5xgkngpb.js:305112-305167 placement
 /**
  * 上下文分段公告 schema。
  */
 var contextSectionsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:304297", () => {
+deferInit("chunk-5xgkngpb.js:305112", () => {
   contextSectionsSchema = DoctorLazy(() =>
     objectSchema({
       sections: array(
@@ -73,36 +73,36 @@ deferInit("chunk-e6aww6q8.js:304297", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:304352-304380 placement
+//@ chunk-5xgkngpb.js:305167-305195 placement
 var REANNOUNCED_ATTACHMENT_TYPE_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var weakSet;
-deferInit("chunk-e6aww6q8.js:304352", () => {
+deferInit("chunk-5xgkngpb.js:305167", () => {
   REANNOUNCED_ATTACHMENT_TYPE_SET = REANNOUNCED_ATTACHMENT_TYPES;
   weakSet = new WeakSet();
 });
-//@ chunk-e6aww6q8.js:304380-304453 placement (2.1.88 match: isCompactBoundaryMessage, 1)
+//@ chunk-5xgkngpb.js:305195-305268 placement (2.1.88 match: isCompactBoundaryMessage, 1)
 function isCompactBoundaryMessage_2(message) {
   return message.type === "system" && message.subtype === "compact_boundary";
 }
-//@ chunk-e6aww6q8.js:304453-304590 placement (2.1.88 match: isNullRenderingAttachment, 1)
+//@ chunk-5xgkngpb.js:305268-305405 placement (2.1.88 match: isNullRenderingAttachment, 1)
 function getNullRenderingAttachmentType(msg) {
-  if (msg.type !== "attachment" || !isPlainObject_5(msg.attachment)) return;
+  if (msg.type !== "attachment" || !isPlainObject_6(msg.attachment)) return;
   let msg_2 = msg.attachment.type;
   return typeof msg_2 === "string" && REANNOUNCED_ATTACHMENT_TYPE_SET.has(msg_2) ? msg_2 : undefined;
 }
-//@ chunk-e6aww6q8.js:304590-304655 placement
+//@ chunk-5xgkngpb.js:305405-305470 placement
 function hasChangedFlag(msg) {
-  return isPlainObject_5(msg.attachment) && msg.attachment.changed === true;
+  return isPlainObject_6(msg.attachment) && msg.attachment.changed === true;
 }
-//@ chunk-e6aww6q8.js:304655-304767 placement
+//@ chunk-5xgkngpb.js:305470-305582 placement
 function isRealUserPrompt(msg) {
   return (
     msg.type === "user" &&
     msg.isMeta !== true &&
-    !contentHasBlockType(isPlainObject_5(msg.message) ? msg.message.content : undefined, "tool_result")
+    !contentHasBlockType(isPlainObject_6(msg.message) ? msg.message.content : undefined, "tool_result")
   );
 }
-//@ chunk-e6aww6q8.js:304767-305008 placement
+//@ chunk-5xgkngpb.js:305582-305823 placement
 function findFirstTurn(messages) {
   let index = messages.findIndex((msg) => msg.type === "assistant");
   if (index < 0) return;
@@ -119,7 +119,7 @@ function findFirstTurn(messages) {
         responseIndex: index,
       };
 }
-//@ chunk-e6aww6q8.js:305008-305120 placement
+//@ chunk-5xgkngpb.js:305823-305935 placement
 function announceFirstTurnOnce(messages, options, options_2) {
   try {
     if (weakSet.has(messages)) return;
@@ -132,12 +132,12 @@ function announceFirstTurnOnce(messages, options, options_2) {
     logError(toError(error));
   }
 }
-//@ chunk-e6aww6q8.js:305120-305562 placement
+//@ chunk-5xgkngpb.js:305935-306377 placement
 /**
  * 公告类附件的负载是否通过校验。
  */
 function isValidAnnouncement(msg) {
-  if (msg.type !== "attachment" || !isPlainObject_5(msg.attachment)) return false;
+  if (msg.type !== "attachment" || !isPlainObject_6(msg.attachment)) return false;
   let attachment = msg.attachment;
   switch (getNullRenderingAttachmentType(msg)) {
     case "instructions":
@@ -156,10 +156,10 @@ function isValidAnnouncement(msg) {
       return false;
   }
 }
-//@ chunk-e6aww6q8.js:305562-305581 placement
+//@ chunk-5xgkngpb.js:306377-306396 placement
 var MAX_ANCESTOR_HOPS = 64;
 var MAX_ANCESTOR_SCAN = 256;
-//@ chunk-e6aww6q8.js:305581-305720 placement
+//@ chunk-5xgkngpb.js:306396-306535 placement
 function findRootAncestor(byUuid, index) {
   let row = index;
   for (let idx = 0; idx < MAX_ANCESTOR_HOPS; idx++) {
@@ -170,17 +170,17 @@ function findRootAncestor(byUuid, index) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:305720-305779 placement
+//@ chunk-5xgkngpb.js:306535-306594 placement
 function hasRealPromptAncestor(byUuid, index) {
   let rootAncestor = findRootAncestor(byUuid, index);
   return rootAncestor !== undefined && isRealUserPrompt(rootAncestor);
 }
-//@ chunk-e6aww6q8.js:305779-305838 placement
+//@ chunk-5xgkngpb.js:306594-306653 placement
 function hasCompactBoundaryAncestor(byUuid, index) {
   let rootAncestor = findRootAncestor(byUuid, index);
   return rootAncestor !== undefined && isCompactBoundaryMessage_2(rootAncestor);
 }
-//@ chunk-e6aww6q8.js:305838-305984 placement
+//@ chunk-5xgkngpb.js:306653-306799 placement
 function findIndexedAncestor(byUuid, indexByUuid, index) {
   let row = index;
   for (let idx = 0; row && idx < MAX_ANCESTOR_HOPS; idx++) {
@@ -190,7 +190,7 @@ function findIndexedAncestor(byUuid, indexByUuid, index) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:305984-306157 placement
+//@ chunk-5xgkngpb.js:306799-306972 placement
 function isBeforePromptAncestor(byUuid, index, promptIndex, startRow) {
   let row = startRow;
   for (let idx = 0; row && idx < MAX_ANCESTOR_HOPS; idx++) {
@@ -201,7 +201,7 @@ function isBeforePromptAncestor(byUuid, index, promptIndex, startRow) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:306157-309487 placement
+//@ chunk-5xgkngpb.js:306972-310305 placement
 /**
  * 在主链首回合（第一条用户提示与回复）之前，找出不在链上的公告类附件（指令、会话上下文、日期、项目文档已读等）， 判断哪些应该归属首回合并返回重放计划；条件不满足时返回 undefined。
  */
@@ -402,7 +402,7 @@ function computeFirstTurnAnnouncements(msg, messages, options) {
     firstTurnCheckpointDelta: turnStartByDuration,
   };
 }
-//@ chunk-e6aww6q8.js:309487-309678 placement
+//@ chunk-5xgkngpb.js:310305-310496 placement
 function findTurnStartByDuration(messages, responseIndex) {
   for (let idx = responseIndex + 1; idx < messages.length; idx++) {
     let starts = messages[idx];
@@ -416,7 +416,7 @@ function findTurnStartByDuration(messages, responseIndex) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:309678-309871 placement
+//@ chunk-5xgkngpb.js:310496-310689 placement
 function countAnnouncementsUnder(index, parentIndex, keptUuids, newUuids) {
   let count = 0;
   let queue = [index];
@@ -431,7 +431,7 @@ function countAnnouncementsUnder(index, parentIndex, keptUuids, newUuids) {
   }
   return count;
 }
-//@ chunk-e6aww6q8.js:309871-311738 placement
+//@ chunk-5xgkngpb.js:310689-312556 placement
 /**
  * 收集首回合需要重放的公告（指令、会话上下文、项目文档已读等）。
  */
@@ -477,7 +477,7 @@ function collectFirstTurnAnnouncements(firstTurnAnnouncements) {
     first_turn_checkpoint_delta: firstTurnAnnouncements.firstTurnCheckpointDelta ?? 0,
   });
 }
-//@ chunk-e6aww6q8.js:311738-313084 placement
+//@ chunk-5xgkngpb.js:312556-313902 placement
 /**
  * 统计恢复会话首回合的公告附件。
  */
@@ -497,7 +497,7 @@ function censusResumeAnnouncements(messages, fileSize) {
           byTurn[nullRenderingAttachmentType] = (byTurn[nullRenderingAttachmentType] ?? 0) + 1;
         else if (
           row.type === "attachment" &&
-          isPlainObject_5(row.attachment) &&
+          isPlainObject_6(row.attachment) &&
           row.attachment.type === "prompt_snapshot"
         )
           hasPromptSnapshot = true;
@@ -536,13 +536,13 @@ function censusResumeAnnouncements(messages, fileSize) {
     logError(toError(error));
   }
 }
-//@ chunk-e6aww6q8.js:313084-313160 placement
+//@ chunk-5xgkngpb.js:313902-313978 placement
 var MAX_ANNOUNCEMENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var weakMap_2;
 var weakMap_3;
 var weakMap_4;
 var weakMap_5;
-deferInit("chunk-e6aww6q8.js:313084", () => {
+deferInit("chunk-5xgkngpb.js:313902", () => {
   MAX_ANNOUNCEMENTS = 500;
   weakMap_2 = new WeakMap();
   weakMap_3 = new WeakMap();
@@ -550,10 +550,10 @@ deferInit("chunk-e6aww6q8.js:313084", () => {
   weakMap_5 = new WeakMap();
 });
 export {
+  announceFirstTurnOnce,
   announcementSchema,
   contextSectionsSchema,
   censusResumeAnnouncements,
-  announceFirstTurnOnce,
   weakMap_2,
   weakMap_3,
   weakMap_5,

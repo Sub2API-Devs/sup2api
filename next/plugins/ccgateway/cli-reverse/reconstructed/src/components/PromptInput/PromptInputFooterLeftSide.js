@@ -3,10 +3,10 @@
  *
  * 页脚左侧：权限模式指示与 shift+tab 循环、双击退出提示、后台任务数、语音"按住说话"提示、PR 状态、其他 Claude 会话列表。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/PromptInputFooterLeftSide.tsx
- * pieces: chunk-18hwfzwa.js (30), chunk-5cp2fssw.js (1)
- * attribution: placement 18, layout 8, fingerprint 5
+ * pieces: chunk-0jvevkh1.js (1), chunk-czq1j3j2.js (31)
+ * attribution: fingerprint 5, placement 18, layout 9
  */
 import { parse } from "path";
 import { formatDuration, truncateToWidth } from "../../utils/format.js";
@@ -25,6 +25,16 @@ import {
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
+import {
+  init_react_production,
+  useMemo,
+  useSyncExternalStore,
+  useEffect,
+  useRef,
+  useState,
+  fragmentTypeExport,
+  memo,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useKeybindingContext } from "../../keybindings/KeybindingContext.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
@@ -37,16 +47,7 @@ import {
 } from "../artifacts/artifactFrames.js";
 import { useShortcutDisplay as useShortcutDisplay_2 } from "../../keybindings/useShortcutDisplay.js";
 import { useSession } from "../../context/session.js";
-import {
-  useMemo,
-  init_react_production,
-  useSyncExternalStore,
-  useEffect,
-  useRef,
-  useState,
-  fragmentTypeExport,
-  memo,
-} from "../../../vendor/react/cjs/react.production.js";
+import { useHasRemoteWork } from "../tasks/remoteTaskStatus.js";
 import { countVisibleTasks } from "../../utils/claudeInChrome/toolRendering.js";
 import {
   useVisibleAgentTaskCount,
@@ -121,6 +122,8 @@ import { env } from "../../utils/env.js";
 import { useMainLoopModel as useMainLoopModel_3 } from "../../hooks/useMainLoopModel.js";
 import { resolveFooterIndicator } from "../../utils/messages/systemInit.js";
 import { isModelMissingFromClientData } from "../../services/clientDataUrl.js";
+import { onProgramUseCaseChoiceChanged } from "../../utils/programUseCase.js";
+import { useCaseStatusText } from "../../utils/programUseCaseChoices.js";
 import { useHasComplianceTaint } from "../LogoV2/LogoV2.js";
 import { useStatusNoticeLines_2 } from "../StatusNotices.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
@@ -135,13 +138,13 @@ import { getPlatform } from "../../utils/platform.js";
 import { Byline } from "../design-system/Byline.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-5cp2fssw.js:14565-14629 fingerprint (2.1.88 match: ProactiveCountdown, 0.737)
+//@ chunk-0jvevkh1.js:14565-14629 fingerprint (2.1.88 match: ProactiveCountdown, 0.737)
 function ProactiveCountdown(ms) {
   return formatDuration(Math.max(0, ms), {
     mostSignificantOnly: true,
   });
 }
-//@ chunk-18hwfzwa.js:678423-678969 placement
+//@ chunk-czq1j3j2.js:699153-699699 placement
 /**
  * 渲染带颜色的权限模式标签：模式符号 + 模式名 + " on"（bare 时不加）+ children。
  */
@@ -197,20 +200,30 @@ function PermissionModeLabel(props) {
   } else labelText = $[13];
   return labelText;
 }
-//@ chunk-18hwfzwa.js:819599-819647 placement
+//@ chunk-czq1j3j2.js:846512-846516 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:846512", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:847366-847370 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:847366", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:852324-852372 placement
 function cycleModeActionName() {
   let keybindingContext = useKeybindingContext();
   return "chat:cycleMode";
 }
-//@ chunk-18hwfzwa.js:819647-819693 placement
+//@ chunk-czq1j3j2.js:852372-852418 placement
 function permissionModeLabelLower(mode) {
   return permissionModeTitle(toExternalPermissionMode(mode)).toLowerCase();
 }
-//@ chunk-18hwfzwa.js:819693-819726 placement
+//@ chunk-czq1j3j2.js:852418-852451 placement
 function permissionModeLabelWidth(mode) {
   return bunStringWidth(permissionModeLabelLower(mode));
 }
-//@ chunk-18hwfzwa.js:819726-820072 placement
+//@ chunk-czq1j3j2.js:852451-852797 placement
 function PermissionModeLabel_2(props) {
   let $ = useMemoCache(8);
   let { mode } = props;
@@ -243,11 +256,11 @@ function PermissionModeLabel_2(props) {
   } else textElement = $[7];
   return textElement;
 }
-//@ chunk-18hwfzwa.js:820072-820101 placement
+//@ chunk-czq1j3j2.js:852797-852826 placement
 var backgroundTaskDotApi = null;
 var ARTIFACT_FRAME_NAME_MAX = 24;
 var ARTIFACT_FRAME_SEPARATOR = "  ";
-//@ chunk-18hwfzwa.js:820101-822055 placement
+//@ chunk-czq1j3j2.js:852826-854795 placement
 function FooterLeftSide({ toolPermissionContext, rowWidth, showHint, isLoading, tasksSelected }) {
   let { columns } = useTerminalSize();
   let effectiveWidth = rowWidth === undefined ? columns : rowWidth < 0 ? 0 : rowWidth;
@@ -266,7 +279,11 @@ function FooterLeftSide({ toolPermissionContext, rowWidth, showHint, isLoading, 
   let lower = useShortcutDisplay_2("chat:cancel", "Chat", "esc").toLowerCase();
   let shortcutDisplay = useShortcutDisplay_2(cycleModeActionName(), "Chat", "shift+tab");
   let host = useSession().host;
-  let visibleTaskCount = useMemo(() => countVisibleTasks(tasks, remoteTasks), [tasks, remoteTasks]);
+  let taskDecorations = useHasRemoteWork();
+  let visibleTaskCount = useMemo(
+    () => countVisibleTasks(tasks, remoteTasks, taskDecorations),
+    [tasks, remoteTasks, taskDecorations],
+  );
   let hasTasksOrAgents = useVisibleAgentTaskCount() > 0 || visibleTaskCount > 0;
   let needsYou = useMemo(
     () =>
@@ -363,7 +380,7 @@ function FooterLeftSide({ toolPermissionContext, rowWidth, showHint, isLoading, 
     ),
   });
 }
-//@ chunk-18hwfzwa.js:822055-822523 placement
+//@ chunk-czq1j3j2.js:854795-855263 placement
 /**
  * 在给定宽度下挑页脚左侧要显示的段：先尝试带提示的紧凑排列，再依次尝试稀疏/紧凑/去掉 artifacts/只留胶囊，取第一个放得下的。
  */
@@ -391,11 +408,11 @@ function chooseFooterLayout({ pill, kept, sparse, dense, hint, keptSelected, wid
     mapped.find((line) => rowTotalWidth(line) <= width) ?? (pill === null ? mapped[0] : mapped.at(-1)) ?? []
   );
 }
-//@ chunk-18hwfzwa.js:822523-822555 placement
+//@ chunk-czq1j3j2.js:855263-855295 placement
 function isPresent(value) {
   return value !== null;
 }
-//@ chunk-18hwfzwa.js:822555-822630 placement
+//@ chunk-czq1j3j2.js:855295-855370 placement
 function buildModePill(mode) {
   return {
     key: "mode",
@@ -409,7 +426,7 @@ function buildModePill(mode) {
     ),
   };
 }
-//@ chunk-18hwfzwa.js:822630-823262 placement
+//@ chunk-czq1j3j2.js:855370-856002 placement
 function BackgroundTasksPill(
   props,
   {
@@ -471,7 +488,7 @@ function BackgroundTasksPill(
   }
   return segments;
 }
-//@ chunk-18hwfzwa.js:823262-823375 placement
+//@ chunk-czq1j3j2.js:856002-856115 placement
 function footerHintSegment(hint) {
   return {
     key: "hint",
@@ -489,7 +506,7 @@ function footerHintSegment(hint) {
     ),
   };
 }
-//@ chunk-18hwfzwa.js:823375-823700 placement
+//@ chunk-czq1j3j2.js:856115-856440 placement
 function FeedbackDraftCount(props) {
   let $ = useMemoCache(7);
   let { count } = props;
@@ -523,16 +540,11 @@ function FeedbackDraftCount(props) {
   } else textElement = $[6];
   return textElement;
 }
-//@ chunk-18hwfzwa.js:823700-823704 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:823700", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:823704-823791 placement
+//@ chunk-czq1j3j2.js:856444-856531 placement
 function feedbackNoticeSignal() {
   return useSyncExternalStore(uiSignals.feedbackNotice.subscribe, () => uiSignals.feedbackNotice.getState());
 }
-//@ chunk-18hwfzwa.js:823791-823942 placement
+//@ chunk-czq1j3j2.js:856531-856682 placement
 function useSessionDraftCount() {
   let feedbackSignal = feedbackNoticeSignal();
   let { storageV5 } = useTheme_2();
@@ -544,25 +556,25 @@ function useSessionDraftCount() {
   }, [storageV5]);
   return isFeedbackDraftsEnabled() ? feedbackSignal.sessionDraftCount : 0;
 }
-//@ chunk-18hwfzwa.js:823942-823993 layout
+//@ chunk-czq1j3j2.js:856682-856733 layout
 function selectPrUrlTemplate(state) {
   return state.settings?.prUrlTemplate;
 }
-//@ chunk-18hwfzwa.js:823993-824084 layout
+//@ chunk-czq1j3j2.js:856733-856824 layout
 function incrementVoiceFooterHintSeenCount(state) {
   return {
     ...state,
     voiceFooterHintSeenCount: (state.voiceFooterHintSeenCount ?? 0) + 1,
   };
 }
-//@ chunk-18hwfzwa.js:824084-824129 layout
+//@ chunk-czq1j3j2.js:856824-856869 layout
 var coordinatorModeModule; // deferred: loads other modules while loading; runs once its import cycle is complete
 var VOICE_HINT_MAX_IMPRESSIONS;
-deferInit("chunk-18hwfzwa.js:824084", () => {
+deferInit("chunk-czq1j3j2.js:856824", () => {
   coordinatorModeModule = require("../../coordinator/coordinatorMode.js");
   VOICE_HINT_MAX_IMPRESSIONS = 3;
 });
-//@ chunk-18hwfzwa.js:824129-829071 fingerprint (2.1.88 match: PromptInputFooterLeftSide, 0.393)
+//@ chunk-czq1j3j2.js:856869-861811 fingerprint (2.1.88 match: PromptInputFooterLeftSide, 0.393)
 /**
  * 页脚左侧：显示权限模式（shift+tab 循环 default/acceptEdits/plan/auto/bypass）、"Press Ctrl-C again to exit"、后台任务计数（可点开）、PR 状态、语音提示、catchupReplay/detach 提示。
  */
@@ -968,19 +980,21 @@ function PromptInputFooterLeftSide(props) {
   } else row = $[64];
   return row;
 }
-//@ chunk-18hwfzwa.js:829071-829099 layout
+//@ chunk-czq1j3j2.js:861811-861839 layout
 function attentionBudgetSummary(attentionBudget) {
   return null;
 }
-//@ chunk-18hwfzwa.js:829099-829124 layout
+//@ chunk-czq1j3j2.js:861839-861864 layout
 function getZero(attentionBudget) {
   return 0;
 }
-//@ chunk-18hwfzwa.js:829124-829169 layout
+//@ chunk-czq1j3j2.js:861864-861875 layout
+var MIN_WIDTH_FOR_USE_CASE_HINT = 80;
+//@ chunk-czq1j3j2.js:861875-861920 layout
 function getFooterIndicatorConfig() {
   return getCachedClientData()?.footer_indicator;
 }
-//@ chunk-18hwfzwa.js:829169-839108 fingerprint (2.1.88 match: ModeIndicator, 0.519)
+//@ chunk-czq1j3j2.js:861920-871966 fingerprint (2.1.88 match: ModeIndicator, 0.52)
 /**
  * 权限模式指示与切换提示（shift+tab），含 frame/artifact 链接（tengu_copper_thistle）。
  */
@@ -1052,7 +1066,11 @@ function ModeIndicator({
   let hasSelection = useHasSelection();
   let selGetState = useSelection().getState;
   let isCoordinatorMode = coordinatorModeModule.isCoordinatorMode();
-  let runningTaskCount = useMemo(() => countVisibleTasks(tasks, tasks_2), [tasks, tasks_2, store]);
+  let decorations = useHasRemoteWork();
+  let runningTaskCount = useMemo(
+    () => countVisibleTasks(tasks, tasks_2, decorations),
+    [tasks, tasks_2, decorations, store],
+  );
   let tasksV2 = useHasTaskSelection();
   let escShortcut = useShortcutDisplay_2("chat:cancel", "Chat", "esc").toLowerCase();
   let todosShortcut = useShortcutDisplay_2("app:toggleTodos", "Global", "ctrl+t");
@@ -1080,6 +1098,7 @@ function ModeIndicator({
     [CLAUDE_CODE_FOOTER_INDICATOR, mainLoopModel, footerIndicatorConfig],
   );
   let isModelMissing = useMemo(() => isModelMissingFromClientData(mainLoopModel), [mainLoopModel]);
+  let programUseCaseChoice = useSyncExternalStore(onProgramUseCaseChoiceChanged, useCaseStatusText);
   let hasComplianceTaint = useHasComplianceTaint("zdr");
   let hasComplianceTaint_2 = useHasComplianceTaint("ldr");
   let isKillAgentsConfirmShowing = useStatusNoticeLines_2(mode === "bash");
@@ -1139,6 +1158,14 @@ function ModeIndicator({
         "retention",
       )
     : null;
+  let visibleUseCaseHint =
+    programUseCaseChoice !== null && columns >= MIN_WIDTH_FOR_USE_CASE_HINT && !isRemoteSessionAvailable()
+      ? programUseCaseChoice
+      : null;
+  let footerIndicator_2 =
+    footerIndicator && visibleUseCaseHint
+      ? `${footerIndicator} \xB7 ${visibleUseCaseHint}`
+      : (footerIndicator ?? visibleUseCaseHint);
   let modelWarning = isModelMissing
     ? jsxProd_default_2(
         Text,
@@ -1154,7 +1181,7 @@ function ModeIndicator({
         },
         "footer-indicator",
       )
-    : footerIndicator
+    : footerIndicator_2
       ? jsxProd_default_2(
           Text,
           {
@@ -1164,7 +1191,7 @@ function ModeIndicator({
                 "aria-hidden": true,
                 children: [figures_default.lozenge, " "],
               }),
-              footerIndicator,
+              footerIndicator_2,
             ],
           },
           "footer-indicator",
@@ -1173,8 +1200,8 @@ function ModeIndicator({
   let indicatorWidth =
     (isModelMissing
       ? bunStringWidth(`${WARNING_GLYPH} wrong model?`) + 3
-      : footerIndicator
-        ? bunStringWidth(footerIndicator) + 5
+      : footerIndicator_2
+        ? bunStringWidth(footerIndicator_2) + 5
         : 0) +
     zeroBudget +
     extraWidth;
@@ -1977,7 +2004,7 @@ function ModeIndicator({
     ],
   });
 }
-//@ chunk-18hwfzwa.js:839108-839458 layout
+//@ chunk-czq1j3j2.js:871966-872316 layout
 function VoiceHoldToSpeakHint(props) {
   let $ = useMemoCache(5);
   let { keyDisplay } = props;
@@ -2013,9 +2040,9 @@ function VoiceHoldToSpeakHint(props) {
   } else hintElement = $[4];
   return hintElement;
 }
-//@ chunk-18hwfzwa.js:839458-840126 layout
+//@ chunk-czq1j3j2.js:872316-872984 layout
 var BackgroundTaskCountPill; // deferred: uses Text (../../ink/components/Text.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:839458", () => {
+deferInit("chunk-czq1j3j2.js:872316", () => {
   BackgroundTaskCountPill = memo(function (props) {
     let $ = useMemoCache(11);
     let { count, selected, onClick } = props;
@@ -2076,7 +2103,7 @@ deferInit("chunk-18hwfzwa.js:839458", () => {
     return pillElement;
   });
 });
-//@ chunk-18hwfzwa.js:840126-840417 fingerprint (2.1.88 match: getSpinnerHintParts, 0.72)
+//@ chunk-czq1j3j2.js:872984-873275 fingerprint (2.1.88 match: getSpinnerHintParts, 0.721)
 function getSpinnerHintParts(isLoading, chord, chord_2, tasksV2, expandedView) {
   let toggleAction = expandedView === "tasks" ? "hide tasks" : "show tasks";
   let showToggleHint = tasksV2;
@@ -2119,12 +2146,12 @@ function getSpinnerHintParts(isLoading, chord, chord_2, tasksV2, expandedView) {
       : []),
   ];
 }
-//@ chunk-18hwfzwa.js:840417-840503 fingerprint (2.1.88 match: isPrStatusEnabled, 1)
+//@ chunk-czq1j3j2.js:873275-873361 fingerprint (2.1.88 match: isPrStatusEnabled, 1)
 function isPrStatusEnabled(terminalFocusState) {
   if (isBgSession() && terminalFocusState === "unknown") return false;
   return getGlobalConfig().prStatusFooterEnabled ?? true;
 }
-//@ chunk-18hwfzwa.js:840503-840627 placement
+//@ chunk-czq1j3j2.js:873361-873485 placement
 function TasksForSubagentsHint() {
   let $ = useMemoCache(1);
   let hintElement;
@@ -2137,12 +2164,8 @@ function TasksForSubagentsHint() {
   } else hintElement = $[0];
   return hintElement;
 }
-//@ chunk-18hwfzwa.js:840627-840631 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:840627", () => {
-  init_react_production();
-});
 export {
+  ProactiveCountdown,
   permissionModeLabelLower,
   PermissionModeLabel,
   PermissionModeLabel_2,
@@ -2150,5 +2173,4 @@ export {
   cycleModeActionName,
   feedbackNoticeSignal,
   useSessionDraftCount,
-  ProactiveCountdown,
 };

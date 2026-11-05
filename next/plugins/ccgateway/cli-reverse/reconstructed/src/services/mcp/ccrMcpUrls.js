@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：CCR（云会话）MCP 地址识别与解析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1wpnxx5r.js (69)
- * attribution: placement 68, affinity 1
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (1), chunk-hfc4cfnt.js (70)
+ * attribution: placement 69, layout 2
  */
 import { posix } from "path";
 import { startupCcrEnv } from "../../tasks/RemoteAgentTask/remoteAgentKinds.js";
-import { CCR_PROXY_PATH_MARKERS, CCR_SESSION_PATH_PREFIXES, CCR_MCP_PATH_PATTERNS } from "./config.js";
+import { CCR_PROXY_PATH_MARKERS, CCR_MCP_PATH_PATTERNS, getCcrProxyTargetUrl } from "./config.js";
 import { CLAUDE_CODE_REMOTE, CCR_META_MCP_PATH, BF7C680D_5FDC_5EF4_B4A0_ABADB619BF0A } from "./ccrMetaMcp.js";
 import { sessionIdBody } from "../../bridge/sessionIdCompat.js";
 import {
@@ -19,10 +19,17 @@ import {
   MEMORY,
   A471CAF9_E559_5AD8_836C_4E5972877185,
   CCR_EMAIL,
+  ARTIFACTS_SERVER_NAME,
+  MEMORY_SERVER_ID,
+  WIDGETS,
+  WIDGETS_SERVER_ID,
+  VISUALIZE,
+  VISUALIZE_SERVER_ID,
+  COWORK,
 } from "./firstPartyServerIds.js";
 import { CLAUDE_IN_CHROME_MCP_SERVER_NAME } from "../../utils/claudeInChrome/common.js";
 import { isCliOwnedConfig } from "./cliOwnedClients.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import {
   RESERVED_BROWSER_SERVER_IDS,
   isRemoteBrowserAllowed,
@@ -32,40 +39,34 @@ import {
 import { checkSdkUrl } from "../../cli/transports/sdkUrlValidation.js";
 import { decodeTaggedUuid } from "./serverIdentity.js";
 import { shortHash } from "../../utils/shortHash.js";
+import { originOf } from "./mcpServerOrigin.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1wpnxx5r.js:3514-3650 placement
+//@ chunk-hfc4cfnt.js:3521-3657 placement
 function ccrBridgeEnvVarNames() {
   return startupCcrEnv.bridgeCarrier
     ? ["CLAUDE_CODE_SESSION_ACCESS_TOKEN", "SESSION_INGRESS_URL", "CLAUDE_CODE_BRIDGE_PROMPT_SHA256"]
     : [];
 }
-//@ chunk-1wpnxx5r.js:3650-3907 placement
+//@ chunk-hfc4cfnt.js:3657-3876 placement
 /**
  * 判断 URL 是否与启动时记录的 CCR（云端会话）地址同源。
  */
 function isSameOriginAsCcr(url) {
-  let atStartup = startupCcrEnv.atStartup;
-  if (!atStartup) return false;
-  let parsed;
-  let startupUrl;
-  try {
-    parsed = new URL(url);
-    startupUrl = new URL(atStartup);
-  } catch {
-    return false;
-  }
+  let ccrOrigin = getCcrOrigin();
+  let parsed = URL.parse(url);
+  if (ccrOrigin === null || parsed === null) return false;
   if (
     (parsed.protocol === "wss:"
       ? `https://${parsed.host}`
       : parsed.protocol === "ws:"
         ? `http://${parsed.host}`
-        : parsed.origin) !== startupUrl.origin
+        : originOfUrl(parsed)) !== ccrOrigin
   )
     return false;
   return CCR_PROXY_PATH_MARKERS.some((marker) => parsed.pathname.includes(marker));
 }
-//@ chunk-1wpnxx5r.js:3907-4130 placement
+//@ chunk-hfc4cfnt.js:3876-4099 placement
 function isCcrInjectedMcpUrl(name, config) {
   if (!("url" in config) || typeof config.url !== "string") return false;
   if (!isSameOriginAsCcr(config.url)) return false;
@@ -78,7 +79,7 @@ function isCcrInjectedMcpUrl(name, config) {
       return false;
   }
 }
-//@ chunk-1wpnxx5r.js:4130-4338 placement
+//@ chunk-hfc4cfnt.js:4099-4307 placement
 function isCcrMetaOrProxyUrl(url, ccrOrigin) {
   let sameOriginUrl = parseSameOriginUrl(url, ccrOrigin);
   if (!sameOriginUrl) return false;
@@ -90,7 +91,7 @@ function isCcrMetaOrProxyUrl(url, ccrOrigin) {
     all[0] === BF7C680D_5FDC_5EF4_B4A0_ABADB619BF0A
   );
 }
-//@ chunk-1wpnxx5r.js:4338-4822 placement
+//@ chunk-hfc4cfnt.js:4307-4791 placement
 function isCcrSessionMcpUrl(url) {
   let ccrOrigin = getCcrOrigin();
   if (ccrOrigin === null) return false;
@@ -117,7 +118,7 @@ function isCcrSessionMcpUrl(url) {
     (mcpUrl === null || parseSameOriginUrl(mcpUrl, ccrOrigin) !== null)
   );
 }
-//@ chunk-1wpnxx5r.js:4822-5533 placement
+//@ chunk-hfc4cfnt.js:4791-5502 placement
 function hasOnlyAllowedCcrParams(url) {
   if (!isSameOriginAsCcr(url)) return false;
   let parsed;
@@ -168,30 +169,30 @@ function hasOnlyAllowedCcrParams(url) {
     (id) => ownIds.has(id) || scopedIds.includes(id) || id.toLowerCase() === CLAUDE_IN_CHROME_MCP_SERVER_NAME,
   );
 }
-//@ chunk-1wpnxx5r.js:5533-5640 placement
+//@ chunk-hfc4cfnt.js:5502-5609 placement
 function ownCcrSessionIdSpellings() {
   let ids = new Set([MEMORY_SERVER_ID_2]);
   for (let ownCcrSessionId of startupCcrEnv.ownCcrSessionIds)
     for (let id of sessionScopedServerIds(sessionIdBody(ownCcrSessionId))) ids.add(id);
   return ids;
 }
-//@ chunk-1wpnxx5r.js:5640-5669 placement
+//@ chunk-hfc4cfnt.js:5609-5640 placement
 /**
  * 为裸会话 id 生成两种前缀下的作用域服务器 id。
  */
-function sessionScopedServerIds(bareId) {
-  return sessionScopedServerIds_2(bareId, CLAUDE_IN_CHROME_MCP_SERVER_NAME);
+function sessionScopedServerIds(id) {
+  return sessionScopedServerIds_2(id, CLAUDE_IN_CHROME_MCP_SERVER_NAME);
 }
-//@ chunk-1wpnxx5r.js:5669-5737 placement (2.1.88 match: toCompatSessionId, 1)
+//@ chunk-hfc4cfnt.js:5640-5710 placement (2.1.88 match: toCompatSessionId, 1)
 /**
  * 为一个裸会话 ID 生成 cse_/session_ 两种前缀下的作用域服务器 ID。
  */
 function sessionScopedServerIds_2(bareId, scope) {
   return [`cse_${bareId}`, `session_${bareId}`].map((base) => derivedServerId(base, scope));
 }
-//@ chunk-1wpnxx5r.js:5737-5796 placement
+//@ chunk-hfc4cfnt.js:5710-5769 placement
 var CCR_MEMORY_MCP_PATH = /^\/v2\/ccr-sessions\/[A-Za-z0-9_-]+\/memory\/mcp$/;
-//@ chunk-1wpnxx5r.js:5796-6163 placement
+//@ chunk-hfc4cfnt.js:5769-6136 placement
 /**
  * 是否是云会话的 memory MCP 服务器（动态作用域、URL 指向 /v2/ccr-sessions/{id}/memory/mcp 或指定 toolbox 服务器）。
  */
@@ -220,7 +221,7 @@ function isCcrMemoryMcpServer(name, config) {
     all[0] === A471CAF9_E559_5AD8_836C_4E5972877185
   );
 }
-//@ chunk-1wpnxx5r.js:6163-6538 placement
+//@ chunk-hfc4cfnt.js:6136-6511 placement
 /**
  * MCP 服务器配置是否指向 toolbox（带 x-mcp-server-id 头的 URL 配置）。
  */
@@ -242,7 +243,7 @@ function isToolboxMcpServerConfig(config) {
     entries.flat().filter((value) => typeof value === "string"),
   );
 }
-//@ chunk-1wpnxx5r.js:6538-6658 placement (2.1.88 match: toCompatSessionId, 1)
+//@ chunk-hfc4cfnt.js:6511-6631 placement (2.1.88 match: toCompatSessionId, 1)
 function memoryServerIdsForSessions(sessionIds) {
   return [
     A471CAF9_E559_5AD8_836C_4E5972877185,
@@ -252,7 +253,7 @@ function memoryServerIdsForSessions(sessionIds) {
     }),
   ].map(normalizedAlnum);
 }
-//@ chunk-1wpnxx5r.js:6658-6858 placement
+//@ chunk-hfc4cfnt.js:6631-6817 placement
 function mentionsCcrMarker(value, markers, { orItsName = true } = {}) {
   if (
     orItsName &&
@@ -260,32 +261,31 @@ function mentionsCcrMarker(value, markers, { orItsName = true } = {}) {
   )
     return true;
   let current = value;
-  for (let i = 0; i <= 3; i++) {
+  for (let i = 0; ; i++) {
     if (includesAnyMarker(current, markers)) return true;
     let decoded = lenientDecodeURIComponent(current);
     if (decoded === current) return false;
     if (i === 3) return true;
     current = decoded;
   }
-  return false;
 }
-//@ chunk-1wpnxx5r.js:6858-6970 placement
+//@ chunk-hfc4cfnt.js:6817-6928 placement
 function includesAnyMarker(value, markers) {
   let mapped = [value, value.replace(/%[0-9a-f]{2}/gi, "")].map(normalizedAlnum);
   return markers.some((marker) => mapped.some((candidate) => candidate.includes(marker)));
 }
-//@ chunk-1wpnxx5r.js:6970-7094 placement
+//@ chunk-hfc4cfnt.js:6928-7051 placement
 var BACKSLASH_OR_CONTROL_REGEX = /[\\\p{Cc}]/u;
 var UNSAFE_PATH_CHAR_REGEX = /[%?#\\\s\p{Cc}]/u;
 var URL_AUTHORITY_REGEX = /^(?:https?|wss?):\/\/(?:[^/?#\\]*@)?[^/?#\\@:]+(?::[^/?#\\@]*)?(?=[/?#\\]|$)/i;
-//@ chunk-1wpnxx5r.js:7094-7156 placement
+//@ chunk-hfc4cfnt.js:7051-7113 placement
 /**
  * 去掉非字母数字并转小写。
  */
 function normalizedAlnum(value) {
   return value.toLowerCase().replace(/[^0-9a-z]/g, "");
 }
-//@ chunk-1wpnxx5r.js:7156-8354 placement
+//@ chunk-hfc4cfnt.js:7113-8310 placement
 function isCcrProxiedUrl(url, extraValues = [], headerValues = extraValues) {
   if (!isSameOriginAsCcr(url)) return false;
   if (url.length > 32768) return true;
@@ -303,7 +303,7 @@ function isCcrProxiedUrl(url, extraValues = [], headerValues = extraValues) {
     ...headerValues,
   ];
   if (fragments.length > 64 || parsed.pathname.length + fragments.join("").length > 8192) return true;
-  let variants = uniq(fragments.flatMap(percentDecodingVariants));
+  let variants = normalizeCaseForComparison_2(fragments.flatMap(percentDecodingVariants));
   if (
     variants.some((candidate) => pathHasMemoryMcpTokens(candidate, MEMORY_MCP_PATH_PREFIXES)) ||
     queryValuesForKeys(parsed, ["mcp_url"]).some((mcpUrl) => hasUnsafeMemoryMcpUrl(mcpUrl, parsed.hostname))
@@ -318,7 +318,7 @@ function isCcrProxiedUrl(url, extraValues = [], headerValues = extraValues) {
     firstMatchGroup(CODE_SESSION_MCP_PATH, pathVariants) ??
     sessionSegment;
   let { ownCcrSessionIds } = startupCcrEnv;
-  let pathSessionIds = uniq(
+  let pathSessionIds = normalizeCaseForComparison_2(
     [...pathVariants, ...variants].flatMap((candidate) =>
       CCR_SESSION_PATHS.flatMap((prefix) => {
         let index = candidate.indexOf(prefix);
@@ -332,7 +332,11 @@ function isCcrProxiedUrl(url, extraValues = [], headerValues = extraValues) {
   );
   if (pathSessionIds.length > 8) return true;
   let memoryIds = memoryServerIdsForSessions(
-    uniq([...ownCcrSessionIds, ...(sessionId === undefined ? [] : [sessionId]), ...pathSessionIds]),
+    normalizeCaseForComparison_2([
+      ...ownCcrSessionIds,
+      ...(sessionId === undefined ? [] : [sessionId]),
+      ...pathSessionIds,
+    ]),
   );
   if (
     [...variants, ...percentDecodingVariants(parsed.pathname + parsed.search + parsed.hash)].some(
@@ -362,7 +366,7 @@ function isCcrProxiedUrl(url, extraValues = [], headerValues = extraValues) {
     return true;
   return valuesForKeys.some((valuesForKey) => mentionsCcrMarker(valuesForKey, memoryIds));
 }
-//@ chunk-1wpnxx5r.js:8354-8474 placement
+//@ chunk-hfc4cfnt.js:8310-8430 placement
 function queryValuesForKeys(url, keys) {
   let mapped = keys.map(normalizedAlnum);
   return [...url.searchParams]
@@ -371,7 +375,7 @@ function queryValuesForKeys(url, keys) {
     )
     .map(([, value]) => value);
 }
-//@ chunk-1wpnxx5r.js:8474-8557 placement
+//@ chunk-hfc4cfnt.js:8430-8513 placement
 /**
  * 依次对多个正则取第一个匹配组。
  */
@@ -382,7 +386,7 @@ function firstMatchGroup(regex, candidates) {
   }
   return;
 }
-//@ chunk-1wpnxx5r.js:8557-8726 placement
+//@ chunk-hfc4cfnt.js:8513-8682 placement
 /**
  * 可能承载记忆 MCP 的路径前缀。
  */
@@ -393,7 +397,7 @@ var CCR_SESSION_PATHS = [
   "/v2/session_ingress/mcp/ws/",
 ];
 var MEMORY_MCP_PATH_PREFIXES = [...CCR_SESSION_PATHS, "/v1/code/local/", "/v1/code/mcp/"];
-//@ chunk-1wpnxx5r.js:8726-8780 placement
+//@ chunk-hfc4cfnt.js:8682-8735 placement
 /**
  * 判断 mcp_url 是否指向不安全（记忆类）的地址。
  */
@@ -403,13 +407,13 @@ function hasUnsafeMemoryMcpUrl(mcpUrl, hostname) {
     (UNSAFE_PATH_CHAR_REGEX.test(mcpUrl) || pathHasMemoryMcpTokens(mcpUrl, CCR_PROXY_PATH_MARKERS))
   );
 }
-//@ chunk-1wpnxx5r.js:8780-8969 placement
+//@ chunk-hfc4cfnt.js:8735-8924 placement
 function percentDecodingVariants(value) {
   if (!value.includes("%")) return [value];
   let results = [value];
   let current = [value];
   for (let k = 1; k <= 3; k++) {
-    current = uniq(
+    current = normalizeCaseForComparison_2(
       current.flatMap((variant) => [
         decodePercentRuns(variant),
         decodePercentRuns(
@@ -421,21 +425,21 @@ function percentDecodingVariants(value) {
     );
     results.push(...current);
   }
-  return uniq(results);
+  return normalizeCaseForComparison_2(results);
 }
-//@ chunk-1wpnxx5r.js:8969-9064 placement
+//@ chunk-hfc4cfnt.js:8924-9019 placement
 /**
  * 匹配带杂字符的百分号编码。
  */
 var INVISIBLE_CHARS_RE = /[\s\p{Cc}\ufffd+]/gu;
 var PERCENT_RUN_RE = /%[\s\p{Cc}\ufffd+]*([0-9a-f])[\s\p{Cc}\ufffd+]*([0-9a-f])/giu;
-//@ chunk-1wpnxx5r.js:9064-9208 placement
+//@ chunk-hfc4cfnt.js:9019-9163 placement
 function decodePercentRuns(value) {
   return value.replace(/(?:%[0-9a-f]{2})+/gi, (run) =>
     new TextDecoder().decode(Uint8Array.from(run.slice(1).split("%"), (hex) => parseInt(hex, 16))),
   );
 }
-//@ chunk-1wpnxx5r.js:9208-9444 placement
+//@ chunk-hfc4cfnt.js:9163-9399 placement
 function pathHasMemoryMcpTokens(value, prefixes) {
   let tokens = splitPathTokens(value);
   if (!tokens.join("").includes("memory")) return false;
@@ -448,14 +452,14 @@ function pathHasMemoryMcpTokens(value, prefixes) {
     ].some((sequence) => containsTokenSequence(tokens, sequence));
   });
 }
-//@ chunk-1wpnxx5r.js:9444-9573 placement
+//@ chunk-hfc4cfnt.js:9399-9528 placement
 function splitPathTokens(value) {
   return value
     .toLowerCase()
     .split(/[^a-z0-9_\-\s\p{Cc}\ufffd+]+/u)
     .flatMap((segment) => [...segment.split(/[\s\p{Cc}\ufffd+]+/u), ""]);
 }
-//@ chunk-1wpnxx5r.js:9573-9791 placement
+//@ chunk-hfc4cfnt.js:9528-9746 placement
 function containsTokenSequence(tokens, sequence) {
   let matched = 0;
   for (let k = 0; k < tokens.length && matched < sequence.length; k++) {
@@ -474,7 +478,7 @@ function containsTokenSequence(tokens, sequence) {
   }
   return matched === sequence.length;
 }
-//@ chunk-1wpnxx5r.js:9791-9959 placement
+//@ chunk-hfc4cfnt.js:9746-9913 placement
 function isMemoryProxyPath(pathname) {
   if (UNSAFE_PATH_CHAR_REGEX.test(pathname) || pathHasMemoryMcpTokens(pathname, CCR_PROXY_PATH_MARKERS))
     return true;
@@ -486,7 +490,7 @@ function isMemoryProxyPath(pathname) {
     }),
   );
 }
-//@ chunk-1wpnxx5r.js:9959-10213 placement
+//@ chunk-hfc4cfnt.js:9913-10166 placement
 function isCcrToolportUrl(value, hostname) {
   let authority = URL_AUTHORITY_REGEX.exec(value)?.[0];
   if (
@@ -510,14 +514,14 @@ function isCcrToolportUrl(value, hostname) {
   }
   return false;
 }
-//@ chunk-1wpnxx5r.js:10213-10278 placement
+//@ chunk-hfc4cfnt.js:10166-10231 placement
 /**
  * 判断主机是否属于 CCR 主机。
  */
 function isCcrHost(url, hostname) {
   return [stripTrailingDots(hostname), ""].includes(stripTrailingDots(new URL(url).hostname));
 }
-//@ chunk-1wpnxx5r.js:10278-10350 placement
+//@ chunk-hfc4cfnt.js:10231-10303 placement
 /**
  * 去掉主机名结尾的点。
  */
@@ -526,7 +530,7 @@ function stripTrailingDots(value) {
   while (value[length - 1] === ".") length--;
   return value.slice(0, length);
 }
-//@ chunk-1wpnxx5r.js:10350-10546 placement
+//@ chunk-hfc4cfnt.js:10303-10499 placement
 function hasMemoryMcpSegments(value) {
   return [value, posix.normalize(value)].some((candidate) => {
     let filtered = candidate.split("/").filter((segment) => segment !== "");
@@ -537,7 +541,7 @@ function hasMemoryMcpSegments(value) {
     );
   });
 }
-//@ chunk-1wpnxx5r.js:10546-10695 placement
+//@ chunk-hfc4cfnt.js:10499-10647 placement
 function lenientDecodeURIComponent(value) {
   try {
     return decodeURIComponent(value);
@@ -547,47 +551,49 @@ function lenientDecodeURIComponent(value) {
     );
   }
 }
-//@ chunk-1wpnxx5r.js:10695-10799 placement
+//@ chunk-hfc4cfnt.js:10647-10751 placement
 /**
  * /v1/code/sessions/<id>/mcp 路径正则。
  */
 var CCR_SESSION_MCP_PATH = /^\/v2\/ccr-sessions\/([A-Za-z0-9_-]+)\/mcp$/;
 var CODE_SESSION_MCP_PATH = /^\/v1\/code\/sessions\/([A-Za-z0-9_-]+)\/mcp$/;
-//@ chunk-1wpnxx5r.js:10799-11105 placement
+//@ chunk-hfc4cfnt.js:10751-11156 placement
 function ccrPathPrefixIndex(url) {
+  if (UNSAFE_PATH_CHAR_REGEX.test(url.pathname) || posix.normalize(url.pathname) !== url.pathname)
+    return false;
+  let lower = url.pathname.toLowerCase();
   let earliest = -1;
-  for (let prefix of CCR_SESSION_PATH_PREFIXES) {
-    let index = url.pathname.indexOf(prefix);
+  for (let prefix of CCR_PROXY_PATH_MARKERS) {
+    let index = lower.indexOf(prefix);
     if (index !== -1 && (earliest === -1 || index < earliest)) earliest = index;
   }
   if (earliest === -1) return false;
   let sliced = url.pathname.slice(earliest);
   let all = url.searchParams.getAll("toolbox_mcp_server_id");
+  if (!all.every((id) => RESERVED_BROWSER_SERVER_IDS.includes(id.toLowerCase()))) return false;
   return (
-    (all.length === 1 &&
-      all.every((id) => RESERVED_BROWSER_SERVER_IDS.includes(id.toLowerCase())) &&
-      (CCR_SESSION_MCP_PATH.test(sliced) || CODE_SESSION_MCP_PATH.test(sliced))) ||
+    (all.length === 1 && (CCR_SESSION_MCP_PATH.test(sliced) || CODE_SESSION_MCP_PATH.test(sliced))) ||
     CCR_MCP_PATH_PATTERNS.some((pattern) => pattern.test(sliced))
   );
 }
-//@ chunk-1wpnxx5r.js:11105-11169 placement
+//@ chunk-hfc4cfnt.js:11156-11220 placement
 function toolportPathFor(sessionId) {
   return `/internal/v2/ccr-sessions/${sessionId}/toolport/`;
 }
-//@ chunk-1wpnxx5r.js:11169-11219 placement
+//@ chunk-hfc4cfnt.js:11220-11270 placement
 var regExp; // deferred: uses toolportPathFor of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-1wpnxx5r.js:11169", () => {
+deferInit("chunk-hfc4cfnt.js:11220", () => {
   regExp = new RegExp(`^${toolportPathFor("[A-Za-z0-9_-]+")}mcp$`);
 });
-//@ chunk-1wpnxx5r.js:11219-11278 placement
+//@ chunk-hfc4cfnt.js:11270-11329 placement
 function isCcrMcpPath(url) {
   return isSameOriginAsCcr(url) && regExp.test(new URL(url).pathname);
 }
-//@ chunk-1wpnxx5r.js:11448-11572 placement
+//@ chunk-hfc4cfnt.js:11499-11623 placement
 var SHTTP_MCP_PATH_REGEX = /^\/v2\/session_ingress\/shttp\/mcp\/([A-Za-z0-9_-]+)$/;
 var WS_MCP_PATH_REGEX = /^\/v2\/session_ingress\/mcp\/ws\/([A-Za-z0-9_-]+)$/;
 var SELF_SESSION_PLACEHOLDER = "-";
-//@ chunk-1wpnxx5r.js:11572-11735 placement
+//@ chunk-hfc4cfnt.js:11623-11786 placement
 function parseCcrSessionMcpUrl(url, ccrOrigin, sessionId) {
   let sameOriginUrl = parseSameOriginUrl(url, ccrOrigin);
   if (!sameOriginUrl) return null;
@@ -596,13 +602,13 @@ function parseCcrSessionMcpUrl(url, ccrOrigin, sessionId) {
   if (!match || match[1] !== sessionId || !ccrMcpQuery) return null;
   return `${ccrOrigin}/v2/ccr-sessions/${sessionId}/mcp?${ccrMcpQuery}`;
 }
-//@ chunk-1wpnxx5r.js:11735-11864 placement
+//@ chunk-hfc4cfnt.js:11786-11915 placement
 /**
  * UUID 格式正则。
  */
 var CCR_MCP_QUERY_PARAMS = ["mcp_url", "mcp_server_id", "toolbox_mcp_server_id"];
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-//@ chunk-1wpnxx5r.js:11864-12366 placement
+//@ chunk-hfc4cfnt.js:11915-12417 placement
 function parseCcrMcpQuery(sameOriginUrl, ccrOrigin) {
   let paramNames = [...sameOriginUrl.searchParams.keys()];
   if (
@@ -627,7 +633,11 @@ function parseCcrMcpQuery(sameOriginUrl, ccrOrigin) {
   uRLSearchParams.set("toolbox_mcp_server_id", BF7C680D_5FDC_5EF4_B4A0_ABADB619BF0A);
   return uRLSearchParams.toString();
 }
-//@ chunk-1wpnxx5r.js:12366-12497 placement
+//@ chunk-hfc4cfnt.js:12417-12498 layout
+function originOfUrl(parsed) {
+  return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.origin : null;
+}
+//@ chunk-hfc4cfnt.js:12498-12627 placement
 function parseSameOriginUrl(url, ccrOrigin) {
   let parsed;
   try {
@@ -635,21 +645,24 @@ function parseSameOriginUrl(url, ccrOrigin) {
   } catch {
     return null;
   }
-  return parsed.origin === ccrOrigin && parsed.username === "" && parsed.password === "" && parsed.hash === ""
+  return originOfUrl(parsed) === ccrOrigin &&
+    parsed.username === "" &&
+    parsed.password === "" &&
+    parsed.hash === ""
     ? parsed
     : null;
 }
-//@ chunk-1wpnxx5r.js:12497-12597 placement
+//@ chunk-hfc4cfnt.js:12627-12725 placement
 function getCcrOrigin() {
   let atStartup = startupCcrEnv.atStartup;
   if (!atStartup) return null;
   try {
-    return new URL(atStartup).origin;
+    return originOfUrl(new URL(atStartup));
   } catch {
     return null;
   }
 }
-//@ chunk-1wpnxx5r.js:12597-12781 placement
+//@ chunk-hfc4cfnt.js:12725-12909 placement
 function isCcrSessionScopedMcpUrl(url) {
   let ccrOrigin = getCcrOrigin();
   let parsed = ccrOrigin === null ? null : parseSameOriginUrl(url, ccrOrigin);
@@ -663,12 +676,12 @@ function isCcrSessionScopedMcpUrl(url) {
     )
   );
 }
-//@ chunk-1wpnxx5r.js:12781-12834 placement
+//@ chunk-hfc4cfnt.js:12909-12962 placement
 function isCcrOriginUrl(url) {
   let ccrOrigin = getCcrOrigin();
   return ccrOrigin !== null && isCcrMetaOrProxyUrl(url, ccrOrigin);
 }
-//@ chunk-1wpnxx5r.js:12834-13286 placement
+//@ chunk-hfc4cfnt.js:12962-13414 placement
 function ccrSessionIdFromMcpUrl(url) {
   let ccrOrigin = getCcrOrigin();
   let parsed = ccrOrigin === null ? null : parseSameOriginUrl(url, ccrOrigin);
@@ -692,17 +705,17 @@ function ccrSessionIdFromMcpUrl(url) {
     upstreamUrl: parsed.searchParams.get("mcp_url") ?? undefined,
   };
 }
-//@ chunk-1wpnxx5r.js:13286-13358 placement
+//@ chunk-hfc4cfnt.js:13414-13484 placement
 function originIfValid(candidate) {
-  return candidate !== undefined && checkSdkUrl(candidate) === null ? new URL(candidate).origin : null;
+  return candidate !== undefined && checkSdkUrl(candidate) === null ? originOfUrl(new URL(candidate)) : null;
 }
-//@ chunk-1wpnxx5r.js:13358-13454 placement
+//@ chunk-hfc4cfnt.js:13484-13580 placement
 /**
  * hearthbot 在 v2 CCR 会话下的路径正则。
  */
 var HEARTHBOT_MCP_PATH = "/v1/code/mcp/hearthbot";
 var HEARTHBOT_CCR_PATH_RE = /^\/v2\/ccr-sessions\/(?:-|[A-Za-z0-9_-]+)\/hearthbot\/mcp$/;
-//@ chunk-1wpnxx5r.js:13454-13635 placement
+//@ chunk-hfc4cfnt.js:13580-13761 placement
 function isCcrUrlWithoutCredentials(url) {
   if (!isSameOriginAsCcr(url)) return false;
   let parsed;
@@ -719,12 +732,12 @@ function isCcrUrlWithoutCredentials(url) {
     (parsed.pathname === HEARTHBOT_MCP_PATH || HEARTHBOT_CCR_PATH_RE.test(parsed.pathname))
   );
 }
-//@ chunk-1wpnxx5r.js:13635-13699 placement
+//@ chunk-hfc4cfnt.js:13761-13825 placement
 /**
  * CCR 邮件 MCP 路径正则。
  */
 var CCR_EMAIL_MCP_PATH_RE = /^\/v2\/ccr-sessions\/(?:-|[A-Za-z0-9_-]+)\/email\/mcp$/;
-//@ chunk-1wpnxx5r.js:13699-13947 placement
+//@ chunk-hfc4cfnt.js:13825-14073 placement
 function isCcrDynamicServer(name, config) {
   if (
     name !== CCR_EMAIL ||
@@ -749,12 +762,12 @@ function isCcrDynamicServer(name, config) {
     CCR_EMAIL_MCP_PATH_RE.test(parsed.pathname)
   );
 }
-//@ chunk-1wpnxx5r.js:13947-14014 placement
+//@ chunk-hfc4cfnt.js:14073-14140 placement
 /**
  * CCR 远程浏览器 MCP 路径正则。
  */
 var CCR_REMOTE_BROWSER_MCP_PATH_RE = /^\/v2\/ccr-sessions\/[A-Za-z0-9_-]+\/remote-browser\/mcp$/;
-//@ chunk-1wpnxx5r.js:14014-14222 placement
+//@ chunk-hfc4cfnt.js:14140-14348 placement
 function isHttpsCcrUrl(url) {
   if (!isSameOriginAsCcr(url)) return false;
   let parsed;
@@ -772,7 +785,7 @@ function isHttpsCcrUrl(url) {
     CCR_REMOTE_BROWSER_MCP_PATH_RE.test(parsed.pathname)
   );
 }
-//@ chunk-1wpnxx5r.js:14222-14485 placement
+//@ chunk-hfc4cfnt.js:14348-14613 placement
 function isRemoteBrowserCcrUrl(url) {
   if (!isRemoteBrowserAllowed() || !isCcrSessionScopedMcpUrl(url)) return false;
   let parsed = new URL(url);
@@ -787,7 +800,7 @@ function isRemoteBrowserCcrUrl(url) {
     )
   );
 }
-//@ chunk-1wpnxx5r.js:14485-14899 placement
+//@ chunk-hfc4cfnt.js:14613-15029 placement
 function matchesCcrMcpServerId(serverName, url) {
   if (!isRemoteBrowserAllowed() || !isSameOriginAsCcr(url)) return false;
   let parsed = new URL(url);
@@ -816,12 +829,12 @@ function matchesCcrMcpServerId(serverName, url) {
     )
   );
 }
-//@ chunk-1wpnxx5r.js:14899-14925 placement
+//@ chunk-hfc4cfnt.js:15029-15055 placement
 /**
  * 匹配非 ASCII 数字的正则。
  */
 var HAS_DIGITS_RE = /(?![0-9])\p{Nd}/u;
-//@ chunk-1wpnxx5r.js:14925-14989 placement
+//@ chunk-hfc4cfnt.js:15055-15119 placement
 /**
  * 判断地址是否属于允许的远程浏览器地址。
  */
@@ -832,14 +845,14 @@ function isRemoteBrowserAllowedUrl(value) {
       normalizeUuidDigits(value).includes(normalizedUuidDigits(REMOTE_BROWSER_SERVER_ID)))
   );
 }
-//@ chunk-1wpnxx5r.js:14989-15034 placement
+//@ chunk-hfc4cfnt.js:15119-15164 placement
 /**
  * 规范化 UUID 数字并去掉前导零。
  */
 function normalizedUuidDigits(value) {
   return normalizeUuidDigits(value).replace(/^0+/, "");
 }
-//@ chunk-1wpnxx5r.js:15034-15189 placement
+//@ chunk-hfc4cfnt.js:15164-15319 placement
 function normalizeUuidDigits(value) {
   let tagged = decodeTaggedUuid(value)?.replaceAll("-", "") ?? "";
   let replaced = value
@@ -849,17 +862,17 @@ function normalizeUuidDigits(value) {
     .replace(/[^0-9a-f]/g, "");
   return `${tagged}${replaced}`;
 }
-//@ chunk-1wpnxx5r.js:15189-15294 placement
+//@ chunk-hfc4cfnt.js:15319-15424 placement
 /**
  * 桥接设备 MCP 的路径。
  */
 var BRIDGE_HOSTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var BRIDGE_DEVICES_PATH;
-deferInit("chunk-1wpnxx5r.js:15189", () => {
+deferInit("chunk-hfc4cfnt.js:15319", () => {
   BRIDGE_HOSTS = new Set(["bridge.claudeusercontent.com", "bridge-staging.claudeusercontent.com"]);
   BRIDGE_DEVICES_PATH = "/devices/mcp";
 });
-//@ chunk-1wpnxx5r.js:15294-15428 placement
+//@ chunk-hfc4cfnt.js:15424-15558 placement
 function isBareWssUrl(url) {
   let parsed;
   try {
@@ -874,76 +887,148 @@ function isBareWssUrl(url) {
     BRIDGE_HOSTS.has(parsed.hostname)
   );
 }
-//@ chunk-1wpnxx5r.js:15515-15619 affinity (2.1.88 match: unwrapCcrProxyUrl, 0.858)
-function getCcrProxyTargetUrl(url) {
-  if (!isSameOriginAsCcr(url) || !URL.canParse(url)) return;
-  return new URL(url).searchParams.get("mcp_url") || undefined;
-}
-//@ chunk-1wpnxx5r.js:15619-15667 placement
+//@ chunk-hfc4cfnt.js:15749-15797 placement
 /**
  * 允许的 URL 协议集合。
  */
 var WEB_SCHEMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1wpnxx5r.js:15619", () => {
+deferInit("chunk-hfc4cfnt.js:15749", () => {
   WEB_SCHEMES = new Set(["http:", "https:", "ws:", "wss:"]);
 });
-//@ chunk-1wpnxx5r.js:15667-15809 placement
+//@ chunk-hfc4cfnt.js:15797-15939 placement
 function ccrProxyTargetHost(url) {
   let ccrProxyTargetUrl = getCcrProxyTargetUrl(url);
   if (ccrProxyTargetUrl === undefined || !URL.canParse(ccrProxyTargetUrl)) return;
   let target = new URL(ccrProxyTargetUrl);
   return WEB_SCHEMES.has(target.protocol) ? target.hostname.toLowerCase() : undefined;
 }
-//@ chunk-1wpnxx5r.js:15931-15976 placement
+//@ chunk-hfc4cfnt.js:15939-16061 layout (2.1.88 match: isPreapprovedUrl, 1)
+/**
+ * 解包 CCR 代理 URL 后判断是否为某个已知端点（主机在集合内且路径相符）；被 MCP 配置使用。
+ */
+function isKnownProxyEndpointUrl(url) {
+  let ccrProxyTargetUrl = getCcrProxyTargetUrl(url);
+  if (!ccrProxyTargetUrl) return false;
+  try {
+    let parsedUrl = new URL(ccrProxyTargetUrl);
+    return BRIDGE_HOSTS.has(parsedUrl.hostname) && parsedUrl.pathname === BRIDGE_DEVICES_PATH;
+  } catch {
+    return false;
+  }
+}
+//@ chunk-hfc4cfnt.js:16061-16106 placement
 var BRIDGE_DEVICE_URL_PREFIXES; // deferred: uses BRIDGE_HOSTS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-1wpnxx5r.js:15931", () => {
+deferInit("chunk-hfc4cfnt.js:16061", () => {
   BRIDGE_DEVICE_URL_PREFIXES = [...BRIDGE_HOSTS].map((host) => `https://${host}${BRIDGE_DEVICES_PATH}`);
 });
-//@ chunk-1wpnxx5r.js:16167-16204 placement
+//@ chunk-hfc4cfnt.js:16297-16334 placement
 function safeOrigin(origin) {
   return origin ? shortHash(origin) : undefined;
 }
-//@ chunk-1wpnxx5r.js:16204-16374 placement
+//@ chunk-hfc4cfnt.js:16334-16491 placement
 function urlPathOf(url) {
   if (!URL.canParse(url)) return;
   let parsed = new URL(url);
-  if (parsed.origin === "null") return;
-  return parsed.pathname !== "/" || parsed.search !== "" || parsed.hash !== ""
-    ? `${parsed.origin}/\u2026`
-    : parsed.origin;
+  let origin = originOf(parsed);
+  if (origin === undefined) return;
+  return parsed.pathname !== "/" || parsed.search !== "" || parsed.hash !== "" ? `${origin}/\u2026` : origin;
 }
+//@ chunk-5xgkngpb.js:2577458-2578174 placement
+/**
+ * MCP server 来源判定的常量表：内置连接器 id 到上报地址、云会话通道名到 MCP 路径、服务器 id 与 URL 上限。
+ */
+var ORG_CONNECTOR; // deferred: uses ARTIFACTS_SERVER_NAME (./firstPartyServerIds.js) of its import cycle while loading; runs once the cycle is complete
+var SESSION_SCOPED_SERVERS;
+var EXPECTED_CCR_MCP_PATHS;
+var MAX_MCP_URL_LENGTH;
+var MCP_URL_PATTERN;
+var UNKNOWN_PROVENANCE;
+var CONFIGURED_PROVENANCE;
+deferInit("chunk-5xgkngpb.js:2577458", () => {
+  ORG_CONNECTOR = "org-connector-";
+  SESSION_SCOPED_SERVERS = new Map([
+    [
+      ARTIFACTS_SERVER_NAME,
+      {
+        id: MEMORY_SERVER_ID,
+        at: "/api/mcp/claude_ai",
+      },
+    ],
+    [
+      WIDGETS,
+      {
+        id: WIDGETS_SERVER_ID,
+        at: "/api/cowork/widgets_mcp",
+      },
+    ],
+    [
+      VISUALIZE,
+      {
+        id: VISUALIZE_SERVER_ID,
+        at: "https://sandbox.claudemcpcontent.com/imagine_mcp",
+      },
+    ],
+  ]);
+  EXPECTED_CCR_MCP_PATHS = new Map([
+    [COWORK, "/v1/code/mcp/cowork"],
+    ["ccr-slack-thread", "/v2/ccr-sessions/-/slack-thread/mcp"],
+    ["amb", "/v2/ccr-sessions/-/amb/mcp"],
+    ["sms_reply", "/v2/ccr-sessions/-/amb/mcp"],
+    ["imessage_reply", "/v2/ccr-sessions/-/amb/mcp"],
+    ["linq_reply", "/v2/ccr-sessions/-/linq/mcp"],
+    [CCR_EMAIL, "/v2/ccr-sessions/-/email/mcp"],
+  ]);
+  MAX_MCP_URL_LENGTH = 2048;
+  MCP_URL_PATTERN =
+    /^https:\/\/(?:[^/?#@\\\s]*@)?(\[[0-9a-f:.]+\]|[a-z0-9._-]+)(?::[0-9]*)?(?:[/?#][^@\\\t\r\n]*)?$/i;
+  UNKNOWN_PROVENANCE = {
+    serverProvenance: undefined,
+    serverUrl: undefined,
+  };
+  CONFIGURED_PROVENANCE = {
+    serverProvenance: "configured",
+    serverUrl: undefined,
+  };
+});
 export {
+  getCcrOrigin,
+  originOfUrl,
+  CCR_SESSION_BASE_PATHS,
+  BRIDGE_DEVICE_URL_PREFIXES,
+  isKnownProxyEndpointUrl,
   isSameOriginAsCcr,
+  safeOrigin,
+  ccrProxyTargetHost,
+  isCcrInjectedMcpUrl,
+  isCcrMcpPath,
   originIfValid,
+  ccrBridgeEnvVarNames,
+  toolportPathFor,
   parseCcrSessionMcpUrl,
   isToolboxMcpServerConfig,
   isCcrMemoryMcpServer,
   hasOnlyAllowedCcrParams,
   matchesCcrMcpServerId,
   urlPathOf,
-  ccrSessionIdFromMcpUrl,
-  UUID_RE,
-  safeOrigin,
-  ccrProxyTargetHost,
-  isCcrInjectedMcpUrl,
-  isCcrMcpPath,
-  getCcrOrigin,
-  CCR_SESSION_BASE_PATHS,
-  BRIDGE_DEVICE_URL_PREFIXES,
-  toolportPathFor,
-  getCcrProxyTargetUrl,
-  BRIDGE_HOSTS,
-  BRIDGE_DEVICES_PATH,
   isCcrDynamicServer,
-  ccrBridgeEnvVarNames,
-  CCR_SESSION_MCP_PATH,
-  isCcrUrlWithoutCredentials,
-  isCcrSessionMcpUrl,
+  MCP_URL_PATTERN,
+  MAX_MCP_URL_LENGTH,
+  CONFIGURED_PROVENANCE,
+  UNKNOWN_PROVENANCE,
+  EXPECTED_CCR_MCP_PATHS,
+  SESSION_SCOPED_SERVERS,
+  ccrSessionIdFromMcpUrl,
+  sessionScopedServerIds_2,
+  ORG_CONNECTOR,
+  UUID_RE,
+  isCcrOriginUrl,
+  isBareWssUrl,
   isHttpsCcrUrl,
   isRemoteBrowserCcrUrl,
-  isCcrOriginUrl,
+  isCcrUrlWithoutCredentials,
+  isCcrSessionMcpUrl,
   isCcrSessionScopedMcpUrl,
-  CCR_MCP_QUERY_PARAMS,
-  isBareWssUrl,
+  CCR_SESSION_MCP_PATH,
   ccrPathPrefixIndex,
+  CCR_MCP_QUERY_PARAMS,
 };

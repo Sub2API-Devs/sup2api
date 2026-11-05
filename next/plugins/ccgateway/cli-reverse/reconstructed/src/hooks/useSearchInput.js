@@ -3,9 +3,9 @@
  *
  * 搜索输入 hook：Emacs 风格编辑键（kill/yank）、退出/取消，供 transcript 搜索、选择器等使用。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useSearchInput.ts
- * pieces: chunk-tzghj6zv.js (7)
+ * pieces: chunk-18rrbwq1.js (7)
  * attribution: affinity 1, fingerprint 4, layout 2
  */
 import { useKillRing, topOfKillRing, nextYankPop } from "../utils/killRing.js";
@@ -17,9 +17,9 @@ import { EDITOR_MODES } from "../utils/configConstants.js";
 import { useVimInput } from "./useVimInput.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-tzghj6zv.js:5963-6203 affinity
+//@ chunk-18rrbwq1.js:6073-6313 affinity
 var NON_TEXT_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tzghj6zv.js:5963", () => {
+deferInit("chunk-18rrbwq1.js:6073", () => {
   NON_TEXT_KEYS = new Set([
     "escape",
     "return",
@@ -54,33 +54,33 @@ deferInit("chunk-tzghj6zv.js:5963", () => {
     "f12",
   ]);
 });
-//@ chunk-tzghj6zv.js:6203-6304 fingerprint (2.1.88 match: isYankKey, 1)
+//@ chunk-18rrbwq1.js:6313-6414 fingerprint (2.1.88 match: isYankKey, 1)
 function isYankKey(text, key) {
   if (key.ctrl || key.meta) return false;
   if (NON_TEXT_KEYS.has(text)) return false;
   return text.length > 0 && !/^\s/.test(text);
 }
-//@ chunk-tzghj6zv.js:6304-6372 layout
+//@ chunk-18rrbwq1.js:6414-6482 layout
 /**
  * 函数 startsWithPunctuation（首字符是标点）；位于「搜索输入 hook：Emacs 风格编辑键（kill/yank）、退出/取消，供 transcript 搜索、选择器等使用」模块。
  */
 function startsWithPunctuation(text) {
   return text.length > 0 && ".,?!:;)]".includes(text.charAt(0));
 }
-//@ chunk-tzghj6zv.js:6372-6561 fingerprint (2.1.88 match: isKillKey, 1)
+//@ chunk-18rrbwq1.js:6482-6671 fingerprint (2.1.88 match: isKillKey, 1)
 function isKillKey(e) {
   if (e.ctrl && (e.key === "k" || e.key === "u" || e.key === "w")) return true;
   if ((e.meta || e.ctrl) && e.key === "backspace") return true;
   if (e.meta && !e.ctrl && e.key.toLowerCase() === "d") return true;
   return false;
 }
-//@ chunk-tzghj6zv.js:6561-6612 layout (2.1.88 match: isYankKey, 1)
+//@ chunk-18rrbwq1.js:6671-6722 layout (2.1.88 match: isYankKey, 1)
 function isYankKey_2(e) {
   return (e.ctrl || e.meta) && e.key === "y";
 }
-//@ chunk-tzghj6zv.js:6612-6768 fingerprint (2.1.88 match: UNHANDLED_SPECIAL_KEYS, 0.925)
+//@ chunk-18rrbwq1.js:6722-6878 fingerprint (2.1.88 match: UNHANDLED_SPECIAL_KEYS, 0.925)
 var UNHANDLED_SPECIAL_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tzghj6zv.js:6612", () => {
+deferInit("chunk-18rrbwq1.js:6722", () => {
   UNHANDLED_SPECIAL_KEYS = new Set([
     "pageup",
     "pagedown",
@@ -104,7 +104,7 @@ deferInit("chunk-tzghj6zv.js:6612", () => {
     "f12",
   ]);
 });
-//@ chunk-tzghj6zv.js:6768-11964 fingerprint (2.1.88 match: useSearchInput, 0.606)
+//@ chunk-18rrbwq1.js:6878-12093 fingerprint (2.1.88 match: useSearchInput, 0.606)
 /**
  * 搜索输入：维护 query/cursorOffset，处理字符输入、退格、Emacs kill/yank、左右移动，return 触发 onExit，escape 触发 onCancel；不处理翻页/滚轮等键。
  */

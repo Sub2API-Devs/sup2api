@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：会话扫描
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dz3q485w.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jndyh8cy.js (4)
  * attribution: placement 4
  */
 import { readdir } from "fs/promises";
@@ -21,7 +21,7 @@ import { clearResolveGitDirCache } from "../../utils/git/gitFilesystem.js";
 import { loadSameRepoMessageLogs_2 } from "../../utils/sessionStorage.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-dz3q485w.js:15469-15880 placement
+//@ chunk-jndyh8cy.js:15567-15977 placement
 /**
  * 列出目录顶层条目（跳过隐藏项与符号链接）并挑出文档类条目（README、CLAUDE.md 优先）。
  */
@@ -53,7 +53,7 @@ async function scanTopLevelEntries(cwd) {
     throw error;
   }
 }
-//@ chunk-dz3q485w.js:15880-16113 placement
+//@ chunk-jndyh8cy.js:15977-16210 placement
 /**
  * 试探 Projects 是否可用：列出一页频道，成功返回 ok，否则区分确定拒绝与未知错误。
  */
@@ -77,12 +77,12 @@ async function probeProjectsAccess(signal, credentials) {
     };
   }
 }
-//@ chunk-dz3q485w.js:16113-16143 placement
+//@ chunk-jndyh8cy.js:16210-16240 placement
 var EMPTY_SCAN_RESULT = {
   logs: [],
   totalCount: 0,
 };
-//@ chunk-dz3q485w.js:16143-16805 placement
+//@ chunk-jndyh8cy.js:16240-16902 placement
 /**
  * 扫描当前目录供 /send-to-project 使用：git 根与仓库/GitHub 访问状态、未提交与未跟踪文件数、同仓库的本地会话、顶层条目与文档，以及是否有未推送提交。
  */

@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：发往 API 前的消息规范化
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (68)
- * attribution: placement 68
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (69), chunk-nt9amew5.js (2)
+ * attribution: placement 68, layout 1, affinity 2
  */
 import { createHash, randomUUID } from "crypto";
 import { isValidReminderId, parseReminderHeader, escapeBareReminderOpen } from "../systemReminder.js";
@@ -33,6 +33,7 @@ import {
   stripTrailingMessageIdTag,
   TRAILING_WHITESPACE_CHARS,
   INTERRUPT_TEXTS,
+  SYNTHETIC_MODEL,
 } from "../messages.js";
 import { isHumanOrigin, isNonTypedInput } from "../turnOrigin.js";
 import { IMAGE_MARKER_PREFIX, IMAGE_SOURCE_MARKER_PREFIX } from "../imageErrors.js";
@@ -66,17 +67,16 @@ import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { attachRelayTurnFlags } from "../../services/projectsRelay/relayConfig.js";
 import { isChatHostEntrypoint } from "../entrypointKinds.js";
 import { normalizeDeliveredPeers } from "../pollEvents.js";
-import { SYNTHETIC_MODEL } from "../../constants/messages.js";
 import { listsHumanReplies } from "../permissions/serverClassifier/fallbackNotice.js";
 import { isNarrationThinking } from "../../services/api/narrationClassifier.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:144825-145817 placement
-function describeForwardedTurns(messages, messagesForAPI) {
+//@ chunk-nt9amew5.js:13154-14138 placement
+function describeForwardedTurns(content, messagesForAPI) {
   let descriptions = new Map();
   let seenReminderIds = new Set();
   let reminderByTurn = new Map();
-  for (let message of messages) {
+  for (let message of content) {
     if (message.type !== "attachment" || message.attachment.type !== "queued_command") continue;
     let { attachment } = message;
     let reminderId = attachment.reminderId;
@@ -136,7 +136,7 @@ function describeForwardedTurns(messages, messagesForAPI) {
   }
   return result.length > MAX_MCP_RULE_LENGTH ? result.slice(result.length - MAX_MCP_RULE_LENGTH) : result;
 }
-//@ chunk-e6aww6q8.js:145817-146020 placement
+//@ chunk-nt9amew5.js:14138-14338 placement
 /**
  * 解析分类器请求附带的数据：request 为非空字符串且 context 通过 schema 校验时返回，否则 undefined。
  */
@@ -152,7 +152,7 @@ function parseClassifierRequest(serverClassifierContext) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:146063-146169 placement
+//@ chunk-5xgkngpb.js:139981-140087 placement
 /**
  * 精简（bare）模式下丢弃除队列命令与 poll 事件外的所有附件。
  */
@@ -161,7 +161,7 @@ function isBareModeAttachmentDropped(message) {
   let { type: attachmentType } = message.attachment;
   return attachmentType !== "queued_command" && attachmentType !== "poll_events";
 }
-//@ chunk-e6aww6q8.js:146169-146554 placement
+//@ chunk-5xgkngpb.js:140087-140472 placement (2.1.88 match: selectableUserMessagesFilter, 0.75)
 /**
  * 从某位置往前看，最近一条有意义的消息是否是人类亲自输入的用户消息（遇到助手、工具结果、压缩摘要、中断或非白名单元消息则为否）。
  */
@@ -186,7 +186,7 @@ function isAfterHumanTurn(messages, endIndex = messages.length) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:146554-146744 placement
+//@ chunk-5xgkngpb.js:140472-140662 placement
 function isHarmlessMetaMessage(message) {
   let content = message.message.content;
   return (
@@ -200,7 +200,7 @@ function isHarmlessMetaMessage(message) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:146744-146840 placement
+//@ chunk-5xgkngpb.js:140662-140758 placement
 function isTaskNotificationText(text) {
   return (
     (text.startsWith(IMAGE_MARKER_PREFIX) || text.startsWith(IMAGE_SOURCE_MARKER_PREFIX)) &&
@@ -209,7 +209,7 @@ function isTaskNotificationText(text) {
 `)
   );
 }
-//@ chunk-e6aww6q8.js:146840-147179 placement
+//@ chunk-5xgkngpb.js:140758-141097 placement
 /**
  * 收集紧跟在人类回合之后的任务通知类队列命令附件 uuid（排除定时触发与 Projects 中继）。
  */
@@ -231,29 +231,29 @@ function collectTaskNotificationsAfterHuman(messages) {
   }
   return uuids ?? NO_NOTIFICATION_UUIDS;
 }
-//@ chunk-e6aww6q8.js:147179-147195 placement
+//@ chunk-5xgkngpb.js:141097-141113 placement
 var NO_NOTIFICATION_UUIDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:147179", () => {
+deferInit("chunk-5xgkngpb.js:141097", () => {
   NO_NOTIFICATION_UUIDS = new Set();
 });
-//@ chunk-e6aww6q8.js:147195-147254 placement
+//@ chunk-5xgkngpb.js:141113-141172 placement
 var TENGU_VELVETY_RIPPLE = "tengu_velvety_ripple";
 var TENGU_LEXICAL_CRYSTAL = "tengu_lexical_crystal";
-//@ chunk-e6aww6q8.js:147254-147286 placement
+//@ chunk-5xgkngpb.js:141172-141204 placement
 /**
  * 判断 tengu_velvety_ripple 是否开启（默认关）。
  */
 function isVelvetyRippleOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VELVETY_RIPPLE, false);
 }
-//@ chunk-e6aww6q8.js:147286-147318 placement
+//@ chunk-5xgkngpb.js:141204-141236 placement
 /**
  * 判断 tengu_lexical_crystal 是否开启（默认开）。
  */
 function isLexicalCrystalOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_LEXICAL_CRYSTAL, true);
 }
-//@ chunk-e6aww6q8.js:2516581-2516709 placement
+//@ chunk-5xgkngpb.js:2559642-2559770 placement
 function hashInsertedText(text, message) {
   let normalized = normalizeFullWidthSpace(text);
   return createHash("sha256")
@@ -263,7 +263,7 @@ function hashInsertedText(text, message) {
     .digest("hex")
     .slice(0, 32);
 }
-//@ chunk-e6aww6q8.js:2516709-2516856 placement
+//@ chunk-5xgkngpb.js:2559770-2559917 placement
 /**
  * 取出消息内容中的文本块（字符串内容视为一个文本块）。
  */
@@ -275,7 +275,7 @@ function getTextBlocks(content) {
       )
     : [];
 }
-//@ chunk-e6aww6q8.js:2516856-2516953 placement
+//@ chunk-5xgkngpb.js:2559917-2560014 placement
 function isSystemReminderText(text) {
   let charAfterTag = text.charAt(16);
   return (
@@ -283,7 +283,7 @@ function isSystemReminderText(text) {
     (charAfterTag === ">" || TRAILING_WHITESPACE_CHARS.has(charAfterTag))
   );
 }
-//@ chunk-e6aww6q8.js:2516953-2517202 placement
+//@ chunk-5xgkngpb.js:2560014-2560263 placement
 function classifyInsertedTextKind(localMessage) {
   if (localMessage.wakeupSource !== undefined) return "timer";
   if (localMessage.type !== "user") return "asTyped";
@@ -291,13 +291,13 @@ function classifyInsertedTextKind(localMessage) {
   if (frame.frame === "human" || frame.frame === "relay-human") return "asTyped";
   return frame.frame === "invisible" && frame.reason === "meta-without-provenance" ? "hidden" : undefined;
 }
-//@ chunk-e6aww6q8.js:2517202-2517239 placement
+//@ chunk-5xgkngpb.js:2560263-2560300 placement
 var COMMAND_TEXT_RANK = {
   hidden: 0,
   asTyped: 1,
   timer: 2,
 };
-//@ chunk-e6aww6q8.js:2517239-2517363 placement
+//@ chunk-5xgkngpb.js:2560300-2560424 placement
 /**
  * 有命令文本时给消息附上命令文本块计数（本条与全部）。
  */
@@ -312,7 +312,7 @@ function withCommandTextBlocks(userMessage, commandContent, ownContent) {
       }
     : userMessage;
 }
-//@ chunk-e6aww6q8.js:2517363-2517528 placement
+//@ chunk-5xgkngpb.js:2560424-2560589 placement
 function countHiddenCommandBlocks(localMessage, allTextBlocks) {
   let commandTextBlocks = localMessage.commandTextBlocks;
   if (commandTextBlocks === undefined) return 0;
@@ -323,19 +323,19 @@ function countHiddenCommandBlocks(localMessage, allTextBlocks) {
     ? commandTextBlocks.all - commandTextBlocks.own
     : allTextBlocks.length;
 }
-//@ chunk-e6aww6q8.js:2517528-2517585 placement
+//@ chunk-5xgkngpb.js:2560589-2560646 placement
 function takeLast(items, count) {
   return items.slice(Math.max(0, items.length - count));
 }
-//@ chunk-e6aww6q8.js:2517585-2517698 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince_8(content) {
+//@ chunk-5xgkngpb.js:2560646-2560759 placement
+function toolUseIdsOf(content) {
   return Array.isArray(content)
     ? content.flatMap((block) =>
         block?.type === "tool_use" && typeof block.id === "string" ? [block.id] : [],
       )
     : [];
 }
-//@ chunk-e6aww6q8.js:2517698-2519379 placement
+//@ chunk-5xgkngpb.js:2560759-2562448 placement
 /**
  * 为发给 API 的用户文本标注出处：找出本地记录里由定时器唤醒或隐藏的元消息插入的文本，按位置哈希在线上消息中定位，追加 inserted_text_at 出处条目（受列表上限约束）；未匹配时打点；出错返回原列表。
  */
@@ -344,7 +344,7 @@ function markInsertedTextProvenance(provenance, localMessages, wireMessages) {
     if (!isSnugWallOn()) return provenance;
     let wireToolIds = new Set(
       wireMessages.flatMap((wireMessage) =>
-        wireMessage.type === "assistant" ? countToolCallsSince_8(wireMessage.message.content) : [],
+        wireMessage.type === "assistant" ? toolUseIdsOf(wireMessage.message.content) : [],
       ),
     );
     let kindByHash = new Map();
@@ -354,7 +354,7 @@ function markInsertedTextProvenance(provenance, localMessages, wireMessages) {
     for (let localMessage of localMessages) {
       if (isVirtualConversationMessage(localMessage)) continue;
       if (localMessage.type === "assistant") {
-        for (let toolUseId of countToolCallsSince_8(localMessage.message?.content))
+        for (let toolUseId of toolUseIdsOf(localMessage.message?.content))
           if (wireToolIds.has(toolUseId)) {
             localToolId = toolUseId;
             seenToolIds.add(toolUseId);
@@ -405,7 +405,7 @@ function markInsertedTextProvenance(provenance, localMessages, wireMessages) {
     let wireToolId = "";
     for (let wireMessage of wireMessages)
       if (wireMessage.type === "assistant") {
-        for (let toolUseId of countToolCallsSince_8(wireMessage.message.content)) {
+        for (let toolUseId of toolUseIdsOf(wireMessage.message.content)) {
           wireToolId = toolUseId;
           if (seenToolIds.has(toolUseId)) lastSharedToolId = toolUseId;
         }
@@ -447,9 +447,12 @@ function markInsertedTextProvenance(provenance, localMessages, wireMessages) {
     return provenance;
   }
 }
-//@ chunk-e6aww6q8.js:2519417-2519444 placement
-var COMMAND_MESSAGE_TAGS = [COMMAND_MESSAGE, COMMAND_NAME, COMMAND_ARGS, SKILL_FORMAT, COMMAND_CONTENTS];
-//@ chunk-e6aww6q8.js:2519444-2520070 placement
+//@ chunk-5xgkngpb.js:2562486-2562513 placement
+var COMMAND_MESSAGE_TAGS; // deferred: uses COMMAND_NAME (../../constants/xml.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-5xgkngpb.js:2562486", () => {
+  COMMAND_MESSAGE_TAGS = [COMMAND_MESSAGE, COMMAND_NAME, COMMAND_ARGS, SKILL_FORMAT, COMMAND_CONTENTS];
+});
+//@ chunk-5xgkngpb.js:2562513-2563142 placement
 /**
  * 解析斜杠命令消息文本里的标签（command-name/args/message/contents/skill-format 等），每种标签至多一次、只允许已知标签；返回命令名、参数、完整行、消息、内容与是否技能格式。
  */
@@ -494,20 +497,20 @@ function parseCommandMessage(text) {
     isSkillFormat: skillFormat !== undefined,
   };
 }
-//@ chunk-e6aww6q8.js:2520070-2520156 placement
+//@ chunk-5xgkngpb.js:2563142-2563228 placement
 function messageRedundantWithName(command) {
   let { message, name } = command;
   return message !== undefined && message !== "" && message !== name && `/${message}` !== name;
 }
-//@ chunk-e6aww6q8.js:2520156-2520209 placement
+//@ chunk-5xgkngpb.js:2563228-2563281 placement
 /**
  * 找出最后一条可用的斜杠命令消息。
  */
-function lastCommandMessageParsed(text) {
-  let commandMessage = parseCommandMessage(text);
+function lastCommandMessageParsed(content) {
+  let commandMessage = parseCommandMessage(content);
   return commandMessage && isUsableCommandMessage(commandMessage) ? commandMessage : null;
 }
-//@ chunk-e6aww6q8.js:2520209-2520306 placement
+//@ chunk-5xgkngpb.js:2563281-2563378 placement
 /**
  * 判断解析出的命令消息是否可用（有 message、与 name 不同、非技能参数）。
  */
@@ -519,7 +522,13 @@ function isUsableCommandMessage(command) {
     !(command.isSkillFormat && command.args !== "")
   );
 }
-//@ chunk-e6aww6q8.js:2520306-2520408 placement
+//@ chunk-5xgkngpb.js:2563378-2563490 layout
+function commandMessageText(record) {
+  return record.isSkillFormat
+    ? `Skill(${record.message})`
+    : `/${[record.message, record.args].filter(Boolean).join(" ")}`;
+}
+//@ chunk-5xgkngpb.js:2563490-2563592 placement
 /**
  * 从后往前找出最后一个可解析为命令的消息内容。
  */
@@ -531,7 +540,7 @@ function findLastCommandMessage(content) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:2520408-2520486 placement
+//@ chunk-5xgkngpb.js:2563592-2563670 placement
 /**
  * 判断文本（跳过前导空白后）是否以命令标签开头。
  */
@@ -539,7 +548,7 @@ function startsWithCommandTag(text) {
   let start = skipWhitespace(text, 0);
   return COMMAND_MESSAGE_TAGS.some((tag) => text.startsWith(`<${tag}>`, start));
 }
-//@ chunk-e6aww6q8.js:2520486-2520669 placement
+//@ chunk-5xgkngpb.js:2563670-2563853 placement
 /**
  * 若最后一条文本是 <bash-input> 包裹的内容，取出其中的命令，否则返回 null。
  */
@@ -553,12 +562,12 @@ function extractBashInput(message) {
     ? text.slice(openTag.length, text.length - closeTag.length)
     : null;
 }
-//@ chunk-e6aww6q8.js:2520669-2520734 placement
+//@ chunk-5xgkngpb.js:2563853-2563918 placement
 function skipWhitespace(text, start) {
   while (start < text.length && /\s/.test(text[start])) start++;
   return start;
 }
-//@ chunk-e6aww6q8.js:2520734-2520880 placement
+//@ chunk-5xgkngpb.js:2563918-2564064 placement
 function getContentTexts(content) {
   if (typeof content === "string") return [content];
   return !Array.isArray(content)
@@ -567,9 +576,9 @@ function getContentTexts(content) {
         block.type === "text" && typeof block.text === "string" ? [block.text] : [],
       );
 }
-//@ chunk-e6aww6q8.js:2520880-2520893 placement
+//@ chunk-5xgkngpb.js:2564064-2564077 placement
 var MAX_COMMAND_TEXT_CHARS = 1024;
-//@ chunk-e6aww6q8.js:2520893-2521045 placement
+//@ chunk-5xgkngpb.js:2564077-2564229 placement
 function hashVouchedText(lastSentCall, earlier, earlierCount, sent) {
   let normalizedSent = normalizeFullWidthSpace(lastSentCall);
   return createHash("sha256")
@@ -579,11 +588,11 @@ function hashVouchedText(lastSentCall, earlier, earlierCount, sent) {
     .digest("hex")
     .slice(0, 32);
 }
-//@ chunk-e6aww6q8.js:2521045-2524731 placement
+//@ chunk-5xgkngpb.js:2564229-2567920 placement
 /**
  * 把上下文分段附件组装成发给 API 的消息。
  */
-function buildContextSectionsMessage(messages, messagesForAPI, attachmentToMessages) {
+function buildContextSectionsMessage(block, messagesForAPI, attachmentToMessages) {
   try {
     if (getAutoModeConfigOrDefault().typedMarks !== true) return;
     if (!getIsInteractive())
@@ -609,7 +618,7 @@ function buildContextSectionsMessage(messages, messagesForAPI, attachmentToMessa
     let isTeammateSession = isTeammate();
     let instructionTexts = new Map();
     let instructionsTrusted = true;
-    for (let message of messages) {
+    for (let message of block) {
       if (message.type !== "attachment") continue;
       if (
         message.attachment.type === "context_sections" &&
@@ -630,14 +639,13 @@ function buildContextSectionsMessage(messages, messagesForAPI, attachmentToMessa
         instructionTexts.set(message, flattened);
       }
     }
-    let firstMessage = messages[0];
+    let firstMessage = block[0];
     if (firstMessage?.type === "user" && firstMessage.userContextReminder === true)
       instructionsTrusted = false;
     let instructionTextSet = new Set([...instructionTexts.values()].flat().map((text) => text.trimEnd()));
     let groupByToolId = new Map();
     for (let wireMessage of messagesForAPI) {
-      let toolUseIds =
-        wireMessage.type === "assistant" ? countToolCallsSince_8(wireMessage.message.content) : [];
+      let toolUseIds = wireMessage.type === "assistant" ? toolUseIdsOf(wireMessage.message.content) : [];
       for (let toolUseId of toolUseIds) groupByToolId.set(toolUseId, toolUseIds[0]);
     }
     let sentToolIds = new Set();
@@ -646,7 +654,7 @@ function buildContextSectionsMessage(messages, messagesForAPI, attachmentToMessa
     let typedCandidateCount = 0;
     let typedOrCommandCount = 0;
     let lastSentToolId = "";
-    for (let message of messages) {
+    for (let message of block) {
       if (isVirtualConversationMessage(message)) continue;
       let texts = [];
       let kind;
@@ -656,7 +664,7 @@ function buildContextSectionsMessage(messages, messagesForAPI, attachmentToMessa
         texts = instructionTextList;
         kind = "instructions";
       } else if (message.type === "assistant")
-        for (let toolUseId of countToolCallsSince_8(message.message?.content)) {
+        for (let toolUseId of toolUseIdsOf(message.message?.content)) {
           let groupToolId = groupByToolId.get(toolUseId);
           if (groupToolId !== undefined) {
             lastSentToolId = groupToolId;
@@ -745,7 +753,7 @@ function buildContextSectionsMessage(messages, messagesForAPI, attachmentToMessa
     let lastSentCall_2 = "";
     for (let wireMessage of messagesForAPI)
       if (wireMessage.type === "assistant")
-        for (let toolUseId of countToolCallsSince_8(wireMessage.message.content)) {
+        for (let toolUseId of toolUseIdsOf(wireMessage.message.content)) {
           lastSentCall_2 = toolUseId;
           sameTextCounts = new Map();
           let groupToolId = groupByToolId.get(toolUseId);
@@ -820,19 +828,19 @@ function buildContextSectionsMessage(messages, messagesForAPI, attachmentToMessa
     };
   }
 }
-//@ chunk-e6aww6q8.js:2524731-2524766 placement
+//@ chunk-5xgkngpb.js:2567920-2567955 placement
 var loggedTypedMarks; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:2524731", () => {
+deferInit("chunk-5xgkngpb.js:2567920", () => {
   loggedTypedMarks = identity_2(new Set(), (set) => set.clear());
 });
-//@ chunk-e6aww6q8.js:2524766-2524827 placement
+//@ chunk-5xgkngpb.js:2567955-2568016 placement
 function noteTypedMark(reason) {
   if (!loggedTypedMarks.has(reason)) {
     loggedTypedMarks.add(reason);
     logFeatureSad("typed_marks", reason);
   }
 }
-//@ chunk-e6aww6q8.js:2524903-2525066 placement
+//@ chunk-5xgkngpb.js:2568092-2568255 placement
 /**
  * 把用户消息标记为已验证的人类回合（可附 Projects 用户回合与邮件发送者回合标记）。
  */
@@ -847,14 +855,14 @@ function markVerifiedHumanTurn(message, turnId, { projectsUserTurn = false, emai
     }),
   });
 }
-//@ chunk-e6aww6q8.js:2525066-2525111 placement
+//@ chunk-5xgkngpb.js:2568255-2568300 placement
 /**
  * 为已验证的人类回合补一个 id（必要时生成）。
  */
 function ensureTurnId(uuid, mintIfMissing) {
   return uuid || (mintIfMissing ? randomUUID() : undefined);
 }
-//@ chunk-e6aww6q8.js:2525111-2525314 placement
+//@ chunk-5xgkngpb.js:2568300-2568503 placement
 /**
  * 已验证人类回合摘录的预算常量（字符数、条数、引用字符、轮询事件人类字符），以及表示"有回合被省略"的占位系统消息。
  */
@@ -863,7 +871,7 @@ var MAX_HUMAN_TURNS;
 var MAX_REFERENT_CHARS;
 var POLL_EVENT_HUMAN_CHARS;
 var OMITTED_TURNS_MARKER;
-deferInit("chunk-e6aww6q8.js:2525111", () => {
+deferInit("chunk-5xgkngpb.js:2568300", () => {
   MAX_HUMAN_TURN_CHARS = 12000;
   MAX_HUMAN_TURNS = 16;
   MAX_REFERENT_CHARS = 6000;
@@ -877,7 +885,7 @@ deferInit("chunk-e6aww6q8.js:2525111", () => {
     timestamp: "1970-01-01T00:00:00.000Z",
   });
 });
-//@ chunk-e6aww6q8.js:2525314-2525851 placement
+//@ chunk-5xgkngpb.js:2568503-2569043 placement
 /**
  * 聊天宿主入口下，汇总已验证的人类回合（继承的加本会话的），从后往前在字符与条数预算内保留最近的回合，并在预算内附上每个回合所回应的助手消息；有省略时插入占位标记。
  */
@@ -920,7 +928,7 @@ function buildVerifiedHumanTurns({ messages, inheritedVerifiedHumanTurns: inheri
       .flatMap((entry, entryIndex) => (entryIndex < referentCut ? [entry.turn] : flattenTurnEntry(entry))),
   ];
 }
-//@ chunk-e6aww6q8.js:2525851-2526312 placement
+//@ chunk-5xgkngpb.js:2569043-2569507 placement
 /**
  * 为多条 poll 事件分配来源文本的字符预算：从最新的开始依次分配上限，超出总预算的部分截断。
  */
@@ -960,7 +968,7 @@ function budgetPollEventProvenance(entries) {
   });
   return result;
 }
-//@ chunk-e6aww6q8.js:2526312-2526551 placement
+//@ chunk-5xgkngpb.js:2569507-2569746 placement
 function withPollProvenance(turn, entries) {
   if (turn.type !== "attachment" || turn.attachment.type !== "poll_events") return turn;
   let provenance = turn.attachment.provenance;
@@ -976,18 +984,18 @@ function withPollProvenance(turn, entries) {
         },
       };
 }
-//@ chunk-e6aww6q8.js:2526551-2526598 placement
+//@ chunk-5xgkngpb.js:2569746-2569793 placement
 function turnEntry(turn) {
   return {
     referent: undefined,
     turn,
   };
 }
-//@ chunk-e6aww6q8.js:2526598-2526651 placement
+//@ chunk-5xgkngpb.js:2569793-2569846 placement
 function flattenTurnEntry({ referent, turn }) {
   return referent ? [referent, turn] : [turn];
 }
-//@ chunk-e6aww6q8.js:2526651-2526839 placement
+//@ chunk-5xgkngpb.js:2569846-2570034 placement
 function splitInheritedTurns(messages) {
   let turns = [];
   let omitted = false;
@@ -1013,7 +1021,7 @@ function splitInheritedTurns(messages) {
     omitted,
   };
 }
-//@ chunk-e6aww6q8.js:2526839-2526960 placement
+//@ chunk-5xgkngpb.js:2570034-2570155 placement
 function collectHumanTurns(messages) {
   let turns = [];
   messages.forEach((message, index) => {
@@ -1026,7 +1034,7 @@ function collectHumanTurns(messages) {
   });
   return turns;
 }
-//@ chunk-e6aww6q8.js:2526960-2527079 placement
+//@ chunk-5xgkngpb.js:2570155-2570274 placement
 function findReferentAssistant(messages, beforeIndex) {
   for (let idx = beforeIndex - 1; idx >= 0; idx--) {
     let candidate = messages[idx];
@@ -1035,7 +1043,7 @@ function findReferentAssistant(messages, beforeIndex) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:2527079-2527233 placement (2.1.88 match: buildTranscriptEntries, 0.777)
+//@ chunk-5xgkngpb.js:2570274-2570428 placement (2.1.88 match: buildTranscriptEntries, 0.902)
 /**
  * user 消息或 queued_command 附件是否是经核实的转发人类发言（verifiedSlackHumanTurn 且非 meta）。
  */
@@ -1049,7 +1057,7 @@ function isVerifiedRelayHumanMessage(message) {
       return false;
   }
 }
-//@ chunk-e6aww6q8.js:2527233-2527419 placement
+//@ chunk-5xgkngpb.js:2570428-2570614 placement
 /**
  * poll_events 附件中含 principal 来源时保留；经核实的人类转发消息且有正文时保留；否则返回 undefined。
  */
@@ -1060,7 +1068,7 @@ function keepPrincipalOrVerifiedHumanMessage(message) {
       : undefined;
   return isVerifiedRelayHumanMessage(message) && countTurnChars(message) > 0 ? message : undefined;
 }
-//@ chunk-e6aww6q8.js:2527419-2527688 placement
+//@ chunk-5xgkngpb.js:2570614-2570883 placement
 function isHumanTurnMessage(message) {
   switch (message.type) {
     case "user":
@@ -1078,7 +1086,7 @@ function isHumanTurnMessage(message) {
       return false;
   }
 }
-//@ chunk-e6aww6q8.js:2527688-2527950 placement
+//@ chunk-5xgkngpb.js:2570883-2571145 placement
 function isTransparentBetweenTurns(message) {
   switch (message.type) {
     case "assistant":
@@ -1095,45 +1103,45 @@ function isTransparentBetweenTurns(message) {
       return true;
   }
 }
-//@ chunk-e6aww6q8.js:2527950-2528083 placement
+//@ chunk-5xgkngpb.js:2571145-2571278 placement
 function getAssistantTextIfReal(message) {
   if (message.isApiErrorMessage || message.isVirtual || message.message.model === SYNTHETIC_MODEL) return "";
   let text = contentText(message.message.content);
   return text.trim() ? text : "";
 }
-//@ chunk-e6aww6q8.js:2528083-2528096 placement
+//@ chunk-5xgkngpb.js:2571278-2571291 placement
 var MAX_ASSISTANT_TAIL_CHARS = 2000;
-//@ chunk-e6aww6q8.js:2528096-2528134 placement
+//@ chunk-5xgkngpb.js:2571291-2571329 placement
 /**
  * 取助手消息末尾文本（截断到预算）。
  */
 function assistantTail(message) {
   return takeLastChars(getAssistantTextIfReal(message), MAX_ASSISTANT_TAIL_CHARS);
 }
-//@ chunk-e6aww6q8.js:2528134-2528189 placement
+//@ chunk-5xgkngpb.js:2571329-2571384 placement
 function assistantTailLength(referent) {
   return referent ? Math.min(getAssistantTextIfReal(referent).length, MAX_ASSISTANT_TAIL_CHARS) : 0;
 }
-//@ chunk-e6aww6q8.js:2528189-2528220 placement
+//@ chunk-5xgkngpb.js:2571384-2571415 placement
 var MAX_PROVENANCE_ENTRY_CHARS = 280;
 var TRUNCATED_SUFFIX = " [truncated]";
-//@ chunk-e6aww6q8.js:2528220-2528330 placement
+//@ chunk-5xgkngpb.js:2571415-2571524 placement
 function truncateSenderText(text) {
   let withoutSuffix = text.endsWith(TRUNCATED_SUFFIX) ? text.slice(0, -TRUNCATED_SUFFIX.length) : text;
   if (withoutSuffix.length <= MAX_PROVENANCE_ENTRY_CHARS) return text;
   return truncateToLength(withoutSuffix, MAX_PROVENANCE_ENTRY_CHARS) + TRUNCATED_SUFFIX;
 }
-//@ chunk-e6aww6q8.js:2528330-2528372 placement
+//@ chunk-5xgkngpb.js:2571524-2571566 placement
 var MAX_PROVENANCE_CHARS = 1000;
 var MAX_REST_ENTRIES = 32;
 var HARNESS_OMITTED = "harness-omitted";
-//@ chunk-e6aww6q8.js:2528372-2528424 placement
+//@ chunk-5xgkngpb.js:2571566-2571618 placement
 function omittedEntriesNotice(omittedCount) {
   return `[${omittedCount} more entries omitted]`;
 }
-//@ chunk-e6aww6q8.js:2528424-2528471 placement
+//@ chunk-5xgkngpb.js:2571618-2571665 placement
 var OMITTED_ENTRIES_RE = /^\[(\d{1,3}) more entries omitted\]$/;
-//@ chunk-e6aww6q8.js:2528471-2529523 placement
+//@ chunk-5xgkngpb.js:2571665-2572720 placement
 /**
  * 在字符预算内挑选轮询事件出处条目：委托人条目全部保留，其他人类与其余条目各在预算内按序保留，超出的合并为一条"省略 N 条"的条目；返回条目与已用字符数。
  */
@@ -1215,7 +1223,7 @@ function budgetProvenanceEntries(provenance, humanBudget, restBudget) {
     restChars,
   };
 }
-//@ chunk-e6aww6q8.js:2529523-2529852 placement
+//@ chunk-5xgkngpb.js:2572720-2573049 placement
 /**
  * 统计一个回合的人类输入字符数：用户消息与队列命令按文本长度，poll 事件只计主体（principal）文本。
  */
@@ -1239,27 +1247,23 @@ function countTurnChars(turn) {
       return 0;
   }
 }
-//@ chunk-e6aww6q8.js:2529852-2529996 placement
+//@ chunk-5xgkngpb.js:2573049-2573193 placement
 function contentText(content) {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content.flatMap((block) => (block?.type === "text" ? [block.text ?? ""] : [])).join(`
 `);
 }
-//@ chunk-e6aww6q8.js:2529996-2530198 placement
+//@ chunk-5xgkngpb.js:2573193-2573336 placement
 function hashHumanReply(lastSentCall, assistantTailText, text) {
-  let normalized = text
-    .trimEnd()
-    .replace(/\[id:[a-z0-9]{1,8}\]$/, "")
-    .trimEnd();
   return createHash("sha256")
     .update(
-      `${Buffer.byteLength(lastSentCall)}:${lastSentCall}${Buffer.byteLength(assistantTailText)}:${assistantTailText}${normalized}`,
+      `${Buffer.byteLength(lastSentCall)}:${lastSentCall}${Buffer.byteLength(assistantTailText)}:${assistantTailText}${normalizeReplyText(text)}`,
     )
     .digest("hex")
     .slice(0, 32);
 }
-//@ chunk-e6aww6q8.js:2530198-2531710 placement
+//@ chunk-5xgkngpb.js:2573336-2575001 placement
 /**
  * 为发给 API 的、紧接助手文字之后的用户文本标注 human_reply 出处：用本地记录里人类亲自输入的文本（及其所回应的助手文字）建立计数，线上出现次数不超过本地次数时才标注（受列表剩余容量限制）。
  */
@@ -1269,7 +1273,8 @@ function markHumanReplyProvenance(entries, transcript, apiMessages, sessionConte
     if (remainingSlots <= 0 || isModelDrivenSession(sessionContext) || !listsHumanReplies()) return entries;
     let humanPairCounts = new Map();
     let humanSaidCounts = new Map();
-    let transcriptToolUseIds = new Set();
+    let seen = new Set();
+    let seenNames = new Set();
     let lastToolUseId = "";
     for (let [index, message] of transcript.entries()) {
       if (isVirtualConversationMessage(message)) continue;
@@ -1279,8 +1284,9 @@ function markHumanReplyProvenance(entries, transcript, apiMessages, sessionConte
       if (message.type === "assistant") {
         for (let block of contentBlocks)
           if (block?.type === "tool_use") {
+            if (typeof block.id !== "string") return entries;
             lastToolUseId = block.id;
-            transcriptToolUseIds.add(block.id);
+            seenNames.add(block.id);
           }
       }
       if (
@@ -1296,6 +1302,7 @@ function markHumanReplyProvenance(entries, transcript, apiMessages, sessionConte
           ? [content]
           : contentBlocks.flatMap((block) => (block?.type === "text" ? [block.text] : []));
       for (let text of texts) {
+        seen.add(normalizeReplyTextFullWidth(text));
         let saidHash = hashHumanReply(lastToolUseId, "", text);
         humanSaidCounts.set(saidHash, (humanSaidCounts.get(saidHash) ?? 0) + 1);
       }
@@ -1325,13 +1332,18 @@ function markHumanReplyProvenance(entries, transcript, apiMessages, sessionConte
         : content) {
         if (apiMessage.type === "assistant") {
           if (block.type === "tool_use") {
+            if (typeof block.id !== "string") return entries;
             lastApiToolUseId = block.id;
-            matchedToolUseId = transcriptToolUseIds.has(block.id) ? block.id : matchedToolUseId;
+            matchedToolUseId = seenNames.has(block.id) ? block.id : matchedToolUseId;
           } else if (block.type === "text" && block.text.trim())
             lastAssistantTail = takeLastChars(block.text, MAX_ASSISTANT_TAIL_CHARS);
           continue;
         }
         if (block.type !== "text" || block.text.startsWith("<system-reminder")) continue;
+        if (!seen.has(normalizeReplyTextFullWidth(block.text))) {
+          lastAssistantTail = undefined;
+          continue;
+        }
         let saidHash = hashHumanReply(matchedToolUseId, "", block.text);
         saidCounts.set(saidHash, (saidCounts.get(saidHash) ?? 0) + 1);
         if (lastAssistantTail !== undefined) {
@@ -1367,19 +1379,30 @@ function markHumanReplyProvenance(entries, transcript, apiMessages, sessionConte
     return entries;
   }
 }
-//@ chunk-e6aww6q8.js:2531710-2531723 placement
+//@ chunk-5xgkngpb.js:2575001-2575082 affinity
+function normalizeReplyText(text) {
+  return text
+    .trimEnd()
+    .replace(/\[id:[a-z0-9]{1,8}\]$/, "")
+    .trimEnd();
+}
+//@ chunk-5xgkngpb.js:2575082-2575116 affinity
+function normalizeReplyTextFullWidth(text) {
+  return normalizeFullWidthSpace(normalizeReplyText(text));
+}
+//@ chunk-5xgkngpb.js:2575536-2575549 placement
 /**
  * 分类器请求文本的字符上限。
  */
 var MAX_CLASSIFIER_REQUEST_CHARS = 2048;
-//@ chunk-e6aww6q8.js:2539630-2539681 placement
+//@ chunk-5xgkngpb.js:2591082-2591133 placement
 /**
  * 判断 thinking 是否是可当叙述用的思考文本。
  */
 function hasNarrationThinking(block) {
   return !!block.thinking?.trim() && isNarrationThinking(block);
 }
-//@ chunk-e6aww6q8.js:2539681-2539755 placement
+//@ chunk-5xgkngpb.js:2591133-2591207 placement
 /**
  * 列出各条消息中可作叙述的思考块下标。
  */
@@ -1391,30 +1414,31 @@ function narrationThinkingIndexes(messages) {
   return indexes;
 }
 export {
+  markInsertedTextProvenance,
+  markHumanReplyProvenance,
+  describeForwardedTurns,
+  buildContextSectionsMessage,
   collectTaskNotificationsAfterHuman,
   isBareModeAttachmentDropped,
   isLexicalCrystalOn,
   findLastCommandMessage,
   extractBashInput,
   hasNarrationThinking,
-  buildVerifiedHumanTurns,
-  narrationThinkingIndexes,
-  parseCommandMessage,
-  isUsableCommandMessage,
   ensureTurnId,
-  getTextBlocks,
   markVerifiedHumanTurn,
-  markInsertedTextProvenance,
-  markHumanReplyProvenance,
-  describeForwardedTurns,
-  buildContextSectionsMessage,
-  assistantTail,
-  OMITTED_TURNS_MARKER,
-  withCommandTextBlocks,
-  lastCommandMessageParsed,
-  startsWithCommandTag,
   isVelvetyRippleOn,
+  getTextBlocks,
+  buildVerifiedHumanTurns,
   parseClassifierRequest,
   TENGU_VELVETY_RIPPLE,
+  assistantTail,
+  OMITTED_TURNS_MARKER,
   MAX_CLASSIFIER_REQUEST_CHARS,
+  withCommandTextBlocks,
+  lastCommandMessageParsed,
+  commandMessageText,
+  narrationThinkingIndexes,
+  isUsableCommandMessage,
+  startsWithCommandTag,
+  parseCommandMessage,
 };

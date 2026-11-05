@@ -3,12 +3,25 @@
  *
  * 结束对话工具（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-t1kwhq0j.js (2)
- * attribution: placement 2
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vafj8wka.js (6)
+ * attribution: affinity 1, placement 2, layout 3
  */
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { END_CONVERSATION_TOOL_NAME } from "./constants.js";
+import { isProjectsRelay, isLegacyHearthRelayMessage } from "../../utils/messageProvenance.js";
+import { isUserQueuedCommandAttachment } from "../../utils/messages.js";
+import {
+  END_CONVERSATION_REFLECTION_PROMPT,
+  DESCRIPTION,
+  isEndConversationToolEnabled,
+  END_CONVERSATION_FORK_REFLECTION_PROMPT,
+  END_CONVERSATION_FINAL_MESSAGE,
+  END_CONVERSATION_TOOL_RESULT,
+} from "./prompt.js";
+import { TurnRegistry } from "../../query/replTurnLedger.js";
+import { isDrainableMainThreadCommand } from "../../utils/messageQueueManager.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   zodStrictObject,
@@ -17,14 +30,6 @@ import {
   stringSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
-import {
-  DESCRIPTION,
-  isEndConversationToolEnabled,
-  END_CONVERSATION_FORK_REFLECTION_PROMPT,
-  END_CONVERSATION_REFLECTION_PROMPT,
-  END_CONVERSATION_FINAL_MESSAGE,
-  END_CONVERSATION_TOOL_RESULT,
-} from "./prompt.js";
 import { mainLoopCanonicalModel } from "../../utils/model/telemetryModelName.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
@@ -33,13 +38,19 @@ import { getSessionId } from "../../bootstrap/state.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-t1kwhq0j.js:11958-12351 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince(messages, sinceUuid, force = false) {
-  let toolCallCount = sinceUuid !== undefined || force;
+//@ chunk-vafj8wka.js:13164-13188 affinity
+class CarriedMarkers {
+  issuedBy = undefined;
+}
+//@ chunk-vafj8wka.js:13188-14230 placement
+function conversationEnded(messages, sinceUuid, force = false) {
+  let includeAttachments = sinceUuid !== undefined || force;
   let sawAssistantMessage = false;
   let unusedFlag = false;
   for (let j = messages.length - 1; j >= 0; j--) {
     let message = messages[j];
+    if (codeModeAccepted() && message !== undefined && "isVirtual" in message && message.isVirtual === true)
+      continue;
     if (message?.type === "assistant") {
       sawAssistantMessage = true;
       let content = message.message.content;
@@ -50,6 +61,8 @@ function countToolCallsSince(messages, sinceUuid, force = false) {
             contentBlock.type === "tool_use" && contentBlock.name === END_CONVERSATION_TOOL_NAME,
         )
       )
+        return true;
+      if (codeModeAccepted() && unusedFlag && sinceUuid !== undefined && message.uuid === sinceUuid)
         return true;
       continue;
     }
@@ -62,12 +75,66 @@ function countToolCallsSince(messages, sinceUuid, force = false) {
       ))
         return false;
       if (sawAssistantMessage) return false;
+      if (codeModeAccepted() && sinceUuid !== undefined)
+        unusedFlag ||= content.some((block) => hasReflectionPrompt(toolResultText(block)));
       continue;
     }
+    if (
+      codeModeAccepted() &&
+      includeAttachments &&
+      message?.type === "attachment" &&
+      ((message.attachment.type === "queued_command" &&
+        (((message.attachment.commandMode === "prompt" || message.attachment.commandMode === "bash") &&
+          message.attachment.isMeta !== true) ||
+          (isProjectsRelay(message.attachment.origin) && !isLegacyHearthRelayMessage(message.attachment)) ||
+          isUserQueuedCommandAttachment(message))) ||
+        (message.attachment.type === "poll_events" &&
+          (message.attachment.provenance ?? []).some(
+            (envelope) => envelope?.authority === "human-principal" || envelope?.authority === "human-other",
+          )))
+    )
+      return false;
+    if (
+      codeModeAccepted() &&
+      sinceUuid !== undefined &&
+      !sawAssistantMessage &&
+      message?.type === "attachment" &&
+      message.attachment.type === "poll_events"
+    )
+      unusedFlag ||= message.attachment.envelopes.some(hasReflectionPrompt);
   }
   return false;
 }
-//@ chunk-t1kwhq0j.js:12351-13861 placement
+//@ chunk-vafj8wka.js:14230-14364 layout
+function hasReflectionPrompt(envelope) {
+  let stripQuotes = (envelope) => envelope.replace(/['"\\]/g, "");
+  let text = stripQuotes(envelope);
+  return END_CONVERSATION_REFLECTION_PROMPT.split(
+    `
+`,
+  )
+    .filter((line) => line.trim() !== "")
+    .every((line) => text.includes(stripQuotes(line)));
+}
+//@ chunk-vafj8wka.js:14364-14620 layout
+function toolResultText(block) {
+  if (typeof block !== "object" || block === null || block.type !== "tool_result") return "";
+  let content = block.content;
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content.map((part) =>
+    typeof part === "object" && part !== null && part.type === "text" ? String(part.text ?? "") : "",
+  ).join(`
+`);
+}
+//@ chunk-vafj8wka.js:14620-14805 layout
+function canQueueInput(toolContext, inputBlock) {
+  let id = inputBlock.parentMessage?.message.id;
+  let turn = id === undefined ? undefined : toolContext.toolState.get(TurnRegistry).turnOf.get(id);
+  if (turn === undefined || turn.signal.aborted) return false;
+  return toolContext.messageQueue.peek(isDrainableMainThreadCommand) === undefined;
+}
+//@ chunk-vafj8wka.js:14805-16688 placement
 /**
  * EndConversation 的输出 schema：ended 与 message。
  */
@@ -125,7 +192,7 @@ var EndConversationTool = buildTool({
   },
   create(toolContext) {
     return {
-      async call(input, callOptions) {
+      async call(input, copyOverride) {
         let isNonInteractiveSession = toolContext.isNonInteractiveSession;
         let surface = toolContext.agentId ? "fork" : isNonInteractiveSession ? "print" : "repl";
         if (toolContext.agentId) {
@@ -141,8 +208,19 @@ var EndConversationTool = buildTool({
             },
           };
         }
-        let unusedFlag = false;
-        if (!countToolCallsSince(toolContext.messages(), undefined, false) || unusedFlag) {
+        let innerCallCannotQueue =
+          codeModeAccepted() && copyOverride.innerCall === true && !canQueueInput(toolContext, copyOverride);
+        if (
+          !conversationEnded(
+            toolContext.messages(),
+            codeModeAccepted() ? toolContext.toolState.get(CarriedMarkers).issuedBy : undefined,
+            codeModeAccepted() && copyOverride.innerCall === true,
+          ) ||
+          innerCallCannotQueue
+        ) {
+          if (codeModeAccepted() && !innerCallCannotQueue)
+            toolContext.toolState.get(CarriedMarkers).issuedBy =
+              copyOverride.innerCall === true ? copyOverride.parentMessage?.uuid : undefined;
           logEvent("tengu_end_conversation_tool_call", {
             surface: lit(surface),
             is_non_interactive: isNonInteractiveSession,
@@ -161,12 +239,21 @@ var EndConversationTool = buildTool({
           phase: lit("end"),
         });
         let unusedValue;
+        if (codeModeAccepted() && copyOverride.innerCall === true) {
+          toolContext.markEndedByModel();
+          unusedValue = toolContext.toolState
+            .get(TurnRegistry)
+            .end(copyOverride.parentMessage?.message.id, toolContext.agentId);
+        }
         try {
           await markSessionEndedByModel(getSessionId(), toolContext.storageV5);
         } catch (error) {
           logForDebugging(`[EndConversation] marker write failed: ${errorMessage(error)}`);
         }
-        callOptions.abort("end_conversation");
+        if (codeModeAccepted() && copyOverride.innerCall === true) {
+          unusedValue?.abort("end_conversation");
+          copyOverride.abortTurn("end_conversation");
+        } else copyOverride.abort("end_conversation");
         if (isNonInteractiveSession) {
           let { gracefulShutdown } = await import("../../utils/gracefulShutdown.js");
           gracefulShutdown(1, "other", {

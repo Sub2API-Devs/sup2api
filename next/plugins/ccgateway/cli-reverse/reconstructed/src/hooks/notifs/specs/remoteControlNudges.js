@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增。启动通知：Remote Control 推荐。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (5)
- * attribution: placement 5
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (6)
+ * attribution: placement 5, affinity 1
  */
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../../../ink/components/ErrorBoundary.js";
@@ -34,12 +34,11 @@ import {
 } from "../../../services/tips/remoteControlNudges.js";
 import { logEvent } from "../../../services/analytics/index.js";
 import { fromEnum } from "../../../services/analytics/safeMetadata.js";
-import { isBridgeInboundAllowed } from "../../../commands/bridge/bridge.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1781197-1781226 placement
+//@ chunk-czq1j3j2.js:1829074-1829103 placement
 var RC_LONG_TURN_NUDGE = "rc-long-turn-nudge";
-//@ chunk-18hwfzwa.js:1781226-1781785 placement
+//@ chunk-czq1j3j2.js:1829103-1829664 placement
 /**
  * 长回合提醒："Still working. Check in from your phone"，附 Remote Control 链接（读屏模式下直接显示 URL）。
  */
@@ -101,7 +100,7 @@ function StillWorkingPhoneLink(props) {
   } else element = $[7];
   return element;
 }
-//@ chunk-18hwfzwa.js:1781785-1782573 placement
+//@ chunk-czq1j3j2.js:1829664-1830452 placement
 var rcLongTurnNudgeNoticeSpec = {
   id: "rc-long-turn-nudge",
   deps: (ctx) => [ctx.turnAtRender.isLoading, ctx.replBridgeActive, ctx.removeNotification, ctx.clock],
@@ -148,11 +147,11 @@ var rcLongTurnNudgeNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1782573-1783832 placement
+//@ chunk-czq1j3j2.js:1830452-1831711 placement
 var RC_PERMISSION_NUDGE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var RC_NUDGE_MODES;
 var rcPermissionNudgeNoticeSpec;
-deferInit("chunk-18hwfzwa.js:1782573", () => {
+deferInit("chunk-czq1j3j2.js:1830452", () => {
   RC_PERMISSION_NUDGE = "rc-permission-nudge";
   RC_NUDGE_MODES = new Set(["default", "plan", "acceptEdits"]);
   rcPermissionNudgeNoticeSpec = {
@@ -250,7 +249,7 @@ deferInit("chunk-18hwfzwa.js:1782573", () => {
     },
   };
 });
-//@ chunk-18hwfzwa.js:1783832-1785048 placement
+//@ chunk-czq1j3j2.js:1831711-1832927 placement
 var RC_IDLE_UPSELL = "rc-idle-upsell";
 var PUSH_IDLE_UPSELL = "push-idle-upsell";
 var remoteControlUpsellNoticeSpec = {
@@ -348,4 +347,9 @@ var remoteControlUpsellNoticeSpec = {
     };
   },
 };
+//@ chunk-czq1j3j2.js:1832927-1833016 affinity
+function isBridgeInboundAllowed(store) {
+  let state = store.getState();
+  return state.replBridgeEnabled && !state.replBridgeOutboundOnly;
+}
 export { remoteControlUpsellNoticeSpec, rcLongTurnNudgeNoticeSpec, rcPermissionNudgeNoticeSpec };

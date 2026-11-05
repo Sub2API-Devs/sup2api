@@ -1,12 +1,12 @@
 /**
  * @anthropic-ai/sdk/internal/utils/bytes.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (5)
+ * pieces: chunk-vn3g7zt8.js (5)
  * attribution: esm-layout 3, esm-fingerprint 2
  */
 
-//@ chunk-hwmsct5x.js:25531-25656 esm-layout
+//@ chunk-vn3g7zt8.js:25902-26027 esm-layout
 function concatBytes(buffers) {
   let length = 0;
   for (let buffer of buffers) length += buffer.length;
@@ -18,18 +18,18 @@ function concatBytes(buffers) {
   }
   return output;
 }
-//@ chunk-hwmsct5x.js:25656-25663 esm-layout
+//@ chunk-vn3g7zt8.js:26027-26034 esm-layout
 var encodeUTF8_;
-//@ chunk-hwmsct5x.js:25663-25751 esm-fingerprint
+//@ chunk-vn3g7zt8.js:26034-26122 esm-fingerprint
 function encodeUTF8(str) {
   let encoder;
   return (
     encodeUTF8_ ?? ((encoder = new globalThis.TextEncoder()), (encodeUTF8_ = encoder.encode.bind(encoder)))
   )(str);
 }
-//@ chunk-hwmsct5x.js:25751-25758 esm-layout
+//@ chunk-vn3g7zt8.js:26122-26129 esm-layout
 var decodeUTF8_;
-//@ chunk-hwmsct5x.js:25758-25846 esm-fingerprint
+//@ chunk-vn3g7zt8.js:26129-26217 esm-fingerprint
 /**
  * 用 TextDecoder 把 MCPB manifest 字节解码为文本（旧版名不准确：只做解码，校验在 ...FromText）。
  */

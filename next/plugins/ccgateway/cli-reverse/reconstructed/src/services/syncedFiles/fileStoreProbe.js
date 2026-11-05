@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：云会话同步文件存储的探测（manifest 获取重试、拒绝、不可达），公布结论
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-240k3fwa.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tz61m3gk.js (10)
  * attribution: placement 10
  */
 import { joined, NOT_IMPLEMENTED_STATUS } from "../../utils/teleport/seedPaths.js";
@@ -22,7 +22,7 @@ import {
 import { getSyncedFile } from "./syncedFileSyncer.js";
 import { getPreSettingsEnvSnapshot } from "../../utils/managedEnvApply.js";
 
-//@ chunk-240k3fwa.js:3803-3933 placement
+//@ chunk-tz61m3gk.js:4139-4269 placement
 var MANIFEST_GET_ATTEMPTS = 5;
 var MANIFEST_RETRY_DELAY_MS = 500;
 var MAX_REFUSED_MANIFEST_GETS = 3;
@@ -33,7 +33,7 @@ var PROBE_TIMING = {
   maxRefusedManifestGets: MAX_REFUSED_MANIFEST_GETS,
   refusedManifestGetDelayMs: REFUSED_MANIFEST_DELAY_MS,
 };
-//@ chunk-240k3fwa.js:3933-4363 placement
+//@ chunk-tz61m3gk.js:4269-4699 placement
 /**
  * 读取同步文件存储 manifest，可重试错误按指数退避重试，返回已答复、被拒或不可达。
  */
@@ -68,7 +68,7 @@ async function getManifestWithRetry(getRow, timing) {
     }
   }
 }
-//@ chunk-240k3fwa.js:4363-4697 placement
+//@ chunk-tz61m3gk.js:4699-5033 placement
 /**
  * 探测云会话同步文件存储是否可用：未开启则公布 off；否则取一次 manifest，能取到为 served、被拒为 refused；不可达时等待有行暂存后再试，并公布结论。
  */
@@ -100,7 +100,7 @@ async function probeFileStore(probe, timing = PROBE_TIMING) {
   })();
   return firstVerdict;
 }
-//@ chunk-240k3fwa.js:4697-4848 placement
+//@ chunk-tz61m3gk.js:5033-5184 placement
 function createWakeQueue(onChange) {
   let pendingWake = false;
   let resolveNext = null;
@@ -122,7 +122,7 @@ function createWakeQueue(onChange) {
     close,
   };
 }
-//@ chunk-240k3fwa.js:4848-5452 placement
+//@ chunk-tz61m3gk.js:5184-5788 placement
 /**
  * 探测一次同步文件存储：答复则为 served；被拒时按情况重试或公布 refused；不可达返回 null。
  */
@@ -166,7 +166,7 @@ async function probeOnce(probe, timing, announce, afterStage) {
     }
   }
 }
-//@ chunk-240k3fwa.js:5452-5518 placement
+//@ chunk-tz61m3gk.js:5788-5854 placement
 /**
  * 空的回合前后钩子与 drain 实现。
  */
@@ -175,7 +175,7 @@ var NOOP_TURN_HOOKS = {
   afterTurn: () => {},
   drain: async () => {},
 };
-//@ chunk-240k3fwa.js:5518-5613 placement
+//@ chunk-tz61m3gk.js:5854-5949 placement
 function _() {
   return {
     enabled: openSettingsToCloudGateIfAvailable,
@@ -184,7 +184,7 @@ function _() {
     hasPreviousCloudInstance: workerEpoch() > 1,
   };
 }
-//@ chunk-240k3fwa.js:5613-5680 placement
+//@ chunk-tz61m3gk.js:5949-6016 placement
 function startFileStoreProbe(
   storage,
   probe = _(),
@@ -196,11 +196,11 @@ function startFileStoreProbe(
   probeFileStore(probe);
   return NOOP_TURN_HOOKS;
 }
-//@ chunk-240k3fwa.js:5680-5706 placement
+//@ chunk-tz61m3gk.js:6016-6042 placement
 function storageSlotOrNull(storage) {
   return null;
 }
-//@ chunk-240k3fwa.js:5706-5865 placement
+//@ chunk-tz61m3gk.js:6042-6201 placement
 function workerEpoch() {
   let CLAUDE_CODE_WORKER_EPOCH = getPreSettingsEnvSnapshot().CLAUDE_CODE_WORKER_EPOCH;
   if (CLAUDE_CODE_WORKER_EPOCH === undefined) return 1;

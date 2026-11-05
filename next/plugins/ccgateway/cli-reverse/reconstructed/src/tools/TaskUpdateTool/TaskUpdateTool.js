@@ -3,9 +3,9 @@
  *
  * TaskUpdate 工具：更新/删除任务、依赖、owner 与 TaskCompleted 钩子
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TaskUpdateTool/TaskUpdateTool.ts
- * pieces: chunk-kxyd0g16.js (1)
+ * pieces: chunk-fmnbrxwy.js (1)
  * attribution: fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -43,14 +43,14 @@ import { writeToMailbox } from "../../utils/teammateMailbox.js";
 import { swarmHostState } from "../../utils/swarm/hostState.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:146123-150001 fingerprint (2.1.88 match: TaskUpdateTool, 0.765)
+//@ chunk-fmnbrxwy.js:161120-164998 fingerprint (2.1.88 match: TaskUpdateTool, 0.767)
 /**
  * TaskUpdate 工具（并发安全、shouldDefer）：更新 subject/description/activeForm/owner/metadata（null 删除键）、status（deleted 即删除），completed 前跑 TaskCompleted 钩子；agent swarms 下 in_progress 自动认领 owner、设置 owner 时给其邮箱发 task_assignment；addBlocks/addBlockedBy 建立双向依赖。
  */
 var taskUpdateInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var taskUpdateOutputSchema;
 var TaskUpdateTool;
-deferInit("chunk-kxyd0g16.js:146123", () => {
+deferInit("chunk-fmnbrxwy.js:161120", () => {
   taskUpdateInputSchema = DoctorLazy(() => {
     let TaskUpdateStatusSchema = TaskStatusSchema().or(literal("deleted"));
     return zodStrictObject({

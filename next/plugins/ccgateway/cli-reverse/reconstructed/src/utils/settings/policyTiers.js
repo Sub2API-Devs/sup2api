@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：机器级登录固定（强制登录组织）；过滤非托管来源的凭据 helper 键。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (30)
- * attribution: placement 30
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (31)
+ * attribution: placement 30, layout 1
  */
 import {
   DANGEROUS_SHELL_SETTINGS,
@@ -39,6 +39,7 @@ import {
   getLegacyLocalSettingsFilePath_3,
 } from "./settingsSources.js";
 import { env } from "../env.js";
+import { logForDebugging } from "../debug.js";
 import {
   isInertManagedMcpServersNotice,
   parseSettingsFile_3,
@@ -50,14 +51,14 @@ import { settingsMergeCustomizer } from "./settings.js";
 import { PROVIDER_ENV_FLAGS } from "../model/modelIds.js";
 import { partitionAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { isEnvDefinedFalsy } from "../envUtils.js";
-import { count } from "../collections.js";
+import { countWhere } from "../collections.js";
 import { getSettingsFilePathForSource_3 } from "./settingsFileParsing.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:500782-501142 placement
+//@ chunk-z20c443b.js:499608-499968 placement
 var CREDENTIAL_HELPER_SETTINGS_KEYS; // deferred: uses DANGEROUS_SHELL_SETTINGS (../managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
 var LAUNCH_FOLDER_WITHHELD_SETTINGS_KEYS;
-deferInit("chunk-dcmhvw5a.js:500782", () => {
+deferInit("chunk-z20c443b.js:499608", () => {
   CREDENTIAL_HELPER_SETTINGS_KEYS = [...DANGEROUS_SHELL_SETTINGS, "otelHeadersHelper", "proxyAuthHelper"];
   LAUNCH_FOLDER_WITHHELD_SETTINGS_KEYS = [
     "disableAllHooks",
@@ -77,7 +78,7 @@ deferInit("chunk-dcmhvw5a.js:500782", () => {
     "enabledMcpjsonServers",
   ];
 });
-//@ chunk-dcmhvw5a.js:501142-501320 placement
+//@ chunk-z20c443b.js:499968-500146 placement
 function withholdLaunchFolderKeys(source, settings, context) {
   if (
     !LAUNCH_FOLDER_WITHHELD_SETTINGS_KEYS.some((key) => settings[key] !== undefined) ||
@@ -91,14 +92,14 @@ function withholdLaunchFolderKeys(source, settings, context) {
   markManagedKeyGroup("keys");
   return out;
 }
-//@ chunk-dcmhvw5a.js:501320-501364 placement
+//@ chunk-z20c443b.js:500146-500190 placement
 /**
  * trimmedPolicyTier：裁剪后的策略层。
  */
 function trimmedPolicyTier(source, settings, context) {
   return filterCredentialHelperKeys(source, withholdLaunchFolderKeys(source, settings, context), context);
 }
-//@ chunk-dcmhvw5a.js:501364-501684 placement
+//@ chunk-z20c443b.js:500190-500510 placement
 /**
  * 过滤非托管来源的凭据 helper 键。
  */
@@ -116,7 +117,7 @@ function filterCredentialHelperKeys(source, settings, context) {
   for (let key of CREDENTIAL_HELPER_SETTINGS_KEYS) delete out[key];
   return Object.assign(out, summary);
 }
-//@ chunk-dcmhvw5a.js:501684-501778 placement
+//@ chunk-z20c443b.js:500510-500604 placement
 function adminPolicyTierSummary(context) {
   let machineAdminPolicyTier = getMachineAdminPolicyTier(context);
   let summary = {};
@@ -126,23 +127,23 @@ function adminPolicyTierSummary(context) {
   }
   return summary;
 }
-//@ chunk-dcmhvw5a.js:501778-501862 placement
+//@ chunk-z20c443b.js:500604-500688 placement
 function getMachineAdminPolicyTier(context) {
   let machineContext = machineOnlyPolicyContext(context);
   let output = armedHelperOutput(machineContext);
   return output.composes === "tier" ? output.helper : resolvePolicySettings(machineContext).admin;
 }
-//@ chunk-dcmhvw5a.js:501862-501928 placement
+//@ chunk-z20c443b.js:500688-500754 placement
 function machineAdminMayPinSignInOrg(context) {
   return (
     getMachineAdminPolicyTier(context)?.forceLoginOrgUUID !== undefined || isMachineAdminSourceUnread(context)
   );
 }
-//@ chunk-dcmhvw5a.js:501928-501962 placement
+//@ chunk-z20c443b.js:500754-500788 placement
 function isMachineAdminSourceUnread(context) {
   return isMachineAdminDocumentUnreadable(machineOnlyPolicyContext(context));
 }
-//@ chunk-dcmhvw5a.js:501962-502198 placement
+//@ chunk-z20c443b.js:500788-501024 placement
 function machineOnlyPolicyContext(context) {
   let keepHelper =
     context.helperArmedFromRemote?.() === false && context.helperArmedFromUserWritableBase?.() === false;
@@ -159,14 +160,14 @@ function machineOnlyPolicyContext(context) {
     }),
   };
 }
-//@ chunk-dcmhvw5a.js:502198-502323 placement
+//@ chunk-z20c443b.js:501024-501149 placement
 function helperMayBeUserControlled(context) {
   return (
     context.helperArmedFromUserWritableBase?.() !== false ||
     (context.helperMergesOutput?.() === true && context.mdm?.().userWritable === true)
   );
 }
-//@ chunk-dcmhvw5a.js:502323-502688 placement
+//@ chunk-z20c443b.js:501149-501514 placement
 /**
  * 机器级登录固定（强制登录组织）。
  */
@@ -185,10 +186,10 @@ function machineLoginPins(target, context) {
   if (forceLoginMethod === "claudeai" || forceLoginMethod === "console")
     target.forceLoginMethod = forceLoginMethod;
 }
-//@ chunk-dcmhvw5a.js:502688-503521 placement
+//@ chunk-z20c443b.js:501514-502347 placement
 var KEPT_FROM_MACHINE_UNDER_POLICY_ONLY_TIER; // deferred: uses RESTRICTIVE_NESTED_SETTING_VALUES (./types.js) of its import cycle while loading; runs once the cycle is complete
 var ADDED_TO_A_POLICY_ONLY_TIER;
-deferInit("chunk-dcmhvw5a.js:502688", () => {
+deferInit("chunk-z20c443b.js:501514", () => {
   KEPT_FROM_MACHINE_UNDER_POLICY_ONLY_TIER = [
     ["model"],
     ["fallbackModel"],
@@ -229,7 +230,7 @@ deferInit("chunk-dcmhvw5a.js:502688", () => {
     ...RESTRICTIVE_NESTED_SETTINGS.map((key) => `autoMode.${key}`),
   ];
 });
-//@ chunk-dcmhvw5a.js:503521-503770 placement
+//@ chunk-z20c443b.js:502347-502596 placement
 function machineBeneathPolicyOnly(context) {
   if (context.store.policy.machineBeneathPolicyOnly === undefined) {
     let machineAdminPolicyTier = getMachineAdminPolicyTier(context);
@@ -245,7 +246,7 @@ function machineBeneathPolicyOnly(context) {
   }
   return context.store.policy.machineBeneathPolicyOnly;
 }
-//@ chunk-dcmhvw5a.js:503770-503870 placement
+//@ chunk-z20c443b.js:502596-502696 placement
 function getMachineAdminPolicyEnv(context) {
   return loadPolicySettings({
     ...machineOnlyPolicyContext(context),
@@ -254,7 +255,7 @@ function getMachineAdminPolicyEnv(context) {
     parentManaged: null,
   }).settings?.env;
 }
-//@ chunk-dcmhvw5a.js:503870-504155 placement
+//@ chunk-z20c443b.js:502696-502981 placement
 function machinePolicyKeepsPriority(settingsContext, orgUuid) {
   if (isMachineAdminDocumentUnreadable(machineOnlyPolicyContext(settingsContext))) return true;
   let admin = resolvePolicySettings({
@@ -273,7 +274,7 @@ function machinePolicyKeepsPriority(settingsContext, orgUuid) {
     Object.values(admin?.[key] ?? {}).some((value) => value !== undefined && value !== null),
   );
 }
-//@ chunk-dcmhvw5a.js:504155-504342 placement
+//@ chunk-z20c443b.js:502981-503168 placement
 function getVouchedAdminPolicyTier(settingsContext, includeRemote) {
   let machineContext = machineOnlyPolicyContext(settingsContext);
   let helperArmed = settingsContext.helperArmedFromUserWritableBase?.() === false;
@@ -287,14 +288,14 @@ function getVouchedAdminPolicyTier(settingsContext, includeRemote) {
   let output = armedHelperOutput(context);
   return output.composes === "tier" ? output.helper : resolvePolicySettings(context).admin;
 }
-//@ chunk-dcmhvw5a.js:504342-504459 placement
+//@ chunk-z20c443b.js:503168-503285 placement
 function getMachineAdminPolicyTiers(context) {
   let machineContext = machineOnlyPolicyContext(context);
   let output = armedHelperOutput(machineContext);
   if (output.composes === "tier") return [output.helper];
   return resolvePolicySettings(machineContext).tiers.filter((tier) => tier !== null);
 }
-//@ chunk-dcmhvw5a.js:504459-504603 placement
+//@ chunk-z20c443b.js:503285-503429 placement
 function getRemotePolicyTierWithKind(settingsContext) {
   let { tiers, tierSources, snapshotFirst } = resolvePolicySettings(settingsContext);
   let index = tierSources.indexOf("remote");
@@ -303,9 +304,9 @@ function getRemotePolicyTierWithKind(settingsContext) {
     servedSnapshot: snapshotFirst,
   };
 }
-//@ chunk-dcmhvw5a.js:504603-504766 placement
+//@ chunk-z20c443b.js:503429-503592 placement
 var WINNER_ONLY_UNDER_MERGE; // deferred: uses CREDENTIAL_HELPER_SETTINGS_KEYS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:504603", () => {
+deferInit("chunk-z20c443b.js:503429", () => {
   WINNER_ONLY_UNDER_MERGE = [
     ...CREDENTIAL_HELPER_SETTINGS_KEYS,
     "forceLoginOrgUUID",
@@ -319,15 +320,15 @@ deferInit("chunk-dcmhvw5a.js:504603", () => {
     ...restrictiveTopLevelSettings,
   ];
 });
-//@ chunk-dcmhvw5a.js:504766-504792 placement
+//@ chunk-z20c443b.js:503592-503618 placement
 function winnerOnlyUnderMerge() {
   return WINNER_ONLY_UNDER_MERGE;
 }
-//@ chunk-dcmhvw5a.js:504792-504862 placement
+//@ chunk-z20c443b.js:503618-503688 placement
 function isCredentialHelperSettingKey(key) {
   return OTEL_EXPORTER_PREFIXES.some((prefix) => key.startsWith(prefix)) || OTEL_DETAIL_VARS.includes(key);
 }
-//@ chunk-dcmhvw5a.js:504862-505320 placement
+//@ chunk-z20c443b.js:503688-504146 placement
 function unionAdminTierEnv(envs, flags, reserved, skipBelow = 0) {
   let seenUpper = new Map();
   let out = new Map();
@@ -357,9 +358,9 @@ function unionAdminTierEnv(envs, flags, reserved, skipBelow = 0) {
   }
   return Object.fromEntries(out);
 }
-//@ chunk-dcmhvw5a.js:505320-505365 placement
+//@ chunk-z20c443b.js:504146-504191 placement
 var DISABLE_ADMIN_ENV_UNION_VAR = "CLAUDE_CODE_DISABLE_ADMIN_ENV_UNION";
-//@ chunk-dcmhvw5a.js:505365-505700 placement
+//@ chunk-z20c443b.js:504191-504526 placement
 function getAdminTierEnvValue(settingsContext, envName) {
   let adminTierEnvView = settingsContext.store.policy.adminTierEnvView;
   if (adminTierEnvView !== undefined) return adminTierEnvView[envName];
@@ -377,7 +378,7 @@ function getAdminTierEnvValue(settingsContext, envName) {
   settingsContext.store.policy.adminTierEnvView = upperMap;
   return upperMap[envName];
 }
-//@ chunk-dcmhvw5a.js:505700-505810 placement
+//@ chunk-z20c443b.js:504526-504636 placement
 function dropDisableAdminEnvUnion(env) {
   if (!env) return;
   let out = {};
@@ -385,7 +386,7 @@ function dropDisableAdminEnvUnion(env) {
     if (key.toUpperCase() !== DISABLE_ADMIN_ENV_UNION_VAR) out[key] = value;
   return out;
 }
-//@ chunk-dcmhvw5a.js:505810-505931 placement
+//@ chunk-z20c443b.js:504636-504757 placement
 function sameEnvMap(env, env_2) {
   let entries = Object.entries(env ?? {});
   let other = env_2 ?? {};
@@ -393,7 +394,16 @@ function sameEnvMap(env, env_2) {
     entries.length === Object.keys(other).length && entries.every(([key, value]) => other[key] === value)
   );
 }
-//@ chunk-dcmhvw5a.js:505931-509861 placement
+//@ chunk-z20c443b.js:504757-504931 layout
+function noteParentLeftOut(context, reason) {
+  if (reason === context.store.parentLeftOutReason) return;
+  context.store.parentLeftOutReason = reason;
+  if (reason !== null)
+    logForDebugging(`--managed-settings left out of the policy tier: ${reason}`, {
+      level: "warn",
+    });
+}
+//@ chunk-z20c443b.js:504931-509327 placement
 /**
  * 组合托管（policy）设置：policyHelper 层（composes=tier）直接返回；否则由 SI() 计算 remote / MDM(plist|HKLM) / managed-settings.json(+managed-settings.d) / 父进程托管切片 / 宿主模型覆盖，按 managedSourcesBehavior（first-wins 或 merge）合成；都没有时回退 HKCU。
  */
@@ -402,7 +412,14 @@ function loadPolicySettings(context) {
   let filtered = (context.helperWarnings?.() ?? []).filter(
     (warning) => !isInertManagedMcpServersNotice(warning.path),
   );
+  let parentHasTier = Object.keys(context.parentManaged ?? {}).length > 0;
   if (output.composes === "tier") {
+    noteParentLeftOut(
+      context,
+      parentHasTier
+        ? "a policy helper supplies that tier (parentSettingsBehavior does not apply to it)"
+        : null,
+    );
     let { helper } = output;
     context.store.lastPolicyEnvComposition = null;
     let helperControlled = helperMayBeUserControlled(context);
@@ -443,9 +460,18 @@ function loadPolicySettings(context) {
     errors,
     present,
     snapshotFirst,
+    parentIncluded,
     heldInTheHostsPlace,
     policyOnlyLeads,
   } = resolvePolicySettings(context);
+  let parentLeftOutReason = null;
+  if (parentHasTier && !parentIncluded)
+    parentLeftOutReason =
+      "an administrator's managed settings apply and do not set parentSettingsBehavior to 'merge'";
+  else if (parentHasTier && !parentSlice && !hostModelOverlay)
+    parentLeftOutReason =
+      "nothing shuts it out, yet none of its keys was kept (unreadable, no restriction, or already set by an administrator)";
+  noteParentLeftOut(context, parentLeftOutReason);
   errors.push(...filtered);
   if (!admin && !parentSlice) {
     context.store.lastPolicyEnvComposition = null;
@@ -586,7 +612,7 @@ function loadPolicySettings(context) {
     mdmTierPresent: present.mdm,
     fileTierPresent: present.file,
     adminTierCount: tiers.length,
-    tiersWithEnv: count(tiers, (tier) => Object.keys(tier.env ?? {}).length > 0),
+    tiersWithEnv: countWhere(tiers, (tier) => Object.keys(tier.env ?? {}).length > 0),
   };
   context.store.policy.pairedModelOverrides = {
     value:
@@ -618,7 +644,7 @@ function loadPolicySettings(context) {
     errors,
   };
 }
-//@ chunk-dcmhvw5a.js:509861-510300 placement
+//@ chunk-z20c443b.js:509327-509766 placement
 /**
  * 读取单个来源的设置（不合并其他来源）：policySettings 走 loadPolicySettings；flagSettings 合并 SDK 内联设置；localSettings 默认把旧位置的 settings.local.json 垫在下面。
  */
@@ -654,7 +680,7 @@ function getSettingsForSourceUncached(
   }
   return settings;
 }
-//@ chunk-dcmhvw5a.js:510300-510623 placement
+//@ chunk-z20c443b.js:509766-510089 placement
 function getSettingsParseErrorsForSource(source, context) {
   let frozen = context.store.repoTierFreeze.tier(source);
   if (frozen !== undefined) return [...frozen.errors];
@@ -676,7 +702,7 @@ function getSettingsParseErrorsForSource(source, context) {
   }
   return errors;
 }
-//@ chunk-dcmhvw5a.js:510623-510659 placement
+//@ chunk-z20c443b.js:510089-510125 placement
 function mergeExtraKnownMarketplacesByEntry(base, addition) {
   return {
     ...base,
@@ -698,12 +724,12 @@ export {
   getAdminTierEnvValue,
   getVouchedAdminPolicyTier,
   isMachineAdminSourceUnread,
+  CREDENTIAL_HELPER_SETTINGS_KEYS,
   machineBeneathPolicyOnly,
   KEPT_FROM_MACHINE_UNDER_POLICY_ONLY_TIER,
   ADDED_TO_A_POLICY_ONLY_TIER,
   winnerOnlyUnderMerge,
   helperMayBeUserControlled,
-  CREDENTIAL_HELPER_SETTINGS_KEYS,
   LAUNCH_FOLDER_WITHHELD_SETTINGS_KEYS,
   WINNER_ONLY_UNDER_MERGE,
   unionAdminTierEnv,

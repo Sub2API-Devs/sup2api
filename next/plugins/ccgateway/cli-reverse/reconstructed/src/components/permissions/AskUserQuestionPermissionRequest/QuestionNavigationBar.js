@@ -3,9 +3,9 @@
  *
  * 问题导航条：各问题标签（已答标记）与 Submit 标签。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/AskUserQuestionPermissionRequest/QuestionNavigationBar.tsx
- * pieces: chunk-18hwfzwa.js (5)
+ * pieces: chunk-czq1j3j2.js (5)
  * attribution: placement 3, layout 1, fingerprint 1
  */
 import { bunStringWidth } from "../../../ink/stringWidth.js";
@@ -22,23 +22,23 @@ import {
 } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { TagTabs } from "../../TagTabs.js";
 
-//@ chunk-18hwfzwa.js:1275630-1275697 placement
+//@ chunk-czq1j3j2.js:1301423-1301490 placement
 function ownLookup(record, key) {
   return key !== undefined && Object.hasOwn(record, key) ? record[key] : undefined;
 }
-//@ chunk-18hwfzwa.js:1275697-1275754 placement
+//@ chunk-czq1j3j2.js:1301490-1301547 placement
 function questionTabHeader(questionDisplay, index) {
   return questionDisplay?.displayHeader || `Q${index + 1}`;
 }
-//@ chunk-18hwfzwa.js:1275754-1275787 placement
+//@ chunk-czq1j3j2.js:1301547-1301580 placement
 function tabWidth(header) {
   return 4 + bunStringWidth(header);
 }
-//@ chunk-18hwfzwa.js:1275787-1275820 layout
+//@ chunk-czq1j3j2.js:1301580-1301613 layout
 function addNumbers(left, right) {
   return left + right;
 }
-//@ chunk-18hwfzwa.js:1275820-1278846 fingerprint (2.1.88 match: QuestionNavigationBar, 0.703)
+//@ chunk-czq1j3j2.js:1301613-1304639 fingerprint (2.1.88 match: QuestionNavigationBar, 0.703)
 function QuestionNavigationBar(props) {
   let $ = useMemoCache(55);
   let { questions, currentQuestionIndex, answers, hideSubmitTab } = props;
@@ -47,7 +47,7 @@ function QuestionNavigationBar(props) {
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let t2;
   if ($[0] !== columns || $[1] !== currentQuestionIndex || $[2] !== hideSubmitTab_2 || $[3] !== questions) {
-    Dt: {
+    zt: {
       let submitText = hideSubmitTab_2 ? "" : ` ${figures_default.tick} Submit `;
       let fixedWidth = bunStringWidth("\u2190 ") + bunStringWidth(" \u2192") + bunStringWidth(submitText);
       let availableForTabs = columns - fixedWidth;
@@ -69,12 +69,12 @@ function QuestionNavigationBar(props) {
           $[7] = t3;
         } else t3 = $[7];
         t2 = t3;
-        break Dt;
+        break zt;
       }
       let tabHeaders = questions.map(questionTabHeader);
       if (tabHeaders.map(tabWidth).reduce(addNumbers, 0) <= availableForTabs) {
         t2 = tabHeaders;
-        break Dt;
+        break zt;
       }
       let currentHeader = tabHeaders[currentQuestionIndex] || "";
       let currentIdealWidth = 4 + bunStringWidth(currentHeader);
@@ -268,4 +268,4 @@ function QuestionNavigationBar(props) {
   } else t7 = $[54];
   return t7;
 }
-export { QuestionNavigationBar, ownLookup };
+export { ownLookup, QuestionNavigationBar };

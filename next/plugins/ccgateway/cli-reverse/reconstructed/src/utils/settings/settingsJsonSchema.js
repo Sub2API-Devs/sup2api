@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：设置 JSON schema
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-y162pn60.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rmd7n4gq.js (1)
  * attribution: placement 1
  */
 import { toJSONSchema } from "../../../vendor/zod/v4/core/json-schema-processors.js";
 import { identity } from "../../services/daemon/sessionCron.js";
 
-//@ chunk-y162pn60.js:11062-11350 placement (2.1.88 match: generateSettingsJSONSchema, 0.88)
+//@ chunk-rmd7n4gq.js:11270-11558 placement (2.1.88 match: generateSettingsJSONSchema, 0.88)
 function generateSettingsJSONSchema(schema) {
   let propertyNames = new Set();
   let collectProperties = (jsonSchema) => {

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件加载状态
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7nse75qx.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a8hqqf13.js (3)
  * attribution: placement 3
  */
 import { mergePluginErrors } from "./refresh.js";
@@ -15,19 +15,19 @@ import { getErrorKey } from "../../services/mcp/useManageMCPConnections.js";
 import { splitPluginId, pluginNamesEqual, hasMarketplaceAlias } from "./pluginIdentifier.js";
 import { mergePluginRecord } from "../../plugins/functionHooks/hooksModuleLoader.js";
 
-//@ chunk-7nse75qx.js:519-634 placement
+//@ chunk-a8hqqf13.js:520-635 placement
 function mergeErrorsBySource(errors, errors_2) {
   let filtered = errors.filter((error) => mergePluginErrors(error.source));
   let keys = new Set(errors_2.map(pluginErrorKey));
   return [...filtered.filter((error) => !keys.has(pluginErrorKey(error))), ...errors_2];
 }
-//@ chunk-7nse75qx.js:743-921 placement
+//@ chunk-a8hqqf13.js:744-922 placement
 function mergePluginSourceErrors(warnings, warnings_2) {
   let filtered = warnings.filter((warning) => warning.source.startsWith("plugin:"));
   let keys = new Set(warnings_2.map((warning) => `${warning.type}:${warning.source}`));
   return [...filtered.filter((warning) => !keys.has(`${warning.type}:${warning.source}`)), ...warnings_2];
 }
-//@ chunk-7nse75qx.js:921-2963 placement
+//@ chunk-a8hqqf13.js:922-2965 placement
 /**
  * 封装 AppState 中 plugins 状态的更新：addErrors/addWarnings 按键去重追加，removeErrorsOf 删除指定插件的错误， markNeedsRefresh 标记需要刷新（not-loaded 另标 needsRefreshToLoad）等。over() 由 store 构造。
  */

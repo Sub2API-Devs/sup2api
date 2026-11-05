@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：被拒绝的登录（组织固定、托管设置、提供商不允许等）回滚：恢复先前凭据、吊销新令牌、密钥链保存失败提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-zbtr7f5k.js (34)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-de28gzhb.js (34)
  * attribution: placement 34
  */
 import {
@@ -13,6 +13,12 @@ import {
   clearAuthRelatedCaches,
   clearAccountScopedConfig,
 } from "../../cli/handlers/auth.js";
+import {
+  shouldUseClaudeAIAuth,
+  fetchAndStoreUserRoles,
+  createAndStoreApiKey,
+  revokeOAuthTokenAcknowledged,
+} from "./client.js";
 import {
   saveOAuthTokensIfNeeded,
   clearOAuthTokenCache,
@@ -50,12 +56,6 @@ import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { logEvent } from "../analytics/index.js";
 import { PLAINTEXT_STORAGE_WARNING } from "../../utils/secureStorage/plainTextStorage.js";
 import { fromEnum, lit } from "../analytics/safeMetadata.js";
-import {
-  fetchAndStoreUserRoles,
-  shouldUseClaudeAIAuth,
-  createAndStoreApiKey,
-  revokeOAuthTokenAcknowledged,
-} from "./client.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { fetchAndStoreClaudeCodeFirstTokenDate } from "../api/firstTokenDate.js";
 import { fetchBootstrapData } from "../api/bootstrap.js";
@@ -101,18 +101,22 @@ import { stripControlChars } from "../../utils/settings/writeQueues.js";
 import { orgConfigGateMessage } from "../policyLimits/orgConfigGateMessages.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-zbtr7f5k.js:2222-2372 placement
+//@ chunk-de28gzhb.js:2240-2472 placement
 var LOGIN_SAVE_FAILED = "Couldn't save your login. Try logging in again.";
 var LOGIN_SAVE_FAILED_KEYCHAIN =
   "Couldn't save your login. If your Mac's keychain is locked, unlock it and log in again.";
-//@ chunk-zbtr7f5k.js:2372-3736 placement
+var SIGN_IN_AGAIN_TO_CLEAR_MESSAGE =
+  "Sign in again to take your previous account or API key off the config file.";
+//@ chunk-de28gzhb.js:2472-3967 placement
 /**
  * 保存登录凭据，失败时给出提示（macOS 钥匙串锁定等）。
  */
 async function saveLoginOrWarn(loginTokens, { storageV5, credentials, clock } = {}) {
-  let installed = await installOAuthTokens(loginTokens, {
+  let { departingLoginMayRemain: installResult, ...installRest } = await installOAuthTokens(loginTokens, {
     storageV5,
     credentials,
+    keepStoredLogin:
+      shouldUseClaudeAIAuth(loginTokens.scopes) && Boolean(loginTokens.refreshToken && loginTokens.expiresAt),
   });
   let { result: saveResult, locked } = await warnNoRefreshLock(
     () => saveOAuthTokensIfNeeded(loginTokens, credentials, "sign_in"),
@@ -166,9 +170,12 @@ async function saveLoginOrWarn(loginTokens, { storageV5, credentials, clock } = 
   await isSameAccount({
     storageV5,
     credentials,
-    ...installed,
+    ...installRest,
   });
   return {
+    ...(installResult && {
+      departingLoginMayRemain: installResult,
+    }),
     storage: {
       success: saveResult.success,
       backendName: saveResult.backendName,
@@ -194,7 +201,7 @@ async function saveLoginOrWarn(loginTokens, { storageV5, credentials, clock } = 
     },
   };
 }
-//@ chunk-zbtr7f5k.js:5302-5534 placement
+//@ chunk-de28gzhb.js:5880-6112 placement
 async function isSameAccount({ storageV5, credentials, preserveQuotaAutoResume = false, incomingIdentity }) {
   await clearAuthRelatedCaches(storageV5, {
     preserveQuotaAutoResume,
@@ -204,19 +211,19 @@ async function isSameAccount({ storageV5, credentials, preserveQuotaAutoResume =
   if (isStorageV5Enabled() && credentials !== undefined) await refreshClaudeAITokens(credentials);
   await fetchBootstrapData(storageV5, credentials);
 }
-//@ chunk-zbtr7f5k.js:5534-5543 placement
+//@ chunk-de28gzhb.js:6112-6121 placement
 /**
  * 刷新锁被占用时最多重试次数（3）。
  */
 var MAX_LOCK_RETRIES = 3;
-//@ chunk-zbtr7f5k.js:5543-6062 placement
+//@ chunk-de28gzhb.js:6121-6640 placement
 async function warnNoRefreshLock(run, credentials, { withoutLock, clock } = {}) {
   if (!isBgSession() || isDiskless())
     return {
       result: await run(),
       locked: false,
     };
-  for (let idx = 1; ; idx++) {
+  for (let j = 1; ; j++) {
     let inLock = false;
     try {
       return await withOAuthRefreshLock(async ({ isCompromised }) => {
@@ -234,8 +241,8 @@ async function warnNoRefreshLock(run, credentials, { withoutLock, clock } = {}) 
       }, credentials);
     } catch (error) {
       if (inLock) throw error;
-      if (error instanceof OAuthRefreshLockContendedError && idx < MAX_LOCK_RETRIES) {
-        await sleep(100 * idx, undefined, {
+      if (error instanceof OAuthRefreshLockContendedError && j < MAX_LOCK_RETRIES) {
+        await sleep(100 * j, undefined, {
           clock,
         });
         continue;
@@ -255,7 +262,7 @@ async function warnNoRefreshLock(run, credentials, { withoutLock, clock } = {}) 
     }
   }
 }
-//@ chunk-zbtr7f5k.js:6062-6100 placement
+//@ chunk-de28gzhb.js:6640-6678 placement
 /**
  * 清空令牌缓存并重新读取 claude.ai 令牌。
  */
@@ -263,7 +270,7 @@ async function refreshClaudeAITokens(credentials) {
   clearOAuthTokenMemos();
   await getClaudeAIOAuthTokensAsync(credentials);
 }
-//@ chunk-zbtr7f5k.js:6100-6581 placement
+//@ chunk-de28gzhb.js:6678-7159 placement
 /**
  * 回滚失败且令牌可能仍有效的说明。
  */
@@ -271,14 +278,14 @@ var ROLLBACK_UNCONFIRMED_TEXT =
   "The refused sign-in could not be fully undone: this machine's previous sign-in state could not be confirmed restored, and the refused sign-in was revoked. Sign in again (claude auth login, or /login).";
 var ROLLBACK_MAYBE_VALID_TEXT =
   "The refused sign-in could not be fully undone: this machine's previous sign-in state could not be confirmed restored, and the refused sign-in may still be valid. Sign in again (claude auth login, or /login), and ask your admin to revoke it if this device is shared.";
-//@ chunk-zbtr7f5k.js:6581-6620 placement
+//@ chunk-de28gzhb.js:7159-7198 placement
 /**
  * 按是否已吊销选择回滚失败说明。
  */
 function rollbackFailureText(rollback) {
   return rollback.revoked ? ROLLBACK_UNCONFIRMED_TEXT : ROLLBACK_MAYBE_VALID_TEXT;
 }
-//@ chunk-zbtr7f5k.js:6620-6677 placement
+//@ chunk-de28gzhb.js:7198-7255 placement
 /**
  * 判断错误是否为锁占用或文件不可访问。
  */
@@ -289,7 +296,7 @@ function isLockOrAccessError(error) {
     isFsInaccessibleCode(storageCauseErrnoCode(error))
   );
 }
-//@ chunk-zbtr7f5k.js:6677-6763 placement
+//@ chunk-de28gzhb.js:7255-7341 placement
 /**
  * 生成错误的名字描述（类名或类型）。
  */
@@ -299,7 +306,7 @@ function describeErrorName(error) {
     (error === null ? "null" : typeof error)
   );
 }
-//@ chunk-zbtr7f5k.js:6763-7005 placement
+//@ chunk-de28gzhb.js:7341-7583 placement
 function logRollbackFailure(error, where) {
   if (isLockOrAccessError(error)) {
     logForDebugging(
@@ -317,46 +324,46 @@ function logRollbackFailure(error, where) {
     ),
   );
 }
-//@ chunk-zbtr7f5k.js:7005-8191 placement
+//@ chunk-de28gzhb.js:7583-8806 placement
 /**
  * 回滚被拒绝的登录：恢复之前的凭据或登出，必要时清除环境令牌说明。
  */
 async function rollbackRefusedSignIn(storage, { storageV5, credentials, clock }) {
   if (storage === undefined || (storage.success && !isBgSession())) {
-    await performLogout({
+    let logoutOutcome = await performLogout({
       clearOnboarding: false,
       preserveNonAnthropicAuth: true,
       storageV5,
       credentials,
     });
     return {
-      restored: true,
-      revoked: true,
+      restored: logoutOutcome === undefined,
+      revoked: logoutOutcome !== "key_on_file",
     };
   }
   env.unset("CLAUDE_CODE_OAUTH_TOKEN");
   setOauthTokenFromFd(null);
   setAuthenticatedAccount(null);
   clearOAuthTokenCache();
-  let landedToken = storage.landedToken;
+  let logoutResult = storage.landedToken;
   let restored = true;
-  let revoked = false;
-  if (landedToken !== undefined) {
-    let refreshToken =
-      landedToken.refreshToken !== null && getAPIProvider() === "firstParty"
-        ? landedToken.refreshToken
+  let restored_2 = false;
+  if (logoutResult !== undefined) {
+    let revoked =
+      logoutResult.refreshToken !== null && getAPIProvider() === "firstParty"
+        ? logoutResult.refreshToken
         : null;
-    let secureStorage = getSecureStorage();
+    let refreshToken = getSecureStorage();
     try {
-      let replacedLogin = storage.replacedLogin;
-      let canRemove = replacedLogin === undefined;
-      if (replacedLogin !== undefined) {
+      let secureStorage = storage.replacedLogin;
+      let canRemove = secureStorage === undefined;
+      if (secureStorage !== undefined) {
         let restoreOutcome = await warnNoRefreshLock(
           () =>
             restorePreviousCredentials(
+              refreshToken,
+              logoutResult.accessToken,
               secureStorage,
-              landedToken.accessToken,
-              replacedLogin,
               credentials,
               clock,
             ),
@@ -370,34 +377,34 @@ async function rollbackRefusedSignIn(storage, { storageV5, credentials, clock })
       }
       if (canRemove)
         await mutateEveryCredentialLeg(
-          secureStorage,
+          refreshToken,
           (leg) => {
-            if (leg.claudeAiOauth?.accessToken !== landedToken.accessToken) return leg;
-            let { claudeAiOauth, ...rest } = leg;
+            if (leg.claudeAiOauth?.accessToken !== logoutResult.accessToken) return leg;
+            let { claudeAiOauth: restoreOutcome, ...rest } = leg;
             return rest;
           },
           credentials,
         );
-      let everyCredentialLeg = await readEveryCredentialLeg(
-        secureStorage,
+      let everyLeg = await readEveryCredentialLeg(
+        refreshToken,
         (leg) => leg.claudeAiOauth?.accessToken,
         credentials,
       );
       restored =
         canRemove &&
-        !everyCredentialLeg.some(
+        !everyLeg.some(
           (leg) =>
             leg.value === READ_FAILED ||
-            leg.value === landedToken.accessToken ||
-            (isBgSession() && leg.value !== undefined && leg.value !== replacedLogin?.accessToken),
+            leg.value === logoutResult.accessToken ||
+            (isBgSession() && leg.value !== undefined && leg.value !== secureStorage?.accessToken),
         );
     } catch (error) {
       logRollbackFailure(error, "credential store");
       restored = false;
     } finally {
-      if (refreshToken !== null)
+      if (revoked !== null)
         try {
-          revoked = await revokeOAuthTokenAcknowledged(refreshToken, landedToken.clientId);
+          restored_2 = await revokeOAuthTokenAcknowledged(revoked, logoutResult.clientId);
         } catch (error) {
           logError(
             new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -412,17 +419,17 @@ async function rollbackRefusedSignIn(storage, { storageV5, credentials, clock })
     artifactAccount: hasStoredOAuthToken() ? "account_switch" : "signed_out",
     credentials,
   });
-  await clearAccountScopedConfig(storageV5);
+  let configCleared = await clearAccountScopedConfig(storageV5);
   return {
-    restored: restored && storage.replacedLoginUnrestorable !== true,
-    revoked,
+    restored: restored && configCleared && storage.replacedLoginUnrestorable !== true,
+    revoked: restored_2,
   };
 }
-//@ chunk-zbtr7f5k.js:8191-8432 placement
+//@ chunk-de28gzhb.js:8806-9047 placement
 async function restorePreviousCredentials(store, newAccessToken, previous, storage, clock) {
-  for (let idx = 0; idx < 3; idx++) {
-    if (idx > 0)
-      await sleep(100 * idx, undefined, {
+  for (let j = 0; j < 3; j++) {
+    if (j > 0)
+      await sleep(100 * j, undefined, {
         clock,
       });
     try {
@@ -447,7 +454,7 @@ async function restorePreviousCredentials(store, newAccessToken, previous, stora
   }
   return false;
 }
-//@ chunk-zbtr7f5k.js:8432-8710 placement
+//@ chunk-de28gzhb.js:9047-9325 placement
 async function LOGIN_REFUSAL_REASONS(refusal, storage, options) {
   switch (refusal.reason) {
     case "org_pin_mismatch":
@@ -468,7 +475,7 @@ async function LOGIN_REFUSAL_REASONS(refusal, storage, options) {
     };
   }
 }
-//@ chunk-zbtr7f5k.js:8710-9116 placement
+//@ chunk-de28gzhb.js:9325-9731 placement
 /**
  * 描述 OAuth 错误响应：是否有结构化错误、是否带 request-id、是否为 HTML 页面、错误类型与代码。
  */
@@ -495,7 +502,7 @@ function describeOAuthErrorResponse(error) {
     errorCode: serverErrorFields.serverErrorCode,
   };
 }
-//@ chunk-zbtr7f5k.js:9116-10061 placement
+//@ chunk-de28gzhb.js:9731-10676 placement
 function classifyOAuthError(error) {
   let { kind, status } = classifyAxiosError(error);
   let facts = describeOAuthErrorResponse(error);
@@ -572,7 +579,7 @@ function classifyOAuthError(error) {
       };
   }
 }
-//@ chunk-zbtr7f5k.js:10061-10249 placement
+//@ chunk-de28gzhb.js:10676-10864 placement
 function logProbeClientError(reason, error) {
   if (reason !== "client_error") return;
   logError(
@@ -582,7 +589,7 @@ function logProbeClientError(reason, error) {
     ),
   );
 }
-//@ chunk-zbtr7f5k.js:10249-11386 placement
+//@ chunk-de28gzhb.js:10864-12001 placement
 async function fetchOAuthProfile(accessToken, timeoutMs, options = {}) {
   let baseApiUrl = options.baseApiUrl ?? getOauthConfig().BASE_API_URL;
   let authHeaders = {
@@ -677,7 +684,7 @@ async function fetchOAuthProfile(accessToken, timeoutMs, options = {}) {
     httpStatus: policyProbeResult.httpStatus ?? settingsProbeResult.httpStatus,
   };
 }
-//@ chunk-zbtr7f5k.js:11386-11611 placement
+//@ chunk-de28gzhb.js:12001-12226 placement
 function loginIdentity(newLogin) {
   return {
     accountUuid: newLogin.profile?.account?.uuid ?? newLogin.tokenAccount?.uuid,
@@ -685,7 +692,7 @@ function loginIdentity(newLogin) {
     email: newLogin.profile?.account?.email ?? newLogin.tokenAccount?.emailAddress,
   };
 }
-//@ chunk-zbtr7f5k.js:11611-11774 placement
+//@ chunk-de28gzhb.js:12226-12389 placement
 /**
  * 判断登录后是否需要核实账号资料（claude.ai scope 且资料或订阅类型未确认）。
  */
@@ -697,7 +704,7 @@ function needsProfileVerification(tokens) {
       (tokens.subscriptionTypeSource === "profile" && tokens.subscriptionTypeVerifiedAt === undefined))
   );
 }
-//@ chunk-zbtr7f5k.js:11774-11924 placement
+//@ chunk-de28gzhb.js:12389-12539 placement
 function normalizeSettingsDecision(evaluation, flag) {
   let { reason } = evaluation.settings;
   if (classifyManagedConfigOutcome(reason) === "refused" && !isExemptReason(flag, reason)) return evaluation;
@@ -709,7 +716,7 @@ function normalizeSettingsDecision(evaluation, flag) {
     },
   };
 }
-//@ chunk-zbtr7f5k.js:11924-15547 placement
+//@ chunk-de28gzhb.js:12539-16163 placement
 /**
  * 检查新登录是否被允许（组织固定、托管设置、API key 冲突、提供商、层级），约 3.6 KB。
  */
@@ -957,7 +964,7 @@ async function checkLoginAllowed(options) {
       "Claude Code couldn't load your organization's settings, which it requires before this sign-in can be used.",
   };
 }
-//@ chunk-zbtr7f5k.js:15547-15745 placement
+//@ chunk-de28gzhb.js:16163-16361 placement
 /**
  * 登录成功但未能核实组织设置时的提示文字。
  */
@@ -965,7 +972,7 @@ function unverifiedSettingsNotice(login) {
   let { reason } = login.decision;
   return `Signed in. Claude Code couldn't verify your organization's settings yet${reason !== undefined ? ` (${describeUnavailableReason(reason)})` : ""}; it will check again when you start a session.`;
 }
-//@ chunk-zbtr7f5k.js:15745-16506 placement
+//@ chunk-de28gzhb.js:16361-17122 placement
 async function mintApiKeyIfAllowed(input) {
   let { minted, ...rest } = input;
   let readCandidateInputs = input.readCandidateInputs ?? orgConfigInputs;
@@ -1006,18 +1013,18 @@ async function mintApiKeyIfAllowed(input) {
     message: `Couldn't verify your organization's settings${reason !== undefined ? ` (${describeUnavailableReason(reason)})` : ""}. ${describeNetworkUnavailable(reason)}. ${revokedNote(withheld)}`,
   };
 }
-//@ chunk-zbtr7f5k.js:16506-16682 placement
+//@ chunk-de28gzhb.js:17122-17298 placement
 var TOKEN_REVOKED_NOTE = "Anthropic reported the token revoked; it was not shown.";
 var TOKEN_NOT_REVOKED_NOTE =
   "The token could not be confirmed revoked and was not shown \u2014 ask your admin to revoke it in Console.";
-//@ chunk-zbtr7f5k.js:16682-16712 placement
+//@ chunk-de28gzhb.js:17298-17328 placement
 /**
  * 按是否已吊销返回对应说明。
  */
 function revokedNote(revoked) {
   return revoked ? TOKEN_REVOKED_NOTE : TOKEN_NOT_REVOKED_NOTE;
 }
-//@ chunk-zbtr7f5k.js:16712-17243 placement
+//@ chunk-de28gzhb.js:17328-17859 placement
 function describeNetworkUnavailable(reason) {
   switch (reason) {
     case "unavailable_connect":
@@ -1035,7 +1042,7 @@ function describeNetworkUnavailable(reason) {
       return "Retry shortly";
   }
 }
-//@ chunk-zbtr7f5k.js:17243-17527 placement
+//@ chunk-de28gzhb.js:17859-18143 placement
 /**
  * 吊销被拒绝登录的令牌并说明结果。
  */
@@ -1044,7 +1051,7 @@ async function revokeRefusedSignInToken(entry) {
     ? "Anthropic reported the new sign-in revoked; your previous login is unchanged."
     : "The new sign-in could not be confirmed revoked \u2014 ask your admin to revoke it if this device is shared; your previous login is unchanged.";
 }
-//@ chunk-zbtr7f5k.js:17527-17835 placement
+//@ chunk-de28gzhb.js:18143-18451 placement
 async function describeWithheldMint(tokens, reason, revoke = revokeOAuthTokenAcknowledged) {
   if (reason !== "withheld mint" && getAPIProvider() !== "firstParty") return false;
   let refreshToken = tokens.refreshToken ?? null;
@@ -1064,7 +1071,7 @@ async function describeWithheldMint(tokens, reason, revoke = revokeOAuthTokenAck
     return false;
   }
 }
-//@ chunk-zbtr7f5k.js:17835-17948 placement
+//@ chunk-de28gzhb.js:18451-18564 placement
 function isRolloutRefusal(exclusion) {
   switch (exclusion) {
     case "flag_off":
@@ -1075,7 +1082,7 @@ function isRolloutRefusal(exclusion) {
       return false;
   }
 }
-//@ chunk-zbtr7f5k.js:17948-18171 placement
+//@ chunk-de28gzhb.js:18564-18787 placement
 function isUnavailableReason(reason) {
   switch (reason) {
     case "unavailable_timeout":
@@ -1089,7 +1096,7 @@ function isUnavailableReason(reason) {
       return false;
   }
 }
-//@ chunk-zbtr7f5k.js:18171-18820 placement
+//@ chunk-de28gzhb.js:18787-19436 placement
 function describeUnavailableReason(reason) {
   switch (reason) {
     case "unavailable_timeout":
@@ -1114,7 +1121,7 @@ function describeUnavailableReason(reason) {
       return "not yet available";
   }
 }
-//@ chunk-zbtr7f5k.js:18820-18964 placement
+//@ chunk-de28gzhb.js:19436-19580 placement
 /**
  * 把登录后的设置检查结果归类为被拒、本模式未加载或不可用。
  */
@@ -1126,9 +1133,9 @@ function loginSettingsOutcome(evaluation) {
       ? "not_loaded_in_launch_mode"
       : "unavailable";
 }
-//@ chunk-zbtr7f5k.js:18964-19157 placement
+//@ chunk-de28gzhb.js:19580-19773 placement
 let OrgConfigLoginRefusedError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-zbtr7f5k.js:18964", () => {
+deferInit("chunk-de28gzhb.js:19580", () => {
   OrgConfigLoginRefusedError = class OrgConfigLoginRefusedError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -1145,14 +1152,15 @@ export {
   saveLoginOrWarn,
   rollbackRefusedSignIn,
   logRollbackFailure,
-  mintApiKeyIfAllowed,
-  OrgConfigLoginRefusedError,
-  describeWithheldMint,
+  SIGN_IN_AGAIN_TO_CLEAR_MESSAGE,
   checkLoginAllowed,
   needsProfileVerification,
   loginSettingsOutcome,
+  mintApiKeyIfAllowed,
+  OrgConfigLoginRefusedError,
+  describeWithheldMint,
   LOGIN_REFUSAL_REASONS,
   rollbackFailureText,
-  isSameAccount,
   unverifiedSettingsNotice,
+  isSameAccount,
 };

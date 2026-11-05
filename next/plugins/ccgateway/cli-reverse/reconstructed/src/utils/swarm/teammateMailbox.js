@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：队友邮箱
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: placement 1
  */
 import { USER } from "./constants.js";
@@ -13,7 +13,7 @@ import { receiveAgentMessage, teammateMessageOrigin } from "../../plugins/functi
 import { logForDebugging } from "../debug.js";
 import { jsonStringify } from "../slowOperations.js";
 
-//@ chunk-e6aww6q8.js:3309320-3309765 placement
+//@ chunk-5xgkngpb.js:3394429-3394874 placement
 /**
  * 让邮箱消息经过接收 hook 过滤，已验证的用户消息直接放行。
  */

@@ -3,18 +3,18 @@
  *
  * 结构化输出 schema 可满足性检查（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-22r83hv0.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8nzbdydx.js (29)
  * attribution: placement 29
  */
 import { isPlainObject } from "../../utils/isPlainObject.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { takeLastChars, stripFormatChars, truncateToLength } from "../../utils/stringUtils.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-22r83hv0.js:16402-16501 placement
+//@ chunk-8nzbdydx.js:45609-45706 placement
 /**
  * schema 可满足性检查的最大深度（32）。
  */
@@ -22,13 +22,13 @@ var MAX_SCHEMA_DEPTH; // deferred: has load-time effects after a deferred statem
 var MAX_SCHEMA_NODES;
 var MAX_SCHEMA_LABEL_CHARS;
 var SCHEMA_TYPES;
-deferInit("chunk-22r83hv0.js:16402", () => {
+deferInit("chunk-8nzbdydx.js:45609", () => {
   MAX_SCHEMA_DEPTH = 32;
   MAX_SCHEMA_NODES = 1e5;
   MAX_SCHEMA_LABEL_CHARS = 80;
   SCHEMA_TYPES = new Set(["object", "array", "string", "integer", "number", "boolean", "null"]);
 });
-//@ chunk-22r83hv0.js:16501-16869 placement
+//@ chunk-8nzbdydx.js:45706-46074 placement
 /**
  * 检查 JSON Schema 是否对象根且可满足，否则结构化输出无法通过
  */
@@ -39,7 +39,7 @@ function checkSchemaSatisfiable(unsatisfiable) {
     ? "no output can satisfy this schema, so StructuredOutput validation would fail on every attempt"
     : "one property or item sub-schema admits no value, so any output that fills it in fails validation";
 }
-//@ chunk-22r83hv0.js:16869-17217 placement
+//@ chunk-8nzbdydx.js:46074-46422 placement
 /**
  * 检查结构化输出 schema 是否可满足：根必须是 object，再递归查找矛盾的子 schema。
  */
@@ -66,7 +66,7 @@ function checkOutputSchemaSatisfiable(schema) {
         finding: unsatisfiable,
       };
 }
-//@ chunk-22r83hv0.js:17217-17751 placement
+//@ chunk-8nzbdydx.js:46422-46956 placement
 /**
  * 递归查找不可满足的子 schema（深度与节点预算）。
  */
@@ -102,7 +102,7 @@ function findUnsatisfiable(schema, pointer, inWholeScope, depthLeft, budget) {
     return findUnsatisfiable(items, `${pointer}/items`, false, depthLeft - 1, budget);
   return;
 }
-//@ chunk-22r83hv0.js:17751-19074 placement
+//@ chunk-8nzbdydx.js:46956-48275 placement
 /**
  * 判断一个 schema 节点是否自相矛盾：required 中有未声明且禁止额外属性的键、enum/const 与 type 不符、取值范围交叉。
  */
@@ -158,7 +158,7 @@ function unsatisfiableReason(schema, pointer, types) {
     };
   return;
 }
-//@ chunk-22r83hv0.js:19074-20110 placement
+//@ chunk-8nzbdydx.js:48275-49311 placement
 /**
  * 检查数值/字符串/数组/对象的上下界是否交叉（含 required 数超过 maxProperties）。
  */
@@ -218,14 +218,14 @@ function crossedBoundsReason(schema, types) {
     let maxProperties = finiteNumberOrUndefined(ownOrUndefined(schema, "maxProperties"));
     let requiredList = ownOrUndefined(schema, "required");
     if (maxProperties !== undefined && Array.isArray(requiredList)) {
-      let requiredCount = count(requiredList, isSafePropertyName);
+      let requiredCount = countWhere(requiredList, isSafePropertyName);
       if (requiredCount > maxProperties)
         return `${requiredCount} required properties but maxProperties ${maxProperties}`;
     }
   }
   return;
 }
-//@ chunk-22r83hv0.js:20110-20233 placement
+//@ chunk-8nzbdydx.js:49311-49434 placement
 function crossedPairReason(schema, minKey, maxKey) {
   let minValue = finiteNumberOrUndefined(ownOrUndefined(schema, minKey));
   let maxValue = finiteNumberOrUndefined(ownOrUndefined(schema, maxKey));
@@ -233,7 +233,7 @@ function crossedPairReason(schema, minKey, maxKey) {
     ? `${minKey} ${minValue} greater than ${maxKey} ${maxValue}`
     : undefined;
 }
-//@ chunk-22r83hv0.js:20233-20484 placement
+//@ chunk-8nzbdydx.js:49434-49683 placement
 function declaredTypes(schema) {
   let declared = ownOrUndefined(schema, "type");
   let types;
@@ -248,28 +248,28 @@ function declaredTypes(schema) {
   if (ownOrUndefined(schema, "nullable") === true && !types.includes("null")) types.push("null");
   return types;
 }
-//@ chunk-22r83hv0.js:20484-20551 placement
+//@ chunk-8nzbdydx.js:49683-49750 placement
 /**
  * 属性名是字符串且不是原型上的名字（避免原型污染）。
  */
 function isSafePropertyName(name) {
   return typeof name === "string" && !(name in Object.prototype);
 }
-//@ chunk-22r83hv0.js:20551-20601 placement
+//@ chunk-8nzbdydx.js:49750-49799 placement
 /**
  * 声明的类型里是否包含给定类型（未声明时视为包含）。
  */
 function typeIncludes(types, typeName) {
   return types === undefined || types.includes(typeName);
 }
-//@ chunk-22r83hv0.js:20601-20659 placement
+//@ chunk-8nzbdydx.js:49799-49857 placement
 /**
  * 声明的类型恰好只有一种。
  */
 function isOnlyType(types, typeName) {
   return types !== undefined && types.length === 1 && types[0] === typeName;
 }
-//@ chunk-22r83hv0.js:20659-20752 placement
+//@ chunk-8nzbdydx.js:49857-49950 placement
 /**
  * 声明的类型恰好是给定的两个之一（顺序无关）。
  */
@@ -280,7 +280,7 @@ function isTwoTypes(types, first, second) {
     ((types[0] === first && types[1] === second) || (types[0] === second && types[1] === first))
   );
 }
-//@ chunk-22r83hv0.js:20752-21111 placement
+//@ chunk-8nzbdydx.js:49950-50308 placement
 /**
  * 判断值是否匹配任一声明类型。
  */
@@ -306,7 +306,7 @@ function matchesAnyType(types, value) {
     }
   });
 }
-//@ chunk-22r83hv0.js:21111-21206 placement
+//@ chunk-8nzbdydx.js:50308-50403 placement
 /**
  * 值是否为基础类型（null/字符串/数字/布尔）。
  */
@@ -315,40 +315,40 @@ function isPrimitiveValue(value) {
     value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean"
   );
 }
-//@ chunk-22r83hv0.js:21206-21276 placement
+//@ chunk-8nzbdydx.js:50403-50473 placement
 /**
  * 有限数字则返回，否则 undefined。
  */
 function finiteNumberOrUndefined(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
-//@ chunk-22r83hv0.js:21276-21330 placement
+//@ chunk-8nzbdydx.js:50473-50527 placement
 /**
  * 只读自有属性，缺失返回 undefined。
  */
 function ownOrUndefined(object, key) {
   return Object.hasOwn(object, key) ? object[key] : undefined;
 }
-//@ chunk-22r83hv0.js:21330-21416 placement
+//@ chunk-8nzbdydx.js:50527-50612 placement
 /**
  * 把类型列表格式化成单引号文本。
  */
 function formatTypeList(types) {
   return types.length === 1 ? `'${types[0]}'` : `[${types.map((typeName) => `'${typeName}'`).join(", ")}]`;
 }
-//@ chunk-22r83hv0.js:21416-21486 placement
+//@ chunk-8nzbdydx.js:50612-50682 placement
 /**
  * 按 JSON Pointer 规则转义属性名（~ 与 /）。
  */
 function escapeJsonPointer(pointer) {
   return normalizeLabel(pointer).replaceAll("~", "~0").replaceAll("/", "~1");
 }
-//@ chunk-22r83hv0.js:21486-21497 placement
+//@ chunk-8nzbdydx.js:50682-50693 placement
 /**
  * schema 路径只保留末尾 300 字符。
  */
 var MAX_POINTER_TAIL_CHARS = 300;
-//@ chunk-22r83hv0.js:21497-21553 placement
+//@ chunk-8nzbdydx.js:50693-50749 placement
 /**
  * 路径过长时只返回末尾部分（前加省略号）。
  */
@@ -357,7 +357,7 @@ function shortenPointer(pointer) {
     ? `\u2026${takeLastChars(pointer, MAX_POINTER_TAIL_CHARS)}`
     : pointer;
 }
-//@ chunk-22r83hv0.js:21553-21641 placement
+//@ chunk-8nzbdydx.js:50749-50834 placement
 /**
  * 折叠空白并截断标签文本，用于错误信息。
  */
@@ -367,7 +367,7 @@ function normalizeLabel(label) {
     ? `${truncateToLength(normalized, MAX_SCHEMA_LABEL_CHARS)}\u2026`
     : normalized;
 }
-//@ chunk-22r83hv0.js:21641-21911 placement
+//@ chunk-8nzbdydx.js:50834-51104 placement
 /**
  * anyOf 之外允许出现的元信息关键字。
  */
@@ -376,7 +376,7 @@ var SUPPORTED_OVERLAY_KEYWORDS;
 var SCHEMA_TYPE_SET;
 var OUTPUT_SCHEMA_MAX_DEPTH;
 var OUTPUT_SCHEMA_MAX_NODES;
-deferInit("chunk-22r83hv0.js:21641", () => {
+deferInit("chunk-8nzbdydx.js:50834", () => {
   SUPPORTED_SCHEMA_KEYWORDS = new Set([
     "$schema",
     "type",
@@ -395,7 +395,7 @@ deferInit("chunk-22r83hv0.js:21641", () => {
   OUTPUT_SCHEMA_MAX_DEPTH = 32;
   OUTPUT_SCHEMA_MAX_NODES = 1e5;
 });
-//@ chunk-22r83hv0.js:21911-22114 placement
+//@ chunk-8nzbdydx.js:51104-51307 placement
 /**
  * 规整结构化输出 schema（检查深度、节点数与关键字），根必须是 object。
  */
@@ -421,7 +421,7 @@ function normalizeOutputSchema(schema) {
     },
   };
 }
-//@ chunk-22r83hv0.js:22114-22229 placement
+//@ chunk-8nzbdydx.js:51307-51422 placement
 function isJsonScalar(value) {
   return (
     value === null ||
@@ -430,7 +430,7 @@ function isJsonScalar(value) {
     typeof value === "boolean"
   );
 }
-//@ chunk-22r83hv0.js:22229-24633 placement
+//@ chunk-8nzbdydx.js:51422-53826 placement
 /**
  * 遍历输出 JSON Schema，检查深度/节点数上限与不支持的关键字
  */
@@ -594,13 +594,13 @@ function walkOutputSchema(node, depthLeft, budget) {
     node: out,
   };
 }
-//@ chunk-22r83hv0.js:27797-27814 placement
+//@ chunk-8nzbdydx.js:56990-57007 placement
 /**
  * 格式化后错误文本的最大长度（300）。
  */
 var MAX_FORMATTED_ERROR_CHARS = 300;
 var MAX_PROPERTY_NAME_DISPLAY_CHARS = 80;
-//@ chunk-22r83hv0.js:27814-28629 placement
+//@ chunk-8nzbdydx.js:57007-57821 placement
 /**
  * 把 Ajv 校验错误格式化为可读文本（附带额外属性名、实际长度/数量、允许的 enum/const 值）。
  */
@@ -641,7 +641,7 @@ function formatSchemaError(error, data) {
       return baseMessage;
   }
 }
-//@ chunk-22r83hv0.js:28629-28835 placement
+//@ chunk-8nzbdydx.js:57821-58027 placement
 function valueAtPointer(data, instancePath) {
   let current = data;
   for (let segment of instancePath.split("/").slice(1)) {
@@ -652,7 +652,7 @@ function valueAtPointer(data, instancePath) {
   }
   return current;
 }
-//@ chunk-22r83hv0.js:28835-28949 placement
+//@ chunk-8nzbdydx.js:58027-58140 placement
 function jsonExcerpt(value) {
   let serialized;
   try {
@@ -665,4 +665,4 @@ function jsonExcerpt(value) {
     ? truncateToLength(serialized, MAX_FORMATTED_ERROR_CHARS) + "\u2026"
     : serialized;
 }
-export { checkSchemaSatisfiable, formatSchemaError, normalizeOutputSchema, checkOutputSchemaSatisfiable };
+export { checkSchemaSatisfiable, normalizeOutputSchema, formatSchemaError, checkOutputSchemaSatisfiable };

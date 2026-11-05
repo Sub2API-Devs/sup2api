@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：mcp serve 启用插件列表的解析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qkxfkqxj.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9rw89d51.js (3)
  * attribution: placement 3
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -20,7 +20,7 @@ import { env } from "../utils/env.js";
 import { safeParseJSON } from "../utils/json.js";
 import { hasProtoKeys } from "../utils/objectSafety.js";
 
-//@ chunk-qkxfkqxj.js:11900-11961 placement
+//@ chunk-9rw89d51.js:13048-13109 placement
 var MAX_PLUGIN_ID = 32;
 var MAX_PLUGINS_JSON_BYTES = 8192;
 var pluginsEnabledSchema = DoctorLazy(() =>
@@ -28,7 +28,7 @@ var pluginsEnabledSchema = DoctorLazy(() =>
     enabledPlugins: record(PluginIdSchema(), literal(true)),
   }),
 );
-//@ chunk-qkxfkqxj.js:11961-12414 placement
+//@ chunk-9rw89d51.js:13109-13562 placement
 async function resolveMcpServeEnabledPlugins() {
   let mcpServeEnabledPluginsEnv = readMcpServeEnabledPluginsEnv();
   if (mcpServeEnabledPluginsEnv.kind !== "named") return mcpServeEnabledPluginsEnv;
@@ -64,7 +64,7 @@ async function resolveMcpServeEnabledPlugins() {
     dropped: mcpServeEnabledPluginsEnv.ids.length - filtered.length,
   };
 }
-//@ chunk-qkxfkqxj.js:12414-12803 placement
+//@ chunk-9rw89d51.js:13562-13951 placement
 function readMcpServeEnabledPluginsEnv() {
   let CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS = toolServerEnvAccessor.CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS;
   toolServerEnvAccessor.unset("CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS");

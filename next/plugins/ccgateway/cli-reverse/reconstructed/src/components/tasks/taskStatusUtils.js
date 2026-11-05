@@ -3,9 +3,9 @@
  *
  * 任务状态图标/颜色、队友活动描述、是否隐藏任务页脚。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/tasks/taskStatusUtils.tsx
- * pieces: chunk-18hwfzwa.js (2), chunk-ah34pb7m.js (4)
+ * pieces: chunk-czq1j3j2.js (2), chunk-wjygkcr4.js (4)
  * attribution: placement 2, fingerprint 3, callgraph-witnessed 1
  */
 import { BLACK_CIRCLE, PAUSE_GLYPH } from "../../constants/figures.js";
@@ -25,7 +25,7 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { Byline } from "../design-system/Byline.js";
 import { summarizeRecentActivities } from "../../utils/collapseReadSearch.js";
 
-//@ chunk-ah34pb7m.js:11869-12036 fingerprint (2.1.88 match: getTaskStatusIcon, 0.527)
+//@ chunk-wjygkcr4.js:11885-12052 fingerprint (2.1.88 match: getTaskStatusIcon, 0.527)
 function getTaskStatusIcon(status) {
   if (status === "running") return BLACK_CIRCLE;
   if (status === "completed") return figures_default.tick;
@@ -33,7 +33,7 @@ function getTaskStatusIcon(status) {
   if (status === "paused") return PAUSE_GLYPH;
   return figures_default.circle;
 }
-//@ chunk-ah34pb7m.js:12036-12200 fingerprint (2.1.88 match: getTaskStatusColor, 0.743)
+//@ chunk-wjygkcr4.js:12052-12216 fingerprint (2.1.88 match: getTaskStatusColor, 0.744)
 function getTaskStatusColor(status) {
   if (status === "completed") return "success";
   if (status === "failed") return "error";
@@ -41,14 +41,14 @@ function getTaskStatusColor(status) {
   if (status === "paused") return "warning";
   return "background";
 }
-//@ chunk-ah34pb7m.js:12331-12424 placement
+//@ chunk-wjygkcr4.js:12347-12440 placement
 function isTerminalStatus(status) {
   return (
     status.status === "completed" &&
     [...(status.keepaliveReasons ?? [])].some((reason) => reason !== FLAG_IDLE_WINDOW)
   );
 }
-//@ chunk-ah34pb7m.js:12424-12578 callgraph-witnessed (2.1.88 match: shouldHideTasksFooter, 0.373)
+//@ chunk-wjygkcr4.js:12440-12594 callgraph-witnessed (2.1.88 match: shouldHideTasksFooter, 0.373)
 function shouldHideTasksFooter(task) {
   if (isAmbientTask(task)) return false;
   if (isCoordinatorPanelActive()) return waitForTaskCompletion(task) || isBackgroundTask(task);
@@ -58,7 +58,7 @@ function shouldHideTasksFooter(task) {
     !(isCoordinatorPanelEnabled() && (isPanelAgentTask(task) || task.type === "in_process_teammate"))
   );
 }
-//@ chunk-18hwfzwa.js:687040-687519 placement
+//@ chunk-czq1j3j2.js:707771-708250 placement
 /**
  * 任务详情对话框的底部快捷键提示：可选"← 返回"、"Esc/Enter/Space 关闭"、可选"x 停止"，再接额外子节点。
  */
@@ -107,7 +107,7 @@ function TaskDetailFooterHints(props) {
   } else bylineElement = $[8];
   return bylineElement;
 }
-//@ chunk-18hwfzwa.js:691937-692158 fingerprint (2.1.88 match: describeTeammateActivity, 0.921)
+//@ chunk-czq1j3j2.js:712671-712892 fingerprint (2.1.88 match: describeTeammateActivity, 0.92)
 function describeTeammateActivity(t) {
   if (t.awaitingPlanApproval) return "awaiting approval";
   if (t.isIdle) return "idle";
@@ -119,9 +119,9 @@ function describeTeammateActivity(t) {
 }
 export {
   shouldHideTasksFooter,
+  describeTeammateActivity,
   isTerminalStatus,
+  TaskDetailFooterHints,
   getTaskStatusColor,
   getTaskStatusIcon,
-  TaskDetailFooterHints,
-  describeTeammateActivity,
 };

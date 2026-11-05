@@ -1,8 +1,8 @@
 /**
  * ajv/dist/core.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: ajv@8.13.0
- * pieces: chunk-r1g76qsy.js (1), chunk-s82q9s4x.js (1)
+ * pieces: chunk-qq5knpkd.js (1), chunk-xcs4sv9h.js (1)
  * attribution: cjs-fingerprint 2
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -19,7 +19,7 @@ import { require_data_2 } from "./refs/data.json.js";
 import { require_uri_2 } from "./runtime/uri.js";
 import { initModule } from "../../@modelcontextprotocol/core/(bundler runtime of a pre-bundled dist file).js";
 
-//@ chunk-s82q9s4x.js:68784-81111 cjs-fingerprint
+//@ chunk-xcs4sv9h.js:68784-81111 cjs-fingerprint
 var require_core_2 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
@@ -667,7 +667,7 @@ var require_core_2 = __commonJS(function (cjsExports) {
     };
   }
 });
-//@ chunk-r1g76qsy.js:118380-197840 cjs-fingerprint
+//@ chunk-qq5knpkd.js:122688-202245 cjs-fingerprint
 var require_code = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
@@ -4615,7 +4615,7 @@ var require_core = initModule((cjsExports) => {
     var _b;
     var _c;
     var _d;
-    var _e_2;
+    var _e;
     var _f;
     var _g;
     var _h;
@@ -4646,7 +4646,7 @@ var require_core = initModule((cjsExports) => {
     let uriResolver = (_d = o.uriResolver) !== null && _d !== undefined ? _d : uri_1.default;
     return {
       strictSchema:
-        (_f = (_e_2 = o.strictSchema) !== null && _e_2 !== undefined ? _e_2 : s) !== null && _f !== undefined
+        (_f = (_e = o.strictSchema) !== null && _e !== undefined ? _e : s) !== null && _f !== undefined
           ? _f
           : true,
       strictNumbers:

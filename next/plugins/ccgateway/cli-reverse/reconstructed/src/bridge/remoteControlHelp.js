@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增。打印 claude remote-control 的帮助。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6w5h3e35.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-x3jt8v9z.js (2)
  * attribution: placement 2
  */
 import { isBridgeProjectsHintEnabled } from "./bridgeGates.js";
 
-//@ chunk-6w5h3e35.js:228-239 placement
+//@ chunk-x3jt8v9z.js:228-239 placement
 var SPAWN_SESSIONS_DEFAULT = 32;
-//@ chunk-6w5h3e35.js:239-4907 placement (2.1.88 match: printHelp, 0.37)
+//@ chunk-x3jt8v9z.js:239-4907 placement (2.1.88 match: printHelp, 0.37)
 /**
  * 打印 claude remote-control 的帮助。
  */

@@ -1,19 +1,19 @@
 /**
  * @anthropic-ai/sdk/internal/shims.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (5)
+ * pieces: chunk-vn3g7zt8.js (5)
  * attribution: esm-fingerprint 5
  */
 
-//@ chunk-hwmsct5x.js:17807-18018 esm-fingerprint
+//@ chunk-vn3g7zt8.js:18175-18386 esm-fingerprint
 function getDefaultFetch() {
   if (typeof fetch !== "undefined") return fetch;
   throw Error(
     "`fetch` is not defined as a global; Either pass `fetch` to the client, `new Anthropic({ fetch })` or polyfill the global, `globalThis.fetch = fetch`",
   );
 }
-//@ chunk-hwmsct5x.js:18018-18238 esm-fingerprint
+//@ chunk-vn3g7zt8.js:18386-18606 esm-fingerprint
 function makeReadableStream(...args) {
   let ReadableStream_2 = globalThis.ReadableStream;
   if (typeof ReadableStream_2 === "undefined")
@@ -22,7 +22,7 @@ function makeReadableStream(...args) {
     );
   return new ReadableStream_2(...args);
 }
-//@ chunk-hwmsct5x.js:18238-18473 esm-fingerprint
+//@ chunk-vn3g7zt8.js:18606-18841 esm-fingerprint
 function ReadableStreamFrom(iterable) {
   let iter =
     Symbol.asyncIterator in iterable ? iterable[Symbol.asyncIterator]() : iterable[Symbol.iterator]();
@@ -38,7 +38,7 @@ function ReadableStreamFrom(iterable) {
     },
   });
 }
-//@ chunk-hwmsct5x.js:18473-18786 esm-fingerprint
+//@ chunk-vn3g7zt8.js:18841-19154 esm-fingerprint
 function ReadableStreamToAsyncIterable(stream) {
   if (stream[Symbol.asyncIterator]) return stream;
   let reader = stream.getReader();
@@ -67,7 +67,7 @@ function ReadableStreamToAsyncIterable(stream) {
     },
   };
 }
-//@ chunk-hwmsct5x.js:18786-18982 esm-fingerprint
+//@ chunk-vn3g7zt8.js:19154-19350 esm-fingerprint
 async function CancelReadableStream(stream) {
   if (stream === null || typeof stream !== "object") return;
   if (stream[Symbol.asyncIterator]) {

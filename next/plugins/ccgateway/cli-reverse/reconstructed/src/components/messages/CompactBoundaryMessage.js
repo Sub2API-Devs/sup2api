@@ -3,9 +3,9 @@
  *
  * 压缩边界："Conversation compacted · ctrl+o for history"。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/CompactBoundaryMessage.tsx
- * pieces: chunk-ah34pb7m.js (9)
+ * pieces: chunk-wjygkcr4.js (9)
  * attribution: placement 8, fingerprint 1
  */
 import { formatTokens, formatDuration } from "../../utils/format.js";
@@ -48,7 +48,7 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { TEARDROP_ASTERISK } from "../../constants/figures.js";
 import { FilePathLink } from "../FilePathLink.js";
 
-//@ chunk-ah34pb7m.js:51952-52444 placement
+//@ chunk-wjygkcr4.js:52568-53060 placement
 /**
  * 压缩边界说明（摘要了多少消息/令牌）。
  */
@@ -82,7 +82,7 @@ function compactBoundaryLabel(compactMetadata, historyShortcut, historyTarget) {
     linkify: false,
   };
 }
-//@ chunk-ah34pb7m.js:52444-52869 placement
+//@ chunk-wjygkcr4.js:53060-53485 placement
 /**
  * 解析本地命令输出的标签内容，判定新格式或旧格式。
  */
@@ -124,7 +124,7 @@ ${stderrText}`
     },
   };
 }
-//@ chunk-ah34pb7m.js:52869-52968 placement
+//@ chunk-wjygkcr4.js:53485-53584 placement
 function interruptedRow({ isBySendNow }) {
   return {
     tone: "dim",
@@ -133,7 +133,7 @@ function interruptedRow({ isBySendNow }) {
     linkify: false,
   };
 }
-//@ chunk-ah34pb7m.js:52968-53208 placement
+//@ chunk-wjygkcr4.js:53584-53824 placement
 /**
  * 把 API 错误文本做成红色提示行：仅前缀时补"请稍后再试"，按长度截断，whole 时完整保留布局。
  */
@@ -160,7 +160,7 @@ function buildApiErrorRow(text, { whole = false } = {}) {
       }
     : row;
 }
-//@ chunk-ah34pb7m.js:53208-53711 placement
+//@ chunk-wjygkcr4.js:53824-54328 placement
 /**
  * 后台任务通知的一行摘要（状态、上下文、耗时、投递说明）。
  */
@@ -193,7 +193,7 @@ function taskNotificationSummaryLine({ status, summary, context, durationMs, del
     linkify: false,
   };
 }
-//@ chunk-ah34pb7m.js:53711-53903 placement
+//@ chunk-wjygkcr4.js:54328-54520 placement
 /**
  * 构造钩子错误行：阻断性错误与普通错误给出不同标题，原因裁成多行附在下面（红色）。
  */
@@ -208,7 +208,7 @@ function buildHookErrorRow({ hookName, blocking, reason }) {
     linkify: false,
   };
 }
-//@ chunk-ah34pb7m.js:53903-54092 placement
+//@ chunk-wjygkcr4.js:54520-54709 placement
 /**
  * 构造系统提示行：按字符上限拆出首行与后续行；文本为空时退回旧版渲染。
  */
@@ -230,7 +230,7 @@ function buildSystemNoticeLine(tone, content, { maxChars = HOOK_FEEDBACK_MAX_WID
     },
   };
 }
-//@ chunk-ah34pb7m.js:54092-54284 placement
+//@ chunk-wjygkcr4.js:54709-54901 placement
 /**
  * 把提示文本按首个 " · " 或 ": " 拆成 text 与 detail。
  */
@@ -249,7 +249,7 @@ function splitNoticeDetail(tone, noticeText, { linkify }) {
     linkify,
   };
 }
-//@ chunk-ah34pb7m.js:187857-189153 fingerprint (2.1.88 match: CompactBoundaryMessage, 0.436)
+//@ chunk-wjygkcr4.js:195088-196384 fingerprint (2.1.88 match: CompactBoundaryMessage, 0.435)
 /**
  * 压缩边界："✻ Conversation compacted (ctrl+o for history)"，说明早先消息保存在 transcript 中。
  */
@@ -368,6 +368,7 @@ function CompactBoundaryMessage(props) {
   return boxElement;
 }
 export {
+  CompactBoundaryMessage,
   splitNoticeDetail,
   buildSystemNoticeLine,
   interruptedRow,
@@ -375,5 +376,4 @@ export {
   buildHookErrorRow,
   taskNotificationSummaryLine,
   parseLocalCommandOutput,
-  CompactBoundaryMessage,
 };

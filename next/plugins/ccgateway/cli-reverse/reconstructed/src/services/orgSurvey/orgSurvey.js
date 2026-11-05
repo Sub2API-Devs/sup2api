@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。组织调查问卷数据。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (22)
  * attribution: placement 22
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -43,12 +43,17 @@ import { logForDebugging } from "../../utils/debug.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1050360-1050364 placement
+//@ chunk-czq1j3j2.js:1050729-1050733 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1050360", () => {
+deferInit("chunk-czq1j3j2.js:1050729", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1050364-1050414 placement
+//@ chunk-czq1j3j2.js:1050804-1050808 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1050804", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1084393-1084443 placement
 /**
  * 是否可展示组织问卷（非 WIF、是 claude.ai 订阅者）。
  */
@@ -56,7 +61,7 @@ function isSurveyEligible() {
   if (!getAnthropicApiKeySafe() && shouldUseWIFAuth()) return false;
   return isClaudeAISubscriber();
 }
-//@ chunk-18hwfzwa.js:1050414-1050625 placement
+//@ chunk-czq1j3j2.js:1084443-1084654 placement
 async function orgSurveyCredentialSource(credentials, { acceptInjectedTokens }) {
   let CLAUDE_CODE_ORGANIZATION_UUID = env.CLAUDE_CODE_ORGANIZATION_UUID;
   let organizationUuid = getOauthAccountInfo()?.organizationUuid;
@@ -67,20 +72,20 @@ async function orgSurveyCredentialSource(credentials, { acceptInjectedTokens }) 
     return acceptInjectedTokens && Boolean(CLAUDE_CODE_ORGANIZATION_UUID);
   return false;
 }
-//@ chunk-18hwfzwa.js:1050625-1050681 placement
+//@ chunk-czq1j3j2.js:1084654-1084710 placement
 /**
  * 问卷邀请的默认标题。
  */
 var DEFAULT_HEADLINE_DELAY_MS = 2000;
 var DEFAULT_SURVEY_HEADLINE = "How\u2019s working with Claude going?";
-//@ chunk-18hwfzwa.js:1050681-1050765 placement
+//@ chunk-czq1j3j2.js:1084710-1084794 placement
 /**
  * 生成 “与 <组织> 管理员分享想法” 的邀请文案。
  */
 function defaultInviteMessage(orgName) {
   return `Take a few minutes to share thoughts with your ${orgName} admins.`;
 }
-//@ chunk-18hwfzwa.js:1050765-1050866 placement
+//@ chunk-czq1j3j2.js:1084794-1084895 placement
 function normalizeSurveyText(text) {
   let trimmed = stripInvisibleChars(text, " ", {
     keepEmojiJoiners: true,
@@ -89,7 +94,7 @@ function normalizeSurveyText(text) {
     .trim();
   return trimmed === "" ? null : trimmed;
 }
-//@ chunk-18hwfzwa.js:1050866-1051106 placement
+//@ chunk-czq1j3j2.js:1084895-1085135 placement
 var SURVEY_QUESTION_TYPES = {
   SURVEY_QUESTION_TYPE_MULTI_SELECT: "multi_select",
   SURVEY_QUESTION_TYPE_LONG_TEXT: "text",
@@ -100,20 +105,20 @@ var SURVEY_QUESTION_TYPES = {
   3: "text",
   4: "single_select",
 };
-//@ chunk-18hwfzwa.js:1051106-1051169 placement
+//@ chunk-czq1j3j2.js:1085135-1085198 placement
 /**
  * 限制字符数的文本 schema 工厂。
  */
 function boundedTextSchema(maxChars) {
   return stringSchema().refine((value) => Array.from(value).length <= maxChars);
 }
-//@ chunk-18hwfzwa.js:1051169-1051515 placement
+//@ chunk-czq1j3j2.js:1085198-1085544 placement
 /**
  * 组织问卷题目的 schema：id、类型、题干、是否必答、选项与说明文字。
  */
 var surveyQuestionSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var pendingSurveyResponseSchema;
-deferInit("chunk-18hwfzwa.js:1051169", () => {
+deferInit("chunk-czq1j3j2.js:1085198", () => {
   surveyQuestionSchema = DoctorLazy(() =>
     objectSchema({
       id: stringSchema().regex(/^[A-Za-z0-9_-]{1,16}$/),
@@ -135,7 +140,7 @@ deferInit("chunk-18hwfzwa.js:1051169", () => {
     }),
   );
 });
-//@ chunk-18hwfzwa.js:1051515-1052638 placement
+//@ chunk-czq1j3j2.js:1085544-1086667 placement
 function parseOrgSurvey(payload, context) {
   let { orgName, ownerKey } = context;
   let parsed = pendingSurveyResponseSchema().safeParse(payload);
@@ -218,7 +223,7 @@ function parseOrgSurvey(payload, context) {
     },
   };
 }
-//@ chunk-18hwfzwa.js:1052638-1052705 placement
+//@ chunk-czq1j3j2.js:1086667-1086734 placement
 /**
  * 出错后的重试间隔（1 小时）。
  */
@@ -226,7 +231,7 @@ var TENGU_STEADY_MITTEN = "tengu_steady_mitten";
 var RETRY_404_MS = 21600000;
 var RETRY_DEFAULT_MS = 86400000;
 var RETRY_ERROR_MS = 3600000;
-//@ chunk-18hwfzwa.js:1052705-1052813 placement
+//@ chunk-czq1j3j2.js:1086734-1086842 placement
 async function checkOrgSurveyEligibilitySafe(credentials) {
   try {
     return await orgSurveyEligibility(credentials);
@@ -235,14 +240,14 @@ async function checkOrgSurveyEligibilitySafe(credentials) {
     return "error";
   }
 }
-//@ chunk-18hwfzwa.js:1052813-1052927 placement
+//@ chunk-czq1j3j2.js:1086842-1086956 placement
 function getOrgSurveyOwnerKey() {
   let oauthAccountInfo = getOauthAccountInfo();
   return oauthAccountInfo?.accountUuid && oauthAccountInfo.organizationUuid
     ? `${oauthAccountInfo.accountUuid}:${oauthAccountInfo.organizationUuid}`
     : null;
 }
-//@ chunk-18hwfzwa.js:1052927-1053414 placement
+//@ chunk-czq1j3j2.js:1086956-1087443 placement
 async function orgSurveyEligibility(credentials) {
   if (env.CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY) return null;
   if (isEssentialTrafficOnly()) return null;
@@ -268,7 +273,7 @@ async function orgSurveyEligibility(credentials) {
     checkKey: `${oauthAccountInfo.accountUuid}:${oauthAccountInfo.organizationUuid}`,
   };
 }
-//@ chunk-18hwfzwa.js:1053414-1053773 placement
+//@ chunk-czq1j3j2.js:1087443-1087802 placement
 /**
  * 问卷消息的 schema。
  */
@@ -277,7 +282,7 @@ var ORG_SURVEY_RPC_PATH;
 var ORG_SURVEY_REQUEST_OPTIONS;
 var ORG_SURVEY_METHODS;
 var surveyMessageSchema;
-deferInit("chunk-18hwfzwa.js:1053414", () => {
+deferInit("chunk-czq1j3j2.js:1087443", () => {
   ORG_SURVEY_RPC = 3000;
   ORG_SURVEY_RPC_PATH = "/claudeai-rpc/anthropic.loupe.api.v1alpha.OrgSurveyService";
   ORG_SURVEY_REQUEST_OPTIONS = {
@@ -301,14 +306,14 @@ deferInit("chunk-18hwfzwa.js:1053414", () => {
     }),
   );
 });
-//@ chunk-18hwfzwa.js:1053773-1053844 placement
+//@ chunk-czq1j3j2.js:1087802-1087873 placement
 /**
  * 记录问卷请求失败（提交类用 bad，其他用 sad）。
  */
 function logSurveyFailure(method, reason) {
   (method === "SubmitSurveyResponse" ? logFeatureBad : logFeatureSad)("cli_org_survey", reason);
 }
-//@ chunk-18hwfzwa.js:1053844-1054658 placement
+//@ chunk-czq1j3j2.js:1087873-1088687 placement
 async function callOrgSurveyRpc(method, body, options) {
   let telemetryName = ORG_SURVEY_METHODS[method];
   let response;
@@ -360,7 +365,7 @@ async function callOrgSurveyRpc(method, body, options) {
     code,
   };
 }
-//@ chunk-18hwfzwa.js:1054658-1054727 placement
+//@ chunk-czq1j3j2.js:1088687-1088756 placement
 /**
  * 取当前问卷检查记录（键不匹配返回 undefined）。
  */
@@ -368,7 +373,7 @@ function getSurveyCheck(checkKey) {
   let orgSurveyCheck = getGlobalConfig().orgSurveyCheck;
   return orgSurveyCheck?.key === checkKey ? orgSurveyCheck : undefined;
 }
-//@ chunk-18hwfzwa.js:1054727-1054804 placement
+//@ chunk-czq1j3j2.js:1088756-1088833 placement
 /**
  * 判断现在是否到了下次检查时间。
  */
@@ -376,7 +381,7 @@ function isSurveyCheckDue(checkKey, nowMs) {
   let nextCheckAt = getSurveyCheck(checkKey)?.nextCheckAt;
   return typeof nextCheckAt !== "number" || nowMs >= nextCheckAt;
 }
-//@ chunk-18hwfzwa.js:1054804-1055005 placement
+//@ chunk-czq1j3j2.js:1088833-1089034 placement
 function saveOrgSurveyCheck(key, fields, storageV5) {
   saveGlobalConfig((config) => {
     let orgSurveyCheck = config.orgSurveyCheck?.key === key ? config.orgSurveyCheck : {};
@@ -394,7 +399,7 @@ function saveOrgSurveyCheck(key, fields, storageV5) {
     });
   });
 }
-//@ chunk-18hwfzwa.js:1055005-1057797 placement
+//@ chunk-czq1j3j2.js:1089034-1091826 placement
 function checkPendingOrgSurvey({ credentials, storageV5, now = Date.now }) {
   let requestOptions = {
     ...ORG_SURVEY_REQUEST_OPTIONS,
@@ -592,9 +597,4 @@ function checkPendingOrgSurvey({ credentials, storageV5, now = Date.now }) {
     },
   };
 }
-//@ chunk-18hwfzwa.js:1057797-1057801 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1057797", () => {
-  init_react_production();
-});
-export { DEFAULT_HEADLINE_DELAY_MS, checkPendingOrgSurvey, isSurveyEligible, orgSurveyCredentialSource };
+export { checkPendingOrgSurvey, isSurveyEligible, orgSurveyCredentialSource, DEFAULT_HEADLINE_DELAY_MS };

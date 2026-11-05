@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：把 URL 里的用户信息、查询里的密钥等敏感片段替换掉的脱敏函数。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-yqnmafqp.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-r8hfaqgy.js (1)
  * attribution: placement 1
  */
 import {
@@ -21,9 +21,9 @@ import {
   redactUnlessSafe,
 } from "../services/mcp/auth.js";
 import { countCharInString } from "./stringUtils.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 
-//@ chunk-yqnmafqp.js:4135-5542 placement
+//@ chunk-r8hfaqgy.js:4135-5542 placement
 /**
  * 脱敏 URL 用于日志：用户名/密码替换为 REDACTED，查询参数与片段中名称看似秘密的键值、令牌形状的值替换为 REDACTED；无法解析时返回 [unparseable url]。
  */
@@ -95,7 +95,7 @@ function redactUrlSecrets(url) {
     parsedUrl.pathname = redactedPath;
     if (HEADER_SEPARATOR_RE.test(parsedUrl.hostname)) parsedUrl.hostname = "REDACTED";
   }
-  let paramNames = uniq(parsedUrl.searchParams.keys());
+  let paramNames = normalizeCaseForComparison_2(parsedUrl.searchParams.keys());
   let emptyParamNames = new Set(
     [...parsedUrl.searchParams.entries()].filter(([, value]) => value === "").map(([name]) => name),
   );

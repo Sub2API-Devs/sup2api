@@ -3,10 +3,10 @@
  *
  * 本机设置/插件/项目文件同步到云会话的状态文案（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-z7wtv7tg.js (38)
- * attribution: placement 38
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6fv5sh2h.js (39)
+ * attribution: placement 38, layout 1
  */
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { repositoryTrustConsentText } from "../../remote/tools/repositoryTrust.js";
@@ -16,7 +16,7 @@ import { HOME_SEED_PARTIAL_REASONS } from "../../services/homeSeed/notices.js";
 import { classifyCloudPluginsWorkerReply } from "./cloudPlugins.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-z7wtv7tg.js:32703-33099 placement
+//@ chunk-6fv5sh2h.js:32736-33132 placement
 /**
  * 同步状态行的标题、等待提示、条目名与顺序、标记字符与常用状态值。
  */
@@ -29,7 +29,7 @@ var cross;
 var PENDING_MARK;
 var SYNCED_STATUS;
 var PENDING_STATUS;
-deferInit("chunk-z7wtv7tg.js:32703", () => {
+deferInit("chunk-6fv5sh2h.js:32736", () => {
   SYNC_STATUS_HEADING = "Synced from this computer:";
   WAITING_MESSAGE_TEXTS = {
     files: "A message is waiting \xB7 esc to take it back",
@@ -52,14 +52,14 @@ deferInit("chunk-z7wtv7tg.js:32703", () => {
     mark: "pending",
   };
 });
-//@ chunk-z7wtv7tg.js:33099-33147 placement
+//@ chunk-6fv5sh2h.js:33132-33180 placement
 function notSyncedStatus(words) {
   return {
     mark: "not_synced",
     words,
   };
 }
-//@ chunk-z7wtv7tg.js:33147-33253 placement
+//@ chunk-6fv5sh2h.js:33180-33286 placement
 function getSyncMark(status) {
   switch (status.mark) {
     case "synced":
@@ -70,7 +70,7 @@ function getSyncMark(status) {
       return cross;
   }
 }
-//@ chunk-z7wtv7tg.js:33253-33436 placement
+//@ chunk-6fv5sh2h.js:33286-33469 placement
 function formatSyncItem(status, label) {
   let words = `${getSyncMark(label)} ${status}`;
   switch (label.mark) {
@@ -82,7 +82,7 @@ function formatSyncItem(status, label) {
       return `${words} \u2014 ${label.words}`;
   }
 }
-//@ chunk-z7wtv7tg.js:33436-33594 placement
+//@ chunk-6fv5sh2h.js:33469-33627 placement
 function buildSyncStatusLines(sync) {
   return [
     SYNC_STATUS_HEADING,
@@ -93,7 +93,7 @@ function buildSyncStatusLines(sync) {
     ...(sync.localTools === undefined ? [] : [formatSyncItem(SYNC_ITEM_LABELS.localTools, sync.localTools)]),
   ];
 }
-//@ chunk-z7wtv7tg.js:33594-33771 placement
+//@ chunk-6fv5sh2h.js:33627-33804 placement
 /**
  * 把同步状态拼成一行："Synced from this computer:" 加各条目状态，附上关闭期间说明与仓库信任说明。
  */
@@ -106,14 +106,14 @@ function formatSyncStatusLine(sync) {
   if (first === undefined) return trust;
   return withNote === undefined ? `${trust}. ${first}.` : `${trust} ${first}.`;
 }
-//@ chunk-z7wtv7tg.js:33771-33794 placement
+//@ chunk-6fv5sh2h.js:33804-33827 placement
 /**
  * 仓库信任说明：当前构建恒返回 undefined，不做标记。
  */
 function repositoryTrustNote(sync) {
   return;
 }
-//@ chunk-z7wtv7tg.js:33794-33916 placement
+//@ chunk-6fv5sh2h.js:33827-33949 placement
 /**
  * 取同步状态中的仓库信任说明；未设置或无需标记时为 undefined。
  */
@@ -121,7 +121,7 @@ function describeRepositoryTrust(sync) {
   if (sync.repositoryTrust === undefined || sync.repositoryTrust === "nothing_to_mark") return;
   return repositoryTrustConsentText(sync.repositoryTrust);
 }
-//@ chunk-z7wtv7tg.js:33916-34071 placement
+//@ chunk-6fv5sh2h.js:33949-34104 placement
 /**
  * 比较两份同步状态是否相同（关闭时、仓库信任、本地工具与各分项）。
  */
@@ -133,7 +133,29 @@ function isSameSyncStatus(cloudSessionSync, a) {
     SYNC_ITEM_ORDER.every((b) => syncItemListsEqual(cloudSessionSync[b], a[b]))
   );
 }
-//@ chunk-z7wtv7tg.js:34071-34250 placement
+//@ chunk-6fv5sh2h.js:34104-34299 layout
+function servedToolsPromptForOutcome(outcome, name, name_2) {
+  switch (outcome.kind) {
+    case "announced":
+      return outcome.status === "announced" && name === undefined
+        ? {
+            on: true,
+            name: name_2,
+          }
+        : {
+            on: false,
+          };
+    case "refused":
+    case "unsupported":
+      return {
+        on: false,
+      };
+    case "retry":
+    case "failed":
+      return;
+  }
+}
+//@ chunk-6fv5sh2h.js:34299-34478 placement
 /**
  * 计算本地工具同步状态：有上游原因且未开启时显示该原因；开启时显示由本机服务，否则显示未服务本会话。
  */
@@ -147,17 +169,17 @@ function getLocalToolsSyncStatus(served, fallback, buffer) {
       }
     : notSyncedStatus("not serving this session");
 }
-//@ chunk-z7wtv7tg.js:34250-34311 placement
+//@ chunk-6fv5sh2h.js:34478-34539 placement
 function syncItemListsEqual(localTools, localTools_2) {
   return localTools === undefined || localTools_2 === undefined
     ? localTools === localTools_2
     : syncItemsEqual(localTools, localTools_2);
 }
-//@ chunk-z7wtv7tg.js:34311-34355 placement
+//@ chunk-6fv5sh2h.js:34539-34583 placement
 function syncItemsEqual(a, b) {
   return formatSyncItem("", a) === formatSyncItem("", b);
 }
-//@ chunk-z7wtv7tg.js:34355-34579 placement
+//@ chunk-6fv5sh2h.js:34583-34807 placement
 /**
  * 把会话记录位置映射为未同步原因（not_from_here、lookup_failed、not_opted_in、not_set_up）。
  */
@@ -177,7 +199,7 @@ function mapRecordWhereToReason(sessionRecordLookup) {
       return "not_set_up";
   }
 }
-//@ chunk-z7wtv7tg.js:34579-34664 placement
+//@ chunk-6fv5sh2h.js:34807-34892 placement
 /**
  * 目录同步状态：state 为 absent 且 reason 为 not_offered 时返回 undefined，否则取目录同步状态。
  */
@@ -186,7 +208,7 @@ function directorySyncStatusOrUndefined(sync, mark) {
     ? undefined
     : getDirectorySyncStatus(sync, mark);
 }
-//@ chunk-z7wtv7tg.js:34664-34856 placement
+//@ chunk-6fv5sh2h.js:34892-35084 placement
 function getDirectorySyncStatus(sync, trust) {
   switch (sync.state) {
     case "seeding":
@@ -199,21 +221,21 @@ function getDirectorySyncStatus(sync, trust) {
       return notSyncedStatus(describeSyncOffReason(sync.state, sync.reason, trust));
   }
 }
-//@ chunk-z7wtv7tg.js:34856-34879 placement
+//@ chunk-6fv5sh2h.js:35084-35107 placement
 /**
  * 空函数占位（syncStatus 的回调默认值）。
  */
 function noop_2(sync) {
   return;
 }
-//@ chunk-z7wtv7tg.js:34879-34904 placement
+//@ chunk-6fv5sh2h.js:35107-35132 placement
 /**
  * 空函数占位（syncStatus 的另一个默认回调）。
  */
 function noop_3(sync) {
   return false;
 }
-//@ chunk-z7wtv7tg.js:34904-34958 placement
+//@ chunk-6fv5sh2h.js:35132-35186 placement
 /**
  * 调用参数函数，出错时返回 null（syncStatus 的安全取值）。
  */
@@ -222,7 +244,7 @@ function nullOnError_2(origin) {
     fromUpload: origin?.kind === "bundle",
   };
 }
-//@ chunk-z7wtv7tg.js:34958-35248 placement
+//@ chunk-6fv5sh2h.js:35186-35476 placement
 var NOT_SET_UP_TEXT = "not set up for this session";
 var SYNC_REASON_TEXTS = {
   not_opted_in: NOT_SET_UP_TEXT,
@@ -237,7 +259,7 @@ var ALL_SYNC_REASON_TEXTS = {
   seeded_elsewhere: SYNC_REASON_TEXTS.not_from_here,
   not_seeded: SYNC_REASON_TEXTS.not_set_up,
 };
-//@ chunk-z7wtv7tg.js:35248-35402 placement
+//@ chunk-6fv5sh2h.js:35476-35630 placement
 function describeSyncOffReason(state, reason, syncState, syncReason) {
   return (
     (reason !== undefined && Object.hasOwn(ALL_SYNC_REASON_TEXTS, reason)
@@ -245,7 +267,7 @@ function describeSyncOffReason(state, reason, syncState, syncReason) {
       : undefined) ?? (state === "stopped" ? "sync stopped for this session" : "sync is off for this session")
   );
 }
-//@ chunk-z7wtv7tg.js:35402-35559 placement
+//@ chunk-6fv5sh2h.js:35630-35787 placement
 /**
  * 把"没有项目文件"的结果统一改为 absent/not_sent。
  */
@@ -261,7 +283,7 @@ function normalizeNoProjectFiles(seedSyncState) {
       }
     : seedSyncState;
 }
-//@ chunk-z7wtv7tg.js:35559-36779 placement
+//@ chunk-6fv5sh2h.js:35787-37007 placement
 function describeProjectFilesSync(state) {
   if (state.kind === "absent") return notSyncedStatus(SETTINGS_ABSENT_TEXTS[state.reason]);
   let { outcome, readBack } = state;
@@ -333,19 +355,19 @@ function describeProjectFilesSync(state) {
       return notSyncedStatus("the upload was cancelled");
   }
 }
-//@ chunk-z7wtv7tg.js:36779-36914 placement
+//@ chunk-6fv5sh2h.js:37007-37142 placement
 function describeKeptFiles({ claudeMd, others }) {
   if (!claudeMd) return `${others} ${plural(others, "file")}`;
   return others === 0 ? "CLAUDE.md" : `CLAUDE.md and ${others} more ${plural(others, "file")}`;
 }
-//@ chunk-z7wtv7tg.js:36914-37099 placement
+//@ chunk-6fv5sh2h.js:37142-37327 placement
 function describeKeptLinks({ names, more }) {
   let extraCount = more > 0 ? `${names.join(", ")} and ${more} more` : names.join(" and ");
   return names.length + more === 1
     ? `${extraCount} is a link, so it wasn't sent`
     : `${extraCount} are links, so they weren't sent`;
 }
-//@ chunk-z7wtv7tg.js:37099-37521 placement
+//@ chunk-6fv5sh2h.js:37327-37749 placement
 function describeSettingsApplyTiming(readBack, sync) {
   switch (readBack.verdict) {
     case "applied_before_first_ask":
@@ -363,7 +385,7 @@ function describeSettingsApplyTiming(readBack, sync) {
       return notSyncedStatus("the cloud session's answer could not be read");
   }
 }
-//@ chunk-z7wtv7tg.js:37521-38242 placement
+//@ chunk-6fv5sh2h.js:37749-38470 placement
 /**
  * 设置同步状态的说明文案：设置文件被拒原因、紧急关闭、自托管 runner、无发送记录与未发送原因。
  */
@@ -385,7 +407,7 @@ var SETTINGS_ABSENT_TEXTS = {
   not_sent: "not sent with this session",
   no_project_files: "not sent with this session",
 };
-//@ chunk-z7wtv7tg.js:38242-38944 placement
+//@ chunk-6fv5sh2h.js:38470-39172 placement
 function describeUserSettingsSyncState(reason) {
   switch (reason) {
     case "flag_off":
@@ -414,7 +436,7 @@ function describeUserSettingsSyncState(reason) {
       return "a settings file here has errors";
   }
 }
-//@ chunk-z7wtv7tg.js:38944-39052 placement
+//@ chunk-6fv5sh2h.js:39172-39280 placement
 /**
  * 由种子结果构造同步状态：无结果时为 absent（附原因），否则为 seed（结果与回读）。
  */
@@ -430,13 +452,13 @@ function toSeedSyncState(homeSeed, reason, readBack) {
         readBack,
       };
 }
-//@ chunk-z7wtv7tg.js:39052-39200 placement
+//@ chunk-6fv5sh2h.js:39280-39428 placement
 var PLUGINS_ABSENT_TEXTS = {
   not_enabled: "not enabled for this account",
   switched_off: "switched off on this machine",
   attach_failed: "could not be sent from this machine",
 };
-//@ chunk-z7wtv7tg.js:39200-39572 placement
+//@ chunk-6fv5sh2h.js:39428-39800 placement
 /**
  * 根据插件转发状态给出同步标记：等待中、未转发原因、紧急关闭、准入结果（未启用、拒绝、未同意）或 worker 回复。
  */
@@ -457,7 +479,7 @@ function getPluginsSyncStatus(plugins) {
       return getAdmittedPluginsStatus(state);
   }
 }
-//@ chunk-z7wtv7tg.js:39572-40204 placement
+//@ chunk-6fv5sh2h.js:39800-40432 placement
 function describePluginsSyncState(source) {
   switch (source) {
     case "not_asked":
@@ -482,7 +504,7 @@ function describePluginsSyncState(source) {
       return "run /cloud-plugins to send them";
   }
 }
-//@ chunk-z7wtv7tg.js:40204-40332 placement
+//@ chunk-6fv5sh2h.js:40432-40560 placement
 function getAdmittedPluginsStatus(state) {
   let plugins = classifyCloudPluginsWorkerReply(state.notice);
   if (plugins !== undefined) return notSyncedStatus(PLUGINS_WORKER_REPLY_TEXTS[plugins]);
@@ -490,7 +512,7 @@ function getAdmittedPluginsStatus(state) {
     ? notSyncedStatus(describePluginsSyncState(state.gaveUp))
     : SYNCED_STATUS;
 }
-//@ chunk-z7wtv7tg.js:40332-40662 placement
+//@ chunk-6fv5sh2h.js:40560-40890 placement
 /**
  * 插件 worker 回复状态对应的说明文字（拒收、未应用、无可发送、未确认、未能安装等）。
  */
@@ -502,7 +524,7 @@ var PLUGINS_WORKER_REPLY_TEXTS = {
   not_installed: "they could not be installed there",
   some_not_installed: "some could not be installed there",
 };
-//@ chunk-z7wtv7tg.js:40662-40942 placement
+//@ chunk-6fv5sh2h.js:40890-41170 placement
 /**
  * 由远程会话报告的状态构造同步状态：项目文件、设置、插件、关闭期间状态与仓库信任。
  */
@@ -527,7 +549,7 @@ function buildSyncStatusFromRemote(info, directorySync) {
     }),
   };
 }
-//@ chunk-z7wtv7tg.js:40942-41174 placement
+//@ chunk-6fv5sh2h.js:41170-41402 placement
 function getWhileClosedStatus(directorySync) {
   let syncInfo = noop_2(
     directorySync.state === "armed"
@@ -551,7 +573,7 @@ function getWhileClosedStatus(directorySync) {
         whileClosed: syncInfo,
       };
 }
-//@ chunk-z7wtv7tg.js:41174-41362 placement
+//@ chunk-6fv5sh2h.js:41402-41590 placement
 function getForwardedStatus(trust) {
   if (trust === undefined) return notSyncedStatus("not enabled for this launch");
   if (trust.state === "forwarded") return SYNCED_STATUS;
@@ -561,13 +583,13 @@ function getForwardedStatus(trust) {
       : "not sent from this machine",
   );
 }
-//@ chunk-z7wtv7tg.js:41362-41404 placement
+//@ chunk-6fv5sh2h.js:41590-41632 placement
 function returnNull(reason) {
   return Object.hasOwn(DEVICE_BINDING_STATUS_TEXTS, reason);
 }
-//@ chunk-z7wtv7tg.js:41404-42685 placement
+//@ chunk-6fv5sh2h.js:41632-42913 placement
 var DEVICE_BINDING_STATUS_TEXTS; // deferred: uses SETTINGS_REFUSAL_TEXTS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-z7wtv7tg.js:41404", () => {
+deferInit("chunk-6fv5sh2h.js:41632", () => {
   DEVICE_BINDING_STATUS_TEXTS = {
     unsupported: SETTINGS_ABSENT_TEXTS.unsupported,
     flag_off: SETTINGS_ABSENT_TEXTS.not_enabled,
@@ -614,6 +636,7 @@ export {
   normalizeNoProjectFiles,
   getPluginsSyncStatus,
   isSameSyncStatus,
+  servedToolsPromptForOutcome,
   WAITING_MESSAGE_TEXTS,
   repositoryTrustNote,
   describeRepositoryTrust,

@@ -3,18 +3,18 @@
  *
  * 2.1.316 新增：转入后台继续运行的工具调用（结果稍后送回）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (23)
  * attribution: placement 23
  */
+import { isPrintInputClosed, mainAgentId } from "../../bootstrap/state.js";
+import { isDetachedToolCallsEnabled } from "../../components/PromptInput/promptFlags.js";
 import { TASK_NOTIFICATION, TOOL_USE_ID, TASK_TYPE } from "../../constants/xml.js";
 import { createStore } from "../../state/store.js";
 import { logForDebugging, createAttachmentMessage_2 } from "../../utils/debug.js";
 import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
-import { isPrintInputClosed, mainAgentId } from "../../bootstrap/state.js";
-import { isDetachedToolCallsEnabled } from "../../components/PromptInput/promptFlags.js";
 import { logError } from "../../utils/log.js";
 import { MAX_MERGED_PROMPTS } from "../../constants/outputLimits.js";
 import { getToolBackgrounding, runAfterResultCommitted } from "../../Tool.js";
@@ -33,7 +33,7 @@ import { AbortError as AbortError_2 } from "../../utils/errors.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { formatToolErrorMessage } from "../../utils/toolErrors.js";
 import {
-  processToolResultBlock,
+  persistLargeToolResult,
   toolResultsDirFor_2,
   persistToolResult,
   isPersistError,
@@ -42,29 +42,36 @@ import { escapeXml_2 as escapeXml, escapeXmlTruncated } from "../../utils/confus
 import { plural } from "../../utils/stringUtils.js";
 import { enqueuePendingNotification } from "../../utils/messageQueueManager.js";
 import { formatTaskNotification } from "../../utils/xmlTags.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { expandPathOrNull } from "../../utils/path.js";
 import { logFileStateResync } from "../../utils/readFileInRange.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2142159-2142179 placement
+//@ chunk-5xgkngpb.js:586537-586577 placement
+/**
+ * 判断工具调用是否可以脱离当前轮次执行。
+ */
+function canDetachCalls(isNonInteractiveSession) {
+  return isNonInteractiveSession && !isPrintInputClosed() && isDetachedToolCallsEnabled();
+}
+//@ chunk-5xgkngpb.js:2195541-2195561 placement
 var TOOL_CALL = "tool_call";
-//@ chunk-e6aww6q8.js:2142179-2142796 placement
+//@ chunk-5xgkngpb.js:2195561-2196178 placement
 /**
  * 工具调用被转入后台时返回给模型的说明：调用仍在进行，结果稍后以 task-notification 送达，不要重复、等待或声称已取消。
  */
 function buildStillRunningNotice(toolName, { isOnScreen }) {
   return `[Still running. The user sent a message while this call loads, and that message follows so you can answer it now. This ${toolName} call was not interrupted. Its result will be delivered to you on its own, in a later <${TASK_NOTIFICATION}> carrying this tool_use_id. Do not repeat the call, and do not wait, sleep or poll for it. You cannot stop it either, so never say you cancelled or dropped it.${isOnScreen ? " On the user's screen this call simply still shows as in progress: nothing there says it was moved, backgrounded or detached, so do not describe it that way." : ""} If they ask, it is still loading.]`;
 }
-//@ chunk-e6aww6q8.js:2142796-2142826 placement
+//@ chunk-5xgkngpb.js:2196178-2196208 placement
 /**
  * 结果里标记「该调用已转入后台」的对象。
  */
 var DETACHED_TOOL_CALL_FLAG = {
   detachedToolCall: true,
 };
-//@ chunk-e6aww6q8.js:2142826-2142959 placement
+//@ chunk-5xgkngpb.js:2196208-2196341 placement
 /**
  * 工具调用是否以分离方式转入后台（backgrounding=detach 且结果标记 detachedToolCall）。
  */
@@ -77,7 +84,7 @@ function isDetachedToolResult(tool, toolUseResult) {
     toolUseResult.detachedToolCall === true
   );
 }
-//@ chunk-e6aww6q8.js:2142959-2143180 placement
+//@ chunk-5xgkngpb.js:2196341-2196562 placement (2.1.88 match: enqueueUltraplanFailureNotification, 0.531)
 /**
  * 从 task-notification 文本开头解析 tool_use_id（类型须为工具调用），否则返回 null。
  */
@@ -103,14 +110,14 @@ function parseTaskNotificationToolUseId(text) {
     return null;
   return text.slice(header.length, index);
 }
-//@ chunk-e6aww6q8.js:2143180-2143217 placement
+//@ chunk-5xgkngpb.js:2196562-2196599 placement
 /**
  * 判断调用 id 是否是任务通知形式的（可对应后台调用）。
  */
 function hasTaskNotificationToolUseId(text) {
   return parseTaskNotificationToolUseId(text) !== null;
 }
-//@ chunk-e6aww6q8.js:2143217-2143266 placement
+//@ chunk-5xgkngpb.js:2196599-2196648 placement
 /**
  * 后台调用跟踪的常量：记录存活时长、通知延迟与两张表。
  */
@@ -118,13 +125,13 @@ var DETACHED_CALL_TTL_MS; // deferred: has load-time effects after a deferred st
 var DETACHED_NOTIFICATION_DELAY_MS;
 var detachedCallsById;
 var queuedDetachedNotifications;
-deferInit("chunk-e6aww6q8.js:2143217", () => {
+deferInit("chunk-5xgkngpb.js:2196599", () => {
   DETACHED_CALL_TTL_MS = 300000;
   DETACHED_NOTIFICATION_DELAY_MS = 30000;
   detachedCallsById = new Map();
   queuedDetachedNotifications = new Set();
 });
-//@ chunk-e6aww6q8.js:2143266-2145458 placement
+//@ chunk-5xgkngpb.js:2196648-2198840 placement
 /**
  * 转入后台继续运行的工具调用对象：跟踪运行、完成、用户取消、对话清空等状态。
  */
@@ -274,15 +281,15 @@ class DetachedToolCall {
     this.#e.setState((state) => new Map(state).set(toolUseId, entry));
   }
 }
-//@ chunk-e6aww6q8.js:2145458-2145485 placement
+//@ chunk-5xgkngpb.js:2198840-2198867 placement
 /**
  * 按会话保存的后台调用跟踪器。
  */
 var detachedCallSlots; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2145458", () => {
+deferInit("chunk-5xgkngpb.js:2198840", () => {
   detachedCallSlots = new SessionRootSlot(() => new DetachedToolCall());
 });
-//@ chunk-e6aww6q8.js:2145485-2145555 placement
+//@ chunk-5xgkngpb.js:2198867-2198937 placement
 /**
  * 丢弃指定范围外的后台调用并移除其排队通知。
  */
@@ -290,7 +297,7 @@ function discardQueuedOutside(store, messageQueue, messages) {
   let discarded = store.discardAllOutside(messages);
   if (discarded.size > 0) removeQueuedToolNotifications(messageQueue, discarded);
 }
-//@ chunk-e6aww6q8.js:2145555-2145650 placement
+//@ chunk-5xgkngpb.js:2198937-2199032 placement
 /**
  * 停止指定范围外的后台调用并移除其排队通知。
  */
@@ -300,7 +307,7 @@ function stopAndDropOutside(store, messageQueue, messages) {
   store.stopRunning(outsideIds);
   return removeQueuedToolNotifications(messageQueue, outsideIds);
 }
-//@ chunk-e6aww6q8.js:2145650-2145813 placement
+//@ chunk-5xgkngpb.js:2199032-2199195 placement
 function removeQueuedToolNotifications(messageQueue, toolUseIds) {
   return messageQueue.removeByFilter((queued) => {
     if (queued.mode !== "task-notification" || typeof queued.value !== "string") return false;
@@ -308,14 +315,7 @@ function removeQueuedToolNotifications(messageQueue, toolUseIds) {
     return taskNotificationToolUseId !== null && toolUseIds.has(taskNotificationToolUseId);
   });
 }
-//@ chunk-e6aww6q8.js:3878016-3878056 placement
-/**
- * 判断工具调用是否可以脱离当前轮次执行。
- */
-function canDetachCalls(isNonInteractiveSession) {
-  return isNonInteractiveSession && !isPrintInputClosed() && isDetachedToolCallsEnabled();
-}
-//@ chunk-e6aww6q8.js:3878056-3878157 placement
+//@ chunk-5xgkngpb.js:3976621-3976722 placement
 class ForegroundCallRegistry {
   #e = new Set();
   add(call) {
@@ -328,15 +328,15 @@ class ForegroundCallRegistry {
     return [...this.#e];
   }
 }
-//@ chunk-e6aww6q8.js:3878157-3878185 placement
+//@ chunk-5xgkngpb.js:3976722-3976750 placement
 /**
  * 按会话保存的前台调用登记表（用于整体转入后台）。
  */
 var foregroundCallRegistrySlots; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3878157", () => {
+deferInit("chunk-5xgkngpb.js:3976722", () => {
   foregroundCallRegistrySlots = new SessionRootSlot(() => new ForegroundCallRegistry());
 });
-//@ chunk-e6aww6q8.js:3878185-3878387 placement
+//@ chunk-5xgkngpb.js:3976750-3976952 placement
 /**
  * 把当前前台的可转后台调用全部转入后台，返回成功数；单个出错时保留在前台并记日志。
  */
@@ -356,9 +356,9 @@ function backgroundForegroundCalls(calls) {
     }
   return detachedCount;
 }
-//@ chunk-e6aww6q8.js:3878387-3878404 placement
+//@ chunk-5xgkngpb.js:3976952-3976969 placement
 var FOREGROUND_DETACH_DEADLINE_MARGIN_MS = MAX_MERGED_PROMPTS - 2000;
-//@ chunk-e6aww6q8.js:3878404-3879073 placement
+//@ chunk-5xgkngpb.js:3976969-3977638 placement
 /**
  * 把正在运行的工具调用转入后台继续，并触发相应钩子。
  */
@@ -406,7 +406,7 @@ function detachToolCall(tool, toolInput, toolUseContext) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:3879073-3881146 placement
+//@ chunk-5xgkngpb.js:3977638-3979718 placement
 /**
  * 以可分离方式运行工具调用：注册"立即转后台"回调；用户发消息时若可分离则立即返回仍在运行的说明，调用在后台继续（有时限），完成或失败后经通知送回结果并记录事件。
  */
@@ -566,14 +566,14 @@ async function runDetachableToolCall({ tool, input, toolUseID, toolUseContext, o
     },
   };
 }
-//@ chunk-e6aww6q8.js:3881146-3882623 placement
+//@ chunk-5xgkngpb.js:3979718-3981195 placement
 /**
  * 完成一个后台工具调用：保存结果，过大时落盘或截断，并记录遥测。
  */
 async function finishDetachedToolCall({ tool, toolUseID, toolUseContext, result, isOnScreen, stillHeard }) {
   let resultText;
   try {
-    let processed = await processToolResultBlock(
+    let processed = await persistLargeToolResult(
       tool.mapToolResultToToolResultBlockParam(
         tool.stripForCreation?.(result.data) ?? result.data,
         toolUseID,
@@ -651,7 +651,7 @@ async function finishDetachedToolCall({ tool, toolUseID, toolUseContext, result,
       break;
   }
 }
-//@ chunk-e6aww6q8.js:3882623-3882912 placement
+//@ chunk-5xgkngpb.js:3981195-3981484 placement
 function flattenResultText(content) {
   if (content === undefined) return "";
   if (typeof content === "string") return content;
@@ -667,7 +667,7 @@ function flattenResultText(content) {
   return texts.join(`
 `);
 }
-//@ chunk-e6aww6q8.js:3882912-3884298 placement
+//@ chunk-5xgkngpb.js:3981484-3982870 placement
 /**
  * 生成后台工具调用完成后送回模型的消息：说明结果属于哪次调用、照常继续。
  */
@@ -731,12 +731,12 @@ ${escapeXmlTruncated(text, FOREGROUND_DETACH_DEADLINE_MARGIN_MS)}
     }
   }
 }
-//@ chunk-e6aww6q8.js:3884298-3884981 placement
+//@ chunk-5xgkngpb.js:3982870-3983553 placement
 /**
  * 编辑/写文件后若 PostToolUse 钩子改动了文件，重新同步读文件状态并附加一条提示，提醒下次编辑前可能需要重读。
  */
 async function noteHookModifiedFile(toolName, toolUseId, toolInput, context) {
-  if (toolName !== FILE_EDIT_TOOL_NAME && toolName !== FILE_WRITE_TOOL_NAME) return null;
+  if (toolName !== EDIT && toolName !== FILE_WRITE_TOOL_NAME) return null;
   if (
     typeof toolInput !== "object" ||
     toolInput === null ||
@@ -769,16 +769,16 @@ async function noteHookModifiedFile(toolName, toolUseId, toolInput, context) {
 }
 export {
   foregroundCallRegistrySlots,
-  backgroundForegroundCalls,
-  discardQueuedOutside,
   detachedCallSlots,
   stopAndDropOutside,
-  parseTaskNotificationToolUseId,
-  hasTaskNotificationToolUseId,
-  isDetachedToolResult,
+  discardQueuedOutside,
   detachToolCall,
   runDetachableToolCall,
   DETACHED_TOOL_CALL_FLAG,
   noteHookModifiedFile,
+  backgroundForegroundCalls,
   canDetachCalls,
+  parseTaskNotificationToolUseId,
+  hasTaskNotificationToolUseId,
+  isDetachedToolResult,
 };

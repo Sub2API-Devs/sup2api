@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：能力阻断的种类（MCP 需认证、认证过期、沙箱违规、策略拒绝等）；认证过期的阻断描述等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-yxnffbzs.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bvz8t570.js (10)
  * attribution: placement 10
  */
 
-//@ chunk-yxnffbzs.js:919-930 placement
+//@ chunk-bvz8t570.js:892-903 placement
 var activeFeatureReader = null;
-//@ chunk-yxnffbzs.js:930-967 placement
+//@ chunk-bvz8t570.js:903-940 placement
 /**
  * 临时替换功能读取器（返回恢复函数），用于策略探测。
  */
@@ -20,14 +20,14 @@ function swapFeatureReader(getFeatureValue_SESSION_PINNED) {
   activeFeatureReader = getFeatureValue_SESSION_PINNED;
   return previous;
 }
-//@ chunk-yxnffbzs.js:967-1031 placement
+//@ chunk-bvz8t570.js:940-1004 placement
 /**
  * 读 cobolt 策略开关（allow_cobalt_* 系列）。
  */
 function isCobaltGateOn() {
   return activeFeatureReader?.("tengu_cobalt_plinth_lovage", false) === true;
 }
-//@ chunk-yxnffbzs.js:1031-1494 placement
+//@ chunk-bvz8t570.js:1004-1467 placement
 /**
  * 能力阻断的种类（MCP 需认证、认证过期、沙箱违规、策略拒绝等）。
  */
@@ -57,7 +57,7 @@ var FEATURE_DISABLED_CAUSES = [
   "unsupported_runtime",
 ];
 var POLICY_DENIAL_KINDS = ["org_denied", "latched"];
-//@ chunk-yxnffbzs.js:1494-1558 placement
+//@ chunk-bvz8t570.js:1467-1531 placement
 /**
  * 认证过期的阻断描述。
  */
@@ -67,7 +67,7 @@ function authExpiredBlock() {
     provider: "claude_ai",
   };
 }
-//@ chunk-yxnffbzs.js:1558-1636 placement
+//@ chunk-bvz8t570.js:1531-1609 placement
 /**
  * 认证提供方被覆盖时对应的功能屏蔽说明。
  */
@@ -78,7 +78,7 @@ function authOverriddenBlock(managed) {
     managed,
   };
 }
-//@ chunk-yxnffbzs.js:1636-1748 placement
+//@ chunk-bvz8t570.js:1609-1721 placement
 /**
  * 按令牌来源给出认证过期阻断。
  */
@@ -93,9 +93,9 @@ function authExpiredBlockFor(claudeAIOAuthTokenOrigin) {
       return authExpiredBlock();
   }
 }
-//@ chunk-yxnffbzs.js:1748-1766 placement
+//@ chunk-bvz8t570.js:1721-1739 placement
 var weakMap = new WeakMap();
-//@ chunk-yxnffbzs.js:1766-1803 placement
+//@ chunk-bvz8t570.js:1739-1776 placement
 /**
  * 给对象打标记（弱映射）。
  */
@@ -103,7 +103,7 @@ function tagObject(object, tag) {
   weakMap.set(object, tag);
   return object;
 }
-//@ chunk-yxnffbzs.js:1803-1875 placement
+//@ chunk-bvz8t570.js:1776-1848 placement
 /**
  * 取对象上带类型标记的字段。
  */
@@ -118,10 +118,10 @@ export {
   FEATURE_DISABLED_CAUSES,
   POLICY_DENIAL_KINDS,
   tagObject,
-  authExpiredBlockFor,
-  authExpiredBlock,
   isCobaltGateOn,
-  authOverriddenBlock,
-  swapFeatureReader,
+  authExpiredBlock,
   getTaggedObject,
+  authExpiredBlockFor,
+  swapFeatureReader,
+  authOverriddenBlock,
 };

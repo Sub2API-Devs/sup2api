@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：artifacts MCP 笔记本条目的等待策略注册
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cm57mjc2.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rxz3fpjx.js (1)
  * attribution: placement 1
  */
 import {
@@ -30,7 +30,7 @@ import { onGrowthBookRefresh } from "../analytics/growthbook.js";
 import { onPolicyVerdictHeldStart } from "../policyLimits/policyState.js";
 import { settingsChangeDetector } from "../../utils/settings/changeDetector.js";
 
-//@ chunk-cm57mjc2.js:12063-13013 placement
+//@ chunk-rxz3fpjx.js:13211-14161 placement
 function registerArtifactsMcpLaptopEntry({ session, store, scope, storageV5, credentials }) {
   if (!mayBuildArtifactsMcpLaptopEntryAfterStart()) return () => {};
   let counter = loginEventCounter.of(session);

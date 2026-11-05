@@ -3,15 +3,15 @@
  *
  * Edit/Write 修改 Claude 设置文件后的内容校验与错误提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/validateEditTool.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
 import { isClaudeSettingsPath } from "../permissions/filesystem.js";
 import { validateSettingsFileContent } from "./validation.js";
 
-//@ chunk-e6aww6q8.js:4644843-4645172 fingerprint (2.1.88 match: validateInputForSettingsFileEdit, 1)
+//@ chunk-5xgkngpb.js:4753428-4753757 fingerprint (2.1.88 match: validateInputForSettingsFileEdit, 1)
 /**
  * Edit/Write 工具编辑 Claude 设置文件时，校验修改后的内容，失败则返回带完整 schema 的错误提示给模型。
  */

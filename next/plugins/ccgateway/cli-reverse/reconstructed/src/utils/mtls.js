@@ -3,10 +3,10 @@
  *
  * mTLS：读取 CLAUDE_CODE_CLIENT_CERT/KEY/KEY_PASSPHRASE，构造带客户端证书与 CA 的 https.Agent、fetch TLS 选项和 Bun FetchSession，缓存与清理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/mtls.ts
- * pieces: chunk-1ny7cxrt.js (2), chunk-hq88884p.js (27)
- * attribution: sole-consumer 5, fingerprint 3, affinity 2, facade-exports 12, layout 7
+ * pieces: chunk-1hnjmk23.js (2), chunk-355mdh7x.js (41)
+ * attribution: sole-consumer 1, fingerprint 3, placement 2, layout 14, facade-majority 23
  */
 import { createPrivateKey, X509Certificate } from "crypto";
 import { Agent } from "https";
@@ -14,40 +14,45 @@ import { Socket, isIP } from "net";
 import { isDeepStrictEqual } from "util";
 import { memoizeAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { HostScoped } from "./hostScoped.js";
-import { getRootSession } from "../bootstrap/state.js";
+import { getRootSession, isDisklessProcess } from "../bootstrap/state.js";
 import { env } from "./env.js";
 import { logForDebugging } from "./debug.js";
 import { getFsImplementation } from "./fsOperations.js";
 import { serializeCalls } from "./promiseQueue.js";
 import { caListFor, getCACertificates } from "./caCerts.js";
-import { caEnvFingerprintIfEnabled, anthropicHostOf, isHttpsAgentKeepingEnabled } from "./anthropicHosts.js";
 import { isRemoteManagedEnvironment } from "./remoteEnvironment.js";
+import { KeptConnectionGate } from "./tlsAgentPool.js";
+import { caEnvFingerprint, anthropicHostOf, isHttpsAgentKeepingEnabled } from "./anthropicHosts.js";
 import { TlsCheckingProxyAgent } from "./proxy.js";
 import { isEgressBoundaryActive } from "../services/claudeGateway/network.js";
 import { isPrivateHost } from "./network/privateHostCheck.js";
 import { guardedLookup } from "../services/claudeGateway/ssrfGuard.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-hq88884p.js:55118-55219 sole-consumer
+//@ chunk-355mdh7x.js:95020-95211 placement
 class MtlsState {
   clientCert = null;
   clientKey = null;
   config = memoizeAlias(() => getMTLSConfig_2(this));
   agents = new Map();
   fetchSessions = new Map();
+  closesAfterServerError = false;
+  ccrLeftSharedPool = false;
+  ccrActedOnNoAnswerAtMs;
+  modelApiPoolRetires;
 }
-//@ chunk-hq88884p.js:55219-55244 sole-consumer
+//@ chunk-355mdh7x.js:95211-95236 placement
 var mtlsStateRegistry; // deferred: uses MtlsState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hq88884p.js:55219", () => {
+deferInit("chunk-355mdh7x.js:95211", () => {
   mtlsStateRegistry = new HostScoped(() => new MtlsState());
 });
-//@ chunk-hq88884p.js:55244-55281 sole-consumer
+//@ chunk-355mdh7x.js:95236-95272 layout
 function currentMtlsState() {
   return mtlsStateRegistry.of(getRootSession().host);
 }
-//@ chunk-hq88884p.js:55281-55302 sole-consumer
+//@ chunk-355mdh7x.js:95272-95293 layout
 var PEM_BEGIN_PREFIX = "-----BEGIN ";
-//@ chunk-hq88884p.js:55302-55487 affinity
+//@ chunk-355mdh7x.js:95293-95478 layout
 function hasCompletePemBlock(pem) {
   let index = pem.lastIndexOf(PEM_BEGIN_PREFIX);
   if (index === -1) return false;
@@ -56,9 +61,9 @@ function hasCompletePemBlock(pem) {
   let sliced = pem.slice(index + PEM_BEGIN_PREFIX.length, index_2);
   return pem.includes(`-----END ${sliced}-----`, index_2);
 }
-//@ chunk-hq88884p.js:55487-55558 facade-exports
+//@ chunk-355mdh7x.js:95478-95549 facade-majority
 var PEM_CERT_BLOCK_RE = /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g;
-//@ chunk-hq88884p.js:55558-55820 layout
+//@ chunk-355mdh7x.js:95549-95811 layout
 function isMismatchedKeyPair(content, key) {
   let privateKey;
   try {
@@ -82,9 +87,9 @@ function isMismatchedKeyPair(content, key) {
     }
   return checkedCerts && !hadFailure;
 }
-//@ chunk-hq88884p.js:55820-55835 layout
+//@ chunk-355mdh7x.js:95811-95826 layout
 var MAX_CLIENT_CERT_FILE_BYTES = 1048576;
-//@ chunk-hq88884p.js:55835-55984 layout
+//@ chunk-355mdh7x.js:95826-95975 layout
 function isAcceptableCertFile(stats, label) {
   if (!stats.isFile() || stats.size > MAX_CLIENT_CERT_FILE_BYTES) {
     logForDebugging(
@@ -97,7 +102,7 @@ function isAcceptableCertFile(stats, label) {
   }
   return true;
 }
-//@ chunk-hq88884p.js:55984-56307 layout
+//@ chunk-355mdh7x.js:95975-96298 layout
 /**
  * 同步读取 PEM 文件。
  */
@@ -125,7 +130,7 @@ function loadPemFileSync(filePath, label) {
     return null;
   }
 }
-//@ chunk-hq88884p.js:56307-56640 layout
+//@ chunk-355mdh7x.js:96298-96631 layout
 /**
  * 异步读取 PEM 文件。
  */
@@ -153,9 +158,9 @@ async function loadPemFile(filePath, label) {
     return null;
   }
 }
-//@ chunk-hq88884p.js:56640-57316 facade-exports
+//@ chunk-355mdh7x.js:96631-97306 facade-majority
 var loadMTLSClientMaterial; // deferred: uses currentMtlsState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hq88884p.js:56640", () => {
+deferInit("chunk-355mdh7x.js:96631", () => {
   loadMTLSClientMaterial = serializeCalls(async () => {
     let state = currentMtlsState();
     let CLAUDE_CODE_CLIENT_CERT = env.CLAUDE_CODE_CLIENT_CERT;
@@ -194,7 +199,7 @@ deferInit("chunk-hq88884p.js:56640", () => {
     };
   });
 });
-//@ chunk-hq88884p.js:57316-57404 facade-exports
+//@ chunk-355mdh7x.js:97306-97393 facade-majority
 function getLoadedMTLSPaths() {
   let state = currentMtlsState();
   return {
@@ -202,11 +207,11 @@ function getLoadedMTLSPaths() {
     keyPath: state.clientKey?.path,
   };
 }
-//@ chunk-hq88884p.js:57404-57439 facade-exports
+//@ chunk-355mdh7x.js:97393-97427 facade-majority
 function getMTLSConfig() {
   return currentMtlsState().config();
 }
-//@ chunk-hq88884p.js:57439-57991 fingerprint (2.1.88 match: getMTLSConfig, 0.652)
+//@ chunk-355mdh7x.js:97427-97979 fingerprint (2.1.88 match: getMTLSConfig, 0.652)
 /**
  * mTLS 配置：CLAUDE_CODE_CLIENT_CERT / CLAUDE_CODE_CLIENT_KEY 指定 PEM 文件路径（按路径缓存内容），CLAUDE_CODE_CLIENT_KEY_PASSPHRASE 为私钥口令。
  */
@@ -235,7 +240,7 @@ function getMTLSConfig_2(state) {
   if (Object.keys(config).length === 0) return;
   return config;
 }
-//@ chunk-hq88884p.js:57991-58153 facade-exports (2.1.88 match: getProxyUrl, 0.786)
+//@ chunk-355mdh7x.js:97979-98141 facade-majority (2.1.88 match: getProxyUrl, 0.792)
 /**
  * 从 env 取代理 URL（https_proxy/HTTPS_PROXY/http_proxy/HTTP_PROXY）。
  */
@@ -250,63 +255,81 @@ function caListBehindProxy(env_2) {
   ].every((proxyUrl) => !proxyUrl || /^\s*http:/i.test(proxyUrl));
   return caListFor(all ? env_2 : undefined);
 }
-//@ chunk-hq88884p.js:58153-58174 layout
+//@ chunk-355mdh7x.js:98141-98170 layout
 var MTLS_RELOAD_INTERVAL_MS = 1000;
 var MTLS_SOCKET_TIMEOUT_MS = 35000;
-//@ chunk-hq88884p.js:58174-58952 layout
-class TrackedHttpsAgent extends Agent {
-  #e = this.options.ca;
-  #r = Array.isArray(this.#e) ? [...this.#e] : undefined;
-  #t = new WeakMap();
-  createConnection(...connectArgs) {
-    let fingerprint = caEnvFingerprintIfEnabled();
-    let connection = super.createConnection(...connectArgs);
-    if (connection) this.#t.set(connection, fingerprint);
+var POOLED_CONNECTION_IDLE_TIMEOUT_MS = 5000;
+//@ chunk-355mdh7x.js:98170-98285 layout
+function pooledKeepAliveTimeout() {
+  if (env.CLAUDE_CODE_DISABLE_POOLED_CONNECTION_IDLE_LIMIT) return;
+  if (isDisklessProcess()) return POOLED_CONNECTION_IDLE_TIMEOUT_MS;
+  return isRemoteManagedEnvironment() ? MTLS_SOCKET_TIMEOUT_MS : undefined;
+}
+//@ chunk-355mdh7x.js:98285-98671 facade-majority
+class CheckSwitchTiedHttpsAgent extends Agent {
+  #e = new KeptConnectionGate(this);
+  createConnection(...[options, ...moreArgs]) {
+    let fingerprint = caEnvFingerprint();
+    let connection = super.createConnection(this.#e.dialOptions(options), ...moreArgs);
+    if (connection) this.#e.noteOpened(connection, fingerprint);
     return connection;
   }
-  keepSocketAlive(socket) {
-    let keepAlive = super.keepSocketAlive(socket);
-    if (
-      socket instanceof Socket &&
-      isRemoteManagedEnvironment() &&
-      !env.CLAUDE_CODE_DISABLE_POOLED_CONNECTION_IDLE_LIMIT
-    ) {
-      socket.setKeepAlive(false);
-      socket.setTimeout(MTLS_SOCKET_TIMEOUT_MS);
-    }
-    return keepAlive;
-  }
-  reuseSocket(socket, request) {
-    if (this.#t.get(socket) !== caEnvFingerprintIfEnabled()) socket.destroy();
-    if (socket instanceof Socket) {
-      socket.setTimeout(0);
-      socket.setKeepAlive(true, MTLS_RELOAD_INTERVAL_MS);
-    }
-    super.reuseSocket(socket, request);
+  reuseSocket(socket, options) {
+    this.#e.closeUnlessOpenedUnderPresentSwitches(socket);
+    super.reuseSocket(socket, options);
   }
   getName(options) {
-    if (typeof options?._agentKey === "string") return options._agentKey;
-    let ca = options?.ca;
-    let initialCaList = this.#r;
-    let isUnchangedCa =
-      initialCaList !== undefined &&
-      ca === this.#e &&
-      Array.isArray(ca) &&
-      ca.length === initialCaList.length &&
-      initialCaList.every((initialCa, caIndex) => typeof initialCa === "string" && ca[caIndex] === initialCa);
-    let baseName = super.getName(
-      isUnchangedCa
-        ? {
-            ...options,
-            ca: "own",
-          }
-        : options,
-    );
-    let fingerprint = caEnvFingerprintIfEnabled();
-    return fingerprint === undefined ? baseName : `${baseName}:${fingerprint}`;
+    return this.#e.poolName(options, () => this.nameWithoutCheckSwitches(options));
+  }
+  nameWithoutCheckSwitches(options) {
+    return super.getName(options);
   }
 }
-//@ chunk-hq88884p.js:58952-59363 facade-exports (2.1.88 match: getMTLSAgent, 0.459)
+//@ chunk-355mdh7x.js:98671-99208 layout
+let TrackedHttpsAgent; // deferred: uses CheckSwitchTiedHttpsAgent of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-355mdh7x.js:98671", () => {
+  TrackedHttpsAgent = class TrackedHttpsAgent extends CheckSwitchTiedHttpsAgent {
+    #e = this.options.ca;
+    #t = Array.isArray(this.#e) ? [...this.#e] : undefined;
+    keepSocketAlive(socket) {
+      let keptSocket = super.keepSocketAlive(socket);
+      let keepAliveTimeoutMs = pooledKeepAliveTimeout();
+      if (socket instanceof Socket && keepAliveTimeoutMs !== undefined) {
+        socket.setKeepAlive(false);
+        socket.setTimeout(keepAliveTimeoutMs);
+      }
+      return keptSocket;
+    }
+    reuseSocket(socket, options) {
+      if (socket instanceof Socket) {
+        socket.setTimeout(0);
+        socket.setKeepAlive(true, MTLS_RELOAD_INTERVAL_MS);
+      }
+      super.reuseSocket(socket, options);
+    }
+    nameWithoutCheckSwitches(options) {
+      let ca = options?.ca;
+      let caListAtConstruction = this.#t;
+      let isUnchangedCa =
+        caListAtConstruction !== undefined &&
+        ca === this.#e &&
+        Array.isArray(ca) &&
+        ca.length === caListAtConstruction.length &&
+        caListAtConstruction.every(
+          (caEntry, caIndex) => typeof caEntry === "string" && ca[caIndex] === caEntry,
+        );
+      return super.nameWithoutCheckSwitches(
+        isUnchangedCa
+          ? {
+              ...options,
+              ca: "own",
+            }
+          : options,
+      );
+    }
+  };
+});
+//@ chunk-355mdh7x.js:99208-99652 facade-majority (2.1.88 match: getMTLSAgent, 0.432)
 /**
  * 按目标（customer/strict）创建带客户端证书和额外 CA 的 https.Agent，缓存复用。
  */
@@ -315,7 +338,7 @@ function getMTLSAgent(isCustomerEnv) {
   let caCerts = getMTLSConfig();
   let proxyCaList = caListBehindProxy(isCustomerEnv);
   let agentKey = isCustomerEnv ? "customer" : "strict";
-  let fingerprint = caEnvFingerprintIfEnabled();
+  let fingerprint = caEnvFingerprint();
   let cachedEntry = mtlsConfig.agents.get(agentKey);
   if (
     cachedEntry &&
@@ -337,7 +360,9 @@ function getMTLSAgent(isCustomerEnv) {
       maxTotalSockets: 1 / 0,
     };
     logForDebugging("mTLS: Creating HTTPS agent with custom certificates");
-    agent = new TrackedHttpsAgent(agentOptions);
+    agent = mtlsConfig.closesAfterServerError
+      ? new ServerErrorPruningAgent(agentOptions)
+      : new TrackedHttpsAgent(agentOptions);
   }
   mtlsConfig.agents.set(agentKey, {
     config: caCerts,
@@ -348,7 +373,37 @@ function getMTLSAgent(isCustomerEnv) {
   destroyFreeSockets(cachedEntry?.agent);
   return agent;
 }
-//@ chunk-hq88884p.js:59363-59444 facade-exports
+//@ chunk-355mdh7x.js:99652-99765 facade-majority
+function makeHttpsAgentCloseAfterServerError() {
+  let mtlsState = currentMtlsState();
+  mtlsState.closesAfterServerError = true;
+  for (let { agent } of mtlsState.agents.values()) destroyFreeSockets(agent);
+  mtlsState.agents.clear();
+}
+//@ chunk-355mdh7x.js:99765-99813 facade-majority
+function mayComeFromOneBadMachine(statusCode) {
+  return statusCode >= 500 && statusCode !== 501 && statusCode !== 529;
+}
+//@ chunk-355mdh7x.js:99813-100261 layout
+let ServerErrorPruningAgent; // deferred: uses TrackedHttpsAgent of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-355mdh7x.js:99813", () => {
+  ServerErrorPruningAgent = class ServerErrorPruningAgent extends TrackedHttpsAgent {
+    keepSocketAlive(socket) {
+      let { _httpMessage, remotePort } = socket;
+      let statusCode = _httpMessage?.res?.statusCode;
+      if (statusCode === undefined || !mayComeFromOneBadMachine(statusCode))
+        return Boolean(super.keepSocketAlive(socket));
+      logForDebugging(
+        `HTTPS agent: a server on port ${remotePort} answered ${statusCode}; closing that connection and the idle ones to the same host and port, so the next request opens a new one`,
+      );
+      for (let [key, value] of Object.entries(this.freeSockets))
+        if (key.startsWith(`${_httpMessage?.host}:${remotePort}:`))
+          for (let freeSocket of [...(value ?? [])]) freeSocket.destroy();
+      return false;
+    }
+  };
+});
+//@ chunk-355mdh7x.js:100261-100342 facade-majority
 function createOneOffHttpsAgent() {
   let mtlsConfig = getMTLSConfig();
   let caCerts = getCACertificates();
@@ -360,7 +415,7 @@ function createOneOffHttpsAgent() {
     keepAlive: false,
   });
 }
-//@ chunk-hq88884p.js:59444-59527 facade-exports (2.1.88 match: getWebSocketTLSOptions, 1)
+//@ chunk-355mdh7x.js:100342-100425 facade-majority (2.1.88 match: getWebSocketTLSOptions, 1)
 function getWebSocketTLSOptions(url) {
   let mtlsConfig = getMTLSConfig();
   let caCerts = caListBehindProxy(anthropicHostOf(url));
@@ -372,7 +427,7 @@ function getWebSocketTLSOptions(url) {
     }),
   };
 }
-//@ chunk-hq88884p.js:59527-59618 facade-exports (2.1.88 match: getTLSFetchOptions, 0.32)
+//@ chunk-355mdh7x.js:100425-100516 facade-majority (2.1.88 match: getTLSFetchOptions, 0.319)
 /**
  * fetch 用 TLS 选项（cert/key/ca），给 Bun fetch 的 tls 参数。
  */
@@ -389,7 +444,7 @@ function getTLSFetchOptions(url) {
     },
   };
 }
-//@ chunk-hq88884p.js:59618-59890 facade-exports
+//@ chunk-355mdh7x.js:100516-100787 facade-majority
 function getTLSFetchSession(origin, requestOptions) {
   let FetchSession = typeof Bun === "undefined" ? undefined : Bun.FetchSession;
   if (!FetchSession) return;
@@ -409,14 +464,57 @@ function getTLSFetchSession(origin, requestOptions) {
   });
   return session;
 }
-//@ chunk-hq88884p.js:59890-59914 facade-exports
+//@ chunk-355mdh7x.js:100787-100844 facade-majority
+function heldTLSFetchSession(sessionRef) {
+  return currentMtlsState().fetchSessions.get(sessionRef)?.session;
+}
+//@ chunk-355mdh7x.js:100844-100996 facade-majority
+function retireTLSFetchSession(sessionRef, session) {
+  let fetchSessions = currentMtlsState().fetchSessions;
+  let found = [sessionRef, `${sessionRef}:customer`].find(
+    (candidate) => fetchSessions.get(candidate)?.session === session,
+  );
+  if (found === undefined) return false;
+  fetchSessions.delete(found);
+  session.close();
+  return true;
+}
+//@ chunk-355mdh7x.js:100996-101040 facade-majority
+function ccrHasLeftSharedPool() {
+  return currentMtlsState().ccrLeftSharedPool;
+}
+//@ chunk-355mdh7x.js:101040-101120 facade-majority
+function ccrLeavesSharedPool() {
+  let state = currentMtlsState();
+  let first = !state.ccrLeftSharedPool;
+  state.ccrLeftSharedPool = true;
+  return first;
+}
+//@ chunk-355mdh7x.js:101120-101275 facade-majority
+function ccrActsOnNoAnswer(windowMs) {
+  let state = currentMtlsState();
+  let now = Date.now();
+  let sinceMs = now - (state.ccrActedOnNoAnswerAtMs ?? Number.NEGATIVE_INFINITY);
+  if (sinceMs >= 0 && sinceMs < windowMs) return false;
+  state.ccrActedOnNoAnswerAtMs = now;
+  return true;
+}
+//@ chunk-355mdh7x.js:101275-101329 facade-majority
+function modelApiPoolRetiresAfterServerError() {
+  return currentMtlsState().modelApiPoolRetires?.() ?? false;
+}
+//@ chunk-355mdh7x.js:101329-101371 facade-majority
+function setModelApiPoolRetiresAfterServerError(modelApiPoolRetires) {
+  currentMtlsState().modelApiPoolRetires = modelApiPoolRetires;
+}
+//@ chunk-355mdh7x.js:101371-101394 facade-majority
 /**
  * 清除 mTLS 证书/agent/fetch session 缓存（设置变化后调用）。
  */
 function clearMTLSCache() {
   clearMTLSCache_2(currentMtlsState());
 }
-//@ chunk-hq88884p.js:59914-60095 fingerprint (2.1.88 match: clearMTLSCache, 0.638)
+//@ chunk-355mdh7x.js:101394-101575 fingerprint (2.1.88 match: clearMTLSCache, 0.638)
 function clearMTLSCache_2(state) {
   state.config.cache.clear?.();
   for (let [cachedKey, { config, agent }] of state.agents)
@@ -426,7 +524,7 @@ function clearMTLSCache_2(state) {
     }
   logForDebugging("Cleared mTLS configuration cache");
 }
-//@ chunk-hq88884p.js:60095-60237 facade-exports (2.1.88 match: configureGlobalMTLS, 1)
+//@ chunk-355mdh7x.js:101575-101717 facade-majority (2.1.88 match: configureGlobalMTLS, 1)
 /**
  * 启动时配置全局 mTLS；检测到 NODE_EXTRA_CA_CERTS 时记日志（运行时自动追加到内置 CA）。
  */
@@ -435,16 +533,24 @@ function configureGlobalMTLS() {
   if (env.NODE_EXTRA_CA_CERTS)
     logForDebugging("NODE_EXTRA_CA_CERTS detected - Node.js will automatically append to built-in CAs");
 }
-//@ chunk-hq88884p.js:60237-60361 affinity
+//@ chunk-355mdh7x.js:101717-101770 layout
 function destroyFreeSockets(agent) {
   if (!agent) return;
   agent.maxFreeSockets = 0;
-  for (let freeSocket of Object.values(agent.freeSockets))
-    for (let socketEntry of [...(freeSocket ?? [])]) socketEntry.destroy();
+  destroyAgentFreeSockets(agent);
 }
-//@ chunk-1ny7cxrt.js:1325162-1325530 sole-consumer
+//@ chunk-355mdh7x.js:101770-101862 layout
+function destroyAgentFreeSockets(agent) {
+  for (let freeSocket of Object.values(agent.freeSockets))
+    for (let socket of [...(freeSocket ?? [])]) socket.destroy();
+}
+//@ chunk-355mdh7x.js:101862-101927 facade-majority
+function closeIdleDirectConnections() {
+  for (let { agent } of currentMtlsState().agents.values()) if (agent) destroyAgentFreeSockets(agent);
+}
+//@ chunk-1hnjmk23.js:1326125-1326493 sole-consumer
 let SsrfGuardedConnector; // deferred: uses TlsCheckingProxyAgent (./proxy.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-1ny7cxrt.js:1325162", () => {
+deferInit("chunk-1hnjmk23.js:1326125", () => {
   SsrfGuardedConnector = class SsrfGuardedConnector extends TlsCheckingProxyAgent {
     async connect(options, target) {
       let host = target.host;
@@ -475,7 +581,7 @@ deferInit("chunk-1ny7cxrt.js:1325162", () => {
     }
   };
 });
-//@ chunk-1ny7cxrt.js:1325530-1325607 fingerprint (2.1.88 match: getWebSocketTLSOptions, 1)
+//@ chunk-1hnjmk23.js:1326493-1326570 fingerprint (2.1.88 match: getWebSocketTLSOptions, 1)
 function getWebSocketTLSOptions_2(agentOptions, caCertPem) {
   let connector = new SsrfGuardedConnector(agentOptions);
   if (caCertPem)
@@ -486,17 +592,28 @@ function getWebSocketTLSOptions_2(agentOptions, caCertPem) {
   return connector;
 }
 export {
+  getTLSFetchSession,
+  getWebSocketTLSOptions,
   getMTLSConfig,
   getTLSFetchOptions,
-  getWebSocketTLSOptions,
-  PEM_CERT_BLOCK_RE,
   getMTLSAgent,
+  closeIdleDirectConnections,
   getWebSocketTLSOptions_2,
-  getTLSFetchSession,
-  loadMTLSClientMaterial,
+  setModelApiPoolRetiresAfterServerError,
+  makeHttpsAgentCloseAfterServerError,
   caListBehindProxy,
-  configureGlobalMTLS,
-  createOneOffHttpsAgent,
+  CheckSwitchTiedHttpsAgent,
+  loadMTLSClientMaterial,
   getLoadedMTLSPaths,
   clearMTLSCache,
+  PEM_CERT_BLOCK_RE,
+  modelApiPoolRetiresAfterServerError,
+  mayComeFromOneBadMachine,
+  retireTLSFetchSession,
+  ccrHasLeftSharedPool,
+  ccrLeavesSharedPool,
+  heldTLSFetchSession,
+  ccrActsOnNoAnswer,
+  configureGlobalMTLS,
+  createOneOffHttpsAgent,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：解决/重开评论线程
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b0a246e7.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-78ymyfsy.js (6)
  * attribution: placement 6
  */
 import {
@@ -33,11 +33,11 @@ import { getTransportErrorProps } from "../frameApi.js";
 import { describeArtifactAuthFailure } from "../frameFlags.js";
 import { isOutsideOrgNotFound } from "../shareEntries.js";
 
-//@ chunk-b0a246e7.js:32199-32336 placement
+//@ chunk-78ymyfsy.js:32232-32369 placement
 var EDIT_STALE_REASON = "the artifact changed since this edit";
 var EDIT_GRANT_INACTIVE_REASON = "this thread's edit grant is no longer active";
 var NOT_OWN_CREDENTIAL_REASON = "not published under your credential";
-//@ chunk-b0a246e7.js:32336-32688 placement
+//@ chunk-78ymyfsy.js:32369-32721 placement
 function classifyResolveError(status, message) {
   if (status === 409 && message.includes(EDIT_STALE_REASON))
     return {
@@ -63,7 +63,7 @@ function classifyResolveError(status, message) {
     reason: status === 404 ? "not_found" : status === 429 ? "rate_limited" : "http",
   };
 }
-//@ chunk-b0a246e7.js:32688-34137 placement
+//@ chunk-78ymyfsy.js:32721-34170 placement
 /**
  * 把 artifact 评论线程标记为已解决（/api/frame/comments/.../resolve），校验 slug 与线程 id。
  */
@@ -141,9 +141,9 @@ async function resolveCommentThread(request) {
   else logFeatureSad("artifact_comment_resolve", classified.kind);
   return classified;
 }
-//@ chunk-b0a246e7.js:34137-34182 placement
+//@ chunk-78ymyfsy.js:34170-34215 placement
 var ONLY_STARTER_OR_WRITER_TEXT = "only the thread starter or a writer";
-//@ chunk-b0a246e7.js:34182-34627 placement
+//@ chunk-78ymyfsy.js:34215-34660 placement
 /**
  * 线程解决的错误文案：需要 claude.ai 会话、CCR agent token 不可用、中继失败时不确认的说明。
  */
@@ -153,7 +153,7 @@ var THREAD_NOT_FOUND = "thread_not_found";
 var CCR_TOKEN_DENIED_TEXT = "CCR agent tokens cannot call this route";
 var RESOLVE_NOT_CONFIRMED_TEXT =
   "thread resolve not confirmed (this session's comment connection failed on this attempt, so the thread may or may not be resolved) \u2014 retry the resolve once if you have not already, it is safe to repeat; if it fails again, leave the thread unresolved and, if you addressed it, say so in a reply on the thread";
-//@ chunk-b0a246e7.js:34627-37756 placement
+//@ chunk-78ymyfsy.js:34660-37789 placement
 async function reopenCommentThread({ slug, threadId, credentials }, signal) {
   if (!ARTIFACT_SLUG_RE.test(slug) || !ARTIFACT_SLUG_RE.test(threadId))
     return {
@@ -339,4 +339,4 @@ async function reopenCommentThread({ slug, threadId, credentials }, signal) {
     reason: body,
   };
 }
-export { reopenCommentThread, resolveCommentThread };
+export { resolveCommentThread, reopenCommentThread };

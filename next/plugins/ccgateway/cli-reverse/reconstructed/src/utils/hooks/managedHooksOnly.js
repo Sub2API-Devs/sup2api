@@ -3,9 +3,9 @@
  *
  * 仅托管钩子（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (5)
  * attribution: placement 5
  */
 import { getSettingsForSource } from "../settings/settings.js";
@@ -20,14 +20,14 @@ import { isOfficialMarketplaceRef } from "../plugins/marketplaceNames.js";
 import { isManagedHookAllowed } from "../hooks.js";
 import { filterHooksByPluginHold } from "./hooksSettings.js";
 
-//@ chunk-s61vbvea.js:199570-199646 placement (2.1.88 match: _temp7, 0.778)
+//@ chunk-7jxyna5q.js:205064-205140 placement (2.1.88 match: _temp7, 0.778)
 var policyHookKeysForEvent = (a_2) =>
   new Set(
     (getSettingsForSource("policySettings")?.hooks?.[a_2] ?? []).map((matcher) =>
       stableStringifySafe(matcher),
     ),
   );
-//@ chunk-s61vbvea.js:199646-199931 placement
+//@ chunk-7jxyna5q.js:205140-205425 placement
 function getManagedHooksHoldState(event) {
   let state = {
     isHolding: isOrganizationHookPolicyPending(),
@@ -51,15 +51,15 @@ function getManagedHooksHoldState(event) {
   }
   return state;
 }
-//@ chunk-s61vbvea.js:199931-199979 placement
+//@ chunk-7jxyna5q.js:205425-205473 placement
 var countHooks = (matchers) => matchers.reduce((acc, matcher) => acc + matcher.hooks.length, 0);
-//@ chunk-s61vbvea.js:199979-200006 placement
+//@ chunk-7jxyna5q.js:205473-205500 placement
 /**
  * 判断钩子是否来自官方市场或允许名单。
  */
 var isManagedOrAllowlistedHook = (pluginId) =>
   isOfficialMarketplaceRef(pluginId) || isManagedHookAllowed(pluginId);
-//@ chunk-s61vbvea.js:200618-200796 placement
+//@ chunk-7jxyna5q.js:206114-206292 placement
 function filterHooksByManagedHold(matchers, event, held) {
   if (held === "included") return matchers;
   let only = held === "only";
@@ -71,4 +71,4 @@ function filterHooksByManagedHold(matchers, event, held) {
   if (only ? matchers_2.length > 0 : countHooks(matchers_2) < countHooks(matchers)) markOrganizationAskHeld();
   return matchers_2;
 }
-export { filterHooksByManagedHold, isManagedOrAllowlistedHook, getManagedHooksHoldState };
+export { isManagedOrAllowlistedHook, filterHooksByManagedHold, getManagedHooksHoldState };

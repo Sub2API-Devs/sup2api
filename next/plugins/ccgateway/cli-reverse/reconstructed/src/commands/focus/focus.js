@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：/focus 命令：切换 focus 视图（只显示提示、摘要和回复），受托管 viewMode 限制。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fv21ck8e.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kpvkfv6j.js (1)
  * attribution: placement 1
  */
 import { isLocalStdinSubmission } from "../../utils/promptSubmissionOrigin.js";
 import { isFocusModeFlag, setViewMode } from "../../utils/focusMode.js";
 
-//@ chunk-fv21ck8e.js:3405-3974 placement
+//@ chunk-kpvkfv6j.js:3713-4282 placement
 /**
  * /focus 命令：切换 focus 视图（只显示提示、摘要和回复），受托管 viewMode 限制。
  */

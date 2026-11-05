@@ -3,18 +3,18 @@
  *
  * 2.1.316 新增：独立符号/emoji 匹配正则
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dg7knv65.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-784n84wr.js (2)
  * attribution: placement 2
  */
 
-//@ chunk-dg7knv65.js:191-380 placement
+//@ chunk-784n84wr.js:191-380 placement
 var regExp = new RegExp(
   "(^|\\s)(?:[^\\p{L}\\s]|[\\u02D0\\u02D1\\u0887\\u0971\\u1427\\u18DF\\uA4F8-\\uA4FD\\uA78F\\u318D\\u119E\\u11A2\\u{10781}\\u{10782}\\u{1BC84}\\u{1BC94}])+(?=\\s|$)",
   "gu",
 );
-//@ chunk-dg7knv65.js:380-989 placement
+//@ chunk-784n84wr.js:380-989 placement
 /**
  * 独立符号/emoji 匹配用的正则：标点与符号类字符（排除常见 ASCII 标点与 emoji 表现形式）、空白外观字符、不可见符号、组合记号。
  */

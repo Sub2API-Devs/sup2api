@@ -3,11 +3,12 @@
  *
  * 2.1.316 新增：claude ultrareview 非交互入口：云端审查当前改动、工作区信任、把发现作为 PR 评论发布
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jzm79q04.js (11)
- * attribution: placement 11
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1svea5nx.js (13)
+ * attribution: placement 11, layout 2
  */
+import { writeFile } from "fs/promises";
 import {
   logFeatureBadAsync,
   logFeatureOk,
@@ -33,6 +34,9 @@ import { initializeGrowthBook } from "../../services/analytics/growthbook.js";
 import { createAbortController } from "../../utils/abortController.js";
 import { runUltrareviewHeadless } from "../review/reviewRemote.js";
 import { UNLIMITED_RATE_LIMITER } from "../../tasks/taskLoopRegistry.js";
+import { LAUNCH_FAILED_PREFIX, STOPPED_WAITING_LINE } from "../review/ultrareviewRun.js";
+import { env } from "../../utils/env.js";
+import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import {
   parseReviewErrorPayload,
@@ -44,16 +48,17 @@ import { waitForUltrareviewPost } from "../review/ultrareviewPost.js";
 import { pollRemoteSessionEvents, isTransientNetworkError } from "../../utils/teleport/api.js";
 import { sleep } from "../../utils/sleep.js";
 import { REMOTE_REVIEW_PROGRESS } from "../../constants/xml.js";
+import { printableName } from "../../utils/printableName.js";
 import { sequential } from "../../utils/sequential.js";
 import { plural } from "../../utils/stringUtils.js";
 
-//@ chunk-jzm79q04.js:12238-12445 placement
+//@ chunk-1svea5nx.js:13510-13717 placement
 var POLL_INTERVAL_MS = 3000;
 var MAX_POLL_FAILURES = 5;
 var ARCHIVED_BEFORE_OUTPUT_MESSAGE = "cloud session was archived before producing output";
 var FINDINGS_LOST_NOTE =
   "its findings will no longer arrive here. A new run is a new review: it uses one of your free ultrareviews or bills as usage credits.";
-//@ chunk-jzm79q04.js:12445-12539 placement
+//@ chunk-1svea5nx.js:13717-13811 placement
 class PollFailure extends Error {
   reason;
   constructor(reason, message) {
@@ -62,22 +67,22 @@ class PollFailure extends Error {
     this.name = "PollFailure";
   }
 }
-//@ chunk-jzm79q04.js:12539-12632 placement
+//@ chunk-1svea5nx.js:13811-13904 placement
 function sessionStartFailure(startupFailure) {
   return new PollFailure("session_start_failed", `the cloud session could not start: ${startupFailure}`);
 }
-//@ chunk-jzm79q04.js:12632-12709 placement
+//@ chunk-1svea5nx.js:13904-13981 placement
 var SEVERITY_EMOJI = {
   normal: "\uD83D\uDD34",
   nit: "\uD83D\uDFE1",
   pre_existing: "\uD83D\uDFE3",
 };
-//@ chunk-jzm79q04.js:12709-12797 placement
+//@ chunk-1svea5nx.js:13981-14069 placement
 function shouldPostComment(post, argv) {
   if (argv.includes("--no-post")) return false;
   return post === true && argv.includes("--post");
 }
-//@ chunk-jzm79q04.js:12797-17230 placement
+//@ chunk-1svea5nx.js:14069-18658 placement
 /**
  * claude ultrareview：信任工作区、启动云审查会话、等待结果并可发布评论（约 4.4 KB）。
  */
@@ -104,7 +109,7 @@ async function ultrareviewCommand(args, flags, storageV5, credentials) {
       });
     } else {
       let { canPromptForWorkspaceTrust, offerBridgeWorkspaceTrust } =
-        await import("../../bridge/canPromptForWorkspaceTrust.lazy.js");
+        await import("../../bridge/workspaceTrustPrompt.js");
       let canPrompt = canPromptForWorkspaceTrust();
       if (canPrompt || (await checkUltrareviewWorkspaceTrust())) {
         stopCapturingEarlyInput();
@@ -177,11 +182,16 @@ async function ultrareviewCommand(args, flags, storageV5, credentials) {
         : "";
     await logFeatureBadAsync("cli_ultrareview", "cli_ultrareview_launch_failed");
     return cliErrorAfterAnalyticsFlush(
-      `Ultrareview could not launch: ${"message" in result ? result.message : result.body}${actionLine}`,
+      `${LAUNCH_FAILED_PREFIX} ${indentLaunchRecordLines(`${"message" in result ? result.message : result.body}${actionLine}`)}`,
     );
   }
-  printStatus(result.message);
-  if (result.lowCreditsNote) printStatus(result.lowCreditsNote);
+  if (env.CLAUDE_CODE_ULTRAREVIEW_LAUNCH_RECORD)
+    await writeFile(env.CLAUDE_CODE_ULTRAREVIEW_LAUNCH_RECORD, result.sessionId, {
+      flag: "wx",
+      mode: 384,
+    }).catch((error) => logForDebugging(`ultrareview: no launch record written: ${errorMessage(error)}`));
+  printStatus(launchRecordLine(result.message));
+  if (result.lowCreditsNote) printStatus(launchRecordLine(result.lowCreditsNote));
   printStatus(`Waiting for findings (${getReviewDurationNote()})\u2026`);
   process.removeListener("SIGINT", onSigint);
   let handleStopSigint = () => {
@@ -222,12 +232,12 @@ The post to the pull request may already be on its way \u2014 check the PR befor
     });
     let startFailed = error instanceof PollFailure && error.reason === "session_start_failed";
     return cliErrorAfterAnalyticsFlush(
-      `Ultrareview failed: ${errorMessage(error)}${
+      `Ultrareview failed: ${indentLaunchRecordLines(errorMessage(error))}${
         startFailed
           ? `
 Nothing is running in the cloud.`
           : `
-This command stopped waiting. The review may still be running in the cloud, but ${FINDINGS_LOST_NOTE}`
+${STOPPED_WAITING_LINE} The review may still be running in the cloud, but ${FINDINGS_LOST_NOTE}`
       }${
         result.postReviewTo
           ? `
@@ -295,7 +305,7 @@ Nothing was posted to the pull request: the review ${stoppedRemotely ? "was stop
   await logFeatureOkAsync("cli_ultrareview", okProps);
   return exitAfterAnalyticsFlush(0);
 }
-//@ chunk-jzm79q04.js:17230-17650 placement
+//@ chunk-1svea5nx.js:18658-19078 placement
 async function describePostOutcome({ postReviewTo, sessionId }, credentials) {
   if (!postReviewTo) return;
   printStatus("Posting the findings to the pull request as a comment from your GitHub account\u2026");
@@ -313,7 +323,7 @@ async function describePostOutcome({ postReviewTo, sessionId }, credentials) {
       break;
   }
 }
-//@ chunk-jzm79q04.js:17650-18596 placement
+//@ chunk-1svea5nx.js:19078-20024 placement
 async function pollReviewSession(sessionId, signal, timeoutMs, credentials) {
   let deadline = Date.now() + timeoutMs;
   let lastEventId = null;
@@ -367,7 +377,7 @@ async function pollReviewSession(sessionId, signal, timeoutMs, credentials) {
   }
   throw new PollFailure("poll_timeout", `cloud session exceeded ${Math.round(timeoutMs / 60000)} minutes`);
 }
-//@ chunk-jzm79q04.js:18596-18914 placement
+//@ chunk-1svea5nx.js:20024-20347 placement
 function formatReviewProgress(stdout) {
   let openTag = `<${REMOTE_REVIEW_PROGRESS}>`;
   let closeTag = `</${REMOTE_REVIEW_PROGRESS}>`;
@@ -380,12 +390,14 @@ function formatReviewProgress(stdout) {
     let bugsFound = payload.bugs_found ?? 0;
     let bugsVerified = payload.bugs_verified ?? 0;
     let bugsRefuted = payload.bugs_refuted ?? 0;
-    return `${stage} \u2014 ${bugsFound} found, ${bugsVerified} verified, ${bugsRefuted} refuted`;
+    return printableName(
+      `${stage} \u2014 ${bugsFound} found, ${bugsVerified} verified, ${bugsRefuted} refuted`,
+    );
   } catch {
     return null;
   }
 }
-//@ chunk-jzm79q04.js:18914-19480 placement
+//@ chunk-1svea5nx.js:20347-20913 placement
 function formatReviewResult(text) {
   let parsed;
   try {
@@ -427,7 +439,21 @@ function formatReviewResult(text) {
     )
     .trimEnd();
 }
-//@ chunk-jzm79q04.js:19480-19530 placement
+//@ chunk-1svea5nx.js:20913-21005 layout
+function indentLaunchRecordLines(text) {
+  return env.CLAUDE_CODE_ULTRAREVIEW_LAUNCH_RECORD
+    ? text.replace(
+        /\r\n?|\n/g,
+        `
+  `,
+      )
+    : text;
+}
+//@ chunk-1svea5nx.js:21005-21080 layout
+function launchRecordLine(text) {
+  return env.CLAUDE_CODE_ULTRAREVIEW_LAUNCH_RECORD ? `  ${indentLaunchRecordLines(text)}` : text;
+}
+//@ chunk-1svea5nx.js:21080-21130 placement
 function printStatus(line) {
   process.stderr.write(
     sequential.dim(line) +

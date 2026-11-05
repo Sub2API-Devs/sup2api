@@ -3,16 +3,16 @@
  *
  * 记忆同步提示文本（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (25)
- * attribution: placement 25
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (26)
+ * attribution: placement 25, layout 1
  */
 import { resolve, sep, relative } from "path";
 import { logEvent } from "../analytics/index.js";
-import { canDeleteRemotely, MAX_MEMORY_BYTES } from "./syncConfig.js";
-import { resolveMountPath, recordPullWrite, isLocalContentEqual, writeLocalEntry } from "./mountWalk.js";
+import { canDeleteRemotely, canRecordNamedDeletes, MAX_MEMORY_BYTES } from "./syncConfig.js";
 import { logForDebugging } from "../../utils/debug.js";
+import { resolveMountPath, recordPullWrite, isLocalContentEqual, writeLocalEntry } from "./mountWalk.js";
 import { errorMessage } from "../../utils/errors.js";
 import { formatFileSize } from "../../utils/format.js";
 import { normalizePathPrefix } from "../orgMemory/storeApi.js";
@@ -20,12 +20,13 @@ import { computeContentHash } from "../../utils/commitAttribution.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:139521-140477 placement
+//@ chunk-7jxyna5q.js:140656-141632 placement
 class OrgMemoryMirrorNotices {
   pending = new Map();
   rejoinPending = new Map();
   oversizeNoticed = new Map();
   roUnsavedNoticed = new Map();
+  putBackTold = new Map();
   mirrorAllUncoveredEmitted = false;
   rejoinOffNoticed = new Set();
   heldFilesNoticed = new Set();
@@ -77,27 +78,27 @@ class OrgMemoryMirrorNotices {
     return paths;
   }
 }
-//@ chunk-s61vbvea.js:140477-140558 placement
+//@ chunk-7jxyna5q.js:141632-141713 placement
 /**
  * 引用某个记忆存储的名字用于提示。
  */
 function quoteStoreName(path) {
   return quoteMemoryPath(path.slice(path.lastIndexOf("/") + 1), path.replaceAll("/", "?"), 64);
 }
-//@ chunk-s61vbvea.js:140558-140610 placement
+//@ chunk-7jxyna5q.js:141713-141765 placement
 /**
  * 引用某个记忆文件路径用于提示。
  */
 function quoteMemoryFilePath(path) {
   return quoteMemoryPath(path.replace(/^\/+/, ""), path, 80);
 }
-//@ chunk-s61vbvea.js:140610-140749 placement
+//@ chunk-7jxyna5q.js:141765-141904 placement
 function quoteMemoryPath(shortPath, fullPath, maxChars) {
   let replaced = (shortPath || fullPath).replace(/[^A-Za-z0-9._ /-]/g, "?").replace(/ +/g, " ");
   if (replaced.length > maxChars) replaced = `\u2026${replaced.slice(-maxChars)}`;
   return `"${replaced}"`;
 }
-//@ chunk-s61vbvea.js:140749-140920 placement
+//@ chunk-7jxyna5q.js:141904-142075 placement
 function isUnderMountDir(mountDir, notice, resolvedDir) {
   if (mountDir === resolvedDir) return true;
   if (!mountDir.endsWith(sep) || !resolvedDir.startsWith(mountDir)) return false;
@@ -107,14 +108,14 @@ function isUnderMountDir(mountDir, notice, resolvedDir) {
   }
   return true;
 }
-//@ chunk-s61vbvea.js:140920-142459 placement
+//@ chunk-7jxyna5q.js:142075-143614 placement
 /**
  * 记忆同步暂停的提示文本。
  */
 var MEMORY_SYNC_REJECT_TEXTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var storeRecoveredText;
 var memorySyncPausedText;
-deferInit("chunk-s61vbvea.js:140920", () => {
+deferInit("chunk-7jxyna5q.js:142075", () => {
   MEMORY_SYNC_REJECT_TEXTS = {
     store_full:
       "The shared memory store is full \u2014 the server is rejecting new memory files (updates to already-synced files still work). " +
@@ -142,7 +143,7 @@ deferInit("chunk-s61vbvea.js:140920", () => {
   ]);
   memorySyncPausedText = 21600000;
 });
-//@ chunk-s61vbvea.js:142459-142574 placement
+//@ chunk-7jxyna5q.js:143614-143729 placement
 function queueStoreNotice(store, text) {
   if (store.scope === "account") return;
   store.notices.queue(resolve(store.mountDir) + sep, {
@@ -150,7 +151,7 @@ function queueStoreNotice(store, text) {
     excludeKey: store.excludeKey,
   });
 }
-//@ chunk-s61vbvea.js:142574-143257 placement
+//@ chunk-7jxyna5q.js:143729-144412 placement
 function formatMemorySyncPausedNotice(store, permanent, path) {
   let reason = /^[a-z0-9_]{1,40}$/.test(permanent) ? permanent : "sync_error";
   let reasonText = MEMORY_SYNC_REJECT_TEXTS[permanent];
@@ -165,7 +166,7 @@ function formatMemorySyncPausedNotice(store, permanent, path) {
       : `Memory sync is paused for one of your memory stores after repeated failures (${reason}). ${pathNote}Recent memory writes are saved locally but are NOT being persisted to shared memory. Sync retries automatically every few minutes.`,
   );
 }
-//@ chunk-s61vbvea.js:143257-143648 placement
+//@ chunk-7jxyna5q.js:144412-144803 placement
 /**
  * 提示之前暂停的记忆库已恢复同步（含推送的待同步改动数），并说明仍被服务器拒绝的文件只保留在本地。
  */
@@ -181,7 +182,7 @@ function noticeStoreRecovered(store, pushedCount) {
         : ""),
   );
 }
-//@ chunk-s61vbvea.js:143648-143917 placement
+//@ chunk-7jxyna5q.js:144803-145072 placement
 function noticeEmptyFilesRestored(store, restoredCount) {
   queueStoreNotice(
     store,
@@ -189,19 +190,22 @@ function noticeEmptyFilesRestored(store, restoredCount) {
       (canDeleteRemotely(store) ? " To remove a memory, delete its file; emptying it does not." : ""),
   );
 }
-//@ chunk-s61vbvea.js:143917-144470 placement
-function formatMassDeleteGuardNotice(store, missingCount, massDeleteThreshold) {
+//@ chunk-7jxyna5q.js:145072-146043 placement
+function formatMassDeleteGuardNotice(store, missingCount, massDeleteThreshold, recentNamedDeleteCount) {
   queueStoreNotice(
     store,
-    `Memory sync did NOT delete anything from shared memory this cycle: ${missingCount} synced memory files went missing from this session's disk at once, which almost always means the local memory folder was wiped rather than deliberately cleared. Shared memory is unchanged and the missing files will be restored on the next sync. If you really do intend to remove that many memories, wait until the missing files have been restored, then delete at most ${massDeleteThreshold} at a time with about a minute between batches so memory sync can apply each one.`,
+    (recentNamedDeleteCount > 0
+      ? `Memory sync did NOT delete anything more from shared memory this cycle: ${missingCount} synced memory files are missing from this session's disk or were just deleted, too many at once. ${recentNamedDeleteCount} of them were already deleted from shared memory within the last minute and will not come back. The others will be restored on the next sync. `
+      : `Memory sync did NOT delete anything from shared memory this cycle: ${missingCount} synced memory files went missing from this session's disk at once, which almost always means the local memory folder was wiped rather than deliberately cleared. Shared memory is unchanged and the missing files will be restored on the next sync. `) +
+      `If you really do intend to remove that many memories, wait until the missing files have been restored, then delete at most ${massDeleteThreshold} at a time${canRecordNamedDeletes(store) ? ", naming each file by its full path in a command that is only that rm," : ""} with about a minute between batches so memory sync can apply each one.`,
   );
 }
-//@ chunk-s61vbvea.js:144470-144479 placement
+//@ chunk-7jxyna5q.js:146043-146052 placement
 /**
  * 提示里最多列出的路径数（5）。
  */
 var MAX_LISTED_PATHS = 5;
-//@ chunk-s61vbvea.js:144479-144813 placement
+//@ chunk-7jxyna5q.js:146052-146386 placement
 /**
  * 排队提示：该记忆存储的同步暂时关闭（文件夹缺少可用记录且暂时无法重建），期间写入只保留在本机。
  */
@@ -211,7 +215,7 @@ function noticeStoreSyncOff(store) {
     excludeKey: store.excludeKey,
   });
 }
-//@ chunk-s61vbvea.js:144813-145309 placement
+//@ chunk-7jxyna5q.js:146386-146882 placement
 function formatStoreBackOnNotice(store, heldPaths, rejoinOn) {
   if (heldPaths.length > 0) store.notices.heldFilesNoticed.add(store.mountDir);
   let storeName = quoteStoreName(store.mountName);
@@ -228,7 +232,7 @@ function formatStoreBackOnNotice(store, heldPaths, rejoinOn) {
     excludeKey: store.excludeKey,
   });
 }
-//@ chunk-s61vbvea.js:145309-145685 placement
+//@ chunk-7jxyna5q.js:146882-147258 placement
 /**
  * 每个挂载目录一次：提示有若干旧记忆文件未在共享记忆中列出，保留在本机不上传（可能是别处删除的副本）。
  */
@@ -243,23 +247,39 @@ function noticeHeldLocalFiles(store) {
     excludeKey: store.excludeKey,
   });
 }
-//@ chunk-s61vbvea.js:145685-145778 placement
+//@ chunk-7jxyna5q.js:147258-147351 placement
 /**
  * 只在本地保留、远端没有的路径。
  */
 function heldLocalOnlyPaths(store) {
   return [...(store.heldLocal?.keys() ?? [])].filter((path) => !store.remoteHashes.has(path)).sort();
 }
-//@ chunk-s61vbvea.js:145778-145958 placement
+//@ chunk-7jxyna5q.js:147351-147531 placement
 var HELD_FILES_ADVICE =
   "They may be copies of memories another session deleted. Editing one ends its hold, so sync treats it like any other memory file. Ask the user before deleting any of them.";
-//@ chunk-s61vbvea.js:145958-146067 placement (2.1.88 match: formatFailureDetails, 0.777)
+//@ chunk-7jxyna5q.js:147531-147640 placement (2.1.88 match: formatFailureDetails, 0.776)
 function formatFailureDetails(paths) {
   let joined = paths.slice(0, MAX_LISTED_PATHS).map(quoteMemoryFilePath).join(", ");
   let moreText = paths.length > MAX_LISTED_PATHS ? ` and ${paths.length - MAX_LISTED_PATHS} more` : "";
   return joined + moreText;
 }
-//@ chunk-s61vbvea.js:146067-146361 placement
+//@ chunk-7jxyna5q.js:147640-148148 layout
+async function noticeDeleteBlocked(store, targetPath, blockingPath) {
+  let quotedTarget = quoteMemoryFilePath(targetPath);
+  let quotedBlocking = quoteMemoryFilePath(blockingPath);
+  logForDebugging(
+    `multi-store-sync[${store.mountName}]: not deleting ${targetPath}: ${blockingPath} is not saved`,
+    {
+      level: "warn",
+    },
+  );
+  await queueConflictNotice(
+    store,
+    targetPath,
+    `Memory sync did not delete ${quotedTarget} from shared memory, because ${quotedBlocking} did not save, and the text of ${quotedTarget} may have moved into it. This stopped every delete from an rm in this store in that sync. ${quotedTarget} comes back on this machine at the next sync. To remove it after that, first check that its text is saved, then run a command that is only an rm of its full path.`,
+  );
+}
+//@ chunk-7jxyna5q.js:148148-148442 placement
 async function queueConflictNotice(store, path, text, options) {
   try {
     let resolvedPath = resolve(await resolveMountPath(store, path));
@@ -281,7 +301,7 @@ ${text}`
     );
   }
 }
-//@ chunk-s61vbvea.js:146361-147025 placement
+//@ chunk-7jxyna5q.js:148442-149106 placement
 async function formatOversizedMemoryNotice(store, skippedOversizedPaths) {
   let noticed = store.notices.oversizeNoticedFor(store.mountDir);
   let stillSkipped = new Set(skippedOversizedPaths.map((entry) => entry.path));
@@ -297,7 +317,7 @@ async function formatOversizedMemoryNotice(store, skippedOversizedPaths) {
     );
   }
 }
-//@ chunk-s61vbvea.js:147025-147168 placement
+//@ chunk-7jxyna5q.js:149106-149249 placement
 async function findRemoteEntry(store, path) {
   let normalizedPath = normalizePathPrefix(path);
   let sliced = normalizedPath.slice(0, normalizedPath.lastIndexOf("/") + 1);
@@ -309,7 +329,7 @@ async function findRemoteEntry(store, path) {
     ).find((entry) => entry.path === normalizedPath) ?? null
   );
 }
-//@ chunk-s61vbvea.js:147168-147532 placement
+//@ chunk-7jxyna5q.js:149249-149613 placement
 /**
  * 生成写入冲突提示：最近的记忆文件写入未保存到共享记忆（未持有共享版本或被其他会话先更新），需重读后重做修改。
  */
@@ -322,20 +342,20 @@ function buildWriteConflictNotice(path, wasUnsynced) {
     "The file on disk now has the shared version. Re-read it and re-apply your change if it is still wanted."
   );
 }
-//@ chunk-s61vbvea.js:147532-147865 placement
+//@ chunk-7jxyna5q.js:149613-149946 placement
 /**
  * 生成提示：本机仅有、从未保存到共享记忆的本地副本已被其他会话保存的同路径文件替换，需重读，本地内容已不保留。
  */
 function buildLocalCopyReplacedNotice(path) {
   return `The local copy of the memory file ${quoteStoreName(path)}, kept on this machine and never saved to shared memory, was replaced: another session saved a file at that path. The file on disk now has the shared version. Re-read it. The local copy was not kept, so anything from it that is still wanted has to come from the user.`;
 }
-//@ chunk-s61vbvea.js:147865-147972 placement
+//@ chunk-7jxyna5q.js:149946-150053 placement
 async function recordRemoteEntry(store, path, ref, storage) {
   store.remoteHashes.set(path, ref);
   store.conflictRefetches?.delete(path);
   await recordPullWrite(store, path, ref.sha256, storage);
 }
-//@ chunk-s61vbvea.js:147972-148738 placement
+//@ chunk-7jxyna5q.js:150053-150819 placement
 async function formatDeletionConflictNotice(store, path, id, op, storage) {
   try {
     let remote = await store.backend.read(id);
@@ -376,6 +396,7 @@ export {
   formatStoreBackOnNotice,
   noticeStoreSyncOff,
   heldLocalOnlyPaths,
+  noticeDeleteBlocked,
   queueConflictNotice,
   buildLocalCopyReplacedNotice,
   buildWriteConflictNotice,

@@ -3,20 +3,20 @@
  *
  * 调查状态机（closed/digit/followup/thanks/submitted/share_failed）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FeedbackSurvey/useSurveyState.tsx
- * pieces: chunk-18hwfzwa.js (9)
- * attribution: affinity 1, fingerprint 1, placement 7
+ * pieces: chunk-czq1j3j2.js (9)
+ * attribution: placement 7, affinity 1, fingerprint 1
  */
 import { randomUUID } from "crypto";
-import { useClock } from "../../ink/components/ClockContext.js";
 import {
+  init_react_production,
   useState,
   useRef,
   useEffect,
   useCallback,
-  init_react_production,
 } from "../../../vendor/react/cjs/react.production.js";
+import { useClock } from "../../ink/components/ClockContext.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
 import { isPolicyAllowed as isPolicyAllowed_2 } from "../../services/policyLimits/policyEvidence.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
@@ -24,9 +24,14 @@ import { buildEffortLevelTelemetry } from "./FeedbackDraftNotice.js";
 import { resolveEffortLevel } from "../../utils/effort.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1021671-1021684 affinity
+//@ chunk-czq1j3j2.js:1038320-1038324 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1038320", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1055710-1055723 affinity
 var PENDING_OPEN_DELAY_MS = 3000;
-//@ chunk-18hwfzwa.js:1021684-1024512 fingerprint (2.1.88 match: useSurveyState, 0.63)
+//@ chunk-czq1j3j2.js:1055723-1058551 fingerprint (2.1.88 match: useSurveyState, 0.63)
 /**
  * 调查状态机：closed → digit（评分）→ followup（是否分享）→ thanks/submitted/share_failed。
  */
@@ -260,7 +265,7 @@ function useSurveyState({
     submittingShare,
   };
 }
-//@ chunk-18hwfzwa.js:1034274-1034549 placement
+//@ chunk-czq1j3j2.js:1068303-1068578 placement
 function surveyProbability(probability) {
   if (!probability) return {};
   return {
@@ -274,37 +279,32 @@ function surveyProbability(probability) {
     }),
   };
 }
-//@ chunk-18hwfzwa.js:1034549-1034615 placement
+//@ chunk-czq1j3j2.js:1068578-1068644 placement
 function answeredAfterTyping(answer) {
   return answer !== null && answer.submitCountWhenTypedOver !== null;
 }
-//@ chunk-18hwfzwa.js:1034615-1034670 placement
+//@ chunk-czq1j3j2.js:1068644-1068699 placement
 function msSinceAppeared(state, now) {
   return Math.round(now - state.openedAtClock);
 }
-//@ chunk-18hwfzwa.js:1034670-1034714 placement
+//@ chunk-czq1j3j2.js:1068699-1068743 placement
 function effortLevelForAppState(appStoreDirect) {
   return buildEffortLevelTelemetry(resolveEffortLevel(appStoreDirect.getState()));
 }
-//@ chunk-18hwfzwa.js:1034714-1034718 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1034714", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1034718-1034755 placement
+//@ chunk-czq1j3j2.js:1068747-1068784 placement
 function selectIsLoading3(state) {
   return state.isLoading;
 }
-//@ chunk-18hwfzwa.js:1034755-1034794 placement
+//@ chunk-czq1j3j2.js:1068784-1068823 placement
 function selectSubmitCount2(state) {
   return state.submitCount;
 }
 export {
+  useSurveyState,
+  selectIsLoading3,
+  selectSubmitCount2,
   effortLevelForAppState,
   surveyProbability,
   answeredAfterTyping,
   msSinceAppeared,
-  useSurveyState,
-  selectIsLoading3,
-  selectSubmitCount2,
 };

@@ -3,9 +3,9 @@
  *
  * 向导位置步骤；实际内容为 Google Cloud 凭证校验（疑似匹配错误）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/agents/new-agent-creation/wizard-steps/LocationStep.tsx
- * pieces: chunk-y6fv30yg.js (2)
+ * pieces: chunk-3qyfks39.js (2)
  * attribution: placement 1, callgraph-fingerprint 1
  */
 import {
@@ -29,12 +29,12 @@ import { ModelSelector } from "../../ModelSelector.js";
 import { ConfirmSelect } from "../../../design-system/ConfirmSelect.js";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-y6fv30yg.js:17115-17119 placement
+//@ chunk-3qyfks39.js:17115-17119 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-y6fv30yg.js:17115", () => {
+deferInit("chunk-3qyfks39.js:17115", () => {
   init_react_production();
 });
-//@ chunk-y6fv30yg.js:17119-19411 callgraph-fingerprint (2.1.88 match: LocationStep, 0.154)
+//@ chunk-3qyfks39.js:17119-19411 callgraph-fingerprint (2.1.88 match: LocationStep, 0.154)
 function LocationStep() {
   let $ = useMemoCache(35);
   let { goBack, goNext, updateWizardData, wizardData } = useWizard();

@@ -3,12 +3,23 @@
  *
  * 折叠的读取/搜索类工具组："Read N files, searched M patterns"，verbose 下逐个展开。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/CollapsedReadSearchContent.tsx
- * pieces: chunk-ah34pb7m.js (9)
- * attribution: placement 7, fingerprint 2
+ * pieces: chunk-wjygkcr4.js (11)
+ * attribution: sole-consumer 1, placement 6, layout 2, fingerprint 2
  */
 import { basename } from "path";
+import { stripPrefix, firstLineOf, getFirstLine, capitalize, plural } from "../../utils/stringUtils.js";
+import { getEffectiveCwd } from "../../utils/cwd.js";
+import { logError } from "../../utils/log.js";
+import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../utils/errors.js";
+import { safeParseToolInput, filterToolProgressMessages, findToolByName } from "../../Tool.js";
+import { renderToolUseMessageFor } from "./toolUseRenderers.js";
+import {
+  formatCollapsedLabel,
+  findToolByNameWithFallback,
+  toolName,
+} from "../../utils/collapseReadSearch.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { VALIDATE_TREE_NAMESPACE } from "../../plugins/functionHooks/ui/index.js";
 import { actionKeysNamespace } from "../pluginUi/render/actionKeys.js";
@@ -23,30 +34,34 @@ import {
   selectActiveAgents_2,
   guardPrimitiveToolResult,
   isNoAgentViewInAutoMode,
+  isReplToolCallProgress,
   toolResultId,
   isHookToolResult,
   toolUseId,
   toolUseId_2,
-  noopRenderHook,
-  returnFalseHook,
+  toolCallId,
+  isErroredPhase,
+  runningCallId,
+  liveCallId,
+  isErrorPhase,
+  erroredCallId,
   renderHookDurationLine,
   commitSha,
   gitBranch,
 } from "./toolResultRendering.js";
 import { useFrameRegistry, parseRenderModeValue, useIsFullscreen } from "../../ink/renderModeContext.js";
 import { EARLY_RETURN_SENTINEL, MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { findToolByNameWithFallback } from "../../utils/collapseReadSearch.js";
 import { displayOnlyMcpTool } from "../../tools/MCPTool/displayOnlyTool.js";
-import { safeParseToolInput, filterToolProgressMessages, findToolByName } from "../../Tool.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import { isEvalToolCallName, isEvalToolName, REPL_TOOL_NAME } from "../../tools/REPLTool/constants.js";
 import { remoteMachineRefForDisplay } from "../../utils/toolUseDisplay.js";
 import { describeUnparsedInput } from "../../utils/json.js";
-import { renderToolUseMessageFor } from "./toolUseRenderers.js";
 import { mcpRenderOverrideFor } from "../Message.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { ToolUseLoader } from "../ToolUseLoader.js";
 import {
   GroupedToolUseRow,
-  toolCallOf,
+  toolCallOf_2,
   ThinkingElapsed,
   collectBackgroundToolUseIds,
   lowerFirstUnlessAcronym,
@@ -68,8 +83,13 @@ import {
   TeamMemCountParts,
   DenialReasonQuote,
 } from "./teamMemCollapsed.js";
-import { isReplToolName, REPL_TOOL_NAME } from "../../tools/REPLTool/constants.js";
 import { POLL } from "../../tools/PollTool/prompt.js";
+import { isCodeModeExperimentEnabled } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import {
+  UserToolErrorMessage,
+  isAutoModeUnavailableKind,
+  NotRunLine,
+} from "./UserToolResultMessage/UserToolErrorMessage.js";
 import {
   isToolDenial,
   REJECT_MESSAGE,
@@ -85,11 +105,6 @@ import { USER_REJECTED_KIND, toolRejectionKind } from "../../entrypoints/sdk/cor
 import { MessageResponse } from "../MessageResponse.js";
 import { Byline } from "../design-system/Byline.js";
 import { CtrlOToExpand } from "../CtrlOToExpand.js";
-import {
-  UserToolErrorMessage,
-  isAutoModeUnavailableKind,
-  NotRunLine,
-} from "./UserToolResultMessage/UserToolErrorMessage.js";
 import { getDisplayPath } from "../../utils/file.js";
 import { useFrozenValue } from "../FreezeWhenOffscreen.js";
 import { useHasAutoModeDenialFor } from "../Spinner/spinnerStatus.js";
@@ -101,40 +116,132 @@ import { RejectedToolUseMessage } from "./UserToolResultMessage/RejectedToolUseM
 import { formatSecondsShort, formatDuration } from "../../utils/format.js";
 import { Ansi } from "../../ink/components/AnsiText.js";
 import { DiffStatCounts, PrBadge } from "../PrBadge.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { isValidPrUrl } from "../../tools/shared/gitOperationTracking.js";
 import { isGitLabMergeRequestUrl } from "../../utils/detectRepository.js";
 import { MEMORY } from "../../services/mcp/firstPartyServerIds.js";
-import { CLAUDEAI_SERVER_PREFIX } from "../../services/mcp/normalization.js";
 import { inflectStatusText } from "../../utils/verbInflection.js";
 import { stripAnsiPerLine } from "../../utils/stripAnsi.js";
 import { unwrapToolUseErrorText } from "../../utils/toolUseErrorText.js";
 import { PRE_TOOL_HOOK_ERROR_PREFIX_RE } from "../../utils/hooks.js";
-import { firstLineOf, getFirstLine, capitalize, plural } from "../../utils/stringUtils.js";
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 import { MarkdownText_2 } from "../pluginUi/render/MarkdownBlock.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:157480-157568 placement (2.1.88 match: countToolUses, 0.815)
-function countToolUses(msg) {
-  return msg.type === "grouped_tool_use" ? msg.results : msg.type === "user" ? [msg] : [];
+//@ chunk-wjygkcr4.js:159280-159323 sole-consumer
+/**
+ * CLAUDEAI_SERVER_PREFIX（实为判断）：名字是否以 "claude.ai " 开头。
+ */
+function stripAiPrefix(name) {
+  return stripPrefix(name, "claude.ai ");
 }
-//@ chunk-ah34pb7m.js:157568-157615 placement
+//@ chunk-wjygkcr4.js:159323-159411 placement (2.1.88 match: toolCallOf, 0.815)
+function toolCallOf(m) {
+  return m.type === "grouped_tool_use" ? m.results : m.type === "user" ? [m] : [];
+}
+//@ chunk-wjygkcr4.js:159411-159458 placement
 function isToolResultBlock(block) {
   return block.type === "tool_result";
 }
-//@ chunk-ah34pb7m.js:157615-157658 placement (2.1.88 match: _temp2, 1)
+//@ chunk-wjygkcr4.js:159458-159501 placement (2.1.88 match: _temp2, 1)
 function selectViewingAgentTaskId_2(s_0) {
   return s_0.viewingAgentTaskId;
 }
-//@ chunk-ah34pb7m.js:157658-157670 placement
+//@ chunk-wjygkcr4.js:159501-159513 placement
 var memorySavesQuietApi = null;
-//@ chunk-ah34pb7m.js:157670-157681 placement
-var HINT_THROTTLE_MS = 700;
-//@ chunk-ah34pb7m.js:157681-157704 placement
-var HINT_LINGER_MS = 3000;
-var HINT_COLUMN_RESERVE = 5;
-var HINT_MAX_LINES = 10;
-//@ chunk-ah34pb7m.js:157704-159047 placement
+//@ chunk-wjygkcr4.js:159513-159568 placement
+var HINT_THROTTLE_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var STYLE_SEPARATOR;
+var HINT_LINGER_MS;
+var HINT_COLUMN_RESERVE;
+var HINT_MAX_LINES;
+var weakMap;
+deferInit("chunk-wjygkcr4.js:159513", () => {
+  HINT_THROTTLE_MS = 700;
+  STYLE_SEPARATOR = "\x00";
+  HINT_LINGER_MS = 3000;
+  HINT_COLUMN_RESERVE = 5;
+  HINT_MAX_LINES = 10;
+  weakMap = new WeakMap();
+});
+//@ chunk-wjygkcr4.js:159568-159702 layout
+function renderCollapsedPart(part, input, theme, activeAgents) {
+  switch (part.kind) {
+    case "hint":
+      return part.text;
+    case "keep":
+      return;
+    case "ownRow":
+      return renderRunningCallHint(part.tool, input, theme, activeAgents);
+    default:
+      return part;
+  }
+}
+//@ chunk-wjygkcr4.js:159702-160369 layout
+function renderRunningCallHint(tool, input, theme, activeAgents) {
+  let effectiveCwd = getEffectiveCwd();
+  let cached = weakMap.get(input);
+  if (
+    cached?.tool === tool &&
+    cached.theme === theme &&
+    cached.cwd === effectiveCwd &&
+    cached.activeAgents === activeAgents
+  )
+    return cached.hint;
+  let logHintError = (error) =>
+    logError(
+      new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+        `Error rendering a running call's hint for ${tool.name}: ${error}`,
+        "Error rendering a running call's hint",
+      ),
+    );
+  let hint;
+  let parsedInput;
+  try {
+    parsedInput = safeParseToolInput(tool, input);
+    let parsedData = parsedInput.success ? parsedInput.data : undefined;
+    let renderedHint = parsedData
+      ? renderToolUseMessageFor(tool, parsedData, {
+          theme,
+          verbose: false,
+          activeAgents,
+        })
+      : null;
+    let hintSource =
+      typeof renderedHint === "string"
+        ? renderedHint
+        : (parsedData && tool.getToolUseSummary?.(parsedData)) || "";
+    let collapsedHint = formatCollapsedLabel(hintSource);
+    let toolName = collapsedHint
+      ? tool.userFacingName(parsedData, {
+          activeAgents,
+        })
+      : "";
+    hint = toolName && collapsedHint ? formatCollapsedLabel(`${toolName}(${collapsedHint})`) : undefined;
+  } catch (error) {
+    logHintError(error);
+  }
+  if (hint === undefined)
+    try {
+      hint =
+        formatCollapsedLabel(
+          tool.userFacingName(parsedInput?.success ? parsedInput.data : undefined, {
+            activeAgents,
+          }),
+        ) || undefined;
+    } catch (error) {
+      logHintError(error);
+    }
+  weakMap.set(input, {
+    tool,
+    theme,
+    cwd: effectiveCwd,
+    activeAgents,
+    hint,
+  });
+  return hint;
+}
+//@ chunk-wjygkcr4.js:160369-161712 placement
 /**
  * 折叠的读取/搜索工具组（进行中、出错状态）。
  */
@@ -248,9 +355,9 @@ function CollapsedReadSearchGroup(props) {
   } else containerElement = $[27];
   return actionKeysNamespace.useRenderHook(summaryElement, containerElement);
 }
-//@ chunk-ah34pb7m.js:159047-162030 fingerprint (2.1.88 match: VerboseToolUse, 0.513)
+//@ chunk-wjygkcr4.js:161712-165574 fingerprint (2.1.88 match: VerboseToolUse, 0.475)
 function VerboseToolUse(props) {
-  let $ = useMemoCache(54);
+  let $ = useMemoCache(67);
   let {
     content,
     tools,
@@ -294,40 +401,89 @@ function VerboseToolUse(props) {
     $[13] !== tools
   ) {
     earlyReturn = EARLY_RETURN_SENTINEL;
-    pe: {
+    ge: {
       tool = findToolByNameWithFallback(tools, content.name) ?? displayOnlyMcpTool(content.name, bg);
       if (!tool) {
         earlyReturn = null;
-        break pe;
+        break ge;
       }
       if (tool.isTransparentWrapper?.()) {
+        if (codeModeAccepted() && isEvalToolCallName(content.name)) {
+          let { ScriptSourceRow } = require("./ScriptSourceRow.lazy.js");
+          let resultMsg;
+          if ($[26] !== content.id || $[27] !== lookups.toolResultByToolUseID) {
+            resultMsg = lookups.toolResultByToolUseID.get(content.id);
+            $[26] = content.id;
+            $[27] = lookups.toolResultByToolUseID;
+            $[28] = resultMsg;
+          } else resultMsg = $[28];
+          let resultMsgStable = resultMsg;
+          const toolUseId = content.id;
+          const input = content.input;
+          const output = resultMsgStable?.type === "user" ? resultMsgStable.toolUseResult : undefined;
+          let shouldAnimate_2;
+          if ($[29] !== content.id || $[30] !== inProgressToolUseIDs || $[31] !== shouldAnimate) {
+            shouldAnimate_2 = shouldAnimate && inProgressToolUseIDs.has(content.id);
+            $[29] = content.id;
+            $[30] = inProgressToolUseIDs;
+            $[31] = shouldAnimate;
+            $[32] = shouldAnimate_2;
+          } else shouldAnimate_2 = $[32];
+          let isResolved;
+          if ($[33] !== content.id || $[34] !== lookups.resolvedToolUseIDs) {
+            isResolved = lookups.resolvedToolUseIDs.has(content.id);
+            $[33] = content.id;
+            $[34] = lookups.resolvedToolUseIDs;
+            $[35] = isResolved;
+          } else isResolved = $[35];
+          const isUnresolved = !isResolved;
+          let isError;
+          if ($[36] !== content.id || $[37] !== lookups.erroredToolUseIDs) {
+            isError = lookups.erroredToolUseIDs.has(content.id);
+            $[36] = content.id;
+            $[37] = lookups.erroredToolUseIDs;
+            $[38] = isError;
+          } else isError = $[38];
+          earlyReturn = jsxProd_default(ScriptSourceRow, {
+            tool,
+            toolUseId,
+            input,
+            toolLabel,
+            output,
+            shouldAnimate: shouldAnimate_2,
+            isUnresolved,
+            isError,
+            addMargin: true,
+          });
+          break ge;
+        }
         earlyReturn = null;
-        break pe;
+        break ge;
       }
       let justResolved;
-      if ($[26] !== content.id || $[27] !== lookups.resolvedToolUseIDs) {
+      if ($[39] !== content.id || $[40] !== lookups.resolvedToolUseIDs) {
         justResolved = lookups.resolvedToolUseIDs.has(content.id);
-        $[26] = content.id;
-        $[27] = lookups.resolvedToolUseIDs;
-        $[28] = justResolved;
-      } else justResolved = $[28];
+        $[39] = content.id;
+        $[40] = lookups.resolvedToolUseIDs;
+        $[41] = justResolved;
+      } else justResolved = $[41];
       isResolved = justResolved;
       let isErrored;
-      if ($[29] !== content.id || $[30] !== lookups.erroredToolUseIDs) {
+      if ($[42] !== content.id || $[43] !== lookups.erroredToolUseIDs) {
         isErrored = lookups.erroredToolUseIDs.has(content.id);
-        $[29] = content.id;
-        $[30] = lookups.erroredToolUseIDs;
-        $[31] = isErrored;
-      } else isErrored = $[31];
+        $[42] = content.id;
+        $[43] = lookups.erroredToolUseIDs;
+        $[44] = isErrored;
+      } else isErrored = $[44];
       let isErrored_2 = isErrored;
       isQuietlyErrored = isErrored_2 && quietWords === undefined;
       let isInProgress;
-      if ($[32] !== content.id || $[33] !== inProgressToolUseIDs) {
+      if ($[45] !== content.id || $[46] !== inProgressToolUseIDs) {
         isInProgress = inProgressToolUseIDs.has(content.id);
-        $[32] = content.id;
-        $[33] = inProgressToolUseIDs;
-        $[34] = isInProgress;
-      } else isInProgress = $[34];
+        $[45] = content.id;
+        $[46] = inProgressToolUseIDs;
+        $[47] = isInProgress;
+      } else isInProgress = $[47];
       let isInProgress_2 = isInProgress;
       resultMsg = lookups.toolResultByToolUseID.get(content.id);
       let output =
@@ -336,8 +492,8 @@ function VerboseToolUse(props) {
           : resultMsg?.type === "user"
             ? resultMsg.toolUseResult
             : undefined;
-      let parsedOutput = parseRenderModeValue(frameRegistry, tool.outputSchema, output);
-      let parsedData = parsedOutput?.success ? parsedOutput.data : undefined;
+      let renderModeValue = parseRenderModeValue(frameRegistry, tool.outputSchema, output);
+      let parsedData = renderModeValue?.success ? renderModeValue.data : undefined;
       let parsedData_2 = parsedData;
       let parsedInput = safeParseToolInput(tool, content.input);
       let parsedInputData = parsedInput.success ? parsedInput.data : undefined;
@@ -348,11 +504,11 @@ function VerboseToolUse(props) {
           activeAgents,
         });
       let parseFailure;
-      if ($[35] !== content.input) {
+      if ($[48] !== content.input) {
         parseFailure = describeUnparsedInput(content.input);
-        $[35] = content.input;
-        $[36] = parseFailure;
-      } else parseFailure = $[36];
+        $[48] = content.input;
+        $[49] = parseFailure;
+      } else parseFailure = $[49];
       let parseFailure_2 = parseFailure;
       let paramText =
         parseFailure_2 !== null
@@ -384,7 +540,7 @@ function VerboseToolUse(props) {
       let hasName = displayedName !== "";
       if (!hasName && renderedOutput == null && !(isResolved && isErrored_2 && resultMsg !== undefined)) {
         earlyReturn = null;
-        break pe;
+        break ge;
       }
       BoxComponent = Box;
       key = content.id;
@@ -474,14 +630,14 @@ function VerboseToolUse(props) {
   if (earlyReturn !== EARLY_RETURN_SENTINEL) return earlyReturn;
   let errorRow;
   if (
-    $[37] !== content.id ||
-    $[38] !== content.input ||
-    $[39] !== isQuietlyErrored ||
-    $[40] !== isResolved ||
-    $[41] !== progressMessages ||
-    $[42] !== resultMsg ||
-    $[43] !== tool ||
-    $[44] !== tools
+    $[50] !== content.id ||
+    $[51] !== content.input ||
+    $[52] !== isQuietlyErrored ||
+    $[53] !== isResolved ||
+    $[54] !== progressMessages ||
+    $[55] !== resultMsg ||
+    $[56] !== tool ||
+    $[57] !== tools
   ) {
     errorRow =
       isResolved &&
@@ -494,25 +650,25 @@ function VerboseToolUse(props) {
         tools,
         progressMessagesForMessage: progressMessages,
       });
-    $[37] = content.id;
-    $[38] = content.input;
-    $[39] = isQuietlyErrored;
-    $[40] = isResolved;
-    $[41] = progressMessages;
-    $[42] = resultMsg;
-    $[43] = tool;
-    $[44] = tools;
-    $[45] = errorRow;
-  } else errorRow = $[45];
+    $[50] = content.id;
+    $[51] = content.input;
+    $[52] = isQuietlyErrored;
+    $[53] = isResolved;
+    $[54] = progressMessages;
+    $[55] = resultMsg;
+    $[56] = tool;
+    $[57] = tools;
+    $[58] = errorRow;
+  } else errorRow = $[58];
   let boxContent;
   if (
-    $[46] !== BoxComponent ||
-    $[47] !== key ||
-    $[48] !== flexDirection ||
-    $[49] !== marginTop ||
-    $[50] !== headerRow ||
-    $[51] !== outputBox ||
-    $[52] !== errorRow
+    $[59] !== BoxComponent ||
+    $[60] !== key ||
+    $[61] !== flexDirection ||
+    $[62] !== marginTop ||
+    $[63] !== headerRow ||
+    $[64] !== outputBox ||
+    $[65] !== errorRow
   ) {
     boxContent = jsxProd_default_2(
       BoxComponent,
@@ -523,23 +679,23 @@ function VerboseToolUse(props) {
       },
       key,
     );
-    $[46] = BoxComponent;
-    $[47] = key;
-    $[48] = flexDirection;
-    $[49] = marginTop;
-    $[50] = headerRow;
-    $[51] = outputBox;
-    $[52] = errorRow;
-    $[53] = boxContent;
-  } else boxContent = $[53];
+    $[59] = BoxComponent;
+    $[60] = key;
+    $[61] = flexDirection;
+    $[62] = marginTop;
+    $[63] = headerRow;
+    $[64] = outputBox;
+    $[65] = errorRow;
+    $[66] = boxContent;
+  } else boxContent = $[66];
   return boxContent;
 }
-//@ chunk-ah34pb7m.js:166083-185246 fingerprint (2.1.88 match: CollapsedReadSearchContent, 0.58)
+//@ chunk-wjygkcr4.js:169627-192477 fingerprint (2.1.88 match: CollapsedReadSearchContent, 0.554)
 /**
  * 折叠读/搜索组：统计 Read/Grep/Glob 等调用次数显示一行摘要（进行中显示当前目标），verbose 或 transcript 下逐个渲染 VerboseToolUse；含权限规则命中/本地错误等标记。
  */
 function CollapsedReadSearchContent(props) {
-  let $ = useMemoCache(201);
+  let $ = useMemoCache(191);
   let { message, inProgressToolUseIDs, shouldAnimate, verbose, tools, lookups, isActiveGroup, addMargin } =
     props;
   let margin = addMargin === undefined ? true : addMargin;
@@ -670,80 +826,140 @@ function CollapsedReadSearchContent(props) {
     frameCount > 0 ||
     (message.hookTotalMs ?? 0) > 0 ||
     hasThought;
-  let replResultIds;
-  if (
-    $[17] !== isActiveGroup ||
-    $[18] !== lookups.toolResultByToolUseID ||
-    $[19] !== message ||
-    $[20] !== isBriefOnly
-  ) {
-    replResultIds =
-      isActiveGroup === true && !isBriefOnly
-        ? toolCallOf(message)
-            .filter((call) => isReplToolName(call.name) && !lookups.toolResultByToolUseID.has(call.id))
-            .map(toolResultId)
-        : [];
-    $[17] = isActiveGroup;
-    $[18] = lookups.toolResultByToolUseID;
-    $[19] = message;
-    $[20] = isBriefOnly;
-    $[21] = replResultIds;
-  } else replResultIds = $[21];
-  let replResultIds_2 = replResultIds;
-  let hasReplActivity;
-  if (
-    $[22] !== inProgressToolUseIDs ||
-    $[23] !== isActiveGroup ||
-    $[24] !== message ||
-    $[25] !== replResultIds_2.length ||
-    $[26] !== isBriefOnly
-  ) {
-    hasReplActivity =
-      replResultIds_2.length > 0 ||
-      (isActiveGroup === true &&
-        !isBriefOnly &&
-        toolCallOf(message).some((call) => isReplToolName(call.name) && inProgressToolUseIDs.has(call.id)));
-    $[22] = inProgressToolUseIDs;
-    $[23] = isActiveGroup;
-    $[24] = message;
-    $[25] = replResultIds_2.length;
-    $[26] = isBriefOnly;
-    $[27] = hasReplActivity;
-  } else hasReplActivity = $[27];
-  let needsLoading = hasReplActivity;
-  let filtered = toolCallOf(message).filter(isHookToolResult);
+  let replResultIds =
+    isActiveGroup === true && !isBriefOnly
+      ? toolCallOf_2(message)
+          .filter(
+            (call) =>
+              (codeModeAccepted()
+                ? isEvalToolName(call.name) ||
+                  (call.name === POLL &&
+                    inProgressToolUseIDs.has(call.id) &&
+                    (lookups.progressMessagesByToolUseID.get(call.id) ?? []).some(isReplToolCallProgress))
+                : isEvalToolName(call.name)) && !lookups.toolResultByToolUseID.has(call.id),
+          )
+          .map(toolResultId)
+      : [];
+  let needsLoading =
+    replResultIds.length > 0 ||
+    (isActiveGroup === true &&
+      !isBriefOnly &&
+      toolCallOf_2(message).some(
+        (replResultId) => isEvalToolName(replResultId.name) && inProgressToolUseIDs.has(replResultId.id),
+      ));
+  let getToolResultOf;
+  if ($[17] !== lookups.toolResultByToolUseID) {
+    getToolResultOf = (toolUseId) => {
+      let resultMsg = lookups.toolResultByToolUseID.get(toolUseId);
+      return resultMsg?.type === "user" ? resultMsg.toolUseResult : undefined;
+    };
+    $[17] = lookups.toolResultByToolUseID;
+    $[18] = getToolResultOf;
+  } else getToolResultOf = $[18];
+  let getToolResult = getToolResultOf;
+  const maxReadCountRef = toolCallOf_2(message);
+  let isReplCallWithoutResult;
+  if ($[19] !== getToolResult) {
+    isReplCallWithoutResult = (call) =>
+      isEvalToolName(call.name) &&
+      !(
+        codeModeAccepted() &&
+        require("../../utils/codeMode/scriptErrors.js").isErrorRowCopy(getToolResult(call.id))
+      );
+    $[19] = getToolResult;
+    $[20] = isReplCallWithoutResult;
+  } else isReplCallWithoutResult = $[20];
+  let filtered = maxReadCountRef.filter(isReplCallWithoutResult);
   let replTool = filtered.length > 0 ? findToolByName(tools, REPL_TOOL_NAME) : undefined;
   let renderErrorMessage = replTool && mcpRenderOverrideFor(replTool, "renderToolUseErrorMessage");
-  let emptyRows;
-  if ($[28] === MEMO_CACHE_SENTINEL) {
-    emptyRows = [];
-    $[28] = emptyRows;
-  } else emptyRows = $[28];
-  let summaryToolUses = emptyRows;
-  if (summaryToolUses.length > 0) findToolByName(tools, POLL);
-  else undefined;
-  let emptyIdSet;
-  if ($[29] === MEMO_CACHE_SENTINEL) {
-    emptyIdSet = new Set([]);
-    $[29] = emptyIdSet;
-  } else emptyIdSet = $[29];
-  let summarizedIds = emptyIdSet;
+  let hookToolCalls =
+    codeModeAccepted() && isCodeModeExperimentEnabled() ? toolCallOf_2(message).filter(isHookToolResult) : [];
+  let tool = hookToolCalls.length > 0 ? findToolByName(tools, POLL) : undefined;
+  let hasInterruptedHookCall =
+    codeModeAccepted() &&
+    hookToolCalls.some((hookCall) =>
+      VALIDATE_TREE_NAMESPACE.isInterruptedCall(lookups.toolResultByToolUseID.get(hookCall.id)),
+    );
+  let summarizedIds = new Set(
+    codeModeAccepted()
+      ? filtered
+          .filter((call) => {
+            let resultMsg = lookups.toolResultByToolUseID.get(call.id);
+            return (
+              resultMsg?.type === "user" &&
+              require("../../tools/REPLTool/stopReport.js").drawsInterruptedRow(
+                REPL_TOOL_NAME,
+                resultMsg.toolUseResult,
+              )
+            );
+          })
+          .map(toolUseId)
+      : [],
+  );
   let hasSummary = renderErrorMessage !== undefined && summarizedIds.size > 0;
-  let summarizedIdSet;
-  if ($[30] === MEMO_CACHE_SENTINEL) {
-    summarizedIdSet = new Set(summaryToolUses.map(toolUseId));
-    $[30] = summarizedIdSet;
-  } else summarizedIdSet = $[30];
-  let summarizedIds_2 = summarizedIdSet;
-  let endedToolIds = new Set(filtered.map(toolUseId_2));
-  let isInterruptedAny = false && !hasSummary && true;
-  let endedCalls = false ? filtered.filter((call) => !summarizedIds.has(call.id)) : filtered;
+  let hookCallIds = new Set(hookToolCalls.map(toolUseId_2));
+  let endedToolIds = new Set(filtered.map(toolCallId));
+  let shouldShowInterrupted =
+    codeModeAccepted() &&
+    (message.stopShownAfter === true ||
+      ((verbose || hasMemoryOps || hasTeamMemOps_2 || hasAnyOutput || needsLoading) &&
+        toolUseIds.some(
+          (toolUseId) =>
+            !hookCallIds.has(toolUseId) &&
+            !endedToolIds.has(toolUseId) &&
+            VALIDATE_TREE_NAMESPACE.isInterruptedCall(lookups.toolResultByToolUseID.get(toolUseId)),
+        )));
+  let isInterruptedAny = hasInterruptedHookCall && !hasSummary && !shouldShowInterrupted;
+  let endedCalls = shouldShowInterrupted ? filtered.filter((call) => !summarizedIds.has(call.id)) : filtered;
   let hasInterruptedCall =
     toolUseIds.some(
       (toolUseId) =>
-        !summarizedIds_2.has(toolUseId) &&
+        !hookCallIds.has(toolUseId) &&
         VALIDATE_TREE_NAMESPACE.isInterruptedCall(lookups.toolResultByToolUseID.get(toolUseId)),
     ) || isInterruptedAny;
+  let renderErroredCall;
+  if (
+    $[21] !== lookups.erroredToolUseIDs ||
+    $[22] !== lookups.toolResultByToolUseID ||
+    $[23] !== tool ||
+    $[24] !== tools
+  ) {
+    renderErroredCall = function renderErroredCallImpl(call, isVerbose) {
+      let resultMsg = lookups.toolResultByToolUseID.get(call.id);
+      if (
+        resultMsg?.type !== "user" ||
+        !lookups.erroredToolUseIDs.has(call.id) ||
+        VALIDATE_TREE_NAMESPACE.isInterruptedCall(resultMsg)
+      ) {
+        return null;
+      }
+      let found = resultMsg.message.content.find(
+        (block) => block.type === "tool_result" && block.tool_use_id === call.id,
+      );
+      if (found?.type !== "tool_result") {
+        return null;
+      }
+      return jsxProd_default(UserToolErrorMessage, {
+        param: found,
+        tool,
+        tools,
+        input: call.input,
+        output: resultMsg.toolUseResult,
+        toolDenialKind: resultMsg.toolDenialKind,
+        remoteToolDenialKind: resultMsg.remoteToolDenialKind,
+        toolDenialMonitorBlocked: resultMsg.toolDenialMonitorBlocked,
+        verbose: isVerbose,
+        progressMessagesForMessage: [],
+        isTranscriptMode: isVerbose,
+      });
+    };
+    $[21] = lookups.erroredToolUseIDs;
+    $[22] = lookups.toolResultByToolUseID;
+    $[23] = tool;
+    $[24] = tools;
+    $[25] = renderErroredCall;
+  } else renderErroredCall = $[25];
+  let renderErroredCallStable = renderErroredCall;
   let renderResult = function renderResultImpl(id, isVerbose) {
     let resultMessage = lookups.toolResultByToolUseID.get(id);
     if (
@@ -820,68 +1036,140 @@ function CollapsedReadSearchContent(props) {
   let { readFilePaths, searchArgs, latestDisplayHint } = message;
   if (latestDisplayHint === undefined) {
     let lastSearchArg;
-    if ($[31] !== searchArgs) {
+    if ($[26] !== searchArgs) {
       lastSearchArg = searchArgs?.at(-1);
-      $[31] = searchArgs;
-      $[32] = lastSearchArg;
-    } else lastSearchArg = $[32];
+      $[26] = searchArgs;
+      $[27] = lastSearchArg;
+    } else lastSearchArg = $[27];
     let searchArg = lastSearchArg;
     let quotedSearchArg = searchArg !== undefined ? `"${searchArg}"` : undefined;
     let displayHint;
-    if ($[33] !== quotedSearchArg || $[34] !== readFilePaths) {
+    if ($[28] !== quotedSearchArg || $[29] !== readFilePaths) {
       let lastRead = readFilePaths?.at(-1);
       displayHint = lastRead !== undefined ? getDisplayPath(lastRead) : quotedSearchArg;
-      $[33] = quotedSearchArg;
-      $[34] = readFilePaths;
-      $[35] = displayHint;
-    } else displayHint = $[35];
+      $[28] = quotedSearchArg;
+      $[29] = readFilePaths;
+      $[30] = displayHint;
+    } else displayHint = $[30];
     latestDisplayHint = displayHint;
   }
-  useAppStateSlice(noopRenderHook);
+  let activeAgentsForRepl = useAppStateSlice((appState) =>
+    codeModeAccepted() && isActiveGroup && replResultIds.length > 0
+      ? appState.agentDefinitions.activeAgents
+      : undefined,
+  );
   let [denialRef, hasAutoDenial] = useFrozenValue(useHasAutoModeDenialFor(toolUseIds));
-  useAppStateSlice(returnFalseHook);
+  let viewingAgentTaskSelector;
+  if ($[31] !== isActiveGroup) {
+    viewingAgentTaskSelector = (appState) =>
+      codeModeAccepted() && isActiveGroup && Boolean(appState.viewingAgentTaskId);
+    $[31] = isActiveGroup;
+    $[32] = viewingAgentTaskSelector;
+  } else viewingAgentTaskSelector = $[32];
+  let appStateSlice_2 = useAppStateSlice(viewingAgentTaskSelector);
+  let hasLiveError = false;
+  let hintCall;
+  let hintText;
   if (isActiveGroup) {
-    if (
-      $[36] !== inProgressToolUseIDs ||
-      $[37] !== latestDisplayHint ||
-      $[39] !== lookups.progressMessagesByToolUseID ||
-      $[40] !== toolUseIds
-    ) {
-      $[38] = latestDisplayHint;
-      for (const id_0 of toolUseIds) {
-        if (!inProgressToolUseIDs.has(id_0)) {
-          continue;
-        }
-        let latest = (lookups.progressMessagesByToolUseID.get(id_0) ?? []).at(-1)?.data;
-        if (latest?.type === "mcp_progress") {
-          let { progress, total, progressMessage } = latest;
-          let progressText = cleanTaskDescription(progressMessage);
-          if (progress !== undefined && total !== undefined && total > 0) {
-            let rounded = Math.round(Math.min(1, Math.max(0, progress / total)) * 100);
-            latestDisplayHint = progressText ? `${progressText} (${rounded}%)` : `${rounded}%`;
-          } else if (progressText) latestDisplayHint = progressText;
-          else if (progress !== undefined) latestDisplayHint = `Processing\u2026 ${progress}`;
-        }
+    for (const id_0 of toolUseIds) {
+      if (!inProgressToolUseIDs.has(id_0)) {
+        continue;
       }
-      $[36] = inProgressToolUseIDs;
-      $[37] = $[38];
-      $[39] = lookups.progressMessagesByToolUseID;
-      $[40] = toolUseIds;
-      $[41] = latestDisplayHint;
-    } else latestDisplayHint = $[41];
+      let progressMessages = lookups.progressMessagesByToolUseID.get(id_0) ?? [];
+      let latest = progressMessages.at(-1)?.data;
+      let liveCalls = [];
+      if (codeModeAccepted() && replResultIds.includes(id_0)) {
+        let { liveCallsOf } = require("../../utils/codeMode/toolCallTicks.js");
+        liveCalls = liveCallsOf(progressMessages);
+        if (liveCalls.some(isErroredPhase)) hasLiveError = true;
+      }
+      if (codeModeAccepted() && liveCalls.length > 0) {
+        for (let idx = liveCalls.length - 1; idx >= 0; idx--) {
+          let liveCall = liveCalls[idx];
+          let displayHintText = renderCollapsedPart(
+            toolName(liveCall.name, liveCall.input, tools),
+            liveCall.input,
+            theme,
+            activeAgentsForRepl,
+          );
+          if (displayHintText !== undefined) {
+            latestDisplayHint = displayHintText;
+            hintCall = liveCall;
+            hintText = displayHintText;
+            break;
+          }
+        }
+      } else if (latest?.type === "mcp_progress") {
+        let { progress, total, progressMessage } = latest;
+        let progressText = cleanTaskDescription(progressMessage);
+        if (progress !== undefined && total !== undefined && total > 0) {
+          let rounded = Math.round(Math.min(1, Math.max(0, progress / total)) * 100);
+          latestDisplayHint = progressText ? `${progressText} (${rounded}%)` : `${rounded}%`;
+        } else if (progressText) latestDisplayHint = progressText;
+        else if (progress !== undefined) latestDisplayHint = `Processing\u2026 ${progress}`;
+      }
+    }
   }
-  let throttledValue = useThrottledValue(latestDisplayHint, HINT_THROTTLE_MS);
+  let statusLine;
+  if (
+    codeModeAccepted() &&
+    isCodeModeExperimentEnabled() &&
+    bg &&
+    !appStateSlice_2 &&
+    hintCall !== undefined &&
+    latestDisplayHint === hintText
+  ) {
+    let { disabledClassifierSurfaces } = require("../../services/classifierSummary.js");
+    if (!disabledClassifierSurfaces().has("repl")) {
+      let { activityLineOf } = require("../../utils/codeMode/toolCallTicks.js");
+      let { toolUseStatusLine } = require("../../services/agentStatus/jobState.js");
+      let pendingHintCall = hintCall;
+      statusLine =
+        toolUseStatusLine(pendingHintCall.input, () =>
+          activityLineOf(findToolByNameWithFallback(tools, pendingHintCall.name), pendingHintCall.input),
+        ) || undefined;
+    }
+  }
+  let hintWithStyle;
+  if ($[33] !== statusLine || $[34] !== latestDisplayHint) {
+    hintWithStyle =
+      codeModeAccepted() && statusLine !== undefined
+        ? `${STYLE_SEPARATOR}${latestDisplayHint ?? ""}${STYLE_SEPARATOR}${statusLine}`
+        : latestDisplayHint;
+    $[33] = statusLine;
+    $[34] = latestDisplayHint;
+    $[35] = hintWithStyle;
+  } else hintWithStyle = $[35];
+  let throttledValue = useThrottledValue(hintWithStyle, HINT_THROTTLE_MS);
+  let hintLine = throttledValue;
   let styleCache;
+  if (
+    codeModeAccepted() &&
+    throttledValue?.startsWith(STYLE_SEPARATOR) &&
+    throttledValue.includes(STYLE_SEPARATOR, STYLE_SEPARATOR.length)
+  ) {
+    if ($[36] !== throttledValue) {
+      let sliced = throttledValue.slice(STYLE_SEPARATOR.length);
+      hintLine = firstLineOf(sliced, STYLE_SEPARATOR) || undefined;
+      styleCache = sliced.slice(sliced.indexOf(STYLE_SEPARATOR) + STYLE_SEPARATOR.length);
+      $[36] = throttledValue;
+      $[37] = hintLine;
+      $[38] = styleCache;
+    } else {
+      hintLine = $[37];
+      styleCache = $[38];
+    }
+  }
   let isLiveTurn = isActiveGroup && message.isLiveBriefTurn === true;
   let displayedHint = useLingeringValue(
     isActiveGroup && !isLiveTurn ? message.latestThinkingSummary : undefined,
     HINT_LINGER_MS,
   );
   let hasLingeringHint = isActiveGroup && displayedHint !== undefined;
-  let hint = hasLingeringHint ? displayedHint : throttledValue;
+  let hint = hasLingeringHint ? displayedHint : hintLine;
   let timestamp = Date.parse(message.timestamp);
   let taskSummarySelector;
-  if ($[42] !== timestamp || $[43] !== isActiveGroup) {
+  if ($[39] !== timestamp || $[40] !== isActiveGroup) {
     taskSummarySelector = (appState) =>
       isActiveGroup &&
       !appState.viewingAgentTaskId &&
@@ -889,31 +1177,51 @@ function CollapsedReadSearchContent(props) {
       !(appState.taskSummary.at < timestamp)
         ? appState.taskSummary.text
         : null;
-    $[42] = timestamp;
-    $[43] = isActiveGroup;
-    $[44] = taskSummarySelector;
-  } else taskSummarySelector = $[44];
-  let appStateSlice_2 = useAppStateSlice(taskSummarySelector);
+    $[39] = timestamp;
+    $[40] = isActiveGroup;
+    $[41] = taskSummarySelector;
+  } else taskSummarySelector = $[41];
+  let appStateSlice_3 = useAppStateSlice(taskSummarySelector);
   if (verbose) {
     let assistantMessages = [];
     for (const msg of groupMessages) {
       if (msg.type === "assistant") assistantMessages.push(msg);
       else if (msg.type === "grouped_tool_use") assistantMessages.push(...msg.messages);
     }
-    new Set();
+    let liveCallsFromHistory = [];
+    let runningCallIds = new Set();
+    if (codeModeAccepted()) {
+      let { isRunningPhase, liveCallsOf } = require("../../utils/codeMode/toolCallTicks.js");
+      liveCallsFromHistory = liveCallsOf(
+        replResultIds.flatMap((msg_0) => lookups.progressMessagesByToolUseID.get(msg_0) ?? []),
+      );
+      runningCallIds = new Set(
+        liveCallsFromHistory.filter((liveCall) => isRunningPhase(liveCall.phase)).map(runningCallId),
+      );
+    }
+    let lookups_2 =
+      !codeModeAccepted() || liveCallsFromHistory.length === 0
+        ? lookups
+        : {
+            ...lookups,
+            resolvedToolUseIDs: new Set(
+              liveCallsFromHistory.filter((liveCall) => !runningCallIds.has(liveCall.id)).map(liveCallId),
+            ),
+            erroredToolUseIDs: new Set(liveCallsFromHistory.filter(isErrorPhase).map(erroredCallId)),
+          };
     let isErroredAssistant;
-    if ($[45] !== lookups) {
-      isErroredAssistant = (msg_0) =>
-        lookups.erroredToolUseIDs.has(msg_0.id) &&
-        lookups.toolResultByToolUseID.get(msg_0.id)?.type === "user";
-      $[45] = lookups;
-      $[46] = isErroredAssistant;
-    } else isErroredAssistant = $[46];
+    if ($[42] !== lookups) {
+      isErroredAssistant = (message) =>
+        lookups.erroredToolUseIDs.has(message.id) &&
+        lookups.toolResultByToolUseID.get(message.id)?.type === "user";
+      $[42] = lookups;
+      $[43] = isErroredAssistant;
+    } else isErroredAssistant = $[43];
     let filtered = endedCalls.filter(isErroredAssistant);
     let thinkingRows;
-    if ($[47] !== groupMessages || $[48] !== verbose) {
+    if ($[44] !== groupMessages || $[45] !== verbose) {
       let renderGroupedMessage;
-      if ($[50] !== verbose) {
+      if ($[47] !== verbose) {
         renderGroupedMessage = (groupMessage) => {
           let contentBlock = groupMessage.type === "user" ? groupMessage.message.content[0] : null;
           if (contentBlock?.type !== "text" || !contentBlock.text.includes(`<${TASK_NOTIFICATION}`)) {
@@ -937,14 +1245,14 @@ function CollapsedReadSearchContent(props) {
             groupMessage.uuid,
           );
         };
-        $[50] = verbose;
-        $[51] = renderGroupedMessage;
-      } else renderGroupedMessage = $[51];
+        $[47] = verbose;
+        $[48] = renderGroupedMessage;
+      } else renderGroupedMessage = $[48];
       thinkingRows = groupMessages.map(renderGroupedMessage);
-      $[47] = groupMessages;
-      $[48] = verbose;
-      $[49] = thinkingRows;
-    } else thinkingRows = $[49];
+      $[44] = groupMessages;
+      $[45] = verbose;
+      $[46] = thinkingRows;
+    } else thinkingRows = $[46];
     const mapped = assistantMessages.map((assistantMessage) => {
       let contentBlock = assistantMessage.message.content[0];
       if (contentBlock?.type === "thinking" && contentBlock.thinking) {
@@ -979,6 +1287,27 @@ function CollapsedReadSearchContent(props) {
         contentBlock.id,
       );
     });
+    const verboseLiveCallRows =
+      codeModeAccepted() &&
+      liveCallsFromHistory.map((liveCall) =>
+        jsxProd_default(
+          VerboseToolUse,
+          {
+            content: {
+              type: "tool_use",
+              id: liveCall.id,
+              name: liveCall.name,
+              input: liveCall.input,
+            },
+            tools,
+            lookups: lookups_2,
+            inProgressToolUseIDs: runningCallIds,
+            shouldAnimate,
+            theme,
+          },
+          liveCall.id,
+        ),
+      );
     const mapped_2 = filtered.map((call) => {
       let resultMessage = lookups.toolResultByToolUseID.get(call.id);
       let row;
@@ -1006,8 +1335,29 @@ function CollapsedReadSearchContent(props) {
             `ended-${call.id}`,
           );
     });
+    const standaloneInterruptedRow =
+      codeModeAccepted() &&
+      isInterruptedAny &&
+      !filtered.some((call) =>
+        VALIDATE_TREE_NAMESPACE.isInterruptedCall(lookups.toolResultByToolUseID.get(call.id)),
+      ) &&
+      jsxProd_default(RejectedToolUseMessage, {});
+    const hookErrorRows =
+      codeModeAccepted() &&
+      hookToolCalls.map((hookCall) => {
+        let errorRow = renderErroredCallStable(hookCall, true);
+        return errorRow === null
+          ? null
+          : jsxProd_default(
+              Box,
+              {
+                children: errorRow,
+              },
+              `ended-${hookCall.id}`,
+            );
+      });
     let hooksRow;
-    if ($[52] !== message.hookCount || $[53] !== message.hookInfos || $[54] !== message.hookTotalMs) {
+    if ($[49] !== message.hookCount || $[50] !== message.hookInfos || $[51] !== message.hookTotalMs) {
       hooksRow =
         message.hookInfos &&
         message.hookInfos.length > 0 &&
@@ -1033,13 +1383,13 @@ function CollapsedReadSearchContent(props) {
             message.hookInfos.map(renderHookDurationLine),
           ],
         });
-      $[52] = message.hookCount;
-      $[53] = message.hookInfos;
-      $[54] = message.hookTotalMs;
-      $[55] = hooksRow;
-    } else hooksRow = $[55];
+      $[49] = message.hookCount;
+      $[50] = message.hookInfos;
+      $[51] = message.hookTotalMs;
+      $[52] = hooksRow;
+    } else hooksRow = $[52];
     let memoriesRow;
-    if ($[56] !== localMemoryPrefix || $[57] !== message.relevantMemories) {
+    if ($[53] !== localMemoryPrefix || $[54] !== message.relevantMemories) {
       memoriesRow = message.relevantMemories?.map((m, idx) =>
         jsxProd_default_2(
           Box,
@@ -1072,114 +1422,130 @@ function CollapsedReadSearchContent(props) {
           m.path,
         ),
       );
-      $[56] = localMemoryPrefix;
-      $[57] = message.relevantMemories;
-      $[58] = memoriesRow;
-    } else memoriesRow = $[58];
+      $[53] = localMemoryPrefix;
+      $[54] = message.relevantMemories;
+      $[55] = memoriesRow;
+    } else memoriesRow = $[55];
     return jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [thinkingRows, mapped, false, mapped_2, false, false, hooksRow, memoriesRow, false],
+      children: [
+        thinkingRows,
+        mapped,
+        verboseLiveCallRows,
+        mapped_2,
+        standaloneInterruptedRow,
+        hookErrorRows,
+        hooksRow,
+        memoriesRow,
+        false,
+      ],
     });
   }
+  let lastCall = codeModeAccepted() ? filtered.at(-1) : undefined;
   let nothing =
-    undefined !== undefined && endedCalls.includes(undefined) ? renderResult(undefined.id, false) : null;
+    lastCall !== undefined && endedCalls.includes(lastCall) ? renderResult(lastCall.id, false) : null;
   let isInterrupted;
-  if ($[59] !== lookups) {
+  if ($[56] !== lookups) {
     isInterrupted = (call) =>
       VALIDATE_TREE_NAMESPACE.isInterruptedCall(lookups.toolResultByToolUseID.get(call.id));
-    $[59] = lookups;
-    $[60] = isInterrupted;
-  } else isInterrupted = $[60];
+    $[56] = lookups;
+    $[57] = isInterrupted;
+  } else isInterrupted = $[57];
   let any = filtered.some(isInterrupted);
-  let emptyRowList;
-  if ($[61] === MEMO_CACHE_SENTINEL) {
-    emptyRowList = [];
-    $[61] = emptyRowList;
-  } else emptyRowList = $[61];
-  let extraRows = emptyRowList;
+  let extraRows = codeModeAccepted()
+    ? hookToolCalls.flatMap((hookCall) => {
+        let hookErrorRow = renderErroredCallStable(hookCall, false);
+        return hookErrorRow === null
+          ? []
+          : [
+              jsxProd_default(
+                Box,
+                {
+                  children: hookErrorRow,
+                },
+                `error-${hookCall.id}`,
+              ),
+            ];
+      })
+    : [];
   if (!hasMemoryOps && !hasTeamMemOps_2 && !hasAnyOutput && !needsLoading) {
     let isInterrupted2 = any || isInterruptedAny;
     if (!isInterrupted2 && nothing === null && extraRows.length === 0) {
       return null;
     }
     let interruptedRow;
-    if ($[62] !== isInterrupted2) {
+    if ($[58] !== isInterrupted2) {
       interruptedRow = isInterrupted2 && jsxProd_default(RejectedToolUseMessage, {});
-      $[62] = isInterrupted2;
-      $[63] = interruptedRow;
-    } else interruptedRow = $[63];
+      $[58] = isInterrupted2;
+      $[59] = interruptedRow;
+    } else interruptedRow = $[59];
     let simpleColumn;
-    if ($[64] !== nothing || $[65] !== interruptedRow) {
+    if ($[60] !== nothing || $[61] !== extraRows || $[62] !== interruptedRow) {
       simpleColumn = jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [interruptedRow, extraRows, nothing],
       });
-      $[64] = nothing;
-      $[65] = interruptedRow;
-      $[66] = simpleColumn;
-    } else simpleColumn = $[66];
+      $[60] = nothing;
+      $[61] = extraRows;
+      $[62] = interruptedRow;
+      $[63] = simpleColumn;
+    } else simpleColumn = $[63];
     return simpleColumn;
   }
-  let elapsedSuffix;
-  if (
-    $[67] !== bg ||
-    $[68] !== inProgressToolUseIDs ||
-    $[69] !== isActiveGroup ||
-    $[70] !== lookups ||
-    $[71] !== toolUseIds
-  ) {
-    elapsedSuffix = "";
-    if (bg && isActiveGroup) {
-      let maxElapsedSeconds;
-      let lastTotalLines = 0;
-      if ($[73] !== inProgressToolUseIDs || $[74] !== lookups || $[75] !== toolUseIds) {
-        for (const id_1 of toolUseIds) {
-          if (!inProgressToolUseIDs.has(id_1)) {
-            continue;
-          }
-          let data = lookups.progressMessagesByToolUseID.get(id_1)?.at(-1)?.data;
-          if (data?.type !== "bash_progress" && data?.type !== "powershell_progress") {
-            continue;
-          }
-          if (maxElapsedSeconds === undefined || data.elapsedTimeSeconds > maxElapsedSeconds) {
-            maxElapsedSeconds = data.elapsedTimeSeconds;
-            lastTotalLines = data.totalLines;
-          }
-        }
-        $[73] = inProgressToolUseIDs;
-        $[74] = lookups;
-        $[75] = toolUseIds;
-        $[76] = maxElapsedSeconds;
-        $[77] = lastTotalLines;
-      } else {
-        maxElapsedSeconds = $[76];
-        lastTotalLines = $[77];
+  let elapsedSuffix = "";
+  if (bg && isActiveGroup) {
+    let maxElapsedSeconds;
+    let lastTotalLines = 0;
+    for (const id_1 of toolUseIds) {
+      if (!inProgressToolUseIDs.has(id_1)) {
+        continue;
       }
-      if (maxElapsedSeconds !== undefined && maxElapsedSeconds >= 2) {
-        const elapsedMs = maxElapsedSeconds * 1000;
-        let elapsedText;
-        if ($[78] !== elapsedMs) {
-          elapsedText = formatDuration(elapsedMs);
-          $[78] = elapsedMs;
-          $[79] = elapsedText;
-        } else elapsedText = $[79];
-        let elapsedTextStable = elapsedText;
-        elapsedSuffix =
-          lastTotalLines > 0
-            ? ` (${elapsedTextStable} \xB7 ${lastTotalLines} ${lastTotalLines === 1 ? "line" : "lines"})`
-            : ` (${elapsedTextStable})`;
+      let data = lookups.progressMessagesByToolUseID.get(id_1)?.at(-1)?.data;
+      if (data?.type !== "bash_progress" && data?.type !== "powershell_progress") {
+        continue;
+      }
+      if (maxElapsedSeconds === undefined || data.elapsedTimeSeconds > maxElapsedSeconds) {
+        maxElapsedSeconds = data.elapsedTimeSeconds;
+        lastTotalLines = data.totalLines;
       }
     }
-    $[67] = bg;
-    $[68] = inProgressToolUseIDs;
-    $[69] = isActiveGroup;
-    $[70] = lookups;
-    $[71] = toolUseIds;
-    $[72] = elapsedSuffix;
-  } else elapsedSuffix = $[72];
+    if (codeModeAccepted()) {
+      let { liveCallsOf } = require("../../utils/codeMode/toolCallTicks.js");
+      let progressMessagesOf;
+      if ($[64] !== lookups) {
+        progressMessagesOf = (toolUseId) => lookups.progressMessagesByToolUseID.get(toolUseId) ?? [];
+        $[64] = lookups;
+        $[65] = progressMessagesOf;
+      } else progressMessagesOf = $[65];
+      let time = liveCallsOf(replResultIds.flatMap(progressMessagesOf));
+      for (const { shellProgress } of time) {
+        if (
+          shellProgress !== undefined &&
+          (maxElapsedSeconds === undefined || shellProgress.elapsedTimeSeconds > maxElapsedSeconds)
+        ) {
+          maxElapsedSeconds = shellProgress.elapsedTimeSeconds;
+          lastTotalLines = shellProgress.totalLines;
+        }
+      }
+    }
+    if (maxElapsedSeconds !== undefined && maxElapsedSeconds >= 2) {
+      const elapsedMs = maxElapsedSeconds * 1000;
+      let elapsedText;
+      if ($[66] !== elapsedMs) {
+        elapsedText = formatDuration(elapsedMs);
+        $[66] = elapsedMs;
+        $[67] = elapsedText;
+      } else elapsedText = $[67];
+      let elapsedTextStable = elapsedText;
+      elapsedSuffix =
+        lastTotalLines > 0
+          ? ` (${elapsedTextStable} \xB7 ${lastTotalLines} ${lastTotalLines === 1 ? "line" : "lines"})`
+          : ` (${elapsedTextStable})`;
+    }
+  }
   let lastToolStartMs = 0;
   if (isActiveGroup && bg) {
-    if ($[80] !== groupMessages || $[81] !== inProgressToolUseIDs) {
+    if ($[68] !== groupMessages || $[69] !== inProgressToolUseIDs) {
       for (let idx = groupMessages.length - 1; idx >= 0 && !lastToolStartMs; idx--) {
         let inProgressToolUseIds = groupMessages[idx];
         let lookups =
@@ -1200,47 +1566,57 @@ function CollapsedReadSearchContent(props) {
           }
         }
       }
-      $[80] = groupMessages;
-      $[81] = inProgressToolUseIDs;
-      $[82] = lastToolStartMs;
-    } else lastToolStartMs = $[82];
+      $[68] = groupMessages;
+      $[69] = inProgressToolUseIDs;
+      $[70] = lastToolStartMs;
+    } else lastToolStartMs = $[70];
+    if (codeModeAccepted()) {
+      let { hintCallOf } = require("../../utils/codeMode/toolCallTicks.js");
+      let scriptStartedAt;
+      for (const replResultId of replResultIds) {
+        let hintCall = hintCallOf(lookups.progressMessagesByToolUseID.get(replResultId) ?? []);
+        if (hintCall !== undefined) scriptStartedAt = hintCall.scriptStartedAt;
+      }
+      if (scriptStartedAt !== undefined && (lastToolStartMs === 0 || scriptStartedAt < lastToolStartMs))
+        lastToolStartMs = scriptStartedAt;
+    }
   }
   let elapsedAnchorMs;
   let taskSummaryText;
   let textOnlyHooks;
   let parts;
   if (
-    $[83] !== agentCount ||
-    $[84] !== bashCount ||
-    $[85] !== styleCache ||
-    $[86] !== editFileCount ||
-    $[87] !== frameCount ||
-    $[88] !== bg ||
-    $[89] !== groupMessages ||
-    $[90] !== needsLoading ||
-    $[91] !== hasTeamMemOps_2 ||
-    $[92] !== hasThought ||
-    $[93] !== lastToolStartMs ||
-    $[94] !== isActiveGroup ||
-    $[95] !== isLiveTurn ||
-    $[96] !== added ||
-    $[97] !== removed ||
-    $[98] !== list_3 ||
-    $[99] !== appStateSlice_2 ||
-    $[100] !== localMemoryPrefix ||
-    $[101] !== mcpTotal ||
-    $[102] !== memoryReadCount ||
-    $[103] !== memorySearchCount ||
-    $[104] !== memoryWriteCount ||
-    $[105] !== message ||
-    $[106] !== otherToolCount ||
-    $[107] !== read_3 ||
-    $[108] !== quietCallCount ||
-    $[109] !== added_2 ||
-    $[110] !== removed_2 ||
-    $[111] !== scratchpadWriteCount ||
-    $[112] !== search_3 ||
-    $[113] !== thoughtForMs
+    $[71] !== agentCount ||
+    $[72] !== bashCount ||
+    $[73] !== styleCache ||
+    $[74] !== editFileCount ||
+    $[75] !== frameCount ||
+    $[76] !== bg ||
+    $[77] !== groupMessages ||
+    $[78] !== needsLoading ||
+    $[79] !== hasTeamMemOps_2 ||
+    $[80] !== hasThought ||
+    $[81] !== lastToolStartMs ||
+    $[82] !== isActiveGroup ||
+    $[83] !== isLiveTurn ||
+    $[84] !== added ||
+    $[85] !== removed ||
+    $[86] !== list_3 ||
+    $[87] !== appStateSlice_3 ||
+    $[88] !== localMemoryPrefix ||
+    $[89] !== mcpTotal ||
+    $[90] !== memoryReadCount ||
+    $[91] !== memorySearchCount ||
+    $[92] !== memoryWriteCount ||
+    $[93] !== message ||
+    $[94] !== otherToolCount ||
+    $[95] !== read_3 ||
+    $[96] !== quietCallCount ||
+    $[97] !== added_2 ||
+    $[98] !== removed_2 ||
+    $[99] !== scratchpadWriteCount ||
+    $[100] !== search_3 ||
+    $[101] !== thoughtForMs
   ) {
     parts = [];
     let pushPart = function pushPart(key, verb, body) {
@@ -1276,7 +1652,7 @@ function CollapsedReadSearchContent(props) {
       let thoughtDuration;
       if (isActiveGroup && bg && !isLiveTurn) {
         let lastThinkingAtMs = 0;
-        if ($[118] !== groupMessages) {
+        if ($[106] !== groupMessages) {
           for (let idx = groupMessages.length - 1; idx >= 0; idx--) {
             let groupMessage = groupMessages[idx];
             if (groupMessage?.type === "assistant" && groupMessage.message.content[0]?.type === "thinking") {
@@ -1285,41 +1661,41 @@ function CollapsedReadSearchContent(props) {
               break;
             }
           }
-          $[118] = groupMessages;
-          $[119] = lastThinkingAtMs;
-        } else lastThinkingAtMs = $[119];
+          $[106] = groupMessages;
+          $[107] = lastThinkingAtMs;
+        } else lastThinkingAtMs = $[107];
         let thinkingElapsed;
-        if ($[120] !== lastThinkingAtMs || $[121] !== thoughtForMs) {
+        if ($[108] !== lastThinkingAtMs || $[109] !== thoughtForMs) {
           thinkingElapsed = jsxProd_default(ThinkingElapsed, {
             baseMs: thoughtForMs,
             lastThinkingAtMs,
           });
-          $[120] = lastThinkingAtMs;
-          $[121] = thoughtForMs;
-          $[122] = thinkingElapsed;
-        } else thinkingElapsed = $[122];
+          $[108] = lastThinkingAtMs;
+          $[109] = thoughtForMs;
+          $[110] = thinkingElapsed;
+        } else thinkingElapsed = $[110];
         thoughtDuration = thinkingElapsed;
       } else {
         const max = Math.max(1000, thoughtForMs);
         let children;
-        if ($[123] !== max) {
+        if ($[111] !== max) {
           children = formatDuration(max);
-          $[123] = max;
-          $[124] = children;
-        } else children = $[124];
+          $[111] = max;
+          $[112] = children;
+        } else children = $[112];
         let durationText;
-        if ($[125] !== children) {
+        if ($[113] !== children) {
           durationText = jsxProd_default(Text, {
             bold: true,
             children,
           });
-          $[125] = children;
-          $[126] = durationText;
-        } else durationText = $[126];
+          $[113] = children;
+          $[114] = durationText;
+        } else durationText = $[114];
         thoughtDuration = durationText;
       }
       let thoughtPart;
-      if ($[127] !== thoughtDuration || $[128] !== thoughtVerb) {
+      if ($[115] !== thoughtDuration || $[116] !== thoughtVerb) {
         thoughtPart = jsxProd_default_2(
           Text,
           {
@@ -1327,10 +1703,10 @@ function CollapsedReadSearchContent(props) {
           },
           "thought",
         );
-        $[127] = thoughtDuration;
-        $[128] = thoughtVerb;
-        $[129] = thoughtPart;
-      } else thoughtPart = $[129];
+        $[115] = thoughtDuration;
+        $[116] = thoughtVerb;
+        $[117] = thoughtPart;
+      } else thoughtPart = $[117];
       parts.push(thoughtPart);
     }
     let partCountBefore = parts.length;
@@ -1395,7 +1771,7 @@ function CollapsedReadSearchContent(props) {
       }
     }
     if (bg && message.pushes?.length) {
-      let branches = uniq(message.pushes.map(gitBranch));
+      let branches = normalizeCaseForComparison_2(message.pushes.map(gitBranch));
       pushPart(
         "push",
         "pushed to",
@@ -1499,8 +1875,8 @@ function CollapsedReadSearchContent(props) {
     if (mcpTotal > 0) {
       let mcpCallLabels = message.mcpCallLabels ?? [];
       let mcpLabel =
-        (quietCallCount > 0 ? uniq([...mcpCallLabels, MEMORY]) : mcpCallLabels)
-          .map(CLAUDEAI_SERVER_PREFIX)
+        (quietCallCount > 0 ? normalizeCaseForComparison_2([...mcpCallLabels, MEMORY]) : mcpCallLabels)
+          .map(stripAiPrefix)
           .join(", ") || "MCP";
       pushPart(
         "mcp",
@@ -1532,7 +1908,7 @@ function CollapsedReadSearchContent(props) {
         let isFirstPart = parts.length === 0;
         if (!isFirstPart) {
           let commaAgent;
-          if ($[130] === MEMO_CACHE_SENTINEL) {
+          if ($[118] === MEMO_CACHE_SENTINEL) {
             commaAgent = jsxProd_default(
               Text,
               {
@@ -1540,8 +1916,8 @@ function CollapsedReadSearchContent(props) {
               },
               "comma-agent",
             );
-            $[130] = commaAgent;
-          } else commaAgent = $[130];
+            $[118] = commaAgent;
+          } else commaAgent = $[118];
           parts.push(commaAgent);
         }
         const children = jsxProd_default(Text, {
@@ -1552,7 +1928,7 @@ function CollapsedReadSearchContent(props) {
           ),
         });
         let agentPart;
-        if ($[131] !== children) {
+        if ($[119] !== children) {
           agentPart = jsxProd_default(
             Text,
             {
@@ -1560,9 +1936,9 @@ function CollapsedReadSearchContent(props) {
             },
             "agent",
           );
-          $[131] = children;
-          $[132] = agentPart;
-        } else agentPart = $[132];
+          $[119] = children;
+          $[120] = agentPart;
+        } else agentPart = $[120];
         parts.push(agentPart);
       } else if (text !== undefined)
         pushPart(
@@ -1664,8 +2040,8 @@ function CollapsedReadSearchContent(props) {
       );
     let isWorking = needsLoading && !hasTeamMemOps_2 && parts.length === partCountBefore;
     if (isWorking) pushPart("script", "working", null);
-    let summaryOverride = !appStateSlice_2 && isWorking ? styleCache : undefined;
-    taskSummaryText = appStateSlice_2 || summaryOverride;
+    let summaryOverride = !appStateSlice_3 && isWorking ? styleCache : undefined;
+    taskSummaryText = appStateSlice_3 || summaryOverride;
     elapsedAnchorMs = summaryOverride === undefined ? lastToolStartMs : 0;
     textOnlyHooks = parts.length === 0 && (message.hookTotalMs ?? 0) > 0;
     if (textOnlyHooks)
@@ -1687,46 +2063,46 @@ function CollapsedReadSearchContent(props) {
           ],
         }),
       );
-    $[83] = agentCount;
-    $[84] = bashCount;
-    $[85] = styleCache;
-    $[86] = editFileCount;
-    $[87] = frameCount;
-    $[88] = bg;
-    $[89] = groupMessages;
-    $[90] = needsLoading;
-    $[91] = hasTeamMemOps_2;
-    $[92] = hasThought;
-    $[93] = lastToolStartMs;
-    $[94] = isActiveGroup;
-    $[95] = isLiveTurn;
-    $[96] = added;
-    $[97] = removed;
-    $[98] = list_3;
-    $[99] = appStateSlice_2;
-    $[100] = localMemoryPrefix;
-    $[101] = mcpTotal;
-    $[102] = memoryReadCount;
-    $[103] = memorySearchCount;
-    $[104] = memoryWriteCount;
-    $[105] = message;
-    $[106] = otherToolCount;
-    $[107] = read_3;
-    $[108] = quietCallCount;
-    $[109] = added_2;
-    $[110] = removed_2;
-    $[111] = scratchpadWriteCount;
-    $[112] = search_3;
-    $[113] = thoughtForMs;
-    $[114] = elapsedAnchorMs;
-    $[115] = taskSummaryText;
-    $[116] = textOnlyHooks;
-    $[117] = parts;
+    $[71] = agentCount;
+    $[72] = bashCount;
+    $[73] = styleCache;
+    $[74] = editFileCount;
+    $[75] = frameCount;
+    $[76] = bg;
+    $[77] = groupMessages;
+    $[78] = needsLoading;
+    $[79] = hasTeamMemOps_2;
+    $[80] = hasThought;
+    $[81] = lastToolStartMs;
+    $[82] = isActiveGroup;
+    $[83] = isLiveTurn;
+    $[84] = added;
+    $[85] = removed;
+    $[86] = list_3;
+    $[87] = appStateSlice_3;
+    $[88] = localMemoryPrefix;
+    $[89] = mcpTotal;
+    $[90] = memoryReadCount;
+    $[91] = memorySearchCount;
+    $[92] = memoryWriteCount;
+    $[93] = message;
+    $[94] = otherToolCount;
+    $[95] = read_3;
+    $[96] = quietCallCount;
+    $[97] = added_2;
+    $[98] = removed_2;
+    $[99] = scratchpadWriteCount;
+    $[100] = search_3;
+    $[101] = thoughtForMs;
+    $[102] = elapsedAnchorMs;
+    $[103] = taskSummaryText;
+    $[104] = textOnlyHooks;
+    $[105] = parts;
   } else {
-    elapsedAnchorMs = $[114];
-    taskSummaryText = $[115];
-    textOnlyHooks = $[116];
-    parts = $[117];
+    elapsedAnchorMs = $[102];
+    taskSummaryText = $[103];
+    textOnlyHooks = $[104];
+    parts = $[105];
   }
   let autoModeBlockedCount = 0;
   let monitorBlockedCount = 0;
@@ -1734,7 +2110,7 @@ function CollapsedReadSearchContent(props) {
   let permissionDeniedCount = 0;
   let autoModeBlockedContent;
   let permissionDeniedContent;
-  let flattened = message.messages.flatMap(countToolUses);
+  let flattened = message.messages.flatMap(toolCallOf);
   for (const toolResultMessage of flattened) {
     let found = toolResultMessage.message.content.find(isToolResultBlock);
     if (
@@ -1756,7 +2132,7 @@ function CollapsedReadSearchContent(props) {
       found.is_error === true &&
       toolResultMessage.toolDenialAfterRun !== true &&
       toolResultMessage.toolDenialFromHost !== true &&
-      !summarizedIds_2.has(found.tool_use_id)
+      !hookCallIds.has(found.tool_use_id)
     ) {
       permissionDeniedCount++;
       permissionDeniedContent = typeof found.content === "string" ? found.content : undefined;
@@ -1792,23 +2168,24 @@ function CollapsedReadSearchContent(props) {
         );
   const marginTop = margin ? 1 : 0;
   let leadingIcon;
-  if ($[133] !== anyError || $[134] !== isActiveGroup) {
+  if ($[121] !== anyError || $[122] !== isActiveGroup || $[123] !== hasLiveError) {
     leadingIcon = isActiveGroup
       ? jsxProd_default(ToolUseLoader, {
           shouldAnimate: true,
           isUnresolved: true,
-          isError: anyError || false,
+          isError: anyError || hasLiveError,
         })
       : jsxProd_default(Box, {
           minWidth: 2,
         });
-    $[133] = anyError;
-    $[134] = isActiveGroup;
-    $[135] = leadingIcon;
-  } else leadingIcon = $[135];
+    $[121] = anyError;
+    $[122] = isActiveGroup;
+    $[123] = hasLiveError;
+    $[124] = leadingIcon;
+  } else leadingIcon = $[124];
   const dimColor = !isActiveGroup;
   let summaryRow;
-  if ($[136] !== taskSummaryText || $[137] !== parts) {
+  if ($[125] !== taskSummaryText || $[126] !== parts) {
     summaryRow = taskSummaryText
       ? jsxProd_default(
           Text,
@@ -1818,12 +2195,12 @@ function CollapsedReadSearchContent(props) {
           "task-summary",
         )
       : parts;
-    $[136] = taskSummaryText;
-    $[137] = parts;
-    $[138] = summaryRow;
-  } else summaryRow = $[138];
+    $[125] = taskSummaryText;
+    $[126] = parts;
+    $[127] = summaryRow;
+  } else summaryRow = $[127];
   let teamMemParts;
-  if ($[139] !== taskSummaryText || $[140] !== isActiveGroup || $[141] !== message || $[142] !== parts) {
+  if ($[128] !== taskSummaryText || $[129] !== isActiveGroup || $[130] !== message || $[131] !== parts) {
     teamMemParts =
       !taskSummaryText &&
       TeamMemCountParts({
@@ -1831,14 +2208,14 @@ function CollapsedReadSearchContent(props) {
         isActiveGroup,
         hasPrecedingParts: parts.length > 0,
       });
-    $[139] = taskSummaryText;
-    $[140] = isActiveGroup;
-    $[141] = message;
-    $[142] = parts;
-    $[143] = teamMemParts;
-  } else teamMemParts = $[143];
+    $[128] = taskSummaryText;
+    $[129] = isActiveGroup;
+    $[130] = message;
+    $[131] = parts;
+    $[132] = teamMemParts;
+  } else teamMemParts = $[132];
   let elapsedRow;
-  if ($[144] !== elapsedAnchorMs || $[145] !== isLiveTurn || $[146] !== shouldAnimate) {
+  if ($[133] !== elapsedAnchorMs || $[134] !== isLiveTurn || $[135] !== shouldAnimate) {
     elapsedRow =
       elapsedAnchorMs > 0 &&
       !isLiveTurn &&
@@ -1850,13 +2227,13 @@ function CollapsedReadSearchContent(props) {
         },
         "tool-elapsed",
       );
-    $[144] = elapsedAnchorMs;
-    $[145] = isLiveTurn;
-    $[146] = shouldAnimate;
-    $[147] = elapsedRow;
-  } else elapsedRow = $[147];
+    $[133] = elapsedAnchorMs;
+    $[134] = isLiveTurn;
+    $[135] = shouldAnimate;
+    $[136] = elapsedRow;
+  } else elapsedRow = $[136];
   let ellipsisRow;
-  if ($[148] !== taskSummaryText || $[149] !== isActiveGroup) {
+  if ($[137] !== taskSummaryText || $[138] !== isActiveGroup) {
     ellipsisRow =
       isActiveGroup &&
       !taskSummaryText &&
@@ -1867,59 +2244,59 @@ function CollapsedReadSearchContent(props) {
         },
         "ellipsis",
       );
-    $[148] = taskSummaryText;
-    $[149] = isActiveGroup;
-    $[150] = ellipsisRow;
-  } else ellipsisRow = $[150];
+    $[137] = taskSummaryText;
+    $[138] = isActiveGroup;
+    $[139] = ellipsisRow;
+  } else ellipsisRow = $[139];
   let expandHint;
-  if ($[151] === MEMO_CACHE_SENTINEL) {
+  if ($[140] === MEMO_CACHE_SENTINEL) {
     expandHint = jsxProd_default(CtrlOToExpand, {});
-    $[151] = expandHint;
-  } else expandHint = $[151];
+    $[140] = expandHint;
+  } else expandHint = $[140];
   let partsRow;
   if (
-    $[152] !== dimColor ||
-    $[153] !== summaryRow ||
-    $[154] !== teamMemParts ||
-    $[155] !== elapsedRow ||
-    $[156] !== ellipsisRow
+    $[141] !== dimColor ||
+    $[142] !== summaryRow ||
+    $[143] !== teamMemParts ||
+    $[144] !== elapsedRow ||
+    $[145] !== ellipsisRow
   ) {
     partsRow = jsxProd_default_2(Text, {
       dimColor,
       children: [summaryRow, teamMemParts, elapsedRow, ellipsisRow, " ", expandHint],
     });
-    $[152] = dimColor;
-    $[153] = summaryRow;
-    $[154] = teamMemParts;
-    $[155] = elapsedRow;
-    $[156] = ellipsisRow;
-    $[157] = partsRow;
-  } else partsRow = $[157];
+    $[141] = dimColor;
+    $[142] = summaryRow;
+    $[143] = teamMemParts;
+    $[144] = elapsedRow;
+    $[145] = ellipsisRow;
+    $[146] = partsRow;
+  } else partsRow = $[146];
   let headerRow;
-  if ($[158] !== leadingIcon || $[159] !== partsRow) {
+  if ($[147] !== leadingIcon || $[148] !== partsRow) {
     headerRow = jsxProd_default_2(Box, {
       flexDirection: "row",
       children: [leadingIcon, partsRow],
     });
-    $[158] = leadingIcon;
-    $[159] = partsRow;
-    $[160] = headerRow;
-  } else headerRow = $[160];
+    $[147] = leadingIcon;
+    $[148] = partsRow;
+    $[149] = headerRow;
+  } else headerRow = $[149];
   let interruptedNotice;
-  if ($[161] !== hasInterruptedCall) {
+  if ($[150] !== hasInterruptedCall) {
     interruptedNotice = hasInterruptedCall && jsxProd_default(RejectedToolUseMessage, {});
-    $[161] = hasInterruptedCall;
-    $[162] = interruptedNotice;
-  } else interruptedNotice = $[162];
+    $[150] = hasInterruptedCall;
+    $[151] = interruptedNotice;
+  } else interruptedNotice = $[151];
   let autoBlockedNotice;
   if (
-    $[163] !== autoModeReason ||
-    $[164] !== autoModeBlockedCount ||
-    $[165] !== monitorBlockedCount ||
-    $[166] !== blockedCount ||
-    $[167] !== hasAutoDenial ||
-    $[168] !== isLiveTurn ||
-    $[169] !== toolUseIds
+    $[152] !== autoModeReason ||
+    $[153] !== autoModeBlockedCount ||
+    $[154] !== monitorBlockedCount ||
+    $[155] !== blockedCount ||
+    $[156] !== hasAutoDenial ||
+    $[157] !== isLiveTurn ||
+    $[158] !== toolUseIds
   ) {
     autoBlockedNotice =
       blockedCount > 0 &&
@@ -1958,21 +2335,21 @@ function CollapsedReadSearchContent(props) {
           ],
         }),
       });
-    $[163] = autoModeReason;
-    $[164] = autoModeBlockedCount;
-    $[165] = monitorBlockedCount;
-    $[166] = blockedCount;
-    $[167] = hasAutoDenial;
-    $[168] = isLiveTurn;
-    $[169] = toolUseIds;
-    $[170] = autoBlockedNotice;
-  } else autoBlockedNotice = $[170];
+    $[152] = autoModeReason;
+    $[153] = autoModeBlockedCount;
+    $[154] = monitorBlockedCount;
+    $[155] = blockedCount;
+    $[156] = hasAutoDenial;
+    $[157] = isLiveTurn;
+    $[158] = toolUseIds;
+    $[159] = autoBlockedNotice;
+  } else autoBlockedNotice = $[159];
   let deniedNotice;
   if (
-    $[171] !== isLiveTurn ||
-    $[172] !== permissionReason ||
-    $[173] !== permissionDeniedCount ||
-    $[174] !== toolUseIds
+    $[160] !== isLiveTurn ||
+    $[161] !== permissionReason ||
+    $[162] !== permissionDeniedCount ||
+    $[163] !== toolUseIds
   ) {
     deniedNotice =
       permissionDeniedCount > 0 &&
@@ -2006,14 +2383,14 @@ function CollapsedReadSearchContent(props) {
           ],
         }),
       });
-    $[171] = isLiveTurn;
-    $[172] = permissionReason;
-    $[173] = permissionDeniedCount;
-    $[174] = toolUseIds;
-    $[175] = deniedNotice;
-  } else deniedNotice = $[175];
+    $[160] = isLiveTurn;
+    $[161] = permissionReason;
+    $[162] = permissionDeniedCount;
+    $[163] = toolUseIds;
+    $[164] = deniedNotice;
+  } else deniedNotice = $[164];
   let unavailableNotice;
-  if ($[176] !== unavailableCount || $[177] !== isLiveTurn || $[178] !== toolUseIds) {
+  if ($[165] !== unavailableCount || $[166] !== isLiveTurn || $[167] !== toolUseIds) {
     unavailableNotice =
       unavailableCount > 0 &&
       !isLiveTurn &&
@@ -2026,19 +2403,19 @@ function CollapsedReadSearchContent(props) {
           }),
         }),
       });
-    $[176] = unavailableCount;
-    $[177] = isLiveTurn;
-    $[178] = toolUseIds;
-    $[179] = unavailableNotice;
-  } else unavailableNotice = $[179];
+    $[165] = unavailableCount;
+    $[166] = isLiveTurn;
+    $[167] = toolUseIds;
+    $[168] = unavailableNotice;
+  } else unavailableNotice = $[168];
   let hintRow;
   if (
-    $[180] !== columns ||
-    $[181] !== hint ||
-    $[182] !== isActiveGroup ||
-    $[183] !== nothing ||
-    $[184] !== elapsedSuffix ||
-    $[185] !== hasLingeringHint
+    $[169] !== columns ||
+    $[170] !== hint ||
+    $[171] !== isActiveGroup ||
+    $[172] !== nothing ||
+    $[173] !== elapsedSuffix ||
+    $[174] !== hasLingeringHint
   ) {
     hintRow =
       isActiveGroup &&
@@ -2083,16 +2460,16 @@ function CollapsedReadSearchContent(props) {
           }),
         ],
       });
-    $[180] = columns;
-    $[181] = hint;
-    $[182] = isActiveGroup;
-    $[183] = nothing;
-    $[184] = elapsedSuffix;
-    $[185] = hasLingeringHint;
-    $[186] = hintRow;
-  } else hintRow = $[186];
+    $[169] = columns;
+    $[170] = hint;
+    $[171] = isActiveGroup;
+    $[172] = nothing;
+    $[173] = elapsedSuffix;
+    $[174] = hasLingeringHint;
+    $[175] = hintRow;
+  } else hintRow = $[175];
   let hooksNotice;
-  if ($[187] !== textOnlyHooks || $[188] !== message) {
+  if ($[176] !== textOnlyHooks || $[177] !== message) {
     hooksNotice =
       !textOnlyHooks &&
       message.hookTotalMs !== undefined &&
@@ -2114,22 +2491,23 @@ function CollapsedReadSearchContent(props) {
           ")",
         ],
       });
-    $[187] = textOnlyHooks;
-    $[188] = message;
-    $[189] = hooksNotice;
-  } else hooksNotice = $[189];
+    $[176] = textOnlyHooks;
+    $[177] = message;
+    $[178] = hooksNotice;
+  } else hooksNotice = $[178];
   let content;
   if (
-    $[190] !== nothing ||
-    $[191] !== marginTop ||
-    $[192] !== headerRow ||
-    $[193] !== interruptedNotice ||
-    $[194] !== autoBlockedNotice ||
-    $[195] !== deniedNotice ||
-    $[196] !== unavailableNotice ||
-    $[197] !== hintRow ||
-    $[198] !== hooksNotice ||
-    $[199] !== denialRef
+    $[179] !== nothing ||
+    $[180] !== extraRows ||
+    $[181] !== marginTop ||
+    $[182] !== headerRow ||
+    $[183] !== interruptedNotice ||
+    $[184] !== autoBlockedNotice ||
+    $[185] !== deniedNotice ||
+    $[186] !== unavailableNotice ||
+    $[187] !== hintRow ||
+    $[188] !== hooksNotice ||
+    $[189] !== denialRef
   ) {
     content = jsxProd_default_2(Box, {
       ref: denialRef,
@@ -2147,18 +2525,19 @@ function CollapsedReadSearchContent(props) {
         hooksNotice,
       ],
     });
-    $[190] = nothing;
-    $[191] = marginTop;
-    $[192] = headerRow;
-    $[193] = interruptedNotice;
-    $[194] = autoBlockedNotice;
-    $[195] = deniedNotice;
-    $[196] = unavailableNotice;
-    $[197] = hintRow;
-    $[198] = hooksNotice;
-    $[199] = denialRef;
-    $[200] = content;
-  } else content = $[200];
+    $[179] = nothing;
+    $[180] = extraRows;
+    $[181] = marginTop;
+    $[182] = headerRow;
+    $[183] = interruptedNotice;
+    $[184] = autoBlockedNotice;
+    $[185] = deniedNotice;
+    $[186] = unavailableNotice;
+    $[187] = hintRow;
+    $[188] = hooksNotice;
+    $[189] = denialRef;
+    $[190] = content;
+  } else content = $[190];
   return content;
 }
 export { CollapsedReadSearchContent, selectViewingAgentTaskId_2 };

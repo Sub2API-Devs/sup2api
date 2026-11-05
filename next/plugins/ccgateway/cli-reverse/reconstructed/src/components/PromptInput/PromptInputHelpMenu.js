@@ -3,11 +3,12 @@
  *
  * "?" 帮助菜单：列出输入模式前缀（! @ / # 等）与快捷键（按当前 keybinding 显示）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/PromptInputHelpMenu.tsx
- * pieces: chunk-18hwfzwa.js (5)
- * attribution: fingerprint 2, layout 1, placement 2
+ * pieces: chunk-czq1j3j2.js (5)
+ * attribution: placement 2, sole-consumer 1, affinity 1, fingerprint 1
  */
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useShortcutDisplay as useShortcutDisplay_2 } from "../../keybindings/useShortcutDisplay.js";
 import { useShortcutDisplay } from "../../keybindings/useKeybindingDisplay.js";
@@ -27,19 +28,23 @@ import { getNewlineInstructions } from "./utils.js";
 import { isSuspendAllowed } from "../../ink/terminalProbe.js";
 import { isFastModeEnabled, isFastModeAvailable } from "../../utils/fastMode.js";
 import { isKeybindingCustomizationEnabled } from "../../keybindings/loadUserBindings.js";
-import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:846384-846430 fingerprint (2.1.88 match: formatShortcut, 1)
+//@ chunk-czq1j3j2.js:849027-849031 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:849027", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:879241-879287 sole-consumer (2.1.88 match: formatShortcut, 1)
 function formatShortcut(shortcut) {
   return shortcut.replaceAll("+", " + ");
 }
-//@ chunk-18hwfzwa.js:846430-846468 layout
+//@ chunk-czq1j3j2.js:879287-879325 affinity
 var SHORTCUT_FORMAT = {
   keyCase: "lower",
   modSep: " + ",
 };
-//@ chunk-18hwfzwa.js:846468-851347 fingerprint (2.1.88 match: PromptInputHelpMenu, 0.665)
+//@ chunk-czq1j3j2.js:879325-884204 fingerprint (2.1.88 match: PromptInputHelpMenu, 0.665)
 /**
  * "?" 帮助菜单：三列列出 ! bash 模式、/ 命令、@ 文件、& 后台、双击 esc 回退、shift+tab 模式切换、ctrl+o transcript、ctrl+t 任务、ctrl+_ 撤销等，按当前 keybinding 显示。
  */
@@ -453,7 +458,7 @@ function PromptInputHelpMenu(props) {
   } else menuBox = $[92];
   return menuBox;
 }
-//@ chunk-18hwfzwa.js:851347-851811 placement
+//@ chunk-czq1j3j2.js:884204-884668 placement
 function EffortKeysHelp(props) {
   let $ = useMemoCache(8);
   let { dimColor } = props;
@@ -491,9 +496,4 @@ function EffortKeysHelp(props) {
   } else rowElement = $[7];
   return rowElement;
 }
-//@ chunk-18hwfzwa.js:851811-851815 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:851811", () => {
-  init_react_production();
-});
 export { PromptInputHelpMenu };

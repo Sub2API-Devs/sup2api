@@ -1,15 +1,15 @@
 /**
  * @anthropic-ai/sdk/internal/qs/stringify.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (6)
+ * pieces: chunk-vn3g7zt8.js (6)
  * attribution: esm-fingerprint 5, esm-layout 1
  */
 import { isArray } from "../utils/values.mjs";
 import { encode, maybe_map, isBufferLike, has } from "./utils.mjs";
 import { default_format, default_formatter, formatters } from "./formats.mjs";
 
-//@ chunk-hwmsct5x.js:20512-21053 esm-fingerprint
+//@ chunk-vn3g7zt8.js:20880-21421 esm-fingerprint
 var array_prefix_generators = {
   brackets(prefix) {
     return String(prefix) + "[]";
@@ -47,7 +47,7 @@ var defaults = {
   skipNulls: false,
   strictNullHandling: false,
 };
-//@ chunk-hwmsct5x.js:21053-21180 esm-fingerprint
+//@ chunk-vn3g7zt8.js:21421-21548 esm-fingerprint
 function is_non_nullish_primitive(v) {
   return (
     typeof v === "string" ||
@@ -57,9 +57,9 @@ function is_non_nullish_primitive(v) {
     typeof v === "bigint"
   );
 }
-//@ chunk-hwmsct5x.js:21180-21190 esm-layout
+//@ chunk-vn3g7zt8.js:21548-21558 esm-layout
 var sentinel = {};
-//@ chunk-hwmsct5x.js:21190-22490 esm-fingerprint
+//@ chunk-vn3g7zt8.js:21558-22861 esm-fingerprint
 function inner_stringify(
   object,
   prefix,
@@ -173,7 +173,7 @@ function inner_stringify(
   }
   return values;
 }
-//@ chunk-hwmsct5x.js:22490-24706 esm-fingerprint
+//@ chunk-vn3g7zt8.js:22861-25077 esm-fingerprint
 function normalize_stringify_options(opts = defaults) {
   if (typeof opts.allowEmptyArrays !== "undefined" && typeof opts.allowEmptyArrays !== "boolean")
     throw TypeError("`allowEmptyArrays` option can only be `true` or `false`, when provided");
@@ -231,7 +231,7 @@ function normalize_stringify_options(opts = defaults) {
       typeof opts.strictNullHandling === "boolean" ? opts.strictNullHandling : defaults.strictNullHandling,
   };
 }
-//@ chunk-hwmsct5x.js:24706-25478 esm-fingerprint
+//@ chunk-vn3g7zt8.js:25077-25849 esm-fingerprint
 function stringify(object, opts = {}) {
   let obj = object;
   let options = normalize_stringify_options(opts);

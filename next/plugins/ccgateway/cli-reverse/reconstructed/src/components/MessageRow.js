@@ -3,10 +3,10 @@
  *
  * 消息列表的一行：包装 Message，计算是否仍在流式、工具是否全部完成、后续是否还有内容，并用自定义比较做 memo。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/MessageRow.tsx
- * pieces: chunk-ag5x7vhf.js (7)
- * attribution: placement 1, fingerprint 5, callgraph-witnessed 1
+ * pieces: chunk-hnxhr3bs.js (8)
+ * attribution: placement 1, fingerprint 5, layout 1, callgraph-witnessed 1
  */
 import {
   isSignedThinkingMessage,
@@ -21,7 +21,6 @@ import {
   EMPTY_STRING_SET,
   getSiblingToolUseIDsFromLookup,
   getToolUseID,
-  rowReferencesToolUseIds,
 } from "../utils/messages.js";
 import { shouldRenderStatically } from "./Messages.js";
 import { shouldShowMessageTimestamp, MessageTimestamp } from "./MessageTimestamp.js";
@@ -36,7 +35,7 @@ import { Box } from "../ink/components/Text.js";
 import { memo } from "../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:138979-139092 placement
+//@ chunk-hnxhr3bs.js:143169-143282 placement
 function shouldShowModelLabel(message, isBrief) {
   return (
     isBrief &&
@@ -45,7 +44,7 @@ function shouldShowModelLabel(message, isBrief) {
     message.message.content.some((state) => state.type === "text")
   );
 }
-//@ chunk-ag5x7vhf.js:141082-141728 fingerprint (2.1.88 match: hasContentAfterIndex, 0.897)
+//@ chunk-hnxhr3bs.js:145272-145918 fingerprint (2.1.88 match: hasContentAfterIndex, 0.881)
 function hasContentAfterIndex(messages, tools, excludedIds) {
   for (let i = messages.length - 1; i >= 0; i--) {
     let msg = messages[i];
@@ -74,18 +73,19 @@ function hasContentAfterIndex(messages, tools, excludedIds) {
   }
   return -1;
 }
-//@ chunk-ag5x7vhf.js:141728-145756 fingerprint (2.1.88 match: MessageRowImpl, 0.817)
+//@ chunk-hnxhr3bs.js:145918-150037 fingerprint (2.1.88 match: MessageRowImpl, 0.8)
 /**
  * 消息列表单行：决定是否显示时间戳/模型、是否仍在流式（isMessageStreaming）、工具是否全部完成，渲染 Message；transcript 屏与折叠分组有特殊处理。
  */
 function MessageRowImpl(props) {
-  let $ = useMemoCache(80);
+  let $ = useMemoCache(81);
   let {
     message: msg,
     isUserContinuation,
     isSplitUserContinuation,
     followsSpeakerLabel,
     continuesLabelledReply,
+    joinsTopNotices,
     followsInboundLabel,
     hasContentAfter,
     tools,
@@ -103,7 +103,8 @@ function MessageRowImpl(props) {
     isLoading,
     lookups,
   } = props;
-  let onTranscriptScreen = screen === "transcript";
+  let joinsTopNotices_2 = joinsTopNotices === undefined ? false : joinsTopNotices;
+  let isContinuation = screen === "transcript";
   let isGrouped = msg.type === "grouped_tool_use";
   let isCollapsedReadSearch = msg.type === "collapsed_read_search";
   let t1;
@@ -229,32 +230,28 @@ function MessageRowImpl(props) {
       shouldAnimate = t5;
     }
   }
+  let hidden = isContinuation && true;
   let hasMetadataHeader;
   if (
     $[33] !== continuesLabelledReply ||
     $[34] !== message ||
     $[35] !== followsSpeakerLabel ||
     $[36] !== isSplitUserContinuation ||
-    $[37] !== onTranscriptScreen ||
-    $[38] !== showMessageTimestamps
+    $[37] !== showMessageTimestamps ||
+    $[38] !== hidden
   ) {
     hasMetadataHeader =
       message !== null &&
       !followsSpeakerLabel &&
       !continuesLabelledReply &&
-      (shouldShowMessageTimestamp(
-        message,
-        onTranscriptScreen,
-        showMessageTimestamps,
-        isSplitUserContinuation,
-      ) ||
-        shouldShowModelLabel(message, onTranscriptScreen));
+      (shouldShowMessageTimestamp(message, hidden, showMessageTimestamps, isSplitUserContinuation) ||
+        shouldShowModelLabel(message, hidden));
     $[33] = continuesLabelledReply;
     $[34] = message;
     $[35] = followsSpeakerLabel;
     $[36] = isSplitUserContinuation;
-    $[37] = onTranscriptScreen;
-    $[38] = showMessageTimestamps;
+    $[37] = showMessageTimestamps;
+    $[38] = hidden;
     $[39] = hasMetadataHeader;
   } else hasMetadataHeader = $[39];
   let metadataHeader = hasMetadataHeader;
@@ -271,25 +268,27 @@ function MessageRowImpl(props) {
     $[45] !== isActiveCollapsedGroup ||
     $[46] !== isSplitUserContinuation ||
     $[47] !== isStatic ||
-    $[48] !== onTranscriptScreen ||
+    $[48] !== isContinuation ||
     $[49] !== isUserContinuation ||
-    $[50] !== latestBashOutputUUID ||
-    $[51] !== lookups ||
-    $[52] !== msg ||
-    $[53] !== onOpenRateLimitOptions ||
-    $[54] !== onRateLimitAutoQueueContinue ||
-    $[55] !== progressMessagesForMessage ||
-    $[56] !== shouldAnimate ||
-    $[57] !== addMargin ||
-    $[58] !== containerWidth ||
-    $[59] !== shouldShowDot ||
-    $[60] !== tools ||
-    $[61] !== verbose
+    $[50] !== joinsTopNotices_2 ||
+    $[51] !== latestBashOutputUUID ||
+    $[52] !== lookups ||
+    $[53] !== msg ||
+    $[54] !== onOpenRateLimitOptions ||
+    $[55] !== onRateLimitAutoQueueContinue ||
+    $[56] !== progressMessagesForMessage ||
+    $[57] !== shouldAnimate ||
+    $[58] !== addMargin ||
+    $[59] !== containerWidth ||
+    $[60] !== shouldShowDot ||
+    $[61] !== tools ||
+    $[62] !== verbose
   ) {
     t8 = jsxProd_default(agentProgressSelector, {
       message: msg,
       lookups,
       addMargin,
+      joinsTopNotices: joinsTopNotices_2,
       containerWidth,
       tools,
       commands,
@@ -298,7 +297,7 @@ function MessageRowImpl(props) {
       progressMessagesForMessage,
       shouldAnimate,
       shouldShowDot,
-      isTranscriptMode: onTranscriptScreen,
+      isTranscriptMode: isContinuation,
       isStatic,
       onOpenRateLimitOptions,
       onRateLimitAutoQueueContinue,
@@ -318,65 +317,66 @@ function MessageRowImpl(props) {
     $[45] = isActiveCollapsedGroup;
     $[46] = isSplitUserContinuation;
     $[47] = isStatic;
-    $[48] = onTranscriptScreen;
+    $[48] = isContinuation;
     $[49] = isUserContinuation;
-    $[50] = latestBashOutputUUID;
-    $[51] = lookups;
-    $[52] = msg;
-    $[53] = onOpenRateLimitOptions;
-    $[54] = onRateLimitAutoQueueContinue;
-    $[55] = progressMessagesForMessage;
-    $[56] = shouldAnimate;
-    $[57] = addMargin;
-    $[58] = containerWidth;
-    $[59] = shouldShowDot;
-    $[60] = tools;
-    $[61] = verbose;
-    $[62] = t8;
-  } else t8 = $[62];
+    $[50] = joinsTopNotices_2;
+    $[51] = latestBashOutputUUID;
+    $[52] = lookups;
+    $[53] = msg;
+    $[54] = onOpenRateLimitOptions;
+    $[55] = onRateLimitAutoQueueContinue;
+    $[56] = progressMessagesForMessage;
+    $[57] = shouldAnimate;
+    $[58] = addMargin;
+    $[59] = containerWidth;
+    $[60] = shouldShowDot;
+    $[61] = tools;
+    $[62] = verbose;
+    $[63] = t8;
+  } else t8 = $[63];
   let messageEl = t8;
   if (!metadataHeader || message === null) {
     let t9;
-    if ($[63] !== messageEl) {
+    if ($[64] !== messageEl) {
       t9 = jsxProd_default(FreezeWhenOffscreen, {
         children: messageEl,
       });
-      $[63] = messageEl;
-      $[64] = t9;
-    } else t9 = $[64];
+      $[64] = messageEl;
+      $[65] = t9;
+    } else t9 = $[65];
     return t9;
   }
   let messageTimestampElement;
   if (
-    $[65] !== message ||
-    $[66] !== isSplitUserContinuation ||
-    $[67] !== onTranscriptScreen ||
-    $[68] !== showMessageTimestamps
+    $[66] !== message ||
+    $[67] !== isSplitUserContinuation ||
+    $[68] !== showMessageTimestamps ||
+    $[69] !== hidden
   ) {
     messageTimestampElement = jsxProd_default(MessageTimestamp, {
       message,
-      isTranscriptMode: onTranscriptScreen,
+      isTranscriptMode: hidden,
       showMessageTimestamps,
       isSplitUserContinuation,
     });
-    $[65] = message;
-    $[66] = isSplitUserContinuation;
-    $[67] = onTranscriptScreen;
+    $[66] = message;
+    $[67] = isSplitUserContinuation;
     $[68] = showMessageTimestamps;
-    $[69] = messageTimestampElement;
-  } else messageTimestampElement = $[69];
+    $[69] = hidden;
+    $[70] = messageTimestampElement;
+  } else messageTimestampElement = $[70];
   let messageModelElement;
-  if ($[70] !== message || $[71] !== onTranscriptScreen) {
+  if ($[71] !== message || $[72] !== hidden) {
     messageModelElement = jsxProd_default(MessageModel, {
       message,
-      isTranscriptMode: onTranscriptScreen,
+      isTranscriptMode: hidden,
     });
-    $[70] = message;
-    $[71] = onTranscriptScreen;
-    $[72] = messageModelElement;
-  } else messageModelElement = $[72];
+    $[71] = message;
+    $[72] = hidden;
+    $[73] = messageModelElement;
+  } else messageModelElement = $[73];
   let boxElement;
-  if ($[73] !== messageTimestampElement || $[74] !== messageModelElement) {
+  if ($[74] !== messageTimestampElement || $[75] !== messageModelElement) {
     boxElement = jsxProd_default_2(Box, {
       flexDirection: "row",
       justifyContent: "flex-end",
@@ -384,12 +384,12 @@ function MessageRowImpl(props) {
       marginTop: 1,
       children: [messageTimestampElement, messageModelElement],
     });
-    $[73] = messageTimestampElement;
-    $[74] = messageModelElement;
-    $[75] = boxElement;
-  } else boxElement = $[75];
+    $[74] = messageTimestampElement;
+    $[75] = messageModelElement;
+    $[76] = boxElement;
+  } else boxElement = $[76];
   let t10;
-  if ($[76] !== columns || $[77] !== messageEl || $[78] !== boxElement) {
+  if ($[77] !== columns || $[78] !== messageEl || $[79] !== boxElement) {
     t10 = jsxProd_default(FreezeWhenOffscreen, {
       children: jsxProd_default_2(Box, {
         width: columns,
@@ -397,14 +397,32 @@ function MessageRowImpl(props) {
         children: [boxElement, messageEl],
       }),
     });
-    $[76] = columns;
-    $[77] = messageEl;
-    $[78] = boxElement;
-    $[79] = t10;
-  } else t10 = $[79];
+    $[77] = columns;
+    $[78] = messageEl;
+    $[79] = boxElement;
+    $[80] = t10;
+  } else t10 = $[80];
   return t10;
 }
-//@ chunk-ag5x7vhf.js:146130-146586 fingerprint (2.1.88 match: allToolsResolved, 0.655)
+//@ chunk-hnxhr3bs.js:150037-150411 layout
+/**
+ * 一个 UI 行（含 grouped_tool_use/collapsed_read_search/work_segment）是否引用集合中的某个 tool_use id。
+ */
+function rowReferencesToolUseIds(message, deps) {
+  if (message.type === "grouped_tool_use")
+    return message.messages.some((message) => {
+      let firstBlock = message.message.content[0];
+      return firstBlock?.type === "tool_use" && deps.has(firstBlock.id);
+    });
+  if (message.type === "collapsed_read_search")
+    return collectToolUseIds(message).some((toolUseId) => deps.has(toolUseId));
+  if (message.type === "work_segment")
+    return message.messages.some((message) => rowReferencesToolUseIds(message, deps));
+  if (message.type === "speaker_label" || message.type === "recap_fold") return false;
+  let toolUseID = getToolUseID(message);
+  return !!toolUseID && deps.has(toolUseID);
+}
+//@ chunk-hnxhr3bs.js:150411-150867 fingerprint (2.1.88 match: allToolsResolved, 0.61)
 function allToolsResolved(msg, resolvedToolUseIDs) {
   if (msg.type === "grouped_tool_use")
     return msg.messages.every((m) => {
@@ -422,7 +440,7 @@ function allToolsResolved(msg, resolvedToolUseIDs) {
   let toolUseID = getToolUseID(msg);
   return !toolUseID || resolvedToolUseIDs.has(toolUseID);
 }
-//@ chunk-ag5x7vhf.js:146586-147355 fingerprint (2.1.88 match: areMessageRowPropsEqual, 0.751)
+//@ chunk-hnxhr3bs.js:150867-151675 fingerprint (2.1.88 match: areMessageRowPropsEqual, 0.719)
 function areMessageRowPropsEqual(prev, next) {
   if (prev.message !== next.message) return false;
   if (prev.screen !== next.screen) return false;
@@ -433,6 +451,7 @@ function areMessageRowPropsEqual(prev, next) {
     prev.isSplitUserContinuation !== next.isSplitUserContinuation ||
     prev.followsSpeakerLabel !== next.followsSpeakerLabel ||
     prev.continuesLabelledReply !== next.continuesLabelledReply ||
+    prev.joinsTopNotices !== next.joinsTopNotices ||
     prev.followsInboundLabel !== next.followsInboundLabel
   )
     return false;
@@ -446,15 +465,15 @@ function areMessageRowPropsEqual(prev, next) {
   if (isStreaming || !isResolved) return false;
   return true;
 }
-//@ chunk-ag5x7vhf.js:147355-147372 callgraph-witnessed (2.1.88 match: MessageRow, 0)
+//@ chunk-hnxhr3bs.js:151675-151692 callgraph-witnessed (2.1.88 match: MessageRow, 0)
 /**
  * MessageRow = React.memo(MessageRowImpl, areMessageRowPropsEqual)。
  */
 var MessageRow; // deferred: uses MessageRowImpl of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ag5x7vhf.js:147355", () => {
+deferInit("chunk-hnxhr3bs.js:151675", () => {
   MessageRow = memo(MessageRowImpl, areMessageRowPropsEqual);
 });
-//@ chunk-ag5x7vhf.js:172936-173244 fingerprint (2.1.88 match: isMessageStreaming, 0.863)
+//@ chunk-hnxhr3bs.js:177238-177546 fingerprint (2.1.88 match: isMessageStreaming, 1)
 /**
  * 判断消息是否仍在流式输出：与当前流式工具 ID 比较，按 assistant/user/grouped_tool_use/collapsed_read_search 分类检查。
  */

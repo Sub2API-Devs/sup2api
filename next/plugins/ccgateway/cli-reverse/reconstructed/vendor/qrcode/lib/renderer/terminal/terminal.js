@@ -1,13 +1,13 @@
 /**
  * qrcode/lib/renderer/terminal/terminal.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: qrcode@1.5.4
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
-//@ chunk-spjgqa4y.js:53699-54100 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:53699-54100 cjs-fingerprint
 var qrTerminalRenderer = __commonJS(function (cjsExports) {
   cjsExports.render = function (qrData, options, cb) {
     let size = qrData.modules.size;

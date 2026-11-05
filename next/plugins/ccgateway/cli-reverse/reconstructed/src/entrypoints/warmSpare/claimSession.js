@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。预热备用进程被认领为会话。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7n18p51h.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ea3gc4y9.js (4)
  * attribution: placement 4
  */
 import { isAbsolute, resolve, join } from "path";
@@ -49,21 +49,21 @@ import { resolveLocalSettingsStoreRoot } from "../../utils/settings/settingsFile
 import { uncachedStorageRootFor } from "../../utils/settings/settingsStorage.js";
 import { parseSettingsFileUncached } from "../../utils/settings/settings.js";
 
-//@ chunk-7n18p51h.js:12190-12372 placement
+//@ chunk-ea3gc4y9.js:13376-13558 placement
 var CLAIM_ENV_KEYS = new Set([
   "CLAUDE_CODE_OAUTH_TOKEN",
   "CLAUDE_CODE_SESSION_ACCESS_TOKEN",
   "CLAUDE_CODE_HOST_SESSION_ID",
 ]);
 var TOKEN_ENV_KEYS = new Set(["CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_SESSION_ACCESS_TOKEN"]);
-//@ chunk-7n18p51h.js:12372-12417 placement
+//@ chunk-ea3gc4y9.js:13558-13603 placement
 function errorResult(message) {
   return {
     kind: "error",
     message,
   };
 }
-//@ chunk-7n18p51h.js:12417-18455 placement
+//@ chunk-ea3gc4y9.js:13603-19641 placement
 /**
  * 预热备用进程（warm spare）被认领：校验进程是以备用模式启动的，接收会话凭证与设置（CLAUDE_CODE_OAUTH_TOKEN/SESSION_ACCESS_TOKEN 等），应用设置并记录启动耗时。
  */
@@ -359,7 +359,7 @@ async function claimWarmSpareSession(claim, spare) {
     },
   };
 }
-//@ chunk-7n18p51h.js:18455-19981 placement
+//@ chunk-ea3gc4y9.js:19641-21167 placement
 async function projectSettingsFilesToApply(dir, options) {
   if (getProjectConfigRoot() !== null) return;
   let files = [];

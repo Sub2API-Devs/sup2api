@@ -1,24 +1,24 @@
 /**
  * @opentelemetry/sdk-trace-base/build/esm/platform/node/RandomIdGenerator.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-trace-base@2.2.0
- * pieces: chunk-9vvvg0d3.js (4)
+ * pieces: chunk-3wgj3rdg.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
  */
 import { BatchSpanProcessorBase } from "../../../src/export/BatchSpanProcessorBase.js";
 
-//@ chunk-9vvvg0d3.js:19263-19297 esm-layout
+//@ chunk-3wgj3rdg.js:19635-19669 esm-layout
 class BatchSpanProcessor extends BatchSpanProcessorBase {
   onShutdown() {}
 }
-//@ chunk-9vvvg0d3.js:19297-19349 esm-fingerprint
+//@ chunk-3wgj3rdg.js:19669-19721 esm-fingerprint
 class RandomIdGenerator {
   generateTraceId = getIdGenerator(16);
   generateSpanId = getIdGenerator(8);
 }
-//@ chunk-9vvvg0d3.js:19349-19379 esm-fingerprint
+//@ chunk-3wgj3rdg.js:19721-19751 esm-fingerprint
 var SHARED_BUFFER = Buffer.allocUnsafe(16);
-//@ chunk-9vvvg0d3.js:19379-19579 esm-fingerprint
+//@ chunk-3wgj3rdg.js:19751-19951 esm-fingerprint
 function getIdGenerator(bytes) {
   return function () {
     for (let i = 0; i < bytes / 4; i++)

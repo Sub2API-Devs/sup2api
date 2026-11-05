@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件 $.http.fetch 接口（带授权句柄与请求体大小限制）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (34)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (34)
  * attribution: placement 34
  */
 import { isAbsolute } from "path";
@@ -49,7 +49,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { getErrnoCode, errorMessage } from "../../utils/errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3732425-3732889 placement
+//@ chunk-5xgkngpb.js:3828159-3828623 placement
 /**
  * 校验 $.http.fetch 的 socketPath：必须是绝对路径、无 NUL、非网络位置，且本构建支持 Unix 套接字。
  */
@@ -72,22 +72,22 @@ function checkSocketPath(socketPath, pluginName, label) {
     );
   return socketPath;
 }
-//@ chunk-e6aww6q8.js:3732889-3732954 placement
+//@ chunk-5xgkngpb.js:3828623-3828688 placement
 /**
  * accept/content-type/user-agent
  */
 var ALLOWED_FETCH_HEADERS = ["accept", "accept-language", "content-type", "user-agent"];
-//@ chunk-e6aww6q8.js:3732954-3732968 placement
+//@ chunk-5xgkngpb.js:3828688-3828702 placement
 /**
  * 30000
  */
 var FETCH_TIMEOUT_MS_2 = 30000;
-//@ chunk-e6aww6q8.js:3732968-3732990 placement
+//@ chunk-5xgkngpb.js:3828702-3828724 placement
 /**
  * "$.http.fetch"
  */
 var HTTP_FETCH_LABEL = "$.http.fetch";
-//@ chunk-e6aww6q8.js:3732990-3733160 placement
+//@ chunk-5xgkngpb.js:3828724-3828894 placement
 /**
  * 带超时的 AbortController：转发外部中止，超时后中止并可查询 timedOut，release 清理。
  */
@@ -108,37 +108,37 @@ function createTimeoutController(signal, ms = FETCH_TIMEOUT_MS_2) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:3733160-3733189 placement
+//@ chunk-5xgkngpb.js:3828894-3828923 placement
 /**
  * 数组包含
  */
 var includesValue = (list, value) => list.includes(value);
-//@ chunk-e6aww6q8.js:3733189-3733219 placement
+//@ chunk-5xgkngpb.js:3828923-3828953 placement
 /**
  * 301/302/303/307/308
  */
 var REDIRECT_STATUSES = [301, 302, 303, 307, 308];
-//@ chunk-e6aww6q8.js:3733219-3733243 placement
+//@ chunk-5xgkngpb.js:3828953-3828977 placement
 /**
  * 是否重定向
  */
 var isRedirectStatus = (status) => includesValue(REDIRECT_STATUSES, status);
-//@ chunk-e6aww6q8.js:3733243-3733265 placement
+//@ chunk-5xgkngpb.js:3828977-3828999 placement
 /**
  * 204/205/304
  */
 var NO_BODY_STATUSES = [204, 205, 304];
-//@ chunk-e6aww6q8.js:3733265-3733283 placement
+//@ chunk-5xgkngpb.js:3828999-3829017 placement
 /**
  * 301/302
  */
 var PRESERVED_METHOD_REDIRECTS = [301, 302];
-//@ chunk-e6aww6q8.js:3733283-3733295 placement
+//@ chunk-5xgkngpb.js:3829017-3829029 placement
 /**
  * 303
  */
 var SEE_OTHER_STATUS = 303;
-//@ chunk-e6aww6q8.js:3733295-3733629 placement
+//@ chunk-5xgkngpb.js:3829029-3829363 placement
 /**
  * 发起 fetch（手动处理重定向）：应用代理选项，或经 Unix 套接字（凭证请求强制校验证书、禁用 keepalive）。
  */
@@ -174,12 +174,12 @@ async function fetchManualRedirect(url, options) {
     signal: options.signal,
   });
 }
-//@ chunk-e6aww6q8.js:3733629-3733697 placement
+//@ chunk-5xgkngpb.js:3829363-3829431 placement
 /**
  * 非必要流量已禁用
  */
 var NONESSENTIAL_TRAFFIC_TEXT = "nonessential network traffic is disabled for this session";
-//@ chunk-e6aww6q8.js:3733697-3733790 placement
+//@ chunk-5xgkngpb.js:3829431-3829524 placement
 /**
  * 是否官方插件引用
  */
@@ -187,13 +187,13 @@ function isOfficialPluginRef(pluginId) {
   let { name, marketplace } = splitPluginId(pluginId);
   return name === "" || (marketplace ?? "") === "" || officialPluginId(pluginId) !== undefined;
 }
-//@ chunk-e6aww6q8.js:3733790-3733915 placement
+//@ chunk-5xgkngpb.js:3829524-3829649 placement
 function networkRefusalReason(pluginId) {
   return env.CLAUDE_CODE_EVAL_CONFINED === true || (isEssentialTrafficOnly() && isOfficialPluginRef(pluginId))
     ? NONESSENTIAL_TRAFFIC_TEXT
     : (policyDeniedReason(ALLOW_WEB_FETCH, "Network access from plugins", "is") ?? undefined);
 }
-//@ chunk-e6aww6q8.js:3733915-3734035 placement
+//@ chunk-5xgkngpb.js:3829649-3829769 placement
 function parseUrlArg(value, pluginName, label) {
   try {
     return value instanceof URL ? value : new URL(value);
@@ -201,7 +201,7 @@ function parseUrlArg(value, pluginName, label) {
     throw new HooksError(`${pluginName}: ${label}: not a URL: ${String(value)}`);
   }
 }
-//@ chunk-e6aww6q8.js:3734035-3734400 placement
+//@ chunk-5xgkngpb.js:3829769-3830134 placement
 /**
  * 校验插件网络请求的 URL：受会话策略（仅必要流量、禁止 web fetch）限制，只允许 http/https 且不得包含凭证。
  */
@@ -215,23 +215,23 @@ function checkPluginFetchUrl(url, { pluginName, pluginStorageId }, label) {
     throw new HooksError(`${pluginName}: ${label}: ${urlArg.host} refused: credentials in the URL`);
   return urlArg;
 }
-//@ chunk-e6aww6q8.js:3734400-3734471 placement
+//@ chunk-5xgkngpb.js:3830134-3830205 placement
 /**
  * 凭证被扣下的说明
  */
 var credentialWithheldText = () =>
   isEssentialTrafficOnly() ? `the session's credential is withheld: ${NONESSENTIAL_TRAFFIC_TEXT}` : undefined;
-//@ chunk-e6aww6q8.js:3734471-3734481 placement
+//@ chunk-5xgkngpb.js:3830205-3830215 placement
 /**
  * 5
  */
 var MAX_REDIRECTS_2 = 5;
-//@ chunk-e6aww6q8.js:3734481-3734547 placement
+//@ chunk-5xgkngpb.js:3830215-3830281 placement
 /**
  * 事件批量请求体 schema
  */
 var EVENT_BATCH_BODY_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3734481", () => {
+deferInit("chunk-5xgkngpb.js:3830215", () => {
   EVENT_BATCH_BODY_SCHEMA = DoctorLazy(() =>
     objectSchema({
       events: array(
@@ -243,12 +243,12 @@ deferInit("chunk-e6aww6q8.js:3734481", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:3734547-3734585 placement
+//@ chunk-5xgkngpb.js:3830281-3830319 placement
 /**
  * /api/event_logging/v2/batch
  */
 var EVENT_LOG_PATH = "/api/event_logging/v2/batch";
-//@ chunk-e6aww6q8.js:3734585-3735009 placement
+//@ chunk-5xgkngpb.js:3830319-3830743 placement
 /**
  * 判断路径（多次解码规范化后）是否指向事件上报批量接口，用于防止绕过隐私过滤。
  */
@@ -282,12 +282,12 @@ function isEventLoggingPath(pathname) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:3735009-3735108 placement
+//@ chunk-5xgkngpb.js:3830743-3830842 placement
 /**
  * 模型元数据请求体 schema
  */
 var MODEL_METADATA_BODY_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3735009", () => {
+deferInit("chunk-5xgkngpb.js:3830743", () => {
   MODEL_METADATA_BODY_SCHEMA = DoctorLazy(() =>
     looseObject({
       events: array(
@@ -301,32 +301,32 @@ deferInit("chunk-e6aww6q8.js:3735009", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:3735108-3735158 placement
+//@ chunk-5xgkngpb.js:3830842-3830892 placement
 /**
  * 是否该形状
  */
 function isModelMetadataBody(body) {
   return MODEL_METADATA_BODY_SCHEMA().safeParse(body).success;
 }
-//@ chunk-e6aww6q8.js:3735158-3735232 placement
+//@ chunk-5xgkngpb.js:3830892-3830966 placement
 /**
  * 工具结果请求体 schema
  */
 var TOOL_RESULT_BODY_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3735158", () => {
+deferInit("chunk-5xgkngpb.js:3830892", () => {
   TOOL_RESULT_BODY_SCHEMA = DoctorLazy(() => {
     let valueSchema = union([stringSchema(), numberSchema(), booleanSchema(), nullSchema()]);
     return record(stringSchema(), union([valueSchema, array(valueSchema)]));
   });
 });
-//@ chunk-e6aww6q8.js:3735232-3735282 placement
+//@ chunk-5xgkngpb.js:3830966-3831016 placement
 /**
  * 是否该形状
  */
 function isToolResultBody(body) {
   return TOOL_RESULT_BODY_SCHEMA().safeParse(body).success;
 }
-//@ chunk-e6aww6q8.js:3735282-3735329 placement
+//@ chunk-5xgkngpb.js:3831016-3831063 placement
 /**
  * 纯数据校验
  */
@@ -337,7 +337,7 @@ function plainDataOrThrow(text) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:3735329-3735553 placement (2.1.88 match: base64URLEncode, 0.79)
+//@ chunk-5xgkngpb.js:3831063-3831287 placement (2.1.88 match: base64URLEncode, 0.789)
 function base64URLEncode(buffer) {
   let decoded = plainDataOrThrow(Buffer.from(buffer, "base64").toString("utf8"));
   if (!isToolResultBody(decoded)) return;
@@ -354,14 +354,14 @@ function base64URLEncode(buffer) {
         }),
       ).toString("base64");
 }
-//@ chunk-e6aww6q8.js:3735553-3735592 placement
+//@ chunk-5xgkngpb.js:3831287-3831326 placement
 /**
  * 模型名脱敏
  */
 function maskModelForLog(model) {
   return model === CONFIDENTIAL_MODEL_ID ? model : maskModelIdForTelemetry(model);
 }
-//@ chunk-e6aww6q8.js:3735592-3735860 placement
+//@ chunk-5xgkngpb.js:3831326-3831594 placement
 function maskEventFields(event) {
   let { model, additional_metadata: additionalMetadata } = event.event_data;
   let maskedModel = maskModelForLog(model);
@@ -388,7 +388,7 @@ function maskEventFields(event) {
         },
       };
 }
-//@ chunk-e6aww6q8.js:3735860-3736060 placement
+//@ chunk-5xgkngpb.js:3831594-3831794 placement
 async function maskEventBatch(body) {
   if (!isModelMetadataBody(body)) return;
   await hydrateMaskedIds();
@@ -402,7 +402,7 @@ async function maskEventBatch(body) {
         events: mapped,
       };
 }
-//@ chunk-e6aww6q8.js:3736060-3736450 placement
+//@ chunk-5xgkngpb.js:3831794-3832184 placement
 /**
  * 插件向事件上报接口发送数据时：内置插件掩码模型与元数据，HIPAA 模式下按隐私规则过滤事件，否则原样发送。
  */
@@ -421,7 +421,7 @@ async function redactEventBatchBody(url, text, { pluginName, pluginStorageId }, 
     events: filterEventsForPrivacy(encoded.data.events),
   });
 }
-//@ chunk-e6aww6q8.js:3736450-3736800 placement
+//@ chunk-5xgkngpb.js:3832184-3832534 placement
 /**
  * 读取响应体至多 n 字节（超出则截断并取消），返回 UTF-8 文本。
  */
@@ -451,7 +451,7 @@ async function readBodyCapped(response, maxBytes, signal) {
   }
   return new TextDecoder().decode(Buffer.concat(chunks));
 }
-//@ chunk-e6aww6q8.js:3736800-3739084 placement
+//@ chunk-5xgkngpb.js:3832534-3834818 placement
 /**
  * 插件 $.http.fetch：校验授权句柄与请求体大小上限后发起请求。
  */

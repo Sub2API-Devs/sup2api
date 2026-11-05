@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：市场 git 检出
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (11)
  * attribution: placement 11
  */
-import { mkdtemp, rm as rm_2, lstat, open } from "fs/promises";
+import { mkdtemp, rm, lstat, open } from "fs/promises";
 import { join, sep, isAbsolute, dirname } from "path";
 import { pluginGitUrlError } from "./pluginDirectoryTelemetry.js";
 import { tmpdir } from "../tempDir.js";
@@ -45,7 +45,7 @@ import {
 } from "./commandSource.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4186897-4187414 placement
+//@ chunk-5xgkngpb.js:4293274-4293791 placement
 async function lsRemoteMarketplace(
   rawUrl,
   { flags = [], patterns = [], timeout, endsWithItsChildren = false } = {},
@@ -76,17 +76,17 @@ async function lsRemoteMarketplace(
         })
       : await execFileNoThrow(gitExe(), args, execOptions);
   } finally {
-    await rm_2(tempDir, {
+    await rm(tempDir, {
       recursive: true,
       force: true,
     }).catch(() => {});
   }
 }
-//@ chunk-e6aww6q8.js:4187414-4187499 placement
+//@ chunk-5xgkngpb.js:4293791-4293876 placement
 var CLAUDE_CODE_SPARSE_PATHS_JSON; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_SPARSE_PATHS_FILE_BYTES;
 var sparsePathsSchema;
-deferInit("chunk-e6aww6q8.js:4187414", () => {
+deferInit("chunk-5xgkngpb.js:4293791", () => {
   CLAUDE_CODE_SPARSE_PATHS_JSON = "claude-code-sparse-paths.json";
   MAX_SPARSE_PATHS_FILE_BYTES = 65536;
   sparsePathsSchema = DoctorLazy(() =>
@@ -95,7 +95,7 @@ deferInit("chunk-e6aww6q8.js:4187414", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:4187499-4187574 placement
+//@ chunk-5xgkngpb.js:4293876-4293951 placement
 /**
  * writeSparsePaths：写入稀疏路径配置。
  */
@@ -107,7 +107,7 @@ async function writeSparsePaths(checkoutDir, sparsePaths) {
     }),
   );
 }
-//@ chunk-e6aww6q8.js:4187574-4189152 placement
+//@ chunk-5xgkngpb.js:4293951-4295531 placement
 /**
  * 探测已有的市场检出是否可复用（稀疏路径、HEAD、分支），否则重新克隆。
  */
@@ -185,7 +185,7 @@ async function probeMarketplaceCheckout(checkoutDir, remoteUrl, { ref, sparsePat
   );
   return isCurrent ? "current" : "stale";
 }
-//@ chunk-e6aww6q8.js:4189276-4189451 placement
+//@ chunk-5xgkngpb.js:4295655-4295830 placement
 /**
  * Git LFS 指针文件头与扫描限额。
  */
@@ -201,7 +201,7 @@ var lfsScanResult = {
   pointerFiles: 0,
   truncated: false,
 };
-//@ chunk-e6aww6q8.js:4189451-4191008 placement
+//@ chunk-5xgkngpb.js:4295830-4297391 placement
 /**
  * 检查市场检出中 Git LFS 跟踪的文件是否都已拉取。
  */
@@ -310,9 +310,9 @@ async function checkGitLfsFiles(repoDir) {
     return lfsScanResult;
   }
 }
-//@ chunk-e6aww6q8.js:4191008-4191075 placement
+//@ chunk-5xgkngpb.js:4297391-4297458 placement
 var VALID_SPARSE_PATH_RE = /^(?![-@~=+])(?:[A-Za-z]:\/)?[\p{L}\p{N}\p{M}_@~+=./-]+$/u;
-//@ chunk-e6aww6q8.js:4191075-4191787 placement
+//@ chunk-5xgkngpb.js:4297458-4298170 placement
 function describeGitLfsMissing(repoDir, { pointerFiles, truncated }) {
   if (pointerFiles === 0 && !truncated) return null;
   let displayPath = sep === "\\" ? repoDir.replaceAll(sep, "/") : repoDir;
@@ -324,7 +324,7 @@ function describeGitLfsMissing(repoDir, { pointerFiles, truncated }) {
   let isPlural = pointerFiles !== 1;
   return `${truncated ? "At least " : ""}${pointerFiles} ${plural(pointerFiles, "file")} in ${repoDir} ${isPlural ? "were" : "was"} checked out as ${isPlural ? "Git LFS pointer files" : "a Git LFS pointer file"} instead of ${isPlural ? "their" : "its"} content \u2014 Claude Code never downloads Git LFS content there. To fetch it, ${hint}`;
 }
-//@ chunk-e6aww6q8.js:4191787-4192025 placement
+//@ chunk-5xgkngpb.js:4298170-4298408 placement
 async function safeCheckoutPath(repoDir, entryPath, parentChecks) {
   let parts = entryPath.split("/");
   if (isAbsolute(entryPath) || parts.some((part) => part === "" || part === "." || part === ".."))
@@ -341,7 +341,7 @@ async function safeCheckoutPath(repoDir, entryPath, parentChecks) {
   }
   return fullPath;
 }
-//@ chunk-e6aww6q8.js:4192025-4192338 placement
+//@ chunk-5xgkngpb.js:4298408-4298721 placement
 /**
  * 文件开头是否 Git LFS 指针头。
  */
@@ -364,7 +364,7 @@ async function isLfsPointerFile(filePath) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:4192481-4192802 placement
+//@ chunk-5xgkngpb.js:4298864-4299185 placement
 /**
  * 子模块挑选用的 schema、组件目录与插件根引用正则。
  */
@@ -377,7 +377,7 @@ var PLUGIN_ROOT_REF_RE;
 var MAX_SCANNED_FILES;
 var MAX_SCANNED_BYTES;
 var MAX_SCANNED_REFS;
-deferInit("chunk-e6aww6q8.js:4192481", () => {
+deferInit("chunk-5xgkngpb.js:4298864", () => {
   MarketplacePluginsSchema = DoctorLazy(() =>
     objectSchema({
       plugins: array(unknown()),
@@ -403,6 +403,7 @@ deferInit("chunk-e6aww6q8.js:4192481", () => {
   MAX_SCANNED_REFS = 1e4;
 });
 export {
+  lsRemoteMarketplace,
   MAX_SCANNED_BYTES,
   probeMarketplaceCheckout,
   writeSparsePaths,
@@ -416,6 +417,5 @@ export {
   PLUGIN_CONFIG_FILES,
   PLUGIN_TREE_DIRS,
   PLUGIN_ROOT_REF_RE,
-  lsRemoteMarketplace,
   GIT_LFS_POINTER_PREFIX,
 };

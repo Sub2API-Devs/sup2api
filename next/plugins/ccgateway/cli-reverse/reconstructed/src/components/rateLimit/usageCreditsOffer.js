@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：检查用量额度的实际逻辑；把文本中的标记替换为可点击链接等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fm6h4dv7.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sp3m4m72.js (24)
  * attribution: placement 24
  */
 import {
@@ -74,7 +74,7 @@ import { LinkifiedText as LinkifiedText_2 } from "../LinkifiedText.js";
 import { Text, Link } from "../../ink/components/Text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fm6h4dv7.js:40379-40615 placement
+//@ chunk-sp3m4m72.js:40385-40621 placement
 /**
  * 用量额度已花完时给出下次可用时间说明。
  */
@@ -94,7 +94,7 @@ function usageCreditsSpentLine(wall, now = Date.now()) {
     return;
   return fillDatePlaceholder(getLimitResetCopy().spentLine, formatIsoResetTime(status.nextAvailableAt));
 }
-//@ chunk-fm6h4dv7.js:40615-40734 placement
+//@ chunk-sp3m4m72.js:40621-40740 placement
 function formatIsoResetTime(nextAvailableAt) {
   if (nextAvailableAt === null) return;
   let timestamp = Date.parse(nextAvailableAt);
@@ -102,7 +102,7 @@ function formatIsoResetTime(nextAvailableAt) {
     ? formatResetTimeWithLocale(Math.floor(timestamp / 1000), false, true, true)
     : undefined;
 }
-//@ chunk-fm6h4dv7.js:40734-40852 placement
+//@ chunk-sp3m4m72.js:40740-40858 placement
 /**
  * 撞到可重置的限额墙时（功能开启且该墙符合条件），记下可继续的重置时间并异步查询用量额度/重置是否可用。
  */
@@ -113,7 +113,7 @@ function offerUsageCreditsAtWall(quotaLimits, credentials) {
   flow.continuableWallResetsAt = quotaLimits.resetsAt ?? null;
   askUsageCreditsAvailability(quotaLimits, credentials, "wall");
 }
-//@ chunk-fm6h4dv7.js:40852-41598 placement
+//@ chunk-sp3m4m72.js:40858-41604 placement
 /**
  * 询问服务端用量额度是否可用（按阶段去重）。
  */
@@ -175,7 +175,7 @@ function askUsageCreditsAvailability(limits, credentials, signal) {
   flow.pendingAsk = request;
   return request;
 }
-//@ chunk-fm6h4dv7.js:41598-42664 placement
+//@ chunk-sp3m4m72.js:41604-42671 placement
 /**
  * 处理额度询问结果并更新状态。
  */
@@ -226,7 +226,7 @@ function settleUsageCreditsAsk({ wallResetsAt, accountEpoch, failures, result, a
     extra_usage_state: fromEnumOpt(status.eventProps?.extraUsageState) ?? undefined,
   });
 }
-//@ chunk-fm6h4dv7.js:42664-42878 placement
+//@ chunk-sp3m4m72.js:42671-42885 placement
 /**
  * 每个重置时间只打点一次 tengu_juniper_tide_shown（5 小时限额重置提示），附带实验分组、展示位置与配置版本。
  */
@@ -242,14 +242,14 @@ function logLimitResetOfferShown(wall, now) {
     config_version: limitResetConfigVersion(),
   });
 }
-//@ chunk-fm6h4dv7.js:42878-42922 placement
+//@ chunk-sp3m4m72.js:42885-42929 placement
 /**
  * 函数 maybeOpenUsageCreditsDialog（满足条件时打开对话框）。
  */
 function maybeOpenUsageCreditsDialog(claudeAiLimits, credentials) {
   if (isFailedForWall(claudeAiLimits)) askUsageCreditsAvailability(claudeAiLimits, credentials, "dialog");
 }
-//@ chunk-fm6h4dv7.js:42922-43047 placement
+//@ chunk-sp3m4m72.js:42929-43054 placement
 /**
  * 检查用量额度（出错时返回 unavailable）。
  */
@@ -264,7 +264,7 @@ async function checkUsageCredits(entry, credentials) {
     };
   }
 }
-//@ chunk-fm6h4dv7.js:43047-44741 placement
+//@ chunk-sp3m4m72.js:43054-44749 placement
 /**
  * 检查用量额度的实际逻辑。
  */
@@ -388,12 +388,12 @@ async function checkUsageCreditsUnsafe(entry, credentials) {
       };
   }
 }
-//@ chunk-fm6h4dv7.js:44741-44946 placement
+//@ chunk-sp3m4m72.js:44749-44954 placement
 var RESET_UNAVAILABLE_TEXT = "A 5-hour limit reset isn't available right now.";
 var RESET_IN_PROGRESS_TEXT = "Your 5-hour limit is already being reset \xB7 one moment";
 var RESET_LOGIN_FAILED_TEXT =
   "Couldn't reset your 5-hour limit with this login \xB7 run /login, then try again";
-//@ chunk-fm6h4dv7.js:44946-45202 placement
+//@ chunk-sp3m4m72.js:44954-45211 placement
 /**
  * 5 小时限额重置成功后的本地收尾：取消额度自动继续、记录、把被拒的 five_hour 状态改回 allowed、复位提示状态、必要时刷新、发出 reset 事件；每步单独 try/catch。
  */
@@ -427,7 +427,7 @@ function applyFiveHourResetLocally(wall, resetsAt, entry, creditEntry) {
       logError(toError(error));
     }
 }
-//@ chunk-fm6h4dv7.js:45202-45392 placement
+//@ chunk-sp3m4m72.js:45211-45401 placement
 function clearFiveHourRejection(resetsAt) {
   forgetHeldWindows(["five_hour"]);
   let currentLimits = getCurrentLimits();
@@ -444,7 +444,7 @@ function clearFiveHourRejection(resetsAt) {
     resetsAt: undefined,
   });
 }
-//@ chunk-fm6h4dv7.js:45392-45465 placement
+//@ chunk-sp3m4m72.js:45401-45474 placement
 function openUsageCreditsOffer(wall) {
   if (isQuotaAutoResumeArmed()) {
     confirmAndFire();
@@ -454,7 +454,7 @@ function openUsageCreditsOffer(wall) {
     logError(toError(error));
   });
 }
-//@ chunk-fm6h4dv7.js:45465-45650 placement
+//@ chunk-sp3m4m72.js:45474-45660 placement
 function markResetUnavailable(resetsAt, nextAvailableAt) {
   let resetFlowPhase = getResetFlowPhase();
   if (
@@ -472,7 +472,7 @@ function markResetUnavailable(resetsAt, nextAvailableAt) {
     },
   });
 }
-//@ chunk-fm6h4dv7.js:45650-45801 placement
+//@ chunk-sp3m4m72.js:45660-45812 placement
 function markResetIneligible(resetsAt) {
   let resetFlowPhase = getResetFlowPhase();
   if (
@@ -490,7 +490,7 @@ function markResetIneligible(resetsAt) {
     },
   });
 }
-//@ chunk-fm6h4dv7.js:45801-45935 placement
+//@ chunk-sp3m4m72.js:45812-45946 placement
 function subscribeSessionSwitchReset(wall) {
   if (wall.sessionSwitchSubscribed) return;
   wall.sessionSwitchSubscribed = true;
@@ -498,7 +498,7 @@ function subscribeSessionSwitchReset(wall) {
     if (isConversationResetSwitch(switchKind)) wall.continuableWallResetsAt = null;
   });
 }
-//@ chunk-fm6h4dv7.js:45935-46054 placement
+//@ chunk-sp3m4m72.js:45946-46065 placement
 /**
  * 会话状态短语常量（running / waiting for a prompt / waiting）、分隔符、8 位短 id 正则与长度上限。
  */
@@ -508,7 +508,7 @@ var SESSION_WAITING_LABEL = "session waiting";
 var MIDDOT_SEPARATOR = " \xB7 ";
 var SHORT_ID_RE = /^[0-9a-f]{8}$/;
 var MIN_SESSION_NAME_CHARS = 20;
-//@ chunk-fm6h4dv7.js:46054-46209 placement
+//@ chunk-sp3m4m72.js:46065-46220 placement
 /**
  * 按分隔符拆分状态文字、去掉空段，第一段之后的各段用 " · " 重新连接。
  */
@@ -521,7 +521,7 @@ function normalizeStatusSegments(label) {
   let [first, ...rest] = filtered;
   return rest.length === 0 ? first : `${first} ${CIRCLE_MARK_GLYPH} ${rest.join(MIDDOT_SEPARATOR)}`;
 }
-//@ chunk-fm6h4dv7.js:46209-46554 placement
+//@ chunk-sp3m4m72.js:46220-46565 placement
 /**
  * 解析限额标签字符串。
  */
@@ -549,7 +549,7 @@ function parseRateLimitLabel(label) {
     chips,
   };
 }
-//@ chunk-fm6h4dv7.js:46554-46927 placement
+//@ chunk-sp3m4m72.js:46565-46938 placement
 /**
  * 按宽度逐步缩短限额标签。
  */
@@ -593,7 +593,7 @@ function fitRateLimitLabel(fields, maxWidth, dropChips = true) {
   }
   return fitted;
 }
-//@ chunk-fm6h4dv7.js:46927-47019 placement
+//@ chunk-sp3m4m72.js:46938-47030 placement
 /**
  * 函数 offerDedupeKey（按状态/名/id/标签拼键）。
  */
@@ -605,14 +605,14 @@ function offerDedupeKey(label) {
     ...label.chips,
   ].join(MIDDOT_SEPARATOR);
 }
-//@ chunk-fm6h4dv7.js:47019-47063 placement
+//@ chunk-sp3m4m72.js:47030-47074 placement
 function hasIndex(field) {
   let { index } = field;
   return index !== -1;
 }
-//@ chunk-fm6h4dv7.js:47063-47130 placement
-var mapped; // deferred: uses CYBER_SAFEGUARDS_ARTICLE_URL (../../services/api/refusalFallback.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fm6h4dv7.js:47063", () => {
+//@ chunk-sp3m4m72.js:47074-47141 placement
+var mapped; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-sp3m4m72.js:47074", () => {
   mapped = [SAFEGUARDS_MODEL_ARTICLE_URL, SAFEGUARDS_DEFAULT_ARTICLE_URL, CYBER_SAFEGUARDS_ARTICLE_URL].map(
     (url) => ({
       url,
@@ -620,7 +620,7 @@ deferInit("chunk-fm6h4dv7.js:47063", () => {
     }),
   );
 });
-//@ chunk-fm6h4dv7.js:47130-48311 placement
+//@ chunk-sp3m4m72.js:47141-48322 placement
 /**
  * 把文本中的标记替换为可点击链接。
  */
@@ -636,7 +636,7 @@ function LinkifiedText(props) {
   let result;
   if ($[0] !== bold || $[1] !== children || $[2] !== color || $[3] !== fallbackPermission) {
     result = EARLY_RETURN_SENTINEL;
-    Fe: {
+    We: {
       let locateMarker;
       if ($[10] !== children) {
         locateMarker = (link) => {
@@ -665,7 +665,7 @@ function LinkifiedText(props) {
           $[15] = plainText;
         } else plainText = $[15];
         result = plainText;
-        break Fe;
+        break We;
       }
       textComponent = Text;
       color_2 = color;
@@ -746,16 +746,16 @@ function LinkifiedText(props) {
   return textComponentElement;
 }
 export {
-  LinkifiedText,
-  offerUsageCreditsAtWall,
   usageCreditsSpentLine,
   logLimitResetOfferShown,
-  parseRateLimitLabel,
-  fitRateLimitLabel,
+  maybeOpenUsageCreditsDialog,
+  checkUsageCredits,
   normalizeStatusSegments,
   SESSION_RUNNING_LABEL,
   SESSION_WAITING_PROMPT_LABEL,
   offerDedupeKey,
-  maybeOpenUsageCreditsDialog,
-  checkUsageCredits,
+  LinkifiedText,
+  offerUsageCreditsAtWall,
+  parseRateLimitLabel,
+  fitRateLimitLabel,
 };

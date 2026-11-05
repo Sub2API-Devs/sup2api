@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件 agent.spawn 钩子要求的 MCP 服务器检查与 dontAsk 模式下的代理调用权限缓存
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0tkmvwy0.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tmsx2mh0.js (7)
  * attribution: placement 7
  */
 import { isDeepStrictEqual } from "util";
@@ -17,7 +17,6 @@ import {
 } from "../../utils/permissions/permissions.js";
 import { isSameRuleDecision } from "./agentLaunchHelpers.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { URL_IN_TEXT_RE, trimTrailingPunctuation } from "../../services/oauth/oauthErrors.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 import { isAutoClassifierActive } from "../../utils/permissions/autoModeState.js";
@@ -27,29 +26,31 @@ import { WEBFETCH } from "../WebFetchTool/prompt.js";
 import { WebFetchTool } from "../WebFetchTool/WebFetchTool.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0tkmvwy0.js:6083-6264 placement
+//@ chunk-tmsx2mh0.js:6287-6468 placement
 /**
  * 插件 agent.spawn 钩子指定的代理缺少所需 MCP 服务器时的错误文本。
  */
 var formatSpawnHookMcpMissing = (agentType, servers) =>
   `Agent '${agentType}', named by a plugin's agent.spawn hook, requires MCP servers matching: ${servers.join(", ")}; none has tools yet. Use /mcp to configure and authenticate them.`;
-//@ chunk-0tkmvwy0.js:6306-6495 placement
+//@ chunk-tmsx2mh0.js:6510-6699 placement
 /**
  * agent.spawn 钩子改写输入后重新跑权限规则：改写后的输入若被 deny/ask 规则命中（且与原输入不是同一条规则）则返回该决策。
  */
 async function checkSpawnHookRewrite(options) {
   let { tool, raised, rewritten, context } = options;
   if (isDeepStrictEqual(raised, rewritten)) return null;
-  let _ = await checkRuleBasedPermissions(tool, rewritten, context);
-  if (_ === null || _.behavior === "deny") return _;
-  return isSameRuleDecision(await checkRuleBasedPermissions(tool, raised, context), _) ? null : _;
+  let rewrittenDecision = await checkRuleBasedPermissions(tool, rewritten, context);
+  if (rewrittenDecision === null || rewrittenDecision.behavior === "deny") return rewrittenDecision;
+  return isSameRuleDecision(await checkRuleBasedPermissions(tool, raised, context), rewrittenDecision)
+    ? null
+    : rewrittenDecision;
 }
-//@ chunk-0tkmvwy0.js:6495-6535 placement
+//@ chunk-tmsx2mh0.js:6699-6739 placement
 var RULE_BEHAVIOR_VERB = {
   deny: "denies",
   ask: "asks about",
 };
-//@ chunk-0tkmvwy0.js:6535-7236 placement
+//@ chunk-tmsx2mh0.js:14474-15175 placement
 /**
  * 按 [toolUseId, ...] 为键的有界缓存（默认 2048 项、10 分钟 TTL），set/take/has/dropToolUse。
  */
@@ -64,7 +65,7 @@ class ToolUseKeyedCache {
   static key(toolUseId, parts) {
     return JSON.stringify([toolUseId, ...parts]);
   }
-  static #o(toolUseId) {
+  static #r(toolUseId) {
     return `${JSON.stringify([toolUseId]).slice(0, -1)},`;
   }
   get size() {
@@ -95,25 +96,25 @@ class ToolUseKeyedCache {
     return this.#e.has(ToolUseKeyedCache.key(toolUseId, parts));
   }
   dropToolUse(toolUseId) {
-    let keyPrefix = ToolUseKeyedCache.#o(toolUseId);
+    let keyPrefix = ToolUseKeyedCache.#r(toolUseId);
     for (let key of this.#e.keys()) if (key.startsWith(keyPrefix)) this.#e.delete(key);
   }
 }
-//@ chunk-0tkmvwy0.js:7236-7289 placement
+//@ chunk-tmsx2mh0.js:15175-15228 placement
 var DONTASK; // deferred: uses URL_IN_TEXT_RE (../../services/oauth/oauthErrors.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_WEBFETCH_DISPATCH_URLS;
 var regExp;
-deferInit("chunk-0tkmvwy0.js:7236", () => {
+deferInit("chunk-tmsx2mh0.js:15175", () => {
   DONTASK = "dontAsk";
   MAX_WEBFETCH_DISPATCH_URLS = 8;
   regExp = new RegExp(URL_IN_TEXT_RE.source, "gi");
 });
-//@ chunk-0tkmvwy0.js:7289-7310 placement
+//@ chunk-tmsx2mh0.js:15228-15249 placement
 let WebFetchDispatchApprovals; // deferred: uses ToolUseKeyedCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0tkmvwy0.js:7289", () => {
+deferInit("chunk-tmsx2mh0.js:15228", () => {
   WebFetchDispatchApprovals = class WebFetchDispatchApprovals extends ToolUseKeyedCache {};
 });
-//@ chunk-0tkmvwy0.js:7310-7783 placement
+//@ chunk-tmsx2mh0.js:15249-15722 placement
 /**
  * dontAsk 模式下判断 web-fetch 代理派发能否免分类器审核：prompt 中 1–8 个 URL 均能通过 WebFetch 的输入校验与权限检查。
  */

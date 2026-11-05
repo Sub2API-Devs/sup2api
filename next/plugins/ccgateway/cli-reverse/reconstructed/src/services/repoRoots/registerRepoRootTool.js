@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：RegisterRepoRoot 工具的调用：在工作区根下注册文件夹。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0k2xkafk.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yxg8g10m.js (3)
  * attribution: placement 3
  */
 import { relative, sep } from "path";
@@ -24,7 +24,7 @@ import { pinResolvedWorkingDirPath } from "../../utils/permissions/filesystem.js
 import { SandboxManager } from "../../utils/sandbox/sandbox-adapter.js";
 import { reloadSkillsAfterDirectoryChange } from "../../utils/skills/skillChangeDetector.js";
 
-//@ chunk-0k2xkafk.js:612-862 placement
+//@ chunk-yxg8g10m.js:612-862 placement
 /**
  * 注册仓库根工具的限制、宿主槽与结果 schema。
  */
@@ -49,7 +49,7 @@ var registerRepoRootResultSchema = DoctorLazy(() =>
     }),
   ]),
 );
-//@ chunk-0k2xkafk.js:862-2022 placement
+//@ chunk-yxg8g10m.js:862-2022 placement
 /**
  * RegisterRepoRoot 工具的调用：在工作区根下注册文件夹。
  */
@@ -137,7 +137,7 @@ async function callRegisterRepoRoot(input, abortSignal, context) {
     },
   };
 }
-//@ chunk-0k2xkafk.js:2022-2101 placement
+//@ chunk-yxg8g10m.js:2022-2101 placement
 function refusalResult(refusalCode) {
   return {
     summary: `folder not registered: ${refusalCode}`,

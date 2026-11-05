@@ -3,30 +3,30 @@
  *
  * 字符串显示宽度（Bun.stringWidth 包装、长行分块）；部分声明误归
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/stringWidth.ts
- * pieces: chunk-gfseh2w1.js (2), chunk-t0gq9gyw.js (2)
+ * pieces: chunk-85eyj5gy.js (2), chunk-bjt8vq6r.js (2)
  * attribution: fingerprint 3, sole-consumer 1
  */
 import { getGraphemeSegmenter } from "../utils/intl.js";
 import { INVISIBLE_CHAR_CLASS_SOURCE } from "../utils/sanitization.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-gfseh2w1.js:191-220 fingerprint (2.1.88 match: BUN_STRING_WIDTH_OPTS, 1)
+//@ chunk-bjt8vq6r.js:191-220 fingerprint (2.1.88 match: BUN_STRING_WIDTH_OPTS, 1)
 /**
  * Bun.stringWidth 选项：东亚歧义宽度按窄。
  */
 var BUN_STRING_WIDTH_OPTS = {
   ambiguousIsNarrow: true,
 };
-//@ chunk-gfseh2w1.js:220-263 fingerprint (2.1.88 match: bunStringWidth, 0.617)
+//@ chunk-bjt8vq6r.js:220-263 fingerprint (2.1.88 match: bunStringWidth, 0.617)
 /**
  * 字符串显示宽度：Bun.stringWidth（歧义宽度按窄）。
  */
 function bunStringWidth(str) {
   return Bun.stringWidth(str, BUN_STRING_WIDTH_OPTS);
 }
-//@ chunk-t0gq9gyw.js:5412-5691 fingerprint (2.1.88 match: stringWidthJavaScript, 0.677)
+//@ chunk-85eyj5gy.js:5482-5761 fingerprint (2.1.88 match: stringWidthJavaScript, 0.677)
 /**
  * 找出文本里会被渲染成零宽的字符（不可见格式符、零宽字素等），返回其码点；没有返回 undefined。
  */
@@ -44,11 +44,11 @@ function findZeroWidthCodePoint(text) {
   }
   return;
 }
-//@ chunk-t0gq9gyw.js:5691-5782 sole-consumer
-var INVISIBLE_CHAR_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+//@ chunk-85eyj5gy.js:5761-5852 sole-consumer
+var INVISIBLE_CHAR_RE; // deferred: uses INVISIBLE_CHAR_CLASSES (../utils/sanitization.js) of its import cycle while loading; runs once the cycle is complete
 var CONTROL_WHITESPACE_RE;
 var PRINTABLE_ASCII_RE;
-deferInit("chunk-t0gq9gyw.js:5691", () => {
+deferInit("chunk-85eyj5gy.js:5761", () => {
   INVISIBLE_CHAR_RE = new RegExp(`(?![\\t\\n\\r])[${INVISIBLE_CHAR_CLASS_SOURCE}]`, "u");
   CONTROL_WHITESPACE_RE = /^[\t\n\r]+$/;
   PRINTABLE_ASCII_RE = /^[\t\n\r\x20-\x7e]*$/;

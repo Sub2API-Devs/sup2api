@@ -3,27 +3,27 @@
  *
  * 2.1.316 新增：git 命令中读文件参数的规则模式表；为命令模式生成 Bash/PowerShell 规则。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-t0gq9gyw.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-85eyj5gy.js (5)
  * attribution: placement 5
  */
 
-//@ chunk-t0gq9gyw.js:61965-62038 placement
+//@ chunk-85eyj5gy.js:62772-62845 placement
 /**
  * 为命令模式生成 Bash/PowerShell 规则。
  */
 function bashAndPowerShellRules(patterns) {
   return patterns.flatMap((pattern) => [`Bash(${pattern})`, `PowerShell(${pattern})`]);
 }
-//@ chunk-t0gq9gyw.js:62038-62111 placement
+//@ chunk-85eyj5gy.js:62845-62918 placement
 /**
  * stripCheckoutBaseRule：去掉 PowerShell(git checkout -b *) 规则。
  */
 function stripCheckoutBaseRule(rules) {
   return rules.filter((rule) => rule !== "PowerShell(git checkout -b *)");
 }
-//@ chunk-t0gq9gyw.js:62111-66193 placement
+//@ chunk-85eyj5gy.js:62918-67000 placement
 /**
  * git 命令中读文件参数的规则模式表。
  */
@@ -104,11 +104,11 @@ var GH_PR_EDIT_RULE_REASON = `${SKILL_ACTIVE_PREFIX} refuses \`gh pr edit\` with
 var GIT_OUTPUT_RULE_REASON = `${SKILL_ACTIVE_PREFIX} refuses \`--output\` on git commands (it writes to an arbitrary path): drop it and read stdout. ${RAW_MATCH_CAVEAT}`;
 var GIT_CHECKOUT_FORCE_REASON = `${SKILL_ACTIVE_PREFIX} refuses \`git checkout\` with \`--force\`/\`-f\` (tokens starting \`--f\` or \` -f\`): create the branch with a plain \`git checkout -b\`. The match is on the raw command text, so a branch name containing \`--f\` trips it too. ${NO_SUBSTITUTE_ADVICE}`;
 var GIT_ADD_FORCE_REASON = `${SKILL_ACTIVE_PREFIX} refuses \`git add\` with \`--force\`/\`-f\` (it stages ignored files such as \`.env\`) or \`--chmod\` (tokens starting \`--f\`, \`-f\`, \`--c\`): stage the paths by name without the option. ${RAW_MATCH_CAVEAT} ${NO_SUBSTITUTE_ADVICE}`;
-//@ chunk-t0gq9gyw.js:66193-66240 placement
+//@ chunk-85eyj5gy.js:67000-67047 placement
 function pairBashAndPowerShellRules(patterns, reason) {
   return bashAndPowerShellRules(patterns).map((rule) => [rule, reason]);
 }
-//@ chunk-t0gq9gyw.js:66240-66409 placement
+//@ chunk-85eyj5gy.js:67047-67216 placement
 var ruleReasons = Object.fromEntries([
   ...pairBashAndPowerShellRules(GIT_COMMIT_FILE_ARG_RULES, GIT_COMMIT_RULE_REASON),
   ...pairBashAndPowerShellRules(GIT_PUSH_RESTRICTED_RULES, GIT_PUSH_RULE_REASON),

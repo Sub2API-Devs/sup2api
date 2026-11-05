@@ -1,15 +1,15 @@
 /**
  * jsonwebtoken/lib/validateAsymmetricKey.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jsonwebtoken@9.0.1
- * pieces: chunk-mrx6y2r5.js (1)
+ * pieces: chunk-b5df2wx1.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_asymmetricKeyDetailsSupported } from "./asymmetricKeyDetailsSupported.js";
 import { require_rsaPssKeyDetailsSupported } from "./rsaPssKeyDetailsSupported.js";
 
-//@ chunk-mrx6y2r5.js:4951-5992 cjs-fingerprint
+//@ chunk-b5df2wx1.js:4951-5992 cjs-fingerprint
 var require_validateAsymmetricKey = __commonJS(function (cjsExports, cjsModule) {
   var ASYMMETRIC_KEY_DETAILS_SUPPORTED = require_asymmetricKeyDetailsSupported();
   var RSA_PSS_KEY_DETAILS_SUPPORTED = require_rsaPssKeyDetailsSupported();

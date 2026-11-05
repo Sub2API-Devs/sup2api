@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：后台会话子进程环境（认证/网关/云凭据变量透传）、粘贴图片落盘与派发参数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bg51yd13.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gwh0qn2w.js (15)
  * attribution: placement 15
  */
 import { readdir, stat, rm } from "fs/promises";
@@ -68,7 +68,7 @@ import { sleep } from "../../utils/sleep.js";
 import { killJob } from "../../daemon/jobs/killJob.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bg51yd13.js:72350-72602 placement
+//@ chunk-gwh0qn2w.js:72642-72894 placement
 function getSecureStorageConfigDir() {
   let env = {};
   let env_2 = process.env;
@@ -85,7 +85,7 @@ function getSecureStorageConfigDir() {
   if (isProviderManagedByHost()) env.CLAUDE_CODE_HOST_GATEWAY_LINEAGE = "1";
   return env;
 }
-//@ chunk-bg51yd13.js:72602-72838 placement
+//@ chunk-gwh0qn2w.js:72894-73130 placement
 /**
  * 收集要透传给后台会话子进程的云/网关提供方环境变量：端点变量已设置（且选择开关为真）时连同其伴随变量一起拷贝；宿主托管环境下返回空。
  */
@@ -105,7 +105,7 @@ function collectProviderPassthroughEnv(providerEnv) {
   }
   return passthrough;
 }
-//@ chunk-bg51yd13.js:72838-72921 placement
+//@ chunk-gwh0qn2w.js:73130-73213 placement
 function sanitizeLogLine(detail) {
   return truncateWithEllipsis(
     stripAnsiPerLine(detail)
@@ -114,9 +114,9 @@ function sanitizeLogLine(detail) {
     200,
   );
 }
-//@ chunk-bg51yd13.js:72921-73203 placement
+//@ chunk-gwh0qn2w.js:73213-73495 placement
 var PASSTHROUGH_ENV_VARS; // deferred: uses PROVIDER_ENV_VARS (../../utils/managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-bg51yd13.js:72921", () => {
+deferInit("chunk-gwh0qn2w.js:73213", () => {
   PASSTHROUGH_ENV_VARS = new Set([
     ...PROVIDER_SELECTION_ENV_VARS,
     "CLAUDE_CODE_HOST_GATEWAY_LINEAGE",
@@ -132,7 +132,7 @@ deferInit("chunk-bg51yd13.js:72921", () => {
     "CLAUDE_CONFIG_DIR",
   ]);
 });
-//@ chunk-bg51yd13.js:73203-73311 placement
+//@ chunk-gwh0qn2w.js:73495-73603 placement
 function toBgAgentTemplate(agent) {
   return {
     name: agent.agentType,
@@ -141,15 +141,15 @@ function toBgAgentTemplate(agent) {
     color: agent.color,
   };
 }
-//@ chunk-bg51yd13.js:73311-73327 placement
+//@ chunk-gwh0qn2w.js:73603-73619 placement
 /**
  * 后台会话的默认 agent 模板（由 CLAUDE_AGENT 转成后台用的形状）。
  */
 var DEFAULT_BG_AGENT_TEMPLATE; // deferred: uses toBgAgentTemplate of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-bg51yd13.js:73311", () => {
+deferInit("chunk-gwh0qn2w.js:73603", () => {
   DEFAULT_BG_AGENT_TEMPLATE = toBgAgentTemplate(CLAUDE_AGENT);
 });
-//@ chunk-bg51yd13.js:73327-73670 placement
+//@ chunk-gwh0qn2w.js:73619-73962 placement
 /**
  * 按 --agent 名字解析后台会话模板：先在用户代理列表里按名字（或 插件:名字 后缀）找，再查内置代理，含冒号的当作插件代理名；都没有时返回默认模板。
  */
@@ -179,7 +179,7 @@ function resolveBgAgentTemplate(defaults, templates) {
         name: agent,
       };
 }
-//@ chunk-bg51yd13.js:73670-73774 placement
+//@ chunk-gwh0qn2w.js:73962-74066 placement
 /**
  * 读取当前目录可用的代理定义，过滤掉内置与运行时注册的代理，转成后台会话模板列表。
  */
@@ -189,7 +189,7 @@ async function listUserAgentTemplates(cwd, storage) {
     .filter((activeAgent) => !isBuiltInAgent(activeAgent) && !isRunTimeRegisteredAgent(activeAgent))
     .map(toBgAgentTemplate);
 }
-//@ chunk-bg51yd13.js:73774-74134 placement
+//@ chunk-gwh0qn2w.js:74066-74426 placement
 async function findGitRoot(dir) {
   let entries;
   try {
@@ -218,7 +218,7 @@ async function findGitRoot(dir) {
   let filtered = (await Promise.all(mapped)).filter((pair) => pair !== null);
   return Object.fromEntries(filtered);
 }
-//@ chunk-bg51yd13.js:74134-75312 placement
+//@ chunk-gwh0qn2w.js:74426-75604 placement
 /**
  * 把粘贴的图片写到会话 tmp 目录，并把消息中的图片换成路径引用。
  */
@@ -301,21 +301,21 @@ async function materializePastedImages(text, pastedById, short, storage, renderM
   }
   return output;
 }
-//@ chunk-bg51yd13.js:75312-75349 placement
+//@ chunk-gwh0qn2w.js:75604-75641 placement
 /**
  * 设置 spare 池的额外启动参数。
  */
 function setSpareExtraArgs(args) {
   bgSparePool().setExtraArgs(args);
 }
-//@ chunk-bg51yd13.js:75349-75386 placement
+//@ chunk-gwh0qn2w.js:75641-75678 placement
 /**
  * 读取 spare 池当前的额外启动参数。
  */
 function spareExtraArgs() {
   return bgSparePool().extraArgs;
 }
-//@ chunk-bg51yd13.js:75386-75762 placement
+//@ chunk-gwh0qn2w.js:75678-76054 placement
 function buildDispatchArgs(defaults) {
   if (!defaults) return [];
   return [
@@ -331,7 +331,7 @@ function buildDispatchArgs(defaults) {
     ...flagArgs("--fast-mode", onOffFlagValue(defaults.fastMode)),
   ];
 }
-//@ chunk-bg51yd13.js:75762-75863 placement
+//@ chunk-gwh0qn2w.js:76054-76155 placement
 /**
  * 派发一个后台会话（没有会话 id 时生成 UUID），并以其前 8 位登记到在途派发表。
  */
@@ -350,7 +350,7 @@ function dispatchBgSessionTracked(template, intent, options, storage) {
     ),
   );
 }
-//@ chunk-bg51yd13.js:75863-77499 placement
+//@ chunk-gwh0qn2w.js:76155-77791 placement
 /**
  * 派发一个后台会话（含 Routines 预备、性能打点）。
  */
@@ -480,12 +480,12 @@ async function dispatchBgSession(template, intent, options, storage) {
   };
 }
 export {
-  buildDispatchArgs,
   findGitRoot,
   listUserAgentTemplates,
   setSpareExtraArgs,
   DEFAULT_BG_AGENT_TEMPLATE,
   spareExtraArgs,
+  buildDispatchArgs,
   resolveBgAgentTemplate,
   materializePastedImages,
   dispatchBgSessionTracked,

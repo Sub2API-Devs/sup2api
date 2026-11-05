@@ -3,9 +3,9 @@
  *
  * ListMcpResources 工具：列出已连接 MCP 服务器的资源（过滤 MCP Apps UI 资源）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ListMcpResourcesTool/ListMcpResourcesTool.ts
- * pieces: chunk-9ycd12hk.js (4)
+ * pieces: chunk-zmp9ej5f.js (4)
  * attribution: fingerprint 2, layout 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -15,6 +15,7 @@ import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { LISTMCPRESOURCESTOOL, LIST_MCP_RESOURCES_DESCRIPTION, LIST_MCP_RESOURCES_PROMPT } from "./prompt.js";
 import { hasWithheldResources } from "../../services/mcp/withheldResources.js";
 import { findServersByName } from "../../services/mcp/normalization.js";
+import { renderToolUseMessage_3 } from "./UI.js";
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   AbortError,
@@ -31,13 +32,13 @@ import { logMCPError } from "../../utils/log.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-9ycd12hk.js:1114-1475 fingerprint (2.1.88 match: outputSchema, 0.862)
+//@ chunk-zmp9ej5f.js:1190-1551 fingerprint (2.1.88 match: outputSchema, 0.862)
 /**
  * ListMcpResources 输入 schema（server 可选）与输出 schema（uri/name/mimeType/description/server 数组）。
  */
 var listMcpResourcesInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var listMcpResourcesOutputSchema;
-deferInit("chunk-9ycd12hk.js:1114", () => {
+deferInit("chunk-zmp9ej5f.js:1190", () => {
   listMcpResourcesInputSchema = DoctorLazy(() =>
     objectSchema({
       server: stringSchema().optional().describe("Optional server name to filter resources by"),
@@ -55,7 +56,7 @@ deferInit("chunk-9ycd12hk.js:1114", () => {
     ),
   );
 });
-//@ chunk-9ycd12hk.js:1475-1778 layout
+//@ chunk-zmp9ej5f.js:1551-1854 layout
 function sanitizeResourceListForCreation(resources) {
   let { hasMcpInboundDoor } = require("../../services/mcp/mcpInboundDoor.js");
   if (!Array.isArray(resources) || !hasMcpInboundDoor()) return resources;
@@ -71,16 +72,16 @@ function sanitizeResourceListForCreation(resources) {
     server: stringOr("", server),
   }));
 }
-//@ chunk-9ycd12hk.js:1778-1825 layout
+//@ chunk-zmp9ej5f.js:1854-1901 layout
 function stringOr(fallback, value) {
   return typeof value === "string" ? value : fallback;
 }
-//@ chunk-9ycd12hk.js:1825-3769 fingerprint (2.1.88 match: ListMcpResourcesTool, 0.516)
+//@ chunk-zmp9ej5f.js:1901-3869 fingerprint (2.1.88 match: ListMcpResourcesTool, 0.511)
 /**
  * ListMcpResources 工具（别名 ListMcpResources，shouldDefer，只读可并发，backgrounding never）。可选 server 过滤；对每个有 resources 能力的已连接服务器 ensureConnectedClient 后拉 resources/list（claude.ai 代理/特定 HTTP 服务器出现发现错误时重连重试一次），过滤掉 MCP Apps UI 资源（ui://、text/html;profile=mcp-app）；结果为空时提示"服务器可能仍提供工具"。
  */
 var ListMcpResourcesTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-9ycd12hk.js:1825", () => {
+deferInit("chunk-zmp9ej5f.js:1901", () => {
   ListMcpResourcesTool = buildTool({
     isConcurrencySafe() {
       return true;
@@ -112,14 +113,16 @@ deferInit("chunk-9ycd12hk.js:1825", () => {
     create(toolContext) {
       return {
         async call(input, { signal }) {
-          let mcpClients = toolContext.turnMcpClients.filter(
+          let entries = toolContext.turnMcpClients.filter(
             (turnMcpClient) => !hasWithheldResources(turnMcpClient, toolContext.agentId),
           );
           let { server: targetServer } = input;
-          let clientsToProcess = targetServer ? findServersByName(mcpClients, targetServer) : mcpClients;
+          let clientsToProcess = targetServer
+            ? findServersByName(entries, targetServer)
+            : renderToolUseMessage_3(entries, LISTMCPRESOURCESTOOL, toolContext.permissions());
           if (targetServer && clientsToProcess.length === 0)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `Server "${targetServer}" not found. Available servers: ${mcpClients.map((mcpClient) => mcpClient.name).join(", ")}`,
+              `Server "${targetServer}" not found. Available servers: ${entries.map((server) => server.name).join(", ")}`,
               "MCP server not found",
             );
           let results = await Promise.all(

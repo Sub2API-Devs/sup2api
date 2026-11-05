@@ -3,9 +3,9 @@
  *
  * PowerShell 工具的调用与结果渲染
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/UI.tsx
- * pieces: chunk-hkh7sq9y.js (6)
+ * pieces: chunk-4hpb3crc.js (6)
  * attribution: affinity 1, fingerprint 2, placement 3
  */
 import {
@@ -22,10 +22,10 @@ import { ShellTimeDisplay } from "../../components/shell/ShellTimeDisplay.js";
 import { FallbackToolUseErrorMessage } from "../../components/FallbackToolUseErrorMessage.js";
 import { exceedsLineLimit } from "../../utils/terminal.js";
 
-//@ chunk-hkh7sq9y.js:5013-5027 affinity
+//@ chunk-4hpb3crc.js:5378-5392 affinity
 var MAX_COMMAND_DISPLAY_LINES = 2;
 var MAX_COMMAND_DISPLAY_CHARS = 160;
-//@ chunk-hkh7sq9y.js:5027-5285 fingerprint (2.1.88 match: renderToolUseMessage, 1)
+//@ chunk-4hpb3crc.js:5392-5650 fingerprint (2.1.88 match: renderToolUseMessage, 1)
 /**
  * PowerShell 工具调用的显示：非 verbose 时命令超过 2 行或 160 字符则截断加省略号。
  */
@@ -52,14 +52,14 @@ function renderToolUseMessage(input, { verbose, theme: _theme }) {
   }
   return displayCommand;
 }
-//@ chunk-hkh7sq9y.js:5608-5634 placement
+//@ chunk-4hpb3crc.js:5957-5983 placement
 /**
  * 工具调用排队中的渲染入口（转给结果渲染组件）。
  */
 function renderToolUseQueuedMessage() {
   return WaitingLabel();
 }
-//@ chunk-hkh7sq9y.js:5634-6325 fingerprint (2.1.88 match: renderToolResultMessage, 0.799)
+//@ chunk-4hpb3crc.js:5983-6675 fingerprint (2.1.88 match: renderToolResultMessage, 0.797)
 /**
  * PowerShell 结果渲染：图片提示、stdout/stderr、后台运行/Interrupted/返回码解释/(No output)、超时显示。
  */
@@ -127,7 +127,7 @@ function renderToolResultMessage(
     ],
   });
 }
-//@ chunk-hkh7sq9y.js:6325-6422 placement (2.1.88 match: renderToolUseErrorMessage, 1)
+//@ chunk-4hpb3crc.js:6675-6772 placement (2.1.88 match: renderToolUseErrorMessage, 1)
 function renderToolUseErrorMessage(
   result,
   { verbose, progressMessagesForMessage: _progressMessagesForMessage, tools: _tools },
@@ -137,7 +137,7 @@ function renderToolUseErrorMessage(
     verbose,
   });
 }
-//@ chunk-hkh7sq9y.js:6422-6508 placement
+//@ chunk-4hpb3crc.js:6772-6858 placement
 /**
  * 非图片时，stdout 或 stderr 超出终端行数则返回 true。
  */

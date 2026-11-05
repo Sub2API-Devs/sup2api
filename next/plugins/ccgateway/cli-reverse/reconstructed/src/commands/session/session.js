@@ -3,10 +3,10 @@
  *
  * 并入已有模块：/session 界面：显示会话浏览器链接与二维码（远程模式）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/session/session.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-3rb87ry3.js (10), chunk-7mtn3rbz.js (5)
- * attribution: fingerprint 2, placement 11, sole-consumer 3
+ * pieces: chunk-5wayr1tc.js (5), chunk-czq1j3j2.js (1), chunk-zn7314wm.js (10)
+ * attribution: sole-consumer 3, fingerprint 2, placement 11
  */
 import { __toESM, MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { require_utf8 } from "../../../vendor/qrcode/lib/renderer/utf8.js";
@@ -36,16 +36,16 @@ import { useAppState } from "../../state/AppState.js";
 import { isRemoteSessionAvailable, hasRemoteCap } from "../../remote/remoteMode.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:795165-795209 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:827784-827828 fingerprint (2.1.88 match: _temp, 1)
 function selectRemoteSessionUrl_2(s) {
   return s.remoteSessionUrl;
 }
-//@ chunk-7mtn3rbz.js:5404-5422 sole-consumer
+//@ chunk-5wayr1tc.js:5712-5730 sole-consumer
 var _; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-7mtn3rbz.js:5404", () => {
+deferInit("chunk-5wayr1tc.js:5712", () => {
   _ = __toESM(require_utf8(), 1);
 });
-//@ chunk-7mtn3rbz.js:5422-5465 sole-consumer
+//@ chunk-5wayr1tc.js:5730-5773 sole-consumer
 function renderTextLine_2(children, key) {
   return jsxProd_default(
     Text,
@@ -55,12 +55,12 @@ function renderTextLine_2(children, key) {
     key,
   );
 }
-//@ chunk-7mtn3rbz.js:5465-5675 sole-consumer
+//@ chunk-5wayr1tc.js:5773-5983 sole-consumer
 var CLAUDE_MOBILE_APP_URL; // deferred: uses _ of its import cycle while loading; runs once the cycle is complete
 var CLAUDE_AI_MOBILE;
 var GET_MOBILE_APP_LABEL;
 var MOBILE_APP_QR_LINES;
-deferInit("chunk-7mtn3rbz.js:5465", () => {
+deferInit("chunk-5wayr1tc.js:5773", () => {
   CLAUDE_MOBILE_APP_URL = "https://claude.ai/mobile?entrypoint=claude_code_cli";
   CLAUDE_AI_MOBILE = "claude.ai/mobile";
   GET_MOBILE_APP_LABEL = "Get the Claude app on your phone";
@@ -78,7 +78,7 @@ deferInit("chunk-7mtn3rbz.js:5465", () => {
     )
     .filter((line) => line.length > 0);
 });
-//@ chunk-7mtn3rbz.js:5675-7261 fingerprint (2.1.88 match: SessionInfo, 0.309)
+//@ chunk-5wayr1tc.js:5983-7569 fingerprint (2.1.88 match: SessionInfo, 0.309)
 function SessionInfo(props) {
   let $ = useMemoCache(25);
   let { onDone } = props;
@@ -234,7 +234,7 @@ function SessionInfo(props) {
   } else pane = $[24];
   return pane;
 }
-//@ chunk-7mtn3rbz.js:7261-7305 placement
+//@ chunk-5wayr1tc.js:7569-7613 placement
 /**
  * /mobile 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -243,20 +243,20 @@ async function sessionInfoCall(onDone) {
     onDone,
   });
 }
-//@ chunk-3rb87ry3.js:5244-5248 placement
+//@ chunk-zn7314wm.js:5581-5585 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3rb87ry3.js:5244", () => {
+deferInit("chunk-zn7314wm.js:5581", () => {
   init_react_production();
 });
-//@ chunk-3rb87ry3.js:5248-5290 placement (2.1.88 match: _temp, 1)
+//@ chunk-zn7314wm.js:5585-5625 placement (2.1.88 match: _temp, 1)
 function selectRemoteSessionUrl(s) {
   return s.remoteSessionUrl;
 }
-//@ chunk-3rb87ry3.js:5290-5324 placement
+//@ chunk-zn7314wm.js:5625-5659 placement
 function isNonEmptyLine(line) {
   return line.length > 0;
 }
-//@ chunk-3rb87ry3.js:5324-5370 placement
+//@ chunk-zn7314wm.js:5659-5705 placement
 function qrCodeLines(qrText) {
   return qrText
     .split(
@@ -265,12 +265,12 @@ function qrCodeLines(qrText) {
     )
     .filter(isNonEmptyLine);
 }
-//@ chunk-3rb87ry3.js:5370-5433 placement
+//@ chunk-zn7314wm.js:5705-5768 placement
 function qrFailureFallback(error) {
   logForDebugging(`QR code generation failed: ${error}`);
   return [];
 }
-//@ chunk-3rb87ry3.js:5433-5476 placement
+//@ chunk-zn7314wm.js:5768-5811 placement
 function renderTextLine(children, key) {
   return jsxProd_default(
     Text,
@@ -280,7 +280,7 @@ function renderTextLine(children, key) {
     key,
   );
 }
-//@ chunk-3rb87ry3.js:5476-7356 placement
+//@ chunk-zn7314wm.js:5811-7691 placement
 /**
  * /session 界面：显示会话浏览器链接与二维码（远程模式）。
  */
@@ -448,7 +448,7 @@ function SessionQrDialog(props) {
   } else dialogPane = $[24];
   return dialogPane;
 }
-//@ chunk-3rb87ry3.js:7356-7580 placement
+//@ chunk-zn7314wm.js:7691-7915 placement
 function CloudSessionPane(props) {
   let $ = useMemoCache(3);
   let { children } = props;
@@ -473,7 +473,7 @@ function CloudSessionPane(props) {
   } else pane = $[2];
   return pane;
 }
-//@ chunk-3rb87ry3.js:7580-7791 placement
+//@ chunk-zn7314wm.js:7915-8127 placement
 function SessionQrCode(props) {
   let $ = useMemoCache(4);
   let { qrLinesPromise } = props;
@@ -497,12 +497,12 @@ function SessionQrCode(props) {
   } else fragment = $[3];
   return fragment;
 }
-//@ chunk-3rb87ry3.js:7791-7824 placement
+//@ chunk-zn7314wm.js:8127-8160 placement
 /**
  * /session 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
-var call = async (onDone) =>
+var sessionQrDialogCall = async (onDone) =>
   jsxProd_default(SessionQrDialog, {
     onDone,
   });
-export { selectRemoteSessionUrl_2, sessionInfoCall, call };
+export { selectRemoteSessionUrl_2, sessionInfoCall, sessionQrDialogCall };

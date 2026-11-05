@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。内置插件 agentsMd 注册。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-16jhn3ak.js (4), chunk-8jbcmznm.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b60e6mnx.js (4), chunk-pyd7te4t.js (7)
  * attribution: placement 11
  */
 import { getFeatureValue_SESSION_PINNED } from "../../../services/analytics/growthbook.js";
@@ -28,7 +28,7 @@ import {
   modeRowOf,
   nestedRowOf,
   quietly,
-  loadAgentsMdInstructions,
+  register,
   settlePending,
   stagePending,
   startOver,
@@ -68,23 +68,23 @@ import { deferInit, beginDeferredInits } from "../../../../runtime/deferred-init
 // This module is the first evaluated of an import cycle of 3 modules closed by ./agentsMd.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("src/plugins/bundled/agentsMd/agentsMd.js");
-//@ chunk-16jhn3ak.js:227-238 placement
+//@ chunk-b60e6mnx.js:227-238 placement
 /**
  * 默认开启
  */
 var AGENTS_MD_ON_BY_DEFAULT = true;
-//@ chunk-16jhn3ak.js:238-280 placement
+//@ chunk-b60e6mnx.js:238-280 placement
 /**
  * 读取 tengu_agents_md_mod 决定 agentsMd 插件是否可用，默认开启。
  */
 var isAgentsMdPluginAvailable = () =>
   getFeatureValue_SESSION_PINNED("tengu_agents_md_mod", AGENTS_MD_ON_BY_DEFAULT);
-//@ chunk-16jhn3ak.js:280-310 placement
+//@ chunk-b60e6mnx.js:280-310 placement
 /**
  * 内置插件 cc-plugin-agents-md 的名字。
  */
 var AGENTS_MD_PLUGIN_NAME = "cc-plugin-agents-md";
-//@ chunk-16jhn3ak.js:310-441 placement
+//@ chunk-b60e6mnx.js:310-441 placement
 /**
  * 沿 parent 链找到最顶层的引用文件路径（防环）。
  */
@@ -98,7 +98,7 @@ function rootIncludeAncestor(file, fileByPath) {
   }
   return path;
 }
-//@ chunk-8jbcmznm.js:3605-4106 placement
+//@ chunk-pyd7te4t.js:3913-4414 placement
 /**
  * agentsMd 插件的扫描清单：订阅的钩子、调用的 API、读取的环境变量。
  */
@@ -143,9 +143,9 @@ var AGENTS_MD_MANIFEST = __commonJS(function (requireFn, moduleObject) {
     files: {},
   };
 });
-//@ chunk-8jbcmznm.js:4106-4115 placement
+//@ chunk-pyd7te4t.js:4414-4423 placement
 var indexNamespace = {};
-//@ chunk-8jbcmznm.js:4115-4264 placement
+//@ chunk-pyd7te4t.js:4423-4572 placement
 __export(indexNamespace, {
   PLUGIN_DESCRIPTION: () => PLUGIN_DESCRIPTION,
   PLUGIN_NAME: () => AGENTS_MD_PLUGIN_NAME,
@@ -155,9 +155,9 @@ __export(indexNamespace, {
   isOnByDefault: () => AGENTS_MD_ON_BY_DEFAULT,
   registerPlugin: () => registerPlugin,
 });
-//@ chunk-8jbcmznm.js:4264-4273 placement
+//@ chunk-pyd7te4t.js:4572-4581 placement
 var indexNamespace2 = {};
-//@ chunk-8jbcmznm.js:4273-5228 placement
+//@ chunk-pyd7te4t.js:4581-5536 placement
 __export(indexNamespace2, {
   AGENTS_NAMES: () => AGENTS_MD_FILENAMES,
   CLAUDE_NAMES: () => CLAUDE_MD_FILENAMES,
@@ -198,7 +198,7 @@ __export(indexNamespace2, {
   outsideClaudeDirs: () => excludeDirs,
   projectDirOf: () => instructionFileDir,
   quietly: () => quietly,
-  register: () => loadAgentsMdInstructions,
+  register: () => register,
   settlePending: () => settlePending,
   stagePending: () => stagePending,
   startOver: () => startOver,
@@ -209,9 +209,9 @@ __export(indexNamespace2, {
   withFrames: () => appendInstructionParts,
   withProjectFiles: () => insertAgentsMdFiles,
 });
-//@ chunk-8jbcmznm.js:11777-12387 placement
+//@ chunk-pyd7te4t.js:12085-12695 placement
 var USER_CONFIG; // deferred: uses DEFAULT_AGENTS_MD_MODE (./agentsMdFiles.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8jbcmznm.js:11777", () => {
+deferInit("chunk-pyd7te4t.js:12085", () => {
   USER_CONFIG = {
     instructionFiles: {
       type: "string",
@@ -223,7 +223,7 @@ deferInit("chunk-8jbcmznm.js:11777", () => {
     },
   };
 });
-//@ chunk-8jbcmznm.js:12387-12499 placement
+//@ chunk-pyd7te4t.js:12695-12807 placement
 var registerPlugin = () =>
   registerBuiltinPlugin({
     name: AGENTS_MD_PLUGIN_NAME,

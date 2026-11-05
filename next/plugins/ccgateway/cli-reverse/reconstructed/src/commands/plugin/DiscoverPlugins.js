@@ -3,9 +3,9 @@
  *
  * /plugin 发现与搜索插件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/DiscoverPlugins.tsx
- * pieces: chunk-vrb44rx7.js (2)
+ * pieces: chunk-wb51jffc.js (2)
  * attribution: fingerprint 2
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -34,7 +34,7 @@ import { usePagination } from "./usePagination.js";
 import { MessageActionsKeybindings } from "../../components/messageActions.js";
 import { logDirectoryListingViewed } from "../../utils/plugins/pluginDirectoryTelemetry.js";
 
-//@ chunk-vrb44rx7.js:59155-60011 fingerprint (2.1.88 match: DiscoverPluginsKeyHint, 0.753)
+//@ chunk-wb51jffc.js:59307-60163 fingerprint (2.1.88 match: DiscoverPluginsKeyHint, 0.752)
 function DiscoverPluginsKeyHint(props) {
   let $ = useMemoCache(12);
   let { hasSelection, canToggle, canView } = props;
@@ -114,7 +114,7 @@ function DiscoverPluginsKeyHint(props) {
   } else t6 = $[11];
   return t6;
 }
-//@ chunk-vrb44rx7.js:71007-74454 fingerprint (2.1.88 match: DiscoverPlugins, 0.392)
+//@ chunk-wb51jffc.js:71161-74608 fingerprint (2.1.88 match: DiscoverPlugins, 0.392)
 function DiscoverPlugins({
   screen,
   surface,

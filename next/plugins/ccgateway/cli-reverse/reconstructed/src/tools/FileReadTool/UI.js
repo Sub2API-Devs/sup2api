@@ -3,12 +3,12 @@
  *
  * Read 工具的用户可见名、摘要与结果渲染（任务输出文件识别）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileReadTool/UI.tsx
- * pieces: chunk-cjvab7rz.js (3), chunk-nc07tp5s.js (3)
+ * pieces: chunk-rt8b7gmx.js (3), chunk-xm6m8ykh.js (3)
  * attribution: affinity 1, fingerprint 3, callgraph-witnessed 1, callgraph-fingerprint 1
  */
-import { sep, basename } from "path";
+import { sep } from "path";
 import { isDiskless } from "../../bootstrap/state.js";
 import { getTaskOutputDir } from "../../utils/task/diskOutput.js";
 import { getPlansDirectory } from "../../utils/plans.js";
@@ -24,7 +24,7 @@ import { Text } from "../../ink/components/Text.js";
 import { formatFileSize } from "../../utils/format.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 
-//@ chunk-cjvab7rz.js:362-576 affinity (2.1.88 match: getAgentOutputTaskId, 1)
+//@ chunk-rt8b7gmx.js:362-576 affinity (2.1.88 match: getAgentOutputTaskId, 1)
 /**
  * 若路径是任务输出目录下的 <taskId>.output（id 1–20 位字母数字），返回 taskId；diskless 会话返回 null。
  */
@@ -38,7 +38,7 @@ function getAgentOutputTaskId(filePath) {
   }
   return null;
 }
-//@ chunk-cjvab7rz.js:576-720 fingerprint (2.1.88 match: userFacingName, 1)
+//@ chunk-rt8b7gmx.js:576-720 fingerprint (2.1.88 match: userFacingName, 1)
 /**
  * Read 的用户可见名："Reading Plan"（计划文件）、"Read agent output"（任务输出）或 "Read"。
  */
@@ -47,7 +47,7 @@ function userFacingName(input) {
   if (input?.file_path && getAgentOutputTaskId(input.file_path)) return "Read agent output";
   return "Read";
 }
-//@ chunk-cjvab7rz.js:720-825 callgraph-witnessed (2.1.88 match: getToolUseSummary, 1)
+//@ chunk-rt8b7gmx.js:720-825 callgraph-witnessed (2.1.88 match: getToolUseSummary, 1)
 /**
  * Read 的工具使用摘要：任务输出返回 taskId，否则显示路径。
  */
@@ -57,7 +57,7 @@ function getToolUseSummary(input) {
   if (agentTaskId) return agentTaskId;
   return getDisplayPath(input.file_path);
 }
-//@ chunk-nc07tp5s.js:7424-7805 fingerprint (2.1.88 match: renderToolUseMessage, 1)
+//@ chunk-xm6m8ykh.js:8037-8420 fingerprint (2.1.88 match: renderToolUseMessage, 1)
 function renderToolUseMessage({ file_path, offset, limit, pages }, { verbose }) {
   if (!file_path) return null;
   if (getAgentOutputTaskId(file_path)) return "";
@@ -90,7 +90,7 @@ function renderToolUseMessage({ file_path, offset, limit, pages }, { verbose }) 
     children,
   });
 }
-//@ chunk-nc07tp5s.js:7805-7912 callgraph-fingerprint (2.1.88 match: renderToolUseTag, 1)
+//@ chunk-xm6m8ykh.js:8420-8527 callgraph-fingerprint (2.1.88 match: renderToolUseTag, 1)
 function renderToolUseTag({ file_path }) {
   let agentTaskId = file_path ? getAgentOutputTaskId(file_path) : null;
   if (!agentTaskId) return null;
@@ -99,7 +99,7 @@ function renderToolUseTag({ file_path }) {
     children: [" ", agentTaskId],
   });
 }
-//@ chunk-nc07tp5s.js:7912-8904 fingerprint (2.1.88 match: renderToolResultMessage, 0.679)
+//@ chunk-xm6m8ykh.js:8527-9337 fingerprint (2.1.88 match: renderToolResultMessage, 0.746)
 function renderToolResultMessage(output) {
   switch (output.type) {
     case "image": {
@@ -178,17 +178,6 @@ function renderToolResultMessage(output) {
         }),
       });
     }
-    case "file_unchanged":
-      return jsxProd_default(MessageResponse, {
-        height: 1,
-        children: jsxProd_default(Text, {
-          dimColor: true,
-          children:
-            output.source === "seeded"
-              ? `Already in context (${replaceLineBreaks(stripUnsafeChars(basename(output.file.filePath)))})`
-              : "Unchanged since last read",
-        }),
-      });
   }
 }
 export {

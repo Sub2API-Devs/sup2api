@@ -3,16 +3,16 @@
  *
  * 语义版本比较（gt/gte/lt/lte/order/satisfies）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/semver.ts
- * pieces: chunk-aepeg2w5.js (8)
+ * pieces: chunk-exfmq47h.js (8)
  * attribution: affinity 1, fingerprint 2, layout 4, placement 1
  */
 import { withTelemetryMessage, toError } from "./errors.js";
 
-//@ chunk-aepeg2w5.js:220767-220803 affinity
+//@ chunk-exfmq47h.js:230282-230318 affinity
 var INVALID_SEMVER_MESSAGE = "Invalid SemVer: <redacted>";
-//@ chunk-aepeg2w5.js:220803-220881 fingerprint (2.1.88 match: order, 0.532)
+//@ chunk-exfmq47h.js:230318-230396 fingerprint (2.1.88 match: order, 0.532)
 function order(a, b) {
   try {
     return Bun.semver.order(a, b);
@@ -20,40 +20,40 @@ function order(a, b) {
     throw withTelemetryMessage(toError(error), INVALID_SEMVER_MESSAGE);
   }
 }
-//@ chunk-aepeg2w5.js:220881-220917 layout
+//@ chunk-exfmq47h.js:230396-230432 layout
 /**
  * 语义版本 a > b。
  */
 function semverGte(left, right) {
   return order(left, right) === 1;
 }
-//@ chunk-aepeg2w5.js:220917-220952 layout
+//@ chunk-exfmq47h.js:230432-230467 layout
 /**
  * 语义版本 a >= b。
  */
 function semverGt(left, right) {
   return order(left, right) >= 0;
 }
-//@ chunk-aepeg2w5.js:220952-220989 layout
+//@ chunk-exfmq47h.js:230467-230504 layout
 /**
  * 语义版本 a < b。
  */
-function lt_2(left, right) {
+function lt(left, right) {
   return order(left, right) === -1;
 }
-//@ chunk-aepeg2w5.js:220989-221025 layout
+//@ chunk-exfmq47h.js:230504-230540 layout
 /**
  * 语义版本 a <= b。
  */
 function semverLt(left, right) {
   return order(left, right) <= 0;
 }
-//@ chunk-aepeg2w5.js:221025-221076 fingerprint (2.1.88 match: satisfies, 0.639)
+//@ chunk-exfmq47h.js:230540-230591 fingerprint (2.1.88 match: satisfies, 0.639)
 function satisfies(version, range) {
   return Bun.semver.satisfies(version, range);
 }
-//@ chunk-aepeg2w5.js:221076-221109 placement
+//@ chunk-exfmq47h.js:230591-230624 placement
 function compareVersions(left, right) {
   return order(left, right);
 }
-export { semverGte, lt_2, semverGt, semverLt, satisfies, compareVersions };
+export { semverGte, semverGt, lt, semverLt, satisfies, compareVersions };

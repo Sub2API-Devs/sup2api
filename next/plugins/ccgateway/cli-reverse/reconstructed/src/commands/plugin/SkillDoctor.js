@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：技能体检（cli_skill_doctor）：本会话加载的技能、最近未使用的插件、技能用量
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vrb44rx7.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wb51jffc.js (16)
  * attribution: placement 16
  */
 import {
@@ -46,12 +46,12 @@ import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { isSkillDoctorScanAllowed } from "../../services/usageInsights/transcriptScan.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../keybindings/useKeybinding.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { plural } from "../../utils/stringUtils.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrb44rx7.js:204871-205045 placement
+//@ chunk-wb51jffc.js:204919-205093 placement
 /**
  * 插件在当前项目没有安装记录、也不在任何可编辑设置范围里时返回 [插件名]，否则返回空数组（安装表读不到也返回空）。
  */
@@ -64,7 +64,7 @@ async function listUnscopedPluginForProject(pluginName, storageV5) {
   let any = [...getPluginEditableScopes().keys()].some((key) => pluginNamesEqual(key, pluginName));
   return installedForProject || any ? [] : [pluginName];
 }
-//@ chunk-vrb44rx7.js:205045-205507 placement
+//@ chunk-wb51jffc.js:205093-205555 placement
 function formatCopyNotLoaded(marketplace) {
   switch (marketplace) {
     case INLINE_PLUGIN_MARKETPLACE:
@@ -75,7 +75,7 @@ function formatCopyNotLoaded(marketplace) {
       return "This claude.ai copy did not load (see above) \u2014 remove or rename the plugin on claude.ai to clear it.";
   }
 }
-//@ chunk-vrb44rx7.js:205507-205653 placement
+//@ chunk-wb51jffc.js:205555-205701 placement
 /**
  * 插件菜单关闭时的提示文案、默认开关值，以及读取 tengu_plugin_menu_close_reload 开关的函数（关闭插件菜单时是否自动排队 /reload-plugins）。
  */
@@ -84,7 +84,7 @@ var PLUGIN_CHANGES_DEFERRED_NOTICE =
 var CLOSE_RELOAD_DEFAULT = true;
 var isPluginMenuCloseReloadEnabled = () =>
   getFeatureValue_CACHED_MAY_BE_STALE("tengu_plugin_menu_close_reload", CLOSE_RELOAD_DEFAULT);
-//@ chunk-vrb44rx7.js:205653-205830 placement
+//@ chunk-wb51jffc.js:205701-205878 placement
 /**
  * 插件状态需要刷新时决定 reload 方式：主查询运行中为 deferred、否则 queued，并打点；不需要刷新返回 none。
  */
@@ -97,20 +97,20 @@ function schedulePluginMenuReload(activePlugins, isQueryRunning = getMainQueryRu
   logFeatureOk("plugin_menu_auto_reload");
   return mode;
 }
-//@ chunk-vrb44rx7.js:205830-205834 placement
+//@ chunk-wb51jffc.js:205878-205882 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:205830", () => {
+deferInit("chunk-wb51jffc.js:205878", () => {
   init_react_production();
 });
-//@ chunk-vrb44rx7.js:205834-205902 placement
+//@ chunk-wb51jffc.js:205882-205950 placement
 function unusedPluginLabel(plugin) {
   return plugin.pluginKey === undefined ? plugin.source : printablePluginName(plugin.pluginKey);
 }
-//@ chunk-vrb44rx7.js:205902-205941 placement
+//@ chunk-wb51jffc.js:205950-205989 placement
 function wasUsed(plugin) {
   return plugin.usageCount > 0;
 }
-//@ chunk-vrb44rx7.js:205941-206113 placement
+//@ chunk-wb51jffc.js:205989-206161 placement
 function formatLastUsed(plugin) {
   return jsxProd_default_2(
     Text,
@@ -130,7 +130,7 @@ function formatLastUsed(plugin) {
     plugin.pluginId,
   );
 }
-//@ chunk-vrb44rx7.js:206113-206487 placement
+//@ chunk-wb51jffc.js:206161-206535 placement
 function logSkillDoctor(options) {
   return runSkillDoctor(options).then(
     (item) => {
@@ -156,7 +156,7 @@ function logSkillDoctor(options) {
     },
   );
 }
-//@ chunk-vrb44rx7.js:206487-207190 placement
+//@ chunk-wb51jffc.js:206535-207238 placement
 function SkillDoctorConfirm(props) {
   let $ = useMemoCache(11);
   let { getReport, onExit } = props;
@@ -224,7 +224,7 @@ function SkillDoctorConfirm(props) {
   } else footer = $[10];
   return footer;
 }
-//@ chunk-vrb44rx7.js:207190-208911 placement
+//@ chunk-wb51jffc.js:207238-208959 placement
 /**
  * 计算并展示技能用量（扫描本地会话），失败时提示 --debug。
  */
@@ -366,7 +366,7 @@ function SkillUsageView(props) {
   } else footerBox = $[21];
   return footerBox;
 }
-//@ chunk-vrb44rx7.js:208911-209821 placement
+//@ chunk-wb51jffc.js:208959-209869 placement
 function renderLoadedSkills(props) {
   let $ = useMemoCache(7);
   let { rows } = props;
@@ -434,7 +434,7 @@ function renderLoadedSkills(props) {
   } else footer = $[2];
   return footer;
 }
-//@ chunk-vrb44rx7.js:209821-212188 placement
+//@ chunk-wb51jffc.js:209869-212236 placement
 /**
  * 渲染技能用量表（来源、调用次数、最近使用、警告）。
  */
@@ -458,7 +458,7 @@ function renderSkillRows(props) {
     $[2] !== unusedOwned.length ||
     $[3] !== unusedSynced.length
   ) {
-    let unusedLabels = uniq(unusedFromPlugins.map(unusedPluginLabel));
+    let unusedLabels = normalizeCaseForComparison_2(unusedFromPlugins.map(unusedPluginLabel));
     let content;
     if ($[12] !== unusedMcpServers) {
       content = unusedMcpServers.length > 0 ? `, from ${unusedMcpServers.join(", ")}` : "";
@@ -574,7 +574,7 @@ function renderSkillRows(props) {
   } else footerBox = $[32];
   return footerBox;
 }
-//@ chunk-vrb44rx7.js:212188-212762 placement
+//@ chunk-wb51jffc.js:212236-212810 placement
 function renderUnusedPlugins(props) {
   let $ = useMemoCache(8);
   let { disusedPlugins } = props;
@@ -628,22 +628,22 @@ function renderUnusedPlugins(props) {
   } else footer = $[7];
   return footer;
 }
-//@ chunk-vrb44rx7.js:212762-212766 placement
+//@ chunk-wb51jffc.js:212810-212814 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:212762", () => {
+deferInit("chunk-wb51jffc.js:212810", () => {
   init_react_production();
 });
-//@ chunk-vrb44rx7.js:212766-212810 placement
+//@ chunk-wb51jffc.js:212814-212858 placement
 function warningLine(warning) {
   return `${figures_default.warning} ${warning}`;
 }
 export {
-  listUnscopedPluginForProject,
-  formatCopyNotLoaded,
   logSkillDoctor,
   isPluginMenuCloseReloadEnabled,
   schedulePluginMenuReload,
   PLUGIN_CHANGES_DEFERRED_NOTICE,
   SkillDoctorConfirm,
+  listUnscopedPluginForProject,
+  formatCopyNotLoaded,
   warningLine,
 };

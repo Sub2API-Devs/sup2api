@@ -3,10 +3,10 @@
  *
  * MCP elicitation（服务器向用户索取输入）处理：注册请求/完成通知处理器，前后运行 Elicitation/ElicitationResult hooks。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/elicitationHandler.ts
- * pieces: chunk-bgxm64nj.js (4), chunk-bma111ke.js (5), chunk-n8fn2df7.js (5)
- * attribution: sole-consumer 3, fingerprint 1, facade-exports 10
+ * pieces: chunk-0sfbgcrn.js (5), chunk-h4qtft3t.js (5), chunk-z9d6k8pq.js (4)
+ * attribution: facade-exports 10, sole-consumer 3, fingerprint 1
  */
 import { hostedDesktopRefusal_2 } from "./mcpWireUtils.js";
 import { logMCPDebug, logMCPError } from "../../utils/log.js";
@@ -21,10 +21,8 @@ import {
 import { logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { MCP_ELICITATION_DIALOG, MCP_ELICITATION_WAITING_DIALOG } from "./elicitationDialogs.js";
-import {
-  RelatedTaskMetadataSchema,
-  RELATED_TASK_META_KEY,
-} from "../../../vendor/@modelcontextprotocol/core/dist/auth-CUe6YdwF.mjs";
+import { RelatedTaskMetadataSchema as RelatedTaskMetadataSchema_2 } from "../../../vendor/@modelcontextprotocol/core/dist/auth-CUe6YdwF.mjs";
+import { RELATED_TASK_META_KEY as RELATED_TASK_META_KEY_2 } from "../../../vendor/@modelcontextprotocol/core/dist/schemas-lGLjBX8n.cjs";
 import {
   executeNotificationHooks,
   executeElicitationHooks,
@@ -36,14 +34,14 @@ import { identityId2 } from "../../types/ids.js";
 import { isDiskless } from "../../bootstrap/state.js";
 import { NoProjectDirectoryError } from "../../bootstrap/sessionSlices.js";
 import {
-  RelatedTaskMetadataSchema as RelatedTaskMetadataSchema_2,
-  RELATED_TASK_META_KEY as RELATED_TASK_META_KEY_2,
+  RelatedTaskMetadataSchema,
+  RELATED_TASK_META_KEY,
   ElicitRequestSchema,
   ElicitationCompleteNotificationSchema,
 } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/types.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bgxm64nj.js:532-4289 sole-consumer
+//@ chunk-z9d6k8pq.js:533-4291 sole-consumer
 /**
  * MCP elicitation 处理器：先跑 Elicitation 钩子（内置插件服务器只接受真人的接受）、再弹对话框询问用户，敏感字段在日志中打码，之后跑 ElicitationResult 钩子；URL 模式下维护等待完成的流程与"等待中"对话框。
  */
@@ -285,16 +283,16 @@ class ElicitationController {
     if (flows.size === 0) this.urlFlows.delete(elicitationId);
   }
 }
-//@ chunk-bgxm64nj.js:4289-4338 fingerprint (2.1.88 match: getElicitationMode, 1)
+//@ chunk-z9d6k8pq.js:4291-4340 fingerprint (2.1.88 match: getElicitationMode, 1)
 function getElicitationMode(params) {
   return params.mode === "url" ? "url" : "form";
 }
-//@ chunk-bgxm64nj.js:4338-4356 sole-consumer
+//@ chunk-z9d6k8pq.js:4340-4358 sole-consumer
 var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bgxm64nj.js:4338", () => {
+deferInit("chunk-z9d6k8pq.js:4340", () => {
   weakMap = new WeakMap();
 });
-//@ chunk-bgxm64nj.js:4356-4452 sole-consumer
+//@ chunk-z9d6k8pq.js:4358-4454 sole-consumer
 /**
  * 取（或创建）某客户端的 elicitation 控制器，并重绑参数。
  */
@@ -308,23 +306,23 @@ function getElicitationController(client, deps) {
   weakMap.set(client, controller);
   return controller;
 }
-//@ chunk-n8fn2df7.js:468-559 facade-exports
+//@ chunk-0sfbgcrn.js:468-559 facade-exports
 /**
  * 从 elicitation 请求 `_meta` 解析关联任务 id。（v2 副本）
  */
-function parseRelatedTaskMetadata_2(meta) {
-  let parseResult = RelatedTaskMetadataSchema.safeParse(meta?.[RELATED_TASK_META_KEY]);
+function parseRelatedTaskMetadata(meta) {
+  let parseResult = RelatedTaskMetadataSchema_2.safeParse(meta?.[RELATED_TASK_META_KEY_2]);
   return parseResult.success
     ? {
         taskId: parseResult.data.taskId,
       }
     : null;
 }
-//@ chunk-n8fn2df7.js:559-1227 facade-exports
+//@ chunk-0sfbgcrn.js:559-1227 facade-exports
 /**
  * 给已连接的 MCP 客户端注册 elicitation 处理（v2）：`elicitation/create` 交给处理器（会先跑 Elicitation 钩子、再弹表单/URL 对话框、再跑 ElicitationResult 钩子），`notifications/elicitation/complete` 关闭对应 URL elicitation 并发系统通知；已有自定义处理器或注册失败时跳过。
  */
-function registerElicitationHandler_2(client, serverName, requestDialog, transportErrorState, pluginSource) {
+function registerElicitationHandler(client, serverName, requestDialog, transportErrorState, pluginSource) {
   if (
     hostedDesktopRefusal_2({
       name: serverName,
@@ -336,8 +334,8 @@ function registerElicitationHandler_2(client, serverName, requestDialog, transpo
     pluginSource,
     requestDialog,
     transportErrorState,
-    runElicitationHooks: runElicitationHooks_2,
-    runElicitationResultHooks: runElicitationResultHooks_2,
+    runElicitationHooks,
+    runElicitationResultHooks,
   });
   try {
     client.setRequestHandler("elicitation/create", (request, extra) =>
@@ -359,164 +357,9 @@ function registerElicitationHandler_2(client, serverName, requestDialog, transpo
     return;
   }
 }
-//@ chunk-n8fn2df7.js:1227-1555 facade-exports
+//@ chunk-0sfbgcrn.js:1227-1555 facade-exports
 /**
  * handleElicitationForConnection（v2 副本）：同 chunk-bma111ke 版本。
- */
-function handleElicitationRequest_2({ connected, params, signal, requestDialog, transportErrorState }) {
-  return getElicitationController(identityId2(connected.client), {
-    serverName: connected.name,
-    pluginSource: connected.config.pluginSource,
-    requestDialog,
-    transportErrorState: connected.transportErrorState,
-    runElicitationHooks: runElicitationHooks_2,
-    runElicitationResultHooks: runElicitationResultHooks_2,
-  }).handle(
-    {
-      params,
-    },
-    {
-      signal,
-      transportErrorState,
-    },
-  );
-}
-//@ chunk-n8fn2df7.js:1555-2072 facade-exports (2.1.88 match: runElicitationHooks, 0.977)
-/**
- * runElicitationHooks（v2 副本）。
- */
-async function runElicitationHooks_2(serverName, params, signal) {
-  let sessionIdentity = getSessionIdentity();
-  if (sessionIdentity.project === null && !isDiskless()) throw new NoProjectDirectoryError();
-  try {
-    let mode = params.mode === "url" ? "url" : "form";
-    let url = "url" in params ? params.url : undefined;
-    let elicitationId = "elicitationId" in params ? params.elicitationId : undefined;
-    let { elicitationResponse, blockingError } = await executeElicitationHooks({
-      session: sessionIdentity,
-      serverName,
-      message: params.message,
-      requestedSchema: "requestedSchema" in params ? params.requestedSchema : undefined,
-      signal,
-      mode,
-      url,
-      elicitationId,
-    });
-    if (blockingError)
-      return {
-        action: "decline",
-      };
-    if (elicitationResponse)
-      return {
-        action: elicitationResponse.action,
-        content: elicitationResponse.content,
-      };
-    return;
-  } catch (error) {
-    logMCPError(serverName, `Elicitation hook error: ${error}`);
-    return;
-  }
-}
-//@ chunk-n8fn2df7.js:2072-2822 facade-exports (2.1.88 match: runElicitationResultHooks, 0.976)
-/**
- * runElicitationResultHooks（v2 副本）。
- */
-async function runElicitationResultHooks_2(serverName, result, signal, mode, elicitationId) {
-  let sessionIdentity = getSessionIdentity();
-  if (sessionIdentity.project === null && !isDiskless()) throw new NoProjectDirectoryError();
-  try {
-    let { elicitationResultResponse, blockingError } = await executeElicitationResultHooks({
-      session: sessionIdentity,
-      serverName,
-      action: result.action,
-      content: result.content,
-      signal,
-      mode,
-      elicitationId,
-    });
-    if (blockingError) {
-      executeNotificationHooks(sessionIdentity, {
-        message: `Elicitation response for server "${serverName}": decline`,
-        notificationType: "elicitation_response",
-      }).catch(logHookExecutionFailure);
-      return {
-        action: "decline",
-      };
-    }
-    let finalResult = elicitationResultResponse
-      ? {
-          action: elicitationResultResponse.action,
-          content: elicitationResultResponse.content ?? result.content,
-        }
-      : result;
-    executeNotificationHooks(sessionIdentity, {
-      message: `Elicitation response for server "${serverName}": ${finalResult.action}`,
-      notificationType: "elicitation_response",
-    }).catch(logHookExecutionFailure);
-    return finalResult;
-  } catch (error) {
-    logMCPError(serverName, `ElicitationResult hook error: ${error}`);
-    executeNotificationHooks(sessionIdentity, {
-      message: `Elicitation response for server "${serverName}": ${result.action}`,
-      notificationType: "elicitation_response",
-    }).catch(logHookExecutionFailure);
-    return result;
-  }
-}
-//@ chunk-bma111ke.js:476-567 facade-exports
-/**
- * 从 elicitation 请求的 `_meta` 中解析关联的任务元数据（related task），成功返回 {taskId}，否则 null。（v1）
- */
-function parseRelatedTaskMetadata(meta) {
-  let parseResult = RelatedTaskMetadataSchema_2.safeParse(meta?.[RELATED_TASK_META_KEY_2]);
-  return parseResult.success
-    ? {
-        taskId: parseResult.data.taskId,
-      }
-    : null;
-}
-//@ chunk-bma111ke.js:567-1178 facade-exports (2.1.88 match: registerElicitationHandler, 0.477)
-/**
- * registerElicitationHandler：为客户端注册 elicitation/create 请求处理与 elicitation complete 通知处理；请求交给 elicitation 控制器（先跑 Elicitation hooks，再弹对话框，最后跑 ElicitationResult hooks）。
- */
-function registerElicitationHandler(client, serverName, requestDialog, transportErrorState, pluginSource) {
-  if (
-    hostedDesktopRefusal_2({
-      name: serverName,
-    }) !== undefined
-  )
-    return;
-  let elicitationController = getElicitationController(client, {
-    serverName,
-    pluginSource,
-    requestDialog,
-    transportErrorState,
-    runElicitationHooks,
-    runElicitationResultHooks,
-  });
-  try {
-    client.setRequestHandler(ElicitRequestSchema, (request, extra) =>
-      elicitationController.handle(request, {
-        signal: extra.signal,
-      }),
-    );
-    client.setNotificationHandler(ElicitationCompleteNotificationSchema, (resolve) => {
-      let { elicitationId } = resolve.params;
-      logMCPDebug(serverName, `Received elicitation completion notification: ${elicitationId}`);
-      executeNotificationHooks(getSessionIdentity(), {
-        message: `MCP server "${serverName}" confirmed elicitation ${elicitationId} complete`,
-        notificationType: "elicitation_complete",
-      }).catch(logHookExecutionFailure);
-      if (!elicitationController.complete(elicitationId))
-        logMCPDebug(serverName, `Ignoring completion notification for unknown elicitation: ${elicitationId}`);
-    });
-  } catch {
-    return;
-  }
-}
-//@ chunk-bma111ke.js:1178-1506 facade-exports
-/**
- * handleElicitationForConnection：为已连接服务器构造 elicitation 控制器并处理一次 elicitation 参数（用于工具调用中 URL elicitation 重试）。
  */
 function handleElicitationRequest({ connected, params, signal, requestDialog, transportErrorState }) {
   return getElicitationController(identityId2(connected.client), {
@@ -536,9 +379,9 @@ function handleElicitationRequest({ connected, params, signal, requestDialog, tr
     },
   );
 }
-//@ chunk-bma111ke.js:1506-2023 facade-exports (2.1.88 match: runElicitationHooks, 0.977)
+//@ chunk-0sfbgcrn.js:1555-2072 facade-exports (2.1.88 match: runElicitationHooks, 0.977)
 /**
- * runElicitationHooks：执行 Elicitation hooks；hook 阻断时返回 decline，hook 给出响应时直接作为结果，否则返回 undefined 交给 UI。
+ * runElicitationHooks（v2 副本）。
  */
 async function runElicitationHooks(serverName, params, signal) {
   let sessionIdentity = getSessionIdentity();
@@ -572,9 +415,9 @@ async function runElicitationHooks(serverName, params, signal) {
     return;
   }
 }
-//@ chunk-bma111ke.js:2023-2773 facade-exports (2.1.88 match: runElicitationResultHooks, 0.976)
+//@ chunk-0sfbgcrn.js:2072-2822 facade-exports (2.1.88 match: runElicitationResultHooks, 0.976)
 /**
- * runElicitationResultHooks：执行 ElicitationResult hooks，可改写 action/content 或阻断为 decline，并发出 elicitation_response 通知 hook。
+ * runElicitationResultHooks（v2 副本）。
  */
 async function runElicitationResultHooks(serverName, result, signal, mode, elicitationId) {
   let sessionIdentity = getSessionIdentity();
@@ -618,15 +461,170 @@ async function runElicitationResultHooks(serverName, result, signal, mode, elici
     return result;
   }
 }
+//@ chunk-h4qtft3t.js:476-567 facade-exports
+/**
+ * 从 elicitation 请求的 `_meta` 中解析关联的任务元数据（related task），成功返回 {taskId}，否则 null。（v1）
+ */
+function parseRelatedTaskMetadata_2(meta) {
+  let parseResult = RelatedTaskMetadataSchema.safeParse(meta?.[RELATED_TASK_META_KEY]);
+  return parseResult.success
+    ? {
+        taskId: parseResult.data.taskId,
+      }
+    : null;
+}
+//@ chunk-h4qtft3t.js:567-1178 facade-exports (2.1.88 match: registerElicitationHandler, 0.477)
+/**
+ * registerElicitationHandler：为客户端注册 elicitation/create 请求处理与 elicitation complete 通知处理；请求交给 elicitation 控制器（先跑 Elicitation hooks，再弹对话框，最后跑 ElicitationResult hooks）。
+ */
+function registerElicitationHandler_2(client, serverName, requestDialog, transportErrorState, pluginSource) {
+  if (
+    hostedDesktopRefusal_2({
+      name: serverName,
+    }) !== undefined
+  )
+    return;
+  let elicitationController = getElicitationController(client, {
+    serverName,
+    pluginSource,
+    requestDialog,
+    transportErrorState,
+    runElicitationHooks: runElicitationHooks_2,
+    runElicitationResultHooks: runElicitationResultHooks_2,
+  });
+  try {
+    client.setRequestHandler(ElicitRequestSchema, (request, extra) =>
+      elicitationController.handle(request, {
+        signal: extra.signal,
+      }),
+    );
+    client.setNotificationHandler(ElicitationCompleteNotificationSchema, (resolve) => {
+      let { elicitationId } = resolve.params;
+      logMCPDebug(serverName, `Received elicitation completion notification: ${elicitationId}`);
+      executeNotificationHooks(getSessionIdentity(), {
+        message: `MCP server "${serverName}" confirmed elicitation ${elicitationId} complete`,
+        notificationType: "elicitation_complete",
+      }).catch(logHookExecutionFailure);
+      if (!elicitationController.complete(elicitationId))
+        logMCPDebug(serverName, `Ignoring completion notification for unknown elicitation: ${elicitationId}`);
+    });
+  } catch {
+    return;
+  }
+}
+//@ chunk-h4qtft3t.js:1178-1506 facade-exports
+/**
+ * handleElicitationForConnection：为已连接服务器构造 elicitation 控制器并处理一次 elicitation 参数（用于工具调用中 URL elicitation 重试）。
+ */
+function handleElicitationRequest_2({ connected, params, signal, requestDialog, transportErrorState }) {
+  return getElicitationController(identityId2(connected.client), {
+    serverName: connected.name,
+    pluginSource: connected.config.pluginSource,
+    requestDialog,
+    transportErrorState: connected.transportErrorState,
+    runElicitationHooks: runElicitationHooks_2,
+    runElicitationResultHooks: runElicitationResultHooks_2,
+  }).handle(
+    {
+      params,
+    },
+    {
+      signal,
+      transportErrorState,
+    },
+  );
+}
+//@ chunk-h4qtft3t.js:1506-2023 facade-exports (2.1.88 match: runElicitationHooks, 0.977)
+/**
+ * runElicitationHooks：执行 Elicitation hooks；hook 阻断时返回 decline，hook 给出响应时直接作为结果，否则返回 undefined 交给 UI。
+ */
+async function runElicitationHooks_2(serverName, params, signal) {
+  let sessionIdentity = getSessionIdentity();
+  if (sessionIdentity.project === null && !isDiskless()) throw new NoProjectDirectoryError();
+  try {
+    let mode = params.mode === "url" ? "url" : "form";
+    let url = "url" in params ? params.url : undefined;
+    let elicitationId = "elicitationId" in params ? params.elicitationId : undefined;
+    let { elicitationResponse, blockingError } = await executeElicitationHooks({
+      session: sessionIdentity,
+      serverName,
+      message: params.message,
+      requestedSchema: "requestedSchema" in params ? params.requestedSchema : undefined,
+      signal,
+      mode,
+      url,
+      elicitationId,
+    });
+    if (blockingError)
+      return {
+        action: "decline",
+      };
+    if (elicitationResponse)
+      return {
+        action: elicitationResponse.action,
+        content: elicitationResponse.content,
+      };
+    return;
+  } catch (error) {
+    logMCPError(serverName, `Elicitation hook error: ${error}`);
+    return;
+  }
+}
+//@ chunk-h4qtft3t.js:2023-2773 facade-exports (2.1.88 match: runElicitationResultHooks, 0.976)
+/**
+ * runElicitationResultHooks：执行 ElicitationResult hooks，可改写 action/content 或阻断为 decline，并发出 elicitation_response 通知 hook。
+ */
+async function runElicitationResultHooks_2(serverName, result, signal, mode, elicitationId) {
+  let sessionIdentity = getSessionIdentity();
+  if (sessionIdentity.project === null && !isDiskless()) throw new NoProjectDirectoryError();
+  try {
+    let { elicitationResultResponse, blockingError } = await executeElicitationResultHooks({
+      session: sessionIdentity,
+      serverName,
+      action: result.action,
+      content: result.content,
+      signal,
+      mode,
+      elicitationId,
+    });
+    if (blockingError) {
+      executeNotificationHooks(sessionIdentity, {
+        message: `Elicitation response for server "${serverName}": decline`,
+        notificationType: "elicitation_response",
+      }).catch(logHookExecutionFailure);
+      return {
+        action: "decline",
+      };
+    }
+    let finalResult = elicitationResultResponse
+      ? {
+          action: elicitationResultResponse.action,
+          content: elicitationResultResponse.content ?? result.content,
+        }
+      : result;
+    executeNotificationHooks(sessionIdentity, {
+      message: `Elicitation response for server "${serverName}": ${finalResult.action}`,
+      notificationType: "elicitation_response",
+    }).catch(logHookExecutionFailure);
+    return finalResult;
+  } catch (error) {
+    logMCPError(serverName, `ElicitationResult hook error: ${error}`);
+    executeNotificationHooks(sessionIdentity, {
+      message: `Elicitation response for server "${serverName}": ${result.action}`,
+      notificationType: "elicitation_response",
+    }).catch(logHookExecutionFailure);
+    return result;
+  }
+}
 export {
-  runElicitationHooks_2,
-  runElicitationResultHooks_2,
-  handleElicitationRequest_2,
   runElicitationHooks,
   runElicitationResultHooks,
-  parseRelatedTaskMetadata_2,
-  registerElicitationHandler_2,
   handleElicitationRequest,
+  runElicitationHooks_2,
+  runElicitationResultHooks_2,
   parseRelatedTaskMetadata,
   registerElicitationHandler,
+  handleElicitationRequest_2,
+  parseRelatedTaskMetadata_2,
+  registerElicitationHandler_2,
 };

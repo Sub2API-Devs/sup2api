@@ -3,9 +3,9 @@
  *
  * /usage 用量（利用率）拉取：订阅用户查询各限额窗口利用率，带重放缓存与认证失败处理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/usage.ts
- * pieces: chunk-1m53rcjd.js (9), chunk-w5ndchqs.js (53)
+ * pieces: chunk-7pwjpdkw.js (53), chunk-rdsmmn25.js (9)
  * attribution: placement 59, callgraph-fingerprint 1, layout 2
  */
 import { isRateLimitMockingEnabled, getRawUtilization, currentUsageWindows } from "../claudeAiLimits.js";
@@ -70,11 +70,11 @@ import {
 import { isUsageScanAllowed } from "../usageInsights/transcriptScan.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-w5ndchqs.js:9271-9316 placement
+//@ chunk-7pwjpdkw.js:9472-9517 placement
 function isMockRateLimit429(error) {
   return isRateLimitMockingEnabled() && error.status === 429;
 }
-//@ chunk-w5ndchqs.js:9316-9415 placement
+//@ chunk-7pwjpdkw.js:9517-9616 placement
 /**
  * 用量提示常量：接近上限阈值 0.7、个人花费/用量限额文案与 wrap-up 链接。
  */
@@ -82,10 +82,10 @@ var NEAR_LIMIT_UTILIZATION = 0.7;
 var INDIVIDUAL_SPEND_LIMIT_TEXT = "individual spend limit";
 var INDIVIDUAL_USAGE_LIMIT_TEXT = "individual usage limit";
 var HTTPS_CLAU_DE_WRAP_UP = "https://clau.de/wrap-up";
-//@ chunk-w5ndchqs.js:9415-9432 placement
+//@ chunk-7pwjpdkw.js:9616-9633 placement
 var MAX_ERROR_TYPE_CHARS = 64;
 var MAX_ERROR_MESSAGE_CHARS = 200;
-//@ chunk-w5ndchqs.js:9432-9880 placement
+//@ chunk-7pwjpdkw.js:9633-10081 placement
 class RememberedResponses {
   maxHoldMs;
   #e = new Map();
@@ -114,13 +114,12 @@ class RememberedResponses {
     return nowMs < entry.recordedAtMs || nowMs >= entry.untilMs ? undefined : entry;
   }
 }
-//@ chunk-w5ndchqs.js:9880-10373 placement
+//@ chunk-7pwjpdkw.js:10081-10528 placement
 let RememberedResponseError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-w5ndchqs.js:9880", () => {
+deferInit("chunk-7pwjpdkw.js:10081", () => {
   RememberedResponseError = class RememberedResponseError extends AxiosError {
     replayed = true;
     kind;
-    recordedAtMs;
     untilMs;
     constructor(entry, nowMs = Date.now()) {
       let config = {
@@ -143,26 +142,25 @@ deferInit("chunk-w5ndchqs.js:9880", () => {
       );
       this.name = "RememberedResponseError";
       this.kind = entry.kind;
-      this.recordedAtMs = entry.recordedAtMs;
       this.untilMs = entry.untilMs;
     }
   };
 });
-//@ chunk-w5ndchqs.js:10373-10410 placement
+//@ chunk-7pwjpdkw.js:10528-10565 placement
 function isRememberedResponseError(error) {
   return error instanceof RememberedResponseError;
 }
-//@ chunk-w5ndchqs.js:10410-10503 placement
+//@ chunk-7pwjpdkw.js:10565-10658 placement
 function isAuthRejectedUsageError(error) {
   if (isRememberedResponseError(error)) return error.kind === "auth_rejected";
   let response = usageErrorResponse(error);
   return response !== undefined && isAuthRejection(response);
 }
-//@ chunk-w5ndchqs.js:10503-10583 placement
+//@ chunk-7pwjpdkw.js:10658-10738 placement
 function isAuthRejection(response) {
   return response.status === 401 || (response.status === 403 && response.anthropicError !== undefined);
 }
-//@ chunk-w5ndchqs.js:10583-10804 placement
+//@ chunk-7pwjpdkw.js:10738-10959 placement
 async function claudeAiAuthKey({ credentials, settle }) {
   if (settle && hasApiClient())
     try {
@@ -176,7 +174,7 @@ async function claudeAiAuthKey({ credentials, settle }) {
     }
   return claudeAiBearerDigest();
 }
-//@ chunk-w5ndchqs.js:10804-11138 placement
+//@ chunk-7pwjpdkw.js:10959-11293 placement
 function usageErrorResponse(error) {
   if (!isAxiosError(error) || isRememberedResponseError(error)) return;
   let authHeader = AxiosHeaders.from(error.config?.headers ?? {}).get("Authorization");
@@ -194,7 +192,7 @@ function usageErrorResponse(error) {
     anthropicError: hasProgressMessage(error.response?.data),
   };
 }
-//@ chunk-w5ndchqs.js:11138-11439 placement (2.1.88 match: hasProgressMessage, 1)
+//@ chunk-7pwjpdkw.js:11293-11592 placement (2.1.88 match: hasProgressMessage, 1)
 /**
  * 从对象中截取 {error:{type,message}} 摘要（API 错误）。
  */
@@ -216,7 +214,7 @@ function hasProgressMessage(data) {
     },
   };
 }
-//@ chunk-w5ndchqs.js:11439-12113 placement
+//@ chunk-7pwjpdkw.js:11592-12266 placement
 /**
  * 用量页促销文案表（tengu_starry_waterfall）：菜单后缀、提示、对话框标题、横幅四种场景的折扣/返现文案与默认值。
  */
@@ -231,7 +229,7 @@ var PROMO_OFFER_TEXTS = {
   bannerPillPctOff: "At least {pct}% off usage credits \xB7 {days} left",
   bannerPillExtraCredit: "At least {pct}% extra usage credits \xB7 {days} left",
 };
-//@ chunk-w5ndchqs.js:12113-12203 placement
+//@ chunk-7pwjpdkw.js:12266-12356 placement
 function promoOfferConfig() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(PROMO_OFFER_FLAG, {});
   return typeof featureValue_CACHED_MAY_BE_STALE === "object" &&
@@ -240,22 +238,22 @@ function promoOfferConfig() {
     ? featureValue_CACHED_MAY_BE_STALE
     : {};
 }
-//@ chunk-w5ndchqs.js:12203-12276 placement
+//@ chunk-7pwjpdkw.js:12356-12429 placement
 function isPromoOfferEnabled() {
   return (
     promoOfferConfig().enabled === true && !isEssentialTrafficOnly() && isPolicyAllowed("allow_promo_offers")
   );
 }
-//@ chunk-w5ndchqs.js:12276-12361 placement
+//@ chunk-7pwjpdkw.js:12429-12514 placement
 function promoOfferVersion() {
   let version = promoOfferConfig().version;
   return typeof version === "number" && Number.isFinite(version) ? version : 0;
 }
-//@ chunk-w5ndchqs.js:12361-12423 placement
+//@ chunk-7pwjpdkw.js:12514-12576 placement
 function withDefaultText(text, fallback) {
   return typeof text === "string" && text.trim() !== "" ? text : fallback;
 }
-//@ chunk-w5ndchqs.js:12423-12957 placement
+//@ chunk-7pwjpdkw.js:12576-13110 placement
 function promoOfferStrings() {
   let config = promoOfferConfig();
   return {
@@ -278,9 +276,9 @@ function promoOfferStrings() {
     ),
   };
 }
-//@ chunk-w5ndchqs.js:12957-12973 placement (2.1.88 match: SEP_WIDTH, 1)
+//@ chunk-7pwjpdkw.js:13110-13126 placement (2.1.88 match: SEP_WIDTH, 1)
 var SEP = " \xB7 ";
-//@ chunk-w5ndchqs.js:12973-13279 placement
+//@ chunk-7pwjpdkw.js:13126-13432 placement
 function fillUsageTemplate(template, values) {
   let result = template;
   if (values.daysLeft === null || values.daysLeft <= 0) {
@@ -293,18 +291,18 @@ function fillUsageTemplate(template, values) {
   }
   return cleanTaskDescription(result.replaceAll("{pct}", String(values.pct)));
 }
-//@ chunk-w5ndchqs.js:13279-13354 placement
+//@ chunk-7pwjpdkw.js:13432-13507 placement
 var FABLE_MODEL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EMPTY_MODEL_LIST;
-deferInit("chunk-w5ndchqs.js:13279", () => {
+deferInit("chunk-7pwjpdkw.js:13432", () => {
   FABLE_MODEL_NAMES = Object.freeze(["Fable", "Fable 5", "Fable 5.1"]);
   EMPTY_MODEL_LIST = Object.freeze([]);
 });
-//@ chunk-w5ndchqs.js:13354-13386 placement
+//@ chunk-7pwjpdkw.js:13507-13539 placement
 function defaultFrozenUsage() {
   return isGrowthBookEnabled() ? EMPTY_MODEL_LIST : FABLE_MODEL_NAMES;
 }
-//@ chunk-w5ndchqs.js:13386-13470 placement
+//@ chunk-7pwjpdkw.js:13539-13623 placement
 /**
  * 导出函数 `isLimitEnabled`：参数 e，返回 !0; return isOutOfCreditsReason(e?.disabled_reason ?? null)。
  */
@@ -312,7 +310,7 @@ function isLimitEnabled(limit) {
   if (limit?.is_enabled === true) return true;
   return isOutOfCreditsReason(limit?.disabled_reason ?? null);
 }
-//@ chunk-w5ndchqs.js:13470-13614 placement
+//@ chunk-7pwjpdkw.js:13623-13767 placement
 var USAGE_LIMIT_KEYS = [
   "five_hour",
   "seven_day",
@@ -324,11 +322,11 @@ var USAGE_LIMIT_KEYS = [
   "extra_usage",
   "limits",
 ];
-//@ chunk-w5ndchqs.js:13614-13686 placement
+//@ chunk-7pwjpdkw.js:13767-13839 placement
 function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-w5ndchqs.js:13686-13782 placement
+//@ chunk-7pwjpdkw.js:13839-13935 placement
 /**
  * 导出函数 `hasUsageLimitKeys`：参数 e，返回 typeof e === "object" && e !== null && !Array.isArray(e) && USAGE_LIMIT_KEYS.some((n) => n in e)。
  */
@@ -340,9 +338,9 @@ function hasUsageLimitKeys(utilization) {
     USAGE_LIMIT_KEYS.some((key) => key in utilization)
   );
 }
-//@ chunk-w5ndchqs.js:13782-13827 placement
+//@ chunk-7pwjpdkw.js:13935-13980 placement
 var TENGU_USAGE_OVERAGE_INCLUDED_MODELS = "tengu_usage_overage_included_models";
-//@ chunk-w5ndchqs.js:13827-13957 placement
+//@ chunk-7pwjpdkw.js:13980-14110 placement
 function overageIncludedModels() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     TENGU_USAGE_OVERAGE_INCLUDED_MODELS,
@@ -354,10 +352,10 @@ function overageIncludedModels() {
     ? featureValue_CACHED_MAY_BE_STALE.filter((model) => typeof model === "string")
     : [];
 }
-//@ chunk-w5ndchqs.js:13957-14015 placement
+//@ chunk-7pwjpdkw.js:14110-14168 placement
 var GROWTHBOOK_WAIT_MS = 1500;
 var GROWTHBOOK_WAIT_REASON = "usage: overage-included models allowlist";
-//@ chunk-w5ndchqs.js:14015-14478 placement
+//@ chunk-7pwjpdkw.js:14168-14631 placement
 /**
  * 超额包含模型白名单仍来自回退值或磁盘缓存时，限时等待 GrowthBook 初始化，以便按模型显示的用量行使用最新名单。
  */
@@ -381,13 +379,13 @@ async function refreshOverageModelsFlag() {
     );
   }
 }
-//@ chunk-w5ndchqs.js:14478-14644 placement
+//@ chunk-7pwjpdkw.js:14631-14797 placement
 /**
  * 限额页促销通知（tengu_rate_limit_promo_notices）的 schema：进度条文字、说明文字与可选主题变体。
  */
 var TENGU_RATE_LIMIT_PROMO_NOTICES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var promoNoticeSchema;
-deferInit("chunk-w5ndchqs.js:14478", () => {
+deferInit("chunk-7pwjpdkw.js:14631", () => {
   TENGU_RATE_LIMIT_PROMO_NOTICES = "tengu_rate_limit_promo_notices";
   promoNoticeSchema = DoctorLazy(() =>
     array(
@@ -401,7 +399,7 @@ deferInit("chunk-w5ndchqs.js:14478", () => {
     ),
   );
 });
-//@ chunk-w5ndchqs.js:14644-14721 placement
+//@ chunk-7pwjpdkw.js:14797-14874 placement
 /**
  * 导出函数 `rateLimitPromoNotices`：返回 safeParse.success ? safeParse.data : []。
  */
@@ -413,7 +411,7 @@ function rateLimitPromoNotices() {
   let parsed = promoNoticeSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
   return parsed.success ? parsed.data : [];
 }
-//@ chunk-w5ndchqs.js:14721-14847 placement
+//@ chunk-7pwjpdkw.js:14874-15000 placement
 function isModelScopedWeeklyLimit(limit) {
   return (
     limit !== null &&
@@ -422,7 +420,7 @@ function isModelScopedWeeklyLimit(limit) {
     typeof limit.scope?.model?.display_name === "string"
   );
 }
-//@ chunk-w5ndchqs.js:14847-14938 placement
+//@ chunk-7pwjpdkw.js:15000-15091 placement
 /**
  * 导出函数 `hasModelScopedLimit`：参数 e，返回 ( Array.isArray(e) && e.some((n) => typeof n === "object" && n !== null && isModelScopedWeeklyLimit(n)) )。
  */
@@ -432,7 +430,7 @@ function hasModelScopedLimit(limits) {
     limits.some((limit) => typeof limit === "object" && limit !== null && isModelScopedWeeklyLimit(limit))
   );
 }
-//@ chunk-w5ndchqs.js:14938-15044 placement
+//@ chunk-7pwjpdkw.js:15091-15197 placement
 /**
  * 判断用量 limits 数组里是否有按模型划分的条目（或无法识别的条目）。
  */
@@ -442,7 +440,7 @@ function hasModelScopedLimits(limits) {
     limits.some((limit) => typeof limit !== "object" || limit === null || limit.scope?.model != null)
   );
 }
-//@ chunk-w5ndchqs.js:15044-15384 placement
+//@ chunk-7pwjpdkw.js:15197-15537 placement
 /**
  * 从用量 limits 中挑出指定模型的周用量条目，转成"Current week (模型名)"行。
  */
@@ -461,7 +459,7 @@ function modelScopedWeeklyRows(limits, modelNames) {
       },
     }));
 }
-//@ chunk-w5ndchqs.js:15384-15555 placement
+//@ chunk-7pwjpdkw.js:15537-15708 placement
 var USAGE_CACHE_TTL_MS_2; // deferred: uses RememberedResponses of its import cycle while loading; runs once the cycle is complete
 var REMEMBERED_RESPONSE_TTL_MS;
 var REFUSAL_REMEMBER_MS;
@@ -469,7 +467,7 @@ var rememberedUsageResponses;
 var usageOauthRefreshLatch;
 var usageRefusedKeys;
 var TENGU_FEDERATED_ROBIN;
-deferInit("chunk-w5ndchqs.js:15384", () => {
+deferInit("chunk-7pwjpdkw.js:15537", () => {
   USAGE_CACHE_TTL_MS_2 = 300000;
   REMEMBERED_RESPONSE_TTL_MS = 3600000;
   REFUSAL_REMEMBER_MS = 3600000;
@@ -489,17 +487,17 @@ deferInit("chunk-w5ndchqs.js:15384", () => {
   });
   TENGU_FEDERATED_ROBIN = "tengu_federated_robin";
 });
-//@ chunk-w5ndchqs.js:15555-15585 placement
+//@ chunk-7pwjpdkw.js:15708-15738 placement
 function federatedRobinEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_FEDERATED_ROBIN, true);
 }
-//@ chunk-w5ndchqs.js:15585-15621 placement
+//@ chunk-7pwjpdkw.js:15738-15774 placement
 function is2xx(status) {
   return status >= 200 && status < 300;
 }
-//@ chunk-w5ndchqs.js:15621-15708 placement
+//@ chunk-7pwjpdkw.js:15774-15861 placement
 var usageFetchState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-w5ndchqs.js:15621", () => {
+deferInit("chunk-7pwjpdkw.js:15774", () => {
   usageFetchState = new HostScoped(() => ({
     pending: null,
     requester: null,
@@ -507,12 +505,12 @@ deferInit("chunk-w5ndchqs.js:15621", () => {
     offerSurface: null,
   }));
 });
-//@ chunk-w5ndchqs.js:15708-15790 placement
+//@ chunk-7pwjpdkw.js:15861-15943 placement
 function oauthAccountKey() {
   let oauthAccountInfo = getOauthAccountInfo();
   return `${oauthAccountInfo?.organizationUuid ?? ""}:${oauthAccountInfo?.accountUuid ?? ""}`;
 }
-//@ chunk-w5ndchqs.js:15790-16363 placement
+//@ chunk-7pwjpdkw.js:15943-16516 placement
 /**
  * 请求 /api/oauth/usage（可带 at_wall、cedar_ember、skip_spend 参数）取当前额度利用率；记住被拒的 bearer，避免反复请求。
  */
@@ -545,13 +543,13 @@ async function fetchUtilization(credentials, options = {}) {
   fetchState.offerSurface = endpoint.includes(`${STARRY_WATERFALL}=`) ? offerSurfaceOrDefault(options) : null;
   return promise;
 }
-//@ chunk-w5ndchqs.js:16363-16389 placement
+//@ chunk-7pwjpdkw.js:16516-16542 placement
 var STARRY_WATERFALL = "starry_waterfall";
-//@ chunk-w5ndchqs.js:16389-16433 placement
+//@ chunk-7pwjpdkw.js:16542-16586 placement
 function offerSurfaceOrDefault(surface) {
   return surface.surface ?? "cli_menu";
 }
-//@ chunk-w5ndchqs.js:16433-16789 placement
+//@ chunk-7pwjpdkw.js:16586-16942 placement
 function usageEndpointPath(endpoint) {
   switch (endpoint.read) {
     case undefined:
@@ -567,7 +565,7 @@ function usageEndpointPath(endpoint) {
       return `/api/oauth/usage?${STARRY_WATERFALL}=${endpoint.surface}&skip_spend=1`;
   }
 }
-//@ chunk-w5ndchqs.js:16789-18746 callgraph-fingerprint (2.1.88 match: fetchUtilization, 0.181)
+//@ chunk-7pwjpdkw.js:16942-18899 callgraph-fingerprint (2.1.88 match: fetchUtilization, 0.181)
 /**
  * 拉取订阅利用率（各窗口），失败结果可重放；auth_rejected 时等待挂起刷新后重试。
  */
@@ -715,14 +713,14 @@ async function fetchUtilization_2(credentials, mode, operation) {
       return withFeatureTelemetry("api_usage_fetch", fetchOnce, usageErrorKind);
   }
 }
-//@ chunk-w5ndchqs.js:18746-18796 layout
+//@ chunk-7pwjpdkw.js:18899-18949 layout
 /**
  * 从重放缓存取上次的用量查询结果。
  */
 function recallUsageOutcome(key) {
   return key === null ? undefined : rememberedUsageResponses.recall(key);
 }
-//@ chunk-w5ndchqs.js:18796-18927 layout
+//@ chunk-7pwjpdkw.js:18949-19080 layout
 /**
  * 上次查询被限流时返回解除时间。
  */
@@ -736,7 +734,7 @@ async function getUsageRateLimitedUntil(credentials) {
   );
   return outcome?.kind === "rate_limited" ? outcome.untilMs : undefined;
 }
-//@ chunk-w5ndchqs.js:18927-19564 placement
+//@ chunk-7pwjpdkw.js:19080-19717 placement
 function rememberUsageRefusal(error, err) {
   try {
     let response = usageErrorResponse(error);
@@ -776,7 +774,7 @@ function rememberUsageRefusal(error, err) {
     return null;
   }
 }
-//@ chunk-w5ndchqs.js:19564-19769 placement
+//@ chunk-7pwjpdkw.js:19717-19922 placement
 function usageErrorKind(error) {
   let response = usageErrorResponse(error);
   if (response === undefined) return "error";
@@ -793,7 +791,7 @@ function usageErrorKind(error) {
       return "http_other";
   }
 }
-//@ chunk-w5ndchqs.js:19769-19998 placement
+//@ chunk-7pwjpdkw.js:19922-20151 placement
 /**
  * 组织花费上限原因集合与“频道月度花费/用量上限”文案和提升提示。
  */
@@ -801,19 +799,19 @@ var ORG_SPEND_CAP_REASONS; // deferred: has load-time effects after a deferred s
 var CHANNEL_SPEND_LIMIT_TEXT;
 var CHANNEL_USAGE_LIMIT_TEXT;
 var ORG_RAISE_HINT;
-deferInit("chunk-w5ndchqs.js:19769", () => {
+deferInit("chunk-7pwjpdkw.js:19922", () => {
   ORG_SPEND_CAP_REASONS = new Set(["org_level_disabled_until", "org_spend_cap_reached"]);
   CHANNEL_SPEND_LIMIT_TEXT = "channel's monthly spend limit";
   CHANNEL_USAGE_LIMIT_TEXT = "channel's monthly usage limit";
   ORG_RAISE_HINT = " \xB7 an org owner or channel manager can raise it in the channel's Claude settings";
 });
-//@ chunk-w5ndchqs.js:19998-20046 placement
+//@ chunk-7pwjpdkw.js:20151-20200 placement
 function isVellumAnchorEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_vellum_anchor", false);
 }
-//@ chunk-w5ndchqs.js:20046-20083 placement
+//@ chunk-7pwjpdkw.js:20200-20237 placement
 var LIMIT_MESSAGE_PREFIXES_ALL; // deferred: uses LIMIT_MESSAGE_PREFIXES (../rateLimitMessages.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-w5ndchqs.js:20046", () => {
+deferInit("chunk-7pwjpdkw.js:20200", () => {
   LIMIT_MESSAGE_PREFIXES_ALL = [
     ...LIMIT_MESSAGE_PREFIXES,
     ...RATE_LIMIT_WARNING_PREFIXES,
@@ -821,14 +819,14 @@ deferInit("chunk-w5ndchqs.js:20046", () => {
     ...RATE_LIMIT_ERROR_PREFIXES,
   ];
 });
-//@ chunk-w5ndchqs.js:20083-20162 placement
+//@ chunk-7pwjpdkw.js:20237-20316 placement
 function isRateLimitText(text) {
   return (
     LIMIT_MESSAGE_PREFIXES_ALL.some((prefix) => text.startsWith(prefix)) ||
     LIMIT_MESSAGE_PREFIX_PATTERNS.some((pattern) => pattern.test(text))
   );
 }
-//@ chunk-1m53rcjd.js:610-1020 placement
+//@ chunk-rdsmmn25.js:610-1020 placement
 function normalizeUsageLimits(credentials) {
   let rawUtilization = getRawUtilization();
   if (!rawUtilization.five_hour && !rawUtilization.seven_day) {
@@ -860,7 +858,7 @@ function normalizeUsageLimits(credentials) {
     source: "headers",
   };
 }
-//@ chunk-1m53rcjd.js:1020-1307 placement
+//@ chunk-rdsmmn25.js:1020-1307 placement
 function overageIncludedLimitRow(sevenDayOverageIncluded, credentials) {
   if (!sevenDayOverageIncluded) return;
   let modelNames = overageIncludedModels();
@@ -879,7 +877,7 @@ function overageIncludedLimitRow(sevenDayOverageIncluded, credentials) {
     },
   };
 }
-//@ chunk-1m53rcjd.js:1307-1456 placement
+//@ chunk-rdsmmn25.js:1307-1456 placement
 function seededUsageResult(seeded, rateLimitedVia, heldUntilMs) {
   return {
     status: "seeded",
@@ -890,14 +888,14 @@ function seededUsageResult(seeded, rateLimitedVia, heldUntilMs) {
     heldUntilMs,
   };
 }
-//@ chunk-1m53rcjd.js:1456-1466 placement
+//@ chunk-rdsmmn25.js:1456-1466 placement
 var MAX_REMEMBERED_ERROR_CHARS = 200;
-//@ chunk-1m53rcjd.js:1466-1565 placement
+//@ chunk-rdsmmn25.js:1466-1565 placement
 function truncateWithEllipsisUsage(text) {
   if (text.length <= MAX_REMEMBERED_ERROR_CHARS) return text;
   return `${text.slice(0, MAX_REMEMBERED_ERROR_CHARS).replace(/[\uD800-\uDBFF]$/, "")}\u2026`;
 }
-//@ chunk-1m53rcjd.js:1565-1905 placement
+//@ chunk-rdsmmn25.js:1565-1905 placement
 /**
  * 获取用量并补上按模型划分的周用量：由响应头播种的结果先刷新白名单再生成该模型的行，返回结果含模型条目时也刷新白名单。
  */
@@ -924,7 +922,7 @@ async function fetchUsageWithModelScopes(credentials, storage) {
   if (hasModelScopedLimit(usage.utilization.limits)) await refreshOverageModelsFlag();
   return usage;
 }
-//@ chunk-1m53rcjd.js:1905-2935 placement
+//@ chunk-rdsmmn25.js:1905-2935 placement
 async function fetchUsage(credentials, credentials_2) {
   let accountUuid = getOauthAccountInfo()?.accountUuid;
   if (isClaudeAISubscriber() && hasProfileScope()) {
@@ -997,7 +995,7 @@ async function fetchUsage(credentials, credentials_2) {
     };
   }
 }
-//@ chunk-1m53rcjd.js:2935-3370 placement
+//@ chunk-rdsmmn25.js:2935-3370 placement
 /**
  * 汇总用量行为：最耗费的行为与推荐（可附修复动作）、请求数、会话数、占比超过阈值的行为，以及代理、技能、插件、MCP 服务器统计。
  */
@@ -1029,7 +1027,7 @@ function usageBehaviorSummary(report, evidence, live) {
     mcp_servers: report.mcpServers,
   };
 }
-//@ chunk-1m53rcjd.js:3370-4583 placement
+//@ chunk-rdsmmn25.js:3370-4583 placement
 async function projectModelScopedUsage({ includeBehaviors = true, storageV5, credentials, live }) {
   let isSubscriber = isClaudeAISubscriber();
   let rateLimitsAvailable = isSubscriber && hasProfileScope();
@@ -1106,6 +1104,13 @@ async function projectModelScopedUsage({ includeBehaviors = true, storageV5, cre
   };
 }
 export {
+  fetchUtilization,
+  hasUsageLimitKeys,
+  isAuthRejectedUsageError,
+  isPromoOfferEnabled,
+  promoOfferStrings,
+  fillUsageTemplate,
+  promoOfferVersion,
   ORG_SPEND_CAP_REASONS,
   CHANNEL_SPEND_LIMIT_TEXT,
   ORG_RAISE_HINT,
@@ -1113,23 +1118,16 @@ export {
   isVellumAnchorEnabled,
   CHANNEL_USAGE_LIMIT_TEXT,
   INDIVIDUAL_USAGE_LIMIT_TEXT,
-  fetchUtilization,
   isLimitEnabled,
-  promoOfferStrings,
-  fillUsageTemplate,
+  isMockRateLimit429,
+  NEAR_LIMIT_UTILIZATION,
+  overageIncludedModels,
   HTTPS_CLAU_DE_WRAP_UP,
   fetchUsageWithModelScopes,
-  overageIncludedModels,
-  NEAR_LIMIT_UTILIZATION,
   normalizeUsageLimits,
   hasModelScopedLimit,
   rateLimitPromoNotices,
   modelScopedWeeklyRows,
   projectModelScopedUsage,
-  isMockRateLimit429,
   isRateLimitText,
-  hasUsageLimitKeys,
-  isAuthRejectedUsageError,
-  isPromoOfferEnabled,
-  promoOfferVersion,
 };

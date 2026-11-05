@@ -3,10 +3,10 @@
  *
  * 上下文窗口与输出上限：上下文百分比、模型 max_output_tokens 默认值与上限（目录 + clientdata 覆盖）、未知模型窗口判定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/context.ts
- * pieces: chunk-aepeg2w5.js (3), chunk-e6aww6q8.js (1)
- * attribution: fingerprint 2, layout 1, callgraph-fingerprint 1
+ * pieces: chunk-5xgkngpb.js (1), chunk-exfmq47h.js (3)
+ * attribution: callgraph-fingerprint 1, fingerprint 2, layout 1
  */
 import { getCachedClientData, getFetchedClientData } from "./config.js";
 import { getCanonicalName } from "./model/canonicalModelName.js";
@@ -19,7 +19,7 @@ import { env } from "./env.js";
 import { is1mContextDisabled, isCompactDisabledOrCustom } from "./model/contextWindow1m.js";
 import { isUnrecognizedModelWindow } from "../services/compact/autoCompactWindow.js";
 
-//@ chunk-aepeg2w5.js:474021-474238 fingerprint (2.1.88 match: calculateContextPercentages, 1)
+//@ chunk-exfmq47h.js:485419-485636 fingerprint (2.1.88 match: calculateContextPercentages, 1)
 /**
  * 上下文已用/剩余百分比（输入+缓存 token / 窗口），夹在 0–100。
  */
@@ -40,7 +40,7 @@ function calculateContextPercentages(currentUsage, contextWindowSize) {
     remaining: 100 - clampedUsed,
   };
 }
-//@ chunk-aepeg2w5.js:474238-474509 layout
+//@ chunk-exfmq47h.js:485636-485907 layout
 /**
  * clientdata 的 heather_vale（全局或按模型）给出的默认输出 token。
  */
@@ -57,7 +57,7 @@ function getClientDataDefaultOutputTokens(model, antModel) {
   if (typeof heatherVale !== "number" || !Number.isInteger(heatherVale) || heatherVale <= 0) return null;
   return heatherVale;
 }
-//@ chunk-aepeg2w5.js:474509-474942 fingerprint (2.1.88 match: getModelMaxOutputTokens, 0.453)
+//@ chunk-exfmq47h.js:485907-486340 fingerprint (2.1.88 match: getModelMaxOutputTokens, 0.454)
 /**
  * 模型 max_output_tokens：{default, upperLimit}；来源依次为模型目录覆盖、目录 max_output_tokens、claude-3 老模型固定值、默认 32000/128000；再受 clientdata 默认值与能力表 max_tokens 约束。
  */
@@ -96,7 +96,7 @@ function getModelMaxOutputTokens(model) {
     upperLimit: maxTokens,
   };
 }
-//@ chunk-e6aww6q8.js:1550371-1550615 callgraph-fingerprint (2.1.88 match: getContextWindowForModel, 0.4)
+//@ chunk-5xgkngpb.js:1615820-1616064 callgraph-fingerprint (2.1.88 match: getContextWindowForModel, 0.4)
 /**
  * 第一方直连、未禁用 1M、窗口 <1M 等条件下是否对未知模型强制窗口。旧版名 getContextWindowForModel 为错配（返回布尔）。
  */
@@ -120,8 +120,8 @@ function shouldEnforceUnknownModelWindow(model) {
   return isUnrecognizedModelWindow(model);
 }
 export {
-  calculateContextPercentages,
   getModelMaxOutputTokens,
-  getClientDataDefaultOutputTokens,
   shouldEnforceUnknownModelWindow,
+  calculateContextPercentages,
+  getClientDataDefaultOutputTokens,
 };

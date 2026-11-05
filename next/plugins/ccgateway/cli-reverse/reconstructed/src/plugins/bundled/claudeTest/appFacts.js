@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：Claude Test 记录的被测应用事实（登录方式、支付、数据存放、端口）及其显示文本
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ae5g0zb5.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mhn0amzz.js (10)
  * attribution: placement 10
  */
 import { parseJsonObject } from "./progress.js";
 import { runDeferredInits } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-ae5g0zb5.js:35406-35813 placement
+//@ chunk-mhn0amzz.js:36644-37051 placement
 /**
  * Claude Test 插件的进程级共享状态（浏览器助手、报告、面板、同意预览等）。
  */
@@ -39,14 +39,14 @@ var claudeTestState = {
   consentPreview: undefined,
   panePreview: undefined,
 };
-//@ chunk-ae5g0zb5.js:35813-35883 placement
+//@ chunk-mhn0amzz.js:37051-37121 placement
 /**
  * 普通对象
  */
 function isPlainObjectNonArray(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
-//@ chunk-ae5g0zb5.js:35883-35989 placement
+//@ chunk-mhn0amzz.js:37121-37227 placement
 /**
  * 运行目录名与规格路径的格式约束。
  */
@@ -54,7 +54,7 @@ var RUN_ID_RE = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(-\d+)?$/;
 var SPEC_SEGMENT_RE = /^[A-Za-z0-9_][A-Za-z0-9._-]{0,63}$/;
 var MAX_SPEC_SEGMENTS = 8;
 var MAX_SPEC_PATH_LENGTH = 200;
-//@ chunk-ae5g0zb5.js:35989-36122 placement
+//@ chunk-mhn0amzz.js:37227-37360 placement
 /**
  * 规格路径是否合法（长度、段数、每段字符）。
  */
@@ -63,7 +63,7 @@ function isValidSpecPath(specPath) {
   let parts = specPath.split("/");
   return parts.length <= MAX_SPEC_SEGMENTS && parts.every((segment) => SPEC_SEGMENT_RE.test(segment));
 }
-//@ chunk-ae5g0zb5.js:36122-36371 placement
+//@ chunk-mhn0amzz.js:37360-37609 placement
 /**
  * 把参数（可能是绝对路径）转为相对规格目录的合法路径，否则 null。
  */
@@ -82,7 +82,7 @@ function toSpecPath(text, rootDir) {
     .replace(/\/+$/, "");
   return isValidSpecPath(specPath) ? specPath : null;
 }
-//@ chunk-ae5g0zb5.js:36371-36671 placement
+//@ chunk-mhn0amzz.js:37609-37909 placement
 /**
  * Claude Test 规格文件名与安全参数的正则、不可见字符正则，以及同意答案的三种取值。
  */
@@ -93,7 +93,7 @@ var regExp = new RegExp(
   "gu",
 );
 var CONSENT_ANSWERS = ["visitor", "none", "refused"];
-//@ chunk-ae5g0zb5.js:36671-36756 placement
+//@ chunk-mhn0amzz.js:37909-37994 placement
 /**
  * 解析同意答案
  */
@@ -101,14 +101,14 @@ function parseConsentAnswer(runFile) {
   let jsonObject = parseJsonObject(runFile);
   return typeof jsonObject?.answer === "string" && CONSENT_ANSWERS.includes(jsonObject.answer);
 }
-//@ chunk-ae5g0zb5.js:36756-36818 placement
+//@ chunk-mhn0amzz.js:37994-38056 placement
 /**
  * 去掉被隔离的条目
  */
 function filterWalled(items, dropWalled) {
   return dropWalled ? items.filter((item) => item.walled !== true) : [...items];
 }
-//@ chunk-ae5g0zb5.js:36818-37944 placement
+//@ chunk-mhn0amzz.js:38056-39182 placement
 /**
  * 被测应用事实的显示文本：登录方式、支付、数据存放的几种说法，以及“测试没能开始”的阻塞原因与可用包管理器。
  */
@@ -195,7 +195,7 @@ var APP_PACKAGE_MANAGERS = {
   yarn: 1,
   bun: 1,
 };
-//@ chunk-ae5g0zb5.js:37944-38231 placement
+//@ chunk-mhn0amzz.js:39182-39469 placement
 function describePortInUse(failure) {
   if (failure === null) return APP_UNAVAILABLE_CAUSES.other;
   if (failure.cause === "port" && failure.port !== null)

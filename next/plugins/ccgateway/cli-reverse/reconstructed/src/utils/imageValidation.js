@@ -3,16 +3,16 @@
  *
  * 图片块校验（base64 大小上限 ImageSizeError、tengu_image_api_validation_failed），另含提示缓存区域定位辅助
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/imageValidation.ts
- * pieces: chunk-171dhyhe.js (1), chunk-f25sswmp.js (3)
+ * pieces: chunk-ma8ytfb3.js (1), chunk-vr5v4gzz.js (3)
  * attribution: fingerprint 3, placement 1
  */
 import { formatFileSize } from "./format.js";
 import { isPlainObject as isPlainObject_2 } from "./isPlainObject.js";
 import { logEvent } from "../services/analytics/index.js";
 
-//@ chunk-f25sswmp.js:1463-1847 fingerprint (2.1.88 match: ImageSizeError, 0.92)
+//@ chunk-vr5v4gzz.js:1496-1880 fingerprint (2.1.88 match: ImageSizeError, 0.92)
 class ImageSizeError extends Error {
   constructor(oversizedImages, maxSize) {
     let message;
@@ -28,7 +28,7 @@ class ImageSizeError extends Error {
     this.name = "ImageSizeError";
   }
 }
-//@ chunk-f25sswmp.js:1847-2019 placement
+//@ chunk-vr5v4gzz.js:1880-2052 placement
 function isBase64ImageBlock(block) {
   if (!isPlainObject_2(block) || !("source" in block)) return false;
   let source = block.source;
@@ -36,7 +36,7 @@ function isBase64ImageBlock(block) {
   if (!("type" in source) || source.type !== "base64") return false;
   return "data" in source && typeof source.data === "string";
 }
-//@ chunk-f25sswmp.js:2288-2441 fingerprint (2.1.88 match: validateImagesForAPI, 1)
+//@ chunk-vr5v4gzz.js:2321-2474 fingerprint (2.1.88 match: validateImagesForAPI, 1)
 function validateImagesForAPI(block, index, maxBytes, tooLarge) {
   let base64Size = block.source.data.length;
   if (base64Size > maxBytes) {
@@ -50,7 +50,7 @@ function validateImagesForAPI(block, index, maxBytes, tooLarge) {
     });
   }
 }
-//@ chunk-171dhyhe.js:44240-44358 fingerprint (2.1.88 match: isBase64ImageBlock, 1)
+//@ chunk-ma8ytfb3.js:45388-45506 fingerprint (2.1.88 match: isBase64ImageBlock, 1)
 function isBase64ImageBlock_2(block) {
   return block.type === "image" && block.source.type === "base64"
     ? block.source.data.length
@@ -58,4 +58,4 @@ function isBase64ImageBlock_2(block) {
       ? block.text.length
       : 0;
 }
-export { isBase64ImageBlock, isBase64ImageBlock_2, ImageSizeError, validateImagesForAPI };
+export { isBase64ImageBlock, ImageSizeError, isBase64ImageBlock_2, validateImagesForAPI };

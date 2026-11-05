@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：按键名到 Ink 键名的映射与显示别名；把按键名称转换为 Ink 的 key 布尔对象。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8pssrarc.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7wgjt81y.js (7)
  * attribution: placement 7
  */
 import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { createSignal } from "../utils/signal.js";
 
-//@ chunk-8pssrarc.js:457-921 placement
+//@ chunk-7wgjt81y.js:457-921 placement
 /**
  * 把按键名称转换为 Ink 的 key 布尔对象。
  */
@@ -49,7 +49,7 @@ function toInkKey(keyEvent) {
     key,
   };
 }
-//@ chunk-8pssrarc.js:921-1443 placement
+//@ chunk-7wgjt81y.js:921-1443 placement
 /**
  * 按键名到 Ink 键字段名的映射，以及反向的 Ink 键名到显示别名表。
  */
@@ -85,7 +85,7 @@ var INK_KEY_DISPLAY_ALIASES = [
   ["home", "home"],
   ["end", "end"],
 ];
-//@ chunk-8pssrarc.js:1443-1581 placement
+//@ chunk-7wgjt81y.js:1443-1581 placement
 /**
  * 把按键名与修饰键转换成 Ink 的按键事件对象（name、key、ctrl/shift/meta/super）。
  */
@@ -105,21 +105,21 @@ function toInkKeyEvent(action, context) {
     superKey: context.super,
   };
 }
-//@ chunk-8pssrarc.js:1581-1585 placement
+//@ chunk-7wgjt81y.js:1581-1585 placement
 init_react_production();
-//@ chunk-8pssrarc.js:1585-1600 placement
+//@ chunk-7wgjt81y.js:1585-1600 placement
 /**
  * 空函数
  */
 function noop() {}
-//@ chunk-8pssrarc.js:1600-1641 placement
+//@ chunk-7wgjt81y.js:1600-1641 placement
 /**
  * 处理器是否消费了按键
  */
 function didHandlerConsume(registration) {
   return registration.handler() !== false;
 }
-//@ chunk-8pssrarc.js:1641-1788 placement
+//@ chunk-7wgjt81y.js:1641-1788 placement
 /**
  * 创建快捷键注册表的初始状态：声明表、作用域与处理器变化信号、抢占作用域、吞键表与分发跟踪信号。
  */
@@ -133,4 +133,4 @@ function createKeybindingRegistryState() {
     keyDispatchTrace: createSignal(),
   };
 }
-export { toInkKeyEvent, noop, didHandlerConsume, createKeybindingRegistryState, toInkKey };
+export { createKeybindingRegistryState, toInkKeyEvent, noop, didHandlerConsume, toInkKey };

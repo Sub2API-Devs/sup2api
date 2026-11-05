@@ -3,9 +3,9 @@
  *
  * /skills 实现：列出技能及其上下文开销
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/skills/skills.tsx
- * pieces: chunk-00qhwn8e.js (9), chunk-ygke3hz8.js (1)
+ * pieces: chunk-4fw9ejgj.js (9), chunk-sprn4z2j.js (1)
  * attribution: sole-consumer 4, placement 2, layout 3, fingerprint 1
  */
 import { init_react_production, useState, useRef } from "../../../vendor/react/cjs/react.production.js";
@@ -30,7 +30,7 @@ import {
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useLatestState } from "../../components/CustomSelect/option-map.js";
 import { useTerminalFocus } from "../../ink/hooks/use-terminal-focus.js";
-import { useHasFocus } from "../../ink/components/Input.js";
+import { isFocusedIn } from "../../ink/components/Input.js";
 import { getFocusManager } from "../../ink/focus.js";
 import { useSearchInput } from "../../hooks/useSearchInput.js";
 import { useGlobalExitKeybindings } from "../../keybindings/useKeybinding.js";
@@ -49,7 +49,7 @@ import { ConfigurableShortcutHint } from "../../components/ConfigurableShortcutH
 import { HintText } from "../../components/design-system/HintText.js";
 import { isSafeMode, getSafeModeExitHint } from "../../utils/envUtils.js";
 import { Dialog } from "../../components/design-system/Dialog.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { SearchBox } from "../../components/SearchBox.js";
 import { OrderedListWithItem } from "../../components/CustomSelect/selectTable.js";
@@ -59,30 +59,30 @@ import { getRemoteCaps } from "../../remote/remoteMode.js";
 import { SkillsMenu_2 } from "../../components/skills/SkillsMenu.js";
 import { bytesPerTokenForModel } from "../../utils/model/modelDisplay.js";
 
-//@ chunk-ygke3hz8.js:528-583 placement
+//@ chunk-sprn4z2j.js:528-583 placement
 /**
  * 技能状态的四个取值（on/name-only/user-invocable-only/off），/skills 与插件页循环切换用。
  */
 var SKILL_STATE_OPTIONS = ["on", "name-only", "user-invocable-only", "off"];
-//@ chunk-00qhwn8e.js:19170-19174 sole-consumer
+//@ chunk-4fw9ejgj.js:20351-20355 sole-consumer
 init_react_production();
-//@ chunk-00qhwn8e.js:19174-19200 sole-consumer
+//@ chunk-4fw9ejgj.js:20355-20381 sole-consumer
 function negateValue(value) {
   return !value;
 }
-//@ chunk-00qhwn8e.js:19200-19231 sole-consumer
+//@ chunk-4fw9ejgj.js:20381-20412 sole-consumer
 function skillNameOf(command) {
   return command.name;
 }
-//@ chunk-00qhwn8e.js:19231-19262 sole-consumer
+//@ chunk-4fw9ejgj.js:20412-20443 sole-consumer
 function isStorableSkillName(name) {
   return !isNotProtoKey(name);
 }
-//@ chunk-00qhwn8e.js:19262-19306 placement (2.1.88 match: _temp0, 1)
+//@ chunk-4fw9ejgj.js:20443-20487 placement (2.1.88 match: _temp0, 1)
 function isPluginSkill(a_5) {
   return a_5.source === "plugin";
 }
-//@ chunk-00qhwn8e.js:19306-19551 layout
+//@ chunk-4fw9ejgj.js:20487-20732 layout
 var SKILL_STATE_DISPLAY = {
   on: {
     icon: jsxProd_default(StatusIcon, {
@@ -109,12 +109,12 @@ var SKILL_STATE_DISPLAY = {
     }),
   },
 };
-//@ chunk-00qhwn8e.js:19551-19655 layout
+//@ chunk-4fw9ejgj.js:20732-20836 layout
 function lockReasonText(lock) {
   if (!lock) return "";
   return lock.source === "reserved-name" ? "reserved name" : `locked by ${lock.source}`;
 }
-//@ chunk-00qhwn8e.js:19655-27856 layout
+//@ chunk-4fw9ejgj.js:20836-29037 layout
 /**
  * /skills 菜单：列出技能、上下文开销、排序、搜索与开关状态。
  */
@@ -167,7 +167,7 @@ function SkillsMenu(props) {
   let isTerminalFocused = useTerminalFocus();
   let containerRef = useRef(null);
   let searchRef = useRef(null);
-  let hasFocus = useHasFocus(searchRef);
+  let clipped = isFocusedIn(searchRef);
   let isSearchFocused;
   if ($[12] === MEMO_CACHE_SENTINEL) {
     isSearchFocused = () => {
@@ -202,10 +202,10 @@ function SkillsMenu(props) {
     useSearchInput(searchInputOptions);
   useGlobalExitKeybindings();
   let filteredCommands;
-  Dr: {
+  Pr: {
     if (!query) {
       filteredCommands = commands_2;
-      break Dr;
+      break Pr;
     }
     let searchMatches;
     if ($[15] !== query || $[16] !== commands_2) {
@@ -518,7 +518,7 @@ function SkillsMenu(props) {
     $[61] !== onKeyInput ||
     $[62] !== onPaste ||
     $[63] !== isScreenReaderEnabled ||
-    $[64] !== hasFocus ||
+    $[64] !== clipped ||
     $[65] !== isTerminalFocused ||
     $[66] !== locked ||
     $[67] !== onExit ||
@@ -533,7 +533,9 @@ function SkillsMenu(props) {
     $[76] !== shortcutDisplay_2 ||
     $[77] !== visibleCount_2
   ) {
-    let unstorableNames = uniq(commands_2.map(skillNameOf).filter(isStorableSkillName));
+    let unstorableNames = normalizeCaseForComparison_2(
+      commands_2.map(skillNameOf).filter(isStorableSkillName),
+    );
     let countText;
     if ($[96] !== visibleCommands.length || $[97] !== query || $[98] !== commands_2.length) {
       countText = query
@@ -545,7 +547,7 @@ function SkillsMenu(props) {
       $[99] = countText;
     } else countText = $[99];
     let countLabel = countText;
-    let helpText = hasFocus
+    let helpText = clipped
       ? "type to filter \xB7 \u2193/enter to select \xB7 esc to clear"
       : visibleCommands.length === 0
         ? `/ to search, ${shortcutDisplay} to close`
@@ -695,7 +697,7 @@ function SkillsMenu(props) {
     $[61] = onKeyInput;
     $[62] = onPaste;
     $[63] = isScreenReaderEnabled;
-    $[64] = hasFocus;
+    $[64] = clipped;
     $[65] = isTerminalFocused;
     $[66] = locked;
     $[67] = onExit;
@@ -831,7 +833,7 @@ function SkillsMenu(props) {
   } else dialog = $[143];
   return dialog;
 }
-//@ chunk-00qhwn8e.js:27856-28005 fingerprint (2.1.88 match: call, 0.637)
+//@ chunk-4fw9ejgj.js:29037-29186 fingerprint (2.1.88 match: call, 0.64)
 /**
  * /skills 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

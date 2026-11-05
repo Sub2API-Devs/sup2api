@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：artifact 读取版本与契约目标的观测记录
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-06y4szbn.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-51jy8ztq.js (16)
  * attribution: placement 16
  */
 import { getEntrypointKind, isHostEntrypoint } from "../../utils/entrypointKinds.js";
@@ -17,7 +17,7 @@ import { ARTIFACT_VERSION_SAFE_RE } from "../../tools/ArtifactTool/constants.js"
 import { compareNumericPrefix } from "../../utils/textNormalize.js";
 import { parseContractVersion } from "./capabilityDeclaration.js";
 
-//@ chunk-06y4szbn.js:44928-45204 placement
+//@ chunk-51jy8ztq.js:47178-47454 placement
 function derivePublishContextFrom(options) {
   let entrypointKind = getEntrypointKind();
   let interactive =
@@ -39,7 +39,7 @@ function derivePublishContextFrom(options) {
     publishContext,
   };
 }
-//@ chunk-06y4szbn.js:45204-45322 placement
+//@ chunk-51jy8ztq.js:47454-47572 placement
 function artifactReadObservationIn(state) {
   return (handler) => {
     let map = state();
@@ -49,7 +49,7 @@ function artifactReadObservationIn(state) {
     };
   };
 }
-//@ chunk-06y4szbn.js:45322-45395 placement (2.1.88 match: getCurrentAgentInfo, 0.426)
+//@ chunk-51jy8ztq.js:47572-47645 placement (2.1.88 match: getCurrentAgentInfo, 0.426)
 function observationStamp(agentId, messageId, agentArg) {
   return (
     `${agentId ?? "main"}
@@ -60,12 +60,12 @@ ${messageId ?? ""}` +
 ${agentArg}`)
   );
 }
-//@ chunk-06y4szbn.js:45395-45423 placement
+//@ chunk-51jy8ztq.js:47645-47673 placement
 var OBSERVATION_KIND_RANK = {
   summary: 0,
   source: 1,
 };
-//@ chunk-06y4szbn.js:45423-45579 placement
+//@ chunk-51jy8ztq.js:47673-47829 placement
 function sourcelessObservation(agentId, slug, ver, source) {
   let deliveries = getLiveState().readDeliveries.get(replicaKey(agentId, slug));
   return deliveries !== undefined &&
@@ -77,38 +77,38 @@ function sourcelessObservation(agentId, slug, ver, source) {
     ? deliveries.kind
     : undefined;
 }
-//@ chunk-06y4szbn.js:45579-45679 placement
+//@ chunk-51jy8ztq.js:47829-47929 placement
 function observedWithoutSource(agentId, slug, ver) {
   let deliveries = getLiveState().readDeliveries.get(replicaKey(agentId, slug));
   return deliveries !== undefined && deliveries.ver === ver && !deliveries.sourced;
 }
-//@ chunk-06y4szbn.js:45679-45701 placement
+//@ chunk-51jy8ztq.js:47929-47951 placement
 var OWN_MINT_SENTINEL = "\x00own-mint";
-//@ chunk-06y4szbn.js:45701-45744 placement
+//@ chunk-51jy8ztq.js:47951-47994 placement
 function ownMintStamp(agentId) {
   return `${agentId ?? "main"}
 ${OWN_MINT_SENTINEL}`;
 }
-//@ chunk-06y4szbn.js:45744-45842 placement
+//@ chunk-51jy8ztq.js:47994-48092 placement
 function versionHeldAsOwnMint(ver, ver_2) {
   return ver.ver === ver_2 && ver.observers !== undefined && Object.values(ver.observers).includes("");
 }
-//@ chunk-06y4szbn.js:45842-45944 placement
+//@ chunk-51jy8ztq.js:48092-48194 placement
 function mainObservedArtifactVersion(state, readState) {
   return observedVersion({
     ver: state.artifactReadVersions?.[readState],
     observers: state.artifactReadObservers?.[readState],
   });
 }
-//@ chunk-06y4szbn.js:45944-45996 placement
+//@ chunk-51jy8ztq.js:48194-48246 placement
 function observedVersion(entry) {
   return hasMainKey(entry.observers) ? entry.ver : undefined;
 }
-//@ chunk-06y4szbn.js:45996-46033 placement
+//@ chunk-51jy8ztq.js:48246-48283 placement
 function makeMainObservedVersionReader(getArtifactReadObservation, slug) {
   return () => observedVersion(getArtifactReadObservation(slug));
 }
-//@ chunk-06y4szbn.js:46033-47310 placement
+//@ chunk-51jy8ztq.js:48283-49560 placement
 function makeSetArtifactReadVersion(setAppState) {
   return (slug, ver, observation) => {
     if (ver !== undefined && !ARTIFACT_VERSION_SAFE_RE.test(ver)) return;
@@ -208,7 +208,7 @@ function makeSetArtifactReadVersion(setAppState) {
     });
   };
 }
-//@ chunk-06y4szbn.js:47310-47525 placement
+//@ chunk-51jy8ztq.js:49560-49775 placement
 function artifactVersionObserved(versions, slug, agentId, batch) {
   let byAgent = versions?.[slug];
   if (byAgent === undefined)
@@ -224,7 +224,7 @@ function artifactVersionObserved(versions, slug, agentId, batch) {
     siblingInFlight,
   };
 }
-//@ chunk-06y4szbn.js:47525-48003 placement
+//@ chunk-51jy8ztq.js:49775-50253 placement
 function makeSetArtifactContractTarget(setAppState) {
   return (toolUseId, body, identity) =>
     setAppState((state) => {
@@ -277,7 +277,7 @@ function makeSetArtifactContractTarget(setAppState) {
       };
     });
 }
-//@ chunk-06y4szbn.js:48003-48149 placement
+//@ chunk-51jy8ztq.js:50253-50399 placement
 function makeGetArtifactContractTarget(getAppState) {
   return () => {
     let artifactRefs = getAppState().artifactRefs ?? [];
@@ -291,16 +291,16 @@ function makeGetArtifactContractTarget(getAppState) {
   };
 }
 export {
-  observationStamp,
   ownMintStamp,
-  versionHeldAsOwnMint,
-  observedWithoutSource,
-  derivePublishContextFrom,
-  mainObservedArtifactVersion,
-  makeMainObservedVersionReader,
-  artifactReadObservationIn,
   artifactVersionObserved,
+  versionHeldAsOwnMint,
   sourcelessObservation,
+  derivePublishContextFrom,
+  observationStamp,
+  observedWithoutSource,
+  artifactReadObservationIn,
+  makeMainObservedVersionReader,
+  mainObservedArtifactVersion,
   makeSetArtifactReadVersion,
   makeSetArtifactContractTarget,
   makeGetArtifactContractTarget,

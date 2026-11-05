@@ -3,16 +3,16 @@
  *
  * 解析 /命令 输入为命令名、参数与是否 MCP 命令
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/slashCommandParsing.ts
- * pieces: chunk-b5rfb1p7.js (4)
+ * pieces: chunk-qr15drgp.js (4)
  * attribution: fingerprint 1, placement 3
  */
 import { splitSlashCommandInput } from "../commands.js";
 import { getPromptId } from "../bootstrap/state.js";
 import { logUserPromptEvent } from "./telemetry/userPromptEvent.js";
 
-//@ chunk-b5rfb1p7.js:402-745 fingerprint (2.1.88 match: parseSlashCommand, 0.66)
+//@ chunk-qr15drgp.js:402-745 fingerprint (2.1.88 match: parseSlashCommand, 0.662)
 /**
  * 解析斜杠命令输入：返回命令名、参数和是否 MCP 命令（名字后跟 (MCP) 标记）；不以 / 开头返回 null。
  */
@@ -40,7 +40,7 @@ function parseSlashCommand(input) {
     isMcp: false,
   };
 }
-//@ chunk-b5rfb1p7.js:745-1041 placement
+//@ chunk-qr15drgp.js:745-1041 placement
 function matchSubcommand(command, rest) {
   if (!command.subcommands) return;
   let trimmed = rest.trimStart();
@@ -56,7 +56,7 @@ function matchSubcommand(command, rest) {
     remainingArgs,
   };
 }
-//@ chunk-b5rfb1p7.js:1041-1174 placement
+//@ chunk-qr15drgp.js:1041-1174 placement
 function logSlashPromptEvent(event, userPromptHold) {
   let promptId = getPromptId();
   if (userPromptHold === undefined) {
@@ -73,11 +73,11 @@ function logSlashPromptEvent(event, userPromptHold) {
     },
   });
 }
-//@ chunk-b5rfb1p7.js:1174-1230 placement
+//@ chunk-qr15drgp.js:1174-1230 placement
 var cloneContent = (content) =>
   typeof content === "string"
     ? content
     : content.map((block) => ({
         ...block,
       }));
-export { parseSlashCommand, matchSubcommand, logSlashPromptEvent, cloneContent };
+export { parseSlashCommand, logSlashPromptEvent, cloneContent, matchSubcommand };

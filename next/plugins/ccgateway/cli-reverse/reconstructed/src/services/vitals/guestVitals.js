@@ -3,9 +3,9 @@
  *
  * 访客 vitals 上报（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ar4s2yky.js (1), chunk-qbkav8vn.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9s09y6gy.js (1), chunk-w6jyk847.js (5)
  * attribution: placement 6
  */
 import { isAbsolute } from "path";
@@ -21,10 +21,10 @@ import { logFeatureOk, logFeatureBad, logFeatureSad } from "../analytics/feature
 import { CCR_SESSION_INGRESS_TOKEN_PATH, MAX_CREDENTIAL_BYTES } from "../../utils/authFileDescriptor.js";
 import { readSmallFileOrNull } from "../../utils/readSmallFile.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { getTransportForUrl } from "../../cli/transports/transportUtils.js";
+import { httpUrlFromWs } from "../../cli/transports/transportUtils.js";
 import { registerCleanup } from "../../utils/cleanupRegistry.js";
 
-//@ chunk-qbkav8vn.js:528-621 placement
+//@ chunk-w6jyk847.js:528-621 placement
 /**
  * 访客 vitals 上报程序：回退路径、终止宽限与重启退避区间。
  */
@@ -33,7 +33,7 @@ var VITALS_EMITTER_GUEST = "vitals-emitter-guest";
 var VITALS_KILL_GRACE_MS = 5000;
 var VITALS_RESPAWN_BASE_MS = 1000;
 var VITALS_RESPAWN_MAX_MS = 30000;
-//@ chunk-qbkav8vn.js:621-969 placement
+//@ chunk-w6jyk847.js:621-969 placement
 /**
  * 启动访客 vitals 上报进程：CLAUDE_CODE_DISABLE_VITALS_EMITTER 或仅必要流量时不启动；解析到上报程序后启动 GuestVitalsEmitter，失败或被禁用时返回 null。
  */
@@ -54,7 +54,7 @@ async function startGuestVitals(options) {
     return null;
   }
 }
-//@ chunk-qbkav8vn.js:969-1429 placement
+//@ chunk-w6jyk847.js:969-1429 placement
 async function resolveVitalsEmitter({ binaryResolution, log }) {
   let VITALS_EMITTER_BIN = env.VITALS_EMITTER_BIN;
   if (VITALS_EMITTER_BIN && !isAbsolute(VITALS_EMITTER_BIN)) {
@@ -89,7 +89,7 @@ async function resolveVitalsEmitter({ binaryResolution, log }) {
     }
   }
 }
-//@ chunk-qbkav8vn.js:1429-3806 placement
+//@ chunk-w6jyk847.js:1429-3806 placement
 /**
  * 访客 vitals 上报子进程管理（退出、SIGTERM/SIGKILL）
  */
@@ -215,7 +215,7 @@ class GuestVitalsEmitter {
     this.respawnTimer.unref();
   }
 }
-//@ chunk-qbkav8vn.js:3806-4653 placement
+//@ chunk-w6jyk847.js:3806-4653 placement
 /**
  * 构造 vitals 上报进程的环境变量（版本、包名、问题反馈地址等）。
  */
@@ -227,10 +227,10 @@ function buildVitalsEmitterEnv() {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -250,7 +250,7 @@ function buildVitalsEmitterEnv() {
   for (let [key, value] of Object.entries(inheritedVars)) if (value !== undefined) envObject[key] = value;
   return envObject;
 }
-//@ chunk-ar4s2yky.js:1458-1842 placement
+//@ chunk-9s09y6gy.js:1542-1926 placement
 /**
  * 在 worker 上启动访客 vitals：需要会话令牌文件，缺失时记录并禁用。
  */
@@ -264,7 +264,7 @@ async function startWorkerGuestVitals({ sessionId, sdkUrl }) {
     }
     let guestVitals = await startGuestVitals({
       sessionId,
-      apiBaseUrl: getTransportForUrl(new URL(sdkUrl)).origin,
+      apiBaseUrl: httpUrlFromWs(new URL(sdkUrl)).origin,
       tokenFilePath: CLAUDE_SESSION_INGRESS_TOKEN_FILE,
       binaryResolution: "search",
       log: logForDebugging,

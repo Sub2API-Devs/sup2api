@@ -3,9 +3,9 @@
  *
  * /batch 内置 skill：把大规模机械改动拆给 5–30 个 worktree 子代理并行执行并各开 PR。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/batch.ts
- * pieces: chunk-hantmvxa.js (7)
+ * pieces: chunk-ne2890fx.js (7)
  * attribution: placement 2, fingerprint 3, layout 2
  */
 import { SKILL } from "../../tools/SkillTool/skillToolNames.js";
@@ -18,9 +18,9 @@ import { findCanonicalGitRoot } from "../../utils/git.js";
 import { getCwd } from "../../utils/cwd.js";
 import { canRunAgentInWorktree } from "../../tools/AgentTool/agentLaunch.js";
 
-//@ chunk-hantmvxa.js:27126-27141 placement
+//@ chunk-ne2890fx.js:27274-27289 placement
 function noopBatchSkillStub() {}
-//@ chunk-hantmvxa.js:27141-28149 placement
+//@ chunk-ne2890fx.js:27289-28297 placement
 /**
  * /batch 常量：并行代理数下限 5、上限 30，以及每个 worker 完成后需执行的收尾指令（code-review、测试、开 PR）。
  */
@@ -32,7 +32,7 @@ var WORKER_INSTRUCTIONS = `After you finish implementing the change:
 3. **Test end-to-end** \u2014 Follow the e2e test recipe from the coordinator's prompt (below). If the recipe says to skip e2e for this unit, skip it.
 4. **Commit and push** \u2014 Commit all changes with a clear message, push the branch, and create a PR with \`gh pr create\`. Use a descriptive title. If \`gh\` is not available or the push fails, note it in your final message.
 5. **Report** \u2014 End with a single line: \`PR: <url>\` so the coordinator can track it. If no PR was created, end with \`PR: none \u2014 <reason>\`.`;
-//@ chunk-hantmvxa.js:28149-32262 fingerprint (2.1.88 match: buildPrompt, 0.923)
+//@ chunk-ne2890fx.js:28297-32410 fingerprint (2.1.88 match: buildPrompt, 0.923)
 /**
  * /batch 的主提示词：研究、拆分单元、并行派发 worktree 代理、汇总 PR 的流程说明。
  */
@@ -107,10 +107,10 @@ As background-agent completion notifications arrive, parse the \`PR: <url>\` lin
 When all agents have reported, render the final table and a one-line summary (e.g., "22/24 units landed as PRs").
 `;
 }
-//@ chunk-hantmvxa.js:32262-32601 layout
+//@ chunk-ne2890fx.js:32410-32749 layout
 var NOT_A_GIT_REPO_MESSAGE =
   "The `/batch` command runs each agent in its own isolated worktree, and none can be created here: this directory is not in a git repository and no WorktreeCreate hook is configured. Run `/batch` from inside a git repository, or configure WorktreeCreate and WorktreeRemove hooks in settings.json for another version-control system.";
-//@ chunk-hantmvxa.js:32601-33215 layout
+//@ chunk-ne2890fx.js:32749-33363 layout
 function buildVcsSection() {
   return `
 ## Version control
@@ -118,14 +118,14 @@ function buildVcsSection() {
 This directory is not a git repository: worker worktrees come from a WorktreeCreate hook, so \`isolation: "worktree"\` works as above, but git and \`gh\` commands do not. ${"Say so in every worker prompt, and when you copy the worker instructions, replace step 4 with: commit and publish the change with this project's own version-control commands, and end with `PR: none \u2014 <what was published instead>` when no pull request can be opened."} In Phase 3, a worker that reports what it published instead of a PR URL counts as done; show that report in the PR column.
 `;
 }
-//@ chunk-hantmvxa.js:33215-33464 fingerprint (2.1.88 match: MISSING_INSTRUCTION_MESSAGE, 1)
+//@ chunk-ne2890fx.js:33363-33612 fingerprint (2.1.88 match: MISSING_INSTRUCTION_MESSAGE, 1)
 var MISSING_INSTRUCTION_MESSAGE = `Provide an instruction describing the batch change you want to make.
 
 Examples:
   /batch migrate from react to vue
   /batch replace all uses of lodash with native equivalents
   /batch add type annotations to all untyped function parameters`;
-//@ chunk-hantmvxa.js:33464-34162 fingerprint (2.1.88 match: registerBatchSkill, 0.889)
+//@ chunk-ne2890fx.js:33612-34310 fingerprint (2.1.88 match: registerBatchSkill, 0.889)
 /**
  * 注册 /batch 内置 skill：把大规模机械改动拆成 5–30 个 worktree 子代理并行执行、各开 PR；不在 git 仓库且没有 WorktreeCreate 钩子时直接返回说明。只能用户调用。
  */

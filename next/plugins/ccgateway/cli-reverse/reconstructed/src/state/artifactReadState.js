@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：artifact 读取状态
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b5yaajx0.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-23w567p3.js (5)
  * attribution: placement 5
  */
 import {
@@ -26,7 +26,7 @@ import {
 } from "./frozenSentinels.js";
 import { getDefaultWebBrowserState } from "./webBrowserSlice.js";
 
-//@ chunk-b5yaajx0.js:317-1474 placement
+//@ chunk-23w567p3.js:317-1474 placement
 /**
  * Artifact 读取状态的初始切片与构造器。
  */
@@ -73,7 +73,7 @@ var sliceInitialState = {
   artifactOutsideOrgConsentSlugs: EMPTY_ARTIFACT_OUTSIDE_ORG_CONSENT,
 };
 var keys = Object.keys(sliceInitialState);
-//@ chunk-b5yaajx0.js:1474-1537 placement
+//@ chunk-23w567p3.js:1474-1537 placement
 /**
  * 已是初始状态则原样返回，否则合回初始值。
  */
@@ -85,9 +85,9 @@ function resetSliceIfUnchanged(state) {
         ...sliceInitialState,
       };
 }
-//@ chunk-b5yaajx0.js:1537-1560 placement
+//@ chunk-23w567p3.js:1537-1560 placement
 var keys_2 = Object.keys(INITIAL_SLICE_STATE);
-//@ chunk-b5yaajx0.js:1560-1967 placement
+//@ chunk-23w567p3.js:1560-1967 placement
 /**
  * 清除会话的 artifact 读取状态与网页浏览器视图状态（已是初始状态时原样返回）。
  */
@@ -123,7 +123,7 @@ function resetArtifactReadState(prev) {
         },
   };
 }
-//@ chunk-b5yaajx0.js:1967-2081 placement
+//@ chunk-23w567p3.js:1967-2081 placement
 /**
  * 若存在 WebView 视图，关闭 Bun 的全部 WebView，返回是否关闭。
  */
@@ -134,4 +134,4 @@ function closeWebViews(getState) {
   }
   return false;
 }
-export { closeWebViews, resetArtifactReadState, resetSliceIfUnchanged, INITIAL_SLICE_STATE };
+export { resetSliceIfUnchanged, INITIAL_SLICE_STATE, closeWebViews, resetArtifactReadState };

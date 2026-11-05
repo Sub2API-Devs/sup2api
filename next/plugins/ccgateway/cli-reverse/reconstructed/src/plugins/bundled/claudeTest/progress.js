@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：Claude Test 解析测试代理的 progress.ndjson 与 names/decisions，得到运行进度
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ae5g0zb5.js (27)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mhn0amzz.js (27)
  * attribution: placement 27
  */
 import { SPEC_FILE_NAME_PATTERN, isPlainObjectNonArray } from "./appFacts.js";
 import { isValidSpecName, collapseAndTruncate, APP_STOPPED_LABELS, APP_STATE_LABELS } from "./runState.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-ae5g0zb5.js:46894-46987 placement
+//@ chunk-mhn0amzz.js:48132-48225 placement
 /**
  * 取出规格文件名 stem
  */
@@ -23,7 +23,7 @@ function specStems(fileNames) {
     .sort()
     .slice(0, 50);
 }
-//@ chunk-ae5g0zb5.js:46987-47116 placement
+//@ chunk-mhn0amzz.js:48225-48354 placement
 /**
  * 解析不超过 256KB 的 JSON 对象，否则 null。
  */
@@ -36,14 +36,14 @@ function parseJsonObject(text) {
     return null;
   }
 }
-//@ chunk-ae5g0zb5.js:47116-47186 placement
+//@ chunk-mhn0amzz.js:48354-48424 placement
 /**
  * 解析 names/areas 映射（最多 500）
  */
 function parseNamesMap(value) {
   return new Map(isPlainObjectNonArray(value) ? Object.entries(value).slice(0, 500) : []);
 }
-//@ chunk-ae5g0zb5.js:47186-47281 placement
+//@ chunk-mhn0amzz.js:48424-48519 placement
 /**
  * 限定范围的整数秒
  */
@@ -52,7 +52,7 @@ function asSeconds(value) {
     ? Math.round(value)
     : null;
 }
-//@ chunk-ae5g0zb5.js:47281-49217 placement
+//@ chunk-mhn0amzz.js:48519-50455 placement
 /**
  * 解析 progress.ndjson（start/claim/PASS/FAIL/BLOCKED 事件）与 names.json、decisions.json，得到运行快照。
  */
@@ -151,7 +151,7 @@ function parseRunProgress(runFolder) {
       }),
   };
 }
-//@ chunk-ae5g0zb5.js:49217-49385 placement
+//@ chunk-mhn0amzz.js:50455-50623 placement
 /**
  * 毫秒格式化为 “1h 2m 3s” / “2m 3s” / “3s”。
  */
@@ -163,7 +163,7 @@ function formatElapsed(ms) {
   if (floored > 0) return `${floored}h ${minutes}m ${seconds}s`;
   return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 }
-//@ chunk-ae5g0zb5.js:49385-49572 placement
+//@ chunk-mhn0amzz.js:50623-50810 placement
 /**
  * 按终端（ghostty/darwin/其他）选择的旋转符号帧。
  */
@@ -172,7 +172,7 @@ var SPINNER_FRAMES = {
   darwin: ["\xB7", "\u2722", "\u2733", "\u2736", "\u273B", "\u273D"],
   other: ["\xB7", "\u2722", "*", "\u2736", "\u273B", "\u273D"],
 };
-//@ chunk-ae5g0zb5.js:49572-49816 placement
+//@ chunk-mhn0amzz.js:50810-51054 placement
 function supportsInlineImages(env) {
   let frames =
     env.term === "xterm-ghostty"
@@ -187,22 +187,22 @@ function supportsInlineImages(env) {
     empty: isGhostty ? "\u2591" : "\u25B1",
   };
 }
-//@ chunk-ae5g0zb5.js:49816-49830 placement
+//@ chunk-mhn0amzz.js:51054-51068 placement
 /**
  * 内联图片能力
  */
 var INLINE_IMAGE_SUPPORT; // deferred: uses supportsInlineImages of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ae5g0zb5.js:49816", () => {
+deferInit("chunk-mhn0amzz.js:51054", () => {
   INLINE_IMAGE_SUPPORT = supportsInlineImages({});
 });
-//@ chunk-ae5g0zb5.js:49830-49903 placement
+//@ chunk-mhn0amzz.js:51068-51141 placement
 /**
  * 按时间取 spinner 帧
  */
 function spinnerGlyph(now, caps = INLINE_IMAGE_SUPPORT) {
   return caps.spinner[Math.floor(now / 250) % caps.spinner.length];
 }
-//@ chunk-ae5g0zb5.js:49903-50024 placement
+//@ chunk-mhn0amzz.js:51141-51262 placement
 /**
  * PASS/FAIL/BLOCKED 的符号
  */
@@ -219,14 +219,14 @@ var VERDICT_TONES = {
 var MAX_THREAD_ROWS = 3;
 var DEFAULT_PANE_WIDTH = 30;
 var MIN_PANE_WIDTH = 6;
-//@ chunk-ae5g0zb5.js:50024-50074 placement
+//@ chunk-mhn0amzz.js:51262-51312 placement
 /**
  * 拼接 spans 文本
  */
 function joinSpans(spans) {
   return spans.map((span) => span.text).join("");
 }
-//@ chunk-ae5g0zb5.js:50074-50156 placement
+//@ chunk-mhn0amzz.js:51312-51394 placement
 /**
  * 超长截断加省略号
  */
@@ -234,7 +234,7 @@ function truncateWithEllipsis(text, maxWidth) {
   if (text.length <= maxWidth) return text;
   return maxWidth <= 0 ? "" : `${text.slice(0, maxWidth - 1)}\u2026`;
 }
-//@ chunk-ae5g0zb5.js:50156-50350 placement
+//@ chunk-mhn0amzz.js:51394-51588 placement
 /**
  * 按单词把文本折行到宽度 n。
  */
@@ -250,7 +250,7 @@ function wrapWords(text, width) {
   lines.push(current);
   return lines.map((line) => truncateWithEllipsis(line, width));
 }
-//@ chunk-ae5g0zb5.js:50350-50458 placement
+//@ chunk-mhn0amzz.js:51588-51696 placement
 /**
  * 由文本片段生成折行的文本块。
  */
@@ -263,7 +263,7 @@ function textBlock(width, ...spans) {
     spans: filtered,
   };
 }
-//@ chunk-ae5g0zb5.js:50458-50496 placement
+//@ chunk-mhn0amzz.js:51696-51734 placement
 /**
  * 空文本 span
  */
@@ -272,7 +272,7 @@ var EMPTY_TEXT_SPAN = {
   text: "",
   spans: [],
 };
-//@ chunk-ae5g0zb5.js:50496-50696 placement
+//@ chunk-mhn0amzz.js:51734-51934 placement
 /**
  * 计算折行位置（优先在 “· ” 之后断开）。
  */
@@ -294,7 +294,7 @@ function findWrapPoints(text, width) {
   }
   return points;
 }
-//@ chunk-ae5g0zb5.js:50696-50849 placement
+//@ chunk-mhn0amzz.js:51934-52087 placement
 /**
  * 在片段的指定位置插入换行。
  */
@@ -314,7 +314,7 @@ function insertLineBreaks(spans, wrapPoints) {
     };
   });
 }
-//@ chunk-ae5g0zb5.js:50849-51260 placement
+//@ chunk-mhn0amzz.js:52087-52498 placement
 /**
  * 生成面板行：前导标记、正文（可折行）和右侧文字。
  */
@@ -352,7 +352,7 @@ function buildRow(width, lead, body, right, wrap = false) {
     right,
   };
 }
-//@ chunk-ae5g0zb5.js:51260-51579 placement
+//@ chunk-mhn0amzz.js:52498-52817 placement
 /**
  * 用 “·” 连接的条目列表按宽度折行并缩进。
  */
@@ -380,7 +380,7 @@ function buildItemsBlock(width, indent, items, tone) {
         }),
   };
 }
-//@ chunk-ae5g0zb5.js:51579-51646 placement
+//@ chunk-mhn0amzz.js:52817-52884 placement
 /**
  * 生成带前导空格的条目
  */
@@ -399,14 +399,14 @@ function spacedItem(mark, gap = "  ") {
     },
   ];
 }
-//@ chunk-ae5g0zb5.js:51646-51730 placement
+//@ chunk-mhn0amzz.js:52884-52968 placement
 /**
  * 该规格是否在并行通道中运行
  */
 function isLaneRunning(run, stem) {
   return run.lanesRunning !== undefined ? run.lanesRunning.has(stem) : stem === run.running;
 }
-//@ chunk-ae5g0zb5.js:51730-51910 placement
+//@ chunk-mhn0amzz.js:52968-53148 placement
 /**
  * 并行通道中某规格已运行的秒数。
  */
@@ -417,7 +417,7 @@ function laneElapsedSeconds(run, stem, readAt) {
   let rounded = Math.round((readAt - run.startedAtMs) / 1000 - laneSince);
   return rounded >= 0 && rounded < 86400 ? rounded : null;
 }
-//@ chunk-ae5g0zb5.js:51910-52110 placement
+//@ chunk-mhn0amzz.js:53148-53348 placement
 /**
  * 运行总耗时（秒）。
  */
@@ -426,7 +426,7 @@ function runElapsedSeconds(run, doneRows, readAt) {
   if (run.startedAtMs === null || (run.rows.length > 0 && doneRows === run.rows.length)) return run.doneAtS;
   return Math.max(run.doneAtS, Math.floor((readAt - run.startedAtMs) / 1000));
 }
-//@ chunk-ae5g0zb5.js:52110-52242 placement
+//@ chunk-mhn0amzz.js:53348-53480 placement
 /**
  * 距上一项完成已过去的秒数。
  */
@@ -435,7 +435,7 @@ function secondsSinceLastDone(run, readAt) {
   let rounded = Math.round((readAt - run.startedAtMs) / 1000 - run.doneAtS);
   return rounded >= 0 && rounded < 86400 ? rounded : null;
 }
-//@ chunk-ae5g0zb5.js:52242-52366 placement
+//@ chunk-mhn0amzz.js:53480-53604 placement
 /**
  * 按平均耗时估计剩余时间（取整到 5 秒）。
  */
@@ -444,7 +444,7 @@ function estimateRemainingSeconds(elapsedSeconds, doneCount, totalCount, lastDon
   let remaining = (elapsedSeconds / doneCount) * (totalCount - doneCount) - Math.max(0, lastDoneSeconds);
   return remaining <= 0 ? 0 : Math.max(5, Math.round(remaining / 5) * 5);
 }
-//@ chunk-ae5g0zb5.js:52366-52377 placement
+//@ chunk-mhn0amzz.js:53604-53615 placement
 /**
  * 10000
  */

@@ -3,12 +3,12 @@
  *
  * /plugin（别名 plugins、marketplace）命令对象
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/index.tsx
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:2029796-2030075 fingerprint (2.1.88 match: plugin, 0.704)
+//@ chunk-5xgkngpb.js:2085613-2085892 fingerprint (2.1.88 match: plugin, 0.704)
 /**
  * /plugin 命令对象（local-jsx）；描述：Manage Claude Code plugins；别名 ["plugins","marketplace"]；实现 chunk-qey4tpm4.js 的 p。
  */
@@ -27,5 +27,5 @@ var pluginCommandDefinition = {
       pluginModule.getPluginArgumentCompletions(arg, state, context),
     ),
 };
-var pluginCommand = pluginCommandDefinition;
-export { pluginCommand };
+var pluginCommandAlias = pluginCommandDefinition;
+export { pluginCommandAlias };

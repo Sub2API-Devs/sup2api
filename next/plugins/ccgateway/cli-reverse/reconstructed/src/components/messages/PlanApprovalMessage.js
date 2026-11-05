@@ -3,9 +3,9 @@
  *
  * 队友计划审批请求/响应的显示（Plan Approval Request / Plan Approved / 反馈）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/PlanApprovalMessage.tsx
- * pieces: chunk-ah34pb7m.js (3)
+ * pieces: chunk-wjygkcr4.js (3)
  * attribution: fingerprint 2, callgraph-fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -30,7 +30,7 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { ShutdownRequestDisplay } from "./ShutdownMessage.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-ah34pb7m.js:84356-85037 fingerprint (2.1.88 match: PlanApprovalRequestDisplay, 0.377)
+//@ chunk-wjygkcr4.js:83772-84453 fingerprint (2.1.88 match: PlanApprovalRequestDisplay, 0.377)
 function PlanApprovalRequestDisplay(props) {
   let $ = useMemoCache(12);
   let { request, senderName } = props;
@@ -88,7 +88,7 @@ function PlanApprovalRequestDisplay(props) {
   } else boxElement = $[11];
   return boxElement;
 }
-//@ chunk-ah34pb7m.js:85037-86383 callgraph-fingerprint (2.1.88 match: PlanApprovalResponseDisplay, 0.272)
+//@ chunk-wjygkcr4.js:84453-85799 callgraph-fingerprint (2.1.88 match: PlanApprovalResponseDisplay, 0.272)
 function PlanApprovalResponseDisplay(props) {
   let $ = useMemoCache(20);
   let { response, senderName } = props;
@@ -206,7 +206,7 @@ function PlanApprovalResponseDisplay(props) {
   } else rejectedBox = $[19];
   return rejectedBox;
 }
-//@ chunk-ah34pb7m.js:86383-86535 fingerprint (2.1.88 match: tryRenderPlanApprovalMessage, 1)
+//@ chunk-wjygkcr4.js:85799-85951 fingerprint (2.1.88 match: tryRenderPlanApprovalMessage, 1)
 function tryRenderPlanApprovalMessage(content, senderName) {
   let request = parseFrameForDisplay(PlanApprovalRequestMessageSchema(), content);
   if (request)

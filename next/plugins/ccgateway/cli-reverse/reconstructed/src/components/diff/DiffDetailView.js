@@ -3,19 +3,19 @@
  *
  * /diff 单文件详情：结构化 diff、未跟踪/二进制/过大/被读权限规则限制等状态。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/diff/DiffDetailView.tsx
- * pieces: chunk-18hwfzwa.js (5)
+ * pieces: chunk-czq1j3j2.js (5)
  * attribution: placement 3, layout 1, fingerprint 1
  */
 import { resolve } from "path";
-import { useSelection } from "../../ink/components/Input.js";
 import {
+  init_react_production,
   useRef,
   useEffectEvent,
   useEffect,
-  init_react_production,
 } from "../../../vendor/react/cjs/react.production.js";
+import { useSelection } from "../../ink/components/Input.js";
 import { countCharInString, getFirstLine } from "../../utils/stringUtils.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -35,7 +35,12 @@ import { HintText } from "../design-system/HintText.js";
 import { StructuredDiff } from "../StructuredDiff.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1816722-1817369 placement
+//@ chunk-czq1j3j2.js:1864053-1864057 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1864053", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1864703-1865350 placement
 /**
  * 订阅终端选区：在 diff 区域内选中文本（非行选、非拖动中）时把选中内容作为 diff 附件回调出去，记 diff_selection_attach。
  */
@@ -75,12 +80,7 @@ function useDiffSelectionAttach(minColumn, getMaxRow, onAttach, filePathForRow) 
   });
   useEffect(() => selection.subscribe(() => onSelectionChange()), [selection]);
 }
-//@ chunk-18hwfzwa.js:1817369-1817373 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1817369", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1817406-1817595 placement
+//@ chunk-czq1j3j2.js:1865387-1865576 placement
 /**
  * when 为真时以暗色显示 “ (children)”。
  */
@@ -101,9 +101,9 @@ function ParenHint(props) {
   } else hint = $[1];
   return hint;
 }
-//@ chunk-18hwfzwa.js:1817595-1817607 layout
+//@ chunk-czq1j3j2.js:1865576-1865588 layout
 var MAX_DIFF_FILE_BYTES = 1e6;
-//@ chunk-18hwfzwa.js:1817607-1821939 fingerprint (2.1.88 match: DiffDetailView, 0.447)
+//@ chunk-czq1j3j2.js:1865588-1869921 fingerprint (2.1.88 match: DiffDetailView, 0.447)
 function DiffDetailView(props) {
   let $ = useMemoCache(75);
   let { filePath, hunks, isLargeFile, isBinary, isTruncated, isUntracked, isRestricted, width } = props;
@@ -126,7 +126,7 @@ function DiffDetailView(props) {
     $[6] !== isUntracked ||
     $[7] !== project
   ) {
-    Et: {
+    It: {
       if (!filePath || isBinary || isLargeFile || isUntracked || isRestricted || isRemoteSessionAvailable()) {
         let emptyInfo;
         if ($[9] === MEMO_CACHE_SENTINEL) {
@@ -137,7 +137,7 @@ function DiffDetailView(props) {
           $[9] = emptyInfo;
         } else emptyInfo = $[9];
         fileInfo = emptyInfo;
-        break Et;
+        break It;
       }
       let fileText;
       try {
@@ -154,7 +154,7 @@ function DiffDetailView(props) {
           $[10] = emptyInfo;
         } else emptyInfo = $[10];
         fileInfo = emptyInfo;
-        break Et;
+        break It;
       }
       fileInfo = {
         firstLine: getFirstLine(fileText),
@@ -491,4 +491,4 @@ function DiffDetailView(props) {
   } else t9 = $[74];
   return t9;
 }
-export { useDiffSelectionAttach, DiffDetailView, ParenHint };
+export { ParenHint, useDiffSelectionAttach, DiffDetailView };

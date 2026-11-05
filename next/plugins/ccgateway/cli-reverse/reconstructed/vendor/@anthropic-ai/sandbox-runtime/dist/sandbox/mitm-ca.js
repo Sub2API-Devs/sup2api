@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/mitm-ca.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (23)
+ * pieces: chunk-qg41pqt6.js (23)
  * attribution: esm-layout 3, esm-fingerprint 20
  */
 import { sign, X509Certificate } from "crypto";
@@ -14,16 +14,16 @@ import { tmpdir } from "os";
 import { forgeModule_2 } from "../../../../unresolved-cjs/index.js";
 import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 
-//@ chunk-fq0cr76a.js:645014-645021 esm-layout
+//@ chunk-qg41pqt6.js:645508-645515 esm-layout
 var cachedRootCertificates;
-//@ chunk-fq0cr76a.js:645021-645056 esm-layout
+//@ chunk-qg41pqt6.js:645515-645550 esm-layout
 function getRootCertificates() {
   return cachedRootCertificates ?? (cachedRootCertificates = forgeModule_2());
 }
-//@ chunk-fq0cr76a.js:645056-645141 esm-fingerprint
+//@ chunk-qg41pqt6.js:645550-645635 esm-fingerprint
 var PEM_CERT_BLOCK = /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g;
 var CRL_PATH = "/srt.crl";
-//@ chunk-fq0cr76a.js:645141-645326 esm-fingerprint
+//@ chunk-qg41pqt6.js:645635-645820 esm-fingerprint
 function caSubjectKeyId(caCert) {
   let { util } = getRootCertificates();
   let extension = caCert.getExtension("subjectKeyIdentifier");
@@ -31,7 +31,7 @@ function caSubjectKeyId(caCert) {
     ? util.hexToBytes(extension.subjectKeyIdentifier)
     : caCert.generateSubjectKeyIdentifier().getBytes();
 }
-//@ chunk-fq0cr76a.js:645326-645587 esm-fingerprint
+//@ chunk-qg41pqt6.js:645820-646081 esm-fingerprint
 function signCertificateNative(cert, keyPem) {
   let { asn1, pki, md } = getRootCertificates();
   let oid = pki.oids.sha256WithRSAEncryption;
@@ -43,11 +43,11 @@ function signCertificateNative(cert, keyPem) {
   cert.md = md.sha256.create();
   cert.md.update(tbsDer);
 }
-//@ chunk-fq0cr76a.js:645587-645669 esm-fingerprint
+//@ chunk-qg41pqt6.js:646081-646163 esm-fingerprint
 function rsaSha256SignNative(der, keyPem) {
   return sign("sha256", Buffer.from(der, "binary"), keyPem).toString("binary");
 }
-//@ chunk-fq0cr76a.js:645669-646166 esm-fingerprint
+//@ chunk-qg41pqt6.js:646163-646660 esm-fingerprint
 function createMitmCA(opts) {
   if (opts.caCertPem && opts.caKeyPem) {
     let v = validateCaPair(opts.caCertPem, opts.caKeyPem);
@@ -64,7 +64,7 @@ function createMitmCA(opts) {
     throw Error("tlsTerminate: caCertPath and caKeyPath must be provided together");
   return generateEphemeralCA(opts.extraCaCertPaths);
 }
-//@ chunk-fq0cr76a.js:646166-646316 esm-fingerprint
+//@ chunk-qg41pqt6.js:646660-646810 esm-fingerprint
 async function disposeMitmCA(ca) {
   for (let dir of ownedDirs(ca))
     try {
@@ -78,7 +78,7 @@ async function disposeMitmCA(ca) {
       });
     }
 }
-//@ chunk-fq0cr76a.js:646316-646454 esm-fingerprint
+//@ chunk-qg41pqt6.js:646810-646948 esm-fingerprint
 function disposeMitmCASync(ca) {
   for (let dir of ownedDirs(ca))
     try {
@@ -92,13 +92,13 @@ function disposeMitmCASync(ca) {
       });
     }
 }
-//@ chunk-fq0cr76a.js:646454-646554 esm-fingerprint
+//@ chunk-qg41pqt6.js:646948-647048 esm-fingerprint
 function ownedDirs(ca) {
   let dirs = new Set([dirname(ca.trustBundlePath)]);
   if (ca.ephemeral) dirs.add(dirname(ca.certPath));
   return dirs;
 }
-//@ chunk-fq0cr76a.js:646554-647057 esm-fingerprint
+//@ chunk-qg41pqt6.js:647048-647551 esm-fingerprint
 function writeTrustBundle(dir, caCertPem, extraCaCertPaths) {
   let parts = [caCertPem.trim(), ...rootCertificates];
   let extra = process.env.NODE_EXTRA_CA_CERTS;
@@ -139,7 +139,7 @@ function writeTrustBundle(dir, caCertPem, extraCaCertPaths) {
   );
   return path;
 }
-//@ chunk-fq0cr76a.js:647057-647857 esm-fingerprint
+//@ chunk-qg41pqt6.js:647551-648355 esm-fingerprint
 function generateEmptyCrl(cert, keyPem) {
   let { asn1, pki } = getRootCertificates();
   let { Class: C, Type: T } = asn1;
@@ -178,13 +178,13 @@ function generateEmptyCrl(cert, keyPem) {
   let crl = seq([tbsCertList, sigAlg(), asn1.create(C.UNIVERSAL, T.BITSTRING, false, "\x00" + sig)]);
   return Buffer.from(asn1.toDer(crl).getBytes(), "binary");
 }
-//@ chunk-fq0cr76a.js:647857-647953 esm-layout
+//@ chunk-qg41pqt6.js:648355-648451 esm-layout
 function seq(value) {
   let { asn1 } = getRootCertificates();
   let { Class, Type } = asn1;
   return asn1.create(Class.UNIVERSAL, Type.SEQUENCE, true, value);
 }
-//@ chunk-fq0cr76a.js:647953-648159 esm-fingerprint
+//@ chunk-qg41pqt6.js:648451-648657 esm-fingerprint
 function asn1Time(d) {
   let { asn1 } = getRootCertificates();
   let { Class, Type } = asn1;
@@ -192,7 +192,7 @@ function asn1Time(d) {
     ? asn1.create(Class.UNIVERSAL, Type.UTCTIME, false, asn1.dateToUtcTime(d))
     : asn1.create(Class.UNIVERSAL, Type.GENERALIZEDTIME, false, asn1.dateToGeneralizedTime(d));
 }
-//@ chunk-fq0cr76a.js:648159-648455 esm-fingerprint
+//@ chunk-qg41pqt6.js:648657-648953 esm-fingerprint
 function loadCA(certPath, keyPath, extraCaCertPaths) {
   let certPem = readPem(certPath, "CERTIFICATE", "tlsTerminate.caCertPath");
   let keyPem = readPem(keyPath, "PRIVATE KEY", "tlsTerminate.caKeyPath");
@@ -205,7 +205,7 @@ function loadCA(certPath, keyPath, extraCaCertPaths) {
     extraCaCertPaths,
   });
 }
-//@ chunk-fq0cr76a.js:648455-648710 esm-fingerprint
+//@ chunk-qg41pqt6.js:648953-649208 esm-fingerprint
 function buildMitmCA(certPem, keyPem, cert, key, opts) {
   let bundleDir = mkdtempSync(join(tmpdir(), "srt-ca-"));
   return {
@@ -222,7 +222,7 @@ function buildMitmCA(certPem, keyPem, cert, key, opts) {
     ephemeral: opts.ephemeral ?? false,
   };
 }
-//@ chunk-fq0cr76a.js:648710-649353 esm-fingerprint
+//@ chunk-qg41pqt6.js:649208-649851 esm-fingerprint
 function generateCa(opts = {}) {
   let { pki } = getRootCertificates();
   let keys = pki.rsa.generateKeyPair(2048);
@@ -269,11 +269,11 @@ function generateCa(opts = {}) {
     key: keys.privateKey,
   };
 }
-//@ chunk-fq0cr76a.js:649353-649428 esm-fingerprint
+//@ chunk-qg41pqt6.js:649851-649926 esm-fingerprint
 function certThumbprint(certPem) {
   return new X509Certificate(certPem).fingerprint.replace(/:/g, "").toUpperCase();
 }
-//@ chunk-fq0cr76a.js:649428-650044 esm-fingerprint
+//@ chunk-qg41pqt6.js:649926-650542 esm-fingerprint
 function validateCaPair(certPem, keyPem) {
   let { pki } = getRootCertificates();
   let cert;
@@ -320,7 +320,7 @@ function validateCaPair(certPem, keyPem) {
     key,
   };
 }
-//@ chunk-fq0cr76a.js:650044-650319 esm-fingerprint
+//@ chunk-qg41pqt6.js:650542-650817 esm-fingerprint
 function generateEphemeralCA(extraCaCertPaths) {
   let { certPem, keyPem, cert, key } = generateCa();
   let dir = mkdtempSync(join(tmpdir(), "srt-ca-"));
@@ -340,7 +340,7 @@ function generateEphemeralCA(extraCaCertPaths) {
     ephemeral: true,
   });
 }
-//@ chunk-fq0cr76a.js:650319-650548 esm-fingerprint
+//@ chunk-qg41pqt6.js:650817-651046 esm-fingerprint
 function readPem(path, label, field) {
   let pem;
   try {
@@ -353,13 +353,13 @@ function readPem(path, label, field) {
     throw Error(`${field}: ${path} is not a PEM ${label}`);
   return pem;
 }
-//@ chunk-fq0cr76a.js:650548-650677 esm-fingerprint
+//@ chunk-qg41pqt6.js:651046-651175 esm-fingerprint
 function randomSerial() {
   let { random, util } = getRootCertificates();
   let hex = util.bytesToHex(random.getBytesSync(16));
   return ((parseInt(hex[0], 16) & 3) | 4).toString(16) + hex.slice(1);
 }
-//@ chunk-fq0cr76a.js:650677-650741 esm-fingerprint
+//@ chunk-qg41pqt6.js:651175-651239 esm-fingerprint
 function daysFromNow(days) {
   let d = new Date();
   d.setDate(d.getDate() + days);

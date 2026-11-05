@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：线上工具输入回显
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (52)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (52)
  * attribution: placement 52
  */
 import { isDeepStrictEqual } from "util";
@@ -14,8 +14,13 @@ import { getSessionFeatureValues } from "../bootstrap/sessionFeatureValues.js";
 import { getAPIProvider } from "./model/providers.js";
 import { canSendFirstPartyBetas } from "./betas.js";
 import { safeParseJSON } from "./json.js";
-import { isPlainObject as isPlainObject_4 } from "./objectUtils.js";
+import { isPlainObject as isPlainObject_5 } from "./objectUtils.js";
 import { clone, jsonStringify, jsonParseRaw, jsonStringifyRaw } from "./slowOperations.js";
+import {
+  BRIEF_TOOL_NAME as BRIEF_TOOL_NAME_2,
+  LEGACY_BRIEF_TOOL_NAME as LEGACY_BRIEF_TOOL_NAME_2,
+} from "../tools/BriefTool/prompt.js";
+import { stripCiteTags } from "./api.js";
 import { logError } from "./log.js";
 import { logFeatureBad, logFeatureSad } from "../services/analytics/featureTelemetry.js";
 import { isFoamySpringEnabled } from "../services/analytics/growthbookGates.js";
@@ -34,20 +39,23 @@ import { getCwd } from "./cwd.js";
 import { getPlatform } from "./platform.js";
 import { windowsPathToPosixPath } from "./path.js";
 import { stripLineNumberPrefix as stripLineNumberPrefix_2 } from "./file.js";
-import { FILE_READ_TOOL_NAME } from "../tools/FileReadTool/constants.js";
-import { isPlainObject as isPlainObject_5 } from "./isPlainObject.js";
-import { FILE_EDIT_TOOL_NAME } from "../tools/FileEditTool/constants.js";
+import { READ } from "../tools/FileReadTool/constants.js";
+import { isPlainObject as isPlainObject_6 } from "./isPlainObject.js";
+import { EDIT } from "../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../tools/FileWriteTool/prompt.js";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { findToolByName } from "../Tool.js";
 import { normalizeToolInput, repairDoubleEscapedUnicode } from "./wireToolInputRepair.js";
 import { isMultiEntryAliasTool } from "../services/tools/permissionCheckGuard.js";
+import { codeModeAccepted } from "./codeMode/accepted.js";
+import { hasBuiltInEvalTool } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { logForDebugging } from "./debug.js";
 import { toolCategoryForTelemetry } from "../services/api/toolDefinitionShape.js";
 import { getUnknownToolAnalyticsName, sanitizeToolNameForAnalytics } from "../services/analytics/metadata.js";
 import { RETIRED_TOOL_NAMES } from "../tools/retiredTools.js";
 import { WORKFLOW_TOOL_NAME } from "../tools/WorkflowTool/constants.js";
+import { isEvalToolName } from "../tools/REPLTool/constants.js";
 import {
   isMarkdownPath,
   stripTrailingWhitespace,
@@ -59,14 +67,14 @@ import { EXITPLANMODE_2 } from "../tools/ExitPlanModeTool/constants.js";
 import { coerceBooleanString } from "./spellcheck.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:318714-318782 placement
+//@ chunk-5xgkngpb.js:320003-320071 placement
 var tetherShape; // deferred: loads other modules while loading; runs once its import cycle is complete
 var tetherEnvAccessor;
-deferInit("chunk-e6aww6q8.js:318714", () => {
+deferInit("chunk-5xgkngpb.js:320003", () => {
   tetherShape = require("../bridge/tetherShape.lazy.js").tetherShape;
   tetherEnvAccessor = createEnvAccessor(tetherShape, null);
 });
-//@ chunk-e6aww6q8.js:318782-318923 placement
+//@ chunk-5xgkngpb.js:320071-320212 placement
 /**
  * 是否通过 CLAUDE_CODE_TETHER_LIVE 启用线上工具输入回显（第一方且可发 beta）。
  */
@@ -81,11 +89,11 @@ function isTetherEnvOptIn() {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:318923-318965 placement
+//@ chunk-5xgkngpb.js:320212-320254 placement
 function nullProtoObject() {
   return Object.create(null);
 }
-//@ chunk-e6aww6q8.js:318965-319430 placement
+//@ chunk-5xgkngpb.js:320254-320760 placement
 /**
  * 从响应内容块中捕获各 tool_use 的原始输入（字符串输入解析为 JSON），返回按 id 的输入表与是否有解析失败。
  */
@@ -101,25 +109,29 @@ function captureWireToolInputs(content) {
     for (let block of content) {
       if (block.type !== "tool_use" || typeof block.id !== "string") continue;
       let input = block.input;
-      let parsedInput;
-      let isObjectInput = false;
+      let rawInput;
+      let cloned = false;
       if (typeof input === "string") {
-        if (input.length === 0) parsedInput = {};
+        if (input.length === 0) rawInput = {};
         else {
           let parsed = safeParseJSON(input, false);
           if (parsed === null && input.trim() !== "null") {
             degraded = true;
             continue;
           }
-          parsedInput = parsed ?? {};
+          rawInput = parsed ?? {};
         }
       } else {
-        parsedInput = input;
-        isObjectInput = true;
+        rawInput = input;
+        cloned = true;
       }
-      if (!isPlainObject_4(parsedInput)) continue;
+      if (!isPlainObject_5(rawInput)) continue;
+      let storedInput = cloned ? clone(rawInput) : rawInput;
       inputsById ??= nullProtoObject();
-      inputsById[block.id] = isObjectInput ? clone(parsedInput) : parsedInput;
+      inputsById[block.id] =
+        block.name === BRIEF_TOOL_NAME_2 || block.name === LEGACY_BRIEF_TOOL_NAME_2
+          ? stripCiteTags(storedInput)
+          : storedInput;
     }
     return {
       inputs: inputsById,
@@ -134,40 +146,40 @@ function captureWireToolInputs(content) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:319430-319488 placement
+//@ chunk-5xgkngpb.js:320760-320818 placement
 function logWireToolInputParseFailure() {
   logFeatureSad("tether_wire_tool_input", "parse_failed");
 }
-//@ chunk-e6aww6q8.js:319488-319857 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince_2(wireToolInputs, content, batchToolUses) {
-  if (!isPlainObject_4(wireToolInputs) || !Array.isArray(content)) return;
+//@ chunk-5xgkngpb.js:320818-321187 placement
+function wireToolInputsForContent(wireToolInputs, content, batchToolUses) {
+  if (!isPlainObject_5(wireToolInputs) || !Array.isArray(content)) return;
   let inputs;
   let content_2 = (id) => {
     if (!Object.hasOwn(wireToolInputs, id)) return;
     let input = wireToolInputs[id];
-    if (!isPlainObject_4(input)) return;
+    if (!isPlainObject_5(input)) return;
     inputs ??= nullProtoObject();
     inputs[id] = input;
   };
   let toolUseIds = [];
   for (let block of content)
-    if (isPlainObject_4(block) && block.type === "tool_use" && typeof block.id === "string") {
+    if (isPlainObject_5(block) && block.type === "tool_use" && typeof block.id === "string") {
       toolUseIds.push(block.id);
       content_2(block.id);
     }
   if (Array.isArray(batchToolUses)) {
     let idPrefixesWithNumericSuffix = collectIdPrefixesWithNumericSuffix(toolUseIds);
-    for (let message of batchToolUses) {
-      if (!isPlainObject_4(message)) continue;
-      let id = message.id;
+    for (let batchUse of batchToolUses) {
+      if (!isPlainObject_5(batchUse)) continue;
+      let id = batchUse.id;
       if (typeof id === "string" && idPrefixesWithNumericSuffix.has(id)) content_2(id);
     }
   }
   return inputs;
 }
-//@ chunk-e6aww6q8.js:319857-319873 placement
+//@ chunk-5xgkngpb.js:321187-321203 placement
 var DIGITS_RE = /^\d+$/;
-//@ chunk-e6aww6q8.js:319873-320007 placement
+//@ chunk-5xgkngpb.js:321203-321337 placement
 function collectIdPrefixesWithNumericSuffix(ids) {
   let prefixes = new Set();
   for (let id of ids) {
@@ -176,9 +188,9 @@ function collectIdPrefixesWithNumericSuffix(ids) {
   }
   return prefixes;
 }
-//@ chunk-e6aww6q8.js:320007-320311 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince_3(wireToolInputs, content, batchToolUses) {
-  if (!isPlainObject_4(wireToolInputs)) return;
+//@ chunk-5xgkngpb.js:321337-321641 placement
+function wireToolInputsForContentLenient(wireToolInputs, content, batchToolUses) {
+  if (!isPlainObject_5(wireToolInputs)) return;
   let inputs;
   let collectInput = (id) => {
     if (Object.hasOwn(wireToolInputs, id)) {
@@ -194,27 +206,27 @@ function countToolCallsSince_3(wireToolInputs, content, batchToolUses) {
     }
   if (Array.isArray(batchToolUses)) {
     let idPrefixesWithNumericSuffix = collectIdPrefixesWithNumericSuffix(toolUseIds);
-    for (let message of batchToolUses) {
-      let id = isPlainObject_4(message) ? message.id : undefined;
+    for (let batchUse of batchToolUses) {
+      let id = isPlainObject_5(batchUse) ? batchUse.id : undefined;
       if (typeof id === "string" && idPrefixesWithNumericSuffix.has(id)) collectInput(id);
     }
   }
   return inputs;
 }
-//@ chunk-e6aww6q8.js:320311-320342 placement
+//@ chunk-5xgkngpb.js:321641-321672 placement
 var TENGU_HUMBLE_HAMMOCK = "tengu_humble_hammock";
-//@ chunk-e6aww6q8.js:320342-320369 placement
+//@ chunk-5xgkngpb.js:321672-321699 placement
 function isServerClassifierEnabled() {
   return isFoamySpringEnabled();
 }
-//@ chunk-e6aww6q8.js:320369-320467 placement
+//@ chunk-5xgkngpb.js:321699-321797 placement
 function getForcedEchoWireToolInputs() {
   let CLAUDE_CODE_HUMBLE_HAMMOCK = env.CLAUDE_CODE_HUMBLE_HAMMOCK;
   if (CLAUDE_CODE_HUMBLE_HAMMOCK !== undefined) return CLAUDE_CODE_HUMBLE_HAMMOCK;
   if (isTetherEnvOptIn()) return true;
   return;
 }
-//@ chunk-e6aww6q8.js:320467-320608 placement
+//@ chunk-5xgkngpb.js:321797-321938 placement
 function getEchoWireToolInputsFlag() {
   let forcedEchoWireToolInputs = getForcedEchoWireToolInputs();
   if (forcedEchoWireToolInputs !== undefined)
@@ -229,7 +241,7 @@ function getEchoWireToolInputsFlag() {
     source,
   };
 }
-//@ chunk-e6aww6q8.js:320608-320836 placement
+//@ chunk-5xgkngpb.js:321938-322166 placement
 function resolveEchoWireToolInputs() {
   let forcedEchoWireToolInputs = getForcedEchoWireToolInputs();
   if (forcedEchoWireToolInputs !== undefined) return forcedEchoWireToolInputs;
@@ -240,7 +252,7 @@ function resolveEchoWireToolInputs() {
   if (source !== "fallback") sessionFeatureValues.echoWireToolInputs = forced;
   return forced;
 }
-//@ chunk-e6aww6q8.js:320836-321126 placement
+//@ chunk-5xgkngpb.js:322166-322456 placement
 function getEchoWireToolInputsState(value) {
   let echoWireToolInputsFlag = getEchoWireToolInputsFlag();
   if (value !== undefined)
@@ -270,12 +282,12 @@ function getEchoWireToolInputsState(value) {
     cached: echoWireToolInputsFlag,
   };
 }
-//@ chunk-e6aww6q8.js:321126-321146 placement
+//@ chunk-5xgkngpb.js:322456-322476 placement
 var weakSet_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:321126", () => {
+deferInit("chunk-5xgkngpb.js:322456", () => {
   weakSet_2 = new WeakSet();
 });
-//@ chunk-e6aww6q8.js:321146-321620 placement
+//@ chunk-5xgkngpb.js:322476-322950 placement
 function shouldEchoWireToolInputs(messages, override) {
   if (override !== undefined) return override;
   try {
@@ -308,11 +320,11 @@ function shouldEchoWireToolInputs(messages, override) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:321620-321659 placement
+//@ chunk-5xgkngpb.js:322950-322989 placement
 function shouldEchoWireToolInputsForRequest(messages, requestMessages) {
   return shouldEchoWireToolInputs(messages, requestMessages) && isFoamySpringEnabled();
 }
-//@ chunk-e6aww6q8.js:321659-321846 placement
+//@ chunk-5xgkngpb.js:322989-323176 placement
 /**
  * 是否启用工具输入回显：环境变量优先，其次会话设置，最后特性开关。
  */
@@ -328,17 +340,17 @@ function isEchoWireToolInputsEnabled(normalizedMessages) {
   }
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_HUMBLE_HAMMOCK, false) === true;
 }
-//@ chunk-e6aww6q8.js:321846-321913 placement
+//@ chunk-5xgkngpb.js:323176-323243 placement
 var SAFE_ABSOLUTE_PATH_RE = /^(?:\/|[A-Za-z]:[\\/])[^\s"'`$;&|<>*?(){}[\]!#]{0,1023}$/;
-//@ chunk-e6aww6q8.js:321913-321949 placement
+//@ chunk-5xgkngpb.js:323243-323279 placement
 function formatCdPrefix(dir) {
   return `cd ${dir} && `;
 }
-//@ chunk-e6aww6q8.js:321949-322004 placement
+//@ chunk-5xgkngpb.js:323279-323334 placement
 function isSafeAbsolutePath(path) {
   return typeof path === "string" && SAFE_ABSOLUTE_PATH_RE.test(path);
 }
-//@ chunk-e6aww6q8.js:322004-322143 placement
+//@ chunk-5xgkngpb.js:323334-323473 placement
 function stripCdPrefix(command, candidateDirs) {
   for (let dir of candidateDirs) {
     let prefix = formatCdPrefix(dir);
@@ -352,11 +364,11 @@ function stripCdPrefix(command, candidateDirs) {
     command,
   };
 }
-//@ chunk-e6aww6q8.js:322143-322190 placement
+//@ chunk-5xgkngpb.js:323473-323520 placement
 function isCdPrefixedCommand(fullCommand, command, cwd) {
   return isSafeAbsolutePath(cwd) && fullCommand === formatCdPrefix(cwd) + command;
 }
-//@ chunk-e6aww6q8.js:322190-322352 placement
+//@ chunk-5xgkngpb.js:323520-323682 placement
 function extractCdPrefixDir(fullCommand, command) {
   let prefixLength = fullCommand.length - command.length;
   if (
@@ -369,27 +381,27 @@ function extractCdPrefixDir(fullCommand, command) {
   let sliced = fullCommand.slice(3, prefixLength - 4);
   return isSafeAbsolutePath(sliced) ? sliced : undefined;
 }
-//@ chunk-e6aww6q8.js:322352-322394 placement
+//@ chunk-5xgkngpb.js:323682-323724 placement
 function createNullProtoObject() {
   return Object.create(null);
 }
-//@ chunk-e6aww6q8.js:322394-322660 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince_4(messages, sinceUuid) {
-  if (!messages || sinceUuid === undefined) return;
+//@ chunk-5xgkngpb.js:323724-323990 placement
+function wireIngestContextStamps(content, inputs) {
+  if (!content || inputs === undefined) return;
   try {
     let stampsById;
-    for (let message of messages) {
+    for (let block of content) {
       if (
-        message.type !== "tool_use" ||
-        typeof message.id !== "string" ||
-        typeof message.name !== "string" ||
-        !Object.hasOwn(sinceUuid, message.id)
+        block.type !== "tool_use" ||
+        typeof block.id !== "string" ||
+        typeof block.name !== "string" ||
+        !Object.hasOwn(inputs, block.id)
       )
         continue;
-      let stamp = bashCwdStamp(message.name, sinceUuid[message.id]);
+      let stamp = bashCwdStamp(block.name, inputs[block.id]);
       if (stamp !== undefined) {
         stampsById ??= createNullProtoObject();
-        stampsById[message.id] = stamp;
+        stampsById[block.id] = stamp;
       }
     }
     return stampsById;
@@ -398,9 +410,9 @@ function countToolCallsSince_4(messages, sinceUuid) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:322660-322863 placement
+//@ chunk-5xgkngpb.js:323990-324193 placement
 function bashCwdStamp(name, input) {
-  if (!isPlainObject_4(input)) return;
+  if (!isPlainObject_5(input)) return;
   if (name === BASH_TOOL_NAME) {
     if (typeof input.command !== "string" || isRemoteOnlyCheck(name)) return;
     let cwd = getCwd();
@@ -416,16 +428,16 @@ function bashCwdStamp(name, input) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:322863-323457 placement
+//@ chunk-5xgkngpb.js:324193-324787 placement
 /**
  * 从转录中恢复工具输入的附加戳（安全的 cwd），或从 cd 前缀推断 Bash 的 cwd。
  */
 function restoreWireInputStamps(wireIngestContext, wireToolInputs, content) {
   if (wireToolInputs === undefined) return;
   let stampsById;
-  if (isPlainObject_4(wireIngestContext))
+  if (isPlainObject_5(wireIngestContext))
     for (let [key, value] of Object.entries(wireIngestContext)) {
-      if (!Object.hasOwn(wireToolInputs, key) || !isPlainObject_4(value)) continue;
+      if (!Object.hasOwn(wireToolInputs, key) || !isPlainObject_5(value)) continue;
       let stamp = {};
       if (isSafeAbsolutePath(value.cwd)) stamp.cwd = value.cwd;
       if (stamp.cwd !== undefined || stamp.slackStamp !== undefined) {
@@ -436,7 +448,7 @@ function restoreWireInputStamps(wireIngestContext, wireToolInputs, content) {
   if (Array.isArray(content))
     for (let block of content) {
       if (
-        !isPlainObject_4(block) ||
+        !isPlainObject_5(block) ||
         block.type !== "tool_use" ||
         block.name !== BASH_TOOL_NAME ||
         typeof block.id !== "string" ||
@@ -447,8 +459,8 @@ function restoreWireInputStamps(wireIngestContext, wireToolInputs, content) {
       let recordedInput = wireToolInputs[block.id];
       let input = block.input;
       if (
-        !isPlainObject_4(recordedInput) ||
-        !isPlainObject_4(input) ||
+        !isPlainObject_5(recordedInput) ||
+        !isPlainObject_5(input) ||
         typeof recordedInput.command !== "string" ||
         typeof input.command !== "string"
       )
@@ -463,13 +475,17 @@ function restoreWireInputStamps(wireIngestContext, wireToolInputs, content) {
     }
   return stampsById;
 }
-//@ chunk-e6aww6q8.js:323457-323579 placement
+//@ chunk-5xgkngpb.js:324787-324990 placement (2.1.88 match: SYSTEM_REMINDER_CLOSE, 0.862)
 /**
  * 去掉 system-reminder 与行号前缀。
  */
 function stripReminderAndLineNumbers(text) {
-  return text
-    .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "")
+  let index = text.lastIndexOf("</system-reminder>");
+  let keepUntil = index === -1 ? 0 : index + 18;
+  return (
+    text.slice(0, keepUntil).replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "") +
+    text.slice(keepUntil)
+  )
     .split(
       `
 `,
@@ -481,16 +497,16 @@ function stripReminderAndLineNumbers(text) {
     )
     .trim();
 }
-//@ chunk-e6aww6q8.js:323579-323632 placement
+//@ chunk-5xgkngpb.js:324990-325043 placement
 function stringLength(value) {
   return typeof value === "string" ? value.length : 0;
 }
-//@ chunk-e6aww6q8.js:323632-324477 placement
+//@ chunk-5xgkngpb.js:325043-325893 placement
 /**
  * 可精简的工具结果表：Read/Bash/Edit-Write 的结果如何给出字符数并清空。
  */
 var SLIMMABLE_TOOL_RESULTS = {
-  [FILE_READ_TOOL_NAME]: (result, displayedContent) => {
+  [READ]: (result, displayedContent) => {
     let contentField =
       result.type === "text"
         ? "content"
@@ -498,10 +514,11 @@ var SLIMMABLE_TOOL_RESULTS = {
           ? "base64"
           : undefined;
     let file = result.file;
-    if (contentField === undefined || !isPlainObject_5(file) || !stringLength(file[contentField])) return;
+    if (contentField === undefined || !isPlainObject_6(file) || !stringLength(file[contentField])) return;
     return {
       chars: stringLength(file[contentField]),
-      slim: () =>
+      slim: (cutsEveryRead) =>
+        !cutsEveryRead &&
         contentField === "content" &&
         (typeof displayedContent !== "string" ||
           String(file.content).includes("<system-reminder>") ||
@@ -528,7 +545,7 @@ var SLIMMABLE_TOOL_RESULTS = {
       }),
     };
   },
-  [FILE_EDIT_TOOL_NAME]: (result) =>
+  [EDIT]: (result) =>
     stringLength(result.originalFile)
       ? {
           chars: stringLength(result.originalFile),
@@ -557,20 +574,20 @@ var SLIMMABLE_TOOL_RESULTS = {
   },
 };
 var MAX_SLIMMABLE_RESULTS = 1024;
-//@ chunk-e6aww6q8.js:324477-325108 placement
+//@ chunk-5xgkngpb.js:325893-326524 placement
 /**
  * 创建转录写入时的工具结果精简器：记住可精简工具的调用，遇到对应结果时返回精简信息。
  */
 function createToolResultSlimmer() {
   let slimmers = new Map();
   return (message) => {
-    if (!isPlainObject_5(message) || !isPlainObject_5(message.message)) return;
+    if (!isPlainObject_6(message) || !isPlainObject_6(message.message)) return;
     let content = message.message.content;
     if (!Array.isArray(content)) return;
     if (message.type === "assistant") {
       for (let block of content)
         if (
-          isPlainObject_5(block) &&
+          isPlainObject_6(block) &&
           block.type === "tool_use" &&
           typeof block.id === "string" &&
           typeof block.name === "string" &&
@@ -582,28 +599,28 @@ function createToolResultSlimmer() {
       return;
     }
     if (message.type !== "user") return;
-    let found = content.find((block) => isPlainObject_5(block) && block.type === "tool_result");
-    let toolUseId = isPlainObject_5(found) ? found.tool_use_id : undefined;
+    let found = content.find((block) => isPlainObject_6(block) && block.type === "tool_result");
+    let toolUseId = isPlainObject_6(found) ? found.tool_use_id : undefined;
     let toolName = typeof toolUseId === "string" ? slimmers.get(toolUseId) : undefined;
     if (typeof toolUseId !== "string" || toolName === undefined) return;
     slimmers.delete(toolUseId);
-    return message.isVirtual !== true && isPlainObject_5(message.toolUseResult) && isPlainObject_5(found)
+    return message.isVirtual !== true && isPlainObject_6(message.toolUseResult) && isPlainObject_6(found)
       ? SLIMMABLE_TOOL_RESULTS[toolName]?.(message.toolUseResult, found.content)
       : undefined;
   };
 }
-//@ chunk-e6aww6q8.js:1528802-1528862 placement
+//@ chunk-5xgkngpb.js:1534348-1534408 placement
 var wireInputCopiesBySession; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
 var wireInputSourcesBySession;
-deferInit("chunk-e6aww6q8.js:1528802", () => {
+deferInit("chunk-5xgkngpb.js:1534348", () => {
   wireInputCopiesBySession = new SessionRootSlot(() => new WeakMap());
   wireInputSourcesBySession = new SessionRootSlot(() => new WeakMap());
 });
-//@ chunk-e6aww6q8.js:1528862-1528896 placement
+//@ chunk-5xgkngpb.js:1534408-1534442 placement
 function wireInputCopies() {
   return wireInputCopiesBySession.of(getRootSession());
 }
-//@ chunk-e6aww6q8.js:1528896-1528988 placement
+//@ chunk-5xgkngpb.js:1534442-1534534 placement
 function areToolInputsEquivalent(a, b) {
   try {
     return (
@@ -613,7 +630,7 @@ function areToolInputsEquivalent(a, b) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:1528988-1529079 placement
+//@ chunk-5xgkngpb.js:1534534-1534625 placement
 function rememberWireInputSource(sessionId, source) {
   let byInput = wireInputSourcesBySession.of(getRootSession());
   let sources = byInput.get(sessionId);
@@ -623,7 +640,7 @@ function rememberWireInputSource(sessionId, source) {
   }
   sources.add(source);
 }
-//@ chunk-e6aww6q8.js:1529079-1530280 placement
+//@ chunk-5xgkngpb.js:1534625-1535991 placement
 /**
  * 检查线上发送的工具输入与记录的一致性，不一致时记录。
  */
@@ -652,7 +669,7 @@ function checkWireToolInputConsistency(
   let toolName = toolNameHint;
   let consistent;
   try {
-    if (isPlainObject_4(displayedInput) && isDeepStrictEqual(recordedInput, displayedInput))
+    if (isPlainObject_5(displayedInput) && isDeepStrictEqual(recordedInput, displayedInput))
       consistent = true;
     else {
       tool =
@@ -669,6 +686,28 @@ function checkWireToolInputConsistency(
         (tool !== undefined && isMultiEntryAliasTool(tool)
           ? perEntryInputsMatch(tool, normalized, displayedInput, ingestContext)
           : isEquivalentToolInput(toolName, normalized, displayedInput, ingestContext));
+      if (
+        codeModeAccepted() &&
+        !consistent &&
+        tool !== undefined &&
+        hasBuiltInEvalTool([tool]) &&
+        typeof recordedInput.code === "string"
+      )
+        consistent = [true, false].some((javaScriptSource) =>
+          isAdoptableWireCopy(
+            recordedInput,
+            {
+              ...normalized,
+              code: repairDoubleEscapedUnicode(recordedInput.code, {
+                logRepairs: false,
+                javaScriptSource,
+              }),
+            },
+            displayedInput,
+            toolName,
+            ingestContext,
+          ),
+        );
     }
   } catch (error) {
     let toolOrByName = tool ?? toolByName;
@@ -704,11 +743,11 @@ function checkWireToolInputConsistency(
       });
     }
   }
-  if (consistent && isPlainObject_4(displayedInput) && areToolInputsEquivalent(recordedInput, displayedInput))
+  if (consistent && isPlainObject_5(displayedInput) && areToolInputsEquivalent(recordedInput, displayedInput))
     rememberWireInputSource(sessionId, source);
   return consistent;
 }
-//@ chunk-e6aww6q8.js:1530280-1530563 placement
+//@ chunk-5xgkngpb.js:1535991-1536274 placement
 /**
  * 汇总消息中各工具调用的线上输入来源（wire 或 displayed）。
  */
@@ -718,7 +757,7 @@ function wireInputSources(messages) {
     let copiesByInputs = wireInputCopies();
     let sourcesBySession = wireInputSourcesBySession.of(getRootSession());
     for (let message of messages) {
-      if (message.type !== "assistant" || !isPlainObject_4(message.wireToolInputs)) continue;
+      if (message.type !== "assistant" || !isPlainObject_5(message.wireToolInputs)) continue;
       let sources = sourcesBySession.get(message.wireToolInputs);
       for (let [toolUseId, isWireCopy] of copiesByInputs.get(message.wireToolInputs) ?? [])
         if (!sources?.has(toolUseId)) copies.set(toolUseId, isWireCopy ? "wire" : "displayed");
@@ -729,7 +768,7 @@ function wireInputSources(messages) {
   }
   return copies;
 }
-//@ chunk-e6aww6q8.js:1530563-1531316 placement
+//@ chunk-5xgkngpb.js:1536274-1537031 placement
 function adoptWireToolInputCopies(copies, toolInputCopies) {
   let adopted = 0;
   try {
@@ -737,7 +776,7 @@ function adoptWireToolInputCopies(copies, toolInputCopies) {
     let copiesByInputs = wireInputCopies();
     let unprovenCount = 0;
     for (let message of copies) {
-      if (message.type !== "assistant" || !isPlainObject_4(message.wireToolInputs)) continue;
+      if (message.type !== "assistant" || !isPlainObject_5(message.wireToolInputs)) continue;
       let wireToolInputs = message.wireToolInputs;
       let blockById = new Map();
       for (let block of Array.isArray(message.message?.content) ? message.message.content : [])
@@ -750,7 +789,7 @@ function adoptWireToolInputCopies(copies, toolInputCopies) {
           let recordedInput = wireToolInputs[key];
           if (
             block === undefined ||
-            !isPlainObject_4(recordedInput) ||
+            !isPlainObject_5(recordedInput) ||
             !adoptWireInputCopy(recordedInput, block.input, block.name, message.wireIngestContext?.[key])
           ) {
             unprovenCount++;
@@ -775,13 +814,13 @@ function adoptWireToolInputCopies(copies, toolInputCopies) {
   }
   return adopted;
 }
-//@ chunk-e6aww6q8.js:1531316-1531656 placement
+//@ chunk-5xgkngpb.js:1537031-1537486 placement
 /**
  * 判断能否采用线上输入副本（字符串化字段还原后等价）。
  */
 function adoptWireInputCopy(instance, copy, name, ingestContext) {
   try {
-    if (!isPlainObject_4(copy)) return false;
+    if (!isPlainObject_5(copy)) return false;
     if (isDeepStrictEqual(instance, copy)) return true;
     let candidate = {
       ...instance,
@@ -799,36 +838,54 @@ function adoptWireInputCopy(instance, copy, name, ingestContext) {
     let repaired = repairDoubleEscapedUnicode(candidate, {
       logRepairs: false,
     });
-    if (isPlainObject_4(repaired) && name === WORKFLOW_TOOL_NAME && typeof candidate.script === "string")
+    if (isPlainObject_5(repaired) && name === WORKFLOW_TOOL_NAME && typeof candidate.script === "string")
       repaired.script = candidate.script;
     if (isAdoptableWireCopy(instance, repaired, copy, name, ingestContext)) return true;
-    return false;
+    return (
+      codeModeAccepted() &&
+      isEvalToolName(name) &&
+      isPlainObject_5(repaired) &&
+      typeof candidate.code === "string" &&
+      isAdoptableWireCopy(
+        instance,
+        {
+          ...repaired,
+          code: repairDoubleEscapedUnicode(candidate.code, {
+            logRepairs: false,
+            javaScriptSource: true,
+          }),
+        },
+        copy,
+        name,
+        ingestContext,
+      )
+    );
   } catch {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:1531656-1531726 placement
+//@ chunk-5xgkngpb.js:1537486-1537556 placement
 function isAdoptableWireCopy(a, b, c, d, e) {
   return (
-    isPlainObject_4(b) && sameShape(a, b) && stringifiedFieldsMatch(a, b) && isEquivalentToolInput(d, b, c, e)
+    isPlainObject_5(b) && sameShape(a, b) && stringifiedFieldsMatch(a, b) && isEquivalentToolInput(d, b, c, e)
   );
 }
-//@ chunk-e6aww6q8.js:1531726-1531942 placement
+//@ chunk-5xgkngpb.js:1537556-1537772 placement
 function sameShape(a, b) {
   if (Array.isArray(a))
     return Array.isArray(b) && a.length === b.length && a.every((item, index) => sameShape(item, b[index]));
-  if (isPlainObject_4(a)) {
-    if (!isPlainObject_4(b)) return false;
+  if (isPlainObject_5(a)) {
+    if (!isPlainObject_5(b)) return false;
     return Object.keys(a).every((key) => Object.hasOwn(b, key) && sameShape(a[key], b[key]));
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:1531942-1532347 placement
+//@ chunk-5xgkngpb.js:1537772-1538178 placement
 /**
  * 按条目比较多条目工具的输入是否等价。
  */
 function perEntryInputsMatch(a, b, c, d) {
-  if (!isPlainObject_4(c)) return false;
+  if (!isPlainObject_5(c)) return false;
   if (isDeepStrictEqual(b, c)) return true;
   let instanceParse = a.inputSchema.safeParse(b);
   let copyParse = a.inputSchema.safeParse(c);
@@ -843,7 +900,7 @@ function perEntryInputsMatch(a, b, c, d) {
     entries.every((entry, index) => isEquivalentToolInput(v1Tool.name, entry, entries_2[index], d))
   );
 }
-//@ chunk-e6aww6q8.js:1532347-1532537 placement
+//@ chunk-5xgkngpb.js:1538178-1538368 placement
 function stringifiedFieldsMatch(a, b) {
   if (b === a) return true;
   for (let [key, value] of Object.entries(a))
@@ -854,7 +911,7 @@ function stringifiedFieldsMatch(a, b) {
     }
   return true;
 }
-//@ chunk-e6aww6q8.js:1532537-1532860 placement
+//@ chunk-5xgkngpb.js:1538368-1538691 placement
 /**
  * 把 JSON 文本规范化（去空白、字符串重新编码）。
  */
@@ -893,17 +950,17 @@ function canonicalJsonText(text) {
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:1532860-1533316 placement
+//@ chunk-5xgkngpb.js:1538691-1539147 placement
 /**
  * 判断两个工具输入是否等价（Bash 命令/cd 前缀、Edit 替换、Write 尾随空白、Read offset 等工具专属规则）。
  */
 function isEquivalentToolInput(a, b, c, d) {
-  if (!isPlainObject_4(c)) return false;
+  if (!isPlainObject_5(c)) return false;
   if (isDeepStrictEqual(b, c)) return true;
   switch (a) {
     case BASH_TOOL_NAME:
       return bashInputsMatch(b, c, d?.cwd);
-    case FILE_EDIT_TOOL_NAME:
+    case EDIT:
       return editInputsMatch(b, c);
     case FILE_WRITE_TOOL_NAME:
       return (
@@ -914,7 +971,7 @@ function isEquivalentToolInput(a, b, c, d) {
         !(typeof b.file_path === "string" && isMarkdownPath(b.file_path)) &&
         stripTrailingWhitespace(b.content) === c.content
       );
-    case FILE_READ_TOOL_NAME:
+    case READ:
       return (
         sameKeys(b, c) &&
         fieldsMatchExcept(b, c, ["offset"]) &&
@@ -927,16 +984,16 @@ function isEquivalentToolInput(a, b, c, d) {
       return false;
   }
 }
-//@ chunk-e6aww6q8.js:1533316-1533429 placement
+//@ chunk-5xgkngpb.js:1539147-1539260 placement
 function sameKeys(a, b) {
   let keys = Object.keys(a);
   return keys.length === Object.keys(b).length && keys.every((key) => Object.hasOwn(b, key));
 }
-//@ chunk-e6aww6q8.js:1533429-1533512 placement
+//@ chunk-5xgkngpb.js:1539260-1539343 placement
 function fieldsMatchExcept(a, b, exemptKeys) {
   return Object.keys(a).every((key) => exemptKeys.includes(key) || isDeepStrictEqual(a[key], b[key]));
 }
-//@ chunk-e6aww6q8.js:1533512-1533655 placement
+//@ chunk-5xgkngpb.js:1539343-1539486 placement
 function coerceBashField(field, value) {
   switch (field) {
     case "timeout":
@@ -948,7 +1005,7 @@ function coerceBashField(field, value) {
       return value;
   }
 }
-//@ chunk-e6aww6q8.js:1533655-1533989 placement
+//@ chunk-5xgkngpb.js:1539486-1539820 placement
 /**
  * 比较 Bash 输入是否等价（字段强制转换、cd 前缀）。
  */
@@ -967,7 +1024,7 @@ function bashInputsMatch(a, b, cwd) {
   let fullCommand = a.command.replaceAll("\\\\;", "\\;");
   return fullCommand === b.command || (cwd !== undefined && isCdPrefixedCommand(fullCommand, b.command, cwd));
 }
-//@ chunk-e6aww6q8.js:1533989-1534635 placement
+//@ chunk-5xgkngpb.js:1539820-1540468 placement
 /**
  * 判断 Edit 输入是否等价（old_str/new_str 别名、replace_all 字符串化、反清洗与尾随空白）。
  */
@@ -1009,23 +1066,23 @@ function editInputsMatch(a, b) {
     .includes(newString_2);
 }
 export {
-  checkWireToolInputConsistency,
-  stripReminderAndLineNumbers,
-  countToolCallsSince_2,
-  restoreWireInputStamps,
-  countToolCallsSince_3,
-  tetherEnvAccessor,
   shouldEchoWireToolInputs,
   shouldEchoWireToolInputsForRequest,
   adoptWireToolInputCopies,
   wireInputSources,
   captureWireToolInputs,
   logWireToolInputParseFailure,
-  countToolCallsSince_4,
+  wireIngestContextStamps,
+  wireToolInputsForContent,
+  restoreWireInputStamps,
+  checkWireToolInputConsistency,
+  tetherEnvAccessor,
   isEchoWireToolInputsEnabled,
-  createToolResultSlimmer,
   stripCdPrefix,
   isTetherEnvOptIn,
+  createToolResultSlimmer,
+  stripReminderAndLineNumbers,
+  wireToolInputsForContentLenient,
   getEchoWireToolInputsState,
   isServerClassifierEnabled,
 };

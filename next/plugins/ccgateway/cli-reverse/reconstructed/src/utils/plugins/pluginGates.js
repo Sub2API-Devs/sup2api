@@ -3,9 +3,9 @@
  *
  * 插件相关特性开关（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3a43jh83.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-f3ry38nm.js (5)
  * attribution: placement 5
  */
 import {
@@ -14,35 +14,35 @@ import {
 } from "../../services/analytics/growthbook.js";
 import { env } from "../env.js";
 
-//@ chunk-3a43jh83.js:264-342 placement
+//@ chunk-f3ry38nm.js:264-342 placement
 /**
  * lanternPrismEnabled：插件 lantern prism 开关。
  */
 function lanternPrismEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_lantern_prism", false) || env.CLAUDE_CODE_LANTERN_PRISM;
 }
-//@ chunk-3a43jh83.js:342-404 placement
+//@ chunk-f3ry38nm.js:342-404 placement
 /**
  * isPluginDirectoryModeOn：插件目录模式开启。
  */
 function isPluginDirectoryModeOn() {
   return encapsulatedPebbleEnabled() || getFeatureValue_SESSION_PINNED("tengu_spicy_blossom", false) === true;
 }
-//@ chunk-3a43jh83.js:404-466 placement
+//@ chunk-f3ry38nm.js:404-466 placement
 /**
  * encapsulatedPebbleEnabled：插件开关（默认开）。
  */
 function encapsulatedPebbleEnabled() {
   return getFeatureValue_SESSION_PINNED("tengu_encapsulated_pebble", true) !== false;
 }
-//@ chunk-3a43jh83.js:466-520 placement
+//@ chunk-f3ry38nm.js:466-520 placement
 /**
  * shardedSnowflakeOff：插件开关（默认关时返回 true）。
  */
 function shardedSnowflakeOff() {
   return !getFeatureValue_CACHED_MAY_BE_STALE("tengu_sharded_snowflake", false);
 }
-//@ chunk-3a43jh83.js:520-1196 placement
+//@ chunk-f3ry38nm.js:520-1196 placement
 function describePluginEvalAvailability() {
   if (shardedSnowflakeOff())
     return {
@@ -55,9 +55,9 @@ function describePluginEvalAvailability() {
   };
 }
 export {
+  encapsulatedPebbleEnabled,
   isPluginDirectoryModeOn,
   lanternPrismEnabled,
-  shardedSnowflakeOff,
   describePluginEvalAvailability,
-  encapsulatedPebbleEnabled,
+  shardedSnowflakeOff,
 };

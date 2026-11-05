@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：停放（parked）权限提示的控制器、恢复与过期取消
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (12)
- * attribution: placement 12
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (12)
+ * attribution: placement 11, layout 1
  */
 import { randomUUID } from "crypto";
 import { isHumanTurn, isHumanOrigin } from "../../utils/turnOrigin.js";
@@ -24,7 +24,7 @@ import {
 } from "./wakeRouter.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { AGENT, TASK } from "../../tools/AgentTool/constants.js";
-import { getSessionId, mainAgentId } from "../../bootstrap/state.js";
+import { getSessionId, isCcsTenant, mainAgentId } from "../../bootstrap/state.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import {
   REJECT_MESSAGE,
@@ -33,6 +33,7 @@ import {
   createUserMessage,
   createUserInterruptionMessage,
 } from "../../utils/messages.js";
+import { rememberResolvedHost } from "../../utils/claudeInChrome/chromePermissions.js";
 import { shortHash } from "../../utils/shortHash.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { chatOriginField } from "./transcriptLeaves.js";
@@ -42,49 +43,43 @@ import {
   normalizedQueueOrigin,
   shouldSkipQueueAttachments,
   queueInputFlags,
+  isQueuedUserTurnCommand,
 } from "../../utils/messageQueueManager.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { isAimedAtTurn } from "./runEndReasons.js";
 import { SYNC_ANSWER_TTL_MS } from "../../services/remoteTools/shellForwarding.js";
 import { logError } from "../../utils/log.js";
 import { resumeReasonFromEnv, resumeInterruptedTurn } from "../../utils/conversationRecovery.js";
+import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
+import {
+  isGraceResendKillswitchOn,
+  TENGU_CANDID_JUNIPER,
+  TENGU_SQUISHY_ULLMAN,
+} from "../../services/api/withRetry.js";
+import { stringArray } from "../../utils/collections.js";
 import { relayTurnFlags } from "../../services/projectsRelay/relayConfig.js";
 import { wakeupSourceField } from "../../utils/cronFireTexts.js";
 import { isRemoteToolForwardingSwitchOn } from "../../services/remoteTools/servingGates.js";
-import { withDeadline } from "../../utils/sleep.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit, fromEnum, fromEnumOpt } from "../../services/analytics/safeMetadata.js";
+import { withDeadline } from "../../utils/sleep.js";
 import { errorMessage } from "../../utils/errors.js";
 import { getRemoteFeatureGateState } from "../../utils/permissions/yoloClassifier.js";
-import { TENGU_CANDID_JUNIPER } from "../../services/api/withRetry.js";
-import { canBatchWith, handleOrphanedPermissionResponse } from "../print.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
+import { messagesToKeepForAssistant } from "../../utils/messages/mappers.js";
 import { isTaskIdOfType } from "../../Task.js";
 import { isMcpTasksEnabled } from "../../services/mcp/mcpTaskWorker.js";
 import { flagKey, permissionResponseTelemetry } from "../structuredIOProtocol.js";
+import { isEmpty } from "../../services/mcpServe/callUtils.js";
+import { handleOrphanedPermissionResponse } from "../print.js";
 import { deviceCallsBehindCard } from "../../utils/remoteTools/restartNotices.js";
 import { MARKETPLACE_ONLY_MANIFEST_FIELDS } from "../../utils/plugins/validatePlugin.js";
+import { isFoamySpringEnabled, readGateFalseByDefault } from "../../services/analytics/growthbookGates.js";
 import { setLateAllowDecision, takeLateAllowDecision } from "../../bridge/mcpApprovalTickets.js";
-import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { ASKUSERQUESTION } from "../../tools/AskUserQuestionTool/prompt.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:327185-327458 placement
-function userMessagePlatformFields(messages, turnInterruption) {
-  let message =
-    turnInterruption === undefined
-      ? undefined
-      : messages.findLast((message) => message.uuid === turnInterruption);
-  if (message?.type !== "user") return {};
-  return {
-    ...(typeof message.clientPlatform === "string" && {
-      clientPlatform: message.clientPlatform,
-    }),
-    ...(typeof message.turnAttributionKey === "string" && {
-      inheritedTurnAttributionKey: message.turnAttributionKey,
-    }),
-  };
-}
-//@ chunk-tyg7f3ek.js:327458-327742 placement
+//@ chunk-0yw3taqg.js:359584-359868 placement
 function findParkedPromptOpener({ park, openerUuid, conversation }) {
   if (park === undefined || typeof park.details?.tool_name !== "string" || openerUuid === undefined) return;
   let found = conversation.find((message) => message.type === "user" && message.uuid === openerUuid);
@@ -97,7 +92,7 @@ function findParkedPromptOpener({ park, openerUuid, conversation }) {
       }
     : undefined;
 }
-//@ chunk-tyg7f3ek.js:327742-329149 placement
+//@ chunk-0yw3taqg.js:359868-361282 placement
 /**
  * 恢复会话时还原上一个 worker 挂起的权限提示（parked prompt），判断是否可接管其工具调用。
  */
@@ -180,7 +175,7 @@ async function restoreParkedPrompt({
     },
   };
 }
-//@ chunk-tyg7f3ek.js:329149-329847 placement
+//@ chunk-0yw3taqg.js:361282-361980 placement
 function cancelStaleParkedPrompt(
   headlessIO,
   restored,
@@ -219,7 +214,7 @@ function cancelStaleParkedPrompt(
     return new Set();
   }
 }
-//@ chunk-tyg7f3ek.js:329847-329998 placement
+//@ chunk-0yw3taqg.js:361980-362131 placement
 function setAsideCallsTelemetry(supersededToolUseIds, toolUseId) {
   let ids = [...(supersededToolUseIds ?? [])];
   let index = ids.indexOf(toolUseId);
@@ -232,17 +227,18 @@ function setAsideCallsTelemetry(supersededToolUseIds, toolUseId) {
         set_aside_calls_behind_prompt: index,
       };
 }
-//@ chunk-tyg7f3ek.js:329998-330065 placement
+//@ chunk-0yw3taqg.js:362131-362198 placement
 function isPendingActionForTool(state, toolName) {
   return state?.external?.pending_action?.tool_name === toolName;
 }
-//@ chunk-tyg7f3ek.js:330065-330272 placement
+//@ chunk-0yw3taqg.js:362198-362434 placement
 var PARKED_PROMPT_CONSTANTS = 3000;
+var TENGU_DRIFTING_SEAHORSE = "tengu_drifting_seahorse";
 var TENGU_WILD_BEACON = "tengu_wild_beacon";
 var MAX_PARKED_ANSWER_AGE_MS = 180000;
 var UNMATCHED_PERMISSION_ANSWER_TEXT =
   "This tool call was refused and did not run: the permission answer for it could not be matched to this call. Do not run it again unless the user asks you to.";
-//@ chunk-tyg7f3ek.js:330272-330334 placement
+//@ chunk-0yw3taqg.js:362434-362496 placement
 function unmatchedAnswerDenial(toolUseID) {
   return {
     behavior: "deny",
@@ -250,10 +246,10 @@ function unmatchedAnswerDenial(toolUseID) {
     toolUseID,
   };
 }
-//@ chunk-tyg7f3ek.js:330334-330505 placement
+//@ chunk-0yw3taqg.js:362496-362667 placement
 var PERMISSION_ANSWER_WAIT_MS; // deferred: uses REJECT_MESSAGE (../../utils/messages.js) of its import cycle while loading; runs once the cycle is complete
 var ANSWER_WAIT_END_OUTCOMES;
-deferInit("chunk-tyg7f3ek.js:330334", () => {
+deferInit("chunk-0yw3taqg.js:362496", () => {
   PERMISSION_ANSWER_WAIT_MS = 7000;
   ANSWER_WAIT_END_OUTCOMES = {
     interrupt: {
@@ -270,7 +266,11 @@ deferInit("chunk-tyg7f3ek.js:330334", () => {
     },
   };
 });
-//@ chunk-tyg7f3ek.js:330505-375915 placement
+//@ chunk-0yw3taqg.js:362667-362713 layout
+function hasResumeReason(command) {
+  return command.resumeReason !== undefined;
+}
+//@ chunk-0yw3taqg.js:362713-410449 placement
 /**
  * headless/CCR 会话中挂起权限请求的总控：恢复、接管上一 worker 的在途调用、继承已决请求、超时撤销与重新询问。
  */
@@ -336,6 +336,7 @@ class ParkedPermissionController {
   session;
   answers;
   lane;
+  cardInputSwitch;
   io;
   drain;
   messageQueue;
@@ -450,6 +451,12 @@ class ParkedPermissionController {
     this.receivedAnswersRead = receivedAnswersRead;
     this.answers = answers;
     this.lane = lane;
+    this.cardInputSwitch =
+      answers.kind !== "strict" && parkedPermission?.recordedInput !== undefined
+        ? lane.findsCardBehindNote?.()
+        : undefined;
+    if (answers.kind !== "strict" && parkedPermission !== undefined)
+      rememberResolvedHost(parkedPermission.tool_use_id, parkedPermission.details?.chrome_site);
     this.io = io;
     this.drain = drain;
     this.messageQueue = messageQueue;
@@ -554,10 +561,17 @@ class ParkedPermissionController {
     return (
       this.rescueOwnsReRun() ||
       this.cutOffTurnLeftToTheNextWorker ||
-      (!this.cutOffTurnGivenUp &&
-        this.messageQueue.getCommandQueue().some((queued) => queued.resumeReason !== undefined)) ||
+      (!this.cutOffTurnGivenUp && this.messageQueue.getCommandQueue().some(hasResumeReason)) ||
       this.isShuttingDown() ||
       this.isTerminalShutdown()
+    );
+  }
+  carryingTheCutOffTurnOnNow() {
+    return (
+      this.rescueOwnsReRun() ||
+      this.reRunHasStillToEnd() ||
+      (!this.cutOffTurnGivenUp && this.messageQueue.getCommandQueue().some(hasResumeReason)) ||
+      this.messageQueue.someInFlightDrainCommand(hasResumeReason)
     );
   }
   inheritedPromptPending() {
@@ -593,6 +607,14 @@ class ParkedPermissionController {
       this.deferredParkedPermissionRescue !== undefined ||
       this.parkedPermissionRetirement !== undefined ||
       this.stopRetirementDue !== undefined
+    );
+  }
+  enqueuedInterruptedTurnRescueArmed() {
+    return (
+      this.turnInterruptionState !== undefined &&
+      this.turnInterruptionState.kind !== "none" &&
+      this.lane.resumeInterruptedTurn &&
+      this.deferredParkedPermissionRescue === undefined
     );
   }
   reRunAnswers(uuid) {
@@ -739,6 +761,7 @@ class ParkedPermissionController {
       }),
       ...this.fromInterruptedTurnsPrompt,
       resumeReason: resumeReasonFromEnv(),
+      ...this.midWorkMark(),
       ...(this.leftToTheCardsTurn().size > 0 && {
         alsoLeftToThisReRun: [...this.leftToTheCardsTurn()],
       }),
@@ -746,6 +769,16 @@ class ParkedPermissionController {
         sendsOfItsCompactedTurn: this.sendsOfTheCardsCompactedTurn,
       }),
     };
+  }
+  midWorkMark() {
+    return this.turnInterruptionState?.kind === "interrupted_prompt" &&
+      this.turnInterruptionState.cutOffMidWork === true &&
+      (isCcsTenant() || isRemoteManagedEnvironment()) &&
+      !isGraceResendKillswitchOn()
+      ? {
+          continuesInterruptedWork: true,
+        }
+      : {};
   }
   enqueueAdoptedServedCalls(servedCalls) {
     this.messageQueue.enqueue({
@@ -762,6 +795,10 @@ class ParkedPermissionController {
       this.sendsTheRescueWouldAnswer = this.sendsTheInterruptedTurnHolds(this.turnInterruptionState.message);
       let compactedTurnSends = this.sendsOfTheCompactedTurn(this.turnInterruptionState.message);
       this.carriesTheCutOffTurnOn = true;
+      let rows = [
+        ...stringArray(this.turnInterruptionState.message.withdrawnBefore),
+        ...stringArray(this.turnInterruptionState.message.withdrawnFilesBefore),
+      ];
       let rescueCommand = {
         mode: "prompt",
         agentId: mainAgentId(),
@@ -781,6 +818,7 @@ class ParkedPermissionController {
         }),
         ...this.fromInterruptedTurnsPrompt,
         resumeReason: resumeReasonFromEnv(),
+        ...this.midWorkMark(),
         origin: normalizedQueueOrigin(this.turnInterruptionState.message),
         skipAttachments: shouldSkipQueueAttachments(this.turnInterruptionState.message),
         ...(this.turnInterruptionState.message.taskDelivery && {
@@ -795,6 +833,9 @@ class ParkedPermissionController {
         ...(this.turnInterruptionState.message.savedFiles && {
           savedFiles: this.turnInterruptionState.message.savedFiles,
         }),
+        ...(rows.length > 0 && {
+          withdrawnFileUuids: rows,
+        }),
         ...(this.sendsTheRescueWouldAnswer.size > 0 && {
           drainOnly: true,
         }),
@@ -807,6 +848,7 @@ class ParkedPermissionController {
         pendingActionClass: this.pendingActionClass,
         cutOffAgentCalls: this.cutOffAgentCalls,
         tail: this.turnInterruptionState.tail,
+        cutOffMidWork: this.turnInterruptionState.cutOffMidWork,
       });
       let servedCalls = isRemoteToolForwardingSwitchOn() ? (this.servedCallsToAdopt ?? []) : [];
       let inFlight = this.inFlightServedCalls();
@@ -829,30 +871,12 @@ class ParkedPermissionController {
       let [firstAgentCall, ...siblingAgentCalls] = this.resumedAgentCalls ?? [];
       if (this.parkOwnAdoptedCall !== undefined)
         inFlight.noteParkedAtRestart(this.parkOwnAdoptedCall.call.tool_use_id);
-      if (this.parkedPermission && this.parkOwnAdoptedCall !== undefined) {
+      if (this.parkedPermission && this.parkOwnAdoptedCall !== undefined && this.answers.kind !== "strict") {
         this.parkSettledAtBoot = true;
         this.notePromptEnded("settled_at_boot");
         if (this.parkedPermission.details?.input === undefined)
           this.withdrawCard(this.parkedPermission.request_id);
-        else {
-          let ask = new PermissionCardAsk({
-            card: this.parkedPermission,
-            answerKind: this.answers.kind,
-            waitMs: this.lane.answerWaitMs,
-            maxAnswerAgeMs: MAX_PARKED_ANSWER_AGE_MS,
-            allowWithoutInputIsEcho: false,
-            withdrawCard: this.withdrawCard,
-            unreadAnswersRead: () => {
-              let answersRead = this.receivedAnswersRead();
-              return answersRead && withDeadline(answersRead, PERMISSION_ANSWER_WAIT_MS);
-            },
-            answerOff: async () => (await this.lane.inheritedAnswerOff?.()) ?? "absent",
-          });
-          this.inheritedAsk = ask;
-          inFlight.offerInheritedAnswer(this.parkedPermission.tool_use_id, (answer) =>
-            this.answerForAdoptedCall(ask, answer),
-          );
-        }
+        else this.inheritedAskFor(this.parkedPermission, this.withdrawCard);
         if (this.registrationKeepsPendingAction) this.io.sessionState.adoptRestoredPendingAction();
         let adopted = this.takeParkAdoption();
         logForDebugging(
@@ -945,6 +969,26 @@ class ParkedPermissionController {
         });
     }
   }
+  inheritedAskFor(card, withdrawCard) {
+    let ask = new PermissionCardAsk({
+      card,
+      answerKind: this.answers.kind,
+      waitMs: this.lane.answerWaitMs,
+      maxAnswerAgeMs: MAX_PARKED_ANSWER_AGE_MS,
+      allowWithoutInputIsEcho: false,
+      withdrawCard,
+      unreadAnswersRead: () => {
+        let readAnswers = this.receivedAnswersRead();
+        return readAnswers && withDeadline(readAnswers, PERMISSION_ANSWER_WAIT_MS);
+      },
+      answerOff: async () => (await this.lane.inheritedAnswerOff?.()) ?? "absent",
+    });
+    this.inheritedAsk = ask;
+    this.inFlightServedCalls().offerInheritedAnswer(card.tool_use_id, (answer) =>
+      this.answerForAdoptedCall(ask, answer),
+    );
+    return ask;
+  }
   takeParkSiblings() {
     let parkSiblings = this.parkSiblings;
     this.parkSiblings = [];
@@ -1032,17 +1076,21 @@ class ParkedPermissionController {
       let retiredCount = 0;
       let rows = [];
       let holders = [];
+      let rowsByUuid = new Map();
       let tellsClient = reason === "interrupt" && this.endsStoppedTurns();
       let stored = false;
       try {
         let unresolved = [];
         for (let toolUseId of toolUseIds) {
-          let holder = (await this.findUnresolvedToolUse(toolUseId))?.holder;
-          if (holder)
+          let unresolvedToolUse = await this.findUnresolvedToolUse(toolUseId);
+          if (unresolvedToolUse) {
             unresolved.push({
               toolUseId,
-              assistantMessage: holder,
+              assistantMessage: unresolvedToolUse.holder,
             });
+            for (let row of unresolvedToolUse.messageRows ?? [])
+              if (!rowsByUuid.has(row.uuid)) rowsByUuid.set(row.uuid, row);
+          }
         }
         if (wasSuperseded()) outcome = "retire_superseded";
         else if (unresolved.length > 0) {
@@ -1089,10 +1137,13 @@ class ParkedPermissionController {
       let inConversation = false;
       if (holders.length > 0 && getRemoteFeatureGateState(TENGU_CANDID_JUNIPER) === "on")
         try {
+          let sortedRows = holders.toSorted((a, b) =>
+            a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0,
+          );
           inConversation = this.putAheadOfLoaderRows([
-            ...holders.toSorted((a, b) =>
-              a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0,
-            ),
+            ...(rowsByUuid.size > 0 && getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SQUISHY_ULLMAN, false)
+              ? messagesToKeepForAssistant(sortedRows, [...rowsByUuid.values()])
+              : sortedRows),
             ...rows.slice(1),
           ]);
         } catch (error) {
@@ -1373,15 +1424,7 @@ class ParkedPermissionController {
     try {
       this.letHeldCommandsGo = this.messageQueue.holdBack((queued) => {
         if (!isMainAgentCommand(queued)) return false;
-        if (
-          canBatchWith(queued) &&
-          isHumanOrigin(queued.origin) &&
-          queued.priority !== "now" &&
-          queued.sentNow !== true &&
-          queued.resumeReason === undefined &&
-          (this.promptEnded !== undefined || this.inheritedPromptHoldCapable()) &&
-          this.lane.holdsInputBehindPrompt?.() === true
-        ) {
+        if (this.isPersonsMessageToHold(queued)) {
           logFeatureOk("ccr_input_held_behind_prompt");
           return true;
         }
@@ -1400,15 +1443,34 @@ class ParkedPermissionController {
       logError(error);
     }
   }
+  isPersonsMessageToHold(message) {
+    return (
+      isQueuedUserTurnCommand(message) &&
+      isHumanOrigin(message.origin) &&
+      message.priority !== "now" &&
+      message.sentNow !== true &&
+      message.resumeReason === undefined &&
+      (this.promptEnded !== undefined || this.inheritedPromptHoldCapable()) &&
+      this.lane.holdsInputBehindPrompt?.() === true
+    );
+  }
+  wouldHoldIfQueuedNow(reason) {
+    return (
+      this.letHeldCommandsGo !== undefined &&
+      isMainAgentCommand(reason) &&
+      this.isPersonsMessageToHold(reason)
+    );
+  }
   async endHoldBehindPrompt(by) {
     if (by === "shutdown") return;
     try {
       await this.parkedPermissionRetirement;
-      let letGo = this.letHeldCommandsGo?.() ?? 0;
+      let letHeldCommandsGo = this.letHeldCommandsGo;
       this.letHeldCommandsGo = undefined;
-      if (letGo > 0)
+      let count = letHeldCommandsGo?.() ?? 0;
+      if (count > 0)
         logForDebugging(
-          `[print.ts] Parked permission toolUseID=${this.parkedPermission?.tool_use_id} ended (${by}): letting go ${letGo} command(s) held back for it`,
+          `[print.ts] Parked permission toolUseID=${this.parkedPermission?.tool_use_id} ended (${by}): letting go ${count} command(s) held back for it`,
         );
     } catch (error) {
       logError(error);
@@ -1552,9 +1614,17 @@ class ParkedPermissionController {
     let messageRows;
     let behindCard = [];
     try {
+      let emptyAllowRunsCardInput =
+        isParkedAnswer &&
+        this.cardInputSwitch !== undefined &&
+        message.response.subtype === "success" &&
+        message.response.response?.behavior === "allow" &&
+        isEmpty(message.response.response.updatedInput) &&
+        (await this.cardInputSwitch) === "on";
       queued = await handleOrphanedPermissionResponse({
         message,
         denyIsRefusal: cardHoldEnabled,
+        emptyAllowRunsCardInput,
         setAppState: this.store.setState,
         messageQueue: this.messageQueue,
         handledToolUseIds: this.handledOrphanedToolUseIds,
@@ -1587,6 +1657,7 @@ class ParkedPermissionController {
             ),
           resumesInterruptedTurn: () => this.deferredParkedPermissionRescue !== undefined,
           cardInput: this.parkedPermission?.recordedInput ?? null,
+          askedInDirectory: this.parkedPermission?.askedInDirectory,
           interruptedTurnEcho: this.interruptedTurnEcho(),
         }),
         onEnqueued: () => {
@@ -1645,7 +1716,7 @@ class ParkedPermissionController {
         else this.fire("orphan_dropped");
     }
   }
-  async routeStrictAnswer(message, lateAllow) {
+  async routeStrictAnswer(message, decision) {
     let parkedPermission = this.parkedPermission;
     let response = message.response;
     if (response.subtype !== "success") return this.dropStrictAnswer("not_an_answer", message);
@@ -1659,8 +1730,6 @@ class ParkedPermissionController {
     )
       return this.dropStrictAnswer("not_the_park", message);
     let isBlankedDeny = cardHoldEnabled && response_2.behavior === "deny";
-    if (this.parkSiblings.length > 0 || this.parkOwnAdoptedCall !== undefined)
-      return this.dropStrictAnswer("adoption", message);
     if (this.answerClearing) return this.dropStrictAnswer("clear_pending", message);
     if (!this.promptStillOpen(parkedPermission)) return this.dropStrictAnswer("decided", message);
     if (response_2.behavior !== "deny" && this.deniedButUnread.has(parkedPermission.tool_use_id))
@@ -1693,12 +1762,12 @@ class ParkedPermissionController {
       ? content.find((block) => block.type === "tool_use" && block.id === parkedPermission.tool_use_id)
       : undefined;
     if (block?.type !== "tool_use") return this.dropStrictAnswer("not_in_last_turn", message);
-    let message_2 = message;
+    let toolName = message;
     for (let name of [response_2.toolName, response_2.tool_name, parkedPermission.details?.tool_name])
       if (typeof name === "string" && name !== block.name) {
         if (!isBlankedDeny || message.response.subtype !== "success")
           return this.dropStrictAnswer("tool_name_mismatch", message);
-        message_2 = {
+        toolName = {
           ...message,
           response: {
             ...message.response,
@@ -1715,7 +1784,13 @@ class ParkedPermissionController {
     if (this.keptInheritedPromptPending()) this.io.sessionState.adoptRestoredPendingAction();
     if (!isBlankedDeny) this.answerClearing = true;
     try {
-      if (!isBlankedDeny && !(await this.recordClearedBeforeRun(lit("strict_clear_unconfirmed"))))
+      if (
+        !isBlankedDeny &&
+        (this.inheritedPromptOwnsWorkerStatus() ||
+          !isFoamySpringEnabled() ||
+          !readGateFalseByDefault(TENGU_DRIFTING_SEAHORSE)) &&
+        !(await this.recordClearedBeforeRun(lit("strict_clear_unconfirmed")))
+      )
         return this.dropStrictAnswer("clear_unconfirmed", message);
       if (!this.promptStillOpen(parkedPermission)) return this.dropStrictAnswer("decided", message);
       let queued = false;
@@ -1725,46 +1800,78 @@ class ParkedPermissionController {
         parkedPermission.tool_use_id,
         this.supersededToolUseIds,
       );
-      setLateAllowDecision(this.session, parkedPermission.tool_use_id, lateAllow);
       try {
-        queued = await handleOrphanedPermissionResponse({
-          message: message_2,
-          denyIsRefusal: cardHoldEnabled,
-          setAppState: this.store.setState,
-          messageQueue: this.messageQueue,
-          handledToolUseIds: this.handledOrphanedToolUseIds,
-          startedBy: this.markAnswer,
-          findUnresolved: async () => unresolvedToolUse.holder,
-          messageRows: () =>
-            getFeatureValue_CACHED_MAY_BE_STALE("tengu_eager_pillow", false)
-              ? unresolvedToolUse.messageRows
-              : undefined,
-          notSent: () => behindCard,
-          note: (toolUseId) =>
-            this.lostCallsNote(
-              unresolvedToolUse.messageRows ?? [],
-              new Set([toolUseId, ...behindCard.map((entry) => entry.toolUseID)]),
-            ),
-          resumesInterruptedTurn: () => this.deferredParkedPermissionRescue !== undefined,
-          cardInput: parkedPermission.recordedInput ?? null,
-          interruptedTurnEcho: this.interruptedTurnEcho(),
-          ccrTurnId: () => {
-            if (parkedPermission.ccrTurnId !== undefined && this.drain.dequeueCount > 0) {
-              logFeatureSad("ccs_card_turn_id", "restore_behind_a_turn");
-              return;
-            }
-            return parkedPermission.ccrTurnId;
-          },
-          onEnqueued: () => {
-            enqueued = true;
+        let parkOwnAdoptedCall = this.parkOwnAdoptedCall;
+        if (parkOwnAdoptedCall !== undefined) {
+          let adoptedCall = {
+            ...this.adoptedServedCallsCommand([parkOwnAdoptedCall, ...this.parkSiblings]),
+            ...this.interruptedTurnEcho(),
+          };
+          enqueued = true;
+          let info = this.inheritedAskFor(parkedPermission, async () => {});
+          if (isBlankedDeny) info.takeDeny(toolName);
+          else info.take(toolName, parkedPermission.tool_use_id);
+          this.handledOrphanedToolUseIds.add(parkedPermission.tool_use_id);
+          this.takeParkAdoption();
+          try {
+            this.messageQueue.enqueue(adoptedCall);
+          } finally {
             this.kick();
-          },
-          enqueueContext: (toolUseId) => this.parkAnswerContext(toolUseId),
-          dropContext: (toolUseId) => ({
-            ...this.orphanDropContext(toolUseId),
-            ...this.parkAnswerContext(toolUseId),
-          }),
-        });
+          }
+          queued = true;
+        } else {
+          setLateAllowDecision(this.session, parkedPermission.tool_use_id, decision);
+          let parkSiblings = this.parkSiblings;
+          queued = await handleOrphanedPermissionResponse({
+            message: toolName,
+            denyIsRefusal: cardHoldEnabled,
+            setAppState: this.store.setState,
+            messageQueue: this.messageQueue,
+            handledToolUseIds: this.handledOrphanedToolUseIds,
+            startedBy: this.markAnswer,
+            findUnresolved: async () => unresolvedToolUse.holder,
+            messageRows: () =>
+              getFeatureValue_CACHED_MAY_BE_STALE("tengu_eager_pillow", false)
+                ? unresolvedToolUse.messageRows
+                : undefined,
+            initFirst: (toolUseId, siblingToolUseId) =>
+              parkSiblings.length > 0 || this.servedElsewhere(toolUseId, siblingToolUseId),
+            siblings: () =>
+              this.takeParkSiblings().map(({ call, assistantMessage }) => ({
+                toolUseID: call.tool_use_id,
+                assistantMessage,
+              })),
+            notSent: () => [...(this.servedCallsNeverSent ?? []), ...behindCard],
+            note: (toolUseId) =>
+              this.lostCallsNote(
+                unresolvedToolUse.messageRows ?? [],
+                new Set([
+                  toolUseId,
+                  ...parkSiblings.map((parkSibling) => parkSibling.call.tool_use_id),
+                  ...behindCard.map((entry) => entry.toolUseID),
+                ]),
+              ),
+            resumesInterruptedTurn: () => this.deferredParkedPermissionRescue !== undefined,
+            cardInput: parkedPermission.recordedInput ?? null,
+            interruptedTurnEcho: this.interruptedTurnEcho(),
+            ccrTurnId: () => {
+              if (parkedPermission.ccrTurnId !== undefined && this.drain.dequeueCount > 0) {
+                logFeatureSad("ccs_card_turn_id", "restore_behind_a_turn");
+                return;
+              }
+              return parkedPermission.ccrTurnId;
+            },
+            onEnqueued: () => {
+              enqueued = true;
+              this.kick();
+            },
+            enqueueContext: (toolUseId) => this.parkAnswerContext(toolUseId),
+            dropContext: (toolUseId) => ({
+              ...this.orphanDropContext(toolUseId),
+              ...this.parkAnswerContext(toolUseId),
+            }),
+          });
+        }
       } catch (error) {
         logForDebugging(
           `[print.ts] strict parked-permission answer could not be queued: ${errorMessage(error)}`,
@@ -2087,12 +2194,12 @@ class ParkedPermissionController {
     this.inheritedAsk?.stop("shutdown");
   }
 }
-//@ chunk-tyg7f3ek.js:378573-378663 placement (2.1.88 match: getRiskColor, 0.785)
+//@ chunk-0yw3taqg.js:413327-413417 placement (2.1.88 match: getRiskColor, 0.786)
 function getRiskColor(riskLevel) {
   if (riskLevel.response.subtype !== "success") return {};
   return permissionResponseTelemetry(riskLevel.response.response);
 }
-//@ chunk-tyg7f3ek.js:378663-378840 placement
+//@ chunk-0yw3taqg.js:413417-413594 placement
 function durationBucket(ms) {
   for (let [limit, label] of [
     [20, "under_20ms"],
@@ -2113,7 +2220,6 @@ export {
   cancelStaleParkedPrompt,
   findParkedPromptOpener,
   ParkedPermissionController,
-  userMessagePlatformFields,
   PERMISSION_ANSWER_WAIT_MS,
   MAX_PARKED_ANSWER_AGE_MS,
   isPendingActionForTool,

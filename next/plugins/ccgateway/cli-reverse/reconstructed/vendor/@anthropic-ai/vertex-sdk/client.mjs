@@ -1,18 +1,18 @@
 /**
  * @anthropic-ai/vertex-sdk/client.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/vertex-sdk@0.19.3..0.20.4
- * pieces: chunk-xa96axyz.js (4)
+ * pieces: chunk-1vqm62xf.js (4)
  * attribution: esm-fingerprint 3
  */
 import { APIConnectionError } from "../sdk/core/error.mjs";
-import { castToError_2 } from "../bedrock-sdk/internal/errors.mjs";
+import { castToError } from "../bedrock-sdk/internal/errors.mjs";
 import { safeJSON, isObj } from "./internal/utils/values.mjs";
 import { buildHeaders } from "./internal/headers.mjs";
 import { Messages_2 } from "../sdk/resources/messages/messages.mjs";
 import { Beta } from "../sdk/resources/beta/beta.mjs";
 
-//@ chunk-xa96axyz.js:2219-2594 esm-fingerprint (moved: shares a binding it assigns)
+//@ chunk-1vqm62xf.js:2219-2594 esm-fingerprint (moved: shares a binding it assigns)
 var __classPrivateFieldGet = function (receiver, state, kind, f) {
   if (kind === "a" && !f) throw TypeError("Private accessor was defined without a getter");
   if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver))
@@ -23,7 +23,7 @@ var _AnthropicVertex_instances;
 var _AnthropicVertex_adaptRequest;
 var DEFAULT_VERSION = "vertex-2023-10-16";
 var MODEL_ENDPOINTS = new Set(["/v1/messages", "/v1/messages?beta=true"]);
-//@ chunk-xa96axyz.js:3944-5755 esm-fingerprint
+//@ chunk-1vqm62xf.js:3944-5755 esm-fingerprint
 _AnthropicVertex_instances = new WeakSet();
 _AnthropicVertex_adaptRequest = async function (request, options) {
   let authClient;
@@ -34,7 +34,7 @@ _AnthropicVertex_adaptRequest = async function (request, options) {
   } catch (err) {
     throw new APIConnectionError({
       message: "Failed to acquire Google OAuth credentials.",
-      cause: castToError_2(err),
+      cause: castToError(err),
     });
   }
   let projectId = authClient.projectId ?? googleAuthHeaders.get("x-goog-user-project");
@@ -86,13 +86,13 @@ _AnthropicVertex_adaptRequest = async function (request, options) {
   if (parsedBody) adapted.body = JSON.stringify(parsedBody);
   return adapted;
 };
-//@ chunk-xa96axyz.js:5755-5812 esm-fingerprint
+//@ chunk-1vqm62xf.js:5755-5812 esm-fingerprint
 function makeMessagesResource(client) {
   let resource = new Messages_2(client);
   delete resource.batches;
   return resource;
 }
-//@ chunk-xa96axyz.js:5812-5878 esm-fingerprint
+//@ chunk-1vqm62xf.js:5812-5878 esm-fingerprint
 function makeBetaResource(client) {
   let resource = new Beta(client);
   delete resource.messages.batches;

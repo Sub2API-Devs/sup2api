@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：Computer Use 会话
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hwmsct5x.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vn3g7zt8.js (3)
  * attribution: placement 3
  */
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hwmsct5x.js:251627-252406 placement
+//@ chunk-vn3g7zt8.js:256721-257500 placement
 /**
  * computer-use 会话状态（按宿主一份）：当前工具上下文、进行中的调用数、锁清理回调、activeThisTurn、run loop 泵与引用计数、ESC 热键是否注册、冻结坐标模式、hostAdapter、Swift/input 原生模块。
  */
@@ -51,12 +51,12 @@ class ComputerUseSession {
     this.inputModule = undefined;
   }
 }
-//@ chunk-hwmsct5x.js:252406-252431 placement
+//@ chunk-vn3g7zt8.js:257500-257525 placement
 var computerUseSessionByHost; // deferred: uses ComputerUseSession of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hwmsct5x.js:252406", () => {
+deferInit("chunk-vn3g7zt8.js:257500", () => {
   computerUseSessionByHost = new HostScoped(() => new ComputerUseSession());
 });
-//@ chunk-hwmsct5x.js:252431-252468 placement
+//@ chunk-vn3g7zt8.js:257525-257562 placement
 /**
  * 返回当前宿主的 ComputerUseSession。
  */

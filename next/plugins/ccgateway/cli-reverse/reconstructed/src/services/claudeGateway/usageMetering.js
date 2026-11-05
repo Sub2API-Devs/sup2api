@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关用量计量
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (13)
  * attribution: placement 13
  */
 import { identity } from "../../utils/identity.js";
@@ -14,14 +14,14 @@ import { DoctorLazy } from "../../cli/handlers/util.js";
 import { create, create_3, create_2 } from "../../../vendor/zod/lib/index.mjs";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1ny7cxrt.js:1442912-1442945 placement
+//@ chunk-1hnjmk23.js:1465634-1465667 placement
 /**
  * 找 data: 字段时扣除的前缀长度。
  */
 var SSE_EVENT_SEPARATOR_RE = /\r?\n\r?\n/;
 var CHARS_PER_OUTPUT_TOKEN = 4;
 var DATA_PREFIX_LENGTH = 80;
-//@ chunk-1ny7cxrt.js:1442945-1443051 placement (2.1.88 match: getParentCacheSuppressReason, 0.426)
+//@ chunk-1hnjmk23.js:1465667-1465773 placement (2.1.88 match: getParentCacheSuppressReason, 0.426)
 /**
  * SSE 用量解析器的初始状态（usage 0、是否见到、估算输出字符）。旧版名 getParentCacheSuppressReason 为错配，归错文件。
  */
@@ -36,7 +36,7 @@ function createSseUsageState() {
     sawOutputTokens: false,
   };
 }
-//@ chunk-1ny7cxrt.js:1443051-1444450 placement
+//@ chunk-1hnjmk23.js:1465773-1467172 placement
 /**
  * 解析一个 SSE 事件并累加用量（message_start/message_delta 的 usage，content_block_delta 估算输出字符）。
  */
@@ -105,7 +105,7 @@ function accumulateSseUsage(stats, eventText) {
     stats.seen = true;
   }
 }
-//@ chunk-1ny7cxrt.js:1444450-1444536 placement
+//@ chunk-1hnjmk23.js:1467172-1467258 placement
 /**
  * 从一段 SSE data 事件里累加估算的输出字符数。
  */
@@ -113,7 +113,7 @@ function addOutputCharsFromDelta(stats, chunk) {
   let fieldRange = findFieldRange(chunk, "data:");
   if (fieldRange) stats.estOutputChars += Math.max(0, fieldRange[1] - fieldRange[0] - DATA_PREFIX_LENGTH);
 }
-//@ chunk-1ny7cxrt.js:1444536-1444742 placement
+//@ chunk-1hnjmk23.js:1467258-1467464 placement
 /**
  * 在 SSE 事件文本中找某字段（event:/data:）值的区间。
  */
@@ -139,7 +139,7 @@ function findFieldRange(text, fieldName) {
     position = index + 1;
   }
 }
-//@ chunk-1ny7cxrt.js:1444742-1444890 placement
+//@ chunk-1hnjmk23.js:1467464-1467612 placement
 /**
  * 结束时若没有 output_tokens 则按字符估算，返回用量或 null。
  */
@@ -150,12 +150,12 @@ function finishSseUsage(sseUsageState) {
   }
   return sseUsageState.seen ? sseUsageState.usage : null;
 }
-//@ chunk-1ny7cxrt.js:1444890-1444950 placement
+//@ chunk-1hnjmk23.js:1467612-1467672 placement
 /**
  * 记录“上游用量不可读”的一次性警告状态。
  */
 var unreadableUsageState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1ny7cxrt.js:1444890", () => {
+deferInit("chunk-1hnjmk23.js:1467612", () => {
   unreadableUsageState = identity(
     {
       unreadableUsage: false,
@@ -165,7 +165,7 @@ deferInit("chunk-1ny7cxrt.js:1444890", () => {
     },
   );
 });
-//@ chunk-1ny7cxrt.js:1444950-1445395 placement
+//@ chunk-1hnjmk23.js:1467672-1468117 placement
 /**
  * 上游用量格式不符时警告一次。
  */
@@ -179,7 +179,7 @@ function warnUnreadableUsage(error) {
     `usage metering: the upstream sent a usage object that does not match the API's shape (${detail}), so that response's spend was metered from its other frames or from the abort-floor estimate and may be under-counted; check the upstream or proxy that produced it. This warning is logged once per process.`,
   );
 }
-//@ chunk-1ny7cxrt.js:1445395-1445745 placement
+//@ chunk-1hnjmk23.js:1468117-1468467 placement
 /**
  * 解析非流式响应 JSON 的用量。
  */
@@ -205,7 +205,7 @@ function parseJsonUsage(text) {
   if (result.data.usage.server_tool_use != null) usage.server_tool_use = result.data.usage.server_tool_use;
   return usage;
 }
-//@ chunk-1ny7cxrt.js:1445745-1445922 placement
+//@ chunk-1hnjmk23.js:1468467-1468644 placement
 /**
  * 缓存写入 token 数（缺省时由 5m/1h 明细求和）。
  */
@@ -216,7 +216,7 @@ function cacheCreationTokens(usage) {
     (usage.cache_creation?.ephemeral_1h_input_tokens ?? 0);
   return !cacheCreationInputTokens && ephemeralTotal > 0 ? ephemeralTotal : cacheCreationInputTokens;
 }
-//@ chunk-1ny7cxrt.js:1445922-1446222 placement
+//@ chunk-1hnjmk23.js:1468644-1468944 placement
 /**
  * 把上游 usage 合并进累计用量。
  */
@@ -228,7 +228,7 @@ function mergeUsage(target, usage) {
   if (usage.server_tool_use != null) target.server_tool_use = usage.server_tool_use;
   if (usage.speed !== undefined) target.speed = usage.speed;
 }
-//@ chunk-1ny7cxrt.js:1446222-1446982 placement
+//@ chunk-1hnjmk23.js:1468944-1469704 placement
 /**
  * 上游用量与 SSE 事件的宽松 schema。
  */
@@ -236,7 +236,7 @@ var USAGE_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of i
 var DELTA_USAGE_SCHEMA;
 var SSE_EVENT_SCHEMA;
 var MESSAGE_RESPONSE_SCHEMA;
-deferInit("chunk-1ny7cxrt.js:1446222", () => {
+deferInit("chunk-1hnjmk23.js:1468944", () => {
   USAGE_SCHEMA = DoctorLazy(() =>
     create({
       input_tokens: create_3().optional(),
@@ -284,7 +284,7 @@ deferInit("chunk-1ny7cxrt.js:1446222", () => {
     }).passthrough(),
   );
 });
-//@ chunk-1ny7cxrt.js:1446982-1446994 placement
+//@ chunk-1hnjmk23.js:1469704-1469716 placement
 /**
  * 估算输出字数时用的最小值（2000）。
  */

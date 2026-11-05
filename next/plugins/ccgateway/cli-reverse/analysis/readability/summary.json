@@ -1,51 +1,51 @@
 {
  "src": {
   "top": {
-   "bindings": 91554,
-   "minified": 2,
-   "authenticShort": 2,
-   "chosenShort": 43,
+   "bindings": 95252,
+   "minified": 1,
+   "authenticShort": 3,
+   "chosenShort": 45,
    "readable": 100,
    "readableByRefs": 100
   },
   "param": {
-   "bindings": 165952,
-   "minified": 60,
-   "authenticShort": 678,
-   "chosenShort": 1276,
+   "bindings": 172532,
+   "minified": 0,
+   "authenticShort": 677,
+   "chosenShort": 1332,
    "readable": 100,
    "readableByRefs": 100
   },
   "local": {
-   "bindings": 231051,
-   "minified": 68,
-   "authenticShort": 1546,
-   "chosenShort": 719,
+   "bindings": 238879,
+   "minified": 0,
+   "authenticShort": 1515,
+   "chosenShort": 757,
    "readable": 100,
    "readableByRefs": 100
   }
  },
  "vendor": {
   "top": {
-   "bindings": 9265,
-   "minified": 4,
+   "bindings": 9271,
+   "minified": 2,
    "authenticShort": 57,
    "chosenShort": 17,
    "readable": 100,
    "readableByRefs": 100
   },
   "param": {
-   "bindings": 40333,
-   "minified": 1,
-   "authenticShort": 3620,
+   "bindings": 40386,
+   "minified": 0,
+   "authenticShort": 3619,
    "chosenShort": 54,
    "readable": 100,
    "readableByRefs": 100
   },
   "local": {
-   "bindings": 50536,
-   "minified": 1,
-   "authenticShort": 3464,
+   "bindings": 50555,
+   "minified": 0,
+   "authenticShort": 3461,
    "chosenShort": 57,
    "readable": 100,
    "readableByRefs": 100

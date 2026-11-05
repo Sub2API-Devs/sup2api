@@ -1,0 +1,4 @@
+{"file":"chunk-5xgkngpb.js","key":"@1241728","name":"RM_COMMAND_NAMES","source":"semantic","confidence":0.97,"note":"name-shape: 原名 RM_TARGET_RE，初值 new Set([\"rm\",\"/bin/rm\",\"/usr/bin/rm\"])，用法 hHo.has(s[0]??\"\") 判断是否 rm 命令，是命令名集合不是正则"}
+{"file":"chunk-7jxyna5q.js","key":"@528087","name":"MAX_TRACKED_ENTRIES","source":"semantic","confidence":0.96,"note":"name-shape: 原名 REPEATABLE_READ_COMMANDS，初值 500，用法 while(z.size>XL)z.delete(z.keys().next().value)，是重复命令记录里 #e、#t 两张表共用的条目上限"}
+{"file":"chunk-d57g06xv.js","key":"@1067","name":"FULLWIDTH_MAP_PAIRS","source":"semantic","confidence":0.97,"note":"name-shape: 原名 FULLWIDTH_MAP，初值 [正则,替换串] 的数组，F.reduce((s,[r,i])=>s.replace(r,i),…) 按顺序替换；是成对表不是 Map，与 KEY_NAME_MAP→KEY_NAME_PAIRS 同类"}
+{"file":"chunk-s4p9jscb.js","key":"@904","name":"MAX_DISPLAY_NAME_CHARS","source":"semantic","confidence":0.97,"note":"name-shape: 原名 MAX_DISPLAY_NAME，初值 128，用法 Z(fE(o),d).trimEnd() 把显示名截到 d 个字符，是字符数上限"}

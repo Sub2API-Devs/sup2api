@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：根据评论自动编辑并发布 artifact
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9tgt55am.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c0pq6qyx.js (24)
  * attribution: placement 24
  */
 import { randomUUID, createHash } from "crypto";
@@ -15,11 +15,11 @@ import { tmpdir } from "os";
 import { getSideQueryThinkingSettings } from "../../../utils/thinking.js";
 import { createChildAbortController } from "../../../utils/abortController.js";
 import { withDeadline } from "../../../utils/sleep.js";
-import { webfetchReadFile } from "../webfetchRead.js";
+import { readArtifactContent } from "../webfetchRead.js";
 import { claudeAiEnvironment } from "../../../constants/claudeAiOrigin.js";
-import { isAudienceVersionServed } from "../audience.js";
+import { contentIsWhatAudienceSees } from "../audience.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../../analytics/featureTelemetry.js";
-import { mayHaveForeignWriters } from "../frameComments.js";
+import { readMarkedForeign } from "../frameComments.js";
 import {
   newPageFenceNonce,
   truncateUtf8Bytes,
@@ -74,7 +74,7 @@ import { uuidSlugFromUrl } from "../../../tools/ArtifactTool/constants.js";
 import { unlinkPath } from "../shareEntries.js";
 import { resolveCommentThread } from "./commentResolve.js";
 
-//@ chunk-9tgt55am.js:132347-132400 placement
+//@ chunk-c0pq6qyx.js:128283-128336 placement
 /**
  * 自动改稿的尺寸与截止参数：内容 256 KB 上限、替换体 64 KB、组合截止 180 s、提示 10 万字节上限等。
  */
@@ -83,17 +83,17 @@ var MIN_EDIT_HEADROOM_CHARS = 2000;
 var MAX_REPLACEMENT_BYTES = 65536;
 var COMPOSE_DEADLINE_MS = 180000;
 var MEDIUM = "medium";
-//@ chunk-9tgt55am.js:132400-132440 placement
+//@ chunk-c0pq6qyx.js:128336-128376 placement
 function hasNoThinkingBudget(thread) {
   return getSideQueryThinkingSettings(thread)[0] === undefined;
 }
-//@ chunk-9tgt55am.js:132440-132482 placement
+//@ chunk-c0pq6qyx.js:128376-128418 placement
 var SMALL_TRUNCATE_CHARS = 1024;
 var MEDIUM_TRUNCATE_CHARS = 6144;
 var LARGE_TRUNCATE_CHARS = 8000;
 var MAX_PROMPT_BYTES = 1e5;
 var PROMPT_HEAD_CHARS = 1e4;
-//@ chunk-9tgt55am.js:132482-133061 placement
+//@ chunk-c0pq6qyx.js:128418-128997 placement
 async function readThreadAnchorSource(thread) {
   let { thread: thread_2, context, slug } = thread;
   if (thread_2.anchorFileDegraded) return;
@@ -102,7 +102,7 @@ async function readThreadAnchorSource(thread) {
     let path =
       (thread_2.anchorFile === undefined ? thread.sourceRead : undefined) ??
       (await withDeadline(
-        webfetchReadFile(
+        readArtifactContent(
           {
             slug,
             env: claudeAiEnvironment(),
@@ -120,20 +120,20 @@ async function readThreadAnchorSource(thread) {
       ));
     if (path === undefined || path.err !== null || !path.html) return;
     if ("contentType" in path && path.contentType !== "text/html") return;
-    if (!isAudienceVersionServed(path)) {
+    if (!contentIsWhatAudienceSees(path)) {
       logFeatureSad("artifact_comments_autoreact", "reply_source_unpublished");
       return "withheld";
     }
     return {
       html: path.html,
       ver: path.ver,
-      foreign: mayHaveForeignWriters(path),
+      foreign: readMarkedForeign(path),
     };
   } finally {
     childAbortController.abort();
   }
 }
-//@ chunk-9tgt55am.js:133061-133226 placement
+//@ chunk-c0pq6qyx.js:128997-129162 placement
 /**
  * 反复去掉文本中的两种标记串，直到不再变化或达到次数上限；仍残留标记时返回 null。
  */
@@ -147,7 +147,7 @@ function stripMarkersRepeatedly(text, sourceFenceNonce, fence) {
   if (current.includes(sourceFenceNonce) || current.includes(fence)) return null;
   return current;
 }
-//@ chunk-9tgt55am.js:133226-133578 placement
+//@ chunk-c0pq6qyx.js:129162-129514 placement
 /**
  * 自动改稿的重试上限 8 次、失败回问文案（整篇重写不可用）与截断长度。
  */
@@ -157,7 +157,7 @@ var MAX_ECHO_CHARS = 2000;
 var REWRITE_WITHHELD_REASK = `
 
 Your previous response used the full-rewrite form, which is unavailable for this version, so it was NOT applied and nothing was changed. Respond again with EXACTLY ONE bare JSON decision object: the patch form (2) carrying the change as exact-string edits, or the reply form (1) if the change cannot be made as a patch.`;
-//@ chunk-9tgt55am.js:133578-134201 placement
+//@ chunk-c0pq6qyx.js:129514-130137 placement
 function buildInvalidDecisionRetryPrompt(failureText) {
   let nonce = `P${newPageFenceNonce()}`;
   let text = truncateCodePoints(failureText, MAX_ATTEMPT_TEXT_CHARS);
@@ -169,7 +169,7 @@ ${text}
 </${nonce}>
 Respond now with ONLY that single JSON decision object \u2014 no preamble, no code fence, no commentary before or after it.`;
 }
-//@ chunk-9tgt55am.js:134201-135064 placement
+//@ chunk-c0pq6qyx.js:130137-131000 placement
 /**
  * 解析自动编辑模型输出的 JSON 决策（reply / edit patch / 全文重写）。
  */
@@ -224,12 +224,12 @@ function parseAutoEditDecision(decisionText) {
     };
   return null;
 }
-//@ chunk-9tgt55am.js:135064-135987 placement
+//@ chunk-c0pq6qyx.js:131000-131923 placement
 /**
  * 判断评论对应的 artifact 是否可自动编辑（自己的、单文件、未固定版本、源码不过大等）。
  */
 async function checkAutoEditEligibility(slug, context, editable) {
-  let page = await webfetchReadFile(
+  let page = await readArtifactContent(
     {
       slug,
       env: claudeAiEnvironment(),
@@ -295,7 +295,7 @@ async function checkAutoEditEligibility(slug, context, editable) {
     modelOutputCap: maxOutputTokensForModel,
   };
 }
-//@ chunk-9tgt55am.js:135987-136501 placement
+//@ chunk-c0pq6qyx.js:131923-132437 placement
 async function composeAutoEditWithTimeout(composition, eligibility) {
   let childAbortController = createChildAbortController(composition.context.abortController);
   let now = Date.now();
@@ -327,7 +327,7 @@ async function composeAutoEditWithTimeout(composition, eligibility) {
         kind: "timed_out",
       };
 }
-//@ chunk-9tgt55am.js:136501-144427 placement
+//@ chunk-c0pq6qyx.js:132437-140362 placement
 /**
  * 让模型针对评论线程生成对 artifact 源码的补丁/重写，失败时带错误信息重试。
  */
@@ -636,7 +636,7 @@ Re-read the source, account for your earlier edits, and output the complete deci
     return null;
   }
 }
-//@ chunk-9tgt55am.js:144427-144554 placement
+//@ chunk-c0pq6qyx.js:140362-140489 placement
 /**
  * 判断自动模式分类结果是否有定论（不是不可用、解析错误、被中断或取消）。
  */
@@ -649,13 +649,13 @@ function isDecisiveClassifierOutcome(outcome) {
     outcome !== "cancelled"
   );
 }
-//@ chunk-9tgt55am.js:144554-144679 placement
+//@ chunk-c0pq6qyx.js:140489-140614 placement
 function classifyAutoEditDecline(decline) {
   if (decline === undefined) return null;
   if (!isDecisiveClassifierOutcome(decline)) return "transient";
   return decline === "automode-blocked" ? "auto_mode_declined" : null;
 }
-//@ chunk-9tgt55am.js:144679-145832 placement
+//@ chunk-c0pq6qyx.js:140614-141767 placement
 function classifyPublishFailure(message) {
   if (message.includes(PUBLISH_OUTCOME_UNKNOWN_FRAME)) return "outcome_unknown";
   if (message.startsWith(PUBLISH_CAP_FRAME)) return "publish_capped";
@@ -685,7 +685,7 @@ function classifyPublishFailure(message) {
   if (message.includes(PUBLISH_CONFLICT_LEAD)) return "superseded";
   return "other";
 }
-//@ chunk-9tgt55am.js:145832-147357 placement
+//@ chunk-c0pq6qyx.js:141767-143292 placement
 /**
  * 自动改稿四类失败（未应用、无变化、整篇重写被拒、超时）分别给用户与给模型的两套说明文案。
  */
@@ -707,14 +707,14 @@ var AUTO_EDIT_FAILURE_FOR_MODEL = {
   timed_out:
     "composing a requested automatic edit ran past its time limit and was abandoned, so the artifact was NOT changed. Read the thread and make the change yourself if appropriate.",
 };
-//@ chunk-9tgt55am.js:147357-147608 placement
+//@ chunk-c0pq6qyx.js:143292-143543 placement
 /**
  * 生成"回复发出后再把讨论串标记为已解决"的提示句（按当前工具集给出对应的调用方式）。
  */
 function RESOLVE_AFTER_REPLY_NOTE() {
   return ` Once the promised reply is posted, resolve the thread (${pickByToolset('Artifact tool, action "resolve"', () => commentsToolAction("resolve"))}); leave it open only if the conversation is still active or the commenter still needs to read an answer from you.`;
 }
-//@ chunk-9tgt55am.js:147608-147726 placement
+//@ chunk-c0pq6qyx.js:143543-143661 placement
 /**
  * 把合法的评论 id 格式化为"(comment a, comment b)"后缀，没有时返回空串。
  */
@@ -722,14 +722,14 @@ function formatCommentIds(ids) {
   let filtered = ids.filter((id) => id !== undefined && COMMENT_ID_RE.test(id));
   return filtered.length > 0 ? ` (comment ${filtered.join(", comment ")})` : "";
 }
-//@ chunk-9tgt55am.js:147726-148099 placement
+//@ chunk-c0pq6qyx.js:143661-144034 placement
 function buildAutoPostedReplyNote(commentIds) {
   return (
     ` The auto-posted reply${formatCommentIds(commentIds)} is already in the thread \u2014 do NOT post another; the commenter can see it.` +
     ` Once you have finished acting on the thread, resolve it (${pickByToolset('Artifact tool, action "resolve"', () => commentsToolAction("resolve"))}); leave it open only if the conversation is still active or the commenter still needs an answer beyond the posted reply.`
   );
 }
-//@ chunk-9tgt55am.js:148099-148403 placement
+//@ chunk-c0pq6qyx.js:144034-144338 placement
 /**
  * 自动回复“先说不再需要”的三种不应答原因（他人召唤、已有答复、页面自管讨论串）。
  */
@@ -739,7 +739,7 @@ var REPLY_ALREADY_STANDS = "a reply to that request already stands in the thread
 var REPLY_ALREADY_STANDS_SHORT = "a reply already stands in the thread";
 var PAGE_OWNS_THREADS_REASON =
   "the artifact's page keeps its own comment threads, so nothing was posted to this platform thread";
-//@ chunk-9tgt55am.js:148403-148594 placement
+//@ chunk-c0pq6qyx.js:144338-144529 placement
 /**
  * 生成"不要仅为确认无需修改而回复"的提示；外部召唤或页面自己管理讨论串时不加。
  */
@@ -748,7 +748,7 @@ function noConfirmOnlyReplyNote(post) {
     ? ""
     : " Do not reply only to confirm that no change was needed \u2014 the standing reply covers it.";
 }
-//@ chunk-9tgt55am.js:148594-148750 placement
+//@ chunk-c0pq6qyx.js:144529-144685 placement
 /**
  * 把召唤让步原因映射为对应的打点原因代码。
  */
@@ -759,7 +759,7 @@ function toStandDownReason(kind) {
       ? "stood_down_answered_post_time"
       : "summon_foreign_sender";
 }
-//@ chunk-9tgt55am.js:148750-148884 placement
+//@ chunk-c0pq6qyx.js:144685-144819 placement
 /**
  * 按召唤状态返回可用的让步原因集合。
  */
@@ -772,7 +772,7 @@ function getStandDownReasons(post) {
         ? PAGE_OWNS_THREADS_REASON
         : REPLY_ALREADY_STANDS;
 }
-//@ chunk-9tgt55am.js:148884-151705 placement
+//@ chunk-c0pq6qyx.js:144819-147640 placement
 var AUTO_EDIT_REFUSAL_REPLIES = {
   pin_paused:
     "I could not apply the requested edit: the artifact is pinned to a fixed version, so automatic edits are paused until the owner moves or clears the pin. The artifact was not changed.",
@@ -806,7 +806,7 @@ var AUTO_EDIT_REFUSAL_REPLIES = {
     "I could not apply the requested edit: it was not approved for automatic publishing, so the artifact was not changed. The artifact\u2019s owner can make the change from their session.",
   other: "I could not apply the requested edit: the update was declined. The artifact was not changed.",
 };
-//@ chunk-9tgt55am.js:151705-155879 placement
+//@ chunk-c0pq6qyx.js:147640-151814 placement
 /**
  * 把自动编辑结果通过 Artifact 工具发布（含权限检查、版本校验），并回帖说明结果。
  */

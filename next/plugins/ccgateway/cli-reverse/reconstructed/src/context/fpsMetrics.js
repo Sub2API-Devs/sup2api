@@ -3,16 +3,16 @@
  *
  * FPS 指标 getter 的 Context Provider。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/context/fpsMetrics.tsx
- * pieces: chunk-xe7zq1p4.js (1)
+ * pieces: chunk-swe0kb5q.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { statsContext } from "./stats.js";
 
-//@ chunk-xe7zq1p4.js:1810-1971 fingerprint (2.1.88 match: FpsMetricsProvider, 0.716)
+//@ chunk-swe0kb5q.js:1812-1973 fingerprint (2.1.88 match: FpsMetricsProvider, 0.716)
 /**
  * 向子树提供 getFpsMetrics。
  */

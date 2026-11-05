@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：按名称放置文件的表读取
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-azz22fvc.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h6gkxbpm.js (11)
  * attribution: placement 11
  */
 import { join, dirname } from "path";
@@ -30,22 +30,22 @@ import { readHandleBounded } from "../fsSafety/boundOpen.js";
 import { PS_REFUSED_INPUT_FIELDS } from "../../tools/PowerShellTool/prompt.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-azz22fvc.js:1223-1272 placement
+//@ chunk-h6gkxbpm.js:1188-1237 placement
 var PLACED_BY_NAME_LIMITS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_PLACED_TABLE_BYTES;
 var DAMAGED_TABLE_ERRNOS;
-deferInit("chunk-azz22fvc.js:1223", () => {
+deferInit("chunk-h6gkxbpm.js:1188", () => {
   PLACED_BY_NAME_LIMITS = 64;
   MAX_PLACED_TABLE_BYTES = 262144;
   DAMAGED_TABLE_ERRNOS = new Set(["ELOOP", "ENXIO"]);
 });
-//@ chunk-azz22fvc.js:1272-1314 placement (2.1.88 match: setCwdState, 1)
+//@ chunk-h6gkxbpm.js:1237-1279 placement (2.1.88 match: setCwdState, 1)
 function nfc(cwd) {
   return cwd.normalize("NFC");
 }
-//@ chunk-azz22fvc.js:1635-1664 placement
+//@ chunk-h6gkxbpm.js:1600-1629 placement
 var PLACED_BY_NAME_FILE_NAME = ".placed-by-name.json";
-//@ chunk-azz22fvc.js:1664-1777 placement
+//@ chunk-h6gkxbpm.js:1629-1741 placement
 function placedTablePaths() {
   let uploadsDir = sessionUploadsDir();
   return [
@@ -57,22 +57,22 @@ function placedTablePaths() {
       : []),
   ].map((baseDir) => join(baseDir, PLACED_BY_NAME_FILE_NAME));
 }
-//@ chunk-azz22fvc.js:1777-1952 placement
+//@ chunk-h6gkxbpm.js:1741-1915 placement
 async function removePlacedTable(tablePath) {
   if (dirname(tablePath) === getUploadsDir()) {
     await unlink(join(tablePath, PLACED_BY_NAME_FILE_NAME));
     return;
   }
-  let dirRef = await openOwnedDirChain(tablePath, 0);
-  if (typeof dirRef !== "string")
+  let ownedDirChain = await openOwnedDirChain(tablePath, 0);
+  if (typeof ownedDirChain !== "string")
     try {
-      if ((await probeNoFollowSupport(dirRef)) === true)
-        await unlink(join(dirRef.at, PLACED_BY_NAME_FILE_NAME));
+      if ((await probeNoFollowSupport(ownedDirChain)) === true)
+        await unlink(join(ownedDirChain.at, PLACED_BY_NAME_FILE_NAME));
     } finally {
-      await dirRef.release();
+      await ownedDirChain.release();
     }
 }
-//@ chunk-azz22fvc.js:1952-2352 placement
+//@ chunk-h6gkxbpm.js:1915-2315 placement
 async function loadFilesPlacedByName() {
   if (filesPlacedByNameRead() !== "done") {
     logForDiagnosticsNoPII("warn", "turn_handoff_files_by_name_table", {
@@ -104,7 +104,7 @@ async function loadFilesPlacedByName() {
     });
   }
 }
-//@ chunk-azz22fvc.js:2352-2713 placement
+//@ chunk-h6gkxbpm.js:2315-2676 placement
 function isPlacedEntry(entry) {
   if (!Array.isArray(entry) || entry.length !== 2) return false;
   let [key, value] = entry;
@@ -118,7 +118,7 @@ function isPlacedEntry(entry) {
     (ambiguous === undefined || ambiguous === true)
   );
 }
-//@ chunk-azz22fvc.js:2713-2950 placement
+//@ chunk-h6gkxbpm.js:2676-2913 placement
 function ensurePlacedByNameRead() {
   let cached = filesPlacedByNameRead();
   if (cached !== undefined) return cached === "done" ? Promise.resolve() : cached;
@@ -130,7 +130,7 @@ function ensurePlacedByNameRead() {
   setFilesPlacedByNameRead(firstRead);
   return firstRead;
 }
-//@ chunk-azz22fvc.js:2950-3112 placement
+//@ chunk-h6gkxbpm.js:2913-3075 placement
 async function readFirstPlacedTable() {
   let [firstPath, ...otherPaths] = placedTablePaths();
   let placedTable = await readPlacedTable(firstPath);
@@ -141,7 +141,7 @@ async function readFirstPlacedTable() {
   }
   return placedTable;
 }
-//@ chunk-azz22fvc.js:3112-3933 placement
+//@ chunk-h6gkxbpm.js:3075-3896 placement
 async function readPlacedTable(tablePath) {
   let entries;
   try {
@@ -206,16 +206,16 @@ async function readPlacedTable(tablePath) {
     rows: entries.length,
   };
 }
-//@ chunk-azz22fvc.js:3933-4057 placement
+//@ chunk-h6gkxbpm.js:3896-4020 placement
 var PLACED_BY_NAME_TOOL_SPEC = {
   supported: true,
   refusedInputFields: PS_REFUSED_INPUT_FIELDS,
   decidingInputFields: ["command", "run_in_background", "dangerouslyDisableSandbox"],
 };
 export {
+  ensurePlacedByNameRead,
   nfc,
+  PLACED_BY_NAME_TOOL_SPEC,
   PLACED_BY_NAME_LIMITS,
   loadFilesPlacedByName,
-  PLACED_BY_NAME_TOOL_SPEC,
-  ensurePlacedByNameRead,
 };

@@ -3,14 +3,14 @@
  *
  * claude-code-guide 内建代理（haiku、dontAsk，查官方文档回答 Claude Code/SDK/API 问题）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/built-in/claudeCodeGuideAgent.ts
- * pieces: chunk-e6aww6q8.js (4)
+ * pieces: chunk-5xgkngpb.js (4)
  * attribution: fingerprint 3, layout 1
  */
 import { hasEmbeddedSearchTools } from "../../../utils/embeddedTools.js";
 import { isBashAvailable } from "../../../utils/shell/shellToolUtils.js";
-import { FILE_READ_TOOL_NAME } from "../../FileReadTool/constants.js";
+import { READ } from "../../FileReadTool/constants.js";
 import { GLOB_TOOL_NAME } from "../../GlobTool/prompt.js";
 import { GREP_TOOL_NAME } from "../../GrepTool/prompt.js";
 import {
@@ -32,12 +32,12 @@ import { uniqByExport } from "../../../../vendor/lodash-es/uniqBy.js";
 import { getSettings_DEPRECATED } from "../../../utils/settings/settings.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2324498-2332456 fingerprint (2.1.88 match: getClaudeCodeGuideBasePrompt, 0.757)
+//@ chunk-5xgkngpb.js:2379899-2387857 fingerprint (2.1.88 match: getClaudeCodeGuideBasePrompt, 0.756)
 function getClaudeCodeGuideBasePrompt() {
   let localSearchHint =
     hasEmbeddedSearchTools() && isBashAvailable()
-      ? `${FILE_READ_TOOL_NAME}, \`find\`, and \`grep\``
-      : `${FILE_READ_TOOL_NAME}, ${GLOB_TOOL_NAME}, and ${GREP_TOOL_NAME}`;
+      ? `${READ}, \`find\`, and \`grep\``
+      : `${READ}, ${GLOB_TOOL_NAME}, and ${GREP_TOOL_NAME}`;
   return `You are the Claude guide agent. Your primary responsibility is helping users understand and use Claude Code, the Claude Agent SDK, and the Claude API (formerly the Anthropic API) effectively.
 
 **Your expertise spans five domains:**
@@ -109,7 +109,7 @@ function getClaudeCodeGuideBasePrompt() {
 
 Complete the user's request by providing accurate, documentation-based guidance.`;
 }
-//@ chunk-e6aww6q8.js:2332456-2333149 layout
+//@ chunk-5xgkngpb.js:2387857-2388550 layout
 function getPluginEvalReferenceSection() {
   let availability = describePluginEvalAvailability();
   let skillDoctorNote = lanternPrismEnabled()
@@ -122,7 +122,7 @@ In THIS session: ${availability.text} ${skillDoctorNote}
 
 ${bundledText}`;
 }
-//@ chunk-e6aww6q8.js:2333149-2333908 fingerprint (2.1.88 match: getFeedbackGuideline, 0.404)
+//@ chunk-5xgkngpb.js:2388550-2389309 fingerprint (2.1.88 match: getFeedbackGuideline, 0.404)
 function getFeedbackGuideline() {
   if (isUsing3PServices() || !isFeedbackAllowed())
     return `- When you cannot find an answer or the feature doesn't exist, direct the user to ${
@@ -130,29 +130,29 @@ function getFeedbackGuideline() {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.ISSUES_EXPLAINER
     }`;
   return "- When you cannot find an answer or the feature doesn't exist, direct the user to use /feedback to report a feature request or bug";
 }
-//@ chunk-e6aww6q8.js:2333908-2336389 fingerprint (2.1.88 match: CLAUDE_CODE_GUIDE_AGENT, 0.869)
+//@ chunk-5xgkngpb.js:2389309-2391801 fingerprint (2.1.88 match: CLAUDE_CODE_GUIDE_AGENT, 0.87)
 /**
  * claude-code-guide 内建代理：model haiku、permissionMode dontAsk，工具 Glob/Grep/Read/WebFetch/WebSearch（嵌入搜索时 Bash/Read/WebFetch/WebSearch），系统提示词附带本项目自定义 skills 列表等。
  */
 var CLAUDE_CODE_GUIDE_AGENT; // deferred: uses SENDMESSAGE (../../SendMessageTool/constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2333908", () => {
+deferInit("chunk-5xgkngpb.js:2389309", () => {
   CLAUDE_CODE_GUIDE_AGENT = {
     agentType: CLAUDE_CODE_GUIDE,
     whenToUse: `Use this agent when the user asks questions ("Can Claude...", "Does Claude...", "How do I...") about: (1) Claude Code (the CLI tool) - features, hooks, slash commands, MCP servers, settings, IDE integrations, keyboard shortcuts; (2) Claude Agent SDK - building custom agents; (3) Claude API (formerly Anthropic API) - Messages API for directly passing messages to Claude, Tool Runner (\`client.beta.messages.tool_runner\`) for running an agentic loop over your own tools, manual tool-use loops, Managed Agents for server-hosted agents with a managed sandbox, prompt caching, and general Anthropic SDK usage; (4) Claude Tag (Claude in Slack) - what it is, setting it up for a Slack workspace, \`/install-slack-app\`; (5) \`claude plugin eval\` (writing and running plugin eval suites, its JSON/report, sandbox, CI) and the \`/skill-doctor\` report. **IMPORTANT:** Before spawning a new agent, check if there is already a running or recently completed claude-code-guide agent that you can continue via ${SENDMESSAGE}.`,
     get tools() {
       return hasEmbeddedSearchTools() && isBashAvailable()
-        ? [BASH_TOOL_NAME, FILE_READ_TOOL_NAME, WEBFETCH, WEBSEARCH]
-        : [GLOB_TOOL_NAME, GREP_TOOL_NAME, FILE_READ_TOOL_NAME, WEBFETCH, WEBSEARCH];
+        ? [BASH_TOOL_NAME, READ, WEBFETCH, WEBSEARCH]
+        : [GLOB_TOOL_NAME, GREP_TOOL_NAME, READ, WEBFETCH, WEBSEARCH];
     },
     source: "built-in",
     baseDir: "built-in",

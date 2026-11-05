@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：清理验证提示文本并保留链接；只接受 Anthropic 官方主机的 https 验证链接等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (29)
  * attribution: placement 29
  */
 import { getMockRateLimitState } from "../claudeAiLimits.js";
@@ -26,35 +26,35 @@ import { logForDebugging } from "../../utils/debug.js";
 import { classifyAxiosError } from "../../utils/errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:289234-289261 placement
+//@ chunk-exfmq47h.js:298857-298884 placement
 /**
  * 导出函数 `nullVerificationState`：返回 null。
  */
 function nullVerificationState() {
   return null;
 }
-//@ chunk-aepeg2w5.js:289261-289284 placement
+//@ chunk-exfmq47h.js:298884-298907 placement
 /**
  * 导出函数 `noop`：参数 e。
  */
 function noop(error) {
   return;
 }
-//@ chunk-aepeg2w5.js:289284-289346 placement
+//@ chunk-exfmq47h.js:298907-298969 placement
 /**
  * 导出函数 `hasFastModeRateLimitDuration`：返回 Zt().fastModeRateLimitDurationMs !== null。
  */
 function hasFastModeRateLimitDuration() {
   return getMockRateLimitState().fastModeRateLimitDurationMs !== null;
 }
-//@ chunk-aepeg2w5.js:289346-289400 placement
+//@ chunk-exfmq47h.js:298969-299023 placement
 /**
  * 导出函数 `checkFastModeRateLimit`：参数 e，返回 Zt().checkFastModeRateLimit(e)。
  */
 function checkFastModeRateLimit(isFastModeActive) {
   return getMockRateLimitState().checkFastModeRateLimit(isFastModeActive);
 }
-//@ chunk-aepeg2w5.js:289442-289521 placement
+//@ chunk-exfmq47h.js:299065-299144 placement
 class VerificationPredicateSlot {
   predicate = null;
   set(predicate) {
@@ -63,16 +63,16 @@ class VerificationPredicateSlot {
     return predicate_2;
   }
 }
-//@ chunk-aepeg2w5.js:289521-289535 placement
+//@ chunk-exfmq47h.js:299144-299158 placement
 var verificationPredicateSlot; // deferred: uses VerificationPredicateSlot of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:289521", () => {
+deferInit("chunk-exfmq47h.js:299144", () => {
   verificationPredicateSlot = new VerificationPredicateSlot();
 });
-//@ chunk-aepeg2w5.js:289535-289567 placement
+//@ chunk-exfmq47h.js:299158-299190 placement
 function setVerificationPredicate(isPolicyGraceEnabled) {
   return verificationPredicateSlot.set(isPolicyGraceEnabled);
 }
-//@ chunk-aepeg2w5.js:289567-289646 placement
+//@ chunk-exfmq47h.js:299190-299269 placement
 function isVerificationRequired() {
   let predicate = verificationPredicateSlot.predicate;
   if (!predicate) return false;
@@ -82,9 +82,9 @@ function isVerificationRequired() {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:289646-289694 placement
+//@ chunk-exfmq47h.js:299269-299317 placement
 var pendingVerificationState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:289646", () => {
+deferInit("chunk-exfmq47h.js:299269", () => {
   pendingVerificationState = identity_2(
     {
       pending: null,
@@ -94,23 +94,23 @@ deferInit("chunk-aepeg2w5.js:289646", () => {
     },
   );
 });
-//@ chunk-aepeg2w5.js:289820-289853 placement
+//@ chunk-exfmq47h.js:299443-299476 placement
 /**
  * 导出函数 `pendingVerification`：返回 ru.pending。
  */
 function pendingVerification() {
   return pendingVerificationState.pending;
 }
-//@ chunk-aepeg2w5.js:289853-289926 placement
+//@ chunk-exfmq47h.js:299476-299549 placement
 var FAST_MODE_CHECK_HTTP_OPTIONS = {
   maxRedirects: 0,
   adapter: "http",
   validateStatus: (status) => status >= 200 && status < 300,
 };
-//@ chunk-aepeg2w5.js:289926-290069 placement
+//@ chunk-exfmq47h.js:299549-299692 placement
 var USER_FACING_ERROR_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var ERROR_CODE_SCHEMA;
-deferInit("chunk-aepeg2w5.js:289926", () => {
+deferInit("chunk-exfmq47h.js:299549", () => {
   USER_FACING_ERROR_SCHEMA = DoctorLazy(() =>
     objectSchema({
       error: objectSchema({
@@ -131,7 +131,7 @@ deferInit("chunk-aepeg2w5.js:289926", () => {
     }),
   );
 });
-//@ chunk-aepeg2w5.js:290069-290189 placement
+//@ chunk-exfmq47h.js:299692-299812 placement
 /**
  * 从 403 响应中取验证错误消息。
  */
@@ -140,7 +140,7 @@ function verificationErrorMessage(error) {
   let parsed = USER_FACING_ERROR_SCHEMA().safeParse(error.response?.data);
   return parsed.success ? parsed.data.error.message : null;
 }
-//@ chunk-aepeg2w5.js:290189-290320 placement
+//@ chunk-exfmq47h.js:299812-299943 placement
 /**
  * 从 axios 错误的响应体中解析 error_code，失败返回 null。
  */
@@ -149,7 +149,7 @@ function readErrorCodeFromAxios(error) {
   let parsed = ERROR_CODE_SCHEMA().safeParse(error.response?.data);
   return parsed.success ? parsed.data.error.details.error_code : null;
 }
-//@ chunk-aepeg2w5.js:290320-290533 placement
+//@ chunk-exfmq47h.js:299943-300156 placement
 class ClaimOnceStore {
   #n = new Set();
   #e = new Map();
@@ -168,24 +168,24 @@ class ClaimOnceStore {
     return true;
   }
 }
-//@ chunk-aepeg2w5.js:290533-290558 placement
+//@ chunk-exfmq47h.js:300156-300181 placement
 /**
  * 一次性声明存储（按 host）。
  */
 var claimOnceStore; // deferred: uses ClaimOnceStore of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:290533", () => {
+deferInit("chunk-exfmq47h.js:300156", () => {
   claimOnceStore = new HostScoped(() => new ClaimOnceStore());
 });
-//@ chunk-aepeg2w5.js:290558-290595 placement
+//@ chunk-exfmq47h.js:300181-300218 placement
 /**
  * 获取一次性声明存储。
  */
 function claimOnce() {
   return claimOnceStore.of(getRootSession().host);
 }
-//@ chunk-aepeg2w5.js:290595-290722 placement
+//@ chunk-exfmq47h.js:300218-300345 placement
 var VERIFICATION_REQUIRED_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:290595", () => {
+deferInit("chunk-exfmq47h.js:300218", () => {
   VERIFICATION_REQUIRED_SCHEMA = DoctorLazy(() =>
     objectSchema({
       error: objectSchema({
@@ -198,7 +198,7 @@ deferInit("chunk-aepeg2w5.js:290595", () => {
     }),
   );
 });
-//@ chunk-aepeg2w5.js:290722-290836 placement
+//@ chunk-exfmq47h.js:300345-300459 placement
 /**
  * 解析 403 响应中的"需要验证"错误，返回清洗后的消息。
  */
@@ -208,12 +208,9 @@ function parseVerificationRequired(status, error) {
   if (!parsed.success) return;
   return sanitizeVerificationMessage(parsed.data.error.message);
 }
-//@ chunk-aepeg2w5.js:290836-290864 placement
-var MAX_VERIFICATION_TEXT_CHARS; // deferred: uses API_ERROR_MESSAGE_PREFIX (./errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:290836", () => {
-  MAX_VERIFICATION_TEXT_CHARS = API_ERROR_CONST_1000 - `${API_ERROR_MESSAGE_PREFIX}: `.length;
-});
-//@ chunk-aepeg2w5.js:290864-291186 placement
+//@ chunk-exfmq47h.js:300459-300487 placement
+var MAX_VERIFICATION_TEXT_CHARS = API_ERROR_CONST_1000 - `${API_ERROR_MESSAGE_PREFIX}: `.length;
+//@ chunk-exfmq47h.js:300487-300807 placement
 /**
  * 清理验证提示文本并保留链接。
  */
@@ -230,14 +227,14 @@ function sanitizeVerificationMessage(message) {
   }
   return `${truncateToLength(trimmed, MAX_VERIFICATION_TEXT_CHARS - 1)}\u2026`;
 }
-//@ chunk-aepeg2w5.js:291186-291257 placement
+//@ chunk-exfmq47h.js:300807-300878 placement
 /**
  * 是否为 verification_required 的 403。
  */
 function isVerificationRequiredError(error) {
   return error instanceof APIError && parseVerificationRequired(error.status, error.error) !== undefined;
 }
-//@ chunk-aepeg2w5.js:291257-291463 placement
+//@ chunk-exfmq47h.js:300878-301084 placement
 /**
  * 每会话一次记录"需要验证"提示已显示，消息含链接时另记一条。
  */
@@ -251,14 +248,14 @@ function logVerificationShown(info) {
       surface: lit("claude_code"),
     });
 }
-//@ chunk-aepeg2w5.js:291463-291553 placement
+//@ chunk-exfmq47h.js:301084-301174 placement
 class VerificationRequiredError extends Error {
   constructor(message, status) {
     super(message, status);
     this.name = "VerificationRequiredError";
   }
 }
-//@ chunk-aepeg2w5.js:291553-291793 placement
+//@ chunk-exfmq47h.js:301174-301414 placement
 /**
  * 只接受 Anthropic 官方主机的 https 验证链接。
  */
@@ -276,9 +273,9 @@ function safeVerificationUrl(url) {
     ? parsed.href
     : undefined;
 }
-//@ chunk-aepeg2w5.js:291793-291919 placement
+//@ chunk-exfmq47h.js:301414-301540 placement
 var OAUTH_PROFILE_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:291793", () => {
+deferInit("chunk-exfmq47h.js:301414", () => {
   OAUTH_PROFILE_SCHEMA = DoctorLazy(() =>
     create({
       account: create({
@@ -291,7 +288,7 @@ deferInit("chunk-aepeg2w5.js:291793", () => {
     }).passthrough(),
   );
 });
-//@ chunk-aepeg2w5.js:291919-292165 placement
+//@ chunk-exfmq47h.js:301540-301786 placement
 function parseOauthProfileResponse(response) {
   let parsed = OAUTH_PROFILE_SCHEMA().safeParse(response);
   if (!parsed.success) {
@@ -304,7 +301,7 @@ function parseOauthProfileResponse(response) {
   logFeatureOk("oauth_profile_fetch");
   return response;
 }
-//@ chunk-aepeg2w5.js:292165-292324 placement
+//@ chunk-exfmq47h.js:301786-301945 placement
 function classifyProfileFetchError(error) {
   let { kind, status } = classifyAxiosError(error);
   if (kind === "auth") return "no_auth";
@@ -312,22 +309,27 @@ function classifyProfileFetchError(error) {
   if (kind === "timeout") return "timeout";
   return "network_error";
 }
-//@ chunk-aepeg2w5.js:292324-292428 placement
+//@ chunk-exfmq47h.js:301945-302049 placement
 function profileFetchErrorCode(error) {
   let { kind, status } = classifyAxiosError(error);
   return kind === "other" || status === undefined ? "unexpected_error" : `http_${status}`;
 }
 export {
   claimOnce,
-  sanitizeVerificationMessage,
-  verificationErrorMessage,
-  readErrorCodeFromAxios,
-  nullVerificationState,
   isVerificationRequiredError,
-  noop,
   parseVerificationRequired,
   logVerificationShown,
+  claimOnceStore,
+  verificationErrorMessage,
+  hasFastModeRateLimitDuration,
+  checkFastModeRateLimit,
+  sanitizeVerificationMessage,
   safeVerificationUrl,
+  pendingVerification,
+  readErrorCodeFromAxios,
+  nullVerificationState,
+  setVerificationPredicate,
+  noop,
   pendingVerificationState,
   FAST_MODE_CHECK_HTTP_OPTIONS,
   parseOauthProfileResponse,
@@ -335,9 +337,4 @@ export {
   profileFetchErrorCode,
   VerificationRequiredError,
   isVerificationRequired,
-  setVerificationPredicate,
-  claimOnceStore,
-  pendingVerification,
-  hasFastModeRateLimitDuration,
-  checkFastModeRateLimit,
 };

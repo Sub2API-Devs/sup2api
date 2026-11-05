@@ -3,15 +3,15 @@
  *
  * "报告问题"横幅：检测挫败信号且会话可兼容时显示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useIssueFlagBanner.ts
- * pieces: chunk-18hwfzwa.js (4)
- * attribution: affinity 2, fingerprint 1, file-local 1
+ * pieces: chunk-czq1j3j2.js (4)
+ * attribution: affinity 1, fingerprint 1, placement 2
  */
 import { SHELL_TOOL_NAMES } from "../utils/shell/shellToolUtils.js";
 import { getUserMessageText } from "../utils/messages.js";
 
-//@ chunk-18hwfzwa.js:1762777-1763335 affinity
+//@ chunk-czq1j3j2.js:1810038-1810596 affinity
 /**
  * 判断会话涉及网络操作的命令模式（curl、ssh、kubectl、docker 等）。
  */
@@ -46,7 +46,7 @@ var FRUSTRATION_PATTERNS = [
   /\btry again\b/i,
   /\b(undo|revert) (that|this|it|what you)\b/i,
 ];
-//@ chunk-18hwfzwa.js:1763335-1763665 fingerprint (2.1.88 match: isSessionContainerCompatible, 1)
+//@ chunk-czq1j3j2.js:1810596-1810926 fingerprint (2.1.88 match: isSessionContainerCompatible, 1)
 function isSessionContainerCompatible(messages) {
   for (let msg of messages) {
     if (msg.type !== "assistant") continue;
@@ -64,7 +64,7 @@ function isSessionContainerCompatible(messages) {
   }
   return true;
 }
-//@ chunk-18hwfzwa.js:1763665-1763821 file-local
+//@ chunk-czq1j3j2.js:1810926-1811082 placement
 function hasFrictionSignal(messages) {
   for (let i = messages.length - 1; i >= 0; i--) {
     let msg = messages[i];
@@ -75,7 +75,7 @@ function hasFrictionSignal(messages) {
   }
   return false;
 }
-//@ chunk-18hwfzwa.js:1763821-1764183 affinity
+//@ chunk-czq1j3j2.js:1811082-1811444 placement
 /**
  * 问题标记横幅的触发阈值与通知定义：达到最少轮数和时间间隔后提示。
  */

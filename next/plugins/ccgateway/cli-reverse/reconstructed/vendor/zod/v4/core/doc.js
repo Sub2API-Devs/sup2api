@@ -1,12 +1,12 @@
 /**
  * zod/v4/core/doc.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: zod@4.6.2
- * pieces: chunk-7vp249v4.js (1)
+ * pieces: chunk-m4y44r15.js (1)
  * attribution: esm-fingerprint 1
  */
 
-//@ chunk-7vp249v4.js:13742-14365 esm-fingerprint
+//@ chunk-m4y44r15.js:13742-14365 esm-fingerprint
 class Doc {
   constructor(args = [], closed = {}) {
     this.content = [];

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设备 MCP 同意确认
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-077pc1h8.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-63cyzqqk.js (1)
  * attribution: placement 1
  */
 import {
@@ -25,7 +25,7 @@ import {
 import { logEvent } from "../analytics/index.js";
 import { lit } from "../analytics/safeMetadata.js";
 
-//@ chunk-077pc1h8.js:12528-13112 placement
+//@ chunk-63cyzqqk.js:13704-14288 placement
 async function ensureDeviceMcpConsent(storageV5) {
   let consentAnswer = await deviceMcpConsentAnswer(deviceMcpConsentStore(storageV5));
   if (consentAnswer === "accepted") {

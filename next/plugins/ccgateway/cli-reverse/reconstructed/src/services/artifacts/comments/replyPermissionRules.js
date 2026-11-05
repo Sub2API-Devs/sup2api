@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：评论回复的权限规则匹配
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9tgt55am.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c0pq6qyx.js (10)
  * attribution: placement 10
  */
 import { isVsCodeTopSession } from "../../../utils/sessionShape.js";
@@ -14,31 +14,31 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../analytics/growthbook.
 import {
   getContentRulesMapForToolName,
   toolMatchesRule,
-  getDenyRules,
-  getAskRules,
+  deniedBashRules,
+  askedBashRules,
 } from "../../../utils/permissions/permissions.js";
 import { ARTIFACT_TOOL_NAME, ARTIFACT_COMMENTS_TOOL_NAME } from "../../../tools/ArtifactTool/constants.js";
 import { matchWildcard } from "../../../utils/permissions/permissionRuleParser.js";
 import { getServerUrl } from "../../../tools/ArtifactTool/permissions/ruleTarget.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-9tgt55am.js:11898-11956 placement
+//@ chunk-c0pq6qyx.js:12012-12070 placement
 /**
  * 导出函数 `permissionRuleDestination`：返回 isVsCodeTopSession() || isDesktopNonClaudecode() ? "userSettings" : "session"。
  */
 function permissionRuleDestination() {
   return isVsCodeTopSession() || isDesktopNonClaudecode() ? "userSettings" : "session";
 }
-//@ chunk-9tgt55am.js:11956-11978 placement
+//@ chunk-c0pq6qyx.js:12070-12092 placement
 var ACTION_REPLY = "action:reply";
-//@ chunk-9tgt55am.js:11978-12027 placement
+//@ chunk-c0pq6qyx.js:12092-12141 placement
 /**
  * 导出函数 `isReplyRuleGateOn`：返回 getFeatureValue_CACHED_MAY_BE_STALE("tengu_ochre_plover", !1)。
  */
 function isReplyRuleGateOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ochre_plover", false);
 }
-//@ chunk-9tgt55am.js:12027-12229 placement
+//@ chunk-c0pq6qyx.js:12141-12343 placement
 /**
  * 在 Artifact 工具的 allow 规则里找允许 reply 动作的规则（功能开启、非 plan 模式且没有 deny/ask 规则命中时）。
  */
@@ -67,7 +67,7 @@ function findReplyAllowRule(toolPermissionContext, request, replyActions) {
   }
   return null;
 }
-//@ chunk-9tgt55am.js:12229-12499 placement
+//@ chunk-c0pq6qyx.js:12343-12613 placement
 /**
  * 判断是否有 deny 或 ask 规则命中本次评论回复（按动作通配或按 artifact URL 匹配）。
  */
@@ -84,13 +84,13 @@ function hasReplyDenyOrAsk(toolPermissionContext, request, replyActions) {
     return getServerUrl(new Map([[ruleContent, rule]]), parsed, request.rawUrl) !== null;
   };
   return (
-    getDenyRules(toolPermissionContext).some(matchesDenyOrAsk) ||
-    getAskRules(toolPermissionContext).some(matchesDenyOrAsk)
+    deniedBashRules(toolPermissionContext).some(matchesDenyOrAsk) ||
+    askedBashRules(toolPermissionContext).some(matchesDenyOrAsk)
   );
 }
-//@ chunk-9tgt55am.js:12499-12552 placement
+//@ chunk-c0pq6qyx.js:12613-12666 placement
 var ARTIFACT_TOOL_RULE_TARGETS; // deferred: uses ARTIFACT_TOOL_NAME (../../../tools/ArtifactTool/constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-9tgt55am.js:12499", () => {
+deferInit("chunk-c0pq6qyx.js:12613", () => {
   ARTIFACT_TOOL_RULE_TARGETS = [
     {
       name: ARTIFACT_TOOL_NAME,
@@ -101,7 +101,7 @@ deferInit("chunk-9tgt55am.js:12499", () => {
     },
   ];
 });
-//@ chunk-9tgt55am.js:12552-12691 placement
+//@ chunk-c0pq6qyx.js:12666-12805 placement
 function parseActionRuleContent(ruleContent) {
   let index = ruleContent.indexOf(":");
   if (index <= 0) return null;
@@ -109,7 +109,7 @@ function parseActionRuleContent(ruleContent) {
   let trimmed_2 = ruleContent.slice(index + 1).trim();
   return trimmed === "action" && trimmed_2 !== "" ? trimmed_2 : null;
 }
-//@ chunk-9tgt55am.js:12691-12809 placement (2.1.88 match: getDenyRuleForAgent, 1)
+//@ chunk-c0pq6qyx.js:12805-12923 placement (2.1.88 match: getDenyRuleForAgent, 1)
 function isArtifactActionRule(rule) {
   return (
     rule.ruleValue.toolName === ARTIFACT_TOOL_NAME &&
@@ -117,7 +117,7 @@ function isArtifactActionRule(rule) {
     parseActionRuleContent(rule.ruleValue.ruleContent) !== null
   );
 }
-//@ chunk-9tgt55am.js:12809-12920 placement (2.1.88 match: buildSuggestions, 0.854)
+//@ chunk-c0pq6qyx.js:12923-13034 placement (2.1.88 match: buildSuggestions, 0.853)
 /**
  * Artifact 工具"回复"动作的 allow 规则建议，destination 由 ODr() 决定。
  */
@@ -134,19 +134,19 @@ function buildArtifactReplyAllowSuggestion() {
     destination: permissionRuleDestination(),
   };
 }
-//@ chunk-9tgt55am.js:12920-12976 placement
+//@ chunk-c0pq6qyx.js:13034-13090 placement
 /**
  * 导出常量或表 `ACTIVATED_LABEL`：值为 "Claude: activated", MDr = "Claude: NOT activated"; export { ODr, findReplyAllowRule, Ezn, hasReplyDenyOrAsk, xRo, MDr, …。
  */
 var ACTIVATED_LABEL = "Claude: activated";
 var NOT_ACTIVATED_LABEL = "Claude: NOT activated";
 export {
+  ACTIVATED_LABEL,
+  NOT_ACTIVATED_LABEL,
+  isArtifactActionRule,
   permissionRuleDestination,
   findReplyAllowRule,
   isReplyRuleGateOn,
   hasReplyDenyOrAsk,
-  ACTIVATED_LABEL,
-  NOT_ACTIVATED_LABEL,
   buildArtifactReplyAllowSuggestion,
-  isArtifactActionRule,
 };

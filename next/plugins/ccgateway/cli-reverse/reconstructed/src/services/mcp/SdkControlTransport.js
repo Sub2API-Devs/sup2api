@@ -3,22 +3,22 @@
  *
  * 并入旧版已有路径：SDK 控制传输。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/SdkControlTransport.ts
- * pieces: chunk-mdk8a5r0.js (5)
+ * pieces: chunk-0cf4tfjz.js (5)
  * attribution: placement 1, fingerprint 2, layout 2
  */
 import { SWALLOW_SYMBOL } from "./client.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 
-//@ chunk-mdk8a5r0.js:226-284 placement
+//@ chunk-0cf4tfjz.js:226-284 placement
 /**
  * 判断消息是否为带非空 id 的 JSON-RPC 请求。
  */
 function isJsonRpcRequest(message) {
   return "method" in message && "id" in message && message.id !== null;
 }
-//@ chunk-mdk8a5r0.js:480-2760 fingerprint (2.1.88 match: SdkControlClientTransport, 0.329)
+//@ chunk-0cf4tfjz.js:480-2760 fingerprint (2.1.88 match: SdkControlClientTransport, 0.329)
 /**
  * SdkControlClientTransport：CLI 侧连接 SDK 宿主进程内 MCP 服务器的传输，消息经 control 通道 sendMcpMessage 转发。可带 manifest（initializeResult/toolsListResult）在本地重放 initialize 与首个 tools/list，不匹配时 dropManifest 并记录原因（outcome）。
  */
@@ -144,11 +144,11 @@ class SdkControlClientTransport {
     if (this.outcome === "pending") this.outcome = outcome;
   }
 }
-//@ chunk-mdk8a5r0.js:2760-2813 layout
+//@ chunk-0cf4tfjz.js:2760-2813 layout
 function isEmptyCapabilities(capabilities) {
   return isPlainObject(capabilities) && Object.keys(capabilities).length === 0;
 }
-//@ chunk-mdk8a5r0.js:2813-3070 layout
+//@ chunk-0cf4tfjz.js:2813-3070 layout
 /**
  * isValidResultMeta：校验结果 _meta（progressToken 类型、io.modelcontextprotocol/related-task.taskId）以决定 manifest 结果能否直接重放。
  */
@@ -162,7 +162,7 @@ function isValidResultMeta(result) {
   let relatedTask = _meta["io.modelcontextprotocol/related-task"];
   return relatedTask === undefined || (isPlainObject(relatedTask) && typeof relatedTask.taskId === "string");
 }
-//@ chunk-mdk8a5r0.js:3070-3347 fingerprint (2.1.88 match: SdkControlServerTransport, 1)
+//@ chunk-0cf4tfjz.js:3070-3347 fingerprint (2.1.88 match: SdkControlServerTransport, 1)
 /**
  * SdkControlServerTransport：SDK 宿主侧的服务器传输，send 直接调用 sendMcpMessage。
  */

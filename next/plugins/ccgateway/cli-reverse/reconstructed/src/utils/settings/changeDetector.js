@@ -3,10 +3,10 @@
  *
  * 设置文件变更检测：监视各来源文件与 managed-settings.d（文件事件或轮询）、定时重读 MDM，变化时发出 ConfigChange 并重新加载。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/changeDetector.ts
- * pieces: chunk-82kqcve8.js (8), chunk-q8cqcff6.js (1)
- * attribution: callgraph-fingerprint 2, layout 3, fingerprint 3, affinity 1
+ * pieces: chunk-5fn9rb8r.js (1), chunk-a2q0x549.js (9)
+ * attribution: callgraph-fingerprint 2, layout 3, fingerprint 3, affinity 2
  */
 import * as pathModule from "path";
 import { watch, readdirSync } from "fs";
@@ -39,6 +39,7 @@ import { logForDebugging } from "../debug.js";
 import { getErrnoCode, errorMessage, withTelemetryMessage, toError } from "../errors.js";
 import { chokidar_default } from "../../../vendor/chokidar/index.js";
 import { getPlatform } from "../platform.js";
+import { commandSyncNameState, invalidateCommandNames } from "./commandSyncNames.js";
 import {
   clearInternalWrites,
   consumeInternalWrite,
@@ -49,7 +50,6 @@ import { sleep } from "../sleep.js";
 import { STORAGE_SPACES } from "../storage/storageSpaces.js";
 import { formatStorageError } from "../storage/storageErrors.js";
 import { seedProjectSettings } from "./settingsSeed.js";
-import { commandSyncNameState, invalidateCommandNames } from "./commandSyncNames.js";
 import { logError } from "../log.js";
 import { jsonStringify } from "../slowOperations.js";
 import { getSessionFeatureValues } from "../../bootstrap/sessionFeatureValues.js";
@@ -62,11 +62,11 @@ import { vetRepoSettingsPath, getFsImplementation } from "../fsOperations.js";
 import { hasDotSegment } from "../pathClassification.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-q8cqcff6.js:10635-10676 callgraph-fingerprint (2.1.88 match: startMdmPoll, 0.169)
+//@ chunk-5fn9rb8r.js:10878-10919 callgraph-fingerprint (2.1.88 match: startMdmPoll, 0.169)
 function startMdmPoll() {
   return withAskedWhere(mdmLoader()).hkcu ?? EMPTY_MDM_SETTINGS;
 }
-//@ chunk-82kqcve8.js:24807-34017 callgraph-fingerprint (2.1.88 match: initialize, 0.232)
+//@ chunk-a2q0x549.js:24882-35080 callgraph-fingerprint (2.1.88 match: initialize, 0.217)
 /**
  * 设置文件变更检测器：监视各来源设置文件与 managed-settings.d（文件事件或轮询），MDM 定时重读，变化时按来源发出 ConfigChange 事件并触发重新加载。
  */
@@ -87,6 +87,9 @@ function createSettingsChangeDetector(options) {
   let probing = false;
   let watchingSince = null;
   let pollFloor = null;
+  let watchCount = 0;
+  let lastSeenStats = new Map();
+  let statsBeforeLive = new Map();
   let watchGeneration = 0;
   let mdmTimer = null;
   let mdmSnapshot = null;
@@ -183,6 +186,8 @@ function createSettingsChangeDetector(options) {
     for (let dir of setDifference(pendingDirs, watchTargets.pendingDirs)) appearedDirs.add(dir);
     pendingDirs = new Set(watchTargets.pendingDirs);
     watchingSince ??= Date.now();
+    let thisGeneration = ++watchCount;
+    lastSeenStats.clear();
     let previousWatcher = watcher;
     watcher = null;
     if (previousWatcher) previousWatcher.close().catch(() => {});
@@ -192,7 +197,7 @@ function createSettingsChangeDetector(options) {
     creationWatchers.clear();
     for (let dir of pendingDirs) watchForAppear(dir, watchMode);
     if (dirs.length === 0) {
-      settleChanges(settingsFiles, Promise.resolve(), projectScoped);
+      settleChanges(settingsFiles, Promise.resolve(), projectScoped, thisGeneration);
       return;
     }
     logForDebugging(
@@ -242,9 +247,9 @@ function createSettingsChangeDetector(options) {
       readyResolve = resolve;
       chokidarWatcher.once("ready", resolve);
     });
-    chokidarWatcher.on("change", onChange);
+    chokidarWatcher.on("change", withWatchState(onChange));
     chokidarWatcher.on("unlink", onUnlink);
-    chokidarWatcher.on("add", onAdd);
+    chokidarWatcher.on("add", withWatchState(onAdd));
     chokidarWatcher.on("unlinkDir", (dir) => {
       if (settingsFiles.has(pathModule.normalize(dir))) onUnlink(dir);
     });
@@ -254,30 +259,46 @@ function createSettingsChangeDetector(options) {
       });
       if (watchMode === "native") onHandleError(error);
     });
-    settleChanges(settingsFiles, promise, projectScoped);
+    settleChanges(settingsFiles, promise, projectScoped, thisGeneration);
     if (watchMode === "native") probeNative();
   }
-  async function settleChanges(settingsFiles, ready, projectScoped) {
-    if (appearedDirs.size === 0 && pollFloor === null) return;
+  async function settleChanges(settingsFiles, ready, projectScoped, generation) {
+    let nameState = commandSyncNameState();
+    if (appearedDirs.size === 0 && pollFloor === null && nameState.firstReadsChecked) return;
     let appeared = new Set(appearedDirs);
     appearedDirs.clear();
     let floor = pollFloor;
     pollFloor = null;
     await ready;
+    if (disposed) return;
+    let firstCheck = !nameState.firstReadsChecked && generation === watchCount;
+    if (firstCheck) nameState.firstReadsChecked = true;
     await Promise.all(
-      [...settingsFiles]
-        .filter((file) => floor !== null || appeared.has(pathModule.dirname(file)))
-        .map(async (file) => {
-          let stats = await statStable(file);
-          if (disposed || stats === null) return;
-          let empty = projectScoped.has(file) && isEmptyPrivateFile(stats);
-          if (
-            (appeared.has(pathModule.dirname(file)) && !empty) ||
-            (floor !== null && stats.mtimeMs >= floor)
-          )
-            onChange(file);
-        }),
+      [...settingsFiles].map(async (file) => {
+        let dirAppeared = appeared.has(pathModule.dirname(file));
+        let firstReadStats = firstCheck ? await firstReadOrOwnWrite(file, nameState) : null;
+        if (!dirAppeared && floor === null && !firstReadStats) return;
+        let stats = await stableStats(file, firstReadStats);
+        if (disposed || stats === null) return;
+        let previousStats = lastSeenStats.get(file);
+        if (
+          firstReadStats !== null &&
+          !dirAppeared &&
+          floor === null &&
+          previousStats !== undefined &&
+          sameStat(previousStats, stats)
+        )
+          return;
+        let empty = projectScoped.has(file) && isEmptyPrivateFile(stats);
+        if (firstReadStats && !empty) {
+          logForDebugging(`Settings file ${file} changed before its watch was live`);
+          statsBeforeLive.set(file, stats);
+        }
+        if (((dirAppeared || firstReadStats) && !empty) || (floor !== null && stats.mtimeMs >= floor))
+          onChange(file);
+      }),
     );
+    if (firstCheck) nameState.forgetFirstReads();
   }
   function watchForAppear(path, mode) {
     let dir = pathModule.dirname(path);
@@ -378,13 +399,45 @@ function createSettingsChangeDetector(options) {
     appearedDirs.add(dir);
     restart();
   }
-  async function statStable(path) {
+  function withWatchState(handler) {
+    return (path, stats) => {
+      let canonicalPath = canonical(path);
+      lastSeenStats.set(canonicalPath, stats);
+      let firstReadStats = statsBeforeLive.get(canonicalPath);
+      statsBeforeLive.delete(canonicalPath);
+      if (firstReadStats && stats && sameStat(stats, firstReadStats)) {
+        logForDebugging(
+          `Ignored a watch report of ${canonicalPath}: the first-read check already dealt with this version`,
+        );
+        return;
+      }
+      handler(path);
+    };
+  }
+  async function firstReadOrOwnWrite(file, nameState) {
+    if (!nameState.firstReads.has(file) || nameState.ownWritesBeforeFirstCheck.has(file)) return null;
     try {
-      let previous = await stat(path);
+      let stats = await stat(file);
+      let firstReadStats = nameState.firstReads.get(file);
+      return firstReadStats === undefined || (firstReadStats !== null && sameStat(stats, firstReadStats))
+        ? null
+        : stats;
+    } catch (error) {
+      let errnoCode = getErrnoCode(error);
+      if (errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR")
+        logForDebugging(
+          `Could not check whether settings file ${file} changed before its watch was live: ${errnoCode ?? errorMessage(error)}`,
+        );
+      return null;
+    }
+  }
+  async function stableStats(file, sinceStats = null) {
+    try {
+      let previous = sinceStats ?? (await stat(file));
       while (true) {
         await sleep(stabilityThreshold);
         if (disposed) return null;
-        let current = await stat(path);
+        let current = await stat(file);
         if (current.size === previous.size && current.mtimeMs === previous.mtimeMs)
           return current.isFile() ? current : null;
         previous = current;
@@ -708,15 +761,15 @@ function createSettingsChangeDetector(options) {
     isWatching: () => started && !disposed,
   };
 }
-//@ chunk-82kqcve8.js:34017-34030 layout
+//@ chunk-a2q0x549.js:35080-35093 layout
 /**
  * 设置变更检测器单例（initialize() 的返回值）。
  */
 var settingsChangeDetector; // deferred: uses createSettingsChangeDetector of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-82kqcve8.js:34017", () => {
+deferInit("chunk-a2q0x549.js:35080", () => {
   settingsChangeDetector = createSettingsChangeDetector();
 });
-//@ chunk-82kqcve8.js:34030-34153 layout
+//@ chunk-a2q0x549.js:35093-35216 layout
 function isUserSettingsSource(session) {
   if (!isStorageV5Enabled() || session === undefined) return;
   let settingsFilePathForSource = getSettingsFilePathForSource("userSettings");
@@ -725,7 +778,7 @@ function isUserSettingsSource(session) {
     ? settingsFilePathForSource
     : undefined;
 }
-//@ chunk-82kqcve8.js:34153-36037 fingerprint (2.1.88 match: getWatchTargets, 0.327)
+//@ chunk-a2q0x549.js:35216-37102 fingerprint (2.1.88 match: getWatchTargets, 0.327)
 async function getWatchTargets(session) {
   let dirToSettingsFiles = new Map();
   let dirsWithExistingFiles = new Set();
@@ -849,7 +902,7 @@ async function getWatchTargets(session) {
     pendingDirs,
   };
 }
-//@ chunk-82kqcve8.js:36037-36340 layout
+//@ chunk-a2q0x549.js:37102-37405 layout
 function isMissingPathError(dir) {
   try {
     vetRepoSettingsPath(getFsImplementation(), dir, {
@@ -883,7 +936,7 @@ function isMissingPathError(dir) {
   }
   return true;
 }
-//@ chunk-82kqcve8.js:36340-36561 fingerprint (2.1.88 match: settingSourceToConfigChangeSource, 1)
+//@ chunk-a2q0x549.js:37405-37626 fingerprint (2.1.88 match: settingSourceToConfigChangeSource, 1)
 function settingSourceToConfigChangeSource(source) {
   switch (source) {
     case "userSettings":
@@ -897,7 +950,7 @@ function settingSourceToConfigChangeSource(source) {
       return "policy_settings";
   }
 }
-//@ chunk-82kqcve8.js:36561-36765 fingerprint (2.1.88 match: getSourceForPath, 0.807)
+//@ chunk-a2q0x549.js:37626-37830 fingerprint (2.1.88 match: getSourceForPath, 0.807)
 function getSourceForPath(path) {
   let normalizedPath = pathModule.normalize(path);
   let dropInDir = getDropInDir();
@@ -909,8 +962,17 @@ function getSourceForPath(path) {
     return "localSettings";
   return;
 }
-//@ chunk-82kqcve8.js:36765-36843 affinity
+//@ chunk-a2q0x549.js:37830-37931 affinity
+function sameStat(left, right) {
+  return (
+    left.ino === right.ino &&
+    left.size === right.size &&
+    left.mtimeMs === right.mtimeMs &&
+    left.ctimeMs === right.ctimeMs
+  );
+}
+//@ chunk-a2q0x549.js:37931-38009 affinity
 function isEmptyPrivateFile(stats) {
   return stats.isFile() && stats.size === 0 && stats.nlink === 1 && (stats.mode & 511) === 292;
 }
-export { settingsChangeDetector, createSettingsChangeDetector, startMdmPoll };
+export { settingsChangeDetector, startMdmPoll, createSettingsChangeDetector };

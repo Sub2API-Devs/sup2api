@@ -3,9 +3,9 @@
  *
  * /help 的概览标签页（产品简介、/powerup 入门提示）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/HelpV2/General.tsx
- * pieces: chunk-yxcx2jtr.js (2)
+ * pieces: chunk-ahfwxte3.js (2)
  * attribution: affinity 1, callgraph-witnessed 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -18,9 +18,9 @@ import {
 import { Box, Text } from "../../ink/components/Text.js";
 import { PromptInputHelpMenu } from "../PromptInput/PromptInputHelpMenu.js";
 
-//@ chunk-yxcx2jtr.js:15530-15540 affinity
+//@ chunk-ahfwxte3.js:16708-16718 affinity
 var GENERAL_COLUMN_WIDTH = 44;
-//@ chunk-yxcx2jtr.js:15540-16345 callgraph-witnessed (2.1.88 match: General, 0.291)
+//@ chunk-ahfwxte3.js:16718-17523 callgraph-witnessed (2.1.88 match: General, 0.291)
 function General() {
   let $ = useMemoCache(8);
   let { rows } = useTerminalSize();

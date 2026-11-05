@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：命令替换与变量展开分析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (35)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (35)
  * attribution: affinity 1, placement 34
  */
 import { getPlatform } from "../../utils/platform.js";
@@ -17,7 +17,7 @@ import { splitCommand } from "../../utils/bash/commands.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1074425-1075273 affinity
+//@ chunk-5xgkngpb.js:1069680-1070528 affinity
 /**
  * 危险删除检测用正则：$VAR/…、${N}/… 形式的目标，顶层目录名列表（Linux/macOS/Windows），以及 __TRACKED_VAR__/顶层目录的匹配。
  */
@@ -26,7 +26,7 @@ var POSITIONAL_VAR_SLASH_TARGET_RE;
 var TOP_LEVEL_DIR_NAMES;
 var TRACKED_VAR_TOP_LEVEL_RE;
 var VAR_TOP_LEVEL_TARGET_RE;
-deferInit("chunk-e6aww6q8.js:1074425", () => {
+deferInit("chunk-5xgkngpb.js:1069680", () => {
   VAR_SLASH_TARGET_RE =
     /^[\uE020"']*\$(?:\{[A-Za-z_][A-Za-z0-9_]*(?::?-(?:["']{2}|"?\$\{?[A-Za-z_][A-Za-z0-9_]*\}?"?)?)?\}|[A-Za-z_][A-Za-z0-9_]*)[\uE020"']*\\?\/(?:[*?[{]|\$|\/|["']|\uE020|$)/;
   POSITIONAL_VAR_SLASH_TARGET_RE =
@@ -42,14 +42,14 @@ deferInit("chunk-e6aww6q8.js:1074425", () => {
     "i",
   );
 });
-//@ chunk-e6aww6q8.js:1075273-1075318 placement
+//@ chunk-5xgkngpb.js:1070528-1070573 placement
 /**
  * 判断变量名是否为 HOME 或 PWD（展开分析中特殊处理）。
  */
 function isHomeOrCwdVar(name) {
   return name === "HOME" || name === "PWD";
 }
-//@ chunk-e6aww6q8.js:1075318-1075492 placement
+//@ chunk-5xgkngpb.js:1070573-1070747 placement
 function matchRootChildTarget(target, isRootLike) {
   let match = VAR_TOP_LEVEL_TARGET_RE.exec(target.replace(/\/(?:\.\/)+/g, "/").replace(/\/{2,}/g, "/"));
   if (match === null) return;
@@ -57,7 +57,7 @@ function matchRootChildTarget(target, isRootLike) {
   let nestedVar = match[2];
   return isRootLike(firstVar) && (nestedVar === undefined || isRootLike(nestedVar)) ? match[4] : undefined;
 }
-//@ chunk-e6aww6q8.js:1075492-1075910 placement
+//@ chunk-5xgkngpb.js:1070747-1071165 placement
 /**
  * 展开分析常量：产出路径的命令替换（cd/pwd/dirname/git rev-parse）、默认分析上下文、长度上限、赋值/unset/for 循环正则。
  */
@@ -67,7 +67,7 @@ var MAX_EXPANSION_SCAN;
 var ASSIGNMENT_NAME_RE;
 var UNSET_STATEMENT_RE;
 var FOR_LOOP_RE;
-deferInit("chunk-e6aww6q8.js:1075492", () => {
+deferInit("chunk-5xgkngpb.js:1070747", () => {
   PATH_COMMAND_SUBST_RE = /^\s*(?:(cd|pwd|dirname)(?![A-Za-z0-9_-])|git\s+(rev-parse)\b)/;
   DEFAULT_EXPANSION_CONTEXT = {
     mayBeUnset: () => false,
@@ -82,7 +82,7 @@ deferInit("chunk-e6aww6q8.js:1075492", () => {
   FOR_LOOP_RE =
     /(?:^|[;&|({\n]|\b(?:then|do|else|elif)\b)\s*for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+([^;\n]*)/g;
 });
-//@ chunk-e6aww6q8.js:1075910-1076359 placement
+//@ chunk-5xgkngpb.js:1071165-1071614 placement
 /**
  * 把命令文本中 heredoc 正文替换为空格（保留换行与长度），避免正文内容被当作命令分析。
  */
@@ -106,7 +106,7 @@ function blankHeredocBodies(text) {
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:1076359-1076524 placement
+//@ chunk-5xgkngpb.js:1071614-1071779 placement
 function joinLineContinuations(text) {
   let masked = maskQuotedAndComments(text, true);
   let result = text;
@@ -121,12 +121,12 @@ function joinLineContinuations(text) {
       result = result.slice(0, idx - 1) + result.slice(idx + 1);
   return result;
 }
-//@ chunk-e6aww6q8.js:1076524-1076581 placement
+//@ chunk-5xgkngpb.js:1071779-1071836 placement
 /**
  * 匹配 /c/、/cygdrive/c/ 这类 Windows 盘符路径。
  */
 var CYGWIN_DRIVE_PATH_RE = /^[\\/](?:cygdrive[\\/])?([A-Za-z])(?=[\\/]|$)/i;
-//@ chunk-e6aww6q8.js:1076581-1076653 placement
+//@ chunk-5xgkngpb.js:1071836-1071908 placement
 /**
  * 先按原路径、再按其 Windows 盘符形式检查谓词。
  */
@@ -135,7 +135,7 @@ function matchesPathOrWindowsDrive(path, predicate) {
   let windowsDrivePath = toWindowsDrivePath(path);
   return windowsDrivePath !== undefined && predicate(windowsDrivePath);
 }
-//@ chunk-e6aww6q8.js:1076653-1076857 placement
+//@ chunk-5xgkngpb.js:1071908-1072112 placement
 function toWindowsDrivePath(path) {
   if (getPlatform() !== "windows") return;
   let normalized = normalizeDosDevicePath(path);
@@ -145,14 +145,14 @@ function toWindowsDrivePath(path) {
   let replaced = path.slice(match[0].length).replace(/\//g, "\\");
   return `${match[1].toUpperCase()}:${replaced === "" ? "\\" : replaced}`;
 }
-//@ chunk-e6aww6q8.js:1076857-1076891 placement
+//@ chunk-5xgkngpb.js:1072112-1072146 placement
 /**
  * 判断路径是危险删除目标（同时检查 Windows 盘符形式）。
  */
 function isDangerousRemovalTarget(target) {
   return matchesPathOrWindowsDrive(target, isDangerousRemovalPath);
 }
-//@ chunk-e6aww6q8.js:1076891-1077173 placement
+//@ chunk-5xgkngpb.js:1072146-1072428 placement
 function isRootLikeValue(value) {
   let replaced = value.replace(/^(["'])([\s\S]*)\1$/, "$2").replace(/(.)\/+$/, "$1");
   let defaultValue = /^\$\{[A-Za-z_][A-Za-z0-9_]*:?-([^}$`]*)\}$/.exec(replaced)?.[1];
@@ -166,7 +166,7 @@ function isRootLikeValue(value) {
       isDangerousRemovalTarget(expandTildeWithHome(defaultValue)))
   );
 }
-//@ chunk-e6aww6q8.js:1077173-1077600 placement
+//@ chunk-5xgkngpb.js:1072428-1072855 placement
 /**
  * 从指定位置找到 shell 单词的结束位置（处理转义、引号、$( ) 与 ${ } 嵌套）；结构不完整返回 undefined。
  */
@@ -199,7 +199,7 @@ function findWordEnd(text, start) {
   };
   return scan(true) ?? scan(false) ?? text.length;
 }
-//@ chunk-e6aww6q8.js:1077600-1077939 placement
+//@ chunk-5xgkngpb.js:1072855-1073194 placement
 /**
  * 跳过语句开头的变量赋值前缀，返回命令开始位置以及该位置是否仍是前缀（遇到分隔符、注释或 &/| 时结束）。
  */
@@ -226,12 +226,12 @@ function skipAssignmentPrefix(text, wordEnd) {
     idx = findWordEnd(text, idx + match[0].length);
   }
 }
-//@ chunk-e6aww6q8.js:1077939-1078040 placement
+//@ chunk-5xgkngpb.js:1073194-1073295 placement
 function isAndChainOnly(command) {
   let parts = command.split("&&");
   return parts[0].trim() === "" && parts.slice(1).every((part) => !/[;|&]/.test(part));
 }
-//@ chunk-e6aww6q8.js:1078040-1078427 placement
+//@ chunk-5xgkngpb.js:1073295-1073682 placement
 /**
  * 从值中提取命令替换的正文：支持反引号与 $( )（须占满整个值，去掉外层双引号与结尾斜杠）。
  */
@@ -253,7 +253,7 @@ function extractSubstitutionBody(word) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:1078427-1082458 placement
+//@ chunk-5xgkngpb.js:1073682-1077716 placement
 /**
  * 描述命令替换的作用（如 git rev-parse 打印仓库根、pwd 打印当前目录），用于权限提示。
  */
@@ -479,7 +479,7 @@ function describeCommandSubstitution(command, mayBeUnset) {
     derived: derivedVars,
   };
 }
-//@ chunk-e6aww6q8.js:1082458-1082612 placement
+//@ chunk-5xgkngpb.js:1077716-1077870 placement
 /**
  * 去掉路径末尾的 /* 或 /. 之类通配后缀（保留引号）。
  */
@@ -490,7 +490,7 @@ function stripTrailingPathGlob(text) {
   while (globStartIndex > 0 && /[/*.]/.test(text[globStartIndex - 1])) globStartIndex--;
   return globStartIndex < endIndex && text[globStartIndex] === "/" ? text.slice(0, globStartIndex) : text;
 }
-//@ chunk-e6aww6q8.js:1082612-1082778 placement
+//@ chunk-5xgkngpb.js:1077870-1078036 placement
 /**
  * 若单词只是一个变量引用（$NAME 或 ${NAME:?..}），返回变量名。
  */
@@ -501,7 +501,7 @@ function getBareVariableName(text) {
     );
   return match === null ? undefined : (match[1] ?? match[2]);
 }
-//@ chunk-e6aww6q8.js:1082778-1083597 placement
+//@ chunk-5xgkngpb.js:1078036-1078855 placement
 /**
  * 内联 shell 分析常量：引号占位字符、函数定义/set -- 正则、"sh -c" 调用正则、最大递归深度、截断长度、前导关键字与包装命令集合、find 谓词正则。
  */
@@ -514,7 +514,7 @@ var MAX_INVOCATION_DISPLAY;
 var LEADING_KEYWORDS;
 var COMMAND_WRAPPERS;
 var FIND_PREDICATE_RE;
-deferInit("chunk-e6aww6q8.js:1082778", () => {
+deferInit("chunk-5xgkngpb.js:1078036", () => {
   QUOTE_MARKER = "\uE020";
   FUNCTION_DEFINITION_RE =
     /(?:^|[;&|(\n])[ \t]*(?:function[ \t]+[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*[ \t]*\([ \t]*\))/;
@@ -548,7 +548,7 @@ deferInit("chunk-e6aww6q8.js:1082778", () => {
   FIND_PREDICATE_RE =
     /^-(?:exec|execdir|ok|okdir|name|iname|path|ipath|regex|prune|type|maxdepth|mindepth|newer|mtime|mmin|size|print0?|delete|o|a|not|and|or)$/;
 });
-//@ chunk-e6aww6q8.js:1083597-1083746 placement
+//@ chunk-5xgkngpb.js:1078855-1079004 placement
 function getRemovalCommand(word) {
   let lower = word
     .replace(/[<>].*$/, "")
@@ -557,7 +557,7 @@ function getRemovalCommand(word) {
     .toLowerCase();
   return lower === "rm" ? "rm" : lower === "rmdir" ? "rmdir" : null;
 }
-//@ chunk-e6aww6q8.js:1083746-1084809 placement
+//@ chunk-5xgkngpb.js:1079004-1080073 placement
 /**
  * 在命令文本中跳过前导关键字、赋值、重定向与包装命令（sudo/env/xargs/eval 等）找到 rm/rmdir 调用，返回 {command, word, tokens, reparsed}。
  */
@@ -631,7 +631,7 @@ function findRemovalInvocation(text, allowEvalStrings) {
         reparsed: isReparsed,
       };
 }
-//@ chunk-e6aww6q8.js:1084809-1085425 placement
+//@ chunk-5xgkngpb.js:1080073-1080689 placement
 /**
  * 对含 $ 和 rm 的命令找出以可能为空的变量路径为目标的 rm/rmdir 调用：结合已知赋值/unset/派生值推断变量是否可能为空，先按普通分词再按保守方式检查。
  */
@@ -669,7 +669,7 @@ function findDangerousVariableRemovalInText(text, options) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:1085425-1085826 placement
+//@ chunk-5xgkngpb.js:1080689-1081090 placement
 /**
  * 把命令文本中的注释与（可选）引号内容替换为空格，保持长度与换行，便于结构匹配。
  */
@@ -719,7 +719,7 @@ function maskQuotedAndComments(text, maskQuoted) {
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:1085826-1086797 placement (2.1.88 match: findTokenBudgetPositions, 0.538)
+//@ chunk-5xgkngpb.js:1081090-1082065 placement (2.1.88 match: findTokenBudgetPositions, 0.537)
 /**
  * 把一行 shell 命令规整（去续行、反引号、$() 与子 shell，拆 ; | && 等）后提取每段调用的命令名，并识别 find -exec/-ok 内的命令（最多 8 个）。
  */
@@ -787,7 +787,7 @@ function extractInvokedCommandNames(segment, allowInline, depth, isShellText, is
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:1086797-1087721 placement
+//@ chunk-5xgkngpb.js:1082065-1082990 placement
 /**
  * 检查 rm 调用的各参数：变量顶层路径、可能为空的变量 + 斜杠、派生值等，命中时返回 {command, target, invocation, rootChild, derived} 描述。
  */
@@ -845,7 +845,7 @@ function findVariableTargetInRemoval(invocation, allowInline, allowQuotedDollar,
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:1087721-1087818 placement
+//@ chunk-5xgkngpb.js:1082990-1083087 placement
 /**
  * 把命令调用拼成一行展示：命令替换折叠为 $(…)，其余空白与控制字符压成一个空格。
  */
@@ -854,18 +854,18 @@ function formatInvocationForDisplay(tokens) {
     .replaceAll(QUOTE_MARKER, "$(\u2026)")
     .replace(/[\s\p{Cc}]+/gu, " ");
 }
-//@ chunk-e6aww6q8.js:1087818-1087873 placement
+//@ chunk-5xgkngpb.js:1083087-1083142 placement
 /**
  * 去掉词尾未转义的右括号。
  */
 function stripTrailingParens(token) {
   return token.replace(/(^|[^\\])\)+$/, "$1");
 }
-//@ chunk-e6aww6q8.js:1087873-1087989 placement
+//@ chunk-5xgkngpb.js:1083142-1083258 placement
 var SHELL_METACHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var METACHAR_PLACEHOLDER_BASE;
 var METACHAR_PLACEHOLDER_RE;
-deferInit("chunk-e6aww6q8.js:1087873", () => {
+deferInit("chunk-5xgkngpb.js:1083142", () => {
   SHELL_METACHARS = ";|&\n\r()` \t";
   METACHAR_PLACEHOLDER_BASE = 57345;
   METACHAR_PLACEHOLDER_RE = new RegExp(
@@ -873,7 +873,7 @@ deferInit("chunk-e6aww6q8.js:1087873", () => {
     "g",
   );
 });
-//@ chunk-e6aww6q8.js:1087989-1088458 placement
+//@ chunk-5xgkngpb.js:1083258-1083727 placement
 /**
  * 把引号内及转义后的 shell 元字符替换为占位字符，使后续分词不把它们当作分隔符；引号未闭合时原样返回。
  */
@@ -910,7 +910,7 @@ function protectQuotedMetachars(text) {
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:1088458-1088525 placement
+//@ chunk-5xgkngpb.js:1083727-1083794 placement
 /**
  * 把占位字符还原成原来的 shell 元字符。
  */
@@ -920,19 +920,19 @@ function restoreMetachars(text) {
     (placeholder) => SHELL_METACHARS[placeholder.charCodeAt(0) - METACHAR_PLACEHOLDER_BASE],
   );
 }
-//@ chunk-e6aww6q8.js:1088525-1088575 placement
+//@ chunk-5xgkngpb.js:1083794-1083844 placement
 /**
  * 去掉引号后还原 shell 元字符。
  */
 function restoreMetacharsAndUnquote(token) {
   return restoreMetachars(token.replace(/['"]/g, ""));
 }
-//@ chunk-e6aww6q8.js:1088575-1088592 placement
+//@ chunk-5xgkngpb.js:1083844-1083861 placement
 /**
  * 转义 $ 时使用的私有区占位字符，最后再换回 “$”。
  */
 var DOLLAR_PLACEHOLDER = "\uE010";
-//@ chunk-e6aww6q8.js:1088592-1089792 placement
+//@ chunk-5xgkngpb.js:1083861-1085071 placement
 /**
  * 在 "sh/bash -c '脚本'" 调用中拼出脚本文本（处理引号、转义与 $ 占位），判断是否会另外接收参数，然后递归查找脚本中的危险 rm。
  */
@@ -1030,14 +1030,14 @@ function findRemovalInShellC(text, allowInline, depth, context) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:1089792-1089908 placement
+//@ chunk-5xgkngpb.js:1085071-1085187 placement
 function isEscapeActive(text, idx, quoteChar) {
   if (quoteChar === "'") return false;
   if (quoteChar === null) return true;
   let nextChar = text[idx + 1];
   return nextChar === '"' || nextChar === "\\" || nextChar === "$" || nextChar === "`";
 }
-//@ chunk-e6aww6q8.js:1089908-1090073 placement
+//@ chunk-5xgkngpb.js:1085187-1085352 placement
 /**
  * 计算文本中某位置之前未闭合的引号字符（无则 null）。
  */
@@ -1056,14 +1056,14 @@ function getOpenQuoteAt(text, end) {
   return quoteChar;
 }
 export {
-  findDangerousVariableRemovalInText,
-  describeCommandSubstitution,
   getOpenQuoteAt,
   getBareVariableName,
   stripTrailingPathGlob,
   TRACKED_VAR_TOP_LEVEL_RE,
   isDangerousRemovalTarget,
   matchesPathOrWindowsDrive,
+  findDangerousVariableRemovalInText,
+  describeCommandSubstitution,
   COMMAND_WRAPPERS,
   LEADING_KEYWORDS,
   MAX_INLINE_DEPTH,

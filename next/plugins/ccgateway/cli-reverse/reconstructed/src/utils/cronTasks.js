@@ -3,13 +3,12 @@
  *
  * 定时任务（cron）存储与校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/cronTasks.ts
- * pieces: chunk-93zax7h2.js (21), chunk-b0a246e7.js (1), chunk-e6aww6q8.js (4)
- * attribution: placement 9, fingerprint 9, layout 7, file-local 1
+ * pieces: chunk-5xgkngpb.js (4), chunk-78ymyfsy.js (1), chunk-mk7xxmed.js (22)
+ * attribution: placement 9, fingerprint 8, layout 7, callgraph-fingerprint 1, file-local 2
  */
 import { join } from "path";
-import { readFileSync } from "fs";
 import { mkdir } from "fs/promises";
 import { randomUUID } from "crypto";
 import { CONTROL_OR_BIDI_CHARS_RE } from "./plugins/schemas.js";
@@ -18,32 +17,38 @@ import {
   getProjectConfigRoot,
   isWorkspaceRestricted,
   isUnderRestrictedWorkspaceRoot,
+  getProjectRootOrNull,
   addSessionCronTask,
   getSessionId,
   removeSessionCronTasks,
   getSessionCronTasks,
 } from "../bootstrap/state.js";
-import { getFsImplementation } from "./fsOperations.js";
-import { isFsInaccessible } from "./errors.js";
+import { isPathConfigDir } from "./envUtils.js";
+import {
+  getFsImplementation,
+  vetRepoSettingsPathAsync,
+  SYMLINK_TO_NETWORK_PATH_CODE,
+  vetRepoSettingsPath,
+} from "./fsOperations.js";
+import { isFsInaccessible, getErrnoCode } from "./errors.js";
 import { logError } from "./log.js";
 import { safeParseJSON } from "./json.js";
 import { logForDebugging } from "./debug.js";
 import { jsonStringify } from "./slowOperations.js";
 import { parseCronExpression, computeNextCronRun } from "./cron.js";
-import { isPathConfigDir } from "./envUtils.js";
-import { assertDirChainReal } from "./fsSafety/atomicWriteStaging.js";
-import { writeFileAtomic } from "./file.js";
+import { readBoundedSync, assertDirChainReal } from "./fsSafety/atomicWriteStaging.js";
+import { readJsonFile_2 } from "./file.js";
 import { ATOMIC_WRITE_DIRNAME } from "./plugins/safeCopy.js";
 import { getHookCallerOrScheduler } from "./workloadContext.js";
 import { ownProcStart } from "./processIdentity.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-93zax7h2.js:5010-5020 placement
+//@ chunk-mk7xxmed.js:4996-5006 placement
 /**
  * 插件名的最大长度（256）。
  */
 var MAX_PLUGIN_NAME_CHARS = 256;
-//@ chunk-93zax7h2.js:5020-5088 placement
+//@ chunk-mk7xxmed.js:5006-5074 placement
 /**
  * 判断插件名合法（非空、长度受限、不含控制与双向字符）。
  */
@@ -52,33 +57,39 @@ var isValidPluginName = (plugin) =>
   plugin !== "" &&
   plugin.length <= MAX_PLUGIN_NAME_CHARS &&
   !CONTROL_OR_BIDI_CHARS_RE.test(plugin);
-//@ chunk-93zax7h2.js:5088-5167 fingerprint (2.1.88 match: CRON_FILE_REL, 1)
+//@ chunk-mk7xxmed.js:5074-5163 fingerprint (2.1.88 match: CRON_FILE_REL, 1)
 /**
  * 常量：缓存预热阈值 5 分钟、"每 N 分钟"表达式正则、任务文件相对路径 .claude/scheduled_tasks.json。
  */
 var CACHE_LEAD_MIN_INTERVAL_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EVERY_N_MINUTES_PATTERN;
 var CRON_FILE_REL;
-deferInit("chunk-93zax7h2.js:5088", () => {
+var MAX_CRON_FILE_BYTES;
+deferInit("chunk-mk7xxmed.js:5074", () => {
   CACHE_LEAD_MIN_INTERVAL_MS = 300000;
   EVERY_N_MINUTES_PATTERN = /^\*\/\d+ \* \* \* \*$/;
   CRON_FILE_REL = join(".claude", "scheduled_tasks.json");
+  MAX_CRON_FILE_BYTES = 1048576;
 });
-//@ chunk-93zax7h2.js:5167-5203 layout
+//@ chunk-mk7xxmed.js:5163-5199 layout
 /**
  * scheduled_tasks.json 的完整路径（默认项目根）。
  */
 function getCronFilePath(dir) {
   return join(dir ?? getProjectRoot(), CRON_FILE_REL);
 }
-//@ chunk-93zax7h2.js:5203-5250 layout
+//@ chunk-mk7xxmed.js:5199-5246 layout
 /**
  * 默认目录且会话用 --project-config-root 启动时，持久化定时任务不可用。
  */
 function isDurableCronUnavailable(dir) {
   return dir === undefined && getProjectConfigRoot() !== null;
 }
-//@ chunk-93zax7h2.js:5250-6510 fingerprint (2.1.88 match: readCronTasks, 0.81)
+//@ chunk-mk7xxmed.js:5246-5293 layout (2.1.88 match: isInGlobalClaudeFolder, 1)
+function isInGlobalClaudeFolder(filePath) {
+  return !isPathConfigDir(join(filePath ?? getProjectRoot(), ".claude"));
+}
+//@ chunk-mk7xxmed.js:5293-6611 fingerprint (2.1.88 match: readCronTasks, 0.794)
 /**
  * 读 scheduled_tasks.json：跳过字段缺失、cron 非法或插件名非法的任务，返回规范化后的任务数组。
  */
@@ -87,11 +98,15 @@ async function readCronTasks(dir) {
   let fs = getFsImplementation();
   let raw;
   try {
-    raw = await fs.readFile(getCronFilePath(dir), {
+    let cronFilePath = getCronFilePath(dir);
+    let marker = isInGlobalClaudeFolder(dir)
+      ? (await vetRepoSettingsPathAsync(fs, cronFilePath)).resolvedPath
+      : cronFilePath;
+    raw = await fs.readFile(marker, {
       encoding: "utf-8",
     });
   } catch (e) {
-    if (isFsInaccessible(e)) return [];
+    if (isFsInaccessible(e) || getErrnoCode(e) === SYMLINK_TO_NETWORK_PATH_CODE) return [];
     logError(e);
     return [];
   }
@@ -154,23 +169,30 @@ async function readCronTasks(dir) {
   }
   return out;
 }
-//@ chunk-93zax7h2.js:6510-6552 layout
+//@ chunk-mk7xxmed.js:6611-6653 layout
 /**
  * 任务文件是否被忽略（某全局开关或该目录的规则）。用途未完全确认。
  */
 function isCronFileIgnored(dir) {
   return isWorkspaceRestricted() || isUnderRestrictedWorkspaceRoot(dir ?? getProjectRoot());
 }
-//@ chunk-93zax7h2.js:6552-6752 fingerprint (2.1.88 match: hasCronTasksSync, 1)
+//@ chunk-mk7xxmed.js:6653-6945 callgraph-fingerprint (2.1.88 match: hasCronTasksSync, 0.261)
 /**
  * 同步检查任务文件里是否有任务（启动时决定是否开启调度）。
  */
 function hasCronTasksSync(dir) {
-  if (isDurableCronUnavailable(dir)) return false;
+  if (isDurableCronUnavailable(dir) || (dir === undefined && getProjectRootOrNull() === null)) return false;
   if (isCronFileIgnored(dir)) return false;
   let raw;
   try {
-    raw = readFileSync(getCronFilePath(dir), "utf-8");
+    let cronFilePath = getCronFilePath(dir);
+    let marker = isInGlobalClaudeFolder(dir)
+      ? vetRepoSettingsPath(getFsImplementation(), cronFilePath).resolvedPath
+      : cronFilePath;
+    raw = readBoundedSync(marker, {
+      maxBytes: MAX_CRON_FILE_BYTES,
+      regularFileOnly: true,
+    });
   } catch {
     return false;
   }
@@ -179,7 +201,7 @@ function hasCronTasksSync(dir) {
   let tasks = parsed.tasks;
   return Array.isArray(tasks) && tasks.length > 0;
 }
-//@ chunk-93zax7h2.js:6752-7155 fingerprint (2.1.88 match: writeCronTasks, 0.603)
+//@ chunk-mk7xxmed.js:6945-7348 fingerprint (2.1.88 match: writeCronTasks, 0.604)
 /**
  * 写 scheduled_tasks.json（去掉运行时 durable 字段），.claude 不存在时先安全创建。
  */
@@ -195,7 +217,7 @@ async function writeCronTasks(tasks, dir) {
   let body = {
     tasks: tasks.map(({ durable: _durable, ...rest }) => rest),
   };
-  await writeFileAtomic(
+  await readJsonFile_2(
     getCronFilePath(root),
     jsonStringify(body, null, 2) +
       `
@@ -208,7 +230,7 @@ async function writeCronTasks(tasks, dir) {
     },
   );
 }
-//@ chunk-93zax7h2.js:7155-7509 layout
+//@ chunk-mk7xxmed.js:7348-7730 layout
 /**
  * 新建定时任务：生成 8 位 ID；非持久化时加入会话内任务（可带 agentId），持久化时追加到文件并记录创建会话/进程/项目。返回 ID。
  */
@@ -236,6 +258,7 @@ async function addCronTask(cron, prompt, recurring, durable, agentId, createdAt 
     });
     return sliced;
   }
+  if (isInGlobalClaudeFolder()) await vetRepoSettingsPathAsync(getFsImplementation(), getCronFilePath());
   let tasks = await readCronTasks();
   tasks.push({
     ...task,
@@ -247,7 +270,7 @@ async function addCronTask(cron, prompt, recurring, durable, agentId, createdAt 
   await writeCronTasks(tasks);
   return sliced;
 }
-//@ chunk-93zax7h2.js:7509-7702 file-local
+//@ chunk-mk7xxmed.js:7730-7924 file-local
 /**
  * 删除任务：先删会话内任务，剩余 ID 再从文件中删除。
  */
@@ -260,7 +283,7 @@ async function removeCronTasks(ids, dir) {
   if (remaining.length === tasks.length) return;
   await writeCronTasks(remaining, dir);
 }
-//@ chunk-93zax7h2.js:7702-7867 fingerprint (2.1.88 match: markCronTasksFired, 1)
+//@ chunk-mk7xxmed.js:7924-8089 fingerprint (2.1.88 match: markCronTasksFired, 1)
 /**
  * 给持久化任务写 lastFiredAt。
  */
@@ -277,7 +300,7 @@ async function markCronTasksFired(ids, firedAt, dir) {
   if (!changed) return;
   await writeCronTasks(tasks, dir);
 }
-//@ chunk-93zax7h2.js:7867-7990 layout
+//@ chunk-mk7xxmed.js:8089-8212 layout
 /**
  * 列出全部任务：文件任务 + 会话内任务（durable=false）。
  */
@@ -290,7 +313,7 @@ async function listAllCronTasks(dir) {
   }));
   return [...fileTasks, ...sessionTasks];
 }
-//@ chunk-93zax7h2.js:7990-8093 layout
+//@ chunk-mk7xxmed.js:8212-8315 layout
 /**
  * 计算 cron 在某时间之后的下次运行时间戳。
  */
@@ -300,7 +323,7 @@ function nextCronRunMs(cron, fromMs, options) {
   let next = computeNextCronRun(fields, new Date(fromMs), options);
   return next ? next.getTime() : null;
 }
-//@ chunk-93zax7h2.js:8093-8245 fingerprint (2.1.88 match: DEFAULT_CRON_JITTER_CONFIG, 0.923)
+//@ chunk-mk7xxmed.js:8315-8467 fingerprint (2.1.88 match: DEFAULT_CRON_JITTER_CONFIG, 0.923)
 /**
  * 抖动默认值：recurringFrac 0.5、recurringCapMs 30 分钟、oneShotMaxMs 90 秒、oneShotFloorMs 0、oneShotMinuteMod 30、recurringMaxAgeMs 7 天、cacheLeadMs 15 秒。
  */
@@ -313,7 +336,7 @@ var DEFAULT_CRON_JITTER_CONFIG = {
   recurringMaxAgeMs: 604800000,
   cacheLeadMs: 15000,
 };
-//@ chunk-93zax7h2.js:8245-8332 layout
+//@ chunk-mk7xxmed.js:8467-8554 file-local
 /**
  * 由任务 ID 前 8 位十六进制得到 [0,1) 的稳定抖动系数。
  */
@@ -321,7 +344,7 @@ function jitterFrac(taskId) {
   let frac = parseInt(taskId.slice(0, 8), 16) / 4294967296;
   return Number.isFinite(frac) ? frac : 0;
 }
-//@ chunk-93zax7h2.js:8332-8610 fingerprint (2.1.88 match: jitteredNextCronRunMs, 0.8)
+//@ chunk-mk7xxmed.js:8554-8832 fingerprint (2.1.88 match: jitteredNextCronRunMs, 0.8)
 /**
  * 循环任务下次时间：在两次运行间隔内按 ID 比例延后（上限 recurringCapMs）；"每 N 分钟"且间隔≥5 分钟时改为提前 cacheLeadMs 触发以命中提示缓存。
  */
@@ -342,7 +365,7 @@ function jitteredNextCronRunMs(cron, fromMs, taskId, cfg = DEFAULT_CRON_JITTER_C
   let jitter = Math.min(jitterFrac(taskId) * cfg.recurringFrac * spanMs, cfg.recurringCapMs);
   return t1 + jitter;
 }
-//@ chunk-93zax7h2.js:8610-8832 fingerprint (2.1.88 match: oneShotJitteredNextCronRunMs, 0.887)
+//@ chunk-mk7xxmed.js:8832-9054 fingerprint (2.1.88 match: oneShotJitteredNextCronRunMs, 0.887)
 /**
  * 一次性任务时间：落在整点/半点（oneShotMinuteMod）时按 ID 比例提前最多 oneShotMaxMs，避免集中触发。
  */
@@ -355,7 +378,7 @@ function oneShotJitteredNextCronRunMs(cron, fromMs, taskId, cfg = DEFAULT_CRON_J
   let lead = cfg.oneShotFloorMs + jitterFrac(taskId) * (cfg.oneShotMaxMs - cfg.oneShotFloorMs);
   return Math.max(t1 - lead, fromMs);
 }
-//@ chunk-93zax7h2.js:8832-8946 fingerprint (2.1.88 match: addCronTask, 0.827)
+//@ chunk-mk7xxmed.js:9054-9168 fingerprint (2.1.88 match: addCronTask, 0.827)
 /**
  * 任务的下次触发时间（循环按 lastFiredAt/createdAt，一次性按 createdAt）。
  */
@@ -364,14 +387,14 @@ function nextFireTimeForTask(task, jitterConfig) {
     ? jitteredNextCronRunMs(task.cron, task.lastFiredAt ?? task.createdAt, task.id, jitterConfig)
     : oneShotJitteredNextCronRunMs(task.cron, task.createdAt, task.id, jitterConfig);
 }
-//@ chunk-93zax7h2.js:8946-9005 placement
+//@ chunk-mk7xxmed.js:9168-9227 placement
 /**
  * 把时间戳四舍五入到整分钟。
  */
 function roundToMinute(ms) {
   return new Date(Math.round(ms / 60000) * 60000);
 }
-//@ chunk-93zax7h2.js:9005-9121 placement (2.1.88 match: addCronTask, 0.818)
+//@ chunk-mk7xxmed.js:9227-9343 placement (2.1.88 match: addCronTask, 0.818)
 /**
  * 找出已错过（下次运行时间早于 now）的任务。
  */
@@ -383,19 +406,19 @@ function findMissedTasks(tasks, nowMs) {
     return next !== null && next < nowMs;
   });
 }
-//@ chunk-b0a246e7.js:1185-1216 placement
+//@ chunk-78ymyfsy.js:1218-1249 placement
 /**
  * 匹配 “u_ + 22 位字母数字下划线” 的短会话 id。
  */
 var SESSION_ID_SHORT_RE = /^u_[A-Za-z0-9_]{22}$/;
-//@ chunk-e6aww6q8.js:2592580-2592660 placement
+//@ chunk-5xgkngpb.js:2647751-2647831 placement
 /**
  * cron 归属表的条目上限（32）。
  */
 var MAX_CRON_OWNERSHIP_ENTRIES = 32;
 var MAX_CRON_OWNERSHIP_KEYS = 64;
 var MISSED_WATCH_RELAUNCH_ADVICE = 'pass action "watch" with its url if you still need that';
-//@ chunk-e6aww6q8.js:2592660-2592773 placement
+//@ chunk-5xgkngpb.js:2647831-2647944 placement
 /**
  * 向 Map 写入（先删再插保持最新），超过上限时淘汰最早的键。
  */
@@ -407,7 +430,7 @@ function setWithLimit(armOutcomes, key, value, limit) {
   }
   armOutcomes.set(key, value);
 }
-//@ chunk-e6aww6q8.js:2592773-2592903 placement
+//@ chunk-5xgkngpb.js:2647944-2648074 placement
 /**
  * 向 Set 添加新值，超过上限时淘汰最早的值；已存在返回 false。
  */
@@ -420,7 +443,7 @@ function addWithLimit(set, value, limit) {
   set.add(value);
   return true;
 }
-//@ chunk-e6aww6q8.js:2592903-2592973 placement
+//@ chunk-5xgkngpb.js:2648074-2648144 placement
 /**
  * 删除某前缀下的所有归属键。
  */
@@ -428,30 +451,30 @@ function removeCronOwnedKeys(announcedArmFailures, taskId) {
   for (let key of announcedArmFailures) if (key.startsWith(`${taskId}:`)) announcedArmFailures.delete(key);
 }
 export {
-  roundToMinute,
-  isValidPluginName,
-  oneShotJitteredNextCronRunMs,
-  SESSION_ID_SHORT_RE,
-  removeCronTasks,
   listAllCronTasks,
+  removeCronTasks,
   addCronTask,
-  nextFireTimeForTask,
-  MISSED_WATCH_RELAUNCH_ADVICE,
-  setWithLimit,
-  MAX_CRON_OWNERSHIP_ENTRIES,
-  removeCronOwnedKeys,
+  SESSION_ID_SHORT_RE,
   addWithLimit,
-  MAX_CRON_OWNERSHIP_KEYS,
-  CACHE_LEAD_MIN_INTERVAL_MS,
-  DEFAULT_CRON_JITTER_CONFIG,
-  getCronFilePath,
-  jitteredNextCronRunMs,
+  isValidPluginName,
+  nextFireTimeForTask,
+  roundToMinute,
   isDurableCronUnavailable,
   isCronFileIgnored,
   readCronTasks,
   writeCronTasks,
   findMissedTasks,
+  DEFAULT_CRON_JITTER_CONFIG,
+  jitteredNextCronRunMs,
   markCronTasksFired,
+  getCronFilePath,
   hasCronTasksSync,
+  MISSED_WATCH_RELAUNCH_ADVICE,
+  setWithLimit,
+  MAX_CRON_OWNERSHIP_ENTRIES,
+  removeCronOwnedKeys,
+  oneShotJitteredNextCronRunMs,
+  CACHE_LEAD_MIN_INTERVAL_MS,
+  MAX_CRON_OWNERSHIP_KEYS,
   nextCronRunMs,
 };

@@ -1,8 +1,8 @@
 /**
  * @smithy/core/dist-cjs/submodules/protocols/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/core@3.30.0
- * pieces: chunk-wjd9n4jx.js (1)
+ * pieces: chunk-1fkvp0h1.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -13,7 +13,7 @@ import { require_protocol_http } from "../../../../protocol-http/dist-cjs/index.
 import { base64Module } from "../../../../../@aws-sdk/credential-provider-web-identity/dist-cjs/index.js";
 import { require_util_utf8 } from "../../../../util-utf8/dist-cjs/index.js";
 
-//@ chunk-wjd9n4jx.js:35068-49122 cjs-fingerprint
+//@ chunk-1fkvp0h1.js:35068-49122 cjs-fingerprint
 var require_protocols = __commonJS(function (cjsExports) {
   var Uint8ArrayBlobAdapter = require_util_stream();
   var NormalizedSchema = require_schema();

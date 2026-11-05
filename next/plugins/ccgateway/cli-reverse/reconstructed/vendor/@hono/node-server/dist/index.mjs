@@ -1,8 +1,8 @@
 /**
  * @hono/node-server/dist/index.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @hono/node-server@1.19.14..1.19.17
- * pieces: chunk-k26nnqnx.js (17)
+ * pieces: chunk-cacgqezg.js (17)
  * attribution: esm-fingerprint 17
  */
 import { Readable } from "stream";
@@ -10,7 +10,7 @@ import { Http2ServerRequest, constants } from "http2";
 import fe from "crypto";
 import { logForDebugging } from "../../../../src/utils/debug.js";
 
-//@ chunk-k26nnqnx.js:16450-17916 esm-fingerprint
+//@ chunk-cacgqezg.js:17775-19241 esm-fingerprint
 var RequestError = class extends Error {
   constructor(message, options) {
     super(message, options);
@@ -114,7 +114,7 @@ var requestPrototype = {
     ));
   },
 };
-//@ chunk-k26nnqnx.js:17916-18123 esm-fingerprint
+//@ chunk-cacgqezg.js:19241-19448 esm-fingerprint
 [
   "body",
   "bodyUsed",
@@ -135,7 +135,7 @@ var requestPrototype = {
     },
   });
 });
-//@ chunk-k26nnqnx.js:18123-18264 esm-fingerprint
+//@ chunk-cacgqezg.js:19448-19589 esm-fingerprint
 ["arrayBuffer", "blob", "clone", "formData", "json", "text"].forEach((k) => {
   Object.defineProperty(requestPrototype, k, {
     value: function () {
@@ -143,7 +143,7 @@ var requestPrototype = {
     },
   });
 });
-//@ chunk-k26nnqnx.js:18264-18506 esm-fingerprint
+//@ chunk-cacgqezg.js:19589-19831 esm-fingerprint
 Object.defineProperty(requestPrototype, Symbol.for("nodejs.util.inspect.custom"), {
   value: function (depth, options, inspectFn) {
     let props = {
@@ -158,9 +158,9 @@ Object.defineProperty(requestPrototype, Symbol.for("nodejs.util.inspect.custom")
     })}`;
   },
 });
-//@ chunk-k26nnqnx.js:18506-18543 esm-fingerprint
+//@ chunk-cacgqezg.js:19831-19868 esm-fingerprint
 Object.setPrototypeOf(requestPrototype, CachedRequest.prototype);
-//@ chunk-k26nnqnx.js:18543-19981 esm-fingerprint
+//@ chunk-cacgqezg.js:19868-21306 esm-fingerprint
 var newRequest = (incoming, defaultHostname) => {
   let req = Object.create(requestPrototype);
   req[incomingKey] = incoming;
@@ -246,7 +246,7 @@ var Response2 = class _Response {
     return status >= 200 && status < 300;
   }
 };
-//@ chunk-k26nnqnx.js:19981-20133 esm-fingerprint
+//@ chunk-cacgqezg.js:21306-21458 esm-fingerprint
 ["body", "bodyUsed", "redirected", "statusText", "trailers", "type", "url"].forEach((k) => {
   Object.defineProperty(Response2.prototype, k, {
     get() {
@@ -254,7 +254,7 @@ var Response2 = class _Response {
     },
   });
 });
-//@ chunk-k26nnqnx.js:20133-20284 esm-fingerprint
+//@ chunk-cacgqezg.js:21458-21609 esm-fingerprint
 ["arrayBuffer", "blob", "clone", "formData", "json", "text"].forEach((k) => {
   Object.defineProperty(Response2.prototype, k, {
     value: function () {
@@ -262,7 +262,7 @@ var Response2 = class _Response {
     },
   });
 });
-//@ chunk-k26nnqnx.js:20284-20536 esm-fingerprint
+//@ chunk-cacgqezg.js:21609-21861 esm-fingerprint
 Object.defineProperty(Response2.prototype, Symbol.for("nodejs.util.inspect.custom"), {
   value: function (depth, options, inspectFn) {
     let props = {
@@ -277,15 +277,15 @@ Object.defineProperty(Response2.prototype, Symbol.for("nodejs.util.inspect.custo
     })}`;
   },
 });
-//@ chunk-k26nnqnx.js:20536-20563 esm-fingerprint
+//@ chunk-cacgqezg.js:21861-21888 esm-fingerprint
 Object.setPrototypeOf(Response2, GlobalResponse);
-//@ chunk-k26nnqnx.js:20563-20610 esm-fingerprint
+//@ chunk-cacgqezg.js:21888-21935 esm-fingerprint
 Object.setPrototypeOf(Response2.prototype, GlobalResponse.prototype);
-//@ chunk-k26nnqnx.js:20610-20708 esm-fingerprint
+//@ chunk-cacgqezg.js:21935-22033 esm-fingerprint
 async function readWithoutBlocking(readPromise) {
   return Promise.race([readPromise, Promise.resolve().then(() => Promise.resolve(undefined))]);
 }
-//@ chunk-k26nnqnx.js:20708-21081 esm-fingerprint
+//@ chunk-cacgqezg.js:22033-22406 esm-fingerprint
 function writeFromReadableStreamDefaultReader(reader, writable, currentReadPromise) {
   let cancel = (error) => {
     reader.cancel(error).catch(() => {});
@@ -313,13 +313,13 @@ function writeFromReadableStreamDefaultReader(reader, writable, currentReadPromi
     }
   }
 }
-//@ chunk-k26nnqnx.js:21081-21208 esm-fingerprint
+//@ chunk-cacgqezg.js:22406-22533 esm-fingerprint
 function writeFromReadableStream(stream, writable) {
   if (stream.locked) throw TypeError("ReadableStream is locked.");
   else if (writable.destroyed) return;
   return writeFromReadableStreamDefaultReader(stream.getReader(), writable);
 }
-//@ chunk-k26nnqnx.js:21208-21464 esm-fingerprint
+//@ chunk-cacgqezg.js:22533-22789 esm-fingerprint
 var buildOutgoingHttpHeaders = (headers) => {
   let res = {};
   if (!(headers instanceof Headers)) headers = new Headers(headers ?? undefined);
@@ -332,9 +332,9 @@ var buildOutgoingHttpHeaders = (headers) => {
   return res;
 };
 var X_ALREADY_SENT = "x-hono-already-sent";
-//@ chunk-k26nnqnx.js:21464-21509 esm-fingerprint
+//@ chunk-cacgqezg.js:22789-22834 esm-fingerprint
 if (typeof global.crypto === "undefined") global.crypto = fe;
-//@ chunk-k26nnqnx.js:21509-24883 esm-fingerprint
+//@ chunk-cacgqezg.js:22834-26208 esm-fingerprint
 var outgoingEnded = Symbol("outgoingEnded");
 var incomingDraining = Symbol("incomingDraining");
 var DRAIN_TIMEOUT_MS = 500;

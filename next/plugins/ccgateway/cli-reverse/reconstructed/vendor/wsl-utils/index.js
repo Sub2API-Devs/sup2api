@@ -1,15 +1,15 @@
 /**
  * wsl-utils/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: wsl-utils@0.1.0
- * pieces: chunk-20ppca50.js (1)
+ * pieces: chunk-j8hasev3.js (1)
  * attribution: esm-fingerprint 1
  */
 import fsPromises, { constants } from "fs/promises";
 import { default as E } from "process";
 import { is_wsl_default } from "../is-wsl/index.js";
 
-//@ chunk-20ppca50.js:1182-1739 esm-fingerprint
+//@ chunk-j8hasev3.js:1182-1739 esm-fingerprint
 var getWslDrivesMountPoint = (() => {
   let mountPoint;
   return async function () {

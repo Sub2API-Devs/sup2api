@@ -3,9 +3,9 @@
  *
  * 统一 @ 建议：合并文件、MCP 资源/模板、agent 建议并排序截断。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/unifiedSuggestions.ts
- * pieces: chunk-18hwfzwa.js (5)
+ * pieces: chunk-czq1j3j2.js (5)
  * attribution: fingerprint 3, layout 1, file-last-pair 1
  */
 import { basename } from "path";
@@ -18,7 +18,7 @@ import { isMcpAppResource } from "../services/mcp/toolNameLimits.js";
 import { literalPrefixBeforeBrace } from "../utils/suggestions/uriTemplate.js";
 import { Fuse } from "../../vendor/fuse.js/dist/fuse.mjs";
 
-//@ chunk-18hwfzwa.js:611275-611822 fingerprint (2.1.88 match: createSuggestionFromSource, 0.772)
+//@ chunk-czq1j3j2.js:631956-632503 fingerprint (2.1.88 match: createSuggestionFromSource, 0.771)
 function createSuggestionFromSource(source) {
   switch (source.type) {
     case "file":
@@ -52,14 +52,14 @@ function createSuggestionFromSource(source) {
       };
   }
 }
-//@ chunk-18hwfzwa.js:611822-611839 layout
+//@ chunk-czq1j3j2.js:632503-632520 layout
 var MAX_UNIFIED_SUGGESTIONS = 15;
 var MAX_DESCRIPTION_WIDTH = 60;
-//@ chunk-18hwfzwa.js:611839-611871 file-last-pair
+//@ chunk-czq1j3j2.js:632520-632552 file-last-pair
 function truncateDescription(description) {
   return truncateToWidth(description, MAX_DESCRIPTION_WIDTH);
 }
-//@ chunk-18hwfzwa.js:611871-612236 fingerprint (2.1.88 match: generateAgentSuggestions, 1)
+//@ chunk-czq1j3j2.js:632552-632917 fingerprint (2.1.88 match: generateAgentSuggestions, 1)
 function generateAgentSuggestions(agents, query, showOnEmpty = false) {
   if (!query && !showOnEmpty) return [];
   try {
@@ -82,7 +82,7 @@ function generateAgentSuggestions(agents, query, showOnEmpty = false) {
     return [];
   }
 }
-//@ chunk-18hwfzwa.js:612236-613736 fingerprint (2.1.88 match: generateUnifiedSuggestions, 0.807)
+//@ chunk-czq1j3j2.js:632917-634417 fingerprint (2.1.88 match: generateUnifiedSuggestions, 0.806)
 /**
  * 统一 @ 建议：并行收集文件、MCP 资源/资源模板、agent 建议，转换成统一建议项并截断描述。
  */

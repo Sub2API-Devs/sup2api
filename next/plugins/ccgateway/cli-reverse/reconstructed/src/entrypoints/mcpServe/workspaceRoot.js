@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：读取 mcp serve 工作区根目录
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hegc6e59.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-e2zrm095.js (2)
  * attribution: placement 2
  */
 import { posix, resolve } from "path";
@@ -25,11 +25,11 @@ import { getClaudeConfigDirOrNull } from "../../utils/envUtils.js";
 import { walkPermissionCheckPathsAsync } from "../../utils/fsOperations.js";
 import { pathInWorkingPath } from "../../utils/permissions/filesystem.js";
 
-//@ chunk-hegc6e59.js:12056-12130 placement
+//@ chunk-e2zrm095.js:13233-13307 placement
 var AbsolutePathSchema = DoctorLazy(() =>
   stringSchema().max(MAX_REGISTER_DIRECTORY_CHARS).refine(posix.isAbsolute, "must be an absolute path"),
 );
-//@ chunk-hegc6e59.js:12130-12801 placement
+//@ chunk-e2zrm095.js:13307-13979 placement
 /**
  * 读取并清除 CLAUDE_CODE_MCP_SERVE_WORKSPACE_ROOT，校验为绝对路径且不是私有目录。
  */

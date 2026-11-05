@@ -1,15 +1,15 @@
 /**
  * human-signals/build/src/signals.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: human-signals@4.3.1..8.0.1
- * pieces: chunk-m4p5zn6n.js (1)
+ * pieces: chunk-t889g22j.js (1)
  * attribution: esm-layout 1
  */
 import { constants } from "os";
 import { getRealtimeSignals } from "./realtime.js";
 import { signals } from "./core.js";
 
-//@ chunk-m4p5zn6n.js:13732-13975 esm-layout
+//@ chunk-t889g22j.js:13731-13974 esm-layout
 var getSignals = () => {
   let realtimeSignals = getRealtimeSignals();
   return [...signals, ...realtimeSignals].map(normalizeSignal);

@@ -1,8 +1,8 @@
 /**
  * @modelcontextprotocol/client/dist/index.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/client@2.0.0
- * pieces: chunk-1kaj6e83.js (1), chunk-1ny7cxrt.js (1), chunk-n1aavqzh.js (1), chunk-r1g76qsy.js (87)
+ * pieces: chunk-1hnjmk23.js (1), chunk-ft6a2kja.js (1), chunk-ghww1f0b.js (1), chunk-qq5knpkd.js (87)
  * attribution: esm-fingerprint 82, esm-layout 8
  */
 import {
@@ -48,19 +48,21 @@ import {
 import {
   OAuthErrorResponseSchema,
   OAuthProtectedResourceMetadataSchema,
-  LATEST_PROTOCOL_VERSION,
   OAuthMetadataSchema,
   OpenIdProviderDiscoveryMetadataSchema,
   OAuthTokensSchema,
   OAuthClientInformationFullSchema,
-  SERVER_INFO_META_KEY,
   DiscoverResultSchema,
-  SUBSCRIPTION_ID_META_KEY,
   ListChangedOptionsBaseSchema,
-  PROTOCOL_VERSION_META_KEY,
   TokenExchangeResponseSchema_2,
   TokenExchangeResponseSchema,
 } from "../../core/dist/auth-CUe6YdwF.mjs";
+import {
+  LATEST_PROTOCOL_VERSION,
+  SERVER_INFO_META_KEY,
+  SUBSCRIPTION_ID_META_KEY,
+  PROTOCOL_VERSION_META_KEY,
+} from "../../core/dist/schemas-lGLjBX8n.cjs";
 import { pkceChallenge } from "../../../pkce-challenge/dist/index.node.js";
 import { AjvJsonSchemaValidator } from "./ajvProvider-BIwGVY6G.mjs";
 import { EventSource } from "../../../eventsource/dist/index.js";
@@ -82,16 +84,16 @@ import {
 import { redactUrlSecrets } from "../../../../src/utils/urlRedaction.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-r1g76qsy.js:256668-256678 esm-layout
+//@ chunk-qq5knpkd.js:261073-261083 esm-layout
 var isDevMode = false;
-//@ chunk-r1g76qsy.js:256678-258898 esm-fingerprint
+//@ chunk-qq5knpkd.js:261083-263303 esm-fingerprint
 var OAuthClientFlowError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var IssuerMismatchError;
 var RegistrationRejectedError;
 var InsecureTokenEndpointError;
 var AuthorizationServerMismatchError;
 var InsufficientScopeError;
-deferInit("chunk-r1g76qsy.js:256678", () => {
+deferInit("chunk-qq5knpkd.js:261083", () => {
   OAuthClientFlowError = class extends Error {
     static {
       Object.defineProperty(this, "mcpBrand", {
@@ -193,7 +195,7 @@ deferInit("chunk-r1g76qsy.js:256678", () => {
     }
   };
 });
-//@ chunk-r1g76qsy.js:258898-259270 esm-fingerprint
+//@ chunk-qq5knpkd.js:263303-263675 esm-fingerprint
 function discardIfIssuerMismatch(stored, issuer, opts) {
   if (stored === undefined) return;
   if (stored.issuer === undefined) {
@@ -205,17 +207,17 @@ function discardIfIssuerMismatch(stored, issuer, opts) {
   }
   return issuersMatch(stored.issuer, issuer) ? stored : undefined;
 }
-//@ chunk-r1g76qsy.js:259270-259372 esm-fingerprint
+//@ chunk-qq5knpkd.js:263675-263777 esm-fingerprint
 function issuersMatch(a, b) {
   return a === b || (a.endsWith("/") && a.slice(0, -1) === b) || (b.endsWith("/") && b.slice(0, -1) === a);
 }
-//@ chunk-r1g76qsy.js:259372-259492 esm-fingerprint
+//@ chunk-qq5knpkd.js:263777-263897 esm-fingerprint
 function isOAuthClientProvider(provider) {
   if (provider == null) return false;
   let p = provider;
   return typeof p.tokens === "function" && typeof p.clientInformation === "function";
 }
-//@ chunk-r1g76qsy.js:259492-259689 esm-fingerprint
+//@ chunk-qq5knpkd.js:263897-264094 esm-fingerprint
 async function handleOAuthUnauthorized(provider, ctx, extraAuthOptions) {
   let { resourceMetadataUrl, scope } = extractWWWAuthenticateParams(ctx.response);
   if (
@@ -229,16 +231,16 @@ async function handleOAuthUnauthorized(provider, ctx, extraAuthOptions) {
   )
     throw new UnauthorizedError();
 }
-//@ chunk-r1g76qsy.js:259689-259797 esm-fingerprint
+//@ chunk-qq5knpkd.js:264094-264202 esm-fingerprint
 function adaptOAuthProvider(provider, extraAuthOptions) {
   return {
     token: async () => (await provider.tokens())?.access_token,
     onUnauthorized: async (ctx) => handleOAuthUnauthorized(provider, ctx, extraAuthOptions),
   };
 }
-//@ chunk-r1g76qsy.js:259797-260252 esm-fingerprint
+//@ chunk-qq5knpkd.js:264202-264657 esm-fingerprint
 var UnauthorizedError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r1g76qsy.js:259797", () => {
+deferInit("chunk-qq5knpkd.js:264202", () => {
   UnauthorizedError = class extends Error {
     static {
       Object.defineProperty(this, "mcpBrand", {
@@ -262,11 +264,11 @@ deferInit("chunk-r1g76qsy.js:259797", () => {
     }
   };
 });
-//@ chunk-r1g76qsy.js:260252-260329 esm-fingerprint
+//@ chunk-qq5knpkd.js:264657-264734 esm-fingerprint
 function isIssParameterSupported(metadata) {
   return metadata?.authorization_response_iss_parameter_supported === true;
 }
-//@ chunk-r1g76qsy.js:260329-260541 esm-fingerprint
+//@ chunk-qq5knpkd.js:264734-264946 esm-fingerprint
 function validateAuthorizationResponseIssuer({ iss, expectedIssuer, issParameterSupported }) {
   if (expectedIssuer === undefined) return;
   if (iss === undefined) {
@@ -276,7 +278,7 @@ function validateAuthorizationResponseIssuer({ iss, expectedIssuer, issParameter
   }
   if (iss !== expectedIssuer) throw new IssuerMismatchError("authorization_response", expectedIssuer, iss);
 }
-//@ chunk-r1g76qsy.js:260541-260686 esm-fingerprint
+//@ chunk-qq5knpkd.js:264946-265091 esm-fingerprint
 function computeScopeUnion(...scopes) {
   let seen = new Set();
   for (let scope of scopes) {
@@ -285,14 +287,14 @@ function computeScopeUnion(...scopes) {
   }
   return seen.size > 0 ? [...seen].join(" ") : undefined;
 }
-//@ chunk-r1g76qsy.js:260686-260832 esm-fingerprint
+//@ chunk-qq5knpkd.js:265091-265237 esm-fingerprint
 function isStrictScopeSuperset(union, current) {
   if (!union) return false;
   let currentSet = new Set((current ?? "").split(/\s+/).filter(Boolean));
   for (let token of union.split(/\s+/)) if (token && !currentSet.has(token)) return true;
   return false;
 }
-//@ chunk-r1g76qsy.js:260832-261464 esm-fingerprint
+//@ chunk-qq5knpkd.js:265237-265869 esm-fingerprint
 async function resolveAuthorizationCallbackParams(codeOrParams, iss, provider, serverUrl, opts) {
   if (typeof codeOrParams === "string")
     return {
@@ -329,14 +331,14 @@ async function resolveAuthorizationCallbackParams(codeOrParams, iss, provider, s
     );
   throw new UnauthorizedError("Authorization callback contained neither `code` nor `error`");
 }
-//@ chunk-r1g76qsy.js:261464-261549 esm-fingerprint
+//@ chunk-qq5knpkd.js:265869-265954 esm-fingerprint
 function isClientAuthMethod(method) {
   return ["client_secret_basic", "client_secret_post", "none"].includes(method);
 }
-//@ chunk-r1g76qsy.js:261549-261573 esm-fingerprint
+//@ chunk-qq5knpkd.js:265954-265978 esm-fingerprint
 var AUTHORIZATION_CODE_RESPONSE_TYPE = "code";
 var AUTHORIZATION_CODE_CHALLENGE_METHOD = "S256";
-//@ chunk-r1g76qsy.js:261573-262075 esm-fingerprint
+//@ chunk-qq5knpkd.js:265978-266480 esm-fingerprint
 function selectClientAuthMethod(clientInformation, supportedMethods) {
   let hasClientSecret = clientInformation.client_secret !== undefined;
   if (
@@ -352,7 +354,7 @@ function selectClientAuthMethod(clientInformation, supportedMethods) {
   if (supportedMethods.includes("none")) return "none";
   return hasClientSecret ? "client_secret_post" : "none";
 }
-//@ chunk-r1g76qsy.js:262075-262323 esm-fingerprint
+//@ chunk-qq5knpkd.js:266480-266728 esm-fingerprint
 function applyClientAuthentication(method, clientInformation, headers, params) {
   let { client_id, client_secret } = clientInformation;
   switch (method) {
@@ -369,33 +371,33 @@ function applyClientAuthentication(method, clientInformation, headers, params) {
       throw Error(`Unsupported client authentication method: ${method}`);
   }
 }
-//@ chunk-r1g76qsy.js:262323-262483 esm-fingerprint
+//@ chunk-qq5knpkd.js:266728-266888 esm-fingerprint
 function applyBasicAuth(clientId, clientSecret, headers) {
   if (!clientSecret) throw Error("client_secret_basic authentication requires a client_secret");
   let credentials = btoa(`${clientId}:${clientSecret}`);
   headers.set("Authorization", `Basic ${credentials}`);
 }
-//@ chunk-r1g76qsy.js:262483-262553 esm-fingerprint
+//@ chunk-qq5knpkd.js:266888-266958 esm-fingerprint
 function applyPostAuth(clientId, clientSecret, params) {
   params.set("client_id", clientId);
   if (clientSecret) params.set("client_secret", clientSecret);
 }
-//@ chunk-r1g76qsy.js:262553-262591 esm-fingerprint
+//@ chunk-qq5knpkd.js:266958-266996 esm-fingerprint
 function applyPublicAuth(clientId, params) {
   params.set("client_id", clientId);
 }
-//@ chunk-r1g76qsy.js:262591-262670 esm-fingerprint
+//@ chunk-qq5knpkd.js:266996-267075 esm-fingerprint
 function isLoopbackHost(hostname) {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]" || hostname === "::1";
 }
-//@ chunk-r1g76qsy.js:262670-262782 esm-fingerprint
+//@ chunk-qq5knpkd.js:267075-267187 esm-fingerprint
 function assertSecureTokenEndpoint(tokenEndpoint) {
   let url = new URL(String(tokenEndpoint));
   if (url.protocol !== "https:" && !isLoopbackHost(url.hostname))
     throw new InsecureTokenEndpointError(url.href);
   return url;
 }
-//@ chunk-r1g76qsy.js:262782-262962 esm-fingerprint
+//@ chunk-qq5knpkd.js:267187-267367 esm-fingerprint
 function deriveApplicationType(redirectUris) {
   for (let raw of redirectUris ?? []) {
     let url;
@@ -409,7 +411,7 @@ function deriveApplicationType(redirectUris) {
   }
   return "web";
 }
-//@ chunk-r1g76qsy.js:262962-263168 esm-fingerprint
+//@ chunk-qq5knpkd.js:267367-267573 esm-fingerprint
 function resolveClientMetadata(provider) {
   let clientMetadata = provider.clientMetadata;
   return {
@@ -420,7 +422,7 @@ function resolveClientMetadata(provider) {
     application_type: clientMetadata.application_type ?? deriveApplicationType(clientMetadata.redirect_uris),
   };
 }
-//@ chunk-r1g76qsy.js:263168-263458 esm-fingerprint
+//@ chunk-qq5knpkd.js:267573-267863 esm-fingerprint
 async function parseErrorResponse(input) {
   let statusCode = input instanceof Response ? input.status : undefined;
   let body = input instanceof Response ? await input.text() : input;
@@ -432,7 +434,7 @@ async function parseErrorResponse(input) {
     return new OAuthError(OAuthErrorCode.ServerError, errorMessage);
   }
 }
-//@ chunk-r1g76qsy.js:263458-263810 esm-fingerprint
+//@ chunk-qq5knpkd.js:267863-268215 esm-fingerprint
 async function auth(provider, options) {
   try {
     return await authInternal(provider, options);
@@ -450,7 +452,7 @@ async function auth(provider, options) {
     throw error;
   }
 }
-//@ chunk-r1g76qsy.js:263810-264122 esm-fingerprint
+//@ chunk-qq5knpkd.js:268215-268527 esm-fingerprint
 function determineScope(options) {
   let { requestedScope, resourceMetadata, authServerMetadata, clientMetadata } = options;
   let effectiveScope =
@@ -464,7 +466,7 @@ function determineScope(options) {
     effectiveScope = `${effectiveScope} offline_access`;
   return effectiveScope;
 }
-//@ chunk-r1g76qsy.js:264122-267876 esm-fingerprint
+//@ chunk-qq5knpkd.js:268527-272281 esm-fingerprint
 async function authInternal(
   provider,
   {
@@ -680,7 +682,7 @@ async function authInternal(
   await provider.redirectToAuthorization(authorizationUrl);
   return "REDIRECT";
 }
-//@ chunk-r1g76qsy.js:267876-267990 esm-fingerprint
+//@ chunk-qq5knpkd.js:272281-272395 esm-fingerprint
 function isHttpsUrl(value) {
   if (!value) return false;
   try {
@@ -690,7 +692,7 @@ function isHttpsUrl(value) {
     return false;
   }
 }
-//@ chunk-r1g76qsy.js:267990-268291 esm-fingerprint
+//@ chunk-qq5knpkd.js:272395-272696 esm-fingerprint
 async function selectResourceURL(serverUrl, provider, resourceMetadata) {
   let defaultResource = resourceUrlFromServerUrl(serverUrl);
   if (provider.validateResourceURL)
@@ -707,7 +709,7 @@ async function selectResourceURL(serverUrl, provider, resourceMetadata) {
     );
   return new URL(resourceMetadata.resource);
 }
-//@ chunk-r1g76qsy.js:268291-268652 esm-fingerprint
+//@ chunk-qq5knpkd.js:272696-273057 esm-fingerprint
 function extractWWWAuthenticateParams(res) {
   let authenticateHeader = res.headers.get("WWW-Authenticate");
   if (!authenticateHeader) return {};
@@ -729,7 +731,7 @@ function extractWWWAuthenticateParams(res) {
     errorDescription,
   };
 }
-//@ chunk-r1g76qsy.js:268652-268848 esm-fingerprint
+//@ chunk-qq5knpkd.js:273057-273253 esm-fingerprint
 function extractFieldFromWwwAuth(response, fieldName) {
   let wwwAuthHeader = response.headers.get("WWW-Authenticate");
   if (!wwwAuthHeader) return null;
@@ -741,7 +743,7 @@ function extractFieldFromWwwAuth(response, fieldName) {
   }
   return null;
 }
-//@ chunk-r1g76qsy.js:268848-269307 esm-fingerprint
+//@ chunk-qq5knpkd.js:273253-273712 esm-fingerprint
 async function discoverOAuthProtectedResourceMetadata(serverUrl, opts, fetchFn = fetch) {
   let response = await discoverMetadataWithFallback(serverUrl, "oauth-protected-resource", fetchFn, {
     protocolVersion: opts?.protocolVersion,
@@ -757,7 +759,7 @@ async function discoverOAuthProtectedResourceMetadata(serverUrl, opts, fetchFn =
   }
   return OAuthProtectedResourceMetadataSchema.parse(await response.json());
 }
-//@ chunk-r1g76qsy.js:269307-269514 esm-layout
+//@ chunk-qq5knpkd.js:273712-273919 esm-layout
 async function fetchWithCorsRetry(url, headers, fetchFn = fetch) {
   try {
     return await fetchFn(url, {
@@ -775,14 +777,14 @@ async function fetchWithCorsRetry(url, headers, fetchFn = fetch) {
     return;
   }
 }
-//@ chunk-r1g76qsy.js:269514-269647 esm-fingerprint
+//@ chunk-qq5knpkd.js:273919-274052 esm-fingerprint
 function buildWellKnownPath(wellKnownPrefix, pathname = "", options = {}) {
   if (pathname.endsWith("/")) pathname = pathname.slice(0, -1);
   return options.prependPathname
     ? `${pathname}/.well-known/${wellKnownPrefix}`
     : `/.well-known/${wellKnownPrefix}${pathname}`;
 }
-//@ chunk-r1g76qsy.js:269647-269726 esm-fingerprint
+//@ chunk-qq5knpkd.js:274052-274131 esm-fingerprint
 async function tryMetadataDiscovery(url, protocolVersion, fetchFn = fetch) {
   return await fetchWithCorsRetry(
     url,
@@ -792,13 +794,13 @@ async function tryMetadataDiscovery(url, protocolVersion, fetchFn = fetch) {
     fetchFn,
   );
 }
-//@ chunk-r1g76qsy.js:269726-269829 esm-layout
+//@ chunk-qq5knpkd.js:274131-274234 esm-layout
 function shouldAttemptFallback(response, pathname) {
   if (!response) return true;
   if (pathname === "/") return false;
   return (response.status >= 400 && response.status < 500) || response.status === 502;
 }
-//@ chunk-r1g76qsy.js:269829-270141 esm-fingerprint
+//@ chunk-qq5knpkd.js:274234-274546 esm-fingerprint
 async function discoverMetadataWithFallback(serverUrl, wellKnownType, fetchFn, opts) {
   let issuer = new URL(serverUrl);
   let protocolVersion = opts?.protocolVersion ?? LATEST_PROTOCOL_VERSION;
@@ -818,7 +820,7 @@ async function discoverMetadataWithFallback(serverUrl, wellKnownType, fetchFn, o
     );
   return response;
 }
-//@ chunk-r1g76qsy.js:270141-270697 esm-fingerprint
+//@ chunk-qq5knpkd.js:274546-275102 esm-fingerprint
 function buildDiscoveryUrls(authorizationServerUrl) {
   let url =
     typeof authorizationServerUrl === "string" ? new URL(authorizationServerUrl) : authorizationServerUrl;
@@ -855,7 +857,7 @@ function buildDiscoveryUrls(authorizationServerUrl) {
   );
   return urlsToTry;
 }
-//@ chunk-r1g76qsy.js:270697-271343 esm-fingerprint
+//@ chunk-qq5knpkd.js:275102-275748 esm-fingerprint
 async function discoverAuthorizationServerMetadata(
   authorizationServerUrl,
   { fetchFn = fetch, protocolVersion = LATEST_PROTOCOL_VERSION, skipIssuerValidation = false } = {},
@@ -891,7 +893,7 @@ async function discoverAuthorizationServerMetadata(
     return parsed;
   }
 }
-//@ chunk-r1g76qsy.js:271343-271789 esm-fingerprint
+//@ chunk-qq5knpkd.js:275748-276194 esm-fingerprint
 async function discoverOAuthServerInfo(serverUrl, opts) {
   let resourceMetadata;
   let authorizationServerUrl;
@@ -919,7 +921,7 @@ async function discoverOAuthServerInfo(serverUrl, opts) {
     resourceMetadata,
   };
 }
-//@ chunk-r1g76qsy.js:271789-272770 esm-fingerprint
+//@ chunk-qq5knpkd.js:276194-277175 esm-fingerprint
 async function startAuthorization(
   authorizationServerUrl,
   { metadata, clientInformation, redirectUrl, scope, state, resource },
@@ -955,7 +957,7 @@ async function startAuthorization(
     codeVerifier,
   };
 }
-//@ chunk-r1g76qsy.js:272770-272897 esm-fingerprint
+//@ chunk-qq5knpkd.js:277175-277302 esm-fingerprint
 function prepareAuthorizationCodeRequest(authorizationCode, codeVerifier, redirectUri) {
   return new URLSearchParams({
     grant_type: "authorization_code",
@@ -964,7 +966,7 @@ function prepareAuthorizationCodeRequest(authorizationCode, codeVerifier, redire
     redirect_uri: String(redirectUri),
   });
 }
-//@ chunk-r1g76qsy.js:272897-273513 esm-fingerprint
+//@ chunk-qq5knpkd.js:277302-277918 esm-fingerprint
 async function executeTokenRequest(
   authorizationServerUrl,
   { metadata, tokenRequestParams, clientInformation, addClientAuthentication, resource, fetchFn },
@@ -1000,7 +1002,7 @@ async function executeTokenRequest(
     throw parseError;
   }
 }
-//@ chunk-r1g76qsy.js:273513-273857 esm-fingerprint
+//@ chunk-qq5knpkd.js:277918-278262 esm-fingerprint
 async function exchangeAuthorization(
   authorizationServerUrl,
   {
@@ -1029,7 +1031,7 @@ async function exchangeAuthorization(
     fetchFn,
   });
 }
-//@ chunk-r1g76qsy.js:273857-274178 esm-fingerprint
+//@ chunk-qq5knpkd.js:278262-278583 esm-fingerprint
 async function refreshAuthorization(
   authorizationServerUrl,
   { metadata, clientInformation, refreshToken, resource, addClientAuthentication, fetchFn },
@@ -1049,7 +1051,7 @@ async function refreshAuthorization(
     })),
   };
 }
-//@ chunk-r1g76qsy.js:274178-274881 esm-fingerprint
+//@ chunk-qq5knpkd.js:278583-279286 esm-fingerprint
 async function fetchToken(
   provider,
   authorizationServerUrl,
@@ -1086,7 +1088,7 @@ async function fetchToken(
     fetchFn,
   });
 }
-//@ chunk-r1g76qsy.js:274881-275399 esm-fingerprint
+//@ chunk-qq5knpkd.js:279286-279804 esm-fingerprint
 async function registerClient(authorizationServerUrl, { metadata, clientMetadata, scope, fetchFn }) {
   let registrationUrl;
   if (metadata) {
@@ -1117,13 +1119,13 @@ async function registerClient(authorizationServerUrl, { metadata, clientMetadata
     });
   return OAuthClientInformationFullSchema.parse(await response.json());
 }
-//@ chunk-r1g76qsy.js:275399-276316 esm-fingerprint
+//@ chunk-qq5knpkd.js:279804-280721 esm-fingerprint
 /**
  * McpResponseCache：MCP SDK 响应缓存，键为 method\0JSON([partition,params])；列表类方法与 server/discover 不计入上限（默认 512），其他方法超限时淘汰最早一条。归属疑为 SDK（见 lead 建议）。
  */
 var UNCAPPED_CACHE_METHODS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var McpResponseCache;
-deferInit("chunk-r1g76qsy.js:275399", () => {
+deferInit("chunk-qq5knpkd.js:279804", () => {
   UNCAPPED_CACHE_METHODS = new Set([
     "tools/list",
     "prompts/list",
@@ -1184,18 +1186,18 @@ deferInit("chunk-r1g76qsy.js:275399", () => {
     }
   };
 });
-//@ chunk-r1g76qsy.js:276316-276404 esm-fingerprint
+//@ chunk-qq5knpkd.js:280721-280809 esm-fingerprint
 /**
  * responseCacheKey：缓存键 = method + \0 + JSON([partition, params])。
  */
 function responseCacheKey(key) {
   return `${key.method}\x00${JSON.stringify([key.partition ?? "", key.params ?? ""])}`;
 }
-//@ chunk-r1g76qsy.js:276404-276456 esm-layout
+//@ chunk-qq5knpkd.js:280809-280861 esm-layout
 function genKey(method, params) {
   return params === undefined ? method : `${method}\x00${params}`;
 }
-//@ chunk-r1g76qsy.js:276456-279996 esm-fingerprint
+//@ chunk-qq5knpkd.js:280861-284401 esm-fingerprint
 var MAX_CACHE_TTL_MS = 86400000;
 var ClientResponseCache = class {
   _evictionGeneration = new Map();
@@ -1397,7 +1399,7 @@ var ClientResponseCache = class {
     }
   }
 };
-//@ chunk-r1g76qsy.js:279996-280268 esm-fingerprint
+//@ chunk-qq5knpkd.js:284401-284673 esm-fingerprint
 function encodeCacheValue(value) {
   let json;
   try {
@@ -1411,14 +1413,14 @@ function encodeCacheValue(value) {
     throw TypeError("cache value is not JSON-serializable: it has no JSON representation");
   return json;
 }
-//@ chunk-r1g76qsy.js:280268-280317 esm-fingerprint
+//@ chunk-qq5knpkd.js:284673-284722 esm-fingerprint
 var UNSUPPORTED_PROTOCOL_VERSION; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NOT_PROBE_RECOGNIZED;
-deferInit("chunk-r1g76qsy.js:280268", () => {
+deferInit("chunk-qq5knpkd.js:284673", () => {
   UNSUPPORTED_PROTOCOL_VERSION = -32022;
   NOT_PROBE_RECOGNIZED = new Set([-32001, -32020, -32021]);
 });
-//@ chunk-r1g76qsy.js:280317-280959 esm-fingerprint
+//@ chunk-qq5knpkd.js:284722-285364 esm-fingerprint
 function classifyProbeOutcome(outcome, context) {
   switch (outcome.kind) {
     case "result":
@@ -1463,7 +1465,7 @@ function classifyProbeOutcome(outcome, context) {
       };
   }
 }
-//@ chunk-r1g76qsy.js:280959-281329 esm-fingerprint
+//@ chunk-qq5knpkd.js:285364-285734 esm-fingerprint
 function classifyResult(result, context) {
   let parsed = codecForVersion(MODERN_WIRE_REVISION).validateResult("server/discover", result);
   if (!parsed.ok)
@@ -1490,7 +1492,7 @@ function classifyResult(result, context) {
     }),
   };
 }
-//@ chunk-r1g76qsy.js:281329-281784 esm-fingerprint
+//@ chunk-qq5knpkd.js:285734-286189 esm-fingerprint
 function classifyRpcError(outcome, context) {
   let { code, message, data } = outcome;
   if (code === UNSUPPORTED_PROTOCOL_VERSION) {
@@ -1536,7 +1538,7 @@ function classifyRpcError(outcome, context) {
     kind: "legacy",
   };
 }
-//@ chunk-r1g76qsy.js:281784-281869 esm-layout
+//@ chunk-qq5knpkd.js:286189-286274 esm-layout
 function classifyHttpError(outcome, context) {
   let rpcError = parseJsonRpcErrorBody(outcome.body);
   if (rpcError !== undefined) return classifyRpcError(rpcError, context);
@@ -1544,7 +1546,7 @@ function classifyHttpError(outcome, context) {
     kind: "legacy",
   };
 }
-//@ chunk-r1g76qsy.js:281869-282058 esm-fingerprint
+//@ chunk-qq5knpkd.js:286274-286463 esm-fingerprint
 function classifyNetworkError(error, context) {
   if (context.environment === "browser" && isOpaqueFetchTypeError(error))
     return {
@@ -1561,15 +1563,15 @@ function classifyNetworkError(error, context) {
     ),
   };
 }
-//@ chunk-r1g76qsy.js:282058-282145 esm-fingerprint
+//@ chunk-qq5knpkd.js:286463-286550 esm-fingerprint
 function isOpaqueFetchTypeError(error) {
   return error instanceof TypeError || (error instanceof Error && error.name === "TypeError");
 }
-//@ chunk-r1g76qsy.js:282145-282206 esm-layout
+//@ chunk-qq5knpkd.js:286550-286611 esm-layout
 function describeError(error) {
   return error instanceof Error ? error.message : String(error);
 }
-//@ chunk-r1g76qsy.js:282206-282366 esm-fingerprint
+//@ chunk-qq5knpkd.js:286611-286771 esm-fingerprint
 function parseSupportedList(data) {
   if (typeof data !== "object" || data === null) return;
   let supported = data.supported;
@@ -1577,13 +1579,13 @@ function parseSupportedList(data) {
     return;
   return supported;
 }
-//@ chunk-r1g76qsy.js:282366-282475 esm-fingerprint
+//@ chunk-qq5knpkd.js:286771-286880 esm-fingerprint
 function parseRequested(data) {
   if (typeof data !== "object" || data === null) return;
   let requested = data.requested;
   return typeof requested === "string" ? requested : undefined;
 }
-//@ chunk-r1g76qsy.js:282475-282768 esm-fingerprint
+//@ chunk-qq5knpkd.js:286880-287173 esm-fingerprint
 function parseJsonRpcErrorBody(body) {
   if (body === undefined || body === "") return;
   let parsed;
@@ -1603,9 +1605,9 @@ function parseJsonRpcErrorBody(body) {
     data,
   };
 }
-//@ chunk-r1g76qsy.js:282768-282784 esm-fingerprint
+//@ chunk-qq5knpkd.js:287173-287189 esm-fingerprint
 var DEFAULT_VERSION_NEGOTIATION_MODE = "legacy";
-//@ chunk-r1g76qsy.js:282784-283281 esm-fingerprint
+//@ chunk-qq5knpkd.js:287189-287686 esm-fingerprint
 function resolveVersionNegotiation(options, supportedProtocolVersionsOption) {
   let mode = options?.mode ?? DEFAULT_VERSION_NEGOTIATION_MODE;
   if (mode === "legacy")
@@ -1636,19 +1638,19 @@ function resolveVersionNegotiation(options, supportedProtocolVersionsOption) {
     probe,
   };
 }
-//@ chunk-r1g76qsy.js:283281-283375 esm-fingerprint
+//@ chunk-qq5knpkd.js:287686-287780 esm-fingerprint
 function detectProbeEnvironment() {
   let g = globalThis;
   return g.window !== undefined && g.document !== undefined ? "browser" : "node";
 }
-//@ chunk-r1g76qsy.js:283375-283435 esm-fingerprint
+//@ chunk-qq5knpkd.js:287780-287840 esm-fingerprint
 function detectProbeTransportKind(transport) {
   return "stderr" in transport && "pid" in transport ? "stdio" : "http";
 }
-//@ chunk-r1g76qsy.js:283435-286144 esm-fingerprint
+//@ chunk-qq5knpkd.js:287840-290549 esm-fingerprint
 var ProbeWindow; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var weakMap;
-deferInit("chunk-r1g76qsy.js:283435", () => {
+deferInit("chunk-qq5knpkd.js:287840", () => {
   ProbeWindow = class ProbeWindow {
     _pending;
     _probeCounter = 0;
@@ -1834,27 +1836,27 @@ deferInit("chunk-r1g76qsy.js:283435", () => {
   };
   weakMap = new WeakMap();
 });
-//@ chunk-r1g76qsy.js:286144-286291 esm-layout
+//@ chunk-qq5knpkd.js:290549-290696 esm-layout
 function truncateForError(text) {
   let str = String(text);
   if (str.length <= 200) return str;
   let sliceEnd = (str.charCodeAt(199) & 64512) === 55296 ? 199 : 200;
   return `${str.slice(0, sliceEnd)}\u2026 [truncated]`;
 }
-//@ chunk-r1g76qsy.js:286291-286428 esm-layout
+//@ chunk-qq5knpkd.js:290696-290833 esm-layout
 function isDecodeError(error) {
   if (error instanceof SyntaxError) return true;
   return (
     typeof error === "object" && error !== null && (error.name === "ZodError" || Array.isArray(error.issues))
   );
 }
-//@ chunk-r1g76qsy.js:286428-286478 esm-fingerprint
+//@ chunk-qq5knpkd.js:290833-290883 esm-fingerprint
 function disarmSpentCloseGuard(transport) {
   let restoreOnClose = weakMap.get(transport);
   weakMap.delete(transport);
   restoreOnClose?.();
 }
-//@ chunk-r1g76qsy.js:286478-286644 esm-fingerprint
+//@ chunk-qq5knpkd.js:290883-291049 esm-fingerprint
 function buildProbeRequest(id, protocolVersion, clientInfo, capabilities) {
   return {
     jsonrpc: "2.0",
@@ -1869,7 +1871,7 @@ function buildProbeRequest(id, protocolVersion, clientInfo, capabilities) {
     },
   };
 }
-//@ chunk-r1g76qsy.js:286644-287286 esm-fingerprint
+//@ chunk-qq5knpkd.js:291049-291691 esm-fingerprint
 function normalizeReply(reply, timeoutMs) {
   switch (reply.kind) {
     case "response":
@@ -1928,7 +1930,7 @@ function normalizeReply(reply, timeoutMs) {
       };
   }
 }
-//@ chunk-r1g76qsy.js:287286-289241 esm-fingerprint
+//@ chunk-qq5knpkd.js:291691-293646 esm-fingerprint
 async function negotiateEra(negotiation, deps) {
   let timeoutMs = negotiation.probe.timeoutMs ?? deps.defaultTimeoutMs;
   let maxRetries = Math.max(0, negotiation.probe.maxRetries ?? 0);
@@ -2012,7 +2014,7 @@ async function negotiateEra(negotiation, deps) {
   probe.release();
   return result;
 }
-//@ chunk-r1g76qsy.js:289241-289456 esm-fingerprint
+//@ chunk-qq5knpkd.js:293646-293861 esm-fingerprint
 function readStdioServerParams(transport) {
   let proto = Object.getPrototypeOf(transport);
   if (proto === null || !Object.prototype.hasOwnProperty.call(proto, "_dispose")) return;
@@ -2021,7 +2023,7 @@ function readStdioServerParams(transport) {
     ? params
     : undefined;
 }
-//@ chunk-r1g76qsy.js:289456-289821 esm-fingerprint
+//@ chunk-qq5knpkd.js:293861-294226 esm-fingerprint
 async function negotiateStdioViaSibling(negotiation, sessionTransport, params, deps) {
   let sibling = new sessionTransport.constructor({
     ...params,
@@ -2055,26 +2057,26 @@ async function negotiateStdioViaSibling(negotiation, sessionTransport, params, d
   if (callerClosed) throw callerCloseAbortError();
   return result;
 }
-//@ chunk-r1g76qsy.js:289821-289962 esm-fingerprint
+//@ chunk-qq5knpkd.js:294226-294367 esm-fingerprint
 function callerCloseAbortError() {
   return new SdkError(
     SdkErrorCode.EraNegotiationFailed,
     "Version negotiation failed: the transport was closed during the server/discover probe",
   );
 }
-//@ chunk-r1g76qsy.js:289962-290061 esm-fingerprint
+//@ chunk-qq5knpkd.js:294367-294466 esm-fingerprint
 async function disposeSibling(sibling) {
   try {
     let dispose = sibling._dispose;
     await (typeof dispose === "function" ? dispose.call(sibling) : sibling.close());
   } catch {}
 }
-//@ chunk-r1g76qsy.js:290061-290133 esm-fingerprint
+//@ chunk-qq5knpkd.js:294466-294538 esm-fingerprint
 function serverInfoFromDiscover(discover) {
   let fromMeta = discover._meta?.[SERVER_INFO_META_KEY];
   return isSpecType.Implementation(fromMeta) ? fromMeta : undefined;
 }
-//@ chunk-r1g76qsy.js:290133-290598 esm-fingerprint
+//@ chunk-qq5knpkd.js:294538-295003 esm-fingerprint
 function applyElicitationDefaults(schema, data) {
   if (!schema || data === null || typeof data !== "object") return;
   if (schema.type === "object" && schema.properties && typeof schema.properties === "object") {
@@ -2094,7 +2096,7 @@ function applyElicitationDefaults(schema, data) {
     for (let sub of schema.oneOf) if (typeof sub !== "boolean") applyElicitationDefaults(sub, data);
   }
 }
-//@ chunk-r1g76qsy.js:290598-290758 esm-fingerprint
+//@ chunk-qq5knpkd.js:295003-295163 esm-fingerprint
 function getSupportedElicitationModes(capabilities) {
   if (!capabilities)
     return {
@@ -2108,7 +2110,7 @@ function getSupportedElicitationModes(capabilities) {
     supportsUrlMode: hasUrlCapability,
   };
 }
-//@ chunk-r1g76qsy.js:290758-291095 esm-fingerprint
+//@ chunk-qq5knpkd.js:295163-295500 esm-fingerprint
 function validatePrior(prior) {
   if (typeof prior === "object" && prior !== null) {
     if (prior.kind === "legacy" && !("supportedVersions" in prior) && !("discover" in prior)) return prior;
@@ -2119,11 +2121,11 @@ function validatePrior(prior) {
     "connect({ prior }): unrecognized prior \u2014 expected { kind: 'modern', discover } or { kind: 'legacy' }",
   );
 }
-//@ chunk-r1g76qsy.js:291095-316569 esm-fingerprint
+//@ chunk-qq5knpkd.js:295500-320975 esm-fingerprint
 var LIST_CHANGED_EVICTIONS; // deferred: uses NO_REQUEST_STATE (./src-D_zzAWoS.mjs) of its import cycle while loading; runs once the cycle is complete
 var DEFAULT_LIST_MAX_PAGES;
 var Client;
-deferInit("chunk-r1g76qsy.js:291095", () => {
+deferInit("chunk-qq5knpkd.js:295500", () => {
   LIST_CHANGED_EVICTIONS = {
     "notifications/tools/list_changed": ["tools/list"],
     "notifications/prompts/list_changed": ["prompts/list"],
@@ -3386,13 +3388,13 @@ deferInit("chunk-r1g76qsy.js:291095", () => {
     }
   };
 });
-//@ chunk-r1g76qsy.js:316569-321626 esm-fingerprint
+//@ chunk-qq5knpkd.js:320975-326032 esm-fingerprint
 var SseError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SSEClientTransport;
 var DEFAULT_MAX_STEP_UP_RETRIES;
 var DEFAULT_STREAMABLE_HTTP_RECONNECTION_OPTIONS;
 var RESERVED_REQUEST_HEADER_NAMES;
-deferInit("chunk-r1g76qsy.js:316569", () => {
+deferInit("chunk-qq5knpkd.js:320975", () => {
   SseError = class extends Error {
     static {
       Object.defineProperty(this, "mcpBrand", {
@@ -3654,7 +3656,7 @@ deferInit("chunk-r1g76qsy.js:316569", () => {
     "mcp-session-id",
   ]);
 });
-//@ chunk-r1g76qsy.js:321626-322076 esm-fingerprint
+//@ chunk-qq5knpkd.js:326032-326482 esm-fingerprint
 function anySignal(a_2, b) {
   if (typeof AbortSignal.any === "function") return AbortSignal.any([a_2, b]);
   let controller = new AbortController();
@@ -3686,7 +3688,7 @@ function anySignal(a_2, b) {
   });
   return controller.signal;
 }
-//@ chunk-r1g76qsy.js:322076-333766 esm-fingerprint
+//@ chunk-qq5knpkd.js:326482-338176 esm-fingerprint
 var StreamableHTTPClientTransport = class {
   _abortController;
   _url;
@@ -4272,7 +4274,7 @@ var StreamableHTTPClientTransport = class {
     });
   }
 };
-//@ chunk-n1aavqzh.js:4420-5535 esm-fingerprint
+//@ chunk-ghww1f0b.js:4491-5606 esm-fingerprint
 /**
  * requestJwtAuthorizationGrant（v2 副本）。
  */
@@ -4333,7 +4335,7 @@ async function exchangeIdTokenForJag_2(opts) {
     scope: result.scope,
   };
 }
-//@ chunk-1kaj6e83.js:4349-5464 esm-fingerprint
+//@ chunk-ft6a2kja.js:4420-5535 esm-fingerprint
 /**
  * requestJwtAuthorizationGrant：RFC 8693 token exchange（subject_token=id_token，requested_token_type=id-jag），失败抛 XaaTokenExchangeError（4xx 时 shouldClearIdToken）。
  */
@@ -4394,18 +4396,21 @@ async function exchangeIdTokenForJag(opts) {
     scope: result.scope,
   };
 }
-//@ chunk-1ny7cxrt.js:1387514-1387570 esm-fingerprint
+//@ chunk-1hnjmk23.js:1389351-1389407 esm-fingerprint
 var LOOPBACK_HOSTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1ny7cxrt.js:1387514", () => {
+deferInit("chunk-1hnjmk23.js:1389351", () => {
   LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 });
 export {
+  exchangeIdTokenForJag,
   UnauthorizedError,
   StreamableHTTPClientTransport,
   SSEClientTransport,
   Client,
   SseError,
-  exchangeIdTokenForJag,
+  LOOPBACK_HOSTS,
+  startAuthorization,
+  exchangeAuthorization,
   discoverOAuthProtectedResourceMetadata,
   discoverAuthorizationServerMetadata,
   exchangeIdTokenForJag_2,
@@ -4415,7 +4420,4 @@ export {
   auth,
   extractWWWAuthenticateParams,
   refreshAuthorization,
-  LOOPBACK_HOSTS,
-  startAuthorization,
-  exchangeAuthorization,
 };

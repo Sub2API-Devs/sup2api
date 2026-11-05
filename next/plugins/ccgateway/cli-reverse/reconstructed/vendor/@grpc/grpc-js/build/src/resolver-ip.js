@@ -1,8 +1,8 @@
 /**
  * @grpc/grpc-js/build/src/resolver-ip.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @grpc/grpc-js@1.14.4
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
@@ -14,7 +14,7 @@ import { require_subchannel_address } from "./subchannel-address.js";
 import { require_uri_parser } from "./uri-parser.js";
 import { require_logging } from "./logging.js";
 
-//@ chunk-pwh5dx3n.js:354924-356504 cjs-fingerprint
+//@ chunk-3k21nfa0.js:354924-356504 cjs-fingerprint
 var require_resolver_ip = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

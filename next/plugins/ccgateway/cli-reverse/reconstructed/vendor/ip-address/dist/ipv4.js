@@ -1,11 +1,11 @@
 /**
  * ip-address/dist/ipv4.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: ip-address@10.7.5
- * pieces: chunk-aepeg2w5.js (1)
+ * pieces: chunk-exfmq47h.js (1)
  * attribution: esm-fingerprint 1
  */
-//@ chunk-aepeg2w5.js:238658-238905 esm-fingerprint
+//@ chunk-exfmq47h.js:248172-248419 esm-fingerprint
 var PRIVATE_NETWORKS = [
   "10.0.0.0/8",
   "172.16.0.0/12",

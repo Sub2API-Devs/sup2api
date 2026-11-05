@@ -1,15 +1,15 @@
 /**
  * @bufbuild/protobuf/dist/commonjs/reflect/scalar.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @bufbuild/protobuf@2.12.1
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-require-graph 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_proto_int64 } from "../proto-int64.js";
 import { require_descriptors } from "../../cjs/descriptors.js";
 
-//@ chunk-fq0cr76a.js:328178-329308 cjs-require-graph
+//@ chunk-qg41pqt6.js:328745-329875 cjs-require-graph
 var require_scalar = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

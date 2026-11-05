@@ -3,19 +3,23 @@
  *
  * 队友 id（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qg0af0yq.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gb7aq6sf.js (11)
  * attribution: placement 11
  */
 import { truncateToLength } from "../stringUtils.js";
+import { beginDeferredInits } from "../../../runtime/deferred-init.js";
 
-//@ chunk-qg0af0yq.js:17811-17888 placement
+// This module is the first evaluated of an import cycle of 3771 modules closed by ../hooks/functionHookMatchers.js (in the hooks worker thread);
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("worker:src/utils/hooks/functionHookMatchers.js");
+//@ chunk-gb7aq6sf.js:17839-17916 placement
 var TEAMMATE_LABEL_INVALID_RUN_RE = /[^\p{L}\p{N}._-]+/gu;
 var TEAMMATE_LABEL_EDGE_CHARS_RE = /^[._-]+|[._-]+$/gu;
 var TEAMMATE_LABEL_ALNUM_RE = /[\p{L}\p{N}]/u;
 var DEFAULT_TEAMMATE_LABEL_CHARS = 20;
-//@ chunk-qg0af0yq.js:17888-17986 placement
+//@ chunk-gb7aq6sf.js:17916-18014 placement
 /**
  * 去不可见字符后截到 64 字符的队友文本。
  */
@@ -24,11 +28,11 @@ function clipTeammateText(text) {
   let chars = [...trimmed];
   return chars.length > 64 ? `${chars.slice(0, 64).join("")}\u2026` : trimmed;
 }
-//@ chunk-qg0af0yq.js:17986-18059 placement
+//@ chunk-gb7aq6sf.js:18014-18087 placement
 function stripFormatCharsTight(text) {
   return text.replace(/[\p{Cf}\p{Cc}\p{Cs}\p{Zl}\p{Zp}]/gu, "");
 }
-//@ chunk-qg0af0yq.js:18059-18189 placement
+//@ chunk-gb7aq6sf.js:18087-18216 placement
 function sanitizeTeammateLabel(text, maxLength = DEFAULT_TEAMMATE_LABEL_CHARS) {
   let replaced = clipTeammateText(text)
     .replace(TEAMMATE_LABEL_INVALID_RUN_RE, "-")
@@ -37,13 +41,13 @@ function sanitizeTeammateLabel(text, maxLength = DEFAULT_TEAMMATE_LABEL_CHARS) {
   let truncated = truncateToLength(replaced, maxLength);
   return truncated === replaced ? replaced : `${truncated}\u2026`;
 }
-//@ chunk-qg0af0yq.js:18189-18209 placement
+//@ chunk-gb7aq6sf.js:18216-18236 placement
 /**
  * 地址文本上限（512），两倍用于预览。
  */
 var MAX_ADDRESS_TEXT_CHARS = 512;
 var MAX_DESCRIBED_PREVIEW_CHARS = 4 * MAX_ADDRESS_TEXT_CHARS;
-//@ chunk-qg0af0yq.js:18209-18480 placement
+//@ chunk-gb7aq6sf.js:18236-18505 placement
 function firstMeaningfulLine(text, maxLines) {
   let start = 0;
   while (start <= text.length) {
@@ -68,32 +72,32 @@ function firstMeaningfulLine(text, maxLines) {
   }
   return "";
 }
-//@ chunk-qg0af0yq.js:18480-18582 placement
+//@ chunk-gb7aq6sf.js:18505-18607 placement
 function sanitizeAddressPart(fromPlugin) {
   if (typeof fromPlugin !== "string") return;
   let pluginName = clipTeammateText(fromPlugin.replace(/["<>]/g, ""));
   return pluginName === "" ? undefined : pluginName;
 }
-//@ chunk-qg0af0yq.js:18582-18593 placement
+//@ chunk-gb7aq6sf.js:18607-18618 placement
 /**
  * 派生名最大长度（200）。
  */
 var MAX_SEED_NAME_CHARS = 200;
-//@ chunk-qg0af0yq.js:18593-18628 placement
+//@ chunk-gb7aq6sf.js:18618-18653 placement
 /**
  * 拼出 `名字@团队` 的队友地址。
  */
 function agentAddress(name, teamName) {
   return `${name}@${teamName}`;
 }
-//@ chunk-qg0af0yq.js:18628-18708 placement
+//@ chunk-gb7aq6sf.js:18653-18733 placement
 /**
  * 百分号编码地址段里的非 ASCII 字符。
  */
 function encodeAddressSegment(segment) {
   return segment.replace(/%|[^\x20-\x7e]/gu, (char) => encodeURIComponent(char));
 }
-//@ chunk-qg0af0yq.js:18708-18766 placement
+//@ chunk-gb7aq6sf.js:18733-18791 placement
 /**
  * 生成带时间戳的队友地址。
  */
@@ -102,13 +106,13 @@ function timestampedAgentAddress(name, teamName) {
   return `${name}-${now}@${teamName}`;
 }
 export {
-  sanitizeTeammateLabel,
-  sanitizeAddressPart,
   clipTeammateText,
-  MAX_SEED_NAME_CHARS,
+  sanitizeAddressPart,
   agentAddress,
-  MAX_ADDRESS_TEXT_CHARS,
+  MAX_SEED_NAME_CHARS,
   timestampedAgentAddress,
-  firstMeaningfulLine,
   encodeAddressSegment,
+  sanitizeTeammateLabel,
+  MAX_ADDRESS_TEXT_CHARS,
+  firstMeaningfulLine,
 };

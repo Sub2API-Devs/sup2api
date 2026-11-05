@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：远程取消处理（取消排队消息、拒绝答复、自身卡片期限、停止后保活）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (20)
  * attribution: placement 20
  */
 import { randomUUID } from "crypto";
-import { isPromptModeQueuedCommand, isMainAgentCommand } from "../../utils/messageQueueManager.js";
+import { isQueuedUserPrompt, isMainAgentCommand } from "../../utils/messageQueueManager.js";
 import {
   isHumanOrAutoContinuation,
   isPeerOrSlackPing,
@@ -53,7 +53,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { isUserTypedPrompt } from "../../utils/processUserInput/promptOrigin.js";
 import { isAbortError } from "../../utils/errors.js";
 
-//@ chunk-tyg7f3ek.js:293818-294907 placement
+//@ chunk-0yw3taqg.js:323449-324542 placement
 /**
  * 处理远程 cancel/interrupt：区分取消排队消息与打断当前轮次，处理待答权限与延迟绑定。
  */
@@ -77,7 +77,7 @@ function handleRemoteCancel({
     let stands = queued.uuid && standsFor?.(queued.uuid);
     return stands
       ? !hasPressed || stands === pressed
-      : isPromptModeQueuedCommand(queued) &&
+      : isQueuedUserPrompt(queued) &&
           !queued.isMeta &&
           isHumanOrAutoContinuation(queued.origin) &&
           queued.shouldQuery !== false &&
@@ -132,7 +132,7 @@ function handleRemoteCancel({
     }),
   };
 }
-//@ chunk-tyg7f3ek.js:294907-295176 placement
+//@ chunk-0yw3taqg.js:324542-324811 placement
 function isCancelAimedAtParkedBatch({ drain, prewaitLatch, aim }) {
   if (aim === undefined) return false;
   let batch = prewaitLatch.parkedIntentBatch();
@@ -145,13 +145,13 @@ function isCancelAimedAtParkedBatch({ drain, prewaitLatch, aim }) {
     prewaitLatch.namesQueuedWork(aim)
   );
 }
-//@ chunk-tyg7f3ek.js:295176-295239 placement
+//@ chunk-0yw3taqg.js:324811-324874 placement
 var REMOTE_GATE_STATE_LABELS = {
   on: "kept",
   off: "switched_off",
   cold: "flags_not_fetched",
 };
-//@ chunk-tyg7f3ek.js:295239-295408 placement
+//@ chunk-0yw3taqg.js:324874-325043 placement
 function interruptCurrentTurn(options) {
   let { drain } = options;
   noteAuthRefreshStop();
@@ -162,13 +162,13 @@ function interruptCurrentTurn(options) {
   }
   return cancelPendingAnswers(options);
 }
-//@ chunk-tyg7f3ek.js:295408-295510 placement
+//@ chunk-0yw3taqg.js:325043-325145 placement
 function cancelPendingAnswers(options) {
   if (!options.lateBind) MODEL_SWITCH_STATE();
   let interrupted = options.prewaitLatch.interruptBeforeArm(options.aim);
   return denyAnswersOnCancel(options, true) || interrupted;
 }
-//@ chunk-tyg7f3ek.js:295510-296387 placement
+//@ chunk-0yw3taqg.js:325145-326023 placement
 function denyAnswersOnCancel(
   { drain, prewaitLatch, aim, cancelQueued, lateBind, onAnswerWaiting },
   besideTheLatch,
@@ -214,7 +214,7 @@ function denyAnswersOnCancel(
   }
   return kept;
 }
-//@ chunk-tyg7f3ek.js:296387-296701 placement
+//@ chunk-0yw3taqg.js:326023-326338 placement
 function requeueTakenMessage({ cancelQueued, messageQueue, io }) {
   if (cancelQueued) {
     messageQueue.settleTaken();
@@ -231,7 +231,7 @@ function requeueTakenMessage({ cancelQueued, messageQueue, io }) {
     logError(error);
   }
 }
-//@ chunk-tyg7f3ek.js:296701-298033 placement
+//@ chunk-0yw3taqg.js:326338-327663 placement
 function cancelQueuedMessages({
   cancelQueued,
   turn,
@@ -259,10 +259,7 @@ function cancelQueuedMessages({
     forgetCodeliveredFollowups(combined);
     survivors = partitionStopNotifications(combined);
     discardPollEvent(combined.filter(isPollEventMode), "interrupt cleared the queue");
-    let cancelledCopies = [
-      ...(frameIntake?.cancelParked() ?? []),
-      ...(waitingCopies?.cancelWaitingToRun() ?? []),
-    ];
+    let cancelledCopies = [...frameIntake.cancelParked(), ...(waitingCopies?.cancelWaitingToRun() ?? [])];
     for (let uuid of cancelledCopies) io.onCommandLifecycle?.(uuid, "cancelled");
     let keptUuids = new Set([...survivors.staleRows, ...survivors.watchLifecycle].map((row) => row.uuid));
     for (let row of combined)
@@ -295,7 +292,7 @@ function cancelQueuedMessages({
           (pendingDispatchUuid) => !messageQueue.hasCancelPendingAcked(pendingDispatchUuid),
         ),
         ...filtered,
-        ...(frameIntake?.parkedUuids() ?? []),
+        ...frameIntake.parkedUuids(),
         ...(waitingCopies?.waitingToRun ?? []),
       ],
       ...(flattened.length > 0 && {
@@ -314,11 +311,11 @@ function cancelQueuedMessages({
     clearSurvivors: survivors,
   };
 }
-//@ chunk-tyg7f3ek.js:298033-298097 placement
+//@ chunk-0yw3taqg.js:327663-327727 placement
 var KEEPALIVE_AFTER_STOP_INTERVAL_MS = 30000;
 var TENGU_CCR_KEEPALIVE_AFTER_STOP_ENABLED = "tengu_ccr_keepalive_after_stop_enabled";
 var OWN_CARD_DEADLINE_MS = SERVED_CALL_MAX_AGE_MS;
-//@ chunk-tyg7f3ek.js:298097-299901 placement
+//@ chunk-0yw3taqg.js:327727-329531 placement
 /**
  * CCR 会话被 Stop 后仍在后台工作时，定期发送 keepalive 帧（tengu_ccr_keepalive_after_stop_enabled）。
  */
@@ -427,11 +424,11 @@ class KeepaliveAfterStop {
     logError(reason);
   }
 }
-//@ chunk-tyg7f3ek.js:299901-299925 placement
+//@ chunk-0yw3taqg.js:329531-329555 placement
 function tickKeepalive(keepalive) {
   keepalive.tick();
 }
-//@ chunk-tyg7f3ek.js:299925-300074 placement
+//@ chunk-0yw3taqg.js:329555-329704 placement
 function unownedShellState(tasks, now) {
   let sawPastCeiling = false;
   for (let task of Object.values(tasks ?? {})) {
@@ -441,7 +438,7 @@ function unownedShellState(tasks, now) {
   }
   return sawPastCeiling ? "past_ceiling" : "none";
 }
-//@ chunk-tyg7f3ek.js:300074-300171 placement
+//@ chunk-0yw3taqg.js:329704-329801 placement
 var TENGU_MISTY_AURORA = "tengu_misty_aurora";
 var OWN_CARD_CHECK_INTERVAL_MS = 30000;
 var OWN_CARD_EXTEND_MIN_MS = 3600000;
@@ -450,7 +447,7 @@ var OWN_CARD_LATE_ASK_GRACE_MS = 90000;
 var TASK_HOLD_AFTER_INTERACTION_MS = 600000;
 var FLAGS_FRESH_MS = 300000;
 var FLAG_FETCH_ASK_COOLDOWN_MS = 120000;
-//@ chunk-tyg7f3ek.js:300171-300370 placement
+//@ chunk-0yw3taqg.js:329801-330000 placement
 function unansweredCardDeadlineMs() {
   let CLAUDE_CODE_ENVIRONMENT_KIND = env.CLAUDE_CODE_ENVIRONMENT_KIND;
   if (
@@ -464,7 +461,7 @@ function unansweredCardDeadlineMs() {
     ? Math.min(featureValue_CACHED_MAY_BE_STALE * 1000, SERVED_CALL_MAX_AGE_MS - OWN_CARD_DEADLINE_RESERVE_MS)
     : 0;
 }
-//@ chunk-tyg7f3ek.js:300370-302582 placement
+//@ chunk-0yw3taqg.js:330000-332212 placement
 /**
  * 无人应答的权限卡片超时管理：服务器任务持有开始后超过期限则拒绝这些卡片（tengu_misty_aurora）。
  */
@@ -586,11 +583,11 @@ class OwnCardDeadline {
     logError(reason);
   }
 }
-//@ chunk-tyg7f3ek.js:302582-302606 placement
+//@ chunk-0yw3taqg.js:332212-332236 placement
 function tickOwnCardDeadline(deadline) {
   deadline.tick();
 }
-//@ chunk-tyg7f3ek.js:302643-302960 placement
+//@ chunk-0yw3taqg.js:332273-332590 placement
 function markOwnWord(message, fromHost) {
   try {
     let hostAsked = fromHost && message.shouldQuery !== false && !isPeerOrSlackPing(message.origin);
@@ -619,7 +616,7 @@ function markOwnWord(message, fromHost) {
     return message;
   }
 }
-//@ chunk-tyg7f3ek.js:302960-303034 placement
+//@ chunk-0yw3taqg.js:332590-332664 placement
 function withOwnWordStopKey(message) {
   return {
     ...message,
@@ -629,14 +626,14 @@ function withOwnWordStopKey(message) {
     }),
   };
 }
-//@ chunk-tyg7f3ek.js:303034-303110 placement
+//@ chunk-0yw3taqg.js:332664-332740 placement
 function cancelSourceLabels(text, text_2) {
   return [
     ...(text ? [cancelSourceLabel(text, "process")] : []),
     ...(text_2 ? [cancelSourceLabel(text_2, "person")] : []),
   ];
 }
-//@ chunk-tyg7f3ek.js:303110-303151 placement
+//@ chunk-0yw3taqg.js:332740-332781 placement
 function cancelSourceLabel(text, sentBy) {
   return {
     text,

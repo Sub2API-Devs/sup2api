@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增（门面模块 serializeAdoptable）。后台会话接管（路径、cron、代理文件校验）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1dp9p908.js (3), chunk-jbv0t0w5.js (85)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-73r4a0j7.js (85), chunk-aydmtcax.js (3)
  * attribution: placement 88
  */
-import { isAbsolute, relative, join, dirname, sep, basename } from "path";
+import { isAbsolute, relative, join, sep, dirname, basename } from "path";
 import {
   lstat,
   readlink,
@@ -59,7 +59,19 @@ import {
   UNVERIFIED_ANCESTRY,
   hasUntouchableRecordSpelling,
 } from "../fsOperations.js";
-import { sessionTempDirRealpath, getClaudeTempDirRealpath } from "../tempDirRealpaths.js";
+import { sanitizePath } from "../sessionStoragePortable.js";
+import {
+  getOriginalCwd,
+  getSessionCronTasks,
+  getLoopWakeFires,
+  removeSessionCronTasks,
+  mainAgentId,
+  addSessionCronTask,
+  setScheduledTasksEnabled,
+  recordLoopWakeFire,
+} from "../../bootstrap/state.js";
+import { projectTempDirName, projectTempDirNames } from "../tempDir.js";
+import { getClaudeTempDirRealpath, sessionTempDirRealpath } from "../tempDirRealpaths.js";
 import { sanitizeMetadataText } from "../agentMetadata.js";
 import { safeIdentifierOrUndefined } from "../safeIdentifier.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -95,15 +107,6 @@ import {
   REFUSED_CAPACITY_HINT,
   REFUSED_CAPACITY_WINDOW,
 } from "../../services/liveReplica/liveReplica.js";
-import {
-  getSessionCronTasks,
-  getLoopWakeFires,
-  removeSessionCronTasks,
-  mainAgentId,
-  addSessionCronTask,
-  setScheduledTasksEnabled,
-  recordLoopWakeFire,
-} from "../../bootstrap/state.js";
 import { forgetCommentMonitorIntents } from "../../services/artifacts/commentMonitor.js";
 import { userAbortReason } from "../abortController.js";
 import { pauseWorkflowTask } from "../../tasks/LocalWorkflowTask/LocalWorkflowTask.js";
@@ -123,7 +126,7 @@ import { logEvent } from "../../services/analytics/index.js";
 import { lit, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { TRANSIENT_FS_ERRORS } from "../plugins/safeCopy.js";
 import { getMcpAuthCache } from "../plugins/safeFileRead.js";
-import { count } from "../collections.js";
+import { countWhere } from "../collections.js";
 import { pendingWritesTracker } from "../shutdown/pendingWrites.js";
 import { DEFAULT_OPEN_BUFFER_BYTES } from "../fsSafety/hardenedRead.js";
 import {
@@ -153,20 +156,20 @@ import { isLocalShellTask } from "../../tasks/LocalShellTask/guards.js";
 import { isWorkflowTask } from "../../tasks/taskKinds.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1dp9p908.js:808-920 placement
+//@ chunk-aydmtcax.js:336-448 placement
 function isValidSessionIdForAdopt(sessionId) {
   if (!isSafeIdSegment_2(sessionId)) return false;
   if (normalizeUuidOrNull(sessionId)) return true;
   return /^[A-Za-z0-9][A-Za-z0-9_]*$/.test(sessionId) && decodeTaggedUuid(sessionId) !== undefined;
 }
-//@ chunk-1dp9p908.js:920-979 placement
+//@ chunk-aydmtcax.js:448-507 placement
 /**
  * 判断恢复会话时是否沿用转录里的会话 id。
  */
 function isValidAdoptedSessionId(sessionId, options = {}) {
   return options.acceptCustomIds ? isSafeIdSegment_2(sessionId) : isValidSessionIdForAdopt(sessionId);
 }
-//@ chunk-1dp9p908.js:979-1392 placement
+//@ chunk-aydmtcax.js:507-920 placement
 /**
  * 恢复会话时决定是否沿用转录里的会话 id：显式 fork 或无 id 时不沿用；通过接管闸门时沿用，否则记录遥测并以新会话 id 作为 fork 继续。
  */
@@ -195,7 +198,7 @@ function resolveResumeSessionAdoption(sessionId, explicitFork, options = {}) {
     effectiveFork: true,
   };
 }
-//@ chunk-jbv0t0w5.js:2594-2678 placement
+//@ chunk-73r4a0j7.js:2741-2825 placement
 /**
  * 等待接管落地的轮询间隔（250 毫秒）。
  */
@@ -207,7 +210,7 @@ var ADOPT_ID_PATTERN = /^[\w-]+$/;
 var ADOPT_ID_MAX_CHARS = 256;
 var WORKFLOW_RUN_ID_MAX_CHARS = 128;
 var MAX_MCP_AUTH_CACHE_BYTES = 16777216;
-//@ chunk-jbv0t0w5.js:2678-4249 placement
+//@ chunk-73r4a0j7.js:2825-4396 placement
 function validateAdoptPath(adoptShellRoots) {
   let allowedRoots = () => [...adoptShellRoots(), ...[]];
   let automountRootOf = (path) => {
@@ -289,21 +292,32 @@ function validateAdoptPath(adoptShellRoots) {
     return resolvedPath;
   });
 }
-//@ chunk-jbv0t0w5.js:4249-4276 placement
+//@ chunk-73r4a0j7.js:4396-4564 placement
 /**
  * 接管 shell 条目时允许的额外输出根目录。
  */
 function adoptShellRoots() {
-  return [sessionTempDirRealpath()];
+  let cwd = sanitizePath(getOriginalCwd());
+  let currentDirName = projectTempDirName(cwd);
+  return projectTempDirNames(cwd).flatMap((candidateDirName) => {
+    let candidatePath = join(getClaudeTempDirRealpath(), candidateDirName);
+    if (candidateDirName !== currentDirName)
+      try {
+        if (!NodeFsOperations.lstatSync(candidatePath).isDirectory()) return [];
+      } catch {
+        return [];
+      }
+    return [candidatePath + sep];
+  });
 }
-//@ chunk-jbv0t0w5.js:4276-4322 placement
+//@ chunk-73r4a0j7.js:4564-4610 placement
 /**
  * 接管用 id 的 schema（字符集与长度受限）。
  */
 function adoptIdSchema() {
   return create_2().max(ADOPT_ID_MAX_CHARS).regex(ADOPT_ID_PATTERN);
 }
-//@ chunk-jbv0t0w5.js:4322-4687 placement
+//@ chunk-73r4a0j7.js:4610-4975 placement
 /**
  * 被接管的后台 shell 条目的 schema：任务 id、pid、启动时间、命令与描述等。
  */
@@ -322,7 +336,7 @@ function adoptShellEntrySchema(adoptShellRoots) {
     agentId: adoptIdSchema().optional(),
   });
 }
-//@ chunk-jbv0t0w5.js:4687-5786 placement
+//@ chunk-73r4a0j7.js:4975-6074 placement
 /**
  * 接管的定时任务提示词长度上限（10 万字符）。
  */
@@ -332,7 +346,7 @@ var adoptedCronSchema;
 var adoptedWorkflowsSchema;
 var adoptedAgentsSchema;
 var adoptedFrameLiveSchema;
-deferInit("chunk-jbv0t0w5.js:4687", () => {
+deferInit("chunk-73r4a0j7.js:4975", () => {
   ADOPT_CRON_SCHEMA = DoctorLazy(() => adoptShellEntrySchema(adoptShellRoots));
   MAX_ADOPTED_CRON_PROMPT_CHARS = 1e5;
   adoptedCronSchema = DoctorLazy(() =>
@@ -391,7 +405,7 @@ deferInit("chunk-jbv0t0w5.js:4687", () => {
     }),
   );
 });
-//@ chunk-jbv0t0w5.js:5786-6117 placement
+//@ chunk-73r4a0j7.js:6074-6405 placement
 /**
  * 接管文件的 schema：写入时间、来源、shell 列表、定时任务、循环唤醒次数与子代理等。
  */
@@ -411,28 +425,28 @@ function adoptFileSchema(shellSchema = ADOPT_CRON_SCHEMA()) {
     }).optional(),
   });
 }
-//@ chunk-jbv0t0w5.js:6117-6136 placement
+//@ chunk-73r4a0j7.js:6405-6424 placement
 /**
  * 接管文件的 schema。
  */
 var adoptFileSchemaLazy; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-jbv0t0w5.js:6117", () => {
+deferInit("chunk-73r4a0j7.js:6405", () => {
   adoptFileSchemaLazy = DoctorLazy(() => adoptFileSchema());
 });
-//@ chunk-jbv0t0w5.js:6136-6211 placement
+//@ chunk-73r4a0j7.js:6424-6502 placement
 /**
  * 带额外输出根目录的接管文件 schema。
  */
 function adoptFileSchemaWithRoots(outputRoots) {
   let extraRoots = Array.isArray(outputRoots) ? outputRoots : [outputRoots];
-  return adoptFileSchema(adoptShellEntrySchema(() => [sessionTempDirRealpath(), ...extraRoots]));
+  return adoptFileSchema(adoptShellEntrySchema(() => [...adoptShellRoots(), ...extraRoots]));
 }
-//@ chunk-jbv0t0w5.js:6211-6227 placement
+//@ chunk-73r4a0j7.js:6502-6518 placement
 /**
  * 接管文件的大小上限（64 MiB）。
  */
 var MAX_ADOPT_FILE_BYTES = 67108864;
-//@ chunk-jbv0t0w5.js:6227-8864 placement
+//@ chunk-73r4a0j7.js:6518-9155 placement
 async function detachAndSerializeShell(shellTask, options) {
   let pid = await shellTask.shellCommand?.detach?.();
   if (pid === undefined) return null;
@@ -584,7 +598,7 @@ async function detachAndSerializeShell(shellTask, options) {
     agentId: shellTask.agentId,
   };
 }
-//@ chunk-jbv0t0w5.js:8864-9192 placement
+//@ chunk-73r4a0j7.js:9155-9483 placement
 async function serializeAdoptAgent(agentTask, options = {}) {
   let transcriptPath =
     options.derivedTranscriptPath ?? getAgentTranscriptPath(identityAgentId2(agentTask.agentId));
@@ -602,7 +616,7 @@ async function serializeAdoptAgent(agentTask, options = {}) {
     forkedSkillName: agentTask.forkedSkillName,
   };
 }
-//@ chunk-jbv0t0w5.js:9192-9602 placement
+//@ chunk-73r4a0j7.js:9483-9893 placement
 async function serializeAdoptWorkflow(workflowTask, options = {}) {
   let transcriptDir = options.derivedTranscriptDir ?? subagentWorkflowDir(workflowTask.workflowRunId);
   return {
@@ -619,11 +633,11 @@ async function serializeAdoptWorkflow(workflowTask, options = {}) {
     transcriptDir: await realpath(transcriptDir).catch(() => transcriptDir),
   };
 }
-//@ chunk-jbv0t0w5.js:9602-9660 placement
+//@ chunk-73r4a0j7.js:9893-9951 placement
 function isCarriedFrameLiveWatch(task) {
   return isAdoptEnabled() && isAutoReactArmedMonitorTask(task) && task.frameLive !== undefined;
 }
-//@ chunk-jbv0t0w5.js:9660-9859 placement
+//@ chunk-73r4a0j7.js:9951-10150 placement
 function carriedFrameLiveSlugs(tasks) {
   let slugs = new Set();
   if (!isAdoptEnabled()) return slugs;
@@ -633,7 +647,7 @@ function carriedFrameLiveSlugs(tasks) {
   for (let slug of getBootingAutoReactSlugs()) slugs.add(slug);
   return slugs;
 }
-//@ chunk-jbv0t0w5.js:9859-10186 placement
+//@ chunk-73r4a0j7.js:10150-10477 placement
 function collectFrameLiveConsent(tasks) {
   let { supervisors, bootingWiredArms } = getLiveState().live;
   let bootingAutoReactSlugs = getBootingAutoReactSlugs();
@@ -655,7 +669,7 @@ function collectFrameLiveConsent(tasks) {
   }
   return consent;
 }
-//@ chunk-jbv0t0w5.js:10186-12987 placement
+//@ chunk-73r4a0j7.js:10477-13280 placement
 async function serializeAdoptable(tasks, options) {
   let adoptability = computeAdoptability(tasks);
   let filtered = Object.values(tasks).filter((task) => isAdoptableShellTask(task, adoptability));
@@ -816,7 +830,7 @@ async function serializeAdoptable(tasks, options) {
     },
   };
 }
-//@ chunk-jbv0t0w5.js:12987-13445 placement
+//@ chunk-73r4a0j7.js:13280-13738 placement
 function dedupFrameLiveNewest(groups) {
   let bySlug = new Map();
   for (let group of groups)
@@ -847,7 +861,7 @@ function dedupFrameLiveNewest(groups) {
     .sort((left, right) => (right.writtenAtMs ?? 0) - (left.writtenAtMs ?? 0))
     .slice(0, REFUSED_CAPACITY_WINDOW);
 }
-//@ chunk-jbv0t0w5.js:13445-14095 placement
+//@ chunk-73r4a0j7.js:13738-14388 placement
 /**
  * 合并两份 adopt.json：shells/cron/agents/workflows 按各自键去重（先旧后新），frameLive 取最新，其他字段以新值优先。
  */
@@ -881,7 +895,7 @@ function mergeAdoptFiles(current, incoming) {
     prefill: incoming.prefill ?? current.prefill,
   };
 }
-//@ chunk-jbv0t0w5.js:14095-14329 placement
+//@ chunk-73r4a0j7.js:14388-14622 placement
 async function readAdoptJsonFromStorage(storage, jobId) {
   let readResult = await storage.read([STORAGE_SPACES.job(jobId, ["adopt.json"])]);
   if (!readResult.ok) {
@@ -892,7 +906,7 @@ async function readAdoptJsonFromStorage(storage, jobId) {
   if (!item.found) return null;
   return Buffer.from(item.value).toString("utf8");
 }
-//@ chunk-jbv0t0w5.js:14329-15148 placement
+//@ chunk-73r4a0j7.js:14622-15441 placement
 async function writeAdoptJson(jobDir, incoming, options = {}, storage) {
   let filePath = join(jobDir, "adopt.json");
   let jobId = basename(jobDir);
@@ -950,7 +964,7 @@ async function writeAdoptJson(jobDir, incoming, options = {}, storage) {
   }
   await writeFileAtomic(filePath, jsonStringify(payload));
 }
-//@ chunk-jbv0t0w5.js:15148-17180 placement
+//@ chunk-73r4a0j7.js:15441-17473 placement
 async function readAndConsumeAdoptJson(bgJobDir, options = {}) {
   if (!bgJobDir) return null;
   let adoptPath = join(bgJobDir, "adopt.json");
@@ -1058,7 +1072,7 @@ async function readAndConsumeAdoptJson(bgJobDir, options = {}) {
               stale: true,
             };
       });
-      let staleCount = count(mapped, (entry) => "stale" in entry);
+      let staleCount = countWhere(mapped, (entry) => "stale" in entry);
       if (staleCount > 0)
         logForDebugging(`[adopt] ${staleCount}/${mapped.length} frameLive entries marked stale`, {
           level: "warn",
@@ -1089,7 +1103,7 @@ async function readAndConsumeAdoptJson(bgJobDir, options = {}) {
     await unlink(claimedPath).catch(() => {});
   }
 }
-//@ chunk-jbv0t0w5.js:17180-17334 placement
+//@ chunk-73r4a0j7.js:17473-17627 placement
 function recordUnresumedAdopt(bgJobDir, registered, workflowIds, owner) {
   let tracker = pendingWritesTracker();
   if (registered.length === 0 && workflowIds.length === 0) {
@@ -1102,7 +1116,7 @@ function recordUnresumedAdopt(bgJobDir, registered, workflowIds, owner) {
     owner,
   });
 }
-//@ chunk-jbv0t0w5.js:17334-17439 placement
+//@ chunk-73r4a0j7.js:17627-17732 placement
 function takeUnresumedAdopt(jobDir, owner) {
   if (pendingWritesTracker().unresumedAdopt.get(jobDir)?.owner !== owner)
     return {
@@ -1111,7 +1125,7 @@ function takeUnresumedAdopt(jobDir, owner) {
     };
   return drainUnresumedAdopt(jobDir);
 }
-//@ chunk-jbv0t0w5.js:17439-17577 placement
+//@ chunk-73r4a0j7.js:17732-17870 placement
 function drainUnresumedAdopt(jobDir) {
   let tracker = pendingWritesTracker();
   let entry = tracker.unresumedAdopt.get(jobDir);
@@ -1121,7 +1135,7 @@ function drainUnresumedAdopt(jobDir) {
     workflows: entry?.workflows ?? [],
   };
 }
-//@ chunk-jbv0t0w5.js:17577-17737 placement
+//@ chunk-73r4a0j7.js:17870-18030 placement
 function recordUnresumedFrameLive(bgJobDir, frameLive, owner) {
   let tracker = pendingWritesTracker();
   if (frameLive.length === 0) {
@@ -1133,19 +1147,19 @@ function recordUnresumedFrameLive(bgJobDir, frameLive, owner) {
     owner,
   });
 }
-//@ chunk-jbv0t0w5.js:17737-17824 placement
+//@ chunk-73r4a0j7.js:18030-18117 placement
 function takeUnresumedFrameLive(jobDir, owner) {
   if (pendingWritesTracker().unresumedFrameLive.get(jobDir)?.owner !== owner) return [];
   return drainUnresumedFrameLive(jobDir);
 }
-//@ chunk-jbv0t0w5.js:17824-17935 placement
+//@ chunk-73r4a0j7.js:18117-18228 placement
 function drainUnresumedFrameLive(jobDir) {
   let tracker = pendingWritesTracker();
   let entry = tracker.unresumedFrameLive.get(jobDir);
   tracker.unresumedFrameLive.delete(jobDir);
   return entry?.entries ?? [];
 }
-//@ chunk-jbv0t0w5.js:17935-18098 placement
+//@ chunk-73r4a0j7.js:18228-18391 placement
 function reparkUnresumedFrameLive(jobDir, entries, owner) {
   let tracker = pendingWritesTracker();
   let existing = tracker.unresumedFrameLive.get(jobDir);
@@ -1155,7 +1169,7 @@ function reparkUnresumedFrameLive(jobDir, entries, owner) {
     owner,
   });
 }
-//@ chunk-jbv0t0w5.js:18098-18332 placement
+//@ chunk-73r4a0j7.js:18391-18625 placement
 function releaseReparkedFrameLive(jobDir, slug, owner) {
   let tracker = pendingWritesTracker();
   let entry = tracker.unresumedFrameLive.get(jobDir);
@@ -1168,11 +1182,11 @@ function releaseReparkedFrameLive(jobDir, slug, owner) {
     });
   else tracker.unresumedFrameLive.delete(jobDir);
 }
-//@ chunk-jbv0t0w5.js:18332-18403 placement
+//@ chunk-73r4a0j7.js:18625-18696 placement
 function recordExitRetryFrameLive(jobDir, frameLive) {
   if (frameLive.length > 0) pendingWritesTracker().exitRetryFrameLive.set(jobDir, [...frameLive]);
 }
-//@ chunk-jbv0t0w5.js:18403-18528 placement
+//@ chunk-73r4a0j7.js:18696-18821 placement
 function takeExitRetryFrameLive(jobDir) {
   if (jobDir === undefined) return [];
   let tracker = pendingWritesTracker();
@@ -1180,23 +1194,23 @@ function takeExitRetryFrameLive(jobDir) {
   tracker.exitRetryFrameLive.delete(jobDir);
   return entries;
 }
-//@ chunk-jbv0t0w5.js:18528-18634 placement
+//@ chunk-73r4a0j7.js:18821-18927 placement
 /**
  * 复制文件时使用的缓冲块大小（1 MiB）。
  */
 var RELINK_FALLBACK_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var COPY_CHUNK_BYTES;
 var ADOPT_RELINK_MARK;
-deferInit("chunk-jbv0t0w5.js:18528", () => {
+deferInit("chunk-73r4a0j7.js:18821", () => {
   RELINK_FALLBACK_ERRNOS = new Set(["EXDEV", "EPERM", "ENOTSUP", "EOPNOTSUPP", "ENOSYS", "EMLINK"]);
   COPY_CHUNK_BYTES = 1048576;
   ADOPT_RELINK_MARK = ".adopt-relink.";
 });
-//@ chunk-jbv0t0w5.js:18634-18720 placement (2.1.88 match: generatePlaceholders, 0.792)
+//@ chunk-73r4a0j7.js:18927-19013 placement (2.1.88 match: generatePlaceholders, 0.793)
 function makeAdoptRelinkName(targetPath) {
   return `${targetPath}${ADOPT_RELINK_MARK}${process.pid}.${Date.now()}.${randomBytes(4).toString("hex")}`;
 }
-//@ chunk-jbv0t0w5.js:18720-19043 placement
+//@ chunk-73r4a0j7.js:19013-19336 placement
 /**
  * 尝试重链接子代理文件，按错误码决定是否回退为复制，并记录采用的方式。
  */
@@ -1230,7 +1244,7 @@ async function relinkOrCopyAgentFile(sourcePath, targetPath, sourceIdentity, lin
     identity,
   };
 }
-//@ chunk-jbv0t0w5.js:19043-19901 placement
+//@ chunk-73r4a0j7.js:19336-20194 placement
 async function copyAdoptedFile(sourcePath, targetPath, sourceIdentity) {
   let sourceHandle = await open(sourcePath, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
   try {
@@ -1278,7 +1292,7 @@ async function copyAdoptedFile(sourcePath, targetPath, sourceIdentity) {
     await sourceHandle.close().catch(() => {});
   }
 }
-//@ chunk-jbv0t0w5.js:19901-20290 placement
+//@ chunk-73r4a0j7.js:20194-20583 placement
 /**
  * 把被接管的子代理文件放到目标位置，已存在的非符号链接文件不覆盖。
  */
@@ -1305,7 +1319,7 @@ async function placeAdoptedAgentFile(adoptRelinkName, targetPath, keepExisting) 
   }
   return existing === undefined ? "created" : "replaced";
 }
-//@ chunk-jbv0t0w5.js:20290-20646 placement
+//@ chunk-73r4a0j7.js:20583-20939 placement
 /**
  * 接管子代理记录文件：已是普通文件则保留，否则重链接或复制。
  */
@@ -1339,7 +1353,7 @@ async function adoptAgentFile(targetPath, sourcePath, sourceIdentity, linkFn, ke
         created: placement === "created" ? identity : null,
       };
 }
-//@ chunk-jbv0t0w5.js:20646-20969 placement
+//@ chunk-73r4a0j7.js:20939-21262 placement
 async function linkAdoptedAgentTranscript(agent, { storageV5, linkFn = link } = {}) {
   if (storageV5 === undefined) return checkAdoptedForkedSkill(agent);
   try {
@@ -1362,7 +1376,7 @@ async function linkAdoptedAgentTranscript(agent, { storageV5, linkFn = link } = 
     throw error;
   }
 }
-//@ chunk-jbv0t0w5.js:20969-22492 placement
+//@ chunk-73r4a0j7.js:21262-22785 placement
 async function checkAdoptedForkedSkill(agent) {
   if (!agent.transcriptPath) return {};
   let agentTranscriptPath = getAgentTranscriptPath(identityAgentId2(agent.agentId));
@@ -1440,7 +1454,7 @@ async function checkAdoptedForkedSkill(agent) {
     forkedSkillNameFromSidecar: forkedSkillName,
   };
 }
-//@ chunk-jbv0t0w5.js:22492-22541 placement
+//@ chunk-73r4a0j7.js:22785-22834 placement
 /**
  * 给错误对象附加 code 字段。
  */
@@ -1449,7 +1463,7 @@ function withErrorCode(error, code) {
     code,
   });
 }
-//@ chunk-jbv0t0w5.js:22541-25268 placement
+//@ chunk-73r4a0j7.js:22834-25561 placement
 async function validateAdoptedAgentFiles(agent, linkFn) {
   if (!agent.transcriptPath) return {};
   let targetPath = getAgentTranscriptPath(identityAgentId2(agent.agentId));
@@ -1597,12 +1611,12 @@ async function validateAdoptedAgentFiles(agent, linkFn) {
     fallbackCode,
   };
 }
-//@ chunk-jbv0t0w5.js:25268-25442 placement
+//@ chunk-73r4a0j7.js:25561-25735 placement
 var AGENT_FILE_NAME_RE; // deferred: uses RELINK_FALLBACK_ERRNOS of its import cycle while loading; runs once the cycle is complete
 var RELINK_TEMP_NAME_RE;
 var STALE_RELINK_TEMP_MS;
 var MAX_ADOPTED_AGENT_LINKS;
-deferInit("chunk-jbv0t0w5.js:25268", () => {
+deferInit("chunk-73r4a0j7.js:25561", () => {
   AGENT_FILE_NAME_RE = /^agent-[\w-]+\.(?:jsonl|meta\.json)$/;
   RELINK_TEMP_NAME_RE = new RegExp(
     "^agent-[\\w-]+\\.(?:jsonl|meta\\.json)" +
@@ -1612,7 +1626,7 @@ deferInit("chunk-jbv0t0w5.js:25268", () => {
   STALE_RELINK_TEMP_MS = 900000;
   MAX_ADOPTED_AGENT_LINKS = 64;
 });
-//@ chunk-jbv0t0w5.js:25442-25630 placement
+//@ chunk-73r4a0j7.js:25735-25923 placement
 function parseSubagentTranscriptPath(storeRoot, dir) {
   let relPath = relative(storeRoot, dir);
   if (relPath === "" || relPath.startsWith("..") || isAbsolute(relPath)) return null;
@@ -1623,7 +1637,7 @@ function parseSubagentTranscriptPath(storeRoot, dir) {
     depth: parts.length,
   };
 }
-//@ chunk-jbv0t0w5.js:25630-25819 placement
+//@ chunk-73r4a0j7.js:25923-26112 placement
 async function relinkAdoptedAgentSymlinks({ storageV5, linkFn = link } = {}) {
   if (storageV5 === undefined) return;
   try {
@@ -1638,7 +1652,7 @@ async function relinkAdoptedAgentSymlinks({ storageV5, linkFn = link } = {}) {
     logError(error);
   }
 }
-//@ chunk-jbv0t0w5.js:25819-27973 placement
+//@ chunk-73r4a0j7.js:26112-28266 placement
 async function relinkSweep(dir, linkFn) {
   let entries;
   try {
@@ -1766,14 +1780,14 @@ async function relinkSweep(dir, linkFn) {
     left: leftAsIs.length - (skippedByCap > 0 ? 1 : 0) + skippedByCap,
   });
 }
-//@ chunk-jbv0t0w5.js:27973-28045 placement
+//@ chunk-73r4a0j7.js:28266-28338 placement
 /**
  * agent 元数据文件的大小上限（64 KiB）。
  */
 var MAX_META_BYTES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var agentMetaSchema;
 var agentIdMetaSchema;
-deferInit("chunk-jbv0t0w5.js:27973", () => {
+deferInit("chunk-73r4a0j7.js:28266", () => {
   MAX_META_BYTES = 65536;
   agentMetaSchema = DoctorLazy(() =>
     create({
@@ -1786,7 +1800,7 @@ deferInit("chunk-jbv0t0w5.js:27973", () => {
     }),
   );
 });
-//@ chunk-jbv0t0w5.js:28045-28767 placement
+//@ chunk-73r4a0j7.js:28338-29060 placement
 async function readAgentMetaSafely(filePath, expectedIdentity, fileName) {
   let filePath_2 = await open(filePath, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
   try {
@@ -1818,7 +1832,7 @@ async function readAgentMetaSafely(filePath, expectedIdentity, fileName) {
     await filePath_2.close().catch(() => {});
   }
 }
-//@ chunk-jbv0t0w5.js:28767-28818 placement
+//@ chunk-73r4a0j7.js:29060-29111 placement
 /**
  * 解析 JSON，失败返回 null。
  */
@@ -1829,7 +1843,7 @@ function parseJsonOrNull(text) {
     return null;
   }
 }
-//@ chunk-jbv0t0w5.js:28818-28966 placement (2.1.88 match: readJSONLFile, 1)
+//@ chunk-73r4a0j7.js:29111-29259 placement (2.1.88 match: readJSONLFile, 1)
 async function readJSONLFile(filePath) {
   let buf = Buffer.allocUnsafe(MAX_META_BYTES);
   let totalRead = 0;
@@ -1840,7 +1854,7 @@ async function readJSONLFile(filePath) {
   }
   return buf.subarray(0, totalRead);
 }
-//@ chunk-jbv0t0w5.js:28966-29323 placement
+//@ chunk-73r4a0j7.js:29259-29616 placement
 /**
  * 判断 JSONL 行的顶层对象是否带指定 agentId 字段（逐字符扫描，忽略嵌套）。
  */
@@ -1874,7 +1888,7 @@ function hasTopLevelAgentId(text, agentId) {
   }
   return false;
 }
-//@ chunk-jbv0t0w5.js:29323-29986 placement
+//@ chunk-73r4a0j7.js:29616-30279 placement
 /**
  * 校验交接给后台会话的子代理转录符号链接：目标须为绝对路径、同名、普通文件、位于转录存储内且不属于本会话、身份未在检查期间变化，并检查对应元数据；返回不合格原因或 null。
  */
@@ -1915,7 +1929,7 @@ async function checkAdoptedAgentLink(dir, expectedName, storeRoot, session, { be
     gate: linkStats,
   };
 }
-//@ chunk-jbv0t0w5.js:29986-30209 placement
+//@ chunk-73r4a0j7.js:30279-30502 placement
 async function checkAgentMetaFile(dir, fileName) {
   let path = join(dir, fileName);
   let stats;
@@ -1928,18 +1942,18 @@ async function checkAgentMetaFile(dir, fileName) {
   let agentMeta = await readAgentMetaSafely(path, stats, fileName);
   return agentMeta === undefined ? null : `transcript ${agentMeta}`;
 }
-//@ chunk-jbv0t0w5.js:30209-30287 placement
+//@ chunk-73r4a0j7.js:30502-30580 placement
 /**
  * 接管 agent 文件并返回实际采用的方式。
  */
 async function adoptAgentFileMethod(gate, linkFn) {
   return (await adoptAgentFile(gate.linkPath, gate.real, gate.gate, linkFn, true)).method;
 }
-//@ chunk-jbv0t0w5.js:30287-30350 placement
+//@ chunk-73r4a0j7.js:30580-30643 placement
 function killOrphanedAdoptedShell(shell) {
   return killIfSameProcess(shell.pid, shell.startTimeTicks, shell.procStart);
 }
-//@ chunk-jbv0t0w5.js:30350-30724 placement
+//@ chunk-73r4a0j7.js:30643-31017 placement
 async function linkAdoptedWorkflowDir(workflow) {
   let targetDir = subagentWorkflowDir(workflow.workflowRunId);
   if (targetDir === workflow.transcriptDir) return;
@@ -1969,14 +1983,14 @@ async function linkAdoptedWorkflowDir(workflow) {
   }
   await symlink(workflow.transcriptDir, targetDir, undefined);
 }
-//@ chunk-jbv0t0w5.js:30724-30958 placement
+//@ chunk-73r4a0j7.js:31017-31251 placement
 function emitAdoptWorkflowFailed(workflow, reason, messageQueue, argsJson = "") {
   let resumeHint =
     workflow.withholdScriptFromSdkEvents === true ? "" : manualWorkflowResumeHint(workflow, argsJson);
   let notice = `Background workflow "${noticeDescriptionOf(workflow.description)}" was checkpointed for the background fork but could not be resumed (${noticeFieldOf(reason, MAX_NOTICE_TEXT_CHARS, regExp_2) ?? UNREPEATED_REASON}).${resumeHint}`;
   enqueueFailedTaskNotification(workflow.taskId, notice, messageQueue);
 }
-//@ chunk-jbv0t0w5.js:30958-31774 placement
+//@ chunk-73r4a0j7.js:31251-32067 placement
 /**
  * 提示文案里各字段的长度上限：ye 是内联 JSON 参数最多 16000 字符；yt 是脚本路径 4096；pe 是描述/原因 1000；$e/xe 是安全字符集，_t/oe/bt/vt 是据此拼出的正则，Tt 是组合符类。
  */
@@ -1990,7 +2004,7 @@ var regExp_2;
 var regExp_3;
 var COMBINING_MARK_CLASS;
 var regExp_4;
-deferInit("chunk-jbv0t0w5.js:30958", () => {
+deferInit("chunk-73r4a0j7.js:31251", () => {
   NOTICE_FIELD_CHARS = 16000;
   MAX_NOTICE_PATH_CHARS = 4096;
   MAX_NOTICE_TEXT_CHARS = 1000;
@@ -2012,7 +2026,7 @@ deferInit("chunk-jbv0t0w5.js:30958", () => {
     "u",
   );
 });
-//@ chunk-jbv0t0w5.js:31774-31905 placement
+//@ chunk-73r4a0j7.js:32067-32198 placement
 function noticeFieldOf(value, maxChars, regExp_2 = regExp) {
   if (!(
     foldLookalikeChars(value) === value &&
@@ -2024,7 +2038,7 @@ function noticeFieldOf(value, maxChars, regExp_2 = regExp) {
   let escaped = escapeXml(value);
   return escaped.length <= maxChars || countCodePoints(escaped) <= maxChars ? escaped : undefined;
 }
-//@ chunk-jbv0t0w5.js:31905-32261 placement
+//@ chunk-73r4a0j7.js:32198-32554 placement
 /**
  * 生成手动恢复工作流的提示（脚本文件名与运行 id），字段不安全时给出替代说明。
  */
@@ -2036,18 +2050,18 @@ function manualWorkflowResumeHint(workflow, argsTail) {
     return " Its script's file name or run id holds what this notice does not repeat, so no call to resume it is given.";
   return ` To resume manually: Workflow({scriptPath: ${jsonStringify(scriptPath)}, resumeFromRunId: ${jsonStringify(runId)}${formatWorkflowArgsTail(workflow.argsJson)}${argsTail}`;
 }
-//@ chunk-jbv0t0w5.js:32261-32364 placement
+//@ chunk-73r4a0j7.js:32554-32657 placement
 var UNREPEATED_DESCRIPTION = "(a description this notice does not repeat)";
 var UNREPEATED_REASON = "a reason this notice does not repeat";
 var MAX_NOTICE_DESCRIPTION_CHARS = 1000;
-//@ chunk-jbv0t0w5.js:32364-32404 placement
+//@ chunk-73r4a0j7.js:32657-32697 placement
 function noticeDescriptionOf(description) {
   return noticeFieldOf(description, MAX_NOTICE_DESCRIPTION_CHARS, regExp_2) ?? UNREPEATED_DESCRIPTION;
 }
-//@ chunk-jbv0t0w5.js:32404-32620 placement
+//@ chunk-73r4a0j7.js:32697-32913 placement
 var UNREPEATED_ARGS_NOTE =
   " The launch's args are not in this call: they are not JSON, are too long or too deeply nested for a notice, or hold characters a notice never repeats. Add them as args, or the run resumes without its input.";
-//@ chunk-jbv0t0w5.js:32620-32874 placement
+//@ chunk-73r4a0j7.js:32913-33167 placement
 function formatWorkflowArgsTail(argsJson) {
   if (argsJson === undefined) return "}).";
   if (argsJson.length > NOTICE_FIELD_CHARS) return `}).${UNREPEATED_ARGS_NOTE}`;
@@ -2060,7 +2074,7 @@ function formatWorkflowArgsTail(argsJson) {
     return `}).${UNREPEATED_ARGS_NOTE}`;
   }
 }
-//@ chunk-jbv0t0w5.js:32874-33089 placement
+//@ chunk-73r4a0j7.js:33167-33382 placement
 function enqueueFailedTaskNotification(
   taskId,
   summary,
@@ -2084,7 +2098,7 @@ function enqueueFailedTaskNotification(
     summary: unescapeHtmlEntities(summary),
   });
 }
-//@ chunk-jbv0t0w5.js:33089-33258 placement
+//@ chunk-73r4a0j7.js:33382-33551 placement
 function resolveAdoptedScriptPath(scriptPath) {
   let parseResult = validateAdoptPath(() => [getProjectsDir()]).safeParse(scriptPath);
   if (!parseResult.success)
@@ -2094,13 +2108,13 @@ function resolveAdoptedScriptPath(scriptPath) {
     );
   return parseResult.data;
 }
-//@ chunk-jbv0t0w5.js:33258-33357 placement
+//@ chunk-73r4a0j7.js:33551-33650 placement
 function mcpSettledForAdopt(state) {
   return (
     state.mcp.clientsInitialized === true && !state.mcp.clients.some((client) => client.type === "pending")
   );
 }
-//@ chunk-jbv0t0w5.js:33357-33478 placement
+//@ chunk-73r4a0j7.js:33650-33771 placement
 function classifyAdoptLinkFailure(agent) {
   let hasParent = agent.parentAgentId !== undefined;
   let hasForkedSkill = agent.forkedSkillName !== undefined;
@@ -2109,12 +2123,12 @@ function classifyAdoptLinkFailure(agent) {
     excludeFromReconcile: !hasParent && hasForkedSkill,
   };
 }
-//@ chunk-jbv0t0w5.js:33478-33674 placement
+//@ chunk-73r4a0j7.js:33771-33967 placement
 function emitAdoptAgentFailed(agent, reason, taskStore, messageQueue) {
   let notice = `Background agent "${noticeDescriptionOf(agent.description ?? agent.agentId)}" was checkpointed for the background fork but could not be resumed (${noticeFieldOf(reason, MAX_NOTICE_TEXT_CHARS, regExp_2) ?? UNREPEATED_REASON}).`;
   enqueueFailedTaskNotification(agent.agentId, notice, messageQueue, notificationAgentFor(agent, taskStore));
 }
-//@ chunk-jbv0t0w5.js:33674-33941 placement
+//@ chunk-73r4a0j7.js:33967-34234 placement
 function emitAdoptAgentDenied(agent, deniedByPlugin, taskRegistry, messageQueue) {
   evictTerminalTask(agent.agentId, taskRegistry);
   enqueueFailedTaskNotification(
@@ -2125,13 +2139,13 @@ function emitAdoptAgentDenied(agent, deniedByPlugin, taskRegistry, messageQueue)
     "stopped",
   );
 }
-//@ chunk-jbv0t0w5.js:33941-34043 placement
+//@ chunk-73r4a0j7.js:34234-34336 placement
 function notificationAgentFor(agent, taskStore) {
   return agent.parentAgentId !== undefined && isLocalAgent(taskStore.get(agent.parentAgentId))
     ? identityAgentId2(agent.parentAgentId)
     : mainAgentId();
 }
-//@ chunk-jbv0t0w5.js:34043-34647 placement
+//@ chunk-73r4a0j7.js:34336-34940 placement
 function adoptCron(cronTasks, loopWakeFires) {
   let lastFiredAt = Date.now();
   let existingIds = new Set(getSessionCronTasks().map((task) => task.id));
@@ -2176,7 +2190,7 @@ function adoptCron(cronTasks, loopWakeFires) {
   }
   for (let i = 0; i < (loopWakeFires ?? 0); i++) recordLoopWakeFire();
 }
-//@ chunk-jbv0t0w5.js:34647-35590 placement
+//@ chunk-73r4a0j7.js:34940-35884 placement
 function computeAdoptability(tasks) {
   let adoptability = new Map();
   if (!isAdoptEnabled()) return adoptability;
@@ -2240,40 +2254,40 @@ function computeAdoptability(tasks) {
   }
   return adoptability;
 }
-//@ chunk-jbv0t0w5.js:35590-35640 placement
+//@ chunk-73r4a0j7.js:35884-35934 placement
 function isAdoptableShellTask(task, adoptability) {
   return isLocalShellTask(task) && (adoptability.get(task.id) ?? false);
 }
-//@ chunk-jbv0t0w5.js:35640-35717 placement
+//@ chunk-73r4a0j7.js:35934-36011 placement
 function isAdoptableCron(task, adoptability) {
   return isAdoptEnabled() && (task.agentId === undefined || (adoptability.get(task.agentId) ?? false));
 }
-//@ chunk-jbv0t0w5.js:35717-35767 placement
+//@ chunk-73r4a0j7.js:36011-36061 placement
 function isAdoptableAgentTask(task, adoptability) {
   return isLocalAgent(task) && (adoptability.get(task.id) ?? false);
 }
-//@ chunk-jbv0t0w5.js:35767-35818 placement
+//@ chunk-73r4a0j7.js:36061-36112 placement
 function isAdoptableWorkflowTask(task, adoptability) {
   return isWorkflowTask(task) && (adoptability.get(task.id) ?? false);
 }
-//@ chunk-jbv0t0w5.js:35818-35859 placement
+//@ chunk-73r4a0j7.js:36112-36153 placement
 function isAdoptableTask(task, adoptability) {
   return adoptability.get(task.id) ?? false;
 }
-//@ chunk-jbv0t0w5.js:35859-35966 placement
+//@ chunk-73r4a0j7.js:36153-36261 placement
 function countAdoptable(tasks, adoptability = computeAdoptability(tasks)) {
   let frameLiveSlugs = carriedFrameLiveSlugs(tasks);
   return (
-    count(Object.values(tasks), (task) => isAdoptableTask(task, adoptability)) +
-    count(getSessionCronTasks(), (task) => isAdoptableCron(task, adoptability)) +
+    countWhere(Object.values(tasks), (task) => isAdoptableTask(task, adoptability)) +
+    countWhere(getSessionCronTasks(), (task) => isAdoptableCron(task, adoptability)) +
     frameLiveSlugs.size
   );
 }
-//@ chunk-jbv0t0w5.js:35966-36018 placement
+//@ chunk-73r4a0j7.js:36261-36314 placement
 function countAbandonable(tasks, adoptability = computeAdoptability(tasks)) {
   return summarizeBackgroundWork(tasks).count - countAdoptable(tasks, adoptability);
 }
-//@ chunk-jbv0t0w5.js:36018-36476 placement
+//@ chunk-73r4a0j7.js:36314-36773 placement
 function countLiveWorkflowAgents(tasks, adoptability = computeAdoptability(tasks)) {
   let running = 0;
   let finished = 0;
@@ -2302,7 +2316,7 @@ function countLiveWorkflowAgents(tasks, adoptability = computeAdoptability(tasks
     rerun,
   };
 }
-//@ chunk-jbv0t0w5.js:36476-36553 placement
+//@ chunk-73r4a0j7.js:36773-36851 placement
 function leftArrowNeedsInterstitial(tasks, adoptability = computeAdoptability(tasks)) {
   return (
     countAbandonable(tasks, adoptability) > 0 ||
@@ -2310,13 +2324,13 @@ function leftArrowNeedsInterstitial(tasks, adoptability = computeAdoptability(ta
     countLiveWorkflowAgents(tasks, adoptability).running > 0
   );
 }
-//@ chunk-jbv0t0w5.js:36553-36625 placement
+//@ chunk-73r4a0j7.js:36851-36923 placement
 function countCarriedSince(tasks, carriedAtPress) {
   let carriedCount = 0;
   for (let slug of carriedFrameLiveSlugs(tasks)) if (!carriedAtPress.has(slug)) carriedCount++;
   return carriedCount;
 }
-//@ chunk-jbv0t0w5.js:36625-36736 placement
+//@ chunk-73r4a0j7.js:36923-37034 placement
 function carriesTasks(payload) {
   return (
     payload.shells.length > 0 ||
@@ -2325,7 +2339,7 @@ function carriesTasks(payload) {
     payload.cron.length > 0
   );
 }
-//@ chunk-jbv0t0w5.js:36736-36947 placement
+//@ chunk-73r4a0j7.js:37034-37245 placement
 function adoptedCounts(payload) {
   return {
     adopted_shells: payload?.shells.length ?? 0,
@@ -2338,20 +2352,27 @@ function adoptedCounts(payload) {
 export {
   resolveResumeSessionAdoption,
   isValidAdoptedSessionId,
-  relinkAdoptedAgentSymlinks,
-  ADOPT_ID_PATTERN,
-  ADOPT_ID_MAX_CHARS,
-  noticeDescriptionOf,
-  noticeFieldOf,
-  WORKFLOW_RUN_ID_MAX_CHARS,
+  isValidSessionIdForAdopt,
+  drainUnresumedFrameLive,
+  computeAdoptability,
+  isAdoptableWorkflowTask,
+  isAdoptableAgentTask,
+  drainUnresumedAdopt,
+  dedupFrameLiveNewest,
+  collectFrameLiveConsent,
+  takeExitRetryFrameLive,
+  isAdoptableShellTask,
+  isCarriedFrameLiveWatch,
+  serializeAdoptAgent,
+  detachAndSerializeShell,
+  serializeAdoptWorkflow,
   writeAdoptJson,
+  recordExitRetryFrameLive,
   serializeAdoptable,
   carriesTasks,
   adoptedCounts,
-  computeAdoptability,
   countLiveWorkflowAgents,
   isAdoptableTask,
-  isCarriedFrameLiveWatch,
   isAdoptableCron,
   carriedFrameLiveSlugs,
   countAdoptable,
@@ -2377,18 +2398,11 @@ export {
   takeUnresumedFrameLive,
   reparkUnresumedFrameLive,
   releaseReparkedFrameLive,
-  isValidSessionIdForAdopt,
-  drainUnresumedFrameLive,
-  isAdoptableWorkflowTask,
-  isAdoptableAgentTask,
-  drainUnresumedAdopt,
-  dedupFrameLiveNewest,
-  collectFrameLiveConsent,
-  takeExitRetryFrameLive,
-  isAdoptableShellTask,
-  serializeAdoptAgent,
-  detachAndSerializeShell,
-  serializeAdoptWorkflow,
-  recordExitRetryFrameLive,
+  relinkAdoptedAgentSymlinks,
+  ADOPT_ID_PATTERN,
+  ADOPT_ID_MAX_CHARS,
+  noticeDescriptionOf,
+  noticeFieldOf,
+  WORKFLOW_RUN_ID_MAX_CHARS,
   CLOCK_SKEW_ALLOWANCE_MS,
 };

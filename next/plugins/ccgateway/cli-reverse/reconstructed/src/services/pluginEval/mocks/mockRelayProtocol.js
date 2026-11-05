@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 模拟中继的消息格式（hit/miss、fixed/agent）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (5)
  * attribution: placement 5
  */
 import { DoctorLazy } from "../../../cli/handlers/util.js";
@@ -19,7 +19,7 @@ import {
 import { jsonParse } from "../../../utils/slowOperations.js";
 import { openNoFollow_2 } from "../../../utils/fsSafety/hardenedRead.js";
 
-//@ chunk-qchp9vrd.js:118449-118653 placement
+//@ chunk-af1hzzme.js:119802-120006 placement
 /**
  * 模拟中继日志的最大字节数（16 MiB）。
  */
@@ -38,7 +38,7 @@ var MockCallLogEntrySchema = DoctorLazy(() =>
   }),
 );
 var MAX_RELAY_LOG_BYTES = 16777216;
-//@ chunk-qchp9vrd.js:118653-118882 placement
+//@ chunk-af1hzzme.js:120006-120235 placement
 /**
  * 读取模拟中继的调用日志，只保留指定 nonce 的有效记录（并返回是否截断）。
  */
@@ -58,7 +58,7 @@ async function readMockCallLog(filePath, nonce) {
     truncated,
   };
 }
-//@ chunk-qchp9vrd.js:118882-119103 placement
+//@ chunk-af1hzzme.js:120235-120456 placement
 /**
  * 从模拟中继日志中读取已就绪的模拟服务器名。
  */
@@ -75,7 +75,7 @@ async function readReadyMockServers(filePath, nonce) {
   }
   return servers;
 }
-//@ chunk-qchp9vrd.js:119103-119143 placement
+//@ chunk-af1hzzme.js:120456-120496 placement
 /**
  * “就绪服务器”消息的 schema。
  */
@@ -85,7 +85,7 @@ var readyServerSchema = DoctorLazy(() =>
     server: stringSchema(),
   }),
 );
-//@ chunk-qchp9vrd.js:119143-119534 placement
+//@ chunk-af1hzzme.js:120496-120887 placement
 /**
  * 不跟随链接地打开文件，只读取前若干字节（上限 ko）为文本，返回 {text, truncated}；失败返回空文本。
  */

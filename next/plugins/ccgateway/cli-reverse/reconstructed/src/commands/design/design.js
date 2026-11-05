@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。/design 命令（设计同步计划）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6qdkmygq.js (1), chunk-ww36hy8b.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-578cfmmm.js (1), chunk-b9qehxwg.js (1)
  * attribution: placement 2
  */
 import { DesignGateState } from "../../services/mcp/designPlanGate.js";
@@ -15,7 +15,7 @@ import { isRemoteEnvironmentAny } from "../../utils/remoteEnvironment.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-ww36hy8b.js:411-1753 placement
+//@ chunk-578cfmmm.js:411-1753 placement
 var designCommandCall = async (args, context) => {
   let gate = context.toolState.get(DesignGateState);
   if (args === "consent")
@@ -65,7 +65,7 @@ ${STANDALONE_DESIGN_CLOSING_NOTICE}`,
     };
   }
 };
-//@ chunk-6qdkmygq.js:3644-3673 placement
+//@ chunk-b9qehxwg.js:3980-4009 placement
 /**
  * /design-revoke 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */

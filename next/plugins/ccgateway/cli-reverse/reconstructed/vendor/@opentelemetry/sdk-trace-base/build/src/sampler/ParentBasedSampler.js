@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/sdk-trace-base/build/src/sampler/ParentBasedSampler.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-trace-base@2.2.0
- * pieces: chunk-9vvvg0d3.js (2)
+ * pieces: chunk-3wgj3rdg.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { __toESM } from "../../../../../../runtime/bun-runtime.js";
@@ -11,10 +11,10 @@ import { require_core } from "../../../../core/build/src/index.js";
 import { AlwaysOnSampler } from "../../esm/sampler/AlwaysOnSampler.js";
 import { AlwaysOffSampler } from "../../esm/sampler/AlwaysOffSampler.js";
 
-//@ chunk-9vvvg0d3.js:11346-11373 esm-layout
+//@ chunk-3wgj3rdg.js:11718-11745 esm-layout
 var import_api_5 = __toESM(require_api());
 var import_core_7 = __toESM(require_core());
-//@ chunk-9vvvg0d3.js:11373-12633 esm-fingerprint
+//@ chunk-3wgj3rdg.js:11745-13005 esm-fingerprint
 class ParentBasedSampler {
   _root;
   _remoteParentSampled;

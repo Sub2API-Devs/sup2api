@@ -1,15 +1,15 @@
 /**
  * human-signals/build/src/realtime.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: human-signals@4.3.1..8.0.1
- * pieces: chunk-m4p5zn6n.js (2)
+ * pieces: chunk-t889g22j.js (2)
  * attribution: esm-layout 2
  */
 import { onetime } from "../../../onetime/index.js";
 
-//@ chunk-m4p5zn6n.js:9596-9606 esm-layout
+//@ chunk-t889g22j.js:9595-9605 esm-layout
 var onetime_default = onetime;
-//@ chunk-m4p5zn6n.js:9662-9868 esm-layout
+//@ chunk-t889g22j.js:9661-9867 esm-layout
 var getRealtimeSignals = () => {
   let length = REALTIME_SIGNAL_MAX - REALTIME_SIGNAL_MIN + 1;
   return Array.from(

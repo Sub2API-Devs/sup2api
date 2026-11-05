@@ -3,9 +3,9 @@
  *
  * 模型能力缓存（~/.claude/cache/model-capabilities.json：id、max_input_tokens、max_tokens），在 316 中该缓存的读取开关恒为关（vmr 恒假）；另混入网关模型缓存路径、accessFallbackModels 客户端数据解析、一个提示词块规整函数。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/model/modelCapabilities.ts
- * pieces: chunk-aepeg2w5.js (17), chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1), chunk-exfmq47h.js (17)
  * attribution: fingerprint 4, layout 12, callgraph-fingerprint 1, file-local 1
  */
 import { join } from "path";
@@ -13,7 +13,7 @@ import { readFileSync } from "fs";
 import { readFile, mkdir, writeFile } from "fs/promises";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, stringSchema, numberSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
-import { getClaudeConfigDir } from "../envUtils.js";
+import { getClaudeConfigDir } from "../markdownConfigLoader.js";
 import { STORAGE_SPACES } from "../storage/storageSpaces.js";
 import { safeParseJSON } from "../json.js";
 import { getProviderState } from "./providerCaches.js";
@@ -25,7 +25,7 @@ import { parseAccessFallbackModels, ACCESSFALLBACKMODELS } from "../../services/
 import { isModelKeyAliasOrResolved, strip1mSuffix } from "./modelIds.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:467817-467981 fingerprint (2.1.88 match: ModelCapabilitySchema, 0.613)
+//@ chunk-exfmq47h.js:479215-479379 fingerprint (2.1.88 match: ModelCapabilitySchema, 0.613)
 /**
  * 见同句首个绑定的说明。
  */
@@ -34,7 +34,7 @@ var ModelCapabilitiesCacheSchema;
 var CAPABILITY_CACHE_EXACT_TTL_MS;
 var CAPABILITY_CACHE_FUZZY_TTL_MS;
 var CAPABILITY_CACHE_TTL_JITTER;
-deferInit("chunk-aepeg2w5.js:467817", () => {
+deferInit("chunk-exfmq47h.js:479215", () => {
   ModelCapabilitySchema = DoctorLazy(() =>
     objectSchema({
       id: stringSchema(),
@@ -52,7 +52,7 @@ deferInit("chunk-aepeg2w5.js:467817", () => {
   CAPABILITY_CACHE_FUZZY_TTL_MS = 300000;
   CAPABILITY_CACHE_TTL_JITTER = 0.1;
 });
-//@ chunk-aepeg2w5.js:467981-468052 layout
+//@ chunk-exfmq47h.js:479379-479450 layout
 /**
  * 按 schema 解析单个能力条目。
  */
@@ -60,35 +60,35 @@ function parseModelCapability(raw) {
   let parsed = ModelCapabilitySchema().safeParse(raw);
   return parsed.success ? parsed.data : undefined;
 }
-//@ chunk-aepeg2w5.js:468052-468090 layout (2.1.88 match: getCacheDir, 1)
+//@ chunk-exfmq47h.js:479450-479488 layout (2.1.88 match: getCacheDir, 1)
 /**
  * ~/.claude/cache。覆盖后缀名 getCacheDir_4。
  */
 function getModelCapabilitiesCacheDir() {
   return join(getClaudeConfigDir(), "cache");
 }
-//@ chunk-aepeg2w5.js:468090-468146 fingerprint (2.1.88 match: getCachePath, 1)
+//@ chunk-exfmq47h.js:479488-479544 fingerprint (2.1.88 match: getCachePath, 1)
 /**
  * model-capabilities.json 的完整路径。
  */
 function getCachePath() {
   return join(getModelCapabilitiesCacheDir(), "model-capabilities.json");
 }
-//@ chunk-aepeg2w5.js:468146-468224 layout
+//@ chunk-exfmq47h.js:479544-479622 layout
 /**
  * 存储 v5 下的缓存键。
  */
 function getModelCapabilitiesStorageKey() {
   return STORAGE_SPACES.cache("model-capabilities", "model-capabilities.json");
 }
-//@ chunk-aepeg2w5.js:468224-468266 layout
+//@ chunk-exfmq47h.js:479622-479664 layout
 /**
  * 缓存文本 → models 数组或 null。
  */
 function parseCapabilitiesModels(raw) {
   return parseCapabilitiesCache(raw)?.models ?? null;
 }
-//@ chunk-aepeg2w5.js:468266-468341 layout
+//@ chunk-exfmq47h.js:479664-479739 layout
 /**
  * 缓存文本 → {models, timestamp} 或 null。
  */
@@ -96,14 +96,14 @@ function parseCapabilitiesCache(raw) {
   let parsed = ModelCapabilitiesCacheSchema().safeParse(safeParseJSON(raw, false));
   return parsed.success ? parsed.data : null;
 }
-//@ chunk-aepeg2w5.js:468341-468365 layout
+//@ chunk-exfmq47h.js:479739-479763 layout
 /**
  * 恒为 false（构建时关闭；能力改由 catalog 与服务端目录提供）。
  */
 function isModelCapabilitiesCacheEnabled() {
   return false;
 }
-//@ chunk-aepeg2w5.js:468365-468456 callgraph-fingerprint (2.1.88 match: sortForMatching, 1)
+//@ chunk-exfmq47h.js:479763-479854 callgraph-fingerprint (2.1.88 match: sortForMatching, 1)
 /**
  * 按 id 长度降序、再字典序排序（长 id 优先匹配）。
  */
@@ -112,14 +112,14 @@ function sortForMatching(models) {
     (modelA, modelB) => modelB.id.length - modelA.id.length || modelA.id.localeCompare(modelB.id),
   );
 }
-//@ chunk-aepeg2w5.js:468456-468511 layout
+//@ chunk-exfmq47h.js:479854-479909 layout
 /**
  * 进程内 按缓存路径 的能力缓存。
  */
 function getCapabilitiesMemo() {
   return getProviderState().modelCapabilitiesByCachePath;
 }
-//@ chunk-aepeg2w5.js:468511-468693 layout
+//@ chunk-exfmq47h.js:479909-480091 layout
 /**
  * 读缓存文件（同步，存储 v5 时不读盘）并记入进程缓存。
  */
@@ -137,7 +137,7 @@ function readCapabilitiesCached(cachePath, storage = getProviderState().modelCap
   capabilitiesMemo.set(cachePath, models);
   return models;
 }
-//@ chunk-aepeg2w5.js:468693-469107 layout
+//@ chunk-exfmq47h.js:480091-480505 layout
 /**
  * 从存储 v5 预读能力缓存（开关关闭时什么都不做）。
  */
@@ -159,7 +159,7 @@ async function primeModelCapabilities(storage) {
     providerState.modelCapabilitiesByCachePath.set(cachePath, capabilitiesModels);
   providerState.modelCapabilitiesStorageV5 = storage;
 }
-//@ chunk-aepeg2w5.js:469107-469311 file-local
+//@ chunk-exfmq47h.js:480505-480709 file-local
 /**
  * 按 id 精确或包含匹配取缓存能力（开关关闭时 undefined）。
  */
@@ -172,7 +172,7 @@ function getModelCapability(model) {
   if (exact) return exact;
   return cached.find((entry) => m.includes(entry.id.toLowerCase()));
 }
-//@ chunk-aepeg2w5.js:469311-469530 layout
+//@ chunk-exfmq47h.js:480709-480928 layout
 /**
  * 异步读缓存（存储 v5 或文件）。
  */
@@ -188,7 +188,7 @@ async function readCapabilitiesFile(cachePath, storage) {
     return null;
   }
 }
-//@ chunk-aepeg2w5.js:469530-469728 layout
+//@ chunk-exfmq47h.js:480928-481126 layout
 /**
  * 带抖动的 TTL 判定。
  */
@@ -202,7 +202,7 @@ function isCapabilitiesCacheFresh(capabilitiesFile, model, now) {
   let ageMs = now - capabilitiesFile.timestamp;
   return ageMs >= 0 && ageMs < ttlMs * (1 + jitter);
 }
-//@ chunk-aepeg2w5.js:469728-469880 layout
+//@ chunk-exfmq47h.js:481126-481278 layout
 /**
  * 缓存新鲜时载入进程缓存并返回 true。
  */
@@ -214,7 +214,7 @@ async function loadFreshCapabilities(model, storage, now = Date.now()) {
   getCapabilitiesMemo().set(cachePath, capabilitiesFile.models);
   return true;
 }
-//@ chunk-aepeg2w5.js:469880-470748 fingerprint (2.1.88 match: refreshModelCapabilities, 0.502)
+//@ chunk-exfmq47h.js:481278-482146 fingerprint (2.1.88 match: refreshModelCapabilities, 0.502)
 /**
  * 刷新能力缓存：排序后写入文件或存储 v5（非交互/禁止写入时跳过）。
  */
@@ -273,7 +273,7 @@ async function refreshModelCapabilities(models, storage) {
   getCapabilitiesMemo().set(cachePath, sortedModels);
   logForDebugging(`[modelCapabilities] cached ${sortedModels.length} models`);
 }
-//@ chunk-e6aww6q8.js:2404750-2404913 fingerprint (2.1.88 match: loadCache, 0.453)
+//@ chunk-5xgkngpb.js:2460406-2460569 fingerprint (2.1.88 match: loadCache, 0.453)
 /**
  * 读客户端数据里的 accessFallbackModels，去掉别名与 default。旧版名 loadCache 不准确。
  */
@@ -289,11 +289,11 @@ function loadAccessFallbackModels() {
   };
 }
 export {
+  getModelCapability,
+  loadAccessFallbackModels,
   primeModelCapabilities,
   isModelCapabilitiesCacheEnabled,
   loadFreshCapabilities,
   parseModelCapability,
   refreshModelCapabilities,
-  getModelCapability,
-  loadAccessFallbackModels,
 };

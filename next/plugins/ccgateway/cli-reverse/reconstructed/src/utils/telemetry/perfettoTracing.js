@@ -3,9 +3,9 @@
  *
  * Perfetto 追踪（外部构建基本为空）与代理注册。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/telemetry/perfettoTracing.ts
- * pieces: chunk-a9ek44g8.js (7), chunk-e6aww6q8.js (1)
+ * pieces: chunk-4qbrxszq.js (7), chunk-5xgkngpb.js (1)
  * attribution: placement 6, fingerprint 2
  */
 import { HostScoped } from "../hostScoped.js";
@@ -16,20 +16,20 @@ import { isWebFetchSubagentContext } from "../../tools/WebFetchTool/harnessNotes
 import { TOOL_AND_BATCH_HOOK_EVENTS } from "../hooks/hookEvents.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-a9ek44g8.js:7159-7182 placement
+//@ chunk-4qbrxszq.js:7225-7248 placement
 class PerfettoState {
   recorder = null;
 }
-//@ chunk-a9ek44g8.js:7182-7207 placement
+//@ chunk-4qbrxszq.js:7248-7273 placement
 var perfettoStateByHost; // deferred: uses PerfettoState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-a9ek44g8.js:7182", () => {
+deferInit("chunk-4qbrxszq.js:7248", () => {
   perfettoStateByHost = new HostScoped(() => new PerfettoState());
 });
-//@ chunk-a9ek44g8.js:7207-7252 placement
+//@ chunk-4qbrxszq.js:7273-7318 placement
 function perfettoRecorder() {
   return perfettoStateByHost.of(getRootSession().host).recorder;
 }
-//@ chunk-a9ek44g8.js:7252-7368 fingerprint (2.1.88 match: initializePerfettoTracing, 0.442)
+//@ chunk-4qbrxszq.js:7318-7434 fingerprint (2.1.88 match: initializePerfettoTracing, 0.443)
 /**
  * Perfetto 追踪初始化（外部构建只记一行调试日志，CLAUDE_CODE_PERFETTO_TRACE）。
  */
@@ -37,14 +37,14 @@ function initializePerfettoTracing() {
   let envValue = env.CLAUDE_CODE_PERFETTO_TRACE;
   logForDebugging(`[Perfetto] initializePerfettoTracing called, env value: ${envValue}`);
 }
-//@ chunk-a9ek44g8.js:7368-7401 placement
+//@ chunk-4qbrxszq.js:7434-7467 placement
 /**
  * 是否正在做 Perfetto 追踪。
  */
 function isPerfettoRecording() {
   return perfettoRecorder() !== null;
 }
-//@ chunk-a9ek44g8.js:7401-7467 placement
+//@ chunk-4qbrxszq.js:7467-7533 placement
 /**
  * 注册 Perfetto 代理。
  */
@@ -53,7 +53,7 @@ function registerPerfettoAgent(agentId, metadata, attributes) {
   if (!recorder) return;
   recorder.registerAgent(agentId, metadata, attributes);
 }
-//@ chunk-a9ek44g8.js:7467-7527 placement
+//@ chunk-4qbrxszq.js:7533-7593 placement
 /**
  * 注销 Perfetto 代理。
  */
@@ -62,7 +62,7 @@ function unregisterPerfettoAgent(agentId) {
   if (!recorder) return;
   recorder.unregisterAgent(agentId);
 }
-//@ chunk-e6aww6q8.js:1291797-1291919 fingerprint (2.1.88 match: registerAgent, 0.327)
+//@ chunk-5xgkngpb.js:1290630-1290752 fingerprint (2.1.88 match: registerAgent, 0.327)
 function registerAgent(agentId, agentName, parentAgentId) {
   let agentId_2 = agentId?.agentId ?? parentAgentId;
   let agentContext = agentId?.agentContext;
@@ -74,9 +74,9 @@ function registerAgent(agentId, agentName, parentAgentId) {
 }
 export {
   registerAgent,
-  isPerfettoRecording,
-  registerPerfettoAgent,
   unregisterPerfettoAgent,
   initializePerfettoTracing,
   perfettoRecorder,
+  isPerfettoRecording,
+  registerPerfettoAgent,
 };

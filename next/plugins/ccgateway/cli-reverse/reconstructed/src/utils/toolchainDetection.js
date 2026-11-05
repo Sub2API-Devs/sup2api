@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：本机工具链探测（语言运行时、包管理器）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3dq9c61y.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-x64bfgzn.js (18)
  * attribution: placement 18
  */
 import { release } from "os";
@@ -40,96 +40,77 @@ import { safeParseJSON } from "./json.js";
 import { MCP_SETTINGS_SCOPES, getMcpConfigsByScope } from "../services/mcp/config.js";
 import { logForDebugging } from "./debug.js";
 import { TOOL_HOST_ID_RE } from "../remote/tools/protocolConstants.js";
-import { uniq } from "./collections.js";
-import { deferInit } from "../../runtime/deferred-init.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 
-//@ chunk-3dq9c61y.js:1129-1856 placement
+//@ chunk-x64bfgzn.js:1129-1856 placement
 /**
  * 主机档案探测的常量组：探测截止时间、读文件上限、工具/发行版/架构名的正则、候选工具名，以及 plist 与 CUDA 的路径。
  */
-var HOST_PROFILE_DEADLINE_MS; // deferred: uses BUILD_TOOL_NAMES (./env.js) of its import cycle while loading; runs once the cycle is complete
-var MAX_PROFILE_FILE_BYTES;
-var MAX_LISTED_TOOLS;
-var MAX_LISTED_MCP_SERVERS;
-var OS_VERSION_RE;
-var ARCH_NAME_RE;
-var DISTRO_NAME_RE;
-var TOOL_NAME_RE;
-var PROFILE_TOOL_CANDIDATES;
-var NON_PROFILE_TOOLS;
-var XCODE_APP_PATH;
-var APPLICATIONS_DIR;
-var XCODE_CLT_DIR;
-var MACOS_VERSION_PLIST;
-var CUDA_LIBRARY_PATH;
-var hostProfileConfigSchema;
-deferInit("chunk-3dq9c61y.js:1129", () => {
-  HOST_PROFILE_DEADLINE_MS = 1500;
-  MAX_PROFILE_FILE_BYTES = 262144;
-  MAX_LISTED_TOOLS = 32;
-  MAX_LISTED_MCP_SERVERS = 16;
-  OS_VERSION_RE = /^[0-9][0-9A-Za-z.+_-]{0,23}$/;
-  ARCH_NAME_RE = /^[a-z0-9_]{1,16}$/;
-  DISTRO_NAME_RE = /^[a-z0-9._-]{1,24}$/;
-  TOOL_NAME_RE = /^[A-Za-z0-9_.-]{1,64}$/;
-  PROFILE_TOOL_CANDIDATES = [
-    "swift",
-    "xcodebuild",
-    "xcrun",
-    "pod",
-    "fastlane",
-    "carthage",
-    "adb",
-    "emulator",
-    "sdkmanager",
-    "flutter",
-    "dart",
-    "xcodes",
-    "kubectl",
-    "helm",
-    "terraform",
-    "bazel",
-    "bazelisk",
-    "nix",
-    "conda",
-    "mamba",
-    "pipx",
-    "podman",
-    "nerdctl",
-    "nvidia-smi",
-    "psql",
-    "mysql",
-    "redis-cli",
-    ...BUILD_TOOL_NAMES,
-  ];
-  NON_PROFILE_TOOLS = new Set([
-    "xcodebuild",
-    "swift",
-    "swiftc",
-    "xcrun",
-    "git",
-    "make",
-    "clang",
-    "clang++",
-    "gcc",
-    "g++",
-    "python3",
-    "pip3",
-  ]);
-  XCODE_APP_PATH = "/System/Library/CoreServices/SystemVersion.plist";
-  APPLICATIONS_DIR = "/Applications";
-  XCODE_CLT_DIR = "/Library/Developer/CommandLineTools/usr/bin";
-  MACOS_VERSION_PLIST = "/usr/local/cuda/version.json";
-  CUDA_LIBRARY_PATH = "/proc/driver/nvidia/version";
-  hostProfileConfigSchema = DoctorLazy(() =>
-    objectSchema({
-      cuda: objectSchema({
-        version: stringSchema(),
-      }),
+var HOST_PROFILE_DEADLINE_MS = 1500;
+var MAX_PROFILE_FILE_BYTES = 262144;
+var MAX_LISTED_TOOLS = 32;
+var MAX_LISTED_MCP_SERVERS = 16;
+var OS_VERSION_RE = /^[0-9][0-9A-Za-z.+_-]{0,23}$/;
+var ARCH_NAME_RE = /^[a-z0-9_]{1,16}$/;
+var DISTRO_NAME_RE = /^[a-z0-9._-]{1,24}$/;
+var TOOL_NAME_RE = /^[A-Za-z0-9_.-]{1,64}$/;
+var PROFILE_TOOL_CANDIDATES = [
+  "swift",
+  "xcodebuild",
+  "xcrun",
+  "pod",
+  "fastlane",
+  "carthage",
+  "adb",
+  "emulator",
+  "sdkmanager",
+  "flutter",
+  "dart",
+  "xcodes",
+  "kubectl",
+  "helm",
+  "terraform",
+  "bazel",
+  "bazelisk",
+  "nix",
+  "conda",
+  "mamba",
+  "pipx",
+  "podman",
+  "nerdctl",
+  "nvidia-smi",
+  "psql",
+  "mysql",
+  "redis-cli",
+  ...BUILD_TOOL_NAMES,
+];
+var NON_PROFILE_TOOLS = new Set([
+  "xcodebuild",
+  "swift",
+  "swiftc",
+  "xcrun",
+  "git",
+  "make",
+  "clang",
+  "clang++",
+  "gcc",
+  "g++",
+  "python3",
+  "pip3",
+]);
+var XCODE_APP_PATH = "/System/Library/CoreServices/SystemVersion.plist";
+var APPLICATIONS_DIR = "/Applications";
+var XCODE_CLT_DIR = "/Library/Developer/CommandLineTools/usr/bin";
+var MACOS_VERSION_PLIST = "/usr/local/cuda/version.json";
+var CUDA_LIBRARY_PATH = "/proc/driver/nvidia/version";
+var hostProfileConfigSchema = DoctorLazy(() =>
+  objectSchema({
+    cuda: objectSchema({
+      version: stringSchema(),
     }),
-  );
-});
-//@ chunk-3dq9c61y.js:1856-1947 placement
+  }),
+);
+//@ chunk-x64bfgzn.js:1856-1947 placement
 function hostProfileSharingMode() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     "tengu_bridge_host_profile",
@@ -137,7 +118,7 @@ function hostProfileSharingMode() {
   );
   return POLICY_HELPER_LOG_LEVELS.find((value) => value === featureValue_CACHED_MAY_BE_STALE) ?? "off";
 }
-//@ chunk-3dq9c61y.js:1947-2244 placement
+//@ chunk-x64bfgzn.js:1947-2244 placement
 /**
  * 按设置决定远程控制是否分享主机档案（off/basic/full）；相关设置解析出错时为 off。
  */
@@ -160,7 +141,7 @@ function hostProfileSharing(options) {
   ];
   return POLICY_HELPER_LOG_LEVELS.find((level) => levels.includes(level)) ?? strongestBefore;
 }
-//@ chunk-3dq9c61y.js:2244-2535 placement
+//@ chunk-x64bfgzn.js:2244-2535 placement
 function hostProfileSettingsBroken() {
   return [
     ...getPolicySettingsLoadErrors(),
@@ -180,7 +161,7 @@ function hostProfileSettingsBroken() {
     );
   });
 }
-//@ chunk-3dq9c61y.js:2535-2946 placement
+//@ chunk-x64bfgzn.js:2535-2946 placement
 /**
  * 重新注册环境前按主机档案分享设置过滤（basic 时去掉 MCP 服务器列表，off 时不分享）。
  */
@@ -215,7 +196,7 @@ async function filterSharedEnvironment(hostProfile) {
     return;
   }
 }
-//@ chunk-3dq9c61y.js:2946-3178 placement
+//@ chunk-x64bfgzn.js:2946-3178 placement
 /**
  * 若允许分享，收集主机档案（full 时包含 MCP 服务器）。
  */
@@ -239,7 +220,7 @@ async function collectHostProfileIfShared(signal) {
     return;
   }
 }
-//@ chunk-3dq9c61y.js:3178-3837 placement
+//@ chunk-x64bfgzn.js:3178-3837 placement
 /**
  * 收集主机档案并上报结果遥测。
  */
@@ -277,7 +258,7 @@ async function collectHostProfile({ includeMcpServers, signal }) {
     return;
   }
 }
-//@ chunk-3dq9c61y.js:3837-4581 placement
+//@ chunk-x64bfgzn.js:3837-4581 placement
 /**
  * 在截止时间内收集主机档案：系统版本、发行版、PATH 中的工具、Xcode/Android SDK/CUDA 与可选的 MCP 服务器。
  */
@@ -346,7 +327,7 @@ async function gatherHostProfile({
     aborted,
   };
 }
-//@ chunk-3dq9c61y.js:4581-4677 placement (2.1.88 match: detectTerminal, 0.92)
+//@ chunk-x64bfgzn.js:4581-4677 placement (2.1.88 match: detectTerminal, 0.92)
 /**
  * （误归 deepLink）平台名常量折叠函数，linux 构建恒返回 "linux"。
  */
@@ -360,7 +341,7 @@ function hostPlatform() {
       return;
   }
 }
-//@ chunk-3dq9c61y.js:4677-5020 placement
+//@ chunk-x64bfgzn.js:4677-5020 placement
 /**
  * 探测系统版本与发行版。
  */
@@ -384,7 +365,7 @@ async function detectOsVersion(platform, profile) {
     }
   }
 }
-//@ chunk-3dq9c61y.js:5020-5162 placement
+//@ chunk-x64bfgzn.js:5020-5162 placement
 async function readPlistVersion(path, key) {
   let xml = await readSmallFileOrNull(path, MAX_PROFILE_FILE_BYTES);
   if (xml === null) return;
@@ -392,7 +373,7 @@ async function readPlistVersion(path, key) {
   let plistValue = isPlainObjectPlist(plistXml) ? plistXml[key] : undefined;
   return typeof plistValue === "string" && OS_VERSION_RE.test(plistValue) ? plistValue : undefined;
 }
-//@ chunk-3dq9c61y.js:5162-5501 placement
+//@ chunk-x64bfgzn.js:5162-5501 placement
 /**
  * 探测 Xcode 版本。
  */
@@ -418,17 +399,17 @@ async function detectXcode(profile) {
   );
   profile.xcode = plistVersion === undefined ? "xcode" : `xcode@${plistVersion}`;
 }
-//@ chunk-3dq9c61y.js:5501-5548 placement
+//@ chunk-x64bfgzn.js:5501-5548 placement
 async function detectXcodeCommandLineTools(profile) {
   if (await isDirectoryAsync(XCODE_CLT_DIR)) profile.clt = "clt";
 }
-//@ chunk-3dq9c61y.js:5548-5686 placement
+//@ chunk-x64bfgzn.js:5548-5686 placement
 async function detectAndroidSdk(profile) {
   let root = env.ANDROID_HOME ?? env.ANDROID_SDK_ROOT;
   if (root === undefined || !(await isScanCandidate(root)) || !(await isDirectoryAsync(root))) return;
   profile.androidSdk = "android-sdk";
 }
-//@ chunk-3dq9c61y.js:5686-5904 placement
+//@ chunk-x64bfgzn.js:5686-5904 placement
 async function detectCuda(profile) {
   let smallFileOrNull = await readSmallFileOrNull(MACOS_VERSION_PLIST, MAX_PROFILE_FILE_BYTES);
   if (smallFileOrNull !== null) {
@@ -444,7 +425,7 @@ async function detectCuda(profile) {
     profile.cuda = "cuda";
   } catch {}
 }
-//@ chunk-3dq9c61y.js:5904-5977 placement
+//@ chunk-x64bfgzn.js:5904-5977 placement
 async function isDirectoryAsync(path) {
   try {
     return (await stat(path)).isDirectory();
@@ -452,7 +433,7 @@ async function isDirectoryAsync(path) {
     return false;
   }
 }
-//@ chunk-3dq9c61y.js:5977-6341 placement
+//@ chunk-x64bfgzn.js:5977-6341 placement
 /**
  * 收集用户与托管范围的 MCP 服务器名。
  */
@@ -484,7 +465,7 @@ async function collectMcpServerNames(profile) {
     }
   }
 }
-//@ chunk-3dq9c61y.js:6341-6625 placement
+//@ chunk-x64bfgzn.js:6341-6625 placement
 function orderHostTools(platform, profile, ordered, maxTools) {
   let hasXcode = platform !== "darwin" || profile.xcode !== undefined || profile.clt !== undefined;
   let filtered = ordered.filter(
@@ -498,6 +479,6 @@ function orderHostTools(platform, profile, ordered, maxTools) {
     profile.cuda,
     ...filtered.filter((tool) => tool !== "swift"),
   ].filter((toolId) => toolId !== undefined && TOOL_HOST_ID_RE.test(toolId));
-  return uniq(filtered_2).slice(0, maxTools);
+  return normalizeCaseForComparison_2(filtered_2).slice(0, maxTools);
 }
 export { filterSharedEnvironment, collectHostProfileIfShared, hostProfileSharing, gatherHostProfile };

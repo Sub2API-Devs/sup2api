@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。跨会话消息是否开启（tengu_harbor_kite 等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jbqx8bv9.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b34h49f2.js (3)
  * attribution: placement 3
  */
 import { getHostAgentPolicy } from "./hostAgentPolicy.js";
@@ -17,7 +17,7 @@ import {
   getFeatureValueWithSource_CACHED_MAY_BE_STALE,
 } from "../services/analytics/growthbook.js";
 
-//@ chunk-jbqx8bv9.js:371-607 placement
+//@ chunk-b34h49f2.js:371-607 placement
 /**
  * 跨会话消息是否开启（tengu_harbor_kite 等）。
  */
@@ -29,7 +29,7 @@ function isCrossSessionMessagingEnabled(direction = "send") {
     return false;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_harbor_kite", true);
 }
-//@ chunk-jbqx8bv9.js:607-741 placement
+//@ chunk-b34h49f2.js:607-741 placement
 function isProjectsHumanOriginEnabled(context) {
   if (
     context?.flagsSettled === false &&
@@ -38,10 +38,10 @@ function isProjectsHumanOriginEnabled(context) {
     return false;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_cuddly_willow", true);
 }
-//@ chunk-jbqx8bv9.js:741-809 placement
+//@ chunk-b34h49f2.js:741-809 placement
 var CROSS_SESSION_MESSAGING_DISABLED_MESSAGE = "Cross-session messaging is not available in this session.";
 export {
-  isCrossSessionMessagingEnabled,
   isProjectsHumanOriginEnabled,
+  isCrossSessionMessagingEnabled,
   CROSS_SESSION_MESSAGING_DISABLED_MESSAGE,
 };

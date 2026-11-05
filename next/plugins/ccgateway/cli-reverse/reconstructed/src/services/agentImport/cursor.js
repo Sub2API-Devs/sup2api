@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：从 Cursor（mcp.json、rules/*.mdc、commands、skills、hooks、.cursorignore）导入
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hddjmtjj.js (40)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ndr12bqk.js (40)
  * attribution: placement 40
  */
 import { join, dirname, relative, sep, basename } from "path";
@@ -52,10 +52,10 @@ import { unwrapResults } from "../../utils/suggestions/slackChannelSuggestions.j
 import { isSyncedDirName } from "../../utils/plugins/syncedItems.js";
 import { escapeShellBangs } from "../../utils/promptShellExecution.js";
 import { importSkillDirectory } from "./codex.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
 
-//@ chunk-hddjmtjj.js:29064-29456 placement
+//@ chunk-ndr12bqk.js:29097-29489 placement
 /**
  * Cursor 导入的 schema：MCP 服务器、mcp.json、规则 frontmatter、hooks，及上限。
  */
@@ -88,42 +88,42 @@ var CURSOR_HOOKS_FILE_SCHEMA = DoctorLazy(() =>
   }).loose(),
 );
 var MAX_CURSOR_ITEMS = 100;
-//@ chunk-hddjmtjj.js:29456-29507 placement
+//@ chunk-ndr12bqk.js:29489-29540 placement
 function cursorHomeDir(options) {
   return options.homeDir ?? join(homedir(), ".cursor");
 }
-//@ chunk-hddjmtjj.js:29507-29557 placement
+//@ chunk-ndr12bqk.js:29540-29590 placement
 function projectAgentsSkillsDir(projectRoot) {
   return join(dirname(projectRoot), ".agents", "skills");
 }
-//@ chunk-hddjmtjj.js:29557-29639 placement
+//@ chunk-ndr12bqk.js:29590-29672 placement
 function escapeHtmlComment(text) {
   return text.replaceAll("-->", "\u2014>").replaceAll("<!--", "<!\u2014");
 }
-//@ chunk-hddjmtjj.js:29639-29684 placement
+//@ chunk-ndr12bqk.js:29672-29717 placement
 var VSCODE_ENV_PLACEHOLDER_RE = /\$\{env:([A-Za-z_][A-Za-z0-9_]*)\}/g;
-//@ chunk-hddjmtjj.js:29684-29765 placement
+//@ chunk-ndr12bqk.js:29717-29798 placement
 function replaceWorkspacePlaceholders(value, workspace) {
   return value.replace(VSCODE_ENV_PLACEHOLDER_RE, "${$1}").replaceAll("${workspaceFolder}", workspace);
 }
-//@ chunk-hddjmtjj.js:29765-29859 placement
+//@ chunk-ndr12bqk.js:29798-29892 placement
 function mapPlaceholders(env, workspace) {
   if (!env) return;
   let mapped = {};
   for (let [key, value] of Object.entries(env)) mapped[key] = replaceWorkspacePlaceholders(value, workspace);
   return mapped;
 }
-//@ chunk-hddjmtjj.js:29859-29978 placement
+//@ chunk-ndr12bqk.js:29892-30011 placement
 /**
  * ${VAR} 形式的占位符（可带认证前缀）。
  */
 var ENV_PLACEHOLDER_RE = /^\$\{[A-Za-z_][A-Za-z0-9_]*(?::-)?\}$/;
 var AUTH_PLACEHOLDER_RE = /^(?:(?:Bearer|Basic|Token) )?\$\{[A-Za-z_][A-Za-z0-9_]*(?::-)?\}$/i;
-//@ chunk-hddjmtjj.js:29978-30038 placement
+//@ chunk-ndr12bqk.js:30011-30071 placement
 function mcpTransportType(url) {
   return /\/sse(?:$|[?#])/.test(url) ? "sse" : "http";
 }
-//@ chunk-hddjmtjj.js:30038-30137 placement
+//@ chunk-ndr12bqk.js:30071-30170 placement
 function sanitizeEnvKey(key) {
   return (
     key
@@ -132,9 +132,9 @@ function sanitizeEnvKey(key) {
       .toUpperCase() || "_"
   );
 }
-//@ chunk-hddjmtjj.js:30137-30161 placement
+//@ chunk-ndr12bqk.js:30170-30194 placement
 var CURSOR_IMPORT = "CURSOR_IMPORT_";
-//@ chunk-hddjmtjj.js:30161-30554 placement
+//@ chunk-ndr12bqk.js:30194-30587 placement
 /**
  * 把 MCP 服务器 env 与 headers 中的字面值替换成 ${CURSOR_IMPORT_...} 占位符，返回新配置与占位名。
  */
@@ -168,13 +168,13 @@ function placeholderSecrets(serverName, scope, used = new Set()) {
     placeholdered: names,
   };
 }
-//@ chunk-hddjmtjj.js:30554-30644 placement
+//@ chunk-ndr12bqk.js:30587-30677 placement
 var SECRET_LIKE_KEY_RE = /(?:api[-_]?key|access[-_]?key|secret|token|password|passwd|auth|authorization)$/i;
-//@ chunk-hddjmtjj.js:30644-30706 placement
+//@ chunk-ndr12bqk.js:30677-30739 placement
 function isNonPlaceholderValue(value) {
   return value !== "" && !AUTH_PLACEHOLDER_RE.test(value.replace(VSCODE_ENV_PLACEHOLDER_RE, "${$1}"));
 }
-//@ chunk-hddjmtjj.js:30706-31003 placement
+//@ chunk-ndr12bqk.js:30739-31036 placement
 /**
  * URL 的用户信息或查询参数中是否含有密钥样式的值。
  */
@@ -195,7 +195,7 @@ function urlHasSecret(url) {
   }
   return false;
 }
-//@ chunk-hddjmtjj.js:31003-31496 placement
+//@ chunk-ndr12bqk.js:31036-31529 placement
 /**
  * MCP 服务器的参数或 URL 中是否内联了密钥。
  */
@@ -224,7 +224,7 @@ function serverHasInlineSecret(server) {
   }
   return server.url !== undefined && urlHasSecret(server.url);
 }
-//@ chunk-hddjmtjj.js:31496-32883 placement
+//@ chunk-ndr12bqk.js:31529-32916 placement
 function convertCursorMcpServer(server, workspace, scope, used, names = new Set()) {
   let mapValue = (value) =>
     value === undefined ? undefined : replaceWorkspacePlaceholders(value, workspace);
@@ -303,7 +303,7 @@ function convertCursorMcpServer(server, workspace, scope, used, names = new Set(
     dropped,
   };
 }
-//@ chunk-hddjmtjj.js:32883-35375 placement
+//@ chunk-ndr12bqk.js:32916-35408 placement
 /**
  * 读取 Cursor mcp.json 并转换（读不了/结构异常时提示人工检查）。
  */
@@ -427,10 +427,10 @@ async function importCursorMcpServers(filePath, scope, workspace, projectRoot, p
     });
   }
 }
-//@ chunk-hddjmtjj.js:35375-35391 placement
+//@ chunk-ndr12bqk.js:35408-35424 placement
 var MAX_RULE_DIR_DEPTH = 4;
 var MAX_RULE_FILES = 200;
-//@ chunk-hddjmtjj.js:35391-35749 placement
+//@ chunk-ndr12bqk.js:35424-35782 placement
 /**
  * 递归收集 .mdc 规则文件（深度与数量上限）。
  */
@@ -457,7 +457,7 @@ async function walkRuleFiles(dir, relDir, depth, out, state) {
     }
   }
 }
-//@ chunk-hddjmtjj.js:35749-35865 placement
+//@ chunk-ndr12bqk.js:35782-35898 placement
 /**
  * 列出规则目录下的 .mdc 文件（排序），并标记是否截断。
  */
@@ -473,7 +473,7 @@ async function listRuleFiles(dir) {
     truncated: state.truncated,
   };
 }
-//@ chunk-hddjmtjj.js:35865-36035 placement
+//@ chunk-ndr12bqk.js:35898-36068 placement
 /**
  * 定位正文中 shell 执行标记所在行。
  */
@@ -487,7 +487,7 @@ function locateShellExecLine(content, baseLine) {
     text: lines[index]?.trim() ?? "",
   };
 }
-//@ chunk-hddjmtjj.js:36035-36096 placement
+//@ chunk-ndr12bqk.js:36068-36129 placement
 function lineIndexBefore(content, prefix) {
   return countCharInString(
     content.slice(0, content.length - prefix.length),
@@ -495,7 +495,7 @@ function lineIndexBefore(content, prefix) {
 `,
   );
 }
-//@ chunk-hddjmtjj.js:36096-36395 placement
+//@ chunk-ndr12bqk.js:36129-36428 placement
 function describeShellExecLine(content, baseLine) {
   let { line, text } = locateShellExecLine(content, baseLine);
   return {
@@ -503,7 +503,7 @@ function describeShellExecLine(content, baseLine) {
     warning: `Line ${line} has a Claude Code shell-exec marker (\`\`\`! or !\`\u2026\`), inert in Cursor but run when the skill loads; if imported it is written escaped, so nothing runs \u2014 review the file.`,
   };
 }
-//@ chunk-hddjmtjj.js:36395-36922 placement
+//@ chunk-ndr12bqk.js:36428-36955 placement
 /**
  * Cursor 规则映射为 Claude Code 规则/技能时的说明文本。
  */
@@ -513,7 +513,7 @@ var SKILL_IMPORT_DESCRIPTION =
   "Becomes a Claude Code skill: its description is always in context, and once Claude loads it the body stays in context for the rest of the session. Unchecked by default; review before importing.";
 var COMMAND_IMPORT_DESCRIPTION =
   "Becomes a Claude Code skill you run with /<name>; once loaded, the body stays in context for the rest of the session. Unchecked by default; review before importing.";
-//@ chunk-hddjmtjj.js:36922-37049 placement
+//@ chunk-ndr12bqk.js:36955-37082 placement
 /**
  * 第一行非空文本（去掉 #），截断到 200 字符。
  */
@@ -527,7 +527,7 @@ function firstHeadingText(content) {
     .find((line) => line !== "");
   return found === undefined ? undefined : truncateCodePoints(found, 200);
 }
-//@ chunk-hddjmtjj.js:37049-37514 placement
+//@ chunk-ndr12bqk.js:37082-37547 placement
 async function planWriteTarget({ target, existing, out, safeName, dryRun, containIn }) {
   if (containIn && (await pinPathInside(containIn, target)) === null)
     return {
@@ -551,7 +551,7 @@ async function planWriteTarget({ target, existing, out, safeName, dryRun, contai
   await writeFile(target, out, "utf8");
   return `wrote \`${target}\``;
 }
-//@ chunk-hddjmtjj.js:37514-40607 placement
+//@ chunk-ndr12bqk.js:37547-40640 placement
 /**
  * 导入 Cursor rules：按 alwaysApply/globs/描述映射为 CLAUDE.md、规则或技能（数量/大小上限）。
  */
@@ -771,7 +771,7 @@ ${(shellExecHazard_2 ? escapeShellBangs(content) : content).trimEnd()}
     });
   }
 }
-//@ chunk-hddjmtjj.js:40607-40798 placement
+//@ chunk-ndr12bqk.js:40640-40831 placement
 /**
  * 技能目录扫描深度/数量上限与允许的 frontmatter 键。
  */
@@ -789,7 +789,7 @@ var ALLOWED_SKILL_FRONTMATTER_KEYS = new Set([
   "compatibility",
 ]);
 var DROPPED_SKILL_FRONTMATTER_KEYS = new Set(["icon", "color"]);
-//@ chunk-hddjmtjj.js:40798-41001 placement
+//@ chunk-ndr12bqk.js:40831-41034 placement
 /**
  * frontmatter 值标准化（字符串、布尔、数字、字符串数组）。
  */
@@ -801,7 +801,7 @@ function normalizeFrontmatterValue(value) {
     return value.map(collapseDashes);
   return;
 }
-//@ chunk-hddjmtjj.js:41001-41690 placement
+//@ chunk-ndr12bqk.js:41034-41723 placement
 function parseSkillFrontmatter(text, name, fileName) {
   text = text.replaceAll(
     `\r
@@ -862,7 +862,7 @@ ${serializeFrontmatter(converted)}---
     dropped: droppedKeys,
   };
 }
-//@ chunk-hddjmtjj.js:41690-42016 placement
+//@ chunk-ndr12bqk.js:41723-42049 placement
 /**
  * 递归找含 SKILL.md 的目录（深度与数量上限）。
  */
@@ -890,10 +890,10 @@ async function walkSkillDirs(dir, depth, out, state) {
     await walkSkillDirs(child, depth + 1, out, state);
   }
 }
-//@ chunk-hddjmtjj.js:42016-42278 placement
+//@ chunk-ndr12bqk.js:42049-42311 placement
 var SKILL_COPY_NOTE =
   "Skill directories are copied as-is \u2014 bundled scripts and body instructions become active in Claude Code, and once Claude loads the skill it stays in context for the session. Unchecked by default; review SKILL.md and its directory before importing.";
-//@ chunk-hddjmtjj.js:42278-44545 placement
+//@ chunk-ndr12bqk.js:42311-44578 placement
 /**
  * 导入 Cursor skills 目录（数量/深度上限、SKILL.md 非普通文件时提示）。
  */
@@ -1053,9 +1053,9 @@ async function importCursorSkills({
     });
   }
 }
-//@ chunk-hddjmtjj.js:44545-44556 placement
+//@ chunk-ndr12bqk.js:44578-44589 placement
 var MAX_SORTED_RULES = 200;
-//@ chunk-hddjmtjj.js:44556-46432 placement
+//@ chunk-ndr12bqk.js:44589-46465 placement
 async function importCursorCommands({
   dir,
   scope,
@@ -1183,7 +1183,7 @@ async function importCursorCommands({
     });
   }
 }
-//@ chunk-hddjmtjj.js:46432-46839 placement
+//@ chunk-ndr12bqk.js:46465-46872 placement
 var CURSOR_HOOK_EVENTS = {
   beforeShellExecution: "PreToolUse",
   afterShellExecution: "PostToolUse",
@@ -1200,7 +1200,7 @@ var CURSOR_HOOK_EVENTS = {
   subagentStop: "SubagentStop",
   stop: "Stop",
 };
-//@ chunk-hddjmtjj.js:46839-47907 placement
+//@ chunk-ndr12bqk.js:46872-47940 placement
 /**
  * 导入 Cursor hooks（读不了、结构异常时提示人工重加）。
  */
@@ -1252,7 +1252,7 @@ async function importCursorHooks(filePath, scope, label, projectRoot, unmappable
     });
   }
 }
-//@ chunk-hddjmtjj.js:47907-49126 placement
+//@ chunk-ndr12bqk.js:47940-49159 placement
 async function importCursorIgnore(ignorePath, projectRoot, scope, scopeArg, unmappable) {
   let scope_2 = scopeArg ? "user" : "project";
   if (scope !== "user" && (await pathExists(join(projectRoot, ".cursorignore"))))
@@ -1296,7 +1296,7 @@ async function importCursorIgnore(ignorePath, projectRoot, scope, scopeArg, unma
       },
     );
 }
-//@ chunk-hddjmtjj.js:49126-53365 placement
+//@ chunk-ndr12bqk.js:49159-53398 placement
 /**
  * Cursor 导入源定义：检测与扫描各类配置。
  */

@@ -3,10 +3,10 @@
  *
  * 并入旧版已有路径：-p 打印/SDK 模式的主循环辅助。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/print.ts
- * pieces: chunk-18hwfzwa.js (1), chunk-e6aww6q8.js (7), chunk-j387qrdq.js (8), chunk-nkdv7dw8.js (7), chunk-tyg7f3ek.js (46)
- * attribution: fingerprint 15, placement 12, layout 28, sole-consumer 11, callgraph-witnessed 2, file-local 1
+ * pieces: chunk-0a7cfwp8.js (10), chunk-0yw3taqg.js (48), chunk-5xgkngpb.js (8), chunk-czq1j3j2.js (1), chunk-vxsfen55.js (8)
+ * attribution: placement 12, layout 25, fingerprint 15, sole-consumer 17, callgraph-witnessed 2, affinity 2, file-local 2
  */
 import { randomUUID } from "crypto";
 import { cwd } from "process";
@@ -15,15 +15,7 @@ import { open, realpath } from "fs/promises";
 import { normalizeUuidOrNull } from "../utils/agentId.js";
 import { EMPTY_USAGE } from "../services/api/emptyUsage.js";
 import {
-  isSendableQueuedCommand,
-  commandsDiscardedSignal,
-  isActiveMainAgentCommand,
-  firstSchedulingPlugin,
-  textNotTypedFlags,
-} from "../utils/messageQueueManager.js";
-import { isHumanDrivenOrigin, isHumanOrigin } from "../utils/turnOrigin.js";
-import {
-  hasToolResultBlock_3,
+  hasToolResultBlock_2,
   isPlainInterruptMarker,
   isLegacyInterruptMarker,
   isInterruptMarkerRow,
@@ -32,7 +24,19 @@ import {
   ResumeRefusedError,
   dedupeSessionStartRows,
 } from "../utils/transcript/deserialize.js";
-import { NO_RESPONSE_REQUESTED, REWIND_UNSAFE_PATH_REASON } from "../constants/messages.js";
+import {
+  NO_RESPONSE_REQUESTED,
+  isToolUseResultMessage,
+  isNoResponseRequestedMessage,
+  createUserMessage,
+  wrapInSystemReminder,
+  createSystemMessage,
+  REWIND_UNSAFE_PATH_REASON,
+  isCompactBoundaryOrSummary,
+  extractTextContent_2,
+  getLastAssistantTextForResult,
+  createModelSwitchBreadcrumbs_2,
+} from "../utils/messages.js";
 import {
   getFeatureValue_CACHED_MAY_BE_STALE,
   initializeGrowthBook,
@@ -41,20 +45,40 @@ import {
 } from "../services/analytics/growthbook.js";
 import {
   TENGU_GOOFY_HARE,
+  TENGU_SQUISHY_ULLMAN,
   TENGU_WONDROUS_HAVEN,
   TENGU_WITTY_KAY,
   retryWatchdogEnv,
 } from "../services/api/withRetry.js";
 import {
-  isToolUseResultMessage,
-  isSyntheticApiErrorMessage,
-  createSystemMessage,
-  createUserMessage,
-  isCompactBoundaryOrSummary,
-  extractTextContent_2,
-  getLastAssistantTextForResult,
-} from "../utils/messages.js";
+  logFeatureOk,
+  logFeatureBad,
+  logFeatureSad,
+  withFeatureTelemetry,
+} from "../services/analytics/featureTelemetry.js";
+import { isPluginServerConfig, isManagedConfigScope } from "../services/mcp/types.js";
 import { disallowedToolsSchema, mcpToolNameSchema } from "../utils/attachments/skillMentions.js";
+import {
+  serverSignature,
+  filterDuplicateServers,
+  serversNeedingNotReconnect,
+} from "../hooks/notifs/useMcpConnectivityStatus.js";
+import {
+  isMcpServerDisabled,
+  isMcpServerAllowedByPolicy,
+  isBuiltinInProcessMcpServer,
+  filterMcpServersByPolicy,
+  doesEnterpriseMcpConfigExist,
+  supportsEnvExpansion,
+  mcpDialBlockCause,
+  emptyServerMap,
+  getMcpConfigByName,
+  MCP_SETTINGS_SCOPE_SET,
+  getAllMcpConfigs,
+  isMcpServerBlockedAtConnectTime,
+  reservedServerNameMessage,
+  isMcpDialBlockedByPolicy,
+} from "../services/mcp/config.js";
 import { import_mapValues, import_sortedIndex_2, pickAlias } from "../../vendor/lodash-es/_inlinedHelpers.js";
 import { omitAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { isStandardKeyActive } from "../services/mcp/mcpStandardKeys.js";
@@ -71,21 +95,6 @@ import {
   filterObject,
 } from "../services/analytics/metadata.js";
 import { isLockedOutByOrgMcpPolicy } from "../services/mcp/orgMcpPolicyLockout.js";
-import {
-  isBuiltinInProcessMcpServer,
-  filterMcpServersByPolicy,
-  doesEnterpriseMcpConfigExist,
-  supportsEnvExpansion,
-  isMcpServerDisabled,
-  mcpDialBlockCause,
-  emptyServerMap,
-  getMcpConfigByName,
-  MCP_SETTINGS_SCOPE_SET,
-  getAllMcpConfigs,
-  isMcpServerBlockedAtConnectTime,
-  reservedServerNameMessage,
-  isMcpDialBlockedByPolicy,
-} from "../services/mcp/config.js";
 import {
   BUILTIN_SERVER_IGNORED_REASON,
   IGNORED_IDE_TRANSPORT_TEXT,
@@ -106,9 +115,17 @@ import {
   sanitizeMcpResourceError,
   SERVERS_OBJECT_REQUIRED_TEXT,
   sanitizeMcpStatusMap,
-  describeMcpServerForStatus,
+  describeMcpServersForStatus,
 } from "./print/mcpControlRequests.js";
-import { getPrefixServerKey } from "../components/agents/ToolSelector.js";
+import {
+  getPrefixServerKey,
+  getMcpPrefix,
+  isToolFromMcpServer,
+  collectServerToolPolicies,
+  mergeMcpServerPolicyRules,
+  mcpInfoFromString,
+  matchesListedOrParsedServer,
+} from "../services/mcp/mcpStringUtils.js";
 import {
   OPERATOR_SUPPLIED_IGNORED_TEXT,
   isAlwaysKeptServer,
@@ -120,22 +137,14 @@ import { startupCcrEnv } from "../tasks/RemoteAgentTask/remoteAgentKinds.js";
 import { logForDebugging, createAttachmentMessage_2 as createAttachmentMessage } from "../utils/debug.js";
 import { omitKeys } from "../utils/hooks/hookCommandResolution.js";
 import {
-  getMcpPrefix,
-  isToolFromMcpServer,
-  collectServerToolPolicies,
-  mergeMcpServerPolicyRules,
-  mcpInfoFromString,
-  matchesListedOrParsedServer,
-} from "../services/mcp/mcpStringUtils.js";
-import {
   commandBelongsToServer,
+  isStdioConfig,
   refetchReasonTelemetry,
   filterCommandsByServer,
   excludeCommandsByServer,
   isMcpTool,
   removeMcpClientsWhere,
   isDeclaredUnderOtherWorkspaceRoot,
-  isStdioConfig,
   isNonReservedStdioConfig,
 } from "../services/mcp/utils.js";
 import {
@@ -145,124 +154,11 @@ import {
   sameToolPolicies,
 } from "../services/mcp/serverIdentity.js";
 import { sanitizeTelemetryString, sanitizeRelayUrl, formatElicitationUrls } from "../utils/sanitization.js";
-import { isPluginServerConfig, isManagedConfigScope } from "../services/mcp/types.js";
 import { reconcileMcpClients } from "../services/mcp/mcpClientState.js";
 import { isDiscoveryCacheOn, isDiscoveryCacheUsable } from "../services/mcp/mcpAccountKey.js";
-import { toDynamicServerConfig } from "../services/mcp/dynamicServers.js";
-import { logMCPDebug, logError, getInMemoryErrors } from "../utils/log.js";
-import { logEvent, logEventAsync } from "../services/analytics/index.js";
-import { fromEnum, lit, fromEnumOpt, fromNumber } from "../services/analytics/safeMetadata.js";
-import { setMcpOnClose, injectMcpMessage, onMcpNotification } from "../services/mcp/mcpWireUtils.js";
-import { ListMcpResourcesTool } from "../tools/ListMcpResourcesTool/ListMcpResourcesTool.js";
-import { ReadMcpResourceTool } from "../tools/ReadMcpResourceTool/ReadMcpResourceTool.js";
-import { toolMatchesName, findToolByName, alwaysFalse as alwaysFalse_2 } from "../Tool.js";
 import {
-  identityChangedFailure,
-  isRemoteMcpTransport,
-  identityChangedForRemote,
-} from "../services/mcp/discoveryIdentity.js";
-import {
-  identityEpoch,
-  setIdentityTrippedHandler,
-  takeIdentityTripUnowned,
-  rearmIdentityBaseline,
-} from "../services/mcp/identityChange.js";
-import {
-  mcpGateError,
-  mcpRefusalText,
-  disabledEnableBeforeText,
-  notApprovedText,
-} from "../services/mcp/mcpToggleMessages.js";
-import {
-  logHandlerFailure,
-  controlHandlerError,
-  dispatchControlRequest,
-} from "./print/dispatchControlRequest.js";
-import { listDirectoryResourceTool } from "../services/mcp/skillDirectoryResource.js";
-import { applyMcpServerConfig } from "../components/mcp/MCPListPanel.js";
-import {
-  toError,
-  errorMessage,
-  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-  WireSafeControlError,
-  withTelemetryMessage,
-  isAbortError,
-  AbortError,
-  sanitizedErrorNameForTelemetry,
-  sanitizedErrnoLowerForTelemetry,
-  getErrnoCode,
-  storageCauseErrnoCode,
-} from "../utils/errors.js";
-import {
-  applyConnectionResult,
-  findReusableClients,
-  retryRemoteMcpServers,
-  CONNECT_RETRY_BASE_MS,
-} from "../services/mcp/connectionBatch.js";
-import {
-  refusalStateFor,
-  applyMcpReconnect,
-  resolveReconnectConfig,
-  reconnectMcpOnIdentityChange,
-  watchMcpDisconnects,
-  createReconnectBackoff,
-  makeCommitReconnect,
-  markServerDisabled,
-} from "../services/mcp/mcpReconnect.js";
-import { pMap } from "../../vendor/p-map/index.js";
-import {
-  rowsSinceTurnStart,
-  isQueuedPromptAnswered,
-  answeredHeldUuids,
-  runningTurnSendsForTurn,
-} from "./print/transcriptChain.js";
-import {
-  isCompactBoundaryMessage,
-  messagesSinceCompactBoundary,
-  hasRelaySourceForClients,
-  hasUpdateStatusToolOnly,
-  hasStartThreadToolOnly,
-} from "../services/projects/threadRows.js";
-import { heldUuidsIfEnabled, isSelfHostedHeldRecognition } from "./print/queuedMessageUtils.js";
-import {
-  isPermissionCardHoldEnabled,
-  pendingActionsAmbiguous,
-  interruptedPromptUuid,
-  createTeardownStatusReporter,
-  isPassiveCommand,
-  WakeRouter,
-  publishQueuedWakeStatus,
-  ResultWakeRouter,
-  installWakeRouterKick,
-  pendingActionToolUseIds,
-  singlePendingAction,
-  hasPendingActions,
-} from "./print/wakeRouter.js";
-import { logForDiagnosticsNoPII, isDiagLogging, withDiagnosticsTiming } from "../utils/diagLogs.js";
-import {
-  flagKey,
-  configProbeEnv,
-  knownSubtypeOrUndefined,
-  elapsedMs as elapsedMs_2,
-  matchRequestId,
-} from "./structuredIOProtocol.js";
-import {
-  getRiskColor,
-  unmatchedAnswerDenial,
-  TENGU_WILD_BEACON,
-  restoreParkedPrompt,
-  cancelStaleParkedPrompt,
-  findParkedPromptOpener,
-  ParkedPermissionController,
-  userMessagePlatformFields,
-} from "./print/parkedPrompts.js";
-import {
-  isDifferentString,
-  isValidBridgeToolName,
-  BridgeToolProvider,
-} from "../bridge/bridgePermissionResponse.js";
-import { getRemoteFlagOverrideState, needsGrowthBookRefresh } from "../utils/permissions/yoloClassifier.js";
-import {
+  getOriginalCwdOrNull,
+  getProjectConfigRoot,
   mainAgentId,
   setFlagSettingsInline,
   getFlagSettingsInline,
@@ -298,6 +194,7 @@ import {
   setAwaitsFirstRun,
   getOriginalCwd,
   getStrictMcpConfig,
+  getSyncedPluginReloadDebt,
   getSpareClaimState,
   getTotalCostUSD,
   getTotalAPIDuration,
@@ -311,18 +208,147 @@ import {
   setSdkAgentProgressSummariesEnabled,
   markSpareClaimFailed,
   getStickyBetas,
-  getSyncedPluginReloadDebt,
   markPrintInputClosed,
   setMainThreadAgentType,
   setSdkPerTaskStopAffordance,
   setSdkRapidFollowupPreempt,
   setSdkForwardNestedSubagentToolCalls,
   setSessionSkillAllowlist,
+  clearSystemPromptSectionState,
   setInitJsonSchema,
   setAllowedChannels,
   isSessionPersistenceDisabled,
   switchSession,
 } from "../bootstrap/state.js";
+import { toDynamicServerConfig } from "../services/mcp/dynamicServers.js";
+import { logMCPDebug, logError, getInMemoryErrors } from "../utils/log.js";
+import { countWhere, uniqBy } from "../utils/collections.js";
+import { logEvent, logEventAsync } from "../services/analytics/index.js";
+import { fromEnum, lit, fromEnumOpt, fromNumber } from "../services/analytics/safeMetadata.js";
+import { setMcpOnClose, injectMcpMessage, onMcpNotification } from "../services/mcp/mcpWireUtils.js";
+import { ListMcpResourcesTool } from "../tools/ListMcpResourcesTool/ListMcpResourcesTool.js";
+import { ReadMcpResourceTool } from "../tools/ReadMcpResourceTool/ReadMcpResourceTool.js";
+import { matchesToolName, findToolByName, alwaysFalse as alwaysFalse_2 } from "../Tool.js";
+import {
+  identityChangedFailure,
+  isRemoteMcpTransport,
+  identityChangedForRemote,
+} from "../services/mcp/discoveryIdentity.js";
+import {
+  identityEpoch,
+  setIdentityTrippedHandler,
+  takeIdentityTripUnowned,
+  rearmIdentityBaseline,
+} from "../services/mcp/identityChange.js";
+import {
+  mcpGateError,
+  mcpRefusalText,
+  disabledEnableBeforeText,
+  notApprovedText,
+} from "../services/mcp/mcpToggleMessages.js";
+import {
+  logHandlerFailure,
+  controlHandlerError,
+  dispatchControlRequest,
+} from "./print/dispatchControlRequest.js";
+import {
+  mcpAuthToolsFor,
+  hasLapsedCcrSignIn,
+  isCachedAuthStaleButUsable,
+  deleteNeedsAuthCache,
+} from "../services/mcp/needsAuthCache.js";
+import { listDirectoryResourceTool } from "../services/mcp/skillDirectoryResource.js";
+import { applyMcpServerConfig } from "../components/mcp/MCPListPanel.js";
+import {
+  toError,
+  errorMessage,
+  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+  WireSafeControlError,
+  withTelemetryMessage,
+  isAbortError,
+  AbortError,
+  sanitizedErrorNameForTelemetry,
+  sanitizedErrnoLowerForTelemetry,
+  getErrnoCode,
+  storageCauseErrnoCode,
+} from "../utils/errors.js";
+import { clearConnectorCardAllows, withClearedCardAllows } from "../utils/permissions/connectorCardAllows.js";
+import {
+  applyConnectionResult,
+  findReusableClients,
+  retryRemoteMcpServers,
+  CONNECT_RETRY_BASE_MS,
+} from "../services/mcp/connectionBatch.js";
+import {
+  refusalStateFor,
+  applyMcpReconnect,
+  resolveReconnectConfig,
+  withAuthTools,
+  reconnectMcpOnIdentityChange,
+  watchMcpDisconnects,
+  createReconnectBackoff,
+  makeCommitReconnect,
+  markServerDisabled,
+} from "../services/mcp/mcpReconnect.js";
+import { pMap } from "../../vendor/p-map/index.js";
+import {
+  rowsSinceTurnStart,
+  isQueuedPromptAnswered,
+  answeredHeldUuids,
+  runningTurnSendsForTurn,
+} from "./print/transcriptChain.js";
+import {
+  isCompactBoundaryMessage,
+  messagesSinceCompactBoundary,
+  hasRelaySourceForClients,
+  hasUpdateStatusToolOnly,
+  hasStartThreadToolOnly,
+} from "../services/projects/threadRows.js";
+import { heldUuidsIfEnabled, isSelfHostedHeldRecognition } from "./print/queuedMessageUtils.js";
+import {
+  isPermissionCardHoldEnabled,
+  pendingActionsAmbiguous,
+  unambiguousPendingAgentId,
+  interruptedPromptUuid,
+  createTeardownStatusReporter,
+  disallowedToolsFromMessages,
+  isPassiveCommand,
+  WakeRouter,
+  publishQueuedWakeStatus,
+  ResultWakeRouter,
+  installWakeRouterKick,
+  pendingActionToolUseIds,
+  singlePendingAction,
+  hasPendingActions,
+} from "./print/wakeRouter.js";
+import { logForDiagnosticsNoPII, isDiagLogging, withDiagnosticsTiming } from "../utils/diagLogs.js";
+import {
+  flagKey,
+  configProbeEnv,
+  knownSubtypeOrUndefined,
+  elapsedMs as elapsedMs_2,
+  matchRequestId,
+} from "./structuredIOProtocol.js";
+import {
+  getRiskColor,
+  unmatchedAnswerDenial,
+  TENGU_WILD_BEACON,
+  restoreParkedPrompt,
+  cancelStaleParkedPrompt,
+  findParkedPromptOpener,
+  ParkedPermissionController,
+} from "./print/parkedPrompts.js";
+import {
+  isDifferentString,
+  isValidBridgeToolName,
+  BridgeToolProvider,
+} from "../bridge/bridgePermissionResponse.js";
+import { deepEqualIgnoringUndefined } from "../bootstrap/stateSlices.js";
+import {
+  stripHostOwnedInputKeys,
+  applyPermissionAnswerChanges,
+} from "../utils/permissions/permissionAnswer.js";
+import { getRemoteFlagOverrideState, needsGrowthBookRefresh } from "../utils/permissions/yoloClassifier.js";
 import {
   drainTaskNotifications,
   setTaskNotificationListener,
@@ -337,11 +363,12 @@ import {
 import { sendSessionActivitySignal_2, sendSessionActivitySignal } from "../utils/sessionActivity.js";
 import {
   surfaceManagedSettingsErrorsHeadless,
-  getInitialSettings_2,
+  getInitialSettings,
   getSettings_DEPRECATED,
-  getSettingsWithSources_2,
-  getSettingsWithErrors_2,
+  getSettingsWithSources,
+  getSettingsWithErrors,
   updateSettingsForSource,
+  parentSettingsIncluded,
 } from "../utils/settings/settings.js";
 import { reportSettingsValidationErrors } from "./print/settingsValidationNotice.js";
 import {
@@ -372,8 +399,6 @@ import {
   getFastRejectedReason,
   onOrgFastModeChange,
   onFastRejectedFallbackModelsChanged,
-  isFastModeEnabled,
-  fastModeSettingDiverges,
   isMainModelFastRejected,
   clearFastRejectedFallbackModels,
 } from "../utils/fastMode.js";
@@ -399,7 +424,7 @@ import {
   gracefulShutdown,
   markPrintModeSignalHandlersRegistered,
 } from "../utils/gracefulShutdown.js";
-import { markPrintPollEventWiring } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { markPollEventWiringForPrintRun } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import {
   turnHandoffAdmission,
   shouldCarryWrites,
@@ -420,8 +445,8 @@ import {
   lazySessionInboxPointers,
   getMcpClientModule,
   lazyHandoffMarkerRelay,
-  MCP_CALL_RESULT_LIMITS,
-  PRINT_TURN_POLL_MS,
+  PRINT_TURN_TIMEOUT_MS,
+  ELICIT_WAIT_RETRY_MS,
   TEAM_SHUTDOWN_REMINDER,
   teamTeardownParkTimeoutMs,
   isTeamShutdownReminder,
@@ -429,7 +454,7 @@ import {
   lazyCronScheduler,
   lazyCronJitterConfig,
   PRINT_TURN_MAX_ATTEMPTS,
-  PRINT_TURN_TIMEOUT_MS,
+  CLAIM_SESSION_QUEUE_DELAY_MS,
   lazyPrintModules,
   lazyConversationExporter,
   isMcpCallResultTooLarge,
@@ -472,6 +497,7 @@ import {
   setTranscriptLocalGcEnabled,
   hydrateFromCCRv2InternalEvents,
   hydrateRemoteSession,
+  getTranscriptPathForSession,
 } from "../utils/sessionStorage.js";
 import {
   reportUserDataAttachments,
@@ -532,17 +558,19 @@ import {
 import {
   transportStateByHost,
   isTransportBacked,
+  mayPersistOnHost,
   pickForTransport,
   isLocalStdinOnly,
   mayTransportPersist,
   emptyIfTransport,
-  statusesForTransport,
   isBridgeOrTransport,
 } from "./transportState.js";
 import { isStreamJsonStdin, applyInitializePlugins } from "./startup/awaitInitialize.js";
 import {
   isRemoteManagedEnvironment,
   workingSyncAdmission,
+  isRemoteEnvPlaceholder,
+  remoteEnvSystemPromptSections,
   isByocEnvironment,
   isBridgeEnvironment,
 } from "../utils/remoteEnvironment.js";
@@ -565,6 +593,7 @@ import {
   restoreCostState,
   COST_PUSH_INTERVAL_MS,
   heldUuidsAnsweredByTurn,
+  MemoryExtractPlaceGate,
   CostStatePusher,
   TurnGate,
   classifyTurnAbort,
@@ -575,7 +604,10 @@ import {
 import { isFirstPartyRemoteSession } from "../utils/userDataRoots.js";
 import {
   createUserDataRootsTurnGate,
+  resumeModelRestrictedNotice,
+  modelRestrictedNotice,
   hasHitUnattendedRestartLimit,
+  withWireModelRestriction,
   UnattendedStartRecord,
   createModelChangeNotices,
   buildSystemStatusMessage,
@@ -646,10 +678,10 @@ import {
   mcpCallRefusalFor,
   remoteBrowserRefusal,
   guardRemoteBrowserMcpCall,
+  applyWidgetToolStates,
   FAILED_TO_RESUME_SESSION_TEXT,
   SESSION_NOT_FOUND_MESSAGE,
 } from "./print/controlRequestMisc.js";
-import { applyPermissionAnswerChanges } from "../utils/permissions/permissionAnswer.js";
 import { profileCheckpoint, addStartupContext } from "../utils/startupProfiler.js";
 import {
   createDependencyWatcher,
@@ -669,6 +701,7 @@ import {
 import {
   createForkSeedVerifier,
   startHostCpuSampler,
+  PROC_FS_READER_WITH_LINKS,
   isBridgeForkSupported,
   mcpSyncNeeded,
   pickReusableMcpClients,
@@ -684,8 +717,16 @@ import {
   formatSessionRunningInBackground,
 } from "../utils/sessionAttach.js";
 import {
+  messagesHeard,
+  hasForeignOrigin,
+  runWithTurnId,
+  pickTurnIdForRelay,
+} from "../services/mcp/ccrTurnId.js";
+import { promptOriginOfContent, promptOriginKind } from "../utils/processUserInput/promptOrigin.js";
+import {
   CloudPluginSwitches,
   retirementPromptRows,
+  isStopOfHeldMessagesEnabled,
   installSdkEventDrain,
   createPromptSuggestionEmitter,
   createRateLimitFrameRelay,
@@ -695,6 +736,7 @@ import {
 } from "./print/turnStartChecks.js";
 import {
   restoreTaskListAtBoot,
+  removePlacedCopiesOfDeletedFiles,
   notifyTurnBeganBeforeInit,
   placeFilesByNameForTurn,
   WorkerDirSyncReporter,
@@ -718,12 +760,22 @@ import {
   logProjectsRelayAdmission,
   initiatorOfFrame,
   isHumanComposedFrame,
-  prepareCloudBrowserTurn,
+  isHumanIngressFrame,
+  withCloudBrowserTurnId,
   admitCloudBrowserTurnId,
   escapePromptUnlessDisabled,
   withdrawnFileUuidsOf,
+  isPlainUserMessageEnvelope,
   ingressSubmitFlags,
 } from "./remoteIO/ingress.js";
+import {
+  rebuildStartupToolsForCodeMode,
+  withLateEnabledToolsIfAdvertised,
+  TOOL_POOL_MEMO_TTL_MS,
+  assembleToolPool,
+  TOOL_CATALOG,
+} from "../tools.js";
+import { noopModelPinReset, switchSessionModelPin } from "../utils/sessionModelPin.js";
 import { prefetchUserContext } from "./startup/sessionLaunchOptions.js";
 import { takePendingInitialUserMessage } from "../utils/sessionStart.js";
 import {
@@ -749,16 +801,9 @@ import {
   getAgentDefinitionsWithOverrides,
   parseAgentsFromJson,
 } from "../tools/AgentTool/loadAgentsDir.js";
-import { formatModelRestrictedNotice } from "../utils/model/validateModel.js";
 import { getMainLoopModel, modelSettingResolvesThroughModelStrings } from "../utils/model/model.js";
 import { writeToStdout, markStdoutDrainExternallyClocked, outstandingStdoutBytes } from "../utils/process.js";
 import { filterToolsByDenyRules } from "../utils/permissions/filterToolsByDenyRules.js";
-import {
-  withLateEnabledToolsIfAdvertised,
-  TOOL_POOL_MEMO_TTL_MS,
-  assembleToolPool,
-  TOOL_CATALOG,
-} from "../tools.js";
 import {
   notifyRequiresAction,
   makePermissionModeReader,
@@ -767,6 +812,24 @@ import {
   cycleProactivityLevel,
   proactivityStateStub,
 } from "./print/proactivityControl.js";
+import {
+  shouldLeadWithOldestCard,
+  restoreDeclaredDialogKinds,
+  getResumeLaneOptions,
+  resolveResumeInterruption,
+  findUnresolvedToolUseOnAPrunedBranch,
+  findUnresolvedToolUseAnywhere,
+  planServedCallAdoption,
+  createUnresolvedToolUseFinder,
+  buildOrphanedPermissionPrompt,
+  createElicitationRegistrar,
+  DISABLED_ELICITATION_LIMITS,
+  createSdkUserDialogHandler,
+  cancelPendingUserDialogs,
+  isTerminalTitleSuppressed,
+  cancelDialogsOnNewPrompt,
+  declareSdkDialogKinds,
+} from "./print/elicitationRegistrar.js";
 import { collectSendPins, collectNamedAgentIds } from "../tools/SendMessageTool/deliveryResults.js";
 import { mcpTaskEndingsSlots } from "../tasks/McpTask/mcpTaskEndings.js";
 import {
@@ -785,7 +848,7 @@ import {
   refreshPluginHooksOnClaim,
   reportTurnLoopCrash,
   watchTaskChanges,
-  isIdlePluginRefreshEnabled,
+  BesideLoopRequestQueue,
   waitForPluginSyncBudget,
   recordInlineMcpSetServers,
 } from "./print/turnLoop.js";
@@ -804,36 +867,14 @@ import {
 import {
   collectOrphanTasks,
   restoreOrphanAgents,
+  isAmbientRunning,
   orphanAgentRestoreNotice,
-  describeInterruptedTasks,
+  enqueueOrphanRestoreWake,
 } from "./remoteIO/orphanAgentRestore.js";
-import {
-  logFeatureBad,
-  logFeatureOk,
-  logFeatureSad,
-  withFeatureTelemetry,
-} from "../services/analytics/featureTelemetry.js";
 import { describeRunningProcesses } from "../utils/sessionState.js";
 import { createTaskFramework, getRunningTasks } from "../utils/task/framework.js";
 import { formatOrphanSummary, startupStandInPlan } from "../tasks/resumeOrphanedTasks.js";
 import { restoreRemoteAgentTasks } from "../tasks/RemoteAgentTask/RemoteAgentTask.js";
-import {
-  restoreDeclaredDialogKinds,
-  getResumeLaneOptions,
-  resolveResumeInterruption,
-  findUnresolvedToolUseOnAPrunedBranch,
-  findUnresolvedToolUseAnywhere,
-  planServedCallAdoption,
-  createUnresolvedToolUseFinder,
-  buildOrphanedPermissionPrompt,
-  createElicitationRegistrar,
-  DISABLED_ELICITATION_LIMITS,
-  createSdkUserDialogHandler,
-  cancelPendingUserDialogs,
-  isTerminalTitleSuppressed,
-  cancelDialogsOnNewPrompt,
-  declareSdkDialogKinds,
-} from "./print/elicitationRegistrar.js";
 import {
   restoreMemoryToggle,
   restoreExcludeDynamicSections,
@@ -844,7 +885,9 @@ import {
   applyInitializeProactivity,
   notifyExcludeDynamicSections,
 } from "./print/workerEpochRestore.js";
-import { restoreToolsKeptByClear } from "../services/compact/keptTools.js";
+import { restoreToolsKeptByClear, recordEarlierToolsUnknown } from "../services/compact/keptTools.js";
+import { applyPicturesToHide, fillPicturesToHide } from "../utils/attachments/bridgeAttachments.js";
+import { removeDeletedChatFiles } from "../utils/uploadsInPlace.js";
 import { adoptInternalWindows } from "../services/compact/autoCompactWindow.js";
 import { restoreDurableWatches } from "../services/artifacts/durableWatch.js";
 import {
@@ -867,6 +910,8 @@ import {
   trackAssistantText,
   createPeerMessageRouter,
   mcpServersNamedByRules,
+  runWithTurnIdReport,
+  collectTrialEnvKeys,
   mcpConnectionClosedMessage,
   resolveTurnAgent,
   applyRequestedAgent,
@@ -874,11 +919,13 @@ import {
   handleTurnHandoff,
   dropBeforeAttachments,
   acceptStdinPeerMessage,
+  prewarmTranscriptReadAhead,
 } from "./print/peerMessages.js";
 import {
   readRecordedThinkingSettings,
   restoreThinkingSettingsFromRecord,
   modelToRestoreAfterRefusal,
+  withAutoModeCapableDropGuard,
   applyWorkspaceTrust,
   rewindExpiryVerdict,
   REWIND_REFUSAL_RETRYABLE,
@@ -897,8 +944,10 @@ import {
   takeServerFallbackAnnouncement,
 } from "../utils/permissions/serverClassifier/fallbackNotice.js";
 import { isServerClassifierOff } from "../utils/permissions/serverClassifier/arbiter.js";
+import { informationalSystemMessage } from "./print/sdkMessageStream.js";
+import { enableCodeMode, resumeSourceForPath } from "../utils/codeMode/sessionResumeHooks.js";
 import { ndjsonStringifyWithReplacer, ndjsonStringify } from "./ndjsonSafeStringify.js";
-import { isExtractModeActive, AUTO_MEM_DIRNAME_2 } from "../memdir/paths.js";
+import { isExtractModeActive } from "../memdir/paths.js";
 import {
   flushPendingAsyncRewakeHooks,
   executeNotificationHooks,
@@ -915,6 +964,14 @@ import {
   turnHandoffRegistrationNow,
   turnHandoffRegistrationToAnnounce,
 } from "./remoteIO.js";
+import {
+  sweepOnFullDisk,
+  interruptedTurnUuids,
+  PrintRunState,
+  wrapPersistenceWithFollowupCheck,
+  countUserPromptsFromEntries_4,
+  isImmediateCommandCandidate,
+} from "./print/inboundMessages.js";
 import { parseUserSpecifiedModel, bytesPerTokenForModel } from "../utils/model/modelDisplay.js";
 import { getSessionProject } from "../bootstrap/sessionSlices.js";
 import { resolvePhysicalCwd } from "../utils/Shell.js";
@@ -926,6 +983,7 @@ import {
 import {
   clientRegistry,
   paneRegistry,
+  normalizeDraws,
   fullscreenClients,
   showPane,
   focusPane,
@@ -935,7 +993,8 @@ import {
 import { McpConnectionStore } from "../services/mcp/mcpConnectionStore.js";
 import { PluginsStateStore } from "../utils/plugins/pluginLoadStatus.js";
 import { computerUseOwnerLock, ComputerUseStateCell } from "../utils/computerUse/computerUseMcpState.js";
-import { startCgroupCpuSampling, startToolCpuSampling } from "./print/toolCpuSampling.js";
+import { startCpuSampling, startToolCpuSampling } from "./print/toolCpuSampling.js";
+import { createWatch } from "../utils/leftRunningFamilyWatch.js";
 import {
   RECEIVED_MESSAGE_UUIDS,
   HOST_INGRESS_LANES,
@@ -950,13 +1009,6 @@ import {
   compactionCopyTelemetry,
 } from "./print/runningTurnRecord.js";
 import {
-  interruptedTurnUuids,
-  PrintRunState,
-  wrapPersistenceWithFollowupCheck,
-  countUserPromptsFromEntries_4,
-  isImmediateCommandCandidate,
-} from "./print/inboundMessages.js";
-import {
   makeRewindStandInWriter,
   hasRewindTarget,
   reportCcrHistoryLoadFailure,
@@ -966,6 +1018,7 @@ import {
   createTurnPersistenceChecks,
   DeclinedRedeliveryBatcher,
   UserFrameIntake,
+  flushPendingRowsWithTerminal,
   InputLatencyLedger,
 } from "./print/userFrameIntake.js";
 import {
@@ -980,6 +1033,7 @@ import {
 } from "./print/followUpPreempt.js";
 import {
   detectTurnInterruption,
+  collectInterruptedTurnsPrompt,
   weakMapLookup,
   tailDiagnosticsFields,
   isInterruptedTail,
@@ -994,7 +1048,7 @@ import {
   expectStartupHandshake,
 } from "./startup/startupWorkGate.js";
 import { isTerminalShutdown, latchTerminalShutdown, heldUntilExit } from "../utils/terminalShutdown.js";
-import { hasBatchableQueuedPrompt, TurnDispatcher, isBusyOrClosed, isBusy } from "./print/turnDispatch.js";
+import { getQueuedUserTurnCount, TurnDispatcher, isBusyOrClosed, isBusy } from "./print/turnDispatch.js";
 import {
   ccrLostCallsNote,
   awaitPendingPermissionAnswers,
@@ -1024,12 +1078,19 @@ import {
 } from "./print/remoteCancel.js";
 import {
   createKeepAliveSender,
+  SDKControlReloadPluginsRequestSchema,
   SDKSetChromeBrowserHintsSetChromeBrowserHintsMessageSchema,
   SDKSetPromptSuggestionsPausedSetPromptSuggestionsPausedMessageSchema,
-  SDKMessageRatedMessageRatedMessageSchema,
 } from "../entrypoints/sdk/controlSchemas.js";
 import { stopObserverAgents, stopAllRunningTasks, stopTaskByUser } from "../tasks/stopTask.js";
 import { PrewaitLatch, interruptOnNowPriority, OneShotRunLimits } from "./print/runEndReasons.js";
+import {
+  commandsDiscarded,
+  firstSchedulingPlugin,
+  isDrainableMainThreadCommand,
+  isQueuedUserTurnCommand,
+  textNotTypedFlags,
+} from "../utils/messageQueueManager.js";
 import {
   createFetchHoldRegistry,
   filesRefetchMode,
@@ -1063,7 +1124,7 @@ import { createPersistenceChecker, loadSessionTranscriptRows } from "./print/tra
 import { getSourceUuid } from "./queuedCommands.js";
 import { serializeCalls } from "../utils/promiseQueue.js";
 import {
-  isEligibleBridgeMessage,
+  isBridgeableMessage,
   isEphemeralSdkFrame,
   SIDE_QUESTION_TIMEOUT_MS,
   SIDE_QUESTION_TIMEOUT_MESSAGE,
@@ -1094,7 +1155,7 @@ import {
   shouldForwardSubagentMessage,
   orderedRowSource,
   appendRowsWithHooks,
-  extractReadFilesFromMessages,
+  restoreRemoteFileState,
   runningTurnRegistry,
 } from "../utils/queryHelpers.js";
 import { useShimmerAnimation } from "../components/Spinner/useShimmerAnimation.js";
@@ -1158,7 +1219,6 @@ import {
 } from "../tools/ArtifactTool/artifactResumeCarry.js";
 import { rearmHeadlessCommentMonitors } from "../services/artifacts/commentMonitorResume.js";
 import { ask, QueryEngine } from "../QueryEngine.js";
-import { informationalSystemMessage } from "./print/sdkMessageStream.js";
 import { registerMemoryAttributor } from "../utils/telemetry/memorySummary.js";
 import { InstanceRegistry } from "../utils/instanceRegistry.js";
 import { setToolState } from "../services/remoteTools/backgroundCommands.js";
@@ -1221,6 +1281,7 @@ import {
 import { isAutoModeActive, isAutoModeFromFallback } from "../utils/permissions/autoModeState.js";
 import {
   isAutoModeCapableModel,
+  burstBackdropRedraw,
   FlagSettingsClaimTracker,
   isAllowedBeforeClaim,
   SPARE_CLAIM_FAILED_TEXT,
@@ -1239,6 +1300,7 @@ import {
   isModelAllowedUnderActiveEnforcement,
 } from "../utils/model/defaultModel.js";
 import { stepDownRestrictedFamilyAliasPick } from "../utils/model/planModeModel.js";
+import { formatModelRestrictedNotice } from "../utils/model/validateModel.js";
 import {
   runPreModelSwitchHooks,
   describeModelSwitchBlocked,
@@ -1286,7 +1348,12 @@ import {
   uiSurfaceCapabilities,
   uiHookedCapabilities,
 } from "./sdkMcpManifests.js";
-import { uniq, uniqBy, count } from "../utils/collections.js";
+import {
+  normalizeCaseForComparison_2,
+  ensureScratchpadDir,
+  pinResolvedWorkingDirPath,
+  matchingRuleForInput,
+} from "../utils/permissions/filesystem.js";
 import { setupVscodeSdkMcp } from "../services/mcp/vscodeSdkMcp.js";
 import { isRefusalFallbackActive } from "../services/api/safeguardMessages.js";
 import { isRefusalFallbackEnabled } from "../services/api/refusalFallback.js";
@@ -1318,12 +1385,12 @@ import {
   resolveEffortValue,
   getEffortEnvOverride,
   isUltracodeAvailable,
-  isUltrathinkEffective,
+  ultrathinkRaisesEffort,
   parseEffortLevel,
   persistEffortSetting,
   getEffortLevelIfSupported,
 } from "../utils/effort.js";
-import { viewTeammateOutput } from "../components/teams/TeamsDialog.js";
+import { currentViewMode, subscribeFocusMode } from "../utils/focusMode.js";
 import {
   bridgeAdvertisedCommands,
   getSlashCommandToolSkills,
@@ -1334,7 +1401,6 @@ import {
   getSkillToolCommands,
 } from "../commands.js";
 import { buildBridgeContextSnapshot, mirrorTokenUsageToBridge } from "./print/bridgeTokenUsageMirror.js";
-import { subscribeFocusMode } from "../utils/focusMode.js";
 import { hasLspEverConnected } from "../services/lsp/manager.js";
 import { isDeclared } from "../tools/WaitForMcpServersTool/WaitForMcpServersTool.js";
 import { getPolicyCacheRevision, onPolicyVerdictChanged } from "../services/policyLimits/policyState.js";
@@ -1370,7 +1436,7 @@ import {
   createRemotePromptBox,
   createRemoteSelectionReader,
   withCurrentRequester,
-  UI_HOST_REQUEST_TIMEOUT_MS,
+  BACKDROP_CLEAR_DELAY_MS,
   causeOnlyResult,
   selectionResult,
   setUiLogSink,
@@ -1389,7 +1455,7 @@ import { jsonStringify } from "../utils/slowOperations.js";
 import {
   withKeyReplaced,
   resolveConnectorTwin,
-  toScopedConfig,
+  toScopedConfig_2,
   subscribeRows,
   waitForMcpServerStatus,
 } from "./print/mcpStatusMessages.js";
@@ -1423,6 +1489,7 @@ import {
   SDKUiClientModuleUiClientModuleMessageSchema,
   SDKUiClientPressUiClientPressMessageSchema,
   SDKUiMessageUiMessageMessageSchema,
+  SDKMessageRatedMessageRatedMessageSchema,
 } from "../entrypoints/sdk/uiControlSchemas.js";
 import {
   startSessionHooks,
@@ -1462,15 +1529,16 @@ import { initialPluginRefreshState } from "../commands/plugin/PluginSettings.js"
 import { getSessionIngressAuthToken, getSessionIngressAuthHeaders } from "../utils/sessionIngressAuth.js";
 import { bridgeHostState } from "../bridge/bridgeHostState.js";
 import { isToolSearchToolAvailable } from "../utils/toolSearch.js";
+import { sessionStartHostRefusedSlot, subscribeBackdrop } from "../plugins/functionHooks/sessionApi.js";
 import { hasBesideArrivingFiles } from "../bridge/attachmentFilesWait.js";
 import { createIdleTimeoutManager } from "../utils/idleTimeout.js";
 import { getNonInteractiveCommands, mergeClients as mergeClients_2 } from "../utils/commandPredicates.js";
-import { loadAllPluginsCacheOnly } from "../utils/plugins/pluginLoader.js";
+import { loadAllPluginsCacheOnly, loadAllPluginsCacheOnly_2 } from "../utils/plugins/pluginLoader.js";
 import { isConnectedOrCached } from "../skills/bundled/scheduleRemoteAgents.js";
 import { waitForStoreState } from "../context/voice.js";
 import { marketplaceSuffix, parsePluginIdentifier_2 } from "../utils/plugins/pluginIdentifier.js";
 import { SYNCED, pluginIdForTelemetry } from "../utils/telemetry/pluginTelemetry.js";
-import { normalizeNameForMCP } from "../services/mcp/normalization.js";
+import { CLAUDEAI_SERVER_PREFIX } from "../services/mcp/normalization.js";
 import { parseIsoTimestamp } from "../utils/parseIsoTimestamp.js";
 import {
   createUiStatusBuffer,
@@ -1482,6 +1550,7 @@ import {
   handlePaneFocusRequest,
 } from "./print/pluginUiPanes.js";
 import { getHostState, isFirstPartyTelemetryBlocked } from "../utils/hostEnvironment.js";
+import { ThrottledReread } from "./print/commandRefreshThrottle.js";
 import { logPluginDirReload, addPluginDirAndRebuildSandbox } from "./print/pluginDirReload.js";
 import { pendingReloadSlot } from "../plugins/functionHooks/pluginLifecycle.js";
 import { installDevModsPlaceholderExpander } from "../services/plugins/devMods/devModsWatcher.js";
@@ -1507,10 +1576,11 @@ import {
 } from "../services/tools/detachedToolCalls.js";
 import { hasWaitingFor } from "../services/artifacts/presenceSocket.js";
 import {
-  LOGIN_VERIFY_TIMEOUT_MS,
-  LOGIN_RESTORE_TIMEOUT_MS,
-  LOGIN_SETTLE_TIMEOUT_MS,
   LOGIN_REVOKE_TIMEOUT_MS,
+  LOGIN_RESTORE_TIMEOUT_MS,
+  PRINT_TURN_POLL_MS,
+  LOGIN_SETTLE_TIMEOUT_MS,
+  MCP_CALL_RESULT_LIMITS,
   LOGIN_BLOCKED_MESSAGES,
   LOGIN_BLOCKED_POLICY_UNVERIFIED_TEXT,
   LOGIN_BLOCKED_POLICY_RESTORE_FAILED_TEXT,
@@ -1527,11 +1597,15 @@ import {
   turnAttributionKeyOf,
   inheritedAttributionKey,
 } from "../utils/turnAttributionKey.js";
-import { runWithDroppableTurnId, runWithCcrTurnId, pickTurnIdForRelay } from "../services/mcp/ccrTurnId.js";
 import { withWorkloadStorage } from "../utils/http.js";
 import { withInteractionSpan, endInteractionSpan } from "../utils/telemetry/sessionTracing.js";
 import { activityManager } from "../utils/activityManager.js";
-import { settleOwedTitle, retractPendingTitle, maybeTitleFromUserMessage } from "./print/sessionTitles.js";
+import {
+  settleOwedTitle,
+  retractPendingTitleIfCancelled,
+  retractPendingTitle,
+  maybeTitleFromUserMessage,
+} from "./print/sessionTitles.js";
 import {
   maybeStartCcrRecap,
   resetRecapState,
@@ -1574,12 +1648,14 @@ import {
   REGISTER_REPO_ROOT_ERROR_TONES,
 } from "../services/repoRoots/registerRepoRoot.js";
 import { applyValidatedPermissionUpdate } from "../utils/permissions/PermissionUpdate.js";
-import { pinResolvedWorkingDirPath, matchingRuleForInput } from "../utils/permissions/filesystem.js";
 import { clearMemoryFilesCache } from "../components/Message.js";
 import { isAdditionalDirWithoutNestedMemory } from "../utils/attachments.js";
+import { buildSideQuestionFallbackParams } from "../utils/queryContext.js";
+import { query } from "../query.js";
 import { HeldInputReader } from "./print/inputReader.js";
 import { isTerminalTitleEnabled } from "../utils/terminalTitle.js";
 import { setJitPolicyAfterStartup } from "../utils/jitPolicy.js";
+import { scheduleResumeCacheWarm } from "./print/resumeCacheWarm.js";
 import { killAutoReactSubscriptions } from "../services/artifacts/frameLive.js";
 import {
   drainQueuedTaskNotifications,
@@ -1592,7 +1668,9 @@ import {
   repoRootErrorClass,
   REPO_ROOT_ERROR_TONES,
 } from "../services/repoRoots/repoRootErrors.js";
+import { syncReadSkills, sessionWriterSpelling } from "../utils/syncedSkillsAnchor.js";
 import {
+  isAsWrittenSearchEnabled,
   readFileAsWrittenUnservedReason,
   refreshAuthDependentSettings,
 } from "./print/authAndPolicyRefresh.js";
@@ -1612,7 +1690,6 @@ import {
   CAN_USE_TOOL_PROMPT_TOOL_IS_CLOUD_BROWSER_DENY_REASON,
   CAN_USE_TOOL_ABORTED_DENY_REASON,
   CAN_USE_TOOL_INVALID_RESULT_DENY_REASON,
-  PROMPT_TOOL_ALLOW_IMITATOR_DENY_REASON,
   PROMPT_TOOL_ALLOW_FLAGGED_MCP_DENY_REASON,
   NO_PROMPT_SURFACE_REASON,
 } from "../types/permissions.js";
@@ -1654,6 +1731,7 @@ import {
   START_SHELL_TASK_V1,
 } from "../utils/messages/systemInit.js";
 import { UNSUPPORTED_CONTROL_SUBTYPE_TEXT } from "../remote/wireFrameShape.js";
+import { hasBackdropSurface } from "../plugins/functionHooks/sites/uiSites.js";
 import { expandPath } from "../utils/path.js";
 import { vetPathSpellingsOrChain, pathVettingReason } from "../utils/permissions/pathVetting.js";
 import { isPathAllowed } from "../utils/permissions/pathValidation.js";
@@ -1666,12 +1744,16 @@ import { IMAGE_LIMITS } from "../utils/mediaLimits.js";
 import { stripAnthropicMeta } from "../services/mcp/anthropicMeta.js";
 import { McpToolResultNotReadError } from "../services/mcp/mcpResultErrors.js";
 import { classifyMcpAuthTarget } from "../services/mcp/auth.js";
-import { claudeAiConnectorAuthUrl, requiresConnectorGrant_2 } from "../services/mcp/claudeai.js";
+import {
+  claudeAiConnectorAuthUrl,
+  requiresConnectorGrant_2,
+  promptToolAllowDenyReason,
+} from "../services/mcp/claudeai.js";
 import { shouldSkipCustomRedirect } from "../services/mcp/customRedirectSkip.js";
 import { sanitizeErrorDetail, normalizeMcpServerName } from "../services/api/deferredToolsState.js";
 import { redactMcpErrorDetail } from "../services/mcp/mcpServerOrigin.js";
-import { deleteNeedsAuthCache } from "../services/mcp/needsAuthCache.js";
 import { isDcrRejection } from "../services/mcp/sdkAuth.js";
+import { McpOauthRefusedError } from "../services/mcp/redirectUriOnlyRefusal.js";
 import { providerBlockedMessage } from "../utils/model/allowedProviders.js";
 import { OAuthService } from "../services/oauth/index.js";
 import { OAuthCallbackError } from "../services/oauth/oauthErrors.js";
@@ -1682,12 +1764,15 @@ import {
   saveLoginOrWarn,
   rollbackRefusedSignIn,
   logRollbackFailure,
+  SIGN_IN_AGAIN_TO_CLEAR_MESSAGE,
 } from "../services/oauth/refusedSignIn.js";
 import { resetSliceIfUnchanged } from "../state/artifactReadState.js";
 import { getAPIProvider } from "../utils/model/providers.js";
 import { signOutFailureMessage } from "../commands/logout/logout.js";
 import { flushDiscoveryCache } from "../services/mcp/discoveryCache.js";
+import { AUTH_CLEARED_REASON, AUTH_CLEAR_FAILED_REASON } from "../services/mcp/redactMcpErrors.js";
 import { PLUGIN_FORWARDING_DISABLED } from "../utils/plugins/cloudPluginForwarding.js";
+import { shouldNudgeFastModeChange } from "../commands/fast/fast.js";
 import { resolveAdvisorModel } from "../utils/advisor.js";
 import {
   isPolicyLimitsCacheLoaded,
@@ -1704,8 +1789,6 @@ import {
 } from "../services/feedback/submitFeedback.js";
 import { postFeedbackSubmission } from "../services/feedback/feedbackBundle.js";
 import { runSideQuestionWithProgress } from "../utils/sideQuestionProgress.js";
-import { buildSideQuestionFallbackParams } from "../utils/queryContext.js";
-import { query } from "../query.js";
 import { confirmUltrareviewOverage } from "../state/appStateSetters.js";
 import { buildUltrareviewMessages } from "../commands/review/ultrareviewCommand.js";
 import { isTeleportedSession } from "../bridge/createSession.js";
@@ -1736,17 +1819,18 @@ import {
   readAheadOfFiles,
 } from "../bridge/inboundAttachments.js";
 import { escapePluginTags } from "../utils/messages/pluginTags.js";
-import { promptOriginKind } from "../utils/processUserInput/promptOrigin.js";
 import { buildExternalEventRecord } from "../utils/externalEventRecords.js";
 import { dispatchSessionReceiveHooks } from "../plugins/functionHooks/sessionReceive.js";
 import { originFromBridgeMetadata } from "../utils/messageOrigin.js";
 import { stripPeerMessageBody, peerMessageInfo } from "../utils/peerMessageHeaders.js";
+import { isUltrathinkPrompt } from "../utils/messages/ultrathinkPaste.js";
 import { backgroundTaskByToolUseId, backgroundAll } from "../tasks/LocalShellTask/LocalShellTask.js";
 import { setInboundAvailabilityPublisher } from "../utils/crossSessionInbound/inboundMode.js";
 import { persistBridgeArtifactFrames } from "../utils/sessionTagRefresh.js";
 import { installRemoteEgressSuppressor, transcriptFileSize } from "./print/turnStreaming.js";
 import { ENUM_PROMPT } from "../components/nudges/nudgeIds.js";
-import { toInternalMessages } from "../utils/messages/mappers.js";
+import { sdkMessagesToInternal } from "../utils/messages/mappers.js";
+import { shouldAllowManagedPermissionRulesOnly } from "../utils/permissions/permissionsLoader.js";
 import { emailSenderTurnDetected, checkEmailSenderTurn } from "../utils/permissions/emailSenderFrame.js";
 import { isSessionReceiveHooked } from "../plugins/functionHooks/sessionHooks.js";
 import { isProjectsHumanOriginEnabled } from "../utils/crossSessionMessagingGate.js";
@@ -1756,10 +1840,16 @@ import {
   takeSeededSummon,
   consumeSeededSummon,
 } from "../services/artifacts/comments/autoreactState.js";
+import {
+  isMergeMessage,
+  isRemoteNonInteractiveNonCcsSession,
+  isViewOwningSdkMessage,
+} from "../utils/widgetContext.js";
 import { extractCcrTraceContext } from "../utils/telemetry/ccrTraceContext.js";
 import { hasModuleHookingSite } from "../plugins/hooksModules/loadedModuleFilters.js";
 import { pluginsMatchingEvent } from "../plugins/functionHooks/hookDispatch.js";
 import { isTurnDisallowedToolName } from "./printUsageSummary.js";
+import { isHumanOrigin } from "../utils/turnOrigin.js";
 import {
   noPromptSurfaceDenialIfPersonOnly,
   buildNoApprovalSurfaceDenial,
@@ -1778,7 +1868,7 @@ import { safeParseJSON } from "../utils/json.js";
 import { isVsCodeOrDesktop, isVsCodeTopSession } from "../utils/sessionShape.js";
 import { hookSourcesSummary } from "../utils/hooks/hookSources.js";
 import { setPathTable } from "../utils/pathTable.js";
-import { DEFAULT, getAllOutputStylesCached } from "../constants/outputStyles.js";
+import { DEFAULT_2, getAllOutputStylesCached } from "../constants/outputStyles.js";
 import { managedOutputStylesDir } from "../outputStyles/loadOutputStylesDir.js";
 import { vscodeSurveyConfig, feedbackSurveyCapabilities } from "./print/hostOtelEvents.js";
 import {
@@ -1790,7 +1880,7 @@ import {
 import {
   gateChannelServer,
   ChannelMessageNotificationSchema,
-  wrapChannelMessage,
+  queuedChannelPush,
   findChannelEntry,
 } from "../services/mcp/channelNotification.js";
 import { isChannelsEnabled } from "../services/mcp/channelAllowlist.js";
@@ -1814,7 +1904,7 @@ import { uniqByExport } from "../../vendor/lodash-es/uniqBy.js";
 import { SIDE_QUESTION_MAX_AGENTS } from "../components/PromptInput/AgentsPill.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-j387qrdq.js:628-800 placement (2.1.88 match: finalContextTokensFromLastResponse, 0.778)
+//@ chunk-0a7cfwp8.js:628-800 placement (2.1.88 match: finalContextTokensFromLastResponse, 0.779)
 function finalContextTokensFromLastResponse(messages) {
   if (messages == null || typeof messages.input_tokens !== "number") return;
   if (typeof messages.output_tokens === "number") return messages;
@@ -1825,23 +1915,27 @@ function finalContextTokensFromLastResponse(messages) {
       }
     : undefined;
 }
-//@ chunk-j387qrdq.js:800-861 placement
+//@ chunk-0a7cfwp8.js:800-861 placement
 /**
  * 判断中断请求是否为立即中断：send_now 为真且未 cancel_queued。
  */
 function isImmediateInterruptRequest(request) {
   return request.send_now === true && request.cancel_queued !== true;
 }
-//@ chunk-j387qrdq.js:861-942 placement
+//@ chunk-0a7cfwp8.js:861-942 placement
 /**
  * 判断 request_id 是否为 late-bind-interrupt- 前缀（延迟绑定的中断请求）。
  */
 function isLateBindInterruptRequestId(requestId) {
   return typeof requestId === "string" && requestId.startsWith("late-bind-interrupt-");
 }
-//@ chunk-j387qrdq.js:942-950 placement
+//@ chunk-0a7cfwp8.js:942-999 layout
+function isInterruptOwnedInline(requestId, request) {
+  return isLateBindInterruptRequestId(requestId) || request.worker_epoch !== undefined;
+}
+//@ chunk-0a7cfwp8.js:999-1007 placement
 var MAX_CANCEL_USER_MESSAGE_UUIDS = 8;
-//@ chunk-j387qrdq.js:950-1212 placement
+//@ chunk-0a7cfwp8.js:1007-1269 placement
 /**
  * 解析"取消排队消息"控制请求的目标：给出 1 到上限个合法的用户消息 uuid 时，返回按 uuid（不区分大小写）匹配的判定函数。
  */
@@ -1864,7 +1958,13 @@ function parseCancelQueuedTarget(request) {
     names: (rows) => rows.some((rowUuid) => uuids.has(rowUuid.toLowerCase())),
   };
 }
-//@ chunk-j387qrdq.js:1212-1314 placement
+//@ chunk-0a7cfwp8.js:1269-1326 layout
+function cancelTargetForUuid(uuid) {
+  return parseCancelQueuedTarget({
+    for_user_message_uuids: [uuid],
+  });
+}
+//@ chunk-0a7cfwp8.js:1326-1428 placement
 /**
  * 构造成功的 control_response 消息（request_id 与响应体）。
  */
@@ -1878,7 +1978,7 @@ function controlSuccessResponse(requestId, response) {
     },
   };
 }
-//@ chunk-j387qrdq.js:1314-1470 placement
+//@ chunk-0a7cfwp8.js:1428-1584 placement
 /**
  * 构造错误的 control_response 消息（错误文本，可选错误码与模型）。
  */
@@ -1898,7 +1998,7 @@ function controlErrorResponse(requestId, error, errorCode, model) {
     },
   };
 }
-//@ chunk-j387qrdq.js:1470-1747 fingerprint (2.1.88 match: emitLoadError, 0.898)
+//@ chunk-0a7cfwp8.js:1584-1861 fingerprint (2.1.88 match: emitLoadError, 0.898)
 /**
  * 构造加载失败时的 result 消息（subtype error_during_execution）。
  */
@@ -1923,20 +2023,7 @@ function emitLoadError(sessionId, errors, userMessageUuid) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:553953-554048 fingerprint (2.1.88 match: canBatchWith, 0.667)
-/**
- * 排队的命令能否与前一条合并发送（同为普通 prompt 且来源允许）。
- */
-function canBatchWith(command) {
-  return (
-    isSendableQueuedCommand(command) &&
-    command.mode === "prompt" &&
-    command.shouldQuery !== false &&
-    !command.isMeta &&
-    isHumanDrivenOrigin(command.origin)
-  );
-}
-//@ chunk-e6aww6q8.js:1818531-1818725 placement (2.1.88 match: isSystemLocalCommandMessage, 1)
+//@ chunk-5xgkngpb.js:1895442-1895636 placement (2.1.88 match: isSystemLocalCommandMessage, 1)
 /**
  * 为每条 assistant 生成“用户轮序号:message.id”键，其他消息为 undefined。
  */
@@ -1945,14 +2032,14 @@ function assistantTurnKeys(message) {
   return message.map((message) => {
     if (message.type === "assistant") return `${turnIndex}:${String(message.message.id)}`;
     if (
-      (message.type === "user" && !hasToolResultBlock_3(message)) ||
+      (message.type === "user" && !hasToolResultBlock_2(message)) ||
       (message.type === "system" && message.subtype === "local_command")
     )
       turnIndex += 1;
     return;
   });
 }
-//@ chunk-e6aww6q8.js:1830039-1830121 fingerprint (2.1.88 match: removeInterruptedMessage, 1)
+//@ chunk-5xgkngpb.js:1906475-1906557 fingerprint (2.1.88 match: removeInterruptedMessage, 1)
 /**
  * 从消息数组里删除被中断的消息及其后一条。
  */
@@ -1960,7 +2047,7 @@ function removeInterruptedMessage(messages, interruptedUserMessage) {
   let idx = messages.findIndex((m) => m.uuid === interruptedUserMessage.uuid);
   if (idx !== -1) messages.splice(idx, 2);
 }
-//@ chunk-e6aww6q8.js:1830121-1830419 layout
+//@ chunk-5xgkngpb.js:1906557-1906855 layout
 /**
  * 把被中断的提示重新放回消息队列（interrupted_prompt）。
  */
@@ -1980,7 +2067,7 @@ function restoreInterruptedPrompt(messages, interruption, pendingRows) {
   messages.splice(replaceMarker ? index : index + 1, 0, ...missingRows);
   return true;
 }
-//@ chunk-e6aww6q8.js:1830419-1831267 placement (2.1.88 match: isNotEmptyMessage, 0.275)
+//@ chunk-5xgkngpb.js:1906855-1907834 placement
 /**
  * 续写时删除哨兵后的 "(no content)" 占位 assistant，并在只剩系统消息时去掉 "Continue from where you left off." 提示（tengu_silly_waterfall 等开关）。
  */
@@ -2005,11 +2092,12 @@ function dropRedundantResumeMessages(messages, interruption, onRemoved) {
     onRemoved(sentinelIndex);
   }
   let sliced = messages.slice(index + 1);
+  let row = index !== -1 ? messages[index] : undefined;
+  if (row?.type !== "user" || !isLegacyInterruptMarker(row)) return;
+  let precededByToolResult =
+    isPrecededByToolResult(messages, index) || getFeatureValue_CACHED_MAY_BE_STALE(TENGU_GOOFY_HARE, false);
+  if (!precededByToolResult && !getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SQUISHY_ULLMAN, false)) return;
   if (
-    index !== -1 &&
-    isLegacyInterruptMarker(messages[index]) &&
-    (isPrecededByToolResult(messages, index) ||
-      getFeatureValue_CACHED_MAY_BE_STALE(TENGU_GOOFY_HARE, false)) &&
     (sliced.every((row) => row.type === "system") ||
       (interruption.tail !== undefined &&
         sliced.every(
@@ -2026,12 +2114,19 @@ function dropRedundantResumeMessages(messages, interruption, onRemoved) {
         ) &&
         getFeatureValue_CACHED_MAY_BE_STALE(TENGU_WONDROUS_HAVEN, false))) &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_silly_waterfall", false)
-  ) {
-    messages.splice(index, 1);
-    onRemoved(index);
-  }
+  )
+    if (precededByToolResult) {
+      messages.splice(index, 1);
+      onRemoved(index);
+    } else {
+      messages[index] = {
+        ...row,
+        isVirtual: true,
+      };
+      logFeatureOk("ccr_resume_prompt_unsent");
+    }
 }
-//@ chunk-e6aww6q8.js:1831267-1831380 placement
+//@ chunk-5xgkngpb.js:1907834-1907947 placement
 /**
  * 位置之前最近的 user/assistant 是工具结果消息。
  */
@@ -2041,7 +2136,11 @@ function isPrecededByToolResult(messages, index) {
   );
   return last !== undefined && isToolUseResultMessage(last);
 }
-//@ chunk-e6aww6q8.js:3260568-3260736 placement
+//@ chunk-5xgkngpb.js:2578174-2578225 fingerprint (2.1.88 match: toScopedConfig, 1)
+function toScopedConfig(config) {
+  return config.scope === "dynamic" && !isPluginServerConfig(config);
+}
+//@ chunk-5xgkngpb.js:3345304-3345472 placement
 /**
  * 从元数据读取禁用工具列表（最多 64 项，全部无效时返回 undefined）。
  */
@@ -2052,7 +2151,51 @@ function readDisallowedToolsMetadata(metadata) {
     .slice(0, 64);
   return sliced?.length === 0 && disallowedTools?.length !== 0 ? undefined : sliced;
 }
-//@ chunk-nkdv7dw8.js:8230-8502 sole-consumer
+//@ chunk-5xgkngpb.js:3345472-3345579 affinity
+function hasDeclaredDisallowedTools(message) {
+  let disallowedTools = "disallowed_tools" in message ? (message.disallowed_tools ?? []) : [];
+  return !Array.isArray(disallowedTools) || disallowedTools.length > 0;
+}
+//@ chunk-vxsfen55.js:10157-10662 sole-consumer
+function collapsePluginServerTwins(servers, pluginCandidates, candidateServers, skipNames = new Set()) {
+  let hostByConfig = new Map();
+  for (let [key, value] of Object.entries(candidateServers)) {
+    let fingerprint = serverSignature(value);
+    if (fingerprint !== null && !hostByConfig.has(fingerprint)) hostByConfig.set(fingerprint, key);
+  }
+  let twins = [];
+  for (let [key, value] of Object.entries(pluginCandidates)) {
+    if (
+      !isPluginServerConfig(value) ||
+      !Object.hasOwn(servers, key) ||
+      servers[key] !== value ||
+      skipNames.has(key) ||
+      isMcpServerDisabled(key) ||
+      !isMcpServerAllowedByPolicy(key, value)
+    )
+      continue;
+    let fingerprint = serverSignature(value);
+    let duplicateOf = fingerprint === null ? undefined : hostByConfig.get(fingerprint);
+    if (duplicateOf !== undefined)
+      twins.push({
+        name: key,
+        duplicateOf,
+      });
+  }
+  if (twins.length === 0)
+    return {
+      servers,
+      twins,
+    };
+  let twinNames = new Set(twins.map((twin) => twin.name));
+  let keptServers = Object.create(null);
+  for (let [key, value] of Object.entries(servers)) if (!twinNames.has(key)) keptServers[key] = value;
+  return {
+    servers: keptServers,
+    twins,
+  };
+}
+//@ chunk-vxsfen55.js:10662-10934 sole-consumer
 function stripInternalMcpConfigFields(configs) {
   return import_mapValues(configs, (serverConfig) =>
     omitAlias(serverConfig, [
@@ -2072,14 +2215,14 @@ function stripInternalMcpConfigFields(configs) {
     ]),
   );
 }
-//@ chunk-nkdv7dw8.js:8502-8555 sole-consumer
+//@ chunk-vxsfen55.js:10934-10987 sole-consumer
 var EMPTY_NAME_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EMPTY_NAME_MAP;
-deferInit("chunk-nkdv7dw8.js:8502", () => {
+deferInit("chunk-vxsfen55.js:10934", () => {
   EMPTY_NAME_SET = new Set();
   EMPTY_NAME_MAP = Object.freeze(Object.create(null));
 });
-//@ chunk-nkdv7dw8.js:8555-8742 sole-consumer
+//@ chunk-vxsfen55.js:10987-11174 sole-consumer
 function carryConfiguredCommand(desiredConfig, previousConfig) {
   return isStandardKeyActive() &&
     previousConfig?.configuredCommand !== undefined &&
@@ -2093,7 +2236,7 @@ function carryConfiguredCommand(desiredConfig, previousConfig) {
       }
     : desiredConfig;
 }
-//@ chunk-nkdv7dw8.js:8742-12607 fingerprint (2.1.88 match: handleMcpSetServers, 0.339)
+//@ chunk-vxsfen55.js:11174-15088 fingerprint (2.1.88 match: handleMcpSetServers, 0.331)
 /**
  * 处理 mcp_set_servers：按 SDK 给出的服务器集合增删改动态 MCP 服务器并重连。
  */
@@ -2162,6 +2305,7 @@ async function handleMcpSetServers(
     caller === "plugin_install_diff" ||
     caller === "plugins_sync" ||
     caller === "reload_plugins" ||
+    caller === "plugin_copy_recheck" ||
     caller === "set_cwd" ||
     caller === "claim_session" ||
     caller === "tool_register" ||
@@ -2316,7 +2460,11 @@ async function handleMcpSetServers(
     caller,
     deferConnect,
     authoritative,
-    new Set(Object.keys(configs).filter((key) => !droppedNames.has(key))),
+    new Set(
+      Object.keys(configs).filter(
+        (key) => !droppedNames.has(key) || !isPluginServerConfig(dynamicState.configs[key]),
+      ),
+    ),
     options,
     hooks,
     dynamicStateHooks,
@@ -2357,7 +2505,7 @@ async function handleMcpSetServers(
     deferredSettle: reconciled.deferredSettle,
   };
 }
-//@ chunk-nkdv7dw8.js:12607-13624 layout
+//@ chunk-vxsfen55.js:15088-16105 layout
 /**
  * 把 SDK 动态 MCP 服务器集合应用到状态（是否权威、是否延迟连接）。
  */
@@ -2436,7 +2584,7 @@ async function applyDynamicMcpServers(
     });
   return result;
 }
-//@ chunk-nkdv7dw8.js:13624-20914 layout
+//@ chunk-vxsfen55.js:16105-23975 layout
 async function reconcileMcpServersImpl(
   desired,
   sdkState,
@@ -2459,17 +2607,18 @@ async function reconcileMcpServersImpl(
 ) {
   let currentNames = new Set(Object.keys(sdkState.configs));
   let desiredNames = new Set(Object.keys(desired));
-  let pluginOnlyNames = authoritative
+  let cwd = authoritative ? getOriginalCwdOrNull() : null;
+  let droppedNames = authoritative
     ? [...currentNames].filter(
         (name) =>
           !desiredNames.has(name) &&
           !keptPluginNames?.has(name) &&
-          isPluginServerConfig(sdkState.configs[name]),
+          (isPluginServerConfig(sdkState.configs[name]) || sdkState.configs[name]?.declaredIn === cwd),
       )
     : [];
   let retainedPluginNames = new Set(
-    pluginOnlyNames.length > 0
-      ? Object.keys(filterMcpServersByPolicy(pickAlias(sdkState.configs, pluginOnlyNames)).allowed)
+    droppedNames.length > 0
+      ? Object.keys(filterMcpServersByPolicy(pickAlias(sdkState.configs, droppedNames)).allowed)
       : [],
   );
   let filtered = [...currentNames].filter(
@@ -2507,18 +2656,34 @@ async function reconcileMcpServersImpl(
           )
           .map((client) => client.name),
   );
+  let pendingNames = new Set(
+    [...sdkState.clients, ...(getAppState?.().mcp.clients ?? [])]
+      .filter((client) => client.type === "pending")
+      .map((client) => client.name),
+  );
   let filtered_4 = filtered_3.filter((name) => {
-    let currentConfig = sdkState.configs[name];
-    let desiredConfigRaw = desired[name];
-    if (!currentConfig || !desiredConfigRaw || supersededNames.has(name) || stateChangedNames.has(name))
+    let previousConfig = sdkState.configs[name];
+    let nextConfig = desired[name];
+    if (!previousConfig || !nextConfig || supersededNames.has(name) || stateChangedNames.has(name))
       return true;
-    let desiredConfig = toDynamicServerConfig(desiredConfigRaw);
-    if (!mcpClientModule_5().areMcpConfigsEqual(currentConfig, desiredConfig)) {
-      logMCPDebug(name, `reconcileMcpServers: config changed, will replace (caller=${caller})`);
+    let dynamicServerConfig = toDynamicServerConfig(nextConfig);
+    if (
+      (getProjectConfigRoot() === null &&
+        !pendingNames.has(name) &&
+        isStdioConfig(previousConfig) &&
+        previousConfig.declaredIn !== undefined &&
+        dynamicServerConfig.declaredIn !== undefined &&
+        previousConfig.declaredIn !== dynamicServerConfig.declaredIn) ||
+      !mcpClientModule_5().areMcpConfigsEqual(previousConfig, dynamicServerConfig)
+    ) {
+      logMCPDebug(name, `reconcileMcpServers: config or folder changed, will replace (caller=${caller})`);
       return true;
     }
     return false;
   });
+  let retainedPluginCount = countWhere([...retainedPluginNames], (name) =>
+    isPluginServerConfig(sdkState.configs[name]),
+  );
   logEvent("tengu_mcp_reconcile", {
     caller: fromEnum(caller),
     desiredCount: desiredNames.size,
@@ -2526,7 +2691,8 @@ async function reconcileMcpServersImpl(
     toRemoveCount: filtered.length,
     toAddCount: filtered_2.length,
     toReplaceCount: filtered_4.length,
-    retainedPluginCount: retainedPluginNames.size,
+    retainedPluginCount,
+    retainedFolderServerCount: retainedPluginNames.size - retainedPluginCount,
   });
   let removed = [];
   let added = [];
@@ -2560,8 +2726,8 @@ async function reconcileMcpServersImpl(
   let dialNameSet = new Set(dialNames);
   let any = [ListMcpResourcesTool, ReadMcpResourceTool].some(
     (resourceTool) =>
-      tools.some((tool) => toolMatchesName(tool, resourceTool.name)) ||
-      (getAppState?.().mcp.tools ?? []).some((tool) => toolMatchesName(tool, resourceTool.name)),
+      tools.some((tool) => matchesToolName(tool, resourceTool.name)) ||
+      (getAppState?.().mcp.tools ?? []).some((tool) => matchesToolName(tool, resourceTool.name)),
   );
   let supersededEntry = (name, config, dialEpoch, client) => {
     if (client.type === "connected")
@@ -2651,19 +2817,20 @@ async function reconcileMcpServersImpl(
       if (client.type === "connected") {
         tools = await mcpClientModule_5().fetchToolsForClient(client, options);
         try {
-          let [commands, resources] = await Promise.all([
+          let [commands, fetchedCommands, extraCommands] = await Promise.all([
             mcpClientModule_5().fetchCommandsForClient(client),
+            Promise.resolve([]),
             mcpClientModule_5().fetchResourcesForClient(client),
           ]);
           fetched = {
             name,
-            cmds: commands,
-            res: resources,
+            cmds: [...commands, ...fetchedCommands],
+            res: extraCommands,
           };
         } catch (error) {
           logHandlerFailure(io, `${caller}: mcp listing`, error);
         }
-      }
+      } else if (client.type === "needs-auth") tools = mcpAuthToolsFor(name, dynamicServerConfig);
       if (isStaleEpoch()) return asSuperseded(client);
       let blockAfterConnect =
         isDiscoveryCacheOn() || client.type === "failed"
@@ -2676,6 +2843,23 @@ async function reconcileMcpServersImpl(
             .catch(() => {});
         return blockAfterConnect ? asFailed(blockAfterConnect) : disabledEntry;
       }
+      if (
+        client.type === "connected" &&
+        client.discoveryAuthFailure &&
+        hasLapsedCcrSignIn(name, dynamicServerConfig)
+      )
+        return {
+          name,
+          client: {
+            name,
+            type: "needs-auth",
+            config: dynamicServerConfig,
+          },
+          tools: mcpAuthToolsFor(name, dynamicServerConfig),
+          error: null,
+          fetched: null,
+          dialEpoch,
+        };
       if (
         client.type === "connected" &&
         client.capabilities?.resources &&
@@ -2780,7 +2964,11 @@ async function reconcileMcpServersImpl(
     });
     let toolPermissionContext = state.toolPermissionContext;
     let nextPermissionContext = authoritative
-      ? mergeMcpServerPolicyRules(toolPermissionContext, allToolPolicies(), "replace")
+      ? mergeMcpServerPolicyRules(
+          clearConnectorCardAllows(toolPermissionContext),
+          allToolPolicies(),
+          "replace",
+        )
       : toolPermissionContext;
     if (touchedNames.size === 0 && nextPermissionContext === toolPermissionContext) return state;
     return {
@@ -2985,7 +3173,7 @@ async function reconcileMcpServersImpl(
     newState: buildMcpStatusList(newState, settled, getAppState?.().mcp.clients),
   };
 }
-//@ chunk-nkdv7dw8.js:20914-21884 fingerprint (2.1.88 match: reconcileMcpServers, 0.344)
+//@ chunk-vxsfen55.js:23975-24950 fingerprint (2.1.88 match: reconcileMcpServers, 0.345)
 /**
  * reconcileMcpServers：比较期望与现有 MCP 配置，替换变化的连接。
  */
@@ -3069,7 +3257,7 @@ async function reconcileMcpServers(
     },
   };
 }
-//@ chunk-tyg7f3ek.js:50315-50620 placement (2.1.88 match: calculateMessagesToKeepIndex, 0.415)
+//@ chunk-0yw3taqg.js:69227-69532 placement (2.1.88 match: calculateMessagesToKeepIndex, 0.412)
 /**
  * headless 会话：返回一个惰性函数，算出停放（被打断）轮次已收进的发送消息 uuid 集合。旧版名 calculateMessagesToKeepIndex 为错配，属于 cli/print 的轮次停放逻辑。
  */
@@ -3090,7 +3278,7 @@ function getParkedTurnSendUuids(prompt, uuid, firstUuid) {
         return new Set();
       let idx = messages
         .slice(0, -1)
-        .findLastIndex((message) => isSyntheticApiErrorMessage(message) || isInterruptMarkerRow(message));
+        .findLastIndex((message) => isNoResponseRequestedMessage(message) || isInterruptMarkerRow(message));
       let msgTokens = heldUuidsIfEnabled(messages.slice(idx + 1));
       return new Set(
         [...heldUuidsIfEnabled(messages)].filter(
@@ -3103,7 +3291,7 @@ function getParkedTurnSendUuids(prompt, uuid, firstUuid) {
     }
   };
 }
-//@ chunk-tyg7f3ek.js:127589-127752 fingerprint (2.1.88 match: getStructuredIO, 0.513)
+//@ chunk-0yw3taqg.js:157375-157538 fingerprint (2.1.88 match: getStructuredIO, 0.512)
 function getStructuredIO(inputPrompt, options) {
   return {
     type: "user",
@@ -3118,7 +3306,7 @@ function getStructuredIO(inputPrompt, options) {
     isReplay: true,
   };
 }
-//@ chunk-tyg7f3ek.js:375915-378573 fingerprint (2.1.88 match: handleOrphanedPermissionResponse, 0.458)
+//@ chunk-0yw3taqg.js:410449-413327 fingerprint (2.1.88 match: handleOrphanedPermissionResponse, 0.444)
 async function handleOrphanedPermissionResponse({
   message,
   setAppState,
@@ -3133,6 +3321,8 @@ async function handleOrphanedPermissionResponse({
   initFirst,
   resumesInterruptedTurn,
   cardInput,
+  askedInDirectory,
+  emptyAllowRunsCardInput = false,
   startedBy,
   interruptedTurnEcho,
   ccrTurnId,
@@ -3195,6 +3385,16 @@ async function handleOrphanedPermissionResponse({
           permissionResult = unmatchedAnswerDenial(toolUseID);
       } else if (isValidBridgeToolName(response?.toolName, toolUseBlock.name, message.response.request_id))
         return drop("name_mismatch", toolUseID);
+      if (
+        emptyAllowRunsCardInput &&
+        permissionResult.behavior === "allow" &&
+        cardInput &&
+        !deepEqualIgnoringUndefined(toolUseBlock.input, cardInput)
+      )
+        permissionResult = {
+          ...permissionResult,
+          updatedInput: stripHostOwnedInputKeys(toolUseBlock.name, cardInput),
+        };
     }
     handledToolUseIds.add(toolUseID);
     logForDebugging(
@@ -3207,13 +3407,13 @@ async function handleOrphanedPermissionResponse({
     let rows = messageRows?.();
     let startedByInfo = startedBy?.markOf(toolUseID);
     let notSentList = notSent?.();
-    let turnId = ccrTurnId?.();
+    let answerEventUuid = "uuid" in message ? normalizeUuidOrNull(message.uuid) : null;
+    let orphanCcrTurnId = ccrTurnId?.();
     let remoteFlagOverrideState = getRemoteFlagOverrideState(TENGU_WILD_BEACON);
     messageQueue.enqueue({
       mode: "orphaned-permission",
       agentId: mainAgentId(),
       value: [],
-      keepsDisallowedTools: true,
       ...(startedByInfo !== undefined && {
         startedBy: startedByInfo,
       }),
@@ -3224,8 +3424,8 @@ async function handleOrphanedPermissionResponse({
       orphanedPermission: {
         permissionResult,
         assistantMessage,
-        ...(turnId !== undefined && {
-          ccrTurnId: turnId,
+        ...(orphanCcrTurnId !== undefined && {
+          ccrTurnId: orphanCcrTurnId,
         }),
         ...(denyIsRefusal && {
           denyIsRefusal: true,
@@ -3238,6 +3438,12 @@ async function handleOrphanedPermissionResponse({
         }),
         ...(cardInput !== undefined && {
           cardInput,
+        }),
+        ...(askedInDirectory !== undefined && {
+          askedInDirectory,
+        }),
+        ...(answerEventUuid !== null && {
+          answerEventUuid,
         }),
         ...(siblingsList !== undefined &&
           siblingsList.length > 0 && {
@@ -3270,15 +3476,15 @@ async function handleOrphanedPermissionResponse({
   }
   return drop(message.response.subtype === "success" ? "no_tool_use_id" : "not_success");
 }
-//@ chunk-tyg7f3ek.js:626933-627002 sole-consumer
+//@ chunk-0yw3taqg.js:669042-669111 sole-consumer
 function isInformationalSystemMessage(frame) {
   return frame.type === "system" && frame.subtype === "informational";
 }
-//@ chunk-tyg7f3ek.js:627002-627067 sole-consumer
+//@ chunk-0yw3taqg.js:669111-669176 sole-consumer
 function isApiRetrySystemMessage(frame) {
   return frame.type === "system" && frame.subtype === "api_retry";
 }
-//@ chunk-tyg7f3ek.js:627067-628650 sole-consumer
+//@ chunk-0yw3taqg.js:669176-670759 sole-consumer
 /**
  * 是否可作为 result 前最后一条输出消息（排除 control_*、部分 system 子类型、流事件等）。
  */
@@ -3339,7 +3545,7 @@ function isLastMessageCandidate(frame) {
     frame.type !== "autocompact_state"
   );
 }
-//@ chunk-tyg7f3ek.js:628650-628732 sole-consumer
+//@ chunk-0yw3taqg.js:670759-670841 sole-consumer
 /**
  * 把启动阶段缓存的 SDK 事件转发到输出流，并订阅后续事件。
  */
@@ -3350,7 +3556,7 @@ function registerStartupSdkEventForwarder(headlessIO) {
   setTaskNotificationListener(flush);
   flush();
 }
-//@ chunk-tyg7f3ek.js:628732-652107 callgraph-witnessed (2.1.88 match: runHeadless, 0.247)
+//@ chunk-0yw3taqg.js:670841-694982 callgraph-witnessed (2.1.88 match: runHeadless, 0.243)
 /**
  * runHeadless（-p 模式主函数）：建立输入输出（StructuredIO 或 RemoteIO）、沙箱初始化、加载初始消息（--continue/--resume）、驱动 runHeadlessStreaming，最后按 --output-format 输出：text 打印最终结果，json 输出 result 对象（--verbose 输出全部消息数组），stream-json 逐行已输出。退出码：结果 is_error 为 1。
  */
@@ -3361,7 +3567,7 @@ async function runHeadless(
   setAppState,
   appStateEmitter,
   clients,
-  tools,
+  startupTools,
   storeSetter,
   agentPool,
   options,
@@ -3373,13 +3579,14 @@ async function runHeadless(
   reportSettingsValidationErrors(options.outputFormat);
   if (isSkillsSyncActive(session)) startSkillSyncAndResync(session, options.storageV5, options.credentials);
   if (isPluginsSyncActive(session)) startFirstPluginsSync(session, options.credentials);
-  function onSettingsChange(source) {
+  function onSettingsChange(source, change) {
     call({
       session,
       source,
       getAppState,
       setAppState,
       storageV5: options.storageV5,
+      countsAsStart: change?.countsAsStart,
     });
   }
   let advisorModel = getAppState().advisorModel;
@@ -3408,7 +3615,7 @@ async function runHeadless(
     await checkGroveForNonInteractive(options.storageV5, options.credentials);
   recordPhase("grove_check_ms", performance.now() - startTime_2, startTime_2);
   headlessProfilerCheckpoint("after_grove_check");
-  initializeGrowthBook().catch((prev) => logError(toError(prev)));
+  initializeGrowthBook().catch((source) => logError(toError(source)));
   if (options.resumeSessionAt && !options.resume) {
     process.stderr.write(`Error: --resume-session-at requires --resume
 `);
@@ -3435,7 +3642,7 @@ async function runHeadless(
   }
   let hasStreamingInput = typeof promptInput !== "string";
   setHasStreamingInput(hasStreamingInput);
-  markPrintPollEventWiring({
+  markPollEventWiringForPrintRun({
     hasStreamingInput,
     sdkUrl: options.sdkUrl,
     permissionMode: getAppState().toolPermissionContext.mode,
@@ -3581,6 +3788,7 @@ async function runHeadless(
     sdkUrl: Boolean(options.sdkUrl),
     remoteSessionId: env.CLAUDE_CODE_REMOTE_SESSION_ID,
     environmentKind: env.CLAUDE_CODE_ENVIRONMENT_KIND,
+    grantedRunnerChild: isRemoteEnvPlaceholder(),
     entrypoint: env.CLAUDE_CODE_ENTRYPOINT,
     channelOff: isSessionChannelDisabled(),
     hermetic: isHermeticRemoteSession(),
@@ -3600,7 +3808,7 @@ async function runHeadless(
     current: [],
   };
   let toolsRef = {
-    current: tools,
+    current: startupTools,
   };
   let permissionPromptToolName = effectivePermissionPromptTool({
     permissionPromptTool: options.permissionPromptToolName,
@@ -3801,8 +4009,9 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
       stdin: process.stdin.isTTY === true,
       stdout: process.stdout.isTTY === true,
     }),
-    tools,
+    tools: startupTools,
   });
+  messagesHeard(messages, promptOriginOfContent);
   let startTime_4 = performance.now();
   recordPhase("initial_messages_load_ms", startTime_4 - startTime_3, startTime_3);
   if (aborted) return;
@@ -3837,6 +4046,32 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
   };
   ownCostLedger();
   let noteRow;
+  {
+    let turnHandoff = weakMap_2.get(session);
+    weakMap_2.delete(session);
+    if (turnHandoff?.switched) {
+      markPollEventWiringForPrintRun({
+        hasStreamingInput,
+        sdkUrl: options.sdkUrl,
+        permissionMode: getAppState().toolPermissionContext.mode,
+      });
+      startupTools = rebuildStartupToolsForCodeMode(startupTools, getAppState().toolPermissionContext);
+      toolsRef.current = startupTools;
+    }
+    if (turnHandoff?.takenOut === undefined)
+      noopModelPinReset(turnHandoff?.declined === true || messagesOrigin === "remote");
+    else {
+      let userMessage = createUserMessage({
+        content: wrapInSystemReminder(turnHandoff.takenOut.reminder),
+        isMeta: true,
+      });
+      appendNotice(userMessage);
+      noteRow = {
+        notice: createSystemMessage(turnHandoff.takenOut.notice, "warning"),
+        reminder: userMessage,
+      };
+    }
+  }
   messagesRef.current = messages;
   prefetchUserContext(
     session,
@@ -3897,7 +4132,7 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
   let restoredModel = await restoreModelFromSession(
     messages,
     appStateSnapshot.mainLoopModel,
-    (notice) => appendNotice(createSystemMessage(notice, "warning")),
+    (notice, replyText) => appendNotice(resumeModelRestrictedNotice(notice, replyText)),
     {
       storageV5: options.storageV5,
       credentials: options.credentials,
@@ -3921,17 +4156,20 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
     options.restrictedStartupModel &&
     isModelDifferentFromRestricted(options.userSpecifiedModel, options.restrictedStartupModel)
   ) {
-    let noticeText = formatModelRestrictedNotice(options.restrictedStartupModel, getMainLoopModel());
+    let noticeText = modelRestrictedNotice(options.restrictedStartupModel, getMainLoopModel(), "start");
     if (
       !messages.some(
         (message) =>
           message.type === "system" &&
           message.subtype === "informational" &&
-          message.content.includes(noticeText),
+          message.content.includes(noticeText.content),
       )
     )
-      appendNotice(createSystemMessage(noticeText, "warning"));
-    restrictedModelNotice = createSystemMessage(noticeText, "warning");
+      appendNotice(noticeText);
+    restrictedModelNotice = {
+      ...noticeText,
+      uuid: randomUUID(),
+    };
   }
   if (options.rewindFiles) {
     let targetMessage = messages.find((message) => message.uuid === options.rewindFiles);
@@ -3989,7 +4227,7 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
   }
   let allowedMcpTools = filterToolsByDenyRules(mcp.tools, appStateSnapshot.toolPermissionContext);
   let toolsWithMcp = withLateEnabledToolsIfAdvertised(
-    [...tools, ...allowedMcpTools],
+    [...startupTools, ...allowedMcpTools],
     appStateSnapshot.toolPermissionContext,
   );
   toolsRef.current = toolsWithMcp;
@@ -4001,6 +4239,7 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
       {
         io: headlessIO,
         setAppState,
+        leadsWithOldestCard: shouldLeadWithOldestCard,
       },
       details,
     );
@@ -4023,7 +4262,7 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
     options.permissionPrompts,
   );
   if (options.permissionPromptToolName)
-    toolsWithMcp = toolsWithMcp.filter((tool) => !toolMatchesName(tool, options.permissionPromptToolName));
+    toolsWithMcp = toolsWithMcp.filter((tool) => !matchesToolName(tool, options.permissionPromptToolName));
   let sendPins = collectSendPins(messages);
   if (Object.keys(sendPins).length > 0)
     setAppState((state) => ({
@@ -4046,7 +4285,7 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
       isShuttingDown,
     }),
   );
-  let restoreMcpTaskSidecar = (taskRegistry) => {
+  let restoreMcpTaskSidecar = (tool) => {
     let conversation = [...messages];
     let sessionId = getSessionId();
     withDeadline(
@@ -4063,7 +4302,7 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
         return loadMcpTaskModule({
           sessionId,
           conversation,
-          taskRegistry,
+          taskRegistry: tool,
           getMcpClients: () => [...(getMcpClientsFromAccessor() ?? [])],
           requestDialog: undefined,
           storageV5: options.storageV5,
@@ -4118,7 +4357,7 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
           recorded: runningForegroundAgents,
           agentCallIds: resumableAgentIds,
           known: new Set([...allTasks, ...orphanTasks].map((task) => task.task_id)),
-          hasTool: (toolName) => findToolByName(tools, toolName) !== undefined,
+          hasTool: (toolName) => findToolByName(startupTools, toolName) !== undefined,
           settleFlags: () =>
             withDeadline(
               initializeGrowthBook().catch(() => null),
@@ -4154,6 +4393,7 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
       toKeep = orphanResult.toKeep;
       headlessIO.sessionState.resumableOrphanedAgents = toKeep ?? [];
     }
+    let onlyAgentId = rescueSuppressed ? unambiguousPendingAgentId(restoredWorkerState) : undefined;
     agentResumes = await resumeCutOffAgents({
       cutOff: agentResumePlan,
       unresolvedCallIds: supersededToolUseIds ?? new Set(),
@@ -4162,10 +4402,11 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
       alsoResumable,
       cardWaits: pendingActionsAmbiguous(restoredWorkerState),
       owesATurn: () =>
-        !rescueSuppressed &&
+        (!rescueSuppressed || (isAmbientRunning() && onlyAgentId !== undefined)) &&
         !resumedAsFork &&
         (turnInterruptionState?.kind === "interrupted_prompt" ||
           getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_orphan_restore_wake", true)),
+      onlyAgent: onlyAgentId,
       startsSpent: () => hasHitUnattendedRestartLimit(restoredWorkerState),
       tools: toolsWithMcp,
       toolPermissionContext: getAppState().toolPermissionContext,
@@ -4193,9 +4434,9 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
       logFeatureBad("ccr_cut_off_agents", "threw");
       logError(toError(error));
     }
-    let canUseTool = orphanAgentRestoreNotice(
+    let taskSummary = orphanAgentRestoreNotice(
       [...stillOffered, ...restoredOrphans, ...filtered],
-      (tool) => findToolByName(tools, tool) !== undefined,
+      (agent) => findToolByName(startupTools, agent) !== undefined,
       alsoResumable,
       resumedAgentIds,
     );
@@ -4206,7 +4447,7 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
           content: describeRunningProcesses(
             dedupeTasksById([...allTasks, ...stillOffered]),
             orphanTasks,
-            canUseTool,
+            taskSummary,
           ),
           isMeta: true,
         }),
@@ -4261,7 +4502,7 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
     } else if (stillOffered.length > 0 || orphanTasks.length > 0) {
       appendNotice(
         createUserMessage({
-          content: describeRunningProcesses(stillOffered, orphanTasks, canUseTool),
+          content: describeRunningProcesses(stillOffered, orphanTasks, taskSummary),
           isMeta: true,
         }),
       );
@@ -4288,23 +4529,17 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
     );
     restoreMcpTaskSidecar(createTaskFramework(getAppState, setAppState));
   } else if (messages.length > 0) {
-    let taskRegistry = createTaskFramework(getAppState, setAppState);
-    await formatOrphanSummary(
-      messages,
-      taskRegistry,
-      undefined,
-      undefined,
-      options.storageV5,
-      liveSourceRows,
-      () => startupStandInPlan(tools),
+    let tool = createTaskFramework(getAppState, setAppState);
+    await formatOrphanSummary(messages, tool, undefined, undefined, options.storageV5, liveSourceRows, () =>
+      startupStandInPlan(startupTools),
     );
     restoreRemoteAgentTasks({
       abortController: new AbortController(),
-      taskRegistry,
+      taskRegistry: tool,
       storageV5: options.storageV5,
       credentials: options.credentials,
     });
-    restoreMcpTaskSidecar(taskRegistry);
+    restoreMcpTaskSidecar(tool);
   }
   let restoredWorkerState = await headlessIO.restoredWorkerState;
   restoreDeclaredDialogKinds(restoredWorkerState);
@@ -4314,6 +4549,8 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
   markHostRendersChromeSetupOffer();
   restoreMemoryToggle(restoredWorkerState);
   restoreToolsKeptByClear(restoredWorkerState);
+  applyPicturesToHide(headlessIO.sessionState, messages);
+  await removePlacedCopiesOfDeletedFiles(await removeDeletedChatFiles(restoredWorkerState));
   adoptInternalWindows(session, restoredWorkerState, headlessIO.sessionState, setAppState);
   lazyPrintModules2.restoreMemoryExtractPlace(
     session.host,
@@ -4363,7 +4600,7 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
     supersededToolUseIds,
     supersededToolNames,
     journaled: resumeInterruption,
-    tools,
+    tools: startupTools,
     findUnresolved: (toolUseId) => findUnresolvedToolUseAnywhere(toolUseId, options.storageV5),
     lane: resumeLaneOptions,
   });
@@ -4475,6 +4712,7 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
       restoredOrphans,
       alsoResumable,
       agentResumes,
+      cutOffAgents: agentResumePlan,
       keptSubagentAsk: parkedAgentAsk,
       lostSessionTimers,
       rescueSuppressed,
@@ -4555,12 +4793,15 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
         }
         await headlessIO.write(stamped);
         if (sawSystemInit && restrictedModelNotice) {
-          let notice = restrictedModelNotice;
+          let heldRow = restrictedModelNotice;
           restrictedModelNotice = undefined;
-          await headlessIO.write({
-            ...notice,
-            session_id: getSessionId(),
-          });
+          await headlessIO.write(withWireModelRestriction(heldRow));
+        }
+        if (sawSystemInit && noteRow) {
+          let { notice, reminder } = noteRow;
+          noteRow = undefined;
+          await headlessIO.write(informationalSystemMessage(notice));
+          if (messages.includes(reminder)) enableCodeMode();
         }
         if (sawSystemInit && heldStartupNotice) {
           let held = heldStartupNotice;
@@ -4674,34 +4915,29 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
       .write(`SDKStartup: exiting without result: ${exitReason} (last_phase=${lastStartupPhase}, drained=${drainedMessageCount}, exit=${transportClosedPermanently ? 1 : 0})
 `);
   }
-  transportStateByHost.of(session).setActive(undefined);
-  gracefulShutdownSync(
+  let exitCode =
     (lastMessage?.type === "result" && lastMessage?.is_error) || transportClosedPermanently
       ? 1
       : options.outputFormat === "stream-json"
         ? 0
-        : (getLocalCommandExitCode() ?? 0),
-  );
+        : (getLocalCommandExitCode() ?? 0);
+  let exitCode_2 = await sweepOnFullDisk({
+    outputFormat: options.outputFormat,
+    sdkUrl: options.sdkUrl,
+    exitCode,
+    io: headlessIO,
+  });
+  transportStateByHost.of(session).setActive(undefined);
+  gracefulShutdownSync(exitCode_2);
 }
-//@ chunk-tyg7f3ek.js:652107-652157 layout
+//@ chunk-0yw3taqg.js:694982-695032 sole-consumer
 function isModelDifferentFromRestricted(userSpecifiedModel, restrictedStartupModel) {
   return (
     userSpecifiedModel === undefined ||
     parseUserSpecifiedModel(userSpecifiedModel) !== parseUserSpecifiedModel(restrictedStartupModel)
   );
 }
-//@ chunk-tyg7f3ek.js:652157-652293 layout (2.1.88 match: createModelSwitchBreadcrumbs, 1)
-function createModelSwitchBreadcrumbs(frame, userSpecifiedModel, prevModel) {
-  if (
-    "model" in frame &&
-    (frame.model == null || String(frame.model).trim().toLowerCase() === "default") &&
-    userSpecifiedModel !== undefined &&
-    userSpecifiedModel !== prevModel
-  )
-    return prevModel;
-  return;
-}
-//@ chunk-tyg7f3ek.js:652293-652402 layout
+//@ chunk-0yw3taqg.js:695168-695277 sole-consumer
 /**
  * 判断一次模型写入是否与当前窗口不一致：写入值存在、新旧模型相同，但写入的模型解析后与先前生效的模型不同。
  */
@@ -4712,7 +4948,7 @@ function isWindowDivergentWrite({ writtenModel, prevModel, newModel, prevActive 
     parseUserSpecifiedModel(writtenModel) !== parseUserSpecifiedModel(prevActive ?? prevModel)
   );
 }
-//@ chunk-tyg7f3ek.js:652402-652485 layout
+//@ chunk-0yw3taqg.js:695277-695360 sole-consumer
 function resolveSessionCwd(snapshot) {
   let cwd = getSessionProject(snapshot).cwd;
   try {
@@ -4722,13 +4958,13 @@ function resolveSessionCwd(snapshot) {
     return getSessionProject(snapshot).originalCwd;
   }
 }
-//@ chunk-tyg7f3ek.js:652485-652566 layout
+//@ chunk-0yw3taqg.js:695360-695441 sole-consumer
 function isAdvertisedCommand(caps) {
   return caps.terminalOriented !== true || caps.advertisedOnHostedSessions === true;
 }
-//@ chunk-tyg7f3ek.js:652566-652580 layout
+//@ chunk-0yw3taqg.js:695441-695455 sole-consumer
 var OAUTH_FLOW_JOIN_WINDOW_MS = 600000;
-//@ chunk-tyg7f3ek.js:652580-652708 layout
+//@ chunk-0yw3taqg.js:695455-695583 affinity
 /**
  * 已有的 OAuth 流程是否可复用（同一登录方式、同一组织、尚未收到授权码、10 分钟内）。
  */
@@ -4740,7 +4976,7 @@ function canJoinOAuthFlow(state, withClaudeAi, forceLoginOrgUUID, orgUuid) {
     orgUuid - state.startedAt < OAUTH_FLOW_JOIN_WINDOW_MS
   );
 }
-//@ chunk-tyg7f3ek.js:652708-850597 callgraph-witnessed (2.1.88 match: runHeadlessStreaming, 0.158)
+//@ chunk-0yw3taqg.js:695583-898487 callgraph-witnessed (2.1.88 match: runHeadlessStreaming, 0.16)
 /**
  * runHeadlessStreaming：headless 主循环。读取输入消息与 control_request（initialize、interrupt、set_model、set_permission_mode、mcp_set_servers、rewind_files 等约 90 种子类型），排队执行查询轮次并产出 SDK 消息。
  */
@@ -4780,9 +5016,10 @@ function _runHeadlessStreamingForTesting(
   session.mcpSessionWiring.registerConnections(mcpConnectionStore);
   computerUseOwnerLock.of(session).acquire(ComputerUseStateCell.over(store));
   if (structuredIO instanceof RemoteIO) {
-    startCgroupCpuSampling(structuredIO.sessionState, getAppState, session.host.clock);
+    startCpuSampling(structuredIO.sessionState, getAppState, session.host.clock);
     startHostCpuSampler(createTaskFramework(getAppState, setAppState));
     startToolCpuSampling(structuredIO.sessionState, getAppState, session.host.clock);
+    createWatch(structuredIO.sessionState, session.host.clock, PROC_FS_READER_WITH_LINKS);
   }
   let neverFalse = () => false;
   let receivedMessageUuids = RECEIVED_MESSAGE_UUIDS.of(session);
@@ -4889,12 +5126,13 @@ function _runHeadlessStreamingForTesting(
       )
     : undefined;
   let errorRowByUuid = new Map();
+  let storedDenyLists = disallowedToolsFromMessages(messages);
   let parkedPermissions = new ParkedPermissionController({
     markAnswer: unattendedStart?.answers,
     parkedPermission,
     holdOpenFor: options.holdOpenFor,
     interruptedTurnsPrompt: turnInterruption,
-    fromInterruptedTurnsPrompt: userMessagePlatformFields(messages, turnInterruption),
+    fromInterruptedTurnsPrompt: collectInterruptedTurnsPrompt(messages, turnInterruption),
     turnInterruptionState,
     supersededToolUseIds,
     bootRetiredToolUseIds,
@@ -4939,7 +5177,7 @@ function _runHeadlessStreamingForTesting(
                     (row, index) =>
                       markerIndex === -1 ||
                       (index !== markerIndex &&
-                        !(index === markerIndex + 1 && isSyntheticApiErrorMessage(row))),
+                        !(index === markerIndex + 1 && isNoResponseRequestedMessage(row))),
                   ),
                   ...rows,
                 ],
@@ -4956,7 +5194,7 @@ function _runHeadlessStreamingForTesting(
         othersToCome:
           runState.endSessionRequested || isShuttingDown() || isTerminalShutdown()
             ? 0
-            : hasBatchableQueuedPrompt(messageQueue) +
+            : getQueuedUserTurnCount(messageQueue) +
               (runState.intentBatchInFlight && intentBatchInFlight ? 1 : 0),
       }))
         output.enqueue(retirementRow);
@@ -5123,15 +5361,22 @@ function _runHeadlessStreamingForTesting(
   };
   let prewaitLatch = new PrewaitLatch({
     messageQueue,
+    heldAheadOfTheQueue: (heldCommand) =>
+      heldCommand && !isStopOfHeldMessagesEnabled()
+        ? []
+        : userFrameIntake
+            .parkedCommands()
+            .filter((parkedCommand) => !parkedPermissions.wouldHoldIfQueuedNow(parkedCommand)),
     commandLacksUserIntent: isPassiveCommand,
   });
-  let unsubscribeCommandsDiscarded = commandsDiscardedSignal.subscribe((turns) => {
+  let unsubscribeCommandsDiscarded = commandsDiscarded.subscribe((turns) => {
     for (let turn of turns) turn.handedOffTurn?.release?.();
   });
   let abortController = createAbortController(500);
   let abortController_2 = createAbortController(500);
   let sideQuestionRequests = new Map();
   let output = structuredIO.outbound;
+  let extractPlacePusher = new MemoryExtractPlaceGate(session.host, structuredIO);
   let keepAliveSender = createKeepAliveSender(output);
   let sigintSeen = false;
   let sigtermSeen = false;
@@ -5240,6 +5485,7 @@ function _runHeadlessStreamingForTesting(
       }),
     readAgain: (uuid) => structuredIO.readAgain(uuid),
     startAborted: (uuid) => prewaitLatch.startQueuedMessageAborted(uuid),
+    prewaitLatch,
     earlierStartOf: (uuid) => {
       let startedAtMs = structuredIO.userFrameStartedAtMs(uuid);
       return startedAtMs === undefined
@@ -5276,6 +5522,26 @@ function _runHeadlessStreamingForTesting(
       }),
     noteReportedDoneUnrun: (uuid) => reportRedeliveredFollowupClosed(conversationRows, uuid, "on_arrival"),
     storeRewindStandIn,
+    cutOffTurnOpenedBy: (toolUseId) =>
+      turnInterruptionState?.kind === "interrupted_prompt" &&
+      (turnInterruption === undefined || toolUseId === turnInterruption)
+        ? {
+            openerKnown: turnInterruption !== undefined,
+            reRun: !parkedPermissions.hasCarriedTheCutOffTurnOn()
+              ? "none"
+              : !runState.running && !cutOffTurnOwed()
+                ? "ended"
+                : parkedPermissions.carryingTheCutOffTurnOnNow()
+                  ? "under_way"
+                  : "unclear",
+            ...(turnInterruptionState.tail !== undefined && {
+              tailKind: fromEnum(turnInterruptionState.tail.kind),
+            }),
+            ...(turnInterruptionState.tail?.shutdownStamped !== undefined && {
+              shutdownStamped: turnInterruptionState.tail.shutdownStamped,
+            }),
+          }
+        : undefined,
   });
   let serializeCall = serializeCalls((fn) => fn());
   let resolved_2 = Promise.resolve();
@@ -5303,7 +5569,7 @@ function _runHeadlessStreamingForTesting(
       let eligible = [];
       let withheld = [];
       for (let message of conversationRows.slice(startIndex)) {
-        if (!isEligibleBridgeMessage(message) || forwardedUuids.has(message.uuid)) continue;
+        if (!isBridgeableMessage(message) || forwardedUuids.has(message.uuid)) continue;
         if (isCompactBoundaryOrSummary(message) && isCompactPairWithheldFromRemote()) {
           withheld.push(message);
           continue;
@@ -5449,6 +5715,7 @@ function _runHeadlessStreamingForTesting(
     flushBufferedSdk();
     abortController.abort();
     abortController_2.abort(userAbortReason("shutdown"));
+    if (!sigintSeen && !sigtermSeen && !output.ended) extractPlacePusher.resendAtShutdown();
     gracefulShutdown(143);
   };
   process.on("SIGTERM", onSigterm);
@@ -5460,7 +5727,10 @@ function _runHeadlessStreamingForTesting(
       runState.abortController.abort(userAbortReason("shutdown"));
   });
   registerCleanup(async () => {
-    if (bridgeHandle) bridgeSdkController.persist(bridgeHandle);
+    if (bridgeHandle)
+      bridgeSdkController.persist(bridgeHandle, {
+        atExit: true,
+      });
     deferred.resolve();
     parkedPermissions.onShutdown();
     sdkResultReporter.reportTerminatedOnShutdown({
@@ -5481,10 +5751,10 @@ function _runHeadlessStreamingForTesting(
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
@@ -5666,7 +5936,7 @@ function _runHeadlessStreamingForTesting(
     if (readFileState instanceof Promise) readFileState.catch(logError);
   }
   headlessProfilerCheckpoint("before_extractReadFiles");
-  let readFilesFromMessages = extractReadFilesFromMessages(messages, cwd(), READ_FILE_STATE_CACHE_SIZE);
+  let readFileState = restoreRemoteFileState(messages, cwd(), READ_FILE_STATE_CACHE_SIZE);
   headlessProfilerCheckpoint("after_extractReadFiles");
   let deferred_2 = Promise.withResolvers();
   if (isResumeFrameSeedEligible()) {
@@ -5698,8 +5968,8 @@ function _runHeadlessStreamingForTesting(
     entries: conversationRows.length,
   }));
   registerMemoryAttributor("file_state_cache", () => ({
-    entries: readFilesFromMessages.size,
-    bytes: readFilesFromMessages.calculatedSize,
+    entries: readFileState.size,
+    bytes: readFileState.calculatedSize,
   }));
   let sessionEnvVars = new Map();
   let toolState = new InstanceRegistry();
@@ -5717,8 +5987,8 @@ function _runHeadlessStreamingForTesting(
   let pendingSeeds = createRemoteFileState(READ_FILE_STATE_CACHE_SIZE);
   function cache() {
     for (let [path, seed] of pendingSeeds.entries()) {
-      let existing = readFilesFromMessages.get(path);
-      if (!existing || seed.timestamp > existing.timestamp) readFilesFromMessages.set(path, seed);
+      let existing = readFileState.get(path);
+      if (!existing || seed.timestamp > existing.timestamp) readFileState.set(path, seed);
     }
   }
   function mergePendingSeeds() {
@@ -5742,30 +6012,31 @@ function _runHeadlessStreamingForTesting(
     });
   }
   parkedPermissions.walkBackKeptRegistrationWithoutPark();
-  let interruptedTasks = describeInterruptedTasks(options.restoredOrphans ?? [], {
+  let orphanRestoreContext = {
+    orphans: options.restoredOrphans ?? [],
+    messageQueue,
     interruptionKind: turnInterruptionState?.kind ?? "none",
-    hasQueuedMainThreadCommand: messageQueue.peek(isActiveMainAgentCommand) !== undefined,
     deferredResumePending: deferredToolUse !== undefined,
     rescueSuppressed: options.rescueSuppressed ?? false,
-    enabled: getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_orphan_restore_wake", true),
-    includeShells: getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_orphan_restore_wake_shells", true),
-    hasTool: (toolName) => findToolByName(tools, toolName) !== undefined,
+    tools,
     alsoResumable: options.alsoResumable,
     autoResumed: new Set(options.agentResumes?.map((agentResume) => agentResume.agentId)),
     lostTimers: options.lostSessionTimers ?? [],
-  });
-  if (interruptedTasks) {
-    let { command, counts } = interruptedTasks;
-    logEvent("tengu_ccr_orphan_restore_wake", {
-      orphan_count: options.restoredOrphans?.length ?? 0,
-      wake_agent_count: counts.agent,
-      wake_monitor_count: counts.monitor,
-      wake_shell_count: counts.shell,
-      wake_timer_count: options.lostSessionTimers?.length ?? 0,
-    });
-    logForDebugging("[print.ts] Waking the session for background tasks or timers lost to the restart");
-    messageQueue.enqueuePendingNotification(command);
-  }
+    answerMarks: unattendedStart?.answers,
+  };
+  let keptSubagentAsk = isAmbientRunning() ? options.keptSubagentAsk : undefined;
+  if (keptSubagentAsk === undefined) enqueueOrphanRestoreWake(orphanRestoreContext);
+  else
+    keptSubagentAsk.ask
+      .waitEnd()
+      .then((askOutcome) => {
+        if (askOutcome !== "stopped")
+          enqueueOrphanRestoreWake(
+            orphanRestoreContext,
+            askOutcome === "answered" ? keptSubagentAsk.card.tool_use_id : undefined,
+          );
+      })
+      .catch(logError);
   let modelRows = () => {
     let modelOptions = buildModelPickerOptions();
     return {
@@ -5873,16 +6144,17 @@ function _runHeadlessStreamingForTesting(
         model,
       });
     },
-    dropUnconfirmedLaunchModel: (refused) => {
-      let hasAdaptiveThinking = modelToRestoreAfterRefusal({
-        refused,
+    dropUnconfirmedLaunchModel: (modelArg, resolvedModel) => {
+      let unconfirmedLaunchModel = modelToRestoreAfterRefusal({
+        refused: modelArg,
         launch: options.userSpecifiedModel,
         active: userSpecifiedModel,
         restored: getMainLoopModelOverride(),
         turnDispatched: session.requestJournal.mainThreadRequestedInProcess(),
       });
-      if (hasAdaptiveThinking === undefined) return false;
-      userSpecifiedModel = hasAdaptiveThinking;
+      if (unconfirmedLaunchModel === undefined || resolvedModel?.(unconfirmedLaunchModel) === false)
+        return false;
+      userSpecifiedModel = unconfirmedLaunchModel;
       return true;
     },
     noticeRestrictedModel,
@@ -6103,7 +6375,7 @@ function _runHeadlessStreamingForTesting(
         return true;
     return false;
   };
-  let hasFastMode = createElicitationRegistrar({
+  let elicitationRegistrar = createElicitationRegistrar({
     structuredIO,
     session,
     storageV5: options.storageV5,
@@ -6144,8 +6416,8 @@ function _runHeadlessStreamingForTesting(
       dynamicMcpState = next;
     },
   };
-  function injectModelSwitchBreadcrumbs_2(modelArg, resolvedModel) {
-    return applyMcpReconnect(reconnectStores, modelArg, resolvedModel);
+  function applyMcpReconnectResult(serverName, reconnectResult) {
+    return applyMcpReconnect(reconnectStores, serverName, reconnectResult);
   }
   let inFlightReconnects = new Map();
   let reconnectAttemptsAt = new Map();
@@ -6231,7 +6503,7 @@ function _runHeadlessStreamingForTesting(
       };
     let any_2 = getAppState().mcp.clients.some((client) => client.name === serverName);
     setAppState((state) => {
-      if (state.mcp.clients.some((clients) => clients.name === serverName))
+      if (state.mcp.clients.some((client) => client.name === serverName))
         return {
           ...state,
           mcp: {
@@ -6270,28 +6542,27 @@ function _runHeadlessStreamingForTesting(
     for (let connection of seenConfigs)
       mcpClientModule.disposeServerConnectionDetached(serverName, connection);
   };
-  let onModelSwitchNotice = (modelArg, resolvedModel) => {
-    let breadcrumbs = injectModelSwitchBreadcrumbs_2(modelArg, resolvedModel);
+  let onModelSwitchNotice = (serverName, attempt) => {
+    let breadcrumbs = applyMcpReconnectResult(serverName, withAuthTools(attempt));
     if (
       breadcrumbs === "superseded" ||
-      (breadcrumbs === "dropped" &&
-        identityChangedForRemote(resolvedModel.client.config, resolvedModel.attemptEpoch))
+      (breadcrumbs === "dropped" && identityChangedForRemote(attempt.client.config, attempt.attemptEpoch))
     )
-      return resolvedModel.client.type === "failed" && resolvedModel.client.errorCode === "IDENTITY_CHANGED"
-        ? resolvedModel.client
-        : getMcpClientModule().inertReconnectShape(modelArg, resolvedModel.client.config).client;
+      return attempt.client.type === "failed" && attempt.client.errorCode === "IDENTITY_CHANGED"
+        ? attempt.client
+        : getMcpClientModule().inertReconnectShape(serverName, attempt.client.config).client;
     let resolvedClientModel =
-      getAppState().mcp.clients.find((client) => client.name === modelArg) ??
-      dynamicMcpState.clients.find((client) => client.name === modelArg);
+      getAppState().mcp.clients.find((client) => client.name === serverName) ??
+      dynamicMcpState.clients.find((client) => client.name === serverName);
     let isSameClient =
-      resolvedClientModel === resolvedModel.client ||
+      resolvedClientModel === attempt.client ||
       (breadcrumbs === "applied" &&
         resolvedClientModel?.type === "connected" &&
-        resolvedModel.client.type === "connected" &&
-        resolvedClientModel.client === resolvedModel.client.client);
+        attempt.client.type === "connected" &&
+        resolvedClientModel.client === attempt.client.client);
     if (resolvedClientModel !== undefined && isSameClient) {
       if (resolvedClientModel.type === "connected") {
-        hasFastMode([resolvedClientModel]);
+        elicitationRegistrar([resolvedClientModel]);
         reregisterChannelHandlerAfterReconnect(resolvedClientModel, messageQueue);
       }
       return resolvedClientModel;
@@ -6301,19 +6572,15 @@ function _runHeadlessStreamingForTesting(
       (resolvedClientModel.type === "disabled" || resolvedClientModel.type === "failed")
     )
       return resolvedClientModel;
-    if (
-      !resolvedClientModel &&
-      resolvedModel.client.config.type === "sdk" &&
-      resolvedModel.client.type !== "connected"
-    )
-      return resolvedModel.client;
+    if (!resolvedClientModel && attempt.client.config.type === "sdk" && attempt.client.type !== "connected")
+      return attempt.client;
     return {
-      name: modelArg,
+      name: serverName,
       type: "failed",
-      config: resolvedModel.client.config,
+      config: attempt.client.config,
       error: resolvedClientModel
         ? `Server status: ${resolvedClientModel.type}`
-        : `Server not found: ${sanitizeTelemetryString(modelArg)}`,
+        : `Server not found: ${sanitizeTelemetryString(serverName)}`,
     };
   };
   let redialServer = async (request, extra) => {
@@ -6401,7 +6668,7 @@ function _runHeadlessStreamingForTesting(
           prompts: resources,
           resources: third,
         });
-        injectModelSwitchBreadcrumbs_2(
+        applyMcpReconnectResult(
           serverName,
           applyMcpServerConfig(found.config, {
             client: connection,
@@ -6424,10 +6691,10 @@ function _runHeadlessStreamingForTesting(
   function wireConnectedClients() {
     primeDiscoveryCacheFlag();
     let discoveryCacheOn = isDiscoveryCacheOn();
-    if (!discoveryCacheOn && !options.mcpListingsHanded) return;
+    if (!discoveryCacheOn && !options.mcpListingsHanded && !isCachedAuthStaleButUsable()) return;
     getCliOwnedState().headlessMcpTeardown?.();
     setConnectedClientWiring((wiring) => {
-      hasFastMode([wiring]);
+      elicitationRegistrar([wiring]);
       noteConnected([wiring]);
     });
     let unsubscribeRetry = mcpRetryOrchestrator.subscribe();
@@ -6512,7 +6779,7 @@ function _runHeadlessStreamingForTesting(
   if (clients_4.length > 0 || clients.length > 0) teardownMcpState();
   wireConnectedClients();
   registerNames([...clients, ...clients_4]);
-  hasFastMode(clients_4);
+  elicitationRegistrar(clients_4);
   noteConnected(clients_4);
   reconnectBackoff(clients_4);
   subscribe(() => {
@@ -6521,7 +6788,7 @@ function _runHeadlessStreamingForTesting(
     clients_4 = clients;
     registerNames(clients);
     if (clients.length > 0) teardownMcpState();
-    hasFastMode(clients);
+    elicitationRegistrar(clients);
     noteConnected(clients);
     reconnectBackoff(clients);
   });
@@ -6622,7 +6889,7 @@ function _runHeadlessStreamingForTesting(
     extraTools = setup.tools;
     sdkCommands = setup.commands;
     for (let client of clients_3) if (client.type === "connected") sdkServerManifests.delete(client.name);
-    let allNames = uniq([...currentServerNames, ...configuredNames]);
+    let allNames = normalizeCaseForComparison_2([...currentServerNames, ...configuredNames]);
     let mapped = allNames.map((name) => [name, getMcpPrefix(name)]);
     setAppState((state) => ({
       ...state,
@@ -6630,13 +6897,13 @@ function _runHeadlessStreamingForTesting(
         ...state.mcp,
         tools: [
           ...state.mcp.tools.filter(
-            (name) => !mapped.some(([serverName, prefix]) => isToolFromMcpServer(name, serverName, prefix)),
+            (tool) => !mapped.some(([serverName, prefix]) => isToolFromMcpServer(tool, serverName, prefix)),
           ),
           ...extraTools,
         ],
         commands: [
           ...state.mcp.commands.filter(
-            (name) => !allNames.some((serverName) => commandBelongsToServer(name, serverName)),
+            (command) => !allNames.some((serverName) => commandBelongsToServer(command, serverName)),
           ),
           ...setup.commands,
         ],
@@ -6651,8 +6918,8 @@ function _runHeadlessStreamingForTesting(
       autoDefaultLaunchEnabled: isHarborWillowEnabled(),
       ccrV2SessionCrudEnabled: isCcrV2SessionCrudEnabled(),
       maxEffortReminderEnabled: isMaxEffortReminderEnabled(),
-      onAutoDefaultNudgeEvent: (serverName, message) =>
-        handleAutoDefaultNudgeEventFromHost(serverName, message, options.storageV5),
+      onAutoDefaultNudgeEvent: (nudgeEvent, nudgePayload) =>
+        handleAutoDefaultNudgeEventFromHost(nudgeEvent, nudgePayload, options.storageV5),
       onAdminLimitRequest: fileAdminLimitRequest,
     });
     installCcdSessionTelemetryProxy(clients_3);
@@ -6685,7 +6952,7 @@ function _runHeadlessStreamingForTesting(
   let enableSdkServer = async (enableSdkServer) => {
     let config = getOwn(sdkMcpServerConfigs, enableSdkServer);
     if (config === undefined) return;
-    let found = clients_3.find((prev) => prev.name === enableSdkServer);
+    let found = clients_3.find((entry) => entry.name === enableSdkServer);
     if (found?.type === "connected") return found;
     if (found?.type === "disabled" || found?.type === "failed") {
       let pending = {
@@ -6699,7 +6966,7 @@ function _runHeadlessStreamingForTesting(
       clients_3 = clients_3.map((client) => (client === found ? pending : client));
     }
     await serializedRedialAll();
-    return clients_3.find((name) => name.name === enableSdkServer);
+    return clients_3.find((pendingEntry) => pendingEntry.name === enableSdkServer);
   };
   let dynamicMcpState = {
     clients: [],
@@ -6724,6 +6991,11 @@ function _runHeadlessStreamingForTesting(
       `[MCP] mcp_set_servers authority: provenance ${options.mcpConfigOwnership === undefined ? "undeclared (all --mcp-config servers host-owned)" : "declared"}; host-owned=[${Object.keys(hostOwnedConfigs).join(", ")}] operator-owned=[${[...operatorOwnedMcpConfigNames].join(", ")}]`,
     );
   setMcpClientsAccessor(() => [...getAppState().mcp.clients, ...clients_3, ...dynamicMcpState.clients]);
+  ensureScratchpadDir().catch((error) =>
+    logForDebugging(`runHeadless: ensureScratchpadDir failed: ${error}`, {
+      level: "error",
+    }),
+  );
   setMcpServerToolsSwapper(makeCommitReconnect(reconnectStores));
   let sdkServersList = Array.isArray(sdkMcpServers) ? sdkMcpServers : [];
   let mcpSyncDone = false;
@@ -6731,8 +7003,8 @@ function _runHeadlessStreamingForTesting(
     ? null
     : (async () => {
         let startTime = performance.now();
-        let readyServers = await sdkMcpServers.catch((error) => {
-          logError(error);
+        let readyServers = await sdkMcpServers.catch((name) => {
+          logError(name);
           return [];
         });
         if (!mcpSyncDone) sdkServersList = readyServers;
@@ -6745,9 +7017,9 @@ function _runHeadlessStreamingForTesting(
     return otherCommands(commands).filter(isAdvertisedCommand);
   }
   let agents = initialAppState;
-  let buildAllTools = (appState) => {
+  let replaceCommandsFromFlags = (name) => {
     let filtered = agents.filter((agent) => agent.source === "flagSettings");
-    agents = withLiveRegisteredAgents([...appState, ...filtered]);
+    agents = withLiveRegisteredAgents([...name, ...filtered]);
     notifyAgentsChanged();
   };
   let pluginFlagTracker = createPluginFlagTracker();
@@ -6850,11 +7122,11 @@ function _runHeadlessStreamingForTesting(
         getFastRejectedReason(mainLoopModel, state.fastMode) ??
         "",
       resolveEffortLevelOrNull(mainLoopModel, resolveEffortLevel(state)) ?? "",
-      viewTeammateOutput(),
+      currentViewMode(),
       queuedNotificationCapabilities(buildBridgeToolsUpdate(state), session, () =>
         messagesSinceCompactBoundary(conversationRows),
       ).join(","),
-      bridgeAdvertisedCommands(rewriteCommands(state.mcp.commands)).map((tool) => tool.name).join(`
+      bridgeAdvertisedCommands(rewriteCommands(state.mcp.commands)).map((command) => command.name).join(`
 `),
     ].join("\x00");
   }
@@ -6867,10 +7139,10 @@ function _runHeadlessStreamingForTesting(
           return;
         }
         let handle = bridgeHandle;
-        let slashCommandToolSkills = await getSlashCommandToolSkills(getCwd(), options.storageV5);
+        let sdkSetup = await getSlashCommandToolSkills(getCwd(), options.storageV5);
         if (bridgeHandle !== handle) return;
-        let initJsonSchema = queueCapabilities();
-        if (!reason?.force && initJsonSchema === announcedCapabilities) {
+        let fingerprint = queueCapabilities();
+        if (!reason?.force && fingerprint === announcedCapabilities) {
           announcedModelOverride = getMainLoopModelOverride();
           return;
         }
@@ -6883,14 +7155,14 @@ function _runHeadlessStreamingForTesting(
             permissionMode: state.toolPermissionContext.mode,
             commands: rewriteCommands(state.mcp.commands),
             agents: getActiveAgentsFromList(agents),
-            loadedSkills: slashCommandToolSkills.filter(isAdvertisedCommand),
+            loadedSkills: sdkSetup.filter(isAdvertisedCommand),
             mcpCommands: state.mcp.commands,
             fastMode: state.fastMode,
             effortValue: resolveEffortLevel(state),
             messagesInView: () => messagesSinceCompactBoundary(conversationRows),
           }),
         ]);
-        announcedCapabilities = initJsonSchema;
+        announcedCapabilities = fingerprint;
         announcedModelOverride = getMainLoopModelOverride();
         logForDebugging(`[bridge:sdk] system/init announced (${reportStateChange})`);
         logFeatureOk("bridge_sdk_state_announce", {
@@ -6937,11 +7209,11 @@ function _runHeadlessStreamingForTesting(
       return;
     noteEffortChange("state_change");
   });
-  let syntheticOutputResult = onOrgFastModeChange(() => noteEffortChange("state_change"));
+  let unsubscribeFastMode = onOrgFastModeChange(() => noteEffortChange("state_change"));
   let unsubscribeFallbackModels = onFastRejectedFallbackModelsChanged(() => noteEffortChange("state_change"));
   let unsubscribeFocusMode = subscribeFocusMode(() => noteEffortChange("state_change"));
   let syntheticOutputWarned = false;
-  let bridgeHandle_2 = null;
+  let toolListCache = null;
   let buildBridgeToolsUpdate = (computeBridgeTools) => {
     let mainThreadAgentType = getMainThreadAgentType();
     let jsonSchema = getInitJsonSchema();
@@ -6971,8 +7243,9 @@ function _runHeadlessStreamingForTesting(
       getHostRendersChromeSetupOffer(),
       chromeSetupOfferKey(structuredIO.sessionState),
       getMcpEntryRowNotServed(),
+      env.CLAUDE_PROJECT_UUID,
     ];
-    let handle = bridgeHandle_2;
+    let handle = toolListCache;
     if (
       handle !== null &&
       Date.now() - handle.computedAt < TOOL_POOL_MEMO_TTL_MS &&
@@ -6982,9 +7255,9 @@ function _runHeadlessStreamingForTesting(
       cachedPrimitiveToolGrant = handle.primitiveToolGrant;
       return handle.result;
     }
-    let activeAgentsFromList = getActiveAgentsFromList(agents);
+    let allSdkNames = getActiveAgentsFromList(agents);
     let assembled = assembleToolPool(computeBridgeTools.toolPermissionContext, computeBridgeTools.mcp.tools, {
-      activeAgents: activeAgentsFromList,
+      activeAgents: allSdkNames,
     });
     let dynamicTools = filterToolsByDenyRules(
       dynamicMcpState.tools,
@@ -6994,23 +7267,23 @@ function _runHeadlessStreamingForTesting(
     registerNames([...computeBridgeTools.mcp.clients, ...dynamicMcpState.clients]);
     retractFrom(clients_3);
     let filterDisabled = !isLovelyUmbrellaOn();
-    let newMessages = withoutStaticMcpShadows(
+    let filtered = withoutStaticMcpShadows(
       tools,
       isDiscoveryCacheOn() || options.mcpListingsHanded
         ? [...commsServerNames]
         : [
-            ...computeBridgeTools.mcp.clients.map((client) => client.name),
+            ...computeBridgeTools.mcp.clients.map((prev) => prev.name),
             ...dynamicMcpState.clients.map((client) => client.name),
           ],
     ).filter((tool) => isMcpTool(tool) || !filterDisabled || tool.isEnabled());
     let deduped = uniqBy(
       mergeAndFilterTools(
-        [...hostTools, ...newMessages, ...extraTools, ...dynamicTools],
+        [...hostTools, ...filtered, ...extraTools, ...dynamicTools],
         assembled,
         computeBridgeTools.toolPermissionContext.mode,
         [
           ...bridgeTools,
-          ...newMessages,
+          ...filtered,
           ...extraTools,
           ...dynamicMcpState.tools,
           ...computeBridgeTools.mcp.tools,
@@ -7026,12 +7299,12 @@ function _runHeadlessStreamingForTesting(
     cachedAllowedAgentTypes = undefined;
     cachedPrimitiveToolGrant = undefined;
     if (mainThreadAgentType) {
-      let toolUseContext = findAgentExcludingWebFetch(activeAgentsFromList, mainThreadAgentType);
+      let toolUseContext = findAgentExcludingWebFetch(allSdkNames, mainThreadAgentType);
       if (toolUseContext) {
         let agentTools = resolveAgentTools(
           toolUseContext,
           withWebFetchToolForAgent(toolUseContext, deduped, computeBridgeTools.toolPermissionContext, {
-            activeAgents: activeAgentsFromList,
+            activeAgents: allSdkNames,
           }),
           false,
           true,
@@ -7042,7 +7315,7 @@ function _runHeadlessStreamingForTesting(
       }
     }
     if (options.permissionPromptToolName)
-      deduped = deduped.filter((tool) => !toolMatchesName(tool, options.permissionPromptToolName));
+      deduped = deduped.filter((tool) => !matchesToolName(tool, options.permissionPromptToolName));
     if (jsonSchema && !options.jsonSchema) {
       let syntheticOutputTool = createSyntheticOutputTool(jsonSchema);
       if ("tool" in syntheticOutputTool) {
@@ -7070,7 +7343,7 @@ function _runHeadlessStreamingForTesting(
       }
     }
     deduped = stripSoleNonDeniableTool(deduped, computeBridgeTools.toolPermissionContext);
-    bridgeHandle_2 = {
+    toolListCache = {
       keys: toolNames,
       computedAt: Date.now(),
       result: deduped,
@@ -7102,6 +7375,20 @@ function _runHeadlessStreamingForTesting(
     ownerRowsWrittenAt: latestHumanRelayAt,
   });
   let rows = () => mergeClients(getAppState().mcp.clients, clients_3, dynamicMcpState.clients);
+  let pluginServerHosts = new Map();
+  function operatorOwnedConfigs() {
+    return {
+      ...firstSdkSync.operatorOwnedConfigs,
+      ...hostOwnedConfigs,
+    };
+  }
+  function computeDynamicMcpConfig() {
+    return filterDuplicateServers(
+      operatorOwnedConfigs(),
+      rows(),
+      new Set(Object.keys(dynamicMcpState.configs).filter((key) => !Object.hasOwn(addedSdkServers, key))),
+    );
+  }
   let queryContext = () => ({
     session,
     refreshTools: refreshBridgeToolList,
@@ -7156,7 +7443,7 @@ function _runHeadlessStreamingForTesting(
     answers: applyPermissionAnswerChanges,
     appendSystemPrompt: () => options.appendSystemPrompt,
     appendSystemPromptHead: options.appendSystemPromptHead,
-    liveAppendSections: AUTO_MEM_DIRNAME_2(options.appendSystemPromptHead),
+    liveAppendSections: remoteEnvSystemPromptSections(options.appendSystemPromptHead),
     planModeInstructions: () => options.planModeInstructions,
     systemPromptSnapshot: () => options.systemPromptSnapshot,
     appendSubagentSystemPrompt: () => options.appendSubagentSystemPrompt,
@@ -7166,9 +7453,10 @@ function _runHeadlessStreamingForTesting(
     thinkingConfig: () => hasEffort.current(),
     jsonSchema: () => getInitJsonSchema() ?? options.jsonSchema,
     initialMessages: conversationRows,
+    storedDenyLists,
     loadShowsCutOffCalls: isInterruptedTail(turnInterruptionState),
     conversation: orderedRows,
-    readFileCache: readFilesFromMessages,
+    readFileCache: readFileState,
     customSystemPrompt: switchToPromptTools,
     takeSystemPromptDelivered: () => {
       let hostPromptSupersedesValue = hostPromptSupersedes;
@@ -7208,14 +7496,14 @@ function _runHeadlessStreamingForTesting(
       return async (signal, task) => {
         let startTime = performance.now();
         let combinedSignal = AbortSignal.any([signal, abortController.signal]);
-        let timer = setTimeout(
+        let assembledTools = setTimeout(
           () =>
             logForDebugging("turn_handoff: the session store has not confirmed the carried lines after 15s", {
               level: "warn",
             }),
           15000,
         );
-        timer.unref();
+        assembledTools.unref();
         try {
           if (
             !(await Promise.race([
@@ -7232,14 +7520,14 @@ function _runHeadlessStreamingForTesting(
             return false;
           return structuredIO.refusedInternalEvents(task).length > 0 ? "refused" : true;
         } finally {
-          clearTimeout(timer);
+          clearTimeout(assembledTools);
           storeConfirmTimer(startTime);
         }
       };
     },
   });
-  let inlineMcpTiming = createInlineMcpTiming();
-  let mcpChangesPromise = Promise.resolve({
+  let initJsonSchema = createInlineMcpTiming();
+  let resolved_4 = Promise.resolve({
     response: {
       added: [],
       removed: [],
@@ -7266,13 +7554,13 @@ function _runHeadlessStreamingForTesting(
         release();
         return fn;
       };
-      mcpChangesPromise = mcpChangesPromise.then(wrap, wrap);
+      resolved_4 = resolved_4.then(wrap, wrap);
     },
-    redactsPersistedLane: () => isTransportBacked(session),
+    redactsPersistedLane: () => mayPersistOnHost(session),
     wantsDial: () => true,
     operatorOwnedMcpConfigNames,
     operatorToolPolicyConfigs,
-    closeReplacedSdkClients: (servers) => pendingMcpTools.closeFor(servers),
+    closeReplacedSdkClients: (mcpAccessor) => pendingMcpTools.closeFor(mcpAccessor),
   };
   let projectsMount = null;
   let bindingChangedHint = null;
@@ -7285,23 +7573,62 @@ function _runHeadlessStreamingForTesting(
   }
   function applySdkServerSet(
     servers,
-    { authoritative, caller, deferConnect = false, pluginDiffScope = "configured", dialOptions },
+    {
+      authoritative,
+      caller,
+      deferConnect = false,
+      pluginDiffScope = "configured",
+      pluginCandidates,
+      dialOptions,
+    },
   ) {
-    let doWork = async () => {
-      let previousNames = servers;
-      let previousServers =
-        pluginDiffScope === "account_plugins"
-          ? nonBuiltinMarketplaceServers(dynamicMcpState.configs)
-          : emptyServerMap();
-      let oldSdkClientNames = new Map([
-        ...Object.entries(previousServers),
+    let applyFromPayload = async () => {
+      let { servers: servers_2, twins } =
+        pluginCandidates === undefined
+          ? {
+              servers,
+              twins: [],
+            }
+          : collapsePluginServerTwins(
+              servers,
+              pluginCandidates,
+              computeDynamicMcpConfig(),
+              new Set(
+                caller === "reload_plugins"
+                  ? []
+                  : rows()
+                      .filter((serverName) => serverName.type === "connected")
+                      .map((serverName) => serverName.name),
+              ),
+            );
+      for (let key of Object.keys(pluginCandidates ?? {}))
+        if (Object.hasOwn(servers, key)) pluginServerHosts.delete(key);
+      for (let { name: twin, duplicateOf } of twins) {
+        let twinConfig = pluginCandidates?.[twin];
+        if (twinConfig !== undefined)
+          pluginServerHosts.set(twin, {
+            host: duplicateOf,
+            config: twinConfig,
+          });
+      }
+      if (twins.length > 0)
+        logForDebugging(
+          `[MCP] ${caller}: plugin server(s) left out because the host already delivered the same server: ${twins.map((servers) => `${servers.name} (same as "${servers.duplicateOf}")`).join(", ")}`,
+        );
+      let previousNames = servers_2;
+      let settingsConfigs =
+        pluginDiffScope === "configured"
+          ? emptyServerMap()
+          : nonBuiltinMarketplaceServers(dynamicMcpState.configs, pluginDiffScope);
+      let wantedConfigs = new Map([
+        ...Object.entries(settingsConfigs),
         ...(authoritative ? [] : Object.entries(hostOwnedConfigs)),
       ]);
-      if (oldSdkClientNames.size > 0) {
+      if (wantedConfigs.size > 0) {
         let changed = Object.create(null);
         let hostKeptNames = [];
-        for (let [name, entry] of oldSdkClientNames) {
-          let config = getOwn(servers, name);
+        for (let [name, entry] of wantedConfigs) {
+          let config = getOwn(servers_2, name);
           let isHostOwned = Object.hasOwn(hostOwnedConfigs, name);
           let nextConfig = config;
           let isSettingsScoped =
@@ -7311,7 +7638,7 @@ function _runHeadlessStreamingForTesting(
             nextConfig.pluginSource === undefined;
           let shouldDrop =
             config?.type === "sdk"
-              ? Object.hasOwn(previousServers, name) && !isHostOwned
+              ? Object.hasOwn(settingsConfigs, name) && !isHostOwned
               : isHostOwned &&
                 entry.type !== "sdk" &&
                 !Object.hasOwn(sdkMcpServerConfigs, name) &&
@@ -7328,7 +7655,7 @@ function _runHeadlessStreamingForTesting(
             `[MCP] ${caller}: host-set server(s) kept over a settings server of the same name: ${hostKeptNames.join(", ")}`,
           );
         previousNames = {
-          ...servers,
+          ...servers_2,
           ...changed,
         };
       }
@@ -7345,7 +7672,7 @@ function _runHeadlessStreamingForTesting(
       let dynamicResult = await applyDynamicMcpServers(
         mcpSyncHooks,
         {
-          payload: servers,
+          payload: servers_2,
           desired: previousNames,
         },
         {
@@ -7376,7 +7703,7 @@ function _runHeadlessStreamingForTesting(
       sdkCommands = sdkResult.state.commands;
       if (dynamicResult.sdkServersChanged) {
         let newSdkClientNames = new Set(clients_3.map((client) => client.name));
-        let allSdkNames = uniq([...previousClientNames, ...newSdkClientNames]);
+        let allSdkNames = normalizeCaseForComparison_2([...previousClientNames, ...newSdkClientNames]);
         let mapped = allSdkNames.map((prev) => [prev, getMcpPrefix(prev)]);
         setAppState((state) => ({
           ...state,
@@ -7400,6 +7727,11 @@ function _runHeadlessStreamingForTesting(
       }
       for (let client of sdkResult.clientsToCleanUp) await client.cleanup();
       for (let serverName of dynamicResult.sdkServersRemoved) await pendingMcpTools.closeFor(serverName);
+      await ensureScratchpadDir().catch((error) =>
+        logForDebugging(`applyMcpServerChanges: ensureScratchpadDir failed: ${error}`, {
+          level: "error",
+        }),
+      );
       return {
         response: dynamicResult.response,
         sdkServersChanged: dynamicResult.sdkServersChanged,
@@ -7407,13 +7739,13 @@ function _runHeadlessStreamingForTesting(
     };
     let reassertMounts = async () => {
       try {
-        return await doWork();
+        return await applyFromPayload();
       } finally {
         for (let holder of mcpSyncMounts()) holder.reassertAfterApply();
       }
     };
-    mcpChangesPromise = mcpChangesPromise.then(reassertMounts, reassertMounts);
-    return mcpChangesPromise;
+    resolved_4 = resolved_4.then(reassertMounts, reassertMounts);
+    return resolved_4;
   }
   function applyOneMcpServer(serverName, config, reassert) {
     let run = async () => {
@@ -7450,8 +7782,8 @@ function _runHeadlessStreamingForTesting(
         for (let holder of mcpSyncMounts()) holder.reassertAfterApply();
       }
     };
-    mcpChangesPromise = mcpChangesPromise.then(run, run);
-    return mcpChangesPromise.then(
+    resolved_4 = resolved_4.then(run, run);
+    return resolved_4.then(
       ({ response }) => response,
       (error) => {
         logError(error);
@@ -7491,6 +7823,15 @@ function _runHeadlessStreamingForTesting(
   };
   let agentRuntime = {
     surface: null,
+    ...(options.outputFormat === "stream-json" && {
+      sendDisplayRows: (detail) =>
+        flushPendingRowsWithTerminal(detail, {
+          drain: runState,
+          messageQueue,
+          write: (keepArrived) => output.enqueue(keepArrived),
+          pointerResults: options.handbackPointerResults,
+        }),
+    }),
     model: () => getMainLoopModel(),
     messages: () => conversationRows,
     conversation: (agent) =>
@@ -7577,7 +7918,7 @@ function _runHeadlessStreamingForTesting(
           ...serverName,
           storageV5: options.storageV5,
           credentials: options.credentials,
-          dynamicServers: toScopedConfig(rows(), addedSdkServers),
+          dynamicServers: toScopedConfig_2(rows(), addedSdkServers),
         }),
         rows(),
         getAppState().mcp.suppressedPluginMcpServers ?? [],
@@ -7597,7 +7938,7 @@ function _runHeadlessStreamingForTesting(
         serverName,
         options,
       ),
-    refreshCommands: () => refreshCommands(),
+    refreshCommands: () => refreshCommandsThrottled.ask(),
     refreshAgents: () => refreshAgents(),
     refreshContext: () => invalidateUserContext(session, "hooks_invalidate"),
     compact: () =>
@@ -7630,7 +7971,7 @@ function _runHeadlessStreamingForTesting(
                   text: event.text,
                 },
                 UiCopyResponseSchema(),
-                UI_HOST_REQUEST_TIMEOUT_MS,
+                BACKDROP_CLEAR_DELAY_MS,
               )
             )?.copied,
           readPrompt: (request) =>
@@ -7641,7 +7982,7 @@ function _runHeadlessStreamingForTesting(
                 client_id: request.clientId,
               },
               UiPromptReadResponseSchema(),
-              UI_HOST_REQUEST_TIMEOUT_MS,
+              BACKDROP_CLEAR_DELAY_MS,
             ),
           fillPrompt: async (request) =>
             (
@@ -7664,7 +8005,7 @@ function _runHeadlessStreamingForTesting(
                   }),
                 },
                 UiPromptFillResponseSchema(),
-                UI_HOST_REQUEST_TIMEOUT_MS,
+                BACKDROP_CLEAR_DELAY_MS,
               )
             )?.filled,
           paintPrompt: async (request) =>
@@ -7684,7 +8025,7 @@ function _runHeadlessStreamingForTesting(
                     }),
                 },
                 UiPromptPaintResponseSchema(),
-                UI_HOST_REQUEST_TIMEOUT_MS,
+                BACKDROP_CLEAR_DELAY_MS,
               )
             )?.painted,
           suggestPrompt: async (request) =>
@@ -7697,7 +8038,7 @@ function _runHeadlessStreamingForTesting(
                   text: request.text,
                 },
                 UiPromptSuggestResponseSchema(),
-                UI_HOST_REQUEST_TIMEOUT_MS,
+                BACKDROP_CLEAR_DELAY_MS,
               )
             )?.shown,
           readSelection: async (request) => {
@@ -7710,7 +8051,7 @@ function _runHeadlessStreamingForTesting(
                 client_id: request.clientId,
               },
               UiReadSelectionResponseSchema(),
-              UI_HOST_REQUEST_TIMEOUT_MS,
+              BACKDROP_CLEAR_DELAY_MS,
             );
             return reply.cause === undefined
               ? selectionResult(reply.answer.text, reply.answer.instance_id)
@@ -7724,7 +8065,7 @@ function _runHeadlessStreamingForTesting(
     isInteractive: false,
   });
   let initialWrite = initialWriteAttempt(false);
-  let resolved_4 = Promise.resolve();
+  let resolved_5 = Promise.resolve();
   let hostSessionOps = {
     titles: initialWrite,
     storageV5: options.storageV5,
@@ -7732,7 +8073,7 @@ function _runHeadlessStreamingForTesting(
     redactsPersistedLane: () => isTransportBacked(session),
     applyRenamedSessionName: (name) => {
       if (isTeammate()) return;
-      resolved_4 = resolved_4
+      resolved_5 = resolved_5
         .then(async () => {
           await saveSessionAgentName(
             name,
@@ -7791,10 +8132,12 @@ function _runHeadlessStreamingForTesting(
           storageV5: options.storageV5,
           shouldStop: (task) => agentsToStop.has(task.id),
         }),
+      tracksAgent: (taskId) => Object.hasOwn(getAppState().tasks, taskId),
       storageV5: options.storageV5,
     },
     runState.whenEnding(),
     options.keptSubagentAsk,
+    options.cutOffAgents,
   );
   let controlContext = {
     session,
@@ -8087,6 +8430,8 @@ function _runHeadlessStreamingForTesting(
     permissionPromptToolServerName: options.permissionPromptToolServerName,
   });
   let startupJoin;
+  let sessionStartPending;
+  sessionStartHostRefusedSlot.set(() => sessionStartPending !== undefined);
   let pluginsSessionStartOwed = false;
   let pluginsSessionStartNeeded = false;
   let lateSessionStartRows = {
@@ -8121,7 +8466,7 @@ function _runHeadlessStreamingForTesting(
     sdkUrl: options.sdkUrl,
     sdkMcpUpdateKind: () => mcpSyncNeeded(sdkMcpServerConfigs, clients_3),
     sdkMcpServersPending: () =>
-      count(Object.keys(sdkMcpServerConfigs), (serverName) => {
+      countWhere(Object.keys(sdkMcpServerConfigs), (serverName) => {
         let found = clients_3.find((client) => client.name === serverName);
         return found === undefined || found.type === "pending";
       }),
@@ -8199,7 +8544,7 @@ function _runHeadlessStreamingForTesting(
       refreshMcpForTurn(getAppState, subscribe, serverNames, options),
     store,
     allMcpClients: (state) => mergeClients(state.mcp.clients, clients_3, dynamicMcpState.clients),
-    registerElicitationHandlers: hasFastMode,
+    registerElicitationHandlers: elicitationRegistrar,
     registerChannelHandler: (serverName) => reregisterChannelHandlerAfterReconnect(serverName, messageQueue),
     buildAllTools: buildBridgeToolsUpdate,
   });
@@ -8298,7 +8643,7 @@ function _runHeadlessStreamingForTesting(
     startupReleased = true;
     sdkServersList = getNonInteractiveCommands(await getCommands(cwd(), options.storageV5));
     mcpSyncDone = true;
-    buildAllTools(agentDefinitions.allAgents);
+    replaceCommandsFromFlags(agentDefinitions.allAgents);
     queueDeferred();
     loadAllPluginsCacheOnly(options.storageV5, options.credentials).then(
       (cmd) =>
@@ -8329,7 +8674,7 @@ function _runHeadlessStreamingForTesting(
       listedServer =
         permissionPromptToolName === undefined || options.permissionPromptToolServerName === undefined
           ? undefined
-          : state.mcp.tools.find((tool) => toolMatchesName(tool, permissionPromptToolName))?.mcpInfo
+          : state.mcp.tools.find((tool) => matchesToolName(tool, permissionPromptToolName))?.mcpInfo
               ?.serverName;
       return {
         ...state,
@@ -8520,10 +8865,10 @@ function _runHeadlessStreamingForTesting(
       scope,
       strictMcpConfig,
     });
-    let skippedCount = count(Object.keys(servers_2), (name) => !Object.hasOwn(scopedServers, name));
+    let skippedCount = countWhere(Object.keys(servers_2), (name) => !Object.hasOwn(scopedServers, name));
     if (skippedCount > 0)
       logForDebugging(
-        `Headless MCP refresh (${reason}): ${skippedCount} configured server(s) left out (scope=${scope}, strict-mcp-config=${strictMcpConfig})`,
+        `Headless MCP refresh (${reason}): ${skippedCount} configured server(s) left out (scope=${typeof scope === "string" ? scope : "copies"}, strict-mcp-config=${strictMcpConfig})`,
       );
     let connected = Object.create(null);
     for (let [key, value] of Object.entries(scopedServers)) {
@@ -8546,11 +8891,30 @@ function _runHeadlessStreamingForTesting(
       caller: reason,
       deferConnect: getMcpConnectNonBlocking(),
       pluginDiffScope: scope,
+      pluginCandidates: scopedServers,
     });
     if (sdkServersChanged) serializedRedialAll();
     logForDebugging(
       `Headless MCP refresh: added=${response.added.length}, removed=${response.removed.length}`,
     );
+  }
+  async function recheckPluginCopies() {
+    try {
+      if (pluginServerHosts.size === 0 || isShuttingDown() || getSyncedPluginReloadDebt().reloadHeld) return;
+      let copies = serversNeedingNotReconnect(pluginServerHosts, operatorOwnedConfigs(), rows());
+      if (copies.size === 0) return;
+      for (let key of copies.keys()) pluginServerHosts.delete(key);
+      await applyPluginServers(connectedNonDynamicServers(), "plugin_copy_recheck", {
+        copies,
+      });
+    } catch (error) {
+      logForDebugging(
+        `plugin copy re-check failed, its copies wait for the next plugin diff: ${errorMessage(error)}`,
+        {
+          level: "error",
+        },
+      );
+    }
   }
   async function applyPluginSettle(pluginServers) {
     let startTime = performance.now();
@@ -8603,7 +8967,7 @@ function _runHeadlessStreamingForTesting(
         reconcile_timed_out: syncTimedOut,
         connect_budget_ms: Math.round(max),
         connect_waited_ms: Math.round(performance.now() - startTime_3),
-        pending_waited_after: count(
+        pending_waited_after: countWhere(
           getAppState().mcp.clients,
           (client) => client.type === "pending" && !skipDeferred.has(client.name),
         ),
@@ -8729,10 +9093,10 @@ function _runHeadlessStreamingForTesting(
     }
   }
   function settleServer(servers, serverName, timeoutMs) {
-    return servers === serverName || normalizeNameForMCP(servers) === timeoutMs;
+    return servers === serverName || CLAUDEAI_SERVER_PREFIX(servers) === timeoutMs;
   }
   function keyForServer(serverName) {
-    let normalized = normalizeNameForMCP(serverName);
+    let normalized = CLAUDEAI_SERVER_PREFIX(serverName);
     return [...getAppState().mcp.clients, ...clients_3, ...dynamicMcpState.clients].filter((cache) =>
       settleServer(cache.name, serverName, normalized),
     );
@@ -8744,7 +9108,7 @@ function _runHeadlessStreamingForTesting(
           status.type === "connected" && !isMcpServerBlockedAtConnectTime(status.name, status.config),
       );
     let deadline = params !== undefined ? parseIsoTimestamp(params) : Number.POSITIVE_INFINITY;
-    let min = Math.min(Date.now() + MCP_CALL_RESULT_LIMITS, Number.isNaN(deadline) ? Date.now() : deadline);
+    let min = Math.min(Date.now() + PRINT_TURN_TIMEOUT_MS, Number.isNaN(deadline) ? Date.now() : deadline);
     let cachedAccepted = false;
     async function waitUntil(status) {
       let row = statusRow(status);
@@ -8784,7 +9148,7 @@ function _runHeadlessStreamingForTesting(
         sleep(Math.max(0, min - Date.now()), elicitSignal),
       ])) === "resolved"
     ) {
-      let key = normalizeNameForMCP(serverName);
+      let key = CLAUDEAI_SERVER_PREFIX(serverName);
       if (!(
         keyForServer(serverName).length > 0 ||
         Object.keys(dynamicMcpState.configs).some((key_2) => settleServer(key_2, serverName, key)) ||
@@ -8801,7 +9165,7 @@ function _runHeadlessStreamingForTesting(
       ))
         return;
     }
-    let min_2 = Math.min(min, Date.now() + PRINT_TURN_POLL_MS);
+    let min_2 = Math.min(min, Date.now() + ELICIT_WAIT_RETRY_MS);
     while (!elicitSignal.aborted) {
       let key = keyForServer(serverName);
       let row = await waitUntil(key);
@@ -8825,6 +9189,14 @@ function _runHeadlessStreamingForTesting(
       canServeManifests(structuredIO.uiSurfaceChannel()) &&
       (!structuredIO.isRemoteTransport() || clientRegistry.list().length > 0)
     );
+  }
+  function requestRender() {
+    if (noteSurfaceChange())
+      enqueueTaskNotification({
+        type: "system",
+        subtype: "ui_invalidate",
+        event: "ui.render",
+      });
   }
   let uiStatusBuffer = createUiStatusBuffer(Date.now);
   let uiStatusSent = false;
@@ -8864,12 +9236,7 @@ function _runHeadlessStreamingForTesting(
         ensureClientConnected(false);
         notifyPlacedRows();
         attachRenderer(renderer);
-        if (noteSurfaceChange())
-          enqueueTaskNotification({
-            type: "system",
-            subtype: "ui_invalidate",
-            event: "ui.render",
-          });
+        requestRender();
       },
     },
     (clientId, options) => structuredIO.surfaceClientAttached(clientId, options),
@@ -8884,10 +9251,11 @@ function _runHeadlessStreamingForTesting(
       deferredPending = true;
       return;
     }
+    if (lastCommandsJson === null) return;
     let slashCommands = toSlashCommands(otherCommands());
-    let commandsJson = jsonStringify(slashCommands);
-    if (lastCommandsJson === null || commandsJson === lastCommandsJson) return;
-    lastCommandsJson = commandsJson;
+    let fingerprint = jsonStringify(slashCommands);
+    if (fingerprint === lastCommandsJson) return;
+    lastCommandsJson = fingerprint;
     enqueueTaskNotification({
       type: "system",
       subtype: "commands_changed",
@@ -8918,7 +9286,8 @@ function _runHeadlessStreamingForTesting(
     refreshFailed = true;
     logError(error);
   };
-  let refreshCommands = () => {
+  let refreshCommandsThrottled = new ThrottledReread(() => refreshCurrentCommands().catch(onRefreshError));
+  let reloadCommandsNow = () => {
     let commands = refreshCurrentCommands()
       .catch(onRefreshError)
       .finally(() => {
@@ -8931,12 +9300,13 @@ function _runHeadlessStreamingForTesting(
       let reload = await logPluginDirReload(pluginsStateStore, {
         model: activeModel() ?? getMainLoopModel(),
         mcpClients: getAppState().mcp.clients,
+        dynamicMcpConfig: computeDynamicMcpConfig(),
         storageV5: options.storageV5,
         credentials: options.credentials,
       });
       if (reload === "held") return reload;
       startupReleased = true;
-      buildAllTools(getAppState().agentDefinitions.allAgents);
+      replaceCommandsFromFlags(getAppState().agentDefinitions.allAgents);
       let [pluginLoad, skillsLoad] = await Promise.allSettled([
         refreshCurrentCommands(),
         applyPluginServers(connectedNonDynamicServers(), "reload_plugins"),
@@ -8959,13 +9329,13 @@ function _runHeadlessStreamingForTesting(
   let refreshAgents = () =>
     Promise.resolve()
       .then(() => getAgentDefinitionsWithOverrides(getOriginalCwd(), options.storageV5))
-      .then((result) => buildAllTools(result.allAgents))
+      .then((result) => replaceCommandsFromFlags(result.allAgents))
       .catch((error) => {
         onRefreshError(error);
         agents = withLiveRegisteredAgents(agents);
       });
   let unsubscribeSkillChange = sharedSkillChangeDetector.subscribe(() => {
-    refreshCommands();
+    reloadCommandsNow();
     refreshAgents();
   });
   let managedDirPrefix = "";
@@ -8992,7 +9362,7 @@ function _runHeadlessStreamingForTesting(
     agents = agents.filter((agent) => !isManagedAgent(agent.source, agent.baseDir));
   };
   let readSkillState = () => {
-    let initialSettings = getInitialSettings_2();
+    let initialSettings = getInitialSettings();
     return {
       skillOverrides: jsonStringify(initialSettings.skillOverrides ?? {}),
       bundledSkillsDisabled: isBundledSkillsDisabled(initialSettings),
@@ -9012,13 +9382,13 @@ function _runHeadlessStreamingForTesting(
     if (managedHoldChanged) {
       refreshFailed = false;
       notifyAgentsChanged();
-      refreshCommands();
+      reloadCommandsNow();
       refreshAgents();
       queueDeferred();
       return;
     }
     if (bundledChanged) {
-      refreshCommands();
+      reloadCommandsNow();
       return;
     }
     (sdkSyncPending ?? Promise.resolve()).then(queueDeferred).catch(logError);
@@ -9074,7 +9444,7 @@ function _runHeadlessStreamingForTesting(
       }),
     });
   });
-  let uiLogSinkUnsubscribe =
+  let paneUiLogSink =
     options.outputFormat === "stream-json"
       ? setUiLogSink((sink) => {
           rewire({
@@ -9104,6 +9474,7 @@ function _runHeadlessStreamingForTesting(
     givePluginUiTo: ensureClientConnected,
     paneRosterPushes: () => renderInstance,
     tellPaneRoster: attachRenderer,
+    tellBackdrop: () => burstBackdropRedraw(backdropState, false),
     isPanelAttachOwed: () => panelAttachOwed,
     redactsPersistedLane: () => isTransportBacked(session),
   };
@@ -9117,11 +9488,15 @@ function _runHeadlessStreamingForTesting(
       });
   }
   let unsubscribePlaced = subscribePlaced(notifyPlacedRows);
-  let unsubscribePanes = subscribeOpenPanes((panes) => {
+  let backdropState = {
+    hasEverStood: false,
+  };
+  let showBackdrop = subscribeBackdrop(() => burstBackdropRedraw(backdropState, true));
+  let onOpenPanes = subscribeOpenPanes((panes) => {
     dropClosedPanes(panes);
     onPlacedRow(panes);
   });
-  let resolved_5 = Promise.resolve();
+  let resolved_6 = Promise.resolve();
   structuredIO.setSurfaceRoster({
     list: () => clientRegistry.list().map((client) => client.clientId),
     refuse: (clients) => {
@@ -9181,7 +9556,7 @@ function _runHeadlessStreamingForTesting(
         else if (!detaching) logFeatureSad("plugin_function_hooks_viewer_absence", "review_failed");
         else logFeatureOk("plugin_function_hooks_viewer_absence");
       });
-      resolved_5 = resolved_5.then(() => done);
+      resolved_6 = resolved_6.then(() => done);
     },
   );
   let unsubscribeRefreshLog = onVsCodeRefreshLogChange(
@@ -9196,7 +9571,7 @@ function _runHeadlessStreamingForTesting(
       );
       for (let client of clients) surfaceDeclarationTracker.forget(client.clientId);
       let currentAppState = detachAllClients_2();
-      resolved_5 = resolved_5.then(async () => {
+      resolved_6 = resolved_6.then(async () => {
         await currentAppState;
       });
       uiStatusSent = true;
@@ -9209,7 +9584,7 @@ function _runHeadlessStreamingForTesting(
       pruneDetachedClients();
     },
   );
-  let unsubscribeScroll = paneSignals.scroll.subscribe((event) => {
+  let unsubscribeSurfaceScroll = paneSignals.scroll.subscribe((event) => {
     if (!noteSurfaceChange()) return;
     enqueueTaskNotification({
       type: "system",
@@ -9223,7 +9598,7 @@ function _runHeadlessStreamingForTesting(
       }),
     });
   });
-  let unsubscribeFocus = paneSignals.focus.subscribe((event) => {
+  let unsubscribeSurfaceFocus = paneSignals.focus.subscribe((event) => {
     if (!noteSurfaceChange()) return;
     enqueueTaskNotification({
       type: "system",
@@ -9303,17 +9678,8 @@ function _runHeadlessStreamingForTesting(
     runState.dequeueCount === 0 && !any && !messages.some((row) => row.type === "assistant");
   let isLaunchModelPick = () => getSpareClaimState() !== "none" && canEndImmediately();
   let costStatePusher = new CostStatePusher(structuredIO);
-  let memoryExtractPlace;
-  lazyPrintModules2.onMemoryExtractPlace(session.host, (extracted) => {
-    memoryExtractPlace = extracted;
-  });
   let waitForTurnEnd = () => {
-    costStatePusher.pushIfChanged(
-      memoryExtractPlace && {
-        memory_extract_place: memoryExtractPlace,
-      },
-    );
-    memoryExtractPlace = undefined;
+    costStatePusher.pushIfChanged(extractPlacePusher.takeForTurnEnd());
   };
   let idleAtTurnEndAllowed = () => {
     if (parkedPermissions.inheritedPromptOwnsWorkerStatus()) return false;
@@ -9404,7 +9770,7 @@ function _runHeadlessStreamingForTesting(
       if (exitReason === "deadline") {
         let state = getAppState();
         logForDebugging(
-          `[print.ts] Team teardown park gave up after ${teamTeardownParkTimeoutMs()}ms (shutdown prompt injected: ${teamTeardownGaveUp}) with ${Object.keys(state.teamContext?.teammates ?? {}).length} roster teammate(s) and ${count(Object.values(state.tasks), (task) => task.type === "in_process_teammate" && task.status === "running")} in-process teammate task(s) still active; tearing down anyway`,
+          `[print.ts] Team teardown park gave up after ${teamTeardownParkTimeoutMs()}ms (shutdown prompt injected: ${teamTeardownGaveUp}) with ${Object.keys(state.teamContext?.teammates ?? {}).length} roster teammate(s) and ${countWhere(Object.values(state.tasks), (task) => task.type === "in_process_teammate" && task.status === "running")} in-process teammate task(s) still active; tearing down anyway`,
         );
         logEvent("tengu_headless_team_teardown_park_timeout", {
           prompt_injected: teamTeardownGaveUp,
@@ -9433,10 +9799,10 @@ function _runHeadlessStreamingForTesting(
     runTeardownSteps("session_ended");
     if (pendingRateLimits.size > 0) {
       sessionEndDeadline =
-        performance.now() + LOGIN_VERIFY_TIMEOUT_MS - LOGIN_RESTORE_TIMEOUT_MS - LOGIN_SETTLE_TIMEOUT_MS;
+        performance.now() + LOGIN_REVOKE_TIMEOUT_MS - LOGIN_RESTORE_TIMEOUT_MS - PRINT_TURN_POLL_MS;
       await withTimeout(
         Promise.allSettled(pendingRateLimits),
-        LOGIN_VERIFY_TIMEOUT_MS,
+        LOGIN_REVOKE_TIMEOUT_MS,
         "reads still pending at teardown",
       ).catch(() => {});
     }
@@ -9456,17 +9822,18 @@ function _runHeadlessStreamingForTesting(
     bridgeTurnKeepAwake();
     teardownPath();
     await withTimeout(
-      Promise.all([resolved_5, detachAllClients()]),
+      Promise.all([resolved_6, detachAllClients()]),
       30000,
       "session.detach hooks still running at teardown",
     ).catch(() => {});
     unsubscribeInvalidate();
     unsubscribeRefreshLog();
-    unsubscribePanes();
+    onOpenPanes();
     unsubscribePlaced();
-    unsubscribeScroll();
-    unsubscribeFocus();
-    uiLogSinkUnsubscribe();
+    showBackdrop();
+    unsubscribeSurfaceScroll();
+    unsubscribeSurfaceFocus();
+    paneUiLogSink();
     authStatusSubscription?.();
     rateLimitFrameRelay();
     usageLimitHeartbeat();
@@ -9475,7 +9842,7 @@ function _runHeadlessStreamingForTesting(
     if (pendingReloadSlot.get() === pluginDirHooks) pendingReloadSlot.set(undefined);
     clearForkCacheSafeParams();
     releaseRequester();
-    syntheticOutputResult();
+    unsubscribeFastMode();
     unsubscribeFallbackModels();
     unsubscribeFocusMode();
     bridgeSdkController.dispose();
@@ -9588,7 +9955,7 @@ function _runHeadlessStreamingForTesting(
     },
     stopping: () => isShuttingDown() || isTerminalShutdown(),
     messages: () => conversationRows,
-    pendingMcpServerCount: () => count(getAppState().mcp.clients, (client) => client.type === "pending"),
+    pendingMcpServerCount: () => countWhere(getAppState().mcp.clients, (client) => client.type === "pending"),
     engine: () => {
       liveAppender ??= QueryEngine(askCall(queryContext()));
       liveAppender.setModel(userSpecifiedModel);
@@ -9602,7 +9969,8 @@ function _runHeadlessStreamingForTesting(
       errorRowByUuid.delete(uuid);
       return row;
     },
-    inTurnScope: ({ command, input }, inTurnScopeOptions) => {
+    inTurnScope: ({ command, members, input }, inTurnScopeOptions) => {
+      hasForeignOrigin(members);
       let turnText =
         typeof input === "string"
           ? input
@@ -9614,8 +9982,8 @@ function _runHeadlessStreamingForTesting(
       let buildFrame = (commandResult) =>
         runWithContextKey(messageTurnAttributionKey(command), () =>
           command.ccrTurnIdEndsWithTurn
-            ? runWithDroppableTurnId(command.ccrTurnId, commandResult)
-            : runWithCcrTurnId(command.ccrTurnId, commandResult),
+            ? runWithTurnIdReport(command.ccrTurnId, commandResult, command.ccrProgramUseCaseId)
+            : runWithTurnId(command.ccrTurnId, commandResult, command.ccrProgramUseCaseId),
         );
       let traceFields =
         command.traceContext || command.linkedTraceContexts?.length
@@ -9673,13 +10041,20 @@ function _runHeadlessStreamingForTesting(
     plainDeltasNeedOnlyEmit: env.CLAUDE_CODE_PLAIN_DELTA_FAST_PATH
       ? () => bridgeHandle === null && !hasQueuedTaskNotification(() => true)
       : undefined,
+    writePlainDeltaNow:
+      env.CLAUDE_CODE_PLAIN_DELTA_FAST_PATH &&
+      env.CLAUDE_CODE_PLAIN_DELTA_DIRECT_WRITE &&
+      options.outputFormat === "stream-json" &&
+      options.verbose
+        ? (delta) => output.readerIsWaiting && structuredIO.writePlainDeltaNow(delta)
+        : undefined,
     onResult: (id, error) => {
       oneShotLimits.turnEnded(id);
       return suggestionEmitter.route(id, error);
     },
     afterTurnFinally: () => {
       if (
-        messageQueue.peek(isActiveMainAgentCommand) === undefined &&
+        messageQueue.peek(isDrainableMainThreadCommand) === undefined &&
         !userFrameIntake.hasParked() &&
         !structuredIO.hasUnconsumedInput
       )
@@ -9798,6 +10173,7 @@ function _runHeadlessStreamingForTesting(
           io: structuredIO,
           store,
           toolState,
+          currentTools: refreshBridgeToolList,
           detachedToolCalls: detachedCallSlots.of(session),
           pendingNotificationWaits: notificationWaits,
           ccrRecap: session.ccrRecap,
@@ -9861,7 +10237,10 @@ function _runHeadlessStreamingForTesting(
           },
         };
       },
-      loopTop: () => turnStartChecks.loopTop(),
+      loopTop: () => {
+        recheckPluginCopies();
+        return turnStartChecks.loopTop();
+      },
       setAsideHeldInput: () => panelModHold.setAside(),
       holdsEvalSettles: () => turnLoop?.holdsEvalSettles() ?? false,
       onLoopTopWork: () => {
@@ -9992,7 +10371,7 @@ function _runHeadlessStreamingForTesting(
                 anchor: conversationRows.at(-1),
               };
         if (runState.intentBatchInFlight) options.homeSeed?.record.markFirstCommandDequeued();
-        intentBatchInFlight = members.some(canBatchWith);
+        intentBatchInFlight = members.some(isQueuedUserTurnCommand);
         try {
           if (
             runState.intentBatchInFlight &&
@@ -10398,7 +10777,8 @@ function _runHeadlessStreamingForTesting(
   let sendControlErrorWithMeta = function (request, message, error, meta = {}, detail) {
     sendControlError(
       request,
-      controlHandlerError(isTransportBacked(session), message, error, meta).error,
+      controlHandlerError(SDKControlReloadPluginsRequestSchema(controlContext, message), message, error, meta)
+        .error,
       detail,
     );
   };
@@ -10649,6 +11029,30 @@ function _runHeadlessStreamingForTesting(
   let oauthManualCallbackUsed = new Map();
   let oauthAuthPromises = new Map();
   let claudeOAuth = null;
+  let buildCacheSafeParams = () =>
+    buildSideQuestionFallbackParams({
+      session,
+      messageQueue,
+      tools: buildBridgeToolsUpdate(getAppState()),
+      toolCatalog: TOOL_CATALOG,
+      commands: otherCommands(),
+      mcpClients: [...getAppState().mcp.clients, ...clients_3, ...dynamicMcpState.clients],
+      messages: conversationRows,
+      turnInProgress: runState.running,
+      readFileState,
+      toolState,
+      sessionHooks,
+      getAppState,
+      setAppState,
+      customSystemPrompt: switchToPromptTools(),
+      appendSystemPrompt: options.appendSystemPrompt,
+      excludeDynamicSections: options.excludeDynamicSections,
+      thinkingConfig: hasEffort.current(),
+      agents: getActiveAgentsFromList(agents),
+      runQuery: query,
+      storageV5: options.storageV5,
+      credentials: options.credentials,
+    });
   (async () => {
     if (sdkSyncPending) await sdkSyncPending;
     parkedPermissions.arm();
@@ -10660,7 +11064,7 @@ function _runHeadlessStreamingForTesting(
     let startupPhase = false;
     let startupPhaseDone = () =>
       runState.running ||
-      messageQueue.peek(isActiveMainAgentCommand) !== undefined ||
+      messageQueue.peek(isDrainableMainThreadCommand) !== undefined ||
       userFrameIntake.hasParked() ||
       structuredIO.hasUnconsumedInput ||
       heldInputReader.hasSetAside();
@@ -10679,7 +11083,12 @@ function _runHeadlessStreamingForTesting(
     recordPhase("input_ready_ms", startTime_2, 0);
     recordInputReadyFromSpawn();
     let inputLatency = new InputLatencyLedger(startTime_2);
-    if (pluginsSyncPromise && !agentsSettled && isIdlePluginRefreshEnabled()) {
+    let unknownResponseHold = new BesideLoopRequestQueue({
+      drain: runState,
+      onEscapedFailure: onCrashPayload,
+    });
+    structuredIO.setUnknownResponseHold(() => unknownResponseHold.whenIdle());
+    if (pluginsSyncPromise && !agentsSettled && loadAllPluginsCacheOnly_2()) {
       let syncPromise = pluginsSyncPromise;
       idleRefreshRan = true;
       lastSyncedPromise = syncPromise;
@@ -10700,23 +11109,39 @@ function _runHeadlessStreamingForTesting(
       });
     }
     let jitPolicy = setJitPolicyAfterStartup();
-    logForDiagnosticsNoPII("info", "cli_message_loop_started", () => ({
-      ...(jitPolicy !== 1 && {
-        jit_policy: jitPolicy,
-      }),
-      cc_version: {
-        ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-        PACKAGE_URL: "@anthropic-ai/claude-code",
-        README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
-        FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-        HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-        DD_SOURCEMAP_GROUP: "default",
-      }.VERSION,
-      ...bytecodeOrderStats(),
-    }));
+    logForDiagnosticsNoPII("info", "cli_message_loop_started", () => {
+      let jitPolicyMode = collectTrialEnvKeys();
+      return {
+        ...(jitPolicy !== 1 && {
+          jit_policy: jitPolicy,
+        }),
+        cc_version: {
+          ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+          PACKAGE_URL: "@anthropic-ai/claude-code",
+          README_URL: "https://code.claude.com/docs/en/overview",
+          VERSION: "2.1.318",
+          FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
+          HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+          DD_SOURCEMAP_GROUP: "default",
+        }.VERSION,
+        handoff_trial_keys: jitPolicyMode,
+        handoff_trial_key_count: jitPolicyMode.length,
+        compiled_ahead_of_time: false,
+        ...bytecodeOrderStats(),
+      };
+    });
+    scheduleResumeCacheWarm({
+      messages: conversationRows,
+      interruptedTurnRescueArmed: parkedPermissions.enqueuedInterruptedTurnRescueArmed(),
+      buildCacheSafeParams,
+      systemPromptSnapshot: () => options.systemPromptSnapshot,
+      awaitSdkMcpSettled: () => (options.sdkUrl ? serializedRedialAll("skip") : serializedRedialAll()),
+      isSessionInitialized: () => startupPhase,
+      isSessionEnded: () => runState.endSessionRequested || runState.inputClosed,
+      maxBudgetUsd: options.maxBudgetUsd,
+    });
     headlessProfilerCheckpoint("stdin_listen_started");
     expectStartupHandshake(session.host);
     if (
@@ -10780,7 +11205,8 @@ function _runHeadlessStreamingForTesting(
         if (cancelled.send_now === "stopped")
           logQueuedInterruptDecision({
             queued: messageQueue.getCommandQueueSnapshot(),
-            turnUnderWay: runState.turnUnderWay,
+            drain: runState,
+            sessionState: structuredIO.sessionState,
             lateBind: false,
             cancelQueued: false,
             sendNow: true,
@@ -10793,8 +11219,9 @@ function _runHeadlessStreamingForTesting(
       }
       let cancelQueuedTarget = parseCancelQueuedTarget(request_2);
       let lateBind = isLateBindInterruptRequestId(request.request_id);
-      let ownedByWorker = !lateBind && request_2.worker_epoch === undefined;
+      let ownedByWorker = !isInterruptOwnedInline(request.request_id, request_2);
       if (ownedByWorker) {
+        setAppState(withClearedCardAllows);
         bangRunner.interrupt(cancelQueuedTarget);
         runTeardownSteps(
           "cleared_on_cancel",
@@ -10814,6 +11241,7 @@ function _runHeadlessStreamingForTesting(
           messageQueue,
           drain: runState,
           prewaitLatch,
+          frameIntake: userFrameIntake,
           waitingCopies: redeliveryResolver,
           io: structuredIO,
         });
@@ -10838,7 +11266,10 @@ function _runHeadlessStreamingForTesting(
         messageQueue,
         io: structuredIO,
       });
-      if (ownedByWorker) wakeRouter.notePersonsStop();
+      if (ownedByWorker) {
+        wakeRouter.notePersonsStop();
+        recordedAgentRun.notePersonsStop();
+      }
       let spareContext = spareTasksForStop();
       let reactSubscriptions = killAutoReactSubscriptions(spareContext.taskRegistry, {
         durable: false,
@@ -10849,7 +11280,8 @@ function _runHeadlessStreamingForTesting(
       handleControlRequest();
       logQueuedInterruptDecision({
         queued: messageQueue.getCommandQueueSnapshot(),
-        turnUnderWay: runState.turnUnderWay,
+        drain: runState,
+        sessionState: structuredIO.sessionState,
         lateBind: isLateBindInterruptRequestId(request.request_id),
         cancelQueued: request_2.cancel_queued === true,
         sendNow: false,
@@ -10867,6 +11299,7 @@ function _runHeadlessStreamingForTesting(
             messageQueue,
             drain: runState,
             prewaitLatch,
+            frameIntake: userFrameIntake,
             waitingCopies: redeliveryResolver,
             io: structuredIO,
           }),
@@ -10877,6 +11310,7 @@ function _runHeadlessStreamingForTesting(
           lateBind,
         }),
       );
+      retractPendingTitleIfCancelled(initialWrite, [...(receipt.cancelled ?? []), ...runSafelyWrapped]);
       sendControlResponseSuccess(
         request,
         runSafelyWrapped.length === 0
@@ -10915,6 +11349,17 @@ function _runHeadlessStreamingForTesting(
                 : undefined
           : undefined,
       personStopped: () => toolState.get(HostReturnWakeTracker).stopped(),
+      handedOffTurnStopped: ({ messages }) => {
+        let aim = cancelTargetForUuid(messages[0]?.uuid);
+        if (
+          !isCancelAimedAtParkedBatch({
+            drain: runState,
+            prewaitLatch,
+            aim,
+          })
+        )
+          recordedAgentRun.notePersonsStop();
+      },
       personWrote: () => session.userPresence.notePersonWrote(),
       stopUnabortedWork: () => {
         handleControlRequest();
@@ -10942,14 +11387,26 @@ function _runHeadlessStreamingForTesting(
     let stranded = {
       probes: 0,
     };
+    syncReadSkills();
     let runTurn = async (request, turnRequest) => {
       let { readFileForRemote } = await import("../services/remoteTools/remoteFileRead.js");
       return readFileForRemote(request.path, request.max_bytes, () => getAppState().toolPermissionContext, {
         encoding: request.encoding,
         anchor: request.anchor,
         telemetrySource: "headless_stream",
+        syncedSkillsFolder: () =>
+          sessionWriterSpelling(
+            session,
+            getAppState().toolPermissionContext,
+            structuredIO.sessionWriters(),
+            true,
+          ),
         asWrittenSources: turnRequest && {
-          heldFiles: () => readFilesFromMessages.everHeldPaths(),
+          heldFiles: () => readFileState.everHeldPaths(),
+          search: {
+            isOn: isAsWrittenSearchEnabled,
+            limitMs: LOGIN_SETTLE_TIMEOUT_MS,
+          },
           timeLimitMs: LOGIN_RESTORE_TIMEOUT_MS,
           stranded,
           whyNotServed: () => readFileAsWrittenUnservedReason(session),
@@ -10957,7 +11414,7 @@ function _runHeadlessStreamingForTesting(
             let startTime = performance.now();
             return startTime >= sessionEndDeadline
               ? "session_ending"
-              : startTime - turnRequest.askedAt >= LOGIN_REVOKE_TIMEOUT_MS
+              : startTime - turnRequest.askedAt >= MCP_CALL_RESULT_LIMITS
                 ? "waited_too_long"
                 : undefined;
           },
@@ -10974,6 +11431,13 @@ function _runHeadlessStreamingForTesting(
         hasSignIn: isClaudeAIOAuthTokenHostInjected,
       });
     for await (let message of heldInputReader) {
+      let controlRequest = unknownResponseHold.waitBefore(message);
+      if (controlRequest !== undefined) {
+        let startTime = performance.now();
+        await controlRequest;
+        inputLatency.note("control", startTime, performance.now());
+      }
+      recordEarlierToolsUnknown(message);
       if (startupPhase && !startupWorkReleased && message.type !== "user" && !startupPhaseDone())
         releaseStartupWorkOnce();
       if (isTerminalShutdown() && message.type !== "control_response") continue;
@@ -11007,9 +11471,14 @@ function _runHeadlessStreamingForTesting(
         runState.turnStartClock.controlRequestStarted(startTime);
         let deadlineMs;
         let timedOut = false;
+        let readSwitchAtReconnect;
+        let markControlCompleted = () => {
+          if (uuid) structuredIO.onCommandLifecycle?.(uuid, "completed");
+        };
         let handleControlRequestAsync = (request) => {
           detached = true;
-          if (uuid) structuredIO.onCommandLifecycle?.(uuid, "started");
+          if (uuid && message.request.subtype !== "stage_file")
+            structuredIO.onCommandLifecycle?.(uuid, "started");
           Promise.resolve()
             .then(request)
             .finally(() => {
@@ -11050,16 +11519,27 @@ function _runHeadlessStreamingForTesting(
               });
             } else {
               let replied = false;
-              let replyNow = (reply) => {
+              let replyOnce = (reply) => {
                 if (replied) return;
                 replied = true;
                 dispatchWithChecks(reply);
               };
-              let result = dispatchControlRequest(request, {
-                ...controlContext,
-                replyNow,
-              });
-              replyNow(result instanceof Promise ? await result : result);
+              let runDetachedControl = () =>
+                dispatchControlRequest(request, {
+                  ...controlContext,
+                  replyNow: replyOnce,
+                });
+              if (request.subtype === "mcp_reconnect" && unknownResponseHold.takesNext())
+                detached = unknownResponseHold.run(() => {
+                  let reply = runDetachedControl();
+                  return reply instanceof Promise ? reply.then(replyOnce) : replyOnce(reply);
+                }, markControlCompleted);
+              else {
+                if (request.subtype === "mcp_reconnect")
+                  readSwitchAtReconnect = BesideLoopRequestQueue.readSwitch();
+                let maybePromise = runDetachedControl();
+                replyOnce(maybePromise instanceof Promise ? await maybePromise : maybePromise);
+              }
             }
           } else if (message.request.subtype === "interrupt") handleInterrupt(message, message.request);
           else if (message.request.subtype === "end_session") {
@@ -11317,7 +11797,7 @@ function _runHeadlessStreamingForTesting(
                 sdkServerConfigs,
                 () =>
                   waitBeforeInitializeReply({
-                    rescan: () => refreshPromise,
+                    rescan: () => refreshCommandsThrottled.inFlight() ?? refreshPromise,
                     isReaderOwed: () =>
                       isShuttingDown() || isTerminalShutdown() || structuredIO.hasPendingRequests(),
                     lookAgainOn: [
@@ -11362,7 +11842,7 @@ function _runHeadlessStreamingForTesting(
             handlePrompt();
             if (startupPhaseDone && isDesktopTopSession() && !isParkedSpare())
               announcePrStarted(session.host);
-            if (messageQueue.peek(isActiveMainAgentCommand) !== undefined) kickQueue();
+            if (messageQueue.peek(isDrainableMainThreadCommand) !== undefined) kickQueue();
           } else if (message.request.subtype === "set_permission_mode") {
             let request = message.request;
             if (request.from_settings === true && isByocEnvironment()) {
@@ -11428,7 +11908,12 @@ function _runHeadlessStreamingForTesting(
             let vouchedPick = takeVouchedModelRequest(message.request_id);
             let runSetModel = async () => {
               try {
-                let result = await handleSetModelRequest(request, modelControl);
+                let result = await handleSetModelRequest(
+                  request,
+                  vouchedPick
+                    ? withAutoModeCapableDropGuard(modelControl, () => getAppState().toolPermissionContext)
+                    : modelControl,
+                );
                 if (result.ok) {
                   await settleAutoModeAtModelSwitch(vouchedPick);
                   for (let notice of result.notices ?? []) announceInfo(notice);
@@ -11708,12 +12193,17 @@ function _runHeadlessStreamingForTesting(
                 startSessionStartHooks: () => {
                   setAwaitsFirstRun(false);
                   let startTime = performance.now();
+                  let hookRunToken = {};
+                  sessionStartPending = hookRunToken;
                   let hooksPromise = runStartupHooks(session, {
                     kind: "session-start",
                     source: "startup",
                     storageV5: options.storageV5,
                     credentials: options.credentials,
                   })
+                    .finally(() => {
+                      if (sessionStartPending === hookRunToken) sessionStartPending = undefined;
+                    })
                     .then(
                       (hookMessages) => {
                         appendToConversation(hookMessages);
@@ -11769,9 +12259,9 @@ function _runHeadlessStreamingForTesting(
                       for (let { text, sentBy } of keptRows) structuredIO.prependUserMessage(text, sentBy);
                       let winner = await Promise.race([
                         promise,
-                        sleep(PRINT_TURN_TIMEOUT_MS, undefined, {
+                        sleep(CLAIM_SESSION_QUEUE_DELAY_MS, undefined, {
                           unref: true,
-                        }).then(() => `not queued after ${PRINT_TURN_TIMEOUT_MS}ms`),
+                        }).then(() => `not queued after ${CLAIM_SESSION_QUEUE_DELAY_MS}ms`),
                       ]);
                       enqueueResult = undefined;
                       if (winner !== undefined)
@@ -12376,6 +12866,7 @@ function _runHeadlessStreamingForTesting(
                 refuse(prepareCheck.refuse);
                 continue;
               }
+              retractPendingTitle(initialWrite);
               spareTasksForStop();
               handleControlRequest({
                 retireParkedPermission: !parkedPermissions.inheritedPromptHoldCapable(),
@@ -12441,6 +12932,7 @@ function _runHeadlessStreamingForTesting(
                 };
                 let prefix = queueStamp(persistOptions);
                 nudgeHold.renew();
+                retractPendingTitle(initialWrite);
                 if (!(await persistRewindCut(pending.cut, persistOptions, mirrorOptions))) {
                   reportRewindRefusal(pending, "persist_failed");
                   refuse("persist_failed");
@@ -12455,7 +12947,7 @@ function _runHeadlessStreamingForTesting(
                   let restoreOptions = {
                     messages: conversationRows,
                     appendToConversation,
-                    readFileState: readFilesFromMessages,
+                    readFileState,
                     memorySelector,
                     host: session.host,
                     toolAliases: options.toolAliases,
@@ -12703,9 +13195,11 @@ function _runHeadlessStreamingForTesting(
             if (!parsed.success) {
               sendControlError(
                 message,
-                `ui_attach: surface must be "desktop", "mobile" or "vscode", client_id 1-64 of letters, digits, . _ - (the colon is the engine's), viewport (when given) positive integer columns and rows with isFullscreen (when given) a boolean, and answers (when given) a list of ${UiClientAnswerableRequestSchema()
+                `ui_attach: surface must be "desktop", "mobile" or "vscode", client_id 1-64 of letters, digits, . _ - (the colon is the engine's), viewport (when given) positive integer columns and rows with isFullscreen (when given) a boolean, answers (when given) a list of ${UiClientAnswerableRequestSchema()
                   .options.map((prev) => `"${prev}"`)
-                  .join(", ")}`,
+                  .join(
+                    ", ",
+                  )}, and draws (when given) a list of at most 16 names of at most 64 characters ("Backdrop", "Input" and "Select" are the ones known; another is ignored)`,
               );
               continue;
             }
@@ -12723,6 +13217,7 @@ function _runHeadlessStreamingForTesting(
                     }),
                   },
                   answers: attachMessage.answers,
+                  draws: normalizeDraws(attachMessage.draws),
                   declares: true,
                   by: attachRequest,
                 });
@@ -12740,6 +13235,9 @@ function _runHeadlessStreamingForTesting(
                   ensureClientConnected(joined.isFirstClient);
                   notifyPlacedRows();
                 }
+                if (joined.hasNewField) requestRender();
+                if (!joined.wasOnRoster && hasBackdropSurface(attachMessage.surface))
+                  burstBackdropRedraw(backdropState, false);
                 panelModHold.noteShown();
                 if (
                   fullscreenClients().some((client) => client.clientId === attachMessage.client_id) &&
@@ -13377,10 +13875,7 @@ function _runHeadlessStreamingForTesting(
                     : stageWaitTimeoutFor(request.mount_path, readFailure.permanent);
                   hasContent = !readFailure.ok && (classifyStageWriteError(readFailure.error) ?? true);
                   if (readFailure.ok && readFailure.outputPath !== undefined) {
-                    let outcome = await recordStagedOutputAsRead(
-                      readFilesFromMessages,
-                      readFailure.outputPath,
-                    );
+                    let outcome = await recordStagedOutputAsRead(readFileState, readFailure.outputPath);
                     logForDiagnosticsNoPII("info", "stage_file_output_read_state", {
                       outcome,
                     });
@@ -13531,42 +14026,60 @@ function _runHeadlessStreamingForTesting(
             }
             let startMs = performance.now();
             let mainThreadRequested = session.requestJournal.mainThreadRequestedInProcess();
-            let appliedSet = await applySdkServerSet(
-              filterObject(message.request.servers, (key, value) => !isPrototypeKey(value)),
-              {
-                authoritative: true,
-                caller: "mcp_set_servers",
-                dialOptions: {
-                  toolsListAhead: true,
+            let { servers: servers_2 } = message.request;
+            let switchAtRequest = unknownResponseHold.takesNext();
+            let setServersFromRequest = () =>
+              applySdkServerSet(
+                filterObject(servers_2, (key, value) => !isPrototypeKey(value)),
+                {
+                  authoritative: true,
+                  caller: "mcp_set_servers",
+                  dialOptions: {
+                    toolsListAhead: true,
+                  },
                 },
-              },
-            );
-            let { sdkServersChanged } = appliedSet;
-            let installOptions = {
-              ...appliedSet.response,
-              errors: {
-                ...Object.fromEntries(
-                  Object.keys(message.request.servers)
-                    .filter(isPrototypeKey)
-                    .map((key) => [key, reservedServerNameMessage(key)]),
-                ),
-                ...appliedSet.response.errors,
-              },
+              );
+            let response = (appliedSet) => {
+              let { sdkServersChanged } = appliedSet;
+              let installOptions = {
+                ...appliedSet.response,
+                errors: {
+                  ...Object.fromEntries(
+                    Object.keys(servers_2)
+                      .filter(isPrototypeKey)
+                      .map((key) => [key, reservedServerNameMessage(key)]),
+                  ),
+                  ...appliedSet.response.errors,
+                },
+              };
+              let shouldSanitize = mayPersistOnHost(session);
+              if (shouldSanitize && Object.keys(installOptions.errors).length > 0)
+                logForDebugging(`mcp_set_servers errors: ${jsonStringify(installOptions.errors)}`, {
+                  level: "error",
+                });
+              sendControlResponseSuccess(message, {
+                ...installOptions,
+                errors: sanitizeMcpStatusMap(shouldSanitize, installOptions.errors),
+              });
+              recordInlineMcpSetServers(initJsonSchema, {
+                startMs,
+                answeredMs: performance.now(),
+                heldLoop: !switchAtRequest,
+                mainThreadRequested,
+                relayMarked,
+                response: installOptions,
+              });
+              if (sdkServersChanged) serializedRedialAll();
             };
-            if (Object.keys(installOptions.errors).length > 0)
-              controlError("mcp_set_servers", jsonStringify(installOptions.errors));
-            sendControlResponseSuccess(message, {
-              ...installOptions,
-              errors: sanitizeMcpStatusMap(isTransportBacked(session), installOptions.errors),
-            });
-            recordInlineMcpSetServers(inlineMcpTiming, {
-              startMs,
-              answeredMs: performance.now(),
-              mainThreadRequested,
-              relayMarked,
-              response: installOptions,
-            });
-            if (sdkServersChanged) serializedRedialAll();
+            if (switchAtRequest)
+              detached = unknownResponseHold.run(
+                () => setServersFromRequest().then(response),
+                markControlCompleted,
+              );
+            else {
+              readSwitchAtReconnect = BesideLoopRequestQueue.readSwitch();
+              response(await setServersFromRequest());
+            }
           } else if (message.request.subtype === "reload_plugins") {
             let reloadResult;
             try {
@@ -13626,6 +14139,7 @@ function _runHeadlessStreamingForTesting(
                 let impact = await computePluginReloadImpact({
                   model: activeModel() ?? getMainLoopModel(),
                   mcpClients: getAppState().mcp.clients,
+                  dynamicMcpConfig: computeDynamicMcpConfig(),
                   storageV5: options.storageV5,
                   credentials: options.credentials,
                 });
@@ -13650,10 +14164,7 @@ function _runHeadlessStreamingForTesting(
                     commands: toSlashCommands(otherCommands()),
                     agents: readAgents(),
                     plugins: emptyIfTransport(session, inFlight.enabled.map(toPluginInitInfo)),
-                    mcpServers: statusesForTransport(
-                      session,
-                      describeMcpServerForStatus(controlContext.mcpConnections()),
-                    ),
+                    mcpServers: describeMcpServersForStatus(controlContext),
                     error_count: inFlight.errors.length,
                     held: true,
                     cache_impact: {
@@ -13678,7 +14189,7 @@ function _runHeadlessStreamingForTesting(
                 reloadResult = undefined;
                 logFeatureOk("sdk_reload_add_plugins");
               }
-              buildAllTools(refreshedPlugins.agentDefinitions.allAgents);
+              replaceCommandsFromFlags(refreshedPlugins.agentDefinitions.allAgents);
               let plugins = [];
               let [agentsResult, commandsResult, skillsResult] = await Promise.allSettled([
                 getCommands(cwd(), options.storageV5),
@@ -13708,10 +14219,7 @@ function _runHeadlessStreamingForTesting(
                 commands: toSlashCommands(otherCommands()),
                 agents: readAgents(),
                 plugins,
-                mcpServers: statusesForTransport(
-                  session,
-                  describeMcpServerForStatus(controlContext.mcpConnections()),
-                ),
+                mcpServers: describeMcpServersForStatus(controlContext),
                 error_count: refreshedPlugins.error_count,
                 ...(refreshed !== undefined && {
                   held: refreshed,
@@ -13831,7 +14339,7 @@ function _runHeadlessStreamingForTesting(
                   }
                   let tool_2 =
                     [...getAppState().mcp.tools, ...dynamicMcpState.tools].find((resolve) =>
-                      toolMatchesName(resolve, tool),
+                      matchesToolName(resolve, tool),
                     )?.mcpInfo?.toolName ?? toolName;
                   if (callContext) {
                     let { runStagedMcpCall } = await import("../services/ccrMcp/stagedMcpCall.js");
@@ -14086,7 +14594,7 @@ function _runHeadlessStreamingForTesting(
               messageQueue,
             );
           } else if (message.request.subtype === "mcp_authenticate") {
-            let { serverName, redirectUri, liveReply } = message.request;
+            let { serverName, redirectUri, redirectUriOnly, liveReply } = message.request;
             let config =
               reconnectConfigFor(serverName) ??
               clients_3.find((client) => client.name === serverName)?.config ??
@@ -14163,6 +14671,7 @@ function _runHeadlessStreamingForTesting(
                       {
                         skipBrowserOpen: true,
                         redirectUri,
+                        redirectUriOnly,
                         onWaitingForCallback: (url, accounts, lastError) => {
                           callbackPort = accounts;
                           state = lastError;
@@ -14184,8 +14693,10 @@ function _runHeadlessStreamingForTesting(
                   };
                   let epoch = identityEpoch();
                   let autoWait =
-                    Boolean(authTarget.config.oauth?.clientId) ||
-                    (Boolean(redirectUri) && (await shouldSkipCustomRedirect(serverName, authTarget.config)));
+                    !redirectUriOnly &&
+                    (Boolean(authTarget.config.oauth?.clientId) ||
+                      (Boolean(redirectUri) &&
+                        (await shouldSkipCustomRedirect(serverName, authTarget.config))));
                   let runFlow = () => {
                     let sessionId = currentSessionId();
                     if (sessionId !== null) {
@@ -14211,6 +14722,7 @@ function _runHeadlessStreamingForTesting(
                       customCallbackUrl = await callback.raced;
                       callbackKind = "custom";
                     } catch (error) {
+                      if (redirectUriOnly) throw error;
                       logForDebugging(
                         `[mcp_authenticate] AS rejected custom redirectUri for ${serverName}; falling back to localhost: ${sanitizeErrorDetail(redactMcpErrorDetail(serverName, authTarget.config, errorMessage(error)))}`,
                       );
@@ -14301,7 +14813,7 @@ function _runHeadlessStreamingForTesting(
                   let dcrRefused = await isDcrRejection(error, serverName, authTarget.config).catch(
                     (error) => {
                       logHandlerFailure(
-                        isTransportBacked(session),
+                        SDKControlReloadPluginsRequestSchema(controlContext, "mcp_authenticate"),
                         "mcp_authenticate: registration check",
                         error,
                       );
@@ -14317,7 +14829,11 @@ function _runHeadlessStreamingForTesting(
                       ),
                     ),
                     {},
-                    dcrRefused ? "mcp_client_registration_unavailable" : undefined,
+                    dcrRefused || error instanceof McpOauthRefusedError
+                      ? redirectUriOnly
+                        ? "mcp_redirect_uri_unusable"
+                        : "mcp_client_registration_unavailable"
+                      : undefined,
                   );
                 }
               });
@@ -14361,11 +14877,12 @@ function _runHeadlessStreamingForTesting(
                             redactMcpErrorDetail(serverName, config, errorMessage(error)),
                           )
                         : "[error detail unavailable: server configuration could not be located]";
-                      controlError("mcp_oauth_callback_url", detail);
-                      sendControlError(
-                        message,
-                        pickForTransport(session, detail, "OAuth authentication failed"),
-                      );
+                      let isOauthCallbackUrl = mayPersistOnHost(session);
+                      if (isOauthCallbackUrl)
+                        logForDebugging(`mcp_oauth_callback_url: ${detail}`, {
+                          level: "error",
+                        });
+                      sendControlError(message, isOauthCallbackUrl ? "OAuth authentication failed" : detail);
                     } finally {
                       if (oauthAuthPromises.get(serverName) === pendingFlow)
                         oauthAuthPromises.delete(serverName);
@@ -14539,6 +15056,9 @@ function _runHeadlessStreamingForTesting(
                   getHostOwnedConfigs: allConfigs,
                 });
                 logFeatureOk("sdk_claude_authenticate");
+                if (saved?.departingLoginMayRemain)
+                  process.stderr.write(`${SIGN_IN_AGAIN_TO_CLEAR_MESSAGE}
+`);
                 logEvent("tengu_oauth_success", {
                   loginWithClaudeAi: loginWithClaudeAi ?? true,
                 });
@@ -14665,7 +15185,7 @@ function _runHeadlessStreamingForTesting(
                     getMcpClientModule().dropDiscoveryEntry(serverName, client.config),
                   );
                 let blockCause = mcpDialBlockCause(serverName, client.config);
-                injectModelSwitchBreadcrumbs_2(serverName, {
+                applyMcpReconnectResult(serverName, {
                   client:
                     blockCause === "managed-policy"
                       ? {
@@ -14691,9 +15211,7 @@ function _runHeadlessStreamingForTesting(
                               name: serverName,
                               type: "failed",
                               config: client.config,
-                              error: revoked.cleared
-                                ? "Authentication cleared"
-                                : "Authentication could not be cleared",
+                              error: revoked.cleared ? AUTH_CLEARED_REASON : AUTH_CLEAR_FAILED_REASON,
                             },
                   tools: [],
                   commands: [],
@@ -14858,15 +15376,7 @@ function _runHeadlessStreamingForTesting(
                       },
                 );
               }
-              applyFlagSettings(
-                effectivePatch,
-                () =>
-                  isFastModeEnabled() &&
-                  fastModeSettingDiverges({
-                    settings: getInitialSettings_2(),
-                    fastMode: getAppState().fastMode,
-                  }),
-              );
+              applyFlagSettings(effectivePatch, () => shouldNudgeFastModeChange(getAppState().fastMode));
               if (pluginSplit !== null) {
                 if (pluginSplit.verdict.apply) pluginFlagTracker.applied(pluginSplit.verdict.settings);
                 if (!pluginSplit.alone) logMixedCloudPluginsPatch(pluginSplit);
@@ -14927,7 +15437,7 @@ function _runHeadlessStreamingForTesting(
                 newModel: prevModel,
                 prevActive: previousSpecifiedModel,
               });
-              let modelSwitchBreadcrumbs = createModelSwitchBreadcrumbs(
+              let modelSwitchBreadcrumbs = createModelSwitchBreadcrumbs_2(
                 effectivePatch,
                 userSpecifiedModel,
                 prevModel,
@@ -15072,8 +15582,8 @@ function _runHeadlessStreamingForTesting(
                 carriedEffort: null,
               });
               let currentAppState = getEffortEnvOverride();
-              let model = getSettingsWithSources_2();
-              let mapped = getSettingsWithErrors_2()
+              let model = getSettingsWithSources();
+              let mapped = getSettingsWithErrors()
                 .errors.filter((error) => error.severity !== "warning")
                 .map((error) => ({
                   file: error.file,
@@ -15098,7 +15608,7 @@ function _runHeadlessStreamingForTesting(
                   ultracode: isUltracodeActive(state.ultracode, newModel),
                   ultracodeRequested: state.ultracode === true,
                   ultracodeAvailable: isUltracodeAvailable(newModel),
-                  ultrathinkAvailable: isUltrathinkEffective(newModel, resolveEffortLevel(state)),
+                  ultrathinkAvailable: ultrathinkRaisesEffort(newModel, resolveEffortLevel(state)),
                 },
                 errors: mapped.length > 0 ? mapped : undefined,
               });
@@ -15181,8 +15691,9 @@ function _runHeadlessStreamingForTesting(
               state: buildPermissionRulesWireState({
                 context: getAppState().toolPermissionContext,
                 originalCwd: getSessionProject(session).originalCwd,
-                readSettingsWithSources: getSettingsWithSources_2,
-                readSettingsErrors: getSettingsWithErrors_2,
+                readSettingsWithSources: getSettingsWithSources,
+                readSettingsErrors: getSettingsWithErrors,
+                readParentSettingsIncluded: parentSettingsIncluded,
               }),
             });
           } else if (message.request.subtype === "submit_feedback") {
@@ -15317,30 +15828,7 @@ function _runHeadlessStreamingForTesting(
                   },
                   getLiveMessages: () => conversationRows,
                   isTurnInProgress: () => runState.running,
-                  buildFallbackParams: () =>
-                    buildSideQuestionFallbackParams({
-                      session,
-                      turnInProgress: runState.running,
-                      messageQueue,
-                      tools: buildBridgeToolsUpdate(getAppState()),
-                      toolCatalog: TOOL_CATALOG,
-                      commands: otherCommands(),
-                      mcpClients: [...getAppState().mcp.clients, ...clients_3, ...dynamicMcpState.clients],
-                      messages: conversationRows,
-                      readFileState: readFilesFromMessages,
-                      toolState,
-                      sessionHooks,
-                      getAppState,
-                      setAppState,
-                      customSystemPrompt: switchToPromptTools(),
-                      appendSystemPrompt: options.appendSystemPrompt,
-                      excludeDynamicSections: options.excludeDynamicSections,
-                      thinkingConfig: hasEffort.current(),
-                      agents: getActiveAgentsFromList(agents),
-                      runQuery: query,
-                      storageV5: options.storageV5,
-                      credentials: options.credentials,
-                    }),
+                  buildFallbackParams: buildCacheSafeParams,
                 });
                 let bounded = await withTimeout(
                   answer,
@@ -15494,7 +15982,7 @@ function _runHeadlessStreamingForTesting(
                         },
                         sdkHostConfigs: () => sdkMcpServerConfigs,
                         awaitHostApplyQuiescence: () =>
-                          mcpChangesPromise.then(
+                          resolved_4.then(
                             () => {
                               return;
                             },
@@ -15583,6 +16071,7 @@ function _runHeadlessStreamingForTesting(
                               resolveCurrent = resolve;
                             });
                             try {
+                              recordEarlierToolsUnknown(frame);
                               let fields = extractInboundMetadata(frame);
                               if (!fields) return;
                               let { uuid } = fields;
@@ -15679,6 +16168,7 @@ function _runHeadlessStreamingForTesting(
                                   turnAttributionKey: attributionKey,
                                 }),
                                 skipSlashCommands: true,
+                                disallowedTools: [],
                                 ...(inlinedImagePaths.length > 0 && {
                                   inlinedImagePaths,
                                 }),
@@ -15702,6 +16192,9 @@ function _runHeadlessStreamingForTesting(
                                           origin: refinedOrigin,
                                         }),
                                       ...textNotTypedFlags(frame, resolved),
+                                      ...(isUltrathinkPrompt(frame) && {
+                                        ultrathinkTyped: true,
+                                      }),
                                       ...(refinedOrigin !== undefined &&
                                         !isHumanOrAutoContinuation(refinedOrigin) && {
                                           skipAttachments: true,
@@ -15800,6 +16293,7 @@ function _runHeadlessStreamingForTesting(
                                   storageV5: options.storageV5,
                                 });
                                 handleControlRequest();
+                                recordedAgentRun.notePersonsStop();
                               } catch (error) {
                                 logError(error);
                                 logFeatureBad("per_task_stop_sparing", "bridge_interrupt_sweep_throw");
@@ -16106,6 +16600,7 @@ function _runHeadlessStreamingForTesting(
               subtype: knownSubtypeOrUndefined(message.request.subtype),
               ms: rounded,
               detached,
+              beside_loop_switch: readSwitchAtReconnect,
               ...(deadlineMs !== undefined && {
                 deadline_ms: deadlineMs,
                 timed_out: timedOut,
@@ -16196,8 +16691,8 @@ function _runHeadlessStreamingForTesting(
         continue;
       } else if (message.type === "assistant" || message.type === "system") {
         try {
-          let internalMessages = toInternalMessages([message]);
-          conversationRows.push(...internalMessages);
+          let replayedRows = sdkMessagesToInternal([message]);
+          conversationRows.push(...replayedRows);
         } catch (error) {
           logForDebugging(`Dropping malformed ${message.type} replay frame: ${errorMessage(error)}`, {
             level: "error",
@@ -16380,6 +16875,8 @@ function _runHeadlessStreamingForTesting(
         }
         if (isDuplicate) continue;
       }
+      if (isRemoteCowork() && shouldAllowManagedPermissionRulesOnly())
+        settingsChangeDetector.notifyChange("flagSettings");
       cancelPendingUserDialogs(structuredIO, "new_user_message");
       let promptContent = ingressPromptContent(message, remoteTransport, locallyPrepended);
       let clientPlatform = message.client_platform;
@@ -16413,7 +16910,7 @@ function _runHeadlessStreamingForTesting(
             kind: "bridge",
           }),
         );
-      let { ingressOrigin, peerFrom, nonPeerOrigin, queuedOrigin } = resolveIngressOrigins(
+      let { ingressOrigin, peerFrom, hostPeer, nonPeerOrigin, queuedOrigin } = resolveIngressOrigins(
         message,
         promptContent,
         remoteTransport,
@@ -16476,6 +16973,7 @@ function _runHeadlessStreamingForTesting(
       maybeTitleFromUserMessage(
         {
           content: promptContent,
+          uuid: message.uuid,
           origin: nonPeerOrigin,
           queuedOrigin,
           dispatchesSlashCommands: !humanComposed,
@@ -16492,21 +16990,38 @@ function _runHeadlessStreamingForTesting(
       let gated = isGatedInbound({
         ingressOrigin,
         inboundOrigin: message.inbound_origin,
-        envelopePeer: hasTeammateMessageEnvelope(promptContent),
+        envelopePeer: hostPeer !== undefined || hasTeammateMessageEnvelope(promptContent),
       });
       let attributionKey = inheritedAttributionKey(message.uuid, {
         isCrossSession: gated,
       });
-      let cloudBrowserTurn = prepareCloudBrowserTurn(message, {
-        deliveredByServer:
-          remoteTransport && !locallyPrepended && !byKnownHuman && peerFrom === undefined && !gated,
+      let viewFlags = isMergeMessage(
+        message,
+        isRemoteNonInteractiveNonCcsSession() &&
+          isViewOwningSdkMessage(message, {
+            isPersons: isHumanIngressFrame(message, {
+              ingressOrigin,
+              isRemoteIO: remoteTransport,
+              peerFrom,
+            }),
+            isCrossSession: gated,
+            originKind: nonPeerOrigin?.kind,
+          }),
+      );
+      applyWidgetToolStates(session, message, viewFlags);
+      let cloudBrowserTurnId = withCloudBrowserTurnId(message, {
+        isRemoteIO: remoteTransport,
+        isLocallyPrepended: locallyPrepended,
+        isRelayHuman: byKnownHuman,
+        peerFrom,
+        isCrossSession: gated,
       });
       let cloudTurn;
-      if (cloudBrowserTurn !== undefined) {
+      if (cloudBrowserTurnId !== undefined) {
         let { admitted, flagSettleMs } = await admitCloudBrowserTurnId({
           uuid: matchRequestId(message.uuid),
         });
-        cloudTurn = admitted ? cloudBrowserTurn : undefined;
+        cloudTurn = admitted ? cloudBrowserTurnId : undefined;
         if (flagSettleMs !== undefined) waits.flagSettleMs = (waits.flagSettleMs ?? 0) + flagSettleMs;
       }
       let traceContext = env.CLAUDE_CODE_REMOTE
@@ -16541,6 +17056,7 @@ function _runHeadlessStreamingForTesting(
           peerFrom,
           hostInjectedPeer: isPeerPrompt,
           ingressOrigin,
+          declaredPeerDenyList: hostPeer !== undefined && hasDeclaredDisallowedTools(message),
         })
       )
         continue;
@@ -16691,7 +17207,16 @@ ${commentSuffix}`;
         hasAttachments: inboundAttachments.length > 0 || inlinedImagePaths.length > 0,
       };
       let threadKind = classifyArtifactThreadMessage(classifyInput);
-      let queueItem = {
+      let turnStamp = withdrawnFileUuidsOf(message, {
+        ingressOrigin,
+        isRemoteIO: remoteTransport,
+        peerFrom,
+      });
+      let picturesToHide =
+        isPersonPrompt && message.priority === undefined && message.inbound_origin === undefined
+          ? fillPicturesToHide(structuredIO.sessionState, turnStamp)
+          : undefined;
+      let message_2 = {
         mode: "prompt",
         agentId: mainAgentId(),
         value: content,
@@ -16710,10 +17235,9 @@ ${commentSuffix}`;
         ...(filesResolved.writtenFiles && {
           savedFiles: filesResolved.writtenFiles,
         }),
-        ...withdrawnFileUuidsOf(message, {
-          ingressOrigin,
-          isRemoteIO: remoteTransport,
-          peerFrom,
+        ...turnStamp,
+        ...(picturesToHide && {
+          picturesToHide,
         }),
         uuid: message.uuid,
         ...(attributionKey && {
@@ -16737,7 +17261,8 @@ ${commentSuffix}`;
         }),
         disallowedTools: peerFrom ? [] : readDisallowedToolsMetadata(message),
         ...(peerFrom === undefined &&
-          !(remoteTransport && isTurnDisallowedToolName(message.inbound_origin)) && {
+          !(remoteTransport && isTurnDisallowedToolName(message.inbound_origin)) &&
+          (!locallyPrepended || structuredIO.isPersonsOwnPrepend(message)) && {
             replacesDisallowedTools: true,
           }),
         ...(peerFrom
@@ -16747,6 +17272,7 @@ ${commentSuffix}`;
                   ? ingressOrigin
                   : {
                       kind: "peer",
+                      ...hostPeer,
                       from: peerFrom,
                       ...peerMessageInfo(promptContent),
                       ...(isPeerPrompt && {
@@ -16774,6 +17300,12 @@ ${commentSuffix}`;
               ...(initiator !== undefined && {
                 hostInitiator: initiator,
               }),
+              ...(isPlainUserMessageEnvelope(message) && {
+                declaresNoSender: true,
+              }),
+              ...(viewFlags.namesViews && {
+                namesWidgetViews: true,
+              }),
               ...textNotTypedFlags(message, filesResolved),
               ...ingressSubmitFlags({
                 message,
@@ -16781,9 +17313,17 @@ ${commentSuffix}`;
                 isRelayHuman: byKnownHuman,
                 queuedOrigin,
                 nonPeerOrigin,
+                foreignWord: promptOrigin,
+              }),
+              ...(isUltrathinkPrompt(message) && {
+                ultrathinkTyped: true,
               }),
               ...(isRelayHuman && {
                 skipAttachments: true,
+              }),
+              ...((typeof message.uuid !== "string" ||
+                structuredIO.userFrameStartedAtMs(message.uuid) !== undefined) && {
+                ccrProgramUseCaseId: undefined,
               }),
               ...(messageIds && {
                 hearthRelayMessageIds: messageIds,
@@ -16800,6 +17340,7 @@ ${commentSuffix}`;
                 ccrTurnId,
                 isProjectsUser: isHearthHuman(message.inbound_origin),
                 emailSenderTurn: isRelayHuman ? emailSenderModeOf(message) : undefined,
+                turnEffortCap: remoteTransport ? message.turn_effort_cap : undefined,
               }),
               ...(cloudTurn !== undefined && {
                 ccrTurnId: cloudTurn,
@@ -16811,8 +17352,8 @@ ${commentSuffix}`;
         }),
       };
       let ownWordItem = structuredIO.isPersonsOwnPrepend(message)
-        ? withOwnWordStopKey(queueItem)
-        : markOwnWord(queueItem, !locallyPrepended);
+        ? withOwnWordStopKey(message_2)
+        : markOwnWord(message_2, !locallyPrepended);
       let resumeAgentThread = async (target, prev) => {
         takeSeededSummon(ownWordItem);
         let resumed = false;
@@ -16976,9 +17517,11 @@ ${commentSuffix}`;
     enqueueResult?.({
       cannotQueue: "the input ended first",
     });
+    let idleWait = unknownResponseHold.whenIdle();
+    if (idleWait !== undefined) await idleWait;
     await userFrameIntake.closeInput(async () => {
       markPrintInputClosed();
-      if (!runState.running && messageQueue.peek(isActiveMainAgentCommand) === undefined)
+      if (!runState.running && messageQueue.peek(isDrainableMainThreadCommand) === undefined)
         releaseStartupWork(session.host, "input_closed");
       abortController.abort();
       if (runState.running || teamLeadPoller.pollActive()) return;
@@ -16992,7 +17535,7 @@ ${commentSuffix}`;
   })().catch(onCrashPayload);
   return output;
 }
-//@ chunk-tyg7f3ek.js:850597-850708 layout
+//@ chunk-0yw3taqg.js:898487-898598 layout
 /**
  * -p 是否需要等待显式 --mcp-config 服务器连接完成（有非 sdk 服务器时）。
  */
@@ -17002,14 +17545,14 @@ function explicitMcpConfigRequestsWait(configs, bridgeCarrier, waitMs) {
     !startupCcrEnv.isBridgeCarrierChild && Object.values(configs).some((config) => config.type !== "sdk")
   );
 }
-//@ chunk-tyg7f3ek.js:850708-850766 layout
+//@ chunk-0yw3taqg.js:898598-898656 layout
 /**
  * 中继模式下 MCP 等待剩余时间（不少于下限）。
  */
 function relayMcpWaitLeft(elapsedMs, budgetMs, now) {
   return Math.max(TRANSPORT_FALLBACK_TIMEOUT_MS, Math.round(elapsedMs + budgetMs - now));
 }
-//@ chunk-tyg7f3ek.js:850766-853865 fingerprint (2.1.88 match: createCanUseToolWithPermissionPrompt, 0.384)
+//@ chunk-0yw3taqg.js:898656-901772 fingerprint (2.1.88 match: createCanUseToolWithPermissionPrompt, 0.361)
 /**
  * 包装 canUseTool：规则判定为 ask 时转给 --permission-prompt-tool 指定的 MCP 工具；工具不可用时拒绝并说明。
  */
@@ -17168,12 +17711,14 @@ function createCanUseToolWithPermissionPrompt(permissionPromptTool, isServerSwep
       };
     }
     let promptResult = parsed.data;
-    if (promptResult.behavior === "allow" && requiresConnectorGrant_2(tool))
+    if (promptResult.behavior === "allow" && requiresConnectorGrant_2(tool)) {
+      let answerRefusal = promptToolAllowDenyReason(tool);
       return {
         behavior: "deny",
-        message: PROMPT_TOOL_ALLOW_IMITATOR_DENY_REASON.reason,
-        decisionReason: PROMPT_TOOL_ALLOW_IMITATOR_DENY_REASON,
+        message: answerRefusal.reason,
+        decisionReason: answerRefusal,
       };
+    }
     if (promptResult.behavior === "allow" && isMcpTool(tool) && tool.requiresUserInteraction?.())
       return {
         behavior: "deny",
@@ -17197,13 +17742,13 @@ function createCanUseToolWithPermissionPrompt(permissionPromptTool, isServerSwep
     () => permissionPromptTool !== null && !isServerSwept(),
   );
 }
-//@ chunk-tyg7f3ek.js:853865-853988 layout (2.1.88 match: countToolCallsSince, 1)
-function messageHasToolUseId(messages, sinceUuid) {
-  let content = messages?.message?.content;
+//@ chunk-0yw3taqg.js:901772-901895 file-local
+function messageHasToolUseId(assistantMessage, toolUseId) {
+  let content = assistantMessage?.message?.content;
   if (!Array.isArray(content)) return false;
-  return content.some((block) => block.type === "tool_use" && block.id === sinceUuid);
+  return content.some((contentBlock) => contentBlock.type === "tool_use" && contentBlock.id === toolUseId);
 }
-//@ chunk-tyg7f3ek.js:853988-854298 layout
+//@ chunk-0yw3taqg.js:901895-902205 layout
 /**
  * --permission-prompt-tool 找不到或不是 MCP 工具时的遥测消息模板（工具名脱敏）。
  */
@@ -17213,7 +17758,7 @@ var PERMISSION_PROMPT_TOOL_NOT_FOUND_NO_MCP_TOOLS_TELEMETRY_MESSAGE =
   "Error: MCP tool <redacted> (passed via --permission-prompt-tool) not found. Available MCP tools: none";
 var PERMISSION_PROMPT_TOOL_NOT_MCP_TELEMETRY_MESSAGE =
   "Error: tool <redacted> (passed via --permission-prompt-tool) must be an MCP tool";
-//@ chunk-tyg7f3ek.js:854298-855389 fingerprint (2.1.88 match: getCanUseToolFn, 0.812)
+//@ chunk-0yw3taqg.js:902205-903301 fingerprint (2.1.88 match: getCanUseToolFn, 0.828)
 /**
  * 根据输入格式与 --permission-prompts 选择 canUseTool：stdio 走 StructuredIO 请求宿主，none 自动拒绝，否则走权限提示工具。
  */
@@ -17273,7 +17818,7 @@ function getCanUseToolFn(
       if (!resolved && serverSwept) resolved = createCanUseToolWithPermissionPrompt(null);
       if (!resolved) {
         let mcpTools = getMcpTools();
-        let permissionPromptTool = mcpTools.find((t) => toolMatchesName(t, permissionPromptToolName));
+        let permissionPromptTool = mcpTools.find((t) => matchesToolName(t, permissionPromptToolName));
         if (!permissionPromptTool) {
           let joined = mcpTools.map((t) => t.name).join(", ");
           let error = `Error: MCP tool ${permissionPromptToolName} (passed via --permission-prompt-tool) not found. Available MCP tools: ${joined || "none"}`;
@@ -17304,11 +17849,11 @@ function getCanUseToolFn(
     () => promptToolState?.isPromptToolServerSwept() !== true,
   );
 }
-//@ chunk-tyg7f3ek.js:855389-855453 file-local
+//@ chunk-0yw3taqg.js:903301-903365 file-local
 function joinPromptValues(values) {
   return Array.isArray(values) && values.length === 1 && values[0] === "";
 }
-//@ chunk-tyg7f3ek.js:855453-856133 layout
+//@ chunk-0yw3taqg.js:903365-904045 layout
 /**
  * 按 --agent 选定主线程代理：设置代理类型、采用其系统提示词与模型、可前置其 initialPrompt。
  */
@@ -17357,7 +17902,7 @@ function seatMainThreadAgentFromPool(
     restrictedAgentModel,
   };
 }
-//@ chunk-tyg7f3ek.js:856133-861179 fingerprint (2.1.88 match: handleInitializeRequest, 0.344)
+//@ chunk-0yw3taqg.js:904045-909122 fingerprint (2.1.88 match: handleInitializeRequest, 0.341)
 /**
  * 处理 initialize 控制请求：注册 SDK 钩子回调、提示建议、代理、MCP 服务器、输出样式等，回复 initialize 响应（命令、代理、模型、账户、pid、版本…）。
  */
@@ -17389,7 +17934,7 @@ async function handleInitializeRequest(
       retiredCallbacks = structuredIO.retireSdkHostHookCallbacks(sdkHookReconnectFallback);
       buildSdkHookRegistrations(
         hostHooks,
-        (hookName, matcher) => structuredIO.createHookCallback(hookName, matcher),
+        (hookName, matcher, onFailure) => structuredIO.createHookCallback(hookName, matcher, onFailure),
         structuredIO,
       );
     }
@@ -17516,7 +18061,10 @@ async function handleInitializeRequest(
     setAppState,
     sessionState: structuredIO.sessionState,
   });
-  if (initialize.skills !== undefined) setSessionSkillAllowlist(initialize.skills);
+  if (initialize.skills !== undefined) {
+    setSessionSkillAllowlist(initialize.skills);
+    clearSystemPromptSectionState("settings");
+  }
   let mergedAgents;
   if (initialize.agents) mergedAgents = parseAgentsFromJson(initialize.agents, "flagSettings");
   let activeAgents = () =>
@@ -17534,7 +18082,8 @@ async function handleInitializeRequest(
   if (initialize.hooks)
     buildSdkHookRegistrations(
       initialize.hooks,
-      (hookName, matcher) => structuredIO.createHookCallback(hookName, matcher),
+      (hasRestrictedModel, isRemoteCowork, agentRegistration) =>
+        structuredIO.createHookCallback(hasRestrictedModel, isRemoteCowork, agentRegistration),
       structuredIO,
     );
   if (initialize.jsonSchema) setInitJsonSchema(initialize.jsonSchema);
@@ -17600,7 +18149,7 @@ async function handleInitializeRequest(
   logEvent("tengu_sdk_init_handshake", {
     uptime_ms: Math.round(process.uptime() * 1000),
     mcp_client_count: mcp.clients.length,
-    mcp_pending_count: count(mcp.clients, (matcher) => matcher.type === "pending"),
+    mcp_pending_count: countWhere(mcp.clients, (matcher) => matcher.type === "pending"),
     mcpNonBlocking: getMcpConnectNonBlocking(),
     session_mirror: !!launchOptions.sessionMirror,
   });
@@ -17622,7 +18171,7 @@ async function handleInitializeRequest(
     publishedCommands: payload.commands,
   };
 }
-//@ chunk-tyg7f3ek.js:861179-863492 layout
+//@ chunk-0yw3taqg.js:909122-911465 layout
 /**
  * 构造 initialize 响应负载：commands、agents、output_style、models、account、pid、claude_code_version 等。
  */
@@ -17642,7 +18191,7 @@ async function _buildInitializeResponsePayloadForTesting(
   onReload,
   options,
 ) {
-  let outputStyle = getSettings_DEPRECATED()?.outputStyle || DEFAULT;
+  let outputStyle = getSettings_DEPRECATED()?.outputStyle || DEFAULT_2;
   let allOutputStyles = await getAllOutputStylesCached(getCwd(), storageV5);
   let accountInformation = getAccountInformation();
   let mode = getAgents().toolPermissionContext.mode;
@@ -17679,10 +18228,10 @@ async function _buildInitializeResponsePayloadForTesting(
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -17693,6 +18242,7 @@ async function _buildInitializeResponsePayloadForTesting(
         inbound_read_receipts: true,
       }),
     hooks_applied: hooksApplied,
+    hook_on_failure_supported: true,
     plugins_applied: pluginsApplied,
     workspace_trust_recorded: workspaceTrustRecorded,
     sdk_mcp_manifests_parked: sdkMcpManifestsParked,
@@ -17748,7 +18298,7 @@ async function _buildInitializeResponsePayloadForTesting(
   if (capabilitySources.length > 0) accountSettings.capabilities = capabilitySources;
   return accountSettings;
 }
-//@ chunk-tyg7f3ek.js:863492-863977 fingerprint (2.1.88 match: handleRewindFiles, 0.957)
+//@ chunk-0yw3taqg.js:911465-911950 fingerprint (2.1.88 match: handleRewindFiles, 0.957)
 /**
  * 处理 rewind_files：检查文件历史检查点，dry-run 或回滚文件。
  */
@@ -17786,7 +18336,7 @@ async function handleRewindFiles(userMessageId, appState, options) {
     skippedLinks: filesChanged?.skippedLinks,
   };
 }
-//@ chunk-tyg7f3ek.js:863977-865145 fingerprint (2.1.88 match: handleChannelEnable, 0.902)
+//@ chunk-0yw3taqg.js:911950-912995 fingerprint (2.1.88 match: handleChannelEnable, 0.8)
 /**
  * 处理 channel_enable：为已连接的插件 MCP 服务器注册频道通知。
  */
@@ -17832,23 +18382,11 @@ function handleChannelEnable(requestId, serverName, connectionPool, output, mess
       is_dev: false,
       plugin: pluginId,
     });
-    messageQueue.enqueue({
-      mode: "prompt",
-      agentId: mainAgentId(),
-      value: wrapChannelMessage(serverName, content, meta),
-      priority: "next",
-      isMeta: true,
-      origin: {
-        kind: "channel",
-        server: serverName,
-      },
-      skipSlashCommands: true,
-      skipAttachments: true,
-    });
+    messageQueue.enqueue(queuedChannelPush(serverName, content, meta));
   });
   output.enqueue(controlSuccessResponse(requestId));
 }
-//@ chunk-tyg7f3ek.js:865145-865881 fingerprint (2.1.88 match: reregisterChannelHandlerAfterReconnect, 0.926)
+//@ chunk-0yw3taqg.js:912995-913592 fingerprint (2.1.88 match: reregisterChannelHandlerAfterReconnect, 0.789)
 function reregisterChannelHandlerAfterReconnect(connection, messageQueue) {
   if (connection.type !== "connected") return;
   if (
@@ -17875,22 +18413,10 @@ function reregisterChannelHandlerAfterReconnect(connection, messageQueue) {
       is_dev: entry?.dev ?? false,
       plugin: pluginId,
     });
-    messageQueue.enqueue({
-      mode: "prompt",
-      agentId: mainAgentId(),
-      value: wrapChannelMessage(connection.name, content, meta),
-      priority: "next",
-      isMeta: true,
-      origin: {
-        kind: "channel",
-        server: connection.name,
-      },
-      skipSlashCommands: true,
-      skipAttachments: true,
-    });
+    messageQueue.enqueue(queuedChannelPush(connection.name, content, meta));
   });
 }
-//@ chunk-tyg7f3ek.js:865881-866114 layout
+//@ chunk-0yw3taqg.js:913592-913825 layout
 /**
  * 每轮开始前等待文件存储 worker 拉取同步（turn hold 参与者）。
  */
@@ -17915,7 +18441,7 @@ function dirSyncPullParticipant(workerDirSync, store, options, signal = false) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:866114-866265 layout
+//@ chunk-0yw3taqg.js:913825-913976 layout
 /**
  * 每轮开始前等待云端 home 设置种子写入完成（turn hold 参与者）。
  */
@@ -17929,7 +18455,7 @@ function homeSeedHoldParticipant({ handle, record }) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:866265-866738 layout
+//@ chunk-0yw3taqg.js:913976-914449 layout
 function startCloudHomeSeedParticipant({
   record,
   configHome,
@@ -17971,7 +18497,7 @@ function startCloudHomeSeedParticipant({
     record,
   };
 }
-//@ chunk-tyg7f3ek.js:866738-866867 layout
+//@ chunk-0yw3taqg.js:914449-914577 layout
 function shortErrorText(options) {
   try {
     let text = stripAnsi(getFirstLine(errorMessage(options))).trimEnd();
@@ -17981,7 +18507,7 @@ function shortErrorText(options) {
     return "unknown error";
   }
 }
-//@ chunk-tyg7f3ek.js:866867-867186 layout
+//@ chunk-0yw3taqg.js:914577-914896 layout
 function logHeadlessFatalError(error, context) {
   logError(error);
   logEvent("tengu_headless_fatal_error", {
@@ -17996,7 +18522,7 @@ function logHeadlessFatalError(error, context) {
     ...errorTelemetryFields_2(error),
   });
 }
-//@ chunk-tyg7f3ek.js:867186-867842 layout
+//@ chunk-0yw3taqg.js:914896-915552 layout
 /**
  * headless 输出写入失败时结束会话：记录致命错误、尽量写最后一条错误、退出。
  */
@@ -18039,7 +18565,7 @@ async function endHeadlessSessionOnOutputWriteFailure(io, headlessIO, message, e
   } catch {}
   gracefulShutdownSync(1);
 }
-//@ chunk-tyg7f3ek.js:867842-868162 layout
+//@ chunk-0yw3taqg.js:915552-915872 layout
 /**
  * runHeadless 抛出未捕获错误时结束会话：停止保留流事件、写错误结果、退出 1。
  */
@@ -18064,7 +18590,7 @@ function endHeadlessSessionOnEscapedError(io, error, context) {
   } catch {}
   gracefulShutdownSync(1);
 }
-//@ chunk-tyg7f3ek.js:868162-868359 layout
+//@ chunk-0yw3taqg.js:915872-916069 layout
 /**
  * 写启动失败：stderr 输出；stream-json 时再输出一行 result 错误（带 startupFailureReason）。
  */
@@ -18091,7 +18617,7 @@ function writeStartupFailure(outputFormat, outputFormat_2, { resultIndex = 0, st
 `,
     );
 }
-//@ chunk-tyg7f3ek.js:868359-868497 layout
+//@ chunk-0yw3taqg.js:916069-916207 layout
 function exitIfEndedByModel(message, outputFormat) {
   if (message?.endedByModel) {
     writeStartupFailure(
@@ -18103,7 +18629,7 @@ function exitIfEndedByModel(message, outputFormat) {
   }
   return false;
 }
-//@ chunk-tyg7f3ek.js:868497-869738 layout
+//@ chunk-0yw3taqg.js:916207-917448 layout
 async function refuseUnsafeWorktreeResume(io, worktreeSession, resumeTarget, outputFormat) {
   let originalCwd = getOriginalCwd();
   let worktree = null;
@@ -18189,7 +18715,7 @@ async function refuseUnsafeWorktreeResume(io, worktreeSession, resumeTarget, out
   gracefulShutdownSync(1);
   return true;
 }
-//@ chunk-tyg7f3ek.js:869738-869795 layout
+//@ chunk-0yw3taqg.js:917448-917505 layout
 /**
  * 声明本进程拥有费用账本并在退出时保存费用状态（diskless 时不做）。
  */
@@ -18198,7 +18724,7 @@ function ownCostLedger() {
   claimCostLedgerForCurrentSession();
   return registerTranscriptExitReStamp(resetCostState);
 }
-//@ chunk-tyg7f3ek.js:869795-869960 layout
+//@ chunk-0yw3taqg.js:917505-917670 layout
 function queueMemoryNotices(outputFormat) {
   let format = restoredMemoryPauseNotice();
   if (format !== undefined)
@@ -18213,7 +18739,29 @@ function queueMemoryNotices(outputFormat) {
       outputFormat,
     });
 }
-//@ chunk-tyg7f3ek.js:869960-882005 fingerprint (2.1.88 match: loadInitialMessages, 0.315)
+//@ chunk-0yw3taqg.js:917670-917689 layout
+var weakMap_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0yw3taqg.js:917670", () => {
+  weakMap_2 = new WeakMap();
+});
+//@ chunk-0yw3taqg.js:917689-917713 layout
+function restoredWorkerAgentDefinitions(_unused) {
+  return false;
+}
+//@ chunk-0yw3taqg.js:917713-917846 layout
+function resumeWarningSink(messages, outputFormat) {
+  return (line) => {
+    logForDebugging(`resume: ${line}`);
+    messages.push(createSystemMessage(line, "warning"));
+    if (outputFormat !== "json" && outputFormat !== "stream-json")
+      process.stderr.write(
+        line +
+          `
+`,
+      );
+  };
+}
+//@ chunk-0yw3taqg.js:917846-930495 fingerprint (2.1.88 match: loadInitialMessages, 0.306)
 /**
  * 加载 -p 模式的初始消息：--continue 取最近会话，--resume 按 ID/名称/文件恢复（含 --resume-session-at 截断、--fork-session），失败写启动失败结果。
  */
@@ -18284,6 +18832,24 @@ async function loadInitialMessages(io, setAppState, storageV5, options) {
             ...prev,
             agentDefinitions,
           }));
+        }
+        {
+          let agentDefinitions = restoredWorkerAgentDefinitions(restoredWorkerState);
+          weakMap_2.set(
+            io,
+            switchSessionModelPin(
+              {
+                ...conversationForResume,
+                ...(agentDefinitions && {
+                  replMode: false,
+                }),
+                source: options.sdkUrl ? "remote" : "store",
+                sdkUrlWorker: Boolean(options.sdkUrl),
+                headless: true,
+              },
+              resumeWarningSink(conversationForResume.messages, options.outputFormat),
+            ),
+          );
         }
         let { adoptedSessionId, effectiveFork } = resolveResumeSessionAdoption(
           conversationForResume.sessionId,
@@ -18366,6 +18932,7 @@ async function loadInitialMessages(io, setAppState, storageV5, options) {
         entrypoint: lit("print"),
       });
     } catch (error) {
+      weakMap_2.delete(io);
       if (error instanceof ResumeRefusedError) {
         await logEventAsync("tengu_continue", {
           success: false,
@@ -18427,6 +18994,7 @@ async function loadInitialMessages(io, setAppState, storageV5, options) {
     let failure = "load_error";
     let startTime = performance.now();
     let resumeArg = options.sdkUrl ? startResumeLoadHold() : undefined;
+    let resumeRows = false;
     try {
       logEvent("tengu_resume_print", {});
       let resumeIdentifier = typeof options.resume === "string" ? options.resume.trim() : "";
@@ -18602,10 +19170,28 @@ ${joined}`,
           };
         }
       }
+      let startTime_2 = performance.now();
+      if (
+        options.sdkUrl &&
+        isRemoteManagedEnvironment() &&
+        !options.storageV5 &&
+        !env.CLAUDE_CODE_DISABLE_TRANSCRIPT_READ_AHEAD
+      ) {
+        await prewarmTranscriptReadAhead(
+          getTranscriptPathForSession(parsedSessionId.sessionId),
+          isShuttingDown,
+        );
+        if (isShuttingDown()) {
+          resumeRows = true;
+          return {
+            messages: [],
+            aborted: true,
+          };
+        }
+      }
       let transcriptAnchor = !parsedSessionId.jsonlFile
         ? await transcriptFileSize(parsedSessionId.sessionId)
         : undefined;
-      let startTime_2 = performance.now();
       let jsonl =
         (await options.remoteControlForkChild?.adoptSeed({
           sha256: workerJoinStart?.internal?.fork_seed_sha256 ?? undefined,
@@ -18834,6 +19420,28 @@ ${joined}`,
           agentDefinitions,
         }));
       }
+      {
+        let restoredMessages = restoredWorkerAgentDefinitions(workerJoinStart);
+        let agentDefinitions = switchSessionModelPin(
+          {
+            ...conversationForResume,
+            ...(restoredMessages && {
+              replMode: false,
+            }),
+            source: parsedSessionId.isJsonlFile
+              ? !options.sdkUrl && parsedSessionId.jsonlFile
+                ? resumeSourceForPath(parsedSessionId.jsonlFile)
+                : "file"
+              : parsedSessionId.isUrl || options.sdkUrl
+                ? "remote"
+                : "store",
+            sdkUrlWorker: Boolean(options.sdkUrl),
+            headless: true,
+          },
+          resumeWarningSink(conversationForResume.messages, options.outputFormat),
+        );
+        weakMap_2.set(io, agentDefinitions);
+      }
       let { adoptedSessionId, effectiveFork } = resolveResumeSessionAdoption(
         conversationForResume.sessionId,
         !!options.forkSession,
@@ -18953,11 +19561,12 @@ ${joined}`,
           level: "error",
         });
       else logError(error);
-      let failureMessage =
+      let resumeFailure =
         error instanceof Error
           ? `${FAILED_TO_RESUME_SESSION_TEXT}: ${describeTranscriptLoadError(error, phase)}`
           : `${FAILED_TO_RESUME_SESSION_TEXT} with --print mode`;
-      writeStartupFailure(failureMessage, options.outputFormat);
+      weakMap_2.delete(io);
+      writeStartupFailure(resumeFailure, options.outputFormat);
       gracefulShutdownSync(1);
       return error instanceof ResumeRefusedError
         ? {
@@ -18968,7 +19577,7 @@ ${joined}`,
             messages: [],
           };
     } finally {
-      resumeArg?.();
+      if (!resumeRows) resumeArg?.();
     }
   }
   if (isParkedSpare())
@@ -18987,7 +19596,7 @@ ${joined}`,
     messages: sessionStartRows,
   };
 }
-//@ chunk-tyg7f3ek.js:882005-882991 sole-consumer
+//@ chunk-0yw3taqg.js:930495-931481 sole-consumer
 /**
  * 会话恢复加载失败时给出人能看懂的原因：按存储错误码 ELOOP/ENXIO/EFBIG/EAGAIN 分别说明（符号链接、不是普通文件、超出大小限制、读取不一致），其他情况返回原始错误消息。
  */
@@ -19008,7 +19617,7 @@ function describeTranscriptLoadError(error, phase) {
       return error.message;
   }
 }
-//@ chunk-tyg7f3ek.js:882991-884037 sole-consumer
+//@ chunk-0yw3taqg.js:931481-932527 sole-consumer
 /**
  * 无头模式选输入输出通道：没有 sdkUrl 时用本地 StructuredIO；否则建 RemoteIO（会话入口认证头、worker epoch、turn_handoff 注册元数据、暂存文件回调），bridge 环境下登记受监管的桥接会话。
  */
@@ -19066,15 +19675,15 @@ function createHeadlessIO(prompt, options, turnHandoff, carriedWrites, stageCall
     );
   return remoteIO;
 }
-//@ chunk-tyg7f3ek.js:884037-884082 sole-consumer (2.1.88 match: mergeClients, 0.78)
+//@ chunk-0yw3taqg.js:932527-932572 sole-consumer (2.1.88 match: mergeClients, 0.78)
 function mergeClients(...lists) {
   return uniqByExport(lists.flat(), "name");
 }
-//@ chunk-tyg7f3ek.js:884082-884144 sole-consumer
+//@ chunk-0yw3taqg.js:932572-932634 sole-consumer
 function mergeClientsWithCommsServers(...lists) {
   return [...mergeClients(...lists), ...lists.flat().filter(isCommsRoledServer)];
 }
-//@ chunk-18hwfzwa.js:810094-810309 fingerprint (2.1.88 match: trackReceivedMessageUuid, 0.591)
+//@ chunk-czq1j3j2.js:842817-843032 fingerprint (2.1.88 match: trackReceivedMessageUuid, 0.591)
 function trackReceivedMessageUuid(countsByAgent, agents) {
   let seenIds = new Set();
   for (let { id, tokenCount } of agents) {
@@ -19087,17 +19696,19 @@ function trackReceivedMessageUuid(countsByAgent, agents) {
   for (let key of countsByAgent.keys()) if (!seenIds.has(key)) countsByAgent.delete(key);
 }
 export {
-  removeInterruptedMessage,
   finalContextTokensFromLastResponse,
-  trackReceivedMessageUuid,
-  controlSuccessResponse,
-  controlErrorResponse,
-  isImmediateInterruptRequest,
   emitLoadError,
-  canBatchWith,
-  assistantTurnKeys,
   getStructuredIO,
+  isInterruptOwnedInline,
+  isImmediateInterruptRequest,
+  readDisallowedToolsMetadata,
   handleOrphanedPermissionResponse,
+  controlErrorResponse,
+  removeInterruptedMessage,
+  assistantTurnKeys,
+  toScopedConfig,
+  controlSuccessResponse,
+  trackReceivedMessageUuid,
   PERMISSION_PROMPT_TOOL_NOT_FOUND_NO_MCP_TOOLS_TELEMETRY_MESSAGE,
   PERMISSION_PROMPT_TOOL_NOT_FOUND_TELEMETRY_MESSAGE,
   PERMISSION_PROMPT_TOOL_NOT_MCP_TELEMETRY_MESSAGE,
@@ -19120,7 +19731,6 @@ export {
   ownCostLedger,
   registerStartupSdkEventForwarder,
   relayMcpWaitLeft,
-  createModelSwitchBreadcrumbs,
   runHeadless,
   seatMainThreadAgentFromPool,
   isModelDifferentFromRestricted,

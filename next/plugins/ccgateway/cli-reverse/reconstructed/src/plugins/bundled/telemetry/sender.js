@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：遥测插件的 hooks：处理 telemetry.*、log、mark 事件；创建遥测发送器（缓存上下文、按策略批量发送）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4m46mxx9.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-08q4d92p.js (12)
  * attribution: placement 12
  */
 import {
@@ -39,7 +39,7 @@ import { builtinHooksModuleRef, getModsFolderPath, registerBuiltinPlugin } from 
 import { MOD_FOLDER } from "../../../services/analytics/firstPartyEventLoggingExporter.js";
 import { EMPTY_HOOKS_INDEX, TELEMETRY_HOOKS_SCAN } from "./index.js";
 
-//@ chunk-4m46mxx9.js:18436-19121 placement
+//@ chunk-08q4d92p.js:18688-19373 placement
 /**
  * 收集遥测发送上下文（事实、部署、配置位置、环境、仓库、版本）。
  */
@@ -81,14 +81,14 @@ async function collectSenderContext(host, isInteractive) {
     engine: engineVersion,
   };
 }
-//@ chunk-4m46mxx9.js:19121-19199 placement
+//@ chunk-08q4d92p.js:19373-19451 placement
 /**
  * SDK 名不合规记为 other
  */
 function sanitizeSdkName(entrypoint) {
   return entrypoint === undefined || /^[a-z][a-z0-9_-]{0,39}$/.test(entrypoint) ? entrypoint : "other";
 }
-//@ chunk-4m46mxx9.js:19199-19322 placement
+//@ chunk-08q4d92p.js:19451-19574 placement
 /**
  * SDK 版本只保留 x.y.z，其他为 other。
  */
@@ -97,7 +97,7 @@ function normalizeSdkVersion(agentSdkVersion) {
   let match = /^\d{1,8}\.\d{1,8}\.\d{1,8}(?!\d)/.exec(agentSdkVersion ?? "")?.[0];
   return isUnknown ? agentSdkVersion : (match ?? "other");
 }
-//@ chunk-4m46mxx9.js:19322-19547 placement
+//@ chunk-08q4d92p.js:19574-19799 placement
 /**
  * 会话事实（客户端类型、入口、SDK 版本、SWE-bench id）。
  */
@@ -109,7 +109,7 @@ var sessionFacts = (env) => ({
   sweBenchInstanceId: env.sweBenchInstanceId || undefined,
   sweBenchTaskId: env.sweBenchTaskId || undefined,
 });
-//@ chunk-4m46mxx9.js:19547-19680 placement
+//@ chunk-08q4d92p.js:19799-19932 placement
 /**
  * 构建发送上下文（身份、会话、环境、远程哈希）。
  */
@@ -122,24 +122,24 @@ async function buildSenderContext(host, isInteractive) {
     remoteHash: senderContext.remoteHash,
   };
 }
-//@ chunk-4m46mxx9.js:19680-19755 placement
+//@ chunk-08q4d92p.js:19932-20007 placement
 /**
  * 只有内置插件能调遥测
  */
 var TELEMETRY_NOT_FOR_PLUGINS = {
   deny: "$.telemetry serves the plugins built into Claude Code alone",
 };
-//@ chunk-4m46mxx9.js:19755-19785 placement
+//@ chunk-08q4d92p.js:20007-20037 placement
 /**
  * 未注册时返回固定拒绝
  */
 var telemetryGate = (payload, next) => (next.called ? next(payload) : TELEMETRY_NOT_FOR_PLUGINS);
-//@ chunk-4m46mxx9.js:19785-19811 placement
+//@ chunk-08q4d92p.js:20037-20063 placement
 /**
  * builtin/core
  */
 var TRUSTED_PLUGIN_TIERS = ["builtin", "core"];
-//@ chunk-4m46mxx9.js:19811-19949 placement
+//@ chunk-08q4d92p.js:20063-20201 placement
 /**
  * 只允许受信任层级的插件调用遥测，否则返回空操作。
  */
@@ -147,7 +147,7 @@ function requireTrustedOrigin(payload, next) {
   if (next.origin?.tier === undefined) throw Error("$.telemetry: the call names no origin");
   return TRUSTED_PLUGIN_TIERS.includes(next.origin.tier) ? next(payload) : TELEMETRY_NOT_FOR_PLUGINS;
 }
-//@ chunk-4m46mxx9.js:19949-21579 placement
+//@ chunk-08q4d92p.js:20201-21831 placement
 /**
  * 创建遥测发送器（缓存上下文、按策略批量发送）。
  */
@@ -262,7 +262,7 @@ function createTelemetrySender(host) {
     flush,
   };
 }
-//@ chunk-4m46mxx9.js:21579-28602 placement
+//@ chunk-08q4d92p.js:21831-28854 placement
 /**
  * 遥测插件的 hooks：处理 telemetry.*、log、mark 事件。
  */
@@ -451,7 +451,7 @@ function telemetryHooks(on) {
     };
   });
 }
-//@ chunk-4m46mxx9.js:28602-28669 placement
+//@ chunk-08q4d92p.js:28854-28921 placement
 /**
  * 注册遥测内置插件
  */

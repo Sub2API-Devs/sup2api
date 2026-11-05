@@ -3,9 +3,9 @@
  *
  * Shell 命令运行中的进度（"Running… N lines" 与尾部输出）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/shell/ShellProgressMessage.tsx
- * pieces: chunk-cqn8yadz.js (1)
+ * pieces: chunk-6yg63dqr.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -24,7 +24,7 @@ import { ShellTimeDisplay } from "./ShellTimeDisplay.js";
 import { countCharInString } from "../../utils/stringUtils.js";
 import { formatFileSize } from "../../utils/format.js";
 
-//@ chunk-cqn8yadz.js:606-1961 fingerprint (2.1.88 match: ShellProgressMessage, 0.658)
+//@ chunk-6yg63dqr.js:639-1994 fingerprint (2.1.88 match: ShellProgressMessage, 0.657)
 function ShellProgressMessage(props) {
   let $ = useMemoCache(27);
   let { output, fullOutput, elapsedTimeSeconds, totalLines, totalBytes, timeoutMs, verbose } = props;

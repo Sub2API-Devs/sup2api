@@ -3,14 +3,14 @@
  *
  * 工具批次摘要：用小模型为一批工具调用生成约 30 字符的过去时标签（移动端显示），由 CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES 打开。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/toolUseSummary/toolUseSummaryGenerator.ts
- * pieces: chunk-ha3km179.js (3)
+ * pieces: chunk-w3ch4xq2.js (3)
  * attribution: affinity 1, fingerprint 2
  */
 import {
   toolsUsedManifestText,
-  tagUntrustedArtifactContent,
+  collectToolsUsedBeforeSummary,
 } from "../../utils/messages/untrustedArtifactContent.js";
 import { queryHaikuWithFallback } from "../api/claude.js";
 import { asSystemPrompt } from "../../utils/systemPromptType.js";
@@ -20,7 +20,7 @@ import { toError } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-ha3km179.js:36630-37084 affinity
+//@ chunk-w3ch4xq2.js:37728-38182 affinity
 /**
  * 工具批次摘要的系统提示（过去时、约 30 字符）。
  */
@@ -34,7 +34,7 @@ Examples:
 - Created signup endpoint
 - Read config.json
 - Ran failing tests`;
-//@ chunk-ha3km179.js:37084-38220 fingerprint (2.1.88 match: generateToolUseSummary, 0.789)
+//@ chunk-w3ch4xq2.js:38182-39318 fingerprint (2.1.88 match: generateToolUseSummary, 0.789)
 /**
  * 用小模型（queryHaikuWithFallback）根据工具名/输入/输出（各截 300 字符）和上一句回答意图生成摘要标签；失败返回 null。
  */
@@ -63,7 +63,7 @@ Output: ${outputStr}`;
 
 `
       : "";
-    let manifest = toolsUsedManifestText(tagUntrustedArtifactContent(messages, undefined, false));
+    let manifest = toolsUsedManifestText(collectToolsUsedBeforeSummary(messages, undefined, false));
     let response = await queryHaikuWithFallback({
       systemPrompt: asSystemPrompt([TOOL_USE_SUMMARY_PROMPT]),
       userPrompt: `${manifest}${contextPrefix}Tools completed:
@@ -111,7 +111,7 @@ Label:`,
     return null;
   }
 }
-//@ chunk-ha3km179.js:38220-38341 fingerprint (2.1.88 match: truncateJson, 1)
+//@ chunk-w3ch4xq2.js:39318-39439 fingerprint (2.1.88 match: truncateJson, 1)
 /**
  * JSON 序列化并截断到指定长度。
  */

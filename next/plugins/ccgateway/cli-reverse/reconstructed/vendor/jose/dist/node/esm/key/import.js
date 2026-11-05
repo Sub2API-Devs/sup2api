@@ -1,16 +1,16 @@
 /**
  * jose/dist/node/esm/key/import.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (1)
+ * pieces: chunk-pd6th42n.js (1)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { isPlainObject } from "../../../webapi/lib/validate.js";
 import { parse_default } from "../../../browser/runtime/jwk_to_key.js";
-import { decode } from "../../../browser/runtime/base64url.js";
-import { JOSENotSupported } from "../../../webapi/lib/content_encryption.js";
+import { decode_2 } from "../../../browser/runtime/base64url.js";
+import { JOSENotSupported_3 } from "../../../webapi/lib/content_encryption.js";
 
-//@ chunk-2tyrgda4.js:16702-17250 esm-fingerprint
+//@ chunk-pd6th42n.js:16702-17250 esm-fingerprint
 async function importJWK(jwk, alg, octAsKeyObject) {
   var _a;
   if (!isPlainObject(jwk)) throw TypeError("JWK must be an object");
@@ -24,10 +24,10 @@ async function importJWK(jwk, alg, octAsKeyObject) {
           alg,
           ext: (_a = jwk.ext) !== null && _a !== undefined ? _a : false,
         });
-      return decode(jwk.k);
+      return decode_2(jwk.k);
     case "RSA":
       if (jwk.oth !== undefined)
-        throw new JOSENotSupported('RSA JWK "oth" (Other Primes Info) Parameter value is not supported');
+        throw new JOSENotSupported_3('RSA JWK "oth" (Other Primes Info) Parameter value is not supported');
     case "EC":
     case "OKP":
       return parse_default({
@@ -35,7 +35,7 @@ async function importJWK(jwk, alg, octAsKeyObject) {
         alg,
       });
     default:
-      throw new JOSENotSupported('Unsupported "kty" (Key Type) Parameter value');
+      throw new JOSENotSupported_3('Unsupported "kty" (Key Type) Parameter value');
   }
 }
 export { importJWK };

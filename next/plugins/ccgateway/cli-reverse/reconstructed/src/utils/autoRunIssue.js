@@ -3,9 +3,9 @@
  *
  * 自动运行 /issue 前的确认提示组件（Esc 取消）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/autoRunIssue.tsx
- * pieces: chunk-s5p7fp0c.js (1)
+ * pieces: chunk-mx6cbnn0.js (1)
  * attribution: callgraph-fingerprint 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -18,7 +18,7 @@ import {
 import { Spinner } from "../components/Spinner.js";
 import { Box, Text } from "../ink/components/Text.js";
 
-//@ chunk-s5p7fp0c.js:11644-12107 callgraph-fingerprint (2.1.88 match: AutoRunIssueNotification, 0.382)
+//@ chunk-mx6cbnn0.js:11725-12188 callgraph-fingerprint (2.1.88 match: AutoRunIssueNotification, 0.382)
 function AutoRunIssueNotification(props) {
   let $ = useMemoCache(7);
   let { label, onCancel } = props;

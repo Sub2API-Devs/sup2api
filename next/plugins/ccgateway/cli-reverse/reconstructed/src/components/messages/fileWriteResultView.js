@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：按 sha256 校验后渲染写文件结果
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ytava78w.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ac1eq6qc.js (3)
  * attribution: placement 3
  */
 import { createHash } from "crypto";
@@ -15,7 +15,7 @@ import { renderMcpToolResultMessage } from "../../tools/MCPTool/UI.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { FileWriteToolCreatedMessage } from "../../tools/FileWriteTool/UI.js";
 
-//@ chunk-ytava78w.js:13317-13651 placement
+//@ chunk-ac1eq6qc.js:14465-14799 placement
 /**
  * 从工具结果（字符串或文本块）中解析 Write 结果 JSON，形状不对时返回 undefined。
  */
@@ -42,9 +42,9 @@ function parseFileWriteResult(result) {
       }
     : null;
 }
-//@ chunk-ytava78w.js:13651-13706 placement
+//@ chunk-ac1eq6qc.js:14799-14854 placement
 var CONTROL_OR_CR_RE = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]|\r(?!\n)/;
-//@ chunk-ytava78w.js:13706-13950 placement
+//@ chunk-ac1eq6qc.js:14854-15098 placement
 function renderVerifiedFileWriteResult(result, messageId, toolUse) {
   let clients = mergeClients_2(toolUse.input);
   let fileWriteResult = parseFileWriteResult(result);

@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/nested-clients/dist-cjs/submodules/sso-oidc/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-ddzww9ex.js (2)
+ * pieces: chunk-67qh5zdp.js (2)
  * attribution: cjs-fingerprint 1, affinity 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -24,7 +24,7 @@ import { require_runtimeConfig } from "./runtimeConfig.js";
 import { require_region_config_resolver } from "../../../../region-config-resolver/dist-cjs/index.js";
 import { require_protocol_http } from "../../../../../@smithy/protocol-http/dist-cjs/index.js";
 
-//@ chunk-ddzww9ex.js:7138-16157 cjs-fingerprint
+//@ chunk-67qh5zdp.js:7138-16157 cjs-fingerprint
 var require_sso_oidc = __commonJS(function (cjsExports) {
   var middlewareHostHeader = require_middleware_host_header();
   var middlewareLogger = require_middleware_logger();
@@ -598,5 +598,5 @@ var require_sso_oidc = __commonJS(function (cjsExports) {
   cjsExports.UnauthorizedClientException = UnauthorizedClientException$1;
   cjsExports.UnsupportedGrantTypeException = UnsupportedGrantTypeException$1;
 });
-//@ chunk-ddzww9ex.js:16157-16177 affinity
+//@ chunk-67qh5zdp.js:16157-16177 affinity
 export default require_sso_oidc();

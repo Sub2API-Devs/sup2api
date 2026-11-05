@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设计系统读取规则
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ez320trn.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1xrdahqv.js (6)
  * attribution: placement 6
  */
 import {
@@ -29,9 +29,9 @@ import {
 } from "../../tools/ArtifactTool/permissions/readConsent.js";
 import { rememberConsentForAsk, hasClassConsent } from "./consentClasses.js";
 import { othersReadIsUserOnly } from "./artifactToolGates.js";
-import { readArtifactFileViaWebFetch } from "./webfetchRead.js";
+import { readArtifactFile } from "./webfetchRead.js";
 
-//@ chunk-ez320trn.js:6203-6587 placement
+//@ chunk-1xrdahqv.js:6203-6587 placement
 /**
  * 判断读取设计系统某动作（read_file/list_files/read_db，含等价简写）是否命中 deny 或 ask 规则。
  */
@@ -81,7 +81,7 @@ function hasDesignSystemReadRule(toolName, args, action, toolUseContext, options
     ),
   );
 }
-//@ chunk-ez320trn.js:6587-6767 placement
+//@ chunk-1xrdahqv.js:6587-6767 placement
 /**
  * 判断是否已有读取设计系统内容的同意：开关关闭时按读取规则判定并记住同意；否则按存储或复制来源的同意判断。
  */
@@ -98,7 +98,7 @@ function hasDesignSystemReadConsent(parsed, owned, designSystem, context) {
     ? owned || attestedDataReadConsented(context, parsed.slug)
     : copySourceConsented(context, parsed, "files", "land");
 }
-//@ chunk-ez320trn.js:6767-6906 placement
+//@ chunk-1xrdahqv.js:6767-6906 placement
 /**
  * 未经询问读取他人的设计系统 artifact 时记录一次外部读取（附带是否已有证明的同意）。
  */
@@ -111,24 +111,18 @@ function recordForeignDesignSystemRead(parsed, designSystem, context) {
     recordUnaskedForeignRead(designSystem, parsed.slug, undefined, orgKey || undefined);
   }
 }
-//@ chunk-ez320trn.js:6906-6936 placement
+//@ chunk-1xrdahqv.js:6906-6936 placement
 var EMPTY_GUIDE_DOC = {
   doc: undefined,
   why: undefined,
 };
-//@ chunk-ez320trn.js:6936-7329 placement
+//@ chunk-1xrdahqv.js:6936-7329 placement
 /**
  * 读取设计系统已发布的某个文件作为文档：空文件或缺失视为无文档，其他失败给出原因。
  */
 async function readPublishedReadme(slug, path, missingOk, deadlineSignal, context) {
   let result = await raceWithDeadline(
-    readArtifactFileViaWebFetch(
-      slug,
-      path,
-      deadlineSignal,
-      context.credentials,
-      "artifact_design_system_guide_read",
-    ),
+    readArtifactFile(slug, path, deadlineSignal, context.credentials, "artifact_design_system_guide_read"),
     deadlineSignal,
     context,
     (kind) => ({
@@ -153,7 +147,7 @@ async function readPublishedReadme(slug, path, missingOk, deadlineSignal, contex
     failed: why,
   };
 }
-//@ chunk-ez320trn.js:7329-7416 placement
+//@ chunk-1xrdahqv.js:7329-7416 placement
 var separateReadHint = (path, reason) =>
   `its ${path} could not be fetched (${reason}) \u2014 ${READ_SEPARATELY_HINT}`;
 var EMPTY_GUIDE_DOCS = {
@@ -161,10 +155,10 @@ var EMPTY_GUIDE_DOCS = {
   project: EMPTY_GUIDE_DOC,
 };
 export {
-  readPublishedReadme,
-  hasDesignSystemReadRule,
-  recordForeignDesignSystemRead,
   hasDesignSystemReadConsent,
   EMPTY_GUIDE_DOC,
   EMPTY_GUIDE_DOCS,
+  recordForeignDesignSystemRead,
+  hasDesignSystemReadRule,
+  readPublishedReadme,
 };

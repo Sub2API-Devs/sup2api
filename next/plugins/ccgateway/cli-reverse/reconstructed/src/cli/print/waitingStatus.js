@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：用量限额等待心跳与等待状态上报
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (8)
  * attribution: placement 8
  */
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
@@ -22,12 +22,12 @@ import {
   drainQueuedTaskNotifications,
   artifactWatchStopNotice,
 } from "../../tasks/MonitorWsTask/MonitorWsTask.js";
-import { commandQueueManager } from "../../utils/messageQueueManager.js";
+import { getProcessQueue } from "../../utils/messageQueueManager.js";
 import { ASKUSERQUESTION } from "../../tools/AskUserQuestionTool/prompt.js";
 import { updateSessionActivity } from "../../utils/concurrentSessions.js";
 import { setWorking } from "../../services/artifacts/artifactPresence.js";
 
-//@ chunk-tyg7f3ek.js:613969-614422 placement
+//@ chunk-0yw3taqg.js:656047-656500 placement
 /**
  * 在主线程等待限流重置时定期向 SDK 宿主发送 usage_limit_wait_heartbeat。
  */
@@ -78,7 +78,7 @@ function createUsageLimitWaitHeartbeat({ readMainLoopModel, emit }) {
     stop();
   };
 }
-//@ chunk-tyg7f3ek.js:614422-614749 placement
+//@ chunk-0yw3taqg.js:656500-656827 placement
 function earliestRateLimitRetry(waits, model, now) {
   let earliest;
   for (let wait of waits) {
@@ -98,33 +98,33 @@ function earliestRateLimitRetry(waits, model, now) {
     error: "rate_limit",
   };
 }
-//@ chunk-tyg7f3ek.js:614749-614804 placement
+//@ chunk-0yw3taqg.js:656827-656882 placement
 function usageLimitWaitsAfter(now) {
   return usageLimitWaits().filter((wait) => wait.retryAtMs > now);
 }
-//@ chunk-tyg7f3ek.js:614804-614884 placement
+//@ chunk-0yw3taqg.js:656882-656962 placement
 function isUsageLimitWaitNoticeEnabled() {
   if (getAPIProvider() === "gateway") return false;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_rustling_sunset", true);
 }
-//@ chunk-tyg7f3ek.js:614884-614989 placement
+//@ chunk-0yw3taqg.js:656962-657067 placement
 function teardownAutoReactAndRooms(options) {
   stopAllRunningTasks(options);
   let killed = killAutoReactSubscriptions(options.taskRegistry, {
     durable: false,
   });
-  let drained = drainQueuedTaskNotifications(commandQueueManager(), {
+  let drained = drainQueuedTaskNotifications(getProcessQueue(), {
     leaveArtifactRooms: true,
   });
   artifactWatchStopNotice(killed, drained);
 }
-//@ chunk-tyg7f3ek.js:614989-615051 placement
+//@ chunk-0yw3taqg.js:657067-657129 placement
 var WAITING_STATE_NAMES = {
   running: "busy",
   requires_action: "waiting",
   idle: "idle",
 };
-//@ chunk-tyg7f3ek.js:615051-615317 placement
+//@ chunk-0yw3taqg.js:657129-657395 placement
 function createWaitingStatusReporter(storageV5) {
   let last;
   return (state, details) => {
@@ -152,7 +152,7 @@ ${waitingFor ?? ""}`;
     }
   };
 }
-//@ chunk-tyg7f3ek.js:615317-615453 placement
+//@ chunk-0yw3taqg.js:657395-657531 placement
 function createUserDecisionReporter(host, sessionState) {
   let pending = false;
   function update() {

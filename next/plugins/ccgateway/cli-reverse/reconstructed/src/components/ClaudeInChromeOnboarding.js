@@ -3,9 +3,9 @@
  *
  * Claude in Chrome 引导说明（需安装扩展）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ClaudeInChromeOnboarding.tsx
- * pieces: chunk-hthm3h8y.js (3)
+ * pieces: chunk-9kwkaaet.js (3)
  * attribution: placement 1, fingerprint 2
  */
 import { init_react_production, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
@@ -27,16 +27,16 @@ import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { NoticeAccent } from "./design-system/NoticeUnderScene.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-hthm3h8y.js:5447-5451 placement
+//@ chunk-9kwkaaet.js:5784-5788 placement
 init_react_production();
-//@ chunk-hthm3h8y.js:5451-5518 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-9kwkaaet.js:5788-5855 fingerprint (2.1.88 match: _temp, 1)
 function markClaudeInChromeOnboarded(current) {
   return {
     ...current,
     hasCompletedClaudeInChromeOnboarding: true,
   };
 }
-//@ chunk-hthm3h8y.js:5561-7326 fingerprint (2.1.88 match: ClaudeInChromeOnboarding, 0.392)
+//@ chunk-9kwkaaet.js:5898-7665 fingerprint (2.1.88 match: ClaudeInChromeOnboarding, 0.392)
 function ClaudeInChromeOnboarding(props) {
   let $ = useMemoCache(22);
   let { onDone } = props;

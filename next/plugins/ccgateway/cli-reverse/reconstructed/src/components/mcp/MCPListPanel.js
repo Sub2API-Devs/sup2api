@@ -3,10 +3,10 @@
  *
  * /mcp 列表面板：按作用域列出服务器及状态（connected/needs-auth/failed/disabled）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/mcp/MCPListPanel.tsx
- * pieces: chunk-9qfjhaj4.js (1), chunk-cpqpnzp4.js (20), chunk-dcmhvw5a.js (1)
- * attribution: fingerprint 4, sole-consumer 5, affinity 3, callgraph-fingerprint 5, layout 5
+ * pieces: chunk-5fazksz3.js (1), chunk-h6004nzv.js (21), chunk-xqynshdn.js (1), chunk-z20c443b.js (1)
+ * attribution: fingerprint 4, sole-consumer 3, affinity 1, callgraph-fingerprint 5, layout 10, placement 1
  */
 import { isPluginServerConfig } from "../../services/mcp/types.js";
 import { withConfigScope, decorateMcpTools, stampToolScope } from "../../services/mcp/mcpToolDecoration.js";
@@ -34,9 +34,8 @@ import { getEverConnectedClaudeAiMcpSet } from "../../services/mcp/claudeai.js";
 import { isDebugMode } from "../../utils/debug.js";
 import { isUnconfiguredFailure } from "../../services/mcp/redactMcpErrors.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { StatusIcon } from "../design-system/StatusIcon.js";
-import { renderToolResultMessage } from "../../tools/SendMessageTool/UI.js";
 import { McpParsingWarnings } from "./McpParsingWarnings.js";
 import { plural } from "../../utils/stringUtils.js";
 import { Dialog } from "../design-system/Dialog.js";
@@ -46,7 +45,7 @@ import { Byline } from "../design-system/Byline.js";
 import { formatToolConnectionState } from "./CapabilitiesSection.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:71740-71850 callgraph-fingerprint (2.1.88 match: _temp2, 0.448)
+//@ chunk-z20c443b.js:71847-71958 callgraph-fingerprint (2.1.88 match: _temp2, 0.449)
 /**
  * isClaudeAiConnectorConfig：claudeai 作用域的 claudeai-proxy，或非插件 dynamic 作用域的 claudeai-proxy。
  */
@@ -54,7 +53,7 @@ function isClaudeAiProxyServer(s_0) {
   if (s_0.type !== "claudeai-proxy") return false;
   return s_0.scope === "claudeai" || (s_0.scope === "dynamic" && !isPluginServerConfig(s_0));
 }
-//@ chunk-9qfjhaj4.js:235-420 fingerprint (2.1.88 match: _temp5, 0.677)
+//@ chunk-xqynshdn.js:236-422 placement
 function applyMcpServerConfig(config, server) {
   let toolServer = {
     name: server.client.name,
@@ -71,48 +70,60 @@ function applyMcpServerConfig(config, server) {
     }),
   };
 }
-//@ chunk-cpqpnzp4.js:21061-21065 sole-consumer
+//@ chunk-5fazksz3.js:13990-14055 fingerprint (2.1.88 match: SCOPE_ORDER, 0.845)
+var SCOPE_ORDER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5fazksz3.js:13990", () => {
+  SCOPE_ORDER = new Set(["local", "user", "project", "enterprise", "managed"]);
+});
+//@ chunk-h6004nzv.js:22250-22254 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-cpqpnzp4.js:21061", () => {
+deferInit("chunk-h6004nzv.js:22250", () => {
   init_react_production();
 });
-//@ chunk-cpqpnzp4.js:21065-21107 sole-consumer
+//@ chunk-h6004nzv.js:22254-22296 sole-consumer
 function isAgentScopeServer(server) {
   return server.scope === "agent";
 }
-//@ chunk-cpqpnzp4.js:21107-21138 affinity
+//@ chunk-h6004nzv.js:22296-22327 affinity
 function serverName(server) {
   return server.name;
 }
-//@ chunk-cpqpnzp4.js:21138-21182 callgraph-fingerprint (2.1.88 match: _temp, 0.493)
+//@ chunk-h6004nzv.js:22327-22372 callgraph-fingerprint (2.1.88 match: _temp, 0.493)
 function isConfiguredServer(s) {
   return !isClaudeAiProxyServer(s.client.config);
 }
-//@ chunk-cpqpnzp4.js:21182-21239 callgraph-fingerprint (2.1.88 match: _temp3, 1)
+//@ chunk-h6004nzv.js:22372-22429 callgraph-fingerprint (2.1.88 match: _temp3, 1)
 function compareByName(a, b) {
   return a.name.localeCompare(b.name);
 }
-//@ chunk-cpqpnzp4.js:21239-21296 callgraph-fingerprint (2.1.88 match: _temp4, 1)
+//@ chunk-h6004nzv.js:22429-22486 callgraph-fingerprint (2.1.88 match: _temp4, 1)
 function compareByName_2(a_0, b_0) {
   return a_0.name.localeCompare(b_0.name);
 }
-//@ chunk-cpqpnzp4.js:21296-21353 layout
+//@ chunk-h6004nzv.js:22486-22543 layout
 function compareByName_3(serverA, serverB) {
   return serverA.name.localeCompare(serverB.name);
 }
-//@ chunk-cpqpnzp4.js:21353-21384 layout
+//@ chunk-h6004nzv.js:22543-22574 layout
 function entryServerName(server) {
   return server.name;
 }
-//@ chunk-cpqpnzp4.js:21384-21423 fingerprint (2.1.88 match: _temp6, 1)
+//@ chunk-h6004nzv.js:22574-22613 fingerprint (2.1.88 match: _temp6, 1)
 function sourceAgentsOf(s_2) {
   return s_2.sourceAgents;
 }
-//@ chunk-cpqpnzp4.js:21423-21474 affinity
+//@ chunk-h6004nzv.js:22613-22664 layout
 function targetList(entry) {
   return "target" in entry ? [entry.target] : [];
 }
-//@ chunk-cpqpnzp4.js:21510-21615 sole-consumer
+//@ chunk-h6004nzv.js:22664-22700 layout
+/**
+ * 结果对象是否带 target 字段（MCP 面板用，切分误归 SendMessage UI）。
+ */
+function isTargetedResult(result) {
+  return "target" in result;
+}
+//@ chunk-h6004nzv.js:22700-22805 layout
 /**
  * 列表项或分组标题。
  */
@@ -133,7 +144,7 @@ function renderListEntry(entry) {
         entry.key,
       );
 }
-//@ chunk-cpqpnzp4.js:21615-21681 sole-consumer
+//@ chunk-h6004nzv.js:22805-22871 layout
 function renderNodeEntry(entry) {
   return (
     "node" in entry &&
@@ -146,12 +157,12 @@ function renderNodeEntry(entry) {
     )
   );
 }
-//@ chunk-cpqpnzp4.js:21681-21762 affinity
+//@ chunk-h6004nzv.js:22871-22952 layout
 var MCP_LIST_ROW_HEIGHT = 12;
 var MCP_LIST_VISIBLE_ROWS = 5;
 var MCP_LIST_INDENT = 3;
 var MCP_SCOPE_ORDER = ["project", "local", "user", "enterprise", "managed", "agent"];
-//@ chunk-cpqpnzp4.js:21762-22266 fingerprint (2.1.88 match: getScopeHeading, 0.736)
+//@ chunk-h6004nzv.js:22952-23456 fingerprint (2.1.88 match: getScopeHeading, 0.736)
 function getScopeHeading(scope) {
   switch (scope) {
     case "project":
@@ -196,7 +207,7 @@ function getScopeHeading(scope) {
       };
   }
 }
-//@ chunk-cpqpnzp4.js:22266-23546 layout
+//@ chunk-h6004nzv.js:23456-24737 layout
 /**
  * 连接器与已有服务器重复时，按重复来源（插件/本地/动态/托管）说明如何改用连接器。
  */
@@ -290,7 +301,7 @@ function DuplicateServerHint(props) {
     }
   }
 }
-//@ chunk-cpqpnzp4.js:23546-23716 callgraph-fingerprint (2.1.88 match: groupServersByScope, 1)
+//@ chunk-h6004nzv.js:24737-24907 callgraph-fingerprint (2.1.88 match: groupServersByScope, 1)
 function groupServersByScope(serverList) {
   let groups = new Map();
   for (let server of serverList) {
@@ -302,7 +313,7 @@ function groupServersByScope(serverList) {
     groupServers.sort((serverA, serverB) => serverA.name.localeCompare(serverB.name));
   return groups;
 }
-//@ chunk-cpqpnzp4.js:23716-24103 layout
+//@ chunk-h6004nzv.js:24907-25294 layout
 /**
  * 粗体标签加括号路径。
  */
@@ -348,7 +359,7 @@ function ServerPathLabel(props) {
   } else row = $[9];
   return row;
 }
-//@ chunk-cpqpnzp4.js:24103-24834 layout
+//@ chunk-h6004nzv.js:25294-26025 layout
 /**
  * 服务器名（按宽度截断）与右侧内容的一行。
  */
@@ -440,7 +451,7 @@ function ServerNameRow(props) {
   } else row = $[22];
   return row;
 }
-//@ chunk-cpqpnzp4.js:24834-31433 fingerprint (2.1.88 match: MCPListPanel, 0.47)
+//@ chunk-h6004nzv.js:26025-32625 fingerprint (2.1.88 match: MCPListPanel, 0.47)
 /**
  * MCP 列表面板：按作用域（项目/本地/用户/企业/claude.ai/动态）分组列出服务器及状态图标。
  */
@@ -477,7 +488,7 @@ function MCPListPanel(props) {
   let hasScrollViewport = useHasScrollViewport();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let visibleAgentServers;
-  ke: {
+  Me: {
     let agentScopeNames;
     if ($[4] !== servers) {
       agentScopeNames = new Set(servers.filter(isAgentScopeServer).map(serverName));
@@ -487,7 +498,7 @@ function MCPListPanel(props) {
     let agentScopeNames_2 = agentScopeNames;
     if (agentScopeNames_2.size === 0) {
       visibleAgentServers = agentServers;
-      break ke;
+      break Me;
     }
     let agentServersOnly;
     if ($[6] !== agentServers || $[7] !== agentScopeNames_2) {
@@ -709,7 +720,7 @@ function MCPListPanel(props) {
         key: "heading-agent-mcps",
         node,
       });
-      for (const agentName of uniq(agentServersToShow.flatMap(sourceAgentsOf))) {
+      for (const agentName of normalizeCaseForComparison_2(agentServersToShow.flatMap(sourceAgentsOf))) {
         entries.push({
           key: `spacer-agent-${agentName}`,
           node: jsxProd_default(Text, {
@@ -833,7 +844,7 @@ function MCPListPanel(props) {
   let serverCount = servers.length + agentServersToShow.length;
   let listRows = hasScrollViewport ? MCP_LIST_VISIBLE_ROWS : MCP_LIST_ROW_HEIGHT;
   let max = Math.max(MCP_LIST_INDENT, rows - listRows - (hasUnconfiguredFailure_2 ? 1 : 0));
-  let any = entries_2.some(renderToolResultMessage);
+  let any = entries_2.some(isTargetedResult);
   let isTruncated = any && entries_2.length > max;
   let warnings;
   if ($[46] === MEMO_CACHE_SENTINEL) {
@@ -991,7 +1002,7 @@ function MCPListPanel(props) {
   } else panel = $[77];
   return panel;
 }
-//@ chunk-cpqpnzp4.js:31433-32585 sole-consumer
+//@ chunk-h6004nzv.js:32625-33777 sole-consumer
 /**
  * 服务器列表项：状态图标与说明（禁用、已连接/无工具、缓存、连接中、需认证、未配置、失败），托管时加 managed。
  */
@@ -1061,4 +1072,4 @@ function describeServerStatus(server, toolCount, isScreenReaderEnabled) {
     meta: enterpriseManaged ? [...meta, "managed"] : meta,
   };
 }
-export { applyMcpServerConfig, MCPListPanel, isClaudeAiProxyServer };
+export { applyMcpServerConfig, isClaudeAiProxyServer, SCOPE_ORDER, MCPListPanel };

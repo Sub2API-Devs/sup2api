@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：npm 插件来源
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (61)
- * attribution: placement 61
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (62)
+ * attribution: placement 61, layout 1
  */
 import { readlink, readdir, writeFile, chmod } from "fs/promises";
 import { promisify } from "util";
@@ -30,7 +30,6 @@ import { getFsImplementation } from "../fsOperations.js";
 import { logForDebugging } from "../debug.js";
 import { firstLineOf } from "../stringUtils.js";
 import { getErrnoCode, TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../errors.js";
-import { decodeChunk } from "../../upstreamproxy/relay.js";
 import { isSafeZipPath } from "../dxt/zip.js";
 import { removeDirectoryTreeNoFollow as removeDirectoryTreeNoFollow_2 } from "../fsRemove.js";
 import { npmResolutionPolicyRefusal } from "./marketplacePolicy.js";
@@ -38,7 +37,7 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/gr
 import { npmMarketplaceDefaultOff } from "./pluginDependencies.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4386422-4386612 placement
+//@ chunk-5xgkngpb.js:4493035-4493225 placement
 /**
  * Linux/WSL 上经 /proc/self/fd 取文件描述符的真实路径。
  */
@@ -52,24 +51,24 @@ async function fdRealPath(fd) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:4386612-4386631 placement
+//@ chunk-5xgkngpb.js:4493225-4493244 placement
 /**
  * semverCompat：npm semver 的 CommonJS 包装（包下载用）。
  */
 var semverCompat; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4386612", () => {
+deferInit("chunk-5xgkngpb.js:4493225", () => {
   semverCompat = __toESM(require_semver_3(), 1);
 });
-//@ chunk-e6aww6q8.js:4386739-4386757 placement
+//@ chunk-5xgkngpb.js:4493352-4493370 placement
 var semverCompatRequire; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4386739", () => {
+deferInit("chunk-5xgkngpb.js:4493352", () => {
   semverCompatRequire = __toESM(require_semver_3(), 1);
 });
-//@ chunk-e6aww6q8.js:4386869-4386912 placement
+//@ chunk-5xgkngpb.js:4493482-4493525 placement
 var NPM_DISABLE_GIT_ENV = {
   npm_config_ignore_scripts: "true",
 };
-//@ chunk-e6aww6q8.js:4386912-4387008 placement
+//@ chunk-5xgkngpb.js:4493525-4493621 placement
 /**
  * npmExecEnv：npm 子进程环境（是否继承父环境）。
  */
@@ -87,7 +86,7 @@ function npmExecEnv() {
     extendEnv: false,
   };
 }
-//@ chunk-e6aww6q8.js:4387008-4387665 placement
+//@ chunk-5xgkngpb.js:4493621-4494278 placement
 /**
  * npm 下载相关的常量组（32 个绑定）：Y_s npm view 超时 60 s；Q_s registry 查询超时 30 s；Z_s npm pack 超时 300 s；eSs npm 子进程输出上限 8 MiB；uDe tar 块 1 MiB；tSs/nSs/aSs 每块数（256/512/256）与 Qct/Ozn/Izn 三个体积上限；Dzn 条目数上限 1e5；lSs/dSs/cSs 错误与名称展示长度；e5/fSs 是 tar 头长度 512 与权限位掩码 493；SSs 类型位掩码 73；rft/bSs/wSs/TSs/vSs/RSs 是 tar 的大小、可打印判定与进制常量；Ox 是 tar 头各字段的偏移；CSs/ASs/PSs/MSs/OSs 是 npm view 字段、校验算法、包名与归档后缀正则、git 托管站；ISs/DSs 是校验和字段的起止下标；LSs 是 promisify 后的 gunzip。
  */
@@ -124,7 +123,7 @@ var GIT_HOSTING_PROVIDERS;
 var CHECKSUM_OFFSET;
 var CHECKSUM_END;
 var gunzipTarball;
-deferInit("chunk-e6aww6q8.js:4387008", () => {
+deferInit("chunk-5xgkngpb.js:4493621", () => {
   NPM_VIEW_TIMEOUT_MS = 60000;
   NPM_REGISTRY_QUERY_TIMEOUT_MS = 30000;
   NPM_PACK_TIMEOUT_MS = 300000;
@@ -173,7 +172,7 @@ deferInit("chunk-e6aww6q8.js:4387008", () => {
   CHECKSUM_END = TAR_HEADER_FIELDS.checksum[0] + TAR_HEADER_FIELDS.checksum[1];
   gunzipTarball = promisify(gunzip);
 });
-//@ chunk-e6aww6q8.js:4387665-4388524 placement
+//@ chunk-5xgkngpb.js:4494278-4495137 placement
 /**
  * 用 npm view 解析插件包版本，名字非法时拒绝。
  */
@@ -218,7 +217,7 @@ async function resolveNpmPackage(packageName, versionSpec, options) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:4388524-4388714 placement
+//@ chunk-5xgkngpb.js:4495137-4495327 placement
 function assertNpmVersionSpec(packageName, versionSpec) {
   if (versionSpec === undefined || isNpmVersionSpec(versionSpec)) return;
   throw telemetrySafeError(
@@ -226,7 +225,7 @@ function assertNpmVersionSpec(packageName, versionSpec) {
     "npm version spec is not a version, range or tag",
   );
 }
-//@ chunk-e6aww6q8.js:4388714-4388926 placement
+//@ chunk-5xgkngpb.js:4495327-4495539 placement
 async function getDefaultHttpNpmRegistry(options) {
   let configResult = await runNpm(
     ["config", "get", "registry", "--workspaces=false"],
@@ -238,7 +237,7 @@ async function getDefaultHttpNpmRegistry(options) {
   let registryUrl = new URL(trimmed);
   return registryUrl.protocol === "http:" ? registryUrl.origin : undefined;
 }
-//@ chunk-e6aww6q8.js:4388926-4389182 placement
+//@ chunk-5xgkngpb.js:4495539-4495795 placement
 function checkTarballUrl(tarballUrl, registryOrigin, registryOverride, subject = "npm") {
   let reason = validateNpmRegistryUrl(tarballUrl, registryOverride, subject);
   if (reason !== undefined)
@@ -258,7 +257,7 @@ function checkTarballUrl(tarballUrl, registryOrigin, registryOverride, subject =
         moved: true,
       };
 }
-//@ chunk-e6aww6q8.js:4389182-4389893 placement
+//@ chunk-5xgkngpb.js:4495795-4496506 placement
 function validateNpmRegistryUrl(url, registryOrigin, subject) {
   if (!/^https?:\/\//i.test(url) || !URL.canParse(url)) return "is not an http or https link";
   if (/[\s#\\]/.test(url) || hasControlChars_2(url))
@@ -274,7 +273,7 @@ function validateNpmRegistryUrl(url, registryOrigin, subject) {
     return `is an unencrypted http link on a host other than your npm registry, so ${subject} could send your saved registry token to it in the clear`;
   return;
 }
-//@ chunk-e6aww6q8.js:4389893-4389995 placement
+//@ chunk-5xgkngpb.js:4496506-4496608 placement
 function hasControlChars_2(text) {
   for (let idx = 0; idx < text.length; idx++) {
     let code = text.charCodeAt(idx);
@@ -282,7 +281,7 @@ function hasControlChars_2(text) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:4389995-4390070 placement
+//@ chunk-5xgkngpb.js:4496608-4496683 placement
 /**
  * isNpmVersionSpec：是否为 npm 版本规格。
  */
@@ -292,7 +291,7 @@ function isNpmVersionSpec(spec) {
     (semverCompatRequire.validRange(spec) !== null || NPM_PACKAGE_NAME_RE.test(spec))
   );
 }
-//@ chunk-e6aww6q8.js:4390070-4390167 placement
+//@ chunk-5xgkngpb.js:4496683-4496780 placement
 /**
  * runNpm：带禁 git 参数执行 npm。
  */
@@ -303,7 +302,7 @@ function runNpm(args, context, timeout) {
     npmExecOptions(context, timeout),
   );
 }
-//@ chunk-e6aww6q8.js:4390167-4390322 placement
+//@ chunk-5xgkngpb.js:4496780-4496935 placement
 function npmExecOptions(context, timeout) {
   return {
     cwd: context.workDir,
@@ -316,7 +315,7 @@ function npmExecOptions(context, timeout) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:4390322-4391044 placement
+//@ chunk-5xgkngpb.js:4496935-4497657 placement
 /**
  * 检查为插件设置的 npm registry：不是合法 URL 抛 validation 拒绝；http 且不是用户默认 registry 时抛 policy 拒绝（避免明文泄露令牌）。 返回默认 http registry（若是）。
  */
@@ -339,7 +338,7 @@ async function checkRegistryOverride(packageName, options) {
     );
   return defaultHttpNpmRegistry;
 }
-//@ chunk-e6aww6q8.js:4391264-4391485 placement
+//@ chunk-5xgkngpb.js:4497877-4498098 placement
 function pickNpmVersion(npmViewVersions, versionSpec) {
   let [first] = npmViewVersions;
   if (!first || npmViewVersions.length === 1) return first;
@@ -354,7 +353,7 @@ function pickNpmVersion(npmViewVersions, versionSpec) {
       : (semverCompatRequire.maxSatisfying(mapped, versionSpec ?? "*") ?? mapped.at(-1));
   return npmViewVersions.find((record) => record.version === chosenVersion);
 }
-//@ chunk-e6aww6q8.js:4391485-4391548 placement
+//@ chunk-5xgkngpb.js:4498098-4498161 placement
 function semverSatisfies(latestTag, range) {
   try {
     return semverCompatRequire.satisfies(latestTag, range);
@@ -362,7 +361,7 @@ function semverSatisfies(latestTag, range) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:4391548-4391665 placement
+//@ chunk-5xgkngpb.js:4498161-4498278 placement
 function parseNpmViewVersions(text) {
   let jsonOrNull = parseJsonOrNull(text);
   return (Array.isArray(jsonOrNull) ? jsonOrNull : jsonOrNull === null ? [] : [jsonOrNull]).flatMap((raw) => {
@@ -370,7 +369,7 @@ function parseNpmViewVersions(text) {
     return npmViewRecord ? [npmViewRecord] : [];
   });
 }
-//@ chunk-e6aww6q8.js:4391665-4391994 placement
+//@ chunk-5xgkngpb.js:4498278-4498607 placement
 /**
  * npm view 单条记录取 version/name/tarball/integrity/shasum/latest。
  */
@@ -394,11 +393,11 @@ function toNpmViewRecord(raw) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:4391994-4392039 placement
+//@ chunk-5xgkngpb.js:4498607-4498652 placement
 function isDefinedValue(record) {
   return pickByHelper(record, (value) => value !== undefined);
 }
-//@ chunk-e6aww6q8.js:4392039-4392106 placement
+//@ chunk-5xgkngpb.js:4498652-4498719 placement
 function parseJsonOrNull(text) {
   try {
     return jsonParse(text.trim() || "null");
@@ -406,7 +405,7 @@ function parseJsonOrNull(text) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:4392106-4392389 placement
+//@ chunk-5xgkngpb.js:4498719-4499002 placement
 function npmErrorSummary(text, stderr) {
   let jsonOrNull = parseJsonOrNull(text);
   let summary = jsonOrNull?.error?.summary;
@@ -424,7 +423,7 @@ function npmErrorSummary(text, stderr) {
           .find((line) => line.length > 0) ?? "npm exited with an error");
   return printableName(redactUrlsInMessage(errorSummary), MAX_NPM_ERROR_LENGTH);
 }
-//@ chunk-e6aww6q8.js:4392389-4392812 placement
+//@ chunk-5xgkngpb.js:4499002-4499425 placement
 /**
  * 下载已解析的 tarball 并校验完整性。
  */
@@ -441,7 +440,7 @@ async function downloadNpmTarball(resolved, options) {
   checkNpmIntegrity(bytes, resolved, options);
   return bytes;
 }
-//@ chunk-e6aww6q8.js:4392812-4393591 placement
+//@ chunk-5xgkngpb.js:4499425-4500204 placement
 /**
  * 用 npm pack 下载插件包（--ignore-scripts）。
  */
@@ -480,11 +479,11 @@ async function npmPackTarball(spec, options, { displaySpec = spec, refusal }) {
     );
   return fileBytes;
 }
-//@ chunk-e6aww6q8.js:4393591-4393632 placement
+//@ chunk-5xgkngpb.js:4500204-4500245 placement
 function bytesToMiB(bytes) {
   return Math.floor(bytes / TAR_CHUNK_BYTES);
 }
-//@ chunk-e6aww6q8.js:4393632-4394134 placement
+//@ chunk-5xgkngpb.js:4500245-4500747 placement
 function checkNpmIntegrity(bytes, resolved, options) {
   let displaySpec = `${resolved.name}@${resolved.version}`;
   if (resolved.integrity) {
@@ -505,7 +504,7 @@ function checkNpmIntegrity(bytes, resolved, options) {
     level: "warn",
   });
 }
-//@ chunk-e6aww6q8.js:4394134-4394332 placement
+//@ chunk-5xgkngpb.js:4500747-4500945 placement
 function integrityMatches(bytes, integrity) {
   let filtered = integrity.split(/\s+/).filter((part) => part.includes("-"));
   let found = INTEGRITY_ALGORITHMS.find((algorithm) =>
@@ -515,22 +514,22 @@ function integrityMatches(bytes, integrity) {
   let digest = createHash(found).update(bytes).digest("base64");
   return filtered.includes(`${found}-${digest}`);
 }
-//@ chunk-e6aww6q8.js:4394332-4394391 placement
+//@ chunk-5xgkngpb.js:4500945-4501004 placement
 function sha1Hex(bytes) {
   return createHash("sha1").update(bytes).digest("hex");
 }
-//@ chunk-e6aww6q8.js:4394391-4394551 placement
+//@ chunk-5xgkngpb.js:4501004-4501164 placement
 function tarballMismatchError(displaySpec, kind) {
   return telemetrySafeError(
     `${displaySpec} was not installed: the downloaded tarball does not match the ${kind} the registry reported`,
     `npm tarball ${firstLineOf(kind, " ")} mismatch`,
   );
 }
-//@ chunk-e6aww6q8.js:4394551-4394583 placement
+//@ chunk-5xgkngpb.js:4501164-4501196 placement
 function printablePackageName(name) {
   return printableName(name, MAX_PACKAGE_NAME_DISPLAY);
 }
-//@ chunk-e6aww6q8.js:4394583-4395039 placement
+//@ chunk-5xgkngpb.js:4501196-4501652 placement
 /**
  * 解开 tarball 到目标目录（wx 独占写、保留可执行位）。
  */
@@ -562,7 +561,7 @@ async function unpackNpmTarball(bytes, targetPath) {
   logForDebugging(`Unpacked npm tarball to ${targetPath}: ${writtenPaths.length} files`);
   return writtenPaths;
 }
-//@ chunk-e6aww6q8.js:4395039-4396489 placement
+//@ chunk-5xgkngpb.js:4501652-4503106 placement
 /**
  * 解析 npm tarball（tar 头校验、大小限制、越界检查）。
  */
@@ -595,7 +594,7 @@ async function parseNpmTarball(bytes) {
     let effectivePath = paxPath ?? longName;
     switch (tarTypeFlag) {
       case "x":
-        paxPath = decodeChunk(chunk).get("path") ?? paxPath;
+        paxPath = parsePrintHeaders(chunk).get("path") ?? paxPath;
         continue;
       case "L":
         longName = readCString(chunk);
@@ -655,7 +654,7 @@ async function parseNpmTarball(bytes) {
   if (!entries.some((entry) => entry.kind === "file")) throw npmInstallRefusal("it contains no files");
   return entries;
 }
-//@ chunk-e6aww6q8.js:4396489-4396784 placement
+//@ chunk-5xgkngpb.js:4503106-4503401 placement
 async function gunzipTarball_2(bytes) {
   try {
     return await gunzipTarball(bytes, {
@@ -669,33 +668,33 @@ async function gunzipTarball_2(bytes) {
     throw telemetrySafeError(message, "npm tarball gunzip failed");
   }
 }
-//@ chunk-e6aww6q8.js:4396784-4396843 placement
+//@ chunk-5xgkngpb.js:4503401-4503460 placement
 function tarLinkKindLabel(tarTypeFlag) {
   return tarTypeFlag === "1" ? "hard link" : "symbolic link";
 }
-//@ chunk-e6aww6q8.js:4396843-4396946 placement
+//@ chunk-5xgkngpb.js:4503460-4503563 placement
 function tarEntryPath(header, tarField) {
   let prefix = readTarField(header, TAR_HEADER_FIELDS.magic).startsWith("ustar")
     ? readTarField(header, TAR_HEADER_FIELDS.prefix)
     : "";
   return prefix ? `${prefix}/${tarField}` : tarField;
 }
-//@ chunk-e6aww6q8.js:4396946-4397036 placement
+//@ chunk-5xgkngpb.js:4503563-4503653 placement
 function readTarTypeFlag(header) {
   let uInt8 = header.readUInt8(TAR_HEADER_FIELDS.typeflag[0]);
   return uInt8 === 0 ? "0" : String.fromCharCode(uInt8);
 }
-//@ chunk-e6aww6q8.js:4397036-4397126 placement
+//@ chunk-5xgkngpb.js:4503653-4503743 placement
 function npmInstallRefusal(reason) {
   return telemetrySafeError(`The npm package was not installed: ${reason}`, "npm tarball refused");
 }
-//@ chunk-e6aww6q8.js:4397126-4397161 placement
+//@ chunk-5xgkngpb.js:4503743-4503778 placement
 function telemetrySafeError(message, telemetryCode) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(message, telemetryCode);
 }
-//@ chunk-e6aww6q8.js:4397161-4397301 placement
+//@ chunk-5xgkngpb.js:4503778-4503918 placement
 let NpmFetchRefusal; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4397161", () => {
+deferInit("chunk-5xgkngpb.js:4503778", () => {
   NpmFetchRefusal = class NpmFetchRefusal extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -707,7 +706,7 @@ deferInit("chunk-e6aww6q8.js:4397161", () => {
     }
   };
 });
-//@ chunk-e6aww6q8.js:4397301-4397440 placement
+//@ chunk-5xgkngpb.js:4503918-4504057 placement
 function stripPackageRoot(entryPath) {
   let replaced = entryPath.replace(/^\.\//, "");
   let index = replaced.indexOf("/");
@@ -715,11 +714,11 @@ function stripPackageRoot(entryPath) {
   let replaced_2 = replaced.slice(index + 1).replace(/\/+$/, "");
   return replaced_2 === "" ? null : replaced_2;
 }
-//@ chunk-e6aww6q8.js:4397440-4397483 placement
+//@ chunk-5xgkngpb.js:4504057-4504100 placement
 function isAllZeroBytes(bytes) {
   return bytes.every((byte) => byte === 0);
 }
-//@ chunk-e6aww6q8.js:4397483-4397607 placement
+//@ chunk-5xgkngpb.js:4504100-4504224 placement
 function verifyTarHeaderChecksum(header) {
   let tarNumber = readTarNumber(header, TAR_HEADER_FIELDS.checksum);
   let sum = 0;
@@ -729,16 +728,16 @@ function verifyTarHeaderChecksum(header) {
   }
   return sum === tarNumber;
 }
-//@ chunk-e6aww6q8.js:4397607-4397659 placement
+//@ chunk-5xgkngpb.js:4504224-4504276 placement
 function readTarField(header, [start, length]) {
   return readCString(header.subarray(start, start + length));
 }
-//@ chunk-e6aww6q8.js:4397659-4397741 placement
+//@ chunk-5xgkngpb.js:4504276-4504358 placement
 function readCString(bytes) {
   let index = bytes.indexOf(0);
   return (index < 0 ? bytes : bytes.subarray(0, index)).toString("utf8");
 }
-//@ chunk-e6aww6q8.js:4397741-4397916 placement
+//@ chunk-5xgkngpb.js:4504358-4504533 placement
 function readTarNumber(header, [start, length]) {
   let bytes = header.subarray(start, start + length);
   if ((bytes.readUInt8(0) & BINARY_MODE_FLAG) !== 0)
@@ -746,7 +745,23 @@ function readTarNumber(header, [start, length]) {
   let trimmed = readCString(bytes).trim();
   return trimmed === "" ? 0 : parseInt(trimmed, OCTAL_RADIX) || 0;
 }
-//@ chunk-e6aww6q8.js:4398208-4398790 placement
+//@ chunk-5xgkngpb.js:4504533-4504825 layout
+function parsePrintHeaders(buffer) {
+  let headers = new Map();
+  let offset = 0;
+  while (offset < buffer.length) {
+    let index = buffer.indexOf(PRINTABLE_CHAR_MIN, offset);
+    if (index < 0) break;
+    let chunkSize = parseInt(buffer.subarray(offset, index).toString("utf8"), DECIMAL_RADIX);
+    if (!Number.isFinite(chunkSize) || chunkSize <= 0) break;
+    let str = buffer.subarray(index + 1, offset + chunkSize - 1).toString("utf8");
+    let index_2 = str.indexOf("=");
+    if (index_2 > 0) headers.set(str.slice(0, index_2), str.slice(index_2 + 1));
+    offset += chunkSize;
+  }
+  return headers;
+}
+//@ chunk-5xgkngpb.js:4504825-4505407 placement
 /**
  * 下载 npm 插件包到 targetPath：非 npm 市场通道且不是包名时按链接或 tarball 处理；否则解析版本、下载 tarball、 校验完整性（需要时与记录的 integrity 对比）、解包；npm 市场通道还校验包名、策略与 package.json 身份。
  */
@@ -782,7 +797,7 @@ async function fetchNpmPackage(request, options) {
   if (options.isNpmMarketplaceLane) await assertUnpackedManifestMatches(targetPath, resolved);
   return resolved;
 }
-//@ chunk-e6aww6q8.js:4398790-4399110 placement
+//@ chunk-5xgkngpb.js:4505407-4505727 placement
 /**
  * 解包后的 package.json 名字/版本须与解析结果一致。
  */
@@ -798,7 +813,7 @@ async function assertUnpackedManifestMatches(dir, resolved) {
     "npm tarball manifest does not match the resolution",
   );
 }
-//@ chunk-e6aww6q8.js:4399110-4399410 placement
+//@ chunk-5xgkngpb.js:4505727-4506027 placement
 /**
  * tarball 与安装时记录的完整性一致，否则提示 plugin update。
  */
@@ -809,7 +824,7 @@ function assertRecordedIntegrity(bytes, resolved, integrity) {
     "npm tarball differs from the recorded install integrity",
   );
 }
-//@ chunk-e6aww6q8.js:4399410-4399741 placement
+//@ chunk-5xgkngpb.js:4506027-4506358 placement
 /**
  * registry 返回的包名一致且策略允许。
  */
@@ -826,14 +841,14 @@ function assertNpmResolutionAllowed(packageName, resolved) {
   if (refusal !== null)
     throw new NpmFetchRefusal(refusal, "npm marketplace install refused by managed policy", "policy");
 }
-//@ chunk-e6aww6q8.js:4399741-4399809 placement
+//@ chunk-5xgkngpb.js:4506358-4506426 placement
 /**
  * isValidNpmPackageNameLoose：小写后是否为合法 npm 包名。
  */
 function isValidNpmPackageNameLoose(name) {
   return isValidNpmPackageName(name.replace(/[A-Z]/g, (char) => char.toLowerCase()));
 }
-//@ chunk-e6aww6q8.js:4399809-4399941 placement
+//@ chunk-5xgkngpb.js:4506426-4506558 placement
 function splitNpmSpec(packageName) {
   let index = packageName.indexOf("@", 1);
   let sliced = packageName.slice(0, index);
@@ -845,7 +860,7 @@ function splitNpmSpec(packageName) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:4399941-4400537 placement
+//@ chunk-5xgkngpb.js:4506558-4507154 placement
 /**
  * 非 registry 包名（链接/tarball）的 npm 源下载与解包。
  */
@@ -866,7 +881,7 @@ async function fetchNpmLinkSource({ packageName, versionSpec, targetPath }, opti
     tarballUrl: packageName,
   };
 }
-//@ chunk-e6aww6q8.js:4400537-4400802 placement
+//@ chunk-5xgkngpb.js:4507154-4507419 placement
 async function readPackageJsonIdentity(dir) {
   try {
     let parsed = jsonParse(
@@ -884,22 +899,22 @@ async function readPackageJsonIdentity(dir) {
     return {};
   }
 }
-//@ chunk-e6aww6q8.js:4413764-4413825 placement
+//@ chunk-5xgkngpb.js:4520390-4520451 placement
 /**
  * npmMarketplaceEnabled：npm 市场功能开关。
  */
 function npmMarketplaceEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_plugins_npm_marketplace", npmMarketplaceDefaultOff);
 }
-//@ chunk-e6aww6q8.js:4413825-4413935 placement
+//@ chunk-5xgkngpb.js:4520451-4520561 placement
 /**
  * 账号未开放 <package>@npm 直接安装。
  */
 var NPM_DIRECT_INSTALL_DISABLED_MESSAGE =
   "Installing plugins straight from an npm registry (`<package>@npm`) is not enabled for this account.";
-//@ chunk-e6aww6q8.js:4413935-4413958 placement
+//@ chunk-5xgkngpb.js:4520561-4520584 placement
 var NPM_REGISTRY = "npm:registry";
-//@ chunk-e6aww6q8.js:4413958-4414097 placement
+//@ chunk-5xgkngpb.js:4520584-4520723 placement
 /**
  * 包名/版本/registry 转 npm 插件源。
  */
@@ -913,7 +928,7 @@ function toNpmPluginSource(request, registry) {
     }),
   });
 }
-//@ chunk-e6aww6q8.js:4414097-4414235 placement
+//@ chunk-5xgkngpb.js:4520723-4520861 placement
 function toNpmMarketplaceSource(name, options) {
   let version = options?.version;
   let npmRegistry = options?.npmRegistry;
@@ -933,7 +948,7 @@ function toNpmMarketplaceSource(name, options) {
     ...versionFields,
   };
 }
-//@ chunk-e6aww6q8.js:4414235-4414294 placement
+//@ chunk-5xgkngpb.js:4520861-4520920 placement
 function npmPluginSource(name, options) {
   return {
     name,
@@ -941,7 +956,7 @@ function npmPluginSource(name, options) {
     source: installVersion(name, options),
   };
 }
-//@ chunk-e6aww6q8.js:4414294-4414348 placement (2.1.88 match: installVersion, 0.763)
+//@ chunk-5xgkngpb.js:4520920-4520974 placement (2.1.88 match: installVersion, 0.763)
 function installVersion(packageName, options) {
   return {
     source: "npm",
@@ -950,21 +965,19 @@ function installVersion(packageName, options) {
   };
 }
 export {
-  npmMarketplaceEnabled,
-  NPM_DIRECT_INSTALL_DISABLED_MESSAGE,
-  toNpmPluginSource,
-  NPM_REGISTRY,
-  resolveNpmPackage,
-  PRINTABLE_CHAR_MIN,
-  DECIMAL_RADIX,
   isValidNpmPackageNameLoose,
   fetchNpmPackage,
+  npmMarketplaceEnabled,
+  NPM_DIRECT_INSTALL_DISABLED_MESSAGE,
   toNpmMarketplaceSource,
-  fdRealPath,
+  NPM_REGISTRY,
   semverCompat,
   checkTarballUrl,
   isNpmVersionSpec,
   npmExecEnv,
   runNpm,
   getDefaultHttpNpmRegistry,
+  fdRealPath,
+  toNpmPluginSource,
+  resolveNpmPackage,
 };

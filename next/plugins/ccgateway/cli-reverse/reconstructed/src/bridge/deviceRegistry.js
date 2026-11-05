@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：向账号设备注册表登记本机（公钥上传、行主键缓存、上限与拒绝错误）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-x58vpmpd.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-dk1d903v.js (16)
  * attribution: placement 16
  */
 import { hostname } from "os";
@@ -25,16 +25,16 @@ import { jsonStringify } from "../utils/slowOperations.js";
 import { getPlatformDisplayName } from "../utils/platform.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-x58vpmpd.js:10413-10588 placement
+//@ chunk-dk1d903v.js:10414-10589 placement
 var REMOTE_DEVICES_API_PATH = "/api/organizations/:orgUUID/cowork/remote_devices";
 var COWORK_REMOTE_DEVICE_LIMIT_REACHED = "cowork_remote_device_limit_reached";
 var ACCOUNT_SESSION_INVALID = "account_session_invalid";
 var DEVICE_REGISTRATION_REVOKED_CODE = "cowork_remote_device_registration_revoked";
-//@ chunk-x58vpmpd.js:10588-10642 placement
+//@ chunk-dk1d903v.js:10589-10643 placement
 async function registeredRowPk(accountUuid, credentials) {
   return (await resolveRegisteredDevice(accountUuid, credentials))?.rowPk;
 }
-//@ chunk-x58vpmpd.js:10642-10757 placement
+//@ chunk-dk1d903v.js:10643-10758 placement
 async function loadRegisteredDevice(accountUuid, credentials) {
   let deviceKey = await deviceKeyStore().load(accountUuid, credentials);
   let lower = normalizeUuidOrNull(deviceKey?.rowPk)?.toLowerCase();
@@ -45,7 +45,7 @@ async function loadRegisteredDevice(accountUuid, credentials) {
       }
     : undefined;
 }
-//@ chunk-x58vpmpd.js:10757-10866 placement
+//@ chunk-dk1d903v.js:10758-10867 placement
 async function resolveRegisteredDevice(accountUuid, credentials, held) {
   if (held?.accountUuid === accountUuid) return held;
   let registeredDevice = await loadRegisteredDevice(accountUuid, credentials);
@@ -56,15 +56,15 @@ async function resolveRegisteredDevice(accountUuid, credentials, held) {
     }
   );
 }
-//@ chunk-x58vpmpd.js:10866-10894 placement (2.1.88 match: chordToDisplayString, 1)
+//@ chunk-dk1d903v.js:10867-10895 placement (2.1.88 match: chordToDisplayString, 1)
 function getPlatform() {
   return "linux";
 }
-//@ chunk-x58vpmpd.js:10894-10955 placement
+//@ chunk-dk1d903v.js:10895-10956 placement
 function deviceDisplayNameForRegister(name) {
   return truncateCodePoints(name.trim(), 255) || truncateCodePoints(deviceDisplayName().trim(), 255);
 }
-//@ chunk-x58vpmpd.js:10955-11173 placement
+//@ chunk-dk1d903v.js:10956-11174 placement
 async function registerDeviceCached(accountUuid, displayName, credentials, { relearn = false } = {}) {
   try {
     if (!isDeviceBindingAllowed()) throw new DeviceRegistrationUnavailableError("client egress policy");
@@ -78,7 +78,7 @@ async function registerDeviceCached(accountUuid, displayName, credentials, { rel
     throw error;
   }
 }
-//@ chunk-x58vpmpd.js:11173-12687 placement
+//@ chunk-dk1d903v.js:11174-12687 placement
 /**
  * 向设备注册表登记本机：加载或生成设备密钥，上传公钥并保存返回的行主键。
  */
@@ -160,9 +160,9 @@ async function registerDevice(accountUuid, displayName, credentials, relearn) {
     key: deviceKey,
   };
 }
-//@ chunk-x58vpmpd.js:12687-12839 placement
+//@ chunk-dk1d903v.js:12687-12839 placement
 let DeviceLimitReachedError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-x58vpmpd.js:12687", () => {
+deferInit("chunk-dk1d903v.js:12687", () => {
   DeviceLimitReachedError = class DeviceLimitReachedError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -175,9 +175,9 @@ deferInit("chunk-x58vpmpd.js:12687", () => {
     }
   };
 });
-//@ chunk-x58vpmpd.js:12839-13082 placement
+//@ chunk-dk1d903v.js:12839-13082 placement
 let DeviceRegistrationUnavailableError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-x58vpmpd.js:12839", () => {
+deferInit("chunk-dk1d903v.js:12839", () => {
   DeviceRegistrationUnavailableError = class DeviceRegistrationUnavailableError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -190,9 +190,9 @@ deferInit("chunk-x58vpmpd.js:12839", () => {
     }
   };
 });
-//@ chunk-x58vpmpd.js:13082-13317 placement
+//@ chunk-dk1d903v.js:13082-13317 placement
 let DeviceKeyRefusedError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-x58vpmpd.js:13082", () => {
+deferInit("chunk-dk1d903v.js:13082", () => {
   DeviceKeyRefusedError = class DeviceKeyRefusedError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -207,14 +207,14 @@ deferInit("chunk-x58vpmpd.js:13082", () => {
     }
   };
 });
-//@ chunk-x58vpmpd.js:13317-13393 placement
+//@ chunk-dk1d903v.js:13317-13393 placement
 async function reregisterDevice(accountUuid, displayName, publicKeySpkiB64, credentials) {
   await retireDroppedDeviceKey(accountUuid, publicKeySpkiB64, credentials, 2);
   return registerDeviceCached(accountUuid, displayName, credentials, {
     relearn: true,
   });
 }
-//@ chunk-x58vpmpd.js:13393-13601 placement
+//@ chunk-dk1d903v.js:13393-13601 placement
 async function retireDroppedDeviceKey(accountUuid, publicKeySpkiB64, credentials, attemptsLeft) {
   let deviceKey = await deviceKeyStore().load(accountUuid, credentials);
   if (deviceKey?.publicKeySpkiB64 !== publicKeySpkiB64) return;
@@ -224,7 +224,7 @@ async function retireDroppedDeviceKey(accountUuid, publicKeySpkiB64, credentials
   });
   return retireDroppedDeviceKey(accountUuid, publicKeySpkiB64, credentials, attemptsLeft - 1);
 }
-//@ chunk-x58vpmpd.js:13601-13759 placement
+//@ chunk-dk1d903v.js:13601-13759 placement
 function createKeyNotRetiredError(reason) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
     `deviceRegistry: the removed device's key could not be retired (${reason})`,
@@ -232,23 +232,23 @@ function createKeyNotRetiredError(reason) {
     "key_not_retired",
   );
 }
-//@ chunk-x58vpmpd.js:13759-13828 placement
+//@ chunk-dk1d903v.js:13759-13828 placement
 async function forgetRegisteredRow(accountUuid, credentials) {
   await (await deviceKeyStore().load(accountUuid, credentials))?.setRowPk(undefined);
 }
-//@ chunk-x58vpmpd.js:13828-13895 placement
+//@ chunk-dk1d903v.js:13828-13895 placement
 function deviceDisplayName() {
   return `Claude Code on ${hostname()} \xB7 ${getPlatformDisplayName("linux")}`;
 }
 export {
-  loadRegisteredDevice,
-  deviceDisplayName,
-  registerDeviceCached,
-  DeviceKeyRefusedError,
-  reregisterDevice,
   forgetRegisteredRow,
+  registerDeviceCached,
+  deviceDisplayName,
+  registeredRowPk,
   DeviceLimitReachedError,
   DeviceRegistrationUnavailableError,
-  registeredRowPk,
+  DeviceKeyRefusedError,
   resolveRegisteredDevice,
+  loadRegisteredDevice,
+  reregisterDevice,
 };

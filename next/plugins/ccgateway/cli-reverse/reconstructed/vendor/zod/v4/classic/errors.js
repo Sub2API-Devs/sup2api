@@ -1,17 +1,17 @@
 /**
  * zod/v4/classic/errors.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: zod@4.6.2
- * pieces: chunk-7vp249v4.js (3)
+ * pieces: chunk-m4y44r15.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
 import { $ZodError, formatError, flattenError } from "../core/errors.js";
 import { jsonStringifyReplacer } from "../core/util.js";
 import { $constructor } from "../core/core.js";
 
-//@ chunk-7vp249v4.js:78914-78969 esm-layout
+//@ chunk-m4y44r15.js:78914-78969 esm-layout
 var _installedErrorProtos = new WeakSet([Object.prototype, Error.prototype]);
-//@ chunk-7vp249v4.js:78969-79221 esm-fingerprint
+//@ chunk-m4y44r15.js:78969-79221 esm-fingerprint
 function _lazyMethod(proto, key, make) {
   Object.defineProperty(proto, key, {
     configurable: true,
@@ -34,7 +34,7 @@ function _lazyMethod(proto, key, make) {
     },
   });
 }
-//@ chunk-7vp249v4.js:79221-79741 esm-fingerprint
+//@ chunk-m4y44r15.js:79221-79741 esm-fingerprint
 var initializer_2 = (inst, issues) => {
   $ZodError.init(inst, issues);
   inst.name = "ZodError";

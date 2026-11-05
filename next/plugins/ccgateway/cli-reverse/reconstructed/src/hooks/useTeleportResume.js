@@ -3,9 +3,9 @@
  *
  * teleport 恢复会话的 hook（tengu_teleport_resume_session）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useTeleportResume.tsx
- * pieces: chunk-0bntfk7p.js (1)
+ * pieces: chunk-1c4mt1y2.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -17,11 +17,10 @@ import { withFeatureTelemetry } from "../services/analytics/featureTelemetry.js"
 import { teleportResumeCodeSession } from "../utils/teleport.js";
 import { setTeleportedSessionInfo } from "../bootstrap/state.js";
 import { TeleportOperationError, errorMessage } from "../utils/errors.js";
-import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 
-//@ chunk-0bntfk7p.js:1257-1971 fingerprint (2.1.88 match: useTeleportResume, 0.793)
+//@ chunk-1c4mt1y2.js:1258-1902 fingerprint (2.1.88 match: useTeleportResume, 0.77)
 function useTeleportResume(source) {
-  let $ = useMemoCache(8);
+  let $ = useMemoCache(7);
   let [isResuming, setIsResuming] = useState(false);
   let [error, setError] = useState(null);
   let [selectedSession, setSelectedSession] = useState(null);
@@ -60,29 +59,20 @@ function useTeleportResume(source) {
     $[1] = t0;
   } else t0 = $[1];
   let resumeSession = t0;
-  let t1;
-  if ($[2] === MEMO_CACHE_SENTINEL) {
-    t1 = () => {
-      setError(null);
-    };
-    $[2] = t1;
-  } else t1 = $[2];
-  let clearError = t1;
-  let t2;
-  if ($[3] !== error || $[4] !== isResuming || $[5] !== resumeSession || $[6] !== selectedSession) {
-    t2 = {
+  let exitKeybindings;
+  if ($[2] !== error || $[3] !== isResuming || $[4] !== resumeSession || $[5] !== selectedSession) {
+    exitKeybindings = {
       resumeSession,
       isResuming,
       error,
       selectedSession,
-      clearError,
     };
-    $[3] = error;
-    $[4] = isResuming;
-    $[5] = resumeSession;
-    $[6] = selectedSession;
-    $[7] = t2;
-  } else t2 = $[7];
-  return t2;
+    $[2] = error;
+    $[3] = isResuming;
+    $[4] = resumeSession;
+    $[5] = selectedSession;
+    $[6] = exitKeybindings;
+  } else exitKeybindings = $[6];
+  return exitKeybindings;
 }
 export { useTeleportResume };

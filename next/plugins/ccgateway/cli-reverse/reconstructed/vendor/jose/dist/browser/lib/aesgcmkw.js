@@ -1,8 +1,8 @@
 /**
  * jose/dist/browser/lib/aesgcmkw.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (2), chunk-5h78gfwc.js (2)
+ * pieces: chunk-0f6azspv.js (2), chunk-pd6th42n.js (2)
  * attribution: esm-layout 3, esm-fingerprint 2
  */
 import { keyToJWK } from "../../webapi/key/export.js";
@@ -12,11 +12,11 @@ import { encrypt_default } from "../runtime/encrypt.js";
 import { encode } from "../runtime/base64url.js";
 import { decrypt_default } from "../runtime/decrypt.js";
 
-//@ chunk-5h78gfwc.js:23811-23845 esm-layout
+//@ chunk-0f6azspv.js:23811-23845 esm-layout
 async function exportJWK(key) {
   return keyToJWK(key);
 }
-//@ chunk-5h78gfwc.js:23845-23984 esm-fingerprint
+//@ chunk-0f6azspv.js:23845-23984 esm-fingerprint
 async function aesGcmKwWrap(alg, key, cek, p2c) {
   let jweAlgorithm = alg.slice(0, 7);
   let encrypted = await encrypt(jweAlgorithm, cek, key, p2c, new Uint8Array());
@@ -26,7 +26,7 @@ async function aesGcmKwWrap(alg, key, cek, p2c) {
     tag: encode_2(encrypted.tag),
   };
 }
-//@ chunk-2tyrgda4.js:19740-19899 esm-fingerprint
+//@ chunk-pd6th42n.js:19740-19899 esm-fingerprint
 async function wrap_2(alg, key, cek, iv) {
   let jweAlgorithm = alg.slice(0, 7);
   if (!iv) iv = generateIv(jweAlgorithm);
@@ -43,7 +43,7 @@ async function wrap_2(alg, key, cek, iv) {
     tag: encode(tag),
   };
 }
-//@ chunk-2tyrgda4.js:19899-19986 esm-layout
+//@ chunk-pd6th42n.js:19899-19986 esm-layout
 async function sha256DigestInit2(alg, key, encryptedKey, iv, tag) {
   let jweAlgorithm = alg.slice(0, 7);
   return decrypt_default(jweAlgorithm, key, encryptedKey, iv, tag, new Uint8Array(0));

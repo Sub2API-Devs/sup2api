@@ -3,23 +3,23 @@
  *
  * 2.1.316 新增：plugin eval 用的规范化 JSON（键排序、限制嵌套深度），用于录制/回放与哈希
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (3)
  * attribution: placement 3
  */
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-qchp9vrd.js:16398-16439 placement
+//@ chunk-af1hzzme.js:17729-17770 placement
 function canonicalJsonStringify(value) {
   return jsonStringify(canonicalizeValue(value, 0)) ?? "null";
 }
-//@ chunk-qchp9vrd.js:16439-16449 placement
+//@ chunk-af1hzzme.js:17770-17780 placement
 /**
  * 规范化 JSON 时允许的最大嵌套深度（64）。
  */
 var MAX_CANONICAL_DEPTH = 64;
-//@ chunk-qchp9vrd.js:16449-16712 placement
+//@ chunk-af1hzzme.js:17780-18043 placement
 /**
  * 递归规范化值（对象键排序），嵌套过深时报错。
  */

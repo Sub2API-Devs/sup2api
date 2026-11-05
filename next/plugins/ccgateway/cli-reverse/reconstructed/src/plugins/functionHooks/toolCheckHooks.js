@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：tool.check 事件钩子接入权限检查（插件只能收紧）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (28)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (28)
  * attribution: placement 27, sole-consumer 1
  */
 import { getAutoModeConfig } from "../../utils/settings/settings.js";
@@ -27,7 +27,7 @@ import {
   decisionReasonText,
   PermissionDecisionInfoItem,
 } from "../../components/permissions/PermissionDecisionDebugInfo.js";
-import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFlag.js";
+import { permissionRuleValueFromString as permissionRuleValueFromString_2 } from "../../utils/permissions/permissionRuleParser.js";
 import { isSandboxOverrideUnderReadBlock } from "../../types/permissions.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { UI_ENV_SITE_RULES } from "./sites/siteRules.js";
@@ -39,7 +39,7 @@ import { NO_CORE_AT_CHAIN_BOTTOM } from "./eventCatalog.js";
 import { isWebToolRestrictedInRelay } from "../../utils/permissions/permissionRulePayload.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:49345-49434 placement
+//@ chunk-5xgkngpb.js:51762-51851 placement
 /**
  * 自动模式有无 deny 列表
  */
@@ -47,7 +47,7 @@ function hasAutoModeDenyLists() {
   let autoModeConfig = getAutoModeConfig();
   return (autoModeConfig?.soft_deny?.length ?? 0) > 0 || (autoModeConfig?.hard_deny?.length ?? 0) > 0;
 }
-//@ chunk-e6aww6q8.js:49434-49579 placement
+//@ chunk-5xgkngpb.js:51851-51996 placement
 function avoidsPrompt(tool, toolPermissionContext) {
   let autoMode = isAutoAllowedInMode(tool, toolPermissionContext);
   let isChrome = isChromeToolName(getToolNameForPermissionCheck_4(tool));
@@ -60,7 +60,7 @@ function avoidsPrompt(tool, toolPermissionContext) {
       ))
   );
 }
-//@ chunk-e6aww6q8.js:49579-49699 placement
+//@ chunk-5xgkngpb.js:51996-52116 placement
 function hostApproves(tool, context) {
   let toolPermissionContext = getToolPermissionContext(context);
   let permissionPromptHostKind = getPermissionPromptHostKind(
@@ -72,7 +72,7 @@ function hostApproves(tool, context) {
     !avoidsPrompt(tool, toolPermissionContext)
   );
 }
-//@ chunk-e6aww6q8.js:49699-49911 placement
+//@ chunk-5xgkngpb.js:52116-52327 placement
 /**
  * 判断 tool.check 中由谁审批：宿主（SDK 宿主可询问）、无人（不弹询问的模式）或人。
  */
@@ -96,9 +96,9 @@ function toolCheckApprover(tool, context) {
           approver: "person",
         };
 }
-//@ chunk-e6aww6q8.js:49911-49932 placement
+//@ chunk-5xgkngpb.js:52327-52348 placement
 var TOOL_CHECK = "tool.check";
-//@ chunk-e6aww6q8.js:49932-50048 placement
+//@ chunk-5xgkngpb.js:52348-52464 placement
 /**
  * 从权限决定原因中取钩子插件名。
  */
@@ -108,7 +108,7 @@ function hookNameFromDecision(result) {
     ? decisionReason.hookName.split(":").at(0)
     : undefined;
 }
-//@ chunk-e6aww6q8.js:50048-50158 placement
+//@ chunk-5xgkngpb.js:52464-52574 placement
 /**
  * 构造 tool.check 事件：工具名、输入、tool_use_id、agentId 与只读等工具元信息。
  */
@@ -121,7 +121,7 @@ var toToolCheckEvent = (tool, toolUseId, { input, agentId }) => ({
   }),
   ...mcpPermissionCeiling(tool),
 });
-//@ chunk-e6aww6q8.js:50656-50801 sole-consumer
+//@ chunk-5xgkngpb.js:53072-53217 sole-consumer
 function findDecidingRuleForResult(result) {
   let decisionReason = result.decisionReason;
   let matchedAskRule = result.behavior === "deny" ? undefined : result.matchedAskRule;
@@ -131,40 +131,40 @@ function findDecidingRuleForResult(result) {
     matchedAskRule
   );
 }
-//@ chunk-e6aww6q8.js:50801-50942 placement (2.1.88 match: _temp5, 0.481)
+//@ chunk-5xgkngpb.js:53217-53358 placement
 /**
  * 汇总权限决定的调试信息：行为、原因文本、命中的规则与钩子。
  */
-function buildDecisionSummary(u_1, i) {
-  let reasonText = decisionReasonText(u_1);
-  let decidingRuleForResult = findDecidingRuleForResult(u_1);
-  let hookName = hookNameFromDecision(u_1) || i;
+function buildDecisionSummary(decided, fallbackHookName) {
+  let reasonText = decisionReasonText(decided);
+  let decidingRuleForResult = findDecidingRuleForResult(decided);
+  let hookName = hookNameFromDecision(decided) || fallbackHookName;
   return {
-    decision: u_1.behavior,
+    decision: decided.behavior,
     ...(reasonText && {
       reason: reasonText,
     }),
     ...(decidingRuleForResult && {
-      rule: formatPermissionRule(decidingRuleForResult.ruleValue),
+      rule: permissionRuleValueFromString_2(decidingRuleForResult.ruleValue),
     }),
     ...(hookName && {
       hook: hookName,
     }),
   };
 }
-//@ chunk-e6aww6q8.js:51058-51094 placement
+//@ chunk-5xgkngpb.js:53474-53510 placement
 /**
  * 读取块覆盖
  */
 var isReadBlockOverride = (decisionReason, context) =>
   PermissionDecisionInfoItem(decisionReason) ||
   isSandboxOverrideUnderReadBlock(decisionReason, getToolPermissionContext(context));
-//@ chunk-e6aww6q8.js:51094-51152 placement
+//@ chunk-5xgkngpb.js:53510-53568 placement
 /**
  * permissions.blockReadsOutsideWorkingDirectories
  */
 var READ_BLOCK_SETTING = "permissions.blockReadsOutsideWorkingDirectories";
-//@ chunk-e6aww6q8.js:51152-51238 placement
+//@ chunk-5xgkngpb.js:53568-53654 placement (2.1.88 match: renderToolUseMessage, 1)
 /**
  * 附设置来源
  */
@@ -175,7 +175,7 @@ function withReadBlockSetting(result, context) {
       }
     : {};
 }
-//@ chunk-e6aww6q8.js:51238-51294 placement
+//@ chunk-5xgkngpb.js:53654-53710 placement
 /**
  * 工具检查核心步骤
  */
@@ -185,7 +185,7 @@ var coreToolCheckStep = (run) => ({
   budgetMs: 0,
   run,
 });
-//@ chunk-e6aww6q8.js:51294-51389 placement
+//@ chunk-5xgkngpb.js:53710-53805 placement
 /**
  * 插件钩子决定来源
  */
@@ -197,7 +197,7 @@ function pluginHookDecisionSource(hooked, reason) {
     reason,
   };
 }
-//@ chunk-e6aww6q8.js:51389-51497 placement
+//@ chunk-5xgkngpb.js:53805-53913 placement
 function withDenialMessage(decided, reason) {
   switch (decided.behavior) {
     case "allow":
@@ -212,13 +212,14 @@ function withDenialMessage(decided, reason) {
         : decided;
   }
 }
-//@ chunk-e6aww6q8.js:51497-51635 placement
+//@ chunk-5xgkngpb.js:53913-54084 placement
 /**
  * 把权限结果标为只能由人决定：去掉建议，允许钩子拒绝，禁止"总是允许"。
  */
 function personOnlyAsk(result) {
+  let { classifierMayAllow, ...rest } = result;
   return {
-    ...result,
+    ...rest,
     suggestions: undefined,
     personOnly: true,
     hooksMayRefuse: true,
@@ -226,7 +227,7 @@ function personOnlyAsk(result) {
     suppressAlwaysAllowRule: true,
   };
 }
-//@ chunk-e6aww6q8.js:51635-52416 placement
+//@ chunk-5xgkngpb.js:54084-54868 placement
 function describePluginPermissionDenial({ result: outcome, decided, tool, input, toolUseID, hooked }) {
   let isAskByPlugin = outcome.decision === "ask" && outcome.plugin !== undefined;
   if (decided?.behavior === outcome.decision) {
@@ -271,7 +272,7 @@ function describePluginPermissionDenial({ result: outcome, decided, tool, input,
     }
   }
 }
-//@ chunk-e6aww6q8.js:52416-52549 placement
+//@ chunk-5xgkngpb.js:54868-55001 placement
 function denyAskWithoutApprover(result, { tool, context }) {
   return result.decision === "ask" &&
     result.plugin !== undefined &&
@@ -282,7 +283,7 @@ function denyAskWithoutApprover(result, { tool, context }) {
       }
     : result;
 }
-//@ chunk-e6aww6q8.js:52549-52704 placement
+//@ chunk-5xgkngpb.js:55001-55156 placement
 /**
  * tool.check 链底核心：执行原权限评估并转为事件结果，记录评估结果供后续使用。
  */
@@ -300,15 +301,15 @@ function createToolCheckCore(evaluate, tool, context) {
     decided: () => decided,
   };
 }
-//@ chunk-e6aww6q8.js:52704-52729 placement
+//@ chunk-5xgkngpb.js:55156-55181 placement
 /**
  * tool.check 站点规则
  */
 var TOOL_CHECK_RULES; // deferred: uses UI_ENV_SITE_RULES (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:52704", () => {
+deferInit("chunk-5xgkngpb.js:55156", () => {
   TOOL_CHECK_RULES = UI_ENV_SITE_RULES["tool.check"];
 });
-//@ chunk-e6aww6q8.js:52729-52835 placement
+//@ chunk-5xgkngpb.js:55181-55287 placement
 var toolCheckEventFor = ({ tool, input, context, toolUseID }) => ({
   ...toToolCheckEvent(tool, toolUseID, {
     input,
@@ -316,7 +317,7 @@ var toolCheckEventFor = ({ tool, input, context, toolUseID }) => ({
   }),
   ...toolCheckApprover(tool, context),
 });
-//@ chunk-e6aww6q8.js:52835-52945 placement
+//@ chunk-5xgkngpb.js:55287-55397 placement
 function createToolCheckSlot() {
   let resolverSlot = subscribe();
   return {
@@ -324,25 +325,25 @@ function createToolCheckSlot() {
     resolveToolCheck: (request) => resolverSlot.get()?.(request) ?? request.evaluate(),
   };
 }
-//@ chunk-e6aww6q8.js:52945-52959 placement
+//@ chunk-5xgkngpb.js:55397-55411 placement
 /**
  * 工具检查槽
  */
 var toolCheckSlot; // deferred: uses createToolCheckSlot of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:52945", () => {
+deferInit("chunk-5xgkngpb.js:55397", () => {
   toolCheckSlot = createToolCheckSlot();
 });
-//@ chunk-e6aww6q8.js:52959-52988 placement
+//@ chunk-5xgkngpb.js:55411-55440 placement
 var resolveToolCheck; // deferred: uses toolCheckSlot of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:52959", () => {
+deferInit("chunk-5xgkngpb.js:55411", () => {
   resolveToolCheck = toolCheckSlot.resolveToolCheck;
 });
-//@ chunk-e6aww6q8.js:52988-53021 placement
+//@ chunk-5xgkngpb.js:55440-55473 placement
 var setToolCheckResolver; // deferred: uses toolCheckSlot of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:52988", () => {
+deferInit("chunk-5xgkngpb.js:55440", () => {
   setToolCheckResolver = toolCheckSlot.setToolCheckResolver;
 });
-//@ chunk-e6aww6q8.js:53021-53127 placement
+//@ chunk-5xgkngpb.js:55473-55579 placement
 function toolCheckRecord({ tool, input, toolUseID }, decided, hooked) {
   return {
     decided,
@@ -352,7 +353,7 @@ function toolCheckRecord({ tool, input, toolUseID }, decided, hooked) {
     hooked,
   };
 }
-//@ chunk-e6aww6q8.js:53127-54134 placement
+//@ chunk-5xgkngpb.js:55579-56590 placement
 /**
  * 把 tool.check 钩子的裁决并入权限检查：插件只能收紧，放宽的结果被忽略并记录。
  */
@@ -428,9 +429,9 @@ var applyToolCheckHookVerdict = (request) => {
       : denial;
   });
 };
-//@ chunk-e6aww6q8.js:54134-54143 placement
+//@ chunk-5xgkngpb.js:56590-56599 placement
 // deferred: uses setToolCheckResolver of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:54134", () => {
+deferInit("chunk-5xgkngpb.js:56590", () => {
   setToolCheckResolver(applyToolCheckHookVerdict);
 });
 export {
@@ -438,9 +439,9 @@ export {
   resolveToolCheck,
   personOnlyAsk,
   TOOL_CHECK,
-  toToolCheckEvent,
-  TOOL_CHECK_RULES,
-  describePluginPermissionDenial,
   createToolCheckCore,
   toolCheckApprover,
+  TOOL_CHECK_RULES,
+  toToolCheckEvent,
+  describePluginPermissionDenial,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。反馈草稿存储。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sn9h1dxj.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mt24sg6g.js (4)
  * attribution: placement 4
  */
 import { getSecuritySensitiveSetting, updateSettingsForSource } from "../utils/settings/settings.js";
@@ -19,14 +19,14 @@ import { isStorageV5Enabled } from "../utils/hoverRest.js";
 import { logEvent } from "./analytics/index.js";
 import { fromEnum } from "./analytics/safeMetadata.js";
 
-//@ chunk-sn9h1dxj.js:518-574 placement
+//@ chunk-mt24sg6g.js:518-574 placement
 /**
  * 取用户设置 feedbackDrafts 的值（默认 notify）。
  */
 function getFeedbackDraftsSetting() {
   return getSecuritySensitiveSetting("feedbackDrafts")[0] ?? "notify";
 }
-//@ chunk-sn9h1dxj.js:574-814 placement
+//@ chunk-mt24sg6g.js:574-814 placement
 /**
  * 产品反馈允许、非无头宿主、非嵌入式搜索、第一方 API 且未被环境变量关闭时，按特性开关决定是否启用反馈中继。
  */
@@ -41,14 +41,14 @@ function isFeedbackRelayEnabled() {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_juniper_relay", false);
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_juniper_relay", false);
 }
-//@ chunk-sn9h1dxj.js:814-856 placement
+//@ chunk-mt24sg6g.js:814-856 placement
 /**
  * 反馈草稿功能是否启用：设置不是 off 且反馈中继可用。
  */
 function isFeedbackDraftsEnabled() {
   return getFeedbackDraftsSetting() !== "off" && isFeedbackRelayEnabled();
 }
-//@ chunk-sn9h1dxj.js:856-1073 placement
+//@ chunk-mt24sg6g.js:856-1073 placement
 /**
  * 写入用户设置 feedbackDrafts（可走存储 v5），并上报变更来源。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：查询引擎（SDK/print/REPL 共用）：执行回合、延迟斜杠命令、汇总模型用量、思考 token 估算。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xx1vmpsq.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pwdsqzsj.js (8)
  * attribution: placement 8
  */
 import { randomUUID } from "crypto";
@@ -74,6 +74,7 @@ import {
 } from "../types/permissions.js";
 import { serializeDecisionReason } from "../utils/permissions/decisionReasons.js";
 import { guardGoalCheck } from "../query/goalCheckIn.js";
+import { UnsentMediaReporter, letGoOfUnsentMediaInPlace } from "../services/api/toolSchemaWire.js";
 import { STRUCTUREDOUTPUT } from "../tools/SyntheticOutputTool/SyntheticOutputTool.js";
 import { MESSAGE_MARK_SYMBOLS_2 } from "../utils/messageKinds.js";
 import { lastAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
@@ -114,7 +115,7 @@ import {
   drainQueuedTaskNotifications,
   artifactWatchStopNotice,
 } from "../tasks/MonitorWsTask/MonitorWsTask.js";
-import { commandQueueManager } from "../utils/messageQueueManager.js";
+import { getProcessQueue } from "../utils/messageQueueManager.js";
 import {
   isBypassPermissionsModeDisabled,
   isAutoModeGateEnabled,
@@ -135,7 +136,7 @@ import {
 import { readFileForRemote } from "../services/remoteTools/remoteFileRead.js";
 import { EMPTY_USAGE } from "../services/api/emptyUsage.js";
 
-//@ chunk-xx1vmpsq.js:61407-62090 placement
+//@ chunk-pwdsqzsj.js:62566-63249 placement
 function thinkingTokenEstimate(estimate, event) {
   if (event.type === "content_block_start")
     return {
@@ -184,13 +185,13 @@ function thinkingTokenEstimate(estimate, event) {
     emission: null,
   };
 }
-//@ chunk-xx1vmpsq.js:62090-62140 placement
+//@ chunk-pwdsqzsj.js:63249-63299 placement
 var VERBOSE_LOG_OPTIONS = {
   level: "verbose",
 };
 var LOG_FLUSH_MS = 1000;
 var LOG_SINKS = [INTERRUPT_RECEIPT_V1, MSG_LIFECYCLE_V1, ASK_USER_QUESTION_UNANSWERED_V1];
-//@ chunk-xx1vmpsq.js:62140-62205 placement
+//@ chunk-pwdsqzsj.js:63299-63364 placement
 function cancelScopeFor(origin) {
   return origin === "remote"
     ? undefined
@@ -198,12 +199,12 @@ function cancelScopeFor(origin) {
         scope: "turn-cancel",
       };
 }
-//@ chunk-xx1vmpsq.js:62205-62244 placement (2.1.88 match: getSettingsWithSources, 0.85)
+//@ chunk-pwdsqzsj.js:63364-63403 placement (2.1.88 match: getSettingsWithSources, 0.85)
 var emptySettingsWithSources = () => ({
   effective: {},
   sources: [],
 });
-//@ chunk-xx1vmpsq.js:62244-62917 placement
+//@ chunk-pwdsqzsj.js:63403-64076 placement
 async function* runDeferredSlashCommand(engineDeferredSlash, queryContext, abortController) {
   let messages = queryContext.messages.filter((message) => message.uuid !== engineDeferredSlash.messageUuid);
   let { messages: messages_2 } = await processUserInput({
@@ -238,7 +239,7 @@ async function* runDeferredSlashCommand(engineDeferredSlash, queryContext, abort
     reason: "completed",
   };
 }
-//@ chunk-xx1vmpsq.js:62917-88547 placement
+//@ chunk-pwdsqzsj.js:64076-89897 placement
 /**
  * 2.1.316 的查询引擎（SDK/print/REPL 共用）：接收 run 回调与命令、模型、工具、MCP、插件等环境，产出 system/init、stream_event、result 等 SDK 消息并处理中断与命令生命周期。
  */
@@ -335,6 +336,7 @@ function createQueryEngine({
       pluginWarnings,
       mcpServerErrors,
       additionalDirectories: undefined,
+      syncedSkillsPath: undefined,
       fastModeState: resolveMaybeFn(fastModeState) ?? "off",
       fastModeDisabledReason: resolveMaybeFn(fastModeDisabledReason),
       capabilities: LOG_SINKS,
@@ -638,6 +640,7 @@ function createQueryEngine({
       let numTurns = turn.engineDeferredSlash ? 0 : 1;
       let stopReason = null;
       let turnMessages = [];
+      let newsTracker = new UnsentMediaReporter(turn.toolUseContext?.agentId);
       let maxTurnsInfo;
       let assistantText = "";
       let isApiError = false;
@@ -661,6 +664,7 @@ function createQueryEngine({
           if (chunk.type === "user") {
             if (!turn.engineDeferredSlash) numTurns++;
             turnMessages.push(chunk);
+            if (newsTracker.hasNews()) letGoOfUnsentMediaInPlace(turnMessages, turn.toolUseContext?.agentId);
             assistantText = "";
             isApiError = false;
             apiErrorStatus = null;
@@ -833,6 +837,9 @@ function createQueryEngine({
               request_id: chunk.requestId,
               api_refusal_category: chunk.apiRefusalCategory ?? null,
               api_refusal_explanation: chunk.apiRefusalExplanation ?? null,
+              ...(chunk.apiRefusalCyberVerification !== undefined && {
+                api_refusal_cyber_verification: chunk.apiRefusalCyberVerification,
+              }),
               ...(chunk.retractedMessageUuids !== undefined && {
                 retracted_message_uuids: chunk.retractedMessageUuids,
               }),
@@ -1250,7 +1257,7 @@ function createQueryEngine({
               setAppState,
             });
           }
-          let drainedNotifications = drainQueuedTaskNotifications(commandQueueManager(), {
+          let drainedNotifications = drainQueuedTaskNotifications(getProcessQueue(), {
             leaveArtifactRooms: true,
           });
           artifactWatchStopNotice(killedSubscriptions, drainedNotifications);
@@ -1430,9 +1437,9 @@ function createQueryEngine({
       if (!mcpDelegate) throw Error("reloadPlugins: no mcpDelegate wired");
       return mcpDelegate.reloadPlugins();
     },
-    mcpAuthenticate: async (serverName, options) => {
+    mcpAuthenticate: async (serverName, options, extra) => {
       if (!mcpAuthDelegate) throw Error(`mcpAuthenticate: no mcpAuthDelegate wired (server: ${serverName})`);
-      return mcpAuthDelegate.authenticate(serverName, options);
+      return mcpAuthDelegate.authenticate(serverName, options, extra);
     },
     mcpClearAuth: async (serverName) => {
       if (!mcpAuthDelegate) throw Error(`mcpClearAuth: no mcpAuthDelegate wired (server: ${serverName})`);
@@ -1729,7 +1736,7 @@ function createQueryEngine({
     close: closeQueue,
   });
 }
-//@ chunk-xx1vmpsq.js:88547-89147 placement
+//@ chunk-pwdsqzsj.js:89897-90497 placement
 function aggregateModelUsage() {
   let values = Object.values(getModelUsage());
   let sumField = (pick) => values.reduce((acc, usage) => acc + pick(usage), 0);
@@ -1752,7 +1759,7 @@ function aggregateModelUsage() {
     },
   };
 }
-//@ chunk-xx1vmpsq.js:89147-89330 placement
+//@ chunk-pwdsqzsj.js:90497-90680 placement
 function isHarnessCompanionMessage(message) {
   if (isHarnessMetaMessage(message)) return true;
   if (message.type !== "user" || message.turnCompanion !== true) return false;

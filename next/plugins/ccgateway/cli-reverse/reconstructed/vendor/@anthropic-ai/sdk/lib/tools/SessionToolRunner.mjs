@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/lib/tools/SessionToolRunner.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (7)
+ * pieces: chunk-vn3g7zt8.js (7)
  * attribution: esm-layout 2, esm-fingerprint 5
  */
 import { __classPrivateFieldSet, __classPrivateFieldGet } from "../../internal/tslib.mjs";
@@ -16,7 +16,7 @@ import { stainlessHelperHeader } from "../../internal/stainless-helper-header.mj
 import { isFatal4xx, applyJitter, backoff } from "../../internal/utils/backoff.mjs";
 import { sleepUnlessAborted } from "../../tools/agent-toolset/memories.mjs";
 
-//@ chunk-hwmsct5x.js:61240-61343 esm-layout
+//@ chunk-vn3g7zt8.js:61611-61714 esm-layout
 var _IdleClock_maxIdleMs;
 var _IdleClock_onExpire;
 var _IdleClock_blockers;
@@ -50,7 +50,7 @@ var _SessionToolRunner_surfaceCall;
 var _SessionToolRunner_execute;
 var _SessionToolRunner_sendResult;
 var _SessionToolRunner_drain;
-//@ chunk-hwmsct5x.js:61343-61416 esm-layout
+//@ chunk-vn3g7zt8.js:61714-61787 esm-layout
 var STREAM_BACKOFF_START_MS = 500;
 var STREAM_BACKOFF_CAP_MS = 1e4;
 var TOOL_TIMEOUT_MS = 120000;
@@ -59,11 +59,11 @@ var SEND_BACKOFF_START_MS = 1000;
 var SEND_BACKOFF_CAP_MS = 30000;
 var IDLE_REPORT_INTERVAL_MS_2 = 300000;
 var DEFAULT_MAX_IDLE_MS = 60000;
-//@ chunk-hwmsct5x.js:61416-61503 esm-fingerprint
+//@ chunk-vn3g7zt8.js:61787-61874 esm-fingerprint
 function isEndTurnIdle(ev) {
   return ev.type === "session.status_idle" && ev.stop_reason?.type === "end_turn";
 }
-//@ chunk-hwmsct5x.js:61503-64562 esm-fingerprint
+//@ chunk-vn3g7zt8.js:61874-64933 esm-fingerprint
 var IdleClock = (() => {
   class IdleClock {
     constructor(maxIdleMs, onExpire) {
@@ -278,7 +278,7 @@ var SessionToolRunner = (() => {
   }
   return SessionToolRunner;
 })();
-//@ chunk-hwmsct5x.js:64562-70363 esm-fingerprint
+//@ chunk-vn3g7zt8.js:64933-70734 esm-fingerprint
 _SessionToolRunner_requestOptions = function () {
   return {
     ...__classPrivateFieldGet(this, _SessionToolRunner_requestOpts, "f"),
@@ -694,7 +694,7 @@ _SessionToolRunner_drain = async function () {
   if (__classPrivateFieldGet(this, _SessionToolRunner_inFlightCount, "f") > 0)
     __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").warn("drain timeout exceeded");
 };
-//@ chunk-hwmsct5x.js:70363-70572 esm-fingerprint
+//@ chunk-vn3g7zt8.js:70734-70943 esm-fingerprint
 function buildResultEvent(ev, isError, content) {
   if (ev.type === "agent.custom_tool_use")
     return {
@@ -710,7 +710,7 @@ function buildResultEvent(ev, isError, content) {
     content,
   };
 }
-//@ chunk-hwmsct5x.js:70572-71076 esm-fingerprint
+//@ chunk-vn3g7zt8.js:70943-71447 esm-fingerprint
 function toSessionContent(content) {
   if (typeof content === "string")
     return [

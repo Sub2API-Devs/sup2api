@@ -3,10 +3,10 @@
  *
  * 限流/用量上限消息：按订阅类型给出升级、额外用量、/usage-credits、/login 等建议。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/RateLimitMessage.tsx
- * pieces: chunk-ah34pb7m.js (9)
- * attribution: sole-consumer 7, fingerprint 2
+ * pieces: chunk-wjygkcr4.js (9)
+ * attribution: sole-consumer 6, fingerprint 2, placement 1
  */
 import {
   init_react_production,
@@ -76,22 +76,17 @@ import { RETURN_SYMBOL } from "../../constants/figures.js";
 import { StatusIcon } from "../design-system/StatusIcon.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:43543-43547 sole-consumer
+//@ chunk-wjygkcr4.js:44156-44160 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:43543", () => {
+deferInit("chunk-wjygkcr4.js:44156", () => {
   init_react_production();
 });
-//@ chunk-ah34pb7m.js:43547-43551 sole-consumer
+//@ chunk-wjygkcr4.js:44160-44164 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:43547", () => {
+deferInit("chunk-wjygkcr4.js:44160", () => {
   init_react_production();
 });
-//@ chunk-ah34pb7m.js:43551-43555 sole-consumer
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:43551", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:43555-43809 sole-consumer
+//@ chunk-wjygkcr4.js:44164-44418 sole-consumer
 function classifyRateLimitText(text) {
   let displayNames = RATE_LIMIT_DISPLAY_NAMES;
   let isHit = (label) => text.startsWith(`You've hit your ${label}`);
@@ -103,7 +98,7 @@ function classifyRateLimitText(text) {
     ? "model"
     : undefined;
 }
-//@ chunk-ah34pb7m.js:43809-44067 sole-consumer
+//@ chunk-wjygkcr4.js:44418-44679 sole-consumer
 function getRateLimitOfferNote(text, limits, creditState) {
   useSyncExternalStore(onUsageCreditStateChange, currentUsageCreditState, currentUsageCreditState);
   useSyncExternalStore(subscribeResetChanges, getResetFlowPhase, getResetFlowPhase);
@@ -126,12 +121,12 @@ function getRateLimitOfferNote(text, limits, creditState) {
     hasResetGrantCoveringLatestEnd(limits),
   );
 }
-//@ chunk-ah34pb7m.js:44067-44584 sole-consumer
+//@ chunk-wjygkcr4.js:44679-45196 sole-consumer
 /**
  * 限额提示中各种升级/调整入口的说明文字（打开选项、/usage-credits 调整月度上限或补充额度等）。
  */
 var UPSELL_TEXTS; // deferred: uses USAGE_SETTINGS_URL (../../services/claudeAiLimits.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ah34pb7m.js:44067", () => {
+deferInit("chunk-wjygkcr4.js:44679", () => {
   UPSELL_TEXTS = {
     opening_options: "Opening your options\u2026",
     spend_limit: "/usage-credits to adjust your monthly spend limit.",
@@ -143,7 +138,7 @@ deferInit("chunk-ah34pb7m.js:44067", () => {
     upgrade_or_extra_usage: "/upgrade or /usage-credits to finish what you\u2019re working on.",
   };
 });
-//@ chunk-ah34pb7m.js:44584-45072 fingerprint (2.1.88 match: getUpsellMessage, 0.336)
+//@ chunk-wjygkcr4.js:45196-45684 fingerprint (2.1.88 match: getUpsellMessage, 0.336)
 function getUpsellMessage({
   shouldShowUpsell,
   isMax20x,
@@ -167,7 +162,7 @@ function getUpsellMessage({
   if (serverHidesUpgrade) return isExtraUsageAvailable ? "extra_usage" : null;
   return isExtraUsageAvailable ? "upgrade_or_extra_usage" : "upgrade";
 }
-//@ chunk-ah34pb7m.js:45072-48024 fingerprint (2.1.88 match: RateLimitMessage, 0.312)
+//@ chunk-wjygkcr4.js:45684-48640 fingerprint (2.1.88 match: RateLimitMessage, 0.313)
 /**
  * 限流消息：根据订阅（pro/max/team/enterprise）与 overage 状态给出建议（/upgrade、/usage-credits、/login、联系管理员），显示重置时间。
  */
@@ -386,8 +381,13 @@ function RateLimitMessage({ text, onOpenRateLimitOptions, onRateLimitAutoQueueCo
     }),
   });
 }
-//@ chunk-ah34pb7m.js:48024-48071 sole-consumer
+//@ chunk-wjygkcr4.js:48640-48687 sole-consumer
 function allowedUsageLink(url) {
   return url === USAGE_SETTINGS_URL || url === HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE ? url : undefined;
 }
+//@ chunk-wjygkcr4.js:64794-64798 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:64794", () => {
+  init_react_production();
+});
 export { RateLimitMessage };

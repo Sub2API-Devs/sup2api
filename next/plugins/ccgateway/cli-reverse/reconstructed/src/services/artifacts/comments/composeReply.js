@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：评论回复的模型生成
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9tgt55am.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c0pq6qyx.js (14)
  * attribution: placement 14
  */
 import { randomUUID } from "crypto";
@@ -28,7 +28,7 @@ import { getCommentAuthorKind } from "./commentState.js";
 import { truncateCodePoints, plural } from "../../../utils/stringUtils.js";
 import { getAutoReactArtifactState } from "./threadScanner.js";
 import { authoredByOthersPreamble } from "../../../constants/xml.js";
-import { artifactForeign, getShareEntry } from "../shareEntries.js";
+import { artifactForeign, getShareEntry, markReadsLine } from "../shareEntries.js";
 import {
   ANCHOR_LABEL_ON_PAGE,
   ANCHOR_LABEL_LOCATION,
@@ -77,13 +77,13 @@ import { withDeadline } from "../../../utils/sleep.js";
 import { getLiveState } from "../../liveReplica/liveReplica.js";
 import { getSmallFastModel } from "../../../utils/model/smallFastModel.js";
 
-//@ chunk-9tgt55am.js:112316-112432 placement
+//@ chunk-c0pq6qyx.js:108242-108358 placement
 var MAX_REPLY_CHARS = 16000;
 var POSTED_BY_ARTIFACT_SUFFIX = ", posted by the artifact";
 var HUMAN_POSTED_BY_ARTIFACT = `human${POSTED_BY_ARTIFACT_SUFFIX}`;
 var SENT_BY_OTHER_SUFFIX = ", sent to Claude by someone else";
 var SENT_TO_YOU_SUFFIX = ", sent to you";
-//@ chunk-9tgt55am.js:112432-114458 placement
+//@ chunk-c0pq6qyx.js:108358-110384 placement
 function renderThreadComments(
   comments,
   pageFenceNonce,
@@ -128,7 +128,7 @@ function renderThreadComments(
 ${renderBody(index)}`;
   let newestIndex = commentCount - 1;
   let keptIndices = [newestIndex];
-  for (let j = 0; j < commentCount - 1; j++) if (isMentionedHuman(j)) keptIndices.push(j);
+  for (let idx = 0; idx < commentCount - 1; idx++) if (isMentionedHuman(idx)) keptIndices.push(idx);
   let max = Math.max(0, maxChars - 40 * (keptIndices.length + 1));
   let renderedByIndex = new Map();
   let usedChars = 0;
@@ -180,12 +180,12 @@ ${truncationNote}`,
       else summoningTruncated = true;
     }
   } else
-    for (let j = newestIndex - 1; j >= 0; j--) {
-      if (renderedByIndex.has(j)) continue;
-      let rendered = renderComment(j);
+    for (let idx = newestIndex - 1; idx >= 0; idx--) {
+      if (renderedByIndex.has(idx)) continue;
+      let rendered = renderComment(idx);
       let renderedLength = rendered.length + 1;
       if (usedChars + renderedLength > max) break;
-      renderedByIndex.set(j, rendered);
+      renderedByIndex.set(idx, rendered);
       usedChars += renderedLength;
     }
   let lines = [];
@@ -226,13 +226,13 @@ ${truncationNote}`,
     ),
   };
 }
-//@ chunk-9tgt55am.js:114458-114532 placement
+//@ chunk-c0pq6qyx.js:110384-110458 placement
 var UNREADABLE_PAGE_ANCHOR_TEXT = "[which page of the artifact this thread is on could not be read]";
-//@ chunk-9tgt55am.js:114532-114592 placement
+//@ chunk-c0pq6qyx.js:110458-110518 placement
 function newPageFenceNonce() {
   return `U${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
-//@ chunk-9tgt55am.js:114592-114776 placement
+//@ chunk-c0pq6qyx.js:110518-110702 placement
 /**
  * 取用于包裹页面源码的随机围栏标记：同版本且不与内容冲突时复用，否则生成新的并记下。
  */
@@ -252,18 +252,19 @@ function getSourceFenceNonce(slug, ver, fences) {
   autoReactArtifactState.sourceFence = sourceFenceSpec;
   return sourceFenceSpec.nonce;
 }
-//@ chunk-9tgt55am.js:114776-123801 placement
+//@ chunk-c0pq6qyx.js:110702-119738 placement
 /**
  * 把评论线程渲染并框定（外部页面/工作坊页面视为不可信），生成给回复模型的线程文本与截断信息。
  */
 async function frameCommentThread(options) {
   let { thread, context } = options;
   let pageFenceNonce = newPageFenceNonce();
-  let preamble = authoredByOthersPreamble(
-    (options.pageForeign ?? artifactForeign(getShareEntry(options.slug))) ||
-      context.artifactRegistries.recordedPages.isWorkshopPage(options.slug) ||
-      hasCommentsFromOthers(thread, await ownAccount(context.credentials)),
-  );
+  let preamble =
+    authoredByOthersPreamble(
+      (options.pageForeign ?? artifactForeign(getShareEntry(options.slug))) ||
+        context.artifactRegistries.recordedPages.isWorkshopPage(options.slug) ||
+        hasCommentsFromOthers(thread, await ownAccount(context.credentials)),
+    ) || markReadsLine(options.slug);
   let {
     rendered,
     elidedCount,
@@ -395,17 +396,17 @@ ${pageAnchorLine}${locationLine}${labelsLine}${anchorLine}${regionLines}${render
     framedThread,
   };
 }
-//@ chunk-9tgt55am.js:123801-123824 placement
+//@ chunk-c0pq6qyx.js:119738-119761 placement
 var DEFAULT_FAILURE = {
   miss: "failed",
 };
-//@ chunk-9tgt55am.js:123824-123921 placement
+//@ chunk-c0pq6qyx.js:119761-119858 placement
 function isHardRateLimited(result) {
   return (
     result.apiErrorStatus === 429 && result.error === "rate_limit" && result.apiErrorIsTransient !== true
   );
 }
-//@ chunk-9tgt55am.js:123921-127840 placement
+//@ chunk-c0pq6qyx.js:119858-123776 placement
 /**
  * 读取锚点页面源码、框定线程后调用模型生成评论回复。
  */
@@ -567,12 +568,12 @@ Write the reply you would post to this thread: directly useful, brief, no preamb
     return DEFAULT_FAILURE;
   }
 }
-//@ chunk-9tgt55am.js:127840-127851 placement
+//@ chunk-c0pq6qyx.js:123776-123787 placement
 /**
  * 400
  */
 var FAST_ACK_MAX_CHARS = 400;
-//@ chunk-9tgt55am.js:127851-129501 placement (2.1.88 match: generateAwaySummary, 0.315)
+//@ chunk-c0pq6qyx.js:123787-125437 placement (2.1.88 match: generateAwaySummary, 0.319)
 /**
  * 为 Artifact 评论线程用小模型生成一句 ≤160 字符的快速确认（maxOutputTokens 96），失败返回空。旧版名 generateAwaySummary 为错配。
  */
@@ -641,7 +642,7 @@ You are about to start working on the newest comment sent to you in this thread;
     return FIXED_ACK_TEXT;
   }
 }
-//@ chunk-9tgt55am.js:129501-132347 placement (2.1.88 match: createApiQueryHook, 0.262)
+//@ chunk-c0pq6qyx.js:125437-128283 placement (2.1.88 match: createApiQueryHook, 0.265)
 /**
  * artifact 评论自动响应：用小模型从候选确认语中选一句先行回复，超时取默认。旧版名 createApiQueryHook 配错。
  */
@@ -721,7 +722,7 @@ ${joined}`;
   }
   return ACK_REPLY_TEMPLATES[text ?? 0]?.text ?? FIXED_ACK_TEXT;
 }
-//@ chunk-9tgt55am.js:155879-156040 placement
+//@ chunk-c0pq6qyx.js:151814-151975 placement
 /**
  * 按 UTF-8 字节数截断字符串，不拆开多字节字符。
  */
@@ -738,7 +739,7 @@ function truncateUtf8Bytes(text, maxBytes) {
   }
   return kept;
 }
-//@ chunk-9tgt55am.js:156040-156222 placement
+//@ chunk-c0pq6qyx.js:151975-152157 placement
 /**
  * 取出助手消息中所有文本块拼接后的内容，空时返回 null。
  */

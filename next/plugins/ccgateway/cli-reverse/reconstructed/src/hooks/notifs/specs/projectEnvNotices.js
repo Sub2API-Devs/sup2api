@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。启动通知：项目环境类。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (14)
  * attribution: placement 14
  */
 import { saveGlobalConfig, getGlobalConfig } from "../../../utils/config.js";
@@ -30,9 +30,11 @@ import { plural } from "../../../utils/stringUtils.js";
 import { env } from "../../../utils/env.js";
 import { formatIgnoredTelemetryEnvNotice } from "../../../utils/settings/settingsNotices.js";
 import {
-  isPromoCreditNoticeEligible,
+  isPromoCreditNoticeDue,
   getPromoLoginKey,
+  promoOfferEndsAt,
   hasRemainingPromoCredit,
+  normalizeApproachingPercent,
 } from "../../../components/LogoV2/PromoNotices.js";
 import { isEssentialTrafficOnly } from "../../../utils/privacyLevel.js";
 import { isPolicyAllowed as isPolicyAllowed_2 } from "../../../services/policyLimits/policyEvidence.js";
@@ -52,7 +54,7 @@ import {
   renderUsageCreditsOnlyModelName,
 } from "../../../utils/model/modelDisplay.js";
 
-//@ chunk-18hwfzwa.js:1776018-1776271 placement
+//@ chunk-czq1j3j2.js:1823281-1823534 placement
 var promptQueueUseCountNoticeSpec = {
   id: "prompt-queue-use-count",
   deps: (ctx) => [ctx.queuedCommandCount, ctx.storageV5],
@@ -75,7 +77,7 @@ var promptQueueUseCountNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1776271-1776424 placement
+//@ chunk-czq1j3j2.js:1823534-1823687 placement
 var proTrialExpiredAutoOpenNoticeSpec = {
   id: "pro-trial-expired-auto-open",
   setup() {
@@ -87,12 +89,12 @@ var proTrialExpiredAutoOpenNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1776424-1776472 placement
+//@ chunk-czq1j3j2.js:1823687-1823735 placement
 var projectChromeEnvNoticeSpec = {
   id: "project-chrome-env",
   setup: () => projectChromeEnvNotice,
 };
-//@ chunk-18hwfzwa.js:1776472-1776826 placement
+//@ chunk-czq1j3j2.js:1823735-1824089 placement
 /**
  * 项目设置里设置了 CLAUDE_CODE_ENABLE_CFC 时提示：项目不能开启 Claude in Chrome，需用 /chrome 或 --chrome 自行开启。
  */
@@ -114,11 +116,11 @@ function projectChromeEnvNotice({ addNotification }) {
     timeoutMs: 15000,
   });
 }
-//@ chunk-18hwfzwa.js:1776826-1776874 placement
+//@ chunk-czq1j3j2.js:1824089-1824137 placement
 function shouldEnableClaudeInChrome() {
   return getChromeFlagOverride() !== false && shouldEnableClaudeInChrome_2(true) && isClaudeAISubscriber();
 }
-//@ chunk-18hwfzwa.js:1776874-1777161 placement
+//@ chunk-czq1j3j2.js:1824137-1824424 placement
 function projectEnablesChrome() {
   let enabledSettingSources = getEnabledSettingSources();
   let last = enabledSettingSources
@@ -142,12 +144,12 @@ function projectEnablesChrome() {
     )
   );
 }
-//@ chunk-18hwfzwa.js:1777161-1777210 placement
+//@ chunk-czq1j3j2.js:1824424-1824473 placement
 var projectSignInEnvNoticeSpec = {
   id: "project-sign-in-env",
   setup: () => projectSignInEnvNotice,
 };
-//@ chunk-18hwfzwa.js:1777210-1777754 placement
+//@ chunk-czq1j3j2.js:1824473-1825017 placement
 /**
  * 项目设置里设置了登录相关环境变量时提示它们被忽略（项目不能设定你的 claude.ai 登录）。
  */
@@ -172,7 +174,7 @@ function projectSignInEnvNotice({ addNotification }) {
     timeoutMs: 15000,
   });
 }
-//@ chunk-18hwfzwa.js:1777754-1778113 placement (2.1.88 match: getHooksSources, 0.871)
+//@ chunk-czq1j3j2.js:1825017-1825376 placement (2.1.88 match: getHooksSources, 0.871)
 function getHooksSources() {
   let filtered = getEnabledSettingSources().filter(
     (pair) =>
@@ -200,12 +202,12 @@ function getHooksSources() {
       : [];
   });
 }
-//@ chunk-18hwfzwa.js:1778113-1778164 placement
+//@ chunk-czq1j3j2.js:1825376-1825427 placement
 var projectTelemetryEnvNoticeSpec = {
   id: "project-telemetry-env",
   setup: () => projectTelemetryEnvNotice,
 };
-//@ chunk-18hwfzwa.js:1778164-1778531 placement
+//@ chunk-czq1j3j2.js:1825427-1825794 placement
 /**
  * 项目设置里设置了遥测相关环境变量时提示，可用 /status 查看哪些被忽略、哪些关闭了遥测。
  */
@@ -222,7 +224,7 @@ function projectTelemetryEnvNotice({ addNotification }) {
     timeoutMs: 15000,
   });
 }
-//@ chunk-18hwfzwa.js:1778531-1779429 placement
+//@ chunk-czq1j3j2.js:1825794-1827306 placement
 /**
  * 启动通知"promo-credit-check"：随机延迟后、每个登录每天最多一次，查询用量接口中的促销额度窗口并把结果写入全局配置 promoCreditCheck。
  */
@@ -239,7 +241,7 @@ var promoCreditCheckSpec = {
       let delayMs = PROMO_CHECK_MIN_DELAY_MS + Math.floor(Math.random() * PROMO_CHECK_JITTER_MS);
       return clock.setTimeout(() => {
         if (
-          !isPromoCreditNoticeEligible(session) ||
+          !isPromoCreditNoticeDue(session) ||
           isEssentialTrafficOnly() ||
           !isPolicyAllowed_2(ALLOW_PROMO_OFFERS)
         )
@@ -252,12 +254,16 @@ var promoCreditCheckSpec = {
         saveGlobalConfig(
           (prev) => ({
             ...prev,
-            promoCreditCheck: {
-              login: promoLoginKey,
-              askedAtMs: now,
-              answer:
-                prev.promoCreditCheck?.login === promoLoginKey ? prev.promoCreditCheck.answer : undefined,
-            },
+            promoCreditCheck:
+              prev.promoCreditCheck?.login === promoLoginKey
+                ? {
+                    ...prev.promoCreditCheck,
+                    askedAtMs: now,
+                  }
+                : {
+                    login: promoLoginKey,
+                    askedAtMs: now,
+                  },
           }),
           storageV5,
         );
@@ -267,34 +273,58 @@ var promoCreditCheckSpec = {
               logFeatureSad("promo_credit_check", "usage_unavailable");
               return;
             }
-            logFeatureOk("promo_credit_check");
-            if (getPromoLoginKey() !== promoLoginKey || !isPolicyAllowed_2(ALLOW_PROMO_OFFERS)) return;
             let wattleEmber = usageWithModelScopes.utilization.wattle_ember;
-            let answer = {
-              atMs: Date.now(),
-              open: hasRemainingPromoCredit(wattleEmber, Date.now()),
-              endsAt: wattleEmber?.resets_at ?? null,
-            };
-            saveGlobalConfig(
-              (prev) =>
-                prev.promoCreditCheck?.login === promoLoginKey
-                  ? {
-                      ...prev,
-                      promoCreditCheck: {
-                        ...prev.promoCreditCheck,
-                        answer,
-                      },
-                    }
-                  : prev,
-              storageV5,
-            );
+            logFeatureOk("promo_credit_check", {
+              credit: wattleEmber != null,
+              used_up: wattleEmber?.used_up_notice === true,
+              approaching: wattleEmber?.approaching_notice === true,
+            });
+            if (getPromoLoginKey() !== promoLoginKey || !isPolicyAllowed_2(ALLOW_PROMO_OFFERS)) return;
+            let now = Date.now();
+            saveGlobalConfig((config) => {
+              let promoCreditCheck = config.promoCreditCheck;
+              if (promoCreditCheck?.login !== promoLoginKey) return config;
+              let offerEndsAt = wattleEmber
+                ? ([
+                    wattleEmber.offer_ends_at,
+                    Array.isArray(wattleEmber.periods) ? wattleEmber.periods.at(-1)?.ends_at : undefined,
+                    wattleEmber.resets_at,
+                  ].find(
+                    (candidate) => typeof candidate === "string" && !Number.isNaN(Date.parse(candidate)),
+                  ) ?? null)
+                : promoCreditCheck.answer
+                  ? promoOfferEndsAt(promoCreditCheck.answer)
+                  : null;
+              let answer = {
+                atMs: now,
+                open: hasRemainingPromoCredit(wattleEmber, now),
+                endsAt: wattleEmber?.resets_at ?? null,
+                usedUpNotice: wattleEmber?.used_up_notice === true,
+                approachingNotice: wattleEmber?.approaching_notice === true,
+                approachingPercent: normalizeApproachingPercent(wattleEmber?.approaching_percent),
+                lastPeriod: wattleEmber?.last_period === true,
+                offerEndsAt,
+                label: typeof wattleEmber?.label === "string" ? wattleEmber.label : null,
+                coveredModels:
+                  typeof wattleEmber?.covered_models_label === "string"
+                    ? wattleEmber.covered_models_label
+                    : null,
+              };
+              return {
+                ...config,
+                promoCreditCheck: {
+                  ...promoCreditCheck,
+                  answer,
+                },
+              };
+            }, storageV5);
           })
           .catch(logError);
       }, delayMs);
     };
   },
 };
-//@ chunk-18hwfzwa.js:1779429-1779933 placement
+//@ chunk-czq1j3j2.js:1827306-1827810 placement
 var fableUsageCreditsNoticeSpec = {
   id: "fable-usage-credits",
   deps: (ctx) => [ctx.addNotification],
@@ -329,7 +359,7 @@ var fableUsageCreditsNoticeSpec = {
       });
   },
 };
-//@ chunk-18hwfzwa.js:1779933-1780037 placement
+//@ chunk-czq1j3j2.js:1827810-1827914 placement
 function billingContextForRateLimit() {
   let subscriptionType = getSubscriptionType();
   return {

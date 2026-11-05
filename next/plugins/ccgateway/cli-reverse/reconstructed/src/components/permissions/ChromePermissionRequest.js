@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。Claude in Chrome 权限请求。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (7)
  * attribution: placement 7
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -33,12 +33,17 @@ import { NO_COMMITTED_ROW } from "../CustomSelect/select.js";
 import { PermissionDialog_2 } from "./PermissionDialog.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1333385-1333389 placement
+//@ chunk-czq1j3j2.js:1347824-1347828 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1333385", () => {
+deferInit("chunk-czq1j3j2.js:1347824", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1333389-1333672 placement
+//@ chunk-czq1j3j2.js:1355706-1355710 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1355706", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1355710-1355993 placement
 function chromeChoiceToResult(choice, payload, selectedRow) {
   switch (choice) {
     case "allow":
@@ -63,7 +68,7 @@ function chromeChoiceToResult(choice, payload, selectedRow) {
       };
   }
 }
-//@ chunk-18hwfzwa.js:1333672-1334160 placement
+//@ chunk-czq1j3j2.js:1355993-1356481 placement
 /**
  * 生成 "本会话允许该站点所有操作" 的建议行（会话级 addRules），站点名不可安全显示时返回 null。
  */
@@ -111,12 +116,12 @@ function buildChromeDomainSuggestion(chrome) {
     },
   );
 }
-//@ chunk-18hwfzwa.js:1334160-1334190 placement
+//@ chunk-czq1j3j2.js:1356481-1356511 placement
 var CHROME_RULE_UPDATE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1334160", () => {
+deferInit("chunk-czq1j3j2.js:1356481", () => {
   CHROME_RULE_UPDATE_TYPES = new Set(["addRules"]);
 });
-//@ chunk-18hwfzwa.js:1334190-1334466 placement
+//@ chunk-czq1j3j2.js:1356511-1356787 placement
 function shouldOfferChromeDomainAllow(payload) {
   let decisionReason =
     payload.permissionResult.behavior === "ask" ? payload.permissionResult.decisionReason : undefined;
@@ -129,7 +134,7 @@ function shouldOfferChromeDomainAllow(payload) {
     !payload.chrome.host.includes("*")
   );
 }
-//@ chunk-18hwfzwa.js:1334466-1337112 placement
+//@ chunk-czq1j3j2.js:1356787-1359433 placement
 function ChromePermissionRequest(props) {
   let $ = useMemoCache(44);
   let { payload, answer } = props;
@@ -345,9 +350,4 @@ function ChromePermissionRequest(props) {
   } else dialog = $[43];
   return dialog;
 }
-//@ chunk-18hwfzwa.js:1337112-1337116 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1337112", () => {
-  init_react_production();
-});
 export { ChromePermissionRequest };

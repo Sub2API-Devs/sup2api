@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：daemon 认证管理：令牌更新广播、401 处理、冷却、组织查询；daemon 配置 schema（目录、名称、spawnMode、容量、权限模式等）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e3de30et.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-szf9hn8s.js (14)
  * attribution: placement 14
  */
 import { join } from "path";
@@ -14,7 +14,7 @@ import { STORAGE_SPACES } from "../utils/storage/storageSpaces.js";
 import { getPlatform } from "../utils/platform.js";
 import { isEssentialTrafficOnly } from "../utils/privacyLevel.js";
 import { logFeatureSad, logFeatureOk, withFeatureTelemetry } from "../services/analytics/featureTelemetry.js";
-import { getClaudeConfigDir } from "../utils/envUtils.js";
+import { getClaudeConfigDir } from "../utils/markdownConfigLoader.js";
 import { isStorageV5Enabled } from "../utils/hoverRest.js";
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -44,7 +44,7 @@ import { updateDaemonConfig, normalizeDirEntries } from "./scheduledWorker.js";
 import { pickByHelper } from "../utils/git/gitSafeEnv.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e3de30et.js:1144-1263 placement
+//@ chunk-szf9hn8s.js:1144-1263 placement
 function isDaemonAuthMessage(message) {
   return (
     typeof message === "object" &&
@@ -53,25 +53,25 @@ function isDaemonAuthMessage(message) {
     (message.type === "token_update" || message.type === "auth_401_result")
   );
 }
-//@ chunk-e3de30et.js:1263-1348 placement
+//@ chunk-szf9hn8s.js:1263-1348 placement
 function isAuth401Result(message) {
   return typeof message === "object" && message !== null && "type" in message && message.type === "auth_401";
 }
-//@ chunk-e3de30et.js:1348-1403 placement
+//@ chunk-szf9hn8s.js:1348-1403 placement
 var AUTH_COOLDOWN_MS = 300000;
 var AUTH_RECHECK_MS = 240000;
 var AUTH_STATUS_TTL_MS = 300000;
 var AUTH_RETRY_MS = 30000;
 var AUTH_STATUS_MAX_AGE_MS = 86400000;
-//@ chunk-e3de30et.js:1403-1457 placement
+//@ chunk-szf9hn8s.js:1403-1457 placement
 function readAuthCooldown() {
   return STORAGE_SPACES.state("daemon-auth-cooldown");
 }
-//@ chunk-e3de30et.js:1457-1509 placement
+//@ chunk-szf9hn8s.js:1457-1509 placement
 function readAuthStatus() {
   return STORAGE_SPACES.state("daemon-auth-status");
 }
-//@ chunk-e3de30et.js:1509-8583 placement
+//@ chunk-szf9hn8s.js:1509-8583 placement
 /**
  * daemon 认证管理：令牌更新广播、401 处理、冷却、组织查询。
  */
@@ -512,7 +512,7 @@ function createDaemonAuthManager(
     workerChannels.clear();
   }
 }
-//@ chunk-e3de30et.js:8583-9560 placement
+//@ chunk-szf9hn8s.js:8583-9560 placement
 /**
  * worker 侧认证客户端：通过 IPC 接收令牌更新、请求刷新。
  */
@@ -593,11 +593,11 @@ function createWorkerAuthClient(initialAccessToken, credentials, storageV5) {
     },
   };
 }
-//@ chunk-e3de30et.js:9560-9645 placement
+//@ chunk-szf9hn8s.js:9560-9645 placement
 function isShutdownResult(message) {
   return typeof message === "object" && message !== null && "type" in message && message.type === "shutdown";
 }
-//@ chunk-e3de30et.js:9645-9805 placement
+//@ chunk-szf9hn8s.js:9645-9805 placement
 function getRestartCause(message) {
   if (!isShutdownResult(message) || typeof message !== "object" || message === null || !("cause" in message))
     return;
@@ -605,7 +605,7 @@ function getRestartCause(message) {
     ? message.cause
     : undefined;
 }
-//@ chunk-e3de30et.js:9805-13196 placement
+//@ chunk-szf9hn8s.js:9805-13196 placement
 /**
  * daemon 配置 schema（目录、名称、spawnMode、容量、权限模式等）。
  */
@@ -613,7 +613,7 @@ var DaemonConfigSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) o
 var DAEMON_RESTART_WAIT_MS;
 var DAEMON_POLL_MS;
 var handleRemoteControlInput;
-deferInit("chunk-e3de30et.js:9805", () => {
+deferInit("chunk-szf9hn8s.js:9805", () => {
   DaemonConfigSchema = DoctorLazy(() =>
     objectSchema({
       dir: stringSchema(),
@@ -827,7 +827,7 @@ deferInit("chunk-e3de30et.js:9805", () => {
     if (isPermanentFailure) process.exit(EXIT_CONFIG_ERROR);
   };
 });
-//@ chunk-e3de30et.js:13196-13634 placement
+//@ chunk-szf9hn8s.js:13196-13634 placement
 /**
  * 检查 Remote Control worker 的资格（桥接阻断码、最低版本、组织）。
  */
@@ -856,11 +856,11 @@ async function checkRemoteControlWorkerEligibility() {
         retry: false,
       };
 }
-//@ chunk-e3de30et.js:13634-13749 placement
+//@ chunk-szf9hn8s.js:13634-13749 placement
 function remoteControlStartError(code) {
   return `Remote Control cannot start (${code}). Run \`claude remote-control\` in a terminal to see why.`;
 }
-//@ chunk-e3de30et.js:13749-14031 placement
+//@ chunk-szf9hn8s.js:13749-14031 placement
 /**
  * 在 daemon 配置中添加或更新某目录的远程控制项，返回 added/updated。
  */
@@ -890,7 +890,7 @@ async function upsertRemoteControlDir(entry, storageV5, credentials) {
     return outcome;
   });
 }
-//@ chunk-e3de30et.js:14031-14268 placement
+//@ chunk-szf9hn8s.js:14031-14268 placement
 /**
  * 从 daemon 配置中移除某目录的远程控制项，空时删除该字段。
  */
@@ -913,9 +913,9 @@ export {
   removeRemoteControlDir,
   checkRemoteControlWorkerEligibility,
   upsertRemoteControlDir,
+  createDaemonAuthManager,
   DaemonConfigSchema,
   handleRemoteControlInput,
   isShutdownResult,
   createWorkerAuthClient,
-  createDaemonAuthManager,
 };

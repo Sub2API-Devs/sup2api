@@ -1,12 +1,12 @@
 /**
  * @aws-sdk/client-sso/package.json
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/client-sso@3.936.0..3.940.0
- * pieces: chunk-kejz1rpb.js (1)
+ * pieces: chunk-tvcdn76c.js (1)
  * attribution: placement 1
  */
 
-//@ chunk-kejz1rpb.js:1969-4847 placement
+//@ chunk-tvcdn76c.js:1969-4847 placement
 var packageJson = {
   name: "@aws-sdk/client-sso",
   description: "AWS SDK for JavaScript Sso Client for Node.js, Browser and React Native",

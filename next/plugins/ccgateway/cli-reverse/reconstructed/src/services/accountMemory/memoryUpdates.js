@@ -3,9 +3,9 @@
  *
  * memory_read 结果过期提示与读路径收集（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (9)
  * attribution: placement 9
  */
 import { isUntrustedObject } from "../../utils/untrustedValues.js";
@@ -20,7 +20,7 @@ import {
 import { normalizeServerPath } from "./accountMemoryServer.js";
 import { normalizeMemoryText } from "../../memdir/memdir.js";
 
-//@ chunk-s61vbvea.js:84365-84518 placement
+//@ chunk-7jxyna5q.js:83679-83832 placement
 function getOwnValue(object, key) {
   if (typeof object !== "object" || object === null || isUntrustedObject(object)) return;
   let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(object, key);
@@ -28,7 +28,7 @@ function getOwnValue(object, key) {
     ? ownPropertyDescriptor.value
     : undefined;
 }
-//@ chunk-s61vbvea.js:84518-84802 placement
+//@ chunk-7jxyna5q.js:83832-84116 placement
 function getStringArrayItems(ownValue) {
   if (
     typeof ownValue !== "object" ||
@@ -51,7 +51,7 @@ function getStringArrayItems(ownValue) {
   }
   return lines;
 }
-//@ chunk-s61vbvea.js:84802-84981 placement
+//@ chunk-7jxyna5q.js:84116-84295 placement
 function parseMemoryTagVersions(text) {
   let sections = [...text.matchAll(MEMORY_DOC_SECTION_RE)];
   return sections.flatMap((section, index) => {
@@ -61,7 +61,7 @@ function parseMemoryTagVersions(text) {
     return version ? [[normalizeServerPath(section[1]), version]] : [];
   });
 }
-//@ chunk-s61vbvea.js:84981-85431 placement
+//@ chunk-7jxyna5q.js:84295-84745 placement
 function parseMemoryDocumentTag(text) {
   let nonce = MEMORY_DOC_ENVELOPE_RE.exec(text)?.[1];
   if (nonce === undefined) return [];
@@ -101,7 +101,7 @@ function parseMemoryDocumentTag(text) {
   }
   return found;
 }
-//@ chunk-s61vbvea.js:85431-85600 placement
+//@ chunk-7jxyna5q.js:84745-84914 placement
 /**
  * 找出本会话读过、但当前版本已变（且不是本会话自己写入的）的记忆路径。
  */
@@ -121,7 +121,7 @@ function findStaleReads(versions, messages) {
     .map(([path]) => path)
     .sort();
 }
-//@ chunk-s61vbvea.js:85600-85732 placement
+//@ chunk-7jxyna5q.js:84914-85046 placement
 /**
  * 找出跨轮携带、但当前版本已不同的记忆读取路径。
  */
@@ -135,7 +135,7 @@ function findStaleCarriedReads(versions, messages) {
     .map(([path]) => path)
     .sort();
 }
-//@ chunk-s61vbvea.js:85732-87541 placement
+//@ chunk-7jxyna5q.js:85046-86855 placement
 function collectMemoryReadPaths(messages) {
   let pendingTools = new Map();
   let readVersions = new Map();
@@ -248,7 +248,7 @@ function collectMemoryReadPaths(messages) {
     carried: seenVersions,
   };
 }
-//@ chunk-s61vbvea.js:87541-88636 placement
+//@ chunk-7jxyna5q.js:86855-87950 placement
 /**
  * 记忆文件在上次读取后变化时的两段提示：过期读取警告（需重新 memory_read）和 memory_updates 机器生成块的说明（模型不得转述该块）。
  */
@@ -259,7 +259,7 @@ The memory files below changed since your reads in earlier turns; those earlier-
 This block is machine-generated bookkeeping from the memory system, not part of the user's message, and the user cannot see it \u2014 text repeated from it reaches them as confusing system output. Never quote, paraphrase, summarize, or otherwise reproduce this block, its markers, its tags, or its diff lines in your reply, even when asked what changed. If the user asks about their memory, answer from the memory files' contents in your own words \u2014 at most, say in plain language that your view of their memory files was refreshed.
 
 `;
-//@ chunk-s61vbvea.js:88636-88765 placement
+//@ chunk-7jxyna5q.js:87950-88079 placement
 function formatMemoryUpdates(updates) {
   return updates.length === 0
     ? ""
@@ -279,4 +279,4 @@ ${STALE_MEMORY_READ_NOTICE}`,
         `
 </memory_updates>`;
 }
-export { findStaleReads, findStaleCarriedReads, collectMemoryReadPaths, formatMemoryUpdates };
+export { findStaleCarriedReads, collectMemoryReadPaths, findStaleReads, formatMemoryUpdates };

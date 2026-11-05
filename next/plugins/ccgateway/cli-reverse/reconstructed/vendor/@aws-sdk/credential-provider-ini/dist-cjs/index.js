@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/credential-provider-ini/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/credential-provider-ini@3.936.0..3.939.0
- * pieces: chunk-hecvqqcj.js (12)
+ * pieces: chunk-jghy7hde.js (12)
  * attribution: esm-layout 8, esm-fingerprint 4
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
@@ -11,15 +11,15 @@ import { require_property_provider } from "../../../@smithy/property-provider/di
 import { require_client } from "../../core/dist-cjs/submodules/client/index.js";
 import { fromLoginCredentials, import_client_2 } from "../../credential-provider-login/dist-cjs/index.js";
 
-//@ chunk-hecvqqcj.js:371-386 esm-layout
+//@ chunk-jghy7hde.js:371-386 esm-layout
 var sharedIniFileLoader = __toESM(require_shared_ini_file_loader());
-//@ chunk-hecvqqcj.js:386-402 esm-layout
+//@ chunk-jghy7hde.js:386-402 esm-layout
 var propertyProvider = __toESM(require_property_provider());
-//@ chunk-hecvqqcj.js:402-439 esm-layout
+//@ chunk-jghy7hde.js:402-439 esm-layout
 var client = __toESM(require_client());
 var import_property_provider = __toESM(require_property_provider());
 var import_shared_ini_file_loader = __toESM(require_shared_ini_file_loader());
-//@ chunk-hecvqqcj.js:439-1426 esm-layout
+//@ chunk-jghy7hde.js:439-1426 esm-layout
 var import_client = __toESM(require_client());
 var import_property_provider_2 = __toESM(require_property_provider());
 var resolveCredentialSource = (credentialSource, profileName, logger) => {
@@ -57,7 +57,7 @@ var resolveCredentialSource = (credentialSource, profileName, logger) => {
 };
 var setNamedProvider = (creds) =>
   import_client.setCredentialFeature(creds, "CREDENTIALS_PROFILE_NAMED_PROVIDER", "p");
-//@ chunk-hecvqqcj.js:1426-3742 esm-fingerprint
+//@ chunk-jghy7hde.js:1426-3742 esm-fingerprint
 var isAssumeRoleProfile = (arg, { profile = "default", logger } = {}) =>
   Boolean(arg) &&
   typeof arg === "object" &&
@@ -167,7 +167,7 @@ var resolveAssumeRoleCredentials = async (
   }
 };
 var isCredentialSourceWithoutRoleArn = (section) => !section.role_arn && !!section.credential_source;
-//@ chunk-hecvqqcj.js:9813-9968 esm-fingerprint
+//@ chunk-jghy7hde.js:9813-9968 esm-fingerprint
 var hasLoginSession = (options) => Boolean(options && options.login_session);
 var resolveLoginCredentials = async (profileName, options) => {
   let credentials = await fromLoginCredentials({
@@ -176,7 +176,7 @@ var resolveLoginCredentials = async (profileName, options) => {
   })();
   return import_client_2.setCredentialFeature(credentials, "CREDENTIALS_PROFILE_LOGIN", "AC");
 };
-//@ chunk-hecvqqcj.js:9968-10224 esm-layout
+//@ chunk-jghy7hde.js:9968-10224 esm-layout
 var import_client_4 = __toESM(require_client());
 var isProcessProfile = (arg) =>
   Boolean(arg) && typeof arg === "object" && typeof arg.credential_process === "string";
@@ -187,7 +187,7 @@ var resolveProcessCredentials = async (options, profile) =>
       profile,
     })().then((creds) => import_client_4.setCredentialFeature(creds, "CREDENTIALS_PROFILE_PROCESS", "v")),
   );
-//@ chunk-hecvqqcj.js:10224-10769 esm-layout
+//@ chunk-jghy7hde.js:10224-10769 esm-layout
 var import_client_5 = __toESM(require_client());
 var resolveSsoCredentials = async (profile, profileData, options = {}) => {
   let { fromSSO } = await import("../../credential-provider-sso/dist-cjs/index.js");
@@ -209,7 +209,7 @@ var isSsoProfile = (arg) =>
     typeof arg.sso_session === "string" ||
     typeof arg.sso_region === "string" ||
     typeof arg.sso_role_name === "string");
-//@ chunk-hecvqqcj.js:10769-11416 esm-layout
+//@ chunk-jghy7hde.js:10769-11416 esm-layout
 var import_client_6 = __toESM(require_client());
 var isStaticCredsProfile = (arg) =>
   Boolean(arg) &&
@@ -233,7 +233,7 @@ var resolveStaticCredentials = async (profile, options) => {
   };
   return import_client_6.setCredentialFeature(credentials, "CREDENTIALS_PROFILE", "n");
 };
-//@ chunk-hecvqqcj.js:11416-11984 esm-layout
+//@ chunk-jghy7hde.js:11416-11984 esm-layout
 var import_client_7 = __toESM(require_client());
 var isWebIdentityProfile = (arg) =>
   Boolean(arg) &&
@@ -254,7 +254,7 @@ var resolveWebIdentityCredentials = async (profile, options) =>
       import_client_7.setCredentialFeature(creds, "CREDENTIALS_PROFILE_STS_WEB_ID_TOKEN", "q"),
     ),
   );
-//@ chunk-hecvqqcj.js:11984-12402 esm-fingerprint
+//@ chunk-jghy7hde.js:11984-12402 esm-fingerprint
 var resolveProfileData = async (
   profileName,
   profiles,
@@ -285,7 +285,7 @@ var resolveProfileData = async (
     },
   );
 };
-//@ chunk-hecvqqcj.js:12402-12676 esm-fingerprint
+//@ chunk-jghy7hde.js:12402-12676 esm-fingerprint
 var fromIni =
   (_init = {}) =>
   async ({ callerClientConfig } = {}) => {

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：在 OAuth 槽位刷新锁下执行（托管服务器会话不允许）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-arf5kz9d.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fe7ws1e7.js (3)
  * attribution: placement 3
  */
 import { join } from "path";
@@ -19,19 +19,19 @@ import { sleep } from "../sleep.js";
 import { beginOAuthRefreshLockHold } from "../auth.js";
 import { errorMessage } from "../errors.js";
 
-//@ chunk-arf5kz9d.js:506-514 placement
+//@ chunk-fe7ws1e7.js:506-514 placement
 /**
  * OAuth 槽位锁的最大尝试次数（5）。
  */
 var MAX_SLOT_LOCK_ATTEMPTS = 5;
-//@ chunk-arf5kz9d.js:514-677 placement
+//@ chunk-fe7ws1e7.js:514-677 placement
 class OauthSlotLockContendedError extends Error {
   constructor() {
     super("OAuth refresh lock contention: another process is holding the refresh lock");
     this.name = "OauthSlotLockContendedError";
   }
 }
-//@ chunk-arf5kz9d.js:677-1368 placement
+//@ chunk-fe7ws1e7.js:677-1368 placement
 /**
  * 在 OAuth 槽位刷新锁下执行（托管服务器会话不允许）。
  */

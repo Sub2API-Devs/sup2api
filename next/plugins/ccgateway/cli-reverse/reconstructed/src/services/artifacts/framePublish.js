@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Artifact frame 发布。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sh3bk7pt.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-he38vqx2.js (12)
  * attribution: placement 12
  */
 import { findProxyError, ConnectProxyAgent, getUsableProxyUrl } from "../../utils/proxy.js";
@@ -22,10 +22,10 @@ import { ANT_KEY_PFX } from "../teamMemorySync/secretScanner.js";
 import { gzipBody, gzipWatermarkedBody } from "../analytics/eventSerialization.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-sh3bk7pt.js:977-1055 placement
+//@ chunk-he38vqx2.js:977-1055 placement
 var HOSTNAME_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 var NUMERIC_HOST_LABEL_RE = /^(?:0x[0-9a-f]*|[0-9]+)$/;
-//@ chunk-sh3bk7pt.js:1055-1282 placement
+//@ chunk-he38vqx2.js:1055-1282 placement
 function parseFrameHostsList(list) {
   if (list === undefined) return;
   let host;
@@ -43,7 +43,7 @@ function parseFrameHostsList(list) {
   }
   return host;
 }
-//@ chunk-sh3bk7pt.js:1282-1438 placement
+//@ chunk-he38vqx2.js:1282-1438 placement
 /**
  * 判断错误是否来自代理或连接被拒（含 SSL 证书错误）。
  */
@@ -60,7 +60,7 @@ function isProxyOrConnectRefusal(error) {
     }) !== undefined
   );
 }
-//@ chunk-sh3bk7pt.js:1438-1867 placement
+//@ chunk-he38vqx2.js:1438-1867 placement
 /**
  * 框架隧道代理缓存：按代理配置复用 HTTP 代理 agent（携带网关 CA），并对格式错误的配置只警告一次。
  */
@@ -90,12 +90,12 @@ class FrameTunnelAgentCache {
     });
   }
 }
-//@ chunk-sh3bk7pt.js:1867-1891 placement
+//@ chunk-he38vqx2.js:1867-1891 placement
 var frameTunnelAgentCache; // deferred: uses FrameTunnelAgentCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-sh3bk7pt.js:1867", () => {
+deferInit("chunk-he38vqx2.js:1867", () => {
   frameTunnelAgentCache = new HostScoped(() => new FrameTunnelAgentCache());
 });
-//@ chunk-sh3bk7pt.js:1891-2136 placement
+//@ chunk-he38vqx2.js:1891-2136 placement
 /**
  * 云会话下读取 CCR_AGENT_PROXY_FRAME_HOSTS，解析出第一个合法主机名并返回经网关代理的 {host, agent}；格式错误只警告一次；没有可用网关代理配置或已有其他代理时返回 undefined。
  */
@@ -116,7 +116,7 @@ function getFrameTunnelRoute() {
     agent: cache.agentFor(agentProxyEndpoint),
   };
 }
-//@ chunk-sh3bk7pt.js:2136-2255 placement
+//@ chunk-he38vqx2.js:2136-2255 placement
 /**
  * 发布请求体压缩用的常量：服务端读取期限、大小阈值、取样长度、压缩比余量与 gzip 请求头。
  */
@@ -130,7 +130,7 @@ var GZIP_JSON_HEADERS = {
   "Content-Encoding": "gzip",
   "Content-Type": "application/json",
 };
-//@ chunk-sh3bk7pt.js:2255-2339 placement
+//@ chunk-he38vqx2.js:2255-2339 placement
 /**
  * 导出函数 `publishReadDeadlineS`：参数 e，返回 PUBLISH_READ_DEADLINE_S; return Math.min( PUBLISH_READ_DEADLINE_MAX_S, PUBLISH_READ_DEADLINE_S + Math.floor(e …。
  */
@@ -141,11 +141,11 @@ function publishReadDeadlineS(jsonBytes) {
     PUBLISH_READ_DEADLINE_S + Math.floor(jsonBytes / BYTES_PER_EXTRA_SECOND),
   );
 }
-//@ chunk-sh3bk7pt.js:2339-2377 placement
+//@ chunk-he38vqx2.js:2339-2377 placement
 function fitsPublishDeadline(jsonBytes, byteCount) {
   return byteCount * publishReadDeadlineS(jsonBytes) <= jsonBytes * PUBLISH_READ_DEADLINE_S;
 }
-//@ chunk-sh3bk7pt.js:2377-3381 placement
+//@ chunk-he38vqx2.js:2377-3381 placement
 /**
  * 决定发布请求体是否 gzip：先看滚动开关；大请求体先取样估算压缩比，达不到在服务端读取期限内完成所需比例就不压缩；压缩后再核验一次。返回压缩结果（或 null）与编码打点信息。
  */
@@ -199,7 +199,7 @@ async function gzipPublishBody({ url: options, body, storageV5 }) {
     },
   };
 }
-//@ chunk-sh3bk7pt.js:3381-3525 placement
+//@ chunk-he38vqx2.js:3381-3525 placement
 /**
  * 判断值是否是普通对象（原型为 Object.prototype 或 null）。
  */
@@ -208,7 +208,7 @@ function isPlainRecord(body) {
   let prototypeOf = Object.getPrototypeOf(body);
   return prototypeOf === Object.prototype || prototypeOf === null;
 }
-//@ chunk-sh3bk7pt.js:3525-3791 placement
+//@ chunk-he38vqx2.js:3525-3791 placement
 /**
  * 把框架请求结果转为统一的响应信息（状态码、按名取响应头、读取正文）；请求失败时状态为 0、正文为空。
  */

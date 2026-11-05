@@ -3,14 +3,14 @@
  *
  * 订阅用户能否使用 1M 上下文（依赖 usage credits 是否开启）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/model/check1mAccess.ts
- * pieces: chunk-aepeg2w5.js (1)
+ * pieces: chunk-exfmq47h.js (1)
  * attribution: fingerprint 1
  */
 import { getGlobalConfig } from "../config.js";
 
-//@ chunk-aepeg2w5.js:418331-418830 fingerprint (2.1.88 match: isExtraUsageEnabled, 0.96)
+//@ chunk-exfmq47h.js:429722-430221 fingerprint (2.1.88 match: isExtraUsageEnabled, 0.96)
 /**
  * 缓存的 extra usage 禁用原因：未知为 false；null（已开启）或 out_of_credits 为 true；其他禁用原因为 false。供 Opus/Sonnet 1M 可用性（EK/vK）在订阅模式下判断。
  */

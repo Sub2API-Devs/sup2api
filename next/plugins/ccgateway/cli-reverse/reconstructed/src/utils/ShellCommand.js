@@ -3,9 +3,9 @@
  *
  * 运行中 shell 命令对象（ShellCommandImpl）：输出转发/落盘、超时与自动转后台、进程树终止、结果组装，以及已中止/启动失败的占位命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/ShellCommand.ts
- * pieces: chunk-e6aww6q8.js (21)
+ * pieces: chunk-5xgkngpb.js (21)
  * attribution: placement 9, fingerprint 5, layout 7
  */
 import {
@@ -32,38 +32,39 @@ import { logForDebugging } from "./debug.js";
 import {
   stringSchema,
   objectSchema,
-  numberSchema,
   literal,
-  array,
+  numberSchema,
   booleanSchema,
+  array,
 } from "../../vendor/zod/v4/classic/schemas.js";
 import { env } from "./env.js";
-import { logEvent } from "../services/analytics/index.js";
+import { logError } from "./log.js";
 import {
   errorMessage,
   getErrnoCode,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   toError,
 } from "./errors.js";
-import { fromEnum, lit as lit_2 } from "../services/analytics/safeMetadata.js";
-import { logError } from "./log.js";
 import { logFeatureBad, logFeatureOk, logFeatureSad } from "../services/analytics/featureTelemetry.js";
+import { logEvent } from "../services/analytics/index.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { jsonStringify } from "./slowOperations.js";
-import { plural } from "./stringUtils.js";
+import { lit as lit_2, fromEnum } from "../services/analytics/safeMetadata.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
+import { useRef, useEffect } from "../../vendor/react/cjs/react.production.js";
 import {
   MAX_TASK_OUTPUT_BYTES as MAX_TASK_OUTPUT_BYTES_2,
   getTaskOutputSize,
   isTaskOutputSwapRefusal,
   MAX_TASK_OUTPUT_BYTES_DISPLAY,
 } from "./task/diskOutput.js";
-import { useEffect, useRef } from "../../vendor/react/cjs/react.production.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
+import { getPlatform } from "./platform.js";
 import { unwrapAbortReason } from "./abortController.js";
 import { isTurnLevelAbort } from "./abortReasons.js";
-import { getPlatform } from "./platform.js";
-import { isPlainObject as isPlainObject_5 } from "./isPlainObject.js";
 import { __commonJS } from "../../runtime/bun-runtime.js";
+import { isPlainObject as isPlainObject_6 } from "./isPlainObject.js";
+import { plural } from "./stringUtils.js";
 import { DISK_SPACE_CHECK_INTERVAL_MS, buildDiskFullWarning } from "./shell/diskSpaceWarning.js";
 import { isProcessGroupAlive, leftoverProcessTracker, findProcessesByPgid } from "./shell/cpuReport.js";
 import { formatDuration } from "./format.js";
@@ -73,7 +74,7 @@ import { generateTaskId } from "../Task.js";
 import { logForDiagnosticsNoPII } from "./diagLogs.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:250002-250080 placement
+//@ chunk-5xgkngpb.js:249231-249309 placement
 /**
  * 判断进程是否仍存活且启动标记一致（用于进程树清理）。
  */
@@ -81,7 +82,7 @@ function isPidStillAlive(pid, startToken) {
   let processInfo = readProcessInfo(pid);
   return processInfo !== undefined && !processInfo.exited && processInfo.startToken === startToken;
 }
-//@ chunk-e6aww6q8.js:250080-250438 placement
+//@ chunk-5xgkngpb.js:249309-249667 placement
 /**
  * 从进程列表中收集以给定 pid 或进程组为根的进程树（广度优先，跳过 pid≤1 与自身）。
  */
@@ -108,7 +109,7 @@ function collectProcessTree(processInfos, rootPgids) {
   }
   return tree;
 }
-//@ chunk-e6aww6q8.js:250438-252316 placement
+//@ chunk-5xgkngpb.js:249667-251549 placement
 /**
  * 退出时清理 shell 进程树：根据进程列表找出各 shell 的进程组与后代（以启动令牌识别），先发 SIGTERM，在宽限期内轮询等待退出，再对仍存活且启动令牌未变的进程发 SIGKILL；返回树数量、等待时间与超出宽限仍存活的数量。
  */
@@ -222,37 +223,37 @@ function sweepShellTrees(shells, graceMs) {
     outlivedGrace: unlistedShells.length > 0 ? undefined : alive.size,
   };
 }
-//@ chunk-e6aww6q8.js:257176-257212 placement
+//@ chunk-5xgkngpb.js:256456-256492 placement
 var SIGKILL_EXIT_CODE = 137;
 var SIGTERM_EXIT_CODE = 143;
 var KILL_GRACE_MS = 1500;
 var TREE_POLL_INTERVAL_MS = 100;
-//@ chunk-e6aww6q8.js:257212-257296 placement
+//@ chunk-5xgkngpb.js:256492-256576 placement
 class ShellCommandRegistry {
   pendingKillBackstops = new Set();
   liveShellCommands = new Set();
   dyingTrees = new Set();
 }
-//@ chunk-e6aww6q8.js:257296-257323 placement
+//@ chunk-5xgkngpb.js:256576-256603 placement
 /**
  * 按宿主缓存的 ShellCommand 注册表（待决 kill、存活命令、待收束进程树）。
  */
 var shellCommandRegistryByHost; // deferred: uses ShellCommandRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:257296", () => {
+deferInit("chunk-5xgkngpb.js:256576", () => {
   shellCommandRegistryByHost = new HostScoped(() => new ShellCommandRegistry());
 });
-//@ chunk-e6aww6q8.js:257323-257353 placement
+//@ chunk-5xgkngpb.js:256603-256633 placement
 function shellCommandRegistry() {
   return onProcessRootHost(shellCommandRegistryByHost);
 }
-//@ chunk-e6aww6q8.js:257353-257439 placement
+//@ chunk-5xgkngpb.js:256633-256719 placement (2.1.88 match: _clearOutputsForTest, 0.458)
 /**
  * 等待所有待决的 kill 收尾 Promise。
  */
 async function drainPendingKillBackstops() {
   await Promise.allSettled(Array.from(shellCommandRegistry().pendingKillBackstops));
 }
-//@ chunk-e6aww6q8.js:257439-257536 placement
+//@ chunk-5xgkngpb.js:256719-256816 placement
 /**
  * 终止所有仍在运行的 shell 命令。
  */
@@ -260,7 +261,7 @@ function killRunningShellCommands() {
   for (let liveShellCommand of Array.from(shellCommandRegistry().liveShellCommands))
     if (liveShellCommand.status === "running") liveShellCommand.kill();
 }
-//@ chunk-e6aww6q8.js:259223-259680 fingerprint (2.1.88 match: StreamWrapper, 0.813)
+//@ chunk-5xgkngpb.js:258503-258960 fingerprint (2.1.88 match: StreamWrapper, 0.814)
 /**
  * 把子进程 stdout/stderr 流按 utf-8 转发到 TaskOutput（writeStdout/writeStderr），ended 在 end/close 时完成。
  */
@@ -299,7 +300,7 @@ class StreamWrapper {
     this.#r = () => {};
   }
 }
-//@ chunk-e6aww6q8.js:259680-265449 fingerprint (2.1.88 match: ShellCommandImpl, 0.616)
+//@ chunk-5xgkngpb.js:258960-264733 fingerprint (2.1.88 match: ShellCommandImpl, 0.616)
 /**
  * 运行中 shell 命令对象：状态 running/backgrounded/completed/killed；超时（可自动转后台）、abort、输出文件大小看门狗（超限或文件被替换则杀）；完成时组装 {code,stdout,stderr,interrupted,backgroundTaskId,outputFilePath,shellUsage(wall/cpu),leftRunningPgid,timedOut…}；kill 先 SIGTERM 进程树、1.5s 后 SIGKILL；background() 转后台并把输出落盘。
  */
@@ -313,32 +314,32 @@ class ShellCommandImpl {
   #s = null;
   #a = false;
   #d = false;
-  #c;
-  #l;
-  #u;
   #m;
+  #l;
+  #p;
   #g;
-  #S;
-  #y = null;
-  #p = shellCommandRegistry();
+  #u;
+  #y;
+  #_ = null;
+  #c = shellCommandRegistry();
   #h = null;
-  #v = false;
-  #k = null;
-  #_;
+  #S = false;
+  #b = null;
+  #k;
   #f;
-  #w;
-  #b;
-  #E;
   #T;
+  #w;
+  #v;
+  #E;
   taskOutput;
   static #O(command) {
-    if (command.#S && command.#m)
-      command.#m((registerOnTimeout) =>
+    if (command.#y && command.#g)
+      command.#g((registerOnTimeout) =>
         command.background(registerOnTimeout, {
           atExit: "kill",
         }),
       );
-    else command.#C(SIGTERM_EXIT_CODE);
+    else command.#R(SIGTERM_EXIT_CODE);
   }
   result;
   outputEnded;
@@ -359,13 +360,13 @@ class ShellCommandImpl {
   ) {
     this.#f = timing;
     this.#r = childProcess;
-    this.#b = childProcess.pid;
+    this.#w = childProcess.pid;
     this.#l = abortSignal;
-    this.#u = level;
-    this.#g = timeoutMs;
-    this.#S = hasOnTimeout;
-    this.#c = maxOutputBytes;
-    this.#_ = cwd;
+    this.#p = level;
+    this.#u = timeoutMs;
+    this.#y = hasOnTimeout;
+    this.#m = maxOutputBytes;
+    this.#k = cwd;
     this.taskOutput = taskOutput;
     this.#o = childProcess.stderr ? new StreamWrapper(childProcess.stderr, taskOutput, true) : null;
     this.#n = childProcess.stdout ? new StreamWrapper(childProcess.stdout, taskOutput, false) : null;
@@ -373,10 +374,10 @@ class ShellCommandImpl {
       this.#n || this.#o ? Promise.all([this.#n?.ended, this.#o?.ended]).then(() => {}) : undefined;
     if (hasOnTimeout)
       this.onTimeout = (onTimeout) => {
-        this.#m = onTimeout;
+        this.#g = onTimeout;
       };
     this.result = this.#L();
-    this.#p.liveShellCommands.add(this);
+    this.#c.liveShellCommands.add(this);
     installExitSweep();
     if (abortSignal.aborted) this.#P();
   }
@@ -385,20 +386,20 @@ class ShellCommandImpl {
   }
   #P() {
     let reason = unwrapAbortReason(this.#l.reason);
-    if ((reason === "interrupt" && !killOnInterruptWhenNoBackground()) || isTurnLevelAbort(reason, this.#u))
+    if ((reason === "interrupt" && !killOnInterruptWhenNoBackground()) || isTurnLevelAbort(reason, this.#p))
       return;
     this.kill();
   }
   #I(code, signal) {
-    if (code !== null && code !== undefined) this.#R(code);
-    else this.#R(signal === "SIGTERM" ? 144 : 1, true);
+    if (code !== null && code !== undefined) this.#C(code);
+    else this.#C(signal === "SIGTERM" ? 144 : 1, true);
   }
   #D() {
-    this.#R(1, true);
+    this.#C(1, true);
   }
-  #R(exitCode, flag = false) {
+  #C(exitCode, flag = false) {
     if (this.#h) {
-      this.#v = flag;
+      this.#S = flag;
       this.#h(exitCode);
       this.#h = null;
     }
@@ -410,10 +411,10 @@ class ShellCommandImpl {
       clearTimeout(timeoutId);
       this.#i = null;
     }
-    let boundAbortHandler = this.#k;
+    let boundAbortHandler = this.#b;
     if (boundAbortHandler) {
       this.#l.removeEventListener("abort", boundAbortHandler);
-      this.#k = null;
+      this.#b = null;
     }
   }
   #x() {
@@ -428,13 +429,13 @@ class ShellCommandImpl {
       getTaskOutputSize(this.taskOutput.taskId).then(
         (taskOutputSize) => {
           if (
-            taskOutputSize > this.#c &&
+            taskOutputSize > this.#m &&
             (this.#e === "running" || this.#e === "backgrounded") &&
             this.#s !== null
           ) {
             this.#a = true;
             this.#x();
-            this.#C(SIGKILL_EXIT_CODE);
+            this.#R(SIGKILL_EXIT_CODE);
           }
         },
         (error) => {
@@ -445,7 +446,7 @@ class ShellCommandImpl {
           ) {
             this.#d = true;
             this.#x();
-            this.#C(SIGKILL_EXIT_CODE);
+            this.#R(SIGKILL_EXIT_CODE);
             return;
           }
         },
@@ -454,26 +455,26 @@ class ShellCommandImpl {
     this.#s.unref();
   }
   #L() {
-    this.#k = this.#P.bind(this);
-    this.#l.addEventListener("abort", this.#k, {
+    this.#b = this.#P.bind(this);
+    this.#l.addEventListener("abort", this.#b, {
       once: true,
     });
     this.#r.once("exit", this.#I.bind(this));
     this.#r.once("error", this.#D.bind(this));
-    this.#i = setTimeout(ShellCommandImpl.#O, this.#g, this);
+    this.#i = setTimeout(ShellCommandImpl.#O, this.#u, this);
     if (this.taskOutput.stdoutToFile) this.#M();
     let exitPromise = new Promise((resolve) => {
       this.#h = resolve;
     });
     return new Promise((resolve) => {
-      this.#y = resolve;
+      this.#_ = resolve;
       exitPromise.then(this.#N.bind(this));
     });
   }
   async #N(exitCode) {
-    let wallMs = (this.#w ?? performance.now()) - this.#f.startedAt;
+    let wallMs = (this.#T ?? performance.now()) - this.#f.startedAt;
     let cpuAccount = this.#f.cpuAccountWindow && closeCpuWindow(this.#f.cpuAccountWindow);
-    this.#p.liveShellCommands.delete(this);
+    this.#c.liveShellCommands.delete(this);
     this.#A();
     let wasKilled = this.#e === "killed";
     if (this.#e === "running" || this.#e === "backgrounded") this.#e = "completed";
@@ -484,7 +485,7 @@ class ShellCommandImpl {
       (groupAlive && this.#f.procCpuTime) ||
       (usage !== undefined && pid !== undefined && this.#f.procCpuTime === "background marker")
         ? readProcCpuTime(pid)
-        : this.#E;
+        : this.#v;
     let stdout = await this.taskOutput.getStdout();
     let result = {
       code: exitCode,
@@ -493,19 +494,19 @@ class ShellCommandImpl {
       interrupted: wasKilled && exitCode === SIGKILL_EXIT_CODE,
       backgroundTaskId: this.#t,
     };
-    if (this.#v) result.noExitStatus = true;
-    if (wasKilled && this.#T !== undefined) result.stopLabel = this.#T;
+    if (this.#S) result.noExitStatus = true;
+    if (wasKilled && this.#E !== undefined) result.stopLabel = this.#E;
     if (
       !wasKilled &&
       pid !== undefined &&
       pid > 1 &&
-      leftoverProcessTracker.follows(this.#u) &&
+      leftoverProcessTracker.follows(this.#p) &&
       (isProcessGroupAlive(pid) ||
         (await findProcessesByPgid(new Set([pid])).catch(() => new Map())).has(pid)) &&
       this.#e !== "killed"
     )
       result.leftRunningPgid = pid;
-    if (this.#b !== undefined)
+    if (this.#w !== undefined)
       result.shellUsage = {
         wallMs,
         ...(usage !== undefined && {
@@ -545,7 +546,7 @@ ${stdout}`
       result.outputFileSize = this.taskOutput.outputFileSize;
     } else if (wasKilled && exitCode === SIGTERM_EXIT_CODE) {
       result.timedOut = true;
-      prefixMessage(`Command timed out after ${formatDuration(this.#g)}`);
+      prefixMessage(`Command timed out after ${formatDuration(this.#u)}`);
     } else if (
       this.taskOutput.stdoutToFile &&
       exitCode !== 0 &&
@@ -558,22 +559,22 @@ ${stdout}`
 ${stdout}`
           : diskFullWarning;
     }
-    let exitListener = this.#y;
+    let exitListener = this.#_;
     if (exitListener) {
-      this.#y = null;
+      this.#_ = null;
       exitListener(result);
     }
   }
-  #C(exitCode) {
+  #R(exitCode) {
     this.#e = "killed";
     let childProcess = this.#r;
     let pid = childProcess?.pid;
     let hasWaiter = this.#h !== null;
-    this.#R(exitCode ?? SIGKILL_EXIT_CODE);
+    this.#C(exitCode ?? SIGKILL_EXIT_CODE);
     if (!pid || pid <= 1 || isWindowsExitedProcess(childProcess)) return Promise.resolve();
     if (hasWaiter && this.#f.procCpuTime) {
-      this.#w = performance.now();
-      this.#E = readProcCpuTime(pid);
+      this.#T = performance.now();
+      this.#v = readProcCpuTime(pid);
     }
     let groupKill = killProcessGroup_2(pid, "SIGTERM");
     let askedAt;
@@ -630,7 +631,7 @@ ${stdout}`
           pollTimer.unref();
         });
     });
-    let { pendingKillBackstops, dyingTrees } = this.#p;
+    let { pendingKillBackstops, dyingTrees } = this.#c;
     let buildSweepEntry = () => ({
       pid,
       running: !hasProcessExited(childProcess),
@@ -649,14 +650,14 @@ ${stdout}`
     return promise;
   }
   kill(reason) {
-    if (this.#e === "running" || this.#e === "backgrounded") this.#T = reason;
-    return this.#C();
+    if (this.#e === "running" || this.#e === "backgrounded") this.#E = reason;
+    return this.#R();
   }
   background(taskId, options) {
     if (this.#e === "running") {
       this.#t = taskId;
       this.#e = "backgrounded";
-      if (options.atExit === "leave") this.#p.liveShellCommands.delete(this);
+      if (options.atExit === "leave") this.#c.liveShellCommands.delete(this);
       this.#A();
       if (this.taskOutput.stdoutToFile) this.#M();
       else if (!options.skipSpill) this.taskOutput.spillToDisk();
@@ -677,26 +678,26 @@ ${stdout}`
         };
   }
   async detach() {
-    this.#p.liveShellCommands.delete(this);
+    this.#c.liveShellCommands.delete(this);
     let pid = this.#r?.pid;
     if (pid === undefined) return;
     this.#r.unref();
-    if (this.#_ === undefined || this.#r.exitCode !== null || this.#r.signalCode !== null) return pid;
-    return (await this.#_()) ?? pid;
+    if (this.#k === undefined || this.#r.exitCode !== null || this.#r.signalCode !== null) return pid;
+    return (await this.#k()) ?? pid;
   }
   cleanup() {
-    this.#p.liveShellCommands.delete(this);
+    this.#c.liveShellCommands.delete(this);
     this.#n?.cleanup();
     this.#o?.cleanup();
     this.taskOutput.clear();
     this.#A();
     this.#r = null;
     this.#l = null;
-    this.#m = undefined;
-    this.#_ = undefined;
+    this.#g = undefined;
+    this.#k = undefined;
   }
 }
-//@ chunk-e6aww6q8.js:265449-265530 layout
+//@ chunk-5xgkngpb.js:264733-264814 layout
 /**
  * 用子进程、abort 信号、超时、TaskOutput 等构造 ShellCommandImpl。
  */
@@ -723,7 +724,7 @@ function wrapSpawn(
     timing,
   );
 }
-//@ chunk-e6aww6q8.js:265530-265807 fingerprint (2.1.88 match: AbortedShellCommand, 0.952)
+//@ chunk-5xgkngpb.js:264814-265091 fingerprint (2.1.88 match: AbortedShellCommand, 0.952)
 /**
  * 未执行即中止的命令占位：结果 code 145、"Command aborted before execution"、interrupted。
  */
@@ -748,22 +749,22 @@ class AbortedShellCommand {
   }
   cleanup() {}
 }
-//@ chunk-e6aww6q8.js:265807-265836 layout
+//@ chunk-5xgkngpb.js:265091-265120 layout
 /**
  * 返回 AbortedShellCommand 实例（exec 在 spawn 前发现已中止时用）。
  */
 function createAbortedCommand() {
   return new AbortedShellCommand();
 }
-//@ chunk-e6aww6q8.js:265836-265883 layout
+//@ chunk-5xgkngpb.js:265120-265167 layout
 function isWindowsExitedProcess(childProcess) {
   return getPlatform() === "windows" && hasProcessExited(childProcess);
 }
-//@ chunk-e6aww6q8.js:265883-265945 layout
+//@ chunk-5xgkngpb.js:265167-265229 layout
 function hasProcessExited(childProcess) {
   return childProcess.exitCode !== null || childProcess.signalCode !== null;
 }
-//@ chunk-e6aww6q8.js:265945-266521 layout
+//@ chunk-5xgkngpb.js:265229-265805 layout
 /**
  * 进程退出时收集仍存活/正在被杀的 shell 进程树，统一 SIGKILL 并上报 cli_shell_exit_sweep 诊断。
  */
@@ -810,7 +811,7 @@ function sweepShellTreesOnExit(exitCode) {
     );
   } catch {}
 }
-//@ chunk-e6aww6q8.js:266521-266684 layout
+//@ chunk-5xgkngpb.js:265805-265968 layout
 /**
  * 非 Windows 且开关允许时把 sweepShellTreesOnExit 挂到 process 'exit'（prepend），否则摘除。
  */
@@ -823,7 +824,7 @@ function installExitSweep() {
   if (!process.listeners("exit").includes(sweepShellTreesOnExit))
     process.prependListener("exit", sweepShellTreesOnExit);
 }
-//@ chunk-e6aww6q8.js:266684-266865 layout
+//@ chunk-5xgkngpb.js:265968-266149 layout
 /**
  * 用 kill(pid,0) 探测进程组与已知子孙是否都已不存在（ESRCH）。
  */
@@ -845,7 +846,7 @@ function isProcessTreeGone(pid, startTokens) {
     }
   return allGone;
 }
-//@ chunk-e6aww6q8.js:266865-267146 fingerprint (2.1.88 match: createFailedCommand, 0.932)
+//@ chunk-5xgkngpb.js:266149-266430 fingerprint (2.1.88 match: createFailedCommand, 0.932)
 /**
  * 构造未启动即失败的命令对象：code 1、stderr=原因、preSpawnError（可带 preSpawnErrorCode 如 e2big）。
  */
@@ -873,7 +874,7 @@ function createFailedCommand(preSpawnError, errorCode) {
     cleanup() {},
   };
 }
-//@ chunk-e6aww6q8.js:4822317-4822395 fingerprint (2.1.88 match: createAbortedCommand, 0.627)
+//@ chunk-5xgkngpb.js:4961060-4961138 fingerprint (2.1.88 match: createAbortedCommand, 0.634)
 /**
  * 结果没有 backgroundTaskId 时原样返回，否则去掉 shellUsage 字段（具体用途未完全确认）。
  */
@@ -887,10 +888,10 @@ function stripShellUsageUnlessBackgrounded(result) {
 }
 export {
   killRunningShellCommands,
-  wrapSpawn,
-  drainPendingKillBackstops,
-  shellCommandRegistryByHost,
-  stripShellUsageUnlessBackgrounded,
   createFailedCommand,
   createAbortedCommand,
+  wrapSpawn,
+  stripShellUsageUnlessBackgrounded,
+  drainPendingKillBackstops,
+  shellCommandRegistryByHost,
 };

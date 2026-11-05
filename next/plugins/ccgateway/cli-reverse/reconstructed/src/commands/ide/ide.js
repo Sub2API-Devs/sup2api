@@ -3,10 +3,10 @@
  *
  * /ide 实现：检测运行中的 IDE、选择连接、安装扩展
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/ide/ide.tsx
- * pieces: chunk-5bdzenzx.js (24), chunk-e6aww6q8.js (1), chunk-fq0cr76a.js (1)
- * attribution: sole-consumer 5, file-local 1, fingerprint 11, placement 4, affinity 1, layout 4
+ * pieces: chunk-5xgkngpb.js (1), chunk-dh16zjm4.js (24), chunk-qg41pqt6.js (1)
+ * attribution: placement 4, sole-consumer 5, file-local 1, fingerprint 11, affinity 1, layout 4
  */
 import { isIP } from "net";
 import * as pathModule from "path";
@@ -15,6 +15,7 @@ import {
   isSupportedTerminal,
   toIDEDisplayName,
   isJetBrainsTerminal,
+  isVSCodeTerminal,
   VSCODE_EXTENSION_DOCS_URL,
   getIdeAutoInstallSkipReason,
   isJetBrainsIde,
@@ -56,7 +57,7 @@ import { useAppState, useSetAppState } from "../../state/AppState.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
 import { setMcpOnClose } from "../../services/mcp/mcpWireUtils.js";
 
-//@ chunk-fq0cr76a.js:916465-916672 fingerprint (2.1.88 match: _temp4, 0.691)
+//@ chunk-qg41pqt6.js:921696-921903 fingerprint (2.1.88 match: _temp4, 0.692)
 /**
  * 解析 "host:port"：端口 1–65535，host 非空；以冒号结尾的 host 必须是 IPv6。失败返回 undefined。
  */
@@ -73,7 +74,7 @@ function parseHostPort(ide_0) {
     port,
   };
 }
-//@ chunk-e6aww6q8.js:3244299-3244625 placement
+//@ chunk-5xgkngpb.js:3328919-3329245 placement
 /**
  * 按 IDE 名判断属于哪个 VS Code 系：windsurf/devin→windsurf，cursor→cursor，VS Code/VSCodium/Code-OSS（非 Insiders）→vscode，否则 null。
  */
@@ -92,21 +93,21 @@ function detectVSCodeFamily(name) {
     return "vscode";
   return null;
 }
-//@ chunk-5bdzenzx.js:16087-16147 sole-consumer (2.1.88 match: _temp, 1)
+//@ chunk-dh16zjm4.js:17268-17328 sole-consumer (2.1.88 match: _temp, 1)
 function shouldAutoConnectIdeAnyway() {
   let config = getGlobalConfig();
   return !isSupportedTerminal() && config.autoConnectIde === true;
 }
-//@ chunk-5bdzenzx.js:16147-16207 file-local
+//@ chunk-dh16zjm4.js:17328-17388 file-local
 function countByName(acc, ide) {
   acc[ide.name] = (acc[ide.name] || 0) + 1;
   return acc;
 }
-//@ chunk-5bdzenzx.js:16207-16282 fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-dh16zjm4.js:17388-17463 fingerprint (2.1.88 match: _temp2, 1)
 function isVSCodeName(ide) {
   return ide.name === "VS Code" || ide.name === "Visual Studio Code";
 }
-//@ chunk-5bdzenzx.js:16282-16395 fingerprint (2.1.88 match: _temp3, 0.748)
+//@ chunk-dh16zjm4.js:17463-17576 fingerprint (2.1.88 match: _temp3, 0.748)
 function renderIdeWorkspaceRow(ide, index) {
   return jsxProd_default(
     BulletRow,
@@ -119,7 +120,7 @@ function renderIdeWorkspaceRow(ide, index) {
     index,
   );
 }
-//@ chunk-5bdzenzx.js:16395-16450 sole-consumer
+//@ chunk-dh16zjm4.js:17576-17631 sole-consumer
 function renderAvailableIde(available) {
   return jsxProd_default(
     OrderedListWithItem.Item,
@@ -129,7 +130,7 @@ function renderAvailableIde(available) {
     available.port,
   );
 }
-//@ chunk-5bdzenzx.js:16450-16499 sole-consumer
+//@ chunk-dh16zjm4.js:17631-17680 sole-consumer
 function renderRunningIde(running) {
   return jsxProd_default(
     OrderedListWithItem.Item,
@@ -139,21 +140,21 @@ function renderRunningIde(running) {
     running,
   );
 }
-//@ chunk-5bdzenzx.js:16538-16585 placement (2.1.88 match: _temp, 1)
+//@ chunk-dh16zjm4.js:17719-17766 placement (2.1.88 match: _temp, 1)
 function findIdeClient(s) {
   return s.mcp.clients.find(isIdeClient);
 }
-//@ chunk-5bdzenzx.js:16585-16600 placement
+//@ chunk-dh16zjm4.js:17766-17781 placement
 function noop() {}
-//@ chunk-5bdzenzx.js:16600-16639 placement (2.1.88 match: _temp2, 1)
+//@ chunk-dh16zjm4.js:17781-17820 placement (2.1.88 match: _temp2, 1)
 function isNonIdeMcpClient(c) {
   return c.name !== "ide";
 }
-//@ chunk-5bdzenzx.js:16696-16751 sole-consumer (2.1.88 match: isIncludedMcpTool, 1)
+//@ chunk-dh16zjm4.js:17877-17932 sole-consumer (2.1.88 match: isIncludedMcpTool, 1)
 function isIncludedMcpTool_2(tool) {
   return !tool.name?.startsWith("mcp__ide__");
 }
-//@ chunk-5bdzenzx.js:16751-16891 sole-consumer (2.1.88 match: _temp, 0.819)
+//@ chunk-dh16zjm4.js:17932-18072 sole-consumer (2.1.88 match: _temp, 0.819)
 function withoutIdeMcpEntries(s) {
   return {
     ...s,
@@ -165,12 +166,12 @@ function withoutIdeMcpEntries(s) {
     },
   };
 }
-//@ chunk-5bdzenzx.js:16891-16940 affinity
+//@ chunk-dh16zjm4.js:18072-18121 affinity
 function withoutIdeEntry(value) {
   let { ide, ...rest } = value ?? {};
   return rest;
 }
-//@ chunk-5bdzenzx.js:16940-20006 fingerprint (2.1.88 match: IDEScreen, 0.611)
+//@ chunk-dh16zjm4.js:18121-21334 fingerprint (2.1.88 match: IDEScreen, 0.596)
 function IDEScreen(props) {
   let $ = useMemoCache(45);
   let { availableIDEs, unavailableIDEs, selectedIDE, onClose, onSelect } = props;
@@ -283,7 +284,10 @@ function IDEScreen(props) {
               children: isJetBrainsTerminal()
                 ? `No available IDEs detected. Please install the plugin and restart your IDE:
 https://code.claude.com/docs/en/jetbrains`
-                : "No available IDEs detected. Make sure your IDE has the Claude Code extension or plugin installed and is running.",
+                : isVSCodeTerminal()
+                  ? `No available IDEs detected. Make sure your IDE has the Claude Code extension installed and is running.
+To install it yourself, see ${VSCODE_EXTENSION_DOCS_URL}`
+                  : "No available IDEs detected. Make sure your IDE has the Claude Code extension or plugin installed and is running.",
             })
           : jsxProd_default_2(Fragment, {
               children: [
@@ -435,14 +439,14 @@ https://code.claude.com/docs/en/jetbrains`
   } else hint = $[44];
   return hint;
 }
-//@ chunk-5bdzenzx.js:20006-20152 fingerprint (2.1.88 match: findCurrentIDE, 1)
+//@ chunk-dh16zjm4.js:21334-21480 fingerprint (2.1.88 match: findCurrentIDE, 1)
 async function findCurrentIDE(availableIDEs, dynamicMcpConfig) {
   let currentConfig = dynamicMcpConfig?.ide;
   if (!currentConfig || (currentConfig.type !== "sse-ide" && currentConfig.type !== "ws-ide")) return null;
   for (let ide of availableIDEs) if (ide.url === currentConfig.url) return ide;
   return null;
 }
-//@ chunk-5bdzenzx.js:20152-20717 fingerprint (2.1.88 match: IDEOpenSelection, 0.843)
+//@ chunk-dh16zjm4.js:21480-22045 fingerprint (2.1.88 match: IDEOpenSelection, 0.844)
 function IDEOpenSelection(props) {
   let $ = useMemoCache(13);
   let { availableIDEs, onSelectIDE, onDone } = props;
@@ -494,7 +498,7 @@ function IDEOpenSelection(props) {
   } else body = $[12];
   return body;
 }
-//@ chunk-5bdzenzx.js:20717-21294 fingerprint (2.1.88 match: RunningIDESelector, 0.772)
+//@ chunk-dh16zjm4.js:22045-22622 fingerprint (2.1.88 match: RunningIDESelector, 0.772)
 function RunningIDESelector(props) {
   let $ = useMemoCache(13);
   let { runningIDEs, onSelectIDE, onDone } = props;
@@ -549,7 +553,7 @@ function RunningIDESelector(props) {
   } else t6 = $[12];
   return t6;
 }
-//@ chunk-5bdzenzx.js:21294-21455 fingerprint (2.1.88 match: InstallOnMount, 1)
+//@ chunk-dh16zjm4.js:22622-22783 fingerprint (2.1.88 match: InstallOnMount, 1)
 function InstallOnMount(props) {
   let $ = useMemoCache(4);
   let { ide, onInstall } = props;
@@ -571,7 +575,7 @@ function InstallOnMount(props) {
   useEffect(t1, t2);
   return null;
 }
-//@ chunk-5bdzenzx.js:21455-22661 layout
+//@ chunk-dh16zjm4.js:22783-23989 layout
 /**
  * /ide 安装扩展步骤组件：挂载时调用 installExtension，按结果回报已安装/需重载/失败/跳过原因；Esc 停止等待并提示稍后用 /status 查看。
  */
@@ -657,7 +661,7 @@ ${manualNote}`);
   } else statusLine = $[13];
   return statusLine;
 }
-//@ chunk-5bdzenzx.js:22661-23489 layout
+//@ chunk-dh16zjm4.js:23989-24962 layout
 /**
  * /ide 安装扩展流程：JetBrains 直接安装并提示重启；只有一个运行中 IDE 时自动安装，否则先让用户选择。
  */
@@ -672,8 +676,9 @@ function InstallExtensionFlow(props) {
         installExtension(index);
         let ideDisplayName = toIDEDisplayName(index);
         onDone(`Couldn't find the Claude Code plugin running in ${sequential.bold(ideDisplayName)}.
-${sequential.bold(`restart ${ideDisplayName}`)} completely and run /ide again.
-`);
+If it isn't installed, install it from the JetBrains Marketplace.
+Then ${sequential.bold(`restart ${ideDisplayName}`)} completely and run /ide again.
+Installation guide: https://code.claude.com/docs/en/jetbrains#installation`);
         return;
       }
       setSelected(index);
@@ -735,7 +740,7 @@ ${sequential.bold(`restart ${ideDisplayName}`)} completely and run /ide again.
   } else status = $[15];
   return status;
 }
-//@ chunk-5bdzenzx.js:23489-24052 layout
+//@ chunk-dh16zjm4.js:24962-25525 layout
 /**
  * 用选中的 IDE 打开项目或 worktree 目录：VS Code 系找到命令行工具后执行，失败再试 code；记录 ide_open_project 遥测并回报结果。
  */
@@ -767,7 +772,7 @@ async function openProjectInIde(ide, targetPath, isWorktree, report) {
   logFeatureBad("ide_open_project", "ide_open_project_failed");
   report(`Failed to open in ${ide.name}. Try opening manually: ${targetPath}`);
 }
-//@ chunk-5bdzenzx.js:24052-24808 fingerprint (2.1.88 match: call, 0.612)
+//@ chunk-dh16zjm4.js:25525-26281 fingerprint (2.1.88 match: call, 0.612)
 /**
  * /ide 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -817,9 +822,9 @@ async function call(onDone, context, args) {
     onDone,
   });
 }
-//@ chunk-5bdzenzx.js:24808-24821 layout
+//@ chunk-dh16zjm4.js:26281-26294 layout
 var IDE_CONNECT_TIMEOUT_MS = 35000;
-//@ chunk-5bdzenzx.js:24821-26672 fingerprint (2.1.88 match: IDECommandFlow, 0.79)
+//@ chunk-dh16zjm4.js:26294-28145 fingerprint (2.1.88 match: IDECommandFlow, 0.79)
 function IDECommandFlow(props) {
   let $ = useMemoCache(27);
   let { availableIDEs, unavailableIDEs, currentIDE, onChangeDynamicMcpConfig, onDone } = props;
@@ -976,7 +981,7 @@ function IDECommandFlow(props) {
   } else helpText = $[26];
   return helpText;
 }
-//@ chunk-5bdzenzx.js:26672-27019 fingerprint (2.1.88 match: formatWorkspaceFolders, 1)
+//@ chunk-dh16zjm4.js:28145-28492 fingerprint (2.1.88 match: formatWorkspaceFolders, 1)
 function formatWorkspaceFolders(folders, maxLength = 100) {
   if (folders.length === 0) return "";
   let cwd = getCwd();

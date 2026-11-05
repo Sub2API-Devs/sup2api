@@ -3,16 +3,16 @@
  *
  * 单个选项行渲染（聚焦指针、选中标记、描述）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CustomSelect/select-option.tsx
- * pieces: chunk-ey2qag4x.js (1)
+ * pieces: chunk-p1yqn9ds.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { ListItem } from "../design-system/ListItem.js";
 
-//@ chunk-ey2qag4x.js:25844-26333 fingerprint (2.1.88 match: SelectOption, 0.897)
+//@ chunk-p1yqn9ds.js:25631-26120 fingerprint (2.1.88 match: SelectOption, 0.897)
 function SelectOption(props) {
   let $ = useMemoCache(10);
   let {

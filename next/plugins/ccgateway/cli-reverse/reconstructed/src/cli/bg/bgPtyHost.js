@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：--bg-pty-host：后台会话的伪终端宿主进程（转发窗口尺寸、信号、输出缓冲与日志）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jx4rgw65.js (7)
- * attribution: placement 7
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mbg9kd5b.js (8)
+ * attribution: placement 7, layout 1
  */
 import { unlink, writeFile, mkdir, appendFile } from "fs/promises";
 import { setPriority, getPriority } from "os";
@@ -15,6 +15,7 @@ import { createWriteStream, mkdirSync, appendFileSync } from "fs";
 import { dirname } from "path";
 import { detectHomebrew } from "../../utils/nativeInstaller/packageManagers.js";
 import { env } from "../../utils/env.js";
+import { getAllLockInfo } from "../../utils/nativeInstaller/pidLock.js";
 import { readSessionAuthFile, timingSafeEqualStrings } from "../../utils/sessionRecords.js";
 import { getPlatform } from "../../utils/platform.js";
 import {
@@ -26,17 +27,16 @@ import {
   DATA_FRAME_KIND,
   CONTROL_FRAME_KIND,
 } from "../../utils/framedSocket.js";
-import { killChildWithSignal } from "../../services/voice.js";
 import { parseNumberWithSeparators } from "../../utils/envUtils.js";
 import { setBgExitCause } from "../../utils/bgExitSidecars.js";
 import { sleep } from "../../utils/sleep.js";
 import { getExecExitPath, ptyLateFile, ptyErrFile } from "../../services/daemon/paths.js";
-import { writeAndPublishSync } from "../../utils/atomicPublishWrite.js";
+import { syncTarget } from "../../utils/atomicPublishWrite.js";
 
-//@ chunk-jx4rgw65.js:1337-1360 placement
+//@ chunk-mbg9kd5b.js:1486-1509 placement
 var MAX_PTY_WRITE_BUFFER_BYTES = 1048576;
 var DEFAULT_SILENT_PEER_TIMEOUT_MS = 5000;
-//@ chunk-jx4rgw65.js:1360-7291 placement
+//@ chunk-mbg9kd5b.js:1509-7446 placement
 /**
  * 后台 PTY 宿主主函数：解析 argv、启动子进程、转发 resize/信号、处理连接（约 6 KB）。
  */
@@ -45,6 +45,7 @@ async function runBgPtyHost(argv) {
   let included = argv.includes("--bg-spare", index + 1);
   if (!included) await detectHomebrew();
   env.unset("CLAUDE_PTY_HOST_NO_STABLE_PATH");
+  getAllLockInfo();
   if (index < 3 || index === argv.length - 1)
     return failPtyHost(undefined, "bad argv: --bg-pty-host <sock> <cols> <rows> -- <file> [args...]");
   let sockPath = argv[0];
@@ -206,10 +207,10 @@ async function runBgPtyHost(argv) {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             } !== "undefined"
@@ -217,10 +218,10 @@ async function runBgPtyHost(argv) {
                   ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
                   PACKAGE_URL: "@anthropic-ai/claude-code",
                   README_URL: "https://code.claude.com/docs/en/overview",
-                  VERSION: "2.1.316",
+                  VERSION: "2.1.318",
                   FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                  BUILD_TIME: "2026-10-30T23:28:13Z",
-                  GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                  BUILD_TIME: "2026-11-03T18:52:53Z",
+                  GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                   HOOKS_WORKER_URL:
                     import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                   DD_SOURCEMAP_GROUP: "default",
@@ -407,7 +408,7 @@ async function runBgPtyHost(argv) {
       let trimmed = 0;
       while (trimmed < 3 && trimmed < chunk.length && (chunk[trimmed] & 192) === 128) trimmed++;
       let tail = chunk.subarray(trimmed).toString("utf8");
-      writeAndPublishSync(
+      syncTarget(
         execExitPath,
         JSON.stringify({
           code: exitCode,
@@ -453,12 +454,21 @@ async function runBgPtyHost(argv) {
   if (getPlatform() !== "windows") await unlink(sockPath).catch(() => {});
   process.exit(exitCode);
 }
-//@ chunk-jx4rgw65.js:7291-7408 placement
+//@ chunk-mbg9kd5b.js:7446-7563 placement
 async function waitWithGrace(promise, grace, graceMs = 5000) {
   let graceDelay = (grace ? grace().catch(() => {}) : Promise.resolve()).then(() => sleep(graceMs));
   await Promise.race([promise, graceDelay]);
 }
-//@ chunk-jx4rgw65.js:7501-7858 placement
+//@ chunk-mbg9kd5b.js:7563-7656 layout (2.1.88 match: stopRecording, 0.781)
+function killChildWithSignal(signal, child, handle) {
+  if (signal === "SIGTERM" && getPlatform() === "windows") {
+    handle.close();
+    return true;
+  }
+  child.kill(signal);
+  return false;
+}
+//@ chunk-mbg9kd5b.js:7656-8013 placement
 function createOutputBuffer(maxBytes) {
   let chunks = [];
   let dropFrom = 0;
@@ -496,7 +506,7 @@ function createOutputBuffer(maxBytes) {
     },
   };
 }
-//@ chunk-jx4rgw65.js:7858-8289 placement
+//@ chunk-mbg9kd5b.js:8013-8444 placement
 function appendPtyLog(logPath, cols, rows) {
   if (!logPath) return;
   let startNs = process.hrtime.bigint();
@@ -531,7 +541,7 @@ function appendPtyLog(logPath, cols, rows) {
     },
   };
 }
-//@ chunk-jx4rgw65.js:8289-8413 placement
+//@ chunk-mbg9kd5b.js:8444-8568 placement (2.1.88 match: dateToFilename, 0.669)
 async function appendPtyHostLog(sessionId, message) {
   try {
     let path = ptyErrFile(sessionId);
@@ -545,7 +555,7 @@ async function appendPtyHostLog(sessionId, message) {
     );
   } catch {}
 }
-//@ chunk-jx4rgw65.js:8413-8538 placement
+//@ chunk-mbg9kd5b.js:8568-8693 placement
 function failPtyHost(sessionId, message) {
   if (sessionId)
     try {

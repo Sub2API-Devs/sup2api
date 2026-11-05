@@ -1,12 +1,12 @@
 /**
  * @aws-sdk/client-sts/package.json
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/client-sts@3.936.0..3.939.0
- * pieces: chunk-heg39xxp.js (1)
+ * pieces: chunk-539esr4f.js (1)
  * attribution: placement 1
  */
 
-//@ chunk-heg39xxp.js:2144-5178 placement
+//@ chunk-539esr4f.js:2144-5178 placement
 var packageJson = {
   name: "@aws-sdk/client-sts",
   description: "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",

@@ -3,9 +3,9 @@
  *
  * 命令输出中的 Claude Code hint 触发插件推荐对话框（tengu_plugin_hint_response）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useClaudeCodeHintRecommendation.tsx
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -27,7 +27,7 @@ import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { installPluginAndNotify } from "./usePluginRecommendationBase.js";
 import { installPluginFromMarketplace } from "../utils/plugins/pluginInstallationHelpers.js";
 
-//@ chunk-18hwfzwa.js:1806264-1807723 fingerprint (2.1.88 match: useClaudeCodeHintRecommendation, 0.695)
+//@ chunk-czq1j3j2.js:1854243-1855702 fingerprint (2.1.88 match: useClaudeCodeHintRecommendation, 0.695)
 function useClaudeCodeHintRecommendation(requestDialog, recommendationGate) {
   let $ = useMemoCache(11);
   let { pendingHint } = useSession();
@@ -96,7 +96,7 @@ function useClaudeCodeHintRecommendation(requestDialog, recommendationGate) {
         if (response === "cancelled") {
           return;
         }
-        oo: switch (
+        eo: switch (
           (pendingHint.markShown(),
           markHintPluginShown(pluginHint.pluginId, storageV5),
           logEvent("tengu_plugin_hint_response", {
@@ -128,11 +128,11 @@ function useClaudeCodeHintRecommendation(requestDialog, recommendationGate) {
               },
               storageV5,
             );
-            break oo;
+            break eo;
           }
           case "disable": {
             disableHintRecommendations(storageV5);
-            break oo;
+            break eo;
           }
           case "no":
         }

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：内置模型目录（model-catalog）：各模型在各提供商的 id、能力、价格档、弃用日期，及服务端下发能力的覆盖
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-v9tcvh08.js (28)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5m8x0kb6.js (28)
  * attribution: placement 28
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -24,7 +24,7 @@ import { env } from "../env.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-v9tcvh08.js:522-20802 placement
+//@ chunk-5m8x0kb6.js:555-20835 placement
 /**
  * 手工维护的内置模型目录 JSON（haiku 3.5 … haiku 5.5 等，各提供商 id、上下文、能力，约 20 KB）。
  */
@@ -1132,7 +1132,7 @@ var BAKED_MODEL_CATALOG = {
   },
   alias_migration: {},
 };
-//@ chunk-v9tcvh08.js:20802-20946 placement
+//@ chunk-5m8x0kb6.js:20835-20979 placement
 function createCatalogState() {
   return {
     bakedCatalog: undefined,
@@ -1142,14 +1142,14 @@ function createCatalogState() {
     modelKnowledge: undefined,
   };
 }
-//@ chunk-v9tcvh08.js:20946-20952 placement
+//@ chunk-5m8x0kb6.js:20979-20985 placement
 var catalogStateCache;
-//@ chunk-v9tcvh08.js:20952-20995 placement
+//@ chunk-5m8x0kb6.js:20985-21028 placement
 function getCatalogState() {
   if (catalogStateCache === undefined) catalogStateCache = createCatalogState();
   return catalogStateCache;
 }
-//@ chunk-v9tcvh08.js:20995-23274 placement
+//@ chunk-5m8x0kb6.js:21028-23307 placement
 /**
  * 模型目录的 zod 模式（first_party/bedrock/vertex/foundry 等 id、effort 级别）。
  */
@@ -1158,7 +1158,7 @@ var pricingSchema;
 var catalogModelSchema;
 var catalogAliasSchema;
 var catalogFileSchema;
-deferInit("chunk-v9tcvh08.js:20995", () => {
+deferInit("chunk-5m8x0kb6.js:21028", () => {
   ModelCatalogSchema = DoctorLazy(() =>
     objectSchema({
       first_party: stringSchema(),
@@ -1281,7 +1281,7 @@ deferInit("chunk-v9tcvh08.js:20995", () => {
     }).loose(),
   );
 });
-//@ chunk-v9tcvh08.js:23274-23629 placement
+//@ chunk-5m8x0kb6.js:23307-23662 placement
 /**
  * 建立按提供商 id 与目录 id 的索引，检测冲突。
  */
@@ -1305,38 +1305,38 @@ function indexModelCatalog(catalog) {
     catalogIdByProviderId,
   };
 }
-//@ chunk-v9tcvh08.js:23629-23724 placement
+//@ chunk-5m8x0kb6.js:23662-23757 placement
 function getBakedCatalog() {
   let catalogState = getCatalogState();
   if (catalogState.bakedCatalog === undefined)
     catalogState.bakedCatalog = indexModelCatalog(BAKED_MODEL_CATALOG);
   return catalogState.bakedCatalog;
 }
-//@ chunk-v9tcvh08.js:23724-23758 placement
+//@ chunk-5m8x0kb6.js:23757-23791 placement
 function getModelCatalog_2() {
   return getBakedCatalog().catalog;
 }
-//@ chunk-v9tcvh08.js:23758-23769 placement
+//@ chunk-5m8x0kb6.js:23791-23802 placement
 /**
  * 取当前模型目录对象的别名。
  */
 var getModelCatalog = getModelCatalog_2;
-//@ chunk-v9tcvh08.js:23769-23838 placement
+//@ chunk-5m8x0kb6.js:23802-23872 placement
 function catalogIdForProviderModelId(providerModelId) {
   return getBakedCatalog().catalogIdByProviderId.get(providerModelId.toLowerCase());
 }
-//@ chunk-v9tcvh08.js:23838-23883 placement
+//@ chunk-5m8x0kb6.js:23872-23917 placement
 function getCatalogEntry(catalogId) {
   return getBakedCatalog().entriesById.get(catalogId);
 }
-//@ chunk-v9tcvh08.js:23883-24010 placement
+//@ chunk-5m8x0kb6.js:23917-24044 placement
 function resolvePricing(entry) {
   let pricing = entry.pricing;
   if (typeof pricing !== "string") return pricing;
   let pricingTiers = getModelCatalog().pricing_tiers;
   return Object.hasOwn(pricingTiers, pricing) ? pricingTiers[pricing] : undefined;
 }
-//@ chunk-v9tcvh08.js:24010-24756 placement
+//@ chunk-5m8x0kb6.js:24044-24790 placement
 var EFFORT_CAPABILITY_KEYS = [
   "effort",
   "max_effort",
@@ -1375,11 +1375,11 @@ var EFFORT_CAPABILITY_KEYS = [
   "temporal_hare",
   "bash_edit_diff",
 ];
-//@ chunk-v9tcvh08.js:24756-24802 placement
+//@ chunk-5m8x0kb6.js:24790-24836 placement
 function setServedCapabilityLookup(servedCapabilityLookup) {
   getCatalogState().servedCapabilityLookup = servedCapabilityLookup;
 }
-//@ chunk-v9tcvh08.js:24802-24847 placement
+//@ chunk-5m8x0kb6.js:24836-24881 placement
 /**
  * 判断模型是否支持某能力：服务端下发覆盖优先，否则看目录。
  */
@@ -1388,29 +1388,29 @@ function modelSupportsCapability(canonicalName, capability, model) {
     modelCapabilitiesEnvEntry(capability, canonicalName) ?? lookupCapability(canonicalName, capability, model)
   );
 }
-//@ chunk-v9tcvh08.js:24847-24898 placement
+//@ chunk-5m8x0kb6.js:24881-24932 placement
 function modelDefinitelySupports(canonicalName, capability, model) {
   return lookupCapability(canonicalName, capability, model) === true ? true : undefined;
 }
-//@ chunk-v9tcvh08.js:24898-24987 placement
+//@ chunk-5m8x0kb6.js:24932-25021 placement
 function lookupCapability(canonicalName, capability, model) {
   return (
     getCatalogState().servedCapabilityLookup?.(capability, [model, stripContextSuffix(canonicalName)]) ??
     (catalogHasCapability(canonicalName, capability) ? true : undefined)
   );
 }
-//@ chunk-v9tcvh08.js:24987-25047 placement
+//@ chunk-5m8x0kb6.js:25021-25081 placement
 function catalogHasCapability(canonicalName, capability) {
   return getCatalogEntry(stripContextSuffix(canonicalName))?.capabilities.includes(capability);
 }
-//@ chunk-v9tcvh08.js:25047-25086 placement
+//@ chunk-5m8x0kb6.js:25081-25120 placement
 /**
  * 取某模型的环境变量式能力配置项。
  */
 function modelCapabilitiesEnvEntry(model, spec) {
   return parseModelCapabilitiesEnv(spec).get(model);
 }
-//@ chunk-v9tcvh08.js:25086-25472 placement
+//@ chunk-5m8x0kb6.js:25120-25506 placement
 /**
  * 解析 CLAUDE_CODE_MODEL_CAPABILITIES（"模型=能力,-能力;..."，模型可用 * 前缀通配），返回当前模型的能力开关表。
  */
@@ -1435,11 +1435,11 @@ function parseModelCapabilitiesEnv(model) {
   }
   return capabilities;
 }
-//@ chunk-v9tcvh08.js:25472-25518 placement
+//@ chunk-5m8x0kb6.js:25506-25552 placement
 function stripContextSuffix(modelId) {
   return modelId.replace(/\[1m\]/gi, "");
 }
-//@ chunk-v9tcvh08.js:25518-25675 placement
+//@ chunk-5m8x0kb6.js:25552-25709 placement
 /**
  * 解析目录中的别名目标：按提供商的覆盖优先，否则默认值。
  */
@@ -1453,14 +1453,14 @@ function resolveCatalogAlias(aliasKey, provider) {
     aliasEntry.default
   );
 }
-//@ chunk-v9tcvh08.js:25675-25874 placement
+//@ chunk-5m8x0kb6.js:25709-25908 placement
 function validateCatalogAliases(aliasKey) {
   let catalogAlias = resolveCatalogAlias(aliasKey, "first_party");
   let entry = catalogAlias === undefined ? undefined : getCatalogEntry(catalogAlias);
   if (entry === undefined) throw Error("model-catalog.json: every aliases entry must name a models[] entry");
   return entry.provider_ids.first_party;
 }
-//@ chunk-v9tcvh08.js:25874-26451 placement
+//@ chunk-5m8x0kb6.js:25908-26485 placement
 /**
  * 模型 id 前缀到内置目录短键（如 claude-opus-4-5 → opus45）的映射表。
  */
@@ -1486,7 +1486,7 @@ var MODEL_KEY_BY_ID = {
   "claude-fable-5": "fable5",
   "claude-fable-5-1": "fable51",
 };
-//@ chunk-v9tcvh08.js:26451-26809 placement
+//@ chunk-5m8x0kb6.js:26485-26843 placement
 /**
  * 把目录条目的 provider_ids 转为各提供商的模型 id 表（缺省为 null，gateway 回退第一方 id），带 eager_input_streaming 时一并带出。
  */
@@ -1505,7 +1505,7 @@ function toProviderIdMap(catalogEntry) {
   if (catalogEntry.eager_input_streaming) map.eagerInputStreaming = catalogEntry.eager_input_streaming;
   return map;
 }
-//@ chunk-v9tcvh08.js:26809-27042 placement
+//@ chunk-5m8x0kb6.js:26843-27076 placement
 function requireCatalogEntry() {
   let result = {};
   for (let [key, value] of Object.entries(MODEL_KEY_BY_ID)) {
@@ -1519,15 +1519,15 @@ function requireCatalogEntry() {
   }
   return result;
 }
-//@ chunk-v9tcvh08.js:27042-27053 placement
+//@ chunk-5m8x0kb6.js:27076-27087 placement
 /**
  * 按 firstParty id 索引的目录条目表。
  */
 var catalogEntriesByFirstPartyId; // deferred: uses requireCatalogEntry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-v9tcvh08.js:27042", () => {
+deferInit("chunk-5m8x0kb6.js:27076", () => {
   catalogEntriesByFirstPartyId = requireCatalogEntry();
 });
-//@ chunk-v9tcvh08.js:27053-27281 placement
+//@ chunk-5m8x0kb6.js:27087-27315 placement
 function PROVIDER_KEYS(providerIds) {
   for (let provider of ["bedrock", "vertex", "foundry", "anthropicAws"])
     if (providerIds[provider] === null)
@@ -1540,20 +1540,20 @@ function PROVIDER_KEYS(providerIds) {
 export {
   getModelCatalog,
   getCatalogEntry,
-  catalogEntriesByFirstPartyId,
-  catalogIdForProviderModelId,
   modelCapabilitiesEnvEntry,
-  modelSupportsCapability,
-  resolvePricing,
+  catalogEntriesByFirstPartyId,
   resolveCatalogAlias,
-  EFFORT_CAPABILITY_KEYS,
-  modelDefinitelySupports,
-  getCatalogState,
-  getModelCatalog_2,
+  modelSupportsCapability,
   validateCatalogAliases,
-  BAKED_MODEL_CATALOG,
-  catalogHasCapability,
-  setServedCapabilityLookup,
   PROVIDER_KEYS,
+  getModelCatalog_2,
+  getCatalogState,
+  resolvePricing,
+  catalogIdForProviderModelId,
+  modelDefinitelySupports,
+  catalogHasCapability,
+  EFFORT_CAPABILITY_KEYS,
+  BAKED_MODEL_CATALOG,
+  setServedCapabilityLookup,
   parseModelCapabilitiesEnv,
 };

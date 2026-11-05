@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设备钩子执行与结果归类
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mthxbav8.js (27)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4z1ntdgk.js (27)
  * attribution: placement 26, layout 1
  */
 import { realpath } from "fs/promises";
@@ -14,7 +14,7 @@ import { devNull } from "os";
 import { SETTING_SOURCES } from "../../settings/constants.js";
 import { expandPath } from "../../path.js";
 import { isAbsolutePlatformPath, findGitRootUncached } from "../../git.js";
-import { uniq } from "../../collections.js";
+import { normalizeCaseForComparison_2 } from "../../permissions/filesystem.js";
 import { collectStickyRoots, stickyRootsFor, anyPairMatches } from "../../settings/stickyRoots.js";
 import { logForDebugging } from "../../debug.js";
 import { scriptFileReaderDeps, replaceCommandProgram } from "../servedHooks/hookSandbox.js";
@@ -31,7 +31,7 @@ import {
 } from "../../../bootstrap/state.js";
 import { POSIX_SEP_2, isPosixPathUnder } from "../hookCommandAnalysis.js";
 import { cloudPluginsConsentFilePath } from "../../../cli/headlessCloud/cloudPlugins.js";
-import { getClaudeConfigDir } from "../../envUtils.js";
+import { getClaudeConfigDir } from "../../markdownConfigLoader.js";
 import { commandReachRoots } from "./commandReach.js";
 import { probeWritability } from "./consent.js";
 import { HostScoped } from "../../hostScoped.js";
@@ -75,7 +75,7 @@ import {
 import { isObjectLike } from "./hookInputPaths.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-mthxbav8.js:6715-6852 placement
+//@ chunk-4z1ntdgk.js:7072-7209 placement
 function createReachState() {
   return {
     stickyRoots: new Set(),
@@ -86,7 +86,7 @@ function createReachState() {
     commonRoots: null,
   };
 }
-//@ chunk-mthxbav8.js:6852-8309 placement
+//@ chunk-4z1ntdgk.js:7209-8666 placement
 /**
  * 创建设备钩子执行器：准备可达性基线、依赖，执行钩子并归纳结果。
  */
@@ -150,7 +150,7 @@ function createDeviceHookRunner(options) {
               rootReal: await realpathOrSelf(syncRoot),
               root: syncRoot,
             };
-      let extra = uniq([
+      let extra = normalizeCaseForComparison_2([
         ...(options.repoRoot !== null ? [options.repoRoot, await realpathOrSelf(options.repoRoot)] : []),
         ...syncRoots,
         ...(await addedRoots()),
@@ -191,12 +191,12 @@ function createDeviceHookRunner(options) {
         ...(sync !== undefined && {
           sync,
         }),
-        extraReach: unresolved ? ["/"] : uniq([...extra, ...stickyRoots]),
+        extraReach: unresolved ? ["/"] : normalizeCaseForComparison_2([...extra, ...stickyRoots]),
       };
     },
   };
 }
-//@ chunk-mthxbav8.js:8309-8900 placement
+//@ chunk-4z1ntdgk.js:8666-9257 placement
 function defaultReachDeps(launchDir) {
   return {
     realpath: scriptFileReaderDeps().realpath,
@@ -221,7 +221,7 @@ function defaultReachDeps(launchDir) {
         );
         return [POSIX_SEP_2];
       }
-      return uniq([
+      return normalizeCaseForComparison_2([
         ...collectSettingsWriteRoots(source, launchDir, settingsFileUncached.settings),
         ...settingsWriteRoots,
       ]);
@@ -230,7 +230,7 @@ function defaultReachDeps(launchDir) {
     addedDirectories: () => getAdditionalDirectoriesForClaudeMd(),
   };
 }
-//@ chunk-mthxbav8.js:8900-9927 placement
+//@ chunk-4z1ntdgk.js:9257-10284 placement
 function createDeviceHookDecider(options) {
   let deps = {
     realpath,
@@ -245,10 +245,12 @@ function createDeviceHookDecider(options) {
     (prepared ??= (async () => {
       let realpathOrSelf = (launchDir) => deps.realpath(launchDir).catch(() => launchDir);
       let launchDirReal = await realpathOrSelf(launchDir);
-      let repoRoots = uniq(
+      let repoRoots = normalizeCaseForComparison_2(
         [launchDir, launchDirReal].map((root) => deps.repoRootOf(root)).filter((root) => root !== null),
       );
-      let extraRoots = uniq((await Promise.all(repoRoots.map(realpathOrSelf))).concat(repoRoots));
+      let extraRoots = normalizeCaseForComparison_2(
+        (await Promise.all(repoRoots.map(realpathOrSelf))).concat(repoRoots),
+      );
       let [repoRoot = null] = repoRoots;
       return {
         tracker: createDeviceHookRunner({
@@ -262,7 +264,7 @@ function createDeviceHookDecider(options) {
             deps: deps.tracker,
           }),
         }),
-        launchRoots: uniq([launchDir, launchDirReal, ...extraRoots]),
+        launchRoots: normalizeCaseForComparison_2([launchDir, launchDirReal, ...extraRoots]),
         repoRoots: extraRoots,
       };
     })());
@@ -288,7 +290,7 @@ function createDeviceHookDecider(options) {
     },
   };
 }
-//@ chunk-mthxbav8.js:9927-10045 placement
+//@ chunk-4z1ntdgk.js:10284-10402 placement
 function createReachStateRegistry() {
   let byLaunchDir = new Map();
   return {
@@ -301,15 +303,15 @@ function createReachStateRegistry() {
     },
   };
 }
-//@ chunk-mthxbav8.js:10045-10063 placement
+//@ chunk-4z1ntdgk.js:10402-10420 placement
 /**
  * 宿主隔离的可达范围状态注册表。
  */
 var reachStateRegistry; // deferred: uses createReachStateRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mthxbav8.js:10045", () => {
+deferInit("chunk-4z1ntdgk.js:10402", () => {
   reachStateRegistry = new HostScoped(createReachStateRegistry);
 });
-//@ chunk-mthxbav8.js:10170-10616 placement
+//@ chunk-4z1ntdgk.js:10527-10973 placement
 /**
  * 设备钩子执行器映射、缺失项目目录标记、传给钩子 git 的安全配置与替代 ref 命令参数。
  */
@@ -318,7 +320,7 @@ var MISSING_PROJECT_DIR_MARKER;
 var SAFE_GIT_CONFIG_FOR_HOOKS;
 var TENGU_TRANQUIL_CROWN;
 var ALTERNATE_REFS_CONFIG_ARG;
-deferInit("chunk-mthxbav8.js:10170", () => {
+deferInit("chunk-4z1ntdgk.js:10527", () => {
   DEVICE_HOOK_EXECUTORS = {
     execCommand: execCommandHookForDevice,
     execHttp: execHttpHook,
@@ -338,13 +340,13 @@ deferInit("chunk-mthxbav8.js:10170", () => {
   TENGU_TRANQUIL_CROWN = "tengu_tranquil_crown";
   ALTERNATE_REFS_CONFIG_ARG = ["core.alternateRefsCommand", ALTERNATE_REFS_COMMAND];
 });
-//@ chunk-mthxbav8.js:10616-10785 placement
+//@ chunk-4z1ntdgk.js:10973-11142 placement
 function withShellPrefix(env) {
   if (env.omit.includes("CLAUDE_CODE_SHELL_PREFIX")) return;
   let trimmed = env.base.CLAUDE_CODE_SHELL_PREFIX?.trim() || undefined;
   return trimmed !== undefined && trimmed.startsWith("/") ? trimmed : undefined;
 }
-//@ chunk-mthxbav8.js:10785-11892 placement
+//@ chunk-4z1ntdgk.js:11142-12249 placement
 async function runDeviceHook(
   { hook, event, input, timeoutMs, env, startDirectory },
   context,
@@ -456,7 +458,7 @@ async function runDeviceHook(
     cleanup();
   }
 }
-//@ chunk-mthxbav8.js:11892-11944 placement
+//@ chunk-4z1ntdgk.js:12249-12301 placement
 function sanitizeOrFallback(stderr, fallback) {
   return (
     sanitizeDisplayText(stderr, {
@@ -464,7 +466,7 @@ function sanitizeOrFallback(stderr, fallback) {
     }) || fallback
   );
 }
-//@ chunk-mthxbav8.js:11944-12319 placement
+//@ chunk-4z1ntdgk.js:12301-12676 placement
 function blockDecision(event, reason, answer = {}) {
   let base = "async" in answer ? {} : answer;
   if (event !== "PreToolUse")
@@ -488,7 +490,7 @@ function blockDecision(event, reason, answer = {}) {
     },
   };
 }
-//@ chunk-mthxbav8.js:12319-12647 placement
+//@ chunk-4z1ntdgk.js:12676-13004 placement
 function interpretHookResult(result, context) {
   let classified = classifyHookOutput(result, context);
   if (classified.answer === null) return classified;
@@ -517,11 +519,14 @@ function interpretHookResult(result, context) {
     blocked: isBlockingHookOutput(answer),
   };
 }
-//@ chunk-mthxbav8.js:12647-16511 placement
+//@ chunk-4z1ntdgk.js:13004-16881 placement
 /**
  * 把钩子执行结果（退出码、超时、输出 JSON）归类为答复，处理超时是否默认拒绝。
  */
-function classifyHookOutput(result, { event, label, timedOut, timeoutMs, timeoutFailsClosed = false }) {
+function classifyHookOutput(
+  result,
+  { event, label, localLabel, timedOut, timeoutMs, timeoutFailsClosed = false },
+) {
   if (result.aborted && !timedOut)
     return {
       answer: null,
@@ -543,7 +548,7 @@ function classifyHookOutput(result, { event, label, timedOut, timeoutMs, timeout
     return {
       answer: {},
       exitClass: "timeout",
-      localWarning: `[${label}]: timed out after ${rounded}s \u2014 output discarded; raise the hook's "timeout" to allow more time`,
+      localWarning: `[${localLabel}]: timed out after ${rounded}s \u2014 output discarded; raise the hook's "timeout" to allow more time`,
       blocked: false,
     };
   }
@@ -561,7 +566,7 @@ function classifyHookOutput(result, { event, label, timedOut, timeoutMs, timeout
       return {
         answer,
         exitClass: "other",
-        localWarning: `[${label}]: ${reasonText}`,
+        localWarning: `[${localLabel}]: ${reasonText}`,
         blocked: isBlockingHookOutput(answer),
       };
     }
@@ -570,7 +575,7 @@ function classifyHookOutput(result, { event, label, timedOut, timeoutMs, timeout
       return {
         answer: {},
         exitClass: "other",
-        localWarning: `[${label}]: ${sanitizeOrFallback(validationError ?? "", "no JSON in the response")}`,
+        localWarning: `[${localLabel}]: ${sanitizeOrFallback(validationError ?? "", "no JSON in the response")}`,
         blocked: false,
       };
     return {
@@ -587,7 +592,7 @@ function classifyHookOutput(result, { event, label, timedOut, timeoutMs, timeout
     return {
       answer,
       exitClass: "spawn_failed",
-      localWarning: `[${label}]: ${sanitizeOrFallback(result.stderr, "failed to start")}`,
+      localWarning: `[${localLabel}]: ${sanitizeOrFallback(result.stderr, "failed to start")}`,
       blocked: isBlockingHookOutput(answer),
     };
   }
@@ -629,7 +634,7 @@ function classifyHookOutput(result, { event, label, timedOut, timeoutMs, timeout
       : {
           answer: {},
           exitClass: result.status === 2 ? "2" : "other",
-          localWarning: `[${label}]: announced async, then failed with status code ${result.status}: ${sanitizeOrFallback(result.stderr, "No stderr output")}`,
+          localWarning: `[${localLabel}]: announced async, then failed with status code ${result.status}: ${sanitizeOrFallback(result.stderr, "No stderr output")}`,
           blocked: false,
         };
   }
@@ -650,7 +655,7 @@ function classifyHookOutput(result, { event, label, timedOut, timeoutMs, timeout
     return {
       answer,
       exitClass: "0",
-      localWarning: `[${label}]: ${sanitizeOrFallback(untrustedCaptureReason, "stdio incomplete")}`,
+      localWarning: `[${localLabel}]: ${sanitizeOrFallback(untrustedCaptureReason, "stdio incomplete")}`,
       blocked: isBlockingHookOutput(answer),
     };
   }
@@ -658,7 +663,7 @@ function classifyHookOutput(result, { event, label, timedOut, timeoutMs, timeout
     return {
       answer: {},
       exitClass: result.status === 0 ? "0" : "other",
-      localWarning: `[${label}]: ${sanitizeOrFallback(withHookStderr(validationError, result.status, result.stderr), "hook JSON output failed validation")}`,
+      localWarning: `[${localLabel}]: ${sanitizeOrFallback(withHookStderr(validationError, result.status, result.stderr), "hook JSON output failed validation")}`,
       blocked: false,
     };
   if (json_2 !== undefined) {
@@ -678,7 +683,7 @@ function classifyHookOutput(result, { event, label, timedOut, timeoutMs, timeout
           : {
               answer: {},
               exitClass: result.status === 2 ? "2" : "other",
-              localWarning: `[${label}]: announced async, then failed with status code ${result.status}: ${sanitizeOrFallback(result.stderr, "No stderr output")}`,
+              localWarning: `[${localLabel}]: announced async, then failed with status code ${result.status}: ${sanitizeOrFallback(result.stderr, "No stderr output")}`,
               blocked: false,
             };
     let captured = json_2;
@@ -718,7 +723,7 @@ function classifyHookOutput(result, { event, label, timedOut, timeoutMs, timeout
       return {
         answer: {},
         exitClass: "2",
-        localWarning: `[${label}]: the hook script appears to be missing (${sanitizeOrFallback(result.stderr, "no such file")})`,
+        localWarning: `[${localLabel}]: the hook script appears to be missing (${sanitizeOrFallback(result.stderr, "no such file")})`,
         blocked: false,
       };
     return {
@@ -730,11 +735,11 @@ function classifyHookOutput(result, { event, label, timedOut, timeoutMs, timeout
   return {
     answer: {},
     exitClass: "other",
-    localWarning: `[${label}]: failed with non-blocking status code ${result.status}: ${sanitizeOrFallback(result.stderr, "No stderr output")}`,
+    localWarning: `[${localLabel}]: failed with non-blocking status code ${result.status}: ${sanitizeOrFallback(result.stderr, "No stderr output")}`,
     blocked: false,
   };
 }
-//@ chunk-mthxbav8.js:16511-16658 placement
+//@ chunk-4z1ntdgk.js:16881-17028 placement (2.1.88 match: PreToolUseHookSpecificOutputSchema, 0.569)
 function denyPreToolUseOutput(event, permissionDecisionReason) {
   return event === "PreToolUse"
     ? {
@@ -746,7 +751,7 @@ function denyPreToolUseOutput(event, permissionDecisionReason) {
       }
     : {};
 }
-//@ chunk-mthxbav8.js:16658-16739 placement
+//@ chunk-4z1ntdgk.js:17028-17109 placement
 var answeredOnDeps = {
   isAnsweredOn: () => isCloudClientToolServingAnsweredOn(),
   isAnsweredOff: () =>
@@ -754,7 +759,7 @@ var answeredOnDeps = {
       cloudClient: true,
     }) !== undefined,
 };
-//@ chunk-mthxbav8.js:16739-16877 placement
+//@ chunk-4z1ntdgk.js:17109-17247 placement
 function createAnsweredOnLatch(deps = answeredOnDeps) {
   let latched = false;
   return () => {
@@ -763,7 +768,7 @@ function createAnsweredOnLatch(deps = answeredOnDeps) {
     return latched ? "answered_on" : "unanswered";
   };
 }
-//@ chunk-mthxbav8.js:17001-17424 placement
+//@ chunk-4z1ntdgk.js:17371-17794 placement
 /**
  * 设备钩子的宽限、重试、体积与标识长度等常量，以及空目录提示与无法担保发送者的文案。
  */
@@ -784,14 +789,14 @@ var SAFE_IDENTIFIER_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
 var EFFORT_LEVEL_RE = /^[a-z]{1,16}$/;
 var SENDER_UNVOUCHED_TEXT =
   "Not running your hooks for the cloud session: the service could not vouch for the sender of its hook requests under your organization's trusted-device policy. The session goes on without them.";
-//@ chunk-mthxbav8.js:17424-17513 placement
+//@ chunk-4z1ntdgk.js:17794-17883 placement
 function isPastDeadline(result) {
   return (
     result.deadlineMs !== undefined &&
     (result.ageMs === undefined || result.ageMs > result.deadlineMs + DEVICE_HOOK_GRACE_MS)
   );
 }
-//@ chunk-mthxbav8.js:17513-17572 placement
+//@ chunk-4z1ntdgk.js:17883-17942 placement
 function safeLabel(requestId) {
   return SAFE_IDENTIFIER_RE.test(requestId)
     ? requestId
@@ -799,7 +804,7 @@ function safeLabel(requestId) {
         maxCodeUnits: 64,
       });
 }
-//@ chunk-mthxbav8.js:17572-17734 placement
+//@ chunk-4z1ntdgk.js:17942-18104 placement
 function permissionDecisionOutput(event, wire, detail) {
   return event === "PreToolUse"
     ? {
@@ -811,11 +816,11 @@ function permissionDecisionOutput(event, wire, detail) {
       }
     : {};
 }
-//@ chunk-mthxbav8.js:17734-17792 placement
+//@ chunk-4z1ntdgk.js:18104-18162 placement
 function rewritePathInInput(command, analysis, rawPath) {
   return analysis.rawPath === rawPath ? command : replaceCommandProgram(command, analysis.site, rawPath);
 }
-//@ chunk-mthxbav8.js:17792-18056 placement
+//@ chunk-4z1ntdgk.js:18162-18426 placement
 function isPlausibleAbsolutePath(path, roots) {
   if (typeof path !== "string" || roots === null || !path.startsWith("/")) return false;
   if (path.trim() !== path || /^\/(?:proc|dev|net|network)(?:\/|$)/i.test(path)) return false;
@@ -828,9 +833,9 @@ function isPlausibleAbsolutePath(path, roots) {
     return false;
   return !isPosixPathUnder(path, stripTrailingSlashes(roots.containerProjectDir));
 }
-//@ chunk-mthxbav8.js:18056-18067 placement
+//@ chunk-4z1ntdgk.js:18426-18437 placement
 var isHookInputTopField = HOOK_INPUT_TOP_FIELDS;
-//@ chunk-mthxbav8.js:18067-18317 placement
+//@ chunk-4z1ntdgk.js:18437-18687 placement
 function isRewritablePath(pointer, input) {
   if (isHookInputTopField(pointer)) return true;
   let segments = unescapeJsonPointerPath(pointer);
@@ -845,7 +850,7 @@ function isRewritablePath(pointer, input) {
   }
   return true;
 }
-//@ chunk-mthxbav8.js:18317-18620 placement
+//@ chunk-4z1ntdgk.js:18687-18990 placement
 function isToolResponsePath(pointer, input, toolPathFields) {
   let segments = unescapeJsonPointerPath(pointer);
   let isNested = segments[0] === "tool_calls";
@@ -858,16 +863,16 @@ function isToolResponsePath(pointer, input, toolPathFields) {
   let pathField = typeof toolName === "string" ? toolPathFieldInput(toolName, toolPathFields) : undefined;
   return pathField !== undefined && rest[1] === pathField;
 }
-//@ chunk-mthxbav8.js:18620-18729 layout
+//@ chunk-4z1ntdgk.js:18990-19099 layout
 var PERMISSION_MODE_ID_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DEVICE_HOOKS_DISCONNECT;
 var DEVICE_HOOKS_DEADLINE;
-deferInit("chunk-mthxbav8.js:18620", () => {
+deferInit("chunk-4z1ntdgk.js:18990", () => {
   PERMISSION_MODE_ID_RE = /^[A-Za-z][A-Za-z0-9_-]{0,40}$/;
   DEVICE_HOOKS_DISCONNECT = Symbol("deviceHooks.disconnect");
   DEVICE_HOOKS_DEADLINE = Symbol("deviceHooks.deadline");
 });
-//@ chunk-mthxbav8.js:18729-19107 placement (2.1.88 match: createBaseHookInput, 0.526)
+//@ chunk-4z1ntdgk.js:19099-19477 placement (2.1.88 match: createBaseHookInput, 0.526)
 /**
  * 校验钩子输入里的 session_id/agent_id/prompt_id/tool_use_id 不含路径穿越、permission_mode/effort/agent_type 合法，用于设备钩子转发。旧版名 createBaseHookInput 配错。
  */
@@ -885,8 +890,6 @@ function isSafeHookInputIds(input) {
   );
 }
 export {
-  createDeviceHookDecider,
-  reachStateRegistry,
   MAX_HOOKS_PER_EVENT,
   MAX_COLLECTED_PATHS,
   MAX_PATH_DEPTH,
@@ -916,4 +919,6 @@ export {
   runDeviceHook,
   DEVICE_HOOK_EXECUTORS,
   createAnsweredOnLatch,
+  createDeviceHookDecider,
+  reachStateRegistry,
 };

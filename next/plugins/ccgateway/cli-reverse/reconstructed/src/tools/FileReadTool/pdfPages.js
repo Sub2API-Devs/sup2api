@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：PDF 页面提取结果读取
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: placement 1
  */
 import "path";
@@ -16,7 +16,7 @@ import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../
 import { listPdfSidecarPages } from "../../utils/pdf.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 
-//@ chunk-e6aww6q8.js:3193372-3194472 placement
+//@ chunk-5xgkngpb.js:3278003-3279103 placement
 /**
  * 读取 PDF 提取后的页面文件，确保提取目录位于会话工具结果目录内。
  */

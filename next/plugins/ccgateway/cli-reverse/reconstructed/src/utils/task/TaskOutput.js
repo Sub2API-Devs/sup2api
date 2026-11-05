@@ -3,9 +3,9 @@
  *
  * 后台任务输出缓冲：内存保留、超限落盘与截断提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/task/TaskOutput.ts
- * pieces: chunk-e6aww6q8.js (5)
+ * pieces: chunk-5xgkngpb.js (5)
  * attribution: sole-consumer 4, fingerprint 1
  */
 import { logForDebugging } from "../debug.js";
@@ -14,11 +14,11 @@ import { HostScoped } from "../hostScoped.js";
 import { getRootSession, isDiskless } from "../../bootstrap/state.js";
 import { env } from "../env.js";
 import { CircularBuffer } from "../CircularBuffer.js";
-import { logEvent } from "../../services/analytics/index.js";
-import { errorMessage } from "../errors.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { logError } from "../log.js";
-import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
+import { errorMessage } from "../errors.js";
+import { logFeatureBad, logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
+import { logEvent } from "../../services/analytics/index.js";
+import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   bindTaskOutputPath,
   getTaskOutputPath,
@@ -28,17 +28,17 @@ import {
   unlinkTaskOutput,
   releaseConvergentTaskOutputBinding,
 } from "./diskOutput.js";
+import { jsonStringify } from "../slowOperations.js";
 import { safeJoinLines } from "../stringUtils.js";
-import { DoctorLazy } from "../../cli/handlers/util.js";
 import { getMaxOutputLength } from "../shell/outputLimits.js";
 import { readFileRange as readFileRange_2 } from "../fsOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:252979-253013 sole-consumer
+//@ chunk-5xgkngpb.js:252212-252246 sole-consumer
 var MEMORY_LIMIT_BYTES = 8388608;
 var SIZE_CHECK_INTERVAL_MS = 1000;
 var TAIL_READ_BYTES = 4096;
-//@ chunk-e6aww6q8.js:253013-253502 sole-consumer
+//@ chunk-5xgkngpb.js:252246-252735 sole-consumer
 /**
  * 后台任务输出实例的注册表：按 taskId 注册/注销/查询 TaskOutput，并维护相关的辅助映射与定时器状态。
  */
@@ -79,16 +79,16 @@ class TaskOutputRegistry {
     this.#t.clear();
   }
 }
-//@ chunk-e6aww6q8.js:253502-253529 sole-consumer
+//@ chunk-5xgkngpb.js:252735-252762 sole-consumer
 var taskOutputRegistryByHost; // deferred: uses TaskOutputRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:253502", () => {
+deferInit("chunk-5xgkngpb.js:252735", () => {
   taskOutputRegistryByHost = new HostScoped(() => new TaskOutputRegistry());
 });
-//@ chunk-e6aww6q8.js:253529-253568 sole-consumer
+//@ chunk-5xgkngpb.js:252762-252801 sole-consumer
 function taskOutputRegistry() {
   return taskOutputRegistryByHost.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:253568-257176 fingerprint (2.1.88 match: TaskOutput, 0.786)
+//@ chunk-5xgkngpb.js:252801-256456 fingerprint (2.1.88 match: TaskOutput, 0.785)
 /**
  * 后台任务输出缓冲：内存保存最近输出、超限时落盘到 .output 文件并给出截断提示。
  */
@@ -104,10 +104,11 @@ class TaskOutput {
   #s = 0;
   #a = 0;
   #d = 0;
-  #c;
+  #m;
   #l;
+  #p = false;
+  #g = 0;
   #u = false;
-  #m = 0;
   constructor(taskId, onProgress, stdoutToFile = false, maxMemory = MEMORY_LIMIT_BYTES) {
     this.taskId = taskId;
     this.#e = stdoutToFile
@@ -116,7 +117,7 @@ class TaskOutput {
         ? undefined
         : getTaskOutputPath(taskId);
     this.stdoutToFile = stdoutToFile;
-    this.#c = maxMemory;
+    this.#m = maxMemory;
     this.#l = onProgress;
     if (stdoutToFile && onProgress) taskOutputRegistry().register(this);
   }
@@ -133,9 +134,11 @@ class TaskOutput {
     taskOutputRegistry().stopPolling(text);
   }
   pollProgress() {
-    if (!this.#l) return;
+    if (!this.#l || this.#u) return;
+    this.#u = true;
     tailTaskOutput(this.path, TAIL_READ_BYTES).then(
       ({ content, bytesRead, bytesTotal }) => {
+        this.#u = false;
         if (!this.#l) return;
         if (!content) {
           this.#l("", "", this.#s, bytesTotal, false);
@@ -163,32 +166,34 @@ class TaskOutput {
         this.#a = bytesTotal;
         this.#l(content.slice(handle), content.slice(n100), totalLines, bytesTotal, bytesRead < bytesTotal);
       },
-      () => {},
+      () => {
+        this.#u = false;
+      },
     );
   }
   writeStdout(data) {
-    this.#g(data, false);
+    this.#y(data, false);
   }
   writeStderr(data) {
-    this.#g(data, true);
+    this.#y(data, true);
   }
-  #g(data, isStderr) {
+  #y(data, isStderr) {
     this.#a += data.length;
     if (!isStderr) this.#d += data.length;
-    this.#S(data);
+    this.#_(data);
     if (this.#o) {
       this.#o.append(isStderr ? `[stderr] ${data}` : data);
       return;
     }
     if (this.#r) return;
-    if (this.#t.length + this.#n.length + data.length > this.#c) {
-      this.#y(isStderr ? data : null, isStderr ? null : data);
+    if (this.#t.length + this.#n.length + data.length > this.#m) {
+      this.#c(isStderr ? data : null, isStderr ? null : data);
       return;
     }
     if (isStderr) this.#n += data;
     else this.#t += data;
   }
-  #S(data) {
+  #_(data) {
     let state = 0;
     let lines = [];
     let extractedBytes = 0;
@@ -234,7 +239,7 @@ class TaskOutput {
       );
     }
   }
-  #y(stderrChunk, stdoutChunk) {
+  #c(stderrChunk, stdoutChunk) {
     if (isDiskless()) {
       if (stdoutChunk !== null || stderrChunk !== null) this.#r = true;
       return;
@@ -252,7 +257,7 @@ class TaskOutput {
     if (stderrChunk) this.#o.append(`[stderr] ${stderrChunk}`);
   }
   async getStdout(event) {
-    if (this.stdoutToFile) return this.#p(event ?? getMaxOutputLength());
+    if (this.stdoutToFile) return this.#h(event ?? getMaxOutputLength());
     if (this.#o) {
       let recent = this.#i.getRecent(5);
       let tail = safeJoinLines(
@@ -276,31 +281,31 @@ Output truncated (${Math.round(this.#a / 1024)}KB total): later output was disca
     }
     return this.#t;
   }
-  async #p(value) {
+  async #h(value) {
     try {
       let taskOutputForRead = await openTaskOutputForRead(this.path);
       if (taskOutputForRead === null) {
         logForDebugging(`TaskOutput.#readStdoutFromFile: ${this.path} is gone (ENOENT)`);
-        return this.#h("ENOENT");
+        return this.#S("ENOENT");
       }
       let result = await readFileRange_2(taskOutputForRead, 0, value).finally(() =>
         taskOutputForRead.close(),
       );
       if (!result) {
-        this.#u = true;
+        this.#p = true;
         return "";
       }
       let { content, bytesRead, bytesTotal } = result;
-      this.#m = bytesTotal;
-      this.#u = bytesTotal <= bytesRead;
+      this.#g = bytesTotal;
+      this.#p = bytesTotal <= bytesRead;
       return content;
     } catch (err) {
       let code = err instanceof Error && "code" in err ? String(err.code) : "unknown";
       logForDebugging(`TaskOutput.#readStdoutFromFile: failed to read ${this.path} (${code}): ${err}`);
-      return this.#h(code);
+      return this.#S(code);
     }
   }
-  #h(onProgress) {
+  #S(onProgress) {
     return `<bash output unavailable: output file ${this.path} could not be read (${onProgress}). This usually means another Claude Code process in the same project deleted it during startup cleanup.>`;
   }
   getStderr() {
@@ -317,13 +322,13 @@ Output truncated (${Math.round(this.#a / 1024)}KB total): later output was disca
     return this.#d;
   }
   get outputFileRedundant() {
-    return this.#u;
+    return this.#p;
   }
   get outputFileSize() {
-    return this.#m;
+    return this.#g;
   }
   spillToDisk() {
-    if (!this.#o) this.#y(null, null);
+    if (!this.#o) this.#c(null, null);
   }
   async flush() {
     await this.#o?.flush();

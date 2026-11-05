@@ -1,13 +1,13 @@
 /**
  * es-toolkit/dist/server/colors/index.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: es-toolkit@1.53.1
- * pieces: chunk-g3xfp0ds.js (1)
+ * pieces: chunk-hhr6kfwg.js (1)
  * attribution: esm-fingerprint 1
  */
 import { sequential } from "../../../../../src/utils/sequential.js";
 
-//@ chunk-g3xfp0ds.js:3306-4974 esm-fingerprint
+//@ chunk-hhr6kfwg.js:3306-4974 esm-fingerprint
 var RGB_REGEX = /^rgb\(\s?(\d+),\s?(\d+),\s?(\d+)\s?\)$/;
 var ANSI_REGEX = /^ansi256\(\s?(\d+)\s?\)$/;
 var colorize = (text, style, mode) => {

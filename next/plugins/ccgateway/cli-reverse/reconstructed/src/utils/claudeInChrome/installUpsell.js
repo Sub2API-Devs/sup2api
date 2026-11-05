@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Claude in Chrome 安装推广
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hantmvxa.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ne2890fx.js (13)
  * attribution: placement 13
  */
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
@@ -51,14 +51,16 @@ import {
   CHROME_POLICY_DENIED_RESULT,
   CHROME_INSTALL_DECLINED_RESULT,
 } from "./skillAvailability.js";
+import { codeModeAccepted } from "../codeMode/accepted.js";
+import { codeModeHidesToolNamesFromApi, offInCodeModeNoteForModel } from "../codeMode.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hantmvxa.js:34162-34314 placement
+//@ chunk-ne2890fx.js:34310-34462 placement
 /**
  * Chrome 安装推荐对话框的定义（结果：安装 / 暂不 / 不再询问 / 取消）。
  */
 var CHROME_INSTALL_UPSELL_DIALOG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hantmvxa.js:34162", () => {
+deferInit("chunk-ne2890fx.js:34310", () => {
   CHROME_INSTALL_UPSELL_DIALOG = withHideWhile({
     kind: "chrome_install_upsell",
     payload: DoctorLazy(() => objectSchema({})),
@@ -66,12 +68,12 @@ deferInit("chunk-hantmvxa.js:34162", () => {
     default: "cancelled",
   });
 });
-//@ chunk-hantmvxa.js:34314-34568 placement
+//@ chunk-ne2890fx.js:34462-34716 placement
 /**
  * Chrome 安装设置对话框的定义（阶段：等待安装、连接中、卡住、已连接、失败；结果：继续 / 继续等待 / 跳过 / 取消）。
  */
 var CHROME_INSTALL_SETUP_DIALOG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hantmvxa.js:34314", () => {
+deferInit("chunk-ne2890fx.js:34462", () => {
   CHROME_INSTALL_SETUP_DIALOG = withHideWhile({
     kind: "chrome_install_setup",
     payload: DoctorLazy(() =>
@@ -85,7 +87,7 @@ deferInit("chunk-hantmvxa.js:34314", () => {
     hideWhile: [],
   });
 });
-//@ chunk-hantmvxa.js:34568-34853 placement
+//@ chunk-ne2890fx.js:34716-35001 placement
 /**
  * 安装完成后把 claude-in-chrome MCP 服务器接入当前会话：更新动态 MCP 配置，并交给会话的 MCP 连接管理器 adoptServer（无管理器时等下次 reconcile）。
  */
@@ -105,7 +107,7 @@ function adoptChromeMcpServer(context, connection) {
     asked: true,
   });
 }
-//@ chunk-hantmvxa.js:34853-34913 placement
+//@ chunk-ne2890fx.js:35001-35061 placement
 /**
  * 等待扩展安装的轮询间隔（2 秒）。
  */
@@ -116,14 +118,14 @@ var CHROME_CONNECT_TIMEOUT_MS = 15000;
 var CHROME_CONNECT_STALL_MS = 45000;
 var CHROME_UPSELL_SETTLE_MS = 5000;
 var MAX_CHROME_CONNECT_ATTEMPTS = 5;
-//@ chunk-hantmvxa.js:34913-34983 placement
+//@ chunk-ne2890fx.js:35061-35131 placement
 /**
  * 惰性加载 MCP 客户端模块（用于重连与清缓存）。
  */
 function mcpClientModule() {
   return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
-//@ chunk-hantmvxa.js:34983-38924 placement
+//@ chunk-ne2890fx.js:35131-39072 placement
 /**
  * Chrome 安装引导：打开扩展安装页，轮询直到检测到扩展，写 cachedChromeExtensionInstalled 后进入连接阶段；遇到托管策略拒绝则停止。
  */
@@ -398,7 +400,7 @@ async function runChromeInstallSetup(context, requestDialog) {
     }
   }
 }
-//@ chunk-hantmvxa.js:38924-39383 placement
+//@ chunk-ne2890fx.js:39072-39531 placement
 /**
  * 在超时内调用 list_connected_browsers 探测扩展是否已连接：返回 connected / not_connected / error。
  */
@@ -439,7 +441,7 @@ async function probeChromeConnection(client, signal) {
     return "error";
   }
 }
-//@ chunk-hantmvxa.js:39383-39940 placement
+//@ chunk-ne2890fx.js:39531-40088 placement
 /**
  * Chrome 安装设置完成：接入 MCP、写全局配置（默认启用、完成引导、扩展已安装）、记埋点，返回给模型的"浏览器工具已可用"说明与 Chrome 系统提示。
  */
@@ -466,7 +468,7 @@ function completeChromeSetup(context, connection, installPageOpened) {
 
 ${maybeAddBrowserBatchToChromeSelect(getChromeSystemPrompt(isToolSearchEnabledOptimistic()))}`;
 }
-//@ chunk-hantmvxa.js:39940-42322 placement
+//@ chunk-ne2890fx.js:40088-42470 placement
 /**
  * Chrome 安装设置未完成时给模型的结果文案：用户选择跳过、连接失败、回合被中断、内部错误、组织策略禁止、切换到 bypass 模式。
  */
@@ -482,7 +484,7 @@ var SETUP_POLICY_DENIED_RESULT =
   "Browser automation is not available: this organization's managed settings do not permit the Claude in Chrome MCP server (the policy loaded while setup was in progress). Continue the task without browser tools (WebFetch and WebSearch cover read-only web content), or ask the user to perform browser steps manually. Do not suggest the extension again.";
 var SETUP_BYPASS_MODE_RESULT =
   "Browser tools were not enabled: the session switched to a mode that auto-allows tool calls without prompts (bypass permissions) while setup was in progress, and Claude in Chrome is not wired into that configuration. Continue the task without browser tools (WebFetch and WebSearch cover read-only web content), or ask the user to perform browser steps manually. Once the session leaves that mode, /chrome completes the connection.";
-//@ chunk-hantmvxa.js:42322-42618 placement
+//@ chunk-ne2890fx.js:42470-42766 placement
 /**
  * 是否显示 Chrome 安装推荐：未接入、未处理过、组织允许、具备基本资格、非远程/WSL/teleport 等、扩展未安装、未被关闭，且 GrowthBook tengu_chrome_install_upsell。
  */
@@ -507,14 +509,14 @@ function shouldOfferChromeInstallUpsell() {
     !isChromeServerPolicyDenied()
   );
 }
-//@ chunk-hantmvxa.js:42618-42677 placement
+//@ chunk-ne2890fx.js:42766-42825 placement
 /**
  * 本会话是否已解析过 Chrome 安装升级提示。
  */
 function hasInstallUpsellResolution() {
   return claudeInChromeSession().installUpsellResolution !== undefined;
 }
-//@ chunk-hantmvxa.js:42677-43256 placement
+//@ chunk-ne2890fx.js:42825-43431 placement
 /**
  * 浏览器技能不可用时决定是否推荐安装 Claude in Chrome（每会话只解析一次并缓存 Promise）：技能预加载、子代理、无盘或已中断时直接返回默认结果。
  */
@@ -526,6 +528,7 @@ async function resolveChromeInstallUpsell(context) {
     context.abortController.signal.aborted
   )
     return CHROME_NOT_SET_UP_RESULT;
+  if (codeModeAccepted() && codeModeHidesToolNamesFromApi()) return offInCodeModeNoteForModel();
   let session = claudeInChromeSession();
   if (session.installUpsellResolution) return session.installUpsellResolution;
   let requestDialog = context.requestDialog;
@@ -546,7 +549,7 @@ async function resolveChromeInstallUpsell(context) {
   });
   return session.installUpsellResolution;
 }
-//@ chunk-hantmvxa.js:43256-45246 placement
+//@ chunk-ne2890fx.js:43431-45421 placement
 /**
  * 安装推荐主流程：策略禁止、扩展已安装、bypass 模式、无 Chromium 浏览器时跳过；否则弹出推荐对话框，按 install / dont_ask_again / not_now 处理并返回给模型的文案。
  */
@@ -641,7 +644,7 @@ async function runChromeInstallUpsell(context, requestDialog) {
 export {
   CHROME_INSTALL_UPSELL_DIALOG,
   CHROME_INSTALL_SETUP_DIALOG,
-  shouldOfferChromeInstallUpsell,
   resolveChromeInstallUpsell,
   hasInstallUpsellResolution,
+  shouldOfferChromeInstallUpsell,
 };

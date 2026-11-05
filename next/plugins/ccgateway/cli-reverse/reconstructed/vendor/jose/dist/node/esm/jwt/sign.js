@@ -1,8 +1,8 @@
 /**
  * jose/dist/node/esm/jwt/sign.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (3)
+ * pieces: chunk-pd6th42n.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
 import { __esm } from "../../../../../../runtime/bun-runtime.js";
@@ -13,15 +13,15 @@ import { init_base64url, encoder } from "../../../browser/runtime/base64url.js";
 import { ProduceJWT } from "./produce.js";
 import { CompactSign } from "../jws/compact/sign.js";
 
-//@ chunk-2tyrgda4.js:40328-40359 esm-layout
+//@ chunk-pd6th42n.js:40328-40359 esm-layout
 var init_sign_3 = __esm(() => {
   noopJwtClaims();
   noopClaims();
   init_secs();
 });
-//@ chunk-2tyrgda4.js:40359-40366 esm-layout
+//@ chunk-pd6th42n.js:40359-40366 esm-layout
 var SignJWT;
-//@ chunk-2tyrgda4.js:40366-40828 esm-fingerprint
+//@ chunk-pd6th42n.js:40366-40828 esm-fingerprint
 var init_sign_4 = __esm(() => {
   init_jwt_claims_set();
   init_content_encryption_2();

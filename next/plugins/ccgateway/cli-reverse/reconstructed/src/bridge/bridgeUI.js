@@ -3,9 +3,9 @@
  *
  * claude remote-control 终端界面：横幅、连接 URL 与二维码、状态行（idle/attached/reconnecting/failed）、会话列表与工具活动
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/bridgeUI.ts
- * pieces: chunk-wbbfk060.js (2)
+ * pieces: chunk-18851qev.js (2)
  * attribution: fingerprint 2
  */
 import { bunStringWidth } from "../ink/stringWidth.js";
@@ -26,13 +26,13 @@ import {
 import { plural, sanitizeSessionTitle } from "../utils/stringUtils.js";
 import { getRemoteSessionUrl } from "../constants/product.js";
 
-//@ chunk-wbbfk060.js:13677-13732 fingerprint (2.1.88 match: QR_OPTIONS, 1)
+//@ chunk-18851qev.js:14956-15011 fingerprint (2.1.88 match: QR_OPTIONS, 1)
 var QR_OPTIONS = {
   type: "utf8",
   errorCorrectionLevel: "L",
   small: true,
 };
-//@ chunk-wbbfk060.js:13732-19273 fingerprint (2.1.88 match: createBridgeLogger, 0.801)
+//@ chunk-18851qev.js:15011-20557 fingerprint (2.1.88 match: createBridgeLogger, 0.801)
 /**
  * 创建终端日志/状态显示器：printBanner 打印连接地址与 QR，logSession*\/logStatus 输出事件，updateIdleStatus/updateReconnectingStatus/updateSessionStatus 重绘状态行（ANSI 回退清除），支持多会话列表与 spawn 模式显示。
  */
@@ -235,10 +235,10 @@ function createBridgeLogger(options) {
                 ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
                 PACKAGE_URL: "@anthropic-ai/claude-code",
                 README_URL: "https://code.claude.com/docs/en/overview",
-                VERSION: "2.1.316",
+                VERSION: "2.1.318",
                 FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                BUILD_TIME: "2026-10-30T23:28:13Z",
-                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                BUILD_TIME: "2026-11-03T18:52:53Z",
+                GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                 HOOKS_WORKER_URL:
                   import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                 DD_SOURCEMAP_GROUP: "default",

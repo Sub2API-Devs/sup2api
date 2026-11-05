@@ -3,9 +3,9 @@
  *
  * 钩子数据纯 JSON 校验（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (17)
  * attribution: placement 17
  */
 import { checkedListLength } from "../dispatch/valueSizing.js";
@@ -15,7 +15,7 @@ import { isUntrustedObject } from "../../../utils/untrustedValues.js";
 import { checkPinnedKeys } from "./siteRules.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:128890-128947 placement
+//@ chunk-j8f885h1.js:109496-109553 placement
 /**
  * 纯数据检查状态
  */
@@ -25,7 +25,7 @@ var emptyPlainDataState = () => ({
   path: new Set(),
   done: new Map(),
 });
-//@ chunk-4121qate.js:128947-129089 placement
+//@ chunk-j8f885h1.js:109553-109695 placement
 function* childEntriesWithCost(value) {
   if (Array.isArray(value)) {
     let length = checkedListLength(value);
@@ -34,33 +34,33 @@ function* childEntriesWithCost(value) {
   }
   for (let [key, value_2] of Object.entries(value)) yield [key.length + 4, value_2];
 }
-//@ chunk-4121qate.js:129089-129100 placement
+//@ chunk-j8f885h1.js:109695-109706 placement
 var MAX_DEPTH = 32;
-//@ chunk-4121qate.js:129100-129112 placement
+//@ chunk-j8f885h1.js:109706-109718 placement
 /**
  * 纯数据最大深度
  */
 var MAX_DEPTH_2 = MAX_DEPTH;
-//@ chunk-4121qate.js:129112-129124 placement
+//@ chunk-j8f885h1.js:109718-109730 placement
 /**
  * 文本字符上限
  */
 var MAX_TREE_TEXT_CHARS_2 = MAX_TREE_TEXT_CHARS;
-//@ chunk-4121qate.js:129124-129138 placement
+//@ chunk-j8f885h1.js:109730-109744 placement
 var MAX_NODES = 20000;
-//@ chunk-4121qate.js:129138-129150 placement
+//@ chunk-j8f885h1.js:109744-109756 placement
 /**
  * 节点上限
  */
 var MAX_NODES_2 = MAX_NODES;
-//@ chunk-4121qate.js:129150-129288 placement
+//@ chunk-j8f885h1.js:109756-109894 placement
 function plainDataLimitProblem(budget) {
   if (budget.nodes > MAX_NODES_2) return `holds more than ${MAX_NODES_2} values`;
   return budget.chars > MAX_TREE_TEXT_CHARS_2
     ? `serializes to more than ${MAX_TREE_TEXT_CHARS_2} characters`
     : undefined;
 }
-//@ chunk-4121qate.js:129288-129445 placement
+//@ chunk-j8f885h1.js:109894-110051 placement
 function scalarJsonLength(value) {
   switch (typeof value) {
     case "boolean":
@@ -73,13 +73,13 @@ function scalarJsonLength(value) {
       return value === null ? 5 : undefined;
   }
 }
-//@ chunk-4121qate.js:129445-129576 placement
+//@ chunk-j8f885h1.js:110051-110182 placement
 function valueKind(value) {
   if (value === null) return "null";
   let isObject = typeof value === "object";
   return Array.isArray(value) ? "an array" : isObject ? "an object" : `a ${typeof value}`;
 }
-//@ chunk-4121qate.js:129576-130412 placement
+//@ chunk-j8f885h1.js:110182-111018 placement
 function checkPlainDataDepth(value, depth, budget) {
   if (depth > MAX_DEPTH_2) return `nests deeper than ${MAX_DEPTH_2}`;
   let memo = typeof value === "object" ? budget.done.get(value) : undefined;
@@ -112,22 +112,22 @@ function checkPlainDataDepth(value, depth, budget) {
   });
   return;
 }
-//@ chunk-4121qate.js:130412-130438 placement
+//@ chunk-j8f885h1.js:111018-111044 placement
 /**
  * 纯数据校验入口
  */
 var checkPlainData = (value) => checkPlainDataDepth(value, 0, emptyPlainDataState());
-//@ chunk-4121qate.js:130438-130499 placement
+//@ chunk-j8f885h1.js:111044-111105 placement
 /**
  * 普通对象
  */
 var isPlainObjectNoArray = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
-//@ chunk-4121qate.js:130499-130562 placement
+//@ chunk-j8f885h1.js:111105-111168 placement
 var FORBIDDEN_OBJECT_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4121qate.js:130499", () => {
+deferInit("chunk-j8f885h1.js:111105", () => {
   FORBIDDEN_OBJECT_KEYS = Object.freeze(["__proto__", "constructor", "prototype"]);
 });
-//@ chunk-4121qate.js:130562-131896 placement
+//@ chunk-j8f885h1.js:111168-112502 placement
 /**
  * 校验插件钩子传回的值是纯 JSON 数据（深度、类型、原型键）
  */
@@ -182,7 +182,7 @@ function checkPlainData_2(value, depth, memo) {
   memo.set(value, copy);
   return copy;
 }
-//@ chunk-4121qate.js:131896-132028 placement
+//@ chunk-j8f885h1.js:112502-112634 placement
 /**
  * 校验值是纯数据对象（深度、节点数、字符数、禁止键），返回对象或问题说明文本。
  */
@@ -195,7 +195,7 @@ function checkPlainObject(frontmatter) {
     throw error;
   }
 }
-//@ chunk-4121qate.js:132028-132362 placement
+//@ chunk-j8f885h1.js:112634-112968 placement
 /**
  * skill.prompt 参数校验：skill 不可改，固定字段不可改，text 必须是字符串，frontmatter 必须是纯数据对象。
  */
@@ -215,16 +215,16 @@ function checkSkillPromptArgument(args, received) {
     : "no { skill }";
 }
 export {
-  checkSkillPromptArgument,
-  checkPlainObject,
-  emptyPlainDataState,
-  checkPlainDataDepth,
+  MAX_TREE_TEXT_CHARS_2,
   checkPlainData,
+  checkPlainObject,
+  FORBIDDEN_OBJECT_KEYS,
   MAX_DEPTH,
   MAX_NODES,
   valueKind,
-  FORBIDDEN_OBJECT_KEYS,
-  MAX_TREE_TEXT_CHARS_2,
   MAX_NODES_2,
   MAX_DEPTH_2,
+  checkSkillPromptArgument,
+  emptyPlainDataState,
+  checkPlainDataDepth,
 };

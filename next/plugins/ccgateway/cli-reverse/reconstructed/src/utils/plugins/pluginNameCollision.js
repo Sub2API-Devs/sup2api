@@ -3,19 +3,20 @@
  *
  * 2.1.316 新增：插件名冲突
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: placement 1
  */
 import { quotedPrintable, printableLabel, printableName } from "../printableName.js";
 import { describeNameCollision } from "./crossMarketplaceInstall.js";
 import { marketplaceSuffix } from "./pluginIdentifier.js";
 import { getOriginalCwdOrNull } from "../../bootstrap/state.js";
-import { count, uniq } from "../collections.js";
+import { countWhere } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { runCommandHint } from "../worktreeResumeHint.js";
 
-//@ chunk-e6aww6q8.js:4432956-4436041 placement
+//@ chunk-5xgkngpb.js:4539605-4542693 placement
 /**
  * 查找名字冲突的插件（忽略大小写，@ 与 . 视为 -）。
  */
@@ -67,7 +68,7 @@ function findPluginNameCollision(options) {
   let inOtherProject = (installation) =>
     isProjectScope(installation) &&
     (installation.projectPath === undefined || installation.projectPath !== cwd);
-  let managedCount = count(flattened, (installation) => installation.scope === "managed");
+  let managedCount = countWhere(flattened, (installation) => installation.scope === "managed");
   let isOrAre = holders.length > 1 ? "are" : "is";
   let holderPhrase =
     managedCount > 0 && managedCount === flattened.length
@@ -75,7 +76,7 @@ function findPluginNameCollision(options) {
       : managedCount > 0
         ? `which ${isOrAre} installed, also by your organization`
         : flattened.length > 0 && flattened.every(inOtherProject)
-          ? `which ${isOrAre} installed in ${uniq(flattened.map((installation) => installation.projectPath)).length > 1 ? "other projects" : "another project"}`
+          ? `which ${isOrAre} installed in ${normalizeCaseForComparison_2(flattened.map((installation) => installation.projectPath)).length > 1 ? "other projects" : "another project"}`
           : `which ${isOrAre} installed`;
   let holderList = new Intl.ListFormat("en", {
     type: "conjunction",
@@ -85,7 +86,7 @@ function findPluginNameCollision(options) {
     return surface === "notice" && managedCount > 0
       ? `Ask your administrator: ${coreMessage}`
       : `${coreMessage}${managedCount > 0 ? " Ask your administrator." : ""}`;
-  let steps = uniq(
+  let steps = normalizeCaseForComparison_2(
     flattened.map((installation) => {
       let step = `uninstall ${quoteId(installation.id)}`;
       if (inOtherProject(installation) && installation.projectPath === undefined)

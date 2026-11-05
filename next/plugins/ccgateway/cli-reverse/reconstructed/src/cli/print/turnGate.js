@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：回合开始协调与回合闸门（宿主返回唤醒、费用状态推送）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (21)
- * attribution: placement 21
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (24)
+ * attribution: placement 21, layout 3
  */
 import {
   isCancelAbortReason,
@@ -24,11 +24,28 @@ import {
   resetCostState,
 } from "../../cost-tracker.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { getRemoteFeatureGateState } from "../../utils/permissions/yoloClassifier.js";
-import { TENGU_STEADFAST_WREN } from "../../services/api/withRetry.js";
+import { onMemoryExtractPlace, cancelUnstartedPass } from "../../services/extractMemories/extractMemories.js";
+import { logEvent } from "../../services/analytics/index.js";
 import { logError } from "../../utils/log.js";
+import {
+  toError,
+  errorMessage,
+  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+  isAbortError,
+} from "../../utils/errors.js";
+import {
+  isDrainableMainThreadCommand,
+  isQueuedUserPrompt,
+  isBatchHeadHumanCommand,
+  isPromptCapableMode,
+} from "../../utils/messageQueueManager.js";
+import { looksLikeSlashInput } from "../../commands.js";
+import { runSafely } from "./followUpPreempt.js";
+import { getRemoteFeatureGateState } from "../../utils/permissions/yoloClassifier.js";
+import { TENGU_WOBBLY_FOG, TENGU_STEADFAST_WREN } from "../../services/api/withRetry.js";
+import { logFeatureOk, logFeatureSad, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
+import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { sleep } from "../../utils/sleep.js";
-import { isActiveMainAgentCommand, isPromptCapableMode } from "../../utils/messageQueueManager.js";
 import { trimTrailingAfterTurn, isTurnOpen } from "./transcriptChain.js";
 import { mergedMessageUuids, findMessageIndex } from "./queuedMessageUtils.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
@@ -39,32 +56,23 @@ import { logForDebugging } from "../../utils/debug.js";
 import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../../utils/env.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
-import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
-import { logEvent } from "../../services/analytics/index.js";
-import {
-  toError,
-  errorMessage,
-  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-  isAbortError,
-} from "../../utils/errors.js";
 import { DoctorLazy } from "../handlers/util.js";
 import { formatTaskNotification } from "../../utils/xmlTags.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { RemoteBackgroundCommands } from "../../services/remoteTools/backgroundCommands.js";
 import { RemoteCallLedger } from "../../services/remoteTools/callOutcome.js";
 import { queryCallsGivenUpOnHost } from "../../services/remoteTools/machinesPrompt.js";
 import { isAttestationNotEnforced } from "../remoteIO/fileStoreVerdicts.js";
 import { isHumanOrigin } from "../../utils/turnOrigin.js";
-import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { CommandQueueDrain } from "./commandQueueDrain.js";
 import { usageLimitStandInMessage } from "./rewindStandIn.js";
 import { MAX_MERGED_PROMPTS } from "./inboundMessages.js";
-import { mergeQueuedPrompts } from "./userFrameIntake.js";
+import { mergeQueuedPrompts_2 } from "./userFrameIntake.js";
 import { discardPollEvent, isPollEventMode, settleDeliveredEvents } from "../../utils/pollEvents.js";
 import { matchRequestId } from "../structuredIOProtocol.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:127752-127990 placement
+//@ chunk-0yw3taqg.js:157538-157776 placement
 function classifyTurnAbort(drain, signal, turnEnd) {
   if (!(turnEnd.abortedAtResult ?? signal.aborted)) return;
   let byStop = drain.stopReachedTurn || (isCancelAbortReason(signal.reason) && !drain.sendNowCutTurn);
@@ -74,10 +82,10 @@ function classifyTurnAbort(drain, signal, turnEnd) {
     sendRunsAgain: turnEnd.putBack.size > 0,
   };
 }
-//@ chunk-tyg7f3ek.js:127990-128041 placement
+//@ chunk-0yw3taqg.js:157776-157827 placement
 var COST_STATE_UNREAD; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_COST_STATE_BYTES;
-deferInit("chunk-tyg7f3ek.js:127990", () => {
+deferInit("chunk-0yw3taqg.js:157776", () => {
   COST_STATE_UNREAD = identity(
     {
       unread: false,
@@ -88,11 +96,11 @@ deferInit("chunk-tyg7f3ek.js:127990", () => {
   );
   MAX_COST_STATE_BYTES = 16384;
 });
-//@ chunk-tyg7f3ek.js:128041-128088 placement
+//@ chunk-0yw3taqg.js:157827-157874 placement
 function isCostStateWithinLimit(text) {
   return Buffer.byteLength(text) <= MAX_COST_STATE_BYTES;
 }
-//@ chunk-tyg7f3ek.js:128088-128315 placement
+//@ chunk-0yw3taqg.js:157874-158101 placement
 function restoreCostState(restoredWorkerState) {
   COST_STATE_UNREAD.unread = restoredWorkerState?.readFailed === true;
   let costState = restoredWorkerState?.internal?.cost_state;
@@ -106,7 +114,7 @@ function restoreCostState(restoredWorkerState) {
       },
     });
 }
-//@ chunk-tyg7f3ek.js:128315-128991 placement
+//@ chunk-0yw3taqg.js:158101-158777 placement
 class CostStatePusher {
   io;
   lastPushedCostUsd = 0;
@@ -140,9 +148,97 @@ class CostStatePusher {
     this.lastPushedCostUsd = sessionCost;
   }
 }
-//@ chunk-tyg7f3ek.js:128991-129003 placement
+//@ chunk-0yw3taqg.js:158777-159347 layout
+class MemoryExtractPlaceGate {
+  host;
+  io;
+  unsent;
+  sent;
+  constructor(session, io) {
+    this.host = session;
+    this.io = io;
+    onMemoryExtractPlace(session, (unsent) => {
+      this.unsent = unsent;
+    });
+  }
+  takeForTurnEnd() {
+    let unsent = this.unsent;
+    if (unsent === undefined) return;
+    this.sent = unsent;
+    this.unsent = undefined;
+    return {
+      memory_extract_place: unsent,
+    };
+  }
+  resendAtShutdown() {
+    try {
+      let cancelled = cancelUnstartedPass(this.host, this.unsent ?? this.sent);
+      let place = cancelled?.place ?? (this.unsent?.passAt === null ? this.unsent : undefined);
+      if (place === undefined) return;
+      this.io.sessionState.notifyInternalMetadataChanged({
+        memory_extract_place: place,
+      });
+      this.sent = place;
+      this.unsent = undefined;
+      if (cancelled !== null)
+        logEvent("tengu_extract_memories_place_resent", {
+          timer_armed: cancelled.timerArmed,
+        });
+    } catch (error) {
+      logError(toError(error));
+    }
+  }
+}
+//@ chunk-0yw3taqg.js:159347-159542 layout
+function hasDrainableHumanPrompt({ messageQueue, drain }) {
+  try {
+    let head = messageQueue.peek(isDrainableMainThreadCommand);
+    return (
+      !drain.endSessionRequested &&
+      head !== undefined &&
+      isQueuedUserPrompt(head) &&
+      isBatchHeadHumanCommand(head) &&
+      head.shouldQuery !== false &&
+      head.textNotTyped !== true &&
+      !looksLikeSlashInput(head.value)
+    );
+  } catch (error) {
+    logError(error);
+    return false;
+  }
+}
+//@ chunk-0yw3taqg.js:159542-160016 layout
+function releaseTurnEndSummaryOnHumanPrompt({ messageQueue, drain, io, alsoTo }) {
+  runSafely(() => {
+    let pendingTurnEndSummary = io.sessionState.pendingTurnEndSummary;
+    if (
+      pendingTurnEndSummary === undefined ||
+      drain.turnUnderWay ||
+      !io.sessionState.turnEndSummaryOutstanding() ||
+      !hasDrainableHumanPrompt({
+        messageQueue,
+        drain,
+      }) ||
+      getRemoteFeatureGateState(TENGU_WOBBLY_FOG) !== "on"
+    )
+      return;
+    io.sessionState.endTurnEndSummaryHold();
+    logFeatureOk("headless_follow_up_ends_hold");
+    let startTime = performance.now();
+    pendingTurnEndSummary.promise.then(() => {
+      runSafely(() => {
+        let details = {
+          call_ran_on_ms: Math.round(performance.now() - startTime),
+        };
+        logForDiagnosticsNoPII("info", "cli_turn_end_wait_ended_by_message", details);
+        alsoTo?.(details);
+      });
+    });
+  });
+}
+//@ chunk-0yw3taqg.js:160016-160028 placement
 var COST_PUSH_INTERVAL_MS = 5000;
-//@ chunk-tyg7f3ek.js:129003-131852 placement
+//@ chunk-0yw3taqg.js:160028-163005 placement
 /**
  * 轮次闸门：轮次开始前等待投递账本、拒绝重投、刷新转录与回执，处理 idle 释放与会话结束。
  */
@@ -273,11 +369,18 @@ class TurnGate {
         logError(error);
       }
     if (!this.stopping()) {
-      let idle = this.decideIdleReport() === "idle";
-      if (idle) this.io.sessionState.notifyStateChanged("idle");
+      let keepSummaryHold =
+        !crashed &&
+        this.io.sessionState.pendingTurnEndSummary?.endedAt !== undefined &&
+        hasDrainableHumanPrompt({
+          messageQueue: this.messageQueue,
+          drain: this.drain,
+        });
+      let goIdle = this.decideIdleReport() === "idle" && !keepSummaryHold;
+      if (goIdle) this.io.sessionState.notifyStateChanged("idle");
       this.pushCost();
       for (let event of this.drainSdkEvents()) this.emit(event);
-      if (idle) this.startRecap();
+      if (goIdle) this.startRecap();
     }
     this.closeWhatNoRowVouchesFor(crashed);
     this.drain.running = false;
@@ -293,7 +396,7 @@ class TurnGate {
       }
     if (
       (!this.drain.endSessionRequested || this.messageQueue.peek(this.endSessionHead) !== undefined) &&
-      this.messageQueue.peek(isActiveMainAgentCommand) !== undefined
+      this.messageQueue.peek(isDrainableMainThreadCommand) !== undefined
     ) {
       this.kick();
       return "rekicked";
@@ -301,7 +404,7 @@ class TurnGate {
     return "released";
   }
 }
-//@ chunk-tyg7f3ek.js:131852-132099 placement
+//@ chunk-0yw3taqg.js:163005-163252 placement
 function heldUuidsAnsweredByTurn(entries, uuid) {
   let trimmed = trimTrailingAfterTurn(entries, uuid);
   let kept = new Set(trimmed);
@@ -316,7 +419,7 @@ function heldUuidsAnsweredByTurn(entries, uuid) {
   let userMessageUuids = buildRunningTurnRecord(uuid, extraUuids).fields()?.user_message_uuids;
   return userMessageUuids !== undefined && userMessageUuids.length > 1 ? userMessageUuids : undefined;
 }
-//@ chunk-tyg7f3ek.js:132099-132181 placement
+//@ chunk-0yw3taqg.js:163252-163334 placement
 function isHandleReattachWakeEnabled() {
   try {
     return (
@@ -327,7 +430,7 @@ function isHandleReattachWakeEnabled() {
     return false;
   }
 }
-//@ chunk-tyg7f3ek.js:132181-133163 placement
+//@ chunk-0yw3taqg.js:163334-164316 placement
 /**
  * 宿主返回唤醒相关文案与阈值：机器重新可达/命令结果更正的提示文本、唤醒 origin、保留时长、安静下限、驻留时间，以及"过旧"阈值与自唤醒次数上限（24 小时内 10 次、总 2 次）。
  */
@@ -346,7 +449,7 @@ var HOST_WAKE_STALE_MS = 600000;
 var HOST_SELF_WAKE_TOTAL_CAP = 2;
 var HOST_SELF_WAKE_PER_DAY_CAP = 10;
 var HOST_SELF_WAKE_WINDOW_MS = 86400000;
-//@ chunk-tyg7f3ek.js:133163-137586 placement
+//@ chunk-0yw3taqg.js:164316-168739 placement
 /**
  * 跟踪附着机器离线/重新可达，在机器回来时向模型排入"主机返回唤醒"提示（task-notification/host-return-wake）。
  */
@@ -599,7 +702,7 @@ class HostReturnWakeTracker {
   #d(host) {
     let now = host.now();
     return (
-      count(this.#n, (at) => now - at < HOST_SELF_WAKE_WINDOW_MS) >= HOST_SELF_WAKE_PER_DAY_CAP ||
+      countWhere(this.#n, (at) => now - at < HOST_SELF_WAKE_WINDOW_MS) >= HOST_SELF_WAKE_PER_DAY_CAP ||
       this.#o >= HOST_SELF_WAKE_TOTAL_CAP
     );
   }
@@ -610,11 +713,11 @@ class HostReturnWakeTracker {
     return host.attestationKnownOff() ? undefined : "attestation_on_or_unknown";
   }
 }
-//@ chunk-tyg7f3ek.js:137586-137683 placement
+//@ chunk-0yw3taqg.js:168739-168836 placement
 function isHostReturnWake(command) {
   return command.origin?.kind === "task-notification" && command.origin.source === "host-return-wake";
 }
-//@ chunk-tyg7f3ek.js:137683-138038 placement
+//@ chunk-0yw3taqg.js:168836-169191 placement
 function startHostReturnWakes({ toolState, messageQueue, drain, permissionMode }) {
   toolState.get(HostReturnWakeTracker).start({
     registry: toolState.get(RemoteBackgroundCommands),
@@ -632,29 +735,29 @@ function startHostReturnWakes({ toolState, messageQueue, drain, permissionMode }
     },
   });
 }
-//@ chunk-tyg7f3ek.js:138038-138080 placement
+//@ chunk-0yw3taqg.js:169191-169233 placement
 function isHumanOrHandedOffTurn(command) {
   return isHumanOrigin(command.origin) || isHandedOffPersonTurn(command);
 }
-//@ chunk-tyg7f3ek.js:138080-138204 placement
+//@ chunk-0yw3taqg.js:169233-169357 placement
 function isHandedOffPersonTurn(command) {
   let first = command.handedOffTurn?.kind === "run" ? command.handedOffTurn.messages[0] : undefined;
   return first?.type === "user" && isHumanOrigin(first.origin);
 }
-//@ chunk-tyg7f3ek.js:138204-138241 placement
+//@ chunk-0yw3taqg.js:169357-169394 placement
 var TURN_GATE_READY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tyg7f3ek.js:138204", () => {
+deferInit("chunk-0yw3taqg.js:169357", () => {
   TURN_GATE_READY = Object.freeze({
     kind: "ready",
   });
 });
-//@ chunk-tyg7f3ek.js:138241-138288 placement
+//@ chunk-0yw3taqg.js:169394-169441 placement
 class TurnRefusedError extends Error {
   name = "TurnRefusedError";
 }
-//@ chunk-tyg7f3ek.js:138288-138377 placement
+//@ chunk-0yw3taqg.js:169441-169530 placement
 var TURN_REFUSED_TEXT = "This session cannot continue: a required step before the turn did not complete.";
-//@ chunk-tyg7f3ek.js:138377-138697 placement
+//@ chunk-0yw3taqg.js:169530-169850 placement
 function parseTurnGateAnswer(answer) {
   if (typeof answer !== "object" || answer === null || !("kind" in answer)) return;
   if (answer.kind === "ready")
@@ -682,7 +785,7 @@ function parseTurnGateAnswer(answer) {
   }
   return;
 }
-//@ chunk-tyg7f3ek.js:138697-140123 placement
+//@ chunk-0yw3taqg.js:169850-171276 placement
 /**
  * 轮次开始前的参与者闸门：依次询问注册的 beforeTurn 参与者，任何一方失败则拒绝本轮（TurnRefusedError）。
  */
@@ -778,7 +881,7 @@ function createTurnGateParticipants() {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:140123-145895 placement
+//@ chunk-0yw3taqg.js:171276-177065 placement
 /**
  * 协调轮次开始：等待队首、合并重放、处理延迟工具调用与 startGate，然后交给 TurnDispatcher。
  */
@@ -855,14 +958,14 @@ class TurnStartCoordinator {
       let head = this.drain.endSessionRequested
         ? this.startGate.takeHead(this.endSessionHead, () => this.messageQueue.dequeue(this.endSessionHead))
         : this.startGate.takeHead(
-            (command) => isActiveMainAgentCommand(command) && !this.selector.holdsBack(command),
+            (command) => isDrainableMainThreadCommand(command) && !this.selector.holdsBack(command),
             () => this.selector.takeHead(),
           );
       if (head === undefined) {
         if (
           this.heldCompletionChars === 0 ||
           this.drain.endSessionRequested ||
-          this.messageQueue.peek(isActiveMainAgentCommand) !== undefined
+          this.messageQueue.peek(isDrainableMainThreadCommand) !== undefined
         )
           return;
         if (this.drain.abortController?.signal.aborted) {
@@ -878,7 +981,6 @@ class TurnStartCoordinator {
           isMeta: true,
           skipSubmissionHooks: true,
           workload: this.heldCompletionWorkload,
-          keepsDisallowedTools: true,
         };
         this.heldCompletionChars = 0;
         this.heldCompletionWorkload = undefined;
@@ -936,7 +1038,7 @@ class TurnStartCoordinator {
           if (members.length === 0) continue;
           head = members[0];
         }
-        if (members.length > 1) head = mergeQueuedPrompts(members);
+        if (members.length > 1) head = mergeQueuedPrompts_2(members);
       }
       let filtered = members.map((member) => member.uuid).filter((uuid) => uuid !== undefined);
       this.drain.pendingDispatchUuids = filtered;
@@ -946,7 +1048,11 @@ class TurnStartCoordinator {
         running: false,
       };
       this.prewaitLatch.parkBatch(this.drain.intentBatchInFlight, members);
-      if (members.length > 1) this.replayMerged?.(members, head);
+      if (members.length > 1)
+        this.replayMerged?.(
+          members.filter((member) => member.origin?.kind !== "plugin"),
+          head,
+        );
       return {
         command: head,
         members,
@@ -973,7 +1079,7 @@ class TurnStartCoordinator {
       }
       batch.members.length = 0;
       batch.members.push(...filtered_2);
-      batch.command = mergeQueuedPrompts(batch.members);
+      batch.command = mergeQueuedPrompts_2(batch.members);
       batch.uuids.length = 0;
       batch.uuids.push(...batch.members.map((member) => member.uuid).filter((uuid) => uuid !== undefined));
     }
@@ -990,7 +1096,7 @@ class TurnStartCoordinator {
         this.prewaitLatch.dropParkedBatch();
         return;
       }
-      batch.command = mergeQueuedPrompts(batch.members);
+      batch.command = mergeQueuedPrompts_2(batch.members);
       batch.uuids.push(...batch.members.map((member) => member.uuid).filter((uuid) => uuid !== undefined));
     }
     return batch;
@@ -1051,12 +1157,14 @@ export {
   restoreCostState,
   COST_PUSH_INTERVAL_MS,
   heldUuidsAnsweredByTurn,
+  MemoryExtractPlaceGate,
   CostStatePusher,
   TurnGate,
   classifyTurnAbort,
   startHostReturnWakes,
   HostReturnWakeTracker,
   TURN_GATE_READY,
+  releaseTurnEndSummaryOnHumanPrompt,
   TurnStartCoordinator,
   isHostReturnWake,
   TurnRefusedError,

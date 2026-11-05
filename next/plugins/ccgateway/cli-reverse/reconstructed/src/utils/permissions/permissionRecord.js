@@ -3,24 +3,24 @@
  *
  * 2.1.316 新增：权限记录
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (16)
  * attribution: placement 16
  */
 import { logError } from "../log.js";
 import { logForDebugging } from "../debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2949462-2949516 placement
+//@ chunk-5xgkngpb.js:3019069-3019123 placement
 class PermissionRecords {
   byToolUse = new Map();
   rounds = new Map();
   nextRound = 1;
 }
-//@ chunk-e6aww6q8.js:2949516-2949528 placement
+//@ chunk-5xgkngpb.js:3019123-3019135 placement
 var MAX_PERMISSION_RECORDS = 256;
-//@ chunk-e6aww6q8.js:2949528-2949584 placement
+//@ chunk-5xgkngpb.js:3019135-3019191 placement
 function guardRecordUpdate(fallback, update) {
   try {
     return update();
@@ -29,13 +29,13 @@ function guardRecordUpdate(fallback, update) {
     return fallback;
   }
 }
-//@ chunk-e6aww6q8.js:2949584-2949752 placement
+//@ chunk-5xgkngpb.js:3019191-3019359 placement
 function getActivePermissionRound(toolUseContext, toolUseId) {
   if (toolUseContext.permissionPhase !== undefined || toolUseContext.permissionRound === undefined) return;
   let roundEntry = toolUseContext.toolState.get(PermissionRecords).rounds.get(toolUseId);
   return roundEntry?.round === toolUseContext.permissionRound ? roundEntry : undefined;
 }
-//@ chunk-e6aww6q8.js:2949752-2950068 placement
+//@ chunk-5xgkngpb.js:3019359-3019675 placement
 /**
  * 判断该工具调用的权限记录轮次是否属于给定工具；不属于时（只一次）记录错误。
  */
@@ -55,7 +55,7 @@ function isRoundOwnedByTool(toolUseContext, toolUseId, toolName) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:2950068-2950365 placement
+//@ chunk-5xgkngpb.js:3019675-3019972 placement
 function getPermissionRecordSlot(toolUseContext, toolUseId) {
   let records = toolUseContext.toolState.get(PermissionRecords);
   let round = records.rounds.get(toolUseId)?.round ?? 0;
@@ -75,7 +75,7 @@ function getPermissionRecordSlot(toolUseContext, toolUseId) {
   }
   return slot;
 }
-//@ chunk-e6aww6q8.js:2950365-2950657 placement
+//@ chunk-5xgkngpb.js:3019972-3020264 placement
 /**
  * 为某 toolUseId 开始新一轮权限记录：分配轮次号，超出上限时淘汰最早的记录。
  */
@@ -100,7 +100,7 @@ function startPermissionRound(toolUseContext, toolUseId, toolName) {
     return roundNumber;
   });
 }
-//@ chunk-e6aww6q8.js:2950657-2950934 placement
+//@ chunk-5xgkngpb.js:3020264-3020541 placement
 function recordCheckedResult(toolUseContext, parsedInput, result, name) {
   let { toolUseId } = toolUseContext;
   if (!toolUseId) return;
@@ -122,7 +122,7 @@ function recordCheckedResult(toolUseContext, parsedInput, result, name) {
     permissionRecordSlot.record.checked = checked;
   });
 }
-//@ chunk-e6aww6q8.js:2950934-2951238 placement
+//@ chunk-5xgkngpb.js:3020541-3020845 placement
 /**
  * 记录权限流水线的输入与结果到该工具调用的权限记录；拒绝时删除记录，允许时附带已回答的待定内容。
  */
@@ -146,7 +146,7 @@ function recordPipelineResult(context, toolUseID, input, decision, name) {
     permissionRecordSlot.pendingAnswered = undefined;
   });
 }
-//@ chunk-e6aww6q8.js:2951238-2951337 placement
+//@ chunk-5xgkngpb.js:3020845-3020944 placement
 /**
  * notePendingPermissionAnswer：记录待定的权限回答。
  */
@@ -157,7 +157,7 @@ function notePendingPermissionAnswer(context, toolUseID, pendingAnswered, name) 
     getPermissionRecordSlot(context, toolUseID).pendingAnswered = pendingAnswered;
   });
 }
-//@ chunk-e6aww6q8.js:2951337-2951466 placement
+//@ chunk-5xgkngpb.js:3020944-3021073 placement
 /**
  * 为工具调用记录待定的权限说明（输入与备注）。
  */
@@ -172,7 +172,7 @@ function setPendingPermissionNote(toolUseContext, input, note, toolName) {
     };
   });
 }
-//@ chunk-e6aww6q8.js:2951466-2951664 placement
+//@ chunk-5xgkngpb.js:3021073-3021271 placement
 /**
  * 在执行回调期间为该调用开一个临时记录槽，结束后关闭。
  */
@@ -191,7 +191,7 @@ async function withProvisionalRecord(toolUseContext, toolUseID, name, fn) {
     if (slot?.provisional !== undefined) slot.provisional.open = false;
   }
 }
-//@ chunk-e6aww6q8.js:2951664-2951872 placement
+//@ chunk-5xgkngpb.js:3021271-3021479 placement
 /**
  * 把临时槽里的 checked 结果提交到正式记录，并写入 pipeline 结果。
  */
@@ -208,7 +208,7 @@ function commitProvisionalRecord(toolUseContext, toolUseID, input, result, name)
     };
   });
 }
-//@ chunk-e6aww6q8.js:2951872-2951975 placement
+//@ chunk-5xgkngpb.js:3021479-3021582 placement
 /**
  * 删除工具调用的权限记录。
  */
@@ -218,7 +218,7 @@ function dropPermissionRecord(toolUseContext, toolUseId) {
     toolUseContext.toolState.get(PermissionRecords).byToolUse.delete(toolUseId);
   });
 }
-//@ chunk-e6aww6q8.js:2951975-2952198 placement
+//@ chunk-5xgkngpb.js:3021582-3021805 placement
 /**
  * 取出并清除指定轮次的权限记录（轮次不符时返回 undefined）。
  */
@@ -233,12 +233,12 @@ function takePermissionRecord(toolUseContext, toolUseId, round) {
     return existing.record;
   });
 }
-//@ chunk-e6aww6q8.js:2952198-2952237 placement
+//@ chunk-5xgkngpb.js:3021805-3021844 placement
 /**
  * permissionRecordModule：权限记录模块的惰性 require。
  */
 var permissionRecordModule; // deferred: loads other modules while loading; runs once its import cycle is complete
-deferInit("chunk-e6aww6q8.js:2952198", () => {
+deferInit("chunk-5xgkngpb.js:3021805", () => {
   permissionRecordModule = require("../../services/workflow/recordWorkflowUsageConsent.lazy.js");
 });
 export {
@@ -246,10 +246,10 @@ export {
   recordPipelineResult,
   permissionRecordModule,
   recordCheckedResult,
-  setPendingPermissionNote,
   dropPermissionRecord,
+  commitProvisionalRecord,
+  setPendingPermissionNote,
   startPermissionRound,
   takePermissionRecord,
-  commitProvisionalRecord,
   withProvisionalRecord,
 };

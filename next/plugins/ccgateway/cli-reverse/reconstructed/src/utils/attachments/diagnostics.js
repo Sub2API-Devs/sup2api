@@ -3,17 +3,17 @@
  *
  * 2.1.316 新增：诊断附件（重放时清理）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (7)
  * attribution: placement 7
  */
-import { weakSet_5, loggedAttachmentPaths, MAX_ATTACHMENT_PATH_CHARS } from "./fileAttachments.js";
+import { weakSet_6, loggedAttachmentPaths, MAX_ATTACHMENT_PATH_CHARS } from "./fileAttachments.js";
 import { logForDebugging } from "../debug.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { NO_CONTENT_MESSAGE } from "../../constants/messages.js";
 
-//@ chunk-e6aww6q8.js:3249673-3249758 placement
+//@ chunk-5xgkngpb.js:3334296-3334381 placement
 /**
  * 诊断严重级别到展示名的映射（error→Error、hint→Hint 等）。
  */
@@ -24,13 +24,13 @@ var SEVERITY_LABELS = {
   information: "Info",
   hint: "Hint",
 };
-//@ chunk-e6aww6q8.js:3249758-3249868 placement
+//@ chunk-5xgkngpb.js:3334381-3334491 placement
 function normalizeDiagnosticSeverity(severity) {
   if (typeof severity !== "string") return;
   let lower = severity.toLowerCase();
   return Object.hasOwn(SEVERITY_LABELS, lower) ? SEVERITY_LABELS[lower] : undefined;
 }
-//@ chunk-e6aww6q8.js:3249868-3251084 placement
+//@ chunk-5xgkngpb.js:3334491-3335714 placement
 /**
  * 清理重放附件中的诊断文件载荷（格式不对时丢弃）。
  */
@@ -38,8 +38,8 @@ function sanitizeDiagnosticsAttachment(files) {
   if (!Array.isArray(files)) {
     let payloadKind = files === undefined ? "missing" : "non-array";
     let payloadIsObject = typeof files === "object" && files !== null;
-    if (!(payloadIsObject ? weakSet_5.has(files) : loggedAttachmentPaths().has(payloadKind))) {
-      if (payloadIsObject) weakSet_5.add(files);
+    if (!(payloadIsObject ? weakSet_6.has(files) : loggedAttachmentPaths().has(payloadKind))) {
+      if (payloadIsObject) weakSet_6.add(files);
       else loggedAttachmentPaths().add(payloadKind);
       logForDebugging(`Dropped a ${payloadKind} diagnostics files payload from a replayed attachment`);
     }
@@ -113,15 +113,15 @@ function sanitizeDiagnosticsAttachment(files) {
       diagnostics: flattened,
     });
   }
-  if ((droppedFiles > 0 || droppedDiagnostics > 0) && !weakSet_5.has(files)) {
-    weakSet_5.add(files);
+  if ((droppedFiles > 0 || droppedDiagnostics > 0) && !weakSet_6.has(files)) {
+    weakSet_6.add(files);
     logForDebugging(
       `Dropped ${droppedFiles} malformed file(s) and ${droppedDiagnostics} malformed diagnostic(s) from a replayed diagnostics attachment`,
     );
   }
   return validFiles;
 }
-//@ chunk-e6aww6q8.js:3251084-3251446 placement
+//@ chunk-5xgkngpb.js:3335714-3336076 placement
 /**
  * 把各文件的诊断格式化为"文件名: 图标 [Line x:y] 消息 [code] (source)"文本，超出长度上限时截断并加 …[truncated]。
  */
@@ -142,7 +142,7 @@ ${joined}`;
     return joined.slice(0, MAX_ATTACHMENT_PATH_CHARS - 12) + "\u2026[truncated]";
   return joined;
 }
-//@ chunk-e6aww6q8.js:3251446-3251567 placement
+//@ chunk-5xgkngpb.js:3336076-3336197 placement
 /**
  * 把新诊断格式化为 <new-diagnostics> 附件文本。
  */
@@ -151,7 +151,7 @@ function formatNewDiagnosticsAttachment(files) {
 
 ${formatDiagnosticsSummary(files)}</new-diagnostics>`;
 }
-//@ chunk-e6aww6q8.js:3251567-3251732 placement
+//@ chunk-5xgkngpb.js:3336197-3336362 placement
 /**
  * 按诊断严重程度返回图标（错误、警告、信息、提示）。
  */
@@ -165,7 +165,7 @@ function getSeverityIcon(severity) {
   if (typeof severity !== "string") return figures_default.bullet;
   return Object.hasOwn(iconsBySeverity, severity) ? iconsBySeverity[severity] : figures_default.bullet;
 }
-//@ chunk-e6aww6q8.js:3251770-3252265 placement
+//@ chunk-5xgkngpb.js:3336400-3336895 placement
 /**
  * 用新文本替换消息内容中的文本：新文本为空时只保留非文本块；字符串内容直接替换；数组内容替换最后一个文本块，若新文本以前面文本块开头则去掉重复前缀并保留它们。
  */

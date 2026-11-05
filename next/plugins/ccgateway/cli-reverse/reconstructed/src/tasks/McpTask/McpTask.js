@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 后台任务类型
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1wp0vvkk.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-f7mbg0zr.js (1)
  * attribution: placement 1
  */
 import { logForDebugging } from "../../utils/debug.js";
@@ -13,7 +13,7 @@ import { logError } from "../../utils/log.js";
 import { deleteMcpTaskMetadata } from "../../services/mcp/mcpTasks.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 
-//@ chunk-1wp0vvkk.js:1144-1951 placement
+//@ chunk-f7mbg0zr.js:1228-2035 placement
 /**
  * MCP 后台任务类型定义：终止、状态与输出处理。
  */

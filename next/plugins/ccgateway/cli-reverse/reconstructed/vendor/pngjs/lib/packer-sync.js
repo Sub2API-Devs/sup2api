@@ -1,15 +1,15 @@
 /**
  * pngjs/lib/packer-sync.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: pngjs@5.0.0
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_constants } from "./constants.js";
 import { require_packer } from "./packer.js";
 
-//@ chunk-spjgqa4y.js:47377-47987 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:47377-47987 cjs-fingerprint
 var require_packer_sync = __commonJS(function (cjsExports, cjsModule) {
   var hasSyncZlib = true;
   var zlib = importMetaRequire("zlib");

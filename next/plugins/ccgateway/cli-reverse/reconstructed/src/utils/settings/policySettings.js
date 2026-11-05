@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：合并管理员策略层；多个策略中取最严格的值等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (57)
- * attribution: placement 57
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (58)
+ * attribution: placement 58
  */
 import {
   getMachineAdminPolicyTier,
@@ -50,7 +50,7 @@ import {
   asArray,
   restrictionValue,
 } from "./managedRestrictionKeys.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { getAllowedMcpServersFromTiers, unmanagedPolicyKeys } from "../../services/mcp/managedMcpPolicy.js";
 import { getPlatform } from "../platform.js";
 import { mergeWithAssigner_2 } from "../../../vendor/lodash-es/_mergeWithFamily.js";
@@ -59,7 +59,7 @@ import { isPlainObject as isPlainObject_2 } from "../isPlainObject.js";
 import { refusedCopyForcesRefresh } from "../../services/remoteManagedSettings/remoteSettingsState.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:485330-485500 placement
+//@ chunk-z20c443b.js:483965-484135 placement
 function getHostPolicyLoginPins(settingsContext) {
   let machineAdminPolicyTier = getMachineAdminPolicyTier(settingsContext);
   return {
@@ -68,7 +68,7 @@ function getHostPolicyLoginPins(settingsContext) {
     gatewayInternalNetworks: machineAdminPolicyTier?.gatewayInternalNetworks,
   };
 }
-//@ chunk-dcmhvw5a.js:485500-485824 placement
+//@ chunk-z20c443b.js:484135-484459 placement
 function getPolicySettingsOrigin(settingsContext) {
   let helper = armedHelperOutput(settingsContext);
   if (helper.composes === "tier") return "helper";
@@ -80,7 +80,7 @@ function getPolicySettingsOrigin(settingsContext) {
   let hkcu = settingsContext.hkcu?.();
   return hkcu && Object.keys(hkcu.settings).length > 0 ? "hkcu" : null;
 }
-//@ chunk-dcmhvw5a.js:485824-486235 placement
+//@ chunk-z20c443b.js:484459-484870 placement
 function getShadowedManagedSources(context) {
   let helper = armedHelperOutput(context);
   let mergedOver = helper.composes === "none" ? null : helper.mergedOver;
@@ -98,7 +98,7 @@ function getShadowedManagedSources(context) {
     filtered.push("hkcu");
   return filtered;
 }
-//@ chunk-dcmhvw5a.js:486235-486587 placement
+//@ chunk-z20c443b.js:484870-485222 placement
 function getManagedSourcesInEffect(settingsContext) {
   let policySettings = resolvePolicySettings(settingsContext);
   let sources = [];
@@ -115,13 +115,13 @@ function getManagedSourcesInEffect(settingsContext) {
     behavior: policySettings.mode === "merge" ? "merge" : "first-wins",
   };
 }
-//@ chunk-dcmhvw5a.js:486587-486698 placement
+//@ chunk-z20c443b.js:485222-485333 placement
 function isPolicySlotAdminOrParentComposed(settingsContext) {
   if (armedHelperOutput(settingsContext).composes === "tier") return true;
   let { admin, parentSlice } = resolvePolicySettings(settingsContext);
   return admin !== null || parentSlice !== null;
 }
-//@ chunk-dcmhvw5a.js:486698-491649 placement
+//@ chunk-z20c443b.js:485333-490285 placement
 function resolvePolicySettings(context) {
   let errors = [];
   let remoteManagedSettings = parseRemoteManagedSettings(context);
@@ -283,7 +283,7 @@ function resolvePolicySettings(context) {
           ADDED_TO_A_POLICY_ONLY_TIER.includes(path.join(".")) &&
             Array.isArray(atPath) &&
             Array.isArray(atPath_2)
-            ? uniq([...atPath_2, ...atPath])
+            ? normalizeCaseForComparison_2([...atPath_2, ...atPath])
             : atPath,
         );
     }
@@ -421,7 +421,7 @@ function resolvePolicySettings(context) {
     policyOnlyLeads: policyOnlyTier,
   };
 }
-//@ chunk-dcmhvw5a.js:491649-492327 placement
+//@ chunk-z20c443b.js:490285-490963 placement
 /**
  * 合并管理员策略层。
  */
@@ -473,7 +473,7 @@ function mergeAdminPolicies(tiers, managedSourcesBehavior, override, count, forc
     merged: true,
   };
 }
-//@ chunk-dcmhvw5a.js:492327-492501 placement
+//@ chunk-z20c443b.js:490963-491137 placement
 var POLICY_HELPER_CONFIG_KEYS = ["policyHelper", "policyHelpers"];
 var MANAGED_SOURCE_NOTICE_LABELS = {
   remote: "server-managed settings",
@@ -481,25 +481,25 @@ var MANAGED_SOURCE_NOTICE_LABELS = {
   hklm: "the HKLM policy key",
   file: "managed-settings.json",
 };
-//@ chunk-dcmhvw5a.js:492501-492566 placement
+//@ chunk-z20c443b.js:491137-491202 placement
 function hasPolicyContent(doc) {
   return Object.keys(doc).some((key) => !restrictiveTopLevelSettings.includes(key));
 }
-//@ chunk-dcmhvw5a.js:492566-492646 placement
+//@ chunk-z20c443b.js:491202-491282 placement
 function hasEffectivePolicyContent(doc) {
   return Object.entries(doc).some(
     ([key, value]) => !restrictiveTopLevelSettings.includes(key) && !isDeepEmptyObject(value),
   );
 }
-//@ chunk-dcmhvw5a.js:492646-492685 placement
+//@ chunk-z20c443b.js:491282-491321 placement
 function policyContentOrNull(settings) {
   return settings && hasPolicyContent(settings) ? settings : null;
 }
-//@ chunk-dcmhvw5a.js:492685-492763 placement
+//@ chunk-z20c443b.js:491321-491399 placement
 function authoredPolicyContent(tier) {
   return tier.settings !== null && hasEffectivePolicyContent(tier.settings) && !tier.onlySubstitutes;
 }
-//@ chunk-dcmhvw5a.js:492763-492848 placement
+//@ chunk-z20c443b.js:491399-491484 placement
 /**
  * explainedPolicyChange：说明策略变化。
  */
@@ -510,15 +510,15 @@ function explainedPolicyChange(issues, settings, issueList) {
     ? explainUnloadableGuardHooks(issues)
     : issues;
 }
-//@ chunk-dcmhvw5a.js:492848-492857 placement
+//@ chunk-z20c443b.js:491484-491493 placement
 var POLICY_RANK_NONE = 0;
-//@ chunk-dcmhvw5a.js:492857-492928 placement
+//@ chunk-z20c443b.js:491493-491564 placement
 function policyRank(content, authored) {
   if (content === null) return -1;
   if (authored) return 2;
   return hasEffectivePolicyContent(content) ? 1 : POLICY_RANK_NONE;
 }
-//@ chunk-dcmhvw5a.js:492928-493040 placement
+//@ chunk-z20c443b.js:491564-491676 placement
 function documentHasPolicyContent(doc, parsed) {
   return (
     Object.entries(doc).some(
@@ -528,24 +528,24 @@ function documentHasPolicyContent(doc, parsed) {
     (parsed !== null && hasPolicyContent(parsed))
   );
 }
-//@ chunk-dcmhvw5a.js:493040-493128 placement
+//@ chunk-z20c443b.js:491676-491764 placement
 function isPolicyTier(layer) {
   return layer.documentHasPolicyContent ?? (layer.settings !== null && hasPolicyContent(layer.settings));
 }
-//@ chunk-dcmhvw5a.js:493128-493202 placement
+//@ chunk-z20c443b.js:491764-491838 placement
 function loadStateOf(tier) {
   return tier.loadState ?? (tier.settings !== null ? "loaded" : "absent");
 }
-//@ chunk-dcmhvw5a.js:493202-493329 placement
+//@ chunk-z20c443b.js:491838-491965 placement
 function combinedLoadState(a, b) {
   if (a === "didNotLoad" || b === "didNotLoad") return "didNotLoad";
   return a === "loaded" || b === "loaded" ? "loaded" : "absent";
 }
-//@ chunk-dcmhvw5a.js:493329-493410 placement
+//@ chunk-z20c443b.js:491965-492046 placement
 function adminDocumentPresent(tier) {
   return tier.userWritable !== true && (isPolicyTier(tier) || tier.loadState === "didNotLoad");
 }
-//@ chunk-dcmhvw5a.js:493410-493633 placement
+//@ chunk-z20c443b.js:492046-492269 placement
 function pickModelOverrides(target, tiers, winnerOverrides) {
   let index = tiers.findIndex((tier) => tier.availableModels !== undefined);
   let index_2 = tiers.findIndex((tier) => tier.modelOverrides !== undefined);
@@ -555,7 +555,7 @@ function pickModelOverrides(target, tiers, winnerOverrides) {
     };
   else delete target.modelOverrides;
 }
-//@ chunk-dcmhvw5a.js:493633-493775 placement
+//@ chunk-z20c443b.js:492269-492411 placement
 var WHOLE_VALUE_POLICY_KEYS = [
   "allowedMcpServers",
   "availableModels",
@@ -564,7 +564,7 @@ var WHOLE_VALUE_POLICY_KEYS = [
   "allowedProviders",
 ];
 var SANDBOX_REPLACE_KEYS = ["awsPairs", "ripgrep"];
-//@ chunk-dcmhvw5a.js:493775-493964 placement
+//@ chunk-z20c443b.js:492411-492600 placement
 function replacePolicyValue(previous, next, key) {
   if (next === undefined) return previous;
   if (Array.isArray(next))
@@ -574,7 +574,7 @@ function replacePolicyValue(previous, next, key) {
   if (!isPlainObject_2(next)) return next;
   return import_mapValues(next, (value) => (Array.isArray(value) ? [...value] : value));
 }
-//@ chunk-dcmhvw5a.js:493964-494338 placement
+//@ chunk-z20c443b.js:492600-492974 placement
 /**
  * 可合并的策略键。
  */
@@ -598,7 +598,7 @@ var mergeablePolicyKeys = [
   ["allowManagedMcpServersOnly", "allowedMcpServers"],
   ["enforceAvailableModels", "availableModels"],
 ];
-//@ chunk-dcmhvw5a.js:494338-494430 placement
+//@ chunk-z20c443b.js:492974-493066 placement
 function fillMissingPolicyKeys(settings, other) {
   return omitAlias(
     settings,
@@ -607,9 +607,9 @@ function fillMissingPolicyKeys(settings, other) {
       .map(([alias]) => alias),
   );
 }
-//@ chunk-dcmhvw5a.js:494430-494721 placement
+//@ chunk-z20c443b.js:493066-493357 placement
 var RESTRICTIVE_PARENT_KEYS; // deferred: uses MERGEABLE_POLICY_KEYS_2 of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:494430", () => {
+deferInit("chunk-z20c443b.js:493066", () => {
   RESTRICTIVE_PARENT_KEYS = [
     ...mergeablePolicyKeys.map(([alias]) => alias),
     "allowManagedPermissionRulesOnly",
@@ -623,7 +623,7 @@ deferInit("chunk-dcmhvw5a.js:494430", () => {
     "sandbox.enabled",
   ];
 });
-//@ chunk-dcmhvw5a.js:494721-494951 placement
+//@ chunk-z20c443b.js:493357-493587 placement
 function restrictiveParentSlice(settings) {
   return policyContentOrNull(
     keepRestrictiveFromParent(omitAlias(settings, RESTRICTIVE_PARENT_KEYS), {
@@ -641,31 +641,31 @@ function restrictiveParentSlice(settings) {
     }),
   );
 }
-//@ chunk-dcmhvw5a.js:494951-495076 placement
+//@ chunk-z20c443b.js:493587-493712 placement
 function keepMergeablePolicyKeys(settings, enabled, tiers) {
   if (settings === null || !enabled) return settings;
   let filtered = MERGEABLE_POLICY_KEYS_2.filter((key) => tiers.some((tier) => tier?.[key] !== undefined));
   return filtered.length === 0 ? settings : omitAlias(settings, filtered);
 }
-//@ chunk-dcmhvw5a.js:495076-495177 placement
+//@ chunk-z20c443b.js:493712-493813 placement
 function mergePolicyValue(previous, next, key) {
   if (key !== undefined && (WHOLE_VALUE_POLICY_KEYS.includes(key) || SANDBOX_REPLACE_KEYS.includes(key)))
     return replacePolicyValue(previous, next, key);
   return unionPolicyArrays(previous, next, key);
 }
-//@ chunk-dcmhvw5a.js:495177-495260 placement
+//@ chunk-z20c443b.js:493813-493896 placement
 function applyPolicyKeyChange(previous, next, key) {
   if (key !== undefined && WHOLE_VALUE_POLICY_KEYS.includes(key))
     return replacePolicyValue(previous, next, key);
   return unionPolicyArrays(previous, next, key);
 }
-//@ chunk-dcmhvw5a.js:495260-495377 placement
+//@ chunk-z20c443b.js:493896-494013 placement
 function unionPolicyArrays(previous, next, key) {
   if (Array.isArray(previous) && Array.isArray(next) && key !== "fallbackModel")
-    return uniq([...next, ...previous]);
+    return normalizeCaseForComparison_2([...next, ...previous]);
   return settingsMergeCustomizer(previous, next, key);
 }
-//@ chunk-dcmhvw5a.js:495377-495911 placement
+//@ chunk-z20c443b.js:494013-494547 placement
 /**
  * 多个策略中取最严格的值。
  */
@@ -683,7 +683,7 @@ function mostRestrictivePolicy(target, tiers) {
       setAtPath(result, path, undefined);
   }
   if (target.strictPluginOnlyCustomization !== true) {
-    let values = uniq(
+    let values = normalizeCaseForComparison_2(
       tiers.flatMap((tier) =>
         Array.isArray(tier.strictPluginOnlyCustomization) ? tier.strictPluginOnlyCustomization : [],
       ),
@@ -692,7 +692,7 @@ function mostRestrictivePolicy(target, tiers) {
     else if (first?.strictPluginOnlyCustomization === undefined) delete target.strictPluginOnlyCustomization;
   }
 }
-//@ chunk-dcmhvw5a.js:495911-496051 placement
+//@ chunk-z20c443b.js:494547-494687 placement
 function getMergedPolicySources(context) {
   let mergedSources = context.store.policy.mergedSources;
   if (mergedSources !== undefined) return mergedSources.value;
@@ -702,7 +702,7 @@ function getMergedPolicySources(context) {
   };
   return names;
 }
-//@ chunk-dcmhvw5a.js:496051-496248 placement
+//@ chunk-z20c443b.js:494687-494884 placement
 function mergedPolicySourceNames(context) {
   if (armedHelperOutput(context).composes === "tier") return null;
   let { merged, composed } = resolvePolicySettings(context);
@@ -713,7 +713,7 @@ function mergedPolicySourceNames(context) {
   if (composed.file) names.push("file");
   return names;
 }
-//@ chunk-dcmhvw5a.js:496248-496719 placement
+//@ chunk-z20c443b.js:494884-495356 placement
 function armedHelperOutput(context) {
   let helper = context.helper?.() ?? null;
   if (!helper)
@@ -745,7 +745,7 @@ function armedHelperOutput(context) {
     ...context.store.policy.mergedHelper,
   };
 }
-//@ chunk-dcmhvw5a.js:496719-496942 placement
+//@ chunk-z20c443b.js:495356-495579 placement
 function helperBaseSettings(context) {
   let mdmSettings = readMdmSettings(context);
   if (
@@ -766,11 +766,11 @@ function helperBaseSettings(context) {
     errors: [...mdmSettings.errors, ...file.errors],
   };
 }
-//@ chunk-dcmhvw5a.js:496942-496978 placement
+//@ chunk-z20c443b.js:495579-495615 placement
 function pickPolicyHelperConfigKeys(settings) {
   return omitAlias(settings ?? {}, POLICY_HELPER_CONFIG_KEYS);
 }
-//@ chunk-dcmhvw5a.js:496978-497188 placement
+//@ chunk-z20c443b.js:495615-495825 placement
 function overlayEnvByUpperName(env, env_2) {
   let upperMap = new Map();
   for (let [key, value] of Object.entries(env_2)) {
@@ -781,7 +781,7 @@ function overlayEnvByUpperName(env, env_2) {
   for (let [key, value] of Object.entries(env)) out[key] = upperMap.get(key.toUpperCase()) ?? value;
   return Object.assign(out, env_2);
 }
-//@ chunk-dcmhvw5a.js:497188-497302 placement
+//@ chunk-z20c443b.js:495825-495939 placement
 var HELPER_WHOLE_VALUE_KEYS = [
   "forceLoginOrgUUID",
   "gatewayInternalNetworks",
@@ -789,7 +789,7 @@ var HELPER_WHOLE_VALUE_KEYS = [
   "httpHookAllowedEnvVars",
   "allowRead",
 ];
-//@ chunk-dcmhvw5a.js:497302-497418 placement
+//@ chunk-z20c443b.js:495939-496055 placement
 function mergeHelperValue(previous, next, key) {
   let value =
     key !== undefined && next !== undefined && HELPER_WHOLE_VALUE_KEYS.includes(key)
@@ -797,14 +797,14 @@ function mergeHelperValue(previous, next, key) {
       : mergePolicyValue(previous, next, key);
   return value === next && Array.isArray(value) ? [...value] : value;
 }
-//@ chunk-dcmhvw5a.js:497418-497511 placement
+//@ chunk-z20c443b.js:496055-496148 placement
 function mergeHelperOutputOverBase(settings, helper) {
   let baseKeys = pickPolicyHelperConfigKeys(settings);
   let merged = mergeWithAssigner_2({}, baseKeys, helper, mergeHelperValue);
   if (baseKeys.env && helper.env) merged.env = overlayEnvByUpperName(baseKeys.env, helper.env);
   return merged;
 }
-//@ chunk-dcmhvw5a.js:497511-497829 placement
+//@ chunk-z20c443b.js:496148-496466 placement
 function getMachineAdminTierSettings(settingsContext) {
   let output = armedHelperOutput(settingsContext);
   if (output.composes === "tier") return [output.helper];
@@ -821,7 +821,7 @@ function getMachineAdminTierSettings(settingsContext) {
   if (present.remote && !snapshotFirst) return [];
   return filtered.slice(0, 1);
 }
-//@ chunk-dcmhvw5a.js:497829-498043 placement
+//@ chunk-z20c443b.js:496466-496680 placement
 function getEveryMachineAdminTierSettings(context) {
   let mdmUserWritable = context.mdm?.().userWritable === true;
   let output = armedHelperOutput(context);
@@ -833,7 +833,7 @@ function getEveryMachineAdminTierSettings(context) {
   };
   return tiers.filter((tier, index) => isVouchedOrigin(tierSources[index], vouched));
 }
-//@ chunk-dcmhvw5a.js:498043-498178 placement
+//@ chunk-z20c443b.js:496680-496815 placement
 function getMachineAdminDocumentLoadErrors(settingsContext) {
   return [
     ...(settingsContext.mdm?.().userWritable === true
@@ -842,7 +842,7 @@ function getMachineAdminDocumentLoadErrors(settingsContext) {
     ...(settingsContext.file?.() ?? loadManagedFileSettings(settingsContext)).errors,
   ];
 }
-//@ chunk-dcmhvw5a.js:498178-498510 placement
+//@ chunk-z20c443b.js:496815-497147 placement
 function isMachineAdminDocumentUnreadable(context) {
   let userWritable = context.mdm?.().userWritable === true;
   if (
@@ -859,14 +859,14 @@ function isMachineAdminDocumentUnreadable(context) {
     return true;
   return loadStateOf(context.file?.() ?? loadManagedFileSettings(context)) === "didNotLoad";
 }
-//@ chunk-dcmhvw5a.js:498510-498630 placement
+//@ chunk-z20c443b.js:497147-497267 placement
 function policyTierSettings(context) {
   let output = armedHelperOutput(context);
   if (output.composes === "tier") return [output.helper];
   let { tiers, parentSlice } = resolvePolicySettings(context);
   return parentSlice ? [...tiers, parentSlice] : tiers;
 }
-//@ chunk-dcmhvw5a.js:498630-498795 placement
+//@ chunk-z20c443b.js:497267-497432 placement
 function getAdminPolicyTierSettings(settingsContext) {
   let adminTiers = settingsContext.store.policy.adminTiers;
   if (adminTiers !== undefined) return adminTiers;
@@ -875,7 +875,7 @@ function getAdminPolicyTierSettings(settingsContext) {
   settingsContext.store.policy.adminTiers = tiers;
   return tiers;
 }
-//@ chunk-dcmhvw5a.js:498795-499268 placement
+//@ chunk-z20c443b.js:497432-497905 placement
 function getVouchedPolicyTierSettings(settingsContext, remoteVerified) {
   let mdmUserWritable = settingsContext.mdm?.().userWritable === true;
   let output = armedHelperOutput(settingsContext);
@@ -903,7 +903,7 @@ function getVouchedPolicyTierSettings(settingsContext, remoteVerified) {
     flattened.push(parentSlice);
   return flattened;
 }
-//@ chunk-dcmhvw5a.js:499268-499426 placement
+//@ chunk-z20c443b.js:497905-498063 placement
 function isVouchedOrigin(source, { remoteVerified, mdmUserWritable }) {
   switch (source) {
     case "remote":
@@ -917,7 +917,7 @@ function isVouchedOrigin(source, { remoteVerified, mdmUserWritable }) {
       return false;
   }
 }
-//@ chunk-dcmhvw5a.js:499426-499554 placement
+//@ chunk-z20c443b.js:498063-498191 placement
 function getShadowedMcpPolicySources(settingsContext) {
   if (armedHelperOutput(settingsContext).composes === "tier") return [];
   let { tiers, tierSources } = resolvePolicySettings(settingsContext);
@@ -927,7 +927,7 @@ function getShadowedMcpPolicySources(settingsContext) {
     getSettingsForSource_3("policySettings", settingsContext) ?? {},
   );
 }
-//@ chunk-dcmhvw5a.js:499554-499702 placement
+//@ chunk-z20c443b.js:498191-498339 placement
 function shadowedPolicyKeys(tiers, tierSources, slot) {
   let slotView = {
     slot,
@@ -946,12 +946,23 @@ function shadowedPolicyKeys(tiers, tierSources, slot) {
       : [];
   });
 }
-//@ chunk-dcmhvw5a.js:499702-499782 placement
+//@ chunk-z20c443b.js:498339-498419 placement
 function parentManagedTierParticipates(settingsContext) {
   if (armedHelperOutput(settingsContext).composes === "tier") return false;
   return resolvePolicySettings(settingsContext).parentIncluded;
 }
-//@ chunk-dcmhvw5a.js:499782-500012 placement
+//@ chunk-z20c443b.js:498419-498608 placement
+/**
+ * 判定父级托管设置是否由本层继承/可写成 tier 组合。
+ */
+function parentSettingsIncluded(settingsContext) {
+  if (Object.keys(settingsContext.parentManaged ?? {}).length === 0) return;
+  if (armedHelperOutput(settingsContext).composes === "tier") return false;
+  let { parentIncluded, parentSlice } = resolvePolicySettings(settingsContext);
+  if (!parentIncluded) return false;
+  return parentSlice === null ? undefined : true;
+}
+//@ chunk-z20c443b.js:498608-498838 placement
 function isForceRemoteSettingsRefreshConfigured(settingsContext) {
   let { tiers, admin, parentSlice } = resolvePolicySettings({
     ...settingsContext,
@@ -961,7 +972,7 @@ function isForceRemoteSettingsRefreshConfigured(settingsContext) {
   if (!settingsContext.remote && refusedCopyForcesRefresh()) return true;
   return !admin && !parentSlice && settingsContext.hkcu?.().settings.forceRemoteSettingsRefresh === true;
 }
-//@ chunk-dcmhvw5a.js:500012-500136 placement
+//@ chunk-z20c443b.js:498838-498962 placement
 function getDurablePolicyTierSettings(context) {
   let durableTiers = context.store.policy.durableTiers;
   if (durableTiers !== undefined) return durableTiers;
@@ -969,7 +980,7 @@ function getDurablePolicyTierSettings(context) {
   context.store.policy.durableTiers = tiers;
   return tiers;
 }
-//@ chunk-dcmhvw5a.js:500136-500321 placement
+//@ chunk-z20c443b.js:498962-499147 placement
 function durablePolicyTiers(context) {
   let output = armedHelperOutput(context);
   if (output.composes === "tier") return [output.helper];
@@ -980,7 +991,7 @@ function durablePolicyTiers(context) {
   }
   return tiers;
 }
-//@ chunk-dcmhvw5a.js:500321-500461 placement
+//@ chunk-z20c443b.js:499147-499287 placement
 function getAdminAuthoredPolicySettings(context) {
   let adminAuthored = context.store.policy.adminAuthored;
   if (adminAuthored !== undefined) return adminAuthored.value;
@@ -990,7 +1001,7 @@ function getAdminAuthoredPolicySettings(context) {
   };
   return policy;
 }
-//@ chunk-dcmhvw5a.js:500461-500702 placement
+//@ chunk-z20c443b.js:499287-499528 placement
 function adminAuthoredPolicy(context) {
   let output = armedHelperOutput(context);
   if (output.composes === "tier") return output.helper;
@@ -1004,9 +1015,12 @@ function adminAuthoredPolicy(context) {
 export {
   POLICY_HELPER_CONFIG_KEYS,
   hasEffectivePolicyContent,
-  MANAGED_SOURCE_NOTICE_LABELS,
+  hasPolicyContent,
+  adminDocumentPresent,
+  combinedLoadState,
   loadStateOf,
   parentManagedTierParticipates,
+  parentSettingsIncluded,
   armedHelperOutput,
   getMergedPolicySources,
   resolvePolicySettings,
@@ -1027,14 +1041,12 @@ export {
   getManagedSourcesInEffect,
   isPolicySlotAdminOrParentComposed,
   authoredPolicyContent,
+  MANAGED_SOURCE_NOTICE_LABELS,
   MERGEABLE_POLICY_KEYS,
   policyTierSettings,
   mergeAdminPolicies,
   MERGEABLE_POLICY_KEYS_2,
   adminAuthoredPolicy,
-  adminDocumentPresent,
-  combinedLoadState,
-  hasPolicyContent,
   explainedPolicyChange,
   documentHasPolicyContent,
   helperBaseSettings,

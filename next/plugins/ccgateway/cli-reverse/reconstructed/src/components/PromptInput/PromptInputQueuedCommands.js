@@ -3,10 +3,10 @@
  *
  * 输入框上方显示排队中的命令预览；本模块混入大量 task-notification 判定副本（切分误归）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/PromptInputQueuedCommands.tsx
- * pieces: chunk-18hwfzwa.js (16)
- * attribution: placement 14, fingerprint 2
+ * pieces: chunk-czq1j3j2.js (16)
+ * attribution: placement 14, layout 1, fingerprint 1
  */
 import {
   parseTaskNotification,
@@ -15,7 +15,7 @@ import {
 } from "../../utils/queuedCommandDisplay.js";
 import { mainAgentId } from "../../bootstrap/state.js";
 import { isTaggedSystemUserText } from "../messages/UserTextMessage.js";
-import { isNonHumanQueuedCommand, isRefillableInput } from "../../utils/messageQueueManager.js";
+import { isQueuedCommandVisible, isQueuedCommandEditable } from "../../utils/messageQueueManager.js";
 import {
   peerOrObserverFrom,
   isNonHumanQueuedOrigin,
@@ -51,42 +51,42 @@ import { EMPTY_LOOKUPS, createUserMessage, normalizeMessages } from "../../utils
 import { Box } from "../../ink/components/Text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:120821-120864 placement
+//@ chunk-czq1j3j2.js:121822-121865 placement
 function selectAbortController(state) {
   return state.abortController;
 }
-//@ chunk-18hwfzwa.js:120911-120953 placement
+//@ chunk-czq1j3j2.js:121912-121954 placement
 function selectQueueEditIndex(state) {
   return state.queueEditIndex;
 }
-//@ chunk-18hwfzwa.js:120953-120988 placement
+//@ chunk-czq1j3j2.js:121954-121989 placement
 function selectVerbose_3(state) {
   return state.verbose;
 }
-//@ chunk-18hwfzwa.js:120988-121042 placement
+//@ chunk-czq1j3j2.js:121989-122043 placement
 function selectToolPermissionContextMode_4(state) {
   return state.toolPermissionContext.mode;
 }
-//@ chunk-18hwfzwa.js:121093-121136 placement
+//@ chunk-czq1j3j2.js:122094-122137 placement
 function selectAbortController2(state) {
   return state.abortController;
 }
-//@ chunk-18hwfzwa.js:121136-121190 placement
+//@ chunk-czq1j3j2.js:122137-122191 placement
 function selectToolPermissionContextMode2(state) {
   return state.toolPermissionContext.mode;
 }
-//@ chunk-18hwfzwa.js:121190-121237 placement (2.1.88 match: _temp2, 1)
+//@ chunk-czq1j3j2.js:122191-122238 placement (2.1.88 match: _temp2, 1)
 function selectHasViewedAgentTask(s_0) {
   return !!s_0.viewingAgentTaskId;
 }
-//@ chunk-18hwfzwa.js:121237-121288 placement
+//@ chunk-czq1j3j2.js:122238-122289 placement
 var EMPTY_TOOL_USE_IDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_REPLY_ROWS;
 var MIN_CHARS_PER_BLOCK;
 var MAX_PREVIEW_BLOCKS;
 var COMMAND_ROW_INDENT;
 var COMMAND_ROW_PADDING;
-deferInit("chunk-18hwfzwa.js:121237", () => {
+deferInit("chunk-czq1j3j2.js:122238", () => {
   EMPTY_TOOL_USE_IDS = new Set();
   MAX_REPLY_ROWS = 3;
   MIN_CHARS_PER_BLOCK = 256;
@@ -94,7 +94,7 @@ deferInit("chunk-18hwfzwa.js:121237", () => {
   COMMAND_ROW_INDENT = 16;
   COMMAND_ROW_PADDING = 32;
 });
-//@ chunk-18hwfzwa.js:121288-121809 placement
+//@ chunk-czq1j3j2.js:122289-122810 placement
 function queuedCommandOriginLabel(commands) {
   let origin = commands[0]?.origin;
   let origin_2 = commands.at(-1)?.origin;
@@ -115,11 +115,11 @@ function queuedCommandOriginLabel(commands) {
   }
   return `+${commands.length} more tasks completed`;
 }
-//@ chunk-18hwfzwa.js:121809-121885 placement
+//@ chunk-czq1j3j2.js:122810-122886 placement
 function getQueuedCommandText(command) {
   return typeof command.value === "string" ? parseTaskNotification(command.value, command.origin) : null;
 }
-//@ chunk-18hwfzwa.js:121885-121992 fingerprint (2.1.88 match: processQueuedCommands, 1)
+//@ chunk-czq1j3j2.js:122886-122993 layout (2.1.88 match: processQueuedCommands, 1)
 function processQueuedCommands(commands, run) {
   return {
     value: buildCollapsedNotification(run, commands.length - 1),
@@ -128,11 +128,11 @@ function processQueuedCommands(commands, run) {
     origin: commands[0].origin,
   };
 }
-//@ chunk-18hwfzwa.js:121992-122030 placement
+//@ chunk-czq1j3j2.js:122993-123031 placement
 function summarizeQueuedCommand(queue) {
   return collapseNotificationRuns(queue, getQueuedCommandText, processQueuedCommands);
 }
-//@ chunk-18hwfzwa.js:122030-122160 placement (2.1.88 match: processQueuedCommands, 1)
+//@ chunk-czq1j3j2.js:123031-123161 placement (2.1.88 match: processQueuedCommands, 1)
 function isTaskNotificationCommand(queuedCommands) {
   return (
     queuedCommands.mode === "task-notification" &&
@@ -141,10 +141,10 @@ function isTaskNotificationCommand(queuedCommands) {
     isTaggedSystemUserText(queuedCommands.value)
   );
 }
-//@ chunk-18hwfzwa.js:122160-122371 placement
+//@ chunk-czq1j3j2.js:123161-123372 placement
 function humanQueuedCommands(commandQueue) {
   return commandQueue.filter((command) => {
-    if (!isNonHumanQueuedCommand(command)) return false;
+    if (!isQueuedCommandVisible(command)) return false;
     if (typeof command.value !== "string") return true;
     if (isTaskNotificationCommand(command)) return false;
     return !(
@@ -154,7 +154,7 @@ function humanQueuedCommands(commandQueue) {
     );
   });
 }
-//@ chunk-18hwfzwa.js:122727-124299 placement
+//@ chunk-czq1j3j2.js:123728-125300 placement
 function QueuedCommandsList(props) {
   let $ = useMemoCache(23);
   let { turn, promptMounted } = props;
@@ -174,15 +174,15 @@ function QueuedCommandsList(props) {
   let appState_4 = useAppState(selectToolPermissionContextMode_4);
   let list;
   if ($[2] !== dedupe || $[3] !== commandQueue) {
-    At: {
+    Rt: {
       if (commandQueue.length === 0) {
         list = null;
-        break At;
+        break Rt;
       }
       let humanCommands = collapseExcessTaskNotifications(humanQueuedCommands(commandQueue), dedupe);
       if (humanCommands.length === 0) {
         list = null;
-        break At;
+        break Rt;
       }
       list = PromptInputQueuedCommandsImpl(humanCommands);
     }
@@ -192,14 +192,14 @@ function QueuedCommandsList(props) {
   } else list = $[4];
   let listValue = list;
   let selectedCommand;
-  Dt: {
+  zt: {
     if (appState_2 === null || listValue === null) {
       selectedCommand = undefined;
-      break Dt;
+      break zt;
     }
     let refillableCommands;
     if ($[5] !== commandQueue) {
-      refillableCommands = commandQueue.filter(isRefillableInput);
+      refillableCommands = commandQueue.filter(isQueuedCommandEditable);
       $[5] = commandQueue;
       $[6] = refillableCommands;
     } else refillableCommands = $[6];
@@ -237,7 +237,7 @@ function QueuedCommandsList(props) {
             jsxProd_default(agentProgressSelector, {
               message,
               lookups: EMPTY_LOOKUPS,
-              addMargin: index === 0 || isRefillableInput(command),
+              addMargin: index === 0 || isQueuedCommandEditable(command),
               tools: [],
               commands: [],
               verbose: false,
@@ -291,7 +291,7 @@ function QueuedCommandsList(props) {
   } else container = $[22];
   return container;
 }
-//@ chunk-18hwfzwa.js:124299-125411 fingerprint (2.1.88 match: PromptInputQueuedCommandsImpl, 0.313)
+//@ chunk-czq1j3j2.js:125300-126412 fingerprint (2.1.88 match: PromptInputQueuedCommandsImpl, 0.313)
 /**
  * 排队命令预览：把 queuedCommands 的文本/图片内容截断显示在输入框上方（图片块显示占位）。
  */

@@ -3,9 +3,9 @@
  *
  * Select 的导航 reducer（聚焦上/下/翻页、视口滚动、重置）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CustomSelect/use-select-navigation.ts
- * pieces: chunk-ey2qag4x.js (3)
+ * pieces: chunk-p1yqn9ds.js (3)
  * attribution: fingerprint 2, affinity 1
  */
 import { isDeepStrictEqual } from "util";
@@ -19,7 +19,7 @@ import {
   useEffect,
 } from "../../../vendor/react/cjs/react.production.js";
 
-//@ chunk-ey2qag4x.js:37574-41082 fingerprint (2.1.88 match: reducer, 0.885)
+//@ chunk-p1yqn9ds.js:37195-40703 fingerprint (2.1.88 match: reducer, 0.885)
 /**
  * Select 导航 reducer：下一个/上一个（首尾循环）、翻页、reset、视口滚动、设焦点，保持聚焦项在 [visibleFromIndex, visibleToIndex) 内。同一声明的 cl 构造初始状态（尽量保留当前视口）。
  */
@@ -221,7 +221,7 @@ var createSelectNavigationState = ({
     visibleToIndex,
   };
 };
-//@ chunk-ey2qag4x.js:41082-42666 fingerprint (2.1.88 match: useSelectNavigation, 0.855)
+//@ chunk-p1yqn9ds.js:40703-42287 fingerprint (2.1.88 match: useSelectNavigation, 0.855)
 /**
  * Select 导航：reducer 处理 focus-next/previous-option、翻页、视口滚动与重置，保证聚焦项在可见窗口内。
  */
@@ -366,7 +366,7 @@ function useSelectNavigation({ visibleOptionCount = 5, options, onFocus, focusVa
     options,
   };
 }
-//@ chunk-ey2qag4x.js:42666-42760 affinity
+//@ chunk-p1yqn9ds.js:42287-42381 affinity
 function validFocusedValue(focusedValue, options) {
   if (focusedValue === undefined) return;
   if (options.some((option) => option.value === focusedValue)) return focusedValue;

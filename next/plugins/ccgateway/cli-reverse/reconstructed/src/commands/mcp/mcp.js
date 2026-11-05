@@ -3,9 +3,9 @@
  *
  * 并入已有模块：/mcp 命令的少量补充声明。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/mcp/mcp.tsx
- * pieces: chunk-5bdzenzx.js (1), chunk-cpqpnzp4.js (23)
+ * pieces: chunk-dh16zjm4.js (1), chunk-h6004nzv.js (23)
  * attribution: fingerprint 3, placement 4, sole-consumer 13, affinity 1, layout 3
  */
 import {
@@ -55,50 +55,50 @@ import { normalizeServerNameShort } from "../../services/api/deferredToolsState.
 import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
 import { formatMcpOperationFailure } from "../../components/mcp/utils/reconnectHelpers.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { parkCommandForAttacher } from "../../services/mcp/mcpReconnectPark.js";
 import { MCPSettings } from "../../components/mcp/MCPSettings.js";
 import { MCPReconnect } from "../../components/mcp/MCPReconnect.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-5bdzenzx.js:16499-16538 fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-dh16zjm4.js:17680-17719 fingerprint (2.1.88 match: _temp2, 1)
 function isIdeClient(c) {
   return c.name === "ide";
 }
-//@ chunk-cpqpnzp4.js:17987-17991 placement
+//@ chunk-h6004nzv.js:19170-19174 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-cpqpnzp4.js:17987", () => {
+deferInit("chunk-h6004nzv.js:19170", () => {
   init_react_production();
 });
-//@ chunk-cpqpnzp4.js:17991-17995 placement
+//@ chunk-h6004nzv.js:19174-19178 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-cpqpnzp4.js:17991", () => {
+deferInit("chunk-h6004nzv.js:19174", () => {
   init_react_production();
 });
-//@ chunk-cpqpnzp4.js:17995-17999 placement
+//@ chunk-h6004nzv.js:19178-19182 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-cpqpnzp4.js:17995", () => {
+deferInit("chunk-h6004nzv.js:19178", () => {
   init_react_production();
 });
-//@ chunk-cpqpnzp4.js:37993-37997 placement
+//@ chunk-h6004nzv.js:38953-38957 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-cpqpnzp4.js:37993", () => {
+deferInit("chunk-h6004nzv.js:38953", () => {
   init_react_production();
 });
-//@ chunk-cpqpnzp4.js:40831-40835 sole-consumer
+//@ chunk-h6004nzv.js:41791-41795 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-cpqpnzp4.js:40831", () => {
+deferInit("chunk-h6004nzv.js:41791", () => {
   init_react_production();
 });
-//@ chunk-cpqpnzp4.js:40835-40874 sole-consumer (2.1.88 match: _temp2, 1)
+//@ chunk-h6004nzv.js:41795-41834 sole-consumer (2.1.88 match: _temp2, 1)
 function isNonIdeClient(c) {
   return c.name !== "ide";
 }
-//@ chunk-cpqpnzp4.js:40874-40897 sole-consumer
+//@ chunk-h6004nzv.js:41834-41857 sole-consumer
 function noAutoReconnect() {
   return false;
 }
-//@ chunk-cpqpnzp4.js:40897-42118 sole-consumer
+//@ chunk-h6004nzv.js:41857-43078 sole-consumer
 /**
  * /mcp reconnect all 的界面组件：挂载时一次性重连全部需要重连的 MCP 服务器，结束后通过 onComplete 报告成功个数与仍未连接的数量。
  */
@@ -195,22 +195,22 @@ function ReconnectAllMcp(props) {
   } else messageBox = $[10];
   return messageBox;
 }
-//@ chunk-cpqpnzp4.js:42118-42166 sole-consumer
+//@ chunk-h6004nzv.js:43078-43126 sole-consumer
 function appendNotice(parts, outOfBandNote) {
   return outOfBandNote === null ? parts : `${parts}. ${outOfBandNote}`;
 }
-//@ chunk-cpqpnzp4.js:42166-42170 sole-consumer
+//@ chunk-h6004nzv.js:43126-43130 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-cpqpnzp4.js:42166", () => {
+deferInit("chunk-h6004nzv.js:43126", () => {
   init_react_production();
 });
-//@ chunk-cpqpnzp4.js:42170-43157 sole-consumer
+//@ chunk-h6004nzv.js:43130-44156 sole-consumer
 /**
  * 从宿主读取 MCP 状态与认证结果的宽容解析结构。
  */
 var MCP_STATUS_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MCP_AUTH_RESULT_SCHEMA;
-deferInit("chunk-cpqpnzp4.js:42170", () => {
+deferInit("chunk-h6004nzv.js:43130", () => {
   MCP_STATUS_SCHEMA = DoctorLazy(() => {
     let optionalBool = booleanSchema().optional().catch(undefined);
     let toolSchema = objectSchema({
@@ -239,6 +239,7 @@ deferInit("chunk-cpqpnzp4.js:42170", () => {
       scope: stringSchema().optional().catch(undefined),
       source: stringSchema().optional().catch(undefined),
       tools: array(toolSchema.nullable().catch(null)).optional().catch(undefined),
+      toolCount: numberSchema().optional().catch(undefined),
       error: stringSchema().optional().catch(undefined),
       error_code: stringSchema().optional().catch(undefined),
     });
@@ -257,7 +258,7 @@ deferInit("chunk-cpqpnzp4.js:42170", () => {
     }),
   );
 });
-//@ chunk-cpqpnzp4.js:43157-43258 sole-consumer
+//@ chunk-h6004nzv.js:44156-44261 sole-consumer
 function toServerOption(server) {
   return {
     value: server.wireName,
@@ -266,11 +267,11 @@ function toServerOption(server) {
     dimDescription: true,
   };
 }
-//@ chunk-cpqpnzp4.js:43258-43287 sole-consumer
+//@ chunk-h6004nzv.js:44261-44290 sole-consumer
 function notFalse(value) {
   return value !== false;
 }
-//@ chunk-cpqpnzp4.js:43287-43482 sole-consumer
+//@ chunk-h6004nzv.js:44290-44485 sole-consumer
 function toToolOption(server, tool) {
   return {
     value: String(tool),
@@ -282,23 +283,23 @@ function toToolOption(server, tool) {
     dimDescription: true,
   };
 }
-//@ chunk-cpqpnzp4.js:43482-43520 sole-consumer (2.1.88 match: _temp, 1)
+//@ chunk-h6004nzv.js:44485-44523 sole-consumer (2.1.88 match: _temp, 1)
 function selectMcpClients(s) {
   return s.mcp.clients;
 }
-//@ chunk-cpqpnzp4.js:43520-43557 sole-consumer (2.1.88 match: _temp2, 1)
+//@ chunk-h6004nzv.js:44523-44560 sole-consumer (2.1.88 match: _temp2, 1)
 function isNonIdeClient_2(c) {
   return c.name !== "ide";
 }
-//@ chunk-cpqpnzp4.js:43557-43605 sole-consumer
+//@ chunk-h6004nzv.js:44560-44608 sole-consumer
 function needsApproval(tool) {
   return connectionTypeOf(tool) === "needs-approval";
 }
-//@ chunk-cpqpnzp4.js:43605-43652 affinity
+//@ chunk-h6004nzv.js:44608-44655 affinity
 function isFulfilled(result) {
   return result.status === "fulfilled";
 }
-//@ chunk-cpqpnzp4.js:43652-45152 fingerprint (2.1.88 match: MCPToggle, 0.724)
+//@ chunk-h6004nzv.js:44655-46155 fingerprint (2.1.88 match: MCPToggle, 0.724)
 function MCPToggle(props) {
   let $ = useMemoCache(8);
   let { action, target, onComplete } = props;
@@ -387,7 +388,7 @@ function MCPToggle(props) {
               );
             }
           });
-          let fulfilledCount = count(settled, isFulfilled);
+          let fulfilledCount = countWhere(settled, isFulfilled);
           let failedCount = settled.length - fulfilledCount;
           onComplete(
             `${enabling ? "Enabled" : "Disabled"} ${fulfilledCount} MCP server(s)` +
@@ -413,7 +414,7 @@ function MCPToggle(props) {
   useEffect(runToggle, runDeps);
   return null;
 }
-//@ chunk-cpqpnzp4.js:45152-45659 layout
+//@ chunk-h6004nzv.js:46155-46662 layout
 /**
  * 后台会话没有终端附着时无法打开 MCP 设置的提示文字。
  */
@@ -422,7 +423,7 @@ var NO_TERMINAL_MCP_NOTICE =
   "Can't open MCP settings while no terminal is attached to this background session. Attach to it and run /mcp again, or use `/mcp enable|disable|reconnect <server>` to steer without the panel.";
 var NO_TERMINAL_MCP_NEEDS_INPUT_NOTICE =
   'Can\'t open MCP settings while no terminal is attached to this background session. This session now shows "needs input" in agent view \u2014 open it and run /mcp to manage servers, or use `/mcp enable|disable|reconnect <server>` to steer without the panel.';
-//@ chunk-cpqpnzp4.js:45659-45784 layout
+//@ chunk-h6004nzv.js:46662-46787 layout
 async function requestMcpSettingsFromHost(onDone, context) {
   let parked = await parkCommandForAttacher(
     context.session.host,
@@ -434,11 +435,11 @@ async function requestMcpSettingsFromHost(onDone, context) {
     display: "system",
   });
 }
-//@ chunk-cpqpnzp4.js:45784-45845 layout
+//@ chunk-h6004nzv.js:46787-46848 layout
 function sanitizeOnComplete(onDone) {
   return (name, value) => onDone(typeof name === "string" ? sanitizeTelemetryString(name) : name, value);
 }
-//@ chunk-cpqpnzp4.js:45845-46284 fingerprint (2.1.88 match: call, 0.769)
+//@ chunk-h6004nzv.js:46848-47287 fingerprint (2.1.88 match: call, 0.769)
 /**
  * /mcp 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：导入其他代理配置时的安全检查：shell-exec 标记、路径钉住（防链接替换）、安全读写与拷贝
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hddjmtjj.js (33)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ndr12bqk.js (33)
  * attribution: placement 33
  */
 import { isAbsolute, sep, resolve, relative, join, parse, dirname, basename } from "path";
@@ -31,18 +31,18 @@ import {
 } from "../../utils/fsSafety/atomicWriteStaging.js";
 import { isUnsupportedFlagError } from "../../utils/atomicPublishWrite.js";
 import { isSystemVolumePath } from "../../utils/permissions/protectedDirs.js";
-import { writeFileAtomic } from "../../utils/file.js";
+import { readJsonFile_2 } from "../../utils/file.js";
 
-//@ chunk-hddjmtjj.js:1514-1575 placement
+//@ chunk-ndr12bqk.js:1547-1608 placement
 function isEscapingRelativePath(relPath) {
   return isAbsolute(relPath) || relPath === ".." || relPath.startsWith(".." + sep);
 }
-//@ chunk-hddjmtjj.js:1575-1591 placement
+//@ chunk-ndr12bqk.js:1608-1624 placement
 /**
  * 导入文件大小上限 10 MB，超过直接报错拒绝。
  */
 var IMPORT_MAX_FILE_BYTES = 10485760;
-//@ chunk-hddjmtjj.js:1591-1724 placement
+//@ chunk-ndr12bqk.js:1624-1757 placement
 /**
  * 读取导入文件（超过上限时拒绝）。
  */
@@ -51,7 +51,7 @@ async function readCappedImportFile(path) {
     throw Error("file exceeds IMPORT_MAX_FILE_BYTES; refusing to load");
   return readFile(path, "utf8");
 }
-//@ chunk-hddjmtjj.js:1724-1786 placement
+//@ chunk-ndr12bqk.js:1757-1819 placement
 async function pathExists(path) {
   try {
     await lstat(path);
@@ -60,7 +60,7 @@ async function pathExists(path) {
     return false;
   }
 }
-//@ chunk-hddjmtjj.js:1786-1930 placement
+//@ chunk-ndr12bqk.js:1819-1963 placement
 /**
  * 名称清理为可用的文件名（非法字符替换、避免保留名）。
  */
@@ -72,11 +72,11 @@ function sanitizeImportName(name) {
       .replace(/^-+/, "_") || "_";
   return isReservedDeviceName(sanitized) ? `_${sanitized}` : sanitized;
 }
-//@ chunk-hddjmtjj.js:1930-1981 placement
+//@ chunk-ndr12bqk.js:1963-2014 placement
 function collapseDashes(text) {
   return text.replace(/-{3,}/g, "\u2014");
 }
-//@ chunk-hddjmtjj.js:1981-2215 placement
+//@ chunk-ndr12bqk.js:2014-2248 placement
 function describeUnexpectedTableShape(
   table,
   label,
@@ -95,10 +95,10 @@ function describeUnexpectedTableShape(
   }
   return table;
 }
-//@ chunk-hddjmtjj.js:2215-2297 placement
+//@ chunk-ndr12bqk.js:2248-2330 placement
 var CODEX_ARG_PLACEHOLDER_RE = /\$ARGUMENTS\[\d+\]|\$ARGUMENTS|\$\d+(?!\w)/g;
 var NON_BANG_CHARS_RE = /[a-zA-RT-Z_).,;:'"?!>-]/;
-//@ chunk-hddjmtjj.js:2297-2459 placement
+//@ chunk-ndr12bqk.js:2330-2492 placement
 /**
  * 文本中是否有前面不是允许字符的 “!”（变量引用除外）。
  */
@@ -108,7 +108,7 @@ function hasBareBang(body) {
     if (body[i] === "!" && !NON_BANG_CHARS_RE.test(replaced[i - 1] ?? "")) return true;
   return false;
 }
-//@ chunk-hddjmtjj.js:2459-3569 placement
+//@ chunk-ndr12bqk.js:2492-3602 placement
 /**
  * 检查命令正文中会被 Claude Code 执行的 shell 标记（悬空的 !`、参数占位与 ! 混用等），返回问题描述。
  */
@@ -126,18 +126,18 @@ function findShellExecHazard(body, hasArgs) {
     return "One of its shell blocks contains an argument placeholder \u2014 Gemini shell-escapes `{{args}}` inside `!{\u2026}`, Claude Code's `$ARGUMENTS` substitution doesn't, so importing would let typed arguments inject shell commands. Port it manually.";
   return null;
 }
-//@ chunk-hddjmtjj.js:3569-3658 placement
+//@ chunk-ndr12bqk.js:3602-3691 placement
 function hasShellExecBlock(body) {
   return body.includes("```!") || (body.includes("!`") && /(?<=^|\s)!`[^`]+`/m.test(body));
 }
-//@ chunk-hddjmtjj.js:3658-3750 placement
+//@ chunk-ndr12bqk.js:3691-3783 placement
 function resolveWithinRoot(root, target) {
   let resolved = resolve(root, target);
   let rel = relative(root, resolved);
   if (rel === "" || isEscapingRelativePath(rel) || resolve(root, rel) !== resolved) return null;
   return resolved;
 }
-//@ chunk-hddjmtjj.js:3750-3921 placement
+//@ chunk-ndr12bqk.js:3783-3954 placement
 /**
  * 解析路径且真实路径仍在根目录内，否则 null。
  */
@@ -156,7 +156,7 @@ async function resolveInsideReal(root, target) {
   if (rel === "" || isEscapingRelativePath(rel)) return null;
   return withinRoot;
 }
-//@ chunk-hddjmtjj.js:3921-4139 placement
+//@ chunk-ndr12bqk.js:3954-4172 placement
 /**
  * 解析路径并确认路径上各级都不是符号链接（不存在的部分允许），否则 null。
  */
@@ -178,15 +178,15 @@ async function pinPathInside(root, target) {
   }
   return withinRoot;
 }
-//@ chunk-hddjmtjj.js:4139-4171 placement
+//@ chunk-ndr12bqk.js:4172-4204 placement
 var TENGU_EAGER_LIGHTHOUSE = "tengu_eager_lighthouse";
-//@ chunk-hddjmtjj.js:4171-4209 placement
+//@ chunk-ndr12bqk.js:4204-4242 placement
 function isEagerLighthouseEnabled() {
   return readFlagWithOverride(TENGU_EAGER_LIGHTHOUSE, {
     safe: true,
   });
 }
-//@ chunk-hddjmtjj.js:4209-4793 placement
+//@ chunk-ndr12bqk.js:4242-4826 placement
 /**
  * 把路径钉在根目录内（拒绝 .. 与链接替换），返回可校验的打开句柄信息。
  */
@@ -228,12 +228,12 @@ async function pinInside(root, relPath, action, createParents = false) {
     );
   }
 }
-//@ chunk-hddjmtjj.js:4793-5199 placement
+//@ chunk-ndr12bqk.js:4826-5232 placement
 function assertStillPinned(action, path) {
   let message = `Refusing to ${action} ${path}: the import could not confirm it is still the place it checked. It, or a folder on the way to it, may have been replaced (for example by a symbolic link), or a folder's name on disk may differ from this path in letter case. Make sure each folder on that path is a real folder spelled as shown, then run the import again.`;
   return action === "read" ? new SymlinkReadRefusedError(message) : new SymlinkWriteRefusedError(message);
 }
-//@ chunk-hddjmtjj.js:5199-5308 placement
+//@ chunk-ndr12bqk.js:5232-5341 placement
 /**
  * 写入前复查路径未被替换为链接。
  */
@@ -245,7 +245,7 @@ async function recheckPinned(pinned, action, path) {
     throw error;
   }
 }
-//@ chunk-hddjmtjj.js:5308-5765 placement
+//@ chunk-ndr12bqk.js:5341-5798 placement
 async function openPinnedForRead(root, path) {
   let pinned = await pinInside(root, path, "read");
   let handle;
@@ -273,7 +273,7 @@ async function openPinnedForRead(root, path) {
     await pinned.close();
   }
 }
-//@ chunk-hddjmtjj.js:5765-6158 placement
+//@ chunk-ndr12bqk.js:5798-6191 placement
 /**
  * 读取导入源文件（必须是普通文件，限制 IMPORT_MAX_FILE_BYTES）。
  */
@@ -293,13 +293,13 @@ async function readImportFile(root, path) {
     await pinnedForRead.close();
   }
 }
-//@ chunk-hddjmtjj.js:6158-6217 placement
+//@ chunk-ndr12bqk.js:6191-6250 placement
 function readImportFileChecked(scope, projectRoot, path) {
   return scope === "project" && isEagerLighthouseEnabled()
     ? readImportFile(projectRoot, path)
     : readCappedImportFile(path);
 }
-//@ chunk-hddjmtjj.js:6217-6798 placement
+//@ chunk-ndr12bqk.js:6250-6831 placement
 async function openPinnedForReadViaFd(root, path) {
   let pinned = await pinInside(root, path, "read");
   let dirHandle;
@@ -342,7 +342,7 @@ async function openPinnedForReadViaFd(root, path) {
     }
   }
 }
-//@ chunk-hddjmtjj.js:6798-7191 placement
+//@ chunk-ndr12bqk.js:6831-7224 placement
 async function openPinnedForWrite(root, path) {
   let pinned = await pinInside(root, path, "write", true);
   try {
@@ -375,7 +375,7 @@ async function openPinnedForWrite(root, path) {
     await pinned.close();
   }
 }
-//@ chunk-hddjmtjj.js:7333-7542 placement
+//@ chunk-ndr12bqk.js:7366-7575 placement
 async function createExclusive(root, path) {
   let pinned = await pinInside(root, path, "write", true);
   try {
@@ -390,7 +390,7 @@ async function createExclusive(root, path) {
     await pinned.close();
   }
 }
-//@ chunk-hddjmtjj.js:7542-7687 placement
+//@ chunk-ndr12bqk.js:7575-7720 placement
 /**
  * 拷贝时目标被他人创建的错误。
  */
@@ -399,7 +399,7 @@ function copyRaceError(path) {
     `Refusing to copy into ${path}: something else created a file or folder with that name while the import was copying.`,
   );
 }
-//@ chunk-hddjmtjj.js:7687-8458 placement
+//@ chunk-ndr12bqk.js:7720-8491 placement
 /**
  * 安全拷贝文件（源不再是普通文件或写入无进展时停止）。
  */
@@ -445,12 +445,12 @@ async function copyFileSafely(relPath, srcDir, destDir, entries, stats) {
     } else stats.notCopied++;
   }
 }
-//@ chunk-hddjmtjj.js:8458-8560 placement (2.1.88 match: detectTerminal, 0.86)
+//@ chunk-ndr12bqk.js:8491-8593 placement (2.1.88 match: detectTerminal, 0.86)
 function detectTerminal(path, platform = "linux") {
   let normalized = identity(path);
   return platform === "darwin" || platform === "win32" ? normalized.toUpperCase().toLowerCase() : normalized;
 }
-//@ chunk-hddjmtjj.js:8560-8861 placement (2.1.88 match: getReservedShortcuts, 1)
+//@ chunk-ndr12bqk.js:8593-8894 placement (2.1.88 match: getReservedShortcuts, 1)
 async function isOutsideDirectory(claudeConfigDir, otherPath) {
   if (!otherPath) return false;
   let configReal = await isUnderSymlink(resolve(claudeConfigDir));
@@ -474,7 +474,7 @@ async function isOutsideDirectory(claudeConfigDir, otherPath) {
   let rel = relative(detectTerminal(otherCanonical), detectTerminal(configCanonical));
   return rel === "" || !isEscapingRelativePath(rel);
 }
-//@ chunk-hddjmtjj.js:8861-8954 placement
+//@ chunk-ndr12bqk.js:8894-8987 placement (2.1.88 match: findValidClaudeAlias, 0.751)
 function isHomeDirMismatch() {
   let homeDir;
   try {
@@ -485,11 +485,11 @@ function isHomeDirMismatch() {
   if (!homeDir) return true;
   return resolve(homedir()) !== resolve(homeDir);
 }
-//@ chunk-hddjmtjj.js:8954-8982 placement
+//@ chunk-ndr12bqk.js:8987-9015 placement
 function toFsSafeName(claudeConfigDir) {
   return isUncOrDevicePath(claudeConfigDir);
 }
-//@ chunk-hddjmtjj.js:8982-9358 placement
+//@ chunk-ndr12bqk.js:9015-9391 placement
 async function isUnderSymlink(path) {
   let root = parse(path).root;
   let root_2 = root;
@@ -524,7 +524,7 @@ async function isUnderSymlink(path) {
   }
   return root_2;
 }
-//@ chunk-hddjmtjj.js:9358-10518 placement
+//@ chunk-ndr12bqk.js:9391-10551 placement
 /**
  * 把导入的指令追加到 CLAUDE.md（带 imported-from 标记，已导入则跳过；项目作用域拒绝符号链接）。
  */
@@ -578,7 +578,7 @@ ${bodyText.trimEnd()}
     await mkdir(dirname(targetPath), {
       recursive: true,
     });
-    await writeFileAtomic(targetPath, nextText, {
+    await readJsonFile_2(targetPath, nextText, {
       encoding: "utf8",
       allowSymlink: true,
     });
@@ -586,7 +586,7 @@ ${bodyText.trimEnd()}
     let pinned = await pinInside(containRoot_2, targetPath, "write", true);
     try {
       await recheckPinned(pinned, "write", targetPath);
-      await writeFileAtomic(pinned.ioPath, nextText, {
+      await readJsonFile_2(pinned.ioPath, nextText, {
         encoding: "utf8",
       });
     } catch (error) {

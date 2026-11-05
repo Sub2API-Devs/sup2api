@@ -3,9 +3,9 @@
  *
  * 记忆类型枚举（user/feedback/project/reference）与各类说明、frontmatter 示例、什么不该存等提示段。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/memdir/memoryTypes.ts
- * pieces: chunk-82kqcve8.js (20)
+ * pieces: chunk-a2q0x549.js (20)
  * attribution: placement 7, layout 8, fingerprint 4, file-local 1
  */
 import { isPlainObject } from "../utils/isPlainObject.js";
@@ -17,17 +17,17 @@ import {
 } from "../utils/frontmatterParser.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 
-//@ chunk-82kqcve8.js:88757-88768 placement
+//@ chunk-a2q0x549.js:86200-86211 placement
 /**
  * 256
  */
 var MAX_FRONTMATTER_NAME_CHARS = 256;
-//@ chunk-82kqcve8.js:88964-88975 placement
+//@ chunk-a2q0x549.js:86407-86418 placement
 /**
  * 256
  */
 var MAX_MEMORY_NAME_CHARS = 256;
-//@ chunk-82kqcve8.js:89664-90013 placement
+//@ chunk-a2q0x549.js:87107-87456 placement
 /**
  * 记忆 frontmatter 键、名称正则与归一化。
  */
@@ -51,7 +51,7 @@ var normalizeMemoryFrontmatter = (frontmatter) => {
     }),
   };
 };
-//@ chunk-82kqcve8.js:90013-90153 placement
+//@ chunk-a2q0x549.js:87456-87596 placement
 /**
  * 解析记忆文件（frontmatter 与正文）。
  */
@@ -65,7 +65,7 @@ function parseMemoryFile(raw, filePath, options) {
     }),
   };
 }
-//@ chunk-82kqcve8.js:90153-90407 placement
+//@ chunk-a2q0x549.js:87596-87850 placement
 /**
  * 按行数与字节截断不受信任的 frontmatter。
  */
@@ -96,7 +96,7 @@ function truncateUntrustedFrontmatter(text) {
     ).lines.join(`
 `);
 }
-//@ chunk-82kqcve8.js:90407-90592 placement
+//@ chunk-a2q0x549.js:87850-88035 placement
 /**
  * 读取元数据字段与更新元数据。
  */
@@ -115,7 +115,7 @@ var slugifyMemoryName = (name) =>
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "");
-//@ chunk-82kqcve8.js:90592-90882 placement
+//@ chunk-a2q0x549.js:88035-88325 placement
 /**
  * 生成带 frontmatter 的记忆文件内容。
  */
@@ -138,11 +138,11 @@ ${serializeFrontmatter(frontmatter)}---
 
 ${replaced}`;
 }
-//@ chunk-82kqcve8.js:90882-91137 layout
+//@ chunk-a2q0x549.js:88325-88580 layout
 var MEMORY_LINKING_GUIDANCE_2 = [
   "In the body, link to related memories with `[[name]]`, where `name` is the other memory's `name:` slug. Link liberally \u2014 a `[[name]]` that doesn't match an existing memory yet is fine; it marks something worth writing later, not an error.",
 ];
-//@ chunk-82kqcve8.js:91137-91549 fingerprint (2.1.88 match: MEMORY_FRONTMATTER_EXAMPLE, 0.639)
+//@ chunk-a2q0x549.js:88580-88992 fingerprint (2.1.88 match: MEMORY_FRONTMATTER_EXAMPLE, 0.639)
 /**
  * 记忆文件 frontmatter 示例（name/description/type）。
  */
@@ -162,12 +162,12 @@ function MEMORY_FRONTMATTER_EXAMPLE_2(types) {
     ...MEMORY_LINKING_GUIDANCE_2,
   ];
 }
-//@ chunk-82kqcve8.js:91549-91599 fingerprint (2.1.88 match: MEMORY_TYPES, 1)
+//@ chunk-a2q0x549.js:88992-89042 fingerprint (2.1.88 match: MEMORY_TYPES, 1)
 /**
  * 记忆类型枚举：user、feedback、project、reference。
  */
 var MEMORY_TYPES = ["user", "feedback", "project", "reference"];
-//@ chunk-82kqcve8.js:91599-91673 file-local
+//@ chunk-a2q0x549.js:89042-89116 file-local
 /**
  * 把 frontmatter type 字段解析为记忆类型，非法值返回 undefined。
  */
@@ -175,16 +175,16 @@ function parseMemoryType(raw) {
   if (typeof raw !== "string") return;
   return MEMORY_TYPES.find((t) => t === raw);
 }
-//@ chunk-82kqcve8.js:91673-91696 layout
+//@ chunk-a2q0x549.js:89116-89139 layout
 var MEMORY_TYPES_SECTION_ID = "memory-types";
-//@ chunk-82kqcve8.js:91696-91744 layout
+//@ chunk-a2q0x549.js:89139-89187 layout
 /**
  * tengu_ochre_finch：使用精简版记忆类型说明。
  */
 function isCompactMemoryTypesEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ochre_finch", false);
 }
-//@ chunk-82kqcve8.js:91744-92151 layout
+//@ chunk-a2q0x549.js:89187-89594 layout
 /**
  * 四种记忆类型的一句话定义（用于类型说明段）。
  */
@@ -195,7 +195,7 @@ var MEMORY_TYPE_DESCRIPTIONS = {
   project: "ongoing work, deadlines, or decisions not derivable from code or git history",
   reference: "where to find information in an external system (issue tracker, dashboard, channel)",
 };
-//@ chunk-82kqcve8.js:92151-92435 layout
+//@ chunk-a2q0x549.js:89594-89878 layout
 function buildCompactMemoryTypesSection(types) {
   return [
     "## Types of memory",
@@ -208,11 +208,11 @@ function buildCompactMemoryTypesSection(types) {
     "",
   ];
 }
-//@ chunk-82kqcve8.js:92435-92477 layout
+//@ chunk-a2q0x549.js:89878-89920 layout
 function selectMemoryTypesSection(fullSection, types = MEMORY_TYPES) {
   return isCompactMemoryTypesEnabled() ? buildCompactMemoryTypesSection(types) : fullSection;
 }
-//@ chunk-82kqcve8.js:92477-109264 fingerprint (2.1.88 match: TYPES_SECTION_COMBINED, 0.854)
+//@ chunk-a2q0x549.js:89920-106707 fingerprint (2.1.88 match: TYPES_SECTION_COMBINED, 0.854)
 /**
  * 内置记忆系统提示里的“记忆类型”大段：user/feedback/project/reference 四类的描述、何时保存、如何使用、示例，以及团队/个人两个变体。
  */
@@ -359,15 +359,15 @@ var MEMORY_TYPES_SECTION_PRIVATE = [
 var MEMORY_LINKING_GUIDANCE =
   "When you save a `feedback` memory because the user corrected how you ran a repeatable step \u2014 how you verified, committed, opened a PR, or used a project skill \u2014 fold the same correction into the project skill that drives that step (`.claude/skills/<name>/SKILL.md`): a terse, general edit, so the next session gets it right unprompted. Edit existing skill files only; never create one \u2014 a new project skill silently shadows a same-named built-in skill. The single exception is verify, because how a project verifies changes is project-specific: put a verify correction in the `.claude/skills/verify/SKILL.md` closest to the code it covers \u2014 the repo root for repo-wide corrections, a subproject directory (e.g. `ios/.claude/skills/verify/SKILL.md`) for corrections that only apply to that subtree \u2014 and if that file does not exist, create it. Each correction lives in exactly one skill file: the closest-scoped one, never duplicated at broader scopes.";
 var MEMORY_FRONTMATTER_EXAMPLE = ["## Project skill upkeep", "", MEMORY_LINKING_GUIDANCE, ""];
-//@ chunk-82kqcve8.js:109264-109313 layout
+//@ chunk-a2q0x549.js:106707-106756 layout
 function isMemoryLinkingEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_gorse_fathom", false);
 }
-//@ chunk-82kqcve8.js:109313-109346 layout
+//@ chunk-a2q0x549.js:106756-106789 layout
 function getMemoryLinkingLines() {
   return isMemoryLinkingEnabled() ? MEMORY_FRONTMATTER_EXAMPLE : [];
 }
-//@ chunk-82kqcve8.js:109346-111681 fingerprint (2.1.88 match: WHAT_NOT_TO_SAVE_SECTION, 0.568)
+//@ chunk-a2q0x549.js:106789-109124 fingerprint (2.1.88 match: WHAT_NOT_TO_SAVE_SECTION, 0.568)
 /**
  * 记忆提示词里的三段规则：不该保存什么（代码模式、git 历史、调试结论…）、何时访问记忆、引用记忆前先核对现状。
  */
@@ -406,10 +406,9 @@ var BEFORE_RECOMMENDING_SECTION = [
 ];
 export {
   parseMemoryFile,
-  MAX_FRONTMATTER_NAME_CHARS,
-  MAX_MEMORY_NAME_CHARS,
-  MEMORY_FRONTMATTER_EXAMPLE_2,
+  truncateUntrustedFrontmatter,
   MEMORY_TYPES,
+  MEMORY_FRONTMATTER_EXAMPLE_2,
   selectMemoryTypesSection,
   MEMORY_TYPES_SECTION_TEAM,
   WHAT_NOT_TO_SAVE_SECTION,
@@ -417,15 +416,16 @@ export {
   STALE_MEMORY_NOTE,
   BEFORE_RECOMMENDING_SECTION,
   isMemoryLinkingEnabled,
-  MEMORY_LINKING_GUIDANCE,
-  WHEN_TO_ACCESS_MEMORY_SECTION,
-  MEMORY_LINKING_GUIDANCE_2,
   MEMORY_TYPES_SECTION_PRIVATE,
+  WHEN_TO_ACCESS_MEMORY_SECTION,
   getMemoryMetadata,
+  parseMemoryType,
+  MAX_FRONTMATTER_NAME_CHARS,
+  MAX_MEMORY_NAME_CHARS,
+  MEMORY_LINKING_GUIDANCE,
+  MEMORY_LINKING_GUIDANCE_2,
   serializeMemoryFile,
   withMemoryMetadata,
-  parseMemoryType,
-  truncateUntrustedFrontmatter,
   MEMORY_TYPES_SECTION_ID,
   isCompactMemoryTypesEnabled,
 };

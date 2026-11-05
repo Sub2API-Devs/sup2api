@@ -3,9 +3,9 @@
  *
  * 插件提供的高亮语言（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-n5fvvrgq.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rep15ptw.js (8)
  * attribution: placement 8
  */
 import { extname } from "path";
@@ -23,14 +23,14 @@ import { logForDebugging } from "../debug.js";
 import { lit, fromSanitizer_SANITIZER_OUTPUT_ONLY } from "../../services/analytics/safeMetadata.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-n5fvvrgq.js:10960-11005 placement
+//@ chunk-rep15ptw.js:10960-11005 placement
 var PLUGIN_LANGUAGE_ID_RE = /^[a-z0-9][a-z0-9_+#.-]{0,63}$/;
 var MAX_PLUGIN_LANGUAGE_ALIASES = 16;
-//@ chunk-n5fvvrgq.js:11005-11040 placement
+//@ chunk-rep15ptw.js:11005-11040 placement
 function pluginLanguageDefaultExport(mod) {
   return mod.default ?? mod;
 }
-//@ chunk-n5fvvrgq.js:11040-13568 placement
+//@ chunk-rep15ptw.js:11040-13568 placement
 /**
  * 插件提供的 highlight.js 语言注册与解析
  */
@@ -161,7 +161,7 @@ class PluginHighlightLanguages {
     }
   }
 }
-//@ chunk-n5fvvrgq.js:13568-13851 placement
+//@ chunk-rep15ptw.js:13568-13851 placement
 function subLanguagesOf(language) {
   let names = new Set();
   let visited = new Set();
@@ -177,15 +177,15 @@ function subLanguagesOf(language) {
   walk(language);
   return names;
 }
-//@ chunk-n5fvvrgq.js:13851-13866 placement
+//@ chunk-rep15ptw.js:13851-13866 placement
 /**
  * 插件提供的高亮语言注册表单例。
  */
 var pluginHighlightLanguages; // deferred: uses PluginHighlightLanguages of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-n5fvvrgq.js:13851", () => {
+deferInit("chunk-rep15ptw.js:13851", () => {
   pluginHighlightLanguages = new PluginHighlightLanguages();
 });
-//@ chunk-n5fvvrgq.js:13866-14019 placement
+//@ chunk-rep15ptw.js:13866-14019 placement
 /**
  * 把语言名或别名转为 highlight 支持的规范名，未知时为 null。
  */
@@ -197,7 +197,7 @@ function canonicalLanguageName(name) {
       ? (HIGHLIGHT_LANGUAGE_NAME_MAP[lower] ?? null)
       : null;
 }
-//@ chunk-n5fvvrgq.js:14019-14266 placement
+//@ chunk-rep15ptw.js:14019-14266 placement
 /**
  * 按文件扩展名判断代码语言（用于权限遥测），插件语言标为 plugin，未知为 unknown。
  */
@@ -212,8 +212,8 @@ async function languageForFilePath(filePath) {
     Object.prototype.hasOwnProperty.call(CEDAR_DISPLAY_NAMES, name) ? CEDAR_DISPLAY_NAMES[name] : undefined,
   );
 }
-//@ chunk-n5fvvrgq.js:14266-14318 placement
+//@ chunk-rep15ptw.js:14266-14318 placement
 function sanitizeLanguageName(name) {
   return name === undefined ? lit("unknown") : fromSanitizer_SANITIZER_OUTPUT_ONLY(name);
 }
-export { canonicalLanguageName, pluginHighlightLanguages, languageForFilePath };
+export { languageForFilePath, canonicalLanguageName, pluginHighlightLanguages };

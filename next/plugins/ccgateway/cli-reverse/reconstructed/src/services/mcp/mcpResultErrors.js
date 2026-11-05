@@ -3,16 +3,19 @@
  *
  * 2.1.316 新增：MCP 结果错误处理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cyj440je.js (9)
- * attribution: placement 9
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fmy4vc7c.js (11)
+ * attribution: placement 9, layout 2
  */
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   getErrnoCode,
   BUN_CONNECTION_CLOSED_MESSAGE_PREFIX,
 } from "../../utils/errors.js";
+import { DoctorLazy } from "../../cli/handlers/util.js";
+import { objectSchema, literal, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { safeParseJSON } from "../../utils/json.js";
 import {
   McpAuthError,
   McpCredentialStoreUnavailableError,
@@ -21,12 +24,12 @@ import {
 } from "./client.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-cyj440je.js:2427-2700 placement
+//@ chunk-fmy4vc7c.js:2538-2811 placement
 /**
  * MCP 服务器返回结果未通过 schema 校验时抛出的错误（McpResponseSchemaError），消息含服务器名与校验信息，cause 保留原错误。
  */
 let McpResponseSchemaError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-cyj440je.js:2427", () => {
+deferInit("chunk-fmy4vc7c.js:2538", () => {
   McpResponseSchemaError = class McpResponseSchemaError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -41,9 +44,9 @@ deferInit("chunk-cyj440je.js:2427", () => {
     }
   };
 });
-//@ chunk-cyj440je.js:2700-3510 placement
+//@ chunk-fmy4vc7c.js:2811-3621 placement
 let McpToolResultNotReadError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-cyj440je.js:2700", () => {
+deferInit("chunk-fmy4vc7c.js:2811", () => {
   McpToolResultNotReadError = class McpToolResultNotReadError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -66,16 +69,16 @@ deferInit("chunk-cyj440je.js:2700", () => {
     }
   };
 });
-//@ chunk-cyj440je.js:3510-3581 placement
+//@ chunk-fmy4vc7c.js:3621-3692 placement
 /**
  * 判断错误文本是否为“认证挑战后消息格式错误”。
  */
 function isMalformedAfterAuthChallenge(closeReason) {
   return closeReason === "malformed message after an auth challenge";
 }
-//@ chunk-cyj440je.js:3581-4059 placement
+//@ chunk-fmy4vc7c.js:3692-4170 placement
 let McpStructuredContentNotReadError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-cyj440je.js:3581", () => {
+deferInit("chunk-fmy4vc7c.js:3692", () => {
   McpStructuredContentNotReadError = class McpStructuredContentNotReadError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -89,7 +92,7 @@ deferInit("chunk-cyj440je.js:3581", () => {
     }
   };
 });
-//@ chunk-cyj440je.js:4059-4162 placement
+//@ chunk-fmy4vc7c.js:4170-4273 placement
 /**
  * 判断错误文本是否表示响应体被截断（过大或 JSON-RPC 消息被截断）。
  */
@@ -98,7 +101,7 @@ function isTruncatedBodyError(closeReason) {
     closeReason === "http body overflow" || closeReason === "malformed JSON-RPC message (response truncated)"
   );
 }
-//@ chunk-cyj440je.js:4162-4733 placement
+//@ chunk-fmy4vc7c.js:4273-4844 placement
 /**
  * MCP 错误分类常量：CCR 需批准与 URL elicitation 错误码、错误来源列表，以及不可达、配置错误与连接类错误码集合。
  */
@@ -109,7 +112,7 @@ var MCP_ERROR_SOURCE_SET;
 var UNREACHABLE_ERRNOS;
 var CONFIG_ERRNOS;
 var UNREACHABLE_CODES;
-deferInit("chunk-cyj440je.js:4162", () => {
+deferInit("chunk-fmy4vc7c.js:4273", () => {
   CCR_NEEDS_APPROVAL_CODE = -32003;
   URL_ELICITATION_REQUIRED_CODE = -32042;
   MCP_ERROR_SOURCES = ["downstream_error", "downstream_unreachable", "user_auth", "user_config", "other"];
@@ -141,21 +144,41 @@ deferInit("chunk-cyj440je.js:4162", () => {
     "SEND_FAILED",
   ]);
 });
-//@ chunk-cyj440je.js:4733-4862 placement
+//@ chunk-fmy4vc7c.js:4844-4973 placement
 function isHttpAuthErrorMessage(error) {
   return (
     ("errorCode" in error && typeof error.errorCode === "string" ? error.errorCode : getErrnoCode(error)) !==
       undefined && /^HTTP 40[13]\b/.test(error.message)
   );
 }
-//@ chunk-cyj440je.js:4862-4892 placement
+//@ chunk-fmy4vc7c.js:4973-5038 layout
+var NOT_FORWARDED_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fmy4vc7c.js:4973", () => {
+  NOT_FORWARDED_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      error: objectSchema({
+        type: literal("not_forwarded"),
+        message: stringSchema(),
+      }),
+    }),
+  );
+});
+//@ chunk-fmy4vc7c.js:5038-5239 layout
+function postedEndpointErrorText(error) {
+  let message = error instanceof Error ? error.message : "";
+  let index = message.indexOf("Error POSTing to endpoint: ");
+  if (index === -1) return;
+  let parsed = NOT_FORWARDED_SCHEMA().safeParse(safeParseJSON(message.slice(index + 27), false));
+  return parsed.success ? parsed.data.error.message : undefined;
+}
+//@ chunk-fmy4vc7c.js:5239-5269 placement
 /**
  * 把 MCP 错误归类为下游错误/不可达/用户认证/用户配置/其他。
  */
 function classifyMcpErrorSourceCategory(error) {
   return classifyMcpErrorSource(error, false);
 }
-//@ chunk-cyj440je.js:4892-6314 placement
+//@ chunk-fmy4vc7c.js:5269-6692 placement
 /**
  * 把 MCP 错误归到来源类别：downstream_error / downstream_unreachable / user_auth / user_config / other；依次看显式标注、错误类型、JSON-RPC/HTTP 状态码、errno，必要时沿 cause 链向下最多查 4 层。
  */
@@ -215,10 +238,11 @@ function classifyMcpErrorSource(error, isCause) {
   return "other";
 }
 export {
+  McpToolResultNotReadError,
+  postedEndpointErrorText,
   classifyMcpErrorSourceCategory,
   CCR_NEEDS_APPROVAL_CODE,
   isTruncatedBodyError,
-  McpToolResultNotReadError,
   isMalformedAfterAuthChallenge,
   McpResponseSchemaError,
   UNREACHABLE_ERRNOS,

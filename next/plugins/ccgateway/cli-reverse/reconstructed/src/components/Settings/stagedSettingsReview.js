@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：审阅"暂存的设置变更"与云会话使用的设置冻结版本（逐条接受、冲突/过期/被替换检测）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-61a1pjwa.js (50)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kh7eenke.js (50)
  * attribution: placement 49, layout 1
  */
 import { lstatSync, realpathSync } from "fs";
@@ -47,8 +47,12 @@ import { useScrollViewportSize, useHasScrollViewport } from "../ScrollViewportCo
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { PANE_PADDING_X, PANE_PADDING, Pane } from "../design-system/Pane.js";
 import { useInputClock } from "../../ink/components/Input.js";
+import {
+  useRecentInputStamp,
+  RECENT_INPUT_GUARD_MS,
+  isWithinRecentInput,
+} from "../../hooks/useRecentInputGuard.js";
 import { useRefusalTracker, settleKey } from "../CustomSelect/selectTypeahead.js";
-import { RECENT_INPUT_GUARD_MS, isWithinRecentInput } from "../../hooks/useRecentInputGuard.js";
 import { useGlobalExitKeybindings, useKeybinding } from "../../keybindings/useKeybinding.js";
 import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
 import { AgentNavigationFooter } from "../agents/AgentNavigationFooter.js";
@@ -94,16 +98,16 @@ import {
   getFlagSettingsInline,
   getAllowedSettingSourcesAsConfigured,
 } from "../../bootstrap/state.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { getCwd } from "../../utils/cwd.js";
 import { printCliError, exitAfterAnalyticsFlush } from "../../cli/exit.js";
 import { configChangeBlocker } from "../../utils/model/providerAttribution.js";
 import { createRoot } from "../../ink/hooks/useTerminalHooks.js";
 import { getBaseRenderOptions } from "../../utils/renderOptions.js";
 
-//@ chunk-61a1pjwa.js:16139-16143 placement
+//@ chunk-kh7eenke.js:17351-17355 placement
 init_react_production();
-//@ chunk-61a1pjwa.js:16143-16431 placement
+//@ chunk-kh7eenke.js:17355-17643 placement
 var DIFF_CONTEXT_LINES = 8;
 var REVIEW_MAX_ROWS = 8;
 var REVIEW_HEADER_ROWS = 2;
@@ -114,36 +118,36 @@ var TERMINAL_TOO_SMALL_REVIEW_TEXT =
 var STAGED_CHANGE_PREFIX = "Staged change to ";
 var LINKED_PATH_NOTE = "A linked path; accepting writes the file it points to \u2192";
 var ACCEPT_WRITES_PREFIX = "Accepting writes \u2192 ";
-//@ chunk-61a1pjwa.js:16431-16534 placement
+//@ chunk-kh7eenke.js:17643-17746 placement
 var UNSAFE_DISPLAY_CHARS_RE =
   /[\x00-\x08\x0a-\x1f\x7f-\x9f\u2028\u2029\u2800\p{Cf}\p{Cs}\p{Default_Ignorable_Code_Point}]/gu;
-//@ chunk-61a1pjwa.js:16534-16600 placement
+//@ chunk-kh7eenke.js:17746-17812 placement
 function escapeControlChars(text, tabReplacement) {
   return text.replace(UNSAFE_DISPLAY_CHARS_RE, "\uFFFD").replaceAll("\t", tabReplacement);
 }
-//@ chunk-61a1pjwa.js:16600-16636 placement
+//@ chunk-kh7eenke.js:17812-17848 placement
 function sanitizeEscaped(text, tabReplacement) {
   return markBrokenSequences(escapeControlChars(text, tabReplacement));
 }
-//@ chunk-61a1pjwa.js:16636-16694 placement
+//@ chunk-kh7eenke.js:17848-17906 placement
 function isInvisibleOnly(text) {
   return /[\p{Mn}\p{Me}]/u.test(text) && bunStringWidth(text) === 0;
 }
-//@ chunk-61a1pjwa.js:16694-16722 placement
+//@ chunk-kh7eenke.js:17906-17934 placement
 function isVisibleLine(text) {
   return !isInvisibleOnly(text);
 }
-//@ chunk-61a1pjwa.js:16722-16759 placement
+//@ chunk-kh7eenke.js:17934-17971 placement
 function isNumericLine(text) {
   return isCombiningOrZeroWidth(text) && !isInvisibleOnly(text);
 }
-//@ chunk-61a1pjwa.js:16759-16820 placement
+//@ chunk-kh7eenke.js:17971-18032 placement
 function countMatching(lines, predicate) {
   let count = 0;
   for (let line of lines) if (predicate(line)) count++;
   return count;
 }
-//@ chunk-61a1pjwa.js:16820-16913 placement
+//@ chunk-kh7eenke.js:18032-18125 placement
 function hasMoreContent(original, candidate) {
   return (
     countMatching(candidate, isVisibleLine) >= countMatching(original, isVisibleLine) &&
@@ -151,21 +155,21 @@ function hasMoreContent(original, candidate) {
     (!GRAPHEME_TRUNCATION_MARKER_RE.test(candidate) || GRAPHEME_TRUNCATION_MARKER_RE.test(original))
   );
 }
-//@ chunk-61a1pjwa.js:16913-16972 placement
+//@ chunk-kh7eenke.js:18125-18184 placement
 function normalizeSpaces(text) {
   return sanitizeEscaped(tildify(text), "\uFFFD").replace(/ +/g, " ");
 }
-//@ chunk-61a1pjwa.js:16972-16986 placement (2.1.88 match: _temp18, 1)
+//@ chunk-kh7eenke.js:18184-18198 placement (2.1.88 match: _temp18, 1)
 var SPACE_CHAR = "    ";
-//@ chunk-61a1pjwa.js:16986-17017 layout
+//@ chunk-kh7eenke.js:18198-18229 layout
 function sanitizeWithSpaces(text) {
   return sanitizeEscaped(text, SPACE_CHAR);
 }
-//@ chunk-61a1pjwa.js:17017-17073 placement
+//@ chunk-kh7eenke.js:18229-18285 placement
 function sanitizeOneLine(text) {
   return sanitizeEscaped(text, "\uFFFD").replace(/ +/g, " ");
 }
-//@ chunk-61a1pjwa.js:17073-17370 placement
+//@ chunk-kh7eenke.js:18285-18582 placement
 /**
  * 按宽度把文本折成行，超过行数上限时截断最后一行并附 "… (+N chars)"，返回 {rows, cut}。
  */
@@ -188,7 +192,7 @@ function wrapRowsWithCap(text, columns, maxRows) {
     cut: droppedChars,
   };
 }
-//@ chunk-61a1pjwa.js:17370-17431 placement
+//@ chunk-kh7eenke.js:18582-18643 placement
 function textHeight(text, columns) {
   return (
     countCharInString(
@@ -198,27 +202,27 @@ function textHeight(text, columns) {
     ) + 1
   );
 }
-//@ chunk-61a1pjwa.js:17431-17516 placement
+//@ chunk-kh7eenke.js:18643-18728 placement
 var NON_PRINTABLE_PATTERN = /[\x00-\x08\x0b-\x1f\x7f]|[^\x00-\x7f]/gu;
 var NON_ASCII_OR_CONTROL_RE = /[\x00-\x1f\x7f]|[^\x00-\x7f]/gu;
-//@ chunk-61a1pjwa.js:17516-17577 placement (2.1.88 match: getErrnoPath, 1)
+//@ chunk-kh7eenke.js:18728-18789 placement (2.1.88 match: getErrnoPath, 1)
 function getErrnoPath(message, field) {
   return message.match(field === "path" ? NON_ASCII_OR_CONTROL_RE : NON_PRINTABLE_PATTERN)?.length ?? 0;
 }
-//@ chunk-61a1pjwa.js:17577-17753 placement
+//@ chunk-kh7eenke.js:18789-18965 placement
 function describeStagedBy(staged) {
   let shortSessionId = takeLastChars(sanitizeOneLine(staged.by.sessionId), 8);
   return staged.by.origin === "served"
     ? `by a cloud session (\u2026${shortSessionId}) this computer served`
     : `by a session on this computer (\u2026${shortSessionId})`;
 }
-//@ chunk-61a1pjwa.js:17753-17799 placement
+//@ chunk-kh7eenke.js:18965-19011 placement
 function isPathResolved(change) {
   return change.resolvedPath === change.path;
 }
-//@ chunk-61a1pjwa.js:17799-17869 placement
+//@ chunk-kh7eenke.js:19011-19081 placement
 var QUOTE_CHARS_RE = /["\u00ab\u00bb\u201c-\u201f\u2033\u2036\u301d-\u301f\uff02]/g;
-//@ chunk-61a1pjwa.js:17869-18037 placement
+//@ chunk-kh7eenke.js:19081-19249 placement
 function truncateStartToWidth(text, maxWidth) {
   let chars = [...text];
   let width = 0;
@@ -232,11 +236,11 @@ function truncateStartToWidth(text, maxWidth) {
   }
   return index === 0 ? text : `\u2026${chars.slice(index).join("")}`;
 }
-//@ chunk-61a1pjwa.js:18037-18104 placement
+//@ chunk-kh7eenke.js:19249-19316 placement
 function fileHeaderLine(change) {
   return `File: "${truncateStartToWidth(normalizeSpaces(change.path).replace(QUOTE_CHARS_RE, "'"), 60)}"`;
 }
-//@ chunk-61a1pjwa.js:18104-19640 placement
+//@ chunk-kh7eenke.js:19316-20852 placement
 /**
  * 应用暂存变更的结果说明（已写入、文件已变、提议已变、路径被重定向、硬链接、不可写、被篡改）。
  */
@@ -262,7 +266,7 @@ function describeApplyOutcome(outcome) {
       return `A ConfigChange hook blocked the change (hooks are shown the proposed content in a ${PROPOSED_FILE_INFIX}* file beside the settings file), so it was not applied: the file was never touched, and the change stays staged.`;
   }
 }
-//@ chunk-61a1pjwa.js:19640-21072 placement
+//@ chunk-kh7eenke.js:20852-22284 placement
 var STAGED_CHANGE_WORDING = {
   header: STAGED_CHANGE_PREFIX,
   listTitle: (count) => `${count} settings ${count === 1 ? "change" : "changes"} staged for your review`,
@@ -289,7 +293,7 @@ var STAGED_CHANGE_WORDING = {
   failed: (action, errorMessage, hint) =>
     `Could not ${action} the staged change. Nothing was applied; it stays staged. Error: "${errorMessage}" ${hint}`,
 };
-//@ chunk-61a1pjwa.js:21072-21437 placement
+//@ chunk-kh7eenke.js:22284-22649 placement
 /**
  * 把 diff hunk 行按宽度折行并放进剩余行数预算，放不下或显示不安全时停止，返回 {shown, hiddenLines}。
  */
@@ -332,7 +336,7 @@ function fitDiffHunks(rawHunks, budgetRows, maxLines) {
     hiddenLines: skipped,
   };
 }
-//@ chunk-61a1pjwa.js:21437-21797 placement
+//@ chunk-kh7eenke.js:22649-23009 placement
 /**
  * 计算暂存设置变更的 diff：hunk、无法显示 diff 的情况、变更摘要，以及路径/内容中被隐藏的码点数。
  */
@@ -354,7 +358,7 @@ function computeStagedChangeDiff({ change, current: currentContent }) {
       description.reduce((acc, patchFromContents) => acc + getErrnoPath(patchFromContents, "path"), 0),
   };
 }
-//@ chunk-61a1pjwa.js:21797-22211 placement
+//@ chunk-kh7eenke.js:23009-23423 placement
 /**
  * 按行渲染文本，首行带前缀、后续行用等宽空格缩进，可设置粗体与颜色。
  */
@@ -398,10 +402,10 @@ function IndentedRows(props) {
   } else boxElement = $[10];
   return boxElement;
 }
-//@ chunk-61a1pjwa.js:22211-22232 placement
+//@ chunk-kh7eenke.js:23423-23444 placement
 var GUTTER_BAR = "\u2502";
 var REVIEW_EXTRA_INDENT = 4;
-//@ chunk-61a1pjwa.js:22232-22665 placement
+//@ chunk-kh7eenke.js:23444-23877 placement
 /**
  * 渲染待审设置的差异行：+/- 行加增删背景色，未变化行变暗，首行显示标记符号。
  */
@@ -449,7 +453,7 @@ function DiffLineRows(props) {
   } else boxElement = $[6];
   return boxElement;
 }
-//@ chunk-61a1pjwa.js:22665-28222 placement
+//@ chunk-kh7eenke.js:23877-29457 placement
 /**
  * 逐条显示暂存的设置变更（diff）并等待接受/拒绝。
  */
@@ -462,11 +466,12 @@ function StagedSettingsReview({ changes, deps, onDone, wording = STAGED_CHANGE_W
   let submittingRef = useRef(false);
   let inputClock = useInputClock();
   let lastShownAt = useRef(Date.now());
+  let isWithinGuard = useRecentInputStamp(lastShownAt.current);
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
   let settle = settleKey(`${selectedChange?.change.id ?? ""}:${epoch}`, RECENT_INPUT_GUARD_MS);
   function refuseInput() {
     if (
-      isWithinRecentInput(inputClock, lastShownAt.current, RECENT_INPUT_GUARD_MS) ||
+      isWithinRecentInput(inputClock, isWithinGuard(lastShownAt.current), RECENT_INPUT_GUARD_MS) ||
       refusedWithin(RECENT_INPUT_GUARD_MS)
     ) {
       noteRefused();
@@ -877,23 +882,23 @@ function StagedSettingsReview({ changes, deps, onDone, wording = STAGED_CHANGE_W
     }),
   });
 }
-//@ chunk-61a1pjwa.js:28222-28245 placement (2.1.88 match: COPY_DIR, 1)
+//@ chunk-kh7eenke.js:29457-29480 placement (2.1.88 match: COPY_DIR, 1)
 var COPY_DIR = `claude ${APPLY_PROJECT_SETTINGS}`;
-//@ chunk-61a1pjwa.js:28245-28277 placement
+//@ chunk-kh7eenke.js:29480-29512 placement
 function normalizePathForDisplay(path) {
   return stripControlChars(tildify(path));
 }
-//@ chunk-61a1pjwa.js:28277-28354 placement
+//@ chunk-kh7eenke.js:29512-29589 placement
 var STAGED_SOURCES = ["project", "local", "legacy"];
 var TARGET_PATH_BY_SCOPE = {
   own: USER_SETTINGS_FILE_NAMES.default,
   own_cowork: USER_SETTINGS_FILE_NAMES.cowork,
 };
-//@ chunk-61a1pjwa.js:28354-28404 placement
+//@ chunk-kh7eenke.js:29589-29639 placement
 function isOwnScope(slot) {
   return slot === "own" || slot === "own_cowork";
 }
-//@ chunk-61a1pjwa.js:28404-28552 placement
+//@ chunk-kh7eenke.js:29639-29787 placement
 function isUnsafeSettingsPath(path) {
   let probe = (path, checkHardLinks) => {
     try {
@@ -905,13 +910,13 @@ function isUnsafeSettingsPath(path) {
   };
   return probe(dirname(path), false) || probe(path, true);
 }
-//@ chunk-61a1pjwa.js:28552-28640 placement
+//@ chunk-kh7eenke.js:29787-29875 placement
 function allStagedFiles(paths) {
   return [paths.project, paths.local, paths.legacy].flatMap((path) =>
     path === null ? [] : [dirname(dirname(path))],
   );
 }
-//@ chunk-61a1pjwa.js:28640-29247 placement
+//@ chunk-kh7eenke.js:29875-30479 placement
 function checkSettingsPathFollowable(path, roots) {
   let resolvePair = (path) => {
     try {
@@ -953,7 +958,7 @@ function checkSettingsPathFollowable(path, roots) {
   }
   return false;
 }
-//@ chunk-61a1pjwa.js:29247-29402 placement
+//@ chunk-kh7eenke.js:30479-30634 placement
 function resolveRealPath(path) {
   try {
     return {
@@ -969,7 +974,7 @@ function resolveRealPath(path) {
     return isENOENT(error) ? "absent" : "unfollowable";
   }
 }
-//@ chunk-61a1pjwa.js:29402-30059 placement
+//@ chunk-kh7eenke.js:30634-31291 placement
 function describeNeedsTerminal(env) {
   if (!env.stdinIsTTY || !env.stdoutIsTTY)
     return `${COPY_DIR} shows you changes and waits for your answer, so it needs a terminal. Run it yourself in a terminal in the project folder.`;
@@ -983,7 +988,7 @@ function describeNeedsTerminal(env) {
     return "Run it with CLAUDE_CONFIG_DIR set outside this folder: it points into the folder, so the settings this process itself reads are this folder's own files, and it has to start with those switched off.";
   return;
 }
-//@ chunk-61a1pjwa.js:30059-30914 placement
+//@ chunk-kh7eenke.js:31291-32146 placement
 function readServedSettingsRecord(folderApi, record, now, isUnsafePath = isUnsafeSettingsPath) {
   let changes = [];
   let conflicts = [];
@@ -1057,7 +1062,7 @@ function readServedSettingsRecord(folderApi, record, now, isUnsafePath = isUnsaf
     linked: notes.filter(isLinked),
   };
 }
-//@ chunk-61a1pjwa.js:30914-31083 placement
+//@ chunk-kh7eenke.js:32146-32315 placement
 function readSettingsSnapshot(path, probePath) {
   let probeResult = probePath(path);
   if (probeResult === "unreadable") return "unreadable";
@@ -1065,7 +1070,7 @@ function readSettingsSnapshot(path, probePath) {
   let { settings } = parseSettingsContent(stripBomAndCarriageReturns(probeResult.text), path);
   return settings === null ? "unreadable" : settingsToJsonText(servedRestrictionSnapshot(settings));
 }
-//@ chunk-61a1pjwa.js:31083-31217 placement
+//@ chunk-kh7eenke.js:32315-32449 placement
 function getServedSettingsSlots(settingsFilePathForSource) {
   if (settingsFilePathForSource === undefined) return [];
   let baseDir = dirname(settingsFilePathForSource);
@@ -1080,7 +1085,7 @@ function getServedSettingsSlots(settingsFilePathForSource) {
     },
   ];
 }
-//@ chunk-61a1pjwa.js:31217-31638 placement
+//@ chunk-kh7eenke.js:32449-32870 placement
 function describeRecordState(records, { slot, path }, probePath) {
   let readState = records.file(path);
   if (readState === "none") return;
@@ -1110,7 +1115,7 @@ function describeRecordState(records, { slot, path }, probePath) {
         note: "changed",
       };
 }
-//@ chunk-61a1pjwa.js:31638-31942 placement
+//@ chunk-kh7eenke.js:32870-33174 placement
 /**
  * 把云会话使用的设置冻结槽（当前与已接受内容）转换为待审阅的变更记录。
  */
@@ -1138,7 +1143,7 @@ function servedSlotsToChanges(files, now) {
     };
   });
 }
-//@ chunk-61a1pjwa.js:32072-33656 placement
+//@ chunk-kh7eenke.js:33304-34888 placement
 /**
  * 比较当前设置与已接受的冻结版本，给出可接受/冲突/过期状态。
  */
@@ -1236,7 +1241,7 @@ function compareServedSettings(snapshot) {
     },
   };
 }
-//@ chunk-61a1pjwa.js:33656-34584 placement
+//@ chunk-kh7eenke.js:34888-35816 placement
 function describeAcceptOutcome(outcome) {
   switch (outcome) {
     case "applied":
@@ -1256,7 +1261,7 @@ function describeAcceptOutcome(outcome) {
       return "A ConfigChange hook blocked this change (hooks are shown a copy of the new content), so nothing was accepted. The file itself was not touched.";
   }
 }
-//@ chunk-61a1pjwa.js:34584-37114 placement
+//@ chunk-kh7eenke.js:35816-38346 placement
 /**
  * 渲染云会话设置冻结版本的各槽（未变、已变、个人设置文件消失等）。
  */
@@ -1310,7 +1315,7 @@ function renderServedSettingsSlots(slots) {
       `Could not accept, so nothing was accepted: "${errorMessage}" ${hint}`,
   };
 }
-//@ chunk-61a1pjwa.js:37114-37297 placement
+//@ chunk-kh7eenke.js:38346-38529 placement
 async function renderStagedSettingsReview(renderer, session, onAppStateChange, changes, onDone) {
   return new Promise((resolve) => {
     renderer.render(
@@ -1331,7 +1336,7 @@ async function renderStagedSettingsReview(renderer, session, onAppStateChange, c
     );
   });
 }
-//@ chunk-61a1pjwa.js:37297-39048 placement
+//@ chunk-kh7eenke.js:38529-40280 placement
 /**
  * claude 子命令：审阅并接受云会话使用的设置版本（remote_served_settings_freeze）。
  */

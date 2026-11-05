@@ -3,10 +3,10 @@
  *
  * 单条消息渲染（MessageImpl）：按 user/assistant/attachment/system 等类型与内容块分派到 messages/* 组件；本模块混入大量 thinking 块判定工具（实属 utils/messages）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Message.tsx
- * pieces: chunk-ah34pb7m.js (15), chunk-e6aww6q8.js (1)
- * attribution: placement 3, sole-consumer 1, affinity 1, fingerprint 5, layout 6
+ * pieces: chunk-5xgkngpb.js (1), chunk-wjygkcr4.js (15)
+ * attribution: fingerprint 5, placement 3, sole-consumer 1, affinity 1, layout 6
  */
 import { claudeMdSessionState } from "../utils/claudemd.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -56,7 +56,7 @@ import { getBuiltinMcpRenderOverride } from "../utils/computerUse/common.js";
 import { GROUPED_TOOL_USE_RENDERERS } from "./messages/SkillProposalMessage.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1349439-1349495 fingerprint (2.1.88 match: Message, 0.471)
+//@ chunk-5xgkngpb.js:1348608-1348664 fingerprint (2.1.88 match: Message, 0.471)
 /**
  * 清空某宿主的记忆文件缓存（loads/moves）。
  */
@@ -66,7 +66,7 @@ function clearMemoryFilesCache(session) {
     moves: new Map(),
   };
 }
-//@ chunk-ah34pb7m.js:220968-221152 placement (2.1.88 match: createUserInterruptionMessage, 0.51)
+//@ chunk-wjygkcr4.js:227913-228097 placement (2.1.88 match: createUserInterruptionMessage, 0.51)
 /**
  * React 组件：按 tool_use_id 在 lookups 里找到对应 tool_use 后渲染（找不到返回 null）。旧版名 createUserInterruptionMessage 为错配，应归 components/。
  */
@@ -88,7 +88,7 @@ function ToolResultRow(props) {
   } else rowElement = $[2];
   return rowElement;
 }
-//@ chunk-ah34pb7m.js:221152-221816 sole-consumer
+//@ chunk-wjygkcr4.js:228097-228761 sole-consumer
 /**
  * React（编译器产物）组件：把 tool_result 的 tool_use_id、工具名、输出、是否出错/展开作为请求参数渲染一行；只被中断消息组件使用。
  */
@@ -151,9 +151,9 @@ function ToolResultRequestRow(props) {
   } else renderHook = $[10];
   return actionKeysNamespace.useRenderHook(renderInput, renderHook);
 }
-//@ chunk-ah34pb7m.js:225018-225030 affinity
+//@ chunk-wjygkcr4.js:231963-231975 affinity
 var workSegmentModule = null;
-//@ chunk-ah34pb7m.js:225030-234162 fingerprint (2.1.88 match: MessageImpl, 0.586)
+//@ chunk-wjygkcr4.js:231975-241516 fingerprint (2.1.88 match: MessageImpl, 0.581)
 /**
  * 单条消息渲染（memo 前的实现）：按 message.type 分派——assistant 逐内容块交给 AssistantMessageBlock，user 交给 UserMessage，attachment/system/grouped_tool_use/collapsed_read_search/work_segment 等交给对应组件；处理 addMargin、verbose、transcript 模式。
  */
@@ -164,6 +164,7 @@ function MessageImpl(props) {
     lookups,
     containerWidth,
     addMargin,
+    joinsTopNotices,
     tools,
     commands,
     verbose,
@@ -184,6 +185,7 @@ function MessageImpl(props) {
     latestBashOutputUUID,
     disableDisplayOverride,
   } = props;
+  let isContinuation = joinsTopNotices === undefined ? false : joinsTopNotices;
   let isUserContinuation_2 = isUserContinuation === undefined ? false : isUserContinuation;
   let isSplitUserContinuation_2 = isSplitUserContinuation === undefined ? false : isSplitUserContinuation;
   let speakerLabel = followsSpeakerLabel === undefined ? false : followsSpeakerLabel;
@@ -222,8 +224,8 @@ function MessageImpl(props) {
           $[7] !== isTranscriptMode ||
           $[8] !== message.attachment.origin ||
           $[9] !== message.uuid ||
-          $[10] !== param ||
-          $[11] !== fromName ||
+          $[10] !== fromName ||
+          $[11] !== param ||
           $[12] !== verbose
         ) {
           children = jsxProd_default(AgentMessage, {
@@ -239,8 +241,8 @@ function MessageImpl(props) {
           $[7] = isTranscriptMode;
           $[8] = message.attachment.origin;
           $[9] = message.uuid;
-          $[10] = param;
-          $[11] = fromName;
+          $[10] = fromName;
+          $[11] = param;
           $[12] = verbose;
           $[13] = children;
         } else children = $[13];
@@ -573,13 +575,13 @@ function MessageImpl(props) {
         $[110] = children_2;
       } else children_2 = $[110];
       let providerWrapped;
-      if ($[111] !== children_2 || $[112] !== value) {
+      if ($[111] !== value || $[112] !== children_2) {
         providerWrapped = jsxProd_default(interruptedByUserSignal.Provider, {
           value,
           children: children_2,
         });
-        $[111] = children_2;
-        $[112] = value;
+        $[111] = value;
+        $[112] = children_2;
         $[113] = providerWrapped;
       } else providerWrapped = $[113];
       return providerWrapped;
@@ -619,19 +621,20 @@ function MessageImpl(props) {
           $[119] = message;
           $[120] = parsed;
         } else parsed = $[120];
-        let parsedSystem = parsed;
-        if (parsedSystem.kind === "hidden") {
+        let hidden = parsed;
+        if (hidden.kind === "hidden") {
           return null;
         }
-        if (parsedSystem.kind === "line") {
+        if (hidden.kind === "line") {
+          const addMargin_2 = addMargin && !isContinuation;
           let noticeRow;
-          if ($[121] !== addMargin || $[122] !== parsedSystem.row) {
+          if ($[121] !== hidden.row || $[122] !== addMargin_2) {
             noticeRow = jsxProd_default(NoticeRowMessage, {
-              row: parsedSystem.row,
-              addMargin,
+              row: hidden.row,
+              addMargin: addMargin_2,
             });
-            $[121] = addMargin;
-            $[122] = parsedSystem.row;
+            $[121] = hidden.row;
+            $[122] = addMargin_2;
             $[123] = noticeRow;
           } else noticeRow = $[123];
           return noticeRow;
@@ -853,7 +856,7 @@ function MessageImpl(props) {
     }
   }
 }
-//@ chunk-ah34pb7m.js:234162-234400 layout
+//@ chunk-wjygkcr4.js:241516-241754 layout
 function WorkSegmentMessageView(props) {
   let $ = useMemoCache(3);
   let { message, shouldAnimate } = props;
@@ -875,7 +878,7 @@ function WorkSegmentMessageView(props) {
   } else workSegmentElement = $[2];
   return workSegmentElement;
 }
-//@ chunk-ah34pb7m.js:234400-236422 fingerprint (2.1.88 match: UserMessage, 0.682)
+//@ chunk-wjygkcr4.js:241754-243787 fingerprint (2.1.88 match: UserMessage, 0.682)
 /**
  * 用户消息分派：按内容块类型（text/image/tool_result）选择 UserTextMessage、UserImageMessage、UserToolResultMessage；coordinator 模式特殊处理。
  */
@@ -1051,22 +1054,22 @@ function UserMessage(props) {
     }
   }
 }
-//@ chunk-ah34pb7m.js:236422-236489 layout
+//@ chunk-wjygkcr4.js:243787-243854 layout
 var TOOL_SEARCH_BLOCK_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:236422", () => {
+deferInit("chunk-wjygkcr4.js:243787", () => {
   TOOL_SEARCH_BLOCK_TYPES = new Set(["tool_search_tool_regex", "tool_search_tool_bm25"]);
 });
-//@ chunk-ah34pb7m.js:236489-236559 layout
+//@ chunk-wjygkcr4.js:243854-243924 layout
 function allowlistedBlockName(param) {
   return "name" in param && isServerToolType(param.name) ? param.name : "non-allowlisted";
 }
-//@ chunk-ah34pb7m.js:236559-236679 layout
+//@ chunk-wjygkcr4.js:243924-244044 layout
 function allowlistedBlockType(param) {
   let blockType = "type" in param ? param.type : undefined;
   if (typeof blockType !== "string") return "non-allowlisted (non-string)";
   return allowlistedBlockType_2(blockType);
 }
-//@ chunk-ah34pb7m.js:236679-236938 layout
+//@ chunk-wjygkcr4.js:244044-244303 layout
 function unrenderableBlockKey(block) {
   if ("id" in block && typeof block.id === "string") return `${block.type}:${block.id}`;
   if ("tool_use_id" in block && typeof block.tool_use_id === "string")
@@ -1077,12 +1080,12 @@ function unrenderableBlockKey(block) {
     return `${block.type}:unserializable`;
   }
 }
-//@ chunk-ah34pb7m.js:236938-237019 layout
+//@ chunk-wjygkcr4.js:244303-244384 layout
 function logUnrenderableBlockOnce(host, block, error) {
   if (!claimOnceStore.of(host).claim(`unrenderable_block:${unrenderableBlockKey(block)}`)) return;
   logError(error);
 }
-//@ chunk-ah34pb7m.js:237019-240675 fingerprint (2.1.88 match: AssistantMessageBlock, 0.765)
+//@ chunk-wjygkcr4.js:244384-248051 fingerprint (2.1.88 match: AssistantMessageBlock, 0.757)
 /**
  * 助手内容块分派：text→AssistantTextMessage，tool_use→AssistantToolUseMessage，thinking/redacted_thinking→思考组件，server_tool_use/advisor 等；无法渲染的块记一次错误日志。
  */
@@ -1394,12 +1397,12 @@ function AssistantMessageBlock(props) {
     }
   }
 }
-//@ chunk-ah34pb7m.js:240675-241692 fingerprint (2.1.88 match: areMessagePropsEqual, 0.429)
+//@ chunk-wjygkcr4.js:248051-249107 fingerprint (2.1.88 match: areMessagePropsEqual, 0.409)
 /**
  * Message 的 memo 比较：uuid、verbose、最新 bash 输出、transcript 模式、续行/说话人标签、进度消息等变化才重渲染。
  */
 function areMessagePropsEqual(prev, next) {
-  if (prev.message.uuid !== next.message.uuid) return false;
+  if (prev.message.uuid !== next.message.uuid || prev.joinsTopNotices !== next.joinsTopNotices) return false;
   if (!hasStringUuid(next.message) && prev.message !== next.message) return false;
   if (prev.verbose !== next.verbose) return false;
   let prevIsLatest = prev.latestBashOutputUUID === prev.message.uuid;
@@ -1437,7 +1440,7 @@ function areMessagePropsEqual(prev, next) {
   }
   return false;
 }
-//@ chunk-ah34pb7m.js:265606-265706 placement
+//@ chunk-wjygkcr4.js:273291-273391 placement
 /**
  * 取 MCP 工具的渲染覆盖：先查内置覆盖，再按 uiTableKey 或工具名查覆盖表。
  */
@@ -1450,7 +1453,7 @@ function mcpRenderOverrideFor(tool, slot) {
       : undefined)
   );
 }
-//@ chunk-ah34pb7m.js:265706-265814 placement
+//@ chunk-wjygkcr4.js:273391-273499 placement
 /**
  * 判断覆盖表中某工具是否定义了指定的渲染覆盖。
  */
@@ -1459,9 +1462,9 @@ function hasMcpRenderOverride(toolName, slot) {
   return ownPropertyDescriptor?.value !== undefined && ownPropertyDescriptor.value[slot] !== undefined;
 }
 export {
+  clearMemoryFilesCache,
   mcpRenderOverrideFor,
+  hasMcpRenderOverride,
   MessageImpl,
   areMessagePropsEqual,
-  clearMemoryFilesCache,
-  hasMcpRenderOverride,
 };

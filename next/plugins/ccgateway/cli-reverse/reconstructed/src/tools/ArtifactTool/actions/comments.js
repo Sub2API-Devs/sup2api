@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：comments 动作
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (19)
  * attribution: placement 19
  */
 import { randomUUID } from "crypto";
@@ -100,7 +100,7 @@ import {
   threadAwaitsClaudeById,
   lastCommentIsPersons,
 } from "../../../services/artifacts/comments/commentMentions.js";
-import { extractPageText } from "../../../services/artifacts/audience.js";
+import { scrubThirdPartyText } from "../../../services/artifacts/audience.js";
 import { truncateCodePoints, plural, capitalize } from "../../../utils/stringUtils.js";
 import { logFeatureSad } from "../../../services/analytics/featureTelemetry.js";
 import {
@@ -124,7 +124,7 @@ import {
   hasPostedReplies,
   markReplyClean,
 } from "../../../services/artifacts/comments/commentState.js";
-import { uniq, count } from "../../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
 import { extractJsonScriptById } from "../../../services/artifacts/pageScripts.js";
 import { MAX_RESULT_ROWS, throwUnroutedArtifactAction } from "../../../services/artifacts/artifactPeople.js";
 import { isPlainObject } from "../../../utils/isPlainObject.js";
@@ -149,6 +149,7 @@ import {
   MAX_COMMENT_THREADS,
   readArtifactComments,
 } from "../../../services/artifacts/comments/commentsRead.js";
+import { countWhere } from "../../../utils/collections.js";
 import { authoredByOthersPreamble } from "../../../constants/xml.js";
 import {
   isCommentNotificationGateOn,
@@ -166,7 +167,7 @@ import {
 } from "../../../services/artifacts/consentClasses.js";
 import { isStrictHumanTurn, analyzeTurnTail } from "../../../utils/turnOrigin.js";
 import { urlSubPathError } from "../permissions/dbWriteInputs.js";
-import { parseSessionArtifactUrl } from "../../../services/artifacts/orgScope.js";
+import { validateSessionArtifactUrl } from "../../../services/artifacts/orgScope.js";
 import { getLiveState, markAutoReplyTime } from "../../../services/liveReplica/liveReplica.js";
 import { dropStaleHandOffs, dropQueuedWakes } from "../../../services/artifacts/artifactNotices.js";
 import { relayIsOnlyRoute } from "../../../services/artifacts/frameRelay.js";
@@ -190,12 +191,12 @@ import { createChildAbortController } from "../../../utils/abortController.js";
 import { reopenCommentThread } from "../../../services/artifacts/comments/commentResolve.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-8wvtd8sr.js:33609-33637 placement
+//@ chunk-xzmy9dn4.js:33918-33946 placement
 /**
  * 因新评论通知而读取评论时的动作名。
  */
 var COMMENT_NOTICE_READ_ACTIONS = ["reply", "comments"];
-//@ chunk-8wvtd8sr.js:33637-34999 placement
+//@ chunk-xzmy9dn4.js:33946-35308 placement
 /**
  * 因新评论通知而读取评论时的权限判定：处理外组织拒绝、晚到的 deny、ask 规则、回复授权规则、他人内容与通知询问下限；需要询问时附上首条评论摘要。
  */
@@ -288,7 +289,7 @@ async function commentsNoticeReadPermission(context, target, request) {
           },
   };
 }
-//@ chunk-8wvtd8sr.js:34999-35165 placement
+//@ chunk-xzmy9dn4.js:35308-35474 placement
 function settleCommentsNotice(context, slug) {
   let delegated = isDelegatedObservationContext(context.agentContext);
   let noticeStood = hasAutoReactNoticePending(slug);
@@ -299,22 +300,22 @@ function settleCommentsNotice(context, slug) {
     judged: judged !== undefined,
   };
 }
-//@ chunk-8wvtd8sr.js:35165-35193 placement
+//@ chunk-xzmy9dn4.js:35474-35502 placement
 // deferred: uses registerPersonOnlyDecider (../../../utils/permissions/personOnlyDecisions.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8wvtd8sr.js:35165", () => {
+deferInit("chunk-xzmy9dn4.js:35474", () => {
   registerPersonOnlyDecider({
     decide: commentsNoticeReadPermission,
     consume: settleCommentsNotice,
   });
 });
-//@ chunk-8wvtd8sr.js:35193-35586 placement
+//@ chunk-xzmy9dn4.js:35502-35895 placement
 /**
  * 跨组织共享的 Artifact 上评论只读的说明：不能从 Claude Code 回复，也不能 resolve，应在会话中处理并告诉用户无法回帖。
  */
 var OTHER_ORG_REPLY_UNAVAILABLE =
   "you can read these comments; replying from Claude Code is not available on artifacts shared from another organization";
 var OTHER_ORG_REPLY_RESOLVE_UNAVAILABLE = `${"you can read these comments; replying from Claude Code is not available on artifacts shared from another organization"}, and neither is resolving \u2014 act on the request in the session and tell the user your answer cannot be posted on the thread from here`;
-//@ chunk-8wvtd8sr.js:35586-35842 placement
+//@ chunk-xzmy9dn4.js:35895-36151 placement
 /**
  * 跨组织 Artifact 评论只读时给界面显示的简短提示。
  */
@@ -325,14 +326,14 @@ function otherOrgReplyNotice(notice) {
     ? "Replying to or resolving comments on this shared artifact isn't available in Claude Code."
     : undefined;
 }
-//@ chunk-8wvtd8sr.js:35879-35947 placement
+//@ chunk-xzmy9dn4.js:36188-36256 placement
 /**
  * 评论来源标签「stent to you」（本会话用户发的）。
  */
 var COMMENT_SOURCE_SENT_TO_YOU = "sent to you";
 var COMMENT_SOURCE_SENT_BY_OTHER = "sent to Claude by someone else";
 var MOVED = "moved";
-//@ chunk-8wvtd8sr.js:35947-36103 placement
+//@ chunk-xzmy9dn4.js:36256-36412 placement
 function canOfferReplyAlwaysAllow(toolUseContext, replyTarget) {
   let toolPermissionContext = getToolPermissionContext(toolUseContext);
   return (
@@ -345,7 +346,7 @@ function canOfferReplyAlwaysAllow(toolUseContext, replyTarget) {
     !hasReplyDenyOrAsk(toolPermissionContext, replyTarget, ["reply"])
   );
 }
-//@ chunk-8wvtd8sr.js:36103-36185 placement
+//@ chunk-xzmy9dn4.js:36412-36494 placement
 /**
  * 跨组织时回复/解决评论的不可用错误。
  */
@@ -354,7 +355,7 @@ function outsideOrgReplyResolveError(slug, reason, action) {
     ? new ArtifactInputError(OTHER_ORG_REPLY_RESOLVE_UNAVAILABLE, `${action}_not_found_outside_org`)
     : undefined;
 }
-//@ chunk-8wvtd8sr.js:36185-36304 placement
+//@ chunk-xzmy9dn4.js:36494-36613 placement
 /**
  * 截断过长的评论文本（按码点上限，加省略号）。
  */
@@ -362,13 +363,13 @@ function truncateCommentText(replyText) {
   if (replyText === undefined || replyText === "") return "";
   let flattened = flattenCommentText(replyText);
   return Array.from(replyText).length > MAX_COMMENT_CHARS
-    ? `${extractPageText(truncateCodePoints(flattened, MAX_COMMENT_CHARS))}\u2026`
+    ? `${scrubThirdPartyText(truncateCodePoints(flattened, MAX_COMMENT_CHARS))}\u2026`
     : flattened;
 }
-//@ chunk-8wvtd8sr.js:36304-36508 placement
+//@ chunk-xzmy9dn4.js:36613-36817 placement
 var PAGE_THREADS_UNREAD_MESSAGE =
   "could not read whether this page keeps its own comment threads, so nothing was posted or resolved \u2014 try once more; if it fails again, tell the user they can do it on the artifact's own page";
-//@ chunk-8wvtd8sr.js:36508-36688 placement
+//@ chunk-xzmy9dn4.js:36817-36997 placement
 function pageThreadsUnreadDeny(action) {
   logFeatureSad(`artifact_comment_${action}`, "page_threads_unread");
   return {
@@ -380,7 +381,7 @@ function pageThreadsUnreadDeny(action) {
     },
   };
 }
-//@ chunk-8wvtd8sr.js:36688-36842 placement
+//@ chunk-xzmy9dn4.js:36997-37151 placement
 async function assertPageThreadsReadable(target, context, action) {
   await warmShareEntry(target, context, action, relayReadBackHint());
   if (needsCapsReadForReply(target.slug)) {
@@ -388,7 +389,7 @@ async function assertPageThreadsReadable(target, context, action) {
     throw new ArtifactInputError(PAGE_THREADS_UNREAD_MESSAGE, `${action}_page_threads_unread`);
   }
 }
-//@ chunk-8wvtd8sr.js:36842-37156 placement
+//@ chunk-xzmy9dn4.js:37151-37465 placement
 /**
  * 检查所选线程与评论是否全部可信：未降级、激活者是自己、评论可信且发给 Claude 的标记由查看者本人发出。
  */
@@ -409,7 +410,7 @@ function threadsTrusted(threads, shown, account) {
         )),
   );
 }
-//@ chunk-8wvtd8sr.js:37156-37609 placement
+//@ chunk-xzmy9dn4.js:37465-37918 placement
 /**
  * 判断所选的带锚点线程是否需要做决策页检查：锚点文件降级时直接需要，否则读取锚点文件看是否含 ws-decisions 区块。
  */
@@ -429,7 +430,7 @@ async function anchorsNeedDecisionCheck(threads, shown, account) {
   if (filtered.some((thread) => thread.anchorFileDegraded === true)) return true;
   return (
     await Promise.all(
-      uniq(filtered.map((thread) => thread.anchorFile)).map(async (anchorFile) => {
+      normalizeCaseForComparison_2(filtered.map((thread) => thread.anchorFile)).map(async (anchorFile) => {
         let fileContent = await account(anchorFile);
         return (
           fileContent === undefined || (await extractJsonScriptById(fileContent, "ws-decisions")) !== null
@@ -438,7 +439,7 @@ async function anchorsNeedDecisionCheck(threads, shown, account) {
     )
   ).some(Boolean);
 }
-//@ chunk-8wvtd8sr.js:37609-59309 placement
+//@ chunk-xzmy9dn4.js:37918-59625 placement
 function renderCommentThreadsResult(result, marker, selfPrincipal) {
   if (!Array.isArray(result.threads))
     return {
@@ -508,7 +509,8 @@ function renderCommentThreadsResult(result, marker, selfPrincipal) {
       ...(typeof comment.account === "string" ? [comment.account] : []),
       ...extractMentions(comment.text),
     ].filter((id) => namesById.has(id));
-  let nameRows = (ids) => uniq(ids).map((id) => `  ${id.slice(0, 8)} ${marker}| ${namesById.get(id)}`);
+  let nameRows = (ids) =>
+    normalizeCaseForComparison_2(ids).map((id) => `  ${id.slice(0, 8)} ${marker}| ${namesById.get(id)}`);
   let namesSection = (ids) =>
     ids.length === 0
       ? ""
@@ -543,9 +545,9 @@ ${nameRows(ids).join(`
       shown: EMPTY_COMMENT_SETS,
       content: missingThreadNote,
     };
-  let openCount = count(record.threads, (thread) => !thread.resolved);
-  let activatedCount = count(record.threads, (thread) => thread.claude_activated);
-  let degradedCount = count(
+  let openCount = countWhere(record.threads, (thread) => !thread.resolved);
+  let activatedCount = countWhere(record.threads, (thread) => thread.claude_activated);
+  let degradedCount = countWhere(
     record.threads,
     (thread) => thread.resolved_degraded === true || thread.activated_degraded === true,
   );
@@ -562,17 +564,17 @@ ${nameRows(ids).join(`
   };
   let threadHasReply = (thread) =>
     thread.comments.some((comment) => commentStatus(comment) !== "unaddressed");
-  let repliedCount = count(record.threads, threadHasReply);
+  let repliedCount = countWhere(record.threads, threadHasReply);
   let sentByViewerOnly = (comment) =>
     commentStatus(comment) === "addressed" && comment.sent_by_viewer === false;
   let threadSentToYouOnly = (thread) =>
     thread.comments.some((comment) => commentStatus(comment) !== "unaddressed" && !sentByViewerOnly(comment));
   let threadSentByOther = (thread) => thread.comments.some(sentByViewerOnly);
-  let sentByOtherCount = count(record.threads, threadSentByOther);
+  let sentByOtherCount = countWhere(record.threads, threadSentByOther);
   let sourceLabel = (threads) => {
-    let toYouCount = count(threads, threadSentToYouOnly);
-    let byOtherCount = count(threads, threadSentByOther);
-    let bothCount = toYouCount + byOtherCount - count(threads, threadHasReply);
+    let toYouCount = countWhere(threads, threadSentToYouOnly);
+    let byOtherCount = countWhere(threads, threadSentByOther);
+    let bothCount = toYouCount + byOtherCount - countWhere(threads, threadHasReply);
     return byOtherCount === 0
       ? COMMENT_SOURCE_SENT_TO_YOU
       : `sent to Claude (${toYouCount} to you, ${byOtherCount} by someone else${bothCount > 0 ? `, ${bothCount} ${plural(bothCount, "thread")} in both` : ""})`;
@@ -644,7 +646,7 @@ ${nameRows(ids).join(`
       : undefined;
   };
   let elementSnippet = (thread) => (elementMarker(thread) !== undefined ? thread.anchor_snippet : undefined);
-  let elementMarkers = uniq(
+  let elementMarkers = normalizeCaseForComparison_2(
     rows.flatMap((thread) => {
       let marker = elementMarker(thread);
       return marker !== undefined ? [marker] : [];
@@ -960,8 +962,8 @@ ${nameRows(ids).join(`
         continue;
       }
     }
-    let addressedCount = count(thread.comments, (comment) => commentStatus(comment) === "addressed");
-    let unknownCount = count(thread.comments, (comment) => commentStatus(comment) === "unknown");
+    let addressedCount = countWhere(thread.comments, (comment) => commentStatus(comment) === "addressed");
+    let unknownCount = countWhere(thread.comments, (comment) => commentStatus(comment) === "unknown");
     let countedSuffix =
       addressedCount > 0 || unknownCount > 0
         ? ` (${addressedCount} sent to Claude${unknownCount > 0 ? `, ${unknownCount} addressed-status-unreadable` : ""})`
@@ -996,12 +998,12 @@ ${nameRows(ids).join(`
     }
   }
   let renderBody = () => {
-    let nonFullCount = count(nameRowsBuilt, (row) => row.kind !== "full");
+    let nonFullCount = countWhere(nameRowsBuilt, (row) => row.kind !== "full");
     let listedIds = new Set(nameRowsBuilt.map((row) => row.threadId));
     let skippedIds = new Set(orderedThreads.slice(0, startIndex).map((thread) => thread.id));
     let filtered = orderedThreads.filter((thread) => !listedIds.has(thread.id) && !skippedIds.has(thread.id));
     let unlistedCount = filtered.length;
-    let unlistedRepliedCount = count(filtered, threadHasReply);
+    let unlistedRepliedCount = countWhere(filtered, threadHasReply);
     let namesSectionText = namesSection(nameRowsBuilt.flatMap((row) => row.namedStamps));
     let sections = [
       ...(namesSectionText === "" ? [] : [namesSectionText]),
@@ -1036,7 +1038,7 @@ ${nameRows(ids).join(`
       record.thread_filter !== undefined
         ? record.threads.filter((thread) => thread.id !== record.thread_filter)
         : [];
-    let otherRepliedCount = count(otherThreads, threadHasReply);
+    let otherRepliedCount = countWhere(otherThreads, threadHasReply);
     let fullListHint =
       record.scoped_dispatch === true ? "" : '; run action "comments" without thread_id for the full list';
     let threadFilterNote =
@@ -1083,7 +1085,7 @@ ${nameRows(ids).join(`
     }),
   };
 }
-//@ chunk-8wvtd8sr.js:59309-59386 placement
+//@ chunk-xzmy9dn4.js:59625-59702 placement
 /**
  * 取当前评论归属主体（账号 uuid 与自有令牌）。
  */
@@ -1093,7 +1095,7 @@ function currentCommentPrincipal() {
     tokens: ownPrincipalTokens(),
   };
 }
-//@ chunk-8wvtd8sr.js:59386-59482 placement
+//@ chunk-xzmy9dn4.js:59702-59798 placement
 /**
  * 用占位主体渲染评论线程预览。
  */
@@ -1106,7 +1108,7 @@ function renderCommentsPreview(result) {
     }),
   };
 }
-//@ chunk-8wvtd8sr.js:59482-81989 placement
+//@ chunk-xzmy9dn4.js:59798-82306 placement
 /**
  * comments 动作处理器（读、写、回复、解决评论）。
  */
@@ -1370,12 +1372,12 @@ var ARTIFACT_COMMENTS_ACTION_HANDLER = {
         };
       let urlError = urlSubPathError(url);
       if (urlError) return urlError;
-      let sessionArtifactUrl = parseSessionArtifactUrl(url);
-      if (!sessionArtifactUrl.ok)
+      let actionName = validateSessionArtifactUrl(url);
+      if (!actionName.ok)
         return {
           result: false,
-          message: sessionArtifactUrl.message,
-          errorCode: sessionArtifactUrl.errorCode,
+          message: actionName.message,
+          errorCode: actionName.errorCode,
         };
       if (action === "comments") {
         let { threadId, cursor } = commentFieldsFrom(input);
@@ -2112,8 +2114,8 @@ var ARTIFACT_COMMENTS_ACTION_HANDLER_VALUE = {
   },
 };
 export {
-  ARTIFACT_COMMENTS_ACTION_HANDLER,
-  ARTIFACT_COMMENTS_ACTION_HANDLER_VALUE,
   truncateCommentText,
   otherOrgReplyNotice,
+  ARTIFACT_COMMENTS_ACTION_HANDLER,
+  ARTIFACT_COMMENTS_ACTION_HANDLER_VALUE,
 };

@@ -3,20 +3,16 @@
  *
  * 2.1.316 新增：检测模型输出中伪造的用户回合/工具调用片段；上报 tengu_fabricated_turn_candidate等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ha3km179.js (19)
- * attribution: placement 19
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-w3ch4xq2.js (18)
+ * attribution: placement 18
  */
 import { resetStreamingToolExecutor } from "./outputLimitRecovery.js";
 import { isAbortError } from "../utils/errors.js";
 import { logError } from "../utils/log.js";
-import {
-  MALFORMED_TOOL_CALL_RETRY,
-  isToolResultMessage,
-  isInterruptionOnlyMessage,
-} from "../utils/messages.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
+import { isToolResultMessage, isInterruptionOnlyMessage } from "../utils/messages.js";
 import { isHumanOrUnset } from "../utils/messageProvenance.js";
 import { logEvent } from "../services/analytics/index.js";
 import { telemetrySafeModelName } from "../utils/model/telemetryModelName.js";
@@ -25,7 +21,7 @@ import { shortHash } from "../utils/shortHash.js";
 import { sanitizeMarkName } from "../utils/startupMarks.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ha3km179.js:149839-149909 placement
+//@ chunk-w3ch4xq2.js:159124-159194 placement
 /**
  * 中止并重置流式执行器
  */
@@ -33,7 +29,7 @@ function blockAndResetStream(attemptState) {
   attemptState.needsFollowUp = false;
   return resetStreamingToolExecutor(attemptState, "safety_monitor_block");
 }
-//@ chunk-ha3km179.js:149909-150081 placement
+//@ chunk-w3ch4xq2.js:159194-159366 placement
 /**
  * 包装流式回调：中止后不再转发（中止前已开始输出时补发一次 null），回调抛错时记录日志（忽略中止错误）。
  */
@@ -56,18 +52,18 @@ function guardedStreamCallback(onRetryStatus, signal) {
     }
   };
 }
-//@ chunk-ha3km179.js:150081-150231 placement
+//@ chunk-w3ch4xq2.js:159366-159516 placement
 var ANTML; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var regExp_2;
 var regExp_3;
-deferInit("chunk-ha3km179.js:150081", () => {
+deferInit("chunk-w3ch4xq2.js:159366", () => {
   ANTML = "antml:";
   regExp_2 = new RegExp("<" + ANTML + "invoke\\b");
   regExp_3 = new RegExp(
     `<(?:${ANTML})?(?:function_calls>|invoke name=)|</(?:${ANTML})?(?:function_calls|invoke)>`,
   );
 });
-//@ chunk-ha3km179.js:150231-150345 placement
+//@ chunk-w3ch4xq2.js:159516-159630 placement
 /**
  * 判断助手最后一段文本是否以伪造的回合内容结尾（匹配特定正则）。
  */
@@ -77,35 +73,26 @@ function endsWithFabricatedTurn(assistantMessages) {
       ?.text ?? "";
   return regExp_2.test(text);
 }
-//@ chunk-ha3km179.js:150345-150379 placement
+//@ chunk-w3ch4xq2.js:159630-159664 placement
 /**
  * 命中伪造标记
  */
 function matchesFabricatedMarker(text) {
   return regExp_3.test(text);
 }
-//@ chunk-ha3km179.js:150379-150388 placement
+//@ chunk-w3ch4xq2.js:159664-159673 placement
 /**
  * 2
  */
 var MAX_RECOVERY_ATTEMPTS = 2;
-//@ chunk-ha3km179.js:150388-150415 placement
+//@ chunk-w3ch4xq2.js:159673-159700 placement
 /**
  * 还能再重试
  */
 function canRecoverAgain(attempt) {
   return attempt < MAX_RECOVERY_ATTEMPTS;
 }
-//@ chunk-ha3km179.js:150415-150505 placement
-/**
- * 最近的格式错误重试
- */
-function recentMalformedRetries(messagesForQuery, malformedToolUseRetryCount) {
-  return messagesForQuery
-    .filter((message) => message.type === "user" && message.message.content === MALFORMED_TOOL_CALL_RETRY)
-    .slice(-malformedToolUseRetryCount);
-}
-//@ chunk-ha3km179.js:150505-150663 placement
+//@ chunk-w3ch4xq2.js:159700-159858 placement
 /**
  * 判定格式错误工具调用恢复的结果：成功、再次格式错误、放弃、正常结束或其他。
  */
@@ -116,7 +103,7 @@ function recoveryOutcome(toolUseCount, stopReason, isApiErrorMessage, attempt) {
   if (stopReason === "end_turn") return "end_turn";
   return "other";
 }
-//@ chunk-ha3km179.js:150663-150747 placement
+//@ chunk-w3ch4xq2.js:159858-159942 placement
 /**
  * 是否尝试恢复
  */
@@ -128,7 +115,7 @@ function shouldTryRecovery(messages) {
     return false;
   }
 }
-//@ chunk-ha3km179.js:150747-151050 placement
+//@ chunk-w3ch4xq2.js:159942-160245 placement
 /**
  * 最后一个用户回合是否来自真人输入。
  */
@@ -149,7 +136,7 @@ function isLastTurnFromHuman(messages) {
   }
   return false;
 }
-//@ chunk-ha3km179.js:151050-151331 placement
+//@ chunk-w3ch4xq2.js:160245-160526 placement
 var FAKE_TURN_SPEAKERS = [
   "um",
   "user",
@@ -167,7 +154,7 @@ var FABRICATED_TAG_MARKERS = ["<dm ", "<system", "<tool_", "<function_"];
 var SPEAKER_LINE_RE = /\n\n(\p{L}{1,12})(?=[< ])/u;
 var DOT_USER_RE = /\u00B7 ?(\r?\n\r?\nuser)(?![\p{L}\p{N}])/u;
 var FRAGMENT_TAIL_CHARS = 200;
-//@ chunk-ha3km179.js:151331-151402 placement
+//@ chunk-w3ch4xq2.js:160526-160597 placement
 /**
  * 尖括号分类
  */
@@ -176,7 +163,7 @@ function classifyAngleChar(char) {
   if (char === " ") return " ";
   return "other";
 }
-//@ chunk-ha3km179.js:151402-151471 placement
+//@ chunk-w3ch4xq2.js:160597-160666 placement
 /**
  * 找伪造片段标记
  */
@@ -184,7 +171,7 @@ function findFabricatedMarker(text) {
   for (let marker of FABRICATED_MARKERS) if (text.includes(marker)) return marker;
   return null;
 }
-//@ chunk-ha3km179.js:151471-152236 placement
+//@ chunk-w3ch4xq2.js:160666-161431 placement
 /**
  * 检测模型输出中伪造的用户回合/工具调用片段。
  */
@@ -243,7 +230,7 @@ ${tag}`);
   if (match_2 !== null) return junkFragmentReport(text, match_2.index, match_2[1]);
   return null;
 }
-//@ chunk-ha3km179.js:152236-152415 placement
+//@ chunk-w3ch4xq2.js:161431-161610 placement
 function junkFragmentReport(text, index, fragment) {
   let suffixIndex = index + 2 + fragment.length;
   let text_2 = text.slice(index, index + FRAGMENT_TAIL_CHARS);
@@ -258,7 +245,7 @@ function junkFragmentReport(text, index, fragment) {
     tail: text_2,
   };
 }
-//@ chunk-ha3km179.js:152415-152505 placement
+//@ chunk-w3ch4xq2.js:161610-161700 placement
 /**
  * 伪造回合发言者分类
  */
@@ -267,7 +254,7 @@ function classifySpeaker(fragment) {
   for (let speaker of FAKE_TURN_SPEAKERS) if (speaker === fragment) return speaker;
   return "catch_all";
 }
-//@ chunk-ha3km179.js:152505-152826 placement
+//@ chunk-w3ch4xq2.js:161700-162021 placement
 /**
  * 遍历助手消息的文本与思考块，产出疑似伪造回合。
  */
@@ -298,7 +285,7 @@ function* findFabricatedTurns(messages) {
       };
     }
 }
-//@ chunk-ha3km179.js:152826-153194 placement
+//@ chunk-w3ch4xq2.js:162021-162389 placement
 /**
  * 上报 tengu_fabricated_turn_candidate。
  */
@@ -318,13 +305,12 @@ function reportFabricatedTurns(messages, attemptModel) {
     });
 }
 export {
+  matchesFabricatedMarker,
   blockAndResetStream,
   recoveryOutcome,
   guardedStreamCallback,
   reportFabricatedTurns,
   canRecoverAgain,
   endsWithFabricatedTurn,
-  recentMalformedRetries,
   shouldTryRecovery,
-  matchesFabricatedMarker,
 };

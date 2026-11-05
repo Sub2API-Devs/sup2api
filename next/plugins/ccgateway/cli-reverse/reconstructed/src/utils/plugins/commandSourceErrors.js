@@ -3,9 +3,9 @@
  *
  * 插件命令源错误（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-csq9ftr9.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-n0gp41wj.js (9)
  * attribution: placement 9
  */
 import { HostScoped } from "../hostScoped.js";
@@ -13,13 +13,13 @@ import { getRootSession } from "../../bootstrap/state.js";
 import { OFFICIAL_MARKETPLACE_NAME } from "./officialMarketplaceNames.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-csq9ftr9.js:966-2468 placement
+//@ chunk-n0gp41wj.js:966-2468 placement
 /**
  * COMMAND_SOURCE_NETWORK_ERRORS：命令源网络/可疑链接类错误文案集合。
  */
 var COMMAND_SOURCE_ERRORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var COMMAND_SOURCE_NETWORK_ERRORS;
-deferInit("chunk-csq9ftr9.js:966", () => {
+deferInit("chunk-n0gp41wj.js:966", () => {
   COMMAND_SOURCE_ERRORS = new Set([
     "plugin command source printed a network path",
     "plugin command source path resolves to a network path",
@@ -51,7 +51,7 @@ deferInit("chunk-csq9ftr9.js:966", () => {
   ]);
   COMMAND_SOURCE_NETWORK_ERRORS = "plugin update refused during cli update: ";
 });
-//@ chunk-csq9ftr9.js:2468-2685 placement
+//@ chunk-n0gp41wj.js:2468-2685 placement
 class CommandSourceSession {
   nameRegistration;
   catalogEntryNames;
@@ -64,19 +64,19 @@ class CommandSourceSession {
   marketplaceChoice;
   blockedLogged = new Set();
 }
-//@ chunk-csq9ftr9.js:2685-2709 placement
+//@ chunk-n0gp41wj.js:2685-2709 placement
 var commandSourceSessionSlot; // deferred: uses CommandSourceSession of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-csq9ftr9.js:2685", () => {
+deferInit("chunk-n0gp41wj.js:2685", () => {
   commandSourceSessionSlot = new HostScoped(() => new CommandSourceSession());
 });
-//@ chunk-csq9ftr9.js:2709-2746 placement
+//@ chunk-n0gp41wj.js:2709-2746 placement
 /**
  * commandSourceSession：当前宿主的命令源会话状态。
  */
 function commandSourceSession() {
   return commandSourceSessionSlot.of(getRootSession().host);
 }
-//@ chunk-csq9ftr9.js:2746-2843 placement
+//@ chunk-n0gp41wj.js:2746-2843 placement
 /**
  * setCommandSourceNameRegistration：记录命令源的名字登记方式。
  */
@@ -84,7 +84,7 @@ function setCommandSourceNameRegistration(source) {
   commandSourceSession().nameRegistration =
     source === undefined ? "none" : source === "pluginDirectory" ? "built-in" : "other";
 }
-//@ chunk-csq9ftr9.js:2843-2941 placement
+//@ chunk-n0gp41wj.js:2843-2941 placement
 /**
  * isOfficialNameUsableHere：官方名在当前登记方式下可用。
  */
@@ -93,7 +93,7 @@ function isOfficialNameUsableHere(marketplace) {
   let { nameRegistration } = commandSourceSession();
   return nameRegistration === "built-in" || nameRegistration === "none";
 }
-//@ chunk-csq9ftr9.js:2941-3032 placement
+//@ chunk-n0gp41wj.js:2941-3032 placement
 /**
  * isBuiltinCatalogAccessAllowed：内建目录且访问允许。
  */
@@ -101,14 +101,14 @@ function isBuiltinCatalogAccessAllowed() {
   let session = commandSourceSession();
   return session.nameRegistration === "built-in" && session.isAccessAllowed?.() === true;
 }
-//@ chunk-csq9ftr9.js:3032-3098 placement
+//@ chunk-n0gp41wj.js:3032-3098 placement
 /**
  * isReviewerMarkedEntry：评审标记过的条目。
  */
 function isReviewerMarkedEntry(name) {
   return commandSourceSession().reviewerMarkedEntryNames?.has(name) === true;
 }
-//@ chunk-csq9ftr9.js:3098-3160 placement
+//@ chunk-n0gp41wj.js:3098-3160 placement
 /**
  * isCatalogEntryName：目录条目名且访问允许。
  */
@@ -116,12 +116,12 @@ function isCatalogEntryName(entryName) {
   return isBuiltinCatalogAccessAllowed() && commandSourceSession().catalogEntryNames?.has(entryName) === true;
 }
 export {
-  COMMAND_SOURCE_NETWORK_ERRORS,
+  commandSourceSession,
+  setCommandSourceNameRegistration,
   isReviewerMarkedEntry,
   isOfficialNameUsableHere,
-  commandSourceSession,
   isCatalogEntryName,
   isBuiltinCatalogAccessAllowed,
   COMMAND_SOURCE_ERRORS,
-  setCommandSourceNameRegistration,
+  COMMAND_SOURCE_NETWORK_ERRORS,
 };

@@ -3,9 +3,9 @@
  *
  * Sessions v2 客户端（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-08945j39.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h29vk4wn.js (12)
  * attribution: placement 11, affinity 1
  */
 import { randomUUID } from "crypto";
@@ -66,7 +66,7 @@ import { signClientEvent } from "../utils/telemetry/clientEventUploader.js";
 import { isTimeoutError } from "./RemoteSessionManager.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-08945j39.js:11449-11700 placement
+//@ chunk-h29vk4wn.js:13059-13310 placement
 /**
  * 远程会话客户端常量：重试/超时时长、致命 HTTP 状态集合、设备证明状态到 verified/unverified 的映射等。
  */
@@ -80,7 +80,7 @@ var POST_EVENTS_TIMEOUT_MS;
 var PERMANENT_HTTP_STATUSES;
 var STREAM_READ_CHUNK_BYTES;
 var DEVICE_ATTESTATION_VERDICTS;
-deferInit("chunk-08945j39.js:11449", () => {
+deferInit("chunk-h29vk4wn.js:13059", () => {
   SESSION_CLIENT_LIMITS = null;
   MAX_RECONNECT_BACKOFF_MS = 30000;
   MAX_RECONNECT_ATTEMPTS = 5;
@@ -99,7 +99,7 @@ deferInit("chunk-08945j39.js:11449", () => {
     invalid: "unverified",
   };
 });
-//@ chunk-08945j39.js:11773-11928 placement
+//@ chunk-h29vk4wn.js:13383-13538 placement
 /**
  * 把设备证明状态（可带 DEVICE_ATTESTATION_STATUS_ 前缀）映射为 verified/unverified/unknown。
  */
@@ -110,7 +110,7 @@ function attestationStatus(deviceAttestationStatus) {
     : deviceAttestationStatus;
   return DEVICE_ATTESTATION_VERDICTS[normalizedStatus] ?? "unknown";
 }
-//@ chunk-08945j39.js:11940-12130 placement
+//@ chunk-h29vk4wn.js:13550-13740 placement
 /**
  * 根据消息 created_at 计算发送时间、是否为重放（早于连接时间），以及按服务端时钟估算的延迟。
  */
@@ -128,7 +128,7 @@ function messageTiming(message, connectedSince, clock) {
     }),
   };
 }
-//@ chunk-08945j39.js:12592-12763 placement
+//@ chunk-h29vk4wn.js:14265-14436 placement
 /**
  * 估算当前服务端时间（服务时间 + 本地流逝），遇到更晚的服务时间时校准。
  */
@@ -144,7 +144,7 @@ function serviceClockNow(clock, remoteMs) {
   }
   return estimatedMs;
 }
-//@ chunk-08945j39.js:12763-12905 placement
+//@ chunk-h29vk4wn.js:14436-14578 placement
 /**
  * CCR worker 标记与远程工具常量（结果过大、会话未激活、工具宿主结束）。
  */
@@ -152,7 +152,7 @@ var CCR_WORKER_FLAG; // deferred: uses createGzipFetchWrapper (../services/api/g
 var REMOTE_TOOL_RESULT_TOO_LARGE;
 var sessionNotActiveErrorSchema;
 var TOOL_HOST_ENDED;
-deferInit("chunk-08945j39.js:12763", () => {
+deferInit("chunk-h29vk4wn.js:14436", () => {
   CCR_WORKER_FLAG = createGzipFetchWrapper("ccr_worker", undefined);
   REMOTE_TOOL_RESULT_TOO_LARGE = "remote_tool_result_too_large";
   sessionNotActiveErrorSchema = DoctorLazy(() =>
@@ -164,11 +164,11 @@ deferInit("chunk-08945j39.js:12763", () => {
   );
   TOOL_HOST_ENDED = "tool_host_ended";
 });
-//@ chunk-08945j39.js:12905-12995 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-h29vk4wn.js:14578-14668 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function hasStringType(data) {
   return typeof data === "object" && data !== null && "type" in data && typeof data.type === "string";
 }
-//@ chunk-08945j39.js:12995-34473 placement
+//@ chunk-h29vk4wn.js:14668-36146 placement
 /**
  * Sessions v2 客户端：连接状态机、事件流读写
  */
@@ -1235,16 +1235,16 @@ class SessionsV2Client {
     };
   }
 }
-//@ chunk-08945j39.js:34473-34490 placement
+//@ chunk-h29vk4wn.js:36146-36163 placement
 var BEARER_PREFIX = "Bearer ";
-//@ chunk-08945j39.js:34490-34605 placement
+//@ chunk-h29vk4wn.js:36163-36278 placement
 function deviceIdentityTelemetry(headers) {
   return {
     trusted_device_token_sent: headers["X-Trusted-Device-Token"] !== undefined,
     device_identity_flag_on: isDeviceIdentityEnabledCached(),
   };
 }
-//@ chunk-08945j39.js:34605-34779 placement
+//@ chunk-h29vk4wn.js:36278-36452 placement
 async function classifyForbiddenResponse(manifestData) {
   let manifest = await parseAndValidateManifestFromBytes(manifestData);
   let untrustedDeviceRefusal = readUntrustedDeviceRefusal(manifest);
@@ -1260,11 +1260,11 @@ async function classifyForbiddenResponse(manifestData) {
             : undefined,
       };
 }
-//@ chunk-08945j39.js:34779-34831 placement
+//@ chunk-h29vk4wn.js:36452-36504 placement
 function isRemoteToolResultTooLarge(value) {
   return value !== undefined && jsonStringify(value).includes(REMOTE_TOOL_RESULT_TOO_LARGE);
 }
-//@ chunk-08945j39.js:34831-34895 affinity
+//@ chunk-h29vk4wn.js:36504-36568 affinity
 async function isSessionNotActiveManifest(manifestData) {
   return sessionNotActiveErrorSchema().safeParse(await parseAndValidateManifestFromBytes(manifestData))
     .success;

@@ -1,6 +1,6 @@
 # 阅读指南与索引
 
-> 本仓库是官方 Claude Code CLI 2.1.316 的 AST 逆向重建。本文告诉你：按目的从哪里读起、全部文档各讲什么、`reconstructed/src/` 每个顶层目录是什么、怎样用 `tools/q.mjs` 查代码。
+> 本仓库是官方 Claude Code CLI 2.1.318 的 AST 逆向重建（2026-11-05 从 2.1.316 升级，见 `docs/process/upgrade-318.md`）。本文告诉你：按目的从哪里读起、全部文档各讲什么、`reconstructed/src/` 每个顶层目录是什么、怎样用 `tools/q.mjs` 查代码。
 > 统计为 2026-11-03 09:15 生成的阅读树快照（place-rest 放置之后）；lead 重新生成 `reconstructed/` 后数字会小幅变化。
 
 ## 目录
@@ -88,7 +88,7 @@
 | `AGENTS.md` | 给在本仓库工作的 AI 与成员的硬规则 |
 | `docs/INDEX.md` | 本文：阅读路线、文档清单、目录一览、查询命令 |
 | `docs/ARCHITECTURE.md` | 整体架构：分层图、一次请求的完整旅程、子系统一览、构建事实、读代码的约定、已知限制 |
-| `docs/CHANGES-SINCE-2.1.88.md` | 2.1.88 → 2.1.316 的新功能、改动、删除总表，每条带证据位置 |
+| `docs/CHANGES-SINCE-2.1.88.md` | 2.1.88 → 2.1.316 的新功能、改动、删除总表，每条带证据位置（316 → 318 见 `research/versions/CLAUDE-CODE-2.1.318-CHANGES.md`） |
 | `docs/PLAN.md` | 逆向计划：已知事实、分层产物、流水线、团队分工、验收标准 |
 | `docs/WORKLOG.md` | 按时间记录的里程碑 |
 
@@ -173,7 +173,7 @@
 | `keybindings/` | 快捷键：默认绑定表、keybindings.json 加载与校验、和弦解析、上下文分发 | 20 | 167 | 60 KB |
 | `types/` | 类型与生成的 protobuf 事件定义（generated/）、权限类型 | 9 | 73 | 46 KB |
 | `native-ts/` | 2.1.88 原生模块的 TS 移植：yoga-layout、color-diff、file-index | 3 | 140 | 45 KB |
-| `engine/` | 2.1.316 新增的共用查询引擎（queryEngine.js）及渲染行、附件应答等 | 6 | 51 | 37 KB |
+| `engine/` | 2.1.88 之后新增的共用查询引擎（queryEngine.js）及渲染行、附件应答等 | 6 | 51 | 37 KB |
 | `state/` | AppState store、选择器、对话框队列、进行中工具等界面状态 | 17 | 129 | 34 KB |
 | `commands.js` | 命令注册表：内建命令表、getCommands、findCommand | 1 | 127 | 28 KB |
 | `vim/` | 输入框 vim 模式：状态机、移动、操作符、文本对象 | 5 | 111 | 28 KB |
@@ -214,13 +214,13 @@
 
 | 命令 | 作用 | 例子 |
 |---|---|---|
-| `node tools/q.mjs find <text>` | 名字、字符串字面量、属性名含 `<text>` 的声明 | `node tools/q.mjs find next_round` → `chunk-ha3km179.js#Oo  [query.ts · layout]` |
+| `node tools/q.mjs find <text>` | 名字、字符串字面量、属性名含 `<text>` 的声明 | `node tools/q.mjs find next_round` → `chunk-w3ch4xq2.js#bo  [query.ts · layout]` |
 | `node tools/q.mjs show <id\|name>` | 格式化源码 + 出处（应用了可读名） | `node tools/q.mjs show queryModelWithStreaming` |
-| `node tools/q.mjs callers <id\|name>` | 谁用它 | `node tools/q.mjs callers 'chunk-ha3km179.js#J$'`（`query()` 的调用方：TurnController、QueryEngine、runHeadlessStreaming、startMCPServer…） |
-| `node tools/q.mjs callees <id\|name>` | 它用谁 | `node tools/q.mjs callees 'chunk-e6aww6q8.js#e_n'`（queryModel 依赖的函数） |
+| `node tools/q.mjs callers <id\|name>` | 谁用它 | `node tools/q.mjs callers 'chunk-w3ch4xq2.js#$U'`（`query()` 的调用方：TurnController、QueryEngine、runHeadlessStreaming、startMCPServer…） |
+| `node tools/q.mjs callees <id\|name>` | 它用谁 | `node tools/q.mjs callees 'chunk-5xgkngpb.js#Z_n'`（queryModel 依赖的函数） |
 | `node tools/q.mjs module <path>` | 一个重组模块的全部声明（路径用原始 `.ts` 名） | `node tools/q.mjs module query/deps.ts` |
-| `node tools/q.mjs where <chunk.js>` | 一个 chunk 贡献给了哪些重组模块 | `node tools/q.mjs where chunk-ha3km179.js` |
-| `node tools/q.mjs bindings <id\|name>` | 声明内每个绑定：命名键（@偏移）、压缩名、当前最佳名及来源 | `node tools/q.mjs bindings 'chunk-ha3km179.js#xc'` |
+| `node tools/q.mjs where <chunk.js>` | 一个 chunk 贡献给了哪些重组模块 | `node tools/q.mjs where chunk-w3ch4xq2.js` |
+| `node tools/q.mjs bindings <id\|name>` | 声明内每个绑定：命名键（@偏移）、压缩名、当前最佳名及来源 | `node tools/q.mjs bindings 'chunk-w3ch4xq2.js#Zc'` |
 | `node tools/q.mjs module-bindings <path>` | 同上，作用于整个模块 | `node tools/q.mjs module-bindings query/deps.ts` |
 
 `show` 的 id 参数含 `$` 时在 shell 里要用单引号。
@@ -231,7 +231,7 @@
 # 按名字找定义位置
 grep '"name":"queryLoop"' reconstructed/symbols.jsonl
 # 按声明 id 找当前所在文件（阅读树重新生成后行号会变，id 不变）
-grep '"id":"chunk-e6aww6q8.js#e_n"' reconstructed/symbols.jsonl
+grep '"id":"chunk-5xgkngpb.js#Z_n"' reconstructed/symbols.jsonl
 # 列出某个文件里有说明的声明
 node -e 'require("fs").readFileSync("reconstructed/symbols.jsonl","utf8").split("\n").filter(Boolean).map(JSON.parse).filter(s=>s.file==="src/query.js"&&s.doc).forEach(s=>console.log(s.line,s.name,s.doc.slice(0,60)))'
 ```
@@ -242,8 +242,8 @@ node -e 'require("fs").readFileSync("reconstructed/symbols.jsonl","utf8").split(
 
 ## 5. 引用校验结果
 
-校验时间 2026-11-04 06:40（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-05 17:32（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
-- 共检查 253 处引用：路径 238/238，名字 9/9，字面量 6/6；占位符与含空格的说明性文字 35 处未检查。
+- 共检查 255 处引用：路径 240/240，名字 9/9，字面量 6/6；占位符与含空格的说明性文字 35 处未检查。
 
 - 未通过：0 处。

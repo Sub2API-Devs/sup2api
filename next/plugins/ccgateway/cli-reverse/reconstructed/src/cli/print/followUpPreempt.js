@@ -3,23 +3,26 @@
  *
  * 2.1.316 新增：快速跟进消息抢占当前回合、后台子代理与重投关闭上报
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (13)
  * attribution: placement 13
  */
-import { toExternalPermissionMode } from "../../utils/permissions/PermissionMode.js";
-import { emitStatusMessage } from "../../entrypoints/sdk/coreSchemas.js";
 import { getSdkRapidFollowupPreempt } from "../../bootstrap/state.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import { isActiveMainAgentCommand, filterQueuedCommandsForThread } from "../../utils/messageQueueManager.js";
+import {
+  isDrainableMainThreadCommand,
+  isQueuedUserTurnCommand,
+  filterMidTurnDrainCommands,
+} from "../../utils/messageQueueManager.js";
 import { isTerminalShutdown } from "../../utils/terminalShutdown.js";
 import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { userAbortReason } from "../../utils/abortController.js";
-import { canBatchWith } from "../print.js";
 import { isHumanOrigin } from "../../utils/turnOrigin.js";
 import { logError } from "../../utils/log.js";
 import { looksLikeSlashInput } from "../../commands.js";
+import { toExternalPermissionMode } from "../../utils/permissions/PermissionMode.js";
+import { emitStatusMessage } from "../../entrypoints/sdk/coreSchemas.js";
 import { env } from "../../utils/env.js";
 import {
   isBackgroundTasksOff,
@@ -27,53 +30,18 @@ import {
 } from "../../tools/AgentTool/backgroundGates.js";
 import { isMainThreadForegroundAgent, isArmedDirectForegroundAgent } from "../../tasks/taskKinds.js";
 import { isMainThreadForegroundShell } from "../../tasks/LocalShellTask/LocalShellTask.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { isAutoBackgroundHeld, tryAutoBackgroundAgent } from "../../tasks/LocalAgentTask/LocalAgentTask.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { foldedFollowUpEnd, chatOriginField } from "./transcriptLeaves.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { flagKey } from "../structuredIOProtocol.js";
 
-//@ chunk-tyg7f3ek.js:89213-89308 placement
-function installPermissionModeReporter(host, report) {
-  host.io.sessionState.onPermissionModeChanged = (mode) => {
-    let permissionMode = toExternalPermissionMode(mode);
-    let statusUuid = emitStatusMessage(host, permissionMode);
-    report(permissionMode, statusUuid);
-  };
-}
-//@ chunk-tyg7f3ek.js:89308-89756 placement
-class SparedWindowReporter {
-  drain;
-  io;
-  stopping;
-  sparedWindowWiped = false;
-  constructor({ drain, io, stopping }) {
-    this.drain = drain;
-    this.io = io;
-    this.stopping = stopping;
-  }
-  runEntered() {
-    this.sparedWindowWiped = false;
-  }
-  report() {
-    if (this.drain.runningReported || this.stopping()) return;
-    if (this.io.hasStandingPrompt()) {
-      if (!this.sparedWindowWiped) {
-        this.sparedWindowWiped = true;
-        this.io.sessionState.wipeTurnScopedMetadata();
-      }
-      return;
-    }
-    this.drain.runningReported = true;
-    this.io.sessionState.notifyStateChanged("running");
-  }
-}
-//@ chunk-tyg7f3ek.js:89756-89812 placement
+//@ chunk-0yw3taqg.js:38858-38914 placement
 function isRapidFollowupPreemptEnabled() {
   return getSdkRapidFollowupPreempt() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_zippy_spindle", false);
 }
-//@ chunk-tyg7f3ek.js:89812-92166 placement
+//@ chunk-0yw3taqg.js:38914-41268 placement
 /**
  * print 模式快速追问抢占：人在模型回复期间连续发消息时，打断当前轮次让新消息尽快生效（tengu_zippy_spindle）。
  */
@@ -147,7 +115,7 @@ class RapidFollowupPreempter {
       let queued = this.messageQueue.getCommandQueueSnapshot();
       if (
         firstDispatchableCommand(queued) === held &&
-        !queued.some((queued) => queued.priority === "now" && isActiveMainAgentCommand(queued))
+        !queued.some((queued) => queued.priority === "now" && isDrainableMainThreadCommand(queued))
       )
         runSafely(() => this.preempt(held));
     }
@@ -204,10 +172,10 @@ class RapidFollowupPreempter {
     return isNew ? first : undefined;
   }
 }
-//@ chunk-tyg7f3ek.js:92166-92299 placement
+//@ chunk-0yw3taqg.js:41268-41401 placement
 function isPreemptingFollowup(command) {
   return (
-    canBatchWith(command) &&
+    isQueuedUserTurnCommand(command) &&
     isHumanOrigin(command.origin) &&
     command.verifiedSlackHumanTurn !== true &&
     command.bridgeOrigin !== true &&
@@ -216,7 +184,7 @@ function isPreemptingFollowup(command) {
     !isSlashLikeCommand(command)
   );
 }
-//@ chunk-tyg7f3ek.js:92299-92337 placement
+//@ chunk-0yw3taqg.js:41401-41439 placement
 function runSafely(applyBridgeChildCliEntrypoint) {
   try {
     applyBridgeChildCliEntrypoint();
@@ -224,25 +192,60 @@ function runSafely(applyBridgeChildCliEntrypoint) {
     logError(error);
   }
 }
-//@ chunk-tyg7f3ek.js:92337-92453 placement
+//@ chunk-0yw3taqg.js:41439-41555 placement
 function firstDispatchableCommand(queued) {
   return queued.find(
     (command) =>
-      isActiveMainAgentCommand(command) &&
+      isDrainableMainThreadCommand(command) &&
       (command.mode === "prompt" || command.mode === "orphaned-permission" || command.priority !== "later"),
   );
 }
-//@ chunk-tyg7f3ek.js:92453-92487 placement
+//@ chunk-0yw3taqg.js:41555-41589 placement
 function isSlashLikeCommand(command) {
   return looksLikeSlashInput(command.value);
 }
-//@ chunk-tyg7f3ek.js:92487-92498 placement
+//@ chunk-0yw3taqg.js:119413-119508 placement
+function installPermissionModeReporter(host, report) {
+  host.io.sessionState.onPermissionModeChanged = (mode) => {
+    let permissionMode = toExternalPermissionMode(mode);
+    let statusUuid = emitStatusMessage(host, permissionMode);
+    report(permissionMode, statusUuid);
+  };
+}
+//@ chunk-0yw3taqg.js:119508-119956 placement
+class SparedWindowReporter {
+  drain;
+  io;
+  stopping;
+  sparedWindowWiped = false;
+  constructor({ drain, io, stopping }) {
+    this.drain = drain;
+    this.io = io;
+    this.stopping = stopping;
+  }
+  runEntered() {
+    this.sparedWindowWiped = false;
+  }
+  report() {
+    if (this.drain.runningReported || this.stopping()) return;
+    if (this.io.hasStandingPrompt()) {
+      if (!this.sparedWindowWiped) {
+        this.sparedWindowWiped = true;
+        this.io.sessionState.wipeTurnScopedMetadata();
+      }
+      return;
+    }
+    this.drain.runningReported = true;
+    this.io.sessionState.notifyStateChanged("running");
+  }
+}
+//@ chunk-0yw3taqg.js:119956-119967 placement
 var PREEMPT_DEBOUNCE_MS = 200;
-//@ chunk-tyg7f3ek.js:92498-92550 placement
+//@ chunk-0yw3taqg.js:119967-120019 placement
 function isFollowupBackgroundsSubagentEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_valiant_crescent", false);
 }
-//@ chunk-tyg7f3ek.js:92550-95036 placement
+//@ chunk-0yw3taqg.js:120019-122505 placement
 /**
  * 人发来排队消息时把前台子代理移到后台，让主线程先处理新消息（tengu_valiant_crescent）。
  */
@@ -331,13 +334,13 @@ class FollowupBackgroundsSubagent {
         !filtered.every(isArmedDirectForegroundAgent) ||
         values.some((task) => isMainThreadForegroundShell(task) && task.status === "running") ||
         this.host.hasListedForegroundToolCall() ||
-        count(filtered, isAutoBackgroundHeld) > 0
+        countWhere(filtered, isAutoBackgroundHeld) > 0
       ) {
         this.lookAgainSoon();
         return;
       }
       if (!this.host.enabled()) return;
-      let movedCount = count(filtered, (agent) =>
+      let movedCount = countWhere(filtered, (agent) =>
         tryAutoBackgroundAgent(agent.id, taskRegistry, "follow_up"),
       );
       logForDebugging(
@@ -356,13 +359,10 @@ class FollowupBackgroundsSubagent {
   }
   waitingMessages() {
     let uuids = new Set();
-    for (let queued of filterQueuedCommandsForThread(
-      this.host.messageQueue.getCommandsByMaxPriority("next"),
-      {
-        isMainThread: true,
-        currentAgentId: undefined,
-      },
-    )) {
+    for (let queued of filterMidTurnDrainCommands(this.host.messageQueue.getCommandsByMaxPriority("next"), {
+      isMainThread: true,
+      currentAgentId: undefined,
+    })) {
       if (
         queued.drainOnly === true ||
         queued.screeningPending === true ||
@@ -384,7 +384,7 @@ class FollowupBackgroundsSubagent {
     }
   }
 }
-//@ chunk-tyg7f3ek.js:95036-95418 placement
+//@ chunk-0yw3taqg.js:122505-122888 placement
 function reportRedeliveredFollowupClosed(state, hasOpener, closedOn) {
   try {
     let folded = foldedFollowUpEnd(state, hasOpener);
@@ -403,7 +403,7 @@ function reportRedeliveredFollowupClosed(state, hasOpener, closedOn) {
     logError(error);
   }
 }
-//@ chunk-tyg7f3ek.js:95418-95577 placement
+//@ chunk-0yw3taqg.js:122888-123047 placement
 var FOLD_END_NO_MORE_ROWS = {
   end: "no_more_rows",
   modelWrote: false,

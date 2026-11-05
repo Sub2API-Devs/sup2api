@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：记录 Bash 命令改动过的文件内容
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (17)
  * attribution: placement 17
  */
 import { join, sep, resolve as resolve_2, dirname, relative, basename } from "path";
@@ -35,7 +35,7 @@ import {
   getSnapshotGitArgs,
   getSnapshotGitEnv,
 } from "./bashEditDiff/snapshot.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { stripBomAndCarriageReturn, isFullFileView } from "../../utils/remoteFileState.js";
 import { normalizeCrlf } from "../../utils/git/gitIndexReader.js";
 import {
@@ -52,7 +52,7 @@ import { safeSpawn } from "../../utils/safeSpawn.js";
 import { getPlatform } from "../../utils/platform.js";
 import { hasNulByteInHead } from "../../utils/fileRead.js";
 
-//@ chunk-e6aww6q8.js:4802566-4803544 placement
+//@ chunk-5xgkngpb.js:4935149-4936130 placement
 /**
  * 把观察到的写入路径记录到编辑记录器：目录写入展开为其下已知文件，过滤被忽略的路径，读取文件内容（总量有上限）存入 lastSeen，溢出或异常时放弃记录。
  */
@@ -110,7 +110,7 @@ async function recordObservedWrites(cwd) {
   }
   if (recorder.evicted) forgetRecorder(cwd);
 }
-//@ chunk-e6aww6q8.js:4803544-4803925 placement
+//@ chunk-5xgkngpb.js:4936130-4936511 placement
 /**
  * 为仓库启动编辑记录器（每个 cwd 一个）：拍快照、取真实根路径与基线文件列表，失败时清除。
  */
@@ -144,7 +144,7 @@ function startEditRecorder(cwd) {
   }
   return recorderPromise.then((recorder) => recorder !== null);
 }
-//@ chunk-e6aww6q8.js:4803925-4804014 placement
+//@ chunk-5xgkngpb.js:4936511-4936600 placement
 /**
  * 串行地记录命令改动过的文件内容（缺失、过大、不可读分别标记）。
  */
@@ -160,7 +160,7 @@ function recordEditedFilesSerially(
     recordEditedFiles(cwd, paths, overflow, snapshotTakenAt, maxAge, shared),
   );
 }
-//@ chunk-e6aww6q8.js:4804014-4806455 placement
+//@ chunk-5xgkngpb.js:4936600-4939044 placement
 /**
  * 记录 Bash 命令改动过的文件内容（缺失、过大、不可读都单独标记）。
  */
@@ -232,7 +232,7 @@ async function recordEditedFiles(cwd, paths, overflow, snapshotTakenAt, maxAge, 
     ].filter(isNewPath);
     let ignoredPaths = paths_2.length > 0 ? await checkIgnoredPaths(recorder.base, paths_2) : new Set();
     if (ignoredPaths === null) return unavailableResult();
-    let unavailableCount = count(unreadablePaths, (path) => !ignoredPaths.has(path));
+    let unavailableCount = countWhere(unreadablePaths, (path) => !ignoredPaths.has(path));
     let files = [];
     let changedFiles = [];
     let diffDeadline = performance.now() + RECORDER_POLL_MS;
@@ -322,7 +322,7 @@ async function recordEditedFiles(cwd, paths, overflow, snapshotTakenAt, maxAge, 
     return unavailableResult();
   }
 }
-//@ chunk-e6aww6q8.js:4806455-4806859 placement
+//@ chunk-5xgkngpb.js:4939044-4939448 placement
 /**
  * 把被写入的目录展开为其下的已知文件（来自基线列表与上次见过的文件），超过上限或缺少基线时返回 null。
  */
@@ -347,7 +347,7 @@ async function expandDirectoryWrites(recorder, directoryPaths) {
     }
   return expanded;
 }
-//@ chunk-e6aww6q8.js:4806859-4807327 placement
+//@ chunk-5xgkngpb.js:4939448-4939916 placement
 /**
  * 把绝对写入路径转换为仓库内的安全相对路径（解析父目录真实路径，排除嵌套仓库中的未知文件）。
  */
@@ -385,7 +385,7 @@ async function toRepoRelativePaths(recorder, paths) {
   }
   return [...repoPaths];
 }
-//@ chunk-e6aww6q8.js:4807327-4807540 placement
+//@ chunk-5xgkngpb.js:4939916-4940129 placement
 async function isInsideNestedRepo(dir, realRoot, nestedRepoCache) {
   let visitedDirs = [];
   let isNestedRepo = false;
@@ -408,7 +408,7 @@ async function isInsideNestedRepo(dir, realRoot, nestedRepoCache) {
   for (let visitedDir of visitedDirs) nestedRepoCache.set(visitedDir, isNestedRepo);
   return isNestedRepo;
 }
-//@ chunk-e6aww6q8.js:4807540-4807826 placement
+//@ chunk-5xgkngpb.js:4940129-4940415 placement
 async function looksLikeGitDir(gitPath) {
   let stat = await lstat(gitPath).catch(() => null);
   if (stat === null) return false;
@@ -421,7 +421,7 @@ async function looksLikeGitDir(gitPath) {
   let content = await statForRecorder(gitPath, 4096);
   return Buffer.isBuffer(content) && content.subarray(0, 7).equals(Buffer.from("gitdir:"));
 }
-//@ chunk-e6aww6q8.js:4807826-4808157 placement
+//@ chunk-5xgkngpb.js:4940415-4940746 placement
 /**
  * 求路径最近的已存在祖先的真实路径并拼回剩余部分（最多 64 层）；出错返回 null。
  */
@@ -447,7 +447,7 @@ async function realpathOfNearestAncestor(dir) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:4808157-4809805 placement
+//@ chunk-5xgkngpb.js:4940746-4942398 placement
 /**
  * 用 git cat-file --batch 批量读取 blob 内容。
  */
@@ -552,7 +552,7 @@ async function readBlobsFromGit(recorder, contentsByPath, hostRecords, maxAge) {
     tooLarge,
   };
 }
-//@ chunk-e6aww6q8.js:4809805-4810136 placement
+//@ chunk-5xgkngpb.js:4942398-4942729 placement
 /**
  * 用 git check-ignore --stdin 批量检查哪些路径被忽略，返回被忽略路径集合；git 失败返回 null。
  */
@@ -571,7 +571,7 @@ async function checkIgnoredPaths(base, paths) {
   );
   return code === 0 || code === 1 ? new Set(stdout.split("\x00").filter((path) => path !== "")) : null;
 }
-//@ chunk-e6aww6q8.js:4810136-4810394 placement
+//@ chunk-5xgkngpb.js:4942729-4942987 placement
 async function listBaseTreePaths(base) {
   if (!(await verifyKnownPrivateGitDir(base))) return null;
   let { stdout, code } = await runSnapshotGit(
@@ -586,7 +586,7 @@ async function listBaseTreePaths(base) {
   if (code !== 0 || stdout.length >= MAX_BASE_LISTING_BYTES) return null;
   return new Set(stdout.split("\x00").filter(isSafeRepoPath));
 }
-//@ chunk-e6aww6q8.js:4810394-4810824 placement
+//@ chunk-5xgkngpb.js:4942987-4943417 placement
 /**
  * 在快照用的隔离 git 环境中运行 git 命令（可传入标准输入、有超时），输出超过上限时强杀，返回输出或 null。
  */
@@ -624,7 +624,7 @@ async function runGitCapped(base, args, input) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:4810824-4811789 placement
+//@ chunk-5xgkngpb.js:4943417-4944382 placement
 async function statForRecorder(path, maxBytes) {
   let handle;
   try {
@@ -680,13 +680,13 @@ async function statForRecorder(path, maxBytes) {
     await handle.close();
   }
 }
-//@ chunk-e6aww6q8.js:4811789-4811984 placement
+//@ chunk-5xgkngpb.js:4944382-4944577 placement
 async function isSameOpenFile(fd, path, stats) {
   if (getPlatform() === "linux") return (await readlink(`/proc/self/fd/${fd}`).catch(() => null)) === path;
   let pathStat = await lstat(path).catch(() => null);
   return pathStat !== null && pathStat.isFile() && pathStat.dev === stats.dev && pathStat.ino === stats.ino;
 }
-//@ chunk-e6aww6q8.js:4811984-4812367 placement
+//@ chunk-5xgkngpb.js:4944577-4944960 placement
 /**
  * 记住文件的最近内容（LRU）：替换旧记录，总字节超过上限时从最旧开始逐出并标记 evicted。
  */
@@ -710,7 +710,7 @@ function rememberFileContent(recorder, filePath, content) {
   });
   recorder.lastSeenBytes += contentBytes;
 }
-//@ chunk-e6aww6q8.js:4812367-4812407 placement
+//@ chunk-5xgkngpb.js:4944960-4945000 placement
 /**
  * 判断快照中的文件内容不可直接逐字比较（二进制/过大/不可读，由 Vys 判定）。
  */

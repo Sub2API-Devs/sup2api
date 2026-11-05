@@ -3,9 +3,9 @@
  *
  * PowerShell 权限选项生成（规则建议、目录、前缀编辑、反馈）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/PowerShellPermissionRequest/powershellToolUseOptions.tsx
- * pieces: chunk-18hwfzwa.js (2)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: placement 1, fingerprint 1
  */
 import { init_react_production } from "../../../../vendor/react/cjs/react.production.js";
@@ -13,12 +13,12 @@ import { shouldShowAlwaysAllowOptions } from "../../../utils/permissions/permiss
 import { POWERSHELL_TOOL_NAME } from "../../../tools/PowerShellTool/toolName.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1395417-1395421 placement
+//@ chunk-czq1j3j2.js:1418187-1418191 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1395417", () => {
+deferInit("chunk-czq1j3j2.js:1418187", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1395421-1396518 fingerprint (2.1.88 match: powershellToolUseOptions, 0.902)
+//@ chunk-czq1j3j2.js:1434164-1435261 fingerprint (2.1.88 match: powershellToolUseOptions, 0.902)
 function powershellToolUseOptions({
   suggestionsRow = null,
   onRejectFeedbackChange,

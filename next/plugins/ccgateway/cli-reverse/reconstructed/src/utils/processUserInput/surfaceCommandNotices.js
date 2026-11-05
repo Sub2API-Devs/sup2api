@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：命令通知展示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3g0djq3w.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g88zyy4n.js (13)
  * attribution: placement 13
  */
 import { resolve } from "path";
@@ -38,7 +38,7 @@ import { loadedModuleArgs } from "../../plugins/hooksModules/loadedModuleFilters
 import { childNameUnder } from "../../plugins/functionHooks/devModsWatch.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3g0djq3w.js:5357-5566 placement
+//@ chunk-g88zyy4n.js:5569-5778 placement
 /**
  * 判断某命令的 command.run 钩子注册数是否不超过 1。
  */
@@ -59,7 +59,7 @@ function hasSingleCommandRunHook(command) {
     return false;
   }
 }
-//@ chunk-3g0djq3w.js:6432-7177 placement
+//@ chunk-g88zyy4n.js:6644-7389 placement
 /**
  * 桌面版运行 /plugin 时的说明（如何添加插件与市场）。
  */
@@ -69,7 +69,7 @@ var PLUGIN_COMMAND_DESKTOP_NOTE =
   "For a marketplace you haven't added, Add marketplace in the app takes a GitHub owner/repo or a Git URL. Or, in a terminal with Claude Code installed on the machine this session runs on, run `claude plugin marketplace add <source>` and then `claude plugin install <plugin>@<marketplace>`, using the marketplace name the first command prints. Then send /reload-plugins here.";
 var PLUGIN_COMMAND_DESKTOP_NOTE_COPY =
   "Your organization limits which marketplaces can be added. For a plugin that isn't in Add plugin, contact your admin.";
-//@ chunk-3g0djq3w.js:7177-7371 placement
+//@ chunk-g88zyy4n.js:7389-7583 placement
 function pluginCommandNotice(command) {
   if (command?.name !== "plugin" || !isNativeTerminalNotifySupported() || !isUsingDefaultPluginsDirectory())
     return;
@@ -83,7 +83,7 @@ function pluginCommandNotice(command) {
     return PLUGIN_COMMAND_DESKTOP_NOTE_2;
   }
 }
-//@ chunk-3g0djq3w.js:7371-8104 placement
+//@ chunk-g88zyy4n.js:7583-8322 placement
 /**
  * 云会话中 /teleport、/session、/remote-control 不可用时的说明。
  */
@@ -96,21 +96,22 @@ function remoteSessionCommandNotices() {
     "remote-control": ({ remoteSessionId }) =>
       `Remote Control connects a terminal session to claude.ai, and this session is already running as a cloud session: ${getRemoteTaskSessionUrl(remoteSessionId)}.`,
     ...{},
+    ...{},
   };
 }
-//@ chunk-3g0djq3w.js:8104-8275 placement
+//@ chunk-g88zyy4n.js:8322-8493 placement
 var CCS_COMMAND_NOTICES = {
   usage: ({ remoteSessionId }) =>
     `Usage isn't shown in this chat. To see it, open Settings \u2192 Usage on claude.ai: ${getClaudeAiBaseUrl(remoteSessionId, env.SESSION_INGRESS_URL)}/settings/usage`,
 };
-//@ chunk-3g0djq3w.js:8275-8325 placement (2.1.88 match: getRemoteTaskSessionUrl, 1)
+//@ chunk-g88zyy4n.js:8493-8543 placement (2.1.88 match: getRemoteTaskSessionUrl, 1)
 /**
  * 远程会话的网页 URL（基于 SESSION_INGRESS_URL）。
  */
 function getRemoteTaskSessionUrl(sessionId) {
   return getRemoteSessionUrl(sessionId, env.SESSION_INGRESS_URL);
 }
-//@ chunk-3g0djq3w.js:8325-8457 placement
+//@ chunk-g88zyy4n.js:8543-8675 placement
 function remoteSessionIdFromEnv() {
   let CLAUDE_CODE_REMOTE_SESSION_ID = env.CLAUDE_CODE_REMOTE_SESSION_ID;
   if (!CLAUDE_CODE_REMOTE_SESSION_ID) return;
@@ -122,7 +123,7 @@ function remoteSessionIdFromEnv() {
     return;
   }
 }
-//@ chunk-3g0djq3w.js:8457-8611 placement
+//@ chunk-g88zyy4n.js:8675-8829 placement
 /**
  * 某命令在当前界面不可用时的说明（桌面版的 /plugin、云会话中的 /teleport 等）。
  */
@@ -140,10 +141,10 @@ function commandSurfaceNotice(commandName, builtinCommands) {
       })
     : undefined;
 }
-//@ chunk-3g0djq3w.js:8611-8658 placement
+//@ chunk-g88zyy4n.js:8829-8876 placement
 var TENGU_POLISHED_QUILL_KILLSWITCH = "tengu_polished_quill_killswitch";
 var MAX_UNKNOWN_COMMAND_NOTICE_LENGTH = 40;
-//@ chunk-3g0djq3w.js:8658-8704 placement
+//@ chunk-g88zyy4n.js:8876-8922 placement
 /**
  * isQuillKillswitchOff：未触发 killswitch 时为真。
  */
@@ -151,7 +152,7 @@ function isQuillKillswitchOff(isNonInteractiveSession) {
   if (!isNonInteractiveSession) return false;
   return !getFeatureValue_CACHED_MAY_BE_STALE(TENGU_POLISHED_QUILL_KILLSWITCH, false);
 }
-//@ chunk-3g0djq3w.js:8704-8990 placement
+//@ chunk-g88zyy4n.js:8922-9208 placement
 /**
  * 构造未知命令的回退信息（命令名、建议与可用命令名，过滤含密钥的文本）。
  */
@@ -166,12 +167,12 @@ function unknownCommandFallback({ commandName, suggestion, availableCommandNames
     availableCommandCount,
   };
 }
-//@ chunk-3g0djq3w.js:9022-9057 placement
+//@ chunk-g88zyy4n.js:9240-9275 placement
 var modBuildHintState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3g0djq3w.js:9022", () => {
+deferInit("chunk-g88zyy4n.js:9240", () => {
   modBuildHintState = identity(createValueSlot(), (state) => state.set(undefined));
 });
-//@ chunk-3g0djq3w.js:9057-9865 placement
+//@ chunk-g88zyy4n.js:9275-10083 placement
 /**
  * 用户运行正在构建的 mod 的命令后，给模型的一次性提示（简短回应结果或提出 mod 建议）。
  */

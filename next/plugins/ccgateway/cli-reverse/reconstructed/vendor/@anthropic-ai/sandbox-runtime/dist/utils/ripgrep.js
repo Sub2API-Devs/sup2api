@@ -1,14 +1,14 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/utils/ripgrep.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (2)
+ * pieces: chunk-qg41pqt6.js (2)
  * attribution: esm-fingerprint 2
  */
 import { spawn } from "child_process";
 import { text } from "stream/consumers";
 
-//@ chunk-fq0cr76a.js:719230-719654 esm-fingerprint
+//@ chunk-qg41pqt6.js:720912-721336 esm-fingerprint
 async function ripGrep(
   args,
   target,
@@ -53,7 +53,7 @@ async function ripGrep(
     stderr,
   );
 }
-//@ chunk-fq0cr76a.js:719654-719759 esm-fingerprint
+//@ chunk-qg41pqt6.js:721336-721441 esm-fingerprint
 class RipgrepError extends Error {
   constructor(message, listed, stderr) {
     super(message);

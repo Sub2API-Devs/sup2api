@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：工具增减提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (8)
  * attribution: placement 8
  */
 import { ownValue } from "../../services/api/toolDefinitionShape.js";
 import { createStepRecorder } from "../../plugins/functionHooks/dispatch/chain.js";
 import { getPluginRegistry } from "../plugins/pluginLoadState.js";
 
-//@ chunk-e6aww6q8.js:5043450-5043949 placement
+//@ chunk-5xgkngpb.js:5198575-5199074 placement
 /**
  * 把工具增删应用到工具变更记录：新增项抵消之前的删除；删除时按值删除需在已宣告列表内才记录（否则只撤销对应新增）；新增时附上工具定义。
  */
@@ -47,7 +47,7 @@ function applyToolDeltas(
       };
   }
 }
-//@ chunk-e6aww6q8.js:5043949-5044228 placement
+//@ chunk-5xgkngpb.js:5199074-5199353 placement
 function dropToolAddition(message, toolName) {
   let filtered = message.toolAdditions?.filter((toolAddition) => toolAddition !== toolName);
   if (filtered === undefined || filtered.length === 0) delete message.toolAdditions;
@@ -58,7 +58,7 @@ function dropToolAddition(message, toolName) {
     else message.toolDefinitions = restDefinitions;
   }
 }
-//@ chunk-e6aww6q8.js:5044228-5044339 placement
+//@ chunk-5xgkngpb.js:5199353-5199464 placement
 /**
  * 从工具增量记录中挑出指定名称的工具定义。
  */
@@ -70,7 +70,7 @@ function pickToolDefinitions(deltas, inlineToolDefinitions) {
     definitions: picked,
   };
 }
-//@ chunk-e6aww6q8.js:5044339-5044736 placement
+//@ chunk-5xgkngpb.js:5199464-5199861 placement
 /**
  * 记录一次工具增或删：删除时移除对应新增；新增时撤销对应删除与按值删除，并加入新增列表。
  */
@@ -91,7 +91,7 @@ function recordToolDelta(message, op, toolName) {
   if (!(message[targetField] ?? []).includes(toolName))
     message[targetField] = [...(message[targetField] ?? []), toolName];
 }
-//@ chunk-e6aww6q8.js:5044736-5044945 placement
+//@ chunk-5xgkngpb.js:5199861-5200070 placement
 var makeCoreHookRunner = (coreHook, stepRecorder) => ({
   name: "core",
   isCore: true,
@@ -113,7 +113,7 @@ var makeCoreHookRunner = (coreHook, stepRecorder) => ({
     };
   },
 });
-//@ chunk-e6aww6q8.js:5044945-5045002 placement
+//@ chunk-5xgkngpb.js:5200070-5200127 placement
 /**
  * 创建带步骤记录器的工具差量执行核心。
  */
@@ -124,7 +124,7 @@ function createDeltaStepRecorder(coreHook) {
     runs: stepRecorder,
   };
 }
-//@ chunk-e6aww6q8.js:5045002-5045109 placement
+//@ chunk-5xgkngpb.js:5200127-5200234 placement
 /**
  * 判断给定的模块是否都已作为内置模块加载。
  */
@@ -134,7 +134,7 @@ function areBuiltinModulesLoaded(moduleNames) {
     loadedModules.some((loadedModule) => loadedModule.name === moduleName && loadedModule.tier === "builtin"),
   );
 }
-//@ chunk-e6aww6q8.js:5045109-5045155 placement
+//@ chunk-5xgkngpb.js:5200234-5200280 placement
 /**
  * 有退出码时附加到结果对象上。
  */

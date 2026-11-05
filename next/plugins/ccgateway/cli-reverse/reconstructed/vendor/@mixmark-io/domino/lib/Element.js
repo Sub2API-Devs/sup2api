@@ -1,8 +1,8 @@
 /**
  * @mixmark-io/domino/lib/Element.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @mixmark-io/domino@2.2.0
- * pieces: chunk-vwj6ccer.js (1)
+ * pieces: chunk-w04z664w.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -21,7 +21,7 @@ import { require_ChildNode } from "./ChildNode.js";
 import { require_NonDocumentTypeChildNode } from "./NonDocumentTypeChildNode.js";
 import { require_NamedNodeMap } from "./NamedNodeMap.js";
 
-//@ chunk-vwj6ccer.js:45299-62055 cjs-fingerprint
+//@ chunk-w04z664w.js:45299-62055 cjs-fingerprint
 var require_Element = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Element;
   var xml = require_xmlnames();

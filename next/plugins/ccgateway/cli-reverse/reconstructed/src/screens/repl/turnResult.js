@@ -3,11 +3,13 @@
  *
  * 2.1.316 新增。回合结果处理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (4)
- * attribution: placement 4
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (6)
+ * attribution: placement 6
  */
+import { sumByAlias } from "../../services/artifacts/frameApi.js";
+import { identityAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { isSdkHostOrigin } from "../../cli/print/lowLatencySubmit.js";
 import { isAsyncIterable } from "../../components/dialogs/dialogRequests.js";
 import { isPlainObject } from "../../utils/objectUtils.js";
@@ -16,7 +18,13 @@ import { isAbortedTerminalReason, isErrorTerminalReason } from "../../entrypoint
 import { getTrailingApiErrorInfo } from "../../utils/messages.js";
 import { filterDisplayableErrors } from "../../remote/sdkMessageAdapter.js";
 
-//@ chunk-18hwfzwa.js:1467830-1468240 placement
+//@ chunk-czq1j3j2.js:1509134-1509182 placement
+function sumToolCounts(counts) {
+  return counts && counts.length ? sumByAlias(counts, identityAlias) : 0;
+}
+//@ chunk-czq1j3j2.js:1509182-1509194 placement
+var sumScores = sumToolCounts;
+//@ chunk-czq1j3j2.js:1509232-1509642 placement
 /**
  * 包装对话框请求：适合时转给 Remote Control 桥回答。
  */
@@ -45,7 +53,7 @@ function routeDialogOverBridge(dialog, scope) {
     return answer.result;
   };
 }
-//@ chunk-18hwfzwa.js:1468240-1468582 placement
+//@ chunk-czq1j3j2.js:1509642-1509984 placement
 /**
  * 回合结束分类：stopped / completed / {failure, errorKind}。
  */
@@ -69,7 +77,7 @@ function classifyTurnEnd({ result: terminal, messages, stopped, threw }) {
     errorKind: trailing?.errorKind,
   };
 }
-//@ chunk-18hwfzwa.js:1468582-1468707 placement
+//@ chunk-czq1j3j2.js:1509984-1510109 placement
 /**
  * 最后一条是助手消息时取末尾 API 错误信息。
  */
@@ -81,7 +89,7 @@ function trailingApiError(messages) {
   }
   return;
 }
-//@ chunk-18hwfzwa.js:1468707-1468823 placement
+//@ chunk-czq1j3j2.js:1510109-1510225 placement
 /**
  * 结果中的错误文本列表。
  */
@@ -93,4 +101,4 @@ function resultErrorTexts(result) {
     ...filterDisplayableErrors(record.errors),
   ];
 }
-export { classifyTurnEnd, routeDialogOverBridge };
+export { classifyTurnEnd, sumScores, routeDialogOverBridge };

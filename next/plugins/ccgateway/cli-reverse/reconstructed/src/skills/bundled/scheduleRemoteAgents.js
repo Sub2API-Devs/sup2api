@@ -3,10 +3,10 @@
  *
  * 并入已有模块：远程代理定时技能补充。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/scheduleRemoteAgents.ts
- * pieces: chunk-6mwt0myy.js (2), chunk-dcmhvw5a.js (1), chunk-m3arwd1y.js (13)
- * attribution: placement 2, fingerprint 6, callgraph-fingerprint 1, affinity 1, layout 5, file-local 1
+ * pieces: chunk-5fazksz3.js (12), chunk-evj8g37g.js (1), chunk-z20c443b.js (1)
+ * attribution: fingerprint 6, layout 4, placement 2, file-local 1, callgraph-fingerprint 1
  */
 import { uuidToBigInt, base58Encode } from "../../utils/taggedId.js";
 import { normalizeConnectorId } from "../../services/mcp/claudeai.js";
@@ -40,14 +40,14 @@ import {
   getMcpServerSignature,
   shouldSkipClaudeAiFetchForEnterpriseLockdown,
 } from "../../services/mcp/config.js";
-import { uniq } from "../../utils/collections.js";
+import { SCOPE_ORDER } from "../../components/mcp/MCPListPanel.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { getStrictMcpConfig } from "../../bootstrap/state.js";
 import { isBareMode } from "../../utils/envUtils.js";
 import { hasDisableClaudeAiConnectors } from "../../utils/settings/settings.js";
 import { isCustomizationDisabled } from "../../utils/settings/customizationDisabled.js";
-import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6mwt0myy.js:1431-1501 placement
+//@ chunk-evj8g37g.js:1426-1496 placement
 /**
  * 用连接器前缀与 base58(uuid) 拼出 id，失败返回 undefined。
  */
@@ -59,28 +59,16 @@ function connectorScopedAgentId(agentIdPrefix, uuid) {
     return;
   }
 }
-//@ chunk-6mwt0myy.js:1501-1694 fingerprint (2.1.88 match: BASE58, 1)
-function BASE58(encoded) {
-  if (encoded.length !== 22) return;
-  let radix = BigInt(58);
-  let value = 0n;
-  for (let char of encoded) {
-    let index = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".indexOf(char);
-    if (index < 0) return;
-    value = value * radix + BigInt(index);
-  }
-  return value;
-}
-//@ chunk-dcmhvw5a.js:71894-71956 callgraph-fingerprint (2.1.88 match: getConnectedClaudeAIConnectors, 0.455)
+//@ chunk-z20c443b.js:72002-72064 callgraph-fingerprint (2.1.88 match: getConnectedClaudeAIConnectors, 0.456)
 /**
  * getConnectedClaudeAIConnectors（实为 isConnectedOrCached）：连接状态为 connected 或 cached。
  */
 function isConnectedOrCached(mcpClients) {
   return mcpClients.type === "connected" || mcpClients.type === "cached";
 }
-//@ chunk-m3arwd1y.js:12143-12210 affinity (2.1.88 match: BASE58, 1)
-var BASE58_2 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-//@ chunk-m3arwd1y.js:12210-12528 fingerprint (2.1.88 match: taggedIdToUUID, 1)
+//@ chunk-5fazksz3.js:13263-13330 fingerprint (2.1.88 match: BASE58, 1)
+var BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+//@ chunk-5fazksz3.js:13330-13648 fingerprint (2.1.88 match: taggedIdToUUID, 1)
 function taggedIdToUUID(taggedId) {
   let normalizedId = normalizeConnectorId(taggedId);
   let prefix = "mcpsrv_";
@@ -88,26 +76,26 @@ function taggedIdToUUID(taggedId) {
   let rest = normalizedId.slice(7).slice(2);
   let n = 0n;
   for (let char of rest) {
-    let idx = BASE58_2.indexOf(char);
+    let idx = BASE58.indexOf(char);
     if (idx === -1) return null;
     n = n * 58n + BigInt(idx);
   }
   let hex = n.toString(16).padStart(32, "0");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
-//@ chunk-m3arwd1y.js:12528-12637 layout
+//@ chunk-5fazksz3.js:13648-13757 layout
 function isClaudeAiConnectorConfig(config) {
   if (config.type !== "claudeai-proxy") return false;
   return config.scope === "claudeai" || (config.scope === "dynamic" && !isPluginServerConfig(config));
 }
-//@ chunk-m3arwd1y.js:12637-12677 layout
+//@ chunk-5fazksz3.js:13757-13797 layout
 /**
  * 判断 MCP 客户端是否可用于 claude.ai 连接器（已连接/缓存且配置匹配）。
  */
 function isUsableClaudeAiConnector(client) {
   return isConnectedOrCached(client) && isClaudeAiConnectorConfig(client.config);
 }
-//@ chunk-m3arwd1y.js:12677-12870 placement (2.1.88 match: _temp2, 1)
+//@ chunk-5fazksz3.js:13797-13990 placement (2.1.88 match: _temp2, 1)
 function collectClaudeAiConnectors(client_0) {
   let connectors = [];
   for (let client of client_0) {
@@ -123,19 +111,14 @@ function collectClaudeAiConnectors(client_0) {
   }
   return connectors;
 }
-//@ chunk-m3arwd1y.js:12870-12935 layout (2.1.88 match: SCOPE_ORDER, 0.845)
-var SCOPE_ORDER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-m3arwd1y.js:12870", () => {
-  SCOPE_ORDER = new Set(["local", "user", "project", "enterprise", "managed"]);
-});
-//@ chunk-m3arwd1y.js:12935-13029 file-local
+//@ chunk-5fazksz3.js:14055-14149 file-local
 function sanitizeConnectorName(name) {
   return name
     .replace(/[^a-zA-Z0-9_-]/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 }
-//@ chunk-m3arwd1y.js:13029-19179 layout
+//@ chunk-5fazksz3.js:14149-20494 layout
 /**
  * 为 /schedule 远程代理提示词生成 MCP 连接器说明：列出已连接的 claude.ai 连接器（uuid、名称、URL）；没有时按原因（托管锁定、受限配置、退出、安全模式、缺少权限、仍在连接）给出对应解释，并说明仅本地的服务器和同名重复项。
  */
@@ -211,6 +194,10 @@ function buildConnectorsInfo({
         "The claude.ai connector list was not loaded in this session, so connectors beyond those listed above may already exist on claude.ai \u2014 do not assert that the user must connect a service that is not listed.",
       );
   }
+  if (connectorFetchSkipReason !== null || hasUnlistedTrustedConnector || suppressedTwinCount > 0)
+    lines.push(
+      "A routine created with neither `mcp_connections` nor `clear_mcp_connections` normally still gets the account's connected connectors, including ones not listed here.",
+    );
   let hasNoConnectors = connectors.length === 0 && connectorFetchSkipReason !== null;
   if (localOnlyServerCount > 0)
     lines.push(
@@ -225,15 +212,15 @@ function buildConnectorsInfo({
   return lines.join(`
 `);
 }
-//@ chunk-m3arwd1y.js:19179-19242 layout
+//@ chunk-5fazksz3.js:20494-20557 layout
 var SCHEDULE_MENU_QUESTION = "What would you like to do with scheduled cloud agents?";
-//@ chunk-m3arwd1y.js:19242-19315 fingerprint (2.1.88 match: formatSetupNotes, 1)
+//@ chunk-5fazksz3.js:20557-20630 fingerprint (2.1.88 match: formatSetupNotes, 1)
 function formatSetupNotes(notes) {
   return `\u26A0 Heads-up:
 ${notes.map((n) => `- ${n}`).join(`
 `)}`;
 }
-//@ chunk-m3arwd1y.js:19315-19454 fingerprint (2.1.88 match: getCurrentRepoHttpsUrl, 1)
+//@ chunk-5fazksz3.js:20630-20769 fingerprint (2.1.88 match: getCurrentRepoHttpsUrl, 1)
 async function getCurrentRepoHttpsUrl() {
   let remoteUrl = await getRemoteUrl();
   if (!remoteUrl) return null;
@@ -241,7 +228,7 @@ async function getCurrentRepoHttpsUrl() {
   if (!parsed || isNestedGitLabProject(parsed)) return null;
   return `https://${parsed.host}/${parsed.owner}/${parsed.name}`;
 }
-//@ chunk-m3arwd1y.js:19454-31118 fingerprint (2.1.88 match: buildPrompt, 0.832)
+//@ chunk-5fazksz3.js:20769-33434 fingerprint (2.1.88 match: buildPrompt, 0.809)
 /**
  * /schedule skill 的主提示词：列出/创建/更新/运行远程定时代理的流程、仓库与环境选择、连接器说明。
  */
@@ -343,6 +330,8 @@ For a recurring schedule:
 
 For a one-time run, replace \`"cron_expression": "CRON_EXPR"\` with \`"run_once_at": "YYYY-MM-DDTHH:MM:SSZ"\` (RFC3339 UTC, must be in the future). Everything else is identical.
 
+If the user asked for no connectors, add \`"clear_mcp_connections": true\` at the top level of the body, beside \`name\` and not inside \`job_config\`.
+
 Generate a fresh lowercase UUID for \`events[].data.uuid\` yourself.
 
 Every \`events[].data.message\` must be the API message shape \`{"role": "user", "content": "..."}\` \u2014 the \`role\` field is required, never omit it. If you instead write the body in the \`session_request\` form that list and get return, the same rule applies to \`session_request.events[].payload.message\`.
@@ -387,12 +376,15 @@ ${
   \`\`\`json
   [{"connector_uuid": "uuid", "name": "server-name", "url": "https://..."}]
   \`\`\`
+- \`clear_mcp_connections\` (boolean) \u2014 Create the routine with an empty stored connector list. Send it only when the user asked for none. The server rejects it alongside a non-empty \`mcp_connections\`.
+
+If both are left out, or \`mcp_connections\` is empty, the server normally attaches the user's connected connectors. Only \`clear_mcp_connections: true\` reliably leaves the routine's stored list empty. Connectors an organization admin set up can still reach its runs, so do not promise the user that a run has no connectors.
 
 ### Update Routine \u2014 Optional Fields
 All fields optional (partial update):
 - \`name\`, \`cron_expression\`, \`run_once_at\`, \`enabled\`, \`job_config\`
-- \`mcp_connections\` \u2014 Replace MCP connections
-- \`clear_mcp_connections\` (boolean) \u2014 Remove all MCP connections
+- \`mcp_connections\` \u2014 Replace MCP connections (an empty list changes nothing)
+- \`clear_mcp_connections\` (boolean) \u2014 Empty the routine's stored MCP connection list
 
 ### Cron Expression Examples
 
@@ -423,8 +415,8 @@ When /schedule was invoked it was **${nowLocal}** (${userTimezone}) / **${nowUtc
    - Explicit about what actions to take (open PRs, commit, just analyze, etc.)
 3. **Set the schedule** \u2014 Ask when and how often. The user's timezone is ${userTimezone}. When they say a time (e.g., "every morning at 9am"), assume they mean their local time and convert to UTC for the cron expression. Always confirm the conversion: "9am ${userTimezone} = Xam UTC." If they want a one-time run (e.g., "once at 3pm", "tomorrow morning", "remind me to check X later"), use \`run_once_at\` instead of \`cron_expression\` \u2014 same timezone conversion applies. **First re-check the current time with \`date -u\` via Bash** (the reference time above may be stale in a long conversation), resolve the relative phrase against that fresh value, and confirm the resulting absolute timestamp with the user.
 4. **Choose the model** \u2014 Default to \`${aliases}\`. Tell the user which model you're defaulting to and ask if they want a different one.
-5. **Validate connections** \u2014 Infer what services the agent will need from the user's description. For example, if they say "check Datadog and Slack me errors," the agent needs both Datadog and Slack MCP connectors. Cross-reference with the connectors list above. If any are missing, warn the user and link them to https://claude.ai/customize/connectors to connect first.${gitRepoUrl ? ` The default git repo is already set to \`${gitRepoUrl}\`. Ask the user if this is the right repo or if they need a different one.` : " Ask which git repos the cloud agent needs cloned into its environment."}
-6. **Review and confirm** \u2014 Show the full configuration before creating. Let them adjust.
+5. **Validate connections** \u2014 Infer what services the agent will need from the user's description. For example, if they say "check Datadog and Slack me errors," the agent needs both Datadog and Slack MCP connectors. Cross-reference with the connectors list above. If any are missing, warn the user and link them to https://claude.ai/customize/connectors to connect first. If the routine seems to need no connectors, tell the user it will normally still get any connectors connected to their account unless they ask for none, and send \`clear_mcp_connections: true\` only if they do.${gitRepoUrl ? ` The default git repo is already set to \`${gitRepoUrl}\`. Ask the user if this is the right repo or if they need a different one.` : " Ask which git repos the cloud agent needs cloned into its environment."}
+6. **Review and confirm** \u2014 Show the full configuration before creating, including which connectors the routine will get. Let them adjust.
 7. **Create it** \u2014 Call \`${REMOTETRIGGER}\` with \`action: "create"\` and show the result. The response includes the routine ID. Always output a link at the end: \`https://claude.ai/code/routines/{ROUTINE_ID}\`
 
 ### UPDATE a routine:
@@ -466,7 +458,7 @@ Start by understanding their intent and working through the appropriate workflow
     : ""
 }`;
 }
-//@ chunk-m3arwd1y.js:31118-37070 fingerprint (2.1.88 match: registerScheduleRemoteAgentsSkill, 0.411)
+//@ chunk-5fazksz3.js:33434-39383 fingerprint (2.1.88 match: registerScheduleRemoteAgentsSkill, 0.411)
 /**
  * 注册 /schedule 内置 skill（管理定时云端代理 routines）：需要 claude.ai 登录、非 CLAUDE_CODE_REMOTE、且策略允许 routines。
  */
@@ -486,7 +478,7 @@ function registerScheduleRemoteAgentsSkill() {
       !env.CLAUDE_CODE_REMOTE &&
       isPolicyAllowed(ALLOW_ROUTINES),
     policyGate: CLOUD_SESSIONS_POLICY,
-    allowedTools: [REMOTETRIGGER, ASKUSERQUESTION, "Bash(date *)"],
+    allowedTools: [ASKUSERQUESTION, "Bash(date *)"],
     async getPromptForCommand(userArgs, context) {
       if (!hasStoredOAuthToken())
         return [
@@ -594,7 +586,7 @@ function registerScheduleRemoteAgentsSkill() {
           })
           .map((mcpClient) => mcpClient.name),
       ).size;
-      let suppressedLabels = uniq(
+      let suppressedLabels = normalizeCaseForComparison_2(
         suppressedClaudeAiConnectors
           .map((suppressedClaudeAiConnector) =>
             sanitizeConnectorName(suppressedClaudeAiConnector.name.replace(/^claude[.\s-]ai[.\s-]/i, "")),
@@ -688,4 +680,4 @@ function registerScheduleRemoteAgentsSkill() {
     },
   });
 }
-export { isConnectedOrCached, connectorScopedAgentId, BASE58, registerScheduleRemoteAgentsSkill };
+export { isConnectedOrCached, connectorScopedAgentId, registerScheduleRemoteAgentsSkill };

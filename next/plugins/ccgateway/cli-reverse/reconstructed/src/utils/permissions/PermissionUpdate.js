@@ -3,10 +3,10 @@
  *
  * 权限更新（addRules/replaceRules/removeRules/setMode/addDirectories/removeDirectories）的运行时校验、应用到 ToolPermissionContext 与持久化到 settings 文件；混入若干同名误配的小函数。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/PermissionUpdate.ts
- * pieces: chunk-1de6ar4n.js (1), chunk-4kzs0ch0.js (1), chunk-82kqcve8.js (36)
- * attribution: placement 18, fingerprint 5, layout 15
+ * pieces: chunk-a2q0x549.js (35), chunk-y5p93xet.js (1)
+ * attribution: placement 25, layout 7, fingerprint 4
  */
 import { posix } from "path";
 import {
@@ -38,35 +38,36 @@ import { getSessionFeatureValues } from "../../bootstrap/sessionFeatureValues.js
 import { logError } from "../log.js";
 import { env } from "../env.js";
 import {
-  getDenyRules,
-  getAskRules,
+  deniedBashRules,
+  askedBashRules,
   NARROWING_RULE_SOURCES as NARROWING_RULE_SOURCES_2,
   toolMatchesRule,
 } from "./permissions.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import {
+  parseRuleString,
   permissionRuleValueFromString,
   canonicalToolName,
   aliasesFor,
   escapeRuleContent,
 } from "./permissionRuleParser.js";
-import { formatPermissionRule } from "./disallowedToolsFlag.js";
 import { jsonStringify } from "../slowOperations.js";
 import { truncateToLength } from "../stringUtils.js";
+import { permissionRuleValueFromString as permissionRuleValueFromString_2 } from "../sandbox/sandbox-adapter.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../errors.js";
 import { isSessionRuleUpdate, propagateAbort } from "../../components/permissions/hooks.js";
 import { logForDebugging } from "../debug.js";
 import { syncRemoteBrowserCardAnswers } from "./toolPermissionContext.js";
+import { addAdditionalWorkingDirectories, toPosixPath } from "./filesystem.js";
+import { normalizeRuleString, parseRuleValue } from "./legacyWildcardRules.js";
 import { getToolNameForPermissionCheck } from "../../services/mcp/mcpStringUtils.js";
 import { addPermissionRulesToSettings } from "./permissionsLoader.js";
-import { toPosixPath } from "./filesystem.js";
 import { getAdditionalDirectoriesForClaudeMd } from "../../bootstrap/state.js";
-import { PATH_RULE_CARVE_OUT_RE } from "../settings/permissionRuleCarveOut.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:219856-219950 placement
+//@ chunk-a2q0x549.js:218025-218119 placement
 /**
  * blocksReadsOutsideWorkingDirs：策略设置是否要求阻断工作目录外的读取。
  */
@@ -75,12 +76,12 @@ function blocksReadsOutsideWorkingDirs() {
     (settings) => settings.permissions?.blockReadsOutsideWorkingDirectories === true,
   );
 }
-//@ chunk-82kqcve8.js:219980-220047 placement
+//@ chunk-a2q0x549.js:218149-218216 placement
 function isRemotePolicyEligible() {
   let eligibilityMemo = getEligibilityMemo();
   return eligibilityMemo === false || (eligibilityMemo === true && getLastLoadStatus()?.state === "ok");
 }
-//@ chunk-82kqcve8.js:220047-220175 placement
+//@ chunk-a2q0x549.js:218216-218344 placement
 function isPolicyHelperConsentSatisfied() {
   let { state, applied } = policyHelperConsentState();
   return (
@@ -90,7 +91,7 @@ function isPolicyHelperConsentSatisfied() {
     (state === "ok" || (state === "none" && (applied !== "none" || !basePolicyNamesHelper())))
   );
 }
-//@ chunk-82kqcve8.js:220175-220259 placement
+//@ chunk-a2q0x549.js:218344-218428 placement
 function isPolicyPlistsAvailable() {
   return (
     hasMdmResult() &&
@@ -99,23 +100,23 @@ function isPolicyPlistsAvailable() {
     getPolicySettingsLoadErrors().length === 0
   );
 }
-//@ chunk-82kqcve8.js:220259-220298 placement
+//@ chunk-a2q0x549.js:218428-218467 placement
 function isHklmPolicyAvailable() {
   return isPolicyPlistsAvailable() && isPolicyReadAnswered("hklm");
 }
-//@ chunk-82kqcve8.js:220298-220337 placement
+//@ chunk-a2q0x549.js:218467-218506 placement
 function isHkcuPolicyAvailable() {
   return isPolicyPlistsAvailable() && isPolicyReadAnswered("hkcu");
 }
-//@ chunk-82kqcve8.js:220337-220385 placement
+//@ chunk-a2q0x549.js:218506-218554 placement
 function hasManagedFileRules() {
   return getManagedFileLoadState() !== "didNotLoad" && hasRules();
 }
-//@ chunk-82kqcve8.js:220385-220428 placement
+//@ chunk-a2q0x549.js:218554-218597 placement
 function hasRules() {
   return !policySettingsUnreadable() && getPolicySettingsLoadErrors().length === 0;
 }
-//@ chunk-82kqcve8.js:220428-220500 placement
+//@ chunk-a2q0x549.js:218597-218669 placement
 var POLICY_SOURCE_PROBES = {
   remote: isRemotePolicyEligible,
   helper: isPolicyHelperConsentSatisfied,
@@ -125,7 +126,7 @@ var POLICY_SOURCE_PROBES = {
   file: hasManagedFileRules,
   parent: hasRules,
 };
-//@ chunk-82kqcve8.js:220500-220669 placement
+//@ chunk-a2q0x549.js:218669-218838 placement
 function areManagedSourcesClear() {
   try {
     return Object.values(POLICY_SOURCE_PROBES).every((probe) => probe());
@@ -138,7 +139,7 @@ function areManagedSourcesClear() {
     return false;
   }
 }
-//@ chunk-82kqcve8.js:220669-220825 placement
+//@ chunk-a2q0x549.js:218838-218994 placement
 /**
  * 在 CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS 下记录规则集是否不含路径范围规则（豁免移除的前提）。
  */
@@ -148,7 +149,7 @@ function noteRemovalWaiverRules(context) {
   sessionFeatureValues.removalWaiverRulesClear =
     sessionFeatureValues.removalWaiverRulesClear !== false && !hasPathScopedRules(context);
 }
-//@ chunk-82kqcve8.js:220825-220936 placement
+//@ chunk-a2q0x549.js:218994-219105 placement
 /**
  * 规则集含路径范围规则时撤销移除豁免。
  */
@@ -156,7 +157,7 @@ function clearRemovalWaiverIfPathScoped(context) {
   if (env.CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS && hasPathScopedRules(context))
     getSessionFeatureValues().removalWaiverRulesClear = false;
 }
-//@ chunk-82kqcve8.js:220936-221147 placement
+//@ chunk-a2q0x549.js:219105-219316 placement
 /**
  * 非子会话且启用 EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS 时，规则集无路径范围规则、无未完成的设置改动、托管来源都正常才返回 true。
  */
@@ -170,7 +171,7 @@ function isRemovalWaiverActive(context) {
     areManagedSourcesClear()
   );
 }
-//@ chunk-82kqcve8.js:221147-222106 placement
+//@ chunk-a2q0x549.js:219316-220275 placement
 function checkBypassPermissionsEnv(toolPermissionContext) {
   if (
     !env.CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS ||
@@ -186,14 +187,14 @@ function checkBypassPermissionsEnv(toolPermissionContext) {
     ? "CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS has no effect while the Windows registry cannot be read for managed settings: dangerous rm commands keep their usual checks, and can run without a prompt in bypass permissions mode if the registry later becomes readable. If you didn't set it, check your shell profile."
     : "CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS is set, so dangerous rm commands can run without a prompt in bypass permissions mode once managed settings and plugin hooks have loaded. If you didn't set it, check your shell profile.";
 }
-//@ chunk-82kqcve8.js:222106-222303 placement (2.1.88 match: getDenyRuleForAgent, 0.771)
+//@ chunk-a2q0x549.js:220275-220472 placement (2.1.88 match: getDenyRuleForAgent, 0.771)
 function hasPathScopedRules(context) {
   return (
     context.blockReadsOutsideWorkingDirectories === true ||
-    [...getDenyRules(context), ...getAskRules(context)].some(
+    [...deniedBashRules(context), ...askedBashRules(context)].some(
       (rule) =>
         !(NARROWING_RULE_SOURCES_2.includes(rule.source) && rule.ruleValue.ruleContent === undefined) &&
-        [BASH_TOOL_NAME, FILE_EDIT_TOOL_NAME, FILE_READ_TOOL_NAME].some((name) =>
+        [BASH_TOOL_NAME, EDIT, READ].some((name) =>
           toolMatchesRule(
             context,
             {
@@ -205,17 +206,17 @@ function hasPathScopedRules(context) {
     )
   );
 }
-//@ chunk-82kqcve8.js:222303-222397 placement
+//@ chunk-a2q0x549.js:220472-220566 placement
 /**
  * isRuleRoundTripStable：规则经格式化再解析后与原值一致。
  */
 function isRuleRoundTripStable(ruleValue) {
-  let roundTripped = permissionRuleValueFromString(formatPermissionRule(ruleValue));
+  let roundTripped = parseRuleString(permissionRuleValueFromString(ruleValue));
   return roundTripped.toolName === ruleValue.toolName && roundTripped.ruleContent === ruleValue.ruleContent;
 }
-//@ chunk-82kqcve8.js:222397-222545 placement
+//@ chunk-a2q0x549.js:220566-220714 placement
 function canonicalizeAliasedRule(ruleValue) {
-  let roundTripped = permissionRuleValueFromString(formatPermissionRule(ruleValue));
+  let roundTripped = parseRuleString(permissionRuleValueFromString(ruleValue));
   if (
     roundTripped.ruleContent !== ruleValue.ruleContent ||
     roundTripped.toolName === ruleValue.toolName ||
@@ -225,14 +226,14 @@ function canonicalizeAliasedRule(ruleValue) {
     return null;
   return roundTripped;
 }
-//@ chunk-82kqcve8.js:222545-222841 layout
+//@ chunk-a2q0x549.js:220714-221010 layout
 /**
  * 合法的更新目的地（settings 五层 + cliArg/command/toolsNarrowing/mcpServerPolicy/hostCredential/session/mcpMount）与 allow/deny/ask → alwaysAllowRules/alwaysDenyRules/alwaysAskRules 的映射。
  */
 var PERMISSION_UPDATE_DESTINATION_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var VALID_PERMISSION_UPDATE_DESTINATIONS;
 var RULE_BEHAVIOR_CONTEXT_KEYS;
-deferInit("chunk-82kqcve8.js:222545", () => {
+deferInit("chunk-a2q0x549.js:220714", () => {
   PERMISSION_UPDATE_DESTINATION_SET = {
     userSettings: true,
     projectSettings: true,
@@ -254,7 +255,7 @@ deferInit("chunk-82kqcve8.js:222545", () => {
     ask: "alwaysAskRules",
   };
 });
-//@ chunk-82kqcve8.js:222841-222960 fingerprint (2.1.88 match: extractRules, 1)
+//@ chunk-a2q0x549.js:221010-221129 fingerprint (2.1.88 match: extractRules, 1)
 /**
  * 从更新列表中取出所有 addRules 的规则值。
  */
@@ -269,7 +270,7 @@ function extractRules(updates) {
     }
   });
 }
-//@ chunk-82kqcve8.js:222960-223120 layout
+//@ chunk-a2q0x549.js:221129-221289 placement
 function isPermissionRuleValueShape(value) {
   if (value === null || typeof value !== "object") return false;
   let candidate = value;
@@ -278,19 +279,19 @@ function isPermissionRuleValueShape(value) {
     (candidate.ruleContent === undefined || typeof candidate.ruleContent === "string")
   );
 }
-//@ chunk-82kqcve8.js:223120-223245 layout
+//@ chunk-a2q0x549.js:221289-221413 placement
 function describeValueForLog(value) {
   let described;
   try {
     described = isPermissionRuleValueShape(value)
-      ? formatPermissionRule(value)
+      ? permissionRuleValueFromString(value)
       : String(jsonStringify(value));
   } catch {
     described = "(unprintable value)";
   }
   return described.length > 200 ? `${truncateToLength(described, 200)}\u2026` : described;
 }
-//@ chunk-82kqcve8.js:223245-225938 layout
+//@ chunk-a2q0x549.js:221413-224130 placement
 /**
  * 运行时校验一条权限更新，返回 {action:"apply", update} 或 {action:"drop", reason}：目的地/行为必须在枚举内；放宽型（allow 的 add/replace、非 allow 的 remove）规则必须形状合法且能经存储往返（否则尝试 bp 修正）；收紧型规则只丢弃畸形项并按解析结果规范化；目录列表不得含空串/NUL。
  */
@@ -349,7 +350,10 @@ function validatePermissionUpdate(update) {
               action: "drop",
               reason: `widening ${type} (${behaviorChecked}) carries a shape-invalid rule: ${describeValueForLog(candidate)}`,
             };
-          if (!isRuleRoundTripStable(candidate)) {
+          if (
+            !isRuleRoundTripStable(candidate) &&
+            !(behaviorChecked === "allow" && permissionRuleValueFromString_2(candidate))
+          ) {
             let canonical = type === "removeRules" ? null : canonicalizeAliasedRule(candidate);
             if (canonical !== null) {
               normalized.push(canonical);
@@ -375,7 +379,7 @@ function validatePermissionUpdate(update) {
       let normalizedRules = [];
       for (let candidate of mapped) {
         if (!isPermissionRuleValueShape(candidate)) continue;
-        let normalizedRule = permissionRuleValueFromString(formatPermissionRule(candidate));
+        let normalizedRule = parseRuleString(permissionRuleValueFromString(candidate));
         if (
           normalizedRule.toolName !== candidate.toolName ||
           normalizedRule.ruleContent !== candidate.ruleContent
@@ -472,7 +476,7 @@ function validatePermissionUpdate(update) {
       };
   }
 }
-//@ chunk-82kqcve8.js:225938-226138 layout
+//@ chunk-a2q0x549.js:224130-224330 placement
 function logRefusedPermissionUpdate(sink, reason) {
   logError(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -481,7 +485,7 @@ function logRefusedPermissionUpdate(sink, reason) {
     ),
   );
 }
-//@ chunk-82kqcve8.js:226138-226375 layout
+//@ chunk-a2q0x549.js:224330-224568 placement
 /**
  * 批量校验更新，丢弃不合法项并记错误日志。
  */
@@ -501,23 +505,7 @@ function sanitizePermissionUpdates(updates) {
   }
   return valid;
 }
-//@ chunk-82kqcve8.js:226375-226527 layout
-/**
- * 向权限上下文添加额外工作目录（记录来源），返回新上下文。
- */
-function addAdditionalWorkingDirectories(context, directories, source) {
-  let dirs = new Map(context.additionalWorkingDirectories);
-  for (let directory of directories)
-    dirs.set(directory, {
-      path: directory,
-      source,
-    });
-  return {
-    ...context,
-    additionalWorkingDirectories: dirs,
-  };
-}
-//@ chunk-82kqcve8.js:226527-226823 layout
+//@ chunk-a2q0x549.js:224720-225017 placement
 /**
  * 校验后应用单条更新；Desktop Code 标签会话会丢弃未限定到单个 skill 的 .claude 会话 Edit allow 规则（Omi）；最后经 QYt 后处理。
  */
@@ -536,11 +524,11 @@ function applyValidatedPermissionUpdate(context, update, { announce = true } = {
     ? context
     : syncRemoteBrowserCardAnswers(context, applyPermissionUpdate(context, filtered, announce));
 }
-//@ chunk-82kqcve8.js:226823-226850 layout
+//@ chunk-a2q0x549.js:225017-225044 placement
 function logIfAnnounced(announce, message) {
   if (announce) logForDebugging(message);
 }
-//@ chunk-82kqcve8.js:226850-228601 fingerprint (2.1.88 match: applyPermissionUpdate, 0.884)
+//@ chunk-a2q0x549.js:225044-226927 fingerprint (2.1.88 match: applyPermissionUpdate, 0.863)
 /**
  * 把一条（已校验的）更新应用到 ToolPermissionContext：setMode（bypass 不可用时拒绝）、addRules/replaceRules/removeRules（按目的地写入对应规则表）、addDirectories/removeDirectories。
  */
@@ -557,9 +545,14 @@ function applyPermissionUpdate(context, update, announce) {
       return {
         ...context,
         mode: update.mode,
+        ...(update.mode === "plan" &&
+          context.mode !== "plan" &&
+          context.planDoc !== undefined && {
+            planDoc: undefined,
+          }),
       };
     case "addRules": {
-      let ruleStrings = update.rules.map((rule) => formatPermissionRule(rule));
+      let ruleStrings = update.rules.map((rule) => permissionRuleValueFromString(rule));
       logIfAnnounced(
         announce,
         `Applying permission update: Adding ${update.rules.length} ${update.behavior} rule(s) to destination '${update.destination}': ${jsonStringify(ruleStrings)}`,
@@ -574,7 +567,7 @@ function applyPermissionUpdate(context, update, announce) {
       };
     }
     case "replaceRules": {
-      let ruleStrings = update.rules.map((rule) => formatPermissionRule(rule));
+      let ruleStrings = update.rules.map((rule) => permissionRuleValueFromString(rule));
       logIfAnnounced(
         announce,
         `Replacing all ${update.behavior} rules for destination '${update.destination}' with ${update.rules.length} rule(s): ${jsonStringify(ruleStrings)}`,
@@ -595,7 +588,7 @@ function applyPermissionUpdate(context, update, announce) {
       );
       return addAdditionalWorkingDirectories(context, update.directories, update.destination);
     case "removeRules": {
-      let ruleStrings = update.rules.map((rule) => formatPermissionRule(rule));
+      let ruleStrings = update.rules.map((rule) => permissionRuleValueFromString(rule));
       logIfAnnounced(
         announce,
         `Applying permission update: Removing ${update.rules.length} ${update.behavior} rule(s) from source '${update.destination}': ${jsonStringify(ruleStrings)}`,
@@ -603,7 +596,15 @@ function applyPermissionUpdate(context, update, announce) {
       let ruleKind = RULE_BEHAVIOR_CONTEXT_KEYS[update.behavior];
       let existingRules = context[ruleKind][update.destination] || [];
       let rulesToRemove = new Set(ruleStrings);
-      let filteredRules = existingRules.filter((rule) => !rulesToRemove.has(rule));
+      let filteredRules = existingRules.filter(
+        (rule) =>
+          !rulesToRemove.has(rule) &&
+          !(
+            update.behavior === "allow" &&
+            permissionRuleValueFromString_2(normalizeRuleString(rule, "allow")) &&
+            rulesToRemove.has(parseRuleValue(rule))
+          ),
+      );
       return {
         ...context,
         [ruleKind]: {
@@ -628,16 +629,16 @@ function applyPermissionUpdate(context, update, announce) {
       return context;
   }
 }
-//@ chunk-82kqcve8.js:228601-228995 layout
+//@ chunk-a2q0x549.js:226927-227329 layout
 /**
  * 从 allow 的 add/replace 更新中去掉针对指定工具的“整工具”（无内容）规则，豁免条件由回调决定。
  */
 function dropBareAllowRulesForTools(updates, toolNames, isExempt, isTargeted) {
   let shouldDrop = (rule, destination) => {
-    let ruleValue = permissionRuleValueFromString(formatPermissionRule(rule));
+    let ruleValue = parseRuleString(permissionRuleValueFromString(rule));
     if (ruleValue.ruleContent !== undefined) return false;
     if (!(toolNames.has(ruleValue.toolName) || isTargeted(ruleValue))) return false;
-    return !isExempt(ruleValue, destination);
+    return !isExempt(permissionRuleValueFromString_2(rule) ? rule : ruleValue, destination);
   };
   let result = [];
   for (let update of updates) {
@@ -655,7 +656,7 @@ function dropBareAllowRulesForTools(updates, toolNames, isExempt, isTargeted) {
   }
   return result;
 }
-//@ chunk-82kqcve8.js:228995-229068 layout
+//@ chunk-a2q0x549.js:227329-227402 layout
 /**
  * 工具名及其全部别名组成的集合。
  */
@@ -666,7 +667,7 @@ function getToolNameWithAliases(tool, toolPermissionContext) {
     ...aliasesFor(toolNameForPermissionCheck, toolPermissionContext.toolAliases),
   ]);
 }
-//@ chunk-82kqcve8.js:229068-229269 layout
+//@ chunk-a2q0x549.js:227402-227603 layout
 /**
  * 依次应用多条更新；模式变化时清掉 startupModeDecidedByProactivityLevel。
  */
@@ -682,7 +683,7 @@ function applyPermissionUpdates(context, updates, options = {}) {
     };
   return next;
 }
-//@ chunk-82kqcve8.js:229269-229355 layout (2.1.88 match: supportsPersistence, 1)
+//@ chunk-a2q0x549.js:227603-227689 layout (2.1.88 match: supportsPersistence, 1)
 /**
  * 只有 localSettings/userSettings/projectSettings 可持久化。
  */
@@ -691,7 +692,7 @@ function supportsPersistence(destination) {
     destination === "localSettings" || destination === "userSettings" || destination === "projectSettings"
   );
 }
-//@ chunk-82kqcve8.js:229355-229462 layout
+//@ chunk-a2q0x549.js:227689-227797 layout
 /**
  * 先校验 PermissionUpdate（validatePermissionUpdate），被丢弃时记录原因，通过后持久化。
  */
@@ -703,7 +704,7 @@ async function persistValidatedPermissionUpdate(update, storage) {
   }
   return persistPermissionUpdate(validated.update, storage);
 }
-//@ chunk-82kqcve8.js:229462-231258 fingerprint (2.1.88 match: persistPermissionUpdate, 0.963)
+//@ chunk-a2q0x549.js:227797-229593 fingerprint (2.1.88 match: persistPermissionUpdate, 0.963)
 /**
  * 把更新写入 settings 文件（仅三个可写层）：addRules/removeRules/replaceRules 改 permissions.allow|deny|ask，add/removeDirectories 改 additionalDirectories，setMode 写 defaultMode；setMode bypassPermissions 只在会话内生效，不落盘。
  */
@@ -759,13 +760,13 @@ async function persistPermissionUpdate(update, storage) {
       logForDebugging(
         `Removing ${update.rules.length} ${update.behavior} rule(s) from ${update.destination}`,
       );
-      let rulesToRemove = new Set(update.rules.map(formatPermissionRule));
+      let rulesToRemove = new Set(update.rules.map(permissionRuleValueFromString));
       let behavior = update.behavior;
       await updateSettingsForSourceWithTransform(
         update.destination,
         (currentSettings) => {
           let filteredRules = (currentSettings?.permissions?.[behavior] || []).filter((rule) => {
-            let normalized = formatPermissionRule(permissionRuleValueFromString(rule));
+            let normalized = permissionRuleValueFromString(parseRuleString(rule));
             return !rulesToRemove.has(normalized);
           });
           return {
@@ -816,7 +817,7 @@ async function persistPermissionUpdate(update, storage) {
       logForDebugging(
         `Replacing all ${update.behavior} rules in ${update.destination} with ${update.rules.length} rule(s)`,
       );
-      let ruleStrings = update.rules.map(formatPermissionRule);
+      let ruleStrings = update.rules.map(permissionRuleValueFromString);
       let behavior = update.behavior;
       await updateSettingsForSourceWithTransform(
         update.destination,
@@ -832,11 +833,11 @@ async function persistPermissionUpdate(update, storage) {
     }
   }
 }
-//@ chunk-82kqcve8.js:231258-231311 layout
+//@ chunk-a2q0x549.js:229593-229646 layout
 async function persistPermissionUpdates(updates, storageV5) {
   for (let update of updates) await persistValidatedPermissionUpdate(update, storageV5);
 }
-//@ chunk-82kqcve8.js:231311-231561 fingerprint (2.1.88 match: createReadRuleSuggestion, 0.838)
+//@ chunk-a2q0x549.js:229646-229896 fingerprint (2.1.88 match: createReadRuleSuggestion, 0.839)
 /**
  * 为目录生成 Read(<dir>/**) 的 allow 规则建议（转义 glob，绝对路径前加 /）；根目录返回 undefined。
  */
@@ -855,7 +856,7 @@ function createReadRuleSuggestion(dirPath, destination = "session") {
     type: "addRules",
     rules: [
       {
-        toolName: FILE_READ_TOOL_NAME,
+        toolName: READ,
         ruleContent,
       },
     ],
@@ -863,7 +864,7 @@ function createReadRuleSuggestion(dirPath, destination = "session") {
     destination,
   };
 }
-//@ chunk-1de6ar4n.js:264-309 placement (2.1.88 match: isIt2CliAvailable, 0.65)
+//@ chunk-y5p93xet.js:264-309 placement
 /**
  * 给权限上下文追加附加工作目录（来源 session）。与 it2 无关。
  */
@@ -874,39 +875,23 @@ function addSessionWorkingDirectories(toolPermissionContext) {
     "session",
   );
 }
-//@ chunk-4kzs0ch0.js:1689-1845 fingerprint (2.1.88 match: supportsPersistence, 1)
-/**
- * 与磁盘已存规则合并：目的地为 user/project/local 设置时，把已存规则放前、再加上新规则中非特殊形式的项。
- */
-function mergeWithStoredRules(rules, destination, behavior, mergeOptions) {
-  if (
-    mergeOptions === undefined ||
-    (destination !== "userSettings" && destination !== "projectSettings" && destination !== "localSettings")
-  )
-    return rules;
-  return [
-    ...mergeOptions[destination][behavior],
-    ...rules.filter((ruleString) => !PATH_RULE_CARVE_OUT_RE.test(ruleString)),
-  ];
-}
 export {
-  isRuleRoundTripStable,
+  applyValidatedPermissionUpdate,
   dropBareAllowRulesForTools,
   getToolNameWithAliases,
   supportsPersistence,
   applyPermissionUpdates,
   persistPermissionUpdates,
-  addAdditionalWorkingDirectories,
   isRemovalWaiverActive,
-  applyValidatedPermissionUpdate,
   clearRemovalWaiverIfPathScoped,
   blocksReadsOutsideWorkingDirs,
   createReadRuleSuggestion,
-  persistValidatedPermissionUpdate,
   extractRules,
+  persistValidatedPermissionUpdate,
+  validatePermissionUpdate,
+  isRuleRoundTripStable,
+  addSessionWorkingDirectories,
+  sanitizePermissionUpdates,
   checkBypassPermissionsEnv,
   noteRemovalWaiverRules,
-  mergeWithStoredRules,
-  sanitizePermissionUpdates,
-  addSessionWorkingDirectories,
 };

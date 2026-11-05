@@ -1,21 +1,21 @@
 /**
  * npm-run-path/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: npm-run-path@6.0.0
- * pieces: chunk-m4p5zn6n.js (1)
+ * pieces: chunk-t889g22j.js (1)
  * attribution: esm-fingerprint 1
  */
-import { default as Mr } from "process";
+import { default as Fo } from "process";
 import { fileURLToPath } from "url";
 import path from "path";
 import { pathKey } from "../path-key/index.js";
 
-//@ chunk-m4p5zn6n.js:7660-8136 esm-fingerprint
+//@ chunk-t889g22j.js:7659-8135 esm-fingerprint
 var npmRunPathEnv = ({
-  cwd = Mr.cwd(),
-  path: pathVar = Mr.env[pathKey()],
+  cwd = Fo.cwd(),
+  path: pathVar = Fo.env[pathKey()],
   preferLocal = true,
-  execPath = Mr.execPath,
+  execPath = Fo.execPath,
   addExecPath = true,
 } = {}) => {
   let cwdPath = cwd instanceof URL ? fileURLToPath(cwd) : cwd;
@@ -37,7 +37,7 @@ var appendExecPathDirs = (result, execPathValue, cwdPath) => {
   let resolvedExecPath = execPathValue instanceof URL ? fileURLToPath(execPathValue) : execPathValue;
   result.push(path.resolve(cwdPath, resolvedExecPath, ".."));
 };
-var npmRunPath = ({ env = Mr.env, ...options } = {}) => {
+var npmRunPath = ({ env = Fo.env, ...options } = {}) => {
   env = {
     ...env,
   };

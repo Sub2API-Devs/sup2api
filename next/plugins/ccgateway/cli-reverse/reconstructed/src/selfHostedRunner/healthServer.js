@@ -3,9 +3,9 @@
  *
  * 自托管 runner 健康检查服务（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3nztfxrw.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a3r2kq46.js (4)
  * attribution: placement 4
  */
 import { createServer } from "http";
@@ -14,7 +14,7 @@ import { jsonParse, jsonStringify } from "../utils/slowOperations.js";
 import { errorMessage } from "../utils/errors.js";
 import { logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 
-//@ chunk-3nztfxrw.js:25665-27299 placement
+//@ chunk-a3r2kq46.js:26319-27953 placement
 function startHealthServer(healthPort, port, onEvent, register, onMetrics) {
   let server = createServer((request, response) => {
     if (request.method === "POST" && request.url === "/v1/metrics") {
@@ -106,12 +106,12 @@ function startHealthServer(healthPort, port, onEvent, register, onMetrics) {
   });
   return server;
 }
-//@ chunk-3nztfxrw.js:27299-27401 placement
+//@ chunk-a3r2kq46.js:27953-28055 placement
 function isLoopbackRequest(request) {
   let remoteAddress = request.socket.remoteAddress;
   return remoteAddress === "127.0.0.1" || remoteAddress === "::1" || remoteAddress === "::ffff:127.0.0.1";
 }
-//@ chunk-3nztfxrw.js:27510-27543 placement
+//@ chunk-a3r2kq46.js:28164-28197 placement
 /**
  * 健康检查服务的限额：请求体上限 256 KB、保留最近 5 条请求、端口范围 100–500。
  */
@@ -119,7 +119,7 @@ var MAX_REQUEST_BODY_BYTES = 262144;
 var MAX_RECENT_REQUESTS = 5;
 var HEALTH_PORT_LOW = 100;
 var HEALTH_PORT_HIGH = 500;
-//@ chunk-3nztfxrw.js:27543-27630 placement
+//@ chunk-a3r2kq46.js:28197-28284 placement
 function countNewlines(text) {
   let count = 0;
   for (let index = text.indexOf(10); index !== -1; index = text.indexOf(10, index + 1)) count++;

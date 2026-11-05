@@ -3,16 +3,11 @@
  *
  * NotebookEdit 的 cell 级 diff 预览（替换/插入/删除，过大时不预览）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/NotebookEditPermissionRequest/NotebookEditToolDiff.tsx
- * pieces: chunk-18hwfzwa.js (11)
- * attribution: sole-consumer 9, fingerprint 2
+ * pieces: chunk-czq1j3j2.js (10)
+ * attribution: sole-consumer 8, fingerprint 2
  */
-import {
-  init_react_production,
-  suspenseTypeExport,
-  use,
-} from "../../../../vendor/react/cjs/react.production.js";
 import { MAX_NOTEBOOK_BYTES, isValidNotebook, parseCellId } from "../../../utils/notebook.js";
 import {
   stripUnsafeChars,
@@ -36,6 +31,7 @@ import { truncateToWidth } from "../../../utils/format.js";
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { isNonWslUncPath, isNetworkOrSpecialPath } from "../../../utils/networkPaths.js";
 import { getFsImplementation } from "../../../utils/fsOperations.js";
+import { suspenseTypeExport, use } from "../../../../vendor/react/cjs/react.production.js";
 import { useCwdDerived } from "../../../utils/cwd.js";
 import { useProject } from "../../../context/session.js";
 import { useTerminalSize } from "../../../hooks/useTerminalSize.js";
@@ -47,14 +43,8 @@ import { HighlightedCode } from "../../HighlightedCode.js";
 import { intersperse } from "../../../utils/collections.js";
 import { StructuredDiff } from "../../StructuredDiff.js";
 import { DiffFrame } from "../../FileEditToolDiff.js";
-import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1371962-1371966 sole-consumer
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1371962", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1371966-1372070 sole-consumer
+//@ chunk-czq1j3j2.js:1394767-1394871 sole-consumer
 function parseNotebookForPreview(rawContent) {
   return rawContent.length > MAX_NOTEBOOK_BYTES
     ? {
@@ -63,22 +53,22 @@ function parseNotebookForPreview(rawContent) {
       }
     : notebookPreviewData(parseNotebookSafe(rawContent.toString("utf-8")));
 }
-//@ chunk-18hwfzwa.js:1372070-1372101 sole-consumer
+//@ chunk-czq1j3j2.js:1394871-1394902 sole-consumer
 function emptyNotebookPreview() {
   return notebookPreviewData(null);
 }
-//@ chunk-18hwfzwa.js:1372101-1372132 sole-consumer
+//@ chunk-czq1j3j2.js:1394902-1394933 sole-consumer
 function selectCwd(state) {
   return state.cwd;
 }
-//@ chunk-18hwfzwa.js:1372132-1372186 sole-consumer
+//@ chunk-czq1j3j2.js:1394933-1394987 sole-consumer
 function sanitizeNotebookEditLines(diff) {
   return {
     ...diff,
     lines: diff.lines.map(stripUnsafeChars),
   };
 }
-//@ chunk-18hwfzwa.js:1372186-1372294 sole-consumer (2.1.88 match: _temp, 0.797)
+//@ chunk-czq1j3j2.js:1394987-1395095 sole-consumer (2.1.88 match: _temp, 0.799)
 function NotebookEllipsisRow(i) {
   return jsxProd_default(
     NoSelect,
@@ -92,19 +82,19 @@ function NotebookEllipsisRow(i) {
     `ellipsis-${i}`,
   );
 }
-//@ chunk-18hwfzwa.js:1372294-1372350 sole-consumer
+//@ chunk-czq1j3j2.js:1395095-1395151 sole-consumer
 function notebookPreviewData(notebook) {
   return {
     notebook,
     tooLargeForPreview: false,
   };
 }
-//@ chunk-18hwfzwa.js:1372350-1372398 sole-consumer
+//@ chunk-czq1j3j2.js:1395151-1395199 sole-consumer
 function parseNotebookSafe(content) {
   let parsed = safeParseJSON(content);
   return isValidNotebook(parsed) ? parsed : null;
 }
-//@ chunk-18hwfzwa.js:1372398-1372568 sole-consumer
+//@ chunk-czq1j3j2.js:1395199-1395368 sole-consumer
 function formatCellLabel(cellId) {
   let truncatedId = truncateToLength(cellId, MAX_RAW_DISPLAY_CHARS);
   if (!hasVisibleText(truncatedId)) return "(unnamed cell)";
@@ -116,7 +106,7 @@ function formatCellLabel(cellId) {
     SHORT_LABEL_WIDTH,
   );
 }
-//@ chunk-18hwfzwa.js:1372568-1373356 fingerprint (2.1.88 match: NotebookEditToolDiff, 0.302)
+//@ chunk-czq1j3j2.js:1395368-1396156 fingerprint (2.1.88 match: NotebookEditToolDiff, 0.301)
 function NotebookEditToolDiff(props) {
   let $ = useMemoCache(8);
   let notebookPromise;
@@ -173,7 +163,7 @@ function NotebookEditToolDiff(props) {
   } else suspenseElement = $[7];
   return suspenseElement;
 }
-//@ chunk-18hwfzwa.js:1373356-1377043 fingerprint (2.1.88 match: NotebookEditToolDiffInner, 0.769)
+//@ chunk-czq1j3j2.js:1396156-1399844 fingerprint (2.1.88 match: NotebookEditToolDiffInner, 0.769)
 function NotebookEditToolDiffInner(props) {
   let $ = useMemoCache(54);
   let {
@@ -193,14 +183,14 @@ function NotebookEditToolDiffInner(props) {
   let { notebook, tooLargeForPreview } = use(promise);
   useExitCleanup();
   let oldSource;
-  Ot: {
+  Ft: {
     if (resolvedOldSource !== undefined) {
       oldSource = resolvedOldSource;
-      break Ot;
+      break Ft;
     }
     if (!notebook || !cell_id) {
       oldSource = "";
-      break Ot;
+      break Ft;
     }
     let foundCell;
     if ($[0] !== cell_id || $[1] !== notebook.cells) {
@@ -220,7 +210,7 @@ function NotebookEditToolDiffInner(props) {
     let cell = foundCell_2 ?? (parsedIndex !== undefined ? notebook.cells[parsedIndex] : undefined);
     if (!cell) {
       oldSource = "";
-      break Ot;
+      break Ft;
     }
     let sourceText;
     if ($[5] !== cell.source) {
@@ -232,20 +222,20 @@ function NotebookEditToolDiffInner(props) {
   }
   let oldSource_2 = oldSource;
   let previewProblem;
-  ao: {
+  lo: {
     if (mode === "insert" || resolvedOldSource !== undefined) {
       previewProblem = undefined;
-      break ao;
+      break lo;
     }
     if (tooLargeForPreview) {
       previewProblem =
         "notebook too large for preview \u2014 the current cell contents cannot be shown; the edit applies to the real cell on approval";
-      break ao;
+      break lo;
     }
     if (!notebook) {
       previewProblem =
         "notebook preview unavailable \u2014 the current cell contents cannot be shown; the edit applies to the real cell on approval";
-      break ao;
+      break lo;
     }
     if (oldSource_2 === "" && cell_id) {
       let any = notebook.cells.some((cell) => cell.id === cell_id);
@@ -254,17 +244,17 @@ function NotebookEditToolDiffInner(props) {
       if (!any && !hasIndexCell) {
         previewProblem =
           "cell not found in the notebook preview \u2014 the current cell contents cannot be shown";
-        break ao;
+        break lo;
       }
     }
     previewProblem = undefined;
   }
   let previewProblem_2 = previewProblem;
   let t3;
-  Ho: {
+  Lo: {
     if (!(resolvedOldSource !== undefined || notebook !== null) || mode === "insert" || mode === "delete") {
       t3 = null;
-      break Ho;
+      break Lo;
     }
     let patches;
     if ($[7] !== new_source || $[8] !== notebook_path || $[9] !== oldSource_2) {

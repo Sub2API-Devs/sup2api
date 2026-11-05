@@ -1,18 +1,18 @@
 /**
  * @opentelemetry/sdk-logs/build/src/export/BatchLogRecordProcessorBase.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-logs@0.208.0
- * pieces: chunk-aepeg2w5.js (2)
+ * pieces: chunk-exfmq47h.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { __toESM } from "../../../../../../runtime/bun-runtime.js";
 import { require_api } from "../../../../api/build/src/index.js";
 import { require_core } from "../../../../core/build/src/index.js";
 
-//@ chunk-aepeg2w5.js:656233-656261 esm-layout
+//@ chunk-exfmq47h.js:668839-668867 esm-layout
 var import_api_3 = __toESM(require_api());
 var import_core_5 = __toESM(require_core());
-//@ chunk-aepeg2w5.js:656261-659093 esm-fingerprint
+//@ chunk-exfmq47h.js:668867-671699 esm-fingerprint
 class BatchLogRecordProcessorBase {
   _exporter;
   _maxExportBatchSize;

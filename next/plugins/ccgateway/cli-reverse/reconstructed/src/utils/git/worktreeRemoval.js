@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：安全删除 worktree
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2xm1rxms.js (34)
- * attribution: placement 29, affinity 2, sole-consumer 3
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b2dh3swb.js (35)
+ * attribution: placement 29, layout 6
  */
 import { join, normalize, dirname, basename, parse, sep, isAbsolute, resolve } from "path";
 import { rm, realpath, lstat, access, readlink } from "fs/promises";
@@ -39,9 +39,9 @@ import {
 import { vetWorktree, isSameRepository } from "./worktreeVetting.js";
 import { findCanonicalGitRootUncached } from "../git.js";
 import { refreshGitDir } from "./gitFilesystem.js";
-import { getFileIdentity_2 } from "../markdownConfigLoader.js";
+import { isSentinelInode } from "../slowOperations.js";
 
-//@ chunk-2xm1rxms.js:25085-27973 placement
+//@ chunk-b2dh3swb.js:25085-27973 placement
 /**
  * 安全删除 git worktree：校验目录、注销记录、处理锁定与二次强制，不跟随符号链接。
  */
@@ -266,7 +266,7 @@ async function removeWorktreeSafely(
     await held.close().catch(() => {});
   }
 }
-//@ chunk-2xm1rxms.js:27973-28767 placement
+//@ chunk-b2dh3swb.js:27973-28767 placement
 async function vetWorktreeForRemoval(dirPath, zipPath, { rootIsCanonical = false } = {}) {
   let located =
     zipPath === undefined ? splitParentAndName(dirPath) : await locateUnderRepoRoots([zipPath], dirPath);
@@ -307,7 +307,7 @@ async function vetWorktreeForRemoval(dirPath, zipPath, { rootIsCanonical = false
     await worktreeBase.held.close().catch(() => {});
   }
 }
-//@ chunk-2xm1rxms.js:28767-28869 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
+//@ chunk-b2dh3swb.js:28767-28869 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 async function convertDirectoryToZipInPlace(dirPath, zipPath, zipData = {}) {
   if (typeof (await vetWorktreeForRemoval(dirPath, zipPath, zipData)) === "object")
     await rm(dirPath, {
@@ -315,7 +315,7 @@ async function convertDirectoryToZipInPlace(dirPath, zipPath, zipData = {}) {
       force: true,
     });
 }
-//@ chunk-2xm1rxms.js:28869-30425 placement
+//@ chunk-b2dh3swb.js:28869-30425 placement
 function worktreeRemovalText(result) {
   switch (result.outcome) {
     case "removed":
@@ -348,17 +348,17 @@ function worktreeRemovalText(result) {
         : `this machine cannot open folders without following links (${result.reason})`;
   }
 }
-//@ chunk-2xm1rxms.js:30425-30498 placement
+//@ chunk-b2dh3swb.js:30425-30498 placement
 var FILES_KEPT_APPEARING_REASON = "files kept appearing in the worktree while it was being deleted";
-//@ chunk-2xm1rxms.js:30498-30554 placement
+//@ chunk-b2dh3swb.js:30498-30554 placement
 function isListUnsupportedError(error) {
   return getErrnoCode(error) === "WORKING_LIST_UNSUPPORTED";
 }
-//@ chunk-2xm1rxms.js:30554-30625 placement
+//@ chunk-b2dh3swb.js:30554-30625 placement
 function dirnameOrEmpty(relPath) {
   return relPath.includes("/") ? relPath.slice(0, relPath.lastIndexOf("/")) : "";
 }
-//@ chunk-2xm1rxms.js:30625-32547 placement
+//@ chunk-b2dh3swb.js:30625-32547 placement
 async function resolveWorktreeBase(filePath, mode, { holdBase = false } = {}) {
   let refuse = (reason, absent = false) => ({
     outcome: "refused",
@@ -446,7 +446,7 @@ async function resolveWorktreeBase(filePath, mode, { holdBase = false } = {}) {
     realBase,
   };
 }
-//@ chunk-2xm1rxms.js:32547-32875 placement
+//@ chunk-b2dh3swb.js:32547-32875 placement
 async function walkPathComponents(filePath) {
   let root = parse(filePath).root;
   let filtered = filePath.slice(root.length).split(sep).filter(Boolean);
@@ -470,7 +470,7 @@ async function walkPathComponents(filePath) {
   }
   return ownerRoot;
 }
-//@ chunk-2xm1rxms.js:32875-32986 placement
+//@ chunk-b2dh3swb.js:32875-32986 placement
 async function isSameVolumeRoot(filePath, root) {
   let realRoot = await realpath(parse(filePath).root).catch(() => null);
   return (
@@ -479,14 +479,14 @@ async function isSameVolumeRoot(filePath, root) {
       foldCaseBasic(stripTrailingSeparators(root))
   );
 }
-//@ chunk-2xm1rxms.js:32986-33096 placement
+//@ chunk-b2dh3swb.js:32986-33096 placement
 async function probeAccess(path, mode) {
   return access(path, mode).then(
     () => true,
     (error) => (["EACCES", "EPERM", "EROFS"].includes(getErrnoCode(error) ?? "") ? false : null),
   );
 }
-//@ chunk-2xm1rxms.js:33096-33316 placement
+//@ chunk-b2dh3swb.js:33096-33316 placement
 async function isRootOwnedLinkChain(filePath) {
   let stats = await lstat(filePath).catch(() => null);
   if (stats === null || !stats.isSymbolicLink()) return false;
@@ -502,7 +502,7 @@ async function isRootOwnedLinkChain(filePath) {
     if (dirname(ancestorPath) === ancestorPath) return true;
   }
 }
-//@ chunk-2xm1rxms.js:33316-33682 placement
+//@ chunk-b2dh3swb.js:33316-33682 placement
 function scopedFs(fs, prefix) {
   let withPrefix = (relPath) => (prefix === "" ? relPath : relPath === "" ? prefix : `${prefix}/${relPath}`);
   return {
@@ -518,7 +518,7 @@ function scopedFs(fs, prefix) {
     anchorBeneath: (path) => fs.anchorBeneath(withPrefix(path)),
   };
 }
-//@ chunk-2xm1rxms.js:33682-34641 placement
+//@ chunk-b2dh3swb.js:33682-34641 placement
 async function inspectWorktreeDir(startPath) {
   let rootPath = startPath;
   let vetResult = await vetWorktree(startPath, {
@@ -582,14 +582,14 @@ async function inspectWorktreeDir(startPath) {
         root: rootPath,
       };
 }
-//@ chunk-2xm1rxms.js:34641-34710 placement
+//@ chunk-b2dh3swb.js:34641-34710 placement
 async function fileIdentityOrFalse(held, relPath, identity) {
   return held.lstat(relPath).then(
     (stats) => getFileIdentity(stats, identity),
     () => false,
   );
 }
-//@ chunk-2xm1rxms.js:34710-34872 placement
+//@ chunk-b2dh3swb.js:34710-34872 placement
 async function hasGitDirOwnFiles(held, relDir) {
   for (let entryName of ["objects", "config", "packed-refs", "hooks", "worktrees"])
     if (
@@ -601,7 +601,7 @@ async function hasGitDirOwnFiles(held, relDir) {
       return true;
   return false;
 }
-//@ chunk-2xm1rxms.js:34872-36944 placement
+//@ chunk-b2dh3swb.js:34872-36944 placement
 async function removeHeldWorktree(dir, entryId, identity, lockAction) {
   let worktreeBase = await resolveWorktreeBase(dir, "canonical", {
     holdBase: true,
@@ -690,7 +690,7 @@ async function removeHeldWorktree(dir, entryId, identity, lockAction) {
     await worktreeBase.held.close().catch(() => {});
   }
 }
-//@ chunk-2xm1rxms.js:36944-37291 placement
+//@ chunk-b2dh3swb.js:36944-37291 placement
 async function dropRegistrationAfter(worktreePath, deregisterResult, repoRoot, entryId) {
   let adminPath = join(repoRoot, "worktrees", entryId);
   if (
@@ -712,7 +712,7 @@ async function dropRegistrationAfter(worktreePath, deregisterResult, repoRoot, e
     reason: keepReason,
   };
 }
-//@ chunk-2xm1rxms.js:37291-37538 placement
+//@ chunk-b2dh3swb.js:37291-37538 placement
 async function statWorktreeAdminDir(repoRoot, entryId) {
   let worktreeBase = await resolveWorktreeBase(repoRoot, "canonical", {
     holdBase: true,
@@ -730,37 +730,61 @@ async function statWorktreeAdminDir(repoRoot, entryId) {
     await worktreeBase.held.close().catch(() => {});
   }
 }
-//@ chunk-2xm1rxms.js:37538-37635 placement
+//@ chunk-b2dh3swb.js:37538-37635 placement
 function describeRemovalError(error) {
   return getErrnoCode(error) === "ENOTEMPTY" && !("syscall" in Object(error))
     ? errorMessage(error)
     : (getErrnoCode(error) ?? "an unknown error");
 }
-//@ chunk-2xm1rxms.js:37635-37673 placement
+//@ chunk-b2dh3swb.js:37635-37673 placement
 function samePathKey(left, right) {
   return normalizeCaseForPlatform(left) === normalizeCaseForPlatform(right);
 }
-//@ chunk-2xm1rxms.js:37673-37718 placement
+//@ chunk-b2dh3swb.js:37673-37718 placement
 function isOneOfSamePaths(path, paths) {
   return containsSamePath(normalizeCaseForPlatform(path), paths.map(normalizeCaseForPlatform));
 }
-//@ chunk-2xm1rxms.js:37718-37804 placement
+//@ chunk-b2dh3swb.js:37718-37804 placement
 function normalizeCaseForPlatform(path) {
   return getPlatform() === "windows"
     ? path.replace(/^[a-z](?=:)/, (driveLetter) => driveLetter.toUpperCase())
     : path;
 }
-//@ chunk-2xm1rxms.js:37804-37879 affinity
+//@ chunk-b2dh3swb.js:37804-37879 layout
 function isUnderPathWithSeparator(path, parentPath) {
   return (
     path.length > parentPath.length + 1 && samePathKey(path.slice(0, parentPath.length + 1), parentPath + sep)
   );
 }
-//@ chunk-2xm1rxms.js:37879-37944 affinity
+//@ chunk-b2dh3swb.js:37879-37944 layout
 function isPathAtOrUnder(path, parentPath) {
   return path === parentPath || path.startsWith(parentPath.endsWith(sep) ? parentPath : parentPath + sep);
 }
-//@ chunk-2xm1rxms.js:38224-39569 sole-consumer
+//@ chunk-b2dh3swb.js:37944-38224 layout (2.1.88 match: getFileIdentity, 1)
+async function getFileIdentity_2(pathA, pathB) {
+  let [statsA, statsB, parentStatsB] = await Promise.all([
+    lstat(pathA, {
+      bigint: true,
+    }).catch(() => null),
+    lstat(pathB, {
+      bigint: true,
+    }).catch(() => null),
+    lstat(dirname(pathB), {
+      bigint: true,
+    }).catch(() => null),
+  ]);
+  return (
+    statsA !== null &&
+    statsB !== null &&
+    parentStatsB !== null &&
+    statsA.dev !== 0n &&
+    !isSentinelInode(statsA.ino) &&
+    statsA.dev === statsB.dev &&
+    statsA.ino === statsB.ino &&
+    !(parentStatsB.dev === statsB.dev && parentStatsB.ino === statsB.ino)
+  );
+}
+//@ chunk-b2dh3swb.js:38224-39569 layout
 /**
  * 把目标路径与仓库根（含真实路径）比较，返回 {base, rel, underRoot}；只在大小写/Unicode 形式上不同时， 非 Windows 且同一文件则接受，否则拒绝并说明。
  */
@@ -842,7 +866,7 @@ async function locateUnderRepoRoots(rootPaths, dirPath, { parentLinkToRoot = fal
   }
   return splitParentAndName(spelledDir);
 }
-//@ chunk-2xm1rxms.js:39569-39924 sole-consumer
+//@ chunk-b2dh3swb.js:39569-39924 layout
 /**
  * 读链接目标，含 . / .. 段时返回 null。
  */
@@ -869,7 +893,7 @@ async function readLinkTargetSafe(linkPath) {
     normalize(isAbsolute(plainText) ? plainText : join(dirname(linkPath), plainText)),
   );
 }
-//@ chunk-2xm1rxms.js:39924-40096 sole-consumer
+//@ chunk-b2dh3swb.js:39924-40096 layout
 function splitParentAndName(result) {
   let segment = stripTrailingSeparators(normalize(result));
   let root = parse(segment).root;
@@ -881,7 +905,7 @@ function splitParentAndName(result) {
     underRoot: false,
   };
 }
-//@ chunk-2xm1rxms.js:40096-40305 placement
+//@ chunk-b2dh3swb.js:40096-40305 placement
 async function isRegisteredWorktreeGitdir(line, key, value, key_2, value_2) {
   let value_3 = isAbsolute(line) ? [normalize(line)] : key.map((key) => normalize(resolve(key, line)));
   let value_4 = await realpath(value).catch(() => null);
@@ -890,14 +914,14 @@ async function isRegisteredWorktreeGitdir(line, key, value, key_2, value_2) {
     .map((firstEntry) => join(firstEntry, "worktrees", value_2));
   return value_3.some((key) => isOneOfSamePaths(key, paths));
 }
-//@ chunk-2xm1rxms.js:40305-40468 placement
+//@ chunk-b2dh3swb.js:40305-40468 placement
 async function readRegisteredWorktreeName(baseUrl, key, value, rest, key_2) {
   let smallFile = await readSmallFile(baseUrl, `${key}/.git`);
   if ("error" in smallFile || smallFile.value === null) return null;
   let line = basename(normalize(smallFile.value));
   return (await isRegisteredWorktreeGitdir(smallFile.value, value, rest, key_2, line)) ? line : null;
 }
-//@ chunk-2xm1rxms.js:40468-40632 placement
+//@ chunk-b2dh3swb.js:40468-40632 placement
 async function readHandleUpTo(refName, arguments_) {
   let colonIndex = Buffer.alloc(arguments_ + 1);
   let pathPart = 0;
@@ -908,7 +932,7 @@ async function readHandleUpTo(refName, arguments_) {
     if (pathPart > arguments_) return null;
   }
 }
-//@ chunk-2xm1rxms.js:40632-41063 placement
+//@ chunk-b2dh3swb.js:40632-41063 placement
 async function readSmallFile(baseUrl, colonIndex) {
   let fragment = {
     value: null,
@@ -942,7 +966,7 @@ async function readSmallFile(baseUrl, colonIndex) {
     await path.close().catch(() => {});
   }
 }
-//@ chunk-2xm1rxms.js:41063-41383 placement
+//@ chunk-b2dh3swb.js:41063-41383 placement
 async function unlinkTracked(
   kind,
   canonical,
@@ -968,7 +992,7 @@ async function unlinkTracked(
     return true;
   }
 }
-//@ chunk-2xm1rxms.js:41383-41995 placement
+//@ chunk-b2dh3swb.js:41383-41995 placement
 async function removeWorktreeContents(
   kind,
   headPath,

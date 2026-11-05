@@ -3,9 +3,9 @@
  *
  * PowerShell acceptEdits 模式：Set/Add/Clear-Content、Remove-Item 可自动允许，排除链接创建、cd+写组合与不可静态验证的参数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/modeValidation.ts
- * pieces: chunk-v0yfsee9.js (6)
+ * pieces: chunk-6zpsr8vx.js (6)
  * attribution: fingerprint 5, file-local 1
  */
 import {
@@ -29,29 +29,29 @@ import {
 } from "./powershellParsing.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-v0yfsee9.js:17169-17245 fingerprint (2.1.88 match: ACCEPT_EDITS_ALLOWED_CMDLETS, 1)
+//@ chunk-6zpsr8vx.js:18396-18472 fingerprint (2.1.88 match: ACCEPT_EDITS_ALLOWED_CMDLETS, 1)
 /**
  * acceptEdits 模式自动允许的 cmdlet：Set-Content、Add-Content、Remove-Item、Clear-Content。
  */
 var ACCEPT_EDITS_ALLOWED_CMDLETS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-v0yfsee9.js:17169", () => {
+deferInit("chunk-6zpsr8vx.js:18396", () => {
   ACCEPT_EDITS_ALLOWED_CMDLETS = new Set(["set-content", "add-content", "remove-item", "clear-content"]);
 });
-//@ chunk-v0yfsee9.js:17245-17289 file-local
+//@ chunk-6zpsr8vx.js:18472-18516 file-local
 function isAcceptEditsAllowedCmdlet(name) {
   let canonical = resolveToCanonical(name);
   return ACCEPT_EDITS_ALLOWED_CMDLETS.has(canonical);
 }
-//@ chunk-v0yfsee9.js:17289-17344 fingerprint (2.1.88 match: LINK_ITEM_TYPES, 1)
+//@ chunk-6zpsr8vx.js:18516-18571 fingerprint (2.1.88 match: LINK_ITEM_TYPES, 1)
 var LINK_ITEM_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-v0yfsee9.js:17289", () => {
+deferInit("chunk-6zpsr8vx.js:18516", () => {
   LINK_ITEM_TYPES = new Set(["symboliclink", "junction", "hardlink"]);
 });
-//@ chunk-v0yfsee9.js:17344-17441 fingerprint (2.1.88 match: isItemTypeParamAbbrev, 1)
+//@ chunk-6zpsr8vx.js:18571-18668 fingerprint (2.1.88 match: isItemTypeParamAbbrev, 1)
 function isItemTypeParamAbbrev(p) {
   return (p.length >= 3 && "-itemtype".startsWith(p)) || (p.length >= 3 && "-type".startsWith(p));
 }
-//@ chunk-v0yfsee9.js:17441-17950 fingerprint (2.1.88 match: isSymlinkCreatingCommand, 1)
+//@ chunk-6zpsr8vx.js:18668-19177 fingerprint (2.1.88 match: isSymlinkCreatingCommand, 1)
 /**
  * New-Item 是否在创建符号链接/联接/硬链接（-ItemType/-Type 缩写、值含通配或变量也算）。
  */
@@ -76,7 +76,7 @@ function isSymlinkCreatingCommand(cmd) {
   }
   return false;
 }
-//@ chunk-v0yfsee9.js:17950-21707 fingerprint (2.1.88 match: checkPermissionMode, 0.943)
+//@ chunk-6zpsr8vx.js:19177-22934 fingerprint (2.1.88 match: checkPermissionMode, 0.943)
 /**
  * PowerShell acceptEdits 模式检查：命令解析成功、无子表达式/脚本块/成员调用/splatting/赋值/停止解析/可展开字符串、不创建链接、无 cd+写组合，所有命令都是 acceptEdits 允许的 cmdlet 或安全输出命令且参数可静态验证时 allow，否则 passthrough。
  */

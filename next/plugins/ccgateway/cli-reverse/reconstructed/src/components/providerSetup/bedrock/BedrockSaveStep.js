@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。Bedrock 设置向导：保存步骤。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sx9xc5ee.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3msz77wt.js (10)
  * attribution: placement 10
  */
 import { init_react_production, useState, useRef } from "../../../../vendor/react/cjs/react.production.js";
@@ -42,16 +42,16 @@ import { AWS_CHAIN_RESOLVE_REQUEST_TIMEOUT_MS } from "../../../utils/auth.js";
 import { withTimeout } from "../../../utils/sleep.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-sx9xc5ee.js:5151-5155 placement
+//@ chunk-3msz77wt.js:5151-5155 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-sx9xc5ee.js:5151", () => {
+deferInit("chunk-3msz77wt.js:5151", () => {
   init_react_production();
 });
-//@ chunk-sx9xc5ee.js:5155-5191 placement
+//@ chunk-3msz77wt.js:5155-5191 placement
 function hasProfileSelection(profileEntry) {
   return profileEntry[1] !== undefined;
 }
-//@ chunk-sx9xc5ee.js:5191-5346 placement
+//@ chunk-3msz77wt.js:5191-5346 placement
 function EnvVarRow(entry) {
   let [name, value] = entry;
   return jsxProd_default_2(
@@ -76,7 +76,7 @@ function EnvVarRow(entry) {
     name,
   );
 }
-//@ chunk-sx9xc5ee.js:5346-6425 placement
+//@ chunk-3msz77wt.js:5346-6425 placement
 function bedrockEnvFromWizard(wizardData) {
   let env = {
     CLAUDE_CODE_USE_BEDROCK: "1",
@@ -118,16 +118,16 @@ function bedrockEnvFromWizard(wizardData) {
   if (wizardData.pinHaiku) env.ANTHROPIC_DEFAULT_HAIKU_MODEL = wizardData.pinHaiku;
   return env;
 }
-//@ chunk-sx9xc5ee.js:6425-6514 placement
+//@ chunk-3msz77wt.js:6425-6514 placement
 var SENSITIVE_BEDROCK_ENV_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-sx9xc5ee.js:6425", () => {
+deferInit("chunk-3msz77wt.js:6425", () => {
   SENSITIVE_BEDROCK_ENV_KEYS = new Set([
     "AWS_BEARER_TOKEN_BEDROCK",
     "AWS_SECRET_ACCESS_KEY",
     "AWS_SESSION_TOKEN",
   ]);
 });
-//@ chunk-sx9xc5ee.js:6514-8606 placement
+//@ chunk-3msz77wt.js:6514-8606 placement
 function BedrockSaveStep(props) {
   let $ = useMemoCache(31);
   let { onComplete } = props;
@@ -287,14 +287,14 @@ function BedrockSaveStep(props) {
   } else wizardDialogLayoutElement = $[30];
   return wizardDialogLayoutElement;
 }
-//@ chunk-sx9xc5ee.js:8606-8625 placement
+//@ chunk-3msz77wt.js:8606-8625 placement
 var bedrockVerificationSignal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-sx9xc5ee.js:8606", () => {
+deferInit("chunk-3msz77wt.js:8606", () => {
   bedrockVerificationSignal = __toESM(require_fetch_http_handler(), 1);
 });
-//@ chunk-sx9xc5ee.js:8625-8670 placement
+//@ chunk-3msz77wt.js:8625-8670 placement
 var BEDROCK_VERIFY_TIMEOUT_TEXT = "Bedrock setup verification timed out";
-//@ chunk-sx9xc5ee.js:8670-8980 placement
+//@ chunk-3msz77wt.js:8670-8980 placement
 /**
  * 按 Bedrock 区域组为 sonnet/opus/haiku 各档生成匹配用的第一方模型 id 与带区域前缀的 Bedrock 回退 id；默认模型配置缺少 bedrock id 时抛错。
  */
@@ -318,7 +318,7 @@ function bedrockModelDefaults(region) {
     fable: defaultsForTier(DEFAULT_3P_FABLE_KEY),
   };
 }
-//@ chunk-sx9xc5ee.js:8980-9790 placement
+//@ chunk-3msz77wt.js:8980-9790 placement
 async function verifyBedrockAccess(wizardData) {
   if (wizardData.authMethod === "bearer") return bedrockApiKeyTestResult(wizardData);
   let awsChainResolveTimeoutMs = getAwsChainResolveTimeoutMs();

@@ -3,12 +3,11 @@
  *
  * 2.1.316 新增：会话通道 PowerShell 提示与暂存行跟踪
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-azz22fvc.js (5)
- * attribution: placement 5
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h6gkxbpm.js (6)
+ * attribution: affinity 1, placement 5
  */
-import { getPowerShellTool } from "../../tools.js";
 import { getPrompt } from "./prompt.js";
 import { HOST_TOOL_INPUT_FIELD } from "../../bridge/deviceRegistration.js";
 import { stringSchema, ZodObject } from "../../../vendor/zod/v4/classic/schemas.js";
@@ -16,7 +15,7 @@ import { PLACED_BY_NAME_TOOL_SPEC } from "../../utils/filePersistence/placedByNa
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, toError } from "../../utils/errors.js";
 import { markHostOnlyNativeTool } from "../../services/api/deferredToolsState.js";
 import { isPowerShellToolEnabled } from "../../utils/shell/shellToolUtils.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { POWERSHELL_TOOL_NAME } from "./toolName.js";
 import { logError } from "../../utils/log.js";
 import { isRemoteToolForwardingEnabledCached } from "../../services/remoteTools/servingGates.js";
@@ -24,16 +23,23 @@ import { createSignal } from "../../utils/signal.js";
 import { joined } from "../../services/homeSeed/workingFiles.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 
-//@ chunk-azz22fvc.js:4123-5156 placement
+//@ chunk-h6gkxbpm.js:4020-4086 affinity
+/**
+ * require 并返回 PowerShellTool（不检查启用条件）。
+ */
+function powerShellTool() {
+  return require("./PowerShellTool.js").PowerShellTool;
+}
+//@ chunk-h6gkxbpm.js:4086-5119 placement
 function sessionChannelPowerShellPrompt(machine, options) {
-  let powerShellTool = getPowerShellTool();
+  let powerShellModule = powerShellTool();
   let prompt = getPrompt({
     edition: options?.powershell?.edition ?? null,
     buildTools: [],
     onWindows: true,
     backgroundRuns: false,
   });
-  let value = omitSchemaFields(powerShellTool.inputSchema, ["run_in_background"]).extend({
+  let value = omitSchemaFields(powerShellModule.inputSchema, ["run_in_background"]).extend({
     [HOST_TOOL_INPUT_FIELD]: stringSchema()
       .optional()
       .describe(
@@ -43,7 +49,7 @@ function sessionChannelPowerShellPrompt(machine, options) {
   let toolStub = Object.defineProperties(
     {},
     {
-      ...Object.getOwnPropertyDescriptors(powerShellTool),
+      ...Object.getOwnPropertyDescriptors(powerShellModule),
       inputSchema: {
         value,
         enumerable: true,
@@ -77,10 +83,10 @@ function sessionChannelPowerShellPrompt(machine, options) {
   );
   return markHostOnlyNativeTool(toolStub);
 }
-//@ chunk-azz22fvc.js:5156-5398 placement
+//@ chunk-h6gkxbpm.js:5119-5361 placement
 function countPowerShellCallsWhenDisabled(announcer, toolUses) {
   if (isPowerShellToolEnabled()) return 0;
-  let hosts = uniq(
+  let hosts = normalizeCaseForComparison_2(
     toolUses.filter((toolUse) => toolUse.tool === POWERSHELL_TOOL_NAME).map((toolUse) => toolUse.host),
   );
   if (hosts.length === 0) return 0;
@@ -97,7 +103,7 @@ function countPowerShellCallsWhenDisabled(announcer, toolUses) {
   announcer.presentUntilAnnounced(announcements, isRemoteToolForwardingEnabledCached);
   return announcements.length;
 }
-//@ chunk-azz22fvc.js:5398-5616 placement
+//@ chunk-h6gkxbpm.js:5361-5579 placement
 function omitSchemaFields(inputSchema, fields) {
   if (!(inputSchema instanceof ZodObject))
     throw TypeError("PowerShellTool no longer declares an object schema");
@@ -105,13 +111,13 @@ function omitSchemaFields(inputSchema, fields) {
   let dropMask = Object.fromEntries(filtered.map((fieldName) => [fieldName, true]));
   return filtered.length === 0 ? inputSchema : inputSchema.omit(dropMask);
 }
-//@ chunk-azz22fvc.js:5616-5632 placement
+//@ chunk-h6gkxbpm.js:5579-5595 placement
 /**
  * 暂存行追踪只保留最近 8 条记录。
  */
 var MAX_STAGED_ROWS = 8;
 var MAX_CONTENT_HASH_CHARS = 256;
-//@ chunk-azz22fvc.js:5632-6742 placement
+//@ chunk-h6gkxbpm.js:5595-6705 placement
 function createStagedRowTracker(now = () => performance.now()) {
   let announcements = [];
   let pendingRows = [];

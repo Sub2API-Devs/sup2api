@@ -1,16 +1,16 @@
 /**
  * @smithy/node-config-provider/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/node-config-provider@2.3.0..3.0.0
- * pieces: chunk-b93kvvbs.js (1), chunk-edce4vxq.js (1)
- * attribution: cjs-fingerprint 1, cjs-require-graph 1
+ * pieces: chunk-3p78mpxm.js (1), chunk-cqstz3az.js (1)
+ * attribution: cjs-require-graph 1, cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_property_provider } from "../../property-provider/dist-cjs/index.js";
 import { require_shared_ini_file_loader } from "../../shared-ini-file-loader/dist-cjs/index.js";
 import { require_index_native } from "../../core/dist-cjs/submodules/config/index.native.js";
 
-//@ chunk-b93kvvbs.js:298-1420 cjs-fingerprint
+//@ chunk-cqstz3az.js:298-1420 cjs-fingerprint
 var require_node_config_provider = __commonJS(function (cjsExports) {
   var import_property_provider = require_property_provider();
   var import_shared_ini_file_loader = require_shared_ini_file_loader();
@@ -97,7 +97,7 @@ var require_node_config_provider = __commonJS(function (cjsExports) {
   };
   cjsExports.loadConfig = loadConfig;
 });
-//@ chunk-edce4vxq.js:166742-168080 cjs-require-graph
+//@ chunk-3p78mpxm.js:166742-168080 cjs-require-graph
 var require_node_config_provider_2 = __commonJS(function (cjsExports) {
   var configResolverModule = require_index_native();
   var nodeConfigProviderModule = require_node_config_provider();

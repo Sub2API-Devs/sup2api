@@ -3,10 +3,10 @@
  *
  * 已有模块；g2 补充放置一个辅助函数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/codeSessionApi.ts
- * pieces: chunk-jt8zq468.js (1), chunk-kgtpkbhq.js (25)
- * attribution: placement 4, fingerprint 1, facade-majority 17, layout 4
+ * pieces: chunk-jc4qbkj6.js (25), chunk-qhe72phc.js (1)
+ * attribution: fingerprint 1, facade-majority 17, layout 4, placement 4
  */
 import { getClientPlatform, claudeCodeUserAgent } from "../utils/http.js";
 import { getCwd } from "../utils/cwd.js";
@@ -22,16 +22,16 @@ import { readRequestIdSource } from "../services/api/requestIdSource.js";
 import { buildSessionEndpoint } from "../assistant/sessionHistory.js";
 import { postSessionAction } from "./remoteBridgeCore.js";
 
-//@ chunk-jt8zq468.js:191-263 placement
+//@ chunk-qhe72phc.js:191-263 placement
 /**
  * 判断字符串是否为安全的 reason code（小写字母数字下划线、1–64 字符）；不合法时不回填到错误对象。
  */
 function isSnakeCaseReasonCode(value) {
   return typeof value === "string" && /^[a-z0-9_]{1,64}$/.test(value);
 }
-//@ chunk-kgtpkbhq.js:605-624 fingerprint (2.1.88 match: ANTHROPIC_VERSION, 1)
+//@ chunk-jc4qbkj6.js:605-624 fingerprint (2.1.88 match: ANTHROPIC_VERSION, 1)
 var ANTHROPIC_VERSION = "2023-06-01";
-//@ chunk-kgtpkbhq.js:624-783 facade-majority (2.1.88 match: oauthHeaders, 0.762)
+//@ chunk-jc4qbkj6.js:624-783 facade-majority (2.1.88 match: oauthHeaders, 0.762)
 /**
  * code sessions API 请求头：Bearer、JSON、anthropic-version、client-platform、User-Agent。
  */
@@ -44,7 +44,7 @@ function oauthHeaders(accessToken) {
     "User-Agent": claudeCodeUserAgent(),
   };
 }
-//@ chunk-kgtpkbhq.js:783-869 facade-majority
+//@ chunk-jc4qbkj6.js:783-869 facade-majority
 /**
  * 错误结果是否为终止性（terminal===true）。
  */
@@ -53,7 +53,7 @@ function isCreateSessionFailure(failure) {
     failure !== null && typeof failure === "object" && "terminal" in failure && failure.terminal === true
   );
 }
-//@ chunk-kgtpkbhq.js:869-1213 layout
+//@ chunk-jc4qbkj6.js:869-1213 layout
 /**
  * 创建失败是否是 Project（session_grouping）不可用。
  */
@@ -76,7 +76,7 @@ function isGroupingRejection(body) {
     reason === "feature_disabled"
   );
 }
-//@ chunk-kgtpkbhq.js:1213-1324 layout
+//@ chunk-jc4qbkj6.js:1213-1324 layout
 /**
  * HTTP 状态分类：401 oauth_rejected；408/429/5xx transient；其余 rejected。
  */
@@ -85,7 +85,7 @@ function classifyHttpStatus(status) {
   if (status === 408 || status === 429 || status >= 500) return "transient";
   return "rejected";
 }
-//@ chunk-kgtpkbhq.js:1324-3006 facade-majority (2.1.88 match: createCodeSession, 0.441)
+//@ chunk-jc4qbkj6.js:1324-3006 facade-majority (2.1.88 match: createCodeSession, 0.441)
 /**
  * 创建 Code Session：POST {base}/v1/code/sessions，body {title, bridge:{}, tags?, session_grouping_id?, config:{cwd, model?, sources?, outcomes?}}；成功返回 cse_* 会话 ID，失败返回 {terminal, reason}，瞬时失败返回 null。
  */
@@ -210,14 +210,14 @@ async function createCodeSession(
   }
   return data.session.id;
 }
-//@ chunk-kgtpkbhq.js:3006-3071 facade-majority
+//@ chunk-jc4qbkj6.js:3006-3071 facade-majority
 /**
  * 结果是否为终止性。
  */
 function isCredentialsFailure(failure) {
   return failure !== null && "terminal" in failure && failure.terminal === true;
 }
-//@ chunk-kgtpkbhq.js:3071-3156 facade-majority
+//@ chunk-jc4qbkj6.js:3071-3156 facade-majority
 /**
  * 结果是否为非终止的 OAuth 拒绝（terminal===false）。
  */
@@ -226,7 +226,7 @@ function isCredentialsRejection(failure) {
     typeof failure === "object" && failure !== null && "terminal" in failure && failure.terminal === false
   );
 }
-//@ chunk-kgtpkbhq.js:3156-3302 facade-majority
+//@ chunk-jc4qbkj6.js:3156-3302 facade-majority
 /**
  * 403 响应体里的 resource：untrusted_device 或 session_stale_relogin。
  */
@@ -238,7 +238,7 @@ function classifyElevatedAuthError(body) {
   }
   return;
 }
-//@ chunk-kgtpkbhq.js:3302-3475 facade-majority
+//@ chunk-jc4qbkj6.js:3302-3475 facade-majority
 function classifyElevatedAuthSubReason(error) {
   let errorObject = getErrorObject(error);
   return errorObject !== undefined &&
@@ -249,7 +249,7 @@ function classifyElevatedAuthSubReason(error) {
     ? "bound_unattested"
     : undefined;
 }
-//@ chunk-kgtpkbhq.js:3475-4179 facade-majority
+//@ chunk-jc4qbkj6.js:3475-4179 facade-majority
 /**
  * 分类 untrusted_device 拒绝的 sub_reason：缺省/bound_unattested → token_refused；served_call_unsigned → signature_wanted；其它 → unrecognized。
  */
@@ -294,21 +294,21 @@ function readUntrustedDeviceRefusal(body) {
   }
   return;
 }
-//@ chunk-kgtpkbhq.js:4179-4227 facade-majority
+//@ chunk-jc4qbkj6.js:4179-4227 facade-majority
 /**
  * 拒绝类型是否为 token_refused。
  */
 function shouldCloudSessionEnroll(refusal) {
   return refusal.kind === "token_refused";
 }
-//@ chunk-kgtpkbhq.js:4227-4278 facade-majority
+//@ chunk-jc4qbkj6.js:4227-4278 facade-majority
 /**
  * 拒绝类型是否不是 signature_wanted（可以走注册设备流程）。
  */
 function shouldRemoteControlEnroll(refusal) {
   return refusal.kind !== "signature_wanted";
 }
-//@ chunk-kgtpkbhq.js:4278-4345 facade-majority
+//@ chunk-jc4qbkj6.js:4278-4345 facade-majority
 /**
  * 固定的拒绝描述：{kind: signature_wanted, subReason: served_call_unsigned}。
  */
@@ -316,7 +316,7 @@ var REFUSAL_BEHIND_NO_ENROLL = {
   kind: "signature_wanted",
   subReason: "served_call_unsigned",
 };
-//@ chunk-kgtpkbhq.js:4345-4482 facade-majority
+//@ chunk-jc4qbkj6.js:4345-4482 facade-majority
 /**
  * 从错误响应中取 reason / resource / sub_reason。
  */
@@ -332,12 +332,12 @@ function refusalCodes(error) {
     subReason: sanitizeSnakeField(copy.sub_reason),
   };
 }
-//@ chunk-kgtpkbhq.js:4482-4581 layout
+//@ chunk-jc4qbkj6.js:4482-4581 layout
 function sanitizeSnakeField(value) {
   if (value === undefined || value === null || value === "") return "";
   return typeof value === "string" && isSnakeCaseReasonCode(value) ? value : undefined;
 }
-//@ chunk-kgtpkbhq.js:4581-4703 layout
+//@ chunk-jc4qbkj6.js:4581-4703 layout
 function getErrorObject(body) {
   return body !== null &&
     typeof body === "object" &&
@@ -347,7 +347,7 @@ function getErrorObject(body) {
     ? body.error
     : undefined;
 }
-//@ chunk-kgtpkbhq.js:4703-6643 facade-majority (2.1.88 match: fetchRemoteCredentials, 0.686)
+//@ chunk-jc4qbkj6.js:4703-6643 facade-majority (2.1.88 match: fetchRemoteCredentials, 0.69)
 /**
  * 取桥凭证：POST {base}/v1/code/sessions/{id}/bridge（可带 X-Trusted-Device-Token、expected_epoch）；200 返回 {worker_jwt, api_base_url, expires_in, worker_epoch, mcp_config}；409 报告 epoch 冲突；403 区分 untrusted_device/session_stale_relogin/非源站拒绝。
  */
@@ -492,7 +492,7 @@ async function attachBridgeWorker(
     ...{},
   };
 }
-//@ chunk-kgtpkbhq.js:6643-6745 placement
+//@ chunk-jc4qbkj6.js:6643-6745 placement
 function isValidSessionId(sessionId, label) {
   try {
     validateBridgeId(sessionId, "sessionId");
@@ -502,7 +502,7 @@ function isValidSessionId(sessionId, label) {
     return false;
   }
 }
-//@ chunk-kgtpkbhq.js:7196-8005 facade-majority
+//@ chunk-jc4qbkj6.js:7196-8005 facade-majority
 async function getCodeSession(baseUrl, accessToken, sessionId, timeout, options) {
   if (!isValidSessionId(sessionId, "Get")) return "invalid";
   let sessionEndpoint = buildSessionEndpoint("Get", baseUrl, accessToken, sessionId, options);
@@ -546,7 +546,7 @@ async function getCodeSession(baseUrl, accessToken, sessionId, timeout, options)
     return axios_default.isAxiosError(error) && error.code === "ECONNABORTED" ? "timeout" : "error";
   }
 }
-//@ chunk-kgtpkbhq.js:8005-8499 facade-majority
+//@ chunk-jc4qbkj6.js:8005-8499 facade-majority
 async function updateCodeSession(baseUrl, accessToken, sessionId, fields, timeout, options) {
   if (!isValidSessionId(sessionId, "Update")) return "invalid";
   let sessionEndpoint = buildSessionEndpoint("Update", baseUrl, accessToken, sessionId, options);
@@ -573,7 +573,7 @@ async function updateCodeSession(baseUrl, accessToken, sessionId, fields, timeou
     return axios_default.isAxiosError(error) && error.code === "ECONNABORTED" ? "timeout" : "error";
   }
 }
-//@ chunk-kgtpkbhq.js:8499-8589 facade-majority
+//@ chunk-jc4qbkj6.js:8499-8589 facade-majority
 async function archiveCodeSession(baseUrl, accessToken, sessionId, timeoutMs, authOptions) {
   return postSessionAction(
     "Archive",
@@ -586,7 +586,7 @@ async function archiveCodeSession(baseUrl, accessToken, sessionId, timeoutMs, au
     "untrusted_device",
   );
 }
-//@ chunk-kgtpkbhq.js:8589-8680 facade-majority
+//@ chunk-jc4qbkj6.js:8589-8680 facade-majority
 /**
  * 解除会话归档（POST …/unarchive，403 时区分 untrusted_device / session_stale_relogin）。
  */
@@ -602,7 +602,7 @@ async function unarchiveCodeSession(baseUrl, accessToken, sessionId, timeoutMs, 
     "elevated_auth",
   );
 }
-//@ chunk-kgtpkbhq.js:9302-9495 placement
+//@ chunk-jc4qbkj6.js:9302-9495 placement
 /**
  * 从桥接 worker 的启动参数里取 mcp_config.content（必须是非空字符串），否则返回 undefined。
  */
@@ -621,7 +621,7 @@ function extractMcpConfigContent(body) {
     };
   return;
 }
-//@ chunk-kgtpkbhq.js:9495-9608 placement
+//@ chunk-jc4qbkj6.js:9495-9608 placement
 /**
  * 字符串或数字转成安全整数，否则 undefined。
  */
@@ -630,22 +630,22 @@ function toSafeInteger(workerEpoch) {
   return typeof value === "number" && Number.isSafeInteger(value) ? value : undefined;
 }
 export {
-  shouldCloudSessionEnroll,
-  readUntrustedDeviceRefusal,
   classifyElevatedAuthError,
-  oauthHeaders,
-  isSnakeCaseReasonCode,
+  isValidSessionId,
+  readUntrustedDeviceRefusal,
+  shouldRemoteControlEnroll,
+  isCredentialsFailure,
   createCodeSession,
   isCreateSessionFailure,
   isCredentialsRejection,
-  isValidSessionId,
-  shouldRemoteControlEnroll,
-  isCredentialsFailure,
   attachBridgeWorker,
   archiveCodeSession,
   unarchiveCodeSession,
   REFUSAL_BEHIND_NO_ENROLL,
+  oauthHeaders,
   refusalCodes,
+  isSnakeCaseReasonCode,
+  shouldCloudSessionEnroll,
   classifyElevatedAuthSubReason,
   getCodeSession,
   updateCodeSession,

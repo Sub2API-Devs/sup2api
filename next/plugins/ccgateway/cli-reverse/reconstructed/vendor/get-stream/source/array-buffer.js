@@ -1,18 +1,18 @@
 /**
  * get-stream/source/array-buffer.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: get-stream@8.0.1
- * pieces: chunk-m4p5zn6n.js (2)
+ * pieces: chunk-t889g22j.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { getStreamContents } from "./contents.js";
 import { throwObjectStream, getLengthProp, noop } from "./utils.js";
 
-//@ chunk-m4p5zn6n.js:22966-23006 esm-layout
+//@ chunk-t889g22j.js:22965-23005 esm-layout
 async function getStreamAsBuffer(stream, options) {
   return getStreamContents(stream, arrayBufferMethods, options);
 }
-//@ chunk-m4p5zn6n.js:23006-23880 esm-fingerprint
+//@ chunk-t889g22j.js:23005-23879 esm-fingerprint
 var initArrayBuffer = () => ({
   contents: new ArrayBuffer(0),
 });

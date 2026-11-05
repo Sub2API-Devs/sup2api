@@ -1,15 +1,15 @@
 /**
  * @smithy/node-http-handler/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/node-http-handler@4.6.0
- * pieces: chunk-hq88884p.js (1)
+ * pieces: chunk-355mdh7x.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_protocol_http } from "../../protocol-http/dist-cjs/index.js";
 import { require_querystring_builder } from "../../querystring-builder/dist-cjs/index.js";
 
-//@ chunk-hq88884p.js:5498-17045 cjs-fingerprint
+//@ chunk-355mdh7x.js:5508-17055 cjs-fingerprint
 var require_node_http_handler = __commonJS(function (cjsExports) {
   var protocolsModule = require_protocol_http();
   var querystringBuilder = require_querystring_builder();

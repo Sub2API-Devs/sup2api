@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：特定使用制度下的拒绝处理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: placement 3
  */
 import { isHipaaFeatureError } from "./errors.js";
@@ -18,15 +18,15 @@ import { APIUserAbortError } from "../../../vendor/@anthropic-ai/sdk/core/error.
 import { logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-e6aww6q8.js:963936-963973 placement
+//@ chunk-5xgkngpb.js:977245-977282 placement
 function isRegimeRefusal(error) {
   return isHipaaFeatureError(error) && !isHumbleFlurryOn();
 }
-//@ chunk-e6aww6q8.js:963973-964013 placement
+//@ chunk-5xgkngpb.js:977282-977322 placement
 function recoverRegimeRefusalIfNeeded(error) {
   if (isRegimeRefusal(error)) runIdleTask().catch(logError);
 }
-//@ chunk-e6aww6q8.js:964013-964617 placement
+//@ chunk-5xgkngpb.js:977322-977926 placement
 /**
  * 受监管使用制度（如 HIPAA）拒绝后，按制度重建请求并重发。
  */

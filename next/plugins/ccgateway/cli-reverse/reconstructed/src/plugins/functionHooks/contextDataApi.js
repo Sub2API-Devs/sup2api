@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：插件读取会话上下文数据的接口
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: placement 3
  */
 
-//@ chunk-e6aww6q8.js:787844-789339 placement
+//@ chunk-5xgkngpb.js:799160-800664 placement
 /**
  * 把内部的上下文用量数据复制为插件可见的形状：分类、网格、模型、记忆文件、MCP 工具、代理、斜杠命令、技能、自动压缩阈值与 API 用量。
  */
@@ -95,7 +95,7 @@ function toPluginContextData(data) {
       : null,
   };
 }
-//@ chunk-e6aww6q8.js:789339-789430 placement
+//@ chunk-5xgkngpb.js:800664-800755 placement
 /**
  * 读插件上下文数据
  */
@@ -106,7 +106,7 @@ var pluginContextData = async (ctx, options) =>
       terminalWidth: options.columns,
     }),
   );
-//@ chunk-e6aww6q8.js:789491-789532 placement
+//@ chunk-5xgkngpb.js:800816-800857 placement
 /**
  * detail 键名格式
  */

@@ -3,10 +3,10 @@
  *
  * /model 与 --model 的模型校验：白名单检查、已知别名直通、服务器探测（max_tokens=1 的 "Hi" 请求）、错误分类成用户提示、权利拒绝的复核缓存。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/model/validateModel.ts
- * pieces: chunk-aepeg2w5.js (4), chunk-ewfzwa2f.js (12)
- * attribution: placement 4, sole-consumer 2, fingerprint 2, layout 7, affinity 1
+ * pieces: chunk-bjbvd2mw.js (12), chunk-exfmq47h.js (4)
+ * attribution: sole-consumer 2, fingerprint 2, layout 7, affinity 1, placement 4
  */
 import { getProviderState, OVERTURNED_DENY_TTL_MS } from "./providerCaches.js";
 import { isModelAllowed, normalizeForDenyMatch, denyEntryMatchesModel } from "./modelAllowlist.js";
@@ -49,22 +49,22 @@ import { isAwsCredentialError } from "../aws.js";
 import { getConfiguredProxyAuthHelper } from "../proxy.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:407872-407902 placement
+//@ chunk-exfmq47h.js:419263-419293 placement
 /**
  * 模型名允许的字符集。
  */
 var MODEL_NAME_ALLOWED_CHARS = "A-Za-z0-9._:/@[\\]-";
-//@ chunk-aepeg2w5.js:407902-407945 placement
+//@ chunk-exfmq47h.js:419293-419336 placement
 /**
  * 模型名最大长度与非法字符正则。
  */
 var MAX_MODEL_NAME_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var regExp_28;
-deferInit("chunk-aepeg2w5.js:407902", () => {
+deferInit("chunk-exfmq47h.js:419293", () => {
   MAX_MODEL_NAME_CHARS = 128;
   regExp_28 = new RegExp(`[^${MODEL_NAME_ALLOWED_CHARS}]`, "g");
 });
-//@ chunk-aepeg2w5.js:407945-408081 placement
+//@ chunk-exfmq47h.js:419336-419472 placement
 /**
  * 模型名的显示形式（去不可见字符、截断）。
  */
@@ -75,29 +75,29 @@ function displayModelName(modelName) {
     ? `${replaced.slice(0, MAX_MODEL_NAME_CHARS)}\u2026`
     : replaced;
 }
-//@ chunk-aepeg2w5.js:408081-408194 placement (2.1.88 match: ASK_USER_QUESTION_TOOL_PROMPT, 0.444)
+//@ chunk-exfmq47h.js:419472-419585 placement (2.1.88 match: ASK_USER_QUESTION_TOOL_PROMPT, 0.444)
 /**
  * 组织设置限制模型时的提示文案（实际与 AskUserQuestion 无关）。
  */
 function formatModelRestrictedNotice(requestedModel, fallbackModel) {
   return `Model "${displayModelName(requestedModel)}" is restricted by your organization's settings. Using ${displayModelName(fallbackModel)} instead.`;
 }
-//@ chunk-ewfzwa2f.js:839-907 sole-consumer
+//@ chunk-bjbvd2mw.js:905-973 sole-consumer
 /**
  * fetch_error、unknown、org_level_disabled_until（不据此判定需要额度）。
  */
 var NON_DEFINITIVE_EXTRA_USAGE_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ewfzwa2f.js:839", () => {
+deferInit("chunk-bjbvd2mw.js:905", () => {
   NON_DEFINITIVE_EXTRA_USAGE_REASONS = new Set(["fetch_error", "unknown", "org_level_disabled_until"]);
 });
-//@ chunk-ewfzwa2f.js:907-962 sole-consumer
+//@ chunk-bjbvd2mw.js:973-1028 sole-consumer
 /**
  * 本进程已探测通过的模型集合。
  */
 function getValidatedModels() {
   return getProviderState().providerCache.validatedModels;
 }
-//@ chunk-ewfzwa2f.js:962-2167 fingerprint (2.1.88 match: validateModel, 0.639)
+//@ chunk-bjbvd2mw.js:1028-2233 fingerprint (2.1.88 match: validateModel, 0.639)
 /**
  * 校验模型：空名、白名单拒绝；非强制探测时别名、ANTHROPIC_CUSTOM_MODEL_OPTION、modelPicker 选项、已验证缓存直接通过；含控制字符的名字在非第一方直连时判不存在；否则发 max_tokens=1 探测请求（querySource=model_validation），成功记入缓存，失败交错误分类。
  */
@@ -201,12 +201,12 @@ async function validateModel(model, options) {
     return handleValidationError(error, normalizedModel);
   }
 }
-//@ chunk-ewfzwa2f.js:2167-2179 layout
+//@ chunk-bjbvd2mw.js:2233-2245 layout
 /**
  * 15000。
  */
 var MODEL_PROBE_TIMEOUT_MS = 15000;
-//@ chunk-ewfzwa2f.js:2179-2660 layout
+//@ chunk-bjbvd2mw.js:2245-2726 layout
 /**
  * 带截止时间的探测；超时中止并返回 probe=undefined；账号在探测期间变化时清掉缓存并标记 accountChanged。
  */
@@ -238,7 +238,7 @@ async function probeModelWithDeadline(model, options) {
     accountChanged,
   };
 }
-//@ chunk-ewfzwa2f.js:2660-2996 layout
+//@ chunk-bjbvd2mw.js:2726-3062 layout
 /**
  * 有截止时间时走带超时探测，超时或账号变化返回可重试错误 "Couldn't confirm model …"。
  */
@@ -258,7 +258,7 @@ async function validateModelWithDeadline(model, options, deadlineMs) {
   }
   return probe;
 }
-//@ chunk-ewfzwa2f.js:2996-3055 layout
+//@ chunk-bjbvd2mw.js:3062-3121 layout
 /**
  * 是否别名（可带 [1m]）。
  */
@@ -266,7 +266,7 @@ function isAliasSpelling(spelling) {
   let trimmed = spelling.toLowerCase().trim();
   return isModelKeyAliasOrResolved(trimmed);
 }
-//@ chunk-ewfzwa2f.js:3055-3101 layout
+//@ chunk-bjbvd2mw.js:3121-3167 layout
 /**
  * 别名或已知简写时解析成具体模型，否则原样。
  */
@@ -275,7 +275,7 @@ function resolveAliasForProbe(spelling) {
     ? parseUserSpecifiedModel(spelling)
     : spelling;
 }
-//@ chunk-ewfzwa2f.js:3101-4240 layout
+//@ chunk-bjbvd2mw.js:3167-4306 layout
 /**
  * 复核“账号无权使用该模型”的缓存结论：策略拒绝、10 分钟内已确认拒绝直接返回；否则强制探测，成功则撤销拒绝并清理模型访问缓存（overturned），失败记录 denied_by_server。
  */
@@ -342,7 +342,7 @@ async function reprobeEntitlementDeny(model, storageV5, credentials) {
     return "probe_failed";
   }
 }
-//@ chunk-ewfzwa2f.js:4240-4524 layout
+//@ chunk-bjbvd2mw.js:4306-4590 layout
 /**
  * 从全局配置 modelAccessCache 删掉该模型的条目。
  */
@@ -368,7 +368,7 @@ async function evictModelAccessCacheEntry(model, storageV5) {
         };
   }, storageV5);
 }
-//@ chunk-ewfzwa2f.js:4524-6216 fingerprint (2.1.88 match: handleValidationError, 0.657)
+//@ chunk-bjbvd2mw.js:4590-6282 fingerprint (2.1.88 match: handleValidationError, 0.657)
 /**
  * 探测错误转校验结果：模型不存在（附建议）、认证失败、网络错误、无权限、需要额度、可重试状态码等。
  */
@@ -486,7 +486,7 @@ function handleValidationError(error, modelName) {
     retryable: true,
   };
 }
-//@ chunk-ewfzwa2f.js:6216-6283 affinity
+//@ chunk-bjbvd2mw.js:6282-6349 affinity
 /**
  * 无状态码、408、409、429 或 5xx。
  */
@@ -494,13 +494,13 @@ function isRetryableStatus(status) {
   return status === undefined || status === 408 || status === 409 || status === 429 || status >= 500;
 }
 export {
-  reprobeEntitlementDeny,
-  displayModelName,
   formatModelRestrictedNotice,
+  displayModelName,
+  reprobeEntitlementDeny,
+  validateModel,
+  MODEL_NAME_ALLOWED_CHARS,
   MAX_MODEL_NAME_CHARS,
   isAliasSpelling,
   validateModelWithDeadline,
   resolveAliasForProbe,
-  validateModel,
-  MODEL_NAME_ALLOWED_CHARS,
 };

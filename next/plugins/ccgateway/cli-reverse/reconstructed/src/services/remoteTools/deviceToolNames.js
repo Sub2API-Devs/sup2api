@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设备工具名
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s5mxraj2.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ap4n81vh.js (2)
  * attribution: placement 2
  */
 import { buildMcpToolName } from "../mcp/mcpStringUtils.js";
@@ -15,7 +15,7 @@ import { stripAnyVersatileSuffix } from "../../utils/model/modelIds.js";
 import { canDeclareToolChangeAhead } from "../api/declaredToolSet.js";
 import { getFeatureValue_SESSION_PINNED } from "../analytics/growthbook.js";
 
-//@ chunk-s5mxraj2.js:5056-5259 placement
+//@ chunk-ap4n81vh.js:5560-5763 placement
 /**
  * 远程设备里可以走 teleport 缓存的工具全名集合及其特性开关名。
  */
@@ -31,7 +31,7 @@ var TELEPORT_CACHEABLE_DEVICE_TOOLS = new Set(
     "list_devices",
   ].map((name) => buildMcpToolName(REMOTE_DEVICES, name)),
 );
-//@ chunk-s5mxraj2.js:5259-5493 placement
+//@ chunk-ap4n81vh.js:5763-5997 placement
 /**
  * 判断工具是否为可走 teleport 缓存的设备工具（远程设备 MCP、始终加载、缓存有效且模型匹配、开关开启）。
  */

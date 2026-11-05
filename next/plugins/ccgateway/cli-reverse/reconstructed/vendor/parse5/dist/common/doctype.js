@@ -1,13 +1,13 @@
 /**
  * parse5/dist/common/doctype.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: parse5@7.2.0..7.2.1
- * pieces: chunk-6ja29j2n.js (4)
+ * pieces: chunk-p9ac6cnb.js (4)
  * attribution: esm-fingerprint 4
  */
 import { DOCUMENT_MODE } from "../../lib/common/html.js";
 
-//@ chunk-6ja29j2n.js:126135-128770 esm-fingerprint
+//@ chunk-p9ac6cnb.js:126135-128770 esm-fingerprint
 var VALID_DOCTYPE_NAME = "html";
 var VALID_SYSTEM_ID = "about:legacy-compat";
 var QUIRKS_MODE_SYSTEM_ID = "http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd";
@@ -87,11 +87,11 @@ var LIMITED_QUIRKS_WITH_SYSTEM_ID_PUBLIC_ID_PREFIXES = [
   "-//w3c//dtd html 4.01 frameset//",
   "-//w3c//dtd html 4.01 transitional//",
 ];
-//@ chunk-6ja29j2n.js:128770-128823 esm-fingerprint
+//@ chunk-p9ac6cnb.js:128770-128823 esm-fingerprint
 function hasPrefix(publicId, prefixes) {
   return prefixes.some((prefix) => publicId.startsWith(prefix));
 }
-//@ chunk-6ja29j2n.js:128823-128914 esm-fingerprint
+//@ chunk-p9ac6cnb.js:128823-128914 esm-fingerprint
 function isConforming(token) {
   return (
     token.name === VALID_DOCTYPE_NAME &&
@@ -99,7 +99,7 @@ function isConforming(token) {
     (token.systemId === null || token.systemId === VALID_SYSTEM_ID)
   );
 }
-//@ chunk-6ja29j2n.js:128914-129218 esm-fingerprint
+//@ chunk-p9ac6cnb.js:128914-129218 esm-fingerprint
 function getDocumentMode(token) {
   if (token.name !== VALID_DOCTYPE_NAME) return DOCUMENT_MODE.QUIRKS;
   let { systemId } = token;

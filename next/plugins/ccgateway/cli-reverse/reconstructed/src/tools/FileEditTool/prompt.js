@@ -3,32 +3,32 @@
  *
  * Edit 工具提示词（lean 短版与完整版）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileEditTool/prompt.ts
- * pieces: chunk-e6aww6q8.js (3)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: fingerprint 2, layout 1
  */
-import { FILE_READ_TOOL_NAME } from "../FileReadTool/constants.js";
+import { READ } from "../FileReadTool/constants.js";
 import { isTabReadSeparationEnabled } from "../FileReadTool/limits.js";
 import { leanPromptOf } from "../../utils/model/promptBundles.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 
-//@ chunk-e6aww6q8.js:4645791-4645970 fingerprint (2.1.88 match: getPreReadInstruction, 1)
+//@ chunk-5xgkngpb.js:4754376-4754555 fingerprint (2.1.88 match: getPreReadInstruction, 1)
 /**
  * Edit 提示词里的"必须先用 Read 读过"一行。
  */
 function getPreReadInstruction() {
   return `
-- You must use your \`${FILE_READ_TOOL_NAME}\` tool at least once in the conversation before editing. This tool will error if you attempt an edit without reading the file.`;
+- You must use your \`${READ}\` tool at least once in the conversation before editing. This tool will error if you attempt an edit without reading the file.`;
 }
-//@ chunk-e6aww6q8.js:4645970-4646004 layout
+//@ chunk-5xgkngpb.js:4754555-4754589 layout
 /**
  * Edit 工具提示词：转调 getDefaultEditDescription。
  */
 function getEditToolDescription(model, leanPrompt) {
   return getDefaultEditDescription(model, leanPrompt);
 }
-//@ chunk-e6aww6q8.js:4646004-4647900 fingerprint (2.1.88 match: getDefaultEditDescription, 0.429)
+//@ chunk-5xgkngpb.js:4754589-4756485 fingerprint (2.1.88 match: getDefaultEditDescription, 0.429)
 /**
  * 生成 Edit 提示词：lean 模式给 3 行短版；完整版含先读要求、行号前缀格式（tengu_tab_read_sep 决定 tab 或冒号）、tengu_edit_minimalanchor_jrn 开启时要求 old_string 尽量短。
  */
@@ -42,7 +42,7 @@ function getDefaultEditDescription(model, leanPrompt) {
   )
     return `Performs exact string replacement in a file.
 
-- You must ${FILE_READ_TOOL_NAME} the file in this conversation before editing, or the call will fail.
+- You must ${READ} the file in this conversation before editing, or the call will fail.
 - \`old_string\` must match the file exactly, including indentation, and be unique \u2014 the edit fails otherwise. Strip the Read line prefix (${tabSeparationEnabled ? "line number + a single tab or `:`" : "line number + tab"}) before matching.
 - \`replace_all: true\` replaces every occurrence instead.`;
   let linePrefixFormat = tabSeparationEnabled

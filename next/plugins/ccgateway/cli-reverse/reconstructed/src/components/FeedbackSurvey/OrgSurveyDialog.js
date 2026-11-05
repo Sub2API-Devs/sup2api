@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。组织调查问卷对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (17)
  * attribution: placement 17
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -29,7 +29,7 @@ import { TagTabs } from "../TagTabs.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { StatusIcon } from "../design-system/StatusIcon.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
-import { useInputRefusalWindow, useRefusalTracker } from "../CustomSelect/selectTypeahead.js";
+import { useRecentInputWithin, useRefusalTracker } from "../CustomSelect/selectTypeahead.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "../CustomSelect/select.js";
 import { SelectMultiAccessible } from "../CustomSelect/SelectMulti.js";
@@ -44,39 +44,39 @@ import { StatusRow } from "../Settings/Status.js";
 import { ConfirmSelect } from "../design-system/ConfirmSelect.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1057801-1057834 placement
+//@ chunk-czq1j3j2.js:1091830-1091863 placement
 function getSurveyOpenedAtMs() {
   return Date.now();
 }
-//@ chunk-18hwfzwa.js:1057834-1057868 placement
+//@ chunk-czq1j3j2.js:1091863-1091897 placement
 function isNotNull(value) {
   return value !== null;
 }
-//@ chunk-18hwfzwa.js:1057868-1057923 placement
+//@ chunk-czq1j3j2.js:1091897-1091952 placement
 function toSingleSelectOption(option) {
   return {
     label: option.label,
     value: option.value,
   };
 }
-//@ chunk-18hwfzwa.js:1057923-1057978 placement
+//@ chunk-czq1j3j2.js:1091952-1092007 placement
 function toMultiSelectOption(option) {
   return {
     label: option.label,
     value: option.value,
   };
 }
-//@ chunk-18hwfzwa.js:1057978-1057994 placement
+//@ chunk-czq1j3j2.js:1092007-1092023 placement
 function noopCancel() {}
-//@ chunk-18hwfzwa.js:1057994-1058023 placement
+//@ chunk-czq1j3j2.js:1092023-1092052 placement
 function incrementByOne(value) {
   return value + 1;
 }
-//@ chunk-18hwfzwa.js:1058023-1058051 placement
+//@ chunk-czq1j3j2.js:1092052-1092080 placement
 var RECENT_INPUT_GUARD_MS = 400;
 var SURVEY_INPUT_GUARD_MS = 700;
 var CARET_GUARD_MS = 100;
-//@ chunk-18hwfzwa.js:1058051-1058380 placement
+//@ chunk-czq1j3j2.js:1092080-1092409 placement
 /**
  * 组织问卷的误触保护：记录打开/最近按键时间，返回判断"是否仍在近期输入窗口内"的函数。
  */
@@ -105,15 +105,15 @@ function useRecentInputGuard(windowMs) {
   } else check = $[3];
   return check;
 }
-//@ chunk-18hwfzwa.js:1058380-1058448 placement
+//@ chunk-czq1j3j2.js:1092409-1092477 placement
 var LIST_FORMATTER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1058380", () => {
+deferInit("chunk-czq1j3j2.js:1092409", () => {
   LIST_FORMATTER = new Intl.ListFormat("en", {
     style: "long",
     type: "conjunction",
   });
 });
-//@ chunk-18hwfzwa.js:1058448-1061293 placement
+//@ chunk-czq1j3j2.js:1092477-1095322 placement
 /**
  * OrgSurveyDialog：组织调查问卷对话框。
  */
@@ -357,7 +357,7 @@ function OrgSurveyDialog(props) {
   } else dialogBody = $[53];
   return dialogBody;
 }
-//@ chunk-18hwfzwa.js:1061293-1062376 placement
+//@ chunk-czq1j3j2.js:1095322-1096405 placement
 function OrgSurveyTabs(props) {
   let $ = useMemoCache(19);
   let { questions, draft, currentIndex } = props;
@@ -447,7 +447,7 @@ function OrgSurveyTabs(props) {
   } else tabsRow = $[18];
   return tabsRow;
 }
-//@ chunk-18hwfzwa.js:1062376-1065714 placement
+//@ chunk-czq1j3j2.js:1096405-1099743 placement
 /**
  * 组织调查中的单个问题。
  */
@@ -468,19 +468,19 @@ function OrgSurveyQuestion(props) {
   } else shouldRefuseCached = $[2];
   let shouldRefuse = shouldRefuseCached;
   let isScreenReader = useIsScreenReaderEnabled() ? true : false;
-  let inputRefusalWindow = useInputRefusalWindow(RECENT_INPUT_GUARD_MS_3);
+  let recentInput = useRecentInputWithin(RECENT_INPUT_GUARD_MS_3);
   let { refusedWithin, noteRefused } = useRefusalTracker();
   let refuseInput;
-  if ($[3] !== inOpenGrace || $[4] !== inputRefusalWindow || $[5] !== noteRefused || $[6] !== refusedWithin) {
+  if ($[3] !== inOpenGrace || $[4] !== recentInput || $[5] !== noteRefused || $[6] !== refusedWithin) {
     refuseInput = () => {
-      if (inOpenGrace() || inputRefusalWindow() || refusedWithin(RECENT_INPUT_GUARD_MS_3)) {
+      if (inOpenGrace() || recentInput() || refusedWithin(RECENT_INPUT_GUARD_MS_3)) {
         noteRefused();
         return true;
       }
       return false;
     };
     $[3] = inOpenGrace;
-    $[4] = inputRefusalWindow;
+    $[4] = recentInput;
     $[5] = noteRefused;
     $[6] = refusedWithin;
     $[7] = refuseInput;
@@ -715,7 +715,7 @@ function OrgSurveyQuestion(props) {
   } else questionElement = $[61];
   return questionElement;
 }
-//@ chunk-18hwfzwa.js:1065714-1067346 placement
+//@ chunk-czq1j3j2.js:1099743-1101375 placement
 function OrgSurveyTextInput(props) {
   let $ = useMemoCache(26);
   let { value, inGrace, onChange, onSubmit } = props;
@@ -843,7 +843,7 @@ function OrgSurveyTextInput(props) {
   } else fieldElement = $[25];
   return fieldElement;
 }
-//@ chunk-18hwfzwa.js:1067346-1069363 placement
+//@ chunk-czq1j3j2.js:1101375-1103392 placement
 function OrgSurveyReview(props) {
   let $ = useMemoCache(28);
   let { questions, draft, orgName, missingRequired, sending, submitFailed, onSubmit, onCancel } = props;
@@ -1013,16 +1013,16 @@ function OrgSurveyReview(props) {
   } else reviewElement = $[27];
   return reviewElement;
 }
-//@ chunk-18hwfzwa.js:1069363-1069418 placement
+//@ chunk-czq1j3j2.js:1103392-1103447 placement
 function ownValue(draft, id) {
   return Object.hasOwn(draft, id) ? draft[id] : undefined;
 }
-//@ chunk-18hwfzwa.js:1069418-1069508 placement
+//@ chunk-czq1j3j2.js:1103447-1103537 placement
 function hasAnswer(answer) {
   if (answer === undefined) return false;
   return typeof answer === "string" ? answer.trim() !== "" : answer.length > 0;
 }
-//@ chunk-18hwfzwa.js:1069508-1069699 placement
+//@ chunk-czq1j3j2.js:1103537-1103728 placement
 function formatSurveyAnswer(question, answer) {
   if (question.kind === "text") return typeof answer === "string" ? answer.trim() : "";
   let values = typeof answer === "string" ? [answer] : (answer ?? []);

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：无头云会话的本机钩子特性：同意、关闭原因与状态报告。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fe6rs39h.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-keyy05re.js (9)
  * attribution: placement 9
  */
 import { isHookForwardingEnabled, unrefTimeout } from "../../utils/hooks/deviceHooks/commandReach.js";
@@ -28,9 +28,9 @@ import {
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 
-//@ chunk-fe6rs39h.js:14172-14184 placement
+//@ chunk-keyy05re.js:14559-14571 placement
 var DEVICE_HOOKS_TIMER_MS = 5000;
-//@ chunk-fe6rs39h.js:14184-15912 placement
+//@ chunk-keyy05re.js:14571-16299 placement
 /**
  * 无头云会话的"本机钩子"特性：检查同意书、向云会话注册本机钩子并在空闲时休眠，报告 off 原因（未同意、被拒、空闲等）。
  */
@@ -130,7 +130,7 @@ function createDeviceHooksFeature(options) {
     };
   };
 }
-//@ chunk-fe6rs39h.js:15912-16329 placement
+//@ chunk-keyy05re.js:16299-16714 placement
 function deviceHooksStatusReport(feature, memory, result, session) {
   let reason = deviceHooksOffReason(feature, memory.standing);
   if (reason !== null) {
@@ -165,14 +165,14 @@ function deviceHooksStatusReport(feature, memory, result, session) {
     }),
   };
 }
-//@ chunk-fe6rs39h.js:16329-16701 placement
+//@ chunk-keyy05re.js:16714-17086 placement
 var DEVICE_HOOKS_OFF_MESSAGES = {
   dormant:
     "Hooks from this machine are idle for this cloud session: nothing has used it for a while, so their registration was allowed to lapse; it is made again when the session is next used.",
   not_registered:
     "Hooks from this machine are not registered with this cloud session yet: it has not answered (it may be asleep); they are registered when it is next used.",
 };
-//@ chunk-fe6rs39h.js:16701-17409 placement
+//@ chunk-keyy05re.js:17086-17794 placement
 function deviceHooksOffReason(state, standing) {
   if (state.phase === "stopped") return state.stoppedReason ?? "stopped";
   switch (state.lastOutcome) {
@@ -203,7 +203,7 @@ function deviceHooksOffReason(state, standing) {
       return null;
   }
 }
-//@ chunk-fe6rs39h.js:17409-17746 placement
+//@ chunk-keyy05re.js:17794-18131 placement
 function waitForConsentAnswer(consentPin, memory, signal, setTimer) {
   if (signal.aborted) return Promise.resolve("aborted");
   let cleanup = () => {};
@@ -226,7 +226,7 @@ function waitForConsentAnswer(consentPin, memory, signal, setTimer) {
   promise.then(() => cleanup());
   return promise;
 }
-//@ chunk-fe6rs39h.js:17746-17939 placement
+//@ chunk-keyy05re.js:18131-18324 placement
 function deviceHooksOffFeature(reason, reattach, isAttach) {
   logEvent("tengu_device_hooks_headless_off", {
     reason: fromEnum(reason),
@@ -246,9 +246,9 @@ function deviceHooksOffFeature(reason, reattach, isAttach) {
     }),
   };
 }
-//@ chunk-fe6rs39h.js:17939-18056 placement
+//@ chunk-keyy05re.js:18324-18441 placement
 var DEVICE_HOOKS_UNDECIDED_MESSAGE =
   "Hooks from this machine are not used in cloud sessions yet: run /hooks in claude on this machine to decide.";
-//@ chunk-fe6rs39h.js:18056-18087 placement
+//@ chunk-keyy05re.js:18441-18472 placement
 var ATTACH_SERVE_FLAG = "tengu_violin_chinrest";
 export { ATTACH_SERVE_FLAG, createDeviceHooksFeature };

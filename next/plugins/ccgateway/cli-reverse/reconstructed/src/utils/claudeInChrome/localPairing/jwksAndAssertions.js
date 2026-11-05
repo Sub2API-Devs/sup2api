@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：配对 JWKS 缓存与断言校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p7xf186d.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-290tacpj.js (16)
  * attribution: placement 16
  */
 import { PairingError, PairingClock, malformedError } from "./pairingErrors.js";
@@ -25,7 +25,7 @@ import {
 } from "./encoding.js";
 import { withTimeout_2 } from "../../sleep.js";
 
-//@ chunk-p7xf186d.js:9412-9510 placement
+//@ chunk-290tacpj.js:9412-9510 placement
 /**
  * 从 Cache-Control 头里取出指定指令的秒数。
  */
@@ -33,7 +33,7 @@ function parseCacheControlSeconds(cacheControl, directive, fallback) {
   let match = new RegExp(`(?:^|,)\\s*${directive}=(\\d+)`).exec(cacheControl ?? "");
   return match ? Number(match[1]) : fallback;
 }
-//@ chunk-p7xf186d.js:9510-9571 placement
+//@ chunk-290tacpj.js:9510-9571 placement
 /**
  * 构造 jwks_unavailable 配对错误。
  */
@@ -42,7 +42,7 @@ function jwksUnavailableError(message, cause) {
     cause,
   });
 }
-//@ chunk-p7xf186d.js:9571-11556 placement
+//@ chunk-290tacpj.js:9571-11556 placement
 /**
  * 缓存配对签名公钥集（JWKS），支持最大存活、出错时使用旧值与最小刷新间隔。
  */
@@ -160,7 +160,7 @@ class JwksCache {
     };
   }
 }
-//@ chunk-p7xf186d.js:11556-12038 placement
+//@ chunk-290tacpj.js:11556-12038 placement
 function canonicalJson(value) {
   if (value === null || typeof value === "boolean" || typeof value === "string") return JSON.stringify(value);
   if (typeof value === "number") {
@@ -182,7 +182,7 @@ function canonicalJson(value) {
   }
   throw TypeError(`canonicalJson: unsupported ${typeof value}`);
 }
-//@ chunk-p7xf186d.js:12038-13130 placement
+//@ chunk-290tacpj.js:12038-13130 placement
 function parseStrictJson(text) {
   let cursor = 0;
   let fail = (message) => {
@@ -279,14 +279,14 @@ function parseStrictJson(text) {
   if (cursor !== text.length) fail("trailing data");
   return value;
 }
-//@ chunk-p7xf186d.js:13130-13172 placement
+//@ chunk-290tacpj.js:13130-13172 placement
 /**
  * 断言 JWT 的 typ 值（local-pairing+jwt）。
  */
 var ASSERTION_TYP = "local-pairing+jwt";
 var MAX_ASSERTION_CHARS = 4096;
 var MAX_KID_CHARS = 256;
-//@ chunk-p7xf186d.js:13172-14160 placement
+//@ chunk-290tacpj.js:13172-14160 placement
 function parseAssertion(token) {
   if (typeof token !== "string" || token.length === 0 || token.length > MAX_ASSERTION_CHARS)
     throw malformedError("assertion missing or too long");
@@ -341,7 +341,7 @@ function parseAssertion(token) {
     signature,
   };
 }
-//@ chunk-p7xf186d.js:14160-14320 placement
+//@ chunk-290tacpj.js:14160-14320 placement
 async function verifyAssertionSignature(assertion, context) {
   if (
     !(await globalThis.crypto.subtle.verify(
@@ -356,19 +356,19 @@ async function verifyAssertionSignature(assertion, context) {
   )
     throw new PairingError("bad_signature");
 }
-//@ chunk-p7xf186d.js:14320-14358 placement
+//@ chunk-290tacpj.js:14320-14358 placement
 /**
  * 允许的对端类型（desktop、chrome_extension）。
  */
 var PEER_KINDS = ["desktop", "chrome_extension"];
-//@ chunk-p7xf186d.js:14358-14395 placement
+//@ chunk-290tacpj.js:14358-14395 placement
 /**
  * 判断对端类型是否允许。
  */
 function isKnownPeerKind(kind) {
   return PEER_KINDS.includes(kind);
 }
-//@ chunk-p7xf186d.js:14395-14447 placement
+//@ chunk-290tacpj.js:14395-14447 placement
 /**
  * 断言时间校验允许的时钟偏差（60 秒）。
  */
@@ -376,19 +376,19 @@ var ASSERTION_CONSTANTS = "claude-local-pairing/v1";
 var ASSERTION_CLOCK_SKEW_S = 60;
 var MAX_ASSERTION_LIFETIME_S = 301;
 var MAX_TAG_FAILURES_DEFAULT = 30;
-//@ chunk-p7xf186d.js:14447-14550 placement
+//@ chunk-290tacpj.js:14447-14550 placement
 function requireStringClaim(payload, field) {
   let value = payload[field];
   if (typeof value !== "string" || value.length === 0) throw malformedError(`claim ${field} missing`);
   return value;
 }
-//@ chunk-p7xf186d.js:14550-14661 placement
+//@ chunk-290tacpj.js:14550-14661 placement
 function requireNumberClaim(payload, field) {
   let value = payload[field];
   if (typeof value !== "number" || !Number.isFinite(value)) throw malformedError(`claim ${field} missing`);
   return value;
 }
-//@ chunk-p7xf186d.js:14661-15071 placement
+//@ chunk-290tacpj.js:14661-15071 placement
 function validatePeerClaims(payload) {
   let clientKind = requireStringClaim(payload, "client_kind");
   if (!isKnownPeerKind(clientKind)) throw new PairingError("wrong_peer_kind", clientKind);
@@ -410,7 +410,7 @@ function validatePeerClaims(payload) {
     jti: typeof payload.jti === "string" ? payload.jti : undefined,
   };
 }
-//@ chunk-p7xf186d.js:15071-15562 placement
+//@ chunk-290tacpj.js:15071-15562 placement
 async function verifyPeerAssertion(token, text, policy) {
   let assertion = parseAssertion(token);
   let point = parsePublicKey(text);
@@ -430,7 +430,7 @@ async function verifyPeerAssertion(token, text, policy) {
     peerRaw: point,
   };
 }
-//@ chunk-p7xf186d.js:15562-15660 placement
+//@ chunk-290tacpj.js:15562-15660 placement
 function checkAssertionTimes(claims, serverTime) {
   if (claims.iat > serverTime + ASSERTION_CLOCK_SKEW_S) throw new PairingError("not_yet_valid");
   if (claims.exp + ASSERTION_CLOCK_SKEW_S <= serverTime) throw new PairingError("expired");

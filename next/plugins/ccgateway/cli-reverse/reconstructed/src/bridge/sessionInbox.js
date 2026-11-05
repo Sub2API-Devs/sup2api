@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。从会话收件箱读取消息（/v1/code/sessions/:id/inbox/:file_id）并渲染内容信封。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-w12gsta7.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1kwawxaw.js (12)
  * attribution: placement 12
  */
 import { stripCombiningRepeated } from "../utils/sanitization.js";
@@ -22,7 +22,7 @@ import { truncateToLength } from "../utils/stringUtils.js";
 import { normalizeUuidOrNull } from "../utils/agentId.js";
 import { extractInboundAttachments } from "./inboundAttachments.js";
 
-//@ chunk-w12gsta7.js:637-770 placement
+//@ chunk-1kwawxaw.js:669-802 placement
 var INBOX_FILE_ID_PATTERN = /^file_[A-Za-z0-9_]{8,80}$/;
 var MAX_INBOX_BODY_CHARS = 8000;
 var MAX_INBOX_HEAD_CHARS = 16000;
@@ -30,14 +30,14 @@ var MAX_SENDER_LABEL_CHARS = 64;
 var MAX_SLACK_PERMALINK_CHARS = 512;
 var MAX_SENDER_KIND_CHARS = 40;
 var SLACK_ARCHIVE_URL_PATTERN = /^https:\/\/([a-z0-9-]+\.)*slack\.com\/archives\/[\x21-\x7e]+$/;
-//@ chunk-w12gsta7.js:770-904 placement
+//@ chunk-1kwawxaw.js:802-936 placement
 function sanitizeInboxText(text, keepNewlines) {
   let stripped = stripCombiningRepeated(text);
   return keepNewlines
     ? stripped.replace(/(?![\n\t])[\p{Cc}\p{Zl}\p{Zp}]/gu, " ")
     : stripped.replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, " ").trim();
 }
-//@ chunk-w12gsta7.js:904-1093 placement
+//@ chunk-1kwawxaw.js:936-1125 placement
 function foldSenderDisplayBrackets(text) {
   return text
     .replace(/(?!\()\p{Ps}|</gu, "(")
@@ -45,11 +45,11 @@ function foldSenderDisplayBrackets(text) {
     .replace(/[\p{Pi}\p{Pf}]/gu, "'")
     .replace(/(?![\p{Sc}\p{Extended_Pictographic}\p{ASCII}])\p{S}/gu, "");
 }
-//@ chunk-w12gsta7.js:1093-1177 placement
+//@ chunk-1kwawxaw.js:1125-1209 placement
 function inboxSenderProvenanceCaption(provenance) {
   return provenance === "rc_owner" ? "your user \xB7 Remote Control" : "third-party";
 }
-//@ chunk-w12gsta7.js:1177-3114 placement
+//@ chunk-1kwawxaw.js:1209-3146 placement
 /**
  * 从会话收件箱读取消息（/v1/code/sessions/:id/inbox/:file_id）并渲染内容信封。
  */
@@ -159,7 +159,7 @@ async function fetchSessionInboxMessage(options) {
     },
   };
 }
-//@ chunk-w12gsta7.js:3114-3802 placement
+//@ chunk-1kwawxaw.js:3146-3834 placement
 function renderInboxContentEnvelope(message, attachments) {
   let envelope = {
     message_id: message.messageId,
@@ -187,7 +187,7 @@ function renderInboxContentEnvelope(message, attachments) {
   }
   return `${openTag}${body}${closeTag}`;
 }
-//@ chunk-w12gsta7.js:3802-3935 placement
+//@ chunk-1kwawxaw.js:3834-3966 placement
 function truncateWithNote(bodyHead, limit, bodyDroppedAtIngest = 0) {
   return bodyHead.length > limit
     ? `${truncateToLength(bodyHead, limit)} [\u2026truncated ${bodyHead.length - limit + bodyDroppedAtIngest} chars]`
@@ -195,7 +195,7 @@ function truncateWithNote(bodyHead, limit, bodyDroppedAtIngest = 0) {
       ? `${bodyHead} [\u2026truncated ${bodyDroppedAtIngest} chars]`
       : bodyHead;
 }
-//@ chunk-w12gsta7.js:3935-5023 placement
+//@ chunk-1kwawxaw.js:3966-5053 placement
 /**
  * 校验并解析收件箱消息响应
  */
@@ -265,14 +265,14 @@ function parseInboxMessageEnvelope(data, sessionId, fileId) {
     },
   };
 }
-//@ chunk-w12gsta7.js:5023-5065 placement
+//@ chunk-1kwawxaw.js:5053-5095 placement
 var INBOX_SENDER_KINDS = ["slack_user", "account", "rc_owner"];
-//@ chunk-w12gsta7.js:5065-5156 placement
+//@ chunk-1kwawxaw.js:5095-5186 placement
 function inboxSenderKind(label) {
   let label_2 = normalizeEnumLabel(label, "SESSION_INBOX_SENDER_KIND_");
   return INBOX_SENDER_KINDS.find((kind) => kind === label_2) ?? "unknown";
 }
-//@ chunk-w12gsta7.js:5156-5327 placement
+//@ chunk-1kwawxaw.js:5186-5357 placement
 /**
  * 去前缀的枚举值转小写标签
  */
@@ -283,7 +283,7 @@ function normalizeEnumLabel(label, prefix) {
     ? stripped.toLowerCase()
     : "";
 }
-//@ chunk-w12gsta7.js:5327-5520 placement
+//@ chunk-1kwawxaw.js:5357-5549 placement
 /**
  * 超长正文截断并标注丢弃字符数
  */
@@ -303,9 +303,9 @@ function truncateInboxBody(body) {
   };
 }
 export {
-  INBOX_FILE_ID_PATTERN,
   foldSenderDisplayBrackets,
   inboxSenderProvenanceCaption,
+  INBOX_FILE_ID_PATTERN,
   renderInboxContentEnvelope,
   fetchSessionInboxMessage,
 };

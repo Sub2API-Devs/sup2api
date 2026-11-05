@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：按预算序列化审批载荷值；为显示相同的标签消歧等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qvp68pt5.js (63)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b73m1002.js (63)
  * attribution: placement 63
  */
 import { stripNonPrintable, wrapLongLines, GRAPHEME_TRUNCATION_MARKER_RE } from "../truncateGraphemes.js";
@@ -16,10 +16,10 @@ import { jsonStringify } from "../slowOperations.js";
 import { INVALID_TOOL_NAME_TEXT } from "../../components/permissions/consentRows.js";
 import { identityFreeze, identityFreeze2 } from "../deepFreezePlainData.js";
 
-//@ chunk-qvp68pt5.js:429-483 placement
+//@ chunk-b73m1002.js:428-482 placement
 var DEFAULT_IGNORABLE_CHAR_RE = /\p{Default_Ignorable_Code_Point}/u;
 var FORMAT_CHAR_RE = /\p{Cf}/u;
-//@ chunk-qvp68pt5.js:483-580 placement
+//@ chunk-b73m1002.js:482-579 placement
 function isPreservedJoinerCodePoint(codePoint) {
   return (
     (codePoint >= 8204 && codePoint <= 8207) ||
@@ -29,7 +29,7 @@ function isPreservedJoinerCodePoint(codePoint) {
     codePoint === 10240
   );
 }
-//@ chunk-qvp68pt5.js:580-699 placement
+//@ chunk-b73m1002.js:579-698 placement
 function isUnsafeDisplayChar(char, codePoint) {
   return (
     DEFAULT_IGNORABLE_CHAR_RE.test(char) ||
@@ -41,7 +41,7 @@ function isUnsafeDisplayChar(char, codePoint) {
     FORMAT_CHAR_RE.test(char)
   );
 }
-//@ chunk-qvp68pt5.js:699-776 placement
+//@ chunk-b73m1002.js:698-775 placement
 /**
  * 是否含需要处理的显示字符。
  */
@@ -49,17 +49,17 @@ function hasDisplayUnsafeChar(text) {
   for (let char of text) if (isUnsafeDisplayChar(char, char.codePointAt(0) ?? 0)) return true;
   return false;
 }
-//@ chunk-qvp68pt5.js:776-813 placement
+//@ chunk-b73m1002.js:775-812 placement
 function isReplacableUnsafeChar(char, codePoint) {
   return isUnsafeDisplayChar(char, codePoint) && !isPreservedJoinerCodePoint(codePoint);
 }
-//@ chunk-qvp68pt5.js:813-901 placement
+//@ chunk-b73m1002.js:812-900 placement
 function replaceCharsByPredicate(text, shouldReplace) {
   let result = "";
   for (let char of text) result += shouldReplace(char, char.codePointAt(0) ?? 0) ? "\uFFFD" : char;
   return result;
 }
-//@ chunk-qvp68pt5.js:901-1103 placement
+//@ chunk-b73m1002.js:900-1102 placement
 function replaceUnsafeChars(text, shouldReplace) {
   let list = Array.from(text);
   let result = "";
@@ -76,47 +76,47 @@ function replaceUnsafeChars(text, shouldReplace) {
   }
   return result;
 }
-//@ chunk-qvp68pt5.js:1103-1136 placement
+//@ chunk-b73m1002.js:1102-1135 placement
 /**
  * 去掉不安全显示字符。
  */
 function stripUnsafeChars(text) {
   return stripNonPrintable(replaceCharsByPredicate(text, isReplacableUnsafeChar));
 }
-//@ chunk-qvp68pt5.js:1136-1167 placement
+//@ chunk-b73m1002.js:1135-1166 placement
 /**
  * sanitizeForDisplay：逐字符清洗后的显示文本。
  */
 function sanitizeForDisplay(text) {
   return fixBrokenSequences(stripAllUnsafeDisplayChars(text));
 }
-//@ chunk-qvp68pt5.js:1167-1199 placement
+//@ chunk-b73m1002.js:1166-1198 placement
 function stripAllUnsafeDisplayChars(text) {
   return stripNonPrintable(replaceCharsByPredicate(text, isUnsafeDisplayChar));
 }
-//@ chunk-qvp68pt5.js:1199-1217 placement
+//@ chunk-b73m1002.js:1198-1216 placement
 /**
  * 显示长度上限与主机名长度上限。
  */
 var MAX_DISPLAY_UNITS = 2000;
 var MAX_HOSTNAME_LENGTH = 253;
-//@ chunk-qvp68pt5.js:1217-1283 placement
+//@ chunk-b73m1002.js:1216-1282 placement
 /**
  * hostnameLengthAllowance：允许的主机名长度（末尾单个点加 1）。
  */
 function hostnameLengthAllowance(hostname) {
   return MAX_HOSTNAME_LENGTH + (hostname.endsWith(".") && !hostname.endsWith("..") ? 1 : 0);
 }
-//@ chunk-qvp68pt5.js:1283-1297 placement
+//@ chunk-b73m1002.js:1282-1296 placement
 /**
  * 审批载荷序列化上限。
  */
 var MAX_PAYLOAD_UNITS = 200000;
-//@ chunk-qvp68pt5.js:1297-1335 placement
+//@ chunk-b73m1002.js:1296-1333 placement
 function fitsWithinUnits(text, maxUnits = MAX_DISPLAY_UNITS) {
   return truncateToLength(text, maxUnits) === text;
 }
-//@ chunk-qvp68pt5.js:1335-1383 placement
+//@ chunk-b73m1002.js:1333-1381 placement
 /**
  * 文本是否需要边栏显示（多行或过长）。
  */
@@ -126,7 +126,7 @@ function needsGutter(text) {
 `) || bunStringWidth(text) > 80
   );
 }
-//@ chunk-qvp68pt5.js:1383-1465 placement
+//@ chunk-b73m1002.js:1381-1462 placement
 /**
  * truncateForDisplayText：截断到显示上限并补省略号。
  */
@@ -135,31 +135,31 @@ function truncateForDisplayText(text) {
   let replaced = truncated.replace(/\t/g, " ");
   return truncated === text ? replaced : `${replaced}\u2026`;
 }
-//@ chunk-qvp68pt5.js:1465-1551 placement
+//@ chunk-b73m1002.js:1462-1548 placement
 function hasVisibleWidth(text) {
   return bunStringWidth(text.replace(/[\uFE0E\uFE0F\u180B-\u180F\u2800]/gu, "").trim()) > 0;
 }
-//@ chunk-qvp68pt5.js:1551-1613 placement
+//@ chunk-b73m1002.js:1548-1610 placement
 function stripZeroWidthChars(text) {
   return Array.from(text)
     .filter((char) => hasRenderedWidth(char))
     .join("");
 }
-//@ chunk-qvp68pt5.js:1613-1686 placement
+//@ chunk-b73m1002.js:1610-1683 placement
 function hasRenderedWidth(char) {
   return bunStringWidth(char.replace(/[\uFE0E\uFE0F\u180B-\u180F]/gu, "")) > 0;
 }
-//@ chunk-qvp68pt5.js:1686-1705 placement
+//@ chunk-b73m1002.js:1683-1704 placement
 var MAX_ZERO_WIDTH_RUN = 8;
 var COMBINING_MARK_RE = /\p{M}/u;
-//@ chunk-qvp68pt5.js:1705-1745 placement
+//@ chunk-b73m1002.js:1704-1744 placement
 /**
  * isCombiningOrZeroWidth：组合标记或无渲染宽度。
  */
 function isCombiningOrZeroWidth(char) {
   return COMBINING_MARK_RE.test(char) || !hasRenderedWidth(char);
 }
-//@ chunk-qvp68pt5.js:1745-1953 placement
+//@ chunk-b73m1002.js:1744-1954 placement
 /**
  * 用替换字符标记残缺序列。
  */
@@ -199,11 +199,11 @@ function markBrokenSequences(text) {
   }
   return pendingReplacement ? `${result}\uFFFD` : result;
 }
-//@ chunk-qvp68pt5.js:1953-1984 placement
+//@ chunk-b73m1002.js:1954-1985 placement
 function fixBrokenSequences(text) {
   return stripNonPrintable(markBrokenSequences(text));
 }
-//@ chunk-qvp68pt5.js:1984-2120 placement
+//@ chunk-b73m1002.js:1985-2121 placement
 function trimToVisible(text) {
   let list = Array.from(text);
   let start = 0;
@@ -212,16 +212,16 @@ function trimToVisible(text) {
   while (end > start && !hasVisibleWidth(list[end - 1] ?? "")) end--;
   return list.slice(start, end).join("");
 }
-//@ chunk-qvp68pt5.js:2120-2190 placement
+//@ chunk-b73m1002.js:2121-2191 placement
 function firstOrLastVisibleChar(text, edge) {
   let list = Array.from(trimToVisible(text));
   return edge === "end" ? list.at(-1) : list[0];
 }
-//@ chunk-qvp68pt5.js:2190-2233 placement
+//@ chunk-b73m1002.js:2191-2234 placement
 function endsWithEllipsis(text) {
   return firstOrLastVisibleChar(text, "end") === "\u2026";
 }
-//@ chunk-qvp68pt5.js:2233-2403 placement
+//@ chunk-b73m1002.js:2234-2404 placement
 /**
  * 去掉末尾的省略号（及其后的不可见字符），可连续多个。
  */
@@ -239,7 +239,7 @@ function stripTrailingEllipsis(text) {
   }
   return list.slice(0, end).join("");
 }
-//@ chunk-qvp68pt5.js:2403-2563 placement
+//@ chunk-b73m1002.js:2404-2564 placement
 /**
  * 文本是否干净（无替换字符）。
  */
@@ -265,18 +265,18 @@ function isCleanText(text) {
   }
   return hasVisibleWidth(visible.join(""));
 }
-//@ chunk-qvp68pt5.js:2563-2612 placement
+//@ chunk-b73m1002.js:2564-2613 placement
 function isIdentifierName(name) {
   return /^[A-Za-z_$][\w$]*$/.test(name);
 }
-//@ chunk-qvp68pt5.js:2612-2642 placement
+//@ chunk-b73m1002.js:2613-2643 placement
 /**
  * renderableText：清洗后可直接显示的文本。
  */
 function renderableText(text) {
   return sanitizeForDisplay(text);
 }
-//@ chunk-qvp68pt5.js:2642-2832 placement
+//@ chunk-b73m1002.js:2643-2833 placement
 /**
  * 清洗用于显示的文本：变体选择符、零宽连接符、蒙古文变体选择符按上下文保留，其余不安全字符替换为 U+FFFD，再去掉不可打印字符。
  */
@@ -293,7 +293,7 @@ function sanitizeDisplayText(text) {
     ),
   );
 }
-//@ chunk-qvp68pt5.js:2832-2955 placement
+//@ chunk-b73m1002.js:2833-2956 placement
 /**
  * 是否有可见文本。
  */
@@ -305,13 +305,13 @@ function hasVisibleText(text) {
     .trim();
   return trimmed !== "" && bunStringWidth(trimmed) > 0;
 }
-//@ chunk-qvp68pt5.js:2955-2973 placement
+//@ chunk-b73m1002.js:2956-2974 placement
 /**
  * 短标签宽度与截断长度。
  */
 var SHORT_LABEL_WIDTH = 48;
 var MAX_RAW_DISPLAY_CHARS = 256;
-//@ chunk-qvp68pt5.js:2973-3076 placement
+//@ chunk-b73m1002.js:2974-3076 placement
 /**
  * 生成短标签。
  */
@@ -323,7 +323,7 @@ function shortLabel(text) {
     SHORT_LABEL_WIDTH,
   );
 }
-//@ chunk-qvp68pt5.js:3076-3176 placement
+//@ chunk-b73m1002.js:3076-3176 placement
 /**
  * 值与原文相同且原文无引号、不含特殊字符时原样返回，否则返回 JSON 字符串形式。
  */
@@ -334,20 +334,20 @@ function quoteIfAmbiguous(label, rawLabel, wasTruncated = false) {
     endsWithEllipsis(label);
   return label === rawLabel && !isAmbiguous && !wasTruncated ? label : jsonStringify(rawLabel);
 }
-//@ chunk-qvp68pt5.js:3176-3269 placement
+//@ chunk-b73m1002.js:3176-3268 placement
 function makeShortLabel(text) {
   let rendered = renderableText(truncateToLength(text, MAX_RAW_DISPLAY_CHARS));
   let trimmed = rendered.replace(/\s+/g, " ").trim();
   return quoteIfAmbiguous(trimmed, rendered, text.length > MAX_RAW_DISPLAY_CHARS);
 }
-//@ chunk-qvp68pt5.js:3269-3305 placement
+//@ chunk-b73m1002.js:3268-3303 placement
 /**
  * 是否在标签长度内。
  */
 function fitsLabelLimit(text) {
   return truncateToLength(text, MAX_RAW_DISPLAY_CHARS) === text;
 }
-//@ chunk-qvp68pt5.js:3305-3754 placement
+//@ chunk-b73m1002.js:3303-3751 placement
 /**
  * 为显示相同的标签消歧。
  */
@@ -377,7 +377,7 @@ function disambiguateLabels(labels, format) {
     return suffix > 1 ? `${escaped} (#${suffix})` : escaped;
   });
 }
-//@ chunk-qvp68pt5.js:3754-4102 placement
+//@ chunk-b73m1002.js:3751-4099 placement
 /**
  * 生成唯一的显示名。
  */
@@ -404,7 +404,7 @@ function uniqueDisplayNames(cwd) {
   }
   return result;
 }
-//@ chunk-qvp68pt5.js:4102-4247 placement (2.1.88 match: setCwdState, 1)
+//@ chunk-b73m1002.js:4099-4244 placement (2.1.88 match: setCwdState, 1)
 function findNfcCollisions(cwd) {
   let firstByName = new Map();
   let collisions = new Set();
@@ -416,14 +416,14 @@ function findNfcCollisions(cwd) {
   }
   return collisions;
 }
-//@ chunk-qvp68pt5.js:4247-4315 placement
+//@ chunk-b73m1002.js:4244-4312 placement
 /**
  * 标签或空串。
  */
 function labelOrEmpty(label) {
   return typeof label === "string" && hasNoVisibleText(label) ? "" : String(safeLabel(label));
 }
-//@ chunk-qvp68pt5.js:4315-4391 placement
+//@ chunk-b73m1002.js:4312-4388 placement
 /**
  * 安全的标签文本。
  */
@@ -431,21 +431,21 @@ function safeLabel(label) {
   let source = typeof label === "string" && !hasNoVisibleText(label) ? label : INVALID_TOOL_NAME_TEXT;
   return identityFreeze(shortLabel(source));
 }
-//@ chunk-qvp68pt5.js:4391-4439 placement
+//@ chunk-b73m1002.js:4388-4435 placement
 /**
  * hasNoVisibleText：字符串为空或没有可见宽度。
  */
 function hasNoVisibleText(text) {
   return text === "" || bunStringWidth(truncateToLength(text, MAX_RAW_DISPLAY_CHARS)) === 0;
 }
-//@ chunk-qvp68pt5.js:4439-4526 placement
+//@ chunk-b73m1002.js:4435-4522 placement
 function humanizeSnakeCase(text) {
   return text
     .replace(/_+/g, " ")
     .trim()
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
-//@ chunk-qvp68pt5.js:4526-4848 placement
+//@ chunk-b73m1002.js:4522-4840 placement
 /**
  * MCP 服务器的显示标签。
  */
@@ -475,14 +475,14 @@ function mcpServerLabel(mcpInfo) {
     truncateToWidth(`${serverLabel} \u2014 ${toolLabel}`.replace(/\s+/g, " ").trim(), SHORT_LABEL_WIDTH),
   );
 }
-//@ chunk-qvp68pt5.js:4848-4900 placement
+//@ chunk-b73m1002.js:4840-4892 placement
 /**
  * displayLabelOrUnnamedTool：标签或 “(unnamed tool)” 回退。
  */
 function displayLabelOrUnnamedTool(label) {
   return identityFreeze(labelOr(label, "(unnamed tool)"));
 }
-//@ chunk-qvp68pt5.js:4900-4948 placement
+//@ chunk-b73m1002.js:4892-4940 placement
 /**
  * 标签干净时用它，否则用回退值。
  */
@@ -490,7 +490,7 @@ function labelOr(text, fallback) {
   let label = shortLabel(text);
   return isCleanText(label) ? label : fallback;
 }
-//@ chunk-qvp68pt5.js:4948-5080 placement
+//@ chunk-b73m1002.js:4940-5072 placement
 /**
  * 审批显示字段（文本与是否需边栏）。
  */
@@ -506,7 +506,7 @@ function displayField(value) {
     needsGutter: needsGutter(text),
   };
 }
-//@ chunk-qvp68pt5.js:5080-5230 placement
+//@ chunk-b73m1002.js:5072-5222 placement
 /**
  * 简单文本的显示形式（不安全时 null）。
  */
@@ -518,11 +518,11 @@ function plainDisplay(text) {
     display: identityFreeze(makeShortLabel(text)),
   };
 }
-//@ chunk-qvp68pt5.js:5230-5329 placement
+//@ chunk-b73m1002.js:5222-5321 placement
 var WITHHELD_VALUE_TEXT = "(value cannot be shown in full \u2014 approval withheld; one-time options only)";
 var MAX_PAYLOAD_ELEMENTS = 1e4;
 var MAX_PAYLOAD_DEPTH = 64;
-//@ chunk-qvp68pt5.js:5329-7263 placement
+//@ chunk-b73m1002.js:5321-7255 placement
 /**
  * 按预算序列化审批载荷值。
  */
@@ -584,7 +584,7 @@ function serializePayloadValue(value, budget, depth = 0) {
   }
   return `{${pairs.join(",")}}`;
 }
-//@ chunk-qvp68pt5.js:7263-7357 placement
+//@ chunk-b73m1002.js:7255-7349 placement
 /**
  * serializePayloadSafely：序列化审批载荷，超限时返回 undefined。
  */
@@ -602,7 +602,7 @@ function serializePayloadSafely(
     return;
   }
 }
-//@ chunk-qvp68pt5.js:7357-7801 placement
+//@ chunk-b73m1002.js:7349-7793 placement
 /**
  * 序列化审批载荷（完整/截断/隐藏）。
  */
@@ -645,7 +645,7 @@ function serializeApprovalPayload(payload, options) {
     needsGutter: needsGutter(replaced),
   };
 }
-//@ chunk-qvp68pt5.js:7801-7853 placement
+//@ chunk-b73m1002.js:7793-7845 placement
 /**
  * 文本是否含可疑字符。
  */
@@ -653,18 +653,18 @@ function hasSuspiciousText(text) {
   let stripped = stripUnsafeChars(text);
   return GRAPHEME_TRUNCATION_MARKER_RE.test(stripped) || markBrokenSequencesChanged(stripped);
 }
-//@ chunk-qvp68pt5.js:7853-7885 placement
+//@ chunk-b73m1002.js:7845-7877 placement
 /**
  * hasBrokenSequences：去掉不安全字符后是否仍有残缺序列。
  */
 function hasBrokenSequences(text) {
   return markBrokenSequencesChanged(stripUnsafeChars(text));
 }
-//@ chunk-qvp68pt5.js:7885-7916 placement
+//@ chunk-b73m1002.js:7877-7908 placement
 function markBrokenSequencesChanged(text) {
   return markBrokenSequences(text) !== text;
 }
-//@ chunk-qvp68pt5.js:7916-8142 placement
+//@ chunk-b73m1002.js:7908-8131 placement
 /**
  * 列表类文本的标签。
  */
@@ -684,21 +684,21 @@ function listLabel(text) {
         truncateToLength(text, MAX_RAW_DISPLAY_CHARS),
   );
 }
-//@ chunk-qvp68pt5.js:8142-8194 placement
+//@ chunk-b73m1002.js:8131-8183 placement
 /**
  * 消歧后的标签列表。
  */
 function uniqueLabels(labels, makeLabel = makeShortLabel) {
   return disambiguateLabels(labels, makeLabel).map((label) => identityFreeze(label));
 }
-//@ chunk-qvp68pt5.js:8194-8258 placement
+//@ chunk-b73m1002.js:8183-8247 placement
 /**
  * 把换行替换为替换字符。
  */
 function replaceLineBreaks(text) {
   return text.replace(/[\n\r\u2028\u2029]/g, "\uFFFD");
 }
-//@ chunk-qvp68pt5.js:8258-8645 placement
+//@ chunk-b73m1002.js:8247-8634 placement
 /**
  * 序列化审批列表。
  */
@@ -730,7 +730,7 @@ function serializeApprovalList(values, options) {
     }
   return segments;
 }
-//@ chunk-qvp68pt5.js:8645-8717 placement
+//@ chunk-b73m1002.js:8634-8706 placement
 /**
  * 显示文本。
  */
@@ -738,7 +738,7 @@ function displayText(value) {
   if (typeof value !== "string") return identityFreeze2("");
   return identityFreeze2(stripUnsafeChars(value));
 }
-//@ chunk-qvp68pt5.js:8717-8880 placement
+//@ chunk-b73m1002.js:8706-8868 placement
 /**
  * 把字符串转为审批界面标签：清洗、制表符换空格、首行须干净且无歧义，再截断到 24 字符。
  */
@@ -749,7 +749,7 @@ function toApprovalLabel(raw) {
   if (endsWithEllipsis(getFirstLine(replaced))) return null;
   return identityFreeze(truncate(replaced, 24, true));
 }
-//@ chunk-qvp68pt5.js:8880-8983 placement
+//@ chunk-b73m1002.js:8868-8971 placement
 /**
  * 模板标签函数：拼接模板片段与插值（空值视为空串）后做规整。
  */
@@ -762,45 +762,46 @@ function approvalLabelTemplate(strings, ...values) {
   return identityFreeze(result);
 }
 export {
-  fitsLabelLimit,
   hasDisplayUnsafeChar,
-  listLabel,
-  disambiguateLabels,
-  uniqueLabels,
-  needsGutter,
-  displayField,
-  markBrokenSequences,
-  uniqueDisplayNames,
-  stripUnsafeChars,
+  MAX_DISPLAY_UNITS,
   hasVisibleText,
-  SHORT_LABEL_WIDTH,
+  fitsLabelLimit,
+  disambiguateLabels,
+  plainDisplay,
   serializeApprovalPayload,
+  MAX_PAYLOAD_UNITS,
+  displayField,
+  needsGutter,
+  labelOrEmpty,
+  markBrokenSequences,
   replaceLineBreaks,
+  stripUnsafeChars,
   toApprovalLabel,
+  hasSuspiciousText,
+  listLabel,
+  uniqueLabels,
+  uniqueDisplayNames,
+  SHORT_LABEL_WIDTH,
   sanitizeForDisplay,
   renderableText,
   isCleanText,
   stripTrailingEllipsis,
   labelOr,
-  labelOrEmpty,
-  MAX_PAYLOAD_UNITS,
   hostnameLengthAllowance,
-  plainDisplay,
   hasNoVisibleText,
   safeLabel,
-  hasSuspiciousText,
   displayText,
+  approvalLabelTemplate,
   MAX_RAW_DISPLAY_CHARS,
   quoteIfAmbiguous,
-  approvalLabelTemplate,
+  MAX_ZERO_WIDTH_RUN,
   serializePayloadSafely,
   displayLabelOrUnnamedTool,
   sanitizeDisplayText,
-  isCombiningOrZeroWidth,
-  MAX_DISPLAY_UNITS,
-  truncateForDisplayText,
   shortLabel,
+  truncateForDisplayText,
   mcpServerLabel,
-  serializeApprovalList,
   hasBrokenSequences,
+  serializeApprovalList,
+  isCombiningOrZeroWidth,
 };

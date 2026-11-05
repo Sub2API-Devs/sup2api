@@ -1,14 +1,14 @@
 /**
  * execa/lib/command.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: execa@8.0.1
- * pieces: chunk-m4p5zn6n.js (2)
+ * pieces: chunk-t889g22j.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { ChildProcess } from "child_process";
-import { Buffer as jo } from "buffer";
+import { Buffer as Go } from "buffer";
 
-//@ chunk-m4p5zn6n.js:26397-26650 esm-layout
+//@ chunk-t889g22j.js:26396-26649 esm-layout
 var normalizeArgs = (file, args = []) => {
   if (!Array.isArray(args)) return [file];
   return [file, ...args];
@@ -24,7 +24,7 @@ var escapedCommand = (file, args) =>
     .map((arg) => escapeArg(arg))
     .join(" ");
 var SPACES_REGEXP = / +/g;
-//@ chunk-m4p5zn6n.js:26650-27510 esm-fingerprint
+//@ chunk-t889g22j.js:26649-27509 esm-fingerprint
 var parseExpression = (expression) => {
   let typeOfExpression = typeof expression;
   if (typeOfExpression === "string") return expression;
@@ -37,7 +37,7 @@ var parseExpression = (expression) => {
   ) {
     let typeOfStdout = typeof expression.stdout;
     if (typeOfStdout === "string") return expression.stdout;
-    if (jo.isBuffer(expression.stdout)) return expression.stdout.toString();
+    if (Go.isBuffer(expression.stdout)) return expression.stdout.toString();
     throw TypeError(`Unexpected "${typeOfStdout}" stdout in template expression`);
   }
   throw TypeError(`Unexpected "${typeOfExpression}" in template expression`);

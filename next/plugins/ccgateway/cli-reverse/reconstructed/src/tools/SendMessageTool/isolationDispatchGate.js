@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：isolatePeerMachines 开启时发消息前询问，并检查权限处理器是否改动接收方/输入形状；权限阶段是否已有重入标记。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vx0qz0bd.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nw438tyx.js (11)
  * attribution: placement 11
  */
 import { randomUUID } from "crypto";
@@ -16,15 +16,15 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vx0qz0bd.js:409-461 placement
+//@ chunk-nw438tyx.js:409-461 placement
 /**
  * 标记“本次权限阶段由隔离闸门自己铸造”的 Symbol。
  */
 var MINTED_REENTRY_SYMBOL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vx0qz0bd.js:409", () => {
+deferInit("chunk-nw438tyx.js:409", () => {
   MINTED_REENTRY_SYMBOL = Symbol("isolationDispatchGate.mintedReentry");
 });
-//@ chunk-vx0qz0bd.js:461-2173 placement
+//@ chunk-nw438tyx.js:461-2173 placement
 /**
  * isolatePeerMachines 开启时发消息前询问，并检查权限处理器是否改动接收方/输入形状。
  */
@@ -127,7 +127,7 @@ async function isolationDispatchGate({
     }),
   };
 }
-//@ chunk-vx0qz0bd.js:2173-2380 placement
+//@ chunk-nw438tyx.js:2173-2380 placement
 /**
  * 判断权限阶段是否已对相同输入询问过（且符合给定条件）。
  */
@@ -138,7 +138,7 @@ function wasAskedForSameInput(deps, input, dedupeKey, isIsolatePeerAsk) {
   if (askResult === undefined || askResult.behavior !== "ask" || !isIsolatePeerAsk(askResult)) return false;
   return sameJson(dedupeKey(pipeline.input), dedupeKey(input));
 }
-//@ chunk-vx0qz0bd.js:2380-2496 placement
+//@ chunk-nw438tyx.js:2380-2496 placement
 /**
  * 若输入与已检查的输入相同，返回已有的检查结果。
  */
@@ -147,7 +147,7 @@ function getCheckedResultForInput(deps, input, sendFileDedupeKey) {
   if (checked === undefined) return;
   return sameJson(sendFileDedupeKey(checked.input), sendFileDedupeKey(input)) ? checked.result : undefined;
 }
-//@ chunk-vx0qz0bd.js:2496-2625 placement
+//@ chunk-nw438tyx.js:2496-2625 placement
 /**
  * 若输入与已检查的输入相同，返回检查附带的说明。
  */
@@ -156,7 +156,7 @@ function getCheckedNoteForInput(deps, input, dedupeKey) {
   if (checked === undefined || !("note" in checked)) return;
   return sameJson(dedupeKey(checked.input), dedupeKey(input)) ? checked.note : undefined;
 }
-//@ chunk-vx0qz0bd.js:2625-2861 placement
+//@ chunk-nw438tyx.js:2625-2861 placement
 /**
  * 输入被改写后，把权限阶段中与原输入相同的记录改为新输入。
  */
@@ -184,7 +184,7 @@ function rebasePermissionPhase(permissionPhase, previousInput, input, getToAndMe
     };
   return rebased;
 }
-//@ chunk-vx0qz0bd.js:2861-2986 placement
+//@ chunk-nw438tyx.js:2861-2986 placement
 /**
  * 若输入与派发解析时相同，返回派发说明。
  */
@@ -195,7 +195,7 @@ function getDispatchNoteForInput(deps, input, getToField) {
     ? dispatchResolution.note
     : undefined;
 }
-//@ chunk-vx0qz0bd.js:2986-3064 placement
+//@ chunk-nw438tyx.js:2986-3064 placement
 /**
  * 权限阶段是否已有重入标记。
  */
@@ -203,7 +203,7 @@ function hasMintedReentry(deps) {
   let permissionPhase = deps.permissionPhase;
   return permissionPhase !== undefined && Object.hasOwn(permissionPhase, MINTED_REENTRY_SYMBOL);
 }
-//@ chunk-vx0qz0bd.js:3064-3203 placement
+//@ chunk-nw438tyx.js:3064-3203 placement
 /**
  * 判断权限结果是否为"隔离对等机器"熔断引起的询问。
  */
@@ -214,14 +214,14 @@ function isIsolatePeerAsk(result) {
     result.decisionReason.circuitBreaker === "isolatePeerMachines"
   );
 }
-//@ chunk-vx0qz0bd.js:3203-3238 placement
+//@ chunk-nw438tyx.js:3203-3238 placement
 /**
  * 比较两个值序列化后是否相同（判断输入是否被改写）。
  */
 function sameJson(left, right) {
   return jsonStringify(left) === jsonStringify(right);
 }
-//@ chunk-vx0qz0bd.js:3238-3521 placement (2.1.88 match: isUnrecognizedKeysIssue, 0.804)
+//@ chunk-nw438tyx.js:3238-3521 placement (2.1.88 match: isUnrecognizedKeysIssue, 0.804)
 function isUnrecognizedKeysIssue(parse, updatedInput) {
   let parsed = parse(updatedInput);
   if (parsed.success || parsed.error === undefined) return parsed;

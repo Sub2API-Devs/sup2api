@@ -1,39 +1,39 @@
-{"id":"chunk-3rwvzn82.js#tt","doc":"Effort 滑块的宽度/标签常量组：标题 \"Effort\"、条宽 42、最小标签宽 14、三角形偏移表 [1,10,20,30,40]、等级间距表 [5,5,5,6]、五个 effort 等级（low/medium/high/xhigh/max，各带颜色）、默认下标 3 与\"被设置或组织上限限制\"的提示语。"}
-{"id":"chunk-0sfjpx19.js#OAs","doc":"反馈调查的 GrowthBook 配置：应用名（tengu_juniper_vale / tengu_russet_whimbrel）、默认调查参数（最小间隔、最少轮次、隐藏感谢时长、适用模型、概率 0.005），以及三段\"是否追问分享记录\"的默认配置 {probability: 0}。"}
-{"id":"chunk-18hwfzwa.js#pot","doc":"长上下文调查常量：默认延迟 5000ms、三个 GrowthBook 键（阈值/问题变体/触发模式/概率）、默认概率 0.2，以及按变体（generic / instruction_following）区分的追问文案表。"}
-{"id":"chunk-18hwfzwa.js#M5t","doc":"主动性（proactivity）选择菜单组件：memo 化的对话框实现，注册 proactivity-dialog 覆盖层，用快捷键在等级与权限模式（shift+tab 循环）间左右移动、确认/取消，并处理 vim 命令模式下的单键（h/j/k/l）操作；同时导出键盘输入过滤用的非打印键名表和允许的控制字符集合。"}
-{"id":"chunk-t659krks.js#c","doc":"判断托管/工作区设置中是否新增了带 headersHelper 的 https extraKnownMarketplaces（命令插件源被策略禁用时直接返回 false）；逐个比较已知 marketplace 与当前配置，url 源还要求 https、helper 命令安全且未被启用源覆盖。"}
-{"id":"chunk-18hwfzwa.js#e1o","doc":"用量宽限提示：GrowthBook 文案键 tengu_lantern_sconce_copy、三种状态（running/stopped/credits_on）的默认提示文本、最大宽度 100 以及宽限提示的 zod 校验 schema。"}
-{"id":"chunk-bajxb7bf.js#es","doc":"云会话钩子状态文案：未注册（尚未注册/当前未注册可重开 /hooks 查看）以及按状态（dormant / kept_none / paused / declined 等）分组的说明文本。"}
-{"id":"chunk-bajxb7bf.js#ds","doc":"云端钩子被关闭或不适用时的原因文案表（policy_unreadable、policy_disable_all、managed_only 等）及会话开始时全部 hooks 被关掉的整句说明。"}
-{"id":"chunk-19dk83fw.js#X","doc":"入门能力课（powerup）的权限模式演示数据：default / accept edits / plan / auto 四步的标签、符号与颜色，以及演示动画的宽度、节拍、最大循环、停留与淡出时长和可用颜色列表。"}
-{"id":"chunk-18hwfzwa.js#gct","doc":"计算机使用审批中\"已知终端/编辑器 bundle id\"清单：macOS 常见终端（Terminal、iTerm2、VS Code、Warp、WezTerm、Alacritty、kitty、Hyper、Ghostty…），用于判断被请求授权的应用是否是需要风险分级的安全终端。"}
-{"id":"chunk-s4bxxzsw.js#eo","doc":"\"工作目录外读取\"权限卡片的标题、问题句、四个选项（allow / block / ask_again / allow_once）及每个选项的完整标签文案。"}
-{"id":"chunk-6d9n2xk3.js#H","doc":"发送到项目的对话框文案与字符常量：分隔符 \" · \"、窄屏兜底文案、查找中提示、可见空格替代字符 U+2423、Default_Ignorable_Code_Point 正则与按词边界的断行正则、退避的次数上限、查找失败文案表，以及环境类型（anthropic_cloud / byoc / self_hosted_pool）到显示标签的映射。"}
-{"id":"chunk-6d9n2xk3.js#wo","doc":"对话框布局常量：行间距、问题块最小行数、单条消息时的选项行、选项换行阈值、最多可丢弃的空隙、不足时的松弛行、反馈行行数、最小对话框宽度 80，以及确认/读不到 git/终端过窄/过小等各类提示文本与按键说明行。"}
-{"id":"chunk-18hwfzwa.js#tYe","doc":"后台任务对话框依赖的惰性模块句柄（WorkflowDetailDialog、工作流 kill/pause/skip/retry 操作、MCP monitor 停止、子代理/任务/工作流/Shell/dream 详情加载器）以及若干空占位常量；这些值在构建时被打桩为 null，运行时用于渲染任务行与详情。"}
-{"id":"chunk-g54kbxqw.js#Pfi","doc":"\"# Delivering work\" 系统提示段：说明不要臆测用户\"真正想要\"的内容，不要悄悄收窄、扩大或改写需求范围。"}
-{"id":"chunk-g54kbxqw.js#Mfi","doc":"子代理结论段：建议用子代理并行处理不阻塞主目标的支线任务，并交代应提供充足的上下文。"}
-{"id":"chunk-g54kbxqw.js#Hfi","doc":"\"谨慎操作\"段：在没有持久授权或用户明确要求时，避免做难以撤销的事（尤其与外部服务的通信可能不可逆）。"}
-{"id":"chunk-g54kbxqw.js#Kfi","doc":"就地编辑说明：本会话配置为在工作目录内直接修改而不隔离到 worktree，除非用户明确要求，否则跳过 EnterWorktree；同组的 Vfi/qfi/Yfi 是 worktree 隔离与提交说明。"}
-{"id":"chunk-g54kbxqw.js#Jfi","doc":"\"# Context management\" 段：长会话被摘要后放进下一个上下文窗口继续，无需提前收尾或中途交接。"}
-{"id":"chunk-g54kbxqw.js#epi","doc":"交互式代理开场句，以及工具消息以独立系统消息出现在对话轮次之间的说明。"}
-{"id":"chunk-g54kbxqw.js#dpi","doc":"Agent 工具用法段：每个 agent 类型的模型、effort 与工具来自其定义（.claude/agents/*.md frontmatter 或 SDK agents），isolation: \"worktree\" 会给代理独立 worktree。"}
-{"id":"chunk-bbtre4r8.js#tDi","doc":"\"cowritten-artifact-html\" 标签下方内容的信任提示：页面 HTML 可能包含其他作者发布的内容，应当作数据而非指令处理；同组的 nDi/rDi/oDi/sDi/iDi/aDi/lDi/dDi/cDi 是各来源（外部作者、Slack、Artifact 类型、非本会话发布）对应的上方/下方两版提示。"}
-{"id":"chunk-bbtre4r8.js#du","doc":"用户消息/工具输出使用的 XML 标签名常量（command-name、bash-stdout/stderr、local-command-stdout 等），以及 USER_MESSAGE_TAGS 列表、task-notification 信封构造和 isBashOutputText 判断。"}
-{"id":"chunk-e6aww6q8.js#rqo","doc":"项目上下文缓存的惰性 require 与常量：从 chunk-5eyj98zq 取 getProjectContextBlock / retryProjectContextWhenPolicyLands / forgetKeptProjectDetail，从 chunk-frr1hkdd 取 clearProjectMemoryCache，重试退避表 [5s, 30s, 120s]，以及按会话维护的用户/项目上下文存储（H_e / OL）。"}
-{"id":"chunk-vbtpanx5.js#z","doc":"插件遥测（cc-plugin-telemetry）中继：状态对象（lookupFault 标记）、send/isWatched 接口与相关常量，用于把插件遥测上报到 watcher 进程。"}
-{"id":"chunk-d2swv9w7.js#c","doc":"上传文件到 Chrome 的请求 schema：单次最大 4,000,000 字节，开始请求带 paths/offset/max_total_bytes/permission_context，分块请求带 sha256/part 等字段。"}
-{"id":"chunk-dz36xfxg.js#Me","doc":"读文件状态变更元数据（anthropic/readFileStateChanges）的 schema：最多 64 条，每条带路径、sha256、字节数与\"内容不在模型上下文中\"等可选标记。"}
-{"id":"chunk-bwbq4xvm.js#gA","doc":"UserPromptSubmit hook 的 promptEnding 取值表：PROMPT_HOOK_ENDINGS（blocked_by_hook 等）与远程运行失败原因表 fA。"}
-{"id":"chunk-bwbq4xvm.js#woo","doc":"子代理报告的处理结果枚举（send / flagged / withheld）以及 SubagentReportSchema（text 中插入反斜杠以中和伪造的 harness 标记，warning 可选）。"}
-{"id":"chunk-bwbq4xvm.js#G0","doc":"内容块的 zod schema 组：从 EphemeralBlockSchema（cache_control）、base64/url/file 块，到 image/document/tool_use/tool_result/thinking 块、内容块列表、literals 与 usage 结构，是本 SDK 输入输出的基础模式集合。"}
-{"id":"chunk-18hwfzwa.js#cK","doc":"配置画像的三个来源枚举（claude_md / skills / agents）、对应的 JSON Schema，以及送入模型的多行提示前缀。"}
-{"id":"chunk-18hwfzwa.js#nTt","doc":"合规污染（compliance-taint）通知规格：监听合规污染变化，把新出现的污染项以警告通知告知用户。"}
-{"id":"chunk-18hwfzwa.js#vKo","doc":"安装类通知规格：sudo npm 安装失败（no_permissions、npm-global 路径下失败）时给出的通知，以及汇总后的 COMPUTED_NOTICE_SPECS 列表。"}
-{"id":"chunk-18hwfzwa.js#HEe","doc":"Remote Control 权限提示（rc-permission-nudge）规格：在 default/plan/acceptEdits 模式下、连接活跃且已有权限提示时提示用户开启 Remote Control。"}
-{"id":"chunk-18hwfzwa.js#qTt","doc":"Remote Control / push 闲置推荐（remote-control-upsell）规格：长时间无查询完成后推荐开启远程控制。"}
-{"id":"chunk-18hwfzwa.js#zTt","doc":"会话类通知规格：REPL 挂载/卸载日志、转录中等待对话框的提示、附加绘制标记等。"}
-{"id":"chunk-18hwfzwa.js#CTt","doc":"OTEL headers helper 失败通知规格：GrowthBook 开关 tengu_quirky_teacup 开启且 helper 调用失败时提示用户。"}
-{"id":"chunk-81qqq1aq.js#it","doc":"剪贴板图片提示规格（clipboard-image-hint）：终端聚焦且可粘贴图片时，延迟 1 秒提示、最长显示 30 秒。"}
-{"id":"chunk-18hwfzwa.js#BQt","doc":"补全输入的分词正则组：@ 提及 token、普通 token、行尾 token/单词、命令名正则以及 @ 提及的分词与完整匹配（含引号）正则，供建议列表定位当前光标处的查询词。"}
+{"id":"chunk-n2cdp9nk.js#tt","doc":"Effort 滑块的宽度/标签常量组：标题 \"Effort\"、条宽 42、最小标签宽 14、三角形偏移表 [1,10,20,30,40]、等级间距表 [5,5,5,6]、五个 effort 等级（low/medium/high/xhigh/max，各带颜色）、默认下标 3 与\"被设置或组织上限限制\"的提示语。"}
+{"id":"chunk-nh1pvp1m.js#FWs","doc":"反馈调查的 GrowthBook 配置：应用名（tengu_juniper_vale / tengu_russet_whimbrel）、默认调查参数（最小间隔、最少轮次、隐藏感谢时长、适用模型、概率 0.005），以及三段\"是否追问分享记录\"的默认配置 {probability: 0}。"}
+{"id":"chunk-czq1j3j2.js#brt","doc":"长上下文调查常量：默认延迟 5000ms、三个 GrowthBook 键（阈值/问题变体/触发模式/概率）、默认概率 0.2，以及按变体（generic / instruction_following）区分的追问文案表。"}
+{"id":"chunk-czq1j3j2.js#RJt","doc":"主动性（proactivity）选择菜单组件：memo 化的对话框实现，注册 proactivity-dialog 覆盖层，用快捷键在等级与权限模式（shift+tab 循环）间左右移动、确认/取消，并处理 vim 命令模式下的单键（h/j/k/l）操作；同时导出键盘输入过滤用的非打印键名表和允许的控制字符集合。"}
+{"id":"chunk-qa0fq590.js#c","doc":"判断托管/工作区设置中是否新增了带 headersHelper 的 https extraKnownMarketplaces（命令插件源被策略禁用时直接返回 false）；逐个比较已知 marketplace 与当前配置，url 源还要求 https、helper 命令安全且未被启用源覆盖。"}
+{"id":"chunk-czq1j3j2.js#kQo","doc":"用量宽限提示：GrowthBook 文案键 tengu_lantern_sconce_copy、三种状态（running/stopped/credits_on）的默认提示文本、最大宽度 100 以及宽限提示的 zod 校验 schema。"}
+{"id":"chunk-5tpnqyt5.js#es","doc":"云会话钩子状态文案：未注册（尚未注册/当前未注册可重开 /hooks 查看）以及按状态（dormant / kept_none / paused / declined 等）分组的说明文本。"}
+{"id":"chunk-5tpnqyt5.js#ds","doc":"云端钩子被关闭或不适用时的原因文案表（policy_unreadable、policy_disable_all、managed_only 等）及会话开始时全部 hooks 被关掉的整句说明。"}
+{"id":"chunk-je0zymfm.js#X","doc":"入门能力课（powerup）的权限模式演示数据：default / accept edits / plan / auto 四步的标签、符号与颜色，以及演示动画的宽度、节拍、最大循环、停留与淡出时长和可用颜色列表。"}
+{"id":"chunk-czq1j3j2.js#Amt","doc":"计算机使用审批中\"已知终端/编辑器 bundle id\"清单：macOS 常见终端（Terminal、iTerm2、VS Code、Warp、WezTerm、Alacritty、kitty、Hyper、Ghostty…），用于判断被请求授权的应用是否是需要风险分级的安全终端。"}
+{"id":"chunk-g4tsxwy3.js#to","doc":"\"工作目录外读取\"权限卡片的标题、问题句、四个选项（allow / block / ask_again / allow_once）及每个选项的完整标签文案。"}
+{"id":"chunk-e98td4c6.js#X","doc":"发送到项目的对话框文案与字符常量：分隔符 \" · \"、窄屏兜底文案、查找中提示、可见空格替代字符 U+2423、Default_Ignorable_Code_Point 正则与按词边界的断行正则、退避的次数上限、查找失败文案表，以及环境类型（anthropic_cloud / byoc / self_hosted_pool）到显示标签的映射。"}
+{"id":"chunk-e98td4c6.js#Ro","doc":"对话框布局常量：行间距、问题块最小行数、单条消息时的选项行、选项换行阈值、最多可丢弃的空隙、不足时的松弛行、反馈行行数、最小对话框宽度 80，以及确认/读不到 git/终端过窄/过小等各类提示文本与按键说明行。"}
+{"id":"chunk-czq1j3j2.js#e2e","doc":"后台任务对话框依赖的惰性模块句柄（WorkflowDetailDialog、工作流 kill/pause/skip/retry 操作、MCP monitor 停止、子代理/任务/工作流/Shell/dream 详情加载器）以及若干空占位常量；这些值在构建时被打桩为 null，运行时用于渲染任务行与详情。"}
+{"id":"chunk-8nzbdydx.js#TLi","doc":"\"# Delivering work\" 系统提示段：说明不要臆测用户\"真正想要\"的内容，不要悄悄收窄、扩大或改写需求范围。"}
+{"id":"chunk-8nzbdydx.js#RLi","doc":"子代理结论段：建议用子代理并行处理不阻塞主目标的支线任务，并交代应提供充足的上下文。"}
+{"id":"chunk-8nzbdydx.js#ILi","doc":"\"谨慎操作\"段：在没有持久授权或用户明确要求时，避免做难以撤销的事（尤其与外部服务的通信可能不可逆）。"}
+{"id":"chunk-8nzbdydx.js#BLi","doc":"就地编辑说明：本会话配置为在工作目录内直接修改而不隔离到 worktree，除非用户明确要求，否则跳过 EnterWorktree；同组的 Vfi/qfi/Yfi 是 worktree 隔离与提交说明。"}
+{"id":"chunk-8nzbdydx.js#KLi","doc":"\"# Context management\" 段：长会话被摘要后放进下一个上下文窗口继续，无需提前收尾或中途交接。"}
+{"id":"chunk-8nzbdydx.js#YLi","doc":"交互式代理开场句，以及工具消息以独立系统消息出现在对话轮次之间的说明。"}
+{"id":"chunk-8nzbdydx.js#oHi","doc":"Agent 工具用法段：每个 agent 类型的模型、effort 与工具来自其定义（.claude/agents/*.md frontmatter 或 SDK agents），isolation: \"worktree\" 会给代理独立 worktree。"}
+{"id":"chunk-my2r02mp.js#D3i","doc":"\"cowritten-artifact-html\" 标签下方内容的信任提示：页面 HTML 可能包含其他作者发布的内容，应当作数据而非指令处理；同组的 nDi/rDi/oDi/sDi/iDi/aDi/lDi/dDi/cDi 是各来源（外部作者、Slack、Artifact 类型、非本会话发布）对应的上方/下方两版提示。"}
+{"id":"chunk-my2r02mp.js#Gu","doc":"用户消息/工具输出使用的 XML 标签名常量（command-name、bash-stdout/stderr、local-command-stdout 等），以及 USER_MESSAGE_TAGS 列表、task-notification 信封构造和 isBashOutputText 判断。"}
+{"id":"chunk-5xgkngpb.js#vWo","doc":"项目上下文缓存的惰性 require 与常量：从 chunk-5eyj98zq 取 getProjectContextBlock / retryProjectContextWhenPolicyLands / forgetKeptProjectDetail，从 chunk-frr1hkdd 取 clearProjectMemoryCache，重试退避表 [5s, 30s, 120s]，以及按会话维护的用户/项目上下文存储（H_e / OL）。"}
+{"id":"chunk-fxk1e28j.js#Y","doc":"插件遥测（cc-plugin-telemetry）中继：状态对象（lookupFault 标记）、send/isWatched 接口与相关常量，用于把插件遥测上报到 watcher 进程。"}
+{"id":"chunk-d4n7mgs8.js#c","doc":"上传文件到 Chrome 的请求 schema：单次最大 4,000,000 字节，开始请求带 paths/offset/max_total_bytes/permission_context，分块请求带 sha256/part 等字段。"}
+{"id":"chunk-fb9qe48t.js#He","doc":"读文件状态变更元数据（anthropic/readFileStateChanges）的 schema：最多 64 条，每条带路径、sha256、字节数与\"内容不在模型上下文中\"等可选标记。"}
+{"id":"chunk-7kayq7nc.js#OA","doc":"UserPromptSubmit hook 的 promptEnding 取值表：PROMPT_HOOK_ENDINGS（blocked_by_hook 等）与远程运行失败原因表 fA。"}
+{"id":"chunk-7kayq7nc.js#gbo","doc":"子代理报告的处理结果枚举（send / flagged / withheld）以及 SubagentReportSchema（text 中插入反斜杠以中和伪造的 harness 标记，warning 可选）。"}
+{"id":"chunk-7kayq7nc.js#tK","doc":"内容块的 zod schema 组：从 EphemeralBlockSchema（cache_control）、base64/url/file 块，到 image/document/tool_use/tool_result/thinking 块、内容块列表、literals 与 usage 结构，是本 SDK 输入输出的基础模式集合。"}
+{"id":"chunk-czq1j3j2.js#UV","doc":"配置画像的三个来源枚举（claude_md / skills / agents）、对应的 JSON Schema，以及送入模型的多行提示前缀。"}
+{"id":"chunk-czq1j3j2.js#Mxt","doc":"合规污染（compliance-taint）通知规格：监听合规污染变化，把新出现的污染项以警告通知告知用户。"}
+{"id":"chunk-czq1j3j2.js#QYo","doc":"安装类通知规格：sudo npm 安装失败（no_permissions、npm-global 路径下失败）时给出的通知，以及汇总后的 COMPUTED_NOTICE_SPECS 列表。"}
+{"id":"chunk-czq1j3j2.js#jDe","doc":"Remote Control 权限提示（rc-permission-nudge）规格：在 default/plan/acceptEdits 模式下、连接活跃且已有权限提示时提示用户开启 Remote Control。"}
+{"id":"chunk-czq1j3j2.js#DPt","doc":"Remote Control / push 闲置推荐（remote-control-upsell）规格：长时间无查询完成后推荐开启远程控制。"}
+{"id":"chunk-czq1j3j2.js#BPt","doc":"会话类通知规格：REPL 挂载/卸载日志、转录中等待对话框的提示、附加绘制标记等。"}
+{"id":"chunk-czq1j3j2.js#oPt","doc":"OTEL headers helper 失败通知规格：GrowthBook 开关 tengu_quirky_teacup 开启且 helper 调用失败时提示用户。"}
+{"id":"chunk-3t80v0fz.js#st","doc":"剪贴板图片提示规格（clipboard-image-hint）：终端聚焦且可粘贴图片时，延迟 1 秒提示、最长显示 30 秒。"}
+{"id":"chunk-czq1j3j2.js#M2t","doc":"补全输入的分词正则组：@ 提及 token、普通 token、行尾 token/单词、命令名正则以及 @ 提及的分词与完整匹配（含引号）正则，供建议列表定位当前光标处的查询词。"}

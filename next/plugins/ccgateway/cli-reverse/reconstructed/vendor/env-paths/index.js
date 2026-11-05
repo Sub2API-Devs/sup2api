@@ -1,15 +1,15 @@
 /**
  * env-paths/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: env-paths@4.0.0
- * pieces: chunk-bbtre4r8.js (2)
+ * pieces: chunk-my2r02mp.js (2)
  * attribution: esm-fingerprint 2
  */
 import os from "os";
 import E from "process";
 import path from "path";
 
-//@ chunk-bbtre4r8.js:10610-11343 esm-fingerprint
+//@ chunk-my2r02mp.js:10760-11493 esm-fingerprint
 var homedir = os.homedir();
 var tmpdir = os.tmpdir();
 var { env } = E;
@@ -44,7 +44,7 @@ var linux = (name) => {
     temp: path.join(tmpdir, username, name),
   };
 };
-//@ chunk-bbtre4r8.js:11343-11558 esm-fingerprint
+//@ chunk-my2r02mp.js:11493-11708 esm-fingerprint
 function envPaths(name, { suffix = "nodejs" } = {}) {
   if (typeof name !== "string") throw TypeError(`Expected a string, got ${typeof name}`);
   if (suffix) name += `-${suffix}`;

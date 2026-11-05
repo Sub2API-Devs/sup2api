@@ -1,8 +1,8 @@
 /**
  * @mixmark-io/domino/lib/Node.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @mixmark-io/domino@2.2.0
- * pieces: chunk-vwj6ccer.js (1)
+ * pieces: chunk-w04z664w.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_LinkedList } from "./LinkedList.js";
 import { require_NodeUtils } from "./NodeUtils.js";
 import { require_utils } from "./utils.js";
 
-//@ chunk-vwj6ccer.js:14225-23412 cjs-fingerprint
+//@ chunk-w04z664w.js:14225-23412 cjs-fingerprint
 var require_Node = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Node;
   var EventTargetModule = require_EventTarget();

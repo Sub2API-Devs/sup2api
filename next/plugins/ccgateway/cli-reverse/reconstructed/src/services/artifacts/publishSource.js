@@ -3,9 +3,9 @@
  *
  * Artifact 发布来源校验与提示（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0wdgqhcf.js (57)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1dbza2qv.js (57)
  * attribution: placement 57
  */
 import { lstatSync, constants, openSync, fstatSync, readFileSync, closeSync } from "fs";
@@ -87,7 +87,7 @@ import { MAX_EDITS_PER_CALL } from "./artifactDb.js";
 import { DB_BATCH_OP } from "../../tools/ArtifactTool/promptText.js";
 import { MAX_FRAME_RESPONSE_BYTES, SAFE_ERROR_CODE_RE } from "./frameApi.js";
 import { MAX_FILE_SIZE, MAX_LISTED_FILES } from "./publishedFiles.js";
-import { MAX_MOUNT_FILE_BYTES } from "./gatewayRead.js";
+import { FILE_READ_BYTE_CAP } from "./gatewayRead.js";
 import { env } from "../../utils/env.js";
 import { isFirstPartyRemoteSession } from "../../utils/userDataRoots.js";
 import { resolveStageFileRoot } from "../../utils/stageFileRoots.js";
@@ -126,7 +126,7 @@ import { isENOENT } from "../../utils/errors.js";
 import { denyRulePhrase } from "../../tools/ArtifactTool/permissions/readRules.js";
 import { truncatePathMiddle } from "../../utils/format.js";
 import { getDenyRuleForTool } from "../../utils/permissions/permissions.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { NOFOLLOW_NONBLOCK_FLAGS, O_NONBLOCK } from "../../utils/fsFlags.js";
 import { isErrnoCode } from "../../utils/fsSafety/hardenedRead.js";
 import { describeTooLargePage } from "./publishReadChecks.js";
@@ -135,7 +135,7 @@ import { logFeatureBad } from "../analytics/featureTelemetry.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0wdgqhcf.js:12464-13399 placement
+//@ chunk-1dbza2qv.js:13750-14684 placement
 function describePublishFiles(errors, options) {
   if (errors === undefined) return "";
   let parsed = ARTIFACT_EMBED_ERRORS().safeParse(errors);
@@ -178,14 +178,14 @@ function describePublishFiles(errors, options) {
 
 ${joined.length > halfLimit ? `${truncateToLength(joined, halfLimit)} \u2026 (embeds truncated)` : joined}`;
 }
-//@ chunk-0wdgqhcf.js:13399-13426 placement
+//@ chunk-1dbza2qv.js:14684-14711 placement
 /**
  * 导出常量或表：vt = 256 是 schema 里 title 字段的字符上限（o().max(vt)）；Ye / at 是外部构建为 null、内部构建才赋值的可选 schema 槽，与字符上限无关。
  */
 var MAX_TITLE_CHARS = 256;
 var COLLAB_SCHEMA_INCLUDED = null;
 var handlersSchemas = null;
-//@ chunk-0wdgqhcf.js:13426-15845 placement
+//@ chunk-1dbza2qv.js:14711-17130 placement
 /**
  * Artifact 发布结果 schema 的编译期开关（嵌入错误、路由声明、提示字段，均为 false）与发布结果 schema（url、路径、版本、能力声明与存储契约、警告、剩余发布次数、图标、受众、合并信息、实时订阅、编辑应用情况、种子线程、复制来源等），以及合并基线 schema。
  */
@@ -194,7 +194,7 @@ var DECLARED_BY_ROUTE_ENABLED;
 var PUBLISH_HINTS_ENABLED;
 var PUBLISH_RESULT_SCHEMA;
 var MERGED_OVER_SCHEMA;
-deferInit("chunk-0wdgqhcf.js:13426", () => {
+deferInit("chunk-1dbza2qv.js:14711", () => {
   EMBEDS_RESULT_ENABLED = false;
   DECLARED_BY_ROUTE_ENABLED = false;
   PUBLISH_HINTS_ENABLED = false;
@@ -322,7 +322,7 @@ deferInit("chunk-0wdgqhcf.js:13426", () => {
     }),
   );
 });
-//@ chunk-0wdgqhcf.js:15845-16022 placement
+//@ chunk-1dbza2qv.js:17130-17307 placement
 function filesWrittenFields() {
   return {
     files_written: array(
@@ -340,28 +340,28 @@ function filesWrittenFields() {
       .catch(undefined),
   };
 }
-//@ chunk-0wdgqhcf.js:16022-16077 placement
+//@ chunk-1dbza2qv.js:17307-17362 placement
 function pathPinsOn() {
   return getLiveState().frozenPathPin ?? (isFrameMultiFileEnabled() && isPathPinEnabled());
 }
-//@ chunk-0wdgqhcf.js:16077-16126 placement
+//@ chunk-1dbza2qv.js:17362-17411 placement
 function hotUpdateOn() {
   return getLiveState().frozenHotUpdate ?? isFrameHotUpdateEnabled();
 }
-//@ chunk-0wdgqhcf.js:16126-16174 placement
+//@ chunk-1dbza2qv.js:17411-17459 placement
 function copyFromOn() {
   return getLiveState().frozenCopyFrom ?? isFrameCopyFromEnabled();
 }
-//@ chunk-0wdgqhcf.js:16174-16244 placement
+//@ chunk-1dbza2qv.js:17459-17529 placement
 function artifactTypesOn() {
   return getLiveState().frozenArtifactTypes?.typesOn ?? (artifactTypesEnabled() && isFrameMultiFileEnabled());
 }
-//@ chunk-0wdgqhcf.js:16244-16467 placement
+//@ chunk-1dbza2qv.js:17529-17752 placement
 /**
  * artifact 类型锁的 schema：类型链接、当前发行版、最新发行版、阻止升级的信息（目标版本、原因、冲突数、路径）。
  */
 var TYPE_LOCK_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0wdgqhcf.js:16244", () => {
+deferInit("chunk-1dbza2qv.js:17529", () => {
   TYPE_LOCK_SCHEMA = DoctorLazy(() =>
     objectSchema({
       url: stringSchema(),
@@ -379,7 +379,7 @@ deferInit("chunk-0wdgqhcf.js:16244", () => {
     }),
   );
 });
-//@ chunk-0wdgqhcf.js:16467-16813 placement
+//@ chunk-1dbza2qv.js:17752-18098 placement
 /**
  * 发布参数中与 artifact 类型相关的字段 schema（类型、自有文件、类型文件、服务位置与新增文件等）。
  */
@@ -396,14 +396,14 @@ function typeInfoFields() {
     unchanged_files: array(stringSchema()).optional().catch(undefined),
   };
 }
-//@ chunk-0wdgqhcf.js:16813-17997 placement
+//@ chunk-1dbza2qv.js:18098-19282 placement
 /**
  * 从类型创建 artifact 的结果 schema（类型、自有/类型文件、服务路径、自动打开时机、预配存储、类型说明、快速开始与设计系统信息等），以及可在存储/压缩时剥离的大字段键表。
  */
 var CREATED_FROM_TYPE_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var QUICKSTART_STRIPPABLE_KEYS;
 var CREATE_STRIPPABLE_KEYS;
-deferInit("chunk-0wdgqhcf.js:16813", () => {
+deferInit("chunk-1dbza2qv.js:18098", () => {
   CREATED_FROM_TYPE_SCHEMA = DoctorLazy(() =>
     objectSchema({
       created_from_type: literal(true),
@@ -468,11 +468,11 @@ deferInit("chunk-0wdgqhcf.js:16813", () => {
     ...QUICKSTART_STRIPPABLE_KEYS,
   };
 });
-//@ chunk-0wdgqhcf.js:17997-18049 placement
+//@ chunk-1dbza2qv.js:19282-19334 placement
 function artifactPinsOn() {
   return getLiveState().frozenArtifactPins ?? isArtifactPinEnabled();
 }
-//@ chunk-0wdgqhcf.js:18049-18222 placement
+//@ chunk-1dbza2qv.js:19334-19507 placement
 function instructionsFields() {
   return {
     instructions: stringSchema().optional(),
@@ -481,7 +481,7 @@ function instructionsFields() {
     instructions_unavailable: stringSchema().optional(),
   };
 }
-//@ chunk-0wdgqhcf.js:18222-20310 placement
+//@ chunk-1dbza2qv.js:19507-21595 placement
 /**
  * 类型目录相关的结果 schema：类型列表、类型实例列表、类型条目、快速开始（意图匹配、候选类型、设计系统、起步套件等）、类型文件读取结果及未读原因、类型详情。
  */
@@ -492,7 +492,7 @@ var QUICKSTART_RESULT_SCHEMA;
 var TYPE_FILE_UNREAD_REASONS;
 var TYPE_FILE_RESULT_SCHEMA;
 var DESCRIBE_TYPE_RESULT_SCHEMA;
-deferInit("chunk-0wdgqhcf.js:18222", () => {
+deferInit("chunk-1dbza2qv.js:19507", () => {
   TYPES_LIST_RESULT_SCHEMA = DoctorLazy(() =>
     objectSchema({
       artifact_types: array(
@@ -614,7 +614,7 @@ deferInit("chunk-0wdgqhcf.js:18222", () => {
     }),
   );
 });
-//@ chunk-0wdgqhcf.js:20310-20559 placement
+//@ chunk-1dbza2qv.js:21595-21844 placement
 function artifactListRowSchema() {
   let call = {
     title: stringSchema(),
@@ -633,7 +633,7 @@ function artifactListRowSchema() {
       })
     : objectSchema(call);
 }
-//@ chunk-0wdgqhcf.js:20559-32269 placement
+//@ chunk-1dbza2qv.js:21844-33585 placement
 /**
  * Artifact 发布来源相关的提示文本表（共享范围、持久唤醒、实时订阅停止等）
  */
@@ -679,13 +679,14 @@ var openSourceSchema;
 var pageVersionsSourceSchema;
 var sharedSourceSchema;
 var allActionSourceSchemas;
-deferInit("chunk-0wdgqhcf.js:20559", () => {
+deferInit("chunk-1dbza2qv.js:21844", () => {
   PUBLISH_SOURCE_TEXTS = DoctorLazy(() =>
     objectSchema({
       artifacts: array(artifactListRowSchema()),
       truncated: booleanSchema().optional(),
       total: numberSchema().int().min(0).optional(),
       total_at_least: literal(true).optional(),
+      next_page_token: stringSchema().optional(),
       ...(artifactPinsOn() && {
         pins_enabled: booleanSchema().optional(),
       }),
@@ -1254,7 +1255,7 @@ deferInit("chunk-0wdgqhcf.js:20559", () => {
         path: stringSchema().max(MAX_PUBLISHED_PATH_LENGTH),
         saved_to: stringSchema().max(8192),
         ver: stringSchema().regex(SAFE_ERROR_CODE_RE),
-        size_bytes: numberSchema().int().nonnegative().max(MAX_MOUNT_FILE_BYTES),
+        size_bytes: numberSchema().int().nonnegative().max(FILE_READ_BYTE_CAP),
         content_type: stringSchema().regex(CONTENT_TYPE_RE),
         sha256: stringSchema().regex(SHA256_HEX_RE),
         content: stringSchema().max(ARTIFACT_FILE_INLINE_RESULT_CAP).optional(),
@@ -1289,7 +1290,7 @@ deferInit("chunk-0wdgqhcf.js:20559", () => {
             objectSchema({
               path: stringSchema().max(MAX_PUBLISHED_PATH_LENGTH),
               saved_to: stringSchema().max(8192),
-              size_bytes: numberSchema().int().nonnegative().max(MAX_MOUNT_FILE_BYTES),
+              size_bytes: numberSchema().int().nonnegative().max(FILE_READ_BYTE_CAP),
               content_type: stringSchema().regex(CONTENT_TYPE_RE),
               sha256: stringSchema().regex(SHA256_HEX_RE),
               content: stringSchema().max(ARTIFACT_FILE_INLINE_RESULT_CAP).optional(),
@@ -1485,7 +1486,7 @@ deferInit("chunk-0wdgqhcf.js:20559", () => {
     return union(options);
   });
 });
-//@ chunk-0wdgqhcf.js:32383-32596 placement
+//@ chunk-1dbza2qv.js:33699-33912 placement
 function getRemoteStageRoot() {
   if (
     env.CLAUDE_CODE_REMOTE !== true ||
@@ -1499,7 +1500,7 @@ function getRemoteStageRoot() {
     return null;
   }
 }
-//@ chunk-0wdgqhcf.js:32596-32674 placement
+//@ chunk-1dbza2qv.js:33912-33990 placement
 function allPathsInWorkingPath(pathsForPermissionCheck, remoteStageRoot) {
   return pathsForPermissionCheck.every((path) =>
     pathInWorkingPath(path, remoteStageRoot, {
@@ -1508,9 +1509,9 @@ function allPathsInWorkingPath(pathsForPermissionCheck, remoteStageRoot) {
     }),
   );
 }
-//@ chunk-0wdgqhcf.js:32674-32690 placement
+//@ chunk-1dbza2qv.js:33990-34006 placement
 var MAX_ATTACHMENT_BYTES = 67108864;
-//@ chunk-0wdgqhcf.js:32690-33069 placement
+//@ chunk-1dbza2qv.js:34006-34385 placement
 /**
  * 判断路径是否是本会话的聊天附件：位于暂存根或上传目录且非硬链接；暂存根下按目录认定；上传目录下需核验文件身份与内容摘要并记入已验证附件表。返回是否在内及路径固定信息。
  */
@@ -1553,7 +1554,7 @@ function checkChatAttachment(context, path, identity) {
     },
   };
 }
-//@ chunk-0wdgqhcf.js:33069-33150 placement
+//@ chunk-1dbza2qv.js:34385-34466 placement
 function isVerifiedAttachmentFile(input) {
   try {
     return input.identity !== null && lstatSync(input.real).isFile();
@@ -1561,7 +1562,7 @@ function isVerifiedAttachmentFile(input) {
     return false;
   }
 }
-//@ chunk-0wdgqhcf.js:33150-33262 placement
+//@ chunk-1dbza2qv.js:34466-34578 placement
 function listStageRoots() {
   let roots = new Set();
   for (let root of [undefined, env.CLAUDE_STAGE_FILE_ROOT])
@@ -1570,7 +1571,7 @@ function listStageRoots() {
     } catch {}
   return [...roots];
 }
-//@ chunk-0wdgqhcf.js:33262-33447 placement
+//@ chunk-1dbza2qv.js:34578-34762 placement
 /**
  * 判断上传文件是否位于需要验证的目录且尚未验证（可选先做一次解析验证）。
  */
@@ -1587,7 +1588,7 @@ function isUnverifiedUpload(path, options = {}) {
   }
   return !isVerifiedAttachment(path);
 }
-//@ chunk-0wdgqhcf.js:33447-33679 placement
+//@ chunk-1dbza2qv.js:34762-34994 placement
 /**
  * 判断路径是已核验的聊天附件（位于暂存根，或在上传目录且身份与已验证记录一致、非硬链接）。
  */
@@ -1605,7 +1606,7 @@ function isVerifiedAttachment(input) {
       getLiveState().verifiedAttachments.get(identity.real) === identity.identity)
   );
 }
-//@ chunk-0wdgqhcf.js:33679-34062 placement
+//@ chunk-1dbza2qv.js:34994-35377 placement
 /**
  * 以不跟随链接的方式打开上传文件，核对文件身份与大小上限，计算内容哈希并与清单摘要比对，一致时返回摘要。
  */
@@ -1635,7 +1636,7 @@ function verifyAttachmentDigest(attachment) {
     if (fd !== undefined) closeSync(fd);
   }
 }
-//@ chunk-0wdgqhcf.js:34062-34269 placement
+//@ chunk-1dbza2qv.js:35377-35584 placement
 /**
  * 检查附件能否发布：服务端调用或 Cowork 绕过权限模式下视为不在工作目录内，否则按常规检查。
  */
@@ -1651,7 +1652,7 @@ function checkAttachmentForPublish(path, path_2, realPath, options) {
     };
   return checkChatAttachment(path, path_2, options);
 }
-//@ chunk-0wdgqhcf.js:34557-34812 placement
+//@ chunk-1dbza2qv.js:35872-36127 placement
 /**
  * 发布源文件无法安全核验时的拒绝决定，以及若干数量上限常量。
  */
@@ -1668,12 +1669,12 @@ var MAX_SOURCE_PATHS = 128;
 var MAX_QUERY_CURSOR_CHARS = 128;
 var MAX_COMMENT_TEXT_CHARS = 1024;
 var MAX_PAGE_NAMES = 128;
-//@ chunk-0wdgqhcf.js:34812-34890 placement
+//@ chunk-1dbza2qv.js:36127-36205 placement
 function pathForCompare(path) {
   let normalized = normalizeCaseForComparison(identity(path));
   return getPlatform() === "windows" ? normalized.replace(/\//g, "\\") : normalized;
 }
-//@ chunk-0wdgqhcf.js:34890-35150 placement
+//@ chunk-1dbza2qv.js:36205-36465 placement
 function findLongestRootPrefix(path, roots) {
   let comparison = pathForCompare(path);
   return roots
@@ -1692,7 +1693,7 @@ function findLongestRootPrefix(path, roots) {
     })
     .sort((a, b) => b.length - a.length)[0];
 }
-//@ chunk-0wdgqhcf.js:35150-35475 placement
+//@ chunk-1dbza2qv.js:36465-36790 placement
 /**
  * 判断主机名是否指向本机：localhost、::1、127.*、本机主机名或任一网卡地址。
  */
@@ -1711,18 +1712,18 @@ function isLocalHostname(host) {
     for (let addr of ifaces ?? []) if (addr.address.toLowerCase() === replaced_2) return true;
   return false;
 }
-//@ chunk-0wdgqhcf.js:35475-35560 placement
+//@ chunk-1dbza2qv.js:36790-36875 placement
 function isLocalUncPath(path) {
   let match = /^[\\/]{2}([^\\/]+)[\\/]/.exec(path);
   return match !== null && isLocalHostname(match[1] ?? "");
 }
-//@ chunk-0wdgqhcf.js:35560-35630 placement
+//@ chunk-1dbza2qv.js:36875-36945 placement
 function isLocalPathWithHost(path) {
   if (!isNetworkMountPath(path)) return false;
   let mountName = networkMountName(path);
   return mountName !== null && isLocalHostname(mountName);
 }
-//@ chunk-0wdgqhcf.js:35630-35952 placement
+//@ chunk-1dbza2qv.js:36945-37267 placement
 /**
  * 收集发布可用的目录：当前 cwd、去重后的额外工作目录，以及（是目录且非链接的）scratchpad 目录。
  */
@@ -1753,7 +1754,7 @@ async function collectPublishDirs(toolPermissionContext) {
     scratchpad,
   };
 }
-//@ chunk-0wdgqhcf.js:35952-36060 placement
+//@ chunk-1dbza2qv.js:37267-37375 placement
 /**
  * 把发布锚点转换为选项（scratchpad 目录与工作目录列表）。
  */
@@ -1767,7 +1768,7 @@ function toPublishAnchorOptions({ dirs, scratchpad }) {
     }),
   };
 }
-//@ chunk-0wdgqhcf.js:36060-36386 placement
+//@ chunk-1dbza2qv.js:37375-37702 placement
 /**
  * 计算 scratchpad 的字面/真实路径对：不存在时原样；是真实目录且不在网络位置时返回解析结果。
  */
@@ -1790,7 +1791,7 @@ async function getScratchpadPairs(publishDirs) {
     ? [[scratchpad, real]]
     : [];
 }
-//@ chunk-0wdgqhcf.js:36386-36493 placement
+//@ chunk-1dbza2qv.js:37702-37809 placement
 /**
  * 把工作目录展开为字面路径与真实路径对。
  */
@@ -1803,7 +1804,7 @@ async function getWorkingDirPairs(publishDirs) {
     })
   ).map((pair) => [pair.lex, pair.real]);
 }
-//@ chunk-0wdgqhcf.js:36493-36627 placement
+//@ chunk-1dbza2qv.js:37809-37943 placement
 /**
  * 判断路径是否位于 cwd、scratchpad 或任一工作目录之下。
  */
@@ -1814,7 +1815,7 @@ function isUnderPublishDirs(path, publishDirs, scratchpadPairs, workingDirPairs 
     ...scratchpadPairs.flatMap(([lex, real]) => [lex, real]),
   ].some((prefix) => path === prefix || path.startsWith(prefix + sep));
 }
-//@ chunk-0wdgqhcf.js:36627-37219 placement
+//@ chunk-1dbza2qv.js:37943-38538 placement
 /**
  * 把发布基准路径解析为真实路径（仍在同一工作目录/scratchpad 内且无不安全链接时），返回解析后的路径与是否发生了重定向。
  */
@@ -1865,7 +1866,7 @@ async function resolvePublishBaseRealpath(base, dirs, workingPairs = []) {
     redirected,
   };
 }
-//@ chunk-0wdgqhcf.js:37219-37335 placement
+//@ chunk-1dbza2qv.js:38538-38654 placement
 /**
  * 审批暂存表满时淘汰最旧条目并标记发生过淘汰。
  */
@@ -1878,11 +1879,11 @@ function evictOldestStash(stash, limit) {
     }
   }
 }
-//@ chunk-0wdgqhcf.js:37335-37412 placement
+//@ chunk-1dbza2qv.js:38654-38731 placement
 function publishingReadDeniedText(path, denyRuleForTool, suffix = "") {
   return `${path}, and ${denyRulePhrase(denyRuleForTool)} forbids reading files${suffix}.`;
 }
-//@ chunk-0wdgqhcf.js:37412-37693 placement
+//@ chunk-1dbza2qv.js:38731-39012 placement
 /**
  * 发布源文件在审批后无法核验或已变化时的错误消息，以及"重试一次，仍被拒就停下告知用户"的说明。
  */
@@ -1891,7 +1892,7 @@ var SOURCE_UNVERIFIED_MESSAGE =
 var SOURCE_CHANGED_MESSAGE =
   "file_path: the source file changed between approval and publish \u2014 retry the publish";
 var RETRY_ONCE_NOTE = "Retry once; if the retry is refused the same way, stop and tell the user.";
-//@ chunk-0wdgqhcf.js:37693-39421 placement
+//@ chunk-1dbza2qv.js:39012-40740 placement
 function checkPublishSourcePin(input) {
   switch (input) {
     case "source_pin_stale_build":
@@ -1932,14 +1933,14 @@ function checkPublishSourcePin(input) {
       );
   }
 }
-//@ chunk-0wdgqhcf.js:39421-39486 placement
+//@ chunk-1dbza2qv.js:40740-40805 placement
 /**
  * 导出函数 `quotedSweptPath`：参数 e，返回 `"${truncatePathMiddle(sweptPagePath(e) || "(unprintable path)", 300)}"`。
  */
 function quotedSweptPath(text) {
   return `"${truncatePathMiddle(sweptPagePath(text) || "(unprintable path)", 300)}"`;
 }
-//@ chunk-0wdgqhcf.js:39486-39831 placement
+//@ chunk-1dbza2qv.js:40805-41150 placement
 /**
  * 审批后 file_path 被（钩子或 SDK 宿主）改动时抛出的输入错误：未发布，不要重试。
  */
@@ -1950,13 +1951,13 @@ function sourcePathChangedError(path, shownPath) {
     "source_path_mismatch",
   );
 }
-//@ chunk-0wdgqhcf.js:39831-39968 placement
+//@ chunk-1dbza2qv.js:41150-41287 placement
 /**
  * 发布需要读取文件而 Read 权限检查需要审批时的提示：重试发布以便发起询问。
  */
 var READ_CHECK_NEEDS_APPROVAL =
   "Publishing reads file contents and a Read permission check requires approval here \u2014 retry the publish so it can be asked.";
-//@ chunk-0wdgqhcf.js:39968-40116 placement
+//@ chunk-1dbza2qv.js:41287-41435 placement
 /**
  * 若存在拒绝读取的规则，返回发布被拒的权限结果（含规则说明）。
  */
@@ -1973,7 +1974,7 @@ function getPublishReadDenial(toolPermissionContext) {
       }
     : undefined;
 }
-//@ chunk-0wdgqhcf.js:40116-40292 placement
+//@ chunk-1dbza2qv.js:41435-41611 placement
 /**
  * 判断路径是否在受信任的网络根下：UNC 路径需主机一致的根才算。
  */
@@ -1991,7 +1992,7 @@ function isInTrustedNetworkRoot(path, roots) {
         return true;
   return false;
 }
-//@ chunk-0wdgqhcf.js:40292-42093 placement
+//@ chunk-1dbza2qv.js:41611-43414 placement
 async function checkDeviceNamespacePath(path, trustedDirs, roots) {
   if (isDeviceNamespacePath(path) || isDevicePrefixPath(path))
     return {
@@ -2091,7 +2092,7 @@ async function checkDeviceNamespacePath(path, trustedDirs, roots) {
               let filtered = longestRootPrefix.split(sepRe).filter(Boolean);
               let filtered_2 = path.split(sepRe).filter(Boolean);
               let root = parse(path).root;
-              let rootDepth = count(parse(path).root.split(sepRe), Boolean);
+              let rootDepth = countWhere(parse(path).root.split(sepRe), Boolean);
               let sawSymlink = true;
               for (let depth = rootDepth; depth < filtered_2.length - 1; depth++) {
                 root = join(root, filtered_2[depth] ?? "");
@@ -2124,7 +2125,7 @@ async function checkDeviceNamespacePath(path, trustedDirs, roots) {
     unverifiedSpelling: isLink,
   };
 }
-//@ chunk-0wdgqhcf.js:42093-42178 placement
+//@ chunk-1dbza2qv.js:43414-43499 placement
 async function readFdTarget(fd) {
   try {
     return await readlink(`/proc/self/fd/${fd.fd}`);
@@ -2132,12 +2133,12 @@ async function readFdTarget(fd) {
     return null;
   }
 }
-//@ chunk-0wdgqhcf.js:42178-42242 placement
+//@ chunk-1dbza2qv.js:43499-43563 placement
 async function fdPointsAtPath(fd, path) {
   let fdTarget = await readFdTarget(fd);
   return fdTarget !== null && fdTarget === path;
 }
-//@ chunk-0wdgqhcf.js:42242-42786 placement
+//@ chunk-1dbza2qv.js:43563-44107 placement
 /**
  * 安全读取已固定的发布源文件：拒绝受保护路径、链接、非普通文件、硬链接、身份变化或超大文件，读取全部字节后核对内容哈希，一致时返回字节、修改时间与身份。
  */
@@ -2184,7 +2185,7 @@ async function readPinnedSource(path, expectedHash) {
     return null;
   }
 }
-//@ chunk-0wdgqhcf.js:42786-43908 placement
+//@ chunk-1dbza2qv.js:44107-45230 placement
 async function checkSourceUnchanged(path, lstatInfo, expected) {
   let filtered = expected.digests.filter((digest) => digest !== undefined);
   let hasDigests = filtered.length > 0;
@@ -2274,7 +2275,7 @@ async function checkSourceUnchanged(path, lstatInfo, expected) {
     await handle.close();
   }
 }
-//@ chunk-0wdgqhcf.js:43908-44024 placement
+//@ chunk-1dbza2qv.js:45230-45346 placement
 /**
  * 确认源文件未变化后计算内容哈希，出错或已变化返回 undefined。
  */
@@ -2288,7 +2289,7 @@ async function hashSourceIfUnchanged(path, pin) {
     return;
   }
 }
-//@ chunk-0wdgqhcf.js:44024-44267 placement
+//@ chunk-1dbza2qv.js:45346-45589 placement
 /**
  * 判断两次固定的文件身份是否一致（设备、inode、叶子是否链接、大小，无哈希时还比较修改时间）。
  */
@@ -2302,7 +2303,7 @@ function samePinIdentity(a, b) {
     (a.sha256 !== undefined || a.pin.mtimeNs === b.mtimeNs)
   );
 }
-//@ chunk-0wdgqhcf.js:44267-44328 placement
+//@ chunk-1dbza2qv.js:45589-45650 placement
 /**
  * 导出函数 `assertArtifactWithinLimit`：参数 e。
  */
@@ -2310,14 +2311,14 @@ function assertArtifactWithinLimit(artifact) {
   if (artifact > MAX_ARTIFACT_BYTES)
     throw new ArtifactInputError(describeTooLargePage(artifact), "too_large_raw");
 }
-//@ chunk-0wdgqhcf.js:44328-44907 placement
+//@ chunk-1dbza2qv.js:45650-46229 placement
 function describeUndecodableSource({ kind, encoding, where }, desc) {
   let text = desc === "publish" ? "then publish again. Nothing was published." : "then preview again.";
   return kind === "undecodable"
     ? `file_path: the source file is not valid ${encoding === "utf-16le" ? "UTF-16" : "UTF-8"} text (first invalid byte at ${where}). It may be saved in another encoding or contain binary data. Rewrite it as UTF-8, ${text}`
     : `file_path: the source file has the replacement character U+FFFD at ${where}, usually left where an earlier edit or paste lost a character. Replace it with the intended text (in HTML, write an intended U+FFFD as &#xFFFD;), ${text}`;
 }
-//@ chunk-0wdgqhcf.js:44907-45183 placement
+//@ chunk-1dbza2qv.js:46229-46505 placement
 /**
  * 严格把发布源文件字节解码为文本；无法解码或含替换字符时打点并抛出输入错误。
  */
@@ -2339,14 +2340,6 @@ export {
   isUnverifiedUpload,
   dbReadSourceSchema,
   dbWriteSourceSchema,
-  liveEditSourceSchema,
-  pinSourceSchema,
-  describeUndecodableSource,
-  previewSourceSchema,
-  emulatorPreviewSourceSchema,
-  sharedSourceSchema,
-  TYPE_FILE_UNREAD_REASONS,
-  MERGED_OVER_SCHEMA,
   quotedSweptPath,
   allActionSourceSchemas,
   evictOldestStash,
@@ -2384,4 +2377,12 @@ export {
   checkSourceUnchanged,
   toPublishAnchorOptions,
   MAX_PAGE_NAMES,
+  liveEditSourceSchema,
+  pinSourceSchema,
+  describeUndecodableSource,
+  previewSourceSchema,
+  emulatorPreviewSourceSchema,
+  sharedSourceSchema,
+  TYPE_FILE_UNREAD_REASONS,
+  MERGED_OVER_SCHEMA,
 };

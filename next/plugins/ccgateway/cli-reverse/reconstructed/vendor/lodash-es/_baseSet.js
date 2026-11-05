@@ -1,19 +1,19 @@
 /**
  * lodash-es/_baseSet.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: lodash-es@4.17.22..4.18.1
- * pieces: chunk-3a1caa6f.js (1)
+ * pieces: chunk-j7eg9eb6.js (1)
  * attribution: placement 1
  */
 import {
   isObjectAlias,
   castPathAlias,
-  toKeyAlias_2,
+  toKeyAlias,
   isIndexAlias,
 } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { assignValueIfDifferent } from "../../src/utils/git/gitSafeEnv.js";
 
-//@ chunk-3a1caa6f.js:1241-1536 placement
+//@ chunk-j7eg9eb6.js:1053-1348 placement
 function baseSet(object, path, value, customizer) {
   if (!isObjectAlias(object)) return object;
   path = castPathAlias(path, object);
@@ -22,7 +22,7 @@ function baseSet(object, path, value, customizer) {
   var lastIndex = length - 1;
   var nested = object;
   while (nested != null && ++index < length) {
-    var key = toKeyAlias_2(path[index]);
+    var key = toKeyAlias(path[index]);
     var newValue = value;
     if (key === "__proto__" || key === "constructor" || key === "prototype") return object;
     if (index != lastIndex) {

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。为入站附件打开溢出文件并计算 sha256。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5wx09b4h.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pkyq3nqg.js (3)
  * attribution: placement 3
  */
 import { readdir, lstat, rm, open } from "fs/promises";
@@ -16,9 +16,9 @@ import { isOwnTempName, makeTempSiblingPath } from "../utils/atomicPublishWrite.
 import { READ_LIMITS } from "../utils/fsBoundRead.js";
 import { openRegularFileForRead } from "../utils/fsSafety/boundOpen.js";
 
-//@ chunk-5wx09b4h.js:479-492 placement
+//@ chunk-pkyq3nqg.js:446-459 placement
 var SPILL_FILE_MAX_AGE_MS = 300000;
-//@ chunk-5wx09b4h.js:492-1274 placement
+//@ chunk-pkyq3nqg.js:459-1241 placement
 /**
  * 为入站附件打开溢出文件并计算 sha256。
  */
@@ -82,13 +82,18 @@ async function openSpill(attachmentsDir, targetPath, mode = 384) {
     },
   };
 }
-//@ chunk-5wx09b4h.js:1274-1615 placement
-async function sha256OfFile(path, expectedSize) {
+//@ chunk-pkyq3nqg.js:1241-1628 placement
+async function sha256OfFile(path, expectedSize, identity) {
   let handle = await openRegularFileForRead(path).catch(() => null);
   if (handle === null) return null;
   try {
     let stats = await handle.stat();
-    if (!stats.isFile() || stats.size !== expectedSize) return null;
+    if (
+      !stats.isFile() ||
+      stats.size !== expectedSize ||
+      (identity !== undefined && (stats.dev !== identity.dev || stats.ino !== identity.ino))
+    )
+      return null;
     let hash = createHash("sha256");
     for await (let chunk of handle.createReadStream({
       autoClose: false,

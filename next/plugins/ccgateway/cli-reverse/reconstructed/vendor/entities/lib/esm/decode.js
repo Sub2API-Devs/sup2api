@@ -1,15 +1,15 @@
 /**
  * entities/lib/esm/decode.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: entities@4.5.0
- * pieces: chunk-6ja29j2n.js (15)
+ * pieces: chunk-p9ac6cnb.js (15)
  * attribution: esm-layout 4, esm-fingerprint 11
  */
 import { decodeCodePoint, fromCodePoint } from "./decode_codepoint.js";
 
-//@ chunk-6ja29j2n.js:57771-57777 esm-layout
+//@ chunk-p9ac6cnb.js:57771-57777 esm-layout
 var CharCodes;
-//@ chunk-6ja29j2n.js:57777-58090 esm-fingerprint
+//@ chunk-p9ac6cnb.js:57777-58090 esm-fingerprint
 (function (CharCodes) {
   CharCodes[(CharCodes.NUM = 35)] = "NUM";
   CharCodes[(CharCodes.SEMI = 59)] = "SEMI";
@@ -24,27 +24,27 @@ var CharCodes;
   CharCodes[(CharCodes.UPPER_F = 70)] = "UPPER_F";
   CharCodes[(CharCodes.UPPER_Z = 90)] = "UPPER_Z";
 })(CharCodes || (CharCodes = {}));
-//@ chunk-6ja29j2n.js:58090-58102 esm-layout
+//@ chunk-p9ac6cnb.js:58090-58102 esm-layout
 var TO_LOWER_BIT = 32;
 var BinTrieFlags;
-//@ chunk-6ja29j2n.js:58102-58241 esm-fingerprint
+//@ chunk-p9ac6cnb.js:58102-58241 esm-fingerprint
 (function (BinTrieFlags) {
   BinTrieFlags[(BinTrieFlags.VALUE_LENGTH = 49152)] = "VALUE_LENGTH";
   BinTrieFlags[(BinTrieFlags.BRANCH_LENGTH = 16256)] = "BRANCH_LENGTH";
   BinTrieFlags[(BinTrieFlags.JUMP_TABLE = 127)] = "JUMP_TABLE";
 })(BinTrieFlags || (BinTrieFlags = {}));
-//@ chunk-6ja29j2n.js:58241-58284 esm-fingerprint
+//@ chunk-p9ac6cnb.js:58241-58284 esm-fingerprint
 function isNumber(code) {
   return code >= CharCodes.ZERO && code <= CharCodes.NINE;
 }
-//@ chunk-6ja29j2n.js:58284-58361 esm-fingerprint
+//@ chunk-p9ac6cnb.js:58284-58361 esm-fingerprint
 function isHexadecimalCharacter(code) {
   return (
     (code >= CharCodes.UPPER_A && code <= CharCodes.UPPER_F) ||
     (code >= CharCodes.LOWER_A && code <= CharCodes.LOWER_F)
   );
 }
-//@ chunk-6ja29j2n.js:58361-58445 esm-fingerprint
+//@ chunk-p9ac6cnb.js:58361-58445 esm-fingerprint
 function isAsciiAlphaNumeric(code) {
   return (
     (code >= CharCodes.UPPER_A && code <= CharCodes.UPPER_Z) ||
@@ -52,13 +52,13 @@ function isAsciiAlphaNumeric(code) {
     isNumber(code)
   );
 }
-//@ chunk-6ja29j2n.js:58445-58487 esm-fingerprint
+//@ chunk-p9ac6cnb.js:58445-58487 esm-fingerprint
 function isEntityInAttributeInvalidEnd(code) {
   return code === CharCodes.EQUALS || isAsciiAlphaNumeric(code);
 }
-//@ chunk-6ja29j2n.js:58487-58493 esm-layout
+//@ chunk-p9ac6cnb.js:58487-58493 esm-layout
 var EntityDecoderState;
-//@ chunk-6ja29j2n.js:58493-58690 esm-fingerprint
+//@ chunk-p9ac6cnb.js:58493-58690 esm-fingerprint
 (function (EntityDecoderState) {
   EntityDecoderState[(EntityDecoderState.EntityStart = 0)] = "EntityStart";
   EntityDecoderState[(EntityDecoderState.NumericStart = 1)] = "NumericStart";
@@ -66,15 +66,15 @@ var EntityDecoderState;
   EntityDecoderState[(EntityDecoderState.NumericHex = 3)] = "NumericHex";
   EntityDecoderState[(EntityDecoderState.NamedEntity = 4)] = "NamedEntity";
 })(EntityDecoderState || (EntityDecoderState = {}));
-//@ chunk-6ja29j2n.js:58690-58696 esm-layout
+//@ chunk-p9ac6cnb.js:58690-58696 esm-layout
 var DecodingMode;
-//@ chunk-6ja29j2n.js:58696-58797 esm-fingerprint
+//@ chunk-p9ac6cnb.js:58696-58797 esm-fingerprint
 (function (DecodingMode) {
   DecodingMode[(DecodingMode.Legacy = 0)] = "Legacy";
   DecodingMode[(DecodingMode.Strict = 1)] = "Strict";
   DecodingMode[(DecodingMode.Attribute = 2)] = "Attribute";
 })(DecodingMode || (DecodingMode = {}));
-//@ chunk-6ja29j2n.js:58797-62166 esm-fingerprint
+//@ chunk-p9ac6cnb.js:58797-62166 esm-fingerprint
 class EntityDecoder {
   constructor(decodeTree, emitCodePoint, errors) {
     this.decodeTree = decodeTree;
@@ -240,7 +240,7 @@ class EntityDecoder {
     }
   }
 }
-//@ chunk-6ja29j2n.js:62166-62413 esm-fingerprint
+//@ chunk-p9ac6cnb.js:62166-62413 esm-fingerprint
 function getDecoder(decodeTree) {
   let ret = "";
   let decoder = new EntityDecoder(decodeTree, (str) => (ret += fromCodePoint(str)));
@@ -263,7 +263,7 @@ function getDecoder(decodeTree) {
     return result;
   };
 }
-//@ chunk-6ja29j2n.js:62413-62667 esm-fingerprint
+//@ chunk-p9ac6cnb.js:62413-62667 esm-fingerprint
 function determineBranch(decodeTree, current, nodeIdx, char) {
   let branchCount = (current & BinTrieFlags.BRANCH_LENGTH) >> 7;
   let jumpOffset = current & BinTrieFlags.JUMP_TABLE;

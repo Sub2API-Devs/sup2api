@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：工具执行期间的 CPU 采样（cgroup 与标记）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (12)
- * attribution: placement 12
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (19)
+ * attribution: placement 11, layout 8
  */
 import { readFileSync } from "fs";
 import { posix } from "path";
@@ -36,7 +36,7 @@ import {
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { logError } from "../../utils/log.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { getRunningTasks } from "../../utils/task/framework.js";
 import { isLocalShellTask } from "../../tasks/LocalShellTask/guards.js";
 import { waitForTaskCompletion } from "../../tools/TaskOutputTool/TaskOutputTool.js";
@@ -49,19 +49,18 @@ import {
   getCpuacctPath,
   CPUACCT_ROOT,
   ensureCpuacctGroup,
-  readCpuUsageSeconds,
   setCpuacctDir,
+  readCpuUsageSeconds,
 } from "../../utils/shell/cpuReport.js";
 import { takeNoWindowUsage } from "../../utils/shell/processCpuTime.js";
+import { registerCleanup } from "../../utils/cleanupRegistry.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { reportsRunningBackgroundTasks } from "./backgroundWindDown.js";
 import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { errorMessage } from "../../utils/errors.js";
-import { registerCleanup } from "../../utils/cleanupRegistry.js";
 
-//@ chunk-tyg7f3ek.js:606037-606378 placement
+//@ chunk-0yw3taqg.js:647331-647672 placement
 function nextCpuMark(state, wait) {
   let elapsedMs = state.clock.monotonicNow() - wait.startMs;
   let max = Math.max(elapsedMs / MINUTE_MS, wait.lastMarkMin);
@@ -83,7 +82,7 @@ function nextCpuMark(state, wait) {
     },
   );
 }
-//@ chunk-tyg7f3ek.js:606378-606472 placement
+//@ chunk-0yw3taqg.js:647672-647767 placement
 function cpuMarkPayload(wait, at, fromMin) {
   return {
     at,
@@ -91,7 +90,7 @@ function cpuMarkPayload(wait, at, fromMin) {
     session_family: sessionSurfaceKind(),
   };
 }
-//@ chunk-tyg7f3ek.js:606472-606569 placement
+//@ chunk-0yw3taqg.js:647767-647864 placement
 function reportCpuMarkGaveUp(wait, reason, fromMin, outcome) {
   logFeatureSad("ccr_idle_cpu_mark", outcome);
   logForDiagnosticsNoPII("warn", "idle_cpu_mark", {
@@ -99,7 +98,7 @@ function reportCpuMarkGaveUp(wait, reason, fromMin, outcome) {
     gave_up: outcome,
   });
 }
-//@ chunk-tyg7f3ek.js:606569-606942 placement
+//@ chunk-0yw3taqg.js:647864-648237 placement
 function recordCpuMark(state, wait, reason, fromMin) {
   state.settled = state.settled
     .then(async () => {
@@ -131,7 +130,7 @@ function recordCpuMark(state, wait, reason, fromMin) {
     })
     .catch(logError);
 }
-//@ chunk-tyg7f3ek.js:606942-610623 placement
+//@ chunk-0yw3taqg.js:648237-652202 placement
 async function sampleToolCpuMark(state, wait, reason, markMin) {
   try {
     let last = wait.last;
@@ -206,7 +205,9 @@ async function sampleToolCpuMark(state, wait, reason, markMin) {
       let treeTicks =
         sumProcessTicks(
           previous,
-          processTree.filter((pid) => !seen.then.has(pid) && !isSameProcess(previous, sample, pid)),
+          collectProcessTree(previous, [pid], new Set()).filter(
+            (pid) => !seen.then.has(pid) && !isSameProcess(previous, sample, pid),
+          ),
         ) * CLOCK_TICKS_MS;
       let winner = await Promise.race([usage, undefined]);
       let winnerCpuMs = (winner?.cpu?.userMs ?? 0) + (winner?.cpu?.systemMs ?? 0);
@@ -215,6 +216,7 @@ async function sampleToolCpuMark(state, wait, reason, markMin) {
         byWholeTree: processTree.some((pid) => isSameProcess(previous, sample, pid) && !seen.now.has(pid))
           ? 0
           : winnerCpuMs + (winner?.procCpuMs ?? 0) - sumProcessTicks(previous, processTree) * CLOCK_TICKS_MS,
+        untakenThen: processTree.filter((pid) => !seen.then.has(pid)),
       });
     }
     collectProcessTree(sample, processLeaders(sample, process.pid), seen.now);
@@ -229,15 +231,15 @@ async function sampleToolCpuMark(state, wait, reason, markMin) {
       .filter(({ ticks }) => ticks * CLOCK_TICKS_MS > spanMs * CPU_NOISE_RATIO)
       .sort((a, b) => b.ticks - a.ticks)
       .slice(0, MAX_CPU_PROCESSES);
-    let sawEnded = false;
-    for (let { pid } of sliced) {
+    let pid = [];
+    for (let { pid: pid_2 } of sliced) {
       if (
         state.timedOut ||
-        seen.now.has(pid) ||
-        !isClaudeCodeAgentEnviron(await state.proc.startOfFile(`${pid}/environ`))
+        seen.now.has(pid_2) ||
+        !isClaudeCodeAgentEnviron(await state.proc.startOfFile(`${pid_2}/environ`))
       )
         continue;
-      let session = sample.processes.get(pid)?.session ?? 0;
+      let session = sample.processes.get(pid_2)?.session ?? 0;
       let agentDiff = diffProcessTreeCpu(
         previous,
         sample,
@@ -245,24 +247,38 @@ async function sampleToolCpuMark(state, wait, reason, markMin) {
           !sample.processes.has(session) &&
           session !== sample.processes.get(process.pid)?.session
           ? session
-          : pid,
+          : pid_2,
         seen,
       );
       let isListening = (await checksListeningSockets(state.proc, agentDiff.tree, socketState)) !== "no";
       cpuMs[isListening ? "leftListen" : "left"] += agentDiff.cpuMs;
       if (!isListening) quietTree.push(...agentDiff.tree);
-      sawEnded ||= agentDiff.tree.some((pid) => !isSameProcess(previous, sample, pid));
+      pid.push(...agentDiff.tree);
     }
-    for (let { byResultAndProc, byWholeTree } of deltas)
-      cpuMs.ended += sawEnded ? byResultAndProc : Math.max(byResultAndProc, byWholeTree);
+    let pids = new Set();
+    collectProcessTree(
+      sample,
+      pid.filter((seen) => isSameProcess(previous, sample, seen)),
+      pids,
+      (pid) =>
+        !isSameProcess(previous, sample, pid) &&
+        sample.processes.get(pid)?.session !==
+          sample.processes.get(sample.processes.get(pid)?.ppid ?? 0)?.session,
+    );
+    let any = pid.some((pid) => !pids.has(pid));
+    for (let { byResultAndProc, byWholeTree, untakenThen } of deltas)
+      cpuMs.ended +=
+        any || untakenThen.some((pid) => seen.then.has(pid))
+          ? byResultAndProc
+          : Math.max(byResultAndProc, byWholeTree);
     if (state.timedOut) return;
     if (last === undefined) {
       wait.last = sample;
       return;
     }
     let shells = [...sample.shells, ...filtered];
-    let serveCount = count(shells, (shell) => shell.kind === "serve_or_watch");
-    let waitCount = count(shells, (shell) => shell.kind === "wait");
+    let serveCount = countWhere(shells, (shell) => shell.kind === "serve_or_watch");
+    let waitCount = countWhere(shells, (shell) => shell.kind === "wait");
     let vmCpuMs = Math.max(0, sample.vmBusyTicks - previous.vmBusyTicks) * CLOCK_TICKS_MS;
     if (!state.hasReportedOk) {
       state.hasReportedOk = true;
@@ -284,7 +300,8 @@ async function sampleToolCpuMark(state, wait, reason, markMin) {
       shells_grew: shellsGrew,
       all_shells_listen:
         shells.length > 0 &&
-        count(shells, (shell) => shell.listens === true) === sample.runningShellIds.size + filtered.length,
+        countWhere(shells, (shell) => shell.listens === true) ===
+          sample.runningShellIds.size + filtered.length,
       shell_kinds:
         shells.length === 0
           ? "none"
@@ -314,7 +331,7 @@ async function sampleToolCpuMark(state, wait, reason, markMin) {
       left_running_cpu_ms: cpuMs.left,
       full_core_processes: Math.min(
         MAX_FULL_CORE_PROCESSES,
-        count(
+        countWhere(
           quietTree,
           (pid) =>
             isSameProcess(previous, sample, pid) &&
@@ -336,7 +353,7 @@ async function sampleToolCpuMark(state, wait, reason, markMin) {
     if (reason === "mark" && state.wait === wait) nextCpuMark(state, wait);
   }
 }
-//@ chunk-tyg7f3ek.js:610623-611078 placement
+//@ chunk-0yw3taqg.js:652202-652657 placement
 function endToolCpuWait(state, nextState) {
   let wait = state.wait;
   if (state.timedOut || (nextState === "idle" && wait !== undefined)) return;
@@ -363,7 +380,7 @@ function endToolCpuWait(state, nextState) {
     logError(error);
   }
 }
-//@ chunk-tyg7f3ek.js:611078-611433 placement
+//@ chunk-0yw3taqg.js:652657-653012 placement
 /**
  * hosted worker 上按 tengu_starry_balloon 配置的分钟标记采样工具 CPU 用量（需 CLAUDE_CODE_DIAGNOSTICS_FILE）。
  */
@@ -396,169 +413,192 @@ function startToolCpuSampling(sessionState, getState, clock, proc = PROC_FS_READ
     return;
   }
 }
-//@ chunk-tyg7f3ek.js:611498-611537 placement
+//@ chunk-0yw3taqg.js:653077-653116 placement
 var CGROUP_SAMPLE_MINUTES = [5, 10, 15, 30, 60, 120];
 var MINUTE_MS_2 = 60000;
 var cancelCgroupSample;
-//@ chunk-tyg7f3ek.js:611537-611589 placement
+//@ chunk-0yw3taqg.js:653116-653168 placement
 function cpuacctPathFromCgroup(mountInfo) {
   let cpuacctPath = getCpuacctPath(mountInfo);
   return cpuacctPath === "/" ? undefined : cpuacctPath;
 }
-//@ chunk-tyg7f3ek.js:611589-613764 placement
-/**
- * CCR 容器内读 cgroup cpuacct.usage，按阶段（等待/工具/空闲）统计 CPU 并上报 tengu_tool_cpu_by_phase。
- */
-function startCgroupCpuSampling(sessionState, getState, clock) {
+//@ chunk-0yw3taqg.js:653168-653806 layout
+function startCpuSampling(sessionState, getState, clock) {
   if (!env.CLAUDE_CODE_REMOTE || isDiskless()) return;
-  let relativePath;
+  let groupPath;
   try {
-    relativePath = cpuacctPathFromCgroup(readFileSync("/proc/self/cgroup", "utf8"));
+    groupPath = cpuacctPathFromCgroup(readFileSync("/proc/self/cgroup", "utf8"));
   } catch {
     return;
   }
-  if (relativePath === undefined) return;
-  let joined = posix.join(CPUACCT_ROOT, relativePath, "cpuacct.usage");
-  let cpuacctGroup = ensureCpuacctGroup(relativePath);
-  let groupPath = cpuacctGroup === undefined ? undefined : posix.join(cpuacctGroup, "cpuacct.usage");
-  function read() {
-    let cpuUsageSeconds = readCpuUsageSeconds(joined);
-    if (cpuUsageSeconds === undefined) return;
-    let usage = process.cpuUsage();
-    return {
-      groupMs: cpuUsageSeconds,
-      cliMs: (usage.user + usage.system) / 1000,
-      wallMs: clock.monotonicNow(),
-      shellMs: groupPath === undefined ? undefined : readCpuUsageSeconds(groupPath),
-    };
-  }
-  let previous = read();
-  if (previous === undefined) return;
-  takeNoWindowUsage(previous.shellMs, previous.wallMs);
+  if (groupPath === undefined) return;
+  let file = posix.join(CPUACCT_ROOT, groupPath, "cpuacct.usage");
+  let cpuacctGroup = ensureCpuacctGroup(groupPath);
+  let shellFile = cpuacctGroup === undefined ? undefined : posix.join(cpuacctGroup, "cpuacct.usage");
+  let firstSample = readCpuSample({
+    file,
+    shellFile,
+    clock,
+  });
+  if (firstSample === undefined) return;
+  takeNoWindowUsage(firstSample.shellMs, firstSample.wallMs);
   let phase = refineIdleState(sessionState.getState(), getState);
-  let sequence = 0;
-  let totals = {};
-  let idleSince = isIdleCpuState(phase) ? clock.monotonicNow() : undefined;
-  let lastDelayMs = 0;
-  let idleTimer;
-  function sample() {
-    let current = read();
-    let noWindow = takeNoWindowUsage(current?.shellMs, current?.wallMs ?? clock.monotonicNow());
-    if (current !== undefined && previous !== undefined) {
-      let cliDelta = current.cliMs - previous.cliMs;
-      let pairs = [
-        [`${phase}_wall_ms`, current.wallMs - previous.wallMs],
-        [`${phase}_cli_cpu_ms`, cliDelta],
-        [`${phase}_tools_cpu_ms`, Math.max(0, current.groupMs - previous.groupMs - cliDelta)],
-      ];
-      if (current.shellMs !== undefined && previous.shellMs !== undefined) {
-        let max = Math.max(0, current.shellMs - previous.shellMs);
-        pairs.push([`${phase}_shell_cpu_ms`, max]);
-        if (phase === "running" || phase === "idle_background")
-          pairs.push(
-            [`${phase}_no_command_cpu_ms`, Math.min(noWindow.cpuMs, max)],
-            [`${phase}_no_command_wall_ms`, noWindow.wallMs],
-          );
-      }
-      for (let [key, value] of pairs) totals[key] = (totals[key] ?? 0) + value;
-    }
-    previous = current;
-  }
-  function emit(trigger) {
-    logEvent("tengu_tool_cpu_by_phase", {
-      trigger: fromEnum(trigger),
-      sequence,
-      bg_tasks_report_running: reportsRunningBackgroundTasks(),
-      ...(idleSince !== undefined && {
-        waited_ms: Math.round(clock.monotonicNow() - idleSince),
-      }),
-      ...import_mapValues(totals, Math.round),
-    });
-    sequence++;
-    totals = {};
-  }
-  function stopIdleTimer() {
-    idleTimer?.();
-    idleTimer = undefined;
-  }
-  function onIdleTimer() {
-    if (phase !== "idle_background" || idleSince === undefined) return;
-    let waitedMs = clock.monotonicNow() - idleSince;
-    let waitedMin = Math.max(waitedMs, lastDelayMs) / MINUTE_MS_2;
-    let delayMs =
-      (CGROUP_SAMPLE_MINUTES.find((step) => step > waitedMin) ?? (Math.floor(waitedMin / 60) + 1) * 60) *
-      MINUTE_MS_2;
-    idleTimer = clock.setTimeout(
-      () => {
-        idleTimer = undefined;
-        try {
-          sample();
-          if (sessionState.getState() !== "idle") return;
-          phase = refineIdleState("idle", getState);
-          lastDelayMs = delayMs;
-          emit("idle_timer");
-          onIdleTimer();
-        } catch (error) {
-          logForDebugging(
-            `tengu_tool_cpu_by_phase: could not send a timed event during an idle wait; no more timed events until the session state changes: ${errorMessage(error)}`,
-            {
-              level: "error",
-            },
-          );
-        }
-      },
-      delayMs - waitedMs,
-      {
-        unref: true,
-      },
-    );
-  }
+  let tracker = {
+    sessionState,
+    getState,
+    clock,
+    file,
+    shellFile,
+    last: firstSample,
+    phase,
+    sequence: 0,
+    totals: {},
+    waitStartMs: isIdleCpuState(phase) ? clock.monotonicNow() : undefined,
+    lastMarkMs: 0,
+    cancelMark: undefined,
+  };
   cancelCgroupSample?.();
   setCpuacctDir(cpuacctGroup);
-  let unsubscribe = sessionState.stateChanged.subscribe((state) => {
-    stopIdleTimer();
-    try {
-      sample();
-      let wasIdle = isIdleCpuState(phase);
-      phase = refineIdleState(state, getState);
-      if (wasIdle && !isIdleCpuState(phase))
-        try {
-          emit("idle_end");
-        } finally {
-          idleSince = undefined;
-        }
-      else if (!wasIdle && isIdleCpuState(phase)) {
-        idleSince = clock.monotonicNow();
-        lastDelayMs = 0;
-      }
-      onIdleTimer();
-    } catch (error) {
-      logForDebugging(
-        `tengu_tool_cpu_by_phase: could not record a session state change; telemetry continues from the next one: ${errorMessage(error)}`,
-        {
-          level: "error",
-        },
-      );
-    }
-  });
+  let unsubscribe = sessionState.stateChanged.subscribe((nextPhase) => onCpuPhaseChange(tracker, nextPhase));
   let cleanup = registerCleanup(() => {
-    stopIdleTimer();
-    sample();
-    emit("exit");
+    clearCpuMark(tracker);
+    recordCpuDelta(tracker);
+    flushCpuTotals(tracker, "exit");
   });
-  onIdleTimer();
+  armIdleCpuMark(tracker);
   cancelCgroupSample = () => {
-    stopIdleTimer();
+    clearCpuMark(tracker);
     unsubscribe();
     cleanup();
     setCpuacctDir(undefined);
   };
 }
-//@ chunk-tyg7f3ek.js:613764-613820 placement
+//@ chunk-0yw3taqg.js:653806-654011 layout
+function readCpuSample({ file, shellFile, clock }) {
+  let cpuUsageSeconds = readCpuUsageSeconds(file);
+  if (cpuUsageSeconds === undefined) return;
+  let usage = process.cpuUsage();
+  return {
+    groupMs: cpuUsageSeconds,
+    cliMs: (usage.user + usage.system) / 1000,
+    wallMs: clock.monotonicNow(),
+    shellMs: shellFile === undefined ? undefined : readCpuUsageSeconds(shellFile),
+  };
+}
+//@ chunk-0yw3taqg.js:654011-654587 layout
+function recordCpuDelta(tracker) {
+  let { phase, last, totals } = tracker;
+  let sample = readCpuSample(tracker);
+  let noWindowUsage = takeNoWindowUsage(sample?.shellMs, sample?.wallMs ?? tracker.clock.monotonicNow());
+  if (sample !== undefined && last !== undefined) {
+    let wallDeltaMs = sample.wallMs - last.wallMs;
+    let cliCpuDeltaMs = sample.cliMs - last.cliMs;
+    let phaseSamples = [
+      [`${phase}_wall_ms`, wallDeltaMs],
+      [`${phase}_cli_cpu_ms`, cliCpuDeltaMs],
+      [`${phase}_tools_cpu_ms`, Math.max(0, sample.groupMs - last.groupMs - cliCpuDeltaMs)],
+    ];
+    if (sample.shellMs !== undefined && last.shellMs !== undefined) {
+      let max = Math.max(0, sample.shellMs - last.shellMs);
+      phaseSamples.push([`${phase}_shell_cpu_ms`, max]);
+      if (phase === "running" || phase === "idle_background")
+        phaseSamples.push(
+          [`${phase}_no_command_cpu_ms`, Math.min(noWindowUsage.cpuMs, max)],
+          [`${phase}_no_command_wall_ms`, Math.min(noWindowUsage.wallMs, wallDeltaMs)],
+        );
+    }
+    for (let [metric, value] of phaseSamples) totals[metric] = (totals[metric] ?? 0) + value;
+  }
+  tracker.last = sample;
+}
+//@ chunk-0yw3taqg.js:654587-654837 layout
+function flushCpuTotals(tracker, trigger) {
+  logEvent("tengu_tool_cpu_by_phase", {
+    trigger: fromEnum(trigger),
+    sequence: tracker.sequence,
+    bg_tasks_report_running: reportsRunningBackgroundTasks(),
+    ...(tracker.waitStartMs !== undefined && {
+      waited_ms: Math.round(tracker.clock.monotonicNow() - tracker.waitStartMs),
+    }),
+    ...import_mapValues(tracker.totals, Math.round),
+  });
+  tracker.sequence++;
+  tracker.totals = {};
+}
+//@ chunk-0yw3taqg.js:654837-655204 layout
+function onCpuPhaseChange(tracker, state) {
+  clearCpuMark(tracker);
+  try {
+    recordCpuDelta(tracker);
+    let wasIdle = isIdleCpuState(tracker.phase);
+    tracker.phase = refineIdleState(state, tracker.getState);
+    if (wasIdle && !isIdleCpuState(tracker.phase))
+      try {
+        flushCpuTotals(tracker, "idle_end");
+      } finally {
+        tracker.waitStartMs = undefined;
+      }
+    else if (!wasIdle && isIdleCpuState(tracker.phase)) {
+      tracker.waitStartMs = tracker.clock.monotonicNow();
+      tracker.lastMarkMs = 0;
+    }
+    armIdleCpuMark(tracker);
+  } catch (error) {
+    logError(error);
+    logForDebugging(
+      "tengu_tool_cpu_by_phase: could not record a session state change; telemetry continues from the next one",
+      {
+        level: "error",
+      },
+    );
+  }
+}
+//@ chunk-0yw3taqg.js:655204-655256 layout
+function clearCpuMark(tracker) {
+  tracker.cancelMark?.();
+  tracker.cancelMark = undefined;
+}
+//@ chunk-0yw3taqg.js:655256-655516 layout
+function armIdleCpuMark(tracker) {
+  if (tracker.phase !== "idle_background" || tracker.waitStartMs === undefined) return;
+  let waitedMs = tracker.clock.monotonicNow() - tracker.waitStartMs;
+  let waitedMinutes = Math.max(waitedMs, tracker.lastMarkMs) / MINUTE_MS_2;
+  let lastMarkMs =
+    (CGROUP_SAMPLE_MINUTES.find((bucketMinutes) => bucketMinutes > waitedMinutes) ??
+      (Math.floor(waitedMinutes / 60) + 1) * 60) * MINUTE_MS_2;
+  tracker.cancelMark = tracker.clock.setTimeout(
+    () => onIdleCpuMarkTimer(tracker, lastMarkMs),
+    lastMarkMs - waitedMs,
+    {
+      unref: true,
+    },
+  );
+}
+//@ chunk-0yw3taqg.js:655516-655842 layout
+function onIdleCpuMarkTimer(tracker, lastMarkMs) {
+  tracker.cancelMark = undefined;
+  try {
+    recordCpuDelta(tracker);
+    if (tracker.sessionState.getState() !== "idle") return;
+    tracker.phase = refineIdleState("idle", tracker.getState);
+    tracker.lastMarkMs = lastMarkMs;
+    flushCpuTotals(tracker, "idle_timer");
+    armIdleCpuMark(tracker);
+  } catch (error) {
+    logError(error);
+    logForDebugging(
+      "tengu_tool_cpu_by_phase: could not send a timed event during an idle wait; no more timed events until the session state changes",
+      {
+        level: "error",
+      },
+    );
+  }
+}
+//@ chunk-0yw3taqg.js:655842-655898 placement
 function isIdleCpuState(state) {
   return state === "idle" || state === "idle_background";
 }
-//@ chunk-tyg7f3ek.js:613820-613969 placement
+//@ chunk-0yw3taqg.js:655898-656047 placement
 function refineIdleState(state, getState) {
   if (state !== "idle") return state;
   return getRunningTasks(getState()).some(
@@ -572,4 +612,4 @@ function refineIdleState(state, getState) {
     ? "idle_background"
     : "idle";
 }
-export { startCgroupCpuSampling, startToolCpuSampling };
+export { startCpuSampling, startToolCpuSampling };

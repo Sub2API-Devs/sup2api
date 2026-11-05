@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.318
+import{TUs}from"./chunk-5ythzcas.js";import{V}from"./chunk-63094ahz.js";import{St,_,ee}from"./chunk-6hadbefe.js";import{a}from"./chunk-my2r02mp.js";import{p}from"./chunk-k6qypy1d.js";import{pd}from"./chunk-gb7aq6sf.js";import{hc,wN}from"./chunk-exfmq47h.js";import{wd}from"./chunk-rmd7n4gq.js";import{Wqe}from"./chunk-xmpgk2cc.js";import{Ko}from"./chunk-5xgkngpb.js";import{o,E,$e}from"./chunk-m4y44r15.js";import{rm as m}from"fs/promises";import{join as t}from"path";var s=".pending-wakeup",u=1024,f=p(()=>$e({toolUseId:o().min(1).max(256),scheduledFor:E().int().positive(),chainStartedAt:E().int().nonnegative()}));async function dcn(i,r){let e=t(i,s);try{if(r===void 0){if(await m(e,{force:!0}).then(()=>!0,(d)=>(wd(d),!1)))return}await Wqe(e,r===void 0?"":_(r))}catch(n){if(!V(n))wd(n)}}async function S2s(i){let r=await pd(t(i,s),u);if(!r)return null;try{let e=f().safeParse(ee(r));return e.success?e.data:null}catch{return null}}class yIo{#o=Promise.resolve();#r=0;#e;#i;constructor(){this.#i=TUs(this.#n)}#n=(i)=>{try{if(!hc())return;let r=wN();if(r===void 0)return;if(i!==void 0&&Ko())return;this.#e??=St(()=>this.#o);let e=++this.#r;this.#o=this.#o.then(()=>e===this.#r?dcn(r,i):void 0)}catch(r){a(r)}};flush(){return this.#o}dispose(){this.#i(),this.#o.then(()=>this.#e?.())}}
+export{dcn,S2s,yIo};

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：评论回复的发布
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9tgt55am.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c0pq6qyx.js (12)
  * attribution: placement 12
  */
 import { getLiveState } from "../../liveReplica/liveReplica.js";
@@ -36,7 +36,7 @@ import { evaluateAskingNoHost } from "../../../utils/permissions/permissions.js"
 import { runToolUse, hasTypeField } from "../../tools/toolExecution.js";
 import { markReplyClean } from "./commentState.js";
 
-//@ chunk-9tgt55am.js:56036-56187 placement
+//@ chunk-c0pq6qyx.js:51944-52095 placement
 /**
  * 自动回复是否开启：没有切到 MCP 时看 isAutoreactArmed；切到 MCP 后强制关闭并广播状态。
  */
@@ -49,7 +49,7 @@ function isAutoReactEnabled() {
   }
   return false;
 }
-//@ chunk-9tgt55am.js:56187-56270 placement
+//@ chunk-c0pq6qyx.js:52095-52178 placement
 function isAutoreactArmed() {
   let liveState = getLiveState();
   let autoReactArmed =
@@ -57,7 +57,7 @@ function isAutoreactArmed() {
   setAutoReactWakeEnabled(liveState, autoReactArmed);
   return autoReactArmed;
 }
-//@ chunk-9tgt55am.js:56270-56459 placement
+//@ chunk-c0pq6qyx.js:52178-52367 placement
 function setAutoReactWakeEnabled(liveState, enabled) {
   let wakeEnabled = enabled && !liveState.builtInArtifactHiddenForMcp;
   if (liveState.autoReact.wakeEnabledMemo !== enabled || liveState.autoReact.enabledMemo !== wakeEnabled) {
@@ -66,7 +66,7 @@ function setAutoReactWakeEnabled(liveState, enabled) {
     emitSummonArmsForActivity(liveState.live);
   }
 }
-//@ chunk-9tgt55am.js:56459-56592 placement
+//@ chunk-c0pq6qyx.js:52367-52500 placement
 /**
  * 判断自动回复产生的任务通知是否该丢弃：自动回复未开启，或对应 slug 已被停止。
  */
@@ -74,14 +74,14 @@ function shouldDropAutoReactNotice(noticeId) {
   if (noticeId?.kind !== "task-notification" || noticeId.source !== "artifact-auto-react") return false;
   return !isAutoreactArmed() || (noticeId.slug !== undefined && isSlugStoppedAnywhere(noticeId.slug));
 }
-//@ chunk-9tgt55am.js:56592-56621 placement
+//@ chunk-c0pq6qyx.js:52500-52529 placement
 /**
  * 导出函数 `hasThreadAgentForSlugPost`：参数 e，返回 hasThreadAgentForSlug(e)。
  */
 function hasThreadAgentForSlugPost(slug) {
   return hasThreadAgentForSlug(slug);
 }
-//@ chunk-9tgt55am.js:56621-56732 placement
+//@ chunk-c0pq6qyx.js:52529-52640 placement
 /**
  * 收到 artifact 自动响应的任务通知时，标记该 slug 有待处理的自动响应提示。
  */
@@ -89,7 +89,7 @@ function markAutoReactNotice(slug) {
   if (slug?.kind === "task-notification" && slug.source === "artifact-auto-react" && slug.slug !== undefined)
     markAutoReactNoticePending(slug.slug);
 }
-//@ chunk-9tgt55am.js:56732-56992 placement
+//@ chunk-c0pq6qyx.js:52640-52900 placement
 function disarmAutoreact(liveState) {
   let liveState_2 = getLiveState();
   liveState_2.autoReact.userDisarmed = true;
@@ -105,7 +105,7 @@ function disarmAutoreact(liveState) {
   setAutoReactWakeEnabled(liveState_2, false);
   emitSummonArmsForActivity(liveState_2.live);
 }
-//@ chunk-9tgt55am.js:56992-57290 placement
+//@ chunk-c0pq6qyx.js:52900-53198 placement
 /**
  * 为一次合成的工具调用生成（并缓存）助手 tool_use 消息与用户 tool_result 消息对。
  */
@@ -130,7 +130,7 @@ function getSyntheticToolMessages(publishTranscript) {
   publishTranscript.messages = [assistantMessage, userMessage];
   return publishTranscript.messages;
 }
-//@ chunk-9tgt55am.js:57290-57354 placement
+//@ chunk-c0pq6qyx.js:53198-53262 placement
 function emptyAutoReactMessage(threadId) {
   return {
     message: {
@@ -139,7 +139,7 @@ function emptyAutoReactMessage(threadId) {
     },
   };
 }
-//@ chunk-9tgt55am.js:57354-61025 placement
+//@ chunk-c0pq6qyx.js:53262-56933 placement
 /**
  * 根据回复发布结果更新线程/artifact 状态、通知与扣留提示。
  */
@@ -362,7 +362,7 @@ function applyPostOutcome(outcome) {
     ...probeTag,
   });
 }
-//@ chunk-9tgt55am.js:61025-61481 placement
+//@ chunk-c0pq6qyx.js:56933-57389 placement
 async function recheckReplyTarget(request) {
   let artifactUrl = parseArtifactUrl(request.url);
   if (artifactUrl === null) return false;
@@ -397,7 +397,7 @@ async function recheckReplyTarget(request) {
     !request.recheck.scanRowIds.has(awaitsClaude.id)
   );
 }
-//@ chunk-9tgt55am.js:61481-64634 placement
+//@ chunk-c0pq6qyx.js:57389-60542 placement
 /**
  * 以 Artifact 工具发布评论回复：先复查权限与线程状态，处理被扣留/等待的情况。
  */
@@ -608,14 +608,14 @@ async function postThreadReply(request) {
   return toolResult;
 }
 export {
+  getSyntheticToolMessages,
   isAutoreactArmed,
+  emptyAutoReactMessage,
+  postThreadReply,
+  isAutoReactEnabled,
+  applyPostOutcome,
   disarmAutoreact,
   shouldDropAutoReactNotice,
   markAutoReactNotice,
-  isAutoReactEnabled,
-  getSyntheticToolMessages,
-  emptyAutoReactMessage,
-  postThreadReply,
-  applyPostOutcome,
   hasThreadAgentForSlugPost,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 输出位置（--output 基目录安全检查）与模拟录制的落盘
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (19)
  * attribution: placement 19
  */
 import path from "path";
@@ -45,7 +45,7 @@ import { RECORDING_FILE_RE } from "./mocks/mockRecordings.js";
 import { openNoFollow_2 } from "../../utils/fsSafety/hardenedRead.js";
 import { stripControlChars } from "../../utils/settings/writeQueues.js";
 
-//@ chunk-qchp9vrd.js:311651-312869 placement
+//@ chunk-af1hzzme.js:313115-314333 placement
 async function resolveEvalTargetPlugin(target, isPluginRoot, trust, cwdOverride) {
   let targetPath = path.resolve(getCwd(), target);
   await (isPluginRoot === undefined
@@ -124,14 +124,14 @@ async function resolveEvalTargetPlugin(target, isPluginRoot, trust, cwdOverride)
       nearestSkillDir === null ? await resolveParentPluginDir(targetDir, trust, "core") : null,
   };
 }
-//@ chunk-qchp9vrd.js:312869-312946 placement
+//@ chunk-af1hzzme.js:314333-314410 placement
 class EscapesBaseError extends Error {
   constructor(message) {
     super(message);
     this.name = "EscapesBaseError";
   }
 }
-//@ chunk-qchp9vrd.js:312946-313584 placement
+//@ chunk-af1hzzme.js:314410-315048 placement
 async function ensureOutputBase(
   baseDir,
   segments,
@@ -171,7 +171,7 @@ async function ensureOutputBase(
       return;
   }
 }
-//@ chunk-qchp9vrd.js:313584-313698 placement
+//@ chunk-af1hzzme.js:315048-315162 placement
 /**
  * 从深到浅删除空目录，遇到无法删除的目录即停止。
  */
@@ -186,7 +186,7 @@ async function removeEmptyDirs(createdDirs) {
     }
   }
 }
-//@ chunk-qchp9vrd.js:313698-314073 placement
+//@ chunk-af1hzzme.js:315162-315537 placement
 async function checkOutputLocation(dirPath, baseDir, baseReal, vetOwnership, allowAbsent = false) {
   let problem;
   try {
@@ -207,7 +207,7 @@ async function checkOutputLocation(dirPath, baseDir, baseReal, vetOwnership, all
   await checkInsideOutputBase(dirPath, baseDir, "output location", baseReal);
   return true;
 }
-//@ chunk-qchp9vrd.js:314073-314212 placement
+//@ chunk-af1hzzme.js:315537-315676 placement
 /**
  * 判断目录中是否存在插件组件（.claude-plugin 以外的组件目录或文件）。
  */
@@ -218,7 +218,7 @@ async function hasPluginComponents(pluginDir) {
   }
   return false;
 }
-//@ chunk-qchp9vrd.js:314212-314510 placement
+//@ chunk-af1hzzme.js:315676-315974 placement
 async function checkInsideOutputBase(dirPath, baseDir, label, baseReal) {
   let dirReal;
   let baseRealPath;
@@ -234,7 +234,7 @@ async function checkInsideOutputBase(dirPath, baseDir, label, baseReal) {
       `${label} ${dirPath} resolves to ${dirReal}, outside ${baseRealPath} \u2014 refusing to write there (is it a symlink?)`,
     );
 }
-//@ chunk-qchp9vrd.js:314510-315130 placement
+//@ chunk-af1hzzme.js:315974-316594 placement
 async function resolveEvalDirSource(pluginRoot, evalDirSource) {
   if (evalDirSource.source === "default") return evalDirSource;
   let dirReal;
@@ -274,7 +274,7 @@ async function resolveEvalDirSource(pluginRoot, evalDirSource) {
     segments: parts,
   };
 }
-//@ chunk-qchp9vrd.js:315130-315435 placement
+//@ chunk-af1hzzme.js:316594-316899 placement
 function describeEvalDirScanScope(targetDir, absolutePath, evalDirSource) {
   let quotedPluginRoot = shellSafePath(toDisplayRelativePath(absolutePath));
   return quotedPluginRoot === null
@@ -283,7 +283,7 @@ function describeEvalDirScanScope(targetDir, absolutePath, evalDirSource) {
     : `Only ${targetDir} was scanned; run \`claude plugin eval ${quotedPluginRoot}${isFromEvalDirFlag(evalDirSource)}\` to scan the whole plugin.
 `;
 }
-//@ chunk-qchp9vrd.js:315435-315529 placement
+//@ chunk-af1hzzme.js:316899-316993 placement
 /**
  * 把路径转成可安全放进命令行的形式（Windows 下检查字符）。
  */
@@ -291,7 +291,7 @@ function shellSafePath(displayRelativePath) {
   if (getPlatform() !== "windows") return shellQuoteArgs([displayRelativePath]);
   return /^[A-Za-z0-9_./:\\-]+$/.test(displayRelativePath) ? displayRelativePath : null;
 }
-//@ chunk-qchp9vrd.js:315529-315734 placement
+//@ chunk-af1hzzme.js:316993-317198 placement
 function toDisplayRelativePath(absolutePath) {
   let relativePath = path.relative(getCwd(), absolutePath);
   if (relativePath === "") return ".";
@@ -301,7 +301,7 @@ function toDisplayRelativePath(absolutePath) {
     ? displayPath
     : `./${displayPath}`;
 }
-//@ chunk-qchp9vrd.js:315734-316025 placement
+//@ chunk-af1hzzme.js:317198-317489 placement
 /**
  * 计算评测输出目录重叠检查要使用的根目录集合。
  */
@@ -321,7 +321,7 @@ function resolveOverlapRoots(scope) {
       otherManifestDir !== adoptedAbove,
   };
 }
-//@ chunk-qchp9vrd.js:316025-316206 placement
+//@ chunk-af1hzzme.js:317489-317670 placement
 /**
  * 描述评测目录的来源：--eval-dir、manifest（提示可覆盖）或默认值。
  */
@@ -335,7 +335,7 @@ function describeEvalDirSource(evalDirSource) {
       return "the default";
   }
 }
-//@ chunk-qchp9vrd.js:316206-318414 placement
+//@ chunk-af1hzzme.js:317670-319878 placement
 /**
  * 把本次运行的模拟录制写到输出目录（只覆盖本运行写的文件）。
  */
@@ -455,10 +455,10 @@ ${flattened.join(`
   );
   for (let summaryLine of flattened) writeStderrLine(`  ${summaryLine}`);
 }
-//@ chunk-qchp9vrd.js:318414-318742 placement
+//@ chunk-af1hzzme.js:319878-320206 placement
 var MOCK_RECORDING_REPLAY_HINT =
   "To replay one on later runs (no model call), copy the file into the .replay/ directory shown after it - the one beside the mock that produced it. Each line carries the sha256 of the file as written; check the copy you take against the hash printed to the terminal (this file sits where the workload could still write):";
-//@ chunk-qchp9vrd.js:318742-319140 placement
+//@ chunk-af1hzzme.js:320206-320604 placement
 async function writeAdoptInstructions(dir) {
   try {
     if (!(await lstat(dir)).isDirectory()) return false;
@@ -485,7 +485,7 @@ async function writeAdoptInstructions(dir) {
   }
   return true;
 }
-//@ chunk-qchp9vrd.js:319140-319364 placement
+//@ chunk-af1hzzme.js:320604-320828 placement
 async function fileHasExactContent(filePath, json) {
   let noFollow = await openNoFollow_2(filePath);
   if (!noFollow.ok) return false;
@@ -498,7 +498,7 @@ async function fileHasExactContent(filePath, json) {
     await noFollow.value.close();
   }
 }
-//@ chunk-qchp9vrd.js:319364-319722 placement
+//@ chunk-af1hzzme.js:320828-321186 placement
 async function writeOutputFile(filePath, content, create) {
   let regularFile = await openRegularFileSafely(filePath, create ? "create" : "write", "output file");
   try {
@@ -518,7 +518,7 @@ async function writeOutputFile(filePath, content, create) {
     throw error;
   }
 }
-//@ chunk-qchp9vrd.js:319722-319769 placement
+//@ chunk-af1hzzme.js:321186-321233 placement
 /**
  * 往 stderr 写一行（去控制字符）。
  */

@@ -3,9 +3,9 @@
  *
  * 欢迎框（Logo v2）显示数据与路径按宽度截断
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/logoV2Utils.ts
- * pieces: chunk-8jypjjdf.js (4), chunk-t3sg9e26.js (1)
+ * pieces: chunk-rzkdv0c6.js (1), chunk-tvbhy3tn.js (4)
  * attribution: fingerprint 4, layout 1
  */
 import { bunStringWidth } from "../ink/stringWidth.js";
@@ -20,14 +20,14 @@ import { getDisplayPath } from "./file.js";
 import { getCwd } from "./cwd.js";
 import { getAPIProvider, THIRD_PARTY_PROVIDER_LABELS } from "./model/providers.js";
 import { isClaudeAISubscriber, getSubscriptionName } from "./auth.js";
-import { getInitialSettings_2 } from "./settings/settings.js";
+import { getInitialSettings } from "./settings/settings.js";
 
-//@ chunk-8jypjjdf.js:18653-18713 fingerprint (2.1.88 match: getLayoutMode, 1)
+//@ chunk-tvbhy3tn.js:18655-18715 fingerprint (2.1.88 match: getLayoutMode, 1)
 function getLayoutMode(columns) {
   if (columns >= 70) return "horizontal";
   return "compact";
 }
-//@ chunk-8jypjjdf.js:18713-19333 layout
+//@ chunk-tvbhy3tn.js:18715-19335 layout
 /**
  * 按终端显示宽度截断路径：保留首段与末段，中间用 … 代替。
  */
@@ -67,7 +67,7 @@ function truncatePathForDisplay(path, maxLength) {
   if (middleParts.length === 0) return `${first}${separator}${ellipsis}${separator}${last}`;
   return `${first}${separator}${ellipsis}${separator}${middleParts.join(separator)}${separator}${last}`;
 }
-//@ chunk-8jypjjdf.js:19333-20174 fingerprint (2.1.88 match: getLogoDisplayData, 0.471)
+//@ chunk-tvbhy3tn.js:19335-20176 fingerprint (2.1.88 match: getLogoDisplayData, 0.471)
 /**
  * 欢迎框（Logo v2）显示数据：版本、cwd、账号/计费信息等。
  */
@@ -79,10 +79,10 @@ function getLogoDisplayData() {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION
@@ -107,7 +107,7 @@ function getLogoDisplayData() {
       : isClaudeAISubscriber()
         ? getSubscriptionName()
         : "API Usage Billing";
-  let agentName = getInitialSettings_2().agent;
+  let agentName = getInitialSettings().agent;
   return {
     version,
     cwd,
@@ -115,7 +115,7 @@ function getLogoDisplayData() {
     agentName,
   };
 }
-//@ chunk-8jypjjdf.js:20174-20372 fingerprint (2.1.88 match: formatModelAndBilling, 0.846)
+//@ chunk-tvbhy3tn.js:20176-20374 fingerprint (2.1.88 match: formatModelAndBilling, 0.846)
 function formatModelAndBilling(modelName, billingType, availableWidth, modelDisplay) {
   if (bunStringWidth(modelDisplay) + 3 + bunStringWidth(billingType) > availableWidth)
     return {
@@ -129,7 +129,7 @@ function formatModelAndBilling(modelName, billingType, availableWidth, modelDisp
     truncatedBilling: billingType,
   };
 }
-//@ chunk-t3sg9e26.js:1126-1313 fingerprint (2.1.88 match: truncatePath, 0.711)
+//@ chunk-rzkdv0c6.js:1125-1312 fingerprint (2.1.88 match: truncatePath, 0.712)
 function truncatePath(env, keyName, includeCaseInsensitive) {
   let middleParts = [];
   for (let [key, value] of Object.entries(env)) {
@@ -147,4 +147,4 @@ function truncatePath(env, keyName, includeCaseInsensitive) {
   }
   return middleParts;
 }
-export { getLogoDisplayData, truncatePathForDisplay, formatModelAndBilling, getLayoutMode, truncatePath };
+export { truncatePath, getLogoDisplayData, truncatePathForDisplay, formatModelAndBilling, getLayoutMode };

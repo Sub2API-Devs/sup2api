@@ -3,9 +3,9 @@
  *
  * 网关登录界面与托管设置重载提示（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s5p7fp0c.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mx6cbnn0.js (13)
  * attribution: placement 13
  */
 import {
@@ -69,12 +69,12 @@ import { Spinner } from "./Spinner.js";
 import { usePermissionExplainerUI } from "./permissions/PermissionExplanation.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s5p7fp0c.js:2310-2314 placement
+//@ chunk-mx6cbnn0.js:2317-2321 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s5p7fp0c.js:2310", () => {
+deferInit("chunk-mx6cbnn0.js:2317", () => {
   init_react_production();
 });
-//@ chunk-s5p7fp0c.js:2314-2496 placement
+//@ chunk-mx6cbnn0.js:2321-2503 placement
 /**
  * Console 账号登录被拒的错误；fallbackCures 表示改用其他登录方式可解决，causeSummary 为原因摘要。
  */
@@ -89,7 +89,7 @@ class ConsoleProfileLoginError extends Error {
     this.causeSummary = options.fallbackCures ? options.causeSummary : null;
   }
 }
-//@ chunk-s5p7fp0c.js:2496-2771 placement
+//@ chunk-mx6cbnn0.js:2503-2778 placement
 /**
  * 执行 Console 账号登录并记录 oauth_console_profile_login 结果（成功/被拒后回退/失败）。
  */
@@ -109,7 +109,7 @@ async function loginWithConsoleProfile(oauthService, profile, options = {}) {
     throw error;
   }
 }
-//@ chunk-s5p7fp0c.js:2771-3854 placement
+//@ chunk-mx6cbnn0.js:2778-3934 placement
 /**
  * Console 账号登录主体：预检可能拒绝（包成 ConsoleProfileLoginError），走 OAuth 流程、校验令牌、吊销被替换的 claude.ai 登录、安装令牌并保存账号信息；保存失败时撤销令牌。
  */
@@ -156,7 +156,7 @@ async function performConsoleProfileLogin(
   }
   await revokeReplacedClaudeAiLogin(await readStoredClaudeAiLogin());
   onInstallStart?.();
-  let installed = await installOAuthTokens(login, {});
+  let { departingLoginMayRemain, ...loginProfile } = await installOAuthTokens(login, {});
   let savedProfile;
   try {
     let tokenAccount = login.tokenAccount;
@@ -181,11 +181,16 @@ async function performConsoleProfileLogin(
     }),
   );
   await isSameAccount({
-    ...installed,
+    ...loginProfile,
   });
-  return savedProfile;
+  return {
+    ...savedProfile,
+    ...(departingLoginMayRemain && {
+      departingLoginMayRemain,
+    }),
+  };
 }
-//@ chunk-s5p7fp0c.js:3854-4063 placement
+//@ chunk-mx6cbnn0.js:3934-4143 placement
 async function readStoredClaudeAiLogin() {
   if (getAPIProvider() !== "firstParty") return null;
   let secureStorage = getSecureStorage();
@@ -198,7 +203,7 @@ async function readStoredClaudeAiLogin() {
       }
     : null;
 }
-//@ chunk-s5p7fp0c.js:4063-4312 placement
+//@ chunk-mx6cbnn0.js:4143-4392 placement
 async function revokeReplacedClaudeAiLogin(storedClaudeAiLogin) {
   if (storedClaudeAiLogin === null) return;
   await revokeOAuthToken(storedClaudeAiLogin.refreshToken, storedClaudeAiLogin.clientId);
@@ -216,7 +221,7 @@ async function revokeReplacedClaudeAiLogin(storedClaudeAiLogin) {
     );
   }
 }
-//@ chunk-s5p7fp0c.js:4312-4818 placement
+//@ chunk-mx6cbnn0.js:4392-4898 placement
 function GATEWAY_LOGIN_ERROR_TEXTS(login) {
   if (!login.scopes.includes(CLAUDE_AI_INFERENCE_SCOPE))
     return Error(
@@ -235,11 +240,11 @@ function GATEWAY_LOGIN_ERROR_TEXTS(login) {
     expiresAtMs: login.expiresAt,
   };
 }
-//@ chunk-s5p7fp0c.js:4818-4886 placement
+//@ chunk-mx6cbnn0.js:4898-4966 placement
 async function refreshGatewayToken(login) {
   if (login.refreshToken) await revokeOAuthToken(login.refreshToken, CONSOLE_PROFILE_CLIENT_ID);
 }
-//@ chunk-s5p7fp0c.js:4886-5325 placement
+//@ chunk-mx6cbnn0.js:4966-5406 placement
 function MANAGED_RELOAD_NOTICES({ showSecurityDialog, storageV5, credentials }) {
   let settingsReload = refreshRemoteManagedSettings(showSecurityDialog, storageV5, credentials).catch(
     (error) => {
@@ -262,20 +267,20 @@ function MANAGED_RELOAD_NOTICES({ showSecurityDialog, storageV5, credentials }) 
   );
   return settingsReload;
 }
-//@ chunk-s5p7fp0c.js:5325-5329 placement
+//@ chunk-mx6cbnn0.js:5406-5410 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s5p7fp0c.js:5325", () => {
+deferInit("chunk-mx6cbnn0.js:5406", () => {
   init_react_production();
 });
-//@ chunk-s5p7fp0c.js:5329-5352 placement
+//@ chunk-mx6cbnn0.js:5410-5433 placement
 function returnFalse() {
   return false;
 }
-//@ chunk-s5p7fp0c.js:5352-5388 placement
+//@ chunk-mx6cbnn0.js:5433-5469 placement
 function isEscape(input, key) {
   return key.escape;
 }
-//@ chunk-s5p7fp0c.js:5388-10633 placement
+//@ chunk-mx6cbnn0.js:5469-10714 placement
 /**
  * 网关登录界面：显示网关 URL 来源（设置文件或托管设置）并完成登录
  */

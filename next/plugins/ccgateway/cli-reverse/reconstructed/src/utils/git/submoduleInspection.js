@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：检查单个子模块目录（.git 文件、gitdir 位置、嵌套仓库）；从 ls-files 输出中收集 gitlink 路径等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-rvr0tzz9.js (30)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-e3y61d7t.js (30)
  * attribution: placement 30
  */
 import { join, resolve, dirname, sep, isAbsolute } from "path";
@@ -31,7 +31,7 @@ import { buildFilterNeutralizingArgs } from "./gitConfigFilters.js";
 import { hasDotSegment } from "../pathClassification.js";
 import { getPlatform } from "../platform.js";
 
-//@ chunk-rvr0tzz9.js:917-1017 placement
+//@ chunk-e3y61d7t.js:1283-1383 placement
 var SUBMODULE_DEADLINE_MS = 15000;
 var MAX_SUBMODULES = 512;
 var MAX_DEPTH = 8;
@@ -41,7 +41,7 @@ var MAX_PATH_LENGTH = 4096;
 var MAX_OUTPUT_BYTES = 8388608;
 var MAX_LINE_BYTES = 74 + 4 * MAX_PATH_LENGTH;
 var DEADLINE_REASON = "submodule inspection deadline";
-//@ chunk-rvr0tzz9.js:1017-1200 placement
+//@ chunk-e3y61d7t.js:1383-1566 placement
 /**
  * 在截止时间内检查子模块是否有改动（超时/不可读视为无法验证）。
  */
@@ -56,7 +56,7 @@ async function inspectSubmodules(repoDir, options) {
     };
   }
 }
-//@ chunk-rvr0tzz9.js:1200-1405 placement
+//@ chunk-e3y61d7t.js:1566-1771 placement
 /**
  * 把检查结果转为改动列表。
  */
@@ -75,7 +75,7 @@ function submoduleChanges(result) {
       }
     : undefined;
 }
-//@ chunk-rvr0tzz9.js:1405-2534 placement
+//@ chunk-e3y61d7t.js:1771-2900 placement
 /**
  * 描述子模块改动或无法验证的原因。
  */
@@ -105,16 +105,16 @@ function describeSubmoduleChanges(result) {
       return "inspecting its submodules took too long";
   }
 }
-//@ chunk-rvr0tzz9.js:2534-2559 placement
+//@ chunk-e3y61d7t.js:2900-2925 placement
 var LABEL_HEAD_TAIL = {
   head: 24,
   tail: 16,
 };
-//@ chunk-rvr0tzz9.js:2559-2589 placement
+//@ chunk-e3y61d7t.js:2925-2955 placement
 function printableShortLabel(path) {
   return printableLabel(path, LABEL_HEAD_TAIL);
 }
-//@ chunk-rvr0tzz9.js:2589-3483 placement
+//@ chunk-e3y61d7t.js:2955-3849 placement
 /**
  * 子模块检查的实际逻辑（gitmodules、ls-files、各子模块状态）。
  */
@@ -196,7 +196,7 @@ async function inspectSubmodulesUnsafe(repoDir, deadlineMs) {
     withUntrackedFiles,
   };
 }
-//@ chunk-rvr0tzz9.js:3483-3746 placement
+//@ chunk-e3y61d7t.js:3849-4112 placement
 /**
  * 读 .gitmodules 中的子模块路径。
  */
@@ -214,7 +214,7 @@ async function listSubmodulePaths(cwd, options) {
   let entries = await gitConfigFromStdin(gitmodulesEntry.text, "^submodule\\..*\\.path$", cwd, options);
   return entries === "unreadable" ? entries : dedupeSubmodulePaths(entries.map((entry) => entry.value));
 }
-//@ chunk-rvr0tzz9.js:3746-4232 placement
+//@ chunk-e3y61d7t.js:4112-4598 placement
 /**
  * 用 git config --file - 读取配置。
  */
@@ -256,27 +256,34 @@ async function gitConfigFromStdin(input, keyPattern, cwd, { repository, env, dea
   }
   return entries;
 }
-//@ chunk-rvr0tzz9.js:4232-4279 placement
+//@ chunk-e3y61d7t.js:4598-4649 placement
 /**
  * 列出索引中的 gitlink（子模块）条目。
  */
-async function listGitlinkEntries(cwd, options) {
-  return listGitlinks(cwd, options, "160000");
+async function listGitlinkEntries(cwd, options, reader) {
+  return listGitlinks(cwd, options, "160000", reader);
 }
-//@ chunk-rvr0tzz9.js:4279-4326 placement
+//@ chunk-e3y61d7t.js:4649-4696 placement
 /**
  * 列出索引中的符号链接条目。
  */
 async function listSymlinkEntries(cwd, options) {
   return listGitlinks(cwd, options, "120000");
 }
-//@ chunk-rvr0tzz9.js:4326-4654 placement
+//@ chunk-e3y61d7t.js:4696-5061 placement
 /**
  * 列出索引中的 gitlink（子模块）条目。
  */
-async function listGitlinks(cwd, options, mode) {
-  let args = [...options.repository, ...GIT_SAFE_GLOBAL_ARGS, "ls-files", "-s", "-z"];
-  let result = await execFileNoThrowWithCwd(gitExe(), args, {
+async function listGitlinks(cwd, options, reader, verbose) {
+  let args = [
+    ...options.repository,
+    ...GIT_SAFE_GLOBAL_ARGS,
+    "ls-files",
+    "-s",
+    ...(verbose === undefined ? [] : ["-v"]),
+    "-z",
+  ];
+  let result = await execFileNoThrowWithCwd(options.git ?? gitExe(), args, {
     cwd,
     env: options.env,
     timeout: options.deadlineMs,
@@ -284,21 +291,21 @@ async function listGitlinks(cwd, options, mode) {
     preserveOutputOnError: false,
     stdin: "ignore",
   });
-  if (result.maxBufferExceeded) return streamGitlinks(cwd, args, options, mode);
+  if (result.maxBufferExceeded) return streamGitlinks(cwd, args, options, reader, verbose);
   if (result.code !== 0) return "unreadable";
-  let collector = new GitlinkCollector(mode);
+  let collector = new GitlinkCollector(reader, verbose);
   collector.push(Buffer.from(result.stdout, "utf8"));
   return collector.end();
 }
-//@ chunk-rvr0tzz9.js:4654-5202 placement
+//@ chunk-e3y61d7t.js:5061-5618 placement
 /**
  * 输出过大时流式读取 gitlink。
  */
-async function streamGitlinks(cwd, args, { env, deadlineMs }, mode) {
-  let safeGitInvocation = buildSafeGitInvocation(gitExe(), args, env);
-  let collector = new GitlinkCollector(mode);
+async function streamGitlinks(cwd, args, { git = gitExe(), env, deadlineMs }, mode, reader) {
+  let safeGitInvocation = buildSafeGitInvocation(git, args, env);
+  let collector = new GitlinkCollector(mode, reader);
   try {
-    let child = safeSpawn(gitExe(), safeGitInvocation?.args ?? args, {
+    let child = safeSpawn(git, safeGitInvocation?.args ?? args, {
       cwd,
       env: safeGitInvocation?.env ?? env,
       timeout: deadlineMs,
@@ -323,19 +330,23 @@ async function streamGitlinks(cwd, args, { env, deadlineMs }, mode) {
     return "unreadable";
   }
 }
-//@ chunk-rvr0tzz9.js:5202-6433 placement
+//@ chunk-e3y61d7t.js:5618-7302 placement
 /**
  * 从 ls-files 输出中收集 gitlink 路径。
  */
 class GitlinkCollector {
+  bitsSeen;
   prefix;
   paths = new Set();
   record = "none";
   pending = [];
   pendingBytes = 0;
   verdict = undefined;
-  constructor(modePrefix) {
+  letterBytes;
+  constructor(modePrefix, bitsSeen) {
+    this.bitsSeen = bitsSeen;
     this.prefix = `${modePrefix} `;
+    this.letterBytes = bitsSeen === undefined ? 0 : 2;
   }
   push(chunk) {
     let cursor = 0;
@@ -359,9 +370,11 @@ class GitlinkCollector {
     this.pending.push(chunk);
     this.pendingBytes += chunk.length;
     if (this.record === "none") this.record = "undecided";
-    if (this.record === "undecided" && this.pendingBytes >= this.prefix.length) {
+    let headerBytes = this.letterBytes + this.prefix.length;
+    if (this.record === "undecided" && this.pendingBytes >= headerBytes) {
       let combined = this.pending.length === 1 ? chunk : Buffer.concat(this.pending);
-      if (combined.toString("latin1", 0, this.prefix.length) === this.prefix) {
+      this.noteLetter(combined.toString("latin1", 0, this.letterBytes));
+      if (combined.toString("latin1", this.letterBytes, headerBytes) === this.prefix) {
         this.record = "listed";
         this.pending = [combined];
       } else {
@@ -371,7 +384,18 @@ class GitlinkCollector {
     }
     if (this.record === "listed" && this.pendingBytes > MAX_LINE_BYTES) this.verdict = "unreadable";
   }
+  noteLetter(letterPair) {
+    if (this.bitsSeen === undefined) return;
+    if (!/^[A-Za-z] $/.test(letterPair)) {
+      this.verdict = "unreadable";
+      return;
+    }
+    let letter = letterPair[0];
+    this.bitsSeen.assumeUnchanged ||= letter === letter.toLowerCase();
+    this.bitsSeen.skipWorktree ||= letter.toUpperCase() === "S";
+  }
   completeRecord() {
+    if (this.record === "undecided" && this.bitsSeen !== undefined) this.verdict ??= "unreadable";
     if (this.record === "listed" && this.verdict === undefined) {
       let str = Buffer.concat(this.pending).toString("utf8");
       let index = str.indexOf("\t");
@@ -386,7 +410,7 @@ class GitlinkCollector {
     this.pendingBytes = 0;
   }
 }
-//@ chunk-rvr0tzz9.js:6433-6579 placement
+//@ chunk-e3y61d7t.js:7302-7448 placement
 function dedupeSubmodulePaths(paths) {
   let unique = new Set();
   for (let path of paths) {
@@ -396,7 +420,7 @@ function dedupeSubmodulePaths(paths) {
   }
   return [...unique];
 }
-//@ chunk-rvr0tzz9.js:6579-6820 placement
+//@ chunk-e3y61d7t.js:7448-7689 placement
 function isSafeSubmodulePath(path) {
   if (path.length === 0 || path.length > MAX_PATH_LENGTH) return false;
   return path.split("/").every((segment) => {
@@ -412,7 +436,7 @@ function isSafeSubmodulePath(path) {
     );
   });
 }
-//@ chunk-rvr0tzz9.js:6820-8634 placement
+//@ chunk-e3y61d7t.js:7689-9504 placement
 /**
  * 检查单个子模块目录（.git 文件、gitdir 位置、嵌套仓库）。
  */
@@ -554,7 +578,7 @@ async function inspectSubmodule(repoDir, submodulePath, modulesDirs, options) {
   if (filtered.some((line) => !line.startsWith("??"))) return "tracked";
   return filtered.length > 0 ? "untracked" : "clean";
 }
-//@ chunk-rvr0tzz9.js:8634-8837 placement
+//@ chunk-e3y61d7t.js:9504-9707 placement
 async function classifySubmoduleDir(repoDir, submodulePath) {
   let dirKind = await inspectSubmoduleDir(repoDir, submodulePath);
   switch (dirKind) {
@@ -571,17 +595,17 @@ async function classifySubmoduleDir(repoDir, submodulePath) {
       };
   }
 }
-//@ chunk-rvr0tzz9.js:8837-8879 placement
+//@ chunk-e3y61d7t.js:9707-9749 placement
 function isPathUnder(path, rootPath) {
   return path.startsWith(rootPath + sep);
 }
-//@ chunk-rvr0tzz9.js:8879-8943 placement
+//@ chunk-e3y61d7t.js:9749-9813 placement
 var MAX_GITDIR_POINTER_DEPTH = 5;
 var MAX_SUBMODULE_NESTING = 10;
 var MAX_GITDIR_POINTER_ENTRIES = 16;
 var DRIVE_PATH_WITHOUT_SEP_RE = /^[A-Za-z]:(?![\\/])/;
 var LEADING_PARENT_SEGMENTS_RE = /^(?:\.\.\/+)*/;
-//@ chunk-rvr0tzz9.js:8943-9046 placement
+//@ chunk-e3y61d7t.js:9813-9916 placement
 function isUnsafeGitdirPointer(pointer, baseDir) {
   return (
     pointer.includes("\uFFFD") ||
@@ -591,7 +615,7 @@ function isUnsafeGitdirPointer(pointer, baseDir) {
     rawPointerPathIsUnsafe(pointer, baseDir)
   );
 }
-//@ chunk-rvr0tzz9.js:9046-9886 placement
+//@ chunk-e3y61d7t.js:9916-10756 placement
 /**
  * 检查子模块 gitdir 必须在 .git/modules 内。
  */
@@ -650,10 +674,10 @@ async function checkModuleGitDir(objectsDir, depth, seen) {
   }
   return;
 }
-//@ chunk-rvr0tzz9.js:9886-9978 placement
+//@ chunk-e3y61d7t.js:10756-10848 placement
 var SUBMODULE_UNSAFE_CONFIG_RE =
   "^(include\\.path|includeif\\..*\\.path|core\\.excludesfile|core\\.attributesfile)$";
-//@ chunk-rvr0tzz9.js:9978-10749 placement
+//@ chunk-e3y61d7t.js:10848-11619 placement
 /**
  * 检查子模块配置是否含危险项。
  */
@@ -702,15 +726,15 @@ async function checkModuleConfig(configPath, cwd, repoDir, depth, seen) {
   }
   return;
 }
-//@ chunk-rvr0tzz9.js:10749-10895 placement
-async function anySubmoduleCheckedOut(path, options) {
-  let gitlinks = await listGitlinkEntries(path, options);
+//@ chunk-e3y61d7t.js:11619-11765 placement
+async function anySubmoduleCheckedOut(repoDir, options) {
+  let gitlinks = await listGitlinkEntries(repoDir, options);
   if (typeof gitlinks === "string") return true;
-  return (await Promise.all(gitlinks.map((path_2) => inspectSubmoduleDir(path, path_2)))).some(
+  return (await Promise.all(gitlinks.map((path) => inspectSubmoduleDir(repoDir, path)))).some(
     (state) => state !== "absent",
   );
 }
-//@ chunk-rvr0tzz9.js:10895-11138 placement
+//@ chunk-e3y61d7t.js:11765-12008 placement
 async function inspectSubmoduleDir(repoDir, submodulePath) {
   let walkResult = await walkSubmodulePath(repoDir, submodulePath);
   if (walkResult.kind !== "directory") return walkResult.kind;
@@ -723,7 +747,7 @@ async function inspectSubmoduleDir(repoDir, submodulePath) {
   let emptyKind = await isDirEmpty(walkResult.path);
   return emptyKind === "absent" || emptyKind === "untracked" ? emptyKind : "unreadable";
 }
-//@ chunk-rvr0tzz9.js:11138-11374 placement
+//@ chunk-e3y61d7t.js:12008-12244 placement
 async function isDirEmpty(path) {
   let dirHandle;
   try {
@@ -747,7 +771,7 @@ async function isDirEmpty(path) {
     } catch {}
   }
 }
-//@ chunk-rvr0tzz9.js:11374-11590 placement
+//@ chunk-e3y61d7t.js:12244-12460 placement
 async function walkSubmodulePath(repoDir, submodulePath) {
   let currentDir = repoDir;
   for (let segment of submodulePath.split("/")) {
@@ -772,11 +796,11 @@ async function walkSubmodulePath(repoDir, submodulePath) {
     path: currentDir,
   };
 }
-//@ chunk-rvr0tzz9.js:11590-11639 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-e3y61d7t.js:12460-12509 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isNotFoundCode(realCandidate) {
   return realCandidate === "ENOENT" || realCandidate === "ENOTDIR";
 }
-//@ chunk-rvr0tzz9.js:11639-12472 placement
+//@ chunk-e3y61d7t.js:12509-13342 placement
 /**
  * 判断路径类型（目录/文件/其他/不存在）。
  */
@@ -867,10 +891,10 @@ async function statEntry(filePath, maxBytes) {
   }
 }
 export {
-  submoduleChanges,
-  inspectSubmodules,
-  describeSubmoduleChanges,
   listSubmodulePaths,
   listGitlinkEntries,
+  inspectSubmodules,
+  submoduleChanges,
+  describeSubmoduleChanges,
   listSymlinkEntries,
 };

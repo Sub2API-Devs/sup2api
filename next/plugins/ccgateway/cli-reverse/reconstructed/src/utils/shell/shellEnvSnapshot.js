@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：shell 环境快照
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (12)
  * attribution: placement 12
  */
 import { logForDebugging } from "../debug.js";
@@ -15,7 +15,7 @@ import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1015407-1015747 placement
+//@ chunk-5xgkngpb.js:1029202-1029542 placement
 /**
  * Claude Code 启动 shell 时总会设置的环境变量名（SHELL、GIT_EDITOR、CLAUDECODE、会话 id、TMPDIR、BUN_OPTIONS 等）。
  */
@@ -42,7 +42,7 @@ var ALWAYS_SPAWN_ENV_KEYS = [
   "CLAUDE_CODE_INVOKED_SKILLS",
   ...[],
 ];
-//@ chunk-e6aww6q8.js:1015747-1016473 placement
+//@ chunk-5xgkngpb.js:1029542-1030268 placement
 /**
  * shell 环境快照状态：快照是否可用/已落定、最近检查的会话环境变量键、探测到的启动环境键、shell 导出的变量，以及据此计算 spawn 时会出现的环境键集合。
  */
@@ -96,55 +96,55 @@ class ShellEnvSnapshotState {
     this.#r = undefined;
   }
 }
-//@ chunk-e6aww6q8.js:1016473-1016500 placement
+//@ chunk-5xgkngpb.js:1030268-1030295 placement
 var shellEnvSnapshotByHost; // deferred: uses ShellEnvSnapshotState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1016473", () => {
+deferInit("chunk-5xgkngpb.js:1030268", () => {
   shellEnvSnapshotByHost = new HostScoped(() => new ShellEnvSnapshotState());
 });
-//@ chunk-e6aww6q8.js:1016500-1016538 placement
+//@ chunk-5xgkngpb.js:1030295-1030333 placement
 function shellEnvSnapshot() {
   return shellEnvSnapshotByHost.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:1016538-1016584 placement
+//@ chunk-5xgkngpb.js:1030333-1030379 placement
 function markSnapshotAvailable(snapshot) {
   shellEnvSnapshot().markSnapshotAvailable(snapshot);
 }
-//@ chunk-e6aww6q8.js:1016584-1016644 placement
+//@ chunk-5xgkngpb.js:1030379-1030439 placement
 function setLastCheckedSessionEnvVarKeys(keys) {
   shellEnvSnapshot().replaceLastCheckedSessionEnvVarKeys(keys);
 }
-//@ chunk-e6aww6q8.js:1016644-1016700 placement
+//@ chunk-5xgkngpb.js:1030439-1030495 placement
 function getLastCheckedSessionEnvVarKeys() {
   return shellEnvSnapshot().lastCheckedSessionEnvVarKeys;
 }
-//@ chunk-e6aww6q8.js:1016700-1016745 placement
+//@ chunk-5xgkngpb.js:1030495-1030540 placement
 function setProbedEnvKeys(keys) {
   shellEnvSnapshot().replaceProbedEnvKeys(keys);
 }
-//@ chunk-e6aww6q8.js:1016745-1016788 placement
+//@ chunk-5xgkngpb.js:1030540-1030583 placement
 function reportShellExports(shellExports) {
   shellEnvSnapshot().reportShellExports(shellExports);
 }
-//@ chunk-e6aww6q8.js:1016788-1016850 placement
+//@ chunk-5xgkngpb.js:1030583-1030645 placement
 function wasShellExportReported(name) {
   return Object.hasOwn(shellEnvSnapshot().shellExports ?? {}, name);
 }
-//@ chunk-e6aww6q8.js:1016850-1016906 placement
+//@ chunk-5xgkngpb.js:1030645-1030702 placement
 function sessionEnvVarNameSet(options) {
   return new Set(options.sessionEnvVars?.keys());
 }
-//@ chunk-e6aww6q8.js:1016906-1016950 placement
+//@ chunk-5xgkngpb.js:1030702-1030746 placement
 function spawnEnvKeysForSession(options) {
   return shellEnvSnapshot().spawnEnvKeys(options);
 }
 export {
   shellEnvSnapshot,
-  spawnEnvKeysForSession,
-  sessionEnvVarNameSet,
-  wasShellExportReported,
-  setLastCheckedSessionEnvVarKeys,
   getLastCheckedSessionEnvVarKeys,
+  sessionEnvVarNameSet,
   setProbedEnvKeys,
   markSnapshotAvailable,
+  spawnEnvKeysForSession,
+  wasShellExportReported,
+  setLastCheckedSessionEnvVarKeys,
   reportShellExports,
 };

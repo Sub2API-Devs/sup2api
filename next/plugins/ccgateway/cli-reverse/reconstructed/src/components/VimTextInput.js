@@ -3,9 +3,9 @@
  *
  * vim 模式文本输入：useVimInput + BaseTextInput，并显示 INSERT/NORMAL/VISUAL 模式。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/VimTextInput.tsx
- * pieces: chunk-ey2qag4x.js (2)
+ * pieces: chunk-p1yqn9ds.js (2)
  * attribution: placement 1, fingerprint 1
  */
 import {
@@ -29,12 +29,12 @@ import { Box } from "../ink/components/Text.js";
 import { BaseTextInput } from "./BaseTextInput.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ey2qag4x.js:23710-23714 placement
+//@ chunk-p1yqn9ds.js:23539-23543 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ey2qag4x.js:23710", () => {
+deferInit("chunk-p1yqn9ds.js:23539", () => {
   init_react_production();
 });
-//@ chunk-ey2qag4x.js:23714-25844 fingerprint (2.1.88 match: VimTextInput, 0.629)
+//@ chunk-p1yqn9ds.js:23543-25631 fingerprint (2.1.88 match: VimTextInput, 0.62)
 /**
  * vim 模式输入框：在 TextInput 基础上显示当前 vim 模式（NORMAL/VISUAL/VISUAL LINE）。
  */
@@ -67,7 +67,6 @@ function VimTextInput(props) {
     disableCtrlCClear: props.disableCtrlCClear,
     cursorChar: props.showCursor && !nativeCursorEnabled ? " " : "",
     preserveTrailingWhitespace: isTerminalFocused,
-    highlightPastedText: props.highlightPastedText,
     invert: terminalFocus ? inverseText : (text) => text,
     themeText: color("text", theme),
     columns: props.columns,

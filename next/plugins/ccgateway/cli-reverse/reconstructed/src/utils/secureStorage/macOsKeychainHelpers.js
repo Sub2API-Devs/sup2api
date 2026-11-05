@@ -3,23 +3,23 @@
  *
  * macOS 钥匙串服务名/账户名计算与每宿主读缓存状态。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/secureStorage/macOsKeychainHelpers.ts
- * pieces: chunk-gwwacf44.js (13)
+ * pieces: chunk-rfqytzvf.js (13)
  * attribution: fingerprint 5, layout 7, callgraph-fingerprint 1
  */
 import { join } from "path";
 import { homedir, userInfo } from "os";
 import { createHash } from "crypto";
-import { getClaudeConfigDir } from "../envUtils.js";
+import { getClaudeConfigDir } from "../markdownConfigLoader.js";
 import { isDiskless, getRootSession } from "../../bootstrap/state.js";
 import { getOauthConfig } from "../../constants/oauth.js";
 import { HostScoped } from "../hostScoped.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-gwwacf44.js:442-465 fingerprint (2.1.88 match: CREDENTIALS_SERVICE_SUFFIX, 1)
+//@ chunk-rfqytzvf.js:442-465 fingerprint (2.1.88 match: CREDENTIALS_SERVICE_SUFFIX, 1)
 var CREDENTIALS_SERVICE_SUFFIX = "-credentials";
-//@ chunk-gwwacf44.js:465-600 layout (2.1.88 match: getProjectDirsUpToHome, 0.855)
+//@ chunk-rfqytzvf.js:465-600 layout (2.1.88 match: getProjectDirsUpToHome, 0.854)
 /**
  * 安全存储使用的配置目录：CLAUDE_SECURESTORAGE_CONFIG_DIR 优先（空串退回 ~/.claude），否则用 Claude 配置目录；NFC 归一。用于钥匙串服务名后缀。旧版名 getProjectDirsUpToHome 错配。
  */
@@ -29,14 +29,14 @@ function getProjectDirsUpToHome() {
     return (envClaudeSecurestorageConfigDir || join(homedir(), ".claude")).normalize("NFC");
   return getClaudeConfigDir();
 }
-//@ chunk-gwwacf44.js:600-636 layout
+//@ chunk-rfqytzvf.js:600-636 layout
 /**
  * keychainProjectDirs：钥匙串服务名用到的项目目录。
  */
 function keychainProjectDirs() {
   return isDiskless() ? null : getProjectDirsUpToHome();
 }
-//@ chunk-gwwacf44.js:636-906 fingerprint (2.1.88 match: getMacOsKeychainStorageServiceName, 0.839)
+//@ chunk-rfqytzvf.js:636-906 fingerprint (2.1.88 match: getMacOsKeychainStorageServiceName, 0.839)
 /**
  * macOS 钥匙串服务名："Claude Code" + OAuth 后缀 + 后缀 + （设置了 CLAUDE_CONFIG_DIR / CLAUDE_SECURESTORAGE_CONFIG_DIR 时）配置目录 sha256 前 8 位。
  */
@@ -55,9 +55,9 @@ function getMacOsKeychainStorageServiceName(serviceSuffix = "") {
     : `-${createHash("sha256").update(configDir).digest("hex").substring(0, 8)}`;
   return `Claude Code${getOauthConfig().OAUTH_FILE_SUFFIX}${serviceSuffix}${dirHash}`;
 }
-//@ chunk-gwwacf44.js:906-932 layout
+//@ chunk-rfqytzvf.js:906-932 layout
 var SAFE_USERNAME_PATTERN = /^[a-zA-Z0-9._-]+$/;
-//@ chunk-gwwacf44.js:932-1064 fingerprint (2.1.88 match: getUsername, 1)
+//@ chunk-rfqytzvf.js:932-1064 fingerprint (2.1.88 match: getUsername, 1)
 /**
  * 钥匙串账户名：USER 或 os.userInfo，非 [A-Za-z0-9._-] 时用 claude-code-user。
  */
@@ -71,9 +71,9 @@ function getUsername() {
   if (!SAFE_USERNAME_PATTERN.test(username)) return "claude-code-user";
   return username;
 }
-//@ chunk-gwwacf44.js:1064-1078 layout
+//@ chunk-rfqytzvf.js:1064-1078 layout
 var KEYCHAIN_CACHE_TTL_MS = 30000;
-//@ chunk-gwwacf44.js:1078-1229 layout
+//@ chunk-rfqytzvf.js:1078-1229 layout
 class KeychainCacheState {
   cache = {
     data: null,
@@ -86,16 +86,16 @@ class KeychainCacheState {
   lastKnown = null;
   legacyApiKeyPrefetch = null;
 }
-//@ chunk-gwwacf44.js:1229-1252 layout
+//@ chunk-rfqytzvf.js:1229-1252 layout
 var KEYCHAIN_CACHE_PER_HOST; // deferred: uses KeychainCacheState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-gwwacf44.js:1229", () => {
+deferInit("chunk-rfqytzvf.js:1229", () => {
   KEYCHAIN_CACHE_PER_HOST = new HostScoped(() => new KeychainCacheState());
 });
-//@ chunk-gwwacf44.js:1252-1289 layout
+//@ chunk-rfqytzvf.js:1252-1289 layout
 function getKeychainCacheState() {
   return KEYCHAIN_CACHE_PER_HOST.of(getRootSession().host);
 }
-//@ chunk-gwwacf44.js:1289-1413 fingerprint (2.1.88 match: keychainCacheState, 0.861)
+//@ chunk-rfqytzvf.js:1289-1413 fingerprint (2.1.88 match: keychainCacheState, 0.861)
 /**
  * 把钥匙串读缓存标为过期（保留数据、cachedAt 归零），代数加一并清除进行中的读取与失败记录。
  */
@@ -109,7 +109,7 @@ function markKeychainCacheStale() {
   keychainCacheState.readInFlight = null;
   keychainCacheState.lastReadFailure = null;
 }
-//@ chunk-gwwacf44.js:1413-1528 callgraph-fingerprint (2.1.88 match: clearKeychainCache, 0.861)
+//@ chunk-rfqytzvf.js:1413-1528 callgraph-fingerprint (2.1.88 match: clearKeychainCache, 0.861)
 /**
  * 清空钥匙串读缓存（数据置空），代数加一并清除进行中的读取与失败记录。
  */
@@ -123,7 +123,7 @@ function clearKeychainCache() {
   keychainCacheState.readInFlight = null;
   keychainCacheState.lastReadFailure = null;
 }
-//@ chunk-gwwacf44.js:1528-1689 fingerprint (2.1.88 match: primeKeychainCacheFromPrefetch, 0.831)
+//@ chunk-rfqytzvf.js:1528-1689 fingerprint (2.1.88 match: primeKeychainCacheFromPrefetch, 0.83)
 function primeKeychainCacheFromPrefetch(stdout, generation, state = getKeychainCacheState()) {
   if (state.cache.cachedAt !== 0 || state.generation !== generation) return;
   let data = null;
@@ -139,12 +139,12 @@ function primeKeychainCacheFromPrefetch(stdout, generation, state = getKeychainC
   };
 }
 export {
-  getMacOsKeychainStorageServiceName,
-  getUsername,
   clearKeychainCache,
-  keychainProjectDirs,
-  KEYCHAIN_CACHE_TTL_MS,
-  getProjectDirsUpToHome,
   markKeychainCacheStale,
+  keychainProjectDirs,
+  getProjectDirsUpToHome,
+  getUsername,
+  getMacOsKeychainStorageServiceName,
+  KEYCHAIN_CACHE_TTL_MS,
   getKeychainCacheState,
 };

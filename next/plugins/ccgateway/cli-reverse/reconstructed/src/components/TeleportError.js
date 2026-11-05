@@ -3,9 +3,9 @@
  *
  * teleport 前置条件错误（需要登录 / 需要 git stash）的处理对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/TeleportError.tsx
- * pieces: chunk-qh0448cn.js (7), chunk-s61vbvea.js (1)
+ * pieces: chunk-3tekt16c.js (7), chunk-7jxyna5q.js (1)
  * attribution: sole-consumer 1, affinity 1, facade-majority 4, layout 1, fingerprint 1
  */
 import { hasFreshSubscriberToken } from "../commands/review/ultrareviewPreconditions.js";
@@ -39,7 +39,7 @@ import { OrgConfigConsentHost } from "./OrgConfigConsentHost.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:471582-471772 fingerprint (2.1.88 match: getTeleportErrors, 1)
+//@ chunk-7jxyna5q.js:389060-389250 fingerprint (2.1.88 match: getTeleportErrors, 1)
 async function getTeleportErrors(credentials, errorsToIgnore) {
   let errors = new Set();
   let [needsLogin, isGitClean] = await Promise.all([
@@ -50,16 +50,16 @@ async function getTeleportErrors(credentials, errorsToIgnore) {
   if (!isGitClean) errors.add("needsGitStash");
   return errors;
 }
-//@ chunk-qh0448cn.js:3209-3236 sole-consumer
+//@ chunk-3tekt16c.js:3210-3237 sole-consumer
 function initialTeleportError() {
   return gracefulShutdownSync(0);
 }
-//@ chunk-qh0448cn.js:3236-3251 affinity
+//@ chunk-3tekt16c.js:3237-3252 affinity
 var dismissedErrors; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-qh0448cn.js:3236", () => {
+deferInit("chunk-3tekt16c.js:3237", () => {
   dismissedErrors = new Set();
 });
-//@ chunk-qh0448cn.js:3251-5645 facade-majority (2.1.88 match: TeleportError, 0.538)
+//@ chunk-3tekt16c.js:3252-5635 facade-majority (2.1.88 match: TeleportError, 0.538)
 /**
  * teleport 前置错误：需要登录时进入登录，需要 stash 时进入 TeleportStash，完成后继续。
  */
@@ -230,7 +230,7 @@ function TeleportError(props) {
                     }),
                     jsxProd_default(Text, {
                       dimColor: true,
-                      children: "Your Claude Pro/Max subscription will be used by Claude Code.",
+                      children: "Your Claude subscription will be used by Claude Code.",
                     }),
                   ],
                 }),
@@ -268,9 +268,9 @@ function TeleportError(props) {
     }
   }
 }
-//@ chunk-qh0448cn.js:5645-5657 layout
+//@ chunk-3tekt16c.js:5635-5647 layout
 var TELEPORT_ERROR_TIMEOUT_MS = 5000;
-//@ chunk-qh0448cn.js:5657-6031 facade-majority
+//@ chunk-3tekt16c.js:5647-6021 facade-majority
 function HoldForSettingsReload(props) {
   let $ = useMemoCache(5);
   let { reload, onDone } = props;
@@ -311,7 +311,7 @@ function HoldForSettingsReload(props) {
   } else loadingElement = $[4];
   return loadingElement;
 }
-//@ chunk-qh0448cn.js:6031-6293 facade-majority
+//@ chunk-3tekt16c.js:6021-6283 facade-majority
 function enforceOrgConfigGateAfterStepSignIn(toolUseContext) {
   return enforceOrgConfigGateAtStartup({
     interactive: true,
@@ -329,7 +329,7 @@ function enforceOrgConfigGateAfterStepSignIn(toolUseContext) {
     },
   });
 }
-//@ chunk-qh0448cn.js:6293-6563 facade-majority
+//@ chunk-3tekt16c.js:6283-6553 facade-majority
 async function showTeleportErrorsImpl(toolUseContext, errorsToIgnore) {
   let reloadPromise;
   await runSteps(

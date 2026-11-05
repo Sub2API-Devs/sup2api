@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：读取 hooks 模块开关的服务端值（需要时触发刷新）；当前进程不加载 hooks 模块的原因（服务器租户、工具服务器 daemon）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pm6ycja1.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-05astxy8.js (18)
  * attribution: placement 18
  */
 import { isDiskless } from "../../bootstrap/state.js";
@@ -44,18 +44,18 @@ import {
 } from "../../utils/hooks/hooksConfigSnapshot.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-pm6ycja1.js:742-752 placement
+//@ chunk-05astxy8.js:742-752 placement
 /**
  * 插件 hooks 模块默认开启值与不加载原因文本。
  */
 var HOOKS_MODULES_DEFAULT = true;
-//@ chunk-pm6ycja1.js:752-847 placement
+//@ chunk-05astxy8.js:752-847 placement
 var DISKLESS_HOOKS_REFUSAL =
   "no hooks module loads in a claude-code-server tenant, whose process serves many people";
-//@ chunk-pm6ycja1.js:847-975 placement
+//@ chunk-05astxy8.js:847-975 placement
 var TOOL_SERVER_DAEMON_REFUSAL =
   "no hooks module loads in a tool server's daemon, which can hold the person's token and runs its caller's shell commands";
-//@ chunk-pm6ycja1.js:975-1026 placement
+//@ chunk-05astxy8.js:975-1026 placement
 /**
  * 当前进程不加载 hooks 模块的原因（服务器租户、工具服务器 daemon）。
  */
@@ -63,7 +63,7 @@ function hooksModulesRefusalReason() {
   if (isDiskless()) return DISKLESS_HOOKS_REFUSAL;
   return isHttpMcpServeInvocation() ? TOOL_SERVER_DAEMON_REFUSAL : undefined;
 }
-//@ chunk-pm6ycja1.js:1026-1199 placement
+//@ chunk-05astxy8.js:1026-1199 placement
 /**
  * 是否已有任何认证方式（API key、OAuth、helper、WIF 等）。
  */
@@ -79,7 +79,7 @@ var hasAnyCredential = () =>
   !getAuthHeaders({
     envBearerFallbackFor: envBearerFallbackMarker(),
   }).error;
-//@ chunk-pm6ycja1.js:1199-1362 placement
+//@ chunk-05astxy8.js:1199-1362 placement
 /**
  * 严格读取凭证存储，全部为空时为 true。
  */
@@ -91,12 +91,12 @@ async function isCredentialStoreEmpty() {
   ]);
   return keychainMissing && everyCredentialLeg.every((leg) => leg.value === false);
 }
-//@ chunk-pm6ycja1.js:1362-1439 placement
+//@ chunk-05astxy8.js:1362-1439 placement
 /**
  * 凭证存储状态缓存（是否已检查、检查中的 Promise），用于判断能否使用首批凭据读取功能开关。
  */
 var credentialStoreState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-pm6ycja1.js:1362", () => {
+deferInit("chunk-05astxy8.js:1362", () => {
   credentialStoreState = identity(
     {
       isLifted: false,
@@ -108,7 +108,7 @@ deferInit("chunk-pm6ycja1.js:1362", () => {
     },
   );
 });
-//@ chunk-pm6ycja1.js:1439-1568 placement
+//@ chunk-05astxy8.js:1439-1568 placement
 /**
  * 异步检查凭证存储是否为空（只做一次）。
  */
@@ -123,12 +123,12 @@ function liftCredentialCheck() {
   );
   return credentialStoreState.lifting;
 }
-//@ chunk-pm6ycja1.js:1568-1619 placement
+//@ chunk-05astxy8.js:1568-1619 placement
 /**
  * 导出函数 `hooksModulesFollowState`。
  */
 var hooksModulesFollowState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-pm6ycja1.js:1568", () => {
+deferInit("chunk-05astxy8.js:1568", () => {
   hooksModulesFollowState = identity(
     {
       isFollowed: false,
@@ -138,12 +138,12 @@ deferInit("chunk-pm6ycja1.js:1568", () => {
     },
   );
 });
-//@ chunk-pm6ycja1.js:1619-1653 placement
+//@ chunk-05astxy8.js:1619-1653 placement
 var FOLLOWABLE_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-pm6ycja1.js:1619", () => {
+deferInit("chunk-05astxy8.js:1619", () => {
   FOLLOWABLE_SOURCES = new Set(["disk", "payload"]);
 });
-//@ chunk-pm6ycja1.js:1653-1760 placement
+//@ chunk-05astxy8.js:1653-1760 placement
 /**
  * 读取 hooks 模块开关的服务端值（需要时触发刷新）。
  */
@@ -159,9 +159,9 @@ async function checkHooksModulesFlag() {
     ? liftCredentialCheck()
     : undefined;
 }
-//@ chunk-pm6ycja1.js:1760-1787 placement
+//@ chunk-05astxy8.js:1760-1787 placement
 var hasUsableCredential = () => !credentialStoreState.isLifted || hasAnyCredential();
-//@ chunk-pm6ycja1.js:1787-1904 placement
+//@ chunk-05astxy8.js:1787-1904 placement
 /**
  * 特性开关客户端是否持有凭证（读取失败视为有）。
  */
@@ -173,7 +173,7 @@ function hasFeatureFlagCredential() {
     return true;
   }
 }
-//@ chunk-pm6ycja1.js:1904-1969 placement
+//@ chunk-05astxy8.js:1904-1969 placement
 var shouldCheckHooksModulesFlag = () =>
   !hooksModulesFollowState.isFollowed &&
   isGrowthBookEnabled() &&
@@ -181,7 +181,7 @@ var shouldCheckHooksModulesFlag = () =>
     getFeatureValueWithSource_CACHED_MAY_BE_STALE(PLUGIN_HOOKS_MODULES_GATE, HOOKS_MODULES_DEFAULT).source,
   ) &&
   !hasFeatureFlagCredential();
-//@ chunk-pm6ycja1.js:1969-2050 placement
+//@ chunk-05astxy8.js:1969-2050 placement
 /**
  * 导出函数 `resolveHooksModulesValue`：返回 s ? HOOKS_MODULES_DEFAULT : o。
  */
@@ -196,31 +196,31 @@ function resolveHooksModulesValue() {
   if (differsFromDefault) checkHooksModulesFlag();
   return trustedOverride ? HOOKS_MODULES_DEFAULT : featureValue_CACHED_MAY_BE_STALE;
 }
-//@ chunk-pm6ycja1.js:2050-2082 placement
+//@ chunk-05astxy8.js:2050-2082 placement
 /**
  * 是否允许加载 hooks 模块。
  */
 var areHooksModulesAllowed = () => hooksModulesRefusalReason() === undefined && resolveHooksModulesValue();
-//@ chunk-pm6ycja1.js:2082-2120 placement
+//@ chunk-05astxy8.js:2082-2120 placement (2.1.88 match: formatDangerousSettingsList, 0.483)
 /**
  * 导出函数 `areHooksModulesActiveGbc`。
  */
 var areHooksModulesActiveGbc = () =>
   areHooksModulesAllowed() && !isCustomizationDisabled("hooks") && !isSafeMode();
-//@ chunk-pm6ycja1.js:2120-2152 placement
+//@ chunk-05astxy8.js:2120-2152 placement
 /**
  * hooks 模块是否在本会话生效。
  */
 var areHooksModulesActive = () =>
   areHooksModulesActiveGbc() && !shouldDisableAllHooksIncludingManaged() && !shouldAllowManagedHooksOnly();
 export {
-  HOOKS_MODULES_DEFAULT,
-  areHooksModulesAllowed,
+  resolveHooksModulesValue,
   checkHooksModulesFlag,
-  areHooksModulesActive,
+  areHooksModulesAllowed,
   hooksModulesRefusalReason,
+  areHooksModulesActive,
+  areHooksModulesActiveGbc,
+  HOOKS_MODULES_DEFAULT,
   hasFeatureFlagCredential,
   hooksModulesFollowState,
-  resolveHooksModulesValue,
-  areHooksModulesActiveGbc,
 };

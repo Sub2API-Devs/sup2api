@@ -3,9 +3,9 @@
  *
  * PowerShell 工具权限请求（与 Bash 类似）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/PowerShellPermissionRequest/PowerShellPermissionRequest.tsx
- * pieces: chunk-18hwfzwa.js (4)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: sole-consumer 3, fingerprint 1
  */
 import {
@@ -28,7 +28,7 @@ import {
   useCallback,
 } from "../../../../vendor/react/cjs/react.production.js";
 import { sanitizeToolNameForAnalytics } from "../../../services/analytics/metadata.js";
-import { useShellPermissionFeedback } from "../useShellPermissionFeedback.js";
+import { PermissionPrompt } from "../PermissionPrompt.js";
 import { ShowInIDEPrompt } from "../../ShowInIDEPrompt.js";
 import { KillAgentsConfirm } from "../../KillAgentsConfirm.js";
 import {
@@ -63,17 +63,17 @@ import {
   jsxProd_default_2,
 } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { PermissionDialog_2 } from "../PermissionDialog.js";
+import { KeyboardShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
 import { Box, Text } from "../../../ink/components/Text.js";
 import { Blockquote } from "../../Blockquote.js";
 import { PermissionRuleExplanation, MAX_EXPLANATION_LINES } from "../PermissionRuleExplanation.js";
 import { ModelSelector } from "../../agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "../../CustomSelect/select.js";
 import { Byline } from "../../design-system/Byline.js";
-import { KeyboardShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
 
-//@ chunk-18hwfzwa.js:1398571-1398594 sole-consumer
+//@ chunk-czq1j3j2.js:1437314-1437337 sole-consumer
 var powershellRuleLabelPredicate = (rule) => ruleMatchesTool(rule, POWERSHELL_TOOL_NAME);
-//@ chunk-18hwfzwa.js:1398594-1398690 sole-consumer
+//@ chunk-czq1j3j2.js:1437337-1437433 sole-consumer
 function parsePowerShellConsentSuggestions(suggestions) {
   return parseConsentSuggestions(suggestions, {
     displayedTypes: CONSENT_UPDATE_TYPES,
@@ -81,7 +81,7 @@ function parsePowerShellConsentSuggestions(suggestions) {
     renderLabel: (suggestion) => parseSuggestionRows(suggestion, POWERSHELL_TOOL_NAME),
   });
 }
-//@ chunk-18hwfzwa.js:1398690-1399269 sole-consumer
+//@ chunk-czq1j3j2.js:1437433-1438012 sole-consumer
 /**
  * 把 PowerShell 权限选项转换为结果：yes、应用建议、编辑过的前缀规则、no（带反馈）。
  */
@@ -129,7 +129,7 @@ function powerShellChoiceToResult(choice, payload, unaryEvent, extra = {}) {
       };
   }
 }
-//@ chunk-18hwfzwa.js:1399269-1403401 fingerprint (2.1.88 match: PowerShellPermissionRequest, 0.473)
+//@ chunk-czq1j3j2.js:1438012-1442478 fingerprint (2.1.88 match: PowerShellPermissionRequest, 0.435)
 /**
  * PowerShell 权限对话框（同 Bash 结构，选项来自 powershellToolUseOptions）。
  */
@@ -150,7 +150,7 @@ function PowerShellPermissionRequest({ payload, answer, wouldTakeAnswer }) {
     logSubmitted,
     logEscape,
     hintNode,
-  } = useShellPermissionFeedback({
+  } = PermissionPrompt({
     feedbackTypeOf: ShowInIDEPrompt,
     toolName,
     isMcp: payload.isMcp,
@@ -344,31 +344,63 @@ function PowerShellPermissionRequest({ payload, answer, wouldTakeAnswer }) {
       behavior: "deny",
     });
   }, [answer, wouldTakeAnswer, logEscape]);
+  let usesSandbox = sandboxingEnabled && !isSandboxed;
+  let insetPadding = display.isFitted ? 0 : 1;
+  let dialogTitle = display.isFitted
+    ? "Run PowerShell command"
+    : usesSandbox
+      ? "PowerShell command (unsandboxed)"
+      : "PowerShell command";
   return jsxProd_default(FittedBodyKeybindings, {
     fitted: display,
     children: jsxProd_default_2(PermissionDialog_2, {
-      title: sandboxingEnabled && !isSandboxed ? "PowerShell command (unsandboxed)" : "PowerShell command",
+      title: dialogTitle,
       innerPaddingX: 0,
       requestSource: payload.requestSource,
+      frame: display.isFitted
+        ? {
+            onCancel,
+            titleSuffix: usesSandbox ? "unsandboxed" : undefined,
+            hints: [
+              hintNode &&
+                jsxProd_default(
+                  KeyboardShortcutHint,
+                  {
+                    chord: "tab",
+                    action: "amend",
+                    terse: true,
+                    format: {
+                      keyCase: "lower",
+                    },
+                  },
+                  "amend",
+                ),
+              killAgentsNotice,
+            ],
+          }
+        : undefined,
       children: [
         jsxProd_default(Box, {
           flexDirection: "column",
-          paddingX: 1,
-          children: jsxProd_default(Blockquote, {
-            multiline: needsGutter(display.description),
-            children: jsxProd_default(Text, {
-              dimColor: true,
-              children: display.description,
+          paddingX: insetPadding,
+          children:
+            !(display.isFitted && display.description === dialogTitle) &&
+            jsxProd_default(Blockquote, {
+              multiline: needsGutter(display.description),
+              children: jsxProd_default(Text, {
+                dimColor: true,
+                children: display.description,
+              }),
             }),
-          }),
         }),
         jsxProd_default(CommandPreviewFrame, {
           commandDisplay: onEditablePrefixChange_2,
           fitted: display,
+          inset: insetPadding,
         }),
         jsxProd_default_2(Box, {
           flexDirection: "column",
-          paddingX: 1,
+          paddingX: insetPadding,
           children: [
             payload.networkAllowHosts !== undefined &&
               payload.networkAllowHosts.length > 0 &&
@@ -383,6 +415,7 @@ function PowerShellPermissionRequest({ payload, answer, wouldTakeAnswer }) {
               toolType: "command",
               rowBudget: display.isCut || hideIndexes ? MAX_EXPLANATION_LINES : undefined,
               rowColumns: display.isCut ? display.reasonColumns : undefined,
+              framed: display.isFitted,
             }),
             destructiveWarning &&
               jsxProd_default(Box, {
@@ -392,9 +425,10 @@ function PowerShellPermissionRequest({ payload, answer, wouldTakeAnswer }) {
                   children: destructiveWarning,
                 }),
               }),
-            jsxProd_default(Text, {
-              children: "Do you want to proceed?",
-            }),
+            !display.isFitted &&
+              jsxProd_default(Text, {
+                children: "Do you want to proceed?",
+              }),
             jsxProd_default(ModelSelector, {
               hideIndexes,
               selectedValue: NO_COMMITTED_ROW,
@@ -410,25 +444,26 @@ function PowerShellPermissionRequest({ payload, answer, wouldTakeAnswer }) {
             }),
           ],
         }),
-        jsxProd_default(Box, {
-          justifyContent: "space-between",
-          marginTop: 1,
-          paddingX: 1,
-          children: jsxProd_default(Text, {
-            dimColor: true,
-            wrap: killAgentsNotice ? "truncate" : undefined,
-            children: jsxProd_default_2(Byline, {
-              children: [
-                jsxProd_default(KeyboardShortcutHint, {
-                  chord: "escape",
-                  action: "cancel",
-                }),
-                hintNode,
-                killAgentsNotice,
-              ],
+        !display.isFitted &&
+          jsxProd_default(Box, {
+            justifyContent: "space-between",
+            marginTop: 1,
+            paddingX: 1,
+            children: jsxProd_default(Text, {
+              dimColor: true,
+              wrap: killAgentsNotice ? "truncate" : undefined,
+              children: jsxProd_default_2(Byline, {
+                children: [
+                  jsxProd_default(KeyboardShortcutHint, {
+                    chord: "escape",
+                    action: "cancel",
+                  }),
+                  hintNode,
+                  killAgentsNotice,
+                ],
+              }),
             }),
           }),
-        }),
       ],
     }),
   });

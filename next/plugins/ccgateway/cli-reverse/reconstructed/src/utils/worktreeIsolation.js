@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工作树隔离
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (7), chunk-s61vbvea.js (75)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (7), chunk-7jxyna5q.js (66), chunk-8nfjhq0y.js (9)
  * attribution: placement 82
  */
 import { isAbsolute, join, relative, sep, dirname, resolve, basename } from "path";
@@ -14,7 +14,7 @@ import { lstat, open, readdir } from "fs/promises";
 import { lstatSync, realpathSync, openSync, fstatSync, readSync, closeSync, readdirSync } from "fs";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { array, unknown } from "../../vendor/zod/v4/classic/schemas.js";
-import { getPlatform as getPlatform_2 } from "./platform.js";
+import { getPlatform } from "./platform.js";
 import {
   isSameContainmentPath,
   isOutsideContainment,
@@ -35,7 +35,7 @@ import { getBgTakeover, isIsolationUnavailableForCwd } from "./concurrentSession
 import { hideUnsafePath } from "./unsafePathGlyphs.js";
 import { isENOENT, getErrnoCode } from "./errors.js";
 import { getRepoRootForWorktreePath, isSystemVolumePath } from "./permissions/protectedDirs.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { GIT_SAFE_GLOBAL_ARGS } from "./git/gitSafeEnv.js";
 import { execFileNoThrowWithCwd } from "./execFileNoThrow.js";
 import {
@@ -56,22 +56,22 @@ import {
   isWslLocalhostPath,
 } from "./networkPaths.js";
 import { HostScoped } from "./hostScoped.js";
-import { getInitialSettings_2 } from "./settings/settings.js";
+import { getInitialSettings } from "./settings/settings.js";
 import { getCwd } from "./cwd.js";
 import { hasWorktreeCreateHook } from "./hooks/worktreeHooks.js";
 import { ENTER_WORKTREE_TOOL_NAME } from "../tools/EnterWorktreeTool/constants.js";
-import { getClaudeConfigDir } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { nativeRealpathLong } from "./windowsUncPaths.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:429820-429849 placement
+//@ chunk-8nfjhq0y.js:23541-23570 placement
 var worktreeFenceSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:429820", () => {
+deferInit("chunk-8nfjhq0y.js:23541", () => {
   worktreeFenceSchema = DoctorLazy(() => array(unknown()).min(1));
 });
-//@ chunk-s61vbvea.js:429849-429968 placement
+//@ chunk-8nfjhq0y.js:23570-23689 placement
 function isPathContainedIn(path, canonical) {
-  return (getPlatform_2() === "linux" ? isSameContainmentPath : isOutsideContainment)(
+  return (getPlatform() === "linux" ? isSameContainmentPath : isOutsideContainment)(
     {
       lexical: canonical,
       canonical,
@@ -84,7 +84,7 @@ function isPathContainedIn(path, canonical) {
     },
   );
 }
-//@ chunk-s61vbvea.js:429968-430158 placement
+//@ chunk-8nfjhq0y.js:23689-23878 placement
 function resolveFencePath(value) {
   if (typeof value !== "string" || !isAbsolute(value))
     return {
@@ -101,7 +101,7 @@ function resolveFencePath(value) {
         at: canonical,
       };
 }
-//@ chunk-s61vbvea.js:430158-430705 placement
+//@ chunk-8nfjhq0y.js:23878-24422 placement
 function checkWorktreeFence(declared, declaredFence, sessionDir) {
   let fenceParse = worktreeFenceSchema().safeParse(safeParseJSON(declaredFence, false));
   if (!fenceParse.success)
@@ -157,7 +157,7 @@ function checkWorktreeFence(declared, declaredFence, sessionDir) {
     problems,
   };
 }
-//@ chunk-s61vbvea.js:430705-430855 placement
+//@ chunk-8nfjhq0y.js:24422-24571 placement
 function hostWorktreeDeclaration() {
   let CLAUDE_CODE_HOST_WORKTREE = env.CLAUDE_CODE_HOST_WORKTREE;
   let CLAUDE_CODE_HOST_WORKTREE_FENCE = env.CLAUDE_CODE_HOST_WORKTREE_FENCE;
@@ -168,7 +168,7 @@ function hostWorktreeDeclaration() {
         declaredFence: CLAUDE_CODE_HOST_WORKTREE_FENCE,
       };
 }
-//@ chunk-s61vbvea.js:430855-431600 placement
+//@ chunk-8nfjhq0y.js:24571-25315 placement
 function describeWorktreeWriteFence() {
   let declaration = hostWorktreeDeclaration();
   if (declaration === undefined) return;
@@ -188,7 +188,7 @@ function describeWorktreeWriteFence() {
   }
   return answer;
 }
-//@ chunk-s61vbvea.js:431600-431764 placement
+//@ chunk-8nfjhq0y.js:25315-25479 placement
 /**
  * 当前上下文的隔离 worktree：子代理自己的 worktree 优先，其次项目的 isolationRoot（非特定模式下），最后是当前 worktree 会话的路径。
  */
@@ -200,31 +200,31 @@ function isolationWorktreeFor(options) {
   }
   return getCurrentWorktreeSession()?.worktreePath || undefined;
 }
-//@ chunk-s61vbvea.js:431764-431833 placement
+//@ chunk-8nfjhq0y.js:25479-25548 placement
 /**
  * 是否后台会话（CLAUDE_CODE_SESSION_KIND=bg 或已接管）。
  */
 function isBackgroundSession() {
   return env.CLAUDE_CODE_SESSION_KIND === "bg" || getBgTakeover() !== null;
 }
-//@ chunk-s61vbvea.js:431833-431869 placement
+//@ chunk-8nfjhq0y.js:25548-25583 placement
 /**
  * 宿主是否声明了 worktree。
  */
 function hasHostWorktreeDeclaration() {
   return hostWorktreeDeclaration() !== undefined;
 }
-//@ chunk-s61vbvea.js:432292-432332 placement
+//@ chunk-7jxyna5q.js:350957-350997 placement
 /**
  * 控制字符与「控制或格式字符」的模式。
  */
 var CONTROL_CHAR_RE = /\p{Cc}/u;
 var CONTROL_OR_FORMAT_CHAR_RE = /[\p{Cc}\p{Cf}]/u;
-//@ chunk-s61vbvea.js:432332-432383 placement (2.1.88 match: isDangerousFilePathToAutoEdit, 1)
+//@ chunk-7jxyna5q.js:350997-351048 placement (2.1.88 match: isDangerousFilePathToAutoEdit, 1)
 function getClaudeWorktreesDir(repoRoot) {
   return join(repoRoot, ".claude", "worktrees");
 }
-//@ chunk-s61vbvea.js:432383-432457 placement (2.1.88 match: isDangerousFilePathToAutoEdit, 0.775)
+//@ chunk-7jxyna5q.js:351048-351122 placement (2.1.88 match: isDangerousFilePathToAutoEdit, 0.775)
 function getWorktreesDirSpec(repoRoot) {
   return {
     dir: getClaudeWorktreesDir(repoRoot),
@@ -232,7 +232,7 @@ function getWorktreesDirSpec(repoRoot) {
     below: [".claude", "worktrees"],
   };
 }
-//@ chunk-s61vbvea.js:432457-432527 placement
+//@ chunk-7jxyna5q.js:351122-351192 placement
 /**
  * 生成 worktrees 目录规格。
  */
@@ -243,7 +243,7 @@ function worktreesDirSpec(spec, anchor) {
     below: spec.below,
   };
 }
-//@ chunk-s61vbvea.js:432527-432839 placement
+//@ chunk-7jxyna5q.js:351192-351504 placement
 function parseWorktreeAddError(createStderr, worktreeBranch) {
   let lines = createStderr.split(/[\r\n]/);
   return [
@@ -253,7 +253,7 @@ function parseWorktreeAddError(createStderr, worktreeBranch) {
     `fatal: cannot force update the branch '${worktreeBranch}' checked out at `,
   ].some((expectedPrefix) => lines.some((line) => line.startsWith(expectedPrefix)));
 }
-//@ chunk-s61vbvea.js:432839-433072 placement
+//@ chunk-7jxyna5q.js:351504-351737 placement
 /**
  * 给出一个路径相对仓库的安全描述：仓库外或路径段含不安全字符时只说"仓库外/内某处（不显示）"，否则显示路径。
  */
@@ -265,13 +265,13 @@ function describeRepoRelativeLocation(a, b) {
     ? hideUnsafePath(a)
     : "a location inside the repository (not shown)";
 }
-//@ chunk-s61vbvea.js:433072-433100 placement
+//@ chunk-7jxyna5q.js:351737-351765 placement
 var SAFE_SEGMENT_RE = /^[a-zA-Z0-9._+-]+$/;
-//@ chunk-s61vbvea.js:433100-433158 placement
+//@ chunk-7jxyna5q.js:351765-351823 placement
 function repoRelativePath(anchor, path) {
   return `${hideUnsafePath(relative(anchor, path))} in the repository`;
 }
-//@ chunk-s61vbvea.js:433158-433773 placement
+//@ chunk-7jxyna5q.js:351823-352438 placement
 async function checkWorktreePath(a, b) {
   let pathsToCheck = [
     ...a.below.map((segment, segmentIndex, segments) =>
@@ -302,21 +302,21 @@ async function checkWorktreePath(a, b) {
     ok: true,
   };
 }
-//@ chunk-s61vbvea.js:433773-433803 placement
+//@ chunk-7jxyna5q.js:352438-352468 placement
 /**
  * 取仓库的 worktrees 目录规格。
  */
 function worktreesDirSpecs(repoRoot) {
   return getWorktreesDirSpec(repoRoot);
 }
-//@ chunk-s61vbvea.js:433803-433834 placement
+//@ chunk-7jxyna5q.js:352468-352499 placement
 /**
  * worktrees 目录规格的数组形式。
  */
 function candidateWorktreeDirs(options) {
   return [worktreesDirSpecs(options)];
 }
-//@ chunk-s61vbvea.js:433834-433909 placement
+//@ chunk-7jxyna5q.js:352499-352574 placement
 /**
  * 解析路径所属仓库检出与其 worktrees 家目录。
  */
@@ -329,7 +329,7 @@ function worktreeLocationOf(worktreePath) {
         home: getWorktreesDirSpec(repoRoot),
       };
 }
-//@ chunk-s61vbvea.js:433909-434277 placement
+//@ chunk-7jxyna5q.js:352574-352942 placement
 /**
  * 异步检查 worktree 隔离是否可靠：读取该 worktree 与候选仓库根的 git 身份，交给 checkWorktreeIsolation_2 比对（选项控制自持 pin 的见证要求）。
  */
@@ -340,7 +340,7 @@ async function checkWorktreeIsolation(worktreePath, repoRoots, extraRoots = [], 
   ]);
   let protectedRoots = new Set(repoRoots);
   let launchTrees = new Set(extraRoots);
-  let allRoots = uniq([...repoRoots, ...extraRoots]);
+  let allRoots = normalizeCaseForComparison_2([...repoRoots, ...extraRoots]);
   let requireWitness = options?.requireWitnessForSelfOwningPins === true;
   let declineSelfOwningPin = options?.declineSelfOwningPinUnderLiveRoot === true;
   if (typeof gitIdentity.ids !== "object")
@@ -373,7 +373,7 @@ async function checkWorktreeIsolation(worktreePath, repoRoots, extraRoots = [], 
     declineSelfOwningPin,
   );
 }
-//@ chunk-s61vbvea.js:434277-434587 placement
+//@ chunk-7jxyna5q.js:352942-353252 placement
 /**
  * checkWorktreeIsolation 的同步版本。
  */
@@ -382,7 +382,7 @@ function checkWorktreeIsolationSync(worktreePath, repoRoots, extraRoots = [], op
   let isSymlink = isSymlinkSync(worktreePath);
   let protectedRoots = new Set(repoRoots);
   let launchTrees = new Set(extraRoots);
-  let allRoots = uniq([...repoRoots, ...extraRoots]);
+  let allRoots = normalizeCaseForComparison_2([...repoRoots, ...extraRoots]);
   let requireWitness = options?.requireWitnessForSelfOwningPins === true;
   let declineSelfOwningPin = options?.declineSelfOwningPinUnderLiveRoot === true;
   if (typeof gitIdentity.ids !== "object")
@@ -413,7 +413,7 @@ function checkWorktreeIsolationSync(worktreePath, repoRoots, extraRoots = [], op
     declineSelfOwningPin,
   );
 }
-//@ chunk-s61vbvea.js:434587-441228 placement
+//@ chunk-7jxyna5q.js:353252-359896 placement
 /**
  * 检查工作树隔离是否可靠（符号链接、.git 条目、仓库内外位置）
  */
@@ -642,12 +642,12 @@ function checkWorktreeIsolation_3(
     reason: "verified",
   };
 }
-//@ chunk-s61vbvea.js:441228-441335 placement
+//@ chunk-7jxyna5q.js:359896-360003 placement
 function candidateRepoRoots(worktreePath, repoRoots, gitIdentity) {
   let commonDirRoot = basename(gitIdentity.commonDir) === ".git" ? dirname(gitIdentity.commonDir) : null;
-  return uniq([...repoRoots, ...(commonDirRoot !== null ? [commonDirRoot] : [])]);
+  return normalizeCaseForComparison_2([...repoRoots, ...(commonDirRoot !== null ? [commonDirRoot] : [])]);
 }
-//@ chunk-s61vbvea.js:441335-441614 placement
+//@ chunk-7jxyna5q.js:360003-360282 placement
 /**
  * 返回 {ok:false, reason:"unverifiable"}：worktree 的 git 身份无法核验，拒绝用作隔离 worktree 的说明。
  */
@@ -660,7 +660,7 @@ function unverifiableIsolationResult(a, b) {
     ),
   };
 }
-//@ chunk-s61vbvea.js:441614-441710 placement
+//@ chunk-7jxyna5q.js:360282-360378 placement
 async function readGitIdentityAsync(dir) {
   let [entry, gitDirs] = await Promise.all([gitEntryPresenceAsync(join(dir, ".git")), readGitDirs(dir)]);
   return {
@@ -668,14 +668,14 @@ async function readGitIdentityAsync(dir) {
     ids: gitDirs,
   };
 }
-//@ chunk-s61vbvea.js:441710-441766 placement
+//@ chunk-7jxyna5q.js:360378-360434 placement
 function readGitIdentitySync(cwd) {
   return {
     entry: gitEntryPresenceSync(join(cwd, ".git")),
     ids: probeGitIdentitySync(cwd),
   };
 }
-//@ chunk-s61vbvea.js:441766-441843 placement
+//@ chunk-7jxyna5q.js:360434-360511 placement
 async function gitEntryPresenceAsync(path) {
   try {
     await lstat(path);
@@ -684,7 +684,7 @@ async function gitEntryPresenceAsync(path) {
     return classifyGitEntryError(error);
   }
 }
-//@ chunk-s61vbvea.js:441843-441908 placement
+//@ chunk-7jxyna5q.js:360511-360576 placement
 function gitEntryPresenceSync(path) {
   try {
     lstatSync(path);
@@ -693,7 +693,7 @@ function gitEntryPresenceSync(path) {
     return classifyGitEntryError(error);
   }
 }
-//@ chunk-s61vbvea.js:441908-441986 placement
+//@ chunk-7jxyna5q.js:360576-360654 placement
 async function isSymlinkAsync(worktreePath) {
   try {
     return (await lstat(worktreePath)).isSymbolicLink();
@@ -701,7 +701,7 @@ async function isSymlinkAsync(worktreePath) {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:441986-442051 placement
+//@ chunk-7jxyna5q.js:360654-360719 placement
 function isSymlinkSync(worktreePath) {
   try {
     return lstatSync(worktreePath).isSymbolicLink();
@@ -709,15 +709,15 @@ function isSymlinkSync(worktreePath) {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:442051-442136 placement
+//@ chunk-7jxyna5q.js:360719-360804 placement
 function classifyGitEntryError(error) {
   let errnoCode = getErrnoCode(error);
   return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "absent" : "unverifiable";
 }
-//@ chunk-s61vbvea.js:442136-442229 placement
+//@ chunk-7jxyna5q.js:360804-360897 placement
 var GIT_IDENTITY_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var GIT_IDENTITY_ARGS;
-deferInit("chunk-s61vbvea.js:442136", () => {
+deferInit("chunk-7jxyna5q.js:360804", () => {
   GIT_IDENTITY_TIMEOUT_MS = 2000;
   GIT_IDENTITY_ARGS = [
     ...GIT_SAFE_GLOBAL_ARGS,
@@ -727,7 +727,7 @@ deferInit("chunk-s61vbvea.js:442136", () => {
     "--git-common-dir",
   ];
 });
-//@ chunk-s61vbvea.js:442229-443089 placement
+//@ chunk-7jxyna5q.js:360897-361757 placement
 async function readGitDirs(dir) {
   let revParseResult = await execFileNoThrowWithCwd(gitExe(), [...GIT_IDENTITY_ARGS], {
     cwd: dir,
@@ -784,7 +784,7 @@ async function readGitDirs(dir) {
     unexaminableRefStore: symlinkScan.unexaminable,
   };
 }
-//@ chunk-s61vbvea.js:443089-443978 placement
+//@ chunk-7jxyna5q.js:361757-362646 placement
 /**
  * 同步运行 git rev-parse 探测目录的 git 身份：失败时区分无仓库、裸仓库（再探 absolute-git-dir / common-dir）与错误，成功时附带 git 目录的符号链接检查结果。
  */
@@ -851,18 +851,18 @@ function probeGitIdentitySync(cwd) {
     unexaminableRefStore: refScan.unexaminable,
   };
 }
-//@ chunk-s61vbvea.js:443978-444047 placement
+//@ chunk-7jxyna5q.js:362646-362715 placement
 /**
  * 把控制字符替换为空格，用于提示文案。
  */
 function stripControlCharsForMessage(text) {
   return text.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ");
 }
-//@ chunk-s61vbvea.js:444047-444157 placement
+//@ chunk-7jxyna5q.js:362715-362825 placement
 function isNotGitRepoError(stderr) {
   return /not a git repository/i.test(stderr) || /gitfile does not point to a valid repository/i.test(stderr);
 }
-//@ chunk-s61vbvea.js:444157-444281 placement
+//@ chunk-7jxyna5q.js:362825-362949 placement
 async function noGitAncestorEntries(cwd) {
   let entries = gitAncestorEntryPaths(cwd);
   if (entries === null) return false;
@@ -870,17 +870,17 @@ async function noGitAncestorEntries(cwd) {
     (presence) => presence === "absent",
   );
 }
-//@ chunk-s61vbvea.js:444281-444356 placement
+//@ chunk-7jxyna5q.js:362949-363024 placement
 function hasNoRepoAncestor(path) {
   let entries = gitAncestorEntryPaths(path);
   return entries !== null && entries.every((entryPath) => gitEntryPresenceSync(entryPath) === "absent");
 }
-//@ chunk-s61vbvea.js:444356-444669 placement
+//@ chunk-7jxyna5q.js:363024-363337 placement
 /**
  * 列出路径各级祖先下的 .git 与 HEAD 路径（Windows 或无法规范化、非 UTF-8 时返回 null），用于确认祖先中没有仓库。
  */
 function gitAncestorEntryPaths(path) {
-  if (getPlatform_2() === "windows") return null;
+  if (getPlatform() === "windows") return null;
   if (resolveContainmentTarget(path).canonical === null) return null;
   let realPath;
   try {
@@ -900,7 +900,7 @@ function gitAncestorEntryPaths(path) {
     dir = parentDir;
   }
 }
-//@ chunk-s61vbvea.js:444669-444772 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-7jxyna5q.js:363337-363440 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 async function readDirNamesCapped(realCandidate) {
   try {
     await lstat(realCandidate);
@@ -910,7 +910,7 @@ async function readDirNamesCapped(realCandidate) {
     return code === "ENOENT" || code === "ENOTDIR";
   }
 }
-//@ chunk-s61vbvea.js:444772-444863 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-7jxyna5q.js:363440-363531 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function readDirNamesCappedSync(realCandidate) {
   try {
     lstatSync(realCandidate);
@@ -920,11 +920,11 @@ function readDirNamesCappedSync(realCandidate) {
     return code === "ENOENT" || code === "ENOTDIR";
   }
 }
-//@ chunk-s61vbvea.js:444863-444941 placement
+//@ chunk-7jxyna5q.js:363531-363609 placement
 function isNotWorkTreeError(stderr) {
   return stderr.includes("this operation must be run in a work tree");
 }
-//@ chunk-s61vbvea.js:444941-445174 placement
+//@ chunk-7jxyna5q.js:363609-363842 placement
 function parseBareRevParse(topLevel, stdout) {
   let filtered = stdout
     .split(
@@ -942,7 +942,7 @@ function parseBareRevParse(topLevel, stdout) {
     isBare: true,
   };
 }
-//@ chunk-s61vbvea.js:445174-445400 placement
+//@ chunk-7jxyna5q.js:363842-364068 placement
 function parseRevParseOutput(baseDir, stdout) {
   let filtered = stdout
     .split(
@@ -959,9 +959,9 @@ function parseRevParseOutput(baseDir, stdout) {
     commonDir: isAbsolute(commonDirRaw) ? commonDirRaw : resolve(baseDir, commonDirRaw),
   };
 }
-//@ chunk-s61vbvea.js:445400-445413 placement
+//@ chunk-7jxyna5q.js:364068-364081 placement
 var MAX_GITDIR_FILE_BYTES = 65536;
-//@ chunk-s61vbvea.js:445413-445711 placement
+//@ chunk-7jxyna5q.js:364081-364379 placement
 async function readGitdirFile(gitDir) {
   try {
     if (!(await lstat(join(gitDir, "gitdir"))).isFile()) return null;
@@ -978,7 +978,7 @@ async function readGitdirFile(gitDir) {
     return null;
   }
 }
-//@ chunk-s61vbvea.js:445711-445948 placement
+//@ chunk-7jxyna5q.js:364379-364616 placement
 function readGitdirFileSync(gitDir) {
   try {
     if (!lstatSync(join(gitDir, "gitdir")).isFile()) return null;
@@ -995,10 +995,10 @@ function readGitdirFileSync(gitDir) {
     return null;
   }
 }
-//@ chunk-s61vbvea.js:445948-445966 placement
+//@ chunk-7jxyna5q.js:364616-364634 placement
 var MAX_SYMLINK_SCAN_DEPTH = 12;
 var MAX_SYMLINK_SCAN_ENTRIES = 4096;
-//@ chunk-s61vbvea.js:445966-446361 placement
+//@ chunk-7jxyna5q.js:364634-365029 placement
 /**
  * 扫描 git 目录顶层与 refs/ 下的符号链接（有条目数与深度上限），返回 {symlinks, unexaminable}。
  */
@@ -1033,7 +1033,7 @@ async function scanGitDirSymlinks(gitDir) {
     unexaminable,
   };
 }
-//@ chunk-s61vbvea.js:446361-446877 placement
+//@ chunk-7jxyna5q.js:365029-365545 placement
 /**
  * 递归扫描 refs 目录中的符号链接，超过深度/条目上限或无法读取时记入 unexaminable。
  */
@@ -1070,7 +1070,7 @@ async function scanRefsSymlinks(dir, label, depth, symlinks, unexaminable, budge
     }
   }
 }
-//@ chunk-s61vbvea.js:446877-447222 placement
+//@ chunk-7jxyna5q.js:365545-365890 placement
 /**
  * 同步扫描 git 目录顶层与 refs 下的符号链接，返回符号链接列表和无法检查的项（不可读、条目超限等）。
  */
@@ -1102,7 +1102,7 @@ function scanGitDirSymlinksSync(gitDir) {
     unexaminable,
   };
 }
-//@ chunk-s61vbvea.js:447222-447714 placement
+//@ chunk-7jxyna5q.js:365890-366382 placement
 /**
  * 递归扫描 refs 目录中的符号链接：受深度与总条目数限制，超限或不可读的位置记入无法检查列表。
  */
@@ -1139,7 +1139,7 @@ function scanRefsSymlinksSync(dir, relativePath, depth, symlinks, unexaminable, 
     }
   }
 }
-//@ chunk-s61vbvea.js:447714-447878 placement
+//@ chunk-7jxyna5q.js:366382-366546 placement
 function comparePathTargets(pathA, pathB, compare) {
   let containmentTarget = resolveContainmentTarget(pathA);
   let containmentTarget_2 = resolveContainmentTarget(pathB);
@@ -1150,7 +1150,7 @@ function comparePathTargets(pathA, pathB, compare) {
     ? "same"
     : "distinct";
 }
-//@ chunk-s61vbvea.js:447878-447990 placement
+//@ chunk-7jxyna5q.js:366546-366658 placement
 function mayBeOutside(pathA, pathB) {
   let containmentTarget = resolveContainmentTarget(pathA);
   let containmentTarget_2 = resolveContainmentTarget(pathB);
@@ -1159,23 +1159,23 @@ function mayBeOutside(pathA, pathB) {
   if (containmentTarget.skipped !== containmentTarget_2.skipped) return true;
   return isOutsideContainment(containmentTarget_2, containmentTarget);
 }
-//@ chunk-s61vbvea.js:447990-448026 placement
+//@ chunk-7jxyna5q.js:366658-366694 placement
 function compareWithOutsideContainment(pathA, pathB) {
   return comparePathTargets(pathA, pathB, isOutsideContainment);
 }
-//@ chunk-s61vbvea.js:448026-448062 placement
+//@ chunk-7jxyna5q.js:366694-366730 placement
 /**
  * 两个路径的包含关系比较（同路径判定）。
  */
 function compareSameContainment(pathA, pathB) {
   return comparePathTargets(pathA, pathB, isSameContainmentPath);
 }
-//@ chunk-s61vbvea.js:448062-448139 placement
+//@ chunk-7jxyna5q.js:366730-366807 placement
 function isOwnRepositoryCheckout(path, commonDir) {
   let location = worktreeLocationOf(path);
   return location !== null && compareWithOutsideContainment(location.checkout, dirname(commonDir)) === "same";
 }
-//@ chunk-s61vbvea.js:448139-448361 placement
+//@ chunk-7jxyna5q.js:366807-367029 placement
 /**
  * 判断 worktree 路径确属一个仓库，且该仓库与给定的某个目录的规范 git 根相同（三处 R6 身份比对都为 same）。
  */
@@ -1199,19 +1199,19 @@ function isSameRepoWorktree(worktreePath, roots) {
     );
   });
 }
-//@ chunk-s61vbvea.js:448361-448485 placement
+//@ chunk-7jxyna5q.js:367029-367153 placement
 /**
  * 求路径所属的 git 根目录（普通与规范化根，加上额外候选），排除特殊路径并去重。
  */
 function gitRootsForPath(path, ...extraRoots) {
   if (isNonWslUncPath(path) || isNetworkMountRoot(path)) return [];
-  return uniq(
+  return normalizeCaseForComparison_2(
     [findGitRoot(path), findCanonicalGitRoot(path), ...extraRoots].filter(
       (root) => root !== null && root !== undefined && !isNonWslUncPath(root) && !isNetworkMountRoot(root),
     ),
   );
 }
-//@ chunk-s61vbvea.js:448485-449839 placement
+//@ chunk-7jxyna5q.js:367153-368507 placement
 function BLOCKED_CWD_MESSAGES(path, isolationRoot) {
   {
     let roots = sharedCheckoutRoots(path, isolationRoot);
@@ -1231,14 +1231,14 @@ function BLOCKED_CWD_MESSAGES(path, isolationRoot) {
   }
   return null;
 }
-//@ chunk-s61vbvea.js:449839-449967 placement
+//@ chunk-7jxyna5q.js:368507-368635 placement
 function linkedWorktreeRepoRoot(roots) {
   let canonical = roots.dir.canonical;
   let canonical_2 = roots.worktree.canonical;
   if (canonical === null || canonical_2 === null || isCanonicalUnderRoot(canonical, canonical_2)) return null;
   return isLinkedWorktree(canonical) ? findGitRoot(canonical) : null;
 }
-//@ chunk-s61vbvea.js:449967-450139 placement
+//@ chunk-7jxyna5q.js:368635-368807 placement
 /**
  * worktree 隔离提示中的主语：当前会话的 worktree 时称 This session，否则称 This agent。
  */
@@ -1253,14 +1253,14 @@ function isolationSubjectWords(worktreePath) {
         possessive: "a worktree-isolated agent's",
       };
 }
-//@ chunk-s61vbvea.js:450139-450181 placement
+//@ chunk-7jxyna5q.js:368807-368849 placement
 /**
  * 共享检出根的越界部分。
  */
 function escapedSharedRoots(path, worktreeDir) {
   return sharedCheckoutRoots(path, worktreeDir).escaped;
 }
-//@ chunk-s61vbvea.js:450181-450855 placement
+//@ chunk-7jxyna5q.js:368849-369523 placement
 /**
  * 计算隔离 worktree 需要拦住的共享检出根：原始 cwd、会话启动锚点及其 git 根/规范 git 根，统一做包含判断解析。
  */
@@ -1268,7 +1268,7 @@ function sharedCheckoutRoots(path, worktreePath) {
   let containmentTarget = resolveContainmentTarget(path);
   let currentWorktreeSession = getCurrentWorktreeSession();
   let worktreeTarget = null;
-  let checkoutDirs = uniq(
+  let checkoutDirs = normalizeCaseForComparison_2(
     (currentWorktreeSession !== null && currentWorktreeSession.worktreePath === worktreePath
       ? [currentWorktreeSession.originalCwd]
       : [getOriginalCwd(), currentWorktreeSession?.originalCwd]
@@ -1300,7 +1300,9 @@ function sharedCheckoutRoots(path, worktreePath) {
     ...(liveLaunchAnchor !== undefined && !hasAnchorRoots ? [liveLaunchAnchor] : []),
     linkedRootPath,
   ];
-  let mapped = uniq(rawRoots.filter((root) => root !== null)).map((root) => resolveContainmentTarget(root));
+  let mapped = normalizeCaseForComparison_2(rawRoots.filter((root) => root !== null)).map((root) =>
+    resolveContainmentTarget(root),
+  );
   if (!mapped.some((root) => isOutsideContainment(containmentTarget, root)))
     return {
       dir: containmentTarget,
@@ -1323,19 +1325,19 @@ function sharedCheckoutRoots(path, worktreePath) {
     escaped: true,
   };
 }
-//@ chunk-s61vbvea.js:450855-450956 placement
+//@ chunk-7jxyna5q.js:369523-369624 placement
 function canonicalRepoRootOrSentinel(path) {
   if (!isLinkedWorktree(path)) return REPO_NEGATIVE_RESULT;
   let containmentTarget = resolveContainmentTarget(path);
   if (!detectTerminal(findGitRoot(path), containmentTarget.lexical)) return REPO_NEGATIVE_RESULT;
   return findCanonicalGitRoot(path) ?? REPO_NEGATIVE_RESULT;
 }
-//@ chunk-s61vbvea.js:450956-451034 placement
+//@ chunk-7jxyna5q.js:369624-369702 placement
 function linkedRepoRootOf(worktreePath) {
   let root = memoizeMap(getGitRepoCache().linkedFromRootByPin, worktreePath, canonicalRepoRootOrSentinel);
   return root === REPO_NEGATIVE_RESULT ? null : root;
 }
-//@ chunk-s61vbvea.js:451034-451166 placement (2.1.88 match: detectTerminal, 0.92)
+//@ chunk-7jxyna5q.js:369702-369835 placement (2.1.88 match: detectTerminal, 0.92)
 function detectTerminal(gitRoot, lexical, platform = "linux") {
   if (gitRoot === null) return false;
   let spelledRoot = platform === "darwin" ? isSystemVolumePath(gitRoot) : gitRoot;
@@ -1343,12 +1345,12 @@ function detectTerminal(gitRoot, lexical, platform = "linux") {
   else spelledRoot = toWin32Backslashes(isWslLocalhostPath(spelledRoot));
   return spelledRoot === lexical;
 }
-//@ chunk-s61vbvea.js:451166-451191 placement
+//@ chunk-7jxyna5q.js:369835-369860 placement
 var EMPTY_RUNTIME; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:451166", () => {
+deferInit("chunk-7jxyna5q.js:369835", () => {
   EMPTY_RUNTIME = Object.freeze({});
 });
-//@ chunk-s61vbvea.js:451191-451302 placement
+//@ chunk-7jxyna5q.js:369860-369971 placement
 class IsolationRuntimeSlot {
   #e;
   register(runtime) {
@@ -1361,30 +1363,30 @@ class IsolationRuntimeSlot {
     return this.#e !== undefined;
   }
 }
-//@ chunk-s61vbvea.js:451302-451327 placement
+//@ chunk-7jxyna5q.js:369971-369996 placement
 var isolationRuntimeByHost; // deferred: uses IsolationRuntimeSlot of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:451302", () => {
+deferInit("chunk-7jxyna5q.js:369971", () => {
   isolationRuntimeByHost = new HostScoped(() => new IsolationRuntimeSlot());
 });
-//@ chunk-s61vbvea.js:451327-451364 placement
+//@ chunk-7jxyna5q.js:369996-370033 placement
 function isolationRuntime() {
   return isolationRuntimeByHost.of(getRootSession().host);
 }
-//@ chunk-s61vbvea.js:451364-451397 placement
+//@ chunk-7jxyna5q.js:370033-370066 placement
 /**
  * 注册隔离运行时。
  */
 function registerIsolationRuntime(runtime) {
   isolationRuntime().register(runtime);
 }
-//@ chunk-s61vbvea.js:451397-451432 placement
+//@ chunk-7jxyna5q.js:370066-370101 placement
 /**
  * 取隔离运行时服务。
  */
 function isolationRuntimeService() {
   return isolationRuntime().runtime;
 }
-//@ chunk-e6aww6q8.js:1369111-1369264 placement
+//@ chunk-5xgkngpb.js:1368617-1368770 placement
 /**
  * 后台会话隔离方式：环境变量 CLAUDE_BG_ISOLATION（worktree/none）优先，其次后台接管设置，最后读 settings.worktree.bgIsolation。
  */
@@ -1393,9 +1395,9 @@ function getBgIsolationSetting() {
   if (CLAUDE_BG_ISOLATION === "worktree" || CLAUDE_BG_ISOLATION === "none") return CLAUDE_BG_ISOLATION;
   let bgTakeover = getBgTakeover();
   if (bgTakeover) return bgTakeover.bgIsolation;
-  return getInitialSettings_2().worktree?.bgIsolation;
+  return getInitialSettings().worktree?.bgIsolation;
 }
-//@ chunk-e6aww6q8.js:1369264-1371063 placement
+//@ chunk-5xgkngpb.js:1368770-1370572 placement
 /**
  * 检查路径是否在 worktree 隔离范围内，范围外时提示改写 worktree 中的副本。
  */
@@ -1438,7 +1440,7 @@ function checkWorktreeIsolation_2(path, ctx) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:1371063-1371467 placement
+//@ chunk-5xgkngpb.js:1370572-1370976 placement
 /**
  * 写入路径落在 worktree 围栏内的共享检出而非当前 worktree 时，返回提示"请编辑 worktree 中的副本"；在配置目录内等情况放行（返回 null）。
  */
@@ -1471,11 +1473,11 @@ function worktreeFenceWriteNotice(path, worktreePath) {
     worktreeCanonical,
   );
 }
-//@ chunk-e6aww6q8.js:1371467-1371622 placement
+//@ chunk-5xgkngpb.js:1370976-1371131 placement
 function isolatedWorktreeEditMessage(noun, worktreePath, canonicalPath, worktreeCanonical) {
   return `${noun} is isolated in the worktree ${worktreePath}. Edit the worktree copy of this file instead of the shared-checkout path.${describeCaseOnlyMismatch(canonicalPath, worktreeCanonical, worktreePath)}`;
 }
-//@ chunk-e6aww6q8.js:1371622-1371778 placement
+//@ chunk-5xgkngpb.js:1371131-1371287 placement
 function pathContainmentKind(target, roots) {
   if (hasUnresolvedCanonicalPath(target)) return "unresolvable";
   let rootList = Array.isArray(roots) ? roots : [roots];
@@ -1483,14 +1485,14 @@ function pathContainmentKind(target, roots) {
     return "network";
   return "contained";
 }
-//@ chunk-e6aww6q8.js:1371778-1372214 placement
+//@ chunk-5xgkngpb.js:1371287-1371723 placement
 /**
  * 写入因路径无法安全解析（符号链接含原始点段、网络/设备命名空间、祖先目录不可读）被拦截时的说明，建议改用直接的普通路径（或 worktree 内的无链接路径）。
  */
 function unresolvableWriteMessage(worktreePath) {
   return `This write was blocked because the path is spelled in a form that cannot be safely resolved (for example through a symlink storing a raw dot segment, a network-share or device-namespace shape, or an unreadable ancestor directory). ${worktreePath === undefined ? "Retry the edit addressing the file by a direct, plainly-spelled path." : `If the file is inside the worktree ${worktreePath}, address it by its direct symlink-free path instead.`}`;
 }
-//@ chunk-e6aww6q8.js:1372214-1372627 placement
+//@ chunk-5xgkngpb.js:1371723-1372136 placement
 /**
  * 写入因路径是网络形态（UNC 共享或 /net 自动挂载）而本会话检出在本地被拦截时的说明，建议用本地普通路径访问。
  */
@@ -1499,29 +1501,29 @@ function networkWriteMessage(worktreePath) {
 }
 export {
   getBgIsolationSetting,
+  checkWorktreeIsolation_2,
+  isolationRuntimeService,
   stripControlCharsForMessage,
   checkWorktreeIsolationSync,
   gitRootsForPath,
   compareSameContainment,
   worktreeLocationOf,
-  isolationWorktreeFor,
-  isolationRuntimeService,
-  isSameRepoWorktree,
-  registerIsolationRuntime,
-  checkWorktreeIsolation,
-  checkWorktreeIsolation_2,
+  hasHostWorktreeDeclaration,
+  BLOCKED_CWD_MESSAGES,
   isolationSubjectWords,
-  escapedSharedRoots,
+  isolationWorktreeFor,
   getClaudeWorktreesDir,
   checkWorktreePath,
   candidateWorktreeDirs,
   worktreesDirSpec,
+  checkWorktreeIsolation,
   parseWorktreeAddError,
   describeRepoRelativeLocation,
   worktreesDirSpecs,
   CONTROL_CHAR_RE,
   CONTROL_OR_FORMAT_CHAR_RE,
   getWorktreesDirSpec,
-  hasHostWorktreeDeclaration,
-  BLOCKED_CWD_MESSAGES,
+  registerIsolationRuntime,
+  isSameRepoWorktree,
+  escapedSharedRoots,
 };

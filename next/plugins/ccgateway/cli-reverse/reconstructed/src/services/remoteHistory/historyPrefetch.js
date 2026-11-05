@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程会话历史预取与缓存
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pmgfyvx7.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bwxq9hmx.js (6)
  * attribution: placement 6
  */
 import { join, dirname } from "path";
@@ -40,20 +40,20 @@ import {
 import { fetchOlderEvents } from "../../assistant/sessionHistory.js";
 import { sleep } from "../../utils/sleep.js";
 
-//@ chunk-pmgfyvx7.js:12911-12929 placement
+//@ chunk-bwxq9hmx.js:14087-14105 placement
 /**
  * 远程会话历史的两个宿主注入钩子：PREFETCH_STATE 提供回复通道判定，G 判定事件是否来自项目成员（均为 null 表示未注入）。
  */
 var PREFETCH_STATE = null;
 var projectPersonEventFilter = null;
-//@ chunk-pmgfyvx7.js:12929-12979 placement
+//@ chunk-bwxq9hmx.js:14105-14155 placement
 var HISTORY_PAGE_SIZE = PREFETCH_EVENT_PAGE_SIZE;
 var MAX_HISTORY_EXTRA_PAGES = 4;
 var HISTORY_WALK_BUDGET_MS = 500;
 var MAX_SPOOL_BYTES = 16000000;
 var PREVIOUS_SPOOL_CLEANUP_DELAY_MS = 30000;
 var SETTLED_PREFETCH_TTL_MS = 3000;
-//@ chunk-pmgfyvx7.js:12979-13348 placement
+//@ chunk-bwxq9hmx.js:14155-14524 placement
 function historySpoolDir() {
   let state = bridgeHostState();
   if (state.historySpoolDir !== null) return state.historySpoolDir;
@@ -83,7 +83,7 @@ function historySpoolDir() {
   });
   return pendingDir;
 }
-//@ chunk-pmgfyvx7.js:13348-15125 placement
+//@ chunk-bwxq9hmx.js:14524-16301 placement
 /**
  * 为云端会话预取历史事件并写入本地缓存目录（仅第一方）。
  */
@@ -203,7 +203,7 @@ function startHistoryPrefetch(sessionId, credentials, options) {
     );
   });
 }
-//@ chunk-pmgfyvx7.js:15125-15785 placement
+//@ chunk-bwxq9hmx.js:16301-16961 placement
 async function readSpooledHistory(sessionId, { path, digest }) {
   try {
     let stats = await lstat(path);
@@ -250,7 +250,7 @@ async function readSpooledHistory(sessionId, { path, digest }) {
     skip: "altered",
   };
 }
-//@ chunk-pmgfyvx7.js:15785-16650 placement
+//@ chunk-bwxq9hmx.js:16961-17826 placement
 async function takePrefetchedHistory(sessionId, credentials) {
   let historyPrefetchEntries = bridgeHostState().historyPrefetchEntries;
   if (!historyPrefetchEntries.has(sessionId)) startHistoryPrefetch(sessionId, credentials);

@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：MCP 结果规范化与回填。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8t8n4kdh.js (7)
- * attribution: placement 7
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sywnjtqb.js (8)
+ * attribution: placement 7, layout 1
  */
 import {
   MAX_CACHEABLE_LIST_ITEMS,
@@ -19,7 +19,7 @@ import { getIsNonInteractiveSession, getLastPersonPrompt } from "../../bootstrap
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 
-//@ chunk-8t8n4kdh.js:25977-26695 placement
+//@ chunk-sywnjtqb.js:27386-28104 placement
 /**
  * installModernResultBackfill：modern 协议下包装 transport，若 tools/list 等结果缺 resultType/ttlMs/cacheScope，补默认值（complete/0/private）并对每种方法告警一次。
  */
@@ -57,7 +57,7 @@ function installModernResultBackfill(transport, name) {
     }
   };
 }
-//@ chunk-8t8n4kdh.js:26695-26803 placement
+//@ chunk-sywnjtqb.js:28104-28212 placement
 function hasProtocolVersionMeta(message) {
   let _meta = message.params?._meta;
   return (
@@ -67,7 +67,7 @@ function hasProtocolVersionMeta(message) {
     typeof _meta[PROTOCOL_VERSION_META_KEY] === "string"
   );
 }
-//@ chunk-8t8n4kdh.js:26803-27087 placement
+//@ chunk-sywnjtqb.js:28212-28496 placement
 function backfillModernResult(method, result) {
   let filled = [];
   if (result.resultType === undefined) {
@@ -86,12 +86,12 @@ function backfillModernResult(method, result) {
   }
   return filled;
 }
-//@ chunk-8t8n4kdh.js:27087-27101 placement
+//@ chunk-sywnjtqb.js:28496-28510 placement
 /**
  * 因提问暂停结果回填的最长时间（230000 毫秒）。
  */
 var MAX_QUESTION_PAUSE_MS = 230000;
-//@ chunk-8t8n4kdh.js:27101-27207 placement
+//@ chunk-sywnjtqb.js:28510-28616 placement
 function shouldPauseForQuestions(config, callTimeoutMs) {
   return (
     callTimeoutMs < MAX_QUESTION_PAUSE_MS &&
@@ -100,7 +100,17 @@ function shouldPauseForQuestions(config, callTimeoutMs) {
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_rosy_finch", false) === true
   );
 }
-//@ chunk-8t8n4kdh.js:27207-27342 placement
+//@ chunk-sywnjtqb.js:28616-28763 layout
+function isProbeAllowed(config) {
+  if (!getIsNonInteractiveSession() || (config.timeout ?? 0) > MAX_QUESTION_PAUSE_MS) return 0;
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_enchanted_leaf", 0);
+  return typeof featureValue_CACHED_MAY_BE_STALE === "number" &&
+    Number.isFinite(featureValue_CACHED_MAY_BE_STALE) &&
+    featureValue_CACHED_MAY_BE_STALE > 0
+    ? featureValue_CACHED_MAY_BE_STALE * 1000
+    : 0;
+}
+//@ chunk-sywnjtqb.js:28763-28898 placement
 function isAppOnSnugOrbitList() {
   let clientPlatform = getLastPersonPrompt()?.clientPlatform;
   if (clientPlatform === undefined) return false;
@@ -110,35 +120,45 @@ function isAppOnSnugOrbitList() {
     featureValue_CACHED_MAY_BE_STALE.includes(clientPlatform)
   );
 }
-//@ chunk-8t8n4kdh.js:27342-27861 placement
+//@ chunk-sywnjtqb.js:28898-29600 placement
 /**
  * 为 MCP 调用安装"提问暂停"：服务器提问期间暂停超时计时（有上限），应用在名单内时跳过，并记录特性状态。
  */
-function installQuestionPause(watchdog, { inFlight, timeoutMs, armTimeout, timedOut }) {
+function installQuestionPause(
+  watchdog,
+  { inFlight, timeoutMs, pauses, questionBoundMs, armTimeout, timedOut },
+) {
   let startTime = performance.now();
   let remainingMs = timeoutMs;
   let openQuestions = 0;
   let pausedAt = 0;
   let paused = false;
-  let skipped;
+  let startedAt = false;
+  let deadlineMs;
   let rearm = (timeoutMs) => {
     if (inFlight?.has(watchdog)) armTimeout(startTime + timeoutMs - performance.now(), timeoutMs);
   };
   watchdog.questionOpened = () => {
-    if (skipped === undefined) {
-      skipped = isAppOnSnugOrbitList();
-      if (skipped) logFeatureSad("mcp_question_pause", "skipped_app_on_list");
+    if (deadlineMs === undefined) {
+      deadlineMs = !pauses || isAppOnSnugOrbitList();
+      if (pauses && deadlineMs) logFeatureSad("mcp_question_pause", "skipped_app_on_list");
     }
-    if (skipped) return;
-    paused = true;
+    if (deadlineMs && questionBoundMs === 0) return;
+    paused ||= !deadlineMs;
     if (openQuestions++ === 0) {
       pausedAt = performance.now();
-      rearm(MAX_QUESTION_PAUSE_MS);
+      let pauseCount = deadlineMs ? remainingMs : MAX_QUESTION_PAUSE_MS;
+      let pausedBoundMs = pausedAt - startTime + questionBoundMs;
+      startedAt = questionBoundMs > 0 && pausedBoundMs < pauseCount;
+      rearm(startedAt ? pausedBoundMs : pauseCount);
     }
   };
   watchdog.questionClosed = () => {
-    if (!skipped && --openQuestions === 0) {
-      remainingMs = Math.min(remainingMs + performance.now() - pausedAt, MAX_QUESTION_PAUSE_MS);
+    if (deadlineMs && questionBoundMs === 0) return;
+    if (--openQuestions === 0) {
+      if (!deadlineMs)
+        remainingMs = Math.min(remainingMs + performance.now() - pausedAt, MAX_QUESTION_PAUSE_MS);
+      startedAt = false;
       rearm(remainingMs);
     }
   };
@@ -146,11 +166,12 @@ function installQuestionPause(watchdog, { inFlight, timeoutMs, armTimeout, timed
     if (paused) logFeatureOk("mcp_question_pause");
   };
   timedOut.catch(() => {
-    if (paused)
+    if (startedAt) logFeatureSad("mcp_question_pause", "question_bound_timeout");
+    else if (paused)
       logFeatureSad(
         "mcp_question_pause",
         openQuestions > 0 || remainingMs === MAX_QUESTION_PAUSE_MS ? "ceiling_timeout" : "timeout",
       );
   });
 }
-export { installModernResultBackfill, shouldPauseForQuestions, installQuestionPause };
+export { installModernResultBackfill, shouldPauseForQuestions, isProbeAllowed, installQuestionPause };

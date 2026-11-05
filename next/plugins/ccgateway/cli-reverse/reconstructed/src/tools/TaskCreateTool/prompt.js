@@ -3,19 +3,19 @@
  *
  * TaskCreate 描述与提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TaskCreateTool/prompt.ts
- * pieces: chunk-kxyd0g16.js (2)
+ * pieces: chunk-fmnbrxwy.js (2)
  * attribution: fingerprint 2
  */
 import { isAgentSwarmsEnabled } from "../../utils/agentSwarmsEnabled.js";
 
-//@ chunk-kxyd0g16.js:137578-137622 fingerprint (2.1.88 match: DESCRIPTION, 1)
+//@ chunk-fmnbrxwy.js:152305-152349 fingerprint (2.1.88 match: DESCRIPTION, 1)
 /**
  * TaskCreate 描述。
  */
 var DESCRIPTION = "Create a new task in the task list";
-//@ chunk-kxyd0g16.js:137622-140086 fingerprint (2.1.88 match: getPrompt, 0.8)
+//@ chunk-fmnbrxwy.js:152349-154813 fingerprint (2.1.88 match: getPrompt, 0.8)
 /**
  * TaskCreate 提示词（agent swarms 下补充分配给队友的说明）。
  */

@@ -3,10 +3,10 @@
  *
  * 附件消息分派：文件/目录/诊断/hook 结果与错误/技能/记忆/计划/队友关停/任务状态等约 40 种附件的显示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/AttachmentMessage.tsx
- * pieces: chunk-ah34pb7m.js (16)
- * attribution: placement 6, sole-consumer 2, affinity 1, fingerprint 5, layout 2
+ * pieces: chunk-wjygkcr4.js (17)
+ * attribution: placement 6, layout 3, sole-consumer 2, affinity 1, fingerprint 5
  */
 import { sep, basename } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -72,9 +72,9 @@ import { useAppState } from "../../state/AppState.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:79262-79342 placement
+//@ chunk-wjygkcr4.js:81066-81146 placement
 var WITHHELD_FILE_INPUT_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ah34pb7m.js:79262", () => {
+deferInit("chunk-wjygkcr4.js:81066", () => {
   WITHHELD_FILE_INPUT_SCHEMA = DoctorLazy(() =>
     create_16([
       create({
@@ -86,12 +86,12 @@ deferInit("chunk-ah34pb7m.js:79262", () => {
     ]),
   );
 });
-//@ chunk-ah34pb7m.js:79342-79346 placement
+//@ chunk-wjygkcr4.js:81146-81150 layout
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:79342", () => {
+deferInit("chunk-wjygkcr4.js:81146", () => {
   init_react_production();
 });
-//@ chunk-ah34pb7m.js:79389-80073 placement
+//@ chunk-wjygkcr4.js:81193-81877 placement
 /**
  * 被扣留文件的一行：说明文本 + 标记 + 加粗路径（从开头截断）。
  */
@@ -159,7 +159,7 @@ function WithheldFileLine(props) {
   } else lineBox = $[14];
   return lineBox;
 }
-//@ chunk-ah34pb7m.js:80073-80168 placement
+//@ chunk-wjygkcr4.js:81877-81972 placement
 function renderWithheldFile(file, keyPrefix) {
   return jsxProd_default(
     MessageResponse,
@@ -172,7 +172,7 @@ function renderWithheldFile(file, keyPrefix) {
     `${keyPrefix} ${file.path}`,
   );
 }
-//@ chunk-ah34pb7m.js:80168-80589 placement
+//@ chunk-wjygkcr4.js:81972-82393 placement
 /**
  * 列出被扣留的文件（显示前若干条，其余以"还有 N 个"提示）。
  */
@@ -225,24 +225,29 @@ function WithheldFilesList(props) {
   } else containerElement = $[9];
   return containerElement;
 }
-//@ chunk-ah34pb7m.js:80589-80593 placement
+//@ chunk-wjygkcr4.js:90335-90339 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:80589", () => {
+deferInit("chunk-wjygkcr4.js:90335", () => {
   init_react_production();
 });
-//@ chunk-ah34pb7m.js:127634-127672 sole-consumer
+//@ chunk-wjygkcr4.js:90339-90343 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:90339", () => {
+  init_react_production();
+});
+//@ chunk-wjygkcr4.js:129344-129382 sole-consumer
 function isNonBlank(text) {
   return text.trim() !== "";
 }
-//@ chunk-ah34pb7m.js:127672-127710 sole-consumer
+//@ chunk-wjygkcr4.js:129382-129420 sole-consumer
 function isNonBlank_2(text) {
   return text.trim() !== "";
 }
-//@ chunk-ah34pb7m.js:127710-127748 affinity
+//@ chunk-wjygkcr4.js:129420-129458 affinity
 function isNonBlank_3(text) {
   return text.trim() !== "";
 }
-//@ chunk-ah34pb7m.js:127748-145759 fingerprint (2.1.88 match: AttachmentMessage, 0.493)
+//@ chunk-wjygkcr4.js:129458-147467 fingerprint (2.1.88 match: AttachmentMessage, 0.492)
 /**
  * 附件分派：按 attachment.type 渲染——file/directory/notebook/pdf_reference（"Read N lines"）、file_unchanged、diagnostics、selected_lines_in_ide/diff、hook_*（成功/阻塞错误/非阻塞错误/取消/系统消息/权限决定）、async_hook_response、skill_listing/invoked_skills/dynamic_skill、relevant_memories/nested_memory/account_memory_recall、plan_file_reference、queued_command、task_status、teammate_shutdown_batch、goal_status、tool_hosts_* 等；不在 NULL_RENDERING_TYPES 中的才显示。
  */
@@ -270,11 +275,11 @@ function AttachmentMessage(props) {
     let earlyReturn;
     if ($[0] !== attachment.messages || $[1] !== transcriptMode) {
       earlyReturn = EARLY_RETURN_SENTINEL;
-      X: {
+      ee: {
         let parsed = visibleTeammateMailboxMessages(attachment.messages);
         if (parsed.length === 0) {
           earlyReturn = null;
-          break X;
+          break ee;
         }
         let renderMailboxMessage;
         if ($[6] !== transcriptMode) {
@@ -1122,7 +1127,7 @@ function AttachmentMessage(props) {
       let earlyReturn;
       if ($[162] !== isTranscriptMode || $[163] !== hookRows || $[164] !== verbose) {
         earlyReturn = EARLY_RETURN_SENTINEL;
-        Mt: {
+        wt: {
           let keepHookRow;
           if ($[168] !== isTranscriptMode || $[169] !== verbose) {
             keepHookRow = (id) => verbose || (isTranscriptMode && id.hookEvent !== "SessionStart");
@@ -1133,7 +1138,7 @@ function AttachmentMessage(props) {
           let filtered = hookRows.filter(keepHookRow);
           if (filtered.length === 0) {
             earlyReturn = null;
-            break Mt;
+            break wt;
           }
           LineComponent = Line;
           children = filtered.map(renderAsyncHookCompletedItem);
@@ -1174,7 +1179,7 @@ function AttachmentMessage(props) {
         $[177] !== showNotice
       ) {
         earlyReturn = EARLY_RETURN_SENTINEL;
-        bt: {
+        St: {
           errorText = attachment.blockingError.blockingError.trim();
           if (showNotice) {
             earlyReturn = jsxProd_default(NoticeRowMessage, {
@@ -1185,7 +1190,7 @@ function AttachmentMessage(props) {
               }),
               addMargin,
             });
-            break bt;
+            break St;
           }
         }
         $[174] = addMargin;
@@ -1244,7 +1249,7 @@ function AttachmentMessage(props) {
         $[191] !== showNotice
       ) {
         earlyReturn = EARLY_RETURN_SENTINEL;
-        So: {
+        _t: {
           errorText = firstLineOfHookOutput(attachment.stderr, attachment.stdout);
           if (showNotice) {
             earlyReturn = jsxProd_default(NoticeRowMessage, {
@@ -1255,7 +1260,7 @@ function AttachmentMessage(props) {
               }),
               addMargin,
             });
-            break So;
+            break _t;
           }
         }
         $[187] = addMargin;
@@ -1716,7 +1721,7 @@ function AttachmentMessage(props) {
     }
   }
 }
-//@ chunk-ah34pb7m.js:145759-146048 fingerprint (2.1.88 match: TaskStatusMessage, 1)
+//@ chunk-wjygkcr4.js:147467-147756 fingerprint (2.1.88 match: TaskStatusMessage, 1)
 function TaskStatusMessage(props) {
   let $ = useMemoCache(4);
   let { attachment } = props;
@@ -1744,7 +1749,7 @@ function TaskStatusMessage(props) {
   } else t1 = $[3];
   return t1;
 }
-//@ chunk-ah34pb7m.js:146048-146614 fingerprint (2.1.88 match: GenericTaskStatus, 0.778)
+//@ chunk-wjygkcr4.js:147756-148322 fingerprint (2.1.88 match: GenericTaskStatus, 0.778)
 function GenericTaskStatus(props) {
   let $ = useMemoCache(6);
   let { attachment } = props;
@@ -1794,7 +1799,7 @@ function GenericTaskStatus(props) {
   } else statusBox = $[5];
   return statusBox;
 }
-//@ chunk-ah34pb7m.js:146614-147479 fingerprint (2.1.88 match: TeammateTaskStatus, 0.749)
+//@ chunk-wjygkcr4.js:148322-149187 fingerprint (2.1.88 match: TeammateTaskStatus, 0.749)
 function TeammateTaskStatus(props) {
   let $ = useMemoCache(13);
   let { attachment } = props;
@@ -1865,13 +1870,11 @@ function TeammateTaskStatus(props) {
   } else statusBox = $[12];
   return statusBox;
 }
-//@ chunk-ah34pb7m.js:147479-147839 layout
+//@ chunk-wjygkcr4.js:149187-149508 layout
 function getFileAttachmentSummaryKind(content, truncated) {
   if (!isPlainObject(content)) return;
   let file = isPlainObject(content.file) ? content.file : undefined;
   switch (content.type) {
-    case "file_unchanged":
-      return "unchanged";
     case "notebook":
       return Array.isArray(file?.cells) ? `${file.cells.length} cells` : undefined;
     case "text":
@@ -1880,7 +1883,7 @@ function getFileAttachmentSummaryKind(content, truncated) {
       return typeof file?.originalSize === "number" ? formatFileSize(file.originalSize) : undefined;
   }
 }
-//@ chunk-ah34pb7m.js:147839-148151 layout
+//@ chunk-wjygkcr4.js:149508-149820 layout
 function firstLineOfHookOutput(stderr, stdout) {
   let output = stderr?.trim() ? stderr : stdout?.trim() ? stdout : "";
   if (!output) return "";
@@ -1906,7 +1909,7 @@ Expected schema:`,
   let trimmed_2 = trimmed.slice(lineStart).trim();
   return trimmed_2.length > 200 ? trimmed_2.slice(0, 200) + "\u2026" : trimmed_2;
 }
-//@ chunk-ah34pb7m.js:148151-148396 fingerprint (2.1.88 match: Line, 0.832)
+//@ chunk-wjygkcr4.js:149820-150065 fingerprint (2.1.88 match: Line, 0.831)
 function Line(props) {
   let $ = useMemoCache(4);
   let { dimColor, children, color } = props;

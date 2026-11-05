@@ -3,9 +3,9 @@
  *
  * 安装 systemd 用户服务（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ksvdmrg0.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y2nrbm62.js (18)
  * attribution: placement 18
  */
 import { stat, mkdir, writeFile, unlink, readFile, access } from "fs/promises";
@@ -22,15 +22,15 @@ import { execFileNoThrow } from "../../utils/execFileNoThrow.js";
 import { isPossibleClaudeBinary } from "../../utils/nativeInstaller/installer.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ksvdmrg0.js:2754-2772 placement
+//@ chunk-y2nrbm62.js:2593-2611 placement
 /**
  * 懒加载的 semver 模块。
  */
 var semverModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ksvdmrg0.js:2754", () => {
+deferInit("chunk-y2nrbm62.js:2593", () => {
   semverModule = __toESM(require_semver_3(), 1);
 });
-//@ chunk-ksvdmrg0.js:3090-3165 placement
+//@ chunk-y2nrbm62.js:2929-3004 placement
 /**
  * 调用 systemctl 时的固定选项。
  */
@@ -39,7 +39,7 @@ var SYSTEMCTL_OPTIONS = {
   useCwd: false,
   useToolMemoryCgroup: false,
 };
-//@ chunk-ksvdmrg0.js:3165-3311 placement
+//@ chunk-y2nrbm62.js:3004-3150 placement
 /**
  * 判断当前用户是否有 systemd 用户会话（XDG_RUNTIME_DIR 下存在 systemd 目录）。
  */
@@ -51,7 +51,7 @@ async function hasSystemdUserSession() {
     return false;
   }
 }
-//@ chunk-ksvdmrg0.js:3311-3383 placement
+//@ chunk-y2nrbm62.js:3150-3222 placement
 /**
  * 服务里 ExecStart 指向的可执行文件路径。
  */
@@ -59,14 +59,14 @@ function daemonExecutablePath() {
   if (!isStandaloneExecutable()) return process.argv[1];
   return join(getUserBinDir(), "claude");
 }
-//@ chunk-ksvdmrg0.js:3383-3451 placement
+//@ chunk-y2nrbm62.js:3222-3290 placement
 /**
  * 转义 systemd 值（换行变空格，% 变 %%）。
  */
 function escapeSystemdValue(logPath) {
   return logPath.replace(/[\r\n]/g, " ").replaceAll("%", "%%");
 }
-//@ chunk-ksvdmrg0.js:3451-3512 placement
+//@ chunk-y2nrbm62.js:3290-3351 placement
 /**
  * 需要时给 systemd 参数加引号。
  */
@@ -74,12 +74,12 @@ function quoteSystemdArg(value) {
   let escaped = escapeSystemdValue(value);
   return escaped.includes(" ") ? `"${escaped}"` : escaped;
 }
-//@ chunk-ksvdmrg0.js:3512-3616 placement
+//@ chunk-y2nrbm62.js:3351-3455 placement
 function getSystemdUnitPath() {
   let configHome = env.XDG_CONFIG_HOME || join(homedir(), ".config");
   return join(configHome, "systemd", "user", `${COM_ANTHROPIC_CLAUDE_DAEMON}.service`);
 }
-//@ chunk-ksvdmrg0.js:3616-3672 placement
+//@ chunk-y2nrbm62.js:3455-3511 placement
 /**
  * 判断 daemon 服务单元文件是否存在。
  */
@@ -89,7 +89,7 @@ async function isDaemonServiceInstalled() {
     () => false,
   );
 }
-//@ chunk-ksvdmrg0.js:3672-4957 placement
+//@ chunk-y2nrbm62.js:3511-4796 placement
 /**
  * 安装 systemd 用户服务（拒绝安装未包装运行的服务）
  */
@@ -170,7 +170,7 @@ WantedBy=default.target
     servicePath: "",
   };
 }
-//@ chunk-ksvdmrg0.js:4957-5253 placement
+//@ chunk-y2nrbm62.js:4796-5092 placement
 async function uninstallDaemonService() {
   {
     let systemdUnitPath = getSystemdUnitPath();
@@ -195,28 +195,28 @@ async function uninstallDaemonService() {
     error: "service uninstall not available on linux",
   };
 }
-//@ chunk-ksvdmrg0.js:5253-5293 placement
+//@ chunk-y2nrbm62.js:5092-5132 placement
 /**
  * 启动 daemon 服务（systemctl --user start）。
  */
 async function startDaemonService() {
   return runSystemctl("start");
 }
-//@ chunk-ksvdmrg0.js:5293-5332 placement
+//@ chunk-y2nrbm62.js:5132-5171 placement
 /**
  * 停止 daemon 服务。
  */
 async function stopDaemonService() {
   return runSystemctl("stop");
 }
-//@ chunk-ksvdmrg0.js:5332-5374 placement
+//@ chunk-y2nrbm62.js:5171-5213 placement
 /**
  * 重启 daemon 服务。
  */
 async function restartDaemonService() {
   return runSystemctl("restart");
 }
-//@ chunk-ksvdmrg0.js:5374-5710 placement
+//@ chunk-y2nrbm62.js:5213-5549 placement
 /**
  * 通过 systemctl --user 启停/重启 daemon 服务，失败时返回错误文字。
  */
@@ -247,7 +247,7 @@ async function runSystemctl(action) {
     error: `service ${action} not available on ${"linux"} \u2014 the daemon runs on demand instead`,
   };
 }
-//@ chunk-ksvdmrg0.js:5710-5969 placement
+//@ chunk-y2nrbm62.js:5549-5808 placement
 async function readServiceExecStart() {
   let systemdUnitPath = getSystemdUnitPath();
   if (!systemdUnitPath) return null;
@@ -263,14 +263,14 @@ async function readServiceExecStart() {
     (match) => match[1] ?? match[2],
   );
 }
-//@ chunk-ksvdmrg0.js:5969-6014 placement
+//@ chunk-y2nrbm62.js:5808-5853 placement
 /**
  * 反转义 systemd 值（%% 变回 %）。
  */
 function unescapeSystemdValue(value) {
   return value.replaceAll("%%", "%");
 }
-//@ chunk-ksvdmrg0.js:6014-6326 placement
+//@ chunk-y2nrbm62.js:5853-6165 placement
 /**
  * 检查 systemd 服务的 ExecStart：daemon 前的可执行路径是否已不存在、启动前缀中的二进制是否失效。
  */
@@ -297,7 +297,7 @@ async function checkServiceExecStart() {
     }
   return state;
 }
-//@ chunk-ksvdmrg0.js:6326-6521 placement
+//@ chunk-y2nrbm62.js:6165-6360 placement
 async function daemonServiceStatus() {
   {
     let { code, stderr, error } = await execFileNoThrow(
@@ -312,14 +312,14 @@ async function daemonServiceStatus() {
 }
 export {
   daemonServiceStatus,
-  hasSystemdUserSession,
+  daemonExecutablePath,
   uninstallDaemonService,
-  stopDaemonService,
+  hasSystemdUserSession,
   installDaemonService,
   checkServiceExecStart,
   startDaemonService,
+  restartDaemonService,
+  stopDaemonService,
   semverModule,
   isDaemonServiceInstalled,
-  daemonExecutablePath,
-  restartDaemonService,
 };

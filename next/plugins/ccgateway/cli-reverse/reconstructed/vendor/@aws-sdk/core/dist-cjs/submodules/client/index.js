@@ -1,13 +1,13 @@
 /**
  * @aws-sdk/core/dist-cjs/submodules/client/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/core@3.936.0
- * pieces: chunk-wr5gyt6x.js (1)
+ * pieces: chunk-d7rgbgn3.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 
-//@ chunk-wr5gyt6x.js:226-1118 cjs-fingerprint
+//@ chunk-d7rgbgn3.js:226-1118 cjs-fingerprint
 var require_client = __commonJS(function (cjsExports) {
   var state = {
     warningEmitted: false,

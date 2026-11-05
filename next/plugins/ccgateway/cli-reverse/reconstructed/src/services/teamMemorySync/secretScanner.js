@@ -3,10 +3,10 @@
  *
  * 密钥扫描与脱敏引擎（规则表、PEM 私钥、key=value 赋值、HTTP 头值判别）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/teamMemorySync/secretScanner.ts
- * pieces: chunk-151tygw9.js (1), chunk-cgr0tezp.js (38), chunk-jy3v56kg.js (1), chunk-nmregrje.js (1), chunk-s61vbvea.js (1)
- * attribution: fingerprint 6, affinity 1, placement 32, layout 3
+ * pieces: chunk-2jb250pa.js (39), chunk-7jxyna5q.js (1), chunk-cm73gsrm.js (1), chunk-g8sg6xj8.js (1)
+ * attribution: affinity 1, placement 32, fingerprint 6, layout 3
  */
 import {
   allowSeparatorsInPattern,
@@ -29,11 +29,11 @@ import {
   ANTHROPIC_KEY_LABEL,
   ANTHROPIC_KEY_IN_PATH_REGEX,
 } from "../../skills/bundled/pluginAuthoring/secretScanTool.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { getSecretScanVariants } from "../memoryStore/memoryKeys.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-cgr0tezp.js:43122-43347 affinity
+//@ chunk-2jb250pa.js:8192-8416 affinity
 function redactMatches(target, pattern, redactMatchKeepPrefix) {
   let edits = [];
   for (let match of target.text.matchAll(pattern)) {
@@ -46,7 +46,7 @@ function redactMatches(target, pattern, redactMatchKeepPrefix) {
   }
   return applyTextEdits(target, edits);
 }
-//@ chunk-cgr0tezp.js:43347-43695 placement (2.1.88 match: initCharAscii, 0.716)
+//@ chunk-2jb250pa.js:8416-8763 placement (2.1.88 match: initCharAscii, 0.716)
 function applyTextEdits(target, edits) {
   if (edits.length === 0) return target;
   let { text, origin } = target;
@@ -72,7 +72,7 @@ function applyTextEdits(target, edits) {
     origin: table,
   };
 }
-//@ chunk-cgr0tezp.js:51715-60332 fingerprint (2.1.88 match: SECRET_RULES, 0.516)
+//@ chunk-2jb250pa.js:16786-25375 fingerprint (2.1.88 match: SECRET_RULES, 0.516)
 /**
  * 密钥扫描的规则表与全部正则片段：键名模式、值形态、JWT、各云厂商令牌规则，以及置信度与预筛标记。
  */
@@ -112,7 +112,7 @@ var JWT_SEGMENT_PAIR;
 var JWT_PATTERN;
 var SECRET_RULES;
 var MIN_PRIVATE_KEY_BODY_CHARS;
-deferInit("chunk-cgr0tezp.js:51715", () => {
+deferInit("chunk-2jb250pa.js:16786", () => {
   SECRET_KEY_NAME_RE = new RegExp(
     allowSeparatorsInPattern(
       String.raw`api[_-]?key|secret|token|password|passwd|credential|bearer|authorization|auth[_-]?header|memory[_-]?request[_-]?mac|cookie|session[_-]?(?:id|key)|connection[_-]?string|(?:private|ssh|encryption|signing|access|deploy|master|license)[_-]?key|client[_-]?secret`,
@@ -523,7 +523,7 @@ deferInit("chunk-cgr0tezp.js:51715", () => {
   ];
   MIN_PRIVATE_KEY_BODY_CHARS = 64;
 });
-//@ chunk-cgr0tezp.js:60332-60640 layout
+//@ chunk-2jb250pa.js:25375-25683 layout
 /**
  * 查找 PEM 私钥块（BEGIN … PRIVATE KEY 到 END）。
  */
@@ -541,11 +541,11 @@ function findPrivateKeyBlock(text, lastIndex) {
     end: match_2.index + match_2[0].length,
   };
 }
-//@ chunk-cgr0tezp.js:60640-60677 layout
+//@ chunk-2jb250pa.js:25683-25720 layout
 function containsPrivateKey(text) {
   return findPrivateKeyBlock(text, 0) !== null;
 }
-//@ chunk-cgr0tezp.js:60677-60821 layout (2.1.88 match: redactSecrets, 0.815)
+//@ chunk-2jb250pa.js:25720-25864 fingerprint (2.1.88 match: redactSecrets, 0.814)
 function redactSecrets_2(content) {
   let pemBlocks = findPemBlocks(content);
   if (pemBlocks.length === 0) return content;
@@ -557,7 +557,7 @@ function redactSecrets_2(content) {
   }
   return result + content.slice(cursor);
 }
-//@ chunk-cgr0tezp.js:60821-61171 placement
+//@ chunk-2jb250pa.js:25864-26214 placement
 /**
  * 文本中是否有 PEM 私钥块。
  */
@@ -585,14 +585,14 @@ function findPemBlocks(text) {
     blocks.push(privateKeyBlock);
   return blocks;
 }
-//@ chunk-cgr0tezp.js:61171-61265 placement
+//@ chunk-2jb250pa.js:26214-26308 placement
 /**
  * 令牌边界的两个断言（前后不允许标识符字符）。
  */
 var SECRET_VALUE_TERMINATOR = `(?:[\\x60'"\\s;]|\\\\[nr]|$)`;
 var TOKEN_BOUNDARY_AFTER = "(?=[^a-zA-Z0-9_\\-+=]|$)";
 var TOKEN_BOUNDARY_BEFORE = "(?<![a-zA-Z0-9_\\-])";
-//@ chunk-cgr0tezp.js:61265-61632 placement
+//@ chunk-2jb250pa.js:26308-26675 placement
 /**
  * 编译显示用的密钥匹配规则。
  */
@@ -624,7 +624,7 @@ function compileDisplayRules() {
     };
   });
 }
-//@ chunk-cgr0tezp.js:61632-62061 placement
+//@ chunk-2jb250pa.js:26675-27103 placement
 /**
  * 编译密钥扫描规则（预过滤、置信度）。
  */
@@ -656,11 +656,11 @@ function compileSecretRules(globalRegex) {
     };
   });
 }
-//@ chunk-cgr0tezp.js:62061-62122 placement
+//@ chunk-2jb250pa.js:27103-27164 placement
 function stripTrailingDelimiter(source) {
   return source.endsWith(SECRET_VALUE_TERMINATOR) ? source.slice(0, -SECRET_VALUE_TERMINATOR.length) : source;
 }
-//@ chunk-cgr0tezp.js:62122-62333 placement
+//@ chunk-2jb250pa.js:27164-27374 placement
 function replaceSecretValue(text, value) {
   if (typeof value !== "string") return "[REDACTED]";
   let quote =
@@ -668,7 +668,7 @@ function replaceSecretValue(text, value) {
   let index = text.lastIndexOf(value);
   return `${text.slice(0, index)}${quote}[REDACTED]${quote}${text.slice(index + value.length)}`;
 }
-//@ chunk-cgr0tezp.js:62333-62574 placement
+//@ chunk-2jb250pa.js:27374-27615 placement
 function redactMatchKeepPrefix(match) {
   let value = match[1];
   if (typeof value !== "string")
@@ -685,7 +685,7 @@ function redactMatchKeepPrefix(match) {
     keepEnd: match[0].length - index - value.length + quoteOffset,
   };
 }
-//@ chunk-cgr0tezp.js:62574-62765 placement
+//@ chunk-2jb250pa.js:27615-27806 placement
 function findSecretAssignmentRanges(text) {
   let mapped = collectUrlRedactions(text, ASSIGNMENT_RULES).map(({ start, end }) => {
     let quoteOffset = /^(["'])[^]*\1$/.test(text.slice(start, end)) ? 1 : 0;
@@ -697,18 +697,18 @@ function findSecretAssignmentRanges(text) {
     ? mapped
     : mergeRanges([...mapped, ...sshUrlUserinfoSpans, ...keyValueSecretRanges]);
 }
-//@ chunk-cgr0tezp.js:62765-62801 placement
+//@ chunk-2jb250pa.js:27806-27842 placement
 /**
  * 赋值形式（key=value）扫描的两套编译结果缓存（普通与转义）。
  */
 var assignmentScanCache; // deferred: uses SECRET_KEY_NAME_RE of its import cycle while loading; runs once the cycle is complete
 var regExp_12;
 var MAX_NEXT_KEY_CHARS;
-deferInit("chunk-cgr0tezp.js:62765", () => {
+deferInit("chunk-2jb250pa.js:27806", () => {
   regExp_12 = new RegExp(MASKED_VALUE_TAIL, "y");
   MAX_NEXT_KEY_CHARS = 512;
 });
-//@ chunk-cgr0tezp.js:62801-63182 placement
+//@ chunk-2jb250pa.js:27842-28221 placement
 /**
  * 赋值形式（key=value）密钥扫描器。
  */
@@ -735,7 +735,7 @@ function findKeyValueSecretRanges(text) {
     ? [...ranges, ...scanAssignments(text, assignmentScanCache.escaped)]
     : ranges;
 }
-//@ chunk-cgr0tezp.js:63182-63767 placement
+//@ chunk-2jb250pa.js:28221-28806 placement
 /**
  * 扫描 key=value 中的敏感值区间。
  */
@@ -782,7 +782,7 @@ function scanAssignments(text, { assign, nextKey, valueWithWhitespace, skipsStra
   }
   return ranges;
 }
-//@ chunk-cgr0tezp.js:63767-63945 placement
+//@ chunk-2jb250pa.js:28806-28984 placement
 function mergeRanges(sshUrlUserinfoSpans) {
   let sorted = sshUrlUserinfoSpans
     .filter(([start, end]) => end > start)
@@ -795,7 +795,7 @@ function mergeRanges(sshUrlUserinfoSpans) {
   }
   return merged;
 }
-//@ chunk-cgr0tezp.js:63945-64293 placement (2.1.88 match: redactSecrets, 0.815)
+//@ chunk-2jb250pa.js:28984-29330 placement (2.1.88 match: redactSecrets, 0.814)
 /**
  * 按原文位置映射对跟踪文本做遮盖。
  */
@@ -824,13 +824,13 @@ function redactTrackedRanges(target, ranges) {
   }
   return applyTextEdits(target, edits);
 }
-//@ chunk-cgr0tezp.js:64293-64311 placement
+//@ chunk-2jb250pa.js:29330-29348 placement
 /**
  * 扫描器的两个上限：可缓存的输入长度与结果缓存条目数。
  */
 var MAX_CACHED_SCAN_INPUT_CHARS = 512;
 var MAX_SCAN_RESULT_CACHE_ENTRIES = 512;
-//@ chunk-cgr0tezp.js:64311-66178 placement
+//@ chunk-2jb250pa.js:29348-31204 placement
 /**
  * 密钥扫描器：按规则表编译测试/脱敏/展示三套正则（带结果缓存），提供 scan、redactContext、redactTokens、redactForDisplay 等。
  */
@@ -945,56 +945,56 @@ class SecretScanner {
     return result;
   }
 }
-//@ chunk-cgr0tezp.js:66178-66191 placement
+//@ chunk-2jb250pa.js:31204-31217 placement
 /**
  * 全局 SecretScanner 单例，所有扫描/脱敏函数都委托给它。
  */
 var secretScanner; // deferred: uses SecretScanner of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-cgr0tezp.js:66178", () => {
+deferInit("chunk-2jb250pa.js:31204", () => {
   secretScanner = new SecretScanner();
 });
-//@ chunk-cgr0tezp.js:66191-66224 placement
+//@ chunk-2jb250pa.js:31217-31250 placement
 /**
  * 扫描文本中的疑似密钥，返回命中规则列表。
  */
 function scanForSecrets(text) {
   return secretScanner.scan(text);
 }
-//@ chunk-cgr0tezp.js:66224-66258 placement
+//@ chunk-2jb250pa.js:31250-31284 placement
 /**
  * 遮盖文本中的密钥。
  */
 function redactSecrets(text) {
   return secretScanner.redact(text);
 }
-//@ chunk-cgr0tezp.js:66258-66316 placement
+//@ chunk-2jb250pa.js:31284-31341 placement
 /**
  * 先按上下文（key=value 等）再按令牌形状脱敏，替换为 [REDACTED]。
  */
 function redactSecretsInText(text) {
   return secretScanner.redactTokens(secretScanner.redactContext(text));
 }
-//@ chunk-cgr0tezp.js:66316-66358 placement
+//@ chunk-2jb250pa.js:31341-31383 placement
 function redactSecretContext(text) {
   return secretScanner.redactContext(text);
 }
-//@ chunk-cgr0tezp.js:66358-66399 placement
+//@ chunk-2jb250pa.js:31383-31424 placement
 function redactSecretTokens(text) {
   return secretScanner.redactTokens(text);
 }
-//@ chunk-cgr0tezp.js:66399-66443 placement
+//@ chunk-2jb250pa.js:31424-31468 placement
 var regExp_13; // deferred: uses SECRET_KEY_NAME_RE of its import cycle while loading; runs once the cycle is complete
 var regExp_14;
-deferInit("chunk-cgr0tezp.js:66399", () => {
+deferInit("chunk-2jb250pa.js:31424", () => {
   regExp_13 = new RegExp(JWT_PATTERN);
   regExp_14 = new RegExp(JWT_PATTERN, "g");
 });
-//@ chunk-cgr0tezp.js:66443-66457 placement
+//@ chunk-2jb250pa.js:31468-31482 placement
 /**
  * 截断遮盖的窗口大小。
  */
 var REDACT_WINDOW_CHARS = 16384;
-//@ chunk-cgr0tezp.js:66457-66791 placement
+//@ chunk-2jb250pa.js:31482-31813 placement
 /**
  * 遮盖后截断到指定长度。
  */
@@ -1018,26 +1018,30 @@ function redactAndTruncate(text, maxChars) {
     }
   }
 }
-//@ chunk-cgr0tezp.js:66791-66834 placement
+//@ chunk-2jb250pa.js:31813-31851 layout
+function redactSecretPrefix(text, startIndex) {
+  return redactTokensPrefix(redactSecretContext(text), startIndex);
+}
+//@ chunk-2jb250pa.js:31851-31894 placement
 /**
  * shell 元字符正则（含空白、反引号与斜杠等）。
  */
 var SHELL_META_RE = /[$\x60|;&<>()\s]/;
 var SHELL_PUNCT_RE = /[/.@:~*?\\]/;
-//@ chunk-cgr0tezp.js:66834-66931 placement
+//@ chunk-2jb250pa.js:31894-31990 placement
 function redactUnlessShellLike(matched, captured) {
   let candidate = typeof captured === "string" ? captured : matched;
   if (SHELL_META_RE.test(candidate) || SHELL_PUNCT_RE.test(candidate)) return matched;
   return replaceSecretValue(matched, captured);
 }
-//@ chunk-cgr0tezp.js:66931-66976 placement
+//@ chunk-2jb250pa.js:31990-32035 placement
 /**
  * 展示用脱敏（保留可辨识前缀）。
  */
 function redactSecretsForDisplay(text) {
   return secretScanner.redactForDisplay(text);
 }
-//@ chunk-cgr0tezp.js:66976-67406 placement
+//@ chunk-2jb250pa.js:32035-32465 placement
 /**
  * 递归脱敏字符串、数组、对象（含对象键）。
  */
@@ -1067,7 +1071,7 @@ function redactSecretsDeep(value, redactSecretsForDisplay = redactSecrets) {
   }
   return value;
 }
-//@ chunk-cgr0tezp.js:67406-67875 placement
+//@ chunk-2jb250pa.js:32465-32931 placement
 /**
  * 带键名上下文地遮盖值。
  */
@@ -1094,7 +1098,7 @@ function redactKeyedValue(key, value) {
     ? secretScanner.redactOnlyRules(redactTrackedRanges(tracked, localRanges).text.slice(prefix.length))
     : redactSecrets(value);
 }
-//@ chunk-cgr0tezp.js:67875-68132 placement
+//@ chunk-2jb250pa.js:32931-33188 placement
 function redactObjectKeys(keys) {
   let mapped = keys.map((key) => redactSecrets(key));
   if (mapped.every((redactedKey, index) => redactedKey === keys[index])) return mapped;
@@ -1113,14 +1117,14 @@ function redactObjectKeys(keys) {
     return candidate;
   });
 }
-//@ chunk-cgr0tezp.js:68132-68247 placement (2.1.88 match: redactSecrets, 0.815)
+//@ chunk-2jb250pa.js:33188-33303 placement (2.1.88 match: redactSecrets, 0.814)
 function redactSecrets_3(content) {
   let result = Object.create(null);
   for (let [key, value] of Object.entries(content))
     result[key] = SECRET_KEY_NAME_RE.test(key) ? "[REDACTED]" : value;
   return result;
 }
-//@ chunk-cgr0tezp.js:76919-77194 fingerprint (2.1.88 match: ruleIdToLabel, 0.957)
+//@ chunk-2jb250pa.js:41962-42237 fingerprint (2.1.88 match: ruleIdToLabel, 0.957)
 /**
  * 规则 id 片段到展示标签的映射（aws→AWS、jwt→JWT 等）。
  */
@@ -1145,11 +1149,11 @@ var ruleIdToLabel = {
   hashicorp: "HashiCorp",
   sendgrid: "SendGrid",
 };
-//@ chunk-nmregrje.js:1741-1805 fingerprint (2.1.88 match: ANT_KEY_PFX, 0.628)
+//@ chunk-g8sg6xj8.js:10416-10481 fingerprint (2.1.88 match: ANT_KEY_PFX, 0.628)
 function ANT_KEY_PFX(url, body, storage, rollout = "api") {
   return isFirstPartyAnthropicHost(url) ? decideGzip(url, bodyCharCount(body), storage, rollout) : undefined;
 }
-//@ chunk-s61vbvea.js:569876-570050 fingerprint (2.1.88 match: getCompiledRules, 0.704)
+//@ chunk-7jxyna5q.js:487223-487397 fingerprint (2.1.88 match: getCompiledRules, 0.703)
 function getTextAfterLastRuleMatch(text) {
   let lastMatchIndex = -1;
   for (let { re } of [...GH_PR_ACTIONS, ...GLAB_MR_ACTIONS]) {
@@ -1159,15 +1163,13 @@ function getTextAfterLastRuleMatch(text) {
   }
   return lastMatchIndex < 0 ? undefined : getPrAction(text.slice(lastMatchIndex));
 }
-//@ chunk-151tygw9.js:7043-7062 fingerprint (2.1.88 match: redactSecrets, 0.815)
-var REDACTED_PLACEHOLDER = "[REDACTED]";
-//@ chunk-jy3v56kg.js:27929-28144 fingerprint (2.1.88 match: scanForSecrets, 0.425)
+//@ chunk-cm73gsrm.js:28995-29210 fingerprint (2.1.88 match: scanForSecrets, 0.425)
 /**
  * 扫描文本中的密钥（规则 id 与标签）。
  */
 function scanForSecrets_2(content) {
   let variants = content.includes(REPLACEMENT_CHAR)
-    ? uniq([
+    ? normalizeCaseForComparison_2([
         ...getSecretScanVariants(content),
         ...getSecretScanVariants(content.replaceAll(REPLACEMENT_CHAR, "")),
       ])
@@ -1179,26 +1181,26 @@ function scanForSecrets_2(content) {
   );
   if (variants.some((variant) => ANTHROPIC_KEY_IN_PATH_REGEX.test(variant)))
     flattened.push(ANTHROPIC_KEY_LABEL);
-  return uniq(flattened);
+  return normalizeCaseForComparison_2(flattened);
 }
 export {
-  redactSecrets,
-  REDACTED_PLACEHOLDER,
-  redactSecretsDeep,
-  scanForSecrets,
   redactSecretsInText,
-  redactSecrets_3,
-  redactAndTruncate,
-  ANT_KEY_PFX,
+  redactSecrets,
   mergeRanges,
   REDACT_WINDOW_CHARS,
   redactSecretTokens,
-  redactSecretsForDisplay,
-  scanForSecrets_2,
   getTextAfterLastRuleMatch,
+  ANT_KEY_PFX,
+  redactAndTruncate,
+  scanForSecrets,
+  scanForSecrets_2,
+  redactSecretsDeep,
+  redactSecretsForDisplay,
+  redactSecretPrefix,
+  redactSecrets_3,
+  redactKeyedValue,
   redactSecrets_2,
   redactSecretContext,
   regExp_10,
   regExp_11,
-  redactKeyedValue,
 };

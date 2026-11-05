@@ -3,20 +3,20 @@
  *
  * 2.1.316 新增：Read 工具输入参数别名
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: placement 1
  */
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { parseIntegerLike } from "./savedOutputPaths.js";
 
-//@ chunk-e6aww6q8.js:3157684-3158323 placement
+//@ chunk-5xgkngpb.js:3242742-3243381 placement
 /**
  * 规范 Read 工具的 offset/limit 参数（数组、负数等）。
  */
 function normalizeReadInputAliases(rawInput) {
-  if (!isPlainObject_5(rawInput)) return null;
+  if (!isPlainObject_6(rawInput)) return null;
   let normalizedInput = {
     ...rawInput,
   };

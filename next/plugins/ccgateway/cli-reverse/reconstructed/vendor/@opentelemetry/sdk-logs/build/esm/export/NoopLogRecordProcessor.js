@@ -1,12 +1,12 @@
 /**
  * @opentelemetry/sdk-logs/build/esm/export/NoopLogRecordProcessor.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-logs@0.208.0
- * pieces: chunk-aepeg2w5.js (1)
+ * pieces: chunk-exfmq47h.js (1)
  * attribution: esm-fingerprint 1
  */
 
-//@ chunk-aepeg2w5.js:654154-654251 esm-fingerprint
+//@ chunk-exfmq47h.js:666760-666857 esm-fingerprint
 class NoopLogRecordProcessor {
   forceFlush() {
     return Promise.resolve();

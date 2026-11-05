@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自托管 runner 启动时把宿主 ~/.claude 配置拍成快照，按会话种入每个会话的配置目录，并校验快照未被篡改
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hm0ce8vc.js (62)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-asf5gh8x.js (62)
  * attribution: placement 62
  */
 import { constants } from "fs";
@@ -61,11 +61,11 @@ import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { MAX_SYNCED_SKILL_BYTES } from "../../utils/claudeAiSync/skillsSync.js";
 import { throwIfHostConfigCancelled } from "../../entrypoints/sdk/controlSchemas.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { GIT_ENV_VARS_TO_CLEAR as GIT_ENV_VARS_TO_CLEAR_2 } from "../../utils/git/gitSafeEnv.js";
 import { TOKEN_FD_ENV_VARS } from "../../utils/managedEnvConstants.js";
 
-//@ chunk-hm0ce8vc.js:14506-14578 placement
+//@ chunk-asf5gh8x.js:15911-15983 placement
 /**
  * 宿主配置快照目录名前缀 ".host-config-snapshot-"。
  */
@@ -74,7 +74,7 @@ var HOST_CONFIG_SNAPSHOT_TIMEOUT_MS = 300000;
 var HOST_CONFIG_MEMORY_TIMEOUT_MS = 60000;
 var SNAPSHOT_DIR_PREFIX = ".host-config-snapshot-";
 var SNAPSHOT_CHUNK_BYTES = 1048576;
-//@ chunk-hm0ce8vc.js:14578-14672 placement
+//@ chunk-asf5gh8x.js:15983-16077 placement
 /**
  * 打开文件的标志：Windows 只读，其他平台加 O_NOFOLLOW|O_NONBLOCK，防止跟随符号链接或阻塞在 FIFO 上。
  */
@@ -83,7 +83,7 @@ function getNoFollowReadFlags(platform = "linux") {
     ? constants.O_RDONLY
     : constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
 }
-//@ chunk-hm0ce8vc.js:14672-15834 placement
+//@ chunk-asf5gh8x.js:16077-17239 placement
 /**
  * 宿主配置目录里的 skills 子目录；同一声明还定义了快照时要排除的会话态文件集合（.claude.json、凭据、projects、sessions、logs 等）。
  */
@@ -172,7 +172,7 @@ var HOST_CONFIG_EXCLUDED_NAMES = new Set([
   ATOMIC_WRITE_DIRNAME,
 ]);
 var HOST_ROOT_SETTINGS_FILE_NAMES = new Set(["settings.json", "settings.local.json", "claude.md"]);
-//@ chunk-hm0ce8vc.js:15834-15954 placement
+//@ chunk-asf5gh8x.js:17239-17359 placement
 /**
  * 判断快照条目是否位于 hooks 目录（或是顶层 hooks 文件），这类文件读入内存而非复制。
  */
@@ -181,7 +181,7 @@ function isHookPathEntry(relPath) {
   if (index === -1) return HOST_ROOT_SETTINGS_FILE_NAMES.has(relPath.toLowerCase());
   return relPath.slice(0, index).toLowerCase() === "hooks";
 }
-//@ chunk-hm0ce8vc.js:15954-16350 placement
+//@ chunk-asf5gh8x.js:17359-17755 placement
 /**
  * 宿主配置超过快照大小上限时抛出，提示减小或设置 SELF_HOSTED_RUNNER_HOST_CONFIG_DIR。
  */
@@ -194,7 +194,7 @@ class HostConfigOverCapError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_C
     this.name = "HostConfigOverCapError";
   }
 }
-//@ chunk-hm0ce8vc.js:16350-16651 placement
+//@ chunk-asf5gh8x.js:17755-18056 placement
 /**
  * runner 启动后快照被改动时抛出；runner 拒绝再开会话直到重启。
  */
@@ -211,7 +211,7 @@ class HostConfigSnapshotTamperedError extends TelemetrySafeError_I_VERIFIED_THIS
     this.what = what;
   }
 }
-//@ chunk-hm0ce8vc.js:16651-17105 placement
+//@ chunk-asf5gh8x.js:18056-18510 placement
 /**
  * 会话配置路径已存在且不是普通目录/文件时抛出，拒绝穿透写入。
  */
@@ -226,7 +226,7 @@ class HostConfigSeedTargetError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NO
     this.target = targetPath;
   }
 }
-//@ chunk-hm0ce8vc.js:17105-17337 placement
+//@ chunk-asf5gh8x.js:18510-18742 placement
 /**
  * 向会话种配置超时（多为 --base-dir 挂载不健康）。
  */
@@ -239,7 +239,7 @@ class HostConfigSeedTimeoutError extends TelemetrySafeError_I_VERIFIED_THIS_IS_N
     this.name = "HostConfigSeedTimeoutError";
   }
 }
-//@ chunk-hm0ce8vc.js:17337-17582 placement
+//@ chunk-asf5gh8x.js:18742-18987 placement
 /**
  * 快照条目读失败，本会话不启动，下个会话重试。
  */
@@ -252,7 +252,7 @@ class HostConfigSnapshotReadError extends TelemetrySafeError_I_VERIFIED_THIS_IS_
     this.name = "HostConfigSnapshotReadError";
   }
 }
-//@ chunk-hm0ce8vc.js:17582-17671 placement
+//@ chunk-asf5gh8x.js:18987-19076 placement
 /**
  * 是否为上面四类快照/种入错误。
  */
@@ -264,7 +264,7 @@ function isHostConfigSnapshotError(error) {
     error instanceof HostConfigSnapshotReadError
   );
 }
-//@ chunk-hm0ce8vc.js:17671-18015 placement
+//@ chunk-asf5gh8x.js:19076-19420 placement
 /**
  * 生成"宿主配置未应用"的会话提示文本。
  */
@@ -274,7 +274,7 @@ function formatHostConfigNotAppliedNotice(sessionId, notApplied) {
     `Host config from ${notApplied.sourceDir} was not applied: ${notApplied.message}. This session has none of the runner operator's user-level settings, skills, plugins or MCP servers. Operators: see --host-config-snapshot in the self-hosted runner guide; large plugin sets can also be pre-populated with CLAUDE_CODE_PLUGIN_SEED_DIR.`,
   );
 }
-//@ chunk-hm0ce8vc.js:18015-18288 placement
+//@ chunk-asf5gh8x.js:19420-19693 placement
 /**
  * 生成"宿主配置只部分应用"的会话提示文本。
  */
@@ -284,7 +284,7 @@ function formatHostConfigPartiallyAppliedNotice(sessionId, sourceDir, error) {
     `Host config from ${sourceDir} was only partially applied: ${error}. Some of the runner operator's user-level settings, skills, plugins or MCP servers may be missing from this session. Operators: check free space and health of the runner's --base-dir.`,
   );
 }
-//@ chunk-hm0ce8vc.js:18288-18400 placement
+//@ chunk-asf5gh8x.js:19693-19805 placement
 /**
  * 构造 system/informational 级别 warning 的 SDK 消息。
  */
@@ -298,7 +298,7 @@ function makeInformationalWarningMessage(sessionId, content) {
     content,
   };
 }
-//@ chunk-hm0ce8vc.js:18400-18705 placement
+//@ chunk-asf5gh8x.js:19805-20110 placement
 /**
  * 顶层条目过滤：排除会话态文件、点文件、daemon/agent-memory、.claude*.json 及其备份等。
  */
@@ -317,7 +317,7 @@ function shouldSnapshotTopLevelEntry(name) {
     !isHashTempFile(strippedName)
   );
 }
-//@ chunk-hm0ce8vc.js:18705-18810 placement
+//@ chunk-asf5gh8x.js:20110-20215 placement
 /**
  * 判断条目是否由宿主 skills 认领（claim-all 或在认领集合中）而应跳过。
  */
@@ -327,7 +327,7 @@ function isClaimedByHostSkills(relPath, name, name_2, claims) {
     stripInvisibleChars(name) === "skills" && (claims === "claim-all" || claims.has(foldNameForSync(name_2)))
   );
 }
-//@ chunk-hm0ce8vc.js:18810-21863 placement
+//@ chunk-asf5gh8x.js:20215-23268 placement
 /**
  * runner 启动时捕获宿主配置：校验 --base-dir 不在配置目录内，按 disk/memory 两种存储模式生成快照。
  */
@@ -498,7 +498,7 @@ async function captureHostConfigSnapshot(log, options) {
     },
   };
 }
-//@ chunk-hm0ce8vc.js:21863-22099 placement
+//@ chunk-asf5gh8x.js:23268-23504 placement
 /**
  * 通过存储层读取全局配置 ~/.claude.json，缺失时抛 ENOENT。
  */
@@ -512,7 +512,7 @@ async function readGlobalConfigViaStorage(storage) {
     });
   return item.value;
 }
-//@ chunk-hm0ce8vc.js:22099-22184 placement
+//@ chunk-asf5gh8x.js:23504-23589 placement
 /**
  * 已知 MCP 传输类型集合（stdio/sse/http/streamable-http/ws/sdk/claudeai-proxy）。
  */
@@ -525,7 +525,7 @@ var KNOWN_MCP_TRANSPORT_TYPES = new Set([
   "sdk",
   "claudeai-proxy",
 ]);
-//@ chunk-hm0ce8vc.js:22184-22581 placement
+//@ chunk-asf5gh8x.js:23589-23986 placement
 /**
  * 检查 MCP 服务器条目形状，返回问题描述（无问题返回 undefined）。
  */
@@ -542,9 +542,9 @@ function describeMcpServerShapeProblem(server) {
   if (!KNOWN_MCP_TRANSPORT_TYPES.has(serverType)) return `unsupported type "${serverType}"`;
   return;
 }
-//@ chunk-hm0ce8vc.js:22581-22597 placement
+//@ chunk-asf5gh8x.js:23986-24002 placement
 var HOST_CONFIG_SNAPSHOT_MAX_BYTES = 67108864;
-//@ chunk-hm0ce8vc.js:22597-22808 placement
+//@ chunk-asf5gh8x.js:24002-24213 placement
 /**
  * 读取宿主 skills 认领文件；过大或读失败返回 "claim-all"。
  */
@@ -560,7 +560,7 @@ async function readHostSkillsClaims(hostDir) {
   }
   return parseSkillsSyncManifest(rawManifest, join(hostDir, "skills"));
 }
-//@ chunk-hm0ce8vc.js:22808-23237 placement
+//@ chunk-asf5gh8x.js:24213-24642 placement
 /**
  * 递归遍历宿主配置目录，累计字节并收集要快照的文件。
  */
@@ -589,7 +589,7 @@ async function walkHostConfigDir(hostDir, relDir, files, acc, maxHeapBytes, lega
     }
   }
 }
-//@ chunk-hm0ce8vc.js:23237-23358 placement
+//@ chunk-asf5gh8x.js:24642-24763 placement
 /**
  * 若快照已落盘，删除其目录（尽力而为）。
  */
@@ -603,12 +603,12 @@ async function removeCapturedSnapshot(snapshotPromise) {
       });
   } catch {}
 }
-//@ chunk-hm0ce8vc.js:23358-23440 placement
+//@ chunk-asf5gh8x.js:24763-24845 placement
 function isPathInside(parent, child) {
   let relativePath = relative(resolve(child), resolve(parent));
   return relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
 }
-//@ chunk-hm0ce8vc.js:23608-23759 placement
+//@ chunk-asf5gh8x.js:25013-25164 placement
 /**
  * 快照目录写失败。
  */
@@ -620,28 +620,28 @@ class SnapshotDirWriteError extends Error {
     this.name = "SnapshotDirWriteError";
   }
 }
-//@ chunk-hm0ce8vc.js:23759-23836 placement
+//@ chunk-asf5gh8x.js:25164-25241 placement
 /**
  * 匹配快照目录名（主机名-pid-随机串），用于清理陈旧快照。
  */
 var HOST_CONFIG_SNAPSHOT_DIR_PATTERN = /^\.host-config-snapshot-([A-Za-z0-9_.]{1,64})-(\d+)-[A-Za-z0-9]{6}$/;
-//@ chunk-hm0ce8vc.js:23836-23927 placement
+//@ chunk-asf5gh8x.js:25241-25332 placement
 function getSanitizedHostname() {
   let sliced = hostname()
     .replace(/[^A-Za-z0-9_.]/g, "_")
     .slice(0, 64);
   return sliced === "" ? "host" : sliced;
 }
-//@ chunk-hm0ce8vc.js:23927-23978 placement
+//@ chunk-asf5gh8x.js:25332-25383 placement
 function getSnapshotDirPrefixForThisProcess() {
   return `${SNAPSHOT_DIR_PREFIX}${getSanitizedHostname()}-${process.pid}-`;
 }
-//@ chunk-hm0ce8vc.js:23978-23993 placement
+//@ chunk-asf5gh8x.js:25383-25398 placement
 /**
  * 已占用快照目录的 pid 集合（防止同机多个 runner 冲突）。
  */
 var claimedHostPids = new Set();
-//@ chunk-hm0ce8vc.js:23993-24072 placement
+//@ chunk-asf5gh8x.js:25398-25477 placement
 function isProcessAlive(pid) {
   try {
     process.kill(pid, 0);
@@ -650,7 +650,7 @@ function isProcessAlive(pid) {
     return getErrnoCode(error) === "EPERM";
   }
 }
-//@ chunk-hm0ce8vc.js:24072-24631 placement
+//@ chunk-asf5gh8x.js:25477-26036 placement
 /**
  * 启动时删除本机已退出 runner 留下的快照目录；其他主机的快照只提示，不删除。
  */
@@ -685,7 +685,7 @@ async function removeStaleHostConfigSnapshots(baseDir, onStatus) {
       `[runner:warn] kept ${keptFromOtherHostsCount} host config snapshot dir(s) from other hosts under ${baseDir} \u2014 concurrently running runners should not share a --base-dir filesystem`,
     );
 }
-//@ chunk-hm0ce8vc.js:24631-24736 placement
+//@ chunk-asf5gh8x.js:26036-26141 placement
 async function writeAll(handle, buffer) {
   let offset = 0;
   while (offset < buffer.length) {
@@ -693,7 +693,7 @@ async function writeAll(handle, buffer) {
     offset += bytesWritten;
   }
 }
-//@ chunk-hm0ce8vc.js:24736-25540 placement
+//@ chunk-asf5gh8x.js:26141-26945 placement
 /**
  * 以 disk 模式把宿主配置复制到快照目录，捕获期间目录变化则报错。
  */
@@ -765,7 +765,7 @@ async function captureHostConfigToDisk(hostDir, baseDir, files, acc, maxHeapByte
     legacySkillsClaims,
   };
 }
-//@ chunk-hm0ce8vc.js:25540-25851 placement
+//@ chunk-asf5gh8x.js:26945-27256 placement
 /**
  * 递归复制配置树：hooks 读入内存，其余写入快照。
  */
@@ -784,11 +784,11 @@ async function copyHostConfigTree(ctx, relDir) {
       else await copyFileIntoSnapshot(ctx, relPath);
   }
 }
-//@ chunk-hm0ce8vc.js:25851-25964 placement
+//@ chunk-asf5gh8x.js:27256-27369 placement
 function reportEntryDisappearedDuringCapture(ctx, relPath) {
   ctx.onStatus(`[runner:startup] host config snapshot: skipping ${relPath} (disappeared during capture)`);
 }
-//@ chunk-hm0ce8vc.js:25964-26318 placement
+//@ chunk-asf5gh8x.js:27369-27723 placement
 /**
  * 把 hooks 下的文件读入内存（计入内存上限）。
  */
@@ -816,7 +816,7 @@ async function readHookFileIntoMemory(ctx, relPath) {
   });
   ctx.acc.bytes += buf.length;
 }
-//@ chunk-hm0ce8vc.js:26318-27009 placement
+//@ chunk-asf5gh8x.js:27723-28414 placement
 /**
  * 以不跟随链接方式打开源文件，复制到快照并计算 sha256。
  */
@@ -881,10 +881,10 @@ async function copyFileIntoSnapshot(ctx, relPath) {
     await sourceHandle.close().catch(() => {});
   }
 }
-//@ chunk-hm0ce8vc.js:27009-27051 placement
+//@ chunk-asf5gh8x.js:28414-28456 placement
 var CCR_GIT_DIR_NAME = ".ccr-git";
 var CCR_LAUNCHER_DIRS = [".ccr-launcher", CCR_GIT_DIR_NAME];
-//@ chunk-hm0ce8vc.js:27051-27354 placement
+//@ chunk-asf5gh8x.js:28456-28759 placement
 /**
  * 检查 git 目录下的 hooks 是否为普通目录（是其他类型时记日志并返回 false），文件系统操作有卡住超时。
  */
@@ -901,14 +901,14 @@ async function isHooksDirSafe(claudeConfigDir, onStatus, timeoutMs = FS_OP_TIMEO
   }
   return true;
 }
-//@ chunk-hm0ce8vc.js:27354-27387 placement
+//@ chunk-asf5gh8x.js:28759-28792 placement
 /**
  * 记录已发现快照问题的 WeakMap，后续会话直接复用错误。
  */
 var seededSnapshotErrors = new WeakMap();
 var HOOKS_DIR_SAFETY_TIMEOUT_MS = 1e4;
 var HOOKS_CHECK_TIMEOUT_MS = 1e4;
-//@ chunk-hm0ce8vc.js:27387-28773 placement
+//@ chunk-asf5gh8x.js:28792-30178 placement
 /**
  * 把快照种入会话配置目录；发现篡改时记录并拒绝。
  */
@@ -996,7 +996,7 @@ async function seedHostConfigForSession(
     };
   }
 }
-//@ chunk-hm0ce8vc.js:28773-30278 placement
+//@ chunk-asf5gh8x.js:30178-31683 placement
 /**
  * memory 模式：把内存中的文件逐个写入会话配置目录。
  */
@@ -1092,7 +1092,7 @@ async function seedHostConfigFromMemory(configDir, snapshot, configSuffix, seedA
     throw error;
   }
 }
-//@ chunk-hm0ce8vc.js:30278-30514 placement
+//@ chunk-asf5gh8x.js:31683-31919 placement
 /**
  * 确保路径是普通目录（不存在则 0700 创建），否则抛 HostConfigSeedTargetError。
  */
@@ -1111,7 +1111,7 @@ async function ensurePlainDirectory(path) {
   if (!stats.isDirectory()) throw new HostConfigSeedTargetError(path);
   return "found";
 }
-//@ chunk-hm0ce8vc.js:30514-30722 placement
+//@ chunk-asf5gh8x.js:31919-32127 placement
 async function ensureSessionConfigDirs(claudeConfigDir, dirs) {
   await mkdir(claudeConfigDir, {
     recursive: true,
@@ -1127,7 +1127,7 @@ async function ensureSessionConfigDirs(claudeConfigDir, dirs) {
     throw error;
   }
 }
-//@ chunk-hm0ce8vc.js:30722-31054 placement
+//@ chunk-asf5gh8x.js:32127-32459 placement
 /**
  * 逐级确认父目录是普通目录。
  */
@@ -1151,7 +1151,7 @@ async function ensureParentDirsPlain(rootDir, relPath, createdDirs, cancel) {
     createdDirs.add(currentRel);
   }
 }
-//@ chunk-hm0ce8vc.js:31054-31264 placement
+//@ chunk-asf5gh8x.js:32459-32669 placement
 /**
  * 原子写会话配置文件（先写 .seed- 临时文件再改名）。
  */
@@ -1174,7 +1174,7 @@ async function writeSessionFileAtomically(
   let buf = typeof contents === "string" ? Buffer.from(contents) : contents;
   await writeViaTempAndRename(configDir, relPath, mode, seedAcc, (handle) => writeAll(handle, buf));
 }
-//@ chunk-hm0ce8vc.js:31264-31744 placement
+//@ chunk-asf5gh8x.js:32669-33149 placement
 async function writeViaTempAndRename(rootDir, relPath, mode, seedAcc, writeFn) {
   let { cancel } = seedAcc;
   let destPath = join(rootDir, relPath);
@@ -1202,7 +1202,7 @@ async function writeViaTempAndRename(rootDir, relPath, mode, seedAcc, writeFn) {
     throw error;
   }
 }
-//@ chunk-hm0ce8vc.js:31744-31866 placement
+//@ chunk-asf5gh8x.js:33149-33271 placement
 async function unlinkAllReverse(published) {
   let firstError;
   for (let j = published.length - 1; j >= 0; j--)
@@ -1213,7 +1213,7 @@ async function unlinkAllReverse(published) {
     }
   if (firstError !== undefined) throw firstError;
 }
-//@ chunk-hm0ce8vc.js:31866-32169 placement
+//@ chunk-asf5gh8x.js:33271-33574 placement
 async function renameOverPlainFile(tempPath, destPath) {
   try {
     await retryFsOp(tempPath, destPath, rename);
@@ -1237,7 +1237,7 @@ async function renameOverPlainFile(tempPath, destPath) {
   }
   await retryFsOp(tempPath, destPath, rename);
 }
-//@ chunk-hm0ce8vc.js:32240-32475 placement
+//@ chunk-asf5gh8x.js:33645-33880 placement
 /**
  * 描述快照条目被替换成什么（socket、设备节点、非普通文件）。
  */
@@ -1253,7 +1253,7 @@ async function describeChangedEntry(path) {
   if (stats.isCharacterDevice() || stats.isBlockDevice()) return "replaced by a device node";
   return "no longer a regular file";
 }
-//@ chunk-hm0ce8vc.js:32475-32727 placement
+//@ chunk-asf5gh8x.js:33880-34132 placement
 function describeOpenErrno(code) {
   switch (code) {
     case "ENOENT":
@@ -1268,7 +1268,7 @@ function describeOpenErrno(code) {
       return `no longer readable by the runner (${code})`;
   }
 }
-//@ chunk-hm0ce8vc.js:32727-33548 placement
+//@ chunk-asf5gh8x.js:34132-34953 placement
 /**
  * 以快照为准逐个校验条目（大小、sha256、类型），检测被替换/截断/内容变化。
  */
@@ -1322,7 +1322,14 @@ async function verifyAndCopySnapshotEntry(snapshotDir, destRootDir, relPath, man
     await sourceHandle.close().catch(() => {});
   }
 }
-//@ chunk-hm0ce8vc.js:33548-33731 placement
+//@ chunk-asf5gh8x.js:34953-34994 placement
+/**
+ * 公版构建里的空实现。
+ */
+function startClockSkewMonitor({ clock, onStatus }) {
+  return;
+}
+//@ chunk-asf5gh8x.js:34994-35185 placement
 /**
  * 公版构建里的空实现（runner 令牌续期）。
  */
@@ -1332,6 +1339,7 @@ function startRunnerTokenRefresher({
   renewRunnerToken,
   renewSessionTokens,
   isThawing,
+  thaws,
   getRetireAtMs,
   isStopping,
   isHeldOff,
@@ -1342,19 +1350,12 @@ function startRunnerTokenRefresher({
 }) {
   return;
 }
-//@ chunk-hm0ce8vc.js:33731-33772 placement
-/**
- * 公版构建里的空实现。
- */
-function startClockSkewMonitor({ clock, onStatus }) {
-  return;
-}
-//@ chunk-hm0ce8vc.js:33838-33849 placement
+//@ chunk-asf5gh8x.js:35251-35262 placement
 /**
  * 检查 --base-dir 可写的默认超时。
  */
 var BASE_DIR_CHECK_TIMEOUT_MS = 1e4;
-//@ chunk-hm0ce8vc.js:33849-34271 placement
+//@ chunk-asf5gh8x.js:35262-35684 placement
 /**
  * 带超时检查 --base-dir 可创建且可写，失败时提示 NFS/CSI 挂载健康或设置 SELF_HOSTED_RUNNER_BASE_DIR。
  */
@@ -1382,21 +1383,23 @@ async function checkBaseDirWritable(
     );
   }
 }
-//@ chunk-hm0ce8vc.js:34371-34393 placement
+//@ chunk-asf5gh8x.js:35784-35806 placement
 /**
  * 预留的额外 git 目录来源（当前恒 undefined）。
  */
 function extraGitDir(configDir) {
   return;
 }
-//@ chunk-hm0ce8vc.js:34393-34464 placement
+//@ chunk-asf5gh8x.js:35806-35877 placement
 /**
  * 列出会话要清理/搜索的 git 目录。
  */
 function gitSearchDirs(configDir, extraDir) {
-  return uniq([join(configDir, "git"), extraGitDir(extraDir)].filter((dir) => dir !== undefined));
+  return normalizeCaseForComparison_2(
+    [join(configDir, "git"), extraGitDir(extraDir)].filter((dir) => dir !== undefined),
+  );
 }
-//@ chunk-hm0ce8vc.js:34464-34601 placement
+//@ chunk-asf5gh8x.js:35877-36014 placement
 /**
  * 启动会话子进程前清除的 git 全局环境变量。
  */
@@ -1407,7 +1410,7 @@ var GIT_ENV_VARS_TO_CLEAR = new Set([
   "GIT_GRAFT_FILE",
   "GIT_REPLACE_REF_BASE",
 ]);
-//@ chunk-hm0ce8vc.js:34601-34693 placement
+//@ chunk-asf5gh8x.js:36014-36106 placement
 /**
  * 代码审查令牌交接的常量：fd、环境变量名与这些 fd 的 stdio 模式。
  */
@@ -1415,7 +1418,7 @@ var CODE_REVIEW_TOKEN_HANDOFF_FD = 4;
 var CODE_REVIEW_TOKEN_FD = 5;
 var CODE_REVIEW_TOKEN_HANDOFF = "code_review_token_handoff";
 var CHILD_STDIO_MODES = ["pipe", "pipe", "pipe", "pipe", "pipe", "pipe"];
-//@ chunk-hm0ce8vc.js:34693-35012 placement
+//@ chunk-asf5gh8x.js:36106-36425 placement
 /**
  * 构造把宿主认证相关环境变量全部置空的覆盖表。
  */
@@ -1430,7 +1433,7 @@ function buildClearedAuthEnv() {
     CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR: String(CODE_REVIEW_TOKEN_FD),
   };
 }
-//@ chunk-hm0ce8vc.js:35012-35228 placement (2.1.88 match: runComputerUseMcpServer, 0.426)
+//@ chunk-asf5gh8x.js:36425-36641 placement (2.1.88 match: runComputerUseMcpServer, 0.427)
 /**
  * （误归 computerUse/mcpServer）把 sessionToken / inferenceToken 写入子进程额外的 stdio 管道并关闭。
  */

@@ -3,10 +3,10 @@
  *
  * 测试用 VCR：录制/回放 API 响应与 token 计数到 fixtures 文件（本构建 isVcrEnabled 恒为假，运行时直接调用真实函数），以及缓存回放时把成本计入会话。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/vcr.ts
- * pieces: chunk-e6aww6q8.js (16)
- * attribution: sole-consumer 3, affinity 1, fingerprint 7, callgraph-witnessed 1, layout 2, file-local 2
+ * pieces: chunk-5xgkngpb.js (16)
+ * attribution: sole-consumer 3, affinity 1, fingerprint 6, callgraph-witnessed 1, layout 3, file-local 2
  */
 import { createHash, randomUUID } from "crypto";
 import { join, dirname } from "path";
@@ -19,15 +19,15 @@ import { normalizeMessagesForAPI } from "../utils/messages.js";
 import { calculateUSDCost } from "../utils/modelCost.js";
 import { addToTotalSessionCost } from "../cost-tracker.js";
 import { import_mapValues, import_isPlainObject } from "../../vendor/lodash-es/_inlinedHelpers.js";
-import { getClaudeConfigDir } from "../utils/envUtils.js";
+import { getClaudeConfigDir } from "../utils/markdownConfigLoader.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:972881-973168 sole-consumer
+//@ chunk-5xgkngpb.js:986198-986485 sole-consumer
 /**
  * 计算 VCR 指纹时忽略的附件类型（环境、日期、模型、输出风格、会话上下文等易变内容）。
  */
 var VCR_IGNORED_ATTACHMENT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:972881", () => {
+deferInit("chunk-5xgkngpb.js:986198", () => {
   VCR_IGNORED_ATTACHMENT_TYPES = new Set([
     "agent_listing_delta",
     "sandbox_instructions",
@@ -46,28 +46,28 @@ deferInit("chunk-e6aww6q8.js:972881", () => {
     "deferred_tools_record",
   ]);
 });
-//@ chunk-e6aww6q8.js:973168-973192 sole-consumer
+//@ chunk-5xgkngpb.js:986485-986509 sole-consumer
 /**
  * 恒返回 true。
  */
 function alwaysTrue() {
   return true;
 }
-//@ chunk-e6aww6q8.js:973192-973363 sole-consumer
+//@ chunk-5xgkngpb.js:986509-986680 sole-consumer
 /**
  * fixture 缺失时的提示（用 CLAUDE_CODE_TEST_ALLOW_REAL_NETWORK=1 录制）。
  */
 function formatMissingFixtureMessage(label, filename) {
   return `${label} missing: ${filename}. Record it with \`CLAUDE_CODE_TEST_ALLOW_REAL_NETWORK=1 bun run test:file -- <this test file>\`, then commit the new fixture.`;
 }
-//@ chunk-e6aww6q8.js:973363-973387 affinity
+//@ chunk-5xgkngpb.js:986680-986703 affinity
 /**
  * 本构建恒为 false（测试专用的 VCR 被关闭）。
  */
 function isVcrEnabled() {
   return false;
 }
-//@ chunk-e6aww6q8.js:973387-973792 fingerprint (2.1.88 match: withFixture, 0.771)
+//@ chunk-5xgkngpb.js:986703-987107 fingerprint (2.1.88 match: withFixture, 0.771)
 /**
  * 通用 fixture：VCR 开启时按输入哈希读写 fixtures/<名>-<hash>.json，否则直接执行。
  */
@@ -94,7 +94,7 @@ async function withFixture(input, fixtureName, f) {
   });
   return result;
 }
-//@ chunk-e6aww6q8.js:973792-974548 fingerprint (2.1.88 match: withVCR, 0.718)
+//@ chunk-5xgkngpb.js:987107-987862 fingerprint (2.1.88 match: withVCR, 0.718)
 /**
  * API 消息 VCR：过滤易变附件、规整后按内容哈希录放 assistant 消息；未开启直接执行。
  */
@@ -108,7 +108,7 @@ async function withVCR(messages, f) {
       return true;
     }),
   );
-  let dehydratedInput = mapMessages(
+  let dehydratedInput = dehydrateMessages(
     messagesForAPI.map((message) => message.message.content),
     dehydrateValue,
   );
@@ -150,7 +150,7 @@ ${jsonStringify(dehydratedInput, null, 2)}`);
   );
   return results;
 }
-//@ chunk-e6aww6q8.js:974548-974657 callgraph-witnessed (2.1.88 match: addCachedCostToTotalSessionCost, 0.476)
+//@ chunk-5xgkngpb.js:987862-987971 callgraph-witnessed (2.1.88 match: addCachedCostToTotalSessionCost, 0.475)
 /**
  * 回放的 assistant 消息按 usage 重新计价并计入会话成本。
  */
@@ -161,20 +161,20 @@ function addCachedCostToTotalSessionCost(message) {
   let costUSD = calculateUSDCost(model, usage);
   addToTotalSessionCost(costUSD, usage, model);
 }
-//@ chunk-e6aww6q8.js:974657-975151 fingerprint (2.1.88 match: mapMessages, 1)
+//@ chunk-5xgkngpb.js:987971-988465 layout (2.1.88 match: _temp, 1)
 /**
  * 遍历消息内容（字符串或块数组、tool_result 内文本）做文本替换。
  */
-function mapMessages(messages, f) {
-  return messages.map((message) => {
-    if (typeof message === "string") return f(message);
-    return message.map((block) => {
+function dehydrateMessages(messages, dehydrateValue) {
+  return messages.map((entry) => {
+    if (typeof entry === "string") return dehydrateValue(entry);
+    return entry.map((block) => {
       switch (block.type) {
         case "tool_result":
           if (typeof block.content === "string")
             return {
               ...block,
-              content: f(block.content),
+              content: dehydrateValue(block.content),
             };
           if (Array.isArray(block.content))
             return {
@@ -184,7 +184,7 @@ function mapMessages(messages, f) {
                   case "text":
                     return {
                       ...nested,
-                      text: f(nested.text),
+                      text: dehydrateValue(nested.text),
                     };
                   case "image":
                     return nested;
@@ -197,12 +197,12 @@ function mapMessages(messages, f) {
         case "text":
           return {
             ...block,
-            text: f(block.text),
+            text: dehydrateValue(block.text),
           };
         case "tool_use":
           return {
             ...block,
-            input: mapValuesDeep(block.input, f),
+            input: mapValuesDeep(block.input, dehydrateValue),
           };
         case "image":
           return redactImageData(block);
@@ -212,7 +212,7 @@ function mapMessages(messages, f) {
     });
   });
 }
-//@ chunk-e6aww6q8.js:975151-975258 layout
+//@ chunk-5xgkngpb.js:988465-988572 layout
 /**
  * base64 图片数据替换成 [IMAGE_DATA]（fixture 脱敏）。
  */
@@ -226,7 +226,7 @@ function redactImageData(block) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:975258-975388 file-local
+//@ chunk-5xgkngpb.js:988572-988702 file-local
 /**
  * 深度遍历对象/数组，对叶子值套用映射。
  */
@@ -237,7 +237,7 @@ function mapValuesDeep(obj, f) {
     return f(val, key, obj);
   });
 }
-//@ chunk-e6aww6q8.js:975388-976012 fingerprint (2.1.88 match: mapAssistantMessage, 0.662)
+//@ chunk-5xgkngpb.js:988702-989326 fingerprint (2.1.88 match: mapAssistantMessage, 0.627)
 /**
  * 把 assistant 消息规整为可录制形式（固定 uuid/requestId，内容做脱敏）。
  */
@@ -280,7 +280,7 @@ function mapAssistantMessage(message, f, index, uuid) {
     type: "assistant",
   };
 }
-//@ chunk-e6aww6q8.js:976012-976092 file-local
+//@ chunk-5xgkngpb.js:989326-989406 file-local
 /**
  * assistant 消息走 mapAssistantMessage，其他原样。
  */
@@ -288,7 +288,7 @@ function mapMessage(message, f, index, uuid) {
   if (message.type === "assistant") return mapAssistantMessage(message, f, index, uuid);
   else return message;
 }
-//@ chunk-e6aww6q8.js:976092-976864 fingerprint (2.1.88 match: dehydrateValue, 0.894)
+//@ chunk-5xgkngpb.js:989406-990178 fingerprint (2.1.88 match: dehydrateValue, 0.894)
 /**
  * 录制前脱敏：文件数、耗时、成本、cwd、配置目录、UUID 等替换成占位符。
  */
@@ -313,7 +313,7 @@ function dehydrateValue(s_2) {
   if (s1.includes("Files modified by user:")) return "Files modified by user: [FILES]";
   return s1;
 }
-//@ chunk-e6aww6q8.js:976864-977034 fingerprint (2.1.88 match: hydrateValue, 1)
+//@ chunk-5xgkngpb.js:990178-990348 fingerprint (2.1.88 match: hydrateValue, 1)
 /**
  * 回放时把占位符还原（[NUM]→1、[DURATION]→100、[CONFIG_HOME]、[CWD]）。
  */
@@ -325,7 +325,7 @@ function hydrateValue(s) {
     .replaceAll("[CONFIG_HOME]", getClaudeConfigDir())
     .replaceAll("[CWD]", getCwd());
 }
-//@ chunk-e6aww6q8.js:977034-977439 layout
+//@ chunk-5xgkngpb.js:990348-990752 layout
 /**
  * 流式查询的 VCR：录制时把事件收集起来（fallback 的 creditCode 清空），回放时补默认 refusedEffort。
  */
@@ -359,7 +359,7 @@ async function* withStreamVCR(messages, runStream) {
   }
   yield* collected;
 }
-//@ chunk-e6aww6q8.js:977439-977825 fingerprint (2.1.88 match: withTokenCountVCR, 1)
+//@ chunk-5xgkngpb.js:990752-991137 fingerprint (2.1.88 match: withTokenCountVCR, 1)
 /**
  * token 计数请求的 VCR（按 messages+tools 脱敏哈希）。
  */
@@ -381,4 +381,4 @@ async function withTokenCountVCR(messages, tools, f) {
     }))
   ).tokenCount;
 }
-export { withStreamVCR, withVCR, withTokenCountVCR };
+export { withStreamVCR, isVcrEnabled, withVCR, withTokenCountVCR };

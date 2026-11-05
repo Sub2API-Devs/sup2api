@@ -3,10 +3,10 @@
  *
  * 把一棵离屏 React 树渲染成 Screen（搜索定位与静态导出用）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/render-to-screen.ts
- * pieces: chunk-ag5x7vhf.js (1), chunk-bzr73sfg.js (2)
- * attribution: callgraph-fingerprint 1, fingerprint 2
+ * pieces: chunk-2avr6cej.js (2), chunk-hnxhr3bs.js (1)
+ * attribution: fingerprint 2, callgraph-fingerprint 1
  */
 import { cellAtIndex, setCellStyleId, createScreen } from "./screen.js";
 import { getSecondRootError } from "./terminal.js";
@@ -15,7 +15,7 @@ import { Output, serializeScreenRow } from "./output.js";
 import { renderNodeToOutputAlias } from "./render-to-screen-reader.js";
 import { createRenderState, dropSubtreeCache } from "./render-node-to-output.js";
 
-//@ chunk-bzr73sfg.js:319573-320032 fingerprint (2.1.88 match: scanPositions, 0.924)
+//@ chunk-2avr6cej.js:319154-319613 fingerprint (2.1.88 match: scanPositions, 0.924)
 /**
  * 在屏幕上查找查询串（不区分大小写，跳过宽字符占位与 noSelect 格），返回每个匹配的 {row, col, len}（列为屏幕列）。
  */
@@ -56,7 +56,7 @@ function scanPositions(screen, query) {
   }
   return positions;
 }
-//@ chunk-bzr73sfg.js:320032-320291 fingerprint (2.1.88 match: applyPositionedHighlight, 1)
+//@ chunk-2avr6cej.js:319613-319872 fingerprint (2.1.88 match: applyPositionedHighlight, 1)
 /**
  * 把第 currentIdx 个匹配（行加 rowOffset）高亮为“当前匹配”样式。
  */
@@ -74,7 +74,7 @@ function applyPositionedHighlight(screen, stylePool, positions, rowOffset, curre
   }
   return true;
 }
-//@ chunk-ag5x7vhf.js:21309-21878 callgraph-fingerprint (2.1.88 match: renderToScreen, 0.22)
+//@ chunk-hnxhr3bs.js:20156-20725 callgraph-fingerprint (2.1.88 match: renderToScreen, 0.22)
 /**
  * 把滚动容器里 [fromRow, toRow) 范围的内容离屏渲染成 ANSI 文本行（新建 Screen+Output，从内容节点 renderNodeToOutput，渲染后恢复其 cachedLayout 并标脏），用于把已滚出的对话写入终端回滚区等。
  */
@@ -122,4 +122,4 @@ function renderToScreen(scrollBox, fromRow, toRow, width, stylePool) {
   for (let idx = 0; idx < rowsToRender; idx++) lines.push(serializeScreenRow(rendered, stylePool, idx));
   return lines;
 }
-export { renderToScreen, applyPositionedHighlight, scanPositions };
+export { applyPositionedHighlight, scanPositions, renderToScreen };

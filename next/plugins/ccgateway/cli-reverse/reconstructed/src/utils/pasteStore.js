@@ -3,16 +3,16 @@
  *
  * 长粘贴文本存储 <配置目录>/paste-cache/<16位hash>.txt，存取与过期清理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/pasteStore.ts
- * pieces: chunk-eg496hkq.js (1), chunk-s61vbvea.js (16)
- * attribution: fingerprint 4, layout 9, file-local 1, callgraph-fingerprint 1, sole-consumer 2
+ * pieces: chunk-7jxyna5q.js (16)
+ * attribution: fingerprint 4, layout 8, file-local 1, callgraph-fingerprint 1, sole-consumer 2
  */
 import { join } from "path";
 import { createHash } from "crypto";
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession, isDiskless } from "../bootstrap/state.js";
-import { getClaudeConfigDir } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { STORAGE_SPACES } from "./storage/storageSpaces.js";
 import { isDisklessWithoutState } from "../services/orgMemory/memoryStores.js";
 import { warnDisklessSettingsWrite } from "./settings/settingsStorage.js";
@@ -25,10 +25,10 @@ import { isENOENT } from "./errors.js";
 import { readAllPages } from "./pagedRead.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:29553-29581 fingerprint (2.1.88 match: PASTE_STORE_DIR, 1)
+//@ chunk-7jxyna5q.js:30152-30180 fingerprint (2.1.88 match: PASTE_STORE_DIR, 1)
 var PASTE_STORE_DIR = "paste-cache";
 var MAX_RETAINED_FAILED_CHARS = 1e7;
-//@ chunk-s61vbvea.js:29581-30463 layout
+//@ chunk-7jxyna5q.js:30180-31062 layout
 class PasteStoreState {
   inFlight = new Map();
   retainedFailed = new Map();
@@ -71,52 +71,52 @@ class PasteStoreState {
     this.retainedCap = MAX_RETAINED_FAILED_CHARS;
   }
 }
-//@ chunk-s61vbvea.js:30463-30488 layout
+//@ chunk-7jxyna5q.js:31062-31087 layout
 var pasteStoreStateByHost; // deferred: uses PasteStoreState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:30463", () => {
+deferInit("chunk-7jxyna5q.js:31062", () => {
   pasteStoreStateByHost = new HostScoped(() => new PasteStoreState());
 });
-//@ chunk-s61vbvea.js:30488-30525 layout
+//@ chunk-7jxyna5q.js:31087-31124 layout
 function getPasteStoreState() {
   return pasteStoreStateByHost.of(getRootSession().host);
 }
-//@ chunk-s61vbvea.js:30525-30558 layout
+//@ chunk-7jxyna5q.js:31124-31157 layout
 /**
  * 粘贴缓存目录 <配置目录>/paste-cache，内容按 16 位 hex hash 存为 <hash>.txt。
  */
 function getPasteStoreDir() {
   return join(getClaudeConfigDir(), PASTE_STORE_DIR);
 }
-//@ chunk-s61vbvea.js:30558-30629 file-local
+//@ chunk-7jxyna5q.js:31157-31228 file-local
 /**
  * 粘贴文本的 sha256 截取 16 位 hex。
  */
 function hashPastedText(content) {
   return createHash("sha256").update(content).digest("hex").slice(0, 16);
 }
-//@ chunk-s61vbvea.js:30629-30653 layout
+//@ chunk-7jxyna5q.js:31228-31252 layout
 var PASTE_HASH_PATTERN = /^[0-9a-f]{16}$/;
-//@ chunk-s61vbvea.js:30653-30725 layout
+//@ chunk-7jxyna5q.js:31252-31324 layout
 function assertValidPasteHash(hash) {
   if (!PASTE_HASH_PATTERN.test(hash)) throw Error("invalid paste-content hash");
 }
-//@ chunk-s61vbvea.js:30725-30773 layout (2.1.88 match: getPastePath, 1)
-function getPastePath_2(hash) {
+//@ chunk-7jxyna5q.js:31324-31372 fingerprint (2.1.88 match: getPastePath, 1)
+function getPastePath(hash) {
   assertValidPasteHash(hash);
   return join(getPasteStoreDir(), `${hash}.txt`);
 }
-//@ chunk-s61vbvea.js:30773-30813 layout
+//@ chunk-7jxyna5q.js:31372-31412 layout
 function getPasteStorageKey(hash) {
   assertValidPasteHash(hash);
   return STORAGE_SPACES.paste(hash);
 }
-//@ chunk-s61vbvea.js:30813-30882 layout
+//@ chunk-7jxyna5q.js:31412-31481 layout
 function storePastedTextQueued(hash, text, storageV5) {
   let pasteStoreState = getPasteStoreState();
   pasteStoreState.markInFlight(hash, text);
   return storePastedText(hash, text, storageV5, pasteStoreState);
 }
-//@ chunk-s61vbvea.js:30882-31496 callgraph-fingerprint (2.1.88 match: storePastedText, 0.283)
+//@ chunk-7jxyna5q.js:31481-32094 callgraph-fingerprint (2.1.88 match: storePastedText, 0.283)
 /**
  * 把长粘贴文本写入 paste-cache/<hash>.txt（diskless 时跳过）。
  */
@@ -141,9 +141,9 @@ async function storePastedText(hash, text, storageV5, pasteStoreState) {
         logForDebugging(`Paste write refused: ${formatStorageError(writeResult.error)}`);
         throw Error("paste write refused by the storage backend");
       }
-    } else await dir.write(getPastePath_2(hash), text, 384);
+    } else await dir.write(getPastePath(hash), text, 384);
     pasteStoreState.settle(hash);
-    let whereLabel = useDisk ? `to ${getPastePath_2(hash)}` : "in the storage backend";
+    let whereLabel = useDisk ? `to ${getPastePath(hash)}` : "in the storage backend";
     logForDebugging(`Stored paste ${hash} ${whereLabel}`);
     logFeatureOk("paste_store");
   } catch (error) {
@@ -152,7 +152,7 @@ async function storePastedText(hash, text, storageV5, pasteStoreState) {
     logFeatureSad("paste_store", "paste_store_write_failed");
   }
 }
-//@ chunk-s61vbvea.js:31496-31861 fingerprint (2.1.88 match: retrievePastedText, 0.703)
+//@ chunk-7jxyna5q.js:32094-32459 fingerprint (2.1.88 match: retrievePastedText, 0.703)
 /**
  * 按 hash 读取 paste-cache 中的粘贴文本。
  */
@@ -169,14 +169,14 @@ async function retrievePastedText(hash, storageV5) {
       let item = readResult.value.items[0];
       return item.found ? Buffer.from(item.value).toString("utf8") : null;
     }
-    let pastePath = getPastePath_2(hash);
+    let pastePath = getPastePath(hash);
     return await getFileReader().read(pastePath);
   } catch (error) {
     if (!isENOENT(error)) logForDebugging(`Failed to retrieve paste ${hash}: ${error}`);
     return null;
   }
 }
-//@ chunk-s61vbvea.js:31861-32179 fingerprint (2.1.88 match: cleanupOldPastes, 0.748)
+//@ chunk-7jxyna5q.js:32459-32777 fingerprint (2.1.88 match: cleanupOldPastes, 0.748)
 /**
  * 删除超过保留期的旧粘贴文件。
  */
@@ -202,7 +202,7 @@ async function cleanupOldPastes(cutoffDate, storageV5) {
     } catch {}
   }
 }
-//@ chunk-s61vbvea.js:32179-32520 sole-consumer
+//@ chunk-7jxyna5q.js:32777-33118 sole-consumer
 async function cleanupOldPastesViaStorage(storage, cutoffTime) {
   let expiredKeys = [];
   if (
@@ -237,7 +237,7 @@ async function cleanupOldPastesViaStorage(storage, cutoffTime) {
   }
   await cleanupPasteStagingFiles(getPasteStoreDir(), cutoffTime);
 }
-//@ chunk-s61vbvea.js:32520-32765 sole-consumer
+//@ chunk-7jxyna5q.js:33118-33363 sole-consumer
 async function cleanupPasteStagingFiles(pasteStoreDir, cutoffTime) {
   let fileReader = getFileReader();
   let files;
@@ -257,8 +257,4 @@ async function cleanupPasteStagingFiles(pasteStoreDir, cutoffTime) {
     } catch {}
   }
 }
-//@ chunk-eg496hkq.js:44035-44104 fingerprint (2.1.88 match: getPastePath, 1)
-function getPastePath(hash, id) {
-  return `${hash}-${id.replace(/[^a-zA-Z0-9-]/g, "_")}.txt`;
-}
-export { retrievePastedText, hashPastedText, storePastedTextQueued, cleanupOldPastes, getPastePath };
+export { retrievePastedText, hashPastedText, storePastedTextQueued, cleanupOldPastes };

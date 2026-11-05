@@ -1,8 +1,8 @@
 /**
  * qrcode/lib/core/segments.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: qrcode@1.5.4
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -15,7 +15,7 @@ import { require_regex } from "./regex.js";
 import { require_utils } from "./utils.js";
 import { require_dijkstra } from "../../../dijkstrajs/dijkstra.js";
 
-//@ chunk-spjgqa4y.js:14833-17575 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:14833-17575 cjs-fingerprint
 var require_segments = __commonJS(function (cjsExports) {
   var Mode = require_mode();
   var NumericData = require_numeric_data();

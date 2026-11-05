@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：markdown 文件链接转路径。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6vnxsn99.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-01kgd7xg.js (2)
  * attribution: placement 2
  */
 import { isAbsolute, resolve } from "path";
@@ -14,7 +14,7 @@ import { getCwd } from "./cwd.js";
 import { toSafeFileUrl } from "../services/mcp/xaa.js";
 import { isUnsafeFileUrl } from "./pathSanitize.js";
 
-//@ chunk-6vnxsn99.js:72708-73149 placement
+//@ chunk-01kgd7xg.js:74075-74516 placement
 function fileUrlToPath(url) {
   let matches = /^file:/i.test(url);
   if (!matches) {
@@ -40,7 +40,7 @@ function fileUrlToPath(url) {
   let resultUrl = safeFileUrl + suffix;
   return isUnsafeFileUrl(resultUrl) ? null : resultUrl;
 }
-//@ chunk-6vnxsn99.js:73149-73248 placement
+//@ chunk-01kgd7xg.js:74516-74615 placement
 function stripLeadingSlashBeforeDrive(path, isAbsolutePath = isAbsolute) {
   if (/^\/[A-Za-z]:(?=[\\/]|$)/.test(path) && isAbsolutePath(path.slice(1))) return path.slice(1);
   return path;

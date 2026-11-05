@@ -3,14 +3,14 @@
  *
  * 保留快捷键表与按键串规范化；本模块 34 个声明是误归的路径/沙箱/符号常量
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/keybindings/reservedShortcuts.ts
- * pieces: chunk-6qssfmzs.js (4)
- * attribution: fingerprint 2, placement 1, affinity 1
+ * pieces: chunk-q6fxvjg8.js (5)
+ * attribution: fingerprint 2, placement 1, layout 2
  */
 import { getPlatform } from "../utils/platform.js";
 
-//@ chunk-6qssfmzs.js:7531-8790 fingerprint (2.1.88 match: MACOS_RESERVED, 0.618)
+//@ chunk-q6fxvjg8.js:7537-8796 fingerprint (2.1.88 match: MACOS_RESERVED, 0.618)
 /**
  * 保留快捷键：NON_REBINDABLE（ctrl+c/ctrl+d 硬编码、ctrl+m=Enter、ctrl+[=Esc、ctrl+i=Tab、ctrl+h=Backspace、capslock 收不到）；TERMINAL_RESERVED（ctrl+z SIGTSTP 警告、ctrl+\ SIGQUIT）；MACOS_RESERVED（cmd+c/v/x/q/w/tab/space）。
  */
@@ -100,14 +100,22 @@ var MACOS_RESERVED = [
     severity: "error",
   },
 ];
-//@ chunk-6qssfmzs.js:8790-8872 placement (2.1.88 match: getReservedShortcuts, 1)
+//@ chunk-q6fxvjg8.js:8796-8878 placement (2.1.88 match: getReservedShortcuts, 1)
 function getReservedShortcuts() {
   let platform = getPlatform();
   let reserved = [...NON_REBINDABLE, ...TERMINAL_RESERVED];
   if (platform === "macos") reserved.push(...MACOS_RESERVED);
   return reserved;
 }
-//@ chunk-6qssfmzs.js:8959-9131 affinity
+//@ chunk-q6fxvjg8.js:8878-8965 layout (2.1.88 match: parseChord, 1)
+/**
+ * 把按键串规范化成比较用字符串：每步修饰键归一（control→ctrl；opt/option/meta→alt；cmd/command/super/win→cmd）并排序，键名查别名表。
+ */
+function normalizeKeyForComparison(input) {
+  if (input === " ") return "space";
+  return input.trim().split(/\s+/).map(normalizeStep).join(" ");
+}
+//@ chunk-q6fxvjg8.js:8965-9137 layout
 var KEY_ALIASES = {
   esc: "escape",
   return: "enter",
@@ -120,7 +128,7 @@ var KEY_ALIASES = {
   "caps-lock": "capslock",
   caps_lock: "capslock",
 };
-//@ chunk-6qssfmzs.js:9131-9545 fingerprint (2.1.88 match: normalizeStep, 0.892)
+//@ chunk-q6fxvjg8.js:9137-9551 fingerprint (2.1.88 match: normalizeStep, 0.892)
 function normalizeStep(step) {
   let parts = step.split("+");
   let modifiers = [];
@@ -142,4 +150,4 @@ function normalizeStep(step) {
   modifiers.sort();
   return [...modifiers, mainKey].join("+");
 }
-export { NON_REBINDABLE, TERMINAL_RESERVED, MACOS_RESERVED, normalizeStep, getReservedShortcuts };
+export { NON_REBINDABLE, normalizeKeyForComparison, getReservedShortcuts, TERMINAL_RESERVED, MACOS_RESERVED };

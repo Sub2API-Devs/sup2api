@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/advisor 命令
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vhac946c.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hmmw5k0q.js (1)
  * attribution: placement 1
  */
 import { isAdvisorToolEnabled, getValidAdvisorAliases, setAdvisorModelCommand } from "../../utils/advisor.js";
@@ -14,7 +14,7 @@ import { stripAnsi } from "../../utils/stripAnsi.js";
 import { renderDefaultModelSetting } from "../../utils/model/modelDisplay.js";
 import { isBridgeOrVerifiedSlackTurn } from "../../utils/promptSubmissionOrigin.js";
 
-//@ chunk-vhac946c.js:5114-5580 placement
+//@ chunk-hmmw5k0q.js:5619-6086 placement
 /**
  * /advisor 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */

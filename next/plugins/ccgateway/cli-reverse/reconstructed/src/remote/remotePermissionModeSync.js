@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。本地与远端权限模式同步。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (37)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (37)
  * attribution: placement 37
  */
 import { randomUUID } from "crypto";
@@ -38,14 +38,14 @@ import { toError, errorMessage } from "../utils/errors.js";
 import { permissionModeTitle } from "../utils/permissions/PermissionMode.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:238716-238720 placement
+//@ chunk-czq1j3j2.js:243755-243759 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:238716", () => {
+deferInit("chunk-czq1j3j2.js:243755", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:238758-238783 placement
+//@ chunk-czq1j3j2.js:243797-243822 placement
 var MODE_PUSH_RETRY_DELAYS_MS = [1000, 3000, 9000];
-//@ chunk-18hwfzwa.js:238783-239052 placement
+//@ chunk-czq1j3j2.js:243822-244091 placement
 /**
  * 把权限模式发给远端：控制请求未送达时按退避延迟重试，被取代则放弃，延迟用尽调用 onGaveUp；其他错误交给 onNotTaken。
  */
@@ -77,14 +77,14 @@ function sendModeWithRetry({
   };
   attempt(0);
 }
-//@ chunk-18hwfzwa.js:239052-239183 placement
+//@ chunk-czq1j3j2.js:244091-244222 placement
 class ModePushTimeoutError extends Error {
   constructor() {
     super("set_permission_mode push not acknowledged in time");
     this.name = "ModePushTimeoutError";
   }
 }
-//@ chunk-18hwfzwa.js:239183-239565 placement
+//@ chunk-czq1j3j2.js:244222-244604 placement
 class PendingModeAcks {
   pending = [];
   register(mode, timeoutMs) {
@@ -109,28 +109,28 @@ class PendingModeAcks {
     }
   }
 }
-//@ chunk-18hwfzwa.js:239565-239593 placement
+//@ chunk-czq1j3j2.js:244604-244632 placement
 var pendingModeAcksBySession; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:239565", () => {
+deferInit("chunk-czq1j3j2.js:244604", () => {
   pendingModeAcksBySession = new SessionRootSlot(() => new PendingModeAcks());
 });
-//@ chunk-18hwfzwa.js:239593-239634 placement
+//@ chunk-czq1j3j2.js:244632-244673 placement
 function settlePendingModeAck(session, mode, error) {
   pendingModeAcksBySession.of(session).settle(mode, error);
 }
-//@ chunk-18hwfzwa.js:239634-239685 placement
+//@ chunk-czq1j3j2.js:244673-244724 placement
 /**
  * 导出函数 `registerPendingModeAck`：参数 h, x, D，返回 cUe.of(h).register(x, D)。
  */
 function registerPendingModeAck(session, mode, timeoutMs) {
   return pendingModeAcksBySession.of(session).register(mode, timeoutMs);
 }
-//@ chunk-18hwfzwa.js:239685-239760 placement
+//@ chunk-czq1j3j2.js:244724-244799 placement
 function rejectPendingModePush(acks, entry) {
   acks.pending = acks.pending.filter((pendingEntry) => pendingEntry !== entry);
   entry.reject(new ModePushTimeoutError());
 }
-//@ chunk-18hwfzwa.js:239760-239936 placement
+//@ chunk-czq1j3j2.js:244799-244975 placement
 /**
  * 更新 remoteModeSessions 中某会话的记录并把它移到末尾，同时按上限裁剪旧记录（优先删除无未决请求的）；值未变返回原对象。
  */
@@ -142,7 +142,7 @@ function updateSessionEntry(remoteModeSessions, sessionId, update) {
   let sessionEntry = [sessionId, next];
   return Object.fromEntries(trimSessionEntries(entries).concat([sessionEntry]));
 }
-//@ chunk-18hwfzwa.js:239936-240164 placement
+//@ chunk-czq1j3j2.js:244975-245203 placement
 function trimSessionEntries(entries) {
   let overflow = entries.length - 3;
   if (overflow <= 0) return entries;
@@ -156,7 +156,7 @@ function trimSessionEntries(entries) {
   );
   return entries.filter(([sessionId]) => !dropped.has(sessionId));
 }
-//@ chunk-18hwfzwa.js:240164-240320 placement
+//@ chunk-czq1j3j2.js:245203-245359 placement
 /**
  * 创建远程权限模式同步的初始状态（已应用/广播/序号/自身发送与确认）。
  */
@@ -173,7 +173,7 @@ function createModeSyncState() {
     ownAck: null,
   };
 }
-//@ chunk-18hwfzwa.js:240320-240407 placement
+//@ chunk-czq1j3j2.js:245359-245446 placement
 var PERMISSION_MODE_RANKS = {
   default: 0,
   dontAsk: 0,
@@ -183,14 +183,14 @@ var PERMISSION_MODE_RANKS = {
   auto: 3,
   bypassPermissions: 4,
 };
-//@ chunk-18hwfzwa.js:240407-240490 placement
+//@ chunk-czq1j3j2.js:245446-245529 placement
 function isModeMorePermissiveThan(mode, otherMode) {
   return (
     PERMISSION_MODE_RANKS[mode] > PERMISSION_MODE_RANKS[otherMode] ||
     (mode === "acceptEdits" && (otherMode === "auto" || otherMode === "plan"))
   );
 }
-//@ chunk-18hwfzwa.js:240490-240707 placement
+//@ chunk-czq1j3j2.js:245529-245746 placement
 function resolveOutgoingMode(chipMode, mode, modeOrigin, inCloudSession) {
   if (!inCloudSession)
     return {
@@ -217,7 +217,7 @@ function resolveOutgoingMode(chipMode, mode, modeOrigin, inCloudSession) {
         workerHolds: mode,
       };
 }
-//@ chunk-18hwfzwa.js:240707-240882 placement
+//@ chunk-czq1j3j2.js:245746-245921 placement
 /**
  * 记录一次权限模式广播，更新序号与最近变化序号。
  */
@@ -237,7 +237,7 @@ function recordModeBroadcast(modeWire, broadcastMode) {
       seq: nextSeq,
     };
 }
-//@ chunk-18hwfzwa.js:240882-240960 placement
+//@ chunk-czq1j3j2.js:245921-245999 placement
 function recordAppliedMode(modeWire, mode, own = false) {
   modeWire.applied = mode;
   modeWire.lastApplied = {
@@ -246,14 +246,14 @@ function recordAppliedMode(modeWire, mode, own = false) {
     own,
   };
 }
-//@ chunk-18hwfzwa.js:240960-241028 placement
+//@ chunk-czq1j3j2.js:245999-246067 placement
 function noteOwnModeAnswerPending(modeWire, mode) {
   modeWire.ownAnswerPending = {
     mode,
     sent: recordOwnSend(modeWire, mode, "person"),
   };
 }
-//@ chunk-18hwfzwa.js:241028-241248 placement
+//@ chunk-czq1j3j2.js:246067-246287 placement
 /**
  * 若收到的模式与自己等待确认的答复一致，则消费该等待并记录确认。
  */
@@ -272,11 +272,11 @@ function consumeOwnAnswer(modeWire, mode) {
   });
   return true;
 }
-//@ chunk-18hwfzwa.js:241248-241278 placement
+//@ chunk-czq1j3j2.js:246287-246317 placement
 function nextOwnSendSeq(modeWire) {
   modeWire.ownSends += 1;
 }
-//@ chunk-18hwfzwa.js:241278-241397 placement
+//@ chunk-czq1j3j2.js:246317-246436 placement
 /**
  * 记录本端发送的模式变更（递增发送计数），返回发送序号。
  */
@@ -290,7 +290,7 @@ function recordOwnSend(modeWire, mode, origin) {
   modeWire.ownAnswerPending = null;
   return modeWire.ownSends;
 }
-//@ chunk-18hwfzwa.js:241397-241512 placement
+//@ chunk-czq1j3j2.js:246436-246551 placement
 function getLatestOwnSend(modeWire) {
   return modeWire.ownSends === (modeWire.ownSent?.sent ?? 0)
     ? modeWire.ownSent
@@ -300,7 +300,7 @@ function getLatestOwnSend(modeWire) {
         sent: modeWire.ownSends,
       };
 }
-//@ chunk-18hwfzwa.js:241512-241621 placement
+//@ chunk-czq1j3j2.js:246551-246660 placement
 /**
  * 记录本端发送得到的确认（忽略比已有确认更旧的）。
  */
@@ -311,7 +311,7 @@ function recordOwnAck(modeWire, ack) {
     afterBroadcastSeq: modeWire.lastSeq,
   };
 }
-//@ chunk-18hwfzwa.js:241621-241951 placement
+//@ chunk-czq1j3j2.js:246660-246990 placement
 /**
  * 用 updater 更新某远程会话的模式记录（不存在时以默认记录起步），可选择忽略来自旧屏幕的更新。
  */
@@ -337,7 +337,7 @@ function updateRemoteModeSession(setAppState, sessionRef, update, force = false)
         };
   });
 }
-//@ chunk-18hwfzwa.js:241951-242170 placement
+//@ chunk-czq1j3j2.js:246990-247209 placement
 function resolveModeOrigin({ fallback, label, acked, confirmedByAck, sentBefore, inCloudSession }) {
   if (confirmedByAck && acked !== null && acked.mode === fallback) return acked.origin;
   if (
@@ -349,7 +349,7 @@ function resolveModeOrigin({ fallback, label, acked, confirmedByAck, sentBefore,
     return sentBefore.origin;
   return label;
 }
-//@ chunk-18hwfzwa.js:242170-242281 placement
+//@ chunk-czq1j3j2.js:247209-247320 placement
 function setSessionModeLabel(setAppState, sessionRef, mode, origin) {
   updateRemoteModeSession(setAppState, sessionRef, (entry) =>
     entry.label?.mode === mode && entry.label.origin === origin
@@ -363,7 +363,7 @@ function setSessionModeLabel(setAppState, sessionRef, mode, origin) {
         },
   );
 }
-//@ chunk-18hwfzwa.js:242281-242806 placement
+//@ chunk-czq1j3j2.js:247320-247845 placement
 /**
  * 远端确认新模式时，把未决请求改为 landing 状态（来源为本人），已与目标一致则清除。
  */
@@ -406,7 +406,7 @@ function landOutstandingMode(setAppState, sessionId, mode) {
         };
   });
 }
-//@ chunk-18hwfzwa.js:242806-242983 placement
+//@ chunk-czq1j3j2.js:247845-248022 placement
 function retargetToDefault(outstanding) {
   return isModeMorePermissiveThan(outstanding.mode, "default")
     ? {
@@ -420,7 +420,7 @@ function retargetToDefault(outstanding) {
       }
     : outstanding;
 }
-//@ chunk-18hwfzwa.js:242983-243407 placement
+//@ chunk-czq1j3j2.js:248022-248446 placement
 /**
  * 处理没有记录的模式应答：上报 tengu_remote_mode_unrecorded_answer，必要时把未决请求改指向 default。
  */
@@ -449,7 +449,7 @@ function handleUnrecordedAnswer(modeWire, store, setAppState, sessionId) {
         };
   });
 }
-//@ chunk-18hwfzwa.js:243407-243848 placement
+//@ chunk-czq1j3j2.js:248446-248887 placement
 /**
  * 远端已应用某模式时更新会话记录的 applied，并清除已完成的 landing 未决请求。
  */
@@ -490,7 +490,7 @@ function applyRemoteMode(setAppState, sessionId, mode, origin) {
         };
   });
 }
-//@ chunk-18hwfzwa.js:243848-244123 placement
+//@ chunk-czq1j3j2.js:248887-249162 placement
 /**
  * 开始在远程会话中落地一次模式切换：生成 id 并记为该会话的待处理切换。
  */
@@ -521,7 +521,7 @@ function beginModeLanding(setAppState, sessionId, mode, from) {
   });
   return landingId;
 }
-//@ chunk-18hwfzwa.js:244123-244308 placement
+//@ chunk-czq1j3j2.js:249162-249347 placement
 /**
  * 清除远程会话中指定 id 的待处理模式切换。
  */
@@ -543,7 +543,7 @@ function clearOutstandingMode(setAppState, sessionId, convergeEntry) {
         };
   });
 }
-//@ chunk-18hwfzwa.js:244308-244448 placement
+//@ chunk-czq1j3j2.js:249347-249487 placement
 function setOutstandingMode(setAppState, sessionRef, outstanding, previous) {
   updateRemoteModeSession(
     setAppState,
@@ -558,7 +558,7 @@ function setOutstandingMode(setAppState, sessionRef, outstanding, previous) {
     outstanding === null && previous !== undefined,
   );
 }
-//@ chunk-18hwfzwa.js:244448-254618 placement
+//@ chunk-czq1j3j2.js:249487-259657 placement
 /**
  * 云会话权限模式同步：本地按 shift+tab 改模式时推送 set_permission_mode 并等待 ack，远端广播模式变化时落地到本地，冲突/超时时回退并通知（remote-permission-mode-unsynced/rejected）。
  */
@@ -1297,7 +1297,7 @@ function useRemotePermissionModeSync(store, retryDelaysMs = MODE_PUSH_RETRY_DELA
     retryDelaysMs,
   ]);
 }
-//@ chunk-18hwfzwa.js:254618-254837 placement
+//@ chunk-czq1j3j2.js:259657-259876 placement
 function notifyRemoteModeUnsynced() {
   return {
     key: "remote-permission-mode-unsynced",
@@ -1307,7 +1307,7 @@ function notifyRemoteModeUnsynced() {
     priority: "immediate",
   };
 }
-//@ chunk-18hwfzwa.js:254837-255014 placement
+//@ chunk-czq1j3j2.js:259876-260053 placement
 function notifyRemoteModeUnreachable(mode) {
   return {
     key: "remote-permission-mode-rejected",
@@ -1317,7 +1317,7 @@ function notifyRemoteModeUnreachable(mode) {
     priority: "immediate",
   };
 }
-//@ chunk-18hwfzwa.js:255014-255183 placement
+//@ chunk-czq1j3j2.js:260053-260222 placement
 function notifyRemoteModeRejected(mode) {
   return {
     key: "remote-permission-mode-rejected",
@@ -1328,6 +1328,8 @@ function notifyRemoteModeRejected(mode) {
   };
 }
 export {
+  registerPendingModeAck,
+  ModePushTimeoutError,
   notifyRemoteModeRejected,
   beginModeLanding,
   clearOutstandingMode,
@@ -1345,6 +1347,4 @@ export {
   recordAppliedMode,
   applyRemoteMode,
   useRemotePermissionModeSync,
-  registerPendingModeAck,
-  ModePushTimeoutError,
 };

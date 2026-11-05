@@ -3,40 +3,43 @@
  *
  * 2.1.316 新增：CLAUDE.md include 处理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-axmbhcjg.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vb7ng9fr.js (15)
  * attribution: placement 15
  */
 import { lexMarkdown } from "./claudemd.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { referenceSpelling, allowAllIncludes, AT_REFERENCE_RE } from "../services/homeSeed/workingFiles.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-axmbhcjg.js:5490-5551 placement
+//@ chunk-vb7ng9fr.js:5524-5585 placement
 function escapeAtSigns(text) {
   return text.replace(/@/g, (matchText, offset) => (isBackslashEscaped(text, offset) ? matchText : "\\@"));
 }
-//@ chunk-axmbhcjg.js:5551-5617 placement
+//@ chunk-vb7ng9fr.js:5585-5651 placement
 function isBackslashEscaped(text, index) {
   let backslashes = 0;
   while (text[index - 1 - backslashes] === "\\") backslashes++;
   return backslashes % 2 === 1;
 }
-//@ chunk-axmbhcjg.js:5617-5638 placement
+//@ chunk-vb7ng9fr.js:5651-5672 placement
 var UNVETTABLE = {
   vettable: false,
 };
-//@ chunk-axmbhcjg.js:5638-5934 placement
+//@ chunk-vb7ng9fr.js:5672-5968 placement
 function collectAtReferenceSpellings(filePath, text) {
   let tokens = lexMarkdown(text);
   let scans = [
-    ...uniq(
-      uniq([text, filePath]).flatMap((candidate) => [candidate, candidate.replace(/\\([[\]])/g, "$1")]),
+    ...normalizeCaseForComparison_2(
+      normalizeCaseForComparison_2([text, filePath]).flatMap((candidate) => [
+        candidate,
+        candidate.replace(/\\([[\]])/g, "$1"),
+      ]),
     ).map((candidate) => scanAtReferences(candidate, "as_loader")),
     ...extractIncludePathsFromTokens(tokens).map((includePath) => scanAtReferences(includePath, "every_at")),
   ];
-  let spellings = uniq([
+  let spellings = normalizeCaseForComparison_2([
     ...extractIncludePathsFromTokens_2(tokens),
     ...scans.flatMap((scan) => (scan.vettable ? scan.spellings : [])),
   ]);
@@ -47,7 +50,7 @@ function collectAtReferenceSpellings(filePath, text) {
       }
     : UNVETTABLE;
 }
-//@ chunk-axmbhcjg.js:5934-6215 placement (2.1.88 match: extractIncludePathsFromTokens, 0.968)
+//@ chunk-vb7ng9fr.js:5968-6249 placement (2.1.88 match: extractIncludePathsFromTokens, 0.968)
 function extractIncludePathsFromTokens(textContent) {
   let textContent_2 = (textContent) =>
     textContent.flatMap((elements) => {
@@ -62,7 +65,7 @@ function extractIncludePathsFromTokens(textContent) {
     });
   return textContent_2(textContent);
 }
-//@ chunk-axmbhcjg.js:6215-6374 placement
+//@ chunk-vb7ng9fr.js:6249-6408 placement
 /**
  * 可校验的 @ 引用数量上限（64）。
  */
@@ -74,7 +77,7 @@ var AT_SIGN_RE;
 var regExp;
 var WORD_CHAR_CLASS_RE;
 var UNDERSCORE_AT_RE;
-deferInit("chunk-axmbhcjg.js:6215", () => {
+deferInit("chunk-vb7ng9fr.js:6249", () => {
   MAX_AT_RUN_LENGTH = 4096;
   MAX_VETTED_REFERENCES = 64;
   MAX_VETTABLE_TEXT_CHARS = 4096;
@@ -84,7 +87,7 @@ deferInit("chunk-axmbhcjg.js:6215", () => {
   WORD_CHAR_CLASS_RE = /[\p{L}\p{N}]/u;
   UNDERSCORE_AT_RE = /[*_[\]!<`]/g;
 });
-//@ chunk-axmbhcjg.js:6374-6840 placement
+//@ chunk-vb7ng9fr.js:6408-6874 placement
 function scanAtReferences(text, mode) {
   let references = [];
   let cursor = 0;
@@ -109,14 +112,14 @@ function scanAtReferences(text, mode) {
   return {
     vettable: true,
     spellings: references.flatMap(({ run, closers }) =>
-      uniq([run, ...closers.map((closer) => run.slice(0, closer))]).flatMap((run) => {
+      normalizeCaseForComparison_2([run, ...closers.map((closer) => run.slice(0, closer))]).flatMap((run) => {
         let spelling = referenceSpelling(run);
         return spelling === "" || spelling.startsWith("@") ? [] : [spelling];
       }),
     ),
   };
 }
-//@ chunk-axmbhcjg.js:6840-6932 placement
+//@ chunk-vb7ng9fr.js:6874-6966 placement
 /**
  * 收集文档里所有有效 @ 引用的位置。
  */
@@ -125,7 +128,7 @@ function collectAtReferenceIndexes(text) {
     .filter((match) => match.index > 0 && !isUnderscoreBoundary(text, match))
     .map((match) => match.index);
 }
-//@ chunk-axmbhcjg.js:6932-7021 placement
+//@ chunk-vb7ng9fr.js:6966-7055 placement
 /**
  * 判断 @ 两侧都是词字符（属于标识符而不是引用）。
  */
@@ -136,15 +139,15 @@ function isUnderscoreBoundary(text, match) {
     WORD_CHAR_CLASS_RE.test(text[match.index + 1] ?? "")
   );
 }
-//@ chunk-axmbhcjg.js:7021-7071 placement
+//@ chunk-vb7ng9fr.js:7055-7105 placement
 function hasUnvettedInclude(text, isAllowed = allowAllIncludes) {
   return extractIncludePathsFromText(text).some((includePath) => !isAllowed(includePath));
 }
-//@ chunk-axmbhcjg.js:7071-7104 placement
+//@ chunk-vb7ng9fr.js:7105-7138 placement
 function extractIncludePathsFromText(text) {
   return extractIncludePathsFromTokens_2(lexMarkdown(text));
 }
-//@ chunk-axmbhcjg.js:7104-7431 placement (2.1.88 match: extractIncludePathsFromTokens, 0.968)
+//@ chunk-vb7ng9fr.js:7138-7465 placement (2.1.88 match: extractIncludePathsFromTokens, 0.968)
 function extractIncludePathsFromTokens_2(textContent) {
   let textContent_2 = (textContent) =>
     textContent.flatMap((elements) => {
@@ -162,7 +165,7 @@ function extractIncludePathsFromTokens_2(textContent) {
     });
   return textContent_2(textContent);
 }
-//@ chunk-axmbhcjg.js:7431-7659 placement
+//@ chunk-vb7ng9fr.js:7465-7693 placement
 function matchIncludePathsInText(text) {
   return [...text.matchAll(AT_REFERENCE_RE)].flatMap((match) => {
     let spelling = referenceSpelling(match[2] ?? "");
@@ -174,7 +177,7 @@ function matchIncludePathsInText(text) {
       : [];
   });
 }
-//@ chunk-axmbhcjg.js:7659-7818 placement
+//@ chunk-vb7ng9fr.js:7693-7852 placement
 function endsInsideOpenBlock(body) {
   let last = lexMarkdown(`${body}
 
@@ -182,7 +185,7 @@ function endsInsideOpenBlock(body) {
 `).findLast((token) => token.type !== "space");
   return !(last?.type === "html" && last.raw.trim() === "<!-- ccr-home-probe -->");
 }
-//@ chunk-axmbhcjg.js:7818-7886 placement
+//@ chunk-vb7ng9fr.js:7852-7920 placement
 /**
  * 生成“内联导入”的注释标记文本。
  */

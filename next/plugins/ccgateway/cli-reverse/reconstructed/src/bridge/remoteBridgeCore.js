@@ -3,9 +3,9 @@
  *
  * env-less（v2）Remote Control 桥核心：创建/复用云会话、取 worker 凭证、建立 v2 传输、处理入站帧与控制请求、出站消息过滤与 FlushGate、断线/401/4091/4093/4094 恢复、归档与拆除
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/remoteBridgeCore.ts
- * pieces: chunk-4cm44bmp.js (14), chunk-kgtpkbhq.js (1)
+ * pieces: chunk-56msakfz.js (14), chunk-jc4qbkj6.js (1)
  * attribution: callgraph-witnessed 1, fingerprint 2, layout 8, callgraph-fingerprint 1, affinity 3
  */
 import {
@@ -129,12 +129,13 @@ import { getPollIntervalConfig } from "./pollConfig.js";
 import { createV2ReplTransport } from "./replBridgeTransport.js";
 import {
   BoundedUUIDSet,
-  isEligibleBridgeMessage,
-  isAttachmentOrConsentFallback,
+  isBridgeableMessage,
+  isVirtualRow,
   isRealUserTurn,
   handleIngressMessage,
   deriveTitleFromHumanTurn,
 } from "./bridgeMessaging.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
 import { FlushGate } from "./flushGate.js";
 import { OWNER_PIN_INCONCLUSIVE_TTL_MS } from "./ownerPin.js";
 import { checkSdkUrl } from "../cli/transports/sdkUrlValidation.js";
@@ -190,7 +191,7 @@ import { truncate } from "../utils/format.js";
 import { dialogPermissionRequest } from "../utils/teleport/sessionCreate.js";
 import { subscribeGithubPullRequest, buildJsonHeaders } from "./githubPrSubscription.js";
 
-//@ chunk-kgtpkbhq.js:8680-9302 fingerprint (2.1.88 match: archiveSession, 0.358)
+//@ chunk-jc4qbkj6.js:8680-9302 fingerprint (2.1.88 match: archiveSession, 0.358)
 /**
  * 对会话执行生命周期动作（archive / unarchive）：POST {session}/{action}，返回 HTTP 状态或 invalid/timeout/error/untrusted_device 等。
  */
@@ -237,7 +238,7 @@ async function postSessionAction(
     return axios_default.isAxiosError(err) && err.code === "ECONNABORTED" ? "timeout" : "error";
   }
 }
-//@ chunk-4cm44bmp.js:29785-95205 callgraph-witnessed (2.1.88 match: initEnvLessBridgeCore, 0.223)
+//@ chunk-56msakfz.js:27320-94246 callgraph-witnessed (2.1.88 match: initEnvLessBridgeCore, 0.212)
 /**
  * REPL Remote Control 的总装函数（约 65KB 单函数）：先按 work secret / 重连指针 / 新建三条路径确定 sessionId（cse_*），调 /bridge 取 worker_jwt 与 worker_epoch，再用 createV2ReplTransport 建 SSE+CCRClient 传输；
  * 之后挂接 onConnect（回放历史、处理延迟上传）、onData（handleIngressMessage 分派到入站消息/权限响应/服务端控制请求/取消）、onClose（按关闭码 401/4091/4093/4094 走 rebuildTransport 恢复）；
@@ -1091,6 +1092,10 @@ async function initEnvLessBridgeCore(params) {
   if (initialMessages)
     for (let msg of initialMessages) {
       initialMessageUUIDs.add(msg.uuid);
+      if (codeModeAccepted() && "isVirtual" in msg && msg.isVirtual === true) {
+        require("../utils/codeMode/scriptRowUUIDs.js").rememberScriptRowUUID(recentPostedUUIDs, msg.uuid);
+        continue;
+      }
       recentPostedUUIDs.add(msg.uuid);
     }
   let recentInboundUUIDs = new BoundedUUIDSet(cfg.uuid_dedup_buffer_size);
@@ -1610,7 +1615,9 @@ async function initEnvLessBridgeCore(params) {
   }
   let pendingActionShown = isReattach;
   let pendingRequests = new Map();
-  let pendingAction = undefined;
+  let pendingAction = codeModeAccepted()
+    ? require("../utils/codeMode/pendingActionReport.js").createScriptPromptState()
+    : undefined;
   let notForwardedIds = new Set();
   let localOnlyMemoryRequests = new BoundedIdSet(256);
   let liveOnlyUuids = new BoundedIdSet(cfg.uuid_dedup_buffer_size);
@@ -1634,6 +1641,13 @@ async function initEnvLessBridgeCore(params) {
     if (onBeforePushTriggeringState && !ownerChanged && (state === "requires_action" || state === "idle"))
       onBeforePushTriggeringState();
     transport.reportState(state, details);
+    if (codeModeAccepted())
+      require("../utils/codeMode/pendingActionReport.js").noteStateReported(
+        pendingAction,
+        pendingRequests,
+        state,
+        details,
+      );
     if (state === "requires_action" && details) {
       pendingActionShown = true;
       let otherDetails = [...pendingRequests.values()]
@@ -2237,6 +2251,7 @@ async function initEnvLessBridgeCore(params) {
               stashedClose.detail,
               true,
               stashedClose.at,
+              stashedClose.registration,
             );
             if (failureMessage !== undefined && !handled && !stopped && !recoveryInFlight)
               failTransport(failureMessage, failureSeverity);
@@ -2282,6 +2297,11 @@ async function initEnvLessBridgeCore(params) {
         let last = [...pendingRequests.values()].findLast((entry) => entry.details !== undefined);
         reportState("requires_action", last?.details);
         notForwardedIds.clear();
+        if (codeModeAccepted() && turnResultReported)
+          require("../utils/codeMode/pendingActionReport.js").noteScriptPromptsShown(
+            pendingAction,
+            pendingRequests,
+          );
       } else if (lastReportedState === "running" && isLive(() => true)) reportState("running");
       logForDebugging("[remote-bridge] v2 transport connected");
       logForDiagnosticsNoPII("info", "bridge_repl_v2_transport_connected");
@@ -2313,8 +2333,8 @@ async function initEnvLessBridgeCore(params) {
       if (transcriptMirrorMode === "deferred") {
         if (!historyFlushed && pendingRequests.size === 0) {
           let last = initialMessages
-            ?.filter((initialMessage) => isEligibleBridgeMessage(initialMessage))
-            .findLast((initialMessage) => !isAttachmentOrConsentFallback(initialMessage));
+            ?.filter((initialMessage) => isBridgeableMessage(initialMessage))
+            .findLast((initialMessage) => !isVirtualRow(initialMessage));
           if (isLive(() => last !== undefined && isRealUserTurn(last) && !isInterruptionMessage(last)))
             reportState("running");
         }
@@ -2358,10 +2378,17 @@ async function initEnvLessBridgeCore(params) {
       drainHeldData();
     });
     let closedTransport = transport;
-    transport.setOnClose((code, cause, detail) => {
+    transport.setOnClose((code, cause, detail, detail2) => {
       if (lastClosedTransport === closedTransport) lastClosedTransport = undefined;
       let now = Date.now();
-      return handleClose(code, cause, detail, false, Math.min(now, closedTransport.lastFrameReadAt() ?? now));
+      return handleClose(
+        code,
+        cause,
+        detail,
+        false,
+        Math.min(now, closedTransport.lastFrameReadAt() ?? now),
+        detail2,
+      );
     });
     function drainHeldData() {
       ownerChangedSince("owner_changed").then((res) => {
@@ -2415,6 +2442,20 @@ async function initEnvLessBridgeCore(params) {
                 }
                 resolvePendingAction(response.response.request_id, answered);
                 if (!turnResultReported) reportPendingState();
+                if (codeModeAccepted() && turnResultReported)
+                  require("../utils/codeMode/pendingActionReport.js").reportAfterTurnEnded(
+                    pendingAction,
+                    pendingRequests,
+                    (id) => !notForwardedIds.has(id),
+                    lastReportedState,
+                    reportState,
+                    {
+                      metadata: {
+                        transport,
+                        buildPendingActionsPlural: pendingActionRows,
+                      },
+                    },
+                  );
               }
             }
           : undefined,
@@ -2437,10 +2478,10 @@ async function initEnvLessBridgeCore(params) {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION,
@@ -2479,7 +2520,7 @@ async function initEnvLessBridgeCore(params) {
       );
     }
   }
-  function handleClose(code, cause, detail, synthetic, closedAt) {
+  function handleClose(code, cause, detail, synthetic, closedAt, _) {
     let leakedRecovery = false;
     clearTimeout(connectTimeoutTimer);
     if (stopped || ownerChanged) {
@@ -2507,6 +2548,7 @@ async function initEnvLessBridgeCore(params) {
           code: code ?? 4092,
           cause,
           detail,
+          registration: _,
           at: pendingClose?.at ?? firstCloseAt ?? closedAt,
         };
         return false;
@@ -2531,6 +2573,13 @@ async function initEnvLessBridgeCore(params) {
         if (!episodeDead)
           notePresenceBad("recovery_exhausted", {
             close_code: code,
+            ...(_?.noAnswer
+              ? {
+                  http_status: 0,
+                }
+              : _?.httpStatus !== undefined && {
+                  http_status: _.httpStatus,
+                }),
           });
         return false;
       }
@@ -3148,7 +3197,14 @@ async function initEnvLessBridgeCore(params) {
           clearRecoverTimer();
           let stashedClose = pendingClose;
           pendingClose = undefined;
-          handleClose(stashedClose.code, stashedClose.cause, stashedClose.detail, true, stashedClose.at);
+          handleClose(
+            stashedClose.code,
+            stashedClose.cause,
+            stashedClose.detail,
+            true,
+            stashedClose.at,
+            stashedClose.registration,
+          );
         } else pendingClose = undefined;
         if (recoverTimer === undefined && !recoveryInFlight) {
           messageFlushGate.drop();
@@ -3218,7 +3274,12 @@ async function initEnvLessBridgeCore(params) {
       let messageEntry = messages[messageIndex];
       let frameEntry = frames[frameIndex];
       if (messageEntry && (!frameEntry || messageEntry.seq < frameEntry.seq)) {
-        recentPostedUUIDs.add(messageEntry.message.uuid);
+        if (
+          codeModeAccepted() &&
+          "isVirtual" in messageEntry.message &&
+          messageEntry.message.isVirtual === true
+        );
+        else recentPostedUUIDs.add(messageEntry.message.uuid);
         backfilledUuids.add(messageEntry.message.uuid);
         anyMessageLive = true;
         pendingMessages.push(messageEntry.message);
@@ -3275,7 +3336,7 @@ async function initEnvLessBridgeCore(params) {
   }
   async function flushInitialHistory(msgs) {
     accountMemoryRedactor.note(msgs);
-    let eligible = msgs.filter(isEligibleBridgeMessage);
+    let eligible = msgs.filter(isBridgeableMessage);
     let capped = sliceTailKeepingGroups(eligible, initialHistoryCap);
     if (capped.length < eligible.length)
       logForDebugging(
@@ -3287,7 +3348,7 @@ async function initEnvLessBridgeCore(params) {
       historical: true,
     }));
     if (events.length === 0) return;
-    let last = eligible.findLast((message) => !isAttachmentOrConsentFallback(message));
+    let last = eligible.findLast((message) => !isVirtualRow(message));
     if (
       isLive(() => last !== undefined && isRealUserTurn(last) && !isInterruptionMessage(last)) &&
       pendingRequests.size === 0
@@ -3521,7 +3582,7 @@ async function initEnvLessBridgeCore(params) {
     accountMemoryRedactor.note(messages ?? []);
     let queuedUuids = new Set(messageFlushGate.pending.map((entry) => entry.message.uuid));
     let eligible = (messages ?? []).filter(
-      (m) => isEligibleBridgeMessage(m) && !backfilledUuids.has(m.uuid) && !queuedUuids.has(m.uuid),
+      (m) => isBridgeableMessage(m) && !backfilledUuids.has(m.uuid) && !queuedUuids.has(m.uuid),
     );
     let selected = sliceTailKeepingGroups(eligible, backfillConfig().backfillMessages);
     logForDebugging(
@@ -3552,7 +3613,7 @@ async function initEnvLessBridgeCore(params) {
       initialMessageUUIDs.add(message.uuid);
     }
     for (let message of selected) backfilledUuids.add(message.uuid);
-    let last = eligible.findLast((message) => !isAttachmentOrConsentFallback(message));
+    let last = eligible.findLast((message) => !isVirtualRow(message));
     let turnWillRun =
       hadPendingAction ||
       pendingRequests.size > 0 ||
@@ -3986,10 +4047,19 @@ async function initEnvLessBridgeCore(params) {
       for (let message of messages)
         if (!initialMessageUUIDs.has(message.uuid)) liveOnlyUuids.add(message.uuid);
       let filtered = messages.filter(
-        (m) =>
-          isEligibleBridgeMessage(m) && !initialMessageUUIDs.has(m.uuid) && !recentPostedUUIDs.has(m.uuid),
+        (m) => isBridgeableMessage(m) && !initialMessageUUIDs.has(m.uuid) && !recentPostedUUIDs.has(m.uuid),
       );
       if (filtered.length === 0) return;
+      if (codeModeAccepted()) {
+        let x = require("../utils/codeMode/scriptRowUUIDs.js");
+        for (let idx = filtered.length - 1; idx >= 0; idx--) {
+          let row = filtered[idx];
+          if (!("isVirtual" in row) || row.isVirtual !== true) continue;
+          if (x.isScriptRowUUID(recentPostedUUIDs, row.uuid)) filtered.splice(idx, 1);
+          else x.rememberScriptRowUUID(recentPostedUUIDs, row.uuid);
+        }
+        if (filtered.length === 0) return;
+      }
       if (!userMessageTitleSent)
         for (let message of filtered) {
           let text = deriveTitleFromHumanTurn(message);
@@ -4027,6 +4097,7 @@ async function initEnvLessBridgeCore(params) {
       }
       for (let msg of toSend) {
         backfilledUuids.add(msg.uuid);
+        if (codeModeAccepted() && "isVirtual" in msg && msg.isVirtual === true) continue;
         recentPostedUUIDs.add(msg.uuid);
       }
       anyMessageLive = true;
@@ -4240,7 +4311,12 @@ async function initEnvLessBridgeCore(params) {
             request,
             details,
           });
-        turnResultReported = false;
+        if (!(
+          codeModeAccepted() &&
+          turnResultReported &&
+          require("../utils/codeMode/pendingActionReport.js").keepsTurnEnded(pendingAction, request)
+        ))
+          turnResultReported = false;
         reportState("requires_action", details);
       } else if (request_2.subtype === "request_user_dialog") {
         let details;
@@ -4256,7 +4332,12 @@ async function initEnvLessBridgeCore(params) {
             request,
             details,
           });
-        turnResultReported = false;
+        if (!(
+          codeModeAccepted() &&
+          turnResultReported &&
+          require("../utils/codeMode/pendingActionReport.js").keepsTurnEnded(pendingAction, request)
+        ))
+          turnResultReported = false;
         reportState("requires_action", details);
       }
       writeOrQueueFrame(event, `control_request request_id=${request.request_id}`);
@@ -4271,6 +4352,20 @@ async function initEnvLessBridgeCore(params) {
         session_id: sessionId,
       };
       if (!options?.skipStateReport && !turnResultReported) reportPendingState();
+      if (codeModeAccepted() && !options?.skipStateReport && turnResultReported)
+        require("../utils/codeMode/pendingActionReport.js").reportAfterTurnEnded(
+          pendingAction,
+          pendingRequests,
+          (id) => !notForwardedIds.has(id),
+          lastReportedState,
+          reportState,
+          {
+            metadata: {
+              transport,
+              buildPendingActionsPlural: pendingActionRows,
+            },
+          },
+        );
       writeOrQueueFrame(event, "control_response");
     },
     sendControlCancelRequest(requestId) {
@@ -4290,6 +4385,20 @@ async function initEnvLessBridgeCore(params) {
         session_id: sessionId,
       };
       if (!turnResultReported) reportPendingState();
+      if (codeModeAccepted() && turnResultReported)
+        require("../utils/codeMode/pendingActionReport.js").reportAfterTurnEnded(
+          pendingAction,
+          pendingRequests,
+          (id) => !notForwardedIds.has(id),
+          lastReportedState,
+          reportState,
+          {
+            metadata: {
+              transport,
+              buildPendingActionsPlural: pendingActionRows,
+            },
+          },
+        );
       writeOrQueueFrame(event, `control_cancel_request request_id=${requestId}`);
     },
     sendResult(result) {
@@ -4297,7 +4406,17 @@ async function initEnvLessBridgeCore(params) {
       turnResultReported = true;
       if (shouldDropAfterOwnerChange("result")) return;
       settleHeldReadReceipts();
-      reportState("idle");
+      if (!(
+        codeModeAccepted() &&
+        require("../utils/codeMode/pendingActionReport.js").holdAtTurnEnd(
+          pendingAction,
+          pendingRequests,
+          (id) => !notForwardedIds.has(id),
+          lastReportedState,
+          reportState,
+        )
+      ))
+        reportState("idle");
       if (transcriptMirrorMode === "deferred" && !backfillConfig().eagerResult) {
         logForDebugging("[remote-bridge] Withheld result (transcript deferred)");
         return;
@@ -4468,7 +4587,7 @@ async function initEnvLessBridgeCore(params) {
   let unregisterCleanup = registerCleanup(bridgeHandle);
   return bridgeHandle;
 }
-//@ chunk-4cm44bmp.js:95205-95591 fingerprint (2.1.88 match: withRetry, 0.782)
+//@ chunk-56msakfz.js:94246-94632 fingerprint (2.1.88 match: withRetry, 0.784)
 /**
  * 通用重试：fn 返回非 null 即成功，否则按 init_retry_* 配置做带对称抖动的指数退避，最多 init_retry_max_attempts 次。
  */
@@ -4497,7 +4616,7 @@ async function withRetry(fn, label, cfg) {
   }
   return null;
 }
-//@ chunk-4cm44bmp.js:95591-96332 layout
+//@ chunk-56msakfz.js:94632-95373 layout
 /**
  * 在 withRetry 外再加 401 恢复：某次调用报告 401 且该 token 未尝试过时调用 onAuth401 刷新 OAuth；刷新发生在最后一次尝试时再额外试一次。
  */
@@ -4551,7 +4670,7 @@ async function withRetryAndAuthRecovery(call, label, cfg, authOptions) {
   }
   return result;
 }
-//@ chunk-4cm44bmp.js:96332-96474 layout
+//@ chunk-56msakfz.js:95373-95515 layout
 /**
  * 凭证失败是否可通过重新登录恢复（untrusted_device 且不是 signature_wanted、session_stale_relogin）。
  */
@@ -4560,32 +4679,32 @@ function isReloginRecoverable(failure) {
     return failure.refusal?.kind !== "signature_wanted" && !isProactiveEnrollmentDisabled();
   return failure.reason === "session_stale_relogin";
 }
-//@ chunk-4cm44bmp.js:96474-96520 layout
+//@ chunk-56msakfz.js:95515-95561 layout
 /**
  * 失败的严重级别：可重登恢复为 auth，否则 terminal。
  */
 function failureSeverity_2(failure) {
   return isReloginRecoverable(failure) ? "auth" : "terminal";
 }
-//@ chunk-4cm44bmp.js:96520-96603 layout
+//@ chunk-56msakfz.js:95561-95644 layout
 /**
  * 是否是"非 Anthropic 源站写的 403"（例如 Cloudflare 拦截）。
  */
 function isNonOrigin403(failure) {
   return failure.reason === "request_rejected" && failure.status === 403 && isNonOriginSource(failure.source);
 }
-//@ chunk-4cm44bmp.js:96603-96699 layout
+//@ chunk-56msakfz.js:95644-95740 layout
 function credentialsRejectedCode(prefix, failure) {
   return isNonOrigin403(failure)
     ? `${prefix}_credentials_rejected_nonorigin`
     : `${prefix}_credentials_rejected`;
 }
-//@ chunk-4cm44bmp.js:96699-96798 layout
+//@ chunk-56msakfz.js:95740-95839 layout
 var RECOVERED_NONORIGIN_CODES = {
   nonorigin_cf: "recovered_403_nonorigin_cf",
   nonorigin_other: "recovered_403_nonorigin_other",
 };
-//@ chunk-4cm44bmp.js:96798-97020 layout
+//@ chunk-56msakfz.js:95839-96061 layout
 function transportClosed403Code(details) {
   switch (details?.rejectSource) {
     case "nonorigin_cf":
@@ -4597,7 +4716,7 @@ function transportClosed403Code(details) {
       return "transport_closed_403";
   }
 }
-//@ chunk-4cm44bmp.js:97020-97520 layout
+//@ chunk-56msakfz.js:96061-96561 layout
 /**
  * 凭证/会话失败 → 用户可读文案（untrusted_device、session_stale_relogin、invalid_session_id、request_rejected、malformed_response）。
  */
@@ -4619,7 +4738,7 @@ function describeCredentialFailure(failure) {
       return BRIDGE_MALFORMED_RESPONSE_HINT;
   }
 }
-//@ chunk-4cm44bmp.js:97520-98051 callgraph-fingerprint (2.1.88 match: fetchRemoteCredentials, 0.201)
+//@ chunk-56msakfz.js:96561-97092 callgraph-fingerprint (2.1.88 match: fetchRemoteCredentials, 0.202)
 /**
  * 带 trusted device 的 /bridge 凭证获取：先带已存的设备令牌请求，遇 untrusted_device 且可注册时自动注册设备后重试（标 justEnrolled）；不支持 trusted device 时把 untrusted_device 降级为 request_rejected；可选覆盖 api_base_url。
  */
@@ -4681,7 +4800,7 @@ async function fetchCredentialsWithTrustedDevice(
       }
     : result;
 }
-//@ chunk-4cm44bmp.js:98051-98391 affinity
+//@ chunk-56msakfz.js:97092-97432 affinity
 /**
  * 由关闭码/原因判断会话是否被取代：403/404 → superseded_unknown；4090 + superseded_by_worker → superseded，session_not_active → session_archived。
  */
@@ -4703,11 +4822,11 @@ function classifySupersession(code, cause) {
       return;
   }
 }
-//@ chunk-4cm44bmp.js:98391-98436 affinity
+//@ chunk-56msakfz.js:97432-97477 affinity
 function isNotArchived(outcome) {
   return outcome !== "session_archived";
 }
-//@ chunk-4cm44bmp.js:98436-98795 affinity
+//@ chunk-56msakfz.js:97477-97836 affinity
 /**
  * 归档结果 → 遥测码（skipped_*、invalid_id、server_403_untrusted、network_error、server_4xx/5xx、ok）。
  */
@@ -4732,4 +4851,4 @@ function archiveStatusCode(archiveResult, supersession) {
                   ? "server_4xx"
                   : "ok";
 }
-export { describeCredentialFailure, initEnvLessBridgeCore, postSessionAction };
+export { initEnvLessBridgeCore, describeCredentialFailure, postSessionAction };

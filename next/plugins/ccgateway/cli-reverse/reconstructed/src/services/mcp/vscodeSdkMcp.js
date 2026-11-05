@@ -3,9 +3,9 @@
  *
  * VS Code 扩展 SDK MCP 通道：转发扩展上报的 log_event 等通知，并向扩展推送 experiment_gates 开关。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/vscodeSdkMcp.ts
- * pieces: chunk-tyg7f3ek.js (5)
+ * pieces: chunk-0yw3taqg.js (5)
  * attribution: fingerprint 2, file-local 1, layout 2
  */
 import {
@@ -34,7 +34,7 @@ import { isPlainObject } from "../../utils/objectUtils.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:534738-534947 fingerprint (2.1.88 match: readAutoModeEnabledState, 0.807)
+//@ chunk-0yw3taqg.js:574912-575121 fingerprint (2.1.88 match: readAutoModeEnabledState, 0.808)
 /**
  * readAutoModeEnabledState：GrowthBook tengu_auto_mode_config.enabled（enabled/disabled/opt-in），非覆盖来源的 disabled 视为 enabled。
  */
@@ -44,10 +44,10 @@ function readAutoModeEnabledState() {
   if (v === "disabled" && source !== "override" && source !== "payload") return "enabled";
   return v === "enabled" || v === "disabled" || v === "opt-in" ? v : "enabled";
 }
-//@ chunk-tyg7f3ek.js:534947-535129 file-local
+//@ chunk-0yw3taqg.js:575121-575303 file-local
 var LogEventNotificationSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var AdminLimitRequestNotificationSchema;
-deferInit("chunk-tyg7f3ek.js:534947", () => {
+deferInit("chunk-0yw3taqg.js:575121", () => {
   LogEventNotificationSchema = DoctorLazy(() =>
     objectSchema({
       method: literal("log_event"),
@@ -64,7 +64,7 @@ deferInit("chunk-tyg7f3ek.js:534947", () => {
     }),
   );
 });
-//@ chunk-tyg7f3ek.js:535129-537401 layout
+//@ chunk-0yw3taqg.js:575303-577575 layout
 /**
  * setupVscodeSdkMcp：找到名为 claude-vscode 的 SDK 客户端，注册 log_event 与 admin_limit_request 通知处理（转发遥测、反馈问卷、自动模式提示等），推送 experiment_gates，并在策略变化时重发。
  */
@@ -166,7 +166,7 @@ function setupVscodeSdkMcp(sdkClients, callbacks) {
     };
   }
 }
-//@ chunk-tyg7f3ek.js:537401-538680 layout
+//@ chunk-0yw3taqg.js:577575-578998 layout
 /**
  * buildVscodeExperimentGates：读取一组 tengu_* GrowthBook 开关组成发给 VS Code 扩展的 gates 对象。
  */
@@ -193,6 +193,9 @@ function buildVscodeExperimentGates(session) {
     tengu_vscode_python_beside_start: Boolean(
       getFeatureValue_CACHED_MAY_BE_STALE("tengu_vscode_python_beside_start", true),
     ),
+    tengu_vscode_start_second_try: Boolean(
+      getFeatureValue_CACHED_MAY_BE_STALE("tengu_vscode_start_second_try", true),
+    ),
     tengu_optimized_puzzle: Boolean(getFeatureValue_CACHED_MAY_BE_STALE("tengu_optimized_puzzle", true)),
     tengu_vscode_inline_pastes: getFeatureValue_CACHED_MAY_BE_STALE("tengu_vscode_inline_pastes", true),
     tengu_vscode_math_rendering: Boolean(
@@ -208,6 +211,7 @@ function buildVscodeExperimentGates(session) {
     tengu_staged_ladybug: getFeatureValue_CACHED_MAY_BE_STALE("tengu_staged_ladybug", true),
     tengu_brick_follow: getFeatureValue_CACHED_MAY_BE_STALE("tengu_brick_follow", false),
     tengu_vellum_siding: featureValue_CACHED_MAY_BE_STALE_2 && session,
+    tengu_glimmering_firefly: Boolean(getFeatureValue_CACHED_MAY_BE_STALE("tengu_glimmering_firefly", false)),
     tengu_lantern_sconce: getFeatureValue_CACHED_MAY_BE_STALE("tengu_lantern_sconce", false),
     tengu_auto_mode_state: autoModeEnabledState === "opt-in" ? "enabled" : autoModeEnabledState,
     tengu_lantern_sconce_copy: isPlainObject(featureValue_CACHED_MAY_BE_STALE_3)
@@ -218,7 +222,7 @@ function buildVscodeExperimentGates(session) {
       : false,
   };
 }
-//@ chunk-tyg7f3ek.js:538680-538953 fingerprint (2.1.88 match: setupVscodeSdkMcp, 0.343)
+//@ chunk-0yw3taqg.js:578998-579271 fingerprint (2.1.88 match: setupVscodeSdkMcp, 0.343)
 /**
  * sendVscodeExperimentGates：向 VS Code 客户端发送 experiment_gates 通知，失败只记日志。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：artifact 文件内容类型表与拒绝说明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-06y4szbn.js (30)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-51jy8ztq.js (30)
  * attribution: placement 30
  */
 import { extname } from "path";
@@ -15,7 +15,7 @@ import { plural } from "../../utils/stringUtils.js";
 import { detectEncodingFromBom } from "../../utils/fileRead.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-06y4szbn.js:22424-23143 placement
+//@ chunk-51jy8ztq.js:22424-23143 placement
 var EXTENSION_CONTENT_TYPES = {
   ".html": "text/html",
   ".css": "text/css",
@@ -50,20 +50,20 @@ var EXTENSION_CONTENT_TYPES = {
   ".wasm": "application/wasm",
   ...{},
 };
-//@ chunk-06y4szbn.js:23143-23180 placement
+//@ chunk-51jy8ztq.js:23143-23180 placement
 function contentTypeForPath(path) {
   return EXTENSION_CONTENT_TYPES[asciiLowerCase(extname(path))];
 }
-//@ chunk-06y4szbn.js:23180-23244 placement
+//@ chunk-51jy8ztq.js:23180-23244 placement
 function asciiLowerCase(value) {
   return value.replace(/[A-Z]/g, (char) => char.toLowerCase());
 }
-//@ chunk-06y4szbn.js:23244-23316 placement
+//@ chunk-51jy8ztq.js:23244-23316 placement
 function baseMediaType(contentType) {
   let index = contentType.indexOf(";");
   return asciiLowerCase(trimHtmlWhitespace(index >= 0 ? contentType.slice(0, index) : contentType));
 }
-//@ chunk-06y4szbn.js:23316-24033 placement
+//@ chunk-51jy8ztq.js:23316-24033 placement
 /**
  * Artifact 可服务的 MIME 类型集合：标记类（html/xhtml/xml/svg）、脚本/WASM、以及文本、图片、字体、音视频清单。
  */
@@ -74,7 +74,7 @@ var MARKUP_WITHOUT_SVG_TYPES;
 var HTML_CONTENT_TYPES;
 var SCRIPT_CONTENT_TYPES;
 var SERVABLE_CONTENT_TYPES;
-deferInit("chunk-06y4szbn.js:23316", () => {
+deferInit("chunk-51jy8ztq.js:23316", () => {
   MARKUP_CONTENT_TYPES = new Set([
     "text/html",
     "application/xhtml+xml",
@@ -119,20 +119,20 @@ deferInit("chunk-06y4szbn.js:23316", () => {
     "video/ogg",
   ]);
 });
-//@ chunk-06y4szbn.js:24033-24107 placement
+//@ chunk-51jy8ztq.js:24033-24107 placement
 function safeJsonQuote(value) {
   return JSON.stringify(value).replace(/[^\x20-\x7e]|[<>]/gu, toUnicodeEscapes);
 }
-//@ chunk-06y4szbn.js:24107-24213 placement
+//@ chunk-51jy8ztq.js:24107-24213 placement
 function toUnicodeEscapes(text) {
   return text
     .split("")
     .map((char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`)
     .join("");
 }
-//@ chunk-06y4szbn.js:24213-24293 placement
+//@ chunk-51jy8ztq.js:24213-24293 placement
 var CONTENT_TYPE_FAMILIES = ["pages", "styles", "scripts", "data", "images", "fonts", "media", "documents"];
-//@ chunk-06y4szbn.js:24293-24669 placement
+//@ chunk-51jy8ztq.js:24293-24669 placement
 function contentTypeFamily(contentType) {
   if (contentType === "text/html") return "pages";
   if (contentType === "text/css") return "styles";
@@ -148,7 +148,7 @@ function contentTypeFamily(contentType) {
   if (contentType === "application/pdf") return "documents";
   return "data";
 }
-//@ chunk-06y4szbn.js:24669-25537 placement
+//@ chunk-51jy8ztq.js:24669-25537 placement
 /**
  * 发布内容的类型说明文案：按族列出扩展名、不支持类型的提示、纯文本与文档归档的处理建议。
  */
@@ -160,7 +160,7 @@ var CONTENT_TYPE_TAKEN_TEXT;
 var SERVED_TYPES_TEXT;
 var TEXT_PLAIN_GUIDANCE;
 var DOCUMENT_ARCHIVE_GUIDANCE;
-deferInit("chunk-06y4szbn.js:24669", () => {
+deferInit("chunk-51jy8ztq.js:24669", () => {
   CONTENT_TYPE_FAMILIES_TEXT = CONTENT_TYPE_FAMILIES.flatMap((family) => {
     let mapped = Object.entries(EXTENSION_CONTENT_TYPES)
       .filter(([, value]) => contentTypeFamily(value) === family)
@@ -177,7 +177,7 @@ deferInit("chunk-06y4szbn.js:24669", () => {
   DOCUMENT_ARCHIVE_GUIDANCE =
     "A document or archive (.docx .xlsx .pptx .zip) can't be attached from here yet under any contentType: render what the page needs from it into the page, or link to where it already lives; a data: or blob: download link is not a way around this (the viewer blocks page-initiated downloads).";
 });
-//@ chunk-06y4szbn.js:25537-25902 placement
+//@ chunk-51jy8ztq.js:25537-25902 placement
 function contentTypeMismatchMessage(kindLabel, path, announced, lowercaseSuggestion) {
   let head = `${UNSUPPORTED_TYPE_TEXT}${kindLabel} ${safeJsonQuote(path)}${CONTENT_TYPE_ANNOUNCED_TEXT}${safeJsonQuote(announced)}`;
   if (lowercaseSuggestion !== undefined)
@@ -187,7 +187,7 @@ function contentTypeMismatchMessage(kindLabel, path, announced, lowercaseSuggest
     return `${head}${CONTENT_TYPE_TAKEN_TEXT}${safeJsonQuote(takenContentType)}. Publish again with no contentType on that file.`;
   return `${head}). ${SERVED_TYPES_TEXT} Publish again with every file as a served type. ${TEXT_PLAIN_GUIDANCE} ${DOCUMENT_ARCHIVE_GUIDANCE}`;
 }
-//@ chunk-06y4szbn.js:25902-26421 placement
+//@ chunk-51jy8ztq.js:25902-26421 placement
 function unservableFileMessage(field, path) {
   let ext = asciiLowerCase(extname(path));
   let reasonText =
@@ -196,9 +196,9 @@ function unservableFileMessage(field, path) {
     ? `files: ${safeJsonQuote(path)} (no contentType, and ${reasonText}) \u2014 nothing was published. ${SERVED_TYPES_TEXT} Publish again with every file as a served type. ${TEXT_PLAIN_GUIDANCE} ${DOCUMENT_ARCHIVE_GUIDANCE}`
     : `file_path: ${safeJsonQuote(path)} (${reasonText}) \u2014 nothing was published. ${SERVED_TYPES_TEXT} Rename a text or data file to one of these (.txt .json .csv), or make another file the \`file_path\` and list this one under \`files\` with contentType "text/plain". ${DOCUMENT_ARCHIVE_GUIDANCE}`;
 }
-//@ chunk-06y4szbn.js:26421-26449 placement
+//@ chunk-51jy8ztq.js:26421-26449 placement
 var JSON_STRING_RE = /"(?:[^"\\]|\\.)*"/y;
-//@ chunk-06y4szbn.js:26449-26618 placement
+//@ chunk-51jy8ztq.js:26449-26618 placement
 function readJsonStringAt(text, start) {
   JSON_STRING_RE.lastIndex = start;
   let match = JSON_STRING_RE.exec(text);
@@ -215,7 +215,7 @@ function readJsonStringAt(text, start) {
     return;
   }
 }
-//@ chunk-06y4szbn.js:26618-27675 placement
+//@ chunk-51jy8ztq.js:26618-27675 placement
 function parseFileTypeRefusal(message) {
   for (let kindLabel of ["supporting file", "file"]) {
     let prefix = `${UNSUPPORTED_TYPE_TEXT}${kindLabel} `;
@@ -247,7 +247,7 @@ function parseFileTypeRefusal(message) {
   }
   return;
 }
-//@ chunk-06y4szbn.js:27675-28553 placement
+//@ chunk-51jy8ztq.js:27675-28553 placement
 /**
  * 发布限流的文案与等待秒数（10/120）：给用户与给模型的提示、重发指引与预检拒绝的正则。
  */
@@ -267,7 +267,7 @@ var RATE_LIMIT_TARGET_TEXT =
 var RATE_LIMIT_REFUSED_STEP_LEAD = " The refused step was ";
 var PREFLIGHT_REFUSAL_RE =
   /^(?:the upload preflight that copying \d{1,4} files? from another artifact needs|staging this publish's \d{1,4} copied files? \((?:"(?:[^"\\\n]|\\.){0,1100}" from artifact [A-Za-z0-9-]{22,36}(?:, (?=")|))+(?:, and \d{1,4} more)?\)); nothing was staged\.$/;
-//@ chunk-06y4szbn.js:28553-28797 placement
+//@ chunk-51jy8ztq.js:28553-28797 placement
 function copiedFilesSummary(copied) {
   let mapped = copied
     .slice(0, 3)
@@ -275,21 +275,21 @@ function copiedFilesSummary(copied) {
   let moreText = copied.length > 3 ? `, and ${copied.length - 3} more` : "";
   return `staging this publish's ${copied.length} copied ${plural(copied.length, "file")} (${mapped.join(", ")}${moreText}); nothing was staged`;
 }
-//@ chunk-06y4szbn.js:28797-28922 placement
+//@ chunk-51jy8ztq.js:28797-28922 placement
 function copyPreflightFailure(failure) {
   return `the upload preflight that copying ${failure} ${plural(failure, "file")} from another artifact needs; nothing was staged`;
 }
-//@ chunk-06y4szbn.js:28922-29127 placement
+//@ chunk-51jy8ztq.js:28922-29127 placement
 var PUBLISH_RATE_LIMITED_MESSAGE =
   "Not published: artifact publishing is rate-limited right now. Claude can try again shortly.";
 var PUBLISHED_URL_RE =
   /^https?:\/\/[A-Za-z0-9.-]{1,100}(?::\d{1,5})?(?:\/[A-Za-z0-9._-]{1,40}){0,4}\/[A-Za-z0-9-]{22,36}$/;
-//@ chunk-06y4szbn.js:29127-29206 placement
+//@ chunk-51jy8ztq.js:29127-29206 placement
 function retryAfterSeconds(retryAfterMs) {
   let seconds = Math.ceil((retryAfterMs ?? 0) / 1000);
   return Math.min(Math.max(seconds, RATE_LIMIT_MIN_WAIT_SECONDS), RATE_LIMIT_MAX_WAIT_SECONDS);
 }
-//@ chunk-06y4szbn.js:29206-29341 placement
+//@ chunk-51jy8ztq.js:29206-29341 placement
 function rateLimitedMessage(retryAfterMs, publishedUrl, refusedStep) {
   let hasUrl = publishedUrl !== undefined;
   return (
@@ -302,7 +302,7 @@ function rateLimitedMessage(retryAfterMs, publishedUrl, refusedStep) {
     (refusedStep !== undefined ? `${RATE_LIMIT_REFUSED_STEP_LEAD}${refusedStep}.` : "")
   );
 }
-//@ chunk-06y4szbn.js:29341-29781 placement
+//@ chunk-51jy8ztq.js:29341-29781 placement
 function parseRateLimitedMessage(message) {
   let headline = RATE_LIMIT_HEADLINE + RATE_LIMIT_RETRIED_TEXT + RATE_LIMIT_RESEND_TEXT;
   if (!message.startsWith(headline)) return;
@@ -326,7 +326,7 @@ function parseRateLimitedMessage(message) {
     ? PUBLISH_RATE_LIMITED_MESSAGE
     : undefined;
 }
-//@ chunk-06y4szbn.js:29781-30245 placement
+//@ chunk-51jy8ztq.js:29781-30245 placement
 /**
  * 契约版本过新（服务器尚未全部更新）时的提示文案与匹配正则。
  */
@@ -336,21 +336,21 @@ var CONTRACT_ROLLOUT_TO_USER =
   "Not published: the artifact service is mid-update. Claude can try again in about a minute.";
 var CONTRACT_TOO_NEW_RE =
   /^deploy 422: contract ([0-9A-Za-z.+-]{1,32}) is newer than the preferred ([0-9A-Za-z.+-]{1,32})\. /;
-//@ chunk-06y4szbn.js:30245-30336 placement
+//@ chunk-51jy8ztq.js:30245-30336 placement
 function contractTooNewText(version, minVersion) {
   return `deploy 422: contract ${version} is newer than the preferred ${minVersion}. ${CONTRACT_ROLLOUT_TEXT}`;
 }
-//@ chunk-06y4szbn.js:30336-30423 placement
+//@ chunk-51jy8ztq.js:30336-30423 placement
 function parseContractRolloutMessage(message) {
   let match = CONTRACT_TOO_NEW_RE.exec(message);
   if (match === null) return;
   return message === contractTooNewText(match[1], match[2]) ? CONTRACT_ROLLOUT_TO_USER : undefined;
 }
-//@ chunk-06y4szbn.js:30460-30534 placement
+//@ chunk-51jy8ztq.js:30460-30534 placement
 function encodingFromBom(bytes) {
   return detectEncodingFromBom(bytes.subarray(0, 4)) === "utf16le" ? "utf-16le" : "utf-8";
 }
-//@ chunk-06y4szbn.js:30534-30821 placement
+//@ chunk-51jy8ztq.js:30534-30821 placement
 function lineColumnAt(text, offset) {
   let sliced = text.slice(0, offset);
   let line = 1;
@@ -380,7 +380,7 @@ function lineColumnAt(text, offset) {
     index++;
   return `line ${line}, column ${column}${index > 0 ? ` (+${index} more)` : ""}`;
 }
-//@ chunk-06y4szbn.js:30821-31119 placement (2.1.88 match: getMcpAuthCache, 0.756)
+//@ chunk-51jy8ztq.js:30821-31119 placement (2.1.88 match: getMcpAuthCache, 0.757)
 function findUndecodableChar(text, bytes, encoding) {
   let isUtf8 = encoding === "utf-8";
   let byteIndex = isUtf8 ? (bytes[0] === 239 && bytes[1] === 187 && bytes[2] === 191 ? 3 : 0) : 2;
@@ -408,11 +408,11 @@ function findUndecodableChar(text, bytes, encoding) {
   }
   return -1;
 }
-//@ chunk-06y4szbn.js:31119-31175 placement
+//@ chunk-51jy8ztq.js:31119-31175 placement
 function decodeText(bytes) {
   return new TextDecoder(encodingFromBom(bytes)).decode(bytes);
 }
-//@ chunk-06y4szbn.js:31175-31510 placement
+//@ chunk-51jy8ztq.js:31175-31510 placement
 function decodeTextStrict(bytes) {
   let encoding = encodingFromBom(bytes);
   try {
@@ -444,11 +444,18 @@ function decodeTextStrict(bytes) {
   }
 }
 export {
+  decodeTextStrict,
+  safeJsonQuote,
+  asciiLowerCase,
   baseMediaType,
-  contentTypeMismatchMessage,
   contentTypeForPath,
-  lineColumnAt,
   MARKUP_WITHOUT_SVG_TYPES,
+  decodeText,
+  parseFileTypeRefusal,
+  parseRateLimitedMessage,
+  parseContractRolloutMessage,
+  contentTypeMismatchMessage,
+  lineColumnAt,
   HTML_CONTENT_TYPES,
   copyPreflightFailure,
   copiedFilesSummary,
@@ -457,15 +464,8 @@ export {
   rateLimitedMessage,
   retryAfterSeconds,
   CONTRACT_ROLLOUT_TEXT,
-  decodeTextStrict,
-  safeJsonQuote,
   unservableFileMessage,
-  asciiLowerCase,
-  decodeText,
   WWW_CONTENT_TYPES,
   SERVABLE_CONTENT_TYPES,
   MARKUP_CONTENT_TYPES,
-  parseFileTypeRefusal,
-  parseRateLimitedMessage,
-  parseContractRolloutMessage,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：跨会话空闲订阅：其他会话空闲时的提示行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7bvr1kd2.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-d82yv3e3.js (10)
  * attribution: placement 10
  */
 import { logError } from "./log.js";
@@ -39,7 +39,7 @@ import { currentInboundSetting } from "./crossSessionInbound/inboundMode.js";
 import { getIsNonInteractiveSession } from "../bootstrap/state.js";
 import { getHostUid } from "./sandbox/userNamespace.js";
 
-//@ chunk-7bvr1kd2.js:11990-12161 placement
+//@ chunk-d82yv3e3.js:13138-13309 placement
 async function subscribeToPeerIdle(peerSocket, label, storage, fromMode) {
   try {
     return await requestPeerIdleNotice(peerSocket, label, storage, fromMode);
@@ -53,7 +53,7 @@ async function subscribeToPeerIdle(peerSocket, label, storage, fromMode) {
     };
   }
 }
-//@ chunk-7bvr1kd2.js:12161-13343 placement
+//@ chunk-d82yv3e3.js:13309-14491 placement
 /**
  * 订阅另一会话的下次空闲通知：检查本端入站策略、收件箱、命名空间、自身目标与对端能力，注册订阅后经 UDS 发送 notify_when_idle；按失败类型（对端不在、发送失败、结果不确定）返回原因。
  */
@@ -137,7 +137,7 @@ async function requestPeerIdleNotice(peerSocket, label, storage, fromMode) {
     };
   }
 }
-//@ chunk-7bvr1kd2.js:13343-13417 placement
+//@ chunk-d82yv3e3.js:14491-14565 placement
 /**
  * 构造空闲订阅失败结果，并上报命中的失败原因。
  */
@@ -148,11 +148,11 @@ function idleSubscribeFailure(reason) {
     reason,
   };
 }
-//@ chunk-7bvr1kd2.js:13417-13551 placement
+//@ chunk-d82yv3e3.js:14565-14699 placement
 function idleSelfTargetMessage(peerName) {
   return `notify_when_idle: ${peerName} is THIS session \u2014 nothing was subscribed; you already know when your own turn ends.`;
 }
-//@ chunk-7bvr1kd2.js:13551-13821 placement
+//@ chunk-d82yv3e3.js:14699-14969 placement
 var IDLE_SUBSCRIBE_FAILURE_EVENTS = {
   "requester-refuses-inbound": "subscribe_requester_refuses_inbound",
   "no-inbox": "subscribe_no_inbox",
@@ -161,7 +161,7 @@ var IDLE_SUBSCRIBE_FAILURE_EVENTS = {
   "peer-unsupported": "subscribe_peer_unsupported",
   cap: "subscribe_cap",
 };
-//@ chunk-7bvr1kd2.js:13821-15391 placement
+//@ chunk-d82yv3e3.js:14969-16539 placement
 /**
  * 生成订阅成功后给模型的说明：对端能力未知时提示可能收不到；按本端入站策略说明通知是直接送达、只记录还是展示给用户。
  */
@@ -183,7 +183,7 @@ function describeIdleSubscription(peer, capabilityKnown = true) {
     ? `Subscribed \u2014 you will get one notice here when "${label}" is next idle (or exits), provided ${sameClassNote} or asserts none; otherwise it is ${isNonInteractive ? "only logged here" : "shown to your user in the transcript"}. Do not poll or wait for it; carry on.`
     : `Subscribed \u2014 "${label}" will send one notice when it is next idle (or exits). It is delivered to you if ${sameClassNote}; otherwise it is ${isNonInteractive ? "only logged here" : "shown to your user in the transcript"} (this session holds other inbound peer traffic). Carry on; do not poll.`;
 }
-//@ chunk-7bvr1kd2.js:15391-17127 placement
+//@ chunk-d82yv3e3.js:16539-18275 placement
 /**
  * 按订阅失败原因生成给模型的说明（无收件箱、自身、拒收入站、命名空间不可达、对端不支持、超上限、对端不在、发送失败或不确定）。
  */
@@ -214,7 +214,7 @@ function describeIdleSubscribeFailure(result, peer) {
       return "notify_when_idle: sending the subscription did not complete cleanly, so it is unknown whether that session recorded it \u2014 a notice may or may not arrive. Do not rely on it.";
   }
 }
-//@ chunk-7bvr1kd2.js:17127-18125 placement
+//@ chunk-d82yv3e3.js:18275-19273 placement
 /**
  * 生成给用户看的空闲订阅结果说明：成功（对端能力已知或未知）或各类失败原因。
  */
@@ -244,7 +244,7 @@ function describeIdleSubscribeForUser(peer, result) {
       return `The idle subscription for ${label} could not be set up; you will not be told when it goes idle.`;
   }
 }
-//@ chunk-7bvr1kd2.js:18125-18335 placement
+//@ chunk-d82yv3e3.js:19273-19483 placement
 function idleSubscriptionLines(peer, result, peer_2) {
   try {
     return {
@@ -262,7 +262,7 @@ function idleSubscriptionLines(peer, result, peer_2) {
     };
   }
 }
-//@ chunk-7bvr1kd2.js:18335-18417 placement
+//@ chunk-d82yv3e3.js:19483-19565 placement
 /**
  * 返回当前用户的 uid 列表（宿主 uid 或进程 uid，取不到为空数组）。
  */

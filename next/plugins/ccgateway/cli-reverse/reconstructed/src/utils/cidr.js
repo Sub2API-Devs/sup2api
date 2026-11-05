@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：解析 IPv6 地址为字节；IP 是否在 CIDR 段内。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hq88884p.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-355mdh7x.js (6)
  * attribution: placement 6
  */
 
-//@ chunk-hq88884p.js:52152-52478 placement
+//@ chunk-355mdh7x.js:90875-91201 placement
 /**
  * IP 是否在 CIDR 段内。
  */
@@ -32,7 +32,7 @@ function ipInCidr(ip, cidr) {
   if (prefixLength < 0 || prefixLength > maxBits) return false;
   return prefixBitsMatch(ipBytes, bytes, prefixLength);
 }
-//@ chunk-hq88884p.js:52478-52635 placement
+//@ chunk-355mdh7x.js:91201-91358 placement
 function prefixBitsMatch(ipBytes, bytes, prefixLength) {
   let fullBytes = prefixLength >> 3;
   for (let j = 0; j < fullBytes; j++) if (ipBytes[j] !== bytes[j]) return false;
@@ -41,14 +41,14 @@ function prefixBitsMatch(ipBytes, bytes, prefixLength) {
   let mask = (255 << (8 - remainderBits)) & 255;
   return ((ipBytes[fullBytes] ?? 0) & mask) === ((bytes[fullBytes] ?? 0) & mask);
 }
-//@ chunk-hq88884p.js:52635-52774 placement
+//@ chunk-355mdh7x.js:91358-91497 placement
 function unmapIpv4MappedIpv6(bytes) {
   if (bytes.length !== 16) return bytes;
   for (let j = 0; j < 10; j++) if (bytes[j] !== 0) return bytes;
   if (bytes[10] !== 255 || bytes[11] !== 255) return bytes;
   return bytes.slice(12);
 }
-//@ chunk-hq88884p.js:52774-53003 placement
+//@ chunk-355mdh7x.js:91497-91726 placement
 function parseIpAddress(address) {
   if (address === "") return null;
   let zone = "";
@@ -76,7 +76,7 @@ function parseIpAddress(address) {
       }
     : null;
 }
-//@ chunk-hq88884p.js:53003-53280 placement
+//@ chunk-355mdh7x.js:91726-92003 placement
 function parseIpv4(text) {
   let parts = text.split(".");
   if (parts.length !== 4) return null;
@@ -91,7 +91,7 @@ function parseIpv4(text) {
   }
   return uint8Array;
 }
-//@ chunk-hq88884p.js:53280-54235 placement
+//@ chunk-355mdh7x.js:92003-92958 placement
 /**
  * 解析 IPv6 地址为字节。
  */

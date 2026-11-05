@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：claude.ai 托管市场
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (70)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (70)
  * attribution: placement 70
  */
 import { join, dirname } from "path";
-import { rm as rm_2, mkdir } from "fs/promises";
+import { rm, mkdir } from "fs/promises";
 import {
   CONTROL_OR_BIDI_CHARS_RE,
   CLAUDEAI_MARKETPLACE_KINDS,
@@ -65,7 +65,7 @@ import {
   syncedPluginsRoot,
   ensurePluginsBucketRoot,
 } from "../claudeAiSync/pluginsSync.js";
-import { getClaudeConfigDir } from "../envUtils.js";
+import { getClaudeConfigDir } from "../markdownConfigLoader.js";
 import { isPluginsSyncOn } from "../../services/plugins/accountSync/syncedPluginHooks.js";
 import { getRootSession, isDiskless } from "../../bootstrap/state.js";
 import { isSourceAllowedByPolicy } from "./marketplacePolicy.js";
@@ -80,15 +80,15 @@ import { registerWriteQueueDrain } from "../settings/writeQueues.js";
 import { lock, releaseLockQuietly } from "../lockfile.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:673790-673867 placement
+//@ chunk-5xgkngpb.js:684242-684319 placement
 var ACCOUNT_MARKETPLACES_API_PATH = "/api/oauth/organizations/:orgUUID/marketplaces";
 var ACCOUNT_MARKETPLACES_FETCH_TIMEOUT_MS = 1e4;
 var MAX_ACCOUNT_MARKETPLACES_BYTES = 4194304;
-//@ chunk-e6aww6q8.js:673867-673902 placement
+//@ chunk-5xgkngpb.js:684319-684354 placement
 function isPrintableMarketplaceText(text) {
   return !CONTROL_OR_BIDI_CHARS_RE.test(text);
 }
-//@ chunk-e6aww6q8.js:673902-674499 placement
+//@ chunk-5xgkngpb.js:684354-684951 placement
 /**
  * 本语句定义 claude.ai 账号市场行的 zod schema：显示名、ref/git url 正则、名长上限 128，以及市场行（github/git/claudeai 源）。
  */
@@ -97,7 +97,7 @@ var GIT_REF_RE;
 var GIT_URL_RE;
 var MAX_MARKETPLACE_NAME_LENGTH;
 var AccountMarketplaceRowSchema;
-deferInit("chunk-e6aww6q8.js:673902", () => {
+deferInit("chunk-5xgkngpb.js:684354", () => {
   OptionalDisplayNameSchema = DoctorLazy(() =>
     stringSchema()
       .max(MAX_MARKETPLACE_NAME_LENGTH)
@@ -135,7 +135,7 @@ deferInit("chunk-e6aww6q8.js:673902", () => {
     ),
   );
 });
-//@ chunk-e6aww6q8.js:674499-674603 placement
+//@ chunk-5xgkngpb.js:684951-685055 placement
 function isValidAccountMarketplaceName(name) {
   return (
     !RESERVED_MARKETPLACE_NAMES.has(nfcBasename(name)) &&
@@ -144,11 +144,11 @@ function isValidAccountMarketplaceName(name) {
     MarketplaceNameSchema().safeParse(name).success
   );
 }
-//@ chunk-e6aww6q8.js:674603-674648 placement (2.1.88 match: setCwdState, 1)
+//@ chunk-5xgkngpb.js:685055-685100 placement (2.1.88 match: setCwdState, 1)
 function nfcBasename(cwd) {
   return normalizePathSegment(cwd.normalize("NFC"));
 }
-//@ chunk-e6aww6q8.js:674648-674852 placement
+//@ chunk-5xgkngpb.js:685100-685304 placement
 /**
  * 把 claude.ai 市场显示名规范化（NFKD 去变音、小写、非法字符换成 -）并加 claude.ai 前缀，得到本地市场名；不合法返回 null。
  */
@@ -165,15 +165,15 @@ function toAccountMarketplaceLocalName(name) {
   let prefixedName = `${CLAUDEAI_MARKETPLACE_PREFIX}${localName}`;
   return isValidAccountMarketplaceName(prefixedName) ? prefixedName : null;
 }
-//@ chunk-e6aww6q8.js:674852-674923 placement
+//@ chunk-5xgkngpb.js:685304-685375 placement
 function trimAccountMarketplaceName(name) {
   return name
     .slice(0, MAX_MARKETPLACE_NAME_LENGTH - CLAUDEAI_MARKETPLACE_PREFIX.length)
     .replace(/^-+|-+$/g, "");
 }
-//@ chunk-e6aww6q8.js:674923-674933 placement
+//@ chunk-5xgkngpb.js:685375-685385 placement
 var MAX_NAME_SUFFIX_LENGTH = 6;
-//@ chunk-e6aww6q8.js:674933-675486 placement
+//@ chunk-5xgkngpb.js:685385-685941 placement
 /**
  * 为账号市场行分配本地名：同名的用 id 去非字母数字后的尾部做后缀区分；最终只保留唯一的名字，返回 id→本地名映射。
  */
@@ -212,7 +212,7 @@ function assignAccountMarketplaceLocalNames(rows) {
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:675527-675781 placement
+//@ chunk-5xgkngpb.js:685982-686236 placement
 function parseAccountMarketplaceRows(rawRows) {
   let seenNames = new Set();
   let seenIds = new Set();
@@ -227,7 +227,7 @@ function parseAccountMarketplaceRows(rawRows) {
     dropped: rawRows.length - filtered.length,
   };
 }
-//@ chunk-e6aww6q8.js:675781-676594 placement
+//@ chunk-5xgkngpb.js:686236-687049 placement
 async function fetchClaudeAiMarketplaceRows({ etag, credentials }) {
   try {
     if ((await pluginsScopeGate(undefined, credentials)) === "skip_no_scope")
@@ -286,7 +286,7 @@ async function fetchClaudeAiMarketplaceRows({ etag, credentials }) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:676594-676702 placement (2.1.88 match: uploadTeamMemory, 0.184)
+//@ chunk-5xgkngpb.js:687049-687157 placement (2.1.88 match: uploadTeamMemory, 0.184)
 function classifySyncError(error) {
   let { kind, status: httpStatus } = classifyAxiosError(error);
   return kind === "http" || kind === "auth"
@@ -295,11 +295,11 @@ function classifySyncError(error) {
       : `http_${httpStatus}`
     : kind;
 }
-//@ chunk-e6aww6q8.js:676702-676841 placement
+//@ chunk-5xgkngpb.js:687157-687296 placement
 var ACCOUNT_MARKETPLACES_CACHE_VERSION; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var ACCOUNT_MARKETPLACES_PARSER_VERSION;
 var AccountMarketplacesCacheSchema;
-deferInit("chunk-e6aww6q8.js:676702", () => {
+deferInit("chunk-5xgkngpb.js:687157", () => {
   ACCOUNT_MARKETPLACES_CACHE_VERSION = 2;
   ACCOUNT_MARKETPLACES_PARSER_VERSION = 1000 + ACCOUNT_MARKETPLACES_CACHE_VERSION;
   AccountMarketplacesCacheSchema = DoctorLazy(() =>
@@ -310,11 +310,11 @@ deferInit("chunk-e6aww6q8.js:676702", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:676841-676875 placement
+//@ chunk-5xgkngpb.js:687296-687330 placement
 function accountMarketplacesCachePath(syncBucketDir) {
   return join(syncBucketDir, MARKETPLACES_JSON_FILE);
 }
-//@ chunk-e6aww6q8.js:676875-677081 placement
+//@ chunk-5xgkngpb.js:687330-687536 placement
 /**
  * 读账号市场列表缓存（etag 只在解析器版本一致时有效）。
  */
@@ -331,7 +331,7 @@ async function readAccountMarketplacesCache(syncBucketDir) {
     rows: parseAccountMarketplaceRows(manifestJson.rows).rows,
   };
 }
-//@ chunk-e6aww6q8.js:677081-677157 placement
+//@ chunk-5xgkngpb.js:687536-687612 placement
 /**
  * writeAccountMarketplacesCache：写入账号市场缓存（带解析器版本）。
  */
@@ -348,7 +348,7 @@ async function writeAccountMarketplacesCache(syncBucketDir, payload) {
     ),
   );
 }
-//@ chunk-e6aww6q8.js:677157-677386 placement
+//@ chunk-5xgkngpb.js:687612-687841 placement
 class KeyedPromiseCache {
   #e = null;
   #t = null;
@@ -373,15 +373,15 @@ class KeyedPromiseCache {
     this.#t = null;
   }
 }
-//@ chunk-e6aww6q8.js:677386-677413 placement
+//@ chunk-5xgkngpb.js:687841-687868 placement
 /**
  * accountMarketplacesPromiseCache：账号市场请求的键控 Promise 缓存。
  */
 var accountMarketplacesPromiseCache; // deferred: uses KeyedPromiseCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:677386", () => {
+deferInit("chunk-5xgkngpb.js:687841", () => {
   accountMarketplacesPromiseCache = new HostScoped(() => new KeyedPromiseCache());
 });
-//@ chunk-e6aww6q8.js:677413-677570 placement
+//@ chunk-5xgkngpb.js:687868-688025 placement
 async function isAccountSyncRootUsable(syncBucket) {
   return (
     (await verifySyncRoot(syncedPluginBucketDir(syncBucket), getClaudeConfigDir(), {
@@ -391,7 +391,7 @@ async function isAccountSyncRootUsable(syncBucket) {
     }).catch(() => null)) === "real" && (await hasSyncMarker(syncedPluginsRoot(), syncBucket))
   );
 }
-//@ chunk-e6aww6q8.js:677570-678759 placement
+//@ chunk-5xgkngpb.js:688025-689214 placement
 /**
  * 列出 claude.ai 插件市场（仅浏览模式时只读）。
  */
@@ -480,12 +480,12 @@ async function listClaudeAiMarketplaces(credentials) {
     });
   return result;
 }
-//@ chunk-e6aww6q8.js:678759-678874 placement
+//@ chunk-5xgkngpb.js:689214-689329 placement
 async function isListedSourceUnchanged(source) {
   let parsed = await parseMarketplaceInput(formatGitSourceSpec(source)).catch(() => null);
   return parsed !== null && !("error" in parsed) && parsed.source === source.source;
 }
-//@ chunk-e6aww6q8.js:678874-679202 placement
+//@ chunk-5xgkngpb.js:689329-689657 placement
 /**
  * 从 claude.ai 可用/托管市场列表中去掉已在本地注册的项（按 NFC 名字或 claudeai 源的 marketplaceId 比较）；输入为 null 时返回空列表。
  */
@@ -508,7 +508,7 @@ function filterUnaddedClaudeAiMarketplaces(listed, configuredMarketplaces) {
     ),
   };
 }
-//@ chunk-e6aww6q8.js:679202-679474 placement
+//@ chunk-5xgkngpb.js:689657-689929 placement
 /**
  * 按本地名精确查找账号市场行；找不到时按显示名查找，多个命中返回 {kind:"ambiguous"}，否则 found/none。
  */
@@ -535,7 +535,7 @@ function findAccountMarketplaceByName(rows, name) {
         row: filtered[0],
       };
 }
-//@ chunk-e6aww6q8.js:679474-679566 placement
+//@ chunk-5xgkngpb.js:689929-690021 placement
 /**
  * accountMarketplaceLabel：市场名加上 “listed as …”。
  */
@@ -543,7 +543,7 @@ function accountMarketplaceLabel(entry) {
   let suffix = listedAsSuffix(entry.name, entry.displayName);
   return suffix === undefined ? entry.name : `${entry.name} (${suffix})`;
 }
-//@ chunk-e6aww6q8.js:679566-679638 placement
+//@ chunk-5xgkngpb.js:690021-690093 placement
 /**
  * listedAsSuffix：显示名与 CLI 名不同时的说明。
  */
@@ -552,20 +552,20 @@ function listedAsSuffix(name, displayName) {
     ? undefined
     : `listed as ${quoteDisplayName(displayName)}`;
 }
-//@ chunk-e6aww6q8.js:679638-679713 placement
+//@ chunk-5xgkngpb.js:690093-690168 placement
 /**
  * noCliNameLabel：只有显示名的市场的说明。
  */
 function noCliNameLabel(entry) {
   return `(no CLI name) \xB7 listed as ${quoteDisplayName(entry.displayName)}`;
 }
-//@ chunk-e6aww6q8.js:679713-679761 placement
+//@ chunk-5xgkngpb.js:690168-690216 placement
 function quoteDisplayName(displayName) {
   return `"${displayName.replace(QUOTATION_MARKS_RE, "'")}"`;
 }
-//@ chunk-e6aww6q8.js:679761-679849 placement
+//@ chunk-5xgkngpb.js:690216-690304 placement
 var QUOTATION_MARKS_RE = /[\p{Quotation_Mark}\u2033\u2036\u2057\u02ba\u02dd\u02ee\u05f4\u275b-\u275e]/gu;
-//@ chunk-e6aww6q8.js:679849-679985 placement
+//@ chunk-5xgkngpb.js:690304-690440 placement
 /**
  * 把 claude.ai 市场 scope 转成展示文字：org 为 "org library"、account 为 "your uploads"、默认为 "claude.ai"。
  */
@@ -580,7 +580,7 @@ function formatMarketplaceScopeLabel(scope) {
       return "claude.ai";
   }
 }
-//@ chunk-e6aww6q8.js:679985-680097 placement
+//@ chunk-5xgkngpb.js:690440-690552 placement
 /**
  * 把 github/git 市场源格式化成用户可输入的来源字符串：github 为 repo@ref，git 为 url#ref。
  */
@@ -589,7 +589,7 @@ function formatGitSourceSpec(source) {
     ? `${source.repo}${source.ref ? `@${source.ref}` : ""}`
     : `${source.url}${source.ref ? `#${source.ref}` : ""}`;
 }
-//@ chunk-e6aww6q8.js:680162-680661 placement
+//@ chunk-5xgkngpb.js:690617-691115 placement
 /**
  * claude.ai 托管市场插件目录：每页 500、最多 4 页，以及插件行、分页响应的 zod schema。
  */
@@ -602,7 +602,7 @@ var CATALOG_VERSION_RE;
 var CATALOG_CURSOR_RE;
 var CatalogPluginRowSchema;
 var CatalogPageSchema;
-deferInit("chunk-e6aww6q8.js:680162", () => {
+deferInit("chunk-5xgkngpb.js:690617", () => {
   CATALOG_PAGE_SIZE = 500;
   CATALOG_MAX_PAGES = 4;
   CATALOG_MAX_ROWS = CATALOG_PAGE_SIZE * CATALOG_MAX_PAGES;
@@ -637,7 +637,7 @@ deferInit("chunk-e6aww6q8.js:680162", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:680661-680816 placement
+//@ chunk-5xgkngpb.js:691115-691270 placement
 function parseCatalogPluginRows(rows) {
   let seenNames = new Set();
   let filtered = parseValidRows(CatalogPluginRowSchema(), rows).filter((row) => {
@@ -649,16 +649,16 @@ function parseCatalogPluginRows(rows) {
     dropped: rows.length - filtered.length,
   };
 }
-//@ chunk-e6aww6q8.js:680816-680868 placement
+//@ chunk-5xgkngpb.js:691270-691322 placement
 var MAX_ACCOUNT_MARKETPLACE_FETCH_RETRIES = 2;
 var GONE_HTTP_STATUSES = ["http_403", "http_404"];
 var ACCOUNT_MARKETPLACE_GONE_TTL_MS = 604800000;
-//@ chunk-e6aww6q8.js:680868-681031 placement
+//@ chunk-5xgkngpb.js:691322-691485 placement
 function buildCatalogPagePath(marketplaceId, cursor) {
   let query = `limit=${CATALOG_PAGE_SIZE}${cursor === undefined ? "" : `&cursor=${cursor}`}`;
   return `/api/oauth/organizations/:orgUUID/marketplaces/${encodeURIComponent(marketplaceId)}/plugins?${query}`;
 }
-//@ chunk-e6aww6q8.js:681031-682231 placement
+//@ chunk-5xgkngpb.js:691485-692688 placement
 /**
  * 按页（最多 ZUe 页）拉取 claude.ai 托管市场的插件目录。首页带 etag，304 返回 not_modified； 401/403 等列入 DNt 的状态返回 denied，其他非 2xx 为 failed，解析失败为 malformed；超页数上限时 truncated 且不保留 etag。
  */
@@ -749,9 +749,9 @@ async function fetchClaudeAiCatalogPages({ marketplaceId, etag, credentials, isB
     };
   }
 }
-//@ chunk-e6aww6q8.js:682231-682475 placement
+//@ chunk-5xgkngpb.js:692688-692932 placement
 var CatalogCacheSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:682231", () => {
+deferInit("chunk-5xgkngpb.js:692688", () => {
   CatalogCacheSchema = DoctorLazy(() =>
     objectSchema({
       etag: stringSchema().optional().catch(undefined),
@@ -768,11 +768,11 @@ deferInit("chunk-e6aww6q8.js:682231", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:682475-682514 placement
+//@ chunk-5xgkngpb.js:692932-692971 placement
 function claudeAiMarketplaceCachePath(root, marketplaceId) {
   return join(root, claudeAiMarketplaceFile(marketplaceId));
 }
-//@ chunk-e6aww6q8.js:682514-682829 placement
+//@ chunk-5xgkngpb.js:692971-693286 placement
 /**
  * 读插件目录缓存：gone 或 rows（etag 只在解析器版本一致时有效）。
  */
@@ -797,7 +797,7 @@ async function readCatalogCache(root, marketplaceId) {
     truncated: manifestJson.truncated,
   };
 }
-//@ chunk-e6aww6q8.js:682829-683042 placement
+//@ chunk-5xgkngpb.js:693286-693499 placement
 async function writeCatalogCache(root, marketplaceId, entry) {
   let cacheBody =
     entry.kind === "gone"
@@ -825,21 +825,21 @@ async function writeCatalogCache(root, marketplaceId, entry) {
     ),
   );
 }
-//@ chunk-e6aww6q8.js:683042-683086 placement
+//@ chunk-5xgkngpb.js:693499-693543 placement
 async function removeClaudeAiMarketplaceCache(bucket, marketplaceId) {
   await removeAccountSyncedFile(bucket, claudeAiMarketplaceFile(marketplaceId));
 }
-//@ chunk-e6aww6q8.js:683086-683184 placement
+//@ chunk-5xgkngpb.js:693543-693641 placement
 /**
  * removeAccountSyncedFile：账号同步根可用时删除同步桶里的文件。
  */
 async function removeAccountSyncedFile(syncBucket, fileName) {
   if (!(await isAccountSyncRootUsable(syncBucket))) return;
-  await rm_2(join(syncedPluginBucketDir(syncBucket), fileName), {
+  await rm(join(syncedPluginBucketDir(syncBucket), fileName), {
     force: true,
   }).catch(() => {});
 }
-//@ chunk-e6aww6q8.js:683184-683416 placement
+//@ chunk-5xgkngpb.js:693641-693873 placement
 /**
  * 解析当前账号的同步桶：功能未开返回 inert，无身份 no_identity，组织不符 identity_mismatch，否则返回 bucket 与根目录。
  */
@@ -863,7 +863,7 @@ async function resolveAccountBucket(source, credentials) {
     root: syncedPluginBucketDir(syncBucket),
   };
 }
-//@ chunk-e6aww6q8.js:683416-684111 placement
+//@ chunk-5xgkngpb.js:693873-694568 placement
 function describeMarketplaceFreshness(status) {
   switch (status.kind) {
     case "fresh":
@@ -889,7 +889,7 @@ function describeMarketplaceFreshness(status) {
       return "could not be loaded from claude.ai";
   }
 }
-//@ chunk-e6aww6q8.js:684111-684375 placement
+//@ chunk-5xgkngpb.js:694568-694832 placement
 /**
  * 把 claude.ai 目录状态（fresh/cached/offline/gone/failed/…）映射成遥测用的短码。
  */
@@ -911,12 +911,12 @@ function catalogStatusCode(status) {
       return status.kind;
   }
 }
-//@ chunk-e6aww6q8.js:684375-684402 placement
+//@ chunk-5xgkngpb.js:694832-694859 placement
 var accountMarketplaceSyncSlots; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:684375", () => {
+deferInit("chunk-5xgkngpb.js:694832", () => {
   accountMarketplaceSyncSlots = new HostScoped(() => new Map());
 });
-//@ chunk-e6aww6q8.js:684402-685361 placement
+//@ chunk-5xgkngpb.js:694859-695823 placement
 async function ensureClaudeAiMarketplace(
   name,
   source,
@@ -974,7 +974,7 @@ ${name}`;
   slots.set(slotKey, slot);
   return slot.load;
 }
-//@ chunk-e6aww6q8.js:685361-685584 placement
+//@ chunk-5xgkngpb.js:695823-696046 placement
 function catalogFromCache(name, entry) {
   if (entry === null)
     return buildCatalogResult(name, [], {
@@ -994,7 +994,7 @@ function catalogFromCache(name, entry) {
       });
   }
 }
-//@ chunk-e6aww6q8.js:685584-685837 placement
+//@ chunk-5xgkngpb.js:696046-696299 placement
 async function fetchClaudeAiCatalogWithTelemetry(options) {
   let claudeAiMarketplaceCatalog = await fetchClaudeAiMarketplaceCatalog(options);
   let statusCode = catalogStatusCode(claudeAiMarketplaceCatalog.status);
@@ -1005,7 +1005,7 @@ async function fetchClaudeAiCatalogWithTelemetry(options) {
   else logFeatureBad("claudeai_marketplace_catalog", statusCode);
   return claudeAiMarketplaceCatalog;
 }
-//@ chunk-e6aww6q8.js:685837-685947 placement
+//@ chunk-5xgkngpb.js:696299-696409 placement
 function buildCatalogResult(name, plugins, status) {
   return {
     marketplace:
@@ -1015,7 +1015,7 @@ function buildCatalogResult(name, plugins, status) {
     status,
   };
 }
-//@ chunk-e6aww6q8.js:685947-687419 placement
+//@ chunk-5xgkngpb.js:696409-697881 placement
 /**
  * 拉取 claude.ai 插件市场目录，丢弃不合格的行并写缓存。
  */
@@ -1119,7 +1119,7 @@ async function fetchClaudeAiMarketplaceCatalog({
           });
   }
 }
-//@ chunk-e6aww6q8.js:687419-687734 placement
+//@ chunk-5xgkngpb.js:697881-698196 placement
 /**
  * 把目录行转成 strict 的 claudeai 源市场 manifest。
  */
@@ -1148,7 +1148,7 @@ function buildClaudeAiMarketplace(name, plugins) {
     plugins: plugins_2,
   };
 }
-//@ chunk-e6aww6q8.js:687734-688102 placement
+//@ chunk-5xgkngpb.js:698196-698564 placement
 /**
  * MAX_KNOWN_CLAUDEAI_FILE_BYTES：claude.ai 市场注册表体积上限；KNOWN_CLAUDEAI_FILE_TTL_MS：注册表缓存时长；knownClaudeAiMarketplaceSchema：claude.ai 市场注册表 schema（同一声明共 4 个绑定）。
  */
@@ -1157,7 +1157,7 @@ var MAX_KNOWN_CLAUDEAI_FILE_BYTES;
 var KNOWN_CLAUDEAI_FILE_TTL_MS;
 var knownClaudeAiMarketplaceSchema;
 var knownClaudeAiMarketplacesFileSchema;
-deferInit("chunk-e6aww6q8.js:687734", () => {
+deferInit("chunk-5xgkngpb.js:698196", () => {
   KNOWN_MARKETPLACES_CLAUDEAI_JSON = "known_marketplaces_claudeai.json";
   MAX_KNOWN_CLAUDEAI_FILE_BYTES = 1048576;
   KNOWN_CLAUDEAI_FILE_TTL_MS = 60000;
@@ -1177,11 +1177,11 @@ deferInit("chunk-e6aww6q8.js:687734", () => {
   );
   knownClaudeAiMarketplacesFileSchema = DoctorLazy(() => record(stringSchema(), unknown()));
 });
-//@ chunk-e6aww6q8.js:688102-688138 placement
+//@ chunk-5xgkngpb.js:698564-698600 placement
 function knownClaudeAiMarketplacesPath() {
   return join(getPluginsDirectory(), KNOWN_MARKETPLACES_CLAUDEAI_JSON);
 }
-//@ chunk-e6aww6q8.js:688138-688476 placement
+//@ chunk-5xgkngpb.js:698600-698938 placement
 /**
  * 读取 claude.ai 市场注册表 JSON（无盘模式或不存在返回 {}），整体不是对象时抛错，逐项校验 schema 与键名，丢弃无效项。
  */
@@ -1203,11 +1203,11 @@ async function readClaudeAiMarketplaceRegistryUnsafe() {
   }
   return registry;
 }
-//@ chunk-e6aww6q8.js:688476-688524 placement
+//@ chunk-5xgkngpb.js:698938-698986 placement
 function isAccountMarketplaceId(id) {
   return id.startsWith(CLAUDEAI_MARKETPLACE_PREFIX) && isValidAccountMarketplaceName(id);
 }
-//@ chunk-e6aww6q8.js:688524-688656 placement
+//@ chunk-5xgkngpb.js:698986-699118 placement
 /**
  * 读取 claude.ai 市场注册表；任何错误只记 warn 并返回空对象。多处市场加载路径用它合并账号市场。
  */
@@ -1221,20 +1221,20 @@ async function readClaudeAiMarketplaceRegistry() {
     return {};
   }
 }
-//@ chunk-e6aww6q8.js:688656-688669 placement
+//@ chunk-5xgkngpb.js:699118-699131 placement
 var accountMarketplaceLockQueue; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:688656", () => {
+deferInit("chunk-5xgkngpb.js:699118", () => {
   accountMarketplaceLockQueue = createKeyedQueue();
 });
-//@ chunk-e6aww6q8.js:688669-688690 placement
+//@ chunk-5xgkngpb.js:699131-699152 placement
 // deferred: uses registerWriteQueueDrain (../settings/writeQueues.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:688669", () => {
+deferInit("chunk-5xgkngpb.js:699131", () => {
   registerWriteQueueDrain(() => accountMarketplaceLockQueue.drain());
 });
-//@ chunk-e6aww6q8.js:688690-688782 placement
+//@ chunk-5xgkngpb.js:699152-699244 placement
 var ACCOUNT_MARKETPLACE_UNSAVABLE_MESSAGE =
   "claude.ai marketplaces can't be added in this session, because it can't save them";
-//@ chunk-e6aww6q8.js:688782-689402 placement
+//@ chunk-5xgkngpb.js:699244-699864 placement
 /**
  * 在 claude.ai 市场注册表锁内执行操作。
  */
@@ -1283,7 +1283,7 @@ async function withClaudeAiMarketplaceLock(updateRegistry) {
     }
   });
 }
-//@ chunk-e6aww6q8.js:689402-689565 placement
+//@ chunk-5xgkngpb.js:699864-700027 placement
 function toKnownMarketplaceEntry(name, entry) {
   return {
     source: entry.source,
@@ -1294,14 +1294,14 @@ function toKnownMarketplaceEntry(name, entry) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:689565-689610 placement
+//@ chunk-5xgkngpb.js:700027-700072 placement
 /**
  * isClaudeAiMarketplaceSource：来源是 claudeai。
  */
 function isClaudeAiMarketplaceSource(source) {
   return source?.source === "claudeai";
 }
-//@ chunk-e6aww6q8.js:689610-689723 placement
+//@ chunk-5xgkngpb.js:700072-700185 placement
 function omitClaudeAiMarketplaces(marketplaces) {
   let result = marketplaces;
   for (let [key, value] of Object.entries(marketplaces))
@@ -1314,14 +1314,14 @@ function omitClaudeAiMarketplaces(marketplaces) {
     }
   return result;
 }
-//@ chunk-e6aww6q8.js:689723-689826 placement
+//@ chunk-5xgkngpb.js:700185-700288 placement
 /**
  * claudeai 源且 installable 为 false。
  */
 function isNonInstallableClaudeAiPlugin(entry) {
   return typeof entry.source === "object" && entry.source.source === "claudeai" && !entry.source.installable;
 }
-//@ chunk-e6aww6q8.js:689826-689997 placement
+//@ chunk-5xgkngpb.js:700288-700459 placement
 /**
  * claude.ai（scope）· listed as 显示名。
  */
@@ -1335,9 +1335,9 @@ function formatClaudeAiMarketplaceLabel(entry) {
     ? baseLabel
     : `${baseLabel} \xB7 listed as ${quoteDisplayName(entry.displayName)}`;
 }
-//@ chunk-e6aww6q8.js:689997-690143 placement
+//@ chunk-5xgkngpb.js:700459-700605 placement
 let ClaudeAiMarketplaceError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:689997", () => {
+deferInit("chunk-5xgkngpb.js:700459", () => {
   ClaudeAiMarketplaceError = class ClaudeAiMarketplaceError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -1349,7 +1349,7 @@ deferInit("chunk-e6aww6q8.js:689997", () => {
     }
   };
 });
-//@ chunk-e6aww6q8.js:690143-692025 placement
+//@ chunk-5xgkngpb.js:700605-702497 placement
 /**
  * 添加 claude.ai 托管的插件市场，校验名字与是否已添加。
  */
@@ -1436,7 +1436,7 @@ async function addClaudeAiMarketplace(candidate, { configured, credentials }) {
     status,
   };
 }
-//@ chunk-e6aww6q8.js:692025-692628 placement
+//@ chunk-5xgkngpb.js:702497-703100 placement
 async function refreshClaudeAiMarketplace(
   name,
   source,
@@ -1472,7 +1472,7 @@ async function refreshClaudeAiMarketplace(
   });
   return claudeAiMarketplace;
 }
-//@ chunk-e6aww6q8.js:692628-692831 placement
+//@ chunk-5xgkngpb.js:703100-703303 placement
 /**
  * 从 claude.ai 市场注册表中删除指定市场（加锁写），若账号桶就绪再删除该市场的目录缓存。
  */
@@ -1490,7 +1490,7 @@ async function removeClaudeAiMarketplace(name, source, credentials) {
   if (accountBucket.kind === "ready")
     await removeClaudeAiMarketplaceCache(accountBucket.bucket, source.marketplaceId);
 }
-//@ chunk-e6aww6q8.js:692831-693187 placement
+//@ chunk-5xgkngpb.js:703303-703659 placement
 /**
  * 根据账号市场行的 id→scope，更新注册表中属于该组织的市场的 source.scope 与 scope（只在变化时写）。
  */
@@ -1518,33 +1518,33 @@ async function syncAccountMarketplaceScopes(rows, organizationUuid) {
   });
 }
 export {
-  withClaudeAiMarketplaceLock,
   isClaudeAiMarketplaceSource,
-  ClaudeAiMarketplaceError,
-  readClaudeAiMarketplaceRegistry,
-  ensureClaudeAiMarketplace,
-  accountMarketplacesPromiseCache,
-  readAccountMarketplacesCache,
-  fetchClaudeAiMarketplaceRows,
-  syncAccountMarketplaceScopes,
-  writeAccountMarketplacesCache,
-  removeAccountSyncedFile,
-  toAccountMarketplaceLocalName,
   listClaudeAiMarketplaces,
   filterUnaddedClaudeAiMarketplaces,
   formatGitSourceSpec,
   accountMarketplaceLabel,
   formatMarketplaceScopeLabel,
   noCliNameLabel,
-  findAccountMarketplaceByName,
-  addClaudeAiMarketplace,
-  describeMarketplaceFreshness,
-  formatClaudeAiMarketplaceLabel,
+  readClaudeAiMarketplaceRegistry,
   toKnownMarketplaceEntry,
   omitClaudeAiMarketplaces,
   removeClaudeAiMarketplace,
+  ensureClaudeAiMarketplace,
+  ClaudeAiMarketplaceError,
+  describeMarketplaceFreshness,
   catalogStatusCode,
   refreshClaudeAiMarketplace,
+  withClaudeAiMarketplaceLock,
+  findAccountMarketplaceByName,
+  addClaudeAiMarketplace,
+  formatClaudeAiMarketplaceLabel,
+  toAccountMarketplaceLocalName,
+  accountMarketplacesPromiseCache,
+  readAccountMarketplacesCache,
+  fetchClaudeAiMarketplaceRows,
+  syncAccountMarketplaceScopes,
+  writeAccountMarketplacesCache,
+  removeAccountSyncedFile,
   isNonInstallableClaudeAiPlugin,
   listedAsSuffix,
 };

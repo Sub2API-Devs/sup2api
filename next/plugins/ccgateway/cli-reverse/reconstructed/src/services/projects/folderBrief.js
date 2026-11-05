@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：文件夹简报
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dz3q485w.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jndyh8cy.js (7)
  * attribution: placement 7
  */
 import { lstat, open, readdir } from "fs/promises";
@@ -38,7 +38,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { collectSessionsForProject } from "../../utils/agenticSessionSearch.js";
 import { describeRepoFact } from "./disclosure.js";
 
-//@ chunk-dz3q485w.js:24276-24716 placement
+//@ chunk-jndyh8cy.js:24028-24468 placement
 /**
  * 安全读取小型普通文件：不跟随链接、只读单链接普通文件且不超过大小上限，否则返回 null。
  */
@@ -80,7 +80,7 @@ async function readSmallRegularFile(filePath, maxBytes) {
     await handle.close();
   }
 }
-//@ chunk-dz3q485w.js:26683-26976 placement
+//@ chunk-jndyh8cy.js:26433-26725 placement
 async function recentFolderCommits(context) {
   if (context.gitRoot === null) return [];
   let { stdout, code } = await execFileNoThrowWithCwd(
@@ -109,7 +109,7 @@ async function recentFolderCommits(context) {
     .map((line) => truncateToLength(stripAnsiAndControls(line).trim(), DOC_NAME_CHARS))
     .filter((line) => line !== "");
 }
-//@ chunk-dz3q485w.js:26976-27613 placement
+//@ chunk-jndyh8cy.js:26725-27359 placement
 /**
  * 为简报读取文档摘录：目录列出前若干个条目，文件读取开头若干字节，跳过无法访问的项。
  */
@@ -155,7 +155,7 @@ async function readDocExcerpts(context) {
   }
   return excerpts;
 }
-//@ chunk-dz3q485w.js:27613-28367 placement
+//@ chunk-jndyh8cy.js:27359-28113 placement
 /**
  * 收集发送到项目所需的文件夹素材：最近本地会话（可跳过）、触及该目录的提交、文档摘录与顶层条目，并统计 MCP 工具调用；支持中止信号。
  */
@@ -207,7 +207,7 @@ async function gatherFolderBrief(context, sessionOptions, signal, opts = {}) {
     }),
   };
 }
-//@ chunk-dz3q485w.js:28367-28531 placement
+//@ chunk-jndyh8cy.js:28113-28277 placement
 /**
  * 仅统计当前对话中的 MCP 工具调用并汇总（没有当前消息时返回 null）。
  */
@@ -221,14 +221,14 @@ function currentConversationTools(conversationState) {
         includesCurrentConversation: true,
       });
 }
-//@ chunk-dz3q485w.js:28531-29018 placement
+//@ chunk-jndyh8cy.js:28277-28764 placement
 /**
  * 说明 MCP 调用统计来自哪些会话转录（最近若干个与/或当前对话），以及 claude.ai 连接器与本机服务器的区别。
  */
 function mcpCallsCountedIn(tools) {
   return `MCP tool calls by server, counted in ${[tools.sessionsScanned > 0 ? `the ${tools.sessionsScanned === 1 ? "most recent session transcript" : `${tools.sessionsScanned} most recent session transcripts`} (read whole, not just the condensed text below)` : null, tools.includesCurrentConversation ? "the conversation above" : null].filter((part) => part !== null).join(" and ")}. A claude.ai connector lives in the cloud; a local server is configured on this computer only and does not carry over to the project.`;
 }
-//@ chunk-dz3q485w.js:29018-30880 placement
+//@ chunk-jndyh8cy.js:28764-30624 placement
 /**
  * 把文件夹素材拼成供模型起草简报的文本：文件夹与仓库信息、顶层条目、最近提交、文档摘录、MCP 服务器调用统计，以及在预算内尽量多的最近会话摘要（超出部分注明省略）。
  */

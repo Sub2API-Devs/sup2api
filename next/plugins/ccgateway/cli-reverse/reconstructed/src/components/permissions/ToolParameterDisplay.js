@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：权限对话框中的工具参数卡片与格式化
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0e8j1zzj.js (20)
- * attribution: placement 20
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8prszgkd.js (21)
+ * attribution: placement 20, layout 1
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import {
@@ -34,22 +34,27 @@ import { languageSubLanguageMap } from "../../utils/highlight/boundedHighlight.j
 import { canonicalLanguageName } from "../../utils/highlight/pluginLanguages.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0e8j1zzj.js:30168-30172 placement
+//@ chunk-8prszgkd.js:34713-34717 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0e8j1zzj.js:30168", () => {
+deferInit("chunk-8prszgkd.js:34713", () => {
   init_react_production();
 });
-//@ chunk-0e8j1zzj.js:30172-30221 placement
+//@ chunk-8prszgkd.js:37418-37422 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-8prszgkd.js:37418", () => {
+  init_react_production();
+});
+//@ chunk-8prszgkd.js:39530-39581 placement
 function isValueStyle(parameter) {
   let { style } = parameter;
   return style === "value";
 }
-//@ chunk-0e8j1zzj.js:30221-30270 placement
+//@ chunk-8prszgkd.js:39581-39632 placement
 function isNotValueStyle(parameter) {
   let { style } = parameter;
   return style !== "value";
 }
-//@ chunk-0e8j1zzj.js:30270-30362 placement
+//@ chunk-8prszgkd.js:39632-39720 placement
 function renderParameterText(parameter, key) {
   let { text, style } = parameter;
   return jsxProd_default(
@@ -61,7 +66,7 @@ function renderParameterText(parameter, key) {
     key,
   );
 }
-//@ chunk-0e8j1zzj.js:30362-30445 placement
+//@ chunk-8prszgkd.js:39720-39803 placement
 function renderParameterValue(parameter, index) {
   let { text } = parameter;
   return jsxProd_default(
@@ -73,20 +78,20 @@ function renderParameterValue(parameter, index) {
     `value-${index}`,
   );
 }
-//@ chunk-0e8j1zzj.js:30445-30692 placement
+//@ chunk-8prszgkd.js:39803-40054 placement
 var PARAM_DISPLAY_LIMITS = 12;
 var VALUE_WRAP_WIDTH = 60;
 var MAX_PARAMETER_VALUE_CHARS = PARAM_DISPLAY_LIMITS * VALUE_WRAP_WIDTH;
 var PARAMETER_VALUE_MAX_LINES = 4;
 var ARTIFACT_LINK_RE =
   /^(?:replacing|source|into|type|artifact)(?: \d+)?: https?:\/\/[^\s/]+\/(?:[^\s/]+\/)*(?:artifact|frame)\/(?:[A-Za-z0-9_-]*-)?(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[A-Za-z0-9_-]{22})\/?$/;
-//@ chunk-0e8j1zzj.js:30692-30781 placement
+//@ chunk-8prszgkd.js:40054-40143 placement
 function truncateMiddle(text, width) {
   if (bunStringWidth(text) <= width) return text;
   let head = truncateToWidthNoEllipsis(text, Math.floor(width / 2));
   return head + truncateStartToWidth(text, width - bunStringWidth(head));
 }
-//@ chunk-0e8j1zzj.js:30781-31371 placement
+//@ chunk-8prszgkd.js:40143-40734 placement
 function cardHeaderRows(header, columns) {
   let max = Math.max(1, columns);
   let rows = [
@@ -144,7 +149,7 @@ function cardHeaderRows(header, columns) {
       rows.some(({ text }) => needsGutter(text)),
   };
 }
-//@ chunk-0e8j1zzj.js:31371-32738 placement
+//@ chunk-8prszgkd.js:40734-42106 placement
 /**
  * 权限对话框中以卡片形式展示工具参数行（问题、字段、代码块）。
  */
@@ -285,29 +290,29 @@ function ParameterCard(props) {
   } else cardElement = $[30];
   return cardElement;
 }
-//@ chunk-0e8j1zzj.js:32738-32742 placement
+//@ chunk-8prszgkd.js:42106-42110 layout
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0e8j1zzj.js:32738", () => {
+deferInit("chunk-8prszgkd.js:42106", () => {
   init_react_production();
 });
-//@ chunk-0e8j1zzj.js:32742-32787 placement
+//@ chunk-8prszgkd.js:42110-42155 placement
 var MAX_TOOL_INPUT_CHARS = 200000;
 var DEFAULT_TOOL_INPUT_LIMIT = MAX_TOOL_INPUT_CHARS;
 var SMALL_INPUT_CHARS = 1e4;
 var SMALL_INPUT_LINES = 1000;
 var LARGE_INPUT_CHARS = 200000;
-//@ chunk-0e8j1zzj.js:32787-32844 placement
+//@ chunk-8prszgkd.js:42155-42212 placement
 function isShortString(value) {
   return typeof value === "string" && value.length <= 256;
 }
-//@ chunk-0e8j1zzj.js:32844-32977 placement
+//@ chunk-8prszgkd.js:42212-42345 placement
 var PARAM_VALUE_MAX_WIDTH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CHANNEL_PARAM_KEYS;
 var TIMESTAMP_PARAM_KEYS;
 var SLACK_TS_RE;
 var YEAR_RE;
 var CLOCK_TIME_RE;
-deferInit("chunk-0e8j1zzj.js:32844", () => {
+deferInit("chunk-8prszgkd.js:42212", () => {
   PARAM_VALUE_MAX_WIDTH = 80;
   CHANNEL_PARAM_KEYS = new Set(["channel_id", "channel"]);
   TIMESTAMP_PARAM_KEYS = new Set(["ts", "thread_ts"]);
@@ -315,16 +320,16 @@ deferInit("chunk-0e8j1zzj.js:32844", () => {
   YEAR_RE = /\b\d{4}\b/;
   CLOCK_TIME_RE = /\d{1,2}:\d{2}/;
 });
-//@ chunk-0e8j1zzj.js:32977-33060 placement
+//@ chunk-8prszgkd.js:42345-42428 placement
 function fitsInline(label, value, hint, columns) {
   return (
     bunStringWidth(label) + 2 + bunStringWidth(value) + (hint === undefined ? 0 : bunStringWidth(hint) + 3) <=
     Math.min(PARAM_VALUE_MAX_WIDTH, columns - 2)
   );
 }
-//@ chunk-0e8j1zzj.js:33060-33070 placement
+//@ chunk-8prszgkd.js:42428-42438 placement
 var INLINE_LABEL_MAX = 64;
-//@ chunk-0e8j1zzj.js:33070-35033 placement
+//@ chunk-8prszgkd.js:42438-44401 placement
 /**
  * 把工具参数值格式化为限长的显示文本（字符串、数组、对象递归截断）。
  */
@@ -421,10 +426,10 @@ ${outerIndent}}`;
   if (typeof value === "bigint") throw Error("bigint value cannot be rendered");
   return "undefined";
 }
-//@ chunk-0e8j1zzj.js:35033-35141 placement
+//@ chunk-8prszgkd.js:44401-44509 placement
 var ISO_DATETIME_RE =
   /^(\d{4})-(\d{2})-(\d{2})[Tt ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(?:[Zz]|[+-]\d{2}:?\d{2})?$/;
-//@ chunk-0e8j1zzj.js:35141-36021 placement
+//@ chunk-8prszgkd.js:44509-45389 placement
 function parseLineRange(range) {
   let trimmed = range.trim();
   let match = trimmed.match(ISO_DATETIME_RE);
@@ -465,7 +470,7 @@ function parseLineRange(range) {
     timeZoneName: "short",
   });
 }
-//@ chunk-0e8j1zzj.js:36021-39940 placement
+//@ chunk-8prszgkd.js:45389-49307 placement
 /**
  * 把工具输入对象拆成可展示的行（内联、多行、代码、链接等），超长时截断。
  */
@@ -755,7 +760,7 @@ function buildParameterRows(input, paramFormatHints, maxWidth = PARAM_VALUE_MAX_
     });
   return rows;
 }
-//@ chunk-0e8j1zzj.js:39940-40067 placement
+//@ chunk-8prszgkd.js:49307-49434 placement
 function canHighlightAsCode(prop, highlight) {
   return (
     prop.language !== undefined &&

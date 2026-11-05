@@ -1,8 +1,8 @@
 /**
  * @modelcontextprotocol/sdk/dist/esm/client/streamableHttp.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/sdk@1.29.0
- * pieces: chunk-pjt9hgpa.js (3)
+ * pieces: chunk-6gs34xvs.js (3)
  * attribution: esm-fingerprint 3
  */
 import { createFetchWithDefaults, headersToObject } from "../../../../../../src/utils/fetchWithDefaults.js";
@@ -15,21 +15,21 @@ import {
   isInitializedNotification,
 } from "../types.js";
 
-//@ chunk-pjt9hgpa.js:634-744 esm-fingerprint
+//@ chunk-6gs34xvs.js:634-744 esm-fingerprint
 var DEFAULT_STREAMABLE_HTTP_RECONNECTION_OPTIONS = {
   initialReconnectionDelay: 1000,
   maxReconnectionDelay: 30000,
   reconnectionDelayGrowFactor: 1.5,
   maxRetries: 2,
 };
-//@ chunk-pjt9hgpa.js:744-835 esm-fingerprint
+//@ chunk-6gs34xvs.js:744-835 esm-fingerprint
 class StreamableHTTPError extends Error {
   constructor(code, message) {
     super(`Streamable HTTP error: ${message}`);
     this.code = code;
   }
 }
-//@ chunk-pjt9hgpa.js:835-7749 esm-fingerprint
+//@ chunk-6gs34xvs.js:835-7749 esm-fingerprint
 class StreamableHTTPClientTransport {
   constructor(url, opts) {
     this._hasCompletedAuthFlow = false;

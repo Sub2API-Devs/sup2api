@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：worktree 目录与 gitdir 校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2xm1rxms.js (34)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b2dh3swb.js (34)
  * attribution: placement 34
  */
 import { readlink, lstat, stat, readdir, realpath } from "fs/promises";
@@ -34,11 +34,11 @@ import { identity } from "../identity.js";
 import { openFailureText } from "./worktreeRegistrations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-2xm1rxms.js:1124-1168 placement
+//@ chunk-b2dh3swb.js:1124-1168 placement
 var MAX_GITDIR_FILE_BYTES = 65536;
 var MAX_LINK_TEXT_BYTES = 4096;
 var runGitForVetting = (args, options) => execFileNoThrowWithCwd(gitExe(), args, options);
-//@ chunk-2xm1rxms.js:1168-4308 placement
+//@ chunk-b2dh3swb.js:1168-4308 placement
 /**
  * 检查目录是否为可安全操作的 worktree：.git 指针、gitdir 与 commondir 是否一致且在仓库内。
  */
@@ -189,13 +189,13 @@ async function vetWorktree(repoRoot, { dotGitLink = "refuse", run: runGit = runG
     refused,
   };
 }
-//@ chunk-2xm1rxms.js:4308-4458 placement
+//@ chunk-b2dh3swb.js:4308-4458 placement
 async function looksLikeGitDir(readEntry) {
   for (let entryName of ["objects", "config", "packed-refs", "hooks", "worktrees"])
     if ((await readEntry(entryName).catch(() => "unchecked")) !== null) return true;
   return false;
 }
-//@ chunk-2xm1rxms.js:4458-6341 placement
+//@ chunk-b2dh3swb.js:4458-6341 placement
 async function vetWorktreeLink(entryPath, repoRoot, probeSymlink, isWindows) {
   let verdict = await symlinkVerdictForPath(entryPath, repoRoot);
   if (verdict === "missing") return "missing";
@@ -283,7 +283,7 @@ async function vetWorktreeLink(entryPath, repoRoot, probeSymlink, isWindows) {
     worktree: candidates[0] ?? null,
   };
 }
-//@ chunk-2xm1rxms.js:6341-7138 placement
+//@ chunk-b2dh3swb.js:6341-7138 placement
 async function gitConfigEnvOverrides(cwd, gitDir, runGit) {
   let configEnv = {};
   for (let varName of ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"]) {
@@ -318,7 +318,7 @@ async function gitConfigEnvOverrides(cwd, gitDir, runGit) {
     ? null
     : `git's ownership check did not name ${gitDir}`;
 }
-//@ chunk-2xm1rxms.js:7138-7276 placement
+//@ chunk-b2dh3swb.js:7138-7276 placement
 function isTrustedOwnerUid(uid) {
   let euid = process.geteuid?.();
   if (euid === undefined || uid === euid) return true;
@@ -326,7 +326,7 @@ function isTrustedOwnerUid(uid) {
   let SUDO_UID = env.SUDO_UID;
   return uid === 0 || (SUDO_UID !== undefined && uid === SUDO_UID);
 }
-//@ chunk-2xm1rxms.js:7276-8027 placement
+//@ chunk-b2dh3swb.js:7276-8027 placement
 function gitdirPathProblem(gitdirValue, baseDir, isWindows) {
   if (
     gitdirValue.includes("\uFFFD") ||
@@ -353,7 +353,7 @@ function gitdirPathProblem(gitdirValue, baseDir, isWindows) {
   if (isOnForeignMount(gitdirValue, baseDir)) return "gitdir names another host";
   return separatorRe.test(gitdirValue.slice(-1)) ? "gitdir ends in a separator git would not write" : null;
 }
-//@ chunk-2xm1rxms.js:8027-8695 placement
+//@ chunk-b2dh3swb.js:8027-8695 placement
 async function readGitdirFile(linkPath, baseDir) {
   let linkText = await readlink(linkPath, {
     encoding: "buffer",
@@ -393,7 +393,7 @@ async function readGitdirFile(linkPath, baseDir) {
     text: linkText,
   };
 }
-//@ chunk-2xm1rxms.js:8695-8860 placement
+//@ chunk-b2dh3swb.js:8695-8860 placement
 function decodeSafeName(rawName) {
   let str = rawName.toString("utf8");
   return !str.includes("\uFFFD") &&
@@ -403,7 +403,7 @@ function decodeSafeName(rawName) {
     ? str
     : null;
 }
-//@ chunk-2xm1rxms.js:8860-9581 placement
+//@ chunk-b2dh3swb.js:8860-9581 placement
 async function readWorktreePointer(dirPath, probeSymlink, maxDepth) {
   let isWindows = getPlatform() === "windows";
   let remainingBudget = MAX_LINK_TEXT_BYTES;
@@ -435,14 +435,14 @@ async function readWorktreePointer(dirPath, probeSymlink, maxDepth) {
   };
   return walk(dirPath, maxDepth);
 }
-//@ chunk-2xm1rxms.js:9581-9695 placement
+//@ chunk-b2dh3swb.js:9581-9695 placement
 /**
  * worktree 校验读取的字节上限，以及"匹配前后"回调状态的宿主作用域存储。
  */
 var WORKTREE_READ_LIMITS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var WORKTREE_READ_LIMITS;
 var worktreeHookState;
-deferInit("chunk-2xm1rxms.js:9581", () => {
+deferInit("chunk-b2dh3swb.js:9581", () => {
   WORKTREE_READ_LIMITS_2 = 65536;
   WORKTREE_READ_LIMITS = 65536;
   worktreeHookState = identity(
@@ -456,7 +456,7 @@ deferInit("chunk-2xm1rxms.js:9581", () => {
     },
   );
 });
-//@ chunk-2xm1rxms.js:9695-9940 placement
+//@ chunk-b2dh3swb.js:9695-9940 placement
 async function vetRepoForWorktrees(repoRoot) {
   let vetResult = await vetWorktree(repoRoot, {
     dotGitLink: "vet",
@@ -471,7 +471,7 @@ async function vetRepoForWorktrees(repoRoot) {
   }
   return sameRepo.gitDir;
 }
-//@ chunk-2xm1rxms.js:9940-10483 placement
+//@ chunk-b2dh3swb.js:9940-10483 placement
 async function isSameRepository(repoRoot, gitDir) {
   let normalizedRoot = normalizedAbsolute(repoRoot);
   let normalizedGitDir = normalizedAbsolute(gitDir);
@@ -498,7 +498,7 @@ async function isSameRepository(repoRoot, gitDir) {
             : `the repository's .git is a link to ${normalizedGitDir}, which could not be checked against the working tree`,
       };
 }
-//@ chunk-2xm1rxms.js:10483-10611 placement
+//@ chunk-b2dh3swb.js:10483-10611 placement
 async function resolveGitDirUnder(rootPath, suffix) {
   let realRoot = await realpath(rootPath).catch(() => null);
   return realRoot === null
@@ -509,12 +509,12 @@ async function resolveGitDirUnder(rootPath, suffix) {
         gitDir: join(realRoot, suffix),
       };
 }
-//@ chunk-2xm1rxms.js:10611-10667 placement
+//@ chunk-b2dh3swb.js:10611-10667 placement
 function normalizedAbsolute(path) {
   let normalized = normalize(path);
   return parse(normalized).root === normalized ? normalized : stripTrailingSeparators(normalized);
 }
-//@ chunk-2xm1rxms.js:10667-10973 placement
+//@ chunk-b2dh3swb.js:10667-10973 placement
 async function locateInside(childPath, rootPath) {
   if (isPathInsideOrEqual(normalizePathKey(childPath), normalizePathKey(rootPath))) return "inside";
   let rootStats = await stat(rootPath, {
@@ -530,7 +530,7 @@ async function locateInside(childPath, rootPath) {
     if (dirname(currentPath) === currentPath) return "elsewhere";
   }
 }
-//@ chunk-2xm1rxms.js:10973-11083 placement
+//@ chunk-b2dh3swb.js:10973-11083 placement
 async function resolveRootSpellings(path) {
   let normalized = normalizedAbsolute(path);
   let realPath = await realpath(normalized).catch(() => null);
@@ -539,7 +539,7 @@ async function resolveRootSpellings(path) {
     tops: [normalized, realPath].filter((spelling) => spelling !== null),
   };
 }
-//@ chunk-2xm1rxms.js:11083-11385 placement
+//@ chunk-b2dh3swb.js:11083-11385 placement
 async function collectWorktreeTops(worktreePaths, path) {
   let gitdirs = new Set();
   let unresolved = [];
@@ -562,9 +562,9 @@ async function collectWorktreeTops(worktreePaths, path) {
     tops,
   };
 }
-//@ chunk-2xm1rxms.js:11385-11395 placement
+//@ chunk-b2dh3swb.js:11385-11395 placement
 var MAX_SYMLINK_LINKS = 16;
-//@ chunk-2xm1rxms.js:11395-12028 placement
+//@ chunk-b2dh3swb.js:11395-12028 placement
 async function walkToCommonAncestor(dirPath, deepestContainingRoot) {
   let targetPath = dirPath;
   let containingRoot = deepestContainingRoot;
@@ -608,11 +608,11 @@ async function walkToCommonAncestor(dirPath, deepestContainingRoot) {
     refused: `more than ${MAX_SYMLINK_LINKS} links lead to ${dirPath}`,
   };
 }
-//@ chunk-2xm1rxms.js:12028-12095 placement
+//@ chunk-b2dh3swb.js:12028-12095 placement
 function isPathInsideOrEqual(path, rootPath) {
   return path === rootPath || path.startsWith(rootPath.endsWith(sep) ? rootPath : rootPath + sep);
 }
-//@ chunk-2xm1rxms.js:12095-12269 placement
+//@ chunk-b2dh3swb.js:12095-12269 placement
 function parseGitdirLine(rawText, baseDir) {
   let gitdirValue = rawText.replace(/[\r\n]+$/, "");
   if (
@@ -626,7 +626,7 @@ function parseGitdirLine(rawText, baseDir) {
     ? normalizedPath
     : null;
 }
-//@ chunk-2xm1rxms.js:12269-12410 placement
+//@ chunk-b2dh3swb.js:12269-12410 placement
 function findDeepestContainingRoot(path, tops) {
   let deepestRoot;
   for (let root of tops)
@@ -640,7 +640,7 @@ function findDeepestContainingRoot(path, tops) {
     }
   return deepestRoot;
 }
-//@ chunk-2xm1rxms.js:12410-12523 placement
+//@ chunk-b2dh3swb.js:12410-12523 placement
 async function verifyAdminEntry(gitdirPath, options, worktreePaths) {
   let tops = worktreePaths?.tops ?? (await resolveRootSpellings(options.repoSpelled)).tops;
   return (
@@ -648,11 +648,11 @@ async function verifyAdminEntry(gitdirPath, options, worktreePaths) {
     "missing"
   );
 }
-//@ chunk-2xm1rxms.js:12523-12602 placement
+//@ chunk-b2dh3swb.js:12523-12602 placement
 function isSafePathSegment(name) {
   return name !== "" && name !== "." && name !== ".." && !/[\\/\p{Cc}\uFFFD]/u.test(name);
 }
-//@ chunk-2xm1rxms.js:12602-12772 placement
+//@ chunk-b2dh3swb.js:12602-12772 placement
 function pathVariants(paths) {
   let variants = new Set();
   for (let worktreePath of paths) {
@@ -665,7 +665,7 @@ function pathVariants(paths) {
   }
   return [...variants];
 }
-//@ chunk-2xm1rxms.js:12772-13055 placement
+//@ chunk-b2dh3swb.js:12772-13055 placement
 function escapeDotSegments(name) {
   let out = "";
   for (let j = 0; j < name.length; j++) {
@@ -679,7 +679,7 @@ function escapeDotSegments(name) {
   while (out.endsWith(".lock")) out = out.slice(0, -5);
   return out;
 }
-//@ chunk-2xm1rxms.js:13055-13208 placement
+//@ chunk-b2dh3swb.js:13055-13208 placement
 async function loadDeviceTreeHost() {
   let [treeModule, hostModule] = await Promise.all([
     import("../fsAnchor/treeAnchor.js"),
@@ -690,7 +690,7 @@ async function loadDeviceTreeHost() {
     host: hostModule.createDeviceTreeHost(),
   };
 }
-//@ chunk-2xm1rxms.js:13208-14073 placement
+//@ chunk-b2dh3swb.js:13208-14073 placement
 async function loadRepoLayout(gitDirSpelled, repoSpelled) {
   let modules = await loadDeviceTreeHost().catch((error) => ({
     failed: errorMessage(error),
@@ -741,7 +741,7 @@ async function loadRepoLayout(gitDirSpelled, repoSpelled) {
     await anchor.close().catch(() => {});
   }
 }
-//@ chunk-2xm1rxms.js:14073-14780 placement
+//@ chunk-b2dh3swb.js:14073-14780 placement
 async function openNonBlocking(fsOps, relPath, maxBytes) {
   let openResult = await fsOps
     .open(relPath, constants.O_RDONLY | constants.O_NONBLOCK)
@@ -795,7 +795,7 @@ async function openNonBlocking(fsOps, relPath, maxBytes) {
     await openResult.close().catch(() => {});
   }
 }
-//@ chunk-2xm1rxms.js:14780-14967 placement
+//@ chunk-b2dh3swb.js:14780-14967 placement
 async function readUpToBytes(handle, maxBytes) {
   let buffer = Buffer.alloc(maxBytes + 1);
   let totalRead = 0;
@@ -807,14 +807,14 @@ async function readUpToBytes(handle, maxBytes) {
   }
   return buffer.subarray(0, totalRead).toString("utf-8");
 }
-//@ chunk-2xm1rxms.js:14967-15054 placement
+//@ chunk-b2dh3swb.js:14967-15054 placement
 /**
  * worktreePath 字段统一成数组。
  */
 function normalizeWorktreePaths(options) {
   return typeof options.worktreePath === "string" ? [options.worktreePath] : options.worktreePath;
 }
-//@ chunk-2xm1rxms.js:15054-15129 placement (2.1.88 match: WORKTREE_PATH_TAG, 0.798)
+//@ chunk-b2dh3swb.js:15054-15129 placement (2.1.88 match: WORKTREE_PATH_TAG, 0.798)
 /**
  * 有 worktreePath 时解析出仓库内 worktree 路径列表，否则 null。旧版名 WORKTREE_PATH_TAG 为错配。
  */
@@ -823,12 +823,15 @@ async function resolveWorktreePaths(options) {
     ? collectWorktreeTops(normalizeWorktreePaths(options), options.repoSpelled)
     : null;
 }
-//@ chunk-2xm1rxms.js:15129-15174 placement
+//@ chunk-b2dh3swb.js:15129-15174 placement
 function noteUnchecked(progress, kindText) {
   progress.unchecked++;
   progress.kinds.add(kindText);
 }
 export {
+  isSameRepository,
+  vetRepoForWorktrees,
+  vetWorktree,
   pathVariants,
   normalizeWorktreePaths,
   isSafePathSegment,
@@ -840,10 +843,7 @@ export {
   resolveWorktreePaths,
   verifyAdminEntry,
   worktreeHookState,
-  vetRepoForWorktrees,
   looksLikeGitDir,
   WORKTREE_READ_LIMITS,
   readUpToBytes,
-  vetWorktree,
-  isSameRepository,
 };

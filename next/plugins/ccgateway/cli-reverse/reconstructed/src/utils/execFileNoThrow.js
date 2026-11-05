@@ -3,10 +3,10 @@
  *
  * 不抛异常地执行 git/git diff 子进程并返回输出（316 中这几个函数都固定执行 git）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/execFileNoThrow.ts
- * pieces: chunk-s61vbvea.js (1), chunk-sycgf9xs.js (26)
- * attribution: fingerprint 2, affinity 4, facade-exports 4, layout 1, sole-consumer 16
+ * pieces: chunk-7jxyna5q.js (1), chunk-hb44av3w.js (25)
+ * attribution: fingerprint 2, affinity 1, facade-exports 4, layout 1, placement 13, sole-consumer 5
  */
 import { basename } from "path";
 import { constants } from "buffer";
@@ -16,6 +16,7 @@ import { getCwdIfAvailable } from "./cwd.js";
 import { isDisklessSession, DISKLESS_PROGRAM_REFUSAL } from "./disklessSession.js";
 import { logError } from "./log.js";
 import { toError, getErrnoCode, isSyscallError, withTelemetryMessage, shortErrorStack } from "./errors.js";
+import { killProcessGroup } from "../services/voice.js";
 import { withDeadline } from "./sleep.js";
 import { STALE_CONNECTION_ERROR_CODES } from "../services/api/withRetry.js";
 import { buildSafeGitInvocation } from "./git/gitSafeInvocation.js";
@@ -31,10 +32,10 @@ import { onExit } from "../../vendor/signal-exit/dist/mjs/index.js";
 import { gitExe } from "./git.js";
 import { SAFE_GIT_REPO_ARGS, GIT_CONFIG_PARAMETERS_LIMIT } from "./git/gitSafeEnv.js";
 
-//@ chunk-sycgf9xs.js:13305-13323 affinity
+//@ chunk-hb44av3w.js:13341-13359 affinity
 var MS_PER_SECOND = 1000;
 var SECONDS_PER_MINUTE_2 = 60;
-//@ chunk-sycgf9xs.js:13323-13686 facade-exports (2.1.88 match: execSyncWithDefaults_DEPRECATED, 0.916)
+//@ chunk-hb44av3w.js:13359-13722 facade-exports (2.1.88 match: execSyncWithDefaults_DEPRECATED, 0.916)
 /**
  * 同步执行 shell 命令（默认 10 分钟超时、1MB 输出），失败或无输出返回 null。
  */
@@ -67,11 +68,11 @@ function execSyncWithDefaults_BLOCKS_EVENT_LOOP_WILL_FREEZE_UI_MAKE_SURE_YOU_KNO
     return null;
   }
 }
-//@ chunk-sycgf9xs.js:13686-13724 facade-exports
+//@ chunk-hb44av3w.js:13722-13760 facade-exports
 var SECONDS_PER_MS = 1000;
 var SECONDS_PER_MINUTE = 60;
 var INHERITED_FD_PATH = "/proc/self/fd/3";
-//@ chunk-sycgf9xs.js:13724-14358 facade-exports
+//@ chunk-hb44av3w.js:13760-14394 facade-exports
 /**
  * execFileNoThrow：执行外部程序且从不抛错，返回 {stdout, stderr, code, error}。默认超时 10 分钟、保留出错输出、cwd 取当前会话目录（Tv() 为真时不设）；其余选项（abortSignal、env、stdin、cgroup、inheritFd、git 钩子/终端提示开关等）原样转给 execFileNoThrowWithCwd。
  */
@@ -108,7 +109,7 @@ function execFileNoThrow(
     }),
   );
 }
-//@ chunk-sycgf9xs.js:14358-14470 layout
+//@ chunk-hb44av3w.js:14394-14506 layout
 async function catchExecError(error) {
   try {
     return await error();
@@ -122,7 +123,7 @@ async function catchExecError(error) {
     };
   }
 }
-//@ chunk-sycgf9xs.js:14470-14533 facade-exports
+//@ chunk-hb44av3w.js:14506-14569 facade-exports
 /**
  * execFileNoThrowWithCwd：execFileNoThrow 的底层，按是否给出选项调用实际的 spawn 实现，并包一层同步异常转结果。
  */
@@ -131,20 +132,10 @@ function execFileNoThrowWithCwd(file, args, options) {
     options === undefined ? execFileCore(file, args) : execFileCore(file, args, options),
   );
 }
-//@ chunk-sycgf9xs.js:14533-14602 affinity (2.1.88 match: stopRecording, 0.781)
-/**
- * 向进程组（-pid）发 SIGTERM；pid ≤ 1 时不做，错误忽略。旧版名 stopRecording 是错配。
- */
-function killProcessGroup(pid) {
-  if (pid <= 1) return;
-  try {
-    process.kill(-pid, "SIGTERM");
-  } catch {}
-}
-//@ chunk-sycgf9xs.js:14602-14622 affinity
+//@ chunk-hb44av3w.js:14637-14657 placement
 var ABORT_KILL_GRACE_MS = 6000;
 var PIPE_DESTROY_DELAY_MS = 2000;
-//@ chunk-sycgf9xs.js:14622-14854 affinity
+//@ chunk-hb44av3w.js:14657-14888 placement
 /**
  * 监听 abort：触发时杀掉子进程所在进程组，并在一段时间后销毁 stdout/stderr 管道，防止孙进程持有管道导致挂起。返回解除监听的函数。
  */
@@ -171,9 +162,9 @@ function killProcessGroupOnAbort(timeoutMs, pid, abortSignal) {
     clearTimeout(timer);
   };
 }
-//@ chunk-sycgf9xs.js:14854-14866 sole-consumer
+//@ chunk-hb44av3w.js:14888-14900 placement
 var ABORT_GRACEFUL_MS = 5000;
-//@ chunk-sycgf9xs.js:14866-15285 sole-consumer
+//@ chunk-hb44av3w.js:14900-15319 placement
 /**
  * 监听 abort：触发时先调用回调尝试优雅停止；回调返回 false 则立即 abort 内部控制器，返回 true 则给 5 秒宽限再 abort 并销毁 stdio。返回清理函数。
  */
@@ -215,7 +206,7 @@ function scheduleGracefulAbort(child, pid, abortSignal, tellBeforeKill, controll
     clearTimeout(timer);
   };
 }
-//@ chunk-sycgf9xs.js:15285-15426 sole-consumer
+//@ chunk-hb44av3w.js:15319-15460 placement
 /**
  * 子进程仍在运行（有 pid、无 exitCode/signalCode）时等待 exit 事件，带超时；kill 后等待退出用。
  */
@@ -223,7 +214,7 @@ async function waitForChildExit(child, deadlineMs) {
   if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
   await withDeadline(new Promise((resolve) => child.once("exit", () => resolve())), deadlineMs);
 }
-//@ chunk-sycgf9xs.js:15426-15540 sole-consumer
+//@ chunk-hb44av3w.js:15460-15574 placement
 /**
  * 判断错误是否为子进程输出超出 maxBuffer（ERR_CHILD_PROCESS_STDIO_MAXBUFFER、isMaxBuffer 或 MaxBufferError）。
  */
@@ -234,7 +225,7 @@ function isMaxBufferError(error) {
     error?.name === "MaxBufferError"
   );
 }
-//@ chunk-sycgf9xs.js:15540-15858 sole-consumer
+//@ chunk-hb44av3w.js:15574-15892 placement
 /**
  * 子进程因参数含空字节被拒时的说明文字（cwd、可执行路径、argv、环境变量名或值）。
  */
@@ -245,7 +236,7 @@ var NULL_BYTE_SPAWN_MESSAGES = {
   envName: "execFileNoThrow spawn rejected: null byte in env name",
   envValue: "execFileNoThrow spawn rejected: null byte in env value",
 };
-//@ chunk-sycgf9xs.js:15858-16772 sole-consumer
+//@ chunk-hb44av3w.js:15892-16806 placement
 /**
  * spawn 被运行时拒绝时找原因：依次检查 cwd、可执行文件路径、某个 argv、环境变量名、环境变量值中是否含空字节，返回 {telemetry 类别, local 给人看的说明}；都没有时返回 undefined。
  */
@@ -285,25 +276,25 @@ function describeNullByteSpawnError(command, argv, cwd, envOverrides, env, env_2
     }
   );
 }
-//@ chunk-sycgf9xs.js:16772-16962 sole-consumer
+//@ chunk-hb44av3w.js:16806-16996 placement
 function envNullByteScopeText([key, value], env) {
   return env[key] === value
     ? "; every program this process starts will fail the same way until that variable is removed from its environment"
     : " (in the env passed for this command)";
 }
-//@ chunk-sycgf9xs.js:16962-16973 sole-consumer
+//@ chunk-hb44av3w.js:16996-17007 placement
 var MAX_QUOTED_CHARS = 200;
-//@ chunk-sycgf9xs.js:16973-17033 sole-consumer
+//@ chunk-hb44av3w.js:17007-17067 placement
 function describeCharCount(count) {
   return count === 1 ? "1 character" : `${count} characters`;
 }
-//@ chunk-sycgf9xs.js:17033-17156 sole-consumer
+//@ chunk-hb44av3w.js:17067-17190 placement
 function escapeForDisplay(text) {
   return jsonStringifyRaw(text)
     .slice(1, -1)
     .replace(/[^\x20-\x7e]/g, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }
-//@ chunk-sycgf9xs.js:17156-17346 sole-consumer
+//@ chunk-hb44av3w.js:17190-17380 placement
 function describeEnvEntry(entry) {
   let index = entry.indexOf("=");
   let name = index === -1 ? entry : entry.slice(0, index);
@@ -313,7 +304,7 @@ function describeEnvEntry(entry) {
     ? quoted
     : `${quoted} (then '=' and ${describeCharCount(entry.length - index - 1)}, not shown)`;
 }
-//@ chunk-sycgf9xs.js:17402-17601 sole-consumer
+//@ chunk-hb44av3w.js:17436-17635 sole-consumer
 /**
  * 接管子进程 stdin 的 error 事件：错误码不在可忽略集合时记录 truncatedBy 并 kill 子进程；返回记录对象供结果报告输入被截断。
  */
@@ -335,7 +326,7 @@ function watchStdinErrors(child) {
   });
   return state;
 }
-//@ chunk-sycgf9xs.js:17601-17721 fingerprint (2.1.88 match: getErrorMessage, 1)
+//@ chunk-hb44av3w.js:17635-17755 fingerprint (2.1.88 match: getErrorMessage, 1)
 /**
  * 取执行失败的错误文本：shortMessage 优先，其次信号名，最后错误码字符串。
  */
@@ -344,7 +335,7 @@ function getErrorMessage(result, errorCode) {
   if (typeof result.signal === "string") return result.signal;
   return String(errorCode);
 }
-//@ chunk-sycgf9xs.js:17721-17960 sole-consumer
+//@ chunk-hb44av3w.js:17755-17994 sole-consumer
 function spawnFailureMessage(child, error) {
   if (
     !isSyscallError(error) ||
@@ -360,10 +351,10 @@ function spawnFailureMessage(child, error) {
   return `Command failed with ${error.code}: ${child.command}
 ${error.message}`;
 }
-//@ chunk-sycgf9xs.js:17960-17976 sole-consumer
+//@ chunk-hb44av3w.js:17994-18010 sole-consumer
 var MAX_BOM_SLICE = 3;
 var MAX_UTF8_SLICE = 1e8;
-//@ chunk-sycgf9xs.js:17976-18272 sole-consumer
+//@ chunk-hb44av3w.js:18010-18306 sole-consumer
 function decodeOutput(buffer, encoding) {
   if (buffer instanceof Uint8Array && encoding === "utf8-keep-bom")
     return Buffer.from(buffer.buffer, buffer.byteOffset, buffer.byteLength).toString("utf8");
@@ -375,7 +366,7 @@ function decodeOutput(buffer, encoding) {
         : "";
   return encoding === "utf8-keep-bom" ? Buffer.from(text, "latin1").toString("utf8") : text;
 }
-//@ chunk-sycgf9xs.js:18272-22243 sole-consumer
+//@ chunk-hb44av3w.js:18306-22275 sole-consumer
 /**
  * execFileNoThrow 的核心：对 git 构造安全调用（禁仓库 hook/终端提示、找到的仓库须在仓库外启动），可脱离控制终端并在退出时杀进程组，支持优雅中止、stdin 输入、输出回调与内存 cgroup；按编码解码输出、处理 maxBuffer 与超时，永不抛异常而返回 code/error。
  */
@@ -737,7 +728,7 @@ maxBuffer exceeded`,
     ...processGroupFlags,
   };
 }
-//@ chunk-s61vbvea.js:531652-531881 fingerprint (2.1.88 match: execFileNoThrowWithCwd, 0.521)
+//@ chunk-7jxyna5q.js:448755-448984 fingerprint (2.1.88 match: execFileNoThrowWithCwd, 0.521)
 /**
  * 在指定目录运行 git（带固定前置参数），成功返回去空白的 stdout，失败/非零返回 undefined。
  */
@@ -760,7 +751,7 @@ async function execGitNoThrow(file, args, abortSignal) {
 export {
   execFileNoThrowWithCwd,
   execFileNoThrow,
-  execSyncWithDefaults_BLOCKS_EVENT_LOOP_WILL_FREEZE_UI_MAKE_SURE_YOU_KNOW_WHAT_YOU_ARE_DOING,
   INHERITED_FD_PATH,
   execGitNoThrow,
+  execSyncWithDefaults_BLOCKS_EVENT_LOOP_WILL_FREEZE_UI_MAKE_SURE_YOU_KNOW_WHAT_YOU_ARE_DOING,
 };

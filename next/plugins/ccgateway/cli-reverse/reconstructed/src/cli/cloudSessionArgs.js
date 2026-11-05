@@ -3,23 +3,33 @@
  *
  * 2.1.316 新增：--cloud/--environment/--pool 等云会话参数组合校验与剥离
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-y162pn60.js (11)
- * attribution: placement 11
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rmd7n4gq.js (13)
+ * attribution: placement 11, layout 2
  */
+import { normalizeUuidOrNull } from "../utils/agentId.js";
 import { truncateToLength } from "../utils/stringUtils.js";
 import { escapeInvisibleChars } from "../utils/resultError.js";
 import { jsonStringify } from "../utils/slowOperations.js";
 
-//@ chunk-y162pn60.js:49379-49493 placement
+//@ chunk-rmd7n4gq.js:49708-49822 placement
 var CLOUD_REATTACH_HINT =
   "To reattach to a cloud session, pass its id: `claude --cloud <session-id>` (find IDs at claude.ai/code).";
-//@ chunk-y162pn60.js:49493-49517 placement
+//@ chunk-rmd7n4gq.js:49822-49865 layout
+function isValidCloudSessionId(value) {
+  return normalizeUuidOrNull(value.trim()) !== null;
+}
+//@ chunk-rmd7n4gq.js:49865-50087 layout
+function cloudSessionIdErrorMessage(value) {
+  return `Error: ${truncateCloudSessionLabel(value)} is not a cloud session ID.
+For a session on this computer, run \`claude --resume ${value.trim()}\`. For a cloud session, pass its ID (session_... or cse_...) or its claude.ai/code URL.`;
+}
+//@ chunk-rmd7n4gq.js:50087-50111 placement
 function isCloudBackendForced() {
   return false;
 }
-//@ chunk-y162pn60.js:49517-51403 placement
+//@ chunk-rmd7n4gq.js:50111-52023 placement
 /**
  * 校验 --cloud/--environment/--pool 与 --print、--continue 等参数组合，返回错误文案。
  */
@@ -34,6 +44,8 @@ ${CLOUD_REATTACH_HINT}`;
     flagLabel = environmentPrefix.flag;
     hintSuffix = "";
   }
+  if (flags.loneWordValue !== undefined && isValidCloudSessionId(flags.loneWordValue))
+    return cloudSessionIdErrorMessage(flags.loneWordValue);
   if (flags.print && !flags.hasPool && !flags.isCloudAttach && !flags.headlessCloudPrint) {
     if (flags.loneWordValue !== undefined)
       return `Error: --cloud ${truncateCloudSessionLabel(flags.loneWordValue)} is not a cloud session ID or URL.
@@ -55,14 +67,8 @@ Without an interactive terminal, --cloud can only send the prompt to an existing
 Non-interactive invocations (piped stdout, --init-only, --sdk-url) run locally and would silently ignore ${flagLabel}. Drop ${flagLabel}, or run from a TTY.`;
   }
   if (flags.continue) return `${prefix}${flagLabel} cannot be combined with --continue.${hintSuffix}`;
-  if (flags.hasConnect || flags.hasSSH || flags.hasAssistant || flags.hasTeleport) {
-    let backend = flags.hasConnect
-      ? "a cc:// connect URL"
-      : flags.hasSSH
-        ? "`claude ssh`"
-        : flags.hasAssistant
-          ? "`claude assistant`"
-          : "--teleport";
+  if (flags.hasConnect || flags.hasSSH || flags.hasTeleport) {
+    let backend = flags.hasConnect ? "a cc:// connect URL" : flags.hasSSH ? "`claude ssh`" : "--teleport";
     return `${prefix}${flagLabel} cannot be combined with ${backend} \u2014 both select a remote backend; pick one.`;
   }
   if (flags.resume || flags.fromPr) {
@@ -71,7 +77,7 @@ Non-interactive invocations (piped stdout, --init-only, --sdk-url) run locally a
   }
   return null;
 }
-//@ chunk-y162pn60.js:51403-51542 placement
+//@ chunk-rmd7n4gq.js:52023-52162 placement
 function isStreamJsonRemoteMode(flags) {
   return (
     !flags.print &&
@@ -82,11 +88,11 @@ function isStreamJsonRemoteMode(flags) {
     flags.outputFormat === "stream-json"
   );
 }
-//@ chunk-y162pn60.js:51542-51632 placement
+//@ chunk-rmd7n4gq.js:52162-52252 placement
 function isPrintNonStreamMode(flags) {
   return flags.print && !flags.initOnly && !flags.hasSdkUrl && flags.outputFormat !== "stream-json";
 }
-//@ chunk-y162pn60.js:51632-52016 placement
+//@ chunk-rmd7n4gq.js:52252-52636 placement
 function rejectBgWithEnvironmentFlags(args) {
   if (
     args.some(
@@ -100,14 +106,14 @@ function rejectBgWithEnvironmentFlags(args) {
     return "--bg and --environment are different backends. Use `claude -p '<task>' --environment <id>` directly to start a session on the environment.";
   return "--bg and --cloud are different backends. Use `claude --cloud '<task>'` directly to start a cloud session.";
 }
-//@ chunk-y162pn60.js:52016-52078 placement
+//@ chunk-rmd7n4gq.js:52636-52698 placement
 function environmentFlagErrorPrefix(noMonorepo) {
   return {
     prefix: "Error: ",
     flag: "--environment",
   };
 }
-//@ chunk-y162pn60.js:52078-52313 placement
+//@ chunk-rmd7n4gq.js:52698-52933 placement
 function hasRemoteBackendFlags(args) {
   if (
     args.some(
@@ -124,7 +130,7 @@ function hasRemoteBackendFlags(args) {
       arg === "--cloud" || arg.startsWith("--cloud=") || arg === "--remote" || arg.startsWith("--remote="),
   );
 }
-//@ chunk-y162pn60.js:52313-52618 placement
+//@ chunk-rmd7n4gq.js:52933-53238 placement
 function stripEnvironmentFlags(args) {
   let kept = [];
   for (let j = 0; j < args.length; j++) {
@@ -142,9 +148,9 @@ function stripEnvironmentFlags(args) {
   }
   return kept;
 }
-//@ chunk-y162pn60.js:52618-52629 placement
+//@ chunk-rmd7n4gq.js:53238-53249 placement
 var MAX_CLOUD_SESSION_LABEL_CHARS = 100;
-//@ chunk-y162pn60.js:52629-52708 placement
+//@ chunk-rmd7n4gq.js:53249-53327 placement
 function truncateCloudSessionLabel(label) {
   let truncated = truncateToLength(label, MAX_CLOUD_SESSION_LABEL_CHARS);
   return escapeInvisibleChars(
@@ -153,12 +159,14 @@ function truncateCloudSessionLabel(label) {
 }
 export {
   environmentFlagErrorPrefix,
+  isValidCloudSessionId,
   isCloudBackendForced,
+  hasRemoteBackendFlags,
+  rejectBgWithEnvironmentFlags,
+  stripEnvironmentFlags,
   truncateCloudSessionLabel,
   isStreamJsonRemoteMode,
   isPrintNonStreamMode,
   validateCloudSessionFlags,
-  stripEnvironmentFlags,
-  hasRemoteBackendFlags,
-  rejectBgWithEnvironmentFlags,
+  cloudSessionIdErrorMessage,
 };

@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：renderToolResultMessage 返回原始值时上报一次并包成 Text。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ah34pb7m.js (15)
- * attribution: placement 15
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wjygkcr4.js (20)
+ * attribution: placement 13, layout 7
  */
 import { isInferredMcpToolName, sanitizeToolNameForAnalytics } from "../../services/analytics/metadata.js";
 import { claimOnceStore } from "../../services/api/verificationRequired.js";
@@ -17,19 +17,19 @@ import {
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
-import { alwaysFalseRefresh } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
-import { isReplToolName } from "../../tools/REPLTool/constants.js";
+import { isAsyncLaneMode } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { POLL } from "../../tools/PollTool/prompt.js";
 import { formatSecondsShort } from "../../utils/format.js";
 
-//@ chunk-ah34pb7m.js:156010-156210 placement
-function toolNameForAnalytics(toolName) {
-  if (isInferredMcpToolName(toolName)) return sanitizeToolNameForAnalytics(toolName);
-  if (toolName.startsWith("mcp__")) return "mcp_tool";
-  if (toolName.startsWith("eval_registered__")) return "eval_registered_tool";
-  if (toolName.includes("__")) return "dynamic_tool";
-  return sanitizeToolNameForAnalytics(toolName);
+//@ chunk-wjygkcr4.js:157646-157846 placement
+function toolNameForAnalytics(name) {
+  if (isInferredMcpToolName(name)) return sanitizeToolNameForAnalytics(name);
+  if (name.startsWith("mcp__")) return "mcp_tool";
+  if (name.startsWith("eval_registered__")) return "eval_registered_tool";
+  if (name.includes("__")) return "dynamic_tool";
+  return sanitizeToolNameForAnalytics(name);
 }
-//@ chunk-ah34pb7m.js:156210-156626 placement
+//@ chunk-wjygkcr4.js:157846-158262 placement
 /**
  * renderToolResultMessage 返回原始值时上报一次并包成 Text。
  */
@@ -52,15 +52,15 @@ function guardPrimitiveToolResult(host, result, tool) {
     children: result,
   });
 }
-//@ chunk-ah34pb7m.js:156626-156682 placement
+//@ chunk-wjygkcr4.js:158262-158318 placement
 function selectActiveAgents_2(state) {
   return state.agentDefinitions.activeAgents;
 }
-//@ chunk-ah34pb7m.js:156682-156737 placement
+//@ chunk-wjygkcr4.js:158318-158373 placement
 function hasNoErrorOrInterrupt(result) {
   return !result.isErrored && !result.isInterrupted;
 }
-//@ chunk-ah34pb7m.js:156737-156955 placement (2.1.88 match: hasContentAfterIndex, 0.833)
+//@ chunk-wjygkcr4.js:158373-158591 placement (2.1.88 match: hasContentAfterIndex, 0.804)
 function hasContentAfterIndex(message) {
   if (message.type === "grouped_tool_use") {
     return true;
@@ -70,33 +70,55 @@ function hasContentAfterIndex(message) {
     ? firstInput === "tool_use" || firstInput === "thinking" || firstInput === "redacted_thinking"
     : message.type === "user" && firstInput === "tool_result";
 }
-//@ chunk-ah34pb7m.js:156955-157045 placement
+//@ chunk-wjygkcr4.js:158591-158680 placement
 function isNoAgentViewInAutoMode(state) {
-  return state.viewingAgentTaskId === undefined && alwaysFalseRefresh(state.toolPermissionContext.mode);
+  return state.viewingAgentTaskId === undefined && isAsyncLaneMode(state.toolPermissionContext.mode);
 }
-//@ chunk-ah34pb7m.js:157045-157074 placement
+//@ chunk-wjygkcr4.js:158680-158735 layout
+function isReplToolCallProgress(progress) {
+  return progress.data.type === "repl_tool_call";
+}
+//@ chunk-wjygkcr4.js:158735-158764 placement
 function toolResultId(result) {
   return result.id;
 }
-//@ chunk-ah34pb7m.js:157074-157113 placement
+//@ chunk-wjygkcr4.js:158764-158800 placement
 function isHookToolResult(result) {
-  return isReplToolName(result.name) && true;
+  return result.name === POLL;
 }
-//@ chunk-ah34pb7m.js:157113-157142 placement
+//@ chunk-wjygkcr4.js:158800-158829 placement
 function toolUseId(block) {
   return block.id;
 }
-//@ chunk-ah34pb7m.js:157142-157171 placement
+//@ chunk-wjygkcr4.js:158829-158858 placement
 function toolUseId_2(block) {
   return block.id;
 }
-//@ chunk-ah34pb7m.js:157171-157189 placement
-function noopRenderHook(deps) {}
-//@ chunk-ah34pb7m.js:157189-157215 placement
-function returnFalseHook(deps) {
-  return false;
+//@ chunk-wjygkcr4.js:158858-158887 layout
+function toolCallId(call) {
+  return call.id;
 }
-//@ chunk-ah34pb7m.js:157215-157374 placement
+//@ chunk-wjygkcr4.js:158887-158929 layout
+function isErroredPhase(entry) {
+  return entry.phase === "error";
+}
+//@ chunk-wjygkcr4.js:158929-158958 layout
+function runningCallId(call) {
+  return call.id;
+}
+//@ chunk-wjygkcr4.js:158958-158987 layout
+function liveCallId(call) {
+  return call.id;
+}
+//@ chunk-wjygkcr4.js:158987-159029 layout
+function isErrorPhase(entry) {
+  return entry.phase === "error";
+}
+//@ chunk-wjygkcr4.js:159029-159058 layout
+function erroredCallId(call) {
+  return call.id;
+}
+//@ chunk-wjygkcr4.js:159058-159217 placement
 /**
  * 折叠读取/搜索内容里的一行钩子记录："命令 (耗时)"。
  */
@@ -119,24 +141,29 @@ function renderHookDurationLine(hook, index) {
     `hook-${index}`,
   );
 }
-//@ chunk-ah34pb7m.js:157374-157404 placement
+//@ chunk-wjygkcr4.js:159217-159247 placement
 function commitSha(result) {
   return result.sha;
 }
-//@ chunk-ah34pb7m.js:157404-157437 placement
+//@ chunk-wjygkcr4.js:159247-159280 placement
 function gitBranch(result) {
   return result.branch;
 }
 export {
-  selectActiveAgents_2,
   guardPrimitiveToolResult,
+  selectActiveAgents_2,
   isNoAgentViewInAutoMode,
+  isReplToolCallProgress,
   toolResultId,
   isHookToolResult,
   toolUseId,
   toolUseId_2,
-  noopRenderHook,
-  returnFalseHook,
+  toolCallId,
+  isErroredPhase,
+  runningCallId,
+  liveCallId,
+  isErrorPhase,
+  erroredCallId,
   renderHookDurationLine,
   commitSha,
   gitBranch,

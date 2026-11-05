@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/recap：用当前对话生成回顾摘要
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-z9nn3hxt.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rt8rdhtb.js (2)
  * attribution: placement 2
  */
 import { isSyntheticMessage, isUserTextPrompt, getUserMessageText } from "../../utils/messages.js";
@@ -16,7 +16,7 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/gr
 import { generateAwaySummary } from "../../services/awaySummary.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 
-//@ chunk-z9nn3hxt.js:11906-13208 placement
+//@ chunk-rt8rdhtb.js:13054-14356 placement
 /**
  * /recap：用当前对话生成一段回顾摘要（需要有实际助手输出）。
  */
@@ -39,7 +39,7 @@ async function generateRecap(context) {
     { withCliSections },
   ] = await Promise.all([
     import("../../utils/queryContext.js"),
-    import("../../utils/permissions/toolPermissionContext.js"),
+    import("../../utils/permissions/applyContextLayers.lazy.js"),
     import("../../utils/model/DEFAULT_3P_FABLE_KEY.lazy.js"),
     import("../../utils/systemPromptType.js"),
     import("../../utils/systemPromptBoundary.js"),
@@ -89,7 +89,7 @@ async function generateRecap(context) {
     advisorModel: context.getAdvisorSetting(),
   };
 }
-//@ chunk-z9nn3hxt.js:13208-14319 placement
+//@ chunk-rt8rdhtb.js:14356-15467 placement
 /**
  * /recap 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */

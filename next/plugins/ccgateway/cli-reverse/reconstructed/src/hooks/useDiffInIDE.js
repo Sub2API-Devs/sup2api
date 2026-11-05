@@ -3,9 +3,9 @@
  *
  * 在 IDE 中显示 diff：打开 diff 标签、等待保存/拒绝/关闭消息、计算编辑并清理标签。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useDiffInIDE.ts
- * pieces: chunk-s4bxxzsw.js (12)
+ * pieces: chunk-g4tsxwy3.js (12)
  * attribution: fingerprint 7, layout 5
  */
 import { randomUUID } from "crypto";
@@ -39,7 +39,7 @@ import { sanitizeToolNameForAnalytics } from "../services/analytics/metadata.js"
 import { logEvent } from "../services/analytics/index.js";
 import { resetDenialStreakAfterUserApproval } from "../utils/permissions/permissions.js";
 
-//@ chunk-s4bxxzsw.js:27106-27331 fingerprint (2.1.88 match: computeEditsFromContents, 1)
+//@ chunk-g4tsxwy3.js:27278-27503 fingerprint (2.1.88 match: computeEditsFromContents, 1)
 function computeEditsFromContents(filePath, oldContent, newContent, editMode) {
   let singleHunk = editMode === "single";
   let patch = getPatchFromContents({
@@ -53,7 +53,7 @@ function computeEditsFromContents(filePath, oldContent, newContent, editMode) {
     logError(Error(`Unexpected number of hunks: ${patch.length}. Expected 1 hunk.`));
   return getEditsForPatch(patch);
 }
-//@ chunk-s4bxxzsw.js:27331-28595 fingerprint (2.1.88 match: showDiffInIDE, 0.919)
+//@ chunk-g4tsxwy3.js:27503-28767 fingerprint (2.1.88 match: showDiffInIDE, 0.917)
 async function showDiffInIDE(file_path, edits, toolUseContext, tabName, isCleanedUp) {
   let isCleanedUp_2 = false;
   let oldFilePath = expandPath(file_path);
@@ -142,7 +142,7 @@ async function showDiffInIDE(file_path, edits, toolUseContext, tabName, isCleane
     throw error;
   }
 }
-//@ chunk-s4bxxzsw.js:28595-28910 fingerprint (2.1.88 match: closeTabInIDE, 0.67)
+//@ chunk-g4tsxwy3.js:28767-29082 fingerprint (2.1.88 match: closeTabInIDE, 0.67)
 async function closeTabInIDE(tabName, ideClient) {
   try {
     if (!ideClient || ideClient.type !== "connected") throw Error("IDE client not available");
@@ -164,7 +164,7 @@ async function closeTabInIDE(tabName, ideClient) {
     logFeatureSad("ide_close_diff_tab", "ide_close_diff_tab_failed");
   }
 }
-//@ chunk-s4bxxzsw.js:28910-29062 fingerprint (2.1.88 match: isClosedMessage, 1)
+//@ chunk-g4tsxwy3.js:29082-29234 fingerprint (2.1.88 match: isClosedMessage, 1)
 function isClosedMessage(data) {
   return (
     Array.isArray(data) &&
@@ -176,7 +176,7 @@ function isClosedMessage(data) {
     data[0].text === "TAB_CLOSED"
   );
 }
-//@ chunk-s4bxxzsw.js:29062-29217 fingerprint (2.1.88 match: isRejectedMessage, 1)
+//@ chunk-g4tsxwy3.js:29234-29389 fingerprint (2.1.88 match: isRejectedMessage, 1)
 function isRejectedMessage(data) {
   return (
     Array.isArray(data) &&
@@ -188,7 +188,7 @@ function isRejectedMessage(data) {
     data[0].text === "DIFF_REJECTED"
   );
 }
-//@ chunk-s4bxxzsw.js:29217-29332 fingerprint (2.1.88 match: isSaveMessage, 1)
+//@ chunk-g4tsxwy3.js:29389-29504 fingerprint (2.1.88 match: isSaveMessage, 1)
 function isSaveMessage(data) {
   return (
     Array.isArray(data) &&
@@ -197,14 +197,14 @@ function isSaveMessage(data) {
     typeof data[1].text === "string"
   );
 }
-//@ chunk-s4bxxzsw.js:29332-29379 layout
+//@ chunk-g4tsxwy3.js:29504-29551 layout
 var IDE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 ._+()-]{0,63}$/;
-//@ chunk-s4bxxzsw.js:29379-29447 layout
+//@ chunk-g4tsxwy3.js:29551-29619 layout
 function markIdeSafe(ideName) {
   if (IDE_NAME_RE.test(ideName)) return fromSanitizer_SANITIZER_OUTPUT_ONLY(ideName);
   return lit("nonconforming");
 }
-//@ chunk-s4bxxzsw.js:29447-29961 layout (2.1.88 match: areFileEditsInputsEquivalent, 0.861)
+//@ chunk-g4tsxwy3.js:29619-30133 layout (2.1.88 match: areFileEditsInputsEquivalent, 0.862)
 /**
  * 把 Edit 或 Write 的工具输入转换为 {filePath, edits}；Write 读取旧文件作为 old_string。
  */
@@ -252,7 +252,7 @@ async function toolInputToFileEdits(input1, input2) {
   }
   return null;
 }
-//@ chunk-s4bxxzsw.js:29961-30160 layout (2.1.88 match: getEditsForPatch, 0.884)
+//@ chunk-g4tsxwy3.js:30133-30332 layout (2.1.88 match: getEditsForPatch, 0.885)
 /**
  * 把编辑结果写回 Edit/Write 工具输入（Edit 改 old/new/replace_all，Write 改 content）。
  */
@@ -273,7 +273,7 @@ function applyFirstEditToToolInput(tool, input, editsFromContents) {
     };
   return input;
 }
-//@ chunk-s4bxxzsw.js:30160-30661 layout
+//@ chunk-g4tsxwy3.js:30332-30833 layout
 /**
  * 判断这次文件编辑/写入是否能在 IDE 中显示 diff：需 IDE 扩展支持、diffTool 为 auto、路径不受保护且不是 notebook；可以则返回 IDE 名、客户端、路径与编辑列表。
  */
@@ -304,7 +304,7 @@ async function getIdeDiffTarget(tool, input, context) {
     edits: fileEdits.edits,
   };
 }
-//@ chunk-s4bxxzsw.js:30661-32505 fingerprint (2.1.88 match: useDiffInIDE, 0.36)
+//@ chunk-g4tsxwy3.js:30833-32677 fingerprint (2.1.88 match: useDiffInIDE, 0.364)
 function useDiffInIDE(params) {
   if (params.permissionResult.localDisplayOnly === true)
     return {

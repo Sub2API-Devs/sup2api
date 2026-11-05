@@ -1,8 +1,8 @@
 /**
  * google-auth-library/build/src/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: google-auth-library@10.6.2
- * pieces: chunk-na3pph4p.js (1)
+ * pieces: chunk-e8d3a8an.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -31,7 +31,7 @@ import { require_externalAccountAuthorizedUserClient } from "./auth/externalAcco
 import { require_passthrough } from "./auth/passthrough.js";
 import { require_googleToken } from "./gtoken/googleToken.js";
 
-//@ chunk-na3pph4p.js:155530-159525 cjs-fingerprint
+//@ chunk-e8d3a8an.js:155530-159525 cjs-fingerprint
 var require_google_auth_library = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||

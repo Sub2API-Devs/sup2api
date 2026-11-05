@@ -3,9 +3,9 @@
  *
  * 并入已有模块：插件策略
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/pluginPolicy.ts
- * pieces: chunk-czx62zen.js (5)
+ * pieces: chunk-r7hswen6.js (5)
  * attribution: callgraph-witnessed 1, placement 4
  */
 import { getSettingsForSourceForUpkeep, getSettingsForSource } from "../settings/settings.js";
@@ -23,7 +23,7 @@ import {
   policyEnabledPluginIds,
 } from "./managedPlugins.js";
 
-//@ chunk-czx62zen.js:10157-10267 callgraph-witnessed (2.1.88 match: isPluginBlockedByPolicy, 0.576)
+//@ chunk-r7hswen6.js:10160-10270 callgraph-witnessed (2.1.88 match: isPluginBlockedByPolicy, 0.576)
 /**
  * 返回指定设置源（如 policySettings）enabledPlugins 中处于启用状态的插件 ID 集合。
  */
@@ -34,7 +34,7 @@ function getEnabledPluginIdsInSource(pluginId) {
       .map(([key]) => key),
   );
 }
-//@ chunk-czx62zen.js:12277-13224 placement
+//@ chunk-r7hswen6.js:12280-13227 placement
 /**
  * 从根插件开始按 manifest.dependencies 广度遍历：依赖 id 先按声明方市场补全，再在已加载插件中查找 （优先已启用，其次 inline、synced 改写后的同名插件）。返回依赖闭包 closure 与找不到的 missing。
  */
@@ -100,7 +100,7 @@ function computeDependencyClosure(rootId, plugins) {
     missing,
   };
 }
-//@ chunk-czx62zen.js:13224-13284 placement
+//@ chunk-r7hswen6.js:13227-13287 placement
 /**
  * builtinQualifiedId：内置插件的规范 id。
  */
@@ -108,7 +108,7 @@ function builtinQualifiedId(name) {
   let externalName = externalSkillToPluginName(name);
   return externalName === name ? undefined : `${externalName}@${BUILTIN}`;
 }
-//@ chunk-czx62zen.js:13284-13352 placement
+//@ chunk-r7hswen6.js:13287-13355 placement
 /**
  * policyEnabledPluginNameSet：策略启用的插件名集合。
  */
@@ -118,7 +118,7 @@ function policyEnabledPluginNameSet() {
     ? new Set(policyEnabledPluginEntries.map((policyEnabledPluginEntry) => policyEnabledPluginEntry.name))
     : null;
 }
-//@ chunk-czx62zen.js:13352-13462 placement (2.1.88 match: _temp7, 1)
+//@ chunk-r7hswen6.js:13355-13465 placement (2.1.88 match: _temp7, 1)
 /**
  * 取组织策略设置中允许的插件集合：合并 policySettings 与当前生效设置两处的允许列表（都没有则 undefined）。
  */
@@ -130,9 +130,9 @@ function getPolicyAllowedSet() {
   return fromPolicy && fromAssured ? new Set([...fromPolicy, ...fromAssured]) : (fromPolicy ?? fromAssured);
 }
 export {
-  getPolicyAllowedSet,
   policyEnabledPluginNameSet,
-  computeDependencyClosure,
-  getEnabledPluginIdsInSource,
+  getPolicyAllowedSet,
   builtinQualifiedId,
+  getEnabledPluginIdsInSource,
+  computeDependencyClosure,
 };

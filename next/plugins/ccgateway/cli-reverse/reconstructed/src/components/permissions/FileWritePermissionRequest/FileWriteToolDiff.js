@@ -3,10 +3,10 @@
  *
  * Write 工具的 diff/新内容预览（超时显示警告）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/FileWritePermissionRequest/FileWriteToolDiff.tsx
- * pieces: chunk-18hwfzwa.js (4)
- * attribution: placement 1, layout 1, fingerprint 2
+ * pieces: chunk-czq1j3j2.js (5)
+ * attribution: placement 1, sole-consumer 2, fingerprint 2
  */
 import { init_react_production } from "../../../../vendor/react/cjs/react.production.js";
 import { stripUnsafeChars } from "../../../utils/permissions/approvalPayloadSerialization.js";
@@ -24,19 +24,24 @@ import { HighlightedCode } from "../../HighlightedCode.js";
 import { DiffFrame } from "../../FileEditToolDiff.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1370706-1370710 placement
+//@ chunk-czq1j3j2.js:1387044-1387048 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1370706", () => {
+deferInit("chunk-czq1j3j2.js:1387044", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1370710-1370764 layout
+//@ chunk-czq1j3j2.js:1393506-1393510 sole-consumer
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1393506", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1393510-1393564 sole-consumer
 function sanitizeFileEditLines(diff) {
   return {
     ...diff,
     lines: diff.lines.map(stripUnsafeChars),
   };
 }
-//@ chunk-18hwfzwa.js:1370764-1370872 fingerprint (2.1.88 match: _temp, 0.797)
+//@ chunk-czq1j3j2.js:1393564-1393672 fingerprint (2.1.88 match: _temp, 0.799)
 function EllipsisRow(i) {
   return jsxProd_default(
     NoSelect,
@@ -50,17 +55,17 @@ function EllipsisRow(i) {
     `ellipsis-${i}`,
   );
 }
-//@ chunk-18hwfzwa.js:1370872-1371962 fingerprint (2.1.88 match: FileWriteToolDiff, 0.761)
+//@ chunk-czq1j3j2.js:1393672-1394763 fingerprint (2.1.88 match: FileWriteToolDiff, 0.761)
 function FileWriteToolDiff(props) {
   let $ = useMemoCache(19);
   let { file_path, content, fileExists, oldContent } = props;
   let { columns } = useTerminalSize();
   useExitCleanup();
   let t1;
-  Be: {
+  Fe: {
     if (!fileExists) {
       t1 = null;
-      break Be;
+      break Fe;
     }
     let t2;
     if ($[0] !== content || $[1] !== file_path || $[2] !== oldContent) {

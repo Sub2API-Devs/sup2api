@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：OAuth 回调页资源：内嵌字体、像素图标（对勾/断链）与减少动画的 CSS。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cq05wh48.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6ba0wca3.js (10)
  * attribution: placement 10
  */
 import __cc_resource_0 from "../../../assets/anthropicSans400.woff2.asset" with { type: "file" };
@@ -13,24 +13,24 @@ import __cc_resource_1 from "../../../assets/anthropicSerif400.woff2.asset" with
 import { identity } from "../../utils/identity.js";
 import { readEmbeddedSync } from "../../utils/embeddedAssets.js";
 
-//@ chunk-cq05wh48.js:432-454 placement
+//@ chunk-6ba0wca3.js:468-490 placement
 /**
  * 内嵌的 anthropic-sans 字体资源。
  */
 var ANTHROPIC_SANS_RESOURCE = __cc_resource_0;
-//@ chunk-cq05wh48.js:454-476 placement
+//@ chunk-6ba0wca3.js:490-512 placement
 /**
  * 内嵌的 anthropic-serif 字体资源。
  */
 var ANTHROPIC_SERIF_RESOURCE = __cc_resource_1;
-//@ chunk-cq05wh48.js:476-511 placement
+//@ chunk-6ba0wca3.js:512-547 placement
 /**
  * 缓存的字体 @font-face CSS。
  */
 var fontFacesState = identity({}, (state) => {
   delete state.faces;
 });
-//@ chunk-cq05wh48.js:511-622 placement
+//@ chunk-6ba0wca3.js:547-658 placement
 function embeddedFontFaces() {
   try {
     fontFacesState.faces ??=
@@ -41,12 +41,12 @@ function embeddedFontFaces() {
     return "";
   }
 }
-//@ chunk-cq05wh48.js:622-837 placement
+//@ chunk-6ba0wca3.js:658-873 placement
 function fontFaceCss(fontFamily, fontWeight, fontPath) {
   let str = readEmbeddedSync(fontPath, import.meta.dirname).toString("base64");
   return `@font-face{font-family:"${fontFamily}";src:url(data:font/woff2;base64,${str}) format("woff2");font-weight:${fontWeight};font-style:normal;font-display:swap}`;
 }
-//@ chunk-cq05wh48.js:837-6077 placement
+//@ chunk-6ba0wca3.js:873-6113 placement
 var BROKEN_LINK_PIXELGRAM = {
   name: "BrokenLink",
   width: 20,
@@ -302,7 +302,7 @@ var BROKEN_LINK_PIXELGRAM = {
     ],
   ],
 };
-//@ chunk-cq05wh48.js:6077-13172 placement
+//@ chunk-6ba0wca3.js:6113-13208 placement
 var CHECKMARK_PIXELGRAM = {
   name: "Checkmark",
   width: 20,
@@ -646,7 +646,7 @@ var CHECKMARK_PIXELGRAM = {
     ],
   ],
 };
-//@ chunk-cq05wh48.js:13172-14023 placement
+//@ chunk-6ba0wca3.js:13208-14059 placement
 function renderPixelgramSvg(animation, options) {
   let { width, height, frameRate, frames } = animation;
   let { cell, color, passes, until = "end" } = options;
@@ -667,10 +667,10 @@ function renderPixelgramSvg(animation, options) {
     .join("");
   return `${openTag}<g class="moving">${joined}</g><path class="resting" display="none" d="${restPath}"/></svg>`;
 }
-//@ chunk-cq05wh48.js:14023-14139 placement
+//@ chunk-6ba0wca3.js:14059-14175 placement
 var REDUCED_MOTION_CSS =
   "@media (prefers-reduced-motion:reduce){.pixelgram .moving{display:none}.pixelgram .resting{display:inline}}";
-//@ chunk-cq05wh48.js:14139-14278 placement
+//@ chunk-6ba0wca3.js:14175-14314 placement
 function pixelRowsToPath(frame) {
   let pathData = "";
   frame.forEach((row, rowIndex) => {

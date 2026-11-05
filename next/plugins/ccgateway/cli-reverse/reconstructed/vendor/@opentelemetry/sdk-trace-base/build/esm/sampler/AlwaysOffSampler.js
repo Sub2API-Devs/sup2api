@@ -1,13 +1,13 @@
 /**
  * @opentelemetry/sdk-trace-base/build/esm/sampler/AlwaysOffSampler.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-trace-base@2.2.0
- * pieces: chunk-9vvvg0d3.js (1)
+ * pieces: chunk-3wgj3rdg.js (1)
  * attribution: esm-fingerprint 1
  */
 import { SamplingDecision } from "../Sampler.js";
 
-//@ chunk-9vvvg0d3.js:11159-11249 esm-fingerprint
+//@ chunk-3wgj3rdg.js:11531-11621 esm-fingerprint
 class AlwaysOffSampler {
   shouldSample() {
     return {

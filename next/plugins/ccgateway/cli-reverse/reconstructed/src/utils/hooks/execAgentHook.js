@@ -3,13 +3,13 @@
  *
  * agent 型钩子：启动最多 50 轮的验证子代理，以 StructuredOutput {ok, reason} 作答。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/execAgentHook.ts
- * pieces: chunk-e6aww6q8.js (1)
- * attribution: fingerprint 1
+ * pieces: chunk-5xgkngpb.js (2)
+ * attribution: fingerprint 1, sole-consumer 1
  */
 import { randomUUID } from "crypto";
-import { isDiskless } from "../../bootstrap/state.js";
+import { isDiskless, getPluginHookRunner } from "../../bootstrap/state.js";
 import { getAgentTranscriptPath, getTranscriptPath } from "../sessionStorage.js";
 import { safeResolvePath, getFsImplementation } from "../fsOperations.js";
 import { shortHash } from "../shortHash.js";
@@ -26,7 +26,6 @@ import {
   nonBlockingHookErrorResult,
 } from "./hookHelpers.js";
 import { memoryModeForSession } from "../../services/accountMemory/memoryContext.js";
-import { filterNonGuardTools, denyDestructiveForHookAgent } from "./servedHooks/destructiveCommands.js";
 import { isCoordinatorBashToolUse } from "../../tools/ReadNotificationsTool/ReadNotificationsTool.js";
 import { isServedAccountMemoryTool } from "../../services/accountMemory/accountMemoryServer.js";
 import { asSystemPrompt } from "../systemPromptType.js";
@@ -43,14 +42,21 @@ import { stripHostToolMeta } from "../../plugins/functionHooks/sites/toolSites.j
 import { stripMemoryCallMeta } from "../../memdir/memoryTool.js";
 import { cloneFileStateCache } from "../fileStateCache.js";
 import { withClassifiedWebCalls, hasPermissionsToUseTool } from "../permissions/permissions.js";
+import { denyDestructiveForHookAgent } from "./servedHooks/destructiveCommands.js";
 import { jsonStringify } from "../slowOperations.js";
 import { isNoModelFallbackEnabled } from "../model/modelFallback.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { promptEndingFields } from "../../entrypoints/sdk/coreSchemas.js";
 import { errorMessage } from "../errors.js";
+import { matchesToolName } from "../../Tool.js";
+import { toolMatchesAnyName } from "../../services/tools/permissionCheckGuard.js";
+import { EXTERNAL_ALWAYS_AVAILABLE_TOOLS } from "../toolPool.js";
+import { AGENT } from "../../tools/AgentTool/constants.js";
+import { POLL } from "../../tools/PollTool/prompt.js";
+import { SKILL } from "../../tools/SkillTool/skillToolNames.js";
 
-//@ chunk-e6aww6q8.js:3396429-3401496 fingerprint (2.1.88 match: execAgentHook, 0.656)
+//@ chunk-5xgkngpb.js:3484642-3489742 fingerprint (2.1.88 match: execAgentHook, 0.651)
 /**
  * 执行 agent 钩子：用 $ARGUMENTS 替换后的提示词启动一个最多 50 轮的验证子代理（工具集去掉危险工具并加 StructuredOutput，dontAsk 权限，可读 transcript），超时默认 60s；返回 ok 成功、not ok 阻断、未给结构化输出视为取消；模型被拒时回退主模型。
  */
@@ -99,7 +105,7 @@ async function execAgentHook(
       let memoryCaller = toolUseContext.memoryCaller ?? "worker";
       let mode = memoryModeForSession(toolUseContext).mode;
       let tools = [
-        ...filterNonGuardTools(toolUseContext.options.tools).filter(
+        ...candidateTools(toolUseContext.options.tools).filter(
           (tool) => !isCoordinatorBashToolUse(tool, toolUseContext) && !isServedAccountMemoryTool(tool, mode),
         ),
         structuredOutputTool,
@@ -152,6 +158,7 @@ ${HOOK_OK_SEMANTICS}`,
         promptShellHandOff: undefined,
         gateIgnoresSwitch: undefined,
         clientRequestedToolUseId: undefined,
+        skipsMcpSkillCodeAsk: undefined,
         namesShownToApi: undefined,
         permissionLayers: (toolUseContext.permissionLayers ?? [])
           .filter((layer) => sameModel || layer.kind !== "effort")
@@ -361,5 +368,16 @@ ${HOOK_OK_SEMANTICS}`,
       stdout: "",
     });
   }
+}
+//@ chunk-5xgkngpb.js:3489742-3489852 sole-consumer
+function candidateTools(tools) {
+  return tools.filter(
+    (tool) =>
+      !matchesToolName(tool, STRUCTUREDOUTPUT) &&
+      !toolMatchesAnyName(tool, EXTERNAL_ALWAYS_AVAILABLE_TOOLS) &&
+      !matchesToolName(tool, AGENT) &&
+      !matchesToolName(tool, POLL) &&
+      !(getPluginHookRunner() !== undefined && matchesToolName(tool, SKILL)),
+  );
 }
 export { execAgentHook };

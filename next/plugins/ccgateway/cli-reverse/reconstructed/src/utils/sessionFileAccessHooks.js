@@ -3,16 +3,16 @@
  *
  * PostToolUse 回调：统计模型读写会话转录/记忆目录的行为。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sessionFileAccessHooks.ts
- * pieces: chunk-e6aww6q8.js (8)
- * attribution: fingerprint 3, facade-exports 2, layout 3
+ * pieces: chunk-5xgkngpb.js (7)
+ * attribution: fingerprint 3, facade-exports 2, sole-consumer 2
  */
-import { basename, resolve as resolve_2, sep, dirname } from "path";
+import { resolve as resolve_2, sep, basename, dirname } from "path";
 import { FileReadTool } from "../tools/FileReadTool/FileReadTool.js";
-import { FILE_READ_TOOL_NAME } from "../tools/FileReadTool/constants.js";
+import { READ } from "../tools/FileReadTool/constants.js";
 import { fileEditInputSchema } from "../../vendor/diff/lib/index.mjs";
-import { FILE_EDIT_TOOL_NAME } from "../tools/FileEditTool/constants.js";
+import { EDIT } from "../tools/FileEditTool/constants.js";
 import { FileWriteTool } from "../tools/FileWriteTool/FileWriteTool.js";
 import { FILE_WRITE_TOOL_NAME } from "../tools/FileWriteTool/prompt.js";
 import { MEMORY_READ, MEMORY_WRITE } from "../tools/MemoryTool/memoryToolNames.js";
@@ -30,8 +30,9 @@ import { GREP_TOOL_NAME } from "../tools/GrepTool/prompt.js";
 import { GlobTool } from "../tools/GlobTool/GlobTool.js";
 import { GLOB_TOOL_NAME } from "../tools/GlobTool/prompt.js";
 import { isTeamMemoryPath } from "../memdir/teamMemPrompts.js";
-import { isOutsideAllowedRoot, getPersonalMemoryDir } from "../services/memoryStore/memoryKeys.js";
-import { MEMORY_INDEX_FILENAME, nfcLower as nfcLower_2 } from "../memdir/memdir.js";
+import { isMemoryTopicFile } from "./permissions/filesystem.js";
+import { nfcLower as nfcLower_2, MEMORY_INDEX_FILENAME } from "../memdir/memdir.js";
+import { getPersonalMemoryDir, isOutsideAllowedRoot } from "../services/memoryStore/memoryKeys.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { memoryWatchers } from "../services/memorySync/memoryWatcher.js";
@@ -49,14 +50,14 @@ import { getMemoryDirNfc } from "../memdir/teamMemPaths.js";
 import { buildPostToolUseContextOutput } from "../entrypoints/sdk/coreSchemas.js";
 import { isDiskless, registerHookCallbacks } from "../bootstrap/state.js";
 
-//@ chunk-e6aww6q8.js:1465221-1465635 fingerprint (2.1.88 match: getFilePathFromInput, 0.802)
+//@ chunk-5xgkngpb.js:1465824-1466238 fingerprint (2.1.88 match: getFilePathFromInput, 0.802)
 function getFilePathFromInput(toolName, toolInput) {
   switch (toolName) {
-    case FILE_READ_TOOL_NAME: {
+    case READ: {
       let parsed = FileReadTool.inputSchema.safeParse(toolInput);
       return parsed.success ? parsed.data.file_path : null;
     }
-    case FILE_EDIT_TOOL_NAME: {
+    case EDIT: {
       let parsed = fileEditInputSchema().safeParse(toolInput);
       return parsed.success ? parsed.data.file_path : null;
     }
@@ -77,10 +78,10 @@ function getFilePathFromInput(toolName, toolInput) {
       return null;
   }
 }
-//@ chunk-e6aww6q8.js:1465635-1466140 fingerprint (2.1.88 match: getSessionFileTypeFromInput, 1)
+//@ chunk-5xgkngpb.js:1466238-1466746 fingerprint (2.1.88 match: getSessionFileTypeFromInput, 1)
 function getSessionFileTypeFromInput(toolName, toolInput) {
   switch (toolName) {
-    case FILE_READ_TOOL_NAME: {
+    case READ: {
       let parsed = FileReadTool.inputSchema.safeParse(toolInput);
       if (!parsed.success) return null;
       return detectSessionFileType_2(parsed.data.file_path);
@@ -113,22 +114,14 @@ function getSessionFileTypeFromInput(toolName, toolInput) {
       return null;
   }
 }
-//@ chunk-e6aww6q8.js:1466140-1466213 facade-exports
+//@ chunk-5xgkngpb.js:1466746-1466819 facade-exports
 function isMemoryFileAccess(toolName, toolInput) {
   let filePathFromInput = getFilePathFromInput(toolName, toolInput);
   if (filePathFromInput && (isAutoMemFilePath(filePathFromInput) || isTeamMemoryPath(filePathFromInput)))
     return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:1466213-1466275 layout (2.1.88 match: isSessionPlanFile, 1)
-function isMemoryTopicFile(absolutePath) {
-  return (
-    absolutePath.endsWith(".md") &&
-    isOutsideAllowedRoot(absolutePath) &&
-    basename(absolutePath) !== MEMORY_INDEX_FILENAME
-  );
-}
-//@ chunk-e6aww6q8.js:1466275-1466472 layout
+//@ chunk-5xgkngpb.js:1466881-1467078 sole-consumer
 /**
  * 记忆路径分类（topic/entrypoint/reserved/other）。
  */
@@ -141,7 +134,7 @@ function classifyMemoryPath(path) {
     ? "entrypoint"
     : "other";
 }
-//@ chunk-e6aww6q8.js:1466472-1466555 layout
+//@ chunk-5xgkngpb.js:1467078-1467161 sole-consumer
 function queuedSessionFileAccessHook(toolName, absolutePath, extra) {
   if (!isMemoryTopicFile(absolutePath)) return;
   logEvent("tengu_memdir_pin_write", {
@@ -149,7 +142,7 @@ function queuedSessionFileAccessHook(toolName, absolutePath, extra) {
     ...extra,
   });
 }
-//@ chunk-e6aww6q8.js:1466555-1468907 fingerprint (2.1.88 match: handleSessionFileAccess, 0.59)
+//@ chunk-5xgkngpb.js:1467161-1469544 fingerprint (2.1.88 match: handleSessionFileAccess, 0.59)
 /**
  * PostToolUse 回调：模型读写会话转录或记忆目录时打 tengu_transcript_accessed / tengu_memdir_accessed。
  */
@@ -176,9 +169,9 @@ async function handleSessionFileAccess(hookInput, toolUseId, toolName, toolInput
       : hookInput.tool_name === MEMORY_READ
         ? personalMemoryReadPath(hookInput.tool_response)
         : getFilePathFromInput(hookInput.tool_name, hookInput.tool_input);
-  let isRead = hookInput.tool_name === FILE_READ_TOOL_NAME || hookInput.tool_name === MEMORY_READ;
+  let isRead = hookInput.tool_name === READ || hookInput.tool_name === MEMORY_READ;
   let isWrite =
-    hookInput.tool_name === FILE_EDIT_TOOL_NAME ||
+    hookInput.tool_name === EDIT ||
     hookInput.tool_name === FILE_WRITE_TOOL_NAME ||
     hookInput.tool_name === MEMORY_WRITE;
   let writtenContent =
@@ -206,14 +199,14 @@ async function handleSessionFileAccess(hookInput, toolUseId, toolName, toolInput
       }),
       hookInput.tool_name)
     ) {
-      case FILE_READ_TOOL_NAME:
+      case READ:
       case MEMORY_READ:
         logEvent("tengu_memdir_file_read", fields);
         tracker.recordAccess(filePath, "read");
         break;
-      case FILE_EDIT_TOOL_NAME:
+      case EDIT:
         logEvent("tengu_memdir_file_edit", fields);
-        queuedSessionFileAccessHook(FILE_EDIT_TOOL_NAME, filePath, subagentFields);
+        queuedSessionFileAccessHook(EDIT, filePath, subagentFields);
         tracker.recordAccess(filePath, "write");
         watchers.notifyWrite(filePath);
         break;
@@ -234,12 +227,12 @@ async function handleSessionFileAccess(hookInput, toolUseId, toolName, toolInput
       }),
       hookInput.tool_name)
     ) {
-      case FILE_READ_TOOL_NAME:
+      case READ:
         logEvent("tengu_team_mem_file_read", {
           ...subagentFields,
         });
         break;
-      case FILE_EDIT_TOOL_NAME:
+      case EDIT:
         logEvent("tengu_team_mem_file_edit", {
           ...subagentFields,
         });
@@ -317,7 +310,7 @@ async function handleSessionFileAccess(hookInput, toolUseId, toolName, toolInput
   }
   return {};
 }
-//@ chunk-e6aww6q8.js:1469041-1469310 facade-exports (2.1.88 match: registerSessionFileAccessHooks, 1)
+//@ chunk-5xgkngpb.js:1469678-1469947 facade-exports (2.1.88 match: registerSessionFileAccessHooks, 1)
 function registerSessionFileAccessHooks() {
   if (isDiskless()) return;
   let hook = {
@@ -329,7 +322,7 @@ function registerSessionFileAccessHooks() {
   registerHookCallbacks({
     PostToolUse: [
       {
-        matcher: FILE_READ_TOOL_NAME,
+        matcher: READ,
         hooks: [hook],
       },
       {
@@ -341,7 +334,7 @@ function registerSessionFileAccessHooks() {
         hooks: [hook],
       },
       {
-        matcher: FILE_EDIT_TOOL_NAME,
+        matcher: EDIT,
         hooks: [hook],
       },
       {

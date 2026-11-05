@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：终端内联图像能力检测（tmux 透传、kitty/Ghostty/iTerm 版本）与 CellSegmenter 运行时检查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-m4dvt8pp.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ngeq6w7y.js (8)
  * attribution: placement 8
  */
 import { env } from "../utils/env.js";
@@ -13,12 +13,12 @@ import { execFileNoThrow } from "../utils/execFileNoThrow.js";
 import { supportsKittyGraphics, supportsItermImages } from "./terminal.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-m4dvt8pp.js:7632-7646 placement
+//@ chunk-ngeq6w7y.js:7632-7646 placement
 /**
  * tmux 查询输出的读取上限（16 KiB）。
  */
 var MAX_SEGMENT_CELLS = 16384;
-//@ chunk-m4dvt8pp.js:7646-7945 placement
+//@ chunk-ngeq6w7y.js:7646-7945 placement
 function assertCellSegmenter(substitute, screen) {
   if (typeof Bun === "undefined" || typeof Bun.ant?.CellSegmenter !== "function")
     throw Error(
@@ -30,7 +30,7 @@ function assertCellSegmenter(substitute, screen) {
     screen,
   });
 }
-//@ chunk-m4dvt8pp.js:7945-9794 placement
+//@ chunk-ngeq6w7y.js:7945-9794 placement
 /**
  * tmux 内显示图像的失败说明组：tmux 版本/allow-passthrough/focus-events 未开、外层终端不支持图像、无法探知外层终端、查询无应答、TMUX_PANE 缺失等，每种情况一段可直接展示给用户的提示。
  */
@@ -43,7 +43,7 @@ var TMUX_VERSION_UNANSWERED;
 var TMUX_PANE_UNSET;
 var TMUX_NOT_A_PANE;
 var joined;
-deferInit("chunk-m4dvt8pp.js:7945", () => {
+deferInit("chunk-ngeq6w7y.js:7945", () => {
   TMUX_PASSTHROUGH_REQUIREMENT =
     "images inside tmux need tmux 3.3 or later with allow-passthrough and focus-events on: run `tmux set -g allow-passthrough on` and `tmux set -g focus-events on`, detach and attach tmux again, then restart Claude Code";
   TMUX_OLD_VERSION_HINT =
@@ -71,7 +71,7 @@ deferInit("chunk-m4dvt8pp.js:7945", () => {
     "#{window_bigger}",
   ].join("\t");
 });
-//@ chunk-m4dvt8pp.js:9794-9972 placement
+//@ chunk-ngeq6w7y.js:9794-9972 placement
 /**
  * 用 tmux display-message 查询当前窗格信息（1 秒超时），成功时解析返回。
  */
@@ -83,7 +83,7 @@ async function queryTmuxPaneInfo() {
   });
   return code === 0 ? parseTmuxPaneInfo(stdout) : undefined;
 }
-//@ chunk-m4dvt8pp.js:9972-10416 placement
+//@ chunk-ngeq6w7y.js:9972-10416 placement
 /**
  * 解析 tmux display-message 输出的 8 个制表符分隔字段（客户端终端名、版本、透传设置等），字段数或数字格式不对时返回 undefined。
  */
@@ -116,7 +116,7 @@ function parseTmuxPaneInfo(stdout) {
     hasPassthroughOption: passthrough !== "",
   };
 }
-//@ chunk-m4dvt8pp.js:10416-11434 placement
+//@ chunk-ngeq6w7y.js:10416-11434 placement
 /**
  * 用 tmux display-message 查询外层终端、透传、焦点事件等。
  */
@@ -178,12 +178,12 @@ function probeTmuxPassthrough(facts, tmuxFacts) {
     },
   };
 }
-//@ chunk-m4dvt8pp.js:11434-11447 placement
+//@ chunk-ngeq6w7y.js:11434-11447 placement
 /**
  * tmux 窗格繁询的冷却：最近一次询问在 1.5 秒内失败或无应答时，重绘路径不再重复执行 tmux display-message。
  */
 var TMUX_PANE_ASK_GRACE_MS = 1500;
-//@ chunk-m4dvt8pp.js:11447-11504 placement
+//@ chunk-ngeq6w7y.js:11447-11504 placement
 /**
  * 判断 tmux 探测结果是否仍新鲜（未探测或超过 1.5 秒则过期）。
  */
@@ -197,10 +197,10 @@ function isFreshTmuxProbe(answeredAt, tmuxPaneAnsweredAt, now) {
 }
 export {
   assertCellSegmenter,
-  MAX_SEGMENT_CELLS,
   queryTmuxPaneInfo,
   probeTmuxPassthrough,
   TMUX_PANE_ASK_GRACE_MS,
+  MAX_SEGMENT_CELLS,
   isFreshTmuxProbe,
   TMUX_PASSTHROUGH_REQUIREMENT,
   TMUX_OLD_VERSION_HINT,

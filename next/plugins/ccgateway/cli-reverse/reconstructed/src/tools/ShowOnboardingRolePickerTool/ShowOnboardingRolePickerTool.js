@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：ShowOnboardingRolePicker 工具（Cowork 引导中显示角色选择芯片）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hg2zbde4.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6f6qbsyw.js (1)
  * attribution: placement 1
  */
-//@ chunk-hg2zbde4.js:2980-3974 placement
+//@ chunk-6f6qbsyw.js:1820-2814 placement
 /**
  * ShowOnboardingRolePicker 的简短描述。
  */

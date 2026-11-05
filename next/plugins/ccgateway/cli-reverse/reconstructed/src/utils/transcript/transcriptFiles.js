@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：转录文件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (34)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (34)
  * attribution: placement 34
  */
-import { open, mkdir, rm as rm_2 } from "fs/promises";
+import { open, mkdir, rm } from "fs/promises";
 import { dirname, relative, sep, isAbsolute, join } from "path";
 import { shouldKeepLine, TRANSCRIPT_ENTRY_TYPES } from "./entryTypes.js";
 import { isBeforeCompactBoundary } from "../../components/tasks/BackgroundTaskStatus.js";
@@ -36,10 +36,10 @@ import { formatStorageError } from "../storage/storageErrors.js";
 import { isValidKeySegment, STORAGE_SPACES, transcriptScope } from "../storage/storageSpaces.js";
 import { getProjectsDir as getProjectsDir_2 } from "../sessionStorage.js";
 import { formatFileSize } from "../format.js";
-import { isPlainObject as isPlainObject_5 } from "../isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../isPlainObject.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:293658-293843 placement
+//@ chunk-5xgkngpb.js:294347-294532 placement
 function makeLineEmitter(plan) {
   return (line, offset) => {
     let parts = [];
@@ -51,18 +51,18 @@ function makeLineEmitter(plan) {
     return parts;
   };
 }
-//@ chunk-e6aww6q8.js:293843-293921 placement
+//@ chunk-5xgkngpb.js:294532-294610 placement
 function stripLeadingNuls(text) {
   let offset = 0;
   while (text.charCodeAt(offset) === 0) offset++;
   return offset > 0 ? text.slice(offset) : text;
 }
-//@ chunk-e6aww6q8.js:293921-293970 placement
+//@ chunk-5xgkngpb.js:294610-294659 placement
 var mapped; // deferred: uses TRANSCRIPT_ENTRY_TYPES_2 (./entryTypes.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:293921", () => {
+deferInit("chunk-5xgkngpb.js:294610", () => {
   mapped = [...TRANSCRIPT_ENTRY_TYPES].map((entryType) => Buffer.from(`"${entryType}"`));
 });
-//@ chunk-e6aww6q8.js:293970-295017 placement
+//@ chunk-5xgkngpb.js:294659-295709 placement
 /**
  * 以分块方式读取转录文件前 n 字节，查找 COMPACT_BOUNDARY_MARKER 与各元数据标记的位置，跨块拼接处理半行， 返回最后边界偏移及需要跳过/保留的元数据行信息。
  */
@@ -139,9 +139,9 @@ async function scanCompactBoundaries(path, maxBytes, chunkSize = TRANSCRIPT_READ
   if (pendingRecordStart >= 0) bytesAfterMarker += maxBytes - pendingRecordStart;
   return Math.min(maxBytes, lastMarkerAt + bytesAfterMarker);
 }
-//@ chunk-e6aww6q8.js:295017-295088 placement
+//@ chunk-5xgkngpb.js:295709-295780 placement
 var messageTimestampSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:295017", () => {
+deferInit("chunk-5xgkngpb.js:295709", () => {
   messageTimestampSchema = DoctorLazy(() =>
     looseObject({
       type: union([literal("user"), literal("assistant")]),
@@ -149,7 +149,7 @@ deferInit("chunk-e6aww6q8.js:295017", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:295088-295414 placement
+//@ chunk-5xgkngpb.js:295780-296106 placement
 /**
  * 从文本末尾向前找最后一条 user/assistant 消息的时间戳。
  */
@@ -178,7 +178,7 @@ function findLastMessageTimestamp(tail) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:295495-295925 placement
+//@ chunk-5xgkngpb.js:296187-296617 placement
 /**
  * 写会话标题旁文件（空标题则删除，v5 存储时写存储）。
  */
@@ -226,7 +226,7 @@ async function writeSessionTitleSidecar(a, b, customTitle, storage) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:295925-296237 placement
+//@ chunk-5xgkngpb.js:296617-296929 placement
 /**
  * 删除会话标题旁文件。
  */
@@ -244,7 +244,7 @@ async function deleteSessionTitleSidecar(a, b, c) {
       }
     }
     if (isDiskless()) return;
-    await rm_2(getCustomTitlePath(a, b), {
+    await rm(getCustomTitlePath(a, b), {
       force: true,
     });
   } catch (error) {
@@ -253,10 +253,10 @@ async function deleteSessionTitleSidecar(a, b, c) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:296237-296264 placement
+//@ chunk-5xgkngpb.js:296929-296956 placement
 var TRANSCRIPT_STREAM_CHUNK_BYTES = 262144;
 var TRANSCRIPT_READ_AHEAD_BYTES = 2097152;
-//@ chunk-e6aww6q8.js:296264-297367 placement
+//@ chunk-5xgkngpb.js:296956-298061 placement
 /**
  * 打开转录文件流，支持倒序读取，文件不存在时报 ENOENT。
  */
@@ -338,7 +338,7 @@ async function* openTranscriptStream(a, b) {
     maxBytes = TRANSCRIPT_READ_AHEAD_BYTES;
   }
 }
-//@ chunk-e6aww6q8.js:297367-298028 placement
+//@ chunk-5xgkngpb.js:298061-298722 placement
 /**
  * Windows 读转录报 EBADF 时的说明与遥测消息。
  */
@@ -346,7 +346,7 @@ var WIN32_EBADF_HELP =
   "Windows reported an error (EBADF) when Claude Code read this session's transcript file, although the file had opened normally. This can happen when other software intercepts file reads \u2014 security, encryption or endpoint-management tools, for example. If it keeps happening for this conversation, try excluding the folder that holds Claude Code's session transcripts from such software (the .claude folder in your user profile, unless the app or CLAUDE_CONFIG_DIR points Claude Code elsewhere), or adding Claude Code to its allowed applications, then resume again.";
 var WIN32_EBADF_TELEMETRY_MESSAGE =
   "loadTranscriptFile: transcript read failed with EBADF (syscall read, win32)";
-//@ chunk-e6aww6q8.js:298028-298220 placement
+//@ chunk-5xgkngpb.js:298722-298914 placement
 function isWin32TranscriptEbadf(error, extra) {
   if (isWin32ReadEbadf(error, extra)) return true;
   try {
@@ -357,25 +357,25 @@ function isWin32TranscriptEbadf(error, extra) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:298220-298267 placement
+//@ chunk-5xgkngpb.js:298914-298961 placement
 function isWin32EbadfTranscriptError(error, extra) {
   return isWin32TranscriptEbadf(error, extra) && getTelemetryMessage(error) === WIN32_EBADF_TELEMETRY_MESSAGE;
 }
-//@ chunk-e6aww6q8.js:298267-298315 placement
+//@ chunk-5xgkngpb.js:298961-299009 placement
 /**
  * 是否是转录加载错误（可容忍的 fs 错误或 Win32 EBADF）。
  */
 function isTranscriptLoadError(error, extra) {
   return isSadFsErrno(error) || isEnvFsErrno(error) || isWin32EbadfTranscriptError(error, extra);
 }
-//@ chunk-e6aww6q8.js:298315-298360 placement
+//@ chunk-5xgkngpb.js:299009-299054 placement
 /**
  * Win32 EBADF 的说明文本。
  */
 function win32EbadfHelp(error, extra) {
   return isWin32EbadfTranscriptError(error, extra) ? WIN32_EBADF_HELP : undefined;
 }
-//@ chunk-e6aww6q8.js:298435-298887 placement
+//@ chunk-5xgkngpb.js:299129-299581 placement
 /**
  * 转录文件路径转存储键（主转录或子代理转录）。
  */
@@ -403,11 +403,11 @@ function transcriptStorageKeyForPath(path) {
     STORAGE_SPACES.transcript(projectKey, sessionId, agentId, sliced.length > 0 ? sliced : undefined),
   );
 }
-//@ chunk-e6aww6q8.js:298887-298941 placement
+//@ chunk-5xgkngpb.js:299581-299636 placement
 function transcriptKeyFor(key) {
   return typeof key === "string" ? transcriptStorageKeyForPath(key) : key.key;
 }
-//@ chunk-e6aww6q8.js:298941-299033 placement
+//@ chunk-5xgkngpb.js:299636-299728 placement
 /**
  * 取主转录的存储键（非子代理）。
  */
@@ -415,7 +415,7 @@ function mainTranscriptKeyFor(dir) {
   let storageKey = transcriptStorageKeyForPath(dir);
   return storageKey?.namespace === "transcript" && storageKey.agentId === undefined ? storageKey : undefined;
 }
-//@ chunk-e6aww6q8.js:299033-299189 placement
+//@ chunk-5xgkngpb.js:299728-299884 placement
 function mainTranscriptKeyOf(key) {
   return key.namespace === "transcript" && (key.agentId ?? key.journal ?? key.sessionJournal) === undefined
     ? {
@@ -424,11 +424,11 @@ function mainTranscriptKeyOf(key) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:299189-299235 placement
+//@ chunk-5xgkngpb.js:299884-299930 placement
 function validatedTranscriptKey(key) {
   return validateStorageKey(key) === undefined ? key : undefined;
 }
-//@ chunk-e6aww6q8.js:299235-299384 placement
+//@ chunk-5xgkngpb.js:299930-300079 placement
 function splitProjectsPath(dir) {
   let relativePath = relative(getProjectsDir_2(), dir);
   if (
@@ -441,7 +441,7 @@ function splitProjectsPath(dir) {
   let parts = relativePath.split(sep);
   return dir === join(getProjectsDir_2(), ...parts) ? parts : undefined;
 }
-//@ chunk-e6aww6q8.js:299384-299701 placement
+//@ chunk-5xgkngpb.js:300079-300396 placement
 /**
  * 转录目录路径转存储作用域。
  */
@@ -468,7 +468,7 @@ function transcriptScopeForDir(dir) {
   else return;
   return validateStorageScope(scope) === undefined ? scope : undefined;
 }
-//@ chunk-e6aww6q8.js:299701-299776 placement
+//@ chunk-5xgkngpb.js:300396-300471 placement
 function versionIfMatch(version) {
   return version !== undefined
     ? {
@@ -479,7 +479,7 @@ function versionIfMatch(version) {
         type: "none",
       };
 }
-//@ chunk-e6aww6q8.js:299776-300035 placement
+//@ chunk-5xgkngpb.js:300471-300730 placement
 function rowHasUuid(line, offset) {
   let buffer = Buffer.from(line.data.buffer, line.data.byteOffset, line.data.byteLength);
   if (!buffer.includes(`"uuid":"${offset}"`)) return false;
@@ -490,7 +490,7 @@ function rowHasUuid(line, offset) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:300035-301017 placement
+//@ chunk-5xgkngpb.js:300730-301719 placement
 /**
  * 从转录流中移除墓碑记录。
  */
@@ -544,7 +544,7 @@ async function removeTombstones(a, b, c, d) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:301017-301962 placement
+//@ chunk-5xgkngpb.js:301719-302675 placement
 async function removeTombstonesBackward(a, b, c, d, e, precondition, limits) {
   let reduced = d.items.reduce((acc, item) => acc + item.data.byteLength, 0);
   let matches = [...e];
@@ -600,13 +600,13 @@ async function removeTombstonesBackward(a, b, c, d, e, precondition, limits) {
     precondition = versionIfMatch(replaceResult.value.version);
   }
 }
-//@ chunk-e6aww6q8.js:301962-302034 placement
+//@ chunk-5xgkngpb.js:302675-302747 placement
 function contentHasBlockType(content, blockType) {
   return (
-    Array.isArray(content) && content.some((block) => isPlainObject_5(block) && block.type === blockType)
+    Array.isArray(content) && content.some((block) => isPlainObject_6(block) && block.type === blockType)
   );
 }
-//@ chunk-e6aww6q8.js:302034-302227 placement
+//@ chunk-5xgkngpb.js:302747-302940 placement
 function collectLinearChain(logs, currentSessionId, index, options) {
   let ids = [];
   let logs_2 = logs;
@@ -619,11 +619,11 @@ function collectLinearChain(logs, currentSessionId, index, options) {
   }
   return ids;
 }
-//@ chunk-e6aww6q8.js:302227-302289 placement (2.1.88 match: filterResumableSessions, 1)
+//@ chunk-5xgkngpb.js:302940-303002 placement (2.1.88 match: filterResumableSessions, 1)
 function filterResumableSessions(logs, currentSessionId) {
   return logs.isSidechain === currentSessionId.isSidechain && isAuxiliaryEntry(logs);
 }
-//@ chunk-e6aww6q8.js:302289-302474 placement
+//@ chunk-5xgkngpb.js:303002-303187 placement
 function isAuxiliaryEntry(entry) {
   if (entry.type === "attachment") return true;
   if (entry.type === "system") return entry.subtype !== "compact_boundary";
@@ -633,18 +633,18 @@ function isAuxiliaryEntry(entry) {
     !contentHasBlockType(entry.message?.content, "tool_result")
   );
 }
-//@ chunk-e6aww6q8.js:302474-302538 placement
+//@ chunk-5xgkngpb.js:303187-303251 placement
 function indexOrMax(index, message) {
   return index?.get(message.uuid) ?? Number.MAX_SAFE_INTEGER;
 }
-//@ chunk-e6aww6q8.js:302538-302615 placement
+//@ chunk-5xgkngpb.js:303251-303328 placement
 function mapKeysToIndex(messages) {
   let index = new Map();
   let i = 0;
   for (let key of messages.keys()) index.set(key, i++);
   return index;
 }
-//@ chunk-e6aww6q8.js:302615-302775 placement
+//@ chunk-5xgkngpb.js:303328-303488 placement
 function buildChildrenIndex(messages) {
   let children = new Map();
   for (let message of messages.values()) {
@@ -655,7 +655,7 @@ function buildChildrenIndex(messages) {
   }
   return children;
 }
-//@ chunk-e6aww6q8.js:303694-304122 placement
+//@ chunk-5xgkngpb.js:304509-304937 placement
 /**
  * 对每个末端消息向上回溯到第一个 user/assistant 消息（带记忆），没有 user/assistant 子节点者加入 leafUuids；返回是否遇到环。
  */
@@ -687,7 +687,6 @@ function collectLeafUuids({ messages, terminalMessages, hasUserAssistantChild, l
   return sawCycle;
 }
 export {
-  isTranscriptLoadError,
   stripLeadingNuls,
   deleteSessionTitleSidecar,
   transcriptStorageKeyForPath,
@@ -704,6 +703,7 @@ export {
   collectLinearChain,
   writeSessionTitleSidecar,
   openTranscriptStream,
+  isTranscriptLoadError,
   collectLeafUuids,
   isWin32TranscriptEbadf,
   WIN32_EBADF_TELEMETRY_MESSAGE,

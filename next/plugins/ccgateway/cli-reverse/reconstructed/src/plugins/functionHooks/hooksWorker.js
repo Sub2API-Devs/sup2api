@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：hooks worker 线程入口与 worker 脚本构造
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (16)
  * attribution: placement 16
  */
 import { randomUUID } from "crypto";
@@ -16,7 +16,7 @@ import { STAMP_SLOT_COUNT } from "./vm/vmGlobals.js";
 import { MARKS_SLOT_COUNT } from "./hostBridge.js";
 import { createValueSlot } from "../../utils/valueSlot.js";
 
-//@ chunk-e6aww6q8.js:3694450-3695549 placement
+//@ chunk-5xgkngpb.js:3789875-3790974 placement
 /**
  * $.host.version：返回 Claude Code 版本号、可选基线版本与构建时间。
  */
@@ -27,10 +27,10 @@ function hostVersionInfo() {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.BUILD_TIME || undefined;
@@ -39,10 +39,10 @@ function hostVersionInfo() {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -54,7 +54,7 @@ function hostVersionInfo() {
     }),
   });
 }
-//@ chunk-e6aww6q8.js:3706989-3707046 placement
+//@ chunk-5xgkngpb.js:3802687-3802744 placement
 /**
  * 构造 worker 线程选项
  */
@@ -65,16 +65,16 @@ var workerThreadOptions = (name, stamp, marks) => ({
     marks,
   },
 });
-//@ chunk-e6aww6q8.js:3707046-3707070 placement
+//@ chunk-5xgkngpb.js:3802744-3802768 placement
 /**
  * Bun 打包前缀
  */
 var BUN_ROOT_PREFIX = "B:/~BUN/root/";
-//@ chunk-e6aww6q8.js:3707070-3707153 placement (2.1.88 match: formatUri, 1)
+//@ chunk-5xgkngpb.js:3802768-3802851 placement (2.1.88 match: formatUri, 1)
 function formatUri(uri) {
   return getPlatform() === "windows" && uri.startsWith(BUN_ROOT_PREFIX) ? uri : new URL(`file://${uri}`);
 }
-//@ chunk-e6aww6q8.js:3707191-3707249 placement
+//@ chunk-5xgkngpb.js:3802889-3802947 placement
 /**
  * hooks-<uuid前段>
  */
@@ -82,7 +82,7 @@ function newWorkerName() {
   let [head] = randomUUID().split("-");
   return `hooks-${head}`;
 }
-//@ chunk-e6aww6q8.js:3707249-3708325 placement
+//@ chunk-5xgkngpb.js:3802947-3804023 placement
 /**
  * hooks worker 脚本的 URL：构建内的 HOOKS_WORKER_URL，否则源码相对路径。
  */
@@ -91,10 +91,10 @@ var hooksWorkerUrl = () =>
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
-    VERSION: "2.1.316",
+    VERSION: "2.1.318",
     FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-    BUILD_TIME: "2026-10-30T23:28:13Z",
-    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
     HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
     DD_SOURCEMAP_GROUP: "default",
   }).HOOKS_WORKER_URL
@@ -103,21 +103,21 @@ var hooksWorkerUrl = () =>
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.HOOKS_WORKER_URL,
       )
     : new URL("../../../hooks-worker/hooks-worker.ts", import.meta.url);
-//@ chunk-e6aww6q8.js:3708325-3708337 placement
+//@ chunk-5xgkngpb.js:3804023-3804035 placement
 /**
  * 1e6
  */
 var MAX_PROC_STATUS_BYTES = 1e6;
-//@ chunk-e6aww6q8.js:3708408-3708491 placement
+//@ chunk-5xgkngpb.js:3804106-3804189 placement
 /**
  * 读 /proc/self/task 文件
  */
@@ -128,7 +128,7 @@ function readProcThreadFile(threadId, file) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:3708491-3708628 placement
+//@ chunk-5xgkngpb.js:3804189-3804326 placement
 function findThreadTask(comm) {
   try {
     let [first, ...rest] = readdirSync("/proc/self/task").filter(
@@ -139,22 +139,22 @@ function findThreadTask(comm) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:3708628-3708642 placement
+//@ chunk-5xgkngpb.js:3804326-3804340 placement
 /**
  * "RTt"
  */
 var RTT_LABEL = "RTt";
-//@ chunk-e6aww6q8.js:3708642-3708653 placement
+//@ chunk-5xgkngpb.js:3804340-3804351 placement
 /**
  * 10
  */
 var MAX_RTT_SAMPLES = 10;
-//@ chunk-e6aww6q8.js:3708653-3708739 placement
+//@ chunk-5xgkngpb.js:3804351-3804437 placement
 /**
  * /proc/<pid>/stat 格式
  */
 var PROC_STAT_RE = /^\d+ \((?<comm>.*)\) (?<state>\S)(?: \S+){10} (?<utime>\d+) (?<stime>\d+) /s;
-//@ chunk-e6aww6q8.js:3708739-3708969 placement
+//@ chunk-5xgkngpb.js:3804437-3804667 placement
 function readThreadCpu(threadId, fallback) {
   let groups = PROC_STAT_RE.exec(readProcThreadFile(threadId, "stat") ?? "")?.groups;
   let schedstat = Number(readProcThreadFile(threadId, "schedstat")?.split(" ").at(0));
@@ -166,7 +166,7 @@ function readThreadCpu(threadId, fallback) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:3708969-3709185 placement
+//@ chunk-5xgkngpb.js:3804667-3804883 placement
 /**
  * Linux/WSL 下按线程名找到 worker 线程（/proc/self/task），返回读取其 CPU 用量与睡眠状态的函数。
  */
@@ -185,7 +185,7 @@ function createThreadCpuProbe(label) {
     return stat ? readThreadCpu(cpu, label) : task;
   };
 }
-//@ chunk-e6aww6q8.js:3709185-3709437 placement
+//@ chunk-5xgkngpb.js:3804883-3805135 placement
 /**
  * 启动 hooks worker 线程：创建共享的心跳戳与标记缓冲区，返回 worker、两个 Int32Array 视图与线程 CPU 探针。
  */
@@ -200,7 +200,7 @@ function spawnHooksWorkerThread(url = hooksWorkerUrl()) {
     thread: createThreadCpuProbe(workerName),
   };
 }
-//@ chunk-e6aww6q8.js:3709437-3709715 placement
+//@ chunk-5xgkngpb.js:3805135-3805413 placement
 /**
  * hooks 宿主的可替换函数槽：worker 生成器、模块重载器与加载完成通知。
  */
@@ -220,4 +220,4 @@ function createWorkerSlots() {
     notifyLoaded: (slot) => valueSlot_3.get()?.(slot),
   };
 }
-export { createWorkerSlots, hostVersionInfo };
+export { hostVersionInfo, createWorkerSlots };

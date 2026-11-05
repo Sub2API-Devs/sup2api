@@ -1,8 +1,8 @@
 /**
  * @azure/identity/dist/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/identity@4.10.1
- * pieces: chunk-mrx6y2r5.js (35)
+ * pieces: chunk-b5df2wx1.js (35)
  * attribution: esm-fingerprint 33, esm-layout 2
  */
 import { readFile } from "fs/promises";
@@ -15,22 +15,22 @@ import { tracingClient } from "./esm/util/tracing.js";
 import { ensureValidScopeForDevTimeCreds, getScopeResource, ensureScopes } from "./esm/util/scopeUtils.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-mrx6y2r5.js:27655-27745 esm-fingerprint
+//@ chunk-b5df2wx1.js:27655-27745 esm-fingerprint
 function isErrorResponse(errorBody) {
   return errorBody && typeof errorBody.error === "string" && typeof errorBody.error_description === "string";
 }
-//@ chunk-mrx6y2r5.js:27745-27781 esm-fingerprint
+//@ chunk-b5df2wx1.js:27745-27781 esm-fingerprint
 var CredentialUnavailableErrorName = "CredentialUnavailableError";
-//@ chunk-mrx6y2r5.js:27781-27845 esm-layout
+//@ chunk-b5df2wx1.js:27781-27845 esm-layout
 class CredentialUnavailableError extends Error {
   constructor(message, options) {
     super(message, options);
     this.name = CredentialUnavailableErrorName;
   }
 }
-//@ chunk-mrx6y2r5.js:27845-27874 esm-fingerprint
+//@ chunk-b5df2wx1.js:27845-27874 esm-fingerprint
 var AuthenticationErrorName = "AuthenticationError";
-//@ chunk-mrx6y2r5.js:27874-28577 esm-fingerprint
+//@ chunk-b5df2wx1.js:27874-28577 esm-fingerprint
 class AuthenticationError extends Error {
   constructor(statusCode, errorBody, options) {
     let errorResponse = {
@@ -74,9 +74,9 @@ ${errorResponse.errorDescription},`,
     this.name = AuthenticationErrorName;
   }
 }
-//@ chunk-mrx6y2r5.js:28577-28615 esm-fingerprint
+//@ chunk-b5df2wx1.js:28577-28615 esm-fingerprint
 var AggregateAuthenticationErrorName = "AggregateAuthenticationError";
-//@ chunk-mrx6y2r5.js:28615-28720 esm-fingerprint
+//@ chunk-b5df2wx1.js:28615-28720 esm-fingerprint
 class AggregateAuthenticationError extends Error {
   constructor(errors, errorMessage) {
     let errorDetail = errors.join(`
@@ -87,7 +87,7 @@ ${errorDetail}`);
     this.name = AggregateAuthenticationErrorName;
   }
 }
-//@ chunk-mrx6y2r5.js:28720-28891 esm-fingerprint
+//@ chunk-b5df2wx1.js:28720-28891 esm-fingerprint
 function convertOAuthErrorResponseToErrorResponse(errorBody) {
   return {
     error: errorBody.error,
@@ -98,7 +98,7 @@ function convertOAuthErrorResponseToErrorResponse(errorBody) {
     traceId: errorBody.trace_id,
   };
 }
-//@ chunk-mrx6y2r5.js:28891-29078 esm-fingerprint
+//@ chunk-b5df2wx1.js:28891-29078 esm-fingerprint
 class AuthenticationRequiredError extends Error {
   constructor(options) {
     super(
@@ -114,11 +114,11 @@ class AuthenticationRequiredError extends Error {
     this.name = "AuthenticationRequiredError";
   }
 }
-//@ chunk-mrx6y2r5.js:29078-29371 esm-fingerprint
+//@ chunk-b5df2wx1.js:29078-29371 esm-fingerprint
 function createConfigurationErrorMessage(tenantId) {
   return `The current credential is not configured to acquire tokens for tenant ${tenantId}. To enable acquiring tokens for this tenant add it to the AdditionallyAllowedTenants on the credential options, or add "*" to AdditionallyAllowedTenants to allow acquiring tokens for any tenant.`;
 }
-//@ chunk-mrx6y2r5.js:29371-29698 esm-fingerprint
+//@ chunk-b5df2wx1.js:29371-29698 esm-fingerprint
 function processMultiTenantRequest(tenantId, getTokenOptions, additionallyAllowedTenantIds = [], logger) {
   var _a;
   let resolvedTenantId;
@@ -143,7 +143,7 @@ function processMultiTenantRequest(tenantId, getTokenOptions, additionallyAllowe
   }
   return resolvedTenantId;
 }
-//@ chunk-mrx6y2r5.js:29698-29959 esm-fingerprint
+//@ chunk-b5df2wx1.js:29698-29959 esm-fingerprint
 /**
  * Azure Identity：校验 tenant id 格式（第三方 @azure/identity 代码）。
  */
@@ -156,7 +156,7 @@ function checkTenantId(logger, tenantId) {
     throw tenantId;
   }
 }
-//@ chunk-mrx6y2r5.js:29959-30058 esm-fingerprint
+//@ chunk-b5df2wx1.js:29959-30058 esm-fingerprint
 /**
  * Azure Identity：解析 tenant（显式 tenant 校验后返回；否则按 clientId 返回 common/organizations）。
  */
@@ -169,15 +169,15 @@ function resolveTenantId(options, tenantId, clientId) {
   if (clientId !== DEVELOPER_SIGN_ON_CLIENT_ID) return "common";
   return "organizations";
 }
-//@ chunk-mrx6y2r5.js:30058-30140 esm-layout
+//@ chunk-b5df2wx1.js:30058-30140 esm-layout
 function resolveAdditionallyAllowedTenantIds(additionallyAllowedTenants) {
   if (!additionallyAllowedTenants || additionallyAllowedTenants.length === 0) return [];
   if (additionallyAllowedTenants.includes("*")) return ALL_TENANTS;
   return additionallyAllowedTenants;
 }
-//@ chunk-mrx6y2r5.js:302180-302218 esm-fingerprint
+//@ chunk-b5df2wx1.js:302180-302218 esm-fingerprint
 var logger$h = credentialLogger("ClientAssertionCredential");
-//@ chunk-mrx6y2r5.js:302218-303019 esm-fingerprint
+//@ chunk-b5df2wx1.js:302218-303019 esm-fingerprint
 class ClientAssertionCredential {
   constructor(tenantId, clientId, getAssertion, options = {}) {
     if (!tenantId)
@@ -216,7 +216,7 @@ class ClientAssertionCredential {
     });
   }
 }
-//@ chunk-mrx6y2r5.js:303059-303174 esm-fingerprint
+//@ chunk-b5df2wx1.js:303059-303174 esm-fingerprint
 var credentialName$4 = "WorkloadIdentityCredential";
 var SupportedWorkloadEnvironmentVariables = [
   "AZURE_TENANT_ID",
@@ -224,7 +224,7 @@ var SupportedWorkloadEnvironmentVariables = [
   "AZURE_FEDERATED_TOKEN_FILE",
 ];
 var logger$g = credentialLogger(credentialName$4);
-//@ chunk-mrx6y2r5.js:303174-305977 esm-fingerprint
+//@ chunk-b5df2wx1.js:303174-305977 esm-fingerprint
 class WorkloadIdentityCredential {
   constructor(options) {
     this.azureFederatedTokenFileContent = undefined;
@@ -290,7 +290,7 @@ class WorkloadIdentityCredential {
     return this.azureFederatedTokenFileContent;
   }
 }
-//@ chunk-mrx6y2r5.js:305977-306645 esm-fingerprint
+//@ chunk-b5df2wx1.js:305977-306645 esm-fingerprint
 var msiName_2 = "ManagedIdentityCredential - Token Exchange";
 var TOKEN_EXCHANGE_MSI_NAME = credentialLogger(msiName_2);
 var tokenExchangeMsi = {
@@ -326,7 +326,7 @@ var tokenExchangeMsi = {
     ).getToken(scopes, getTokenOptions);
   },
 };
-//@ chunk-mrx6y2r5.js:314766-315144 esm-fingerprint
+//@ chunk-b5df2wx1.js:314766-315144 esm-fingerprint
 var logger$c = credentialLogger("AzureDeveloperCliCredential");
 var developerCliCredentialInternals = {
   getSafeWorkingDir() {
@@ -365,7 +365,7 @@ var developerCliCredentialInternals = {
     });
   },
 };
-//@ chunk-mrx6y2r5.js:315144-317050 esm-fingerprint
+//@ chunk-b5df2wx1.js:315144-317050 esm-fingerprint
 class AzureDeveloperCliCredential {
   constructor(options) {
     if (options === null || options === undefined ? undefined : options.tenantId) {
@@ -446,7 +446,7 @@ class AzureDeveloperCliCredential {
     });
   }
 }
-//@ chunk-mrx6y2r5.js:317083-317288 esm-fingerprint
+//@ chunk-b5df2wx1.js:317083-317288 esm-fingerprint
 var processUtils = {
   execFile(file, params, options) {
     return new Promise((resolve, reject) => {
@@ -459,15 +459,15 @@ var processUtils = {
     });
   },
 };
-//@ chunk-mrx6y2r5.js:317288-317332 esm-fingerprint
+//@ chunk-b5df2wx1.js:317288-317332 esm-fingerprint
 var logger$b = credentialLogger("AzurePowerShellCredential");
 var isWindows = false;
-//@ chunk-mrx6y2r5.js:317332-317384 esm-fingerprint
+//@ chunk-b5df2wx1.js:317332-317384 esm-fingerprint
 function formatCommand(commandName) {
   if (isWindows) return `${commandName}.exe`;
   else return commandName;
 }
-//@ chunk-mrx6y2r5.js:317384-317518 esm-fingerprint
+//@ chunk-b5df2wx1.js:317384-317518 esm-fingerprint
 async function runCommands(commands, timeout) {
   let results = [];
   for (let command of commands) {
@@ -480,13 +480,13 @@ async function runCommands(commands, timeout) {
   }
   return results;
 }
-//@ chunk-mrx6y2r5.js:317518-318208 esm-fingerprint
+//@ chunk-b5df2wx1.js:317518-318208 esm-fingerprint
 var powerShellErrors; // deferred: uses formatCommand of its import cycle while loading; runs once the cycle is complete
 var powerShellPublicErrorMessages;
 var isLoginError;
 var isNotInstalledError;
 var commandStack;
-deferInit("chunk-mrx6y2r5.js:317518", () => {
+deferInit("chunk-b5df2wx1.js:317518", () => {
   powerShellErrors = {
     login: "Run Connect-AzAccount to login",
     installed:
@@ -502,12 +502,12 @@ deferInit("chunk-mrx6y2r5.js:317518", () => {
   isNotInstalledError = (err) => err.message.match(powerShellErrors.installed);
   commandStack = [formatCommand("pwsh")];
 });
-//@ chunk-mrx6y2r5.js:318208-318240 esm-fingerprint
+//@ chunk-b5df2wx1.js:318208-318240 esm-fingerprint
 // deferred: uses powerShellErrors of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-mrx6y2r5.js:318208", () => {
+deferInit("chunk-b5df2wx1.js:318208", () => {
   if (isWindows) commandStack.push(formatCommand("powershell"));
 });
-//@ chunk-mrx6y2r5.js:318240-320501 esm-fingerprint
+//@ chunk-b5df2wx1.js:318240-320501 esm-fingerprint
 class AzurePowerShellCredential {
   constructor(options) {
     if (options === null || options === undefined ? undefined : options.tenantId) {
@@ -603,7 +603,7 @@ class AzurePowerShellCredential {
     });
   }
 }
-//@ chunk-mrx6y2r5.js:320501-320882 esm-fingerprint
+//@ chunk-b5df2wx1.js:320501-320882 esm-fingerprint
 async function parseJsonToken(result) {
   let jsonRegex = /{[^{}]*}/g;
   let matches = result.match(jsonRegex);
@@ -626,12 +626,12 @@ async function parseJsonToken(result) {
     }
   throw Error(`No access token found in the output. Received output: ${result}`);
 }
-//@ chunk-mrx6y2r5.js:320882-320917 esm-fingerprint
+//@ chunk-b5df2wx1.js:320882-320917 esm-fingerprint
 var logger$a; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mrx6y2r5.js:320882", () => {
+deferInit("chunk-b5df2wx1.js:320882", () => {
   logger$a = credentialLogger("ChainedTokenCredential");
 });
-//@ chunk-mrx6y2r5.js:320917-321699 esm-fingerprint
+//@ chunk-b5df2wx1.js:320917-321699 esm-fingerprint
 class ChainedTokenCredential {
   constructor(...sources) {
     this._sources = [];
@@ -672,12 +672,12 @@ class ChainedTokenCredential {
     });
   }
 }
-//@ chunk-mrx6y2r5.js:324245-324280 esm-fingerprint
+//@ chunk-b5df2wx1.js:324245-324280 esm-fingerprint
 var logger$8; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mrx6y2r5.js:324245", () => {
+deferInit("chunk-b5df2wx1.js:324245", () => {
   logger$8 = credentialLogger("ClientSecretCredential");
 });
-//@ chunk-mrx6y2r5.js:324280-325326 esm-fingerprint
+//@ chunk-b5df2wx1.js:324280-325326 esm-fingerprint
 class ClientSecretCredential {
   constructor(tenantId, clientId, clientSecret, options = {}) {
     if (!tenantId)
@@ -719,12 +719,12 @@ class ClientSecretCredential {
     });
   }
 }
-//@ chunk-mrx6y2r5.js:325326-325365 esm-fingerprint
+//@ chunk-b5df2wx1.js:325326-325365 esm-fingerprint
 var logger$7; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mrx6y2r5.js:325326", () => {
+deferInit("chunk-b5df2wx1.js:325326", () => {
   logger$7 = credentialLogger("UsernamePasswordCredential");
 });
-//@ chunk-mrx6y2r5.js:325365-326641 esm-fingerprint
+//@ chunk-b5df2wx1.js:325365-326641 esm-fingerprint
 class UsernamePasswordCredential {
   constructor(tenantId, clientId, username, password, options = {}) {
     if (!tenantId)

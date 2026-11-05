@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。内置插件 modsGuide 注册。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sc72x544.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y4bgqkdt.js (5)
  * attribution: placement 5
  */
 import { __commonJS, __export } from "../../../../runtime/bun-runtime.js";
@@ -34,7 +34,7 @@ import {
 } from "./clawdCooking.js";
 import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../builtinPlugins.js";
 
-//@ chunk-sc72x544.js:3476-3691 placement
+//@ chunk-y4bgqkdt.js:3784-3999 placement
 /**
  * modsGuide 插件扫描清单。
  */
@@ -51,9 +51,9 @@ var MODS_GUIDE_MANIFEST = __commonJS(function (requireFn, moduleObject) {
     files: {},
   };
 });
-//@ chunk-sc72x544.js:3691-3700 placement
+//@ chunk-y4bgqkdt.js:3999-4008 placement
 var indexNamespace = {};
-//@ chunk-sc72x544.js:3700-3848 placement
+//@ chunk-y4bgqkdt.js:4008-4156 placement
 __export(indexNamespace, {
   PLUGIN_DESCRIPTION: () => PLUGIN_DESCRIPTION,
   PLUGIN_NAME: () => PLUGIN_NAME,
@@ -63,7 +63,7 @@ __export(indexNamespace, {
   isOnByDefault: () => isOnByDefault,
   registerPlugin: () => registerPlugin,
 });
-//@ chunk-sc72x544.js:19803-20600 placement
+//@ chunk-y4bgqkdt.js:20111-20908 placement
 function register(on) {
   let playedUntil = new Map();
   on(
@@ -117,7 +117,7 @@ function register(on) {
     },
   );
 }
-//@ chunk-sc72x544.js:20600-20695 placement
+//@ chunk-y4bgqkdt.js:20908-21003 placement
 var registerPlugin = () =>
   registerBuiltinPlugin({
     name: PLUGIN_NAME,

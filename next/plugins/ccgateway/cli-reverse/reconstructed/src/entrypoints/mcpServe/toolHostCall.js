@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：工具宿主调用执行（权限检查、拒绝结果、原生诊断）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dz36xfxg.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fb9qe48t.js (23)
  * attribution: placement 23
  */
 import { normalize } from "path";
 import { realpath } from "fs/promises";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { MAX_DIRECTORY_PATH_LENGTH } from "../../utils/permissions/permissionContextSerialization.js";
 import {
   MAX_REFS,
@@ -46,6 +46,7 @@ import {
   keepCallAnswer,
   hasRunApproval,
   isMainAgentRun,
+  mcpServeCallState,
   readFileStateFor,
   claimCallRun,
   releaseCallRun,
@@ -69,9 +70,11 @@ import {
   barredCallOutcome,
   runServedBashCall,
 } from "./toolHostResults.js";
+import { isShellDirectoryTaken } from "./shellDirectoryHeld.js";
 import { permissionCheckedCwds } from "../../utils/Shell.js";
 import { getSessionProject } from "../../bootstrap/sessionSlices.js";
 import { runInRemoteCallFrameMain } from "../../remote/remoteMode.js";
+import { readBaselineOfCall } from "./readBaselineOfCall.js";
 import { asksForEditResult } from "./editResult.js";
 import { identity } from "../../utils/pathClassification.js";
 import { identityAgentId2 } from "../../utils/agentId.js";
@@ -89,11 +92,11 @@ import { isEmptyObject } from "../../utils/toolInputPlaceholder.js";
 import { restoreCallInput } from "../../services/tools/toolExecution.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
 import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
 
-//@ chunk-dz36xfxg.js:23436-23757 placement
+//@ chunk-fb9qe48t.js:24872-25193 placement
 function trackReadFileStateChanges(readFileState) {
   let entriesSetByCall = new Map();
   let keysSetWithNoEntryBefore = new Set();
@@ -116,7 +119,7 @@ function trackReadFileStateChanges(readFileState) {
     }),
   };
 }
-//@ chunk-dz36xfxg.js:23757-23954 placement
+//@ chunk-fb9qe48t.js:25193-25390 placement
 function readStateMetaFor(entry) {
   if (entry.isPartialView)
     return {
@@ -131,23 +134,23 @@ function readStateMetaFor(entry) {
         }),
       };
 }
-//@ chunk-dz36xfxg.js:23954-24329 placement
+//@ chunk-fb9qe48t.js:25390-25765 placement
 function readFileStateTelemetry(changes, readFileStateNotSentCount) {
   return {
-    read_file_state_whole_file_count: count(changes, (change) => change.sha256 !== undefined),
-    read_file_state_not_in_model_context_count: count(
+    read_file_state_whole_file_count: countWhere(changes, (change) => change.sha256 !== undefined),
+    read_file_state_not_in_model_context_count: countWhere(
       changes,
       (change) => change.sha256 !== undefined && change.content_not_in_model_context === true,
     ),
-    read_file_state_partial_view_count: count(changes, (change) => change.is_partial_view === true),
-    read_file_state_path_only_count: count(
+    read_file_state_partial_view_count: countWhere(changes, (change) => change.is_partial_view === true),
+    read_file_state_path_only_count: countWhere(
       changes,
       (change) => change.sha256 === undefined && !change.is_partial_view,
     ),
     read_file_state_not_sent_count: readFileStateNotSentCount,
   };
 }
-//@ chunk-dz36xfxg.js:24329-24508 placement
+//@ chunk-fb9qe48t.js:25765-25944 placement
 function readFileStateChangesMeta(entriesSetByCall, isBash) {
   let sliced = [...entriesSetByCall]
     .filter(([path]) => path.length <= MAX_DIRECTORY_PATH_LENGTH)
@@ -164,7 +167,7 @@ function readFileStateChangesMeta(entriesSetByCall, isBash) {
         : readFileStateTelemetry(changes, entriesSetByCall.size - sliced.length),
   };
 }
-//@ chunk-dz36xfxg.js:24508-24580 placement
+//@ chunk-fb9qe48t.js:25944-26016 placement
 function withReadFileStateChanges(result, changes) {
   return changes.length === 0
     ? result
@@ -176,7 +179,7 @@ function withReadFileStateChanges(result, changes) {
         },
       };
 }
-//@ chunk-dz36xfxg.js:24580-24837 placement
+//@ chunk-fb9qe48t.js:26016-26273 placement
 var TOOL_HOST_REFUSAL_CODES = new Set([
   "already_started",
   "not_served",
@@ -189,7 +192,7 @@ var TOOL_HOST_REFUSAL_CODES = new Set([
   "approver_not_user",
 ]);
 var HOST_CALL_RESULT_KINDS = new Set(["invalid", "allow", "deny", "ask", "output", "tool_failed"]);
-//@ chunk-dz36xfxg.js:24837-25929 placement
+//@ chunk-fb9qe48t.js:26273-27365 placement
 function toolHostRefusalResult(toolName, refusal, range) {
   switch (refusal.kind) {
     case "too_large":
@@ -220,7 +223,7 @@ function toolHostRefusalResult(toolName, refusal, range) {
       };
   }
 }
-//@ chunk-dz36xfxg.js:25929-26140 placement
+//@ chunk-fb9qe48t.js:27365-27576 placement
 function duplicateCallError(name) {
   return completedError(
     `${name} was not run again: this very call was already started here once. It may have finished, failed or been cut off: check what it did before you send a new call.`,
@@ -228,7 +231,7 @@ function duplicateCallError(name) {
     [],
   );
 }
-//@ chunk-dz36xfxg.js:26140-26901 placement
+//@ chunk-fb9qe48t.js:27576-28337 placement
 /**
  * mcp serve 的 ToolHost 调用入口：带权限上下文的请求先做权限判定，否则直接执行。
  */
@@ -286,7 +289,7 @@ async function handleToolHostCall(request) {
     callHandle.release();
   }
 }
-//@ chunk-dz36xfxg.js:26901-29780 placement
+//@ chunk-fb9qe48t.js:28337-31552 placement
 /**
  * 执行一次 ToolHost 工具调用：校验输入、按客户端权限上下文判定、运行工具并整理结果（含 readFileState 变化）。
  */
@@ -386,13 +389,27 @@ async function runToolHostCall({
       logFeatureSad("mcp_serve_tool_host_permission", "launch_directory_gone", logAttrs);
       return notServedResult(launchDirGoneMessage(name));
     }
-    if (intactDirectory === undefined && isMainAgent) {
+    if (
+      intactDirectory === undefined &&
+      (isMainAgent || (request.step === "run" && isShellDirectoryTaken(session, daemonCwd)))
+    ) {
       if (!signal.aborted) {
         logFeatureSad("mcp_serve_tool_host_permission", "start_directory_gone", logAttrs);
         session.setCwd(workingDir);
+        mcpServeCallState.of(session).shell.goneUntoldToMainAgent = isMainAgent ? undefined : daemonCwd;
       }
       return withShellDirectoryMeta(
         notServedResult(startDirGoneMessage(name, workingDir, daemonCwd)),
+        workingDir,
+      );
+    }
+    let { shell } = mcpServeCallState.of(session);
+    if (isMainAgent && shell.goneUntoldToMainAgent !== undefined && !signal.aborted) {
+      let goneUntoldToMainAgent = shell.goneUntoldToMainAgent;
+      shell.goneUntoldToMainAgent = undefined;
+      logFeatureSad("mcp_serve_tool_host_permission", "start_directory_gone", logAttrs);
+      return withShellDirectoryMeta(
+        notServedResult(startDirGoneMessage(name, workingDir, goneUntoldToMainAgent)),
         workingDir,
       );
     }
@@ -405,15 +422,18 @@ async function runToolHostCall({
         tool_2,
         args,
         request,
-        callServedTool(
-          {
-            ...toolUseContext,
-            session: projectSession,
-          },
-          request,
-          launchPermissionContext,
-          repoRules,
-        ),
+        {
+          ...callServedTool(
+            {
+              ...toolUseContext,
+              session: projectSession,
+            },
+            request,
+            launchPermissionContext,
+            repoRules,
+          ),
+          carriedReadBaseline: readBaselineOfCall(meta),
+        },
         launchPermissionContext,
         repoRules,
         startHeartbeat,
@@ -474,15 +494,15 @@ async function runToolHostCall({
     release();
   }
 }
-//@ chunk-dz36xfxg.js:29780-29949 placement
+//@ chunk-fb9qe48t.js:31552-31721 placement
 function launchDirGoneMessage(toolName) {
   return `${toolName} was not run: the directory that this server was started in is gone (deleted, moved, replaced by a link, or unreadable). Retrying won't help.`;
 }
-//@ chunk-dz36xfxg.js:29949-30210 placement
-function startDirGoneMessage(toolName, nextDir, daemonCwd) {
-  return `${toolName} was not run: the directory it was to start in is gone (deleted, moved, replaced by a link, or unreadable). The next call starts in ${nextDir}. Check that this call still does what you mean there, then send it again. What is gone: ${daemonCwd}`;
+//@ chunk-fb9qe48t.js:31721-31982 placement
+function startDirGoneMessage(toolName, nextDir, gonePath) {
+  return `${toolName} was not run: the directory it was to start in is gone (deleted, moved, replaced by a link, or unreadable). The next call starts in ${nextDir}. Check that this call still does what you mean there, then send it again. What is gone: ${gonePath}`;
 }
-//@ chunk-dz36xfxg.js:30210-30291 placement
+//@ chunk-fb9qe48t.js:31982-32063 placement
 async function canonicalDir(dir) {
   try {
     return identity(await realpath(`${dir}/`)) === dir ? dir : undefined;
@@ -490,7 +510,7 @@ async function canonicalDir(dir) {
     return;
   }
 }
-//@ chunk-dz36xfxg.js:30291-30431 placement
+//@ chunk-fb9qe48t.js:32063-32203 placement
 async function resolveServeDirectories(session) {
   let { cwd, originalCwd } = getSessionProject(session);
   let launchDirectory = await canonicalDir(originalCwd);
@@ -500,7 +520,7 @@ async function resolveServeDirectories(session) {
     intactDirectory: cwd === originalCwd ? launchDirectory : await canonicalDir(cwd),
   };
 }
-//@ chunk-dz36xfxg.js:30431-30944 placement
+//@ chunk-fb9qe48t.js:32203-32716 placement
 function callServedTool(toolUseContext, request, launchPermissionContext, repoRules) {
   return call(
     {
@@ -542,7 +562,7 @@ function callServedTool(toolUseContext, request, launchPermissionContext, repoRu
     ),
   );
 }
-//@ chunk-dz36xfxg.js:30944-31033 placement (2.1.88 match: call, 0.777)
+//@ chunk-fb9qe48t.js:32716-32805 placement (2.1.88 match: call, 0.777)
 function call(onDone, context) {
   let appState = {
     ...serveModeDefaultAppState(),
@@ -553,7 +573,7 @@ function call(onDone, context) {
     getAppState: () => appState,
   };
 }
-//@ chunk-dz36xfxg.js:31033-31215 placement
+//@ chunk-fb9qe48t.js:32805-32987 placement
 function approvalForStep(request) {
   switch (request.step) {
     case "check":
@@ -564,7 +584,7 @@ function approvalForStep(request) {
       throw Error("A ToolHost permission request with an unknown step reached the permission check.");
   }
 }
-//@ chunk-dz36xfxg.js:31215-33128 placement
+//@ chunk-fb9qe48t.js:32987-34900 placement
 async function runPermissionedToolHostCall(
   tool,
   validated,
@@ -682,7 +702,7 @@ async function runPermissionedToolHostCall(
     releaseCallRun(toolUseContext.session, request.tool_use_id);
   }
 }
-//@ chunk-dz36xfxg.js:33128-34929 placement
+//@ chunk-fb9qe48t.js:34900-36701 placement
 /**
  * 对 ToolHost 调用做声明式权限检查（规则、模式、分类器），把结果映射为允许/拒绝/询问。
  */
@@ -805,7 +825,7 @@ async function checkToolHostPermission(tool, validated, toolUseContext, cwd, cla
     settingsWriteSuspicion: suspicion,
   };
 }
-//@ chunk-dz36xfxg.js:34929-35066 placement
+//@ chunk-fb9qe48t.js:36701-36838 placement
 function planModeWriteAsk(tool, input, mode, toolUseContext) {
   if (!isPlanModeWrite(tool, input, mode, toolUseContext)) return;
   let reason = {
@@ -818,7 +838,7 @@ function planModeWriteAsk(tool, input, mode, toolUseContext) {
     decisionReason: reason,
   };
 }
-//@ chunk-dz36xfxg.js:35066-36259 placement
+//@ chunk-fb9qe48t.js:36838-38031 placement
 async function runWithNativeDoctor(
   tool,
   validated,
@@ -885,7 +905,7 @@ async function runWithNativeDoctor(
     settingsWriteSuspicion: recheckWithNativeContext.settingsWriteSuspicion,
   };
 }
-//@ chunk-dz36xfxg.js:36259-36524 placement
+//@ chunk-fb9qe48t.js:38031-38296 placement
 async function denyNestedPermissionAsk(tool) {
   return {
     behavior: "deny",
@@ -896,10 +916,10 @@ async function denyNestedPermissionAsk(tool) {
     },
   };
 }
-//@ chunk-dz36xfxg.js:36524-36803 placement
+//@ chunk-fb9qe48t.js:38296-38575 placement
 function resultTooLargeHint(tool) {
   let hint =
-    tool.name === FILE_READ_TOOL_NAME
+    tool.name === READ
       ? "Ask for less of it: for a PDF, fewer pages at a time with the pages parameter."
       : tool.name === GREP_TOOL_NAME || tool.name === GLOB_TOOL_NAME
         ? "Narrow the search."

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：带校验地读取文件（不跟随链接、nlink、句柄路径核对）；按 BOM/编码检测解码文本等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-t0gq9gyw.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-85eyj5gy.js (6)
  * attribution: placement 6
  */
 import { constants, watchFile } from "fs";
@@ -17,7 +17,7 @@ import { logError } from "../log.js";
 import { env } from "../env.js";
 import { getPlatform } from "../platform.js";
 
-//@ chunk-t0gq9gyw.js:57275-58517 placement
+//@ chunk-85eyj5gy.js:57441-58683 placement
 /**
  * 带校验地读取文件（不跟随链接、nlink、句柄路径核对）。
  */
@@ -94,7 +94,7 @@ async function readFileGuarded(filePath, maxBytes, options) {
     });
   }
 }
-//@ chunk-t0gq9gyw.js:58517-58579 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-85eyj5gy.js:58683-58745 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 /**
  * 错误是否为路径不存在。
  */
@@ -102,7 +102,7 @@ function isMissingPathError(realCandidate) {
   let code = getErrnoCode(realCandidate);
   return code === "ENOENT" || code === "ENOTDIR";
 }
-//@ chunk-t0gq9gyw.js:58579-58709 placement
+//@ chunk-85eyj5gy.js:58745-58875 placement
 /**
  * 从句柄指定位置读满缓冲区，返回实际读取的字节数。
  */
@@ -120,7 +120,7 @@ async function readIntoBuffer(handle, buffer, startOffset) {
   }
   return totalRead;
 }
-//@ chunk-t0gq9gyw.js:58709-59039 placement
+//@ chunk-85eyj5gy.js:58875-59205 placement
 /**
  * 按 BOM/编码检测解码文本。
  */
@@ -132,9 +132,9 @@ function decodeText(buffer, sniffEncoding) {
     let chunk = buffer.subarray(0, Math.min(buffer.length, 512));
     let evenNulCount = 0;
     let oddNulCount = 0;
-    for (let j = 0; j < chunk.length; j++)
-      if (chunk[j] === 0)
-        if (j % 2 === 0) evenNulCount++;
+    for (let idx = 0; idx < chunk.length; idx++)
+      if (chunk[idx] === 0)
+        if (idx % 2 === 0) evenNulCount++;
         else oddNulCount++;
     if (chunk.length >= 8 && (evenNulCount + oddNulCount) * 4 > chunk.length) {
       encodingFromBom = "utf16le";
@@ -144,7 +144,7 @@ function decodeText(buffer, sniffEncoding) {
   let str = buffer.subarray(byteOffset).toString(encodingFromBom);
   return str.charCodeAt(0) === 65279 ? str.slice(1) : str;
 }
-//@ chunk-t0gq9gyw.js:59262-59360 placement
+//@ chunk-85eyj5gy.js:59428-59526 placement
 /**
  * 安全地注册文件监听（watchFile），回调异常只记录不外抛，返回包装后的回调。
  */
@@ -163,11 +163,11 @@ function watchFileSafe(filePath, options, listener) {
   }
   return safeListener;
 }
-//@ chunk-t0gq9gyw.js:59360-59431 placement
+//@ chunk-85eyj5gy.js:59526-59597 placement
 /**
  * 判断配置监听事件开关是否开启且平台为 linux。
  */
 function isConfigWatchEventsEnabled() {
   return env.CLAUDE_CODE_CONFIG_WATCH_EVENTS && getPlatform() === "linux";
 }
-export { isConfigWatchEventsEnabled, watchFileSafe, isMissingPathError, readFileGuarded };
+export { readFileGuarded, isConfigWatchEventsEnabled, watchFileSafe, isMissingPathError };

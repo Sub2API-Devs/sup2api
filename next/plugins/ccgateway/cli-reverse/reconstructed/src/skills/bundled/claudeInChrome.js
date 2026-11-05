@@ -3,9 +3,9 @@
  *
  * claude-in-chrome 内置 skill 注册（Chrome 扩展可用时启用）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/claudeInChrome.ts
- * pieces: chunk-20nqyqvq.js (1), chunk-hantmvxa.js (1)
+ * pieces: chunk-ne2890fx.js (1), chunk-y8m17a3e.js (1)
  * attribution: fingerprint 2
  */
 import { chromeToolSuffix } from "../../utils/claudeInChrome/chromeToolNames.js";
@@ -14,7 +14,7 @@ import { isClaudeInChromeWiredThisSession } from "../../utils/claudeInChrome/set
 import { shouldOfferChromeInstallUpsell } from "../../utils/claudeInChrome/installUpsell.js";
 import { chromeSkillGuidance } from "../../utils/claudeInChrome/skillAvailability.js";
 
-//@ chunk-20nqyqvq.js:656-729 fingerprint (2.1.88 match: CLAUDE_IN_CHROME_MCP_TOOLS, 1)
+//@ chunk-y8m17a3e.js:656-729 fingerprint (2.1.88 match: CLAUDE_IN_CHROME_MCP_TOOLS, 1)
 /**
  * 判断工具名是否属于 Claude in Chrome MCP 工具集。
  */
@@ -22,7 +22,7 @@ function CLAUDE_IN_CHROME_MCP_TOOLS(tool) {
   let suffixedTool = chromeToolSuffix(tool);
   return suffixedTool === null ? tool : "mcp__claude-in-chrome__" + suffixedTool;
 }
-//@ chunk-hantmvxa.js:48192-49051 fingerprint (2.1.88 match: registerClaudeInChromeSkill, 0.867)
+//@ chunk-ne2890fx.js:48367-49226 fingerprint (2.1.88 match: registerClaudeInChromeSkill, 0.867)
 /**
  * 注册 claude-in-chrome 内置 skill；disabled（CLAUDE_CODE_DISABLE_CFC_PROMPT 等）为假且 Chrome 扩展可用时启用。
  */

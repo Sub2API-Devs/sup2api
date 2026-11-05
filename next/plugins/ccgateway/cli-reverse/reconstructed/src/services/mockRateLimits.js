@@ -3,9 +3,9 @@
  *
  * 内部测试用的限额模拟：可设置模拟场景、伪造 anthropic-ratelimit-unified-* 响应头、快速模式限额与 overage 状态。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mockRateLimits.ts
- * pieces: chunk-1ny7cxrt.js (1), chunk-aepeg2w5.js (1), chunk-w5ndchqs.js (1), chunk-zv6whf9m.js (1)
+ * pieces: chunk-0467wazv.js (1), chunk-1hnjmk23.js (1), chunk-7pwjpdkw.js (1), chunk-exfmq47h.js (1)
  * attribution: fingerprint 4
  */
 import {
@@ -15,7 +15,7 @@ import {
 } from "./claudeAiLimits.js";
 import { MOCK_UTILIZATION_STEPS, roundUtilization } from "./claudeGateway/mockRateLimits.js";
 
-//@ chunk-aepeg2w5.js:279587-288283 fingerprint (2.1.88 match: setMockRateLimitScenario, 0.609)
+//@ chunk-exfmq47h.js:289210-297906 fingerprint (2.1.88 match: setMockRateLimitScenario, 0.609)
 /**
  * 限额模拟状态类：enabled、伪造头、超限列表、无头 429 文案、订阅类型/档位、快速模式限额、overage、试用、宽限、计费权限等，含 reset 与场景设置方法。旧版名 setMockRateLimitScenario 指方法而非类。
  */
@@ -356,7 +356,7 @@ class MockRateLimitState {
     return headersToSend;
   }
 }
-//@ chunk-w5ndchqs.js:48835-48918 fingerprint (2.1.88 match: applyMockHeaders, 1)
+//@ chunk-7pwjpdkw.js:49082-49165 fingerprint (2.1.88 match: applyMockHeaders, 1)
 /**
  * 从（模拟或真实）响应头计算额度并构造被拒状态。
  */
@@ -364,7 +364,7 @@ function applyMockHeaders(headers) {
   let mockHeaders = maybeMockRateLimitHeaders(headers.headers ?? new globalThis.Headers());
   return buildRejectedLimits(refreshLimitsFromHeaders(mockHeaders, false), headers);
 }
-//@ chunk-zv6whf9m.js:16736-16932 fingerprint (2.1.88 match: setMockHeader, 0.357)
+//@ chunk-0467wazv.js:16736-16932 fingerprint (2.1.88 match: setMockHeader, 0.357)
 /**
  * 限额类型归类：five_hour→session、seven_day→weekly、模型类周限额→model。旧版名 setMockHeader 为错配。
  */
@@ -382,7 +382,7 @@ function getLimitScopeKind(rateLimitType) {
       return;
   }
 }
-//@ chunk-1ny7cxrt.js:1451847-1452744 fingerprint (2.1.88 match: updateRepresentativeClaim, 0.494)
+//@ chunk-1hnjmk23.js:1474775-1475672 fingerprint (2.1.88 match: updateRepresentativeClaim, 0.494)
 /**
  * 按模拟的 overage 用量生成 unified-status/reset/overage 利用率与阈值头。旧版名 updateRepresentativeClaim 不准确。
  */
@@ -414,4 +414,4 @@ function buildOverageMockHeaders(overage, now) {
   }
   return headers;
 }
-export { MockRateLimitState, applyMockHeaders, buildOverageMockHeaders, getLimitScopeKind };
+export { applyMockHeaders, buildOverageMockHeaders, MockRateLimitState, getLimitScopeKind };

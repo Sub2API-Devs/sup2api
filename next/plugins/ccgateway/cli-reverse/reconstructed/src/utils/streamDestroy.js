@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：流销毁
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fd68q4sd.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yjn0j1bs.js (2)
  * attribution: placement 2
  */
 import { StringDecoder } from "string_decoder";
 
-//@ chunk-fd68q4sd.js:238-252 placement
+//@ chunk-yjn0j1bs.js:238-252 placement
 var MAX_LINE_CHARS = 1048576;
-//@ chunk-fd68q4sd.js:252-643 placement
+//@ chunk-yjn0j1bs.js:252-643 placement
 /**
  * 按行读取流（UTF-8 解码），逐行回调。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：服务端 shell 写设置文件的检查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tr0s0d0k.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6d2p9h2d.js (4)
  * attribution: placement 4
  */
 import { join, parse, isAbsolute, resolve, basename } from "path";
@@ -15,6 +15,7 @@ import { getPlatform } from "../../../utils/platform.js";
 import {
   touchesProtectedPath,
   isReadOnlyCommand,
+  readOnlyShellCheck,
   classifyCommandForSandbox,
   getProtectedSettingsPaths,
   isHostPersonOnlyPath,
@@ -23,9 +24,9 @@ import { BASH_TOOL_NAME } from "../../../tools/BashTool/toolName.js";
 import {
   settingsLocationPaths,
   SETTINGS_FILE_BASENAMES,
+  normalizeCaseForComparison_2,
   normalizeCaseForComparison,
 } from "../../../utils/permissions/filesystem.js";
-import { uniq } from "../../../utils/collections.js";
 import { getClaudeConfigDirs } from "../../../utils/permissions/claudeStatePaths.js";
 import { expandTildeWithHome, isUnderNetworkDirCached } from "../../../utils/networkPaths.js";
 import { containsAnyPlaceholder } from "../../../utils/bash/ast.js";
@@ -40,7 +41,7 @@ import { logError } from "../../../utils/log.js";
 import { logForDebugging } from "../../../utils/debug.js";
 import { isSentinelInode } from "../../../utils/slowOperations.js";
 
-//@ chunk-tr0s0d0k.js:48209-50947 placement
+//@ chunk-6d2p9h2d.js:48537-51326 placement
 /**
  * 判断云会话调用的 shell 命令是否会写到本机 Claude 设置文件（解析重定向/参数，比对设置文件身份）。
  */
@@ -77,8 +78,9 @@ async function checkServedShellSettingsWrite(name, input, cwd, stopSignal, readO
       });
     });
     if (name !== BASH_TOOL_NAME) return result;
+    let settingsWrite = await readOnlyShellCheck(command);
     let words = await classifyCommandForSandbox(command, cwd);
-    if (words === "unparsed") return result;
+    if (words === "unparsed") return settingsWrite ? withUnresolvedDefaults(result, "unresolved") : result;
     let { files, dirs } = settingsLocationPaths();
     let protectedSettingsPaths = getProtectedSettingsPaths();
     let settingsPaths = [
@@ -86,7 +88,7 @@ async function checkServedShellSettingsWrite(name, input, cwd, stopSignal, readO
       ...dirs.flatMap((dir) => SETTINGS_FILE_BASENAMES.map((base) => join(dir, base))),
       ...protectedSettingsPaths.paths,
     ];
-    let configDirs = uniq([...dirs, ...getClaudeConfigDirs()]);
+    let configDirs = normalizeCaseForComparison_2([...dirs, ...getClaudeConfigDirs()]);
     let settingsPathSet = new Set(
       [...settingsPaths, ...configDirs].map((path) => normalizeCaseForComparison(path)),
     );
@@ -97,7 +99,9 @@ async function checkServedShellSettingsWrite(name, input, cwd, stopSignal, readO
     );
     let winner = await Promise.race([
       Promise.all(
-        uniq([...settingsPaths, ...configDirs]).map((path) => settingsFileIdentity(path, "followed")),
+        normalizeCaseForComparison_2([...settingsPaths, ...configDirs]).map((path) =>
+          settingsFileIdentity(path, "followed"),
+        ),
       ),
       promise,
     ]);
@@ -128,20 +132,21 @@ async function checkServedShellSettingsWrite(name, input, cwd, stopSignal, readO
     });
     let winner_2 = await Promise.race([
       Promise.all(
-        uniq(flattened.flatMap(({ local }) => local.map(({ firstPartThere }) => firstPartThere))).map(
-          (path) =>
-            getFsImplementation()
-              .lstat(path)
-              .then(
-                () => [path, true],
-                (error) => {
-                  let errnoCode = getErrnoCode(error);
-                  return [
-                    path,
-                    errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR" && errnoCode !== "ENAMETOOLONG",
-                  ];
-                },
-              ),
+        normalizeCaseForComparison_2(
+          flattened.flatMap(({ local }) => local.map(({ firstPartThere }) => firstPartThere)),
+        ).map((path) =>
+          getFsImplementation()
+            .lstat(path)
+            .then(
+              () => [path, true],
+              (error) => {
+                let errnoCode = getErrnoCode(error);
+                return [
+                  path,
+                  errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR" && errnoCode !== "ENAMETOOLONG",
+                ];
+              },
+            ),
         ),
       ),
       promise,
@@ -188,7 +193,7 @@ async function checkServedShellSettingsWrite(name, input, cwd, stopSignal, readO
           if (walked.unresolved || isNetworkOrSharedPath(walked.landing))
             return withUnresolvedDefaults(result, "unresolved");
           landing = walked.landing;
-          spellings = uniq([...walked.spellings, walked.landing]);
+          spellings = normalizeCaseForComparison_2([...walked.spellings, walked.landing]);
         }
         if (
           spellings.some(
@@ -208,7 +213,7 @@ async function checkServedShellSettingsWrite(name, input, cwd, stopSignal, readO
           return withUnresolvedDefaults(result, "on_disk");
       }
     }
-    return result;
+    return settingsWrite ? withUnresolvedDefaults(result, "unresolved") : result;
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === undefined)
@@ -229,18 +234,18 @@ async function checkServedShellSettingsWrite(name, input, cwd, stopSignal, readO
     combinedAbortSignal.cleanup();
   }
 }
-//@ chunk-tr0s0d0k.js:50947-51056 placement
+//@ chunk-6d2p9h2d.js:51326-51435 placement
 function withUnresolvedDefaults(result, fallback) {
   return {
     file: result.file === "none" ? fallback : result.file,
     fileOrFolder: result.fileOrFolder === "none" ? fallback : result.fileOrFolder,
   };
 }
-//@ chunk-tr0s0d0k.js:51056-51092 placement
+//@ chunk-6d2p9h2d.js:51435-51471 placement
 function isNetworkOrSharedPath(path) {
   return isNetworkOrDevicePath(path) || isUnderNetworkDirCached(path);
 }
-//@ chunk-tr0s0d0k.js:51092-51445 placement
+//@ chunk-6d2p9h2d.js:51471-51824 placement
 async function settingsFileIdentity(path, mode) {
   if (isNetworkOrSharedPath(path)) return;
   try {

@@ -3,19 +3,19 @@
  *
  * 2.1.316 新增：用量限额等待
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-41w44bgm.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-dvek96j5.js (8), chunk-kd2wbncj.js (4)
  * attribution: placement 12
  */
 import { sleep, fullJitterBackoffMs } from "../../utils/sleep.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { env } from "../../utils/env.js";
-import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { logEvent } from "../analytics/index.js";
+import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { logError } from "../../utils/log.js";
+import { logEvent } from "../analytics/index.js";
 import { rawSettingsKeyPresence } from "../../utils/settings/settings.js";
 import { errorMessage } from "../../utils/errors.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
@@ -37,10 +37,10 @@ import { formatResetTimeWithLocale } from "../../utils/format.js";
 import { readFlagWithOverride } from "../analytics/flagOverrides.js";
 import { getAutoModeClassifierRole } from "../../utils/permissions/serverClassifier/arbiter.js";
 
-//@ chunk-41w44bgm.js:33596-33618 placement
+//@ chunk-dvek96j5.js:8300-8320 placement
 var DEFAULT_WARMUP_RELEASE_WAIT_MS = 5000;
 var WARM_STATE_TTL_MS = 270000;
-//@ chunk-41w44bgm.js:33618-34564 placement
+//@ chunk-dvek96j5.js:8320-9262 placement
 /**
  * 按键（账号/模型）协调用量限额后的"预热"：第一个进入者负责预热，其余在上限时间内等待其就绪；预热结束后在一段时间内视为 warm。
  */
@@ -101,7 +101,7 @@ class UsageLimitWarmupGate {
     if (previous?.state === "warming") previous.release();
   }
 }
-//@ chunk-41w44bgm.js:34564-34648 placement
+//@ chunk-dvek96j5.js:9262-9345 placement
 /**
  * 构造「预热中」条目：state 为 warming，并给出 ready promise 与 release。
  */
@@ -115,7 +115,7 @@ function warmingEntry() {
     release,
   };
 }
-//@ chunk-41w44bgm.js:34648-34887 placement
+//@ chunk-dvek96j5.js:9345-9583 placement
 function waitWithCap(ready, capMs, signal) {
   if (signal?.aborted) return Promise.resolve();
   let abortController = new AbortController();
@@ -128,33 +128,33 @@ function waitWithCap(ready, capMs, signal) {
     signal?.removeEventListener("abort", onAbort);
   });
 }
-//@ chunk-41w44bgm.js:34887-34912 placement
+//@ chunk-dvek96j5.js:9583-9606 placement
 /**
  * 按 host 保存的用量限额预热门。
  */
 var warmupGateSlots = new HostScoped(() => new UsageLimitWarmupGate());
-//@ chunk-41w44bgm.js:34912-34949 placement
+//@ chunk-dvek96j5.js:9606-9643 placement
 /**
  * 取当前 host 的用量限额预热门。
  */
 function currentWarmupGate() {
   return warmupGateSlots.of(getRootSession().host);
 }
-//@ chunk-41w44bgm.js:34949-34977 placement
+//@ chunk-dvek96j5.js:9643-9669 placement
 /**
  * 预热等待时长的默认值兜底。
  */
 function warmupWaitMs(override) {
   return override ?? DEFAULT_WARMUP_RELEASE_WAIT_MS;
 }
-//@ chunk-41w44bgm.js:34977-35070 placement
+//@ chunk-dvek96j5.js:9669-9762 placement
 /**
  * 前缀缓存错峰毫秒数：关闭提示缓存时 0，否则取环境变量或默认值。
  */
 function prefixStaggerMs() {
   return env.DISABLE_PROMPT_CACHING ? 0 : warmupWaitMs(env.CLAUDE_CODE_WORKFLOW_PREFIX_STAGGER_MS);
 }
-//@ chunk-41w44bgm.js:35070-35124 placement
+//@ chunk-kd2wbncj.js:25872-25926 placement
 var MAX_WAITED_RESETS = 2;
 var MAX_RESETS_AFTER_RUN = 2;
 var MAX_SINGLE_WAIT_MS = 30000;
@@ -162,20 +162,20 @@ var INITIAL_RETRY_COUNT = 2;
 var RETRY_SLEEP_MS = 2000;
 var RETRY_FLOOR_MS = 30000;
 var RETRY_BASE_MS = 90000;
-//@ chunk-41w44bgm.js:35124-38231 placement
+//@ chunk-kd2wbncj.js:25926-29033 placement
 class UsageLimitWaiter {
   #e;
-  #o;
+  #n;
   #r;
   #t;
-  #n;
+  #o;
   #i = 0;
   #a = 0;
   #l = false;
   #s = "unscanned";
   constructor({ signal, log, onChange, storageV5 }) {
     this.#e = signal;
-    this.#o = log;
+    this.#n = log;
     this.#r = onChange;
     this.#u(storageV5, INITIAL_RETRY_COUNT);
   }
@@ -198,7 +198,7 @@ class UsageLimitWaiter {
       return "killswitch";
     return resolveAutoContinueEnabled(this.#s) ? undefined : "setting_off";
   }
-  #f() {
+  #c() {
     return (
       isClaudeAISubscriber() &&
       getOauthAccountInfo()?.billingType !== "usage_based" &&
@@ -216,7 +216,7 @@ class UsageLimitWaiter {
         resetMs - Date.now() <= RATE_LIMIT_RESET_MAX_MS &&
         this.#i < MAX_WAITED_RESETS &&
         this.#a < MAX_RESETS_AFTER_RUN &&
-        this.#f()
+        this.#c()
       );
     } catch (error) {
       logError(error);
@@ -224,7 +224,7 @@ class UsageLimitWaiter {
     }
   }
   async whenClear() {
-    while (this.#n !== undefined) await this.#n;
+    while (this.#o !== undefined) await this.#o;
   }
   join(limit) {
     try {
@@ -242,7 +242,7 @@ class UsageLimitWaiter {
       return {
         outcome: "aborted",
       };
-    if (limit === undefined || limit.resetsAt === undefined || !isAutoResumableLimit(limit) || !this.#f())
+    if (limit === undefined || limit.resetsAt === undefined || !isAutoResumableLimit(limit) || !this.#c())
       return {
         outcome: "declined",
         failureNote: undefined,
@@ -250,7 +250,7 @@ class UsageLimitWaiter {
     let now = Date.now();
     let resetAtMs = limit.resetsAt * 1000;
     if (resetAtMs - now > RATE_LIMIT_RESET_MAX_MS)
-      return this.#c(`usage limit; resets ${formatResetTime(limit.resetsAt)}, too far out to wait for`);
+      return this.#f(`usage limit; resets ${formatResetTime(limit.resetsAt)}, too far out to wait for`);
     let resumeAtMs =
       Math.max(resetAtMs, now) +
       fullJitterBackoffMs({
@@ -259,7 +259,7 @@ class UsageLimitWaiter {
         attempt: 0,
         floorMs: RETRY_FLOOR_MS,
       });
-    if (this.#t !== undefined && this.#n !== undefined) {
+    if (this.#t !== undefined && this.#o !== undefined) {
       this.#t.status = {
         resetsAt: Math.max(this.#t.status.resetsAt, limit.resetsAt),
         resumeAtMs: Math.max(this.#t.status.resumeAtMs, resumeAtMs),
@@ -268,12 +268,12 @@ class UsageLimitWaiter {
       this.#r(this.#t.status);
       return {
         outcome: "waiting",
-        ended: this.#n,
+        ended: this.#o,
       };
     }
     let alreadyReset = resetAtMs <= now;
     if (alreadyReset ? this.#a >= MAX_RESETS_AFTER_RUN : this.#i >= MAX_WAITED_RESETS)
-      return this.#c(
+      return this.#f(
         `usage limit; resets ${formatResetTime(limit.resetsAt)}, and this run already waited for ${alreadyReset ? MAX_RESETS_AFTER_RUN : MAX_WAITED_RESETS} resets`,
       );
     if (alreadyReset) this.#a++;
@@ -287,15 +287,15 @@ class UsageLimitWaiter {
       startedAtMs: now,
     };
     this.#t = waitRecord;
-    this.#n = this.#m(waitRecord);
+    this.#o = this.#m(waitRecord);
     let resetText = resetsAtText(limit.resetsAt, true);
-    this.#o(
+    this.#n(
       `Usage limit reached${resetText === undefined ? "" : ` \xB7 ${resetText}`}. Workflow paused; waiting agents re-run shortly after the reset.`,
     );
     this.#r(waitRecord.status);
     return {
       outcome: "waiting",
-      ended: this.#n,
+      ended: this.#o,
     };
   }
   async #m(waitRecord) {
@@ -313,7 +313,7 @@ class UsageLimitWaiter {
       logError(error);
     }
     this.#t = undefined;
-    this.#n = undefined;
+    this.#o = undefined;
     try {
       this.#r(undefined);
       let fields = {
@@ -322,7 +322,7 @@ class UsageLimitWaiter {
       };
       switch (outcome) {
         case "resumed":
-          this.#o(
+          this.#n(
             `Usage limit reset. Re-running ${waitRecord.status.waitingAgents} waiting ${plural(waitRecord.status.waitingAgents, "agent")}.`,
           );
           logFeatureOk("workflow_rate_limit_wait", fields);
@@ -331,7 +331,7 @@ class UsageLimitWaiter {
           logFeatureSad("workflow_rate_limit_wait", "killed_while_waiting", fields);
           break;
         case "revoked":
-          this.#o(
+          this.#n(
             `Waiting for usage limits to reset was turned off. ${waitRecord.status.waitingAgents} waiting ${plural(waitRecord.status.waitingAgents, "agent")} will not run again.`,
           );
           logFeatureSad(
@@ -349,7 +349,7 @@ class UsageLimitWaiter {
     }
     return outcome;
   }
-  #c(failureNote) {
+  #f(failureNote) {
     if (!this.#l) {
       this.#l = true;
       logFeatureSad("workflow_rate_limit_wait", "gave_up", {
@@ -363,11 +363,11 @@ class UsageLimitWaiter {
     };
   }
 }
-//@ chunk-41w44bgm.js:38231-38284 placement
+//@ chunk-kd2wbncj.js:29033-29086 placement
 function formatResetTime(resetsAt) {
   return formatResetTimeWithLocale(resetsAt, true) ?? "at an unknown time";
 }
-//@ chunk-41w44bgm.js:38284-38376 placement
+//@ chunk-kd2wbncj.js:29086-29178 placement
 /**
  * 判断是否启用序列化日出开关且当前代理为仲裁者。
  */

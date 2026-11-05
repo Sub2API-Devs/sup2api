@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件 $.model.complete/classify/fork 接口
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (1), chunk-e6aww6q8.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (15), chunk-j8f885h1.js (1)
  * attribution: placement 16
  */
 import {
@@ -19,7 +19,12 @@ import { logForDebugging } from "../../utils/debug.js";
 import { modelApiError, MAX_ERROR_TEXT } from "./mcpApi.js";
 import { HooksError } from "./hooksErrors.js";
 import { MAX_TIMER_DELAY_MS } from "../../utils/timerDelayClamp.js";
-import { isEffortLevel } from "../../utils/effort.js";
+import {
+  isEffortLevel,
+  getEffortEnvOverride,
+  isEffortHigherThan,
+  normalizeEffortLevel,
+} from "../../utils/effort.js";
 import { parseUserSpecifiedModel } from "../../utils/model/modelDisplay.js";
 import { isModelAllowed } from "../../utils/model/modelAllowlist.js";
 import { getModelMaxOutputTokens } from "../../utils/context.js";
@@ -39,8 +44,9 @@ import {
 import { getSessionId } from "../../bootstrap/state.js";
 import { currentTurn } from "./personHold.js";
 import { createUserMessage, getAssistantMessageText } from "../../utils/messages.js";
+import { logFeatureOk, logFeatureBad, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 
-//@ chunk-4121qate.js:280961-281189 placement
+//@ chunk-j8f885h1.js:262153-262381 placement
 /**
  * prompt/system 为块数组时拼成字符串并保留原块（promptBlocks/systemBlocks）。疑似属于 SDK/钩子输入规整，归错文件。
  */
@@ -69,7 +75,7 @@ function normalizePromptAndSystemBlocks(options) {
     ...(hasSystem && systemPart),
   };
 }
-//@ chunk-e6aww6q8.js:3981077-3981593 placement
+//@ chunk-5xgkngpb.js:4083317-4083833 placement
 /**
  * 校验 $.model.complete 参数：需要 {model, prompt}，system/prompt 块必须是带可选 cache 的文本块列表。
  */
@@ -84,7 +90,7 @@ function checkModelCompleteArgs(args) {
     ? undefined
     : "takes promptBlocks and systemBlocks that are lists of blocks, each { text } and at most `cache: true`";
 }
-//@ chunk-e6aww6q8.js:3981593-3981887 placement
+//@ chunk-5xgkngpb.js:4083833-4084127 placement
 /**
  * 把提示文本按给定块前缀切分为 API 文本块（cache 标记转为 ephemeral cache_control）；无可用块时返回原字符串。
  */
@@ -119,12 +125,12 @@ function toPromptBlocks(prefixText, blocks = []) {
         }),
       }));
 }
-//@ chunk-e6aww6q8.js:3981887-3981929 placement
+//@ chunk-5xgkngpb.js:4084127-4084169 placement
 /**
  * 模型调用超时说明
  */
 var MODEL_COMPLETE_DEADLINE = "model.complete deadline reached";
-//@ chunk-e6aww6q8.js:3981929-3982293 placement
+//@ chunk-5xgkngpb.js:4084169-4084533 placement
 /**
  * $.model.complete 失败时的结果：超时/中止记调试日志并返回未回答，HTTP 失败记错误并按失败类型给出结果。
  */
@@ -147,7 +153,7 @@ function modelCompleteFailure({ pluginName, model, error, timedOutAfterMs, failu
     };
   return modelApiError(failure);
 }
-//@ chunk-e6aww6q8.js:3982293-3984250 placement
+//@ chunk-5xgkngpb.js:4084533-4086493 placement
 /**
  * 插件 $.model.complete：校验 maxTokens、timeoutMs、effort 等参数后调用模型。
  */
@@ -257,7 +263,7 @@ async function modelCompleteForPlugin(
         usage,
       };
 }
-//@ chunk-e6aww6q8.js:3984250-3984387 placement
+//@ chunk-5xgkngpb.js:4086493-4086630 placement
 var denyForkToolUse = () =>
   Promise.resolve({
     behavior: "deny",
@@ -267,23 +273,23 @@ var denyForkToolUse = () =>
       reason: "model.fork",
     },
   });
-//@ chunk-e6aww6q8.js:3984387-3984397 placement
+//@ chunk-5xgkngpb.js:4086630-4086640 placement
 /**
  * 2
  */
 var SESSION_CACHE_SLOTS = 2;
-//@ chunk-e6aww6q8.js:3984397-3984558 placement
+//@ chunk-5xgkngpb.js:4086640-4086801 placement
 var isMainThreadQuery = ({ toolUseContext, querySource }) =>
   toolUseContext.agentId === undefined &&
   classifyQuerySource(querySource) === "main" &&
   (toolUseContext.agentContext === undefined || isMainAgent(toolUseContext.agentContext)) &&
   !toolUseContext.abortController.signal.aborted;
-//@ chunk-e6aww6q8.js:3984558-3984608 placement
+//@ chunk-5xgkngpb.js:4086801-4086851 placement
 /**
  * 会话回合缓存
  */
 var sessionTurnCache = () => forkCacheSafeParamsSlot.current(String(getSessionId()), currentTurn()?.turnId);
-//@ chunk-e6aww6q8.js:3984608-3984725 placement
+//@ chunk-5xgkngpb.js:4086851-4086968 placement
 /**
  * 在主线程 Stop 钩子阶段记录本回合的请求，供插件 $.model.fork 复用。
  */
@@ -293,7 +299,7 @@ function noteMainRequestForFork(query, cacheSafeParams) {
   if (turnId !== undefined && isMainThreadQuery(query) && !forkCacheSafeParamsSlot.holdsResponse(sessionId))
     forkCacheSafeParamsSlot.setRequest(cacheSafeParams, sessionId, turnId);
 }
-//@ chunk-e6aww6q8.js:3984725-3984777 placement
+//@ chunk-5xgkngpb.js:4086968-4087020 placement
 /**
  * 记住回合请求参数
  */
@@ -301,14 +307,14 @@ function rememberTurnParams(query) {
   if (isMainThreadQuery(query))
     forkCacheSafeParamsSlot.set(createCacheSafeParams(query), String(getSessionId()));
 }
-//@ chunk-e6aww6q8.js:3984777-3984813 placement
+//@ chunk-5xgkngpb.js:4087020-4087056 placement
 /**
  * 注册一次 Stop 钩子
  */
 function registerTurnParamsHook(registerPostSamplingHook) {
   if (forkCacheSafeParamsSlot.once()) registerPostSamplingHook(rememberTurnParams);
 }
-//@ chunk-e6aww6q8.js:3984813-3985134 placement
+//@ chunk-5xgkngpb.js:4087056-4087377 placement
 /**
  * 去掉消息末尾连续助手消息中的 tool_use 块（全为 tool_use 的消息丢弃）。
  */
@@ -336,7 +342,7 @@ function stripTrailingToolUses(forkContextMessages) {
   }
   return strippedAny ? [...forkContextMessages.slice(0, scanEnd), ...keptTail] : forkContextMessages;
 }
-//@ chunk-e6aww6q8.js:3985134-3986406 placement
+//@ chunk-5xgkngpb.js:4087377-4089286 placement
 /**
  * 插件 $.model.fork：在主线程请求的基础上分叉一次模型调用。
  */
@@ -350,6 +356,12 @@ async function modelForkForPlugin(args, plugin, modelCallNames, signal) {
       reason: "nothing-to-fork",
     };
   }
+  let effort = args.effort;
+  let effortEnvOverride = getEffortEnvOverride();
+  let envRaisesEffort =
+    effort !== undefined &&
+    effortEnvOverride !== undefined &&
+    (effortEnvOverride === null || isEffortHigherThan(effort, normalizeEffortLevel(effortEnvOverride)));
   let abortController = new AbortController();
   let onSignalAbort = () => abortController.abort();
   if (signal?.aborted) abortController.abort();
@@ -373,6 +385,7 @@ async function modelForkForPlugin(args, plugin, modelCallNames, signal) {
       querySource: "hook_prompt",
       forkLabel: "plugin_model_fork",
       maxTurns: SESSION_CACHE_SLOTS,
+      pinnedEffort: envRaisesEffort ? undefined : effort,
       skipCacheWrite: true,
       skipTranscript: true,
       overrides: {
@@ -380,32 +393,52 @@ async function modelForkForPlugin(args, plugin, modelCallNames, signal) {
         modelCallNames,
       },
     });
-    let usage = getTokenCountFromUsage_3_2(totalUsage);
-    let filtered = messages.filter((message) => message.type === "assistant");
-    let filtered_2 = filtered
-      .filter((assistantMessage) => !assistantMessage.isApiErrorMessage)
+    let forkedUuids = new Set(cacheSafeParams.forkContextMessages.map(({ uuid }) => uuid));
+    let filtered = messages
+      .filter((message) => message.type === "assistant")
+      .filter(({ uuid }) => !forkedUuids.has(uuid));
+    let filtered_2 = filtered.filter((assistantMessage) => !assistantMessage.isApiErrorMessage);
+    let filtered_3 = filtered_2
       .map(getAssistantMessageText)
       .filter((replyText) => replyText !== null && replyText !== "");
     let last = filtered.findLast((errorMessage) => errorMessage.isApiErrorMessage);
     let aborted = abortController.signal.aborted;
+    let last_2 = filtered_2.at(-1);
+    let sentEffort = last_2?.perTurnEffort ?? last_2?.effort;
+    let effortNote = {
+      usage: getTokenCountFromUsage_3_2(totalUsage),
+      ...(sentEffort !== undefined && {
+        effort: sentEffort,
+      }),
+    };
     logForDebugging(
-      `$.model.fork (${plugin}): ${Date.now() - now}ms, ${filtered_2.length} replies` +
+      `$.model.fork (${plugin}): ${Date.now() - now}ms, ${filtered_3.length} replies` +
+        (effort === undefined ? "" : `, effort ${effort} asked, ${sentEffort ?? "none"} sent`) +
         (aborted ? ", aborted" : "") +
         (last ? `, API error ${last.apiErrorStatus ?? "no status"}` : ""),
     );
-    let hasReplies = filtered_2.length > 0;
+    if (effort !== undefined && !aborted) {
+      if (sentEffort === effort) logFeatureOk("plugin_function_hooks_fork_effort");
+      else if (last_2 === undefined) logFeatureBad("plugin_function_hooks_fork_effort", "no_response");
+      else
+        logFeatureSad(
+          "plugin_function_hooks_fork_effort",
+          sentEffort === undefined ? "no_named_level" : "other_level",
+        );
+    }
+    let hasReplies = filtered_3.length > 0;
     return aborted
       ? {
           isAnswered: false,
           reason: "aborted",
-          usage,
+          ...effortNote,
         }
       : hasReplies
         ? {
             isAnswered: true,
-            text: filtered_2.join(`
+            text: filtered_3.join(`
 `),
-            usage,
+            ...effortNote,
           }
         : last
           ? {
@@ -413,18 +446,22 @@ async function modelForkForPlugin(args, plugin, modelCallNames, signal) {
               reason: "api-error",
               status: last.apiErrorStatus ?? null,
               error: last.error ?? "unknown",
-              usage,
+              ...effortNote,
             }
           : {
               isAnswered: false,
               reason: "empty-reply",
-              usage,
+              ...effortNote,
             };
+  } catch (error) {
+    if (effort !== undefined && !abortController.signal.aborted)
+      logFeatureBad("plugin_function_hooks_fork_effort", "threw");
+    throw error;
   } finally {
     signal?.removeEventListener("abort", onSignalAbort);
   }
 }
-//@ chunk-e6aww6q8.js:3986406-3986460 placement
+//@ chunk-5xgkngpb.js:4089286-4089340 placement
 /**
  * 带前缀包装的错误构造
  */
@@ -432,11 +469,11 @@ var prefixedErrorCtor = (pluginName, method, apiName) => (detail) =>
   new HooksError(`${pluginName}: ${method}(${apiName}) ${detail}`);
 export {
   registerTurnParamsHook,
-  normalizePromptAndSystemBlocks,
-  prefixedErrorCtor,
   checkModelCompleteArgs,
   modelCompleteForPlugin,
   modelForkForPlugin,
+  prefixedErrorCtor,
+  normalizePromptAndSystemBlocks,
   rememberTurnParams,
   noteMainRequestForFork,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：web-fetch 内建代理的定义（模型、工具集、系统提示、结果存储目录）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 2
  */
 import { WEBFETCH } from "../../WebFetchTool/prompt.js";
@@ -27,7 +27,7 @@ import { modelSupportsAutoMode } from "../../../utils/betas.js";
 import { getFeatureValue_SESSION_PINNED } from "../../../services/analytics/growthbook.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2351964-2354943 placement
+//@ chunk-5xgkngpb.js:2407376-2410355 placement
 /**
  * web-fetch 内建代理的系统提示：只用 WebFetch 读取调用方给出的 URL，页面内容视为不可信数据，精确引用并给出最终 URL，失败如实报告不绕行，不在报告中写本地文件路径。
  */
@@ -47,12 +47,12 @@ How to work:
 
 Expect follow-up questions about pages you have already read. Answer them from the content already in your context; only re-fetch when asked to, when you need a page you have not read yet, or when the content may have changed.`;
 }
-//@ chunk-e6aww6q8.js:2354943-2357250 placement (2.1.88 match: VERIFICATION_AGENT, 0.275)
+//@ chunk-5xgkngpb.js:2410355-2412662 placement (2.1.88 match: VERIFICATION_AGENT, 0.275)
 /**
  * web-fetch 内建代理（旧版 verificationAgent 位置）：只有 WebFetch 工具，maxTurns 15，omitClaudeMd，满足订阅与 tengu_nimble_wren 条件时用 haiku，否则 inherit。
  */
 var WEB_FETCH_BUILTIN_AGENT; // deferred: uses WEB_FETCH_AGENT (../../WebFetchTool/harnessNotes.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2354943", () => {
+deferInit("chunk-5xgkngpb.js:2410355", () => {
   WEB_FETCH_BUILTIN_AGENT = {
     agentType: WEB_FETCH_AGENT,
     get whenToUse() {

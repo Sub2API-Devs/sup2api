@@ -3,20 +3,20 @@
  *
  * 权限规则线上传输状态（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-eecdvv5g.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mj4tyz4n.js (5)
  * attribution: placement 5
  */
 import { describeRuleShape } from "../../components/permissions/rules/PermissionRuleDescription.js";
-import { formatPermissionRule } from "./disallowedToolsFlag.js";
-import { PERMISSION_RULE_SOURCES, getAllowRules, getAskRules, getDenyRules } from "./permissions.js";
 import { permissionRuleValueFromString } from "./permissionRuleParser.js";
+import { PERMISSION_RULE_SOURCES, getAllowRules, askedBashRules, deniedBashRules } from "./permissions.js";
+import { normalizeRuleString } from "./legacyWildcardRules.js";
 import { shouldAllowManagedPermissionRulesOnly } from "./permissionsLoader.js";
 
-//@ chunk-eecdvv5g.js:4829-4858 placement
+//@ chunk-mj4tyz4n.js:5081-5110 placement
 var RULE_BEHAVIORS = ["allow", "deny", "ask"];
-//@ chunk-eecdvv5g.js:4858-5031 placement (2.1.88 match: isPermissionUpdateDestination, 0.776)
+//@ chunk-mj4tyz4n.js:5110-5283 placement (2.1.88 match: isPermissionUpdateDestination, 0.776)
 function getRuleEditability(source) {
   switch (source) {
     case "userSettings":
@@ -30,12 +30,12 @@ function getRuleEditability(source) {
       return "readonly";
   }
 }
-//@ chunk-eecdvv5g.js:5031-5321 placement
+//@ chunk-mj4tyz4n.js:5283-5573 placement
 function toRuleListEntry(rule, stored) {
   let description = describeRuleShape(rule.ruleValue);
-  let ruleText = stored?.raw ?? formatPermissionRule(rule.ruleValue);
+  let ruleText = stored?.raw ?? permissionRuleValueFromString(rule.ruleValue);
   let editability = stored?.notInEffect ? "readonly" : getRuleEditability(rule.source);
-  if (editability === "session" && formatPermissionRule(rule.ruleValue) !== ruleText)
+  if (editability === "session" && permissionRuleValueFromString(rule.ruleValue) !== ruleText)
     editability = "readonly";
   return {
     behavior: rule.ruleBehavior,
@@ -50,7 +50,7 @@ function toRuleListEntry(rule, stored) {
     }),
   };
 }
-//@ chunk-eecdvv5g.js:5321-5709 placement
+//@ chunk-mj4tyz4n.js:5573-6082 placement
 /**
  * 把一组规则与上下文中某行为的规则逐一配对（按来源+规范化规则计数），返回 {rule, raw} 列表。
  */
@@ -62,14 +62,14 @@ function matchStoredRulesToContext(context, behavior, storedRules) {
   }[behavior];
   let remaining = new Map();
   for (let storedRule of storedRules) {
-    let key = `${storedRule.source}\x00${formatPermissionRule(storedRule.ruleValue)}`;
+    let key = `${storedRule.source}\x00${permissionRuleValueFromString(storedRule.ruleValue)}`;
     remaining.set(key, (remaining.get(key) ?? 0) + 1);
   }
   let matched = [];
   for (let source of PERMISSION_RULE_SOURCES)
     for (let rawRule of context[field][source] ?? []) {
-      let ruleValue = permissionRuleValueFromString(rawRule);
-      let key = `${source}\x00${formatPermissionRule(ruleValue)}`;
+      let ruleValue = normalizeRuleString(rawRule, behavior);
+      let key = `${source}\x00${permissionRuleValueFromString(ruleValue)}`;
       let count = remaining.get(key) ?? 0;
       if (count <= 0) continue;
       remaining.set(key, count - 1);
@@ -82,9 +82,21 @@ function matchStoredRulesToContext(context, behavior, storedRules) {
         raw: rawRule,
       });
     }
+  for (let storedRule of storedRules) {
+    let ruleValue = permissionRuleValueFromString(storedRule.ruleValue);
+    let key = `${storedRule.source}\x00${ruleValue}`;
+    let count = remaining.get(key) ?? 0;
+    if (count > 0) {
+      remaining.set(key, count - 1);
+      matched.push({
+        rule: storedRule,
+        raw: ruleValue,
+      });
+    }
+  }
   return matched;
 }
-//@ chunk-eecdvv5g.js:5709-6545 placement
+//@ chunk-mj4tyz4n.js:6082-6995 placement
 function summarizeWireRules(options) {
   let { context, originalCwd } = options;
   let managedOnly = shouldAllowManagedPermissionRulesOnly();
@@ -97,6 +109,7 @@ function summarizeWireRules(options) {
       path: error.path,
       message: error.message,
     }));
+  let parentSettingsIncluded = options.readParentSettingsIncluded();
   let entries = [];
   let seen = new Set();
   let addEntry = (ruleListEntry) => {
@@ -108,8 +121,8 @@ function summarizeWireRules(options) {
   };
   for (let { rule, raw } of [
     ...matchStoredRulesToContext(context, "allow", getAllowRules(context)),
-    ...matchStoredRulesToContext(context, "ask", getAskRules(context)),
-    ...matchStoredRulesToContext(context, "deny", getDenyRules(context)),
+    ...matchStoredRulesToContext(context, "ask", askedBashRules(context)),
+    ...matchStoredRulesToContext(context, "deny", deniedBashRules(context)),
   ])
     addEntry(
       toRuleListEntry(rule, {
@@ -126,7 +139,7 @@ function summarizeWireRules(options) {
               {
                 source,
                 ruleBehavior: behavior,
-                ruleValue: permissionRuleValueFromString(rawRule),
+                ruleValue: normalizeRuleString(rawRule, behavior),
               },
               {
                 raw: rawRule,
@@ -143,6 +156,9 @@ function summarizeWireRules(options) {
     })),
     originalCwd,
     managedOnly,
+    ...(parentSettingsIncluded !== undefined && {
+      parentSettingsIncluded,
+    }),
     ...(mapped.length > 0 && {
       errors: mapped,
     }),

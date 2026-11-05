@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增。/setup-cowork 的提示词（SETUP_COWORK_PROMPT）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1eqzjhyp.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8s2k2kxy.js (1)
  * attribution: placement 1
  */
-//@ chunk-1eqzjhyp.js:191-12748 placement
+//@ chunk-8s2k2kxy.js:191-12748 placement
 /**
  * /setup-cowork 命令的提示词，引导模型为 cowork 环境做初始化配置。
  */

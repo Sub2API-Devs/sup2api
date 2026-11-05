@@ -1,8 +1,8 @@
 /**
  * proper-lockfile/lib/lockfile.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: proper-lockfile@4.1.2
- * pieces: chunk-bmbhxpfm.js (1)
+ * pieces: chunk-3c7mkwg0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_retry } from "../../retry/lib/retry.js";
 import { require_signal_exit } from "../../signal-exit/index.js";
 import { require_mtime_precision } from "./mtime-precision.js";
 
-//@ chunk-bmbhxpfm.js:17645-20904 cjs-fingerprint
+//@ chunk-3c7mkwg0.js:17645-20904 cjs-fingerprint
 var require_lockfile = __commonJS(function (cjsExports, cjsModule) {
   var path = importMetaRequire("path");
   var fs = require_graceful_fs();

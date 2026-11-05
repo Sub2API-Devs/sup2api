@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：组装发布页面（骨架文档解包、viewport meta、嵌套页修复）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-06y4szbn.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-51jy8ztq.js (15)
  * attribution: placement 15
  */
 import {
@@ -24,7 +24,7 @@ import { isHtmlCommentOnly } from "./capabilityRoster.js";
 import { getLiveState } from "../liveReplica/liveReplica.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-06y4szbn.js:67830-68237 placement (2.1.88 match: sanitizeMessageHTML, 0.385)
+//@ chunk-51jy8ztq.js:70082-70489 placement (2.1.88 match: sanitizeMessageHTML, 0.385)
 /**
  * HTML 文档前缀与 meta 常量。旧版名 sanitizeMessageHTML 为错配；疑似归错文件（HTML 预览/发布）。
  */
@@ -38,7 +38,7 @@ var META_OR_WBR_TAG_REGEX;
 var META_TAG_REGEX;
 var HTML_HEAD_SCAN_LIMIT;
 var VIEWPORT_CONTENT_PAIR_REGEX;
-deferInit("chunk-06y4szbn.js:67830", () => {
+deferInit("chunk-51jy8ztq.js:70082", () => {
   HTML_DOCTYPE = "<!doctype html>";
   HTML_OPEN_TAG = "<html";
   HTML_DOC_PREFIX = HTML_DOCTYPE + HTML_OPEN_TAG;
@@ -51,7 +51,7 @@ deferInit("chunk-06y4szbn.js:67830", () => {
   HTML_HEAD_SCAN_LIMIT = 1024;
   VIEWPORT_CONTENT_PAIR_REGEX = /([^\t\n\f\r =,]+)[^=,]*[\t\n\f\r =]*([^\t\n\f\r =,]*)/g;
 });
-//@ chunk-06y4szbn.js:68237-68371 placement
+//@ chunk-51jy8ztq.js:70489-70623 placement
 /**
  * viewport content 里 viewport-fit=cover。疑似归错文件。
  */
@@ -61,7 +61,7 @@ function hasViewportFitCover(content) {
     if (key.toLowerCase() === "viewport-fit") fit = value.toLowerCase();
   return fit === "cover";
 }
-//@ chunk-06y4szbn.js:68371-68875 placement
+//@ chunk-51jy8ztq.js:70623-71127 placement
 function readTagAttributes(text, start, end) {
   let attrs = new Map();
   let limit = end - 1;
@@ -94,7 +94,7 @@ function readTagAttributes(text, start, end) {
     if (!attrs.has(name)) attrs.set(name, value);
   }
 }
-//@ chunk-06y4szbn.js:68875-69489 placement
+//@ chunk-51jy8ztq.js:71127-71741 placement
 function needsViewportMeta(html, defaultResult = true) {
   if (!/<meta[\t\n\f\r />]/i.test(html)) return defaultResult;
   let viewportContent;
@@ -132,12 +132,12 @@ function needsViewportMeta(html, defaultResult = true) {
   }
   return viewportContent === undefined ? defaultResult : hasViewportFitCover(viewportContent);
 }
-//@ chunk-06y4szbn.js:69489-69534 placement
+//@ chunk-51jy8ztq.js:71741-71786 placement
 var HEAD_BODY_CLOSE = `</head><body>
 `;
 var BODY_HTML_CLOSE = `
 </body></html>`;
-//@ chunk-06y4szbn.js:69534-69661 placement
+//@ chunk-51jy8ztq.js:71786-71913 placement
 function composeArtifactPage(html, tag, defaultResult) {
   let langAttr = tag !== undefined && isValidLangTag(tag) ? ` lang="${tag}"` : "";
   let needsViewport = needsViewportMeta(html, defaultResult)
@@ -145,15 +145,15 @@ function composeArtifactPage(html, tag, defaultResult) {
     : META_VIEWPORT + BASE_STYLE_HEAD;
   return `${HTML_DOC_PREFIX}${langAttr}><head>${needsViewport}${HEAD_BODY_CLOSE}${html}${BODY_HTML_CLOSE}`;
 }
-//@ chunk-06y4szbn.js:69661-69699 placement
+//@ chunk-51jy8ztq.js:71913-71951 placement
 function pinnedAttrEquals(text, start, end) {
   return skipQuotedAttribute(text, start) === end;
 }
-//@ chunk-06y4szbn.js:69699-69761 placement
+//@ chunk-51jy8ztq.js:71951-72013 placement
 function startsWithSkeletonOpen(html) {
   return HTML_DOCTYPE_REGEX.test(html) && html.startsWith(HTML_OPEN_TAG, HTML_DOCTYPE.length);
 }
-//@ chunk-06y4szbn.js:69761-70927 placement
+//@ chunk-51jy8ztq.js:72013-73179 placement
 function unwrapSkeletonDocument(html) {
   if (!startsWithSkeletonOpen(html)) return null;
   if (!html.startsWith(HTML_DOCTYPE)) html = HTML_DOCTYPE + html.slice(HTML_DOCTYPE.length);
@@ -217,7 +217,7 @@ function unwrapSkeletonDocument(html) {
     }),
   };
 }
-//@ chunk-06y4szbn.js:70927-71368 placement
+//@ chunk-51jy8ztq.js:73179-73620 placement
 function trimTrailingComments(html, start) {
   let commentsDropped = false;
   let end = html.length;
@@ -250,7 +250,7 @@ function trimTrailingComments(html, start) {
     } else return null;
   }
 }
-//@ chunk-06y4szbn.js:71368-71665 placement
+//@ chunk-51jy8ztq.js:73620-73917 placement
 function repairNestedPage(html, lang, cover, stripPass, budget) {
   let levels = 0;
   let unsettled = false;
@@ -279,13 +279,13 @@ function repairNestedPage(html, lang, cover, stripPass, budget) {
     outcome,
   };
 }
-//@ chunk-06y4szbn.js:71665-71741 placement
+//@ chunk-51jy8ztq.js:73917-73993 placement
 function hasRuntimeSentinelsInHead(html) {
   if (!startsWithSkeletonOpen(html)) return false;
   let index = html.indexOf(FRAME_RUNTIME_SENTINELS);
   return index !== -1 && index < FRAME_RUNTIME_HEAD_WINDOW;
 }
-//@ chunk-06y4szbn.js:71741-72501 placement
+//@ chunk-51jy8ztq.js:73993-74753 placement
 function matchSkeletonPrefix(html) {
   if (!startsWithSkeletonOpen(html)) return null;
   let cursor = HTML_DOC_PREFIX.length;
@@ -327,7 +327,7 @@ function matchSkeletonPrefix(html) {
     cover: hasViewportCover,
   };
 }
-//@ chunk-06y4szbn.js:72501-72598 placement
+//@ chunk-51jy8ztq.js:74753-74850 placement
 function mintRoundTripPublishSignal(slug) {
   let options = Object.freeze({
     slug,
@@ -335,7 +335,7 @@ function mintRoundTripPublishSignal(slug) {
   getLiveState().mintedRoundTripPublishSignals.add(options);
   return options;
 }
-//@ chunk-06y4szbn.js:72598-72694 placement
+//@ chunk-51jy8ztq.js:74850-74946 placement
 function isMintedRoundTripPublishSignal(roundTrip) {
   return (
     typeof roundTrip === "object" &&
@@ -344,11 +344,11 @@ function isMintedRoundTripPublishSignal(roundTrip) {
   );
 }
 export {
+  isMintedRoundTripPublishSignal,
   unwrapSkeletonDocument,
   repairNestedPage,
   hasRuntimeSentinelsInHead,
   composeArtifactPage,
-  isMintedRoundTripPublishSignal,
   startsWithSkeletonOpen,
   mintRoundTripPublishSignal,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件活动
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (12)
  * attribution: placement 12
  */
 import { stripCombiningRepeated } from "./sanitization.js";
@@ -18,19 +18,19 @@ import { getPluginRegistry } from "./plugins/pluginLoadState.js";
 import { parsePluginIdentifier, isOfficialOrBuiltinMarketplace } from "./plugins/pluginIdentifier.js";
 import { logForDebugging } from "./debug.js";
 
-//@ chunk-e6aww6q8.js:876906-876958 placement
+//@ chunk-5xgkngpb.js:887381-887433 placement
 var PLUGIN_ACTIVITY_KINDS = ["hook", "skill", "subagent", "command", "mcp"];
-//@ chunk-e6aww6q8.js:876958-876997 placement
+//@ chunk-5xgkngpb.js:887433-887472 placement
 /**
  * isPluginActivityKind：是否为插件活动种类。
  */
 function isPluginActivityKind(trigger) {
   return PLUGIN_ACTIVITY_KINDS.includes(trigger);
 }
-//@ chunk-e6aww6q8.js:876997-877016 placement
+//@ chunk-5xgkngpb.js:887472-887491 placement
 var LABEL_RESERVED_WIDTH = 30;
 var MAX_ACTIVITY_NAME_LENGTH = 200;
-//@ chunk-e6aww6q8.js:877016-877093 placement
+//@ chunk-5xgkngpb.js:887491-887567 placement
 /**
  * formatActivityLabel：生成活动标签。
  */
@@ -39,7 +39,7 @@ function formatActivityLabel(pluginId, reservedWidth) {
   let truncatedName = truncateToLength(printableName, MAX_ACTIVITY_NAME_LENGTH);
   return truncateToWidth(truncatedName, Math.max(LABEL_RESERVED_WIDTH - reservedWidth, 1));
 }
-//@ chunk-e6aww6q8.js:877093-877537 placement
+//@ chunk-5xgkngpb.js:887567-888011 placement
 /**
  * 插件活动标签（技能、命令、工作流、代理、钩子）。
  */
@@ -66,11 +66,11 @@ function activityLabel({ kind, name }) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:877537-877601 placement
+//@ chunk-5xgkngpb.js:888011-888075 placement
 function stripActivityPrefix(text, prefix) {
   return prefix && text.startsWith(prefix) ? text.slice(prefix.length) : text;
 }
-//@ chunk-e6aww6q8.js:877601-877830 placement
+//@ chunk-5xgkngpb.js:888075-888304 placement
 /**
  * 命令或技能的活动描述。
  */
@@ -84,17 +84,17 @@ function commandActivity(command, name) {
     name: name_2,
   };
 }
-//@ chunk-e6aww6q8.js:877830-877847 placement
+//@ chunk-5xgkngpb.js:888304-888321 placement
 /**
  * MAX_ACTIVITY_FEATURE_KEYS：活动特性键上限；MAX_RECENT_ACTIVITY：最近活动保留条数（同一声明共 2 个绑定）。
  */
 var MAX_ACTIVITY_FEATURE_KEYS = 64;
 var MAX_RECENT_ACTIVITY = 6;
-//@ chunk-e6aww6q8.js:877847-877906 placement
+//@ chunk-5xgkngpb.js:888321-888380 placement
 function activityKey(pluginName, marketplace) {
   return `${pluginName}\x00${(marketplace ?? "").toLowerCase()}`;
 }
-//@ chunk-e6aww6q8.js:877906-878450 placement
+//@ chunk-5xgkngpb.js:888380-888924 placement
 /**
  * 记录插件活动（钩子、MCP）。
  */
@@ -129,14 +129,14 @@ function recordPluginActivity(pluginId, trigger, activity) {
     level: "verbose",
   });
 }
-//@ chunk-e6aww6q8.js:878450-878521 placement
+//@ chunk-5xgkngpb.js:888924-888995 placement
 /**
  * activityFeaturesFor：取某活动的特性列表。
  */
 function activityFeaturesFor(pluginName, marketplace) {
   return getPluginRegistry().pluginActivityFeatures.get(activityKey(pluginName, marketplace)) ?? [];
 }
-//@ chunk-e6aww6q8.js:878521-878616 placement
+//@ chunk-5xgkngpb.js:888995-889090 placement
 /**
  * drainRecentActivity：取出并清空最近活动。
  */
@@ -148,10 +148,10 @@ function drainRecentActivity(since) {
 }
 export {
   recordPluginActivity,
+  commandActivity,
   formatActivityLabel,
   MAX_RECENT_ACTIVITY,
   isPluginActivityKind,
   activityFeaturesFor,
   drainRecentActivity,
-  commandActivity,
 };

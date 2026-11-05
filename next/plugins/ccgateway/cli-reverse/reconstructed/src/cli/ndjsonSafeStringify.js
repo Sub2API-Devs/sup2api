@@ -3,9 +3,9 @@
  *
  * 并入已有模块：桥接通道的 NDJSON 序列化（按需转义行分隔符）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/ndjsonSafeStringify.ts
- * pieces: chunk-2kh2r6st.js (6)
+ * pieces: chunk-md68gfrt.js (6)
  * attribution: placement 5, fingerprint 1
  */
 import { hasPromptHooks } from "../utils/telemetry/sessionTracing.js";
@@ -16,7 +16,7 @@ import { readFlagWithOverride } from "../services/analytics/flagOverrides.js";
 import { jsonStringify } from "../utils/slowOperations.js";
 import { escapeInvisibleChars } from "../utils/resultError.js";
 
-//@ chunk-2kh2r6st.js:410-492 placement
+//@ chunk-md68gfrt.js:443-525 placement
 function shouldEscapeNdjsonForBridge() {
   try {
     return (
@@ -30,16 +30,16 @@ function shouldEscapeNdjsonForBridge() {
     return true;
   }
 }
-//@ chunk-2kh2r6st.js:492-539 placement
+//@ chunk-md68gfrt.js:525-572 placement
 var LINE_SEPARATOR_PATTERN = /\u2028|\u2029/g;
 var TENGU_SOBER_INKWELL = "tengu_sober_inkwell";
-//@ chunk-2kh2r6st.js:539-575 placement
+//@ chunk-md68gfrt.js:572-608 placement
 function shouldEscapeLineTerminators() {
   return readFlagWithOverride(TENGU_SOBER_INKWELL, {
     safe: true,
   });
 }
-//@ chunk-2kh2r6st.js:575-652 fingerprint (2.1.88 match: escapeJsLineTerminators, 1)
+//@ chunk-md68gfrt.js:608-685 fingerprint (2.1.88 match: escapeJsLineTerminators, 1)
 /**
  * JSON 序列化后把 U+2028/U+2029 转义，保证 NDJSON 一行一条。
  */
@@ -48,14 +48,14 @@ function escapeJsLineTerminators(json) {
     json === "\u2028" ? "\\u2028" : "\\u2029",
   );
 }
-//@ chunk-2kh2r6st.js:652-705 placement
+//@ chunk-md68gfrt.js:685-738 placement
 function ndjsonStringify(json) {
   if (shouldEscapeLineTerminators()) return escapeInvisibleChars(jsonStringify(json));
   return escapeJsLineTerminators(json);
 }
-//@ chunk-2kh2r6st.js:705-773 placement
+//@ chunk-md68gfrt.js:738-806 placement
 function ndjsonStringifyWithReplacer(value, indent) {
   if (shouldEscapeLineTerminators()) return escapeInvisibleChars(jsonStringify(value, null, indent));
   return jsonStringify(value, null, indent);
 }
-export { shouldEscapeNdjsonForBridge, ndjsonStringifyWithReplacer, ndjsonStringify, escapeJsLineTerminators };
+export { ndjsonStringifyWithReplacer, ndjsonStringify, shouldEscapeNdjsonForBridge, escapeJsLineTerminators };

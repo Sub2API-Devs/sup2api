@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：diff 面板的 git 读取：解析文件 diff 与 numstat、分支基点、HEAD 键。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wyqg6m3h.js (55)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c7hntn0y.js (55)
  * attribution: placement 55
  */
 import {
@@ -20,7 +20,7 @@ import {
 import { TRANSIENT_STATE_FILES } from "../../../utils/gitDiff.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-wyqg6m3h.js:12004-12177 placement
+//@ chunk-c7hntn0y.js:12368-12541 placement
 var DIFF_LEADING_ARGS = [
   "--no-optional-locks",
   "-c",
@@ -33,18 +33,18 @@ var DIFF_LEADING_ARGS = [
   "--ignore-submodules=dirty",
   "--submodule=short",
 ];
-//@ chunk-wyqg6m3h.js:12177-12209 placement
+//@ chunk-c7hntn0y.js:12541-12573 placement
 var GIT_CHILD_ENV = {
   LC_ALL: "C",
   LANGUAGE: "",
 };
-//@ chunk-wyqg6m3h.js:12209-12287 placement
+//@ chunk-c7hntn0y.js:12573-12651 placement
 var HUNKS_ARGS = ["--no-renames", "--src-prefix=a/", "--dst-prefix=b/", "--raw", "-z", "-p"];
-//@ chunk-wyqg6m3h.js:12287-12315 placement
+//@ chunk-c7hntn0y.js:12651-12679 placement
 var NO_OPTIONAL_LOCKS = "--no-optional-locks";
-//@ chunk-wyqg6m3h.js:12315-12381 placement
+//@ chunk-c7hntn0y.js:12679-12745 placement
 var pinnedLeadOf = (repo) => [`--git-dir=${repo.gitDir}`, `--work-tree=${repo.toplevel}`];
-//@ chunk-wyqg6m3h.js:12381-12531 placement
+//@ chunk-c7hntn0y.js:12745-12895 placement
 function cutHunks(hunks) {
   let remaining = MAX_LINES_PER_FILE;
   let totalLines = 0;
@@ -61,7 +61,7 @@ function cutHunks(hunks) {
     isTruncated: totalLines > MAX_LINES_PER_FILE,
   };
 }
-//@ chunk-wyqg6m3h.js:12531-12908 placement
+//@ chunk-c7hntn0y.js:12895-13272 placement
 function renameDisplayOf(renamedFrom, path) {
   let prefixLen = 0;
   let suffixLen = 0;
@@ -82,38 +82,38 @@ function renameDisplayOf(renamedFrom, path) {
   let sliced_2 = renamedFrom.slice(renamedFrom.length - suffixLen);
   return hasCommon ? `${sliced}{${middleText}}${sliced_2}` : middleText;
 }
-//@ chunk-wyqg6m3h.js:12908-12977 placement
+//@ chunk-c7hntn0y.js:13272-13341 placement
 function displayPathOf(file) {
   let { renamedFrom, path } = file;
   return renamedFrom === null ? path : renameDisplayOf(renamedFrom, path);
 }
-//@ chunk-wyqg6m3h.js:12977-13036 placement
+//@ chunk-c7hntn0y.js:13341-13400 placement
 var EMPTY_FILE_HUNKS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wyqg6m3h.js:12977", () => {
+deferInit("chunk-c7hntn0y.js:13341", () => {
   EMPTY_FILE_HUNKS = Object.freeze({
     hunks: [],
     isTruncated: false,
     isLarge: false,
   });
 });
-//@ chunk-wyqg6m3h.js:13036-13092 placement
+//@ chunk-c7hntn0y.js:13400-13456 placement
 var FAILED_RUN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wyqg6m3h.js:13036", () => {
+deferInit("chunk-c7hntn0y.js:13400", () => {
   FAILED_RUN = Object.freeze({
     exitCode: -1,
     stdout: "",
     stderr: "",
   });
 });
-//@ chunk-wyqg6m3h.js:13092-13226 placement
+//@ chunk-c7hntn0y.js:13456-13590 placement
 async function currentBranchOf(run) {
   let { exitCode, stdout } = await run([NO_OPTIONAL_LOCKS, "rev-parse", "--abbrev-ref", "HEAD"]);
   let trimmed = stdout.trim();
   return exitCode === 0 && trimmed !== "" ? trimmed : "HEAD";
 }
-//@ chunk-wyqg6m3h.js:13226-13251 placement
+//@ chunk-c7hntn0y.js:13590-13615 placement
 var CONVENTIONAL_DEFAULT_BRANCHES = ["main", "master"];
-//@ chunk-wyqg6m3h.js:13251-13585 placement
+//@ chunk-c7hntn0y.js:13615-13949 placement
 async function defaultBranchOf(run) {
   let existsOnOrigin = async (branch) =>
     (await run([NO_OPTIONAL_LOCKS, "show-ref", "--verify", "--quiet", `refs/remotes/origin/${branch}`]))
@@ -124,9 +124,9 @@ async function defaultBranchOf(run) {
   for (let branch of CONVENTIONAL_DEFAULT_BRANCHES) if (await existsOnOrigin(branch)) return branch;
   return "main";
 }
-//@ chunk-wyqg6m3h.js:13585-13639 placement
+//@ chunk-c7hntn0y.js:13949-14003 placement
 var isSha = (value) => /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value);
-//@ chunk-wyqg6m3h.js:13639-13886 placement
+//@ chunk-c7hntn0y.js:14003-14250 placement
 async function mergeBaseCandidatesOf(run, baseBranch) {
   let results = [
     await run([NO_OPTIONAL_LOCKS, "merge-base", "HEAD", `origin/${baseBranch}`]),
@@ -140,7 +140,7 @@ async function mergeBaseCandidatesOf(run, baseBranch) {
     hasNoCommonAncestor: results.some((result) => result.exitCode === 1),
   };
 }
-//@ chunk-wyqg6m3h.js:13886-14117 placement
+//@ chunk-c7hntn0y.js:14250-14481 placement
 async function missingBaseOf(run, baseBranch) {
   for (let ref of [`refs/remotes/origin/${baseBranch}`, `refs/heads/${baseBranch}`]) {
     let { exitCode } = await run([NO_OPTIONAL_LOCKS, "show-ref", "--verify", "--quiet", ref]);
@@ -154,7 +154,7 @@ async function missingBaseOf(run, baseBranch) {
     kind: "none",
   };
 }
-//@ chunk-wyqg6m3h.js:14117-14691 placement
+//@ chunk-c7hntn0y.js:14481-15055 placement
 async function branchBaseOf(run) {
   let [branch, defaultBranch] = await Promise.all([currentBranchOf(run), defaultBranchOf(run)]);
   if (branch === "HEAD" || defaultBranch.startsWith("-"))
@@ -198,7 +198,7 @@ async function branchBaseOf(run) {
         baseBranch: defaultBranch,
       };
 }
-//@ chunk-wyqg6m3h.js:14691-14874 placement
+//@ chunk-c7hntn0y.js:15055-15238 placement
 async function stampIfFile(stamps, relPath) {
   let isDir = relPath.endsWith("/");
   let trimmedPath = isDir ? relPath.slice(0, -1) : relPath;
@@ -209,7 +209,7 @@ async function stampIfFile(stamps, relPath) {
       ? stamps.mtimeOf(`${stamps.base}/${trimmedPath}`)
       : null;
 }
-//@ chunk-wyqg6m3h.js:14874-15136 placement
+//@ chunk-c7hntn0y.js:15238-15500 placement
 async function datingsOf(context, paths) {
   let { sessionStartMs } = context.deps;
   let results = await Promise.all(paths.map((path) => stampIfFile(context.stamps, path)));
@@ -219,39 +219,39 @@ async function datingsOf(context, paths) {
   }
   return new Map(paths.map((path, index) => [path, stampOf(results[index] ?? null)]));
 }
-//@ chunk-wyqg6m3h.js:15136-15157 placement
+//@ chunk-c7hntn0y.js:15500-15521 placement
 var FILE_HEADER_START = "diff --git ";
-//@ chunk-wyqg6m3h.js:15157-15218 placement
+//@ chunk-c7hntn0y.js:15521-15582 placement
 var HUNK_HEADER_RE = /^@@ -(?<old>\d+)(?:,\d+)? \+(?<new>\d+)(?:,\d+)? @@/;
-//@ chunk-wyqg6m3h.js:15218-15286 placement
+//@ chunk-c7hntn0y.js:15582-15650 placement
 var isBodyLine = (line) => line.startsWith("+") || line.startsWith("-") || line.startsWith(" ");
-//@ chunk-wyqg6m3h.js:15286-15295 placement
+//@ chunk-c7hntn0y.js:15650-15659 placement
 var MOST_UTF8_BYTES = 3;
-//@ chunk-wyqg6m3h.js:15295-15361 placement
+//@ chunk-c7hntn0y.js:15659-15725 placement
 var isUnderUtf8Ceiling = (text, limit) =>
   text.length * MOST_UTF8_BYTES < limit || new TextEncoder().encode(text).length < limit;
-//@ chunk-wyqg6m3h.js:15361-15419 placement
+//@ chunk-c7hntn0y.js:15725-15783 placement
 var isWholeListing = (text, terminator = "\x00") =>
   (text === "" || text.endsWith(terminator)) &&
   isUnderUtf8Ceiling(text, HOST_OUTPUT_CAP_BYTES - MOST_UTF8_BYTES);
-//@ chunk-wyqg6m3h.js:15419-15460 placement
+//@ chunk-c7hntn0y.js:15783-15824 placement
 var isWholeAnswer = (result) => result.exitCode === 0 && isWholeListing(result.stdout);
-//@ chunk-wyqg6m3h.js:15460-15534 placement
+//@ chunk-c7hntn0y.js:15824-15898 placement
 var hunkOf = (groups, lines) => ({
   oldStart: Number(groups?.old),
   newStart: Number(groups?.new),
   lines,
 });
-//@ chunk-wyqg6m3h.js:15534-15593 placement
+//@ chunk-c7hntn0y.js:15898-15957 placement
 var LARGE_FILE_HUNKS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wyqg6m3h.js:15534", () => {
+deferInit("chunk-c7hntn0y.js:15898", () => {
   LARGE_FILE_HUNKS = Object.freeze({
     hunks: [],
     isTruncated: false,
     isLarge: true,
   });
 });
-//@ chunk-wyqg6m3h.js:15593-15791 placement
+//@ chunk-c7hntn0y.js:15957-16155 placement
 function parseFileDiff(text) {
   if (text.length > MAX_DIFF_BYTES) return LARGE_FILE_HUNKS;
   let lines = text.split(`
@@ -269,11 +269,11 @@ function parseFileDiff(text) {
     isLarge: false,
   };
 }
-//@ chunk-wyqg6m3h.js:15791-15807 placement
+//@ chunk-c7hntn0y.js:16155-16171 placement
 var QUOTED_HEADER_START = `${FILE_HEADER_START}"`;
-//@ chunk-wyqg6m3h.js:15807-15819 placement
+//@ chunk-c7hntn0y.js:16171-16183 placement
 var UNMERGED_STATUS = " U";
-//@ chunk-wyqg6m3h.js:15819-16605 placement
+//@ chunk-c7hntn0y.js:16183-16969 placement
 function parseFileDiffs(text, wantedPaths) {
   let parts = text.split("\x00");
   let index = parts.findIndex((part, index) => index % 2 === 0 && !part.startsWith(":"));
@@ -328,9 +328,9 @@ function parseFileDiffs(text, wantedPaths) {
       .map((path) => [path, diffs.get(path) ?? EMPTY_FILE_HUNKS]),
   );
 }
-//@ chunk-wyqg6m3h.js:16605-16614 placement
+//@ chunk-c7hntn0y.js:16969-16978 placement
 var RENAME_RECORDS = 3;
-//@ chunk-wyqg6m3h.js:16614-17135 placement
+//@ chunk-c7hntn0y.js:16978-17499 placement
 function parseNumstat(stdout, maxFiles) {
   let files = [];
   let stats = {
@@ -370,9 +370,9 @@ function parseNumstat(stdout, maxFiles) {
     files,
   };
 }
-//@ chunk-wyqg6m3h.js:17135-17308 placement
+//@ chunk-c7hntn0y.js:17499-17672 placement
 var SHORTSTAT_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wyqg6m3h.js:17135", () => {
+deferInit("chunk-c7hntn0y.js:17499", () => {
   SHORTSTAT_PATTERN = new RegExp(
     [
       String.raw`(?<files>\d+) files? changed`,
@@ -381,7 +381,7 @@ deferInit("chunk-wyqg6m3h.js:17135", () => {
     ].join(""),
   );
 });
-//@ chunk-wyqg6m3h.js:17308-17465 placement
+//@ chunk-c7hntn0y.js:17672-17829 placement
 function parseShortstat(stdout) {
   let groups = SHORTSTAT_PATTERN.exec(stdout)?.groups;
   if (!groups) return null;
@@ -391,9 +391,9 @@ function parseShortstat(stdout) {
     linesRemoved: Number(groups.removed ?? 0),
   };
 }
-//@ chunk-wyqg6m3h.js:17465-17474 placement
+//@ chunk-c7hntn0y.js:17829-17838 placement
 var STATUS_PATH_OFFSET = 3;
-//@ chunk-wyqg6m3h.js:17474-17705 placement
+//@ chunk-c7hntn0y.js:17838-18069 placement
 async function dirtyPathsOf(run) {
   let result = await run([
     NO_OPTIONAL_LOCKS,
@@ -407,12 +407,12 @@ async function dirtyPathsOf(run) {
   let filtered = result.stdout.split("\x00").filter((record) => record !== "");
   return isWholeAnswer(result) ? new Set(filtered.map((record) => record.slice(STATUS_PATH_OFFSET))) : null;
 }
-//@ chunk-wyqg6m3h.js:17705-17760 placement
+//@ chunk-c7hntn0y.js:18069-18124 placement
 /**
  * refs/ 路径正则。
  */
 var SAFE_REF_PATTERN = /^refs(?:\/[A-Za-z0-9_@+-][A-Za-z0-9._@+-]*)+$/;
-//@ chunk-wyqg6m3h.js:17760-17848 placement (2.1.88 match: getTaskListLockPath, 1)
+//@ chunk-c7hntn0y.js:18124-18212 placement (2.1.88 match: getTaskListLockPath, 1)
 /**
  * refs/ 路径安全检查（切分误归）。
  */
@@ -420,7 +420,7 @@ var getTaskListLockPath = (taskListId) =>
   SAFE_REF_PATTERN.test(taskListId) &&
   !taskListId.includes("..") &&
   !taskListId.split("/").some((segment) => segment.endsWith(".lock"));
-//@ chunk-wyqg6m3h.js:17848-18276 placement
+//@ chunk-c7hntn0y.js:18212-18640 placement
 function kindWalkOf(entryKindsOf, base, budget) {
   let cache = new Map();
   function kindOfDir(relDir) {
@@ -447,13 +447,13 @@ function kindWalkOf(entryKindsOf, base, budget) {
     kindOf: kindOfPath,
   };
 }
-//@ chunk-wyqg6m3h.js:18276-18349 placement
+//@ chunk-c7hntn0y.js:18640-18713 placement
 var stampProbeOf = (deps, base, budget) => ({
   walk: kindWalkOf(deps.entryKindsOf, base, budget),
   base,
   mtimeOf: deps.mtimeOf,
 });
-//@ chunk-wyqg6m3h.js:18349-18905 placement
+//@ chunk-c7hntn0y.js:18713-19269 placement
 async function headKeyOf(deps, repository) {
   let gitProbe = stampProbeOf(deps, repository.gitDir, MAX_LISTED_DIRECTORIES);
   let commonProbe =
@@ -481,16 +481,16 @@ async function headKeyOf(deps, repository) {
         await stampIfFile(commonProbe, "packed-refs"),
       ].join("|");
 }
-//@ chunk-wyqg6m3h.js:18905-18962 placement
+//@ chunk-c7hntn0y.js:19269-19326 placement
 var isAbsolutePath = (path) => path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path);
-//@ chunk-wyqg6m3h.js:18962-19052 placement
+//@ chunk-c7hntn0y.js:19326-19416 placement
 var REBASE_STATE_FILES = {
   head: "REBASE_HEAD",
   merge: "rebase-merge",
   apply: "rebase-apply",
   rebasing: "rebasing",
 };
-//@ chunk-wyqg6m3h.js:19107-19338 placement
+//@ chunk-c7hntn0y.js:19471-19702 placement
 async function isRebaseOrTransientState(entryKindsOf, gitDir) {
   let entries = await entryKindsOf(gitDir);
   let hasHead = entries?.get(REBASE_STATE_FILES.head) === "file";
@@ -505,12 +505,12 @@ async function isRebaseOrTransientState(entryKindsOf, gitDir) {
     TRANSIENT_STATE_FILES.some((name) => entries?.get(name) === "file")
   );
 }
-//@ chunk-wyqg6m3h.js:19338-19441 placement
+//@ chunk-c7hntn0y.js:19702-19805 placement
 async function isUnbornHead(run) {
   let { exitCode } = await run([NO_OPTIONAL_LOCKS, "rev-parse", "--verify", "--quiet", "HEAD"]);
   return exitCode === 1;
 }
-//@ chunk-wyqg6m3h.js:19441-19807 placement
+//@ chunk-c7hntn0y.js:19805-20171 placement
 function overlayUnstaged(cached, unstaged) {
   let unstagedByPath = new Map(unstaged.files.map((file) => [file.path, file]));
   let mapped = cached.files.map((file) => {
@@ -537,9 +537,9 @@ function overlayUnstaged(cached, unstaged) {
     files: mapped,
   };
 }
-//@ chunk-wyqg6m3h.js:19807-19816 placement
+//@ chunk-c7hntn0y.js:20171-20180 placement
 var REPOSITORY_LINES = 3;
-//@ chunk-wyqg6m3h.js:19816-20095 placement
+//@ chunk-c7hntn0y.js:20180-20459 placement
 async function repositoryOf(run) {
   let { exitCode, stdout } = await run([
     NO_OPTIONAL_LOCKS,
@@ -564,7 +564,7 @@ async function repositoryOf(run) {
       }
     : null;
 }
-//@ chunk-wyqg6m3h.js:20095-20600 placement
+//@ chunk-c7hntn0y.js:20459-20964 placement
 async function statsOf(context, baseRef) {
   let run = context.run;
   let cutBases = context.deps.cutBases;
@@ -601,9 +601,9 @@ async function statsOf(context, baseRef) {
       }
     : null;
 }
-//@ chunk-wyqg6m3h.js:20600-20642 placement
+//@ chunk-c7hntn0y.js:20964-21006 placement
 var wasDirtyAtStart = (context, path) => context.deps.baseline?.has(path) ?? true;
-//@ chunk-wyqg6m3h.js:20642-20787 placement
+//@ chunk-c7hntn0y.js:21006-21151 placement
 async function tagPreSession(context, files) {
   let datings = await datingsOf(
     context,
@@ -614,12 +614,12 @@ async function tagPreSession(context, files) {
     isPreSession: datings.get(file.path) === "pre-session" && wasDirtyAtStart(context, file.path),
   }));
 }
-//@ chunk-wyqg6m3h.js:20787-20904 placement
+//@ chunk-c7hntn0y.js:21151-21268 placement
 async function unstagedNumstat(run) {
   let result = await run([...DIFF_LEADING_ARGS, "--numstat", "-z"]);
   return isWholeAnswer(result) ? parseNumstat(result.stdout, Number.POSITIVE_INFINITY) : null;
 }
-//@ chunk-wyqg6m3h.js:20904-21370 placement
+//@ chunk-c7hntn0y.js:21268-21734 placement
 async function buildUntrackedFileEntries(context, paths, scope) {
   let paths_2 = paths.slice(0, MAX_UNTRACKED_PROBES);
   let datings = await datingsOf(context, paths_2);

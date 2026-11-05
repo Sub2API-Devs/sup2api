@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增。读取守护进程状态文件 daemon.status.json；本模块也负责写入与删除。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-nbg7qs8b.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-w0jx3s5v.js (9)
  * attribution: placement 9
  */
 import { join } from "path";
-import { getClaudeConfigDir } from "../utils/envUtils.js";
+import { getClaudeConfigDir } from "../utils/markdownConfigLoader.js";
 import { STORAGE_SPACES } from "../utils/storage/storageSpaces.js";
 import { ownProcStart, isSameProcessAsync } from "../utils/processIdentity.js";
 import { isStorageV5Enabled } from "../utils/hoverRest.js";
@@ -22,15 +22,15 @@ import { objectSchema, stringSchema, int } from "../../vendor/zod/v4/classic/sch
 import { plural, cleanForDisplay } from "../utils/stringUtils.js";
 import { truncateWithEllipsis } from "../utils/printableName.js";
 
-//@ chunk-nbg7qs8b.js:624-675 placement
+//@ chunk-w0jx3s5v.js:625-676 placement
 function daemonStatusPath() {
   return join(getClaudeConfigDir(), "daemon.status.json");
 }
-//@ chunk-nbg7qs8b.js:675-723 placement
+//@ chunk-w0jx3s5v.js:676-724 placement
 function daemonStatusKey() {
   return STORAGE_SPACES.state("daemon-status");
 }
-//@ chunk-nbg7qs8b.js:723-1148 placement
+//@ chunk-w0jx3s5v.js:724-1149 placement
 async function writeDaemonStatus(workers, storageV5) {
   let status = {
     supervisorPid: process.pid,
@@ -57,7 +57,7 @@ async function writeDaemonStatus(workers, storageV5) {
     return false;
   }
 }
-//@ chunk-nbg7qs8b.js:1148-1358 placement
+//@ chunk-w0jx3s5v.js:1149-1359 placement
 async function removeDaemonStatus(storageV5) {
   if (isStorageV5Enabled() && storageV5 !== undefined) {
     try {
@@ -72,7 +72,7 @@ async function removeDaemonStatus(storageV5) {
     await getFileReader().delete(daemonStatusPath());
   } catch {}
 }
-//@ chunk-nbg7qs8b.js:1358-1932 placement
+//@ chunk-w0jx3s5v.js:1359-1933 placement
 /**
  * 读取守护进程状态文件 daemon.status.json；本模块也负责写入与删除。
  */
@@ -114,7 +114,7 @@ async function readDaemonStatus(storageV5) {
   if (!(await isSameProcessAsync(parsed.supervisorPid, supervisorProcStart))) return null;
   return status;
 }
-//@ chunk-nbg7qs8b.js:1932-1961 placement
+//@ chunk-w0jx3s5v.js:1933-1962 placement
 /**
  * 导出值：同一声明里的多个绑定：MAX_DAEMON_STATUS_BYTES（4096）；DAEMON_STATUS_TTL_MS（200）；DAEMON_STATUS_ENTRIES（32）。
  */
@@ -122,7 +122,7 @@ var MAX_DAEMON_STATUS_BYTES = 4096;
 var DAEMON_STATUS_TTL_MS = 200;
 var SERVED_SESSIONS_MAX = 64;
 var DAEMON_STATUS_ENTRIES = 32;
-//@ chunk-nbg7qs8b.js:1961-2180 placement
+//@ chunk-w0jx3s5v.js:1962-2181 placement
 /**
  * 从守护进程状态读服务的文件夹
  */
@@ -140,7 +140,7 @@ function readServedFoldersFromStatus(daemonStatus) {
   }
   return folders;
 }
-//@ chunk-nbg7qs8b.js:2180-2313 placement
+//@ chunk-w0jx3s5v.js:2181-2314 placement
 async function readServedFolders(pid, storageV5) {
   try {
     let daemonStatus = await readDaemonStatus(storageV5);
@@ -150,7 +150,7 @@ async function readServedFolders(pid, storageV5) {
   }
   return [];
 }
-//@ chunk-nbg7qs8b.js:2313-2530 placement
+//@ chunk-w0jx3s5v.js:2314-2532 placement
 function servingToolsLines(folders) {
   let mapped = folders
     .slice(0, DAEMON_STATUS_ENTRIES)
@@ -166,10 +166,10 @@ function servingToolsLines(folders) {
 export {
   readServedFolders,
   servingToolsLines,
-  readDaemonStatus,
-  daemonStatusPath,
-  daemonStatusKey,
   SERVED_SESSIONS_MAX,
   writeDaemonStatus,
   removeDaemonStatus,
+  readDaemonStatus,
+  daemonStatusPath,
+  daemonStatusKey,
 };

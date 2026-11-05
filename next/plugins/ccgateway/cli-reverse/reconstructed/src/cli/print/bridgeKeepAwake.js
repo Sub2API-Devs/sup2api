@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：桥接回合期间保持唤醒、子 CLI 入口与 stdout 保护
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (5)
  * attribution: sole-consumer 1, placement 4
  */
 import { HostScoped } from "../../utils/hostScoped.js";
@@ -28,19 +28,19 @@ import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:395444-395469 sole-consumer
+//@ chunk-0yw3taqg.js:429189-429214 sole-consumer
 /**
  * 按宿主懒建的 StdoutGuard 单例。
  */
 var stdoutGuardSlot; // deferred: uses installStreamJsonStdoutGuard (../../utils/streamJsonStdoutGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:395444", () => {
+deferInit("chunk-0yw3taqg.js:429189", () => {
   stdoutGuardSlot = new HostScoped(() => new installStreamJsonStdoutGuard());
 });
-//@ chunk-tyg7f3ek.js:395469-395503 placement
+//@ chunk-0yw3taqg.js:429214-429248 placement
 function installStdoutGuard(host) {
   stdoutGuardSlot.of(host).install();
 }
-//@ chunk-tyg7f3ek.js:395503-395736 placement
+//@ chunk-0yw3taqg.js:429248-429481 placement
 function applyBridgeChildCliEntrypoint() {
   if (env.CLAUDE_CODE_BRIDGE_CHILD_CLI_ENTRYPOINT !== true || !isBridgeRcChildCliEntrypointEnabled()) return;
   env.unset("CLAUDE_CODE_BRIDGE_CHILD_CLI_ENTRYPOINT");
@@ -48,11 +48,11 @@ function applyBridgeChildCliEntrypoint() {
     if (applySdkCliEntrypointOverride()) logFeatureOk("bridge_cli_entrypoint_name");
     else logFeatureSad("bridge_cli_entrypoint_name", "name_not_taken");
 }
-//@ chunk-tyg7f3ek.js:395736-395770 placement
+//@ chunk-0yw3taqg.js:429481-429515 placement
 var KEEP_AWAKE_TIMEOUTS_MS = 900000;
 var KEEP_AWAKE_MAX_IDLE_MS = 3600000;
 var KEEP_AWAKE_RENEW_INTERVAL_MS = 60000;
-//@ chunk-tyg7f3ek.js:395770-396442 placement
+//@ chunk-0yw3taqg.js:429515-430189 placement
 /**
  * macOS 上 Remote Control 桥会话运行轮次时阻止系统睡眠，空闲或超时释放。
  */

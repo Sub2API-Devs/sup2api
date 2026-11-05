@@ -1,117 +1,117 @@
 # 对拍：original vs runnable
 
-- 时间：2026-11-04T11:41:41.045Z，耗时 278 s
+- 时间：2026-11-05T17:03:07.324Z，耗时 333 s
 - 运行时：bun 1.4.4+38afee6c8，node v24.20.0，win32-x64
 - 场景：98；归一化后一致：98；预期满足：基线 98，候选 98
 - 重跑后才一致（不稳定）的场景：无
 - 不归一化就会不一致的场景：67（doctor, mcp-add, print-hi, print-hi-first-party, print-json, print-stream-json, print-stdin, print-stream-json-input, print-model-alias, print-system-prompt, print-bare, print-api-error, print-tools, print-tools-stream-json, print-max-turns, print-permission-denied, print-mcp, ink-mcp-lifecycle, ink-auth-status, ink-auth-status-text, tty-session, print-bash-stdout, print-bash-stdout-unshimmed, tool-read-errors, tool-edit-errors, tool-unavailable, tool-bash-errors, tool-notebook, tool-skill-claudemd, tool-agent-sync, perm-mode-plan, perm-mode-accept-edits, perm-mode-bypass, perm-mode-dont-ask, perm-mode-auto, perm-allowed-pattern, perm-settings-rules, perm-settings-untrusted, perm-settings-default-mode, hook-settings-events, mcp-resources, mcp-prompt, mcp-connect-fail, mcp-project-config, plugin-dir-command, plugin-dir-skill-hook, plugin-marketplace-lifecycle, plugin-disabled-command, plugin-validate, session-resume-id, session-continue, session-fork, session-errors, session-resume-tools, tty-multi-turn, tty-permission-accept, tty-permission-reject, tty-esc-interrupt, tty-help-dialog, tty-slash-menu, tty-input-edit, tty-mode-cycle, tty-unknown-command, tty-continue, tty-resume-print-session, tty-continue-print-only, tty-bash-mode）
-- 归一化规则命中次数：path:bun=1，path:tree=19，path:cwd=753，path:home=195，uuid=470，port=163，header:content-length=158，date=154，duration=279，hex64=158，cch=1，iso-ts=38，path:project=4，path:tmp=61，tty-turn-line=18，path:sandbox=5，agent-id=4，plan-slug=5
+- 归一化规则命中次数：path:bun=1，path:tree=28，path:cwd=753，path:home=195，uuid=470，port=163，header:content-length=158，date=154，duration=279，hex64=158，cch=1，iso-ts=38，parallel-tool-results=3，path:project=4，path:tmp=61，tty-turn-line=18，path:sandbox=5，agent-id=4，plan-slug=5
 
 | 场景 | 一致 | 基线预期 | 候选预期 | 退出码 | API 请求 | 外网请求 | 耗时 ms |
 |---|---|---|---|---|---|---|---|
-| version | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3098/2431 |
-| version-verbose | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 1388/824 |
-| help | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3856/3245 |
-| help-mcp | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3523/5213 |
-| help-mcp-add | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3043/2393 |
-| help-mcp-list | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4187/3484 |
-| help-plugin | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 5055/4410 |
-| help-plugin-marketplace | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2711/2067 |
-| help-plugin-install | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4343/3736 |
-| help-auth | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2135/5076 |
-| help-agents | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2990/2303 |
-| help-auto-mode | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3397/2806 |
-| help-doctor | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4672/4023 |
-| help-update | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2444/1851 |
-| help-install | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4145/3590 |
-| help-setup-token | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2040/4739 |
-| help-import | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2802/2224 |
-| help-ultrareview | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3183/2600 |
-| help-gateway | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4476/3900 |
-| help-purge | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2461/1894 |
-| invalid-option | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 3672/3018 |
-| doctor | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4079/3489 |
-| plugin-list-json | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 1956/4725 |
-| agents-json | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2809/2209 |
-| update-offline | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 3193/2611 |
-| mcp-add | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 11586/11867 |
-| mcp-list-ink-limit | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 1971/3281 |
-| print-hi | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 4639/4030 |
-| print-hi-first-party | 是 | 满足 | 满足 | 0/0 | 1/1 | 12/12 | 25060/23613 |
-| print-json | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 3467/3725 |
-| print-stream-json | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 2649/3008 |
-| print-stdin | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 2901/3427 |
-| print-stream-json-input | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 2636/3015 |
-| print-model-alias | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 2622/3010 |
-| print-system-prompt | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 2694/3077 |
-| print-bare | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 2641/2992 |
-| print-api-error | 是 | 满足 | 满足 | 1/1 | 6/6 | 0/0 | 2813/3219 |
-| print-tools | 是 | 满足 | 满足 | 0/0 | 6/6 | 0/0 | 4108/4472 |
-| print-tools-stream-json | 是 | 满足 | 满足 | 0/0 | 6/6 | 0/0 | 4287/5777 |
-| print-max-turns | 是 | 满足 | 满足 | 1/1 | 1/1 | 0/0 | 4532/3894 |
-| print-permission-denied | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 3897/3296 |
-| print-mcp | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 6380/6613 |
-| ink-mcp-list-empty | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2686/2098 |
-| ink-mcp-lifecycle | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 15879/19838 |
-| ink-plugin-list | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 1822/3266 |
-| ink-plugin-marketplace-list | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2886/2333 |
-| ink-auth-status | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3820/3239 |
-| ink-auth-status-text | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2798/2213 |
-| ink-auto-mode-defaults | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2932/3219 |
-| ink-auto-mode-config | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4268/4639 |
-| tty-first-run | 是 | 满足 | 满足 | 1/1 | 0/0 | 2/2 | 4177/4485 |
-| tty-session | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 8592/10367 |
-| print-bash-stdout | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 3998/4572 |
-| print-bash-stdout-unshimmed | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 3959/4378 |
-| tool-read-errors | 是 | 满足 | 满足 | 0/0 | 6/6 | 0/0 | 5175/4463 |
-| tool-edit-errors | 是 | 满足 | 满足 | 0/0 | 9/9 | 0/0 | 5653/6054 |
-| tool-unavailable | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 2999/3533 |
-| tool-bash-errors | 是 | 满足 | 满足 | 0/0 | 6/6 | 0/0 | 8145/7547 |
-| tool-notebook | 是 | 满足 | 满足 | 0/0 | 6/6 | 0/0 | 3719/4420 |
-| tool-skill-claudemd | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 5450/5724 |
-| tool-agent-sync | 是 | 满足 | 满足 | 0/0 | 4/4 | 0/0 | 4279/4560 |
-| perm-mode-plan | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 4524/4798 |
-| perm-mode-accept-edits | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 4347/4741 |
-| perm-mode-bypass | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 4154/5947 |
-| perm-mode-dont-ask | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 3061/3352 |
-| perm-mode-auto | 是 | 满足 | 满足 | 0/0 | 6/6 | 0/0 | 5612/4862 |
-| perm-allowed-pattern | 是 | 满足 | 满足 | 0/0 | 5/5 | 0/0 | 4592/4860 |
-| perm-settings-rules | 是 | 满足 | 满足 | 0/0 | 5/5 | 0/0 | 5477/4893 |
-| perm-settings-untrusted | 是 | 满足 | 满足 | 0/0 | 5/5 | 0/0 | 4504/3825 |
-| perm-settings-default-mode | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 5023/4287 |
-| hook-settings-events | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 6500/6867 |
-| mcp-resources | 是 | 满足 | 满足 | 0/0 | 7/7 | 0/0 | 6150/8322 |
-| mcp-prompt | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 4761/4996 |
-| mcp-connect-fail | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 4457/4787 |
-| mcp-project-config | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 4707/3997 |
-| plugin-dir-command | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 4577/4866 |
-| plugin-dir-skill-hook | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 7216/6559 |
-| plugin-marketplace-lifecycle | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 30406/35816 |
-| plugin-disabled-command | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 12066/13329 |
-| plugin-validate | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 7726/10448 |
-| session-resume-id | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 7294/7578 |
-| session-continue | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 12546/12854 |
-| session-fork | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 8050/8249 |
-| session-errors | 是 | 满足 | 满足 | 1/1 | 3/3 | 0/0 | 18909/19583 |
-| session-resume-tools | 是 | 满足 | 满足 | 0/0 | 4/4 | 0/0 | 8378/9822 |
-| tty-multi-turn | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 24363/24545 |
-| tty-permission-accept | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 22406/23663 |
-| tty-permission-reject | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 22096/22314 |
-| tty-esc-interrupt | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 22987/23171 |
-| tty-help-dialog | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 23170/23363 |
-| tty-slash-menu | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 19951/20318 |
-| tty-input-edit | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 26779/27023 |
-| tty-mode-cycle | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 23514/24765 |
-| tty-unknown-command | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 20121/20839 |
-| tty-continue | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 32685/33195 |
-| tty-resume-print-session | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 23902/24569 |
-| tty-continue-print-only | 是 | 满足 | 满足 | 1/1 | 1/1 | 0/0 | 6175/6611 |
-| tty-bash-mode | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 25026/25204 |
+| version | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 8344/6943 |
+| version-verbose | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3885/2449 |
+| help | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 8292/6971 |
+| help-mcp | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3930/8669 |
+| help-mcp-add | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4523/3389 |
+| help-mcp-list | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 8378/7352 |
+| help-plugin | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3799/2433 |
+| help-plugin-marketplace | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 7198/5933 |
+| help-plugin-install | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3600/8331 |
+| help-auth | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4870/3683 |
+| help-agents | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 7758/6738 |
+| help-auto-mode | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3518/2257 |
+| help-doctor | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 6222/5265 |
+| help-update | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3047/7066 |
+| help-install | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4128/3177 |
+| help-setup-token | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 5541/4500 |
+| help-import | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2475/6115 |
+| help-ultrareview | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3931/2960 |
+| help-gateway | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 5151/4269 |
+| help-purge | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2279/6178 |
+| invalid-option | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 3916/2972 |
+| doctor | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 5519/4659 |
+| plugin-list-json | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2589/6164 |
+| agents-json | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3998/2916 |
+| update-offline | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 4588/3739 |
+| mcp-add | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 16433/18154 |
+| mcp-list-ink-limit | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 4226/3244 |
+| print-hi | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 5645/4695 |
+| print-hi-first-party | 是 | 满足 | 满足 | 0/0 | 1/1 | 12/12 | 26318/28491 |
+| print-json | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 5471/4603 |
+| print-stream-json | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 3025/4689 |
+| print-stdin | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 3494/3817 |
+| print-stream-json-input | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 4248/4378 |
+| print-model-alias | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 3379/3819 |
+| print-system-prompt | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 3735/4063 |
+| print-bare | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 3729/4472 |
+| print-api-error | 是 | 满足 | 满足 | 1/1 | 6/6 | 0/0 | 6265/6500 |
+| print-tools | 是 | 满足 | 满足 | 0/0 | 6/6 | 0/0 | 7692/7701 |
+| print-tools-stream-json | 是 | 满足 | 满足 | 0/0 | 6/6 | 0/0 | 5244/7648 |
+| print-max-turns | 是 | 满足 | 满足 | 1/1 | 1/1 | 0/0 | 7333/7426 |
+| print-permission-denied | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 5857/4953 |
+| print-mcp | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 10999/10028 |
+| ink-mcp-list-empty | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4000/2948 |
+| ink-mcp-lifecycle | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 22870/21982 |
+| ink-plugin-list | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2372/2575 |
+| ink-plugin-marketplace-list | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3437/2535 |
+| ink-auth-status | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 5201/4302 |
+| ink-auth-status-text | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2215/5560 |
+| ink-auto-mode-defaults | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 5056/5157 |
+| ink-auto-mode-config | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 6037/5085 |
+| tty-first-run | 是 | 满足 | 满足 | 1/1 | 0/0 | 2/2 | 5895/6147 |
+| tty-session | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 8152/9572 |
+| print-bash-stdout | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 3810/4149 |
+| print-bash-stdout-unshimmed | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 4040/4796 |
+| tool-read-errors | 是 | 满足 | 满足 | 0/0 | 6/6 | 0/0 | 5413/4581 |
+| tool-edit-errors | 是 | 满足 | 满足 | 0/0 | 9/9 | 0/0 | 6982/6134 |
+| tool-unavailable | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 3286/3605 |
+| tool-bash-errors | 是 | 满足 | 满足 | 0/0 | 6/6 | 0/0 | 6101/9448 |
+| tool-notebook | 是 | 满足 | 满足 | 0/0 | 6/6 | 0/0 | 3497/4327 |
+| tool-skill-claudemd | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 4489/3641 |
+| tool-agent-sync | 是 | 满足 | 满足 | 0/0 | 4/4 | 0/0 | 4475/4905 |
+| perm-mode-plan | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 4428/4779 |
+| perm-mode-accept-edits | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 5086/5321 |
+| perm-mode-bypass | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 4791/5697 |
+| perm-mode-dont-ask | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 3587/4960 |
+| perm-mode-auto | 是 | 满足 | 满足 | 0/0 | 6/6 | 0/0 | 5884/6133 |
+| perm-allowed-pattern | 是 | 满足 | 满足 | 0/0 | 5/5 | 0/0 | 5434/5757 |
+| perm-settings-rules | 是 | 满足 | 满足 | 0/0 | 5/5 | 0/0 | 6436/6577 |
+| perm-settings-untrusted | 是 | 满足 | 满足 | 0/0 | 5/5 | 0/0 | 6007/7489 |
+| perm-settings-default-mode | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 3286/4070 |
+| hook-settings-events | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 6933/7107 |
+| mcp-resources | 是 | 满足 | 满足 | 0/0 | 7/7 | 0/0 | 3796/7804 |
+| mcp-prompt | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 5481/4560 |
+| mcp-connect-fail | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 4495/4817 |
+| mcp-project-config | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 4761/4938 |
+| plugin-dir-command | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 4967/5200 |
+| plugin-dir-skill-hook | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 7198/7300 |
+| plugin-marketplace-lifecycle | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 35710/35954 |
+| plugin-disabled-command | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 16884/13228 |
+| plugin-validate | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 10384/9609 |
+| session-resume-id | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 9935/10188 |
+| session-continue | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 15483/14577 |
+| session-fork | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 10537/10641 |
+| session-errors | 是 | 满足 | 满足 | 1/1 | 3/3 | 0/0 | 22758/23394 |
+| session-resume-tools | 是 | 满足 | 满足 | 0/0 | 4/4 | 0/0 | 9021/9239 |
+| tty-multi-turn | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 25014/25735 |
+| tty-permission-accept | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 22639/23181 |
+| tty-permission-reject | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 21968/22240 |
+| tty-esc-interrupt | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 22947/23184 |
+| tty-help-dialog | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 23092/23334 |
+| tty-slash-menu | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 19998/20255 |
+| tty-input-edit | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 26613/26857 |
+| tty-mode-cycle | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 23259/23573 |
+| tty-unknown-command | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 20211/20414 |
+| tty-continue | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 33362/32629 |
+| tty-resume-print-session | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 22872/23652 |
+| tty-continue-print-only | 是 | 满足 | 满足 | 1/1 | 1/1 | 0/0 | 4908/6280 |
+| tty-bash-mode | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 24860/25040 |
 
 ## 场景说明
 
-- **version**：--version 走 cli.js 快速路径：打印 "2.1.316 (Claude Code)"，退出 0，无网络请求。
-- **version-verbose**：--version --verbose：多打印一行 "Commit: <git sha>"（cd7ceb45…）。
+- **version**：--version 走 cli.js 快速路径：打印 "2.1.318 (Claude Code)"，退出 0，无网络请求。
+- **version-verbose**：--version --verbose：多打印一行 "Commit: <git sha>"（ca1fa9de…）。
 - **help**：--help：commander 生成的总帮助，含选项与子命令表，退出 0。
 - **help-mcp**：mcp --help：子命令帮助，退出 0，不发请求。
 - **help-mcp-add**：mcp add --help：子命令帮助，退出 0，不发请求。
@@ -160,13 +160,13 @@
 - **ink-auth-status-text**：[垫片] auth status --text：API key 来源、自定义 base URL、代理三行。
 - **ink-auto-mode-defaults**：[垫片] auto-mode defaults（Ink）：打印默认 allow / soft_deny 等规则 JSON。
 - **ink-auto-mode-config**：[垫片] auto-mode config（Ink）：没有用户设置时等于默认规则的 JSON。
-- **tty-first-run**：[垫片+伪终端] 全新配置、交互模式启动：欢迎画面（"Welcome to Claude Code v2.1.316" + 字符画）后做首次联网检查，直连 api.anthropic.com / platform.claude.com 被黑洞代理拒绝，显示 "Unable to connect to Anthropic services … ERR_PROXY_TUNNEL"，退出 1。比较的是 vt-screen.mjs 还原的最终屏幕。
+- **tty-first-run**：[垫片+伪终端] 全新配置、交互模式启动：欢迎画面（"Welcome to Claude Code v2.1.318" + 字符画）后做首次联网检查，直连 api.anthropic.com / platform.claude.com 被黑洞代理拒绝，显示 "Unable to connect to Anthropic services … ERR_PROXY_TUNNEL"，退出 1。比较的是 vt-screen.mjs 还原的最终屏幕。
 - **tty-session**：[垫片+伪终端] 预置"已完成引导、已批准假 key、已信任工作目录"的配置，交互模式：等到输入框 → 输入 hi 回车 → 假上游回答含中文、emoji、全角字符的文本 → 屏幕上出现回答 → 输入 /exit 回车，打印 "Resume this session with: claude --resume <id>"，退出 0。比较两个时刻的屏幕快照（空闲输入框、回答之后）、最终屏幕和请求体。
 - **print-bash-stdout**：[垫片] Bash 工具直接输出到 stdout/stderr（echo hi; echo err >&2; $((6*7))）：tool_result = "hi\nerr\n42\nShell cwd was reset to <CWD>"。不加 win-append-shim 时在 Windows 上是 "Exit code 1"（原因见 verify.md 第 13 节）。
 - **print-bash-stdout-unshimmed**：对照：同一 Bash 命令不加垫片，tool_result 为 "Exit code 1"（is_error）。确认两棵树的失败方式相同；哪天变成成功，说明运行环境或 CLI 行为变了。
 - **tool-read-errors**：Read 的成功与错误路径：不存在的文件 → "File does not exist. Note: your current working directory is <CWD>."（is_error）；目录 → EISDIR（is_error）；缺 file_path → InputValidationError（is_error）；offset=2/limit=1 → "2\ttwo"（只回第 2 行，带行号）；完整读取 → 带行号的全文。
 - **tool-edit-errors**：Edit/Write 的前置条件与错误路径：没 Read 就 Edit、没 Read 就覆盖已有文件 → "File has not been read yet. Read it first before writing to it."；Read 后 old_string 不存在 → "String to replace not found in file."；多处匹配且 replace_all=false → "Found 2 matches …"；replace_all=true → 全部替换；Write 新建嵌套目录 deep/a/b.txt 再 Edit 它。检查每个 tool_result 和最终文件内容。
-- **tool-unavailable**：316 默认没有的工具：一次回答里并行调用 Glob、Grep、TodoWrite → 三个 tool_result 都是 "<tool_use_error>Error: No such tool available: …"，并带各自的提示（Glob/Grep 提示改用 Bash 的 find/grep，TodoWrite 说本会话禁用）；之后模型照常收尾。
+- **tool-unavailable**：官方构建默认没有的工具：一次回答里并行调用 Glob、Grep、TodoWrite → 三个 tool_result 都是 "<tool_use_error>Error: No such tool available: …"，并带各自的提示（Glob/Grep 提示改用 Bash 的 find/grep，TodoWrite 说本会话禁用）；之后模型照常收尾。
 - **tool-bash-errors**：[垫片] Bash 的退出码与输出：exit 3 → "Exit code 3"（is_error）；echo partial; exit 4 → 内容含 "partial" 与 "Exit code 4"；cd 到不存在的目录 → 错误并带 bash 的报错；pwd → <CWD> 的 POSIX 形式；不在 PATH 上的外部命令（Git 的 usr/bin 不在沙箱 PATH 里）→ "Exit code 127"。只用 bash 内置命令，不依赖外部程序。
 - **tool-notebook**：延迟工具 + NotebookEdit：ToolSearch 关键词 "notebook jupyter" 命中 NotebookEdit（tool_reference）；select:NoSuchTool → "No matching deferred tools found"；Read .ipynb → <cell id=…> 形式；NotebookEdit replace c1 → "Updated cell c1 with print(2)"；delete c2；最终 nb.ipynb 只剩改过的 c1。
 - **tool-skill-claudemd**：项目 CLAUDE.md 与项目技能：第一条 user 消息里有 "Contents of <CWD>\CLAUDE.md (project instructions…)" 的 system-reminder；Skill 工具调用 .claude/skills/verify-skill → tool_result "Launching skill: verify-skill"，紧跟一个文本块 "Base directory for this skill: …" + 技能正文；未知技能 → 错误。
@@ -207,4 +207,4 @@
 - **tty-continue**：[垫片+伪终端] 两次交互会话：第一次问 earlier question 得到 "● Earlier reply." 后 /exit；第二次 --continue：屏幕上恢复出上一轮的提问和回答，再问 later question → 请求带上一轮历史，"● Later reply." 上屏。
 - **tty-resume-print-session**：[垫片+伪终端] -p --session-id <uuid> 写的会话，交互模式 --resume <uuid> 打开：屏幕上显示 -p 那一轮的提问和回答，再问一句 → 请求带上历史。
 - **tty-continue-print-only**：[垫片+伪终端] 只有 -p 写过会话时，交互模式 --continue 不接 -p 的会话：打印 "No conversation found to continue"，退出 1，不发请求（-p --continue 则能接上，见 session-continue）。
-- **tty-bash-mode**：[垫片+伪终端] ! 进入 bash 模式：输入 "!" 再输入 "echo tty-bang" 回车 → 在本地执行，屏幕显示 "! echo tty-bang" 和 "⎿ tty-bang"；316 随后把 <bash-input>echo tty-bang</bash-input> 与 <bash-stdout>tty-bang</bash-stdout> 作为一条 user 消息发给模型（第 1 个请求），再问一句是第 2 个请求。
+- **tty-bash-mode**：[垫片+伪终端] ! 进入 bash 模式：输入 "!" 再输入 "echo tty-bang" 回车 → 在本地执行，屏幕显示 "! echo tty-bang" 和 "⎿ tty-bang"；官方构建随后把 <bash-input>echo tty-bang</bash-input> 与 <bash-stdout>tty-bang</bash-stdout> 作为一条 user 消息发给模型（第 1 个请求），再问一句是第 2 个请求。

@@ -3,9 +3,9 @@
  *
  * SendMessage 投递结果（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-42jte3st.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-aac6cgbf.js (13)
  * attribution: placement 13
  */
 import { subscribe } from "../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
@@ -32,9 +32,9 @@ import { AGENT_METADATA_ID_RE } from "../../utils/agentMetadata.js";
 import { AGENT, TASK } from "../AgentTool/constants.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-42jte3st.js:697-796 placement
+//@ chunk-aac6cgbf.js:9617-9716 placement
 var DELIVERED_RESULT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-42jte3st.js:697", () => {
+deferInit("chunk-aac6cgbf.js:9617", () => {
   DELIVERED_RESULT = Object.freeze({
     delivered: () => {
       return;
@@ -47,7 +47,7 @@ deferInit("chunk-42jte3st.js:697", () => {
     },
   });
 });
-//@ chunk-42jte3st.js:796-953 placement
+//@ chunk-aac6cgbf.js:9716-9874 placement
 function createSessionSendRunner() {
   let slot = subscribe();
   return {
@@ -63,30 +63,30 @@ function createSessionSendRunner() {
     },
   };
 }
-//@ chunk-42jte3st.js:953-963 placement
+//@ chunk-aac6cgbf.js:9874-9885 placement
 /**
  * 会话发送的可替换执行入口（runSessionSend/setSessionSendRunner）。
  */
 var sessionSendRunner; // deferred: uses createSessionSendRunner of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-42jte3st.js:953", () => {
+deferInit("chunk-aac6cgbf.js:9874", () => {
   sessionSendRunner = createSessionSendRunner();
 });
-//@ chunk-42jte3st.js:963-988 placement
+//@ chunk-aac6cgbf.js:9885-9910 placement
 var runSessionSend; // deferred: uses sessionSendRunner of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-42jte3st.js:963", () => {
+deferInit("chunk-aac6cgbf.js:9885", () => {
   runSessionSend = sessionSendRunner.runSessionSend;
 });
-//@ chunk-42jte3st.js:988-1049 placement
+//@ chunk-aac6cgbf.js:9910-9971 placement
 /**
  * 说明消息由插件 hook 投递、没有其他内容发送。
  */
 var HOOK_DELIVERED_NOTE = "Delivered by a plugin hook; nothing else was sent.";
-//@ chunk-42jte3st.js:1049-1080 placement
+//@ chunk-aac6cgbf.js:9971-10002 placement
 var setSessionSendRunner; // deferred: uses sessionSendRunner of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-42jte3st.js:1049", () => {
+deferInit("chunk-aac6cgbf.js:9971", () => {
   setSessionSendRunner = sessionSendRunner.setSessionSendRunner;
 });
-//@ chunk-42jte3st.js:1080-1927 placement
+//@ chunk-aac6cgbf.js:10002-10850 placement
 async function describeDeliveryResult({
   session,
   to,
@@ -160,7 +160,7 @@ async function describeDeliveryResult({
     pin: newPin,
   };
 }
-//@ chunk-42jte3st.js:1927-2205 placement
+//@ chunk-aac6cgbf.js:10850-11129 placement
 function routeToSubagentRef(resolved) {
   switch (resolved.kind) {
     case "main":
@@ -181,9 +181,9 @@ function routeToSubagentRef(resolved) {
       };
   }
 }
-//@ chunk-42jte3st.js:2205-2351 placement
+//@ chunk-aac6cgbf.js:11129-11276 placement
 var sendResultPinSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-42jte3st.js:2205", () => {
+deferInit("chunk-aac6cgbf.js:11129", () => {
   sendResultPinSchema = DoctorLazy(() =>
     objectSchema({
       success: literal(true),
@@ -197,7 +197,7 @@ deferInit("chunk-42jte3st.js:2205", () => {
     }),
   );
 });
-//@ chunk-42jte3st.js:2351-2894 placement
+//@ chunk-aac6cgbf.js:11276-11820 placement (2.1.88 match: getToolResultIDs, 0.547)
 /**
  * 从历史消息中找出成功的 SendMessage 结果，按名字收集其 pin（id、name、ref），用于恢复会话后的寻址固定。
  */
@@ -232,7 +232,7 @@ function collectSendPins(messages) {
     }
   return Object.fromEntries(pinsBySlug);
 }
-//@ chunk-42jte3st.js:2894-2947 placement
+//@ chunk-aac6cgbf.js:11820-11873 placement
 /**
  * 发送目标已确定时返回 null，否则返回其固定标记。
  */
@@ -240,10 +240,10 @@ function sendPinsIfNotSettled(messages, sendMessagePins) {
   let sendPins = collectSendPins(messages);
   return import_sortedIndex_2(sendPins, sendMessagePins) ? null : sendPins;
 }
-//@ chunk-42jte3st.js:2947-3072 placement
+//@ chunk-aac6cgbf.js:11873-12000 placement
 var agentNameSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var agentLaunchResultSchema;
-deferInit("chunk-42jte3st.js:2947", () => {
+deferInit("chunk-aac6cgbf.js:11873", () => {
   agentNameSchema = DoctorLazy(() =>
     objectSchema({
       name: stringSchema()
@@ -258,7 +258,7 @@ deferInit("chunk-42jte3st.js:2947", () => {
     }),
   );
 });
-//@ chunk-42jte3st.js:3072-3713 placement (2.1.88 match: yieldMissingToolResultBlocks, 0.847)
+//@ chunk-aac6cgbf.js:12000-12643 placement (2.1.88 match: yieldMissingToolResultBlocks, 0.755)
 /**
  * 从历史中收集 Agent/Task 工具调用的 name → 子代理 agentId（解析 tool_use 输入与 toolUseResult），与已有映射合并；没有新增时返回 null。旧版名配错（不是 yieldMissingToolResultBlocks）。
  */
@@ -289,12 +289,12 @@ function collectNamedAgentIds(assistantMessages, errorMessage) {
   return idByName.size > 0 ? new Map([...errorMessage, ...idByName]) : null;
 }
 export {
-  DELIVERED_RESULT,
-  setSessionSendRunner,
-  sendPinsIfNotSettled,
-  collectNamedAgentIds,
   collectSendPins,
+  collectNamedAgentIds,
   runSessionSend,
   HOOK_DELIVERED_NOTE,
   describeDeliveryResult,
+  sendPinsIfNotSettled,
+  DELIVERED_RESULT,
+  setSessionSendRunner,
 };

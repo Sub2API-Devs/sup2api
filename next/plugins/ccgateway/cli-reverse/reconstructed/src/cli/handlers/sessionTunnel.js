@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。--session-tunnel：为远程会话建立隧道。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6a6pbbv.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czv9g42s.js (8)
  * attribution: placement 8
  */
 import { validateIngressOrigin } from "../../utils/teleport/relayEnv.js";
@@ -14,23 +14,25 @@ import { isLoopbackHost } from "../../utils/localhost.js";
 import { DoctorLazy } from "./util.js";
 import { objectSchema, literal, stringSchema, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { INVALID } from "../../../vendor/zod/v4/core/core.js";
+import { diskStateSchema } from "../../services/mcpServe/toolHostIds.js";
 import { jsonParse } from "../../utils/slowOperations.js";
 import { isFirstPartyProvider } from "../../utils/model/providers.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
 import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import { gracefulShutdown } from "../../utils/gracefulShutdown.js";
+import { toolServerEnvAccessor } from "../../utils/subprocessEnvLoader.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { decodeJwtExpiry } from "../../bridge/jwtUtils.js";
 import { createPreviewTunnel } from "../../bridge/previewTunnel.js";
 
-//@ chunk-e6a6pbbv.js:12043-12083 placement
+//@ chunk-czv9g42s.js:13236-13276 placement
 var EXIT_UNAVAILABLE = 69;
-var _ = 77;
+var EXIT_POLICY = 77;
 var EXIT_CONFIG = 78;
 var SESSION_TUNNEL_PORT = 28471;
 var TUNNEL_LIVENESS_DEADLINE_MS = 600000;
 var TUNNEL_QUIET_LIVENESS_PINGS = 1;
-//@ chunk-e6a6pbbv.js:12083-12278 placement
+//@ chunk-czv9g42s.js:13276-13471 placement
 function parseTunnelApiOrigin(url) {
   let validated = validateIngressOrigin(url);
   if (validated.ok) return checkSdkUrl(validated.origin) === null ? validated.origin : undefined;
@@ -41,7 +43,7 @@ function parseTunnelApiOrigin(url) {
     ? parsed.origin
     : undefined;
 }
-//@ chunk-e6a6pbbv.js:12278-12593 placement
+//@ chunk-czv9g42s.js:13471-13827 placement
 /**
  * 会话隧道从 stdin 读取的参数结构：会话 id 与令牌、API 地址、令牌过期时间、上传路径。
  */
@@ -65,9 +67,10 @@ var TUNNEL_STDIN_SCHEMA = DoctorLazy(() =>
       .regex(/^\/(?!\/)/)
       .optional()
       .catch(undefined),
+    tool_host: diskStateSchema().optional().catch(undefined),
   }),
 );
-//@ chunk-e6a6pbbv.js:12593-12679 placement
+//@ chunk-czv9g42s.js:13827-13913 placement
 function parseTunnelStdin(raw) {
   if (raw === undefined) return;
   try {
@@ -76,9 +79,9 @@ function parseTunnelStdin(raw) {
     return;
   }
 }
-//@ chunk-e6a6pbbv.js:12679-12702 placement
+//@ chunk-czv9g42s.js:13913-13936 placement
 class SessionTunnelError extends Error {}
-//@ chunk-e6a6pbbv.js:12702-13142 placement
+//@ chunk-czv9g42s.js:13936-14376 placement
 /**
  * 检查 --session-tunnel 能否运行：必须 http 传输与固定端口、标准输入给出一行 JSON、提供方是 Anthropic、未禁用非必要流量；返回问题描述或 undefined。
  */
@@ -92,7 +95,7 @@ function sessionTunnelUsageProblem(transport, port, stdinLine) {
     ? "does not dial while CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC is set"
     : undefined;
 }
-//@ chunk-e6a6pbbv.js:13142-13852 placement
+//@ chunk-czv9g42s.js:14376-15152 placement
 function runSessionTunnel(toolServer, spec, onStop = (code) => void gracefulShutdown(code)) {
   let previewTunnelWithRedial = startPreviewTunnelWithRedial(
     {
@@ -107,6 +110,7 @@ function runSessionTunnel(toolServer, spec, onStop = (code) => void gracefulShut
       toolServer: {
         port: toolServer.boundPort,
         authToken: toolServer.authToken,
+        asksForBinaryFrames: toolServerEnvAccessor.CLAUDE_CODE_MCP_SERVE_TUNNEL_BINARY_FRAMES,
       },
     },
     spec.session_token_expires_at,
@@ -123,13 +127,13 @@ function runSessionTunnel(toolServer, spec, onStop = (code) => void gracefulShut
 `,
       );
       logFeatureBad("cli_mcp_serve_session_tunnel", reason === "policy" ? "relay_refused" : reason);
-      onStop(reason === "policy" ? EXIT_CONFIG : _);
+      onStop(reason === "policy" ? EXIT_CONFIG : EXIT_POLICY);
     },
   );
   logFeatureOk("cli_mcp_serve_session_tunnel");
   return previewTunnelWithRedial;
 }
-//@ chunk-e6a6pbbv.js:13852-14244 placement
+//@ chunk-czv9g42s.js:15152-15544 placement
 /**
  * 启动预览隧道，永久失败时：策略拒绝或令牌已过期则回调 onFatal，否则在 stderr 提示后重新拨号；返回带 stop 的句柄。
  */

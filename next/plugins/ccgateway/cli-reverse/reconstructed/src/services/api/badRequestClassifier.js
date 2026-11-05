@@ -3,25 +3,25 @@
  *
  * 400 错误分类（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (23)
  * attribution: placement 23
  */
 import { MID_CONVERSATION_SYSTEM_2026_04_07 } from "../../utils/betas.js";
 import { isPromptTooLongMessage } from "./errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:54228-54259 placement
+//@ chunk-7jxyna5q.js:53167-53198 placement
 var CAPABILITY_REJECTED_PREFIX = "capability_rejected: ";
-//@ chunk-s61vbvea.js:54259-54293 placement
+//@ chunk-7jxyna5q.js:53198-53232 placement
 /**
  * 导出函数 `capabilityRejectedText`：参数 e，返回 `${Nm}${e}`。
  */
 function capabilityRejectedText(word) {
   return `${CAPABILITY_REJECTED_PREFIX}${word}`;
 }
-//@ chunk-s61vbvea.js:54293-54453 placement
+//@ chunk-7jxyna5q.js:53232-53392 placement
 /**
  * 判断文本中是否包含完整的某个词（后一个字符不是标识符字符）。
  */
@@ -36,14 +36,14 @@ function includesWholeWord(text, word) {
     fromIndex = index + 1;
   }
 }
-//@ chunk-s61vbvea.js:54453-54508 placement
+//@ chunk-7jxyna5q.js:53392-53447 placement
 /**
  * 导出函数 `isBetaHeaderRejection`：参数 e，返回 e.includes(`${Nm}beta_header:`)。
  */
 function isBetaHeaderRejection(message) {
   return message.includes(`${CAPABILITY_REJECTED_PREFIX}beta_header:`);
 }
-//@ chunk-s61vbvea.js:54639-54829 placement
+//@ chunk-7jxyna5q.js:53578-53768 placement
 /**
  * 判断错误消息是否为单纯的"input is too long"（排除 policy_blocked）。
  */
@@ -53,21 +53,21 @@ function isPlainInputTooLong(message) {
     ? /"message":\s*"input is too long\.?"/i.test(replaced) && !replaced.includes('"policy_blocked"')
     : /^input is too long\.?$/i.test(replaced);
 }
-//@ chunk-s61vbvea.js:54829-54895 placement
+//@ chunk-7jxyna5q.js:53768-53834 placement
 /**
  * 导出函数 `isContextWindowError`：参数 e，返回 e.toLowerCase().includes("context window")。
  */
 function isContextWindowError(message) {
   return message.toLowerCase().includes("context window");
 }
-//@ chunk-s61vbvea.js:54895-54997 placement
+//@ chunk-7jxyna5q.js:53834-53936 placement
 /**
  * 判断错误消息是否为"输入长度加 max_tokens 超过上下文上限"。
  */
 function isContextLimitExceeded(message) {
   return message.toLowerCase().includes("input length and `max_tokens` exceed context limit");
 }
-//@ chunk-s61vbvea.js:54997-55327 placement
+//@ chunk-7jxyna5q.js:53936-54266 placement
 /**
  * 图片处理错误与不支持 PDF 的错误消息片段列表。
  */
@@ -84,7 +84,7 @@ var IMAGE_ERROR_PHRASES = [
   "image file is empty",
 ];
 var PDF_UNSUPPORTED_PHRASES = ["does not support pdf input", "does not support pdfs"];
-//@ chunk-s61vbvea.js:55327-55400 placement
+//@ chunk-7jxyna5q.js:54266-54339 placement
 /**
  * 导出函数 `isPdfUnsupportedError`：参数 e，返回 PDF_UNSUPPORTED_PHRASES.some((r) => lower.includes(r))。
  */
@@ -92,9 +92,9 @@ function isPdfUnsupportedError(message) {
   let lower = message.toLowerCase();
   return PDF_UNSUPPORTED_PHRASES.some((phrase) => lower.includes(phrase));
 }
-//@ chunk-s61vbvea.js:55400-55566 placement
+//@ chunk-7jxyna5q.js:54339-54505 placement
 var DOCUMENT_ERROR_PHRASES; // deferred: uses IMAGE_ERROR_PHRASES of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:55400", () => {
+deferInit("chunk-7jxyna5q.js:54339", () => {
   DOCUMENT_ERROR_PHRASES = [
     "could not process pdf",
     "pdf pages",
@@ -105,7 +105,7 @@ deferInit("chunk-s61vbvea.js:55400", () => {
     "too much media",
   ];
 });
-//@ chunk-s61vbvea.js:55566-55957 placement
+//@ chunk-7jxyna5q.js:54505-54896 placement
 function isThinkingSignatureError(message) {
   let replaced = message.toLowerCase().replaceAll("`", "");
   if (replaced.includes("signature in thinking block")) return true;
@@ -116,7 +116,7 @@ function isThinkingSignatureError(message) {
     (replaced.includes("cannot be modified") || replaced.includes("invalid signature"))
   );
 }
-//@ chunk-s61vbvea.js:55957-56143 placement
+//@ chunk-7jxyna5q.js:54896-55082 placement
 /**
  * 从错误消息中提取被拒绝的 thinking 类型（enabled 或 adaptive）。
  */
@@ -126,7 +126,7 @@ function rejectedThinkingType(message) {
     /\b(adaptive) thinking is not supported/i.exec(message);
   return match?.[1] ? match[1].toLowerCase() : undefined;
 }
-//@ chunk-s61vbvea.js:56143-56379 placement
+//@ chunk-7jxyna5q.js:55082-55318 placement
 function isEffortUnsupportedError(message) {
   let lower = message.toLowerCase();
   if (lower.includes("effort parameter") && lower.includes("not support")) return true;
@@ -135,15 +135,15 @@ function isEffortUnsupportedError(message) {
     (lower.includes("extra inputs are not permitted") || lower.includes("requires a model that supports"))
   );
 }
-//@ chunk-s61vbvea.js:56379-56483 placement
+//@ chunk-7jxyna5q.js:55318-55422 placement
 function isOutputFormatExtraInputsError(message) {
   return message.toLowerCase().includes("output_config.format: extra inputs are not permitted");
 }
-//@ chunk-s61vbvea.js:56483-56548 placement
+//@ chunk-7jxyna5q.js:55422-55487 placement
 function isTooMuchMediaError(message) {
   return message.toLowerCase().includes("too much media");
 }
-//@ chunk-s61vbvea.js:56548-56975 placement
+//@ chunk-7jxyna5q.js:55487-55914 placement
 /**
  * 从 400 错误文本中定位出错的媒体块：能解析出 messages[i].content[j]（可含 tool_result 内层下标）时返回位置与类型，否则按关键短语判断是图片还是文档。
  */
@@ -171,7 +171,7 @@ function locateMediaError(message) {
     };
   return;
 }
-//@ chunk-s61vbvea.js:56975-57393 placement
+//@ chunk-7jxyna5q.js:55914-56332 placement
 /**
  * 与 system 角色相关的错误消息正则：提到 system、system 位置不对、仅文本 system、角色只能是 user/assistant。
  */
@@ -181,7 +181,7 @@ var MID_CONV_SYSTEM_PATTERN =
 var TEXT_ONLY_SYSTEM_PATTERN = /text-only role .{0,2}system.{0,2} messages require/i;
 var UNKNOWN_SYSTEM_ROLE_PATTERN =
   /(?:unknown variant .{0,2}system\b.{0,2}, expected|Input should be) [\\'"`]{1,2}(?:user|assistant)\b.{0,2} or [\\'"`]{1,2}(?:user|assistant)\b/i;
-//@ chunk-s61vbvea.js:57393-57494 placement
+//@ chunk-7jxyna5q.js:56332-56433 placement
 /**
  * 解析中途 system 消息被拒的错误，返回涉及的消息序号。
  */
@@ -192,21 +192,21 @@ function parseMidConvSystemRejection(message) {
     messageIndex: match[1] === undefined ? undefined : Number(match[1]),
   };
 }
-//@ chunk-s61vbvea.js:57494-57562 placement
+//@ chunk-7jxyna5q.js:56433-56501 placement
 /**
  * 导出函数 `mentionsAnthropicBeta`：参数 e, n，返回 e.includes(n) && /anthropic[-_]beta/.test(e)。
  */
 function mentionsAnthropicBeta(message, headerName) {
   return message.includes(headerName) && /anthropic[-_]beta/.test(message);
 }
-//@ chunk-s61vbvea.js:57562-57622 placement
+//@ chunk-7jxyna5q.js:56501-56561 placement
 /**
  * 导出函数 `isBetaHeaderNamed`：参数 e, n，返回 wyn(e, n) || includesWholeWord(e, `beta_header:${n}`)。
  */
 function isBetaHeaderNamed(message, header) {
   return mentionsAnthropicBeta(message, header) || includesWholeWord(message, `beta_header:${header}`);
 }
-//@ chunk-s61vbvea.js:57622-57906 placement
+//@ chunk-7jxyna5q.js:56561-56845 placement
 function isUnsupportedRoleError(message) {
   if (mentionsAnthropicBeta(message, MID_CONVERSATION_SYSTEM_2026_04_07)) return true;
   if (parseMidConvSystemRejection(message) !== undefined || TEXT_ONLY_SYSTEM_PATTERN.test(message))
@@ -219,7 +219,7 @@ function isUnsupportedRoleError(message) {
   if (message.includes("cache_control") && SYSTEM_ROLE_PATTERN.test(message)) return true;
   return message.includes("not supported") && /role .{0,2}system/i.test(message);
 }
-//@ chunk-s61vbvea.js:57906-58330 placement
+//@ chunk-7jxyna5q.js:56845-57269 placement
 function isCacheControlError(message) {
   if (!message.includes("cache_control")) return false;
   if (SYSTEM_ROLE_PATTERN.test(message)) return false;
@@ -236,7 +236,7 @@ function isCacheControlError(message) {
     lower.includes("additional propert")
   );
 }
-//@ chunk-s61vbvea.js:58330-58930 placement
+//@ chunk-7jxyna5q.js:57269-57869 placement
 /**
  * 把 400 错误分类为 prompt_too_long、thinking_signature、cache_control 等
  */
@@ -265,9 +265,11 @@ function classifyBadRequest(status, message, knownBetaHeaders) {
 export {
   capabilityRejectedText,
   classifyBadRequest,
-  includesWholeWord,
-  isContextLimitExceeded,
   isPlainInputTooLong,
+  includesWholeWord,
+  locateMediaError,
+  isPdfUnsupportedError,
+  isContextLimitExceeded,
   mentionsAnthropicBeta,
   isBetaHeaderNamed,
   isUnsupportedRoleError,
@@ -277,7 +279,5 @@ export {
   isThinkingSignatureError,
   rejectedThinkingType,
   isContextWindowError,
-  locateMediaError,
-  isPdfUnsupportedError,
   isBetaHeaderRejection,
 };

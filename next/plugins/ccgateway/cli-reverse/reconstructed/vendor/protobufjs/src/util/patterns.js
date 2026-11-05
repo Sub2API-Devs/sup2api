@@ -1,13 +1,13 @@
 /**
  * protobufjs/src/util/patterns.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: protobufjs@7.6.0
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-pwh5dx3n.js:79820-80379 cjs-fingerprint
+//@ chunk-3k21nfa0.js:79820-80379 cjs-fingerprint
 var require_patterns = __commonJS(function (cjsExports) {
   var patterns = cjsExports;
   patterns.numberRe = /^(?![eE])[0-9]*(?:\.[0-9]*)?(?:[eE][+-]?[0-9]+)?$/;

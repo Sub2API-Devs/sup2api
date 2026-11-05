@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：跨会话消息：发送、接收与预览。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bmba7dcv.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xp9fpmmg.js (13)
  * attribution: placement 13
  */
 import { CROSS_SESSION_MESSAGE } from "../constants/xml.js";
 import { COORDINATOR_MESSAGE_PREFIX, COORDINATOR_MESSAGE_SUFFIX } from "./messages.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bmba7dcv.js:227-5102 placement
+//@ chunk-xp9fpmmg.js:227-5102 placement
 /**
  * 对等消息头部附带的说明段落。
  */
@@ -43,7 +43,7 @@ var PEER_IDLE_HEADER;
 var regExp;
 var PEER_MESSAGE_WRAPPER_RE;
 var regExp_2;
-deferInit("chunk-bmba7dcv.js:227", () => {
+deferInit("chunk-xp9fpmmg.js:227", () => {
   PEER_MESSAGE_HEADER = "Another Claude session sent a message";
   PEER_MESSAGE_MIDTURN_HEADER = `${PEER_MESSAGE_HEADER} while you were working:`;
   PEER_MESSAGE_IDLE_HEADER = `${PEER_MESSAGE_HEADER}:`;
@@ -129,7 +129,7 @@ ${DESCENDANT_TRUST_NOTE}${MIDTURN_TOOL_SUFFIX}`,
     "g",
   );
 });
-//@ chunk-bmba7dcv.js:5102-5226 placement
+//@ chunk-xp9fpmmg.js:5102-5226 placement
 /**
  * 文本是否为合法的 <wake> 唤醒信封。
  */
@@ -141,7 +141,7 @@ function isWakeEnvelope(text) {
     !replaced.replace(regExp_2, "").includes("<")
   );
 }
-//@ chunk-bmba7dcv.js:5226-5296 placement
+//@ chunk-xp9fpmmg.js:5226-5296 placement
 /**
  * 若文本未被包裹，补上对等消息头部。
  */
@@ -150,12 +150,12 @@ function ensurePeerHeader(text, options) {
   return `${options.midTurn ? PEER_MIDTURN_HEADER : PEER_IDLE_HEADER}
 ${text}`;
 }
-//@ chunk-bmba7dcv.js:5296-5374 placement
-var regExp_3; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bmba7dcv.js:5296", () => {
+//@ chunk-xp9fpmmg.js:5296-5374 placement
+var regExp_3; // deferred: uses AGENT_NOTIFICATION_PREFIX (../constants/xml.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-xp9fpmmg.js:5296", () => {
   regExp_3 = new RegExp(`^<${CROSS_SESSION_MESSAGE}(?:[ \\t][^>\\r\\n\\v\\f\\u0085\\u2028\\u2029]*)?>`);
 });
-//@ chunk-bmba7dcv.js:5374-5494 placement
+//@ chunk-xp9fpmmg.js:5374-5494 placement
 /**
  * 文本是否为带标签的跨会话消息（含头部）。
  */
@@ -164,7 +164,7 @@ function isTaggedPeerText(text) {
   let found = PEER_MESSAGE_PREFIXES.find((prefix) => text.startsWith(prefix));
   return found !== undefined && regExp_3.test(text.slice(found.length));
 }
-//@ chunk-bmba7dcv.js:5627-6033 placement
+//@ chunk-xp9fpmmg.js:5627-6033 placement
 /**
  * 给跨会话或活动观察消息加上头部与信任说明（区分同伴、子代理、宿主注入、回合中）。
  */
@@ -202,7 +202,7 @@ ${text}
 
 ${trustNote}${footer}`;
 }
-//@ chunk-bmba7dcv.js:6033-6130 placement
+//@ chunk-xp9fpmmg.js:6033-6130 placement
 /**
  * 判断文本是否是某种对等/宿主消息的包裹形式。
  */
@@ -217,12 +217,12 @@ function hasPeerWrapper(text, lanes) {
     ],
   );
 }
-//@ chunk-bmba7dcv.js:6130-6173 placement
+//@ chunk-xp9fpmmg.js:6130-6173 placement
 /**
  * 对等消息可能出现的后缀列表。
  */
 var PEER_SUFFIXES; // deferred: uses PEER_MESSAGE_HEADER of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-bmba7dcv.js:6130", () => {
+deferInit("chunk-xp9fpmmg.js:6130", () => {
   PEER_SUFFIXES = [
     `
 
@@ -235,7 +235,7 @@ ${PEER_TRUST_NOTE}`,
 ${PEER_TRUST_NOTE}${MIDTURN_TOOL_SUFFIX}`,
   ];
 });
-//@ chunk-bmba7dcv.js:6173-6311 placement
+//@ chunk-xp9fpmmg.js:6173-6311 placement
 /**
  * 文本首行与结尾是否匹配给定头尾。
  */
@@ -247,7 +247,7 @@ function hasWrapper(text, prefixes, suffixes) {
   if (!prefixes.includes(sliced)) return false;
   return suffixes.some((suffix) => text.endsWith(suffix));
 }
-//@ chunk-bmba7dcv.js:6311-6361 placement
+//@ chunk-xp9fpmmg.js:6311-6361 placement
 /**
  * 判断文本是否带活动提示包裹。
  */
@@ -261,14 +261,14 @@ ${ACTIVITY_NOTE_2}`,
 ${ACTIVITY_ALL_KINDS_NOTE_2}`,
   ]);
 }
-//@ chunk-bmba7dcv.js:6361-6398 placement
+//@ chunk-xp9fpmmg.js:6361-6398 placement
 /**
  * 给消息套上协调者消息的前后缀。
  */
 function wrapCoordinatorMessage(text) {
   return `${COORDINATOR_MESSAGE_PREFIX}${text}${COORDINATOR_MESSAGE_SUFFIX}`;
 }
-//@ chunk-bmba7dcv.js:6398-6524 placement
+//@ chunk-xp9fpmmg.js:6398-6524 placement
 /**
  * 去掉协调者消息的前后缀。
  */
@@ -279,7 +279,7 @@ function unwrapCoordinatorMessage(content) {
     ? content.slice(COORDINATOR_MESSAGE_PREFIX.length, content.length - COORDINATOR_MESSAGE_SUFFIX.length)
     : undefined;
 }
-//@ chunk-bmba7dcv.js:6524-6947 placement
+//@ chunk-xp9fpmmg.js:6524-6947 placement
 /**
  * 包装观察者报告（单向建议，不是用户同意）。
  */
@@ -296,13 +296,13 @@ export {
   COORDINATOR_MESSAGE_WRAPPER,
   isTaggedPeerText,
   PEER_MESSAGE_PREFIXES,
-  wrapCoordinatorMessage,
-  unwrapCoordinatorMessage,
   wrapPeerMessage,
-  PEER_MESSAGE_SUFFIXES,
-  DESCENDANT_MESSAGE_SUFFIXES,
   isWakeEnvelope,
+  wrapCoordinatorMessage,
   ensurePeerHeader,
   wrapObserverReport,
+  unwrapCoordinatorMessage,
+  PEER_MESSAGE_SUFFIXES,
   HOST_MESSAGE_SUFFIXES,
+  DESCENDANT_MESSAGE_SUFFIXES,
 };

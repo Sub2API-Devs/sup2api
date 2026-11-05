@@ -3,10 +3,10 @@
  *
  * 并入旧版已有路径：MCP OAuth。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/auth.ts
- * pieces: chunk-1kaj6e83.js (43), chunk-4w0z5wdp.js (6), chunk-cyj440je.js (10), chunk-n1aavqzh.js (56), chunk-yqnmafqp.js (36)
- * attribution: sole-consumer 12, affinity 4, facade-exports 50, layout 42, fingerprint 10, placement 32, callgraph-fingerprint 1
+ * pieces: chunk-avdt1w7h.js (6), chunk-fmy4vc7c.js (10), chunk-ft6a2kja.js (45), chunk-ghww1f0b.js (56), chunk-r8hfaqgy.js (36)
+ * attribution: placement 32, fingerprint 10, layout 48, sole-consumer 8, affinity 4, facade-exports 50, callgraph-fingerprint 1
  */
 import { createHash, randomUUID, randomBytes } from "crypto";
 import { createServer } from "http";
@@ -32,7 +32,7 @@ import {
 import { isCliOwnedConfig, getCliOwnedState } from "./cliOwnedClients.js";
 import { readSecureStorageForMcp } from "./credentialStoreRead.js";
 import { READ_FAILED } from "../../utils/secureStorage/storageWriteLock.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { redactUrlSecrets } from "../../utils/urlRedaction.js";
 import {
   isAbortError,
@@ -123,6 +123,7 @@ import { axios_default } from "../../../vendor/axios/dist/esm/axios.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { confirmCredentialRemoval } from "../../utils/secureStorage/credentialLegs.js";
 import { clearDiscoveryPathMemo } from "./discoveryCache.js";
+import { assertRedirectUriOnlyAllowed } from "./redirectUriOnlyRefusal.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { callbackPageBody } from "../oauth/callbackPage.js";
 import { getPlatform } from "../../utils/platform.js";
@@ -155,10 +156,9 @@ import {
   extractWWWAuthenticateParams,
   refreshAuthorization,
 } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/client/auth.js";
-import { isLoopbackOrigin_2, extractHost } from "../../utils/plugins/fetchTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-cyj440je.js:8407-8551 fingerprint (2.1.88 match: getServerKey, 1)
+//@ chunk-fmy4vc7c.js:8786-8930 fingerprint (2.1.88 match: getServerKey, 1)
 /**
  * getServerKey：OAuth 令牌存储键 "<name>|<sha256(type,url,headers) 前 16 位>"。
  */
@@ -171,28 +171,28 @@ function getServerKey(serverName, serverConfig) {
   let hash = createHash("sha256").update(configJson).digest("hex").substring(0, 16);
   return `${serverName}|${hash}`;
 }
-//@ chunk-cyj440je.js:8551-8634 layout
+//@ chunk-fmy4vc7c.js:8930-9013 layout
 /**
  * 判断请求头对象里是否有 Authorization 头（大小写不敏感）。
  */
 function hasAuthorizationHeader(headers) {
   return Object.keys(headers).some((key) => key.toLowerCase() === "authorization");
 }
-//@ chunk-cyj440je.js:8634-8675 layout
+//@ chunk-fmy4vc7c.js:9013-9054 layout
 /**
  * 判断 MCP 服务器配置的 headers 是否带 Authorization 头（带了就视为外部自带凭证，不走 OAuth）。
  */
 function configHasAuthorizationHeader(config) {
   return hasAuthorizationHeader(config.headers ?? {});
 }
-//@ chunk-cyj440je.js:8675-8724 layout
+//@ chunk-fmy4vc7c.js:9054-9103 layout
 var DESIGN_PATH_PREFIX; // deferred: uses MEMORY_SERVER_ID_2 (./firstPartyServerIds.js) of its import cycle while loading; runs once the cycle is complete
 var FIRST_PARTY_MCP_PATH_PREFIXES;
-deferInit("chunk-cyj440je.js:8675", () => {
+deferInit("chunk-fmy4vc7c.js:9054", () => {
   DESIGN_PATH_PREFIX = "/v1/design/";
   FIRST_PARTY_MCP_PATH_PREFIXES = [DESIGN_PATH_PREFIX, "/v1/claude/test/", DOCS_MCP_PATH];
 });
-//@ chunk-cyj440je.js:8724-8913 layout
+//@ chunk-fmy4vc7c.js:9103-9292 layout
 /**
  * isFirstPartyMcpUrl：https 且 Anthropic 域名下 /v1/design/、/v1/claude/test/ 等一方 MCP 路径。
  */
@@ -211,7 +211,7 @@ function isFirstPartyMcpUrl(url) {
     return false;
   }
 }
-//@ chunk-cyj440je.js:8913-9004 layout
+//@ chunk-fmy4vc7c.js:9292-9383 layout
 /**
  * 判断 URL 是否是一方 MCP 网关上的 Design 连接器路径（一方 MCP 主机且 path 以 Design 前缀开头）；解析失败返回 false。
  */
@@ -223,7 +223,7 @@ function isDesignMcpUrl(url) {
     return false;
   }
 }
-//@ chunk-cyj440je.js:9004-9159 layout
+//@ chunk-fmy4vc7c.js:9383-9539 layout
 /**
  * usesNonOAuthAuth：XAA、自定义 headers/headersHelper 或一方登录的服务器（不走标准 OAuth 发现）。
  */
@@ -233,7 +233,7 @@ function usesNonOAuthAuth(config) {
   if (isFirstPartyMcpUrl(config.url) && isFirstPartyProvider()) return true;
   return false;
 }
-//@ chunk-cyj440je.js:9159-9217 layout
+//@ chunk-fmy4vc7c.js:9539-9597 layout
 /**
  * 判断服务器是否已有"外部认证"：配置了 Authorization 头、或是 CCR 托管配置、或是一方 MCP URL 且已一方登录并允许使用；有则跳过 OAuth 流程。
  */
@@ -244,7 +244,7 @@ function hasExternalAuthForConfig(config, authorized) {
     (isFirstPartyMcpUrl(config.url) && isFirstPartyProvider() && authorized)
   );
 }
-//@ chunk-cyj440je.js:9217-9322 layout
+//@ chunk-fmy4vc7c.js:9597-9702 layout
 /**
  * 异步判断安全存储里某服务器是否保存了 refresh token（存储为特殊哨兵值时视为有）；用于决定能否静默刷新而不是标记 needs-auth。
  */
@@ -253,7 +253,7 @@ async function hasStoredRefreshToken(serverName, serverConfig) {
   if (secureStorageForMcp === READ_FAILED) return true;
   return !!secureStorageForMcp?.mcpOAuth?.[getServerKey(serverName, serverConfig)]?.refreshToken;
 }
-//@ chunk-cyj440je.js:9322-9454 fingerprint (2.1.88 match: hasMcpDiscoveryButNoToken, 0.717)
+//@ chunk-fmy4vc7c.js:9702-9834 fingerprint (2.1.88 match: hasMcpDiscoveryButNoToken, 0.718)
 /**
  * hasMcpDiscoveryButNoToken：存储里有发现状态但没有访问令牌。
  */
@@ -263,37 +263,37 @@ async function hasMcpDiscoveryButNoToken(serverName, serverConfig) {
   let entry = secureStorageForMcp?.mcpOAuth?.[getServerKey(serverName, serverConfig)];
   return !!entry?.accessToken || !!entry?.refreshToken;
 }
-//@ chunk-yqnmafqp.js:338-346 placement
+//@ chunk-r8hfaqgy.js:338-346 placement
 /**
  * 授权服务器发现的最大尝试次数（8）。
  */
 var MAX_DISCOVERY_ATTEMPTS = 8;
-//@ chunk-yqnmafqp.js:346-376 placement
+//@ chunk-r8hfaqgy.js:346-376 placement
 /**
  * 匹配版本号样式的正则。
  */
 var VERSION_STRING_RE = /^v?\d+(?:[._-]\d+)*$/i;
-//@ chunk-yqnmafqp.js:376-557 placement
+//@ chunk-r8hfaqgy.js:376-557 placement
 /**
  * scope 记号格式正则。
  */
 var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var regExp_2;
 var SCOPE_TOKEN_RE;
-deferInit("chunk-yqnmafqp.js:376", () => {
+deferInit("chunk-r8hfaqgy.js:376", () => {
   regExp = new RegExp("^[A-Za-z0-9._~+/=%-]+$");
   regExp_2 = new RegExp("[^A-Za-z0-9._~+/=%-]+");
   SCOPE_TOKEN_RE =
     /^(?=.{1,32}$)(?:[a-z]+|[A-Z][a-z]{2,}|[A-Z]+|\d+)(?:[-_](?:[a-z]+|[A-Z][a-z]{2,}|[A-Z]+|\d+))*$/;
 });
-//@ chunk-yqnmafqp.js:557-644 placement
+//@ chunk-r8hfaqgy.js:557-644 placement
 /**
  * 判断字符串是否看起来像随机令牌。
  */
 function looksRandomToken(value) {
   return /[a-z]/i.test(value) && (/\d/.test(value) || (/[a-z]/.test(value) && /[A-Z]/.test(value)));
 }
-//@ chunk-yqnmafqp.js:644-719 placement
+//@ chunk-r8hfaqgy.js:644-719 placement
 /**
  * 判断字符串是否像令牌（长度、字符集、不像版本号/scope）。
  */
@@ -306,7 +306,7 @@ function isTokenLike(value) {
     looksRandomToken(value)
   );
 }
-//@ chunk-yqnmafqp.js:719-860 placement
+//@ chunk-r8hfaqgy.js:719-860 placement
 function safeDecodeURIComponent(value) {
   try {
     return decodeURIComponent(value);
@@ -316,7 +316,7 @@ function safeDecodeURIComponent(value) {
     );
   }
 }
-//@ chunk-yqnmafqp.js:860-1169 placement
+//@ chunk-r8hfaqgy.js:860-1169 placement
 /**
  * 匹配结尾多余分隔符的正则。
  */
@@ -325,7 +325,7 @@ var MEDIA_TYPE_RE =
 var ACCEPT_ENCODING_RE = /^(?:gzip|x-gzip|deflate|br|zstd|compress|identity|\*)(?:\s*;\s*q=[\d.]+)?$/i;
 var CHARSET_PARAM_RE = /^charset=[\w.:-]+$/i;
 var TRAILING_SEPARATOR_RE = /(?<![;,\s])[;,\s]+$/;
-//@ chunk-yqnmafqp.js:1169-1329 placement
+//@ chunk-r8hfaqgy.js:1169-1329 placement
 function isBenignHeaderValue(value) {
   let filtered = value
     .replace(TRAILING_SEPARATOR_RE, "")
@@ -337,7 +337,7 @@ function isBenignHeaderValue(value) {
     (part) => MEDIA_TYPE_RE.test(part) || ACCEPT_ENCODING_RE.test(part) || CHARSET_PARAM_RE.test(part),
   );
 }
-//@ chunk-yqnmafqp.js:1329-1617 placement
+//@ chunk-r8hfaqgy.js:1329-1617 placement
 /**
  * 请求头分隔符正则。
  */
@@ -349,7 +349,7 @@ var SCHEME_LIKE_RE;
 var URL_SCHEME_RE;
 var HEADER_SEPARATOR_RE;
 var WHITESPACE_RE;
-deferInit("chunk-yqnmafqp.js:1329", () => {
+deferInit("chunk-r8hfaqgy.js:1329", () => {
   BENIGN_HEADER_NAMES = new Set([
     "accept",
     "accept-encoding",
@@ -366,13 +366,13 @@ deferInit("chunk-yqnmafqp.js:1329", () => {
   HEADER_SEPARATOR_RE = /[;,&=]/;
   WHITESPACE_RE = /[\t\n\r]/g;
 });
-//@ chunk-yqnmafqp.js:1617-1663 placement
+//@ chunk-r8hfaqgy.js:1617-1663 placement
 function looksLikeTokenSegment(segment) {
   return (
     segment.length >= MAX_DISCOVERY_ATTEMPTS && looksRandomToken(segment) && !isBenignHeaderValue(segment)
   );
 }
-//@ chunk-yqnmafqp.js:1663-1728 placement
+//@ chunk-r8hfaqgy.js:1663-1728 placement
 /**
  * 判断单个片段是否像令牌。
  */
@@ -382,7 +382,7 @@ function hasTokenSegment(segment) {
     (segment.includes("+") && segment.split("+").some(looksLikeTokenSegment))
   );
 }
-//@ chunk-yqnmafqp.js:1728-1921 placement
+//@ chunk-r8hfaqgy.js:1728-1921 placement
 /**
  * 判断请求头值里是否含密钥。
  */
@@ -397,12 +397,12 @@ function headerValueHasSecret(value) {
     })
   );
 }
-//@ chunk-yqnmafqp.js:1921-2006 placement
+//@ chunk-r8hfaqgy.js:1921-2006 placement
 function isSafeHeaderValue(name, value) {
   if (name === "user-agent") return !SECRET_IN_PROSE_RE.test(value);
   return NUMERIC_STRING_RE.test(value) || (isBenignHeaderValue(value) && !headerValueHasSecret(value));
 }
-//@ chunk-yqnmafqp.js:2006-2134 placement (2.1.88 match: redactSecrets, 0.815)
+//@ chunk-r8hfaqgy.js:2006-2134 placement (2.1.88 match: redactSecrets, 0.814)
 /**
  * 请求头脱敏：只有白名单内的无害头名且值通过安全检查时保留原值，其余一律替换成 `[REDACTED]`；用于 MCP/XAA 调试日志打印请求头。
  */
@@ -414,7 +414,7 @@ function redactHeaders(content) {
   }
   return redacted;
 }
-//@ chunk-yqnmafqp.js:2134-2403 layout
+//@ chunk-r8hfaqgy.js:2134-2403 layout
 function looksLikeUrlWithScheme(text, ignoreQuery = false) {
   let replaced = text.replace(WHITESPACE_RE, "");
   if (!replaced.includes(":")) return false;
@@ -431,7 +431,7 @@ function looksLikeUrlWithScheme(text, ignoreQuery = false) {
   }
   return false;
 }
-//@ chunk-yqnmafqp.js:2403-2500 layout
+//@ chunk-r8hfaqgy.js:2403-2500 layout
 /**
  * 判断字符串是否（多次解码后）是带协议的 URL。
  */
@@ -444,15 +444,15 @@ function isEncodedUrl(text) {
     current = decoded;
   }
 }
-//@ chunk-yqnmafqp.js:2500-2607 layout
+//@ chunk-r8hfaqgy.js:2500-2607 layout
 function userinfoAtIndex(text) {
   let atIndex = text.length < 2 ? -1 : text.lastIndexOf("@", text.length - 2);
   let index = text.indexOf(":");
   return index !== -1 && atIndex > index + 1 ? atIndex : -1;
 }
-//@ chunk-yqnmafqp.js:2607-2784 layout
+//@ chunk-r8hfaqgy.js:2607-2784 layout
 function looksLikeSecretBearingText(text, checkEmbedded = true) {
-  for (let variant of uniq([text, text.replaceAll(" ", "+")])) {
+  for (let variant of normalizeCaseForComparison_2([text, text.replaceAll(" ", "+")])) {
     let current = variant;
     for (let i = 0; ; i++) {
       if (
@@ -469,30 +469,30 @@ function looksLikeSecretBearingText(text, checkEmbedded = true) {
   }
   return false;
 }
-//@ chunk-yqnmafqp.js:2784-2828 layout
+//@ chunk-r8hfaqgy.js:2784-2828 layout
 /**
  * 安全时原样返回，疑似密钥则返回 REDACTED。
  */
 function redactUnlessSafe(text, keepWhenSafe) {
   return !keepWhenSafe || looksLikeSecretBearingText(text) ? "REDACTED" : text;
 }
-//@ chunk-yqnmafqp.js:2828-2863 layout
+//@ chunk-r8hfaqgy.js:2828-2863 layout
 /**
  * 判断片段或其 URL 解码形式是否像令牌。
  */
 function anySegmentTokenLike(segment) {
   return isTokenLike(segment) || isTokenLike(safeDecodeURIComponent(segment));
 }
-//@ chunk-yqnmafqp.js:2863-2923 layout
+//@ chunk-r8hfaqgy.js:2863-2923 layout
 /**
  * 判断空白分隔的片段里是否有密钥。
  */
 function hasEmbeddedSecret(text) {
   return text.replace(/\s+/g, "+").split(regExp_2).some(anySegmentTokenLike);
 }
-//@ chunk-yqnmafqp.js:2923-3325 fingerprint (2.1.88 match: SENSITIVE_OAUTH_PARAMS, 0.414)
+//@ chunk-r8hfaqgy.js:2923-3325 fingerprint (2.1.88 match: SENSITIVE_OAUTH_PARAMS, 0.415)
 var SENSITIVE_OAUTH_PARAMS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-yqnmafqp.js:2923", () => {
+deferInit("chunk-r8hfaqgy.js:2923", () => {
   SENSITIVE_OAUTH_PARAMS = new Map([
     ["state", "sensitive"],
     ["nonce", "sensitive"],
@@ -512,7 +512,7 @@ deferInit("chunk-yqnmafqp.js:2923", () => {
     ["display", "judged"],
   ]);
 });
-//@ chunk-yqnmafqp.js:3325-3506 layout
+//@ chunk-r8hfaqgy.js:3325-3506 layout
 /**
  * redactUrlSearchParams：把 URL 查询串中的敏感 OAuth 参数值替换为 REDACTED。
  */
@@ -528,7 +528,7 @@ function redactUrlSearchParams(url) {
   let str = uRLSearchParams.toString();
   return str === "" ? "" : `?${str}`;
 }
-//@ chunk-yqnmafqp.js:3506-3707 callgraph-fingerprint (2.1.88 match: redactSensitiveUrlParams, 0.308)
+//@ chunk-r8hfaqgy.js:3506-3707 callgraph-fingerprint (2.1.88 match: redactSensitiveUrlParams, 0.309)
 /**
  * redactSensitiveUrlParams：日志中把 URL/字段里的敏感 OAuth 参数（state、nonce、code…）替换为 REDACTED。
  */
@@ -546,7 +546,7 @@ function redactSensitiveUrlParams(name, value) {
       return redactWords(value);
   }
 }
-//@ chunk-yqnmafqp.js:3707-3870 affinity
+//@ chunk-r8hfaqgy.js:3707-3870 affinity
 /**
  * 按 URL 与非 URL 分段脱敏。
  */
@@ -567,7 +567,7 @@ function redactWords(text) {
   flush();
   return out.join(" ");
 }
-//@ chunk-yqnmafqp.js:3870-4135 affinity
+//@ chunk-r8hfaqgy.js:3870-4135 affinity
 /**
  * 对一组片段做脱敏（含逐段判断）。
  */
@@ -594,7 +594,7 @@ function redactTokens(tokens) {
   flush();
   return out;
 }
-//@ chunk-yqnmafqp.js:5542-5633 placement (2.1.88 match: validateURL, 0.823)
+//@ chunk-r8hfaqgy.js:5542-5633 placement (2.1.88 match: validateURL, 0.823)
 /**
  * URL 带用户名/密码或无法解析时返回 true。
  */
@@ -606,7 +606,7 @@ function urlHasCredentials(url) {
     return true;
   }
 }
-//@ chunk-yqnmafqp.js:5633-5764 placement
+//@ chunk-r8hfaqgy.js:5633-5764 placement
 function isExpectedAuthError(error) {
   return (
     isAbortError(error) ||
@@ -615,7 +615,7 @@ function isExpectedAuthError(error) {
     error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   );
 }
-//@ chunk-yqnmafqp.js:5764-5879 placement
+//@ chunk-r8hfaqgy.js:5764-5879 placement
 /**
  * 生成 fetch 错误描述。
  */
@@ -625,7 +625,7 @@ function describeFetchError(error, url) {
     ? `${error instanceof Error ? error.name : typeof error} fetching ${redactUrlSecrets(url_2)}`
     : errorMessage(error);
 }
-//@ chunk-yqnmafqp.js:5879-5945 placement
+//@ chunk-r8hfaqgy.js:5879-5945 placement
 /**
  * 判断 URL 脱敏后是否与规范化形式一致。
  */
@@ -636,21 +636,21 @@ function urlAlreadyClean(url) {
     return false;
   }
 }
-//@ chunk-yqnmafqp.js:5945-6007 placement
+//@ chunk-r8hfaqgy.js:5945-6007 placement
 /**
  * 生成 MCP SDK 请求失败的描述。
  */
 function describeSdkFetchError(error, url) {
   return describeFetchError_2(error, String(url), "from the MCP SDK for");
 }
-//@ chunk-yqnmafqp.js:6007-6229 placement
+//@ chunk-r8hfaqgy.js:6007-6229 placement
 function describeFetchError_2(error, url, verb) {
   if (isExpectedAuthError(error) || urlAlreadyClean(url)) return errorMessage(error);
   let status = error instanceof Error ? /\bHTTP (\d{3})\b/.exec(error.message)?.[1] : undefined;
   let code = extractConnectionErrorDetails(error)?.code;
   return `${status ? `HTTP ${status}` : error instanceof Error ? error.name : typeof error} ${verb} ${redactUrlSecrets(url)}${code ? ` (${code})` : ""}`;
 }
-//@ chunk-yqnmafqp.js:6229-6345 placement
+//@ chunk-r8hfaqgy.js:6229-6345 placement
 /**
  * 简要描述错误：可安全展示的直接用消息，否则只给错误类型与错误码。
  */
@@ -659,7 +659,7 @@ function describeErrorBrief(error) {
   let code = extractConnectionErrorDetails(error)?.code;
   return `${error instanceof Error ? error.name : typeof error}${code ? ` (${code})` : ""}`;
 }
-//@ chunk-yqnmafqp.js:6345-6547 placement (2.1.88 match: expandEnvVars, 0.824)
+//@ chunk-r8hfaqgy.js:6345-6547 placement (2.1.88 match: expandEnvVars, 0.824)
 /**
  * describeConnectError：连接错误描述，远程传输附带 URL（拨号阶段）。
  */
@@ -680,7 +680,7 @@ function describeConnectError(error, config) {
       return config;
   }
 }
-//@ chunk-yqnmafqp.js:6547-6599 placement
+//@ chunk-r8hfaqgy.js:6547-6599 placement
 /**
  * 连接错误里含凭据时抛脱敏后的错误。
  */
@@ -688,7 +688,7 @@ function rethrowRedactedConnectError(error, serverRef) {
   let message = describeConnectError(error, serverRef);
   return message === errorMessage(error) ? error : message;
 }
-//@ chunk-yqnmafqp.js:6599-6738 placement
+//@ chunk-r8hfaqgy.js:6599-6738 placement
 /**
  * fetch 出错时若 URL 含凭据，抛出不含凭据的 TypeError（保留错误码），否则原样抛出。
  */
@@ -707,7 +707,7 @@ function rethrowRedactedFetchError(error, url) {
   }
   throw error;
 }
-//@ chunk-4w0z5wdp.js:335-418 placement
+//@ chunk-avdt1w7h.js:335-418 placement
 /**
  * 不提供本地 OAuth 的托管 MCP 主机名。
  */
@@ -716,11 +716,11 @@ var LOCAL_OAUTH_BLOCKED_HOSTS = [
   "gmail.mcp.claude.com",
   "gcal.mcp.claude.com",
 ];
-//@ chunk-4w0z5wdp.js:418-473 placement
+//@ chunk-avdt1w7h.js:418-473 placement
 function normalizeHostname(hostname) {
   return hostname.toLowerCase().replace(/\.$/, "");
 }
-//@ chunk-4w0z5wdp.js:473-708 placement
+//@ chunk-avdt1w7h.js:473-708 placement
 function localOAuthBlockedHosts() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     "tengu_mcp_local_oauth_blocked_hosts",
@@ -740,7 +740,7 @@ function localOAuthBlockedHosts() {
   }
   return new Set(hosts.map(normalizeHostname));
 }
-//@ chunk-4w0z5wdp.js:708-804 placement
+//@ chunk-avdt1w7h.js:708-804 placement
 /**
  * 判断主机是否属于不允许本地 OAuth 的托管服务。
  */
@@ -753,7 +753,7 @@ function isLocalOAuthBlockedHost(url) {
     return false;
   }
 }
-//@ chunk-4w0z5wdp.js:804-1195 placement
+//@ chunk-avdt1w7h.js:804-1195 placement
 /**
  * Anthropic 托管 MCP 服务器不支持本地 OAuth 时的提示：请在 claude.ai 连接器中连接，可附带移除旧配置的命令。
  */
@@ -771,7 +771,7 @@ function anthropicHostedOAuthMessage(serverName, options = {}) {
     : baseMessage;
   return removeCommand && [...withHint].length <= 1024 ? withHint : baseMessage;
 }
-//@ chunk-4w0z5wdp.js:1195-1820 placement
+//@ chunk-avdt1w7h.js:1195-1820 placement
 /**
  * 判断一个 MCP 服务器能否在本地做 OAuth：claude.ai 代理、非 HTTP 传输、Anthropic 托管（附去 claude.ai 连接的提示）、云服务注入的服务器，或普通 oauth。
  */
@@ -805,7 +805,7 @@ function classifyMcpAuthTarget(serverName, config) {
     config,
   };
 }
-//@ chunk-n1aavqzh.js:2890-3504 placement (2.1.88 match: discoverProtectedResource, 0.828)
+//@ chunk-ghww1f0b.js:2961-3575 placement (2.1.88 match: discoverProtectedResource, 0.828)
 /**
  * discoverProtectedResource（v2 副本）。
  */
@@ -835,7 +835,7 @@ async function discoverProtectedResource(serverUrl, opts) {
     authorization_servers: prm.authorization_servers,
   };
 }
-//@ chunk-n1aavqzh.js:3504-4420 placement (2.1.88 match: discoverAuthorizationServer, 0.794)
+//@ chunk-ghww1f0b.js:3575-4491 placement (2.1.88 match: discoverAuthorizationServer, 0.794)
 /**
  * discoverAuthorizationServer（v2 副本，元数据发现跳过 issuer 内建校验后自行比对）。
  */
@@ -869,7 +869,7 @@ async function discoverAuthorizationServer(asUrl, opts) {
     token_endpoint_auth_methods_supported: meta.token_endpoint_auth_methods_supported,
   };
 }
-//@ chunk-n1aavqzh.js:5535-6523 sole-consumer (2.1.88 match: exchangeJwtAuthGrant, 0.989)
+//@ chunk-ghww1f0b.js:5606-6594 sole-consumer (2.1.88 match: exchangeJwtAuthGrant, 0.989)
 /**
  * exchangeJwtAuthGrant（v2 副本）。
  */
@@ -918,7 +918,7 @@ async function exchangeJwtAuthGrant(opts) {
     throw Error(`XAA: jwt-bearer response did not match expected shape: ${redactTokens_2(rawTokens)}`);
   return tokensParsed.data;
 }
-//@ chunk-n1aavqzh.js:6523-8495 sole-consumer (2.1.88 match: performCrossAppAccess, 0.894)
+//@ chunk-ghww1f0b.js:6594-8566 sole-consumer (2.1.88 match: performCrossAppAccess, 0.894)
 /**
  * performCrossAppAccess（v2 副本）。
  */
@@ -1007,7 +1007,7 @@ async function performCrossAppAccess(serverUrl, config, serverName = "xaa", abor
     authorizationServerUrl: asMeta.issuer,
   };
 }
-//@ chunk-n1aavqzh.js:8495-8563 sole-consumer
+//@ chunk-ghww1f0b.js:8566-8634 sole-consumer
 /**
  * 认证重试前的等待。
  */
@@ -1015,13 +1015,13 @@ var AUTH_REQUEST_TIMEOUT_MS; // deferred: uses SSL_CERT_ERROR_CODES (../api/erro
 var AUTH_RETRY_DELAY_MS;
 var AUTH_FLOW_DISCOVERY_TTL_MS;
 var RETRYABLE_CONNECTION_ERRORS;
-deferInit("chunk-n1aavqzh.js:8495", () => {
+deferInit("chunk-ghww1f0b.js:8566", () => {
   AUTH_REQUEST_TIMEOUT_MS = 30000;
   AUTH_RETRY_DELAY_MS = 500;
   AUTH_FLOW_DISCOVERY_TTL_MS = 600000;
   RETRYABLE_CONNECTION_ERRORS = new Set([...TRANSIENT_SOCKET_CODES, ...UNREACHABLE_ERROR_CODES, "ETIMEDOUT"]);
 });
-//@ chunk-n1aavqzh.js:8563-8696 sole-consumer
+//@ chunk-ghww1f0b.js:8634-8767 sole-consumer
 /**
  * 判断错误是否可重试（中止、超时或连接错误）。
  */
@@ -1031,26 +1031,26 @@ function isRetryableAuthError(error) {
   let connectionErrorDetails = extractConnectionErrorDetails(error);
   return connectionErrorDetails !== null && RETRYABLE_CONNECTION_ERRORS.has(connectionErrorDetails.code);
 }
-//@ chunk-n1aavqzh.js:8696-8797 sole-consumer
+//@ chunk-ghww1f0b.js:8767-8868 sole-consumer
 function isZodError_2(error) {
   let candidate = error;
   return (
     (candidate?.name === "ZodError" || candidate?.name === "$ZodError") && Array.isArray(candidate?.issues)
   );
 }
-//@ chunk-n1aavqzh.js:8797-8922 affinity
+//@ chunk-ghww1f0b.js:8868-8993 affinity
 /**
  * 已知 OAuth 错误码全集（设备流 + 重试类）。
  */
 var DEVICE_FLOW_PENDING_ERRORS; // deferred: uses OAuthErrorCode (../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs) of its import cycle while loading; runs once the cycle is complete
 var DEVICE_FLOW_RETRY_ERRORS;
 var KNOWN_OAUTH_ERROR_CODES;
-deferInit("chunk-n1aavqzh.js:8797", () => {
+deferInit("chunk-ghww1f0b.js:8868", () => {
   DEVICE_FLOW_PENDING_ERRORS = new Set(Object.values(OAuthErrorCode));
   DEVICE_FLOW_RETRY_ERRORS = ["authorization_pending", "expired_token", "slow_down"];
   KNOWN_OAUTH_ERROR_CODES = [...Object.values(OAuthErrorCode), ...DEVICE_FLOW_RETRY_ERRORS];
 });
-//@ chunk-n1aavqzh.js:8922-8989 facade-exports
+//@ chunk-ghww1f0b.js:8993-9060 facade-exports
 /**
  * 把 OAuth 错误码收敛成遥测白名单值：命中已知错误码表则原样（标为可上报）返回，否则记为 `other`，避免把服务器自定义字符串送进遥测。（v2）
  */
@@ -1058,7 +1058,7 @@ function sanitizeOAuthErrorCodeForAnalytics_2(code) {
   let found = KNOWN_OAUTH_ERROR_CODES.find((candidate) => candidate === code);
   return fromEnumOpt(found) ?? lit("other");
 }
-//@ chunk-n1aavqzh.js:8989-9816 facade-exports
+//@ chunk-ghww1f0b.js:9060-9887 facade-exports
 /**
  * describeIssuerEchoError：把 issuer 回显错误归类为 issuer_echo_denied/mismatch 等原因码。
  */
@@ -1089,25 +1089,25 @@ ${cause.message}`
   if (errno && UNREACHABLE_ERRNOS.has(errno)) return "network_failed";
   return "sdk_auth_failed";
 }
-//@ chunk-n1aavqzh.js:9816-9825 layout
+//@ chunk-ghww1f0b.js:9887-9896 layout
 var MAX_METADATA_REDIRECTS_2 = 5;
-//@ chunk-n1aavqzh.js:9825-9879 facade-exports
+//@ chunk-ghww1f0b.js:9896-9950 facade-exports
 /**
  * 生成用于调试日志的授权 URL：origin+path 经 URL 脱敏（用户名/密码/查询值替换为 REDACTED）后，再拼上只保留参数名的查询摘要。（v2）
  */
 function authorizationUrlForDebugLog_2(url) {
   return redactUrlSecrets(url.origin + url.pathname) + redactUrlSearchParams(url);
 }
-//@ chunk-n1aavqzh.js:9879-9961 layout (2.1.88 match: NONSTANDARD_INVALID_GRANT_ALIASES, 1)
+//@ chunk-ghww1f0b.js:9950-10032 layout (2.1.88 match: NONSTANDARD_INVALID_GRANT_ALIASES, 1)
 var NONSTANDARD_INVALID_GRANT_ALIASES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-n1aavqzh.js:9879", () => {
+deferInit("chunk-ghww1f0b.js:9950", () => {
   NONSTANDARD_INVALID_GRANT_ALIASES_2 = new Set([
     "invalid_refresh_token",
     "expired_refresh_token",
     "token_expired",
   ]);
 });
-//@ chunk-n1aavqzh.js:9961-10425 facade-exports (2.1.88 match: normalizeOAuthErrorBody, 1)
+//@ chunk-ghww1f0b.js:10032-10496 facade-exports (2.1.88 match: normalizeOAuthErrorBody, 1)
 /**
  * normalizeOAuthErrorBody（v2 副本）：把非标准 OAuth 错误体（如 invalid_refresh_token 等别名）规范化为标准 invalid_grant，便于 SDK 正确处理刷新失败。
  */
@@ -1136,7 +1136,7 @@ async function normalizeOAuthErrorBody_2(response) {
     headers: response.headers,
   });
 }
-//@ chunk-n1aavqzh.js:10425-10585 facade-exports
+//@ chunk-ghww1f0b.js:10496-10656 facade-exports
 /**
  * throwIfAborted：返回一个在信号已中止时抛出的检查函数（OAuth 请求用）。
  */
@@ -1151,7 +1151,7 @@ function createAuthFetch_2() {
     }
   };
 }
-//@ chunk-n1aavqzh.js:10585-11116 layout (2.1.88 match: createAuthFetch, 1)
+//@ chunk-ghww1f0b.js:10656-11187 layout (2.1.88 match: createAuthFetch, 1)
 async function createAuthFetch_4(url, init) {
   let timeoutSignal = AbortSignal.timeout(AUTH_REQUEST_TIMEOUT_MS);
   let isPost = init?.method?.toUpperCase() === "POST";
@@ -1193,7 +1193,7 @@ async function createAuthFetch_4(url, init) {
     rethrowRedactedFetchError(error, url);
   }
 }
-//@ chunk-n1aavqzh.js:11116-12321 layout
+//@ chunk-ghww1f0b.js:11187-12392 layout
 /**
  * fetchAuthServerMetadata：授权服务器元数据发现：配置的 authServerMetadataUrl（必须 https）直接用，否则按资源元数据/RFC 8414/OIDC 路径探测，支持限次重定向。
  */
@@ -1275,12 +1275,12 @@ async function fetchAuthServerMetadata(serverName, serverUrl, options) {
     return;
   }
 }
-//@ chunk-n1aavqzh.js:12321-12621 facade-exports
+//@ chunk-ghww1f0b.js:12392-12692 facade-exports
 /**
  * IssuerEchoCrossOriginError：issuer 回显跨源不一致错误。
  */
 let IssuerEchoCrossOriginError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-n1aavqzh.js:12321", () => {
+deferInit("chunk-ghww1f0b.js:12392", () => {
   IssuerEchoCrossOriginError = class IssuerEchoCrossOriginError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -1298,7 +1298,7 @@ deferInit("chunk-n1aavqzh.js:12321", () => {
     }
   };
 });
-//@ chunk-n1aavqzh.js:12621-12704 layout
+//@ chunk-ghww1f0b.js:12692-12775 layout
 function isIssuerStrictEchoEnabled() {
   try {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_issuer_strict_echo", false) === true;
@@ -1306,14 +1306,14 @@ function isIssuerStrictEchoEnabled() {
     return false;
   }
 }
-//@ chunk-n1aavqzh.js:12704-12770 layout
+//@ chunk-ghww1f0b.js:12775-12841 layout
 function stripTrailingSlash(expectedIssuer, receivedIssuer) {
   return (
     receivedIssuer === expectedIssuer ||
     (expectedIssuer.endsWith("/") && receivedIssuer === expectedIssuer.slice(0, -1))
   );
 }
-//@ chunk-n1aavqzh.js:12770-12897 layout
+//@ chunk-ghww1f0b.js:12841-12968 layout
 function getHttpOrigin(value) {
   try {
     let parsed = new URL(value);
@@ -1322,7 +1322,7 @@ function getHttpOrigin(value) {
   } catch {}
   return;
 }
-//@ chunk-n1aavqzh.js:12897-13139 layout
+//@ chunk-ghww1f0b.js:12968-13210 layout
 function compareIssuerOrigin(expectedIssuer, receivedIssuer) {
   let httpOrigin = getHttpOrigin(expectedIssuer);
   let httpOrigin_2 = getHttpOrigin(receivedIssuer);
@@ -1338,7 +1338,7 @@ function compareIssuerOrigin(expectedIssuer, receivedIssuer) {
     return "cross_origin";
   return httpOrigin.origin === httpOrigin_2.origin ? "same_origin" : "cross_origin";
 }
-//@ chunk-n1aavqzh.js:13139-13568 layout
+//@ chunk-ghww1f0b.js:13210-13639 layout
 function diffUrlComponents(expectedIssuer, receivedIssuer) {
   let httpOrigin = getHttpOrigin(expectedIssuer);
   let httpOrigin_2 = getHttpOrigin(receivedIssuer);
@@ -1355,7 +1355,7 @@ function diffUrlComponents(expectedIssuer, receivedIssuer) {
   if (facets.length === 0) facets.push("normalization_only");
   return facets;
 }
-//@ chunk-n1aavqzh.js:13568-14262 facade-exports
+//@ chunk-ghww1f0b.js:13639-14333 facade-exports
 /**
  * checkIssuerEcho：校验授权响应回显的 issuer（RFC 9207）与预期一致，enforce 模式拒绝跨源不一致，observe 模式只记录。
  */
@@ -1402,12 +1402,12 @@ function evaluateIssuerEchoPolicy({ serverName, site, expectedIssuer, receivedIs
   }
   if (deny) throw new IssuerEchoCrossOriginError(expectedIssuer, receivedIssuer);
 }
-//@ chunk-n1aavqzh.js:14262-14470 facade-exports
+//@ chunk-ghww1f0b.js:14333-14541 facade-exports
 /**
  * McpClientRegistrationDeferredError：需要认证但客户端注册推迟到用户认证时。
  */
 let McpClientRegistrationDeferredError_2; // deferred: uses UnauthorizedError (../../../vendor/@modelcontextprotocol/client/dist/index.mjs) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-n1aavqzh.js:14262", () => {
+deferInit("chunk-ghww1f0b.js:14333", () => {
   McpClientRegistrationDeferredError_2 = class McpClientRegistrationDeferredError_2 extends (
     UnauthorizedError_2
   ) {
@@ -1419,7 +1419,7 @@ deferInit("chunk-n1aavqzh.js:14262", () => {
     }
   };
 });
-//@ chunk-n1aavqzh.js:14470-14588 facade-exports (2.1.88 match: AuthenticationCancelledError, 1)
+//@ chunk-ghww1f0b.js:14541-14659 facade-exports (2.1.88 match: AuthenticationCancelledError, 1)
 /**
  * 用户取消 MCP OAuth 授权时抛出的错误类（消息 `Authentication was cancelled`），调用方据此区分"取消"与"失败"。（v2）
  */
@@ -1429,7 +1429,7 @@ class AuthenticationCancelledError_2 extends Error {
     this.name = "AuthenticationCancelledError";
   }
 }
-//@ chunk-n1aavqzh.js:14588-14677 layout
+//@ chunk-ghww1f0b.js:14659-14748 layout
 function getUrlOriginNoPort(urlText) {
   try {
     let parsed = new URL(urlText);
@@ -1438,47 +1438,47 @@ function getUrlOriginNoPort(urlText) {
     return urlText;
   }
 }
-//@ chunk-n1aavqzh.js:14677-14758 layout
-function isLoopbackOrigin(uri) {
+//@ chunk-ghww1f0b.js:14748-14829 layout
+function isLoopbackOrigin_2(uri) {
   let urlOriginNoPort = getUrlOriginNoPort(uri);
   return urlOriginNoPort === "http://127.0.0.1" || urlOriginNoPort === "http://localhost";
 }
-//@ chunk-n1aavqzh.js:14758-14955 layout
+//@ chunk-ghww1f0b.js:14829-15026 layout
 function getRegisteredLoopbackPort_2(tokenData) {
-  if (!tokenData?.clientId || !tokenData.redirectUri || !isLoopbackOrigin(tokenData.redirectUri)) return;
+  if (!tokenData?.clientId || !tokenData.redirectUri || !isLoopbackOrigin_2(tokenData.redirectUri)) return;
   let port = Number(new URL(tokenData.redirectUri).port);
   return port && tokenData.redirectUri.replace("//127.0.0.1:", "//localhost:") === buildRedirectUri(port)
     ? port
     : undefined;
 }
-//@ chunk-n1aavqzh.js:14955-15013 layout
+//@ chunk-ghww1f0b.js:15026-15084 layout
 function getClientMetadataDocumentUrl_2() {
   return env.MCP_OAUTH_CLIENT_METADATA_URL || MCP_CLIENT_METADATA_URL;
 }
-//@ chunk-n1aavqzh.js:15013-15108 layout
+//@ chunk-ghww1f0b.js:15084-15179 layout
 function isLoopbackCallbackUri_2(uri) {
-  if (!isLoopbackOrigin(uri)) return false;
+  if (!isLoopbackOrigin_2(uri)) return false;
   try {
     return new URL(uri).pathname === "/callback";
   } catch {
     return false;
   }
 }
-//@ chunk-n1aavqzh.js:15108-15162 layout
+//@ chunk-ghww1f0b.js:15179-15233 layout
 function isClientMetadataDocumentId_2(clientId) {
   return (
     clientId !== undefined &&
     (clientId === MCP_CLIENT_METADATA_URL || clientId === getClientMetadataDocumentUrl_2())
   );
 }
-//@ chunk-n1aavqzh.js:15162-15221 facade-exports
+//@ chunk-ghww1f0b.js:15233-15292 facade-exports
 /**
  * 按服务器键取出进程级状态里登记的 OAuth 回调提交器（用于把粘贴的回调 URL 交给正在等待的授权流程）。（v2）
  */
 function getOAuthCallbackSubmitter_2(serverKey) {
   return getCliOwnedState().oauthCallbackSubmitters.get(serverKey);
 }
-//@ chunk-n1aavqzh.js:15221-15337 facade-exports
+//@ chunk-ghww1f0b.js:15292-15408 facade-exports
 /**
  * 登记某服务器正在进行的 OAuth 授权 Promise，结束后（无论成败）若仍是同一个则从 activeOAuthFlows 移除，用于并发去重。（v2）
  */
@@ -1491,14 +1491,14 @@ function setActiveOAuthPromise_2(serverKey, promise) {
     })
     .catch(() => {});
 }
-//@ chunk-n1aavqzh.js:15337-15389 facade-exports
+//@ chunk-ghww1f0b.js:15408-15460 facade-exports
 /**
  * 取出某服务器正在进行的 OAuth 授权 Promise（没有则 undefined），让并发的授权请求复用同一流程。（v2）
  */
 function getActiveOAuthPromise_2(serverKey) {
   return getCliOwnedState().activeOAuthFlows.get(serverKey);
 }
-//@ chunk-n1aavqzh.js:15389-15769 facade-exports
+//@ chunk-ghww1f0b.js:15460-15840 facade-exports
 /**
  * clearTokenlessStub：删除既无令牌也无发现状态的占位凭证条目。
  */
@@ -1524,7 +1524,7 @@ async function clearMcpOAuthStubIfTokenless_2(serverName, serverConfig) {
     logMCPDebug(serverName, `clear tokenless stub failed: ${errorMessage(error)}`);
   }
 }
-//@ chunk-n1aavqzh.js:15769-16823 layout (2.1.88 match: revokeToken, 0.967)
+//@ chunk-ghww1f0b.js:15840-16894 layout (2.1.88 match: revokeToken, 0.967)
 async function revokeToken_2({
   serverName,
   endpoint,
@@ -1584,7 +1584,7 @@ async function revokeToken_2({
     } else throw error;
   }
 }
-//@ chunk-n1aavqzh.js:16823-17121 facade-exports
+//@ chunk-ghww1f0b.js:16894-17192 facade-exports
 /**
  * readStoredServerCredentials：读取服务器的令牌/客户端信息。
  */
@@ -1601,7 +1601,7 @@ async function snapshotServerTokens_2(serverName, serverConfig) {
     }),
   };
 }
-//@ chunk-n1aavqzh.js:17121-18760 layout (2.1.88 match: revokeServerTokens, 0.772)
+//@ chunk-ghww1f0b.js:17192-18831 layout (2.1.88 match: revokeServerTokens, 0.772)
 async function revokeServerTokens_4(serverName, serverConfig, tokenData) {
   let storage = getPresentedCredentialLog();
   storage.record(tokenData.accessToken);
@@ -1692,7 +1692,7 @@ async function revokeServerTokens_4(serverName, serverConfig, tokenData) {
   }
   return failureReason;
 }
-//@ chunk-n1aavqzh.js:18760-19280 facade-exports
+//@ chunk-ghww1f0b.js:18831-19351 facade-exports
 /**
  * revokeReplacedTokens：令牌被替换后撤销旧令牌。
  */
@@ -1724,7 +1724,7 @@ async function revokeReplacedServerTokens_2(serverName, serverConfig, tokenData)
   if (failureReason) logFeatureSad("mcp_oauth_revoke", failureReason);
   else logFeatureOk("mcp_oauth_revoke");
 }
-//@ chunk-n1aavqzh.js:19280-21238 facade-exports
+//@ chunk-ghww1f0b.js:19351-21309 facade-exports
 /**
  * clearServerTokens：撤销并清除服务器令牌（可保留 step-up 状态），凭证存储不可读时放弃。
  */
@@ -1840,7 +1840,7 @@ async function revokeServerTokens_2(serverName, serverConfig, { preserveStepUpSt
         reason: "credential_store_failed",
       };
 }
-//@ chunk-n1aavqzh.js:21238-21871 facade-exports
+//@ chunk-ghww1f0b.js:21309-21942 facade-exports
 /**
  * clearServerTokensFromLocalStorage：只清本地存储里的令牌，可保留客户端注册。
  */
@@ -1890,7 +1890,7 @@ async function clearServerTokensFromLocalStorage_2(serverName, serverConfig, opt
     );
   return mutateResult;
 }
-//@ chunk-n1aavqzh.js:21871-22160 layout
+//@ chunk-ghww1f0b.js:21942-22231 layout
 function logStorageWriteFailure_2(serverName, serverConfig, result, thrown) {
   if (result?.success) return;
   let reason = thrown ? "mutate_rejected" : "storage_write_failed";
@@ -1905,7 +1905,7 @@ function logStorageWriteFailure_2(serverName, serverConfig, result, thrown) {
     reason: fromEnum(reason),
   });
 }
-//@ chunk-n1aavqzh.js:22160-22319 layout
+//@ chunk-ghww1f0b.js:22231-22390 layout
 async function hasStoredOAuthState_2(serverName, serverConfig) {
   let serverKey = getServerKey(serverName, serverConfig);
   let secureStorageForMcp = await readSecureStorageForMcp();
@@ -1916,7 +1916,7 @@ async function hasStoredOAuthState_2(serverName, serverConfig) {
     return READ_FAILED;
   return xaaPinnedServer(secureStorageForMcp?.mcpOAuth?.[serverKey]?.discoveryState);
 }
-//@ chunk-n1aavqzh.js:22319-24942 layout (2.1.88 match: performMCPXaaAuth, 0.9)
+//@ chunk-ghww1f0b.js:22390-25015 layout (2.1.88 match: performMCPXaaAuth, 0.9)
 /**
  * performMCPXaaAuth（v2）：XAA 认证：取 IdP 设置与 client secret，acquireIdpIdToken 后 performCrossAppAccess，令牌写入存储并固定授权服务器。
  */
@@ -2061,7 +2061,7 @@ async function performMCPXaaAuth_2(
     throw e;
   }
 }
-//@ chunk-n1aavqzh.js:24942-33269 facade-exports (2.1.88 match: performMCPOAuthFlow, 0.765)
+//@ chunk-ghww1f0b.js:25015-33385 facade-exports (2.1.88 match: performMCPOAuthFlow, 0.762)
 /**
  * performMCPOAuthFlow（v2）：MCP OAuth 主流程：XAA 分支；否则选回调端口（配置 callbackPort/重用已注册端口/findAvailablePort）、清旧令牌、起 127.0.0.1 回调服务器、ClaudeAuthProvider 发起授权（CIMD 或 DCR、PKCE）、浏览器打开、等待回调换令牌，记录 tengu_mcp_oauth_flow_* 遥测。
  */
@@ -2078,6 +2078,7 @@ async function performMCPOAuthFlow_2(serverName, serverConfig, onAuthorizationUr
       "MCP OAuth refused: no valid server URL",
     );
   }
+  if (options?.redirectUriOnly) assertRedirectUriOnlyAllowed(options.redirectUri, serverConfig);
   if (serverConfig.oauth?.xaa) {
     if (!isXaaEnabled())
       throw Error(
@@ -2563,7 +2564,7 @@ async function performMCPOAuthFlow_2(serverName, serverConfig, onAuthorizationUr
         });
   }
 }
-//@ chunk-n1aavqzh.js:33269-33798 facade-exports
+//@ chunk-ghww1f0b.js:33385-33914 facade-exports
 /**
  * wrapFetchWithAuthChallengeDetection：记录 401/403 认证挑战与 insufficient_scope（step-up）信息到 provider。
  */
@@ -2586,7 +2587,7 @@ function wrapFetchWithStepUpDetection_2(fetchFn, authProvider) {
     return response;
   };
 }
-//@ chunk-n1aavqzh.js:33798-62345 facade-exports
+//@ chunk-ghww1f0b.js:33914-62464 facade-exports
 /**
  * ClaudeAuthProvider（v2）：OAuthClientProvider 实现：客户端元数据（CIMD URL 或 DCR）、令牌读写（安全存储 mcpOAuth[serverKey]）、XAA 静默刷新、刷新令牌并发协调、step-up scope、发现状态缓存、重定向到授权页。
  */
@@ -3900,7 +3901,7 @@ class ClaudeAuthProvider_2 {
     return;
   }
 }
-//@ chunk-n1aavqzh.js:62345-63004 facade-exports (2.1.88 match: readClientSecret, 1)
+//@ chunk-ghww1f0b.js:62464-63123 facade-exports (2.1.88 match: readClientSecret, 1)
 /**
  * readClientSecret：从 MCP_CLIENT_SECRET 或 TTY 交互读取 client secret。
  */
@@ -3936,7 +3937,7 @@ async function readClientSecret_2() {
     process.stdin.on("data", onData);
   });
 }
-//@ chunk-n1aavqzh.js:63004-63200 facade-exports
+//@ chunk-ghww1f0b.js:63123-63319 facade-exports
 /**
  * saveMcpClientSecret：把 client secret 写入 mcpOAuthClientConfig[serverKey]。
  */
@@ -3959,7 +3960,7 @@ async function saveMcpClientSecret_2(serverName, serverConfig, clientSecret) {
     };
   }
 }
-//@ chunk-n1aavqzh.js:63200-63388 facade-exports
+//@ chunk-ghww1f0b.js:63319-63507 facade-exports
 /**
  * clearMcpClientConfig：删除 mcpOAuthClientConfig 条目。
  */
@@ -3977,7 +3978,7 @@ async function clearMcpClientConfig_2(serverName, serverConfig) {
     };
   });
 }
-//@ chunk-n1aavqzh.js:63388-63487 facade-exports
+//@ chunk-ghww1f0b.js:63507-63606 facade-exports
 /**
  * 从安全存储读取某服务器（名字+配置算出的键）保存的 OAuth 客户端配置 `mcpOAuthClientConfig`（如 DCR 得到的 client_id/secret）。（v2）
  */
@@ -3986,7 +3987,7 @@ async function getMcpClientConfig_2(serverName, serverConfig) {
   let serverKey = getServerKey(serverName, serverConfig);
   return async?.mcpOAuthClientConfig?.[serverKey];
 }
-//@ chunk-n1aavqzh.js:63487-63660 layout (2.1.88 match: getScopeFromMetadata, 0.903)
+//@ chunk-ghww1f0b.js:63606-63779 layout (2.1.88 match: getScopeFromMetadata, 0.903)
 function getScopeFromMetadata_2(metadata) {
   if (!metadata) return;
   if ("scope" in metadata && typeof metadata.scope === "string") return metadata.scope;
@@ -3994,7 +3995,7 @@ function getScopeFromMetadata_2(metadata) {
     return metadata.default_scope;
   return;
 }
-//@ chunk-n1aavqzh.js:63660-63856 facade-exports
+//@ chunk-ghww1f0b.js:63779-63975 facade-exports
 /**
  * shouldRequestOfflineAccess：元数据 scopes_supported 含 offline_access。
  */
@@ -4003,7 +4004,7 @@ function maybeAppendOfflineAccess_2(scope, metadata) {
   if (!metadata?.scopes_supported?.includes("offline_access")) return scope;
   return scope === null ? "offline_access" : `${scope} offline_access`;
 }
-//@ chunk-n1aavqzh.js:63856-64018 layout
+//@ chunk-ghww1f0b.js:63975-64137 layout
 var ENTRA_LOGIN_HOSTS = [
   "login.microsoftonline.com",
   "login.microsoftonline.us",
@@ -4011,7 +4012,7 @@ var ENTRA_LOGIN_HOSTS = [
   "login.chinacloudapi.cn",
 ];
 var ENTRA_LOGIN_HOST_SUFFIXES = [".b2clogin.com", ".ciamlogin.com"];
-//@ chunk-n1aavqzh.js:64018-64155 facade-exports
+//@ chunk-ghww1f0b.js:64137-64274 facade-exports
 /**
  * 判断 URL 主机是否属于 Microsoft Entra ID 登录域（精确列表或后缀匹配），解析失败返回 false；用于对 Entra 授权服务器做特殊处理。（v2）
  */
@@ -4026,14 +4027,14 @@ function isEntraLoginUrl_2(urlOrObject) {
     return false;
   }
 }
-//@ chunk-1kaj6e83.js:8424-8482 sole-consumer
+//@ chunk-ft6a2kja.js:8495-8553 sole-consumer
 /**
  * 可重试连接错误码集合。
  */
 var AUTH_REQUEST_TIMEOUT_MS_ALT; // deferred: uses SSL_CERT_ERROR_CODES (../api/errorUtils.js) of its import cycle while loading; runs once the cycle is complete
 var AUTH_RETRY_DELAY_MS_2;
 var RETRYABLE_CONNECTION_ERRORS_ALT;
-deferInit("chunk-1kaj6e83.js:8424", () => {
+deferInit("chunk-ft6a2kja.js:8495", () => {
   AUTH_REQUEST_TIMEOUT_MS_ALT = 30000;
   AUTH_RETRY_DELAY_MS_2 = 500;
   RETRYABLE_CONNECTION_ERRORS_ALT = new Set([
@@ -4042,21 +4043,21 @@ deferInit("chunk-1kaj6e83.js:8424", () => {
     "ETIMEDOUT",
   ]);
 });
-//@ chunk-1kaj6e83.js:8482-8615 sole-consumer
+//@ chunk-ft6a2kja.js:8553-8686 sole-consumer
 function isTransientAuthFetchError(error) {
   if (isAbortError(error)) return true;
   if (error instanceof Error && error.name === "TimeoutError") return true;
   let connectionErrorDetails = extractConnectionErrorDetails(error);
   return connectionErrorDetails !== null && RETRYABLE_CONNECTION_ERRORS_ALT.has(connectionErrorDetails.code);
 }
-//@ chunk-1kaj6e83.js:8615-8716 sole-consumer
+//@ chunk-ft6a2kja.js:8686-8787 sole-consumer
 function isZodError(error) {
   let candidate = error;
   return (
     (candidate?.name === "ZodError" || candidate?.name === "$ZodError") && Array.isArray(candidate?.issues)
   );
 }
-//@ chunk-1kaj6e83.js:8716-9122 affinity
+//@ chunk-ft6a2kja.js:8787-9193 affinity
 /**
  * 可上报的 OAuth 错误码白名单。
  */
@@ -4082,7 +4083,7 @@ var OAUTH_ERROR_CODES = [
   "expired_token",
   "slow_down",
 ];
-//@ chunk-1kaj6e83.js:9122-9189 facade-exports
+//@ chunk-ft6a2kja.js:9193-9260 facade-exports
 /**
  * 把 OAuth 错误码收敛成遥测白名单值，未知码记为 `other`。（v1 副本，同 chunk-n1aavqzh.js#q0i）
  */
@@ -4090,7 +4091,7 @@ function sanitizeOAuthErrorCodeForAnalytics(code) {
   let found = OAUTH_ERROR_CODES.find((candidate) => candidate === code);
   return fromEnumOpt(found) ?? lit("other");
 }
-//@ chunk-1kaj6e83.js:9189-9650 facade-exports
+//@ chunk-ft6a2kja.js:9260-9721 facade-exports
 /**
  * 把 SDK 授权失败按消息与错误类型归类：dcr_failed（动态注册/客户端元数据无效）、discovery_failed（元数据加载失败或授权服务器不兼容）、dcr_rejected、network_failed（网络错误码）、其余 sdk_auth_failed；供遥测与提示。（v1 副本）
  */
@@ -4115,25 +4116,25 @@ ${cause.message}`
   if (errno && UNREACHABLE_ERRNOS.has(errno)) return "network_failed";
   return "sdk_auth_failed";
 }
-//@ chunk-1kaj6e83.js:9650-9659 layout
+//@ chunk-ft6a2kja.js:9721-9730 layout
 var MAX_METADATA_REDIRECTS = 5;
-//@ chunk-1kaj6e83.js:9659-9713 facade-exports
+//@ chunk-ft6a2kja.js:9730-9784 facade-exports
 /**
  * 生成脱敏后的授权 URL 调试日志串。（v1 副本，同 chunk-n1aavqzh.js#izs）
  */
 function authorizationUrlForDebugLog(url) {
   return redactUrlSecrets(url.origin + url.pathname) + redactUrlSearchParams(url);
 }
-//@ chunk-1kaj6e83.js:9713-9795 fingerprint (2.1.88 match: NONSTANDARD_INVALID_GRANT_ALIASES, 1)
+//@ chunk-ft6a2kja.js:9784-9866 fingerprint (2.1.88 match: NONSTANDARD_INVALID_GRANT_ALIASES, 1)
 var NONSTANDARD_INVALID_GRANT_ALIASES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1kaj6e83.js:9713", () => {
+deferInit("chunk-ft6a2kja.js:9784", () => {
   NONSTANDARD_INVALID_GRANT_ALIASES = new Set([
     "invalid_refresh_token",
     "expired_refresh_token",
     "token_expired",
   ]);
 });
-//@ chunk-1kaj6e83.js:9795-10259 facade-exports (2.1.88 match: normalizeOAuthErrorBody, 1)
+//@ chunk-ft6a2kja.js:9866-10330 facade-exports (2.1.88 match: normalizeOAuthErrorBody, 1)
 /**
  * normalizeOAuthErrorBody：把非标准 OAuth 错误体（NONSTANDARD_INVALID_GRANT_ALIASES 中的别名）改写成 invalid_grant。
  */
@@ -4162,7 +4163,7 @@ async function normalizeOAuthErrorBody(response) {
     headers: response.headers,
   });
 }
-//@ chunk-1kaj6e83.js:10259-10419 facade-exports
+//@ chunk-ft6a2kja.js:10330-10490 facade-exports
 /**
  * throwIfAborted（v1 副本）。
  */
@@ -4177,7 +4178,7 @@ function createAuthFetch() {
     }
   };
 }
-//@ chunk-1kaj6e83.js:10419-10950 fingerprint (2.1.88 match: createAuthFetch, 1)
+//@ chunk-ft6a2kja.js:10490-11021 fingerprint (2.1.88 match: createAuthFetch, 1)
 async function createAuthFetch_3(url, init) {
   let timeoutSignal = AbortSignal.timeout(AUTH_REQUEST_TIMEOUT_MS_ALT);
   let isPost = init?.method?.toUpperCase() === "POST";
@@ -4219,7 +4220,7 @@ async function createAuthFetch_3(url, init) {
     rethrowRedactedFetchError(error, url);
   }
 }
-//@ chunk-1kaj6e83.js:10950-11774 fingerprint (2.1.88 match: fetchAuthServerMetadata, 0.81)
+//@ chunk-ft6a2kja.js:11021-11845 fingerprint (2.1.88 match: fetchAuthServerMetadata, 0.809)
 /**
  * fetchAuthServerMetadata（v1）。
  */
@@ -4279,12 +4280,12 @@ async function fetchAuthServerMetadata_2(serverName, serverUrl, options) {
     return;
   }
 }
-//@ chunk-1kaj6e83.js:11774-11982 facade-exports
+//@ chunk-ft6a2kja.js:11845-12053 facade-exports
 /**
  * McpClientRegistrationDeferredError（v1 副本）。
  */
 let McpClientRegistrationDeferredError; // deferred: uses UnauthorizedError (../../../vendor/@modelcontextprotocol/sdk/dist/esm/client/auth.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-1kaj6e83.js:11774", () => {
+deferInit("chunk-ft6a2kja.js:11845", () => {
   McpClientRegistrationDeferredError = class McpClientRegistrationDeferredError extends UnauthorizedError {
     serverName;
     constructor(serverName) {
@@ -4294,7 +4295,7 @@ deferInit("chunk-1kaj6e83.js:11774", () => {
     }
   };
 });
-//@ chunk-1kaj6e83.js:11982-12100 facade-exports (2.1.88 match: AuthenticationCancelledError, 1)
+//@ chunk-ft6a2kja.js:12053-12171 facade-exports (2.1.88 match: AuthenticationCancelledError, 1)
 /**
  * 用户取消 MCP OAuth 授权时抛出的错误类。（v1 副本）
  */
@@ -4304,42 +4305,62 @@ class AuthenticationCancelledError extends Error {
     this.name = "AuthenticationCancelledError";
   }
 }
-//@ chunk-1kaj6e83.js:12270-12467 sole-consumer
+//@ chunk-ft6a2kja.js:12171-12260 layout
+/**
+ * URL 取 协议//主机。名字归属可疑（被 MCP auth 引用）。
+ */
+function originOf(originSummary) {
+  try {
+    let parsedUrl = new URL(originSummary);
+    return `${parsedUrl.protocol}//${parsedUrl.hostname}`;
+  } catch {
+    return originSummary;
+  }
+}
+//@ chunk-ft6a2kja.js:12260-12341 layout
+/**
+ * URL 主机是否为本机回环（127.0.0.1/localhost）。
+ */
+function isLoopbackOrigin(origin) {
+  let normalizedOrigin = originOf(origin);
+  return normalizedOrigin === "http://127.0.0.1" || normalizedOrigin === "http://localhost";
+}
+//@ chunk-ft6a2kja.js:12341-12538 layout
 function getRegisteredLoopbackPort(tokenData) {
-  if (!tokenData?.clientId || !tokenData.redirectUri || !isLoopbackOrigin_2(tokenData.redirectUri)) return;
+  if (!tokenData?.clientId || !tokenData.redirectUri || !isLoopbackOrigin(tokenData.redirectUri)) return;
   let port = Number(new URL(tokenData.redirectUri).port);
   return port && tokenData.redirectUri.replace("//127.0.0.1:", "//localhost:") === buildRedirectUri(port)
     ? port
     : undefined;
 }
-//@ chunk-1kaj6e83.js:12467-12525 sole-consumer
+//@ chunk-ft6a2kja.js:12538-12596 layout
 function getClientMetadataDocumentUrl() {
   return env.MCP_OAUTH_CLIENT_METADATA_URL || MCP_CLIENT_METADATA_URL;
 }
-//@ chunk-1kaj6e83.js:12525-12620 sole-consumer
-function isLoopbackCallbackUri(redirectUri) {
-  if (!isLoopbackOrigin_2(redirectUri)) return false;
+//@ chunk-ft6a2kja.js:12596-12691 layout
+function isLoopbackCallbackUri(origin) {
+  if (!isLoopbackOrigin(origin)) return false;
   try {
-    return new URL(redirectUri).pathname === "/callback";
+    return new URL(origin).pathname === "/callback";
   } catch {
     return false;
   }
 }
-//@ chunk-1kaj6e83.js:12620-12674 sole-consumer
+//@ chunk-ft6a2kja.js:12691-12745 layout
 function isClientMetadataDocumentId(clientId) {
   return (
     clientId !== undefined &&
     (clientId === MCP_CLIENT_METADATA_URL || clientId === getClientMetadataDocumentUrl())
   );
 }
-//@ chunk-1kaj6e83.js:12674-12733 facade-exports
+//@ chunk-ft6a2kja.js:12745-12804 facade-exports
 /**
  * 按服务器键取 OAuth 回调提交器。（v1 副本）
  */
 function getOAuthCallbackSubmitter(serverKey) {
   return getCliOwnedState().oauthCallbackSubmitters.get(serverKey);
 }
-//@ chunk-1kaj6e83.js:12733-12849 facade-exports
+//@ chunk-ft6a2kja.js:12804-12920 facade-exports
 /**
  * 登记进行中的 OAuth 授权 Promise，结束后自动移除。（v1 副本）
  */
@@ -4352,14 +4373,14 @@ function setActiveOAuthPromise(serverKey, promise) {
     })
     .catch(() => {});
 }
-//@ chunk-1kaj6e83.js:12849-12901 facade-exports
+//@ chunk-ft6a2kja.js:12920-12972 facade-exports
 /**
  * 取出进行中的 OAuth 授权 Promise。（v1 副本）
  */
 function getActiveOAuthPromise(serverKey) {
   return getCliOwnedState().activeOAuthFlows.get(serverKey);
 }
-//@ chunk-1kaj6e83.js:12901-13281 facade-exports
+//@ chunk-ft6a2kja.js:12972-13352 facade-exports
 /**
  * 清理"无令牌桩"：安全存储里某服务器的 mcpOAuth 记录既无 accessToken 也无 refreshToken、且没有进行中的发现状态时，原子地删除该条；失败只记 MCP 调试日志。（v1）
  */
@@ -4385,7 +4406,7 @@ async function clearMcpOAuthStubIfTokenless(serverName, serverConfig) {
     logMCPDebug(serverName, `clear tokenless stub failed: ${errorMessage(error)}`);
   }
 }
-//@ chunk-1kaj6e83.js:13281-14335 fingerprint (2.1.88 match: revokeToken, 0.967)
+//@ chunk-ft6a2kja.js:13352-14406 fingerprint (2.1.88 match: revokeToken, 0.967)
 async function revokeToken({
   serverName,
   endpoint,
@@ -4445,7 +4466,7 @@ async function revokeToken({
     } else throw error;
   }
 }
-//@ chunk-1kaj6e83.js:14335-14633 facade-exports
+//@ chunk-ft6a2kja.js:14406-14704 facade-exports
 /**
  * readStoredServerCredentials（v1 副本）。
  */
@@ -4462,7 +4483,7 @@ async function snapshotServerTokens(serverName, serverConfig) {
     }),
   };
 }
-//@ chunk-1kaj6e83.js:14633-16208 fingerprint (2.1.88 match: revokeServerTokens, 0.795)
+//@ chunk-ft6a2kja.js:14704-16279 fingerprint (2.1.88 match: revokeServerTokens, 0.796)
 /**
  * revokeServerTokens（v1）：按 RFC 7009 撤销访问与刷新令牌。
  */
@@ -4554,7 +4575,7 @@ async function revokeServerTokens_3(serverName, serverConfig, tokenData) {
   }
   return failureReason;
 }
-//@ chunk-1kaj6e83.js:16208-16728 facade-exports
+//@ chunk-ft6a2kja.js:16279-16799 facade-exports
 /**
  * revokeReplacedTokens（v1 副本）。
  */
@@ -4586,7 +4607,7 @@ async function revokeReplacedServerTokens(serverName, serverConfig, tokenData) {
   if (failureReason) logFeatureSad("mcp_oauth_revoke", failureReason);
   else logFeatureOk("mcp_oauth_revoke");
 }
-//@ chunk-1kaj6e83.js:16728-18686 facade-exports
+//@ chunk-ft6a2kja.js:16799-18757 facade-exports
 /**
  * clearServerTokens（v1）。
  */
@@ -4702,7 +4723,7 @@ async function revokeServerTokens(serverName, serverConfig, { preserveStepUpStat
         reason: "credential_store_failed",
       };
 }
-//@ chunk-1kaj6e83.js:18686-19319 facade-exports (2.1.88 match: clearServerTokensFromLocalStorage, 0.306)
+//@ chunk-ft6a2kja.js:18757-19390 facade-exports (2.1.88 match: clearServerTokensFromLocalStorage, 0.307)
 /**
  * clearServerTokensFromLocalStorage（v1）。
  */
@@ -4752,7 +4773,7 @@ async function clearServerTokensFromLocalStorage(serverName, serverConfig, optio
     );
   return mutateResult;
 }
-//@ chunk-1kaj6e83.js:19319-19608 layout
+//@ chunk-ft6a2kja.js:19390-19679 layout
 function logStorageWriteFailure(serverName, serverConfig, result, thrown) {
   if (result?.success) return;
   let reason = thrown ? "mutate_rejected" : "storage_write_failed";
@@ -4767,7 +4788,7 @@ function logStorageWriteFailure(serverName, serverConfig, result, thrown) {
     reason: fromEnum(reason),
   });
 }
-//@ chunk-1kaj6e83.js:19608-19767 layout
+//@ chunk-ft6a2kja.js:19679-19838 layout
 async function hasStoredOAuthState(serverName, serverConfig) {
   let serverKey = getServerKey(serverName, serverConfig);
   let secureStorageForMcp = await readSecureStorageForMcp();
@@ -4778,7 +4799,7 @@ async function hasStoredOAuthState(serverName, serverConfig) {
     return READ_FAILED;
   return xaaPinnedServer(secureStorageForMcp?.mcpOAuth?.[serverKey]?.discoveryState);
 }
-//@ chunk-1kaj6e83.js:19767-22390 fingerprint (2.1.88 match: performMCPXaaAuth, 0.9)
+//@ chunk-ft6a2kja.js:19838-22463 fingerprint (2.1.88 match: performMCPXaaAuth, 0.9)
 /**
  * performMCPXaaAuth（v1）。
  */
@@ -4917,7 +4938,7 @@ async function performMCPXaaAuth(serverName, serverConfig, onAuthorizationUrl, a
     throw e;
   }
 }
-//@ chunk-1kaj6e83.js:22390-30247 facade-exports (2.1.88 match: performMCPOAuthFlow, 0.792)
+//@ chunk-ft6a2kja.js:22463-30363 facade-exports (2.1.88 match: performMCPOAuthFlow, 0.79)
 /**
  * performMCPOAuthFlow（v1）：同 v2，回调不处理 iss。
  */
@@ -4934,6 +4955,7 @@ async function performMCPOAuthFlow(serverName, serverConfig, onAuthorizationUrl,
       "MCP OAuth refused: no valid server URL",
     );
   }
+  if (options?.redirectUriOnly) assertRedirectUriOnlyAllowed(options.redirectUri, serverConfig);
   if (serverConfig.oauth?.xaa) {
     if (!isXaaEnabled())
       throw Error(
@@ -5400,7 +5422,7 @@ async function performMCPOAuthFlow(serverName, serverConfig, onAuthorizationUrl,
         });
   }
 }
-//@ chunk-1kaj6e83.js:30247-30776 facade-exports (2.1.88 match: wrapFetchWithStepUpDetection, 0.428)
+//@ chunk-ft6a2kja.js:30363-30892 facade-exports (2.1.88 match: wrapFetchWithStepUpDetection, 0.428)
 /**
  * wrapFetchWithAuthChallengeDetection（v1 副本）。
  */
@@ -5423,7 +5445,7 @@ function wrapFetchWithStepUpDetection(fetchFn, authProvider) {
     return response;
   };
 }
-//@ chunk-1kaj6e83.js:30776-56066 facade-exports (2.1.88 match: ClaudeAuthProvider, 0.728)
+//@ chunk-ft6a2kja.js:30892-56185 facade-exports (2.1.88 match: ClaudeAuthProvider, 0.728)
 /**
  * ClaudeAuthProvider（v1）。
  */
@@ -5607,7 +5629,7 @@ class ClaudeAuthProvider {
       if (
         this.handleRedirection &&
         (redirectUri
-          ? extractHost(redirectUri) !== extractHost(this.redirectUri)
+          ? originOf(redirectUri) !== originOf(this.redirectUri)
           : !this.redirectUri.startsWith("http://localhost"))
       ) {
         let storedRedirect = redirectUri ? redactUrlSecrets(redirectUri) : "localhost";
@@ -6619,7 +6641,7 @@ class ClaudeAuthProvider {
     return;
   }
 }
-//@ chunk-1kaj6e83.js:56066-56725 facade-exports (2.1.88 match: readClientSecret, 1)
+//@ chunk-ft6a2kja.js:56185-56844 facade-exports (2.1.88 match: readClientSecret, 1)
 /**
  * readClientSecret（v1）。
  */
@@ -6655,7 +6677,7 @@ async function readClientSecret() {
     process.stdin.on("data", onData);
   });
 }
-//@ chunk-1kaj6e83.js:56725-56921 facade-exports (2.1.88 match: saveMcpClientSecret, 0.631)
+//@ chunk-ft6a2kja.js:56844-57040 facade-exports (2.1.88 match: saveMcpClientSecret, 0.632)
 /**
  * saveMcpClientSecret（v1）。
  */
@@ -6678,7 +6700,7 @@ async function saveMcpClientSecret(serverName, serverConfig, clientSecret) {
     };
   }
 }
-//@ chunk-1kaj6e83.js:56921-57109 facade-exports (2.1.88 match: getMcpClientConfig, 0.711)
+//@ chunk-ft6a2kja.js:57040-57228 facade-exports (2.1.88 match: getMcpClientConfig, 0.711)
 /**
  * getMcpClientConfig（v1）：读 mcpOAuthClientConfig[serverKey]。
  */
@@ -6696,7 +6718,7 @@ async function clearMcpClientConfig(serverName, serverConfig) {
     };
   });
 }
-//@ chunk-1kaj6e83.js:57109-57208 facade-exports
+//@ chunk-ft6a2kja.js:57228-57327 facade-exports
 /**
  * 从安全存储读取某服务器的 OAuth 客户端配置。（v1 副本）
  */
@@ -6705,7 +6727,7 @@ async function getMcpClientConfig(serverName, serverConfig) {
   let serverKey = getServerKey(serverName, serverConfig);
   return async?.mcpOAuthClientConfig?.[serverKey];
 }
-//@ chunk-1kaj6e83.js:57208-57381 fingerprint (2.1.88 match: getScopeFromMetadata, 0.903)
+//@ chunk-ft6a2kja.js:57327-57500 fingerprint (2.1.88 match: getScopeFromMetadata, 0.903)
 function getScopeFromMetadata(metadata) {
   if (!metadata) return;
   if ("scope" in metadata && typeof metadata.scope === "string") return metadata.scope;
@@ -6713,7 +6735,7 @@ function getScopeFromMetadata(metadata) {
     return metadata.default_scope;
   return;
 }
-//@ chunk-1kaj6e83.js:57381-57577 facade-exports
+//@ chunk-ft6a2kja.js:57500-57696 facade-exports
 /**
  * shouldRequestOfflineAccess（v1 副本）。
  */
@@ -6722,7 +6744,7 @@ function maybeAppendOfflineAccess(scope, metadata) {
   if (!metadata?.scopes_supported?.includes("offline_access")) return scope;
   return scope === null ? "offline_access" : `${scope} offline_access`;
 }
-//@ chunk-1kaj6e83.js:57577-57739 layout
+//@ chunk-ft6a2kja.js:57696-57858 layout
 var ENTRA_LOGIN_HOSTS_V1 = [
   "login.microsoftonline.com",
   "login.microsoftonline.us",
@@ -6730,7 +6752,7 @@ var ENTRA_LOGIN_HOSTS_V1 = [
   "login.chinacloudapi.cn",
 ];
 var ENTRA_LOGIN_HOST_SUFFIXES_V1 = [".b2clogin.com", ".ciamlogin.com"];
-//@ chunk-1kaj6e83.js:57739-57876 facade-exports
+//@ chunk-ft6a2kja.js:57858-57995 facade-exports
 /**
  * 判断 URL 是否是 Microsoft Entra 登录域。（v1 副本）
  */
@@ -6746,15 +6768,15 @@ function isEntraLoginUrl(urlOrObject) {
   }
 }
 export {
-  describeErrorBrief,
-  isFirstPartyMcpUrl,
-  configHasAuthorizationHeader,
-  getServerKey,
+  isDesignMcpUrl,
+  rethrowRedactedFetchError,
+  classifyMcpAuthTarget,
   IssuerEchoCrossOriginError,
   usesNonOAuthAuth,
   hasStoredRefreshToken,
-  isDesignMcpUrl,
-  rethrowRedactedFetchError,
+  configHasAuthorizationHeader,
+  isFirstPartyMcpUrl,
+  describeErrorBrief,
   hasAuthorizationHeader,
   ClaudeAuthProvider_2,
   wrapFetchWithStepUpDetection_2,
@@ -6767,7 +6789,7 @@ export {
   ClaudeAuthProvider,
   wrapFetchWithStepUpDetection,
   clearMcpOAuthStubIfTokenless,
-  classifyMcpAuthTarget,
+  getServerKey,
   hasMcpDiscoveryButNoToken,
   hasExternalAuthForConfig,
   anySegmentTokenLike,

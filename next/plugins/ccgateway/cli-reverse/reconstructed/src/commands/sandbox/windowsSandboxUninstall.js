@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。claude sandbox uninstall（Windows 沙箱卸载与残留检查）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-v21qppnj.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3qtgj81y.js (17)
  * attribution: placement 17
  */
 import { basename, join, dirname } from "path";
@@ -46,10 +46,10 @@ import {
   getEffectiveFilesystemPolicy,
 } from "../../utils/sandbox/sandbox-adapter.js";
 import { isScrubEnabled, isScrubSandboxAvailable } from "../../utils/subprocessEnv.js";
-import { getInitialSettings_2 } from "../../utils/settings/settings.js";
+import { getInitialSettings } from "../../utils/settings/settings.js";
 import { getPlatform } from "../../utils/platform.js";
 
-//@ chunk-v21qppnj.js:5755-7058 placement
+//@ chunk-3qtgj81y.js:6147-7450 placement
 /**
  * Windows 沙箱卸载的用户提示集合：关闭程序的指引、未检查的沙箱进程说明、残留账户名、无需管理员批准的说明、最多列出 5 项、40 分钟超时与勿中断提醒。
  */
@@ -66,7 +66,7 @@ var UNINSTALL_TIMEOUT_MINUTES = 40;
 var PROFILE_SCAN_DURATION_HINT =
   "goes through your user profile and project folders. On a large profile that can take many minutes, with nothing printed meanwhile.";
 var DO_NOT_INTERRUPT_HINT = `Until this has ended, don't start Claude Code, don't close this window, and don't press Ctrl+C. Claude Code stops waiting after ${UNINSTALL_TIMEOUT_MINUTES} minutes.`;
-//@ chunk-v21qppnj.js:7058-14107 placement
+//@ chunk-3qtgj81y.js:7450-14499 placement
 /**
  * Windows 沙箱卸载（claude sandbox uninstall）：停止服务、删除账户与目录并检查残留。
  */
@@ -320,7 +320,7 @@ async function uninstallWindowsSandbox(onNotice) {
         : "No entries of the Windows sandbox are recorded on your files now.",
   };
 }
-//@ chunk-v21qppnj.js:14107-14509 placement
+//@ chunk-3qtgj81y.js:14499-14901 placement
 /**
  * 调 srt-win acl forget --all 撤掉沙箱写在项目目录上的 ACL；超时或失败抛 WindowsSandboxError。
  */
@@ -347,7 +347,7 @@ async function forgetSandboxAcls({ exe, prependArgs }, timeoutMs) {
       `The sandbox's entries on your project folders could not all be taken off (exit ${code}): ${stderr || error || ""}`,
     );
 }
-//@ chunk-v21qppnj.js:14509-14873 placement
+//@ chunk-3qtgj81y.js:14901-15265 placement
 /**
  * 列出其他正在运行的 claude/cli/srt-win 进程（用于卸载前提示），快照失败返回 undefined。
  */
@@ -376,7 +376,7 @@ function listRunningClaudeProcesses() {
     })
     .map(({ pid, name: processName }) => `${diffLineToPlainText(processName)} (process ${pid})`);
 }
-//@ chunk-v21qppnj.js:14873-15111 placement
+//@ chunk-3qtgj81y.js:15265-15503 placement
 function describeSandboxLeftovers({ user, wfp }) {
   return [
     user.provisioned && "the sandbox account",
@@ -385,7 +385,7 @@ function describeSandboxLeftovers({ user, wfp }) {
     (wfp.state === "installed" || wfp.filters > 0) && "the network filters",
   ].filter((leftover) => leftover !== false);
 }
-//@ chunk-v21qppnj.js:15111-15348 placement
+//@ chunk-3qtgj81y.js:15503-15740 placement
 function describeGrantLeftovers({ user }) {
   return [
     {
@@ -408,31 +408,31 @@ function describeGrantLeftovers({ user }) {
         ],
   );
 }
-//@ chunk-v21qppnj.js:15348-15438 placement
+//@ chunk-3qtgj81y.js:15740-15830 placement
 function describeSandboxEntryLocations(entries) {
   return entries.length > 0
     ? [`the sandbox's entries on ${formatListConjunction(entries.map((entry) => entry.where))}`]
     : [];
 }
-//@ chunk-v21qppnj.js:15438-15551 placement
+//@ chunk-3qtgj81y.js:15830-15943 placement
 function formatSids({ sid, groupSid }) {
   let filtered = [sid, groupSid].filter((sid) => sid !== undefined);
   return filtered.length > 0 ? ` (${filtered.join(" and ")})` : "";
 }
-//@ chunk-v21qppnj.js:15551-15629 placement
+//@ chunk-3qtgj81y.js:15943-16021 placement
 function formatListConjunction(items) {
   return new Intl.ListFormat("en", {
     type: "conjunction",
   }).format(items);
 }
-//@ chunk-v21qppnj.js:15629-15728 placement (2.1.88 match: formatFailureDetails, 0.777)
+//@ chunk-3qtgj81y.js:16021-16120 placement (2.1.88 match: formatFailureDetails, 0.776)
 function formatFailureDetails(items) {
   let remaining = items.length - MAX_LISTED_REMAINING;
   return remaining > 0
     ? `${items.slice(0, MAX_LISTED_REMAINING).join(", ")} and ${remaining} more`
     : items.join(", ");
 }
-//@ chunk-v21qppnj.js:15728-16246 placement
+//@ chunk-3qtgj81y.js:16120-16638 placement
 /**
  * 把 srt-win 的错误说明改写成面向 claude sandbox uninstall 的提示（去掉 srt-win 命令建议），包成 "(Details: …)"。
  */
@@ -449,7 +449,7 @@ function formatUninstallDetails(error) {
     ? `(Details: ${replaced.slice(0, -1)}, with no reason given.)`
     : `(Details: ${replaced})`;
 }
-//@ chunk-v21qppnj.js:16246-18771 placement
+//@ chunk-3qtgj81y.js:16638-19163 placement
 async function windowsSandboxLeftovers(user, user_2) {
   let sandboxRuntimeDir = join(env.ProgramData || env.PROGRAMDATA || "C:\\ProgramData", "sandbox-runtime");
   let profileDirs =
@@ -473,7 +473,7 @@ async function windowsSandboxLeftovers(user, user_2) {
     "Your Claude Code settings. If the sandbox is still turned on there, Claude Code warns that it isn't available and runs commands without it. If your settings require the sandbox, Claude Code won't start. To turn it off, run /sandbox or set sandbox.enabled to false in your settings file. Where policy manages these settings, that is up to your administrator.",
   ];
 }
-//@ chunk-v21qppnj.js:18771-19077 placement
+//@ chunk-3qtgj81y.js:19163-19469 placement
 /**
  * claude sandbox install：不可用时直接返回原因；否则执行一次 Windows 沙箱安装，结果以 JSON 写到 stdout，并按状态设置退出码。
  */
@@ -509,7 +509,7 @@ async function sandboxInstallCommand() {
   );
   return exitAfterAnalyticsFlush(result.status === "ok" ? 0 : 1);
 }
-//@ chunk-v21qppnj.js:19077-20100 placement
+//@ chunk-3qtgj81y.js:19469-20492 placement
 async function sandboxStatusSummary() {
   let unavailableReason = windowsSandboxUnavailableReason();
   let base;
@@ -553,7 +553,7 @@ async function sandboxStatusSummary() {
       ? "unsupported"
       : isSandboxSettingOverriddenByPolicy("autoAllowBashIfSandboxed")
         ? "policy"
-        : getInitialSettings_2().sandbox?.autoAllowBashIfSandboxed === undefined
+        : getInitialSettings().sandbox?.autoAllowBashIfSandboxed === undefined
           ? "default"
           : "settings",
   };
@@ -564,7 +564,7 @@ async function sandboxStatusSummary() {
   );
   return exitAfterAnalyticsFlush(0);
 }
-//@ chunk-v21qppnj.js:20100-20634 placement
+//@ chunk-3qtgj81y.js:20492-21026 placement
 /**
  * claude sandbox uninstall：仅原生 Windows 执行卸载（非 json 模式逐条打印进度），输出结果与残留清单，按状态设置退出码。
  */
@@ -607,7 +607,7 @@ async function sandboxUninstallCommand({ json }) {
   );
   return exitAfterAnalyticsFlush(result.status === "ok" || result.status === "not_installed" ? 0 : 1);
 }
-//@ chunk-v21qppnj.js:20634-20937 placement
+//@ chunk-3qtgj81y.js:21026-21329 placement
 /**
  * 返回 Windows 沙箱不可安装的原因（非原生 Windows、未启用、被策略禁用），可用时为 null。
  */
@@ -618,7 +618,7 @@ function windowsSandboxUnavailableReason() {
     return "Sandboxing is disabled for this platform by the enabledPlatforms policy setting.";
   return null;
 }
-//@ chunk-v21qppnj.js:20937-21047 placement
+//@ chunk-3qtgj81y.js:21329-21439 placement
 function sandboxEnablementSource({ forced, policy, settings }) {
   if (forced) return "forced";
   if (policy) return "policy";

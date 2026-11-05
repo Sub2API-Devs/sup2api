@@ -3,13 +3,14 @@
  *
  * 工具结果/子输出的缩进容器（"⎿" 前缀），带 aria-hidden 与嵌套去重。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/MessageResponse.tsx
- * pieces: chunk-wq9366y3.js (6)
+ * pieces: chunk-h40h7b8f.js (6)
  * attribution: placement 5, fingerprint 1
  */
 import { init_react_production, useContext, createContext } from "../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -19,96 +20,91 @@ import { Text, Box } from "../ink/components/Text.js";
 import { Ratchet } from "./design-system/Ratchet.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-wq9366y3.js:380-384 placement
+//@ chunk-h40h7b8f.js:415-419 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wq9366y3.js:380", () => {
+deferInit("chunk-h40h7b8f.js:415", () => {
   init_react_production();
 });
-//@ chunk-wq9366y3.js:384-388 placement
+//@ chunk-h40h7b8f.js:419-423 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wq9366y3.js:384", () => {
+deferInit("chunk-h40h7b8f.js:419", () => {
   init_react_production();
 });
-//@ chunk-wq9366y3.js:388-1065 fingerprint (2.1.88 match: MessageResponse, 0.639)
+//@ chunk-h40h7b8f.js:423-1003 fingerprint (2.1.88 match: MessageResponse, 0.727)
 /**
  * 工具结果缩进容器：首行前缀 "⎿"，嵌套时不重复；前缀 aria-hidden；被 100+ 处使用。
  */
 function MessageResponse(props) {
-  let $ = useMemoCache(11);
-  let { children, height, screenReaderLabel } = props;
+  let $ = useMemoCache(8);
+  let { children, height } = props;
   if (useContext(InMessageResponseContext)) {
     return children;
   }
-  const isUnlabeled = screenReaderLabel === undefined;
-  let noSelectContent;
-  if ($[0] !== screenReaderLabel || $[1] !== isUnlabeled) {
-    noSelectContent = jsxProd_default(NoSelect, {
+  let t1;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t1 = jsxProd_default(NoSelect, {
       fromLeftEdge: true,
       flexShrink: 0,
       children: jsxProd_default_2(Text, {
-        "aria-hidden": isUnlabeled,
-        "aria-label": screenReaderLabel,
+        "aria-hidden": true,
         dimColor: true,
         children: ["  ", "\u23BF \xA0"],
       }),
     });
-    $[0] = screenReaderLabel;
-    $[1] = isUnlabeled;
-    $[2] = noSelectContent;
-  } else noSelectContent = $[2];
+    $[0] = t1;
+  } else t1 = $[0];
   let t2;
-  if ($[3] !== children) {
+  if ($[1] !== children) {
     t2 = jsxProd_default(Box, {
       flexShrink: 1,
       flexGrow: 1,
       children,
     });
-    $[3] = children;
-    $[4] = t2;
-  } else t2 = $[4];
+    $[1] = children;
+    $[2] = t2;
+  } else t2 = $[2];
   let t3;
-  if ($[5] !== height || $[6] !== noSelectContent || $[7] !== t2) {
+  if ($[3] !== height || $[4] !== t2) {
     t3 = jsxProd_default(InMessageResponseProvider, {
       children: jsxProd_default_2(Box, {
         flexDirection: "row",
         height,
         overflowY: "hidden",
-        children: [noSelectContent, t2],
+        children: [t1, t2],
       }),
     });
-    $[5] = height;
-    $[6] = noSelectContent;
-    $[7] = t2;
-    $[8] = t3;
-  } else t3 = $[8];
+    $[3] = height;
+    $[4] = t2;
+    $[5] = t3;
+  } else t3 = $[5];
   let content = t3;
   if (height !== undefined) {
     return content;
   }
   let t4;
-  if ($[9] !== content) {
+  if ($[6] !== content) {
     t4 = jsxProd_default(Ratchet, {
       lock: "offscreen",
       children: content,
     });
-    $[9] = content;
-    $[10] = t4;
-  } else t4 = $[10];
+    $[6] = content;
+    $[7] = t4;
+  } else t4 = $[7];
   return t4;
 }
-//@ chunk-wq9366y3.js:1065-1078 placement
+//@ chunk-h40h7b8f.js:1003-1016 placement
 var InMessageResponseContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wq9366y3.js:1065", () => {
+deferInit("chunk-h40h7b8f.js:1003", () => {
   InMessageResponseContext = createContext(false);
 });
-//@ chunk-wq9366y3.js:1078-1106 placement
+//@ chunk-h40h7b8f.js:1016-1044 placement
 /**
  * 函数 useMessageResponseValue（取消息响应上下文）；位于「工具结果/子输出的缩进容器（"⎿" 前缀），带 aria-hidden 与嵌套去重」模块。
  */
 function useMessageResponseValue() {
   return useContext(InMessageResponseContext);
 }
-//@ chunk-wq9366y3.js:1106-1233 placement
+//@ chunk-h40h7b8f.js:1044-1171 placement
 function InMessageResponseProvider(props) {
   let $ = useMemoCache(2);
   let { children } = props;

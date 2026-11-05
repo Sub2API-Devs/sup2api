@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：折叠行显示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-j64mp9kq.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pnx1prpt.js (3)
  * attribution: placement 3
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -19,13 +19,13 @@ import { useMainLoopModel } from "../../hooks/useMainLoopModel.js";
 import { useQueuedMessageText } from "../../context/QueuedMessageContext.js";
 import { EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { ULTRATHINK_KEYWORD } from "../../utils/ultraplan/keyword.js";
-import { isUltrathinkEffective } from "../../utils/effort.js";
+import { ultrathinkRaisesEffort } from "../../utils/effort.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { getRainbowColor } from "../../utils/thinking.js";
 import { splitLongTextForCollapse } from "./UserMessageSite.js";
 import { sanitizeDisplayText } from "../../utils/sanitizeDisplayText.js";
 
-//@ chunk-j64mp9kq.js:4795-5195 placement
+//@ chunk-pnx1prpt.js:4795-5195 placement
 /**
  * 折叠提示分隔线："(N lines hidden)"、"(~X KB hidden)" 或两者。
  */
@@ -61,7 +61,7 @@ function CollapsedLinesDivider(props) {
   } else dividerElement = $[6];
   return dividerElement;
 }
-//@ chunk-j64mp9kq.js:5195-5838 placement
+//@ chunk-pnx1prpt.js:5195-5838 placement
 /**
  * 渲染思考文本，ultrathink 关键字生效时把关键字逐字符彩虹着色。
  */
@@ -74,9 +74,9 @@ function UltrathinkHighlightedText(props) {
   let contentElement;
   if ($[0] !== color || $[1] !== queuedMessageText || $[2] !== mainLoopModel || $[3] !== text) {
     contentElement = EARLY_RETURN_SENTINEL;
-    C: {
+    b: {
       let ultrathinkKeyword = ULTRATHINK_KEYWORD(text);
-      if (ultrathinkKeyword.length === 0 || !isUltrathinkEffective(mainLoopModel, queuedMessageText)) {
+      if (ultrathinkKeyword.length === 0 || !ultrathinkRaisesEffort(mainLoopModel, queuedMessageText)) {
         let textElement;
         if ($[6] !== color || $[7] !== text) {
           textElement = jsxProd_default(Text, {
@@ -88,7 +88,7 @@ function UltrathinkHighlightedText(props) {
           $[8] = textElement;
         } else textElement = $[8];
         contentElement = textElement;
-        break C;
+        break b;
       }
       let segments = [];
       let cursor = 0;
@@ -145,7 +145,7 @@ function UltrathinkHighlightedText(props) {
   if (contentElement !== EARLY_RETURN_SENTINEL) return contentElement;
   return headerElement;
 }
-//@ chunk-j64mp9kq.js:5838-6575 placement
+//@ chunk-pnx1prpt.js:5838-6575 placement
 /**
  * 长文本折叠显示：能折叠时显示头部、折叠分隔线和尾部，否则整段显示（均经 sanitizeDisplayText）。
  */
@@ -238,4 +238,4 @@ function CollapsibleText(props) {
   } else footerElementElement = $[18];
   return footerElementElement;
 }
-export { CollapsibleText, CollapsedLinesDivider, UltrathinkHighlightedText };
+export { CollapsedLinesDivider, UltrathinkHighlightedText, CollapsibleText };

@@ -3,18 +3,18 @@
  *
  * /ultraplan：云端计划会话的提示词变体、文案、启动与同意流程
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/ultraplan.tsx
- * pieces: chunk-aepeg2w5.js (1), chunk-e6aww6q8.js (28), chunk-fym4r1th.js (1), chunk-s61vbvea.js (1)
- * attribution: callgraph-fingerprint 2, placement 9, layout 9, fingerprint 11
+ * pieces: chunk-5xgkngpb.js (28), chunk-7jxyna5q.js (1), chunk-czq1j3j2.js (1), chunk-exfmq47h.js (1), chunk-wrq65rh8.js (1)
+ * attribution: placement 11, callgraph-fingerprint 2, layout 9, fingerprint 10
  */
 import { stat } from "fs/promises";
 import { getAPIProvider } from "../utils/model/providers.js";
-import { getInitialSettings_2 } from "../utils/settings/settings.js";
+import { getInitialSettings } from "../utils/settings/settings.js";
 import { catalogDefaultKeyForFamily } from "../utils/model/classifierModel.js";
 import { catalogEntriesByFirstPartyId } from "../utils/model/modelCatalog.js";
 import { findServedModel, entryModelKey } from "../utils/model/modelCatalog/servedCatalog.js";
-import { MODEL_KEY_BY_FIRST_PARTY_ID } from "../utils/model/configs.js";
+import { MODEL_KEY_BY_FIRST_PARTY_ID, CLAUDE_FABLE_5_1_CONFIG } from "../utils/model/configs.js";
 import {
   hasDescribableCatalogModel,
   isAliasFamilyUnavailable,
@@ -27,7 +27,7 @@ import {
 } from "../tools/BashTool/bashTelemetry.js";
 import { looksLikePrompt } from "../tasks/LocalShellTask/LocalShellTask.js";
 import { stripClaudeCodeHints } from "../utils/claudeCodeHints.js";
-import { findBtwTriggerPositions, findKeywordTriggerPositions } from "../utils/ultraplan/keyword.js";
+import { findBtwTriggerPositions_2 } from "../utils/sideQuestion.js";
 import { withHideWhile } from "../components/dialogs/dialogRequests.js";
 import { ULTRAPLAN_CHOICE } from "../components/nudges/nudgeIds.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -77,16 +77,18 @@ import { env } from "../utils/env.js";
 import { isPolicyAllowed as isPolicyAllowed_3 } from "../services/policyLimits/policyEvidence.js";
 import { teleportToRemote, launchReadsOnlyTags } from "../utils/teleport.js";
 import { registerCleanup } from "../utils/cleanupRegistry.js";
+import { findKeywordTriggerPositions } from "../utils/ultraplan/keyword.js";
 import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
 import { LOCAL_COMMAND_STDOUT } from "../constants/xml.js";
 import { escapeXml_2 as escapeXml } from "../utils/confusables.js";
 import { createAbortController } from "../utils/abortController.js";
+import { strippedCanonicalName } from "../utils/model/canonicalModelName.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:436484-436867 callgraph-fingerprint (2.1.88 match: getUltraplanModel, 0.333)
-function getUltraplanModel(family, model) {
+//@ chunk-exfmq47h.js:447875-448258 placement
+function isBelowFamilyDefault(family, model) {
   if (getAPIProvider() === "firstParty") return false;
-  let modelOverrides = getInitialSettings_2().modelOverrides;
+  let modelOverrides = getInitialSettings().modelOverrides;
   let catalogKey = catalogDefaultKeyForFamily(family);
   if (catalogKey === undefined || !modelOverrides?.[catalogEntriesByFirstPartyId[catalogKey].firstParty])
     return false;
@@ -109,8 +111,8 @@ function getUltraplanModel(family, model) {
     !isAliasFamilyUnavailable(family)
   );
 }
-//@ chunk-fym4r1th.js:50778-51176 fingerprint (2.1.88 match: DEFAULT_INSTRUCTIONS, 0.696)
-function DEFAULT_INSTRUCTIONS(taskId, onPrompt, onResume) {
+//@ chunk-wrq65rh8.js:52089-52487 placement
+function watchTaskOutputForPrompt(taskId, onPrompt, onResume) {
   let taskOutputPath = getTaskOutputPath(taskId);
   let lastSize = 0;
   let now = Date.now();
@@ -156,17 +158,17 @@ function DEFAULT_INSTRUCTIONS(taskId, onPrompt, onResume) {
     clearInterval(interval);
   };
 }
-//@ chunk-s61vbvea.js:33608-33648 fingerprint (2.1.88 match: buildLaunchMessage, 1)
+//@ chunk-7jxyna5q.js:34206-34246 fingerprint (2.1.88 match: buildLaunchMessage, 1)
 function buildLaunchMessage(disconnectedBridge) {
-  return findBtwTriggerPositions(disconnectedBridge, "ultraplan");
+  return findBtwTriggerPositions_2(disconnectedBridge, "ultraplan");
 }
-//@ chunk-e6aww6q8.js:1763752-1763922 placement
+//@ chunk-5xgkngpb.js:1840823-1840994 placement
 /**
  * ultraplan-choice 对话框 spec：kind 为 ULTRAPLAN_CHOICE，载荷为 {plan}。
  */
 var ULTRAPLAN; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var ULTRAPLAN_CHOICE_DIALOG_SPEC;
-deferInit("chunk-e6aww6q8.js:1763752", () => {
+deferInit("chunk-5xgkngpb.js:1840823", () => {
   ULTRAPLAN = "ultraplan";
   ULTRAPLAN_CHOICE_DIALOG_SPEC = withHideWhile({
     kind: ULTRAPLAN_CHOICE,
@@ -180,7 +182,7 @@ deferInit("chunk-e6aww6q8.js:1763752", () => {
     hideWhile: ["panel", "draft"],
   });
 });
-//@ chunk-e6aww6q8.js:1763922-1764761 placement
+//@ chunk-5xgkngpb.js:1840994-1841835 placement
 async function runUltraplanPoll({
   plan,
   sessionId,
@@ -258,7 +260,7 @@ async function runUltraplanPoll({
       logForDebugging(`ultraplan archive failed: ${String(error)}`),
     );
 }
-//@ chunk-e6aww6q8.js:1764761-1766349 placement
+//@ chunk-5xgkngpb.js:1841835-1843432 placement
 /**
  * 用户在浏览器里批准 ultraplan 后，生成交回本地会话的提示：先简述计划再开始实现。
  */
@@ -346,7 +348,7 @@ async function buildUltraplanApprovedPrompt(
     }
   }
 }
-//@ chunk-e6aww6q8.js:1766349-1766538 placement
+//@ chunk-5xgkngpb.js:1843432-1843621 placement
 async function saveStoppedUltraplan(plan, note, storageV5) {
   try {
     let savedPath = await saveRejectedUltraplan(isNetworkPath(normalizeLineBreaks(plan)), storageV5);
@@ -356,27 +358,27 @@ async function saveStoppedUltraplan(plan, note, storageV5) {
     note(`ultraplan: failed to save the stopped plan \u2014 ${errorMessage(error)}`);
   }
 }
-//@ chunk-e6aww6q8.js:1766538-1766607 placement
+//@ chunk-5xgkngpb.js:1843621-1843693 placement
 function formatUltraplanBlock(planText) {
   return [`<${ULTRAPLAN}>`, neutralizeForwardedLinks_2(ULTRAPLAN, indentTurn(planText)), `</${ULTRAPLAN}>`]
     .join(`
 `);
 }
-//@ chunk-e6aww6q8.js:1766607-1766669 placement
+//@ chunk-5xgkngpb.js:1843693-1843755 placement
 async function transcriptFileExists(id, sessionId) {
   return stat(getTranscriptPathForSession(id)).then(
     () => true,
     () => false,
   );
 }
-//@ chunk-e6aww6q8.js:1766669-1766739 placement
+//@ chunk-5xgkngpb.js:1843755-1843825 placement
 var ULTRAPLAN_PROMPT_VARIANTS = ["simple_plan", "visual_plan", "three_subagents_with_critique"];
-//@ chunk-e6aww6q8.js:1766739-1766933 placement
+//@ chunk-5xgkngpb.js:1843825-1844019 placement
 /**
  * ultraplan 启动对话框的声明：载荷（提示词变体、是否显示条款、提示词、是否经中继投递）与结果（run/cancel/cancelled），默认 cancelled。
  */
 var ULTRAPLAN_LAUNCH_DIALOG; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1766739", () => {
+deferInit("chunk-5xgkngpb.js:1843825", () => {
   ULTRAPLAN_LAUNCH_DIALOG = withHideWhile({
     kind: "ultraplan_launch",
     payload: DoctorLazy(() =>
@@ -391,7 +393,7 @@ deferInit("chunk-e6aww6q8.js:1766739", () => {
     default: "cancelled",
   });
 });
-//@ chunk-e6aww6q8.js:2014140-2014222 placement
+//@ chunk-5xgkngpb.js:2069942-2070024 placement
 /**
  * isUltraplanEnabled：tengu_ultraplan_config.enabled 且 bridge 可用且非远程。
  */
@@ -402,14 +404,14 @@ function isUltraplanEnabled() {
     !getIsRemoteMode()
   );
 }
-//@ chunk-e6aww6q8.js:2014222-2014383 callgraph-fingerprint (2.1.88 match: CCR_TERMS_URL, 0.43)
+//@ chunk-5xgkngpb.js:2070024-2070185 callgraph-fingerprint (2.1.88 match: CCR_TERMS_URL, 0.43)
 /**
  * ULTRAPLAN_PROMPTS：simple_plan/visual_plan/three_subagents_with_critique。
  */
 var CCR_TERMS_URL_ULTRAPLAN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ULTRAPLAN_PROMPTS;
 var DEFAULT_ULTRAPLAN_PROMPT_ID;
-deferInit("chunk-e6aww6q8.js:2014222", () => {
+deferInit("chunk-5xgkngpb.js:2070024", () => {
   CCR_TERMS_URL_ULTRAPLAN = "https://code.claude.com/docs/en/claude-code-on-the-web";
   ULTRAPLAN_PROMPTS = {
     simple_plan: require_simplePlanResource(),
@@ -418,11 +420,11 @@ deferInit("chunk-e6aww6q8.js:2014222", () => {
   };
   DEFAULT_ULTRAPLAN_PROMPT_ID = "simple_plan";
 });
-//@ chunk-e6aww6q8.js:2014383-2014415 layout
+//@ chunk-5xgkngpb.js:2070185-2070217 layout
 function isUltraplanPromptId(featureValue_CACHED_MAY_BE_STALE) {
   return featureValue_CACHED_MAY_BE_STALE in ULTRAPLAN_PROMPTS;
 }
-//@ chunk-e6aww6q8.js:2014415-2014499 layout
+//@ chunk-5xgkngpb.js:2070217-2070301 layout
 /**
  * getUltraplanPromptId：tengu_ultraplan_prompt_identifier。
  */
@@ -435,7 +437,7 @@ function getUltraplanPromptId() {
     ? featureValue_CACHED_MAY_BE_STALE
     : DEFAULT_ULTRAPLAN_PROMPT_ID;
 }
-//@ chunk-e6aww6q8.js:2014499-2015417 layout
+//@ chunk-5xgkngpb.js:2070301-2071219 layout
 var DEFAULT_ULTRAPLAN_COPY = {
   timeEstimate: "a few minutes",
   dialogBody:
@@ -464,16 +466,16 @@ var ULTRAPLAN_COPY_BY_PROMPT = {
     ],
   },
 };
-//@ chunk-e6aww6q8.js:2015417-2015454 layout
+//@ chunk-5xgkngpb.js:2071219-2071256 layout
 function getUltraplanCopy(promptIdentifier) {
   return ULTRAPLAN_COPY_BY_PROMPT[promptIdentifier ?? getUltraplanPromptId()];
 }
-//@ chunk-e6aww6q8.js:2015454-2015533 layout
+//@ chunk-5xgkngpb.js:2071256-2071335 layout
 function getUltraplanPromptText(identifier) {
   let entry = ULTRAPLAN_PROMPTS[identifier];
   return (typeof entry === "string" ? entry : entry.default).trimEnd();
 }
-//@ chunk-e6aww6q8.js:2015533-2015669 fingerprint (2.1.88 match: buildUltraplanPrompt, 1)
+//@ chunk-5xgkngpb.js:2071335-2071471 fingerprint (2.1.88 match: buildUltraplanPrompt, 1)
 function buildUltraplanPrompt(blurb, seedPlan, identifier) {
   let parts = [];
   if (seedPlan) parts.push("Here is a draft plan to refine:", "", seedPlan, "");
@@ -482,7 +484,7 @@ function buildUltraplanPrompt(blurb, seedPlan, identifier) {
   return parts.join(`
 `);
 }
-//@ chunk-e6aww6q8.js:2015669-2018378 fingerprint (2.1.88 match: startDetachedPoll, 0.616)
+//@ chunk-5xgkngpb.js:2071471-2074185 fingerprint (2.1.88 match: startDetachedPoll, 0.616)
 function startDetachedPoll({
   taskId,
   sessionId,
@@ -638,23 +640,23 @@ Session: ${url}`,
     }
   })();
 }
-//@ chunk-e6aww6q8.js:2018378-2018474 layout
+//@ chunk-5xgkngpb.js:2074185-2074281 layout
 function buildLaunchingMessage(disconnectedBridge) {
   let prefix = disconnectedBridge ? `${REMOTE_CONTROL_DISCONNECTED_MSG} ` : "";
   return `${DIAMOND_GLYPH} ultraplan
 ${prefix}Starting a cloud session\u2026`;
 }
-//@ chunk-e6aww6q8.js:2018474-2018636 fingerprint (2.1.88 match: buildSessionReadyMessage, 0.8)
+//@ chunk-5xgkngpb.js:2074281-2074443 fingerprint (2.1.88 match: buildSessionReadyMessage, 0.8)
 function buildSessionReadyMessage(url) {
   return `${DIAMOND_GLYPH} ultraplan \xB7 Monitor the cloud session at ${url}
 You can continue working \u2014 when the ${DIAMOND_GLYPH} fills, press \u2193 to view results`;
 }
-//@ chunk-e6aww6q8.js:2018636-2018720 layout
+//@ chunk-5xgkngpb.js:2074443-2074527 layout
 function buildPlanReadyMessage(url) {
   return `${FILLED_DIAMOND_GLYPH} ultraplan ready \xB7 ${url}
 Press ${DOWN_ARROW} to view results`;
 }
-//@ chunk-e6aww6q8.js:2018720-2018878 layout
+//@ chunk-5xgkngpb.js:2074527-2074685 layout
 function getUltraplanUsage() {
   return [
     'Usage: /ultraplan \\<prompt\\>, or include "ultraplan" anywhere',
@@ -666,13 +668,13 @@ function getUltraplanUsage() {
   ].join(`
 `);
 }
-//@ chunk-e6aww6q8.js:2018878-2019065 fingerprint (2.1.88 match: buildAlreadyActiveMessage, 1)
+//@ chunk-5xgkngpb.js:2074685-2074872 fingerprint (2.1.88 match: buildAlreadyActiveMessage, 1)
 function buildAlreadyActiveMessage(url) {
   return url
     ? `ultraplan: already polling. Open ${url} to check status, or wait for the plan to land here.`
     : "ultraplan: already launching. Please wait for the session to start.";
 }
-//@ chunk-e6aww6q8.js:2019065-2019611 fingerprint (2.1.88 match: stopUltraplan, 0.899)
+//@ chunk-5xgkngpb.js:2074872-2075418 fingerprint (2.1.88 match: stopUltraplan, 0.899)
 async function stopUltraplan(taskId, sessionId, setAppState, updateAppState, queue, storageV5) {
   await RemoteAgentTask.kill(taskId, setAppState, updateAppState, undefined, storageV5);
   updateAppState((prev) =>
@@ -702,7 +704,7 @@ Session: ${url}`,
     isMeta: true,
   });
 }
-//@ chunk-e6aww6q8.js:2019611-2020376 fingerprint (2.1.88 match: launchUltraplan, 0.59)
+//@ chunk-5xgkngpb.js:2075418-2076185 fingerprint (2.1.88 match: launchUltraplan, 0.591)
 async function launchUltraplan(opts) {
   let {
     arg,
@@ -759,7 +761,7 @@ async function launchUltraplan(opts) {
   });
   return buildLaunchingMessage(disconnectedBridge);
 }
-//@ chunk-e6aww6q8.js:2020376-2022801 fingerprint (2.1.88 match: launchDetached, 0.802)
+//@ chunk-5xgkngpb.js:2076185-2078615 fingerprint (2.1.88 match: launchDetached, 0.8)
 async function launchDetached(opts) {
   let {
     arg: blurb,
@@ -923,7 +925,7 @@ ${reasons}`,
     );
   }
 }
-//@ chunk-e6aww6q8.js:2022801-2023546 fingerprint (2.1.88 match: call, 0.563)
+//@ chunk-5xgkngpb.js:2078615-2079360 fingerprint (2.1.88 match: call, 0.574)
 /**
  * call：/ultraplan 的 call（rrn.load 直接给出）。
  */
@@ -976,7 +978,7 @@ var EMPTY_TASKS_STORE = {
 };
 var ULTRAPLAN_NO_CONSENT_SURFACE =
   "ultraplan asks before it starts a cloud session, and this session can't show that prompt. Run /ultraplan from an interactive Claude Code session.";
-//@ chunk-e6aww6q8.js:2023546-2025505 layout
+//@ chunk-5xgkngpb.js:2079360-2081322 layout
 async function runUltraplanConsentFlow({ arg, source, context, onDone }) {
   let requestDialog = context.requestDialog;
   if (!requestDialog) {
@@ -1119,10 +1121,7 @@ async function runUltraplanConsentFlow({ arg, source, context, onDone }) {
     display: "skip",
   });
 }
-//@ chunk-e6aww6q8.js:2025505-2025765 fingerprint (2.1.88 match: default, 0.563)
-/**
- * /ultraplan 命令对象（local-jsx）；描述：{return`Draft an editable plan in a cloud session (${MXn().timeEstimate}) \xB7 See ${wbe}`}；availability ["claude-ai"]；isEnabled: ()=>f6()。
- */
+//@ chunk-5xgkngpb.js:2081322-2081582 fingerprint (2.1.88 match: default, 0.563)
 var ultraplanCommand = {
   type: "local-jsx",
   name: "ultraplan",
@@ -1137,16 +1136,24 @@ var ultraplanCommand = {
       call,
     }),
 };
+//@ chunk-czq1j3j2.js:1790853-1790903 callgraph-fingerprint (2.1.88 match: getUltraplanModel, 0.589)
+/**
+ * 模型（去掉 [1m]、按身份归一）是否 claude-fable-5-1。旧版名 MODEL_COSTS 为错配。
+ */
+function isFable51Model(mainLoopModel) {
+  return strippedCanonicalName(mainLoopModel) === strippedCanonicalName(CLAUDE_FABLE_5_1_CONFIG.firstParty);
+}
 export {
   CCR_TERMS_URL_ULTRAPLAN,
   buildLaunchMessage,
-  ULTRAPLAN_CHOICE_DIALOG_SPEC,
+  ultraplanCommand,
   isUltraplanEnabled,
+  watchTaskOutputForPrompt,
+  ULTRAPLAN_CHOICE_DIALOG_SPEC,
   ULTRAPLAN_LAUNCH_DIALOG,
   stopUltraplan,
   getUltraplanCopy,
   launchUltraplan,
-  getUltraplanModel,
-  ultraplanCommand,
-  DEFAULT_INSTRUCTIONS,
+  isFable51Model,
+  isBelowFamilyDefault,
 };

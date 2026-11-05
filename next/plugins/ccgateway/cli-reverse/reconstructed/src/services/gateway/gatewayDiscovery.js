@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：向网关发现可用模型并缓存（第一方/自定义 base URL 时跳过）；从存储读取网关模型列表缓存等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (13)
  * attribution: placement 13
  */
 import { join } from "path";
@@ -20,7 +20,7 @@ import {
   isFirstPartyAnthropicBaseUrl,
   assumesFirstPartyBaseUrl,
 } from "../../utils/model/providers.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { safeParseJSON } from "../../utils/json.js";
 import { getProviderState } from "../../utils/model/providerCaches.js";
@@ -45,7 +45,7 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { redactInvalidHeaderValues } from "../../utils/errorRedaction.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:399969-400128 placement
+//@ chunk-exfmq47h.js:411357-411516 placement
 /**
  * 网关模型发现用的常量与 schema（超时、描述长度上限、模型条目与缓存文件的 zod schema）；与错误遮盖无关，应归 services/gateway/gatewayDiscovery.js。
  */
@@ -53,7 +53,7 @@ var GATEWAY_DISCOVERY_TIMEOUT_MS; // deferred: uses DoctorLazy (../../cli/handle
 var gatewayModelSchema;
 var GATEWAY_MODEL_DESCRIPTION_MAX;
 var gatewayModelCacheSchema;
-deferInit("chunk-aepeg2w5.js:399969", () => {
+deferInit("chunk-exfmq47h.js:411357", () => {
   GATEWAY_DISCOVERY_TIMEOUT_MS = 3000;
   gatewayModelSchema = DoctorLazy(() =>
     objectSchema({
@@ -71,7 +71,7 @@ deferInit("chunk-aepeg2w5.js:399969", () => {
     }),
   );
 });
-//@ chunk-aepeg2w5.js:400128-400308 placement
+//@ chunk-exfmq47h.js:411516-411696 placement
 function isGatewayModelDiscoveryEnabled() {
   if (isDiskless()) return false;
   if (!env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY) return false;
@@ -80,28 +80,28 @@ function isGatewayModelDiscoveryEnabled() {
   if (!env.ANTHROPIC_BASE_URL) return false;
   return true;
 }
-//@ chunk-aepeg2w5.js:400308-400346 placement (2.1.88 match: getCacheDir, 1)
+//@ chunk-exfmq47h.js:411696-411734 placement (2.1.88 match: getCacheDir, 1)
 /**
  * ~/.claude/cache。覆盖后缀名 getCacheDir_3。
  */
 function getCacheDir() {
   return join(getClaudeConfigDir(), "cache");
 }
-//@ chunk-aepeg2w5.js:400346-400398 placement
+//@ chunk-exfmq47h.js:411734-411786 placement
 /**
  * ~/.claude/cache/gateway-models.json（网关模型发现缓存）。
  */
 function getGatewayModelsCachePath() {
   return join(getCacheDir(), "gateway-models.json");
 }
-//@ chunk-aepeg2w5.js:400398-400468 placement
+//@ chunk-exfmq47h.js:411786-411856 placement
 /**
  * 网关模型缓存的存储键（gateway-models.json）。
  */
 function gatewayModelCacheKey() {
   return STORAGE_SPACES.cache("gateway-models", "gateway-models.json");
 }
-//@ chunk-aepeg2w5.js:400468-400543 placement
+//@ chunk-exfmq47h.js:411856-411931 placement
 /**
  * 解析网关模型缓存文件，解析失败返回 null。
  */
@@ -109,14 +109,14 @@ function parseGatewayModelCache(text) {
   let parsed = gatewayModelCacheSchema().safeParse(safeParseJSON(text, false));
   return parsed.success ? parsed.data : null;
 }
-//@ chunk-aepeg2w5.js:400543-400594 placement
+//@ chunk-exfmq47h.js:411931-411982 placement
 /**
  * 按宿主保存的网关模型选项缓存表。
  */
 function gatewayModelCacheMap() {
   return getProviderState().gatewayModelsByCachePath;
 }
-//@ chunk-aepeg2w5.js:400594-400772 placement
+//@ chunk-exfmq47h.js:411982-412160 placement
 function readGatewayModelsCache(gatewayModelsCachePath, path = getProviderState().gatewayModelsStorageV5) {
   let cache = gatewayModelCacheMap();
   if (cache.has(gatewayModelsCachePath)) return cache.get(gatewayModelsCachePath) ?? null;
@@ -131,7 +131,7 @@ function readGatewayModelsCache(gatewayModelsCachePath, path = getProviderState(
   cache.set(gatewayModelsCachePath, text);
   return text;
 }
-//@ chunk-aepeg2w5.js:400772-401172 placement
+//@ chunk-exfmq47h.js:412160-412560 placement
 /**
  * 从存储读取网关模型列表缓存。
  */
@@ -153,12 +153,12 @@ async function primeGatewayModels(baseUrl) {
     providerState.gatewayModelsByCachePath.set(gatewayModelsCachePath, gatewayModelCache);
   providerState.gatewayModelsStorageV5 = baseUrl;
 }
-//@ chunk-aepeg2w5.js:401172-401191 placement
+//@ chunk-exfmq47h.js:412560-412579 placement
 var weakMap_3; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:401172", () => {
+deferInit("chunk-exfmq47h.js:412560", () => {
   weakMap_3 = new WeakMap();
 });
-//@ chunk-aepeg2w5.js:401191-401476 placement
+//@ chunk-exfmq47h.js:412579-412864 placement
 /**
  * 网关提供的模型选项（来自发现缓存）。
  */
@@ -178,14 +178,14 @@ function getGatewayModelOptions() {
   weakMap_3.set(gatewayModelsCache, mapped);
   return mapped;
 }
-//@ chunk-aepeg2w5.js:401476-401548 placement
+//@ chunk-exfmq47h.js:412864-412936 placement
 /**
  * 判断一个模型选项的值与标签是否自洽（标签是清洗后的值）。
  */
 function isSanitizedModelOption(option) {
   return typeof option.value === "string" && option.label === sanitizeTitle(option.value);
 }
-//@ chunk-aepeg2w5.js:401548-404666 placement
+//@ chunk-exfmq47h.js:412936-416057 placement
 /**
  * 向网关发现可用模型并缓存（第一方/自定义 base URL 时跳过）。
  */

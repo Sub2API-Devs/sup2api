@@ -3,19 +3,19 @@
  *
  * 计算 MCP 服务器 instructions 的增量附件（新增/变更/移除），避免每轮重复注入完整说明。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/mcpInstructionsDelta.ts
- * pieces: chunk-e6aww6q8.js (2)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: fingerprint 1, placement 1
  */
-import { stringArray as stringArray_2, count } from "./collections.js";
+import { stringArray as stringArray_2, countWhere } from "./collections.js";
 import { isConnectedOrCached } from "../skills/bundled/scheduleRemoteAgents.js";
 import { isSortedOtterOn } from "../services/mcp/mcpGates.js";
 import { isDiscoveryCacheOn } from "../services/mcp/mcpAccountKey.js";
 import { logEvent } from "../services/analytics/index.js";
 import { compareStringsGrouped } from "./stringUtils.js";
 
-//@ chunk-e6aww6q8.js:2311501-2313126 fingerprint (2.1.88 match: getMcpInstructionsDelta, 0.82)
+//@ chunk-5xgkngpb.js:2366898-2368526 fingerprint (2.1.88 match: getMcpInstructionsDelta, 0.82)
 /**
  * getMcpInstructionsDelta：对比消息中已宣布的 mcp_instructions_delta 附件与当前已连接服务器的 instructions，算出新增/变更与已断开的服务器，返回 {addedNames, addedBlocks, addedServerInstructions?, removedNames} 或 null；可选在服务器 pending 时暂不撤回。
  */
@@ -97,7 +97,7 @@ function getMcpInstructionsDelta(
   logEvent("tengu_mcp_instructions_pool_change", {
     addedCount: added.length,
     removedCount: removed.length,
-    departedWhileConnectingCount: count(filtered, (name) => pendingNames.has(name)),
+    departedWhileConnectingCount: countWhere(filtered, (name) => pendingNames.has(name)),
     retractionHoldEnabled: holdRetractionsWhilePending,
     priorAnnouncedCount: announced.size,
     clientSideCount: clientSideInstructions.length,
@@ -115,7 +115,7 @@ function getMcpInstructionsDelta(
     removedNames: removed.sort(),
   };
 }
-//@ chunk-e6aww6q8.js:2313126-2313429 placement
+//@ chunk-5xgkngpb.js:2368526-2368829 placement
 /**
  * 计算 MCP 服务器 instructions 增量：对比当前已连接服务器的 instructions 与之前已公告的，给出新增/变更与移除的服务器列表。
  */

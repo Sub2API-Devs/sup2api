@@ -1,14 +1,14 @@
 /**
  * https-proxy-agent/dist/parse-proxy-response.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: https-proxy-agent@7.0.4..7.0.6
- * pieces: chunk-hq88884p.js (1)
+ * pieces: chunk-355mdh7x.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_debug_2 } from "../../debug/src/index.js";
 
-//@ chunk-hq88884p.js:20967-22404 cjs-fingerprint
+//@ chunk-355mdh7x.js:20988-22425 cjs-fingerprint
 var require_parse_proxy_response = __commonJS(function (cjsExports) {
   var __importDefault =
     (cjsExports && cjsExports.__importDefault) ||
@@ -30,8 +30,8 @@ var require_parse_proxy_response = __commonJS(function (cjsExports) {
       let buffersLength = 0;
       let buffers = [];
       function read() {
-        let b_2 = socket.read();
-        if (b_2) ondata(b_2);
+        let b = socket.read();
+        if (b) ondata(b);
         else socket.once("readable", read);
       }
       function cleanup() {
@@ -49,9 +49,9 @@ var require_parse_proxy_response = __commonJS(function (cjsExports) {
         debug("onerror %o", err);
         reject(err);
       }
-      function ondata(b) {
-        buffers.push(b);
-        buffersLength += b.length;
+      function ondata(b_2) {
+        buffers.push(b_2);
+        buffersLength += b_2.length;
         let buffered = Buffer.concat(buffers, buffersLength);
         let endOfHeaders = buffered.indexOf(`\r
 \r

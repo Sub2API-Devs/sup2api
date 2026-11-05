@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：在云会话中应用 home seed
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-twq47pff.js (35)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9x09krra.js (35)
  * attribution: placement 35
  */
 import { join, relative, sep, isAbsolute, resolve, dirname, basename } from "path";
@@ -36,16 +36,12 @@ import { readOnlyNoFollowFlags } from "../../utils/platformTargets.js";
 import { getErrnoCode, isENOENT } from "../../utils/errors.js";
 import { createHomeFileWriter, resolveDestinationSpelling } from "./destination.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
-import {
-  markInternalWrite,
-  consumeInternalWrite,
-  INTERNAL_WRITE_WINDOW_MS,
-} from "../../cli/headlessCloud/attachServe.js";
+import { markInternalWrite, withdrawInternalWrite } from "../../cli/headlessCloud/attachServe.js";
 import { runInSettingsWriteQueue, getSettingsFilePathForSource } from "../../utils/settings/settings.js";
 import { isSettingsToCloudAvailable } from "../../cli/remoteIO/workerAuth.js";
 import { SYNCED_FILE_ROOT } from "../syncedFiles/syncedFileSyncer.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import { MAX_PACK_BYTES } from "./homePack.js";
 import { logEvent } from "../analytics/index.js";
@@ -53,7 +49,7 @@ import { fromEnum } from "../analytics/safeMetadata.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-twq47pff.js:36275-36405 placement (2.1.88 match: formatRecentMessages, 1)
+//@ chunk-9x09krra.js:37438-37568 placement (2.1.88 match: formatRecentMessages, 1)
 function formatRecentMessages(homeReal, entry) {
   try {
     return processMemoryFile(
@@ -65,7 +61,7 @@ function formatRecentMessages(homeReal, entry) {
     return false;
   }
 }
-//@ chunk-twq47pff.js:36405-36571 placement (2.1.88 match: getOutputStyleAttachment, 0.676)
+//@ chunk-9x09krra.js:37568-37734 placement (2.1.88 match: getOutputStyleAttachment, 0.676)
 /**
  * 路径在技能根目录内且不是 output_style 类型。旧版名 getOutputStyleAttachment 为错配；归错文件（技能改进相关）。
  */
@@ -75,7 +71,7 @@ function isSkillPathOutsideOutputStyles(input, options) {
   let report = workingFileDestination(deps.split(sep).join("/"));
   return report !== null && report.kind !== "output_style";
 }
-//@ chunk-twq47pff.js:36571-36663 placement (2.1.88 match: isFileReadDenied, 1)
+//@ chunk-9x09krra.js:37734-37826 placement (2.1.88 match: isFileReadDenied, 1)
 /**
  * 读 ccr-home-seed.json 并解析。归错文件。
  */
@@ -83,13 +79,13 @@ async function readHomeSeedFile(filePath) {
   let denyRule = await readBoundedFile(join(filePath, CCR_HOME_SEED_JSON), MAX_SIDECAR_BYTES);
   return denyRule.kind === "read" ? parseHomeSidecar(denyRule.content) : null;
 }
-//@ chunk-twq47pff.js:36663-36812 placement
+//@ chunk-9x09krra.js:37826-37975 placement
 async function checkSidecarState(configHome) {
   let boundedFile = await readBoundedFile(join(configHome, CCR_HOME_SEED_JSON), MAX_SIDECAR_BYTES);
   if (boundedFile.kind === "absent") return "absent";
   return boundedFile.kind === "read" && parseHomeSidecar(boundedFile.content) !== null ? "valid" : "invalid";
 }
-//@ chunk-twq47pff.js:36812-36869 placement
+//@ chunk-9x09krra.js:37975-38032 placement
 /**
  * 读取云会话的 settings 文件并判断可用状态（absent/unusable/object）。
  */
@@ -97,7 +93,7 @@ async function readCloudSettingsForSeed(path) {
   let boundedFile = await readBoundedFile(path, MAX_RENDERED_SETTINGS_BYTES);
   return parseExistingSettings(boundedFile, path);
 }
-//@ chunk-twq47pff.js:36869-37165 placement
+//@ chunk-9x09krra.js:38032-38328 placement
 /**
  * 解析云端现有 settings 文件：不存在、不可读或过大分别返回 absent/unusable，能解析为对象时返回 object。
  */
@@ -122,7 +118,7 @@ function parseExistingSettings(input, options) {
         kind: "unusable",
       };
 }
-//@ chunk-twq47pff.js:37165-37274 placement
+//@ chunk-9x09krra.js:38328-38437 placement
 function isEmptySettingsFile(existing, options) {
   try {
     let existingSettings = parseExistingSettings(existing, options);
@@ -131,19 +127,19 @@ function isEmptySettingsFile(existing, options) {
     return false;
   }
 }
-//@ chunk-twq47pff.js:37274-37301 placement
+//@ chunk-9x09krra.js:38437-38464 placement
 /**
  * 云会话 settings 的宽松 schema（未知键原样保留）。
  */
 var cloudSettingsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-twq47pff.js:37274", () => {
+deferInit("chunk-9x09krra.js:38437", () => {
   cloudSettingsSchema = DoctorLazy(() => record(stringSchema(), unknown()));
 });
-//@ chunk-twq47pff.js:37301-37351 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-9x09krra.js:38464-38514 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isNotFoundCode_2(realCandidate) {
   return realCandidate === "ENOENT" || realCandidate === "ENOTDIR";
 }
-//@ chunk-twq47pff.js:37351-37734 placement
+//@ chunk-9x09krra.js:38514-38897 placement
 /**
  * 打开并读取不超过上限的普通文件，返回 read/absent/not_regular/too_large/unreadable。
  */
@@ -183,7 +179,7 @@ async function readBoundedFile(filePath, maxBytes) {
         };
   }
 }
-//@ chunk-twq47pff.js:37734-38001 placement
+//@ chunk-9x09krra.js:38897-39151 placement
 function createApplyDeps({ storageV5, configHome }) {
   return {
     writeHomeFile: createHomeFileWriter({
@@ -192,9 +188,7 @@ function createApplyDeps({ storageV5, configHome }) {
       configHome,
     }),
     markInternalWrite,
-    consumeInternalWrite: (writer) => {
-      consumeInternalWrite(writer, INTERNAL_WRITE_WINDOW_MS);
-    },
+    withdrawInternalWrite,
     inSettingsWriteQueue: (key) =>
       runInSettingsWriteQueue(
         getSettingsFilePathForSource("userSettings") ?? join(configHome, SETTINGS_JSON),
@@ -204,7 +198,7 @@ function createApplyDeps({ storageV5, configHome }) {
     settingsToCloud: isSettingsToCloudAvailable,
   };
 }
-//@ chunk-twq47pff.js:38001-38742 placement
+//@ chunk-9x09krra.js:39151-39892 placement
 /**
  * 校验 home seed 的根目录：必须是真实目录、不与仓库重叠、不在 git 工作区内、不与同步文件根重叠，返回真实路径或原因。
  */
@@ -296,14 +290,14 @@ async function vetHomeSeedRoot(configHome, repoRoot, syncedRoot = SYNCED_FILE_RO
     real: realHome,
   };
 }
-//@ chunk-twq47pff.js:38742-38854 placement
+//@ chunk-9x09krra.js:39892-40004 placement
 async function isInsideGitWorktree(root) {
   for (let dir = root; ; dir = dirname(dir)) {
     if ((await statOrState(join(dir, ".git"))) !== "absent") return true;
     if (dirname(dir) === dir) return false;
   }
 }
-//@ chunk-twq47pff.js:38854-38948 placement
+//@ chunk-9x09krra.js:40004-40098 placement
 /**
  * 取路径状态：不存在返回 absent，其他错误返回 unverifiable。
  */
@@ -314,14 +308,14 @@ async function statOrState(path) {
     return isNotFoundCode_2(getErrnoCode(error)) ? "absent" : "unverifiable";
   }
 }
-//@ chunk-twq47pff.js:38948-39032 placement
+//@ chunk-9x09krra.js:40098-40182 placement
 /**
  * 判断 path 是否等于 directory 或在其中。
  */
 function isPathInside({ path, directory }) {
   return path === directory || path.startsWith(directory.endsWith(sep) ? directory : directory + sep);
 }
-//@ chunk-twq47pff.js:39032-42658 placement
+//@ chunk-9x09krra.js:40182-43808 placement
 async function applyHomeSeedToCloudSession(plan, options, deps) {
   let flagState = await Promise.resolve()
     .then(deps.settingsToCloud)
@@ -413,9 +407,9 @@ async function applyHomeSeedToCloudSession(plan, options, deps) {
     (settingsResult.written || (settingsRemovalWanted && !settingsResult.removeFailed));
   let totalExpected =
     plan.writes.length + plan.counts.refilteredCredentialFiles + removals.length + (settingsTouched ? 1 : 0);
-  let removalsFailed = count(removals, ({ result }) => result === "failed");
+  let removalsFailed = countWhere(removals, ({ result }) => result === "failed");
   let totalDone = filtered.length + (removals.length - removalsFailed) + (settingsApplied ? 1 : 0);
-  let countByResult = (wanted) => count(writes, (entry) => entry.result === wanted);
+  let countByResult = (wanted) => countWhere(writes, (entry) => entry.result === wanted);
   let outcome = totalExpected === 0 ? "empty" : totalDone === totalExpected ? "applied" : "partial";
   let isRestore = plan.restoreRecord === true;
   let sidecarWritten =
@@ -452,11 +446,11 @@ async function applyHomeSeedToCloudSession(plan, options, deps) {
     generation: plan.generation,
     filesApplied: filtered.length,
     appliedByKind: {
-      claude_md: count(filtered, ({ file }) => file.kind === "claude_md"),
-      rule: count(filtered, ({ file }) => file.kind === "rule"),
-      output_style: count(filtered, ({ file }) => file.kind === "output_style"),
+      claude_md: countWhere(filtered, ({ file }) => file.kind === "claude_md"),
+      rule: countWhere(filtered, ({ file }) => file.kind === "rule"),
+      output_style: countWhere(filtered, ({ file }) => file.kind === "output_style"),
     },
-    filesReplacedForeign: count(filtered, ({ stoodForeign }) => stoodForeign),
+    filesReplacedForeign: countWhere(filtered, ({ stoodForeign }) => stoodForeign),
     filesRefused: {
       destination: plan.counts.refused.destination,
       overCap: plan.counts.refused.overCap,
@@ -490,14 +484,14 @@ async function applyHomeSeedToCloudSession(plan, options, deps) {
     sidecarWritten,
   };
 }
-//@ chunk-twq47pff.js:42658-42704 placement
+//@ chunk-9x09krra.js:43808-43854 placement
 /**
  * 在根目录下按 / 分隔的相对路径拼接。
  */
 function joinUnder(configHome, relPath) {
   return join(configHome, ...relPath.split("/"));
 }
-//@ chunk-twq47pff.js:42704-42940 placement
+//@ chunk-9x09krra.js:43854-44090 placement
 async function applySeedFile(write, priorSha, ctx) {
   let destination = await checkSeedFileDestination(write, ctx);
   if (destination !== "clear")
@@ -516,7 +510,7 @@ async function applySeedFile(write, priorSha, ctx) {
     stoodForeign: foreign,
   };
 }
-//@ chunk-twq47pff.js:42940-43542 placement
+//@ chunk-9x09krra.js:44090-44692 placement
 /**
  * 检查单个种子文件能否写入：非输出样式需在加载器可达范围；解析后的拼写须是合法目的地；路径无阻碍且 home 已核实。返回 clear 或拒绝原因（均记诊断）。
  */
@@ -552,7 +546,7 @@ async function checkSeedFileDestination(file, context) {
   }
   return "clear";
 }
-//@ chunk-twq47pff.js:43542-43928 placement
+//@ chunk-9x09krra.js:44692-45078 placement
 /**
  * 写入种子文件并核实落点，返回 applied/unverified；目标被拒或写入失败时记诊断。
  */
@@ -576,7 +570,7 @@ async function writeSeedFile(write, ctx) {
     return "failed";
   }
 }
-//@ chunk-twq47pff.js:43928-44035 placement
+//@ chunk-9x09krra.js:45078-45185 placement
 async function isHomeStillVetted(context) {
   try {
     return (
@@ -587,7 +581,7 @@ async function isHomeStillVetted(context) {
     return false;
   }
 }
-//@ chunk-twq47pff.js:44035-44290 placement
+//@ chunk-9x09krra.js:45185-45440 placement
 async function verifyWrittenSeedFile(path, context) {
   let destPath = joinUnder(context.configHome, path);
   let actual =
@@ -606,7 +600,7 @@ async function verifyWrittenSeedFile(path, context) {
   }
   return true;
 }
-//@ chunk-twq47pff.js:44290-44437 placement
+//@ chunk-9x09krra.js:45440-45587 placement
 async function checkLeafRegular(path) {
   let state = await statOrState(path);
   return state === "absent"
@@ -617,7 +611,7 @@ async function checkLeafRegular(path) {
         ? null
         : "leaf_not_regular";
 }
-//@ chunk-twq47pff.js:44437-44886 placement
+//@ chunk-9x09krra.js:45587-46036 placement
 /**
  * 逐级检查目标的祖先：不存在为 none；无法验证、是符号链接、不是目录或位于 git 工作区内则返回相应阻碍。
  */
@@ -636,7 +630,7 @@ async function findAncestorObstruction(relPath, ctx) {
   }
   return "none";
 }
-//@ chunk-twq47pff.js:44886-45201 placement
+//@ chunk-9x09krra.js:46036-46351 placement
 /**
  * 检查目标位置是否被占用：先查上层障碍，再看目标叶子（不存在、无法核验、符号链接、目录或非普通文件）。
  */
@@ -650,7 +644,7 @@ async function findDestinationObstruction(relPath, context) {
   if (leaf.isDirectory()) return "dest_is_directory";
   return leaf.isFile() ? "clear" : "leaf_not_regular";
 }
-//@ chunk-twq47pff.js:45201-45411 placement
+//@ chunk-9x09krra.js:46351-46561 placement
 async function hasForeignFileAt(path, relPath, context) {
   let boundedFile = await readBoundedFile(joinUnder(context.configHome, path), MAX_WORKING_FILE_BYTES);
   switch (boundedFile.kind) {
@@ -664,7 +658,7 @@ async function hasForeignFileAt(path, relPath, context) {
       return relPath === undefined || computeContentHash(boundedFile.content) !== relPath;
   }
 }
-//@ chunk-twq47pff.js:45411-46159 placement
+//@ chunk-9x09krra.js:46561-47309 placement
 /**
  * 删除之前由种子写入的文件：home 未核实、无法解析或位置不合法时失败；文件已不存在为 gone；内容摘要不符视为别人的文件不删。
  */
@@ -716,7 +710,7 @@ async function removeSeedFile(file, context) {
     return "failed";
   }
 }
-//@ chunk-twq47pff.js:46159-48413 placement
+//@ chunk-9x09krra.js:47309-49564 placement
 /**
  * 把种子设置写入云端 settings.json：校验路径与 home；按现有文件是否为本方写入或他人文件决定替换、保留或只合并限制性规则；设置为空且文件是本方写入时删除；写后核实并返回各状态与新摘要。
  */
@@ -867,7 +861,7 @@ async function applySeedSettings(plan, filePath, ctx) {
       sha256After: shaAfter,
     };
   } catch (error) {
-    ctx.deps.consumeInternalWrite(settingsPath);
+    ctx.deps.withdrawInternalWrite(settingsPath);
     logForDiagnosticsNoPII("warn", "home_seed_settings_write_failed", {
       code: getErrnoCode(error) ?? "unknown",
     });
@@ -877,7 +871,7 @@ async function applySeedSettings(plan, filePath, ctx) {
     };
   }
 }
-//@ chunk-twq47pff.js:48413-48495 placement
+//@ chunk-9x09krra.js:49564-49646 placement
 /**
  * 判断文件是否直接位于目录 t 下（不跟随到别处）。
  */
@@ -888,7 +882,7 @@ async function isFileDirectlyIn(homeReal, filePath) {
     return false;
   }
 }
-//@ chunk-twq47pff.js:48495-49023 placement
+//@ chunk-9x09krra.js:49646-50174 placement
 /**
  * 写入 home seed 附带文件并核实；home 未核实、目标不是普通文件或写入失败时记诊断并返回 false。
  */
@@ -924,7 +918,7 @@ async function writeHomeSidecar(ctx, seed) {
   }
   return true;
 }
-//@ chunk-twq47pff.js:49023-49173 placement (2.1.88 match: readJSONLFile, 1)
+//@ chunk-9x09krra.js:50174-50324 placement (2.1.88 match: readJSONLFile, 1)
 async function readJSONLFile(path, size) {
   let buf = Buffer.allocUnsafe(size);
   let totalRead = 0;
@@ -935,12 +929,12 @@ async function readJSONLFile(path, size) {
   }
   return buf.subarray(0, totalRead);
 }
-//@ chunk-twq47pff.js:49173-49189 placement
+//@ chunk-9x09krra.js:50324-50340 placement
 /**
  * 生成空的更新对象（占位）。
  */
 var emptyUpdate = () => ({});
-//@ chunk-twq47pff.js:49189-52227 placement
+//@ chunk-9x09krra.js:50340-53378 placement
 function createHomeSeedTelemetry() {
   return {
     apply: ({
@@ -1086,16 +1080,16 @@ function createHomeSeedTelemetry() {
     },
   };
 }
-//@ chunk-twq47pff.js:52227-52668 placement
+//@ chunk-9x09krra.js:53378-53822 placement
 /**
  * 种子应用后按变化刷新：设置变化重载用户设置，CLAUDE.md/规则变化清记忆与用户上下文，首个询问后清系统提示分段，输出样式变化清样式缓存。
  */
-function reloadAfterSeedApply(applyReport, reloaders, reloaders_2) {
+function reloadAfterSeedApply(applyReport, reloaders, reloader, countsAsStart) {
   if (applyReport.outcome === "config_home_unsafe" || applyReport.outcome === "flag_off") return;
-  if (applyReport.settingsWritten || applyReport.settingsRemoved) reloaders_2.reloadUserSettings();
+  if (applyReport.settingsWritten || applyReport.settingsRemoved) reloader.reloadUserSettings(countsAsStart);
   if (applyReport.touchedKinds.has("claude_md") || applyReport.touchedKinds.has("rule")) {
-    reloaders_2.clearMemoryFiles();
-    reloaders_2.clearUserContext();
+    reloader.clearMemoryFiles();
+    reloader.clearUserContext();
   }
   if (
     (applyReport.filesApplied > 0 ||
@@ -1104,10 +1098,10 @@ function reloadAfterSeedApply(applyReport, reloaders, reloaders_2) {
       applyReport.settingsRemoved) &&
     !reloaders.beforeFirstAsk
   )
-    reloaders_2.clearSystemPromptSections();
-  if (applyReport.touchedKinds.has("output_style")) reloaders_2.clearOutputStyles();
+    reloader.clearSystemPromptSections();
+  if (applyReport.touchedKinds.has("output_style")) reloader.clearOutputStyles();
 }
-//@ chunk-twq47pff.js:52668-53774 placement
+//@ chunk-9x09krra.js:53822-54928 placement
 /**
  * 云端恢复本机设置时的提示文案：偏好名称、输出样式不可用、重新发送的提示与恢复失败原因。
  */

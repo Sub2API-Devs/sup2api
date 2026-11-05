@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：Agents 视图编辑器状态（查询、光标、粘贴、回复草稿、错误/提示）；根据输入生成派发建议（模板、routine、仓库、worktree、技能、模型）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-93kwxas0.js (47)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-avy0g5d4.js (47)
  * attribution: placement 47
  */
 import { isAbsolute } from "path";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { CCR_LIST_TARGET_VISIBLE } from "../../services/cloudSessions/ccrSessionList.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { createSignal } from "../../utils/signal.js";
@@ -17,13 +17,12 @@ import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { logError, getLogDisplayTitle } from "../../utils/log.js";
+import { logEvent } from "../../services/analytics/index.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { env } from "../../utils/env.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
-import { logEvent } from "../../services/analytics/index.js";
-import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
-import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
+import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { logError, getLogDisplayTitle } from "../../utils/log.js";
+import { logFeatureBad, logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { isFleetDispatchEnabled, respawnBgSession } from "../../cli/bg/bgSpare.js";
 import { errorMessage, isFsInaccessible } from "../../utils/errors.js";
 import { registerPasteCarrier, mintPasteId } from "../../history.js";
@@ -34,6 +33,7 @@ import {
   getCliSessionConfigCarried,
   getOriginalCwd,
 } from "../../bootstrap/state.js";
+import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { resolveLauncher } from "../../commands/restart/restart.js";
 import { relaunchClaudeCode } from "../../utils/processRelaunch.js";
 import { spareExtraArgs, buildDispatchArgs, DEFAULT_BG_AGENT_TEMPLATE } from "../../cli/bg/bgSpawnEnv.js";
@@ -67,10 +67,10 @@ import { listJobs } from "../../services/daemon/jobState.js";
 import { resolveDispatchDefaults, dispatchDefaultsFromJob } from "./dispatchDefaults.js";
 import { parseEffortLevel, EFFORT_LEVELS } from "../../utils/effort.js";
 
-//@ chunk-93kwxas0.js:46084-46106 placement
+//@ chunk-avy0g5d4.js:46137-46159 placement
 var DRAFT_ABSENCE_MS = 90000;
 var DRAFT_SWEEP_INTERVAL_MS = 45000;
-//@ chunk-93kwxas0.js:46106-46425 placement
+//@ chunk-avy0g5d4.js:46159-46478 placement
 /**
  * 清理已不存在会话的回复草稿。
  */
@@ -94,7 +94,7 @@ function sweepReplyDrafts({ drafts, observedAbsenceMs, isGuarded, now, lastSweep
   for (let key of observedAbsenceMs.keys()) if (!drafts.has(key)) observedAbsenceMs.delete(key);
   return prunedAny;
 }
-//@ chunk-93kwxas0.js:46425-46962 placement
+//@ chunk-avy0g5d4.js:46478-47015 placement
 /**
  * 按当前会话集合修剪回复草稿。
  */
@@ -109,7 +109,7 @@ function pruneReplyDrafts(editor, roster, { jobs, pendings, adoptedPeers, remote
   let knownJobIds = new Set();
   for (let jobList of [jobs, pendings, adoptedPeers, remoteJobs])
     for (let job of jobList) knownJobIds.add(job.id);
-  let settledRemoteCount = count(remoteJobs, (remoteJob) => !remoteJob.id.startsWith("remote-pending-"));
+  let settledRemoteCount = countWhere(remoteJobs, (remoteJob) => !remoteJob.id.startsWith("remote-pending-"));
   let remoteListComplete =
     !remoteListLoaded ||
     roster.getSnapshot().remoteListFailure !== null ||
@@ -129,7 +129,7 @@ function pruneReplyDrafts(editor, roster, { jobs, pendings, adoptedPeers, remote
           : jobs.length === 0),
   });
 }
-//@ chunk-93kwxas0.js:46962-47107 placement
+//@ chunk-avy0g5d4.js:47015-47160 placement
 var EDITOR_PERSIST_DELAY_MS = 30000;
 var EDITOR_SNAPSHOT_KEYS = [
   "query",
@@ -143,11 +143,11 @@ var EDITOR_SNAPSHOT_KEYS = [
   "replyError",
   "expandHintPasteId",
 ];
-//@ chunk-93kwxas0.js:47107-47164 placement
+//@ chunk-avy0g5d4.js:47160-47217 placement
 function clampCursor(text, offset) {
   return Math.max(0, Math.min(text.length, offset));
 }
-//@ chunk-93kwxas0.js:47164-50355 placement
+//@ chunk-avy0g5d4.js:47217-50409 placement
 /**
  * Agents 视图编辑器状态（查询、光标、粘贴、回复草稿、错误/提示）。
  */
@@ -158,13 +158,13 @@ class FleetEditorStore {
   #t = null;
   #r = false;
   #i = {};
-  #c = null;
+  #u = null;
   #s = null;
   #a = new Map();
   #o = new Map();
   #m = Date.now();
   #g = new Map();
-  #u = null;
+  #c = null;
   constructor(initialState = {}) {
     let query = initialState.query ?? "";
     let isBashMode = isFleetDispatchEnabled() && query.startsWith("!");
@@ -212,7 +212,7 @@ class FleetEditorStore {
         this.#r = false;
         this.#s = null;
         this.#g.clear();
-        this.#u = null;
+        this.#c = null;
         this.#e = {
           ...this.#e,
           cursorOffset: this.#e.query.length,
@@ -296,15 +296,15 @@ class FleetEditorStore {
     this.clearArchiveLine();
     if ("error" in line) {
       this.setError(line.error);
-      this.#u = line.error;
+      this.#c = line.error;
     } else {
       this.setHint(line.hint);
-      this.#u = line.hint;
+      this.#c = line.hint;
     }
   }
   clearArchiveLine() {
-    let previousLine = this.#u;
-    this.#u = null;
+    let previousLine = this.#c;
+    this.#c = null;
     if (previousLine !== null && this.#e.error === previousLine) this.setError(null);
     if (previousLine !== null && this.#e.hint === previousLine) this.setHint(null);
   }
@@ -338,14 +338,14 @@ class FleetEditorStore {
     };
   }
   get lastMintedPasteId() {
-    return this.#c;
+    return this.#u;
   }
   noteMintedPaste = (pasteId) => {
-    this.#c = pasteId;
+    this.#u = pasteId;
   };
   mintTextPaste(content) {
     let pasteId = mintPasteId(this.#e.query, this.#i);
-    this.#c = pasteId;
+    this.#u = pasteId;
     this.#i[pasteId] = {
       id: pasteId,
       type: "text",
@@ -407,15 +407,15 @@ class FleetEditorStore {
     this.#g.delete(jobId);
   }
 }
-//@ chunk-93kwxas0.js:50355-50400 placement
+//@ chunk-avy0g5d4.js:50409-50454 placement
 function ensureFleetEditor(visit, initialState) {
   return (visit.editor ??= new FleetEditorStore(initialState));
 }
-//@ chunk-93kwxas0.js:50400-50465 placement
+//@ chunk-avy0g5d4.js:50454-50519 placement
 var RELAUNCH_RECENT_MS = 3600000;
 var RELAUNCH_COOLDOWN_MS = 21600000;
 var CLAUDE_AGENTS_AUTO_RELAUNCHED_AT = "CLAUDE_AGENTS_AUTO_RELAUNCHED_AT";
-//@ chunk-93kwxas0.js:50465-51849 placement
+//@ chunk-avy0g5d4.js:50519-51902 placement
 /**
  * 切换到最新构建时重新启动 Agents 视图。
  */
@@ -466,10 +466,10 @@ Switching from ${
                 ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
                 PACKAGE_URL: "@anthropic-ai/claude-code",
                 README_URL: "https://code.claude.com/docs/en/overview",
-                VERSION: "2.1.316",
+                VERSION: "2.1.318",
                 FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                BUILD_TIME: "2026-10-30T23:28:13Z",
-                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                BUILD_TIME: "2026-11-03T18:52:53Z",
+                GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                 HOOKS_WORKER_URL:
                   import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                 DD_SOURCEMAP_GROUP: "default",
@@ -485,7 +485,7 @@ Switching from ${
       if (reason === "manual") onError(`Couldn't switch to the latest build \u2014 ${errorMessage(error)}`);
     });
 }
-//@ chunk-93kwxas0.js:51849-52212 placement
+//@ chunk-avy0g5d4.js:51902-52265 placement
 /**
  * Agents 视图启动时组合 policy limits 客户端。
  */
@@ -510,17 +510,17 @@ async function composePolicyLimitsForFleet(services) {
     headless: isPlainNonInteractive(),
   });
 }
-//@ chunk-93kwxas0.js:52390-52401 placement
+//@ chunk-avy0g5d4.js:52443-52454 placement
 var PAST_SESSION_LIMIT = 200;
-//@ chunk-93kwxas0.js:52401-52434 placement
+//@ chunk-avy0g5d4.js:52454-52487 placement
 function shouldListPastSessions() {
   return canLoadPastSessions() && isPastSessionsExperimentEnabled();
 }
-//@ chunk-93kwxas0.js:52434-52468 placement
+//@ chunk-avy0g5d4.js:52487-52521 placement
 function canLoadPastSessions() {
   return !isSafeMode() && !getCliSessionConfigCarried();
 }
-//@ chunk-93kwxas0.js:52468-52954 placement
+//@ chunk-avy0g5d4.js:52521-53008 placement
 /**
  * 枚举可恢复的历史会话。
  */
@@ -558,13 +558,13 @@ async function listPastSessions(seenSessionIds, includeBackground, storage) {
     return null;
   }
 }
-//@ chunk-93kwxas0.js:52989-53028 placement
+//@ chunk-avy0g5d4.js:53043-53082 placement
 var NEW_SESSION_PREFIX_RE = /(?:^|\s)(?:[aso]:|n:(?!\\))/gi;
-//@ chunk-93kwxas0.js:53028-53079 placement
+//@ chunk-avy0g5d4.js:53082-53133 placement
 function hasNewSessionPrefix(query) {
   return query.trimStart().search(NEW_SESSION_PREFIX_RE) === 0;
 }
-//@ chunk-93kwxas0.js:53079-53246 placement
+//@ chunk-avy0g5d4.js:53133-53300 placement
 /**
  * 解析 “n:” 新会话前缀，返回去掉前缀的文本或 null。
  */
@@ -574,7 +574,7 @@ function parseNewSessionPrefix(query) {
   if (isFleetDispatchEnabled() && trimmed.startsWith("!")) return null;
   return hasNewSessionPrefix(`n:${trimmed}`) ? `n:${trimmed}` : null;
 }
-//@ chunk-93kwxas0.js:53246-53654 placement
+//@ chunk-avy0g5d4.js:53300-53708 placement
 /**
  * 解析派发输入里的短标志（-a/-s/-n/-g 等）。
  */
@@ -611,7 +611,7 @@ function parseDispatchFlags(query) {
     text: textParts.join(" ").toLowerCase(),
   };
 }
-//@ chunk-93kwxas0.js:53654-53825 placement
+//@ chunk-avy0g5d4.js:53708-53879 placement
 /**
  * 从 “#123”、/pull/123、/-/merge_requests/123 中取 PR 号。
  */
@@ -624,11 +624,11 @@ function parsePrNumber(value) {
       /\/-\/merge_requests\/(\d+)(?!\d)/.exec(trimmed))?.[1] ?? null
   );
 }
-//@ chunk-93kwxas0.js:53825-53906 placement
+//@ chunk-avy0g5d4.js:53879-53960 placement
 function prUrlMatcher(prNumber) {
   return new RegExp(`\\/(?:pull|-\\/merge_requests)\\/${prNumber}(?!\\d)`);
 }
-//@ chunk-93kwxas0.js:53906-54039 placement
+//@ chunk-avy0g5d4.js:53960-54093 placement
 /**
  * 会话的子项或输出是否引用了该 PR。
  */
@@ -638,16 +638,16 @@ function jobReferencesPr(job, prNumber, urlMatcher = prUrlMatcher(prNumber)) {
     Object.values(job.output ?? {}).some((outputValue) => urlMatcher.test(outputValue))
   );
 }
-//@ chunk-93kwxas0.js:54039-54121 placement
+//@ chunk-avy0g5d4.js:54093-54175 placement
 function soloUrl(text) {
   let trimmed = text.trim();
   return !/\s/.test(trimmed) && /^https?:\/\//i.test(trimmed) ? trimmed : null;
 }
-//@ chunk-93kwxas0.js:54121-54198 placement
+//@ chunk-avy0g5d4.js:54175-54252 placement
 function mentionsText(jobState, needle) {
   return jobState.intent.includes(needle) || !!jobState.initialPrompt?.includes(needle);
 }
-//@ chunk-93kwxas0.js:54198-54983 placement
+//@ chunk-avy0g5d4.js:54252-55037 placement
 /**
  * 解析派发输入：! 命令、@ 提及（仓库/agent）、/ 技能等。
  */
@@ -717,7 +717,7 @@ function parseDispatchInput(query, templates, allRepos = {}, routines = []) {
     routine,
   };
 }
-//@ chunk-93kwxas0.js:54983-55128 placement
+//@ chunk-avy0g5d4.js:55037-55182 placement
 /**
  * 文本是 http(s) 链接或绝对路径时转成可打开的 URL。
  */
@@ -728,7 +728,7 @@ function toOpenableUrl(text) {
   let expandedPath = expandTildeWithHome(trimmed);
   return isAbsolute(expandedPath) ? toSafeFileUrl(expandedPath) : null;
 }
-//@ chunk-93kwxas0.js:55128-55251 placement
+//@ chunk-avy0g5d4.js:55182-55305 placement
 /**
  * 输入里 “n:” 前缀的高亮区间。
  */
@@ -741,7 +741,7 @@ function newSessionPrefixRanges(query) {
   }
   return ranges;
 }
-//@ chunk-93kwxas0.js:55251-55423 placement
+//@ chunk-avy0g5d4.js:55305-55477 placement
 /**
  * 输入中 @提及（已知名字）的高亮区间。
  */
@@ -754,11 +754,11 @@ function mentionRanges(query, knownNames) {
   }
   return ranges;
 }
-//@ chunk-93kwxas0.js:55423-55487 placement
+//@ chunk-avy0g5d4.js:55477-55541 placement
 function replaceTrailingMention(query, prefix, name) {
   return query.replace(/[@/]\S*$/, () => `${prefix}${name} `);
 }
-//@ chunk-93kwxas0.js:55487-55742 placement
+//@ chunk-avy0g5d4.js:55541-55796 placement
 /**
  * 找输入中第一个 @提及的模板（跳过同名 agent/技能）。
  */
@@ -773,7 +773,7 @@ function findMentionedTemplate(query, repos, templates = [], routines = []) {
   }
   return;
 }
-//@ chunk-93kwxas0.js:55742-56282 placement
+//@ chunk-avy0g5d4.js:55796-56336 placement
 /**
  * 派发建议种类标签与触发字符。
  */
@@ -807,7 +807,7 @@ var DISPATCH_FLAG_HINTS = new Map([
   ["fast", "Turn fast mode on or off for new sessions from this window (not saved)"],
   ["resume", "Resume a past session"],
 ]);
-//@ chunk-93kwxas0.js:56282-56484 placement
+//@ chunk-avy0g5d4.js:56336-56538 placement
 /**
  * 派发建议里的模型列表（含 “default”）。
  */
@@ -827,10 +827,10 @@ function modelSuggestions() {
     },
   ];
 }
-//@ chunk-93kwxas0.js:56484-56500 placement
+//@ chunk-avy0g5d4.js:56538-56554 placement
 var EMPTY_AGENT_SUGGESTIONS = [];
 var EMPTY_SKILL_SUGGESTIONS = [];
-//@ chunk-93kwxas0.js:56500-56578 placement
+//@ chunk-avy0g5d4.js:56554-56632 placement
 function agentSuggestions(template) {
   return {
     kind: "agent",
@@ -838,7 +838,7 @@ function agentSuggestions(template) {
     description: getFirstLine(template.description),
   };
 }
-//@ chunk-93kwxas0.js:56578-56735 placement
+//@ chunk-avy0g5d4.js:56632-56789 placement
 /**
  * 按名字（不区分大小写）去重合并两组建议。
  */
@@ -847,7 +847,7 @@ function mergeSuggestionsByName(primary, extra) {
   let knownNames = new Set(primary.map((suggestion) => suggestion.name.toLowerCase()));
   return [...primary, ...extra.filter((suggestion) => !knownNames.has(suggestion.name.toLowerCase()))];
 }
-//@ chunk-93kwxas0.js:56735-56901 placement
+//@ chunk-avy0g5d4.js:56789-56955 placement
 /**
  * 按 agentLastUsed 倒序、再按名字排序。
  */
@@ -860,7 +860,7 @@ function sortAgentsByLastUsed(templates) {
     return templateA.name.localeCompare(templateB.name);
   });
 }
-//@ chunk-93kwxas0.js:56901-57032 placement
+//@ chunk-avy0g5d4.js:56955-57086 placement
 /**
  * 仓库或 worktree 建议项。
  */
@@ -878,7 +878,7 @@ function repoOrWorktreeSuggestion(name, repos, worktreeBranches) {
         description: branch || repos[name],
       };
 }
-//@ chunk-93kwxas0.js:57032-58896 placement
+//@ chunk-avy0g5d4.js:57086-58950 placement
 /**
  * 根据输入生成派发建议（模板、routine、仓库、worktree、技能、模型）。
  */
@@ -985,7 +985,7 @@ function buildDispatchSuggestions(
     suggestions,
   };
 }
-//@ chunk-93kwxas0.js:58896-59045 placement
+//@ chunk-avy0g5d4.js:58950-59099 placement
 /**
  * 平台对应的粘贴图片快捷键（非 Windows 用 Ctrl+V，Windows/WSL 用 Alt+V）。
  */
@@ -996,7 +996,7 @@ function isPasteImageKey(event) {
   if (event.meta && !event.ctrl) return platform === "windows" || platform === "wsl";
   return false;
 }
-//@ chunk-93kwxas0.js:59045-59285 placement
+//@ chunk-avy0g5d4.js:59099-59339 placement
 /**
  * 从剪贴板读图片，成功回调，失败给出提示并记录。
  */
@@ -1015,7 +1015,7 @@ function pasteImageFromClipboard(onPaste, setHint) {
       setHint("Couldn't read an image from the clipboard");
     });
 }
-//@ chunk-93kwxas0.js:59285-59669 placement
+//@ chunk-avy0g5d4.js:59339-59723 placement
 /**
  * 回填 agentLastUsed 配置。
  */
@@ -1045,14 +1045,14 @@ async function backfillAgentLastUsed(storageV5) {
   }, storageV5);
   return changed;
 }
-//@ chunk-93kwxas0.js:59669-59788 placement
+//@ chunk-avy0g5d4.js:59723-59842 placement
 /**
  * fleet 会话常量：MIN_SPAWN_INTENT_LENGTH=4 是“意图太短不给起”的最小长度阈值（原名 MAX_SPAWN_RETRIES 名不副实）；另有 STILL_STARTING_MESSAGE 与可重试的瞬态 socket 错误集。
  */
 var MIN_SPAWN_INTENT_LENGTH = 4;
 var STILL_STARTING_MESSAGE = "Still starting \u2014 try again in a moment";
 var TRANSIENT_SOCKET_ERRORS = new Set(["EPIPE", "ECONNRESET", "ECONNREFUSED", "ENOTCONN"]);
-//@ chunk-93kwxas0.js:59788-59894 placement
+//@ chunk-avy0g5d4.js:59842-59948 placement
 /**
  * 调 respawnBgSession，异常转成 {ok:false, error}。
  */
@@ -1063,10 +1063,10 @@ function safeRespawnBgSession(...args) {
     alive: false,
   }));
 }
-//@ chunk-93kwxas0.js:59894-59920 placement
+//@ chunk-avy0g5d4.js:59948-59974 placement
 var DISPATCH_MARK_WINDOW_MS = 150;
 var weakMap = new WeakMap();
-//@ chunk-93kwxas0.js:59920-60026 placement
+//@ chunk-avy0g5d4.js:59974-60080 placement
 /**
  * 标记一次派发在同一事件循环片段内（微任务后清除）。
  */
@@ -1080,12 +1080,12 @@ function markDispatchChunk(editor) {
     mark.sameChunk = false;
   });
 }
-//@ chunk-93kwxas0.js:60026-60117 placement
+//@ chunk-avy0g5d4.js:60080-60171 placement
 function isRecentDispatchMark(editor) {
   let mark = weakMap.get(editor);
   return mark !== undefined && (mark.sameChunk || performance.now() - mark.at < DISPATCH_MARK_WINDOW_MS);
 }
-//@ chunk-93kwxas0.js:60117-61243 placement
+//@ chunk-avy0g5d4.js:60171-61297 placement
 /**
  * 设置新会话的模型/effort 并提示。
  */
@@ -1139,7 +1139,7 @@ function setDispatchWindowValue(editor, launch, setting, value, isCloud) {
     setting: fromEnum(setting),
   });
 }
-//@ chunk-93kwxas0.js:61243-61752 placement
+//@ chunk-avy0g5d4.js:61297-61806 placement
 /**
  * 生成模型/effort 选择项。
  */

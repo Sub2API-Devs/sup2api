@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：服务端调用账本（调用者调用查找、生命周期、加入已知调用）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ad2e1aj6.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nvm0wye1.js (12)
  * attribution: placement 12
  */
 import { userAbortReason } from "../../../utils/abortController.js";
@@ -22,11 +22,11 @@ import { DISOWNED, JOINED_RETRY } from "../servedCallLog.js";
 import { logRemoteTools } from "../../../services/remoteTools/remoteToolsDebug.js";
 import { violinFholeEnabled } from "../../../utils/sandbox/sandboxDefaultPolicy.js";
 
-//@ chunk-ad2e1aj6.js:13890-13981 placement
+//@ chunk-nvm0wye1.js:14236-14327 placement
 function callDeadlineMs(limits, envelope) {
   return Math.min(limits.max_call_ms, envelope?.expires_in_ms ?? Number.POSITIVE_INFINITY);
 }
-//@ chunk-ad2e1aj6.js:13981-14690 placement
+//@ chunk-nvm0wye1.js:14327-15036 placement
 function createCallLifetime({ remainingMs, controller, leg, lifetime }) {
   let timedOut = false;
   let abortOnCancel = () => controller.abort(userAbortReason("remote-cancel"));
@@ -80,7 +80,7 @@ function createCallLifetime({ remainingMs, controller, leg, lifetime }) {
     },
   };
 }
-//@ chunk-ad2e1aj6.js:14690-15147 placement
+//@ chunk-nvm0wye1.js:15036-15493 placement
 function joinKnownCall({ known, session, hostEpoch, callId, target, facts }) {
   let joinedRetryCall = lookupJoinedRetryCall(known, session);
   if (joinedRetryCall !== undefined) {
@@ -112,7 +112,7 @@ function joinKnownCall({ known, session, hostEpoch, callId, target, facts }) {
       return envelopeFromRecord(target, callId, known.summary);
   }
 }
-//@ chunk-ad2e1aj6.js:15147-16011 placement
+//@ chunk-nvm0wye1.js:15493-16357 placement
 function lookupCallerCall({ sessions, callLog, callerKey, callId, target, facts }) {
   let session = sessions.forCaller(callerKey);
   let call = session?.calls.lookup(callId);
@@ -173,7 +173,7 @@ function lookupCallerCall({ sessions, callLog, callerKey, callId, target, facts 
       });
   }
 }
-//@ chunk-ad2e1aj6.js:16011-16350 placement
+//@ chunk-nvm0wye1.js:16357-16696 placement
 function joinRetry({ session, joined, hostEpoch, callId, target, facts, workerEpoch }) {
   logRemoteTools(callId, "retry joined", {
     joined_call: joined.callId,
@@ -195,7 +195,7 @@ function joinRetry({ session, joined, hostEpoch, callId, target, facts, workerEp
     facts,
   });
 }
-//@ chunk-ad2e1aj6.js:16350-16692 placement
+//@ chunk-nvm0wye1.js:16696-17038 placement
 function answerJoinedCall({ session, joined, hostEpoch, callId, target, facts }) {
   switch (joined.summary.state) {
     case "completed":
@@ -216,7 +216,7 @@ function answerJoinedCall({ session, joined, hostEpoch, callId, target, facts })
       });
   }
 }
-//@ chunk-ad2e1aj6.js:16692-16894 placement
+//@ chunk-nvm0wye1.js:17038-17240 placement
 function hasAnswerInHand(known, session, facts) {
   let { summary } = known;
   if (summary.state !== "asked" || summary.askId === undefined) return false;
@@ -225,7 +225,7 @@ function hasAnswerInHand(known, session, facts) {
   let answeredLegs = facts.redeemsAskId === pendingAsk.askId ? 1 : 0;
   return pendingAsk.redeemingLegs > answeredLegs;
 }
-//@ chunk-ad2e1aj6.js:16894-17272 placement
+//@ chunk-nvm0wye1.js:17240-17618 placement
 function runningCallStatus(known, { callId, target, hostEpoch, answerInHand = false }) {
   let replayed = violinFholeEnabled() ? known.outputSoFar?.() : undefined;
   return callStillRunningText({
@@ -247,7 +247,7 @@ function runningCallStatus(known, { callId, target, hostEpoch, answerInHand = fa
     }),
   });
 }
-//@ chunk-ad2e1aj6.js:17272-17454 placement
+//@ chunk-nvm0wye1.js:17618-17800 placement
 function replayKnownCall(known, callId, target, facts) {
   facts.answeredFromRecord = known.result !== undefined ? "replayed" : "duplicate";
   facts.fromPriorEpoch = known.priorEpoch !== undefined;
@@ -256,18 +256,18 @@ function replayKnownCall(known, callId, target, facts) {
     known.summary.servedAt,
   );
 }
-//@ chunk-ad2e1aj6.js:17454-17525 placement
+//@ chunk-nvm0wye1.js:17800-17871 placement
 function isDisownedFailure(record) {
   return record.summary.state === "failed" && record.summary.code === DISOWNED;
 }
-//@ chunk-ad2e1aj6.js:17525-17663 placement
+//@ chunk-nvm0wye1.js:17871-18009 placement
 function lookupJoinedRetryCall(record, session) {
   let { summary } = record;
   return summary.state === "failed" && summary.code === JOINED_RETRY && summary.joinedCallId !== undefined
     ? session?.calls.lookup(summary.joinedCallId)
     : undefined;
 }
-//@ chunk-ad2e1aj6.js:17663-18005 placement
+//@ chunk-nvm0wye1.js:18009-18351 placement
 function pendingAskStatus(known, session, { callId, target, hostEpoch, facts }) {
   let { summary } = known;
   if (summary.state !== "asked" || summary.askId === undefined) return;

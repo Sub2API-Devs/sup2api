@@ -3,22 +3,22 @@
  *
  * 2.1.316 新增：桥接会话标签。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pg55apw2.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rxz88nw9.js (2)
  * attribution: placement 2
  */
 import { logForDebugging } from "../utils/debug.js";
 import { errorMessage } from "../utils/errors.js";
 
-//@ chunk-pg55apw2.js:261-320 placement
+//@ chunk-rxz88nw9.js:261-320 placement
 /**
  * 读取桥接会话的 tags（v2 接口，可选 access token）；失败只记 debug 日志并返回 null。
  */
 async function readBridgeSessionTags(sessionId, options) {
   return (await fetchBridgeSessionTags(sessionId, options))?.tags ?? null;
 }
-//@ chunk-pg55apw2.js:320-839 placement
+//@ chunk-rxz88nw9.js:320-839 placement
 /**
  * 读取桥接会话的 tags 与 created_at（v2 接口，可选 access token）；失败记 debug 日志并返回 null。
  */

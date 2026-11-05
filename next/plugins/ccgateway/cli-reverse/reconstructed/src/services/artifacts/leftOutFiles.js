@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：发布时被略过文件的说明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-06y4szbn.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-51jy8ztq.js (13)
  * attribution: placement 13
  */
 import { getLiveState } from "../liveReplica/liveReplica.js";
@@ -14,7 +14,7 @@ import { formatFrameErrorBody, UNKNOWN_FIELD_ERROR_RE, mentionsField } from "./f
 import { plural, truncateToLength } from "../../utils/stringUtils.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-06y4szbn.js:37798-37863 placement
+//@ chunk-51jy8ztq.js:37798-37863 placement
 /**
  * 未纳入发布的文件提示常量：no_file 标记、文件类型正则、未命名上限 16 与路径 160 字符。
  */
@@ -22,7 +22,7 @@ var NO_FILE = "no_file";
 var FILE_KIND_RE = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 var MAX_UNNAMED_FILES = 16;
 var MAX_FILE_PATH_CHARS = 160;
-//@ chunk-06y4szbn.js:37863-37975 placement
+//@ chunk-51jy8ztq.js:37863-37975 placement
 function leaveOutMissingField() {
   let leaveOutMissingRefusedAt = getLiveState().leaveOutMissingRefusedAt;
   return leaveOutMissingRefusedAt !== undefined &&
@@ -32,11 +32,11 @@ function leaveOutMissingField() {
         leave_out_missing: true,
       };
 }
-//@ chunk-06y4szbn.js:37975-38030 placement
+//@ chunk-51jy8ztq.js:37975-38030 placement
 function markLeaveOutMissingRefused() {
   getLiveState().leaveOutMissingRefusedAt = Date.now();
 }
-//@ chunk-06y4szbn.js:38030-38215 placement
+//@ chunk-51jy8ztq.js:38030-38215 placement
 function leaveOutMissingRefusal(body, missingPaths) {
   let text = formatFrameErrorBody(body);
   if (!UNKNOWN_FIELD_ERROR_RE.test(text)) return;
@@ -45,7 +45,7 @@ function leaveOutMissingRefusal(body, missingPaths) {
     ? undefined
     : "unnamed";
 }
-//@ chunk-06y4szbn.js:38215-38301 placement
+//@ chunk-51jy8ztq.js:38215-38301 placement
 function isClientRefusalStatus(status, body) {
   return (
     status < 500 &&
@@ -55,18 +55,18 @@ function isClientRefusalStatus(status, body) {
     !(status === 400 && UNKNOWN_FIELD_ERROR_RE.test(formatFrameErrorBody(body)))
   );
 }
-//@ chunk-06y4szbn.js:38301-38386 placement
+//@ chunk-51jy8ztq.js:38301-38386 placement
 function isAddOnlyPublish({ mode, isFirstPublish, removedCount }) {
   return removedCount === 0 && (mode === "patch" || isFirstPublish);
 }
-//@ chunk-06y4szbn.js:38386-38760 placement
+//@ chunk-51jy8ztq.js:38386-38760 placement
 function copiedFilesLeftOutNote(files) {
   let count = files.length;
   let fileNoun = plural(count, "file");
   let verb = count === 1 ? "was" : "were";
   return `${count} copied ${fileNoun} ${verb} left out of this version; the other files in this publish were saved. Tell the user which ${fileNoun} ${verb} left out${unnamedFilesSuffix(files)}. At each left-out path the artifact keeps the file it had before; if it had none, the path is empty, so change or remove any reference to it. Left out: ${describeLeftOutFiles(files)}.`;
 }
-//@ chunk-06y4szbn.js:38760-39745 placement
+//@ chunk-51jy8ztq.js:38760-39745 placement
 function allFilesLeftOutMessage(files, extra) {
   let count = files.length;
   let fileNoun = plural(count, "file");
@@ -83,17 +83,17 @@ function allFilesLeftOutMessage(files, extra) {
       return `${head}, and nothing else in this publish would have changed the artifact. ${advice} Send a copy again only when the reason it was left out no longer applies. ${detail}`;
   }
 }
-//@ chunk-06y4szbn.js:39745-39826 placement
+//@ chunk-51jy8ztq.js:39745-39826 placement
 function unnamedFilesSuffix(files) {
   let hiddenCount = files.length - MAX_UNNAMED_FILES;
   return hiddenCount > 0 ? ` (${hiddenCount} more are not named here)` : "";
 }
-//@ chunk-06y4szbn.js:39826-39887 placement
+//@ chunk-51jy8ztq.js:39826-39886 placement
 function jsonQuotedTruncated(path) {
   let shownPath = truncateToLength(path, MAX_FILE_PATH_CHARS);
   return jsonStringify(shownPath === path ? path : `${shownPath}\u2026`);
 }
-//@ chunk-06y4szbn.js:39887-40168 placement
+//@ chunk-51jy8ztq.js:39886-40167 placement
 function describeLeftOutFiles(files) {
   return files
     .slice(0, MAX_UNNAMED_FILES)
@@ -108,9 +108,9 @@ function describeLeftOutFiles(files) {
     })
     .join("; ");
 }
-//@ chunk-06y4szbn.js:40168-40217 placement
+//@ chunk-51jy8ztq.js:40167-40216 placement
 var SHARE_ROLES = ["editor", "commenter", "reader", "viewer"];
-//@ chunk-06y4szbn.js:40217-40305 placement
+//@ chunk-51jy8ztq.js:40216-40304 placement
 function shareRoleVerb(role) {
   return role === "editor" ? "can edit" : role === "commenter" ? "can comment" : "can view";
 }

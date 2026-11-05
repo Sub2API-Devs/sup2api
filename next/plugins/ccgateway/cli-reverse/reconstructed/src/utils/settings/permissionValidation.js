@@ -3,27 +3,27 @@
  *
  * 权限规则 Tool(content) 的格式校验与 zod schema。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/permissionValidation.ts
- * pieces: chunk-dcmhvw5a.js (12)
+ * pieces: chunk-z20c443b.js (12)
  * attribution: placement 9, fingerprint 2, layout 1
  */
 import {
   hasWildcard,
   classifyRuleParens,
+  parseRuleString,
   permissionRuleValueFromString,
 } from "../permissions/permissionRuleParser.js";
 import { mcpInfoFromString } from "../../services/mcp/mcpStringUtils.js";
 import { capitalize as capitalize_3 } from "../stringUtils.js";
 import { isFilePatternTool, getCustomValidation, isBashPrefixTool } from "./toolValidationConfig.js";
-import { formatPermissionRule } from "../permissions/disallowedToolsFlag.js";
 import { permissionRuleExtractPrefix, endsWithUnescapedStar } from "../permissions/shellRuleMatching.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { ZodIssueCode } from "../../../vendor/zod/v4/classic/compat.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:215644-215722 placement
+//@ chunk-z20c443b.js:211112-211190 placement
 function isEscapedAt(text, index) {
   let backslashes = 0;
   let j = index - 1;
@@ -33,33 +33,33 @@ function isEscapedAt(text, index) {
   }
   return backslashes % 2 !== 0;
 }
-//@ chunk-dcmhvw5a.js:215722-215809 placement
+//@ chunk-z20c443b.js:211190-211277 placement
 function countUnescapedChar(str, char) {
   let count = 0;
   for (let i = 0; i < str.length; i++) if (str[i] === char && !isEscapedAt(str, i)) count++;
   return count;
 }
-//@ chunk-dcmhvw5a.js:215809-215836 placement
+//@ chunk-z20c443b.js:211277-211304 placement
 var ESCAPED_PAREN_RE = /(?:^|[^\\])\\[()]/;
-//@ chunk-dcmhvw5a.js:215836-215892 placement
+//@ chunk-z20c443b.js:211304-211360 placement
 function hasUnbalancedParens(rawContent) {
   return (
     ESCAPED_PAREN_RE.test(rawContent) &&
     countUnescapedChar(rawContent, "(") !== countUnescapedChar(rawContent, ")")
   );
 }
-//@ chunk-dcmhvw5a.js:215892-215922 placement
+//@ chunk-z20c443b.js:211360-211390 placement
 var LEADING_SHELL_OPERATOR_RE = /^(?:[|&;<>]|\d+[<>])/;
-//@ chunk-dcmhvw5a.js:215922-215955 placement
+//@ chunk-z20c443b.js:211390-211423 placement
 function hasLeadingShellOperator(text) {
   return LEADING_SHELL_OPERATOR_RE.test(text);
 }
-//@ chunk-dcmhvw5a.js:215955-216039 placement
+//@ chunk-z20c443b.js:211423-211507 placement
 function hasUnescapedEmptyParens(str) {
   for (let i = 0; i < str.length; i++) if (str[i] === "*" && !isEscapedAt(str, i)) return true;
   return false;
 }
-//@ chunk-dcmhvw5a.js:216039-216301 placement
+//@ chunk-z20c443b.js:211507-211769 placement
 function emptyParensCommandName(content) {
   if (content.endsWith(":*")) return;
   let filtered = content.trim().split(/\s+/).filter(Boolean);
@@ -77,7 +77,7 @@ function emptyParensCommandName(content) {
   }
   return;
 }
-//@ chunk-dcmhvw5a.js:216301-216720 placement
+//@ chunk-z20c443b.js:211769-212188 placement
 /**
  * 校验工具名中的通配符。
  */
@@ -93,7 +93,7 @@ function validateWildcardToolName(toolName) {
     examples: ["mcp__puppeteer__*", "mcp__github__get_*"],
   };
 }
-//@ chunk-dcmhvw5a.js:216720-221819 fingerprint (2.1.88 match: validatePermissionRule, 0.5)
+//@ chunk-z20c443b.js:212188-217287 fingerprint (2.1.88 match: validatePermissionRule, 0.501)
 /**
  * 校验单条权限规则 Tool 或 Tool(content) 的格式，按工具类型检查内容（文件模式、Bash 前缀等）。
  */
@@ -125,7 +125,7 @@ function validatePermissionRule(rule, mode) {
       examples: [`${parsed.toolName}`, `${parsed.toolName}(some-pattern)`],
     };
   }
-  let ruleValue = permissionRuleValueFromString(rule);
+  let ruleValue = parseRuleString(rule);
   let mcpInfo = mcpInfoFromString(ruleValue.toolName);
   if (mcpInfo) {
     if (parsed.kind === "call") {
@@ -209,8 +209,8 @@ function validatePermissionRule(rule, mode) {
         let example = isGit ? " (for example Bash(git status *))" : "";
         return {
           valid: true,
-          warning: `${formatPermissionRule(ruleValue)} has a wildcard before the rest of the command, so it also matches any options inserted at that position and approves them without a prompt.${gitNote} Replace that * with the exact value you mean, or only use * after the subcommand${example}.`,
-          securityNotice: `${formatPermissionRule(ruleValue)} allows any option at its * \xB7 use an exact value`,
+          warning: `${permissionRuleValueFromString(ruleValue)} has a wildcard before the rest of the command, so it also matches any options inserted at that position and approves them without a prompt.${gitNote} Replace that * with the exact value you mean, or only use * after the subcommand${example}.`,
+          securityNotice: `${permissionRuleValueFromString(ruleValue)} allows any option at its * \xB7 use an exact value`,
         };
       }
     }
@@ -227,18 +227,18 @@ function validatePermissionRule(rule, mode) {
             ? " Replace that * with the exact value you mean."
             : fixed.endsWith(":*")
               ? ""
-              : ` Use ${formatPermissionRule({
+              : ` Use ${permissionRuleValueFromString({
                   toolName: ruleValue.toolName,
                   ruleContent: fixed,
                 })} for wildcard matching.`;
         return {
           valid: true,
-          warning: `${formatPermissionRule(ruleValue)} mixes * with the trailing :* prefix syntax, so it is matched as a literal prefix (the * is not expanded) and ${consequence}.${advice}`,
+          warning: `${permissionRuleValueFromString(ruleValue)} mixes * with the trailing :* prefix syntax, so it is matched as a literal prefix (the * is not expanded) and ${consequence}.${advice}`,
           ...(mode !== "allow" && {
-            securityNotice: `${formatPermissionRule(ruleValue)} reads its * literally${
+            securityNotice: `${permissionRuleValueFromString(ruleValue)} reads its * literally${
               fixed.endsWith(":*")
                 ? ""
-                : ` \xB7 use ${formatPermissionRule({
+                : ` \xB7 use ${permissionRuleValueFromString({
                     toolName: ruleValue.toolName,
                     ruleContent: fixed,
                   })}`
@@ -253,9 +253,9 @@ function validatePermissionRule(rule, mode) {
           : "It already matches as a * wildcard; moving :* to the end would make it a literal prefix and change which commands match.";
       return {
         valid: true,
-        warning: `${formatPermissionRule(ruleValue)} has a :* that is not at the end, so it is matched as a * wildcard (the : is literal), not as the trailing :* prefix syntax. ${advice}`,
+        warning: `${permissionRuleValueFromString(ruleValue)} has a :* that is not at the end, so it is matched as a * wildcard (the : is literal), not as the trailing :* prefix syntax. ${advice}`,
         ...(mode === "allow" && {
-          securityNotice: `${formatPermissionRule(ruleValue)} reads its :* as a wildcard \xB7 use an exact value`,
+          securityNotice: `${permissionRuleValueFromString(ruleValue)} reads its :* as a wildcard \xB7 use an exact value`,
         }),
       };
     }
@@ -285,17 +285,19 @@ function validatePermissionRule(rule, mode) {
     if (expectedTool !== undefined && !ruleValue.ruleContent.includes(":*"))
       return {
         valid: true,
-        warning: `${formatPermissionRule(ruleValue)} is not matched by file permission checks \u2014 only ${expectedTool}(path) rules are. Use ${formatPermissionRule(
+        warning: `${permissionRuleValueFromString(ruleValue)} is not matched by file permission checks \u2014 only ${expectedTool}(path) rules are. Use ${permissionRuleValueFromString(
           {
             toolName: expectedTool,
             ruleContent: ruleValue.ruleContent,
           },
         )} instead (${expectedTool} rules cover all file-${expectedTool === "Edit" ? "editing" : "reading"} tools).`,
         ...(mode !== "allow" && {
-          securityNotice: `${formatPermissionRule(ruleValue)} never matches \xB7 use ${formatPermissionRule({
-            toolName: expectedTool,
-            ruleContent: ruleValue.ruleContent,
-          })}`,
+          securityNotice: `${permissionRuleValueFromString(ruleValue)} never matches \xB7 use ${permissionRuleValueFromString(
+            {
+              toolName: expectedTool,
+              ruleContent: ruleValue.ruleContent,
+            },
+          )}`,
         }),
       };
   }
@@ -303,17 +305,17 @@ function validatePermissionRule(rule, mode) {
     valid: true,
   };
 }
-//@ chunk-dcmhvw5a.js:221819-221860 layout
+//@ chunk-z20c443b.js:217287-217328 layout
 /**
  * permissionRuleSchema：权限规则 schema；allowPermissionRuleSchema：allow 类权限规则 schema（同一声明共 2 个绑定）。
  */
 var permissionRuleSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var allowPermissionRuleSchema;
-deferInit("chunk-dcmhvw5a.js:221819", () => {
+deferInit("chunk-z20c443b.js:217287", () => {
   permissionRuleSchema = DoctorLazy(() => PermissionRuleSchema());
   allowPermissionRuleSchema = DoctorLazy(() => PermissionRuleSchema("allow"));
 });
-//@ chunk-dcmhvw5a.js:221860-222126 fingerprint (2.1.88 match: PermissionRuleSchema, 0.903)
+//@ chunk-z20c443b.js:217328-217594 fingerprint (2.1.88 match: PermissionRuleSchema, 0.903)
 function PermissionRuleSchema(mode) {
   return stringSchema().superRefine((val, ctx) => {
     let result = validatePermissionRule(val, mode);

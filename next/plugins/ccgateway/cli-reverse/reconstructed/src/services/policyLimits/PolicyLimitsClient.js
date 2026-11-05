@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增（门面模块 PolicyLimitsClient）。策略限制客户端。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7t4fmt2f.js (68)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pcv9zvvv.js (68)
  * attribution: placement 69
  */
 import { statSync } from "fs";
@@ -71,7 +71,7 @@ import {
   noteTunnelEpochHeard,
   _resetRememberedCoreSkillsForTesting,
 } from "./policyEvidence.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import {
   isKnownTaint,
   MAX_COMPLIANCE_TAINTS,
@@ -169,6 +169,7 @@ import {
   settingsFetchOutcome,
   notAttemptedReason,
 } from "../analytics/authOutcomeTelemetry.js";
+import { countWhere } from "../../utils/collections.js";
 import { settingsAuthSource, startInteractionAwarePoll } from "../remoteManagedSettings/fetchSupport.js";
 import { errorReportingPolicyState } from "../errorReportingGate.js";
 import { onCredentialChange, subscribeCredentialEpoch } from "../../utils/auth/credentialEpoch.js";
@@ -178,7 +179,7 @@ import { skillChangeDetector } from "../../utils/skills/skillChangeDetector.js";
 import { clearLockHolderSocket } from "../../utils/auth/lockHolderLiveness.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-7t4fmt2f.js:14397-14495 placement
+//@ chunk-pcv9zvvv.js:14399-14497 placement
 /**
  * 策略接口请求的默认超时（10 秒），fetchPolicyLimitsForBearer 的 timeoutMs 默认值；第一次尝试的等待时间在此基础上加 2 秒。
  */
@@ -189,36 +190,36 @@ var POLL_INTERVAL_MS = 3600000;
 var VERDICTLESS_RETRY_DELAYS_MS = [15000, 15000, 30000, 60000, 180000, 600000];
 var RETRY_JITTER_RATIO = 0.2;
 var REGIME_REFUSAL_REFETCH_MIN_INTERVAL_MS = 60000;
-//@ chunk-7t4fmt2f.js:14495-14549 placement
+//@ chunk-pcv9zvvv.js:14497-14551 placement
 function isShimmyingStardustGateOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_shimmying_stardust", false);
 }
-//@ chunk-7t4fmt2f.js:14549-14563 placement
+//@ chunk-pcv9zvvv.js:14551-14565 placement
 var PREFETCHED_POLICY_LIMITS_MAX_AGE_MS = 60000;
-//@ chunk-7t4fmt2f.js:14563-14606 placement
+//@ chunk-pcv9zvvv.js:14565-14608 placement
 function normalizeRecoverySource(source) {
   return source === "load" ? "other" : source;
 }
-//@ chunk-7t4fmt2f.js:14606-14706 placement
+//@ chunk-pcv9zvvv.js:14608-14708 placement
 function isAcceleratedTrigger(trigger) {
   return (
     trigger === "accelerated_retry" || trigger === "api_success_trigger" || trigger === "api_refusal_trigger"
   );
 }
-//@ chunk-7t4fmt2f.js:14706-14741 placement
+//@ chunk-pcv9zvvv.js:14708-14743 placement
 /**
  * 等待策略加载完成 promise 的最长时间（30 秒），超时后直接放行并记调试日志。
  */
 var LOADING_PROMISE_TIMEOUT_MS = 30000;
 var POLICY_LIMITS_COLD_AWAIT_MS = 5000;
 var FAIL_CLOSED_SHADOW_CACHE_TTL_MS = 86400000;
-//@ chunk-7t4fmt2f.js:14741-14828 placement
+//@ chunk-pcv9zvvv.js:14743-14830 placement
 function revalidationChecksumForPolicy(etag, ageMs) {
   let normalizedEtag = etag || undefined;
   if (!isPolicyGraceEnabled()) return normalizedEtag;
   return keepIfFresh(normalizedEtag, ageMs ?? (isDiskCacheForeign() ? sessionBodyAgeMs() : cacheAgeMs()));
 }
-//@ chunk-7t4fmt2f.js:14828-15008 placement
+//@ chunk-pcv9zvvv.js:14830-15010 placement
 function cacheAgeMs() {
   if (isDiskCacheForeign()) return;
   let persistedPolicyCacheConfirmedAt = getPersistedPolicyCacheConfirmedAt();
@@ -233,24 +234,24 @@ function cacheAgeMs() {
     return;
   }
 }
-//@ chunk-7t4fmt2f.js:15008-15093 placement
+//@ chunk-pcv9zvvv.js:15010-15095 placement
 function sessionBodyAgeMs() {
   let sessionBodyReceivedAt = getSessionBodyReceivedAt();
   if (sessionBodyReceivedAt === null) return;
   let age = Date.now() - sessionBodyReceivedAt;
   return age >= 0 ? age : undefined;
 }
-//@ chunk-7t4fmt2f.js:15093-15111 placement
+//@ chunk-pcv9zvvv.js:15095-15113 placement
 var now; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-7t4fmt2f.js:15093", () => {
+deferInit("chunk-pcv9zvvv.js:15095", () => {
   now = Date.now();
 });
-//@ chunk-7t4fmt2f.js:15111-15351 placement
+//@ chunk-pcv9zvvv.js:15113-15353 placement
 function mergeUnknownTaints(body) {
   let sessionCache = getSessionCache();
   if (!sessionCache) return body;
   latchComplianceTaintsBustingBetas(body.compliance_taints);
-  let sliced = uniq([
+  let sliced = normalizeCaseForComparison_2([
     ...sessionCache.compliance_taints,
     ...body.compliance_taints.filter((complianceTaint) => !isKnownTaint(complianceTaint)),
   ]).slice(0, MAX_COMPLIANCE_TAINTS);
@@ -260,18 +261,18 @@ function mergeUnknownTaints(body) {
     compliance_taints: sliced,
   };
 }
-//@ chunk-7t4fmt2f.js:15351-15419 placement
+//@ chunk-pcv9zvvv.js:15353-15421 placement
 function policyLimitsBaseUrl() {
   return policyLimitsUrl(getPolicyLimitsTunnelSocket() ? "http://localhost" : getOauthConfig().BASE_API_URL);
 }
-//@ chunk-7t4fmt2f.js:15419-15445 placement
+//@ chunk-pcv9zvvv.js:15421-15447 placement
 /**
  * 返回策略接口的基址（隧道时为 http://localhost，否则为 OAuth 配置的 BASE_API_URL），policyEndpointHost 由它取 host。
  */
 function policyLimitsEndpointUrl() {
   return policyLimitsBaseUrl();
 }
-//@ chunk-7t4fmt2f.js:15445-15571 placement
+//@ chunk-pcv9zvvv.js:15447-15573 placement
 function policyEndpointHost() {
   if (getPolicyLimitsTunnelSocket()) return "local machine (via claude ssh tunnel)";
   try {
@@ -280,15 +281,15 @@ function policyEndpointHost() {
     return "unknown host";
   }
 }
-//@ chunk-7t4fmt2f.js:15571-15604 placement
+//@ chunk-pcv9zvvv.js:15573-15606 placement
 function checksumOfServerResponse(response) {
   return computeChecksum(serverBodyOf(response));
 }
-//@ chunk-7t4fmt2f.js:15604-15645 placement
+//@ chunk-pcv9zvvv.js:15606-15647 placement
 function shouldAwaitPolicyLimitsOnStartup() {
   return isPolicyLimitsEligible() && loadCachedResponse() === null;
 }
-//@ chunk-7t4fmt2f.js:15645-16103 placement
+//@ chunk-pcv9zvvv.js:15647-16105 placement
 /**
  * 策略请求使用的鉴权类型（api_key/oauth/wif）。
  */
@@ -329,7 +330,7 @@ function policyAuthKind() {
         apiKeyFromHelper: false,
       };
 }
-//@ chunk-7t4fmt2f.js:16103-16348 placement
+//@ chunk-pcv9zvvv.js:16105-16350 placement
 function credentialOriginLabel(credential, wireInfo) {
   if (getPolicyLimitsTunnelSocket()) return "proxy";
   switch (credential.authType) {
@@ -345,12 +346,12 @@ function credentialOriginLabel(credential, wireInfo) {
       return;
   }
 }
-//@ chunk-7t4fmt2f.js:16348-16455 placement
+//@ chunk-pcv9zvvv.js:16350-16457 placement
 function authTokenSourceLabel() {
   if (getPolicyLimitsTunnelSocket()) return env.CLAUDE_CODE_OAUTH_TOKEN ? "CLAUDE_CODE_OAUTH_TOKEN" : "none";
   return getAuthTokenSource().source;
 }
-//@ chunk-7t4fmt2f.js:16455-16761 placement
+//@ chunk-pcv9zvvv.js:16457-16763 placement
 /**
  * 是否使用代理及是否回环。
  */
@@ -382,7 +383,7 @@ function proxyTelemetry() {
     proxy_is_loopback: proxyUrl_2 !== undefined && isLoopbackHost(proxyUrl_2.hostname),
   };
 }
-//@ chunk-7t4fmt2f.js:21874-22472 placement
+//@ chunk-pcv9zvvv.js:21876-22474 placement
 async function fetchPolicyLimitsForBearer(bearer, { timeoutMs = POLICY_REQUEST_TIMEOUT_MS } = {}) {
   if (getAPIProvider() !== "firstParty" || !isActualFirstPartyAnthropicBaseUrl()) return null;
   try {
@@ -415,12 +416,12 @@ async function fetchPolicyLimitsForBearer(bearer, { timeoutMs = POLICY_REQUEST_T
     return null;
   }
 }
-//@ chunk-7t4fmt2f.js:22472-22591 placement
+//@ chunk-pcv9zvvv.js:22474-22593 placement
 function responseShapeField(field) {
   if (field === undefined) return "root";
   return field === "restrictions" || field === "compliance_taints" || field === "defaults" ? field : "other";
 }
-//@ chunk-7t4fmt2f.js:22591-22804 placement
+//@ chunk-pcv9zvvv.js:22593-22806 placement
 function connectionTelemetry() {
   return {
     has_custom_base_url: hasCustomBaseUrlForAnalytics(),
@@ -431,7 +432,7 @@ function connectionTelemetry() {
     api_key_prefix: fromEnum(getApiKeyPrefixBucket()),
   };
 }
-//@ chunk-7t4fmt2f.js:22804-22910 placement
+//@ chunk-pcv9zvvv.js:22806-22912 placement
 var CACHE_IO_ERRORS = [
   "EACCES",
   "EPERM",
@@ -445,28 +446,28 @@ var CACHE_IO_ERRORS = [
   "ENFILE",
   "EBUSY",
 ];
-//@ chunk-7t4fmt2f.js:22910-22969 placement
+//@ chunk-pcv9zvvv.js:22912-22971 placement
 function cacheIoErrorCodeOrOther(errnoCode) {
   return errnoCode !== undefined && CACHE_IO_ERRORS.includes(errnoCode) ? errnoCode : "other";
 }
-//@ chunk-7t4fmt2f.js:22969-23000 placement
+//@ chunk-pcv9zvvv.js:22971-23002 placement
 function cacheIoErrorCodeOf(error) {
   return cacheIoErrorCodeOrOther(getErrnoCode(error));
 }
-//@ chunk-7t4fmt2f.js:23000-23118 placement
+//@ chunk-pcv9zvvv.js:23002-23120 placement
 function storageErrorIoCode(error) {
   let telemetryCode = "telemetryCode" in error ? error.telemetryCode : undefined;
   return cacheIoErrorCodeOrOther(
     telemetryCode === "UnexpectedAbsent" || telemetryCode === ABSENTPARENT ? "ENOENT" : telemetryCode,
   );
 }
-//@ chunk-7t4fmt2f.js:23118-23165 placement
+//@ chunk-pcv9zvvv.js:23120-23167 placement
 function policyLimitsStorageSpace() {
   return STORAGE_SPACES.state("policy-limits");
 }
-//@ chunk-7t4fmt2f.js:23165-23180 placement
+//@ chunk-pcv9zvvv.js:23167-23182 placement
 var MAX_POLICY_CACHE_BYTES = 1048576;
-//@ chunk-7t4fmt2f.js:23180-23695 placement
+//@ chunk-pcv9zvvv.js:23182-23697 placement
 async function primePolicyLimitsCache(storageV5) {
   if (
     !isStorageV5Enabled() ||
@@ -506,7 +507,7 @@ async function primePolicyLimitsCache(storageV5) {
     logForDebugging(`Policy limits: prime failed: ${errorMessage(error)}`);
   }
 }
-//@ chunk-7t4fmt2f.js:23695-63095 placement
+//@ chunk-pcv9zvvv.js:23697-63097 placement
 /**
  * PolicyLimitsClient：组织策略限制（policy limits）客户端。持有存储与凭证，负责冷启动等待、预取结果接纳、OAuth 刷新闩锁、定时轮询与主体变化时重载，产出 fail-open/fail-closed 判定供启动门控和工具使用。
  */
@@ -1474,7 +1475,7 @@ class PolicyLimitsClient {
         prefetched: prefetched !== undefined,
         hedged: result.hedged === true,
         restrictions_denied_count: usedPolicy
-          ? count(Object.values(usedPolicy.restrictions), (restriction) => !restriction.allowed)
+          ? countWhere(Object.values(usedPolicy.restrictions), (restriction) => !restriction.allowed)
           : undefined,
         compliance_taint_count: usedPolicy ? (usedPolicy.compliance_taints?.length ?? 0) : undefined,
         is_load: label === "policy_limits_load",
@@ -1585,7 +1586,10 @@ class PolicyLimitsClient {
         if (lossyCachedTaints && sessionTaints.some((taint) => !complianceTaints.includes(taint))) {
           keptPolicy = {
             ...diskPolicy,
-            compliance_taints: uniq([...sessionTaints, ...complianceTaints]).slice(0, MAX_COMPLIANCE_TAINTS),
+            compliance_taints: normalizeCaseForComparison_2([...sessionTaints, ...complianceTaints]).slice(
+              0,
+              MAX_COMPLIANCE_TAINTS,
+            ),
           };
           logForDebugging("Policy limits: lossy cached compliance_taints \u2014 kept the session taint set");
         }
@@ -1633,10 +1637,10 @@ class PolicyLimitsClient {
         if (knownTaints.length > 0) {
           policy = {
             ...policy,
-            compliance_taints: uniq([...policy.compliance_taints, ...knownTaints]).slice(
-              0,
-              MAX_COMPLIANCE_TAINTS,
-            ),
+            compliance_taints: normalizeCaseForComparison_2([
+              ...policy.compliance_taints,
+              ...knownTaints,
+            ]).slice(0, MAX_COMPLIANCE_TAINTS),
           };
           logForDebugging("Policy limits: lossy compliance_taints \u2014 kept the known taint set");
         }
@@ -2408,26 +2412,26 @@ class PolicyLimitsClient {
     this.resetAcceleratedRecovery();
   }
 }
-//@ chunk-7t4fmt2f.js:63095-63119 placement
+//@ chunk-pcv9zvvv.js:63097-63121 placement
 class DefaultPolicyLimitsClientSlot {
   client = undefined;
 }
-//@ chunk-7t4fmt2f.js:63119-63146 placement
+//@ chunk-pcv9zvvv.js:63121-63148 placement
 var defaultPolicyLimitsClientSlots; // deferred: uses DefaultPolicyLimitsClientSlot of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-7t4fmt2f.js:63119", () => {
+deferInit("chunk-pcv9zvvv.js:63121", () => {
   defaultPolicyLimitsClientSlots = new HostScoped(() => new DefaultPolicyLimitsClientSlot());
 });
-//@ chunk-7t4fmt2f.js:63146-63184 placement
+//@ chunk-pcv9zvvv.js:63148-63186 placement
 function policyLimitsClientSlots() {
   return defaultPolicyLimitsClientSlots.of(getRootSession().host);
 }
-//@ chunk-7t4fmt2f.js:63184-63243 placement
+//@ chunk-pcv9zvvv.js:63186-63245 placement
 function getPolicyLimitsClient() {
   let slots = policyLimitsClientSlots();
   slots.client ??= new PolicyLimitsClient();
   return slots.client;
 }
-//@ chunk-7t4fmt2f.js:63243-63931 placement
+//@ chunk-pcv9zvvv.js:63245-63933 placement
 function composePolicyLimitsClient(services) {
   let slots = policyLimitsClientSlots();
   if (slots.client === undefined) {
@@ -2457,11 +2461,11 @@ function composePolicyLimitsClient(services) {
     default:
   }
 }
-//@ chunk-7t4fmt2f.js:63931-63979 placement
+//@ chunk-pcv9zvvv.js:63933-63981 placement
 function _recordPolicyLimitsStartupAwaitResultForTesting(result) {
   getPolicyLimitsClient().recordStartupAwaitResult(result);
 }
-//@ chunk-7t4fmt2f.js:63979-64180 placement
+//@ chunk-pcv9zvvv.js:63981-64182 placement
 async function awaitPolicyLimitsColdStartVerdict() {
   let since = performance.now();
   let verdict;
@@ -2480,19 +2484,19 @@ async function awaitPolicyLimitsColdStartVerdict() {
   });
   return verdict;
 }
-//@ chunk-7t4fmt2f.js:64180-64224 placement
+//@ chunk-pcv9zvvv.js:64182-64226 placement
 function didPolicyLimitsColdStartTimeOut() {
   return getPolicyLimitsClient().coldStartTimedOut;
 }
-//@ chunk-7t4fmt2f.js:64224-64265 placement
+//@ chunk-pcv9zvvv.js:64226-64267 placement
 function getPolicyLimitsGateSnapshot() {
   return getPolicyLimitsClient().gateSnapshot();
 }
-//@ chunk-7t4fmt2f.js:64265-64312 placement
+//@ chunk-pcv9zvvv.js:64267-64314 placement
 function getPolicyLimitsColdStartWait() {
   return getPolicyLimitsClient().coldStartVerdictWait;
 }
-//@ chunk-7t4fmt2f.js:64312-64427 placement
+//@ chunk-pcv9zvvv.js:64314-64429 placement
 function ensurePolicyLimitsLoadRequested() {
   recordLoadBarrier("policy", "not_awaited");
   try {
@@ -2504,7 +2508,7 @@ function ensurePolicyLimitsLoadRequested() {
     logError(error);
   }
 }
-//@ chunk-7t4fmt2f.js:64427-64591 placement
+//@ chunk-pcv9zvvv.js:64429-64593 placement
 async function awaitPolicyLimitsColdStart() {
   let since = performance.now();
   try {
@@ -2521,16 +2525,16 @@ async function awaitPolicyLimitsColdStart() {
   }
   return awaitPolicyLimitsColdStartVerdict();
 }
-//@ chunk-7t4fmt2f.js:64591-64617 placement
+//@ chunk-pcv9zvvv.js:64593-64619 placement
 function _getDefaultPolicyLimitsClientForTesting() {
   return getPolicyLimitsClient();
 }
-//@ chunk-7t4fmt2f.js:64617-64704 placement
+//@ chunk-pcv9zvvv.js:64619-64706 placement
 async function _awaitPolicyLimitsCyclesForTesting() {
   let client = policyLimitsClientSlots().client;
   if (client !== undefined) await client._settleCyclesForTesting();
 }
-//@ chunk-7t4fmt2f.js:64704-64779 placement
+//@ chunk-pcv9zvvv.js:64706-64781 placement
 function _resetPolicyLimitsForTesting() {
   getPolicyLimitsClient().stop();
   liftDiskAdoptionSuppression();
@@ -2540,78 +2544,78 @@ function _resetPolicyLimitsForTesting() {
   clearLockHolderSocket();
   _resetMachinePinsSignInForTesting();
 }
-//@ chunk-7t4fmt2f.js:64779-64825 placement
+//@ chunk-pcv9zvvv.js:64781-64827 placement
 function initializePolicyLimitsLoadingPromise() {
   getPolicyLimitsClient().initializeLoadingPromise();
 }
-//@ chunk-7t4fmt2f.js:64825-64888 placement
+//@ chunk-pcv9zvvv.js:64827-64890 placement
 function serverErrorCodeOf(error) {
   return stampedServerErrorType(error) !== undefined ? error.serverErrorCode : undefined;
 }
-//@ chunk-7t4fmt2f.js:64888-64952 placement
+//@ chunk-pcv9zvvv.js:64890-64954 placement
 function serverAuthDenialOf(error) {
   return stampedServerErrorType(error) !== undefined ? error.serverAuthDenial : undefined;
 }
-//@ chunk-7t4fmt2f.js:64952-64995 placement
+//@ chunk-pcv9zvvv.js:64954-64997 placement
 function getPolicyLimitsSignatureFacts() {
   return getPolicyLimitsClient().signatureFacts();
 }
-//@ chunk-7t4fmt2f.js:64995-65034 placement
+//@ chunk-pcv9zvvv.js:64997-65036 placement
 function waitForPolicyLimitsToLoad() {
   return getPolicyLimitsClient().waitForLoad();
 }
-//@ chunk-7t4fmt2f.js:65034-65082 placement
+//@ chunk-pcv9zvvv.js:65036-65084 placement
 function logPolicyLimitsCacheStateAtFirstPrompt() {
   getPolicyLimitsClient().logCacheStateAtFirstPrompt();
 }
-//@ chunk-7t4fmt2f.js:65082-65128 placement
+//@ chunk-pcv9zvvv.js:65084-65130 placement
 function admitPrefetchedPolicyLimits(prefetched) {
   return getPolicyLimitsClient().admitPrefetched(prefetched);
 }
-//@ chunk-7t4fmt2f.js:65128-65195 placement
+//@ chunk-pcv9zvvv.js:65130-65197 placement
 function isSessionVerdictOfLiveCredential() {
   return policyLimitsClientSlots().client?.isVerdictOfLiveCredential() ?? false;
 }
-//@ chunk-7t4fmt2f.js:65195-65233 placement
+//@ chunk-pcv9zvvv.js:65197-65235 placement
 function loadPolicyLimits(options = {}) {
   return getPolicyLimitsClient().load(options);
 }
-//@ chunk-7t4fmt2f.js:65233-65263 placement (2.1.88 match: skillSearchModules, 1)
+//@ chunk-pcv9zvvv.js:65235-65265 placement (2.1.88 match: skillSearchModules, 1)
 function prefetchPolicyLimits() {
   getPolicyLimitsClient().prefetch();
 }
-//@ chunk-7t4fmt2f.js:65263-65299 placement
+//@ chunk-pcv9zvvv.js:65265-65301 placement
 function refreshPolicyLimits() {
   return getPolicyLimitsClient().refresh();
 }
-//@ chunk-7t4fmt2f.js:65299-65338 placement
+//@ chunk-pcv9zvvv.js:65301-65340 placement
 function clearPolicyLimitsCache() {
   return getPolicyLimitsClient().clearCache();
 }
-//@ chunk-7t4fmt2f.js:65338-65382 placement
+//@ chunk-pcv9zvvv.js:65340-65384 placement
 function startBackgroundPolling() {
   getPolicyLimitsClient().startBackgroundPolling();
 }
-//@ chunk-7t4fmt2f.js:65382-65425 placement
+//@ chunk-pcv9zvvv.js:65384-65427 placement
 function stopBackgroundPolling() {
   getPolicyLimitsClient().stopBackgroundPolling();
 }
-//@ chunk-7t4fmt2f.js:65425-65451 placement
+//@ chunk-pcv9zvvv.js:65427-65453 placement
 function stopPolicyLimits() {
   getPolicyLimitsClient().stop();
 }
-//@ chunk-7t4fmt2f.js:65451-65467 placement
+//@ chunk-pcv9zvvv.js:65453-65469 placement
 var UNCLASSIFIED_RECHECK_DELAY_MS; // deferred: uses POLICY_LIMITS_CACHE_FILENAME (./policyState.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-7t4fmt2f.js:65451", () => {
+deferInit("chunk-pcv9zvvv.js:65453", () => {
   UNCLASSIFIED_RECHECK_DELAY_MS = UNCLASSIFIED_ORIGIN_MEMO_MS + 1000;
 });
-//@ chunk-7t4fmt2f.js:65467-65519 placement
+//@ chunk-pcv9zvvv.js:65469-65521 placement
 function isClassifiedPrincipal(policyPrincipal) {
   return policyPrincipal !== null && policyPrincipal.unclassified !== true;
 }
-//@ chunk-7t4fmt2f.js:65519-65541 placement
+//@ chunk-pcv9zvvv.js:65521-65543 placement
 var ADMITS_ONLY_KEY_SUFFIX = ":admits-only";
-//@ chunk-7t4fmt2f.js:65541-65661 placement
+//@ chunk-pcv9zvvv.js:65543-65663 placement
 function policyCacheKey(policyPrincipal) {
   let descriptorDigest = identityDigestOfDescriptor(policyPrincipal);
   let key =
@@ -2620,27 +2624,29 @@ function policyCacheKey(policyPrincipal) {
       : `${descriptorDigest}:${policyPrincipal.bearerDigest}`;
   return policyPrincipal.admitsOnly === true ? `${key}${ADMITS_ONLY_KEY_SUFFIX}` : key;
 }
-//@ chunk-7t4fmt2f.js:65661-65713 placement
+//@ chunk-pcv9zvvv.js:65663-65715 placement
 function currentPolicyCacheKey() {
   let policyPrincipal = getPolicyPrincipal();
   return policyPrincipal === null ? null : policyCacheKey(policyPrincipal);
 }
-//@ chunk-7t4fmt2f.js:65713-65752 placement
+//@ chunk-pcv9zvvv.js:65715-65754 placement
 function envBearerCacheKey(digest) {
   return `env-bearer:${digest}`;
 }
-//@ chunk-7t4fmt2f.js:65752-65823 placement
+//@ chunk-pcv9zvvv.js:65754-65825 placement
 function principalCacheKeyWithBearer(policyPrincipal) {
   let accessToken = getClaudeAIOAuthTokens()?.accessToken;
   return `${policyCacheKey(policyPrincipal)}#${accessToken ? tokenDigest(accessToken) : ""}`;
 }
 export {
+  didPolicyLimitsColdStartTimeOut,
   waitForPolicyLimitsToLoad,
+  refreshPolicyLimits,
   getPolicyLimitsSignatureFacts,
   shouldAwaitPolicyLimitsOnStartup,
   loadPolicyLimits,
-  refreshPolicyLimits,
-  didPolicyLimitsColdStartTimeOut,
+  awaitPolicyLimitsColdStart,
+  clearPolicyLimitsCache,
   FETCH_MAX_RETRIES,
   policyLimitsEndpointUrl,
   currentPolicyCacheKey,
@@ -2653,20 +2659,18 @@ export {
   responseShapeField,
   isShimmyingStardustGateOn,
   policyEndpointHost,
-  logPolicyLimitsCacheStateAtFirstPrompt,
-  awaitPolicyLimitsColdStart,
+  awaitPolicyLimitsColdStartVerdict,
   ensurePolicyLimitsLoadRequested,
+  getPolicyLimitsGateSnapshot,
   getPolicyLimitsColdStartWait,
   POLICY_LIMITS_COLD_AWAIT_MS,
-  clearPolicyLimitsCache,
+  logPolicyLimitsCacheStateAtFirstPrompt,
+  fetchPolicyLimitsForBearer,
   composePolicyLimitsClient,
   primePolicyLimitsCache,
   initializePolicyLimitsLoadingPromise,
   prefetchPolicyLimits,
-  getPolicyLimitsGateSnapshot,
   isSessionVerdictOfLiveCredential,
-  awaitPolicyLimitsColdStartVerdict,
-  fetchPolicyLimitsForBearer,
   DefaultPolicyLimitsClientSlot,
   FAIL_CLOSED_SHADOW_CACHE_TTL_MS,
   POLICY_LIMITS_FIRST_ATTEMPT_WAIT_MS,

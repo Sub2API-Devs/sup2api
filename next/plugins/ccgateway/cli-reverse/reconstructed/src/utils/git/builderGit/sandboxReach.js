@@ -3,9 +3,9 @@
  *
  * builderGit：沙箱可达范围判断（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (60)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fepf8jp6.js (60)
  * attribution: placement 60
  */
 import { isAbsolute, resolve, parse, basename, dirname, sep, join, delimiter } from "path";
@@ -21,14 +21,14 @@ import {
 } from "fs";
 import { homedir } from "os";
 import { access, lstat } from "fs/promises";
-import { getPlatform as getPlatform_2 } from "../../platform.js";
-import { uniq } from "../../collections.js";
+import { getPlatform } from "../../platform.js";
+import { normalizeCaseForComparison_2 } from "../../permissions/filesystem.js";
 import {
   resolveForeignSpelling,
   classifyPathSpelling,
   spellingsToCheck,
   isPathTooDeep,
-  isPathInside as isPathInside_2,
+  isPathInside,
   MAX_PROTECTED_PATH_LENGTH,
   classifyPathSpellingSync,
   isForeignSpelling,
@@ -51,7 +51,7 @@ import {
   resolveSandboxFilesystemPath,
   detectWorktreeGitCommonDir,
 } from "../../sandbox/sandbox-adapter.js";
-import { FILE_EDIT_TOOL_NAME } from "../../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../../tools/FileEditTool/constants.js";
 import { expandPath } from "../../path.js";
 import { getClaudeTempDirRealpath, getChildProcessTmpDirRealpath } from "../../tempDirRealpaths.js";
 import { getAdditionalDirectoriesForClaudeMd } from "../../../bootstrap/state.js";
@@ -67,22 +67,22 @@ import { rawPointerPathIsUnsafe } from "../gitFilesystem.js";
 import { stripPathQuotes } from "../../which.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:208341-208477 placement
+//@ chunk-fepf8jp6.js:2926-3062 placement
 function msysPathToWindows(path) {
-  let driveMatch = getPlatform_2() === "windows" ? /^\/([A-Za-z])(?=\/|$)/.exec(path) : null;
+  let driveMatch = getPlatform() === "windows" ? /^\/([A-Za-z])(?=\/|$)/.exec(path) : null;
   return driveMatch === null ? path : `${driveMatch[1].toUpperCase()}:${path.slice(2) || "\\"}`;
 }
-//@ chunk-s61vbvea.js:208477-208564 placement
+//@ chunk-fepf8jp6.js:3062-3149 placement
 function reachRootsForPath(path, launchDir) {
   let windowsPath = msysPathToWindows(path);
   if (windowsPath !== path)
-    return uniq([
+    return normalizeCaseForComparison_2([
       ...checkSandboxWriteRoot(windowsPath, launchDir),
       ...checkSandboxWriteRoot(path, launchDir),
     ]);
   return checkSandboxWriteRoot(path, launchDir);
 }
-//@ chunk-s61vbvea.js:208564-209049 placement
+//@ chunk-fepf8jp6.js:3149-3634 placement
 function checkSandboxWriteRoot(path, launchDir) {
   let resolvedPath = path.startsWith("~") || isAbsolute(path) ? path : resolve(launchDir, path);
   let foreignSpelling = resolveForeignSpelling(
@@ -131,9 +131,9 @@ function checkSandboxWriteRoot(path, launchDir) {
       return [];
     }
   });
-  return uniq([...filtered, ...flattened]);
+  return normalizeCaseForComparison_2([...filtered, ...flattened]);
 }
-//@ chunk-s61vbvea.js:209049-209421 placement
+//@ chunk-fepf8jp6.js:3634-4006 placement
 /**
  * 读取某设置源（或传入的设置）中 permissions.allow 的 Edit 规则路径、sandbox.filesystem.allowWrite 与 permissions.additionalDirectories，展开为路径列表；读取失败返回空。
  */
@@ -148,7 +148,7 @@ function collectSettingsWriteRoots(source, launchDir, settings) {
   for (let rule of resolvedSettings?.permissions?.allow ?? [])
     try {
       let ruleForSandbox = parseRuleForSandbox(rule);
-      if (ruleForSandbox.toolName === FILE_EDIT_TOOL_NAME && ruleForSandbox.ruleContent)
+      if (ruleForSandbox.toolName === EDIT && ruleForSandbox.ruleContent)
         roots.push(resolvePathPatternForSandbox(ruleForSandbox.ruleContent, source));
     } catch {}
   for (let pathRule of resolvedSettings?.sandbox?.filesystem?.allowWrite ?? [])
@@ -161,7 +161,7 @@ function collectSettingsWriteRoots(source, launchDir, settings) {
     } catch {}
   return roots;
 }
-//@ chunk-s61vbvea.js:209421-209601 placement
+//@ chunk-fepf8jp6.js:4006-4186 placement
 /**
  * 默认可达根：临时目录、配置目录、工作树公共 git 目录与额外目录。
  */
@@ -178,43 +178,43 @@ function collectBaseReachRoots(launchDir) {
     try {
       roots.push(expandPath(dir, launchDir));
     } catch {}
-  return uniq(roots.flatMap((root) => reachRootsForPath(root, launchDir)));
+  return normalizeCaseForComparison_2(roots.flatMap((root) => reachRootsForPath(root, launchDir)));
 }
-//@ chunk-s61vbvea.js:209601-209667 placement
+//@ chunk-fepf8jp6.js:4186-4252 placement
 /**
  * 某设置来源的可达根（展开设置写入根）。
  */
 function settingsReachRootsForSource(launchDir, source, writeRoots) {
-  return uniq(
+  return normalizeCaseForComparison_2(
     (writeRoots ?? collectSettingsWriteRoots(source, launchDir)).flatMap((root) =>
       reachRootsForPath(root, launchDir),
     ),
   );
 }
-//@ chunk-s61vbvea.js:209667-209739 placement
+//@ chunk-fepf8jp6.js:4252-4324 placement
 /**
  * 汇总所有设置来源的可达根。
  */
 function settingsReachRoots(launchDir) {
-  return uniq([
+  return normalizeCaseForComparison_2([
     ...collectBaseReachRoots(launchDir),
     ...SETTING_SOURCES.flatMap((source) => settingsReachRootsForSource(launchDir, source, null)),
   ]);
 }
-//@ chunk-s61vbvea.js:209739-209749 placement
-var REPO_DIR_SETTING_SOURCES_2; // deferred: uses EDITABLE_SETTING_SOURCES (../../settings/constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:209739", () => {
-  REPO_DIR_SETTING_SOURCES_2 = REPO_DIR_SETTING_SOURCE_LIST;
+//@ chunk-fepf8jp6.js:4324-4334 placement
+var REPO_DIR_SETTING_SOURCES; // deferred: uses EDITABLE_SETTING_SOURCES (../../settings/constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fepf8jp6.js:4324", () => {
+  REPO_DIR_SETTING_SOURCES = REPO_DIR_SETTING_SOURCE_LIST;
 });
-//@ chunk-s61vbvea.js:209749-209955 placement
+//@ chunk-fepf8jp6.js:4334-4540 placement
 function collectRepoSettingsReachRoots(launchDir) {
-  let mapped = REPO_DIR_SETTING_SOURCES_2.map((source) => ({
+  let mapped = REPO_DIR_SETTING_SOURCES.map((source) => ({
     source,
     read: readRepoSettingsForReach(source),
   }));
   return mapped.some(({ read }) => read === "unreadable")
     ? "unreadable"
-    : uniq(
+    : normalizeCaseForComparison_2(
         mapped.flatMap(({ source, read }) =>
           read === "unreadable"
             ? []
@@ -226,7 +226,7 @@ function collectRepoSettingsReachRoots(launchDir) {
         ),
       );
 }
-//@ chunk-s61vbvea.js:209955-210150 placement
+//@ chunk-fepf8jp6.js:4540-4735 placement
 function readRepoSettingsForReach(source) {
   try {
     let repoDirSettingsFresh = readRepoDirSettingsFresh(source);
@@ -238,7 +238,7 @@ function readRepoSettingsForReach(source) {
     return "unreadable";
   }
 }
-//@ chunk-s61vbvea.js:263193-263279 placement
+//@ chunk-fepf8jp6.js:57085-57171 placement
 /**
  * 创建一个可达范围收集器（根、是否保留卷根、路径与加载器表）。
  */
@@ -250,23 +250,23 @@ function createReachCollector(keepsVolumes = true) {
     loaders: new Map(),
   };
 }
-//@ chunk-s61vbvea.js:263279-263448 placement
+//@ chunk-fepf8jp6.js:57171-57339 placement
 function mergeReachRoots(screenMemo, roots) {
   let previouslyCounted = weakMap.get(roots) ?? new Set();
   let filtered = roots.filter(
     (root) => previouslyCounted.has(root) || (!screenMemo.keepsVolumes && isVolumeRoot(root)),
   );
   for (let root of roots) if (!filtered.includes(root)) screenMemo.roots.add(root);
-  return uniq([...screenMemo.roots, ...filtered]);
+  return normalizeCaseForComparison_2([...screenMemo.roots, ...filtered]);
 }
-//@ chunk-s61vbvea.js:263448-263486 placement
+//@ chunk-fepf8jp6.js:57339-57376 placement
 /**
  * 判断路径是否为卷根（/）。
  */
 function isVolumeRoot(path) {
   return path === parse(path).root;
 }
-//@ chunk-s61vbvea.js:263486-263599 placement
+//@ chunk-fepf8jp6.js:57376-57489 placement
 function reachForWorkTree(workTree, layout) {
   let workTree_2 = layout?.workTree ?? workTree;
   return {
@@ -277,7 +277,7 @@ function reachForWorkTree(workTree, layout) {
     ]),
   };
 }
-//@ chunk-s61vbvea.js:263599-264061 placement
+//@ chunk-fepf8jp6.js:57489-57951 placement
 /**
  * 把可达根解析为真实路径，无法担保的按“整卷”处理。
  */
@@ -289,9 +289,9 @@ function resolveReachRoots(roots, tree) {
     for (let volume of volumes) countedRoots.add(volume);
     return volumes;
   };
-  let resolved = uniq([
+  let resolved = normalizeCaseForComparison_2([
     ...roots.filter((root) => !isPathTooDeep(root, 0)),
-    ...uniq(roots).flatMap((root) => {
+    ...normalizeCaseForComparison_2(roots).flatMap((root) => {
       if (isPathTooDeep(root, 0))
         return countAsEveryVolume(root, {
           spelling: root,
@@ -313,12 +313,12 @@ function resolveReachRoots(roots, tree) {
   if (filtered.length > 0) weakMap.set(resolved, new Set(filtered));
   return resolved;
 }
-//@ chunk-s61vbvea.js:264061-264080 placement
+//@ chunk-fepf8jp6.js:57951-57970 placement
 var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:264061", () => {
+deferInit("chunk-fepf8jp6.js:57951", () => {
   weakMap = new WeakMap();
 });
-//@ chunk-s61vbvea.js:264080-264280 placement
+//@ chunk-fepf8jp6.js:57970-58170 placement
 function countRootAsEveryVolume(root, spelling, tree) {
   logForDebugging(
     `[builderGit] reach root ${truncateWithCount(root, 256)} cannot be vouched for (${spelling.verdict}): counted as every volume`,
@@ -336,7 +336,7 @@ function countRootAsEveryVolume(root, spelling, tree) {
     tree,
   );
 }
-//@ chunk-s61vbvea.js:264280-264331 placement
+//@ chunk-fepf8jp6.js:58170-58221 placement
 /**
  * 取某仓库工作树的可达根。
  */
@@ -346,9 +346,9 @@ function reachRootsForRepo(tree, extraRoots) {
     roots: baseReachRootsForTree(tree, extraRoots),
   });
 }
-//@ chunk-s61vbvea.js:264331-264395 placement
+//@ chunk-fepf8jp6.js:58221-58285 placement
 function baseReachRootsForTree(tree, extraRoots) {
-  return uniq([
+  return normalizeCaseForComparison_2([
     tree,
     ...extraRoots,
     ...repoAncestorRoots(tree),
@@ -356,19 +356,21 @@ function baseReachRootsForTree(tree, extraRoots) {
     ...settingsReachRoots(tree),
   ]);
 }
-//@ chunk-s61vbvea.js:264395-264471 placement
+//@ chunk-fepf8jp6.js:58285-58360 placement
 function repoAncestorRoots(tree) {
   let ancestors = repoAncestorsBelowHome(tree);
-  return ancestors.length === 0 ? [] : uniq([...ancestors, homedir()].filter(isAbsolute));
+  return ancestors.length === 0
+    ? []
+    : normalizeCaseForComparison_2([...ancestors, homedir()].filter(isAbsolute));
 }
-//@ chunk-s61vbvea.js:264471-264531 placement
+//@ chunk-fepf8jp6.js:58360-58419 placement
 /**
  * 若路径指向 .git 目录则返回其父目录（检出目录）。
  */
 function checkoutDirOfGitDir(commonDir) {
   return basename(commonDir).toLowerCase() === ".git" ? dirname(commonDir) : commonDir;
 }
-//@ chunk-s61vbvea.js:264531-264651 placement
+//@ chunk-fepf8jp6.js:58419-58538 placement
 /**
  * 工作树上方（家目录以下）的 git 仓库目录。
  */
@@ -376,24 +378,24 @@ function findEnclosingRepos(tree) {
   let homeReal = resolveRealPathLoose(homedir(), tree) ?? homedir();
   let ancestorsOf = (dir) => {
     let parentDir = dirname(dir);
-    return parentDir === dir || isPathInside_2(parentDir, homeReal)
+    return parentDir === dir || isPathInside(parentDir, homeReal)
       ? []
       : [parentDir, ...ancestorsOf(parentDir)];
   };
   return ancestorsOf(tree).filter(isGitRepoDir);
 }
-//@ chunk-s61vbvea.js:264651-264715 placement
+//@ chunk-fepf8jp6.js:58538-58602 placement
 /**
  * 找出家目录之上且包含该路径的 git 检出。
  */
 function enclosingCheckoutAboveHome(tree) {
   return (
     repoAncestorsBelowHome(tree).find(
-      (ancestor) => isPathInside_2(ancestor, tree) && !isPathInside_2(tree, ancestor),
+      (ancestor) => isPathInside(ancestor, tree) && !isPathInside(tree, ancestor),
     ) ?? null
   );
 }
-//@ chunk-s61vbvea.js:264715-264766 placement
+//@ chunk-fepf8jp6.js:58602-58653 placement
 /**
  * 列出家目录以下的各层 git 仓库祖先。
  */
@@ -401,14 +403,14 @@ function repoAncestorsBelowHome(tree) {
   let homeDir = homedir();
   return homeDir === "" ? [] : listRepoAncestors(homeDir, tree);
 }
-//@ chunk-s61vbvea.js:264766-264804 placement
+//@ chunk-fepf8jp6.js:58653-58691 placement
 /**
  * 最近的一层仓库祖先。
  */
 function nearestRepoAncestor(tree) {
   return repoAncestorsBelowHome(tree)[0] ?? null;
 }
-//@ chunk-s61vbvea.js:264804-264947 placement
+//@ chunk-fepf8jp6.js:58691-58834 placement
 /**
  * 路径相对家目录：home/above_home/elsewhere。
  */
@@ -418,14 +420,14 @@ function classifyHomePosition(tree, cwd) {
   let realHome = resolveRealPathLoose(homeDir, cwd) ?? homeDir;
   return realHome === tree || homeDir === tree
     ? "home"
-    : isPathInside_2(tree, realHome) || isPathInside_2(tree, homeDir)
+    : isPathInside(tree, realHome) || isPathInside(tree, homeDir)
       ? "above_home"
       : "elsewhere";
 }
-//@ chunk-s61vbvea.js:264947-265102 placement
+//@ chunk-fepf8jp6.js:58834-58987 placement
 function listRepoAncestors(baseDir, cwd) {
   let realBase = resolveRealPathLoose(baseDir, cwd) ?? baseDir;
-  return uniq([
+  return normalizeCaseForComparison_2([
     ...(isAbsolute(realBase) ? ancestorChain(realBase) : []),
     ...(isAbsolute(baseDir) ? ancestorChain(baseDir) : []),
   ])
@@ -433,28 +435,28 @@ function listRepoAncestors(baseDir, cwd) {
     .filter(isGitRepoDir)
     .sort((left, right) => left.split(sep).length - right.split(sep).length);
 }
-//@ chunk-s61vbvea.js:265102-265147 placement
+//@ chunk-fepf8jp6.js:58987-59032 placement
 /**
  * 最外层（最远）的仓库祖先。
  */
 function outermostRepoAncestor(tree, cwd) {
   return listRepoAncestors(tree, cwd).at(-1) ?? null;
 }
-//@ chunk-s61vbvea.js:265147-265220 placement
+//@ chunk-fepf8jp6.js:59032-59104 placement
 function ancestorChain(dir, remaining = MAX_ANCESTOR_CHAIN) {
   let parentDir = dirname(dir);
   return parentDir === dir || remaining === 0 ? [dir] : [dir, ...ancestorChain(parentDir, remaining - 1)];
 }
-//@ chunk-s61vbvea.js:265220-265231 placement
+//@ chunk-fepf8jp6.js:59104-59115 placement
 var MAX_ANCESTOR_CHAIN = MAX_PROTECTED_PATH_LENGTH;
-//@ chunk-s61vbvea.js:265231-265550 placement
+//@ chunk-fepf8jp6.js:59115-59433 placement
 /**
  * 找到可达范围内可写的 git 检出，或返回无法担保的位置。
  */
 async function findHeldCheckout(includePath, cwd) {
   if (hasDotDotSegment(includePath) || !isAbsolute(includePath)) return null;
   let reach = classifyReachRoot(includePath, cwd);
-  let sorted = uniq(reach.nodes)
+  let sorted = normalizeCaseForComparison_2(reach.nodes)
     .filter((node) => !reach.links.has(node) && !reach.cutAt.has(node) && isTraversableDirectory(node))
     .filter(isGitRepoDir)
     .sort((left, right) => right.split(sep).length - left.split(sep).length);
@@ -472,15 +474,15 @@ async function findHeldCheckout(includePath, cwd) {
         at: unvouchedAt,
       };
 }
-//@ chunk-s61vbvea.js:265550-265760 placement
+//@ chunk-fepf8jp6.js:59433-59643 placement
 async function isCheckoutHeld(reach, checkout) {
-  let filtered = uniq(reach.nodes).filter((node) => isPathInside_2(checkout, node));
+  let filtered = normalizeCaseForComparison_2(reach.nodes).filter((node) => isPathInside(checkout, node));
   if (filtered.some((node) => reach.cutAt.has(node))) return true;
   let filtered_2 = filtered.filter((node) => !reach.links.has(node));
   let results = await Promise.all(filtered_2.map(isWritableOrOwned));
   return filtered_2.length === 0 || results.some((owned) => owned === true);
 }
-//@ chunk-s61vbvea.js:265760-266322 placement
+//@ chunk-fepf8jp6.js:59643-60203 placement
 function classifyReachRoot(startPath, cwd) {
   let linkNodes = new Set();
   let cutAt = new Set();
@@ -529,7 +531,7 @@ function classifyReachRoot(startPath, cwd) {
     cutAt,
   };
 }
-//@ chunk-s61vbvea.js:266322-266635 placement
+//@ chunk-fepf8jp6.js:60203-60515 placement
 /**
  * 路径可写，或属当前用户（不存在返回 absent）。
  */
@@ -550,11 +552,11 @@ async function isWritableOrOwned(path) {
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "absent" : true;
   }
 }
-//@ chunk-s61vbvea.js:266635-266671 placement
+//@ chunk-fepf8jp6.js:60515-60551 placement
 function isTraversableDirectory(path) {
   return !isNetworkMountRoot_2(path) && !isProcFilesystem(path);
 }
-//@ chunk-s61vbvea.js:266671-266729 placement
+//@ chunk-fepf8jp6.js:60551-60609 placement
 function isProcFilesystem(path) {
   try {
     return statfsSync(path).type === PROC_SUPER_MAGIC;
@@ -562,13 +564,13 @@ function isProcFilesystem(path) {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:266729-266740 placement
+//@ chunk-fepf8jp6.js:60609-60620 placement
 var PROC_SUPER_MAGIC = 391;
-//@ chunk-s61vbvea.js:266740-266786 placement
+//@ chunk-fepf8jp6.js:60620-60665 placement
 function isGitRepoDir(dirPath) {
   return pathMayExist(join(dirPath, ".git")) || isCurrentDirectoryBareGitRepo(dirPath);
 }
-//@ chunk-s61vbvea.js:266786-266953 placement (2.1.88 match: isCurrentDirectoryBareGitRepo, 0.757)
+//@ chunk-fepf8jp6.js:60665-60829 placement (2.1.88 match: isCurrentDirectoryBareGitRepo, 0.756)
 function isCurrentDirectoryBareGitRepo(dirPath) {
   return (
     basename(dirPath).toLowerCase() !== ".git" &&
@@ -577,11 +579,11 @@ function isCurrentDirectoryBareGitRepo(dirPath) {
         isGitdirFile(join(dirPath, "config"))))
   );
 }
-//@ chunk-s61vbvea.js:266953-266990 placement
+//@ chunk-fepf8jp6.js:60829-60866 placement
 function pathExistsSync(path) {
   return lstatOrUndefined(path) !== undefined;
 }
-//@ chunk-s61vbvea.js:266990-267128 placement
+//@ chunk-fepf8jp6.js:60866-61004 placement
 function pathMayExist(path) {
   try {
     return (
@@ -594,10 +596,10 @@ function pathMayExist(path) {
     return !(errnoCode === "ENOTDIR" || errnoCode === "ELOOP" || errnoCode === "ENAMETOOLONG");
   }
 }
-//@ chunk-s61vbvea.js:267128-267163 placement
+//@ chunk-fepf8jp6.js:61004-61039 placement
 var GIT_CONFIG_HEAD_PROBE_BYTES = 4096;
 var CORE_SECTION_RE = /^[ \t]*\[core\]/im;
-//@ chunk-s61vbvea.js:267163-267380 placement
+//@ chunk-fepf8jp6.js:61039-61256 placement
 function isGitdirFile(configPath) {
   if (lstatOrUndefined(configPath)?.isFile() !== true) return false;
   try {
@@ -614,12 +616,12 @@ function isGitdirFile(configPath) {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:267380-267395 placement
+//@ chunk-fepf8jp6.js:61256-61271 placement
 /**
  * 遍历配置文件时允许的字节上限。
  */
 var MAX_CONFIG_WALK_BYTES = 1048576;
-//@ chunk-s61vbvea.js:274016-274082 placement
+//@ chunk-fepf8jp6.js:67711-67777 placement
 /**
  * 取 lstat 结果；不存在或出错返回 undefined。
  */
@@ -632,23 +634,23 @@ function lstatOrUndefined(path) {
     return;
   }
 }
-//@ chunk-s61vbvea.js:274082-274177 placement
+//@ chunk-fepf8jp6.js:67777-67871 placement
 function resolveRealPathLoose(path, cwd) {
   if (isPathTooDeep(path, 0)) return null;
   let [head, tail] = splitAtPathMax(path);
   let realHead = realpathWithMissingTail(head, cwd);
   return realHead === null ? null : join(realHead, tail);
 }
-//@ chunk-s61vbvea.js:274177-274436 placement (2.1.88 match: getReservedShortcuts, 0.806)
+//@ chunk-fepf8jp6.js:67871-68130 placement (2.1.88 match: getReservedShortcuts, 0.807)
 function splitAtPathMax(path) {
-  let pathMax = getPlatform_2() === "windows" ? null : getPlatform_2() === "macos" ? 1024 : 4096;
+  let pathMax = getPlatform() === "windows" ? null : getPlatform() === "macos" ? 1024 : 4096;
   if (pathMax === null || Buffer.byteLength(path) < pathMax) return [path, ""];
   let index = path.lastIndexOf(sep, pathMax - 1);
   while (index > 0 && Buffer.byteLength(path.slice(0, index)) >= pathMax)
     index = path.lastIndexOf(sep, index - 1);
   return index > 0 ? [path.slice(0, index), path.slice(index + 1)] : [path, ""];
 }
-//@ chunk-s61vbvea.js:274436-274715 placement
+//@ chunk-fepf8jp6.js:68130-68406 placement
 function realpathWithMissingTail(path, cwd, missingTail = [], hops = 0) {
   if (isPathTooDeep(path, missingTail.length)) return null;
   try {
@@ -665,7 +667,7 @@ function realpathWithMissingTail(path, cwd, missingTail = [], hops = 0) {
       : realpathWithMissingTail(parentDir, cwd, [basename(path), ...missingTail], hops);
   }
 }
-//@ chunk-s61vbvea.js:274715-274803 placement
+//@ chunk-fepf8jp6.js:68406-68494 placement
 function resolvePathSpellings(path, cwd) {
   let realPathLoose = resolveRealPathLoose(path, cwd);
   return realPathLoose === null
@@ -678,31 +680,31 @@ function resolvePathSpellings(path, cwd) {
       )
     : [realPathLoose];
 }
-//@ chunk-s61vbvea.js:274803-274877 placement
+//@ chunk-fepf8jp6.js:68494-68568 placement
 var MAX_LINK_HOPS_2 = 8;
 var GIT_NOT_FOUND_MESSAGE = "git was not found on the PATH this process was started with";
-//@ chunk-s61vbvea.js:274877-275039 placement
+//@ chunk-fepf8jp6.js:68568-68730 placement
 function homeInCheckoutNote(tree) {
   let ancestor = nearestRepoAncestor(tree);
   return ancestor === null
     ? ""
     : `; the home directory counts here because it ${classifyHomePosition(ancestor, tree) === "home" ? "is itself" : "lies inside"} a git checkout (${ancestor})`;
 }
-//@ chunk-s61vbvea.js:275039-275590 placement
+//@ chunk-fepf8jp6.js:68730-69281 placement
 /**
  * 云会话可写目录范围的说明文本，以及目录无法检查时的提示。
  */
 var SANDBOX_REACH_TEXTS = `${GIT_NOT_FOUND_MESSAGE} (directories a cloud session bound here can write \u2014 inside this checkout or a checkout enclosing it, such as a worktree\u2019s main checkout; below your home directory when it is, or lies inside, a git checkout; a session temp directory; one whose git links into those \u2014 and directories that name or lead to another host are not searched)`;
 var UNEXAMINABLE_REACH_NOTE =
   "If one of the directories that a cloud session can write cannot be examined, or is too deep or too long to resolve, every directory is left out; the debug log names the one to fix.";
-//@ chunk-s61vbvea.js:275590-275638 placement
+//@ chunk-fepf8jp6.js:69281-69329 placement
 /**
  * 判断路径是否位于外部挂载或指向不安全目标。
  */
 function pathIsForeignOrUnsafePointer(pointer, baseDir, mountBase = baseDir) {
   return isOnForeignMount(pointer, mountBase) || rawPointerPathIsUnsafe(pointer, baseDir, mountBase);
 }
-//@ chunk-s61vbvea.js:275638-275733 placement
+//@ chunk-fepf8jp6.js:69329-69421 placement
 function readLinkTargetInfo(linkPath) {
   try {
     let linkTarget = readlinkSync(linkPath);
@@ -715,7 +717,7 @@ function readLinkTargetInfo(linkPath) {
     return null;
   }
 }
-//@ chunk-s61vbvea.js:275733-275859 placement
+//@ chunk-fepf8jp6.js:69421-69546 placement
 function filterSafePathEnv(pathValue, reach, expectedNames) {
   let reachPredicate = makeReachPredicate(reach);
   let memo = new Map();
@@ -727,7 +729,7 @@ function filterSafePathEnv(pathValue, reach, expectedNames) {
     )
     .join(delimiter);
 }
-//@ chunk-s61vbvea.js:275859-276200 placement
+//@ chunk-fepf8jp6.js:69546-69886 placement
 /**
  * PATH 中的目录及其中的 git 等程序都在可达范围之外。
  */
@@ -748,14 +750,14 @@ function isPathDirSafe(dirPath, reach, expectedNames, memo = new Map()) {
     return !isReachableOrUnsafe(entryPath, reach, memo);
   });
 }
-//@ chunk-s61vbvea.js:276200-276325 placement
+//@ chunk-fepf8jp6.js:69886-70011 placement
 function makeReachPredicate(roots) {
-  return Object.assign((path) => roots.some((root) => isPathInside_2(root, path)), {
-    beneath: (path) => roots.some((root) => isPathInside_2(path, root) && !isPathInside_2(root, path)),
+  return Object.assign((path) => roots.some((root) => isPathInside(root, path)), {
+    beneath: (path) => roots.some((root) => isPathInside(path, root) && !isPathInside(root, path)),
     anchor: roots[0] ?? sep,
   });
 }
-//@ chunk-s61vbvea.js:276325-277031 placement
+//@ chunk-fepf8jp6.js:70011-70711 placement
 /**
  * 判断路径能否被沙箱写到：非绝对、设备路径或在可达范围内（含其上层）直接返回 true；否则逐级 lstat， 遇到不存在的组件按真实路径与剩余部分判断，遇到链接递归解析（限深度），无法判断的视为可达。
  */
@@ -812,9 +814,9 @@ function isReachableOrUnsafe(path, reach, memo, hopsLeft = MAX_LINK_HOPS) {
   let realPathLoose = resolveRealPathLoose(path, reach.anchor);
   return realPathLoose === null || reach(realPathLoose) || reach.beneath(realPathLoose);
 }
-//@ chunk-s61vbvea.js:277031-277041 placement
+//@ chunk-fepf8jp6.js:70711-70721 placement
 var MAX_LINK_HOPS = 40;
-//@ chunk-s61vbvea.js:277041-277278 placement
+//@ chunk-fepf8jp6.js:70721-70958 placement
 function lstatLinkKind(path) {
   try {
     let stats = lstatSync(path, {
@@ -835,17 +837,8 @@ function lstatLinkKind(path) {
 }
 export {
   collectBaseReachRoots,
-  collectSettingsWriteRoots,
   settingsReachRootsForSource,
-  isVolumeRoot,
-  nearestRepoAncestor,
-  checkoutDirOfGitDir,
-  createReachCollector,
-  enclosingCheckoutAboveHome,
-  findEnclosingRepos,
-  classifyHomePosition,
-  pathIsForeignOrUnsafePointer,
-  UNEXAMINABLE_REACH_NOTE,
+  collectSettingsWriteRoots,
   settingsReachRoots,
   collectRepoSettingsReachRoots,
   resolveReachRoots,
@@ -858,7 +851,11 @@ export {
   GIT_NOT_FOUND_MESSAGE,
   SANDBOX_REACH_TEXTS,
   homeInCheckoutNote,
+  UNEXAMINABLE_REACH_NOTE,
   reachRootsForRepo,
+  findEnclosingRepos,
+  checkoutDirOfGitDir,
+  createReachCollector,
   outermostRepoAncestor,
   repoAncestorsBelowHome,
   resolvePathSpellings,
@@ -866,4 +863,9 @@ export {
   findHeldCheckout,
   MAX_CONFIG_WALK_BYTES,
   isPathDirSafe,
+  pathIsForeignOrUnsafePointer,
+  isVolumeRoot,
+  nearestRepoAncestor,
+  enclosingCheckoutAboveHome,
+  classifyHomePosition,
 };

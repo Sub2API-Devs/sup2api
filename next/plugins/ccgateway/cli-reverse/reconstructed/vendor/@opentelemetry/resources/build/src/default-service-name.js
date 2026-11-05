@@ -1,13 +1,13 @@
 /**
  * @opentelemetry/resources/build/src/default-service-name.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/resources@2.2.0
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
-//@ chunk-bwbq4xvm.js:135957-136332 cjs-fingerprint
+//@ chunk-7kayq7nc.js:136051-136426 cjs-fingerprint
 var require_default_service_name = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

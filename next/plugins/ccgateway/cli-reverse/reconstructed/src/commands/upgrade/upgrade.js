@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。从不同入口触发 /upgrade（打开升级页并重新登录）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/upgrade/upgrade.tsx
- * pieces: chunk-rw1dvz2v.js (3)
+ * pieces: chunk-vb93bfct.js (3)
  * attribution: placement 3
  */
 import { withQuotaResumeFire } from "../../services/quotaAutoResume/quotaAutoResume.js";
@@ -23,15 +23,15 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { Login, runPostLoginHooks, loginCompletion } from "../../services/oauth/postLoginHooks.js";
 import { logError } from "../../utils/log.js";
 
-//@ chunk-rw1dvz2v.js:468-576 placement
+//@ chunk-vb93bfct.js:468-576 placement
 function getUpgradeUrl(surface) {
   return `https://claude.ai/upgrade/max?utm_source=claude_code&utm_medium=cli&utm_campaign=${surface}`;
 }
-//@ chunk-rw1dvz2v.js:576-634 placement
+//@ chunk-vb93bfct.js:576-634 placement
 async function call(onDone, context) {
   return callUpgradeFromSurface(onDone, context, "upgrade_command");
 }
-//@ chunk-rw1dvz2v.js:634-2248 placement (2.1.88 match: call, 0.541)
+//@ chunk-vb93bfct.js:634-2236 placement (2.1.88 match: call, 0.485)
 /**
  * 从不同入口触发 /upgrade（打开升级页并重新登录）。
  */
@@ -56,8 +56,8 @@ async function callUpgradeFromSurface(onDone, context, surface) {
           done,
           0,
           usageCreditsCommand
-            ? `You\u2019re already on the highest Max subscription plan. For additional usage, run ${usageCreditsCommand}.`
-            : "You are already on the highest Max subscription plan. For additional usage, run /login to switch to an API usage-billed account.",
+            ? `You\u2019re already on the highest individual plan. For additional usage, run ${usageCreditsCommand}.`
+            : "You are already on the highest individual plan. For additional usage, run /login to switch to an API usage-billed account.",
         );
         return null;
       }

@@ -3,10 +3,10 @@
  *
  * Bash 权限检查主模块：规则匹配（exact/prefix/wildcard，剥离安全 env 与包装命令）、单子命令判定、沙箱自动允许、too-complex/语义失败路径、bashToolHasPermission 总流程
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/bashPermissions.ts
- * pieces: chunk-63f0f3kd.js (1), chunk-dcmhvw5a.js (1), chunk-e6aww6q8.js (86), chunk-fnhsh6ng.js (1), chunk-m79qv8gp.js (1), chunk-v0yfsee9.js (1)
- * attribution: fingerprint 18, placement 28, layout 33, file-local 2, sole-consumer 8, affinity 2
+ * pieces: chunk-5xgkngpb.js (90), chunk-6zpsr8vx.js (1), chunk-h2y5xkdx.js (1), chunk-z20c443b.js (1)
+ * attribution: placement 42, layout 30, fingerprint 16, file-local 2, sole-consumer 1, affinity 2
  */
 import { isAbsolute, resolve as resolve_2, dirname, normalize, sep } from "path";
 import { homedir } from "os";
@@ -14,6 +14,7 @@ import {
   getFeatureValue_CACHED_MAY_BE_STALE,
   getFeatureValueWithSource_CACHED_MAY_BE_STALE,
 } from "../../services/analytics/growthbook.js";
+import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
 import { firstLineOf, getFirstLine } from "../../utils/stringUtils.js";
 import { noAdditionalDepthRule } from "../../utils/shell/specPrefix.js";
 import { extractFirstPrompt_2 } from "../../commands/export/export.js";
@@ -21,6 +22,7 @@ import { BashTool, READ_BLOCK_EXEMPT_COMMANDS } from "./BashTool.js";
 import {
   buildToolAllowSuggestion,
   parseShellPermissionRule,
+  checkTooComplexCommandDeny,
   trimPsWhitespace,
   matchingRulesForInput_2,
   suggestionForExactCommand_2,
@@ -30,6 +32,7 @@ import {
   deletePlaceholders,
   noteRefusal,
   CMDSUB_PLACEHOLDER,
+  BACKSLASH_ESCAPED_SPACE_RE,
   parseForSecurityFromAst,
   containsAnyPlaceholder,
   hasZshDangerousCommand,
@@ -71,7 +74,6 @@ import {
   splitCommand,
   splitCommandStrict,
   hasZshExecutableParenInBraceExpansion,
-  nestedCommandSpansFromAst,
   funsubBodyFromNode,
   nestedCommandSpansOrOverrun,
   nestedCommandSpans,
@@ -83,12 +85,21 @@ import {
   createPermissionRequestMessage,
   findSafetyCheckReason,
   carriesAskRuleIntent,
-  sandboxOverrideAskGuardsOn,
   scriptAsksToRunUnsandboxed,
   shouldRetagAskAsSandboxOverride,
+  sandboxOverrideAskGuardsOn,
 } from "../../utils/permissions/permissions.js";
-import { uniq, count } from "../../utils/collections.js";
-import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
+import { logForDebugging } from "../../utils/debug.js";
+import { logError } from "../../utils/log.js";
+import {
+  normalizeCaseForComparison_2,
+  allWorkingDirectories,
+  normalizeCaseForComparison,
+} from "../../utils/permissions/filesystem.js";
+import {
+  parseRuleString,
+  permissionRuleValueFromString as permissionRuleValueFromString_2,
+} from "../../utils/permissions/permissionRuleParser.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 import {
   BASH_COMMAND_CLAMP_DENY_REASON,
@@ -107,7 +118,6 @@ import {
 import {
   stripWrappersFromArgvForPaths,
   PATH_EXTRACTORS,
-  urlPatternToRegex,
   checkPathConstraints,
   hasBashDenyRule,
   checkDangerousRemovalPaths,
@@ -125,6 +135,7 @@ import {
   globBeforeInteriorDotDot,
 } from "../../utils/permissions/pathValidation.js";
 import { getFsImplementation, safeResolvePath } from "../../utils/fsOperations.js";
+import { urlPatternToRegex } from "../../services/mcp/config.js";
 import { isHttpMcpServeInvocation } from "../../entrypoints/mcpServeArgs.js";
 import {
   sandboxReadBlockApplies,
@@ -148,28 +159,34 @@ import { isTildeUserPath } from "../../utils/shell/readOnlyCommandValidation.js"
 import {
   isDangerousRmEnabled,
   logDangerousRmShape,
-  logEventUnlessSuppressed,
-  checkDangerousRemoval,
-  classifyRemovalReason,
   dangerousRemovalAsk,
+  classifyRemovalReason,
+  checkDangerousRemoval,
+  logEventUnlessSuppressed,
   runWithoutTelemetry,
 } from "./dangerousRemoval.js";
 import { findDangerousVariableRemovalInText, describeCommandSubstitution } from "./expansionAnalysis.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
-import { isTinglyPearlEnabled, runGuarded, runWithGuardOff } from "../../utils/bash/bashParserFlags.js";
+import {
+  isTinglyPearlEnabled,
+  DOUBLE_SUBST_START_RE,
+  isDeepLocketEnabled,
+  runInReExpansion,
+  runGuarded,
+  runWithGuardOff,
+  withReExpansionIfNeeded,
+} from "../../utils/bash/bashParserFlags.js";
 import {
   INLINE_CD_PLACEHOLDER,
   checkInlineShellRemoval,
   combineDeclarationReadings,
 } from "./inlineShellAnalysis.js";
 import { env } from "../../utils/env.js";
+import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { isAbortError, AbortError as AbortError_2 } from "../../utils/errors.js";
-import { logError } from "../../utils/log.js";
-import { runWithReadingRefusals, runAsBashReads, runWithRuleOff } from "../../utils/bash/bashReadingFlags.js";
 import {
-  askClassifierForAllowedDomains,
-  isPlainAsk,
+  checkBashPermissionWithSandbox,
   bashCommandIsSafeAsync,
+  isPlainAsk,
   getDecisionSeverity,
   getSafetyCheckRank,
   stripCommandBuiltinPrefixes,
@@ -193,27 +210,21 @@ import {
 } from "./bashCommandHelpers.js";
 import { getPlatform } from "../../utils/platform.js";
 import { windowsPathToPosixPath, expandPath } from "../../utils/path.js";
-import { allWorkingDirectories, normalizeCaseForComparison } from "../../utils/permissions/filesystem.js";
-import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFlag.js";
-import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
-import { logForDebugging } from "../../utils/debug.js";
+import { countWhere } from "../../utils/collections.js";
+import {
+  withSturdyLanternOff,
+  runWithReadingRefusals,
+  runWithRuleOff,
+  runAsBashReads,
+} from "../../utils/bash/bashReadingFlags.js";
 import { isAllRuleReason } from "../../utils/permissions/decisionReasons.js";
 import { noopToolUseHook } from "./sandboxViolations.js";
 import { BASH_TOOL_NAME } from "./toolName.js";
-import {
-  toExternalPermissionMode,
-  permissionModeFromString,
-} from "../../utils/permissions/PermissionMode.js";
-import {
-  isBypassPermissionsModeDisabled,
-  isAutoModeGateEnabled,
-} from "../../utils/permissions/permissionSetup.js";
-import { ASSET_TARGET_PIN_TAG } from "../ArtifactTool/permissions/consentStamps.js";
 import { POWERSHELL_TOOL_NAME } from "../PowerShellTool/toolName.js";
 import { findDirectoryChangeIndex } from "./bgWorktreeGuard/bgWorktreeCommandGuard.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:214446-214577 placement (2.1.88 match: buildSuggestions, 1)
+//@ chunk-z20c443b.js:209914-210045 placement (2.1.88 match: buildSuggestions, 1)
 /**
  * 通用前缀权限建议：规则内容为 "<前缀> *"。
  */
@@ -232,21 +243,29 @@ function buildToolPrefixAllowSuggestion(toolName, prefix) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:1164354-1164413 placement
+//@ chunk-5xgkngpb.js:1159717-1159776 placement
 /**
  * 匹配命令开头的环境变量赋值（NAME=value），权限检查用它统计安全的环境前缀。
  */
 var ENV_ASSIGNMENT_RE = /^[A-Za-z_]\w*=/;
 var MAX_COLLECTED_RULES = 5;
 var TENGU_BINARY_LOLLIPOP = "tengu_binary_lollipop";
-//@ chunk-e6aww6q8.js:1164413-1164445 placement
+//@ chunk-5xgkngpb.js:1159776-1159808 placement
 /**
  * 读取 tengu_binary_lollipop 开关，控制语义检查是否记录通配来源。
  */
 function isSourceGlobRecordingEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_BINARY_LOLLIPOP, true);
 }
-//@ chunk-e6aww6q8.js:1164445-1164580 placement
+//@ chunk-5xgkngpb.js:1159808-1159841 layout
+var TENGU_HUMBLE_HARTMANIS = "tengu_humble_hartmanis";
+//@ chunk-5xgkngpb.js:1159841-1159881 layout
+function isBashTextRuleSearchOn() {
+  return readFlagWithOverride(TENGU_HUMBLE_HARTMANIS, {
+    safe: false,
+  });
+}
+//@ chunk-5xgkngpb.js:1159881-1160016 placement
 /**
  * 统计命令开头安全的环境变量赋值个数，遇到不安全赋值返回 null。
  */
@@ -259,7 +278,7 @@ function countSafeEnvPrefix(argv) {
   }
   return prefixCount;
 }
-//@ chunk-e6aww6q8.js:1164580-1164960 placement
+//@ chunk-5xgkngpb.js:1160016-1160396 placement
 /**
  * 从命令中取出可作为规则前缀的"命令 子命令"（跳过安全的环境变量赋值，子命令须为小写 kebab 形式，必要时取更深层子命令）；裸 shell 前缀返回 null。
  */
@@ -279,12 +298,12 @@ function getSubcommandPrefix(command) {
   while (depth < maxDepth && wordPattern.test(sliced[depth] ?? "")) depth++;
   return depth < maxDepth ? null : sliced.slice(0, depth).join(" ");
 }
-//@ chunk-e6aww6q8.js:1164960-1165276 fingerprint (2.1.88 match: BARE_SHELL_PREFIXES, 0.706)
+//@ chunk-5xgkngpb.js:1160396-1160712 fingerprint (2.1.88 match: BARE_SHELL_PREFIXES, 0.706)
 /**
  * 会把后续参数当命令执行的"裸 shell/包装"命令名（sh/bash/zsh/pwsh/env/xargs/sudo/timeout/nohup/strace…）；规则建议不会为这些前缀生成前缀规则。
  */
 var BARE_SHELL_PREFIXES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1164960", () => {
+deferInit("chunk-5xgkngpb.js:1160396", () => {
   BARE_SHELL_PREFIXES = new Set([
     "sh",
     "bash",
@@ -325,7 +344,7 @@ deferInit("chunk-e6aww6q8.js:1164960", () => {
     "runuser",
   ]);
 });
-//@ chunk-e6aww6q8.js:1165276-1165416 placement
+//@ chunk-5xgkngpb.js:1160712-1160852 placement
 /**
  * 判断命令（去掉前导环境变量后）是否以裸 shell 开头（如 bash、sh）。
  */
@@ -336,7 +355,7 @@ function startsWithBareShell(command) {
   let firstWord = parts[idx];
   return !!firstWord && BARE_SHELL_PREFIXES.has(firstWord.split("/").pop());
 }
-//@ chunk-e6aww6q8.js:1165416-1165670 placement
+//@ chunk-5xgkngpb.js:1160852-1161106 placement
 /**
  * 获取命令的裸命令前缀（跳过安全的环境变量），用于生成权限规则；shell 或特殊命令返回 null。
  */
@@ -351,7 +370,7 @@ function getBareCommandPrefix(command) {
   if (noAdditionalDepthRule(firstWord, argv[envPrefixCount + 1] ?? "") !== undefined) return null;
   return firstWord;
 }
-//@ chunk-e6aww6q8.js:1165670-1165854 placement
+//@ chunk-5xgkngpb.js:1161106-1161290 placement
 function suggestionForExactCommand(command) {
   let heredocPrefix = extractFirstPrompt_2(command);
   if (heredocPrefix) return buildToolPrefixAllowSuggestion(BashTool.name, heredocPrefix);
@@ -366,24 +385,24 @@ function suggestionForExactCommand(command) {
   if (prefix) return buildToolPrefixAllowSuggestion(BashTool.name, prefix);
   return buildToolAllowSuggestion(BashTool.name, command);
 }
-//@ chunk-e6aww6q8.js:1166245-1166283 placement
+//@ chunk-5xgkngpb.js:1161681-1161719 placement
 function suggestionForPrefix(prefix) {
   return buildToolPrefixAllowSuggestion(BashTool.name, prefix);
 }
-//@ chunk-e6aww6q8.js:1166283-1166321 placement
+//@ chunk-5xgkngpb.js:1161719-1161757 placement
 /**
  * 按 Bash 权限规则模式（含 xargs 前缀）匹配命令文本。
  */
 function matchesCommandRule(rule, command) {
   return matchWildcardPattern(rule, command, false, true);
 }
-//@ chunk-e6aww6q8.js:1166321-1166857 fingerprint (2.1.88 match: SAFE_ENV_VARS, 0.91)
+//@ chunk-5xgkngpb.js:1161757-1162294 fingerprint (2.1.88 match: SAFE_ENV_VARS, 0.91)
 /**
  * Bash 安全环境变量白名单（GO*\/RUST_*\/NODE_ENV/PYTHON*\/LANG/LC_*\/TERM/NO_COLOR/TZ/CI…）；wQ 是规则内容解析函数的别名（exact/prefix/wildcard）。
  */
 var parseBashPermissionRule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SAFE_ENV_VARS;
-deferInit("chunk-e6aww6q8.js:1166321", () => {
+deferInit("chunk-5xgkngpb.js:1161757", () => {
   parseBashPermissionRule = parseShellPermissionRule;
   SAFE_ENV_VARS = new Set([
     "GOEXPERIMENT",
@@ -427,20 +446,20 @@ deferInit("chunk-e6aww6q8.js:1166321", () => {
     "GIT_TERMINAL_PROMPT",
   ]);
 });
-//@ chunk-e6aww6q8.js:1166857-1166891 layout
+//@ chunk-5xgkngpb.js:1162294-1162328 layout
 /**
  * 变量名是否在 Bash 安全环境变量白名单 SAFE_ENV_VARS 中。
  */
 function isSafeEnvVarName(name) {
   return SAFE_ENV_VARS.has(name);
 }
-//@ chunk-e6aww6q8.js:1166891-1166929 layout
+//@ chunk-5xgkngpb.js:1162328-1162366 layout
 function isSafeEnvVarNameForStrip(name) {
   return SAFE_ENV_VARS.has(name) || false;
 }
-//@ chunk-e6aww6q8.js:1166929-1166997 layout
+//@ chunk-5xgkngpb.js:1162366-1162434 layout
 var PATH_LIKE_VALUE_RE = /^[.~]*[/\\]|[/\\][/\\]|:[/\\.]|(?:^|[/\\])\.\.(?:[/\\]|$)/;
-//@ chunk-e6aww6q8.js:1166997-1167104 layout
+//@ chunk-5xgkngpb.js:1162434-1162541 layout
 /**
  * 值看起来像路径（以 ./ ~/ / 开头、含 ..、URL 冒号斜杠等）且路径型值检查开关打开时返回 true；这类赋值不能作为安全前缀剥离。
  */
@@ -450,7 +469,7 @@ function isPathLikeEnvValue(value) {
     (PATH_LIKE_VALUE_RE.test(text) || PATH_LIKE_VALUE_RE.test(deletePlaceholders(text))) && noteRefusal()
   );
 }
-//@ chunk-e6aww6q8.js:1167104-1167203 layout
+//@ chunk-5xgkngpb.js:1162541-1162640 layout
 /**
  * NAME=value 是否可以当作安全前缀剥离：变量在 SAFE_ENV_VARS 中且值不像路径；含占位符时更严格。
  */
@@ -460,7 +479,7 @@ function isSafeEnvAssignment(varName, varValue) {
   if (SAFE_ENV_VARS.has(varName)) return !isPathLikeEnvValue(varValue);
   return false;
 }
-//@ chunk-e6aww6q8.js:1167203-1167279 layout
+//@ chunk-5xgkngpb.js:1162640-1162716 layout
 function isRiskyBareAssignmentName(name, getProtectedNames) {
   return (
     name === "PWD" ||
@@ -468,7 +487,7 @@ function isRiskyBareAssignmentName(name, getProtectedNames) {
     (!isSafeEnvVarNameForStrip(name) && getProtectedNames()?.has(name) !== false)
   );
 }
-//@ chunk-e6aww6q8.js:1167279-1167318 layout
+//@ chunk-5xgkngpb.js:1162716-1162755 layout
 /**
  * 返回会话环境变量名集合的惰性读取器（供 hasRiskyBareAssignment 判断裸赋值）。
  */
@@ -476,7 +495,7 @@ function lazySessionEnvVarNames(sessionId) {
   shellEnvSnapshot();
   return () => spawnEnvKeysForSession(sessionId);
 }
-//@ chunk-e6aww6q8.js:1167318-1167377 layout
+//@ chunk-5xgkngpb.js:1162755-1162814 layout
 /**
  * 复合命令里的裸赋值是否可能改变目录语义：赋值给 PWD/OLDPWD，或给不在安全表但存在于会话环境变量里的名字。
  */
@@ -484,7 +503,7 @@ function hasRiskyBareAssignment(assignments, sessionId) {
   let getNames = onceExport(sessionId);
   return assignments.some((subcmd) => isRiskyBareAssignmentName(subcmd, getNames));
 }
-//@ chunk-e6aww6q8.js:1167377-1167495 file-local
+//@ chunk-5xgkngpb.js:1162814-1162932 file-local
 /**
  * 去掉以 # 开头的注释行（全是注释时原样返回）。
  */
@@ -499,7 +518,7 @@ function stripCommentLines(command) {
   return nonCommentLines.join(`
 `);
 }
-//@ chunk-e6aww6q8.js:1167495-1168849 layout
+//@ chunk-5xgkngpb.js:1162932-1164291 layout
 /**
  * 规则匹配前的规范化：循环剥离注释行与安全 env 前缀，去掉首词引号，再剥离 timeout/time/nice/stdbuf/nohup/command/builtin/noglob 包装，返回 trim 后的命令。
  */
@@ -570,9 +589,9 @@ function stripSafeWrappers(command, stripEnvVars = true, stripComments = true) {
   }
   return stripped.trim();
 }
-//@ chunk-e6aww6q8.js:1168849-1168878 layout
+//@ chunk-5xgkngpb.js:1164291-1164320 layout
 var TIMEOUT_FLAG_VALUE_RE = /^[A-Za-z0-9_.+-]+$/;
-//@ chunk-e6aww6q8.js:1168878-1169375 fingerprint (2.1.88 match: skipTimeoutFlags, 1)
+//@ chunk-5xgkngpb.js:1164320-1164817 fingerprint (2.1.88 match: skipTimeoutFlags, 1)
 /**
  * 在 timeout 的 argv 中跳过它的选项（--foreground、-k/-s 带值等），返回时长参数下标；遇到未知选项返回 -1。
  */
@@ -597,7 +616,7 @@ function skipTimeoutFlags(a) {
   }
   return i;
 }
-//@ chunk-e6aww6q8.js:1169375-1169778 fingerprint (2.1.88 match: stripWrappersFromArgv, 1)
+//@ chunk-5xgkngpb.js:1164817-1165220 fingerprint (2.1.88 match: stripWrappersFromArgv, 1)
 /**
  * argv 版包装剥离：反复去掉 time [-p]、nohup、timeout <选项> <时长>、nice -n N，返回真正的命令 argv。
  */
@@ -618,7 +637,7 @@ function stripWrappersFromArgv(argv) {
     else return remaining;
   }
 }
-//@ chunk-e6aww6q8.js:1169778-1170112 layout
+//@ chunk-5xgkngpb.js:1165220-1165554 layout
 /**
  * 命令是否带有不在安全表里（或值像路径）的 env 前缀；有 AST 时直接看 envVars。
  */
@@ -636,7 +655,7 @@ function hasUnsafeEnvVarPrefix(input, astCommand) {
     command = command.slice(m[0].length);
   }
 }
-//@ chunk-e6aww6q8.js:1170112-1170440 file-local
+//@ chunk-5xgkngpb.js:1165554-1165882 file-local
 /**
  * 剥离所有前导 VAR=value（含数组下标、引号值），可用回调/正则在特定变量处停止；用于 deny/ask 规则匹配时不被 env 前缀绕过。
  */
@@ -661,12 +680,12 @@ function stripAllLeadingEnvVars(command, isUnsafeEnvAssignment, stripComments = 
   }
   return stripped.trim();
 }
-//@ chunk-e6aww6q8.js:1170440-1172319 layout
+//@ chunk-5xgkngpb.js:1165882-1167761 layout
 var WRAPPER_FLAGS_WITH_VALUE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var WRAPPER_COMMAND_STRING_FLAGS;
 var WRAPPER_LEADING_OPERAND_CHECKS;
 var ENV_ASSIGNMENT_RE_2;
-deferInit("chunk-e6aww6q8.js:1170440", () => {
+deferInit("chunk-5xgkngpb.js:1165882", () => {
   WRAPPER_FLAGS_WITH_VALUE = {
     env: new Set(["-u", "-C", "--unset", "--chdir"]),
     sudo: new Set([
@@ -807,7 +826,7 @@ deferInit("chunk-e6aww6q8.js:1170440", () => {
   };
   ENV_ASSIGNMENT_RE_2 = /^[A-Za-z_][A-Za-z0-9_]*\+?=/;
 });
-//@ chunk-e6aww6q8.js:1172319-1173302 layout
+//@ chunk-5xgkngpb.js:1167761-1168753 layout
 /**
  * 把 argv 中的 env 赋值和 sudo/doas/env/watch/ionice/taskset/chrt/strace/ltrace/flock/script/unshare/nsenter/exec/command 等包装（含它们带值的选项、env -S/flock -c 的命令串）一层层剥掉，得到真正执行的命令 argv。
  */
@@ -896,7 +915,7 @@ function unwrapCommandArgv(argv) {
     argv_2 = argv_2.slice(idx);
   }
 }
-//@ chunk-e6aww6q8.js:1173302-1174805 fingerprint (2.1.88 match: filterRulesByContentsMatchingInput, 0.797)
+//@ chunk-5xgkngpb.js:1168753-1170327 fingerprint (2.1.88 match: filterRulesByContentsMatchingInput, 0.796)
 /**
  * 在一组 Bash 规则里找出与输入命令匹配的规则：候选命令包括原文、去重定向、stripSafeWrappers 后，以及（deny/ask 时）剥离全部 env 与包装后的形式；exact/prefix/wildcard 三种规则，prefix 匹配拒绝复合命令，并识别 xargs 前缀。
  */
@@ -928,6 +947,8 @@ function filterRulesByContentsMatchingInput(
       commandsToTry.push(unwrappedArgv.join(" "));
     if (unwrappedArgv[0] !== undefined && stripPathAndExe(unwrappedArgv[0]) !== unwrappedArgv[0])
       commandsToTry.push([stripPathAndExe(unwrappedArgv[0]), ...unwrappedArgv.slice(1)].join(" "));
+    if (BACKSLASH_ESCAPED_SPACE_RE.test(commandWithoutRedirections) && isBashTextRuleSearchOn())
+      commandsToTry.push(commandWithoutRedirections.replace(/\\([ \t])/g, "$1"));
     let seen = new Set(commandsToTry);
     let startIdx = 0;
     while (startIdx < commandsToTry.length) {
@@ -997,11 +1018,11 @@ function filterRulesByContentsMatchingInput(
     })
     .map(([, rule]) => rule);
 }
-//@ chunk-e6aww6q8.js:1174805-1175298 fingerprint (2.1.88 match: matchingRulesForInput, 0.781)
+//@ chunk-5xgkngpb.js:1170327-1170822 fingerprint (2.1.88 match: matchingRulesForInput, 0.781)
 /**
  * 对输入分别求匹配的 deny、ask、allow 规则（deny/ask 剥离全部 env 与包装、不做复合检查；allow 不剥离）。
  */
-function matchingRulesForInput(
+function matchingRulesForInput_3(
   input,
   toolPermissionContext,
   matchMode,
@@ -1034,7 +1055,38 @@ function matchingRulesForInput(
     matchingAllowRules,
   };
 }
-//@ chunk-e6aww6q8.js:1175298-1176073 placement
+//@ chunk-5xgkngpb.js:1170917-1170983 placement
+function isUsableNodeType(nodeType) {
+  return nodeType !== undefined && nodeType !== "PARSE_ABORT" && nodeType !== "ERROR";
+}
+//@ chunk-5xgkngpb.js:1170983-1171391 placement
+/**
+ * 含转义空白的命令在 PowerShell 权限里的判定：无 AST 结果时返回 true，否则按 AST 的 simple/too-complex 与节点类型判定，栈溢出记日志并返回 false。
+ */
+function canParseEscapedSpaceCommand(command, parseContext, nodeType) {
+  if (nodeType !== undefined || !BACKSLASH_ESCAPED_SPACE_RE.test(command) || command.includes("\\\n"))
+    return isUsableNodeType(nodeType);
+  try {
+    let parseResult = parseForSecurityFromAst(command, parseContext, {
+      passesEscapedBlanks: true,
+    });
+    return (
+      parseResult.kind === "simple" ||
+      (parseResult.kind === "too-complex" && isUsableNodeType(parseResult.nodeType))
+    );
+  } catch (error) {
+    if (error instanceof RangeError)
+      logForDebugging(
+        "Bash permissions: stack overflow while analyzing a command with an escaped space or tab, so deny and ask rules are searched for in its text",
+        {
+          level: "error",
+        },
+      );
+    else logError(error);
+    return false;
+  }
+}
+//@ chunk-5xgkngpb.js:1171391-1172166 placement
 /**
  * 检查命令的每个片段是否都被某组规则（会话 allow 规则字符串）覆盖；返回第一个未覆盖的片段或解析失败时的 unverifiable。
  */
@@ -1057,11 +1109,14 @@ async function findSpanNotCoveredByRuleGroups(toolInput, bashCommandClamps) {
   if (securityParse.kind === "too-complex") return unverifiableResult;
   let splitCommands = splitCommandStrict(toolInput.command);
   if (splitCommands === null || splitCommands.length === 0) return unverifiableResult;
-  let commandTexts = uniq([...splitCommands, ...securityParse.commands.map((command) => command.text)]);
+  let commandTexts = normalizeCaseForComparison_2([
+    ...splitCommands,
+    ...securityParse.commands.map((command) => command.text),
+  ]);
   for (let clampGroup of bashCommandClamps) {
     let allowRulesByContent = new Map();
     for (let ruleString of clampGroup) {
-      let ruleValue = permissionRuleValueFromString(ruleString);
+      let ruleValue = parseRuleString(ruleString);
       if (
         ruleValue.toolName !== BashTool.name ||
         ruleValue.ruleContent === undefined ||
@@ -1096,7 +1151,7 @@ async function findSpanNotCoveredByRuleGroups(toolInput, bashCommandClamps) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:1176073-1176465 placement
+//@ chunk-5xgkngpb.js:1172166-1172558 placement
 /**
  * 代理带有 bashCommandClamp（限定 Bash 命令形式）时，拒绝通过其他工具面执行 shell。
  */
@@ -1116,7 +1171,7 @@ function denyForBashCommandClamp(toolName, shellPermission) {
     };
   return;
 }
-//@ chunk-e6aww6q8.js:1176465-1176759 placement
+//@ chunk-5xgkngpb.js:1172558-1172852 placement
 /**
  * 权限检查本身崩溃且代理带 bashCommandClamp 时直接拒绝，不运行未验证的命令。BashTool.permissionCheckFailureDecision 调用。
  */
@@ -1133,13 +1188,13 @@ function denyCrashedCheckUnderCommandClamp(checkName, shellPermission) {
     };
   return;
 }
-//@ chunk-e6aww6q8.js:1176759-1177404 placement (2.1.88 match: bashToolCheckExactMatchPermission, 0.921)
+//@ chunk-5xgkngpb.js:1172852-1173498 placement (2.1.88 match: bashToolCheckExactMatchPermission, 0.919)
 /**
  * 精确规则检查：deny→拒绝、ask→询问、allow→允许，否则 passthrough 并附精确命令的规则建议。
  */
 var bashToolCheckExactMatchPermission = (input, toolPermissionContext) => {
   let command = input.command.trim();
-  let { matchingDenyRules, matchingAskRules, matchingAllowRules } = matchingRulesForInput(
+  let { matchingDenyRules, matchingAskRules, matchingAllowRules } = matchingRulesForInput_3(
     input,
     toolPermissionContext,
     "exact",
@@ -1183,7 +1238,7 @@ var bashToolCheckExactMatchPermission = (input, toolPermissionContext) => {
     suggestions: suggestionForExactCommand(command),
   };
 };
-//@ chunk-e6aww6q8.js:1177404-1177633 placement
+//@ chunk-5xgkngpb.js:1173498-1173727 placement
 function readsCodeFromStdin(argv) {
   let strippedArgv = stripWrappersFromArgvForPaths([...argv]);
   let commandName = strippedArgv[0];
@@ -1194,7 +1249,7 @@ function readsCodeFromStdin(argv) {
   if (sliced.includes("-")) return true;
   return sliced.every((arg) => arg.startsWith("-"));
 }
-//@ chunk-e6aww6q8.js:1177633-1178453 placement
+//@ chunk-5xgkngpb.js:1173727-1174547 placement
 /**
  * 对 git 的 -C/--git-dir/--work-tree/--file 路径参数检查工作目录外读取限制：命中拒绝规则直接 deny，越界或无法判定时给出 ask。
  */
@@ -1237,7 +1292,7 @@ function checkGitPathArgsForReadBlock(commandName, paths, cwd, context) {
   }
   return ask;
 }
-//@ chunk-e6aww6q8.js:1178560-1181654 sole-consumer
+//@ chunk-5xgkngpb.js:1174654-1177777 sole-consumer
 /**
  * 检查单个命令是否会读取工作目录外路径（permissions.blockReadsOutsideWorkingDirectories）：处理 env 赋值、git 路径选项、从 stdin/内联执行代码、xargs，以及各参数（含 --opt=路径、glob、~）的路径校验，返回 deny/ask 或 undefined。
  */
@@ -1387,7 +1442,7 @@ function checkCommandAgainstReadBlock(command, cwd, context, requireAbsolute, tr
   }
   return ask;
 }
-//@ chunk-e6aww6q8.js:1181654-1181714 affinity
+//@ chunk-5xgkngpb.js:1177777-1177837 affinity
 function isSandboxReadBlockEnforceable(permissionContext) {
   return (
     !isHttpMcpServeInvocation() &&
@@ -1396,7 +1451,7 @@ function isSandboxReadBlockEnforceable(permissionContext) {
     hasBlockReadsOutsideWorkingDirectories()
   );
 }
-//@ chunk-e6aww6q8.js:1181714-1183399 fingerprint (2.1.88 match: bashToolCheckPermission, 0.772)
+//@ chunk-5xgkngpb.js:1177837-1179527 fingerprint (2.1.88 match: bashToolCheckPermission, 0.767)
 /**
  * 单个子命令的权限判定：精确规则 → 前缀/通配规则 → 路径约束（checkPathConstraints）→ 读封锁下的 sed/env/读命令检查 → allow 规则 → sed 约束 → 权限模式（acceptEdits）→ 只读命令自动允许；否则 passthrough 并给出前缀建议。
  */
@@ -1413,7 +1468,7 @@ var bashToolCheckPermission = (
   let command = input.command.trim();
   let exactMatchResult = bashToolCheckExactMatchPermission(input, toolPermissionContext);
   if (exactMatchResult.behavior === "deny" || exactMatchResult.behavior === "ask") return exactMatchResult;
-  let { matchingDenyRules, matchingAskRules, matchingAllowRules } = matchingRulesForInput(
+  let { matchingDenyRules, matchingAskRules, matchingAllowRules } = matchingRulesForInput_3(
     input,
     toolPermissionContext,
     "prefix",
@@ -1524,7 +1579,7 @@ var bashToolCheckPermission = (
     suggestions: suggestionForExactCommand(command),
   };
 };
-//@ chunk-e6aww6q8.js:1183399-1183707 layout
+//@ chunk-5xgkngpb.js:1179527-1179836 layout
 /**
  * 对子命令跑 bashToolCheckPermission，passthrough 时用前缀提取器给出的 commandPrefix 生成建议规则。
  */
@@ -1560,11 +1615,11 @@ async function checkSubcommandPermissionWithSuggestions(
     suggestions: suggestedUpdates,
   };
 }
-//@ chunk-e6aww6q8.js:1183707-1183928 layout
+//@ chunk-5xgkngpb.js:1179836-1180057 layout
 var INTERPRETER_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DD_OPERAND_KEYS;
 var INNER_WHITESPACE_RE;
-deferInit("chunk-e6aww6q8.js:1183707", () => {
+deferInit("chunk-5xgkngpb.js:1179836", () => {
   INTERPRETER_COMMANDS = new Set(["python", "python3", "node", "bun", "deno", "ruby", "perl"]);
   DD_OPERAND_KEYS = new Set([
     "if",
@@ -1585,7 +1640,7 @@ deferInit("chunk-e6aww6q8.js:1183707", () => {
   ]);
   INNER_WHITESPACE_RE = /[^ \t\n][ \t\n]+[^ \t\n]/;
 });
-//@ chunk-e6aww6q8.js:1183928-1185390 layout
+//@ chunk-5xgkngpb.js:1180057-1181532 layout
 /**
  * 沙箱开启且"沙箱内自动允许"打开时，对已解析的简单命令判断能否自动允许：排除危险 env 赋值、UNC 路径、/dev/tcp 重定向、cd 与 rm 组合、危险删除路径等，满足则返回规则检查结果（allow/ask/deny）。
  */
@@ -1676,7 +1731,7 @@ function checkSandboxAutoAllowForAst(
   if (hasCd && hasRm) return null;
   return decision;
 }
-//@ chunk-e6aww6q8.js:1185390-1188803 fingerprint (2.1.88 match: checkSandboxAutoAllow, 0.592)
+//@ chunk-5xgkngpb.js:1181532-1184917 fingerprint (2.1.88 match: checkSandboxAutoAllow, 0.64)
 /**
  * AST 过于复杂时的沙箱自动允许：逐个片段检查 deny/ask 规则，再用一长串启发式（heredoc、${!x}、/proc/*\/environ、引号/展开、test/find/jobs/print/set 的危险用法）排除，全部通过则 allow（有 ask 规则则 ask）。
  */
@@ -1691,7 +1746,7 @@ function checkSandboxAutoAllow(input, permissionContext, nodeType) {
       !isSandboxReadBlockEnforceable(permissionContext))
   )
     return null;
-  if (nodeType === undefined || nodeType === "PARSE_ABORT" || nodeType === "ERROR") return null;
+  if (!isUsableNodeType(nodeType)) return null;
   if (/(?<!<)<<(?!<)/.test(input.command)) return null;
   if (/\$\{[\s|]/.test(input.command.replace(/['"\\]/g, ""))) return null;
   if (/\$\{![A-Za-z_0-9]/.test(input.command.replace(/['"\\]/g, ""))) return null;
@@ -1701,7 +1756,7 @@ function checkSandboxAutoAllow(input, permissionContext, nodeType) {
   if (commands === null || commands.length === 0) return null;
   let firstAskRule;
   for (let command of commands) {
-    let { matchingDenyRules, matchingAskRules } = matchingRulesForInput(
+    let { matchingDenyRules, matchingAskRules } = matchingRulesForInput_3(
       {
         ...input,
         command,
@@ -1868,10 +1923,10 @@ function checkSandboxAutoAllow(input, permissionContext, nodeType) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1188803-1188958 layout
+//@ chunk-5xgkngpb.js:1184917-1185072 layout
 var EXPANSION_SENSITIVE_BUILTINS; // deferred: uses SUBSCRIPT_EVAL_FLAGS (../../utils/bash/ast.js) of its import cycle while loading; runs once the cycle is complete
 var WRAPPER_COMMAND_NAMES;
-deferInit("chunk-e6aww6q8.js:1188803", () => {
+deferInit("chunk-5xgkngpb.js:1184917", () => {
   EXPANSION_SENSITIVE_BUILTINS = new Set([
     "printf",
     "test",
@@ -1892,7 +1947,7 @@ deferInit("chunk-e6aww6q8.js:1188803", () => {
     "noglob",
   ]);
 });
-//@ chunk-e6aww6q8.js:1188958-1189178 layout
+//@ chunk-5xgkngpb.js:1185072-1185292 layout
 /**
  * 剥离 argv 开头的 VAR=value；遇到危险变量或值含元字符返回 null。
  */
@@ -1907,13 +1962,13 @@ function stripSafeLeadingAssignments(words) {
   }
   return assignmentCount === 0 ? words : words.slice(assignmentCount);
 }
-//@ chunk-e6aww6q8.js:1189178-1190057 layout (2.1.88 match: checkSemanticsDeny, 0.881)
+//@ chunk-5xgkngpb.js:1185292-1186171 layout (2.1.88 match: checkSemanticsDeny, 0.874)
 /**
  * 对整条命令和每个 AST 子命令查 prefix deny/ask 规则；没有命中则以"沙箱自动允许"理由 allow。
  */
 function checkRulesForSandboxAutoAllow(input, toolPermissionContext, commands) {
   let command = input.command.trim();
-  let { matchingDenyRules, matchingAskRules } = matchingRulesForInput(
+  let { matchingDenyRules, matchingAskRules } = matchingRulesForInput_3(
     input,
     toolPermissionContext,
     "prefix",
@@ -1933,7 +1988,7 @@ function checkRulesForSandboxAutoAllow(input, toolPermissionContext, commands) {
   if (commands.length > 1 || commands[0]?.text !== command) {
     let firstAskRule;
     for (let cmd of commands) {
-      let subResult = matchingRulesForInput(
+      let subResult = matchingRulesForInput_3(
         {
           command: cmd.text,
         },
@@ -1982,7 +2037,7 @@ function checkRulesForSandboxAutoAllow(input, toolPermissionContext, commands) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1190057-1190400 fingerprint (2.1.88 match: filterCdCwdSubcommands, 0.641)
+//@ chunk-5xgkngpb.js:1186171-1186514 fingerprint (2.1.88 match: filterCdCwdSubcommands, 0.642)
 /**
  * 过滤掉 "cd <当前目录>" 这种无效 cd 子命令（参数是纯路径、无 env/重定向/通配），返回剩余子命令及对应 AST。
  */
@@ -2012,14 +2067,14 @@ function filterCdCwdSubcommands(rawSubcommands, astCommands, cwd, cwdMingw) {
     astCommandsByIdx,
   };
 }
-//@ chunk-e6aww6q8.js:1190400-1190458 placement
+//@ chunk-5xgkngpb.js:1186514-1186572 placement
 /**
  * 字符串是否是不含空白、引号、通配、元字符的纯路径（用于识别无效的 cd <cwd>）。
  */
 function isPlainPathToken(token) {
   return !/[\s\\$`'"*?[\]{}<>|&;()]/.test(token);
 }
-//@ chunk-e6aww6q8.js:1190458-1190605 placement
+//@ chunk-5xgkngpb.js:1186572-1186719 placement
 /**
  * 命令是否只由 && 连接（不含 ||、;、换行、单个 &）。
  */
@@ -2033,12 +2088,16 @@ function isSimpleAndChain(command) {
   if (command.replaceAll("&&", "").includes("&")) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:1197312-1197749 fingerprint (2.1.88 match: checkEarlyExitDeny, 0.959)
+//@ chunk-5xgkngpb.js:1193454-1193892 fingerprint (2.1.88 match: checkEarlyExitDeny, 0.956)
 /**
  * 对整条命令做提前检查：prefix deny → 拒绝；精确 deny → 拒绝；prefix ask → 询问；精确匹配非 passthrough 时返回它；否则 null。
  */
 function checkEarlyExitDeny(input, toolPermissionContext) {
-  let { matchingDenyRules, matchingAskRules } = matchingRulesForInput(input, toolPermissionContext, "prefix");
+  let { matchingDenyRules, matchingAskRules } = matchingRulesForInput_3(
+    input,
+    toolPermissionContext,
+    "prefix",
+  );
   if (matchingDenyRules[0] !== undefined)
     return {
       behavior: "deny",
@@ -2062,7 +2121,7 @@ function checkEarlyExitDeny(input, toolPermissionContext) {
   if (exactMatchResult.behavior !== "passthrough") return exactMatchResult;
   return null;
 }
-//@ chunk-e6aww6q8.js:1197749-1198003 sole-consumer
+//@ chunk-5xgkngpb.js:1193892-1194147 placement
 /**
  * 读封锁开关打开时返回 mayBeUnset(name) 判定器，用于估计变量在运行时是否可能为空（TMPDIR 在沙箱中视为已设置）。
  */
@@ -2082,7 +2141,7 @@ function createEnvUnsetOracle(isEvalOrSource, toolUseContext) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1198003-1198326 sole-consumer
+//@ chunk-5xgkngpb.js:1194147-1194470 placement
 /**
  * 检测命令中可能展开为空的变量导致 rm 等危险删除（如 rm -rf $DIR/），命中时记录遥测并返回危险项。
  */
@@ -2110,87 +2169,25 @@ function findDangerousVariableRemoval(
     logDangerousRmShape("eval_trap_string");
   return dangerousVariableRemovalInText;
 }
-//@ chunk-e6aww6q8.js:1198326-1199186 sole-consumer (2.1.88 match: checkSemanticsDeny, 0.783)
+//@ chunk-5xgkngpb.js:1194470-1194799 placement
 /**
- * AST 过于复杂（too-complex）时的拒绝路径：整命令/各片段的 deny 规则、读封锁、空变量删除、AST 上的危险删除检查；只有精确 allow 规则覆盖整条命令时才返回 allow。
+ * 解析失败（ERROR 节点）时的 rm 危险删除询问决定，说明 shell 可能按不同方式理解该命令，需显式批准。
  */
-async function checkTooComplexCommandDeny(
-  input,
-  permissionContext,
-  parsedRoot,
-  findExtraDeny,
-  originalCommand,
-  isEvalOrSource,
-  toolUseContext,
-  toolUseContext_2,
-) {
-  let fullCmd = checkEarlyExitDeny(input, permissionContext);
-  if (fullCmd?.behavior === "deny") return fullCmd;
-  if (getContentRulesMapForTool(permissionContext, BashTool, "deny").size > 0) {
-    let candidateCommands = new Set([
-      ...splitCommand(input.command),
-      ...(parsedRoot && parsedRoot !== PARSE_ABORTED ? nestedCommandSpansFromAst(parsedRoot) : []),
-    ]);
-    for (let cmd of candidateCommands) {
-      let subDeny = matchingRulesForInput(
-        {
-          ...input,
-          command: cmd,
-        },
-        permissionContext,
-        "prefix",
-      ).matchingDenyRules[0];
-      if (subDeny !== undefined)
-        return {
-          behavior: "deny",
-          message: `Permission to use ${BashTool.name} with command ${input.command} has been denied.`,
-          decisionReason: {
-            type: "rule",
-            rule: subDeny,
-          },
-        };
-    }
-  }
-  let denyResult = findExtraDeny?.();
-  if (denyResult) return denyResult;
-  let dangerousVariableRemoval = findDangerousVariableRemoval(
-    input.command,
-    false,
-    originalCommand,
-    isEvalOrSource,
-    toolUseContext_2,
+function askForDangerousRmOnParseError(parseResult, nodeType) {
+  if (
+    parseResult === null ||
+    parseResult === PARSE_ABORTED ||
+    parseResult.type !== "ERROR" ||
+    nodeType !== undefined
+  )
+    return;
+  return dangerousRemovalAsk(
+    "rm",
+    "This command could not be checked for dangerous rm operations: the shell may read it differently than it was parsed. This requires explicit approval.",
+    "not ruled out \u2014 the shell may read this command differently than it was parsed",
   );
-  if (dangerousVariableRemoval !== null) {
-    logEventUnlessSuppressed("tengu_bash_dangerous_rm_too_complex", {
-      kind: fromEnum("emptyVariable"),
-    });
-    return checkDangerousRemoval(dangerousVariableRemoval, false);
-  }
-  if (parsedRoot && parsedRoot !== PARSE_ABORTED) {
-    let removalResult = await checkDangerousRemovals(
-      parsedRoot,
-      getCwd(),
-      permissionContext,
-      originalCommand,
-      isEvalOrSource,
-      toolUseContext,
-      toolUseContext_2,
-    );
-    if (removalResult !== null) {
-      logEventUnlessSuppressed("tengu_bash_dangerous_rm_too_complex", {
-        kind: fromEnum(removalResult.kind),
-      });
-      return removalResult.result;
-    }
-  }
-  if (fullCmd === null || fullCmd.behavior !== "allow") return fullCmd;
-  return (fullCmd.decisionReason?.type === "rule"
-    ? fullCmd.decisionReason.rule.ruleValue.ruleContent
-    : undefined) === input.command.trim()
-    ? fullCmd
-    : null;
 }
-//@ chunk-e6aww6q8.js:1199186-1199290 sole-consumer
+//@ chunk-5xgkngpb.js:1196436-1196540 placement
 function isMountedDriveAsk(decision) {
   return (
     decision.behavior === "ask" &&
@@ -2198,7 +2195,7 @@ function isMountedDriveAsk(decision) {
       "mounted_drive_path"
   );
 }
-//@ chunk-e6aww6q8.js:1199290-1199410 sole-consumer
+//@ chunk-5xgkngpb.js:1196540-1196660 placement
 function preferEarlierAsk(softAsk, result) {
   return softAsk !== undefined &&
     findSafetyCheckReason(
@@ -2208,7 +2205,7 @@ function preferEarlierAsk(softAsk, result) {
     ? softAsk
     : result;
 }
-//@ chunk-e6aww6q8.js:1199410-1203520 sole-consumer
+//@ chunk-5xgkngpb.js:1196660-1200772 placement
 /**
  * 检查命令（含命令替换、嵌套命令）中的危险 rm/rmdir：空变量展开、字面目标、替换输出为空时的目标、整段替换作为递归删除目标、内联 shell 脚本；返回 {result, kind} 或 null。
  */
@@ -2303,7 +2300,8 @@ async function checkDangerousRemovals(
     } catch {
       commands = [text];
     }
-    if (text === node.text && nestedCommands.length > 0) commands = uniq([...commands, ...nestedCommands]);
+    if (text === node.text && nestedCommands.length > 0)
+      commands = normalizeCaseForComparison_2([...commands, ...nestedCommands]);
     for (let subcommand of commands) {
       let trimmed = subcommand.trim();
       if (
@@ -2433,10 +2431,10 @@ async function checkDangerousRemovals(
   }
   return softAsk ?? null;
 }
-//@ chunk-e6aww6q8.js:1203520-1203541 sole-consumer
+//@ chunk-5xgkngpb.js:1200772-1200793 placement
 var FALLBACK_RULE_LEFT_CHARS = 32;
 var FALLBACK_RULE_TOTAL_CHARS = 20000;
-//@ chunk-e6aww6q8.js:1222420-1222925 fingerprint (2.1.88 match: checkSemanticsDeny, 0.891)
+//@ chunk-5xgkngpb.js:1219696-1220201 fingerprint (2.1.88 match: checkSemanticsDeny, 0.885)
 /**
  * 语义检查失败时的规则检查：整命令提前检查 + 每个 AST 子命令的 deny 规则；allow 仅当规则内容等于整条命令。
  */
@@ -2444,7 +2442,7 @@ function checkSemanticsDeny(input, toolPermissionContext, commands) {
   let fullCmd = checkEarlyExitDeny(input, toolPermissionContext);
   if (fullCmd?.behavior === "deny") return fullCmd;
   for (let cmd of commands) {
-    let subDeny = matchingRulesForInput(
+    let subDeny = matchingRulesForInput_3(
       {
         ...input,
         command: cmd.text,
@@ -2476,7 +2474,7 @@ function checkSemanticsDeny(input, toolPermissionContext, commands) {
   if (fullCmd?.behavior === "ask") return fullCmd;
   return null;
 }
-//@ chunk-e6aww6q8.js:1222925-1223105 layout
+//@ chunk-5xgkngpb.js:1220201-1220381 layout
 /**
  * tree-sitter 树中是否含 ERROR 节点或不在二元表达式里的后台 &。
  */
@@ -2492,7 +2490,7 @@ function hasErrorOrBackgroundNode(node) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:1223105-1223554 layout
+//@ chunk-5xgkngpb.js:1220381-1220830 placement
 /**
  * bashMissKind 分类表：too-complex/semantics/multi-cd/shell-operators/cd-git-compound/process-substitution/loop-later-pass 为结构性原因。
  */
@@ -2520,7 +2518,7 @@ var STRUCTURAL_MISS_KINDS = {
   "safety-check": false,
   "other-untagged": false,
 };
-//@ chunk-e6aww6q8.js:1223554-1223712 layout
+//@ chunk-5xgkngpb.js:1220830-1220988 placement
 /**
  * 若 ask 结果的 bashMissKind 是结构性原因则返回它。
  */
@@ -2532,7 +2530,7 @@ function getStructuralMissKind(decision) {
     ? decisionReason.bashMissKind
     : undefined;
 }
-//@ chunk-e6aww6q8.js:1223712-1223955 layout
+//@ chunk-5xgkngpb.js:1220988-1221231 placement
 /**
  * 开启"禁止读工作目录外"且沙箱不能兜底时，把结构性 ask 改成读封锁拒绝。
  */
@@ -2552,7 +2550,7 @@ function applyReadBlockToStructuralAsk(decision, input, toolPermissionContext) {
     return outsideReadsTooComplexAsk(decisionReason.reason);
   return decision;
 }
-//@ chunk-e6aww6q8.js:1223955-1224531 layout (2.1.88 match: checkSemanticsDeny, 0.828)
+//@ chunk-5xgkngpb.js:1221231-1221807 placement (2.1.88 match: checkSemanticsDeny, 0.82)
 /**
  * 对已得出的 ask 结果，再用整条命令、各片段、子命令理由键逐一查 deny/ask 规则：命中 deny 改为拒绝，命中 ask 记到 matchedAskRule。
  */
@@ -2573,7 +2571,7 @@ function applyAskDenyRulesToAskResult(askResult, bashInput, permissionContext) {
   ]);
   let matchedAskRule;
   for (let cmd of candidateCommands) {
-    let { matchingDenyRules, matchingAskRules } = matchingRulesForInput(
+    let { matchingDenyRules, matchingAskRules } = matchingRulesForInput_3(
       {
         ...bashInput,
         command: cmd,
@@ -2599,7 +2597,46 @@ function applyAskDenyRulesToAskResult(askResult, bashInput, permissionContext) {
         matchedAskRule,
       };
 }
-//@ chunk-e6aww6q8.js:1224531-1224768 layout
+//@ chunk-5xgkngpb.js:1221807-1221837 layout
+var TENGU_QUIET_SEXTANT = "tengu_quiet_sextant";
+//@ chunk-5xgkngpb.js:1221837-1222257 layout
+async function bashPermissionWithTextFallback(bashInput, shellPermission, astNode, toolUseContext) {
+  let firstPass = await bashToolHasPermissionTwoPass(bashInput, shellPermission, astNode, toolUseContext);
+  if (
+    firstPass.behavior === "deny" ||
+    !DOUBLE_SUBST_START_RE.test(bashInput.command) ||
+    !isDeepLocketEnabled() ||
+    !readFlagWithOverride(TENGU_QUIET_SEXTANT, {
+      safe: true,
+    })
+  )
+    return firstPass;
+  try {
+    let retryPass = await runInReExpansion(() =>
+      runWithoutTelemetry(() =>
+        bashToolHasPermissionTwoPass(bashInput, shellPermission, astNode, toolUseContext),
+      ),
+    );
+    if (retryPass.behavior !== "deny") return firstPass;
+    return {
+      ...retryPass,
+      decisionReason: {
+        type: "subcommandResults",
+        reasons: new Map([
+          [bashInput.command, retryPass],
+          [`${bashInput.command} (as refused)`, firstPass],
+        ]),
+      },
+    };
+  } catch (error) {
+    if (shellPermission.abortController.signal.aborted && isAbortError(error)) throw error;
+    try {
+      logError(error);
+    } catch {}
+    return firstPass;
+  }
+}
+//@ chunk-5xgkngpb.js:1222257-1222494 placement
 /**
  * Bash 权限检查的两遍执行：先正常跑 checkBashPermissionWithSandbox，若触发了二次检查条件，再在 R0e 上下文里重跑，第二遍为 deny 时以它为准，异常时保留第一遍结果。BashTool 与 Monitor 工具调用。
  */
@@ -2616,111 +2653,7 @@ async function bashToolHasPermissionTwoPass(input, permissionContext, astNode, t
     return firstPassResult;
   }
 }
-//@ chunk-e6aww6q8.js:1224768-1225707 layout
-/**
- * 合并 Bash 权限的几路结论：常规规则检查、读法检查、沙箱覆盖检查；dangerouslyDisableSandbox 且原本可沙箱运行时按严格模式改成 too-complex ask；ask 结论标记 standsInUnderHookAsk 供 hook 处理。
- */
-async function checkBashPermissionWithSandbox(input, permissionContext, astNode, toolUseContext) {
-  let safetyCheck = () => runCommandSafetyCheck(input, permissionContext, astNode, toolUseContext);
-  let [firstResult, reason] = await runWithReadingRefusals(safetyCheck);
-  let context = firstResult;
-  if (reason !== undefined && firstResult.behavior !== "deny") {
-    let readsResult = await runWithoutTelemetry(() => runAsBashReads(safetyCheck));
-    context = combineWithTooComplex(context, readsResult, reason);
-    let context_2 = await runWithoutTelemetry(() => runWithRuleOff(safetyCheck));
-    context = combineWithTooComplex(context, context_2, reason);
-    if (
-      input.dangerouslyDisableSandbox &&
-      !shouldUseSandbox(input) &&
-      shouldUseSandbox({
-        ...input,
-        dangerouslyDisableSandbox: false,
-      })
-    ) {
-      if (isPassthroughOrPlainAsk(context_2) && context.behavior !== "deny" && sandboxOverrideAskGuardsOn())
-        context = buildTooComplexAsk(reason);
-    } else if (isPassthroughOrPlainAsk(context))
-      context =
-        askClassifierForAllowedDomains(BashTool, input, permissionContext, {
-          behavior: "passthrough",
-          message: "",
-        }) ?? context;
-    if (
-      context.behavior === "ask" &&
-      (context_2.behavior === "allow" ||
-        context_2.behavior === "passthrough" ||
-        (context_2.behavior === "ask" &&
-          !carriesAskRuleIntent(context_2) &&
-          findSafetyCheckReason(context_2.decisionReason) === undefined &&
-          context_2.decisionReason?.type !== "sandboxOverride"))
-    )
-      context = {
-        ...context,
-        standsInUnderHookAsk: true,
-      };
-  }
-  if (context.behavior === "ask" && isPlainAsk(context)) {
-    let classifierAsk = askClassifierForAllowedDomains(BashTool, input, permissionContext, {
-      behavior: "passthrough",
-      message: "",
-    });
-    if (classifierAsk !== undefined) {
-      let astRoot = (await parseCommandRaw(input.command)) ?? PARSE_ABORTED;
-      let parsed = parseForSecurityFromAst(input.command, astRoot);
-      if (parsed.kind === "too-complex" && parsed.keepsRemovalVerdict) context = classifierAsk;
-    }
-  }
-  if (isDangerousRmEnabled()) {
-    let safetyCheckReason = findSafetyCheckReason(
-      context.decisionReason,
-      (reason) => reason.circuitBreaker === "dangerousRemoval",
-    );
-    let removalKind =
-      safetyCheckReason === undefined ? undefined : classifyRemovalReason(safetyCheckReason.reason);
-    if (removalKind !== undefined) logDangerousRmShape(removalKind);
-  }
-  return context;
-}
-//@ chunk-e6aww6q8.js:1225707-1225784 layout (2.1.88 match: validateShellMetacharacters, 1)
-/**
- * 结果是 passthrough 或普通 ask（可被其他读法覆盖）。
- */
-function isPassthroughOrPlainAsk(context) {
-  return context.behavior === "passthrough" || (context.behavior === "ask" && isPlainAsk(context));
-}
-//@ chunk-e6aww6q8.js:1225784-1225995 layout
-/**
- * 合并规则结果与安全检查结果：deny 优先；安全 ask 去掉建议；规则 allow 而安全检查不 allow 时改为需确认。
- */
-function combineWithTooComplex(first, second, reason) {
-  if (first.behavior === "deny") return first;
-  if (second.behavior === "deny") return second;
-  if (second.behavior === "ask" && !isPlainAsk(second))
-    return {
-      ...second,
-      suggestions: [],
-    };
-  if (first.behavior === "allow" && second.behavior !== "allow") return buildTooComplexAsk(reason);
-  return first;
-}
-//@ chunk-e6aww6q8.js:1225995-1226145 layout
-/**
- * 生成 bashMissKind="too-complex" 的 ask 权限结论（无建议规则）。
- */
-function buildTooComplexAsk(reason) {
-  let decisionReason = {
-    type: "other",
-    reason,
-    bashMissKind: "too-complex",
-  };
-  return {
-    behavior: "ask",
-    decisionReason,
-    message: createPermissionRequestMessage(BashTool.name, decisionReason),
-    suggestions: [],
-  };
-}
-//@ chunk-e6aww6q8.js:1226145-1226675 fingerprint (2.1.88 match: checkCommandAndSuggestRules, 0.671)
+//@ chunk-5xgkngpb.js:1223871-1224401 fingerprint (2.1.88 match: checkCommandAndSuggestRules, 0.612)
 /**
  * 两遍运行注入/安全检查（正常模式和 refused 模式），取更严格的结果；refused 才有的 ask 在可安全降级时转为 passthrough。
  */
@@ -2752,7 +2685,7 @@ async function runCommandSafetyCheck(input, permissionContext, astNode, toolUseC
       : firstResult;
   return getDecisionSeverity(secondResult) > getDecisionSeverity(firstResult) ? secondResult : firstResult;
 }
-//@ chunk-e6aww6q8.js:1227686-1227822 placement
+//@ chunk-5xgkngpb.js:1225412-1225548 placement
 /**
  * 判断当前是否为绕过权限模式（或计划模式下可绕过且非远程执行）。
  */
@@ -2763,7 +2696,7 @@ function isBypassModeForBash(input) {
     (isPlanBypass(mode, isBypassPermissionsModeAvailable) && input.forRemoteExecution !== true)
   );
 }
-//@ chunk-e6aww6q8.js:1227822-1227984 placement
+//@ chunk-5xgkngpb.js:1225548-1225710 placement
 function buildPendingClassifierCheck(command, toolPermissionContext) {
   let allowDescriptions = getToolPermissionContext(toolPermissionContext);
   return (
@@ -2775,7 +2708,7 @@ function buildPendingClassifierCheck(command, toolPermissionContext) {
     getDangerousRmTimeoutConfig().enabled
   );
 }
-//@ chunk-e6aww6q8.js:1227984-1229250 placement
+//@ chunk-5xgkngpb.js:1225710-1226994 placement
 /**
  * 带声明前缀推断地执行 Bash 权限检查：对 declare/export 等可能的读法分别再检查并合并；命令含 $ 且使用了本命令内赋值的变量时，不允许直接 allow（转为 passthrough 并去掉建议）。
  */
@@ -2867,7 +2800,7 @@ async function checkBashWithDeclarations(input, context, getCommandSubcommandPre
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:1229250-1231407 placement
+//@ chunk-5xgkngpb.js:1226994-1229163 placement
 /**
  * 当代理的 Bash 使用被限定为固定命令集时，拒绝超出范围的命令。
  */
@@ -3002,10 +2935,10 @@ async function checkBashCommandClamp(
     getToolPermissionContext(toolUseContext),
   );
 }
-//@ chunk-e6aww6q8.js:1231663-1231802 affinity
+//@ chunk-5xgkngpb.js:1229419-1229558 affinity
 var GIT_AFTER_CD_READ_BLOCK_REASON =
   "git after a directory change, or after writes to files git reads (HEAD, config, hooks), cannot be checked against the read block";
-//@ chunk-e6aww6q8.js:1231802-1243231 fingerprint (2.1.88 match: bashToolHasPermission, 0.438)
+//@ chunk-5xgkngpb.js:1229558-1240751 fingerprint (2.1.88 match: bashToolHasPermission, 0.449)
 /**
  * Bash 权限检查主入口：tree-sitter 解析 → 语义检查 → too-complex/语义失败的专用路径 → 沙箱自动允许 → 精确规则 → 管道/操作符分段 → cd 处理（多个 cd、cd+git、git 内部文件）→ 每个子命令 bashToolCheckPermission → 路径约束 → 安全检查 → 汇总为 allow/ask/deny/passthrough 并合并最多 aDo 条建议规则（写 localSettings）。
  */
@@ -3165,6 +3098,7 @@ async function bashToolHasPermission(
       input,
       permissionContext,
       parsedRoot,
+      astAnalysis.nodeType,
       () =>
         permissionContext.blockReadsOutsideWorkingDirectories === true &&
         !(shouldUseSandbox(input) && isSandboxReadBlockEnforceable(permissionContext))
@@ -3206,17 +3140,8 @@ async function bashToolHasPermission(
     logEventUnlessSuppressed("tengu_bash_ast_too_complex", {
       nodeTypeId: nodeTypeId(astAnalysis.nodeType),
     });
-    if (
-      parsedRoot !== null &&
-      parsedRoot !== PARSE_ABORTED &&
-      parsedRoot.type === "ERROR" &&
-      originalCommand === undefined
-    )
-      return dangerousRemovalAsk(
-        "rm",
-        "This command could not be checked for dangerous rm operations: the shell may read it differently than it was parsed. This requires explicit approval.",
-        "not ruled out \u2014 the shell may read this command differently than it was parsed",
-      );
+    let rule = askForDangerousRmOnParseError(parsedRoot, originalCommand);
+    if (rule !== undefined) return rule;
     let decisionReason = {
       type: "other",
       reason: astAnalysis.reason,
@@ -3401,7 +3326,7 @@ async function bashToolHasPermission(
       !(shouldUseSandbox(input) && isSandboxReadBlockEnforceable(permissionContext))
     )
       return outsideReadsTooComplexAsk("multiple directory changes cannot be checked against the read block");
-    let mapped = uniq(
+    let mapped = normalizeCaseForComparison_2(
       [cwd, ...allWorkingDirectories(getToolPermissionContext(toolUseContext))]
         .flatMap((dir) => {
           let { resolvedPath } = safeResolvePath(getFsImplementation(), dir);
@@ -3420,7 +3345,7 @@ async function bashToolHasPermission(
     };
     let isSimpleCdOnly = !/[;|\n&(`!]/.test(input.command.replace(/&&/g, ""));
     let { resolvedPath } = safeResolvePath(getFsImplementation(), cwd);
-    let currentDirs = uniq([normalize(cwd), normalize(resolvedPath)]);
+    let currentDirs = normalizeCaseForComparison_2([normalize(cwd), normalize(resolvedPath)]);
     let pushdStack = [];
     let inlineRemoval = await checkInlineShellRemoval(input.command, recursionCtx, [], commands);
     if (inlineRemoval !== null) return inlineRemoval;
@@ -3459,7 +3384,7 @@ async function bashToolHasPermission(
           isSimpleCdOnly &&= isTargetAllowed;
           if (isTargetAllowed) {
             if (replaced === "pushd") pushdStack.push(currentDirs);
-            currentDirs = uniq(resolvedDirs);
+            currentDirs = normalizeCaseForComparison_2(resolvedDirs);
           }
         }
         continue;
@@ -3662,7 +3587,7 @@ async function bashToolHasPermission(
   let askSubresult = subcommandPermissionDecisions.find(
     (subcommandPermissionDecision) => subcommandPermissionDecision.behavior === "ask",
   );
-  let nonAllowCount = count(subcommandPermissionDecisions, (decision) => decision.behavior !== "allow");
+  let nonAllowCount = countWhere(subcommandPermissionDecisions, (decision) => decision.behavior !== "allow");
   if (
     pathConstraintResult.behavior === "ask" &&
     askSubresult === undefined &&
@@ -3769,12 +3694,12 @@ async function bashToolHasPermission(
       let suggestions = "suggestions" in result ? result.suggestions : undefined;
       let rules = extractRules(suggestions);
       for (let rule of rules) {
-        let ruleKey = formatPermissionRule(rule);
+        let ruleKey = permissionRuleValueFromString_2(rule);
         collectedRules.set(ruleKey, rule);
       }
       if (result.behavior === "ask" && rules.length === 0 && result.decisionReason?.type !== "rule")
         for (let rule of extractRules(suggestionForExactCommand(subcommand))) {
-          let ruleKey = formatPermissionRule(rule);
+          let ruleKey = permissionRuleValueFromString_2(rule);
           collectedRules.set(ruleKey, rule);
         }
     }
@@ -3802,10 +3727,10 @@ async function bashToolHasPermission(
     suggestions,
   };
 }
-//@ chunk-e6aww6q8.js:1243231-1243296 layout
+//@ chunk-5xgkngpb.js:1240751-1240816 layout
 var TENGU_WILD_OCTOPUS = "tengu_wild_octopus";
 var LEADING_TIME_PREFIX_RE = /^(?:time[ \t]+(?:--[ \t]+)?)+/;
-//@ chunk-e6aww6q8.js:1243296-1243435 layout
+//@ chunk-5xgkngpb.js:1240816-1240955 layout
 /**
  * 把命令剥离安全包装后解析 argv 交给谓词；开关 tengu_wild_octopus 打开时还会对 argv 再做包装剥离后再判一次。
  */
@@ -3825,7 +3750,7 @@ function matchesArgvAfterUnwrap(commandText, normalizeArgv, matchesArgv) {
       : getCommandArgv(commandText.replace(LEADING_TIME_PREFIX_RE, ""));
   return matchesArgv(normalizeArgv(candidateArgv));
 }
-//@ chunk-e6aww6q8.js:1243435-1243583 fingerprint (2.1.88 match: isNormalizedGitCommand, 0.939)
+//@ chunk-5xgkngpb.js:1240955-1241103 fingerprint (2.1.88 match: isNormalizedGitCommand, 0.939)
 /**
  * 规范化后的命令是否是 git 命令（含 time/nohup 等包装后的 git、xargs git）。
  */
@@ -3841,14 +3766,14 @@ function isNormalizedGitCommand(command) {
     return true;
   return isNeverExactMatch(command);
 }
-//@ chunk-e6aww6q8.js:1243583-1243608 layout
+//@ chunk-5xgkngpb.js:1241103-1241128 layout
 /**
  * 语义检查失败路径上的占位实现，恒返回 false（该路径不放行精确匹配）。
  */
 function isNeverExactMatch(command) {
   return false;
 }
-//@ chunk-e6aww6q8.js:1243608-1243694 layout
+//@ chunk-5xgkngpb.js:1241128-1241214 layout
 /**
  * 剥掉包装后判断命令是否为目录切换内建（cd/pushd/popd/chdir）。
  */
@@ -3859,17 +3784,20 @@ function isNormalizedCdCommand(command) {
     ([firstArg]) => firstArg === "cd" || firstArg === "pushd" || firstArg === "popd" || firstArg === "chdir",
   );
 }
-//@ chunk-e6aww6q8.js:1243694-1243747 placement
+//@ chunk-5xgkngpb.js:1241214-1241267 placement
 function commandHasAnyCd(command) {
   return splitCommand(command).some((subcmd) => isNormalizedCdCommand(subcmd.trim()));
 }
-//@ chunk-e6aww6q8.js:1243747-1244182 placement
+//@ chunk-5xgkngpb.js:1241267-1241724 placement
 /**
  * 从命令中提取 rm 的字面目标路径（可能用两种读法解析），命令含 cd 时只保留绝对路径，展开后去重返回。
  */
-async function extractLiteralRmTargets(command, cwd) {
+async function extractLiteralRmTargets(command, commandText) {
   if (!/\brm\b/.test(command)) return [];
-  let parseReadings = () => runWithGuardOff(() => parseForSecurity(command));
+  let parseReadings = () =>
+    runWithGuardOff(() =>
+      withSturdyLanternOff(() => withReExpansionIfNeeded(command, () => parseForSecurity(command))),
+    );
   let [guardedParse, readRefusal] = await runWithReadingRefusals(parseReadings);
   let parses =
     readRefusal === undefined
@@ -3886,33 +3814,48 @@ async function extractLiteralRmTargets(command, cwd) {
       let [commandName, ...commandArgs] = stripWrappersFromArgvForPaths(command.argv);
       if (normalizeCommandName(commandName) !== "rm") continue;
       for (let targetPath of PATH_EXTRACTORS.rm(commandArgs).map(expandTildeWithHome))
-        if (!hasAnyCd || isAbsolute(targetPath)) targets.add(expandPath(targetPath, cwd));
+        if (!hasAnyCd || isAbsolute(targetPath)) targets.add(expandPath(targetPath, commandText));
     }
   }
   return [...targets];
 }
-//@ chunk-e6aww6q8.js:1244182-1244222 placement
+//@ chunk-5xgkngpb.js:1241724-1241772 layout
+var RM_COMMAND_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xgkngpb.js:1241724", () => {
+  RM_COMMAND_NAMES = new Set(["rm", "/bin/rm", "/usr/bin/rm"]);
+});
+//@ chunk-5xgkngpb.js:1241772-1241984 layout
+async function findRmTargets(command, commandText) {
+  if (!/\brm\b/.test(command)) return [];
+  let parsed = await parseForSecurity(command);
+  if (parsed.kind !== "simple" || parsed.commands.length !== 1) return [];
+  let { argv, envVars } = parsed.commands[0];
+  return envVars.length === 0 && RM_COMMAND_NAMES.has(argv[0] ?? "")
+    ? extractLiteralRmTargets(command, commandText)
+    : [];
+}
+//@ chunk-5xgkngpb.js:1241984-1242024 placement
 /**
  * 判断某个开头的环境赋值不安全（变量名非常规或值像路径）。
  */
 function isUnsafeEnvAssignment(name, value) {
   return !isSafeEnvVarName(name) || isPathLikeEnvValue(value);
 }
-//@ chunk-e6aww6q8.js:1244222-1244258 placement
+//@ chunk-5xgkngpb.js:1242024-1242060 placement
 /**
  * 剥掉开头所有不安全的环境赋值，返回剩余命令。
  */
 function stripUnsafeLeadingEnvVars(command) {
   return stripAllLeadingEnvVars(command, isUnsafeEnvAssignment, false);
 }
-//@ chunk-e6aww6q8.js:1244258-1244293 placement
+//@ chunk-5xgkngpb.js:1242060-1242095 placement
 /**
  * 剥掉安全包装命令（command/time 等），得到实际执行的命令文本。
  */
 function stripSafeWrappersFromCommand(command) {
   return stripSafeWrappers(command, false, false);
 }
-//@ chunk-e6aww6q8.js:4855075-4855835 placement
+//@ chunk-5xgkngpb.js:4995938-4996698 placement
 function mergeBashSubcommandVerdicts(input, context, result, mergeMode) {
   if (
     !input.dangerouslyDisableSandbox ||
@@ -3957,29 +3900,11 @@ function mergeBashSubcommandVerdicts(input, context, result, mergeMode) {
     message: "Run outside of the sandbox",
   };
 }
-//@ chunk-fnhsh6ng.js:2095-2231 fingerprint (2.1.88 match: startSpeculativeClassifierCheck, 1)
-/**
- * 把当前权限模式规整为分类器使用的模式（bypassPermissions 被禁用或 auto 不可用时回落为 default）。
- */
-function resolveAvailablePermissionMode(permissionMode) {
-  let allowDescriptions = toExternalPermissionMode(permissionModeFromString(permissionMode ?? "default"));
-  if (allowDescriptions === "bypassPermissions" && isBypassPermissionsModeDisabled()) return "default";
-  if (allowDescriptions === "auto" && !isAutoModeGateEnabled()) return "default";
-  return allowDescriptions;
-}
-//@ chunk-m79qv8gp.js:11458-11568 fingerprint (2.1.88 match: awaitClassifierAutoApproval, 0.353)
-/**
- * 判断对象上是否带有 classifier:true 的决策标记。
- */
-function isClassifierDecision(decision) {
-  let metadata = Reflect.get(decision, ASSET_TARGET_PIN_TAG);
-  return typeof metadata === "object" && metadata !== null && Reflect.get(metadata, "classifier") === true;
-}
-//@ chunk-v0yfsee9.js:75146-75763 fingerprint (2.1.88 match: bashToolCheckExactMatchPermission, 1)
+//@ chunk-6zpsr8vx.js:76377-76994 fingerprint (2.1.88 match: bashToolCheckExactMatchPermission, 1)
 /**
  * PowerShell 的精确规则检查（命令先规范化），deny/ask/allow 规则命中即返回，否则 passthrough 并附精确命令建议。
  */
-function powershellToolCheckExactMatchPermission_2(input, toolPermissionContext) {
+function powershellToolCheckExactMatchPermission(input, toolPermissionContext) {
   let command = trimPsWhitespace(input.command);
   let trimmedInput = {
     ...input,
@@ -4028,7 +3953,7 @@ function powershellToolCheckExactMatchPermission_2(input, toolPermissionContext)
     suggestions: suggestionForExactCommand_2(command),
   };
 }
-//@ chunk-63f0f3kd.js:106273-106715 fingerprint (2.1.88 match: isNormalizedCdCommand, 0.91)
+//@ chunk-h2y5xkdx.js:118990-119432 fingerprint (2.1.88 match: isNormalizedCdCommand, 0.91)
 /**
  * 从 cd/pushd 的 argv 求目标目录：无参数为 homedir，popd、pushd 无参、±N 栈操作、多个参数、"-" 返回 undefined。
  */
@@ -4052,24 +3977,14 @@ function getCdTargetFromArgv(command) {
   return pathArgs[0];
 }
 export {
-  commandHasAnyCd,
-  getSubcommandPrefix,
-  getBareCommandPrefix,
-  startsWithBareShell,
-  getCdTargetFromArgv,
+  parseBashPermissionRule,
   suggestionForExactCommand,
-  checkBashWithDeclarations,
-  isBypassModeForBash,
-  buildPendingClassifierCheck,
-  isPassthroughOrPlainAsk,
-  countSafeEnvPrefix,
-  BARE_SHELL_PREFIXES,
-  bashToolHasPermissionTwoPass,
-  denyCrashedCheckUnderCommandClamp,
-  denyForBashCommandClamp,
-  powershellToolCheckExactMatchPermission_2,
+  commandHasAnyCd,
   extractLiteralRmTargets,
+  denyCrashedCheckUnderCommandClamp,
   mergeBashSubcommandVerdicts,
+  bashPermissionWithTextFallback,
+  findRmTargets,
   stripSafeWrappers,
   skipTimeoutFlags,
   isSourceGlobRecordingEnabled,
@@ -4078,7 +3993,23 @@ export {
   isNormalizedGitCommand,
   isNormalizedCdCommand,
   isSafeEnvAssignment,
+  runCommandSafetyCheck,
+  checkBashWithDeclarations,
+  isBypassModeForBash,
+  buildPendingClassifierCheck,
+  getSubcommandPrefix,
+  countSafeEnvPrefix,
+  BARE_SHELL_PREFIXES,
   isPlainPathToken,
+  checkEarlyExitDeny,
+  isBashTextRuleSearchOn,
+  canParseEscapedSpaceCommand,
+  matchingRulesForInput_3,
+  findDangerousVariableRemoval,
+  checkDangerousRemovals,
+  askForDangerousRmOnParseError,
+  matchesCommandRule,
+  powershellToolCheckExactMatchPermission,
   unwrapCommandArgv,
   isSimpleAndChain,
   bashToolHasPermission,
@@ -4087,8 +4018,10 @@ export {
   stripSafeWrappersFromCommand,
   isSafeEnvVarName,
   isPathLikeEnvValue,
-  matchesCommandRule,
-  parseBashPermissionRule,
-  resolveAvailablePermissionMode,
-  isClassifierDecision,
+  bashToolCheckExactMatchPermission,
+  bashToolCheckPermission,
+  startsWithBareShell,
+  getBareCommandPrefix,
+  denyForBashCommandClamp,
+  getCdTargetFromArgv,
 };

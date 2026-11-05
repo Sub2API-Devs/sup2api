@@ -3,14 +3,14 @@
  *
  * 列出 MCP 目录资源的工具提示词（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sfy7bm1n.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gg17c06d.js (1)
  * attribution: placement 1
  */
 import { INODE_DIRECTORY } from "../../services/mcp/mcpCallConstants.js";
 
-//@ chunk-sfy7bm1n.js:5160-5989 placement
+//@ chunk-gg17c06d.js:6164-6993 placement
 /**
  * ReadMcpResourceDirTool 的简短描述。
  */

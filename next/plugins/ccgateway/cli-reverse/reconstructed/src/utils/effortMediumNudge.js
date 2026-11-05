@@ -3,11 +3,12 @@
  *
  * 2.1.316 新增。medium effort 推荐判定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (25)
  * attribution: placement 25
  */
+import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import {
   objectSchema,
@@ -47,10 +48,14 @@ import { announce } from "./accessibility/screenReader.js";
 import { logError } from "./log.js";
 import { applyEffortCommand } from "../commands/effort/effort.js";
 import { EFFORT_LEVEL_KEY } from "../components/EffortIndicator.js";
-import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:155528-156543 placement
+//@ chunk-czq1j3j2.js:158520-158524 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:158520", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:159624-160639 placement
 /**
  * 提示文案的最大字符数（500）。
  */
@@ -65,7 +70,7 @@ var DEFAULT_NUDGE_FROM_EFFORTS;
 var MEDIUM;
 var MAX_NUDGE_WARNING_CHARS;
 var nudgeCopySchema;
-deferInit("chunk-18hwfzwa.js:155528", () => {
+deferInit("chunk-czq1j3j2.js:159624", () => {
   MAX_NUDGE_BODY_CHARS = 500;
   MAX_NUDGE_BODY_LINES = 6;
   MAX_NUDGE_TITLE_CHARS = 120;
@@ -117,7 +122,7 @@ deferInit("chunk-18hwfzwa.js:155528", () => {
     }),
   );
 });
-//@ chunk-18hwfzwa.js:156543-156621 placement
+//@ chunk-czq1j3j2.js:160639-160717 placement
 /**
  * 判断提示是否确实是向下调整 effort。
  */
@@ -125,19 +130,19 @@ function isNudgeDowngrade(nudge) {
   let targetRank = effortRank(nudge.toEffort ?? MEDIUM);
   return getNudgeFromEfforts(nudge).every((fromEffort) => targetRank < effortRank(fromEffort));
 }
-//@ chunk-18hwfzwa.js:156621-156739 placement
+//@ chunk-czq1j3j2.js:160717-160835 placement
 function getNudgeFromEfforts(nudge) {
   if (nudge.fromEffort === undefined) return DEFAULT_NUDGE_FROM_EFFORTS;
   return typeof nudge.fromEffort === "string" ? [nudge.fromEffort] : nudge.fromEffort;
 }
-//@ chunk-18hwfzwa.js:156739-156776 placement
+//@ chunk-czq1j3j2.js:160835-160872 placement
 /**
  * 返回 effort 级别的排序下标。
  */
 function effortRank(effortLevel) {
   return EFFORT_LEVELS.indexOf(effortLevel);
 }
-//@ chunk-18hwfzwa.js:156776-156939 placement
+//@ chunk-czq1j3j2.js:160872-161035 placement
 var EFFORT_NUDGE_MODEL_FLAGS = {
   "claude-opus-5": {
     flag: "tengu_radiant_island",
@@ -149,7 +154,7 @@ var EFFORT_NUDGE_MODEL_FLAGS = {
   },
 };
 var CLAUDE_OPUS_5 = "claude-opus-5";
-//@ chunk-18hwfzwa.js:156939-157002 placement
+//@ chunk-czq1j3j2.js:161035-161098 placement
 /**
  * 取模型对应的提示开关键（未配置时 undefined）。
  */
@@ -157,7 +162,7 @@ function nudgeFlagKeyForModel(model) {
   let modelSettingsKey = getModelSettingsKey(model);
   return Object.hasOwn(EFFORT_NUDGE_MODEL_FLAGS, modelSettingsKey) ? modelSettingsKey : undefined;
 }
-//@ chunk-18hwfzwa.js:157002-157359 placement
+//@ chunk-czq1j3j2.js:161098-161455 placement
 function effortMediumNudgeCandidate({ model, effortValue }) {
   let globalConfig = getGlobalConfig();
   let modelKey = nudgeFlagKeyForModel(model);
@@ -186,14 +191,14 @@ function effortMediumNudgeCandidate({ model, effortValue }) {
     toLevel,
   };
 }
-//@ chunk-18hwfzwa.js:157359-157470 placement
+//@ chunk-czq1j3j2.js:161455-161566 placement
 function hasSeenEffortNudge(globalConfig, modelKey) {
   return (
     globalConfig.hasSeenEffortMediumNudgeByModel?.[modelKey] === true ||
     (modelKey === CLAUDE_OPUS_5 && globalConfig.hasSeenEffortMediumNudge === true)
   );
 }
-//@ chunk-18hwfzwa.js:157470-157724 placement
+//@ chunk-czq1j3j2.js:161566-161820 placement
 function markEffortNudgeSeen(globalConfig, modelKey) {
   let isDefaultModel = modelKey === CLAUDE_OPUS_5;
   if (
@@ -212,7 +217,7 @@ function markEffortNudgeSeen(globalConfig, modelKey) {
     }),
   };
 }
-//@ chunk-18hwfzwa.js:157724-158114 placement
+//@ chunk-czq1j3j2.js:161820-162210 placement
 function servedEffortNudgeCopy(featureValue_CACHED_MAY_BE_STALE) {
   let schema = nudgeCopySchema();
   let parseResult = schema.safeParse(featureValue_CACHED_MAY_BE_STALE);
@@ -231,7 +236,7 @@ function servedEffortNudgeCopy(featureValue_CACHED_MAY_BE_STALE) {
   );
   return partialParseResult.success ? acceptServedNudge(partialParseResult.data) : undefined;
 }
-//@ chunk-18hwfzwa.js:158114-158203 placement
+//@ chunk-czq1j3j2.js:162210-162299 placement
 /**
  * 校验下发的提示文案，不合法时记录并返回 undefined。
  */
@@ -240,7 +245,7 @@ function acceptServedNudge(nudge) {
   logFeatureSad("effort_medium_nudge", "served_copy_invalid");
   return;
 }
-//@ chunk-18hwfzwa.js:158203-158620 placement
+//@ chunk-czq1j3j2.js:162299-162716 placement
 function effortPinSource({ model, effortValue }) {
   let modelKey = nudgeFlagKeyForModel(model);
   if (
@@ -276,14 +281,14 @@ function effortPinSource({ model, effortValue }) {
     };
   return;
 }
-//@ chunk-18hwfzwa.js:158620-158664 placement
+//@ chunk-czq1j3j2.js:162716-162760 placement
 /**
  * 在给定的 effort 级别列表里找到生效的源级别。
  */
 function findNudgeFromLevel(effortLevelOrHigh, from) {
   return from.find((candidateLevel) => candidateLevel === effortLevelOrHigh);
 }
-//@ chunk-18hwfzwa.js:158664-159029 placement
+//@ chunk-czq1j3j2.js:162760-163125 placement
 /**
  * 从高到低优先级查找某模型生效的 effort 设置来源：先看 modelSettings 里精确/同键模型的 effortLevel，再看来源级 effortLevel（用户设置只对旧版模型生效）。
  */
@@ -315,7 +320,7 @@ function findEffortSettingSource(model) {
   }
   return;
 }
-//@ chunk-18hwfzwa.js:159029-159076 placement
+//@ chunk-czq1j3j2.js:163125-163172 placement
 /**
  * 把 CRLF/CR 统一为 LF。
  */
@@ -326,7 +331,7 @@ function normalizeNewlines(text) {
 `,
   );
 }
-//@ chunk-18hwfzwa.js:159076-159116 placement
+//@ chunk-czq1j3j2.js:163172-163212 placement
 /**
  * 统计文本行数（先统一换行再加一）。
  */
@@ -339,23 +344,23 @@ function countLines(text) {
     ) + 1
   );
 }
-//@ chunk-18hwfzwa.js:159116-159168 placement
+//@ chunk-czq1j3j2.js:163212-163264 placement
 /**
  * 判断文本是否只有一行且不含制表符。
  */
 function isSingleLine(text) {
   return countLines(text) === 1 && !text.includes("\t");
 }
-//@ chunk-18hwfzwa.js:159168-159202 placement
+//@ chunk-czq1j3j2.js:163264-163298 placement
 /**
  * 判断文本是否不含控制字符。
  */
 function hasNoControlChars(text) {
   return !CONTROL_CHARS_RE.test(text);
 }
-//@ chunk-18hwfzwa.js:159202-159628 placement
+//@ chunk-czq1j3j2.js:163298-163724 placement
 var effortMediumNudgeDialogDef; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:159202", () => {
+deferInit("chunk-czq1j3j2.js:163298", () => {
   effortMediumNudgeDialogDef = withHideWhile({
     kind: EFFORT_MEDIUM_NUDGE,
     payload: DoctorLazy(() =>
@@ -384,7 +389,7 @@ deferInit("chunk-18hwfzwa.js:159202", () => {
     hideWhile: ["panel", "draft"],
   });
 });
-//@ chunk-18hwfzwa.js:159628-159791 placement
+//@ chunk-czq1j3j2.js:163724-163887 placement
 /**
  * 等待活动空闲后弹出"降低推理强度到 medium"的提示对话框，用户作答后应用选择。
  */
@@ -397,7 +402,7 @@ async function showEffortMediumNudge(requestDialog, copy, controller, appState) 
   if (choice === "cancelled") return;
   await resolveEffortMediumNudge(choice, copy.copy, appState);
 }
-//@ chunk-18hwfzwa.js:159791-160641 placement
+//@ chunk-czq1j3j2.js:163887-164737 placement
 async function resolveEffortMediumNudge(
   { choice, optionOrder },
   { cohort, modelKey, fromLevel, toLevel, showWarning },
@@ -439,7 +444,7 @@ async function resolveEffortMediumNudge(
     ...telemetryBase,
   });
 }
-//@ chunk-18hwfzwa.js:160641-160762 placement
+//@ chunk-czq1j3j2.js:164737-164858 placement
 function isNudgeStillApplicable(modelKey, fromLevel, appState) {
   let liveModel = appState.getLiveModel();
   return (
@@ -450,7 +455,7 @@ function isNudgeStillApplicable(modelKey, fromLevel, appState) {
     })?.fromLevel === fromLevel
   );
 }
-//@ chunk-18hwfzwa.js:160762-161354 placement
+//@ chunk-czq1j3j2.js:164858-165450 placement
 async function applyEffortMediumNudgeResult(
   { setAppState, addNotification, storageV5, getLiveEffort, getLiveUltracode },
   toLevel,
@@ -493,12 +498,7 @@ async function applyEffortMediumNudgeResult(
   });
   return "switched";
 }
-//@ chunk-18hwfzwa.js:161354-161358 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:161354", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:161358-161401 placement
+//@ chunk-czq1j3j2.js:165454-165497 placement
 /**
  * 记录错误并返回 {success:false}。
  */

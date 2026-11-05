@@ -3,25 +3,17 @@
  *
  * 2.1.316 新增。提示文本处理（占位、截断）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (9)
- * attribution: placement 9
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (8)
+ * attribution: placement 8
  */
-import { memo } from "../../../vendor/react/cjs/react.production.js";
-import { PromptInput } from "./PromptInput.js";
 import { MIN_INLINE_TAG_CHARS, createInlineTextTag, MIN_INLINE_TAG_BLOCK } from "../../utils/userTurnTags.js";
 import { parsePastedRefs } from "../../history.js";
 import { stripInvisibleChars_2 } from "../../utils/invisibleChars.js";
 import { findSlashMentionRanges } from "../../utils/attachments/skillMentions.js";
-import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:918585-918601 placement
-var PromptInputMemo; // deferred: uses PromptInput (./PromptInput.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:918585", () => {
-  PromptInputMemo = memo(PromptInput);
-});
-//@ chunk-18hwfzwa.js:918601-918919 placement
+//@ chunk-czq1j3j2.js:951507-951825 placement
 /**
  * 把输入文本中粘贴占位符之间的普通文字段落各自作为 inline 文本内容（负数 id）加入 pastedContents；文本较短且无特殊标记时不处理，slashOnly 时标记 slashNameOnly。
  */
@@ -52,26 +44,26 @@ function addInlineTextContents(contents, text, slashNameOnly = false) {
   }
   return next;
 }
-//@ chunk-18hwfzwa.js:918919-918972 placement
+//@ chunk-czq1j3j2.js:951825-951877 placement
 function mentionsUltraplan(inputState) {
   return /ultraplan/i.test(stripInvisibleChars_2(inputState).text);
 }
-//@ chunk-18hwfzwa.js:918972-919045 placement
+//@ chunk-czq1j3j2.js:951877-951950 placement
 function addInlineTextContentsWithFallback(contents, text, normalizeFirst) {
   let next = normalizeFirst ? addInlineTextContents(contents, text) : contents;
   return next === contents && hasTextAfterNfcNormalize(text)
     ? addInlineTextContents(contents, text, true)
     : next;
 }
-//@ chunk-18hwfzwa.js:919045-919127 placement (2.1.88 match: setCwdState, 1)
+//@ chunk-czq1j3j2.js:951950-952031 placement (2.1.88 match: setCwdState, 1)
 function hasTextAfterNfcNormalize(cwd) {
   return [cwd, cwd.normalize("NFC")].some(
     (inputState) => findSlashMentionRanges(stripInvisibleChars_2(inputState).text).length > 0,
   );
 }
-//@ chunk-18hwfzwa.js:919127-919144 placement
+//@ chunk-czq1j3j2.js:952031-952048 placement
 var COMBINING_MARK_RE_2 = /\p{M}/u;
-//@ chunk-18hwfzwa.js:919144-919937 placement (2.1.88 match: needsWidthCompensation, 0.769)
+//@ chunk-czq1j3j2.js:952048-952841 placement (2.1.88 match: needsWidthCompensation, 0.769)
 function endsWithCombiningMatch(haystack, needle) {
   let endIndex = needle.length;
   while (endIndex > 0) {
@@ -108,16 +100,15 @@ function endsWithCombiningMatch(haystack, needle) {
   }
   return false;
 }
-//@ chunk-18hwfzwa.js:919937-920028 placement
+//@ chunk-czq1j3j2.js:952841-952932 placement
 function isSyntheticContent(prev) {
   return prev.type === "image" || (prev.type === "text" && prev.unavailable === true) || prev.inline === true;
 }
-//@ chunk-18hwfzwa.js:920028-920094 placement
+//@ chunk-czq1j3j2.js:952932-952998 placement
 function normalizeVimMode(vimMode) {
   return vimMode === "VISUAL" || vimMode === "VISUAL LINE" ? "NORMAL" : vimMode;
 }
 export {
-  PromptInputMemo,
   normalizeVimMode,
   isSyntheticContent,
   endsWithCombiningMatch,

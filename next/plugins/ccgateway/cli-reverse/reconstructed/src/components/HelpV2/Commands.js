@@ -3,9 +3,9 @@
  *
  * /help 的命令列表标签页（内置/自定义命令及描述）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/HelpV2/Commands.tsx
- * pieces: chunk-p2qwpk2k.js (1)
+ * pieces: chunk-h5wy8vq5.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -15,7 +15,7 @@ import { toRuleOption, noopRulePicker } from "../permissions/rules/CloudSessionR
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 
-//@ chunk-p2qwpk2k.js:19779-20255 fingerprint (2.1.88 match: Commands, 0.526)
+//@ chunk-h5wy8vq5.js:20898-21374 fingerprint (2.1.88 match: Commands, 0.526)
 /**
  * /help 的命令标签页：列出可用命令及描述，按名称排序。
  */

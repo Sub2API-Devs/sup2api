@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：后台定时任务详情页与新建/编辑表单
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vde9a20m.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-896pyw2s.js (7)
  * attribution: placement 7
  */
 import { resolve, basename } from "path";
@@ -40,21 +40,21 @@ import {
 } from "../../tools/ScheduleCronTool/UI.js";
 import { AgentsList } from "../agents/AgentsList.js";
 
-//@ chunk-vde9a20m.js:1114-1160 placement
+//@ chunk-896pyw2s.js:1114-1160 placement
 function permissionModeOption(mode) {
   return {
     label: permissionModeTitle(mode),
     value: mode,
   };
 }
-//@ chunk-vde9a20m.js:1160-1225 placement
+//@ chunk-896pyw2s.js:1160-1225 placement
 async function loadScheduledTaskRuns(storageV5) {
   return listScheduledTasks(undefined, storageV5).catch((error) => {
     logError(error);
     return [];
   });
 }
-//@ chunk-vde9a20m.js:1225-5219 placement
+//@ chunk-896pyw2s.js:1225-5219 placement
 /**
  * 后台定时任务详情页：运行记录、启用/停用、编辑、立即运行与删除。
  */
@@ -406,7 +406,7 @@ function DaemonScheduledTaskDetail(props) {
   } else dialogElement = $[75];
   return dialogElement;
 }
-//@ chunk-vde9a20m.js:5219-8902 placement
+//@ chunk-896pyw2s.js:5219-8902 placement
 /**
  * 新建或编辑后台定时任务的表单：名称、计划、目录、模型与提示词。
  */
@@ -722,7 +722,7 @@ function DaemonScheduledTaskForm(props) {
   } else formElement = $[58];
   return formElement;
 }
-//@ chunk-vde9a20m.js:8902-9003 placement
+//@ chunk-896pyw2s.js:8902-9003 placement
 function slugifyTaskName(name) {
   return name
     .toLowerCase()
@@ -730,7 +730,7 @@ function slugifyTaskName(name) {
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
 }
-//@ chunk-vde9a20m.js:9003-9126 placement
+//@ chunk-896pyw2s.js:9003-9126 placement
 /**
  * 由目录名和提示词前几个词生成任务名，空则为 task。
  */
@@ -739,7 +739,7 @@ function defaultTaskSlug(directory, prompt) {
   let promptSlug = slugifyTaskName(prompt.split(/\s+/).slice(0, 4).join(" "));
   return [dirSlug, promptSlug].filter(Boolean).join("-") || "task";
 }
-//@ chunk-vde9a20m.js:9126-9345 placement
+//@ chunk-896pyw2s.js:9126-9345 placement
 /**
  * 定时任务对象转为表单字段值。
  */
@@ -758,4 +758,4 @@ function toTaskFormValues(task) {
     }),
   };
 }
-export { loadScheduledTaskRuns, DaemonScheduledTaskDetail, DaemonScheduledTaskForm, slugifyTaskName };
+export { slugifyTaskName, loadScheduledTaskRuns, DaemonScheduledTaskDetail, DaemonScheduledTaskForm };

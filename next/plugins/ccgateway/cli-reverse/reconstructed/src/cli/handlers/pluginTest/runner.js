@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。claude plugin test 入口：查找测试文件、子进程逐个运行、汇总结果。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1tz177x8.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-f284hj51.js (29)
  * attribution: placement 29
  */
 import { join, relative, sep, isAbsolute, resolve } from "path";
@@ -64,9 +64,9 @@ import { getCwd } from "../../../utils/cwd.js";
 import { loadTestPlugins } from "./uiDriver.js";
 import { runDeferredInits } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-1tz177x8.js:13247-13257 placement
+//@ chunk-f284hj51.js:14400-14410 placement
 var runnerNamespace = {};
-//@ chunk-1tz177x8.js:13257-13828 placement
+//@ chunk-f284hj51.js:14410-14981 placement
 __export(runnerNamespace, {
   CHILD_ARGV_LENGTH: () => CHILD_ARGV_LENGTH,
   IS_WORKTREE_LAUNCH: () => IS_WORKTREE_LAUNCH,
@@ -93,9 +93,9 @@ __export(runnerNamespace, {
   switchFetched: () => switchFetched,
   switchSaveSettled: () => switchSaveSettled,
 });
-//@ chunk-1tz177x8.js:13828-13837 placement
+//@ chunk-f284hj51.js:14981-14990 placement
 var CHILD_ARGV_LENGTH = 3;
-//@ chunk-1tz177x8.js:13869-13993 placement
+//@ chunk-f284hj51.js:15022-15146 placement
 var createTestHooksEngine = (bare, register) => (args, host, bounds) =>
   createHooksEngine({
     bare,
@@ -108,7 +108,7 @@ var createTestHooksEngine = (bare, register) => (args, host, bounds) =>
         register,
       }),
   });
-//@ chunk-1tz177x8.js:14104-14394 placement
+//@ chunk-f284hj51.js:15257-15547 placement
 async function scaffoldPluginTestDir(dir, name, source) {
   let registerPath = join(dir, "hooks", "register.js");
   await mkdir(join(dir, ".claude-plugin"), {
@@ -128,7 +128,7 @@ async function scaffoldPluginTestDir(dir, name, source) {
   await writeFile(registerPath, source);
   return registerPath;
 }
-//@ chunk-1tz177x8.js:46664-46728 placement
+//@ chunk-f284hj51.js:47817-47881 placement
 var CONTROL_CHAR_BOUNDS = {
   tab: 9,
   space: 32,
@@ -137,7 +137,7 @@ var CONTROL_CHAR_BOUNDS = {
   radix: 16,
   digits: 4,
 };
-//@ chunk-1tz177x8.js:46728-46911 placement
+//@ chunk-f284hj51.js:47881-48064 placement
 var escapeControlChars = (text) =>
   [...text]
     .map((char) => {
@@ -149,7 +149,7 @@ var escapeControlChars = (text) =>
       return isControl ? `\\u${padded}` : char;
     })
     .join("");
-//@ chunk-1tz177x8.js:46911-47088 placement
+//@ chunk-f284hj51.js:48064-48241 placement
 function createChildConsole(wrapMethod) {
   let write = () =>
     nullPrototypeFunction(
@@ -177,20 +177,20 @@ function createChildConsole(wrapMethod) {
     debug: write(),
   });
 }
-//@ chunk-1tz177x8.js:47088-47153 placement
+//@ chunk-f284hj51.js:48241-48306 placement
 function fireTimerCallback({ live, id, fire, fn, args }) {
   live.delete(id);
   fire(fn, args);
 }
-//@ chunk-1tz177x8.js:47153-47171 placement
+//@ chunk-f284hj51.js:48306-48324 placement
 var MAX_TIMER_DELAY_MS = 2147483647;
-//@ chunk-1tz177x8.js:47171-47221 placement
+//@ chunk-f284hj51.js:48324-48374 placement
 var createVmTimers = (globals, clearAll, thrown) => ({
   globals,
   clearAll,
   thrown,
 });
-//@ chunk-1tz177x8.js:47221-47801 placement
+//@ chunk-f284hj51.js:48374-48954 placement
 /**
  * 为测试 vm 提供 setTimeout/setInterval/clear*：真实计时器回调转进 vm 调用，延迟有上限；clearAll 清掉所有计时器，thrown 返回回调抛出的错误。
  */
@@ -248,7 +248,7 @@ function createVmTimers_2(wrapMethod, call) {
     () => errors,
   );
 }
-//@ chunk-1tz177x8.js:47801-48089 placement
+//@ chunk-f284hj51.js:48954-49242 placement
 function createTestEnvironment(root) {
   let vmContext = createVmContext(root);
   let { vmCall, vmSettle, fromEnvironment, wrapMethod } = vmContext;
@@ -271,7 +271,7 @@ function createTestEnvironment(root) {
     thrown: vmTimers.thrown,
   };
 }
-//@ chunk-1tz177x8.js:48089-48755 placement
+//@ chunk-f284hj51.js:49242-49908 placement
 async function runTestFileInChild(root, file) {
   let environment = createTestEnvironment(root);
   let testKitModule = await createTestKitModule(environment, root);
@@ -326,7 +326,7 @@ async function runTestFileInChild(root, file) {
     environment.dispose();
   }
 }
-//@ chunk-1tz177x8.js:48755-49173 placement
+//@ chunk-f284hj51.js:49908-50326 placement
 /**
  * 从子进程输出里取最后一行 REPORT_MARK 报告；没有报告时生成失败结果；退出码非 0 时追加一条失败说明。
  */
@@ -355,11 +355,11 @@ function readChildReport(file, stdout, exitCode) {
         ],
       };
 }
-//@ chunk-1tz177x8.js:49201-49254 placement
+//@ chunk-f284hj51.js:50354-50407 placement
 var STACK_FRAME_PATTERN = /^\s+at (?:.+ \()?(?:\S+:\d+:\d+|native)\)?$/;
-//@ chunk-1tz177x8.js:49254-49282 placement
+//@ chunk-f284hj51.js:50407-50435 placement
 var stringIncludes = (line, needle) => line.includes(needle);
-//@ chunk-1tz177x8.js:49282-49566 placement
+//@ chunk-f284hj51.js:50435-50719 placement
 function formatFailureStack(stack, root) {
   let lines = stack.split(`
 `);
@@ -374,7 +374,7 @@ function formatFailureStack(stack, root) {
     .map((line) => `  ${escapeControlChars(line)}`).join(`
 `);
 }
-//@ chunk-1tz177x8.js:49599-49910 placement
+//@ chunk-f284hj51.js:50752-51063 placement
 /**
  * 生成单个测试文件的结果报告（加载失败与每个测试的通过/失败及耗时）。
  */
@@ -396,7 +396,7 @@ function formatFileReport(report, root) {
 `)}
 `;
 }
-//@ chunk-1tz177x8.js:49910-49965 placement
+//@ chunk-f284hj51.js:51063-51118 placement
 function growthBookDisabledEnv() {
   return hooksModulesGateSourceChanged()
     ? {
@@ -404,7 +404,7 @@ function growthBookDisabledEnv() {
       }
     : {};
 }
-//@ chunk-1tz177x8.js:49965-50519 placement
+//@ chunk-f284hj51.js:51118-51672 placement
 async function spawnPluginTestChild(root, file) {
   let launchCommand = getLaunchCommand({
     pinToCurrentBinary: true,
@@ -439,7 +439,7 @@ async function spawnPluginTestChild(root, file) {
     return fileErrorReport(file, `its child did not run: ${errorMessage(error)}`);
   }
 }
-//@ chunk-1tz177x8.js:50562-51178 placement
+//@ chunk-f284hj51.js:51715-52331 placement
 async function runPluginTests({ root, files, runFile, write }) {
   let startTime = performance.now();
   let max = Math.max(1, Math.min(files.length, availableParallelism()));
@@ -473,9 +473,9 @@ Ran ${total} ${plural(total, "test")} across ${files.length} ${plural(files.leng
 `);
   return failCount === 0 ? 0 : 1;
 }
-//@ chunk-1tz177x8.js:51178-51190 placement
+//@ chunk-f284hj51.js:52331-52343 placement
 var MAX_TEST_FILES = 1000;
-//@ chunk-1tz177x8.js:51258-51661 placement
+//@ chunk-f284hj51.js:52411-52814 placement
 /**
  * 递归查找目录下的 *.test.ts(x) 文件（跳过 node_modules 与隐藏目录，数量有上限）。
  */
@@ -498,13 +498,13 @@ async function findTestFiles(root) {
   }
   return found.toSorted();
 }
-//@ chunk-1tz177x8.js:51661-51714 placement
+//@ chunk-f284hj51.js:52814-52867 placement
 var isTeardown = (message) => / its environment was unloaded$/.test(message);
-//@ chunk-1tz177x8.js:51714-51723 placement
+//@ chunk-f284hj51.js:52867-52876 placement
 var LATE_TURNS = 3;
-//@ chunk-1tz177x8.js:51773-51796 placement
+//@ chunk-f284hj51.js:52926-52949 placement
 var safeMessageOf = (thrown) => describeThrownValue(thrown).msg;
-//@ chunk-1tz177x8.js:51796-52299 placement
+//@ chunk-f284hj51.js:52949-53452 placement
 async function runChild({ file, dir, write }) {
   let relativePath = relative(dir, file);
   if (!(relativePath !== "" && !relativePath.startsWith("..") && !isAbsolute(relativePath))) {
@@ -540,7 +540,7 @@ async function runChild({ file, dir, write }) {
   }
   return 0;
 }
-//@ chunk-1tz177x8.js:52299-52948 placement
+//@ chunk-f284hj51.js:53452-54101 placement
 /**
  * `claude plugin test` 入口：在插件目录下查找 *.test.ts(x)，逐个在子进程中用测试 kit 加载插件与 hooks 模块，驱动引擎事件与 ui.render，汇总 pass/fail。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：bashEditDiff 运行 git 的环境
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (7)
  * attribution: placement 7
  */
 import { sep } from "path";
@@ -16,7 +16,7 @@ import { getBashEditDiffDir } from "../../../utils/sandbox/userTempRoot.js";
 import { shellQuoteArgs } from "../../../utils/bash/bashPipeCommand.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4771420-4772117 placement
+//@ chunk-5xgkngpb.js:4903742-4904442 placement
 async function buildSnapshotGitEnv(argv, env, worktreeDir) {
   let [command, ...args] = argv;
   if (command === undefined) return null;
@@ -59,7 +59,7 @@ async function buildSnapshotGitEnv(argv, env, worktreeDir) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:4772117-4772232 placement
+//@ chunk-5xgkngpb.js:4904442-4904557 placement
 /**
  * 若 git 命令是在沙箱包装中运行的，执行后清理沙箱（只清理其自身临时区）。
  */
@@ -71,12 +71,12 @@ function cleanupSandboxAfterGit(snapshotGitEnv) {
     });
   } catch {}
 }
-//@ chunk-e6aww6q8.js:4772232-4772288 placement
+//@ chunk-5xgkngpb.js:4904557-4904613 placement
 class OwnClientPromptState {
   ownClientSentPrompt = false;
   countedReasons = new Set();
 }
-//@ chunk-e6aww6q8.js:4772288-4772393 placement
+//@ chunk-5xgkngpb.js:4904613-4904718 placement
 /**
  * 若提示来源以 claude_code_ 开头，则标记本会话的提示由 Claude Code 客户端自己发送。
  */
@@ -84,7 +84,7 @@ function markOwnClientPrompt(state, clientPlatform) {
   if (typeof clientPlatform === "string" && clientPlatform.startsWith("claude_code_"))
     state.get(OwnClientPromptState).ownClientSentPrompt = true;
 }
-//@ chunk-e6aww6q8.js:4772393-4772429 placement
+//@ chunk-5xgkngpb.js:4904718-4904754 placement
 /**
  * 差异大小上限：文件数 5、单文件行数 200、总行数 400、总字符 64000（另含 SHARED_READ_SPACING_MS 等常量）。
  */
@@ -92,7 +92,7 @@ var MAX_DIFF_FILES = 5;
 var SHARED_READ_SPACING_MS = 200;
 var MAX_DIFF_LINES = 400;
 var MAX_DIFF_CHARS = 64000;
-//@ chunk-e6aww6q8.js:4772429-4772546 placement
+//@ chunk-5xgkngpb.js:4904754-4904871 placement
 /**
  * 判断差异的总行数与总字符数是否都在上限内。
  */
@@ -105,7 +105,7 @@ function isDiffSmallEnough(diffs) {
   }
   return lineCount <= MAX_DIFF_LINES && charCount <= MAX_DIFF_CHARS;
 }
-//@ chunk-e6aww6q8.js:4772546-4772679 placement
+//@ chunk-5xgkngpb.js:4904871-4905004 placement
 /**
  * bashEditDiff 常量：git 步骤超时（Windows 2s/其他 750ms）、并发间隔、读树超时、输出缓冲、批量大小、排除文件内容、单文件/索引大小上限、失败次数阈值等。
  */
@@ -121,7 +121,7 @@ var MAX_SNAPSHOT_FILE_BYTES;
 var MAX_INDEX_BYTES;
 var MAX_SNAPSHOT_FAILURES;
 var MAX_ALTERNATE_DEPTH;
-deferInit("chunk-e6aww6q8.js:4772546", () => {
+deferInit("chunk-5xgkngpb.js:4904871", () => {
   GIT_STEP_TIMEOUT_MS = getPlatform() === "windows" ? 2000 : 750;
   DIFF_RETRY_COUNT = 3;
   SHARED_READ_SPACING_MS_2 = 50;

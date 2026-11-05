@@ -3,9 +3,9 @@
  *
  * Grep 工具名与提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/GrepTool/prompt.ts
- * pieces: chunk-aepeg2w5.js (1), chunk-g54kbxqw.js (1)
+ * pieces: chunk-8nzbdydx.js (1), chunk-exfmq47h.js (1)
  * attribution: fingerprint 2
  */
 import { leanPromptOf, leanRewriteOf } from "../../utils/model/promptBundles.js";
@@ -14,12 +14,12 @@ import { BASH_TOOL_NAME } from "../BashTool/toolName.js";
 import { getSubagentSteer } from "../../utils/model/subagentSteer.js";
 import { AGENT } from "../AgentTool/constants.js";
 
-//@ chunk-aepeg2w5.js:817688-817702 fingerprint (2.1.88 match: GREP_TOOL_NAME, 1)
+//@ chunk-exfmq47h.js:840058-840072 fingerprint (2.1.88 match: GREP_TOOL_NAME, 1)
 /**
  * Grep 工具名 "Grep"。
  */
 var GREP_TOOL_NAME = "Grep";
-//@ chunk-g54kbxqw.js:137352-138896 fingerprint (2.1.88 match: getDescription, 0.514)
+//@ chunk-8nzbdydx.js:44034-45577 fingerprint (2.1.88 match: getDescription, 0.514)
 /**
  * 生成 Grep 提示词：lean 模式短版（可换 leanRewrite 版）；完整版说明基于 ripgrep、优先于 Bash 里的 grep/rg、正则语法、glob/type 过滤、三种输出模式、multiline。
  */

@@ -3,9 +3,9 @@
  *
  * 内部测试：模拟限额开启时把模拟头转成 429 错误抛给请求方。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/rateLimitMocking.ts
- * pieces: chunk-w5ndchqs.js (1)
+ * pieces: chunk-7pwjpdkw.js (1)
  * attribution: fingerprint 1
  */
 import {
@@ -16,7 +16,7 @@ import {
 import { APIError } from "../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { hasFastModeRateLimitDuration, checkFastModeRateLimit } from "./api/verificationRequired.js";
 
-//@ chunk-w5ndchqs.js:8434-9271 fingerprint (2.1.88 match: checkMockRateLimitError, 1)
+//@ chunk-7pwjpdkw.js:8635-9472 fingerprint (2.1.88 match: checkMockRateLimitError, 1)
 /**
  * 限额模拟启用时生成模拟 429 错误（无头 429 文案、快速模式限额、unified 被拒且无 overage），否则 null。
  */

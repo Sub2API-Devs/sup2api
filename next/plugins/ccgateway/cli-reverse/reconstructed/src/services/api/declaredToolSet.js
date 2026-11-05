@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增："已声明工具集"：请求中声明的工具在会话内保持稳定（压缩时丢弃、从记录恢复、late tool additions、inline tools 回退）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-a76knw89.js (58)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-03tec5k5.js (58)
  * attribution: placement 58
  */
 import { STRUCTUREDOUTPUT } from "../../tools/SyntheticOutputTool/SyntheticOutputTool.js";
@@ -24,7 +24,7 @@ import {
   isPermanentUnavailabilityFor,
 } from "../mcp/mcpToolAvailability.js";
 import { mcpInfoFromString, getMcpPrefix } from "../mcp/mcpStringUtils.js";
-import { compareToolsByName, getAllBaseToolsFromRegistry, toolMatchesName } from "../../Tool.js";
+import { compareToolsByName, getAllBaseToolsFromRegistry, matchesToolName } from "../../Tool.js";
 import {
   TOOL_DEFINITION_BOOLEAN_KEYS,
   anyEagerInputStreaming,
@@ -45,6 +45,7 @@ import {
   markBetaRejected,
   rejectInlineToolsHeader,
 } from "../../bootstrap/stateSlices.js";
+import { isEvalToolName, REPL_TOOL_NAME } from "../../tools/REPLTool/constants.js";
 import { logEvent } from "../analytics/index.js";
 import { WAITFORMCPSERVERS } from "../../tools/WaitForMcpServersTool/WaitForMcpServersTool.js";
 import { findTool, areDeferredToolsKept } from "./deferredToolsState.js";
@@ -68,14 +69,14 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logFeatureSad } from "../analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-a76knw89.js:8006-8070 placement (2.1.88 match: stripCacheControl, 1)
+//@ chunk-03tec5k5.js:8444-8507 placement (2.1.88 match: stripCacheControl, 1)
 /**
  * 取对象上的 cache_control（没有为 undefined）。旧版名 stripCacheControl 为错配。
  */
 function getCacheControl(items) {
   return "cache_control" in items ? items.cache_control : undefined;
 }
-//@ chunk-a76knw89.js:8070-8157 placement (2.1.88 match: stripCacheControl, 1)
+//@ chunk-03tec5k5.js:8507-8593 placement (2.1.88 match: stripCacheControl, 1)
 /**
  * 去掉对象的 cache_control 字段。
  */
@@ -84,7 +85,7 @@ function stripCacheControl(item) {
   let { cache_control: cacheControl, ...rest } = item;
   return rest;
 }
-//@ chunk-a76knw89.js:43836-44543 placement
+//@ chunk-03tec5k5.js:29830-30537 placement
 /**
  * 会话已声明工具名集合（含仅记录的条目与顺序）。
  */
@@ -131,14 +132,14 @@ class DeclaredToolSet {
     return getToolNameForPermissionCheck(toolName, server);
   }
 }
-//@ chunk-a76knw89.js:44543-44574 placement
+//@ chunk-03tec5k5.js:30537-30568 placement
 /**
  * 导出函数 `stickyBetasOr`：参数 e，返回 e ?? getStickyBetas()。
  */
 function stickyBetasOr(stickyBetas) {
   return stickyBetas ?? getStickyBetas();
 }
-//@ chunk-a76knw89.js:44574-44645 placement
+//@ chunk-03tec5k5.js:30568-30639 placement
 /**
  * 导出函数 `asDeclaredToolSet`：参数 e，返回 declaredTools instanceof DeclaredToolSet ? declaredTools : void 0。
  */
@@ -146,7 +147,7 @@ function asDeclaredToolSet(conversation) {
   let declaredTools = conversation.declaredTools;
   return declaredTools instanceof DeclaredToolSet ? declaredTools : undefined;
 }
-//@ chunk-a76knw89.js:44645-44717 placement
+//@ chunk-03tec5k5.js:30639-30711 placement
 /**
  * 导出函数 `asScratchDeclaredToolSet`：参数 e，返回 noChannelTools instanceof DeclaredToolSet ? noChannelTools : void 0。
  */
@@ -154,7 +155,7 @@ function asScratchDeclaredToolSet(conversation) {
   let noChannelTools = conversation.noChannelTools;
   return noChannelTools instanceof DeclaredToolSet ? noChannelTools : undefined;
 }
-//@ chunk-a76knw89.js:44717-44856 placement
+//@ chunk-03tec5k5.js:30711-30850 placement
 /**
  * 缓存"无通道工具"计算结果：强制刷新时清空，未开启且未缓存时跳过。
  */
@@ -168,9 +169,9 @@ function cacheNoChannelTools(conversation, skipCache, buildTools) {
   conversation.noChannelTools = built;
   return built;
 }
-//@ chunk-a76knw89.js:44856-45338 placement
-function buildDeclaredToolSet(tools, tools_2, recordedOnly) {
-  let presentNames = new Set([...tools_2, ...tools].map((tool) => tool.name));
+//@ chunk-03tec5k5.js:30850-31332 placement
+function buildDeclaredToolSet(tools, recordedNames, recordedOnly) {
+  let presentNames = new Set([...recordedNames, ...tools].map((tool) => tool.name));
   let name = new Map([...(recordedOnly ?? [])].filter(([name]) => !presentNames.has(name)));
   if (name.size === 0) return new DeclaredToolSet(tools);
   let isMcpLike = (tool) => tool.isMcp === true || mcpInfoFromString(tool.name) !== null;
@@ -201,15 +202,15 @@ function buildDeclaredToolSet(tools, tools_2, recordedOnly) {
     names: order,
   });
 }
-//@ chunk-a76knw89.js:45338-45405 placement (2.1.88 match: buildDiffableContent, 0.675)
+//@ chunk-03tec5k5.js:31332-31398 placement (2.1.88 match: buildDiffableContent, 0.673)
 /**
  * 工具定义比对时关心的键（name/description/input_schema/type 及附加键）。旧版名 buildDiffableContent 为错配；使用方在 chunk-a76knw89 的记录工具比较里。
  */
 var TOOL_DIFF_KEYS; // deferred: uses TOOL_DEFINITION_BOOLEAN_KEYS (./toolDefinitionShape.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-a76knw89.js:45338", () => {
+deferInit("chunk-03tec5k5.js:31332", () => {
   TOOL_DIFF_KEYS = new Set(["name", "description", "input_schema", "type", ...TOOL_DEFINITION_BOOLEAN_KEYS]);
 });
-//@ chunk-a76knw89.js:45405-46082 placement
+//@ chunk-03tec5k5.js:31398-32075 placement
 async function markReconnectingServers(
   {
     recordedToolDescriptions,
@@ -273,9 +274,9 @@ async function markReconnectingServers(
     }
   return reconnecting.size === 0 ? undefined : reconnecting;
 }
-//@ chunk-a76knw89.js:46082-46611 placement
-async function isHipaaRestricted(declaredSet, tools, { mcpClients, getPermissionContext, byValue }) {
-  let heldNames = hasDeclaredToolSet(declaredSet, tools, true);
+//@ chunk-03tec5k5.js:32075-32603 placement
+async function isHipaaRestricted(declaredSet, byValueNames, { mcpClients, getPermissionContext, byValue }) {
+  let heldNames = hasDeclaredToolSet(declaredSet, byValueNames, true);
   if (heldNames.length === 0)
     return {
       kept: declaredSet,
@@ -324,15 +325,15 @@ async function isHipaaRestricted(declaredSet, tools, { mcpClients, getPermission
     unread: unreadCount,
   };
 }
-//@ chunk-a76knw89.js:46611-46689 placement
+//@ chunk-03tec5k5.js:32603-32681 placement
 /**
  * 导出函数 `stickyBetasForRequest`：参数 e，返回 OYo(e.stickyBetas)。
  */
-function stickyBetasForRequest(toolUseContext) {
-  if (toolUseContext.agentId && !toolUseContext.stickyBetas) return;
-  return stickyBetasOr(toolUseContext.stickyBetas);
+function stickyBetasForRequest(queryOptions) {
+  if (queryOptions.agentId && !queryOptions.stickyBetas) return;
+  return stickyBetasOr(queryOptions.stickyBetas);
 }
-//@ chunk-a76knw89.js:46689-46750 placement
+//@ chunk-03tec5k5.js:32681-32742 placement
 /**
  * 导出函数 `cachedDeclaredTools`：参数 e，返回 n === void 0 ? void 0 : DSe(n)。
  */
@@ -340,15 +341,15 @@ function cachedDeclaredTools(toolUseContext) {
   let betas = stickyBetasForRequest(toolUseContext);
   return betas === undefined ? undefined : asDeclaredToolSet(betas);
 }
-//@ chunk-a76knw89.js:46750-46811 placement
+//@ chunk-03tec5k5.js:32742-32803 placement
 /**
  * 导出函数 `cachedNoChannelTools`：参数 e，返回 n === void 0 ? void 0 : kbn(n)。
  */
-function cachedNoChannelTools(toolUseContext) {
-  let betas = stickyBetasForRequest(toolUseContext);
+function cachedNoChannelTools(cachedDeclaredToolSet) {
+  let betas = stickyBetasForRequest(cachedDeclaredToolSet);
   return betas === undefined ? undefined : asScratchDeclaredToolSet(betas);
 }
-//@ chunk-a76knw89.js:46811-46909 placement
+//@ chunk-03tec5k5.js:32803-32901 placement
 /**
  * 导出函数 `recordDeclaredToolsIfMissing`：参数 e, n，返回 !1; return (dLn(e, new DeclaredToolSet(n)), !0)。
  */
@@ -358,7 +359,7 @@ function recordDeclaredToolsIfMissing(stickyBetas, tools) {
   setDeclaredTools(stickyBetas, new DeclaredToolSet(tools));
   return true;
 }
-//@ chunk-a76knw89.js:46909-47914 placement
+//@ chunk-03tec5k5.js:32901-33923 placement
 /**
  * 决定本次请求的已声明工具（启动时省略、开关关闭等原因）。
  */
@@ -371,7 +372,7 @@ function planDeclaredTools(names, tools, { servers, entries } = EMPTY_PLAN_SOURC
   };
   let toolForV1Name = (name) => {
     let underlyingV1ToolName = getBaseTools()?.find((tool) =>
-      toolMatchesName(tool, name),
+      matchesToolName(tool, name),
     )?.underlyingV1ToolName;
     return underlyingV1ToolName === undefined ? undefined : toolByName.get(underlyingV1ToolName);
   };
@@ -380,9 +381,7 @@ function planDeclaredTools(names, tools, { servers, entries } = EMPTY_PLAN_SOURC
   let gateOffCount = 0;
   let needsUserCount = 0;
   let launchOmittedCount = 0;
-  let lookupStub = (name) => {
-    return;
-  };
+  let lookupStub = (name) => (isEvalToolName(name) ? toolByName.get(REPL_TOOL_NAME) : undefined);
   let order = [...names];
   for (let name of order) {
     let tool = toolByName.get(name) ?? lookupStub(name) ?? toolForV1Name(name);
@@ -439,7 +438,7 @@ function planDeclaredTools(names, tools, { servers, entries } = EMPTY_PLAN_SOURC
         launchOmitted: launchOmittedCount,
       };
 }
-//@ chunk-a76knw89.js:47914-48419 placement
+//@ chunk-03tec5k5.js:33923-34428 placement
 /**
  * 从记录恢复或首次决定已声明工具集（tengu_declared_tool_set_from_record）。
  */
@@ -465,7 +464,7 @@ function resolveDeclaredToolSet(conversation, getRecorded, tools, { latch, permi
   });
   return plan.held;
 }
-//@ chunk-a76knw89.js:48419-48969 placement
+//@ chunk-03tec5k5.js:34428-34978 placement
 function updateDeclaredToolSet(tools, declaredSet) {
   if (declaredSet === undefined)
     return {
@@ -486,8 +485,8 @@ function updateDeclaredToolSet(tools, declaredSet) {
     let tool = toolToAdd(name);
     if (!tool) return;
     let insertAt = -1;
-    for (let j = position - 1; j >= 0 && insertAt === -1; j--) {
-      let precedingName = declaredSet.names[j];
+    for (let idx = position - 1; idx >= 0 && insertAt === -1; idx--) {
+      let precedingName = declaredSet.names[idx];
       insertAt = out.findIndex((tool) => tool.name === precedingName);
     }
     if (insertAt !== -1) out.splice(insertAt + 1, 0, tool);
@@ -508,7 +507,7 @@ function updateDeclaredToolSet(tools, declaredSet) {
         redeclared,
       };
 }
-//@ chunk-a76knw89.js:48969-49057 placement
+//@ chunk-03tec5k5.js:34978-35066 placement
 /**
  * 导出函数 `turnDeniedTools`：参数 e, n，返回 updateDeclaredToolSet(e, turnDeniedTools instanceof DeclaredToolSet ? turnDeniedTools : void 0) .tools。
  */
@@ -519,7 +518,7 @@ function turnDeniedTools(tools, conversation) {
     turnDeniedTools instanceof DeclaredToolSet ? turnDeniedTools : undefined,
   ).tools;
 }
-//@ chunk-a76knw89.js:49057-49249 placement
+//@ chunk-03tec5k5.js:35066-35258 placement
 function logDeclaredToolsDroppedAtCompaction(conversation, droppedNames) {
   let declaredSet = asDeclaredToolSet(conversation);
   if (declaredSet === undefined || droppedNames.length === 0) return;
@@ -529,7 +528,7 @@ function logDeclaredToolsDroppedAtCompaction(conversation, droppedNames) {
     noDeferredChannel: false,
   });
 }
-//@ chunk-a76knw89.js:49249-49317 placement
+//@ chunk-03tec5k5.js:35258-35326 placement
 /**
  * 导出函数 `hasScratchToolSet`：参数 e, n，返回 hasDeclaredToolSet(o, n, !0)。
  */
@@ -537,7 +536,7 @@ function hasScratchToolSet(conversation, tools) {
   let set = conversation === undefined ? undefined : asScratchDeclaredToolSet(conversation);
   return hasDeclaredToolSet(set, tools, true);
 }
-//@ chunk-a76knw89.js:49317-49510 placement
+//@ chunk-03tec5k5.js:35326-35519 placement
 function logDeclaredToolsDroppedAtCompaction2(conversation, droppedNames) {
   let set = asScratchDeclaredToolSet(conversation);
   if (set === undefined || droppedNames.length === 0) return;
@@ -547,17 +546,17 @@ function logDeclaredToolsDroppedAtCompaction2(conversation, droppedNames) {
     noDeferredChannel: true,
   });
 }
-//@ chunk-a76knw89.js:49510-49712 placement
-function hasDeclaredToolSet(declaredSet, tools, keepMcp) {
+//@ chunk-03tec5k5.js:35519-35720 placement
+function hasDeclaredToolSet(declaredSet, presentTools, keepMcp) {
   if (declaredSet === undefined) return [];
-  let presentNames = new Set(tools.map((tool) => tool.name));
+  let presentNames = new Set(presentTools.map((tool) => tool.name));
   return declaredSet.names.filter((name) => {
     if (presentNames.has(name) || !declaredSet.keeps(name)) return false;
     let mcpInfo = declaredSet.sourceFor(name)?.mcpInfo;
     return keepMcp || !isMcpToolName(name, mcpInfo?.serverName);
   });
 }
-//@ chunk-a76knw89.js:49712-49751 placement
+//@ chunk-03tec5k5.js:35720-35759 placement
 /**
  * 声明工具集合的默认来源（servers/entries 为空），用于 planDeclaredTools 的参数默认值。
  */
@@ -565,16 +564,16 @@ var EMPTY_PLAN_SOURCES = {
   servers: undefined,
   entries: undefined,
 };
-//@ chunk-a76knw89.js:49751-49918 placement
+//@ chunk-03tec5k5.js:35759-35926 placement
 function isUndeclarableTool(name, server, baseTools, tools) {
   if (name === STRUCTUREDOUTPUT) return false;
   if (server !== undefined) return true;
   if (mcpInfoFromString(name) !== null) return false;
-  if (name === WAITFORMCPSERVERS && !tools.some((tool) => toolMatchesName(tool, TOOL_SEARCH_TOOL_NAME)))
+  if (name === WAITFORMCPSERVERS && !tools.some((tool) => matchesToolName(tool, TOOL_SEARCH_TOOL_NAME)))
     return true;
   return baseTools !== undefined && findTool(baseTools, name) === undefined;
 }
-//@ chunk-a76knw89.js:49918-50326 placement
+//@ chunk-03tec5k5.js:35926-36334 placement
 function describeDeclaredToolsSkipReason(name, baseTools, context) {
   if (context === undefined || baseTools === undefined) return;
   if (name === STRUCTUREDOUTPUT || name === WAITFORMCPSERVERS || mcpInfoFromString(name) !== null) return;
@@ -592,32 +591,32 @@ function describeDeclaredToolsSkipReason(name, baseTools, context) {
   if (tool.isEnabled()) return;
   return "gate_off";
 }
-//@ chunk-a76knw89.js:50326-50409 placement
+//@ chunk-03tec5k5.js:36334-36417 placement
 function requiresUserInteractionByName(name, baseTools) {
   return baseTools?.find((tool) => tool.name === name)?.requiresUserInteraction?.() === true;
 }
-//@ chunk-a76knw89.js:50409-50441 placement
+//@ chunk-03tec5k5.js:36417-36449 placement
 var TENGU_GLEAMING_CUPCAKE = "tengu_gleaming_cupcake";
-//@ chunk-a76knw89.js:50441-50471 placement
+//@ chunk-03tec5k5.js:36449-36479 placement
 function isGleamingCupcakeEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_GLEAMING_CUPCAKE, true);
 }
-//@ chunk-a76knw89.js:50471-50500 placement
+//@ chunk-03tec5k5.js:36479-36508 placement
 var TENGU_JOYFUL_ANCHOR = "tengu_joyful_anchor";
-//@ chunk-a76knw89.js:50500-50698 placement
+//@ chunk-03tec5k5.js:36508-36705 placement
 function isPinnedUpfrontTool(name, server, baseTools) {
   if (isMcpToolName(name, server)) return false;
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_JOYFUL_ANCHOR, null);
   if (!Array.isArray(featureValue_CACHED_MAY_BE_STALE) || featureValue_CACHED_MAY_BE_STALE.length === 0)
     return false;
-  let found = baseTools?.find((tool) => toolMatchesName(tool, name));
+  let found = baseTools?.find((tool) => matchesToolName(tool, name));
   return featureValue_CACHED_MAY_BE_STALE.some(
     (pinnedName) =>
       typeof pinnedName === "string" &&
-      (pinnedName === name || (found !== undefined && toolMatchesName(found, pinnedName))),
+      (pinnedName === name || (found !== undefined && matchesToolName(found, pinnedName))),
   );
 }
-//@ chunk-a76knw89.js:50698-50803 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
+//@ chunk-03tec5k5.js:36705-36810 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck(toolName, server) {
   let mcpPrefix = getMcpPrefix(server);
   return {
@@ -627,11 +626,11 @@ function getToolNameForPermissionCheck(toolName, server) {
     },
   };
 }
-//@ chunk-a76knw89.js:50803-50852 placement
+//@ chunk-03tec5k5.js:36810-36858 placement
 function isMcpToolName(name, server) {
   return server !== undefined || mcpInfoFromString(name) !== null;
 }
-//@ chunk-a76knw89.js:50852-51486 placement
+//@ chunk-03tec5k5.js:36858-37487 placement
 function computeLateToolAdditions(
   messageText,
   declaredSet,
@@ -681,7 +680,7 @@ function computeLateToolAdditions(
   });
   return added;
 }
-//@ chunk-a76knw89.js:51486-51695 placement
+//@ chunk-03tec5k5.js:37487-37695 placement
 function isLateToolAdditionsEnabled(declaredSet, { pool, keptDeferred, keepMcp }) {
   let presentNames = new Set([...pool.map((tool) => tool.name), ...keptDeferred]);
   return declaredSet.recordOrder.filter((name) => {
@@ -691,30 +690,30 @@ function isLateToolAdditionsEnabled(declaredSet, { pool, keptDeferred, keepMcp }
     );
   });
 }
-//@ chunk-a76knw89.js:51695-51767 placement (2.1.88 match: mergeClients, 1)
+//@ chunk-03tec5k5.js:37695-37766 placement (2.1.88 match: mergeClients, 1)
 function mergeClients_2(schema) {
   return "name" in schema && typeof schema.name === "string" ? schema.name : undefined;
 }
-//@ chunk-a76knw89.js:51767-51795 placement
+//@ chunk-03tec5k5.js:37766-37794 placement
 /**
  * 导出函数 `deferredToolsEnabled`：返回 l$e()。
  */
 function deferredToolsEnabled() {
   return areDeferredToolsKept();
 }
-//@ chunk-a76knw89.js:51795-51885 placement
+//@ chunk-03tec5k5.js:37794-37883 placement
 /**
  * 导出函数 `clientNames`：参数 e，返回 n。
  */
-function clientNames(toolSchemas) {
+function clientNames(schemas) {
   let names = new Set();
-  for (let schema of toolSchemas) {
+  for (let schema of schemas) {
     let name = mergeClients_2(schema);
     if (name !== undefined) names.add(name);
   }
   return names;
 }
-//@ chunk-a76knw89.js:51885-52282 placement
+//@ chunk-03tec5k5.js:37883-38280 placement
 function logDeclaredToolSetHeld(info) {
   if (
     info.deferredLate === 0 &&
@@ -735,18 +734,18 @@ function logDeclaredToolSetHeld(info) {
     unclassifiedDepartures: info.unclassifiedDepartures,
   });
 }
-//@ chunk-a76knw89.js:52282-52321 placement
+//@ chunk-03tec5k5.js:38280-38320 placement
 function canDeclareToolChange(conversation, model) {
   return toolChangeHeaderAllowed(conversation) && modelTakesToolAdditions(model);
 }
-//@ chunk-a76knw89.js:52321-52361 placement
+//@ chunk-03tec5k5.js:38320-38360 placement
 /**
  * 导出函数 `toolChangeHeaderAllowed`：参数 e，返回 lT(e, Lb) && !we(e)。
  */
 function toolChangeHeaderAllowed(conversation) {
   return isBetaSent(conversation, BETA_MID_CONV_TOOL_CHANGE) && !isToolChangeHeaderBlocked(conversation);
 }
-//@ chunk-a76knw89.js:52361-52407 placement
+//@ chunk-03tec5k5.js:38360-38406 placement
 function isToolChangeHeaderBlocked(conversation) {
   return (
     isBetaRejected(conversation, BETA_MID_CONVERSATION_SYSTEM) ||
@@ -754,7 +753,7 @@ function isToolChangeHeaderBlocked(conversation) {
     !areDeferredToolsKept()
   );
 }
-//@ chunk-a76knw89.js:52407-52476 placement
+//@ chunk-03tec5k5.js:38406-38475 placement
 /**
  * 导出函数 `canDeclareToolChangeAhead`：参数 e, n，返回 (lT(e, Lb) || (Kpr() && !Lp(e, Lb))) && !we(e) && modelTakesToolAdditions(n)。
  */
@@ -766,14 +765,14 @@ function canDeclareToolChangeAhead(conversation, model) {
     modelTakesToolAdditions(model)
   );
 }
-//@ chunk-a76knw89.js:52476-52517 placement
+//@ chunk-03tec5k5.js:38475-38517 placement
 /**
  * 导出函数 `canDeclareInlineTools`：参数 e, n，返回 Snr(e) && ae(e, n)。
  */
 function canDeclareInlineTools(conversation, effectiveModel) {
   return inlineToolsAllowed(conversation) && canDeclareToolChange(conversation, effectiveModel);
 }
-//@ chunk-a76knw89.js:52517-52565 placement
+//@ chunk-03tec5k5.js:38517-38565 placement
 /**
  * 导出函数 `inlineToolsAllowed`：参数 e，返回 lT(e, tb) && !isInlineToolsRefused() && Nrt(e)。
  */
@@ -784,7 +783,7 @@ function inlineToolsAllowed(conversation) {
     toolChangeHeaderAllowed(conversation)
   );
 }
-//@ chunk-a76knw89.js:52565-52672 placement
+//@ chunk-03tec5k5.js:38565-38672 placement
 /**
  * 判断能否以内联方式追加工具（未被拒绝、相关 beta 可用）。
  */
@@ -797,7 +796,7 @@ function canInlineToolAdditions(conversation, model) {
     canDeclareToolChangeAhead(conversation, model)
   );
 }
-//@ chunk-a76knw89.js:52672-52817 placement
+//@ chunk-03tec5k5.js:38672-38818 placement
 /**
  * 判断是否需要宣布延迟加载的工具：ToolSearch 被过滤掉、通道可用且有延迟工具或工具池会刷新。
  */
@@ -814,7 +813,7 @@ function shouldAnnounceDeferredTools(
     (asDeclaredToolSet(conversation) !== undefined || (toolPoolRefreshes && isFoamySpringEnabled()))
   );
 }
-//@ chunk-a76knw89.js:52817-53137 placement
+//@ chunk-03tec5k5.js:38818-39139 placement
 /**
  * 根据工具追加通道是否可用，调整请求的 beta 列表（增删工具追加与内联工具 beta），并必要时登记不可用状态。
  */
@@ -840,7 +839,7 @@ function adjustToolBetas(betas, betaList, model) {
   if (!inlineOn && out.includes(BETA_INLINE_TOOLS)) out = out.filter((beta) => beta !== BETA_INLINE_TOOLS);
   return out;
 }
-//@ chunk-a76knw89.js:53137-53329 placement
+//@ chunk-03tec5k5.js:39139-39332 placement
 /**
  * 按模型是否支持工具追加，生成包含或去掉相关 beta 的列表。
  */
@@ -855,7 +854,7 @@ function toolAdditionBetas(conversation, betaList, creditMintModel, model) {
   }
   return betaList.filter((beta) => beta !== BETA_MID_CONV_TOOL_CHANGE && beta !== BETA_INLINE_TOOLS);
 }
-//@ chunk-a76knw89.js:53329-53628 placement
+//@ chunk-03tec5k5.js:39332-39632 placement
 /**
  * 重试换用不支持工具追加的模型时，描述哪些内容被移动（advisor 条目、延迟条目、宣布块），无移动返回 undefined。
  */
@@ -878,7 +877,7 @@ function describeToolAdditionMoves(
     return;
   }
 }
-//@ chunk-a76knw89.js:53628-53903 placement
+//@ chunk-03tec5k5.js:39632-39907 placement
 function findDeferredToolsDelta(conversation, message) {
   if (
     message.type !== "attachment" ||
@@ -896,7 +895,7 @@ function findDeferredToolsDelta(conversation, message) {
     )
   );
 }
-//@ chunk-a76knw89.js:53903-54256 placement
+//@ chunk-03tec5k5.js:39907-40260 placement
 function findLatestApiSystemDelta(
   conversation,
   messages,
@@ -927,7 +926,7 @@ function findLatestApiSystemDelta(
       conversation.nameOnlyAnnouncements.add(message.uuid);
   }
 }
-//@ chunk-a76knw89.js:54256-55109 placement
+//@ chunk-03tec5k5.js:40260-41113 placement
 /**
  * 决定延迟工具通过 ToolSearch 宣告还是按值内联到 tools[]。
  */
@@ -979,7 +978,7 @@ function surfaceDeferredTools(
       conversation.nameOnlyAnnouncements.add(message.uuid);
   }
 }
-//@ chunk-a76knw89.js:55109-55563 placement
+//@ chunk-03tec5k5.js:41113-41567 placement
 function classifyToolAdditionRejection(conversation, cause, model, inlineAlsoRefused) {
   dropToolChangeState(conversation);
   if (cause === "header_rejected" || cause === "block_type_unknown") {
@@ -1000,7 +999,7 @@ function classifyToolAdditionRejection(conversation, cause, model, inlineAlsoRef
   );
   logFeatureSad("mcp_late_tool_additions", `rejected_${cause}`);
 }
-//@ chunk-a76knw89.js:55563-55631 placement
+//@ chunk-03tec5k5.js:41567-41635 placement
 /**
  * 导出函数 `dropToolChangeState`：参数 e。
  */
@@ -1010,12 +1009,12 @@ function dropToolChangeState(conversation) {
   fallBackToolChangeState(conversation);
   conversation.surfacedOnWire.clear();
 }
-//@ chunk-a76knw89.js:55631-55693 placement
+//@ chunk-03tec5k5.js:41635-41697 placement
 function fallBackToolChangeState(conversation) {
   if (isBetaSent(conversation, BETA_INLINE_TOOLS)) rejectInlineToolsHeader(conversation, BETA_INLINE_TOOLS);
   conversation.definedByValue.clear();
 }
-//@ chunk-a76knw89.js:55693-56095 placement
+//@ chunk-03tec5k5.js:41697-42099 placement
 /**
  * inline tools 被 API 拒绝（头被拒、平台不支持）时回退到在 tools[] 中声明。
  */
@@ -1033,7 +1032,7 @@ function handleInlineToolsRejection(conversation, cause) {
   );
   logFeatureSad("mcp_inline_tools", `rejected_${cause}`);
 }
-//@ chunk-a76knw89.js:56095-56486 placement
+//@ chunk-03tec5k5.js:42099-42490 placement
 function buildToolRemovalBlocks(content, additions, cacheControl, removals = [], toolDefinitions = {}) {
   let blocks = [
     ...(content
@@ -1078,10 +1077,8 @@ function buildToolRemovalBlocks(content, additions, cacheControl, removals = [],
   return blocks;
 }
 export {
-  DeclaredToolSet,
-  asDeclaredToolSet,
-  resolveDeclaredToolSet,
   turnDeniedTools,
+  DeclaredToolSet,
   toolChangeHeaderAllowed,
   inlineToolsAllowed,
   stickyBetasOr,
@@ -1089,6 +1086,7 @@ export {
   shouldAnnounceDeferredTools,
   canDeclareInlineTools,
   deferredToolsEnabled,
+  resolveDeclaredToolSet,
   updateDeclaredToolSet,
   asScratchDeclaredToolSet,
   isHipaaRestricted,
@@ -1110,13 +1108,15 @@ export {
   buildToolRemovalBlocks,
   getCacheControl,
   stripCacheControl,
-  canDeclareToolChangeAhead,
+  asDeclaredToolSet,
+  cachedDeclaredTools,
   stickyBetasForRequest,
+  hasDeclaredToolSet,
+  canInlineToolAdditions,
   hasScratchToolSet,
   logDeclaredToolsDroppedAtCompaction,
   logDeclaredToolsDroppedAtCompaction2,
-  cachedDeclaredTools,
+  canDeclareToolChange,
   cachedNoChannelTools,
-  hasDeclaredToolSet,
-  canInlineToolAdditions,
+  canDeclareToolChangeAhead,
 };

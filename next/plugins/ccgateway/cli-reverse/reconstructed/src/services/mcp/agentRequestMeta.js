@@ -3,9 +3,9 @@
  *
  * MCP 请求的代理元数据（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tw0z2kk3.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-p28azry7.js (4)
  * attribution: placement 4
  */
 import { CLAUDE_CODE_REMOTE } from "./ccrMetaMcp.js";
@@ -16,7 +16,7 @@ import { truncateToLength } from "../../utils/stringUtils.js";
 import { stripIgnorables } from "../../utils/sanitization.js";
 import { isObserverAgentTask } from "../../tasks/LocalAgentTask/LocalAgentTask.js";
 
-//@ chunk-tw0z2kk3.js:448-537 placement
+//@ chunk-p28azry7.js:447-536 placement
 /**
  * MCP 请求 meta 最多键数（64）。
  */
@@ -25,7 +25,7 @@ var CLAUDECODE_AGENTTYPE = "claudecode/agentType";
 var CLAUDECODE_ISOBSERVER = "claudecode/isObserver";
 var MAX_AGENT_TYPE_CHARS = 128;
 var MAX_META_KEYS = 64;
-//@ chunk-tw0z2kk3.js:537-677 placement
+//@ chunk-p28azry7.js:536-676 placement
 /**
  * 判断 MCP 连接是否是 Claude Code 远程服务器（名称匹配，且为 CCR 配置或指向 CCR 地址的动态 http 配置）。
  */
@@ -40,7 +40,7 @@ function isClaudeCodeRemoteServer(info) {
       isCcrOriginUrl(config.url))
   );
 }
-//@ chunk-tw0z2kk3.js:677-848 placement
+//@ chunk-p28azry7.js:676-846 placement (2.1.88 match: _temp0, 0.654)
 /**
  * 生成发给 Claude Code 远程服务器的代理元数据：代理 id、代理类型与是否为观察者代理链。
  */
@@ -58,7 +58,7 @@ function agentRequestMeta(info, context) {
     }),
   };
 }
-//@ chunk-tw0z2kk3.js:848-1249 placement
+//@ chunk-p28azry7.js:846-1247 placement
 /**
  * 沿任务注册表与代理上下文向上追溯父代理，判断是否属于观察者代理（追溯次数超限时视为是）。
  */

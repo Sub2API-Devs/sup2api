@@ -3,22 +3,22 @@
  *
  * 设备绑定（本机为云会话提供工具）的拒绝原因与提示文本（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (24)
  * attribution: placement 24
  */
 import path, { parse, isAbsolute, resolve } from "path";
 import { homedir } from "os";
 import { realpathSync } from "fs";
 import { isWslMntRoot } from "../utils/teleport/remoteTaskLabels.js";
-import { getClaudeConfigDir } from "../utils/envUtils.js";
+import { getClaudeConfigDir } from "../utils/markdownConfigLoader.js";
 import { findCanonicalGitRoot } from "../utils/git.js";
 import { getPlatform as getPlatform_2 } from "../utils/platform.js";
 import { hasBackslash } from "../utils/pathClassification.js";
 import { isCaseInsensitivePlatform } from "../utils/pathCaseFolding.js";
 
-//@ chunk-s61vbvea.js:493469-496714 placement
+//@ chunk-7jxyna5q.js:410572-413817 placement
 /**
  * 设备绑定被拒原因文案表（--project 会话、home 目录、自托管池等）
  */
@@ -74,20 +74,20 @@ var DEVICE_BINDING_REFUSAL_TEXTS_ALL = {
   ...DEVICE_BINDING_REFUSAL_TEXTS,
   ...DEVICE_BINDING_STATUS_REFUSAL_TEXTS,
 };
-//@ chunk-s61vbvea.js:496714-496757 placement
+//@ chunk-7jxyna5q.js:413817-413860 placement
 /**
  * 判断某个字符串是否属于已知的设备绑定拒绝原因（用于决定是否按远端未绑定提示）。
  */
 function isKnownDeviceBindingRefusal(refusalText) {
   return Object.hasOwn(DEVICE_BINDING_REFUSAL_TEXTS, refusalText);
 }
-//@ chunk-s61vbvea.js:496757-496966 placement
+//@ chunk-7jxyna5q.js:413860-414069 placement
 function formatUnboundSessionNotice(reason) {
   return reason === "trusted_devices_off"
     ? `This session began unbound (no local commands): ${deviceBindingRefusalText(reason)}`
     : `Start a new session to attach this machine; this one began unbound (no local commands): ${deviceBindingRefusalText(reason)}`;
 }
-//@ chunk-s61vbvea.js:496966-497166 placement
+//@ chunk-7jxyna5q.js:414069-414269 placement
 function classifyDeviceBindingBlocker(error) {
   switch (error) {
     case "project":
@@ -103,16 +103,16 @@ function classifyDeviceBindingBlocker(error) {
       return true;
   }
 }
-//@ chunk-s61vbvea.js:497166-497195 placement
+//@ chunk-7jxyna5q.js:414269-414298 placement
 /**
  * 取设备绑定拒绝原因对应的用户可见文案（合并两组合文本）；未知原因返回 undefined。
  */
 function deviceBindingRefusalText(refusalText) {
   return DEVICE_BINDING_REFUSAL_TEXTS_ALL[refusalText];
 }
-//@ chunk-s61vbvea.js:497195-497250 placement
+//@ chunk-7jxyna5q.js:414298-414353 placement
 var NOT_BOUND_PREFIX = "Not bound to this machine (local tools off): ";
-//@ chunk-s61vbvea.js:497250-497351 placement
+//@ chunk-7jxyna5q.js:414353-414454 placement
 function isDeviceRevokedError(refusalText) {
   let detail =
     refusalText === "device_revoked"
@@ -120,11 +120,11 @@ function isDeviceRevokedError(refusalText) {
       : deviceBindingRefusalText(refusalText);
   return `${NOT_BOUND_PREFIX}${detail}`;
 }
-//@ chunk-s61vbvea.js:497351-497479 placement
+//@ chunk-7jxyna5q.js:414454-414582 placement
 var LOCAL_TOOLS_OFF_PREFIX = "Local tools off in this window: ";
 var RUNS_IN_APPROVED_FOLDER_TEXT = "run in this session's approved folder, not in this window";
 var LOCAL_TOOLS_IN_APPROVED_FOLDER_TEXT = `Local tools ${RUNS_IN_APPROVED_FOLDER_TEXT}`;
-//@ chunk-s61vbvea.js:497479-497841 placement
+//@ chunk-7jxyna5q.js:414582-414944 placement
 /**
  * 按设备绑定状态（detached / other_state / unreadable / unstated）给出"本地工具为何不可用"的说明尾句；n 为"重新开会话"的位置描述。
  */
@@ -138,7 +138,7 @@ function describeBindingState(state, suffix) {
       return "Claude Code cannot tell how this session is linked to this computer. Attaching again or updating Claude Code may help";
   }
 }
-//@ chunk-s61vbvea.js:497841-497967 placement
+//@ chunk-7jxyna5q.js:414944-415070 placement
 /**
  * 附着设备时的状态提示：已连接/已请求时说明工具在批准目录运行（不弹 toast），否则拼"本窗口本地工具关闭"前缀和原因，非 detached 时弹 toast。
  */
@@ -153,7 +153,7 @@ function getDeviceBindingStatusNotice(state) {
         toast: state !== "detached",
       };
 }
-//@ chunk-s61vbvea.js:497967-498104 placement
+//@ chunk-7jxyna5q.js:415070-415207 placement
 /**
  * 裸云会话附着时的提示：未连接时返回"此客户端不为该会话运行工具"及原因，已连接返回 undefined。
  */
@@ -162,7 +162,7 @@ function getBareSessionNoToolsNotice(state) {
     ? undefined
     : `This client runs no tools for this session: ${describeBindingState(state, "from this folder")}`;
 }
-//@ chunk-s61vbvea.js:498104-498394 placement
+//@ chunk-7jxyna5q.js:415207-415497 placement
 function formatDeviceNotBoundMessage(message) {
   if (message.startsWith(NOT_BOUND_PREFIX))
     return `not bound to this computer: ${message.slice(NOT_BOUND_PREFIX.length)}`;
@@ -173,9 +173,9 @@ function formatDeviceNotBoundMessage(message) {
     if (message.startsWith(prefix)) return `${prefix.toLowerCase()}${message.slice(prefix.length)}`;
   return message;
 }
-//@ chunk-s61vbvea.js:498394-498428 placement
+//@ chunk-7jxyna5q.js:415497-415531 placement
 var REMOTE_DEVICE_NOT_BOUND = "remote-device-not-bound";
-//@ chunk-s61vbvea.js:498428-498530 placement
+//@ chunk-7jxyna5q.js:415531-415633 placement
 /**
  * 生成"远程设备未绑定"的高优先级警告通知（30 秒）。
  */
@@ -189,21 +189,21 @@ function createDeviceNotBoundNotification(text) {
     timeoutMs: 30000,
   };
 }
-//@ chunk-s61vbvea.js:498530-498563 placement
+//@ chunk-7jxyna5q.js:415633-415666 placement
 /**
  * 本构建里恒返回 false：--project 会话不能绑定设备。
  */
 async function isProjectSessionBindable(session, options) {
   return false;
 }
-//@ chunk-s61vbvea.js:498563-498587 placement
+//@ chunk-7jxyna5q.js:415666-415690 placement
 /**
  * 返回空对象，作为设备绑定判定的占位事实集合。
  */
 function emptyBindingFacts() {
   return {};
 }
-//@ chunk-s61vbvea.js:498732-499073 placement
+//@ chunk-7jxyna5q.js:415835-416176 placement
 /**
  * 判断工作目录是否根目录、home 目录或配置目录，这些目录不能绑定设备
  */
@@ -226,18 +226,18 @@ function classifyBindingFolder(folder, rootAnchors = {}, candidates = bindingFol
   }
   return null;
 }
-//@ chunk-s61vbvea.js:499073-499148 placement
+//@ chunk-7jxyna5q.js:416176-416251 placement
 function bindingFolderCandidates(filePath, findGitRoot = findCanonicalGitRoot) {
   let path = resolvePathCached(filePath);
   let rawRoot = findGitRoot(filePath) ?? filePath;
   let resolvedRoot = findGitRoot(path) ?? path;
   return rawRoot === resolvedRoot ? [resolvedRoot] : [rawRoot, resolvedRoot];
 }
-//@ chunk-s61vbvea.js:499148-499209 placement (2.1.88 match: setCwdState, 1)
+//@ chunk-7jxyna5q.js:416251-416312 placement (2.1.88 match: setCwdState, 1)
 function foldCaseIf(cwd, foldCase) {
   return foldCase ? cwd.normalize("NFC").toLowerCase() : cwd;
 }
-//@ chunk-s61vbvea.js:499209-499342 placement
+//@ chunk-7jxyna5q.js:416312-416445 placement
 function isPathInside(cwd, cwd_2, foldCase, { isAbsolute, relative, sep } = path) {
   let relativePath = relative(foldCaseIf(cwd, foldCase), foldCaseIf(cwd_2, foldCase));
   return (
@@ -245,11 +245,11 @@ function isPathInside(cwd, cwd_2, foldCase, { isAbsolute, relative, sep } = path
     (relativePath !== ".." && !relativePath.startsWith(".." + sep) && !isAbsolute(relativePath))
   );
 }
-//@ chunk-s61vbvea.js:499342-499399 placement (2.1.88 match: setCwdState, 0.757)
+//@ chunk-7jxyna5q.js:416445-416502 placement (2.1.88 match: setCwdState, 0.757)
 function nfcOnMacos(cwd) {
   return getPlatform_2() === "macos" ? cwd.normalize("NFC") : cwd;
 }
-//@ chunk-s61vbvea.js:499399-499633 placement
+//@ chunk-7jxyna5q.js:416502-416736 placement
 function realpathSafe(filePath, readRealpath = (run) => run()) {
   if (hasBackslash(filePath))
     return {
@@ -267,12 +267,12 @@ function realpathSafe(filePath, readRealpath = (run) => run()) {
     };
   }
 }
-//@ chunk-s61vbvea.js:499633-499702 placement (2.1.88 match: getResolvedDir, 0.798)
+//@ chunk-7jxyna5q.js:416736-416805 placement (2.1.88 match: getResolvedDir, 0.799)
 function resolvePathCached(filePath) {
   let result = realpathSafe(filePath);
   return "resolved" in result ? result.resolved : nfcOnMacos(resolve(filePath));
 }
-//@ chunk-s61vbvea.js:499702-499888 placement
+//@ chunk-7jxyna5q.js:416805-416991 placement
 function resolveBindingRoots({
   folder,
   home: filePath = homedir(),
@@ -290,16 +290,16 @@ function resolveBindingRoots({
 }
 export {
   isDeviceRevokedError,
-  formatDeviceNotBoundMessage,
-  createDeviceNotBoundNotification,
-  REMOTE_DEVICE_NOT_BOUND,
+  deviceBindingRefusalText,
   classifyDeviceBindingBlocker,
   isProjectSessionBindable,
   emptyBindingFacts,
-  deviceBindingRefusalText,
-  getBareSessionNoToolsNotice,
-  formatUnboundSessionNotice,
-  classifyBindingFolder,
   isKnownDeviceBindingRefusal,
+  formatUnboundSessionNotice,
   getDeviceBindingStatusNotice,
+  formatDeviceNotBoundMessage,
+  createDeviceNotBoundNotification,
+  REMOTE_DEVICE_NOT_BOUND,
+  getBareSessionNoToolsNotice,
+  classifyBindingFolder,
 };

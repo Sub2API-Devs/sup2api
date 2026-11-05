@@ -3,36 +3,36 @@
  *
  * 2.1.316 新增：校验导出声明（不能被重新赋值等）；把标识符解析为本地或导入的函数等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bfnfj4kx.js (59)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6sf70a86.js (59)
  * attribution: placement 59
  */
 import __cc_resource_0 from "../../../assets/state-library.js-wy8y4843.txt" with { type: "text" };
 import { IDENTIFIER_PATTERN_SOURCE } from "./hookApiSurface.js";
 import { HooksError } from "./hooksErrors.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { CLAUDE_CODE } from "./moduleLoader.js";
 import { declaredNames, exportNameText } from "./moduleScan.js";
 import { readStaticString, describeArgument } from "./clientSurfaceScan.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bfnfj4kx.js:39545-39578 placement
+//@ chunk-6sf70a86.js:39589-39622 placement
 var regExp_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bfnfj4kx.js:39545", () => {
+deferInit("chunk-6sf70a86.js:39589", () => {
   regExp_2 = new RegExp(`^${IDENTIFIER_PATTERN_SOURCE}$`, "u");
 });
-//@ chunk-bfnfj4kx.js:39578-39636 placement
+//@ chunk-6sf70a86.js:39622-39680 placement
 /**
  * 字符串是否为事件模式（*、前缀.*、!）。
  */
 var isEventPattern = (pattern) => pattern === "*" || pattern.endsWith(".*") || pattern.startsWith("!");
-//@ chunk-bfnfj4kx.js:39636-39675 placement
+//@ chunk-6sf70a86.js:39680-39719 placement
 /**
  * telemetry.* 事件
  */
 var isTelemetryEvent = (event) => event.startsWith("telemetry.");
-//@ chunk-bfnfj4kx.js:39675-40256 placement
+//@ chunk-6sf70a86.js:39719-40300 placement
 /**
  * 校验事件名或模式，返回错误说明。
  */
@@ -64,7 +64,7 @@ function validateEventPattern(pattern) {
           },
   };
 }
-//@ chunk-bfnfj4kx.js:40256-40331 placement
+//@ chunk-6sf70a86.js:40300-40375 placement
 /**
  * 校验并返回模式
  */
@@ -73,7 +73,7 @@ function requireEventPattern(pattern) {
   if (typeof problem === "string") throw new HooksError(problem);
   return problem;
 }
-//@ chunk-bfnfj4kx.js:40331-40407 placement
+//@ chunk-6sf70a86.js:40375-40451 placement
 /**
  * 精确名前缀
  */
@@ -81,7 +81,7 @@ function nameOfEventPattern(pattern) {
   let { selection } = requireEventPattern(pattern);
   return selection.kind === "name" ? selection.name : undefined;
 }
-//@ chunk-bfnfj4kx.js:40407-40471 placement
+//@ chunk-6sf70a86.js:40451-40515 placement
 /**
  * 校验失败文本
  */
@@ -89,7 +89,7 @@ function eventPatternError(pattern) {
   let problem = validateEventPattern(pattern);
   return typeof problem === "string" ? problem : undefined;
 }
-//@ chunk-bfnfj4kx.js:40471-40657 placement
+//@ chunk-6sf70a86.js:40515-40701 placement
 /**
  * 事件名是否匹配模式（支持取反、前缀、精确）。
  */
@@ -109,27 +109,27 @@ function matchesEventPattern(pattern, event) {
   }
   return isNegated ? !matched : matched;
 }
-//@ chunk-bfnfj4kx.js:40657-40717 placement
+//@ chunk-6sf70a86.js:40701-40761 placement
 /**
  * 是否路由给用户
  */
 function routesToUser(scan, event) {
   return (scan.toUserOn ?? []).some((pattern) => matchesEventPattern(pattern, event));
 }
-//@ chunk-bfnfj4kx.js:40717-40772 placement
+//@ chunk-6sf70a86.js:40761-40816 placement
 /**
  * 按插件是否内置判断是否可监听 telemetry.* 事件。
  */
 var matchesEventForPlugin = (event, event_2, plugin) =>
   matchesEventPattern(event, event_2) &&
   (plugin.isBuiltin || !isTelemetryEvent(event_2) || isTelemetryEvent(event));
-//@ chunk-bfnfj4kx.js:40772-40838 placement
+//@ chunk-6sf70a86.js:40816-40882 placement
 /**
  * Spread/computed/非 init
  */
 var isUnsupportedExportShape = (property) =>
   property.type === "SpreadElement" || property.computed || property.kind !== "init";
-//@ chunk-bfnfj4kx.js:40838-40958 placement
+//@ chunk-6sf70a86.js:40882-41002 placement
 /**
  * AST 节点是否为名为 o 的对象属性（标识符或字面量键）。
  */
@@ -137,7 +137,7 @@ var isNamedProperty = (property, name) =>
   property.type === "Property" &&
   ((property.key.type === "Identifier" && property.key.name === name) ||
     (property.key.type === "Literal" && property.key.value === name));
-//@ chunk-bfnfj4kx.js:40958-41265 placement
+//@ chunk-6sf70a86.js:41002-41309 placement
 /**
  * 从字面量/数组字面量取字符串列表。
  */
@@ -160,7 +160,7 @@ function literalStrings(node) {
       return;
   }
 }
-//@ chunk-bfnfj4kx.js:41265-41639 placement
+//@ chunk-6sf70a86.js:41309-41683 placement
 /**
  * 从 AST 读取 command 字段列表。
  */
@@ -186,7 +186,7 @@ function readCommandList(matcher) {
       return;
   }
 }
-//@ chunk-bfnfj4kx.js:41639-41845 placement
+//@ chunk-6sf70a86.js:41683-41889 placement
 /**
  * 扫描中所有 command.run 注册的 matcher 都能静态读出命令名时，返回排序去重的命令列表，否则 undefined。
  */
@@ -196,25 +196,25 @@ function collectRunCommands(graph) {
   );
   let mapped = filtered.map((registration) => readCommandList(registration.matcher));
   return filtered.length > 0 && mapped.every((rows) => rows !== undefined)
-    ? uniq(mapped.flatMap((row) => row ?? [])).toSorted()
+    ? normalizeCaseForComparison_2(mapped.flatMap((row) => row ?? [])).toSorted()
     : undefined;
 }
-//@ chunk-bfnfj4kx.js:41845-41897 placement
+//@ chunk-6sf70a86.js:41889-41941 placement
 /**
  * atom/derive/memberOf/read/update
  */
 var STATE_LIB_EXPORTS = ["atom", "derive", "memberOf", "read", "update"];
-//@ chunk-bfnfj4kx.js:41897-41920 placement
+//@ chunk-6sf70a86.js:41941-41964 placement
 /**
  * 内嵌的 state-library.js 源码文本
  */
 var stateLibrarySourceText = __cc_resource_0;
-//@ chunk-bfnfj4kx.js:41920-41931 placement
+//@ chunk-6sf70a86.js:41964-41975 placement
 /**
  * 内嵌资源别名
  */
 var STATE_RESOURCE = stateLibrarySourceText;
-//@ chunk-bfnfj4kx.js:41931-42145 placement
+//@ chunk-6sf70a86.js:41975-42189 placement
 /**
  * 若调用的是从 claude-code 导入且未被遮蔽的状态库函数（atom/derive/memberOf/read/update），返回其名。
  */
@@ -229,12 +229,12 @@ function stateLibraryCallKind(scanned, call) {
     ? found
     : undefined;
 }
-//@ chunk-bfnfj4kx.js:42145-42196 placement
+//@ chunk-6sf70a86.js:42189-42240 placement
 /**
  * envReads / envWrites
  */
 var envScannerField = (scan, op) => (op === "env.get" ? scan.envReads : scan.envWrites);
-//@ chunk-bfnfj4kx.js:42196-42319 placement
+//@ chunk-6sf70a86.js:42240-42363 placement
 /**
  * 取扫描图中已链接的文件，不在图中时抛错。
  */
@@ -243,7 +243,7 @@ function requireLinkedFile({ graph, pluginName }, file) {
   if (entry === undefined) throw new HooksError(`${pluginName}: ${file} was not linked`);
   return entry;
 }
-//@ chunk-bfnfj4kx.js:42319-42580 placement
+//@ chunk-6sf70a86.js:42363-42624 placement
 function followReExportLink(graph, from, name) {
   let { scan, linked } = graph;
   let link = linked.links.get(from);
@@ -257,7 +257,7 @@ function followReExportLink(graph, from, name) {
     linked: requireLinkedFile(scan, link),
   };
 }
-//@ chunk-bfnfj4kx.js:42580-43254 placement
+//@ chunk-6sf70a86.js:42624-43298 placement
 /**
  * 收集模块自身的导出表（命名、命名空间、星号）。
  */
@@ -304,12 +304,12 @@ function collectOwnExports(graph) {
   scan.ownExports.set(linked, importFacts);
   return importFacts;
 }
-//@ chunk-bfnfj4kx.js:43254-43268 placement
+//@ chunk-6sf70a86.js:43298-43312 placement
 /**
  * 500000
  */
 var MAX_EXPORT_RESOLVE_STEPS = 500000;
-//@ chunk-bfnfj4kx.js:43268-43582 placement
+//@ chunk-6sf70a86.js:43312-43626 placement
 /**
  * 记录导出解析步数，超过上限时拒绝。
  */
@@ -322,7 +322,7 @@ function chargeExportSteps(graph, steps) {
       `the re-exports of "${scan.pluginName}" took ${scan.exportSteps.taken} steps to follow, more than the ${MAX_EXPORT_RESOLVE_STEPS} a scan allows: write fewer \`export *\`, or import each name from the file that declares it`,
     );
 }
-//@ chunk-bfnfj4kx.js:43582-43902 placement
+//@ chunk-6sf70a86.js:43626-43946 placement
 /**
  * 把导出名解析为顶层函数声明。
  */
@@ -340,7 +340,7 @@ function resolveExportedFunction(graph, exported, name) {
     throw refuse(exported, `${label} ("${localName}") is assigned to elsewhere`);
   return declaration;
 }
-//@ chunk-bfnfj4kx.js:43902-45166 placement
+//@ chunk-6sf70a86.js:43946-45210 placement
 /**
  * 校验导出声明（不能被重新赋值等）。
  */
@@ -397,7 +397,7 @@ function checkExportDeclaration(graph, declaration, name) {
     ? resolveExportedFunction(graph, exported, name)
     : undefined;
 }
-//@ chunk-bfnfj4kx.js:45166-45809 placement
+//@ chunk-6sf70a86.js:45210-45853 placement
 /**
  * 解析命名导出（拒绝命名空间导出）。
  */
@@ -434,14 +434,14 @@ function resolveNamedExport(graph, name, readExport) {
         linked,
       };
 }
-//@ chunk-bfnfj4kx.js:45809-45863 placement
+//@ chunk-6sf70a86.js:45853-45907 placement
 /**
  * Map<k, Set> 追加
  */
 var addToSetInMap = (map, key, value) => {
   map.set(key, (map.get(key) ?? new Set()).add(value));
 };
-//@ chunk-bfnfj4kx.js:45863-46392 placement
+//@ chunk-6sf70a86.js:45907-46436 placement
 /**
  * 沿 export * 链构建完整导出表。
  */
@@ -480,7 +480,7 @@ function buildExportTable(graph) {
   scan.exportTables.set(linked, table);
   return table;
 }
-//@ chunk-bfnfj4kx.js:46392-46641 placement
+//@ chunk-6sf70a86.js:46436-46685 placement
 function collectReExportGivers(graph, name) {
   let exportTable = buildExportTable(graph);
   let givers = new Map();
@@ -497,7 +497,7 @@ function collectReExportGivers(graph, name) {
   }
   return givers;
 }
-//@ chunk-bfnfj4kx.js:46641-47353 placement
+//@ chunk-6sf70a86.js:46685-47397 placement
 /**
  * 沿重新导出链查找名字。
  */
@@ -542,7 +542,7 @@ function followReExport(graph, name, readExport) {
   }
   return visit(graph.linked);
 }
-//@ chunk-bfnfj4kx.js:47353-47642 placement
+//@ chunk-6sf70a86.js:47397-47686 placement
 function resolveExport(graph, name, readExport) {
   let ownExports = collectOwnExports(graph);
   let hasNamespace = ownExports.namespaces.has(name);
@@ -564,7 +564,7 @@ function resolveExport(graph, name, readExport) {
     readExport,
   );
 }
-//@ chunk-bfnfj4kx.js:47642-48200 placement
+//@ chunk-6sf70a86.js:47686-48244 placement
 /**
  * 带缓存地解析导出（处理循环）。
  */
@@ -606,7 +606,7 @@ function readExportCached(graph, name) {
     }
   }
 }
-//@ chunk-bfnfj4kx.js:48200-48550 placement
+//@ chunk-6sf70a86.js:48244-48594 placement
 /**
  * 把标识符解析为本地顶层函数（禁止重新赋值与遮蔽）。
  */
@@ -623,7 +623,7 @@ function resolveLocalFunction(reference, { names, refuse, what }) {
     );
   return declaration;
 }
-//@ chunk-bfnfj4kx.js:48550-49649 placement
+//@ chunk-6sf70a86.js:48594-49693 placement
 /**
  * 把标识符解析为本地或导入的函数。
  */
@@ -675,7 +675,7 @@ function resolveFunctionReference({ scan, linked }, reference, scope) {
     );
   return value;
 }
-//@ chunk-bfnfj4kx.js:49649-49904 placement
+//@ chunk-6sf70a86.js:49693-49948 placement
 function readNamedLiteralArg(call) {
   let [arg] = call.arguments;
   let properties = arg?.type === "ObjectExpression" ? arg.properties : [];
@@ -686,7 +686,7 @@ function readNamedLiteralArg(call) {
   let other = value?.type === "Literal" ? value.value : undefined;
   return typeof other === "string" ? other : undefined;
 }
-//@ chunk-bfnfj4kx.js:49904-49975 placement
+//@ chunk-6sf70a86.js:49948-50019 placement
 /**
  * 记录具名命令
  */
@@ -694,7 +694,7 @@ function recordNamedCommand(state, call) {
   let namedLiteralArg = readNamedLiteralArg(call);
   if (namedLiteralArg !== undefined) state.registeredCommands.add(namedLiteralArg);
 }
-//@ chunk-bfnfj4kx.js:49975-50203 placement
+//@ chunk-6sf70a86.js:50019-50247 placement
 /**
  * 记录扫描到的 $.state.get/set 调用及其引用常量。
  */
@@ -709,9 +709,9 @@ function recordStateCall(state, { call, spelling, named, consts }, scanned) {
       scanned,
     });
 }
-//@ chunk-bfnfj4kx.js:50203-50229 placement
+//@ chunk-6sf70a86.js:50247-50273 placement
 var COMMAND_REGISTER = "command.register";
-//@ chunk-bfnfj4kx.js:50229-50527 placement
+//@ chunk-6sf70a86.js:50273-50571 placement
 var DOLLAR_USE_DESCRIPTIONS = {
   VariableDeclarator: "bound to a name",
   AssignmentExpression: "assigned",
@@ -723,7 +723,7 @@ var DOLLAR_USE_DESCRIPTIONS = {
   ChainExpression: "optionally chained",
   TemplateLiteral: "put in a template",
 };
-//@ chunk-bfnfj4kx.js:50527-50696 placement
+//@ chunk-6sf70a86.js:50571-50740 placement
 /**
  * 描述 $ 在 AST 中的用法（被调用、作为参数、赋值、展开等），用于扫描报错。
  */
@@ -732,39 +732,39 @@ function describeDollarUse(use, callee) {
     return DOLLAR_USE_DESCRIPTIONS[use.type] ?? `used in a ${use.type}`;
   return use.callee === callee ? "called" : "passed as an argument";
 }
-//@ chunk-bfnfj4kx.js:50696-50712 placement
+//@ chunk-6sf70a86.js:50740-50756 placement
 var PLUGIN = "plugin";
-//@ chunk-bfnfj4kx.js:50712-50741 placement
+//@ chunk-6sf70a86.js:50756-50785 placement
 /**
  * env.get/env.set
  */
 var ENV_API_CALLS = ["env.get", "env.set"];
-//@ chunk-bfnfj4kx.js:50741-50769 placement
+//@ chunk-6sf70a86.js:50785-50813 placement
 /**
  * 是否 env 调用
  */
 var isEnvApiCall = (op) => ENV_API_CALLS.includes(op);
-//@ chunk-bfnfj4kx.js:50769-50802 placement
+//@ chunk-6sf70a86.js:50813-50846 placement
 /**
  * state.get/state.set
  */
 var STATE_API_CALLS = ["state.get", "state.set"];
-//@ chunk-bfnfj4kx.js:50802-50830 placement
+//@ chunk-6sf70a86.js:50846-50874 placement
 /**
  * 是否为保留名。
  */
 var isReservedHookName = (op) => STATE_API_CALLS.includes(op);
-//@ chunk-bfnfj4kx.js:50830-50883 placement
+//@ chunk-6sf70a86.js:50874-50927 placement
 /**
  * 标识符或 JSON 引号
  */
 var quoteIfNeeded = (text) => (/^[\w$@-]+$/.test(text) ? text : JSON.stringify(text));
-//@ chunk-bfnfj4kx.js:50883-50927 placement
+//@ chunk-6sf70a86.js:50927-50971 placement
 /**
  * 状态原子键字符串（plugin.key）。
  */
 var stateAtomKey = (key) => `${quoteIfNeeded(key.plugin)}.${quoteIfNeeded(key.key)}`;
-//@ chunk-bfnfj4kx.js:50927-50970 placement
+//@ chunk-6sf70a86.js:50971-51014 placement
 /**
  * 用空实现探测钩子回调。
  */
@@ -774,7 +774,7 @@ var probeHookCallback = (probe) =>
     (onValue, value) => value(),
     (onStale) => onStale(),
   );
-//@ chunk-bfnfj4kx.js:50970-51047 placement
+//@ chunk-6sf70a86.js:51014-51091 placement
 /**
  * 字符串是否形如 name@builtin。
  */
@@ -782,34 +782,34 @@ var isBuiltinSuffixed = (pluginStorageId) =>
   pluginStorageId.endsWith("@builtin") &&
   pluginStorageId.indexOf("@") === pluginStorageId.length - 8 &&
   pluginStorageId.length > 8;
-//@ chunk-bfnfj4kx.js:51047-51067 placement
+//@ chunk-6sf70a86.js:51091-51111 placement
 var ANTHROPIC = "anthropic";
-//@ chunk-bfnfj4kx.js:51067-51100 placement
+//@ chunk-6sf70a86.js:51111-51144 placement
 /**
  * anthropic/collector
  */
 var CORE_SOURCES = ["anthropic", "collector"];
-//@ chunk-bfnfj4kx.js:51100-51127 placement
+//@ chunk-6sf70a86.js:51144-51171 placement
 /**
  * 是否核心来源
  */
 var isCoreSource = (source) => CORE_SOURCES.includes(source);
-//@ chunk-bfnfj4kx.js:51127-51142 placement
+//@ chunk-6sf70a86.js:51171-51186 placement
 /**
  * 核心来源标识 "core"。
  */
 var CORE_ORIGIN = "core";
-//@ chunk-bfnfj4kx.js:51142-51176 placement
+//@ chunk-6sf70a86.js:51186-51220 placement
 /**
  * 最后一个扣留者
  */
 var topWithholder = (entry) => entry.withheldBy?.at(-1);
-//@ chunk-bfnfj4kx.js:51176-51228 placement
+//@ chunk-6sf70a86.js:51220-51272 placement
 /**
  * 被插件移除的说明
  */
 var removedByPluginText = (spelling, plugin) => `$.${spelling}: removed by plugin \`${plugin}\``;
-//@ chunk-bfnfj4kx.js:51228-51333 placement
+//@ chunk-6sf70a86.js:51272-51377 placement
 /**
  * 列出 hooks 模块及其界面模块的全部文件（入口与链接文件，含源码）。
  */
@@ -821,7 +821,7 @@ var hooksModuleFiles = (hooksModule) =>
     },
     ...surfaceModule.linked,
   ]);
-//@ chunk-bfnfj4kx.js:51333-51583 placement
+//@ chunk-6sf70a86.js:51377-51628 placement
 /**
  * $.env.get/set 的第一个参数必须是字面量字符串，返回之，否则抛扫描错误。
  */
@@ -836,21 +836,21 @@ function readLiteralEnvName(call, name, refuse) {
   return secondName;
 }
 export {
-  isReservedHookName,
-  probeHookCallback,
-  routesToUser,
-  matchesEventPattern,
-  isEventPattern,
-  removedByPluginText,
-  topWithholder,
-  CORE_ORIGIN,
-  matchesEventForPlugin,
-  eventPatternError,
-  isBuiltinSuffixed,
-  STATE_RESOURCE,
   stateAtomKey,
-  PLUGIN,
+  matchesEventPattern,
+  isBuiltinSuffixed,
+  CORE_ORIGIN,
+  isEventPattern,
+  eventPatternError,
+  nameOfEventPattern,
+  matchesEventForPlugin,
+  hooksModuleFiles,
+  readCommandList,
+  ANTHROPIC,
+  removedByPluginText,
   isEnvApiCall,
+  isReservedHookName,
+  PLUGIN,
   readLiteralEnvName,
   COMMAND_REGISTER,
   describeDollarUse,
@@ -859,7 +859,6 @@ export {
   recordNamedCommand,
   recordStateCall,
   stateLibraryCallKind,
-  nameOfEventPattern,
   checkExportDeclaration,
   requireLinkedFile,
   CORE_SOURCES,
@@ -867,7 +866,8 @@ export {
   isNamedProperty,
   isTelemetryEvent,
   collectRunCommands,
-  hooksModuleFiles,
-  readCommandList,
-  ANTHROPIC,
+  STATE_RESOURCE,
+  probeHookCallback,
+  routesToUser,
+  topWithholder,
 };

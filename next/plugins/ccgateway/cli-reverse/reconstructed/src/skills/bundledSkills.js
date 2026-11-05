@@ -3,9 +3,9 @@
  *
  * 并入已有模块：按目录批量写出技能附带文件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundledSkills.ts
- * pieces: chunk-e6aww6q8.js (1), chunk-hddjmtjj.js (1), chunk-wy9dbk5f.js (1), chunk-yjaa68dq.js (15)
+ * pieces: chunk-5xgkngpb.js (1), chunk-ndr12bqk.js (1), chunk-xc4g26h5.js (15), chunk-xrwmcqkn.js (1)
  * attribution: fingerprint 4, placement 14
  */
 import { constants } from "fs";
@@ -25,13 +25,13 @@ import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTeleme
 import { openPinnedForWrite } from "../services/agentImport/importSafety.js";
 import { NOFOLLOW_NONBLOCK_FLAGS } from "../utils/fsFlags.js";
 
-//@ chunk-yjaa68dq.js:620-676 placement
+//@ chunk-xc4g26h5.js:620-676 placement
 /**
  * 安全写文件用的打开标志（独占创建 + 不跟随符号链接）。
  */
 var O_NOFOLLOW_FLAG = constants.O_NOFOLLOW ?? 0;
 var SECURE_WRITE_OPEN_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | O_NOFOLLOW_FLAG;
-//@ chunk-yjaa68dq.js:676-810 placement
+//@ chunk-xc4g26h5.js:676-810 placement
 async function writeFileWithMode(filePath, content, mode = 384) {
   let handle = await open(filePath, SECURE_WRITE_OPEN_FLAGS, mode);
   try {
@@ -41,7 +41,7 @@ async function writeFileWithMode(filePath, content, mode = 384) {
     await handle.close();
   }
 }
-//@ chunk-yjaa68dq.js:810-1009 placement
+//@ chunk-xc4g26h5.js:810-1009 placement
 function safeJoinBundledPath(dir, relPath, pathModule = path) {
   let normalized = pathModule.normalize(relPath);
   if (
@@ -52,7 +52,7 @@ function safeJoinBundledPath(dir, relPath, pathModule = path) {
     throw Error("bundled file path escapes its extraction dir");
   return pathModule.join(dir, normalized);
 }
-//@ chunk-yjaa68dq.js:1009-1642 placement
+//@ chunk-xc4g26h5.js:1009-1642 placement
 /**
  * 按目录批量写出技能附带文件。
  */
@@ -103,11 +103,11 @@ async function writeSkillFiles(dir, files, options) {
     }),
   );
 }
-//@ chunk-yjaa68dq.js:1642-1701 placement
+//@ chunk-xc4g26h5.js:1642-1701 placement
 function registerBundledSkillSessionReset(hook) {
   getHostState().bundledSkillSessionResetHooks.push(hook);
 }
-//@ chunk-yjaa68dq.js:1701-1865 placement
+//@ chunk-xc4g26h5.js:1701-1865 placement
 function runBundledSkillSessionResets() {
   for (let bundledSkillSessionResetHook of getHostState().bundledSkillSessionResetHooks)
     try {
@@ -118,7 +118,7 @@ function runBundledSkillSessionResets() {
       );
     }
 }
-//@ chunk-yjaa68dq.js:1865-2514 placement
+//@ chunk-xc4g26h5.js:1865-2514 placement
 /**
  * 如果 skill 定义带 files（对象或异步函数），首次调用 getPromptForCommand 时把文件解压到 bundled skill 目录，并在提示词前加「Base directory for this skill: <dir>」；并发调用共享同一次解压。
  */
@@ -177,7 +177,7 @@ function wireSkillFilesExtraction(definition) {
     getPromptForCommand: getPromptForCommand_2,
   };
 }
-//@ chunk-yjaa68dq.js:2514-4342 placement (2.1.88 match: registerBundledSkill, 0.515)
+//@ chunk-xc4g26h5.js:2514-4342 placement (2.1.88 match: registerBundledSkill, 0.515)
 /**
  * 把一个内置 skill 定义转成 type:prompt 的命令对象并压入全局 bundledSkills 列表：source/loadedFrom 都是 bundled，isHidden = !userInvocable；description/argumentHint/whenToUse 可为函数（惰性求值）；survivesBundledKillSwitch 的 skill 在总开关关闭时仍保留。
  */
@@ -239,7 +239,7 @@ function registerBundledSkill(definition) {
   if (definition.survivesBundledKillSwitch) hostState.bundledSkillKillSwitchSurvivors.add(command);
   hostState.bundledSkills.push(command);
 }
-//@ chunk-yjaa68dq.js:4342-4579 placement
+//@ chunk-xc4g26h5.js:4342-4579 placement
 function getBundledSkills() {
   let hostState = getHostState();
   if (isBundledSkillsDisabled())
@@ -254,7 +254,7 @@ function getBundledSkills() {
     );
   return [...hostState.bundledSkills];
 }
-//@ chunk-yjaa68dq.js:4579-4750 placement
+//@ chunk-xc4g26h5.js:4579-4750 placement
 function isShippedSkillExecutionBlocked(command) {
   if (command.type !== "prompt" || command.source !== "bundled") return false;
   for (let bundledSkillKillSwitchSurvivor of getHostState().bundledSkillKillSwitchSurvivors)
@@ -262,14 +262,14 @@ function isShippedSkillExecutionBlocked(command) {
       return false;
   return isSkillOutsideCorePolicy(command.name);
 }
-//@ chunk-yjaa68dq.js:4750-4795 placement (2.1.88 match: loadAllCommands, 0.375)
+//@ chunk-xc4g26h5.js:4750-4795 placement (2.1.88 match: loadAllCommands, 0.376)
 /**
  * getRegisteredBundledSkillsIgnoringKillSwitch：返回已注册的全部发行内建技能命令，不看技能开关（用于名字保留）。
  */
 function getRegisteredBundledSkillsIgnoringKillSwitch() {
   return [...getHostState().bundledSkills];
 }
-//@ chunk-yjaa68dq.js:4795-4886 placement
+//@ chunk-xc4g26h5.js:4795-4886 placement
 /**
  * 内置 skill 的解压目录：有 bundledSkillFilesElsewhere 时用其 root（posix），否则 getBundledSkillsRoot()/<name>。
  */
@@ -279,7 +279,7 @@ function getBundledSkillExtractDir(skillName) {
     ? posix.join(bundledSkillFilesElsewhere.root, skillName)
     : join(getBundledSkillsRoot(), skillName);
 }
-//@ chunk-yjaa68dq.js:4886-5213 fingerprint (2.1.88 match: extractBundledSkillFiles, 0.558)
+//@ chunk-xc4g26h5.js:4886-5213 fingerprint (2.1.88 match: extractBundledSkillFiles, 0.558)
 /**
  * 把内置 skill 的附带文件写入解压目录（verify-content 模式，内容不同才写）；失败返回 null 并记 skill_bundled_extract 失败。
  */
@@ -298,7 +298,7 @@ async function extractBundledSkillFiles(skillName, files) {
     return null;
   }
 }
-//@ chunk-yjaa68dq.js:5213-5450 placement
+//@ chunk-xc4g26h5.js:5213-5450 placement
 async function extractAdditionalSkillFiles(skillName, capabilityDefs) {
   if (Object.keys(capabilityDefs).length === 0) return null;
   let bundledSkillExtractDir = getBundledSkillExtractDir(skillName);
@@ -312,7 +312,7 @@ async function extractAdditionalSkillFiles(skillName, capabilityDefs) {
     return null;
   }
 }
-//@ chunk-yjaa68dq.js:5450-5558 placement
+//@ chunk-xc4g26h5.js:5450-5558 placement
 function writeBundledSkillFiles(dir, files, tolerateExisting) {
   let bundledSkillFilesElsewhere = getHostState().bundledSkillFilesElsewhere;
   return bundledSkillFilesElsewhere
@@ -321,7 +321,7 @@ function writeBundledSkillFiles(dir, files, tolerateExisting) {
         tolerateExisting,
       });
 }
-//@ chunk-e6aww6q8.js:3124728-3124790 fingerprint (2.1.88 match: prependBaseDir, 1)
+//@ chunk-5xgkngpb.js:3211256-3211318 fingerprint (2.1.88 match: prependBaseDir, 1)
 /**
  * 返回「Base directory for this skill: <dir>」前缀行，skill 提示词前置使用。
  */
@@ -330,7 +330,7 @@ function prependBaseDir(baseDir) {
 
 `;
 }
-//@ chunk-hddjmtjj.js:7191-7333 fingerprint (2.1.88 match: safeWriteFile, 0.722)
+//@ chunk-ndr12bqk.js:7224-7366 fingerprint (2.1.88 match: safeWriteFile, 0.722)
 async function safeWriteFile(filePath, directory, content) {
   let pinnedForWrite = await openPinnedForWrite(filePath, directory);
   if (pinnedForWrite === null) return false;
@@ -343,7 +343,7 @@ async function safeWriteFile(filePath, directory, content) {
   }
   return true;
 }
-//@ chunk-wy9dbk5f.js:65065-65138 fingerprint (2.1.88 match: SAFE_WRITE_FLAGS, 0.719)
+//@ chunk-xrwmcqkn.js:61137-61210 fingerprint (2.1.88 match: SAFE_WRITE_FLAGS, 0.719)
 function SAFE_WRITE_FLAGS(filePath, isExclusive) {
   return open(
     filePath,
@@ -353,15 +353,15 @@ function SAFE_WRITE_FLAGS(filePath, isExclusive) {
 }
 export {
   registerBundledSkill,
-  runBundledSkillSessionResets,
-  getBundledSkills,
   getRegisteredBundledSkillsIgnoringKillSwitch,
-  isShippedSkillExecutionBlocked,
+  getBundledSkills,
   prependBaseDir,
-  getBundledSkillExtractDir,
+  runBundledSkillSessionResets,
+  isShippedSkillExecutionBlocked,
   registerBundledSkillSessionReset,
-  extractAdditionalSkillFiles,
   safeWriteFile,
+  getBundledSkillExtractDir,
+  extractAdditionalSkillFiles,
   SAFE_WRITE_FLAGS,
   wireSkillFilesExtraction,
 };

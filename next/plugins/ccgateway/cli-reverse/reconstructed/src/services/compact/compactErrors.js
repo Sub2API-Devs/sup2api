@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：压缩错误类型
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xndtzje6.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-v7ffshjk.js (2)
  * attribution: placement 2
  */
-//@ chunk-xndtzje6.js:191-431 placement
+//@ chunk-v7ffshjk.js:191-431 placement
 /**
  * 压缩错误文案常量。
  */
@@ -18,15 +18,15 @@ var COMPACT_FAILED_CONTEXT_LIMIT_MESSAGE =
 var COMPACT_FAILED_MEDIA_LIMIT_MESSAGE = "Compaction failed \xB7 attached media exceeds size limits";
 var COMPACT_ERROR_PREFIX = "Error during compaction: ";
 var COULD_NOT_COMPACT = "Could not compact";
-//@ chunk-xndtzje6.js:431-558 placement
+//@ chunk-v7ffshjk.js:431-558 placement
 var CONVERSATION_TOO_LONG_HINT = `conversation too long \xB7 ${"/clear to start fresh"}`;
 var MEDIA_TOO_LARGE_HINT = `attached media too large \xB7 ${"/clear to start fresh"}`;
 export {
-  CONVERSATION_TOO_LONG_HINT,
-  COMPACT_FAILED_CONTEXT_LIMIT_MESSAGE,
-  MEDIA_TOO_LARGE_HINT,
-  COMPACT_FAILED_MEDIA_LIMIT_MESSAGE,
   NO_MESSAGES_TO_COMPACT,
   COMPACT_ERROR_PREFIX,
+  COMPACT_FAILED_CONTEXT_LIMIT_MESSAGE,
+  COMPACT_FAILED_MEDIA_LIMIT_MESSAGE,
+  MEDIA_TOO_LARGE_HINT,
   COULD_NOT_COMPACT,
+  CONVERSATION_TOO_LONG_HINT,
 };

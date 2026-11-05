@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.318
+import{nn}from"./chunk-tzbg5px3.js";import{Nn}from"./chunk-5m8x0kb6.js";import{Pht,P2,iC}from"./chunk-7kayq7nc.js";import{Hn,Wl,vt,M7e}from"./chunk-exfmq47h.js";import{$X}from"./chunk-4dkmc786.js";import{Pse}from"./chunk-vgaj51qh.js";import{sce}from"./chunk-xrw4a49n.js";import{X}from"./chunk-mycxs6m3.js";import{hostname as i}from"os";function JC(){return}function But(e=$X(),n){if(JC()!==void 0)return!1;return sce(e)||n!==void 0&&n!==Hn()?.accessToken&&sce(e,!0)}function cW(){let e=JC();if(e!==void 0)return e;if(!Nn()||!vt())return;return Pse(Hn())?.accessToken}async function WM(e){if(!(X()&&e!==void 0))return cW();let n=JC();if(n!==void 0)return n;if(!Nn()||!await M7e(e))return;return Pse(await Wl(e))?.accessToken}function BDe(){let e=cW();if(e===void 0||JC()!==void 0)return e;return Pht()??e}async function bMt(e){let n=await WM(e);if(n===void 0||JC()!==void 0)return n;return await P2()??n}async function Ffs(e,n,r=!1){if(await iC(e,r?"withheld":"refused")==="not_held")return;return bMt(n)}function VB(){return $X()??nn().BASE_API_URL}function P9e(){let e=process.env.CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX||i();return t(e)||"remote-control"}function t(e){return e.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")}
+export{JC,But,cW,WM,BDe,bMt,Ffs,VB,P9e};

@@ -3,10 +3,10 @@
  *
  * Claude Design 同意与授权 API（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-98n6ge4d.js (16), chunk-ty8q6r2q.js (21)
- * attribution: placement 37
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xja31b7a.js (21), chunk-zevfa8jm.js (17)
+ * attribution: placement 37, layout 1
  */
 import {
   checkAndRefreshOAuthTokenIfNeeded,
@@ -32,34 +32,36 @@ import {
 import { isFirstPartyProvider } from "../../utils/model/providers.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
 import { logFeatureBad, logFeatureOk, logFeatureSad } from "../analytics/featureTelemetry.js";
+import { isAxiosError } from "../../../vendor/axios/dist/esm/axios.js";
 import {
   swapScaffoldResolver,
   swapConsentChecker,
   swapNoticeHolder,
 } from "../mcp/firstPartyDesignConsent.js";
 import { getOAuthHeaders } from "../../utils/teleport/api.js";
+import { getOauthConfig } from "../../constants/oauth.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ty8q6r2q.js:597-629 placement
+//@ chunk-xja31b7a.js:633-665 placement
 /**
  * 与 Claude Design 同意状态相关的正文字段名（agent_design_projects）。
  */
 var DESIGN_CONSENT_NAMES = ["agent_design_projects"];
-//@ chunk-ty8q6r2q.js:629-687 placement
+//@ chunk-xja31b7a.js:665-723 placement
 /**
  * 判断字符串是否属于 design 同意字段名。
  */
 function isDesignConsentName(consent) {
   return typeof consent === "string" && DESIGN_CONSENT_NAMES.includes(consent);
 }
-//@ chunk-ty8q6r2q.js:687-906 placement
+//@ chunk-xja31b7a.js:723-942 placement
 function DESIGN_CONSENT_PROMPT(key) {
   switch (key) {
     case "agent_design_projects":
       return "Connect to Claude Design? Claude can read and edit your Design projects from this tool. Change anytime at claude.ai/design/settings or with /design revoke.";
   }
 }
-//@ chunk-ty8q6r2q.js:906-989 placement
+//@ chunk-xja31b7a.js:942-1025 placement
 /**
  * 清空 Design 同意状态的缓存与在途请求。
  */
@@ -68,7 +70,7 @@ function invalidateDesignConsentCache(state) {
   state.consentFetch = null;
   state.consentCacheGeneration++;
 }
-//@ chunk-ty8q6r2q.js:989-1301 placement
+//@ chunk-xja31b7a.js:1025-1337 placement
 /**
  * 生成 Claude Design API 请求的认证选项：优先用带 design 读取 scope 的 claude.ai 令牌，否则取 Design 专用令牌。
  */
@@ -95,7 +97,7 @@ async function designAuthOptions(credentials) {
     }),
   };
 }
-//@ chunk-ty8q6r2q.js:1301-1632 placement
+//@ chunk-xja31b7a.js:1337-1668 placement
 /**
  * 预检读取 Claude Design 的同意状态（失败时返回空，后续靠 403 填充缓存）。
  */
@@ -119,7 +121,7 @@ async function fetchDesignConsent(credentials) {
     return {};
   }
 }
-//@ chunk-ty8q6r2q.js:1632-1757 placement
+//@ chunk-xja31b7a.js:1668-1793 placement
 /**
  * 更新 Design 同意缓存；撤销项目同意时同时清除相关授权缓存。
  */
@@ -134,14 +136,14 @@ function setDesignConsent(state, key, value) {
     [key]: value,
   };
 }
-//@ chunk-ty8q6r2q.js:1757-1815 placement
+//@ chunk-xja31b7a.js:1793-1851 placement
 /**
  * 是否已存有 Design 的 OAuth 访问令牌。
  */
 async function hasDesignOAuthToken(credentials) {
   return !!(await readDesignOAuth(credentials))?.accessToken;
 }
-//@ chunk-ty8q6r2q.js:1815-2430 placement
+//@ chunk-xja31b7a.js:1851-2466 placement
 async function designUnavailableReason(credentials) {
   if (!isFirstPartyProvider())
     return {
@@ -185,14 +187,14 @@ async function designUnavailableReason(credentials) {
     detail: designAccessToken.detail,
   };
 }
-//@ chunk-ty8q6r2q.js:2430-2464 placement
+//@ chunk-xja31b7a.js:2466-2500 placement
 /**
  * 取首次使用时被拒的 design 同意键（未拒绝返回 null）。
  */
 async function getDesignConsentKey(credentials) {
   return designUnavailableReason(credentials);
 }
-//@ chunk-ty8q6r2q.js:2464-2864 placement
+//@ chunk-xja31b7a.js:2500-2900 placement
 /**
  * 首次使用时拉取 Claude Design 同意状态并缓存（并发共享一次请求）；agent_design_projects 被拒时返回该键，否则 null。仅第一方且非仅必要流量。
  */
@@ -213,7 +215,7 @@ async function checkDesignConsent(state, credentials) {
   }
   return state.consentCache?.agent_design_projects === false ? "agent_design_projects" : null;
 }
-//@ chunk-ty8q6r2q.js:2864-3038 placement
+//@ chunk-xja31b7a.js:2900-3074 placement
 /**
  * 判断是否需要先登录 Claude Design（第一方提供方、无 claude.ai 令牌且无 Design 令牌）。
  */
@@ -226,7 +228,7 @@ async function needsDesignLogin(credentials) {
   if (accessToken) return false;
   return !(await readDesignOAuth(credentials))?.accessToken;
 }
-//@ chunk-ty8q6r2q.js:3038-3392 placement
+//@ chunk-xja31b7a.js:3074-3428 placement
 async function recordDesignConsent(scope, consent, credentials) {
   try {
     let response = await apiClient.post(
@@ -251,7 +253,7 @@ async function recordDesignConsent(scope, consent, credentials) {
   setDesignConsent(scope, consent, true);
   logFeatureOk("design_consent");
 }
-//@ chunk-ty8q6r2q.js:3392-3761 placement
+//@ chunk-xja31b7a.js:3428-3835 placement
 async function revokeDesignConsent(scope, consent, credentials) {
   try {
     let response = await apiClient.delete(
@@ -261,7 +263,7 @@ async function revokeDesignConsent(scope, consent, credentials) {
       },
       {
         ...(await designAuthOptions(credentials)),
-        validateStatus: (status) => status < 300 || status === 404,
+        validateStatus: (status) => status < 300,
       },
     );
     if (!response.ok)
@@ -270,13 +272,14 @@ async function revokeDesignConsent(scope, consent, credentials) {
         "design consent DELETE blocked by policy gate",
       );
   } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 404) setDesignConsent(scope, consent, false);
     logFeatureBad("design_consent", "delete_failed");
     throw error;
   }
   setDesignConsent(scope, consent, false);
   logFeatureOk("design_consent");
 }
-//@ chunk-ty8q6r2q.js:3761-4366 placement
+//@ chunk-xja31b7a.js:3835-4440 placement
 async function probeDesignGrants(credentials) {
   try {
     let response = await apiClient.get("/v1/design/grants", {
@@ -309,7 +312,7 @@ async function probeDesignGrants(credentials) {
     return null;
   }
 }
-//@ chunk-ty8q6r2q.js:4366-4557 placement
+//@ chunk-xja31b7a.js:4440-4631 placement
 /**
  * 检查 Design 项目授权：合并并发探测，返回已授权、未授权或不可用。
  */
@@ -323,7 +326,7 @@ async function checkDesignGrant(state, projectId, credentials) {
     if (state.grantsFetch === grants) state.grantsFetch = null;
   }
 }
-//@ chunk-ty8q6r2q.js:4557-5335 placement
+//@ chunk-xja31b7a.js:4631-5409 placement
 async function recordDesignProjectGrant(state, projectId, credentials) {
   let response;
   try {
@@ -358,7 +361,7 @@ async function recordDesignProjectGrant(state, projectId, credentials) {
   markProjectGrantVerified(state, projectId);
   logFeatureOk("design_project_grant");
 }
-//@ chunk-ty8q6r2q.js:5335-6111 placement
+//@ chunk-xja31b7a.js:5409-6185 placement
 function pollDesignGrantApproval(credentials, projectId, signal) {
   let baseline = null;
   async function fetchGrant() {
@@ -407,19 +410,19 @@ function pollDesignGrantApproval(credentials, projectId, signal) {
     },
   };
 }
-//@ chunk-ty8q6r2q.js:6111-6118 placement
+//@ chunk-xja31b7a.js:6185-6192 placement
 // deferred: uses swapScaffoldResolver (../mcp/firstPartyDesignConsent.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ty8q6r2q.js:6111", () => {
+deferInit("chunk-xja31b7a.js:6185", () => {
   swapScaffoldResolver(designUnavailableReason);
 });
-//@ chunk-ty8q6r2q.js:6118-6148 placement
+//@ chunk-xja31b7a.js:6192-6222 placement
 // deferred: uses swapConsentChecker (../mcp/firstPartyDesignConsent.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ty8q6r2q.js:6118", () => {
+deferInit("chunk-xja31b7a.js:6192", () => {
   swapConsentChecker(async (credentials) => !!(await readDesignOAuth(credentials)));
 });
-//@ chunk-ty8q6r2q.js:6148-6267 placement
+//@ chunk-xja31b7a.js:6222-6341 placement
 // deferred: uses swapNoticeHolder (../mcp/firstPartyDesignConsent.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ty8q6r2q.js:6148", () => {
+deferInit("chunk-xja31b7a.js:6222", () => {
   swapNoticeHolder({
     wouldNeedDesignConsent: checkDesignConsent,
     consentPromptFor: DESIGN_CONSENT_PROMPT,
@@ -428,12 +431,12 @@ deferInit("chunk-ty8q6r2q.js:6148", () => {
     isConsentBit: isDesignConsentName,
   });
 });
-//@ chunk-98n6ge4d.js:6335-6391 placement
+//@ chunk-zevfa8jm.js:6695-6751 placement
 /**
  * Claude Design 的 RPC 服务名 anthropic.omelette.api.v1alpha.OmeletteService。
  */
 var OMELETTE_SERVICE_NAME = "anthropic.omelette.api.v1alpha.OmeletteService";
-//@ chunk-98n6ge4d.js:6391-6786 placement
+//@ chunk-zevfa8jm.js:6751-7146 placement
 /**
  * 调 Claude Design 同步 RPC（POST /<前缀>/<方法>）：401/403 抛 DesignAuthError，其他非 2xx 抛 DesignRpcError，返回响应数据。
  */
@@ -459,9 +462,9 @@ async function designRpc(method, token, body, signal) {
     throw new DesignRpcError(method, response.status, response.data);
   return response.data;
 }
-//@ chunk-98n6ge4d.js:6786-6821 placement
+//@ chunk-zevfa8jm.js:7146-7181 placement
 var PROJECT_TYPE_DESIGN_SYSTEM = "PROJECT_TYPE_DESIGN_SYSTEM";
-//@ chunk-98n6ge4d.js:6821-6990 placement
+//@ chunk-zevfa8jm.js:7181-7350 placement
 async function listOrgProjects(token, options = {}, signal) {
   let result = await designRpc(
     "ListOrgProjects",
@@ -481,7 +484,7 @@ async function listOrgProjects(token, options = {}, signal) {
     cursor: result.cursor ?? "",
   };
 }
-//@ chunk-98n6ge4d.js:6990-7172 placement
+//@ chunk-zevfa8jm.js:7350-7532 placement
 async function writeDesignFiles(token, projectId, files, options = {}, signal) {
   return (
     (
@@ -501,7 +504,7 @@ async function writeDesignFiles(token, projectId, files, options = {}, signal) {
     ).files ?? []
   );
 }
-//@ chunk-98n6ge4d.js:7172-7238 placement
+//@ chunk-zevfa8jm.js:7532-7598 placement
 /**
  * 调 GetProject RPC 取项目信息。
  */
@@ -515,7 +518,25 @@ async function getDesignProject(token, projectId, signal) {
     signal,
   );
 }
-//@ chunk-98n6ge4d.js:7238-7554 placement
+//@ chunk-zevfa8jm.js:7598-7862 layout
+async function getProjectArtifactExport(credentials, projectId, client) {
+  let artifactUrl = (
+    await designRpc(
+      "GetProjectArtifactExport",
+      credentials,
+      {
+        projectId,
+      },
+      client,
+    )
+  ).projectArtifact?.artifactUrl;
+  if (typeof artifactUrl !== "string" || !URL.canParse(artifactUrl)) return;
+  let exportUrl = new URL(artifactUrl);
+  return exportUrl.origin === new URL(getOauthConfig().CLAUDE_AI_ORIGIN).origin
+    ? exportUrl.origin + exportUrl.pathname
+    : undefined;
+}
+//@ chunk-zevfa8jm.js:7862-8178 placement
 /**
  * 分页列出 Design 项目全部文件路径（最多 50 页）。
  */
@@ -544,7 +565,7 @@ async function listDesignFiles(credentials, projectId, signal) {
     error: `pagination exceeded 50 pages (${paths.length} paths)`,
   });
 }
-//@ chunk-98n6ge4d.js:7554-7899 placement
+//@ chunk-zevfa8jm.js:8178-8523 placement
 /**
  * 读取 Design 项目文件内容，按上限截断，返回内容类型与是否截断。
  */
@@ -584,7 +605,7 @@ async function getDesignFile(credentials, projectId, path, maxBytes = 262144, si
     truncated,
   };
 }
-//@ chunk-98n6ge4d.js:7899-8019 placement
+//@ chunk-zevfa8jm.js:8523-8643 placement
 async function deleteDesignFiles(token, projectId, paths, signal) {
   if (paths.length === 0) return 0;
   return (
@@ -601,7 +622,7 @@ async function deleteDesignFiles(token, projectId, paths, signal) {
     ).deleted ?? 0
   );
 }
-//@ chunk-98n6ge4d.js:8019-8183 placement
+//@ chunk-zevfa8jm.js:8643-8807 placement
 async function createDesignProject(token, name, signal) {
   let result = await designRpc(
     "CreateProject",
@@ -618,7 +639,7 @@ async function createDesignProject(token, name, signal) {
     name,
   };
 }
-//@ chunk-98n6ge4d.js:8183-8379 placement
+//@ chunk-zevfa8jm.js:8807-9003 placement
 async function recordDesignAsset(token, projectId, asset, signal) {
   await designRpc(
     "RecordAsset",
@@ -640,7 +661,7 @@ async function recordDesignAsset(token, projectId, asset, signal) {
     signal,
   );
 }
-//@ chunk-98n6ge4d.js:8379-8454 placement
+//@ chunk-zevfa8jm.js:9003-9078 placement
 /**
  * 调 DeleteAsset RPC 删除项目文件。
  */
@@ -655,7 +676,7 @@ async function deleteDesignAsset(token, projectId, path, signal) {
     signal,
   );
 }
-//@ chunk-98n6ge4d.js:8454-8535 placement
+//@ chunk-zevfa8jm.js:9078-9158 placement
 /**
  * 把字符串里的 OAuth 令牌替换成 [redacted-oauth-token]。
  */
@@ -663,7 +684,7 @@ function redactOAuthToken(text, token) {
   if (!token) return text;
   return text.split(token).join("[redacted-oauth-token]");
 }
-//@ chunk-98n6ge4d.js:8535-8790 placement
+//@ chunk-zevfa8jm.js:9158-9413 placement
 class DesignRpcError extends Error {
   method;
   status;
@@ -678,9 +699,9 @@ class DesignRpcError extends Error {
     this.telemetryMessage = `Design API ${method} failed: HTTP ${status}`;
   }
 }
-//@ chunk-98n6ge4d.js:8790-8869 placement
+//@ chunk-zevfa8jm.js:9413-9492 placement
 let DesignAuthError; // deferred: uses DesignRpcError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-98n6ge4d.js:8790", () => {
+deferInit("chunk-zevfa8jm.js:9413", () => {
   DesignAuthError = class DesignAuthError extends DesignRpcError {
     constructor(message, status, body) {
       super(message, status, body);
@@ -688,7 +709,7 @@ deferInit("chunk-98n6ge4d.js:8790", () => {
     }
   };
 });
-//@ chunk-98n6ge4d.js:8869-9028 placement
+//@ chunk-zevfa8jm.js:9492-9651 placement
 function truncateErrorBody(body) {
   if (body == null) return "";
   if (typeof body === "string") return body.slice(0, 200);
@@ -699,6 +720,8 @@ function truncateErrorBody(body) {
   }
 }
 export {
+  recordDesignConsent,
+  revokeDesignConsent,
   getDesignConsentKey,
   checkDesignConsent,
   DESIGN_CONSENT_PROMPT,
@@ -706,17 +729,16 @@ export {
   setDesignConsent,
   invalidateDesignConsentCache,
   recordDesignProjectGrant,
-  recordDesignConsent,
   isDesignConsentName,
   hasDesignOAuthToken,
   pollDesignGrantApproval,
-  revokeDesignConsent,
   needsDesignLogin,
   DesignAuthError,
   redactOAuthToken,
   listOrgProjects,
   PROJECT_TYPE_DESIGN_SYSTEM,
   getDesignProject,
+  getProjectArtifactExport,
   listDesignFiles,
   getDesignFile,
   writeDesignFiles,

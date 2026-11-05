@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。函数钩子注册。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6txwcq2p.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c7a2a4rj.js (4)
  * attribution: placement 4
  */
 import { isHookRegistrationPending } from "../loadPluginHooks.js";
@@ -17,7 +17,7 @@ import { areHooksEnabled } from "../../hooks.js";
 import { hasLink } from "../../hasLink.js";
 import { isManagedOrPolicyBlocked } from "../managedPlugins.js";
 
-//@ chunk-6txwcq2p.js:480-544 placement
+//@ chunk-c7a2a4rj.js:480-544 placement
 function hasPendingHookRegistration() {
   try {
     return isHookRegistrationPending() && hasManagedPluginsSafe();
@@ -26,7 +26,7 @@ function hasPendingHookRegistration() {
     return true;
   }
 }
-//@ chunk-6txwcq2p.js:544-709 placement
+//@ chunk-c7a2a4rj.js:544-709 placement
 /**
  * 对比快照：快照时注册未知、当前仍未知、或注册代次/已加载模块变化且有相关钩子时返回 true；出错保守返回 true。
  */
@@ -46,7 +46,7 @@ function hasHookRegistrationChanged(snapshot) {
     return true;
   }
 }
-//@ chunk-6txwcq2p.js:709-906 placement
+//@ chunk-c7a2a4rj.js:709-906 placement
 /**
  * 是否有插件模块订阅 prompt.submit（或未到 run 时的 command.run）。
  */
@@ -66,7 +66,7 @@ function hasPromptSubmitHooks({ isRunReached }) {
     return true;
   }
 }
-//@ chunk-6txwcq2p.js:906-1008 placement
+//@ chunk-c7a2a4rj.js:906-1008 placement
 /**
  * 记录钩子注册代次与已加载模块。
  */

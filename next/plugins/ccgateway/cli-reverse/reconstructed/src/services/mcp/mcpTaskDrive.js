@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。驱动一个 MCP 任务（com.anthropic/agent-task）：轮询 working/input_required/completed/failed 状态，处理输入请求，中止时发 tasks/cancel；能力丢失的 JSON-RPC 错误码按不可用处理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-01rphnc1.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yyrn42td.js (13)
  * attribution: placement 13
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -24,9 +24,10 @@ import { MCP_TASK_LABEL_MAX, LABEL_PATTERN } from "./mcpTaskCapability.js";
 import { describeErrorBrief } from "./auth.js";
 import { MCP_TASK_POLL_MS } from "./mcpTaskWorker.js";
 import { sleep } from "../../utils/sleep.js";
+import { TASK_CANCEL_REQUESTED_CODE } from "./mcpCallConstants.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-01rphnc1.js:429-1390 placement
+//@ chunk-yyrn42td.js:466-1427 placement
 /**
  * MCP 任务会话元数据的 schema。
  */
@@ -42,7 +43,7 @@ var AGENT_TASK_META_KEY;
 var MAX_SESSION_MESSAGE_CHARS;
 var MAX_TASK_MODEL_CHARS;
 var sessionMetaSchema;
-deferInit("chunk-01rphnc1.js:429", () => {
+deferInit("chunk-yyrn42td.js:466", () => {
   MCP_NAME_HEADER = "Mcp-Name";
   MIN_TASK_POLL_MS = 250;
   MAX_TASK_POLL_MS = 30000;
@@ -115,7 +116,7 @@ deferInit("chunk-01rphnc1.js:429", () => {
     }),
   );
 });
-//@ chunk-01rphnc1.js:1390-1659 placement
+//@ chunk-yyrn42td.js:1427-1696 placement
 function sdkAgentTaskMeta(meta) {
   let agentTaskMeta = parseAgentTaskMeta(meta);
   if (agentTaskMeta === undefined) return;
@@ -139,7 +140,7 @@ function sdkAgentTaskMeta(meta) {
       }
     : undefined;
 }
-//@ chunk-01rphnc1.js:1659-1803 placement
+//@ chunk-yyrn42td.js:1696-1840 placement
 function parseAgentTaskMeta(meta) {
   if (typeof meta !== "object" || meta === null) return;
   let raw = meta[AGENT_TASK_META_KEY];
@@ -147,13 +148,13 @@ function parseAgentTaskMeta(meta) {
   let parseResult = sessionMetaSchema().safeParse(raw);
   return parseResult.success ? parseResult.data : undefined;
 }
-//@ chunk-01rphnc1.js:1803-2439 placement
+//@ chunk-yyrn42td.js:1840-2476 placement
 /**
  * 任务状态回复的联合 schema。
  */
 var taskStatusSchemas; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var taskStatusReplySchema;
-deferInit("chunk-01rphnc1.js:1803", () => {
+deferInit("chunk-yyrn42td.js:1840", () => {
   taskStatusSchemas = DoctorLazy(() =>
     looseObject({
       method: stringSchema().min(1).max(MCP_TASK_LABEL_MAX).regex(LABEL_PATTERN),
@@ -202,18 +203,18 @@ deferInit("chunk-01rphnc1.js:1803", () => {
     ]),
   );
 });
-//@ chunk-01rphnc1.js:2439-2525 placement
+//@ chunk-yyrn42td.js:2476-2562 placement
 class TaskInputUnservableError extends Error {
   constructor(message) {
     super(message);
     this.name = "TaskInputUnservableError";
   }
 }
-//@ chunk-01rphnc1.js:2525-2577 placement
+//@ chunk-yyrn42td.js:2562-2614 placement
 function clampPollInterval(pollIntervalMs) {
   return Math.min(MAX_TASK_POLL_MS, Math.max(MIN_TASK_POLL_MS, pollIntervalMs ?? DEFAULT_TASK_POLL_MS));
 }
-//@ chunk-01rphnc1.js:2577-2959 placement
+//@ chunk-yyrn42td.js:2614-2996 placement
 /**
  * 是否为可重试的传输错误
  */
@@ -235,7 +236,7 @@ function isTransientTransportError(error) {
     typeof error.message === "string"
   );
 }
-//@ chunk-01rphnc1.js:2959-3082 placement
+//@ chunk-yyrn42td.js:2996-3119 placement
 function isRetryableTaskPollError(error) {
   return (
     isTransientTransportError(error) ||
@@ -243,7 +244,7 @@ function isRetryableTaskPollError(error) {
       (error.name === "UnauthorizedError" || ("status" in error && typeof error.status === "number")))
   );
 }
-//@ chunk-01rphnc1.js:3082-3165 placement
+//@ chunk-yyrn42td.js:3119-3202 placement
 /**
  * 判断错误码是否属于服务端错误类。
  */
@@ -251,23 +252,23 @@ function isServerErrorCode(code) {
   if (isCapabilityLossCode(code)) return false;
   return code === -32603 || code === -32700 || (code >= -32099 && code <= -32000);
 }
-//@ chunk-01rphnc1.js:3165-3209 placement
+//@ chunk-yyrn42td.js:3202-3246 placement
 /**
  * 判断错误码是否为能力缺失类（-32021、-32003）。
  */
 function isCapabilityLossCode(code) {
   return code === -32021 || code === -32003;
 }
-//@ chunk-01rphnc1.js:3209-3249 placement
+//@ chunk-yyrn42td.js:3246-3286 placement
 function isCapabilityLossJsonRpcCode(code) {
   return code === -32601 || isCapabilityLossCode(code);
 }
-//@ chunk-01rphnc1.js:3249-3289 placement
+//@ chunk-yyrn42td.js:3286-3326 placement
 var TASK_DRIVE_QUIET_STOP; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-01rphnc1.js:3249", () => {
+deferInit("chunk-yyrn42td.js:3286", () => {
   TASK_DRIVE_QUIET_STOP = Symbol("TASK_DRIVE_QUIET_STOP");
 });
-//@ chunk-01rphnc1.js:3289-8000 placement
+//@ chunk-yyrn42td.js:3326-8231 placement
 /**
  * 驱动一个 MCP 任务（com.anthropic/agent-task）：轮询 working/input_required/completed/failed 状态，处理输入请求，中止时发 tasks/cancel；能力丢失的 JSON-RPC 错误码按不可用处理。
  */
@@ -424,7 +425,18 @@ async function driveMcpTask({
       pollFailures += 1;
       let failureLimit = endsAtFirstFailedPoll?.() === true ? 1 : MAX_TASK_UPDATE_FAILURES;
       log?.(`task ${taskId}: poll failure ${pollFailures}/${failureLimit}: ${errorText(error)}`);
-      if (pollFailures >= failureLimit)
+      if (pollFailures >= failureLimit) {
+        if (isTransientTransportError(error) && error.code === TASK_CANCEL_REQUESTED_CODE) {
+          cancelTask();
+          return {
+            status: "error",
+            error: {
+              kind: "poll_failed",
+              message: `tasks/get failed for task ${taskId}: ${error.message} Claude Code asked the server to cancel the task.`,
+              code: error.code,
+            },
+          };
+        }
         return {
           status: "error",
           error: {
@@ -439,6 +451,7 @@ async function driveMcpTask({
                 }),
           },
         };
+      }
       continue;
     }
     onStatus?.(status);

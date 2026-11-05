@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。读取云会话（转写、元数据）的客户端，处理登录、组织策略与非必要流量关闭等拒绝。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-63n281q4.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-90w4vcfp.js (9)
  * attribution: placement 9
  */
 import { CLOUD_UNAVAILABLE_IN_EVAL_TEXT } from "../../commands/review/ultrareviewPreconditions.js";
@@ -49,7 +49,7 @@ import { isPolicyRouteMissing, policyDenyKind } from "../policyLimits/policyEvid
 import { logOrgPolicyDeniedAsync } from "../policyLimits/orgPolicyDeniedEvent.js";
 import { apiClient } from "../routines/routinesApi.js";
 
-//@ chunk-63n281q4.js:999-2906 placement
+//@ chunk-90w4vcfp.js:999-2906 placement
 /**
  * 读不到控制台凭据时的说明文案。
  */
@@ -89,7 +89,7 @@ var NOT_SIGNED_IN_TEXT = `Cloud sessions aren't available with this Console sign
 var NOT_LDR_TEXT = "Cloud sessions can't be read with this Console sign-in.";
 var CONSOLE_PROFILE_TEXT =
   "Cloud sessions can't be read with your Console sign-in in this process. This is a bug in Claude Code; please report it.";
-//@ chunk-63n281q4.js:2906-6313 placement
+//@ chunk-90w4vcfp.js:2906-6313 placement
 /**
  * 读取云会话（转写、元数据）的客户端，处理登录、组织策略与非必要流量关闭等拒绝。
  */
@@ -294,7 +294,7 @@ class CloudSessionReads {
     }
   }
 }
-//@ chunk-63n281q4.js:6313-6439 placement
+//@ chunk-90w4vcfp.js:6313-6439 placement
 function requireCloudSessionId(subtype, sessionId) {
   if (
     typeof sessionId !== "string" ||
@@ -303,7 +303,7 @@ function requireCloudSessionId(subtype, sessionId) {
   )
     throw new WireSafeControlError(`${subtype}: session_id is not a cloud session id`);
 }
-//@ chunk-63n281q4.js:6439-7112 placement
+//@ chunk-90w4vcfp.js:6439-7112 placement
 async function refusalBeforeAnyRequest(fromSession) {
   if ((await refusedFromSession()) !== undefined) return unavailable("started_by_session");
   if (getAPIProvider() !== "firstParty") return unavailable("provider");
@@ -330,7 +330,7 @@ async function refusalBeforeAnyRequest(fromSession) {
   }
   return null;
 }
-//@ chunk-63n281q4.js:7112-7627 placement
+//@ chunk-90w4vcfp.js:7112-7627 placement
 async function getFromSessionApi(path, opts) {
   opts.signal.throwIfAborted();
   let deviceToken = opts.withDeviceProof
@@ -360,7 +360,7 @@ async function getFromSessionApi(path, opts) {
     storageV5: opts.context.storageV5,
   });
 }
-//@ chunk-63n281q4.js:7627-8101 placement
+//@ chunk-90w4vcfp.js:7627-8101 placement
 function unavailableForResult(result, authFailed) {
   if (!result.ok)
     switch (result.reason) {
@@ -386,7 +386,7 @@ function unavailableForResult(result, authFailed) {
       return unavailable(result.status >= 500 ? "temporarily_unavailable" : "failed");
   }
 }
-//@ chunk-63n281q4.js:8101-8171 placement
+//@ chunk-90w4vcfp.js:8101-8171 placement
 function unavailable(reason, message = UNAVAILABLE_TEXT[reason]) {
   return {
     status: "unavailable",
@@ -394,13 +394,13 @@ function unavailable(reason, message = UNAVAILABLE_TEXT[reason]) {
     message,
   };
 }
-//@ chunk-63n281q4.js:8171-8282 placement
+//@ chunk-90w4vcfp.js:8171-8282 placement
 function getSessionConfigArray(session, key) {
   let config = isPlainObject(session.config) ? session.config : session.session_context;
   let value = isPlainObject(config) ? config[key] : undefined;
   return Array.isArray(value) ? value : [];
 }
-//@ chunk-63n281q4.js:8282-8488 placement
+//@ chunk-90w4vcfp.js:8282-8488 placement
 /**
  * 取会话结果中的首个 git 分支
  */

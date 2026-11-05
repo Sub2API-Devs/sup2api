@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。JSON 规范化序列化（JCS），用于设备事件签名；本模块还提供客户端事件签名器。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-869v6e0e.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xbe812hz.js (12)
  * attribution: placement 12
  */
 import { createHash } from "crypto";
@@ -18,10 +18,10 @@ import { logForDebugging } from "../utils/debug.js";
 import { errorMessage } from "../utils/errors.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-869v6e0e.js:447-509 placement
+//@ chunk-xbe812hz.js:448-510 placement
 var ANTHROPIC_CCR_CLIENT_EVENT_V1 = "anthropic.ccr.client_event.v1";
 var JCS_LIB = "claude-code-jcs@1";
-//@ chunk-869v6e0e.js:509-1276 placement
+//@ chunk-xbe812hz.js:510-1277 placement
 /**
  * JSON 规范化序列化（JCS），用于设备事件签名；本模块还提供客户端事件签名器。
  */
@@ -69,7 +69,7 @@ function canonicalJson(value) {
   }
   return out.join("");
 }
-//@ chunk-869v6e0e.js:1276-1485 placement (2.1.88 match: generateCodeChallenge, 0.89)
+//@ chunk-xbe812hz.js:1277-1486 placement (2.1.88 match: generateCodeChallenge, 0.89)
 function generateCodeChallenge(rowPk, event) {
   let { uuid, type: eventType, ...payload } = event;
   let payloadHash = createHash("sha256").update(canonicalJson(payload), "utf8").digest();
@@ -85,12 +85,12 @@ function generateCodeChallenge(rowPk, event) {
     payloadHash,
   ]);
 }
-//@ chunk-869v6e0e.js:1485-1508 placement
+//@ chunk-xbe812hz.js:1486-1509 placement
 var buffer; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-869v6e0e.js:1485", () => {
+deferInit("chunk-xbe812hz.js:1486", () => {
   buffer = Buffer.from([0]);
 });
-//@ chunk-869v6e0e.js:1508-1693 placement
+//@ chunk-xbe812hz.js:1509-1694 placement
 function createClientEventSigner(rowPk, key) {
   let kid = DEVICE_REGISTRY_KID_PREFIX + rowPk;
   let signFailureNoted = false;
@@ -107,7 +107,7 @@ function createClientEventSigner(rowPk, key) {
     }),
   };
 }
-//@ chunk-869v6e0e.js:1693-1816 placement
+//@ chunk-xbe812hz.js:1694-1817 placement
 async function signerForBoundDevice({ accountUuid, boundDeviceUuid, credentials, held }) {
   return signerFromDeviceKeyOutcome(
     await readDeviceKeyOutcome(
@@ -118,7 +118,7 @@ async function signerForBoundDevice({ accountUuid, boundDeviceUuid, credentials,
     boundDeviceUuid,
   );
 }
-//@ chunk-869v6e0e.js:1816-2225 placement
+//@ chunk-xbe812hz.js:1817-2227 placement
 async function deviceEventSignerOnceBoundHere(bindingPromise, credentials) {
   let binding = await resolveCurrentDeviceBinding(credentials).catch(() => {
     return;
@@ -156,7 +156,7 @@ async function deviceEventSignerOnceBoundHere(bindingPromise, credentials) {
       }
     : undefined;
 }
-//@ chunk-869v6e0e.js:2225-2396 placement
+//@ chunk-xbe812hz.js:2227-2399 placement
 async function deviceEventSignerFor(boundDeviceUuid, credentials, held) {
   let binding = await resolveCurrentDeviceBinding(credentials).catch(() => {
     return;
@@ -170,7 +170,7 @@ async function deviceEventSignerFor(boundDeviceUuid, credentials, held) {
       })
     : undefined;
 }
-//@ chunk-869v6e0e.js:2396-2620 placement
+//@ chunk-xbe812hz.js:2399-2624 placement
 async function deviceEventSignerIfBoundHere(boundDeviceUuid, credentials) {
   let binding = await resolveCurrentDeviceBinding(credentials).catch(() => {
     return;
@@ -182,7 +182,7 @@ async function deviceEventSignerIfBoundHere(boundDeviceUuid, credentials) {
   logFeatureOk("client_event_signer");
   return createClientEventSigner(deviceKeyOutcome.rowPk, deviceKeyOutcome.key);
 }
-//@ chunk-869v6e0e.js:2620-2930 placement
+//@ chunk-xbe812hz.js:2624-2934 placement
 async function readDeviceKeyOutcome(accountUuid, credentials, held) {
   if (held?.accountUuid === accountUuid)
     return {
@@ -208,11 +208,11 @@ async function readDeviceKeyOutcome(accountUuid, credentials, held) {
     };
   }
 }
-//@ chunk-869v6e0e.js:2930-2973 placement
+//@ chunk-xbe812hz.js:2934-2977 placement
 function isSameDeviceRowPk(rowPk, boundDeviceUuid) {
   return rowPk === boundDeviceUuid.toLowerCase();
 }
-//@ chunk-869v6e0e.js:2973-3218 placement
+//@ chunk-xbe812hz.js:2977-3222 placement
 /**
  * 按设备密钥读取结果构造事件签名器，绑定到别处则不签
  */
@@ -232,10 +232,10 @@ function signerFromDeviceKeyOutcome(deviceKeyOutcome, boundDeviceUuid) {
   }
 }
 export {
-  deviceEventSignerFor,
-  deviceEventSignerIfBoundHere,
   readDeviceKeyOutcome,
   createClientEventSigner,
+  deviceEventSignerFor,
+  deviceEventSignerIfBoundHere,
   canonicalJson,
   JCS_LIB,
   deviceEventSignerOnceBoundHere,

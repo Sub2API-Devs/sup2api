@@ -3,8 +3,8 @@
  *
  * 2.1.316 新增。hillclimb skill 的轻量报告构建脚本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: build-report-lite-jwtbvm49.mjs (29)
  * attribution: placement 28, affinity 1
  */
@@ -33,12 +33,12 @@ const isNum = (x) => typeof x === "number" && Number.isFinite(x);
  */
 const NOFOLLOW = WIN ? 0 : FS.O_NOFOLLOW;
 //@ build-report-lite-jwtbvm49.mjs:2396-2534 placement
-const isSymlink = (p) => {
+const isSymlink = (filePath) => {
   try {
-    return lstatSync(p).isSymbolicLink();
-  } catch (e) {
-    if (e?.code === "ENOENT") return false;
-    throw e;
+    return lstatSync(filePath).isSymbolicLink();
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
   }
 };
 //@ build-report-lite-jwtbvm49.mjs:2655-2683 placement
@@ -47,24 +47,24 @@ const skippedHardLinks = [];
 /**
  * 不跟随符号链接地读取文本文件，拒绝硬链接等异常情况，失败返回空字符串。
  */
-const readText = (p) => {
-  let fd;
+const readText = (filePath) => {
+  let fileHandle;
   try {
-    if (WIN && isSymlink(p)) return "";
-    fd = openSync(p, FS.O_RDONLY | NOFOLLOW);
-    const st = fstatSync(fd);
+    if (WIN && isSymlink(filePath)) return "";
+    fileHandle = openSync(filePath, FS.O_RDONLY | NOFOLLOW);
+    const fileStat = fstatSync(fileHandle);
     // O_NOFOLLOW and lstat cannot see a hard link (a second name for a file
     // outside the flow dir); nothing in a flow dir needs one, so read nothing.
-    if (!st.isFile()) return "";
-    if (st.nlink > 1) {
-      skippedHardLinks.push(p);
+    if (!fileStat.isFile()) return "";
+    if (fileStat.nlink > 1) {
+      skippedHardLinks.push(filePath);
       return "";
     }
-    return readFileSync(fd, "utf8");
+    return readFileSync(fileHandle, "utf8");
   } catch {
     return "";
   } finally {
-    if (fd !== undefined) closeSync(fd);
+    if (fileHandle !== undefined) closeSync(fileHandle);
   }
 };
 //@ build-report-lite-jwtbvm49.mjs:3839-4144 placement
@@ -89,12 +89,12 @@ function resolveOutputRoot(root) {
   // A `.`/`..` segment (e.g. a trailing `/.`) makes the leaf lstat below
   // follow a planted link at the flow root, and the absolute branch skips the
   // ancestor walk. Refuse dot segments outright.
-  if (segments.some((seg) => seg === "." || seg === ".."))
+  if (segments.some((segment) => segment === "." || segment === ".."))
     throw new Error("refusing to write into " + root + ": '.'/'..' path segment");
   if (!isAbsolute(root)) {
     let walk = "";
-    for (const part of segments.filter(Boolean).slice(0, -1)) {
-      walk = walk ? join(walk, part) : part;
+    for (const segmentPart of segments.filter(Boolean).slice(0, -1)) {
+      walk = walk ? join(walk, segmentPart) : segmentPart;
       if (isSymlink(walk))
         throw new Error("refusing to write into " + root + ": ancestor " + walk + " is a symlink");
     }
@@ -106,28 +106,29 @@ function resolveOutputRoot(root) {
 /**
  * 不跟随符号链接地写文件：父目录不得是链接且须在输出根内，打开后确认是普通文件且没有多个硬链接，检查通过后才截断写入。
  */
-function writeNoFollow(p, data, root) {
-  if (isSymlink(dirname(p))) throw new Error("refusing to write through symlinked directory: " + dirname(p));
-  assertContained(dirname(p), root);
-  if (WIN && isSymlink(p)) throw new Error("refusing to write through symlink: " + p);
+function writeNoFollow(filePath, data, root) {
+  if (isSymlink(dirname(filePath)))
+    throw new Error("refusing to write through symlinked directory: " + dirname(filePath));
+  assertContained(dirname(filePath), root);
+  if (WIN && isSymlink(filePath)) throw new Error("refusing to write through symlink: " + filePath);
   // Opened without O_TRUNC and truncated only after the checks, so a refused
   // file keeps its bytes.
-  const fd = openSync(p, FS.O_WRONLY | FS.O_CREAT | NOFOLLOW, 0o644);
+  const fileHandle = openSync(filePath, FS.O_WRONLY | FS.O_CREAT | NOFOLLOW, 0o644);
   try {
-    const st = fstatSync(fd);
-    if (!st.isFile()) throw new Error("refusing to write to non-regular file: " + p);
-    if (st.nlink > 1)
+    const fileStat = fstatSync(fileHandle);
+    if (!fileStat.isFile()) throw new Error("refusing to write to non-regular file: " + filePath);
+    if (fileStat.nlink > 1)
       throw new Error(
         "refusing to write to " +
-          p +
+          filePath +
           ": it has a second hard link (another name for the same file); replace it with a plain copy if it is yours",
       );
-    ftruncateSync(fd, 0);
+    ftruncateSync(fileHandle, 0);
     // writeFileSync on the fd loops until every byte lands (a bare writeSync
     // is one write(2) that may return short on ENOSPC and silently truncate).
-    writeFileSync(fd, data);
+    writeFileSync(fileHandle, data);
   } finally {
-    closeSync(fd);
+    closeSync(fileHandle);
   }
 }
 //@ build-report-lite-jwtbvm49.mjs:7027-7296 placement
@@ -140,9 +141,9 @@ function mkdirNoFollow(dir, root) {
   assertContained(dir, root);
 }
 //@ build-report-lite-jwtbvm49.mjs:7297-7394 placement
-const readJSON = (p, dflt) => {
+const readJSON = (filePath, dflt) => {
   try {
-    return JSON.parse(readText(p));
+    return JSON.parse(readText(filePath));
   } catch {
     return dflt;
   }
@@ -152,59 +153,60 @@ const ESC_SEQ = /\x1b\[[0-?]*[ -\/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1
 //@ build-report-lite-jwtbvm49.mjs:7737-7777 placement
 const CONTROL = /[\x00-\x1f\x7f-\x9f]/g;
 //@ build-report-lite-jwtbvm49.mjs:7778-7852 placement
-const termSafe = (s) => String(s).replace(ESC_SEQ, "").replace(CONTROL, "");
+const termSafe = (text) => String(text).replace(ESC_SEQ, "").replace(CONTROL, "");
 //@ build-report-lite-jwtbvm49.mjs:7853-7912 placement
-const eprint = (...a) => console.error(...a.map(termSafe));
+const eprint = (...args) => console.error(...args.map(termSafe));
 //@ build-report-lite-jwtbvm49.mjs:7913-8051 placement
 /**
  * HTML 转义（& < > " '）。
  */
-const esc = (s) =>
-  String(s ?? "").replace(
+const esc = (text) =>
+  String(text ?? "").replace(
     /[&<>"']/g,
-    (c) =>
+    (char) =>
       ({
         "&": "&amp;",
         "<": "&lt;",
         ">": "&gt;",
         '"': "&quot;",
         "'": "&#39;",
-      })[c],
+      })[char],
   );
 //@ build-report-lite-jwtbvm49.mjs:8052-8101 placement
 const fmt = (x) => (x == null ? "" : x.toFixed(3));
 //@ build-report-lite-jwtbvm49.mjs:8432-8561 placement
-const tsvCell = (s) => {
-  const flat = String(s).replace(/[\t\n\r]/g, " ");
+const tsvCell = (text) => {
+  const flat = String(text).replace(/[\t\n\r]/g, " ");
   return /^[=+\-@]/.test(flat) ? "'" + flat : flat;
 };
 //@ build-report-lite-jwtbvm49.mjs:8632-8928 placement
-function discoverVariants(flow) {
-  const names = readdirSync(flow, {
+function discoverVariants(flowDir) {
+  const names = readdirSync(flowDir, {
     withFileTypes: true,
   })
-    .filter((e) => e.isDirectory() && /^(baseline|v\d+)$/.test(e.name))
-    .map((e) => e.name);
-  const rank = (n) => (n === "baseline" ? -1 : +n.slice(1));
-  return names.sort((a, b) => rank(a) - rank(b));
+    .filter((entry) => entry.isDirectory() && /^(baseline|v\d+)$/.test(entry.name))
+    .map((entry) => entry.name);
+  const rank = (name) => (name === "baseline" ? -1 : +name.slice(1));
+  return names.sort((left, right) => rank(left) - rank(right));
 }
 //@ build-report-lite-jwtbvm49.mjs:9046-9377 placement
 /**
  * 把评分结果规范为数值字典：对象取数值或布尔字段，布尔值转为 score。
  */
-function coerceScores(g) {
-  if (g && typeof g === "object" && !Array.isArray(g)) {
-    const out = {};
-    for (const [k, v] of Object.entries(g)) if (isNum(v) || typeof v === "boolean") out[k] = +v;
-    return out;
+function coerceScores(grade) {
+  if (grade && typeof grade === "object" && !Array.isArray(grade)) {
+    const scores = {};
+    for (const [key, value] of Object.entries(grade))
+      if (isNum(value) || typeof value === "boolean") scores[key] = +value;
+    return scores;
   }
-  if (typeof g === "boolean")
+  if (typeof grade === "boolean")
     return {
-      score: g ? 1 : 0,
+      score: grade ? 1 : 0,
     };
-  if (isNum(g))
+  if (isNum(grade))
     return {
-      score: g,
+      score: grade,
     };
   return {};
 }
@@ -212,27 +214,27 @@ function coerceScores(g) {
 /**
  * 读取 results.jsonl，按用例 id 分组为行记录，解析失败的行记入警告。
  */
-function loadRows(p, warnings, dir) {
+function loadRows(resultsPath, warnings, variant) {
   // Keyed by data-supplied ids: null-prototype so '__proto__' is a key, not a crash.
   const byId = Object.create(null);
-  readText(p)
+  readText(resultsPath)
     .split("\n")
-    .forEach((line, i) => {
+    .forEach((line, lineNumber) => {
       line = line.trim();
       if (!line) return;
-      let r;
+      let row;
       try {
-        r = JSON.parse(line);
+        row = JSON.parse(line);
       } catch {
-        warnings.push(dir + "/results.jsonl:" + (i + 1) + ": malformed JSON, skipped");
+        warnings.push(variant + "/results.jsonl:" + (lineNumber + 1) + ": malformed JSON, skipped");
         return;
       }
-      const pid = String(r.prompt_id ?? r.id ?? r.case_id ?? "");
-      if (!pid) {
-        warnings.push(dir + "/results.jsonl:" + (i + 1) + ": no prompt_id, skipped");
+      const promptId = String(row.prompt_id ?? row.id ?? row.case_id ?? "");
+      if (!promptId) {
+        warnings.push(variant + "/results.jsonl:" + (lineNumber + 1) + ": no prompt_id, skipped");
         return;
       }
-      (byId[pid] ||= []).push(r);
+      (byId[promptId] ||= []).push(row);
     });
   return byId;
 }
@@ -240,20 +242,20 @@ function loadRows(p, warnings, dir) {
 /**
  * 统计 errors.jsonl 中的错误总数及按类别计数。
  */
-function countErrors(vdir) {
+function countErrors(variantDir) {
   let total = 0;
   const byClass = Object.create(null);
-  for (const line of readText(join(vdir, "errors.jsonl")).split("\n")) {
+  for (const line of readText(join(variantDir, "errors.jsonl")).split("\n")) {
     if (!line.trim()) continue;
-    let e;
+    let record;
     try {
-      e = JSON.parse(line);
+      record = JSON.parse(line);
     } catch {
       continue;
     }
     total++;
-    const c = String(e?.failure_class ?? "error");
-    byClass[c] = (byClass[c] || 0) + 1;
+    const failureClass = String(record?.failure_class ?? "error");
+    byClass[failureClass] = (byClass[failureClass] || 0) + 1;
   }
   return {
     total,
@@ -266,23 +268,23 @@ function countErrors(vdir) {
  */
 function inferMetrics(rows, variants) {
   const seen = new Map();
-  for (const v of variants)
-    for (const reps of Object.values(rows[v]))
-      for (const r of reps) {
-        const expl = r.explanation && typeof r.explanation === "object" ? r.explanation : {};
-        for (const [k, val] of Object.entries(coerceScores(r.grade))) {
-          const m = seen.get(k) || {
+  for (const variant of variants)
+    for (const reps of Object.values(rows[variant]))
+      for (const row of reps) {
+        const explanation = row.explanation && typeof row.explanation === "object" ? row.explanation : {};
+        for (const [metricId, value] of Object.entries(coerceScores(row.grade))) {
+          const metric = seen.get(metricId) || {
             binary: true,
             judge: false,
           };
-          if (val !== 0 && val !== 1) m.binary = false;
-          if (k in expl) m.judge = true;
-          seen.set(k, m);
+          if (value !== 0 && value !== 1) metric.binary = false;
+          if (metricId in explanation) metric.judge = true;
+          seen.set(metricId, metric);
         }
       }
-  return [...seen.entries()].map(([id, s]) => ({
-    id,
-    kind: s.judge ? "judge" : s.binary ? "binary" : "float",
+  return [...seen.entries()].map(([metricId, metric]) => ({
+    id: metricId,
+    kind: metric.judge ? "judge" : metric.binary ? "binary" : "float",
   }));
 }
 //@ build-report-lite-jwtbvm49.mjs:11175-20623 placement
@@ -305,7 +307,7 @@ function build(flowArg) {
   const warnings = [];
   // Same warning the full builder gives: a mis-named variant dir is the usual
   // reason the header shows one variant fewer than expected.
-  const nonVariant = new Set([
+  const nonVariantDirNames = new Set([
     "trajectory",
     "attachments",
     "refs",
@@ -315,52 +317,53 @@ function build(flowArg) {
     "target",
     "__pycache__",
   ]);
-  for (const e of readdirSync(flow, {
+  for (const entry of readdirSync(flow, {
     withFileTypes: true,
   }))
     if (
-      e.isDirectory() &&
-      !variants.includes(e.name) &&
-      !nonVariant.has(e.name) &&
-      !e.name.startsWith(".") &&
-      !e.name.startsWith("_")
+      entry.isDirectory() &&
+      !variants.includes(entry.name) &&
+      !nonVariantDirNames.has(entry.name) &&
+      !entry.name.startsWith(".") &&
+      !entry.name.startsWith("_")
     )
       warnings.push(
         "ignored directory '" +
-          e.name +
+          entry.name +
           "/' - variant dirs must be named 'baseline' or 'v<N>'; put the descriptive name in change.md's first line instead",
       );
   const state = readJSON(join(flow, "_state.json"), {}) || {};
   const splitOf = Object.create(null);
-  for (const sp of ["train", "val", "test"]) {
-    const ids = state[sp + "_ids"];
-    if (ids == null) continue;
-    if (!Array.isArray(ids)) {
-      warnings.push("_state.json " + sp + "_ids is not a list - ignored");
+  for (const splitName of ["train", "val", "test"]) {
+    const splitIds = state[splitName + "_ids"];
+    if (splitIds == null) continue;
+    if (!Array.isArray(splitIds)) {
+      warnings.push("_state.json " + splitName + "_ids is not a list - ignored");
       continue;
     }
-    for (const pid of ids) splitOf[String(pid)] = sp;
+    for (const promptId of splitIds) splitOf[String(promptId)] = splitName;
   }
   const rows = Object.create(null);
-  for (const v of variants) rows[v] = loadRows(join(flow, v, "results.jsonl"), warnings, v);
+  for (const variant of variants)
+    rows[variant] = loadRows(join(flow, variant, "results.jsonl"), warnings, variant);
 
   // Trace links are emitted only for a real traces/ directory that resolves
   // inside the pinned flow root: the per-file lstat below refuses a symlinked
   // trace but silently resolves a symlinked traces/ (or variant) directory,
   // which would link files from wherever it points into the report.
   const traceDirOk = Object.create(null);
-  for (const v of variants) {
-    const tdir = join(flow, v, "traces");
+  for (const variant of variants) {
+    const traceDir = join(flow, variant, "traces");
     try {
-      if (isSymlink(join(flow, v)) || isSymlink(tdir)) {
-        warnings.push(v + "/traces is reached through a symlink - trace links omitted");
-        traceDirOk[v] = false;
+      if (isSymlink(join(flow, variant)) || isSymlink(traceDir)) {
+        warnings.push(variant + "/traces is reached through a symlink - trace links omitted");
+        traceDirOk[variant] = false;
       } else {
-        const real = realpathSync(tdir);
-        traceDirOk[v] = real.startsWith(flowRoot + (WIN ? "\\" : "/"));
+        const resolvedTraceDir = realpathSync(traceDir);
+        traceDirOk[variant] = resolvedTraceDir.startsWith(flowRoot + (WIN ? "\\" : "/"));
       }
     } catch {
-      traceDirOk[v] = false;
+      traceDirOk[variant] = false;
     }
   }
 
@@ -368,11 +371,11 @@ function build(flowArg) {
   // rows (a vN/ holding only change.md while the run warms up would render a
   // blank column), and refuse to build when the first variant itself has none
   // rather than overwrite a good trajectory/scores.tsv with a header-only file.
-  for (let i = variants.length - 1; i > 0; i--) {
-    const v = variants[i];
-    if (Object.keys(rows[v]).length) continue;
-    warnings.push(v + ": zero result rows - dropping (run not started or results.jsonl missing/empty)");
-    variants.splice(i, 1);
+  for (let index = variants.length - 1; index > 0; index--) {
+    const variant = variants[index];
+    if (Object.keys(rows[variant]).length) continue;
+    warnings.push(variant + ": zero result rows - dropping (run not started or results.jsonl missing/empty)");
+    variants.splice(index, 1);
   }
   if (!Object.keys(rows[variants[0]]).length)
     throw new Error(
@@ -382,27 +385,28 @@ function build(flowArg) {
         " - nothing to report" +
         (skippedHardLinks.length
           ? " (not read, second hard link: " +
-            skippedHardLinks.map((p) => p.slice(flow.length + 1)).join(", ") +
+            skippedHardLinks.map((hardLinkPath) => hardLinkPath.slice(flow.length + 1)).join(", ") +
             " - replace with plain copies if they are yours)"
           : ""),
     );
   const header = Object.create(null);
-  for (const v of variants) {
-    const vdir = join(flow, v);
-    const change =
-      readText(join(vdir, "change.md"))
+  for (const variant of variants) {
+    const variantDir = join(flow, variant);
+    const changeText =
+      readText(join(variantDir, "change.md"))
         .split("\n")
-        .find((l) => l.trim()) || "";
-    const summary = readJSON(join(vdir, "summary.json"), {}) || {};
+        .find((line) => line.trim()) || "";
+    const summary = readJSON(join(variantDir, "summary.json"), {}) || {};
     // Model: summary.json wins, else the most common row.model (what the app called).
-    const tally = Object.create(null);
-    for (const reps of Object.values(rows[v]))
-      for (const r of reps) if (typeof r.model === "string") tally[r.model] = (tally[r.model] || 0) + 1;
-    const rowModel = Object.entries(tally).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
-    header[v] = {
-      change: change.replace(/^#+\s*/, ""),
+    const modelTally = Object.create(null);
+    for (const reps of Object.values(rows[variant]))
+      for (const row of reps)
+        if (typeof row.model === "string") modelTally[row.model] = (modelTally[row.model] || 0) + 1;
+    const rowModel = Object.entries(modelTally).sort((left, right) => right[1] - left[1])[0]?.[0] || "";
+    header[variant] = {
+      change: changeText.replace(/^#+\s*/, ""),
       model: summary.model || rowModel,
-      errors: countErrors(vdir),
+      errors: countErrors(variantDir),
     };
   }
 
@@ -412,54 +416,54 @@ function build(flowArg) {
   // selection the full builder's lib/adapter.mjs makes, so both builders
   // report the same metric's numbers on the same flow.
   const metricsCfg = state.metrics || state.criteria;
-  const declared = (Array.isArray(metricsCfg) ? metricsCfg : [])
-    .map((m) =>
-      typeof m === "string"
+  const declaredMetrics = (Array.isArray(metricsCfg) ? metricsCfg : [])
+    .map((metric) =>
+      typeof metric === "string"
         ? {
-            id: m,
+            id: metric,
           }
         : {
-            id: m?.id,
-            kind: m?.kind,
+            id: metric?.id,
+            kind: metric?.kind,
           },
     )
-    .filter((m) => m.id);
-  const metrics = declared.length ? declared : inferMetrics(rows, variants);
+    .filter((metric) => metric.id);
+  const metrics = declaredMetrics.length ? declaredMetrics : inferMetrics(rows, variants);
   if (!metrics.length)
     metrics.push({
       id: "score",
       kind: "float",
     });
-  const primary = (metrics.find((m) => m.kind === "binary") || metrics[0]).id;
+  const binaryMetric = (metrics.find((metric) => metric.kind === "binary") || metrics[0]).id;
 
   // Cases: union of ids across variants, in first-seen order.
-  const ids = [];
-  const seenId = new Set();
-  for (const v of variants)
-    for (const pid of Object.keys(rows[v]))
-      if (!seenId.has(pid)) {
-        seenId.add(pid);
-        ids.push(pid);
+  const caseIds = [];
+  const seenIds = new Set();
+  for (const variant of variants)
+    for (const promptId of Object.keys(rows[variant]))
+      if (!seenIds.has(promptId)) {
+        seenIds.add(promptId);
+        caseIds.push(promptId);
       }
-  const okReps = (reps) => reps.filter((r) => r.status == null || r.status === "ok");
-  const caseMean = (reps, m) => {
+  const okReps = (reps) => reps.filter((row) => row.status == null || row.status === "ok");
+  const caseMean = (reps, metricId) => {
     const vals = okReps(reps)
-      .map((r) => coerceScores(r.grade)[m])
+      .map((row) => coerceScores(row.grade)[metricId])
       .filter(isNum);
-    return vals.length ? vals.reduce((s, x) => s + x, 0) / vals.length : null;
+    return vals.length ? vals.reduce((sum, value) => sum + value, 0) / vals.length : null;
   };
-  const cases = ids.map((pid) => {
-    const first = variants.map((v) => rows[v][pid]?.[0]).find(Boolean) || {};
+  const cases = caseIds.map((promptId) => {
+    const first = variants.map((variant) => rows[variant][promptId]?.[0]).find(Boolean) || {};
     const tags = Array.isArray(first.tags) ? first.tags.map(String) : [];
-    const per = {};
-    for (const v of variants) {
-      const reps = rows[v][pid] || [];
-      per[v] = {
-        mean: caseMean(reps, primary),
+    const perCase = {};
+    for (const variant of variants) {
+      const reps = rows[variant][promptId] || [];
+      perCase[variant] = {
+        mean: caseMean(reps, binaryMetric),
         reps: reps.length,
-        truncated: reps.filter((r) => r.status === "truncated").length,
+        truncated: reps.filter((row) => row.status === "truncated").length,
         traces: reps
-          .map((r, k) => {
+          .map((row, caseId) => {
             // Link only to files directly inside this variant's traces/ dir:
             // ids and reps come from results.jsonl (data, not trusted), so the
             // composed path must not resolve anywhere else, and a symlinked
@@ -473,23 +477,24 @@ function build(flowArg) {
             // charset (so `#`, `?`, `\\`, `%` and separators never reach the
             // link) and require an integer rep, on top of the traceDirOk
             // resolved-path check above and the lexical one below.
-            if (!traceDirOk[v]) return null;
-            const rep = r.rep ?? k;
-            if (!/^[A-Za-z0-9_.-]+$/.test(pid) || /^\.+$/.test(pid)) return null;
-            if (!Number.isInteger(+rep) || +rep < 0) return null;
-            const stems = +rep === 0 ? [pid + "_rep" + rep, pid] : [pid + "_rep" + rep];
+            if (!traceDirOk[variant]) return null;
+            const traceRep = row.rep ?? caseId;
+            if (!/^[A-Za-z0-9_.-]+$/.test(promptId) || /^\.+$/.test(promptId)) return null;
+            if (!Number.isInteger(+traceRep) || +traceRep < 0) return null;
+            const stems =
+              +traceRep === 0 ? [promptId + "_rep" + traceRep, promptId] : [promptId + "_rep" + traceRep];
             for (const stem of stems) {
-              const rel = v + "/traces/" + stem + ".json";
-              const abs = resolve(flow, rel);
-              if (dirname(abs) !== join(flow, v, "traces")) return null;
+              const relPath = variant + "/traces/" + stem + ".json";
+              const absPath = resolve(flow, relPath);
+              if (dirname(absPath) !== join(flow, variant, "traces")) return null;
               // A hard-linked trace is no more ours than a symlinked one.
-              const ls = lstatSync(abs, {
+              const entries = lstatSync(absPath, {
                 throwIfNoEntry: false,
               });
-              if (ls?.isFile() && !(ls.nlink > 1))
+              if (entries?.isFile() && !(entries.nlink > 1))
                 return {
-                  rep,
-                  rel,
+                  rep: traceRep,
+                  rel: relPath,
                 };
             }
             return null;
@@ -498,40 +503,45 @@ function build(flowArg) {
       };
     }
     return {
-      id: pid,
-      split: splitOf[pid] || "",
+      id: promptId,
+      split: splitOf[promptId] || "",
       tags,
       prompt: String(first.prompt ?? ""),
-      per,
+      per: perCase,
     };
   });
 
   // Per-variant aggregate: mean over cases that have a value, per split.
-  const agg = {};
-  for (const v of variants) {
-    const all = cases.map((c) => c.per[v].mean).filter(isNum);
-    const test = cases
-      .filter((c) => c.split === "test")
-      .map((c) => c.per[v].mean)
+  const aggregate = {};
+  for (const variant of variants) {
+    const allRows = cases.map((caseId) => caseId.per[variant].mean).filter(isNum);
+    const testIds = cases
+      .filter((caseId) => caseId.split === "test")
+      .map((caseId) => caseId.per[variant].mean)
       .filter(isNum);
-    const m = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
-    agg[v] = {
-      all: m(all),
-      n: all.length,
-      test: m(test),
-      nTest: test.length,
-      truncated: cases.reduce((s, c) => s + c.per[v].truncated, 0),
+    const metric = (values) =>
+      values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+    aggregate[variant] = {
+      all: metric(allRows),
+      n: allRows.length,
+      test: metric(testIds),
+      nTest: testIds.length,
+      truncated: cases.reduce((sum, value) => sum + value.per[variant].truncated, 0),
     };
   }
 
   // trajectory/scores.tsv - same shape as the full builder.
   mkdirNoFollow(join(flow, "trajectory"), flowRoot);
-  const tsv = [["id", "split", ...variants].join("\t")];
-  for (const c of cases)
-    tsv.push(
-      [tsvCell(c.id), tsvCell(c.split || "all"), ...variants.map((v) => fmt(c.per[v].mean))].join("\t"),
+  const tsvLines = [["id", "split", ...variants].join("\t")];
+  for (const caseId of cases)
+    tsvLines.push(
+      [
+        tsvCell(caseId.id),
+        tsvCell(caseId.split || "all"),
+        ...variants.map((variant) => fmt(caseId.per[variant].mean)),
+      ].join("\t"),
     );
-  writeNoFollow(join(flow, "trajectory", "scores.tsv"), tsv.join("\n") + "\n", flowRoot);
+  writeNoFollow(join(flow, "trajectory", "scores.tsv"), tsvLines.join("\n") + "\n", flowRoot);
 
   // _state.json's `best` is {round, test_score}; map the round to a variant
   // name the way the full builder does (0 = baseline), and drop it when the
@@ -541,19 +551,19 @@ function build(flowArg) {
     best = state.best.round === 0 ? "baseline" : "v" + state.best.round;
     if (!variants.includes(best)) best = null;
   }
-  for (const p of new Set(skippedHardLinks))
+  for (const entryPath of new Set(skippedHardLinks))
     warnings.push(
-      p.slice(flow.length + 1) +
+      entryPath.slice(flow.length + 1) +
         " has a second hard link - not read; replace it with a plain copy if it is yours",
     );
   const html = render({
     flow,
     variants,
     header,
-    agg,
+    agg: aggregate,
     cases,
-    primary,
-    metrics: metrics.map((m) => m.id),
+    primary: binaryMetric,
+    metrics: metrics.map((metric) => metric.id),
     warnings,
     best,
   });
@@ -568,88 +578,104 @@ function build(flowArg) {
 /**
  * 把汇总结果渲染为单文件 HTML 报告：变体概览表（得分、错误分类计数）、每个用例在各变体上的指标、警告列表；所有数据值经 HTML 转义。
  */
-function render({ flow, variants, header, agg, cases, primary, metrics, warnings, best }) {
-  const hasSplit = cases.some((c) => c.split);
-  const hasTest = variants.some((v) => agg[v].nTest > 0);
-  const th = (label, key) => '<th data-k="' + esc(key) + '">' + esc(label) + "</th>";
+function render({
+  flow,
+  variants,
+  header,
+  agg: aggregate,
+  cases,
+  primary: primaryMetric,
+  metrics,
+  warnings,
+  best: bestRow,
+}) {
+  const hasSplit = cases.some((caseId) => caseId.split);
+  const hasTestIds = variants.some((variant) => aggregate[variant].nTest > 0);
+  const tableHead = (label, sortKey) => '<th data-k="' + esc(sortKey) + '">' + esc(label) + "</th>";
   const variantRows = variants
-    .map((v) => {
-      const h = header[v];
-      const a = agg[v];
-      const err = h.errors.total
-        ? h.errors.total +
+    .map((variant) => {
+      const thead = header[variant];
+      const aggregateForVariant = aggregate[variant];
+      const readError = thead.errors.total
+        ? thead.errors.total +
           " (" +
-          Object.entries(h.errors.byClass)
-            .map(([k, n]) => esc(k) + " " + n)
+          Object.entries(thead.errors.byClass)
+            .map(([sortKey, headerEntry]) => esc(sortKey) + " " + headerEntry)
             .join(", ") +
           ")"
         : "0";
       return (
         "<tr" +
-        (best === v ? ' class="best"' : "") +
+        (bestRow === variant ? ' class="best"' : "") +
         "><td>" +
-        esc(v) +
-        (best === v ? ' <span class="pill">best</span>' : "") +
+        esc(variant) +
+        (bestRow === variant ? ' <span class="pill">best</span>' : "") +
         "</td>" +
         "<td>" +
-        esc(h.change) +
+        esc(thead.change) +
         "</td><td>" +
-        esc(h.model) +
+        esc(thead.model) +
         "</td>" +
         '<td class="num">' +
-        fmt(a.all) +
+        fmt(aggregateForVariant.all) +
         '</td><td class="num">' +
-        a.n +
+        aggregateForVariant.n +
         "</td>" +
-        (hasTest ? '<td class="num">' + fmt(a.test) + '</td><td class="num">' + a.nTest + "</td>" : "") +
+        (hasTestIds
+          ? '<td class="num">' +
+            fmt(aggregateForVariant.test) +
+            '</td><td class="num">' +
+            aggregateForVariant.nTest +
+            "</td>"
+          : "") +
         '<td class="num">' +
-        a.truncated +
+        aggregateForVariant.truncated +
         "</td><td>" +
-        err +
+        readError +
         "</td></tr>"
       );
     })
     .join("\n");
   const caseRows = cases
-    .map((c) => {
+    .map((caseId) => {
       const cells = variants
-        .map((v) => {
-          const p = c.per[v];
-          const links = p.traces
-            .map((t) => '<a href="' + esc(t.rel) + '">rep' + esc(t.rep) + "</a>")
+        .map((variant) => {
+          const cell = caseId.per[variant];
+          const traceLinks = cell.traces
+            .map((trace) => '<a href="' + esc(trace.rel) + '">rep' + esc(trace.rep) + "</a>")
             .join(" ");
           return (
             '<td class="num" data-v="' +
-            fmt(p.mean) +
+            fmt(cell.mean) +
             '">' +
-            fmt(p.mean) +
-            (p.truncated ? ' <span class="pill warn">' + p.truncated + " truncated</span>" : "") +
-            (links ? '<div class="links">' + links + "</div>" : "") +
+            fmt(cell.mean) +
+            (cell.truncated ? ' <span class="pill warn">' + cell.truncated + " truncated</span>" : "") +
+            (traceLinks ? '<div class="links">' + traceLinks + "</div>" : "") +
             "</td>"
           );
         })
         .join("");
-      const prompt = c.prompt.length > 600 ? c.prompt.slice(0, 600) + "..." : c.prompt;
+      const promptText = caseId.prompt.length > 600 ? caseId.prompt.slice(0, 600) + "..." : caseId.prompt;
       return (
         '<tr><td class="id">' +
-        esc(c.id) +
+        esc(caseId.id) +
         "</td>" +
-        (hasSplit ? "<td>" + esc(c.split) + "</td>" : "") +
+        (hasSplit ? "<td>" + esc(caseId.split) + "</td>" : "") +
         "<td>" +
-        c.tags.map((t) => '<span class="pill">' + esc(t) + "</span>").join(" ") +
+        caseId.tags.map((cell) => '<span class="pill">' + esc(cell) + "</span>").join(" ") +
         "</td>" +
         cells +
         '<td class="prompt"><details><summary>' +
-        esc(prompt.split("\n")[0].slice(0, 80)) +
+        esc(promptText.split("\n")[0].slice(0, 80)) +
         "</summary><pre>" +
-        esc(prompt) +
+        esc(promptText) +
         "</pre></details></td></tr>"
       );
     })
     .join("\n");
-  const warn = warnings.length
+  const warningList = warnings.length
     ? '<section class="warnings"><h2>Warnings</h2><ul>' +
-      warnings.map((w) => "<li>" + esc(w) + "</li>").join("") +
+      warnings.map((warning) => "<li>" + esc(warning) + "</li>").join("") +
       "</ul></section>"
     : "";
   return (
@@ -659,7 +685,7 @@ function render({ flow, variants, header, agg, cases, primary, metrics, warnings
     esc(flow.split(/[\\/]/).pop()) +
     " - eval report</title>" +
     "<style>" +
-    CSS +
+    CSS_TEXT +
     "</style></head><body>" +
     "<header><h1>" +
     esc(flow.split(/[\\/]/).pop()) +
@@ -672,12 +698,12 @@ function render({ flow, variants, header, agg, cases, primary, metrics, warnings
     cases.length +
     " cases" +
     " &middot; primary metric <code>" +
-    esc(primary) +
+    esc(primaryMetric) +
     "</code>" +
     (metrics.length > 1
       ? " (also: " +
         metrics
-          .filter((m) => m !== primary)
+          .filter((metric) => metric !== primaryMetric)
           .map(esc)
           .join(", ") +
         ")"
@@ -687,37 +713,37 @@ function render({ flow, variants, header, agg, cases, primary, metrics, warnings
     " UTC" +
     " &middot; lite report (no transcripts inlined; click rep links)</p></header>" +
     "<section><h2>Variants</h2><table><thead><tr>" +
-    th("variant", "s") +
-    th("change", "s") +
-    th("model", "s") +
-    th("mean " + primary, "n") +
-    th("cases", "n") +
-    (hasTest ? th("test mean", "n") + th("test cases", "n") : "") +
-    th("truncated", "n") +
-    th("failed attempts", "s") +
+    tableHead("variant", "s") +
+    tableHead("change", "s") +
+    tableHead("model", "s") +
+    tableHead("mean " + primaryMetric, "n") +
+    tableHead("cases", "n") +
+    (hasTestIds ? tableHead("test mean", "n") + tableHead("test cases", "n") : "") +
+    tableHead("truncated", "n") +
+    tableHead("failed attempts", "s") +
     "</tr></thead><tbody>" +
     variantRows +
     "</tbody></table></section>" +
     '<section><h2>Cases</h2><p class="hint">Click a column header to sort. Per-case values are the mean of <code>' +
-    esc(primary) +
+    esc(primaryMetric) +
     "</code> over status-ok reps.</p>" +
     '<table id="cases"><thead><tr>' +
-    th("id", "s") +
-    (hasSplit ? th("split", "s") : "") +
-    th("tags", "s") +
-    variants.map((v) => th(v, "n")).join("") +
-    th("prompt", "s") +
+    tableHead("id", "s") +
+    (hasSplit ? tableHead("split", "s") : "") +
+    tableHead("tags", "s") +
+    variants.map((variant) => tableHead(variant, "n")).join("") +
+    tableHead("prompt", "s") +
     "</tr></thead><tbody>" +
     caseRows +
     "</tbody></table></section>" +
-    warn +
+    warningList +
     "<script>" +
     SORT_JS +
     "</script></body></html>\n"
   );
 }
 //@ build-report-lite-jwtbvm49.mjs:24433-25885 placement
-const CSS = [
+const CSS_TEXT = [
   ":root{color-scheme:light dark;--fg:#1a1a1a;--bg:#fff;--muted:#666;--line:#ddd;--pill:#eee;--warn:#b45309;--best:#ecfdf5}",
   "@media(prefers-color-scheme:dark){:root{--fg:#e6e6e6;--bg:#121212;--muted:#9a9a9a;--line:#333;--pill:#2a2a2a;--warn:#f59e0b;--best:#0f2a1f}}",
   "body{font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--fg);background:var(--bg);margin:0;padding:24px;max-width:1400px}",
@@ -752,7 +778,7 @@ if (!arg || arg === "-h" || arg === "--help") {
 //@ build-report-lite-jwtbvm49.mjs:26994-27328 placement
 try {
   const { variants, cases, warnings } = build(arg);
-  for (const w of warnings) eprint("warning: " + w);
+  for (const warning of warnings) eprint("warning: " + warning);
   eprint(
     "wrote " +
       join(resolve(arg), "report.html") +
@@ -762,7 +788,7 @@ try {
       cases +
       " cases) and trajectory/scores.tsv",
   );
-} catch (e) {
-  eprint("build-report-lite: " + (e?.message || e));
+} catch (error) {
+  eprint("build-report-lite: " + (error?.message || error));
   process.exit(1);
 }

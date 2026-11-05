@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。为 Java/NSS/Bazel 等工具配置 CA 信任。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-awy329vy.js (34)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9knfmvrf.js (34)
  * attribution: placement 33, affinity 1
  */
 import { createHash, X509Certificate } from "crypto";
@@ -18,6 +18,7 @@ import {
   BLOCKED_ROOT_SHA256,
   BLOCKED_ROOT_SPKI_SHA256,
   LEAKED_CA_SPKI_SHA256,
+  denyListHasReadKeyOf,
   withoutBlockedCerts,
 } from "../utils/caCerts.js";
 import { errorMessage, isFsInaccessible, isENOENT, getErrnoCode } from "../utils/errors.js";
@@ -40,7 +41,7 @@ import {
 } from "../utils/settings/managedSettingsKeys.js";
 import { execFileNoThrow } from "../utils/execFileNoThrow.js";
 
-//@ chunk-awy329vy.js:44083-44302 placement
+//@ chunk-9knfmvrf.js:54583-54802 placement
 /**
  * 描述外部命令的运行结果：退出码、超时仍在运行、输出超限，或未能运行（附错误）。
  */
@@ -50,7 +51,7 @@ function describeExecOutcome(result) {
   if (result.maxBufferExceeded) return "output over the cap";
   return `did not run (${result.error ?? "unknown"})`;
 }
-//@ chunk-awy329vy.js:44302-44463 placement
+//@ chunk-9knfmvrf.js:54802-54963 placement
 /**
  * 把外部工具的 stdout/stderr 合并后（超长截断）写入 agent-proxy 调试日志。
  */
@@ -62,7 +63,7 @@ ${result.stderr}`.trim();
     trimmed = `${trimmed.slice(0, MAX_LOGGED_OUTPUT_CHARS)}\u2026 (${trimmed.length} chars)`;
   logForDebugging(`[agent-proxy] ${label}: ${trimmed}`);
 }
-//@ chunk-awy329vy.js:44755-45013 placement
+//@ chunk-9knfmvrf.js:55255-55513 placement
 /**
  * keytool 路径含空白或引号时无法安全引用。
  */
@@ -81,7 +82,7 @@ var SEED_RETRY_BASE_MS = 3000;
 var MAX_NSS_ENTRIES = 16;
 var MAX_NSS_DIR_BYTES = 16777216;
 var NSS_CHECK_STAMP_SUFFIX = ".checked-v1";
-//@ chunk-awy329vy.js:45013-45157 placement
+//@ chunk-9knfmvrf.js:55513-55657 placement
 /**
  * 按拒绝证书列表（根证书/SPKI/泄露 CA 哈希）的摘要生成证书包文件名，使列表变化时文件名随之变化。
  */
@@ -98,7 +99,7 @@ function getBundlePathForDenylist(
     .slice(0, 16);
   return `${storePath}${CA_BUNDLE_V2_SUFFIX}-${sliced}.pem`;
 }
-//@ chunk-awy329vy.js:45157-45292 placement
+//@ chunk-9knfmvrf.js:55657-55792 placement
 /**
  * 生成 JVM 信任库系统属性字符串（-Djavax.net.ssl.trustStore 等）并与已有 JAVA_TOOL_OPTIONS 合并；已有 trustStore 设置时原样保留。
  */
@@ -108,7 +109,7 @@ function buildJavaTrustOptions(storePath, storeType, token) {
   let joined = javaTrustStoreArgs(storePath, storeType).join(" ");
   return trimmed ? `${joined} ${trimmed}` : joined;
 }
-//@ chunk-awy329vy.js:45292-45518 placement
+//@ chunk-9knfmvrf.js:55792-56018 placement
 function javaTrustStoreArgs(storePath, storeType) {
   return storeType === "JKS"
     ? [`-Djavax.net.ssl.trustStore=${storePath}`, "-Djavax.net.ssl.trustStoreType=JKS"]
@@ -118,7 +119,7 @@ function javaTrustStoreArgs(storePath, storeType) {
         "-Djavax.net.ssl.trustStoreType=PKCS12",
       ];
 }
-//@ chunk-awy329vy.js:45518-48332 placement
+//@ chunk-9knfmvrf.js:56018-58832 placement
 /**
  * 为 Java、NSS、Bazel、gsutil 等工具配置 CA 信任。
  */
@@ -318,7 +319,7 @@ async function configureToolTrust(options) {
   }
   return result;
 }
-//@ chunk-awy329vy.js:48332-48418 placement
+//@ chunk-9knfmvrf.js:58832-58918 placement
 /**
  * 解析 keytool/certutil 的真实路径（配置优先，其次 PATH 查找）。
  */
@@ -329,7 +330,7 @@ async function resolveToolBinaryPath(configuredPath, fallback) {
     });
   return (await fallback()) ?? undefined;
 }
-//@ chunk-awy329vy.js:48418-48642 placement
+//@ chunk-9knfmvrf.js:58918-59142 placement
 /**
  * 找 keytool：PATH 中与 JAVA_HOME/bin 下的候选，解析真实路径，优先选能找到 cacerts 的那个，否则返回第一个找到的。
  */
@@ -350,7 +351,7 @@ async function findKeytool() {
   }
   return firstFound;
 }
-//@ chunk-awy329vy.js:48642-48825 placement
+//@ chunk-9knfmvrf.js:59142-59325 placement
 async function findJdkCacerts(keytoolPath) {
   let javaHome = dirname(dirname(keytoolPath));
   for (let candidate of [
@@ -364,7 +365,7 @@ async function findJdkCacerts(keytoolPath) {
   }
   return;
 }
-//@ chunk-awy329vy.js:48825-49081 placement
+//@ chunk-9knfmvrf.js:59325-59581 placement
 async function statTrustStore(storePath) {
   let handle;
   try {
@@ -386,20 +387,21 @@ async function statTrustStore(storePath) {
     await handle?.close().catch(() => {});
   }
 }
-//@ chunk-awy329vy.js:49081-49206 placement
+//@ chunk-9knfmvrf.js:59581-59716 placement
 function hasParsableSpki(pemText) {
   if (BLOCKED_ROOT_SPKI_SHA256.size === 0) return true;
   try {
-    new X509Certificate(pemText).publicKey.export({
-      type: "spki",
-      format: "der",
-    });
+    if (!denyListHasReadKeyOf(pemText))
+      new X509Certificate(pemText).publicKey.export({
+        type: "spki",
+        format: "der",
+      });
     return true;
   } catch {
     return false;
   }
 }
-//@ chunk-awy329vy.js:49477-49636 affinity
+//@ chunk-9knfmvrf.js:59987-60146 affinity
 async function loadJdkCacerts(keytoolPath, out) {
   let filePath = await findJdkCacerts(keytoolPath);
   let storeLines =
@@ -414,7 +416,7 @@ async function loadJdkCacerts(keytoolPath, out) {
     store: storeLines,
   };
 }
-//@ chunk-awy329vy.js:49636-50296 placement
+//@ chunk-9knfmvrf.js:60146-60835 placement
 /**
  * 解析 JKS 信任库的二进制结构，提取所有证书转为 PEM 并检查是否含被拒证书：clean（完整且干净）、part_written（截断/未写完）、failed_filter（格式不对或含被拒证书）。
  */
@@ -434,9 +436,13 @@ function inspectJksStore(buffer) {
       let uInt32BE = buffer.readUInt32BE(offset);
       offset += 4;
       if (offset + uInt32BE > buffer.length) return "part_written";
-      let str = buffer.toString("base64", offset, offset + uInt32BE);
+      let replaced = buffer.toString("base64", offset, offset + uInt32BE).replace(
+        /.{64}(?=.)/g,
+        `$&
+`,
+      );
       pemCerts.push(`-----BEGIN CERTIFICATE-----
-${str}
+${replaced}
 -----END CERTIFICATE-----`);
       offset += uInt32BE;
     }
@@ -457,7 +463,7 @@ ${str}
     return "failed_filter";
   return exactLength ? "clean" : "part_written";
 }
-//@ chunk-awy329vy.js:50296-52161 placement
+//@ chunk-9knfmvrf.js:60835-62700 placement
 async function importIntoJvmTruststore(keytoolPath, cacerts, ccrCa, caFilePath, jdkStorePath, failures) {
   if (!cacerts) {
     logForDebugging(`[agent-proxy] no JDK cacerts found near ${keytoolPath}; skipping JVM truststore`);
@@ -560,7 +566,7 @@ async function importIntoJvmTruststore(keytoolPath, cacerts, ccrCa, caFilePath, 
   logForDebugging(`[agent-proxy] JVM truststore built at ${jdkStorePath}`);
   return jdkStorePath;
 }
-//@ chunk-awy329vy.js:52161-52237 placement
+//@ chunk-9knfmvrf.js:62700-62776 placement
 /**
  * 运行 Java 工具时使用的环境（去掉 _JAVA_OPTIONS 与 JAVA_TOOL_OPTIONS）。
  */
@@ -571,7 +577,7 @@ function javaToolEnv() {
     JAVA_TOOL_OPTIONS: undefined,
   };
 }
-//@ chunk-awy329vy.js:52237-52803 placement
+//@ chunk-9knfmvrf.js:62776-63342 placement
 /**
  * 用 keytool 列出 PKCS12 信任库条目，找出含被拒证书或无法解析 SPKI 的条目别名；列表无法使用时返回失败。
  */
@@ -629,7 +635,7 @@ async function listDeniedStoreAliases(keytool, storePath) {
       ),
   };
 }
-//@ chunk-awy329vy.js:52803-53337 placement
+//@ chunk-9knfmvrf.js:63342-63876 placement
 /**
  * 删除信任库中被拒或不可读的条目（拒绝以 - 开头的别名），删除后复查，仍有剩余则返回失败。
  */
@@ -660,7 +666,7 @@ async function removeDeniedStoreEntries(keytoolPath, storePath) {
       }
     : remaining;
 }
-//@ chunk-awy329vy.js:53337-53472 placement
+//@ chunk-9knfmvrf.js:63876-64011 placement
 function importCertToStore(keytoolPath, storePath, alias, certPath) {
   return runToolCommand(keytoolPath, [
     "-importcert",
@@ -677,7 +683,7 @@ function importCertToStore(keytoolPath, storePath, alias, certPath) {
     CHANGEIT_2,
   ]);
 }
-//@ chunk-awy329vy.js:53472-54136 placement
+//@ chunk-9knfmvrf.js:64011-64675 placement
 /**
  * 判断旧的 JVM 信任库是否应作废（证书包读取失败/变化或库里有被拒条目），从 .bazelrc 中移除指向它的信任块，并在确认是同一文件时删除；返回是否已作废。
  */
@@ -717,7 +723,7 @@ async function cleanupJavaTrust(keytool, storePath, previousState, otherStorePat
   if (isStale && unchanged) await unlink(storePath).catch(() => {});
   return isStale;
 }
-//@ chunk-awy329vy.js:54136-54310 placement
+//@ chunk-9knfmvrf.js:64675-64849 placement
 function splitBazelTrustBlock(text) {
   let index = text.indexOf(CCR_BLOCK_START_MARKER);
   let index_2 = text.indexOf(CCR_BLOCK_END_MARKER);
@@ -731,7 +737,7 @@ function splitBazelTrustBlock(text) {
         rest: text,
       };
 }
-//@ chunk-awy329vy.js:54310-54933 placement
+//@ chunk-9knfmvrf.js:64849-65472 placement
 /**
  * 在 .bazelrc 中写入（替换）agent-proxy 信任块：用 startup --host_jvm_args 传递信任库参数（Bazel 内嵌 JDK 不读 JAVA_TOOL_OPTIONS）；读写失败记入失败列表。
  */
@@ -771,7 +777,7 @@ ${blockText}`
     failures.push("bazelrc_write_failed");
   }
 }
-//@ chunk-awy329vy.js:54933-57088 placement
+//@ chunk-9knfmvrf.js:65472-67627 placement
 async function addToNssDb(dbDirParam, ccrCa, nssDirs, toolBinaryPath, stateDir, failures) {
   let addedCount = 0;
   let directoryCount = 0;
@@ -883,12 +889,12 @@ async function addToNssDb(dbDirParam, ccrCa, nssDirs, toolBinaryPath, stateDir, 
     byRecord: directoryCount,
   };
 }
-//@ chunk-awy329vy.js:57088-57191 placement
+//@ chunk-9knfmvrf.js:67627-67730 placement
 function getNssDbPath(stateDir, caText) {
   let sliced = createHash("sha256").update(caText).digest("hex").slice(0, 16);
   return join(stateDir, `nssdb-${sliced}${NSS_CHECK_STAMP_SUFFIX}`);
 }
-//@ chunk-awy329vy.js:57191-57631 placement
+//@ chunk-9knfmvrf.js:67730-68170 placement
 /**
  * 计算 NSS 证书库的指纹：证书集合、证书包文件大小与修改时间、库目录各文件尾部内容；文件过多或读取失败时返回 undefined。
  */
@@ -915,14 +921,14 @@ async function fingerprintNssDb(dbDir, certs, stampPath) {
   }
   return hash.digest("hex");
 }
-//@ chunk-awy329vy.js:57631-57695 placement
+//@ chunk-9knfmvrf.js:68170-68234 placement
 /**
  * 构造 certutil 检查 NSS 证书条目的参数。
  */
 function certutilAddArgs(dbDir, nickname, certPath) {
   return ["-A", "-d", dbDir, "-t", "C,,", "-n", nickname, "-i", certPath];
 }
-//@ chunk-awy329vy.js:57695-58305 placement
+//@ chunk-9knfmvrf.js:68234-68844 placement
 /**
  * 用 certutil 检查 NSS 库里 agent-proxy 证书条目：数量与信任标志符合预期，且导出的证书集合与期望完全一致。
  */
@@ -955,7 +961,7 @@ async function verifyNssDb(certutil, dbDir, certs) {
     foundCerts.size === expected.size && [...expected].every((expectedCert) => foundCerts.has(expectedCert))
   );
 }
-//@ chunk-awy329vy.js:58305-58573 placement
+//@ chunk-9knfmvrf.js:68844-69112 placement
 /**
  * 为 gsutil 写入 .boto（ca_certificates_file 指向证书包），文件已存在则不覆盖，其他写失败记入失败列表。
  */
@@ -975,7 +981,7 @@ ca_certificates_file = ${caBundlePath}
     failures.push("boto_write_failed");
   }
 }
-//@ chunk-awy329vy.js:58573-59484 placement
+//@ chunk-9knfmvrf.js:69112-70023 placement
 async function writeLoginShellCaEnv(proxyState, profilePath, failures) {
   if (!proxyState.hasSystemCa) {
     await unlink(profilePath).catch(() => {});
@@ -1014,18 +1020,18 @@ async function writeLoginShellCaEnv(proxyState, profilePath, failures) {
     return;
   }
 }
-//@ chunk-awy329vy.js:59484-59569 placement
+//@ chunk-9knfmvrf.js:70023-70108 placement
 /**
  * 生成“未设置则设置并导出环境变量”的 shell 片段。
  */
 function exportEnvIfUnset(name, value) {
   return `if [ -z "\${${name}:-}" ]; then ${name}=${shellQuote(value)}; fi; export ${name}`;
 }
-//@ chunk-awy329vy.js:59569-59621 placement (2.1.88 match: shellQuote, 1)
+//@ chunk-9knfmvrf.js:70108-70160 placement (2.1.88 match: shellQuote, 1)
 function shellQuote(s) {
   return `'${s.replace(/'/g, "'\\''")}'`;
 }
-//@ chunk-awy329vy.js:59621-59703 placement
+//@ chunk-9knfmvrf.js:70160-70242 placement
 /**
  * 从字符串里取第一张 PEM 证书（与首块不同时）。
  */
@@ -1033,11 +1039,11 @@ function firstPemCertAfterDifferent(caText) {
   let certs = caText.match(PEM_CERT_BLOCK_RE) ?? [];
   return certs.length === 2 && certs[1] !== certs[0] ? certs[1] : undefined;
 }
-//@ chunk-awy329vy.js:59703-59800 placement (2.1.88 match: base64URLEncode, 1)
+//@ chunk-9knfmvrf.js:70242-70339 placement (2.1.88 match: base64URLEncode, 1)
 function base64URLEncode(buffer) {
   return Buffer.from(buffer.replace(/-----(?:BEGIN|END) CERTIFICATE-----/g, ""), "base64");
 }
-//@ chunk-awy329vy.js:59800-60056 placement
+//@ chunk-9knfmvrf.js:70339-70595 placement
 /**
  * 以 20 秒超时运行外部命令（保留输出、不使用 cwd），返回 ok、stdout 与失败说明。
  */

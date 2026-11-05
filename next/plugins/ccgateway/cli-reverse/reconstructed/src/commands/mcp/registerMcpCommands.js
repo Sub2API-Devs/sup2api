@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：注册 `claude mcp` 子命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4vq0yytw.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yzwxxgws.js (1)
  * attribution: placement 1
  */
 import { createHelpConfig } from "../../cli/helpFormat.js";
@@ -17,7 +17,7 @@ import { isXaaEnabled } from "../../services/mcp/xaaIdpLogin.js";
 import { registerMcpXaaIdpCommand } from "./xaaIdpCommand.js";
 import { cliOkAfterAnalyticsFlush } from "../../cli/exit.js";
 
-//@ chunk-4vq0yytw.js:20902-25179 placement
+//@ chunk-yzwxxgws.js:22648-26925 placement
 function registerMcpCommands(program, register) {
   let mcpCommand = program
     .command("mcp")

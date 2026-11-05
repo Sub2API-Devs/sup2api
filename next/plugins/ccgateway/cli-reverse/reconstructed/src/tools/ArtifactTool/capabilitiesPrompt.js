@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：能力说明提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hantmvxa.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ne2890fx.js (13)
  * attribution: placement 13
  */
 import { access } from "fs/promises";
@@ -57,7 +57,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { getLiveState } from "../../services/liveReplica/liveReplica.js";
 import { resolveContract, fetchContractPrompt } from "../../services/artifacts/contract.js";
 
-//@ chunk-hantmvxa.js:7689-7828 placement
+//@ chunk-ne2890fx.js:7837-7976 placement
 async function verifyExtractedTypeFiles(typeFiles) {
   if (typeFiles == null) return null;
   let bundledSkillExtractDir = getBundledSkillExtractDir(ARTIFACT_CAPABILITIES);
@@ -68,7 +68,7 @@ async function verifyExtractedTypeFiles(typeFiles) {
     return null;
   }
 }
-//@ chunk-hantmvxa.js:7828-7887 placement
+//@ chunk-ne2890fx.js:7976-8035 placement
 /**
  * 能力提示上下文的空值（非 ccr 托管、无 meta 连接器）。
  */
@@ -78,7 +78,7 @@ var EMPTY_CAPABILITY_PROMPT_CONTEXT = {
   hosted: null,
 };
 var MAX_LISTED_CONNECTORS = 32;
-//@ chunk-hantmvxa.js:7887-7960 placement
+//@ chunk-ne2890fx.js:8035-8108 placement
 /**
  * 拼出「以及另外 N 个 — …」的补充说明。
  */
@@ -86,7 +86,7 @@ function moreCountClause(total, shown, howToSeeMore) {
   let more = total - shown;
   return more > 0 ? `; and ${more} more \u2014 ${howToSeeMore}` : "";
 }
-//@ chunk-hantmvxa.js:7960-9954 placement
+//@ chunk-ne2890fx.js:8108-10102 placement
 /**
  * 生成 MCP 能力说明中关于 Claude 应用托管连接器的段落：列出 id 对应的连接器名称（最多 $e 个），说明 server 参数必须用连接器名称而非 id。
  */
@@ -118,7 +118,7 @@ function describeHostedConnectors(hosted, hasHostedConnectors) {
       : ` ${plural(mapped_3.length, "Connector")} ${mapped_3.join(", ")}${moreCountClause(hosted.undeclarable.length, mapped_3.length, "more like them")} cannot be declared at all until renamed: a manifest \`server\` must be 1\u201364 characters with no control characters, line breaks, unusual spaces or text-direction controls, must not begin or end with a space or invisible character, and must not read as \`host:\` or be shaped like an id or a \`claude_ai_\u2026\`/\`mcp__\u2026\` prefix, so if the page needs one of these, tell the user it must first be renamed in claude.ai (Settings \u2192 Connectors).`;
   return `${opaqueNote}${namedText}${unnamedText}${undeclarableText}`;
 }
-//@ chunk-hantmvxa.js:9954-15689 placement
+//@ chunk-ne2890fx.js:10102-15837 placement
 function buildConnectorCapabilitiesPrompt(connectors, hostedConnectors, hostServers) {
   let { ccrHosted, metaConnector, hosted } = hostedConnectors;
   let groupedConnectors = groupClaudeAiConnectors(connectors);
@@ -162,7 +162,7 @@ function buildConnectorCapabilitiesPrompt(connectors, hostedConnectors, hostServ
       : ` In hermetic/CI sessions where connectors aren't loaded but \`$CLAUDE_CODE_OAUTH_TOKEN\` is set, fetch the list via Bash: \`curl -H 'anthropic-version: 2023-06-01' -H 'anthropic-beta: ${BETA_MCP_SERVERS.header}' -H "Authorization: Bearer $CLAUDE_CODE_OAUTH_TOKEN" ${getOauthConfig().BASE_API_URL}/v1/mcp_servers?limit=1000\`; in that case use each entry's \`display_name\` as the \`server\` value (exact display names are always accepted alongside tool-prefix segments).`;
   return `${mcpIntro}${hostedText}${metaText}${hostText} The manifest's \`tools\` array takes the connector's upstream tool names (as returned by ${listHint}), which can differ from the normalized \`<toolName>\` segment when an upstream name contains \`.\` or spaces. Every \`servers[]\` entry needs a non-empty \`tools\` array naming the tools the page calls \u2014 an empty or omitted \`tools\` list is refused and never means "all tools"; to publish without connector access, leave \`mcp\` out of \`capabilities\` (pass \`capabilities: {}\` to clear a stored declaration) rather than declaring an empty \`servers\` list.${ciNote}`;
 }
-//@ chunk-hantmvxa.js:15689-16936 placement
+//@ chunk-ne2890fx.js:15837-17084 placement
 /**
  * 连接器 schema 指引：类型定义只覆盖调用信封，参数名取自本会话的工具定义，结果形状靠一次安全的真实调用了解，不要把观察到的真实数据嵌入页面；另一条提示用 Read 而非 cat 打开类型文件。
  */
@@ -170,7 +170,7 @@ var CONNECTOR_SCHEMA_GUIDANCE =
   "The type definitions cover only the call envelope, not a connector tool's argument names or result shape. Take argument names from the tool's input schema in this session's own definition of that connector tool, when it is loaded here. Learn a result's shape from one real call of a tool that is safe to run \u2014 never run a write only to learn its result. The published page may also read a connector tool's schema itself with `describeTool(server, tool)` at view time, once the viewer has allowed that connector for the page (viewers without that support reject it \u2014 treat any rejection as no schema available); this session cannot read that answer before publishing, so it is no substitute for a schema read here. If this session has no schema for a tool and cannot safely call it, say so to the user at publish time \u2014 in your reply, not as a note inside the published page \u2014 instead of shipping a guessed shape. Observed response payloads are the user's real data: learn the shape from them, but never embed the observed values in the published page as sample or placeholder data.";
 var TYPE_DEFS_AUTHORITY_NOTE =
   "Open these files with the Read tool rather than `cat`: a file past the Bash tool's inline output limit does not come back in full.";
-//@ chunk-hantmvxa.js:16936-17964 placement
+//@ chunk-ne2890fx.js:17084-18112 placement
 /**
  * "Call contract" 段：指出平台提供的 window.claude 类型定义解压位置，要求写 mcp 调用代码前先读 mcp.d.ts（及通用入口文件）。
  */
@@ -186,10 +186,10 @@ function callContractParagraph(contract) {
   }
   return `**Call contract.** The served \`mcp\` type definitions could not be extracted for this invocation \u2014 invoking this skill again retries. Do not write \`mcp\` capability calls from memory; the served definitions are the authority.${found_2 ? ` \`${bundledSkillExtractDir}/${found_2}\` (how a page reaches any capability on this contract) did extract \u2014 Read it.` : ""} ${CONNECTOR_SCHEMA_GUIDANCE}`;
 }
-//@ chunk-hantmvxa.js:17964-18164 placement
+//@ chunk-ne2890fx.js:18112-18312 placement
 var NO_RUNTIME_CAPABILITIES_NOTE =
   "**No runtime capabilities are available to you for this artifact.** Do not declare or guess any `capabilities` name; if the user asked for one, say it is unavailable and build a static page.";
-//@ chunk-hantmvxa.js:18164-18765 placement
+//@ chunk-ne2890fx.js:18312-18913 placement
 /**
  * "Available capabilities" 行：列出可声明的能力名，以及每个页面内置、无需声明的核心能力。
  */
@@ -201,13 +201,13 @@ function availableCapabilitiesLine(roster, core) {
   let names_2 = roster.filter((name) => !core.includes(name));
   return `**Available capabilities:** ${names_2.length > 0 ? `${joinNames(names_2)} \u2014 the complete set of capability names you may declare; ` : "none to declare for this user; "}built in on every page, called without declaring (never pass these in \`capabilities\`): ${joinNames(names)}. Anything not listed is unavailable to this user.`;
 }
-//@ chunk-hantmvxa.js:18765-20295 placement
+//@ chunk-ne2890fx.js:18913-20443 placement
 /**
  * artifact-capabilities 技能的开头说明：页面可声明运行时能力，省略/空对象/非空对象三种声明语义，contract 版本升级与固定，以及页面自我重新发布时必须使用的文档骨架。
  */
 var CAPABILITIES_SKILL_HEADER =
   "# Artifact runtime capabilities\n\nA published Artifact page can declare **runtime capabilities** \u2014 abilities the claude.ai viewer grants the page at open time \u2014 by passing `capabilities: {name: config}` to the Artifact tool. The control plane is the authority on valid names and config shapes. Declaration gestures: **omitting** `capabilities` on a redeploy carries the stored declaration forward unchanged (and preserves the artifact's stored contract pin); an **empty object** `{}` is the explicit clear-all; a **non-empty object** is a full-set declaration (anything stored but not restated is revoked). Moving a republished artifact's runtime version is a deliberate gesture \u2014 pass `contract: 'latest'` to upgrade, or a specific version to pin or roll back \u2014 never a side effect of editing.\n\n**A page that republishes itself** through the `artifact` capability sends its whole document in exactly the shape the Artifact tool publishes, so a later publish from the tool recognizes and replaces the skeleton instead of nesting it: `<!doctype html><html><head><meta charset=utf8><meta name=viewport content=\"width=device-width,initial-scale=1,viewport-fit=cover\"><style>` the same small reset the tool's description names `</style></head><body>` \u2014 no whitespace between those tags and nothing else in the head \u2014 then the page content exactly as it was written for the tool (its `<title>` and `<style>` first, inside the body, regenerated from the page's state), then `</body></html>`.";
-//@ chunk-hantmvxa.js:20295-22072 placement
+//@ chunk-ne2890fx.js:20443-22220 placement
 /**
  * 拼装 artifact-capabilities 技能正文：头部说明 + 可用能力清单 + 合约版本 pin 提示 + 各能力的提示词正文 + MCP 合约/连接器段；取不到能力清单或为空时给出对应说明。
  */
@@ -276,14 +276,14 @@ ${NO_RUNTIME_CAPABILITIES_NOTE}`,
 
 `);
 }
-//@ chunk-hantmvxa.js:22072-22112 placement
+//@ chunk-ne2890fx.js:22220-22260 placement
 /**
  * 当前是否可展示能力提示（Artifact 工具可用、开关打开且未被隐藏）。
  */
 function isCapabilitiesPromptAvailable() {
   return isArtifactToolEnabled() && artifactCapabilitiesPromptGateOpen() && !isBuiltInArtifactHiddenForMcp();
 }
-//@ chunk-hantmvxa.js:22112-25849 placement
+//@ chunk-ne2890fx.js:22260-25997 placement
 function createCapabilityProbeCache() {
   let byVersion = new Map();
   let unpinnedSlugs = new Set();

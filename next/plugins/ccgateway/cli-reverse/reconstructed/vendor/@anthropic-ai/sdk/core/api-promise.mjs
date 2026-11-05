@@ -1,14 +1,14 @@
 /**
  * @anthropic-ai/sdk/core/api-promise.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (1)
+ * pieces: chunk-vn3g7zt8.js (1)
  * attribution: esm-layout 1
  */
 import { defaultParseResponse, addResponseIDs } from "../internal/parse.mjs";
 import { __classPrivateFieldSet, __classPrivateFieldGet } from "../internal/tslib.mjs";
 
-//@ chunk-hwmsct5x.js:36448-37300 esm-layout
+//@ chunk-vn3g7zt8.js:36819-37671 esm-layout
 var _APIPromise_client;
 var APIPromise = (() => {
   class APIPromise extends Promise {

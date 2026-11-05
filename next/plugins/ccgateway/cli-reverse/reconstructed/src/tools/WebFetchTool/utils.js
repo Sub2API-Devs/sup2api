@@ -3,20 +3,19 @@
  *
  * WebFetch 抓取实现：URL 校验、域名预检、带重定向检查的 GET、HTML→markdown、缓存、CCR 代理、次级模型调用；混入多处他用的 URL 辅助函数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/WebFetchTool/utils.ts
- * pieces: chunk-1wpnxx5r.js (1), chunk-2a8yx6fc.js (1), chunk-4j20twbf.js (1), chunk-aepeg2w5.js (1), chunk-e6aww6q8.js (36)
- * attribution: fingerprint 11, placement 3, sole-consumer 1, affinity 2, layout 13, facade-majority 10
+ * pieces: chunk-56df17sz.js (1), chunk-5xgkngpb.js (37), chunk-exfmq47h.js (1)
+ * attribution: fingerprint 10, placement 3, sole-consumer 1, affinity 2, layout 12, facade-majority 11
  */
 import { randomUUID } from "crypto";
-import { getCcrProxyTargetUrl, BRIDGE_HOSTS, BRIDGE_DEVICES_PATH } from "../../services/mcp/ccrMcpUrls.js";
 import {
   fetchViaCcrWorker,
   WORKER_FETCH_RESPONSE_SCHEMA,
   getWebFetchDeadlineMs,
   canFetchViaCcrWorker,
 } from "./ccrWorkerFetch.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { HOSTNAME_ONLY, PATH_PREFIXES, PATH_RESTRICTED_HOSTS, GITHUB_COM_ANTHROPICS } from "./preapproved.js";
 import { WEBFETCH, webFetchCacheTtlMs, makeSecondaryModelPrompt, UNTRUSTED_CONTENT } from "./prompt.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
@@ -26,7 +25,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { createCombinedAbortSignal } from "../../utils/combinedAbortSignal.js";
 import { axios_default } from "../../../vendor/axios/dist/esm/axios.js";
 import { claudeCodeUserAgent, getWebFetchUserAgent } from "../../utils/http.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { isBlockedByProxyAllowlist, isAllowlistBlockedResponse } from "../../utils/sandbox/proxyDenial.js";
 import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import {
@@ -51,21 +50,7 @@ import { asSystemPrompt } from "../../utils/systemPromptType.js";
 import { extractTextContent_2 } from "../../utils/messages.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1wpnxx5r.js:15809-15931 fingerprint (2.1.88 match: isPreapprovedUrl, 1)
-/**
- * 解包 CCR 代理 URL 后判断是否为某个已知端点（主机在集合内且路径相符）；被 MCP 配置使用。
- */
-function isKnownProxyEndpointUrl(url) {
-  let ccrProxyTargetUrl = getCcrProxyTargetUrl(url);
-  if (!ccrProxyTargetUrl) return false;
-  try {
-    let parsedUrl = new URL(ccrProxyTargetUrl);
-    return BRIDGE_HOSTS.has(parsedUrl.hostname) && parsedUrl.pathname === BRIDGE_DEVICES_PATH;
-  } catch {
-    return false;
-  }
-}
-//@ chunk-aepeg2w5.js:251114-251301 fingerprint (2.1.88 match: isPermittedRedirect, 0.842)
+//@ chunk-exfmq47h.js:260628-260815 fingerprint (2.1.88 match: isPermittedRedirect, 0.842)
 /**
  * 只有 https、无凭证、无端口的 URL 才返回主机名（去掉末尾点），否则 undefined。
  */
@@ -86,11 +71,11 @@ function getHttpsHostname(canonical) {
     return;
   return parsedUrl.hostname.replace(/\.$/, "");
 }
-//@ chunk-e6aww6q8.js:2155694-2156079 placement
+//@ chunk-5xgkngpb.js:2209082-2209508 placement
 /**
  * 经云会话 worker 的 web-fetch 路由代抓 URL，把响应映射为正文、内容类型、最终地址与抓取时间。
  */
-async function fetchViaWorkerProxy(session, url, signal) {
+async function fetchViaWorkerProxy(session, url, signal, autoModeServerCleared = false) {
   let viaCcrWorker = await fetchViaCcrWorker({
     session,
     route: "web-fetch",
@@ -99,6 +84,9 @@ async function fetchViaWorkerProxy(session, url, signal) {
     targetErrorLabel: "fetch error",
     body: {
       url,
+      ...(autoModeServerCleared && {
+        auto_mode_server_cleared: true,
+      }),
     },
     schema: WORKER_FETCH_RESPONSE_SCHEMA(),
     signal,
@@ -112,7 +100,7 @@ async function fetchViaWorkerProxy(session, url, signal) {
     retrievedAt: Date.parse(viaCcrWorker.data.retrieved_at ?? "") || undefined,
   };
 }
-//@ chunk-e6aww6q8.js:2156079-2156170 placement
+//@ chunk-5xgkngpb.js:2209508-2209599 placement
 /**
  * WebFetch 输入里已废弃的字段名（旧版模型取用参数）。
  */
@@ -121,9 +109,9 @@ var RETIRED_INPUT_FIELDS = [
   "html_extraction_method",
   "web_fetch_pdf_extract_text",
 ];
-//@ chunk-e6aww6q8.js:2156170-2156378 placement
+//@ chunk-5xgkngpb.js:2209599-2209807 placement
 function stripRetiredInputFields(input) {
-  if (!isPlainObject_5(input)) return null;
+  if (!isPlainObject_6(input)) return null;
   let filtered = RETIRED_INPUT_FIELDS.filter((fieldName) => Object.hasOwn(input, fieldName));
   if (filtered.length === 0) return null;
   let cleaned = {
@@ -135,13 +123,13 @@ function stripRetiredInputFields(input) {
     shapeClass: filtered.map((fieldName) => `drop_${fieldName}`).join(","),
   };
 }
-//@ chunk-e6aww6q8.js:2167829-2167993 sole-consumer
+//@ chunk-5xgkngpb.js:2221266-2221430 sole-consumer
 function isAllowedAnthropicRepoPath(hostname, pathname) {
   return hostname === "raw.githubusercontent.com"
     ? /^\/[^/]+\/[^/]+\/refs\/heads\/main\/./.test(pathname)
     : /^\/[^/]+\/[^/]+(\/?|\/(tree|blob)\/main(\/.*)?)$/.test(pathname);
 }
-//@ chunk-e6aww6q8.js:2167993-2168190 affinity
+//@ chunk-5xgkngpb.js:2221430-2221627 affinity
 /**
  * 预批准判断核心：HOSTNAME_ONLY 直接放行；PATH_PREFIXES 要求路径等于或在前缀之下，且拒绝 %2f/%5c/%2e 编码；github.com 与 raw.githubusercontent.com 还要求是 anthropics 组织或仓库根/main 分支路径。
  */
@@ -160,14 +148,14 @@ function isPreapprovedHostPath(hostname, pathname) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:2168190-2168311 fingerprint (2.1.88 match: DomainBlockedError, 1)
+//@ chunk-5xgkngpb.js:2221627-2221748 fingerprint (2.1.88 match: DomainBlockedError, 1)
 class DomainBlockedError extends Error {
   constructor(domain) {
     super(`Claude Code is unable to fetch from ${domain}`);
     this.name = "DomainBlockedError";
   }
 }
-//@ chunk-e6aww6q8.js:2168311-2168933 fingerprint (2.1.88 match: DomainCheckFailedError, 0.599)
+//@ chunk-5xgkngpb.js:2221748-2222370 fingerprint (2.1.88 match: DomainCheckFailedError, 0.599)
 class DomainCheckFailedError extends Error {
   code;
   constructor(domain, code) {
@@ -180,7 +168,7 @@ class DomainCheckFailedError extends Error {
     this.code = code;
   }
 }
-//@ chunk-e6aww6q8.js:2168933-2169139 fingerprint (2.1.88 match: EgressBlockedError, 0.973)
+//@ chunk-5xgkngpb.js:2222370-2222576 fingerprint (2.1.88 match: EgressBlockedError, 0.973)
 class EgressBlockedError extends Error {
   domain;
   constructor(hostname) {
@@ -195,14 +183,14 @@ class EgressBlockedError extends Error {
     this.name = "EgressBlockedError";
   }
 }
-//@ chunk-e6aww6q8.js:2169139-2169257 layout
+//@ chunk-5xgkngpb.js:2222576-2222694 layout
 class TooManyRedirectsError extends Error {
   constructor(maxRedirects) {
     super(`Too many redirects (exceeded ${maxRedirects})`);
     this.name = "TooManyRedirectsError";
   }
 }
-//@ chunk-e6aww6q8.js:2169257-2169360 facade-majority
+//@ chunk-5xgkngpb.js:2222694-2222797 facade-majority
 /**
  * WebFetch 传输层错误（带 code，如 EDEADLINE），供上层区分超时与其他 axios 错误。
  */
@@ -214,9 +202,9 @@ class WebFetchTransportError extends Error {
     this.code = code;
   }
 }
-//@ chunk-e6aww6q8.js:2169360-2169377 layout
+//@ chunk-5xgkngpb.js:2222797-2222814 layout
 var WEB_FETCH_CACHE_MAX_BYTES = 52428800;
-//@ chunk-e6aww6q8.js:2169377-2169747 facade-majority
+//@ chunk-5xgkngpb.js:2222814-2223184 facade-majority
 /**
  * WebFetch 的 toolState 缓存槽：urls（按字节计的 LRU，上限 50MB，TTL 由 E7o() 决定，写入后定时 purgeStale）、domainChecks（128 项/5 分钟，域名预检通过的结果）、targetFailures（1024 项/5 分钟，目标站失败记忆）。
  */
@@ -249,9 +237,9 @@ class WebFetchCache {
     this.targetFailures.clear();
   }
 }
-//@ chunk-e6aww6q8.js:2169747-2169755 layout
+//@ chunk-5xgkngpb.js:2223184-2223192 layout
 var turndownServicePromise;
-//@ chunk-e6aww6q8.js:2169755-2169904 layout
+//@ chunk-5xgkngpb.js:2223192-2223341 layout
 function getTurndownService() {
   return (turndownServicePromise ??= import("../../../vendor/turndown/lib/default.lazy.js").then((m) => {
     let service = new m.default();
@@ -259,7 +247,7 @@ function getTurndownService() {
     return service;
   }));
 }
-//@ chunk-e6aww6q8.js:2169904-2169977 layout
+//@ chunk-5xgkngpb.js:2223341-2223414 layout
 var MAX_URL_LENGTH = 2000;
 var MAX_HTTP_CONTENT_LENGTH = 10485760;
 var FETCH_TIMEOUT_MS = 60000;
@@ -267,7 +255,7 @@ var DOMAIN_CHECK_TIMEOUT_MS = 1e4;
 var DOMAIN_CHECK_DEADLINE_MS = 30000;
 var MAX_REDIRECTS = 10;
 var MAX_HTML_FOR_MARKDOWN = 1048576;
-//@ chunk-e6aww6q8.js:2169977-2170242 facade-majority
+//@ chunk-5xgkngpb.js:2223414-2223679 facade-majority
 /**
  * HTML 转 markdown：懒加载 turndown（移除 style/script/noscript/iframe），超过 1MB 先截断并附注；失败时记录错误并返回原 HTML。
  */
@@ -289,7 +277,7 @@ async function convertHtmlToMarkdown(htmlContent) {
     return htmlContent;
   }
 }
-//@ chunk-e6aww6q8.js:2170242-2170329 facade-majority (2.1.88 match: isPreapprovedUrl, 1)
+//@ chunk-5xgkngpb.js:2223679-2223766 facade-majority (2.1.88 match: isPreapprovedUrl, 1)
 /**
  * URL 是否在预批准文档站列表内（主机名完全匹配或主机+路径前缀匹配）；解析失败为 false。
  */
@@ -301,7 +289,7 @@ function isPreapprovedUrl(url) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:2170329-2170495 layout (2.1.88 match: validateURL, 1)
+//@ chunk-5xgkngpb.js:2223766-2223932 fingerprint (2.1.88 match: validateURL, 1)
 /**
  * URL 基本校验：长度 ≤2000、可解析、无用户名密码、主机名至少两段。
  */
@@ -317,7 +305,7 @@ function validateURL(url) {
   if (parsed.hostname.split(".").length < 2) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:2170495-2171248 fingerprint (2.1.88 match: checkDomainBlocklist, 0.672)
+//@ chunk-5xgkngpb.js:2223932-2224685 fingerprint (2.1.88 match: checkDomainBlocklist, 0.671)
 /**
  * 域名预检：GET api.anthropic.com/api/web/domain_info?domain=…（10 秒超时，总 30 秒），can_fetch=true 记入 domainChecks 缓存；返回 allowed/blocked/check_failed（含 HTTP 状态，429 会被翻译成限流错误）。
  */
@@ -374,7 +362,7 @@ async function checkDomainBlocklist(domain, cache, signal) {
     combinedAbortSignal.cleanup();
   }
 }
-//@ chunk-e6aww6q8.js:2171248-2171574 layout
+//@ chunk-5xgkngpb.js:2224685-2225011 layout
 /**
  * 判断是否可以自动跟随重定向：协议、端口相同，无凭证，去 www 后主机相同；若原 URL 在预批准路径内，目标也必须在预批准路径内。
  */
@@ -384,7 +372,7 @@ function isPermittedRedirect(originalUrl, redirectUrl) {
     let parsedRedirect = new URL(redirectUrl);
     if (parsedRedirect.protocol !== parsedOriginal.protocol) return false;
     let bareHost = stripWww(parsedOriginal.hostname);
-    let originalHosts = uniq([parsedOriginal.hostname, bareHost, `www.${bareHost}`]);
+    let originalHosts = normalizeCaseForComparison_2([parsedOriginal.hostname, bareHost, `www.${bareHost}`]);
     if (
       originalHosts.some((host) => isPreapprovedHostPath(host, parsedOriginal.pathname)) &&
       !originalHosts.some((host) => isPreapprovedHostPath(host, parsedRedirect.pathname))
@@ -397,16 +385,16 @@ function isPermittedRedirect(originalUrl, redirectUrl) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:2171574-2171620 layout
+//@ chunk-5xgkngpb.js:2225011-2225057 layout
 function stripWww(hostname) {
   return hostname.replace(/^www\./, "");
 }
-//@ chunk-e6aww6q8.js:2171620-2171659 layout
+//@ chunk-5xgkngpb.js:2225057-2225096 layout
 var REDIRECT_STATUS_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:2171620", () => {
+deferInit("chunk-5xgkngpb.js:2225057", () => {
   REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
 });
-//@ chunk-e6aww6q8.js:2171659-2171900 layout
+//@ chunk-5xgkngpb.js:2225096-2225337 layout
 /**
  * 给抓取加整体 deadline（nte() 毫秒，0 表示不限），调用 getWithPermittedRedirects。
  */
@@ -438,7 +426,7 @@ async function getWithDeadline(upgradedUrl, signal, isPermittedRedirect, depth =
     combinedAbortSignal.cleanup();
   }
 }
-//@ chunk-e6aww6q8.js:2171900-2173370 fingerprint (2.1.88 match: getWithPermittedRedirects, 0.534)
+//@ chunk-5xgkngpb.js:2225337-2226807 fingerprint (2.1.88 match: getWithPermittedRedirects, 0.534)
 /**
  * axios GET（不自动跟随重定向、arraybuffer、10MB 上限、60 秒超时、Accept 优先 markdown）。2xx 返回响应；3xx 若 redirectChecker 允许则递归（最多 10 次），否则返回 {type:"redirect"}；出口代理拦截抛 EgressBlockedError；其余返回 {type:"http_error", retryAfter?}。云会话中 ENOTFOUND 给出"需在网络设置放行"的专用提示。
  */
@@ -508,20 +496,20 @@ async function getWithPermittedRedirects(url, signal, redirectChecker, depth, de
       }),
   };
 }
-//@ chunk-e6aww6q8.js:2173370-2173424 fingerprint (2.1.88 match: isRedirectInfo, 1)
+//@ chunk-5xgkngpb.js:2226807-2226861 fingerprint (2.1.88 match: isRedirectInfo, 1)
 function isRedirectInfo(response) {
   return "type" in response && response.type === "redirect";
 }
-//@ chunk-e6aww6q8.js:2173424-2173480 layout
+//@ chunk-5xgkngpb.js:2226861-2226917 layout
 function isHttpErrorInfo(response) {
   return "type" in response && response.type === "http_error";
 }
-//@ chunk-e6aww6q8.js:2173480-2174461 layout
+//@ chunk-5xgkngpb.js:2226917-2227898 layout
 var PROXY_ERROR_EVENT_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TARGET_ERROR_EVENT_CODES;
 var REMEMBERED_TARGET_ERRORS;
 var SITE_ANSWER_ERRORS;
-deferInit("chunk-e6aww6q8.js:2173480", () => {
+deferInit("chunk-5xgkngpb.js:2226917", () => {
   PROXY_ERROR_EVENT_CODES = {
     transport: "web_fetch_proxy_transport",
     deadline: "web_fetch_proxy_deadline",
@@ -554,9 +542,9 @@ deferInit("chunk-e6aww6q8.js:2173480", () => {
   ];
   SITE_ANSWER_ERRORS = ["url_not_found", "client_error", "robots_disallowed"];
 });
-//@ chunk-e6aww6q8.js:2174461-2174561 facade-majority
+//@ chunk-5xgkngpb.js:2227898-2227998 facade-majority
 let SiteAnswerError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2174461", () => {
+deferInit("chunk-5xgkngpb.js:2227898", () => {
   SiteAnswerError = class SiteAnswerError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -567,19 +555,31 @@ deferInit("chunk-e6aww6q8.js:2174461", () => {
     }
   };
 });
-//@ chunk-e6aww6q8.js:2174561-2174614 facade-majority
+//@ chunk-5xgkngpb.js:2227998-2228051 facade-majority
 function siteAnswerAsValue(error) {
   if (error instanceof SiteAnswerError) return error;
   throw error;
 }
-//@ chunk-e6aww6q8.js:2174614-2174673 facade-majority (2.1.88 match: getCurrentRepoHttpsUrl, 0.803)
+//@ chunk-5xgkngpb.js:2228051-2228110 facade-majority (2.1.88 match: getCurrentRepoHttpsUrl, 0.805)
 /**
  * 把 http:// 改写为 https://。
  */
 function upgradeToHttps(url) {
   return url.replace(/^http:\/\//i, "https://");
 }
-//@ chunk-e6aww6q8.js:2174673-2175050 layout
+//@ chunk-5xgkngpb.js:2228110-2228309 facade-majority
+function serverClearedUrl(permissionPhase) {
+  let pipeline = permissionPhase?.pipeline;
+  if (pipeline?.result.behavior !== "allow") return;
+  let decisionReason = pipeline.result.decisionReason;
+  let url = pipeline.input.url;
+  return decisionReason?.type === "classifier" &&
+    decisionReason.serverCleared === true &&
+    typeof url === "string"
+    ? url
+    : undefined;
+}
+//@ chunk-5xgkngpb.js:2228309-2228686 layout
 /**
  * 把 CCR 代理/目标站错误映射成遥测用错误码（web_fetch_proxy_* / web_fetch_target_*）。
  */
@@ -596,7 +596,7 @@ function proxyErrorEventCode(proxyResult) {
     ? PROXY_ERROR_EVENT_CODES.unavailable
     : PROXY_ERROR_EVENT_CODES.rejected;
 }
-//@ chunk-e6aww6q8.js:2175050-2178353 facade-majority (2.1.88 match: getURLMarkdownContent, 0.463)
+//@ chunk-5xgkngpb.js:2228686-2232020 facade-majority (2.1.88 match: getURLMarkdownContent, 0.462)
 /**
  * 抓取并转 markdown：URL 校验（无点主机名提示改用 curl）→ urls 缓存命中直接返回 → 有 CCR web-fetch 代理时走代理（处理 provenance_denied、目标站失败记忆、代理报告的最终 URL 是否允许）→ claude-code-server 无代理时报错 → 直连：http 升级 https、域名预检（settings.skipWebFetchPreflight 可跳过）、带 deadline 抓取、二进制内容另存文件、HTML 转 markdown，写入缓存。
  */
@@ -608,6 +608,7 @@ async function getURLMarkdownContent(
   persistedToolResultFiles,
   storage,
   timing,
+  priorUrl,
 ) {
   if (!validateURL(url)) {
     let hostname = URL.parse(url)?.hostname;
@@ -640,7 +641,12 @@ async function getURLMarkdownContent(
   if (canFetchViaCcrWorker(session)) {
     let httpsUrl = upgradeToHttps(url);
     let markExternal = timing?.mark("external");
-    let proxyResult = await fetchViaWorkerProxy(session, httpsUrl, abortHolder.signal).finally(markExternal);
+    let proxyResult = await fetchViaWorkerProxy(
+      session,
+      httpsUrl,
+      abortHolder.signal,
+      priorUrl !== undefined && upgradeToHttps(priorUrl) === httpsUrl,
+    ).finally(markExternal);
     cache.targetFailures.delete(httpsUrl);
     if (!proxyResult.ok) {
       if (proxyResult.source === "target" && proxyResult.errorType === PROVENANCE_REQUIRED)
@@ -812,14 +818,14 @@ async function getURLMarkdownContent(
   cache.setUrl(url, entry, contentBytes);
   return entry;
 }
-//@ chunk-e6aww6q8.js:2178353-2178386 facade-majority
+//@ chunk-5xgkngpb.js:2232020-2232052 facade-majority
 /**
  * 把 markdown 截到 Tnr 字符上限（次级模型输入上限）。
  */
 function secondaryModelHead(text) {
   return truncateToLength(text, MAX_REJECT_KEY_CHARS);
 }
-//@ chunk-e6aww6q8.js:2178386-2179237 facade-majority (2.1.88 match: applyPromptToMarkdown, 0.616)
+//@ chunk-5xgkngpb.js:2232052-2232905 facade-majority (2.1.88 match: applyPromptToMarkdown, 0.616)
 /**
  * 用次级模型（querySource "web_fetch_apply"，空 system prompt）按用户 prompt 处理页面 markdown；超长截断；可选用随机 fence 包裹不可信内容；返回首个文本块，API 错误抛 TelemetrySafeError。
  */
@@ -882,10 +888,10 @@ async function applyPromptToMarkdown(prompt, markdown, options) {
   }
   return "No response from model";
 }
-//@ chunk-e6aww6q8.js:2313429-2313452 affinity
+//@ chunk-5xgkngpb.js:2368829-2368852 affinity
 var DOMAIN_CACHE_MAX = 500;
 var DOMAIN_CACHE_TTL_MS = 300000;
-//@ chunk-e6aww6q8.js:2313452-2313500 fingerprint (2.1.88 match: DOMAIN_CHECK_CACHE, 1)
+//@ chunk-5xgkngpb.js:2368852-2368900 fingerprint (2.1.88 match: DOMAIN_CHECK_CACHE, 1)
 /**
  * 创建 500 项、5 分钟 TTL 的 LRU（域名类检查缓存）。
  */
@@ -895,51 +901,27 @@ function createDomainCache() {
     ttl: DOMAIN_CACHE_TTL_MS,
   });
 }
-//@ chunk-4j20twbf.js:1240-1330 fingerprint (2.1.88 match: URL_CACHE, 0.376)
+//@ chunk-56df17sz.js:1296-1386 fingerprint (2.1.88 match: URL_CACHE, 0.376)
 /**
  * 大小与待清理量是否都在上限内。
  */
 function isWithinSanitizeBudget(budget) {
   return budget.size <= budget.maxSize && budget.sixteenthsToSanitize <= budget.maxSixteenthsToSanitize;
 }
-//@ chunk-2a8yx6fc.js:24186-24598 fingerprint (2.1.88 match: validateURL, 1)
-/**
- * 从 URL 安全地提取主机名：防止 user@host 形式伪装，非法时返回 null。
- */
-function extractSafeHostname(url) {
-  let replaced = url.replace(/^https?:\/\//i, "");
-  if (!replaced.includes("@")) return replaced.match(/^([a-zA-Z0-9.][a-zA-Z0-9.-]*)/)?.[1] ?? null;
-  let parsed;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return null;
-  }
-  if (parsed.username !== "" || parsed.password !== "") {
-    let match = replaced.match(/[/?#]/);
-    if (
-      (match?.index === undefined ? "" : replaced.slice(match.index + 1)).includes("@") ||
-      !parsed.hostname.includes(".")
-    )
-      return null;
-  }
-  return parsed.hostname && /^[a-zA-Z0-9.][a-zA-Z0-9.-]*$/.test(parsed.hostname) ? parsed.hostname : null;
-}
 export {
-  isKnownProxyEndpointUrl,
-  extractSafeHostname,
-  isWithinSanitizeBudget,
   convertHtmlToMarkdown,
   applyPromptToMarkdown,
-  getHttpsHostname,
+  isWithinSanitizeBudget,
   secondaryModelHead,
   stripRetiredInputFields,
   isPreapprovedUrl,
   WebFetchCache,
   upgradeToHttps,
   getURLMarkdownContent,
+  serverClearedUrl,
   siteAnswerAsValue,
   SiteAnswerError,
   WebFetchTransportError,
   createDomainCache,
+  getHttpsHostname,
 };

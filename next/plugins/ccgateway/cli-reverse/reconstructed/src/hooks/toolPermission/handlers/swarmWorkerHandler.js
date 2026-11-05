@@ -3,9 +3,9 @@
  *
  * 队友（swarm worker）权限：通过 mailbox 把请求转发给领导，等待批准/拒绝。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/toolPermission/handlers/swarmWorkerHandler.ts
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { isAgentSwarmsEnabled } from "../../../utils/agentSwarmsEnabled.js";
@@ -17,12 +17,12 @@ import {
 import { createResolveOnce } from "../PermissionContext.js";
 import { registerPermissionCallback, unregisterPermissionCallback } from "../../useSwarmPermissionPoller.js";
 import { stableHashOfJson } from "../../../utils/stableHash.js";
-import { identity as identity_3 } from "../../../tools/REPLTool/constants.js";
+import { shownToolName } from "../../../tools/REPLTool/constants.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../../services/analytics/featureTelemetry.js";
 import { logError } from "../../../utils/log.js";
 import { toError } from "../../../utils/errors.js";
 
-//@ chunk-18hwfzwa.js:1645261-1647210 fingerprint (2.1.88 match: handleSwarmWorkerPermission, 0.64)
+//@ chunk-czq1j3j2.js:1690174-1692123 fingerprint (2.1.88 match: handleSwarmWorkerPermission, 0.627)
 /**
  * 队友权限：把请求写入领导的 mailbox（permission_swarm_forward），注册回调等待 useSwarmPermissionPoller 收到回复；写入失败时提示无法送达。
  */
@@ -108,7 +108,7 @@ async function handleSwarmWorkerPermission(params) {
       ctx.toolUseContext.setAppState((prev) => ({
         ...prev,
         pendingWorkerRequest: {
-          toolName: identity_3(ctx.tool.name),
+          toolName: shownToolName(ctx.tool.name),
           toolUseId: ctx.toolUseID,
           description,
         },

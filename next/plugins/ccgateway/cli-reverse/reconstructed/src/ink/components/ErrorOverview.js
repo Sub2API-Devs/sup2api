@@ -3,12 +3,13 @@
  *
  * 渲染出错时的错误面板（消息、精简后的调用栈与源码片段）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/components/ErrorOverview.tsx
- * pieces: chunk-bzr73sfg.js (4)
- * attribution: sole-consumer 2, affinity 1, fingerprint 1
+ * pieces: chunk-2avr6cej.js (3)
+ * attribution: placement 1, affinity 1, fingerprint 1
  */
 import { readFileSync } from "fs";
+import { MAX_ERROR_LENGTH, stripFileUrlPrefix } from "../../components/messages/UserResourceUpdateMessage.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { textColorizer, BaseText } from "./Text.js";
@@ -19,15 +20,12 @@ import {
   jsxProd_default,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 
-//@ chunk-bzr73sfg.js:227142-227193 sole-consumer
+//@ chunk-2avr6cej.js:226737-226788 placement
 function isTooLongError(line) {
   let { value } = line;
   return value.length > MAX_ERROR_LENGTH;
 }
-//@ chunk-bzr73sfg.js:227193-227254 sole-consumer (2.1.88 match: formatUri, 1)
-var stripFileUrlPrefix = (file) => file?.replace(`file://${process.cwd()}/`, "");
-var MAX_ERROR_LENGTH = 200;
-//@ chunk-bzr73sfg.js:227254-227366 affinity
+//@ chunk-2avr6cej.js:226849-226961 affinity
 /**
  * 堆栈帧路径是否是打包内部路径（$bunfs、~BUN、/snapshot/、node:），这些不读源码。
  */
@@ -39,7 +37,7 @@ function isInternalStackPath(path) {
     path.startsWith("node:")
   );
 }
-//@ chunk-bzr73sfg.js:227366-229377 fingerprint (2.1.88 match: ErrorOverview, 0.868)
+//@ chunk-2avr6cej.js:226961-228972 fingerprint (2.1.88 match: ErrorOverview, 0.869)
 /**
  * 渲染出错时的错误页：ERROR 标题与消息、出错位置、读源码显示附近几行（超长行不显示）、解析后的堆栈。
  */

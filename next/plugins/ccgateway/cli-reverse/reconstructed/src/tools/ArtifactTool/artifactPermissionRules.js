@@ -3,25 +3,28 @@
  *
  * 2.1.316 新增：为 artifacts MCP 工具（runner/laptop）安装权限与调用包装；artifact MCP 动作到目标字段的映射表等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7zr1t9gr.js (1), chunk-p5cstt88.js (49)
- * attribution: placement 50
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4wmswyss.js (1), chunk-f2b3q7t8.js (55)
+ * attribution: placement 55, layout 1
  */
 import { MCP_SERVER_NOT_ALLOWED_MESSAGE, artifactsMcpClient } from "../../services/mcp/client.js";
 import {
   getContentRulesMapForToolName,
   getDenyRuleForTool,
-  getAskRuleForTool,
+  findAskRuleForTool,
   matchToolRule,
-  getAskRules,
-  getDenyRules,
+  askedBashRules,
+  deniedBashRules,
   toolMatchesRule,
   applyAskRuleOverride,
   toolAlwaysAllowedRule,
 } from "../../utils/permissions/permissions.js";
 import { ARTIFACT_TOOL_NAME, getArtifactPublishStubDir, ArtifactInputError } from "./constants.js";
-import { matchWildcard } from "../../utils/permissions/permissionRuleParser.js";
+import {
+  matchWildcard,
+  permissionRuleValueFromString,
+} from "../../utils/permissions/permissionRuleParser.js";
 import {
   regExp_2 as regExp_2_2,
   regExp as regExp_4,
@@ -78,7 +81,6 @@ import {
   newArtifactIsPersonsPrivate,
   recordUnaskedRoutineFirstPublish,
 } from "./artifactAccessClasses.js";
-import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFlag.js";
 import { getSettingSourceDisplayNameLowercase } from "../../utils/settings/constants.js";
 import {
   anyAutoReactNoticePending,
@@ -103,7 +105,7 @@ import {
 import { getLiveState } from "../../services/liveReplica/liveReplica.js";
 import {
   isCreateAction,
-  PUBLISH_ACTION_NAMES,
+  ACTION_WITH_RESERVED_MINT,
   shareFieldsFromResult,
   publishedArtifactFromResult,
   commentsFromResult,
@@ -125,7 +127,7 @@ import { isStrictHumanTurn } from "../../utils/turnOrigin.js";
 import { ownAccountUuid, ownPrincipalTokens } from "../../services/artifacts/comments/commentAuthorship.js";
 import { ANTHROPIC_FRAMECREATECONFIRMED } from "../../services/artifacts/frameApi.js";
 
-//@ chunk-7zr1t9gr.js:360-667 placement
+//@ chunk-4wmswyss.js:360-667 placement
 /**
  * 判断错误是否是 Artifact 服务返回的 403 禁止访问错误。
  */
@@ -141,11 +143,11 @@ function isArtifactForbiddenError(error) {
         typeof error.telemetryMessage === "string" &&
         error.telemetryMessage.startsWith("SdkHttpError ");
 }
-//@ chunk-p5cstt88.js:6973-7175 placement
+//@ chunk-f2b3q7t8.js:1574-1776 placement
 var DATA_RULE_FIELDS = new Set(["db_op", "collection", "doc_id", "query", "data", "writes", "as_level"]);
 var ENDPOINT_RULE_FIELDS = new Set(["method", "path", "body", "body_file", "mode", "script"]);
 var DATA_RULE_ACTIONS = ["read_db", "write_db", "call_endpoint", "run_script"];
-//@ chunk-p5cstt88.js:7175-7391 placement
+//@ chunk-f2b3q7t8.js:1776-1992 placement
 function findDataContentRule(toolName, context) {
   for (let [ruleContent, rule] of getContentRulesMapForToolName(toolName, ARTIFACT_TOOL_NAME, context)) {
     let index = ruleContent.indexOf(":");
@@ -161,7 +163,7 @@ function findDataContentRule(toolName, context) {
   }
   return;
 }
-//@ chunk-p5cstt88.js:7391-10137 placement
+//@ chunk-f2b3q7t8.js:1992-4776 placement
 /**
  * artifact MCP 动作到目标字段的映射表。
  */
@@ -171,7 +173,7 @@ var artifactRuleToolRef = {
   mcpInfo: undefined,
   ruleContentField: undefined,
 };
-var ARTIFACT_ACTION_TARGETS_MAP = {
+var COUNTERPARTS = {
   publish_version: {
     action: "publish",
     target: "slug",
@@ -192,6 +194,7 @@ var ARTIFACT_ACTION_TARGETS_MAP = {
   create_from_type: {
     action: "publish",
     type: "slug",
+    givesStoredText: true,
   },
   declare_capabilities: {
     action: "publish",
@@ -219,7 +222,9 @@ var ARTIFACT_ACTION_TARGETS_MAP = {
     action: "describe_type",
     type: "slug",
   },
-  guide: {},
+  guide: {
+    givesStoredText: true,
+  },
   pin_artifact: {
     action: "pin",
     target: "slug",
@@ -377,13 +382,13 @@ var DB_OP_ARG_SPECS = {
 };
 var DB_BATCH_OP_FIELDS = new Set(["op", "path", "data", "ifVersion"]);
 var DB_BATCH_OP_TYPES = new Set(["set", "merge", "update", "delete"]);
-//@ chunk-p5cstt88.js:10137-10273 placement
+//@ chunk-f2b3q7t8.js:4776-4912 placement
 function isArtifactAssetPath(path) {
   if (typeof path !== "string") return false;
   let index = path.lastIndexOf("/");
   return regExp_2_2.test(path.slice(0, Math.max(index, 0))) && regExp_4.test(path.slice(index + 1));
 }
-//@ chunk-p5cstt88.js:10273-10697 placement
+//@ chunk-f2b3q7t8.js:4912-5336 placement
 /**
  * artifact URL/UUID 的匹配模式。
  */
@@ -395,11 +400,11 @@ var regExp_2 = new RegExp(
 var regExp_3 = new RegExp(
   `^https://(${ARTIFACT_URL_PATTERNS})\\.frame\\.(?:staging\\.)?claudeusercontent\\.com(?:[/?#]|$)`,
 );
-//@ chunk-p5cstt88.js:10697-10972 placement
+//@ chunk-f2b3q7t8.js:5336-5613 placement
 /**
  * 把 artifact 地址或 slug 规范成小写 UUID slug：已是 slug 直接返回，否则从 URL 中解析（22 位 base58 解码为 UUID），失败返回 null。
  */
-function normalizeArtifactSlug(value) {
+function artifactIdOf(value) {
   let lower = value.toLowerCase();
   if (regExp.test(lower)) return lower;
   let trimmed = value.trim();
@@ -410,14 +415,14 @@ function normalizeArtifactSlug(value) {
     return slugMatch.length === 22 ? decodeBase58Uuid(slugMatch) : slugMatch.toLowerCase();
   return lowered.match(regExp_3)?.[1]?.toLowerCase() ?? null;
 }
-//@ chunk-p5cstt88.js:10972-12919 placement
+//@ chunk-f2b3q7t8.js:5613-7566 placement
 /**
  * 规范化 artifact 调用输入（目标、来源、拷贝）。
  */
-function normalizeArtifactInput(verb, input, hints) {
-  let known = Object.hasOwn(ARTIFACT_ACTION_TARGETS_MAP, verb);
+function artifactInputFor(verb, input, hints) {
+  let known = Object.hasOwn(COUNTERPARTS, verb);
   let targets = known
-    ? ARTIFACT_ACTION_TARGETS_MAP[verb]
+    ? COUNTERPARTS[verb]
     : {
         target: "slug",
       };
@@ -441,7 +446,7 @@ function normalizeArtifactInput(verb, input, hints) {
       }
       continue;
     }
-    let slug = normalizeArtifactSlug(rawValue);
+    let slug = artifactIdOf(rawValue);
     if (slug === null) {
       unread = true;
       copies ||= normalizedKey === "from_url";
@@ -521,7 +526,7 @@ function normalizeArtifactInput(verb, input, hints) {
     }),
   };
 }
-//@ chunk-p5cstt88.js:12919-12982 placement
+//@ chunk-f2b3q7t8.js:7566-7629 placement
 /**
  * 按谓词找第一个匹配项的值。
  */
@@ -529,7 +534,7 @@ function findFirstMatch(contentRulesMapForToolName, predicate) {
   for (let [key, rule] of contentRulesMapForToolName) if (predicate(key)) return rule;
   return null;
 }
-//@ chunk-p5cstt88.js:12982-13098 placement
+//@ chunk-f2b3q7t8.js:7629-7745 placement
 function findRuleForFields(contentRulesMapForToolName, fieldNames) {
   for (let [key, rule] of contentRulesMapForToolName) {
     let index = key.indexOf(":");
@@ -537,7 +542,7 @@ function findRuleForFields(contentRulesMapForToolName, fieldNames) {
   }
   return null;
 }
-//@ chunk-p5cstt88.js:13098-13250 placement
+//@ chunk-f2b3q7t8.js:7745-7897 placement
 function withoutNarrowingDenyRules(context) {
   if ((context.alwaysDenyRules.toolsNarrowing?.length ?? 0) === 0) return context;
   let { toolsNarrowing, ...rest } = context.alwaysDenyRules;
@@ -546,22 +551,22 @@ function withoutNarrowingDenyRules(context) {
     alwaysDenyRules: rest,
   };
 }
-//@ chunk-p5cstt88.js:13250-13296 placement
+//@ chunk-f2b3q7t8.js:7897-7943 placement
 var PLACEHOLDER_SLUG = "00000000-0000-4000-8000-000000000000";
-//@ chunk-p5cstt88.js:13296-14937 placement
+//@ chunk-f2b3q7t8.js:7943-9589 placement
 /**
  * 用权限规则匹配 artifact 调用。
  */
-function matchArtifactRule(context, normalized, behavior) {
+function artifactRuleFor(context, normalized, behavior) {
   let { action, ...fields } = normalized.input;
   let url = normalized.input.url;
-  let slug = typeof url === "string" ? normalizeArtifactSlug(url) : null;
+  let slug = typeof url === "string" ? artifactIdOf(url) : null;
   let fromUrl = normalized.input.from_url;
-  let sourceSlug = typeof fromUrl === "string" ? normalizeArtifactSlug(fromUrl) : null;
+  let sourceSlug = typeof fromUrl === "string" ? artifactIdOf(fromUrl) : null;
   let rule =
     (behavior === "deny"
       ? getDenyRuleForTool(withoutNarrowingDenyRules(context), artifactRuleToolRef)
-      : getAskRuleForTool(context, artifactRuleToolRef)) ??
+      : findAskRuleForTool(context, artifactRuleToolRef)) ??
     findUrlContentRule(context, normalized.input, behavior) ??
     matchArtifactRuleOrEquivalent(context, artifactRuleToolRef, normalized.input, behavior) ??
     matchToolRule(context, artifactRuleToolRef, fields, behavior) ??
@@ -664,7 +669,7 @@ function matchArtifactRule(context, normalized, behavior) {
           ? null
           : behavior === "deny"
             ? getDenyRuleForTool(withoutNarrowingDenyRules(context), toolRef)
-            : getAskRuleForTool(context, toolRef)));
+            : findAskRuleForTool(context, toolRef)));
     if (unknownRule !== null)
       return {
         rule: unknownRule,
@@ -708,7 +713,7 @@ function matchArtifactRule(context, normalized, behavior) {
   }
   return null;
 }
-//@ chunk-p5cstt88.js:14937-15249 placement
+//@ chunk-f2b3q7t8.js:9589-9901 placement
 /**
  * 去掉参数值末尾误带的 </invoke> 标签。
  */
@@ -728,7 +733,7 @@ function stripTrailingInvoke(value) {
     }
   return stripped;
 }
-//@ chunk-p5cstt88.js:15249-15801 placement
+//@ chunk-f2b3q7t8.js:9901-10456 placement
 /**
  * 生成用于规则匹配的输入变体（多文件拆分）。
  */
@@ -776,17 +781,17 @@ function artifactRuleInputs(context, toolName, input, behavior) {
         : [],
     ),
   ]) {
-    let listInput = matchArtifactRule(context, normalizeArtifactInput(toolName, file, index), behavior);
+    let listInput = artifactRuleFor(context, artifactInputFor(toolName, file, index), behavior);
     if (listInput !== null) return listInput;
   }
   return null;
 }
-//@ chunk-p5cstt88.js:15801-15915 placement
+//@ chunk-f2b3q7t8.js:10456-10570 placement
 function listDataToolNames() {
   let values = Object.values(ARTIFACT_ACTION_TOOL_NAMES);
   return values.length < 2 ? values.join("") : `${values.slice(0, -1).join(", ")}, or ${values.at(-1)}`;
 }
-//@ chunk-p5cstt88.js:15915-16201 placement
+//@ chunk-f2b3q7t8.js:10570-10856 placement
 function unreadCallRuleNote(why) {
   return why === "unread"
     ? " Claude Code couldn't tell what this call names or does, so the rule applies to it."
@@ -794,7 +799,7 @@ function unreadCallRuleNote(why) {
       ? ` Claude Code doesn't know what this tool does, so every ${ARTIFACT_TOOL_NAME} rule that names something in parentheses, and every rule on ${listDataToolNames()}, applies to it.`
       : "";
 }
-//@ chunk-p5cstt88.js:16201-16398 placement
+//@ chunk-f2b3q7t8.js:10856-11053 placement
 var KNOWN_MCP_ARG_NAMES = new Set([
   "slug",
   "from_slug",
@@ -813,20 +818,30 @@ var KNOWN_MCP_ARG_NAMES = new Set([
   "asLevel",
 ]);
 var KNOWN_MCP_ARG_NAMES_UPPER = new Set([...KNOWN_MCP_ARG_NAMES].map((name) => name.toUpperCase()));
-//@ chunk-p5cstt88.js:16398-16597 placement
-function findMisspelledArgName(input) {
-  if (!isPlainObject(input)) return;
-  return [input, ...[input.files, input.ops].flat().filter(isPlainObject)]
-    .flatMap(Object.keys)
-    .find(
-      (key) =>
-        !KNOWN_MCP_ARG_NAMES.has(key) &&
-        KNOWN_MCP_ARG_NAMES_UPPER.has(
-          key.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().toUpperCase(),
-        ),
-    );
+//@ chunk-f2b3q7t8.js:11053-11146 placement
+/**
+ * Artifact 工具名归一：NFKD、去组合符、转小写再大写。
+ */
+function foldedArgumentName(name) {
+  return name.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().toUpperCase();
 }
-//@ chunk-p5cstt88.js:16597-16783 placement
+//@ chunk-f2b3q7t8.js:11146-11418 placement
+function respelledArgument(input, mark) {
+  if (!isPlainObject(input)) return;
+  let keys = mark === undefined ? [] : [mark.arg, mark.local, mark.ref];
+  let mapped = keys.map((key) => key.toUpperCase());
+  return [input, ...[input.files, input.ops, mark && input[mark.arg]].flat().filter(isPlainObject)]
+    .flatMap(Object.keys)
+    .find((key) => {
+      let fieldName = foldedArgumentName(key);
+      return (
+        !keys.includes(key) &&
+        (mapped.includes(fieldName) ||
+          (!KNOWN_MCP_ARG_NAMES.has(key) && KNOWN_MCP_ARG_NAMES_UPPER.has(fieldName)))
+      );
+    });
+}
+//@ chunk-f2b3q7t8.js:11418-11604 placement
 var UPLOAD_MCP_TOOLS = new Set(["publish_files", "declare_capabilities", "authorize_upload"]);
 var READ_ONLY_ACTIONS = new Set([
   "read",
@@ -838,9 +853,9 @@ var READ_ONLY_ACTIONS = new Set([
   "read_file",
   "get_endpoints",
 ]);
-//@ chunk-p5cstt88.js:16783-16913 placement
+//@ chunk-f2b3q7t8.js:11604-11736 placement
 function allPublishFilesAutoReadable(input, toolPermissionContext) {
-  let filePaths = normalizeArtifactInput("publish_files", input).input.file_paths;
+  let filePaths = artifactInputFor("publish_files", input).input.file_paths;
   return (
     Array.isArray(filePaths) &&
     filePaths.every(
@@ -849,7 +864,7 @@ function allPublishFilesAutoReadable(input, toolPermissionContext) {
     )
   );
 }
-//@ chunk-p5cstt88.js:16913-17176 placement
+//@ chunk-f2b3q7t8.js:11736-11999 placement
 function artifactsMcpUnavailableReason(backend) {
   return (
     (backend !== "laptop" || getArtifactPublishStubDir() === null
@@ -860,7 +875,7 @@ function artifactsMcpUnavailableReason(backend) {
       : `The Artifact tool isn't available in this session, so the Artifacts MCP tools aren't available either.${backend === "laptop" ? " Check /login and /config." : ""}`)
   );
 }
-//@ chunk-p5cstt88.js:17176-18899 placement
+//@ chunk-f2b3q7t8.js:11999-13724 placement
 /**
  * artifact 工具权限检查（参数拼写、规则、分类器）。
  */
@@ -875,9 +890,9 @@ function checkArtifactPermission(backend, toolName, displayToolName, input, cont
         reason: unavailable,
       },
     };
-  let misspelledArgName = findMisspelledArgName(input);
-  if (misspelledArgName !== undefined) {
-    let message = `${displayToolName} takes no argument spelled ${refusalEcho(misspelledArgName)}. Spell argument names exactly as the tool lists them.`;
+  let extraArg = respelledArgument(input);
+  if (extraArg !== undefined) {
+    let message = `${displayToolName} takes no argument spelled ${refusalEcho(extraArg)}. Spell argument names exactly as the tool lists them.`;
     return {
       behavior: "deny",
       message,
@@ -887,7 +902,7 @@ function checkArtifactPermission(backend, toolName, displayToolName, input, cont
       },
     };
   }
-  let targets = ARTIFACT_ACTION_TARGETS_MAP[toolName];
+  let targets = COUNTERPARTS[toolName];
   if (
     isCoworkFramePublishSession() &&
     consentMustDeny(context) &&
@@ -945,7 +960,7 @@ function checkArtifactPermission(backend, toolName, displayToolName, input, cont
       },
     };
   }
-  let action = ARTIFACT_ACTION_TARGETS_MAP[toolName]?.action;
+  let action = COUNTERPARTS[toolName]?.action;
   if (
     planConsentMustDeny(context) &&
     (dbWriteMayAsk(toolName, input) || !PLAN_SAFE_MCP_TOOLS.has(action) || action === "resolve")
@@ -961,7 +976,7 @@ function checkArtifactPermission(backend, toolName, displayToolName, input, cont
     };
   return;
 }
-//@ chunk-p5cstt88.js:18899-19130 placement
+//@ chunk-f2b3q7t8.js:13724-13955 placement
 function unknownMcpToolAsk(toolName) {
   let message = `Claude Code doesn't know what ${toolName} does yet, so each call needs your approval.`;
   return {
@@ -975,7 +990,7 @@ function unknownMcpToolAsk(toolName) {
     },
   };
 }
-//@ chunk-p5cstt88.js:19130-19800 placement
+//@ chunk-f2b3q7t8.js:13955-14625 placement
 /**
  * 数据库写入触发询问的原因。
  */
@@ -1012,7 +1027,7 @@ function artifactDbAskReason(tool, input, context) {
     },
   };
 }
-//@ chunk-p5cstt88.js:19800-20083 placement
+//@ chunk-f2b3q7t8.js:14625-14908 placement
 /**
  * laptop 端的 publish_version 是否属于"例行、仅自己可见的首次发布"：无 slug/共享/合约、非子代理、无人判断的例行运行、新 Artifact 默认私有、且没有针对这些工具的 ask/deny 规则。
  */
@@ -1029,8 +1044,8 @@ function isRoutinePrivateFirstPublish(kind, toolName, input, context) {
     routineRunNobodyJudges(context) &&
     newArtifactIsPersonsPrivate() &&
     ![
-      ...getAskRules(getToolPermissionContext(context)),
-      ...getDenyRules(getToolPermissionContext(context)),
+      ...askedBashRules(getToolPermissionContext(context)),
+      ...deniedBashRules(getToolPermissionContext(context)),
     ].some(
       (isFirstPublish) =>
         toolMatchesRule(getToolPermissionContext(context), artifactRuleToolRef, isFirstPublish) ||
@@ -1038,14 +1053,13 @@ function isRoutinePrivateFirstPublish(kind, toolName, input, context) {
     )
   );
 }
-//@ chunk-p5cstt88.js:20083-20235 placement
+//@ chunk-f2b3q7t8.js:14908-15060 placement
 function askRuleCoversMessage(denial, subject) {
-  return `The ${refusalEcho(formatPermissionRule(denial.rule.ruleValue))} ask rule from ${getSettingSourceDisplayNameLowercase(denial.rule.source)} covers ${subject}, so this call needs your approval.${unreadCallRuleNote(denial.why)}`;
+  return `The ${refusalEcho(permissionRuleValueFromString(denial.rule.ruleValue))} ask rule from ${getSettingSourceDisplayNameLowercase(denial.rule.source)} covers ${subject}, so this call needs your approval.${unreadCallRuleNote(denial.why)}`;
 }
-//@ chunk-p5cstt88.js:20235-20340 placement
+//@ chunk-f2b3q7t8.js:15060-15167 placement
 function targetFromSlugArg(input) {
-  let slug =
-    isPlainObject(input) && typeof input.slug === "string" ? normalizeArtifactSlug(input.slug) : null;
+  let slug = isPlainObject(input) && typeof input.slug === "string" ? artifactIdOf(input.slug) : null;
   return slug === null
     ? null
     : {
@@ -1053,7 +1067,7 @@ function targetFromSlugArg(input) {
         env: claudeAiEnvironment(),
       };
 }
-//@ chunk-p5cstt88.js:20340-20398 placement
+//@ chunk-f2b3q7t8.js:15167-15225 placement
 /**
  * 该 artifact（或任意 artifact）是否有待处理的自动反应通知。
  */
@@ -1061,14 +1075,14 @@ function isAutoReactNoticePendingFor(input) {
   let target = targetFromSlugArg(input);
   return target === null ? anyAutoReactNoticePending() : hasAutoReactNoticePending(target.slug);
 }
-//@ chunk-p5cstt88.js:20398-20447 placement
+//@ chunk-f2b3q7t8.js:15225-15274 placement
 /**
  * 评论读取的决策入口（有待处理通知时用已载入规则）。
  */
 function commentReadDecision(input) {
   return isAutoReactNoticePendingFor(input) ? personOnlyRegistry.loaded() : personOnlyRegistry.read;
 }
-//@ chunk-p5cstt88.js:20447-20858 placement
+//@ chunk-f2b3q7t8.js:15274-15707 placement
 /**
  * 读取评论需要先批准时的拒绝说明。
  */
@@ -1083,21 +1097,75 @@ var ASSET_MUTATING_ACTIONS = new Set([
   "call_endpoint",
   "run_script",
 ]);
-var VALID_SHARED_SCOPES = new Set([undefined, null, "", "users", "org", "others", "agent_scoped"]);
-//@ chunk-p5cstt88.js:20858-21006 placement
+var NOT_PUBLIC_BY_THE_SERVERS_MARK = new Set(["users", "org"]);
+var VALID_SHARED_SCOPES = new Set([
+  undefined,
+  null,
+  "",
+  ...NOT_PUBLIC_BY_THE_SERVERS_MARK,
+  "others",
+  "agent_scoped",
+]);
+//@ chunk-f2b3q7t8.js:15707-15764 placement
 function pendingNoticeReadKind(toolName, input) {
-  let { action, readsBack } = ARTIFACT_ACTION_TARGETS_MAP[toolName] ?? {};
-  let kind =
-    readsBack === true ? "edit" : action === "read_db" ? "rows" : action === "comments" ? "comments" : null;
+  let kind = readBackKind(toolName);
   return kind !== null && isAutoReactNoticePendingFor(input) ? kind : null;
 }
-//@ chunk-p5cstt88.js:21006-21189 placement
+//@ chunk-f2b3q7t8.js:15764-15925 placement
+/**
+ * 该 action 是否不需要读权限判定（未知/端点类/脚本类）。
+ */
+function mayHoldOthersWriting(actionName) {
+  let action = Object.hasOwn(COUNTERPARTS, actionName) ? COUNTERPARTS[actionName]?.action : "unknown";
+  return (
+    action === "unknown" ||
+    action === "get_endpoints" ||
+    action === "call_endpoint" ||
+    action === "run_script" ||
+    readBackKind(actionName) !== null
+  );
+}
+//@ chunk-f2b3q7t8.js:15925-16089 placement
+var READ_ONLY_ACTION_NAMES = new Set([
+  "read",
+  "read_file",
+  "read_asset",
+  "list",
+  "list_files",
+  "list_types",
+  "describe_type",
+]);
+var ARTIFACT_READ_ACTION_NAMES = new Set(["get_artifact", "read_declaration", "list_artifacts"]);
+//@ chunk-f2b3q7t8.js:16089-16217 placement
+/**
+ * 读类 action 需要哪种同意（cannot 或 by_mark），不需要时 null。
+ */
+function othersStoredTextIsTold(actionName) {
+  let { action: rule, givesStoredText } = COUNTERPARTS[actionName] ?? {};
+  return mayHoldOthersWriting(actionName) || !(givesStoredText === true || READ_ONLY_ACTION_NAMES.has(rule))
+    ? null
+    : ARTIFACT_READ_ACTION_NAMES.has(actionName)
+      ? "cannot"
+      : "by_mark";
+}
+//@ chunk-f2b3q7t8.js:16217-16341 layout
+function readBackKind(actionName) {
+  let { action, readsBack } = COUNTERPARTS[actionName] ?? {};
+  return readsBack === true
+    ? "edit"
+    : action === "read_db"
+      ? "rows"
+      : action === "comments"
+        ? "comments"
+        : null;
+}
+//@ chunk-f2b3q7t8.js:16341-16526 placement
 function dbWriteMayAsk(toolName, input) {
   return (
-    ASSET_MUTATING_ACTIONS.has(ARTIFACT_ACTION_TARGETS_MAP[toolName]?.action) ||
+    ASSET_MUTATING_ACTIONS.has(COUNTERPARTS[toolName]?.action) ||
     toolName === "declare_capabilities" ||
-    ARTIFACT_ACTION_TARGETS_MAP[toolName]?.source !== undefined ||
-    (ARTIFACT_ACTION_TARGETS_MAP[toolName]?.action === "publish" &&
+    COUNTERPARTS[toolName]?.source !== undefined ||
+    (COUNTERPARTS[toolName]?.action === "publish" &&
       isCoworkFramePublishSession() &&
       !isOwnPersonArtifactWithoutOtherComments(toolName, input)) ||
     !isPlainObject(input) ||
@@ -1105,29 +1173,29 @@ function dbWriteMayAsk(toolName, input) {
     pendingNoticeReadKind(toolName, input) !== null
   );
 }
-//@ chunk-p5cstt88.js:21189-21403 placement
+//@ chunk-f2b3q7t8.js:16526-16740 placement
 var SHARED_AUDIENCE_MODES = new Set(["users", "org", "others", "agent_scoped", "public"]);
 var UNRECOGNIZED_ADDRESS = "(unrecognized address)";
 var ANYONE_MAY_VIEW_NOTE =
   ", anyone may be a viewer, not only the user's colleagues: internal code and infrastructure detail count as sensitive";
-//@ chunk-p5cstt88.js:21403-21539 placement
+//@ chunk-f2b3q7t8.js:16740-16878 placement
 function isSessionWrittenArtifact(url) {
-  let slug = typeof url === "string" ? normalizeArtifactSlug(url) : null;
+  let slug = typeof url === "string" ? artifactIdOf(url) : null;
   let record = slug === null ? undefined : getLiveState().ownCreatedSlugs.get(slug);
   return record?.wrotePage === true && record.env === claudeAiEnvironment();
 }
-//@ chunk-p5cstt88.js:21539-21757 placement
+//@ chunk-f2b3q7t8.js:16878-17096 placement
 function noticeRequestedTag(kind) {
   return kind === null
     ? ""
     : ` [requested after a new-comments notification${kind === "rows" ? ": rows are written by artifact viewers" : kind === "comments" ? ": the comment text it ingests is written by artifact viewers" : ""}]`;
 }
-//@ chunk-p5cstt88.js:21757-22880 placement
+//@ chunk-f2b3q7t8.js:17096-18222 placement
 /**
  * 检查 artifact 读取（共享、未读评论）。
  */
-function checkArtifactRead(actionName, rawInput, renderPhrases, options) {
-  let { input, unread, copies } = normalizeArtifactInput(actionName, rawInput);
+function artifactClassifierLine(actionName, rawInput, renderPhrases, options) {
+  let { input, unread, copies } = artifactInputFor(actionName, rawInput);
   let isCreate = isCreateAction(actionName, rawInput);
   let hasTarget = !isCreate && (typeof input.url === "string" || unread);
   let ownershipMarks = hasTarget ? classifierOwnershipMarks(input.url) : "";
@@ -1165,19 +1233,26 @@ function checkArtifactRead(actionName, rawInput, renderPhrases, options) {
       : "";
   return `${ARTIFACT_TOOL_NAME} ${typeof input.action === "string" ? input.action : "tool"}${options.readOnly ? " [read-only]" : ""}${ownershipMarks}${audienceTag}${noticeTag}${copyTag}${targetTag}, as Claude wrote it: ${foldClassifierCodePhrases(sweepProvenanceMarker(normalizeNfkc(typeof phrasedInput === "string" ? phrasedInput : jsonStringify(phrasedInput)).replace(INVISIBLE_FORMAT_CHARS_RE, "?")).replace(DECISION_SURFACE_BRACKETS_RE, " "))}`;
 }
-//@ chunk-p5cstt88.js:22880-23045 placement
-function createArtifactNotice(toolName, input) {
-  let slug = isPlainObject(input) ? input.slug : undefined;
-  let normalizedSlug = typeof slug === "string" ? normalizeArtifactSlug(slug) : null;
-  return toolName === "create_from_type" ||
-    (PUBLISH_ACTION_NAMES.has(toolName) &&
-      (normalizedSlug === null || getLiveState().reservedMints.has(normalizedSlug)))
-    ? getArtifactCreateNotice()
-    : null;
+//@ chunk-f2b3q7t8.js:18222-18380 placement
+/**
+ * 该调用是否要 mint 新的 artifact（create_from_type 或受保留字节限制的类型）。
+ */
+function makesANewArtifact(actionName, args) {
+  let slug = isPlainObject(args) ? args.slug : undefined;
+  let reservedArtifactId = typeof slug === "string" ? artifactIdOf(slug) : null;
+  return (
+    actionName === "create_from_type" ||
+    (ACTION_WITH_RESERVED_MINT.has(actionName) &&
+      (reservedArtifactId === null || getLiveState().reservedMints.has(reservedArtifactId)))
+  );
 }
-//@ chunk-p5cstt88.js:23045-23279 placement
-function createArtifactAsk(toolName, input, context) {
-  let artifactNotice = createArtifactNotice(toolName, input);
+//@ chunk-f2b3q7t8.js:18380-18423 placement
+function createArtifactNotice(actionName, actionName_2) {
+  return makesANewArtifact(actionName, actionName_2) ? getArtifactCreateNotice() : null;
+}
+//@ chunk-f2b3q7t8.js:18423-18658 placement
+function createNoticeDecision(argName, input, context) {
+  let artifactNotice = createArtifactNotice(argName, input);
   if (artifactNotice === null) return;
   let message = `Claude wants to create a new artifact on claude.ai. ${artifactNotice}`;
   return (
@@ -1193,18 +1268,18 @@ function createArtifactAsk(toolName, input, context) {
     }
   );
 }
-//@ chunk-p5cstt88.js:23279-23391 placement
+//@ chunk-f2b3q7t8.js:18658-18773 placement
 function mcpTargetSlug(toolName, input) {
-  let target = ARTIFACT_ACTION_TARGETS_MAP[toolName]?.target;
+  let target = COUNTERPARTS[toolName]?.target;
   let stripped = stripTrailingInvoke(input);
   let rawSlug = target !== undefined && isPlainObject(stripped) ? stripped[target] : undefined;
-  return typeof rawSlug === "string" ? normalizeArtifactSlug(rawSlug) : null;
+  return typeof rawSlug === "string" ? artifactIdOf(rawSlug) : null;
 }
-//@ chunk-p5cstt88.js:23391-23595 placement
+//@ chunk-f2b3q7t8.js:18773-18980 placement
 function ownPersonPublishedTarget(toolName, input) {
-  let target = ARTIFACT_ACTION_TARGETS_MAP[toolName]?.target;
+  let target = COUNTERPARTS[toolName]?.target;
   let rawSlug = target !== undefined && isPlainObject(input) ? input[target] : undefined;
-  let slug = typeof rawSlug === "string" ? normalizeArtifactSlug(rawSlug) : null;
+  let slug = typeof rawSlug === "string" ? artifactIdOf(rawSlug) : null;
   let record = slug === null ? undefined : getLiveState().ownPublishedSlugs.get(slug);
   return slug !== null && record?.byPerson === true
     ? {
@@ -1213,14 +1288,14 @@ function ownPersonPublishedTarget(toolName, input) {
       }
     : null;
 }
-//@ chunk-p5cstt88.js:23595-23737 placement
+//@ chunk-f2b3q7t8.js:18980-19122 placement
 function isOwnedTarget(toolName, input) {
   let target = ownPersonPublishedTarget(toolName, input);
   if (target !== null && getArtifactPublishStubDir() !== null) return true;
   let shareEntry = target === null ? undefined : getShareEntry(target.slug);
   return shareEntry?.mode === "owner" && shareEntry.probeFailed !== true;
 }
-//@ chunk-p5cstt88.js:23737-23806 placement
+//@ chunk-f2b3q7t8.js:19122-19190 placement
 /**
  * 自己发布的 artifact 且没有他人待处理评论。
  */
@@ -1228,7 +1303,7 @@ function isOwnPersonArtifactWithoutOtherComments(toolName, input) {
   let target = ownPersonPublishedTarget(toolName, input);
   return target !== null && isOwnedTarget(toolName, input) && !hasOtherCommentPending(target.slug);
 }
-//@ chunk-p5cstt88.js:23806-23974 placement
+//@ chunk-f2b3q7t8.js:19190-19358 placement
 var PLAN_SAFE_MCP_TOOLS = new Set([
   "list",
   "list_types",
@@ -1239,7 +1314,7 @@ var PLAN_SAFE_MCP_TOOLS = new Set([
   undefined,
 ]);
 var WRITE_MCP_TOOLS = new Set(["publish_version", "edit_version", "publish_files", "reply_comment"]);
-//@ chunk-p5cstt88.js:23974-30311 placement
+//@ chunk-f2b3q7t8.js:19358-25703 placement
 /**
  * 为 artifacts MCP 工具（runner/laptop）安装权限与调用包装。
  */
@@ -1267,7 +1342,7 @@ function applyArtifactRules(serverName, entry) {
     };
   }
   let toolName = entry.mcpInfo.toolName;
-  if (!Object.hasOwn(ARTIFACT_ACTION_TARGETS_MAP, toolName)) {
+  if (!Object.hasOwn(COUNTERPARTS, toolName)) {
     entry.requiresUserInteraction = () => true;
     entry.suppressesAlwaysAllowRule = () => true;
   }
@@ -1290,7 +1365,7 @@ function applyArtifactRules(serverName, entry) {
             ...input,
           }
         : {};
-      return checkArtifactRead(
+      return artifactClassifierLine(
         toolName,
         copiedInput,
         (innerInput) => toAutoClassifierInput.call(entry, isPlainObject(innerInput) ? innerInput : {}),
@@ -1303,19 +1378,17 @@ function applyArtifactRules(serverName, entry) {
       logForDebugging(`[artifacts-mcp] the classifier's line for ${toolName} could not be built`, {
         level: "warn",
       });
-      return `${ARTIFACT_TOOL_NAME} ${ARTIFACT_ACTION_TARGETS_MAP[toolName]?.action ?? "tool"}${ownershipClassifierMark(
-        {
-          role: undefined,
-        },
-      )} [shared: unknown]${noticeRequestedTag(pendingNoticeReadKind(toolName, {}))} \u2192 ${UNRECOGNIZED_ADDRESS}, as Claude wrote it: (unreadable arguments)`;
+      return `${ARTIFACT_TOOL_NAME} ${COUNTERPARTS[toolName]?.action ?? "tool"}${ownershipClassifierMark({
+        role: undefined,
+      })} [shared: unknown]${noticeRequestedTag(pendingNoticeReadKind(toolName, {}))} \u2192 ${UNRECOGNIZED_ADDRESS}, as Claude wrote it: (unreadable arguments)`;
     }
   };
   let seenSlugs = new Set();
   let seenPaths = new Set();
   let memo = new Map();
   entry.hookMatcherFamilyNames = (input) => {
-    let equivalent = dataToolEquivalent(artifactRuleToolRef, normalizeArtifactInput(toolName, input).input);
-    if (!Object.hasOwn(ARTIFACT_ACTION_TARGETS_MAP, toolName))
+    let equivalent = dataToolEquivalent(artifactRuleToolRef, artifactInputFor(toolName, input).input);
+    if (!Object.hasOwn(COUNTERPARTS, toolName))
       return [ARTIFACT_TOOL_NAME, ...Object.values(ARTIFACT_ACTION_TOOL_NAMES)];
     return equivalent === undefined
       ? [ARTIFACT_TOOL_NAME]
@@ -1329,7 +1402,7 @@ function applyArtifactRules(serverName, entry) {
       ownTarget !== null &&
       getArtifactPublishStubDir() === null &&
       artifactsMcpUnavailableReason(kind) === null &&
-      findMisspelledArgName(input) === undefined &&
+      respelledArgument(input) === undefined &&
       artifactRuleInputs(getToolPermissionContext(context), toolName, input, "deny") === null
     )
       await warmShareEntry(ownTarget, context, "artifacts-mcp-published");
@@ -1363,14 +1436,14 @@ function applyArtifactRules(serverName, entry) {
               lateDeny: () => checkArtifactPermission(kind, toolName, toolLabel, input, context) ?? null,
               askRule: (permissionContext) =>
                 artifactRuleInputs(permissionContext, toolName, input, "ask")?.rule ??
-                getAskRuleForTool(permissionContext, entry),
+                findAskRuleForTool(permissionContext, entry),
               updatedInput: () => {
                 return;
               },
             });
       if (commentDecision !== null && commentDecision !== undefined) return commentDecision;
     }
-    let toolDecision = Object.hasOwn(ARTIFACT_ACTION_TARGETS_MAP, toolName)
+    let toolDecision = Object.hasOwn(COUNTERPARTS, toolName)
       ? await checkPermissions.call(entry, input, context)
       : unknownMcpToolAsk(toolLabel);
     let refusal = checkArtifactPermission(
@@ -1386,7 +1459,8 @@ function applyArtifactRules(serverName, entry) {
     let overridden = await applyAskRuleOverride(toolDecision, askRule?.rule ?? null, async () =>
       askRule === null ? "" : askRuleCoversMessage(askRule, toolLabel),
     );
-    let createAsk = overridden.behavior === "deny" ? undefined : createArtifactAsk(toolName, input, context);
+    let createAsk =
+      overridden.behavior === "deny" ? undefined : createNoticeDecision(toolName, input, context);
     if (createAsk !== undefined) {
       if (createAsk.behavior === "ask" && context.toolUseId !== undefined)
         rememberToolUseId(seenSlugs, context.toolUseId);
@@ -1445,8 +1519,7 @@ function applyArtifactRules(serverName, entry) {
     }
     let dbAskReason = artifactDbAskReason(entry, input, context);
     if (dbAskReason !== undefined) return dbAskReason;
-    if (!Object.hasOwn(ARTIFACT_ACTION_TARGETS_MAP, toolName) || dbWriteMayAsk(toolName, input))
-      return overridden;
+    if (!Object.hasOwn(COUNTERPARTS, toolName) || dbWriteMayAsk(toolName, input)) return overridden;
     if (
       kind === "laptop" &&
       (toolName === "publish_version" || toolName === "edit_version") &&
@@ -1465,7 +1538,7 @@ function applyArtifactRules(serverName, entry) {
           reason: "Redeploy of an artifact already published this session",
         },
       };
-    let action = ARTIFACT_ACTION_TARGETS_MAP[toolName]?.action;
+    let action = COUNTERPARTS[toolName]?.action;
     if (PLAN_SAFE_MCP_TOOLS.has(action))
       return {
         behavior: "allow",
@@ -1510,12 +1583,12 @@ function applyArtifactRules(serverName, entry) {
         },
       };
     }
-    let batchDeny = Object.hasOwn(ARTIFACT_ACTION_TARGETS_MAP, toolName)
+    let batchDeny = Object.hasOwn(COUNTERPARTS, toolName)
       ? (permissionCheckFailureDecision?.call(entry, permissionFailure, input) ??
         artifactDbAskReason(entry, permissionFailure, input))
       : unknownMcpToolAsk(toolLabel);
     let askDecision =
-      batchDeny?.behavior === "deny" ? undefined : createArtifactAsk(toolName, permissionFailure, input);
+      batchDeny?.behavior === "deny" ? undefined : createNoticeDecision(toolName, permissionFailure, input);
     if (askDecision !== undefined) {
       if (askDecision.behavior === "ask" && input.toolUseId !== undefined)
         rememberToolUseId(seenSlugs, input.toolUseId);
@@ -1539,7 +1612,7 @@ function applyArtifactRules(serverName, entry) {
         };
   };
   let originalCall = entry.call;
-  entry.call = async (slug, toolUseContext, a, b, argC, d) => {
+  entry.call = async (slug, toolUseContext, a, b_2, argC, d) => {
     let cleared = toolUseContext.toolUseId !== undefined && seenPaths.delete(toolUseContext.toolUseId);
     let cachedSeq = toolUseContext.toolUseId === undefined ? undefined : memo.get(toolUseContext.toolUseId);
     if (toolUseContext.toolUseId !== undefined) memo.delete(toolUseContext.toolUseId);
@@ -1549,7 +1622,7 @@ function applyArtifactRules(serverName, entry) {
         slug,
         toolUseContext,
         a,
-        b,
+        b_2,
         argC,
         markFrameCreateConfirmed(d, toolUseContext, seenSlugs),
       );
@@ -1576,7 +1649,7 @@ function applyArtifactRules(serverName, entry) {
       throw error;
     }
   };
-  let action = ARTIFACT_ACTION_TARGETS_MAP[toolName]?.action;
+  let action = COUNTERPARTS[toolName]?.action;
   if (action === "delete_asset" || action === "delete") {
     let { checkPermissions, permissionCheckFailureDecision } = entry;
     entry.checkPermissions = async (checkPermissionsWrapped, input) =>
@@ -1630,7 +1703,7 @@ function applyArtifactRules(serverName, entry) {
     };
   }
 }
-//@ chunk-p5cstt88.js:30311-30591 placement
+//@ chunk-f2b3q7t8.js:25703-25983 placement
 function askDefaultsToNo(entry, decision) {
   if (decision.behavior === "ask")
     return {
@@ -1648,9 +1721,9 @@ function askDefaultsToNo(entry, decision) {
     }),
   };
 }
-//@ chunk-p5cstt88.js:30591-30601 placement
+//@ chunk-f2b3q7t8.js:25983-25993 placement
 var MAX_REMEMBERED_TOOL_USE_IDS = 64;
-//@ chunk-p5cstt88.js:30601-30694 placement
+//@ chunk-f2b3q7t8.js:25993-26086 placement
 /**
  * 记住被询问过的 toolUseId，超过上限逐出最早的。
  */
@@ -1659,7 +1732,7 @@ function rememberToolUseId(set, toolUseId) {
   let oldest = set.values().next().value;
   if (set.size > MAX_REMEMBERED_TOOL_USE_IDS && oldest !== undefined) set.delete(oldest);
 }
-//@ chunk-p5cstt88.js:30694-30822 placement
+//@ chunk-f2b3q7t8.js:26086-26214 placement
 function markFrameCreateConfirmed(result, context, seenPaths) {
   return context.toolUseId !== undefined &&
     seenPaths.delete(context.toolUseId) &&
@@ -1673,9 +1746,9 @@ function markFrameCreateConfirmed(result, context, seenPaths) {
       }
     : result;
 }
-//@ chunk-p5cstt88.js:30822-30952 placement
+//@ chunk-f2b3q7t8.js:26214-26346 placement
 function classifierOwnershipMarks(url) {
-  let slug = typeof url === "string" ? normalizeArtifactSlug(url) : null;
+  let slug = typeof url === "string" ? artifactIdOf(url) : null;
   let shareEntry = slug === null ? undefined : getShareEntry(slug);
   return `${
     isSessionWrittenArtifact(url)
@@ -1690,10 +1763,17 @@ function classifierOwnershipMarks(url) {
   }${otherOrgClassifierMark(shareEntry)}`;
 }
 export {
-  ARTIFACT_ACTION_TARGETS_MAP,
+  foldedArgumentName,
+  mayHoldOthersWriting,
+  othersStoredTextIsTold,
+  respelledArgument,
+  NOT_PUBLIC_BY_THE_SERVERS_MARK,
+  createNoticeDecision,
+  makesANewArtifact,
+  COUNTERPARTS,
   applyArtifactRules,
-  checkArtifactRead,
-  normalizeArtifactSlug,
-  normalizeArtifactInput,
-  matchArtifactRule,
+  artifactClassifierLine,
+  artifactIdOf,
+  artifactInputFor,
+  artifactRuleFor,
 };

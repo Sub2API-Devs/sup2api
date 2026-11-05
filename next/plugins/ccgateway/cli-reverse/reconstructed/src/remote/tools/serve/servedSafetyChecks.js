@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：服务端调用的安全检查与分类
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tr0s0d0k.js (35)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6d2p9h2d.js (35)
  * attribution: placement 35
  */
 import { BASH_TOOL_NAME } from "../../../tools/BashTool/toolName.js";
@@ -18,7 +18,7 @@ import {
 } from "./credentialPathGuards.js";
 import { claudeStateGlobs } from "../../../utils/permissions/claudeStatePaths.js";
 import { secondRootMounts } from "../../../utils/wslMounts.js";
-import { FILE_EDIT_TOOL_NAME } from "../../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../../tools/FileEditTool/constants.js";
 import { readFlagWithOverride } from "../../../services/analytics/flagOverrides.js";
 import { logError } from "../../../utils/log.js";
 import { autoModeRefusedHere } from "../../../utils/permissions/permissionSetup.js";
@@ -36,7 +36,7 @@ import {
   classifyYoloAction,
   isTransientClassifierError,
 } from "../../../utils/permissions/yoloClassifier.js";
-import { formatPermissionRule } from "../../../utils/permissions/disallowedToolsFlag.js";
+import { permissionRuleValueFromString } from "../../../utils/permissions/permissionRuleParser.js";
 import { getPathsForPermissionCheck } from "../../../utils/fsOperations.js";
 import {
   checkReadNetworkPathSafety,
@@ -47,7 +47,7 @@ import {
 import { GLOB_TOOL_NAME } from "../../../tools/GlobTool/prompt.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics/growthbook.js";
 
-//@ chunk-tr0s0d0k.js:35380-35874 placement
+//@ chunk-6d2p9h2d.js:35708-36202 placement
 function credentialRuleKind(rule) {
   if (rule.ruleValue.toolName === BASH_TOOL_NAME || rule.ruleValue.toolName === POWERSHELL_TOOL_NAME)
     return "keychain";
@@ -63,39 +63,39 @@ function credentialRuleKind(rule) {
   if (/\/daemon\/dispatch\/\*\*$/.test(ruleContent)) return "exec_ingest";
   if (/\/Library\/Keychains\/\*\*$/.test(ruleContent)) return "keychain_files";
   if (/\/Microsoft\/(?:Credentials|Vault|Protect)\/\*\*$/.test(ruleContent)) return "credential_store_files";
-  return rule.ruleValue.toolName === FILE_EDIT_TOOL_NAME ? "write" : "read";
+  return rule.ruleValue.toolName === EDIT ? "write" : "read";
 }
-//@ chunk-tr0s0d0k.js:35874-35905 placement
+//@ chunk-6d2p9h2d.js:36202-36233 placement
 var TENGU_REACTIVE_ZEPHYR = "tengu_reactive_zephyr";
-//@ chunk-tr0s0d0k.js:35905-35943 placement
+//@ chunk-6d2p9h2d.js:36233-36271 placement
 function isReactiveSafetyCheckEnabled() {
   return readFlagWithOverride(TENGU_REACTIVE_ZEPHYR, {
     safe: false,
   });
 }
-//@ chunk-tr0s0d0k.js:35943-35959 placement
+//@ chunk-6d2p9h2d.js:36271-36287 placement
 var MAY_ANSWER = {
   may: true,
 };
-//@ chunk-tr0s0d0k.js:35959-35995 placement
+//@ chunk-6d2p9h2d.js:36287-36323 placement
 function mayNotAnswer(why) {
   return {
     may: false,
     why,
   };
 }
-//@ chunk-tr0s0d0k.js:35995-36120 placement
+//@ chunk-6d2p9h2d.js:36323-36448 placement
 function hookAskKind(decision) {
   return decision.decisionReason?.type === "hook" && decision.decisionReason.heldForServedCall === true
     ? "hook_held"
     : "hook_forced_ask";
 }
-//@ chunk-tr0s0d0k.js:36120-36213 placement
+//@ chunk-6d2p9h2d.js:36448-36541 placement
 function unanswerableAskKind(decision, forcedByHook) {
   if (decision.behavior !== "ask") return "other";
   return forcedByHook ? hookAskKind(decision) : "unresolved_shell_write";
 }
-//@ chunk-tr0s0d0k.js:36213-36342 placement
+//@ chunk-6d2p9h2d.js:36541-36670 placement
 function safeTelemetryValue(fallback, compute) {
   try {
     return compute();
@@ -108,14 +108,14 @@ function safeTelemetryValue(fallback, compute) {
     return fallback;
   }
 }
-//@ chunk-tr0s0d0k.js:36342-36489 placement
+//@ chunk-6d2p9h2d.js:36670-36817 placement
 function unattendedStanceKind(stanceValue) {
   return safeTelemetryValue("other", () => {
     if (stanceValue !== "own_record") return stanceValue === "conveyed" ? "conveyed_stance" : "other";
     return autoModeRefusedHere() ? "auto_refused" : "consent";
   });
 }
-//@ chunk-tr0s0d0k.js:36489-36766 placement
+//@ chunk-6d2p9h2d.js:36817-37094 placement
 var SAFETY_CHECK_TELEMETRY = {
   dangerousRemoval: "safety_check_dangerous_removal",
   backgroundOperator: "safety_check_background_operator",
@@ -123,7 +123,7 @@ var SAFETY_CHECK_TELEMETRY = {
   outsideReadsBlocked: "safety_check_outside_reads_blocked",
   restrictedMode: "safety_check_restricted_mode",
 };
-//@ chunk-tr0s0d0k.js:36766-36906 placement
+//@ chunk-6d2p9h2d.js:37094-37234 placement
 function safetyCheckKind(safetyCheckReason) {
   if (safetyCheckReason.classifierApprovable) return "settings_file";
   let circuitBreaker = safetyCheckReason.circuitBreaker;
@@ -132,7 +132,7 @@ function safetyCheckKind(safetyCheckReason) {
     "safety_check_other"
   );
 }
-//@ chunk-tr0s0d0k.js:36906-37180 placement
+//@ chunk-6d2p9h2d.js:37234-37508 placement
 function servedVerdictKind(verdicts) {
   return safeTelemetryValue("other", () => {
     if (!verdicts.first.may) return verdicts.first.why;
@@ -143,7 +143,7 @@ function servedVerdictKind(verdicts) {
       : "tool_not_answerable";
   });
 }
-//@ chunk-tr0s0d0k.js:37180-37668 placement
+//@ chunk-6d2p9h2d.js:37508-37996 placement
 /**
  * 本机安全检查（destructive-command 分类器）的预算与文案：20 s 总预算、5 s 余量、2 s 最小预算，按不可逆删除/外部代码两类给出询问文案，以及未答与未放行的兜底文案。
  */
@@ -160,7 +160,7 @@ var SAFETY_CHECK_REASON_TEXTS = {
 };
 var SAFETY_CHECK_NO_ANSWER_TEXT =
   "This computer's own safety check did not answer, so a person needs to approve it.";
-//@ chunk-tr0s0d0k.js:37668-37800 placement
+//@ chunk-6d2p9h2d.js:37996-38128 placement
 function ownCheckMessage(ownCheck) {
   switch (ownCheck.verdict) {
     case "no_verdict":
@@ -173,18 +173,18 @@ function ownCheckMessage(ownCheck) {
       return SAFETY_CHECK_NOT_CLEARED_TEXT;
   }
 }
-//@ chunk-tr0s0d0k.js:37800-37903 placement
+//@ chunk-6d2p9h2d.js:38128-38231 placement
 function joinSentences(first, second) {
   let trimmed = first.trimEnd();
   if (trimmed === "") return second;
   return `${/[.!?\u2026]$/.test(trimmed) ? trimmed : `${trimmed}.`} ${second}`;
 }
-//@ chunk-tr0s0d0k.js:37903-37978 placement
+//@ chunk-6d2p9h2d.js:38231-38306 placement
 function classifierBudgetMs(legDeadlineAt) {
   if (legDeadlineAt === undefined) return SAFETY_CHECK_BUDGET_MS;
   return Math.min(SAFETY_CHECK_BUDGET_MS, legDeadlineAt - Date.now() - SAFETY_CHECK_MARGIN_MS);
 }
-//@ chunk-tr0s0d0k.js:37978-38828 placement
+//@ chunk-6d2p9h2d.js:38306-39156 placement
 async function runServedSafetyCheck(params) {
   let now = Date.now();
   let firstPass = await classifyServedCall(params, params.capMs);
@@ -237,7 +237,7 @@ async function runServedSafetyCheck(params) {
     ms: elapsedMs,
   };
 }
-//@ chunk-tr0s0d0k.js:38828-40102 placement
+//@ chunk-6d2p9h2d.js:39156-40430 placement
 async function classifyServedCall(params, budgetMs) {
   let judged;
   let mayPass = false;
@@ -340,21 +340,21 @@ async function classifyServedCall(params, budgetMs) {
     failure,
   };
 }
-//@ chunk-tr0s0d0k.js:40102-40204 placement
+//@ chunk-6d2p9h2d.js:40430-40532 placement
 function servedCredentialDenyRules(permissionContext) {
   let hostRules = new Set(permissionContext.alwaysDenyRules[HOST_CREDENTIAL_RULE_SOURCE]);
   return {
     [HOST_CREDENTIAL_RULE_SOURCE]: defaultCredentialDenyRules()
-      .map(formatPermissionRule)
+      .map(permissionRuleValueFromString)
       .filter((ruleString) => hostRules.has(ruleString)),
   };
 }
-//@ chunk-tr0s0d0k.js:40204-40284 placement
+//@ chunk-6d2p9h2d.js:40532-40612 placement
 function timeoutOrStopReason(signal, stopSignal) {
   if (stopSignal.aborted) return "stopped";
   return signal.aborted ? "timeout" : undefined;
 }
-//@ chunk-tr0s0d0k.js:40284-40826 placement
+//@ chunk-6d2p9h2d.js:40612-41154 placement
 var DEFENSE_IN_DEPTH_REASONS = new Set([
   "Automount -hosts path detected (defense-in-depth check)",
   "Automount browse surface detected (defense-in-depth check)",
@@ -365,7 +365,7 @@ var DEFENSE_IN_DEPTH_REASONS = new Set([
   "Automount browse surface glob pattern detected (defense-in-depth check)",
   "Kernel-resolved path prefix (/.vol etc.) glob pattern detected (defense-in-depth check)",
 ]);
-//@ chunk-tr0s0d0k.js:40826-40940 placement
+//@ chunk-6d2p9h2d.js:41154-41268 placement
 function isDefenseInDepthAsk(decision) {
   return (
     decision.behavior === "ask" &&
@@ -373,7 +373,7 @@ function isDefenseInDepthAsk(decision) {
     DEFENSE_IN_DEPTH_REASONS.has(decision.decisionReason.reason)
   );
 }
-//@ chunk-tr0s0d0k.js:40940-41226 placement
+//@ chunk-6d2p9h2d.js:41268-41554 placement
 function readsNetworkPath(tool, input, toolPermissionContext) {
   if (typeof tool.getPath !== "function") return false;
   let path = tool.getPath(input);
@@ -394,11 +394,11 @@ function readsNetworkPath(tool, input, toolPermissionContext) {
     ) || !paths.some((path) => hasSuspiciousWindowsPathPattern(path, trustedNetworkDirectories))
   );
 }
-//@ chunk-tr0s0d0k.js:41226-41271 placement (2.1.88 match: handleAutoModeTransition, 0.799)
+//@ chunk-6d2p9h2d.js:41554-41599 placement (2.1.88 match: handleAutoModeTransition, 0.798)
 function isAutoOrPlanMode(sessionMode) {
   return sessionMode === "auto" || sessionMode === "plan";
 }
-//@ chunk-tr0s0d0k.js:41271-41592 placement
+//@ chunk-6d2p9h2d.js:41599-41920 placement
 function classifyCcrContainerAsk(facts) {
   if (facts.callerKind !== "ccr_container") return;
   if (facts.attested === true) return "attested";
@@ -412,29 +412,29 @@ function classifyCcrContainerAsk(facts) {
     ? "auto_arm"
     : undefined;
 }
-//@ chunk-tr0s0d0k.js:41592-41623 placement
+//@ chunk-6d2p9h2d.js:41920-41951 placement
 var TENGU_VIOLIN_PURFLING = "tengu_violin_purfling";
-//@ chunk-tr0s0d0k.js:41623-41661 placement
+//@ chunk-6d2p9h2d.js:41951-41989 placement
 function isViolinPurflingEnabled() {
   return readFlagWithOverride(TENGU_VIOLIN_PURFLING, {
     safe: true,
   });
 }
-//@ chunk-tr0s0d0k.js:41661-41699 placement
+//@ chunk-6d2p9h2d.js:41989-42027 placement
 function isViolinPurflingGateEnabled() {
   return readFlagWithOverride(TENGU_VIOLIN_PURFLING, {
     safe: true,
   });
 }
-//@ chunk-tr0s0d0k.js:41699-41732 placement
+//@ chunk-6d2p9h2d.js:42027-42060 placement
 var TENGU_REFACTORED_GADGET = "tengu_refactored_gadget";
-//@ chunk-tr0s0d0k.js:41732-41770 placement
+//@ chunk-6d2p9h2d.js:42060-42098 placement
 function isRefactoredGadgetEnabled() {
   return readFlagWithOverride(TENGU_REFACTORED_GADGET, {
     safe: false,
   });
 }
-//@ chunk-tr0s0d0k.js:41770-41845 placement
+//@ chunk-6d2p9h2d.js:42098-42173 placement
 function isViolinArchingEnabled() {
   try {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_arching", false) === true;
@@ -442,15 +442,15 @@ function isViolinArchingEnabled() {
     return false;
   }
 }
-//@ chunk-tr0s0d0k.js:41845-41873 placement
+//@ chunk-6d2p9h2d.js:42173-42201 placement
 var TENGU_VIOLIN_EBONY = "tengu_violin_ebony";
-//@ chunk-tr0s0d0k.js:41873-41911 placement
+//@ chunk-6d2p9h2d.js:42201-42239 placement
 function isViolinEbonyEnabled() {
   return readFlagWithOverride(TENGU_VIOLIN_EBONY, {
     safe: false,
   });
 }
-//@ chunk-tr0s0d0k.js:41911-41986 placement
+//@ chunk-6d2p9h2d.js:42239-42314 placement
 function isViolinTailgutEnabled() {
   try {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_tailgut", false) === true;
@@ -458,7 +458,7 @@ function isViolinTailgutEnabled() {
     return false;
   }
 }
-//@ chunk-tr0s0d0k.js:41986-42043 placement
+//@ chunk-6d2p9h2d.js:42314-42371 placement
 function isViolinCamberEnabled() {
   return readFlagWithOverride("tengu_violin_camber", {
     safe: false,
@@ -466,8 +466,6 @@ function isViolinCamberEnabled() {
 }
 export {
   credentialRuleKind,
-  classifyCcrContainerAsk,
-  unattendedStanceKind,
   isViolinPurflingEnabled,
   isViolinCamberEnabled,
   isViolinArchingEnabled,
@@ -485,7 +483,9 @@ export {
   MAY_ANSWER,
   servedVerdictKind,
   mayNotAnswer,
+  unattendedStanceKind,
   unanswerableAskKind,
   hookAskKind,
   safetyCheckKind,
+  classifyCcrContainerAsk,
 };

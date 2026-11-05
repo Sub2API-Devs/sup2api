@@ -3,9 +3,9 @@
  *
  * <ScrollBox>：带滚动偏移的可滚动容器（滚轮、粘底、命令式 scrollTo/scrollBy）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/components/ScrollBox.tsx
- * pieces: chunk-01xdq6fy.js (4)
+ * pieces: chunk-czgrs6px.js (4)
  * attribution: placement 2, layout 1, fingerprint 1
  */
 import {
@@ -23,16 +23,16 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { BaseBox } from "./Box.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-01xdq6fy.js:460-464 placement
+//@ chunk-czgrs6px.js:460-464 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-01xdq6fy.js:460", () => {
+deferInit("chunk-czgrs6px.js:460", () => {
   init_react_production();
 });
-//@ chunk-01xdq6fy.js:464-492 layout
+//@ chunk-czgrs6px.js:464-492 layout
 function increment(count) {
   return count + 1;
 }
-//@ chunk-01xdq6fy.js:492-3446 fingerprint (2.1.88 match: ScrollBox, 0.89)
+//@ chunk-czgrs6px.js:492-3446 fingerprint (2.1.88 match: ScrollBox, 0.89)
 /**
  * <ScrollBox>：overflow 为 scroll 的 ink-box（默认作为选区范围 selectionScope），内容放在一列子 Box 中。通过 ref 暴露命令式 API：scrollTo / scrollToElement（锚定到元素，start/center/end/nearest）/ scrollBy（累积到 pendingScrollDelta，由渲染时逐帧排水）/ scrollToBottom（重新开启粘底）、读 scrollTop/高度/视口、isSticky、subscribe、setClampBounds；滚动只标脏并在微任务里触发重绘，不走 React 状态。stickyScroll 让内容增长时自动跟到底，followGrowth=false 关闭位置跟随。
  */
@@ -277,7 +277,7 @@ function ScrollBox(props) {
   } else element = $[27];
   return element;
 }
-//@ chunk-01xdq6fy.js:3446-3455 placement
+//@ chunk-czgrs6px.js:3446-3455 placement
 /**
  * 导出值：ScrollBoxDefault（默认 ScrollBox 组件别名）；位于「<ScrollBox>：带滚动偏移的可滚动容器（滚轮、粘底、命令式 scrollTo/scrollBy）」模块。
  */

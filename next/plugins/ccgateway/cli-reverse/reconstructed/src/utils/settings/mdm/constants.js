@@ -3,9 +3,9 @@
  *
  * MDM 常量：Windows 注册表 HKLM/HKCU\SOFTWARE\Policies\ClaudeCode 与值名 Settings（另有错配进来的无关函数）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/mdm/constants.ts
- * pieces: chunk-e6aww6q8.js (1), chunk-vrb44rx7.js (1), chunk-zw3bhs13.js (1)
+ * pieces: chunk-4cd7tk6d.js (1), chunk-5xgkngpb.js (1), chunk-wb51jffc.js (1)
  * attribution: fingerprint 3
  */
 import {
@@ -21,11 +21,11 @@ import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../../keybindings/useKeybinding.js";
 import { useRegisterTabsNavigationOwner } from "../../../components/design-system/Tabs.js";
 
-//@ chunk-zw3bhs13.js:337-442 fingerprint (2.1.88 match: WINDOWS_REGISTRY_KEY_PATH_HKLM, 0.548)
+//@ chunk-4cd7tk6d.js:337-442 fingerprint (2.1.88 match: WINDOWS_REGISTRY_KEY_PATH_HKLM, 0.548)
 var WINDOWS_REGISTRY_KEY_PATH_HKLM = "HKLM\\SOFTWARE\\Policies\\ClaudeCode";
 var WINDOWS_REGISTRY_KEY_PATH_HKCU = "HKCU\\SOFTWARE\\Policies\\ClaudeCode";
 var SETTINGS = "Settings";
-//@ chunk-e6aww6q8.js:2373815-2374050 fingerprint (2.1.88 match: PLUTIL_ARGS_PREFIX, 1)
+//@ chunk-5xgkngpb.js:2429181-2429416 fingerprint (2.1.88 match: PLUTIL_ARGS_PREFIX, 1)
 async function countToolTokensPerItem(
   tools,
   getToolPermissionContext,
@@ -61,7 +61,7 @@ async function countToolTokensPerItem(
     defs.map((def) => roughTokenCountEstimationForFileType(jsonStringify(def), "json")),
   );
 }
-//@ chunk-vrb44rx7.js:51594-51744 fingerprint (2.1.88 match: WINDOWS_REGISTRY_VALUE_NAME, 0.603)
+//@ chunk-wb51jffc.js:51745-51895 fingerprint (2.1.88 match: WINDOWS_REGISTRY_VALUE_NAME, 0.603)
 function SettingsDialogCancelBinding(props) {
   let $ = useMemoCache(1);
   let { onCancel, children } = props;

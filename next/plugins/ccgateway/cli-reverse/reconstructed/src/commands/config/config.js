@@ -3,10 +3,10 @@
  *
  * 并入已有模块：/config 命令：无参数时打开设置界面，有 key=value 时直接设置。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/config/config.tsx
- * pieces: chunk-ak1qv1dp.js (3), chunk-q8cyy466.js (1)
- * attribution: placement 3, fingerprint 1
+ * pieces: chunk-67zm9hne.js (1), chunk-avg382dy.js (3)
+ * attribution: fingerprint 1, placement 3
  */
 import { init_react_production, useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import {
@@ -28,9 +28,9 @@ import { isBridgeOrTransport } from "../../cli/transportState.js";
 import { isVimModeEnabled } from "../../components/PromptInput/utils.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
-//@ chunk-ak1qv1dp.js:17277-17281 placement
+//@ chunk-avg382dy.js:18510-18514 placement
 init_react_production();
-//@ chunk-ak1qv1dp.js:17281-17856 placement
+//@ chunk-avg382dy.js:18514-19090 placement
 /**
  * /config 命令：无参数时打开设置界面，有 key=value 时直接设置。
  */
@@ -70,7 +70,7 @@ ${listConfigKeys(context)}`,
     onDone,
   });
 };
-//@ chunk-ak1qv1dp.js:17856-18207 placement (2.1.88 match: ShowHelp, 0.383)
+//@ chunk-avg382dy.js:19090-19441 placement (2.1.88 match: ShowHelp, 0.383)
 function ShowHelp(props) {
   let $ = useMemoCache(6);
   let { pairs, caller, onDone } = props;
@@ -111,7 +111,7 @@ function ShowHelp(props) {
   useEffect(commit, deps);
   return null;
 }
-//@ chunk-q8cyy466.js:17324-17644 fingerprint (2.1.88 match: call, 0.717)
+//@ chunk-67zm9hne.js:18556-18876 fingerprint (2.1.88 match: call, 0.718)
 var call_2 = async (onDone, storageV5, context, args) => {
   let isVimMode = isVimModeEnabled(args);
   return jsxProd_default_2(Box, {

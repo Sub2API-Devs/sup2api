@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：mermaid 流程图分层布局
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-yb0ajcmt.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q80fh8vc.js (8)
  * attribution: placement 8
  */
 import {
@@ -21,7 +21,7 @@ import {
 } from "../../../ink/graphemeCells.js";
 import { labelEdgeBundles } from "./flowchartRender.js";
 
-//@ chunk-yb0ajcmt.js:9934-10213 placement
+//@ chunk-q80fh8vc.js:10242-10521 placement
 /**
  * 把字符网格（字形、连线位、样式、圆角）转为文本行。
  */
@@ -47,14 +47,14 @@ function gridToLines(boxCanvas) {
   }
   return lines;
 }
-//@ chunk-yb0ajcmt.js:10213-10237 placement
+//@ chunk-q80fh8vc.js:10521-10545 placement
 /**
  * 1000
  */
 var MAX_LAYOUT_WIDTH = 1000;
 var MAX_LABEL_LEN = 64;
 var MAX_NODE_HEIGHT = 24;
-//@ chunk-yb0ajcmt.js:10237-13733 placement
+//@ chunk-q80fh8vc.js:10545-14041 placement
 /**
  * 把解析后的 mermaid 流程图（节点/边/子图）按方向分层布局到字符网格坐标。
  */
@@ -69,8 +69,8 @@ function layoutFlowchart(graph, isWide, maxSize) {
   mapped.forEach((edge, index) => mapped_2[edge.from]?.push(index));
   let mapped_3 = mapped.map((edge) => edge.from === edge.to);
   let visited = new Uint8Array(graph.nodes.length);
-  for (let k = 0; k < graph.nodes.length; k++)
-    markLoopEdges(k, {
+  for (let idx = 0; idx < graph.nodes.length; idx++)
+    markLoopEdges(idx, {
       outgoing: mapped_2,
       links: mapped,
       visited,
@@ -297,7 +297,7 @@ function layoutFlowchart(graph, isWide, maxSize) {
     orderExtent: max,
   };
 }
-//@ chunk-yb0ajcmt.js:13733-13911 placement
+//@ chunk-q80fh8vc.js:14041-14219 placement
 /**
  * 深度优先遍历，标记形成环的边。
  */
@@ -311,7 +311,7 @@ function markLoopEdges(from, state) {
   }
   state.visited[from] = 2;
 }
-//@ chunk-yb0ajcmt.js:13911-14270 placement
+//@ chunk-q80fh8vc.js:14219-14578 placement
 function rankNodesTopologically(count, edges) {
   let list = Array.from(
     {
@@ -346,21 +346,21 @@ function rankNodesTopologically(count, edges) {
   }
   return list;
 }
-//@ chunk-yb0ajcmt.js:14270-14344 placement
+//@ chunk-q80fh8vc.js:14578-14652 placement
 /**
  * 求平均
  */
 function averageOf(values) {
   return values.length === 0 ? undefined : values.reduce((acc, value) => acc + value, 0) / values.length;
 }
-//@ chunk-yb0ajcmt.js:14344-14401 placement (2.1.88 match: percentile, 0.62)
+//@ chunk-q80fh8vc.js:14652-14709 placement (2.1.88 match: percentile, 0.619)
 /**
  * 图布局：两个相邻节点中心的最小间距。旧版名 percentile 为错配，归错文件。
  */
 function requiredCenterGap(left, right, gap) {
   return Math.ceil((left.slot + right.slot) / 2) + gap;
 }
-//@ chunk-yb0ajcmt.js:14401-14774 placement
+//@ chunk-q80fh8vc.js:14709-15082 placement
 /**
  * 图布局：前向/后向两遍约束后取中点，调整节点中心位置。
  */

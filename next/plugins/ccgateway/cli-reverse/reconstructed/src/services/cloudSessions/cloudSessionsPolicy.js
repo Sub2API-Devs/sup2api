@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：云会话不可用时的说明（第三方提供商、组织策略、API key 等）；云会话策略键与凭据来源说明。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pemtjbn7.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xbatms9p.js (5)
  * attribution: placement 5
  */
 import { isSessionVerdictOfLiveCredential } from "../policyLimits/PolicyLimitsClient.js";
@@ -36,7 +36,7 @@ import { wouldWIFProfileYieldToClaudeAILogin } from "../../utils/wifProfile.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
 import { env } from "../../utils/env.js";
 
-//@ chunk-pemtjbn7.js:721-952 placement
+//@ chunk-xbatms9p.js:721-952 placement
 /**
  * API key/令牌在报错文案里的名词与“当前凭据是否即所问凭据”的判断表。
  */
@@ -54,7 +54,7 @@ var AUTH_KEY_NOUNS = {
     fetchedTheLoadedAnswer: () => envBearerVerdictOnWire() === "same",
   },
 };
-//@ chunk-pemtjbn7.js:952-2280 placement
+//@ chunk-xbatms9p.js:952-2280 placement
 /**
  * 云会话不可用时的说明（第三方提供商、组织策略、API key 等）。
  */
@@ -116,14 +116,14 @@ function cloudSessionsUnavailableReason() {
     return `${message} Cloud sessions need a claude.ai sign-in. Run \`claude auth login\` (or /login in a local session), then try again.`;
   return message;
 }
-//@ chunk-pemtjbn7.js:2280-2331 placement
+//@ chunk-xbatms9p.js:2280-2331 placement
 /**
  * 组织策略是否明确拒绝了云会话（org_denied）。
  */
 function isCloudSessionsDeniedByOrg() {
   return policyDenyKind(CLOUD_SESSIONS_POLICY.policy) === "org_denied";
 }
-//@ chunk-pemtjbn7.js:2331-2404 placement
+//@ chunk-xbatms9p.js:2331-2404 placement
 /**
  * 能否用 claude.ai OAuth 重试：订阅用户、凭据来自 claude.ai、账号未被冻结。
  */
@@ -135,7 +135,7 @@ function canRetryCloudSessionsWithOAuth() {
     getOAuthAccountOnHold() === null
   );
 }
-//@ chunk-pemtjbn7.js:2404-2670 placement
+//@ chunk-xbatms9p.js:2404-2670 placement
 function getConflictingApiCredentialSource() {
   if (env.ANTHROPIC_UNIX_SOCKET || isEnvTruthy(false) || !hasUsableClaudeAILogin() || isClaudeAISubscriber())
     return null;
@@ -144,4 +144,4 @@ function getConflictingApiCredentialSource() {
   if (source === "apiKeyHelper") return source;
   return getAuthTokenSource().source === "ANTHROPIC_AUTH_TOKEN" ? "ANTHROPIC_AUTH_TOKEN" : null;
 }
-export { cloudSessionsUnavailableReason, isCloudSessionsDeniedByOrg, CLOUD_SESSIONS_POLICY };
+export { cloudSessionsUnavailableReason, CLOUD_SESSIONS_POLICY, isCloudSessionsDeniedByOrg };

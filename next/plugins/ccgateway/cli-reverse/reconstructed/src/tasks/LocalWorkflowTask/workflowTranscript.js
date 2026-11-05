@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增。工作流代理转录读取。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-axsvbsqv.js (10)
- * attribution: placement 10
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-n6w10qzg.js (12)
+ * attribution: placement 10, layout 1, sole-consumer 1
  */
 import { join } from "path";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -17,7 +17,7 @@ import { TASK_LIST_TOOL_NAME } from "../../tools/TaskListTool/constants.js";
 import { TASK_GET_TOOL_NAME } from "../../tools/TaskGetTool/constants.js";
 import { STRUCTUREDOUTPUT } from "../../tools/SyntheticOutputTool/SyntheticOutputTool.js";
 import { subagentWorkflowDir } from "../../services/workflow/snapshots.js";
-import { readJSONLFile_2 } from "../../utils/json.js";
+import { readJSONLFile } from "../../utils/json.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { isTranscriptMessage } from "../../utils/sessionStorage.js";
 import {
@@ -27,6 +27,8 @@ import {
   noteWorkflowToolUse,
   describeWorkflowStep,
 } from "../../services/workflows/harnessFraming.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import { NEWLINE_2 } from "../../ink/log-update.js";
 import {
   resolvePendingTaskCreate,
   trackTaskToolUse,
@@ -37,16 +39,17 @@ import { SUBAGENTHANDBACK } from "../../tools/AgentTool/constants.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { getAgentMissState, isAgentFlagged, agentContract } from "../../tools/AgentTool/handbackReport.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { truncateToLength, countCharInString } from "../../utils/stringUtils.js";
+import { INTERRUPT_MESSAGE_FOR_TOOL_USE } from "../../utils/messages.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-axsvbsqv.js:2394-2398 placement
+//@ chunk-n6w10qzg.js:2509-2513 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-axsvbsqv.js:2394", () => {
+deferInit("chunk-n6w10qzg.js:2509", () => {
   init_react_production();
 });
-//@ chunk-axsvbsqv.js:2427-2475 placement
+//@ chunk-n6w10qzg.js:2542-2590 placement
 /**
  * 转录提示词/输出字段字符上限与保留的工具结果条数、任务工具名列表。
  */
@@ -54,7 +57,7 @@ var MAX_TRANSCRIPT_PROMPT_CHARS; // deferred: uses structuredOutputInputSchema (
 var MAX_TRANSCRIPT_OUTPUT_CHARS;
 var MAX_TRANSCRIPT_TOOL_RESULTS;
 var TASK_TODO_TOOL_NAMES;
-deferInit("chunk-axsvbsqv.js:2427", () => {
+deferInit("chunk-n6w10qzg.js:2542", () => {
   MAX_TRANSCRIPT_PROMPT_CHARS = 4000;
   MAX_TRANSCRIPT_OUTPUT_CHARS = 2000;
   MAX_TRANSCRIPT_TOOL_RESULTS = 3;
@@ -67,12 +70,12 @@ deferInit("chunk-axsvbsqv.js:2427", () => {
     STRUCTUREDOUTPUT,
   ];
 });
-//@ chunk-axsvbsqv.js:2475-4981 placement
+//@ chunk-n6w10qzg.js:2590-5339 placement
 async function readWorkflowAgentTranscript(workflowRunId, agentIndex, { promptFramed } = {}) {
   let filePath = join(subagentWorkflowDir(workflowRunId), `agent-${agentIndex}.jsonl`);
   let rows;
   try {
-    rows = await readJSONLFile_2(filePath);
+    rows = await readJSONLFile(filePath);
   } catch (error) {
     logForDebugging(
       `readWorkflowAgentTranscript: ${filePath} not readable (${error instanceof Error ? error.message : String(error)})`,
@@ -114,8 +117,13 @@ async function readWorkflowAgentTranscript(workflowRunId, agentIndex, { promptFr
           settleWorkflowToolUse(toolUseTracker, block.tool_use_id, message.isVirtual === true, isError);
           if (message.isVirtual !== true && toolUseTracker.uses.has(block.tool_use_id))
             pendingResponseId = block.tool_use_id;
-          let resultText = contentToText(block.content);
-          let headSource = resultText;
+          let progress = contentToText(block.content);
+          let headSource =
+            codeModeAccepted() && message.isVirtual !== true && toolUseTracker.uses.has(block.tool_use_id)
+              ? resultHeadText(block.content, message.toolDenialKind, isError)
+              : codeModeAccepted() && progress === "" && message.isVirtual === true
+                ? NEWLINE_2(message.toolUseResult)
+                : progress;
           resultByToolUseId.set(block.tool_use_id, {
             ...textHead(headSource, MAX_TRANSCRIPT_OUTPUT_CHARS),
             isError,
@@ -123,19 +131,22 @@ async function readWorkflowAgentTranscript(workflowRunId, agentIndex, { promptFr
           resolvePendingTaskCreate(taskTracker, {
             tool_use_id: block.tool_use_id,
             is_error: isError,
-            content: resultText,
+            content: progress,
           });
         }
       continue;
     }
     if (message.type !== "assistant" || !Array.isArray(message.message?.content)) continue;
     let responseId = message.message.id || `entry-${rowIndex}`;
-    lastResponseId = responseId;
-    pendingResponseId = undefined;
+    if (!(codeModeAccepted() && message.isVirtual === true)) {
+      lastResponseId = responseId;
+      pendingResponseId = undefined;
+    }
     let responseText = "";
     for (let block of message.message.content) {
       if (!isContentBlock(block)) continue;
       if (block.type === "tool_use" && typeof block.name === "string") {
+        if (codeModeAccepted() && message.scriptErrorCopy === true) continue;
         noteWorkflowToolUse(
           toolUseTracker,
           {
@@ -190,9 +201,11 @@ ${found.message}`
     })
   )
     finalText = "";
-  let allToolEntries = toolUseEntries;
-  let isHidden = (entry) => false;
-  let visibleBudget = count(allToolEntries, (entry) => !isHidden(entry));
+  let allToolEntries = codeModeAccepted()
+    ? pickToolUsesToEmit(toolUseEntries, toolUseTracker, resultByToolUseId, virtualToolUseIds)
+    : toolUseEntries;
+  let isHidden = (entry) => codeModeAccepted() && toolUseTracker.uses.has(entry.id);
+  let visibleBudget = countWhere(allToolEntries, (entry) => !isHidden(entry));
   let toolCalls = allToolEntries.map((entry) => {
     let isLastResponse = entry.responseKey === lastResponseId;
     let hidden = isHidden(entry);
@@ -218,7 +231,35 @@ ${found.message}`
     tasks,
   };
 }
-//@ chunk-axsvbsqv.js:4981-5027 placement
+//@ chunk-n6w10qzg.js:5339-5743 layout
+function pickToolUsesToEmit(toolUseEntries, toolUseTracker, resultByToolUseId, virtualToolUseIds) {
+  let entry = new Map();
+  for (let indexByKey of toolUseEntries) {
+    let progressEntry = virtualToolUseIds.get(indexByKey.id);
+    if (progressEntry !== undefined && !toolUseTracker.helperCalls.has(indexByKey.id))
+      entry.set(progressEntry, indexByKey.id);
+  }
+  let newEntry = new Map();
+  let entryKey = [];
+  for (let progressEntry of toolUseEntries) {
+    if (toolUseTracker.helperCalls.has(progressEntry.id)) continue;
+    if (toolUseTracker.uses.has(progressEntry.id)) {
+      let existingIndex = resultByToolUseId.get(progressEntry.id);
+      if (existingIndex === undefined) entryKey.push(progressEntry);
+      else if (existingIndex.isError) {
+        let kept = entry.get(progressEntry.id);
+        if (kept === undefined) entryKey.push(progressEntry);
+        else newEntry.set(kept, progressEntry);
+      }
+      continue;
+    }
+    entryKey.push(progressEntry);
+    let logEntry = newEntry.get(progressEntry.id);
+    if (logEntry !== undefined) entryKey.push(logEntry);
+  }
+  return entryKey;
+}
+//@ chunk-n6w10qzg.js:5743-5789 placement
 /**
  * 文本头的空值（head 为空、行数 0）。
  */
@@ -227,7 +268,7 @@ var EMPTY_TEXT_HEAD = {
   lineCount: 0,
   truncatedChars: 0,
 };
-//@ chunk-axsvbsqv.js:5027-5099 placement
+//@ chunk-n6w10qzg.js:5789-5861 placement
 /**
  * 无文本时返回空文本头（保留 isError）。
  */
@@ -240,7 +281,7 @@ function textHeadOrError(result, includeBody) {
         isError: result.isError,
       };
 }
-//@ chunk-axsvbsqv.js:5099-5227 placement
+//@ chunk-n6w10qzg.js:5861-5988 placement
 function textHead(text, maxChars) {
   let trimmed = text.trimEnd();
   let head = trimmed.length > maxChars ? truncateToLength(trimmed, maxChars) : trimmed;
@@ -255,14 +296,14 @@ function textHead(text, maxChars) {
     truncatedChars: trimmed.length - head.length,
   };
 }
-//@ chunk-axsvbsqv.js:5227-5305 placement
+//@ chunk-n6w10qzg.js:5988-6066 placement
 /**
  * 判断值是否是带 type 字符串的内容块。
  */
 function isContentBlock(value) {
   return typeof value === "object" && value !== null && typeof value.type === "string";
 }
-//@ chunk-axsvbsqv.js:5305-5446 placement
+//@ chunk-n6w10qzg.js:6066-6207 placement
 function textOfBlocks(blocks) {
   if (!Array.isArray(blocks)) return "";
   return blocks
@@ -270,7 +311,7 @@ function textOfBlocks(blocks) {
     .flatMap((block) => (block.type === "text" && typeof block.text === "string" ? block.text : [])).join(`
 `);
 }
-//@ chunk-axsvbsqv.js:5446-5625 placement
+//@ chunk-n6w10qzg.js:6207-6386 placement
 function contentToText(blocks) {
   if (typeof blocks === "string") return blocks;
   let text = textOfBlocks(blocks);
@@ -278,7 +319,33 @@ function contentToText(blocks) {
   let filtered = blocks.filter(isContentBlock);
   return filtered.length === 0 ? "" : `(${filtered.map((block) => block.type).join(", ")} content)`;
 }
-//@ chunk-axsvbsqv.js:5625-5872 placement (2.1.88 match: _temp7, 1)
+//@ chunk-n6w10qzg.js:6386-6866 sole-consumer
+function resultHeadText(content, toolDenialKind, isError) {
+  if (codeModeAccepted()) {
+    let entry =
+      typeof content === "string"
+        ? content
+        : Array.isArray(content)
+          ? content.filter(isContentBlock).find((denialKind) => denialKind.type === "text")?.text
+          : undefined;
+    let progressEntry = typeof entry === "string" ? entry : "";
+    let outputEnvelope = require("../../utils/codeMode/parseOutputEnvelope.lazy.js").parseOutputEnvelope(
+      progressEntry,
+    );
+    if (outputEnvelope === null) return toolDenialKind !== undefined ? progressEntry : isError ? "Error" : "";
+    if (toolDenialKind === "user-rejected") {
+      let { REFUSAL_SENTENCE } = require("../../tools/REPLTool/stopReport.js");
+      return outputEnvelope.error?.startsWith(REFUSAL_SENTENCE)
+        ? REFUSAL_SENTENCE
+        : INTERRUPT_MESSAGE_FOR_TOOL_USE;
+    }
+    if (outputEnvelope.error !== undefined)
+      return require("../../utils/codeMode/scriptErrors.js").scriptErrorLine(outputEnvelope.error);
+    return isError ? "Error" : "";
+  }
+  return "";
+}
+//@ chunk-n6w10qzg.js:7074-7321 placement (2.1.88 match: _temp7, 1)
 function inputFieldsPreview(opt) {
   if (opt === undefined || opt === null) return [];
   return (typeof opt === "object" && !Array.isArray(opt) ? Object.entries(opt) : [["input", opt]]).map(

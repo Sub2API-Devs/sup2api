@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：claude daemon 子命令入口：run/status/logs/stop/install/hub 等服务生命周期操作；claude daemon 的用法文本与列宽等常量等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ss669z1x.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ergqq6hs.js (20)
  * attribution: placement 20
  */
 import { resolve, dirname } from "path";
@@ -106,7 +106,7 @@ import { isViolinVarnishOn } from "../../services/remoteTools/backgroundCommands
 import { controlRequest } from "../../services/daemon/controlClient.js";
 import { reapAllBackgroundJobs } from "../../services/daemon/reapJobs.js";
 import { stripAnsi } from "../../utils/stripAnsi.js";
-import { resolveAgentLauncher } from "../../services/daemon/spawnLauncher.js";
+import { spawnDetachedSupervisor } from "../../services/daemon/spawnLauncher.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { readSmallFileOrNull } from "../../utils/readSmallFile.js";
 import { openBgDispatchLog } from "../../daemon/bgDispatch.js";
@@ -115,7 +115,7 @@ import { cgroupSpawnOptions } from "../../utils/toolCgroup.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { formatStorageError } from "../../utils/storage/storageErrors.js";
 
-//@ chunk-ss669z1x.js:64258-65764 placement
+//@ chunk-ergqq6hs.js:65556-67062 placement
 /**
  * claude daemon 的用法文本与列宽等常量。
  */
@@ -158,7 +158,7 @@ Options:
 var DAEMON_SUBCOMMANDS_WITHOUT_TRUST = new Set(["list", "scheduled", "remote-control", "hub"]);
 var DAEMON_SERVICE_SUBCOMMANDS = new Set(["status", "stop", "uninstall"]);
 var DAEMON_DAEMON_COMMAND_NAMES = new Set(["run", ...DAEMON_SERVICE_SUBCOMMANDS]);
-//@ chunk-ss669z1x.js:65764-65843 placement
+//@ chunk-ergqq6hs.js:67062-67141 placement
 function daemonUsageText() {
   return (
     DAEMON_USAGE_LIFECYCLE +
@@ -171,7 +171,7 @@ function daemonUsageText() {
     DAEMON_USAGE_OPTIONS
   );
 }
-//@ chunk-ss669z1x.js:65843-67094 placement
+//@ chunk-ergqq6hs.js:67141-68392 placement
 /**
  * 解析 claude daemon 的参数（--json-path、--log-file、--origin、--spawned-by、子命令）。
  */
@@ -281,13 +281,13 @@ function parseDaemonArgs(argv) {
     rest: remaining,
   };
 }
-//@ chunk-ss669z1x.js:67094-67209 placement
+//@ chunk-ergqq6hs.js:68392-68507 placement
 function parseDaemonOrigin(value) {
   if (value === "service" || value === "transient" || value === "foreground") return value;
   if (value === "auto") return "transient";
   return;
 }
-//@ chunk-ss669z1x.js:67209-67479 placement
+//@ chunk-ergqq6hs.js:68507-68777 placement
 function describeDaemonOrigin(status) {
   let origin = status.origin ?? "unknown";
   if (origin !== "transient" && origin !== "auto") return origin;
@@ -295,7 +295,7 @@ function describeDaemonOrigin(status) {
   if (!spawnedBy) return "transient \u2014 started on-demand by a client";
   return `transient \u2014 started on-demand by \`${spawnedBy.label}\` (pid ${spawnedBy.pid}) in ${spawnedBy.cwd}`;
 }
-//@ chunk-ss669z1x.js:67479-67685 placement
+//@ chunk-ergqq6hs.js:68777-68983 placement
 function parseSpawnedByJson(json) {
   let parsed = safeParseJSON(json, false);
   if (parsed === null || typeof parsed !== "object") return;
@@ -308,7 +308,7 @@ function parseSpawnedByJson(json) {
     };
   return;
 }
-//@ chunk-ss669z1x.js:67685-67727 placement
+//@ chunk-ergqq6hs.js:68983-69025 placement
 function daemonPrint(line) {
   process.stdout.write(
     line +
@@ -316,7 +316,7 @@ function daemonPrint(line) {
 `,
   );
 }
-//@ chunk-ss669z1x.js:67727-67769 placement
+//@ chunk-ergqq6hs.js:69025-69067 placement
 function daemonPrintErr(line) {
   process.stderr.write(
     line +
@@ -324,7 +324,7 @@ function daemonPrintErr(line) {
 `,
   );
 }
-//@ chunk-ss669z1x.js:67769-68118 placement
+//@ chunk-ergqq6hs.js:69067-69416 placement
 /**
  * 去掉 argv 中的调试相关标志和指定参数。
  */
@@ -350,11 +350,11 @@ function stripDebugArgs(argv, alreadyConsumed) {
   }
   if (kept.length > 0) daemonPrintErr(`warning: extra arguments ignored: ${kept.join(" ")}`);
 }
-//@ chunk-ss669z1x.js:68118-68318 placement
+//@ chunk-ergqq6hs.js:69416-69616 placement
 function foregroundDaemonRefusalMessage(action, pid) {
   return `${action} refused: a foreground daemon (pid ${pid}, started with \`claude daemon run\`) holds the daemon lock \u2014 stop it first (Ctrl-C in its terminal or \`claude daemon stop\`)`;
 }
-//@ chunk-ss669z1x.js:68318-68653 placement
+//@ chunk-ergqq6hs.js:69616-69951 placement
 /**
  * 停止守护进程被拒时（eperm/unverified/timed-out）给出说明。
  */
@@ -373,18 +373,18 @@ function describeDaemonStopRefusal(action, serverLockStatus) {
   }
   return `${action} refused: ${lockHolderProblemText(serverLockStatus)} \u2014 a freshly started service would lose the lockfile race to it and crash-loop. ${remedy}, then retry.`;
 }
-//@ chunk-ss669z1x.js:68653-68747 placement
+//@ chunk-ergqq6hs.js:69951-70045 placement
 function daemonRefusalMessage(action, pid) {
   return `${action} refused: ${unknownDaemonText(pid)}. Stop it (\`claude daemon stop\`) and retry.`;
 }
-//@ chunk-ss669z1x.js:68747-69128 placement
+//@ chunk-ergqq6hs.js:70045-70426 placement
 /**
  * 服务管理器已接受操作但守护进程在超时内不可达时的警告文字。
  */
 function daemonUnreachableWarning(action) {
   return `warning: the service manager accepted the ${action}, but the installed daemon is not reachable after ${DAEMON_START_BUDGET_MS / 1000}s \u2014 the first start after an update can be slow. Check \`claude daemon status\` and \`claude daemon logs\`; if the service file points at a binary or launcher that no longer exists, \`claude daemon install\` rewrites it from the current settings.`;
 }
-//@ chunk-ss669z1x.js:69128-69268 placement
+//@ chunk-ergqq6hs.js:70426-70566 placement
 async function flushAndExitDaemon(exitCode) {
   await Promise.race([
     Promise.all([shutdown1PEventLogging(), shutdownDatadog()]),
@@ -395,7 +395,7 @@ async function flushAndExitDaemon(exitCode) {
   await waitForInFlightOAuthRefresh(OAUTH_REFRESH_EXIT_WAIT_CAP_MS);
   process.exit(exitCode);
 }
-//@ chunk-ss669z1x.js:69268-86121 placement
+//@ chunk-ergqq6hs.js:70566-87432 placement
 /**
  * claude daemon 子命令入口：run/status/logs/stop/install/hub 等服务生命周期操作。
  */
@@ -1102,10 +1102,10 @@ note: cloud sessions had ${shellCount} background ${plural(shellCount, "command"
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION
@@ -1117,10 +1117,10 @@ note: cloud sessions had ${shellCount} background ${plural(shellCount, "command"
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION
@@ -1144,7 +1144,7 @@ note: cloud sessions had ${shellCount} background ${plural(shellCount, "command"
       process.exit(1);
   }
 }
-//@ chunk-ss669z1x.js:86121-86429 placement
+//@ chunk-ergqq6hs.js:87432-87740 placement
 /**
  * 停止守护进程并确认其退出（必要时 SIGKILL），返回结局。
  */
@@ -1160,7 +1160,7 @@ async function stopDaemonProcess(lock, options) {
   if (startTime !== expectedIdentity) return "exited";
   return isSigkill ? "timed-out" : "not-a-daemon";
 }
-//@ chunk-ss669z1x.js:86429-86649 placement
+//@ chunk-ergqq6hs.js:87740-87960 placement
 async function printServedBackgroundShells() {
   if (!isViolinVarnishOn()) return;
   let { readServedBackgroundShells, servedBackgroundShellLines } =
@@ -1171,12 +1171,12 @@ async function printServedBackgroundShells() {
   }))
     daemonPrint(line);
 }
-//@ chunk-ss669z1x.js:86649-87577 placement
+//@ chunk-ergqq6hs.js:87960-88888 placement
 /**
  * 后台拉起 claude daemon run 并等待其就绪，失败时报告 stderr 路径。
  */
 async function spawnDaemon(jsonPath, logPath, origin, spawnedBy) {
-  let { err, stderrPath } = await resolveAgentLauncher([
+  let { err, stderrPath } = await spawnDetachedSupervisor([
     "daemon",
     "run",
     "--json-path",
@@ -1223,7 +1223,7 @@ async function spawnDaemon(jsonPath, logPath, origin, spawnedBy) {
     });
   }
 }
-//@ chunk-ss669z1x.js:87577-88204 placement
+//@ chunk-ergqq6hs.js:88888-89515 placement
 /**
  * 用 tail -f 跟随守护进程日志文件。
  */
@@ -1272,7 +1272,7 @@ async function tailDaemonLogFile(logPath, storage) {
   }
   await handle.close();
 }
-//@ chunk-ss669z1x.js:88204-89055 placement
+//@ chunk-ergqq6hs.js:89515-90366 placement
 /**
  * 从存储后端读取并跟随 daemon-log 记录流。
  */

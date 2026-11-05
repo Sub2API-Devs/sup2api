@@ -3,23 +3,24 @@
  *
  * 从 shell 命令与输出识别 git/gh 操作（提交、推送、合并、PR 创建/动作、PR URL），生成 gitOperation 字段并发遥测与计数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/shared/gitOperationTracking.ts
- * pieces: chunk-s61vbvea.js (65)
- * attribution: affinity 3, fingerprint 5, layout 43, sole-consumer 1, placement 10, file-local 3
+ * pieces: chunk-7jxyna5q.js (64)
+ * attribution: affinity 2, fingerprint 5, layout 43, sole-consumer 1, placement 10, file-local 3
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, stringSchema, _enum, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   REPO_NAME_PATTERN,
   GOOGLESOURCE_HOST_PATTERN,
-  regExp as regExp_18,
+  regExp as regExp_16,
   HOSTNAME_PATTERN,
   GITLAB_MR_PATH_PATTERN,
   MAX_REPO_URL_CHARS,
 } from "../../utils/detectRepository.js";
+import { QUOTED_SEGMENT_RE, GH_PR_REVIEW_RE } from "../../commands/review.js";
 import { splitCommand, getCommandArgv } from "../../utils/bash/commands.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnumOpt, lit, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { shortHash } from "../../utils/shortHash.js";
@@ -42,32 +43,33 @@ import { withDeadline } from "../../utils/sleep.js";
 import { getBranch } from "../../utils/git.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { getNpmDistTags } from "../../utils/autoUpdater.js";
+import { countWhere } from "../../utils/collections.js";
 import { currentPrStatusFetcher, getPrStatus, findGerritReview } from "../../utils/ghPrStatus.js";
 import { getTextAfterLastRuleMatch } from "../../services/teamMemorySync/secretScanner.js";
 import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { isWorkspacePersistedTrusted } from "../../utils/config.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:567893-567998 affinity
+//@ chunk-7jxyna5q.js:485240-485345 affinity
 /**
  * 生成匹配 "git [-c k=v|--opt=v]* <子命令>" 的正则。
  */
 function gitCmdRe(verb, suffix = "") {
   return new RegExp(`\\bgit(?:\\s+-[cC]\\s+\\S+|\\s+--[^\\s=]+=\\S+)*\\s+${verb}\\b${suffix}`);
 }
-//@ chunk-s61vbvea.js:567998-568018 fingerprint (2.1.88 match: GIT_COMMIT_RE, 1)
+//@ chunk-7jxyna5q.js:485345-485365 fingerprint (2.1.88 match: GIT_COMMIT_RE, 1)
 var GIT_COMMIT_RE; // deferred: uses gitCmdRe of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:567998", () => {
+deferInit("chunk-7jxyna5q.js:485345", () => {
   GIT_COMMIT_RE = gitCmdRe("commit");
 });
-//@ chunk-s61vbvea.js:568018-568052 layout
+//@ chunk-7jxyna5q.js:485365-485399 layout
 /**
  * 命令是否包含 git commit。
  */
 function isGitCommitCommand(command) {
   return GIT_COMMIT_RE.test(command);
 }
-//@ chunk-s61vbvea.js:568052-568590 layout
+//@ chunk-7jxyna5q.js:485399-485937 layout
 /**
  * git push / cl upload / cherry-pick / merge / rebase 的命令正则、--dry-run 正则，以及 gitOperation 输出 schema（commit{sha,kind,branch}、push、branch、pr…）。
  */
@@ -78,7 +80,7 @@ var GIT_CHERRY_PICK_RE;
 var GIT_MERGE_RE;
 var GIT_REBASE_RE;
 var gitOperationSchema;
-deferInit("chunk-s61vbvea.js:568052", () => {
+deferInit("chunk-7jxyna5q.js:485399", () => {
   GIT_PUSH_RE = gitCmdRe("push");
   GIT_CL_UPLOAD_RE = gitCmdRe(String.raw`cl\s+upload`);
   DRY_RUN_FLAG_RE = /(?:^|\s)(?:-n|--dry-run)(?=\s|$)/;
@@ -118,24 +120,24 @@ deferInit("chunk-s61vbvea.js:568052", () => {
     }),
   );
 });
-//@ chunk-s61vbvea.js:568590-568658 layout
+//@ chunk-7jxyna5q.js:485937-486005 layout
 /**
  * 生成匹配 "gh pr <子命令>" 的正则。
  */
 function ghPrCmdRe(subcmd, suffix = "") {
   return new RegExp(`\\bgh\\s+pr\\s+${subcmd}\\b${suffix}`);
 }
-//@ chunk-s61vbvea.js:568658-569467 fingerprint (2.1.88 match: GH_PR_ACTIONS, 0.738)
+//@ chunk-7jxyna5q.js:486005-486814 fingerprint (2.1.88 match: GH_PR_ACTIONS, 0.738)
 /**
  * gh pr 子命令表 GH_PR_ACTIONS（create/edit/merge/comment/close/ready…→ 动作与遥测 op），以及 gh pr checkout N 正则；tc 为 glab mr 等同类表。
  */
 var GH_PR_CHECKOUT_RE; // deferred: uses ghPrCmdRe of its import cycle while loading; runs once the cycle is complete
-var regExp_11;
+var regExp_10;
 var GH_PR_ACTIONS;
 var GLAB_MR_ACTIONS;
-deferInit("chunk-s61vbvea.js:568658", () => {
+deferInit("chunk-7jxyna5q.js:486005", () => {
   GH_PR_CHECKOUT_RE = ghPrCmdRe("checkout", String.raw`[^&|;]*\s(\d+)(?=\s|$|[&|;])`);
-  regExp_11 = new RegExp(`^${REPO_NAME_PATTERN}/${REPO_NAME_PATTERN}$`);
+  regExp_10 = new RegExp(`^${REPO_NAME_PATTERN}/${REPO_NAME_PATTERN}$`);
   GH_PR_ACTIONS = [
     {
       re: ghPrCmdRe("create"),
@@ -206,7 +208,7 @@ deferInit("chunk-s61vbvea.js:568658", () => {
     },
   ];
 });
-//@ chunk-s61vbvea.js:569467-569876 affinity
+//@ chunk-7jxyna5q.js:486814-487223 affinity
 /**
  * 从命令推断 PR 动作（created/merged/auto-merge-enabled/ready/draft…），兼顾 gh 与 glab。
  */
@@ -225,17 +227,7 @@ function getPrAction(command) {
   }
   return action_2;
 }
-//@ chunk-s61vbvea.js:570050-570102 sole-consumer
-/**
- * 匹配 gh pr review 命令的正则。
- */
-var GH_PR_REVIEW_RE; // deferred: uses ghPrCmdRe of its import cycle while loading; runs once the cycle is complete
-var QUOTED_SEGMENT_RE;
-deferInit("chunk-s61vbvea.js:570050", () => {
-  GH_PR_REVIEW_RE = ghPrCmdRe("review");
-  QUOTED_SEGMENT_RE = /"(?:[^"\\]|\\.)*"|'[^']*'/g;
-});
-//@ chunk-s61vbvea.js:570102-570386 affinity
+//@ chunk-7jxyna5q.js:487449-487733 sole-consumer
 /**
  * 找到未被注释的 gh repo create 命令，返回其后的参数文本。
  */
@@ -254,14 +246,14 @@ function ghRepoCreateArgs(command) {
   }
   return null;
 }
-//@ chunk-s61vbvea.js:570386-570665 placement
+//@ chunk-7jxyna5q.js:487733-488012 placement
 /**
  * 识别 gh repo create/new 命令用的正则、带值选项、可见性选项。
  */
 var GH_REPO_CREATE_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var GH_REPO_CREATE_VALUE_FLAGS;
 var GH_REPO_VISIBILITY_FLAGS;
-deferInit("chunk-s61vbvea.js:570386", () => {
+deferInit("chunk-7jxyna5q.js:487733", () => {
   GH_REPO_CREATE_PATTERN = /\bgh\s+repo\s+(?:create|new)\b/;
   GH_REPO_CREATE_VALUE_FLAGS = new Set([
     "-d",
@@ -287,7 +279,7 @@ deferInit("chunk-s61vbvea.js:570386", () => {
     ["--internal", "internal"],
   ]);
 });
-//@ chunk-s61vbvea.js:570665-571016 placement (2.1.88 match: buildDeepLink, 0.415)
+//@ chunk-7jxyna5q.js:488012-488363 placement (2.1.88 match: buildDeepLink, 0.416)
 /**
  * （误归 deepLink）从 Bash 命令中解析每个 gh repo create 的仓库名与可见性，用于上报 tengu_gh_repo_created。
  */
@@ -314,12 +306,12 @@ function parseGhRepoCreateCommands(action) {
   }
   return results;
 }
-//@ chunk-s61vbvea.js:571016-571081 layout
-var regExp_12; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:571016", () => {
-  regExp_12 = new RegExp(`^https://github\\.com/(${REPO_NAME_PATTERN}/${REPO_NAME_PATTERN})/?$`, "gm");
+//@ chunk-7jxyna5q.js:488363-488428 layout
+var regExp_11; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7jxyna5q.js:488363", () => {
+  regExp_11 = new RegExp(`^https://github\\.com/(${REPO_NAME_PATTERN}/${REPO_NAME_PATTERN})/?$`, "gm");
 });
-//@ chunk-s61vbvea.js:571081-571279 layout
+//@ chunk-7jxyna5q.js:488428-488626 layout
 /**
  * 在输出中的仓库名里找与命令参数匹配的唯一一个。
  */
@@ -336,7 +328,7 @@ function matchCreatedRepo(repo, createdRepos, onlyOneCommand) {
         );
   return candidates.length === 1 ? candidates[0] : undefined;
 }
-//@ chunk-s61vbvea.js:571279-571614 layout
+//@ chunk-7jxyna5q.js:488626-488961 layout
 /**
  * 识别 gh repo create 创建的仓库并记 tengu_gh_repo_created（可见性、仓库哈希）。
  */
@@ -344,36 +336,38 @@ function logReposCreated(action, output) {
   if (output === undefined) return;
   let ghRepoCreateCommands = parseGhRepoCreateCommands(action);
   if (ghRepoCreateCommands.length === 0) return;
-  let reposInOutput = [...uniq([...output.matchAll(regExp_12)].map((match) => match[1]))];
+  let reposInOutput = [
+    ...normalizeCaseForComparison_2([...output.matchAll(regExp_11)].map((match) => match[1])),
+  ];
   for (let { repo, visibility } of ghRepoCreateCommands) {
     let createdRepo = matchCreatedRepo(repo, reposInOutput, ghRepoCreateCommands.length === 1);
     if (createdRepo === undefined) continue;
     reposInOutput.splice(reposInOutput.indexOf(createdRepo), 1);
-    let repoForHash = repo !== undefined && regExp_11.test(repo) ? repo : undefined;
+    let repoForHash = repo !== undefined && regExp_10.test(repo) ? repo : undefined;
     logEvent("tengu_gh_repo_created", {
       visibility: fromEnumOpt(visibility),
       repo_hash: shortHash(repoForHash ?? createdRepo),
     });
   }
 }
-//@ chunk-s61vbvea.js:571614-571987 layout
+//@ chunk-7jxyna5q.js:488961-489334 layout
 /**
  * PR/MR URL 正则（GitHub/GitHub Enterprise/Bitbucket/GitLab）与 Gerrit 变更 URL、remote: 输出行正则。
  */
 var PR_URL_RE_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var GERRIT_CHANGE_URL_RE;
-var regExp_13;
+var regExp_12;
 var GITLAB_MR_REMOTE_RE;
-deferInit("chunk-s61vbvea.js:571614", () => {
+deferInit("chunk-7jxyna5q.js:488961", () => {
   PR_URL_RE_2 = /https?:\/\/[^/\s"]+\/([^\s"]+?)\/(?:pull|pull-requests|-\/merge_requests)\/(\d+)/;
   GERRIT_CHANGE_URL_RE = new RegExp(
     String.raw`https://${GOOGLESOURCE_HOST_PATTERN}/c/((?:${REPO_NAME_PATTERN}/)*${REPO_NAME_PATTERN})/\+/(\d{1,9})(?!\d)`,
   );
-  regExp_13 = new RegExp(String.raw`^remote:\s+(${GERRIT_CHANGE_URL_RE.source})`, "m");
+  regExp_12 = new RegExp(String.raw`^remote:\s+(${GERRIT_CHANGE_URL_RE.source})`, "m");
   GITLAB_MR_REMOTE_RE =
     /^remote:[ \t]+View merge request for \S+:[ \t]*\r?\n[ \t]*remote:[ \t]+(https?:\/\/[^/\s"]+\/[^\s"]+?\/-\/merge_requests\/\d{1,9})(?!\d)/m;
 });
-//@ chunk-s61vbvea.js:571987-572147 fingerprint (2.1.88 match: parsePrUrl, 0.878)
+//@ chunk-7jxyna5q.js:489334-489494 fingerprint (2.1.88 match: parsePrUrl, 0.878)
 /**
  * 从 URL 解析 PR 编号、仓库、提供方。
  */
@@ -388,13 +382,13 @@ function parsePrUrl_2(url) {
     };
   return null;
 }
-//@ chunk-s61vbvea.js:572147-572400 layout
+//@ chunk-7jxyna5q.js:489494-489747 layout
 /**
  * 按 URL 判断 PR 提供方：gitlab / gerrit / bitbucket / github / github-enterprise。
  */
 function detectPrProvider(url) {
   if (url.includes("/-/merge_requests/")) return "gitlab";
-  if (regExp_18.test(url)) return "gerrit";
+  if (regExp_16.test(url)) return "gerrit";
   if (url.includes("/pull-requests/")) return "bitbucket";
   let hostname;
   try {
@@ -404,24 +398,24 @@ function detectPrProvider(url) {
   }
   return isGithubDotCom(hostname) ? "github" : "github-enterprise";
 }
-//@ chunk-s61vbvea.js:572400-572560 layout
-var regExp_14; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:572400", () => {
-  regExp_14 = new RegExp(
+//@ chunk-7jxyna5q.js:489747-489907 layout
+var regExp_13; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7jxyna5q.js:489747", () => {
+  regExp_13 = new RegExp(
     `^https?://${HOSTNAME_PATTERN}(?::\\d{1,5})?/(?:${REPO_NAME_PATTERN}/${REPO_NAME_PATTERN}/(?:pull|pull-requests|cr)|projects/${REPO_NAME_PATTERN}/repos/${REPO_NAME_PATTERN}/pull-requests|${GITLAB_MR_PATH_PATTERN}` +
       String.raw`)/\d+$`,
   );
 });
-//@ chunk-s61vbvea.js:572560-572624 layout
+//@ chunk-7jxyna5q.js:489907-489971 layout
 function isValidPrUrl(prUrl) {
-  return prUrl.length <= MAX_REPO_URL_CHARS && (regExp_14.test(prUrl) || regExp_18.test(prUrl));
+  return prUrl.length <= MAX_REPO_URL_CHARS && (regExp_13.test(prUrl) || regExp_16.test(prUrl));
 }
-//@ chunk-s61vbvea.js:572624-572685 layout
+//@ chunk-7jxyna5q.js:489971-490032 layout
 /**
  * 判断 git 分支名是否安全（排除 HEAD、选项、@{ 等）。
  */
 var SAFE_BRANCH_NAME_RE = /^(?!HEAD$)(?!-)(?!.*@\{)[A-Za-z0-9._\/+@#-]{1,255}$/;
-//@ chunk-s61vbvea.js:572685-572831 layout (2.1.88 match: getTaskListLockPath, 1)
+//@ chunk-7jxyna5q.js:490032-490178 layout (2.1.88 match: getTaskListLockPath, 1)
 /**
  * git 分支名安全检查（切分误归 utils/tasks）。
  */
@@ -435,7 +429,7 @@ function isSafeBranchName(taskListId) {
       .every((segment) => segment !== "" && !segment.startsWith(".") && !segment.endsWith(".lock"))
   );
 }
-//@ chunk-s61vbvea.js:572831-573119 layout
+//@ chunk-7jxyna5q.js:490178-490466 layout
 /**
  * PR URL 有效时发出 code_change_published 系统事件（切分误归）。
  */
@@ -457,7 +451,7 @@ function announceCodeChangePublished(publication) {
   });
   return true;
 }
-//@ chunk-s61vbvea.js:573119-573682 layout
+//@ chunk-7jxyna5q.js:490466-491029 layout
 /**
  * 根据解析出的 git 动作（commit、push 及推送分支、merge/rebase）发出 vcs_state_changed 系统事件。
  */
@@ -512,14 +506,14 @@ function emitVcsStateChanges(gitOperation, output, commandInfo) {
       cwd: commandInfo.cwd,
     });
 }
-//@ chunk-s61vbvea.js:573682-573767 file-local
+//@ chunk-7jxyna5q.js:491029-491114 file-local
 function findLastPrUrl(stdout) {
   let match = stdout.match(new RegExp(PR_URL_RE_2.source, "g"));
   return match ? parsePrUrl_2(match.at(-1)) : null;
 }
-//@ chunk-s61vbvea.js:573767-573777 layout
+//@ chunk-7jxyna5q.js:491114-491124 layout
 var MAX_TRACKED_PRS = 10;
-//@ chunk-s61vbvea.js:573777-573912 layout
+//@ chunk-7jxyna5q.js:491124-491259 layout
 function dedupePrUrls(urls, maxCount = MAX_TRACKED_PRS) {
   let byUrl = new Map();
   for (let url of urls) {
@@ -531,14 +525,14 @@ function dedupePrUrls(urls, maxCount = MAX_TRACKED_PRS) {
   }
   return [...byUrl.values()].slice(-maxCount);
 }
-//@ chunk-s61vbvea.js:573912-573982 file-local
+//@ chunk-7jxyna5q.js:491259-491329 file-local
 /**
  * 从文本里提取全部 PR URL，按 prUrl 去重保留最新，最多 10 个。
  */
 function extractPrUrls(text, maxCount) {
   return dedupePrUrls(text.match(new RegExp(PR_URL_RE_2.source, "g")) ?? [], maxCount);
 }
-//@ chunk-s61vbvea.js:573982-574097 layout
+//@ chunk-7jxyna5q.js:491329-491444 layout
 function recordPrActions(prs, action) {
   let announcedCount = 0;
   for (let pr of prs) {
@@ -551,9 +545,9 @@ function recordPrActions(prs, action) {
   }
   return announcedCount;
 }
-//@ chunk-s61vbvea.js:574097-574109 layout
+//@ chunk-7jxyna5q.js:491444-491456 layout
 var SPILLED_OUTPUT_TAIL_BYTES = 8192;
-//@ chunk-s61vbvea.js:574109-574337 layout
+//@ chunk-7jxyna5q.js:491456-491684 layout
 /**
  * 输出被落盘时，把落盘文件末尾（最多 8 KiB）拼到内存输出后面再扫描 git 动作；读不到时只扫开头。
  */
@@ -575,7 +569,7 @@ ${content}`
     return stdout;
   }
 }
-//@ chunk-s61vbvea.js:574337-574440 layout
+//@ chunk-7jxyna5q.js:491684-491787 layout
 function normalizeTerminalOutput(text) {
   return text
     .replace(/\x1b\[[0-9;]*K/g, "")
@@ -590,9 +584,9 @@ function normalizeTerminalOutput(text) {
 `,
     );
 }
-//@ chunk-s61vbvea.js:574440-574520 layout
+//@ chunk-7jxyna5q.js:491787-491867 layout
 var GIT_COMMIT_SUMMARY_RE = /^\[(?:([\w./-]+)|detached HEAD)(?: \(root-commit\))? ([0-9a-f]{4,})\]/m;
-//@ chunk-s61vbvea.js:574520-574632 layout
+//@ chunk-7jxyna5q.js:491867-491979 layout
 function parseCommitSummary(output) {
   let match = normalizeTerminalOutput(output).match(GIT_COMMIT_SUMMARY_RE);
   if (match?.[2] === undefined) return;
@@ -603,7 +597,7 @@ function parseCommitSummary(output) {
     }),
   };
 }
-//@ chunk-s61vbvea.js:574632-574827 layout
+//@ chunk-7jxyna5q.js:491979-492174 layout
 /**
  * 从提交输出解析 sha 与分支，必要时把短 sha 扩展成完整 commitId。
  */
@@ -619,9 +613,9 @@ async function resolveCommitInfo(stdout, gitDir, reflogPath) {
     }),
   };
 }
-//@ chunk-s61vbvea.js:574827-574916 layout
+//@ chunk-7jxyna5q.js:492174-492263 layout
 var GIT_PUSH_REF_RE = /^\s*[+\-*!= ]?\s*(?:\[new branch\]|[0-9a-f]+\.\.+[0-9a-f]+)\s+\S+\s*->\s*(\S+)/m;
-//@ chunk-s61vbvea.js:574916-575150 layout
+//@ chunk-7jxyna5q.js:492263-492497 layout
 /**
  * 从 git push 输出（"To <remote>" 之后的缩进行）解析被推送的分支名。
  */
@@ -642,7 +636,7 @@ function parsePushedBranches(output) {
   }
   return [...branches];
 }
-//@ chunk-s61vbvea.js:575150-575473 layout
+//@ chunk-7jxyna5q.js:492497-492820 layout
 function isGhApiPullCreate(command) {
   let apiArgs = (command.replace(QUOTED_SEGMENT_RE, " ").split(/\bgh\s+api\b/)[1] ?? "").split(/[&|;\n]/)[0];
   if (!apiArgs || !/(?:^|\s)\/?repos\/[^\s/]+\/[^\s/]+\/pulls(?=\s|$)/.test(apiArgs)) return false;
@@ -651,14 +645,14 @@ function isGhApiPullCreate(command) {
     ? method.toUpperCase() === "POST"
     : /(?:^|\s)(?:-f|-F|--field|--raw-field)(?:\s|=)/.test(apiArgs);
 }
-//@ chunk-s61vbvea.js:575473-575539 layout
+//@ chunk-7jxyna5q.js:492820-492886 layout
 /**
  * 取 git push 之后到分隔符前的参数串。
  */
 function pushedBranchOf(command) {
   return (command.split(GIT_PUSH_RE)[1] ?? "").split(/[&|;\n]/)[0] ?? "";
 }
-//@ chunk-s61vbvea.js:575539-575680 layout (2.1.88 match: parsePrUrl, 0.792)
+//@ chunk-7jxyna5q.js:492886-493027 layout (2.1.88 match: parsePrUrl, 0.792)
 function parsePrNumberFromText(url) {
   let match = url.match(/[Pp]ull request (?:(\S+)#)?#?(\d{1,9})\b/);
   return match?.[2]
@@ -668,7 +662,7 @@ function parsePrNumberFromText(url) {
       }
     : undefined;
 }
-//@ chunk-s61vbvea.js:575680-575857 file-local
+//@ chunk-7jxyna5q.js:493027-493204 file-local
 /**
  * 取 git <verb> 后第一个非选项参数（遇到重定向/分隔符停止）。
  */
@@ -682,7 +676,7 @@ function parseRefFromCommand(command, verb) {
   }
   return;
 }
-//@ chunk-s61vbvea.js:575857-576546 fingerprint (2.1.88 match: detectGitOperation, 1)
+//@ chunk-7jxyna5q.js:493204-493893 fingerprint (2.1.88 match: detectGitOperation, 1)
 /**
  * 从命令与输出识别 git/gh 操作：提交（sha、committed/amended/cherry-picked、分支）、推送分支、合并/变基、PR 创建/动作等，生成结果的 gitOperation 字段（给客户端展示，不给模型）。
  */
@@ -746,20 +740,20 @@ function detectGitOperation(command, output) {
   }
   return result;
 }
-//@ chunk-s61vbvea.js:576546-576590 layout
+//@ chunk-7jxyna5q.js:493893-493937 layout
 /**
  * 待查 PR 的分支表上限（8）。
  */
 var MAX_PENDING_BRANCH_LINKS = 8;
 var MAX_BRANCH_LOOKUP_ATTEMPTS = 5;
 var GIT_LIKE_COMMAND_RE = /\b(?:git|gh|glab|curl)\b/;
-//@ chunk-s61vbvea.js:576590-576678 layout
+//@ chunk-7jxyna5q.js:493937-494025 layout
 /**
  * 待查推送分支表的键（cwd + 分支）与"可跟踪分支"判定（排除 HEAD、选项、纯数字）。
  */
 var pendingBranchKey = (sessionId, branch) => `${sessionId}\x00${branch}`;
 var isTrackableBranch = (branch) => branch !== "HEAD" && !branch.startsWith("-") && !/^#?\d+$/.test(branch);
-//@ chunk-s61vbvea.js:576678-576821 layout
+//@ chunk-7jxyna5q.js:494025-494168 layout
 /**
  * 记下推送的分支（待查 PR），有上限。
  */
@@ -775,14 +769,14 @@ function rememberPushedBranch(pendingBranchLinks, sessionId, branch) {
     attempts: 0,
   });
 }
-//@ chunk-s61vbvea.js:576821-576880 layout
+//@ chunk-7jxyna5q.js:494168-494227 layout
 /**
  * 清除某工作目录下所有待查分支记录。
  */
 function clearPendingBranchesForCwd(pendingBranchLinks, cwd) {
   for (let [key, link] of pendingBranchLinks) if (link.cwd === cwd) pendingBranchLinks.delete(key);
 }
-//@ chunk-s61vbvea.js:576880-576998 layout
+//@ chunk-7jxyna5q.js:494227-494345 layout
 /**
  * 推送后按是否已有 PR 记下或清除该分支。
  */
@@ -793,7 +787,7 @@ async function trackPushedBranch(pendingBranchLinks, sessionId, branchPromise, p
   if (wasPushed) pendingBranchLinks.delete(pendingBranchKey(sessionId, branch));
   else rememberPushedBranch(pendingBranchLinks, sessionId, branch);
 }
-//@ chunk-s61vbvea.js:576998-577268 layout
+//@ chunk-7jxyna5q.js:494345-494615 layout
 /**
  * 命令只包含 gh pr create / glab mr create（及 auth/config/api user）且非 dry-run。
  */
@@ -807,7 +801,7 @@ function isPrCreateOnlyCommand(command) {
     subcommands.every((subcommand) => createOnlyRe.test(subcommand) || harmlessRe.test(subcommand))
   );
 }
-//@ chunk-s61vbvea.js:577268-577553 layout
+//@ chunk-7jxyna5q.js:494615-494900 layout
 /**
  * 记录新建的 PR：发遥测 tengu_git_created_prs、异步登记 PR、清理当前目录的待查推送分支。
  */
@@ -830,12 +824,12 @@ function recordCreatedPr(
   clearPendingBranchesForCwd(getPendingBranchLinks(), getCwd());
   return lastPr;
 }
-//@ chunk-s61vbvea.js:577553-577565 layout
+//@ chunk-7jxyna5q.js:494900-494912 layout
 /**
  * 读取当前分支时的超时（2 秒）。
  */
 var BRANCH_LOOKUP_TIMEOUT_MS = 2000;
-//@ chunk-s61vbvea.js:577565-578168 layout
+//@ chunk-7jxyna5q.js:494912-495515 layout
 /**
  * 从 pr create 命令的 --head/--source-branch 取分支，否则读当前分支（带超时）。
  */
@@ -862,7 +856,7 @@ function prHeadBranch(command, cli) {
     BRANCH_LOOKUP_TIMEOUT_MS,
   );
 }
-//@ chunk-s61vbvea.js:578168-578336 layout
+//@ chunk-7jxyna5q.js:495515-495683 layout
 /**
  * 开关 tengu_record_created_pr_to_ccr 打开时把新 PR 记录到 CCR（远程会话）。
  */
@@ -880,7 +874,7 @@ function recordCreatedPrToCcr(pr) {
     ),
   );
 }
-//@ chunk-s61vbvea.js:578336-578558 layout
+//@ chunk-7jxyna5q.js:495683-495905 layout
 /**
  * 有相关输出时重新查询当前目录待查分支的 PR（有次数上限）。
  */
@@ -902,12 +896,12 @@ function recheckPendingBranches(command) {
     );
   }
 }
-//@ chunk-s61vbvea.js:578558-578569 layout
+//@ chunk-7jxyna5q.js:495905-495916 layout
 /**
  * 分析 PR 创建命令时的字符上限（10000）。
  */
 var MAX_PR_COMMAND_CHARS = 1e4;
-//@ chunk-s61vbvea.js:578569-578785 layout
+//@ chunk-7jxyna5q.js:495916-496132 layout
 /**
  * 命令是否通过 curl POST 或 gh api 创建 PR/MR。
  */
@@ -919,7 +913,7 @@ function isApiPrCreate(command, hasGhPrAction) {
     (!hasGhPrAction && isGhApiPullCreate(command))
   );
 }
-//@ chunk-s61vbvea.js:578785-578996 layout
+//@ chunk-7jxyna5q.js:496132-496343 layout
 /**
  * 命令在其他进程执行时，仅根据命令文本累加提交数与 PR 创建数计数器。
  */
@@ -931,11 +925,11 @@ function countGitOpsFromCommand(command) {
     GLAB_MR_ACTIONS.find((actionEntry) => actionEntry.re.test(command)),
   ];
   let createCount =
-    count(actions, (actionEntry) => actionEntry?.action === "created") +
+    countWhere(actions, (actionEntry) => actionEntry?.action === "created") +
     (isApiPrCreate(command, actions.some(Boolean)) ? 1 : 0);
   if (createCount > 0) getPrCounter()?.add(createCount);
 }
-//@ chunk-s61vbvea.js:578996-581324 fingerprint (2.1.88 match: trackGitOperations, 0.49)
+//@ chunk-7jxyna5q.js:496343-498676 fingerprint (2.1.88 match: trackGitOperations, 0.49)
 /**
  * 命令成功（退出码 0）后跟踪 git 操作：遥测 tengu_git_operation（commit/commit_amend/push/merge/rebase/pr_*），累加提交/PR 计数，识别 PR URL 与 gh pr checkout，记录推送分支以便稍后查 PR；返回是否解决了 PR（BashTool 据此 markPrResolvedThisSession）。
  */
@@ -1046,7 +1040,7 @@ function trackGitOperations(host, command, code, output) {
   let pushedPrUrls =
     isCliUpload && !prActionEntry && output && !DRY_RUN_FLAG_RE.test(pushedBranchOf(command))
       ? dedupePrUrls(
-          [regExp_13, GITLAB_MR_REMOTE_RE]
+          [regExp_12, GITLAB_MR_REMOTE_RE]
             .flatMap((pattern) => [...output.matchAll(new RegExp(pattern, "gm"))])
             .sort((match, otherMatch) => match.index - otherMatch.index)
             .map((match) => match[1] ?? ""),
@@ -1099,7 +1093,7 @@ function trackGitOperations(host, command, code, output) {
     prResolved,
   };
 }
-//@ chunk-s61vbvea.js:581324-581411 layout
+//@ chunk-7jxyna5q.js:498676-498763 layout
 /**
  * 登记后台 Promise（吞掉错误），供退出前等待。
  */
@@ -1111,12 +1105,12 @@ function trackPendingPrLink(linkPromise) {
   pendingPrLinks.add(tracked);
   tracked.finally(() => pendingPrLinks.delete(tracked));
 }
-//@ chunk-s61vbvea.js:581411-581423 placement
+//@ chunk-7jxyna5q.js:498763-498775 placement
 /**
  * 等待 PR 关联完成的超时（2 秒）。
  */
 var PR_LINK_SETTLE_TIMEOUT_MS = 2000;
-//@ chunk-s61vbvea.js:581423-581517 placement
+//@ chunk-7jxyna5q.js:498775-498869 placement
 /**
  * 等待所有待完成的 PR 关联结束（带超时）。
  */
@@ -1125,7 +1119,7 @@ async function settlePendingPrLinks() {
   if (pendingPrLinks.size === 0) return;
   await withDeadline(Promise.allSettled([...pendingPrLinks]), PR_LINK_SETTLE_TIMEOUT_MS);
 }
-//@ chunk-s61vbvea.js:581517-581604 placement
+//@ chunk-7jxyna5q.js:498869-498956 placement
 /**
  * 工作区受信任且非仅必需流量时，报告 PR 已开始并跟踪其关联。
  */
@@ -1135,7 +1129,7 @@ function announcePrStarted(host) {
   trackPendingPrLink(announcePromise);
   return announcePromise;
 }
-//@ chunk-s61vbvea.js:581604-582063 placement
+//@ chunk-7jxyna5q.js:498956-499415 placement
 async function announcePrStarted_2(host) {
   let [prStatus, branch] = await Promise.all([getPrStatus(host), getBranch(getCwd())]);
   if (prStatus === "fetch-failed") {
@@ -1167,7 +1161,7 @@ async function announcePrStarted_2(host) {
     branch,
   });
 }
-//@ chunk-s61vbvea.js:582063-582400 placement
+//@ chunk-7jxyna5q.js:499415-499752 placement
 /**
  * 把 PR 与当前会话关联并发通知，返回 linked/no_session/url_rejected。
  */
@@ -1188,7 +1182,7 @@ async function linkPrToSession(pr, action, branch) {
   await linkSessionToPR(sessionId, pr.prNumber, pr.prUrl, pr.prRepository);
   return "linked";
 }
-//@ chunk-s61vbvea.js:582400-582603 placement
+//@ chunk-7jxyna5q.js:499752-499955 placement
 /**
  * gh 命令、GitHub 限流错误正则与提醒间隔。
  */
@@ -1197,14 +1191,14 @@ var GH_COMMAND_RE =
 var GITHUB_RATE_LIMIT_RE =
   /API rate limit (?:already )?exceeded|exceeded a secondary rate limit|\bRATE_LIMITED\b/i;
 var RATE_LIMIT_REMINDER_INTERVAL_MS = 60000;
-//@ chunk-s61vbvea.js:582603-582628 placement
+//@ chunk-7jxyna5q.js:499955-499980 placement
 /**
  * 记录 PR 关联失败后的退避截止时间。
  */
 class PrLinkBackoffState {
   backoffUntil = 0;
 }
-//@ chunk-s61vbvea.js:582628-583010 placement
+//@ chunk-7jxyna5q.js:499980-500362 placement
 function GITHUB_RATE_LIMIT_REMINDER(command, branch, output) {
   if (!GH_COMMAND_RE.test(command) || !GITHUB_RATE_LIMIT_RE.test(branch) || Date.now() < output.backoffUntil)
     return;
@@ -1212,25 +1206,26 @@ function GITHUB_RATE_LIMIT_REMINDER(command, branch, output) {
   return "<system-reminder>GitHub API rate limit exceeded (5,000/hr shared across all tools and agents). Run `gh api rate_limit --jq .resources` and sleep until reset before further gh calls. If polling in a loop, use ScheduleWakeup instead of retrying.</system-reminder>";
 }
 export {
+  settlePendingPrLinks,
+  announcePrStarted,
   GH_PR_ACTIONS,
   GLAB_MR_ACTIONS,
   getPrAction,
   PR_URL_RE_2,
   parsePrUrl_2,
-  settlePendingPrLinks,
-  announcePrStarted,
   gitOperationSchema,
+  countGitOpsFromCommand,
   withSpilledOutputTail,
   trackGitOperations,
-  detectGitOperation,
-  emitVcsStateChanges,
-  regExp_11,
-  linkPrToSession,
-  isValidPrUrl,
-  isGitCommitCommand,
-  resolveCommitInfo,
-  countGitOpsFromCommand,
   GITHUB_RATE_LIMIT_REMINDER,
   PrLinkBackoffState,
+  detectGitOperation,
+  emitVcsStateChanges,
+  ghPrCmdRe,
+  isGitCommitCommand,
+  resolveCommitInfo,
+  regExp_10,
+  linkPrToSession,
+  isValidPrUrl,
   isSafeBranchName,
 };

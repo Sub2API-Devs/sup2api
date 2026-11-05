@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。读取 --session-tunnel 的标准输入行（OAuth 令牌、代理令牌与变量）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e38pv7hv.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z32jrfc6.js (5)
  * attribution: placement 5
  */
 import { openSync, closeSync } from "fs";
@@ -24,16 +24,16 @@ import { jsonParseRaw } from "../utils/slowOperations.js";
 import { setToolServerLaunchEnv } from "../utils/managedEnvApply.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e38pv7hv.js:530-543 placement
+//@ chunk-z32jrfc6.js:530-543 placement
 class LineCounter {
   line;
 }
-//@ chunk-e38pv7hv.js:543-566 placement
+//@ chunk-z32jrfc6.js:543-566 placement
 var lineCounterSlot; // deferred: uses LineCounter of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e38pv7hv.js:543", () => {
+deferInit("chunk-z32jrfc6.js:543", () => {
   lineCounterSlot = new HostScoped(() => new LineCounter());
 });
-//@ chunk-e38pv7hv.js:566-1376 placement
+//@ chunk-z32jrfc6.js:566-1376 placement
 /**
  * 读取 --session-tunnel 的标准输入行（OAuth 令牌、代理令牌与变量）。
  */
@@ -77,11 +77,11 @@ function readSessionTunnelInput(fd = 0) {
   }
   return;
 }
-//@ chunk-e38pv7hv.js:1376-1409 placement
+//@ chunk-z32jrfc6.js:1376-1409 placement
 function peekSessionTunnelInput() {
   return onProcessRootHost(lineCounterSlot).line;
 }
-//@ chunk-e38pv7hv.js:1409-1468 placement
+//@ chunk-z32jrfc6.js:1409-1468 placement
 function takeSessionTunnelInput() {
   let state = onProcessRootHost(lineCounterSlot);
   let line = state.line;

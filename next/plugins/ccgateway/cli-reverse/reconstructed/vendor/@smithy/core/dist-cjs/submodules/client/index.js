@@ -1,8 +1,8 @@
 /**
  * @smithy/core/dist-cjs/submodules/client/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/core@3.30.0
- * pieces: chunk-ke7ft91e.js (1)
+ * pieces: chunk-x53tzdyc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -12,7 +12,7 @@ import { require_types } from "../../../../types/dist-cjs/index.js";
 import { require_schema } from "../schema/index.js";
 import { require_serde } from "../serde/index.js";
 
-//@ chunk-ke7ft91e.js:3961-12613 cjs-fingerprint
+//@ chunk-x53tzdyc.js:3961-12613 cjs-fingerprint
 var require_client = __commonJS(function (cjsExports) {
   var constructStack = require_middleware_stack();
   var protocols = require_protocols();

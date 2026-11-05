@@ -3,10 +3,10 @@
  *
  * 单次工具调用的生命周期：输入 JSON/schema 校验、validateInput、PreToolUse hooks、权限决策、tool.call、结果映射与持久化、PostToolUse hooks、遥测；runToolUse 入口（chunk-e6aww6q8#$B）在 _unattributed
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/tools/toolExecution.ts
- * pieces: chunk-bk5ntezz.js (1), chunk-e6aww6q8.js (124)
- * attribution: fingerprint 8, placement 102, layout 15
+ * pieces: chunk-5xgkngpb.js (130)
+ * attribution: placement 101, fingerprint 7, layout 21, sole-consumer 1
  */
 import { AsyncLocalStorage } from "async_hooks";
 import { randomUUID } from "crypto";
@@ -37,7 +37,7 @@ import {
   addToToolDuration,
 } from "../../bootstrap/state.js";
 import {
-  PERSISTED_OUTPUT_TAG,
+  PERSISTED_OUTPUT_TAG as PERSISTED_OUTPUT_TAG_2,
   PERSISTED_OUTPUT_CLOSING_TAG,
   TRUNCATED_OUTPUT_TAG,
   TRUNCATED_OUTPUT_CLOSING_TAG,
@@ -46,10 +46,15 @@ import {
   isToolResultContentEmpty,
   exceedsPersistThreshold,
   getPersistenceThreshold,
+  recordRetypedLikely,
   toolResultsDirFor_2,
-  processToolResultBlock,
+  persistLargeToolResult,
 } from "../../utils/toolResultStorage.js";
-import { MAX_MCP_RESULT_CHARS, MAX_OUTPUT_CHARS_SMALL } from "../../constants/outputLimits.js";
+import {
+  MAX_MCP_RESULT_CHARS,
+  MAX_OUTPUT_CHARS_SMALL,
+  TRUNCATE_MIDDLE_CHARS,
+} from "../../constants/outputLimits.js";
 import { isTextBlock } from "../../utils/messages/textLineCount.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import {
@@ -103,6 +108,8 @@ import {
   runPostToolUseFailureHooks,
 } from "./toolHooks.js";
 import { logForDebugging, createAttachmentMessage_2 } from "../../utils/debug.js";
+import { codeModeAccepted, isAccepted } from "../../utils/codeMode/accepted.js";
+import { withStoppedWaitContext, withoutStoppedWait, getAbortKind } from "./toolAbort.js";
 import {
   toolInputOf,
   EDIT_SOURCE_KINDS,
@@ -121,7 +128,7 @@ import {
   stringifyToolResult,
   withMemoryCorrectionHint,
   createProgressMessage,
-  createCancelledToolResultBlock,
+  getDenialMessageSuffix,
   PERMISSION_DENIED_RETRY_TEXT,
   asSubagentFrameResult,
 } from "../../utils/messages.js";
@@ -130,14 +137,13 @@ import { asStringList, UI_ENV_SITE_RULES } from "../../plugins/functionHooks/sit
 import { logError } from "../../utils/log.js";
 import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../../utils/env.js";
-import { logEvent } from "../analytics/index.js";
 import {
   callFrameCwd,
   getCwdOrNull,
   realPathOutcomeSync,
   callFramePhysicalMatches,
 } from "../../utils/cwd.js";
-import { runInRemoteCallFrame } from "../../remote/remoteMode.js";
+import { runInRemoteCallFrame, WALKED } from "../../remote/remoteMode.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad, toolFeature } from "../analytics/featureTelemetry.js";
 import {
   unwrapAbortReason,
@@ -148,7 +154,7 @@ import {
   userAbortReason,
 } from "../../utils/abortController.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import {
   latestPromptSnapshot,
   recordedDeferredTools,
@@ -173,7 +179,7 @@ import { exceedsLineLimit } from "../../utils/terminal.js";
 import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
 import { isModelCapabilityEnabled } from "../../utils/model/promptBundles.js";
 import {
-  getMcpPrefix as getMcpPrefix_2,
+  getMcpPrefix as getMcpPrefix_4,
   getToolNameForPermissionCheck as getToolNameForPermissionCheck_4,
   mcpInfoFromString,
   resolveMcpConnectionForTool,
@@ -198,8 +204,8 @@ import {
   extractSubagentType,
   extractToolInputDetailsForAnalytics,
   toolSourceMetadata,
-  extractToolInputForTelemetry_2,
-  isMedia,
+  extractToolInputForTelemetry,
+  isMedia as isMedia_2,
   getFileExtensionForAnalytics,
   getFileExtensionsFromBashCommand_2,
   extensionsInCommand,
@@ -232,6 +238,8 @@ import {
   ALL_BROWSER_TOOL_PREFIXES,
   isAutoAllowedInMode,
 } from "../../utils/permissions/browserToolNames.js";
+import { MCP_RESOURCE_TOOL_NAMES } from "../../cli/print/turnLoop.js";
+import { canonicalToolName, WORKSPACE_BASH_TOOL } from "../../utils/permissions/permissionRuleParser.js";
 import { findToolByName, runAfterResultCommitted } from "../../Tool.js";
 import { currentMcpClients } from "../compact/idleToolResultClearing.js";
 import {
@@ -262,14 +270,15 @@ import {
   getMainLoopModel as getMainLoopModel_2,
   getEffortValue,
   getEffortLayerOverride,
+  ModeAtRequest,
 } from "../../utils/permissions/toolPermissionContext.js";
 import { getEffortLevelIfSupported } from "../../utils/effort.js";
 import { getRuntimeMainLoopModel } from "../../utils/model/planModeModel.js";
 import { doesMostRecentAssistantMessageExceed200k } from "../../utils/tokens.js";
 import { hasRelaySource } from "../projectsRelay/relayConfig.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { roughTokenCountEstimationForContent } from "../tokenEstimation.js";
-import { count, uniq } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   getLoggingSafeMcpBaseUrl,
   RETRYABLE_CONNECT_CODES,
@@ -294,6 +303,7 @@ import {
   ARTIFACTS_MCP_GET_TOOL,
   ARTIFACTS_MCP_READ_SHARED_TOOL,
 } from "../artifacts/artifactsMcpTools.js";
+import { logEvent } from "../analytics/index.js";
 import { shortHash } from "../../utils/shortHash.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import {
@@ -315,17 +325,23 @@ import {
   parseArtifactUrlInput,
 } from "../../tools/ArtifactTool/constants.js";
 import { aliasOfToolName, toolByAlias } from "./batchTools.js";
+import {
+  isCodeModeEnabled,
+  CODE_MODE_ONLY_TOOLS,
+  willHideCodeModeOnlyTools,
+} from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { toolMatchesAnyName } from "./permissionCheckGuard.js";
+import { REPL_TOOL_NAME } from "../../tools/REPLTool/constants.js";
+import { POLL } from "../../tools/PollTool/prompt.js";
 import {
   EXTERNAL_ALWAYS_AVAILABLE_TOOLS,
   COORDINATOR_MAIN_THREAD_TOOL_NAMES,
   EXTERNAL_ALWAYS_AVAILABLE_TOOLS_2,
 } from "../../utils/toolPool.js";
-import { POLL } from "../../tools/PollTool/prompt.js";
 import { BRIEF_TOOL_NAME as BRIEF_TOOL_NAME_2 } from "../../tools/BriefTool/prompt.js";
 import { GET_TASK_TOOL_TEXT, GET_TASK_NOT_A_TOOL_TEXT } from "../../remote/tools/nativeToolErrors.js";
 import { isCoordinatorMode_2 } from "../../coordinator/coordinatorMode.js";
-import { AGENT, TASK } from "../../tools/AgentTool/constants.js";
+import { AGENT } from "../../tools/AgentTool/constants.js";
 import { claudeAiEnvironment } from "../../constants/claudeAiOrigin.js";
 import { artifactViewerUrlFor } from "../../tools/ArtifactTool/artifactUrls.js";
 import {
@@ -343,13 +359,14 @@ import {
   isOutsideLaunchToolList,
 } from "../../utils/permissions/filterToolsByDenyRules.js";
 import { ASKUSERQUESTION } from "../../tools/AskUserQuestionTool/prompt.js";
+import { STILL_LISTED_NOTE } from "../mcp/mcpToolRemovalReasons.js";
 import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
 import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
 import { CHROME_TOOL_NAMES } from "../../utils/claudeInChrome/common.js";
-import { isPlainObject as isPlainObject_4 } from "../../utils/objectUtils.js";
+import { isPlainObject as isPlainObject_5 } from "../../utils/objectUtils.js";
 import { appToolServerErrorSuffix } from "../mcp/appToolServerErrors.js";
 import { WAITFORMCPSERVERS } from "../../tools/WaitForMcpServersTool/WaitForMcpServersTool.js";
-import { normalizeNameForMCP } from "../mcp/normalization.js";
+import { CLAUDEAI_SERVER_PREFIX } from "../mcp/normalization.js";
 import { mintPasteId } from "../../history.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
 import { isGitCommitCommand, resolveCommitInfo } from "../../tools/shared/gitOperationTracking.js";
@@ -367,6 +384,7 @@ import {
 import { cachedDeclaredTools, cachedNoChannelTools } from "../api/declaredToolSet.js";
 import { recordToolUsePair } from "../compact/keptTools.js";
 import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
+import { openProfileWindow } from "../../utils/queryProfiler.js";
 import {
   checkWebIsolation,
   webIsolationModule,
@@ -390,8 +408,8 @@ import {
 import { clearToolUsePermissionState } from "../../components/permissions/hooks.js";
 import { toolCategoryForTelemetry } from "../api/toolDefinitionShape.js";
 import {
-  cloneIfServerResults,
   isClassifierTargetToolUse,
+  cloneIfServerResults,
   lacksServerResult,
   getPermissionModeAtRequestForArbiter,
   describeInputRewrite,
@@ -402,12 +420,14 @@ import {
 import { isAutoClassifierActive } from "../../utils/permissions/autoModeState.js";
 import { getServerClassifierFallbackMode } from "../../utils/permissions/serverClassifier/flags.js";
 import { deepEqualIgnoringUndefined, getSurfacedToolNames } from "../../bootstrap/stateSlices.js";
-import { guardAccountMemoryHookRewrite } from "../../utils/hooks/hookUpdatedInput.js";
 import { hasModuleHookingSite } from "../../plugins/hooksModules/loadedModuleFilters.js";
+import { guardAccountMemoryHookRewrite } from "../../utils/hooks/hookUpdatedInput.js";
 import { eventCallersFor2 } from "../../plugins/functionHooks/eventCatalog.js";
 import { releaseToolServerHold } from "../../plugins/functionHooks/pluginLifecycle.js";
 import { notLoadedToolPolicy } from "../mcp/mcpGates.js";
+import { isCompactBoundaryMessage as isCompactBoundaryMessage_3 } from "../projects/threadRows.js";
 import { toolInputJsonSchema } from "../../plugins/functionHooks/types/builtinToolSchemas.js";
+import { createCancelledToolResultBlock } from "../PromptSuggestion/speculation.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { hasLink } from "../../utils/hasLink.js";
 import {
@@ -416,9 +436,11 @@ import {
   executePermissionDeniedHooks,
 } from "../../utils/hooks.js";
 import { registerAgent } from "../../utils/telemetry/perfettoTracing.js";
+import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { getClassifierEpoch, registerClassifiedRun } from "../../utils/conversationRecovery.js";
 import { emptyInputRepairConfig } from "../analytics/juniperShoalConfig.js";
 import { isEmptyObject, placeholderToolInput } from "../../utils/toolInputPlaceholder.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { errorTelemetryFields } from "../../utils/accessibility/screenReader.js";
 import {
   getActiveSpanId,
@@ -436,8 +458,7 @@ import {
   isToolContentLoggingEnabled,
   describeErrorWithoutText,
 } from "../../utils/telemetry/sessionTracing.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
-import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { classifyBashCommand } from "../../tools/BashTool/commandClassification.js";
 import { isLiveMemoryTool } from "../mcp/memoryServerVerification.js";
 import { withholdsFileReferenceErrors } from "../mcp/fileReference/wrapFileReferenceTool.js";
@@ -471,7 +492,6 @@ import {
 } from "./detachedToolCalls.js";
 import { waitForFolderAttached } from "../../utils/remoteTools/folderTargets.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../../tools/NotebookEditTool/constants.js";
-import { WORKSPACE_BASH_TOOL } from "../../utils/permissions/permissionRuleParser.js";
 import { DESIGNSYNC, DESIGNSYNC_METHODS } from "../../tools/DesignSyncTool/DesignSyncTool.js";
 import { WEBSEARCH, getWebSearchModeAnalytics } from "../../tools/WebSearchTool/prompt.js";
 import { commitAttributes } from "../../utils/telemetry/repositoryAttributes.js";
@@ -481,24 +501,15 @@ import {
   isLiveHostContextDisabled,
 } from "../../utils/permissions/classifierHostContext.js";
 import { getAutoModeConfigOrDefault } from "../../utils/permissions/permissionSetup.js";
-import { MESSAGE_MARK_SYMBOLS } from "../../utils/messageKinds.js";
+import { MESSAGE_MARK_SYMBOLS, BUILT_IN_TOOL_RUN_SYMBOL } from "../../utils/messageKinds.js";
 import { isDocsConnectorTool, readFirstJsonPayload } from "../mcp/resultContent.js";
 import { getCachedReadingLimit } from "../../tools/FileReadTool/limits.js";
-import { getAbortKind } from "./toolAbort.js";
 import { abortScopeOf } from "../../utils/abortReasons.js";
 import { classifyMcpErrorSourceCategory } from "../mcp/mcpResultErrors.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
-import {
-  MAX_USAGE_NAME_CHARS,
-  INSTRUCTIONS,
-  PERSON,
-  CLAUDE,
-  SUMMARY,
-  OTHER,
-} from "../../skills/bundled/explainUsage.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3765505-3765551 placement
+//@ chunk-5xgkngpb.js:3861297-3861343 placement
 /**
  * 把权限决策原因转成可安全展示的文本（经输出清洗器）。
  */
@@ -507,7 +518,7 @@ function sanitizedDecisionReasonDisplay(decision, tool, input, permissionMode) {
     decisionReasonDisplayString(decision, tool, input, permissionMode),
   );
 }
-//@ chunk-e6aww6q8.js:3783493-3783547 placement
+//@ chunk-5xgkngpb.js:3879941-3879995 placement
 /**
  * 定时任务类工具调用时复制一份结果，供后续修正插件归属。
  */
@@ -518,7 +529,7 @@ function cronToolCallResult(toolName, result) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:3783547-3783707 placement
+//@ chunk-5xgkngpb.js:3879995-3880155 placement
 /**
  * 定时任务触发的工具调用：按对应会话定时任务（或当前调度插件）修正结果里的 plugin 归属。
  */
@@ -535,18 +546,18 @@ function attributeScheduledPlugin(name, toolResult, toolOutput) {
         plugin: pluginName,
       };
 }
-//@ chunk-e6aww6q8.js:3783707-3783745 placement
+//@ chunk-5xgkngpb.js:3880155-3880193 placement
 /**
  * 工具名是 CronCreate 或 ScheduleWakeup。
  */
 function isCronToolName(toolName) {
   return toolName === CRON_CREATE_TOOL_NAME || toolName === SCHEDULE_WAKEUP_TOOL_NAME;
 }
-//@ chunk-e6aww6q8.js:3783745-3783817 placement
+//@ chunk-5xgkngpb.js:3880193-3880265 placement
 function isPlainObjectValue(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-e6aww6q8.js:3783817-3783966 placement
+//@ chunk-5xgkngpb.js:3880265-3880414 placement
 function getCronTaskPlugin(value) {
   if (!isPlainObjectValue(value)) return;
   return getSessionCronTasks().find((task) =>
@@ -555,7 +566,7 @@ function getCronTaskPlugin(value) {
       : task.kind === "loop" && task.scheduledFor === value.scheduledFor,
   )?.plugin;
 }
-//@ chunk-e6aww6q8.js:3783966-3784199 placement
+//@ chunk-5xgkngpb.js:3880414-3880645 placement
 /**
  * MCP 结果被持久化或截断标签替换时，为副本保留原始结果的截断版本（钩子调用的除外）。
  */
@@ -564,7 +575,7 @@ function restoreMcpResultForCopy(tool, result, { content }, { hookCaller }) {
     hookCaller === undefined &&
     typeof content === "string" &&
     content !== result &&
-    ((content.startsWith(PERSISTED_OUTPUT_TAG) && content.endsWith(PERSISTED_OUTPUT_CLOSING_TAG)) ||
+    ((content.startsWith(PERSISTED_OUTPUT_TAG_2) && content.endsWith(PERSISTED_OUTPUT_CLOSING_TAG)) ||
       (content.startsWith(TRUNCATED_OUTPUT_TAG) && content.endsWith(TRUNCATED_OUTPUT_CLOSING_TAG)))
     ? truncateResultForCopy(
         result,
@@ -574,9 +585,9 @@ function restoreMcpResultForCopy(tool, result, { content }, { hookCaller }) {
       )
     : result;
 }
-//@ chunk-e6aww6q8.js:3784199-3784210 placement
+//@ chunk-5xgkngpb.js:3880645-3880656 placement
 var MAX_KEPT_TEXT_BLOCK_CHARS = 32;
-//@ chunk-e6aww6q8.js:3784210-3784705 placement
+//@ chunk-5xgkngpb.js:3880656-3881149 placement
 /**
  * 按字符预算截断结果中的文本块，超出部分用"[N more characters are not kept on this copy]"说明。
  */
@@ -626,7 +637,7 @@ function truncateResultForCopy(result, maxChars = MAX_MCP_RESULT_CHARS) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3784705-3787120 placement
+//@ chunk-5xgkngpb.js:3881149-3883630 placement
 /**
  * 运行 tool.call 钩子链；对账户记忆服务器的调用，钩子的代答会被记录并警告。
  */
@@ -665,7 +676,9 @@ async function runToolCallHooks(
         toolDenialKind: "permission-rule",
       },
     );
-  let toolUseContext_2 = toolUseContext;
+  let toolUseContext_2 = codeModeAccepted()
+    ? withStoppedWaitContext(toolUseContext, toolUseId)
+    : toolUseContext;
   let keepResultForSubagents = managedRan() && shouldKeepToolResultInSubagents(toolUseContext, tool);
   if (keptRun && !keepResultForSubagents) return keptRun.made.messages;
   let needsManagedLink = shouldRunManagedLink(keepResultForSubagents, managedRan(), keptRun !== undefined);
@@ -734,7 +747,8 @@ async function runToolCallHooks(
       ? keptRun.made.messages
       : [...keptRun.made.messages, ...postHookResult.messages];
   let outputCheck = tool.outputSchema?.safeParse(postHookResult.output);
-  if (outputCheck && !outputCheck.success)
+  if (outputCheck && !outputCheck.success) {
+    if (codeModeAccepted()) toolUseContext.stoppedResultWait?.(toolUseId)?.withdraw();
     return [
       ...plainErrorAppender(
         `${postHookResult.rewritten ? "a managed PostToolUse hook rewrote" : "tool.call step resolved"} ${tool.name} with a result that does not match its output shape: ` +
@@ -743,19 +757,20 @@ async function runToolCallHooks(
       ...(keptRun ? withoutToolResultBlock(keptRun.made.messages, toolUseId) : []),
       ...postHookResult.messages,
     ];
-  let toolUseResult = attributeScheduledPlugin(
+  }
+  let scheduled = attributeScheduledPlugin(
     tool.name,
     runs.last()?.made.result,
     outputCheck?.data ?? postHookResult.output,
   );
-  let finalOutput = toolUseResult;
+  let finalOutput = scheduled;
   let keepForSubagents = shouldKeepToolResultInSubagents(toolUseContext, tool);
   let toolDuration = (keptRun ?? hookRun)?.made.messages.find(
     (message) => findToolResultBlock(message, toolUseId) !== undefined,
   )?.toolDuration;
   let resultBlock = await mapAndMaybePersistToolResult(
     tool,
-    toolUseResult,
+    scheduled,
     toolUseId,
     getOriginalCwd_2(toolUseContext.session),
     toolUseContext.storageV5,
@@ -776,7 +791,7 @@ async function runToolCallHooks(
     ...postHookResult.messages,
   ];
 }
-//@ chunk-e6aww6q8.js:3787120-3787208 placement
+//@ chunk-5xgkngpb.js:3883630-3883718 placement
 /**
  * tool.call 钩子最近一次运行失败时返回拒绝结果。
  */
@@ -787,7 +802,7 @@ function denyOnStaleHookRun(hookResult, hookRun, toolUseId) {
       }
     : hookResult;
 }
-//@ chunk-e6aww6q8.js:3787208-3788237 placement
+//@ chunk-5xgkngpb.js:3883718-3884794 placement
 /**
  * 应用 tool.call 钩子的结果（阻止执行、改写结果）。
  */
@@ -839,7 +854,9 @@ async function applyToolCallHookResult(hookResult, toolCallChain, callInfo) {
               tool: callInfo.tool,
               toolUseID: callInfo.input.tool_use_id,
               input: findRunInputForResult(staleCheckedResult, toolCallChain, callInfo.input),
-              toolUseContext: callInfo.toolUseContext,
+              toolUseContext: codeModeAccepted()
+                ? withStoppedWaitContext(callInfo.toolUseContext, callInfo.input.tool_use_id)
+                : callInfo.toolUseContext,
             },
             allMessages,
           )),
@@ -852,12 +869,12 @@ async function applyToolCallHookResult(hookResult, toolCallChain, callInfo) {
           ),
         ];
 }
-//@ chunk-e6aww6q8.js:3788237-3788261 placement
+//@ chunk-5xgkngpb.js:3884794-3884818 placement
 var TOOL_CALL_SITE_RULES; // deferred: uses UI_ENV_SITE_RULES (../../plugins/functionHooks/sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3788237", () => {
+deferInit("chunk-5xgkngpb.js:3884794", () => {
   TOOL_CALL_SITE_RULES = UI_ENV_SITE_RULES["tool.call"];
 });
-//@ chunk-e6aww6q8.js:3788305-3788666 placement
+//@ chunk-5xgkngpb.js:3884862-3885223 placement
 /**
  * 安全采样 process.memoryUsage()：无磁盘会话跳过；失败时记日志，非常见文件系统错误只上报一次。
  */
@@ -887,7 +904,7 @@ class MemoryUsageSampler {
     }
   }
 }
-//@ chunk-e6aww6q8.js:3788666-3788833 placement
+//@ chunk-5xgkngpb.js:3885223-3885390 placement
 function diffMemoryUsage(before, after) {
   if (before === undefined || after === undefined) return;
   return {
@@ -896,12 +913,12 @@ function diffMemoryUsage(before, after) {
     externalDeltaBytes: after.external - before.external,
   };
 }
-//@ chunk-e6aww6q8.js:3788883-3788929 placement
+//@ chunk-5xgkngpb.js:3885440-3885486 placement
 /**
  * 工具调用耗时的类别顺序（审批、模型、自身、外部）。
  */
 var TIMING_CATEGORIES = ["approval", "model", "own", "external"];
-//@ chunk-e6aww6q8.js:3788929-3789753 placement
+//@ chunk-5xgkngpb.js:3885486-3886310 placement
 /**
  * 统计工具调用的墙钟时间分布：按外部、审批、模型、自身等类别计时（同时只计最高优先的一类），settle 后输出外部耗时、审批等待、模型调用与外部工作前时间。
  */
@@ -980,32 +997,32 @@ class ToolWallClockTracker {
     return nowMs;
   }
 }
-//@ chunk-e6aww6q8.js:3789753-3789769 placement
+//@ chunk-5xgkngpb.js:3886310-3886326 placement
 /**
  * 按调用保存计时上下文的 AsyncLocalStorage。
  */
 var timingContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3789753", () => {
+deferInit("chunk-5xgkngpb.js:3886310", () => {
   timingContext = new AsyncLocalStorage();
 });
-//@ chunk-e6aww6q8.js:3789769-3789807 placement
+//@ chunk-5xgkngpb.js:3886326-3886364 placement
 /**
  * 在给定计时上下文里执行函数。
  */
 function runWithTimingContext(timing, fn) {
   return timingContext.run(timing, fn);
 }
-//@ chunk-e6aww6q8.js:3789807-3789844 placement (2.1.88 match: getAgentContext, 1)
+//@ chunk-5xgkngpb.js:3886364-3886401 placement
 /**
  * 当前请求的计时器存储（ALS）。
  */
 function getRequestTimingStore() {
   return timingContext.getStore();
 }
-//@ chunk-e6aww6q8.js:3789844-3790091 placement
+//@ chunk-5xgkngpb.js:3886401-3886648 placement
 var CALL_DIRECTORY_CHANGED_MESSAGE =
   "The working directory no longer leads where it did when this call was permission-checked (it was deleted, a part of its path was replaced, or it can't be examined), so the call was not run. Make the call again to have it checked afresh.";
-//@ chunk-e6aww6q8.js:3790091-3790191 placement
+//@ chunk-5xgkngpb.js:3886648-3886748 placement
 function runInHeldDirectory(cwd, fn) {
   return callFrameCwd() !== undefined || (cwd !== undefined && cwd === getCwdOrNull())
     ? runInRemoteCallFrame(fn, {
@@ -1013,7 +1030,7 @@ function runInHeldDirectory(cwd, fn) {
       })
     : fn();
 }
-//@ chunk-e6aww6q8.js:3790191-3790638 placement
+//@ chunk-5xgkngpb.js:3886748-3887598 placement
 /**
  * 检查工作目录在权限检查后是否仍指向同一位置；变化时记日志与 call_directory_hold 事件并拒绝调用。
  */
@@ -1021,15 +1038,22 @@ function isCallDirectoryUnchanged() {
   let heldCwd = callFrameCwd();
   if (heldCwd === undefined) return true;
   let realPath = realPathOutcomeSync(heldCwd);
+  let reasonText = typeof realPath === "string" && realPath.startsWith(WALKED);
   if (callFramePhysicalMatches(realPath)) {
     if (realPath === undefined)
       logForDebugging(
         `Working directory "${heldCwd}" may not be examined, now or at the call's permission check, so it isn't compared`,
       );
+    else if (reasonText)
+      logForDebugging(
+        `Working directory "${heldCwd}" is on a volume that the native lookup fails on, now and at the call's permission check, so it is compared by its device and file index and a walk of its links`,
+      );
     return true;
   }
   logForDebugging(
-    `Call refused: working directory "${heldCwd}" now leads to ${typeof realPath === "string" ? `"${realPath}"` : "nowhere that can be examined"}, elsewhere than at the call's permission check`,
+    reasonText
+      ? `Call refused: for working directory "${heldCwd}" the native lookup fails now, and the walk of its links answers ${realPath}, not what the call's permission check was given`
+      : `Call refused: working directory "${heldCwd}" now leads to ${typeof realPath === "string" ? `"${realPath}"` : "nowhere that can be examined"}, elsewhere than at the call's permission check`,
     {
       level: "warn",
     },
@@ -1037,18 +1061,21 @@ function isCallDirectoryUnchanged() {
   logFeatureSad("call_directory_hold", "changed_before_call");
   return false;
 }
-//@ chunk-e6aww6q8.js:3790638-3790776 placement
+//@ chunk-5xgkngpb.js:3887598-3887765 placement
 /**
  * 根据中止原因选择工具取消消息：同批被拒、交付中断（特性开关）或普通取消。
  */
 function getCancelMessage(signal) {
   let reasonKind = unwrapAbortReason(signal.reason);
   if (reasonKind === "permission-stop") return TOOL_CALL_SKIPPED_BY_SIBLING_DENIAL;
-  if (reasonKind === "interrupt" && getFeatureValue_CACHED_MAY_BE_STALE("tengu_fizzy_grove", false))
+  if (
+    reasonKind === "interrupt" &&
+    (env.CLAUDE_CODE_FIZZY_GROVE ?? getFeatureValue_CACHED_MAY_BE_STALE("tengu_fizzy_grove", false))
+  )
     return TOOL_CALL_SKIPPED_FOR_DELIVERY;
   return CANCEL_MESSAGE;
 }
-//@ chunk-e6aww6q8.js:3790776-3791098 fingerprint (2.1.88 match: classifyToolError, 0.849)
+//@ chunk-5xgkngpb.js:3887765-3888087 fingerprint (2.1.88 match: classifyToolError, 0.849)
 /**
  * 把工具抛出的错误归类为可上报的字符串：TelemetrySafeError 的 errorClass、errno 码、合法的 error.name，否则 Error/UnknownError。
  */
@@ -1068,13 +1095,13 @@ function classifyToolError(error) {
   }
   return lit_2("UnknownError");
 }
-//@ chunk-e6aww6q8.js:3791098-3792219 layout
+//@ chunk-5xgkngpb.js:3888087-3889217 layout
 /**
  * 输入校验失败时，若未知键或枚举值"在本对话早先的工具 schema 里出现过"（内联或延迟 schema），生成"…was offered earlier in this conversation but is not available in this session"提示。
  */
 function buildUnavailableOptionNote(name, schema, schemaInput, error, messages) {
   try {
-    if (!isPlainObject_5(schemaInput)) return null;
+    if (!isPlainObject_6(schemaInput)) return null;
     let offeredKeys = new Set();
     let offeredValues = [];
     for (let issue of error.issues)
@@ -1121,7 +1148,7 @@ function buildUnavailableOptionNote(name, schema, schemaInput, error, messages) 
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:3792219-3792424 fingerprint (2.1.88 match: ruleSourceToOTelSource, 1)
+//@ chunk-5xgkngpb.js:3889217-3889422 fingerprint (2.1.88 match: ruleSourceToOTelSource, 1)
 /**
  * 权限规则来源映射到 OTel 决策来源：session→user_temporary/user_reject，用户/本地设置→user_permanent/user_reject，其余→config。
  */
@@ -1136,7 +1163,7 @@ function ruleSourceToOTelSource(ruleSource, behavior) {
       return "config";
   }
 }
-//@ chunk-e6aww6q8.js:3792424-3792965 fingerprint (2.1.88 match: decisionReasonToOTelSource, 0.965)
+//@ chunk-5xgkngpb.js:3889422-3889963 fingerprint (2.1.88 match: decisionReasonToOTelSource, 0.965)
 /**
  * 权限决策原因映射到 OTel 来源：permissionPromptTool 用其分类、rule 看来源、hook→hook、用户中断→user_abort，其它→config。
  */
@@ -1168,21 +1195,21 @@ function decisionReasonToOTelSource(reason, behavior) {
       return "config";
   }
 }
-//@ chunk-e6aww6q8.js:3792965-3793218 layout
+//@ chunk-5xgkngpb.js:3889963-3890216 layout
 /**
  * 权限结果转 OTel tool_decision：allow→accept，deny→reject，ask（未决）→reject（中断时来源 user_abort）。
  */
-function getToolDecisionForOTel(permissionDecision, aborted) {
-  switch (permissionDecision.behavior) {
+function getToolDecisionForOTel(decision, aborted) {
+  switch (decision.behavior) {
     case "allow":
       return {
         decision: "accept",
-        source: decisionReasonToOTelSource(permissionDecision.decisionReason, "allow"),
+        source: decisionReasonToOTelSource(decision.decisionReason, "allow"),
       };
     case "deny":
       return {
         decision: "reject",
-        source: decisionReasonToOTelSource(permissionDecision.decisionReason, "deny"),
+        source: decisionReasonToOTelSource(decision.decisionReason, "deny"),
       };
     case "ask":
       return {
@@ -1191,7 +1218,7 @@ function getToolDecisionForOTel(permissionDecision, aborted) {
       };
   }
 }
-//@ chunk-e6aww6q8.js:3793218-3794030 layout
+//@ chunk-5xgkngpb.js:3890216-3891044 layout
 /**
  * 组装权限决策记录（decision、source、reasonType、ruleSource、grantScope、reasonCode、circuitBreaker、classifierCategory），供权限遥测与审计。
  */
@@ -1222,6 +1249,7 @@ function buildPermissionDecisionRecord(decision, source, outcomeInfo) {
     shownOutcome?.reason?.type === "classifier"
       ? sanitizeRuleCategory(shownOutcome.reason.category)
       : undefined;
+  let empty = undefined;
   return {
     decision,
     source,
@@ -1249,9 +1277,10 @@ function buildPermissionDecisionRecord(decision, source, outcomeInfo) {
     ...(classifierCategory !== undefined && {
       classifierCategory,
     }),
+    ...false,
   };
 }
-//@ chunk-e6aww6q8.js:3794030-3794695 layout
+//@ chunk-5xgkngpb.js:3891044-3891709 layout
 function resolveShownPermissionOutcome(decisionInfo, isPrompted) {
   let { outcome, shown } = decisionInfo;
   let isEvaluationReason =
@@ -1289,11 +1318,11 @@ function resolveShownPermissionOutcome(decisionInfo, isPrompted) {
     };
   return;
 }
-//@ chunk-e6aww6q8.js:3794695-3794762 layout
+//@ chunk-5xgkngpb.js:3891709-3891776 layout
 function getMatchedAskRule(outcome) {
   return "matchedAskRule" in outcome ? outcome.matchedAskRule : undefined;
 }
-//@ chunk-e6aww6q8.js:3794762-3795026 placement
+//@ chunk-5xgkngpb.js:3891776-3892040 placement
 function findCircuitBreaker(reason, behavior) {
   if (reason?.type === "safetyCheck") {
     let circuitBreaker = reason.circuitBreaker;
@@ -1310,19 +1339,19 @@ function findCircuitBreaker(reason, behavior) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:3795026-3795185 placement
-function buildDeniedDecisionRecord(permissionDecision, recorded, source, pipeline) {
+//@ chunk-5xgkngpb.js:3892040-3892200 placement
+function buildDeniedDecisionRecord(decisionResult, recorded, pipelineRecorded, pipeline) {
   return buildPermissionDecisionRecord(
-    permissionDecision.behavior === "allow" ? recorded?.decision || source.decision : "reject",
-    recorded?.source || source.source,
+    decisionResult.behavior === "allow" ? recorded?.decision || pipelineRecorded.decision : "reject",
+    recorded?.source || pipelineRecorded.source,
     {
-      outcome: permissionDecision,
+      outcome: decisionResult,
       recorded,
       shown: pipeline?.answered ?? pipeline?.result,
     },
   );
 }
-//@ chunk-e6aww6q8.js:3795185-3795335 placement
+//@ chunk-5xgkngpb.js:3892200-3892351 placement
 function buildDenyRuleDecisionRecord(message, rule) {
   let reason = {
     type: "rule",
@@ -1337,12 +1366,12 @@ function buildDenyRuleDecisionRecord(message, rule) {
     recorded: undefined,
   });
 }
-//@ chunk-e6aww6q8.js:3795335-3795439 placement
+//@ chunk-5xgkngpb.js:3892351-3892455 placement
 function getDecisionRuleSource(reason, behavior) {
   if (reason?.type === "rule") return reason.rule.source;
   return findDecidingRule(reason, behavior === "deny" ? "deny" : "ask")?.source;
 }
-//@ chunk-e6aww6q8.js:3795439-3795670 placement
+//@ chunk-5xgkngpb.js:3892455-3892686 placement
 function shouldAddBashAudienceNote(name, toolOutput, mainLoopModel) {
   if (
     name !== BASH_TOOL_NAME ||
@@ -1362,19 +1391,19 @@ function shouldAddBashAudienceNote(name, toolOutput, mainLoopModel) {
     env.CLAUDE_CODE_BASH_OUTPUT_AUDIENCE_NOTE,
   );
 }
-//@ chunk-e6aww6q8.js:3795670-3795810 placement
+//@ chunk-5xgkngpb.js:3892686-3892826 placement
 var REMOTE_DEVICES_PREFIX; // deferred: uses getMcpPrefix (../mcp/mcpStringUtils.js) of its import cycle while loading; runs once the cycle is complete
 var BROWSER_TOOL_PREFIXES;
 var flattened_2;
-deferInit("chunk-e6aww6q8.js:3795670", () => {
-  REMOTE_DEVICES_PREFIX = getMcpPrefix_2(REMOTE_DEVICES);
+deferInit("chunk-5xgkngpb.js:3892686", () => {
+  REMOTE_DEVICES_PREFIX = getMcpPrefix_4(REMOTE_DEVICES);
   BROWSER_TOOL_PREFIXES = [`${REMOTE_DEVICES_PREFIX}Claude_Preview__`, "mcp__claude-for-chrome__"];
   flattened_2 = [IOS_SIMULATOR_DISPLAY_NAME, ANDROID_EMULATOR_DISPLAY_NAME].flatMap((displayName) => {
-    let mcpPrefix = getMcpPrefix_2(displayName);
+    let mcpPrefix = getMcpPrefix_4(displayName);
     return [mcpPrefix, REMOTE_DEVICES_PREFIX + mcpPrefix.slice(5)];
   });
 });
-//@ chunk-e6aww6q8.js:3795810-3796064 placement
+//@ chunk-5xgkngpb.js:3892826-3893080 placement
 function getDeviceToolKind(tool) {
   if (tool.isMcp !== true) return;
   let toolName = getToolNameForPermissionCheck_4(tool);
@@ -1390,18 +1419,18 @@ function getDeviceToolKind(tool) {
     return "computer_use";
   return flattened_2.some((prefix) => toolName.startsWith(prefix)) ? "simulator" : undefined;
 }
-//@ chunk-e6aww6q8.js:3796064-3796090 placement
+//@ chunk-5xgkngpb.js:3893080-3893106 placement
 var TOOL_NOT_LOADED = "TOOL_NOT_LOADED";
-//@ chunk-e6aww6q8.js:3796090-3796455 placement
+//@ chunk-5xgkngpb.js:3893106-3893471 placement
 /**
  * 工具未加载就被调用时的 InputValidationError 文本，提示先用 ToolSearch 一次性加载所需工具再调用。
  */
 function buildNotLoadedToolError(name) {
   return `InputValidationError: ${name} did not run: it was not loaded when it was called. Unless ${TOOL_SEARCH_TOOL_NAME} has loaded it since, load it together with the other tools you expect to need, in one ${TOOL_SEARCH_TOOL_NAME} call (for example, query "select:${name}", with the other names after it, comma-separated). Call it again once that result has come back, not in the same reply.`;
 }
-//@ chunk-e6aww6q8.js:3796455-3796529 placement
+//@ chunk-5xgkngpb.js:3893471-3893545 placement
 var SANITIZER_SHAPE_REGEX = /^[A-Za-z][A-Za-z0-9_]{0,63}(?:[,+][A-Za-z][A-Za-z0-9_]{0,63})*$/;
-//@ chunk-e6aww6q8.js:3796529-3796589 placement
+//@ chunk-5xgkngpb.js:3893545-3893605 placement
 /**
  * 校验遥测里的形状字段，非法时记为 nonconforming。
  */
@@ -1410,7 +1439,7 @@ function sanitizeShapeClass(shapeClass) {
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(shapeClass)
     : lit_2("nonconforming");
 }
-//@ chunk-e6aww6q8.js:3796627-3796882 placement
+//@ chunk-5xgkngpb.js:3893643-3893898 placement
 var MAX_RESULT_FIELDS; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_PENDING_CUTS;
 var MAX_PENDING_CUT_CHARS;
@@ -1418,7 +1447,7 @@ var MAX_WALK_NODES;
 var MAX_WALK_NODES_DEDUPED;
 var HOOK_RESULT_FIELDS_CUT_NOTICE;
 var pendingResultCuts;
-deferInit("chunk-e6aww6q8.js:3796627", () => {
+deferInit("chunk-5xgkngpb.js:3893643", () => {
   MAX_RESULT_FIELDS = 256;
   MAX_PENDING_CUTS = 64;
   MAX_PENDING_CUT_CHARS = 33554432;
@@ -1428,14 +1457,14 @@ deferInit("chunk-e6aww6q8.js:3796627", () => {
     "[Parts of this tool result were left out: a hook replaced the tool's output with one that has too many fields, and only its text, inline images and inline PDFs are kept.]";
   pendingResultCuts = new SessionRootSlot(() => new Map());
 });
-//@ chunk-e6aww6q8.js:3796882-3796916 placement
+//@ chunk-5xgkngpb.js:3893898-3893932 placement
 /**
  * 判断工具是否属于项目中继读取工具集。
  */
 function isHearthReadTool(name) {
   return HEARTH_READ_TOOLS.has(name);
 }
-//@ chunk-e6aww6q8.js:3796916-3797295 placement
+//@ chunk-5xgkngpb.js:3893932-3894310 placement
 /**
  * 有 MCP 入站门时，字段过多的 MCP 结果只保留简化形式，完整结果按 uuid 暂存待取回；子代理或无法序列化时只做截断并记事件。
  */
@@ -1471,14 +1500,14 @@ function cutLargeMcpResult(result) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3797295-3797694 placement
+//@ chunk-5xgkngpb.js:3894310-3894708 placement
 /**
  * 编辑工具结果的 originalFile 过长时置空并暂存完整结果（子代理中只置空）。
  */
 function cutEditOriginalFile({ toolUseId, toolUseResult, mcpMeta, inSubagent }) {
   if (
     !hasMcpInboundDoor() ||
-    !isPlainObject_5(toolUseResult) ||
+    !isPlainObject_6(toolUseResult) ||
     typeof toolUseResult.originalFile !== "string" ||
     toolUseResult.originalFile.length <= MAX_OUTPUT_CHARS_SMALL
   )
@@ -1509,7 +1538,7 @@ function cutEditOriginalFile({ toolUseId, toolUseResult, mcpMeta, inSubagent }) 
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3797694-3797933 placement
+//@ chunk-5xgkngpb.js:3894708-3894947 placement
 /**
  * 按 toolUseId 暂存被截掉的完整结果，超过条数或字符上限时淘汰最早的（记 dropped_waiting），返回新 uuid。
  */
@@ -1531,14 +1560,14 @@ function stashCutResult(toolUseId, cut) {
   }
   return uuid;
 }
-//@ chunk-e6aww6q8.js:3797933-3798073 placement
+//@ chunk-5xgkngpb.js:3894947-3895086 placement
 function cutOversizedResultBlocks(content) {
   let simplified = hasMcpInboundDoor() ? simplifyResultBlocks(content) : undefined;
   if (simplified === undefined) return content;
   logFeatureSad("mcp_result_block_cut", typeof simplified === "string" ? "not_a_list" : "list");
   return simplified;
 }
-//@ chunk-e6aww6q8.js:3798073-3798344 placement
+//@ chunk-5xgkngpb.js:3895086-3895357 placement
 /**
  * 结果字段过多时把内容块简化为只保留文本、工具引用、内联图片与 PDF，丢弃部分处加一条说明；不需要时返回 undefined。
  */
@@ -1562,12 +1591,12 @@ function simplifyResultBlocks(content, dedupe = false) {
         : []),
   );
 }
-//@ chunk-e6aww6q8.js:3798344-3798989 placement
+//@ chunk-5xgkngpb.js:3895357-3896007 placement
 /**
  * 把单个内容块简化为文本、工具引用、支持的 base64 图片或 PDF 文档，其他返回 undefined。
  */
 function simplifyResultBlock(block, allowToolReference) {
-  let raw = isPlainObject_5(block) ? block : {};
+  let raw = isPlainObject_6(block) ? block : {};
   let { type: blockType, text, source, title, context, tool_name: toolName } = raw;
   if (blockType === "text" && typeof text === "string")
     return {
@@ -1579,7 +1608,7 @@ function simplifyResultBlock(block, allowToolReference) {
       type: blockType,
       tool_name: toolName,
     };
-  let base64Source = isPlainObject_5(source) && source.type === "base64" ? source : {};
+  let base64Source = isPlainObject_6(source) && source.type === "base64" ? source : {};
   let { media_type: mediaType, data } = base64Source;
   if (
     blockType === "image" &&
@@ -1614,7 +1643,7 @@ function simplifyResultBlock(block, allowToolReference) {
     };
   return;
 }
-//@ chunk-e6aww6q8.js:3798989-3799116 placement
+//@ chunk-5xgkngpb.js:3896007-3896134 placement (2.1.88 match: _temp4, 0.615)
 function needsResultCut(minimalMcpResult, original, dedupe = false) {
   let budget =
     MAX_RESULT_FIELDS +
@@ -1623,7 +1652,7 @@ function needsResultCut(minimalMcpResult, original, dedupe = false) {
     budget === 1 / 0 || countResultFields([original.toolUseResult, original.mcpMeta], budget, dedupe) > budget
   );
 }
-//@ chunk-e6aww6q8.js:3799116-3799419 placement
+//@ chunk-5xgkngpb.js:3896134-3896437 placement
 /**
  * 迭代统计结果对象的字段数（超过上限提前返回上限+1），可对重复键形状的对象去重计数。
  */
@@ -1648,7 +1677,7 @@ function countResultFields(root, limit, dedupe = false) {
   }
   return fieldCount;
 }
-//@ chunk-e6aww6q8.js:3799419-3799572 placement
+//@ chunk-5xgkngpb.js:3896437-3896590 placement
 function isRepeatedKeyShape(value, seenShapes) {
   let keys = Object.keys(value);
   let isNumericKey = String(Number(keys[0]) >>> 0) === keys[0];
@@ -1658,7 +1687,7 @@ function isRepeatedKeyShape(value, seenShapes) {
   seenShapes.add(shapeKey);
   return false;
 }
-//@ chunk-e6aww6q8.js:3799572-3799920 placement
+//@ chunk-5xgkngpb.js:3896590-3896938 placement
 /**
  * 构造精简的 MCP 结果：内容块只留基本字段，mcpMeta 只保留结束轮次标记、限定大小的插件元数据、来源中继、结构化内容省略标记与资源链接。
  */
@@ -1671,21 +1700,21 @@ function buildMinimalMcpResult(toolUseResult, mcpMeta, keepsMcpMeta = false) {
   return {
     toolUseResult: Array.isArray(toolUseResult)
       ? toolUseResult.map(minimalContentBlock)
-      : isPlainObject_5(toolUseResult)
+      : isPlainObject_6(toolUseResult)
         ? {}
         : toolUseResult,
     mcpMeta: mcpMeta && {
-      ...(isPlainObject_5(mcpMeta._meta) && pickMcpMetaFields(mcpMeta._meta)),
+      ...(isPlainObject_6(mcpMeta._meta) && pickMcpMetaFields(mcpMeta._meta)),
       ...((mcpMeta.structuredContent !== undefined || mcpMeta.structuredContentOmitted === true) && {
         structuredContentOmitted: true,
       }),
       ...(Array.isArray(mcpMeta.resourceLinks) && {
-        resourceLinks: mcpMeta.resourceLinks.filter(isPlainObject_5).map(minimalResourceLink),
+        resourceLinks: mcpMeta.resourceLinks.filter(isPlainObject_6).map(minimalResourceLink),
       }),
     },
   };
 }
-//@ chunk-e6aww6q8.js:3799920-3800270 placement
+//@ chunk-5xgkngpb.js:3896938-3897288 placement
 /**
  * 从 MCP _meta 中挑出要保留的键：结束轮次标记，以及开关开启时大小受限的插件元数据（超限的记录到 plugin_meta_cut）。
  */
@@ -1718,13 +1747,13 @@ function pickMcpMetaFields(meta) {
         _meta: kept,
       };
 }
-//@ chunk-e6aww6q8.js:3800270-3800692 placement
+//@ chunk-5xgkngpb.js:3897288-3897710 placement
 /**
  * 把内容块精简为 type、text、source（type/media_type/data）、title、context。
  */
 function minimalContentBlock(block) {
   if (Array.isArray(block)) return [];
-  if (!isPlainObject_5(block)) return block;
+  if (!isPlainObject_6(block)) return block;
   let { type, text, source, title, context } = block;
   return {
     ...(typeof type === "string" && {
@@ -1733,7 +1762,7 @@ function minimalContentBlock(block) {
     ...(typeof text === "string" && {
       text,
     }),
-    ...(isPlainObject_5(source) && {
+    ...(isPlainObject_6(source) && {
       source: {
         ...(typeof source.type === "string" && {
           type: source.type,
@@ -1754,7 +1783,7 @@ function minimalContentBlock(block) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3800692-3800979 placement
+//@ chunk-5xgkngpb.js:3897710-3897997 placement
 function minimalResourceLink(link) {
   let { uri, name, title, description, mimeType, size } = link;
   return {
@@ -1774,7 +1803,7 @@ function minimalResourceLink(link) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3800979-3801142 placement
+//@ chunk-5xgkngpb.js:3897997-3898160 placement
 /**
  * 按 toolUseId 取回暂存的完整结果，uuid 不符时丢弃并记事件。
  */
@@ -1790,7 +1819,7 @@ function takeCutResult(toolUseId, uuid) {
   logFeatureOk(cut.feature);
   return cut.whole;
 }
-//@ chunk-e6aww6q8.js:3801142-3801243 placement
+//@ chunk-5xgkngpb.js:3898160-3898261 placement
 /**
  * 轮次结束时，对仍未完成的切出结果逐个上报 turn_ended 并清空。
  */
@@ -1799,7 +1828,7 @@ function clearCutResults() {
   for (let cut of cuts?.values() ?? []) logFeatureSad(cut.feature, "turn_ended");
   cuts?.clear();
 }
-//@ chunk-e6aww6q8.js:3801243-3801328 placement
+//@ chunk-5xgkngpb.js:3898261-3898346 placement
 /**
  * 设备类 MCP 工具名的前缀常量与后缀规则。
  */
@@ -1807,13 +1836,13 @@ var CLAUDE_DEVICE_MCP_PREFIX; // deferred: uses getMcpPrefix (../mcp/mcpStringUt
 var REMOTE_DEVICES_MCP_PREFIX;
 var MAX_DEVICE_TOOL_SUFFIX_CHARS;
 var DEVICE_TOOL_SUFFIX_REGEX;
-deferInit("chunk-e6aww6q8.js:3801243", () => {
-  CLAUDE_DEVICE_MCP_PREFIX = getMcpPrefix_2(CLAUDE_DEVICE);
-  REMOTE_DEVICES_MCP_PREFIX = getMcpPrefix_2(REMOTE_DEVICES);
+deferInit("chunk-5xgkngpb.js:3898261", () => {
+  CLAUDE_DEVICE_MCP_PREFIX = getMcpPrefix_4(CLAUDE_DEVICE);
+  REMOTE_DEVICES_MCP_PREFIX = getMcpPrefix_4(REMOTE_DEVICES);
   MAX_DEVICE_TOOL_SUFFIX_CHARS = 108;
   DEVICE_TOOL_SUFFIX_REGEX = /^[a-zA-Z0-9](?:[a-zA-Z0-9_-]*[a-zA-Z0-9])?$/;
 });
-//@ chunk-e6aww6q8.js:3801328-3801494 placement
+//@ chunk-5xgkngpb.js:3898346-3898512 placement
 function matchLocalToolAlias(toolName, aliases) {
   let matches;
   if (toolName.startsWith(REMOTE_DEVICES_MCP_PREFIX)) {
@@ -1825,7 +1854,7 @@ function matchLocalToolAlias(toolName, aliases) {
     );
   return matches.length === 1 ? matches[0] : undefined;
 }
-//@ chunk-e6aww6q8.js:3801494-3801722 placement
+//@ chunk-5xgkngpb.js:3898512-3898740 placement
 function toLocalToolAlias(toolName) {
   let sliced = toolName.slice(REMOTE_DEVICES_MCP_PREFIX.length);
   let [devicePart, actionPart, ...extraParts] = sliced.split("__");
@@ -1843,37 +1872,41 @@ function toLocalToolAlias(toolName) {
     ? CLAUDE_DEVICE_MCP_PREFIX + localSuffix
     : undefined;
 }
-//@ chunk-e6aww6q8.js:3801722-3801750 placement
+//@ chunk-5xgkngpb.js:3898768-3898806 sole-consumer
+function isMcpServerAlias(serverConnection) {
+  return MCP_RESOURCE_TOOL_NAMES.has(canonicalToolName(serverConnection));
+}
+//@ chunk-5xgkngpb.js:3898806-3898834 placement
 /**
  * 等待 MCP 服务器就绪的轮询间隔、最长等待与缺失宽限。
  */
 var MCP_WAIT_POLL_INTERVAL_MS = 50;
 var MAX_MCP_WAIT_MS = 1e4;
 var MCP_ABSENT_GRACE_MS = 3000;
-//@ chunk-e6aww6q8.js:3801750-3801777 placement
+//@ chunk-5xgkngpb.js:3898834-3898861 placement
 /**
  * 按会话记录已尝试过的工具行（弱集合）。
  */
 class ToolRowsState {
   rows = new WeakSet();
 }
-//@ chunk-e6aww6q8.js:3801777-3801806 placement
+//@ chunk-5xgkngpb.js:3898861-3898890 placement
 /**
  * 按响应 id 记录等待时长。
  */
 class ToolWaitByResponse {
   byResponse = new Map();
 }
-//@ chunk-e6aww6q8.js:3801806-3801817 placement
+//@ chunk-5xgkngpb.js:3898890-3898901 placement
 var MAX_WAIT_BY_RESPONSE_ENTRIES = 50;
-//@ chunk-e6aww6q8.js:3801817-3801905 placement
+//@ chunk-5xgkngpb.js:3898901-3898989 placement
 /**
  * 判断缓存未命中的原因（未找到、超时、已列出但未入池）。
  */
 function isCacheMissReason(bridgeEnd) {
   return bridgeEnd === "look_failed" || bridgeEnd === "look_timed_out" || bridgeEnd === "listed_not_pooled";
 }
-//@ chunk-e6aww6q8.js:3801905-3802154 placement
+//@ chunk-5xgkngpb.js:3898989-3899238 placement
 /**
  * 等待 MCP 工具所在服务器就绪并返回工具与等待信息；出错时记日志并返回未知状态。
  */
@@ -1898,7 +1931,7 @@ async function waitForMcpToolServer(toolName, tools, toolUseContext, options = {
     });
   }
 }
-//@ chunk-e6aww6q8.js:3802154-3802517 placement
+//@ chunk-5xgkngpb.js:3899238-3899601 placement
 /**
  * 判断调用的 MCP 工具是否值得等待：已能在刷新后的工具池找到，或对应服务器尚未出现在已知行中。
  */
@@ -1926,7 +1959,7 @@ function shouldWaitForMcpTool(toolName, toolUseContext) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:3802517-3802575 placement
+//@ chunk-5xgkngpb.js:3899601-3899659 placement
 /**
  * 工具名属 MCP 且前缀客户端里有尚未连接完成的客户端。
  */
@@ -1936,11 +1969,11 @@ function isPendingMcpToolName(name, clients) {
     findLongestPrefixClients(name, clients).some(isPendingWithoutReconnect)
   );
 }
-//@ chunk-e6aww6q8.js:3802575-3802646 placement
+//@ chunk-5xgkngpb.js:3899659-3899730 placement
 function isPendingWithoutReconnect(client) {
   return client.type === "pending" && client.reconnectAttempt === undefined;
 }
-//@ chunk-e6aww6q8.js:3802646-3804158 placement
+//@ chunk-5xgkngpb.js:3899730-3901309 placement
 async function getMcpServerType(toolName, tools, toolUseContext, options, notWaited) {
   let maxWaitMs = options.maxWaitMs ?? Math.min(getConnectionTimeoutMs(), MAX_MCP_WAIT_MS);
   let absentGraceMs = options.absentGraceMs ?? MCP_ABSENT_GRACE_MS;
@@ -1950,13 +1983,15 @@ async function getMcpServerType(toolName, tools, toolUseContext, options, notWai
   let { signal } = toolUseContext.abortController;
   let { toolAliases } = toolUseContext.options;
   let serverConnection = aliasOrSelf(toolName, toolAliases);
-  if (typeof serverConnection !== "string" || !mcpInfoFromString(serverConnection))
+  let isToolAlias = typeof serverConnection === "string" && isMcpServerAlias(serverConnection);
+  if (typeof serverConnection !== "string" || (!isToolAlias && !mcpInfoFromString(serverConnection)))
     return notWaited({
       serverState: "not_mcp",
       initialServerState: "not_mcp",
     });
   function clients() {
-    return findLongestPrefixClients(serverConnection, currentMcpClients(toolUseContext));
+    let clients = currentMcpClients(toolUseContext);
+    return isToolAlias ? clients : findLongestPrefixClients(serverConnection, clients);
   }
   function serverState() {
     return getMcpServerBaseUrlFromToolName(clients());
@@ -1974,7 +2009,7 @@ async function getMcpServerType(toolName, tools, toolUseContext, options, notWai
       return true;
     if (elapsedMs < connectedGraceMs && currentClients.some((client) => client.type === "connected"))
       return true;
-    return currentClients.length === 0 && elapsedMs < absentGraceMs;
+    return (currentClients.length === 0 || isToolAlias) && elapsedMs < absentGraceMs;
   }
   function findTool(currentTools) {
     return findToolByName(currentTools, toolName, toolAliases);
@@ -2022,7 +2057,7 @@ async function getMcpServerType(toolName, tools, toolUseContext, options, notWai
   else if (!foundTool) {
     currentTools = refreshTools();
     foundTool = findTool(currentTools);
-    if (!foundTool && waitBudgetMs === maxWaitMs && Date.now() - now >= waitBudgetMs) {
+    if (!foundTool && !isToolAlias && waitBudgetMs === maxWaitMs && Date.now() - now >= waitBudgetMs) {
       for (let client of clients()) if (waitedClients.has(client)) rows.add(client);
     }
   }
@@ -2043,21 +2078,21 @@ async function getMcpServerType(toolName, tools, toolUseContext, options, notWai
     aborted: signal.aborted,
   };
 }
-//@ chunk-e6aww6q8.js:3804158-3804318 placement
+//@ chunk-5xgkngpb.js:3901309-3901469 placement
 function getMcpServerBaseUrlFromToolName(clients) {
   let mapped = clients.map((client) => client.type);
   for (let state of ["connected", "cached", "pending", "needs-auth", "failed", "disabled"])
     if (mapped.includes(state)) return state;
   return "absent";
 }
-//@ chunk-e6aww6q8.js:3804318-3804375 placement
+//@ chunk-5xgkngpb.js:3901469-3901526 placement
 /**
  * 别名表里有该名字则返回别名，否则返回原名。
  */
 function aliasOrSelf(name, toolAliases) {
   return toolAliases && Object.hasOwn(toolAliases, name) ? (toolAliases[name] ?? name) : name;
 }
-//@ chunk-e6aww6q8.js:3804375-3804529 placement
+//@ chunk-5xgkngpb.js:3901526-3901680 placement
 /**
  * 找出 MCP 前缀与工具名匹配且前缀最长的客户端列表。
  */
@@ -2065,7 +2100,7 @@ function findLongestPrefixClients(toolName, clients) {
   let matches = [];
   let bestPrefixLength = 0;
   for (let client of clients) {
-    let mcpPrefix = getMcpPrefix_2(client.name);
+    let mcpPrefix = getMcpPrefix_4(client.name);
     if (!toolName.startsWith(mcpPrefix) || mcpPrefix.length < bestPrefixLength) continue;
     if (mcpPrefix.length > bestPrefixLength) {
       bestPrefixLength = mcpPrefix.length;
@@ -2075,14 +2110,14 @@ function findLongestPrefixClients(toolName, clients) {
   }
   return matches;
 }
-//@ chunk-e6aww6q8.js:3804529-3804591 placement
+//@ chunk-5xgkngpb.js:3901680-3901742 placement
 /**
  * 客户端处于 pending 且不在已尝试集合里。
  */
 function isUnwaitedPendingClient(client, skipExhausted, rows) {
   return client.type === "pending" && !(skipExhausted && rows.has(client));
 }
-//@ chunk-e6aww6q8.js:3804591-3805028 placement
+//@ chunk-5xgkngpb.js:3901742-3902179 placement
 /**
  * 解析工具输入：原始 JSON 无法解析时报 json 错误；可选先做 coerceInput 修复，再按 inputSchema 校验，返回解析结果与修复信息。
  */
@@ -2123,7 +2158,7 @@ function parseToolInput(tool, rawInput, coercion) {
     coerced,
   };
 }
-//@ chunk-e6aww6q8.js:3805028-3805408 placement
+//@ chunk-5xgkngpb.js:3902179-3902559 placement
 /**
  * 调用 validateInput：失败时返回校验结论（被规则拒绝时补全可观测输入）；成功时按需生成补全后的可观测输入。
  */
@@ -2162,7 +2197,7 @@ async function runValidateInput(tool, input, validate) {
     backfilled: true,
   };
 }
-//@ chunk-e6aww6q8.js:3805408-3805614 placement
+//@ chunk-5xgkngpb.js:3902559-3902765 placement
 /**
  * 把基于可观测输入改写的输入映射回实际调用输入（file_path 等）。
  */
@@ -2182,10 +2217,10 @@ function restoreCallInput(parseResult, restoredInput) {
   if (backfilled && restoredInput === observableInput) return callInput;
   return restoredInput;
 }
-//@ chunk-e6aww6q8.js:3805614-3805638 placement
+//@ chunk-5xgkngpb.js:3902765-3902789 placement
 var MAX_PREWARM_WAIT_MS = 300000;
 var PREWARM_POLL_MS = 5000;
-//@ chunk-e6aww6q8.js:3805638-3806688 placement
+//@ chunk-5xgkngpb.js:3902789-3903841 placement
 /**
  * 工具执行前预热远程记忆路径，处理中止、超时与挂载断开。
  */
@@ -2256,9 +2291,9 @@ async function warmRemoteMemoryPath(tool, input, signal, activityLabel) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:3900124-3900138 placement
+//@ chunk-5xgkngpb.js:3998769-3998783 placement
 var MEMORY_PREWARM_TIMEOUT_MS = 30000;
-//@ chunk-e6aww6q8.js:3900138-3900640 placement
+//@ chunk-5xgkngpb.js:3998783-3999285 placement
 function emitToolHeartbeat({ toolName, toolUseID, abortSignal, onProgress }) {
   let now = Date.now();
   let isStopped = false;
@@ -2297,7 +2332,7 @@ function emitToolHeartbeat({ toolName, toolUseID, abortSignal, onProgress }) {
   }
   return stopHeartbeat;
 }
-//@ chunk-e6aww6q8.js:3906428-3906616 placement
+//@ chunk-5xgkngpb.js:4005122-4005310 placement
 function getEffortTelemetryFields(toolUseContext) {
   let mode = getToolPermissionContext(toolUseContext).mode;
   let effortLevelIfSupported = getEffortLevelIfSupported(
@@ -2315,7 +2350,7 @@ function getEffortTelemetryFields(toolUseContext) {
       }
     : {};
 }
-//@ chunk-e6aww6q8.js:3906616-3907001 placement
+//@ chunk-5xgkngpb.js:4005310-4005695 placement
 /**
  * 为写入转录准备工具结果：MCP 或需要时裁掉过大的结果，编辑工具结果的 originalFile 过长时置空，返回结果、mcpMeta 与暂存 uuid。
  */
@@ -2331,7 +2366,7 @@ function cutResultForStorage(toolUseContext, tool, forceCut, result) {
         })
       : result;
   let { toolUseResult, mcpMeta, uuid } =
-    tool.isMcp !== true && tool.name === FILE_EDIT_TOOL_NAME && cutResult.uuid === undefined
+    tool.isMcp !== true && tool.name === EDIT && cutResult.uuid === undefined
       ? {
           ...cutResult,
           ...cutEditOriginalFile({
@@ -2348,7 +2383,7 @@ function cutResultForStorage(toolUseContext, tool, forceCut, result) {
     uuid,
   };
 }
-//@ chunk-e6aww6q8.js:3907001-3907066 placement
+//@ chunk-5xgkngpb.js:4005695-4005760 placement
 function toolFeatureOf(signal) {
   return signal.aborted
     ? {
@@ -2356,7 +2391,7 @@ function toolFeatureOf(signal) {
       }
     : {};
 }
-//@ chunk-e6aww6q8.js:3907066-3907259 placement
+//@ chunk-5xgkngpb.js:4005760-4005953 placement
 function measureStringChars(value, depth = 0) {
   if (typeof value === "string") return value.length + 1;
   if (depth >= 8 || value === null || typeof value !== "object") return 0;
@@ -2365,12 +2400,12 @@ function measureStringChars(value, depth = 0) {
   for (let item of items) total += measureStringChars(item, depth + 1);
   return total;
 }
-//@ chunk-e6aww6q8.js:3907259-3908209 placement
+//@ chunk-5xgkngpb.js:4005953-4006903 placement
 /**
  * 统计工具结果中大字段的长度（原文件、笔记本前后内容、文件内容/base64/cells、git diff、结构化补丁）用于遥测。
  */
 function measureSidecarFields(output) {
-  if (!isPlainObject_5(output)) return {};
+  if (!isPlainObject_6(output)) return {};
   let sizes = {};
   if (typeof output.originalFile === "string") sizes.sidecarOriginalFileBytes = output.originalFile.length;
   if (typeof output.original_file === "string")
@@ -2378,20 +2413,20 @@ function measureSidecarFields(output) {
   if (typeof output.updated_file === "string")
     sizes.sidecarNotebookUpdatedFileBytes = output.updated_file.length;
   if (typeof output.content === "string") sizes.sidecarContentBytes = output.content.length;
-  if (isPlainObject_5(output.file)) {
+  if (isPlainObject_6(output.file)) {
     let file = output.file;
     if (typeof file.content === "string") sizes.sidecarFileContentBytes = file.content.length;
     if (typeof file.base64 === "string") sizes.sidecarFileBase64Bytes = file.base64.length;
     if (Array.isArray(file.cells)) sizes.sidecarFileCellsBytes = measureStringChars(file.cells);
   }
-  if (isPlainObject_5(output.gitDiff)) {
+  if (isPlainObject_6(output.gitDiff)) {
     let patch = output.gitDiff.patch;
     if (typeof patch === "string") sizes.sidecarGitDiffPatchBytes = patch.length;
   }
   if (Array.isArray(output.structuredPatch)) {
     let sidecarStructuredPatchBytes = 0;
     for (let patchHunk of output.structuredPatch) {
-      if (!isPlainObject_5(patchHunk)) continue;
+      if (!isPlainObject_6(patchHunk)) continue;
       let lines = patchHunk.lines;
       if (!Array.isArray(lines)) continue;
       for (let line of lines) if (typeof line === "string") sidecarStructuredPatchBytes += line.length + 1;
@@ -2400,7 +2435,7 @@ function measureSidecarFields(output) {
   }
   return sizes;
 }
-//@ chunk-e6aww6q8.js:3908209-3908522 placement
+//@ chunk-5xgkngpb.js:4006903-4007215 placement
 /**
  * 估算工具结果的遥测指标：token 估计、图片/文档块数量，以及是否超过阈值需要落盘；出错时返回空对象。
  */
@@ -2409,7 +2444,7 @@ function getResultSizeTelemetry(content, tool) {
     return {
       toolResultTokensEst: roughTokenCountEstimationForContent(content),
       toolResultMediaBlocks: Array.isArray(content)
-        ? count(content, (block) => block.type === "image" || block.type === "document")
+        ? countWhere(content, (block) => block.type === "image" || block.type === "document")
         : 0,
       toolResultWillPersist:
         !!content &&
@@ -2429,7 +2464,7 @@ function getResultSizeTelemetry(content, tool) {
     return {};
   }
 }
-//@ chunk-e6aww6q8.js:3908522-3908619 placement
+//@ chunk-5xgkngpb.js:4007215-4007312 placement
 /**
  * 取工具对应的遥测特性名（MCP 工具按来源归类）。
  */
@@ -2438,7 +2473,7 @@ function toolFeatureName(name, server) {
   if (hostSource !== undefined) return toolFeature(hostSource);
   return toolFeature(String(sanitizeToolNameWithMcpFlag(name, server !== undefined)));
 }
-//@ chunk-e6aww6q8.js:3908619-3908673 placement
+//@ chunk-5xgkngpb.js:4007312-4007366 placement
 /**
  * 安全地处理未知工具（吞掉异常）。
  */
@@ -2449,7 +2484,7 @@ function resolveUnknownToolSafe(toolName, toolUseId, toolUseContext, requestId) 
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:3908673-3909926 placement
+//@ chunk-5xgkngpb.js:4007366-4008625 placement
 /**
  * 处理找不到的工具名：未注册的 MCP 工具、未知工具，返回对应错误。
  */
@@ -2522,14 +2557,14 @@ function resolveUnknownTool(toolName, toolUseId, toolUseContext, requestId) {
     ...mcpToolDetailsForAnalytics(toolName, mcpServerType, connection !== undefined),
   });
 }
-//@ chunk-e6aww6q8.js:3909926-3909962 placement
+//@ chunk-5xgkngpb.js:4008625-4008661 placement
 /**
  * 判断错误是否属于中止/取消。
  */
 function isAbortOrCancelError(error) {
   return isAbortError(error) || isCancel(error);
 }
-//@ chunk-e6aww6q8.js:3909962-3910048 placement
+//@ chunk-5xgkngpb.js:4008661-4008746 placement
 /**
  * 把中止错误转成工具错误文案（后台取消时附记忆更正提示）。
  */
@@ -2538,7 +2573,7 @@ function toolErrorTextForAbort(error, signal) {
     ? withMemoryCorrectionHint(CANCEL_MESSAGE)
     : formatToolErrorMessage(error);
 }
-//@ chunk-e6aww6q8.js:3910048-3910592 placement
+//@ chunk-5xgkngpb.js:4008746-4009290 placement
 /**
  * 后台代理或 dontAsk 模式下拒绝了带问题的权限请求时，调用工具的 settleUnaskedQuestion 给出替代答复（已问过、停止、中止或远程执行时跳过）。
  */
@@ -2577,14 +2612,14 @@ async function settleUnaskedQuestion(tool, decision, input, context, state) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:3910592-3910770 placement
+//@ chunk-5xgkngpb.js:4009290-4009468 placement
 function getInterruptKind(error, signal) {
   let interrupted = error instanceof ShellError && error.interrupted;
   if (!(error instanceof AbortError_2 || interrupted || (isAbortOrCancelError(error) && signal.aborted)))
     return;
   return signal.aborted && unwrapAbortReason(signal.reason) === "background" ? "cancelled" : "interrupted";
 }
-//@ chunk-e6aww6q8.js:3910770-3911894 placement
+//@ chunk-5xgkngpb.js:4009468-4010592 placement
 /**
  * 把工具执行错误归类为错误码（MCP 认证、OAuth、shell 错误等）。
  */
@@ -2663,7 +2698,7 @@ function classifyToolErrorCode(error) {
     isSad: false,
   };
 }
-//@ chunk-e6aww6q8.js:3911894-3912026 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
+//@ chunk-5xgkngpb.js:4010592-4010724 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck_3(tool) {
   let hasArtifactTool = (toolName) =>
     tool.some(
@@ -2676,53 +2711,76 @@ function getToolNameForPermissionCheck_3(tool) {
     hasArtifactTool(ARTIFACTS_MCP_GET_TOOL)
   );
 }
-//@ chunk-e6aww6q8.js:3912026-3918095 placement
-/**
- * 当内置 Artifact 工具被替换或不可用时，告诉模型应该调用哪些工具。
- */
-function explainUnavailableArtifactTool(
+//@ chunk-5xgkngpb.js:4010724-4010793 layout
+function describeUnknownTool(
   toolName,
-  toolDefinitions,
-  allBaseTools,
-  isRestrictedContext,
   mcpClients,
+  baseTools,
+  agentId,
+  declaredTools,
   toolPermissionContext,
   agentSpawnContext = {},
   input,
-  toolSearchIndex,
-  deferredIndex,
+  surfacedTools,
+  noChannelTools,
 ) {
-  let tool = deferredIndex?.sourceFor(toolName) ?? toolSearchIndex?.sourceFor(toolName);
+  return describeToolUnavailable(
+    toolName,
+    mcpClients,
+    baseTools,
+    agentId,
+    declaredTools,
+    toolPermissionContext,
+    agentSpawnContext,
+    input,
+    surfacedTools,
+    noChannelTools,
+  );
+}
+//@ chunk-5xgkngpb.js:4010793-4017514 layout
+function describeToolUnavailable(
+  toolName,
+  mcpClients,
+  baseTools,
+  isRestrictedContext,
+  connectedClients,
+  toolPermissionContext,
+  agentSpawnContext = {},
+  input,
+  messages,
+  surfaced,
+) {
+  let tool = surfaced?.sourceFor(toolName) ?? messages?.sourceFor(toolName);
   if (tool?.mcpInfo !== undefined && mcpInfoFromString(toolName) === null)
     return describeUnavailableMcpTool(
       toolName,
       isRestrictedContext,
-      mcpClients,
+      connectedClients,
       toolPermissionContext,
       tool,
-      deferredIndex === undefined && isToolSearchInPool(toolDefinitions),
+      surfaced === undefined && isToolSearchInPool(mcpClients),
     );
-  let tool_2 = findTool(allBaseTools, toolName);
+  let tool_2 = findTool(baseTools, toolName);
   if (
     tool_2 !== undefined &&
     isArtifactFamilyTool(tool_2) &&
     isBuiltInArtifactHiddenForMcp() &&
-    toolDefinitions.some((tool) => tool.mcpInfo?.serverName === CLAUDE_ARTIFACTS)
+    mcpClients.some((client) => client.mcpInfo?.serverName === CLAUDE_ARTIFACTS)
   ) {
-    let searchNote =
-      !isByocEnvironment() && getToolNameForPermissionCheck_3(toolDefinitions)
+    let webReadNote =
+      !isByocEnvironment() && getToolNameForPermissionCheck_3(mcpClients)
         ? ` ${WEBFETCH} can read claude.ai artifact links.`
         : "";
-    return deferredIndex === undefined && isToolSearchInPool(toolDefinitions)
-      ? `. In this session the built-in Artifact tools were replaced by the tools of the MCP server '${CLAUDE_ARTIFACTS}': find them with ${TOOL_SEARCH_TOOL_NAME} and call those instead.${searchNote}`
-      : `. In this session the built-in Artifact tools were replaced by the tools of the MCP server '${CLAUDE_ARTIFACTS}', which are in your tool list: call those instead.${searchNote}`;
+    return surfaced === undefined && isToolSearchInPool(mcpClients)
+      ? `. In this session the built-in Artifact tools were replaced by the tools of the MCP server '${CLAUDE_ARTIFACTS}': find them with ${TOOL_SEARCH_TOOL_NAME} and call those instead.${webReadNote}`
+      : `. In this session the built-in Artifact tools were replaced by the tools of the MCP server '${CLAUDE_ARTIFACTS}', which are in your tool list: call those instead.${webReadNote}`;
   }
   if (
     !isByocEnvironment() &&
     tool_2 !== undefined &&
     isArtifactFamilyTool(tool_2) &&
     isBuiltInArtifactHiddenForMcp() &&
-    !mcpClients.some((tool) => tool.name === CLAUDE_ARTIFACTS && tool.type === "connected")
+    !connectedClients.some((client) => client.name === CLAUDE_ARTIFACTS && client.type === "connected")
   )
     return `. The Artifacts tools aren't available in this session right now: the MCP server '${CLAUDE_ARTIFACTS}' that replaced the built-in Artifact tools isn't connected. Tell the user; /mcp can reconnect or re-enable it, or restarting Claude Code restores the tools.`;
   if (
@@ -2730,24 +2788,42 @@ function explainUnavailableArtifactTool(
     toolName === buildMcpToolName(CLAUDE_ARTIFACTS, ARTIFACTS_MCP_READ_SHARED_TOOL) &&
     isBuiltInArtifactHiddenForMcp()
   ) {
-    let any = toolDefinitions.some(
-      (tool) =>
-        tool.mcpInfo?.serverName === CLAUDE_ARTIFACTS && tool.mcpInfo.toolName === ARTIFACTS_MCP_READ_TOOL,
+    let any = mcpClients.some(
+      (client) =>
+        client.mcpInfo?.serverName === CLAUDE_ARTIFACTS &&
+        client.mcpInfo.toolName === ARTIFACTS_MCP_READ_TOOL,
     );
-    let toolNameForPermissionCheck = getToolNameForPermissionCheck_3(toolDefinitions);
-    let sharedNote = any
+    let toolNameForPermissionCheck = getToolNameForPermissionCheck_3(mcpClients);
+    let readNote = any
       ? ` ${ARTIFACTS_MCP_READ_TOOL} reads an artifact the user owns, or one from their organization that they can open; ${toolNameForPermissionCheck ? `for a link ${ARTIFACTS_MCP_READ_TOOL} refuses, use ${WEBFETCH}.` : "for anything else, tell the user."}`
       : " Tell the user.";
-    return `. ${ARTIFACTS_MCP_READ_SHARED_TOOL} isn't available in local Claude Code sessions.${sharedNote}`;
+    return `. ${ARTIFACTS_MCP_READ_SHARED_TOOL} isn't available in local Claude Code sessions.${readNote}`;
   }
-  let tool_3 = findToolByName(toolDefinitions, ARTIFACT_TOOL_NAME_2);
+  let tool_3 = findToolByName(mcpClients, ARTIFACT_TOOL_NAME_2);
   if (
     tool_3 !== undefined &&
     mcpInfoFromString(toolName)?.serverName === CLAUDE_ARTIFACTS &&
-    mcpClients.some(isEntryRowNotServed)
+    connectedClients.some(isEntryRowNotServed)
   )
-    return `. The MCP server '${CLAUDE_ARTIFACTS}' is no longer served in this session, and the built-in Artifact tools are back${suggestToolInstead(tool_3, toolDefinitions, toolSearchIndex, deferredIndex)}`;
+    return `. The MCP server '${CLAUDE_ARTIFACTS}' is no longer served in this session, and the built-in Artifact tools are back${suggestToolInstead(tool_3, mcpClients, messages, surfaced)}`;
   let underlyingName = aliasOfToolName(toolName) ?? tool_2?.underlyingV1ToolName;
+  if (
+    codeModeAccepted() &&
+    isCodeModeEnabled() &&
+    toolMatchesAnyName(
+      {
+        name: toolName,
+        underlyingV1ToolName: underlyingName,
+      },
+      CODE_MODE_ONLY_TOOLS,
+    ) &&
+    findToolByName(mcpClients, REPL_TOOL_NAME)
+  ) {
+    let toolNameText = underlyingName ?? toolName;
+    return `. ${toolNameText} is only available inside ${REPL_TOOL_NAME}. Use ${REPL_TOOL_NAME} with code: await ${toolNameText}({...}).`;
+  }
+  if (codeModeAccepted() && isRestrictedContext && tool_2?.name === POLL)
+    return `. ${toolName} is not available to this agent. Complete the task with the tools provided and return findings to the orchestrator.`;
   if (
     isRestrictedContext &&
     tool_2 &&
@@ -2775,7 +2851,7 @@ function explainUnavailableArtifactTool(
     (aliasTool === undefined ||
       !aliasTool.isEnabled() ||
       !getDenyRuleForTool(toolPermissionContext, aliasTool)) &&
-    findToolByName(toolDefinitions, AGENT)
+    findToolByName(mcpClients, AGENT)
   )
     return `. ${toolName} is not available to you as the coordinator \u2014 run it from a worker via the ${AGENT} tool instead.`;
   if (tool_2?.name === WEBFETCH && tool_2.isEnabled() && !getDenyRuleForTool(toolPermissionContext, tool_2)) {
@@ -2784,7 +2860,7 @@ function explainUnavailableArtifactTool(
     if (
       artifactUrl !== null &&
       artifactUrl.env === claudeAiEnvironment() &&
-      findToolByName(toolDefinitions, ARTIFACT_TOOL_NAME_2) &&
+      findToolByName(mcpClients, ARTIFACT_TOOL_NAME_2) &&
       !getDenyRuleForTool(toolPermissionContext, {
         name: ARTIFACT_TOOL_NAME_2,
       })
@@ -2797,29 +2873,29 @@ function explainUnavailableArtifactTool(
       !getDenyRuleForTool(toolPermissionContext, {
         name: ARTIFACT_TOOL_NAME_2,
       })
-        ? toolDefinitions.find(
-            (tool) =>
-              tool.mcpInfo?.serverName === CLAUDE_ARTIFACTS &&
-              tool.mcpInfo.toolName === ARTIFACTS_MCP_READ_TOOL,
+        ? mcpClients.find(
+            (candidate) =>
+              candidate.mcpInfo?.serverName === CLAUDE_ARTIFACTS &&
+              candidate.mcpInfo.toolName === ARTIFACTS_MCP_READ_TOOL,
           )
         : undefined;
     if (artifactUrl !== null && readTool !== undefined)
       return `. ${artifactViewerUrlFor(artifactUrl)} is a claude.ai artifact \u2014 read it with ${readTool.name} (slug: "${artifactUrl.slug}") instead of ${WEBFETCH}.`;
     if (
-      canUseWebFetchAgent(toolDefinitions, toolPermissionContext, {
+      canUseWebFetchAgent(mcpClients, toolPermissionContext, {
         activeAgents: agentSpawnContext.activeAgents,
       })
     ) {
-      if (canUseWebFetchAgent(toolDefinitions, toolPermissionContext, agentSpawnContext))
+      if (canUseWebFetchAgent(mcpClients, toolPermissionContext, agentSpawnContext))
         return `. ${WEBFETCH} is not available directly in this context \u2014 use the ${AGENT} tool with subagent_type: "${WEB_FETCH_AGENT}" to read web pages instead.`;
       return (agentSpawnContext.depth ?? 0) === 0
         ? `. ${WEBFETCH} is not available in this context, and the ${WEB_FETCH_AGENT} agent that reads web pages for this session is outside this session's allowed subagent types. If the page is required, tell the user.`
         : `. ${WEBFETCH} is not available in this context, and the ${WEB_FETCH_AGENT} agent that reads web pages for this session cannot be dispatched from here (this agent's nesting depth or allowed subagent types rule it out). If the page is required, say so in your report so the caller can fetch it.`;
     }
   }
-  let searchIndex = deferredIndex ?? (isToolSearchInPool(toolDefinitions) ? toolSearchIndex : undefined);
-  let isListedHere =
-    (toolSearchIndex?.keeps(toolName) === true || deferredIndex?.keeps(toolName) === true) &&
+  let keptSource = surfaced ?? (isToolSearchInPool(mcpClients) ? messages : undefined);
+  let isKnownButGone =
+    (messages?.keeps(toolName) === true || surfaced?.keeps(toolName) === true) &&
     tool?.mcpInfo === undefined &&
     mcpInfoFromString(toolName) === null &&
     !toolMatchesAnyName(
@@ -2829,21 +2905,23 @@ function explainUnavailableArtifactTool(
       },
       getShadowedSearchToolNames(),
     );
-  let isSwitchOff =
-    isListedHere &&
-    isPermanentUnavailabilityFor(describeToolAvailability(toolName, mcpClients, toolPermissionContext, tool));
+  let isPermanent =
+    isKnownButGone &&
+    isPermanentUnavailabilityFor(
+      describeToolAvailability(toolName, connectedClients, toolPermissionContext, tool),
+    );
   let listedButGone =
-    isListedHere &&
-    searchIndex?.keeps(toolName) === true &&
-    !isSwitchOff &&
-    !findToolByName(toolDefinitions, toolName);
+    isKnownButGone &&
+    keptSource?.keeps(toolName) === true &&
+    !isPermanent &&
+    !findToolByName(mcpClients, toolName);
   let isSendMessage = tool_2?.name === SENDMESSAGE;
-  let spawnNote =
-    isSendMessage && canSpawnSubagents(toolDefinitions, toolPermissionContext, agentSpawnContext)
+  let spawnHint =
+    isSendMessage && canSpawnSubagents(mcpClients, toolPermissionContext, agentSpawnContext)
       ? ` To follow up on an agent's work, start a new ${AGENT} call with everything it needs in its prompt.`
       : "";
   let sendMessageNote = isSendMessage
-    ? ` An agent cannot be continued from this context. To message another session, use your host application's own messaging tool if it provides one; otherwise that is not possible from here.${spawnNote}`
+    ? ` An agent cannot be continued from this context. To message another session, use your host application's own messaging tool if it provides one; otherwise that is not possible from here.${spawnHint}`
     : "";
   if (listedButGone) {
     if (
@@ -2853,13 +2931,21 @@ function explainUnavailableArtifactTool(
         isOutsideLaunchToolList(toolPermissionContext, tool_2))
     )
       return toolName === ASKUSERQUESTION && !canPromptUserForPermission()
-        ? `. ${toolName} is still listed for this conversation, but nobody in this session can answer it, so it cannot run. Continue without it; if you need the user's decision, ask in your response text instead.`
-        : `. ${toolName} is still listed for this conversation but is switched off in this session right now, so it cannot run. Continue without it.${sendMessageNote}`;
-    return `. ${toolName} is still listed for this conversation, but nothing in this session provides it right now (its source was removed or disconnected, or this version no longer has it), so it cannot run. Continue without it.${sendMessageNote}`;
+        ? `. ${toolName} ${STILL_LISTED_NOTE}, but nobody in this session can answer it, so it cannot run. Continue without it; if you need the user's decision, ask in your response text instead.`
+        : `. ${toolName} ${STILL_LISTED_NOTE} but is switched off in this session right now, so it cannot run. Continue without it.${sendMessageNote}`;
+    return `. ${toolName} ${STILL_LISTED_NOTE}, but nothing in this session provides it right now (its source was removed or disconnected, or this version no longer has it), so it cannot run. Continue without it.${sendMessageNote}`;
   }
+  if (
+    codeModeAccepted() &&
+    tool_2?.name === POLL &&
+    tool_2.isEnabled() &&
+    !getDenyRuleForTool(toolPermissionContext, tool_2) &&
+    willHideCodeModeOnlyTools(mcpClients)
+  )
+    return `. ${POLL} is not among your tools in this session. Each ${REPL_TOOL_NAME} call here waits for its script and returns its output; none returns a (dispatched #N) receipt and no ${REPL_TOOL_NAME} output arrives later. A tool call the script has not awaited when it returns is cancelled and may not finish, so await every tool call. Continue with ${REPL_TOOL_NAME}.`;
   if (isSendMessage) return `. ${SENDMESSAGE} is not among the tools available here.${sendMessageNote}`;
-  if (tool_2 || isSwitchOff)
-    return isSwitchOff ||
+  if (tool_2 || isPermanent)
+    return isPermanent ||
       !tool_2?.isEnabled() ||
       getDenyRuleForTool(toolPermissionContext, tool_2) ||
       isOutsideLaunchToolList(toolPermissionContext, tool_2) ||
@@ -2880,72 +2966,72 @@ function explainUnavailableArtifactTool(
     )
   ) {
     let searchToolName = (underlyingName ?? toolName) === GLOB_TOOL_NAME ? GLOB_TOOL_NAME : GREP_TOOL_NAME;
-    if (!findToolByName(toolDefinitions, BASH_TOOL_NAME))
+    if (!findToolByName(mcpClients, BASH_TOOL_NAME))
       return `. ${searchToolName} is disabled for this session.`;
     return searchToolName === GLOB_TOOL_NAME
       ? `. ${GLOB_TOOL_NAME} is not available in this session \u2014 find files with \`find\` via the ${BASH_TOOL_NAME} tool instead.`
       : `. ${GREP_TOOL_NAME} is not available in this session \u2014 search file contents with \`grep\` via the ${BASH_TOOL_NAME} tool instead.`;
   }
-  let waitHint = isRestrictedContext ? "" : suggestWaitForMcpServers(toolName, toolDefinitions, mcpClients);
+  let waitHint = isRestrictedContext ? "" : suggestWaitForMcpServers(toolName, mcpClients, connectedClients);
   if (waitHint) return waitHint;
   if (
     (areDeferredToolsKept() && deferredToolCache().hasTool(toolName)) ||
-    toolSearchIndex?.has(toolName) ||
-    deferredIndex?.has(toolName)
+    messages?.has(toolName) ||
+    surfaced?.has(toolName)
   )
     return describeUnavailableMcpTool(
       toolName,
       isRestrictedContext,
-      mcpClients,
+      connectedClients,
       toolPermissionContext,
       tool,
-      deferredIndex === undefined && isToolSearchInPool(toolDefinitions),
+      surfaced === undefined && isToolSearchInPool(mcpClients),
     );
   if (typeof toolName !== "string") return "";
-  let filtered = toolDefinitions.filter((tool) => tool.name.toLowerCase() === toolName.toLowerCase());
+  let filtered = mcpClients.filter((tool) => tool.name.toLowerCase() === toolName.toLowerCase());
   let [caseMatch] = filtered;
   if (
     caseMatch !== undefined &&
     filtered.length === 1 &&
-    !isDeferredToolInConversation(caseMatch, toolSearchIndex, toolDefinitions)
+    !isDeferredToolInConversation(caseMatch, messages, mcpClients)
   )
     return `. Tool names are case-sensitive: call ${caseMatch.name} instead.`;
-  let found = CHROME_TOOL_NAMES.find((chromeName) => chromeName === toolName);
+  let found = CHROME_TOOL_NAMES.find((name) => name === toolName);
   if (found !== undefined) {
-    let filtered = toolDefinitions.filter((tool) => {
+    let filtered = mcpClients.filter((tool) => {
       let lower = tool.name.toLowerCase();
       return lower === found || lower.endsWith(`__${found}`);
     });
-    let [prefixedTool] = filtered;
+    let [tool] = filtered;
     if (
-      prefixedTool !== undefined &&
+      tool !== undefined &&
       filtered.length === 1 &&
-      isInputSchemaCompatible(prefixedTool, input) &&
-      CHROME_TOOL_PREFIXES.some((prefix) => prefixedTool.name === prefix + found)
+      isInputSchemaCompatible(tool, input) &&
+      CHROME_TOOL_PREFIXES.some((matchedTool) => tool.name === matchedTool + found)
     )
-      return suggestToolInstead(prefixedTool, toolDefinitions, toolSearchIndex, deferredIndex);
+      return suggestToolInstead(tool, mcpClients, messages, surfaced);
   }
-  let aliasName = matchLocalToolAlias(
+  let message = matchLocalToolAlias(
     toolName,
-    toolDefinitions.map((tool) => tool.name),
+    mcpClients.map((client) => client.name),
   );
-  let matchedAliasTool = aliasName === undefined ? undefined : findToolByName(toolDefinitions, aliasName);
-  if (matchedAliasTool !== undefined && isInputSchemaCompatible(matchedAliasTool, input))
-    return suggestToolInstead(matchedAliasTool, toolDefinitions, toolSearchIndex, deferredIndex);
+  let tool_4 = message === undefined ? undefined : findToolByName(mcpClients, message);
+  if (tool_4 !== undefined && isInputSchemaCompatible(tool_4, input))
+    return suggestToolInstead(tool_4, mcpClients, messages, surfaced);
   return "";
 }
-//@ chunk-e6aww6q8.js:3918095-3918311 placement
+//@ chunk-5xgkngpb.js:4017514-4017730 placement
 function isInputSchemaCompatible(tool, input) {
   let properties = tool.inputJSONSchema?.properties;
   let required = tool.inputJSONSchema?.required;
   return (
     properties === undefined ||
-    (isPlainObject_4(input) &&
+    (isPlainObject_5(input) &&
       Object.keys(input).every((key) => Object.hasOwn(properties, key)) &&
       (Object.keys(input).length > 0 || !Array.isArray(required) || required.length === 0))
   );
 }
-//@ chunk-e6aww6q8.js:3918311-3918503 placement
+//@ chunk-5xgkngpb.js:4017730-4017922 placement
 function suggestToolInstead(tool, pool, messages, surfaced) {
   return surfaced === undefined &&
     isToolSearchInPool(pool) &&
@@ -2953,7 +3039,7 @@ function suggestToolInstead(tool, pool, messages, surfaced) {
     ? `. Call ${tool.name} instead, loading it first with ${TOOL_SEARCH_TOOL_NAME} query "select:${tool.name}" if it is not loaded yet.`
     : `. Call ${tool.name} instead.`;
 }
-//@ chunk-e6aww6q8.js:3918503-3921286 placement
+//@ chunk-5xgkngpb.js:4017922-4020705 placement
 /**
  * 为不可用的 MCP 工具生成说明后缀：按状态（重连中、需授权、策略阻止、保留地址、断开、禁用、关闭、组织阻止、已认证占位、未提供、被拒、未配置）给出继续方式。
  */
@@ -3004,21 +3090,21 @@ function describeUnavailableMcpTool(toolName, isRestrictedContext, tools, mcpCli
       return "";
   }
 }
-//@ chunk-e6aww6q8.js:3921286-3921570 placement
+//@ chunk-5xgkngpb.js:4020705-4020989 placement
 function suggestWaitForMcpServers(toolName, tools, clients) {
   let serverName = /^mcp__(.+?)__/.exec(toolName)?.[1];
   if (!serverName) return "";
   if (!findToolByName(tools, WAITFORMCPSERVERS)) return "";
-  let normalizedServer = normalizeNameForMCP(serverName);
+  let normalizedServer = CLAUDEAI_SERVER_PREFIX(serverName);
   let found = clients.find(
     (client) =>
       client.type === "pending" &&
-      (client.name === serverName || normalizeNameForMCP(client.name) === normalizedServer),
+      (client.name === serverName || CLAUDEAI_SERVER_PREFIX(client.name) === normalizedServer),
   );
   if (!found) return "";
   return `. The MCP server '${found.name}' is still connecting. Call ${WAITFORMCPSERVERS} to wait for it, then try again.`;
 }
-//@ chunk-e6aww6q8.js:3921570-3921625 placement
+//@ chunk-5xgkngpb.js:4020989-4021044 placement
 /**
  * 生成指定数量的图片占位符。
  */
@@ -3030,21 +3116,21 @@ function makeImagePlaceholders(imageCount) {
     () => mintPasteId(),
   );
 }
-//@ chunk-e6aww6q8.js:3921625-3921657 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-5xgkngpb.js:4021044-4021076 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 对象是否带 type 字段。
  */
 function hasTypeField(data) {
   return "type" in data;
 }
-//@ chunk-e6aww6q8.js:3921657-3921681 placement
+//@ chunk-5xgkngpb.js:4021076-4021100 placement
 /**
  * 按会话记录已触发过的工具别名。
  */
 class AliasFireState {
   fired = new Set();
 }
-//@ chunk-e6aww6q8.js:3921681-3921830 placement
+//@ chunk-5xgkngpb.js:4021100-4021249 placement (2.1.88 match: extractBashToolsFromMessages, 1)
 function shouldLogGitCommitDetails(tool, callInput) {
   return (
     isToolDetailsLoggingEnabled() &&
@@ -3056,7 +3142,7 @@ function shouldLogGitCommitDetails(tool, callInput) {
     isGitCommitCommand(callInput.command)
   );
 }
-//@ chunk-e6aww6q8.js:3921830-3921913 placement
+//@ chunk-5xgkngpb.js:4021249-4021332 placement
 /**
  * 取当前调用所属的后台代理 id。
  */
@@ -3066,7 +3152,7 @@ function backgroundAgentIdOf(toolUseContext) {
     (toolUseContext.isBackgroundAgent ? toolUseContext.agentId : undefined)
   );
 }
-//@ chunk-e6aww6q8.js:3921913-3927718 placement
+//@ chunk-5xgkngpb.js:4021332-4027197 placement
 /**
  * runToolUse：单个 tool_use 的入口。等待前置排空与会话活动锁，按名字/别名查工具（别名调用记 tengu_dead_probe_tool_alias_exec），工具缺失但 MCP 服务器连接中时等待；检查隔离锁（拒绝时返回 permission-rule 错误）；判定在本机、远端或拒绝运行；本机时进 streamedCheckPermissionsAndCallTool。异常转成 tool_result 错误并按错误码分类上报。
  */
@@ -3163,7 +3249,7 @@ async function* runToolUse(
     if (isTerminalShutdown() && !toolUseContext.abortController.signal.aborted) await heldUntilExit();
   }
   if (!tool) {
-    let unavailableNote = explainUnavailableArtifactTool(
+    let unavailableNote = describeUnknownTool(
       toolName,
       toolUseContext.options.tools,
       toolUseContext.options.toolCatalog.getAllBaseTools(),
@@ -3209,6 +3295,7 @@ async function* runToolUse(
     );
   let featureName = toolFeatureName(tool.name, tool.mcpInfo);
   let input = toolUse.input;
+  let serverType = openProfileWindow(tool.name === AGENT ? "agent_tool" : "tool");
   try {
     if (toolUseContext.abortController.signal.aborted) {
       logEvent("tengu_tool_use_cancelled", {
@@ -3469,9 +3556,11 @@ async function* runToolUse(
         now,
       }),
     };
+  } finally {
+    serverType();
   }
 }
-//@ chunk-e6aww6q8.js:3927718-3930188 fingerprint (2.1.88 match: streamedCheckPermissionsAndCallTool, 0.414)
+//@ chunk-5xgkngpb.js:4027197-4030031 fingerprint (2.1.88 match: streamedCheckPermissionsAndCallTool, 0.394)
 /**
  * streamedCheckPermissionsAndCallTool：把 checkPermissionsAndCallTool 包成异步流。进度消息即时转成 progress 消息（记 tengu_tool_use_progress），按需修复输入（coerceInput），运行 tool.call 模块级 hook（W$n），记录权限决策与沙箱违规，最后把结果逐条入流。
  */
@@ -3525,6 +3614,14 @@ function streamedCheckPermissionsAndCallTool(
       }),
     });
   }
+  let command =
+    isClassifierTargetToolUse(assistantMessage, toolUseID, toolUseContext.clientRequestedToolUseId) &&
+    assistantMessage.handedOff !== true &&
+    assistantMessage.serverClassifierInputRewritten !== true &&
+    assistantMessage.permissionModeAtRequest instanceof ModeAtRequest &&
+    typeof input.command === "string"
+      ? input.command
+      : undefined;
   let coercion =
     tool.coerceInput !== undefined && !isUnparsedInputMarker(input)
       ? {
@@ -3533,13 +3630,13 @@ function streamedCheckPermissionsAndCallTool(
         }
       : undefined;
   let input_2 = coercion?.repair?.input;
-  let candidateInput = isPlainObject_5(input_2) ? input_2 : input;
+  let candidateInput = isPlainObject_6(input_2) ? input_2 : input;
   let serverResult = cloneIfServerResults(assistantMessage, candidateInput);
-  let serverInput = serverResult ?? undefined;
+  let serverInput = serverResult ?? (tool.name === REPL_TOOL_NAME ? clone(candidateInput) : undefined);
   let clonedInput = clonedHookInput(toolUseContext, candidateInput);
   let classifierState = {
     input:
-      isPlainObject_5(candidateInput) &&
+      isPlainObject_6(candidateInput) &&
       isAutoClassifierActive(
         getToolPermissionContext(toolUseContext).mode,
         getToolPermissionContext(toolUseContext).servedCall === true,
@@ -3603,6 +3700,7 @@ function streamedCheckPermissionsAndCallTool(
       callObserver,
       coercion,
       usedClassifierInput,
+      classifierState.input !== undefined ? undefined : command,
     )
       .then((decision) => {
         let { decided } = decisionOut;
@@ -3625,11 +3723,20 @@ function streamedCheckPermissionsAndCallTool(
       .finally(() => clearToolUsePermissionState(callContext.session, toolUseID));
   };
   let callEvent = withAgentId(toolCallEvent(tool.name, toolUseID, candidateInput), toolUseContext.agentId);
-  let didLogSuspected = false;
-  let toolCallChain = createToolCallChain(tool, toolUseContext, run, (managedInput) =>
-    shouldReplaceMemoryInput(tool, candidateInput, managedInput)
-      ? guardAccountMemoryHookRewrite(tool, "PreToolUse", "tool.call hook").message
-      : undefined,
+  let didLogSuspected =
+    codeModeAccepted() &&
+    toolUseContext.stoppedResultWait !== undefined &&
+    hasModuleHookingSite("tool.call", {
+      tool: tool.name,
+    });
+  let toolCallChain = createToolCallChain(
+    tool,
+    codeModeAccepted() && didLogSuspected ? withoutStoppedWait(toolUseContext) : toolUseContext,
+    run,
+    (managedInput) =>
+      shouldReplaceMemoryInput(tool, candidateInput, managedInput)
+        ? guardAccountMemoryHookRewrite(tool, "PreToolUse", "tool.call hook").message
+        : undefined,
   );
   if (
     hasModuleHookingSite("tool.call", {
@@ -3678,19 +3785,20 @@ function streamedCheckPermissionsAndCallTool(
       },
       (error) => {
         forgetOpenCall(toolUseID);
+        if (codeModeAccepted()) toolUseContext.stoppedResultWait?.(toolUseID)?.withdraw();
         stream.error(error);
       },
     );
   return stream;
 }
-//@ chunk-e6aww6q8.js:3930188-3930223 layout
+//@ chunk-5xgkngpb.js:4030031-4030066 layout
 /**
  * 工具搜索乐观开启（isToolSearchEnabledOptimistic）且当前工具列表里有 ToolSearch。
  */
 function isToolSearchInPool(pool) {
   return isToolSearchEnabledOptimistic() && isToolSearchToolAvailable(pool);
 }
-//@ chunk-e6aww6q8.js:3930223-3930305 layout
+//@ chunk-5xgkngpb.js:4030066-4030147 layout
 /**
  * 判断调用的工具是否是"schema 没发给 API 的延迟工具"：工具搜索在池中、该工具在本对话应延迟、且历史中未被发现（extractDiscoveredToolNames 不含它）。buildSchemaNotSentHint 与未加载判定都依赖它。
  */
@@ -3703,8 +3811,8 @@ function isDeferredSchemaNotSent(tool, messages, pool, conversation, surfaced) {
     }).has(tool.name)
   );
 }
-//@ chunk-e6aww6q8.js:3930305-3930472 layout (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince_9(name, messages, sinceUuid) {
+//@ chunk-5xgkngpb.js:4030147-4030314 layout
+function toolSchemaHint(name, messages, sinceUuid) {
   return messages.some(
     (message) =>
       message.type === "assistant" &&
@@ -3714,7 +3822,7 @@ function countToolCallsSince_9(name, messages, sinceUuid) {
       ),
   );
 }
-//@ chunk-e6aww6q8.js:3930472-3930574 layout
+//@ chunk-5xgkngpb.js:4030314-4030416 layout
 /**
  * 未加载工具检查自身出错时的兜底：记 tengu_tool_use_not_loaded_check_failed{part} 并 logError，两步都吞掉异常，不影响工具调用。
  */
@@ -3728,7 +3836,7 @@ function logNotLoadedCheckFailure(part, error) {
     logError(error);
   } catch {}
 }
-//@ chunk-e6aww6q8.js:3930574-3930902 layout
+//@ chunk-5xgkngpb.js:4030416-4030744 layout
 /**
  * 为"调用未加载的延迟工具"收集附加信息：late（工具本不该延迟）、loadInSameReply（同一回答里已调用 ToolSearch）、firstForTool（本对话首次调用该工具）、relayActive（中继缓存活跃）。
  */
@@ -3737,10 +3845,10 @@ function getNotLoadedCallNotes(tool, toolUseContext, messageId) {
     let sameTurnToolUses = toolUseContext.sameTurnToolUses ?? [];
     return {
       late: !isDeferredToolInConversation(tool, undefined, toolUseContext.options.tools),
-      loadInSameReply: countToolCallsSince_9(TOOL_SEARCH_TOOL_NAME, sameTurnToolUses),
+      loadInSameReply: toolSchemaHint(TOOL_SEARCH_TOOL_NAME, sameTurnToolUses),
       firstForTool:
-        !countToolCallsSince_9(tool.name, toolUseContext.messages, messageId) &&
-        !countToolCallsSince_9(tool.name, sameTurnToolUses),
+        !toolSchemaHint(tool.name, toolUseContext.messages, messageId) &&
+        !toolSchemaHint(tool.name, sameTurnToolUses),
       relayActive: webIsolationModule?.getTeleportCacheState().status === "active",
     };
   } catch (error) {
@@ -3753,11 +3861,28 @@ function getNotLoadedCallNotes(tool, toolUseContext, messageId) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:3930902-3930967 layout
+//@ chunk-5xgkngpb.js:4030744-4030809 layout
 function isHookCallerVirtualTool(assistantMessage, toolUseContext) {
   return assistantMessage.isVirtual === true && toolUseContext.hookCaller !== undefined;
 }
-//@ chunk-e6aww6q8.js:3930967-3931383 layout
+//@ chunk-5xgkngpb.js:4030809-4031000 layout
+function shouldMentionToolSearch(tool, messages, messages_2 = messages.messages) {
+  let tools = messages.options.tools;
+  let conversation = cachedDeclaredTools(messages);
+  return (
+    cachedNoChannelTools(messages) === undefined &&
+    !isToolSearchPrecluded(messages.options.mainLoopModel, tools) &&
+    (getToolSearchMode() === "tst" || conversation?.has(TOOL_SEARCH_TOOL_NAME) === true) &&
+    isDeferredSchemaNotSent(
+      tool,
+      messages_2,
+      tools,
+      conversation,
+      getSurfacedToolNames(messages.stickyBetas ?? getStickyBetas()),
+    )
+  );
+}
+//@ chunk-5xgkngpb.js:4031000-4031263 layout
 /**
  * 延迟工具未加载就被调用时的判定：工具属于受管家族、工具搜索处于 tst 或已声明、且 schema 未发送时，返回 {enforced, flagSource, coworkSurface, family, message, …notes}，否则 null。出错时记失败事件返回 null。
  */
@@ -3765,21 +3890,7 @@ function getNotLoadedToolVerdict(tool, toolUseContext, messageId) {
   try {
     let deviceToolKind = getDeviceToolKind(tool);
     if (deviceToolKind === undefined) return null;
-    let tools = toolUseContext.options.tools;
-    let declaredTools = cachedDeclaredTools(toolUseContext);
-    if (
-      cachedNoChannelTools(toolUseContext) !== undefined ||
-      isToolSearchPrecluded(toolUseContext.options.mainLoopModel, tools) ||
-      !(getToolSearchMode() === "tst" || declaredTools?.has(TOOL_SEARCH_TOOL_NAME) === true) ||
-      !isDeferredSchemaNotSent(
-        tool,
-        toolUseContext.messages,
-        tools,
-        declaredTools,
-        getSurfacedToolNames(toolUseContext.stickyBetas ?? getStickyBetas()),
-      )
-    )
-      return null;
+    if (!shouldMentionToolSearch(tool, toolUseContext)) return null;
     let policy = notLoadedToolPolicy();
     return {
       enforced: policy.inForce,
@@ -3794,7 +3905,50 @@ function getNotLoadedToolVerdict(tool, toolUseContext, messageId) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:3931383-3931895 fingerprint (2.1.88 match: buildSchemaNotSentHint, 0.723)
+//@ chunk-5xgkngpb.js:4031263-4032073 layout
+function toolSchemaNotInPromptNote(tool, toolUseContext) {
+  try {
+    if (
+      tool.inputJSONSchema === undefined ||
+      !shouldMentionToolSearch(
+        tool,
+        toolUseContext,
+        toolUseContext.messages.filter((message) => !isCompactBoundaryMessage_3(message)),
+      )
+    )
+      return null;
+    let introText = `
+
+This tool's input schema was not in your prompt when you called it. `;
+    let howToLoad = `call ${TOOL_SEARCH_TOOL_NAME} with query "select:${tool.name}" to load the tool, then call it again.`;
+    if (
+      toolUseContext.messages.some(
+        (message) =>
+          message.type === "user" &&
+          Array.isArray(message.message.content) &&
+          message.message.content.some(
+            (block) =>
+              block.type === "tool_result" &&
+              typeof block.content === "string" &&
+              block.content.endsWith(howToLoad),
+          ),
+      )
+    )
+      return null;
+    let schemaText = jsonStringify(tool.inputJSONSchema);
+    if (schemaText.length > TRUNCATE_MIDDLE_CHARS)
+      return `${introText}If the error above is about the input, ${howToLoad}`;
+    return (
+      introText +
+      `The input schema is: ${schemaText}
+If your input does not match this schema, correct it and call the tool again. If it matches, the error above has another cause. If the corrected call fails the same way, ${howToLoad}`
+    );
+  } catch (error) {
+    logNotLoadedCheckFailure("verdict", error);
+    return null;
+  }
+}
+//@ chunk-5xgkngpb.js:4032073-4032585 fingerprint (2.1.88 match: buildSchemaNotSentHint, 0.719)
 /**
  * 调用了 schema 未发送的延迟工具时生成提示：说明 schema 不在已发现集合里、类型化参数会被当成字符串，要求先 ToolSearch select:<name> 再重试，并附上该工具的 JSON schema。
  */
@@ -3811,7 +3965,7 @@ This tool's schema was not sent to the API \u2014 it was not in the discovered-t
     `Without the schema in your prompt, typed parameters (arrays, numbers, booleans) get emitted as strings and the client-side parser rejects them. Load the tool first: call ${TOOL_SEARCH_TOOL_NAME} with query "select:${tool.name}", then retry this call.${schemaNote}`
   );
 }
-//@ chunk-e6aww6q8.js:3931895-3932586 fingerprint (2.1.88 match: runToolUse, 0.478)
+//@ chunk-5xgkngpb.js:4032585-4033279 fingerprint (2.1.88 match: runToolUse, 0.465)
 /**
  * 生成"已取消"的工具结果：记 tengu_tool_use_cancelled（阶段 validate_input/permission/... 与中断原因），返回 toolDenialKind=cancelled 的 tool_result。
  */
@@ -3864,14 +4018,14 @@ function buildCancelledToolResult(options) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3932586-3932738 layout (2.1.88 match: isUnrecognizedKeysIssue, 0.804)
+//@ chunk-5xgkngpb.js:4033279-4033431 layout (2.1.88 match: isUnrecognizedKeysIssue, 0.804)
 function isUnrecognizedKeysIssue_2(inputSchema, updatedInput) {
   let parsed = inputSchema.safeParse(updatedInput);
   if (parsed.success) return null;
   let filtered = parsed.error.issues.filter((issue) => issue.code !== "unrecognized_keys");
   return filtered.length > 0 ? filtered : null;
 }
-//@ chunk-e6aww6q8.js:3932738-3932917 layout
+//@ chunk-5xgkngpb.js:4033431-4033610 layout
 /**
  * 向结果列表推入 hook_stopped_continuation 附件（hookName=PreToolUse:<工具名>），表示 PreToolUse hook 阻止了继续。
  */
@@ -3886,25 +4040,53 @@ function pushHookStoppedContinuation(results, { toolName, toolUseID, message }) 
     }),
   });
 }
-//@ chunk-e6aww6q8.js:3932917-3933145 layout
+//@ chunk-5xgkngpb.js:4033610-4033763 layout
+var BASH_EDIT_HOOK_EVENTS = [["PostToolUse", "post_tool_use_hook"]];
+var DEFAULT_HOOK_EVENTS = [
+  ...BASH_EDIT_HOOK_EVENTS,
+  ["PostToolUseFailure", "post_tool_use_failure_hook"],
+  ["PostToolBatch", "post_tool_batch_hook"],
+];
+//@ chunk-5xgkngpb.js:4033763-4033941 layout
+function makeOutsideResultReaderBlocker({
+  sessionHooksRegistry,
+  session,
+  agentId,
+  agentContext,
+  remoteCall,
+}) {
+  return (toolUseContext) =>
+    getOutsideResultReaderBlocker(
+      {
+        sessionHooksRegistry,
+        session,
+        agentId,
+        agentContext,
+        remoteCall,
+      },
+      toolUseContext,
+    );
+}
+//@ chunk-5xgkngpb.js:4033941-4034190 layout
 /**
  * 判断工具调用是否需要"外部结果读取器"：有非内置插件模块已加载→plugin_loaded，插件加载中→plugins_loading，有会话外的 PostToolUse hook→post_tool_use_hook，否则 undefined。
  */
-function getOutsideResultReaderBlocker(toolUseContext) {
+function getOutsideResultReaderBlocker(toolUseContext, callSite) {
   if (getPluginRegistry().loadedModules.some((loadedModule) => !hasLink(loadedModule)))
     return "plugin_loaded";
   if (arePermissionHooksUnsettled()) return "plugins_loading";
-  return hasOnlyOwnCallbacksToRun(
-    "PostToolUse",
-    toolUseContext.sessionHooksRegistry,
-    registerAgent(toolUseContext, "PostToolUse", toolUseContext.session.id),
-    toolUseContext,
-    isRemoteManagedEnvironment(),
-  )
-    ? undefined
-    : "post_tool_use_hook";
+  return (callSite === "bash_edit_diff" ? BASH_EDIT_HOOK_EVENTS : DEFAULT_HOOK_EVENTS).find(
+    ([hookEvent]) =>
+      !hasOnlyOwnCallbacksToRun(
+        hookEvent,
+        toolUseContext.sessionHooksRegistry,
+        registerAgent(toolUseContext, hookEvent, toolUseContext.session.id),
+        toolUseContext,
+        callSite === "bash_edit_diff" && isRemoteManagedEnvironment(),
+      ),
+  )?.[1];
 }
-//@ chunk-e6aww6q8.js:3933145-3968539 fingerprint (2.1.88 match: checkPermissionsAndCallTool, 0.393)
+//@ chunk-5xgkngpb.js:4034190-4070977 fingerprint (2.1.88 match: checkPermissionsAndCallTool, 0.38)
 /**
  * checkPermissionsAndCallTool：一次工具调用的完整生命周期。1) JSON 解析失败/schema 校验失败 → InputValidationError（可附"选项本会话不可用"或"schema 未发送"提示）；2) validateInput（带拒绝规则时记录）；3) PreToolUse hooks（可改输入、给权限结论、阻止继续、追加上下文）；4) 权限决策（hook 结论 → 规则/模式/分类器 → canUseTool 询问），拒绝时返回错误；5) 调用 tool.call（进度、中断监听、工作目录变化检查、协调者 Bash 限制）；6) mapToolResultToToolResultBlockParam、结果持久化与大小预算；7) PostToolUse / PostToolUseFailure hooks；8) OTel 与 tengu_tool_use_* 统计。
  */
@@ -3929,12 +4111,20 @@ async function checkPermissionsAndCallTool(
   callObserver,
   coercion,
   usedClassifierInput = false,
+  commandAsWritten,
 ) {
   let errorContent = toolFeatureName(tool.name, tool.mcpInfo);
   let effectiveToolName = builtinToolServedByMcp(tool) ?? tool.name;
   let parsedInput =
     coercion?.repair && deepEqualIgnoringUndefined(input, coercion.repair.input) ? coercion.sent : input;
   let inputBytes = jsonStringify(parsedInput).length;
+  if (
+    effectiveToolName === BASH_TOOL_NAME ||
+    effectiveToolName === FILE_WRITE_TOOL_NAME ||
+    effectiveToolName === POWERSHELL_TOOL_NAME ||
+    tool.name === WORKSPACE_BASH_TOOL
+  )
+    recordRetypedLikely(inputBytes);
   let classifierEpoch = getClassifierEpoch();
   let schemaHint = parseToolInput(tool, input, coercion);
   if (!schemaHint.ok && schemaHint.cause === "json") {
@@ -4046,7 +4236,7 @@ ${unavailableNote.text}`;
       });
       validationText += schemaNotSentHint;
     }
-    let joined = uniq(schemaHint.error.issues.map((issue) => issue.code)).join(",");
+    let joined = normalizeCaseForComparison_2(schemaHint.error.issues.map((issue) => issue.code)).join(",");
     logForDebugging(
       `${toolCategoryForTelemetry(tool)} tool input error: issues=${joined} inputBytes=${inputBytes} errorChars=${validationText.length}`,
     );
@@ -4054,7 +4244,9 @@ ${unavailableNote.text}`;
     logEvent("tengu_tool_use_error", {
       error: lit_2("InputValidationError"),
       errorCode: lit_2("ZOD_VALIDATION"),
-      zodIssueCodes: fromEnumArr(uniq(schemaHint.error.issues.map((issue) => issue.code))),
+      zodIssueCodes: fromEnumArr(
+        normalizeCaseForComparison_2(schemaHint.error.issues.map((issue) => issue.code)),
+      ),
       errorDetailsHash: shortHash(validationText),
       messageID: sanitizeMarkName(messageId),
       toolName: sanitizeToolNameForAnalytics(tool.name),
@@ -4247,7 +4439,8 @@ ${unavailableNote.text}`;
   let messages = [];
   let { observableInput, callInput } = validation;
   let clonedMessage = cloneIfServerResults(assistantMessage, validation.observableInput);
-  let baselineInput = clonedMessage ?? undefined;
+  let baselineInput =
+    clonedMessage ?? (tool.name === REPL_TOOL_NAME ? clone(validation.observableInput) : undefined);
   let classifierInput = usedClassifierInput ? clone(validation.observableInput) : undefined;
   let classifierCallInput =
     usedClassifierInput && validation.backfilled ? clone(validation.callInput) : undefined;
@@ -4349,7 +4542,7 @@ ${unavailableNote.text}`;
           break;
         }
         let batchToolCount = Array.isArray(assistantMessage.message.content)
-          ? count(assistantMessage.message.content, (block) => block.type === "tool_use")
+          ? countWhere(assistantMessage.message.content, (block) => block.type === "tool_use")
           : 1;
         if (batchToolCount > 1) {
           logForDebugging(
@@ -4468,10 +4661,10 @@ ${unavailableNote.text}`;
     );
   let spanAttributes = {};
   if (observableInput && typeof observableInput === "object" && !isTracingRedacted()) {
-    if (tool.name === FILE_READ_TOOL_NAME && "file_path" in observableInput && isToolDetailsLoggingEnabled())
+    if (tool.name === READ && "file_path" in observableInput && isToolDetailsLoggingEnabled())
       spanAttributes.file_path = String(observableInput.file_path);
     else if (
-      (tool.name === FILE_EDIT_TOOL_NAME || tool.name === FILE_WRITE_TOOL_NAME) &&
+      (tool.name === EDIT || tool.name === FILE_WRITE_TOOL_NAME) &&
       "file_path" in observableInput &&
       isToolDetailsLoggingEnabled()
     )
@@ -4772,7 +4965,13 @@ ${unavailableNote.text}`;
         getToolPermissionContext(toolUseContext),
         getAgentSpawnContext(toolUseContext),
       );
-    let settledMessage = denyMessage;
+    let settledMessage =
+      codeModeAccepted() &&
+      tool.name === REPL_TOOL_NAME &&
+      !tool.mcpInfo &&
+      !toolUseContext.abortController.signal.aborted
+        ? `${denyMessage}${getDenialMessageSuffix()}`
+        : denyMessage;
     let messageContent = [
       {
         type: "tool_result",
@@ -4787,7 +4986,7 @@ ${unavailableNote.text}`;
     if (contentBlocks?.length) messageContent.push(...contentBlocks);
     let imagePasteIds;
     if (contentBlocks?.length) {
-      let imageCount = count(contentBlocks, (imageCount) => imageCount.type === "image");
+      let imageCount = countWhere(contentBlocks, (imageCount) => imageCount.type === "image");
       if (imageCount > 0) imagePasteIds = makeImagePlaceholders(imageCount);
     }
     messages.push({
@@ -4886,7 +5085,7 @@ ${unavailableNote.text}`;
       let zodError = new ZodError(unknownIssues);
       let updatedInputError = `The permission handler returned updatedInput for ${tool.name} that failed schema validation: ${formatZodValidationError(tool.name, zodError)}
 This is a configuration issue in your canUseTool callback, PermissionRequest hook, or permission-prompt tool \u2014 updatedInput must satisfy the tool's input schema. The tool input from the model was valid.`;
-      let startId = uniq(unknownIssues.map((issueCode) => issueCode.code));
+      let startId = normalizeCaseForComparison_2(unknownIssues.map((issueCode) => issueCode.code));
       setDecided(
         decisionOut,
         permissionMode,
@@ -4959,7 +5158,7 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
     stamped: false,
     visiblyAttributed: false,
   };
-  let toolInputForTelemetry = extractToolInputForTelemetry_2(observableInput);
+  let toolInputForTelemetry = extractToolInputForTelemetry(observableInput);
   let attributedFlag =
     toolInputForTelemetry !== undefined && accountMemoryTool
       ? notRecordedLength(jsonStringify(observableInput))
@@ -5143,16 +5342,17 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
         {
           userModified: permissionDecision.userModified ?? false,
           gitDiffRead: true,
-          outsideResultReader: () => getOutsideResultReaderBlocker(toolUseContext),
+          outsideResultReader: makeOutsideResultReaderBlocker(toolUseContext),
+          commandAsWritten,
           permissionCheckedFor: skillName ? undefined : checkRegistered,
           runnerCheckedHere: skillName ? checkRunner : checkRunnerHere,
           timing: wallClock,
         },
       );
-    let result;
+    let calledToolResult;
     callObserver?.onToolEntered?.();
     try {
-      result = await runWithTimingContext(wallClock, () =>
+      calledToolResult = await runWithTimingContext(wallClock, () =>
         detachToolCall(tool, callInput, toolUseContext)
           ? runDetachableToolCall({
               tool,
@@ -5171,7 +5371,7 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
     await waitForFolderAttached({
       toolState: toolUseContext.toolState,
       fullToolName: tool.name,
-      content: result.data,
+      content: calledToolResult.data,
       signal: toolUseContext.abortController.signal,
     });
     let callDurationMs = Date.now() - now_2;
@@ -5189,29 +5389,22 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
     if (
       tool.mcpInfo === undefined &&
       CORE_FILE_TOOLS.has(tool.name) &&
-      result.data &&
-      typeof result.data === "object"
+      calledToolResult.data &&
+      typeof calledToolResult.data === "object"
     ) {
       let timings = {};
-      if (tool.name === FILE_READ_TOOL_NAME) {
-        let resultData = result.data;
+      if (tool.name === READ) {
+        let resultData = calledToolResult.data;
         if (resultData.type === "text") {
           if (isToolDetailsLoggingEnabled() && "file_path" in observableInput)
             timings.file_path = String(observableInput.file_path);
           timings.content = resultData.file.content;
         }
       }
-      if (
-        (tool.name === FILE_EDIT_TOOL_NAME || tool.name === FILE_WRITE_TOOL_NAME) &&
-        "file_path" in observableInput
-      ) {
+      if ((tool.name === EDIT || tool.name === FILE_WRITE_TOOL_NAME) && "file_path" in observableInput) {
         if (isToolDetailsLoggingEnabled()) timings.file_path = String(observableInput.file_path);
-        if (
-          isToolDetailsLoggingEnabled() &&
-          tool.name === FILE_EDIT_TOOL_NAME &&
-          "structuredPatch" in result.data
-        )
-          timings.diff = jsonStringify(result.data.structuredPatch);
+        if (isToolDetailsLoggingEnabled() && tool.name === EDIT && "structuredPatch" in calledToolResult.data)
+          timings.diff = jsonStringify(calledToolResult.data.structuredPatch);
         if (
           isToolDetailsLoggingEnabled() &&
           tool.name === FILE_WRITE_TOOL_NAME &&
@@ -5222,17 +5415,17 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
       if (tool.name === BASH_TOOL_NAME && "command" in observableInput) {
         let callInputSnapshot = observableInput;
         if (isToolDetailsLoggingEnabled()) timings.bash_command = callInputSnapshot.command;
-        if ("stdout" in result.data) timings.output = String(result.data.stdout);
+        if ("stdout" in calledToolResult.data) timings.output = String(calledToolResult.data.stdout);
       }
       if (Object.keys(timings).length > 0) addToolContentEvent(span, "tool.output", timings);
     }
     if (
       tool.name === POLL &&
-      typeof result.data === "object" &&
-      result.data !== null &&
-      "eventCount" in result.data &&
-      typeof result.data.eventCount === "number" &&
-      result.data.eventCount > 0
+      typeof calledToolResult.data === "object" &&
+      calledToolResult.data !== null &&
+      "eventCount" in calledToolResult.data &&
+      typeof calledToolResult.data.eventCount === "number" &&
+      calledToolResult.data.eventCount > 0
     )
       messages.push({
         message: createAttachmentMessage_2({
@@ -5241,38 +5434,38 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
           envelopes: [],
           kinds: [],
           remainingWakeCount: 0,
-          ...("provenance" in result.data &&
-            Array.isArray(result.data.provenance) && {
-              provenance: result.data.provenance,
+          ...("provenance" in calledToolResult.data &&
+            Array.isArray(calledToolResult.data.provenance) && {
+              provenance: calledToolResult.data.provenance,
             }),
-          ...("declared" in result.data &&
-            Array.isArray(result.data.declared) && {
-              declared: result.data.declared,
+          ...("declared" in calledToolResult.data &&
+            Array.isArray(calledToolResult.data.declared) && {
+              declared: calledToolResult.data.declared,
             }),
           ...false,
         }),
       });
-    if (typeof result === "object" && "structured_output" in result)
+    if (typeof calledToolResult === "object" && "structured_output" in calledToolResult)
       messages.push({
         message: createAttachmentMessage_2({
           type: "structured_output",
-          data: result.structured_output,
+          data: calledToolResult.structured_output,
           toolUseID,
         }),
       });
     endToolExecutionSpan({
       success: true,
     });
-    let preMappedBlock = result.detached
+    let preMappedBlock = calledToolResult.detached
       ? {
           type: "tool_result",
           tool_use_id: toolUseID,
-          content: result.detached.text,
+          content: calledToolResult.detached.text,
         }
-      : tool.mapToolResultToToolResultBlockParam(result.data, toolUseID);
+      : tool.mapToolResultToToolResultBlockParam(calledToolResult.data, toolUseID);
     if (
       (tool.mcpInfo !== undefined || WEB_TOOLS.has(tool.name)) &&
-      !result.detached &&
+      !calledToolResult.detached &&
       shouldRecordToolContent(span)
     ) {
       let preMappedText = stringifyToolContentForSpan(preMappedBlock.content);
@@ -5282,9 +5475,9 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
     }
     let mappedBlock =
       isPerfettoTracingEnabled() || (isBetaTracingEnabled() && isToolContentLoggingEnabled())
-        ? result.data && typeof result.data === "object"
-          ? jsonStringify(result.data)
-          : String(result.data ?? "")
+        ? calledToolResult.data && typeof calledToolResult.data === "object"
+          ? jsonStringify(calledToolResult.data)
+          : String(calledToolResult.data ?? "")
         : undefined;
     endToolSpan(span, mappedBlock, undefined, accountMemoryTool);
     let mappedContent = preMappedBlock.content;
@@ -5295,7 +5488,7 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
         ? mappedContent.length
         : jsonStringify(mappedContent).length;
     let resultSizeTelemetry = getResultSizeTelemetry(mappedContent, tool);
-    let resultIsMedia = isMedia(result.newMessages);
+    let resultIsMedia = isMedia_2(calledToolResult.newMessages);
     let mediaBlocks;
     let mediaUrls;
     let extraMessages;
@@ -5303,8 +5496,8 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
     let resultNotes;
     if (observableInput && typeof observableInput === "object") {
       if (
-        (effectiveToolName === FILE_READ_TOOL_NAME ||
-          effectiveToolName === FILE_EDIT_TOOL_NAME ||
+        (effectiveToolName === READ ||
+          effectiveToolName === EDIT ||
           effectiveToolName === FILE_WRITE_TOOL_NAME) &&
         "file_path" in observableInput &&
         typeof observableInput.file_path === "string"
@@ -5387,7 +5580,7 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
       ...getEffortTelemetryFields(toolUseContext),
       durationMs: callDurationMs,
       ...wallClock.fields(callDurationMs, callState),
-      ...(result.detached && {
+      ...(calledToolResult.detached && {
         detached: true,
       }),
       ...(callSpan !== undefined && {
@@ -5402,10 +5595,10 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
       ...(resultIsMedia > 0 && {
         toolResultAttachmentBytes: resultIsMedia,
       }),
-      ...measureSidecarFields(result.data),
+      ...measureSidecarFields(calledToolResult.data),
       ...(!shouldKeepToolResultInSubagents(toolUseContext, tool) && {
         sidecarDroppedForSubagent: true,
-        ...(result.subagentFrameResult !== undefined && {
+        ...(calledToolResult.subagentFrameResult !== undefined && {
           sidecarSmallFormOfferedForSubagent: true,
         }),
       }),
@@ -5431,7 +5624,7 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
         has_pipe: bashClass.has_pipe,
       }),
       ...resultNotes,
-      ...(effectiveToolName === FILE_READ_TOOL_NAME &&
+      ...(effectiveToolName === READ &&
         observableInput &&
         typeof observableInput === "object" && {
           readHasLimit: observableInput.limit !== undefined,
@@ -5462,15 +5655,15 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
     let cronResult;
     if (
       shouldLogGitCommitDetails(tool, callInput) &&
-      result.data &&
-      typeof result.data === "object" &&
-      "stdout" in result.data
+      calledToolResult.data &&
+      typeof calledToolResult.data === "object" &&
+      "stdout" in calledToolResult.data
     ) {
       let cronData =
-        !("backgroundTaskId" in result.data && result.data.backgroundTaskId) &&
-        !("interrupted" in result.data && result.data.interrupted === true);
+        !("backgroundTaskId" in calledToolResult.data && calledToolResult.data.backgroundTaskId) &&
+        !("interrupted" in calledToolResult.data && calledToolResult.data.interrupted === true);
       let commitInfo = await resolveCommitInfo(
-        String(result.data.stdout),
+        String(calledToolResult.data.stdout),
         toolUseContext.session.project?.cwd ?? null,
         cronData ? toolResult : undefined,
       );
@@ -5510,15 +5703,15 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
       },
       toolUseContext.agentContext,
     );
-    let toolOutput = result.data;
-    let cronSummary = cronToolCallResult(tool.name, result.data);
+    let toolOutput = calledToolResult.data;
+    let cronSummary = cronToolCallResult(tool.name, calledToolResult.data);
     let followups = [];
     let followupCount = 0;
     let followupFailed = false;
     let followupError;
     let followupMessages = [];
     if (
-      result.classifierContext !== undefined &&
+      calledToolResult.classifierContext !== undefined &&
       (!tool.isMcp ||
         (mcpServerType === "sdk" &&
           tool.mcpInfo?.scope !== "project" &&
@@ -5527,20 +5720,20 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
           )))
     )
       followupMessages.push({
-        value: truncateToLength(result.classifierContext, HOST_CONTEXT_LINE_LIMIT),
+        value: truncateToLength(calledToolResult.classifierContext, HOST_CONTEXT_LINE_LIMIT),
         hostPrincipal: true,
         pairedRewriteSeq: 0,
       });
-    let contextLayers = result.contextLayers;
-    let mcpMeta = result.mcpMeta;
-    let toolEndsTurn = result.endsTurn;
-    let toolResultRemedy = result.remedy;
-    let sandboxViolations = result.sandboxViolations;
-    let sandboxed = result.sandboxed;
+    let contextLayers = calledToolResult.contextLayers;
+    let mcpMeta = calledToolResult.mcpMeta;
+    let toolEndsTurn = calledToolResult.endsTurn;
+    let toolResultRemedy = calledToolResult.remedy;
+    let sandboxViolations = calledToolResult.sandboxViolations;
+    let sandboxed = calledToolResult.sandboxed;
     async function addToolResult(toolUseResult, preMappedBlock) {
       let toolResultsDir = toolResultsDirFor_2(toolUseContext.session);
       let mappedPreBlock = preMappedBlock
-        ? await processToolResultBlock(preMappedBlock, tool, toolResultsDir, toolUseContext.storageV5)
+        ? await persistLargeToolResult(preMappedBlock, tool, toolResultsDir, toolUseContext.storageV5)
         : await mapAndMaybePersistToolResult(
             tool,
             toolUseResult,
@@ -5576,7 +5769,7 @@ ${resultNote}`,
       if (contentBlocks_2?.length) contentBlocks.push(...contentBlocks_2);
       let imagePasteIds;
       if (contentBlocks_2?.length) {
-        let imageCount = count(contentBlocks_2, (imageCount) => imageCount.type === "image");
+        let imageCount = countWhere(contentBlocks_2, (imageCount) => imageCount.type === "image");
         if (imageCount > 0) imagePasteIds = makeImagePlaceholders(imageCount);
       }
       let strippedResult = toolUseResult;
@@ -5646,13 +5839,35 @@ ${resultNote}`,
           as: "feedback",
           texts: [permissionDecision.acceptFeedback],
         };
-      if (result.subagentFrameResult !== undefined && !shouldKeepToolResultInSubagents(toolUseContext, tool))
+      if (
+        tool.stampsOwnResults &&
+        toolUseContext.agentId === undefined &&
+        assistantMessage.handedOff !== true &&
+        !hasFollowups &&
+        toolUseContext.options.toolCatalog.getAllBaseTools().includes(tool)
+      )
+        startId[BUILT_IN_TOOL_RUN_SYMBOL] = {
+          toolUseId: toolUseID,
+          name: tool.name,
+        };
+      if (codeModeAccepted() && calledToolResult.hideRow === true && !hasFollowups)
+        startId.hiddenToolUseIds = [toolUseID];
+      if (
+        calledToolResult.subagentFrameResult !== undefined &&
+        !shouldKeepToolResultInSubagents(toolUseContext, tool)
+      )
         if (hasFollowups) logFeatureSad("subagent_frame_result", "hook_rewrote_output");
         else if (followupError !== undefined) logFeatureSad("subagent_frame_result", followupError);
         else {
-          Object.assign(startId, asSubagentFrameResult(result.subagentFrameResult));
+          Object.assign(startId, asSubagentFrameResult(calledToolResult.subagentFrameResult));
           logFeatureOk("subagent_frame_result");
         }
+      if (
+        codeModeAccepted() &&
+        calledToolResult.detachedToolUseIds !== undefined &&
+        calledToolResult.detachedToolUseIds.length > 0
+      )
+        startId.detachedToolUseIds = [...calledToolResult.detachedToolUseIds];
       if (
         startId.hostClassifierContext !== undefined &&
         allHostPrincipals &&
@@ -5676,7 +5891,7 @@ ${resultNote}`,
         },
       });
     }
-    if (result.detached) {
+    if (calledToolResult.detached) {
       await addToolResult(DETACHED_TOOL_CALL_FLAG, preMappedBlock);
       if (preventContinuation && !toolUseContext.abortController.signal.aborted)
         pushHookStoppedContinuation(messages, {
@@ -5687,15 +5902,29 @@ ${resultNote}`,
       return messages;
     }
     let unusedShape;
-    let hookTimings = [];
+    if (codeModeAccepted() && toolUseContext.abortController.signal.aborted) {
+      let chunkModule = require("../../tools/REPLTool/stopReport.js");
+      if (chunkModule.isStoppedReplResult(tool.name, calledToolResult.data))
+        unusedShape = toolUseContext.stoppedResultWait?.(toolUseID);
+    }
+    let stoppedWait = [];
     let postToolHookStart = Date.now();
     let outputModified = false;
     let didRewriteOutput = false;
-    let followupsStarted = false;
+    let followupsStarted =
+      isAccepted() &&
+      tool.name === REPL_TOOL_NAME &&
+      !tool.mcpInfo &&
+      require("../../utils/codeMode/receiptEvalId.js").receiptEvalIdOf(calledToolResult.data) !== undefined;
     for await (let followup of followupsStarted
       ? []
       : runPostToolUseHooks(
-          toolUseContext,
+          codeModeAccepted() && unusedShape !== undefined
+            ? {
+                ...toolUseContext,
+                abortController: unusedShape.hookController,
+              }
+            : toolUseContext,
           tool,
           toolUseID,
           assistantMessage.message.id,
@@ -5736,7 +5965,7 @@ ${resultNote}`,
             "durationMs" in att &&
             att.durationMs !== undefined
           )
-            hookTimings.push({
+            stoppedWait.push({
               command: att.command,
               durationMs: att.durationMs,
             });
@@ -5757,11 +5986,11 @@ ${resultNote}`,
         });
     }
     if (
-      result.subagentFrameResultHolds !== undefined &&
+      calledToolResult.subagentFrameResultHolds !== undefined &&
       !shouldKeepToolResultInSubagents(toolUseContext, tool)
     ) {
       try {
-        if (!(await result.subagentFrameResultHolds())) followupError = "tool_says_stale";
+        if (!(await calledToolResult.subagentFrameResultHolds())) followupError = "tool_says_stale";
       } catch (error) {
         logError(error);
         followupError = "check_threw";
@@ -5773,7 +6002,7 @@ ${resultNote}`,
     }
     if (postHookElapsedMs >= ISOLATION_TIMEOUT_MS)
       logForDebugging(
-        `Slow PostToolUse hooks: ${postHookElapsedMs}ms for ${toolCategoryForTelemetry(tool)} (${hookTimings.length} hooks)`,
+        `Slow PostToolUse hooks: ${postHookElapsedMs}ms for ${toolCategoryForTelemetry(tool)} (${stoppedWait.length} hooks)`,
         {
           level: "info",
         },
@@ -5781,7 +6010,7 @@ ${resultNote}`,
     if (isMcpTool(tool)) {
       await addToolResult(attributeScheduledPlugin(tool.name, cronSummary, toolOutput));
       let frameKey = isDocsConnectorTool(tool, toolUseContext.getAppState().mcp.clients)
-        ? readFirstJsonPayload(result.data)
+        ? readFirstJsonPayload(calledToolResult.data)
         : null;
       if (frameKey !== null)
         import("../artifacts/AUTO_REPLIES_ARMED_TOKEN.lazy.js")
@@ -5796,6 +6025,19 @@ ${resultNote}`,
     } else {
       let preMappedBlock_2 = preMappedBlock;
       if (didRewriteOutput) {
+        if (
+          codeModeAccepted() &&
+          tool.name === REPL_TOOL_NAME &&
+          calledToolResult.data !== null &&
+          typeof calledToolResult.data === "object" &&
+          calledToolResult.data.asyncDispatched === true &&
+          toolOutput !== null &&
+          typeof toolOutput === "object"
+        )
+          toolOutput = {
+            ...toolOutput,
+            asyncDispatched: true,
+          };
         let outputCheck = tool.outputSchema?.safeParse(toolOutput);
         let logInvalidOutput = (reason, detail) => {
           logForDebugging(
@@ -5804,9 +6046,9 @@ ${resultNote}`,
               level: "error",
             },
           );
-          toolOutput = result.data;
+          toolOutput = calledToolResult.data;
           followupFailed = true;
-          let pairedCount = count(
+          let pairedCount = countWhere(
             followupMessages,
             (followup) => followup.pairedRewriteSeq === followupCount,
           );
@@ -5822,7 +6064,7 @@ ${resultNote}`,
         };
         if (outputCheck && !outputCheck.success)
           logInvalidOutput(
-            `schema_invalid issues=${uniq(outputCheck.error.issues.map((issue) => issue.code)).join(",")}`,
+            `schema_invalid issues=${normalizeCaseForComparison_2(outputCheck.error.issues.map((issue) => issue.code)).join(",")}`,
             outputCheck.error.message,
           );
         else
@@ -5830,7 +6072,7 @@ ${resultNote}`,
             let remappedOutput = toolOutput;
             if (tool.restoreTransientForRemap)
               try {
-                remappedOutput = tool.restoreTransientForRemap(result.data, toolOutput);
+                remappedOutput = tool.restoreTransientForRemap(calledToolResult.data, toolOutput);
               } catch (error) {
                 logError(error);
                 remappedOutput = toolOutput;
@@ -5844,8 +6086,8 @@ ${resultNote}`,
       }
       await addToolResult(attributeScheduledPlugin(tool.name, cronSummary, toolOutput), preMappedBlock_2);
     }
-    if (tool.name === FILE_READ_TOOL_NAME && result.data && typeof result.data === "object") {
-      let cachedReadingLimit = getCachedReadingLimit(result.data);
+    if (tool.name === READ && calledToolResult.data && typeof calledToolResult.data === "object") {
+      let cachedReadingLimit = getCachedReadingLimit(calledToolResult.data);
       if (cachedReadingLimit !== undefined)
         messages.push({
           message: createAttachmentMessage_2({
@@ -5855,7 +6097,7 @@ ${resultNote}`,
           }),
         });
     }
-    if (shouldAddBashAudienceNote(tool.name, result.data, getMainLoopModel_2(toolUseContext)))
+    if (shouldAddBashAudienceNote(tool.name, calledToolResult.data, getMainLoopModel_2(toolUseContext)))
       messages.push({
         message: createAttachmentMessage_2({
           type: "bash_output_audience_note",
@@ -5868,12 +6110,21 @@ ${resultNote}`,
         {
           name: tool.name,
           ran: true,
-          ...false,
+          ...(codeModeAccepted() && {
+            asyncReplReceipt: require("../../utils/codeMode/asyncReplReceipt.js").isAsyncReplReceipt(
+              calledToolResult.data,
+            ),
+          }),
         },
         abortScopeOf(toolUseContext),
       ) !== null;
     for (let followup of followups) messages.push(followup);
-    let message = [...(result.newMessages ?? []), ...[]];
+    let message = [
+      ...(calledToolResult.newMessages ?? []),
+      ...(codeModeAccepted() && calledToolResult.messagesFromOutput
+        ? calledToolResult.messagesFromOutput(toolOutput)
+        : []),
+    ];
     if (message.length > 0)
       for (let hookResult of message)
         if (hookResult.type === "user") {
@@ -5894,7 +6145,12 @@ ${resultNote}`,
         toolUseID,
         message: stopReason || "Execution stopped by hook",
       });
-    runAfterResultCommitted(result, false || resultCommitted, logError);
+    let stoppedResult =
+      codeModeAccepted() &&
+      unusedShape !== undefined &&
+      !unusedShape.hookController.signal.aborted &&
+      unusedShape.keep(() => runAfterResultCommitted(calledToolResult, false, logError));
+    runAfterResultCommitted(calledToolResult, stoppedResult || resultCommitted, logError);
     return messages;
   } catch (error) {
     let errorDurationMs = Date.now() - now_2;
@@ -6084,7 +6340,7 @@ ${resultNote}`,
       interruptKind === undefined
         ? await getToolErrorCode(error, tool.name, toolUseContext.options.mcpClients)
         : undefined;
-    let skip =
+    let serverTypeForCall =
       getAbortKind(
         toolUseContext.abortController.signal,
         {
@@ -6094,13 +6350,23 @@ ${resultNote}`,
         abortScopeOf(toolUseContext),
       ) !== null;
     let extraMessages = [];
+    let resultWaitKept =
+      error instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS &&
+      !isHookCallerVirtualTool(assistantMessage, toolUseContext)
+        ? toolSchemaNotInPromptNote(tool, toolUseContext)
+        : null;
+    if (resultWaitKept !== null)
+      logEvent("tengu_deferred_tool_schema_not_sent", {
+        toolName: sanitizeToolNameWithMcpFlag(tool.name, tool.isMcp === true),
+        isMcp: tool.isMcp ?? false,
+      });
     messages.push(
       {
         message: createUserMessage({
           content: [
             {
               type: "tool_result",
-              content: error_2,
+              content: error_2 + (resultWaitKept ?? ""),
               is_error: true,
               tool_use_id: toolUseID,
             },
@@ -6136,7 +6402,7 @@ ${resultNote}`,
         toolUseID,
         message: stopReason || "Execution stopped by hook",
       });
-    runAfterResultCommitted(error, skip, logError);
+    runAfterResultCommitted(error, serverTypeForCall, logError);
     return messages;
   } finally {
     if (toolResult !== undefined) releaseHeadReflogMark(toolResult);
@@ -6144,40 +6410,39 @@ ${resultNote}`,
     if (decisionRecord) toolUseContext.toolDecisions.delete(toolUseID);
   }
 }
-//@ chunk-bk5ntezz.js:3179-3346 fingerprint (2.1.88 match: findMcpServerConnection, 1)
-/**
- * 规范化工具名用于记录：Task→Agent，MCP 工具缩成 mcp__<server>，非法字符换成 _，与保留词（instructions/person/claude/summary/other）冲突时加 _。
- */
-function normalizeToolNameForTranscript(toolName) {
-  if (toolName === TASK) return AGENT;
-  let sliced = toolName.slice(0, MAX_USAGE_NAME_CHARS);
-  let serverName = mcpInfoFromString(sliced)?.serverName;
-  let replaced = (serverName === undefined ? sliced : `mcp__${serverName}`).replace(/[^\w.:-]/g, "_");
-  return [INSTRUCTIONS, PERSON, CLAUDE, SUMMARY, OTHER].includes(replaced) ? `${replaced}_` : replaced;
-}
 export {
-  takeCutResult,
-  hasTypeField,
-  waitForMcpToolServer,
-  isCacheMissReason,
-  shouldWaitForMcpTool,
-  findLongestPrefixClients,
-  aliasOrSelf,
-  runToolUse,
-  classifyToolError,
   getRequestTimingStore,
+  waitForMcpToolServer,
+  aliasOrSelf,
+  findLongestPrefixClients,
   getMcpServerBaseUrlFromToolName,
   clearCutResults,
-  toolFeatureName,
+  classifyToolError,
+  runToolUse,
+  hasTypeField,
+  isPendingMcpToolName,
+  getCancelMessage,
+  TOOL_CALL_SITE_RULES,
+  takeCutResult,
+  isCacheMissReason,
+  shouldWaitForMcpTool,
   isAbortOrCancelError,
   classifyToolErrorCode,
-  normalizeToolNameForTranscript,
-  emitToolHeartbeat,
-  getCancelMessage,
+  toolFeatureName,
   restoreCallInput,
   runValidateInput,
-  TOOL_CALL_SITE_RULES,
-  explainUnavailableArtifactTool,
+  buildDenyRuleDecisionRecord,
+  buildPermissionDecisionRecord,
+  buildDeniedDecisionRecord,
+  getToolDecisionForOTel,
+  settleUnaskedQuestion,
+  isHookCallerVirtualTool,
+  getNotLoadedToolVerdict,
+  logNotLoadedCheckFailure,
+  isCallDirectoryUnchanged,
+  CALL_DIRECTORY_CHANGED_MESSAGE,
+  getInterruptKind,
+  describeUnknownTool,
   resolveUnknownToolSafe,
-  isPendingMcpToolName,
+  emitToolHeartbeat,
 };

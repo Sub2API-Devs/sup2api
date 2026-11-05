@@ -3,9 +3,9 @@
  *
  * REPL 侧 Remote Control 入口：门控（开关/OAuth/组织策略/信任设备/最低版本）、重连目标与属主校验（环境交接、恢复指针）、会话标题派生，然后调用 initEnvLessBridgeCore
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/initReplBridge.ts
- * pieces: chunk-cg2r2hy6.js (3)
+ * pieces: chunk-66b9fbd5.js (3)
  * attribution: callgraph-witnessed 1, placement 2
  */
 import { setCseShimGate, sessionIdBody, toInfraSessionId } from "./sessionIdCompat.js";
@@ -155,7 +155,7 @@ import { runSideQuestionWithProgress } from "../utils/sideQuestionProgress.js";
 import { wrapTeardownWithPresence } from "../ink/reconciler.js";
 import { unwrapReminderText } from "../utils/systemReminder.js";
 
-//@ chunk-cg2r2hy6.js:27697-48603 callgraph-witnessed (2.1.88 match: initReplBridge, 0.22)
+//@ chunk-66b9fbd5.js:28974-49872 callgraph-witnessed (2.1.88 match: initReplBridge, 0.22)
 /**
  * 启用 REPL Remote Control：读 CLAUDE_BRIDGE_REATTACH_* 环境交接或恢复指针确定重连目标，校验当前登录是否为记录的属主（不一致则否决并抑制历史回填）；
  * 依次检查桥开关、OAuth、allow_remote_control/allow_remote_sessions 策略、本地另一进程是否持有该会话、OAuth 死令牌退避、trusted device、组织 UUID、最低版本；
@@ -1478,9 +1478,9 @@ async function initReplBridge(options) {
   }
   return wrapTeardownWithPresence(bridgeHandle, () => presencePulse);
 }
-//@ chunk-cg2r2hy6.js:48738-48748 placement
+//@ chunk-66b9fbd5.js:50007-50017 placement
 var FIRST_SENTENCE_MAX_CHARS = 50;
-//@ chunk-cg2r2hy6.js:48748-48898 placement
+//@ chunk-66b9fbd5.js:50017-50167 placement
 /**
  * 取文本的第一句、压缩空白，超过长度上限截断加省略号。
  */

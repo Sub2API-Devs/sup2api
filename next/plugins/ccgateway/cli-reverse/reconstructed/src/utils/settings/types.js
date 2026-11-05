@@ -3,10 +3,10 @@
  *
  * settings.json 的完整 zod schema（约 187 个顶层键）、权限/沙箱/MCP 白名单子 schema、托管设置的宽容解析。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/types.ts
- * pieces: chunk-5nte8cwj.js (1), chunk-dcmhvw5a.js (67)
- * attribution: fingerprint 8, placement 1, layout 59
+ * pieces: chunk-z20c443b.js (67)
+ * attribution: placement 1, fingerprint 7, layout 59
  */
 import { win32, posix } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -51,7 +51,7 @@ import {
   parseGithubOwnerWildcard,
   hasGithubWildcard,
 } from "../plugins/schemas.js";
-import { count } from "../collections.js";
+import { countWhere } from "../collections.js";
 import { isDeviceNamespacePath, isMacSpecialPath } from "../pathClassification.js";
 import { isNetworkMountRoot } from "../networkPaths.js";
 import { MAX_TIMER_DELAY_MS } from "../timerDelayClamp.js";
@@ -95,23 +95,21 @@ import { EFFORT_LEVELS } from "../effort.js";
 import { import_reject, import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { MANAGED_RESTRICTION_KEYS, asArray } from "./managedRestrictionKeys.js";
 import { isPlainObject as isPlainObject_2 } from "../isPlainObject.js";
-import { semverModuleForDesktop, MIN_DESKTOP_VERSION } from "../desktopDeepLink.js";
-import { semverGt } from "../semver.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:222126-222212 placement
+//@ chunk-z20c443b.js:217594-217680 placement
 /**
  * POLICY_HELPER_ON_FAILURE：policyHelper 失败处理取值；POLICY_HELPER_LOG_LEVELS：policyHelper 日志级别取值；policyHelperScriptRefSchema：policyHelper 脚本引用 schema（同一声明共 3 个绑定）。
  */
 var POLICY_HELPER_ON_FAILURE; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var POLICY_HELPER_LOG_LEVELS;
 var policyHelperScriptRefSchema;
-deferInit("chunk-dcmhvw5a.js:222126", () => {
+deferInit("chunk-z20c443b.js:217594", () => {
   POLICY_HELPER_ON_FAILURE = ["accept", "hold", "refuse"];
   POLICY_HELPER_LOG_LEVELS = ["off", "basic", "full"];
   policyHelperScriptRefSchema = DoctorLazy(() => record(stringSchema(), coerceString()));
 });
-//@ chunk-dcmhvw5a.js:222212-225428 fingerprint (2.1.88 match: PermissionsSchema, 0.81)
+//@ chunk-z20c443b.js:217680-222381 fingerprint (2.1.88 match: PermissionsSchema, 0.793)
 function PermissionsSchema(groups) {
   return objectSchema({
     allow: array(allowPermissionRuleSchema())
@@ -148,13 +146,19 @@ function PermissionsSchema(groups) {
       .describe(
         'For the program that starts Claude Code: read only from --settings and from settings that program sends while the session runs; ignored in user, project, local and managed settings. Absolute paths, each a folder with all below it or one file, that blockReadsOutsideWorkingDirectories lets through beside the working directories. It allows nothing: an allow rule, the permission mode or the user still decides each read, as with that setting off, and a shell command that hands such a path to a program is still asked about unless a Read allow rule covers it. The paths do not become working directories, so blockWritesOutsideWorkingDirectories refuses writes to them, and they are not told to MCP servers or to the model. Each path counts as written: a link in it is not followed and a pattern is not expanded, so list every spelling that a read may arrive by. Ignored: an entry that starts with ~, has a ".." segment or has white space at either end (as written or once normalized), a relative or network path, and the root of a filesystem. Does not change what sandboxed commands may read (sandbox.filesystem.allowRead does).',
       ),
+    workingDirectoriesAsGiven: array(stringSchema().catch(""))
+      .optional()
+      .catch(undefined)
+      .describe(
+        'For the program that starts Claude Code: read only from --settings and from settings that program sends while the session runs; ignored in user, project, local and managed settings. Absolute paths of working directories, each spelled exactly as it is passed, letter case included (the session folder, --add-dir, permissions.additionalDirectories). To decide what lies inside a listed working directory, Claude Code takes it as written and follows no link at it, so a link that later stands in its place gives the file tools no access to where the link leads. List real paths: the files of a listed path that runs through a link count as outside the working directories, because where they really are lies outside it. List a mapped network drive by its drive-letter path: Claude Code still derives the UNC form of that path by itself and adds it, as for any mapped drive. A file path that is itself spelled as a UNC path is judged as written, so a link on the share is not seen by that spelling. It adds no working directory and allows nothing. Once listed, a path stays so until the process ends, also if later settings leave it out. Ignored: an entry that is not already normalized (a relative path, one that starts with ~, a ".." segment, a separator at its end unless it is a filesystem root, forward slashes on Windows, white space at either end). Does not change what sandboxed commands may write.',
+      ),
     disableAutoMode: _enum(["disable"]).optional().describe("Disable auto mode"),
     additionalDirectories: array(stringSchema())
       .optional()
       .describe("Additional directories to include in the permission scope"),
   }).passthrough();
 }
-//@ chunk-dcmhvw5a.js:225428-230167 fingerprint (2.1.88 match: AllowedMcpServerEntrySchema, 0.418)
+//@ chunk-z20c443b.js:222381-227120 fingerprint (2.1.88 match: AllowedMcpServerEntrySchema, 0.418)
 /**
  * tipEntrySchema：提示条目 schema；skillsSettingsSchema：技能设置 schema；agentsSettingsSchema：代理设置 schema（同一声明共 11 个绑定）。
  */
@@ -170,7 +174,7 @@ var deniedMcpServersSchema;
 var modelPricingSchema;
 var sandboxSettingsSchema;
 var CONTROL_CHARS_RE;
-deferInit("chunk-dcmhvw5a.js:225428", () => {
+deferInit("chunk-z20c443b.js:222381", () => {
   PermissionsSettingsSchema = DoctorLazy(() => PermissionsSchema(enabledSettingsFeatureGroups()));
   tipEntrySchema = DoctorLazy(() =>
     union([
@@ -256,7 +260,7 @@ deferInit("chunk-dcmhvw5a.js:225428", () => {
         ),
     }).refine(
       (entry) =>
-        count(
+        countWhere(
           [entry.serverName !== undefined, entry.serverCommand !== undefined, entry.serverUrl !== undefined],
           Boolean,
         ) === 1,
@@ -289,7 +293,7 @@ deferInit("chunk-dcmhvw5a.js:225428", () => {
         ),
     }).refine(
       (entry) =>
-        count(
+        countWhere(
           [entry.serverName !== undefined, entry.serverCommand !== undefined, entry.serverUrl !== undefined],
           Boolean,
         ) === 1,
@@ -316,7 +320,7 @@ deferInit("chunk-dcmhvw5a.js:225428", () => {
   );
   CONTROL_CHARS_RE = /[\x00-\x1f\x7f-\x9f\u2028\u2029]|\p{DI}/u;
 });
-//@ chunk-dcmhvw5a.js:230167-230258 layout
+//@ chunk-z20c443b.js:227120-227211 layout
 /**
  * looksLikeUncPath：反斜杠形式像 UNC 路径。
  */
@@ -325,21 +329,21 @@ function looksLikeUncPath(path) {
   if (isDeviceNamespacePath(replaced)) return false;
   return /^\\{2}[^\\]/.test(replaced);
 }
-//@ chunk-dcmhvw5a.js:230258-230332 layout
+//@ chunk-z20c443b.js:227211-227285 layout
 /**
  * isNetworkOrMacSpecialPath：网络路径或 macOS 特殊路径。
  */
 function isNetworkOrMacSpecialPath(path) {
   return isNetworkMountRoot(path) || /^\/network\/servers(\/|$)/i.test(path) || isMacSpecialPath(path);
 }
-//@ chunk-dcmhvw5a.js:230332-230411 layout
+//@ chunk-z20c443b.js:227285-227364 layout
 /**
  * isKernelPseudoPath：/proc、/dev/fd 等内核伪路径。
  */
 function isKernelPseudoPath(path) {
   return /^\/(proc|dev\/(fd|stdin|stdout|stderr))(\/|$)/i.test(path);
 }
-//@ chunk-dcmhvw5a.js:230411-231166 layout
+//@ chunk-z20c443b.js:227364-228119 layout
 /**
  * 校验 helper 路径是规范形式：Windows 上不含 . / ..、双分隔符、尾随点或空格、盘符外的冒号、设备命名空间，按规则拒绝 UNC 与盘符相对路径；POSIX 上拒绝网络自动挂载根与 /proc、/dev/fd 等。
  */
@@ -373,26 +377,26 @@ function isNormalizedHelperPath(path, platform, rules = {}) {
   if (/\/{2}/.test(path)) return false;
   return !path.endsWith("/") || path === "/";
 }
-//@ chunk-dcmhvw5a.js:231166-231190 layout
+//@ chunk-z20c443b.js:228119-228143 layout
 /**
  * POLICY_HELPER_EXECUTABLE_RE：policyHelper 可执行文件后缀。
  */
 var POLICY_HELPER_EXECUTABLE_RE = /\.(exe|ps1)$/i;
-//@ chunk-dcmhvw5a.js:231190-231230 layout
+//@ chunk-z20c443b.js:228143-228183 layout
 /**
  * isPowerShellScript：.ps1 脚本。
  */
 function isPowerShellScript(path) {
   return /\.ps1$/i.test(path);
 }
-//@ chunk-dcmhvw5a.js:231230-231280 layout
+//@ chunk-z20c443b.js:228183-228233 layout
 /**
  * hasPowerShellGlobChars：.ps1 里含 glob 字符。
  */
 function hasPowerShellGlobChars(path) {
   return isPowerShellScript(path) && /[[\]`*?]/.test(path);
 }
-//@ chunk-dcmhvw5a.js:231280-231627 layout
+//@ chunk-z20c443b.js:228233-228580 layout
 /**
  * policyHelper 条目 schema 的辅助：.ps1 通配字符提示、路径字段、null 视为缺省的包装、带上限的整数 schema、可为 null 的字段名。
  */
@@ -408,7 +412,7 @@ var clampedIntSchema = (minValue) =>
     .min(minValue)
     .transform((value) => Math.min(value, MAX_HELPER_MS));
 var NULLABLE_ENTRY_FIELDS = ["path", "script", "defaultSettings"];
-//@ chunk-dcmhvw5a.js:231627-231780 layout
+//@ chunk-z20c443b.js:228580-228733 layout
 function isAllNullEntry(entry) {
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
   let record = entry;
@@ -417,14 +421,14 @@ function isAllNullEntry(entry) {
     NULLABLE_ENTRY_FIELDS.every((field) => record[field] === null || record[field] === undefined)
   );
 }
-//@ chunk-dcmhvw5a.js:231780-232632 layout
+//@ chunk-z20c443b.js:228733-229585 layout
 /**
  * policyHelper 条目的基础结构（路径、超时、刷新间隔）与 outputBehavior 字段说明。
  */
 var MAX_QUOTED_NAME_CHARS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var HELPER_BASE_SCHEMA;
 var outputBehaviorSchema;
-deferInit("chunk-dcmhvw5a.js:231780", () => {
+deferInit("chunk-z20c443b.js:228733", () => {
   MAX_QUOTED_NAME_CHARS = 64;
   HELPER_BASE_SCHEMA = DoctorLazy(() =>
     objectSchema({
@@ -438,11 +442,11 @@ deferInit("chunk-dcmhvw5a.js:231780", () => {
       "How the helper's managedSettings compose with the settings of the source that delivered this entry: 'replace' (default) \u2014 the output is the policy; 'merge' \u2014 the output is deep-merged over that source's own settings the way merged managed sources compose (helper scalars win, arrays union, objects merge \u2014 except fallbackModel, forceLoginOrgUUID, gatewayInternalNetworks, sandbox.filesystem.allowRead, sandbox.credentials.awsPairs, sandbox.ripgrep and the restriction allowlists such as allowedMcpServers, allowedProviders, availableModels and allowedHttpHookUrls, which are the helper's whole value when it emits one; tighten a permission with a deny), so a failed helper costs only the delta",
     );
 });
-//@ chunk-dcmhvw5a.js:232632-232683 layout
+//@ chunk-z20c443b.js:229585-229636 layout
 function isPolicyHelperOnFailure(value) {
   return value === "continue" || value === "refuse";
 }
-//@ chunk-dcmhvw5a.js:232683-236920 layout
+//@ chunk-z20c443b.js:229636-233873 layout
 /**
  * policyHelpers 条目各字段的 schema：onFailure（continue/refuse）、retries（上限 5）、interpreter（sh/pwsh）、内联 script 的约束，以及路径/脚本组合错误文本。
  */
@@ -497,7 +501,7 @@ var scriptSchema = (platform) =>
       message: WINDOWS_SCRIPT_ASCII_MESSAGE,
     })
     .describe("Inline helper script, delivered to the fixed interpreter over stdin (never written to disk)");
-//@ chunk-dcmhvw5a.js:236920-237074 layout
+//@ chunk-z20c443b.js:233873-234027 layout
 /**
  * 校验内联 helper（script 与 interpreter），返回第一条错误或 null。
  */
@@ -508,20 +512,20 @@ function validateInlineHelper(config, platform) {
   }).safeParse(config);
   return result.success ? null : result.error.issues[0]?.message || "invalid inline helper config";
 }
-//@ chunk-dcmhvw5a.js:237074-237115 layout (2.1.88 match: SUPPORTED_PLATFORMS, 0.811)
+//@ chunk-z20c443b.js:234027-234068 layout (2.1.88 match: SUPPORTED_PLATFORMS, 0.811)
 var SUPPORTED_PLATFORMS = ["macos", "linux", "windows", "wsl"];
-//@ chunk-dcmhvw5a.js:237115-237167 layout
+//@ chunk-z20c443b.js:234068-234120 layout
 /**
  * platformSpellings：平台名的等价写法（wsl 兼容 linux）。
  */
 function platformSpellings(platform) {
   return platform === "wsl" ? ["wsl", "linux"] : [platform];
 }
-//@ chunk-dcmhvw5a.js:237167-237219 layout
+//@ chunk-z20c443b.js:234120-234172 layout
 function posixPlatformFamily(platform) {
   return platform === "windows" ? "win32" : "posix";
 }
-//@ chunk-dcmhvw5a.js:237219-237409 layout
+//@ chunk-z20c443b.js:234172-234362 layout
 function pathRulesForOs(platform) {
   return {
     rejectDriveRelative: platform === "windows",
@@ -531,7 +535,7 @@ function pathRulesForOs(platform) {
     requireWin32ExecutableSuffix: platform === "windows",
   };
 }
-//@ chunk-dcmhvw5a.js:237409-238532 layout
+//@ chunk-z20c443b.js:234362-235485 layout
 /**
  * 按目标系统生成 helper 路径 schema：长度上限、无控制/不可见字符、绝对路径、Windows 须为 .exe/.ps1 且 .ps1 无通配字符，并须为规范形式。
  */
@@ -568,7 +572,7 @@ function helperPathSchemaFor(os) {
     })
     .describe("Absolute path to the helper executable");
 }
-//@ chunk-dcmhvw5a.js:238532-240013 layout
+//@ chunk-z20c443b.js:235485-236966 layout
 /**
  * policyHelpers 静态载荷校验：不得含 policyHelper(s)、条目字段、helper 输出信封字段或平台键，并给出对应提示。
  */
@@ -577,7 +581,7 @@ var HELPER_ENTRY_FIELDS;
 var HELPER_ENVELOPE_FIELDS;
 var STATIC_PAYLOAD_SCHEMA;
 var EMPTY_ENTRY_MESSAGE;
-deferInit("chunk-dcmhvw5a.js:238532", () => {
+deferInit("chunk-z20c443b.js:235485", () => {
   POLICY_HELPER_KEYS = [...SUPPORTED_PLATFORMS, "default"];
   HELPER_ENTRY_FIELDS = [
     "path",
@@ -622,7 +626,7 @@ deferInit("chunk-dcmhvw5a.js:238532", () => {
   EMPTY_ENTRY_MESSAGE =
     'Entry must carry "path" (a helper executable) or "script" + "interpreter" (an inline helper), and/or "defaultSettings" (a static settings payload)';
 });
-//@ chunk-dcmhvw5a.js:240013-240219 layout
+//@ chunk-z20c443b.js:236966-237172 layout
 function entryShapeError(entry) {
   let { path, script, interpreter, defaultSettings } = entry;
   if (path !== undefined && script !== undefined) return PATH_OR_SCRIPT_MESSAGE;
@@ -630,7 +634,7 @@ function entryShapeError(entry) {
   if (path === undefined && script === undefined && defaultSettings === undefined) return EMPTY_ENTRY_MESSAGE;
   return null;
 }
-//@ chunk-dcmhvw5a.js:240219-240582 layout
+//@ chunk-z20c443b.js:237172-237535 layout
 /**
  * 按平台构造 policyHelpers 条目 schema：path、script、interpreter、outputBehavior、onFailure、retries、defaultSettings，并检查 path/script/defaultSettings 的组合。
  */
@@ -662,22 +666,22 @@ function policyHelperEntrySchema(os, defaultSettingsSchema) {
         });
     });
 }
-//@ chunk-dcmhvw5a.js:240582-240614 layout
+//@ chunk-z20c443b.js:237535-237567 layout
 var linuxPolicyHelperSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:240582", () => {
+deferInit("chunk-z20c443b.js:237535", () => {
   linuxPolicyHelperSchema = DoctorLazy(() => policyHelperEntrySchema("linux", STATIC_PAYLOAD_SCHEMA()));
 });
-//@ chunk-dcmhvw5a.js:240614-240672 layout
+//@ chunk-z20c443b.js:237567-237625 layout
 function policyHelperEntrySchemaFor(os, defaultSettingsSchema = STATIC_PAYLOAD_SCHEMA()) {
   return os === "default" ? STATIC_PAYLOAD_SCHEMA() : policyHelperEntrySchema(os, defaultSettingsSchema);
 }
-//@ chunk-dcmhvw5a.js:240672-240862 fingerprint (2.1.88 match: CUSTOMIZATION_SURFACES, 0.945)
+//@ chunk-z20c443b.js:237625-237815 fingerprint (2.1.88 match: CUSTOMIZATION_SURFACES, 0.945)
 /**
  * 插件专属定制限制：_E 是 strictPluginOnlyCustomization 的 schema（逐项过滤，非数组原样放行）；oJt 是允许的定制组件名单 ["skills","agents","hooks","mcp"]，名单外会在校验时给出 unknown-surface 的说明。
  */
 var SkillOverridesSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var SKILL_OVERRIDE_COMPONENTS;
-deferInit("chunk-dcmhvw5a.js:240672", () => {
+deferInit("chunk-z20c443b.js:237625", () => {
   SkillOverridesSchema = DoctorLazy(() =>
     objectSchema(
       Object.fromEntries(
@@ -694,7 +698,7 @@ deferInit("chunk-dcmhvw5a.js:240672", () => {
   );
   SKILL_OVERRIDE_COMPONENTS = ["skills", "agents", "hooks", "mcp"];
 });
-//@ chunk-dcmhvw5a.js:240862-241035 layout
+//@ chunk-z20c443b.js:237815-237988 layout
 function filteredSurfacesSchema(onFiltered) {
   return preprocess(
     (value) => {
@@ -706,18 +710,18 @@ function filteredSurfacesSchema(onFiltered) {
     union([booleanSchema(), array(_enum(SKILL_OVERRIDE_COMPONENTS))]),
   );
 }
-//@ chunk-dcmhvw5a.js:241035-241078 layout
+//@ chunk-z20c443b.js:237988-238031 layout
 function triStateSchema() {
   return union([array(stringSchema()), booleanSchema(), undefinedSchema()]);
 }
-//@ chunk-dcmhvw5a.js:241078-242189 layout
+//@ chunk-z20c443b.js:238031-239142 layout
 /**
  * configVariantSchema：配置变体 schema；configVariantUnionSchema：配置变体联合 schema（同一声明共 2 个绑定）。
  */
 var INVALID_ENTRY_STRIPPED; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var configVariantSchema;
 var configVariantUnionSchema;
-deferInit("chunk-dcmhvw5a.js:241078", () => {
+deferInit("chunk-z20c443b.js:238031", () => {
   INVALID_ENTRY_STRIPPED = Object.freeze({
     type: "invalid-entry-stripped",
   });
@@ -749,7 +753,7 @@ deferInit("chunk-dcmhvw5a.js:241078", () => {
   configVariantUnionSchema = () =>
     numberSchema().int().min(TRANSPORT_LABELS).max(GLOBAL_CONFIG_FIELD_KINDS).optional().catch(undefined);
 });
-//@ chunk-dcmhvw5a.js:242189-314583 fingerprint (2.1.88 match: SettingsSchema, 0.419)
+//@ chunk-z20c443b.js:239142-312547 fingerprint (2.1.88 match: SettingsSchema, 0.418)
 /**
  * settings.json 的完整 zod schema（约 187 个顶层键：认证 helper、env、permissions、hooks、model、sandbox、插件/市场、遥测相关等）。strictPolicyHelperKeys 时 policyHelper 键严格校验。
  */
@@ -891,7 +895,7 @@ function SettingsSchema(featureGroups, { strictPolicyHelperKeys = false } = {}) 
         .positive()
         .optional()
         .describe(
-          "Number of days to retain chat transcripts before automatic cleanup (default: 30). Minimum 1. Use a large value for long retention; use --no-session-persistence to disable transcript writes entirely.",
+          "Number of days to retain chat transcripts before automatic cleanup (default: 30). Minimum 1. Use a large value for long retention; use --no-session-persistence to disable transcript writes entirely. Cleanup deletes data only on this computer, not anything stored by Anthropic.",
         ),
     desktopSessionCleanupPeriodDays: () =>
       numberSchema()
@@ -899,7 +903,7 @@ function SettingsSchema(featureGroups, { strictPolicyHelperKeys = false } = {}) 
         .nonnegative()
         .optional()
         .describe(
-          "Retention ceiling in days for session transcripts created or last written by a desktop-host surface (Claude Desktop, Cowork), which are otherwise exempt from the cleanupPeriodDays sweep. 0 (the default) means no ceiling: such transcripts are kept until deleted another way. Unlike cleanupPeriodDays, 0 is allowed because this setting never disables writes \u2014 it only bounds an exemption from deletion. The ceiling is a hard cap: it also bounds an active archive grace, so the grace window of a release marker never keeps files past the ceiling. Ignored when cleanupPeriodDays is managed by org policy. A ceiling at or below cleanupPeriodDays effectively disables the exemption: those transcripts age out on the regular cleanupPeriodDays schedule, so the effective retention is whichever of the two periods is longer.",
+          "Retention ceiling in days for session transcripts created or last written by a desktop-host surface (Claude Desktop, Cowork), which are otherwise exempt from the cleanupPeriodDays sweep. 0 (the default) means no ceiling: such transcripts are kept until deleted another way. Unlike cleanupPeriodDays, 0 is allowed because this setting never disables writes \u2014 it only bounds an exemption from deletion. The ceiling is a hard cap: it also bounds an active archive grace, so the grace window of a release marker never keeps files past the ceiling. Ignored when cleanupPeriodDays is managed by org policy. A ceiling at or below cleanupPeriodDays effectively disables the exemption: those transcripts age out on the regular cleanupPeriodDays schedule, so the effective retention is whichever of the two periods is longer. Cleanup deletes data only on this computer, not anything stored by Anthropic.",
         ),
     syncClaudeAiSkills: () =>
       booleanSchema()
@@ -986,14 +990,14 @@ function SettingsSchema(featureGroups, { strictPolicyHelperKeys = false } = {}) 
       stringSchema()
         .optional()
         .describe(
-          `The claude.ai Project this session names for your organization's usage reports: the Project's UUID, or its ID starting with "claude_proj_". An empty string names none and stops lower-precedence files from naming one; the organization default still applies. Sent only when Claude Code uses your claude.ai login, connects directly to the Anthropic API, is not in a cloud session, and CLAUDE_CODE_ATTRIBUTION_HEADER is not 0. CLAUDE_CODE_ATTRIBUTION_PROJECT takes precedence over it. Set in managed settings, it overrides people's own settings files. A project's .claude/settings.json and settings.local.json count only once the folder is trusted; for runs in a folder nobody has trusted, such as CI, use CLAUDE_CODE_ATTRIBUTION_PROJECT.`,
+          `The claude.ai Project this session names for your organization's usage reports: the Project's ID, starting with "claude_proj_" or "chan_", or the UUID of a "claude_proj_" Project. An empty string names none and stops lower-precedence files from naming one; the organization default still applies. Sent only when Claude Code uses your claude.ai login, connects directly to the Anthropic API, is not in a cloud session, and CLAUDE_CODE_ATTRIBUTION_HEADER is not 0. CLAUDE_CODE_ATTRIBUTION_PROJECT takes precedence over it. Set in managed settings, it overrides people's own settings files. A project's .claude/settings.json and settings.local.json count only once the folder is trusted; for runs in a folder nobody has trusted, such as CI, use CLAUDE_CODE_ATTRIBUTION_PROJECT.`,
         ),
     attributionProjectPolicy: () =>
       objectSchema({
         default: stringSchema()
           .optional()
           .describe(
-            'The Project used when neither CLAUDE_CODE_ATTRIBUTION_PROJECT nor attributionProject names one: its UUID, or its ID starting with "claude_proj_".',
+            'The Project used when neither CLAUDE_CODE_ATTRIBUTION_PROJECT nor attributionProject names one: its ID, starting with "claude_proj_" or "chan_", or the UUID of a "claude_proj_" Project.',
           ),
       })
         .optional()
@@ -1178,6 +1182,12 @@ function SettingsSchema(featureGroups, { strictPolicyHelperKeys = false } = {}) 
         .optional()
         .describe(
           "Disable all hooks and statusLine execution: the hooks defined in settings files and by installed plugins. Features built into Claude Code are not hooks in this sense and keep working; each has its own switch.",
+        ),
+    disableReplyCheck: () =>
+      booleanSchema()
+        .optional()
+        .describe(
+          "Disable the reply check in Claude Tag sessions on a self-hosted runner. The check re-prompts Claude, at most four times a turn, when a turn ends without a call to one of Claude Tag's reply tools. It is not a hook, so disableAllHooks does not affect it. Disabling it also stops two messages to Claude that Anthropic's service can request for such a session: a nudge after a long stretch of work with no visible update, and a reminder added to prompts. Claude Code's built-in reminder to give progress updates, on models that have it, is then no longer held back. Set it in managed settings; false there keeps the check on. Everywhere else it is ignored and the check stays on. Has no effect on sessions that Anthropic hosts.",
         ),
     disableAgentView: () =>
       booleanSchema()
@@ -1428,7 +1438,7 @@ function SettingsSchema(featureGroups, { strictPolicyHelperKeys = false } = {}) 
       array(stringSchema())
         .optional()
         .describe(
-          "Marketplace names whose plugins may surface as contextual install suggestions (relevance-based tips). No marketplace-declared suggestions surface without this allowlist; the built-in first-party frontend-design tip is unaffected. Only honored when set in managed settings (policy scope); the key is ignored in user, project, and local settings. A name only takes effect when the marketplace is registered on the machine AND its registered source is also declared in managed settings, either as the extraKnownMarketplaces entry for that name or as an entry of strictKnownMarketplaces. A marketplace registered from a different source under an allowlisted name is ignored. The official marketplace is exempt from the source requirement: allowlisting its name alone suffices, since that name can only register from the official Anthropic source.",
+          "Marketplace names whose plugins may surface as contextual install suggestions (relevance-based tips). No marketplace-declared suggestions surface without this allowlist; the built-in tips for Anthropic's own plugins are unaffected. Only honored when set in managed settings (policy scope); the key is ignored in user, project, and local settings. A name only takes effect when the marketplace is registered on the machine AND its registered source is also declared in managed settings, either as the extraKnownMarketplaces entry for that name or as an entry of strictKnownMarketplaces. A marketplace registered from a different source under an allowlisted name is ignored. The official marketplace is exempt from the source requirement: allowlisting its name alone suffices, since that name can only register from the official Anthropic source.",
         ),
     forceLoginMethod: () =>
       _enum(["claudeai", "console", "gateway"])
@@ -2125,12 +2135,12 @@ function SettingsSchema(featureGroups, { strictPolicyHelperKeys = false } = {}) 
     ...import_mapValues(buildSettingsShapeForGroups(featureGroups), (field) => () => field),
   };
 }
-//@ chunk-dcmhvw5a.js:314583-314643 layout
+//@ chunk-z20c443b.js:312547-312607 layout
 function buildWholeSettingsSchema(featureGroups, options = {}) {
   let shape = SettingsSchema(featureGroups, options);
   return new PerKeyLazySchema(shape).whole();
 }
-//@ chunk-dcmhvw5a.js:314643-314724 layout
+//@ chunk-z20c443b.js:312607-312688 layout
 /**
  * warnedSettingsKeys：已警告过的设置键；perKeySettingsSchema：逐键惰性的设置 schema；wholeSettingsSchema：整份设置 schema（同一声明共 3 个绑定）。
  */
@@ -2138,7 +2148,7 @@ var settingsSchemaWarnedKeys; // deferred: uses DoctorLazy (../../cli/handlers/u
 var warnedSettingsKeys;
 var perKeySettingsSchema;
 var wholeSettingsSchema;
-deferInit("chunk-dcmhvw5a.js:314643", () => {
+deferInit("chunk-z20c443b.js:312607", () => {
   settingsSchemaWarnedKeys = new Set();
   warnedSettingsKeys = new Set();
   perKeySettingsSchema = DoctorLazy(
@@ -2146,33 +2156,33 @@ deferInit("chunk-dcmhvw5a.js:314643", () => {
   );
   wholeSettingsSchema = DoctorLazy(() => perKeySettingsSchema().whole());
 });
-//@ chunk-dcmhvw5a.js:314724-314767 layout
+//@ chunk-z20c443b.js:312688-312731 layout
 function getSettingsSchemaForDocument(rawDocument) {
   return perKeySettingsSchema().forDocument(rawDocument);
 }
-//@ chunk-dcmhvw5a.js:314767-314818 layout
+//@ chunk-z20c443b.js:312731-312782 layout
 function getStrippingSettingsSchema(settings) {
   return perKeySettingsSchema().forDocument(settings, "strip");
 }
-//@ chunk-dcmhvw5a.js:314818-314853 layout
+//@ chunk-z20c443b.js:312782-312817 layout
 /**
  * isWarnedSettingsKey：该键出现过警告。
  */
 function isWarnedSettingsKey(key) {
   return perKeySettingsSchema().has(key);
 }
-//@ chunk-dcmhvw5a.js:314853-314889 layout
+//@ chunk-z20c443b.js:312817-312853 layout
 function getSettingsFieldSchema(key) {
   return perKeySettingsSchema().field(key);
 }
-//@ chunk-dcmhvw5a.js:314889-314949 layout
+//@ chunk-z20c443b.js:312853-312913 layout
 var INVALID_SERVER_NAME; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dcmhvw5a.js:314889", () => {
+deferInit("chunk-z20c443b.js:312853", () => {
   INVALID_SERVER_NAME = Object.freeze({
     serverName: "invalid-entry-stripped",
   });
 });
-//@ chunk-dcmhvw5a.js:314949-315264 layout
+//@ chunk-z20c443b.js:312913-313228 layout
 /**
  * 递归取 zod 问题列表中第一条有意义的消息（展开 union 分支），带路径前缀。
  */
@@ -2191,14 +2201,14 @@ function firstIssueMessage(issues) {
   }
   return null;
 }
-//@ chunk-dcmhvw5a.js:315264-315752 layout
+//@ chunk-z20c443b.js:313228-313716 layout
 /**
  * RESTRICTIVE_TOP_LEVEL_SETTINGS：受限的顶层设置键（同一声明共 2 个绑定）。
  */
 var RESTRICTIVE_TOP_LEVEL_SETTINGS_2; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var RESTRICTIVE_TOP_LEVEL_SETTINGS;
 var restrictiveTopLevelSettings;
-deferInit("chunk-dcmhvw5a.js:315264", () => {
+deferInit("chunk-z20c443b.js:313228", () => {
   RESTRICTIVE_TOP_LEVEL_SETTINGS_2 = DoctorLazy(() => {
     let schema = perKeySettingsSchema();
     return MANAGED_RESTRICTION_KEYS().flatMap(({ path, restrictive }) => {
@@ -2229,18 +2239,18 @@ deferInit("chunk-dcmhvw5a.js:315264", () => {
   ]);
   restrictiveTopLevelSettings = ["managedSourcesBehavior", "wslInheritsWindowsSettings"];
 });
-//@ chunk-dcmhvw5a.js:315752-315807 layout
+//@ chunk-z20c443b.js:313716-313771 layout
 function isDeepEmptyObject(value) {
   return isPlainObject_2(value) && Object.values(value).every(isDeepEmptyObject);
 }
-//@ chunk-dcmhvw5a.js:315807-315964 layout
+//@ chunk-z20c443b.js:313771-313928 layout
 function readWslInheritFlag(settings) {
   let wslInheritsWindowsSettings = settings.wslInheritsWindowsSettings;
   if (wslInheritsWindowsSettings === undefined || wslInheritsWindowsSettings === null) return "disarmed";
   let flag = coerceBooleanString(wslInheritsWindowsSettings);
   return flag === true ? "armed" : flag === false ? "disarmed" : "unreadable";
 }
-//@ chunk-dcmhvw5a.js:315964-316661 layout
+//@ chunk-z20c443b.js:313928-314625 layout
 function getUnenforceableMarketplaceReason(entry) {
   let pattern =
     entry.source === "hostPattern"
@@ -2262,7 +2272,7 @@ function getUnenforceableMarketplaceReason(entry) {
     return `${entry.source}: ref contains "*", which git does not allow in ref names; the entry cannot be enforced`;
   return null;
 }
-//@ chunk-dcmhvw5a.js:316661-317476 layout
+//@ chunk-z20c443b.js:314625-315440 layout
 /**
  * 宽容解析插件市场列表：逐项校验，无效或不可执行的条目忽略并报告（blockedMarketplaces 中不可执行的保留），全部无效时额外提示。
  */
@@ -2310,7 +2320,7 @@ function tolerantMarketplaceList(key, report) {
     }),
   ]).optional();
 }
-//@ chunk-dcmhvw5a.js:317476-317674 layout
+//@ chunk-z20c443b.js:315440-315638 layout
 function tolerantArray(key, entrySchema, report) {
   return array(
     entrySchema.catch((error) => {
@@ -2324,12 +2334,12 @@ function tolerantArray(key, entrySchema, report) {
     .transform((entries) => entries.filter((entry) => entry !== INVALID_SERVER_NAME))
     .optional();
 }
-//@ chunk-dcmhvw5a.js:317674-317697 layout
+//@ chunk-z20c443b.js:315638-315661 layout
 /**
  * UNREADABLE_SETTING_MARKER：设置不可读的占位文本。
  */
 var UNREADABLE_SETTING_MARKER = "(unreadable)";
-//@ chunk-dcmhvw5a.js:317697-318444 layout
+//@ chunk-z20c443b.js:315661-316408 layout
 /**
  * 宽容解析白名单数组：无效条目忽略并报告，全部无效或整体无效时按空白名单执行并提示。
  */
@@ -2381,7 +2391,7 @@ function tolerantAllowlist(key, entrySchema, report, emptyMeaning, entryNotice, 
       return [];
     });
 }
-//@ chunk-dcmhvw5a.js:318444-319177 layout
+//@ chunk-z20c443b.js:316408-317141 layout
 /**
  * RESTRICTIVE_NESTED_SETTINGS：受限的嵌套设置键；restrictiveNestedSettingsMap：受限嵌套设置映射（同一声明共 3 个绑定）。
  */
@@ -2389,7 +2399,7 @@ var RESTRICTIVE_NESTED_SETTING_VALUES; // deferred: uses DoctorLazy (../../cli/h
 var RESTRICTIVE_NESTED_SETTINGS;
 var restrictiveNestedSettings;
 var restrictiveNestedSettingsMap;
-deferInit("chunk-dcmhvw5a.js:318444", () => {
+deferInit("chunk-z20c443b.js:316408", () => {
   RESTRICTIVE_NESTED_SETTING_VALUES = DoctorLazy(
     () =>
       new Map(
@@ -2449,7 +2459,7 @@ deferInit("chunk-dcmhvw5a.js:318444", () => {
     ],
   ]);
 });
-//@ chunk-dcmhvw5a.js:319177-319962 layout
+//@ chunk-z20c443b.js:317141-317926 layout
 /**
  * 同一设置块中的限制项不可读或被裁剪时，暂扣该块的授予项（删除或降为下限值）并报告原因，返回被降级的键。
  */
@@ -2491,12 +2501,12 @@ function withholdGrants(path, block, restrictionState, report) {
   }
   return withheld;
 }
-//@ chunk-dcmhvw5a.js:319962-320045 layout
+//@ chunk-z20c443b.js:317926-318009 layout
 function hasRestrictiveNestedPath(path) {
   for (let key of RESTRICTIVE_NESTED_SETTING_VALUES().keys()) if (key.startsWith(`${path}.`)) return true;
   return false;
 }
-//@ chunk-dcmhvw5a.js:320045-320139 layout
+//@ chunk-z20c443b.js:318009-318103 layout
 /**
  * isRestrictiveNestedPath：路径属于受限嵌套设置。
  */
@@ -2507,7 +2517,7 @@ function isRestrictiveNestedPath(path) {
     hasRestrictiveNestedPath(path)
   );
 }
-//@ chunk-dcmhvw5a.js:320139-320289 layout
+//@ chunk-z20c443b.js:318103-318253 layout
 function unwrapObjectSchema(schema) {
   let current = schema;
   while (
@@ -2518,16 +2528,16 @@ function unwrapObjectSchema(schema) {
     current = current instanceof ZodPipe ? current.out : current.unwrap();
   return current instanceof ZodObject ? current : undefined;
 }
-//@ chunk-dcmhvw5a.js:320289-320337 layout
+//@ chunk-z20c443b.js:318253-318301 layout
 var REMOTE_OWNED_SETTING_PATHS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dcmhvw5a.js:320289", () => {
+deferInit("chunk-z20c443b.js:318253", () => {
   REMOTE_OWNED_SETTING_PATHS = new Set(["remoteTools", "remoteControl"]);
 });
-//@ chunk-dcmhvw5a.js:320337-320401 layout
+//@ chunk-z20c443b.js:318301-318365 layout
 function isObjectInSet(set, value) {
   return typeof value === "object" && value !== null && set.has(value);
 }
-//@ chunk-dcmhvw5a.js:320401-320606 layout
+//@ chunk-z20c443b.js:318365-318570 layout
 function restrictiveSkeleton(path, schema, exclude) {
   let skeleton = {};
   for (let [key, value] of Object.entries(schema.shape)) {
@@ -2541,7 +2551,7 @@ function restrictiveSkeleton(path, schema, exclude) {
   }
   return skeleton;
 }
-//@ chunk-dcmhvw5a.js:320606-320749 layout
+//@ chunk-z20c443b.js:318570-318713 layout
 function nullRemovalNotice(path, key) {
   return {
     path,
@@ -2550,11 +2560,11 @@ function nullRemovalNotice(path, key) {
     removal: true,
   };
 }
-//@ chunk-dcmhvw5a.js:320749-320810 layout
+//@ chunk-z20c443b.js:318713-318774 layout
 function formatValueForMessage(value) {
   return typeof value === "string" ? `"${value}"` : String(value);
 }
-//@ chunk-dcmhvw5a.js:320810-321243 layout
+//@ chunk-z20c443b.js:318774-319207 layout
 /**
  * 把单个 zod 问题描述为简短文字（自定义消息、期望类型或可选值），按路径加前缀或标为嵌套值。
  */
@@ -2575,11 +2585,11 @@ function describeIssue(issue, skipPathSegments = 0) {
     ? `${sliced.join(".")}: ${message}`
     : `nested value: ${message}`;
 }
-//@ chunk-dcmhvw5a.js:321243-321285 layout
+//@ chunk-z20c443b.js:319207-319249 layout
 function isFalsyBooleanString(value) {
   return value === false || value === "false";
 }
-//@ chunk-dcmhvw5a.js:321285-321417 layout
+//@ chunk-z20c443b.js:319249-319381 layout
 function isRestrictiveDisable(path, value) {
   if (value === null) return true;
   return (
@@ -2589,7 +2599,7 @@ function isRestrictiveDisable(path, value) {
     isFalsyBooleanString(value)
   );
 }
-//@ chunk-dcmhvw5a.js:321417-321927 layout
+//@ chunk-z20c443b.js:319381-319891 layout
 /**
  * 为限制性设置加入宽容预处理：布尔键接受字符串形式并提示，取值只有 disable 的键遇到 false 视为缺省并提示。
  */
@@ -2621,7 +2631,7 @@ function coerceRestrictiveValue(path, restrictive, schema, report) {
     }, schema);
   return schema;
 }
-//@ chunk-dcmhvw5a.js:321927-323189 layout
+//@ chunk-z20c443b.js:319891-321153 layout
 /**
  * 宽容解析单个设置字段：无效时优先替换为限制性值或下限值，数组则剔除无效条目后保留其余，否则忽略并报告，同时记录被替换/裁剪/忽略的键。
  */
@@ -2683,7 +2693,7 @@ function tolerantField(path, schema, report, substitutedKeys, ignoredKeys, trimm
     return;
   });
 }
-//@ chunk-dcmhvw5a.js:323189-324702 layout
+//@ chunk-z20c443b.js:321153-322666 layout
 /**
  * 宽容解析设置对象：各字段用宽容规则，不是对象时用限制性骨架代替并报告；null 视为删除；限制项不可读时暂扣同块授予项；结果为空或全部为合成值时据此处理。
  */
@@ -2789,7 +2799,7 @@ function tolerantObjectSchema(path, schema, report, options = {}) {
     })
     .optional();
 }
-//@ chunk-dcmhvw5a.js:324702-348175 layout
+//@ chunk-z20c443b.js:322666-346135 layout
 /**
  * 托管设置的宽容 schema：逐字段校验，无效值按该字段的限制性取值处理而不是整份失效，并收集警告。
  */
@@ -3797,59 +3807,24 @@ function buildPolicyTolerantSettingsSchema(report, sourceSalt, settingsContext) 
       return value;
     });
 }
-//@ chunk-dcmhvw5a.js:348175-348237 fingerprint (2.1.88 match: isMcpServerNameEntry, 1)
+//@ chunk-z20c443b.js:346135-346197 fingerprint (2.1.88 match: isMcpServerNameEntry, 1)
 function isMcpServerNameEntry(entry) {
   return "serverName" in entry && entry.serverName !== undefined;
 }
-//@ chunk-dcmhvw5a.js:348237-348305 fingerprint (2.1.88 match: isMcpServerCommandEntry, 1)
+//@ chunk-z20c443b.js:346197-346265 fingerprint (2.1.88 match: isMcpServerCommandEntry, 1)
 function isMcpServerCommandEntry(entry) {
   return "serverCommand" in entry && entry.serverCommand !== undefined;
 }
-//@ chunk-dcmhvw5a.js:348305-348365 fingerprint (2.1.88 match: isMcpServerUrlEntry, 1)
+//@ chunk-z20c443b.js:346265-346325 fingerprint (2.1.88 match: isMcpServerUrlEntry, 1)
 function isMcpServerUrlEntry(entry) {
   return "serverUrl" in entry && entry.serverUrl !== undefined;
 }
-//@ chunk-5nte8cwj.js:1184-1251 fingerprint (2.1.88 match: EnvironmentVariablesSchema, 0.544)
-function EnvironmentVariablesSchema(version) {
-  let desktopVersion = semverModuleForDesktop.coerce(version);
-  return desktopVersion !== null && semverGt(desktopVersion.version, MIN_DESKTOP_VERSION);
-}
 export {
-  isMcpServerUrlEntry,
-  isMcpServerCommandEntry,
-  isMcpServerNameEntry,
-  getSettingsSchemaForDocument,
-  buildWholeSettingsSchema,
-  POLICY_HELPER_LOG_LEVELS,
   getSettingsFieldSchema,
-  getStrippingSettingsSchema,
-  PermissionsSettingsSchema,
-  EnvironmentVariablesSchema,
-  skillsSettingsSchema,
-  UNREADABLE_SETTING_MARKER,
-  isNetworkOrMacSpecialPath,
-  RESTRICTIVE_NESTED_SETTINGS,
-  platformSpellings,
-  SUPPORTED_PLATFORMS,
-  SKILL_OVERRIDE_COMPONENTS,
+  getSettingsSchemaForDocument,
   wholeSettingsSchema,
-  withholdGrants,
-  allowedMcpServersSchema,
-  deniedMcpServersSchema,
-  RESTRICTIVE_TOP_LEVEL_SETTINGS,
-  getUnenforceableMarketplaceReason,
-  agentsSettingsSchema,
-  outputStylesSettingsSchema,
-  mcpSettingsSchema,
-  hooksSettingsSchema,
-  POLICY_HELPER_ON_FAILURE,
-  restrictiveTopLevelSettings,
-  restrictiveNestedSettingsMap,
-  buildPolicyTolerantSettingsSchema,
-  isRestrictiveDisable,
-  isRestrictiveNestedPath,
+  buildWholeSettingsSchema,
   readWslInheritFlag,
-  isDeepEmptyObject,
   isPowerShellScript,
   MAX_HELPER_RETRIES,
   MAX_HELPER_MS,
@@ -3859,8 +3834,37 @@ export {
   hasPowerShellGlobChars,
   PS1_WILDCARD_MESSAGE,
   looksLikeUncPath,
+  isNetworkOrMacSpecialPath,
   isKernelPseudoPath,
   isNormalizedHelperPath,
+  SUPPORTED_PLATFORMS,
   STATIC_PAYLOAD_SCHEMA,
+  getStrippingSettingsSchema,
+  PermissionsSettingsSchema,
+  SKILL_OVERRIDE_COMPONENTS,
+  isMcpServerUrlEntry,
+  isMcpServerCommandEntry,
+  isMcpServerNameEntry,
+  withholdGrants,
   isWarnedSettingsKey,
+  UNREADABLE_SETTING_MARKER,
+  skillsSettingsSchema,
+  POLICY_HELPER_LOG_LEVELS,
+  POLICY_HELPER_ON_FAILURE,
+  RESTRICTIVE_NESTED_SETTINGS,
+  platformSpellings,
+  allowedMcpServersSchema,
+  deniedMcpServersSchema,
+  RESTRICTIVE_TOP_LEVEL_SETTINGS,
+  getUnenforceableMarketplaceReason,
+  agentsSettingsSchema,
+  outputStylesSettingsSchema,
+  mcpSettingsSchema,
+  hooksSettingsSchema,
+  restrictiveTopLevelSettings,
+  restrictiveNestedSettingsMap,
+  buildPolicyTolerantSettingsSchema,
+  isRestrictiveDisable,
+  isRestrictiveNestedPath,
+  isDeepEmptyObject,
 };

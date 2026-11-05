@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：额度宽限期：利用率缓存与检查点说明。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-w5ndchqs.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7pwjpdkw.js (10)
  * attribution: placement 10
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -18,14 +18,14 @@ import { sanitizeAttributeValue } from "../utils/sanitization.js";
 import { logFeatureSad } from "./analytics/featureTelemetry.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-w5ndchqs.js:34489-35548 placement
+//@ chunk-7pwjpdkw.js:34696-35755 placement
 /**
  * 用量快照缓存：有效期常量与校验 schema。
  */
 var GRACE_WINDOW_MS; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var USAGE_CACHE_TTL_MS;
 var usageUtilizationSchema;
-deferInit("chunk-w5ndchqs.js:34489", () => {
+deferInit("chunk-7pwjpdkw.js:34696", () => {
   GRACE_WINDOW_MS = 3600000;
   USAGE_CACHE_TTL_MS = 60000;
   usageUtilizationSchema = DoctorLazy(() => {
@@ -96,7 +96,7 @@ deferInit("chunk-w5ndchqs.js:34489", () => {
     });
   });
 });
-//@ chunk-w5ndchqs.js:35548-35849 placement
+//@ chunk-7pwjpdkw.js:35755-36056 placement
 function cacheUsageUtilization(utilization, accountUuid, storageV5) {
   let accountUuid_2 = getOauthAccountInfo()?.accountUuid;
   if (accountUuid_2 !== accountUuid) return;
@@ -120,7 +120,7 @@ function cacheUsageUtilization(utilization, accountUuid, storageV5) {
     storageV5,
   );
 }
-//@ chunk-w5ndchqs.js:35849-36202 placement
+//@ chunk-7pwjpdkw.js:36056-36409 placement
 function cachedUsageUtilization(storageV5) {
   let cachedUsageUtilization = getGlobalConfig().cachedUsageUtilization;
   if (!cachedUsageUtilization) return null;
@@ -143,7 +143,7 @@ function cachedUsageUtilization(storageV5) {
     fetchedAtMs: parsed.data.fetchedAtMs,
   };
 }
-//@ chunk-w5ndchqs.js:36202-36387 placement
+//@ chunk-7pwjpdkw.js:36409-36594 placement
 function freshCachedUtilization(storageV5) {
   let cached = cachedUsageUtilization(storageV5);
   if (!cached) return null;
@@ -155,12 +155,12 @@ function freshCachedUtilization(storageV5) {
     ageMs,
   };
 }
-//@ chunk-w5ndchqs.js:36387-36547 placement
+//@ chunk-7pwjpdkw.js:36594-36754 placement
 var USAGE_LIMIT_WRAP_UP_NOTE =
   "[Usage limit reached \u2014 grace window active. Wrap up: finish or " +
   "checkpoint; don't start subagents or long work.]";
 var TENGU_LANTERN_WICK_MODE = "tengu_lantern_wick_mode";
-//@ chunk-w5ndchqs.js:36547-36661 placement
+//@ chunk-7pwjpdkw.js:36754-36868 placement
 function parseWrapUpMode(featureValue_CACHED_MAY_BE_STALE) {
   let normalized =
     typeof featureValue_CACHED_MAY_BE_STALE === "string"
@@ -168,17 +168,17 @@ function parseWrapUpMode(featureValue_CACHED_MAY_BE_STALE) {
       : featureValue_CACHED_MAY_BE_STALE;
   return normalized === "wrap-up" || normalized === "next-steps" ? normalized : "off";
 }
-//@ chunk-w5ndchqs.js:36661-36735 placement
+//@ chunk-7pwjpdkw.js:36868-36942 placement
 var WRAP_UP_TEXT_FLAG = "tengu_lantern_wick_text";
 var BOT_PROTECTED_TENGU_HAZY_WATERFALL = "bot_protected_tengu_hazy_waterfall";
-//@ chunk-w5ndchqs.js:36735-36771 placement
+//@ chunk-7pwjpdkw.js:36942-36978 placement
 /**
  * 是否启用 bot 保护模式下的收尾提示文本清洗开关。
  */
 function isBotProtectedWrapUpTextOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(BOT_PROTECTED_TENGU_HAZY_WATERFALL, true) !== false;
 }
-//@ chunk-w5ndchqs.js:36771-37096 placement
+//@ chunk-7pwjpdkw.js:36978-37303 placement
 /**
  * 校验并清理服务端下发的收尾提示文本；不合法时上报并返回 null。
  */
@@ -197,7 +197,7 @@ function formatWrapUpText(rawText) {
   let trimmed = typeof rawText === "string" ? rawText.trim() : "";
   return trimmed === "" ? null : `[${trimmed}]`;
 }
-//@ chunk-w5ndchqs.js:37096-37636 placement
+//@ chunk-7pwjpdkw.js:37303-37843 placement
 /**
  * 额度将满时的收尾提示文本、触发比例与对外通知文案。
  */
@@ -212,10 +212,6 @@ var WRAP_UP_APPROACHING_NOTICE =
   "Approaching your 5-hour usage limit \u2014 Claude will wrap up the current step.";
 var NOTICE = "notice";
 export {
-  WRAP_UP_UTILIZATION_THRESHOLD,
-  cachedUsageUtilization,
-  freshCachedUtilization,
-  cacheUsageUtilization,
   isBotProtectedWrapUpTextOn,
   formatWrapUpText,
   WRAP_UP_TEXT_FLAG,
@@ -227,4 +223,8 @@ export {
   WRAP_UP_APPROACHING_NOTICE,
   NOTICE,
   WRAP_UP_APPROACHING_CHECKPOINT_NOTE,
+  WRAP_UP_UTILIZATION_THRESHOLD,
+  cachedUsageUtilization,
+  freshCachedUtilization,
+  cacheUsageUtilization,
 };

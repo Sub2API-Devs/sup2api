@@ -1,23 +1,23 @@
-{"id":"chunk-x1hcas72.js#j","doc":"placeFilesByName 的预算常量：PLACEMENT_TIME_BUDGET_MS=3000 是单次放置的默认时间预算（不是文件数），MAX_COPIED_BYTES=134217728 是字节预算；名字曾按“文件类型/复制上限”误起。"}
-{"id":"chunk-93kwxas0.js#xh","doc":"fleet 会话常量：MIN_SPAWN_INTENT_LENGTH=4 是“意图太短不给起”的最小长度阈值（原名 MAX_SPAWN_RETRIES 名不副实）；另有 STILL_STARTING_MESSAGE 与可重试的瞬态 socket 错误集。"}
-{"id":"chunk-sx9xc5ee.js#Do","doc":"判断一个 AWS profile 名里是否含 \"bedrock\"（用来在 profile 过多时预填第一个 bedrock profile），与“区域”无关。"}
-{"id":"chunk-jy3v56kg.js#Kn","doc":"构建不带扫描时注册 scan_secrets 的 skill 钩子：把一组恒等/恒假的 host 桩塞给 registerSecretScanSkillHook，使 skill 提示词仍能告诉模型“此会话无法扫描、不能分享”。"}
-{"id":"chunk-9cjx5pnm.js#Ut","doc":"发布请求的通用收尾：发请求→带 kind 直接返回→4xx 时取手工市场 id 或兜底 refusal，否则按错误码/HTTP 状态表归类。原先误配名 extractMarkupText（同名的另外三个声明分别属于 SDK schema、LSP formatter、SendMessageTool）。"}
-{"id":"chunk-vp5gef34.js#Re","doc":"BM25 打分：字段权重（filename/frontmatter 3、headings 2.5、body 1）、长度归一化与短语/邻近加成；其中 bm25Idf 是 log((N-df+0.5)/(df+0.5))，fieldLengthBoost 才是 k1 加权。"}
-{"id":"chunk-vp5gef34.js#x","doc":"倒排索引的增删查：每词一篇 posting（docIds/offsets/positions 三个 Uint32Array），字段编号表与 posting 二分查找。SMALL_DELETION_THRESHOLD=16 决定删文档时逐个标未验证还是重建词表。"}
-{"id":"chunk-vp5gef34.js#re","doc":"波特词干化：辅音/元音判定与各个步骤。注意 trimTrailingDoubleL（原 stemWord）只是第 5 步后的双辅音 l 去重，porterStemWord（原 measureWord）才是主流程，memoizedStemWord 是它的 5 万条 LRU 包装。"}
-{"id":"chunk-e6aww6q8.js#nrt","doc":"加载并登记一个 hooks 模块：查 environment 上限、建 environment、登记 moduleSeats/environmentArgs，返回带 enter/leave/dispatch/discard/retire/resolveTables/build/press 的模块记录。"}
-{"id":"chunk-e6aww6q8.js#ELr","doc":"组装 hooks 模块运行期：host 代理、流式 hook 校验（必须返回 async generator）、参数/返回值直通、卸载信号处理；返回 activation 与 store/dispose。"}
-{"id":"chunk-e6aww6q8.js#Axo","doc":"按名字查保留技能命名空间（anthropic-skills）的缓存版：超过折叠长度上限直接匹配，否则走 LRU（8192 条 / 4 MB）。与文件状态缓存无关，名字曾误作 FileStateCache。"}
-{"id":"chunk-pp50kewz.js#xt","doc":"按插件各条目的 scope 选出一个更新作用域：local < project < user，都没有则 managed。"}
-{"id":"chunk-z1n5m6nf.js#pt","doc":"把一次 MCP 连接尝试结算成“已连接或 undefined”：超时固定 0（withDeadline(dial.catch(()=>undefined),0)），不会等待。"}
-{"id":"chunk-3y22eg7d.js#Ujs","doc":"回合结束时若停在额度上限：取状态变化（limitHitAtMs 毫秒时间戳），已 armed 则更新拒绝记录并比较重置时刻，否则走自动装配。"}
-{"id":"chunk-9cjx5pnm.js#ga","doc":"创建账号级“My Uploads”市场：POST marketplaces/create-account-marketplace，失败给 refusalResult(\"other\")。"}
-{"id":"chunk-e6aww6q8.js#iZt","doc":"官方行为，保留：实现是 [...new Map().values()]（少了构造参数），恒返回空数组；唯一调用方 countUniqueFiles 因此永远只统计 extraFiles。疑似打包丢实参的 bug，忠实还原不改代码。"}
-{"id":"chunk-n770a3wm.js#D","doc":"官方行为，保留：getClipboardCommands 末行 return {commands: commands.linux || commands.linux, …}，三元退化成同一分支，darwin/win32 两张命令表构造后从不返回；另有一个声明后未使用的空串。"}
-{"id":"chunk-mvvq2nx1.js#Me","doc":"官方行为，保留：imageDecodingOff 只初始化为 false、本 chunk 内从不赋 true（死开关），isImageDecodingDisabled 实际由 !isDisklessMode() 决定；不要把名字当成可配置项。"}
-{"id":"chunk-fe6rs39h.js#$i","doc":"官方行为，保留：createBareCloudSession 中 if (V_K137841 !== null) 整段不可达（恒 null），G_K137777/x_K137771 只赋值不使用；本版构建里是死代码。"}
-{"id":"chunk-0h4e7gnq.js#g2n","doc":"官方行为，保留：extractReadFilesFromMessages 的 replaceEntry 先写新值又写回旧值，等于没有替换，只有 ee.delete 生效；疑为打包把“替换后清哈希”写坏。"}
-{"id":"chunk-qg0af0yq.js#c$","doc":"官方行为，保留：procIdentityOf 在 Bun 下 e.procStart !== void 0 时反而返回 undefined，而 procIdentityFields 恒把 procStart 置空、写 procStartFt；两函数约定不一致。"}
-{"id":"chunk-j2t139r9.js#_t","doc":"官方行为，保留：compat.js 的 var e;(function(o){})(e||(e={})) 是空的兼容占位（cjs 版同样为空），ZodFirstPartyTypeKind 只是借位，本构建没有可用的枚举值。"}
-{"id":"chunk-bzr73sfg.js#LR","doc":"截断带样式的文本到给定显示宽度（按段落总宽计算保留头尾），只给 daemon 预览/渲染用。"}
+{"id":"chunk-hab8hy4a.js#j","doc":"placeFilesByName 的预算常量：PLACEMENT_TIME_BUDGET_MS=3000 是单次放置的默认时间预算（不是文件数），MAX_COPIED_BYTES=134217728 是字节预算；名字曾按“文件类型/复制上限”误起。"}
+{"id":"chunk-avy0g5d4.js#Fh","doc":"fleet 会话常量：MIN_SPAWN_INTENT_LENGTH=4 是“意图太短不给起”的最小长度阈值（原名 MAX_SPAWN_RETRIES 名不副实）；另有 STILL_STARTING_MESSAGE 与可重试的瞬态 socket 错误集。"}
+{"id":"chunk-3msz77wt.js#Eo","doc":"判断一个 AWS profile 名里是否含 \"bedrock\"（用来在 profile 过多时预填第一个 bedrock profile），与“区域”无关。"}
+{"id":"chunk-cm73gsrm.js#Gn","doc":"构建不带扫描时注册 scan_secrets 的 skill 钩子：把一组恒等/恒假的 host 桩塞给 registerSecretScanSkillHook，使 skill 提示词仍能告诉模型“此会话无法扫描、不能分享”。"}
+{"id":"chunk-77qzxtqv.js#zt","doc":"发布请求的通用收尾：发请求→带 kind 直接返回→4xx 时取手工市场 id 或兜底 refusal，否则按错误码/HTTP 状态表归类。原先误配名 extractMarkupText（同名的另外三个声明分别属于 SDK schema、LSP formatter、SendMessageTool）。"}
+{"id":"chunk-kbw92gv8.js#Re","doc":"BM25 打分：字段权重（filename/frontmatter 3、headings 2.5、body 1）、长度归一化与短语/邻近加成；其中 bm25Idf 是 log((N-df+0.5)/(df+0.5))，fieldLengthBoost 才是 k1 加权。"}
+{"id":"chunk-kbw92gv8.js#x","doc":"倒排索引的增删查：每词一篇 posting（docIds/offsets/positions 三个 Uint32Array），字段编号表与 posting 二分查找。SMALL_DELETION_THRESHOLD=16 决定删文档时逐个标未验证还是重建词表。"}
+{"id":"chunk-kbw92gv8.js#re","doc":"波特词干化：辅音/元音判定与各个步骤。注意 trimTrailingDoubleL（原 stemWord）只是第 5 步后的双辅音 l 去重，porterStemWord（原 measureWord）才是主流程，memoizedStemWord 是它的 5 万条 LRU 包装。"}
+{"id":"chunk-5xgkngpb.js#Zst","doc":"加载并登记一个 hooks 模块：查 environment 上限、建 environment、登记 moduleSeats/environmentArgs，返回带 enter/leave/dispatch/discard/retire/resolveTables/build/press 的模块记录。"}
+{"id":"chunk-5xgkngpb.js#wWr","doc":"组装 hooks 模块运行期：host 代理、流式 hook 校验（必须返回 async generator）、参数/返回值直通、卸载信号处理；返回 activation 与 store/dispose。"}
+{"id":"chunk-5xgkngpb.js#yLo","doc":"按名字查保留技能命名空间（anthropic-skills）的缓存版：超过折叠长度上限直接匹配，否则走 LRU（8192 条 / 4 MB）。与文件状态缓存无关，名字曾误作 FileStateCache。"}
+{"id":"chunk-md9fmgw9.js#Kt","doc":"按插件各条目的 scope 选出一个更新作用域：local < project < user，都没有则 managed。"}
+{"id":"chunk-h44h5gdv.js#mt","doc":"把一次 MCP 连接尝试结算成“已连接或 undefined”：超时固定 0（withDeadline(dial.catch(()=>undefined),0)），不会等待。"}
+{"id":"chunk-peqtdyy5.js#gti","doc":"回合结束时若停在额度上限：取状态变化（limitHitAtMs 毫秒时间戳），已 armed 则更新拒绝记录并比较重置时刻，否则走自动装配。"}
+{"id":"chunk-77qzxtqv.js#ga","doc":"创建账号级“My Uploads”市场：POST marketplaces/create-account-marketplace，失败给 refusalResult(\"other\")。"}
+{"id":"chunk-5xgkngpb.js#Fon","doc":"官方行为，保留：实现是 [...new Map().values()]（少了构造参数），恒返回空数组；唯一调用方 countUniqueFiles 因此永远只统计 extraFiles。疑似打包丢实参的 bug，忠实还原不改代码。"}
+{"id":"chunk-6ajqjj6e.js#D","doc":"官方行为，保留：getClipboardCommands 末行 return {commands: commands.linux || commands.linux, …}，三元退化成同一分支，darwin/win32 两张命令表构造后从不返回；另有一个声明后未使用的空串。"}
+{"id":"chunk-nw81sbzb.js#Be","doc":"官方行为，保留：imageDecodingOff 只初始化为 false、本 chunk 内从不赋 true（死开关），isImageDecodingDisabled 实际由 !isDisklessMode() 决定；不要把名字当成可配置项。"}
+{"id":"chunk-keyy05re.js#Wi","doc":"官方行为，保留：createBareCloudSession 中 if (V_K137841 !== null) 整段不可达（恒 null），G_K137777/x_K137771 只赋值不使用；本版构建里是死代码。"}
+{"id":"chunk-frs14hy1.js#bXn","doc":"官方行为，保留：extractReadFilesFromMessages 的 replaceEntry 先写新值又写回旧值，等于没有替换，只有 ee.delete 生效；疑为打包把“替换后清哈希”写坏。"}
+{"id":"chunk-gb7aq6sf.js#GF","doc":"官方行为，保留：procIdentityOf 在 Bun 下 e.procStart !== void 0 时反而返回 undefined，而 procIdentityFields 恒把 procStart 置空、写 procStartFt；两函数约定不一致。"}
+{"id":"chunk-djgshcbm.js#_t","doc":"官方行为，保留：compat.js 的 var e;(function(o){})(e||(e={})) 是空的兼容占位（cjs 版同样为空），ZodFirstPartyTypeKind 只是借位，本构建没有可用的枚举值。"}
+{"id":"chunk-2avr6cej.js#UR","doc":"截断带样式的文本到给定显示宽度（按段落总宽计算保留头尾），只给 daemon 预览/渲染用。"}

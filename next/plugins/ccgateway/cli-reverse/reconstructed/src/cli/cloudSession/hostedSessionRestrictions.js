@@ -3,24 +3,29 @@
  *
  * 2.1.316 新增：托管（云端）会话对控制请求的路由与限制、丢失的 SDK 功能说明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3wek6r2k.js (27)
- * attribution: placement 27
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hjswk319.js (20), chunk-jscvyyh4.js (8)
+ * attribution: placement 27, layout 1
  */
 import { splitRuleList, hasUnclosedRuleParen } from "../../utils/permissions/disallowedToolsFlag.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { HOSTED_RULES_FLAG } from "../startup/launcherHostLogin.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { quotedPrintable } from "../../utils/printableName.js";
 import { classifyRuleParens } from "../../utils/permissions/permissionRuleParser.js";
 import { mcpInfoFromString, MCP_TOOL_PREFIX } from "../../services/mcp/mcpStringUtils.js";
-import { normalizeNameForMCP, CLAUDE_AI_NAME_PREFIX, CLAUDE_AI } from "../../services/mcp/normalization.js";
+import {
+  CLAUDEAI_SERVER_PREFIX,
+  CLAUDE_AI_NAME_PREFIX,
+  CLAUDE_AI,
+} from "../../services/mcp/normalization.js";
+import { countWhere } from "../../utils/collections.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { sanitizeCloudText } from "./headlessCloudClient.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3wek6r2k.js:19020-19250 placement
+//@ chunk-jscvyyh4.js:451-679 placement
 function collectDisallowedToolRules(rules) {
   let split = splitRuleList([...rules]);
   let found = split.find(hasUnclosedRuleParen);
@@ -37,26 +42,30 @@ function collectDisallowedToolRules(rules) {
       }
     : {
         kind: "rules",
-        rules: uniq([...split, ...split.flatMap(claudeAiRuleRespellings)]),
-        blocksNothing: uniq(split.filter(isClaudeAiWildcardRule)),
+        rules: normalizeCaseForComparison_2([...split, ...split.flatMap(claudeAiRuleRespellings)]),
+        blocksNothing: normalizeCaseForComparison_2(split.filter(isClaudeAiWildcardRule)),
       };
 }
-//@ chunk-3wek6r2k.js:19250-19669 placement
+//@ chunk-jscvyyh4.js:679-801 layout (2.1.88 match: formatFailureDetails, 0.776)
+function formatFailureDetails(values) {
+  let joined = values
+    .slice(0, 8)
+    .map((value) => `"${quotedPrintable(value, 64)}"`)
+    .join(", ");
+  return values.length > 8 ? `${joined} and ${values.length - 8} more` : joined;
+}
+//@ chunk-jscvyyh4.js:801-1129 placement
 function lostDisallowedTools(blocksNothing) {
   if (blocksNothing.length === 0) return [];
-  let joined = blocksNothing
-    .slice(0, 8)
-    .map((rule) => `"${quotedPrintable(rule, 64)}"`)
-    .join(", ");
   return [
     {
       kind: "lost",
       name: "--disallowed-tools",
-      why: `any other rules apply, but not ${blocksNothing.length > 8 ? `${joined} and ${blocksNothing.length - 8} more` : joined}: a * in a claude.ai connector's name blocks no connector in a cloud session; start a new session with one rule for each connector, such as mcp__claude_ai_Slack or mcp__claude_ai_Slack__<tool>`,
+      why: `any other rules apply, but not ${formatFailureDetails(blocksNothing)}: a * in a claude.ai connector's name blocks no connector in a cloud session; start a new session with one rule for each connector, such as mcp__claude_ai_Slack or mcp__claude_ai_Slack__<tool>`,
     },
   ];
 }
-//@ chunk-3wek6r2k.js:19669-19810 placement
+//@ chunk-jscvyyh4.js:1129-1269 placement
 function parseMcpRuleTool(rule) {
   let parens = classifyRuleParens(rule);
   if (parens.kind === "malformed") return null;
@@ -69,11 +78,11 @@ function parseMcpRuleTool(rule) {
         name: toolName,
       };
 }
-//@ chunk-3wek6r2k.js:19810-19849 placement
+//@ chunk-jscvyyh4.js:1269-1307 placement
 function isAnthropicMcpToolName(name) {
-  return normalizeNameForMCP(CLAUDE_AI_NAME_PREFIX + name) === CLAUDE_AI + name;
+  return CLAUDEAI_SERVER_PREFIX(CLAUDE_AI_NAME_PREFIX + name) === CLAUDE_AI + name;
 }
-//@ chunk-3wek6r2k.js:19849-20029 placement
+//@ chunk-jscvyyh4.js:1307-1484 placement
 function claudeAiRuleRespellings(rule) {
   let mcpRuleTool = parseMcpRuleTool(rule);
   if (!mcpRuleTool?.serverName.startsWith(CLAUDE_AI)) return [];
@@ -82,7 +91,7 @@ function claudeAiRuleRespellings(rule) {
     ? [`${MCP_TOOL_PREFIX}${name}__${mcpRuleTool.toolName ?? "*"}${rule.slice(mcpRuleTool.name.length)}`]
     : [];
 }
-//@ chunk-3wek6r2k.js:20029-20151 placement
+//@ chunk-jscvyyh4.js:1484-1604 placement
 function isClaudeAiWildcardRule(rule) {
   let serverName = parseMcpRuleTool(rule)?.serverName ?? "";
   return (
@@ -90,37 +99,37 @@ function isClaudeAiWildcardRule(rule) {
     (serverName.startsWith(CLAUDE_AI) || serverName.startsWith(`${CLAUDE_AI.slice(0, -1)}*`))
   );
 }
-//@ chunk-3wek6r2k.js:20151-20447 placement
+//@ chunk-jscvyyh4.js:1604-1896 placement
 function disallowedToolsTelemetry(rules = []) {
   let known = new Set(rules);
   let respelled = new Set(rules.flatMap(claudeAiRuleRespellings));
   return {
-    disallowed_tools_connector_both_names_count: count(rules, (rule) =>
+    disallowed_tools_connector_both_names_count: countWhere(rules, (rule) =>
       claudeAiRuleRespellings(rule).some((respelling) => known.has(respelling)),
     ),
-    disallowed_tools_connector_local_name_only_count: count(
+    disallowed_tools_connector_local_name_only_count: countWhere(
       rules,
       (rule) =>
         !respelled.has(rule) && claudeAiRuleRespellings(rule).some((respelling) => !known.has(respelling)),
     ),
-    disallowed_tools_connector_wildcard_count: count(rules, isClaudeAiWildcardRule),
+    disallowed_tools_connector_wildcard_count: countWhere(rules, isClaudeAiWildcardRule),
   };
 }
-//@ chunk-3wek6r2k.js:20484-20563 placement
+//@ chunk-hjswk319.js:19791-19870 placement
 function isNonEmptyValue(addPlugins) {
   return (
     addPlugins !== undefined && addPlugins !== null && !(Array.isArray(addPlugins) && addPlugins.length === 0)
   );
 }
-//@ chunk-3wek6r2k.js:20563-20766 placement
+//@ chunk-hjswk319.js:19870-20073 placement
 var NOT_SUPPORTED_IN_CLOUD = "is not supported in a cloud-hosted session";
 var LOCAL_PATH_IN_CLOUD = "names a path on this machine; the agent's files are in the cloud container";
 var UNAVAILABLE_WHILE_DRIVING_CLOUD = "is not available while this process drives a cloud-hosted session";
-//@ chunk-3wek6r2k.js:20766-20912 placement
+//@ chunk-hjswk319.js:20073-20219 placement
 function cloudOptionsRefusal(names) {
   return `these options cannot apply to a cloud-hosted session, where the agent runs in the cloud container; remove: ${names.join(", ")}`;
 }
-//@ chunk-3wek6r2k.js:20912-21504 placement
+//@ chunk-hjswk319.js:20219-20812 placement
 /**
  * 云托管会话的限制文案与集合：bypassPermissions/文件回滚/MCP 变更不可用的说明，本地处理的控制请求子类型列表，以及允许透传的 settings 键。
  */
@@ -129,7 +138,7 @@ var REWIND_UNAVAILABLE_IN_CLOUD;
 var MCP_CHANGES_UNAVAILABLE_IN_CLOUD;
 var CLOUD_LOCAL_CONTROL_TYPES;
 var CLOUD_ALLOWED_SETTINGS_KEYS;
-deferInit("chunk-3wek6r2k.js:20912", () => {
+deferInit("chunk-hjswk319.js:20219", () => {
   HOSTED_SESSION_REFUSAL_TEXT = "bypassPermissions is not available in a cloud-hosted session";
   REWIND_UNAVAILABLE_IN_CLOUD =
     "file rewinding is not available in a cloud-hosted session: the cloud agent keeps no file checkpoints";
@@ -153,13 +162,13 @@ deferInit("chunk-3wek6r2k.js:20912", () => {
     "alwaysThinkingEnabled",
   ]);
 });
-//@ chunk-3wek6r2k.js:21504-21588 placement
+//@ chunk-hjswk319.js:20812-20896 placement
 function controlRequestSubtypeOf(message) {
   return typeof message === "object" && message !== null && "subtype" in message
     ? message.subtype
     : undefined;
 }
-//@ chunk-3wek6r2k.js:21588-21751 placement
+//@ chunk-hjswk319.js:20896-21059 placement
 function routeHostedControlRequest(request, options) {
   let route = hostedControlRequestRoute(request, options);
   return route === null
@@ -175,9 +184,9 @@ function routeHostedControlRequest(request, options) {
         telemetrySubtype: request.subtype,
       };
 }
-//@ chunk-3wek6r2k.js:21751-21760 placement
+//@ chunk-hjswk319.js:21059-21068 placement
 var MAX_LISTED_REQUEST_TYPES = 8;
-//@ chunk-3wek6r2k.js:21760-21894 placement
+//@ chunk-hjswk319.js:21068-21202 placement
 function listForRefusal(names) {
   let mapped = names
     .slice(0, MAX_LISTED_REQUEST_TYPES)
@@ -186,13 +195,13 @@ function listForRefusal(names) {
     ? `${mapped.join(", ")} (and ${names.length - MAX_LISTED_REQUEST_TYPES} more)`
     : mapped.join(", ");
 }
-//@ chunk-3wek6r2k.js:21894-21986 placement
+//@ chunk-hjswk319.js:21202-21293 placement
 function describeRequestSubtype(subtype) {
   return typeof subtype === "string"
     ? truncateToLength(sanitizeCloudText(subtype), 64)
     : "a request without a string subtype";
 }
-//@ chunk-3wek6r2k.js:21986-26721 placement
+//@ chunk-hjswk319.js:21293-26056 placement
 /**
  * 决定云托管会话中各 SDK 控制请求的去向：转发给云 worker、在本地处理或拒绝（如 set_proactivity_level、apply_flag_settings 的部分键）。
  */
@@ -402,6 +411,7 @@ function hostedControlRequestRoute(request, options) {
     case "stage_file":
     case "turn_handoff":
     case "mcp_tasks_changed":
+    case "set_attached_project":
       return {
         kind: "reject",
         error: `${request.subtype} is sent to a cloud agent by the service, not by a host`,
@@ -432,15 +442,15 @@ function hostedControlRequestRoute(request, options) {
       return null;
   }
 }
-//@ chunk-3wek6r2k.js:26721-26845 placement
+//@ chunk-hjswk319.js:26056-26181 placement
 function unknownKeys(settings) {
   if (typeof settings !== "object" || settings === null || Array.isArray(settings)) return null;
   return Object.keys(settings).filter((key) => !CLOUD_ALLOWED_SETTINGS_KEYS.has(key));
 }
-//@ chunk-3wek6r2k.js:26845-27558 placement
+//@ chunk-hjswk319.js:26181-26894 placement
 var CLOUD_OPTION_TREATMENT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var keys;
-deferInit("chunk-3wek6r2k.js:26845", () => {
+deferInit("chunk-hjswk319.js:26181", () => {
   CLOUD_OPTION_TREATMENT = {
     systemPrompt: "lost",
     appendSystemPrompt: "lost",
@@ -470,16 +480,16 @@ deferInit("chunk-3wek6r2k.js:26845", () => {
   };
   keys = Object.keys(CLOUD_OPTION_TREATMENT);
 });
-//@ chunk-3wek6r2k.js:27558-27595 placement
+//@ chunk-hjswk319.js:26894-26931 placement
 function cloudOptionTreatment(optionName) {
   return CLOUD_OPTION_TREATMENT[optionName] ?? "lost";
 }
-//@ chunk-3wek6r2k.js:27595-27610 placement
+//@ chunk-hjswk319.js:26931-26946 placement
 var EMPTY_LOST_FEATURE_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3wek6r2k.js:27595", () => {
+deferInit("chunk-hjswk319.js:26931", () => {
   EMPTY_LOST_FEATURE_SET = new Set();
 });
-//@ chunk-3wek6r2k.js:27610-27720 placement
+//@ chunk-hjswk319.js:26946-27056 placement
 function hasNonEmptyArrays(hooks) {
   return (
     typeof hooks === "object" &&
@@ -487,7 +497,7 @@ function hasNonEmptyArrays(hooks) {
     Object.values(hooks).some((value) => Array.isArray(value) && value.length > 0)
   );
 }
-//@ chunk-3wek6r2k.js:27720-28093 placement
+//@ chunk-hjswk319.js:27056-27429 placement
 function agentDefinitionRestricts(agentDefinition) {
   if (typeof agentDefinition !== "object" || agentDefinition === null) return false;
   let tools = "tools" in agentDefinition ? agentDefinition.tools : undefined;
@@ -504,7 +514,7 @@ function agentDefinitionRestricts(agentDefinition) {
     permissionMode === "dontAsk"
   );
 }
-//@ chunk-3wek6r2k.js:28093-28266 placement
+//@ chunk-hjswk319.js:27429-27602 placement
 function restrictedAgentNames(agents) {
   if (agents === undefined) return [];
   if (typeof agents !== "object" || agents === null || Array.isArray(agents)) return ["(unreadable)"];
@@ -512,11 +522,11 @@ function restrictedAgentNames(agents) {
     .filter(([, value]) => agentDefinitionRestricts(value))
     .map(([key]) => key);
 }
-//@ chunk-3wek6r2k.js:28266-28444 placement
+//@ chunk-hjswk319.js:27602-27780 placement
 var CLOUD_LOST_FEATURE_TEXT =
   "agent definitions that list tools or hooks, or set a permission mode, are not enforced by a cloud session";
 var STRUCTURED_OUTPUT_UNAVAILABLE_TEXT = "structured output is not delivered to a cloud session yet";
-//@ chunk-3wek6r2k.js:28444-28954 placement
+//@ chunk-hjswk319.js:27780-28291 placement
 function lostSdkFeatures(options, mode, ignoredFeatures = EMPTY_LOST_FEATURE_SET) {
   let hasHooks = hasNonEmptyArrays(options.hooks);
   let sdkMcpServers = options.sdkMcpServers;
@@ -555,13 +565,16 @@ function lostSdkFeatures(options, mode, ignoredFeatures = EMPTY_LOST_FEATURE_SET
     ignored: [...lostFeatures, ...filtered],
   };
 }
-//@ chunk-3wek6r2k.js:28954-29040 placement
+//@ chunk-hjswk319.js:28291-28377 placement
 function isEmptySystemPrompt(key, value) {
   return key === "systemPrompt" && Array.isArray(value) && value.length === 1 && value[0] === "";
 }
 export {
-  disallowedToolsTelemetry,
   isNonEmptyValue,
+  disallowedToolsTelemetry,
+  CLOUD_ALLOWED_SETTINGS_KEYS,
+  listForRefusal,
+  formatFailureDetails,
   collectDisallowedToolRules,
   STRUCTURED_OUTPUT_UNAVAILABLE_TEXT,
   hasNonEmptyArrays,

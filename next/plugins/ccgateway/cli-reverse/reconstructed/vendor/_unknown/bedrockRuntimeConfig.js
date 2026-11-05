@@ -1,8 +1,8 @@
 /**
  * _unknown/bedrockRuntimeConfig.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: _unknown/bedrockRuntimeConfig.js
- * pieces: chunk-3cddmtk7.js (4)
+ * pieces: chunk-ayc8mk37.js (4)
  * attribution: placement 4
  */
 import { EventStreamMarshaller } from "../@smithy/core/dist-cjs/submodules/event-streams/index.js";
@@ -22,16 +22,16 @@ import { require_util_utf8 } from "../@smithy/util-utf8/dist-cjs/index.js";
 import { require_util_endpoints } from "../@aws-sdk/util-endpoints/dist-cjs/index.js";
 import { require_index_browser } from "../@smithy/core/dist-cjs/submodules/endpoints/index.browser.js";
 
-//@ chunk-3cddmtk7.js:20617-20640 placement
+//@ chunk-ayc8mk37.js:20617-20640 placement
 var eventStreamCodec = (options) => new EventStreamMarshaller(options);
-//@ chunk-3cddmtk7.js:20640-20716 placement
+//@ chunk-ayc8mk37.js:20640-20716 placement
 var require_hash_node = __toESM(hashModule());
 var import_retry = __toESM(require_retry());
 var import_node_config_provider = __toESM(require_node_config_provider());
 var import_node_http_handler = __toESM(require_node_http_handler());
 var require_util_body_length_node = __toESM(bodyLengthNodeModule());
 var import_index_browser_2 = __toESM(require_index_browser_2());
-//@ chunk-3cddmtk7.js:20716-20803 placement
+//@ chunk-ayc8mk37.js:20716-20803 placement
 var import_core_2 = __toESM(require_core_2());
 var import_protocols = __toESM(require_protocols());
 var import_core = __toESM(require_core());
@@ -39,7 +39,7 @@ var import_client = __toESM(require_client());
 var import_url_parser = __toESM(require_url_parser());
 var base64Module = __toESM(base64Module_2());
 var import_util_utf8 = __toESM(require_util_utf8());
-//@ chunk-3cddmtk7.js:20803-20831 placement
+//@ chunk-ayc8mk37.js:20803-20831 placement
 var import_util_endpoints = __toESM(require_util_endpoints());
 var import_index_browser = __toESM(require_index_browser());
 export {

@@ -1,22 +1,22 @@
 /**
  * @typespec/ts-http-runtime/dist/esm/util/concat.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
- * pieces: chunk-mrx6y2r5.js (7)
+ * pieces: chunk-b5df2wx1.js (7)
  * attribution: esm-layout 2, esm-fingerprint 5
  */
 import { Readable } from "stream";
 import { __asyncGenerator, __await, __asyncValues } from "../../../../../tslib/tslib.es6.mjs";
 
-//@ chunk-mrx6y2r5.js:47151-47192 esm-layout
+//@ chunk-b5df2wx1.js:47151-47192 esm-layout
 function stringToUint8Array(value, format) {
   return Buffer.from(value, format);
 }
-//@ chunk-mrx6y2r5.js:49828-49879 esm-layout
+//@ chunk-b5df2wx1.js:49828-49879 esm-layout
 function hasStreamMethod(source) {
   return typeof source.stream === "function";
 }
-//@ chunk-mrx6y2r5.js:49914-50120 esm-fingerprint
+//@ chunk-b5df2wx1.js:49914-50120 esm-fingerprint
 function readableStreamAsyncIterator() {
   return __asyncGenerator(this, arguments, function* () {
     let reader = this.getReader();
@@ -31,26 +31,26 @@ function readableStreamAsyncIterator() {
     }
   });
 }
-//@ chunk-mrx6y2r5.js:50120-50231 esm-fingerprint
+//@ chunk-b5df2wx1.js:50120-50231 esm-fingerprint
 function polyfillReadableStreamIterator(webStream) {
   if (!webStream[Symbol.asyncIterator])
     webStream[Symbol.asyncIterator] = readableStreamAsyncIterator.bind(webStream);
   if (!webStream.values) webStream.values = readableStreamAsyncIterator.bind(webStream);
 }
-//@ chunk-mrx6y2r5.js:50231-50318 esm-fingerprint
+//@ chunk-b5df2wx1.js:50231-50318 esm-fingerprint
 function toNodeReadable(stream) {
   if (stream instanceof ReadableStream) {
     polyfillReadableStreamIterator(stream);
     return Readable.fromWeb(stream);
   } else return stream;
 }
-//@ chunk-mrx6y2r5.js:50318-50445 esm-fingerprint
+//@ chunk-b5df2wx1.js:50318-50445 esm-fingerprint
 function toNodeReadableFromBody(source) {
   if (source instanceof Uint8Array) return Readable.from(Buffer.from(source));
   else if (hasStreamMethod(source)) return toNodeReadable(source.stream());
   else return toNodeReadable(source);
 }
-//@ chunk-mrx6y2r5.js:50445-50855 esm-fingerprint
+//@ chunk-b5df2wx1.js:50445-50855 esm-fingerprint
 async function concat(sources) {
   return function () {
     let streams = sources.map((x) => (typeof x === "function" ? x() : x)).map(toNodeReadableFromBody);

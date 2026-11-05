@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：解析 HTML 中的 artifact-thumbnail 链接（亮/暗色）；字符脚本分类正则等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (1), chunk-yxnffbzs.js (87)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bvz8t570.js (87), chunk-xzmy9dn4.js (1)
  * attribution: placement 88
  */
 import { getClaudeAiOrigin_2 } from "../../constants/product.js";
@@ -47,7 +47,7 @@ import {
   DASH_CHAR_CLASS,
 } from "../../utils/confusables.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import {
@@ -59,13 +59,14 @@ import {
   CONFUSABLE_BACKSLASH_ESCAPES,
 } from "../../utils/messages.js";
 import { withConfusables, BRACKET_CONFUSABLES_2, BOX_DRAWING_RANGES_2 } from "../../utils/sanitization.js";
+import { countWhere } from "../../utils/collections.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-yxnffbzs.js:26471-26520 placement
+//@ chunk-bvz8t570.js:26530-26579 placement
 function artifactViewerUrlFor(target) {
   return `${getClaudeAiOrigin_2(target.env)}${artifactViewerPath(target.slug)}`;
 }
-//@ chunk-yxnffbzs.js:26520-26567 placement
+//@ chunk-bvz8t570.js:26579-26626 placement
 function ownedField(owned) {
   return owned === undefined
     ? {}
@@ -73,7 +74,7 @@ function ownedField(owned) {
         owned,
       };
 }
-//@ chunk-yxnffbzs.js:26567-26623 placement
+//@ chunk-bvz8t570.js:26626-26682 placement
 function writtenPage(target, ownership) {
   return {
     written: {
@@ -82,7 +83,7 @@ function writtenPage(target, ownership) {
     ...ownedField(ownership),
   };
 }
-//@ chunk-yxnffbzs.js:26623-26743 placement
+//@ chunk-bvz8t570.js:26682-26802 placement
 function artifactViewerUrlSpellings(target) {
   let claudeAiOrigin = getClaudeAiOrigin_2(target.env);
   let shortId = encodeUuidBase58(target.slug);
@@ -91,12 +92,12 @@ function artifactViewerUrlSpellings(target) {
     ...(shortId !== null ? [`${claudeAiOrigin}/artifact/${shortId}`] : []),
   ];
 }
-//@ chunk-yxnffbzs.js:26743-26840 placement
+//@ chunk-bvz8t570.js:26802-26899 placement
 function classifierArtifactTargetFor(url, target) {
   let { target: target_2, other } = classifierArtifactTargetParts(url, target);
   return other === undefined ? target_2 : `${target_2} [same artifact: ${other}]`;
 }
-//@ chunk-yxnffbzs.js:26840-27095 placement
+//@ chunk-bvz8t570.js:26899-27154 placement
 function classifierArtifactTargetParts(url, target) {
   let artifactUrl = typeof url === "string" ? parseArtifactUrl(url) : null;
   if (artifactUrl === null)
@@ -121,25 +122,25 @@ function classifierArtifactTargetParts(url, target) {
         other: shortUrl,
       };
 }
-//@ chunk-yxnffbzs.js:27095-27184 placement
+//@ chunk-bvz8t570.js:27154-27243 placement
 function sameArtifactMark(parts) {
   return parts.other === undefined ? "" : ` [same artifact: ${parts.target} is ${parts.other}]`;
 }
-//@ chunk-yxnffbzs.js:27184-27288 placement
+//@ chunk-bvz8t570.js:27243-27347 placement
 function artifactContentOriginUrlFor(target) {
   return `https://${target.slug}.frame.${target.env === "staging" ? "staging." : ""}claudeusercontent.com`;
 }
-//@ chunk-yxnffbzs.js:27288-27359 placement
+//@ chunk-bvz8t570.js:27347-27418 placement
 function canonicalArtifactTargetFor(url, fallback) {
   let artifactUrl = typeof url === "string" ? parseArtifactUrl(url) : null;
   return artifactUrl ? artifactViewerUrlFor(artifactUrl) : fallback;
 }
-//@ chunk-yxnffbzs.js:27359-27464 placement
+//@ chunk-bvz8t570.js:27418-27523 placement
 function isCanonicalArtifactViewerUrl(href) {
   let match = href.match(new RegExp(`^https://claude\\.ai${VIEWER_PREFIX_RE}(${ARTIFACT_ID_PATTERN})/?$`));
   return decodeShortArtifactId(match?.[1]) !== null;
 }
-//@ chunk-yxnffbzs.js:27464-27953 placement
+//@ chunk-bvz8t570.js:27523-28012 placement
 /**
  * HTML 实体正则与实体表。
  */
@@ -181,17 +182,17 @@ var HTML_ENTITY_MAP = {
   deg: "\xB0",
   times: "\xD7",
 };
-//@ chunk-yxnffbzs.js:27953-28014 placement
+//@ chunk-bvz8t570.js:28012-28073 placement
 function stripHtmlComments(html) {
   return html.replace(/<!--[\s\S]*?(?:-->|$)/g, "");
 }
-//@ chunk-yxnffbzs.js:28014-28102 placement
+//@ chunk-bvz8t570.js:28073-28161 placement
 function htmlHeadBeforeSvg(html) {
   let head = stripHtmlComments(html.slice(0, TITLE_SCAN_CHARS));
   let svgIndex = head.search(/<svg/i);
   return svgIndex === -1 ? head : head.slice(0, svgIndex);
 }
-//@ chunk-yxnffbzs.js:28102-28416 placement
+//@ chunk-bvz8t570.js:28161-28475 placement
 function decodeHtmlEntities(html) {
   return html.replace(HTML_ENTITY_REGEX, (whole, entity) => {
     if (entity.startsWith("#")) {
@@ -209,7 +210,7 @@ function decodeHtmlEntities(html) {
     return whole;
   });
 }
-//@ chunk-yxnffbzs.js:28416-28787 placement
+//@ chunk-bvz8t570.js:28475-28846 placement
 /**
  * 解析 artifact 缩略图 link 标签的正则。
  */
@@ -222,7 +223,7 @@ var ARTIFACT_THUMBNAIL;
 var DARK_MEDIA_QUERY;
 var LIGHT_OR_ALL_MEDIA_QUERY;
 var SCRIPT_OR_STYLE_BLOCK;
-deferInit("chunk-yxnffbzs.js:28416", () => {
+deferInit("chunk-bvz8t570.js:28475", () => {
   THUMBNAIL_LINK_PATTERNS = /<link\b[^>]*>/gi;
   MAX_LINK_TAG_CHARS = 2048;
   THUMBNAIL_LINK_REGEX = /<link\b[^>]{0,2048}\bartifact-thumbnail\b/gi;
@@ -233,7 +234,7 @@ deferInit("chunk-yxnffbzs.js:28416", () => {
   LIGHT_OR_ALL_MEDIA_QUERY = /^(?:all|\(\s*prefers-color-scheme\s*:\s*light\s*\))$/i;
   SCRIPT_OR_STYLE_BLOCK = /<(script|style)\b[^>]{0,2048}>[\s\S]*?(?:<\/\1\s*>|$)/gi;
 });
-//@ chunk-yxnffbzs.js:28787-29272 placement
+//@ chunk-bvz8t570.js:28846-29331 placement
 /**
  * 解析 HTML 中的 artifact-thumbnail 链接（亮/暗色）。
  */
@@ -275,7 +276,7 @@ function parseThumbnailLinks(html) {
   }
   return links;
 }
-//@ chunk-yxnffbzs.js:29272-29614 placement
+//@ chunk-bvz8t570.js:29331-29673 placement
 function extractThumbnailLinks(html) {
   let result = {
     pastWindow: false,
@@ -293,7 +294,7 @@ function extractThumbnailLinks(html) {
     countLinks(stripHtmlComments(html).replace(SCRIPT_OR_STYLE_BLOCK, "")) > countLinks(replaced);
   return result;
 }
-//@ chunk-yxnffbzs.js:29614-29707 placement
+//@ chunk-bvz8t570.js:29673-29766 placement
 /**
  * 成对的引号字符表。
  */
@@ -305,7 +306,7 @@ var QUOTE_PAIRS = [
   ["\u201C", "\u201D"],
   ["`", "`"],
 ];
-//@ chunk-yxnffbzs.js:29707-29931 placement
+//@ chunk-bvz8t570.js:29766-29990 placement
 function sanitizeFavicon(value) {
   let current = value;
   for (let idx = 0; idx < 4; idx++) {
@@ -325,7 +326,7 @@ function sanitizeFavicon(value) {
   }
   return current;
 }
-//@ chunk-yxnffbzs.js:29931-30334 placement
+//@ chunk-bvz8t570.js:29990-30393 placement
 /**
  * 标题字符检查用的 emoji 正则。
  */
@@ -334,26 +335,26 @@ var ENGLAND_FLAG_SEQUENCE;
 var EMOJI_SEQUENCE_PATTERN;
 var regExp_6;
 var REGIONAL_INDICATOR_REPEAT;
-deferInit("chunk-yxnffbzs.js:29931", () => {
+deferInit("chunk-bvz8t570.js:29990", () => {
   EMOJI_PATTERNS = String.raw`\p{Extended_Pictographic}[\ufe0e\ufe0f]?\p{Emoji_Modifier}?`;
   ENGLAND_FLAG_SEQUENCE = String.raw`\u{1f3f4}\u{e0067}\u{e0062}(?:\u{e0065}\u{e006e}\u{e0067}|\u{e0073}\u{e0063}\u{e0074}|\u{e0077}\u{e006c}\u{e0073})\u{e007f}`;
   EMOJI_SEQUENCE_PATTERN = String.raw`(?:[#*0-9]\ufe0f?\u20e3|\p{Regional_Indicator}{2}|${ENGLAND_FLAG_SEQUENCE}|${EMOJI_PATTERNS}(?:\u200d${EMOJI_PATTERNS}){0,3})`;
   regExp_6 = new RegExp(`^${EMOJI_SEQUENCE_PATTERN}{1,4}$`, "u");
   REGIONAL_INDICATOR_REPEAT = /\p{Regional_Indicator}{2}.*\p{Regional_Indicator}/u;
 });
-//@ chunk-yxnffbzs.js:30334-30446 placement
+//@ chunk-bvz8t570.js:30393-30505 placement
 function vetForeignFavicon(favicon) {
   if (typeof favicon !== "string" || favicon.length > 32) return;
   let clean = sanitizeFavicon(favicon);
   return regExp_6.test(clean) && !REGIONAL_INDICATOR_REPEAT.test(clean) ? clean : undefined;
 }
-//@ chunk-yxnffbzs.js:30446-30564 placement
+//@ chunk-bvz8t570.js:30505-30623 placement
 function extractHtmlTitle(html) {
   let titleText = htmlHeadBeforeSvg(html).match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
   if (titleText === undefined) return null;
   return sanitizeArtifactTitle(decodeHtmlEntities(titleText));
 }
-//@ chunk-yxnffbzs.js:30564-30791 placement
+//@ chunk-bvz8t570.js:30623-30850 placement
 function sanitizeArtifactTitle(title) {
   let trimmed = Array.from(title, (char) => {
     let codePoint = char.codePointAt(0) ?? 0;
@@ -366,13 +367,13 @@ function sanitizeArtifactTitle(title) {
   let list = Array.from(trimmed);
   return list.length > TITLE_MAX_RUNES ? list.slice(0, TITLE_MAX_RUNES).join("") : trimmed;
 }
-//@ chunk-yxnffbzs.js:30791-31262 placement
+//@ chunk-bvz8t570.js:30850-31321 placement
 var QUOTE_HOMOGLYPHS =
   /[\u201C\u201D\u201E\u201F\u2E42\uFF02\u02F5\u02F6\u2033\u2034\u2036\u2037\u02BA\u02DD\u02EE\u05F4\u3003\u301D-\u301F\u275D\u275E\u2760\u{1F676}-\u{1F678}]/gu;
 var SINGLE_QUOTE_RUNS =
   /['\u0060\u00B4\u02B9\u02BB\u02BC\u02BD\u02BE\u02BF\u02C8\u02CA\u02CB\u0374\u0384\u055A\u05F3\u07F4\u07F5\u1FBD\u1FBF\u1FEF\u1FFD\u1FFE\u2018\u2019\u201A\u201B\u2032\u2035\u275B\u275C\u275F\uA78B\uA78C\uFF07\uFF40]{2,}/g;
 var INVISIBLE_BLANKS = /[\p{Default_Ignorable_Code_Point}\u2800\u{1D159}\u{13441}\u{13442}\uFFFC]/gu;
-//@ chunk-yxnffbzs.js:31262-31483 placement
+//@ chunk-bvz8t570.js:31321-31542 placement
 function isDecisionSurfaceControl(codePoint) {
   return (
     codePoint <= 31 ||
@@ -391,22 +392,22 @@ function isDecisionSurfaceControl(codePoint) {
     (codePoint >= 917504 && codePoint <= 917999)
   );
 }
-//@ chunk-yxnffbzs.js:31483-31570 placement
+//@ chunk-bvz8t570.js:31542-31629 placement
 var INVISIBLE_BLANK_CODE_POINT =
   /^[\p{Default_Ignorable_Code_Point}\u2800\u{1D159}\u{13441}\u{13442}\uFFFC]$/u;
-//@ chunk-yxnffbzs.js:31570-31611 placement
+//@ chunk-bvz8t570.js:31629-31670 placement
 function isJoiner(codePoint) {
   return codePoint === 8204 || codePoint === 8205;
 }
-//@ chunk-yxnffbzs.js:31611-31674 placement
+//@ chunk-bvz8t570.js:31670-31733 placement
 function isVariationSelector(codePoint) {
   return (codePoint >= 65024 && codePoint <= 65039) || (codePoint >= 917760 && codePoint <= 917999);
 }
-//@ chunk-yxnffbzs.js:31674-31710 placement
+//@ chunk-bvz8t570.js:31733-31769 placement
 function isJoinerOrEmojiSelector(codePoint) {
   return isJoiner(codePoint) || isVariationSelector(codePoint);
 }
-//@ chunk-yxnffbzs.js:31710-31791 placement
+//@ chunk-bvz8t570.js:31769-31850 placement
 function isResultLineControl(codePoint) {
   return (
     !isJoinerOrEmojiSelector(codePoint) &&
@@ -414,7 +415,7 @@ function isResultLineControl(codePoint) {
       (codePoint > 127 && INVISIBLE_BLANK_CODE_POINT.test(String.fromCodePoint(codePoint))))
   );
 }
-//@ chunk-yxnffbzs.js:31791-32228 placement
+//@ chunk-bvz8t570.js:31850-32287 placement
 /**
  * 字符脚本分类正则。
  */
@@ -425,7 +426,7 @@ var HAN_CHAR_REGEX = /^\p{Script=Han}$/u;
 var COMPLEX_SCRIPT_REGEX =
   /^[\p{Script=Arabic}\p{Script=Syriac}\p{Script=Mongolian}\p{Script=Devanagari}\p{Script=Bengali}\p{Script=Gurmukhi}\p{Script=Gujarati}\p{Script=Oriya}\p{Script=Tamil}\p{Script=Telugu}\p{Script=Kannada}\p{Script=Malayalam}\p{Script=Sinhala}\p{Script=Myanmar}\p{Script=Tibetan}\p{Script=Khmer}]$/u;
 var LINE_BREAK_CHAR_REGEX = /^[\n\r\t\v\f\u0085\u2028\u2029]$/;
-//@ chunk-yxnffbzs.js:32228-32403 placement
+//@ chunk-bvz8t570.js:32287-32462 placement
 function rideStateAfter(char) {
   if ((char.codePointAt(0) ?? 0) < 128) return KEYCAP_BASE_REGEX.test(char) ? "keycap" : "plain";
   return SCRIPT_PATTERNS.test(char)
@@ -438,7 +439,7 @@ function rideStateAfter(char) {
           ? "joining"
           : "plain";
 }
-//@ chunk-yxnffbzs.js:32403-32667 placement
+//@ chunk-bvz8t570.js:32462-32726 placement
 function selectorOrJoinerRides(codePoint, prevState) {
   if (isVariationSelector(codePoint)) {
     let rides =
@@ -458,7 +459,7 @@ function selectorOrJoinerRides(codePoint, prevState) {
     after: "none",
   };
 }
-//@ chunk-yxnffbzs.js:32667-33129 placement
+//@ chunk-bvz8t570.js:32726-33188 placement
 function sweepResultLine(
   text,
   maxTokens,
@@ -500,7 +501,7 @@ function sweepResultLine(
     cut,
   };
 }
-//@ chunk-yxnffbzs.js:33129-33227 placement
+//@ chunk-bvz8t570.js:33188-33286 placement
 function revealPageInvisibles(text) {
   let out = "";
   let rideState = "none";
@@ -511,7 +512,7 @@ function revealPageInvisibles(text) {
   }
   return out;
 }
-//@ chunk-yxnffbzs.js:33227-33472 placement
+//@ chunk-bvz8t570.js:33286-33531 placement
 function displayCharFor(char, rideState) {
   let codePoint = char.codePointAt(0) ?? 0;
   if (isJoinerOrEmojiSelector(codePoint)) {
@@ -536,43 +537,43 @@ function displayCharFor(char, rideState) {
     after: rideStateAfter(char),
   };
 }
-//@ chunk-yxnffbzs.js:33472-33540 placement
+//@ chunk-bvz8t570.js:33531-33599 placement
 function sweepResultLineField(text, maxTokens) {
   let { kept, cut } = sweepResultLine(text, maxTokens);
   return cut ? `${kept}\u2026` : kept;
 }
-//@ chunk-yxnffbzs.js:33540-33560 placement
+//@ chunk-bvz8t570.js:33599-33619 placement
 var MAX_SWEEP_FIELD_CHARS = 1024;
 var MAX_SWEEP_LINE_CHARS = 2048;
-//@ chunk-yxnffbzs.js:33560-33623 placement
+//@ chunk-bvz8t570.js:33619-33683 placement
 function safePublishPath(path) {
   return typeof path === "string" ? sweepResultLineField(path, MAX_SWEEP_FIELD_CHARS) : "(unknown)";
 }
-//@ chunk-yxnffbzs.js:33623-33687 placement
+//@ chunk-bvz8t570.js:33683-33747 placement
 function safePublishUrl(url) {
   return typeof url === "string" ? sweepResultLineField(url, MAX_SWEEP_LINE_CHARS) : "(unknown)";
 }
-//@ chunk-yxnffbzs.js:33687-33698 placement
+//@ chunk-bvz8t570.js:33747-33758 placement
 var MAX_SWEEP_TOKENS = 512;
-//@ chunk-yxnffbzs.js:33698-33749 placement
+//@ chunk-bvz8t570.js:33758-33809 placement
 function markDisplayTokens(text) {
   return text.replace(regExp_9, (token) => `${token}\\`);
 }
-//@ chunk-yxnffbzs.js:33749-33786 placement
+//@ chunk-bvz8t570.js:33809-33846 placement
 function refusalEcho(text) {
   return markDisplayTokens(sweepResultLineField(text, MAX_SWEEP_TOKENS));
 }
-//@ chunk-yxnffbzs.js:33786-33867 placement
+//@ chunk-bvz8t570.js:33846-33927 placement
 function sweepResultLineText(text, maxTokens) {
   let { kept, cut } = sweepResultLine(text, maxTokens, {
     joiners: false,
   });
   return cut ? `${kept}\u2026` : kept;
 }
-//@ chunk-yxnffbzs.js:33867-33887 placement
+//@ chunk-bvz8t570.js:33927-33947 placement
 var MAX_REFUSAL_CHARS = 500;
 var MAX_SIZE_CLAUSE_CHARS = 600;
-//@ chunk-yxnffbzs.js:33887-33996 placement
+//@ chunk-bvz8t570.js:33947-34056 placement
 function isPublishShapedArtifactAction(input) {
   let action = input?.action;
   return (
@@ -583,31 +584,37 @@ function isPublishShapedArtifactAction(input) {
     action === "version"
   );
 }
-//@ chunk-yxnffbzs.js:33996-34022 placement
+//@ chunk-bvz8t570.js:34056-34081 placement
 var DEFAULT_LIST_LIMIT = 25;
 var LIST_LIMIT_MAX = 200;
 var TYPE_LIST_LIMIT_MAX = 50;
-//@ chunk-yxnffbzs.js:34022-34092 placement
+//@ chunk-bvz8t570.js:34081-34151 placement
 function listScopeFrom(input) {
   let scope = input.scope;
   return scope === "shared" || scope === "all" ? scope : "mine";
 }
-//@ chunk-yxnffbzs.js:34092-34221 placement
+//@ chunk-bvz8t570.js:34151-34280 placement
 /**
  * Artifact 信封与工具结果信封使用的标签名单。
  */
-var ARTIFACT_PAGE_ENVELOPE_TAGS = [
-  COWRITTEN_ARTIFACT_HTML,
-  ARTIFACT_FILE_CONTENT,
-  ARTIFACT_CONTENT_AUTHORED_BY_OTHERS,
-  ARTIFACT_ORIGIN_NOTES,
-  ARTIFACT_STORED_DECLARATION,
-  ARTIFACT_TYPE_INSTRUCTIONS,
-];
-var ARTIFACT_ENVELOPE_TAG_LIST = ARTIFACT_PAGE_ENVELOPE_TAGS;
-var TOOL_ERROR_TAGS = ["tool_use_error", "sandbox_violations"];
-var RESULT_ENVELOPE_TAGS = ["result", "name", "output", "error", "system"];
-//@ chunk-yxnffbzs.js:34221-34479 placement
+var ARTIFACT_PAGE_ENVELOPE_TAGS; // deferred: uses COWRITTEN_ARTIFACT_HTML (../../constants/xml.js) of its import cycle while loading; runs once the cycle is complete
+var ARTIFACT_ENVELOPE_TAG_LIST;
+var TOOL_ERROR_TAGS;
+var RESULT_ENVELOPE_TAGS;
+deferInit("chunk-bvz8t570.js:34151", () => {
+  ARTIFACT_PAGE_ENVELOPE_TAGS = [
+    COWRITTEN_ARTIFACT_HTML,
+    ARTIFACT_FILE_CONTENT,
+    ARTIFACT_CONTENT_AUTHORED_BY_OTHERS,
+    ARTIFACT_ORIGIN_NOTES,
+    ARTIFACT_STORED_DECLARATION,
+    ARTIFACT_TYPE_INSTRUCTIONS,
+  ];
+  ARTIFACT_ENVELOPE_TAG_LIST = ARTIFACT_PAGE_ENVELOPE_TAGS;
+  TOOL_ERROR_TAGS = ["tool_use_error", "sandbox_violations"];
+  RESULT_ENVELOPE_TAGS = ["result", "name", "output", "error", "system"];
+});
+//@ chunk-bvz8t570.js:34280-34538 placement
 function confusableTagPatterns() {
   let { open, close, slash } = TAG_BRACKET_CLASSES;
   let tagShape = `[${open}][^${WORD_CHARS_CLASS}${open}${close}]*[${slash}]`;
@@ -622,7 +629,7 @@ function confusableTagPatterns() {
     new RegExp(`(?!${cmpLike})${closedSource.source}`, closedSource.flags),
   ];
 }
-//@ chunk-yxnffbzs.js:34479-35524 placement
+//@ chunk-bvz8t570.js:34538-35583 placement
 function artifactLeadTokens() {
   return [
     ["artifact", LEAD_HEX_ID],
@@ -653,7 +660,7 @@ function artifactLeadTokens() {
     ["how", "to", "build", "and", "iterate", "on"],
   ];
 }
-//@ chunk-yxnffbzs.js:35524-35776 placement
+//@ chunk-bvz8t570.js:35583-35836 placement
 class ScrubPatternCache {
   #e;
   #t;
@@ -669,7 +676,7 @@ class ScrubPatternCache {
   get envelopes() {
     this.#n ??= [
       confusableTagScrubPattern(
-        uniq([
+        normalizeCaseForComparison_2([
           ...ARTIFACT_ENVELOPE_TAG_LIST,
           "transcript",
           ...RESERVED_XML_TAGS.filter((tag) => tag !== CHANNEL),
@@ -684,22 +691,22 @@ class ScrubPatternCache {
     return this.#n;
   }
 }
-//@ chunk-yxnffbzs.js:35776-35802 placement
+//@ chunk-bvz8t570.js:35836-35862 placement
 var artifactTagPatterns; // deferred: uses ScrubPatternCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-yxnffbzs.js:35776", () => {
+deferInit("chunk-bvz8t570.js:35836", () => {
   artifactTagPatterns = new HostScoped(() => new ScrubPatternCache());
 });
-//@ chunk-yxnffbzs.js:35802-35840 placement
+//@ chunk-bvz8t570.js:35862-35900 placement
 function artifactTagPatternsForHost() {
   return artifactTagPatterns.of(getRootSession().host);
 }
-//@ chunk-yxnffbzs.js:35840-35872 placement
+//@ chunk-bvz8t570.js:35900-35932 placement
 function artifactLeadScrubPattern() {
   return artifactTagPatternsForHost().lead;
 }
-//@ chunk-yxnffbzs.js:35872-35895 placement
+//@ chunk-bvz8t570.js:35932-35955 placement
 var INTERRUPT_TOOL_MESSAGES; // deferred: uses INTERRUPT_MESSAGE (../../utils/messages.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-yxnffbzs.js:35872", () => {
+deferInit("chunk-bvz8t570.js:35932", () => {
   INTERRUPT_TOOL_MESSAGES = [
     INTERRUPT_MESSAGE_FOR_TOOL_USE,
     TOOL_CALL_ENDED_FOR_DELIVERY,
@@ -708,14 +715,14 @@ deferInit("chunk-yxnffbzs.js:35872", () => {
     AGENT_CALL_PROCESS_STOPPED,
   ];
 });
-//@ chunk-yxnffbzs.js:35895-35945 placement
+//@ chunk-bvz8t570.js:35955-36005 placement
 function containsInterruptLiteral(text) {
   return INTERRUPT_TOOL_MESSAGES.some((literal) => text.includes(literal));
 }
-//@ chunk-yxnffbzs.js:35945-36215 placement
+//@ chunk-bvz8t570.js:36005-36275 placement
 var regExp_8; // deferred: uses INTERRUPT_TOOL_MESSAGES of its import cycle while loading; runs once the cycle is complete
 var regExp_9;
-deferInit("chunk-yxnffbzs.js:35945", () => {
+deferInit("chunk-bvz8t570.js:36005", () => {
   regExp_8 = new RegExp(
     INTERRUPT_TOOL_MESSAGES.map(
       (literal) => `${urlPatternToRegex(literal.slice(0, 1))}(?=${urlPatternToRegex(literal.slice(1))})`,
@@ -734,11 +741,11 @@ deferInit("chunk-yxnffbzs.js:35945", () => {
     "gi",
   );
 });
-//@ chunk-yxnffbzs.js:36215-36266 placement
+//@ chunk-bvz8t570.js:36275-36326 placement
 function markInterruptLiterals(text) {
   return text.replace(regExp_8, (match) => `${match}\\`);
 }
-//@ chunk-yxnffbzs.js:36266-36403 placement
+//@ chunk-bvz8t570.js:36326-36463 placement
 function scrubArtifactEnvelopeTags(text, scope = "all") {
   let patterns = artifactTagPatternsForHost();
   let result = text;
@@ -746,14 +753,14 @@ function scrubArtifactEnvelopeTags(text, scope = "all") {
     result = result.replace(pattern, (match) => `${match}\\`);
   return scope === "page" ? result : markInterruptLiterals(result);
 }
-//@ chunk-yxnffbzs.js:36403-36485 placement
+//@ chunk-bvz8t570.js:36463-36543 placement
 function scrubbedHead(text, maxChars, scope = "all") {
   let scrubbed = scrubArtifactEnvelopeTags(truncateToLength(text, maxChars), scope);
   return scrubbed.length > maxChars
     ? scrubArtifactEnvelopeTags(truncateToLength(text, maxChars - 1), scope)
     : scrubbed;
 }
-//@ chunk-yxnffbzs.js:36485-36628 placement
+//@ chunk-bvz8t570.js:36543-36685 placement
 function scrubServerLine(text, maxChars) {
   return scrubArtifactEnvelopeTags(
     truncateCodePoints(
@@ -768,9 +775,9 @@ function scrubServerLine(text, maxChars) {
     ),
   );
 }
-//@ chunk-yxnffbzs.js:36628-36639 placement
+//@ chunk-bvz8t570.js:36685-36696 placement
 var ARTIFACT_CARD_TITLE_MAX = 80;
-//@ chunk-yxnffbzs.js:36639-36795 placement (2.1.88 match: ghIsDangerousCallback, 1)
+//@ chunk-bvz8t570.js:36696-36852 placement (2.1.88 match: ghIsDangerousCallback, 1)
 function sweptArtifactTitle(title) {
   return spacedFromClosingQuote(
     characterReferencesAsBrackets(
@@ -786,20 +793,20 @@ function sweptArtifactTitle(title) {
       .trim(),
   );
 }
-//@ chunk-yxnffbzs.js:36795-36908 placement
+//@ chunk-bvz8t570.js:36852-36964 placement
 function artifactCardTitle(title) {
   let swept = sweptArtifactTitle(title);
   let truncated = truncateToLength(swept, ARTIFACT_CARD_TITLE_MAX);
   if (truncated === swept) return swept;
   return `${truncated.endsWith(":\u2215") ? truncated.slice(0, -1) : truncated}\u2026`;
 }
-//@ chunk-yxnffbzs.js:36908-37003 placement
+//@ chunk-bvz8t570.js:36964-37059 placement
 function blankDecisionSurfaceControls(text) {
   return Array.from(text, (char) => (isDecisionSurfaceControl(char.codePointAt(0) ?? 0) ? " " : char))
     .join("")
     .replace(INVISIBLE_BLANKS, " ");
 }
-//@ chunk-yxnffbzs.js:37003-37226 placement
+//@ chunk-bvz8t570.js:37059-37282 placement
 function withDroppedBlanksMarked(text) {
   if (blankDecisionSurfaceControls(text).trim() === "") return text;
   let out = "";
@@ -816,29 +823,29 @@ function withDroppedBlanksMarked(text) {
     .replace(SINGLE_QUOTE_RUNS, "'?")
     .replace(ENTITY_LIKE_PREFIX_REGEX, "?");
 }
-//@ chunk-yxnffbzs.js:37226-37286 placement
+//@ chunk-bvz8t570.js:37282-37342 placement
 function withEdgeBlanksMarked(text) {
   return text.replace(/^ (?=\S)|(?<=\S) $/g, "?");
 }
-//@ chunk-yxnffbzs.js:37286-37362 placement
+//@ chunk-bvz8t570.js:37342-37418 placement
 function foldedForSurface(text) {
   return characterReferencesAsBrackets(
     sweepProvenanceMarker(sweepAskCopy(text) ?? "").replace(DECISION_SURFACE_BRACKETS_RE, " "),
   ).replace(ANGLE_BRACKET_RUN_RE, "?");
 }
-//@ chunk-yxnffbzs.js:37362-37413 placement
+//@ chunk-bvz8t570.js:37418-37469 placement
 function markedForBracketFold(text) {
   return withSchemeMarked(withDroppedBlanksMarked(text)).replace(DECISION_SURFACE_BRACKETS_RE, "?");
 }
-//@ chunk-yxnffbzs.js:37413-37457 placement
+//@ chunk-bvz8t570.js:37469-37513 placement
 function withSchemeMarked(text) {
   return text.replace(SCHEME_SEPARATOR_RE, ":?/");
 }
-//@ chunk-yxnffbzs.js:37457-37502 placement
+//@ chunk-bvz8t570.js:37513-37558 placement
 function spacedFromClosingQuote(text) {
   return text.replace(/\\$/, "\\ ");
 }
-//@ chunk-yxnffbzs.js:37502-37612 placement
+//@ chunk-bvz8t570.js:37558-37668 placement
 function sweepAskCopy(text) {
   return (
     blankDecisionSurfaceControls(text)
@@ -849,7 +856,7 @@ function sweepAskCopy(text) {
       .trim() || null
   );
 }
-//@ chunk-yxnffbzs.js:37612-39763 placement
+//@ chunk-bvz8t570.js:37668-39819 placement
 /**
  * 匹配符号与装饰符号连续串的正则。
  */
@@ -857,7 +864,7 @@ var ARROW_SHAFT_SYMBOLS; // deferred: uses INVISIBLE_CHAR_CLASSES (../../utils/c
 var SYMBOL_OR_DECORATION_RUN;
 var regExp_10;
 var regExp_11;
-deferInit("chunk-yxnffbzs.js:37612", () => {
+deferInit("chunk-bvz8t570.js:37668", () => {
   ARROW_SHAFT_SYMBOLS = String.raw`\u002b\u003d\u005e\u007c\u007e\u00a2-\u00a5\u00a8\u00ac\u00af\u00b1\u00b4\u00b8\u00d7\u00f7\u02c2-\u02c5\u02d2-\u02df\u02e5-\u02eb\u02ed\u02ef-\u02ff\u0375\u0384\u0385\u03f6\u058f\u0606-\u0608\u060b\u07fe\u07ff\u0888\u09f2\u09f3\u09fb\u0af1\u0bf9\u0e3f\u17db\u1fbd\u1fbf-\u1fc1\u1fcd-\u1fcf\u1fdd-\u1fdf\u1fed-\u1fef\u1ffd\u1ffe\u2044\u2052\u207a-\u207c\u208a-\u208c\u20a0-\u20c1\u2118\u2140-\u2144\u214b\u2190-\u2194\u219a\u219b\u21a0\u21a3\u21a6\u21ae\u21ce\u21cf\u21d2\u21d4\u21f4-\u22ff\u2320\u2321\u237c\u239b-\u23b3\u23dc-\u23e1\u25b7\u25c1\u25f8-\u25ff\u266f\u27c0-\u27c4\u27c7-\u27e5\u27f0-\u27ff\u2900-\u2982\u2999-\u29d7\u29dc-\u29fb\u29fe-\u2aff\u2b30-\u2b44\u2b47-\u2b4c\u309b\u309c\ua700-\ua716\ua720\ua721\ua789\ua78a\ua838\uab5b\uab6a\uab6b\ufb29\ufbb2-\ufbc2\ufdfc\ufe62\ufe64-\ufe66\ufe69\uff04\uff0b\uff1c-\uff1e\uff3e\uff40\uff5c\uff5e\uffe0-\uffe3\uffe5\uffe6\uffe9-\uffec\u{10d8e}\u{10d8f}\u{11fdd}-\u{11fe0}\u{1cef0}\u{1d6c1}\u{1d6db}\u{1d6fb}\u{1d715}\u{1d735}\u{1d74f}\u{1d76f}\u{1d789}\u{1d7a9}\u{1d7c3}\u{1e2ff}\u{1ecb0}\u{1eef0}\u{1eef1}\u{1f3fb}-\u{1f3ff}\u{1f8d0}-\u{1f8d8}`;
   SYMBOL_OR_DECORATION_RUN = `[\\p{So}${ARROW_SHAFT_SYMBOLS}\\p{Pd}\\p{Pc}\\p{Mn}\\p{Me}${DASH_CHAR_CLASS}\\u02c9\\u02cd\\u2017\\u2053\\u203e\\ufe49-\\ufe4c\\u0640\\u07fa\\u1173\\u1428\\u180a\\u2e0f\\u2f00\\u3127\\u3161\\u3192\\u31d0\\u4e00\\ua4ff\\ua7f7\\ua8fb\\uffda]`;
   regExp_10 = new RegExp(`(?<!${SYMBOL_OR_DECORATION_RUN})${SYMBOL_OR_DECORATION_RUN}+>`, "gu");
@@ -866,11 +873,11 @@ deferInit("chunk-yxnffbzs.js:37612", () => {
     "gu",
   );
 });
-//@ chunk-yxnffbzs.js:39763-39820 placement
+//@ chunk-bvz8t570.js:39819-39876 placement
 function sweepProvenanceMarker(text) {
   return text.replace(regExp_11, "?").replace(regExp_10, "?");
 }
-//@ chunk-yxnffbzs.js:39820-40324 placement
+//@ chunk-bvz8t570.js:39876-40380 placement
 /**
  * 规范化展示文本用的正则：重复斜杠、实体样式前缀与括号/方框连续串。
  */
@@ -884,7 +891,7 @@ var ENTITY_LIKE_PREFIX_REGEX;
 var AMPERSAND_FORMS;
 var regExp_12;
 var BRACKET_OR_BOX_RUN;
-deferInit("chunk-yxnffbzs.js:39820", () => {
+deferInit("chunk-bvz8t570.js:39876", () => {
   SCHEME_SEPARATOR_RE = /[:\uFE13\uFE55\uFF1A][/\uFF0F][/\uFF0F]/gu;
   DEFANGED_SCHEME_SEPARATOR = ":\u2215\u2215";
   NORMALIZED_SLASH_SLASH = /:\u2215\u2215/g;
@@ -902,13 +909,13 @@ deferInit("chunk-yxnffbzs.js:39820", () => {
   );
   BRACKET_OR_BOX_RUN = /^(?:#\p{N}|#x|lt|gt|amp|quot|laquo|raquo|shy|nbsp|acute|uml|macr)/u;
 });
-//@ chunk-yxnffbzs.js:40324-40437 placement
+//@ chunk-bvz8t570.js:40380-40493 placement
 function characterReferencesAsBrackets(text) {
   return text.replace(regExp_12, (whole, ref, what) =>
     ref !== "" && (what !== "" || BRACKET_OR_BOX_RUN.test(ref.normalize("NFKC").toLowerCase())) ? "<" : whole,
   );
 }
-//@ chunk-yxnffbzs.js:40437-40749 placement
+//@ chunk-bvz8t570.js:40493-40805 placement
 /**
  * 标题中需剥离的括号/标点正则。
  */
@@ -917,7 +924,7 @@ var MODEL_TEXT_PUNCT_STRIP_REGEX;
 var DECISION_SURFACE_BRACKETS_RE;
 var MODEL_TEXT_PUNCT_CODE_POINT_2;
 var MODEL_TEXT_PUNCT_CODE_POINT;
-deferInit("chunk-yxnffbzs.js:40437", () => {
+deferInit("chunk-bvz8t570.js:40493", () => {
   TITLE_STRIP_PATTERNS = new RegExp(
     `[<>${[...BRACKET_CONFUSABLES_2.keys()].join("")}${ANGLE_OPENERS_OFF_THE_LIST}${ANGLE_CLOSERS_OFF_THE_LIST}]+`,
     "gu",
@@ -931,7 +938,7 @@ deferInit("chunk-yxnffbzs.js:40437", () => {
     /[:\u02D0\u02D1\u05C3\u2D42\u2D53\u2D57\uA4FD\uA789\u{10781}\u{10782}]|(?![\p{L}\p{N}\p{Zs}])[^\x00-\x7F]/gu;
   MODEL_TEXT_PUNCT_CODE_POINT = new RegExp(`^(?:${MODEL_TEXT_PUNCT_CODE_POINT_2.source})$`, "u");
 });
-//@ chunk-yxnffbzs.js:40749-40832 placement
+//@ chunk-bvz8t570.js:40805-40888 placement
 function sweepMarkerLookalikes(text) {
   return foldClassifierCodePhrases(
     text
@@ -940,10 +947,10 @@ function sweepMarkerLookalikes(text) {
       .replace(/ {2,}/g, " "),
   );
 }
-//@ chunk-yxnffbzs.js:40832-41039 placement
+//@ chunk-bvz8t570.js:40888-41095 placement
 var CLASSIFIER_CODE_PHRASES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var mapped;
-deferInit("chunk-yxnffbzs.js:40832", () => {
+deferInit("chunk-bvz8t570.js:40888", () => {
   CLASSIFIER_CODE_PHRASES = [
     ["sources", "under"],
     ["stored", "connector", "grant"],
@@ -955,11 +962,11 @@ deferInit("chunk-yxnffbzs.js:40832", () => {
     phrase.join("-"),
   ]);
 });
-//@ chunk-yxnffbzs.js:41039-41100 placement
+//@ chunk-bvz8t570.js:41095-41156 placement
 function foldClassifierCodePhrases(text) {
   return mapped.reduce((acc, [pattern, replacement]) => acc.replace(pattern, replacement), text);
 }
-//@ chunk-yxnffbzs.js:41100-41723 placement
+//@ chunk-bvz8t570.js:41156-41779 placement
 var SESSION_PUBLISHED_CLASSIFIER_MARK = " [artifact published by this session]";
 var SESSION_CREATED_CLASSIFIER_MARK = " [artifact created by this session]";
 var OWN_TYPE_INSTANCE_CLASSIFIER_MARK =
@@ -970,7 +977,7 @@ var SCREENED_NAME_CLASSIFIER_MARK =
   " [destination is a file name Claude Code screens: git, hook, tool and agent settings]";
 var CHAIN_REPUBLISH_ALLOW_REASON =
   "Automatic edit of an Artifact this session watches, requested by a writer's comment on it; the server re-checks the writer, the thread's edit grant, single-file, size and rate limits";
-//@ chunk-yxnffbzs.js:41723-41860 placement
+//@ chunk-bvz8t570.js:41779-41916 placement
 function sweptAskPath(path) {
   if (blankDecisionSurfaceControls(path).replace(DECISION_SURFACE_BRACKETS_RE, " ").trim() === "") return "";
   return spacedFromClosingQuote(
@@ -979,7 +986,7 @@ function sweptAskPath(path) {
     ).trim(),
   );
 }
-//@ chunk-yxnffbzs.js:41860-41961 placement
+//@ chunk-bvz8t570.js:41916-42017 placement
 function sweptPagePath(path) {
   return spacedFromClosingQuote(
     characterReferencesAsBrackets(
@@ -990,18 +997,18 @@ function sweptPagePath(path) {
       .trim(),
   );
 }
-//@ chunk-yxnffbzs.js:41961-42158 placement
+//@ chunk-bvz8t570.js:42017-42215 placement
 var META_DESCRIPTION_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TITLE_TAG_RE;
 var H1_TAG_RE;
 var GENERIC_TITLES;
-deferInit("chunk-yxnffbzs.js:41961", () => {
+deferInit("chunk-bvz8t570.js:42017", () => {
   META_DESCRIPTION_RE = /<meta[^>]+name=["']description["'][^>]+content=(["'])((?:(?!\1).)*)\1/is;
   TITLE_TAG_RE = /<title[^>]*>([\s\S]*?)<\/title>/i;
   H1_TAG_RE = /<h1[^>]*>([\s\S]*?)<\/h1>/i;
   GENERIC_TITLES = new Set(["", "index", "untitled", "document"]);
 });
-//@ chunk-yxnffbzs.js:42158-42452 placement
+//@ chunk-bvz8t570.js:42215-42511 placement
 function deriveDescription(html, lowerCase) {
   let head = htmlHeadBeforeSvg(html);
   let clean = (value) => sanitizeArtifactTitle(decodeHtmlEntities(value ?? "")) ?? "";
@@ -1017,15 +1024,15 @@ function deriveDescription(html, lowerCase) {
     return titleText;
   return headingText;
 }
-//@ chunk-yxnffbzs.js:42452-42560 placement
+//@ chunk-bvz8t570.js:42511-42619 placement
 function splitWatchRows(rows) {
-  let stoppedCount = count(rows, (row) => "rail" in row && row.rail === "live_stopped");
+  let stoppedCount = countWhere(rows, (row) => "rail" in row && row.rail === "live_stopped");
   return {
     watching: rows.length - stoppedCount,
     stopped: stoppedCount,
   };
 }
-//@ chunk-8wvtd8sr.js:360984-361012 placement
+//@ chunk-xzmy9dn4.js:363254-363282 placement
 /**
  * 取 Artifact 卡片标题。
  */
@@ -1033,21 +1040,12 @@ function artifactCardTitleOf(title) {
   return artifactCardTitle(title);
 }
 export {
-  sweepResultLineText,
-  QUOTE_HOMOGLYPHS,
-  SINGLE_QUOTE_RUNS,
-  scrubArtifactEnvelopeTags,
-  scrubServerLine,
-  LIST_LIMIT_MAX,
-  vetForeignFavicon,
+  artifactContentOriginUrlFor,
+  extractThumbnailLinks,
   artifactViewerUrlFor,
-  containsInterruptLiteral,
-  isDecisionSurfaceControl,
-  INVISIBLE_BLANK_CODE_POINT,
-  ARTIFACT_PAGE_ENVELOPE_TAGS,
-  refusalEcho,
   sweepResultLineField,
   canonicalArtifactTargetFor,
+  sweepResultLineText,
   sweepResultLine,
   ANGLE_OPENERS_OFF_THE_LIST,
   ANGLE_CLOSERS_OFF_THE_LIST,
@@ -1063,57 +1061,66 @@ export {
   DECISION_SURFACE_BRACKETS_RE,
   writtenPage,
   classifierArtifactTargetFor,
-  artifactViewerUrlSpellings,
-  extractThumbnailLinks,
-  TITLE_SCAN_CHARS,
+  scrubArtifactEnvelopeTags,
+  sweptArtifactTitle,
   sweptAskPath,
-  artifactContentOriginUrlFor,
-  safePublishPath,
-  ownedField,
-  sweepProvenanceMarker,
   SESSION_CREATED_CLASSIFIER_MARK,
   SESSION_PUBLISHED_CLASSIFIER_MARK,
-  TYPE_LIST_LIMIT_MAX,
-  DEFAULT_LIST_LIMIT,
-  listScopeFrom,
-  safePublishUrl,
-  artifactCardTitle,
-  extractHtmlTitle,
-  withSchemeMarked,
-  sweepMarkerLookalikes,
-  splitWatchRows,
-  artifactCardTitleOf,
   SCREENED_NAME_CLASSIFIER_MARK,
-  sweptArtifactTitle,
+  artifactCardTitle,
+  artifactCardTitleOf,
   TITLE_SCAN_BYTES,
+  extractHtmlTitle,
   sanitizeArtifactTitle,
   CHAIN_REPUBLISH_ALLOW_REASON,
   OWN_TYPE_INSTANCE_CLASSIFIER_MARK,
+  sweepMarkerLookalikes,
   classifierArtifactTargetParts,
   sameArtifactMark,
+  sweepProvenanceMarker,
   INHERITED_TYPE_DECLARATION_CLASSIFIER_MARK,
   sanitizeFavicon,
   FAVICON_MARKUP_RE,
   VERSION_LABEL_MAX,
+  safePublishPath,
+  safePublishUrl,
+  ownedField,
   decodeHtmlEntities,
   deriveDescription,
+  vetForeignFavicon,
+  listScopeFrom,
+  splitWatchRows,
+  revealPageInvisibles,
+  refusalEcho,
+  QUOTE_HOMOGLYPHS,
+  SINGLE_QUOTE_RUNS,
+  LIST_LIMIT_MAX,
+  scrubServerLine,
+  containsInterruptLiteral,
+  isDecisionSurfaceControl,
+  INVISIBLE_BLANK_CODE_POINT,
+  ARTIFACT_PAGE_ENVELOPE_TAGS,
+  artifactLeadTokens,
+  isPublishShapedArtifactAction,
+  INVISIBLE_BLANKS,
+  characterReferencesAsBrackets,
+  ANGLE_BRACKET_RUN_RE,
+  TITLE_SCAN_CHARS,
   MODEL_TEXT_PUNCT_CODE_POINT,
   isJoinerOrEmojiSelector,
   selectorOrJoinerRides,
   rideStateAfter,
-  INVISIBLE_BLANKS,
-  characterReferencesAsBrackets,
-  ANGLE_BRACKET_RUN_RE,
+  artifactViewerUrlSpellings,
+  DEFAULT_LIST_LIMIT,
+  TITLE_MAX_RUNES,
+  artifactLeadScrubPattern,
+  scrubbedHead,
+  markDisplayTokens,
+  isCanonicalArtifactViewerUrl,
   SCHEME_SEPARATOR_RE,
   DEFANGED_SCHEME_SEPARATOR,
-  artifactLeadTokens,
-  isPublishShapedArtifactAction,
-  scrubbedHead,
-  TITLE_MAX_RUNES,
-  markDisplayTokens,
-  artifactLeadScrubPattern,
-  revealPageInvisibles,
-  isCanonicalArtifactViewerUrl,
+  TYPE_LIST_LIMIT_MAX,
+  withSchemeMarked,
   ARROW_SHAFT_SYMBOLS,
   ARTIFACT_CARD_TITLE_MAX,
   CLASSIFIER_CODE_PHRASES,

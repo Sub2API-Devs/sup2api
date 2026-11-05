@@ -1,0 +1,6 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.318
+import{Ypr}from"./chunk-98xr2khk.js";var s=40,a=80,i="Your REPL VM state was kept across this compaction",f=4000,c=new RegExp(`^${i}(?:; no bindings are defined in it\\.|\\. (\\d{1,9}) bindings? (?:is|are) still defined in it, with names this note does not list\\.|\\. These bindings are still defined: ((?:\`[^\`]+\`, )*\`[^\`]+\`)(?:, and (\\d{1,9}) more this note does not list)?\\.)$`);function o(e){return e.length<=a&&Ypr.test(e)}function r(e,n){if(e.length===0&&n===0)return`${i}; no bindings are defined in it.`;if(e.length===0)return`${i}. ${n} binding${n===1?" is":"s are"} still defined in it, with names this note does not list.`;return`${i}. These bindings are still defined: ${e.map((t)=>`\`${t}\``).join(", ")}${n>0?`, and ${n} more this note does not list`:""}.`}function u(e){let n=e.filter(o).slice(0,s);return r(n,e.length-n.length)}function h(e){if(e.length>f)return!1;let n=c.exec(e);if(n===null)return!1;let t=n[2]===void 0?[]:n[2].split(", ").map((d)=>d.slice(1,-1)),l=Number(n[1]??n[3]??0);if(t.length>s||!t.every(o))return!1;return r(t,l)===e}export{h as isReplStateNote,u as replStateNote};

@@ -3,9 +3,9 @@
  *
  * 后台会话会合点客户端（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fd653dqq.js (31)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wyc3ddyy.js (31)
  * attribution: placement 31
  */
 import { join } from "path";
@@ -16,6 +16,7 @@ import { HostScoped } from "../../utils/hostScoped.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage, isENOENT } from "../../utils/errors.js";
 import { env } from "../../utils/env.js";
+import { logError } from "../../utils/log.js";
 import {
   logJobWriteError,
   withOwnJobStateWrite,
@@ -39,7 +40,6 @@ import {
   mainAgentId,
   recordSubmitTime,
 } from "../../bootstrap/state.js";
-import { logError } from "../../utils/log.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
 import { logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { timingSafeEqualStrings, readSessionAuthFile } from "../../utils/sessionRecords.js";
@@ -55,12 +55,12 @@ import { hasEarlyInput, seedEarlyInput } from "../../utils/earlyInput.js";
 import { registerCleanup, runCleanups } from "../../utils/cleanupRegistry.js";
 import { getReplBridgeHandle } from "../../bridge/replBridgeHandle.js";
 import { ERASE_SCREEN, CURSOR_HOME } from "../../ink/termio/csi.js";
-import { enqueueCommand } from "../../utils/messageQueueManager.js";
+import { enqueue } from "../../utils/messageQueueManager.js";
 import { getModeFromInput, stripModePrefix } from "../../components/PromptInput/inputModes.js";
 import { getBgTakeover } from "../../utils/concurrentSessions.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fd653dqq.js:1305-1364 placement
+//@ chunk-wyc3ddyy.js:1304-1363 placement
 /**
  * 按宿主保存的 rendezvous 命令解析器状态。
  */
@@ -70,29 +70,29 @@ class RendezvousResolverState {
     this.resolver = resolver;
   }
 }
-//@ chunk-fd653dqq.js:1364-1387 placement
+//@ chunk-wyc3ddyy.js:1363-1386 placement
 /**
  * rendezvous 解析器状态的宿主作用域单例。
  */
 var rendezvousResolverState; // deferred: uses RendezvousResolverState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fd653dqq.js:1364", () => {
+deferInit("chunk-wyc3ddyy.js:1363", () => {
   rendezvousResolverState = new HostScoped(() => new RendezvousResolverState());
 });
-//@ chunk-fd653dqq.js:1387-1433 placement
+//@ chunk-wyc3ddyy.js:1386-1432 placement
 /**
  * 注册当前宿主的 rendezvous 命令解析器。
  */
 function registerRendezvousResolver(host, resolver) {
   rendezvousResolverState.of(host).registerResolver(resolver);
 }
-//@ chunk-fd653dqq.js:1433-1482 placement
+//@ chunk-wyc3ddyy.js:1432-1481 placement
 /**
  * 调用当前宿主的 rendezvous 命令解析器（未注册返回 false）。
  */
 function resolveRendezvousCommand(rootHost, text) {
   return rendezvousResolverState.of(rootHost).resolver?.(text) ?? false;
 }
-//@ chunk-fd653dqq.js:1482-1535 placement
+//@ chunk-wyc3ddyy.js:1481-1534 placement
 /**
  * 按宿主保存的 rendezvous 命令执行器状态。
  */
@@ -102,22 +102,22 @@ class RendezvousRunnerState {
     this.runner = runner;
   }
 }
-//@ chunk-fd653dqq.js:1535-1558 placement
+//@ chunk-wyc3ddyy.js:1534-1557 placement
 /**
  * rendezvous 执行器状态的宿主作用域单例。
  */
 var rendezvousRunnerState; // deferred: uses RendezvousRunnerState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fd653dqq.js:1535", () => {
+deferInit("chunk-wyc3ddyy.js:1534", () => {
   rendezvousRunnerState = new HostScoped(() => new RendezvousRunnerState());
 });
-//@ chunk-fd653dqq.js:1558-1602 placement
+//@ chunk-wyc3ddyy.js:1557-1601 placement
 /**
  * 注册当前宿主的 rendezvous 命令执行器。
  */
 function registerRendezvousRunner(host, runner) {
   rendezvousRunnerState.of(host).registerRunner(runner);
 }
-//@ chunk-fd653dqq.js:1602-1751 placement
+//@ chunk-wyc3ddyy.js:1601-1750 placement
 function runRvCommand(rootHost, text) {
   try {
     return rendezvousRunnerState.of(rootHost).runner?.(text) ?? false;
@@ -128,7 +128,7 @@ function runRvCommand(rootHost, text) {
     return false;
   }
 }
-//@ chunk-fd653dqq.js:1812-2499 placement
+//@ chunk-wyc3ddyy.js:1811-2497 placement
 /**
  * 把输入框草稿跟随写入作业目录的 .prompt-draft（≤256 KB）；草稿为空或用户已返回时删除文件；写入串行化，settled 等待全部写完。
  */
@@ -179,13 +179,13 @@ class PromptDraftWriter {
     return promise === this.#e ? undefined : this.#i(this.#e);
   }
 }
-//@ chunk-fd653dqq.js:2499-2514 placement
+//@ chunk-wyc3ddyy.js:2497-2512 placement
 /**
  * 静默对端超时的默认毫秒数（5000）。
  */
 var MAX_UNAUTH_DROPS = 3;
 var DEFAULT_SILENT_PEER_TIMEOUT_MS = 5000;
-//@ chunk-fd653dqq.js:2514-8372 placement
+//@ chunk-wyc3ddyy.js:2512-8370 placement
 /**
  * 后台会话会合点客户端：心跳、服务端错误、下一轮提示排队
  */
@@ -547,43 +547,43 @@ class RendezvousClient {
     if (this.promptInput.getState().value === "") setPromptValue(this.promptInput, draftText);
   }
 }
-//@ chunk-fd653dqq.js:8372-8394 placement
+//@ chunk-wyc3ddyy.js:8370-8392 placement
 /**
  * 按宿主保存的 rendezvous 服务端状态。
  */
 class RendezvousServerState {
   server = undefined;
 }
-//@ chunk-fd653dqq.js:8394-8417 placement
+//@ chunk-wyc3ddyy.js:8392-8415 placement
 /**
  * rendezvous 服务端状态的宿主作用域单例。
  */
 var rendezvousServerState; // deferred: uses RendezvousServerState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fd653dqq.js:8394", () => {
+deferInit("chunk-wyc3ddyy.js:8392", () => {
   rendezvousServerState = new HostScoped(() => new RendezvousServerState());
 });
-//@ chunk-fd653dqq.js:8417-8441 placement
+//@ chunk-wyc3ddyy.js:8415-8439 placement
 /**
  * 取当前根会话对象。
  */
 function getRootSessionRef() {
   return getRootSession();
 }
-//@ chunk-fd653dqq.js:8441-8470 placement
+//@ chunk-wyc3ddyy.js:8439-8468 placement
 /**
  * 取当前根会话对应的宿主标识。
  */
 function getRootHost() {
   return getRootSessionRef().host;
 }
-//@ chunk-fd653dqq.js:8470-8500 placement
+//@ chunk-wyc3ddyy.js:8468-8498 placement
 /**
  * 取当前宿主的 rendezvous 服务端状态。
  */
 function getRendezvousServerState() {
   return rendezvousServerState.of(getRootHost());
 }
-//@ chunk-fd653dqq.js:8500-9115 placement
+//@ chunk-wyc3ddyy.js:8498-9113 placement
 async function startRendezvousServer(storageV5) {
   let CLAUDE_BG_RENDEZVOUS_SOCK = env.CLAUDE_BG_RENDEZVOUS_SOCK;
   let rendezvousServerState = getRendezvousServerState();
@@ -623,11 +623,11 @@ async function startRendezvousServer(storageV5) {
   let server = rendezvousServerState.server;
   registerCleanup(() => server.promptStash.flush());
 }
-//@ chunk-fd653dqq.js:9115-9162 placement
+//@ chunk-wyc3ddyy.js:9113-9160 placement
 function sendRv(frame) {
   return getRendezvousServerState().server?.send(frame) ?? false;
 }
-//@ chunk-fd653dqq.js:9162-9494 placement
+//@ chunk-wyc3ddyy.js:9160-9524 placement
 /**
  * 后台会话关闭：通知 rendezvous，拆除 REPL 桥（记录最后序号），运行清理并刷新草稿，最多等 5 秒后退出。
  */
@@ -652,13 +652,13 @@ function shutdownBgSession(promptDraftFile, storageV5) {
   Promise.race([
     Promise.all(cleanups)
       .catch(() => {})
-      .then(() => promptDraftFile.settled()),
+      .then(() => Promise.all([promptDraftFile.settled(), withOwnJobStateWrite(async () => {})])),
     sleep(5000),
   ]).finally(() => {
     process.exit(0);
   });
 }
-//@ chunk-fd653dqq.js:9494-9727 placement
+//@ chunk-wyc3ddyy.js:9524-9757 placement
 function repaintForAttacher() {
   if (getAttacherCaps() !== null) noteAttachStamp(Date.now());
   if (
@@ -677,10 +677,10 @@ function repaintForAttacher() {
     type: "repaint-done",
   });
 }
-//@ chunk-fd653dqq.js:9727-10318 placement
+//@ chunk-wyc3ddyy.js:9757-10348 placement
 function enqueueNextTurnPrompt(frame) {
   if (frame.nextTurn === true) {
-    enqueueCommand({
+    enqueue({
       agentId: mainAgentId(),
       mode: "prompt",
       value: frame.text,
@@ -703,7 +703,7 @@ function enqueueNextTurnPrompt(frame) {
     return;
   }
   let modeFromInput = getModeFromInput(frame.text);
-  enqueueCommand({
+  enqueue({
     agentId: mainAgentId(),
     mode: modeFromInput,
     value: stripModePrefix(frame.text),
@@ -715,17 +715,17 @@ function enqueueNextTurnPrompt(frame) {
   if (modeFromInput === "prompt" && !frame.text.trim().startsWith("/")) recordSubmitTime();
   logForDebugging(`[bg-rv] enqueued reply: ${frame.text.slice(0, 80)}`);
 }
-//@ chunk-fd653dqq.js:10318-10392 placement
+//@ chunk-wyc3ddyy.js:10348-10422 placement
 /**
  * 会话卡在启动对话框时作业状态的 needs 文案。
  */
 var BLOCKED_STUCK_DIALOG_DETAIL = "stuck on a startup dialog";
 var BLOCKED_STUCK_DIALOG_NEEDS = "open this session to continue setup";
-//@ chunk-fd653dqq.js:10392-10448 placement
+//@ chunk-wyc3ddyy.js:10422-10478 placement
 function disarmStartupWedgeWatchdog() {
   getRendezvousServerState().server?.disarmStartupWedgeWatchdog();
 }
-//@ chunk-fd653dqq.js:10448-10866 placement
+//@ chunk-wyc3ddyy.js:10478-10896 placement
 /**
  * 把作业状态改为 blocked 并写入需要的输入（已是同一需求返回 already，被其他需求占用返回 refused），同步给 rendezvous，返回之前的状态。
  */
@@ -771,7 +771,7 @@ async function markJobBlocked(jobDir, needs, detail, storageV5) {
     },
   };
 }
-//@ chunk-fd653dqq.js:10866-11092 placement
+//@ chunk-wyc3ddyy.js:10896-11122 placement
 async function restoreJobFromBlocked(jobDir, needs, patch, storageV5) {
   let jobState = await readJobState(jobDir, storageV5);
   if (!jobState || jobState.tempo !== "blocked" || jobState.needs !== needs) return;
@@ -793,7 +793,7 @@ async function restoreJobFromBlocked(jobDir, needs, patch, storageV5) {
     },
   });
 }
-//@ chunk-fd653dqq.js:11092-11261 placement
+//@ chunk-wyc3ddyy.js:11122-11291 placement
 async function markStartupDialogBlocked(detail, storageV5) {
   let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
   if (!CLAUDE_JOB_DIR || getRendezvousServerState().server?.wedgeDisarmed) return;
@@ -801,13 +801,13 @@ async function markStartupDialogBlocked(detail, storageV5) {
   let result = await markJobBlocked(CLAUDE_JOB_DIR, BLOCKED_STUCK_DIALOG_NEEDS, detail_2, storageV5);
   return result.kind === "wrote" ? result.prior : undefined;
 }
-//@ chunk-fd653dqq.js:11261-11338 placement
+//@ chunk-wyc3ddyy.js:11291-11368 placement
 async function clearStartupDialogBlocked(patch, storageV5) {
   let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
   if (!CLAUDE_JOB_DIR) return;
   await restoreJobFromBlocked(CLAUDE_JOB_DIR, BLOCKED_STUCK_DIALOG_NEEDS, patch, storageV5);
 }
-//@ chunk-fd653dqq.js:11338-11443 placement
+//@ chunk-wyc3ddyy.js:11368-11473 placement
 async function markCommandParkBlocked(needs, detail, storageV5) {
   let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
   if (!CLAUDE_JOB_DIR)
@@ -816,13 +816,13 @@ async function markCommandParkBlocked(needs, detail, storageV5) {
     };
   return withOwnJobStateWrite(() => markJobBlocked(CLAUDE_JOB_DIR, needs, detail, storageV5));
 }
-//@ chunk-fd653dqq.js:11443-11531 placement
+//@ chunk-wyc3ddyy.js:11473-11561 placement
 async function clearCommandParkBlocked(needs, patch, storageV5) {
   let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
   if (!CLAUDE_JOB_DIR) return;
   await withOwnJobStateWrite(() => restoreJobFromBlocked(CLAUDE_JOB_DIR, needs, patch, storageV5));
 }
-//@ chunk-fd653dqq.js:11531-12162 placement
+//@ chunk-wyc3ddyy.js:11561-12192 placement
 async function markReplayNoOp(storageV5) {
   let CLAUDE_JOB_DIR = env.CLAUDE_CODE_SESSION_KIND === "bg" ? env.CLAUDE_JOB_DIR : undefined;
   let jobDir = CLAUDE_JOB_DIR ?? getBgTakeover()?.jobDir;
@@ -880,7 +880,7 @@ async function markReplayNoOp(storageV5) {
     },
   });
 }
-//@ chunk-fd653dqq.js:12162-12318 placement
+//@ chunk-wyc3ddyy.js:12192-12348 placement
 async function recordBridgeSessionSeq(jobDir, seq, storageV5) {
   let jobState = await readJobState(jobDir, storageV5);
   if (!jobState || jobState.bridgeSessionSeq === seq) return;
@@ -896,12 +896,12 @@ async function recordBridgeSessionSeq(jobDir, seq, storageV5) {
 }
 export {
   sendRv,
+  disarmStartupWedgeWatchdog,
   markReplayNoOp,
   registerRendezvousResolver,
   registerRendezvousRunner,
   markCommandParkBlocked,
   clearCommandParkBlocked,
-  disarmStartupWedgeWatchdog,
   clearStartupDialogBlocked,
   markStartupDialogBlocked,
   startRendezvousServer,

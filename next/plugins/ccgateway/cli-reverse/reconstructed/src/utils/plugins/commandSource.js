@@ -3,9 +3,9 @@
  *
  * 插件命令源（command source）（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-21ppfwx8.js (56)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5hddsdew.js (56)
  * attribution: placement 56
  */
 import { spawn } from "child_process";
@@ -41,8 +41,8 @@ import {
 } from "../pathResolution.js";
 import { isNetworkMountRoot, isNetworkRelatedPath, foldCase_2 } from "../networkPaths.js";
 import { getPluginRegistry } from "./pluginLoadState.js";
-import { getClaudeConfigDir, isEnvTruthy, isEnvDefinedFalsy } from "../envUtils.js";
-import { uniq } from "../collections.js";
+import { getClaudeConfigDir } from "../markdownConfigLoader.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import {
   getOriginalCwd,
   getAdditionalDirectoriesForClaudeMd,
@@ -85,12 +85,13 @@ import { execFileNoThrowWithCwd } from "../execFileNoThrow.js";
 import { jsonParse } from "../slowOperations.js";
 import { isPlainObject } from "../isPlainObject.js";
 import { listSecretEnvNames } from "../settings/policyHelper/helperEnv.js";
+import { isEnvTruthy, isEnvDefinedFalsy } from "../envUtils.js";
 import { sanitizeEnvCredentials } from "../settings/policyHelper/helperExec.js";
 import { logError } from "../log.js";
 import { withDeadline } from "../sleep.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-21ppfwx8.js:1536-1597 placement
+//@ chunk-5hddsdew.js:1570-1631 placement
 /**
  * shouldRefreshCommandPlugins：命令源插件是否需要刷新。
  */
@@ -99,16 +100,16 @@ function shouldRefreshCommandPlugins() {
   if (isPluginsDirOnLocalDisk()) return false;
   return commandSourceRefreshEnabled();
 }
-//@ chunk-21ppfwx8.js:1597-1661 placement
+//@ chunk-5hddsdew.js:1631-1695 placement
 /**
  * commandSourceRefreshEnabled：命令源刷新开关。
  */
 function commandSourceRefreshEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_plugin_command_source_refresh", true);
 }
-//@ chunk-21ppfwx8.js:1661-1674 placement
+//@ chunk-5hddsdew.js:1695-1708 placement
 var COMMAND_SOURCE_FETCH_TIMEOUT_MS = 30000;
-//@ chunk-21ppfwx8.js:1674-1979 placement
+//@ chunk-5hddsdew.js:1708-2013 placement
 /**
  * 判断插件目录是否在可信本地文件系统上（Windows 用 SLi，其他平台 yl）；否则对项目插件目录做 realpath 检查并缓存， 配置目录在其下返回 false，最后检查与已知可疑根（be()）是否互相包含。命令源安装、更新前调用。
  */
@@ -145,17 +146,17 @@ function isPluginsDirOnLocalDisk() {
       }),
   );
 }
-//@ chunk-21ppfwx8.js:1979-2070 placement
+//@ chunk-5hddsdew.js:2013-2104 placement
 function trustedLocalRoots() {
-  return uniq(
+  return normalizeCaseForComparison_2(
     [getOriginalCwd(), ...getAdditionalDirectoriesForClaudeMd()].flatMap((dir) =>
       [dir, findGitRoot(dir), noUncachedRoot(dir)].filter((rootCandidate) => rootCandidate !== null),
     ),
   );
 }
-//@ chunk-21ppfwx8.js:2401-2478 placement
+//@ chunk-5hddsdew.js:2435-2512 placement
 var COMMAND_SOURCE_KINDS = ["local", "npm", "github", "git", "subdir", "archive", "command", "unknown"];
-//@ chunk-21ppfwx8.js:2478-2590 placement
+//@ chunk-5hddsdew.js:2512-2624 placement
 /**
  * temp_<名>_<时间戳>_<随机串> 临时缓存目录名。
  */
@@ -166,7 +167,7 @@ function makeTempCachePathName(temporaryCacheNameForPlugin) {
     .padEnd(1, "0");
   return `${TEMP}${temporaryCacheNameForPlugin}_${Date.now()}_${padded}`;
 }
-//@ chunk-21ppfwx8.js:2590-2722 placement
+//@ chunk-5hddsdew.js:2624-2756 placement
 /**
  * TEMP_CACHE_DIR_MAX_RANDOM：临时缓存目录名随机段长度；TEMP_CACHE_LINK_SUFFIX：临时缓存目录的 link 后缀；TEMP_CACHE_CLONE_SUFFIX：临时缓存目录的 clone 后缀（同一声明共 3 个绑定）。
  */
@@ -175,7 +176,7 @@ var TEMP_CACHE_DIR_MAX_RANDOM;
 var TEMP_CACHE_LINK_SUFFIX;
 var TEMP_CACHE_CLONE_SUFFIX;
 var regExp;
-deferInit("chunk-21ppfwx8.js:2590", () => {
+deferInit("chunk-5hddsdew.js:2624", () => {
   TEMP = "temp_";
   TEMP_CACHE_DIR_MAX_RANDOM = 6;
   TEMP_CACHE_LINK_SUFFIX = "_x";
@@ -184,20 +185,20 @@ deferInit("chunk-21ppfwx8.js:2590", () => {
     `^${TEMP}(?:${COMMAND_SOURCE_KINDS.join("|")})_(\\d{10,})_[a-z0-9]{1,${TEMP_CACHE_DIR_MAX_RANDOM}}(?:${TEMP_CACHE_LINK_SUFFIX}|\\${TEMP_CACHE_CLONE_SUFFIX})?$`,
   );
 });
-//@ chunk-21ppfwx8.js:2722-2761 placement
+//@ chunk-5hddsdew.js:2756-2795 placement
 function linkingTempName(sourcePath, pid) {
   return `${sourcePath}${LINKING_DIR_PREFIX}${pid}`;
 }
-//@ chunk-21ppfwx8.js:2761-2813 placement
+//@ chunk-5hddsdew.js:2795-2847 placement
 var LINKING_DIR_PREFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var regExp_2;
-deferInit("chunk-21ppfwx8.js:2761", () => {
+deferInit("chunk-5hddsdew.js:2795", () => {
   LINKING_DIR_PREFIX = ".linking-";
   regExp_2 = new RegExp(`\\${LINKING_DIR_PREFIX}(\\d+)$`);
 });
-//@ chunk-21ppfwx8.js:2852-2864 placement
+//@ chunk-5hddsdew.js:2886-2898 placement
 var COMMAND_SOURCE_MAX_OUTPUT = 2000;
-//@ chunk-21ppfwx8.js:2864-4508 placement
+//@ chunk-5hddsdew.js:2898-4542 placement
 function spawnCommandSource(command, { cwd, env, timeoutMs, maxStdoutBytes, maxStderrBytes }) {
   if (isDisklessSession())
     return Promise.resolve({
@@ -327,7 +328,7 @@ function spawnCommandSource(command, { cwd, env, timeoutMs, maxStdoutBytes, maxS
     });
   });
 }
-//@ chunk-21ppfwx8.js:4586-4837 placement
+//@ chunk-5hddsdew.js:4620-4871 placement
 /**
  * 插件布局常量：.claude-plugin 目录、其中的 plugin.json 与 marketplace.json 相对路径、组件目录（commands/skills/agents/…）、 根目录识别文件（SKILL.md、.mcp.json、.lsp.json）与它们的合集。
  */
@@ -338,7 +339,7 @@ var MARKETPLACE_MANIFEST_PATH;
 var PLUGIN_COMPONENT_DIRS;
 var PLUGIN_ROOT_MARKER_FILES;
 var PLUGIN_ROOT_MARKERS;
-deferInit("chunk-21ppfwx8.js:4586", () => {
+deferInit("chunk-5hddsdew.js:4620", () => {
   PLUGIN_MANIFEST_DIR = ".claude-plugin";
   PLUGIN_MANIFEST_PATH = join(PLUGIN_MANIFEST_DIR, "plugin.json");
   PLUGIN_JSON = "plugin.json";
@@ -356,7 +357,7 @@ deferInit("chunk-21ppfwx8.js:4586", () => {
   PLUGIN_ROOT_MARKER_FILES = ["SKILL.md", ".mcp.json", ".lsp.json"];
   PLUGIN_ROOT_MARKERS = [PLUGIN_MANIFEST_DIR, ...PLUGIN_COMPONENT_DIRS, ...PLUGIN_ROOT_MARKER_FILES];
 });
-//@ chunk-21ppfwx8.js:4837-4909 placement
+//@ chunk-5hddsdew.js:4871-4943 placement
 /**
  * pluginRootHasMarker：目录下是否有插件根标记。
  */
@@ -365,7 +366,7 @@ async function pluginRootHasMarker(pluginRoot) {
     .filter((entryName) => !isJunkEntryName(entryName))
     .some(isPluginRootMarker);
 }
-//@ chunk-21ppfwx8.js:4909-5199 placement
+//@ chunk-5hddsdew.js:4943-5233 placement
 /**
  * 定位解压后的插件根：本层有 .claude-plugin 就返回本层；只有一个子目录且其中有 .claude-plugin（或像插件根）则返回子目录。
  */
@@ -383,21 +384,21 @@ async function findPluginRootInExtracted(extractedDir) {
   }
   return extractedDir;
 }
-//@ chunk-21ppfwx8.js:5199-5238 placement
+//@ chunk-5hddsdew.js:5233-5272 placement
 /**
  * isPluginRootMarker：是否为插件根标记文件名。
  */
 function isPluginRootMarker(name) {
   return PLUGIN_ROOT_MARKERS.includes(name);
 }
-//@ chunk-21ppfwx8.js:5238-5277 placement
+//@ chunk-5hddsdew.js:5272-5311 placement
 /**
  * isPluginComponentDir：是否为插件组件目录名。
  */
 function isPluginComponentDir(dirName) {
   return PLUGIN_COMPONENT_DIRS.includes(dirName);
 }
-//@ chunk-21ppfwx8.js:5277-5340 placement
+//@ chunk-5hddsdew.js:5311-5374 placement
 async function pathExists(targetPath) {
   try {
     await stat(targetPath);
@@ -406,11 +407,11 @@ async function pathExists(targetPath) {
     return false;
   }
 }
-//@ chunk-21ppfwx8.js:5340-5394 placement
+//@ chunk-5hddsdew.js:5374-5428 placement
 function isJunkEntryName(entryName) {
   return entryName === "__MACOSX" || entryName === ".DS_Store";
 }
-//@ chunk-21ppfwx8.js:5394-5467 placement
+//@ chunk-5hddsdew.js:5428-5501 placement
 var COMMAND_SOURCE_KILL_GRACE_MS; // deferred: uses PLUGIN_MANIFEST_DIR of its import cycle while loading; runs once the cycle is complete
 var COMMAND_SOURCE_MAX_FILE_BYTES;
 var COMMAND_SOURCE_MAX_TOTAL_BYTES;
@@ -418,7 +419,7 @@ var COMMAND_SOURCE_MAX_ENTRIES;
 var COMMAND_SOURCE_MAX_SCAN_BYTES;
 var MAX_COMMAND_SOURCE_NAME_LENGTH;
 var PLUGIN_ROOT_MARKER_SET;
-deferInit("chunk-21ppfwx8.js:5394", () => {
+deferInit("chunk-5hddsdew.js:5428", () => {
   COMMAND_SOURCE_KILL_GRACE_MS = 60;
   COMMAND_SOURCE_MAX_FILE_BYTES = 65536;
   COMMAND_SOURCE_MAX_TOTAL_BYTES = 65536;
@@ -427,7 +428,7 @@ deferInit("chunk-21ppfwx8.js:5394", () => {
   MAX_COMMAND_SOURCE_NAME_LENGTH = 20000;
   PLUGIN_ROOT_MARKER_SET = new Set(PLUGIN_ROOT_MARKERS);
 });
-//@ chunk-21ppfwx8.js:5467-8893 placement
+//@ chunk-5hddsdew.js:5501-8927 placement
 /**
  * 运行插件的命令源（command source）生成插件目录，带超时
  */
@@ -543,7 +544,7 @@ async function runPluginCommandSource(commandSourceConfig) {
   logForDebugging(`Plugin command source: resolved plugin directory ${resolvedPath}`);
   return resolvedPath;
 }
-//@ chunk-21ppfwx8.js:8893-9573 placement
+//@ chunk-5hddsdew.js:8927-9607 placement
 async function checkPluginDirSize(root, symlinks, fileSizes) {
   let files = [];
   let totalBytes = 0;
@@ -581,7 +582,7 @@ async function checkPluginDirSize(root, symlinks, fileSizes) {
   symlinks?.sort();
   return files.sort();
 }
-//@ chunk-21ppfwx8.js:9573-10063 placement
+//@ chunk-5hddsdew.js:9607-10097 placement
 /**
  * 计算插件目录内容摘要：按相对路径与大小逐个文件流式哈希（不足部分补零），再加入符号链接及其目标，返回 hex。
  */
@@ -617,20 +618,20 @@ async function hashPluginDirectoryContents(root) {
   }
   return hash.digest("hex");
 }
-//@ chunk-21ppfwx8.js:10063-10194 placement
+//@ chunk-5hddsdew.js:10097-10228 placement
 /**
  * Windows 不支持 mode link 的提示。
  */
 var LINK_MODE_UNSUPPORTED_ON_WINDOWS_MESSAGE =
   'This plugin source uses mode "link", which is not supported on Windows yet; the marketplace can use mode "copy" instead.';
-//@ chunk-21ppfwx8.js:10194-10263 placement
+//@ chunk-5hddsdew.js:10228-10297 placement
 /**
  * describeCommandOutputMode：说明 link/copy 模式对输出目录的处理。
  */
 function describeCommandOutputMode(source) {
   return source.mode === "link" ? `${source.command}${PLUGIN_LINK_HEADER}` : source.command;
 }
-//@ chunk-21ppfwx8.js:10263-10444 placement
+//@ chunk-5hddsdew.js:10297-10478 placement
 /**
  * 说明 link/copy 两种模式对输出目录的处理。
  */
@@ -639,17 +640,17 @@ function describeCommandSourceMode(source) {
     ? 'mode "link": its output directory is used in place (linked, not copied)'
     : 'mode "copy": its output directory is copied into the plugin cache';
 }
-//@ chunk-21ppfwx8.js:10444-10464 placement
+//@ chunk-5hddsdew.js:10478-10498 placement
 /**
  * CommandSourceError：命令源错误类。
  */
 let CommandSourceError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-21ppfwx8.js:10444", () => {
+deferInit("chunk-5hddsdew.js:10478", () => {
   CommandSourceError = class CommandSourceError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {};
 });
-//@ chunk-21ppfwx8.js:10464-12145 placement
+//@ chunk-5hddsdew.js:10498-12179 placement
 function describePluginSourceMode(source, consent) {
   if (consent && consent.kind !== "none" && consent.command === describeCommandOutputMode(source)) return;
   let commandLabel =
@@ -698,7 +699,7 @@ function describePluginSourceMode(source, consent) {
     "plugin command source without consent",
   );
 }
-//@ chunk-21ppfwx8.js:12145-12605 placement
+//@ chunk-5hddsdew.js:12179-12639 placement
 /**
  * 在 n 下为源目录 e 的每一项创建符号链接（目标先经安全检查），写入 PLUGIN_LINK_FILE 标记（wx 独占）， 返回由源路径与各链接名/目标计算的 sha256。
  */
@@ -733,7 +734,7 @@ async function createLinkFarm(producerDir, farmDir) {
   }
   return hash.digest("hex");
 }
-//@ chunk-21ppfwx8.js:12605-13459 placement
+//@ chunk-5hddsdew.js:12639-13493 placement
 async function checkPluginEntryLinks(producerDir, entries) {
   let links = [];
   for (let { name: entryName, path } of entries) {
@@ -772,7 +773,7 @@ async function checkPluginEntryLinks(producerDir, entries) {
   }
   return links;
 }
-//@ chunk-21ppfwx8.js:13459-14892 placement
+//@ chunk-5hddsdew.js:13493-14926 placement
 async function checkRelinkTarget(sourcePath, cachePath) {
   let sourceDir = resolve(getOriginalCwd(), sourcePath);
   let cacheDir = resolve(getOriginalCwd(), cachePath);
@@ -847,7 +848,7 @@ async function checkRelinkTarget(sourcePath, cachePath) {
     throw error;
   }
 }
-//@ chunk-21ppfwx8.js:14892-14999 placement
+//@ chunk-5hddsdew.js:14926-15033 placement
 /**
  * 删掉缓存目录中应忽略的项（可保留 .git）。
  */
@@ -856,19 +857,19 @@ async function removeIgnoredEntries(dir, { keepGit }) {
     if (isPristineLinkFarm(entryName) && !(keepGit && foldCase_2(entryName) === ".git"))
       await removeDirectoryTreeNoFollow(join(dir, entryName));
 }
-//@ chunk-21ppfwx8.js:14999-15032 placement
+//@ chunk-5hddsdew.js:15033-15066 placement
 /**
  * isPristineLinkFarm：链接农场是否只含缓存元数据。
  */
 function isPristineLinkFarm(entryName) {
   return matchesSegmentOrTempName(entryName, LINK_FARM_META_NAMES);
 }
-//@ chunk-21ppfwx8.js:15032-15064 placement
+//@ chunk-5hddsdew.js:15066-15098 placement
 var LINK_FARM_META_NAMES; // deferred: uses CACHE_META_FILES (./cacheUtils.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-21ppfwx8.js:15032", () => {
+deferInit("chunk-5hddsdew.js:15066", () => {
   LINK_FARM_META_NAMES = new Set([...CACHE_META_FILES, ".git"]);
 });
-//@ chunk-21ppfwx8.js:15064-15179 placement
+//@ chunk-5hddsdew.js:15098-15213 placement
 /**
  * 链接农场是否仍是 live（无法判定时按参数决定）。
  */
@@ -876,7 +877,7 @@ async function isLiveLinkFarm(farmDir, { unclassifiableIsFarm = false } = {}) {
   let classification = await classifyLinkFarm(farmDir);
   return classification === "live" || (classification === "unclassifiable" && unclassifiableIsFarm);
 }
-//@ chunk-21ppfwx8.js:15179-15632 placement
+//@ chunk-5hddsdew.js:15213-15666 placement
 /**
  * 读取链接标记并校验；目录中存在指向绝对路径的符号链接则为 live，否则 not-live；读取错误按 errno 归为 not-live 或 unclassifiable。
  */
@@ -912,21 +913,21 @@ async function classifyLinkFarm(farmDir) {
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "not-live" : "unclassifiable";
   }
 }
-//@ chunk-21ppfwx8.js:15632-15697 placement
+//@ chunk-5hddsdew.js:15666-15731 placement
 var IGNORED_CACHE_ENTRIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-21ppfwx8.js:15632", () => {
+deferInit("chunk-5hddsdew.js:15666", () => {
   IGNORED_CACHE_ENTRIES = new Set([".ds_store", "thumbs.db", "desktop.ini", "icon\r"]);
 });
-//@ chunk-21ppfwx8.js:15697-15761 placement
+//@ chunk-5hddsdew.js:15731-15795 placement
 function isIgnoredCacheEntry(name) {
   let foldedName = foldCase_2(name);
   return IGNORED_CACHE_ENTRIES.has(foldedName) || foldedName.startsWith("._");
 }
-//@ chunk-21ppfwx8.js:15761-15794 placement
+//@ chunk-5hddsdew.js:15795-15828 placement
 function isCacheMetaFile(name) {
   return CACHE_META_FILES.has(name);
 }
-//@ chunk-21ppfwx8.js:15794-16232 placement
+//@ chunk-5hddsdew.js:15828-16266 placement
 /**
  * 检查缓存目录 e：跳过忽略项与缓存元数据文件，若有普通文件/目录或指向 n 之外（或可疑）路径的符号链接则返回 true。
  */
@@ -965,7 +966,7 @@ async function hasEntriesOutsideTarget(farmDir, targetDir) {
     return errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR";
   }
 }
-//@ chunk-21ppfwx8.js:16232-16329 placement
+//@ chunk-5hddsdew.js:16266-16363 placement
 /**
  * readLinkFarmTarget：读取链接农场标记的目标。
  */
@@ -977,9 +978,9 @@ async function readLinkFarmTarget(farmDir) {
     return;
   }
 }
-//@ chunk-21ppfwx8.js:16329-16342 placement
+//@ chunk-5hddsdew.js:16363-16376 placement
 var MAX_LINK_FARM_MARKER_BYTES = 16384;
-//@ chunk-21ppfwx8.js:16342-16574 placement
+//@ chunk-5hddsdew.js:16376-16608 placement
 async function readLinkFarmMarker(markerPath) {
   let markerStat = await lstat(markerPath);
   if (!markerStat.isFile() || markerStat.size > MAX_LINK_FARM_MARKER_BYTES)
@@ -989,21 +990,21 @@ async function readLinkFarmMarker(markerPath) {
     );
   return readFile(markerPath, "utf8");
 }
-//@ chunk-21ppfwx8.js:16574-16648 placement
+//@ chunk-5hddsdew.js:16608-16682 placement (2.1.88 match: extractBashToolsFromMessages, 1)
 /**
  * commandSourceSpecOf：取出 command 来源配置。
  */
-function commandSourceSpecOf(source) {
-  return typeof source === "object" && source.source === "command" ? source : undefined;
+function commandSourceSpecOf(messages) {
+  return typeof messages === "object" && messages.source === "command" ? messages : undefined;
 }
-//@ chunk-21ppfwx8.js:16648-16693 placement
+//@ chunk-5hddsdew.js:16682-16727 placement
 /**
  * isLinkModeCommandSource：命令源是否为 link 模式。
  */
 function isLinkModeCommandSource(source) {
   return commandSourceSpecOf(source)?.mode === "link";
 }
-//@ chunk-21ppfwx8.js:16693-17682 placement
+//@ chunk-5hddsdew.js:16727-17716 placement
 async function holdCommandSourceForOrg(source, targetPath, materialize, consent) {
   if (isHttpMcpServeInvocation())
     throw new CommandSourceError(
@@ -1053,10 +1054,10 @@ async function holdCommandSourceForOrg(source, targetPath, materialize, consent)
     };
   });
 }
-//@ chunk-21ppfwx8.js:17712-17730 placement
+//@ chunk-5hddsdew.js:17746-17764 placement
 var TRUST_DIALOG_TIMEOUT_MS = 1e4;
 var TRUST_DIALOG_LONG_TIMEOUT_MS = 1e6;
-//@ chunk-21ppfwx8.js:17730-17805 placement
+//@ chunk-5hddsdew.js:17764-17839 placement
 function isWorkspaceTrustedForCommandSource(repoResidentOrigin) {
   if (isWorkspacePersistedTrusted(repoResidentOrigin)) return true;
   return (
@@ -1065,7 +1066,7 @@ function isWorkspaceTrustedForCommandSource(repoResidentOrigin) {
     getHomeTrustDialogAccepted()
   );
 }
-//@ chunk-21ppfwx8.js:17805-18559 placement
+//@ chunk-5hddsdew.js:17839-18593 placement
 async function classifyCommandSourceFailure(options) {
   if (options.isRepoResidentConfig && !isWorkspaceTrustedForCommandSource(options.repoResidentOrigin))
     return {
@@ -1137,7 +1138,7 @@ async function classifyCommandSourceFailure(options) {
     headers,
   };
 }
-//@ chunk-21ppfwx8.js:18559-19129 placement
+//@ chunk-5hddsdew.js:18593-19163 placement
 /**
  * 构造命令源构建命令的环境：不擦除时直接合并 e.env；擦除时删掉凭证类变量，收集其值， 并把 e.env 中出现的凭证值替换为 REDACTED（等于 cwd 的值除外）。
  */
@@ -1178,7 +1179,7 @@ function buildCommandSourceEnv(options) {
     ...extraEnv,
   };
 }
-//@ chunk-21ppfwx8.js:19129-19176 placement
+//@ chunk-5hddsdew.js:19163-19210 placement
 /**
  * organizationAnswerState：等待组织答复的共享状态。
  */
@@ -1187,7 +1188,7 @@ var organizationAnswerState = {
   ask: undefined,
   fetches: undefined,
 };
-//@ chunk-21ppfwx8.js:19176-19371 placement
+//@ chunk-5hddsdew.js:19210-19405 placement
 /**
  * 等待托管设置的组织答复：先等 zW.wait，状态仍为 unanswered 时调用 zW.ask；进行中的 Promise 共享，结束后清空。
  */
@@ -1202,17 +1203,17 @@ function askOrganizationOnce() {
     });
   return organizationAsk.asking;
 }
-//@ chunk-21ppfwx8.js:19371-19385 placement
+//@ chunk-5hddsdew.js:19405-19419 placement
 /**
  * ORGANIZATION_ANSWER_TIMEOUT_MS：等待组织答复超时。
  */
 var ORGANIZATION_ANSWER_TIMEOUT_MS = 30000;
-//@ chunk-21ppfwx8.js:19385-19398 placement
+//@ chunk-5hddsdew.js:19419-19432 placement
 /**
  * ORGANIZATION_ANSWER_POLL_MS：组织答复轮询间隔。
  */
 var ORGANIZATION_ANSWER_POLL_MS = 3000;
-//@ chunk-21ppfwx8.js:19398-19505 placement
+//@ chunk-5hddsdew.js:19432-19539 placement
 /**
  * 带截止时间等待组织答复（共享）。
  */
@@ -1225,7 +1226,7 @@ function waitForOrganizationAnswer(timeoutMs) {
   ).then(() => {});
   return organizationAsk.answerWait;
 }
-//@ chunk-21ppfwx8.js:19505-19578 placement
+//@ chunk-5hddsdew.js:19539-19612 placement
 /**
  * MAX_SPILL_BYTES：溢出文件体积上限；MAX_PLUGIN_ARCHIVE_BYTES：插件归档体积上限；COMMAND_SOURCE_DEFAULT_TIMEOUT_MS：命令源默认超时（同一声明共 3 个绑定）。
  */
@@ -1237,43 +1238,43 @@ export {
   ORGANIZATION_ANSWER_TIMEOUT_MS,
   askOrganizationOnce,
   organizationAnswerState,
-  shouldRefreshCommandPlugins,
-  describeCommandOutputMode,
   CommandSourceError,
-  LINK_MODE_UNSUPPORTED_ON_WINDOWS_MESSAGE,
-  isPluginsDirOnLocalDisk,
-  describeCommandSourceMode,
-  commandSourceSpecOf,
-  classifyCommandSourceFailure,
-  PLUGIN_JSON,
-  isLinkModeCommandSource,
-  isLiveLinkFarm,
-  makeTempCachePathName,
-  TEMP_CACHE_LINK_SUFFIX,
-  hasEntriesOutsideTarget,
-  CLAUDE_CODE_PLUGIN_MANAGER,
-  COMMAND_SOURCE_DEFAULT_TIMEOUT_MS,
-  MAX_SPILL_BYTES,
-  waitForOrganizationAnswer,
-  commandSourceRefreshEnabled,
   classifyLinkFarm,
   readLinkFarmTarget,
+  hasEntriesOutsideTarget,
   isPristineLinkFarm,
+  isLinkModeCommandSource,
   checkRelinkTarget,
   TEMP_CACHE_CLONE_SUFFIX,
+  makeTempCachePathName,
+  TEMP_CACHE_LINK_SUFFIX,
   holdCommandSourceForOrg,
+  PLUGIN_JSON,
   removeIgnoredEntries,
   findPluginRootInExtracted,
   pluginRootHasMarker,
   PLUGIN_MANIFEST_PATH,
+  commandSourceSpecOf,
+  isLiveLinkFarm,
+  shouldRefreshCommandPlugins,
   MARKETPLACE_MANIFEST_PATH,
   PLUGIN_ROOT_MARKERS,
-  ORGANIZATION_ANSWER_POLL_MS,
+  MAX_SPILL_BYTES,
+  describeCommandOutputMode,
+  waitForOrganizationAnswer,
+  CLAUDE_CODE_PLUGIN_MANAGER,
+  COMMAND_SOURCE_DEFAULT_TIMEOUT_MS,
+  commandSourceRefreshEnabled,
+  classifyCommandSourceFailure,
+  regExp,
+  regExp_2,
   MAX_PLUGIN_ARCHIVE_BYTES,
   PLUGIN_MANIFEST_DIR,
   isPluginRootMarker,
   isPluginComponentDir,
-  regExp,
-  regExp_2,
+  ORGANIZATION_ANSWER_POLL_MS,
   PLUGIN_COMPONENT_DIRS,
+  isPluginsDirOnLocalDisk,
+  LINK_MODE_UNSUPPORTED_ON_WINDOWS_MESSAGE,
+  describeCommandSourceMode,
 };

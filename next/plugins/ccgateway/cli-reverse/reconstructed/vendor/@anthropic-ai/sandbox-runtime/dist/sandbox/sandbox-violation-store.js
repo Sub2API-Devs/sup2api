@@ -1,13 +1,13 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/sandbox-violation-store.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (8)
+ * pieces: chunk-qg41pqt6.js (8)
  * attribution: esm-fingerprint 6, esm-layout 2
  */
 import { encodeSandboxedCommand, SANDBOXED_COMMAND_KEY_LENGTH } from "./sandbox-utils.js";
 
-//@ chunk-fq0cr76a.js:653509-654298 esm-fingerprint
+//@ chunk-qg41pqt6.js:654016-654805 esm-fingerprint
 class SandboxViolationStore {
   constructor() {
     this.violations = [];
@@ -54,7 +54,7 @@ class SandboxViolationStore {
     this.listeners.forEach((listener) => listener(violations));
   }
 }
-//@ chunk-fq0cr76a.js:654298-654510 esm-fingerprint
+//@ chunk-qg41pqt6.js:654805-655017 esm-fingerprint
 function shouldIgnoreViolation(line, command, ignoreViolations) {
   if (!ignoreViolations) return false;
   if ((ignoreViolations["*"] ?? []).some((p) => line.includes(p))) return true;
@@ -63,24 +63,24 @@ function shouldIgnoreViolation(line, command, ignoreViolations) {
     if (pattern !== "*" && command.includes(pattern) && patterns.some((p) => line.includes(p))) return true;
   return false;
 }
-//@ chunk-fq0cr76a.js:654510-654644 esm-fingerprint
+//@ chunk-qg41pqt6.js:655017-655151 esm-fingerprint
 var DISPLAY_UNSAFE_CHARACTERS =
   /[\x00-\x1f\x7f-\x9f\u00ad\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\u{e0000}-\u{e007f}]+/gu;
-//@ chunk-fq0cr76a.js:654644-654711 esm-fingerprint
+//@ chunk-qg41pqt6.js:655151-655218 esm-fingerprint
 function sanitizeViolationText(text) {
   return text.replace(DISPLAY_UNSAFE_CHARACTERS, " ").replace(/[<>]/g, "").trim();
 }
-//@ chunk-fq0cr76a.js:654711-654747 esm-layout
+//@ chunk-qg41pqt6.js:655218-655254 esm-layout
 function dedupeFingerprint(decodedKey) {
   return cutBetweenCharacters(sanitizeViolationText(decodedKey), SANDBOXED_COMMAND_KEY_LENGTH);
 }
-//@ chunk-fq0cr76a.js:654747-654758 esm-layout
+//@ chunk-qg41pqt6.js:655254-655265 esm-layout
 var MAX_DENIAL_REASON_LENGTH = 500;
-//@ chunk-fq0cr76a.js:654758-654803 esm-fingerprint
+//@ chunk-qg41pqt6.js:655265-655310 esm-fingerprint
 function sanitizeDenialReason(reason) {
   return cutBetweenCharacters(sanitizeViolationText(reason), MAX_DENIAL_REASON_LENGTH).trimEnd();
 }
-//@ chunk-fq0cr76a.js:654803-654888 esm-fingerprint
+//@ chunk-qg41pqt6.js:655310-655395 esm-fingerprint
 function cutBetweenCharacters(text, length) {
   let cut = text.slice(0, length);
   return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;

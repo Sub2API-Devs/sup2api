@@ -3,13 +3,13 @@
  *
  * 指令文件类型枚举：User、Project、Local、Managed、AutoMem。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/memory/types.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-e6aww6q8.js:111514-111569 fingerprint (2.1.88 match: MEMORY_TYPE_VALUES, 1)
+//@ chunk-5xgkngpb.js:114599-114654 fingerprint (2.1.88 match: MEMORY_TYPE_VALUES, 1)
 /**
  * 指令文件类型：User、Project、Local、Managed、AutoMem。
  */

@@ -3,19 +3,19 @@
  *
  * AppState 选择器：当前查看的队友任务、输入框指向的代理（leader/viewed/named_agent）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/state/selectors.ts
- * pieces: chunk-0e8j1zzj.js (3), chunk-18hwfzwa.js (1)
+ * pieces: chunk-8prszgkd.js (3), chunk-czq1j3j2.js (1)
  * attribution: shared-adjacent 1, fingerprint 2, placement 1
  */
 import { viewedTaskParts } from "./teammateViewHelpers.js";
 import { describeAgentTask } from "../plugins/functionHooks/sessionApi.js";
 
-//@ chunk-0e8j1zzj.js:11902-11968 shared-adjacent (2.1.88 match: getViewedTeammateTask, 0.76)
+//@ chunk-8prszgkd.js:12168-12234 shared-adjacent (2.1.88 match: getViewedTeammateTask, 0.762)
 function getViewedTeammateTask_2(appState) {
   return viewedTaskParts(appState.viewingAgentTaskId, appState.tasks).teammate;
 }
-//@ chunk-0e8j1zzj.js:11968-12141 fingerprint (2.1.88 match: getActiveAgentForInput, 0.822)
+//@ chunk-8prszgkd.js:12234-12407 fingerprint (2.1.88 match: getActiveAgentForInput, 0.823)
 /**
  * 当前输入框指向的代理：leader（主线程）、viewed（正在查看的队友）或 named_agent。
  */
@@ -35,7 +35,7 @@ function getActiveAgentForInput(appState) {
     type: "leader",
   };
 }
-//@ chunk-0e8j1zzj.js:12141-12356 placement
+//@ chunk-8prszgkd.js:12407-12622 placement
 function getActiveAgentName(appState) {
   let activeAgentForInput = getActiveAgentForInput(appState);
   switch (activeAgentForInput.type) {
@@ -50,7 +50,7 @@ function getActiveAgentName(appState) {
     }
   }
 }
-//@ chunk-18hwfzwa.js:481398-481499 fingerprint (2.1.88 match: getViewedTeammateTask, 1)
+//@ chunk-czq1j3j2.js:507874-507975 fingerprint (2.1.88 match: getViewedTeammateTask, 1)
 function getViewedTeammateTask(appState) {
   let viewingAgentTaskId = appState.viewingAgentTaskId;
   let task = viewingAgentTaskId === undefined ? undefined : appState.tasks[viewingAgentTaskId];

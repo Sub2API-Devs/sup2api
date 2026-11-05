@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。“本周功能”活动与赠送额度资格。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0ba63vr9.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a76zrsb5.js (15)
  * attribution: placement 15
  */
 import { create_2, create, create_6, create_15, create_26 } from "../../../vendor/zod/lib/index.mjs";
@@ -32,7 +32,7 @@ import { apiClient } from "../routines/routinesApi.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0ba63vr9.js:511-1331 placement
+//@ chunk-a76zrsb5.js:511-1331 placement
 /**
  * Feature of the Week 活动配置：开关名、命令与时间窗、标题/说明/提示文案、公告行与领取期限的 zod schema。
  */
@@ -42,7 +42,7 @@ var FOTW_DAY_MS;
 var isoTimestampSchema;
 var optionalNonEmptyString;
 var fotwCampaignSchema;
-deferInit("chunk-0ba63vr9.js:511", () => {
+deferInit("chunk-a76zrsb5.js:511", () => {
   FOTW_EXPERIMENT_FLAG = "tengu_lilac_loom";
   FEATURE_OF_THE_WEEK = "feature_of_the_week";
   FOTW_DAY_MS = 86400000;
@@ -92,21 +92,21 @@ deferInit("chunk-0ba63vr9.js:511", () => {
     }),
   );
 });
-//@ chunk-0ba63vr9.js:1331-1391 placement
+//@ chunk-a76zrsb5.js:1331-1391 placement
 class FotwState {
   parsedCampaign = null;
   inFlightEligibilityRefresh = null;
 }
-//@ chunk-0ba63vr9.js:1391-1414 placement
+//@ chunk-a76zrsb5.js:1391-1414 placement
 var fotwStateSlot; // deferred: uses FotwState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0ba63vr9.js:1391", () => {
+deferInit("chunk-a76zrsb5.js:1391", () => {
   fotwStateSlot = new HostScoped(() => new FotwState());
 });
-//@ chunk-0ba63vr9.js:1414-1449 placement
+//@ chunk-a76zrsb5.js:1414-1449 placement
 function fotwState() {
   return fotwStateSlot.of(getRootSession().host);
 }
-//@ chunk-0ba63vr9.js:1449-2056 placement
+//@ chunk-a76zrsb5.js:1449-2056 placement
 function parsePromoCampaign() {
   let dynamicConfig_CACHED_MAY_BE_STALE = getDynamicConfig_CACHED_MAY_BE_STALE(FOTW_EXPERIMENT_FLAG, null);
   if (dynamicConfig_CACHED_MAY_BE_STALE === null || dynamicConfig_CACHED_MAY_BE_STALE === undefined)
@@ -138,14 +138,14 @@ function parsePromoCampaign() {
   if (now > state.parsedCampaign.endsAtMs) return null;
   return state.parsedCampaign.campaign;
 }
-//@ chunk-0ba63vr9.js:2056-2099 placement
+//@ chunk-a76zrsb5.js:2056-2099 placement
 /**
  * 导出函数 `promoCommand`：返回 parsePromoCampaign()?.command ?? null。
  */
 function promoCommand() {
   return parsePromoCampaign()?.command ?? null;
 }
-//@ chunk-0ba63vr9.js:2099-2337 placement
+//@ chunk-a76zrsb5.js:2099-2337 placement
 function promoAudience(campaign) {
   if (!isClaudeAISubscriber()) return "excluded";
   let subscriptionType = getSubscriptionType();
@@ -158,7 +158,7 @@ function promoAudience(campaign) {
   }
   return "excluded";
 }
-//@ chunk-0ba63vr9.js:2337-2552 placement
+//@ chunk-a76zrsb5.js:2337-2552 placement
 function activePromo() {
   let campaign = parsePromoCampaign();
   if (!campaign) return null;
@@ -173,7 +173,7 @@ function activePromo() {
     audience,
   };
 }
-//@ chunk-0ba63vr9.js:2552-2603 placement
+//@ chunk-a76zrsb5.js:2552-2603 placement
 /**
  * 导出函数 `isPromoCommand`：参数 e，返回 n !== null && e === n。
  */
@@ -181,14 +181,14 @@ function isPromoCommand(command) {
   let commandName = promoCommand();
   return commandName !== null && command === commandName;
 }
-//@ chunk-0ba63vr9.js:2603-2640 placement
+//@ chunk-a76zrsb5.js:2603-2640 placement
 /**
  * 导出函数 `canClaimPromoCreditFor`：参数 e，返回 jDr(e) && canClaimPromoCredit()。
  */
 function canClaimPromoCreditFor(command) {
   return isPromoCommand(command) && canClaimPromoCredit();
 }
-//@ chunk-0ba63vr9.js:2640-2814 placement
+//@ chunk-a76zrsb5.js:2640-2814 placement
 /**
  * 当前组织作为领取方（claimant）且活动配置了命令时，判断缓存的超额额度赠送是否符合条件且仍可领取。
  */
@@ -203,7 +203,7 @@ function canClaimPromoCredit() {
     cachedOverageCreditGrant.available
   );
 }
-//@ chunk-0ba63vr9.js:2814-2946 placement
+//@ chunk-a76zrsb5.js:2814-2946 placement
 /**
  * 当前组织作为观看方（viewer）且活动配置了命令时，判断升级推广是否尚未完成，用于决定是否展示推广。
  */
@@ -213,7 +213,7 @@ function shouldShowPromoUpsell() {
   if (!promo.campaign.command) return false;
   return !isUpsellFulfilled(promo.orgId, promo.campaign.feature);
 }
-//@ chunk-0ba63vr9.js:2946-3167 placement
+//@ chunk-a76zrsb5.js:2946-3167 placement
 /**
  * 读取当前组织在本次推广活动中可领取的额度金额（最小货币单位与币种），没有缓存或数据不全时返回 null。
  */
@@ -233,7 +233,7 @@ function promoCreditAmount() {
     currency: cachedOverageCreditGrant.currency,
   };
 }
-//@ chunk-0ba63vr9.js:3167-3391 placement
+//@ chunk-a76zrsb5.js:3167-3391 placement
 /**
  * 刷新推广资格：合并同一时刻的并发请求，失败只记调试日志并返回 null。
  */
@@ -251,7 +251,7 @@ function refreshPromoEligibility(credentials) {
     });
   return state.inFlightEligibilityRefresh;
 }
-//@ chunk-0ba63vr9.js:3391-4406 placement
+//@ chunk-a76zrsb5.js:3391-4406 placement
 /**
  * GET overage_credit_grant?campaign=… 查询领取资格并缓存。
  */

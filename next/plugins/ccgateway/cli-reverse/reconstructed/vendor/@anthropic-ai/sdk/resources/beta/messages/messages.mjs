@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/resources/beta/messages/messages.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (1)
+ * pieces: chunk-vn3g7zt8.js (1)
  * attribution: esm-layout 1
  */
 import { APIResource } from "../../../core/resource.mjs";
@@ -15,7 +15,7 @@ import { BetaMessageStream } from "../../../lib/BetaMessageStream.mjs";
 import { BetaToolRunner } from "../../../lib/tools/BetaToolRunner.mjs";
 import { ToolError } from "../../../lib/tools/ToolError.mjs";
 
-//@ chunk-hwmsct5x.js:116886-118856 esm-layout
+//@ chunk-vn3g7zt8.js:117266-119236 esm-layout
 var DEPRECATED_MODELS = {};
 var MODELS_TO_WARN_WITH_THINKING_ENABLED = ["claude-mythos-preview", "claude-opus-4-6"];
 var Messages = (() => {

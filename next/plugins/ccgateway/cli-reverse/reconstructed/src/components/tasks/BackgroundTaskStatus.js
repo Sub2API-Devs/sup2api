@@ -3,29 +3,30 @@
  *
  * 页脚后台任务状态汇总 pill（"N background · ↓ to view"）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/tasks/BackgroundTaskStatus.tsx
- * pieces: chunk-18hwfzwa.js (6), chunk-e6aww6q8.js (1)
- * attribution: fingerprint 5, callgraph-fingerprint 1, layout 1
+ * pieces: chunk-34x4ecrv.js (1), chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (4), chunk-wjygkcr4.js (1)
+ * attribution: fingerprint 5, callgraph-fingerprint 2
  */
-import { isTerminalTaskStatus } from "../../Task.js";
-import { hasCompletedWithFindings } from "../../tasks/LocalAgentTask/LocalAgentTask.js";
-import { countNonAmbientTasks } from "../../utils/tasks.js";
+import { isTerminalTaskStatus } from "../../tasks/taskStatus.js";
+import { isParkedMcpTask, skipsTranscript, isLocalScriptTask } from "../../tasks/taskKinds.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import { isRemoteWorkScreen, useHasRemoteWork } from "./remoteTaskStatus.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../state/AppState.js";
-import { EARLY_RETURN_SENTINEL, MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { shouldHideTasksFooter } from "./taskStatusUtils.js";
+import { getPillLabelWithExtra, pillNeedsCta } from "../../tasks/pillLabel.js";
 import {
+  jsxProd_default,
   jsxProd_default_2,
   Fragment,
-  jsxProd_default,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { getPillLabelWithExtra, pillNeedsCta } from "../../tasks/pillLabel.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { useState } from "../../../vendor/react/cjs/react.production.js";
+import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-e6aww6q8.js:293537-293658 fingerprint (2.1.88 match: _temp0, 0.314)
+//@ chunk-5xgkngpb.js:294226-294347 fingerprint (2.1.88 match: _temp0, 0.314)
 /**
  * 判断转录条目是否位于最后一个压缩边界之前（attribution-snapshot 需在最后一个非保留边界之后才算）。
  */
@@ -35,74 +36,103 @@ function isBeforeCompactBoundary(pill, { idx, type: entryType }) {
     (entryType !== "attribution-snapshot" || idx > pill.lastNonPreservedBoundaryIdx)
   );
 }
-//@ chunk-18hwfzwa.js:133842-133882 fingerprint (2.1.88 match: _temp4, 1)
+//@ chunk-34x4ecrv.js:17193-17292 fingerprint (2.1.88 match: _temp6, 1)
+function isDisplayableTranscriptTask(t_1) {
+  return (
+    !isTerminalTaskStatus(t_1.status) &&
+    t_1.type !== "in_process_teammate" &&
+    !isParkedMcpTask(t_1) &&
+    !skipsTranscript(t_1) &&
+    !(codeModeAccepted() && isLocalScriptTask(t_1))
+  );
+}
+//@ chunk-wjygkcr4.js:12793-12956 callgraph-fingerprint (2.1.88 match: _temp5, 0.472)
+function countNonAmbientTasks(remoteBackgroundTasks, localWorkflowsEnabled) {
+  if (remoteBackgroundTasks.length === 0) return [];
+  let workflowsEnabled = localWorkflowsEnabled ?? isRemoteWorkScreen();
+  return remoteBackgroundTasks.filter(
+    (task) =>
+      !task.ambient &&
+      task.taskType !== "in_process_teammate" &&
+      !(task.taskType === "local_workflow" && workflowsEnabled),
+  );
+}
+//@ chunk-czq1j3j2.js:134956-134996 fingerprint (2.1.88 match: _temp4, 1)
 function selectExpandedView(s_1) {
   return s_1.expandedView;
 }
-//@ chunk-18hwfzwa.js:444877-444973 fingerprint (2.1.88 match: _temp6, 1)
-function isTaskStillActive(t_1) {
-  if (t_1.type === "in_process_teammate") return !isTerminalTaskStatus(t_1.status);
-  return !isTerminalTaskStatus(t_1.status) || hasCompletedWithFindings(t_1);
-}
-//@ chunk-18hwfzwa.js:805876-805909 callgraph-fingerprint (2.1.88 match: _temp, 1)
-function selectTasks_3(s) {
+//@ chunk-czq1j3j2.js:838353-838386 callgraph-fingerprint (2.1.88 match: _temp, 1)
+function selectTasks_4(s) {
   return s.tasks;
 }
-//@ chunk-18hwfzwa.js:805909-805963 layout
-function countRemoteBackgroundTasks(appState) {
-  return countNonAmbientTasks(appState.remoteBackgroundTasks);
-}
-//@ chunk-18hwfzwa.js:805963-806502 fingerprint (2.1.88 match: BackgroundTaskStatus, 0.373)
+//@ chunk-czq1j3j2.js:838386-839223 fingerprint (2.1.88 match: BackgroundTaskStatus, 0.364)
 function BackgroundTaskStatus(props) {
-  let $ = useMemoCache(8);
+  let $ = useMemoCache(16);
   let { tasksSelected, onOpenDialog } = props;
-  let tasks = useAppState(selectTasks_3);
-  let viewingAgentTaskId = useAppState(countRemoteBackgroundTasks);
-  let footerElement;
-  let earlyReturnValue;
-  if ($[0] !== viewingAgentTaskId || $[1] !== onOpenDialog || $[2] !== tasks || $[3] !== tasksSelected) {
-    earlyReturnValue = EARLY_RETURN_SENTINEL;
-    We: {
-      let tasks_2 = Object.values(tasks ?? {}).filter(shouldHideTasksFooter);
-      if (tasks_2.length + viewingAgentTaskId === 0) {
-        earlyReturnValue = null;
-        break We;
-      }
-      let onClick;
-      if ($[6] !== onOpenDialog) {
-        onClick = onOpenDialog && (() => onOpenDialog());
-        $[6] = onOpenDialog;
-        $[7] = onClick;
-      } else onClick = $[7];
-      footerElement = jsxProd_default_2(Fragment, {
-        children: [
-          jsxProd_default(SummaryPill, {
-            selected: tasksSelected,
-            onClick,
-            children: getPillLabelWithExtra(tasks_2, viewingAgentTaskId),
-          }),
-          pillNeedsCta(tasks_2) &&
-            jsxProd_default_2(Text, {
-              dimColor: true,
-              children: [" \xB7 ", figures_default.arrowDown, " to view"],
-            }),
-        ],
-      });
-    }
-    $[0] = viewingAgentTaskId;
-    $[1] = onOpenDialog;
-    $[2] = tasks;
-    $[3] = tasksSelected;
-    $[4] = footerElement;
-    $[5] = earlyReturnValue;
-  } else {
-    footerElement = $[4];
-    earlyReturnValue = $[5];
+  let tasks = useAppState(selectTasks_4);
+  let footerTasks;
+  if ($[0] !== tasks) {
+    footerTasks = Object.values(tasks ?? {}).filter(shouldHideTasksFooter);
+    $[0] = tasks;
+    $[1] = footerTasks;
+  } else footerTasks = $[1];
+  let tasks_2 = footerTasks;
+  let localWorkflowsEnabled = useHasRemoteWork();
+  let pillLabelByState;
+  if ($[2] !== localWorkflowsEnabled || $[3] !== tasks_2) {
+    pillLabelByState = (t_3) => {
+      let remoteTasks = countNonAmbientTasks(t_3.remoteBackgroundTasks, localWorkflowsEnabled);
+      return tasks_2.length + remoteTasks.length > 0 ? getPillLabelWithExtra(tasks_2, remoteTasks) : null;
+    };
+    $[2] = localWorkflowsEnabled;
+    $[3] = tasks_2;
+    $[4] = pillLabelByState;
+  } else pillLabelByState = $[4];
+  let appState = useAppState(pillLabelByState);
+  if (appState === null) {
+    return null;
   }
-  if (earlyReturnValue !== EARLY_RETURN_SENTINEL) return earlyReturnValue;
-  return footerElement;
+  let onClick;
+  if ($[5] !== onOpenDialog) {
+    onClick = onOpenDialog && (() => onOpenDialog());
+    $[5] = onOpenDialog;
+    $[6] = onClick;
+  } else onClick = $[6];
+  let footerElement;
+  if ($[7] !== appState || $[8] !== onClick || $[9] !== tasksSelected) {
+    footerElement = jsxProd_default(SummaryPill, {
+      selected: tasksSelected,
+      onClick,
+      children: appState,
+    });
+    $[7] = appState;
+    $[8] = onClick;
+    $[9] = tasksSelected;
+    $[10] = footerElement;
+  } else footerElement = $[10];
+  let ctaHint;
+  if ($[11] !== tasks_2) {
+    ctaHint =
+      pillNeedsCta(tasks_2) &&
+      jsxProd_default_2(Text, {
+        dimColor: true,
+        children: [" \xB7 ", figures_default.arrowDown, " to view"],
+      });
+    $[11] = tasks_2;
+    $[12] = ctaHint;
+  } else ctaHint = $[12];
+  let earlyReturnValue;
+  if ($[13] !== footerElement || $[14] !== ctaHint) {
+    earlyReturnValue = jsxProd_default_2(Fragment, {
+      children: [footerElement, ctaHint],
+    });
+    $[13] = footerElement;
+    $[14] = ctaHint;
+    $[15] = earlyReturnValue;
+  } else earlyReturnValue = $[15];
+  return earlyReturnValue;
 }
-//@ chunk-18hwfzwa.js:806502-806983 fingerprint (2.1.88 match: SummaryPill, 0.795)
+//@ chunk-czq1j3j2.js:839223-839704 fingerprint (2.1.88 match: SummaryPill, 0.795)
 function SummaryPill(props) {
   let $ = useMemoCache(8);
   let { selected, onClick, children } = props;
@@ -148,4 +178,10 @@ function SummaryPill(props) {
   } else t5 = $[7];
   return t5;
 }
-export { selectExpandedView, isTaskStillActive, BackgroundTaskStatus, isBeforeCompactBoundary };
+export {
+  BackgroundTaskStatus,
+  isDisplayableTranscriptTask,
+  isBeforeCompactBoundary,
+  selectExpandedView,
+  countNonAmbientTasks,
+};

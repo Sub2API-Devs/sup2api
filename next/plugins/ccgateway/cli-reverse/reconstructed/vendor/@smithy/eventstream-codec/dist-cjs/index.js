@@ -1,18 +1,18 @@
 /**
  * @smithy/eventstream-codec/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/eventstream-codec@4.2.13..4.2.14
- * pieces: chunk-3cddmtk7.js (12)
+ * pieces: chunk-ayc8mk37.js (12)
  * attribution: esm-layout 5, esm-fingerprint 7
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_util_hex_encoding } from "../../util-hex-encoding/dist-cjs/index.js";
 
-//@ chunk-3cddmtk7.js:4598-4614 esm-layout
+//@ chunk-ayc8mk37.js:4598-4614 esm-layout
 var utilHexEncoding = __toESM(require_util_hex_encoding());
-//@ chunk-3cddmtk7.js:4614-4631 esm-layout
+//@ chunk-ayc8mk37.js:4614-4631 esm-layout
 var import_util_hex_encoding = __toESM(require_util_hex_encoding());
-//@ chunk-3cddmtk7.js:4631-5163 esm-fingerprint
+//@ chunk-ayc8mk37.js:4631-5163 esm-fingerprint
 class Int64 {
   bytes;
   constructor(bytes) {
@@ -38,7 +38,7 @@ class Int64 {
     return String(this.valueOf());
   }
 }
-//@ chunk-3cddmtk7.js:5163-5254 esm-layout
+//@ chunk-ayc8mk37.js:5163-5254 esm-layout
 function negate(bytes) {
   for (let i = 0; i < 8; i++) bytes[i] ^= 255;
   for (let i = 7; i > -1; i--) {
@@ -46,7 +46,7 @@ function negate(bytes) {
     if (bytes[i] !== 0) break;
   }
 }
-//@ chunk-3cddmtk7.js:5254-7788 esm-fingerprint
+//@ chunk-ayc8mk37.js:5254-7788 esm-fingerprint
 class HeaderMarshaller {
   toUtf8;
   fromUtf8;
@@ -205,9 +205,9 @@ class HeaderMarshaller {
     return out;
   }
 }
-//@ chunk-3cddmtk7.js:7788-7795 esm-layout
+//@ chunk-ayc8mk37.js:7788-7795 esm-layout
 var HEADER_VALUE_TYPE;
-//@ chunk-3cddmtk7.js:7795-8063 esm-fingerprint
+//@ chunk-ayc8mk37.js:7795-8063 esm-fingerprint
 (function (HEADER_VALUE_TYPE) {
   HEADER_VALUE_TYPE[(HEADER_VALUE_TYPE.boolTrue = 0)] = "boolTrue";
   HEADER_VALUE_TYPE[(HEADER_VALUE_TYPE.boolFalse = 1)] = "boolFalse";
@@ -220,7 +220,7 @@ var HEADER_VALUE_TYPE;
   HEADER_VALUE_TYPE[(HEADER_VALUE_TYPE.timestamp = 8)] = "timestamp";
   HEADER_VALUE_TYPE[(HEADER_VALUE_TYPE.uuid = 9)] = "uuid";
 })(HEADER_VALUE_TYPE || (HEADER_VALUE_TYPE = {}));
-//@ chunk-3cddmtk7.js:8063-8241 esm-layout
+//@ chunk-ayc8mk37.js:8063-8241 esm-layout
 var BOOLEAN_TAG = "boolean";
 var BYTE_TAG = "byte";
 var SHORT_TAG = "short";
@@ -231,7 +231,7 @@ var STRING_TAG = "string";
 var TIMESTAMP_TAG = "timestamp";
 var UUID_TAG = "uuid";
 var UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
-//@ chunk-3cddmtk7.js:10073-10276 esm-fingerprint
+//@ chunk-ayc8mk37.js:10073-10276 esm-fingerprint
 class MessageDecoderStream {
   options;
   constructor(options) {
@@ -244,7 +244,7 @@ class MessageDecoderStream {
     for await (let bytes of this.options.inputStream) yield this.options.decoder.decode(bytes);
   }
 }
-//@ chunk-3cddmtk7.js:10276-10537 esm-fingerprint
+//@ chunk-ayc8mk37.js:10276-10537 esm-fingerprint
 class MessageEncoderStream {
   options;
   constructor(options) {
@@ -258,7 +258,7 @@ class MessageEncoderStream {
     if (this.options.includeEndFrame) yield new Uint8Array(0);
   }
 }
-//@ chunk-3cddmtk7.js:10537-10779 esm-fingerprint
+//@ chunk-ayc8mk37.js:10537-10779 esm-fingerprint
 class SmithyMessageDecoderStream {
   options;
   constructor(options) {
@@ -275,7 +275,7 @@ class SmithyMessageDecoderStream {
     }
   }
 }
-//@ chunk-3cddmtk7.js:10779-10978 esm-fingerprint
+//@ chunk-ayc8mk37.js:10779-10978 esm-fingerprint
 class SmithyMessageEncoderStream {
   options;
   constructor(options) {
@@ -289,9 +289,9 @@ class SmithyMessageEncoderStream {
   }
 }
 export {
-  HeaderMarshaller,
   SmithyMessageDecoderStream,
   MessageDecoderStream,
   MessageEncoderStream,
   SmithyMessageEncoderStream,
+  HeaderMarshaller,
 };

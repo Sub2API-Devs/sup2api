@@ -3,40 +3,39 @@
  *
  * 2.1.316 新增：经认证的只读命令表
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (13)
- * attribution: placement 13
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (14)
+ * attribution: placement 13, layout 1
  */
-import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
+import { parseRuleString } from "../../utils/permissions/permissionRuleParser.js";
 import { BASH_TOOL_NAME } from "./toolName.js";
-import { isDevNullStdoutRedirect } from "../../utils/bash/bashPipeCommand.js";
 import { containsRuntimePlaceholder } from "../../utils/bash/ast.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1018035-1018057 placement
+//@ chunk-5xgkngpb.js:1031831-1031853 placement
 /**
  * 认证只读命令的规则名前缀。
  */
 var CERTIFIED_PREFIX = "certified: ";
-//@ chunk-e6aww6q8.js:1018057-1018098 placement
+//@ chunk-5xgkngpb.js:1031853-1031894 placement
 /**
  * 判断规则内容是否带 “certified: ” 前缀。
  */
 function hasCertifiedPrefix(ruleContent) {
   return ruleContent.startsWith(CERTIFIED_PREFIX);
 }
-//@ chunk-e6aww6q8.js:1018098-1018193 placement
+//@ chunk-5xgkngpb.js:1031894-1031989 placement
 /**
  * 解析权限规则字符串，判断它是否是 Bash 工具的认证命令规则。
  */
 function isCertifiedCommandRule(ruleString) {
-  let rule = permissionRuleValueFromString(ruleString);
+  let rule = parseRuleString(ruleString);
   return (
     rule.toolName === BASH_TOOL_NAME && rule.ruleContent !== undefined && hasCertifiedPrefix(rule.ruleContent)
   );
 }
-//@ chunk-e6aww6q8.js:1018193-1018586 placement
+//@ chunk-5xgkngpb.js:1031989-1032382 placement
 /**
  * 认证只读命令的规则名常量（git status/add/commit/checkout -b/log/diff/branch --show-current、gh pr create/edit/view、git push）与远程名正则。
  */
@@ -53,7 +52,7 @@ var CERTIFIED_GH_PR_VIEW = "certified: gh pr view";
 var CERTIFIED_GIT_PUSH_PREFIX = "certified: git push ";
 var CERTIFIED_GIT_PUSH_ORIGIN = "certified: git push origin";
 var REMOTE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-//@ chunk-e6aww6q8.js:1018586-1018643 placement
+//@ chunk-5xgkngpb.js:1032382-1032439 placement
 /**
  * 远程名合法时，返回该远程的认证 git push 规则。
  */
@@ -61,13 +60,13 @@ function buildCertifiedPushRule(remoteName) {
   if (!REMOTE_NAME_RE.test(remoteName)) return null;
   return CERTIFIED_GIT_PUSH_PREFIX + remoteName;
 }
-//@ chunk-e6aww6q8.js:1018643-1018784 placement
+//@ chunk-5xgkngpb.js:1032439-1032580 placement
 function isSafeRefName(refName) {
   if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(refName)) return false;
   if (refName.includes("..") || refName.includes("@{") || refName.endsWith("/")) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:1018784-1018962 placement
+//@ chunk-5xgkngpb.js:1032580-1032758 placement
 function isSafeRevisionRange(range) {
   let index = range.indexOf("...");
   if (index !== -1) return isSafeRefName(range.slice(0, index)) && isSafeRefName(range.slice(index + 3));
@@ -76,7 +75,7 @@ function isSafeRevisionRange(range) {
     return isSafeRefName(range.slice(0, index_2)) && isSafeRefName(range.slice(index_2 + 2));
   return isSafeRefName(range);
 }
-//@ chunk-e6aww6q8.js:1018962-1019127 placement
+//@ chunk-5xgkngpb.js:1032758-1032923 placement
 function isSafePathspec(pathspec) {
   if (pathspec === "") return false;
   for (let segment of pathspec.split("/")) {
@@ -85,7 +84,7 @@ function isSafePathspec(pathspec) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:1019127-1020741 placement
+//@ chunk-5xgkngpb.js:1032923-1034537 placement
 /**
  * 认证命令规格表：每条规则的命令头、子命令、允许的长/短选项（布尔或取值）、必需选项、操作数形态。
  */
@@ -95,7 +94,7 @@ var BOOLEAN_OPTION;
 var OPAQUE_VALUE_OPTION;
 var REF_VALUE_OPTION;
 var CERTIFIED_COMMAND_SPECS;
-deferInit("chunk-e6aww6q8.js:1019127", () => {
+deferInit("chunk-5xgkngpb.js:1032923", () => {
   EMPTY_OPTIONS = new Map();
   optionMap = (entries) => new Map(entries);
   BOOLEAN_OPTION = {
@@ -261,7 +260,7 @@ deferInit("chunk-e6aww6q8.js:1019127", () => {
     ],
   ]);
 });
-//@ chunk-e6aww6q8.js:1020741-1021040 placement
+//@ chunk-5xgkngpb.js:1034537-1034836 placement
 function getCertifiedSpec(ruleName) {
   let spec = CERTIFIED_COMMAND_SPECS.get(ruleName);
   if (spec !== undefined) return spec;
@@ -281,14 +280,26 @@ function getCertifiedSpec(ruleName) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:1021153-1021277 placement
+//@ chunk-5xgkngpb.js:1034836-1034949 layout
+/**
+ * 重定向是否为字面量 >/dev/null 或 2>/dev/null。
+ */
+function isDevNullStdoutRedirect(redirect) {
+  return (
+    redirect.op === ">" &&
+    (redirect.fd === undefined || redirect.fd === 2) &&
+    redirect.target === "/dev/null" &&
+    redirect.targetSourceLiteral === true
+  );
+}
+//@ chunk-5xgkngpb.js:1034949-1035073 placement
 function isValidOptionValue(optionSpec, optionValue) {
   if (optionSpec.arity !== "value") return false;
   if (optionValue.startsWith("-")) return false;
   if (optionSpec.valueShape === "ref") return isSafeRefName(optionValue);
   return true;
 }
-//@ chunk-e6aww6q8.js:1021277-1021655 placement
+//@ chunk-5xgkngpb.js:1035073-1035451 placement
 /**
  * 检查命令操作数是否符合认证命令的约束：无操作数、路径规格、修订与路径、PR 编号、推送远程与 refspec。
  */
@@ -310,7 +321,7 @@ function operandsMatch(operands, operands_2) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:1021655-1022987 placement
+//@ chunk-5xgkngpb.js:1035451-1036791 placement
 /**
  * 判断命令是否严格符合某条认证规则：字面 argv、无环境变量与通配、只重定向到 /dev/null，命令头与子命令一致，选项不重复且都在白名单内、必需选项齐全、操作数形态匹配。
  */
@@ -381,8 +392,8 @@ function matchesCertifiedCommand(ruleName, command, ambiguousWords) {
   return operandsMatch(spec.operands, operands);
 }
 export {
-  isCertifiedCommandRule,
   hasCertifiedPrefix,
+  isCertifiedCommandRule,
   matchesCertifiedCommand,
   CERTIFIED_GIT_ADD,
   CERTIFIED_GIT_STATUS,

@@ -3,9 +3,9 @@
  *
  * history.jsonl 安全读写与扫描（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (29)
  * attribution: placement 29
  */
 import { createReadStream, constants } from "fs";
@@ -13,7 +13,7 @@ import { stat, open } from "fs/promises";
 import { createHash } from "crypto";
 import { transcriptLines } from "./backgroundSessionResume.js";
 import { isENOENT, getErrnoCode } from "./errors.js";
-import { publishWriteAtomic, O_NONBLOCK } from "./atomicPublishWrite.js";
+import { filePath, O_NONBLOCK } from "./atomicPublishWrite.js";
 import {
   OPENING_PUNCT_RE,
   CLOSING_PUNCT_RE,
@@ -23,9 +23,9 @@ import {
   isPasteIdHex,
   PASTED_CONTENT_LINE_END,
 } from "./pastedContent.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 
-//@ chunk-s61vbvea.js:20915-21013 placement
+//@ chunk-7jxyna5q.js:21490-21588 placement
 /**
  * 取消息内容中的最后一段文本（字符串或末尾文本块）。
  */
@@ -34,7 +34,7 @@ function lastTextBlockText(text) {
   let last = text.at(-1);
   return last?.type === "text" ? last.text : null;
 }
-//@ chunk-s61vbvea.js:21152-21206 placement
+//@ chunk-7jxyna5q.js:21727-21781 placement
 /**
  * 读写 history.jsonl 的重试配置。
  */
@@ -45,7 +45,7 @@ var HISTORY_FILE_RETRY_OPTIONS = {
     minTimeout: 50,
   },
 };
-//@ chunk-s61vbvea.js:21206-21367 placement
+//@ chunk-7jxyna5q.js:21781-21942 placement
 /**
  * 按 \r 拆分历史文本行；含 U+2028/2029 的段若不是合法 JSON 则再按这两个字符拆开。
  */
@@ -60,14 +60,14 @@ function splitHistoryLines(text) {
     }
   });
 }
-//@ chunk-s61vbvea.js:21367-21428 placement
+//@ chunk-7jxyna5q.js:21942-22003 placement
 /**
  * 流式拆分历史文件的行（按 \r 与 U+2028/2029 处理）。
  */
 async function* splitHistoryStream(readStream) {
   for await (let line of transcriptLines(readStream)) yield* splitHistoryLines(line);
 }
-//@ chunk-s61vbvea.js:21428-21791 placement
+//@ chunk-7jxyna5q.js:22003-22365 placement
 /**
  * 流式扫描历史文件，统计匹配行；filter 模式下把未匹配的行原子写回（可保留原文件权限）。
  */
@@ -89,7 +89,7 @@ async function filterHistoryFile(source, shouldDrop, mode, { fileMode = "default
   if (mode !== "filter" || dropped === 0) return dropped;
   beforeWrite?.();
   let exactMode = fileMode === "preserve" ? (await stat(source)).mode & 511 : undefined;
-  await publishWriteAtomic(
+  await filePath(
     source,
     kept.length
       ? `${kept.join(`
@@ -102,14 +102,14 @@ async function filterHistoryFile(source, shouldDrop, mode, { fileMode = "default
   );
   return dropped;
 }
-//@ chunk-s61vbvea.js:21791-21816 placement
+//@ chunk-7jxyna5q.js:22365-22390 placement
 /**
  * history.jsonl 不是普通文件或扫描期间被改写时抛出的错误。
  */
 class HistoryFileError extends Error {}
-//@ chunk-s61vbvea.js:21816-21831 placement
+//@ chunk-7jxyna5q.js:22390-22405 placement
 var HISTORY_SCAN_CHUNK_BYTES = 4194304;
-//@ chunk-s61vbvea.js:21831-23698 placement
+//@ chunk-7jxyna5q.js:22405-24276 placement
 /**
  * 安全打开 history.jsonl（拒绝符号链接、特殊文件，校验哈希）
  */
@@ -229,13 +229,13 @@ async function openHistoryFile(
     split,
   };
 }
-//@ chunk-s61vbvea.js:23698-23802 placement
+//@ chunk-7jxyna5q.js:24276-24380 placement
 function toCharCodes(text) {
   let uint16Array = new Uint16Array(text.length);
   for (let j = 0; j < text.length; j++) uint16Array[j] = text.charCodeAt(j);
   return uint16Array;
 }
-//@ chunk-s61vbvea.js:23802-23947 placement
+//@ chunk-7jxyna5q.js:24380-24525 placement
 function kmpFailureTable(pattern) {
   let int32Array = new Int32Array(pattern.length);
   for (let j = 1, matched = 0; j < pattern.length; j++) {
@@ -245,10 +245,10 @@ function kmpFailureTable(pattern) {
   }
   return int32Array;
 }
-//@ chunk-s61vbvea.js:23947-23964 placement
+//@ chunk-7jxyna5q.js:24525-24542 placement
 var FINDER_PREFIX_CHARS = 8;
 var FINDER_CACHE_MAX = 1024;
-//@ chunk-s61vbvea.js:23964-24692 placement
+//@ chunk-7jxyna5q.js:24542-25277 placement
 /**
  * 为大文本创建子串查找器：先用首段 indexOf 定位，再用 KMP 精确匹配，压缩周期性重复的命中，返回按位置二分查找下一次出现的函数（结果缓存）。
  */
@@ -308,9 +308,9 @@ function createSubstringFinder(haystack) {
     return findNext;
   };
 }
-//@ chunk-s61vbvea.js:24692-24722 placement
+//@ chunk-7jxyna5q.js:25277-25307 placement
 var WORD_CHAR_RE = /[\p{L}\p{N}_@#./\\]/u;
-//@ chunk-s61vbvea.js:24722-25109 placement
+//@ chunk-7jxyna5q.js:25307-25694 placement
 /**
  * 判断匹配是否独立成词：前面（跳过开括号类字符）不是词字符，后面（跳过闭括号类字符）是结尾或空白；带缓存区间。
  */
@@ -341,7 +341,7 @@ function isWordBoundaryMatch(text, start, end, windowFrom, windowTo, atWordStart
   }
   return afterIndex >= windowTo || /\s/.test(text[afterIndex]);
 }
-//@ chunk-s61vbvea.js:25109-25184 placement
+//@ chunk-7jxyna5q.js:25694-25769 placement
 function emptySpanBudget() {
   return {
     openersFrom: 0,
@@ -350,7 +350,7 @@ function emptySpanBudget() {
     closersTo: 0,
   };
 }
-//@ chunk-s61vbvea.js:25184-25346 placement
+//@ chunk-7jxyna5q.js:25769-25931 placement
 /**
  * 找出文本中与历史内容相同的区间（多种匹配方式合并）。
  */
@@ -362,12 +362,12 @@ function findHistoryCopySpans(text, needles, find = createSubstringFinder(text))
     ...(firstPass.skipped ? pickHistoryCopy(text, needles, find, true, "standingCopy").spans : []),
   ]);
 }
-//@ chunk-s61vbvea.js:25346-26375 placement
+//@ chunk-7jxyna5q.js:25931-26970 placement
 function pickHistoryCopy(text, needles, find, incremental, copyKind) {
   let spans = [];
   let standingSpans = [];
   let skipped = false;
-  let sorted = uniq(needles)
+  let sorted = normalizeCaseForComparison_2(needles)
     .filter((needle) => needle !== "")
     .sort((leftNeedle, rightNeedle) => rightNeedle.length - leftNeedle.length);
   for (let needle of sorted) {
@@ -458,7 +458,7 @@ function pickHistoryCopy(text, needles, find, incremental, copyKind) {
     skipped,
   };
 }
-//@ chunk-s61vbvea.js:26375-26538 placement
+//@ chunk-7jxyna5q.js:26970-27133 placement
 function mergeSpans(original) {
   let merged = [];
   for (let span of original.sort((left, right) => left.from - right.from)) {
@@ -471,7 +471,7 @@ function mergeSpans(original) {
   }
   return merged;
 }
-//@ chunk-s61vbvea.js:26538-26707 placement
+//@ chunk-7jxyna5q.js:27133-27302 placement
 /**
  * 合并重叠或相接的区间。
  */
@@ -487,7 +487,7 @@ function mergeAdjacentSpans(original) {
   }
   return merged;
 }
-//@ chunk-s61vbvea.js:26707-26978 placement
+//@ chunk-7jxyna5q.js:27302-27573 placement
 function findAllMatches(haystack, pattern) {
   let failure = kmpFailureTable(pattern);
   if (failure.at(-1) === 0) return;
@@ -509,14 +509,14 @@ function findAllMatches(haystack, pattern) {
   }
   return spans;
 }
-//@ chunk-s61vbvea.js:26978-27253 placement
+//@ chunk-7jxyna5q.js:27573-27848 placement
 /**
  * 在文本中找出各粘贴内容出现的区间（含 < 的内容用 KMP 全匹配），合并后返回。
  */
 function findPasteSpans(text, needles, substringFinder = createSubstringFinder(text)) {
   let spans = [];
   let haystack;
-  for (let needle of uniq(needles)) {
+  for (let needle of normalizeCaseForComparison_2(needles)) {
     if (needle === "") continue;
     let findIn = substringFinder(needle);
     let probed =
@@ -535,7 +535,7 @@ function findPasteSpans(text, needles, substringFinder = createSubstringFinder(t
   }
   return mergeAdjacentSpans(spans);
 }
-//@ chunk-s61vbvea.js:27253-27619 placement
+//@ chunk-7jxyna5q.js:27848-28214 placement
 /**
  * 找出文本中带 id 的开/闭标签标记，按位置排序。
  */
@@ -574,7 +574,7 @@ function findTagMarkers(text) {
     }
   return markers.sort((left, right) => left.at - right.at);
 }
-//@ chunk-s61vbvea.js:27619-28298 placement
+//@ chunk-7jxyna5q.js:28214-28897 placement
 /**
  * 在文本中配对开/闭标签标记，生成区块（含正文范围），跳过与排除区间重叠或被指定文本包含的标记。
  */
@@ -633,7 +633,7 @@ function findTaggedBlocks(text, spans = [], excludes = []) {
   });
   return blocks;
 }
-//@ chunk-s61vbvea.js:28298-28425 placement
+//@ chunk-7jxyna5q.js:28897-29024 placement
 function findOverlappingSpan(spans, from, end) {
   let low = 0;
   let high = spans.length;
@@ -644,7 +644,7 @@ function findOverlappingSpan(spans, from, end) {
   }
   return low < spans.length && spans[low].from < end ? low : -1;
 }
-//@ chunk-s61vbvea.js:28425-28680 placement
+//@ chunk-7jxyna5q.js:29024-29279 placement
 /**
  * 合并区块与额外区间（取并集，保留正文范围）。
  */
@@ -672,7 +672,7 @@ function mergeBlocks(historyCopySpans, taggedBlocks) {
   }
   return merged;
 }
-//@ chunk-s61vbvea.js:28680-29131 placement
+//@ chunk-7jxyna5q.js:29279-29730 placement
 /**
  * 按区块重组文本：区块外的片段经转换，区块内的正文经渲染并用开/闭标记包裹，控制前后空行。
  */
@@ -741,19 +741,19 @@ ${rendered.closer}`);
   flushUntil(text.length);
   return parts.join("");
 }
-//@ chunk-s61vbvea.js:29131-29220 placement
+//@ chunk-7jxyna5q.js:29730-29819 placement
 /**
  * 判断历史记录是否仍在等待/欠一次屏幕检查。
  */
 var isScreeningPendingEntry = (command) =>
   command.promptSubmitted === undefined &&
   (command.screeningPending === true || command.screeningOwed === true);
-//@ chunk-s61vbvea.js:29220-29250 placement
+//@ chunk-7jxyna5q.js:29819-29849 placement
 /**
  * 值未变化时返回 undefined，否则返回新值。
  */
 var unchangedOrUndefined = (text, text_2) => (text_2 === text ? undefined : text_2);
-//@ chunk-s61vbvea.js:29250-29487 placement
+//@ chunk-7jxyna5q.js:29849-30086 placement
 function getHistoryEntryForCommand(command, placed, options) {
   let { screened, unanswered } = options;
   let historyEntry = command.historyEntry;
@@ -773,9 +773,9 @@ export {
   HISTORY_FILE_RETRY_OPTIONS,
   getHistoryEntryForCommand,
   unchangedOrUndefined,
-  isScreeningPendingEntry,
   openHistoryFile,
   HistoryFileError,
+  isScreeningPendingEntry,
   splitHistoryStream,
   splitHistoryLines,
   filterHistoryFile,

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：对话回退（定位回退点、截断、停止队友、持久化判定）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (33)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (33)
  * attribution: placement 33
  */
 import { join } from "path";
@@ -25,9 +25,9 @@ import {
   computeThinkingStrippedScope,
 } from "../../utils/messages.js";
 import { getMessageIdentityUuids, getDroppedPromptUuids } from "../queuedCommands.js";
-import { countToolCallsSince, hasPollEventsAttachmentSince } from "../../utils/pollEvents.js";
+import { isPollEventToolResultRow, hasPollEventsAttachmentSince } from "../../utils/pollEvents.js";
 import { hasCronToolUse, collectReadNotificationsResultIds } from "./rateLimitForwarding.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { isLoggableMessage, isChainParticipant } from "../../utils/sessionStorage.js";
@@ -52,7 +52,7 @@ import { logError } from "../../utils/log.js";
 import { isClaudeAiChatRemote } from "../../utils/entrypointKinds.js";
 import { getRemoteFeatureGateState } from "../../utils/permissions/yoloClassifier.js";
 import { TENGU_FALLOW_LANTERN, retryWatchdogEnv } from "../../services/api/withRetry.js";
-import { isActiveMainAgentCommand } from "../../utils/messageQueueManager.js";
+import { isDrainableMainThreadCommand } from "../../utils/messageQueueManager.js";
 import { isClaudeAISubscriber } from "../../utils/auth.js";
 import { getAPIProvider } from "../../utils/model/providers.js";
 import { isLowPriorityActive } from "../../services/lowPriority/lowPriorityMode.js";
@@ -60,10 +60,10 @@ import { env } from "../../utils/env.js";
 import { getBareCheckModel } from "../../utils/model/smallFastModel.js";
 import { preflightRateLimitCore } from "../../services/api/rateLimitPreflight.js";
 import { sleep } from "../../utils/sleep.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { sessionIdBody, isSafeBridgeId } from "../../bridge/sessionIdCompat.js";
 
-//@ chunk-tyg7f3ek.js:575930-578104 placement
+//@ chunk-0yw3taqg.js:617671-619851 placement
 /**
  * 在对话中定位 rewind 目标（用户消息或可选的 assistant/已压缩目标），返回切点或拒绝原因。
  */
@@ -171,7 +171,7 @@ function findRewindPoint(
       summarizedResolution !== undefined,
       assistantTarget,
     );
-  if (countToolCallsSince(messages, targetIndex))
+  if (isPollEventToolResultRow(messages, targetIndex))
     return rewindRefusal_2("poll_tool_result_target", summarizedResolution !== undefined);
   if (hasCronToolUse(messages, targetIndex))
     return rewindRefusal_2("target_splits_tool_call", summarizedResolution !== undefined, assistantTarget);
@@ -210,7 +210,7 @@ function findRewindPoint(
     },
   };
 }
-//@ chunk-tyg7f3ek.js:578104-578214 placement
+//@ chunk-0yw3taqg.js:619851-619961 placement
 function indexByUuidPrefix(messages, fromIndex) {
   let index = new Map();
   for (let cursor = fromIndex; cursor >= 0; cursor--)
@@ -218,7 +218,7 @@ function indexByUuidPrefix(messages, fromIndex) {
       index.set(uuid.slice(0, UUID_PREFIX_LENGTH), messages[cursor]);
   return index;
 }
-//@ chunk-tyg7f3ek.js:578214-578401 placement
+//@ chunk-0yw3taqg.js:619961-620148 placement
 function hasMatchingPrefill(index, message) {
   let candidatePrefill = rewindPrefillText(message);
   return getMessageIdentityUuids(message).some((uuid) => {
@@ -232,7 +232,7 @@ function hasMatchingPrefill(index, message) {
     );
   });
 }
-//@ chunk-tyg7f3ek.js:578401-578693 placement
+//@ chunk-0yw3taqg.js:620148-620440 placement (2.1.88 match: buildTranscriptEntries, 0.766)
 function rewindPrefillText(row) {
   let content =
     row.type === "user"
@@ -244,10 +244,10 @@ function rewindPrefillText(row) {
   if (content === undefined || text === undefined || text === "") return;
   return {
     text,
-    otherBlocks: typeof content === "string" ? 0 : count(content, (block) => block.type !== "text"),
+    otherBlocks: typeof content === "string" ? 0 : countWhere(content, (block) => block.type !== "text"),
   };
 }
-//@ chunk-tyg7f3ek.js:578693-578845 placement
+//@ chunk-0yw3taqg.js:620440-620592 placement
 function rewindRefusal_2(reason, summarized, assistantTarget = false) {
   return summarized
     ? {
@@ -261,7 +261,7 @@ function rewindRefusal_2(reason, summarized, assistantTarget = false) {
         }),
       };
 }
-//@ chunk-tyg7f3ek.js:578845-579403 placement
+//@ chunk-0yw3taqg.js:620592-621150 placement
 function reportRewindRefusal(point, outcome) {
   if ("refuse" in point) {
     if (point.summarizedTargetMiss !== undefined)
@@ -281,7 +281,7 @@ function reportRewindRefusal(point, outcome) {
     logForDiagnosticsNoPII("info", "cli_rewind_stand_in_served");
   }
 }
-//@ chunk-tyg7f3ek.js:579403-580030 placement
+//@ chunk-0yw3taqg.js:621150-621778 placement
 function isRewindCutPersistable(messages, target, rowsOffDisk) {
   if (rowsOffDisk === undefined) return true;
   let indexes = [];
@@ -318,14 +318,14 @@ function isRewindCutPersistable(messages, target, rowsOffDisk) {
   if (lastBoundary !== undefined && lastBoundaryIndex < 0) return false;
   return indexes.every((index) => index >= lastBoundaryIndex);
 }
-//@ chunk-tyg7f3ek.js:580030-580104 placement
+//@ chunk-0yw3taqg.js:621778-621852 placement
 function queueStamp(session) {
   return {
     dequeues: session.dequeueCount(),
     length: session.messages.length,
   };
 }
-//@ chunk-tyg7f3ek.js:580104-580598 placement
+//@ chunk-0yw3taqg.js:621852-622346 placement
 async function persistRewindCut({ persistAnchor, target }, session, persistence) {
   let persisted = true;
   let marker = {
@@ -358,7 +358,7 @@ async function persistRewindCut({ persistAnchor, target }, session, persistence)
     }
   return persisted;
 }
-//@ chunk-tyg7f3ek.js:580598-580766 placement
+//@ chunk-0yw3taqg.js:622346-622514 placement
 function rewindTargetMoved(prefix, session, target) {
   return (
     session.messages[target.index]?.uuid !== target.target?.uuid ||
@@ -367,7 +367,7 @@ function rewindTargetMoved(prefix, session, target) {
     session.drainableMainThreadQueueLength() > 0
   );
 }
-//@ chunk-tyg7f3ek.js:580766-581207 placement
+//@ chunk-0yw3taqg.js:622514-622955 placement
 async function waitForRewindQuiet(session, persistence) {
   try {
     for (let j = 0; j < 3; j++) {
@@ -388,7 +388,7 @@ async function waitForRewindQuiet(session, persistence) {
     else persistence.logFailure("heal", error);
   }
 }
-//@ chunk-tyg7f3ek.js:581207-582110 placement
+//@ chunk-0yw3taqg.js:622955-623858 placement
 /**
  * 在内存中截断对话到切点，清理 thinking 范围与粘性 beta，并同步通知/任务状态。
  */
@@ -445,7 +445,7 @@ function applyRewindCut(session, index) {
   setLastCacheSafeForkMessages([...session.messages]);
   return removed;
 }
-//@ chunk-tyg7f3ek.js:582110-582292 placement
+//@ chunk-0yw3taqg.js:623858-624040 placement
 function rewindReadNotifications(host, { kept, removed, targetUuid }) {
   try {
     restoreReadsAfterRewind(host, {
@@ -457,7 +457,7 @@ function rewindReadNotifications(host, { kept, removed, targetUuid }) {
     logHandlerFailure(true, "rewind_conversation: notifications", error);
   }
 }
-//@ chunk-tyg7f3ek.js:582292-583373 placement
+//@ chunk-0yw3taqg.js:624040-625128 placement
 function stopTeammatesAfterCut({ taskRegistry, setAppState, storageV5, messages, cutIndex }) {
   let tasksById = taskRegistry.all();
   let teammatesById = new Map();
@@ -523,7 +523,7 @@ function stopTeammatesAfterCut({ taskRegistry, setAppState, storageV5, messages,
     );
   }
 }
-//@ chunk-tyg7f3ek.js:583373-583746 placement
+//@ chunk-0yw3taqg.js:625128-625501 placement
 function stopMcpTasksAfterCut({ taskRegistry, setAppState, storageV5, messages, cutIndex }) {
   try {
     let runningTasks = runningMcpTasksAfter(taskRegistry, messages, cutIndex);
@@ -546,12 +546,12 @@ function stopMcpTasksAfterCut({ taskRegistry, setAppState, storageV5, messages, 
     );
   }
 }
-//@ chunk-tyg7f3ek.js:583746-584146 placement
+//@ chunk-0yw3taqg.js:625501-625901 placement
 function withdrawDeferredAfterCut({ endings, queue, messages, cutIndex }) {
   try {
     let withdrawnTaskIds = new Set(
-      endings?.withdraw((sinceUuid) => {
-        let messageIndexByToolUseId = findMessageIndexByToolUseId(messages, sinceUuid);
+      endings?.withdraw((taskId) => {
+        let messageIndexByToolUseId = findMessageIndexByToolUseId(messages, taskId);
         return messageIndexByToolUseId >= 0 && messageIndexByToolUseId >= cutIndex;
       }),
     );
@@ -575,7 +575,7 @@ function withdrawDeferredAfterCut({ endings, queue, messages, cutIndex }) {
     );
   }
 }
-//@ chunk-tyg7f3ek.js:584146-584359 placement
+//@ chunk-0yw3taqg.js:625901-626114 placement
 function runningMcpTasksAfter(taskRegistry, messages, cutIndex) {
   let taskIds = [];
   for (let task of Object.values(taskRegistry.all())) {
@@ -591,16 +591,18 @@ function runningMcpTasksAfter(taskRegistry, messages, cutIndex) {
   }
   return taskIds;
 }
-//@ chunk-tyg7f3ek.js:584359-584517 placement (2.1.88 match: countToolCallsSince, 0.778)
-function findMessageIndexByToolUseId(messages, sinceUuid) {
+//@ chunk-0yw3taqg.js:626114-626272 placement
+function findMessageIndexByToolUseId(messages, targetToolUseId) {
   return messages.findIndex(
     (message) =>
       message.type === "assistant" &&
       Array.isArray(message.message.content) &&
-      message.message.content.some((block) => block?.type === "tool_use" && block.id === sinceUuid),
+      message.message.content.some(
+        (contentBlock) => contentBlock?.type === "tool_use" && contentBlock.id === targetToolUseId,
+      ),
   );
 }
-//@ chunk-tyg7f3ek.js:584517-584964 placement
+//@ chunk-0yw3taqg.js:626272-626719 placement
 function reportMcpTaskRewindStops(settled, failureReason = "stop_failed") {
   try {
     let filtered = settled.filter((result) => result.status === "rejected");
@@ -621,11 +623,11 @@ function reportMcpTaskRewindStops(settled, failureReason = "stop_failed") {
       );
   } catch {}
 }
-//@ chunk-tyg7f3ek.js:584964-585005 placement
+//@ chunk-0yw3taqg.js:626719-626759 placement
 function rewindRerunMode() {
   return isClaudeAiChatRemote() ? getRemoteFeatureGateState(TENGU_FALLOW_LANTERN) : "off";
 }
-//@ chunk-tyg7f3ek.js:585005-585395 placement
+//@ chunk-0yw3taqg.js:626759-627148 placement
 function dropOwnRerunOnRewind(queue) {
   try {
     let queued = queue.messageQueue.getCommandQueueSnapshot().filter(isResumedQueuedCommand);
@@ -645,7 +647,7 @@ function dropOwnRerunOnRewind(queue) {
     logFeatureBad("rewind_drops_own_rerun", "threw");
   }
 }
-//@ chunk-tyg7f3ek.js:585395-585956 placement
+//@ chunk-0yw3taqg.js:627148-627709 placement
 function rerunDropVerdict({ messageQueue, readSwitch, namedByTheRequest, decide }, queued) {
   if (!queued.every((queued) => queued.mode === "prompt")) return "not_a_prompt";
   let mapped = queued.map((queued) => queued.resumedTurnUserMessageUuid);
@@ -661,15 +663,15 @@ function rerunDropVerdict({ messageQueue, readSwitch, namedByTheRequest, decide 
   let switchState = readSwitch();
   return switchState === "on" ? undefined : `switch_${switchState}`;
 }
-//@ chunk-tyg7f3ek.js:585956-586009 placement
+//@ chunk-0yw3taqg.js:627709-627762 placement
 function isResumedQueuedCommand(command) {
-  return command.resumeReason !== undefined && isActiveMainAgentCommand(command);
+  return command.resumeReason !== undefined && isDrainableMainThreadCommand(command);
 }
-//@ chunk-tyg7f3ek.js:586009-586050 placement
+//@ chunk-0yw3taqg.js:627762-627803 placement
 var TENGU_EBBING_TIDE = "tengu_ebbing_tide";
 var REWIND_QUIET_WAIT_MS = 5000;
 var REWIND_QUIET_POLL_MS = 20;
-//@ chunk-tyg7f3ek.js:586050-586283 placement
+//@ chunk-0yw3taqg.js:627803-628036 placement
 function isTurnAbortedForRewind({ drain, messageQueue, prewaitLatch }) {
   if (drain.turnUnderWay) return drain.abortController?.signal.aborted === true;
   return (
@@ -679,7 +681,7 @@ function isTurnAbortedForRewind({ drain, messageQueue, prewaitLatch }) {
       .every((command) => command.uuid !== undefined && messageQueue.hasCancelPendingAcked(command.uuid))
   );
 }
-//@ chunk-tyg7f3ek.js:586283-586825 placement
+//@ chunk-0yw3taqg.js:628036-628578 placement
 function rewindLimitQuestionGate(host) {
   if (host.promptUpOrHeld()) return "skipped_prompt";
   if (host.busy()) return "skipped_busy";
@@ -707,7 +709,7 @@ function rewindLimitQuestionGate(host) {
       }
     : "skipped_no_cut";
 }
-//@ chunk-tyg7f3ek.js:586825-587087 placement
+//@ chunk-0yw3taqg.js:628578-628840 placement
 function rewindLimitAccountGate() {
   if (!isClaudeAISubscriber() || getAPIProvider() !== "firstParty") return "skipped_account";
   if (isLowPriorityActive()) return "skipped_low_priority";
@@ -717,7 +719,7 @@ function rewindLimitAccountGate() {
     ? "skipped_retry_watchdog"
     : null;
 }
-//@ chunk-tyg7f3ek.js:587087-587207 placement
+//@ chunk-0yw3taqg.js:628840-628960 placement
 async function askRewindLimitQuestion(host) {
   try {
     return await runRewindLimitQuestion(host);
@@ -727,7 +729,7 @@ async function askRewindLimitQuestion(host) {
     return "go_on";
   }
 }
-//@ chunk-tyg7f3ek.js:587207-588419 placement
+//@ chunk-0yw3taqg.js:628960-630172 placement
 async function runRewindLimitQuestion(host) {
   let fields = {
     process_has_dequeued: host.dequeues() > 0,
@@ -801,7 +803,7 @@ async function runRewindLimitQuestion(host) {
     targetFound: gateAfterWait.targetFound,
   };
 }
-//@ chunk-tyg7f3ek.js:588419-588600 placement
+//@ chunk-0yw3taqg.js:630172-630353 placement
 async function waitForQueueQuiet(host, dequeues) {
   let deadline = performance.now() + REWIND_QUIET_WAIT_MS;
   let isQuiet = () =>
@@ -809,14 +811,14 @@ async function waitForQueueQuiet(host, dequeues) {
   while (!isQuiet() && performance.now() < deadline) await sleep(REWIND_QUIET_POLL_MS, host.stop);
   return isQuiet();
 }
-//@ chunk-tyg7f3ek.js:588785-588845 placement
+//@ chunk-0yw3taqg.js:630538-630598 placement
 function forkSeedsDir() {
   return join(getClaudeConfigDir(), "remote-control", "fork-seeds");
 }
-//@ chunk-tyg7f3ek.js:588845-588869 placement
+//@ chunk-0yw3taqg.js:630598-630622 placement
 var FORK_SEED_MAX_BYTES = 268435456;
 var FORK_SEED_UNLINK_RETRY_MS = 100;
-//@ chunk-tyg7f3ek.js:588869-588935 placement
+//@ chunk-0yw3taqg.js:630622-630688 placement (2.1.88 match: NATIVE_HOST_MANIFEST_NAME, 1)
 function forkSeedPath(sessionId) {
   let body = sessionIdBody(sessionId);
   return isSafeBridgeId(body) ? join(forkSeedsDir(), `${body}.json`) : null;

@@ -1,15 +1,15 @@
 /**
  * parse5/dist/common/html.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: parse5@7.2.0..7.2.1
- * pieces: chunk-6ja29j2n.js (5)
+ * pieces: chunk-p9ac6cnb.js (5)
  * attribution: esm-layout 2, esm-fingerprint 3
  */
 import { TAG_NAMES, NAMESPACES } from "../../lib/common/html.js";
 
-//@ chunk-6ja29j2n.js:65146-65152 esm-layout
+//@ chunk-p9ac6cnb.js:65146-65152 esm-layout
 var TAG_ID;
-//@ chunk-6ja29j2n.js:65152-67836 esm-fingerprint
+//@ chunk-p9ac6cnb.js:65152-67836 esm-fingerprint
 (function (TAG_ID) {
   TAG_ID[(TAG_ID.UNKNOWN = 0)] = "UNKNOWN";
   TAG_ID[(TAG_ID.A = 1)] = "A";
@@ -136,7 +136,7 @@ var TAG_ID;
   TAG_ID[(TAG_ID.WBR = 122)] = "WBR";
   TAG_ID[(TAG_ID.XMP = 123)] = "XMP";
 })(TAG_ID || (TAG_ID = {}));
-//@ chunk-6ja29j2n.js:67836-69980 esm-fingerprint
+//@ chunk-p9ac6cnb.js:67836-69980 esm-fingerprint
 var TAG_NAME_TO_ID = new Map([
   [TAG_NAMES.A, TAG_ID.A],
   [TAG_NAMES.ADDRESS, TAG_ID.ADDRESS],
@@ -262,12 +262,12 @@ var TAG_NAME_TO_ID = new Map([
   [TAG_NAMES.WBR, TAG_ID.WBR],
   [TAG_NAMES.XMP, TAG_ID.XMP],
 ]);
-//@ chunk-6ja29j2n.js:69980-70051 esm-fingerprint
+//@ chunk-p9ac6cnb.js:69980-70051 esm-fingerprint
 function getTagID(tagName) {
   var _a;
   return (_a = TAG_NAME_TO_ID.get(tagName)) !== null && _a !== undefined ? _a : TAG_ID.UNKNOWN;
 }
-//@ chunk-6ja29j2n.js:70051-71013 esm-layout
+//@ chunk-p9ac6cnb.js:70051-71013 esm-layout
 var $ = TAG_ID;
 var SPECIAL_ELEMENTS = {
   [NAMESPACES.HTML]: new Set([

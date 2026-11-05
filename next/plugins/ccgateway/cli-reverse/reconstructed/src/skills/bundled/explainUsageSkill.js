@@ -3,19 +3,19 @@
  *
  * 2.1.316 新增：explain-usage 内置技能：解释本会话 token 去向并画一张简单图表。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hantmvxa.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ne2890fx.js (2)
  * attribution: placement 2
  */
 import { registerBundledSkill } from "../bundledSkills.js";
 import { EXPLAIN_USAGE } from "./bundledSkillNames.js";
 import { isRemoteCowork, isCcsRemoteCowork } from "../../utils/entrypointKinds.js";
 
-//@ chunk-hantmvxa.js:163716-163925 placement
+//@ chunk-ne2890fx.js:163897-164106 placement
 var EXPLAIN_USAGE_SKILL_DESCRIPTION =
   "Explain where this session's tokens went, with one simple chart in plain language. Use when: explain usage, explain my usage, where did my tokens go, token usage breakdown, what used the most tokens.";
-//@ chunk-hantmvxa.js:163925-165630 placement
+//@ chunk-ne2890fx.js:164106-165811 placement
 /**
  * 注册"解释本会话 token 去向"skill：有测量能力时用 chunk-bk5ntezz.js 的 measuredPrompt 基于当前消息生成，否则让模型自己读 transcript jsonl 分组估算。
  */

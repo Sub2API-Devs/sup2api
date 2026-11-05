@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：列出排队/过期的反馈草稿；反馈草稿 schema等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kxyd0g16.js (55)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fmnbrxwy.js (55)
  * attribution: placement 55
  */
 import { join, basename, dirname } from "path";
@@ -28,7 +28,7 @@ import {
   numberSchema,
   tuple,
 } from "../../../vendor/zod/v4/classic/schemas.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { STORAGE_SPACES, isValidKeySegment } from "../../utils/storage/storageSpaces.js";
 import { readAllPages } from "../../utils/pagedRead.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -45,19 +45,19 @@ import { getFileReader } from "../../utils/fileStore.js";
 import { logEvent } from "../analytics/index.js";
 import { fromEnum, fromNumber } from "../analytics/safeMetadata.js";
 import { validateStorageKey } from "../../utils/storage/storageKeys.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { uiSignals } from "../../state/uiSignals.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:67217-67237 placement
+//@ chunk-fmnbrxwy.js:81931-81951 placement
 /**
  * 反馈草稿关联的记忆类工具列表。
  */
 var MEMORY_TOOLS; // deferred: uses MemoryListTool (../../tools/MemoryTool/MemoryListTool.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kxyd0g16.js:67217", () => {
+deferInit("chunk-fmnbrxwy.js:81931", () => {
   MEMORY_TOOLS = [MemoryListTool, MemoryReadTool, MemoryWriteTool];
 });
-//@ chunk-kxyd0g16.js:67237-67264 placement
+//@ chunk-fmnbrxwy.js:81951-81978 placement
 /**
  * 提示次数上限的最大可配置值（20）。
  */
@@ -65,14 +65,14 @@ var DEFAULT_MAX_TOOL_CALLS_PER_SESSION = 10;
 var DEFAULT_MAX_DRAFT_PROMPTS_PER_SESSION = 3;
 var MAX_TOOL_CALLS_PER_SESSION = 50;
 var MAX_DRAFT_PROMPTS_PER_SESSION = 20;
-//@ chunk-kxyd0g16.js:67264-67321 placement
+//@ chunk-fmnbrxwy.js:81978-82035 placement
 /**
  * 读反馈中继的远程配置 tengu_juniper_relay_config。
  */
 function feedbackRelayConfig() {
   return getDynamicConfig_CACHED_MAY_BE_STALE("tengu_juniper_relay_config", {});
 }
-//@ chunk-kxyd0g16.js:67321-67406 placement
+//@ chunk-fmnbrxwy.js:82035-82120 placement
 /**
  * 把值限制成范围内的整数，不合格用默认值。
  */
@@ -81,7 +81,7 @@ function clampIntInRange(value, fallback, min, max) {
     ? value
     : fallback;
 }
-//@ chunk-kxyd0g16.js:67406-67467 placement
+//@ chunk-fmnbrxwy.js:82120-82181 placement
 /**
  * 每个会话最多记录多少次反馈工具调用。
  */
@@ -93,7 +93,7 @@ function getMaxToolCallsPerSession() {
     MAX_TOOL_CALLS_PER_SESSION,
   );
 }
-//@ chunk-kxyd0g16.js:67467-67531 placement
+//@ chunk-fmnbrxwy.js:82181-82245 placement
 /**
  * 每个会话最多主动提示多少次反馈草稿。
  */
@@ -105,7 +105,7 @@ function getMaxDraftPromptsPerSession() {
     MAX_DRAFT_PROMPTS_PER_SESSION,
   );
 }
-//@ chunk-kxyd0g16.js:67626-67726 placement
+//@ chunk-fmnbrxwy.js:82340-82440 placement
 /**
  * 反馈草稿限制：队列上限、保留天数与毫秒、详情字节上限、标题长度、转录尾部字节上限、request_id 数、模型名/版本/OS/cwd/area 长度上限。
  */
@@ -121,14 +121,14 @@ var MAX_CLI_VERSION_LENGTH = 32;
 var MAX_OS_LENGTH = 64;
 var MAX_CWD_LENGTH = 512;
 var MAX_AREA_LENGTH = 64;
-//@ chunk-kxyd0g16.js:67726-67766 placement
+//@ chunk-fmnbrxwy.js:82440-82480 placement
 /**
  * 清洗标题（去控制字符、合并重复组合符、限长）。
  */
 function sanitizeTitle(title) {
   return truncateChars(replaceControlChars(stripCombiningRepeated(title)), MAX_TITLE_LENGTH);
 }
-//@ chunk-kxyd0g16.js:67766-67861 placement
+//@ chunk-fmnbrxwy.js:82480-82575 placement
 /**
  * 清洗详情（统一换行、逐行去控制字符、按字节限长）。
  */
@@ -149,26 +149,26 @@ function sanitizeDetails(details) {
     MAX_DETAILS_LENGTH,
   );
 }
-//@ chunk-kxyd0g16.js:67861-67909 placement
+//@ chunk-fmnbrxwy.js:82575-82623 placement
 /**
  * 清洗短文本并限制长度。
  */
 function sanitizeShortText(text, maxLen) {
   return truncateChars(replaceControlChars(stripCombiningRepeated(text)).trim(), maxLen);
 }
-//@ chunk-kxyd0g16.js:67909-67941 placement
+//@ chunk-fmnbrxwy.js:82623-82655 placement
 /**
  * 模型名里允许的字符集（其他字符被删掉）。
  */
 var INVALID_MODEL_CHARS_RE = /[^A-Za-z0-9.:_/@[\]-]/g;
-//@ chunk-kxyd0g16.js:67941-67988 placement
+//@ chunk-fmnbrxwy.js:82655-82702 placement
 /**
  * 清洗模型名。
  */
 function sanitizeModel(model) {
   return truncateChars(model.replace(INVALID_MODEL_CHARS_RE, ""), MAX_MODEL_LENGTH);
 }
-//@ chunk-kxyd0g16.js:67988-68064 placement
+//@ chunk-fmnbrxwy.js:82702-82778 placement
 /**
  * 清洗可选的 area 字段（空串变 undefined）。
  */
@@ -177,14 +177,14 @@ function sanitizeArea(area) {
   let sanitized = sanitizeShortText(area, MAX_AREA_LENGTH);
   return sanitized === "" ? undefined : sanitized;
 }
-//@ chunk-kxyd0g16.js:68064-68111 placement
+//@ chunk-fmnbrxwy.js:82778-82825 placement
 /**
  * 取最近的条目。
  */
 function recentEntries(requestIds) {
   return requestIds.filter(isSessionsToken).slice(-MAX_REQUEST_IDS);
 }
-//@ chunk-kxyd0g16.js:68111-68645 placement
+//@ chunk-fmnbrxwy.js:82825-83359 placement
 /**
  * 反馈的任务类别（code_edit、debug、explain 等）。
  */
@@ -224,14 +224,14 @@ var FEEDBACK_TASK_CATEGORIES = [
   "review",
   "other",
 ];
-//@ chunk-kxyd0g16.js:68645-68705 placement
+//@ chunk-fmnbrxwy.js:83359-83419 placement
 /**
  * 校验失败模式是否属于已知枚举。
  */
 function asFailureMode(failureMode) {
   return failureMode !== undefined && FEEDBACK_FAILURE_MODES.includes(failureMode) ? failureMode : undefined;
 }
-//@ chunk-kxyd0g16.js:68705-68765 placement
+//@ chunk-fmnbrxwy.js:83419-83479 placement
 /**
  * 校验任务类别是否属于已知枚举。
  */
@@ -240,24 +240,24 @@ function asTaskCategory(taskCategory) {
     ? taskCategory
     : undefined;
 }
-//@ chunk-kxyd0g16.js:68765-68806 placement
+//@ chunk-fmnbrxwy.js:83479-83520 placement
 /**
  * thinking 的三种类型（adaptive、enabled、disabled）。
  */
 var THINKING_TYPES = ["adaptive", "enabled", "disabled"];
-//@ chunk-kxyd0g16.js:68806-68865 placement
+//@ chunk-fmnbrxwy.js:83520-83579 placement
 /**
  * 校验 thinking 类型。
  */
 function asThinkingType(thinkingType) {
   return thinkingType !== undefined && THINKING_TYPES.includes(thinkingType) ? thinkingType : undefined;
 }
-//@ chunk-kxyd0g16.js:68865-68875 placement
+//@ chunk-fmnbrxwy.js:83579-83589 placement
 /**
  * effort 字段的最大字符数（16）。
  */
 var MAX_EFFORT_CHARS = 16;
-//@ chunk-kxyd0g16.js:68875-68951 placement
+//@ chunk-fmnbrxwy.js:83589-83665 placement
 /**
  * 清洗可选 effort。
  */
@@ -266,12 +266,12 @@ function sanitizeEffort(effort) {
   let sanitized = sanitizeShortText(effort, MAX_EFFORT_CHARS);
   return sanitized === "" ? undefined : sanitized;
 }
-//@ chunk-kxyd0g16.js:68951-68962 placement
+//@ chunk-fmnbrxwy.js:83665-83676 placement
 /**
  * token 数量字段的上限（100 万）。
  */
 var MAX_TOKEN_COUNT = 1e6;
-//@ chunk-kxyd0g16.js:68962-69039 placement
+//@ chunk-fmnbrxwy.js:83676-83753 placement
 /**
  * 校验 token 数量（非负整数且不超过上限）。
  */
@@ -280,12 +280,12 @@ function asTokenCount(value) {
     ? value
     : undefined;
 }
-//@ chunk-kxyd0g16.js:69039-70198 placement
+//@ chunk-fmnbrxwy.js:83753-84912 placement
 /**
  * 反馈草稿 schema。
  */
 var FeedbackDraftSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kxyd0g16.js:69039", () => {
+deferInit("chunk-fmnbrxwy.js:83753", () => {
   FeedbackDraftSchema = DoctorLazy(() =>
     objectSchema({
       draft_id: uuidSchema(),
@@ -326,18 +326,18 @@ deferInit("chunk-kxyd0g16.js:69039", () => {
     }),
   );
 });
-//@ chunk-kxyd0g16.js:70198-70248 placement
+//@ chunk-fmnbrxwy.js:84912-84962 placement
 /**
  * 反馈草稿目录（configDir/feedback/drafts）。
  */
 function feedbackDraftsDir() {
   return join(getClaudeConfigDir(), "feedback", "drafts");
 }
-//@ chunk-kxyd0g16.js:70248-70390 placement
+//@ chunk-fmnbrxwy.js:84962-85104 placement
 var DRAFT_ID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 var SESSION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 var PROJECT_DIR_KEY_RE = /^[A-Za-z0-9-]{1,255}$/;
-//@ chunk-kxyd0g16.js:70390-70489 placement
+//@ chunk-fmnbrxwy.js:85104-85203 placement
 /**
  * 由草稿 id 得到本地文件路径（id 非法时抛错）。
  */
@@ -345,7 +345,7 @@ function draftFilePath(id) {
   if (!DRAFT_ID_RE.test(id)) throw Error("invalid feedback draft id");
   return join(feedbackDraftsDir(), `${id}.json`);
 }
-//@ chunk-kxyd0g16.js:70489-70587 placement
+//@ chunk-fmnbrxwy.js:85203-85301 placement
 /**
  * 由草稿 id 得到存储 v5 的键（id 非法时抛错）。
  */
@@ -353,14 +353,14 @@ function draftStorageKey(id) {
   if (!DRAFT_ID_RE.test(id)) throw Error("invalid feedback draft id");
   return STORAGE_SPACES.feedbackDraft(id);
 }
-//@ chunk-kxyd0g16.js:70587-70651 placement
+//@ chunk-fmnbrxwy.js:85301-85365 placement
 /**
  * 从错误对象取遥测码。
  */
 function telemetryCodeOf(error) {
   return "telemetryCode" in error ? error.telemetryCode : undefined;
 }
-//@ chunk-kxyd0g16.js:70651-70720 placement
+//@ chunk-fmnbrxwy.js:85365-85434 placement
 /**
  * 把存储错误描述成 “code telemetryCode”。
  */
@@ -368,7 +368,7 @@ function describeStorageError(error) {
   let code = telemetryCodeOf(error);
   return code === undefined ? error.code : `${error.code} ${code}`;
 }
-//@ chunk-kxyd0g16.js:70720-71303 placement
+//@ chunk-fmnbrxwy.js:85434-86017 placement
 /**
  * 列出存储中的反馈草稿键。
  */
@@ -411,12 +411,12 @@ async function listFeedbackDraftKeys(storage) {
     "feedback draft listing failed",
   );
 }
-//@ chunk-kxyd0g16.js:71303-71312 placement
+//@ chunk-fmnbrxwy.js:86017-86026 placement
 /**
  * 逐块读取转录时的块大小（8）。
  */
 var TAIL_READ_BLOCK_CHARS = 8;
-//@ chunk-kxyd0g16.js:71312-71759 placement
+//@ chunk-fmnbrxwy.js:86026-86473 placement
 /**
  * 创建转录尾部读取器。
  */
@@ -460,7 +460,7 @@ function createTranscriptTailReader(storage, keys, tail) {
     return block[keyIndex - nextStart] ?? null;
   };
 }
-//@ chunk-kxyd0g16.js:71759-72280 placement
+//@ chunk-fmnbrxwy.js:86473-86994 placement
 /**
  * 定位草稿对应的转录。
  */
@@ -478,12 +478,12 @@ async function resolveDraftTranscript(draft) {
     return join(getProjectsDir(), projectDirKey, `${draft.source_session_id}.jsonl`);
   return join(getProjectDir(draft.cwd), `${draft.source_session_id}.jsonl`);
 }
-//@ chunk-kxyd0g16.js:72280-72294 placement
+//@ chunk-fmnbrxwy.js:86994-87008 placement
 /**
  * 佐证草稿时读取的转录尾部大小（256 KiB）。
  */
 var MAX_CORROBORATION_TAIL_CHARS = 262144;
-//@ chunk-kxyd0g16.js:72294-72587 placement
+//@ chunk-fmnbrxwy.js:87008-87301 placement
 /**
  * 检查转录内容是否能佐证反馈草稿（逐行解析 JSONL 查找对应记录）。
  */
@@ -509,7 +509,7 @@ function transcriptCorroboratesDraft(jsonl, draft) {
   }
   return false;
 }
-//@ chunk-kxyd0g16.js:72587-72667 placement
+//@ chunk-fmnbrxwy.js:87301-87381 placement
 /**
  * 按字符截断（不切开代理对）。
  */
@@ -517,7 +517,7 @@ function truncateChars(text, maxLen) {
   let list = Array.from(text);
   return list.length <= maxLen ? text : list.slice(0, maxLen).join("");
 }
-//@ chunk-kxyd0g16.js:72667-73413 placement
+//@ chunk-fmnbrxwy.js:87381-88127 placement
 /**
  * 生成反馈草稿对象。
  */
@@ -555,7 +555,7 @@ function createFeedbackDraft(input, now = new Date()) {
     status: "queued",
   };
 }
-//@ chunk-kxyd0g16.js:73413-73471 placement
+//@ chunk-fmnbrxwy.js:88127-88185 placement
 /**
  * 从转写文件路径取项目目录键。
  */
@@ -563,7 +563,7 @@ function projectDirKey_2(transcriptFile) {
   let dirName = basename(dirname(transcriptFile));
   return PROJECT_DIR_KEY_RE.test(dirName) ? dirName : undefined;
 }
-//@ chunk-kxyd0g16.js:73471-74630 placement
+//@ chunk-fmnbrxwy.js:88185-89344 placement
 /**
  * 保存反馈草稿（大小上限）。
  */
@@ -656,7 +656,7 @@ async function saveFeedbackDraft(draft, now = new Date(), storageV5) {
     evicted,
   };
 }
-//@ chunk-kxyd0g16.js:74630-76006 placement
+//@ chunk-fmnbrxwy.js:89344-90720 placement
 /**
  * 列出排队/过期的反馈草稿。
  */
@@ -760,7 +760,7 @@ async function listFeedbackDrafts(options, storage) {
     expired,
   };
 }
-//@ chunk-kxyd0g16.js:76006-76187 placement (2.1.88 match: getErrorsPath, 0.79)
+//@ chunk-fmnbrxwy.js:90720-90901 placement (2.1.88 match: getErrorsPath, 0.79)
 function parseTranscriptPathUnder(draftTranscript, projectsDir) {
   if (!draftTranscript.endsWith(".jsonl")) return;
   let dir = dirname(draftTranscript);
@@ -770,7 +770,7 @@ function parseTranscriptPathUnder(draftTranscript, projectsDir) {
   let parts = STORAGE_SPACES.transcript(dirName, sliced);
   return validateStorageKey(parts) === undefined ? parts : undefined;
 }
-//@ chunk-kxyd0g16.js:76187-76756 placement
+//@ chunk-fmnbrxwy.js:90901-91470 placement
 /**
  * 核对草稿的转录。
  */
@@ -812,7 +812,7 @@ async function verifyDraftTranscript(draft, storage) {
     return false;
   }
 }
-//@ chunk-kxyd0g16.js:76756-77065 placement
+//@ chunk-fmnbrxwy.js:91470-91779 placement
 /**
  * 删除反馈草稿。
  */
@@ -837,7 +837,7 @@ async function deleteFeedbackDraft(id, storage) {
     return false;
   }
 }
-//@ chunk-kxyd0g16.js:77065-77174 placement
+//@ chunk-fmnbrxwy.js:91779-91888 placement
 /**
  * 统计某会话产生的排队中反馈草稿数量。
  */
@@ -848,9 +848,9 @@ async function countSessionQueuedDrafts(sessionId, storageV5) {
     },
     storageV5,
   );
-  return count(queued, (draft) => draft.source_session_id === sessionId);
+  return countWhere(queued, (draft) => draft.source_session_id === sessionId);
 }
-//@ chunk-kxyd0g16.js:77174-77203 placement
+//@ chunk-fmnbrxwy.js:91888-91917 placement
 /**
  * 提示里模型名最多展示的字符数（6）。
  */
@@ -858,7 +858,7 @@ var MAX_TITLE_PREVIEW_CHARS = 20;
 var MAX_NOTICE_PROMPT_CHARS = 160;
 var MAX_NOTICE_LINES = 4;
 var MAX_NOTICE_MODEL_CHARS = 6;
-//@ chunk-kxyd0g16.js:77203-77506 placement
+//@ chunk-fmnbrxwy.js:91917-92220 placement
 /**
  * 记录新草稿并决定是否提示用户。
  */
@@ -885,7 +885,7 @@ function noteFeedbackDraft(notice) {
   });
   return kind;
 }
-//@ chunk-kxyd0g16.js:77506-77658 placement
+//@ chunk-fmnbrxwy.js:92220-92372 placement
 /**
  * 在未达上限时把反馈工具调用计数加一，返回是否计数成功。
  */
@@ -901,7 +901,7 @@ function tryCountFeedbackToolCall() {
   });
   return counted;
 }
-//@ chunk-kxyd0g16.js:77658-77750 placement
+//@ chunk-fmnbrxwy.js:92372-92464 placement
 /**
  * 关闭指定草稿的提示。
  */
@@ -915,7 +915,7 @@ function dismissFeedbackNotice_2(draftId) {
       : state,
   );
 }
-//@ chunk-kxyd0g16.js:77750-77835 placement
+//@ chunk-fmnbrxwy.js:92464-92549 placement
 /**
  * 关闭反馈提示。
  */
@@ -929,7 +929,7 @@ function dismissFeedbackNotice() {
         },
   );
 }
-//@ chunk-kxyd0g16.js:77835-77987 placement
+//@ chunk-fmnbrxwy.js:92549-92701 placement
 /**
  * 标记某草稿的提示已记录过遥测，首次标记返回 true。
  */
@@ -945,7 +945,7 @@ function markDraftNoticeLogged(draftId) {
   });
   return logged;
 }
-//@ chunk-kxyd0g16.js:77987-78099 placement
+//@ chunk-fmnbrxwy.js:92701-92813 placement
 /**
  * 把会话草稿计数减少指定数量（不低于 0）。
  */
@@ -955,7 +955,7 @@ function decrementSessionDraftCount(amount = 1) {
     sessionDraftCount: Math.max(0, state.sessionDraftCount - amount),
   }));
 }
-//@ chunk-kxyd0g16.js:78099-78245 placement
+//@ chunk-fmnbrxwy.js:92813-92959 placement
 /**
  * 尝试开始从磁盘初始化草稿计数，仅首次返回 true。
  */
@@ -971,7 +971,7 @@ function tryStartDraftSeed() {
   });
   return started;
 }
-//@ chunk-kxyd0g16.js:78245-78406 placement
+//@ chunk-fmnbrxwy.js:92959-93120 placement
 /**
  * 用磁盘上的草稿数初始化会话草稿计数（只做一次，取较大值）。
  */
@@ -985,7 +985,7 @@ function seedSessionDraftCount(count) {
     };
   });
 }
-//@ chunk-kxyd0g16.js:78406-78544 placement
+//@ chunk-fmnbrxwy.js:93120-93258 placement
 /**
  * 直接设置会话草稿计数并标记已从磁盘初始化。
  */
@@ -1004,14 +1004,6 @@ export {
   tryStartDraftSeed,
   countSessionQueuedDrafts,
   seedSessionDraftCount,
-  MAX_TITLE_PREVIEW_CHARS,
-  dismissFeedbackNotice_2,
-  markDraftNoticeLogged,
-  dismissFeedbackNotice,
-  listFeedbackDrafts,
-  MAX_NOTICE_MODEL_CHARS,
-  FEEDBACK_TYPES,
-  MEMORY_TOOLS,
   recentEntries,
   sanitizeArea,
   asFailureMode,
@@ -1029,6 +1021,14 @@ export {
   transcriptCorroboratesDraft,
   deleteFeedbackDraft,
   decrementSessionDraftCount,
+  dismissFeedbackNotice_2,
+  listFeedbackDrafts,
+  FEEDBACK_TYPES,
+  MEMORY_TOOLS,
+  MAX_TITLE_PREVIEW_CHARS,
+  markDraftNoticeLogged,
+  dismissFeedbackNotice,
+  MAX_NOTICE_MODEL_CHARS,
   FEEDBACK_FAILURE_MODES,
   FEEDBACK_TASK_CATEGORIES,
   feedbackRelayConfig,

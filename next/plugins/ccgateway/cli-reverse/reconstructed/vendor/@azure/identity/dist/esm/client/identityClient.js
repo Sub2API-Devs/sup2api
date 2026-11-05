@@ -1,8 +1,8 @@
 /**
  * @azure/identity/dist/esm/client/identityClient.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/identity@4.10.1
- * pieces: chunk-mrx6y2r5.js (3)
+ * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-fingerprint 3
  */
 import { isNodeLike_default } from "../../../../core-rest-pipeline/dist/esm/util/file.js";
@@ -22,9 +22,9 @@ import {
 } from "../../../../core-rest-pipeline/dist/esm/policies/retryPolicy.js";
 import { runDeferredInits } from "../../../../../../runtime/deferred-init.js";
 
-//@ chunk-mrx6y2r5.js:83557-83582 esm-fingerprint
+//@ chunk-b5df2wx1.js:83557-83582 esm-fingerprint
 var noCorrelationId = "noCorrelationId";
-//@ chunk-mrx6y2r5.js:83582-83744 esm-fingerprint
+//@ chunk-b5df2wx1.js:83582-83744 esm-fingerprint
 function getIdentityClientAuthorityHost(options) {
   let authorityHost = options === null || options === undefined ? undefined : options.authorityHost;
   if (isNodeLike_default)
@@ -34,7 +34,7 @@ function getIdentityClientAuthorityHost(options) {
         : process.env.AZURE_AUTHORITY_HOST;
   return authorityHost !== null && authorityHost !== undefined ? authorityHost : DefaultAuthorityHost;
 }
-//@ chunk-mrx6y2r5.js:83744-88341 esm-fingerprint
+//@ chunk-b5df2wx1.js:83744-88341 esm-fingerprint
 class IdentityClient extends ServiceClient {
   constructor(options) {
     var _a;

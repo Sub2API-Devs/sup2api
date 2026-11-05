@@ -1,14 +1,14 @@
 /**
  * combined-stream/lib/combined_stream.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: combined-stream@1.0.8
- * pieces: chunk-h6b7mazd.js (1)
+ * pieces: chunk-ww9agm6g.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_delayed_stream } from "../../delayed-stream/lib/delayed_stream.js";
 
-//@ chunk-h6b7mazd.js:1799-4742 cjs-fingerprint
+//@ chunk-ww9agm6g.js:1799-4742 cjs-fingerprint
 var require_combined_stream = __commonJS(function (cjsExports, cjsModule) {
   var util = importMetaRequire("util");
   var Stream = importMetaRequire("stream").Stream;

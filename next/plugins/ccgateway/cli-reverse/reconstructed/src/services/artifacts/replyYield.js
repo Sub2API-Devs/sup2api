@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Artifact 评论自动回复的"让出"（yield）：多个会话之间协调由谁回复评论
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sqqsb7w7.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-27nza5ft.js (22)
  * attribution: placement 22
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -32,7 +32,7 @@ import {
 } from "../../utils/udsMessaging/peerGuard.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-sqqsb7w7.js:534-1261 placement
+//@ chunk-27nza5ft.js:534-1261 placement
 /**
  * 评论自动回复让渡协议：4 s 超时、最多 16 个 slug、表上限 64，以及 yield/unyield 消息 schema 与 unref 定时器。
  */
@@ -43,7 +43,7 @@ var yieldRequestSchema;
 var yieldedResponseSchema;
 var unyieldRequestSchema;
 var unrefTimers;
-deferInit("chunk-sqqsb7w7.js:534", () => {
+deferInit("chunk-27nza5ft.js:534", () => {
   REPLY_YIELD_TIMEOUT_MS = 4000;
   MAX_YIELD_SLUGS = 16;
   MAX_TRACKED_TABLE = 64;
@@ -89,7 +89,7 @@ deferInit("chunk-sqqsb7w7.js:534", () => {
     clearTimeout: (handle) => clearTimeout(handle),
   };
 });
-//@ chunk-sqqsb7w7.js:1261-1619 placement
+//@ chunk-27nza5ft.js:1261-1619 placement
 class ReplyYieldTable {
   outstanding = new Map();
   pendingClaims = new Map();
@@ -109,16 +109,16 @@ class ReplyYieldTable {
     this.delivered.clear();
   }
 }
-//@ chunk-sqqsb7w7.js:1619-1642 placement
+//@ chunk-27nza5ft.js:1619-1642 placement
 var replyYieldSlot; // deferred: uses ReplyYieldTable of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-sqqsb7w7.js:1619", () => {
+deferInit("chunk-27nza5ft.js:1619", () => {
   replyYieldSlot = new HostScoped(() => new ReplyYieldTable());
 });
-//@ chunk-sqqsb7w7.js:1642-1677 placement
+//@ chunk-27nza5ft.js:1642-1677 placement
 function replyYieldTable() {
   return replyYieldSlot.of(getRootSession().host);
 }
-//@ chunk-sqqsb7w7.js:1677-1794 placement
+//@ chunk-27nza5ft.js:1677-1794 placement
 function evictOverCap(map, cap) {
   while (map.size > MAX_TRACKED_TABLE) {
     let oldest = map.keys().next().value;
@@ -128,7 +128,7 @@ function evictOverCap(map, cap) {
     cap?.(entry, oldest);
   }
 }
-//@ chunk-sqqsb7w7.js:1794-2376 placement
+//@ chunk-27nza5ft.js:1794-2376 placement
 function waitForYieldAnswer(msgId, msg, slugs) {
   let timers = slugs.timers ?? unrefTimers;
   let table = replyYieldTable();
@@ -165,7 +165,7 @@ function waitForYieldAnswer(msgId, msg, slugs) {
     });
   });
 }
-//@ chunk-sqqsb7w7.js:2376-2579 placement
+//@ chunk-27nza5ft.js:2376-2579 placement
 /**
  * 开始一次回复让渡认领：生成唯一 id，记录涉及的 slug 与发送时间，挂进待处理认领表，返回带 end() 的认领对象。
  */
@@ -182,7 +182,7 @@ function startYieldClaim(slugs, now) {
   table.pendingClaims.set(claimId, claim);
   return claim;
 }
-//@ chunk-sqqsb7w7.js:2579-2725 placement
+//@ chunk-27nza5ft.js:2579-2725 placement
 /**
  * 取出并清除某个待回复记录的丢失列表（同时取消其定时器）。
  */
@@ -194,14 +194,14 @@ function takeOutstandingLost(msgId) {
   table.outstanding.delete(msgId);
   return [...entry.lost];
 }
-//@ chunk-sqqsb7w7.js:2725-2792 placement
+//@ chunk-27nza5ft.js:2725-2792 placement
 /**
  * 导出函数 `hasOutstanding`：参数 e，返回 typeof e === "string" && y().outstanding.has(e)。
  */
 function hasOutstanding(origMsgId) {
   return typeof origMsgId === "string" && replyYieldTable().outstanding.has(origMsgId);
 }
-//@ chunk-sqqsb7w7.js:2792-3505 placement
+//@ chunk-27nza5ft.js:2792-3505 placement
 /**
  * 处理让出请求（pid 不符、超时、表满）。
  */
@@ -250,7 +250,7 @@ function handleYieldRequest(request, senderPid) {
   }
   return true;
 }
-//@ chunk-sqqsb7w7.js:3505-3562 placement
+//@ chunk-27nza5ft.js:3505-3562 placement
 /**
  * 导出函数 `setYieldHolder`：参数 e, i = null。
  */
@@ -259,7 +259,7 @@ function setYieldHolder(holder, reverter = null) {
   table.holder = holder;
   table.reverter = reverter;
 }
-//@ chunk-sqqsb7w7.js:3562-3983 placement
+//@ chunk-27nza5ft.js:3562-3983 placement
 /**
  * 记录把某些 slug 让渡给某接收方（合并 slug、记接收方 pid 与进程启动标识）；超出上限时优先淘汰同进程的其他记录，再淘汰最早的，并对被淘汰的调用回滚函数。
  */
@@ -289,21 +289,21 @@ function recordDelivered(table, msgId, yielded, info) {
   }
   evictOverCap(table.delivered, revertEntry);
 }
-//@ chunk-sqqsb7w7.js:3983-4118 placement
+//@ chunk-27nza5ft.js:3983-4118 placement
 function isDeliveredFull(entry, pid) {
   if (entry.delivered.size < MAX_TRACKED_TABLE) return false;
   if (pid === undefined) return true;
   for (let delivered of entry.delivered.values()) if (delivered.pid === pid) return false;
   return true;
 }
-//@ chunk-sqqsb7w7.js:4118-4150 placement
+//@ chunk-27nza5ft.js:4118-4150 placement
 /**
  * 导出函数 `revertGoneTakersNow`：参数 e，返回 revertGoneTakers(y(), e)。
  */
 function revertGoneTakersNow(entry) {
   return revertGoneTakers(replyYieldTable(), entry);
 }
-//@ chunk-sqqsb7w7.js:4150-4282 placement
+//@ chunk-27nza5ft.js:4150-4282 placement
 function revertGoneTakers(entry, pid) {
   let out = [];
   for (let [slug, sent] of [...entry.delivered])
@@ -312,7 +312,7 @@ function revertGoneTakers(entry, pid) {
   revertReusedPids(entry);
   return out;
 }
-//@ chunk-sqqsb7w7.js:4282-4400 placement
+//@ chunk-27nza5ft.js:4282-4400 placement
 /**
  * 从所有已投递记录中移除某 slug，记录变空时一并删除。
  */
@@ -321,7 +321,7 @@ function forgetDeliveredSlug(slug) {
   for (let [pid, entry] of [...table.delivered])
     if (entry.slugs.delete(slug) && entry.slugs.size === 0) table.delivered.delete(pid);
 }
-//@ chunk-sqqsb7w7.js:4400-4668 placement
+//@ chunk-27nza5ft.js:4400-4668 placement
 async function revertReusedPids(entry) {
   for (let [pid, item] of [...entry.delivered]) {
     if (item.pid === undefined || item.procStart === undefined) continue;
@@ -339,7 +339,7 @@ async function revertReusedPids(entry) {
     }
   }
 }
-//@ chunk-sqqsb7w7.js:4668-4907 placement
+//@ chunk-27nza5ft.js:4668-4907 placement
 function revertDelivered(entry, pid, slugs, options) {
   let delivered = entry.delivered.get(pid);
   if (delivered === undefined) return [];
@@ -353,7 +353,7 @@ function revertDelivered(entry, pid, slugs, options) {
     return [];
   }
 }
-//@ chunk-sqqsb7w7.js:4907-4970 placement
+//@ chunk-27nza5ft.js:4907-4970 placement
 /**
  * 导出函数 `setSendAnswer`：参数 e, i = null。
  */
@@ -362,7 +362,7 @@ function setSendAnswer(sendAnswer, ownAddress = null) {
   table.sendAnswer = sendAnswer;
   table.ownAddress = ownAddress;
 }
-//@ chunk-sqqsb7w7.js:4970-5376 placement
+//@ chunk-27nza5ft.js:4970-5376 placement
 function decideYield(table, claim) {
   let claimAt = claim.claimed_at ?? claim.sent_at;
   let refuse = false;
@@ -386,7 +386,7 @@ function decideYield(table, claim) {
   }
   return refuse ? "refuse" : "proceed";
 }
-//@ chunk-sqqsb7w7.js:5376-6673 placement
+//@ chunk-27nza5ft.js:5376-6673 placement
 /**
  * 回答其他会话的让出请求（过期、处理器抛错、投递不明）。
  */
@@ -467,7 +467,7 @@ function answerYieldRequest(request, extra, identity, now, options) {
     },
   );
 }
-//@ chunk-sqqsb7w7.js:6673-7033 placement
+//@ chunk-27nza5ft.js:6673-7033 placement
 function handleUnyield(msg, ctx) {
   let table = replyYieldTable();
   let entry = table.delivered.get(msg.orig_msg_id);
@@ -488,6 +488,12 @@ function handleUnyield(msg, ctx) {
   return true;
 }
 export {
+  unrefTimers,
+  MAX_YIELD_SLUGS,
+  waitForYieldAnswer,
+  takeOutstandingLost,
+  setYieldHolder,
+  revertGoneTakersNow,
   yieldRequestSchema,
   answerYieldRequest,
   unyieldRequestSchema,
@@ -496,12 +502,6 @@ export {
   hasOutstanding,
   handleYieldRequest,
   setSendAnswer,
-  unrefTimers,
-  MAX_YIELD_SLUGS,
-  waitForYieldAnswer,
-  takeOutstandingLost,
-  setYieldHolder,
-  revertGoneTakersNow,
   forgetDeliveredSlug,
   startYieldClaim,
 };

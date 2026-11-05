@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：会话技能清单
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f9asxqh1.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q1gbn2mn.js (6)
  * attribution: placement 6
  */
 import { DoctorLazy } from "../../../cli/handlers/util.js";
@@ -19,14 +19,14 @@ import { logForDiagnosticsNoPII } from "../../../utils/diagLogs.js";
 import { classifyAxiosError } from "../../../utils/errors.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-f9asxqh1.js:21245-21660 placement
+//@ chunk-q1gbn2mn.js:22928-23343 placement
 /**
  * 会话技能清单（/worker/skill-manifest）的懒加载 schema：skills 与 plugins 两个条目列表（缺省为空数组，字段缺省为空串，附带市场名与是否官方），另带请求超时与重试间隔常量。
  */
 var sessionSkillManifestSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MANIFEST_TIMEOUT_MS;
 var MANIFEST_RETRY_DELAY_MS;
-deferInit("chunk-f9asxqh1.js:21245", () => {
+deferInit("chunk-q1gbn2mn.js:22928", () => {
   sessionSkillManifestSchema = DoctorLazy(() => {
     let stringField = create_2()
       .nullish()
@@ -59,7 +59,7 @@ deferInit("chunk-f9asxqh1.js:21245", () => {
   MANIFEST_TIMEOUT_MS = 30000;
   MANIFEST_RETRY_DELAY_MS = 500;
 });
-//@ chunk-f9asxqh1.js:21660-22430 placement
+//@ chunk-q1gbn2mn.js:23343-24113 placement
 /**
  * 会话技能/插件清单的缓存：fetch 合并并发请求，启动时复用同一次结果；listEntries 按 skills 或 plugins 返回条目，失败时记录遥测与特性状态并返回 manifest 错误。
  */
@@ -106,15 +106,15 @@ class SessionSkillManifest {
     };
   }
 }
-//@ chunk-f9asxqh1.js:22430-22457 placement
+//@ chunk-q1gbn2mn.js:24113-24140 placement
 /**
  * 按会话根保存的技能清单。
  */
 var sessionSkillManifestSlot; // deferred: uses SessionRootSlot (../../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-f9asxqh1.js:22430", () => {
+deferInit("chunk-q1gbn2mn.js:24113", () => {
   sessionSkillManifestSlot = new SessionRootSlot(() => new SessionSkillManifest());
 });
-//@ chunk-f9asxqh1.js:22457-22577 placement
+//@ chunk-q1gbn2mn.js:24140-24260 placement
 async function fetchSkillManifestWithRetry() {
   let skillManifest = await fetchSkillManifest();
   if (skillManifest.ok || skillManifest.reason === "no_auth" || skillManifest.reason === "gated")
@@ -122,7 +122,7 @@ async function fetchSkillManifestWithRetry() {
   await sleep(MANIFEST_RETRY_DELAY_MS);
   return fetchSkillManifest();
 }
-//@ chunk-f9asxqh1.js:22577-23503 placement
+//@ chunk-q1gbn2mn.js:24260-25186 placement
 /**
  * 从 CCR 会话 GET /worker/skill-manifest（会话 JWT）：无认证、被拦、503、HTTP 错误、格式不符或传输异常分别归类为 no_auth/gated/unavailable/http_error/malformed/transport，成功时返回带 id 的技能与插件条目。
  */
@@ -193,7 +193,7 @@ async function fetchSkillManifest() {
     };
   }
 }
-//@ chunk-f9asxqh1.js:23594-23651 placement
+//@ chunk-q1gbn2mn.js:25277-25334 placement
 /**
  * 判断字节数组开头是否为 zip 的 PK 标记。
  */

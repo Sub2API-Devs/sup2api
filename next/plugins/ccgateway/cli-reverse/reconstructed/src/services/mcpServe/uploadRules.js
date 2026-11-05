@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。mcp serve 的文件上传调用读取仓库权限规则（repo rules），读不到时拒绝并记 repo_rules_read_failed。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-11e3jmt7.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yxp63rfa.js (4)
  * attribution: placement 4
  */
 import { readRepoRulesForRequest } from "./repoPermissionRules.js";
@@ -14,9 +14,9 @@ import { getEmptyToolPermissionContext } from "../../Tool.js";
 import { composeRepoDenyAskRules } from "../../utils/permissions/repoRules.js";
 import { getSessionProject } from "../../bootstrap/sessionSlices.js";
 
-//@ chunk-11e3jmt7.js:374-402 placement
+//@ chunk-yxp63rfa.js:374-402 placement
 var REPO_RULES_UNREAD = "repo_rules_unread";
-//@ chunk-11e3jmt7.js:402-495 placement
+//@ chunk-yxp63rfa.js:402-495 placement
 /**
  * mcp serve 的文件上传调用读取仓库权限规则（repo rules），读不到时拒绝并记 repo_rules_read_failed。
  */
@@ -26,7 +26,7 @@ function uploadRulesForRequest(request, context) {
     ? rulesRead.then((repoRules) => permissionContextWithRepoRules(repoRules, context))
     : permissionContextWithRepoRules(rulesRead, context);
 }
-//@ chunk-11e3jmt7.js:495-728 placement
+//@ chunk-yxp63rfa.js:495-728 placement
 /**
  * 把仓库规则并入启动权限上下文
  */
@@ -42,7 +42,7 @@ function permissionContextWithRepoRules(rulesRead, context) {
     ? context.launchPermissionContext
     : buildUploadPermissionContext(context.launchPermissionContext, rulesRead.repoRules, context);
 }
-//@ chunk-11e3jmt7.js:728-861 placement
+//@ chunk-yxp63rfa.js:728-861 placement
 function buildUploadPermissionContext(launchPermissionContext, mergeOptions, { session }) {
   let launchRules = launchPermissionContext ?? getEmptyToolPermissionContext();
   return {

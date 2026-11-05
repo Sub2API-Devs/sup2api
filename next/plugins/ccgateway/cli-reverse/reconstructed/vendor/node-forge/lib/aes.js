@@ -1,8 +1,8 @@
 /**
  * node-forge/lib/aes.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: node-forge@1.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_cipher } from "./cipher.js";
 import { require_cipherModes } from "./cipherModes.js";
 import { require_util } from "./util.js";
 
-//@ chunk-fq0cr76a.js:43142-47100 cjs-fingerprint
+//@ chunk-qg41pqt6.js:43009-46984 cjs-fingerprint
 var require_aes = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_cipher();

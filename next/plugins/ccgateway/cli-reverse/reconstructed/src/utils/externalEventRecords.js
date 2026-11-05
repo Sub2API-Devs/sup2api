@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：外部事件（频道消息、粘贴内容）记录
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xnxk5g3e.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-m9hfbpfh.js (3)
  * attribution: placement 3
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
@@ -28,16 +28,16 @@ import {
 import { pastedContentOpenTag, pastedContentCloseTag } from "./pastedContent.js";
 import { parseInboundContent, parseInlinePastes } from "../bridge/inboundMessageOrigin.js";
 import { isVirtualPancakeEnabled } from "./permissions/permissionSetup.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { stripSystemReminders } from "../components/messageActions.js";
 import { neutralizePeerTags } from "./sessionPeers.js";
 import { escapePluginTags } from "./messages/pluginTags.js";
 
-//@ chunk-xnxk5g3e.js:603-675 placement
+//@ chunk-m9hfbpfh.js:570-642 placement
 function externalEventRecordIfEnabled(record) {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_external_event_record", false) ? record : undefined;
 }
-//@ chunk-xnxk5g3e.js:675-1127 placement
+//@ chunk-m9hfbpfh.js:642-1094 placement
 function recordPastedSpans(text, inlineGroups, sessionTag) {
   let inlineTexts = inlineGroups.flat();
   let substringFinder = createSubstringFinder(text);
@@ -80,7 +80,7 @@ function recordPastedSpans(text, inlineGroups, sessionTag) {
     escapePastedContentTag,
   );
 }
-//@ chunk-xnxk5g3e.js:1127-2135 placement
+//@ chunk-m9hfbpfh.js:1094-2102 placement
 /**
  * 构建外部事件（频道消息等）的记录：解析入站内容与内联粘贴，记录问题。
  */
@@ -104,7 +104,7 @@ function buildExternalEventRecord(content, pastedContent, inlinePastes) {
     .map((text) => text.trim())
     .filter((text) => text.length >= MIN_INLINE_TAG_CHARS)
     .map((inlineText) =>
-      uniq(
+      normalizeCaseForComparison_2(
         [
           inlineText,
           stripSystemReminders(`x${inlineText}`).slice(1).trim(),

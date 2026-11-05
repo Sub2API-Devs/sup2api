@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工具宿主权限请求答复、预检与服务端 Bash 调用
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dz36xfxg.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fb9qe48t.js (8)
  * attribution: placement 8
  */
 import { SERVE_MODE_VALUE, strippedPrivilegeFieldsNote, parseServeModeInput } from "./serveModeInput.js";
@@ -46,10 +46,11 @@ import { findToolByName } from "../../Tool.js";
 import { getAllBaseTools } from "../../tools.js";
 import { MONITOR } from "../../tools/MonitorTool/constants.js";
 import { readRepoRulesForRequest } from "../../services/mcpServe/repoPermissionRules.js";
+import { isShellDirectoryTaken } from "./shellDirectoryHeld.js";
 import { permissionCheckedCwds } from "../../utils/Shell.js";
 import { runInRemoteCallFrameMain } from "../../remote/remoteMode.js";
 
-//@ chunk-dz36xfxg.js:37128-38278 placement
+//@ chunk-fb9qe48t.js:38900-40050 placement
 async function runServedBashCall(
   tool,
   validated,
@@ -136,7 +137,7 @@ async function runServedBashCall(
     outcome: "unsent" in answer ? answer.unsent : answer.answer === "tool_failed" ? "tool_failed" : "output",
   };
 }
-//@ chunk-dz36xfxg.js:38278-39015 placement
+//@ chunk-fb9qe48t.js:40050-40786 placement
 async function precheckToolHostCall(tool, input, toolUseContext) {
   try {
     if (!tool.isEnabled())
@@ -178,28 +179,28 @@ async function precheckToolHostCall(tool, input, toolUseContext) {
     };
   }
 }
-//@ chunk-dz36xfxg.js:39015-39071 placement
+//@ chunk-fb9qe48t.js:40786-40842 placement
 function notServedResult(message) {
   return refusedResult({
     code: "not_served",
     message,
   });
 }
-//@ chunk-dz36xfxg.js:39071-39117 placement
+//@ chunk-fb9qe48t.js:40842-40888 placement
 function notServedOutcome(outcome, message) {
   return {
     result: notServedResult(message),
     outcome,
   };
 }
-//@ chunk-dz36xfxg.js:39117-39285 placement
+//@ chunk-fb9qe48t.js:40888-41056 placement
 function barredCallOutcome(tool) {
   return notServedOutcome(
     "barred_call",
     `${tool.name} was not run: this session was already told that this call had not started, so it can no longer run. Send a new call.`,
   );
 }
-//@ chunk-dz36xfxg.js:39285-39477 placement
+//@ chunk-fb9qe48t.js:41056-41248 placement
 function permissionOnlyResult(tool, decision) {
   let result = completedError(
     "message" in decision
@@ -219,7 +220,7 @@ function permissionOnlyResult(tool, decision) {
     outcome: decision.kind,
   };
 }
-//@ chunk-dz36xfxg.js:39477-39669 placement
+//@ chunk-fb9qe48t.js:41248-41440 placement
 function permissionOnlyOutcome(decision) {
   switch (decision.kind) {
     case "invalid":
@@ -231,7 +232,7 @@ function permissionOnlyOutcome(decision) {
       return "asked_in_session";
   }
 }
-//@ chunk-dz36xfxg.js:39669-41656 placement
+//@ chunk-fb9qe48t.js:41440-43747 placement
 /**
  * 处理只请求权限判定（不执行）的 ToolHost 调用：返回 requested/declined 等决定。
  */
@@ -289,6 +290,10 @@ async function answerToolHostPermissionRequest({
       rejection: startDirGoneMessage(name, workingDir, daemonCwd),
     };
   }
+  if (intactDirectory === undefined && isShellDirectoryTaken(session, daemonCwd))
+    return {
+      rejection: `${name} was not run: the directory it was to start in is gone (deleted, moved, replaced by a link, or unreadable). Your next shell command will be refused as well, and its answer names the directory that calls start in from then on. Then send this call again. What is gone: ${daemonCwd}`,
+    };
   let projectSession = session.withProject({
     cwd: workingDir,
   });

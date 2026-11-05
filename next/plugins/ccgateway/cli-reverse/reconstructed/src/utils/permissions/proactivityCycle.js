@@ -3,9 +3,9 @@
  *
  * 权限模式切换循环（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-g2tve833.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9wvx26mj.js (4)
  * attribution: placement 4
  */
 import {
@@ -25,7 +25,7 @@ import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 
-//@ chunk-g2tve833.js:497-649 placement
+//@ chunk-9wvx26mj.js:497-649 placement
 /**
  * 按主动性等级计算下一权限模式，并给出切换后的权限上下文。
  */
@@ -44,7 +44,7 @@ function computeProactivityModeTransition(
     context: transitionPermissionMode(toolPermissionContext.mode, nextMode, toolPermissionContext, trigger),
   };
 }
-//@ chunk-g2tve833.js:649-1021 placement
+//@ chunk-9wvx26mj.js:649-1021 placement
 function nextPermissionMode(level, context, { offerBypass = true } = {}) {
   let hipaaPending = getHipaaPolicyVerdict() !== undefined;
   let baseMode = context.mode === "plan" ? (context.prePlanMode ?? "plan") : context.mode;
@@ -68,7 +68,7 @@ function nextPermissionMode(level, context, { offerBypass = true } = {}) {
         : baseMode;
   return getProactivityPolicyVerdict(level, levelMode, baselineMode) === undefined ? levelMode : "default";
 }
-//@ chunk-g2tve833.js:1021-1520 placement
+//@ chunk-9wvx26mj.js:1021-1520 placement
 /**
  * 设置主动性等级：更新 AppState 中的等级与权限模式，记遥测；模式变化或等级跨档时触发事件通知。
  */
@@ -105,7 +105,7 @@ function setProactivityLevel(level, setAppState, context, { offerBypass = true }
       permissionModeSignal.emit();
     });
 }
-//@ chunk-g2tve833.js:1520-1672 placement
+//@ chunk-9wvx26mj.js:1520-1672 placement
 function logProactivityCycle(level, context, { source, from, toMode }) {
   noopWithArgs(level, context);
   logEvent("tengu_proactivity_cycle", {
@@ -116,4 +116,4 @@ function logProactivityCycle(level, context, { source, from, toMode }) {
   });
   logFeatureOk("proactivity_cycle");
 }
-export { nextPermissionMode, computeProactivityModeTransition, setProactivityLevel };
+export { computeProactivityModeTransition, setProactivityLevel, nextPermissionMode };

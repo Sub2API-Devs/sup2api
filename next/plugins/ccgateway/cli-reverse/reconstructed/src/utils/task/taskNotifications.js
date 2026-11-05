@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：任务输出目录与链接记录；任务通知队列（按 key 分组、驱逐、级别持有）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (30)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (30)
  * attribution: placement 30
  */
 import { randomBytes, randomUUID } from "crypto";
@@ -21,13 +21,13 @@ import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTel
 import { isDiagLogging, isInDiagScope } from "../diagLogs.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:345356-345820 placement
+//@ chunk-exfmq47h.js:355843-356307 placement
 /**
  * 任务错误状态表。
  */
 var TASK_ERROR_STATUSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var weakMap_2;
-deferInit("chunk-aepeg2w5.js:345356", () => {
+deferInit("chunk-exfmq47h.js:355843", () => {
   TASK_ERROR_STATUSES = {
     stalled: true,
     error: true,
@@ -48,7 +48,7 @@ deferInit("chunk-aepeg2w5.js:345356", () => {
   };
   weakMap_2 = new WeakMap();
 });
-//@ chunk-aepeg2w5.js:345820-345873 placement
+//@ chunk-exfmq47h.js:356307-356360 placement
 /**
  * 给任务对象挂上失败类型。
  */
@@ -56,7 +56,7 @@ function withFailureKind(notification, failureKind) {
   if (failureKind !== undefined) weakMap_2.set(notification, failureKind);
   return notification;
 }
-//@ chunk-aepeg2w5.js:345873-345971 placement
+//@ chunk-exfmq47h.js:356360-356458 placement
 /**
  * 取任务挂着的失败类型。
  */
@@ -66,18 +66,18 @@ function failureKindOf(notification) {
     ? failureKind
     : undefined;
 }
-//@ chunk-aepeg2w5.js:346009-346068 placement
+//@ chunk-exfmq47h.js:356496-356555 placement
 var MAX_BASH_TASK_SNAPSHOTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_BASH_TASK_GETS;
 var MAX_EVICTED_RUN_IDS;
 var LINKS_INHERITED_BEFORE;
-deferInit("chunk-aepeg2w5.js:346009", () => {
+deferInit("chunk-exfmq47h.js:356496", () => {
   MAX_BASH_TASK_SNAPSHOTS = 200;
   MAX_BASH_TASK_GETS = 64;
   MAX_EVICTED_RUN_IDS = 64;
   LINKS_INHERITED_BEFORE = Date.now() - process.uptime() * 1000;
 });
-//@ chunk-aepeg2w5.js:346068-349666 placement
+//@ chunk-exfmq47h.js:356555-360249 placement
 /**
  * 任务输出目录与链接记录。
  */
@@ -108,6 +108,8 @@ class TaskOutputLinks {
   bashTaskSnapshots = new Map();
   bashTaskGetCounts = new Map();
   lastPressureReapAt = 0;
+  limitStops = new Map();
+  afterHeavyStops = new Map();
   quietShellOwners = new Map();
   bashTaskGetsByResponse = new Map();
   withdrawShellNotification = undefined;
@@ -212,6 +214,8 @@ class TaskOutputLinks {
     this.bashTaskSnapshots.clear();
     this.bashTaskGetCounts.clear();
     this.lastPressureReapAt = 0;
+    this.limitStops.clear();
+    this.afterHeavyStops.clear();
     this.quietShellOwners.clear();
     this.bashTaskGetsByResponse.clear();
     this.reportedBashTaskDeliveries.clear();
@@ -223,22 +227,22 @@ class TaskOutputLinks {
     this.diskOutputs.clear();
   }
 }
-//@ chunk-aepeg2w5.js:349666-349691 placement
+//@ chunk-exfmq47h.js:360249-360274 placement
 var taskOutputLinksByHost; // deferred: uses TaskOutputLinks of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:349666", () => {
+deferInit("chunk-exfmq47h.js:360249", () => {
   taskOutputLinksByHost = new HostScoped(() => new TaskOutputLinks());
 });
-//@ chunk-aepeg2w5.js:349691-349728 placement
+//@ chunk-exfmq47h.js:360274-360311 placement
 /**
  * 任务运行 id 存储（按 host）。
  */
 function getTaskRunState() {
   return taskOutputLinksByHost.of(getRootSession().host);
 }
-//@ chunk-aepeg2w5.js:349728-349770 placement
+//@ chunk-exfmq47h.js:360311-360353 placement
 var RUN_ID_SEQ_WIDTH = 9;
 var RUN_ID_RE = /^([0-9a-z]{9})-[0-9a-f]{8}$/;
-//@ chunk-aepeg2w5.js:349770-349846 placement
+//@ chunk-exfmq47h.js:360353-360429 placement
 /**
  * 取任务的运行 id。
  */
@@ -246,12 +250,12 @@ function getRunId(taskId) {
   let { runIds, evictedRunIds } = getTaskRunState();
   return runIds.get(taskId) ?? evictedRunIds.get(taskId);
 }
-//@ chunk-aepeg2w5.js:349846-349905 placement
+//@ chunk-exfmq47h.js:360429-360488 placement
 function previousRunSeq(taskId) {
   let runId = getRunId(taskId);
   return runId === undefined ? undefined : runSeqOf(runId);
 }
-//@ chunk-aepeg2w5.js:349905-349983 placement
+//@ chunk-exfmq47h.js:360488-360566 placement
 /**
  * 从运行 id 解析出 36 进制的序号。
  */
@@ -259,20 +263,20 @@ function runSeqOf(runId) {
   let seq = RUN_ID_RE.exec(runId)?.[1];
   return seq === undefined ? undefined : parseInt(seq, 36);
 }
-//@ chunk-aepeg2w5.js:349983-350028 placement
+//@ chunk-exfmq47h.js:360566-360611 placement
 /**
  * 为任务登记运行 id。
  */
 function setTaskRunId(taskId, runId = makeTimeOrderedId(taskId)) {
   getTaskRunState().runIds.set(taskId, runId);
 }
-//@ chunk-aepeg2w5.js:350028-350144 placement (2.1.88 match: generatePlaceholders, 0.758)
+//@ chunk-exfmq47h.js:360611-360727 placement (2.1.88 match: generatePlaceholders, 0.758)
 function makeTimeOrderedId(taskId) {
   return `${Math.max(Date.now(), (previousRunSeq(taskId) ?? -1) + 1)
     .toString(36)
     .padStart(RUN_ID_SEQ_WIDTH, "0")}-${randomBytes(4).toString("hex")}`;
 }
-//@ chunk-aepeg2w5.js:350144-350244 placement
+//@ chunk-exfmq47h.js:360727-360827 placement
 /**
  * 认领某任务的终态通知发送权（每个任务只能认领一次）。
  */
@@ -281,18 +285,18 @@ function claimTerminalEmit_2(taskId) {
   getTaskRunState().terminalEmitClaims.add(taskId);
   return true;
 }
-//@ chunk-aepeg2w5.js:350244-350301 placement
+//@ chunk-exfmq47h.js:360827-360884 placement
 /**
  * 取消任务的终态通知认领。
  */
 function claimTerminalEmit(id) {
   return getTaskRunState().terminalEmitClaims.delete(id);
 }
-//@ chunk-aepeg2w5.js:350301-350331 placement (2.1.88 match: getClientSurface, 0.78)
+//@ chunk-exfmq47h.js:360884-360914 placement (2.1.88 match: getClientSurface, 0.779)
 var MAX_QUEUED_NOTIFICATIONS = 1000;
 var CLIENT_SURFACE_ID = "cli";
 var MAX_EVICTED_KEYS = 1000;
-//@ chunk-aepeg2w5.js:350331-353341 placement
+//@ chunk-exfmq47h.js:360914-363924 placement
 /**
  * 任务通知队列（按 key 分组、驱逐、级别持有）。
  */
@@ -455,7 +459,7 @@ class TaskNotificationQueue {
     }));
   }
 }
-//@ chunk-aepeg2w5.js:353341-353616 placement
+//@ chunk-exfmq47h.js:363924-364199 placement
 function redactTaskEventForSdk(event) {
   if (event.type !== "system") return event;
   if (event.subtype === "task_notification")
@@ -476,39 +480,39 @@ function redactTaskEventForSdk(event) {
     };
   return event;
 }
-//@ chunk-aepeg2w5.js:353616-353641 placement
+//@ chunk-exfmq47h.js:364199-364224 placement
 var taskNotificationQueueByHost; // deferred: uses TaskNotificationQueue of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:353616", () => {
+deferInit("chunk-exfmq47h.js:364199", () => {
   taskNotificationQueueByHost = new HostScoped(() => new TaskNotificationQueue());
 });
-//@ chunk-aepeg2w5.js:353641-353678 placement
+//@ chunk-exfmq47h.js:364224-364261 placement
 function taskNotificationQueue() {
   return taskNotificationQueueByHost.of(getRootSession().host);
 }
-//@ chunk-aepeg2w5.js:353678-353717 placement
+//@ chunk-exfmq47h.js:364261-364300 placement
 function currentNotificationKey() {
   return taskNotificationQueue().currentKey();
 }
-//@ chunk-aepeg2w5.js:353717-353728 placement
+//@ chunk-exfmq47h.js:364300-364311 placement
 /**
  * 取当前通知 key 的别名导出。
  */
 var currentNotificationKeyAlias = currentNotificationKey;
-//@ chunk-aepeg2w5.js:353728-353771 placement
+//@ chunk-exfmq47h.js:364311-364354 placement
 /**
  * 设置入队监听。
  */
 function setTaskNotificationListener(listener) {
   taskNotificationQueue().setEnqueueListener(listener);
 }
-//@ chunk-aepeg2w5.js:353771-353802 placement
+//@ chunk-exfmq47h.js:364354-364385 placement
 /**
  * 入队一条任务通知。
  */
 function enqueueTaskNotification(notification) {
   taskNotificationQueue().enqueue(notification);
 }
-//@ chunk-aepeg2w5.js:353802-353910 placement
+//@ chunk-exfmq47h.js:364385-364492 placement
 /**
  * 暂时保持诊断日志级别不变（诊断范围外时返回空操作句柄）。
  */
@@ -522,35 +526,35 @@ function holdDiagLevels() {
   }
   return taskNotificationQueue().holdLevels();
 }
-//@ chunk-aepeg2w5.js:353910-353951 placement
+//@ chunk-exfmq47h.js:364492-364533 placement
 /**
  * 是否有排队的任务通知。
  */
 function hasQueuedTaskNotification(predicate) {
   return taskNotificationQueue().hasQueued(predicate);
 }
-//@ chunk-aepeg2w5.js:353951-353986 placement
+//@ chunk-exfmq47h.js:364533-364568 placement
 /**
  * 取出全部排队的任务通知。
  */
 function drainTaskNotifications() {
   return taskNotificationQueue().drain();
 }
-//@ chunk-aepeg2w5.js:353986-354033 placement
+//@ chunk-exfmq47h.js:364568-364615 placement
 /**
  * 取出某会话排队中的通知。
  */
 function drainNotificationsForSession(sessionId) {
   return taskNotificationQueue().drainForSession(sessionId);
 }
-//@ chunk-aepeg2w5.js:354033-354084 placement
+//@ chunk-exfmq47h.js:364615-364666 placement
 /**
  * 某会话是否有排队通知。
  */
 function hasQueuedNotificationsForSession(sessionId) {
   return taskNotificationQueue().hasQueuedForSession(sessionId);
 }
-//@ chunk-aepeg2w5.js:354084-354620 placement
+//@ chunk-exfmq47h.js:364666-365202 placement
 /**
  * 发出 task_notification 系统事件（状态、摘要、输出文件）。
  */
@@ -589,19 +593,19 @@ function emitTaskNotification(taskId, status, opts) {
 }
 export {
   getTaskRunState,
-  emitTaskNotification,
-  getRunId,
-  withFailureKind,
-  enqueueTaskNotification,
-  runSeqOf,
-  setTaskRunId,
   claimTerminalEmit_2,
+  holdDiagLevels,
+  failureKindOf,
+  getRunId,
+  enqueueTaskNotification,
+  withFailureKind,
+  emitTaskNotification,
+  claimTerminalEmit,
+  setTaskRunId,
   drainTaskNotifications,
   setTaskNotificationListener,
   hasQueuedTaskNotification,
-  holdDiagLevels,
-  failureKindOf,
-  claimTerminalEmit,
+  runSeqOf,
   currentNotificationKeyAlias,
   CLIENT_SURFACE_ID,
   drainNotificationsForSession,

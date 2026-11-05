@@ -3,9 +3,9 @@
  *
  * ui.render 返回树校验（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (105)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (105)
  * attribution: placement 105
  */
 import {
@@ -59,11 +59,11 @@ import { isNonNegativeInt } from "../sites/siteRules.js";
 import { plainDataChars } from "../sites/uiSites.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:143694-143704 placement
+//@ chunk-j8f885h1.js:124871-124881 placement
 var WELL_FORMED_SLACK = 4;
-//@ chunk-4121qate.js:143704-143731 placement
+//@ chunk-j8f885h1.js:124881-124908 placement
 var wellFormedText = (text) => (isWellFormedString(text) ? text : normalizeFullWidthSpace(text));
-//@ chunk-4121qate.js:143731-144236 placement
+//@ chunk-j8f885h1.js:124908-125413 placement
 function wellFormedValue(value, state) {
   if (typeof value === "string") return wellFormedText(value);
   if (!Array.isArray(value) && !isPlainDataObject(value)) return value;
@@ -91,7 +91,7 @@ function wellFormedValue(value, state) {
   state.copies.set(value, result);
   return result;
 }
-//@ chunk-4121qate.js:144236-144300 placement
+//@ chunk-j8f885h1.js:125413-125477 placement
 var wellFormed = (value) =>
   wellFormedValue(value, {
     copies: new Map(),
@@ -99,30 +99,30 @@ var wellFormed = (value) =>
     depth: 0,
     isKeyed: true,
   });
-//@ chunk-4121qate.js:144300-144379 placement
+//@ chunk-j8f885h1.js:125477-125556 placement
 function autoFocusProblem(autoFocus) {
   return autoFocus === undefined || autoFocus === true ? undefined : "autoFocus is true or absent";
 }
-//@ chunk-4121qate.js:144379-144390 placement
+//@ chunk-j8f885h1.js:125556-125567 placement
 var SHOWN_KEY_CHARS = 40;
-//@ chunk-4121qate.js:144390-144478 placement
+//@ chunk-j8f885h1.js:125567-125654 placement
 function shownKey(value) {
   let replaced = String(value).replace(LINE_SCRUB, "?");
   return replaced.length <= SHOWN_KEY_CHARS ? replaced : `${truncateToLength(replaced, SHOWN_KEY_CHARS)}...`;
 }
-//@ chunk-4121qate.js:144478-144569 placement
+//@ chunk-j8f885h1.js:125654-125745 placement
 var CONTROL_CHARACTER; // deferred: uses CHARACTER_CLASSES (./textScrub.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:144478", () => {
+deferInit("chunk-j8f885h1.js:125654", () => {
   CONTROL_CHARACTER = new RegExp(
     `[${CHARACTER_CLASSES.escape}${CHARACTER_CLASSES.loneSurrogate}${CHARACTER_CLASSES.placeholder}]|${ITERM_CELL.source}`,
     "u",
   );
 });
-//@ chunk-4121qate.js:144569-144593 placement
+//@ chunk-j8f885h1.js:125745-125769 placement
 var hasControlCharacter = (text) => CONTROL_CHARACTER.test(text);
-//@ chunk-4121qate.js:144593-144605 placement
+//@ chunk-j8f885h1.js:125769-125781 placement
 var MAX_TEXT_CHARS = 1e4;
-//@ chunk-4121qate.js:144605-144886 placement
+//@ chunk-j8f885h1.js:125781-126062 placement
 function unusableKeyProblem(key) {
   if (!(typeof key === "string" && key !== "" && key.length <= MAX_TEXT_CHARS))
     return `Box key "${shownKey(key)}" is not a string of 1 to ${MAX_TEXT_CHARS} characters; it is dropped and names no hover scope`;
@@ -130,7 +130,7 @@ function unusableKeyProblem(key) {
     ? `Box "${shownKey(key)}" key holds a control character; it is dropped and names no hover scope`
     : undefined;
 }
-//@ chunk-4121qate.js:144886-145083 placement
+//@ chunk-j8f885h1.js:126062-126259 placement
 function boxKeyProblem(key, seenKeys) {
   let keyProblem = unusableKeyProblem(key);
   if (keyProblem !== undefined || typeof key !== "string") return keyProblem;
@@ -140,9 +140,9 @@ function boxKeyProblem(key, seenKeys) {
     ? `Box "${shownKey(key)}" is drawn twice under one parent; only the first is a hover scope`
     : undefined;
 }
-//@ chunk-4121qate.js:145083-145139 placement
+//@ chunk-j8f885h1.js:126259-126315 placement
 var hasOnlyKeys = (props, allowed) => Object.keys(props).every((key) => allowed.includes(key));
-//@ chunk-4121qate.js:145139-145328 placement
+//@ chunk-j8f885h1.js:126315-126504 placement
 function heldProblem(press) {
   return isPlainObject(press) &&
     typeof press.plugin === "string" &&
@@ -153,7 +153,7 @@ function heldProblem(press) {
     ? undefined
     : "is not held by a plugin of this chain";
 }
-//@ chunk-4121qate.js:145328-146931 placement
+//@ chunk-j8f885h1.js:126504-128107 placement
 function buttonProblem(element) {
   let { props, press } = element;
   if (!(
@@ -199,23 +199,23 @@ function buttonProblem(element) {
     ? undefined
     : `Button "${key}" children is ${valueKind(children)}`;
 }
-//@ chunk-4121qate.js:146931-147007 placement
+//@ chunk-j8f885h1.js:128107-128183 placement
 var isStamped = (stamp) =>
   isPlainObject(stamp) &&
   typeof stamp.plugin === "string" &&
   stamp.plugin !== "" &&
   !hasControlCharacter(stamp.plugin);
-//@ chunk-4121qate.js:147007-147217 placement
+//@ chunk-j8f885h1.js:128183-128393 placement
 function textPropProblem(field, value) {
   let isString = typeof value === "string";
   if (value !== undefined && !isString) return `${field} must be a string`;
   if (isString && value.length > MAX_TEXT_CHARS) return `${field} longer than ${MAX_TEXT_CHARS} characters`;
   return isString && hasControlCharacter(value) ? `${field} holds a control character` : undefined;
 }
-//@ chunk-4121qate.js:147217-147278 placement
+//@ chunk-j8f885h1.js:128393-128454 placement
 var textPropsProblem = (fields, props) =>
   fields.map((field) => textPropProblem(field, props[field])).find((problem) => problem !== undefined);
-//@ chunk-4121qate.js:147278-148104 placement
+//@ chunk-j8f885h1.js:128454-129280 placement
 function clientProblem(element) {
   let { props, client } = element;
   if (!(
@@ -244,12 +244,12 @@ function clientProblem(element) {
   if (!isStamped(client)) return `Client "${key}" is not stamped by a plugin of this chain`;
   return element.children === undefined ? undefined : `Client "${key}" takes no children`;
 }
-//@ chunk-4121qate.js:148104-148116 placement
+//@ chunk-j8f885h1.js:129280-129292 placement
 /**
  * @@ hunk 头里行号/行数允许的最大值（1e9）。
  */
 var MAX_LINE_NUMBER = 1e9;
-//@ chunk-4121qate.js:148116-148593 placement (2.1.88 match: hunkSchema, 0.352)
+//@ chunk-j8f885h1.js:129292-129769 placement (2.1.88 match: hunkSchema, 0.353)
 /**
  * 把统一 diff 文本解析为 hunks（去掉 "\ No newline" 行）；无 hunk 头或行号越界时返回 {kind:"refused", problem}。
  */
@@ -289,18 +289,18 @@ function diffHunksOf(uniDiff) {
         hunks: mapped,
       };
 }
-//@ chunk-4121qate.js:148593-148633 placement
+//@ chunk-j8f885h1.js:129769-129809 placement
 /**
  * 格式为 "diff" 时调用 parseDiffHunks，否则 undefined。
  */
 var codeHunks = (source, format) => (format === "diff" ? diffHunksOf(source) : undefined);
-//@ chunk-4121qate.js:148633-148781 placement
+//@ chunk-j8f885h1.js:129809-129957 placement
 function drawnTextProblem(field, value) {
   let isString = typeof value === "string";
   if (value !== undefined && !isString) return `${field} must be a string`;
   return isString && hasControlCharacter(value) ? `${field} holds a control character` : undefined;
 }
-//@ chunk-4121qate.js:148781-149563 placement
+//@ chunk-j8f885h1.js:129957-130739 placement
 function codeProblem(element) {
   let { props, children } = element;
   if (!isPlainObject(props)) return "Code props must be { source }";
@@ -327,18 +327,18 @@ function codeProblem(element) {
     ? undefined
     : 'Code wrap is "wrap" or "truncate-end"';
 }
-//@ chunk-4121qate.js:149563-149653 placement
+//@ chunk-j8f885h1.js:130739-130829 placement
 var drawnHref = (href) =>
   href
     .replace(LINE_SCRUB, (char) => encodeURIComponent(normalizeFullWidthSpace(char)))
     .replace(regExp_2, encodeURIComponent);
-//@ chunk-4121qate.js:149653-149735 placement
+//@ chunk-j8f885h1.js:130829-130911 placement
 var drawnText = (text) =>
   expandTabsInText(convertLeadingTabsToSpaces(text)).replace(
     /[\u061c\u202a-\u202e\u2066-\u2069]/gu,
     "\uFFFD",
   );
-//@ chunk-4121qate.js:149735-149915 placement
+//@ chunk-j8f885h1.js:130911-131091 placement
 var ELEMENT_KIND = {
   Box: "block",
   Button: "block",
@@ -353,13 +353,13 @@ var ELEMENT_KIND = {
   Text: "inline",
   Link: "inline",
 };
-//@ chunk-4121qate.js:149915-150003 placement
+//@ chunk-j8f885h1.js:131091-131179 placement
 function isPlacingRecord(record) {
   return (
     record !== undefined && Object.keys(record).some((key) => key === "position" || OFFSET_PROPS.has(key))
   );
 }
-//@ chunk-4121qate.js:150003-150214 placement
+//@ chunk-j8f885h1.js:131179-131390 placement
 function hasPlacedBox(drawn) {
   if (typeof drawn === "string" || drawn.type === "engine") return false;
   if (!(drawn.type === "Box" || drawn.type === "Text" || drawn.type === "Link")) return false;
@@ -368,16 +368,16 @@ function hasPlacedBox(drawn) {
     (drawn.children ?? []).some(hasPlacedBox)
   );
 }
-//@ chunk-4121qate.js:150214-150330 placement (2.1.88 match: setAttribute, 0.839)
+//@ chunk-j8f885h1.js:131390-131506 placement (2.1.88 match: setAttribute, 0.84)
 var heldTexts = (nodes) =>
   nodes.flatMap((node) => {
     let isString = typeof node === "string";
     let children = !isString && "children" in node ? (node.children ?? []) : [];
     return isString ? [node] : heldTexts(children);
   });
-//@ chunk-4121qate.js:150330-150341 placement
+//@ chunk-j8f885h1.js:131506-131517 placement
 var MAX_SCOPE_CHARS = 64;
-//@ chunk-4121qate.js:150341-150618 placement
+//@ chunk-j8f885h1.js:131517-131794 placement
 function scopeProblem(scope, holder, where) {
   let label = `${where} hover scope "${shownKey(scope)}"`;
   if (!(typeof scope === "string" && scope !== "" && scope.length <= MAX_SCOPE_CHARS))
@@ -390,16 +390,16 @@ function scopeProblem(scope, holder, where) {
       ? undefined
       : `${label} is not held by a plugin of this chain`;
 }
-//@ chunk-4121qate.js:150618-150685 placement
+//@ chunk-j8f885h1.js:131794-131861 placement
 var OBJECT_FIELDS = ["props", "hover", "press", "group", "part", "client", "raster"];
-//@ chunk-4121qate.js:150685-150763 placement
+//@ chunk-j8f885h1.js:131861-131939 placement
 function unplainPartOf(node) {
   let target = node;
   return isPlainDataObject(node)
     ? OBJECT_FIELDS.find((field) => isPlainObject(target[field]) && !isPlainDataObject(target[field]))
     : "node";
 }
-//@ chunk-4121qate.js:150763-152548 placement
+//@ chunk-j8f885h1.js:131939-133724 placement
 function hoverProblem(node, where, scopeState) {
   let { hover } = node;
   let typeName = node.type;
@@ -441,7 +441,7 @@ function hoverProblem(node, where, scopeState) {
   }
   return;
 }
-//@ chunk-4121qate.js:152548-152578 placement
+//@ chunk-j8f885h1.js:133724-133754 placement
 /**
  * 3 字节 / 4 字符
  */
@@ -449,7 +449,7 @@ var base64BytesPerFour = {
   bytes: 3,
   characters: 4,
 };
-//@ chunk-4121qate.js:152578-152782 placement
+//@ chunk-j8f885h1.js:133754-133958 placement
 /**
  * 校验标准 padded base64，返回解码后字节数；不合法返回 undefined。
  */
@@ -464,7 +464,7 @@ function base64DecodedLength(text) {
   let padding = text.endsWith("==") ? 2 : text.endsWith("=") ? 1 : 0;
   return (text.length / base64BytesPerFour.characters) * base64BytesPerFour.bytes - padding;
 }
-//@ chunk-4121qate.js:156899-157596 placement
+//@ chunk-j8f885h1.js:138076-138773 placement
 function imageProblem(element) {
   let { props, children, image } = element;
   if (!isPlainObject(props)) return "Image props must be { source, columns, rows, alt }";
@@ -485,9 +485,9 @@ function imageProblem(element) {
     (isStamped(image) ? undefined : "is not stamped by a plugin of this chain");
   return problem === undefined ? undefined : `${label} ${problem}`;
 }
-//@ chunk-4121qate.js:157596-157650 placement
+//@ chunk-j8f885h1.js:138773-138827 placement
 var INPUT_TEXT_PROPS = ["label", "placeholder", "value", "submitLabel"];
-//@ chunk-4121qate.js:157650-158237 placement
+//@ chunk-j8f885h1.js:138827-139414 placement
 function inputProblem(element) {
   let { props, press } = element;
   if (
@@ -517,7 +517,7 @@ function inputProblem(element) {
   if (problem !== undefined) return `Input "${key}" ${problem}`;
   return element.children === undefined ? undefined : `Input "${key}" takes no children`;
 }
-//@ chunk-4121qate.js:158237-158370 placement
+//@ chunk-j8f885h1.js:139414-139547 placement
 var isBlockLeafType = (type) =>
   type === "Button" ||
   type === "Input" ||
@@ -528,20 +528,20 @@ var isBlockLeafType = (type) =>
   type === "Client" ||
   type === "Raster" ||
   type === "Image";
-//@ chunk-4121qate.js:158370-158425 placement
+//@ chunk-j8f885h1.js:139547-139602 placement
 var isElementType = (type) => typeof type === "string" && Object.hasOwn(ELEMENT_KIND, type);
-//@ chunk-4121qate.js:158425-158473 placement
+//@ chunk-j8f885h1.js:139602-139650 placement
 var isHref = (href) => typeof href === "string" && href.trim() !== "";
-//@ chunk-4121qate.js:158473-158486 placement
+//@ chunk-j8f885h1.js:139650-139663 placement
 var MAX_SVG_PIXELS = 4096;
-//@ chunk-4121qate.js:158486-158564 placement
+//@ chunk-j8f885h1.js:139663-139741 placement
 var isSvgPixels = (pixels) =>
   pixels === undefined ||
   (typeof pixels === "number" && Number.isFinite(pixels) && pixels > 0 && pixels <= MAX_SVG_PIXELS);
-//@ chunk-4121qate.js:158564-158633 placement
+//@ chunk-j8f885h1.js:139741-139810 placement
 var isUnknownBorder = (prop, value) =>
   prop === "borderStyle" && !(typeof value === "string" && BORDER_STYLES.has(value));
-//@ chunk-4121qate.js:158633-158745 placement
+//@ chunk-j8f885h1.js:139810-139922 placement
 function keyedPropsOf(props, allowed) {
   if (!isPlainObject(props)) return;
   let { key } = props;
@@ -552,11 +552,11 @@ function keyedPropsOf(props, allowed) {
       }
     : undefined;
 }
-//@ chunk-4121qate.js:158745-158758 placement
+//@ chunk-j8f885h1.js:139922-139935 placement
 var MAX_LINK_HREF_CHARS = 2048;
-//@ chunk-4121qate.js:158758-158770 placement
+//@ chunk-j8f885h1.js:139935-139947 placement
 var MAX_PRESSABLE_LINKS = 256;
-//@ chunk-4121qate.js:158770-159211 placement
+//@ chunk-j8f885h1.js:139947-140388 placement
 function pressableLinksProblem(pressableLinks) {
   if (pressableLinks === undefined) return;
   if (!Array.isArray(pressableLinks))
@@ -572,7 +572,7 @@ function pressableLinksProblem(pressableLinks) {
   }
   return;
 }
-//@ chunk-4121qate.js:159211-160366 placement
+//@ chunk-j8f885h1.js:140388-141543 placement
 function markdownProblem(element) {
   let { props, press, part, children } = element;
   if (!(isPlainObject(props) && hasOnlyKeys(props, ["key", "text", "dimColor", "pressableLinks"])))
@@ -600,9 +600,9 @@ function markdownProblem(element) {
     ? undefined
     : "Markdown answers its links (onLinkPress) but has no key, its address";
 }
-//@ chunk-4121qate.js:168819-168860 placement
+//@ chunk-j8f885h1.js:149996-150037 placement
 var RASTER_PROP_NAMES = ["key", "columns", "rows", "cells"];
-//@ chunk-4121qate.js:168860-169318 placement
+//@ chunk-j8f885h1.js:150037-150495 placement
 function rasterProblem(element) {
   let { raster, children } = element;
   let props = keyedPropsOf(element.props, RASTER_PROP_NAMES);
@@ -617,9 +617,9 @@ function rasterProblem(element) {
     (isStamped(raster) ? undefined : "is not stamped by a plugin of this chain");
   return problem === undefined ? undefined : `Raster "${shownKey(key)}" ${problem}`;
 }
-//@ chunk-4121qate.js:169318-169329 placement
+//@ chunk-j8f885h1.js:150495-150506 placement
 var MAX_SELECT_OPTIONS = 64;
-//@ chunk-4121qate.js:169329-169654 placement
+//@ chunk-j8f885h1.js:150506-150831 placement
 function optionProblem(option, seenValues) {
   if (!(
     isPlainObject(option) &&
@@ -635,7 +635,7 @@ function optionProblem(option, seenValues) {
     : (textPropProblem("value", value) ?? drawnTextProblem("label", option.label));
   return problem === undefined ? undefined : `option "${value}" ${problem}`;
 }
-//@ chunk-4121qate.js:169654-170208 placement
+//@ chunk-j8f885h1.js:150831-151385 placement
 function selectProblem(element) {
   let { props, press } = element;
   if (!(
@@ -659,9 +659,9 @@ function selectProblem(element) {
     (element.children === undefined ? undefined : "takes no children");
   return problem === undefined ? undefined : `Select "${key}" ${problem}`;
 }
-//@ chunk-4121qate.js:170208-170223 placement
+//@ chunk-j8f885h1.js:151385-151400 placement
 var MAX_SVG_SOURCE_CHARS = 131072;
-//@ chunk-4121qate.js:170223-170897 placement
+//@ chunk-j8f885h1.js:151400-152074 placement
 function svgProblem(element) {
   let { props, children } = element;
   if (!isPlainObject(props)) return "Svg props must be { source, alt }";
@@ -680,7 +680,7 @@ function svgProblem(element) {
     ? undefined
     : "Svg isInteractive is a boolean";
 }
-//@ chunk-4121qate.js:170897-171001 placement
+//@ chunk-j8f885h1.js:152074-152178 placement
 var LEAF_PROBLEM = {
   Button: buttonProblem,
   Client: clientProblem,
@@ -692,7 +692,7 @@ var LEAF_PROBLEM = {
   Select: selectProblem,
   Svg: svgProblem,
 };
-//@ chunk-4121qate.js:171001-171149 placement
+//@ chunk-j8f885h1.js:152178-152326 placement
 function textColumns(text, limit) {
   let columns = 0;
   let lineStart = 0;
@@ -703,7 +703,7 @@ function textColumns(text, limit) {
   }
   return columns + bunStringWidth(text.slice(lineStart));
 }
-//@ chunk-4121qate.js:171149-171229 placement
+//@ chunk-j8f885h1.js:152326-152406 placement
 function wrapRows(text, columns, rowsMax) {
   let lineCount = countCharInString(
     text,
@@ -714,14 +714,14 @@ function wrapRows(text, columns, rowsMax) {
     ? lineCount
     : lineCount + Math.floor(textColumns(text, columns * (rowsMax + 1)) / columns);
 }
-//@ chunk-4121qate.js:171229-171429 placement
+//@ chunk-j8f885h1.js:152406-152606 placement
 function leafTexts(node) {
   if (node.type === "Svg") return [node.props.alt];
   let buttonChildren = node.type === "Button" ? (node.children ?? []) : [];
   if (buttonChildren.length > 0) return [heldTexts(buttonChildren).join("")];
   return node.type === "Button" || node.type === "Input" ? [node.props.label ?? ""] : [];
 }
-//@ chunk-4121qate.js:171429-171982 placement
+//@ chunk-j8f885h1.js:152606-153159 placement
 function leafRows(node, rowsMax) {
   if (node.type === "Raster" || node.type === "Image") return node.props.rows;
   if (node.type === "Markdown") return 1 + wrapRows(node.props.text, DIALOG_FRAME_COLUMNS, rowsMax);
@@ -747,10 +747,10 @@ function leafRows(node, rowsMax) {
   let reduced = hunks.reduce((acc, patch) => Math.max(acc, computeGutterWidth(patch)), lineNumberWidth);
   return 1 + max + wrapRows(drawnText(source), DIALOG_FRAME_COLUMNS - reduced, rowsMax);
 }
-//@ chunk-4121qate.js:171982-172048 placement
+//@ chunk-j8f885h1.js:153159-153225 placement
 var writtenHref = (href) =>
   href.replace(/[^ -~]/gu, (char) => encodeURIComponent(normalizeFullWidthSpace(char)));
-//@ chunk-4121qate.js:172048-172717 placement
+//@ chunk-j8f885h1.js:153225-153894 placement
 function linkProblem(element) {
   let { props } = element;
   if (!isPlainObject(props)) return "Link props must be { href }";
@@ -766,7 +766,7 @@ function linkProblem(element) {
     ? "Link label opens with a combining mark that image cells use, which could join the text before it; put a character before the mark"
     : undefined;
 }
-//@ chunk-4121qate.js:172717-172884 placement
+//@ chunk-j8f885h1.js:153894-154061 placement
 function linkText(element) {
   let { children } = element;
   let props = isPlainObject(element.props) ? element.props : {};
@@ -776,21 +776,21 @@ function linkText(element) {
   let hasHref = isHref(href);
   return hasChildren ? "" : hasLabel ? label : hasHref ? drawnHref(href) : "";
 }
-//@ chunk-4121qate.js:172884-172900 placement
+//@ chunk-j8f885h1.js:154061-154077 placement
 var MAX_TREE_IMAGE_BYTES = 2097152;
-//@ chunk-4121qate.js:172900-172915 placement
+//@ chunk-j8f885h1.js:154077-154092 placement
 var MAX_TREE_RASTER_CELLS = 262144;
-//@ chunk-4121qate.js:172915-172972 placement
+//@ chunk-j8f885h1.js:154092-154149 placement
 var notOverBudget = () => ({
   isOver: false,
   isOverRows: false,
   isClientAdded: false,
 });
-//@ chunk-4121qate.js:172972-173017 placement
+//@ chunk-j8f885h1.js:154149-154194 placement
 var plainCodeFinding = (finding) => `Code ${finding.ordinal} drawn plain`;
-//@ chunk-4121qate.js:173017-173029 placement
+//@ chunk-j8f885h1.js:154194-154206 placement
 var MAX_REASON_CHARS = 200;
-//@ chunk-4121qate.js:173029-173242 placement
+//@ chunk-j8f885h1.js:154206-154418 placement
 function plainCodeNote({ ordinal, path, problem }) {
   let pathNote = path === undefined ? "" : ` (path "${path}")`;
   let reasonText =
@@ -800,9 +800,9 @@ function plainCodeNote({ ordinal, path, problem }) {
     "?",
   );
 }
-//@ chunk-4121qate.js:173242-173289 placement
+//@ chunk-j8f885h1.js:154418-154465 placement
 var plainLinkFinding = ([finding]) => `Link ${finding.ordinal} drawn plain`;
-//@ chunk-4121qate.js:173289-173527 placement
+//@ chunk-j8f885h1.js:154465-154702 placement
 function plainLinkNote(findings) {
   let [{ ordinal, problem }, ...rest] = findings;
   let problemText =
@@ -813,7 +813,7 @@ function plainLinkNote(findings) {
     "?",
   );
 }
-//@ chunk-4121qate.js:173527-174031 placement
+//@ chunk-j8f885h1.js:154702-155206 placement
 function wireHrefProblem(href) {
   if (/[^!-~]/.test(href)) return "holds a character outside printable ASCII";
   if (!URL.canParse(href)) return "is not a URL";
@@ -825,7 +825,7 @@ function wireHrefProblem(href) {
   let replaced = href.replace(/^(https?:\/\/[^/?#]+)(?=[?#]|$)/, "$1/");
   return href_2 === href || href_2 === replaced ? undefined : `is not in canonical form (${href_2})`;
 }
-//@ chunk-4121qate.js:174031-174278 placement
+//@ chunk-j8f885h1.js:155206-155453 placement
 function plainLinkProblem(href, surface) {
   if (!isHref(href))
     return `is ${typeof href === "string" ? "blank" : href === undefined ? "absent" : valueKind(href)}, not a string that names where it goes`;
@@ -834,7 +834,7 @@ function plainLinkProblem(href, surface) {
     ? undefined
     : `${wireProblem}, and the ${surface} surface is sent no other link`;
 }
-//@ chunk-4121qate.js:174278-174550 placement
+//@ chunk-j8f885h1.js:155453-155725 placement
 function spacingInCells(props) {
   if (!(
     props !== undefined &&
@@ -857,7 +857,7 @@ function spacingInCells(props) {
     return axis !== undefined && isSpaceStep(value) ? SPACE_CELLS[value][axis] : value;
   });
 }
-//@ chunk-4121qate.js:174550-174667 placement
+//@ chunk-j8f885h1.js:155725-155842 placement
 var stampsByKind = (element) => ({
   Input: element.press,
   Select: element.press,
@@ -866,7 +866,7 @@ var stampsByKind = (element) => ({
   Raster: element.raster,
   Image: element.image,
 });
-//@ chunk-4121qate.js:174667-174739 placement
+//@ chunk-j8f885h1.js:155842-155914 placement
 /**
  * 节点标识状态
  */
@@ -876,7 +876,7 @@ var newNodeIdentities = () => ({
   left: new Map(),
   unread: MAX_NODES * WELL_FORMED_SLACK,
 });
-//@ chunk-4121qate.js:174739-174811 placement
+//@ chunk-j8f885h1.js:155914-155986 placement
 /**
  * 节点标识
  */
@@ -885,7 +885,7 @@ function nodeIdentity(node, ids) {
   ids.ids.set(node, id);
   return id;
 }
-//@ chunk-4121qate.js:174811-175190 placement
+//@ chunk-j8f885h1.js:155986-156365 placement
 /**
  * 计算子树的标识（记忆化，处理循环）。
  */
@@ -908,7 +908,7 @@ function subtreeId(node, ids, depth = 0) {
     return;
   }
 }
-//@ chunk-4121qate.js:175190-175433 placement
+//@ chunk-j8f885h1.js:156365-156608 placement
 function handedSubtrees(tree) {
   let nodeIdentities = newNodeIdentities();
   let stack = [tree];
@@ -924,7 +924,7 @@ function handedSubtrees(tree) {
   nodeIdentities.unread = count + MAX_NODES + 1;
   return nodeIdentities;
 }
-//@ chunk-4121qate.js:184654-185018 placement
+//@ chunk-j8f885h1.js:165829-166193 placement
 function twiceProblem(element, seen) {
   let { props } = element;
   let key =
@@ -944,7 +944,7 @@ function twiceProblem(element, seen) {
   seen.add(keyText);
   return isDuplicate ? `${element.type} "${key}" is drawn twice; each takes its own key` : undefined;
 }
-//@ chunk-4121qate.js:185018-185132 placement
+//@ chunk-j8f885h1.js:166193-166307 placement
 var createTreeBudget = ({ handed, budget }, visit) => ({
   visit,
   nodes: 0,
@@ -955,7 +955,7 @@ var createTreeBudget = ({ handed, budget }, visit) => ({
   handed,
   budget,
 });
-//@ chunk-4121qate.js:185132-185184 placement
+//@ chunk-j8f885h1.js:166307-166359 placement
 /**
  * 标记遍历结束
  */
@@ -963,7 +963,7 @@ function endTraversal(message, budget) {
   if (budget !== undefined) budget.isOver = true;
   return message;
 }
-//@ chunk-4121qate.js:185184-185482 placement
+//@ chunk-j8f885h1.js:166359-166657 placement
 function consumeHandedSubtree(tree, handed) {
   let counts = new Map();
   let stack = [tree];
@@ -980,7 +980,7 @@ function consumeHandedSubtree(tree, handed) {
   for (let [id, used] of counts) handed.left.set(id, (handed.left.get(id) ?? 0) - used);
   return true;
 }
-//@ chunk-4121qate.js:185482-185711 placement
+//@ chunk-j8f885h1.js:166657-166886 placement
 function visitWithHanded(tree, frame, treeBudget) {
   let { visit, handed } = treeBudget;
   if (treeBudget.isHeld) return visit(tree, frame);
@@ -994,7 +994,7 @@ function visitWithHanded(tree, frame, treeBudget) {
   Object.assign(treeBudget, saved);
   return result;
 }
-//@ chunk-4121qate.js:185711-190702 placement
+//@ chunk-j8f885h1.js:166886-171889 placement
 /**
  * 校验 ui.render 树的节点数与深度上限
  */
@@ -1203,7 +1203,7 @@ function validateTree(tree, component, options = {}) {
   if (problem === undefined) measured?.(treeBudget.rows, frame.rowsMax);
   return problem;
 }
-//@ chunk-4121qate.js:190702-190909 placement
+//@ chunk-j8f885h1.js:171889-172096 placement
 function weightAndBold(style) {
   if (style?.weight === undefined)
     return style?.bold === true
@@ -1222,7 +1222,7 @@ function weightAndBold(style) {
       }
     : rest;
 }
-//@ chunk-4121qate.js:190909-190973 placement
+//@ chunk-j8f885h1.js:172096-172160 placement
 var wellFormedLeaves = (value) =>
   wellFormedValue(value, {
     copies: new Map(),
@@ -1230,7 +1230,7 @@ var wellFormedLeaves = (value) =>
     depth: 0,
     isKeyed: false,
   });
-//@ chunk-4121qate.js:190973-191396 placement
+//@ chunk-j8f885h1.js:172160-172583 placement
 function withKnownBorders(element, report) {
   if (!(element.type === "Box" || element.type === "Text" || element.type === "Link")) return element;
   let { children } = element;
@@ -1258,7 +1258,7 @@ function withKnownBorders(element, report) {
     }),
   };
 }
-//@ chunk-4121qate.js:191396-191845 placement
+//@ chunk-j8f885h1.js:172583-173032 placement
 function withPlainCode(tree, report) {
   let ordinal = 0;
   function walk(node) {
@@ -1289,7 +1289,7 @@ function withPlainCode(tree, report) {
   }
   return walk(tree);
 }
-//@ chunk-4121qate.js:191845-192350 placement
+//@ chunk-j8f885h1.js:173032-173537 placement
 function withPlainLinks(tree, surface, report) {
   let linkCount = 0;
   let problems = [];
@@ -1324,7 +1324,7 @@ function withPlainLinks(tree, surface, report) {
   if (first !== undefined) report([first, ...rest]);
   return converted;
 }
-//@ chunk-4121qate.js:192350-192761 placement
+//@ chunk-j8f885h1.js:173537-173948 placement
 function withRemoteProps(element, surface) {
   let isRemoteCapable =
     element.type === "Box" || element.type === "Text" || element.type === "Link" || element.type === "Button";
@@ -1354,9 +1354,9 @@ function withRemoteProps(element, surface) {
         props,
       };
 }
-//@ chunk-4121qate.js:192761-192821 placement
+//@ chunk-j8f885h1.js:173948-174008 placement
 var cutMark = (count, newline) => `${newline}\u2026 ${count} more characters, not drawn`;
-//@ chunk-4121qate.js:192821-192993 placement
+//@ chunk-j8f885h1.js:174008-174180 placement
 function cutProps(props, fields, room) {
   let flattened = fields.flatMap((field) => {
     let value = props[field];
@@ -1370,7 +1370,7 @@ function cutProps(props, fields, room) {
         ...Object.fromEntries(flattened),
       };
 }
-//@ chunk-4121qate.js:192993-193072 placement
+//@ chunk-j8f885h1.js:174180-174259 placement
 function cutLeaf(leaf, fields, room) {
   let props = cutProps(leaf.props, fields, room);
   return props === leaf.props
@@ -1380,7 +1380,7 @@ function cutLeaf(leaf, fields, room) {
         props,
       };
 }
-//@ chunk-4121qate.js:193072-193181 placement
+//@ chunk-j8f885h1.js:174259-174368 placement
 function keyedBox(box, room) {
   let { key, ...rest } = box.props ?? {};
   return key === undefined || room.isHeld(String(key).length)
@@ -1390,7 +1390,7 @@ function keyedBox(box, room) {
         props: rest,
       };
 }
-//@ chunk-4121qate.js:193181-193322 placement
+//@ chunk-j8f885h1.js:174368-174509 placement
 function wholeControl(control, texts, room) {
   let reduced = texts.reduce((acc, text) => acc + text.length, 0);
   if (room.isHeld(reduced)) return control;
@@ -1400,7 +1400,7 @@ function wholeControl(control, texts, room) {
     children: mark === "" ? [] : [mark],
   };
 }
-//@ chunk-4121qate.js:193322-194704 placement
+//@ chunk-j8f885h1.js:174509-175891 placement
 function shownNode(node, room) {
   if (node.type === "Code") {
     let { format, startLine, ...props } = node.props;
@@ -1512,9 +1512,9 @@ function shownNode(node, room) {
         }),
       };
 }
-//@ chunk-4121qate.js:194704-194716 placement
+//@ chunk-j8f885h1.js:175891-175903 placement
 var SHOWN_TEXT_MAX = 1e5;
-//@ chunk-4121qate.js:194716-195166 placement
+//@ chunk-j8f885h1.js:175903-176351 placement
 function textRoom() {
   let textLeft = SHOWN_TEXT_MAX;
   let fieldLeft = SHOWN_TEXT_MAX;
@@ -1564,7 +1564,7 @@ function textRoom() {
     },
   };
 }
-//@ chunk-4121qate.js:195166-195270 placement
+//@ chunk-j8f885h1.js:176351-176455 placement
 function withShownText(node, report) {
   let room = textRoom();
   let drawn = shownNode(node, room);
@@ -1575,7 +1575,7 @@ function withShownText(node, report) {
     });
   return drawn;
 }
-//@ chunk-4121qate.js:195270-195635 placement
+//@ chunk-j8f885h1.js:176455-176820 placement
 function withUsableBoxKeys(node) {
   if (node.type === "engine") return node;
   if (!(node.type === "Box" || node.type === "Text" || node.type === "Link")) return node;
@@ -1596,7 +1596,7 @@ function withUsableBoxKeys(node) {
     props: rest,
   };
 }
-//@ chunk-4121qate.js:195635-196298 placement
+//@ chunk-j8f885h1.js:176820-177483 placement
 /**
  * 校验 ui.render 钩子返回的树，失败时报出具体原因
  */
@@ -1643,20 +1643,7 @@ function checkRenderTree(tree, input, answers) {
   return `a tree ${component} refuses: ${finalProblem}`;
 }
 export {
-  hasControlCharacter,
   wellFormed,
-  checkRenderTree,
-  base64DecodedLength,
-  base64BytesPerFour,
-  drawnText,
-  codeHunks,
-  weightAndBold,
-  drawnHref,
-  writtenHref,
-  spacingInCells,
-  boxKeyProblem,
-  hasPlacedBox,
-  wellFormedLeaves,
   validateTree,
   withPlainLinks,
   withPlainCode,
@@ -1665,6 +1652,7 @@ export {
   plainCodeNote,
   plainLinkFinding,
   plainLinkNote,
+  wellFormedLeaves,
   CONTROL_CHARACTER,
   ELEMENT_KIND,
   INPUT_TEXT_PROPS,
@@ -1686,16 +1674,22 @@ export {
   SHOWN_TEXT_MAX,
   WELL_FORMED_SLACK,
   autoFocusProblem,
+  boxKeyProblem,
   buttonProblem,
   clientProblem,
+  codeHunks,
   codeProblem,
   cutLeaf,
   cutMark,
   cutProps,
   diffHunksOf,
+  drawnHref,
+  drawnText,
   drawnTextProblem,
   handedSubtrees,
+  hasControlCharacter,
   hasOnlyKeys,
+  hasPlacedBox,
   heldProblem,
   heldTexts,
   hoverProblem,
@@ -1724,6 +1718,7 @@ export {
   selectProblem,
   shownKey,
   shownNode,
+  spacingInCells,
   stampsByKind,
   svgProblem,
   textColumns,
@@ -1733,6 +1728,7 @@ export {
   twiceProblem,
   unplainPartOf,
   unusableKeyProblem,
+  weightAndBold,
   wellFormedText,
   wellFormedValue,
   wholeControl,
@@ -1741,4 +1737,8 @@ export {
   withShownText,
   withUsableBoxKeys,
   wrapRows,
+  writtenHref,
+  checkRenderTree,
+  base64DecodedLength,
+  base64BytesPerFour,
 };

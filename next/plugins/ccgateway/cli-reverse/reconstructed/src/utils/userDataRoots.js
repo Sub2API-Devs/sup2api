@@ -3,9 +3,9 @@
  *
  * 用户数据根目录（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-82kqcve8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a2q0x549.js (2)
  * attribution: placement 2
  */
 import * as fsPromisesModule from "fs/promises";
@@ -15,14 +15,14 @@ import { getErrnoCode, errorMessage } from "./errors.js";
 import { logForDiagnosticsNoPII } from "./diagLogs.js";
 import { logForDebugging } from "./debug.js";
 
-//@ chunk-82kqcve8.js:178347-178411 placement
+//@ chunk-a2q0x549.js:176515-176579 placement
 /**
  * 是否是第一方（console/云）远程会话。
  */
 function isFirstPartyRemoteSession(remoteSessionId, provider) {
   return Boolean(remoteSessionId) && (!provider || provider === "anthropic_cloud");
 }
-//@ chunk-82kqcve8.js:178411-178775 placement
+//@ chunk-a2q0x549.js:176579-176944 placement
 async function ensureUserDataRoot() {
   if (!isFirstPartyRemoteSession(env.CLAUDE_CODE_REMOTE_SESSION_ID, env.CLAUDE_CODE_ENVIRONMENT_KIND)) return;
   try {

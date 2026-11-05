@@ -1,7 +1,0 @@
-
-// @bun @bytecode
-// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
-
-// Version: 2.1.316
-import{nn}from"./chunk-6ysndsgz.js";import{Hn}from"./chunk-v9tcvh08.js";import{Ylt,IG,YT}from"./chunk-bwbq4xvm.js";import{Pn,Al,vt,H6e}from"./chunk-aepeg2w5.js";import{g8}from"./chunk-hqdsrzb2.js";import{Ine}from"./chunk-30p0tvt0.js";import{jie}from"./chunk-gkzv6xmy.js";import{Y}from"./chunk-byeye1yp.js";import{hostname as i}from"os";function UA(){return}function fst(e=g8(),n){if(UA()!==void 0)return!1;return jie(e)||n!==void 0&&n!==Pn()?.accessToken&&jie(e,!0)}function m1(){let e=UA();if(e!==void 0)return e;if(!Hn()||!vt())return;return Ine(Pn())?.accessToken}async function iD(e){if(!(Y()&&e!==void 0))return m1();let n=UA();if(n!==void 0)return n;if(!Hn()||!await H6e(e))return;return Ine(await Al(e))?.accessToken}function cPe(){let e=m1();if(e===void 0||UA()!==void 0)return e;return Ylt()??e}async function eAt(e){let n=await iD(e);if(n===void 0||UA()!==void 0)return n;return await IG()??n}async function J9o(e,n,r=!1){if(await YT(e,r?"withheld":"refused")==="not_held")return;return eAt(n)}function tU(){return g8()??nn().BASE_API_URL}function U4e(){let e=process.env.CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX||i();return t(e)||"remote-control"}function t(e){return e.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")}
-export{UA,fst,m1,iD,cPe,eAt,J9o,tU,U4e};

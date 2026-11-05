@@ -1,15 +1,15 @@
 /**
  * @aws-sdk/credential-provider-http/dist-cjs/fromHttp/fromHttp.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/credential-provider-http@3.936.0..3.972.41
- * pieces: chunk-0c72454j.js (2)
+ * pieces: chunk-48h98ags.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import fsPromises from "fs/promises";
 import { import_property_provider, checkUrl, import_node_http_handler, import_client } from "./checkUrl.js";
 import { createGetRequest, getCredentials } from "./requestHelpers.js";
 
-//@ chunk-0c72454j.js:2461-2594 esm-layout
+//@ chunk-48h98ags.js:2461-2594 esm-layout
 var retryWrapper = (fn, maxAttempts, sleepImpl) => async () => {
   for (let j = 0; j < maxAttempts; ++j)
     try {
@@ -19,7 +19,7 @@ var retryWrapper = (fn, maxAttempts, sleepImpl) => async () => {
     }
   return await fn();
 };
-//@ chunk-0c72454j.js:2594-4271 esm-fingerprint
+//@ chunk-48h98ags.js:2594-4271 esm-fingerprint
 var AWS_CONTAINER_CREDENTIALS_RELATIVE_URI = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI";
 var DEFAULT_LINK_LOCAL_HOST = "http://169.254.170.2";
 var AWS_CONTAINER_CREDENTIALS_FULL_URI = "AWS_CONTAINER_CREDENTIALS_FULL_URI";

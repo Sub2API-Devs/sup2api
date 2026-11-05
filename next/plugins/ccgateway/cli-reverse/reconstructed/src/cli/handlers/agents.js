@@ -3,9 +3,9 @@
  *
  * 并入 claude agents 命令处理器（含 --json 输出与舰队开关）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/handlers/agents.ts
- * pieces: chunk-xv2m2k8x.js (1)
+ * pieces: chunk-krzstbbv.js (1)
  * attribution: placement 1
  */
 import { resolve } from "path";
@@ -27,15 +27,19 @@ import {
   setInlinePlugins,
   setInlinePluginsNoMcp,
   setCliSessionConfigCarried,
+  setCliConfigBeyondSessionState,
   getRootSession,
   setSessionStartType,
 } from "../../bootstrap/state.js";
 import { clearPluginCache } from "../../utils/plugins/pluginLoader.js";
-import { cliCarriesSessionConfig } from "../../utils/sessionConfigFlags.js";
+import {
+  cliCarriesSessionConfig,
+  cliCarriesConfigBeyondSessionState,
+} from "../../utils/sessionConfigFlags.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { gracefulShutdown } from "../../utils/gracefulShutdown.js";
 
-//@ chunk-xv2m2k8x.js:12045-14681 placement
+//@ chunk-krzstbbv.js:13201-15859 placement
 async function agentsCommandHandler(options, launchState = {}, storage, credentials) {
   if (options.json) {
     await ensureFleetGateHydrated({
@@ -75,6 +79,12 @@ async function agentsCommandHandler(options, launchState = {}, storage, credenti
       }
       setCliSessionConfigCarried(
         cliCarriesSessionConfig({
+          ...launchState,
+          ...earlyConfig,
+        }),
+      );
+      setCliConfigBeyondSessionState(
+        cliCarriesConfigBeyondSessionState({
           ...launchState,
           ...earlyConfig,
         }),

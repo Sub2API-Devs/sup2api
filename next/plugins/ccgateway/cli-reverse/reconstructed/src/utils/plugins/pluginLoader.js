@@ -3,10 +3,10 @@
  *
  * 插件加载核心：版本化缓存（目录/zip、link 模式）、各来源下载（npm/git/github/git-subdir/archive/command）、manifest 解析、由目录构造插件对象、合并会话/市场/同步/内置插件，loadAllPlugins/loadAllPluginsCacheOnly 及其全局缓存。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/pluginLoader.ts
- * pieces: chunk-3wek6r2k.js (1), chunk-5aas12zq.js (1), chunk-9tyqgtn4.js (1), chunk-e6aww6q8.js (196), chunk-g6j7q15x.js (1)
- * attribution: fingerprint 22, placement 127, affinity 1, layout 44, file-local 2, callgraph-witnessed 2, callgraph-fingerprint 1, sole-consumer 1
+ * pieces: chunk-0yw3taqg.js (1), chunk-4hx0rq5z.js (1), chunk-5xgkngpb.js (196), chunk-6vxyfwtv.js (1), chunk-b08ck61p.js (1)
+ * attribution: fingerprint 21, placement 128, affinity 1, layout 44, file-local 2, callgraph-witnessed 2, callgraph-fingerprint 1, sole-consumer 1
  */
 import * as pathModule from "path";
 import { join, sep, relative, isAbsolute, parse, resolve as resolve_2, dirname, basename } from "path";
@@ -15,7 +15,7 @@ import {
   lstat,
   stat as stat_2,
   readdir,
-  rm as rm_2,
+  rm,
   mkdir,
   copyFile,
   readlink,
@@ -155,6 +155,7 @@ import {
   PluginIdSchema,
   isAsciiImpersonatingOfficialName,
   redactMarketplaceSource,
+  isLocalMarketplaceSource,
   isNpmPluginId,
   gitSha,
   PLUGIN_NAME_FORBIDDEN_CHARS_RE,
@@ -302,6 +303,8 @@ import {
   reportIfPathEscapes,
   resolveContainmentRoots,
   specCoversDefaultDir,
+  findSymlinkEscape,
+  checkPluginContainment,
 } from "./pluginPathContainment.js";
 import { stripBom } from "../json.js";
 import {
@@ -320,7 +323,7 @@ import {
   hasGuardHooks_2,
   parseHooksSetting,
 } from "../../schemas/hookEntryValidation.js";
-import { isPlainObject as isPlainObject_5 } from "../isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../isPlainObject.js";
 import { warnUnknownHooksJsonKeys } from "./loadPluginHooks.js";
 import {
   logPluginFolderShadowed,
@@ -402,7 +405,6 @@ import { hasDotSegmentAlias } from "../pathClassification.js";
 import { isServerPluginId, getPluginAttribution } from "./pluginAttribution.js";
 import { getPluginRegistry } from "./pluginLoadState.js";
 import { stripInvisibleKeepEmoji, cleanOptionalText_2 } from "../settings/marketplaceSettingsAliases.js";
-import { isLocalMarketplaceSource } from "./reconciler.js";
 import { marketplaceNameOfId, resolveArchiveDownloadHeaders } from "./headersHelper.js";
 import { CLAUDE_PLUGINS_OFFICIAL } from "./officialMarketplace.js";
 import { isOfficialDirectoryPlugin } from "./pluginDirectoryTelemetry.js";
@@ -436,7 +438,7 @@ import { ANTHROPIC_SKILLS } from "../../skills/syncedSkills.js";
 import { isPersonalConfigRestricted } from "../personalConfigRestriction.js";
 import { pMap } from "../../../vendor/p-map/index.js";
 import { logEvent } from "../../services/analytics/index.js";
-import { count } from "../collections.js";
+import { countWhere } from "../collections.js";
 import { matchPolicyPluginEntry, getPolicyEnabledPluginEntries } from "./managedPlugins.js";
 import { managedHooksPolicyStamp_2, EMPTY_POLICY_STAMP } from "../../plugins/functionHooks/policyGate.js";
 import { notePluginFullLoad } from "../startupTiming.js";
@@ -452,10 +454,12 @@ import {
   setPluginCommandBase,
 } from "../settings/commandSyncNames.js";
 import { _ } from "../../services/modelCatalog/publishedCatalog.js";
+import { isRemoteCowork } from "../entrypointKinds.js";
 import { manifestRelativePath } from "./validate/validatePluginDirectory.js";
+import { buildSecretScanResult } from "../../skills/bundled/pluginAuthoring/secretScanTool.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:606211-606381 placement
+//@ chunk-5xgkngpb.js:616281-616451 placement
 function mapStringsDeep(value, expandData) {
   if (typeof value === "string") return expandData(value);
   if (Array.isArray(value)) return value.map((item) => mapStringsDeep(item, expandData));
@@ -463,10 +467,10 @@ function mapStringsDeep(value, expandData) {
     return import_mapValues(value, (value) => mapStringsDeep(value, expandData));
   return value;
 }
-//@ chunk-e6aww6q8.js:606867-606884 placement
+//@ chunk-5xgkngpb.js:616952-616969 placement
 var MAX_LISTED_ITEMS = 5;
 var MAX_QUOTED_ITEM_LENGTH = 40;
-//@ chunk-e6aww6q8.js:606884-606953 placement
+//@ chunk-5xgkngpb.js:616969-617037 placement
 /**
  * truncateListItem：截断列表项并补省略号。
  */
@@ -476,14 +480,14 @@ function truncateListItem(item) {
     ? escaped
     : `${truncateToLength(escaped, MAX_QUOTED_ITEM_LENGTH)}...`;
 }
-//@ chunk-e6aww6q8.js:606953-606988 placement
+//@ chunk-5xgkngpb.js:617037-617072 placement
 /**
  * quotedListItem：列表项加引号。
  */
 function quotedListItem(item) {
   return `"${truncateListItem(item)}"`;
 }
-//@ chunk-e6aww6q8.js:606988-607082 placement (2.1.88 match: formatFailureDetails, 0.777)
+//@ chunk-5xgkngpb.js:617072-617166 placement (2.1.88 match: formatFailureDetails, 0.776)
 /**
  * 列表前 N 项用逗号连接，多余的写“and N more”。
  */
@@ -491,21 +495,21 @@ function formatFailureDetails_2(items) {
   let remaining = items.length - MAX_LISTED_ITEMS;
   return items.slice(0, MAX_LISTED_ITEMS).join(", ") + (remaining > 0 ? ` and ${remaining} more` : "");
 }
-//@ chunk-e6aww6q8.js:724353-724409 fingerprint (2.1.88 match: getVersionedZipCachePath, 1)
+//@ chunk-5xgkngpb.js:734869-734925 placement (2.1.88 match: getVersionedZipCachePath, 1)
 /**
  * 路径是否以 .zip 结尾（忽略大小写）。
  */
 function isZipPathCaseInsensitive(path) {
   return path.toLowerCase().endsWith(".zip");
 }
-//@ chunk-e6aww6q8.js:4324611-4324691 fingerprint (2.1.88 match: resolveGitSubdirUrl, 0.712)
+//@ chunk-5xgkngpb.js:4431156-4431236 fingerprint (2.1.88 match: resolveGitSubdirUrl, 0.713)
 /**
  * GitHub owner/repo 转克隆 URL：偏好 HTTPS 时 https://github.com/x.git，否则 git@github.com:x.git。
  */
 function githubRepoToCloneUrl(url) {
   return preferHttpsGitTransport() ? `https://github.com/${url}.git` : `git@${GITHUB_HOST}:${url}.git`;
 }
-//@ chunk-e6aww6q8.js:4391044-4391264 fingerprint (2.1.88 match: installFromNpm, 0.359)
+//@ chunk-5xgkngpb.js:4497657-4497877 fingerprint (2.1.88 match: installFromNpm, 0.359)
 /**
  * 构造 npm 命令的 --registry 参数；作用域包另加 --@scope:registry。
  */
@@ -519,7 +523,7 @@ function buildNpmRegistryArgs(options, packageName) {
     ? ["--registry", options.registry]
     : ["--registry", options.registry, `--${packageSpec}:registry=${options.registry}`];
 }
-//@ chunk-e6aww6q8.js:4496936-4497084 placement (2.1.88 match: discoverSkillDirsForPaths, 0.562)
+//@ chunk-5xgkngpb.js:4603771-4603919 placement (2.1.88 match: discoverSkillDirsForPaths, 0.562)
 /**
  * skill 显示路径：project 作用域且在 .claude/skills 下显示为 ./ 相对路径，否则缩写主目录。
  */
@@ -530,24 +534,24 @@ function displaySkillsDirPath(plugin) {
   }
   return tildify(plugin.path);
 }
-//@ chunk-e6aww6q8.js:4497084-4497119 placement
+//@ chunk-5xgkngpb.js:4603919-4603954 placement
 function pluginCacheDirPath() {
   return join(getPluginsDirectory(), PLUGIN_CACHE_DIRNAME);
 }
-//@ chunk-e6aww6q8.js:4497119-4497210 placement
+//@ chunk-5xgkngpb.js:4603954-4604045 placement
 function anchoredPluginCachePath() {
   let cacheDir = pluginCacheDirPath();
   return isAbsolute(cacheDir) && (sep === "/" || parse(cacheDir).root.length > 1)
     ? resolve_2(cacheDir)
     : resolve_2(getOriginalCwd(), cacheDir);
 }
-//@ chunk-e6aww6q8.js:4497210-4497267 placement
+//@ chunk-5xgkngpb.js:4604045-4604102 placement
 function orphanMarkerCoordsV5(versionPath, storageV5) {
   return isStorageV5Enabled() && storageV5 !== undefined
     ? parseVersionCachePath(versionPath, anchoredPluginCachePath())
     : null;
 }
-//@ chunk-e6aww6q8.js:4497267-4497344 placement
+//@ chunk-5xgkngpb.js:4604102-4604179 placement
 function strictCacheAddressable(storageV5) {
   return (
     isStorageV5Enabled() &&
@@ -555,18 +559,18 @@ function strictCacheAddressable(storageV5) {
     parseVersionCachePath(join(anchoredPluginCachePath(), "_", "_", "_"), anchoredPluginCachePath()) !== null
   );
 }
-//@ chunk-e6aww6q8.js:4497344-4497395 placement
+//@ chunk-5xgkngpb.js:4604179-4604230 placement
 async function versionParentContained(cachePath) {
   return (await versionParentState(cachePath)) === "real";
 }
-//@ chunk-e6aww6q8.js:4497395-4497558 placement
+//@ chunk-5xgkngpb.js:4604230-4604393 placement
 function versionParentUnexaminableError(pluginId, error) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
     `Could not examine the plugin directory of ${pluginId} (${errorMessage(error)}); retry the install.`,
     "plugin cache version parent could not be examined",
   );
 }
-//@ chunk-e6aww6q8.js:4497558-4497804 placement
+//@ chunk-5xgkngpb.js:4604393-4604639 placement
 async function isPlainPluginParentDir(parentDir) {
   let cacheRoot = anchoredPluginCachePath();
   let relPath = relative(cacheRoot, parentDir);
@@ -586,7 +590,7 @@ async function isPlainPluginParentDir(parentDir) {
     (await isPlainDirectory(join(realRoot, marketplace, plugin)))
   );
 }
-//@ chunk-e6aww6q8.js:4497804-4497999 placement
+//@ chunk-5xgkngpb.js:4604639-4604834 placement
 async function isPlainDirectory(dirPath) {
   if ((await lstat(dirPath)).isDirectory() && (await isSameFilesystem(dirname(dirPath), basename(dirPath))))
     return true;
@@ -596,7 +600,7 @@ async function isPlainDirectory(dirPath) {
   });
   return stat !== null && stat.isDirectory();
 }
-//@ chunk-e6aww6q8.js:4497999-4498693 placement
+//@ chunk-5xgkngpb.js:4604834-4605528 placement
 /**
  * 各阶段版本父目录越界的遥测消息。
  */
@@ -611,7 +615,7 @@ var CONTAINMENT_FAILURE_MESSAGES = {
   "during publish": "plugin cache version parent not contained during publish",
   "after a failed archive": "plugin cache version parent not contained after a failed archive",
 };
-//@ chunk-e6aww6q8.js:4498693-4499051 placement
+//@ chunk-5xgkngpb.js:4605528-4605886 placement
 async function requireVersionParentContained(cachePath, pluginId, version, verb, stage, state) {
   if (state === undefined && (await versionParentState(cachePath)) === "real") return;
   let message = `Could not ${verb} ${pluginId} ${version}: its plugin directory is not a directory (a dangling link, or a file wearing the marketplace or plugin folder name); make it a directory, or retry the install if it was being moved.`;
@@ -620,7 +624,7 @@ async function requireVersionParentContained(cachePath, pluginId, version, verb,
     CONTAINMENT_FAILURE_MESSAGES[stage] ?? "plugin cache version parent not contained",
   );
 }
-//@ chunk-e6aww6q8.js:4499051-4499167 placement
+//@ chunk-5xgkngpb.js:4605886-4606002 placement
 async function versionParentState(cachePath) {
   try {
     return (await isPlainPluginParentDir(dirname(cachePath))) ? "real" : "refused";
@@ -629,13 +633,13 @@ async function versionParentState(cachePath) {
     throw versionParentUnexaminableError(cachePath, error);
   }
 }
-//@ chunk-e6aww6q8.js:4499167-4499324 placement
+//@ chunk-5xgkngpb.js:4606002-4606159 placement
 function getPluginCachePath(cachePath, pluginId, version, verb = "cache") {
   return versionPathOccupantError(
     `Could not ${verb} ${pluginId} ${version}: what occupies its cache path ${cachePath} could not be examined; retry the load or the install.`,
   );
 }
-//@ chunk-e6aww6q8.js:4499324-4499869 placement
+//@ chunk-5xgkngpb.js:4606159-4606704 placement
 /**
  * 缓存/归档路径上的残留链接删不掉时抛错。
  */
@@ -651,7 +655,7 @@ async function removeStrayLinkOrThrow(linkPath, pluginId, version, verb, where) 
     "plugin cache stray link not removable before replace",
   );
 }
-//@ chunk-e6aww6q8.js:4499869-4500162 placement
+//@ chunk-5xgkngpb.js:4606704-4606997 placement
 async function clearOccupantForReplace(linkPath, pluginId, version, verb = "cache") {
   switch (await classifyCacheEntry(linkPath)) {
     case "absent":
@@ -668,7 +672,7 @@ async function clearOccupantForReplace(linkPath, pluginId, version, verb = "cach
       throw getPluginCachePath(linkPath, pluginId, version, verb);
   }
 }
-//@ chunk-e6aww6q8.js:4500162-4500507 placement
+//@ chunk-5xgkngpb.js:4606997-4607342 placement
 async function strictArchivePresent(archivePath, pluginId, version, assertParent) {
   switch (await classifyCacheEntry(archivePath)) {
     case "absent":
@@ -686,7 +690,7 @@ async function strictArchivePresent(archivePath, pluginId, version, assertParent
       throw getPluginCachePath(archivePath, pluginId, version);
   }
 }
-//@ chunk-e6aww6q8.js:4500507-4500596 placement
+//@ chunk-5xgkngpb.js:4607342-4607431 placement
 async function isCacheDirReusable(cachePath) {
   return (
     (await isCachePathClean(cachePath)) &&
@@ -696,7 +700,7 @@ async function isCacheDirReusable(cachePath) {
     }))
   );
 }
-//@ chunk-e6aww6q8.js:4500596-4500858 placement
+//@ chunk-5xgkngpb.js:4607431-4607693 placement
 async function decideCachedVersionReuse(cachePath, pluginId, version, linkFarm, sourcePath) {
   let kind = await classifyCacheEntry(cachePath);
   if (kind === "absent") return "absent";
@@ -712,7 +716,7 @@ async function decideCachedVersionReuse(cachePath, pluginId, version, linkFarm, 
     ? "serve"
     : "republish";
 }
-//@ chunk-e6aww6q8.js:4500858-4501029 placement
+//@ chunk-5xgkngpb.js:4607693-4607864 placement
 async function isStagedTreeIntact(stagedPath) {
   try {
     if (!(await lstat(stagedPath)).isDirectory()) return false;
@@ -723,7 +727,7 @@ async function isStagedTreeIntact(stagedPath) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:4501029-4501662 placement
+//@ chunk-5xgkngpb.js:4607864-4608497 placement
 /**
  * 暂存树被替换时按阶段（install/publish/archive）抛错。
  */
@@ -744,7 +748,7 @@ async function assertStagedTreeIntact(stagedPath, pluginId, version, phase) {
     "plugin cache staged tree swapped before archiving",
   );
 }
-//@ chunk-e6aww6q8.js:4501662-4501821 placement
+//@ chunk-5xgkngpb.js:4608497-4608656 placement
 async function isCachePathClean(cachePath) {
   try {
     let [rootReal, parentReal] = await Promise.all([
@@ -765,7 +769,7 @@ async function isCachePathClean(cachePath) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:4501821-4502215 placement
+//@ chunk-5xgkngpb.js:4608656-4609050 placement
 /**
  * 版本目录是缓存下的普通目录时返回其真实路径。
  */
@@ -798,7 +802,7 @@ async function resolvePlainVersionDir(versionDir) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:4502215-4502802 placement
+//@ chunk-5xgkngpb.js:4609050-4609637 placement
 /**
  * 严格安装步骤前确认版本目录仍是普通目录。
  */
@@ -819,7 +823,7 @@ async function requirePlainVersionDir(versionDir, phase) {
     );
   return resolved;
 }
-//@ chunk-e6aww6q8.js:4502802-4503547 placement
+//@ chunk-5xgkngpb.js:4609637-4610382 placement
 async function unvouchBeforeDependencyStep(versionDir, storageV5, { staged = false } = {}) {
   if (!strictCacheAddressable(storageV5)) return;
   if ((await requirePlainVersionDir(versionDir, "dependency install")) === null) {
@@ -842,7 +846,7 @@ async function unvouchBeforeDependencyStep(versionDir, storageV5, { staged = fal
     "plugin cache conversion marker could not be withdrawn before dependency install",
   );
 }
-//@ chunk-e6aww6q8.js:4503547-4504323 placement
+//@ chunk-5xgkngpb.js:4610382-4611158 placement
 async function unmarkBeforeArchiving(versionDir, storageV5, { staged = false } = {}) {
   if (!strictCacheAddressable(storageV5) || staged) return true;
   let resolved = await resolvePlainVersionDir(versionDir).catch(() => null);
@@ -881,7 +885,7 @@ async function unmarkBeforeArchiving(versionDir, storageV5, { staged = false } =
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:4504323-4504804 placement
+//@ chunk-5xgkngpb.js:4611158-4611639 placement
 async function removeFreshCopyUnlessInUse(versionDir, storageV5) {
   if (!strictCacheAddressable(storageV5)) return;
   let resolved = await resolvePlainVersionDir(versionDir).catch(() => null);
@@ -904,7 +908,7 @@ async function removeFreshCopyUnlessInUse(versionDir, storageV5) {
   }
   await removeDirectoryTreeNoFollow_2(resolved).catch(() => {});
 }
-//@ chunk-e6aww6q8.js:4504804-4505997 placement
+//@ chunk-5xgkngpb.js:4611639-4612832 placement
 async function rescreenCachedPluginTree(versionDir, storageV5) {
   if (!strictCacheAddressable(storageV5)) return;
   let resolved = await requirePlainVersionDir(versionDir, "post-install screen");
@@ -948,7 +952,7 @@ async function rescreenCachedPluginTree(versionDir, storageV5) {
       "plugin cache conversion marker could not be withdrawn after the post-install screen",
     );
 }
-//@ chunk-e6aww6q8.js:4505997-4506216 placement
+//@ chunk-5xgkngpb.js:4612832-4613051 placement
 async function materializeCachedLinks(versionDir, storageV5, linkFarm = false) {
   if (!strictCacheAddressable(storageV5)) return;
   if (linkFarm) {
@@ -967,13 +971,13 @@ async function materializeCachedLinks(versionDir, storageV5, linkFarm = false) {
     ).catch(() => true),
   );
 }
-//@ chunk-e6aww6q8.js:4506216-4506326 placement
+//@ chunk-5xgkngpb.js:4613051-4613161 placement
 function getLegacyCachePath(baseDir, pluginId, version) {
   let replaced = version.replace(/[^a-zA-Z0-9\-_.]/g, "-");
   if (replaced === "." || replaced === "..") replaced = "-";
   return join(getPluginCacheDirIn(baseDir, pluginId), replaced);
 }
-//@ chunk-e6aww6q8.js:4506326-4506435 placement
+//@ chunk-5xgkngpb.js:4613161-4613270 placement
 function getPluginCacheDirIn(baseDir, pluginId) {
   let { name, marketplace } = parsePluginIdentifier(pluginId);
   return join(
@@ -985,19 +989,19 @@ function getPluginCacheDirIn(baseDir, pluginId) {
       : sanitizePluginId(name || pluginId),
   );
 }
-//@ chunk-e6aww6q8.js:4506435-4506455 placement
-var weakSet_7; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4506435", () => {
-  weakSet_7 = new WeakSet();
+//@ chunk-5xgkngpb.js:4613270-4613290 placement
+var weakSet_8; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xgkngpb.js:4613270", () => {
+  weakSet_8 = new WeakSet();
 });
-//@ chunk-e6aww6q8.js:4506455-4506493 placement (2.1.88 match: getVersionedCachePath, 0)
+//@ chunk-5xgkngpb.js:4613290-4613328 placement (2.1.88 match: getVersionedCachePath, 0)
 /**
  * 版本化缓存目录 <plugins>/cache/<marketplace>/<plugin>/<version>。
  */
 function getVersionedCachePath(pluginId, version) {
   return getLegacyCachePath(getPluginsDirectory(), pluginId, version);
 }
-//@ chunk-e6aww6q8.js:4506493-4506868 placement
+//@ chunk-5xgkngpb.js:4613328-4613703 placement
 /**
  * 通过 storageV5 存储后端读取插件缓存内的文件，返回 {outcome:"found",content}/"absent"/"error"；路径不在插件缓存内返回 null。
  */
@@ -1024,7 +1028,7 @@ async function readFileViaStorageBackend(storageV5, fullPath) {
     content: Buffer.from(item.value).toString("utf-8"),
   };
 }
-//@ chunk-e6aww6q8.js:4506868-4507100 placement
+//@ chunk-5xgkngpb.js:4613703-4613935 placement
 async function isCachePathPresentInStorage(storageV5, fullPath) {
   let storageKey = cacheStorageKeyOrFallback(fullPath, anchoredPluginCachePath());
   if (storageKey === null) return null;
@@ -1036,7 +1040,7 @@ async function isCachePathPresentInStorage(storageV5, fullPath) {
       : undefined;
   return isNonRegularError(telemetryCode) ? null : false;
 }
-//@ chunk-e6aww6q8.js:4507100-4507190 placement
+//@ chunk-5xgkngpb.js:4613935-4614025 placement
 async function isCachePresent(storageV5, fullPath) {
   let result =
     isStorageV5Enabled() && storageV5 !== undefined
@@ -1044,7 +1048,7 @@ async function isCachePresent(storageV5, fullPath) {
       : null;
   return result !== null ? result : pathExists(fullPath);
 }
-//@ chunk-e6aww6q8.js:4507190-4507585 placement
+//@ chunk-5xgkngpb.js:4614025-4614420 placement
 /**
  * 检查插件组件路径：present/absent/{unknown, errno}。
  */
@@ -1078,7 +1082,7 @@ async function probeComponentPath(storageV5, fullPath) {
         };
   }
 }
-//@ chunk-e6aww6q8.js:4507585-4507791 placement
+//@ chunk-5xgkngpb.js:4614420-4614626 placement
 function reportUncheckablePath(errors, source, name, component, relPath, unknown) {
   logForDebugging(`Plugin ${name}: could not check ${relPath} (${unknown.unknown}); not loading it`, {
     level: "error",
@@ -1092,7 +1096,7 @@ function reportUncheckablePath(errors, source, name, component, relPath, unknown
     errno: unknown.errno ?? "UNKNOWN",
   });
 }
-//@ chunk-e6aww6q8.js:4507791-4508003 placement (2.1.88 match: _temp2, 1)
+//@ chunk-5xgkngpb.js:4614626-4614838 placement (2.1.88 match: _temp2, 1)
 async function statPluginPath(storageV5, fullPath) {
   let result =
     isStorageV5Enabled() && storageV5 !== undefined
@@ -1115,7 +1119,7 @@ async function statPluginPath(storageV5, fullPath) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:4508003-4508498 placement
+//@ chunk-5xgkngpb.js:4614838-4615333 placement
 /**
  * 缓存目录（或存储作用域）中是否有非忽略项。
  */
@@ -1147,9 +1151,9 @@ async function dirHasRealEntries(dirPath, storageV5, isCacheEntryName = isCacheS
   }
   return names.some((name) => !isCacheEntryName(name));
 }
-//@ chunk-e6aww6q8.js:4508498-4508528 placement
+//@ chunk-5xgkngpb.js:4615333-4615363 placement
 var LINKS_MATERIALIZED_MARKER = ".links_materialized";
-//@ chunk-e6aww6q8.js:4508528-4508701 placement
+//@ chunk-5xgkngpb.js:4615363-4615536 placement
 /**
  * 判断版本化缓存目录是否完整可用；storageV5 下若有 .links_materialized 标记则按链接已物化方式检查。
  */
@@ -1165,7 +1169,7 @@ async function cacheDirHasPluginContentStrict(cachePath, storageV5) {
     ? dirHasRealEntries(cachePath, storageV5, isCacheEntryName)
     : dirHasRealEntries(cachePath, undefined, isCacheEntryName);
 }
-//@ chunk-e6aww6q8.js:4508701-4508908 placement
+//@ chunk-5xgkngpb.js:4615536-4615743 placement
 async function removeCacheInUseMarker(cachePath, storageV5) {
   if (await isSymlinkOrFalse(cachePath)) return;
   let coords = orphanMarkerCoordsV5(cachePath, storageV5);
@@ -1175,11 +1179,11 @@ async function removeCacheInUseMarker(cachePath, storageV5) {
     );
     return;
   }
-  await rm_2(join(cachePath, ORPHAN_MARKER_FILE), {
+  await rm(join(cachePath, ORPHAN_MARKER_FILE), {
     force: true,
   }).catch(() => {});
 }
-//@ chunk-e6aww6q8.js:4508908-4509239 placement
+//@ chunk-5xgkngpb.js:4615743-4616074 placement
 /**
  * 在一个插件的多个安装记录中挑第一个 installPath 可信且缓存存在的；都不存在时返回第一个可信的或第一条。
  */
@@ -1204,14 +1208,14 @@ async function pickUsableInstallation(installations, { storageV5, trustedRoots =
   }
   return fallback ?? relevant[0];
 }
-//@ chunk-e6aww6q8.js:4509239-4509280 placement (2.1.88 match: getVersionedZipCachePath, 1)
+//@ chunk-5xgkngpb.js:4616074-4616115 placement (2.1.88 match: getVersionedZipCachePath, 1)
 /**
  * 版本化缓存的 zip 路径（目录路径 + .zip）。
  */
 function getVersionedZipCachePath(pluginId, version) {
   return `${getVersionedCachePath(pluginId, version)}.zip`;
 }
-//@ chunk-e6aww6q8.js:4509280-4509388 placement
+//@ chunk-5xgkngpb.js:4616115-4616223 placement
 async function findSeedCachePath(pluginId, version) {
   for (let seedDir of getPluginSeedDirs()) {
     let legacyCachePath = getLegacyCachePath(seedDir, pluginId, version);
@@ -1221,14 +1225,14 @@ async function findSeedCachePath(pluginId, version) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:4509388-4509485 placement (2.1.88 match: formatRelativeTimeAgo, 0.75)
+//@ chunk-5xgkngpb.js:4616223-4616320 placement (2.1.88 match: formatRelativeTimeAgo, 0.75)
 async function probeSeedForPlugin(pluginId, version, mode) {
   return (
     (await findSeedCachePath(pluginId, version)) ??
     (mode === "always" || version === "unknown" ? await probeSeedCacheAnyVersion(pluginId) : null)
   );
 }
-//@ chunk-e6aww6q8.js:4509485-4509693 placement
+//@ chunk-5xgkngpb.js:4616320-4616528 placement
 async function probeSeedCacheAnyVersion(pluginId) {
   for (let seedDir of getPluginSeedDirs()) {
     let pluginDir = dirname(getLegacyCachePath(seedDir, pluginId, "_"));
@@ -1244,11 +1248,11 @@ async function probeSeedCacheAnyVersion(pluginId) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:4509693-4509732 placement
+//@ chunk-5xgkngpb.js:4616528-4616567 placement
 function isCommandSourceError(error) {
   return error instanceof CommandSourceError;
 }
-//@ chunk-e6aww6q8.js:4509732-4509805 placement
+//@ chunk-5xgkngpb.js:4616567-4616640 placement
 function commandSourceErrorMessage(error, redact = redactUrlsInMessage) {
   return isCommandSourceError(error)
     ? redact(
@@ -1258,10 +1262,10 @@ function commandSourceErrorMessage(error, redact = redactUrlsInMessage) {
       )
     : printableMessage(redact(errorMessage(error)));
 }
-//@ chunk-e6aww6q8.js:4509805-4509824 placement
+//@ chunk-5xgkngpb.js:4616640-4616659 placement
 var MAX_MANIFEST_PROBLEMS = 20;
 var MAX_PROBLEM_TEXT_LENGTH = 500;
-//@ chunk-e6aww6q8.js:4509824-4510322 placement
+//@ chunk-5xgkngpb.js:4616659-4617158 placement
 /**
  * manifest 解析/校验错误转插件错误（脱敏、截断）。
  */
@@ -1296,7 +1300,7 @@ function manifestErrorToPluginError(error, source, pluginName) {
         }),
       };
 }
-//@ chunk-e6aww6q8.js:4510322-4510589 placement
+//@ chunk-5xgkngpb.js:4617158-4617425 placement
 async function classifyLinkFarmReuse(farmDir, farmDir_2) {
   let classification = await classifyLinkFarm(farmDir);
   if (classification === "not-live")
@@ -1318,7 +1322,7 @@ async function classifyLinkFarmReuse(farmDir, farmDir_2) {
     unclassifiable: false,
   };
 }
-//@ chunk-e6aww6q8.js:4510589-4510671 placement
+//@ chunk-5xgkngpb.js:4617425-4617507 placement
 async function isPluginVersionInUseSafe(cachePath, storageV5) {
   try {
     return await isPluginVersionInUse(
@@ -1332,7 +1336,7 @@ async function isPluginVersionInUseSafe(cachePath, storageV5) {
     return true;
   }
 }
-//@ chunk-e6aww6q8.js:4510671-4510744 placement
+//@ chunk-5xgkngpb.js:4617507-4617580 placement
 async function copyPluginDir(sourceDir, targetDir, containmentRoot, useStorageBackend) {
   await copyDir(
     sourceDir,
@@ -1348,7 +1352,7 @@ async function copyPluginDir(sourceDir, targetDir, containmentRoot, useStorageBa
     true,
   );
 }
-//@ chunk-e6aww6q8.js:4510744-4510950 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-5xgkngpb.js:4617580-4617786 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 async function lstatChildBigintOrUndefined(realCandidate) {
   for (let seedDir of getPluginSeedDirs()) {
     let pluginDir = dirname(getLegacyCachePath(seedDir, realCandidate, "_"));
@@ -1364,7 +1368,7 @@ async function lstatChildBigintOrUndefined(realCandidate) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:4510950-4514602 placement
+//@ chunk-5xgkngpb.js:4617786-4621442 placement
 async function copyDir(
   sourceDir,
   targetDir,
@@ -1594,7 +1598,7 @@ async function copyDir(
     }
   }
 }
-//@ chunk-e6aww6q8.js:4514602-4514831 placement
+//@ chunk-5xgkngpb.js:4621442-4621671 placement
 function assertSymlinkFree(result, pluginPath) {
   if (result.failed > 0 || result.readOnly)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -1602,7 +1606,7 @@ function assertSymlinkFree(result, pluginPath) {
       "plugin tree could not be made symlink-free",
     );
 }
-//@ chunk-e6aww6q8.js:4514831-4515261 placement
+//@ chunk-5xgkngpb.js:4621671-4622101 placement
 /**
  * 存储中暂存副本是否为空（分页列举）。
  */
@@ -1633,7 +1637,7 @@ async function isStorageScopeEmpty(storageV5, scope) {
   } while (cursor !== undefined);
   return true;
 }
-//@ chunk-e6aww6q8.js:4515261-4521669 placement (2.1.88 match: copyPluginToVersionedCache, 0.356)
+//@ chunk-5xgkngpb.js:4622101-4628592 placement (2.1.88 match: copyPluginToVersionedCache, 0.356)
 /**
  * 把插件复制进版本化缓存 <plugins>/cache/<marketplace>/<plugin>/<version>（zip 缓存开启时再打成 .zip）。已有完整缓存直接复用；其他会话正在用时推迟覆盖；种子缓存命中直接用；link 模式建立链接农场；复制后装依赖、拉 binaries，再原子发布。返回最终路径。
  */
@@ -1676,7 +1680,7 @@ async function copyPluginToVersionedCache(
         return zipPath;
       }
       if (useStorageBackend) await assertParent("cache", "before overwrite");
-      await rm_2(zipPath, {
+      await rm(zipPath, {
         force: true,
       });
     } else if (useStorageBackend && !forceOverwrite) {
@@ -2019,7 +2023,7 @@ async function copyPluginToVersionedCache(
   logForDebugging(`Successfully cached plugin ${pluginId} at ${cachePath}`);
   return cachePath;
 }
-//@ chunk-e6aww6q8.js:4521669-4522454 placement
+//@ chunk-5xgkngpb.js:4628592-4629377 placement
 /**
  * 删除版本化缓存目录：存储后端模式下先让存储层清理作用域，剩余部分再直接删除。
  */
@@ -2057,7 +2061,7 @@ async function evictCachedVersionDir(cachePath, storageV5) {
   }
   await removeDirectoryTreeNoFollow_2(cachePath);
 }
-//@ chunk-e6aww6q8.js:4522454-4523178 placement
+//@ chunk-5xgkngpb.js:4629377-4630101 placement
 async function ensurePluginCacheFolder(cachePath, storageV5) {
   let storageScope =
     isStorageV5Enabled() && storageV5 !== undefined
@@ -2090,7 +2094,7 @@ async function ensurePluginCacheFolder(cachePath, storageV5) {
   }
   await getFsImplementation().mkdir(dirname(cachePath));
 }
-//@ chunk-e6aww6q8.js:4523178-4523506 placement
+//@ chunk-5xgkngpb.js:4630101-4630429 placement
 /**
  * 不运行 install 脚本地下载 npm 包到目标目录（可指定 registry、期望 integrity）。
  */
@@ -2112,12 +2116,12 @@ async function fetchNpmPackageNoScripts(packageName, targetPath, options) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:4524665-4524705 affinity
+//@ chunk-5xgkngpb.js:4631589-4631629 affinity
 var CLONE_STEP_FAILED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4524665", () => {
+deferInit("chunk-5xgkngpb.js:4631589", () => {
   CLONE_STEP_FAILED = Symbol("pluginCloneStepFailed");
 });
-//@ chunk-e6aww6q8.js:4524705-4526454 fingerprint (2.1.88 match: gitClone, 0.736)
+//@ chunk-5xgkngpb.js:4631629-4633381 fingerprint (2.1.88 match: gitClone, 0.736)
 /**
  * git 克隆插件仓库：校验 sha/ref、--depth 1（有 sha 时 fetch 该提交）、可禁用子模块、校验钉住的提交。
  */
@@ -2253,7 +2257,7 @@ async function gitClone_2(gitUrl, targetPath, ref, sha, { isDirectoryPlugin, noS
   );
   return pinned;
 }
-//@ chunk-e6aww6q8.js:4526454-4526599 fingerprint (2.1.88 match: installFromGit, 1)
+//@ chunk-5xgkngpb.js:4633381-4633526 fingerprint (2.1.88 match: installFromGit, 1)
 async function installFromGit(gitUrl, targetPath, ref, sha, options) {
   let safeUrl = parsePluginGitUrl(gitUrl);
   let pinnedSha = await gitClone_2(safeUrl, targetPath, ref, sha, options);
@@ -2261,7 +2265,7 @@ async function installFromGit(gitUrl, targetPath, ref, sha, options) {
   logForDebugging(`Cloned repository from ${redactUrlQuery(safeUrl)}${refMessage} to ${targetPath}`);
   return pinnedSha;
 }
-//@ chunk-e6aww6q8.js:4526599-4527713 fingerprint (2.1.88 match: installFromGitHub, 0.49)
+//@ chunk-5xgkngpb.js:4633526-4634640 fingerprint (2.1.88 match: installFromGitHub, 0.49)
 /**
  * github 来源安装：校验 owner/repo，按 SSH 配置情况先 SSH 后 HTTPS（或直接 HTTPS）克隆，失败时回退另一种传输。
  */
@@ -2325,30 +2329,30 @@ Check the repository and ref in the marketplace entry and that github.com can be
     }
   }
 }
-//@ chunk-e6aww6q8.js:4527713-4527765 layout
+//@ chunk-5xgkngpb.js:4634640-4634692 layout
 function isCloneStepFailure(error) {
   return error instanceof Error && CLONE_STEP_FAILED in error;
 }
-//@ chunk-e6aww6q8.js:4527765-4527907 layout
+//@ chunk-5xgkngpb.js:4634692-4634834 layout
 function githubShorthandToCloneUrl(url) {
   if (/^[a-zA-Z0-9-_.]+\/[a-zA-Z0-9-_.]+$/.test(url))
     return preferHttpsGitTransport() ? `https://github.com/${url}.git` : `git@${GITHUB_HOST}:${url}.git`;
   return parsePluginGitUrl(url);
 }
-//@ chunk-e6aww6q8.js:4527907-4527932 placement
+//@ chunk-5xgkngpb.js:4634834-4634859 placement
 /**
  * git 不可用（xcrun 报错或找不到 git）时抛的错误类。
  */
 class GitNotAvailableError extends Error {}
-//@ chunk-e6aww6q8.js:4527932-4527957 placement
+//@ chunk-5xgkngpb.js:4634859-4634884 placement
 /**
  * git 网络错误（无法访问、RPC 失败、SSH 解析失败）时抛的错误类。
  */
 class GitHostFetchFailedError extends Error {}
-//@ chunk-e6aww6q8.js:4527957-4528180 layout
+//@ chunk-5xgkngpb.js:4634884-4635107 layout
 var GIT_NETWORK_ERROR_RE =
   /^(?:fatal: unable to access '[^']*': |error: RPC failed; (?:curl (?:6|7|18|28|35|52|55|56|60|92)\b|HTTP [45]\d\d)|ssh: Could not resolve hostname |ssh: connect to host \S+ port \d+: |fatal: unable to connect to )/;
-//@ chunk-e6aww6q8.js:4528180-4528411 layout
+//@ chunk-5xgkngpb.js:4635107-4635338 layout
 function classifyGitError(stderr, message) {
   let lines = stderr.split(`
 `);
@@ -2359,7 +2363,7 @@ function classifyGitError(stderr, message) {
     ? new GitHostFetchFailedError(message)
     : Error(message);
 }
-//@ chunk-e6aww6q8.js:4528411-4528527 layout
+//@ chunk-5xgkngpb.js:4635338-4635454 layout
 function gitEnvWithCMessages(env) {
   let { LC_ALL, ...rest } = env;
   return {
@@ -2372,7 +2376,7 @@ function gitEnvWithCMessages(env) {
     LC_MESSAGES: "C",
   };
 }
-//@ chunk-e6aww6q8.js:4528527-4531133 fingerprint (2.1.88 match: installFromGitSubdir, 0.721)
+//@ chunk-5xgkngpb.js:4635454-4638065 fingerprint (2.1.88 match: installFromGitSubdir, 0.721)
 /**
  * git-subdir 来源安装：部分克隆（--filter=tree:0）+ sparse-checkout 只取子目录，校验 sha，复制子目录到目标。需要 git ≥2.25。
  */
@@ -2513,13 +2517,13 @@ async function installFromGitSubdir(
     );
     return resolvedSha;
   } finally {
-    await rm_2(cloneDir, {
+    await rm(cloneDir, {
       recursive: true,
       force: true,
     });
   }
 }
-//@ chunk-e6aww6q8.js:4531133-4531330 fingerprint (2.1.88 match: installFromLocal, 0.745)
+//@ chunk-5xgkngpb.js:4638065-4638262 fingerprint (2.1.88 match: installFromLocal, 0.745)
 async function installFromLocal(
   sourcePath,
   targetPath,
@@ -2544,11 +2548,11 @@ async function installFromLocal(
   let gitPath = join(targetPath, ".git");
   await removeDirectoryTreeNoFollow_2(gitPath);
 }
-//@ chunk-e6aww6q8.js:4531330-4531365 layout
+//@ chunk-5xgkngpb.js:4638262-4638297 layout
 function getTemporaryCachePath(source) {
   return makeTempCachePathName(generateTemporaryCacheNameForPlugin(source));
 }
-//@ chunk-e6aww6q8.js:4531365-4531639 fingerprint (2.1.88 match: generateTemporaryCacheNameForPlugin, 0.683)
+//@ chunk-5xgkngpb.js:4638297-4638571 fingerprint (2.1.88 match: generateTemporaryCacheNameForPlugin, 0.683)
 function generateTemporaryCacheNameForPlugin(source) {
   if (typeof source === "string") return "local";
   switch (source.source) {
@@ -2569,7 +2573,7 @@ function generateTemporaryCacheNameForPlugin(source) {
       return "unknown";
   }
 }
-//@ chunk-e6aww6q8.js:4531639-4531882 placement
+//@ chunk-5xgkngpb.js:4638571-4638814 placement
 function redactPluginSourceForLog(source) {
   if (typeof source === "string") return source;
   return {
@@ -2587,7 +2591,7 @@ function redactPluginSourceForLog(source) {
       }),
   };
 }
-//@ chunk-e6aww6q8.js:4531882-4534542 placement (2.1.88 match: cachePlugin, 0.458)
+//@ chunk-5xgkngpb.js:4638814-4641481 placement (2.1.88 match: cachePlugin, 0.458)
 /**
  * 按来源把插件下载/复制到临时目录：npm、github/url/git-subdir（git 克隆、sha 钉住校验）、archive（https zip）、command、本地路径；storageV5 下在插件缓存内分配暂存区。返回 {path, manifest, gitCommitSha…} 供 copyPluginToVersionedCache 使用。
  */
@@ -2781,7 +2785,7 @@ async function cachePlugin(source, options) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:4534542-4534733 placement
+//@ chunk-5xgkngpb.js:4641481-4641672 placement
 function allocateStagingInCache(storageV5, pluginId) {
   let cacheRoot = anchoredPluginCachePath();
   let pluginScope = pluginCacheStorageScope(getPluginCacheDirIn(getPluginsDirectory(), pluginId), cacheRoot);
@@ -2796,11 +2800,11 @@ function allocateStagingInCache(storageV5, pluginId) {
         path: stagingPath,
       };
 }
-//@ chunk-e6aww6q8.js:4534733-4534867 placement
+//@ chunk-5xgkngpb.js:4641672-4641806 placement
 var ARCHIVE_RETRY_DELAYS_MS = [30, 70, 150];
 var UNSUPPORTED_SOURCE_MESSAGE =
   "This plugin uses a source type your Claude Code version does not support. Update Claude Code and try again.";
-//@ chunk-e6aww6q8.js:4534867-4537104 placement
+//@ chunk-5xgkngpb.js:4641806-4644045 placement
 /**
  * 安装插件压缩包：拒绝只声明不安全组件路径的条目，过滤 __MACOSX 等文件。
  */
@@ -2888,14 +2892,14 @@ async function installFromArchive(
       await retryFsOp(pluginRootInExtracted, targetPath);
       return contentSha256;
     } finally {
-      await rm_2(stagingDirPath, {
+      await rm(stagingDirPath, {
         recursive: true,
         force: true,
       }).catch(() => {});
     }
   });
 }
-//@ chunk-e6aww6q8.js:4537104-4539060 placement (2.1.88 match: loadPluginManifest, 0.364)
+//@ chunk-5xgkngpb.js:4644045-4646011 placement (2.1.88 match: loadPluginManifest, 0.364)
 /**
  * 读取并解析 .claude-plugin/plugin.json（找不到再试候选路径），先确认清单路径不经符号链接逃出插件目录；JSON 损坏或 schema 失败抛 TelemetrySafeError；返回 {manifest, manifestPath, depConstraints}。没有 manifest 时用目录名合成。
  */
@@ -3035,7 +3039,7 @@ JSON parse error: ${errorMsg}`,
     depConstraints: undefined,
   };
 }
-//@ chunk-e6aww6q8.js:4539060-4540263 fingerprint (2.1.88 match: loadPluginHooks, 0.496)
+//@ chunk-5xgkngpb.js:4646011-4647214 fingerprint (2.1.88 match: loadPluginHooks, 0.497)
 /**
  * 读取 hooks/hooks.json：校验 PluginHooksSchema，返回 hooks 配置与 hooks 模块（modules）列表。
  */
@@ -3071,7 +3075,7 @@ async function loadPluginHooks_3(hooksFilePath, pluginName, storageV5) {
     "hooks" in parsed &&
     parsed.hooks !== null &&
     parsed.hooks !== undefined &&
-    !isPlainObject_5(parsed.hooks)
+    !isPlainObject_6(parsed.hooks)
   )
     throw new HookValidationError(
       `hooks: must be an object mapping event names to matcher arrays \u2014 ${UNLOADABLE_GUARD_NOTE}`,
@@ -3102,7 +3106,7 @@ async function loadPluginHooks_3(hooksFilePath, pluginName, storageV5) {
     modules: parsedHooks.modules ?? [],
   };
 }
-//@ chunk-e6aww6q8.js:4540263-4540956 layout
+//@ chunk-5xgkngpb.js:4647214-4647907 layout
 /**
  * 处理 hooks.json 的 modules（JS hooks 模块）：每插件只允许一个，多于一个时报 hook-load-failed 都不加载。
  */
@@ -3146,7 +3150,7 @@ async function loadPluginHooksModule(options) {
   plugin.modulePath = fullPath;
   return;
 }
-//@ chunk-e6aww6q8.js:4540956-4542014 layout
+//@ chunk-5xgkngpb.js:4647907-4648964 layout
 /**
  * 读 manifest 的 monitors（或 experimental.monitors），缺省时读 monitors/monitors.json，校验后挂到插件对象上（后台常驻监视命令）。
  */
@@ -3229,7 +3233,7 @@ async function loadPluginMonitors(
     return;
   }
 }
-//@ chunk-e6aww6q8.js:4542014-4542132 layout
+//@ chunk-5xgkngpb.js:4648964-4649082 layout
 /**
  * 把相对路径解析到目录内，越界返回 null。
  */
@@ -3245,7 +3249,7 @@ function resolveWithinDir(baseDir, targetPath) {
     return null;
   return resolvedTarget;
 }
-//@ chunk-e6aww6q8.js:4542132-4543378 fingerprint (2.1.88 match: validatePluginPaths, 0.466)
+//@ chunk-5xgkngpb.js:4649082-4650330 fingerprint (2.1.88 match: validatePluginPaths, 0.467)
 /**
  * 校验 manifest 中声明的组件路径：都要在插件目录内且存在，逃逸或不存在的记 path-traversal/path-not-found 错误，返回有效路径。
  */
@@ -3340,7 +3344,7 @@ async function validatePluginPaths(
   }
   return validPaths;
 }
-//@ chunk-e6aww6q8.js:4543378-4546074 fingerprint (2.1.88 match: finishLoadingPluginFromPath, 0.446)
+//@ chunk-5xgkngpb.js:4650330-4653028 fingerprint (2.1.88 match: finishLoadingPluginFromPath, 0.446)
 /**
  * 处理 manifest 或 marketplace 条目中 commands 的对象形式（name → {source|content,…}）与路径数组：解析路径、校验逃逸、内联内容注册，结果写入插件对象。
  */
@@ -3526,7 +3530,7 @@ async function finishLoadingPluginFromPath(plugin, commands, options, storageV5)
   if (validPaths.length > 0)
     plugin.commandsPaths = mode === "append" ? [...(plugin.commandsPaths || []), ...validPaths] : validPaths;
 }
-//@ chunk-e6aww6q8.js:4547805-4555972 placement (2.1.88 match: createPluginFromPath, 0.485)
+//@ chunk-5xgkngpb.js:4655346-4664194 placement (2.1.88 match: createPluginFromPath, 0.473)
 /**
  * 由插件目录构造 LoadedPlugin：读 manifest；默认目录 commands/、agents/、skills/、output-styles/、themes/、workflows/ 存在即挂 *Path，manifest 指定的路径挂 *Paths（并做目录逃逸检查）；根目录 SKILL.md 视为单技能插件；读 hooks/hooks.json 与 manifest.hooks、monitors、mcpServers、lspServers、settings、userConfig 等；错误收集到 errors 数组。
  */
@@ -3563,6 +3567,10 @@ async function createPluginFromPath(
     repository: pluginSource,
     enabled,
     depConstraints,
+    ...(containedIn !== undefined && {
+      filesAnchor: containedIn,
+      entriesAnchor: containedIn,
+    }),
   };
   let statErrors = new Map();
   let probeDir = async (dirName) => {
@@ -3622,12 +3630,12 @@ async function createPluginFromPath(
         ]);
       }
     }
-    return Promise.all([...folderNames.map((cmdPath) => probeDir(cmdPath)), probeDir("workflows")]);
+    return Promise.all([...folderNames.map((folderName) => probeDir(folderName)), probeDir("workflows")]);
   })();
   for (let [folderName, code] of [...statErrors].sort(([left], [right]) => left.localeCompare(right))) {
-    let fullPath = join(pluginPath, folderName);
+    let folderPath = join(pluginPath, folderName);
     logForDebugging(
-      `Plugin ${manifest.name}: could not check the default ${folderName}/ folder at ${fullPath} (${code}); not loading it`,
+      `Plugin ${manifest.name}: could not check the default ${folderName}/ folder at ${folderPath} (${code}); not loading it`,
       {
         level: "error",
       },
@@ -3636,7 +3644,7 @@ async function createPluginFromPath(
       type: "path-not-found",
       source: pluginSource,
       plugin: manifest.name,
-      path: fullPath,
+      path: folderPath,
       component: folderName,
       errno: code,
     });
@@ -3699,8 +3707,44 @@ async function createPluginFromPath(
   let useDefaultOutputStyles = !outputStyles && hasOutputStyles;
   let useDefaultThemes = !(manifest.experimental?.themes ?? manifest.themes) && hasThemes;
   let useDefaultWorkflows = !manifest.workflows && hasWorkflows;
+  let folderChecks = [
+    ["commands", useDefaultCommands],
+    ["agents", useDefaultAgents],
+    ["skills", useDefaultSkills],
+    ["output-styles", useDefaultOutputStyles],
+    ["themes", useDefaultThemes],
+    ["workflows", useDefaultWorkflows],
+  ];
+  let checks = await Promise.all(
+    folderChecks.map(([folderName, useDefault]) =>
+      useDefault && containedIn !== undefined
+        ? findSymlinkEscape(containedIn, pluginPath, folderName)
+        : undefined,
+    ),
+  );
+  let escapedFolders = new Set();
+  folderChecks.forEach(([folderName], index) => {
+    let escapeReason = checks[index];
+    if (escapeReason === undefined) return;
+    escapedFolders.add(folderName);
+    let fullPath = join(pluginPath, folderName);
+    logForDebugging(
+      `Plugin ${manifest.name}: did not load the ${folderName} folder at ${fullPath}: ${escapeReason}`,
+      {
+        level: "error",
+      },
+    );
+    errors.push({
+      type: "path-traversal",
+      source: pluginSource,
+      plugin: manifest.name,
+      path: fullPath,
+      component: folderName,
+      reason: escapeReason,
+    });
+  });
   let commandsPath = join(pluginPath, "commands");
-  if (useDefaultCommands) plugin.commandsPath = commandsPath;
+  if (useDefaultCommands && !escapedFolders.has("commands")) plugin.commandsPath = commandsPath;
   if (manifest.commands)
     await finishLoadingPluginFromPath(
       plugin,
@@ -3719,7 +3763,7 @@ async function createPluginFromPath(
       storageV5,
     );
   let agentsPath = join(pluginPath, "agents");
-  if (useDefaultAgents) plugin.agentsPath = agentsPath;
+  if (useDefaultAgents && !escapedFolders.has("agents")) plugin.agentsPath = agentsPath;
   if (manifest.agents) {
     let agentSpecs = Array.isArray(manifest.agents) ? manifest.agents : [manifest.agents];
     let validAgents = await validatePluginPaths(
@@ -3738,14 +3782,16 @@ async function createPluginFromPath(
     if (validAgents.length > 0) plugin.agentsPaths = validAgents;
   }
   let skillsPath = join(pluginPath, "skills");
-  if (useDefaultSkills) plugin.skillsPath = skillsPath;
+  if (useDefaultSkills && !escapedFolders.has("skills")) plugin.skillsPath = skillsPath;
   if (manifest.skills) {
-    let skillSpecs = Array.isArray(manifest.skills) ? manifest.skills : [manifest.skills];
-    let skillsDirResolved = resolve_2(skillsPath);
+    let defaultSkillsPath = resolve_2(skillsPath);
+    let filtered = (Array.isArray(manifest.skills) ? manifest.skills : [manifest.skills]).filter(
+      (skillSpec) => !escapedFolders.has("skills") || resolve_2(pluginPath, skillSpec) !== defaultSkillsPath,
+    );
     let rootResolved = resolve_2(pluginPath);
-    let filtered = (
+    let filtered_2 = (
       await validatePluginPaths(
-        skillSpecs,
+        filtered,
         pluginPath,
         manifest.name,
         pluginSource,
@@ -3759,11 +3805,11 @@ async function createPluginFromPath(
       )
     ).filter((path) => {
       let resolved = resolve_2(path);
-      if (resolved === skillsDirResolved) return false;
+      if (resolved === defaultSkillsPath) return false;
       if (marketplace === SKILLS_DIR && resolved === rootResolved) return false;
       return true;
     });
-    if (filtered.length > 0) plugin.skillsPaths = filtered;
+    if (filtered_2.length > 0) plugin.skillsPaths = filtered_2;
   } else if (!useDefaultSkills && marketplace !== SKILLS_DIR) {
     let skillFilePath = join(pluginPath, "SKILL.md");
     let probe = await probeComponentPath(storageV5, skillFilePath);
@@ -3781,7 +3827,8 @@ async function createPluginFromPath(
       reportUncheckablePath(errors, pluginSource, manifest.name, "skills", skillFilePath, probe);
   }
   let outputStylesPath = join(pluginPath, "output-styles");
-  if (useDefaultOutputStyles) plugin.outputStylesPath = outputStylesPath;
+  if (useDefaultOutputStyles && !escapedFolders.has("output-styles"))
+    plugin.outputStylesPath = outputStylesPath;
   if (outputStyles) {
     let styleSpecs = Array.isArray(outputStyles) ? outputStyles : [outputStyles];
     let validStyles = await validatePluginPaths(
@@ -3800,7 +3847,7 @@ async function createPluginFromPath(
     if (validStyles.length > 0) plugin.outputStylesPaths = validStyles;
   }
   let themesPath = join(pluginPath, "themes");
-  if (useDefaultThemes) plugin.themesPath = themesPath;
+  if (useDefaultThemes && !escapedFolders.has("themes")) plugin.themesPath = themesPath;
   let themes = manifest.experimental?.themes ?? manifest.themes;
   if (themes) {
     let themeSpecs = Array.isArray(themes) ? themes : [themes];
@@ -3819,7 +3866,8 @@ async function createPluginFromPath(
     );
     if (validThemes.length > 0) plugin.themesPaths = validThemes;
   }
-  if (useDefaultWorkflows) plugin.workflowsPath = join(pluginPath, "workflows");
+  if (useDefaultWorkflows && !escapedFolders.has("workflows"))
+    plugin.workflowsPath = join(pluginPath, "workflows");
   if (manifest.workflows) {
     let workflowSpecs = Array.isArray(manifest.workflows) ? manifest.workflows : [manifest.workflows];
     let validWorkflows = await validatePluginPaths(
@@ -4063,9 +4111,9 @@ async function createPluginFromPath(
     manifestPath,
   };
 }
-//@ chunk-e6aww6q8.js:4555972-4556034 layout
+//@ chunk-5xgkngpb.js:4664194-4664256 layout
 var PluginAllowedSettingsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4555972", () => {
+deferInit("chunk-5xgkngpb.js:4664194", () => {
   PluginAllowedSettingsSchema = DoctorLazy(() =>
     objectSchema(
       Object.fromEntries(
@@ -4074,7 +4122,7 @@ deferInit("chunk-e6aww6q8.js:4555972", () => {
     ),
   );
 });
-//@ chunk-e6aww6q8.js:4556034-4556154 file-local
+//@ chunk-5xgkngpb.js:4664256-4664376 file-local
 function parsePluginSettings(raw) {
   let result = PluginAllowedSettingsSchema().safeParse(raw);
   if (!result.success) return;
@@ -4082,7 +4130,7 @@ function parsePluginSettings(raw) {
   if (Object.keys(data).length === 0) return;
   return data;
 }
-//@ chunk-e6aww6q8.js:4556154-4557356 fingerprint (2.1.88 match: loadPluginSettings, 0.6)
+//@ chunk-5xgkngpb.js:4664376-4665578 fingerprint (2.1.88 match: loadPluginSettings, 0.6)
 /**
  * 读取插件根目录 settings.json（或 manifest.settings），只保留白名单键，作为插件启用期间合并进用户设置的值。
  */
@@ -4122,7 +4170,7 @@ async function loadPluginSettings(pluginPath, manifest, storageV5, containmentRe
         encoding: "utf-8",
       });
     let parsed = jsonParse(settingsContent);
-    if (isPlainObject_5(parsed)) {
+    if (isPlainObject_6(parsed)) {
       let filtered = parsePluginSettings(parsed);
       if (filtered) {
         logForDebugging(`Loaded settings from settings.json for plugin ${manifest.name}`);
@@ -4154,7 +4202,7 @@ async function loadPluginSettings(pluginPath, manifest, storageV5, containmentRe
   else logFeatureOk("plugin_load_settings");
   return;
 }
-//@ chunk-e6aww6q8.js:4557356-4558076 layout
+//@ chunk-5xgkngpb.js:4665578-4666298 layout
 /**
  * 解析 marketplace 条目里内联的 hooks：只支持对象形式（事件名 → matcher 数组），文件路径与数组形式报 hook-load-failed。
  */
@@ -4191,7 +4239,7 @@ function parseMarketplaceEntryHooks(hooks, source, plugin, hookPath) {
     errors: toHookLoadErrors(invalid, source, plugin, hookPath),
   };
 }
-//@ chunk-e6aww6q8.js:4558076-4558210 layout
+//@ chunk-5xgkngpb.js:4666298-4666432 layout
 function toHookLoadErrors(invalid, source, plugin, hookPath) {
   return invalid.map(({ path, reason }) => ({
     type: "hook-load-failed",
@@ -4201,7 +4249,7 @@ function toHookLoadErrors(invalid, source, plugin, hookPath) {
     reason: `${path}: ${reason}`,
   }));
 }
-//@ chunk-e6aww6q8.js:4558210-4558343 file-local
+//@ chunk-5xgkngpb.js:4666432-4666565 file-local
 function mergeHooksSettings(base, additional) {
   if (!base) return additional;
   let merged = {
@@ -4212,7 +4260,7 @@ function mergeHooksSettings(base, additional) {
     else merged[event] = [...(merged[event] || []), ...matchers];
   return merged;
 }
-//@ chunk-e6aww6q8.js:4558343-4560222 placement
+//@ chunk-5xgkngpb.js:4666565-4668447 placement
 /**
  * 解析安装记录中的插件路径，路径缺失或不对时提示重新安装。
  */
@@ -4363,7 +4411,7 @@ async function loadNpmMarketplacePlugin({
   }
   return plugin;
 }
-//@ chunk-e6aww6q8.js:4560222-4560423 placement
+//@ chunk-5xgkngpb.js:4668447-4668648 placement
 /**
  * 合并 --add-dir 目录与设置的 enabledPlugins，过滤出 ID 合法、非 builtin、非保留市场的条目。
  */
@@ -4378,14 +4426,14 @@ function getEnabledPluginEntries() {
     return marketplace !== BUILTIN && !isOfficialMarketplace_2(marketplace);
   });
 }
-//@ chunk-e6aww6q8.js:4560423-4560460 placement
+//@ chunk-5xgkngpb.js:4668648-4668685 placement
 /**
  * 是否有启用的市场插件条目（用于决定刷新策略）。
  */
 function hasMarketplaceBackedPlugins() {
   return getEnabledPluginEntries().length > 0;
 }
-//@ chunk-e6aww6q8.js:4560460-4573903 callgraph-witnessed (2.1.88 match: loadPluginsFromMarketplaces, 0.141)
+//@ chunk-5xgkngpb.js:4668685-4682132 callgraph-witnessed (2.1.88 match: loadPluginsFromMarketplaces, 0.141)
 /**
  * 加载全部市场插件：读 known_marketplaces 与 enabledPlugins，套用 strictKnownMarketplaces/blockedMarketplaces 策略，对每个启用插件找安装记录与缓存（cacheOnly 时缓存缺失只报 plugin-cache-miss），调用 loadPluginFromMarketplaceEntry；收集 errors/warnings。
  */
@@ -5105,7 +5153,7 @@ async function loadPluginsFromMarketplaces({ cacheOnly, preview = false, storage
         plugin.resolvedVersion = installRecord.resolvedVersion;
       if (
         plugin &&
-        !weakSet_7.has(plugin) &&
+        !weakSet_8.has(plugin) &&
         installRecord?.gitCommitSha !== undefined &&
         resolve_2(installRecord.installPath) === resolve_2(plugin.path)
       )
@@ -5177,7 +5225,7 @@ async function loadPluginsFromMarketplaces({ cacheOnly, preview = false, storage
     warnings,
   };
 }
-//@ chunk-e6aww6q8.js:4573903-4574093 layout
+//@ chunk-5xgkngpb.js:4682132-4682322 layout
 function annotateRegistryReadFailures(errors, installedListHeldNote) {
   return errors.map((error) =>
     (error.type === "plugin-cache-miss" ||
@@ -5191,7 +5239,7 @@ function annotateRegistryReadFailures(errors, installedListHeldNote) {
       : error,
   );
 }
-//@ chunk-e6aww6q8.js:4574093-4574427 layout
+//@ chunk-5xgkngpb.js:4682322-4682656 layout
 function commandSourceCacheMissError(pluginId, plugin) {
   return {
     type: "generic-error",
@@ -5201,7 +5249,7 @@ function commandSourceCacheMissError(pluginId, plugin) {
     error: `${stripInvisibleKeepEmoji(pluginId)} is installed by running a command, and background command execution is currently switched off, so its missing cache was not rebuilt. Run \`${claudeCommand("plugin update", pluginId) ?? "claude plugin update <plugin>@<marketplace>"}\` in a terminal to rebuild it.`,
   };
 }
-//@ chunk-e6aww6q8.js:4574427-4575334 layout
+//@ chunk-5xgkngpb.js:4682656-4683563 layout
 function checkClaudeAiPluginLoadable(pluginId, plugin, source, installRecord, recordedClaudeAiPluginId) {
   if (typeof source !== "object" || source.source !== "claudeai") return null;
   if (installRecord === "unknown")
@@ -5237,13 +5285,13 @@ function checkClaudeAiPluginLoadable(pluginId, plugin, source, installRecord, re
     };
   return null;
 }
-//@ chunk-e6aww6q8.js:4575334-4575469 layout
+//@ chunk-5xgkngpb.js:4683563-4683698 layout
 function sessionPluginDirFor(baseDir, pluginId) {
   let replaced = pluginId.replace(/[^a-zA-Z0-9@\-_]/g, "-");
   let hash = createHash("sha256").update(pluginId).digest("hex");
   return join(baseDir, `${replaced}-${hash.slice(0, 8)}`);
 }
-//@ chunk-e6aww6q8.js:4575469-4575749 layout
+//@ chunk-5xgkngpb.js:4683698-4683978 layout
 function planArchiveExtraction(sessionCacheDir, extractDir) {
   let relativePath = relative(sessionCacheDir, extractDir);
   if (
@@ -5260,9 +5308,9 @@ function planArchiveExtraction(sessionCacheDir, extractDir) {
     previousPrefix: `${extractDir}.previous-${str}`,
   };
 }
-//@ chunk-e6aww6q8.js:4575749-4575765 layout
+//@ chunk-5xgkngpb.js:4683978-4683994 layout
 var MIXED_ARCHIVE_HASH = "mixed";
-//@ chunk-e6aww6q8.js:4575765-4576369 layout
+//@ chunk-5xgkngpb.js:4683994-4684601 layout
 async function extractSessionArchive(filePath, plan) {
   let zipExtractionState = getZipExtractionState();
   let seq = ++zipExtractionState.nextSeq;
@@ -5306,9 +5354,9 @@ async function extractSessionArchive(filePath, plan) {
     settle,
   };
 }
-//@ chunk-e6aww6q8.js:4576369-4576379 layout
+//@ chunk-5xgkngpb.js:4684601-4684611 layout
 var MAX_PREVIEW_TREES = 2;
-//@ chunk-e6aww6q8.js:4576379-4576672 layout
+//@ chunk-5xgkngpb.js:4684611-4684904 layout
 async function prunePreviewTrees(zipExtractionState, sessionCacheDir, extractDir, previewPath) {
   let filtered = (zipExtractionState.previews.get(extractDir) ?? []).filter(
     (existingPath) => existingPath !== previewPath,
@@ -5326,7 +5374,7 @@ async function prunePreviewTrees(zipExtractionState, sessionCacheDir, extractDir
   });
   await Promise.all(mapped);
 }
-//@ chunk-e6aww6q8.js:4576672-4576854 layout
+//@ chunk-5xgkngpb.js:4684904-4685086 layout
 async function removePreviewTree(extractDir, targetDir) {
   let { previousPrefix } = planArchiveExtraction(extractDir, targetDir);
   try {
@@ -5340,7 +5388,7 @@ async function removePreviewTree(extractDir, targetDir) {
   }
   await removeTreeQuietly(previousPrefix);
 }
-//@ chunk-e6aww6q8.js:4576854-4577324 layout
+//@ chunk-5xgkngpb.js:4685086-4685556 layout
 async function statDirIdentity(dirPath, when) {
   try {
     let { dev, ino, birthtimeMs } = await lstat(dirPath);
@@ -5361,7 +5409,7 @@ async function statDirIdentity(dirPath, when) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:4577324-4577560 layout
+//@ chunk-5xgkngpb.js:4685556-4685792 layout
 async function assertDirUnchanged(dirPath, identity) {
   let currentIdentity = await statDirIdentity(dirPath, "after");
   if (
@@ -5374,7 +5422,7 @@ async function assertDirUnchanged(dirPath, identity) {
       "plugin extraction tree replaced during load",
     );
 }
-//@ chunk-e6aww6q8.js:4577560-4578063 layout
+//@ chunk-5xgkngpb.js:4685792-4686295 layout
 async function extractPreviewArchive(archivePath, sessionCacheDir, extractDir) {
   let zipExtractionState = getZipExtractionState();
   let fileBytes = await getFsImplementation().readFileBytes(archivePath);
@@ -5412,9 +5460,9 @@ async function extractPreviewArchive(archivePath, sessionCacheDir, extractDir) {
     return previewDir;
   }
 }
-//@ chunk-e6aww6q8.js:4578063-4578073 layout
+//@ chunk-5xgkngpb.js:4686295-4686305 layout
 var MAX_EXTRACT_ATTEMPTS = 3;
-//@ chunk-e6aww6q8.js:4578073-4578149 layout
+//@ chunk-5xgkngpb.js:4686305-4686381 layout
 async function isDirectory(path) {
   try {
     return (await lstat(path)).isDirectory();
@@ -5422,24 +5470,24 @@ async function isDirectory(path) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:4578149-4578241 layout
+//@ chunk-5xgkngpb.js:4686381-4686473 layout
 function isWindowsLockError(error) {
   let errnoCode = getErrnoCode(error);
   return (
     getPlatform() === "windows" && (errnoCode === "EPERM" || errnoCode === "EACCES" || errnoCode === "EBUSY")
   );
 }
-//@ chunk-e6aww6q8.js:4578241-4578293 layout
+//@ chunk-5xgkngpb.js:4686473-4686525 layout
 async function isLockedButPresent(error, path) {
   return isWindowsLockError(error) && (await isDirectory(path));
 }
-//@ chunk-e6aww6q8.js:4578293-4578386 layout
+//@ chunk-5xgkngpb.js:4686525-4686618 layout
 async function isTargetOccupiedError_2(error, path) {
   let errnoCode = getErrnoCode(error);
   if (errnoCode === "ENOTEMPTY" || errnoCode === "EEXIST") return true;
   return isLockedButPresent(error, path);
 }
-//@ chunk-e6aww6q8.js:4578386-4578504 layout
+//@ chunk-5xgkngpb.js:4686618-4686736 layout
 async function removeTreeQuietly(staging) {
   await removeDirectoryTreeNoFollow_2(staging).catch((error) => {
     logForDebugging(`Failed to remove the extraction tree ${staging}: ${errorMessage(error)}`, {
@@ -5447,7 +5495,7 @@ async function removeTreeQuietly(staging) {
     });
   });
 }
-//@ chunk-e6aww6q8.js:4578504-4578677 layout
+//@ chunk-5xgkngpb.js:4686736-4686909 layout
 async function moveIntoPlace(zipExtractionState, sourceDir, extractDir) {
   try {
     await retryFsOp(sourceDir, extractDir);
@@ -5463,7 +5511,7 @@ async function moveIntoPlace(zipExtractionState, sourceDir, extractDir) {
     });
   return true;
 }
-//@ chunk-e6aww6q8.js:4578677-4579962 layout
+//@ chunk-5xgkngpb.js:4686909-4688203 layout
 /**
  * 把暂存解压树原子替换到目标解压目录（旧树先移到 .previous-*，Windows 被占用时退化为原地解压）。
  */
@@ -5562,7 +5610,7 @@ async function swapInExtractedTree({ extractDir, staging, previousPrefix }, plan
   });
   plan.settle();
 }
-//@ chunk-e6aww6q8.js:4579962-4582994 layout
+//@ chunk-5xgkngpb.js:4688203-4691242 layout
 /**
  * cacheOnly 模式加载市场插件：只用已有版本化缓存或种子缓存，缺失时报 plugin-cache-miss 并返回 null。
  */
@@ -5810,7 +5858,7 @@ async function loadCachedMarketplacePlugin(
   if (extractedFrom !== undefined && loaded !== null) loaded.extractedFrom = extractedFrom;
   return loaded;
 }
-//@ chunk-e6aww6q8.js:4582994-4590867 fingerprint (2.1.88 match: loadPluginFromMarketplaceEntry, 0.385)
+//@ chunk-5xgkngpb.js:4691242-4699120 fingerprint (2.1.88 match: loadPluginFromMarketplaceEntry, 0.385)
 /**
  * 按 marketplace 条目加载一个插件：相对路径来源直接在市场目录里读；远程来源走安装记录/版本化缓存，必要时 cachePlugin + copyPluginToVersionedCache；校验钉住的 sha/integrity/archiveSha256；strict=false 时用条目合成 manifest；最后 createPluginFromPath 并合并条目里的组件声明。
  */
@@ -6293,7 +6341,7 @@ async function loadPluginFromMarketplaceEntry(
       extraction = await extractSessionArchive(pluginPath, extractionPlan);
     } catch (error) {
       logForDebugging(`Failed to extract plugin ZIP ${pluginPath}, deleting corrupt file: ${error}`);
-      await rm_2(pluginPath, {
+      await rm(pluginPath, {
         force: true,
       }).catch(() => {});
       throw error;
@@ -6320,12 +6368,12 @@ async function loadPluginFromMarketplaceEntry(
   );
   if (plugin && shaInfo !== undefined) {
     if (shaInfo.sha !== undefined) plugin.gitCommitSha = shaInfo.sha;
-    weakSet_7.add(plugin);
+    weakSet_8.add(plugin);
   }
   if (plugin && extractedFrom !== undefined) plugin.extractedFrom = extractedFrom;
   return plugin;
 }
-//@ chunk-e6aww6q8.js:4590867-4593927 layout
+//@ chunk-5xgkngpb.js:4699120-4702202 layout
 /**
  * 市场插件定位到目录后的收尾：link/producer 目录检查、createPluginFromPath、合并 marketplace 条目中的组件声明（strict=false 时条目即 manifest）。
  */
@@ -6516,6 +6564,7 @@ async function finishMarketplacePluginLoad(
     );
   }
   if (requestedEntryEnabled) {
+    await checkPluginContainment(plugin, outErrors);
     errors.push(...outErrors);
     warnings.push(...warnings_2);
     let gapWarning = await checkDependencyGap(
@@ -6528,7 +6577,7 @@ async function finishMarketplacePluginLoad(
   }
   return plugin;
 }
-//@ chunk-e6aww6q8.js:4593927-4594243 layout
+//@ chunk-5xgkngpb.js:4702202-4702518 layout
 /**
  * 缓存副本缺依赖时生成 dependencies-refused/not-installed 错误。
  */
@@ -6556,7 +6605,7 @@ async function checkDependencyGap(pluginPath, pluginId, plugin, checkEnabled) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:4594243-4594401 placement
+//@ chunk-5xgkngpb.js:4702518-4702676 placement
 async function realPathInsideCache(filePath) {
   let [realPath, realCacheRoot] = await Promise.all([
     realpath(filePath).catch(() => {
@@ -6570,7 +6619,7 @@ async function realPathInsideCache(filePath) {
     ? realPath
     : undefined;
 }
-//@ chunk-e6aww6q8.js:4594401-4594637 placement
+//@ chunk-5xgkngpb.js:4702676-4702913 placement
 async function cacheCopyDependencyGap(pluginPath) {
   if (isPluginZipCacheEnabled() || isUsingCoworkPlugins()) return;
   let absolutePath = resolve_2(getOriginalCwd(), pluginPath);
@@ -6585,7 +6634,7 @@ async function cacheCopyDependencyGap(pluginPath) {
     ? lockfileInfo
     : undefined;
 }
-//@ chunk-e6aww6q8.js:4594637-4596117 placement
+//@ chunk-5xgkngpb.js:4702913-4704397 placement
 /**
  * 从市场条目加载插件组件（代理、技能、输出风格等）。
  */
@@ -6708,7 +6757,7 @@ async function loadMarketplaceEntryComponents(
     errors.push(...errors_2);
   }
 }
-//@ chunk-e6aww6q8.js:4596117-4596782 placement
+//@ chunk-5xgkngpb.js:4704397-4705062 placement
 async function describePluginDirShape_2(entries) {
   return (
     await Promise.all(
@@ -6735,13 +6784,13 @@ async function describePluginDirShape_2(entries) {
     )
   ).flat();
 }
-//@ chunk-e6aww6q8.js:4596782-4596796 placement
+//@ chunk-5xgkngpb.js:4705062-4705076 placement
 var PLUGIN_ZIP_FETCH_TIMEOUT_MS = 30000;
-//@ chunk-e6aww6q8.js:4596796-4596830 placement
+//@ chunk-5xgkngpb.js:4705076-4705110 placement
 function dirHasPluginRoot(dirPath) {
   return dirHasAnyEntry(dirPath, PLUGIN_ROOT_MARKERS);
 }
-//@ chunk-e6aww6q8.js:4596830-4596957 placement
+//@ chunk-5xgkngpb.js:4705110-4705237 placement
 var MANIFEST_COMPONENT_KEYS = [
   "commands",
   "agents",
@@ -6754,7 +6803,7 @@ var MANIFEST_COMPONENT_KEYS = [
   "experimental",
 ];
 var THEME_ONLY_KEYS = ["themes"];
-//@ chunk-e6aww6q8.js:4596957-4597666 placement
+//@ chunk-5xgkngpb.js:4705237-4705946 placement
 function entryDeclaredComponentPaths(entry) {
   if (!entry || typeof entry !== "object") return [];
   let manifest = entry;
@@ -6794,7 +6843,7 @@ function entryDeclaredComponentPaths(entry) {
   if (paths.length === 0 && hadUnsafe) return null;
   return paths;
 }
-//@ chunk-e6aww6q8.js:4597666-4597787 placement
+//@ chunk-5xgkngpb.js:4705946-4706067 placement
 function entryDeclaresComponents(entry) {
   if (!entry || typeof entry !== "object") return false;
   let manifest = entry;
@@ -6802,41 +6851,41 @@ function entryDeclaresComponents(entry) {
     key === "experimental" ? isRecord(manifest[key]) : isNonEmptyValue(manifest[key]),
   );
 }
-//@ chunk-e6aww6q8.js:4597787-4597967 placement
+//@ chunk-5xgkngpb.js:4706067-4706247 placement
 function isNonEmptyValue(value) {
   if (value === undefined || value === null) return false;
   if (Array.isArray(value)) return value.length > 0;
   if (typeof value === "string") return value.length > 0;
   return typeof value === "object" && Object.keys(value).length > 0;
 }
-//@ chunk-e6aww6q8.js:4597967-4598091 placement
+//@ chunk-5xgkngpb.js:4706247-4706371 placement
 function isRecord(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   let themeValue = value;
   if (THEME_ONLY_KEYS.some((key) => isNonEmptyValue(themeValue[key]))) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:4598091-4598149 placement
+//@ chunk-5xgkngpb.js:4706371-4706429 placement
 var RELATIVE_PATH_RE = /^[A-Za-z0-9_.$-]+(\/[A-Za-z0-9_.$-]+)*$/;
 var MAX_EXAMPLE_PATH_LENGTH = 120;
-//@ chunk-e6aww6q8.js:4598149-4598229 placement
+//@ chunk-5xgkngpb.js:4706429-4706509 placement
 function examplePathSuffix(path) {
   if (!path || path.length > MAX_EXAMPLE_PATH_LENGTH || !RELATIVE_PATH_RE.test(path)) return "";
   return ` (e.g. ${path})`;
 }
-//@ chunk-e6aww6q8.js:4598229-4598255 placement
+//@ chunk-5xgkngpb.js:4706509-4706535 placement
 var MANIFEST_IDENTITY_READ_RELPATHS; // deferred: uses PLUGIN_MANIFEST_DIR (./commandSource.js) of its import cycle while loading; runs once the cycle is complete
 var MANIFEST_IDENTITY_READ_PATHS;
-deferInit("chunk-e6aww6q8.js:4598229", () => {
+deferInit("chunk-5xgkngpb.js:4706509", () => {
   MANIFEST_IDENTITY_READ_RELPATHS = [PLUGIN_MANIFEST_PATH_2];
   MANIFEST_IDENTITY_READ_PATHS = [PLUGIN_MANIFEST_PATH_2, PLUGIN_JSON];
 });
-//@ chunk-e6aww6q8.js:4598255-4598333 placement
+//@ chunk-5xgkngpb.js:4706535-4706613 placement
 async function hasManifestIdentityFile(rootDir) {
   for (let relPath of MANIFEST_IDENTITY_READ_PATHS) if (await pathExists(join(rootDir, relPath))) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:4598333-4598464 placement
+//@ chunk-5xgkngpb.js:4706613-4706744 placement
 async function anyPathExistsUnder(root, paths) {
   let resolvedRoot = resolve_2(root);
   for (let path of paths) {
@@ -6846,7 +6895,7 @@ async function anyPathExistsUnder(root, paths) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:4598464-4598643 placement
+//@ chunk-5xgkngpb.js:4706744-4706923 placement
 async function findSingleTopDir(extractDir) {
   let filtered = (
     await readdir(extractDir, {
@@ -6855,21 +6904,21 @@ async function findSingleTopDir(extractDir) {
   ).filter((entry) => entry.name !== "__MACOSX" && entry.name !== ".DS_Store");
   return filtered.length === 1 && filtered[0].isDirectory() ? join(extractDir, filtered[0].name) : undefined;
 }
-//@ chunk-e6aww6q8.js:4598643-4598714 placement
+//@ chunk-5xgkngpb.js:4706923-4706994 placement
 function isPluginNameAcceptable(name, fromSkillFile, allowEmpty) {
   if (fromSkillFile && !allowEmpty) return false;
   return name.length === 0 || PLUGIN_NAME_FORBIDDEN_CHARS_RE.test(name);
 }
-//@ chunk-e6aww6q8.js:4598714-4598789 placement
+//@ chunk-5xgkngpb.js:4706994-4707069 placement
 function directoryPluginFallbackName(pluginPath, marketplace) {
   let replaced = basename(pluginPath).replace(/\.zip$/i, "");
   return marketplace === SYNCED ? stripGenerationSuffix(replaced) : replaced;
 }
-//@ chunk-e6aww6q8.js:4598789-4598832 placement
+//@ chunk-5xgkngpb.js:4707069-4707112 placement
 function syncedPluginFolderId(pluginPath) {
   return `${directoryPluginFallbackName(pluginPath, SYNCED)}@${SYNCED}`;
 }
-//@ chunk-e6aww6q8.js:4598832-4599039 placement
+//@ chunk-5xgkngpb.js:4707112-4707320 placement
 async function syncedPluginMintedName(pluginPath, storageV5) {
   let folderName = directoryPluginFallbackName(pluginPath, SYNCED);
   try {
@@ -6889,7 +6938,7 @@ async function syncedPluginMintedName(pluginPath, storageV5) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:4599039-4599129 placement
+//@ chunk-5xgkngpb.js:4707320-4707410 placement
 function attributionFromManifest(attribution) {
   return attribution.unread === true
     ? {}
@@ -6899,7 +6948,7 @@ function attributionFromManifest(attribution) {
         },
       };
 }
-//@ chunk-e6aww6q8.js:4599129-4599602 placement
+//@ chunk-5xgkngpb.js:4707410-4707883 placement
 /**
  * 插件名非法时的 manifest-validation-error。
  */
@@ -6927,7 +6976,7 @@ function invalidPluginNameError(
     };
   return null;
 }
-//@ chunk-e6aww6q8.js:4599602-4600076 placement
+//@ chunk-5xgkngpb.js:4707883-4708357 placement
 /**
  * 记一次桌面技能目录保留命名空间检查结果。
  */
@@ -6959,7 +7008,7 @@ function logReservedNamespaceWrapperCheck(folderChecks) {
       ...desktopFolderFields,
     });
 }
-//@ chunk-e6aww6q8.js:4600076-4600286 placement
+//@ chunk-5xgkngpb.js:4708357-4708567 placement
 function dropUnprintableManifestVersion(plugin) {
   if (plugin.manifest.version !== undefined && INVISIBLE_CHARS_RE.test(plugin.manifest.version)) {
     logForDebugging(
@@ -6971,7 +7020,7 @@ function dropUnprintableManifestVersion(plugin) {
     plugin.manifest.version = undefined;
   }
 }
-//@ chunk-e6aww6q8.js:4600286-4600471 placement
+//@ chunk-5xgkngpb.js:4708567-4708752 placement
 function isOperatorSettingSource_2(settingSource) {
   switch (settingSource) {
     case "userSettings":
@@ -6986,7 +7035,7 @@ function isOperatorSettingSource_2(settingSource) {
       return false;
   }
 }
-//@ chunk-e6aww6q8.js:4600471-4600772 placement
+//@ chunk-5xgkngpb.js:4708752-4709053 placement
 /**
  * 插件在设置中被显式禁用（可只认操作者设置）。
  */
@@ -7011,7 +7060,7 @@ function isPluginDisabledBySettings(
     (alternateName !== undefined && isDisabledIn(`${alternateName}@${marketplaceName}`))
   );
 }
-//@ chunk-e6aww6q8.js:4600772-4600925 placement
+//@ chunk-5xgkngpb.js:4709053-4709206 placement
 function isUnderOriginalCwd(targetPath) {
   let path = getOriginalCwd();
   if (
@@ -7025,7 +7074,7 @@ function isUnderOriginalCwd(targetPath) {
     alreadyComparable: true,
   });
 }
-//@ chunk-e6aww6q8.js:4600925-4601068 placement (2.1.88 match: ghIsDangerousCallback, 1)
+//@ chunk-5xgkngpb.js:4709206-4709349 placement (2.1.88 match: ghIsDangerousCallback, 1)
 function ghIsDangerousCallback(_rawCommand, args) {
   return (args ? replaceAll(_rawCommand, args, redactUrlQuery(args)) : _rawCommand)
     .split(/(\s+)/)
@@ -7036,7 +7085,7 @@ function ghIsDangerousCallback(_rawCommand, args) {
     )
     .join("");
 }
-//@ chunk-e6aww6q8.js:4601068-4601393 placement
+//@ chunk-5xgkngpb.js:4709349-4709674 placement
 /**
  * 错误文字中的 URL 脱敏（含凭证与查询串）。
  */
@@ -7053,7 +7102,7 @@ function redactUrlsInLoadError(rawText) {
   });
   return redactUrlsInMessage(replaced).replace(/\?[^\s"']*/g, "");
 }
-//@ chunk-e6aww6q8.js:4601393-4607537 callgraph-witnessed (2.1.88 match: loadSessionOnlyPlugins, 0.231)
+//@ chunk-5xgkngpb.js:4709674-4715938 callgraph-witnessed (2.1.88 match: loadSessionOnlyPlugins, 0.228)
 /**
  * 加载会话级插件（--plugin-dir 目录、--plugin-url 归档、claude.ai 同步目录）：url 先下载解压到会话缓存；每个目录走 createPluginFromPath；市场名默认 inline（同步的为 synced）。
  */
@@ -7265,6 +7314,10 @@ async function loadSessionOnlyPlugins(
             logForDebugging(`Inline plugin zip had wrapper directory; using ${pluginPath}`);
           if (preview) dirIdentity = await statDirIdentity(pluginPath, "before");
         }
+        let fields =
+          marketplaceName === SYNCED
+            ? await resolveContainmentRoots([pluginPath], "plugin directory")
+            : undefined;
         let { plugin, errors, warnings, manifestPath } = await createPluginFromPath(
           pluginPath,
           `${fallbackName}@${marketplaceName}`,
@@ -7272,6 +7325,9 @@ async function loadSessionOnlyPlugins(
           fallbackName,
           true,
           storageV5,
+          fields,
+          undefined,
+          fields,
         );
         if (dirIdentity !== undefined) await assertDirUnchanged(pluginPath, dirIdentity);
         let nameError = invalidPluginNameError(
@@ -7364,6 +7420,7 @@ async function loadSessionOnlyPlugins(
           plugin.skipMcpDiscovery = true;
           plugin.mcpServers = {};
         }
+        await checkPluginContainment(plugin, errors);
         logForDebugging(`Loaded inline plugin from path: ${plugin.name}`);
         return {
           plugin,
@@ -7447,7 +7504,7 @@ async function loadSessionOnlyPlugins(
         if (tempDownload !== undefined) {
           let tempPath = tempDownload;
           await retryTransient(() =>
-            rm_2(tempPath, {
+            rm(tempPath, {
               force: true,
             }),
           ).catch((error) => {
@@ -7471,7 +7528,7 @@ async function loadSessionOnlyPlugins(
     warnings,
   };
 }
-//@ chunk-e6aww6q8.js:4607537-4607820 placement (2.1.88 match: isRealPathWithinTeamDir, 0.772)
+//@ chunk-5xgkngpb.js:4715938-4716221 placement (2.1.88 match: isRealPathWithinTeamDir, 0.772)
 async function listDirNamesSet(storageV5, dir) {
   let storageKey = isStorageV5Enabled() && storageV5 !== undefined ? thinkbackStorageKey(dir) : null;
   if (storageV5 !== undefined && storageKey !== null) {
@@ -7486,12 +7543,12 @@ async function listDirNamesSet(storageV5, dir) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:4607820-4607906 placement
+//@ chunk-5xgkngpb.js:4716221-4716307 placement
 async function hasClaudePluginEntry(storageV5, dir, dirName) {
   if ((await listDirNamesSet(storageV5, dir)).has(".claude-plugin")) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:4607906-4611594 placement
+//@ chunk-5xgkngpb.js:4716307-4720171 placement
 async function loadSkillsAsPlugins(storageV5, enabledPluginsIndexed = getEnabledPluginsBySource()) {
   let skillsAsPlugins = await loadSkillsAsPlugins_2(storageV5);
   let untrusted = [];
@@ -7521,8 +7578,14 @@ async function loadSkillsAsPlugins(storageV5, enabledPluginsIndexed = getEnabled
     async ({ dir, scope }) => {
       await new Promise((resolve) => setImmediate(resolve));
       let dirName = basename(dir);
+      let fields;
       try {
         if (!(await hasClaudePluginEntry(storageV5, dir, dirName).catch(() => false))) return null;
+        if (scope === "project")
+          fields = await resolveContainmentRoots(
+            [dir, resolve_2(dir, "..", "..", "..")],
+            "plugin directory and its project folder",
+          );
         let { plugin, errors, warnings, hasManifest, manifestPath } = await createPluginFromPath(
           dir,
           `${dirName}@${SKILLS_DIR}`,
@@ -7530,7 +7593,11 @@ async function loadSkillsAsPlugins(storageV5, enabledPluginsIndexed = getEnabled
           dirName,
           false,
           storageV5,
+          fields,
+          undefined,
+          fields,
         );
+        delete plugin.filesAnchor;
         if (!isSkillCustomizationBookingAllowed(plugin, hasManifest))
           return errors.length || warnings.length
             ? {
@@ -7575,6 +7642,7 @@ async function loadSkillsAsPlugins(storageV5, enabledPluginsIndexed = getEnabled
             });
           plugin.monitors = [];
         }
+        await checkPluginContainment(plugin, errors);
         return {
           plugin,
           errors,
@@ -7588,6 +7656,7 @@ async function loadSkillsAsPlugins(storageV5, enabledPluginsIndexed = getEnabled
           [],
           {
             noTelemetry: true,
+            containedIn: fields,
           },
           storageV5,
         )
@@ -7680,8 +7749,8 @@ async function loadSkillsAsPlugins(storageV5, enabledPluginsIndexed = getEnabled
   }
   logEvent("tengu_plugin_skills_dir_loaded", {
     count: plugins.length,
-    user_count: count(plugins, (plugin) => plugin.scope === "user"),
-    project_count: count(plugins, (plugin) => plugin.scope === "project"),
+    user_count: countWhere(plugins, (plugin) => plugin.scope === "user"),
+    project_count: countWhere(plugins, (plugin) => plugin.scope === "project"),
     project_suppressed_count: filtered_2.length,
     error_count: errors.length,
   });
@@ -7692,7 +7761,7 @@ async function loadSkillsAsPlugins(storageV5, enabledPluginsIndexed = getEnabled
     warnings,
   };
 }
-//@ chunk-e6aww6q8.js:4611594-4611707 placement
+//@ chunk-5xgkngpb.js:4720171-4720284 placement
 function localCopyShadowingSynced(pluginName, plugins) {
   let lowerName = nfcLower(pluginName);
   return plugins.find(
@@ -7702,7 +7771,7 @@ function localCopyShadowingSynced(pluginName, plugins) {
       pluginNameAliases(plugin).some((alias) => nfcLower(alias) === lowerName),
   );
 }
-//@ chunk-e6aww6q8.js:4611707-4612189 layout
+//@ chunk-5xgkngpb.js:4720284-4720766 layout
 /**
  * 操作者设置中被禁用的 synced/inline 插件名。
  */
@@ -7739,7 +7808,7 @@ function collectDisabledInlineNames(records, settingSources) {
   }
   return disabledNames;
 }
-//@ chunk-e6aww6q8.js:4612189-4612370 layout
+//@ chunk-5xgkngpb.js:4720766-4720947 layout
 function countAdmittedPluginNames(plugins, managedEntries) {
   let counts = new Map();
   for (let plugin of plugins)
@@ -7753,7 +7822,7 @@ function countAdmittedPluginNames(plugins, managedEntries) {
     }
   return counts;
 }
-//@ chunk-e6aww6q8.js:4612370-4617007 callgraph-fingerprint (2.1.88 match: mergePluginSources, 0.184)
+//@ chunk-5xgkngpb.js:4720947-4725587 callgraph-fingerprint (2.1.88 match: mergePluginSources, 0.184)
 /**
  * 合并各来源插件（session/marketplace/skills-dir/synced/builtin），同名时按 托管策略 > 会话 > 市场 的优先级去重，托管锁定（managed）条目可强制启用/禁用，记录冲突警告。
  */
@@ -7983,7 +8052,7 @@ function mergePluginSources(sources) {
     warnings,
   };
 }
-//@ chunk-e6aww6q8.js:4617007-4617584 placement
+//@ chunk-5xgkngpb.js:4725587-4726164 placement
 /**
  * 完整加载全部插件（允许网络获取缺失缓存），结果 Promise 缓存在全局状态 pluginLoad；完成后若设置未变也填充 cacheOnly 缓存。
  */
@@ -8029,25 +8098,25 @@ function loadAllPlugins(storageV5, credentials) {
   pluginRegistry.pluginLoad = loadPromise;
   return loadPromise;
 }
-//@ chunk-e6aww6q8.js:4617584-4617634 placement
+//@ chunk-5xgkngpb.js:4726164-4726214 placement
 function getLoadArm(storageV5) {
   return isStorageV5Enabled() && storageV5 !== undefined ? "v5" : "raw";
 }
-//@ chunk-e6aww6q8.js:4617634-4617837 placement
+//@ chunk-5xgkngpb.js:4726214-4726417 placement
 function logJoinedLoadArmMismatch(label, arm, storageV5) {
   if (isStorageV5Enabled() && storageV5 !== undefined && arm === "raw")
     logForDebugging(
       `${label}: joining a plugin load that an earlier caller started without the storage backend (tengu_hover_rest); this caller's backend is not used for it`,
     );
 }
-//@ chunk-e6aww6q8.js:4617837-4617913 placement
+//@ chunk-5xgkngpb.js:4726417-4726493 placement
 /**
  * 是否启用同步插件安装（storageV5 且 CLAUDE_CODE_SYNC_PLUGIN_INSTALL）。
  */
 function shouldFillPluginLoadWithStore(storageV5) {
   return isStorageV5Enabled() && storageV5 !== undefined && !!env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL;
 }
-//@ chunk-e6aww6q8.js:4617913-4618473 placement
+//@ chunk-5xgkngpb.js:4726493-4727053 placement
 /**
  * 只用本地缓存加载全部插件（不联网），结果缓存在全局 pluginLoadCacheOnly；设置 CLAUDE_CODE_SYNC_PLUGIN_INSTALL 时改为等待完整加载。启动与大多数读取插件列表的地方都调用它。
  */
@@ -8084,7 +8153,7 @@ function loadAllPluginsCacheOnly(storageV5, credentials) {
     pluginRegistry.pluginLoadMarks.set(pluginRegistry.pluginLoadCacheOnly, policyStamp);
   return pluginRegistry.pluginLoadCacheOnly;
 }
-//@ chunk-e6aww6q8.js:4618473-4618570 placement
+//@ chunk-5xgkngpb.js:4727053-4727150 placement
 function trackPluginLoad(load) {
   let pluginRegistry = getPluginRegistry();
   pluginRegistry.pluginLoadsRunning++;
@@ -8092,13 +8161,13 @@ function trackPluginLoad(load) {
     pluginRegistry.pluginLoadsRunning--;
   });
 }
-//@ chunk-e6aww6q8.js:4618570-4618631 fingerprint (2.1.88 match: loadAllPlugins, 0.743)
+//@ chunk-5xgkngpb.js:4727150-4727211 fingerprint (2.1.88 match: loadAllPlugins, 0.743)
 var cacheOnlyLoadOptions = (storageV5) => ({
   cacheOnly: true,
   storageV5,
   credentials: undefined,
 });
-//@ chunk-e6aww6q8.js:4618631-4618765 placement
+//@ chunk-5xgkngpb.js:4727211-4727345 placement
 /**
  * 返回与当前插件相关设置一致的 cacheOnly 加载结果：缓存的 Promise 标记与当前设置指纹一致就复用，否则重新加载。
  */
@@ -8114,7 +8183,7 @@ function rereadPluginsCacheOnly(storageV5) {
       : undefined) ?? reloadCacheOnlyUnder(stamp, storageV5)
   );
 }
-//@ chunk-e6aww6q8.js:4618765-4619057 placement
+//@ chunk-5xgkngpb.js:4727345-4727637 placement
 function reloadCacheOnlyUnder(stamp, storageV5) {
   let pluginRegistry = getPluginRegistry();
   let pluginLoad = pluginRegistry.pluginLoad;
@@ -8137,7 +8206,7 @@ function reloadCacheOnlyUnder(stamp, storageV5) {
   pluginRegistry.pluginLoadCacheOnly = load;
   return load;
 }
-//@ chunk-e6aww6q8.js:4619057-4619182 placement
+//@ chunk-5xgkngpb.js:4727637-4727762 placement
 /**
  * 预览模式加载（cacheOnly + preview，不产生副作用、不写缓存），供 /plugin 界面等展示用。
  */
@@ -8156,9 +8225,9 @@ async function loadAllPluginsForPreview(storageV5) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:4619182-4619195 placement
+//@ chunk-5xgkngpb.js:4727762-4727775 placement
 var BIN_STAT_TIMEOUT_MS = 2000;
-//@ chunk-e6aww6q8.js:4619195-4619739 placement
+//@ chunk-5xgkngpb.js:4727775-4728319 placement
 /**
  * 收集已启用（非内置）插件的 bin/ 目录（stat 超时 2 秒，含 shell 元字符的路径丢弃），用于加进 Bash 工具的 PATH。
  */
@@ -8196,7 +8265,7 @@ async function getEnabledPluginBinPaths(storageV5) {
   );
   return filtered.filter((binPath, index) => results[index]);
 }
-//@ chunk-e6aww6q8.js:4619739-4620032 layout
+//@ chunk-5xgkngpb.js:4728319-4728612 layout
 async function listSyncedPluginDirs_2() {
   let empty = {
     dirs: [],
@@ -8231,7 +8300,7 @@ async function listSyncedPluginDirs_2() {
     return empty;
   }
 }
-//@ chunk-e6aww6q8.js:4620032-4620293 layout
+//@ chunk-5xgkngpb.js:4728612-4728873 layout
 function describeSyncedPluginOutcomes(input) {
   try {
     let byKey = mapSyncedDirsToPluginIds(input.manifestRows);
@@ -8254,7 +8323,7 @@ function describeSyncedPluginOutcomes(input) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:4620293-4620853 layout
+//@ chunk-5xgkngpb.js:4728873-4729433 layout
 function classifySyncedPluginOutcome(plugin, mergedSet, context) {
   let policyMatch = matchPolicyPluginEntry(
     context.managedEntries,
@@ -8278,7 +8347,7 @@ function classifySyncedPluginOutcome(plugin, mergedSet, context) {
     ? "held_back"
     : "not_loaded";
 }
-//@ chunk-e6aww6q8.js:4620853-4621016 layout
+//@ chunk-5xgkngpb.js:4729433-4729596 layout
 function mapSyncedDirsToPluginIds(manifestRows) {
   let byKey = new Map();
   let seenKeys = new Set();
@@ -8293,7 +8362,7 @@ function mapSyncedDirsToPluginIds(manifestRows) {
   }
   return byKey;
 }
-//@ chunk-e6aww6q8.js:4621016-4621253 layout
+//@ chunk-5xgkngpb.js:4729596-4729833 layout
 function collectOfficialAttestations_2(allPlugins) {
   let bySource = new Map();
   let conflicting = new Set();
@@ -8310,7 +8379,7 @@ function collectOfficialAttestations_2(allPlugins) {
   for (let source of conflicting) bySource.delete(source);
   return bySource;
 }
-//@ chunk-e6aww6q8.js:4621253-4624204 fingerprint (2.1.88 match: assemblePluginLoadResult, 0.337)
+//@ chunk-5xgkngpb.js:4729833-4732788 fingerprint (2.1.88 match: assemblePluginLoadResult, 0.338)
 /**
  * 插件加载总装：并行跑市场加载、会话插件（--plugin-dir/--plugin-url）、claude.ai 同步插件、skills-dir 插件，再合并内置插件，mergePluginSources 去重，verifyAndDemote 处理依赖不满足的降级，最后（非预览且设置未变时）执行副作用：缓存插件 settings、清理旧缓存等。返回 {enabled, disabled, errors, warnings}。
  */
@@ -8494,7 +8563,7 @@ async function assemblePluginLoadResult(loadMarketplacePlugins, options) {
     readUnder,
   };
 }
-//@ chunk-e6aww6q8.js:4624204-4624432 layout (2.1.88 match: getVersionedZipCachePath, 1)
+//@ chunk-5xgkngpb.js:4732788-4733016 layout (2.1.88 match: getVersionedZipCachePath, 1)
 async function releaseUnusedPluginCaches(pluginId, version) {
   if (isDiskless()) return;
   let cacheRoot = anchoredPluginCachePath();
@@ -8508,14 +8577,14 @@ async function releaseUnusedPluginCaches(pluginId, version) {
   await Promise.all(versionDirs.map((path) => writeInUseMarker(path, version)));
   await sweepInUseMarkers(versionDirs, version);
 }
-//@ chunk-e6aww6q8.js:4624432-4624502 placement
+//@ chunk-5xgkngpb.js:4733016-4733086 placement
 /**
  * 清理不再被会话使用的插件解压目录。
  */
 async function releaseSyncedDirsNotIn(plugins, storageV5) {
   await releaseMarkersOutside(syncedPluginsRoot(), new Set(plugins.map((plugin) => plugin.path)), storageV5);
 }
-//@ chunk-e6aww6q8.js:4624502-4624736 placement (2.1.88 match: clearPluginCache, 0.483)
+//@ chunk-5xgkngpb.js:4733086-4733320 placement (2.1.88 match: clearPluginCache, 0.483)
 /**
  * 清空 loadAllPlugins/loadAllPluginsCacheOnly 的缓存 Promise（附原因日志），并清掉依赖插件列表的下游缓存；安装/卸载/刷新后调用。
  */
@@ -8530,7 +8599,7 @@ function clearPluginCache(reason) {
   if (pluginCommandBase() !== undefined) invalidateCommandNames();
   clearPluginCommandBase();
 }
-//@ chunk-e6aww6q8.js:4624736-4624946 placement
+//@ chunk-5xgkngpb.js:4733320-4733530 placement
 /**
  * 存储后端模式下预先发起一次 cacheOnly 加载以填充缓存；失败则清掉缓存。
  */
@@ -8549,7 +8618,7 @@ function refillPluginLoadCacheOnly(storageV5, label) {
   });
   return allPluginsCacheOnly;
 }
-//@ chunk-e6aww6q8.js:4624946-4625173 fingerprint (2.1.88 match: mergePluginSettings, 1)
+//@ chunk-5xgkngpb.js:4733530-4733757 fingerprint (2.1.88 match: mergePluginSettings, 1)
 function mergePluginSettings(plugins) {
   let merged;
   for (let plugin of plugins) {
@@ -8565,7 +8634,7 @@ function mergePluginSettings(plugins) {
   }
   return merged;
 }
-//@ chunk-e6aww6q8.js:4625173-4625422 fingerprint (2.1.88 match: cachePluginSettings, 0.667)
+//@ chunk-5xgkngpb.js:4733757-4734006 fingerprint (2.1.88 match: cachePluginSettings, 0.667)
 function cachePluginSettings(plugins) {
   let settings = mergePluginSettings(plugins);
   let hadSettings = Object.keys(pluginCommandBase() ?? {}).length > 0;
@@ -8578,7 +8647,7 @@ function cachePluginSettings(plugins) {
     logForDebugging("Dropped plugin settings: no enabled plugin supplies any");
   }
 }
-//@ chunk-e6aww6q8.js:4625422-4625529 sole-consumer
+//@ chunk-5xgkngpb.js:4734006-4734113 sole-consumer
 function findMatchingSourceCommand(source, installations) {
   if (!source) return;
   let mode = describeCommandOutputMode(source);
@@ -8589,7 +8658,7 @@ function findMatchingSourceCommand(source, installations) {
     )
   )?.sourceCommand;
 }
-//@ chunk-g6j7q15x.js:4001-4202 fingerprint (2.1.88 match: validateGitUrl, 0.458)
+//@ chunk-4hx0rq5z.js:4002-4203 fingerprint (2.1.88 match: validateGitUrl, 0.458)
 /**
  * 判断 URL 类型：file（本机）、hosted（官方地址）、custom_url（其他 http(s)）。
  */
@@ -8599,14 +8668,11 @@ function validateGitUrl(url) {
   if (url.protocol !== "https:" && url.protocol !== "http:") return;
   return url.toString() === _ ? "hosted" : "custom_url";
 }
-//@ chunk-3wek6r2k.js:15714-15773 fingerprint (2.1.88 match: loadAllPluginsCacheOnly, 0.661)
-/**
- * 是否同步安装插件（传入值存在且 CLAUDE_CODE_SYNC_PLUGIN_INSTALL）。
- */
-function shouldSyncPluginInstall(isNonInteractiveSession) {
-  return isNonInteractiveSession && env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL;
+//@ chunk-0yw3taqg.js:197589-197650 fingerprint (2.1.88 match: loadAllPluginsCacheOnly, 0.661)
+function loadAllPluginsCacheOnly_2() {
+  return !env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL && isRemoteCowork();
 }
-//@ chunk-5aas12zq.js:24411-24816 fingerprint (2.1.88 match: copyDir, 0.664)
+//@ chunk-6vxyfwtv.js:24675-25104 fingerprint (2.1.88 match: copyDir, 0.664)
 /**
  * 递归复制目录（带缓存的目录创建）。
  */
@@ -8626,11 +8692,12 @@ async function copyDir_2(root) {
     let baseName = parts.pop() ?? "";
     let current = root;
     for (let entry of parts) {
-      current = (await listDir(current)).some(
-        (childEntry) => childEntry.name === entry && childEntry.isDirectory(),
-      )
-        ? pathModule.join(current, entry)
-        : undefined;
+      current =
+        (await listDir(current)).some(
+          (childEntry) => childEntry.name === entry && childEntry.isDirectory(),
+        ) && !(await buildSecretScanResult(pathModule.join(current, entry)))
+          ? pathModule.join(current, entry)
+          : undefined;
       if (current === undefined) break;
     }
     if (
@@ -8641,7 +8708,7 @@ async function copyDir_2(root) {
   }
   return;
 }
-//@ chunk-9tyqgtn4.js:20076-20329 fingerprint (2.1.88 match: loadPluginFromMarketplaceEntryCacheOnly, 0.344)
+//@ chunk-b08ck61p.js:20490-20743 fingerprint (2.1.88 match: loadPluginFromMarketplaceEntryCacheOnly, 0.344)
 /**
  * 从一次 cacheOnly 加载结果中找出缓存缺失的启用插件，供后台补装。
  */
@@ -8656,61 +8723,61 @@ function loadPluginFromMarketplaceEntryCacheOnly({ enabled, errors }, rootPlugin
 }
 export {
   loadAllPluginsCacheOnly,
-  loadAllPluginsForPreview,
-  syncedPluginFolderId,
+  loadAllPluginsCacheOnly_2,
   clearPluginCache,
-  createPluginFromPath,
-  loadAllPlugins,
-  refillPluginLoadCacheOnly,
   shouldFillPluginLoadWithStore,
-  shouldSyncPluginInstall,
+  syncedPluginFolderId,
+  hasMarketplaceBackedPlugins,
+  loadAllPlugins,
+  releaseSyncedDirsNotIn,
+  loadAllPluginsForPreview,
+  validateGitUrl,
+  refillPluginLoadCacheOnly,
+  getEnabledPluginBinPaths,
+  anchoredPluginCachePath,
+  orphanMarkerCoordsV5,
+  evictCachedVersionDir,
+  githubRepoToCloneUrl,
+  resolveWithinDir,
+  mapStringsDeep,
+  truncateListItem,
+  quotedListItem,
+  formatFailureDetails_2,
+  rereadPluginsCacheOnly,
+  createPluginFromPath,
+  directoryPluginFallbackName,
+  isZipPathCaseInsensitive,
+  getVersionedCachePath,
+  copyPluginToVersionedCache,
+  strictCacheAddressable,
+  versionParentContained,
+  cacheDirHasPluginContentStrict,
+  probeSeedForPlugin,
+  buildNpmRegistryArgs,
+  getPluginCacheDirIn,
+  cachePlugin,
+  entryDeclaresComponents,
+  entryDeclaredComponentPaths,
+  versionParentState,
+  getVersionedZipCachePath,
+  strictArchivePresent,
+  requireVersionParentContained,
+  unvouchBeforeDependencyStep,
+  rescreenCachedPluginTree,
+  removeFreshCopyUnlessInUse,
+  unmarkBeforeArchiving,
   loadPluginManifest,
   copyDir,
   localCopyShadowingSynced,
   syncedPluginMintedName,
   cacheCopyDependencyGap,
   realPathInsideCache,
-  unvouchBeforeDependencyStep,
-  rescreenCachedPluginTree,
-  cachePlugin,
-  entryDeclaresComponents,
-  entryDeclaredComponentPaths,
-  getVersionedCachePath,
-  getVersionedZipCachePath,
-  cacheDirHasPluginContentStrict,
-  copyPluginToVersionedCache,
-  anchoredPluginCachePath,
-  hasMarketplaceBackedPlugins,
-  releaseSyncedDirsNotIn,
-  copyDir_2,
-  mapStringsDeep,
-  loadPluginFromMarketplaceEntryCacheOnly,
-  directoryPluginFallbackName,
-  quotedListItem,
-  formatFailureDetails_2,
-  truncateListItem,
-  rereadPluginsCacheOnly,
-  displaySkillsDirPath,
-  resolveWithinDir,
-  getEnabledPluginBinPaths,
-  isZipPathCaseInsensitive,
-  orphanMarkerCoordsV5,
-  evictCachedVersionDir,
-  githubRepoToCloneUrl,
-  strictCacheAddressable,
-  versionParentContained,
-  probeSeedForPlugin,
-  buildNpmRegistryArgs,
-  getPluginCacheDirIn,
-  versionParentState,
-  strictArchivePresent,
-  requireVersionParentContained,
-  removeFreshCopyUnlessInUse,
-  unmarkBeforeArchiving,
   GitNotAvailableError,
   GitHostFetchFailedError,
   clearOccupantForReplace,
-  validateGitUrl,
+  displaySkillsDirPath,
+  copyDir_2,
   MANIFEST_IDENTITY_READ_RELPATHS,
   loadSkillsAsPlugins,
+  loadPluginFromMarketplaceEntryCacheOnly,
 };

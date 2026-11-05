@@ -3,13 +3,12 @@
  *
  * Files API（/v1/files）客户端：上传、下载到会话 uploads 目录、删除、批量下载，带指数退避重试；第三方提供商与 HIPAA 组织禁用。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/filesApi.ts
- * pieces: chunk-s61vbvea.js (18)
+ * pieces: chunk-7jxyna5q.js (18)
  * attribution: fingerprint 10, layout 6, placement 1, callgraph-fingerprint 1
  */
-import "path";
-import * as pathModule_2 from "path";
+import * as pathModule from "path";
 import * as fsPromisesModule from "fs/promises";
 import { randomUUID } from "crypto";
 import { getAPIProvider } from "../../utils/model/providers.js";
@@ -32,12 +31,12 @@ import { axios_default } from "../../../vendor/axios/dist/esm/axios.js";
 import { getCwd } from "../../utils/cwd.js";
 import { errorMessage } from "../../utils/errors.js";
 import { limitConcurrency } from "../../utils/concurrencyLimit.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { logEvent } from "../analytics/index.js";
 import { lit } from "../analytics/safeMetadata.js";
 
-//@ chunk-s61vbvea.js:486519-486638 fingerprint (2.1.88 match: getDefaultApiBaseUrl, 1)
+//@ chunk-7jxyna5q.js:403622-403741 fingerprint (2.1.88 match: getDefaultApiBaseUrl, 1)
 /**
  * Files API 基址：ANTHROPIC_BASE_URL、CLAUDE_CODE_API_BASE_URL 或 api.anthropic.com。
  */
@@ -46,7 +45,7 @@ function getDefaultApiBaseUrl() {
     process.env.ANTHROPIC_BASE_URL || process.env.CLAUDE_CODE_API_BASE_URL || "https://api.anthropic.com"
   );
 }
-//@ chunk-s61vbvea.js:486638-487018 layout
+//@ chunk-7jxyna5q.js:403741-404121 layout
 /**
  * 仅第一方；校验端点与登录方式；HIPAA 组织禁用上传。
  */
@@ -67,7 +66,7 @@ function assertFilesApiAvailable(baseUrl, config) {
     throw new StoredLoginHeldBackError(storedLoginRefusalReason());
   if (hasComplianceTaint("hipaa")) throw Error("File upload is disabled by your organization's policy.");
 }
-//@ chunk-s61vbvea.js:487018-487071 fingerprint (2.1.88 match: logDebugError, 1)
+//@ chunk-7jxyna5q.js:404121-404174 fingerprint (2.1.88 match: logDebugError, 1)
 /**
  * [files-api] 错误日志。
  */
@@ -76,14 +75,14 @@ function logDebugError(message) {
     level: "error",
   });
 }
-//@ chunk-s61vbvea.js:487071-487108 layout (2.1.88 match: logDebugError, 1)
+//@ chunk-7jxyna5q.js:404174-404211 layout (2.1.88 match: logDebugError, 1)
 /**
  * [files-api] 调试日志。
  */
 function logFilesApiDebug(message) {
   logForDebugging(`[files-api] ${message}`);
 }
-//@ chunk-s61vbvea.js:487108-487233 placement (2.1.88 match: getAuthHeaders, 0.76)
+//@ chunk-7jxyna5q.js:404211-404336 placement (2.1.88 match: getAuthHeaders, 0.76)
 function getOAuthApiHeaders(config) {
   return {
     "User-Agent": claudeCodeUserAgent(),
@@ -92,7 +91,7 @@ function getOAuthApiHeaders(config) {
     "anthropic-beta": COMBINED_BETA_HEADER,
   };
 }
-//@ chunk-s61vbvea.js:487233-487273 layout
+//@ chunk-7jxyna5q.js:404336-404376 layout
 /**
  * 3 次、基础退避 500ms、超时 120s、最大 500MB。
  */
@@ -100,7 +99,7 @@ var FILES_API_MAX_ATTEMPTS = 3;
 var FILES_API_BASE_BACKOFF_MS = 500;
 var FILES_API_TIMEOUT_MS = 120000;
 var FILES_API_MAX_FILE_BYTES = 524288000;
-//@ chunk-s61vbvea.js:487273-487558 fingerprint (2.1.88 match: retryWithBackoff, 1)
+//@ chunk-7jxyna5q.js:404376-404661 fingerprint (2.1.88 match: retryWithBackoff, 1)
 /**
  * 最多 3 次，失败后 500ms×2^(n-1) 退避。
  */
@@ -119,7 +118,7 @@ async function retryWithBackoff(operation, attemptFn) {
   }
   throw Error(`${lastError} after ${FILES_API_MAX_ATTEMPTS} attempts`);
 }
-//@ chunk-s61vbvea.js:487558-488276 fingerprint (2.1.88 match: downloadFile, 0.875)
+//@ chunk-7jxyna5q.js:404661-405379 fingerprint (2.1.88 match: downloadFile, 0.875)
 /**
  * 下载 /v1/files/<id>/content。
  */
@@ -160,25 +159,25 @@ async function downloadFile(fileId, config) {
     }
   });
 }
-//@ chunk-s61vbvea.js:488276-488579 fingerprint (2.1.88 match: buildDownloadPath, 1)
+//@ chunk-7jxyna5q.js:405379-405682 fingerprint (2.1.88 match: buildDownloadPath, 1)
 /**
  * 计算下载保存路径（会话 uploads 目录内，禁止 .. 越界）。
  */
 function buildDownloadPath(basePath, sessionId, relativePath) {
-  let normalized = pathModule_2.normalize(relativePath);
+  let normalized = pathModule.normalize(relativePath);
   if (normalized.startsWith("..")) {
     logDebugError(`Invalid file path: ${relativePath}. Path must not traverse above workspace`);
     return null;
   }
-  let uploadsBase = pathModule_2.join(basePath, sessionId, "uploads");
+  let uploadsBase = pathModule.join(basePath, sessionId, "uploads");
   let matchedPrefix = [
-    pathModule_2.join(basePath, sessionId, "uploads") + pathModule_2.sep,
-    pathModule_2.sep + "uploads" + pathModule_2.sep,
+    pathModule.join(basePath, sessionId, "uploads") + pathModule.sep,
+    pathModule.sep + "uploads" + pathModule.sep,
   ].find((prefix) => normalized.startsWith(prefix));
   let cleanPath = matchedPrefix ? normalized.slice(matchedPrefix.length) : normalized;
-  return pathModule_2.join(uploadsBase, cleanPath);
+  return pathModule.join(uploadsBase, cleanPath);
 }
-//@ chunk-s61vbvea.js:488579-489038 fingerprint (2.1.88 match: downloadAndSaveFile, 1)
+//@ chunk-7jxyna5q.js:405682-406141 fingerprint (2.1.88 match: downloadAndSaveFile, 1)
 /**
  * 下载单个文件并写盘。
  */
@@ -194,7 +193,7 @@ async function downloadAndSaveFile(attachment, config) {
     };
   try {
     let content = await downloadFile(fileId, config);
-    let parentDir = pathModule_2.dirname(fullPath);
+    let parentDir = pathModule.dirname(fullPath);
     await fsPromisesModule.mkdir(parentDir, {
       recursive: true,
     });
@@ -216,12 +215,12 @@ async function downloadAndSaveFile(attachment, config) {
     };
   }
 }
-//@ chunk-s61vbvea.js:489038-489047 layout
+//@ chunk-7jxyna5q.js:406141-406150 layout
 /**
  * 默认下载并发 5。
  */
 var FILE_DOWNLOAD_CONCURRENCY = 5;
-//@ chunk-s61vbvea.js:489047-489463 fingerprint (2.1.88 match: downloadSessionFiles, 0.739)
+//@ chunk-7jxyna5q.js:406150-406566 fingerprint (2.1.88 match: downloadSessionFiles, 0.739)
 /**
  * 并发（默认 5）下载会话文件。
  */
@@ -233,14 +232,14 @@ async function downloadSessionFiles(files, config, concurrency = FILE_DOWNLOAD_C
     files.map(limitConcurrency(concurrency, (file) => downloadAndSaveFile(file, config))),
   );
   let elapsedMs = Date.now() - startTime;
-  let successCount = count(results, (result) => result.success);
+  let successCount = countWhere(results, (result) => result.success);
   logFilesApiDebug(`Downloaded ${successCount}/${files.length} file(s) in ${elapsedMs}ms`);
   if (successCount === files.length) logFeatureOk("api_files_download");
   else if (successCount > 0) logFeatureSad("api_files_download", "partial_failed");
   else logFeatureBad("api_files_download", "all_failed");
   return results;
 }
-//@ chunk-s61vbvea.js:489463-489731 layout
+//@ chunk-7jxyna5q.js:406566-406834 layout
 /**
  * 读本地文件后调用 uploadFile。
  */
@@ -263,7 +262,7 @@ async function uploadFileFromPath(path, relativePath, config, opts) {
   }
   return uploadFile(filePath, relativePath, config, opts);
 }
-//@ chunk-s61vbvea.js:489731-492338 fingerprint (2.1.88 match: uploadFile, 0.755)
+//@ chunk-7jxyna5q.js:406834-409441 fingerprint (2.1.88 match: uploadFile, 0.755)
 /**
  * 上传到 /v1/files（multipart，大小上限 500MB），带重试与错误分类。
  */
@@ -285,7 +284,7 @@ async function uploadFile(filePath, relativePath, config, opts) {
     };
   }
   let boundary = `----FormBoundary${randomUUID()}`;
-  let filename = escapeMultipartFilename(pathModule_2.basename(relativePath));
+  let filename = escapeMultipartFilename(pathModule.basename(relativePath));
   let bodyParts = [];
   bodyParts.push(
     Buffer.from(`--${boundary}\r
@@ -425,14 +424,14 @@ ${opts.expiresInSeconds}\r
     };
   }
 }
-//@ chunk-s61vbvea.js:492338-492422 layout
+//@ chunk-7jxyna5q.js:409441-409525 layout
 /**
  * multipart 文件名里的 " CR LF 转义。
  */
 function escapeMultipartFilename(filename) {
   return filename.replace(/["\r\n]/g, (ch) => (ch === '"' ? "%22" : ch === "\r" ? "%0D" : "%0A"));
 }
-//@ chunk-s61vbvea.js:492422-492529 fingerprint (2.1.88 match: UploadNonRetriableError, 1)
+//@ chunk-7jxyna5q.js:409525-409632 fingerprint (2.1.88 match: UploadNonRetriableError, 1)
 /**
  * 不可重试的上传错误（带原因）。
  */
@@ -444,7 +443,7 @@ class UploadNonRetriableError extends Error {
     this.name = "UploadNonRetriableError";
   }
 }
-//@ chunk-s61vbvea.js:492529-493170 callgraph-fingerprint (2.1.88 match: listFilesCreatedAfter, 0.271)
+//@ chunk-7jxyna5q.js:409632-410273 callgraph-fingerprint (2.1.88 match: listFilesCreatedAfter, 0.271)
 /**
  * DELETE /v1/files/<id>，返回 success 或 auth/forbidden/not_found 等原因。旧版名 listFilesCreatedAfter 为错配。
  */
@@ -495,7 +494,7 @@ async function deleteFile(fileId, config, opts) {
     };
   }
 }
-//@ chunk-s61vbvea.js:493170-493469 fingerprint (2.1.88 match: parseFileSpecs, 1)
+//@ chunk-7jxyna5q.js:410273-410572 fingerprint (2.1.88 match: parseFileSpecs, 1)
 /**
  * 解析 "file_id:relative_path" 文件规格列表。
  */
@@ -519,11 +518,11 @@ function parseFileSpecs(fileSpecs) {
   return files;
 }
 export {
-  parseFileSpecs,
-  downloadSessionFiles,
   FILES_API_MAX_FILE_BYTES,
   deleteFile,
-  uploadFileFromPath,
+  parseFileSpecs,
+  downloadSessionFiles,
   uploadFile,
   assertFilesApiAvailable,
+  uploadFileFromPath,
 };

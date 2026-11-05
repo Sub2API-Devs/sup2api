@@ -3,13 +3,13 @@
  *
  * in_process_teammate 任务类型守卫
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tasks/InProcessTeammateTask/types.ts
- * pieces: chunk-6vnxsn99.js (1)
+ * pieces: chunk-01kgd7xg.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-6vnxsn99.js:22659-22755 fingerprint (2.1.88 match: isInProcessTeammateTask, 1)
+//@ chunk-01kgd7xg.js:22451-22547 fingerprint (2.1.88 match: isInProcessTeammateTask, 1)
 /**
  * 是否是 in_process_teammate 任务。
  */

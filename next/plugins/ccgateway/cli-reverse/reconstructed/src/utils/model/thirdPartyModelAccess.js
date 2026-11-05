@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。第三方（Bedrock 等）模型访问判定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bwyr6h72.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jkg2b83p.js (29)
  * attribution: placement 29
  */
 import { open } from "fs/promises";
@@ -32,7 +32,7 @@ import { expandTildeWith } from "../networkPaths.js";
 import { env } from "../env.js";
 import { resolveGcloudConfigDir, getGcloudConfigDir } from "../gcloudConfigDir.js";
 import { safeParseJSON } from "../json.js";
-import { getClaudeConfigDir } from "../envUtils.js";
+import { getClaudeConfigDir } from "../markdownConfigLoader.js";
 import { hasCustomApiKeyHeader, bearerFromEnvOrHeaders } from "../../services/api/customHeaders.js";
 import { isDiskless } from "../../bootstrap/state.js";
 import { getFileReader } from "../fileStore.js";
@@ -47,7 +47,7 @@ import { stripIgnorables } from "../sanitization.js";
 import { truncateAtWord } from "../stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bwyr6h72.js:1088-1518 placement
+//@ chunk-jkg2b83p.js:1121-1551 placement
 /**
  * 第三方模型访问记忆用常量：身份文件大小上限、AWS 配置中影响身份的键、gcloud ADC 文件中的键及其解析 schema。
  */
@@ -56,7 +56,7 @@ var MAX_AWS_PROFILES;
 var AWS_IDENTITY_KEYS;
 var GCP_ADC_KEYS;
 var adcFileSchema;
-deferInit("chunk-bwyr6h72.js:1088", () => {
+deferInit("chunk-jkg2b83p.js:1121", () => {
   MAX_IDENTITY_FILE_BYTES = 4194304;
   MAX_AWS_PROFILES = 5;
   AWS_IDENTITY_KEYS = [
@@ -89,7 +89,7 @@ deferInit("chunk-bwyr6h72.js:1088", () => {
     });
   });
 });
-//@ chunk-bwyr6h72.js:1518-2090 placement
+//@ chunk-jkg2b83p.js:1551-2123 placement
 /**
  * 以非阻塞只读方式读取 AWS/gcloud 身份文件（必须是普通文件且不超过 4MB），返回文本与 mtime；不存在返回空文本，其他错误返回 undefined。
  */
@@ -127,9 +127,9 @@ async function readIdentityFile(filePath) {
     return;
   }
 }
-//@ chunk-bwyr6h72.js:2090-2984 placement
+//@ chunk-jkg2b83p.js:2123-3017 placement
 var readAwsSharedConfig; // deferred: uses memoizeWithTTLAsync (../memoize.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-bwyr6h72.js:2090", () => {
+deferInit("chunk-jkg2b83p.js:2123", () => {
   readAwsSharedConfig = memoizeWithTTLAsync(
     async () => {
       let { getHomeDir, loadSharedConfigFiles } =
@@ -183,7 +183,7 @@ deferInit("chunk-bwyr6h72.js:2090", () => {
     () => "aws",
   );
 });
-//@ chunk-bwyr6h72.js:2984-3257 placement
+//@ chunk-jkg2b83p.js:3017-3290 placement
 function readGcloudCoreConfig(text) {
   let inCore = false;
   let values = {};
@@ -199,12 +199,12 @@ function readGcloudCoreConfig(text) {
   }
   return [`project=${values.project ?? ""}`, `account=${values.account ?? ""}`];
 }
-//@ chunk-bwyr6h72.js:3257-3867 placement
+//@ chunk-jkg2b83p.js:3290-3900 placement
 /**
  * 计算 GCP 身份指纹（按 TTL 缓存）：当前 gcloud 配置名、core 段 project/account、ADC 文件中的关键字段（authorized_user 时加文件 mtime）。
  */
 var getGcpIdentityFingerprint; // deferred: uses memoizeWithTTLAsync (../memoize.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-bwyr6h72.js:3257", () => {
+deferInit("chunk-jkg2b83p.js:3290", () => {
   getGcpIdentityFingerprint = memoizeWithTTLAsync(
     async () => {
       let configDir = resolveGcloudConfigDir();
@@ -231,7 +231,7 @@ deferInit("chunk-bwyr6h72.js:3257", () => {
     () => "gcp",
   );
 });
-//@ chunk-bwyr6h72.js:3867-4376 placement
+//@ chunk-jkg2b83p.js:3900-4409 placement
 /**
  * 模型访问记忆常量：可用/拒绝结论的有效期与保留期、文件版本与大小上限、作用域与每作用域条目上限、日志前缀、结论说明、文件 schema 与"更新格式"标记。
  */
@@ -251,7 +251,7 @@ var memoryEntrySchema;
 var memoryFileSchema;
 var versionOnlySchema;
 var NEWER_FORMAT;
-deferInit("chunk-bwyr6h72.js:3867", () => {
+deferInit("chunk-jkg2b83p.js:3900", () => {
   OK_TTL_MS = 900000;
   REFUSED_TTL_MS = 86400000;
   RECHECK_CLAIM_MS = 600000;
@@ -295,21 +295,21 @@ deferInit("chunk-bwyr6h72.js:3867", () => {
   );
   NEWER_FORMAT = Symbol("newer format");
 });
-//@ chunk-bwyr6h72.js:4376-4434 placement
+//@ chunk-jkg2b83p.js:4409-4467 placement
 /**
  * 模型访问记忆文件路径（<config>/cache/model-access.json）。
  */
 function accessMemoryPath() {
   return join(getClaudeConfigDir(), "cache", "model-access.json");
 }
-//@ chunk-bwyr6h72.js:4434-4503 placement
+//@ chunk-jkg2b83p.js:4467-4536 placement
 /**
  * 提供商探测结论文件路径。
  */
 function providerProbeVerdictsPath() {
   return join(getClaudeConfigDir(), "cache", "provider-probe-verdicts.json");
 }
-//@ chunk-bwyr6h72.js:4503-4683 placement
+//@ chunk-jkg2b83p.js:4536-4716 placement
 function hasStaticProviderCredential() {
   return (
     Boolean(env.AWS_BEARER_TOKEN_BEDROCK) ||
@@ -319,7 +319,7 @@ function hasStaticProviderCredential() {
     bearerFromEnvOrHeaders() !== undefined
   );
 }
-//@ chunk-bwyr6h72.js:4683-4907 placement (2.1.88 match: getCustomHeaders, 1)
+//@ chunk-jkg2b83p.js:4716-4940 placement (2.1.88 match: getCustomHeaders, 1)
 function getCustomHeaders() {
   let customHeadersEnv = env.ANTHROPIC_CUSTOM_HEADERS;
   if (!customHeadersEnv) return "";
@@ -333,7 +333,7 @@ function getCustomHeaders() {
     .sort()
     .join(",");
 }
-//@ chunk-bwyr6h72.js:4907-5726 placement
+//@ chunk-jkg2b83p.js:4940-5759 placement
 async function PACKAGE_INFO(
   provider,
   loadModels,
@@ -341,10 +341,10 @@ async function PACKAGE_INFO(
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
-    VERSION: "2.1.316",
+    VERSION: "2.1.318",
     FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-    BUILD_TIME: "2026-10-30T23:28:13Z",
-    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
     HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
     DD_SOURCEMAP_GROUP: "default",
   }.VERSION,
@@ -372,17 +372,17 @@ async function PACKAGE_INFO(
     return;
   }
 }
-//@ chunk-bwyr6h72.js:5726-5804 placement
+//@ chunk-jkg2b83p.js:5759-5837 placement
 var accessMemoryCache; // deferred: uses memoizeWithTTLAsync (../memoize.js) of its import cycle while loading; runs once the cycle is complete
 var noopMemorySetterCache;
-deferInit("chunk-bwyr6h72.js:5726", () => {
+deferInit("chunk-jkg2b83p.js:5759", () => {
   accessMemoryCache = memoizeWithTTLAsync(async (path) => {
     let accessMemory = await readAccessMemory(path);
     return accessMemory === NEWER_FORMAT ? {} : accessMemory;
   });
   noopMemorySetterCache = memoizeWithTTLAsync(async (path) => {});
 });
-//@ chunk-bwyr6h72.js:5804-6310 placement
+//@ chunk-jkg2b83p.js:5837-6343 placement
 /**
  * 读取模型访问记忆文件（不跟随符号链接，最多 64KB）：版本更新时返回 NEWER_FORMAT 标记，格式不符或读失败返回空表。
  */
@@ -416,7 +416,7 @@ async function readAccessMemory(path) {
   }
   return fileResult.data.entries;
 }
-//@ chunk-bwyr6h72.js:6310-6519 placement
+//@ chunk-jkg2b83p.js:6343-6552 placement
 function toRememberedState(entry, now) {
   if (entry === undefined || entry.at > now) return;
   if (entry.s === "ok")
@@ -436,20 +436,20 @@ function toRememberedState(entry, now) {
       }),
   };
 }
-//@ chunk-bwyr6h72.js:6519-6593 placement
+//@ chunk-jkg2b83p.js:6552-6626 placement
 /**
  * 取某作用域下某模型已记忆的访问结论。
  */
 async function rememberedAccess(scope, modelId, now = Date.now()) {
   return toRememberedState((await accessMemoryCache(accessMemoryPath()))[scope]?.[modelId], now);
 }
-//@ chunk-bwyr6h72.js:6593-6691 placement
+//@ chunk-jkg2b83p.js:6626-6724 placement
 function shouldRecheckRefusal(state, now = Date.now()) {
   return (
     state.state === "refused" && now - Math.max(state.at, state.recheckClaimedAt ?? 0) >= RECHECK_CLAIM_MS
   );
 }
-//@ chunk-bwyr6h72.js:6691-7066 placement
+//@ chunk-jkg2b83p.js:6724-7099 placement
 /**
  * 串行地读取-修改-原子写入模型访问记忆文件（按作用域与模型更新一条记录），返回更新后的记录；无盘模式只调用更新函数。
  */
@@ -486,7 +486,7 @@ function updateAccessMemory(scope, modelId, mutate, now) {
   );
   return write;
 }
-//@ chunk-bwyr6h72.js:7066-7159 placement
+//@ chunk-jkg2b83p.js:7099-7192 placement
 function updateAccessMemoryCache(scope, modelId, entry, now) {
   let path = accessMemoryPath();
   let loaded = accessMemoryCache(path);
@@ -498,7 +498,7 @@ function updateAccessMemoryCache(scope, modelId, entry, now) {
     ),
   );
 }
-//@ chunk-bwyr6h72.js:7159-7247 placement
+//@ chunk-jkg2b83p.js:7192-7280 placement
 /**
  * 记录某模型的访问结论（可访问或拒绝）。
  */
@@ -510,7 +510,7 @@ async function recordAccessVerdict(scope, modelId, verdict, now = Date.now()) {
   updateAccessMemoryCache(scope, modelId, entry, now);
   await updateAccessMemory(scope, modelId, () => entry, now);
 }
-//@ chunk-bwyr6h72.js:7247-7327 placement
+//@ chunk-jkg2b83p.js:7280-7360 placement
 async function forgetAccessVerdict(scope, modelId, now = Date.now()) {
   updateAccessMemoryCache(scope, modelId, undefined, now);
   await updateAccessMemory(
@@ -522,7 +522,7 @@ async function forgetAccessVerdict(scope, modelId, now = Date.now()) {
     now,
   );
 }
-//@ chunk-bwyr6h72.js:7327-7581 placement
+//@ chunk-jkg2b83p.js:7360-7614 placement
 async function claimRecheck(scope, modelId, now = Date.now()) {
   let claimed = false;
   let entry = await updateAccessMemory(
@@ -557,7 +557,7 @@ async function claimRecheck(scope, modelId, now = Date.now()) {
         current: rememberedState,
       };
 }
-//@ chunk-bwyr6h72.js:7581-8025 placement
+//@ chunk-jkg2b83p.js:7614-8058 placement
 /**
  * 清理访问记忆：去掉过期记录，更新指定条目，每个作用域只保留最近的若干模型，并只保留最近使用的若干作用域。
  */
@@ -589,16 +589,16 @@ function pruneAccessMemory(memory, scope, modelId, mutate, now) {
       .slice(0, MAX_SCOPES),
   );
 }
-//@ chunk-bwyr6h72.js:8025-8091 placement
+//@ chunk-jkg2b83p.js:8058-8124 placement
 function maxEntryTimestamp(models) {
   return Math.max(...Object.values(models).map((entry) => entry.at));
 }
-//@ chunk-bwyr6h72.js:8091-8212 placement
+//@ chunk-jkg2b83p.js:8124-8245 placement
 function getStatusCode(error) {
   if (typeof error !== "object" || error === null || !("status" in error)) return;
   return typeof error.status === "number" ? error.status : undefined;
 }
-//@ chunk-bwyr6h72.js:8212-8363 placement
+//@ chunk-jkg2b83p.js:8245-8396 placement
 function classifyAccessFailure(failureKind, error) {
   if (failureKind === "refused" || failureKind === "denied") return failureKind;
   let statusCode = getStatusCode(error);
@@ -610,7 +610,7 @@ function classifyAccessFailure(failureKind, error) {
     ? "temporary"
     : "failed";
 }
-//@ chunk-bwyr6h72.js:8363-8477 placement
+//@ chunk-jkg2b83p.js:8396-8510 placement
 /**
  * 判定第三方模型访问（优先用记忆），回调通知结论并返回。
  */
@@ -619,7 +619,7 @@ async function checkRememberedModelAccess(provider, scope, modelId, probe, optio
   options?.onVerdict?.(modelAccess.verdict, modelAccess.rememberedAt);
   return modelAccess.verdict;
 }
-//@ chunk-bwyr6h72.js:8477-8928 placement
+//@ chunk-jkg2b83p.js:8510-8961 placement
 /**
  * 判定第三方模型是否可用：非 live 时先用记忆中的结论（默认模型的拒绝可认领复查），否则实际探测并记忆结果。
  */
@@ -654,7 +654,7 @@ async function resolveModelAccess(provider, scope, modelId, probe, options) {
     verdict: await decideRememberedModelAccess(provider, scope, modelId, probe, options),
   };
 }
-//@ chunk-bwyr6h72.js:8928-10421 placement
+//@ chunk-jkg2b83p.js:8961-10454 placement
 async function decideRememberedModelAccess(provider, scope, modelId, probe, options) {
   let probeResult = await probe();
   let failureKind = probeResult.accessible
@@ -671,10 +671,10 @@ async function decideRememberedModelAccess(provider, scope, modelId, probe, opti
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION
@@ -717,7 +717,7 @@ async function decideRememberedModelAccess(provider, scope, modelId, probe, opti
   );
   return failureClass;
 }
-//@ chunk-bwyr6h72.js:10421-10736 placement
+//@ chunk-jkg2b83p.js:10454-10769 placement
 /**
  * 按分组顺序探测候选模型（并行），返回第一个可用者；都不可用时在截止时间前对记忆为拒绝的候选做一次 live 复查。
  */

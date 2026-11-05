@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：遇到 workflow 关键词或 ultracode 时自动加载 workflow 编写技能
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-70r0mv35.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y4mkcswm.js (2)
  * attribution: placement 2
  */
 import { isWorkflowAuthoringSkillVisible } from "../skills/skillVisibility.js";
@@ -19,7 +19,7 @@ import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { createUserMessage, markToolSummaryMessage } from "./messages.js";
 
-//@ chunk-70r0mv35.js:11979-12698 placement
+//@ chunk-y4mkcswm.js:13127-13846 placement
 /**
  * 本轮出现 workflow 关键词或 ultracode 完整提示时自动加载 workflow 编写技能：已在历史中则只更新登记，否则登记、上报并返回技能加载元消息与正文。
  */
@@ -73,7 +73,7 @@ async function autoloadWorkflowAuthoringSkill(attachments, messages, context) {
     }),
   ].map(markToolSummaryMessage);
 }
-//@ chunk-70r0mv35.js:12698-12794 placement (2.1.88 match: isNullRenderingAttachment, 1)
+//@ chunk-y4mkcswm.js:13846-13942 placement (2.1.88 match: isNullRenderingAttachment, 1)
 function isNullRenderingAttachment(msg, messages, matchesTrigger) {
   return (
     msg.type === "attachment" &&

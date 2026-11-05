@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关托管设置加载失败时的处理（401 结束会话、403 等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cjydagjy.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h61dq9nz.js (10)
  * attribution: placement 10
  */
 import { migrateEnableAllProjectMcpServersToSettings } from "../../migrations/migrateEnableAllProjectMcpServersToSettings.js";
@@ -18,6 +18,7 @@ import {
   stopBackgroundPolling,
   clearRemoteManagedSettingsPrefetch,
   firstRulingClause,
+  gatewayRequiredLoadFailedSteps,
   initializeRemoteManagedSettingsLoadingPromise,
 } from "./loader.js";
 import { resetRemoteSettingsSyncCache } from "../cloudSessions/eligibility.js";
@@ -46,7 +47,7 @@ import { validateLoginIdentity } from "../../cli/startup/launcherHostLogin.js";
 import { logError } from "../../utils/log.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, toError } from "../../utils/errors.js";
 
-//@ chunk-cjydagjy.js:69366-69431 placement
+//@ chunk-h61dq9nz.js:71312-71377 placement
 /**
  * preAction 中调用的迁移入口：先 migrateEnableAllProjectMcpServersToSettings，再 runMigrations，再异步迁移（不等待）。
  */
@@ -55,19 +56,19 @@ async function runAllMigrations(config) {
   await runMigrations(config);
   migrateChangelogFromConfig(config).catch(() => {});
 }
-//@ chunk-cjydagjy.js:69431-69510 placement
+//@ chunk-h61dq9nz.js:71377-71456 placement
 function asStringArray(optionValue) {
   return Array.isArray(optionValue) && optionValue.every((value) => typeof value === "string")
     ? optionValue
     : [];
 }
-//@ chunk-cjydagjy.js:69510-69599 placement
+//@ chunk-h61dq9nz.js:71456-71545 placement
 function parseNumberOption(value) {
   let numberWithSeparators = parseNumberWithSeparators(value);
   if (Number.isNaN(numberWithSeparators)) throw new InvalidArgumentError("must be a number");
   return numberWithSeparators;
 }
-//@ chunk-cjydagjy.js:69599-69675 placement
+//@ chunk-h61dq9nz.js:71545-71621 placement
 function continueSignedOutAfterGatewayEnd() {
   setGatewayAuth(null);
   stopBackgroundPolling();
@@ -80,7 +81,7 @@ function continueSignedOutAfterGatewayEnd() {
 `,
   );
 }
-//@ chunk-cjydagjy.js:69675-69796 placement
+//@ chunk-h61dq9nz.js:71621-71742 placement
 function needsPolicyHelperVerdict() {
   if (!getGatewayAuth()?.hostVerdict) return false;
   let basePolicySettings = getBasePolicySettings();
@@ -89,7 +90,7 @@ function needsPolicyHelperVerdict() {
     (basePolicySettings?.policyHelpers != null || basePolicySettings?.policyHelper != null)
   );
 }
-//@ chunk-cjydagjy.js:69796-71446 placement
+//@ chunk-h61dq9nz.js:71742-73336 placement
 /**
  * 网关托管设置加载失败时的处理（401 结束会话、403 等）。
  */
@@ -129,7 +130,7 @@ function gatewaySettingsFailure() {
   let hint = isMountMode
     ? "You can check your network connection or contact your admin."
     : isGatewayLoginForced()
-      ? "Check your network connection, or sign in again with /login."
+      ? gatewayRequiredLoadFailedSteps(failure)
       : "Check your network connection, or run `claude auth login` to re-authenticate.";
   return {
     endedSession: false,
@@ -139,18 +140,18 @@ function gatewaySettingsFailure() {
     reason: "remote_settings_required_unavailable",
   };
 }
-//@ chunk-cjydagjy.js:71446-71536 placement
+//@ chunk-h61dq9nz.js:73336-73426 placement
 function remoteSettingsFailureReason() {
   return getAPIProvider() === "gateway"
     ? gatewaySettingsFailure().reason
     : "remote_settings_required_unavailable";
 }
-//@ chunk-cjydagjy.js:71536-71578 placement
+//@ chunk-h61dq9nz.js:73426-73468 placement
 async function exitWithStartupFailure(storageV5, message) {
   printCliError(message);
   await sendManagedSettingsRefusal(storageV5);
 }
-//@ chunk-cjydagjy.js:71578-71626 placement
+//@ chunk-h61dq9nz.js:73468-73516 placement
 function redoAuthDependentStartup() {
   resetRemoteSettingsSyncCache();
   invalidateCommandNames();
@@ -159,7 +160,7 @@ function redoAuthDependentStartup() {
   initializeRemoteManagedSettingsLoadingPromise();
   initializePolicyLimitsLoadingPromise();
 }
-//@ chunk-cjydagjy.js:71626-71821 placement
+//@ chunk-h61dq9nz.js:73516-73711 placement
 function redoStartupAfterLauncherLogin(refreshFeatures) {
   try {
     clearOAuthTokenCache();

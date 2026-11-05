@@ -1,7 +1,0 @@
-
-// @bun @bytecode
-// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
-
-// Version: 2.1.316
-import{Oe}from"./chunk-0777tkjc.js";import{GU}from"./chunk-s7k22nbx.js";class o{captured=r();capturedOwn=n();carrier=s();ownSessionIds=i();selfHostedRunnerChild=t();get atStartup(){return this.captured}get isSessionIngressUrlSet(){return this.capturedOwn}get ownCcrSessionIds(){return this.ownSessionIds}get isSelfHostedRunnerChild(){return this.selfHostedRunnerChild}get bridgeCarrier(){return this.carrier}get isBridgeCarrierChild(){return this.carrier==="child"}reset(){this.captured=r(),this.capturedOwn=n(),this.carrier=s(),this.ownSessionIds=i(),this.selfHostedRunnerChild=t()}}var dd=new o;function r(){return process.env.SESSION_INGRESS_URL??process.env.ANTHROPIC_BASE_URL}function n(){return process.env.SESSION_INGRESS_URL!==void 0}function s(){let e=process.env.CLAUDE_CODE_BRIDGE_MCP_CARRIER;if(e==="1"||!e)return e?"child":void 0;if(process.env.CLAUDE_CODE_ENVIRONMENT_KIND==="byoc"&&Oe(process.env.CLAUDE_CODE_REMOTE)){delete process.env.CLAUDE_CODE_BRIDGE_MCP_CARRIER;return}return"descendant"}function i(){return[process.env.CLAUDE_CODE_REMOTE_SESSION_ID,process.env.CLAUDE_CODE_SESSION_ID].filter((e)=>e!==void 0&&GU(e))}function t(){return Oe(process.env.CLAUDE_CODE_REMOTE)&&process.env.CLAUDE_CODE_ENVIRONMENT_KIND==="byoc"&&process.env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE==="self_hosted"}
-export{dd};

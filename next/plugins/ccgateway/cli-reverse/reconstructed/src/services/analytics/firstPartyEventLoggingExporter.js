@@ -3,15 +3,15 @@
  *
  * 1P 事件导出器：POST /api/event_logging/v2/batch，退避重试、认证、失败批落盘 <配置目录>/telemetry/1p_failed_events.* 并重发。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/analytics/firstPartyEventLoggingExporter.ts
- * pieces: chunk-4m46mxx9.js (1), chunk-aepeg2w5.js (18)
+ * pieces: chunk-08q4d92p.js (1), chunk-exfmq47h.js (18)
  * attribution: fingerprint 4, layout 6, placement 9
  */
 import { randomUUID, createHash } from "crypto";
 import * as pathModule from "path";
 import { unlink, mkdir, writeFile, appendFile, readdir } from "fs/promises";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import {
   isRowOfCurrentPrincipal,
   isHipaaMode,
@@ -21,7 +21,7 @@ import {
 import { EXPORT_ENVIRONMENTS, isDisklessHost } from "./anthropicTelemetryExport.js";
 import { getSessionId, getIsNonInteractiveSession, getIsInteractive } from "../../bootstrap/state.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
-import { readJSONLFile_2 } from "../../utils/json.js";
+import { readJSONLFile } from "../../utils/json.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -73,33 +73,33 @@ import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:874435-874470 fingerprint (2.1.88 match: FILE_PREFIX, 1)
+//@ chunk-exfmq47h.js:897327-897362 fingerprint (2.1.88 match: FILE_PREFIX, 1)
 var EXPORTER_RUN_ID; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var FAILED_EVENTS_KEY_PREFIX;
-deferInit("chunk-aepeg2w5.js:874435", () => {
+deferInit("chunk-exfmq47h.js:897327", () => {
   EXPORTER_RUN_ID = randomUUID();
   FAILED_EVENTS_KEY_PREFIX = "1p_failed_events.";
 });
-//@ chunk-aepeg2w5.js:874470-874581 layout
+//@ chunk-exfmq47h.js:897362-897473 layout
 function getFlatMigrationKey(index, text) {
   let sliced = createHash("sha256").update(text).digest("base64url").slice(0, 22);
   return `flat-migration.${index}.${sliced}`;
 }
-//@ chunk-aepeg2w5.js:874581-874628 layout (2.1.88 match: getStorageDir, 1)
+//@ chunk-exfmq47h.js:897473-897520 layout (2.1.88 match: getStorageDir, 1)
 /**
  * 1P 失败事件落盘目录 <配置目录>/telemetry。
  */
 function getTelemetryStorageDir() {
   return pathModule.join(getClaudeConfigDir(), "telemetry");
 }
-//@ chunk-aepeg2w5.js:874628-874658 layout
+//@ chunk-exfmq47h.js:897520-897550 layout
 /**
  * 一方遥测导出的 OAUTH 刷新超时、密钥助手加入超时与 WIF 铸造重试间隔。
  */
 var OAUTH_REFRESH_TIMEOUT_MS = 2000;
 var KEY_HELPER_JOIN_TIMEOUT_MS = 3000;
 var WIF_MINT_RETRY_MS = 300000;
-//@ chunk-aepeg2w5.js:874658-874758 layout
+//@ chunk-exfmq47h.js:897550-897650 layout
 /**
  * 去掉 principal_stamp 不属于当前身份的事件。
  */
@@ -109,7 +109,7 @@ function dropForeignPrincipalEvents(events) {
     if (principalStamp === undefined || isRowOfCurrentPrincipal(principalStamp)) kept.push(rest);
   return kept;
 }
-//@ chunk-aepeg2w5.js:874758-892785 fingerprint (2.1.88 match: FirstPartyEventLoggingExporter, 0.535)
+//@ chunk-exfmq47h.js:897650-915679 fingerprint (2.1.88 match: FirstPartyEventLoggingExporter, 0.536)
 /**
  * 1P 事件导出器：POST <baseUrl 默认 https://api.anthropic.com>/api/event_logging/v2/batch（批 200、指数退避最多 8 次、OAuth/API key 认证可跳过）；失败批写入 <配置目录>/telemetry/1p_failed_events.<runId>… 下次重发；killswitch 时不发。
  */
@@ -194,7 +194,7 @@ class FirstPartyEventLoggingExporter {
   async loadEventsFromFile(filePath) {
     if (this.underATenantsRules()) return [];
     try {
-      return await readJSONLFile_2(filePath);
+      return await readJSONLFile(filePath);
     } catch {
       return [];
     }
@@ -1147,7 +1147,7 @@ class FirstPartyEventLoggingExporter {
     await Promise.all(this.pendingExports);
   }
 }
-//@ chunk-aepeg2w5.js:892785-893118 placement
+//@ chunk-exfmq47h.js:915679-916012 placement
 /**
  * claude-code-server 租户中没有授权时的空导出授权（只丢弃并报错一次）。
  */
@@ -1167,7 +1167,7 @@ function dryRunGrant() {
     onFailed: () => {},
   };
 }
-//@ chunk-aepeg2w5.js:893118-893199 placement
+//@ chunk-exfmq47h.js:916012-916093 placement
 /**
  * 一方遥测 sink 被 killswitch 关闭时抛出的错误类型。
  */
@@ -1176,7 +1176,7 @@ class SinkKillSwitchError extends Error {
     super("firstParty sink killswitch active");
   }
 }
-//@ chunk-aepeg2w5.js:893199-893255 placement
+//@ chunk-exfmq47h.js:916093-916149 placement
 function endpointHost(url) {
   try {
     return new URL(url).host;
@@ -1184,7 +1184,7 @@ function endpointHost(url) {
     return;
   }
 }
-//@ chunk-aepeg2w5.js:893255-893333 placement (2.1.88 match: getApiBaseUrlHost, 0.812)
+//@ chunk-exfmq47h.js:916149-916227 placement (2.1.88 match: getApiBaseUrlHost, 0.812)
 /**
  * ANTHROPIC_BASE_URL 非 api.anthropic.com 时返回其 host，作为 GrowthBook 属性。
  */
@@ -1192,7 +1192,7 @@ function getApiBaseUrlHost_2(url) {
   if (url === undefined) return;
   return url === null ? "api.anthropic.com" : endpointHost(url);
 }
-//@ chunk-aepeg2w5.js:893603-893676 placement
+//@ chunk-exfmq47h.js:916497-916570 placement
 function isHttpsEndpoint_2(endpoint) {
   try {
     return new URL(endpoint).protocol === "https:";
@@ -1200,7 +1200,7 @@ function isHttpsEndpoint_2(endpoint) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:893676-893919 placement
+//@ chunk-exfmq47h.js:916570-916813 placement
 /**
  * 1P 上报失败原因：kill_switch / threw / no_answer / status_429/5xx/4xx/3xx。
  */
@@ -1213,21 +1213,21 @@ function classifyPostFailure(error) {
   if (status >= 500) return "status_5xx";
   return status >= 400 ? "status_4xx" : "status_3xx";
 }
-//@ chunk-aepeg2w5.js:893919-893977 placement
+//@ chunk-exfmq47h.js:916813-916871 placement
 var acceptedCountSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:893919", () => {
+deferInit("chunk-exfmq47h.js:916813", () => {
   acceptedCountSchema = DoctorLazy(() =>
     objectSchema({
       accepted_count: numberSchema().int().nonnegative(),
     }),
   );
 });
-//@ chunk-aepeg2w5.js:893977-894071 placement
+//@ chunk-exfmq47h.js:916871-916965 placement
 function acceptedEventCount(response, fallback) {
   let parsed = acceptedCountSchema().safeParse(response);
   return parsed.success ? Math.min(parsed.data.accepted_count, fallback) : fallback;
 }
-//@ chunk-aepeg2w5.js:894071-894295 placement
+//@ chunk-exfmq47h.js:916965-917189 placement
 /**
  * 记录租户授权回调抛错。
  */
@@ -1242,9 +1242,9 @@ function logGrantCallbackError(error) {
     );
   } catch {}
 }
-//@ chunk-aepeg2w5.js:894295-894338 layout
+//@ chunk-exfmq47h.js:917189-917232 layout
 var DEFAULT_ACCEPT_HEADER = "application/json, text/plain, */*";
-//@ chunk-aepeg2w5.js:894338-894435 layout
+//@ chunk-exfmq47h.js:917232-917329 layout
 class DirectPostError extends Error {
   facts;
   constructor(message, facts) {
@@ -1253,7 +1253,7 @@ class DirectPostError extends Error {
     this.name = "DirectPostError";
   }
 }
-//@ chunk-aepeg2w5.js:894435-894682 fingerprint (2.1.88 match: getAxiosErrorContext, 0.688)
+//@ chunk-exfmq47h.js:917329-917576 fingerprint (2.1.88 match: getAxiosErrorContext, 0.689)
 /**
  * 从 axios 错误提取 request-id、status、code 便于日志。
  */
@@ -1267,9 +1267,9 @@ function getAxiosErrorContext(error) {
   if (error.message) parts.push(error.message);
   return parts.join(", ");
 }
-//@ chunk-4m46mxx9.js:6572-6590 fingerprint (2.1.88 match: getStorageDir, 1)
+//@ chunk-08q4d92p.js:6824-6842 fingerprint (2.1.88 match: getStorageDir, 1)
 /**
  * telemetry 插件的目录名 "telemetry"，导出为 MOD_FOLDER；registerPlugin 里 Zfr(B) 在该目录下解析 hooks 模块文件。
  */
 var MOD_FOLDER = "telemetry";
-export { isHttpsEndpoint_2, MOD_FOLDER, FirstPartyEventLoggingExporter };
+export { MOD_FOLDER, isHttpsEndpoint_2, FirstPartyEventLoggingExporter };

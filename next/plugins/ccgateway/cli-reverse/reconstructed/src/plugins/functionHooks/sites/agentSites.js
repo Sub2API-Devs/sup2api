@@ -3,9 +3,9 @@
  *
  * 钩子站点规则：agent.offer/agent.spawn（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (13)
  * attribution: placement 13
  */
 import { isAbsolute } from "path";
@@ -20,9 +20,9 @@ import {
 import { DECISION_ORDER } from "../builtinHooksModule.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:205042-205597 placement
+//@ chunk-j8f885h1.js:186227-186782 placement
 var AGENT_OFFER_SITE; // deferred: uses checkResultObject (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:205042", () => {
+deferInit("chunk-j8f885h1.js:186227", () => {
   AGENT_OFFER_SITE = {
     event: "agent.offer",
     restoreArgument: (passed, received) => restoreMissingKeys_2(["provider"], passed, received),
@@ -40,7 +40,7 @@ deferInit("chunk-4121qate.js:205042", () => {
     ),
   };
 });
-//@ chunk-4121qate.js:205597-205726 placement
+//@ chunk-j8f885h1.js:186782-186911 placement
 /**
  * agent.spawn 中不可被钩子改写的身份字段（tool_use_id、name、fork、isTeammate、workflow、resume、父模型、权限模式、父代理、提供者）。
  */
@@ -56,12 +56,12 @@ var AGENT_SPAWN_PINNED_KEYS_2 = [
   "parentAgentId",
   "provider",
 ];
-//@ chunk-4121qate.js:205726-205795 placement
+//@ chunk-j8f885h1.js:186911-186980 placement
 /**
  * agent.offer 固定键
  */
 var AGENT_OFFER_PINNED_KEYS = ["isTeammate", "workflow", "resume", "parentAgentId", "provider"];
-//@ chunk-4121qate.js:205830-206436 placement
+//@ chunk-j8f885h1.js:187015-187621 placement
 function checkAgentSpawnPrompt(args, received) {
   let { prompt, model, cwd } = args;
   return [
@@ -81,22 +81,22 @@ function checkAgentSpawnPrompt(args, received) {
     ],
   ].find(([key, isValid]) => !isValid && args[key] !== received[key])?.[2];
 }
-//@ chunk-4121qate.js:206436-206510 placement
+//@ chunk-j8f885h1.js:187621-187695 placement
 /**
  * agent.spawn 固定键
  */
 var AGENT_SPAWN_PINNED_KEYS = ["prompt", "description", "subagentType", "model", "background", "cwd"];
-//@ chunk-4121qate.js:206510-206538 placement
+//@ chunk-j8f885h1.js:187695-187723 placement
 /**
  * background/cwd
  */
 var AGENT_SPAWN_BACKGROUND_KEYS = ["background", "cwd"];
-//@ chunk-4121qate.js:206538-206595 placement
+//@ chunk-j8f885h1.js:187723-187780 placement
 /**
  * 恢复可改键
  */
 var AGENT_SPAWN_RESUME_KEYS = ["description", "subagentType", "background", "cwd"];
-//@ chunk-4121qate.js:206595-206772 placement
+//@ chunk-j8f885h1.js:187780-187957 placement
 /**
  * 恢复、工作流、队友三类派生各自不可改写的字段集合。
  */
@@ -121,7 +121,7 @@ function spawnKindKeys(args) {
           }
         : undefined;
 }
-//@ chunk-4121qate.js:206772-206907 placement
+//@ chunk-j8f885h1.js:187957-188092 placement
 /**
  * 恢复派生类型的固定字段（钩子改动时还原）。
  */
@@ -138,7 +138,7 @@ function restoreSpawnKindKeys(passed, received) {
       )
     : passed;
 }
-//@ chunk-4121qate.js:206907-207349 placement
+//@ chunk-j8f885h1.js:188092-188534 placement
 function checkResumedAgentRefusal(passed, received) {
   let kindKeys = spawnKindKeys(received);
   if (kindKeys === undefined) return;
@@ -157,12 +157,12 @@ function checkResumedAgentRefusal(passed, received) {
       return `${joined} ${isPlural ? "do" : "does"} not apply to a workflow agent`;
   }
 }
-//@ chunk-4121qate.js:207349-207693 placement
+//@ chunk-j8f885h1.js:188534-188878 placement
 /**
  * agent.spawn 站点规则：恢复与校验固定身份字段与提示词，结果须带 model 或 deny。
  */
 var AGENT_SPAWN_SITE; // deferred: uses checkResultObject (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:207349", () => {
+deferInit("chunk-j8f885h1.js:188534", () => {
   AGENT_SPAWN_SITE = {
     event: "agent.spawn",
     unappliedArgument: checkResumedAgentRefusal,
@@ -185,7 +185,7 @@ deferInit("chunk-4121qate.js:207349", () => {
     ),
   };
 });
-//@ chunk-4121qate.js:207693-207783 placement
+//@ chunk-j8f885h1.js:188878-188968 placement
 /**
  * 覆盖 ceiling
  */
@@ -199,15 +199,15 @@ function withCeiling(next, origin) {
         ceiling: ceiling_2,
       };
 }
-//@ chunk-4121qate.js:207783-207816 placement
+//@ chunk-j8f885h1.js:188968-189001 placement
 /**
  * 合法权限决定
  */
 var isPermissionDecisionValue = (decision) => DECISION_ORDER.some((level) => level === decision);
 export {
+  AGENT_SPAWN_PINNED_KEYS_2,
   AGENT_OFFER_SITE,
   AGENT_SPAWN_SITE,
-  AGENT_SPAWN_PINNED_KEYS_2,
   AGENT_OFFER_PINNED_KEYS,
   AGENT_SPAWN_PINNED_KEYS,
   AGENT_SPAWN_BACKGROUND_KEYS,

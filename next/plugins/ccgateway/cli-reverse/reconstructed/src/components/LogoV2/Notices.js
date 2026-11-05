@@ -3,27 +3,31 @@
  *
  * 2.1.316 新增：启动提示通用外框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ag5x7vhf.js (10)
- * attribution: placement 10
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gdkqhwa0.js (3), chunk-hnxhr3bs.js (8)
+ * attribution: placement 10, layout 1
  */
+import { getAPIProvider } from "../../utils/model/providers.js";
+import { isAnthropicAuthEnabled, getClaudeAIOAuthTokens } from "../../utils/auth.js";
+import { isPlausibleRefreshTokenExpiry } from "../../utils/auth/managedHelpers.js";
+import {
+  init_react_production,
+  useContext,
+  childrenExport,
+  isValidElement_default,
+  useMemo,
+  useSyncExternalStore,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { actionKeysNamespace } from "../pluginUi/render/actionKeys.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { Box, Text } from "../../ink/components/Text.js";
-import {
-  childrenExport,
-  isValidElement_default,
-  init_react_production,
-  useMemo,
-  useSyncExternalStore,
-} from "../../../vendor/react/cjs/react.production.js";
-import { getAPIProvider } from "../../utils/model/providers.js";
-import { isAnthropicAuthEnabled, getClaudeAIOAuthTokens } from "../../utils/auth.js";
+import { slashCommandLinkContext } from "../SlashCommandLink.js";
+import { Text, Box } from "../../ink/components/Text.js";
+import { PROPORTION } from "../../constants/figures.js";
 import { useMainLoopModel_2 } from "../../hooks/useMainLoopModel.js";
 import { getModelSourceAnnotation, renderModelSetting } from "../../utils/model/modelDisplay.js";
 import { MIGRATIONS } from "../../hooks/notifs/useModelMigrationNotifications.js";
@@ -31,7 +35,45 @@ import { uiSignals } from "../../state/uiSignals.js";
 import { isMainLoopBusy } from "./ModelSuccessorNotice.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:74596-75065 placement
+//@ chunk-gdkqhwa0.js:270-291 placement
+var ONE_DAY_MS = 86400000;
+var TOKEN_EXPIRY_WINDOW_MS = 3 * ONE_DAY_MS;
+//@ chunk-gdkqhwa0.js:291-533 layout
+function refreshTokenExpiryNotice() {
+  if (getAPIProvider() !== "firstParty" || !isAnthropicAuthEnabled()) return null;
+  let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
+  if (
+    !claudeAIOAuthTokens?.refreshToken ||
+    !isPlausibleRefreshTokenExpiry(claudeAIOAuthTokens.refreshTokenExpiresAt)
+  )
+    return null;
+  let refreshTokenExpiresAt = claudeAIOAuthTokens.refreshTokenExpiresAt;
+  if (
+    typeof claudeAIOAuthTokens.expiresAt === "number" &&
+    claudeAIOAuthTokens.expiresAt > refreshTokenExpiresAt + TOKEN_EXPIRY_WINDOW_MS
+  )
+    return null;
+  return new Date(refreshTokenExpiresAt);
+}
+//@ chunk-gdkqhwa0.js:533-670 placement
+/**
+ * 第一方 OAuth 令牌即将过期（3 天内）时返回提示文本，否则 null。
+ */
+function oauthExpiryWarning() {
+  let expiry = refreshTokenExpiryNotice();
+  if (expiry === null) return null;
+  let msLeft = expiry.getTime() - Date.now();
+  if (msLeft > TOKEN_EXPIRY_WINDOW_MS || msLeft <= 0) return null;
+  return {
+    daysLeft: Math.ceil(msLeft / ONE_DAY_MS),
+  };
+}
+//@ chunk-hnxhr3bs.js:74149-74153 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:74149", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:74153-74622 placement
 /**
  * 启动提示的通用外框：提示正文 + 可选命令（"· /cmd"）。
  */
@@ -78,26 +120,50 @@ function InfoNotice(props) {
   } else renderNotice = $[8];
   return actionKeysNamespace.useRenderHook(actionKeys, renderNotice);
 }
-//@ chunk-ag5x7vhf.js:75065-75264 placement
+//@ chunk-hnxhr3bs.js:74622-75062 placement (2.1.88 match: _temp, 0.345)
 function NoticeLine(props) {
-  let $ = useMemoCache(3);
+  let $ = useMemoCache(10);
   let { children, command } = props;
+  let hasProportion = useContext(slashCommandLinkContext);
+  const marginLeft = hasProportion ? -2 : 0;
+  let proportion;
+  if ($[0] !== hasProportion) {
+    proportion =
+      hasProportion &&
+      jsxProd_default_2(Text, {
+        "aria-hidden": true,
+        children: [PROPORTION, " "],
+      });
+    $[0] = hasProportion;
+    $[1] = proportion;
+  } else proportion = $[1];
   const commandSuffix = command ? ` \xB7 ${command}` : "";
-  let line;
-  if ($[0] !== children || $[1] !== commandSuffix) {
-    line = jsxProd_default(Box, {
-      children: jsxProd_default_2(Text, {
-        dimColor: true,
-        children: [children, commandSuffix],
-      }),
+  let children_2;
+  if ($[2] !== children || $[3] !== hasProportion || $[4] !== proportion || $[5] !== commandSuffix) {
+    children_2 = jsxProd_default_2(Text, {
+      dimColor: true,
+      italic: hasProportion,
+      children: [proportion, children, commandSuffix],
     });
-    $[0] = children;
-    $[1] = commandSuffix;
-    $[2] = line;
-  } else line = $[2];
+    $[2] = children;
+    $[3] = hasProportion;
+    $[4] = proportion;
+    $[5] = commandSuffix;
+    $[6] = children_2;
+  } else children_2 = $[6];
+  let line;
+  if ($[7] !== marginLeft || $[8] !== children_2) {
+    line = jsxProd_default(Box, {
+      marginLeft,
+      children: children_2,
+    });
+    $[7] = marginLeft;
+    $[8] = children_2;
+    $[9] = line;
+  } else line = $[9];
   return line;
 }
-//@ chunk-ag5x7vhf.js:75264-75413 placement
+//@ chunk-hnxhr3bs.js:75062-75211 placement
 function noticeText(children) {
   let text = "";
   childrenExport.forEach(children, (child) => {
@@ -106,35 +172,12 @@ function noticeText(children) {
   });
   return text;
 }
-//@ chunk-ag5x7vhf.js:75413-75437 placement
-var ONE_DAY_MS = 86400000;
-var TOKEN_EXPIRY_WINDOW_MS = 3 * ONE_DAY_MS;
-//@ chunk-ag5x7vhf.js:75437-75737 placement
-/**
- * 第一方 OAuth 令牌即将过期（3 天内）时返回提示文本，否则 null。
- */
-function oauthExpiryWarning() {
-  if (getAPIProvider() !== "firstParty" || !isAnthropicAuthEnabled()) return null;
-  let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
-  if (!claudeAIOAuthTokens || typeof claudeAIOAuthTokens.refreshTokenExpiresAt !== "number") return null;
-  let refreshTokenExpiresAt = claudeAIOAuthTokens.refreshTokenExpiresAt;
-  if (
-    typeof claudeAIOAuthTokens.expiresAt === "number" &&
-    claudeAIOAuthTokens.expiresAt > refreshTokenExpiresAt + TOKEN_EXPIRY_WINDOW_MS
-  )
-    return null;
-  let msLeft = refreshTokenExpiresAt - Date.now();
-  if (msLeft > TOKEN_EXPIRY_WINDOW_MS || msLeft <= 0) return null;
-  return {
-    daysLeft: Math.ceil(msLeft / ONE_DAY_MS),
-  };
-}
-//@ chunk-ag5x7vhf.js:75737-75741 placement
+//@ chunk-hnxhr3bs.js:75211-75215 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:75737", () => {
+deferInit("chunk-hnxhr3bs.js:75211", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:75741-75936 placement
+//@ chunk-hnxhr3bs.js:75215-75410 placement
 /**
  * 启动提示 "Using <模型>"，附带模型来源说明和/或 (auto-updated)；两者都没有时不显示。
  */
@@ -154,12 +197,7 @@ function ModelSourceNotice() {
     children: ["Using ", renderModelSetting(mainLoopModel), suffix],
   });
 }
-//@ chunk-ag5x7vhf.js:75936-75940 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:75936", () => {
-  init_react_production();
-});
-//@ chunk-ag5x7vhf.js:75940-76009 placement
+//@ chunk-hnxhr3bs.js:75414-75483 placement
 function setMainLoopBusy(isMainLoopBusy) {
   uiSignals.mainLoopBusy.setState((state) =>
     state.busy === isMainLoopBusy
@@ -169,8 +207,15 @@ function setMainLoopBusy(isMainLoopBusy) {
         },
   );
 }
-//@ chunk-ag5x7vhf.js:76009-76067 placement
+//@ chunk-hnxhr3bs.js:75483-75541 placement
 function useMainLoopBusy() {
   return useSyncExternalStore(uiSignals.mainLoopBusy.subscribe, isMainLoopBusy, isMainLoopBusy);
 }
-export { ModelSourceNotice, InfoNotice, oauthExpiryWarning, useMainLoopBusy, setMainLoopBusy };
+export {
+  refreshTokenExpiryNotice,
+  ModelSourceNotice,
+  InfoNotice,
+  oauthExpiryWarning,
+  useMainLoopBusy,
+  setMainLoopBusy,
+};

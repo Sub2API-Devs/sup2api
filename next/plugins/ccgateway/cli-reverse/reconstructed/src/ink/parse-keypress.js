@@ -3,12 +3,12 @@
  *
  * 并入已有模块：解析 kitty 键盘协议的 CSI _ 序列；按键序列解析用正则（meta、CSI、kitty、modifyOtherKeys、DECRPM）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/parse-keypress.ts
- * pieces: chunk-bzr73sfg.js (39)
+ * pieces: chunk-2avr6cej.js (39)
  * attribution: placement 16, fingerprint 11, file-local 1, layout 10, callgraph-fingerprint 1
  */
-import { Buffer as Nc } from "buffer";
+import { Buffer as wc } from "buffer";
 import { csi, PASTE_START, PASTE_END, FOCUS_OUT, FOCUS_IN } from "./termio/csi.js";
 import { isBackspaceCtrlBackspace } from "./clearTerminal.js";
 import { getAttacherCaps } from "../bootstrap/state.js";
@@ -17,7 +17,7 @@ import { env } from "../utils/env.js";
 import { isEnvTruthy, isEnvDefinedFalsy } from "../utils/envUtils.js";
 import { createTokenizer } from "./termio/tokenize.js";
 
-//@ chunk-bzr73sfg.js:129780-130164 placement
+//@ chunk-2avr6cej.js:129780-130164 placement
 /**
  * 键盘协议解析用的正则与按键码常量。
  */
@@ -81,7 +81,7 @@ var WIN32_NAV_KEY_CSI = {
   },
 };
 var WIN32_F5_F12_CODES = [15, 17, 18, 19, 20, 21, 23, 24];
-//@ chunk-bzr73sfg.js:130164-131427 placement
+//@ chunk-2avr6cej.js:130164-131427 placement
 /**
  * 解析 kitty 键盘协议的 CSI _ 序列。
  */
@@ -187,7 +187,7 @@ function decodeWin32InputSequence(sequence, pendingHighSurrogate) {
   }
   return repeatSequences(repeatCount, altPrefix + text);
 }
-//@ chunk-bzr73sfg.js:131427-131500 placement
+//@ chunk-2avr6cej.js:131427-131500 placement
 /**
  * 取 params[index] 转整数，缺失或空串返回 fallback。
  */
@@ -195,14 +195,14 @@ function parseIntParam(params, index, fallback) {
   let raw = params[index];
   return raw === undefined || raw === "" ? fallback : parseInt(raw, 10);
 }
-//@ chunk-bzr73sfg.js:131500-131569 placement
+//@ chunk-2avr6cej.js:131500-131569 placement
 function repeatSequences(count, sequence) {
   return {
     sequences: Array(count).fill(sequence),
     highSurrogate: "",
   };
 }
-//@ chunk-bzr73sfg.js:131569-131797 placement
+//@ chunk-2avr6cej.js:131569-131797 placement
 /**
  * 按 xterm 规则把字符码转成 Ctrl 组合产生的控制码（@–_ 与 a–z 取低 5 位，2/空格→NUL，3–7→ESC..US，8/?→DEL，/→US）。
  */
@@ -228,7 +228,7 @@ function toControlCharCode(charCode) {
       return charCode;
   }
 }
-//@ chunk-bzr73sfg.js:131797-132430 placement
+//@ chunk-2avr6cej.js:131797-132430 placement
 /**
  * 按键序列解析用正则（meta、CSI、kitty、modifyOtherKeys、DECRPM）。
  */
@@ -251,19 +251,19 @@ var SGR_MOUSE_PREFIX_RE = /^\x1b\[<[\d;-]*$/;
 var SGR_MOUSE_LEADING_RE = /^\x1b\[<[\d;-]*[Mm]/;
 var SGR_MOUSE_COMPLETE_RE = /^\x1b\[<\d+;-?\d+;-?\d+[Mm]/;
 var MAX_MOUSE_PREFIX_LEN = 32;
-//@ chunk-bzr73sfg.js:132430-132477 placement
+//@ chunk-2avr6cej.js:132430-132477 placement
 /**
  * 文本是否是被拆开的 SGR 鼠标序列前缀（ESC[< 数字;…，长度不超过 32）。
  */
 function isPartialSgrMousePrefix(text) {
   return text.length <= MAX_MOUSE_PREFIX_LEN && SGR_MOUSE_PREFIX_RE.test(text);
 }
-//@ chunk-bzr73sfg.js:132477-132589 placement
+//@ chunk-2avr6cej.js:132477-132589 placement
 var PARTIAL_CSI_RE = /^\x1b\[(?:[0-9:;]+|[<=>?][0-9:;]*[ -/]*)$/;
 var PARTIAL_STRING_SEQ_RE = /^\x1b(?:\][0-9]|P[0-9>|$+=!]|_G)[^\x07]*$/s;
 var MAX_PARTIAL_STRING_SEQ_LEN = 256;
 var MAX_PARTIAL_CSI_LEN = 64;
-//@ chunk-bzr73sfg.js:132589-132697 placement
+//@ chunk-2avr6cej.js:132589-132697 placement
 /**
  * 输入在 flush 时剩下的半截转义序列是否还可能被后续字节补全（鼠标前缀、OSC/DCS/APC 串不超过 256 字节、CSI 参数串不超过 64 字节）；是则保留等待，否则当普通按键冲刷出去。
  */
@@ -272,7 +272,7 @@ function isPlausibleIncompleteSequence(buffer) {
   if (PARTIAL_STRING_SEQ_RE.test(buffer)) return buffer.length <= MAX_PARTIAL_STRING_SEQ_LEN;
   return buffer.length <= MAX_PARTIAL_CSI_LEN && PARTIAL_CSI_RE.test(buffer);
 }
-//@ chunk-bzr73sfg.js:132697-132816 placement
+//@ chunk-2avr6cej.js:132697-132816 placement
 /**
  * 清空分词器里的半截输入，把它记成 droppedMousePrefix（后续文本若是被截断的鼠标序列尾巴会被吞掉）。
  */
@@ -285,7 +285,7 @@ function discardIncompleteInput(state) {
     droppedMousePrefix: buffered,
   };
 }
-//@ chunk-bzr73sfg.js:132816-133676 fingerprint (2.1.88 match: parseTerminalResponse, 0.821)
+//@ chunk-2avr6cej.js:132816-133676 fingerprint (2.1.88 match: parseTerminalResponse, 0.821)
 /**
  * 把终端对查询的应答解析成结构：DECRPM、DA1/DA2、kitty 键盘标志、光标位置、主题变化通知（997）、单元格像素尺寸、OSC、XTVERSION、kitty 图形应答；都不是返回 null。
  */
@@ -360,7 +360,7 @@ function parseTerminalResponse(s) {
   }
   return null;
 }
-//@ chunk-bzr73sfg.js:133676-133751 file-local
+//@ chunk-2avr6cej.js:133676-133751 file-local
 /**
  * 把 CSI 参数串按分号拆成整数数组。
  */
@@ -368,7 +368,7 @@ function splitNumericParams(params) {
   if (!params) return [];
   return params.split(";").map((part) => parseInt(part, 10));
 }
-//@ chunk-bzr73sfg.js:133751-133891 fingerprint (2.1.88 match: INITIAL_STATE, 0.629)
+//@ chunk-2avr6cej.js:133751-133891 fingerprint (2.1.88 match: INITIAL_STATE, 0.629)
 /**
  * 按键解析器初始状态：NORMAL 模式，空的半截输入、粘贴缓冲、待拼 UTF-8 字节、被丢弃的鼠标前缀、flush 时冲出的 ESC 前缀、win32 高位代理。
  */
@@ -381,14 +381,14 @@ var INITIAL_STATE = {
   flushedEscapePrefix: "",
   win32HighSurrogate: "",
 };
-//@ chunk-bzr73sfg.js:134050-134096 placement (2.1.88 match: chordToDisplayString, 1)
+//@ chunk-2avr6cej.js:134050-134096 placement (2.1.88 match: chordToDisplayString, 1)
 /**
  * 用当前进程环境调用 isBackspaceCtrlBackspace；linux 构建里平台常量是 "linux"。
  */
 function isBackspaceCtrlBackspaceHere() {
   return isBackspaceCtrlBackspace("linux", process.env);
 }
-//@ chunk-bzr73sfg.js:134096-134165 placement
+//@ chunk-2avr6cej.js:134096-134165 placement
 /**
  * 终端键序列方言：优先用会话状态里记下的 keyDialect（终端探测结果），否则按 TERM 推断（如 st、rxvt）。
  */
@@ -396,15 +396,15 @@ function getKeyDialect() {
   let keyDialect = getAttacherCaps()?.keyDialect;
   return keyDialect !== undefined ? keyDialect : detectMinimalTerminal(env.TERM);
 }
-//@ chunk-bzr73sfg.js:134165-134198 placement
+//@ chunk-2avr6cej.js:134165-134198 placement
 function isStKeyDialect() {
   return getKeyDialect() === "st";
 }
-//@ chunk-bzr73sfg.js:134198-134233 placement
+//@ chunk-2avr6cej.js:134198-134233 placement
 function isRxvtKeyDialect() {
   return getKeyDialect() === "rxvt";
 }
-//@ chunk-bzr73sfg.js:134233-134366 placement
+//@ chunk-2avr6cej.js:134233-134366 placement
 /**
  * AltGr 当文字的模式：CLAUDE_CODE_ALTGR_AS_TEXT 显式真→force、假→off；否则在 Windows Terminal（WT_SESSION）里 auto，其余 off。
  */
@@ -414,15 +414,15 @@ function resolveAltGrMode(env, wtSession) {
   if (isEnvDefinedFalsy(CLAUDE_CODE_ALTGR_AS_TEXT)) return "off";
   return (wtSession ?? !!env.WT_SESSION) ? "auto" : "off";
 }
-//@ chunk-bzr73sfg.js:134366-134419 placement
+//@ chunk-2avr6cej.js:134366-134419 placement
 function getAltGrMode() {
   return resolveAltGrMode(process.env, getAttacherCaps()?.wtSession);
 }
-//@ chunk-bzr73sfg.js:134419-134470 layout
+//@ chunk-2avr6cej.js:134419-134470 layout
 function isPrintableCodePoint(codePoint) {
   return (codePoint > 32 && codePoint < 127) || (codePoint >= 160 && codePoint < 55296);
 }
-//@ chunk-bzr73sfg.js:134470-134534 layout
+//@ chunk-2avr6cej.js:134470-134534 layout
 function isAsciiAlphanumeric(codePoint) {
   return (
     (codePoint >= 48 && codePoint <= 57) ||
@@ -430,7 +430,7 @@ function isAsciiAlphanumeric(codePoint) {
     (codePoint >= 97 && codePoint <= 122)
   );
 }
-//@ chunk-bzr73sfg.js:134534-134701 layout (2.1.88 match: createPasteKey, 0.864)
+//@ chunk-2avr6cej.js:134534-134689 layout (2.1.88 match: createPasteKey, 0.864)
 /**
  * 把 AltGr（Ctrl+Alt）组合产生的可打印字符当成普通文字键：name 为该字符，不带 ctrl/meta。
  */
@@ -446,12 +446,11 @@ function createAltGrTextKey(sequence, codePoint, shift) {
     super: false,
     sequence,
     raw: sequence,
-    code: undefined,
     col: undefined,
     row: undefined,
   };
 }
-//@ chunk-bzr73sfg.js:134701-134836 layout
+//@ chunk-2avr6cej.js:134689-134824 layout
 /**
  * Ctrl+Alt（无 Super）加可打印字符是否按 AltGr 文字处理：mode=off 否，force 是，auto 时字母数字仍当快捷键。
  */
@@ -462,12 +461,12 @@ function isAltGrText(modifiers, codePoint) {
   if (mode === "off") return false;
   return mode === "force" || !isAsciiAlphanumeric(codePoint);
 }
-//@ chunk-bzr73sfg.js:134836-135043 fingerprint (2.1.88 match: inputToString, 1)
+//@ chunk-2avr6cej.js:134824-135031 fingerprint (2.1.88 match: inputToString, 1)
 /**
  * 把 stdin 数据转成字符串；单字节且高位为 1 的 Buffer 按 Meta 前缀（ESC + 低 7 位）解释。
  */
 function inputToString(input) {
-  if (Nc.isBuffer(input)) {
+  if (wc.isBuffer(input)) {
     if (input[0] > 127 && input[1] === undefined) {
       input[0] -= 128;
       return "\x1B" + String(input);
@@ -476,7 +475,7 @@ function inputToString(input) {
   else if (!input) return "";
   else return input;
 }
-//@ chunk-bzr73sfg.js:135043-137460 fingerprint (2.1.88 match: parseMultipleKeypresses, 0.664)
+//@ chunk-2avr6cej.js:135031-137448 fingerprint (2.1.88 match: parseMultipleKeypresses, 0.664)
 /**
  * 输入解析主入口：用 termio 分词器把一段 stdin 文本切成序列/文本，产出 ParsedInput 数组和新状态。处理：括号粘贴（ESC[200~/201~ 之间收集到 pasteBuffer，产出 {kind:'paste'}）、终端应答（{kind:'response'}）、SGR/X10 鼠标、焦点进出（{kind:'focus'}）、win32-input-mode、CSI u 里编码的单个 UTF-8 字节（凑齐多字节字符再出）、被截断的鼠标序列尾巴（droppedMousePrefix）、flush 时冲出的 ESC 前缀。input 为 null 表示超时 flush。
  */
@@ -546,8 +545,8 @@ function parseMultipleKeypresses(prevState, input = "") {
       if (pendingByteEvents.length < expectedBytes) return;
       let group = pendingByteEvents;
       pendingByteEvents = [];
-      let str = Nc.from(group.map((pending) => pending.byte)).toString("utf8");
-      if ([...str].length !== 1 || Nc.byteLength(str, "utf8") !== group.length)
+      let str = wc.from(group.map((pending) => pending.byte)).toString("utf8");
+      if ([...str].length !== 1 || wc.byteLength(str, "utf8") !== group.length)
         for (let pending of group) emitByteEvent(pending);
       else if (inPaste) pasteBuffer += str;
       else keys.push(parseKeypress(str));
@@ -680,7 +679,7 @@ function parseMultipleKeypresses(prevState, input = "") {
   };
   return [keys, nextState];
 }
-//@ chunk-bzr73sfg.js:137460-138621 fingerprint (2.1.88 match: keyName, 0.991)
+//@ chunk-2avr6cej.js:137448-138609 fingerprint (2.1.88 match: keyName, 0.991)
 /**
  * 功能键序列（去掉 ESC 后的代码）→ 键名表；isShiftKey/isCtrlKey 判断 rxvt 风格的 Shift/Ctrl 变体（[a、Oa、[2$、[2^ 等）。
  */
@@ -778,7 +777,7 @@ var isShiftKey = (code) =>
   ["[a", "[b", "[c", "[d", "[e", "[2$", "[3$", "[5$", "[6$", "[7$", "[8$", "[Z"].includes(code);
 var isCtrlKey = (code) =>
   ["Oa", "Ob", "Oc", "Od", "Oe", "[2^", "[3^", "[5^", "[6^", "[7^", "[8^"].includes(code);
-//@ chunk-bzr73sfg.js:138621-138708 fingerprint (2.1.88 match: decodeModifier, 1)
+//@ chunk-2avr6cej.js:138609-138696 fingerprint (2.1.88 match: decodeModifier, 1)
 /**
  * xterm 修饰参数（1 + 位掩码）解码成 {shift, meta, ctrl, super}。
  */
@@ -791,7 +790,7 @@ function decodeModifier(modifier) {
     super: !!(m & 8),
   };
 }
-//@ chunk-bzr73sfg.js:138708-139630 layout
+//@ chunk-2avr6cej.js:138696-139618 layout
 /**
  * CSI u / modifyOtherKeys 里的码点 → 键名：控制键（backspace/tab/return/escape/space）、kitty 小键盘私有码 57399–57426（数字、运算符、方向、翻页、Home/End/Insert/Delete），其余可打印字符转小写字符本身。
  */
@@ -871,7 +870,7 @@ function codePointToKeyName(codePoint) {
       return;
   }
 }
-//@ chunk-bzr73sfg.js:139630-139836 fingerprint (2.1.88 match: keycodeToName, 0.688)
+//@ chunk-2avr6cej.js:139618-139824 fingerprint (2.1.88 match: keycodeToName, 0.688)
 /**
  * 只有 Ctrl（无 Shift/Meta/Super）时把 Ctrl+[、Ctrl+M、Ctrl+I、Ctrl+H 还原成 escape/return/tab/backspace（kitty 协议会把这些编码成 Ctrl+字母）。
  */
@@ -893,7 +892,7 @@ function keycodeToName(modifiers, codePoint) {
       return;
   }
 }
-//@ chunk-bzr73sfg.js:139836-140071 layout
+//@ chunk-2avr6cej.js:139824-140059 layout
 /**
  * CSI u 或 modifyOtherKeys 序列若编码的是 128–255 之间的单个字节（无修饰），返回该字节；用于在原始字节模式下拼 UTF-8。
  */
@@ -912,12 +911,12 @@ function getEncodedByte(sequence) {
   if (modifier !== undefined && modifier !== 1) return;
   return codePoint;
 }
-//@ chunk-bzr73sfg.js:140071-140169 layout
+//@ chunk-2avr6cej.js:140059-140157 layout
 function getCsiUPrintableChar(sequence) {
   let codePoint = parseInt(CSI_U_RE.exec(sequence)?.[2] ?? "", 10);
   return isPrintableCodePoint(codePoint) ? String.fromCodePoint(codePoint) : undefined;
 }
-//@ chunk-bzr73sfg.js:140169-140516 layout
+//@ chunk-2avr6cej.js:140157-140504 layout
 /**
  * 粘贴期间收到 CSI u / modifyOtherKeys 编码的按键时还原成字符（Ctrl+I→\t、Ctrl+J→\n、Ctrl+M→\r），其它序列原样返回。
  */
@@ -948,10 +947,10 @@ function csiKeyToPasteText(sequence) {
   }
   return sequence;
 }
-//@ chunk-bzr73sfg.js:140516-140604 layout
+//@ chunk-2avr6cej.js:140504-140592 layout
 var X10_MOUSE_MOTION_RE = /^\x1b\[M[\x60-\x7f][\x20-\uffff]{2}$/;
 var X10_MOUSE_RE = /^\x1b\[M[\x20-\x7f][\x20-\uffff]{2}$/;
-//@ chunk-bzr73sfg.js:140604-140667 layout
+//@ chunk-2avr6cej.js:140592-140655 layout
 function isMouseOrFocusSequence(sequence) {
   return (
     sequence === FOCUS_IN ||
@@ -960,7 +959,7 @@ function isMouseOrFocusSequence(sequence) {
     X10_MOUSE_MOTION_RE.test(sequence)
   );
 }
-//@ chunk-bzr73sfg.js:140667-140888 fingerprint (2.1.88 match: parseMouseEvent, 1)
+//@ chunk-2avr6cej.js:140655-140876 fingerprint (2.1.88 match: parseMouseEvent, 1)
 /**
  * 解析 SGR 鼠标序列（ESC[<b;x;y M/m）成 {kind:'mouse', button, action, col, row}；滚轮（button 位 64）不在这里，留给 parseKeypress 变成 wheelup/wheeldown 键。
  */
@@ -978,7 +977,7 @@ function parseMouseEvent(s) {
     sequence: s,
   };
 }
-//@ chunk-bzr73sfg.js:140888-143647 fingerprint (2.1.88 match: parseKeypress, 0.933)
+//@ chunk-2avr6cej.js:140876-143590 fingerprint (2.1.88 match: parseKeypress, 0.933)
 /**
  * 把一个序列解析成 ParsedKey：依次尝试 CSI u（kitty，含 AltGr 文字、Ctrl 码点修正）、modifyOtherKeys、SGR/X10 滚轮、单字节控制键（\r/\n/\t/\b/DEL/ESC/空格/Ctrl+字母）、Meta+字母、功能键表；最后对几个常见序列（Home/End/PageUp/PageDown/Ctrl+方向）做固定映射。
  */
@@ -995,7 +994,6 @@ function parseKeypress(s = "") {
     super: false,
     sequence: s,
     raw: s,
-    code: undefined,
     col: undefined,
     row: undefined,
   };
@@ -1020,7 +1018,6 @@ function parseKeypress(s = "") {
       super: mods.super,
       sequence: s,
       raw: s,
-      code: undefined,
       col: undefined,
       row: undefined,
     };
@@ -1041,7 +1038,6 @@ function parseKeypress(s = "") {
       super: name.super,
       sequence: s,
       raw: s,
-      code: undefined,
       col: undefined,
       row: undefined,
     };
@@ -1121,7 +1117,6 @@ function parseKeypress(s = "") {
     key.meta = !!(modifier & 2);
     key.super = !!(modifier & 8);
     key.shift = !!(modifier & 1);
-    key.code = code;
     key.name = code === "[P" && modifier === 0 && isStKeyDialect() ? "delete" : keyName[code];
     key.shift = isShiftKey(code) || key.shift;
     key.ctrl = isCtrlKey(code) || key.ctrl;
@@ -1149,7 +1144,7 @@ function parseKeypress(s = "") {
   }
   return key;
 }
-//@ chunk-bzr73sfg.js:143647-143875 callgraph-fingerprint (2.1.88 match: createNavKey, 0.744)
+//@ chunk-2avr6cej.js:143590-143806 callgraph-fingerprint (2.1.88 match: createNavKey, 0.743)
 /**
  * 鼠标按钮码是滚轮（64/65）时生成 wheelup/wheeldown 键并带上 ctrl/meta/shift 与坐标；否则返回 null。
  */
@@ -1167,12 +1162,11 @@ function createWheelKey(sequence, buttonCode, col, row) {
     super: false,
     sequence,
     raw: sequence,
-    code: undefined,
     col,
     row,
   };
 }
-//@ chunk-bzr73sfg.js:143875-144020 fingerprint (2.1.88 match: createPasteKey, 0.909)
+//@ chunk-2avr6cej.js:143806-143939 fingerprint (2.1.88 match: createPasteKey, 0.908)
 /**
  * 按给定键名和 ctrl 标志构造 ParsedKey（导航键、无法识别的鼠标序列等用）。
  */
@@ -1188,12 +1182,11 @@ function createNavKey(sequence, name, ctrl) {
     super: false,
     sequence,
     raw: sequence,
-    code: undefined,
     col: undefined,
     row: undefined,
   };
 }
-//@ chunk-bzr73sfg.js:243839-243954 fingerprint (2.1.88 match: nonAlphanumericKeys, 0.645)
+//@ chunk-2avr6cej.js:243515-243630 fingerprint (2.1.88 match: nonAlphanumericKeys, 0.645)
 /**
  * 是粘贴或真正的按键（不是滚轮/鼠标伪键）。
  */

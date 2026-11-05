@@ -3,19 +3,19 @@
  *
  * 任务列表监视：找出可做任务并转成提示（"Complete all open tasks…"）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useTaskListWatcher.ts
- * pieces: chunk-8xs34hez.js (2), chunk-ag5x7vhf.js (1)
+ * pieces: chunk-gjfaq3rj.js (2), chunk-hnxhr3bs.js (1)
  * attribution: fingerprint 3
  */
 
-//@ chunk-ag5x7vhf.js:149008-149162 fingerprint (2.1.88 match: useTaskListWatcher, 0.386)
+//@ chunk-hnxhr3bs.js:153328-153482 fingerprint (2.1.88 match: useTaskListWatcher, 0.387)
 function useTaskListWatcher({ enabled, isLoading, hasToolsInProgress, hasPendingBackgroundWork }) {
   if (!enabled) return null;
   if (isLoading || hasToolsInProgress || hasPendingBackgroundWork) return "indeterminate";
   return "completed";
 }
-//@ chunk-8xs34hez.js:5789-5988 fingerprint (2.1.88 match: findAvailableTask, 1)
+//@ chunk-gjfaq3rj.js:5837-6036 fingerprint (2.1.88 match: findAvailableTask, 1)
 function findAvailableTask(tasks) {
   let unresolvedTaskIds = new Set(tasks.filter((t) => t.status !== "completed").map((t) => t.id));
   return tasks.find((task) => {
@@ -24,7 +24,7 @@ function findAvailableTask(tasks) {
     return task.blockedBy.every((id) => !unresolvedTaskIds.has(id));
   });
 }
-//@ chunk-8xs34hez.js:5988-6128 fingerprint (2.1.88 match: formatTaskAsPrompt, 1)
+//@ chunk-gjfaq3rj.js:6036-6176 fingerprint (2.1.88 match: formatTaskAsPrompt, 1)
 function formatTaskAsPrompt(task) {
   let prompt = `Complete all open tasks. Start with task #${task.id}: 
 
@@ -35,4 +35,4 @@ function formatTaskAsPrompt(task) {
 ${task.description}`;
   return prompt;
 }
-export { useTaskListWatcher, findAvailableTask, formatTaskAsPrompt };
+export { findAvailableTask, formatTaskAsPrompt, useTaskListWatcher };

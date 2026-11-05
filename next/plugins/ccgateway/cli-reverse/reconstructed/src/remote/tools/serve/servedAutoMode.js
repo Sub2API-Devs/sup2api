@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。远端服务调用拒绝 auto 模式的原因。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vpphf2a1.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-d8r64egc.js (3)
  * attribution: placement 3
  */
 import {
@@ -22,7 +22,7 @@ import {
 } from "../../../services/remoteTools/unattendedConsentStore.js";
 import { REMOTE_TOOLS_CONSENT_TEXT } from "../consentText.js";
 
-//@ chunk-vpphf2a1.js:355-443 placement
+//@ chunk-d8r64egc.js:356-444 placement
 function autoModeRefusedForServedCalls() {
   return (
     autoModeRefusedHere() ||
@@ -31,7 +31,7 @@ function autoModeRefusedForServedCalls() {
     isServedSettingRefused("unattended_serving_off")
   );
 }
-//@ chunk-vpphf2a1.js:443-838 placement
+//@ chunk-d8r64egc.js:444-840 placement
 /**
  * 远端服务调用拒绝 auto 模式的原因。
  */
@@ -50,7 +50,7 @@ function autoModeRefusedForServedCallsWhy(session) {
     return "consent_unknown";
   }
 }
-//@ chunk-vpphf2a1.js:838-1030 placement
+//@ chunk-d8r64egc.js:840-1032 placement
 function autoOffNotice(targetName) {
   let reason = autoModeRefusedForServedCallsWhy();
   if (reason === "none") return;
@@ -62,4 +62,4 @@ function autoOffNotice(targetName) {
     ),
   };
 }
-export { autoModeRefusedForServedCalls, autoOffNotice, autoModeRefusedForServedCallsWhy };
+export { autoModeRefusedForServedCalls, autoModeRefusedForServedCallsWhy, autoOffNotice };

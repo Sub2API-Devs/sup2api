@@ -3,26 +3,27 @@
  *
  * 2.1.316 新增。输入模式提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (5)
  * attribution: placement 5
  */
-
-//@ chunk-18hwfzwa.js:132912-133034 placement
+//@ chunk-czq1j3j2.js:133981-134185 placement
+var EXIT_HINTS = {
+  exit: "exit",
+  detach: "detach (session keeps running)",
+  quit: "quit Claude Code",
+};
 var VOICE_MODE_HINTS = {
   listening: "listening\u2026",
   listeningTapToSend: "listening\u2026 \xB7 tap to send",
   processing: "processing\u2026",
 };
-//@ chunk-18hwfzwa.js:133034-133715 placement
+//@ chunk-czq1j3j2.js:134185-134829 placement
 function PromptModeHints(props) {
   if (props.exitConfirm !== null) {
-    let { keyName, detaches } = props.exitConfirm;
-    return buildModeHint(
-      "exit-confirm",
-      `${formatKeyName(keyName)} again to ${detaches ? "detach (session keeps running)" : "exit"}`,
-    );
+    let { keyName, leaves } = props.exitConfirm;
+    return buildModeHint("exit-confirm", `${formatKeyName(keyName)} again to ${EXIT_HINTS[leaves]}`);
   }
   if (props.isPasting) return buildModeHint("pasting", "Pasting\u2026");
   if (props.voice !== null) return buildModeHint("voice", VOICE_MODE_HINTS[props.voice]);
@@ -36,17 +37,17 @@ function PromptModeHints(props) {
   if (props.shellMode) return buildModeHint("shell-mode", "shell mode");
   return null;
 }
-//@ chunk-18hwfzwa.js:133715-133752 placement
+//@ chunk-czq1j3j2.js:134829-134866 placement
 function buildModeHint(id, text) {
   return {
     id,
     text,
   };
 }
-//@ chunk-18hwfzwa.js:133752-133811 placement
+//@ chunk-czq1j3j2.js:134866-134925 placement
 function formatKeyName(keyName) {
   return keyName.toLowerCase().replaceAll("-", "+");
 }
-//@ chunk-18hwfzwa.js:133811-133842 placement
+//@ chunk-czq1j3j2.js:134925-134956 placement
 var NOT_IN_CLOUD_SESSIONS = "not in cloud sessions";
 export { NOT_IN_CLOUD_SESSIONS, PromptModeHints };

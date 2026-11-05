@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：剩余 token 总数提醒
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (24)
  * attribution: placement 24
  */
 import { stripAnyVersatileSuffix } from "../model/modelIds.js";
@@ -16,7 +16,7 @@ import {
   getFeatureValue_CACHED_MAY_BE_STALE,
 } from "../../services/analytics/growthbook.js";
 import { safeParseJSON } from "../json.js";
-import { isPlainObject as isPlainObject_4 } from "../objectUtils.js";
+import { isPlainObject as isPlainObject_5 } from "../objectUtils.js";
 import { logForDebugging } from "../debug.js";
 import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../env.js";
@@ -26,15 +26,15 @@ import { getRootSession } from "../../bootstrap/state.js";
 import { getSessionFeatureValues } from "../../bootstrap/sessionFeatureValues.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { isModelCapabilityEnabled } from "../model/promptBundles.js";
-import { getInitialSettings_2 } from "../settings/settings.js";
+import { getInitialSettings } from "../settings/settings.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2230913-2230925 placement
+//@ chunk-5xgkngpb.js:2285922-2285934 placement
 /**
  * 按模型取配置时的通配键 “*”。
  */
 var ANY_MODEL_KEY = "*";
-//@ chunk-e6aww6q8.js:2230925-2231064 placement
+//@ chunk-5xgkngpb.js:2285934-2286073 placement
 function matchesWildcardPattern(pattern, value) {
   let filtered = pattern.split("*").filter((part) => part !== "");
   let cursor = 0;
@@ -45,7 +45,7 @@ function matchesWildcardPattern(pattern, value) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:2231064-2231445 placement
+//@ chunk-5xgkngpb.js:2286073-2286458 placement
 /**
  * 在按模型名为键的对象中查找条目：优先精确匹配模型名，其次规范名，再次最长的通配匹配，最后是默认键。
  */
@@ -81,14 +81,14 @@ function findModelKeyedEntry(entriesObject, model) {
   if (wildcardMatch !== undefined) return wildcardMatch;
   return anyModelMatch;
 }
-//@ chunk-e6aww6q8.js:2231445-2231495 placement
+//@ chunk-5xgkngpb.js:2286458-2286508 placement
 /**
  * 依次取调用方给的值、客户端数据、会话固定配置开关值。
  */
 function getClientOrDefaultValue(flagKey, explicitValue) {
   return explicitValue ?? getCachedClientData()?.[flagKey] ?? getFeatureValue_SESSION_PINNED(flagKey, null);
 }
-//@ chunk-e6aww6q8.js:2231495-2231590 placement
+//@ chunk-5xgkngpb.js:2286508-2286603 placement
 /**
  * 取配置时按模型取值：字符串解析成对象后取该模型的键。
  */
@@ -98,9 +98,9 @@ function getModelKeyedFlagValue(flagKey, explicitValue, model) {
     typeof clientOrDefaultValue === "string"
       ? (safeParseJSON(clientOrDefaultValue, false) ?? clientOrDefaultValue)
       : clientOrDefaultValue;
-  return isPlainObject_4(parsedValue) ? getModelKeyedValue(parsedValue, model) : parsedValue;
+  return isPlainObject_5(parsedValue) ? getModelKeyedValue(parsedValue, model) : parsedValue;
 }
-//@ chunk-e6aww6q8.js:2231590-2231731 placement
+//@ chunk-5xgkngpb.js:2286603-2286744 placement
 /**
  * 在按模型名为键的对象中取值：精确匹配优先，否则用默认键。
  */
@@ -113,13 +113,13 @@ function getModelKeyedValue(entriesObject, modelKey) {
   }
   return anyModelValue;
 }
-//@ chunk-e6aww6q8.js:2231731-2231877 placement
+//@ chunk-5xgkngpb.js:2286744-2286890 placement
 var TOTAL_TOKENS_REMINDER_MODES = ["off", "infinite", "fixed", "countdown", "padded-countdown"];
 var FIXED_TOTAL_TOKENS = 5000000;
 var DEFAULT_TOTAL_TOKENS_BUDGET = 15000000;
 var TOTAL_TOKENS_THRESHOLDS = [75, 50, 25, 10, 0];
 var TENGU_LAPIS_ANCHOR_THRESHOLD = "tengu_lapis_anchor_threshold";
-//@ chunk-e6aww6q8.js:2231877-2233186 placement
+//@ chunk-5xgkngpb.js:2286890-2288199 placement
 /**
  * 剩余 token 总数提醒：在主线程按设定节奏插入剩余额度提醒。
  */
@@ -200,34 +200,34 @@ class TotalTokensReminder {
     return state;
   }
 }
-//@ chunk-e6aww6q8.js:2233186-2233214 placement
+//@ chunk-5xgkngpb.js:2288199-2288227 placement
 /**
  * 按会话根保存剩余 token 提醒状态。
  */
 var totalTokensReminderByRoot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2233186", () => {
+deferInit("chunk-5xgkngpb.js:2288199", () => {
   totalTokensReminderByRoot = new SessionRootSlot(() => new TotalTokensReminder());
 });
-//@ chunk-e6aww6q8.js:2233214-2233265 placement
+//@ chunk-5xgkngpb.js:2288227-2288278 placement
 /**
  * 上下文切换时让剩余 token 提醒跟随（重置计数）。
  */
 function rollOverTotalTokensContext(budgetKey, tokens) {
   totalTokensReminderByRoot.of(getRootSession()).rollOverContext(budgetKey, tokens);
 }
-//@ chunk-e6aww6q8.js:2233265-2233325 placement
+//@ chunk-5xgkngpb.js:2288278-2288338 placement
 /**
  * 判断字符串是否为合法的剩余 token 提醒模式。
  */
 function isTotalTokensReminderMode(value) {
   return typeof value === "string" && TOTAL_TOKENS_REMINDER_MODES.includes(value);
 }
-//@ chunk-e6aww6q8.js:2233325-2233463 placement
+//@ chunk-5xgkngpb.js:2288338-2288476 placement
 var TENGU_LAPIS_ANCHOR = "tengu_lapis_anchor";
 var TENGU_LAPIS_ANCHOR_BUDGET = "tengu_lapis_anchor_budget";
 var TENGU_LAPIS_ANCHOR_USER_TURN = "tengu_lapis_anchor_user_turn";
 var TENGU_LAPIS_ANCHOR_FROM_CLIENT_DATA = "tengu_lapis_anchor_from_client_data";
-//@ chunk-e6aww6q8.js:2233463-2233707 placement
+//@ chunk-5xgkngpb.js:2288476-2288720 placement
 function reportClientDataValue(key, value, telemetryFields) {
   let reportedValues = (getSessionFeatureValues().totalTokensReminderClientDataReported ??= new Map());
   if (reportedValues.get(key) === value) return;
@@ -238,14 +238,14 @@ function reportClientDataValue(key, value, telemetryFields) {
       level: "warn",
     });
 }
-//@ chunk-e6aww6q8.js:2233707-2233742 placement
+//@ chunk-5xgkngpb.js:2288720-2288755 placement
 /**
  * 取生效的提醒模式：覆盖值优先，否则按特性开关。
  */
 function getEffectiveTotalTokensReminderMode() {
   return getTotalTokensReminderModeOverride() ?? readDefaultTotalTokensReminderMode();
 }
-//@ chunk-e6aww6q8.js:2233742-2233882 placement
+//@ chunk-5xgkngpb.js:2288755-2288895 placement
 function getTotalTokensReminderModeOverride() {
   let configuredTotalTokensReminderMode = getConfiguredTotalTokensReminderMode();
   if (configuredTotalTokensReminderMode !== undefined) return configuredTotalTokensReminderMode;
@@ -266,7 +266,7 @@ function getTotalTokensReminderModeOverride() {
   );
   return resolvedMode;
 }
-//@ chunk-e6aww6q8.js:2233882-2233964 placement
+//@ chunk-5xgkngpb.js:2288895-2288977 placement
 /**
  * 从 tengu_lapis_anchor 读默认提醒模式，非法时用 padded-countdown。
  */
@@ -279,7 +279,7 @@ function readDefaultTotalTokensReminderMode() {
     ? featureValue_CACHED_MAY_BE_STALE
     : "padded-countdown";
 }
-//@ chunk-e6aww6q8.js:2233964-2234104 placement
+//@ chunk-5xgkngpb.js:2288977-2289117 placement
 /**
  * 决定剩余 token 提醒模式：有固定预算时为 padded-countdown，否则按覆盖或模型能力决定。
  */
@@ -298,14 +298,14 @@ function getTotalTokensReminderMode(model, totalTokensReminderBudget) {
       : "off")
   );
 }
-//@ chunk-e6aww6q8.js:2234104-2234234 placement
+//@ chunk-5xgkngpb.js:2289117-2289247 placement
 function getConfiguredTotalTokensReminderMode() {
   let CLAUDE_CODE_TOTAL_TOKENS_REMINDER = env.CLAUDE_CODE_TOTAL_TOKENS_REMINDER;
   if (isTotalTokensReminderMode(CLAUDE_CODE_TOTAL_TOKENS_REMINDER)) return CLAUDE_CODE_TOTAL_TOKENS_REMINDER;
-  let totalTokensReminder = getInitialSettings_2().totalTokensReminder;
+  let totalTokensReminder = getInitialSettings().totalTokensReminder;
   return isTotalTokensReminderMode(totalTokensReminder) ? totalTokensReminder : undefined;
 }
-//@ chunk-e6aww6q8.js:2234234-2234564 placement
+//@ chunk-5xgkngpb.js:2289247-2289577 placement
 /**
  * 读取剩余 token 提醒的预算：环境变量 > 用户设置 > 客户端数据（上报一次）> 功能开关 tengu_lapis_anchor_budget > 默认值。
  */
@@ -313,7 +313,7 @@ function getTotalTokensReminderBudget() {
   let CLAUDE_CODE_TOTAL_TOKENS_REMINDER_BUDGET = env.CLAUDE_CODE_TOTAL_TOKENS_REMINDER_BUDGET;
   if (CLAUDE_CODE_TOTAL_TOKENS_REMINDER_BUDGET !== undefined && CLAUDE_CODE_TOTAL_TOKENS_REMINDER_BUDGET > 0)
     return CLAUDE_CODE_TOTAL_TOKENS_REMINDER_BUDGET;
-  let totalTokensReminderBudget = getInitialSettings_2().totalTokensReminderBudget;
+  let totalTokensReminderBudget = getInitialSettings().totalTokensReminderBudget;
   if (Number.isFinite(totalTokensReminderBudget) && totalTokensReminderBudget > 0)
     return totalTokensReminderBudget;
   let clientBudget = getCachedClientData()?.[TENGU_LAPIS_ANCHOR_BUDGET];
@@ -336,7 +336,7 @@ function getTotalTokensReminderBudget() {
     ? featureValue_CACHED_MAY_BE_STALE
     : DEFAULT_TOTAL_TOKENS_BUDGET;
 }
-//@ chunk-e6aww6q8.js:2234564-2235172 placement
+//@ chunk-5xgkngpb.js:2289577-2290185 placement
 function resolveTotalTokensReminderMode(model, messages) {
   if (env.CLAUDE_CODE_DISABLE_ATTACHMENTS || env.CLAUDE_CODE_SIMPLE) return;
   let effectiveTotalTokensReminderMode = getEffectiveTotalTokensReminderMode();
@@ -361,7 +361,7 @@ function resolveTotalTokensReminderMode(model, messages) {
   if (effectiveTotalTokensReminderMode === "off" && messages === undefined) return tagValue;
   return tagValue < getTotalTokensReminderBudget() ? tagValue : undefined;
 }
-//@ chunk-e6aww6q8.js:2235172-2235281 placement
+//@ chunk-5xgkngpb.js:2290185-2290294 placement
 /**
  * 读取 tengu_calm_mochi 范围（forks、all 或 none）。
  */
@@ -369,14 +369,14 @@ function getCalmMochiScope() {
   let clientOrDefaultValue = getClientOrDefaultValue("tengu_calm_mochi", env.CLAUDE_CODE_CALM_MOCHI);
   return clientOrDefaultValue === "forks" || clientOrDefaultValue === "all" ? clientOrDefaultValue : "none";
 }
-//@ chunk-e6aww6q8.js:2235281-2235549 placement
+//@ chunk-5xgkngpb.js:2290294-2290562 placement
 /**
  * 判断剩余 token 提醒是否在用户回合后发送：环境变量 > 设置 > 客户端数据 > 开关。
  */
 function shouldRemindAfterUserTurn() {
   let envValue = env.CLAUDE_CODE_TOTAL_TOKENS_REMINDER_AFTER_USER_TURN;
   if (envValue !== undefined) return envValue;
-  let totalTokensReminderAfterUserTurn = getInitialSettings_2().totalTokensReminderAfterUserTurn;
+  let totalTokensReminderAfterUserTurn = getInitialSettings().totalTokensReminderAfterUserTurn;
   if (totalTokensReminderAfterUserTurn !== undefined) return totalTokensReminderAfterUserTurn;
   let clientValue = getCachedClientData()?.[TENGU_LAPIS_ANCHOR_USER_TURN];
   let isBooleanValue = typeof clientValue === "boolean";
@@ -392,14 +392,14 @@ function shouldRemindAfterUserTurn() {
   if (isBooleanValue) return clientValue;
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_LAPIS_ANCHOR_USER_TURN, true);
 }
-//@ chunk-e6aww6q8.js:2235549-2235675 placement
+//@ chunk-5xgkngpb.js:2290562-2290688 placement
 /**
  * 生成 <total_tokens> 提醒标签（无限、固定或剩余数量）。
  */
 function formatTotalTokensTag(mode, remainingTokens) {
   return `<total_tokens>${mode === "infinite" ? "Infinite" : mode === "fixed" ? FIXED_TOTAL_TOKENS : Math.max(0, remainingTokens)} tokens left</total_tokens>`;
 }
-//@ chunk-e6aww6q8.js:2235675-2235735 placement
+//@ chunk-5xgkngpb.js:2290688-2290748 placement
 /**
  * 匹配 “<total_tokens>N tokens left</total_tokens>” 文本。
  */
@@ -408,14 +408,14 @@ export {
   formatTotalTokensTag,
   getTotalTokensReminderMode,
   getTotalTokensReminderBudget,
-  resolveTotalTokensReminderMode,
-  getCalmMochiScope,
-  getClientOrDefaultValue,
+  shouldRemindAfterUserTurn,
   totalTokensReminderByRoot,
-  rollOverTotalTokensContext,
+  ANY_MODEL_KEY,
   findModelKeyedEntry,
   getModelKeyedValue,
-  shouldRemindAfterUserTurn,
-  ANY_MODEL_KEY,
+  rollOverTotalTokensContext,
+  getClientOrDefaultValue,
+  resolveTotalTokensReminderMode,
+  getCalmMochiScope,
   getModelKeyedFlagValue,
 };

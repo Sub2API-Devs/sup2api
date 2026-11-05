@@ -1,13 +1,13 @@
 /**
  * @aws-sdk/middleware-logger/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/middleware-logger@3.936.0
- * pieces: chunk-edce4vxq.js (1)
+ * pieces: chunk-3p78mpxm.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-edce4vxq.js:1420-2273 cjs-fingerprint
+//@ chunk-3p78mpxm.js:1420-2273 cjs-fingerprint
 var require_middleware_logger = __commonJS(function (cjsExports) {
   var loggerMiddleware = () => (next, context) => async (args) => {
     try {

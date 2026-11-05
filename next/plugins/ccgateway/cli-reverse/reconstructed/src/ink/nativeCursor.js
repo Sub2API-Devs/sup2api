@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：是否启用 DECSTBM 滚动区渲染（TTY、终端支持、环境）；是否使用原生光标（无障碍模式、开关 tengu_native_cursor）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bzr73sfg.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2avr6cej.js (3)
  * attribution: placement 3
  */
 import { getSessionFeatureValues } from "../bootstrap/sessionFeatureValues.js";
@@ -17,7 +17,7 @@ import { env } from "../utils/env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { getTerminalProbeState } from "./terminalCapabilities.js";
 
-//@ chunk-bzr73sfg.js:144020-144502 placement
+//@ chunk-2avr6cej.js:143939-144421 placement
 /**
  * 是否启用 DECSTBM 滚动区渲染（TTY、终端支持、环境）。
  */
@@ -38,7 +38,7 @@ function isDecstbmRendererEnabled() {
   );
   return sessionFeatureValues.decstbmRendererEnabled;
 }
-//@ chunk-bzr73sfg.js:144502-144735 placement
+//@ chunk-2avr6cej.js:144421-144654 placement
 /**
  * 是否使用原生光标（无障碍模式、开关 tengu_native_cursor）。
  */
@@ -49,11 +49,11 @@ function isNativeCursorEnabled() {
   if (isScreenReaderMode()) return (terminalProbeState.nativeCursorEnabled = true);
   return (terminalProbeState.nativeCursorEnabled = !isDecstbmRendererEnabled() && isNativeCursorRequested());
 }
-//@ chunk-bzr73sfg.js:144735-144882 placement
+//@ chunk-2avr6cej.js:144654-144801 placement
 function isNativeCursorRequested() {
   if (env.CLAUDE_CODE_ACCESSIBILITY) return true;
   if (isScreenReaderMode()) return true;
   if (env.CLAUDE_CODE_NATIVE_CURSOR) return true;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_native_cursor", false);
 }
-export { isNativeCursorEnabled, isDecstbmRendererEnabled, isNativeCursorRequested };
+export { isNativeCursorEnabled, isNativeCursorRequested, isDecstbmRendererEnabled };

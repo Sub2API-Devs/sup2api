@@ -1,13 +1,13 @@
 /**
  * @azure/core-tracing/dist/commonjs/state-cjs.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/core-tracing@1.2.0..1.3.1
- * pieces: chunk-mrx6y2r5.js (2)
+ * pieces: chunk-b5df2wx1.js (2)
  * attribution: cjs-fingerprint 1, esm-layout 1
  */
 import { __commonJS, __toESM } from "../../../../../runtime/bun-runtime.js";
 
-//@ chunk-mrx6y2r5.js:3264-3399 cjs-fingerprint
+//@ chunk-b5df2wx1.js:3264-3399 cjs-fingerprint
 var require_state_cjs = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
@@ -17,7 +17,7 @@ var require_state_cjs = __commonJS(function (cjsExports) {
     instrumenterImplementation: undefined,
   };
 });
-//@ chunk-mrx6y2r5.js:58129-58159 esm-layout
+//@ chunk-b5df2wx1.js:58129-58159 esm-layout
 var import_state_cjs = __toESM(require_state_cjs(), 1);
 var state = import_state_cjs.state;
 export { state };

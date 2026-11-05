@@ -1,8 +1,8 @@
 /**
  * @azure/identity/dist/esm/credentials/clientCertificateCredential.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/identity@4.10.1
- * pieces: chunk-mrx6y2r5.js (3)
+ * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-fingerprint 3
  */
 import { createPrivateKey, createHash } from "crypto";
@@ -12,10 +12,10 @@ import { resolveAdditionallyAllowedTenantIds, processMultiTenantRequest } from "
 import { createMsalClient } from "../msal/nodeFlows/msalClient.js";
 import { tracingClient } from "../util/tracing.js";
 
-//@ chunk-mrx6y2r5.js:321799-321845 esm-fingerprint
+//@ chunk-b5df2wx1.js:321799-321845 esm-fingerprint
 var credentialName = "ClientCertificateCredential";
 var logger_8 = credentialLogger(credentialName);
-//@ chunk-mrx6y2r5.js:321845-323667 esm-fingerprint
+//@ chunk-b5df2wx1.js:321845-323667 esm-fingerprint
 class ClientCertificateCredential {
   constructor(tenantId, clientId, certificatePathOrConfiguration, options = {}) {
     if (!tenantId || !clientId)
@@ -92,7 +92,7 @@ class ClientCertificateCredential {
     };
   }
 }
-//@ chunk-mrx6y2r5.js:323667-324245 esm-fingerprint
+//@ chunk-b5df2wx1.js:323667-324245 esm-fingerprint
 async function parseCertificate(certificateConfiguration, sendCertificateChain) {
   let { certificate, certificatePath } = certificateConfiguration;
   let certificateContents = certificate || (await readFile(certificatePath, "utf8"));

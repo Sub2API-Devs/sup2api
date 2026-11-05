@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：带图标、名称与说明列的表格式选择列表（Select 表格变体）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-r68xwcze.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yz6x5v95.js (11)
  * attribution: placement 11
  */
 import { bunStringWidth } from "../../ink/stringWidth.js";
@@ -32,20 +32,20 @@ import { EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { collapseWhitespace } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-r68xwcze.js:19250-19296 placement
+//@ chunk-yz6x5v95.js:19376-19422 placement
 function labelWidth(item) {
   return bunStringWidth(cellText(item.props.label));
 }
-//@ chunk-r68xwcze.js:19296-19354 placement
+//@ chunk-yz6x5v95.js:19422-19480 placement
 function metaWidth(option) {
   return bunStringWidth(metaTexts(option.props.meta).join(" \xB7 "));
 }
-//@ chunk-r68xwcze.js:19354-19379 placement
+//@ chunk-yz6x5v95.js:19480-19505 placement
 var TABLE_ROW_CHROME_WIDTH = 2;
 var TABLE_COLUMN_GAP = 3;
 var MAX_LABEL_COLUMN_WIDTH = 50;
 var NARROW_TABLE_WIDTH = 6;
-//@ chunk-r68xwcze.js:19379-20797 placement
+//@ chunk-yz6x5v95.js:19505-20918 placement
 function SelectTable(props) {
   let $ = useMemoCache(30);
   let children;
@@ -188,7 +188,7 @@ function SelectTable(props) {
   } else tableElement = $[29];
   return tableElement;
 }
-//@ chunk-r68xwcze.js:20797-22669 placement
+//@ chunk-yz6x5v95.js:20918-22783 placement
 function SelectTableRow(props) {
   let $ = useMemoCache(42);
   let { item, iconWidth, nameWidth, factsWidth, rowLines } = props;
@@ -368,19 +368,19 @@ function SelectTableRow(props) {
   } else rowElement = $[41];
   return rowElement;
 }
-//@ chunk-r68xwcze.js:22669-22696 placement
+//@ chunk-yz6x5v95.js:22783-22810 placement
 function OrderedListItem(child) {
   return null;
 }
-//@ chunk-r68xwcze.js:22696-22737 placement
+//@ chunk-yz6x5v95.js:22810-22851 placement
 function isOrderedListItem(child) {
   return isValidElement_default(child) && child.type === OrderedListItem;
 }
-//@ chunk-r68xwcze.js:22737-22794 placement
+//@ chunk-yz6x5v95.js:22851-22908 placement
 function metaTexts(meta) {
   return (meta ?? []).map(cellText).filter((text) => text !== "");
 }
-//@ chunk-r68xwcze.js:22794-22899 placement
+//@ chunk-yz6x5v95.js:22908-23013 placement
 function fitBreadcrumb(segments, maxWidth) {
   return (
     segments
@@ -388,16 +388,16 @@ function fitBreadcrumb(segments, maxWidth) {
       .findLast((candidate, index) => index === 0 || bunStringWidth(candidate) <= maxWidth) ?? ""
   );
 }
-//@ chunk-r68xwcze.js:22899-23012 placement
+//@ chunk-yz6x5v95.js:23013-23126 placement
 function cellText(value) {
   if (typeof value === "string") return collapseWhitespace(value);
   return typeof value === "number" || typeof value === "boolean" ? String(value) : "";
 }
-//@ chunk-r68xwcze.js:23012-23047 placement
+//@ chunk-yz6x5v95.js:23126-23161 placement
 var OrderedListWithItem; // deferred: uses SelectTable of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-r68xwcze.js:23012", () => {
+deferInit("chunk-yz6x5v95.js:23126", () => {
   OrderedListWithItem = Object.assign(SelectTable, {
     Item: OrderedListItem,
   });
 });
-export { OrderedListWithItem, cellText, isOrderedListItem, metaTexts };
+export { OrderedListWithItem, isOrderedListItem, metaTexts, cellText };

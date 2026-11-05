@@ -1,14 +1,14 @@
 /**
  * @modelcontextprotocol/sdk/dist/esm/server/stdio.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/sdk@1.29.0
- * pieces: chunk-nkpwtgej.js (1)
+ * pieces: chunk-3w2d05bg.js (1)
  * attribution: esm-fingerprint 1
  */
 import e from "process";
 import { ReadBuffer, serializeMessage } from "../shared/stdio.js";
 
-//@ chunk-nkpwtgej.js:255-1169 esm-fingerprint
+//@ chunk-3w2d05bg.js:255-1169 esm-fingerprint
 class StdioServerTransport {
   constructor(_stdin = e.stdin, _stdout = e.stdout) {
     this._stdin = _stdin;

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工具到权限卡片的映射。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s4bxxzsw.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g4tsxwy3.js (3)
  * attribution: placement 3
  */
 import { WebFetchTool } from "../../tools/WebFetchTool/WebFetchTool.js";
@@ -40,7 +40,7 @@ import { SkillTool } from "../../tools/SkillTool/SkillTool.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s4bxxzsw.js:44358-44817 placement
+//@ chunk-g4tsxwy3.js:44622-45081 placement
 /**
  * 可选工具的占位（本构建被裁掉为 null）以及 Workflow/Monitor/ContinueInProjects 的懒加载引用、workflow 使用同意模块、已撤回请求的提示文字。
  */
@@ -57,7 +57,7 @@ var workflowPermissionDialog;
 var workflowUsageConsentModule;
 var MonitorTool;
 var WITHDRAWN_REQUEST_ANSWER_TEXT;
-deferInit("chunk-s4bxxzsw.js:44358", () => {
+deferInit("chunk-g4tsxwy3.js:44622", () => {
   ARTIFACT_TOOL_REF = null;
   ARTIFACT_PERMISSION_DIALOG = null;
   ACCOUNT_MEMORY_PERMISSION_MODULE = null;
@@ -75,16 +75,16 @@ deferInit("chunk-s4bxxzsw.js:44358", () => {
   WITHDRAWN_REQUEST_ANSWER_TEXT =
     "The request this approval was for had already been withdrawn; the answer applied to nothing.";
 });
-//@ chunk-s4bxxzsw.js:44817-44841 placement
+//@ chunk-g4tsxwy3.js:45081-45105 placement
 function identity(x) {
   return x;
 }
-//@ chunk-s4bxxzsw.js:44841-45959 placement
+//@ chunk-g4tsxwy3.js:45105-46222 placement
 /**
  * 工具 → 权限卡片映射：每项 {matches 工具判定, dialog 卡片定义, build 载荷构造}，供远程/桥接审批使用。
  */
 var PERMISSION_CARD_REGISTRY; // deferred: uses identity of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s4bxxzsw.js:44841", () => {
+deferInit("chunk-g4tsxwy3.js:45105", () => {
   PERMISSION_CARD_REGISTRY = [
     identity({
       matches: (tool) => tool === WebFetchTool,
@@ -190,9 +190,9 @@ deferInit("chunk-s4bxxzsw.js:44841", () => {
   ];
 });
 export {
-  PERMISSION_CARD_REGISTRY,
   WorkflowTool,
   workflowUsageConsentModule,
   ACCOUNT_MEMORY_PERMISSION_MODULE,
   WITHDRAWN_REQUEST_ANSWER_TEXT,
+  PERMISSION_CARD_REGISTRY,
 };

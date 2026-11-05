@@ -3,10 +3,10 @@
  *
  * 通知队列：优先级、SDK 通知规范化常量、启动公告选择、useNotifications。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/context/notifications.tsx
- * pieces: chunk-0h4e7gnq.js (5), chunk-jvez4qde.js (20)
- * attribution: fingerprint 2, placement 22, layout 1
+ * pieces: chunk-ad798f12.js (20), chunk-frs14hy1.js (5)
+ * attribution: placement 22, fingerprint 2, affinity 1
  */
 import {
   init_react_production,
@@ -30,23 +30,23 @@ import { truncateToLength } from "../utils/stringUtils.js";
 import { stripAnsi } from "../utils/stripAnsi.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-jvez4qde.js:506-510 placement
+//@ chunk-ad798f12.js:506-510 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-jvez4qde.js:506", () => {
+deferInit("chunk-ad798f12.js:506", () => {
   init_react_production();
 });
-//@ chunk-jvez4qde.js:510-537 placement
+//@ chunk-ad798f12.js:510-537 placement
 /**
  * 函数 useStatelessShared（无状态订阅辅助）；位于「通知队列：优先级、SDK 通知规范化常量、启动公告选择、useNotifications」模块。
  */
 function useStatelessShared() {
   return currentToolPermissionContext();
 }
-//@ chunk-jvez4qde.js:537-569 placement
+//@ chunk-ad798f12.js:537-569 placement
 function hasMounts(notifications) {
   return notifications.mounts > 0;
 }
-//@ chunk-jvez4qde.js:569-818 placement
+//@ chunk-ad798f12.js:569-818 placement
 /**
  * 从通知状态（当前、队列、置顶）中移除指定 key 的通知；不存在时原样返回。
  */
@@ -61,40 +61,40 @@ function removeNotificationByKey(notifications, key) {
     pinned: any_2 ? notifications.pinned.filter((notice) => notice.key !== key) : notifications.pinned,
   };
 }
-//@ chunk-jvez4qde.js:818-878 placement
+//@ chunk-ad798f12.js:818-878 placement
 /**
  * 函数 holdsToasts（diff 面板或 pane 占住 toast）；位于「通知队列：优先级、SDK 通知规范化常量、启动公告选择、useNotifications」模块。
  */
 function holdsToasts(notifications) {
   return notifications.diffPanelVisible || notifications.paneHoldsToasts;
 }
-//@ chunk-jvez4qde.js:878-950 placement
+//@ chunk-ad798f12.js:878-950 placement
 /**
  * 函数 isHeldNotice（非空且可豁免 diff 面板）；位于「通知队列：优先级、SDK 通知规范化常量、启动公告选择、useNotifications」模块。
  */
 function isHeldNotice(notice, renderMode) {
   return notice !== null && (!renderMode || notice.exemptFromDiffPanelHold === true);
 }
-//@ chunk-jvez4qde.js:950-1014 placement
+//@ chunk-ad798f12.js:950-1014 placement
 /**
  * 函数 isGaugeSurface（表面为 gauge）；位于「通知队列：优先级、SDK 通知规范化常量、启动公告选择、useNotifications」模块。
  */
 function isGaugeSurface(surface, headerGauge) {
   return headerGauge && surface !== null && gaugeOf(surface)?.surface === "gauge";
 }
-//@ chunk-jvez4qde.js:1014-1057 placement
+//@ chunk-ad798f12.js:1014-1057 placement
 /**
  * 函数 useHeaderGauge（取头部 gauge）；位于「通知队列：优先级、SDK 通知规范化常量、启动公告选择、useNotifications」模块。
  */
 function useHeaderGauge() {
   return useStoreSelector(uiSignals.headerGauge, hasMounts);
 }
-//@ chunk-jvez4qde.js:1057-1070 placement
+//@ chunk-ad798f12.js:1057-1070 placement
 /**
  * 导出值：GAUGE_DECAY_MS（8000）；位于「通知队列：优先级、SDK 通知规范化常量、启动公告选择、useNotifications」模块。
  */
 var GAUGE_DECAY_MS = 8000;
-//@ chunk-jvez4qde.js:1070-1198 placement
+//@ chunk-ad798f12.js:1070-1198 placement
 function createNotificationHostState() {
   return {
     clearTimer: {
@@ -109,12 +109,12 @@ function createNotificationHostState() {
     saidInTranscript: new Map(),
   };
 }
-//@ chunk-jvez4qde.js:1198-1213 placement
+//@ chunk-ad798f12.js:1198-1213 placement
 var noticeSignal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-jvez4qde.js:1198", () => {
+deferInit("chunk-ad798f12.js:1198", () => {
   noticeSignal = createContext(null);
 });
-//@ chunk-jvez4qde.js:1213-1367 placement
+//@ chunk-ad798f12.js:1213-1367 placement
 /**
  * 通知上下文 Provider：为子树提供一份通知宿主状态（清除定时器、挂载计数、转录输出槽等）。
  */
@@ -134,13 +134,13 @@ function NotificationsProvider(props) {
   } else providerElement = $[2];
   return providerElement;
 }
-//@ chunk-jvez4qde.js:1367-1467 placement
+//@ chunk-ad798f12.js:1367-1467 placement
 function shouldRouteToFullscreenNotices({ presentationContext, isScreenReaderEnabled }) {
   return (
     useStatelessShared() && !isScreenReaderEnabled && resolveRenderMode(presentationContext) === "fullscreen"
   );
 }
-//@ chunk-jvez4qde.js:1467-1619 placement
+//@ chunk-ad798f12.js:1467-1619 placement
 function routeNotificationToTranscript(notice, { transcriptSink, saidInTranscript }, renderMode) {
   if (false)
     switch (m.routeNotification(notice.key, true)) {
@@ -150,14 +150,14 @@ function routeNotificationToTranscript(notice, { transcriptSink, saidInTranscrip
     }
   return notice;
 }
-//@ chunk-jvez4qde.js:1619-1642 placement
+//@ chunk-ad798f12.js:1619-1642 placement
 /**
  * 函数 gaugeOf（取 gauge（未启用））；位于「通知队列：优先级、SDK 通知规范化常量、启动公告选择、useNotifications」模块。
  */
 function gaugeOf(notice) {
   return;
 }
-//@ chunk-jvez4qde.js:1642-1816 placement
+//@ chunk-ad798f12.js:1642-1816 placement
 /**
  * 把一个转录输出函数注册为通知的 transcriptSink，卸载时注销。
  */
@@ -171,7 +171,7 @@ function useRegisterNotificationTranscriptSink(sink) {
     };
   }, [hostState, sink]);
 }
-//@ chunk-jvez4qde.js:1816-5286 fingerprint (2.1.88 match: useNotifications, 0.595)
+//@ chunk-ad798f12.js:1816-5286 fingerprint (2.1.88 match: useNotifications, 0.595)
 /**
  * 通知队列 hook：addNotification/removeNotification，按优先级出队、immediate 抢占、超时自动移除、diff 面板期间暂缓。
  */
@@ -437,7 +437,7 @@ function useNotifications() {
     processQueue,
   };
 }
-//@ chunk-jvez4qde.js:5286-5330 layout (2.1.88 match: PRIORITIES, 1)
+//@ chunk-ad798f12.js:5286-5330 fingerprint (2.1.88 match: PRIORITIES, 1)
 /**
  * 通知优先级排序值：immediate 0、high 1、medium 2、low 3。
  */
@@ -447,7 +447,7 @@ var PRIORITIES = {
   medium: 2,
   low: 3,
 };
-//@ chunk-jvez4qde.js:5330-5465 placement
+//@ chunk-ad798f12.js:5330-5465 placement
 function isRequeueableOnPreempt(notice, incoming) {
   return (
     (notice.priority !== "immediate" ||
@@ -456,14 +456,14 @@ function isRequeueableOnPreempt(notice, incoming) {
     !incoming.invalidates?.includes(notice.key)
   );
 }
-//@ chunk-jvez4qde.js:5465-5562 placement
+//@ chunk-ad798f12.js:5465-5562 placement
 function _(notices) {
   if (notices.length === 0) return;
   return notices.reduce((acc, notice) =>
     PRIORITIES[notice.priority] < PRIORITIES[acc.priority] ? notice : acc,
   );
 }
-//@ chunk-0h4e7gnq.js:40882-40987 fingerprint (2.1.88 match: PRIORITIES, 1)
+//@ chunk-frs14hy1.js:46576-46681 affinity (2.1.88 match: PRIORITIES, 1)
 /**
  * 通知 color 字符串最长 64。
  */
@@ -473,7 +473,7 @@ var MAX_NOTIFICATION_TIMEOUT_MS;
 var MAX_NOTIFICATION_TEXT_LENGTH;
 var MAX_REMOTE_NOTIFICATION_KEY_LENGTH;
 var MAX_NOTIFICATION_COLOR_LENGTH;
-deferInit("chunk-0h4e7gnq.js:40882", () => {
+deferInit("chunk-frs14hy1.js:46576", () => {
   NOTIFICATION_PRIORITY_KEYS = {
     low: true,
     medium: true,
@@ -486,7 +486,7 @@ deferInit("chunk-0h4e7gnq.js:40882", () => {
   MAX_REMOTE_NOTIFICATION_KEY_LENGTH = 256;
   MAX_NOTIFICATION_COLOR_LENGTH = 64;
 });
-//@ chunk-0h4e7gnq.js:40987-41080 placement
+//@ chunk-frs14hy1.js:46681-46774 placement
 /**
  * 函数 isValidNotice（key/text 为字符串且优先级已知）；位于「通知队列：优先级、SDK 通知规范化常量、启动公告选择、useNotifications」模块。
  */
@@ -497,9 +497,9 @@ function isValidNotice(notice) {
     NOTIFICATION_PRIORITY_SET.has(notice.priority)
   );
 }
-//@ chunk-0h4e7gnq.js:41080-41089 placement
+//@ chunk-frs14hy1.js:46774-46783 placement
 var MAX_QUEUED_NOTICES = 3;
-//@ chunk-0h4e7gnq.js:41089-41260 placement
+//@ chunk-frs14hy1.js:46783-46954 placement
 /**
  * 远程通知超过 3 条时返回最早一条要挤掉的 key；同 key 已存在或未超限返回 null。
  */
@@ -509,7 +509,7 @@ function pickRemoteNotificationToEvict(notifications, key) {
   let filtered = notifications.queue.filter((queued) => queued.key.startsWith("remote:"));
   return filtered.length >= MAX_QUEUED_NOTICES ? filtered[0].key : null;
 }
-//@ chunk-0h4e7gnq.js:41260-41678 placement
+//@ chunk-frs14hy1.js:46954-47371 placement
 /**
  * 规范化 SDK/远程传来的通知：远程 key 加 remote: 前缀并截断、文本消毒截断并压成单行、远程 immediate 降为 high、颜色长度校验、超时夹到上限。
  */
@@ -536,7 +536,9 @@ function normalizeSdkNotification(raw, origin = "local") {
 }
 export {
   useNotifications,
+  removeNotificationByKey,
   holdsToasts,
+  useStatelessShared,
   isValidNotice,
   normalizeSdkNotification,
   pickRemoteNotificationToEvict,
@@ -544,10 +546,8 @@ export {
   isHeldNotice,
   isGaugeSurface,
   gaugeOf,
-  removeNotificationByKey,
   PRIORITIES,
-  useRegisterNotificationTranscriptSink,
   GAUGE_DECAY_MS,
-  useStatelessShared,
+  useRegisterNotificationTranscriptSink,
   NotificationsProvider,
 };

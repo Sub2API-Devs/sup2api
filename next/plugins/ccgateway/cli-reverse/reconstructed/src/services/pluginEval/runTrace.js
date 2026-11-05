@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 解析子会话 trace（stream-json）、统计用量与收集 Artifact 发布桩
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (18)
  * attribution: placement 18
  */
 import { lstat, readdir, rm as rm_2, mkdir } from "fs/promises";
@@ -55,10 +55,10 @@ import { truncateWithCount } from "../../utils/stringUtils.js";
 import { getGitSafetyConfigPairs } from "../../utils/gitSafeExec.js";
 import { identity as identity_2 } from "../../utils/identity.js";
 import { execFileNoThrow } from "../../utils/execFileNoThrow.js";
-import { SUPPORTED_PLATFORMS } from "../../utils/platform.js";
+import { isCaseInsensitivePlatform } from "../../utils/platform.js";
 import { normalizeCaseForComparison } from "../../utils/permissions/filesystem.js";
 
-//@ chunk-qchp9vrd.js:193455-193781 placement (2.1.88 match: hasSuccessfulToolCall, 0.813)
+//@ chunk-af1hzzme.js:194851-195177 placement
 /**
  * 助手消息的 schema。
  */
@@ -90,7 +90,7 @@ var AssistantMessageSchema = DoctorLazy(() =>
     }).passthrough(),
   }).passthrough(),
 );
-//@ chunk-qchp9vrd.js:193781-194060 placement
+//@ chunk-af1hzzme.js:195177-195456 placement
 function findPublishToolUses(trace) {
   let toolUseIds = new Map();
   for (let message of trace) {
@@ -109,7 +109,7 @@ function findPublishToolUses(trace) {
   }
   return toolUseIds;
 }
-//@ chunk-qchp9vrd.js:194060-194324 placement
+//@ chunk-af1hzzme.js:195456-195720 placement
 function* iteratePublishResults(trace) {
   let publishToolUses = findPublishToolUses(trace);
   if (publishToolUses.size === 0) return;
@@ -126,7 +126,7 @@ function* iteratePublishResults(trace) {
     }
   }
 }
-//@ chunk-qchp9vrd.js:194324-194551 placement
+//@ chunk-af1hzzme.js:195720-195947 placement
 function collectPublishedArtifacts(trace) {
   let seenSlugs = new Set();
   let artifacts = [];
@@ -144,7 +144,7 @@ function collectPublishedArtifacts(trace) {
   }
   return artifacts;
 }
-//@ chunk-qchp9vrd.js:194551-194673 placement
+//@ chunk-af1hzzme.js:195947-196069 placement
 /**
  * 从运行轨迹的消息中收集桩工件 URL 的 slug。
  */
@@ -157,7 +157,7 @@ function collectStubArtifactSlugs(trace) {
   }
   return slugs;
 }
-//@ chunk-qchp9vrd.js:194673-194914 placement
+//@ chunk-af1hzzme.js:196069-196310 placement
 function getToolResultUrl(message) {
   let parsed = toolUseResultSchema().safeParse(message);
   if (!parsed.success) return;
@@ -168,7 +168,7 @@ function getToolResultUrl(message) {
   );
   return urlResult.success ? urlResult.data.url : undefined;
 }
-//@ chunk-qchp9vrd.js:194914-195143 placement
+//@ chunk-af1hzzme.js:196310-196539 placement
 var urlResultSchema = DoctorLazy(() =>
   create({
     url: create_2(),
@@ -194,7 +194,7 @@ var artifactStubSchema = DoctorLazy(() =>
     publishedAtMs: create_3().optional(),
   }).passthrough(),
 );
-//@ chunk-qchp9vrd.js:195143-196768 placement
+//@ chunk-af1hzzme.js:196539-198164 placement
 async function readStubPublishDir(dirPath, expectedSlugs) {
   let entries;
   try {
@@ -272,7 +272,7 @@ async function readStubPublishDir(dirPath, expectedSlugs) {
   }
   return records.sort((left, right) => left.at - right.at).map((item) => item.record);
 }
-//@ chunk-qchp9vrd.js:196814-197062 placement
+//@ chunk-af1hzzme.js:198210-198458 placement
 async function readSingleLinkFile(filePath, maxBytes) {
   let noFollow = await openNoFollow_2(filePath);
   if (!noFollow.ok) return null;
@@ -289,7 +289,7 @@ async function readSingleLinkFile(filePath, maxBytes) {
     await handle.close();
   }
 }
-//@ chunk-qchp9vrd.js:197062-197564 placement
+//@ chunk-af1hzzme.js:198458-198960 placement
 async function readStubPublishesJson(outDir, stubPublishDir) {
   let outStats = await lstat(outDir).catch((error) => {
     if (isENOENT(error)) return null;
@@ -326,7 +326,7 @@ async function readStubPublishesJson(outDir, stubPublishDir) {
     }
   }
 }
-//@ chunk-qchp9vrd.js:197564-197646 placement
+//@ chunk-af1hzzme.js:198960-199042 placement
 /**
  * 取助手消息内容数组。
  */
@@ -334,7 +334,7 @@ function assistantContent(message) {
   let parsed = AssistantMessageSchema().safeParse(message);
   return parsed.success ? parsed.data.message.content : [];
 }
-//@ chunk-qchp9vrd.js:197646-199801 placement
+//@ chunk-af1hzzme.js:199042-201211 placement
 /**
  * 从 trace 汇总助手消息、工具调用、成本与用量。
  */
@@ -466,14 +466,14 @@ function summarizeRunTrace(trace, timedOut, exitInfo, tracePath, { shellGranted,
     mockSetupFailure: null,
   };
 }
-//@ chunk-qchp9vrd.js:199801-200089 placement
+//@ chunk-af1hzzme.js:201211-201499 placement
 /**
  * 无法沙箱化 shell 时拒绝运行的说明。
  */
 var NO_STDERR_TEXT = "(no stderr)";
 var SANDBOX_UNAVAILABLE_TEXT =
   "A shell tool (Bash or PowerShell) was granted but this machine cannot confine it (no sandbox backend on this platform, or it is not installed), so the run was refused rather than run unconfined \u2014 drop the shell grant, or on Linux/macOS install the backend.";
-//@ chunk-qchp9vrd.js:200089-200140 placement
+//@ chunk-af1hzzme.js:201499-201550 placement
 /**
  * 安全地把值转成 JSON 文本。
  */
@@ -484,7 +484,7 @@ function safeStringify(value) {
     return "";
   }
 }
-//@ chunk-qchp9vrd.js:200140-200240 placement
+//@ chunk-af1hzzme.js:201550-201650 placement
 /**
  * 评测运行用的 git 配置对：安全配置加上 pager=cat、editor=true、清空 credential.helper。
  */
@@ -496,14 +496,14 @@ function getEvalGitConfigPairs() {
     ["credential.helper", ""],
   ];
 }
-//@ chunk-qchp9vrd.js:200240-200291 placement
+//@ chunk-af1hzzme.js:201650-201701 placement
 /**
  * 按环境缓存的 git 版本结果。
  */
 var MIN_GIT_VERSION = [2, 31];
 var GIT_VERSION_TIMEOUT_MS = 1e4;
 var gitVersionCache = identity_2(new Map(), (map) => map.clear());
-//@ chunk-qchp9vrd.js:200291-201628 placement
+//@ chunk-af1hzzme.js:201701-203038 placement
 /**
  * 检查本机 git 版本是否足够新（超时无回应则无法判断）。
  */
@@ -540,9 +540,9 @@ async function checkGitVersionForEval(env) {
     "eval: git too old for env-scoped config",
   );
 }
-//@ chunk-qchp9vrd.js:201628-201680 placement (2.1.88 match: setCwdState, 1)
+//@ chunk-af1hzzme.js:203038-203090 placement (2.1.88 match: setCwdState, 1)
 function nfcKeyIfEnabled(cwd) {
-  return SUPPORTED_PLATFORMS() ? normalizeCaseForComparison(cwd.normalize("NFC")) : cwd;
+  return isCaseInsensitivePlatform() ? normalizeCaseForComparison(cwd.normalize("NFC")) : cwd;
 }
 export {
   readStubPublishDir,

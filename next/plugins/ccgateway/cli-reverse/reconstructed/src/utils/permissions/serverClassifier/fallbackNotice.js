@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：分类器回退提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (40)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (40)
  * attribution: placement 40
  */
 import { env, antEnv } from "../../env.js";
@@ -15,7 +15,7 @@ import { logError } from "../../log.js";
 import { endActivity, startSessionActivity } from "../../sessionActivity.js";
 import { logForDiagnosticsNoPII } from "../../diagLogs.js";
 import { toError } from "../../errors.js";
-import { enqueueTaskNotification as enqueueTaskNotification_2 } from "../../task/taskNotifications.js";
+import { enqueueTaskNotification } from "../../task/taskNotifications.js";
 import {
   getIsNonInteractiveSession,
   takeNoServerCheckAnnouncement,
@@ -60,18 +60,18 @@ import { isServerArbiterActive } from "./arbiter.js";
 import { getAutoModeConfigOrDefault } from "../permissionSetup.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1298626-1298721 placement
+//@ chunk-5xgkngpb.js:1297550-1297645 placement
 var CLASSIFIER_CHECK_HOLD; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CLASSIFIER_CHECK_HOLD_MS;
 var merged;
-deferInit("chunk-e6aww6q8.js:1298626", () => {
+deferInit("chunk-5xgkngpb.js:1297550", () => {
   CLASSIFIER_CHECK_HOLD = "classifier-check-hold";
   CLASSIFIER_CHECK_HOLD_MS = 1200000;
   merged = Object.assign(() => {}, {
     restartDeadline: () => {},
   });
 });
-//@ chunk-e6aww6q8.js:1298721-1299213 placement
+//@ chunk-5xgkngpb.js:1297645-1298137 placement
 /**
  * 远程会话开启保活时，在分类器检查期间维持一段会话活动（超时自动结束）；返回结束函数，附带 restartDeadline 以续期。
  */
@@ -139,16 +139,16 @@ function startClassifierKeepalive() {
   startHold();
   return merged_2;
 }
-//@ chunk-e6aww6q8.js:1299213-1299299 placement
+//@ chunk-5xgkngpb.js:1298137-1298223 placement
 function onClassifierHoldExpired(stop) {
   stop();
   logForDiagnosticsNoPII("warn", "session_activity_classifier_hold_expired", {
     max_ms: CLASSIFIER_CHECK_HOLD_MS,
   });
 }
-//@ chunk-e6aww6q8.js:1299299-1299312 placement
+//@ chunk-5xgkngpb.js:1298223-1298236 placement
 var PERMISSION_CHECK_STATUS_DELAY_MS = 4000;
-//@ chunk-e6aww6q8.js:1299312-1300275 placement
+//@ chunk-5xgkngpb.js:1298236-1299199 placement
 class enqueuePermissionCheckStatus {
   toolUseID;
   agentId;
@@ -198,7 +198,7 @@ class enqueuePermissionCheckStatus {
   }
   send(status) {
     try {
-      enqueueTaskNotification_2({
+      enqueueTaskNotification({
         type: "system",
         subtype: "permission_check_status",
         tool_use_id: this.toolUseID,
@@ -225,13 +225,13 @@ class enqueuePermissionCheckStatus {
     }
   }
 }
-//@ chunk-e6aww6q8.js:1300275-1300513 placement
+//@ chunk-5xgkngpb.js:1299199-1299437 placement
 var CLASSIFIER_BILLING_DOCS_URL = "https://code.claude.com/docs/en/auto-mode-classifier-billing";
 var SERVER_CLASSIFIER_DOCS_URL =
   "https://code.claude.com/docs/en/permission-modes#server-side-classifier-review";
 var GATEWAY_AUTO_MODE_DOCS_URL =
   "https://claude.com/docs/third-party/claude-desktop/gateway#auto-mode-checks";
-//@ chunk-e6aww6q8.js:1300513-1301908 placement
+//@ chunk-5xgkngpb.js:1299437-1300832 placement
 /**
  * 生成自动模式切换到内置安全检查时的提示。
  */
@@ -266,13 +266,13 @@ function buildClassifierFallbackNotice(notice) {
     helpUrl: CLASSIFIER_BILLING_DOCS_URL,
   };
 }
-//@ chunk-e6aww6q8.js:1301908-1301957 placement
+//@ chunk-5xgkngpb.js:1300832-1300881 placement
 function isVelvetHeronOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_velvet_heron", true);
 }
-//@ chunk-e6aww6q8.js:1301957-1301974 placement
+//@ chunk-5xgkngpb.js:1300881-1300898 placement
 var BILLING_NOTICE_ACK_TTL_MS = 86400000;
-//@ chunk-e6aww6q8.js:1301974-1302190 placement (2.1.88 match: hasOpusAccess, 0.768)
+//@ chunk-5xgkngpb.js:1300898-1301114 placement (2.1.88 match: hasOpusAccess, 0.768)
 function hasOpusAccess() {
   let subscriptionType = getSubscriptionType();
   if (
@@ -287,11 +287,11 @@ function hasOpusAccess() {
   let acknowledgedAt = getGlobalConfig().autoModeClassifierBillingNoticeAcknowledgedAt;
   return acknowledgedAt === undefined || Date.now() - acknowledgedAt >= BILLING_NOTICE_ACK_TTL_MS;
 }
-//@ chunk-e6aww6q8.js:1302190-1302349 placement
+//@ chunk-5xgkngpb.js:1301114-1301273 placement
 var NO_CHECK_FOR_SESSION_TITLE =
   "Auto mode can't check actions in this session, so this one needs your approval";
 var NO_CHECK_FOR_ACTION_TITLE = "Auto mode couldn't check this action, so it needs your approval";
-//@ chunk-e6aww6q8.js:1302349-1304878 placement
+//@ chunk-5xgkngpb.js:1301273-1303802 placement
 /**
  * 说明服务端分类器不可用的原因（未提供、未请求、需要实验 beta）。
  */
@@ -346,7 +346,7 @@ function describeServerClassifierUnavailable({ why, asks, heldByDenyRules = fals
     nextStep,
   ].join(" ");
 }
-//@ chunk-e6aww6q8.js:1304878-1304974 placement
+//@ chunk-5xgkngpb.js:1303802-1303898 placement
 /**
  * takeNoServerCheckNotice：取一次性的无服务端检查说明。
  */
@@ -360,7 +360,7 @@ function takeNoServerCheckNotice(asks, heldByDenyRules = false) {
         heldByDenyRules,
       });
 }
-//@ chunk-e6aww6q8.js:1304974-1305170 placement
+//@ chunk-5xgkngpb.js:1303898-1304094 placement
 /**
  * 会话因无服务端检查而停止时，给出一次性说明文字。
  */
@@ -369,7 +369,7 @@ function getNoServerCheckStoppedNotice() {
     ? "Auto mode can't check actions in this session, so Claude stopped after a run of responses whose actions were refused. Use another permission mode to continue."
     : undefined;
 }
-//@ chunk-e6aww6q8.js:1305170-1305236 placement
+//@ chunk-5xgkngpb.js:1304094-1304160 placement
 /**
  * takeServerFallbackAnnouncement：取一次性的回退公告。
  */
@@ -381,7 +381,7 @@ function takeServerFallbackAnnouncement(hasOpus) {
     ? fallbackNoticeText(getGatewayNoticeInfo())
     : undefined;
 }
-//@ chunk-e6aww6q8.js:1305236-1305496 placement
+//@ chunk-5xgkngpb.js:1304160-1304420 placement
 var KNOWN_GATEWAY_NAMES = {
   litellm: "a LiteLLM gateway",
   helicone: "a Helicone gateway",
@@ -392,7 +392,7 @@ var KNOWN_GATEWAY_NAMES = {
   bifrost: "a Bifrost gateway",
   databricks: "a Databricks gateway",
 };
-//@ chunk-e6aww6q8.js:1305496-1305626 placement
+//@ chunk-5xgkngpb.js:1304420-1304550 placement
 function getNonAnthropicHost(url) {
   if (!url) return;
   try {
@@ -402,7 +402,7 @@ function getNonAnthropicHost(url) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:1305626-1305769 placement
+//@ chunk-5xgkngpb.js:1304550-1304693 placement
 function getProviderEndpointHost(provider) {
   let envVarName = providerEndpointVariables(provider)[0]?.name;
   let url = envVarName === undefined ? undefined : env[envVarName] || undefined;
@@ -413,7 +413,7 @@ function getProviderEndpointHost(provider) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:1305769-1305827 placement
+//@ chunk-5xgkngpb.js:1304693-1304751 placement
 /**
  * gatewayDisplayName：网关显示名。
  */
@@ -421,9 +421,9 @@ function gatewayDisplayName() {
   let gatewayHost = getGatewayHost();
   return gatewayHost === undefined ? knownGatewayName() : truncateGatewayHost(gatewayHost);
 }
-//@ chunk-e6aww6q8.js:1305827-1305838 placement
+//@ chunk-5xgkngpb.js:1304751-1304762 placement
 var MAX_GATEWAY_NAME_LENGTH = 80;
-//@ chunk-e6aww6q8.js:1305838-1305917 placement
+//@ chunk-5xgkngpb.js:1304762-1304841 placement
 /**
  * truncateGatewayHost：截断网关主机名。
  */
@@ -433,12 +433,12 @@ function truncateGatewayHost(gatewayHost) {
     ? cleaned
     : `${cleaned.slice(0, MAX_GATEWAY_NAME_LENGTH - 1)}\u2026`;
 }
-//@ chunk-e6aww6q8.js:1305917-1305987 placement
+//@ chunk-5xgkngpb.js:1304841-1304911 placement
 function knownGatewayName() {
   let observed = isDiskless() ? undefined : getObservedGateway();
   return observed === undefined ? undefined : KNOWN_GATEWAY_NAMES[observed];
 }
-//@ chunk-e6aww6q8.js:1305987-1306249 placement
+//@ chunk-5xgkngpb.js:1304911-1305173 placement
 function getGatewayHost() {
   let apiProvider = getAPIProvider();
   switch (apiProvider) {
@@ -457,7 +457,7 @@ function getGatewayHost() {
       return getNonAnthropicHost(getGatewayAuth()?.url);
   }
 }
-//@ chunk-e6aww6q8.js:1306249-1306434 placement
+//@ chunk-5xgkngpb.js:1305173-1305359 placement
 function getGatewayNoticeInfo() {
   let name = gatewayDisplayName();
   if (name === undefined) return {};
@@ -473,7 +473,7 @@ function getGatewayNoticeInfo() {
         gatewayHost: name,
       };
 }
-//@ chunk-e6aww6q8.js:1306434-1306523 placement
+//@ chunk-5xgkngpb.js:1305359-1305448 placement
 /**
  * withGatewayHost：公告带上网关主机。
  */
@@ -485,12 +485,12 @@ function withGatewayHost(info) {
     ...buildClassifierFallbackNotice(info),
   };
 }
-//@ chunk-e6aww6q8.js:1306523-1306621 placement
+//@ chunk-5xgkngpb.js:1305448-1305546 placement
 function fallbackNoticeText(notice) {
   let { title, paragraphs } = buildClassifierFallbackNotice(notice);
   return [title.endsWith(".") ? title : `${title}.`, ...paragraphs].join(" ");
 }
-//@ chunk-e6aww6q8.js:1306621-1306847 placement
+//@ chunk-5xgkngpb.js:1305546-1305772 placement
 function resolveServerFallbackChoice(askDialog) {
   let serverClassifierFallbackChoice = getServerClassifierFallbackChoice();
   if (serverClassifierFallbackChoice !== undefined) return serverClassifierFallbackChoice;
@@ -506,7 +506,7 @@ function resolveServerFallbackChoice(askDialog) {
   setServerClassifierFallbackChoice(choice);
   return choice;
 }
-//@ chunk-e6aww6q8.js:1306847-1307113 placement
+//@ chunk-5xgkngpb.js:1305772-1306038 placement
 function raceChoiceWithAbort(choice, signal) {
   if (signal.aborted) return Promise.resolve("interrupt");
   return new Promise((resolve) => {
@@ -526,12 +526,12 @@ function raceChoiceWithAbort(choice, signal) {
     );
   });
 }
-//@ chunk-e6aww6q8.js:1307113-1307297 placement
+//@ chunk-5xgkngpb.js:1306038-1306222 placement
 /**
  * 服务端分类器回退提示对话框的宿主请求规格：载荷含网关主机、标题、段落与帮助链接，结果为 continue/interrupt/cancelled。
  */
 var serverFallbackNoticeSpec; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1307113", () => {
+deferInit("chunk-5xgkngpb.js:1306038", () => {
   serverFallbackNoticeSpec = withHideWhile({
     kind: AUTO_MODE_SERVER_FALLBACK,
     payload: DoctorLazy(() =>
@@ -546,16 +546,16 @@ deferInit("chunk-e6aww6q8.js:1307113", () => {
     default: "cancelled",
   });
 });
-//@ chunk-e6aww6q8.js:1307297-1307351 placement
+//@ chunk-5xgkngpb.js:1306222-1306276 placement
 /**
  * sdkSupportsFallbackDialog：SDK 宿主支持回退对话框。
  */
 function sdkSupportsFallbackDialog() {
   return isSdkDialogHostActive() && (getSdkSupportedDialogKinds() ?? []).includes(AUTO_MODE_SERVER_FALLBACK);
 }
-//@ chunk-e6aww6q8.js:1307351-1307371 placement
+//@ chunk-5xgkngpb.js:1306276-1306296 placement
 var INTERRUPT = "interrupt";
-//@ chunk-e6aww6q8.js:1307371-1307862 placement
+//@ chunk-5xgkngpb.js:1306296-1306787 placement
 /**
  * 展示服务端分类器回退提示并记 tengu_auto_mode_server_fallback_notice_closed；继续且经网关时记下计费提示已确认时间；未作答且用户已继续时返回 continue_unacknowledged。
  */
@@ -593,7 +593,7 @@ async function showServerFallbackNotice(requestDialog, info, context) {
       return unansweredReason === "moved_on" ? "continue_unacknowledged" : INTERRUPT;
   }
 }
-//@ chunk-e6aww6q8.js:1307862-1307962 placement
+//@ chunk-5xgkngpb.js:1306787-1306887 placement
 function isChromeClassifierFloorTool(tool, toolPermissionContext) {
   let toolNameForPermissionCheck = getToolNameForPermissionCheck_4(tool);
   if (!isChromeToolName(toolNameForPermissionCheck)) return false;
@@ -602,7 +602,7 @@ function isChromeClassifierFloorTool(tool, toolPermissionContext) {
     toolPermissionContext.chromeClassifierFloorEnabled === true
   );
 }
-//@ chunk-e6aww6q8.js:1307962-1308025 placement
+//@ chunk-5xgkngpb.js:1306887-1306950 placement
 /**
  * isChromeClassifierFloorCall：浏览器工具且分类器可跑。
  */
@@ -612,22 +612,22 @@ function isChromeClassifierFloorCall(tool, toolPermissionContext) {
     toolPermissionContext.canAutoClassifierRun === true
   );
 }
-//@ chunk-e6aww6q8.js:1308025-1308245 placement
+//@ chunk-5xgkngpb.js:1306950-1307170 placement
 var UNREVIEWED_ACTION_NOTICE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NON_AUTO_MODES;
-deferInit("chunk-e6aww6q8.js:1308025", () => {
+deferInit("chunk-5xgkngpb.js:1306950", () => {
   UNREVIEWED_ACTION_NOTICE =
     "Claude Code's automatic safety check couldn't review this action, so the action hasn't run. Allow it only if you expected Claude to do this.";
   NON_AUTO_MODES = new Set(["default", "acceptEdits", "dontAsk", "bypassPermissions"]);
 });
-//@ chunk-e6aww6q8.js:1308245-1308279 placement
+//@ chunk-5xgkngpb.js:1307170-1307204 placement
 /**
  * isNonAutoMode：是否非 auto 模式。
  */
 function isNonAutoMode(mode) {
   return NON_AUTO_MODES.has(mode);
 }
-//@ chunk-e6aww6q8.js:1308279-1308394 placement
+//@ chunk-5xgkngpb.js:1307204-1307319 placement
 /**
  * 非 auto 模式下 MCP 工具是否仍经分类器审阅（服务端分类器启用时）。
  */
@@ -641,14 +641,14 @@ function isMcpReviewedOutsideAuto(tool, toolPermissionContext) {
     isServerArbiterActive()
   );
 }
-//@ chunk-e6aww6q8.js:1308394-1308428 placement
+//@ chunk-5xgkngpb.js:1307319-1307353 placement
 /**
  * priorAssistantContextEnabled：是否附带先前助手上下文。
  */
 function priorAssistantContextEnabled() {
   return resolvePriorAssistantContextFlag().value;
 }
-//@ chunk-e6aww6q8.js:1308428-1308705 placement
+//@ chunk-5xgkngpb.js:1307353-1307630 placement
 function resolvePriorAssistantContextFlag() {
   if (antEnv.CLAUDE_CODE_AUTO_MODE_PRIOR_ASSISTANT_CONTEXT !== undefined)
     return {
@@ -666,7 +666,7 @@ function resolvePriorAssistantContextFlag() {
         src: "default",
       };
 }
-//@ chunk-e6aww6q8.js:1308705-1308790 placement
+//@ chunk-5xgkngpb.js:1307630-1307715 placement
 /**
  * listsHumanReplies：是否列出人类回复（含开关来源）。
  */
@@ -688,18 +688,18 @@ export {
   takeNoServerCheckNotice,
   isChromeClassifierFloorCall,
   isChromeClassifierFloorTool,
-  isMcpReviewedOutsideAuto,
   enqueuePermissionCheckStatus,
+  isMcpReviewedOutsideAuto,
   startClassifierKeepalive,
   gatewayDisplayName,
   NO_CHECK_FOR_SESSION_TITLE,
   NO_CHECK_FOR_ACTION_TITLE,
   UNREVIEWED_ACTION_NOTICE,
+  takeServerFallbackAnnouncement,
+  listsHumanReplies,
   serverFallbackNoticeSpec,
   truncateGatewayHost,
   withGatewayHost,
-  takeServerFallbackAnnouncement,
-  listsHumanReplies,
-  isNonAutoMode,
   getNoServerCheckStoppedNotice,
+  isNonAutoMode,
 };

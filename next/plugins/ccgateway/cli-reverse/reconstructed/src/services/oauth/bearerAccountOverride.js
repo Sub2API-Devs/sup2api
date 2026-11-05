@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：bearer 令牌对应账号的覆盖记录
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-n96d6ab0.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-x8vqv0nj.js (2)
  * attribution: placement 2
  */
 import { identity } from "../../utils/identity.js";
@@ -15,15 +15,15 @@ import { claimedCredential, envDriftDetected } from "../../entrypoints/warmSpare
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-n96d6ab0.js:376-410 placement
+//@ chunk-x8vqv0nj.js:376-410 placement
 /**
  * 保存 bootstrap 返回的账号覆盖（可重置）。
  */
 var bearerAccountOverride; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-n96d6ab0.js:376", () => {
+deferInit("chunk-x8vqv0nj.js:376", () => {
   bearerAccountOverride = identity(subscribe(), (state) => state.set(null));
 });
-//@ chunk-n96d6ab0.js:410-514 placement
+//@ chunk-x8vqv0nj.js:410-514 placement
 /**
  * 托管设置使用 bearer 令牌且哈希匹配时，记录 bootstrap 返回的账号覆盖。
  */
@@ -36,4 +36,4 @@ function recordBearerAccountOverride(fingerprint, account) {
   )
     bearerAccountOverride.set(account ?? null);
 }
-export { recordBearerAccountOverride, bearerAccountOverride };
+export { bearerAccountOverride, recordBearerAccountOverride };

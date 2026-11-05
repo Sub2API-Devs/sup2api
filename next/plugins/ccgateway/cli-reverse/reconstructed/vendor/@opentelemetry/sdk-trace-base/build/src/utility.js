@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/sdk-trace-base/build/src/utility.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-trace-base@2.2.0
- * pieces: chunk-9vvvg0d3.js (1)
+ * pieces: chunk-3wgj3rdg.js (1)
  * attribution: esm-fingerprint 1
  */
 import {
@@ -11,7 +11,7 @@ import {
   DEFAULT_ATTRIBUTE_VALUE_LENGTH_LIMIT,
 } from "../esm/utility.js";
 
-//@ chunk-9vvvg0d3.js:15235-15771 esm-fingerprint
+//@ chunk-3wgj3rdg.js:15607-16143 esm-fingerprint
 function configureDefaultLimits(userConfig) {
   let spanLimits = Object.assign({}, userConfig.spanLimits);
   spanLimits.attributeCountLimit =

@@ -3,15 +3,15 @@
  *
  * 存储空间表（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3g8vhh6f.js (21)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5qsfbz2c.js (21)
  * attribution: placement 21
  */
-//@ chunk-3g8vhh6f.js:191-248 placement
+//@ chunk-5qsfbz2c.js:191-248 placement
 var KEY_SEPARATOR = String.fromCharCode(0);
 var ASIDE_FILE_RE = /^\.[0-9a-f]{16}\.aside$/;
-//@ chunk-3g8vhh6f.js:248-332 placement
+//@ chunk-5qsfbz2c.js:248-332 placement
 /**
  * 是否是 `.16位十六进制.aside` 形式的旁路文件名。
  */
@@ -19,21 +19,21 @@ function isAsideFileName(name) {
   if (name.charCodeAt(0) !== 46) return false;
   return storageNameSpellings(name).some((spelling) => ASIDE_FILE_RE.test(spelling));
 }
-//@ chunk-3g8vhh6f.js:332-468 placement
+//@ chunk-5qsfbz2c.js:332-468 placement
 var TEMP_FILE_NAME_RE =
   /(^\.[0-9a-f]{16}\.tmp~?$)|(\.tmp[.~][0-9a-f]{8}$)|(\.purge\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$)/;
-//@ chunk-3g8vhh6f.js:468-519 placement
+//@ chunk-5qsfbz2c.js:468-519 placement
 /**
  * 是否是临时文件名。
  */
 function isTempFileName(name) {
   return storageNameSpellings(name).some((spelling) => TEMP_FILE_NAME_RE.test(spelling));
 }
-//@ chunk-3g8vhh6f.js:519-579 placement
+//@ chunk-5qsfbz2c.js:519-579 placement
 function isDotsOrSpacesOnly(segment) {
   return typeof segment === "string" && /^[. ]+$/.test(segment);
 }
-//@ chunk-3g8vhh6f.js:579-701 placement
+//@ chunk-5qsfbz2c.js:579-701 placement
 function isValidKeySegment(segment) {
   return !(
     typeof segment !== "string" ||
@@ -45,14 +45,14 @@ function isValidKeySegment(segment) {
     isAsideFileName(segment)
   );
 }
-//@ chunk-3g8vhh6f.js:701-747 placement
+//@ chunk-5qsfbz2c.js:701-747 placement
 /**
  * 所有键片段是否都合法。
  */
 function areValidKeySegments(segments) {
   return segments.length > 0 && segments.every(isValidKeySegment);
 }
-//@ chunk-3g8vhh6f.js:824-947 placement
+//@ chunk-5qsfbz2c.js:824-947 placement
 function storageNameSpellings(name) {
   let cached = nameSpellingsCache.get(name);
   if (cached !== undefined) return cached;
@@ -61,7 +61,7 @@ function storageNameSpellings(name) {
   nameSpellingsCache.set(name, spellings);
   return spellings;
 }
-//@ chunk-3g8vhh6f.js:947-1044 placement
+//@ chunk-5qsfbz2c.js:947-1044 placement
 function nameSpellingsOf(name) {
   let lower = name.toLowerCase();
   let index = lower.indexOf(":");
@@ -69,10 +69,10 @@ function nameSpellingsOf(name) {
     ? [trimTrailingDotsAndSpaces(lower)]
     : [trimTrailingDotsAndSpaces(lower), trimTrailingDotsAndSpaces(lower.slice(0, index))];
 }
-//@ chunk-3g8vhh6f.js:1044-1066 placement
+//@ chunk-5qsfbz2c.js:1044-1066 placement
 var nameSpellingsCache = new Map();
 var SPELLINGS_CACHE_LIMIT = 32768;
-//@ chunk-3g8vhh6f.js:1066-1194 placement
+//@ chunk-5qsfbz2c.js:1066-1194 placement
 function trimTrailingDotsAndSpaces(value) {
   let end = value.length;
   while (end > 0) {
@@ -82,7 +82,7 @@ function trimTrailingDotsAndSpaces(value) {
   }
   return end === value.length ? value : value.slice(0, end);
 }
-//@ chunk-3g8vhh6f.js:1194-1245 placement
+//@ chunk-5qsfbz2c.js:1194-1245 placement
 function withOptionalField(base, field, value) {
   return value === undefined
     ? base
@@ -91,7 +91,7 @@ function withOptionalField(base, field, value) {
         [field]: value,
       };
 }
-//@ chunk-3g8vhh6f.js:1245-1365 placement
+//@ chunk-5qsfbz2c.js:1245-1365 placement
 function transcriptSpace(projectKey, sessionId, agentId, agentRelPath) {
   let baseSpace = withOptionalField(
     {
@@ -104,7 +104,7 @@ function transcriptSpace(projectKey, sessionId, agentId, agentRelPath) {
   );
   return withOptionalField(baseSpace, "agentRelPath", agentRelPath);
 }
-//@ chunk-3g8vhh6f.js:1365-1482 placement
+//@ chunk-5qsfbz2c.js:1365-1482 placement
 function logSpace(sessionId, channel, logIds) {
   let baseSpace = withOptionalField(
     {
@@ -117,7 +117,7 @@ function logSpace(sessionId, channel, logIds) {
   );
   return withOptionalField(baseSpace, "runId", logIds?.runId);
 }
-//@ chunk-3g8vhh6f.js:1482-4060 placement
+//@ chunk-5qsfbz2c.js:1482-4060 placement
 /**
  * 存储空间表：transcript/history/globalConfig/settings 等各自的存储后端描述
  */
@@ -320,7 +320,7 @@ var STORAGE_SPACES = {
     sessionId,
   }),
 };
-//@ chunk-3g8vhh6f.js:4060-4150 placement
+//@ chunk-5qsfbz2c.js:4060-4150 placement
 /**
  * 构造转录作用域（空 agentRelPath）。
  */
@@ -332,21 +332,21 @@ function transcriptScope(projectKey, sessionId) {
     agentRelPath: [],
   };
 }
-//@ chunk-3g8vhh6f.js:4150-4194 placement
+//@ chunk-5qsfbz2c.js:4150-4194 placement
 /**
  * 存储空间标识（describeStorageSpace 的 JSON）。
  */
 function storageSpaceId(space) {
   return JSON.stringify(describeStorageSpace(space));
 }
-//@ chunk-3g8vhh6f.js:4194-4235 placement
+//@ chunk-5qsfbz2c.js:4194-4235 placement
 /**
  * 两个存储空间是否相同。
  */
 function isSameStorageSpace(key, right) {
   return storageSpaceId(key) === storageSpaceId(right);
 }
-//@ chunk-3g8vhh6f.js:4235-6618 placement
+//@ chunk-5qsfbz2c.js:4235-6618 placement
 function describeStorageSpace(space) {
   switch (space.namespace) {
     case "transcript":
@@ -443,7 +443,7 @@ function describeStorageSpace(space) {
       return [space.namespace, space.projectKey, space.year, space.month, space.day, space.logName];
   }
 }
-//@ chunk-3g8vhh6f.js:6618-6665 placement
+//@ chunk-5qsfbz2c.js:6618-6665 placement
 /**
  * 桥接 spawn 作用域。
  */
@@ -452,7 +452,7 @@ function bridgeSpawnScope() {
     namespace: "bridgeSpawn",
   };
 }
-//@ chunk-3g8vhh6f.js:6665-6815 placement
+//@ chunk-5qsfbz2c.js:6665-6815 placement
 function marketplaceCacheKey(marketplace, relPath) {
   return relPath === undefined || relPath.length === 0
     ? {
@@ -466,15 +466,15 @@ function marketplaceCacheKey(marketplace, relPath) {
       };
 }
 export {
-  STORAGE_SPACES,
   isValidKeySegment,
+  STORAGE_SPACES,
   areValidKeySegments,
   storageNameSpellings,
   bridgeSpawnScope,
   isTempFileName,
-  marketplaceCacheKey,
   storageSpaceId,
-  transcriptScope,
+  marketplaceCacheKey,
   isSameStorageSpace,
+  transcriptScope,
   isAsideFileName,
 };

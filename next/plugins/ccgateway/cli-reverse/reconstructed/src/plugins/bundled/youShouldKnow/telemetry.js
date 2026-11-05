@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。youShouldKnow 遥测。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bss4k1z9.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-775n2x67.js (14)
  * attribution: placement 14
  */
 import {
@@ -26,26 +26,26 @@ import {
   proposedMark,
 } from "./NoteCard.js";
 
-//@ chunk-bss4k1z9.js:18000-18043 placement
+//@ chunk-775n2x67.js:18308-18351 placement
 var msSince = (shownAt) => (shownAt === undefined ? undefined : Date.now() - shownAt);
-//@ chunk-bss4k1z9.js:18043-18086 placement
+//@ chunk-775n2x67.js:18351-18394 placement
 var msToAnswerProp = (msToAnswer) =>
   msToAnswer === undefined
     ? {}
     : {
         ms_to_answer: msToAnswer,
       };
-//@ chunk-bss4k1z9.js:18086-18224 placement
+//@ chunk-775n2x67.js:18394-18532 placement
 var usageProps = (usage) => ({
   cache_read: usage?.cache_read_input_tokens ?? 0,
   cache_create: usage?.cache_creation_input_tokens ?? 0,
   output_tokens: usage?.output_tokens ?? 0,
 });
-//@ chunk-bss4k1z9.js:18224-18236 placement
+//@ chunk-775n2x67.js:18532-18544 placement
 var MS_PER_SECOND = 1000;
-//@ chunk-bss4k1z9.js:18236-18274 placement
+//@ chunk-775n2x67.js:18544-18582 placement
 var RELEASE_BASE = /^(\d+)\.(\d+)\.(\d+)(-dev)?$/;
-//@ chunk-bss4k1z9.js:18274-18561 placement
+//@ chunk-775n2x67.js:18582-18869 placement
 function versionMarkOf(version) {
   let match = RELEASE_BASE.exec(version?.base ?? "");
   if (!match) return;
@@ -64,7 +64,7 @@ function versionMarkOf(version) {
     }),
   };
 }
-//@ chunk-bss4k1z9.js:18561-18726 placement
+//@ chunk-775n2x67.js:18869-19034 placement
 var versionProps = (version) =>
   version === undefined
     ? {}
@@ -77,7 +77,7 @@ var versionProps = (version) =>
           built_at_s: version.builtAtS,
         }),
       };
-//@ chunk-bss4k1z9.js:18726-19272 placement
+//@ chunk-775n2x67.js:19034-19580 placement
 var answered = (event) => ({
   entry: {
     event: "you_should_know_answered",
@@ -110,7 +110,7 @@ var answered = (event) => ({
     },
   },
 });
-//@ chunk-bss4k1z9.js:19272-19494 placement
+//@ chunk-775n2x67.js:19580-19802 placement
 var explained = (event) => ({
   entry: {
     event: "you_should_know_explained",
@@ -123,7 +123,7 @@ var explained = (event) => ({
   },
   mark: markOf("learn_explain", event.outcome === "shown" ? "ok" : "bad", event.outcome),
 });
-//@ chunk-bss4k1z9.js:19494-19639 placement
+//@ chunk-775n2x67.js:19802-19947 placement
 var page = (event) => ({
   entry: {
     event: "learn_page",
@@ -136,7 +136,7 @@ var page = (event) => ({
   },
   mark: pageMark(event.outcome),
 });
-//@ chunk-bss4k1z9.js:19639-19829 placement
+//@ chunk-775n2x67.js:19947-20137 placement
 var proposed = (event) => ({
   entry: {
     event: "you_should_know_proposed",
@@ -151,7 +151,7 @@ var proposed = (event) => ({
   },
   mark: proposedMark(event),
 });
-//@ chunk-bss4k1z9.js:19829-19922 placement
+//@ chunk-775n2x67.js:20137-20230 placement
 async function send(event, sink) {
   try {
     await sink.log(event.entry);
@@ -160,9 +160,9 @@ async function send(event, sink) {
     return;
   }
 }
-//@ chunk-bss4k1z9.js:19922-19931 placement
+//@ chunk-775n2x67.js:20230-20239 placement
 var CLOCK_LENGTH = 8;
-//@ chunk-bss4k1z9.js:19931-20123 placement
+//@ chunk-775n2x67.js:20239-20431 placement
 function checkLineOf(check) {
   let seconds = (check.latencyMs / MS_PER_SECOND).toFixed(1);
   let sliced = new Date(check.at).toTimeString().slice(0, CLOCK_LENGTH);

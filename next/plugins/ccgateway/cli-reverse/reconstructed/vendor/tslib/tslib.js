@@ -1,13 +1,13 @@
 /**
  * tslib/tslib.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: tslib@2.6.3..2.7.0
- * pieces: chunk-spyfntaa.js (1)
+ * pieces: chunk-xw24zrg8.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 
-//@ chunk-spyfntaa.js:226-11423 cjs-fingerprint
+//@ chunk-xw24zrg8.js:226-11423 cjs-fingerprint
 var require_tslib = __commonJS(function (cjsExports, cjsModule) {
   var __extends;
   var __assign;

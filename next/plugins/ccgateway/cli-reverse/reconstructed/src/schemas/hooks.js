@@ -3,15 +3,15 @@
  *
  * 并入已有模块：hook 的 if 字段 schema（权限规则语法过滤）；hook 配置错误类与 shell 类型列表。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/schemas/hooks.ts
- * pieces: chunk-b91jfdd4.js (1), chunk-dcmhvw5a.js (5)
- * attribution: fingerprint 3, placement 3
+ * pieces: chunk-dew2fy99.js (1), chunk-z20c443b.js (6)
+ * attribution: fingerprint 3, placement 3, layout 1
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
 import {
-  stringSchema,
   _enum,
+  stringSchema,
   objectSchema,
   literal,
   array,
@@ -31,20 +31,25 @@ import {
 } from "../tools/MonitorTool/websocketMonitor.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:50625-50650 placement
+//@ chunk-z20c443b.js:50662-50687 placement
 /**
  * hook 配置错误类与 shell 类型列表。
  */
 class HookConfigError extends Error {}
-//@ chunk-dcmhvw5a.js:50650-50679 placement (2.1.88 match: FRONTMATTER_SHELLS, 1)
+//@ chunk-z20c443b.js:50687-50716 placement (2.1.88 match: FRONTMATTER_SHELLS, 1)
 var FRONTMATTER_SHELLS = ["bash", "powershell"];
-//@ chunk-dcmhvw5a.js:50679-51434 placement
+//@ chunk-z20c443b.js:50716-50766 layout
+var hookFailureModeSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-z20c443b.js:50716", () => {
+  hookFailureModeSchema = DoctorLazy(() => _enum(["continue", "block"]).optional());
+});
+//@ chunk-z20c443b.js:50766-51492 placement
 /**
  * hook 的 if 字段 schema（权限规则语法过滤）。
  */
 var HookIfSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-var hookFailureModeSchema;
-deferInit("chunk-dcmhvw5a.js:50679", () => {
+var hookFailureModeSchema_2;
+deferInit("chunk-z20c443b.js:50766", () => {
   HookIfSchema = DoctorLazy(() =>
     stringSchema()
       .optional()
@@ -52,15 +57,13 @@ deferInit("chunk-dcmhvw5a.js:50679", () => {
         'Permission rule syntax to filter when this hook runs (e.g., "Bash(git *)"). Only runs if the tool call matches the pattern. Avoids spawning hooks for non-matching commands.',
       ),
   );
-  hookFailureModeSchema = DoctorLazy(() =>
-    _enum(["continue", "block"])
-      .optional()
-      .describe(
-        "What a failure of this hook does: it could not start (a missing script or plugin directory), timed out, exited with a code other than 0 or 2, or printed JSON that is invalid or fails validation. 'continue' (default): the failure is reported and the action goes ahead. 'block': the failure counts as exit code 2, so the action the event guards (a tool call, a permission request, a prompt) is blocked. Ignored for async hooks and on Stop, SubagentStop, TaskCompleted and TeammateIdle.",
-      ),
+  hookFailureModeSchema_2 = DoctorLazy(() =>
+    hookFailureModeSchema().describe(
+      "What a failure of this hook does: it could not start (a missing script or plugin directory), timed out, exited with a code other than 0 or 2, or printed JSON that is invalid or fails validation. 'continue' (default): the failure is reported and the action goes ahead. 'block': the failure counts as exit code 2, so the action the event guards (a tool call, a permission request, a prompt) is blocked. Ignored for async hooks and on Stop, SubagentStop, TaskCompleted and TeammateIdle.",
+    ),
   );
 });
-//@ chunk-dcmhvw5a.js:51434-57516 fingerprint (2.1.88 match: buildHookSchemas, 0.69)
+//@ chunk-z20c443b.js:51492-57574 fingerprint (2.1.88 match: buildHookSchemas, 0.69)
 /**
  * 构造 5 种钩子的 zod schema：command（command/args 执行形式/shell/timeout/onFailure/async/asyncRewake/rewakeMessage/rewakeSummary/cloud）、prompt（prompt/model/continueOnBlock）、mcp_tool（server/tool/input）、http（url/headers/allowedEnvVars/onFailure/cloud）、agent（prompt/model）。所有类型都有 if/timeout/statusMessage/once。
  */
@@ -82,7 +85,7 @@ function buildHookSchemas() {
         "Shell interpreter. 'bash' uses your $SHELL (bash/zsh/sh); 'powershell' uses pwsh. Defaults to bash (powershell on Windows without Git Bash).",
       ),
     timeout: numberSchema().positive().optional().describe("Timeout in seconds for this specific command"),
-    onFailure: hookFailureModeSchema(),
+    onFailure: hookFailureModeSchema_2(),
     statusMessage: stringSchema()
       .optional()
       .describe("Custom status message to display in spinner while hook runs"),
@@ -158,7 +161,7 @@ function buildHookSchemas() {
     url: stringSchema().url().describe("URL to POST the hook input JSON to"),
     if: HookIfSchema(),
     timeout: numberSchema().positive().optional().describe("Timeout in seconds for this specific request"),
-    onFailure: hookFailureModeSchema(),
+    onFailure: hookFailureModeSchema_2(),
     headers: record(stringSchema(), stringSchema())
       .optional()
       .describe(
@@ -206,7 +209,7 @@ function buildHookSchemas() {
     McpToolHookSchema,
   };
 }
-//@ chunk-dcmhvw5a.js:57516-57897 fingerprint (2.1.88 match: HookMatcherSchema, 0.589)
+//@ chunk-z20c443b.js:57574-57955 fingerprint (2.1.88 match: HookMatcherSchema, 0.589)
 /**
  * hook 定义 schema：命令长度上限、各类型 hook 联合（command/prompt/agent/http/mcp_tool）、matcher 与按事件分组的 hooks 配置。
  */
@@ -214,7 +217,7 @@ var HOOK_COMMAND_MAX_LENGTH; // deferred: uses DoctorLazy (../cli/handlers/util.
 var HookCommandSchema;
 var HookMatcherSchema;
 var HooksSchema;
-deferInit("chunk-dcmhvw5a.js:57516", () => {
+deferInit("chunk-z20c443b.js:57574", () => {
   HOOK_COMMAND_MAX_LENGTH = 24576;
   HookCommandSchema = DoctorLazy(() => {
     let { BashCommandHookSchema, PromptHookSchema, AgentHookSchema, HttpHookSchema, McpToolHookSchema } =
@@ -231,7 +234,7 @@ deferInit("chunk-dcmhvw5a.js:57516", () => {
   );
   HooksSchema = DoctorLazy(() => partialRecord(_enum(HOOK_EVENTS), array(HookMatcherSchema())));
 });
-//@ chunk-b91jfdd4.js:9523-9609 fingerprint (2.1.88 match: IfConditionSchema, 0.457)
+//@ chunk-dew2fy99.js:9622-9708 fingerprint (2.1.88 match: IfConditionSchema, 0.456)
 /**
  * if 条件字段的附属 schema 片段（command 子字段与 ws 选项），供 if 条件解析器使用。
  */
@@ -243,10 +246,11 @@ function IfConditionSchema() {
   };
 }
 export {
+  hookFailureModeSchema,
   HooksSchema,
-  HookCommandSchema,
-  IfConditionSchema,
-  HookMatcherSchema,
   HOOK_COMMAND_MAX_LENGTH,
+  IfConditionSchema,
   HookConfigError,
+  HookCommandSchema,
+  HookMatcherSchema,
 };

@@ -1,8 +1,8 @@
 /**
  * jose/dist/webapi/jwe/flattened/encrypt.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-5h78gfwc.js (1)
+ * pieces: chunk-0f6azspv.js (1)
  * attribution: esm-fingerprint 1
  */
 import { assertNotSet, unusedSymbol } from "../../lib/helpers.js";
@@ -17,7 +17,7 @@ import { encode, concat } from "../../lib/buffer_utils.js";
 import { deflate } from "../../lib/deflate.js";
 import { encrypt } from "../../lib/content_encryption.js";
 
-//@ chunk-5h78gfwc.js:35279-37807 esm-fingerprint
+//@ chunk-0f6azspv.js:35279-37807 esm-fingerprint
 class FlattenedEncrypt {
   #e;
   #t;

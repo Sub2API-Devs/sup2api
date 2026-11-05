@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：处理 worktree 注册撤销请求：校验请求、核对仓库后移除注册。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5sfp2t4x.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-d6fqja04.js (3)
  * attribution: placement 3
  */
 import { isAbsolute, normalize } from "path";
@@ -16,7 +16,7 @@ import { vetRepoForWorktrees } from "../../utils/git/worktreeVetting.js";
 import { deregisterWorktree } from "../../utils/git/worktreeRegistrations.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-5sfp2t4x.js:1659-1946 placement
+//@ chunk-d6fqja04.js:1771-2058 placement
 var localAbsolutePathSchema = () =>
   stringSchema()
     .min(1)
@@ -31,7 +31,7 @@ var worktreeDropRequestSchema = DoctorLazy(() =>
     worktreePaths: array(localAbsolutePathSchema()).min(1).max(4),
   }),
 );
-//@ chunk-5sfp2t4x.js:1946-2573 placement
+//@ chunk-d6fqja04.js:2058-2685 placement
 /**
  * 处理 worktree 注册撤销请求：校验请求、核对仓库后移除注册。
  */
@@ -87,7 +87,7 @@ async function runWorktreeRegistrationDrops(request) {
     outcomes: errors,
   };
 }
-//@ chunk-5sfp2t4x.js:2573-2616 placement
+//@ chunk-d6fqja04.js:2685-2728 placement
 function worktreeDropResultJson(outcomes) {
   return jsonStringify({
     ok: true,

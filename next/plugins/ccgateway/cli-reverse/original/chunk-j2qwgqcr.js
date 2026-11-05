@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.318
+var BJ=8;function hFr(o,u){let e=[],t="",n=0;for(let r of o){let s=c(r);if(n+s>u&&t!=="")e.push(t),t="",n=0;t+=r,n+=s}return e.push(t),e}function c(o){return o.length===1&&o<"\x80"?1:2}
+export{BJ,hFr};

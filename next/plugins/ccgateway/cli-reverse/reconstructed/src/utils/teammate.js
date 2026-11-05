@@ -3,12 +3,12 @@
  *
  * teammate 身份查询：优先同进程 teammate 上下文（ALS），否则用进程级动态团队上下文（pane 型 teammate 由 CLI 参数设置）；以及 teammate 运行/空闲状态查询
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/teammate.ts
- * pieces: chunk-fnhsh6ng.js (1), chunk-fxf1mb10.js (30)
- * attribution: fingerprint 1, affinity 2, facade-exports 25, layout 3
+ * pieces: chunk-dtzk9y3z.js (27), chunk-sc94d59g.js (1)
+ * attribution: facade-exports 24, layout 2, affinity 1, fingerprint 1
  */
-import { AsyncLocalStorage } from "async_hooks";
+import { teammateContextStorage, getTeammateContext } from "./teammateContext.js";
 import { call } from "../commands/exit/exit.js";
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession, getIsInteractive } from "../bootstrap/state.js";
@@ -16,36 +16,14 @@ import { env } from "./env.js";
 import { isSpawnedByAttendedSession } from "./sessionShape.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-fxf1mb10.js:456-468 affinity
-/**
- * 同进程 teammate 上下文的 AsyncLocalStorage。
- */
-var teammateContextStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fxf1mb10.js:456", () => {
-  teammateContextStorage = new AsyncLocalStorage();
-});
-//@ chunk-fxf1mb10.js:468-502 facade-exports (2.1.88 match: getAgentContext, 1)
-/**
- * 取当前同进程 teammate 上下文。
- */
-function getTeammateContext() {
-  return teammateContextStorage.getStore();
-}
-//@ chunk-fxf1mb10.js:502-538 layout
-/**
- * 在 teammate 上下文中运行函数（inProcessRunner 使用）。
- */
-function runWithTeammateContext(teammateContext, fn) {
-  return teammateContextStorage.run(teammateContext, fn);
-}
-//@ chunk-fxf1mb10.js:538-581 facade-exports (2.1.88 match: getAgentContext, 1)
+//@ chunk-dtzk9y3z.js:538-581 facade-exports (2.1.88 match: isInProcessTeammate, 1)
 /**
  * 当前是否运行在同进程 teammate 上下文中。
  */
 function isInProcessTeammate() {
   return teammateContextStorage.getStore() !== undefined;
 }
-//@ chunk-fxf1mb10.js:667-799 facade-exports (2.1.88 match: getParentSessionId, 0.445)
+//@ chunk-dtzk9y3z.js:667-799 facade-exports (2.1.88 match: getParentSessionId, 0.445)
 /**
  * 父会话 ID：同进程 teammate 取其上下文，否则取动态团队上下文或 CLI 传入的父会话 ID。
  */
@@ -55,7 +33,7 @@ function getParentSessionId() {
   let teammateProcessState = getTeammateProcessState();
   return teammateProcessState.dynamicTeamContext?.parentSessionId ?? teammateProcessState.cliParentSessionId;
 }
-//@ chunk-fxf1mb10.js:799-1114 layout
+//@ chunk-dtzk9y3z.js:799-1114 layout
 /**
  * 每个宿主一份的团队身份状态：CLI 父会话 ID、动态团队上下文（pane 型 teammate 的 agentId/agentName/teamName/planModeRequired 等）、tmux 环境标记探测。
  */
@@ -74,38 +52,38 @@ class TeammateProcessState {
     this.ambientMarkerProbe = memoizeProbe(marker);
   }
 }
-//@ chunk-fxf1mb10.js:1114-1139 facade-exports
+//@ chunk-dtzk9y3z.js:1114-1139 facade-exports
 var teammateIdentities; // deferred: uses TeammateProcessState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fxf1mb10.js:1114", () => {
+deferInit("chunk-dtzk9y3z.js:1114", () => {
   teammateIdentities = new HostScoped(() => new TeammateProcessState());
 });
-//@ chunk-fxf1mb10.js:1139-1176 layout
+//@ chunk-dtzk9y3z.js:1139-1176 layout
 function getTeammateProcessState() {
   return teammateIdentities.of(getRootSession().host);
 }
-//@ chunk-fxf1mb10.js:1176-1221 facade-exports
+//@ chunk-dtzk9y3z.js:1176-1221 facade-exports
 function setCliParentSessionId(sessionId) {
   getTeammateProcessState().setCliParentSessionId(sessionId);
 }
-//@ chunk-fxf1mb10.js:1221-1266 facade-exports
+//@ chunk-dtzk9y3z.js:1221-1266 facade-exports
 /**
  * 设置动态团队上下文（以 teammate 身份启动的进程用）。
  */
 function setDynamicTeamContext(context) {
   getTeammateProcessState().setDynamicTeamContext(context);
 }
-//@ chunk-fxf1mb10.js:1266-1313 facade-exports
+//@ chunk-dtzk9y3z.js:1266-1313 facade-exports
 function clearDynamicTeamContext() {
   getTeammateProcessState().setDynamicTeamContext(null);
 }
-//@ chunk-fxf1mb10.js:1313-1357 facade-exports
+//@ chunk-dtzk9y3z.js:1313-1357 facade-exports
 /**
  * 取进程级动态团队上下文。
  */
 function getDynamicTeamContext() {
   return getTeammateProcessState().dynamicTeamContext;
 }
-//@ chunk-fxf1mb10.js:1357-1443 facade-exports
+//@ chunk-dtzk9y3z.js:1357-1443 facade-exports
 /**
  * 当前 teammate 的 agentId（同进程上下文优先，其次动态团队上下文）。
  */
@@ -114,7 +92,7 @@ function getAgentId() {
   if (inProcessCtx) return inProcessCtx.agentId;
   return getTeammateProcessState().dynamicTeamContext?.agentId;
 }
-//@ chunk-fxf1mb10.js:1443-1533 facade-exports (2.1.88 match: getAgentName, 0.607)
+//@ chunk-dtzk9y3z.js:1443-1533 facade-exports (2.1.88 match: getAgentName, 0.608)
 /**
  * 当前 teammate 的名字。
  */
@@ -123,7 +101,7 @@ function getAgentName() {
   if (inProcessCtx) return inProcessCtx.agentName;
   return getTeammateProcessState().dynamicTeamContext?.agentName;
 }
-//@ chunk-fxf1mb10.js:1533-1664 facade-exports
+//@ chunk-dtzk9y3z.js:1533-1664 facade-exports
 /**
  * 当前团队名：同进程上下文 > 动态团队上下文 > 传入的 teamContext.teamName。
  */
@@ -134,7 +112,7 @@ function getTeamName(teamContext) {
   if (dynamicTeamContext?.teamName) return dynamicTeamContext.teamName;
   return teamContext?.teamName;
 }
-//@ chunk-fxf1mb10.js:1664-1759 facade-exports (2.1.88 match: isTeammate, 0.615)
+//@ chunk-dtzk9y3z.js:1664-1759 facade-exports (2.1.88 match: isTeammate, 0.615)
 /**
  * 当前进程/上下文是否是 teammate（同进程上下文存在，或动态上下文有 agentId 和 teamName）。
  */
@@ -143,30 +121,30 @@ function isTeammate() {
   let { dynamicTeamContext } = getTeammateProcessState();
   return !!(dynamicTeamContext?.agentId && dynamicTeamContext?.teamName);
 }
-//@ chunk-fxf1mb10.js:1759-1827 facade-exports
+//@ chunk-dtzk9y3z.js:1759-1827 facade-exports
 function isModelDrivenSession(flag) {
   return flag !== undefined || isTeammate() || env.CLAUDE_CODE_CHILD_SESSION;
 }
-//@ chunk-fxf1mb10.js:1827-1997 facade-exports
+//@ chunk-dtzk9y3z.js:1827-1997 facade-exports
 function isNestedInteractiveClaudeSession() {
   if (env.CLAUDE_CODE_FORCE_SESSION_PERSISTENCE) return false;
   if (!(env.CLAUDE_CODE_CHILD_SESSION && getIsInteractive() && !isTeammate())) return false;
   return !getTeammateProcessState().isChildSessionMarkerAmbientInTmux();
 }
-//@ chunk-fxf1mb10.js:1997-2169 facade-exports
+//@ chunk-dtzk9y3z.js:1997-2169 facade-exports
 function isHeadlessToolCallOfClaudeCodeSession() {
   if (!env.CLAUDE_CODE_CHILD_SESSION) return false;
   if (process.stdin.isTTY || process.stdout.isTTY) return false;
   if (!isSpawnedByAttendedSession()) return false;
   return getTeammateProcessState().ambientMarkerProbe() === "absent";
 }
-//@ chunk-fxf1mb10.js:2169-2336 facade-exports
+//@ chunk-dtzk9y3z.js:2169-2335 facade-exports
 function isOnClaudeCodeSessionSurface() {
   if (env.CLAUDE_CODE_CHILD_SESSION) return true;
   if (!env.CLAUDECODE) return false;
   return env.CLAUDE_CODE_SKIP_PROMPT_HISTORY || (!process.stdin.isTTY && !process.stdout.isTTY);
 }
-//@ chunk-fxf1mb10.js:2336-2448 facade-exports
+//@ chunk-dtzk9y3z.js:2335-2447 facade-exports
 function _setAmbientMarkerProbeForTesting(probe) {
   getTeammateProcessState().setAmbientMarkerProbe(
     probe === null
@@ -177,7 +155,7 @@ function _setAmbientMarkerProbeForTesting(probe) {
         },
   );
 }
-//@ chunk-fxf1mb10.js:2448-2534 affinity
+//@ chunk-dtzk9y3z.js:2447-2533 affinity
 function memoizeProbe(probe) {
   let cached = null;
   return () => {
@@ -190,7 +168,7 @@ function memoizeProbe(probe) {
     return cached;
   };
 }
-//@ chunk-fxf1mb10.js:2853-2943 facade-exports
+//@ chunk-dtzk9y3z.js:2852-2942 facade-exports
 function _tmuxGlobalEnvOutputHasMarker(stdout) {
   return stdout
     .split(
@@ -199,13 +177,13 @@ function _tmuxGlobalEnvOutputHasMarker(stdout) {
     )
     .some((line) => line.startsWith("CLAUDE_CODE_CHILD_SESSION="));
 }
-//@ chunk-fxf1mb10.js:2943-3025 facade-exports
+//@ chunk-dtzk9y3z.js:2942-3024 facade-exports
 function getTeammateColor() {
   let teammateContext = getTeammateContext();
   if (teammateContext) return teammateContext.color;
   return getTeammateProcessState().dynamicTeamContext?.color;
 }
-//@ chunk-fxf1mb10.js:3025-3190 facade-exports (2.1.88 match: isPlanModeRequired, 0.808)
+//@ chunk-dtzk9y3z.js:3024-3189 facade-exports (2.1.88 match: isPlanModeRequired, 0.808)
 /**
  * teammate 是否必须先走计划模式：上下文的 planModeRequired，否则看 CLAUDE_CODE_PLAN_MODE_REQUIRED。
  */
@@ -216,7 +194,7 @@ function isPlanModeRequired() {
   if (dynamicTeamContext !== null) return dynamicTeamContext.planModeRequired;
   return env.CLAUDE_CODE_PLAN_MODE_REQUIRED;
 }
-//@ chunk-fxf1mb10.js:3190-3293 facade-exports
+//@ chunk-dtzk9y3z.js:3189-3292 facade-exports
 /**
  * 团队里除 leader 外是否还有成员。
  */
@@ -225,7 +203,7 @@ function hasNonLeadTeammate(teamContext) {
   let { leadAgentId, teammates } = teamContext;
   return Object.keys(teammates).some((key) => key !== leadAgentId);
 }
-//@ chunk-fxf1mb10.js:3293-3405 facade-exports (2.1.88 match: isTeamLead, 1)
+//@ chunk-dtzk9y3z.js:3292-3404 facade-exports (2.1.88 match: isTeamLead, 1)
 /**
  * 当前是否是 team lead：自身 agentId 等于 leadAgentId，或自身没有 agentId（主进程）。
  */
@@ -237,7 +215,7 @@ function isTeamLead(teamContext) {
   if (!myAgentId) return true;
   return false;
 }
-//@ chunk-fxf1mb10.js:3405-3531 facade-exports (2.1.88 match: hasActiveInProcessTeammates, 1)
+//@ chunk-dtzk9y3z.js:3404-3530 facade-exports (2.1.88 match: hasActiveInProcessTeammates, 1)
 /**
  * 是否有运行中的同进程 teammate。
  */
@@ -246,7 +224,7 @@ function hasActiveInProcessTeammates(appState) {
     if (task.type === "in_process_teammate" && task.status === "running") return true;
   return false;
 }
-//@ chunk-fxf1mb10.js:3531-3668 facade-exports (2.1.88 match: hasWorkingInProcessTeammates, 1)
+//@ chunk-dtzk9y3z.js:3530-3667 facade-exports (2.1.88 match: hasWorkingInProcessTeammates, 1)
 /**
  * 是否有运行中且非空闲的同进程 teammate。
  */
@@ -255,7 +233,7 @@ function hasWorkingInProcessTeammates(appState) {
     if (task.type === "in_process_teammate" && task.status === "running" && !task.isIdle) return true;
   return false;
 }
-//@ chunk-fxf1mb10.js:3668-4111 facade-exports (2.1.88 match: waitForTeammatesToBecomeIdle, 1)
+//@ chunk-dtzk9y3z.js:3667-4110 facade-exports (2.1.88 match: waitForTeammatesToBecomeIdle, 1)
 /**
  * 等待所有工作中的同进程 teammate 变为空闲：给它们挂 onIdleCallbacks，全部回调后 resolve。
  */
@@ -292,7 +270,7 @@ function waitForTeammatesToBecomeIdle(setAppState, appState) {
     });
   });
 }
-//@ chunk-fnhsh6ng.js:6724-6834 fingerprint (2.1.88 match: getTeamName, 0.634)
+//@ chunk-sc94d59g.js:8079-8189 fingerprint (2.1.88 match: getTeamName, 0.638)
 /**
  * 取 teammate 上下文：toolUseContext 自带的 teammateContext，否则用动态团队上下文（有 agentId 与 teamName 时）。
  */
@@ -302,28 +280,26 @@ function getEffectiveTeammateContext(toolUseContext) {
   return dynamicContext?.agentId && dynamicContext.teamName ? dynamicContext : undefined;
 }
 export {
-  isTeammate,
-  getTeamName,
-  isInProcessTeammate,
-  getAgentName,
-  getTeammateColor,
   isModelDrivenSession,
-  isNestedInteractiveClaudeSession,
+  getAgentId,
   getParentSessionId,
-  isTeamLead,
-  getTeammateContext,
-  getDynamicTeamContext,
+  getTeamName,
+  isTeammate,
+  isNestedInteractiveClaudeSession,
   hasWorkingInProcessTeammates,
   waitForTeammatesToBecomeIdle,
   hasNonLeadTeammate,
   hasActiveInProcessTeammates,
-  getAgentId,
-  isPlanModeRequired,
-  _tmuxGlobalEnvOutputHasMarker,
+  isTeamLead,
+  getDynamicTeamContext,
+  getAgentName,
+  getTeammateColor,
   isOnClaudeCodeSessionSurface,
-  runWithTeammateContext,
-  getEffectiveTeammateContext,
+  isInProcessTeammate,
+  _tmuxGlobalEnvOutputHasMarker,
   isHeadlessToolCallOfClaudeCodeSession,
+  isPlanModeRequired,
+  getEffectiveTeammateContext,
   _setAmbientMarkerProbeForTesting,
   clearDynamicTeamContext,
   setCliParentSessionId,

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：后台会话名册
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-y162pn60.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rmd7n4gq.js (20)
  * attribution: placement 20
  */
 import { lstat, rm, readFile, rename, mkdir } from "fs/promises";
@@ -38,7 +38,7 @@ import { writeFileAtomic } from "../../utils/atomicPublishWrite.js";
 import { createKeyedQueue } from "../../utils/promiseQueue.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-y162pn60.js:11738-11897 placement
+//@ chunk-rmd7n4gq.js:11946-12105 placement
 /**
  * 存储读取失败是否属于不可恢复类型（ENXIO、EFBIG、ELOOP、ENAMETOOLONG）。
  */
@@ -51,13 +51,13 @@ function isUnrecoverableStorageRead(error) {
       error.telemetryCode === "ENAMETOOLONG")
   );
 }
-//@ chunk-y162pn60.js:11897-12529 placement
+//@ chunk-rmd7n4gq.js:12105-12737 placement
 /**
  * 后台会话名册允许的字段集合及名册文件大小上限。
  */
 var ROSTER_KEYS; // deferred: uses toSet (./sessionCron.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_ROSTER_BYTES;
-deferInit("chunk-y162pn60.js:11897", () => {
+deferInit("chunk-rmd7n4gq.js:12105", () => {
   ROSTER_KEYS = toSet([
     "proto",
     "supervisorPid",
@@ -115,11 +115,11 @@ deferInit("chunk-y162pn60.js:11897", () => {
   ]);
   MAX_ROSTER_BYTES = 8388608;
 });
-//@ chunk-y162pn60.js:12529-12578 placement
+//@ chunk-rmd7n4gq.js:12737-12786 placement
 function rosterKey() {
   return STORAGE_SPACES.daemon(["roster.json"]);
 }
-//@ chunk-y162pn60.js:12578-12666 placement
+//@ chunk-rmd7n4gq.js:12786-12874 placement
 /**
  * 生成空名册（协议版本、当前 supervisor pid、时间戳、空 workers）。
  */
@@ -131,7 +131,7 @@ function emptyRoster() {
     workers: {},
   };
 }
-//@ chunk-y162pn60.js:12666-13462 placement
+//@ chunk-rmd7n4gq.js:12874-13670 placement
 async function readRoster(options, inspectSource) {
   if (inspectSource) {
     let { roster, inspectFailed } = await readRosterFile(inspectSource, options);
@@ -188,7 +188,7 @@ async function readRoster(options, inspectSource) {
   }
   return parseRosterJson(raw, options, undefined);
 }
-//@ chunk-y162pn60.js:13462-14345 placement
+//@ chunk-rmd7n4gq.js:13670-14553 placement
 /**
  * 校验名册 JSON：成功时修复时间戳字段并返回；失败时（非静默）记 tengu_bg_roster_parse_failed 并隔离文件，返回 parseFailed 的空名册。
  */
@@ -250,7 +250,7 @@ async function parseRosterJson(raw, options, storage) {
     parseFailed: true,
   };
 }
-//@ chunk-y162pn60.js:14345-14675 placement
+//@ chunk-rmd7n4gq.js:14553-14883 placement
 /**
  * 把损坏的名册改名为 roster.json.corrupt.<时间>（存储 v5 下在存储中移动）。
  */
@@ -274,14 +274,14 @@ async function quarantineRoster(storage) {
       ),
     );
 }
-//@ chunk-y162pn60.js:14675-14749 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
+//@ chunk-rmd7n4gq.js:14883-14957 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 async function removeRecursiveLogged(dirPath) {
   await rm(dirPath, {
     recursive: true,
     force: true,
   }).catch((error) => logError(error));
 }
-//@ chunk-y162pn60.js:14749-14912 placement
+//@ chunk-rmd7n4gq.js:14957-15120 placement
 async function discardUnreadableRoster(storage, options, error, code) {
   if (!options?.silent) {
     logError(error);
@@ -297,7 +297,7 @@ async function discardUnreadableRoster(storage, options, error, code) {
     parseFailed: true,
   };
 }
-//@ chunk-y162pn60.js:14912-15319 placement
+//@ chunk-rmd7n4gq.js:15120-15527 placement
 /**
  * 读取名册：不是普通文件时删除并返回空；读取出错返回 inspectFailed；否则从存储读取解析。
  */
@@ -329,7 +329,7 @@ async function readRosterFile(storage, options) {
     );
   return readRosterFromStorage(storage, options);
 }
-//@ chunk-y162pn60.js:15319-15485 placement
+//@ chunk-rmd7n4gq.js:15527-15693 placement
 function rosterInspectFailed(options, error, errCode) {
   if (!options?.silent) {
     logError(error);
@@ -347,7 +347,7 @@ function rosterInspectFailed(options, error, errCode) {
     inspectFailed: true,
   };
 }
-//@ chunk-y162pn60.js:15485-16515 placement
+//@ chunk-rmd7n4gq.js:15693-16723 placement
 /**
  * 从存储 v5 读取名册：读取被拒或过大时删除，读失败返回 inspectFailed，JSON 解析失败隔离，否则校验 schema。
  */
@@ -431,7 +431,7 @@ async function readRosterFromStorage(storage, options) {
     inspectFailed: false,
   };
 }
-//@ chunk-y162pn60.js:16515-16716 placement
+//@ chunk-rmd7n4gq.js:16723-16924 placement
 async function deleteRosterKey(storage) {
   let result = await storage.delete(rosterKey()).catch(() => {
     return;
@@ -444,25 +444,25 @@ async function deleteRosterKey(storage) {
       ),
     );
 }
-//@ chunk-y162pn60.js:16716-16752 placement
+//@ chunk-rmd7n4gq.js:16924-16960 placement
 /**
  * 把 zod 报错的路径段转成遥测安全的字符串。
  */
 function sanitizeRosterIssuePath(path) {
   return sanitizeJsonPath(path, () => ROSTER_KEYS);
 }
-//@ chunk-y162pn60.js:16752-16804 placement
+//@ chunk-rmd7n4gq.js:16960-17012 placement
 function bgShort(short) {
   return SHORT_RE.test(short) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(short) : lit("invalid");
 }
-//@ chunk-y162pn60.js:16804-16952 placement
+//@ chunk-rmd7n4gq.js:17012-17160 placement
 function countRosterWorkers(raw) {
   let workers = raw !== null && typeof raw === "object" ? raw.workers : undefined;
   return workers !== null && typeof workers === "object" && !Array.isArray(workers)
     ? Object.keys(workers).length
     : 0;
 }
-//@ chunk-y162pn60.js:16952-17520 placement
+//@ chunk-rmd7n4gq.js:17160-17728 placement
 /**
  * 写回名册（去掉解析状态字段）：存储 v5 或原子写文件；资源耗尽类错误只记日志不抛。
  */
@@ -504,15 +504,15 @@ async function writeRoster(roster, storage) {
     throw error;
   });
 }
-//@ chunk-y162pn60.js:17520-17532 placement
+//@ chunk-rmd7n4gq.js:17728-17740 placement
 /**
  * 名册写入的串行队列。
  */
 var rosterWriteQueue; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-y162pn60.js:17520", () => {
+deferInit("chunk-rmd7n4gq.js:17728", () => {
   rosterWriteQueue = createKeyedQueue();
 });
-//@ chunk-y162pn60.js:17532-17678 placement
+//@ chunk-rmd7n4gq.js:17740-17886 placement
 function updateRoster(update, storage) {
   return rosterWriteQueue.run("roster", async () => {
     let rosterForUpdate = await readRosterForUpdate(storage);
@@ -522,7 +522,7 @@ function updateRoster(update, storage) {
     await writeRoster(roster, storage);
   });
 }
-//@ chunk-y162pn60.js:17678-17913 placement
+//@ chunk-rmd7n4gq.js:17886-18121 placement
 async function readRosterForUpdate(storage) {
   if (!storage) return readRoster();
   let rosterFile = await readRosterFile(storage);
@@ -533,4 +533,4 @@ async function readRosterForUpdate(storage) {
     );
   return rosterFile.roster;
 }
-export { bgShort, readRoster, rosterKey, updateRoster, isUnrecoverableStorageRead };
+export { readRoster, updateRoster, isUnrecoverableStorageRead, bgShort, rosterKey };

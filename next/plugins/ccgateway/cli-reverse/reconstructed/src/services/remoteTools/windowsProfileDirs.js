@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增（门面模块 primeWindowsProfileDirs）。Windows 用户目录探测。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e2fknt7w.js (49)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2214fejy.js (49)
  * attribution: placement 49
  */
 import { win32 } from "path";
 import { homedir } from "os";
 import { realpath } from "fs/promises";
 import { getPlatform } from "../../utils/platform.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { isAbsolutePlatformPath } from "../../utils/git.js";
 import { getLatchedPreSettingsEnvSnapshot } from "../../utils/managedEnvApply.js";
 import { env } from "../../utils/env.js";
@@ -27,7 +27,7 @@ import { withDeadline } from "../../utils/sleep.js";
 import { getErrnoCode } from "../../utils/errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e2fknt7w.js:3656-3930 placement
+//@ chunk-2214fejy.js:3657-3931 placement
 function windowsPowerShellProfileDirs() {
   if (getPlatform() !== "windows") return [];
   let { result } = profileDirsState;
@@ -36,31 +36,33 @@ function windowsPowerShellProfileDirs() {
     ...(result.settled && !result.failed ? result.kept : []),
     ...oneDriveDocumentsDirs(),
   ].filter((dir) => dir !== null);
-  return uniq(
+  return normalizeCaseForComparison_2(
     filtered
       .flatMap((dir) => [dir, profileDirsState.resolved.get(dir) ?? dir])
       .flatMap((dir) => [win32.join(dir, "PowerShell"), win32.join(dir, "WindowsPowerShell")]),
   );
 }
-//@ chunk-e2fknt7w.js:3930-4100 placement
+//@ chunk-2214fejy.js:3931-4101 placement
 function windowsAutoRunDirs() {
   if (getPlatform() !== "windows") return [];
   let { result } = profileDirsState;
-  let dirs = uniq([
+  let dirs = normalizeCaseForComparison_2([
     ...appDataDirs(),
     startMenuDir(),
     ...(result.settled && !result.failed ? placedPaths(result.autoRun) : []),
   ]);
-  return uniq(dirs.flatMap((dir) => [dir, profileDirsState.resolved.get(dir) ?? dir]));
+  return normalizeCaseForComparison_2(
+    dirs.flatMap((dir) => [dir, profileDirsState.resolved.get(dir) ?? dir]),
+  );
 }
-//@ chunk-e2fknt7w.js:4100-4200 placement
+//@ chunk-2214fejy.js:4101-4201 placement
 function appDataDirs() {
   return ["APPDATA", "LOCALAPPDATA"].flatMap((name) => {
     let dir = sanitizeProfileDir(envAtStartup(name));
     return dir === null ? [] : [dir];
   });
 }
-//@ chunk-e2fknt7w.js:4200-4336 placement
+//@ chunk-2214fejy.js:4201-4337 placement
 function startMenuDir() {
   let programData =
     sanitizeProfileDir(
@@ -68,13 +70,13 @@ function startMenuDir() {
     ) ?? DEFAULT_PROGRAMDATA_DIR;
   return win32.join(programData, "Microsoft", "Windows", "Start Menu");
 }
-//@ chunk-e2fknt7w.js:4336-4481 placement
+//@ chunk-2214fejy.js:4337-4482 placement
 function oneDriveDocumentsDirs() {
   return [envAtStartup("OneDrive"), envAtStartup("OneDriveConsumer"), envAtStartup("OneDriveCommercial")]
     .filter((value) => value !== undefined && isAbsolutePlatformPath(value))
     .map((root) => win32.join(root, "Documents"));
 }
-//@ chunk-e2fknt7w.js:4481-4534 placement
+//@ chunk-2214fejy.js:4482-4535 placement
 /**
  * 读环境变量：优先用启动时锁定的快照，否则读当前 env（Windows 文件夹正在探测时用）。
  */
@@ -82,18 +84,18 @@ function envAtStartup(name) {
   let latchedPreSettingsEnvSnapshot = getLatchedPreSettingsEnvSnapshot();
   return latchedPreSettingsEnvSnapshot !== undefined ? latchedPreSettingsEnvSnapshot[name] : env[name];
 }
-//@ chunk-e2fknt7w.js:4534-4591 placement
+//@ chunk-2214fejy.js:4535-4592 placement
 function windowsProfileDirsUnread() {
   return getPlatform() === "windows" && !profileDirsState.result.settled;
 }
-//@ chunk-e2fknt7w.js:4591-4679 placement
+//@ chunk-2214fejy.js:4592-4680 placement
 function windowsProfileDirsReadFailure() {
   let { result } = profileDirsState;
   return getPlatform() === "windows" && result.settled && result.failed ? result.why : undefined;
 }
-//@ chunk-e2fknt7w.js:4679-4720 placement
+//@ chunk-2214fejy.js:4680-4721 placement
 var PROFILE_DIRS_UNREADABLE_NOTICE_KEY = "served-profile-dirs-unreadable";
-//@ chunk-e2fknt7w.js:4720-6451 placement
+//@ chunk-2214fejy.js:4721-6452 placement
 async function primeWindowsProfileDirs() {
   if (getPlatform() !== "windows" || isProfileDirsUnsettledRecently()) return;
   if (isProfileDirsSettled() && profileDirsState.unresolved.length > 0) {
@@ -177,7 +179,7 @@ async function primeWindowsProfileDirs() {
     });
   await profileDirsState.inFlight;
 }
-//@ chunk-e2fknt7w.js:6451-6590 placement
+//@ chunk-2214fejy.js:6452-6591 placement
 function emitProfileDirsSettled() {
   try {
     profileDirsState.settled.emit();
@@ -187,22 +189,22 @@ function emitProfileDirsSettled() {
     );
   }
 }
-//@ chunk-e2fknt7w.js:6590-6647 placement
+//@ chunk-2214fejy.js:6591-6648 placement
 function pendingWindowsProfileDirsRead() {
   return getPlatform() !== "windows" || isProfileDirsUnsettledRecently()
     ? undefined
     : primeWindowsProfileDirs();
 }
-//@ chunk-e2fknt7w.js:6647-6693 placement
+//@ chunk-2214fejy.js:6648-6694 placement
 function onWindowsProfileDirsSettled(listener) {
   return profileDirsState.settled.subscribe(listener);
 }
-//@ chunk-e2fknt7w.js:6693-7023 placement
+//@ chunk-2214fejy.js:6694-7024 placement
 /**
  * Windows 用户文件夹解析的进程状态：结果、已解析/未解析的路径、进行中的读取、卷与 PowerShell 的答复。
  */
 var profileDirsState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e2fknt7w.js:6693", () => {
+deferInit("chunk-2214fejy.js:6694", () => {
   profileDirsState = identity(
     {
       result: {
@@ -230,7 +232,7 @@ deferInit("chunk-e2fknt7w.js:6693", () => {
     },
   );
 });
-//@ chunk-e2fknt7w.js:7023-7111 placement
+//@ chunk-2214fejy.js:7024-7112 placement
 /**
  * 平台为 Windows、尚未就绪且最近没有问过未解析文件夹时，需要（再次）探测。
  */
@@ -241,28 +243,28 @@ function isProfileDirsUnsettledRecently() {
       Date.now() - profileDirsState.unresolvedAskedAt < UNRESOLVED_REQUEST_COOLDOWN_MS)
   );
 }
-//@ chunk-e2fknt7w.js:7111-7124 placement
+//@ chunk-2214fejy.js:7112-7125 placement
 var UNRESOLVED_REQUEST_COOLDOWN_MS = 60000;
-//@ chunk-e2fknt7w.js:7124-7194 placement
+//@ chunk-2214fejy.js:7125-7195 placement
 function isProfileDirsSettled() {
   let { result } = profileDirsState;
   return result.settled && (!result.failed || !result.retry);
 }
-//@ chunk-e2fknt7w.js:7194-7302 placement
+//@ chunk-2214fejy.js:7195-7303 placement
 function readRegistryValue(stdout, valueName, vars) {
   let dir = registryValuePattern(valueName)
     .exec(stdout)?.[1]
     ?.replace(/%([^%]+)%/g, (wholeMatch, varName) => vars[varName.toUpperCase()] ?? wholeMatch);
   return sanitizeProfileDir(dir);
 }
-//@ chunk-e2fknt7w.js:7302-7436 placement
+//@ chunk-2214fejy.js:7303-7437 placement
 function registryValuePattern(valueName, typePattern = "REG_(?:EXPAND_)?SZ") {
   return new RegExp(
     "^[ \\t]+" + valueName.replace(/ /g, "[ ]") + "[ \\t]+" + typePattern + "[ \\t]+(.+?)[ \\t]*\\r?$",
     "im",
   );
 }
-//@ chunk-e2fknt7w.js:7436-7650 placement
+//@ chunk-2214fejy.js:7437-7651 placement
 function parsePowerShellProfileDir(stdout) {
   let lastLine = stdout.trim().split(/\r?\n/).pop()?.trim() ?? "";
   let dir = sanitizeProfileDir(
@@ -272,11 +274,11 @@ function parsePowerShellProfileDir(stdout) {
   );
   return dir !== null && /\.ps1$/i.test(dir) ? win32.dirname(win32.dirname(dir)) : null;
 }
-//@ chunk-e2fknt7w.js:7650-7719 placement
+//@ chunk-2214fejy.js:7651-7720 placement
 function sanitizeProfileDir(dir) {
   return dir === undefined || /[%?\uFFFD]/.test(dir) || !isAbsolutePlatformPath(dir) ? null : dir;
 }
-//@ chunk-e2fknt7w.js:7719-7923 placement
+//@ chunk-2214fejy.js:7720-7924 placement
 async function findRegExe() {
   let joined = win32.join(DEFAULT_WINDOWS_DIR, "System32", "reg.exe");
   if (await pathExists(joined)) return joined;
@@ -285,12 +287,12 @@ async function findRegExe() {
     ? win32.join(systemRoot, "System32", "reg.exe")
     : undefined;
 }
-//@ chunk-e2fknt7w.js:7923-8051 placement
+//@ chunk-2214fejy.js:7924-8052 placement
 var DEFAULT_WINDOWS_DIR = "C:\\Windows";
 var DEFAULT_PROGRAMDATA_DIR = "C:\\ProgramData";
 var USER_SHELL_FOLDERS_KEY =
   "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders";
-//@ chunk-e2fknt7w.js:8051-8655 placement
+//@ chunk-2214fejy.js:8052-8656 placement
 /**
  * 读取 Windows 用户 shell 文件夹位置：先用 reg.exe 查 User Shell Folders，无法确定时退回 PowerShell，合并两者结果并核实目录存在。
  */
@@ -322,7 +324,7 @@ async function readProfileDirs() {
       : regResult.documents,
   );
 }
-//@ chunk-e2fknt7w.js:8655-9126 placement
+//@ chunk-2214fejy.js:8656-9127 placement
 /**
  * 确认 reg.exe 给出的文件夹：对不存在的再问 PowerShell，合并结果并检查仍无法定位的文件夹。
  */
@@ -355,7 +357,7 @@ async function settleProfileDirs(autoRun, documents) {
     failed: false,
   };
 }
-//@ chunk-e2fknt7w.js:9126-9786 placement
+//@ chunk-2214fejy.js:9127-9787 placement
 /**
  * 重新读取缺失的 Windows 用户文件夹：经 PowerShell 获取新位置，返回更新后的结果与需要核实的路径。
  */
@@ -379,7 +381,7 @@ async function rereadMissingProfileDirs(dirs, missing) {
     result: {
       ...dirs,
       documents: newDocuments ?? dirs.documents,
-      kept: uniq([
+      kept: normalizeCaseForComparison_2([
         ...dirs.kept,
         ...(newDocuments === null || dirs.documents === null ? [] : [dirs.documents]),
       ]),
@@ -388,7 +390,7 @@ async function rereadMissingProfileDirs(dirs, missing) {
     its: await resolveVolumePaths([...(newDocuments === null ? [] : [newDocuments]), ...filtered]),
   };
 }
-//@ chunk-e2fknt7w.js:9786-10016 placement
+//@ chunk-2214fejy.js:9787-10017 placement
 function logProfileDirsUnsettled(failure) {
   resetProfileDirAnswers();
   logForDebugging(
@@ -398,7 +400,7 @@ function logProfileDirsUnsettled(failure) {
     result: failure,
   };
 }
-//@ chunk-e2fknt7w.js:10016-10337 placement
+//@ chunk-2214fejy.js:10017-10338 placement
 /**
  * 让 PowerShell 读取用户文件夹位置（文档与自动运行目录），失败或不可读时给出失败原因。
  */
@@ -414,39 +416,41 @@ async function askPowerShellForDirs(documents, missing) {
     autoRun: answer.autoRun === "unreadable" ? undefined : answer.autoRun,
   };
 }
-//@ chunk-e2fknt7w.js:10337-10558 placement
+//@ chunk-2214fejy.js:10338-10559 placement
 function missingDirsFailure(dirs, why) {
   return unreadableProfileDirs(
     `${dirs.join(" and ")} ${dirs.length === 1 ? "does not exist on its volume" : "do not exist on their volumes"} as read, and PowerShell could not say where ${dirs.length === 1 ? "the folder is" : "they are"} (${why})`,
   );
 }
-//@ chunk-e2fknt7w.js:10558-10667 placement
+//@ chunk-2214fejy.js:10559-10668 placement
 function unplaceableFolders(folderEntries, state) {
   return [
     ...(state === "unplaceable" ? ["Personal"] : []),
     ...folderEntries.flatMap(([name, value]) => (value === "unplaceable" ? [name] : [])),
   ];
 }
-//@ chunk-e2fknt7w.js:10667-10747 placement
+//@ chunk-2214fejy.js:10668-10748 placement
 function shellFoldersByKind(...sources) {
   return SHELL_FOLDER_NAMES.map((name) => {
     let placement = mergePlacements(sources.map((source) => placementFor(source, name)));
     return [name, placement];
   });
 }
-//@ chunk-e2fknt7w.js:10747-10822 placement
+//@ chunk-2214fejy.js:10748-10823 placement
 function placedPaths(autoRun) {
-  return uniq(autoRun.flatMap(([, value]) => (typeof value === "object" ? value.placed : [])));
+  return normalizeCaseForComparison_2(
+    autoRun.flatMap(([, value]) => (typeof value === "object" ? value.placed : [])),
+  );
 }
-//@ chunk-e2fknt7w.js:10822-10969 placement
+//@ chunk-2214fejy.js:10823-10970 placement
 function unplaceableFailure(names) {
   return unreadableProfileDirs(
     `the User Shell Folders key's ${names.join(" and ")} could not be placed by any source that read ${names.length === 1 ? "it" : "them"}`,
   );
 }
-//@ chunk-e2fknt7w.js:10969-11128 placement
+//@ chunk-2214fejy.js:10970-11129 placement
 function mergePlacements(placements) {
-  let paths = uniq(
+  let paths = normalizeCaseForComparison_2(
     placements.flatMap((placement) => (typeof placement === "object" ? placement.placed : [])),
   );
   if (paths.length > 0)
@@ -455,11 +459,11 @@ function mergePlacements(placements) {
     };
   return placements.includes("unplaceable") ? "unplaceable" : "absent";
 }
-//@ chunk-e2fknt7w.js:11128-11188 placement
+//@ chunk-2214fejy.js:11129-11189 placement
 function placementFor(autoRun, name) {
   return autoRun.find(([entryName]) => entryName === name)?.[1] ?? "absent";
 }
-//@ chunk-e2fknt7w.js:11188-12008 placement
+//@ chunk-2214fejy.js:11189-12009 placement
 async function queryUserShellFoldersViaReg() {
   let regExe = await findRegExe();
   if (regExe === undefined) return unreadableProfileDirs("no reg.exe under a local Windows directory", false);
@@ -507,13 +511,13 @@ async function queryUserShellFoldersViaReg() {
     autoRun: SHELL_FOLDER_NAMES.map((name) => [name, readFolder(name)]),
   };
 }
-//@ chunk-e2fknt7w.js:12008-12477 placement
+//@ chunk-2214fejy.js:12009-12478 placement
 /**
  * Windows 需要定位的用户 shell 文件夹名，以及读取这些文件夹与 PowerShell 配置文件位置的 PowerShell 脚本。
  */
 var SHELL_FOLDER_NAMES; // deferred: uses DEFAULT_WINDOWS_DIR of its import cycle while loading; runs once the cycle is complete
 var POWERSHELL_FOLDERS_SCRIPT;
-deferInit("chunk-e2fknt7w.js:12008", () => {
+deferInit("chunk-2214fejy.js:12009", () => {
   SHELL_FOLDER_NAMES = ["AppData", "Local AppData", "Start Menu", "Programs", "Startup"];
   POWERSHELL_FOLDERS_SCRIPT = [
     `$k='HKCU:\\${USER_SHELL_FOLDERS_KEY.slice(5)}'`,
@@ -522,11 +526,11 @@ deferInit("chunk-e2fknt7w.js:12008", () => {
     "([int[]][char[]]$PROFILE.CurrentUserAllHosts) -join ','",
   ].join(";");
 });
-//@ chunk-e2fknt7w.js:12477-12524 placement
+//@ chunk-2214fejy.js:12478-12525 placement
 function powerShellProfileAnswer() {
   return (profileDirsState.powershellAnswer ??= queryPowerShellProfile());
 }
-//@ chunk-e2fknt7w.js:12524-13248 placement
+//@ chunk-2214fejy.js:12525-13249 placement
 async function queryPowerShellProfile() {
   let cachedPowerShellPath = await getCachedPowerShellPath();
   if (cachedPowerShellPath === null || !win32.isAbsolute(cachedPowerShellPath))
@@ -566,7 +570,7 @@ async function queryPowerShellProfile() {
       : mapped.flatMap(([name, raw]) => (raw === undefined ? [] : [[name, parsePowerShellFolderValue(raw)]])),
   };
 }
-//@ chunk-e2fknt7w.js:13248-13450 placement
+//@ chunk-2214fejy.js:13249-13451 placement
 function parsePowerShellFolderValue(raw) {
   let decoded = /^\d{1,5}(,\d{1,5})*$/.test(raw) ? String.fromCharCode(...raw.split(",").map(Number)) : raw;
   if (decoded.trim() === "") return "absent";
@@ -577,7 +581,7 @@ function parsePowerShellFolderValue(raw) {
         placed: [dir],
       };
 }
-//@ chunk-e2fknt7w.js:13450-13527 placement
+//@ chunk-2214fejy.js:13451-13528 placement
 /**
  * 构造「读取失败」的探测结果：已结算、无文档、可/不可重试并给出原因。
  */
@@ -590,7 +594,7 @@ function unreadableProfileDirs(why, retry = true) {
     why,
   };
 }
-//@ chunk-e2fknt7w.js:13527-13998 placement
+//@ chunk-2214fejy.js:13528-13999 placement
 /**
  * 把文件夹路径解析到真实卷路径（含映射网络驱动器），分出已解析、无法解析和不存在的三类。
  */
@@ -620,14 +624,14 @@ async function resolveVolumePaths(folders) {
     missing: results.flatMap(({ folder, outcome }) => ("missing" in outcome ? [folder] : [])),
   };
 }
-//@ chunk-e2fknt7w.js:13998-14010 placement
+//@ chunk-2214fejy.js:13999-14011 placement
 var VOLUME_RESOLVE_TIMEOUT_MS = 5000;
-//@ chunk-e2fknt7w.js:14010-14074 placement
+//@ chunk-2214fejy.js:14011-14075 placement
 function resetProfileDirAnswers() {
   profileDirsState.volumeAnswers.clear();
   profileDirsState.powershellAnswer = undefined;
 }
-//@ chunk-e2fknt7w.js:14074-14224 placement
+//@ chunk-2214fejy.js:14075-14225 placement
 function resolveVolumeCached(folder) {
   let cached = profileDirsState.volumeAnswers.get(folder);
   if (cached !== undefined) return cached;
@@ -640,7 +644,7 @@ function resolveVolumeCached(folder) {
   profileDirsState.volumeAnswers.set(folder, promise);
   return promise;
 }
-//@ chunk-e2fknt7w.js:14224-14511 placement
+//@ chunk-2214fejy.js:14225-14512 placement
 async function resolveVolumePath(path) {
   try {
     return {
@@ -668,7 +672,7 @@ async function resolveVolumePath(path) {
     );
   }
 }
-//@ chunk-e2fknt7w.js:14511-15018 placement
+//@ chunk-2214fejy.js:14512-15019 placement
 /**
  * 把映射网络驱动器上的路径还原为 UNC 路径：优先用 HOMESHARE，否则用 reg.exe 查询 HKCU\Network 下的 RemotePath。
  */
@@ -707,23 +711,23 @@ async function resolveMappedDrive(folder) {
         resolved: win32.join(remotePath, sliced),
       };
 }
-//@ chunk-e2fknt7w.js:15018-15112 placement
+//@ chunk-2214fejy.js:15019-15113 placement
 function remotePathFromReg(stdout) {
   return sanitizeUncPath(/^[ \t]+RemotePath[ \t]+REG_SZ[ \t]+(.+?)[ \t]*\r?$/im.exec(stdout)?.[1]);
 }
-//@ chunk-e2fknt7w.js:15112-15205 placement
+//@ chunk-2214fejy.js:15113-15206 placement
 function sanitizeUncPath(path) {
   return path !== undefined && /^\\\\(?![?.][\\/])[^\\/]+[\\/]+[^\\/]+/.test(path)
     ? sanitizeProfileDir(path)
     : null;
 }
 export {
-  PROFILE_DIRS_UNREADABLE_NOTICE_KEY,
-  onWindowsProfileDirsSettled,
-  primeWindowsProfileDirs,
-  pendingWindowsProfileDirsRead,
   windowsProfileDirsUnread,
   windowsProfileDirsReadFailure,
   windowsPowerShellProfileDirs,
   windowsAutoRunDirs,
+  primeWindowsProfileDirs,
+  onWindowsProfileDirsSettled,
+  PROFILE_DIRS_UNREADABLE_NOTICE_KEY,
+  pendingWindowsProfileDirsRead,
 };

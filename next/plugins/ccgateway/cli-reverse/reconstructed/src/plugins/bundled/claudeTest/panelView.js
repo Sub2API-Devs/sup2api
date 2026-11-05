@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Claude Test 面板（pane）的渲染：阶段提示、结果行、控制台错误与失败请求、下一步按钮
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ae5g0zb5.js (53)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mhn0amzz.js (53)
  * attribution: placement 53
  */
 import {
@@ -38,7 +38,7 @@ import {
   withCheckingAppState,
   RUNS_DIR,
   collapseAndTruncate,
-  capitalize,
+  capitalize_2,
 } from "./runState.js";
 import {
   SIGN_IN_SHORT_LABELS,
@@ -50,7 +50,7 @@ import {
   RUN_ID_RE,
 } from "./appFacts.js";
 
-//@ chunk-ae5g0zb5.js:52377-52543 placement
+//@ chunk-mhn0amzz.js:53615-53781 placement
 /**
  * 结束阶段文案：“Writing the report…” 或 “Checking the page…”。
  */
@@ -60,7 +60,7 @@ function finishingPhaseLabel(run, now) {
     ? "Writing the report\u2026"
     : "Checking the page\u2026";
 }
-//@ chunk-ae5g0zb5.js:52543-53280 placement
+//@ chunk-mhn0amzz.js:53781-54518 placement
 function formatResultCounts(state) {
   let earlier = state.earlier;
   if (earlier === null || earlier === undefined || !earlier.finished) return null;
@@ -112,7 +112,7 @@ function formatResultCounts(state) {
         earlierRows: mapped.length,
       };
 }
-//@ chunk-ae5g0zb5.js:53280-53483 placement
+//@ chunk-mhn0amzz.js:54518-54721 placement
 /**
  * 按已显示的行修正 skipped 计数。
  */
@@ -128,7 +128,7 @@ function adjustSkippedCount(run, earlier) {
     }),
   };
 }
-//@ chunk-ae5g0zb5.js:53483-53625 placement
+//@ chunk-mhn0amzz.js:54721-54863 placement
 /**
  * 应用宕机/失败/忙或页面为空时为 true。
  */
@@ -141,7 +141,7 @@ function isAppUnusable(state) {
     state.look?.kind === "nothing"
   );
 }
-//@ chunk-ae5g0zb5.js:53625-53770 placement
+//@ chunk-mhn0amzz.js:54863-55008 placement
 /**
  * “N console errors”、“M failed requests”。
  */
@@ -151,7 +151,7 @@ function formatLookIssues(errors, failed) {
     ...(failed > 0 ? [`${failed} ${failed > 1 ? "failed requests" : "failed request"}`] : []),
   ];
 }
-//@ chunk-ae5g0zb5.js:53770-54228 placement
+//@ chunk-mhn0amzz.js:55008-55466 placement
 function describeAppState(facts) {
   let note = facts.note ?? REPORT_STATE_TEXT;
   let look = note.look;
@@ -173,7 +173,7 @@ function describeAppState(facts) {
     (facts.hasReadCode || facts.proposed.length > 0)
   );
 }
-//@ chunk-ae5g0zb5.js:54228-54424 placement
+//@ chunk-mhn0amzz.js:55466-55662 placement
 /**
  * 应用细节：端口、框架、页面问题。
  */
@@ -189,7 +189,7 @@ function formatAppDetails(note) {
     .map((part) => ` \xB7 ${part}`)
     .join("");
 }
-//@ chunk-ae5g0zb5.js:54424-54513 placement
+//@ chunk-mhn0amzz.js:55662-55751 placement
 /**
  * 登录/支付/数据三句概述
  */
@@ -203,7 +203,7 @@ function appFactSummary(note) {
         DATA_LOCATION_PHRASES[about.data],
       ];
 }
-//@ chunk-ae5g0zb5.js:54513-54800 placement
+//@ chunk-mhn0amzz.js:55751-56038 placement
 /**
  * 步骤行构造：完成（✓）、失败（✗）、待办（◻）、进行中（带标记）。
  */
@@ -244,7 +244,7 @@ var activeStep = (text, words) => ({
   words,
   isNow: true,
 });
-//@ chunk-ae5g0zb5.js:54800-55035 placement
+//@ chunk-mhn0amzz.js:56038-56273 placement
 /**
  * 把步骤渲染成一行（进行中的 claude 色调步骤登记以便替换）。
  */
@@ -277,9 +277,9 @@ function renderStepRow(ctx, step, isWide = false) {
   if (step.mark.tone === "claude") weakSet.add(row);
   return row;
 }
-//@ chunk-ae5g0zb5.js:55035-55054 placement
+//@ chunk-mhn0amzz.js:56273-56292 placement
 var weakSet = new WeakSet();
-//@ chunk-ae5g0zb5.js:55054-55174 placement
+//@ chunk-mhn0amzz.js:56292-56412 placement
 /**
  * 等待用户时把进行中的步骤替换为等待提示。
  */
@@ -293,7 +293,7 @@ function replaceActiveStepWithWaiting(rows, ctx) {
         ...rows.slice(index + 1),
       ];
 }
-//@ chunk-ae5g0zb5.js:55174-55447 placement
+//@ chunk-mhn0amzz.js:56412-56685 placement
 /**
  * 测试浏览器安装进度步骤。
  */
@@ -311,7 +311,7 @@ function browserInstallStep(install, mark) {
       : `Installing the test browser\u2026 ${install.percent}%`,
   );
 }
-//@ chunk-ae5g0zb5.js:55447-55537 placement
+//@ chunk-mhn0amzz.js:56685-56775 placement
 /**
  * 安装步骤行
  */
@@ -320,7 +320,7 @@ function installStepRows(facts, mark, ctx) {
     ? []
     : [renderStepRow(ctx, browserInstallStep(facts.install, mark))];
 }
-//@ chunk-ae5g0zb5.js:55537-55616 placement
+//@ chunk-mhn0amzz.js:56775-56854 placement
 /**
  * 停止原因，修复中则显示“Fixing…”
  */
@@ -330,13 +330,13 @@ function haltStepOrFixing(facts, mark) {
     ? activeStep(mark, FIXING_TEXT)
     : haltStep;
 }
-//@ chunk-ae5g0zb5.js:55616-55671 placement
+//@ chunk-mhn0amzz.js:56854-56909 placement
 /**
  * "Waiting for you in the chat"
  */
 var WAITING_IN_CHAT_TEXT = "Waiting for you in the chat";
 var FIXING_TEXT = "Fixing\u2026";
-//@ chunk-ae5g0zb5.js:55671-56671 placement
+//@ chunk-mhn0amzz.js:56909-57909 placement
 function describeRunHalt(facts, mark) {
   let note = facts.note ?? REPORT_STATE_TEXT;
   let { app, look } = note;
@@ -373,21 +373,21 @@ function describeRunHalt(facts, mark) {
       return activeStep(mark, "Getting ready\u2026");
   }
 }
-//@ chunk-ae5g0zb5.js:56671-56744 placement
+//@ chunk-mhn0amzz.js:57909-57982 placement
 /**
  * "App isn't running"
  */
 var APP_NOT_RUNNING_TEXT = "App isn't running";
 var APP_STOPPED_TEXT = "App stopped";
 var APP_STARTING_TEXT = "Starting your app\u2026";
-//@ chunk-ae5g0zb5.js:56744-56836 placement
+//@ chunk-mhn0amzz.js:57982-58074 placement
 /**
  * 端口被占用的失败行
  */
 function portInUseStep(port) {
   return failedStep(`${port === null ? "Its port" : `Port ${port}`} is in use by another program`);
 }
-//@ chunk-ae5g0zb5.js:56836-57072 placement
+//@ chunk-mhn0amzz.js:58074-58310 placement
 /**
  * 运行停止的原因（declined/halted/blocked 或备注里的原因）。
  */
@@ -403,7 +403,7 @@ function resolveStopReason(facts) {
     ? null
     : reason;
 }
-//@ chunk-ae5g0zb5.js:57072-57217 placement
+//@ chunk-mhn0amzz.js:58310-58455 placement
 /**
  * 停止原因行（必要时附“见聊天”）。
  */
@@ -431,14 +431,14 @@ function renderStopRow(ctx, stopReason) {
     true,
   );
 }
-//@ chunk-ae5g0zb5.js:57217-57298 placement
+//@ chunk-mhn0amzz.js:58455-58536 placement
 /**
  * 当前进行或成功完成的步骤
  */
 function isNowStep(step) {
   return step.mark.tone !== "claude" && (step.isNow || step.mark.tone === "success");
 }
-//@ chunk-ae5g0zb5.js:57298-57954 placement
+//@ chunk-mhn0amzz.js:58536-59192 placement
 function formatReadingCodeStep(facts, mark, ctx, stopReason = null) {
   let note = facts.note ?? REPORT_STATE_TEXT;
   let proposedCount = facts.proposed.length;
@@ -481,7 +481,7 @@ function formatReadingCodeStep(facts, mark, ctx, stopReason = null) {
     renderStepRow(ctx, pendingStep("Run them")),
   ];
 }
-//@ chunk-ae5g0zb5.js:57954-58084 placement
+//@ chunk-mhn0amzz.js:59192-59322 placement
 /**
  * “App ready” 行及应用细节。
  */
@@ -508,7 +508,7 @@ function renderAppReadyRow(facts, ctx) {
     true,
   );
 }
-//@ chunk-ae5g0zb5.js:58084-58231 placement
+//@ chunk-mhn0amzz.js:59322-59469 placement
 /**
  * 面板标题行 “Claude Test · 项目” 与右侧说明。
  */
@@ -535,23 +535,23 @@ function renderPanelTitle(ctx, subtitle, right) {
         },
   );
 }
-//@ chunk-ae5g0zb5.js:58231-58246 placement
+//@ chunk-mhn0amzz.js:59469-59484 placement
 var OTHER = "other";
-//@ chunk-ae5g0zb5.js:58246-58281 placement
+//@ chunk-mhn0amzz.js:59484-59519 placement
 /**
  * 取分组键，缺省为 OTHER
  */
 function groupKeyOf(keyOf) {
   return (row) => keyOf(row) ?? OTHER;
 }
-//@ chunk-ae5g0zb5.js:58281-58334 placement
+//@ chunk-mhn0amzz.js:59519-59572 placement
 /**
  * 是否有多个分组
  */
 function hasMultipleGroups(rows, keyOf) {
   return new Set(rows.map(groupKeyOf(keyOf))).size > 1;
 }
-//@ chunk-ae5g0zb5.js:58334-58497 placement
+//@ chunk-mhn0amzz.js:59572-59735 placement
 /**
  * 按分组键给行插入分组标题。
  */
@@ -571,7 +571,7 @@ function groupRowsWithHeadings(ctx, rows, keyOf, renderRow) {
   });
   return out;
 }
-//@ chunk-ae5g0zb5.js:58497-58572 placement
+//@ chunk-mhn0amzz.js:59735-59810 placement
 /**
  * "adds data" 警告标记
  */
@@ -583,7 +583,7 @@ var NOT_RE_RUN_MARK = {
   text: "not re-run",
   tone: "dim",
 };
-//@ chunk-ae5g0zb5.js:58572-58732 placement
+//@ chunk-mhn0amzz.js:59810-59970 placement
 /**
  * 按分组聚合行（OTHER 组放最后）。
  */
@@ -595,14 +595,14 @@ function orderRowsByGroup(rows, keyOf) {
     .sort((keyA, keyB) => Number(keyA === OTHER) - Number(keyB === OTHER))
     .flatMap((key) => rows.filter((row) => keyOfRow(row) === key));
 }
-//@ chunk-ae5g0zb5.js:58732-58772 placement
+//@ chunk-mhn0amzz.js:59970-60010 placement
 /**
  * 按 area 分组排序
  */
 function orderProposedRows(rows) {
   return orderRowsByGroup(rows, (row) => row.area);
 }
-//@ chunk-ae5g0zb5.js:58772-58878 placement
+//@ chunk-mhn0amzz.js:60010-60116 placement
 /**
  * 结果行色调：未重跑为暗色，有结论按 PASS/FAIL/BLOCKED，运行中为 claude。
  */
@@ -615,7 +615,7 @@ function rowTone(state, row) {
         ? "claude"
         : null;
 }
-//@ chunk-ae5g0zb5.js:58878-59437 placement
+//@ chunk-mhn0amzz.js:60116-60675 placement
 function buildPanelHeader(state, icons, columns) {
   let mapped = state.rows.map((row) => rowTone(state, row));
   let mapped_2 = state.rows.map((row) => row.verdict !== null);
@@ -654,7 +654,7 @@ function buildPanelHeader(state, icons, columns) {
   }
   return segments;
 }
-//@ chunk-ae5g0zb5.js:59437-59757 placement
+//@ chunk-mhn0amzz.js:60675-60995 placement
 /**
  * 结果行排序：运行结束后按组内最早顺序排列。
  */
@@ -676,33 +676,33 @@ function orderResultRows(results) {
     )
     .flatMap((group) => group.sort((rowA, rowB) => verdictRank(rowA) - verdictRank(rowB)));
 }
-//@ chunk-ae5g0zb5.js:59757-59786 placement
+//@ chunk-mhn0amzz.js:60995-61024 placement
 /**
  * 取行的 area
  */
 function areaOf(row) {
   return row.area;
 }
-//@ chunk-ae5g0zb5.js:59786-59875 placement
+//@ chunk-mhn0amzz.js:61024-61113 placement
 /**
  * FAIL<BLOCKED<PASS<未重跑 的排序权重
  */
 function verdictRank(row) {
   return row.isNotReRun === true ? 3 : row.verdict === "FAIL" ? 0 : row.verdict === "BLOCKED" ? 1 : 2;
 }
-//@ chunk-ae5g0zb5.js:59875-59921 placement
+//@ chunk-mhn0amzz.js:61113-61159 placement
 /**
  * 停止全部代理的按键提示
  */
 var STOP_AGENTS_HINT = "ctrl+x ctrl+k twice stops all agents";
-//@ chunk-ae5g0zb5.js:59921-59959 placement
+//@ chunk-mhn0amzz.js:61159-61197 placement
 /**
  * 生成暗色文本块
  */
 function dimLine(ctx, ...rest) {
   return textBlock(ctx, ...rest);
 }
-//@ chunk-ae5g0zb5.js:59959-60139 placement
+//@ chunk-mhn0amzz.js:61197-61377 placement
 /**
  * 带前缀的条目列表，放不下时前缀单独一行。
  */
@@ -719,7 +719,7 @@ function renderLabeledItems(width, items) {
         ...items.map((item) => buildLabeledRow(width, item, "  ")),
       ];
 }
-//@ chunk-ae5g0zb5.js:60139-60220 placement
+//@ chunk-mhn0amzz.js:61377-61458 placement
 /**
  * 生成“标签 + 值”的行
  */
@@ -741,14 +741,14 @@ function buildLabeledRow(ctx, text, text_2) {
     null,
   );
 }
-//@ chunk-ae5g0zb5.js:60220-60240 placement
+//@ chunk-mhn0amzz.js:61458-61478 placement
 /**
  * 6
  */
 var MAX_DETAIL_ROWS = 6;
 var MIN_PASS_ROWS = 3;
 var PANE_DEFAULT_WIDTH = 30;
-//@ chunk-ae5g0zb5.js:60240-60305 placement
+//@ chunk-mhn0amzz.js:61478-61543 placement
 /**
  * 生成计数行
  */
@@ -765,7 +765,7 @@ function countRow(ctx, item, text) {
     null,
   );
 }
-//@ chunk-ae5g0zb5.js:60305-61168 placement
+//@ chunk-mhn0amzz.js:61543-62406 placement
 function formatResultSummary(state, ctx, maxRows, renderRow) {
   let rows = orderResultRows(state);
   let withHeadings = groupRowsWithHeadings(ctx, rows, (row) => row.area, renderRow);
@@ -831,7 +831,7 @@ function formatResultSummary(state, ctx, maxRows, renderRow) {
       : [];
   return [...passRows, ...filtered.map(renderRow), ...filtered_2.slice(0, min).map(renderRow), ...moreRows];
 }
-//@ chunk-ae5g0zb5.js:61168-61295 placement
+//@ chunk-mhn0amzz.js:62406-62533 placement
 /**
  * 渲染面板；等待用户时把进行中的步骤换成等待提示。
  */
@@ -848,7 +848,7 @@ function renderClaudeTestPane(
     ? replaceActiveStepWithWaiting(lines, Math.max(20, Math.floor(width)))
     : lines;
 }
-//@ chunk-ae5g0zb5.js:61295-61403 placement
+//@ chunk-mhn0amzz.js:62533-62641 placement
 /**
  * 待运行规格行。
  */
@@ -867,14 +867,14 @@ function renderPendingSpecRow(ctx, row) {
     row.addsData ? ADDS_DATA_MARK : null,
   );
 }
-//@ chunk-ae5g0zb5.js:61403-61492 placement
+//@ chunk-mhn0amzz.js:62641-62730 placement
 /**
  * 统计某结论的行数
  */
 function countVerdict(run, verdict) {
   return run.rows.reduce((acc, row) => acc + (row.verdict === verdict && row.isNotReRun !== true ? 1 : 0), 0);
 }
-//@ chunk-ae5g0zb5.js:61492-61769 placement
+//@ chunk-mhn0amzz.js:62730-63007 placement
 /**
  * 结果行的耗时文本（完成用总秒数，运行中按开始时间推算）。
  */
@@ -887,7 +887,7 @@ function rowElapsedLabel(run, row, readAt, runningSeconds) {
   }
   return row.stem === run.running && runningSeconds !== null ? formatElapsed(runningSeconds * 1000) : null;
 }
-//@ chunk-ae5g0zb5.js:61769-66493 placement
+//@ chunk-mhn0amzz.js:63007-67731 placement
 /**
  * 生成 Claude Test 面板内容：登录、开始测试、审批规格、结果与修复建议（约 4.7 KB）。
  */
@@ -1347,14 +1347,14 @@ function renderClaudeTestPanel(facts, now, width, glyphs, maxRows, showRunIds) {
     );
   return lines;
 }
-//@ chunk-ae5g0zb5.js:66493-66549 placement
+//@ chunk-mhn0amzz.js:67731-67787 placement
 /**
  * 由文件名 stem 得到显示名
  */
 function displayNameForStem(stem) {
-  return collapseAndTruncate(capitalize(stem.replaceAll("-", " ")), 140);
+  return collapseAndTruncate(capitalize_2(stem.replaceAll("-", " ")), 140);
 }
-//@ chunk-ae5g0zb5.js:66549-66639 placement
+//@ chunk-mhn0amzz.js:67787-67877 placement
 /**
  * 统计文本行数
  */
@@ -1373,14 +1373,14 @@ function lineCount(text) {
     lineCount += 1;
   return lineCount;
 }
-//@ chunk-ae5g0zb5.js:66639-66693 placement
+//@ chunk-mhn0amzz.js:67877-67931 placement
 /**
  * 所有行合计行数
  */
 function totalLines(lines) {
   return lines.reduce((acc, line) => acc + lineCount(line.text), 0);
 }
-//@ chunk-ae5g0zb5.js:66693-66716 placement
+//@ chunk-mhn0amzz.js:67931-67954 placement
 /**
  * 0.5
  */

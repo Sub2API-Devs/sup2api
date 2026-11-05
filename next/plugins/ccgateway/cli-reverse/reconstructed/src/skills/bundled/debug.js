@@ -3,9 +3,9 @@
  *
  * 并入已有模块：内置 debug 技能
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/debug.ts
- * pieces: chunk-hantmvxa.js (6)
+ * pieces: chunk-ne2890fx.js (6)
  * attribution: affinity 1, fingerprint 1, placement 4
  */
 import { registerBundledSkill } from "../bundledSkills.js";
@@ -28,14 +28,14 @@ import { tailFile } from "../../utils/fsOperations.js";
 import { isENOENT, errorMessage } from "../../utils/errors.js";
 import { formatFileSize } from "../../utils/format.js";
 
-//@ chunk-hantmvxa.js:102064-102091 affinity
+//@ chunk-ne2890fx.js:102245-102272 affinity
 /**
  * 读取调试日志的字节上限。
  */
 var DEBUG_TAIL_LINES = 20;
 var MAX_DEBUG_LOG_BYTES = 65536;
 var MAX_DEBUG_SETTINGS_CHARS = 8192;
-//@ chunk-hantmvxa.js:102091-103906 fingerprint (2.1.88 match: registerDebugSkill, 0.766)
+//@ chunk-ne2890fx.js:102272-104087 fingerprint (2.1.88 match: registerDebugSkill, 0.766)
 /**
  * 注册 /debug 内置 skill：打开本会话调试日志，读取最近的 debug 日志与设置信息拼成诊断提示词；只能用户调用（disableModelInvocation）。
  */
@@ -116,7 +116,7 @@ Remember that settings are in:
     },
   });
 }
-//@ chunk-hantmvxa.js:103906-104808 placement
+//@ chunk-ne2890fx.js:104087-104989 placement
 /**
  * 为内置 debug 技能生成 "## Daemon" 段：读取后台守护进程的 lock、status 文件与日志尾部；都不存在时说明守护进程未运行并给出日志路径。
  */
@@ -170,7 +170,7 @@ Other daemon state on disk (Read if relevant \u2014 roster contains user prompts
 - \`${daemonRosterFile()}\` \u2014 live worker roster
 - \`${getJobsDir()}/<short>/state.json\` \u2014 per-job state`;
 }
-//@ chunk-hantmvxa.js:104808-105223 placement
+//@ chunk-ne2890fx.js:104989-105404 placement
 /**
  * 读取调试日志末尾若干行（经存储后端或本地文件），失败时返回说明文字。
  */
@@ -199,7 +199,7 @@ async function readLogTailSection(logPath, backendRef) {
       : `Failed to read last ${DEBUG_TAIL_LINES} lines: ${errorMessage(error)}`;
   }
 }
-//@ chunk-hantmvxa.js:105223-105370 placement
+//@ chunk-ne2890fx.js:105404-105551 placement
 function formatLogTail({ content, bytesTotal }) {
   let joined = content
     .split(
@@ -216,7 +216,7 @@ function formatLogTail({ content, bytesTotal }) {
 ${joined}
 \`\`\``;
 }
-//@ chunk-hantmvxa.js:105370-105673 placement
+//@ chunk-ne2890fx.js:105551-105854 placement
 /**
  * 读取守护进程状态文件内容，失败时返回错误说明，不存在时返回 null。
  */

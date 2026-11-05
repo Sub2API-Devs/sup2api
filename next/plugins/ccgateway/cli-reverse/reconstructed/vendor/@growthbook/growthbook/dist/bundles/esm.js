@@ -1,13 +1,13 @@
 /**
  * @growthbook/growthbook/dist/bundles/esm.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @growthbook/growthbook@1.6.1
- * pieces: chunk-aepeg2w5.js (131)
+ * pieces: chunk-exfmq47h.js (131)
  * attribution: esm-layout 25, esm-fingerprint 106
  */
 import { promiseTimeout, getAutoExperimentChangeType } from "./esm.min.js";
 
-//@ chunk-aepeg2w5.js:6509-6567 esm-layout
+//@ chunk-exfmq47h.js:6969-7027 esm-layout
 function subscribe() {
   let value = null;
   return {
@@ -17,17 +17,17 @@ function subscribe() {
     },
   };
 }
-//@ chunk-aepeg2w5.js:6604-6775 esm-fingerprint
+//@ chunk-exfmq47h.js:7064-7235 esm-fingerprint
 var polyfills$1 = {
   fetch: globalThis.fetch ? globalThis.fetch.bind(globalThis) : undefined,
   SubtleCrypto: globalThis.crypto ? globalThis.crypto.subtle : undefined,
   EventSource: globalThis.EventSource,
 };
-//@ chunk-aepeg2w5.js:6775-6799 esm-layout
+//@ chunk-exfmq47h.js:7235-7259 esm-layout
 function getPolyfills() {
   return polyfills$1;
 }
-//@ chunk-aepeg2w5.js:6799-6933 esm-fingerprint
+//@ chunk-exfmq47h.js:7259-7393 esm-fingerprint
 function hashFnv32a(str) {
   let hval = 2166136261;
   let l = str.length;
@@ -37,33 +37,33 @@ function hashFnv32a(str) {
   }
   return hval >>> 0;
 }
-//@ chunk-aepeg2w5.js:6933-7037 esm-fingerprint
+//@ chunk-exfmq47h.js:7393-7497 esm-fingerprint
 function hash(seed, value, version) {
   if (version === 2) return (hashFnv32a(hashFnv32a(seed + value) + "") % 1e4) / 1e4;
   if (version === 1) return (hashFnv32a(value + seed) % 1000) / 1000;
   return null;
 }
-//@ chunk-aepeg2w5.js:7037-7095 esm-layout
+//@ chunk-exfmq47h.js:7497-7555 esm-layout
 function getEqualWeights(n) {
   if (n <= 0) return [];
   return Array(n).fill(1 / n);
 }
-//@ chunk-aepeg2w5.js:7095-7135 esm-layout
+//@ chunk-exfmq47h.js:7555-7595 esm-layout
 function inRange(n_2, range) {
   return n_2 >= range[0] && n_2 < range[1];
 }
-//@ chunk-aepeg2w5.js:7135-7220 esm-layout
+//@ chunk-exfmq47h.js:7595-7680 esm-layout
 function inNamespace(hashValue, namespace) {
   let n = hash("__" + namespace[0], hashValue, 1);
   if (n === null) return false;
   return n >= namespace[1] && n < namespace[2];
 }
-//@ chunk-aepeg2w5.js:7220-7296 esm-layout
+//@ chunk-exfmq47h.js:7680-7756 esm-layout
 function chooseVariation(n_2, ranges) {
   for (let i = 0; i < ranges.length; i++) if (inRange(n_2, ranges[i])) return i;
   return -1;
 }
-//@ chunk-aepeg2w5.js:7296-7408 esm-fingerprint
+//@ chunk-exfmq47h.js:7756-7868 esm-fingerprint
 function getUrlRegExp(regexString) {
   try {
     let escaped = regexString.replace(/([^\\])\//g, "$1\\/");
@@ -73,7 +73,7 @@ function getUrlRegExp(regexString) {
     return;
   }
 }
-//@ chunk-aepeg2w5.js:7408-7593 esm-fingerprint
+//@ chunk-exfmq47h.js:7868-8053 esm-fingerprint
 function isURLTargeted(url, targets) {
   if (!targets.length) return false;
   let hasIncludeRules = false;
@@ -89,7 +89,7 @@ function isURLTargeted(url, targets) {
   }
   return isIncluded || !hasIncludeRules;
 }
-//@ chunk-aepeg2w5.js:7593-7793 esm-fingerprint
+//@ chunk-exfmq47h.js:8053-8253 esm-fingerprint
 function _evalSimpleUrlPart(actual, pattern, isPath) {
   try {
     let escaped = pattern.replace(/[*.+?^${}()|[\]\\]/g, "\\$&").replace(/_____/g, ".*");
@@ -99,7 +99,7 @@ function _evalSimpleUrlPart(actual, pattern, isPath) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:7793-8130 esm-fingerprint
+//@ chunk-exfmq47h.js:8253-8590 esm-fingerprint
 function _evalSimpleUrlTarget(actual, pattern) {
   try {
     let expected = new URL(
@@ -119,7 +119,7 @@ function _evalSimpleUrlTarget(actual, pattern) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:8130-8354 esm-fingerprint
+//@ chunk-exfmq47h.js:8590-8814 esm-fingerprint
 function _evalURLTarget(url, type, pattern) {
   try {
     let parsed = new URL(url, "https://_");
@@ -133,7 +133,7 @@ function _evalURLTarget(url, type, pattern) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:8354-8566 esm-fingerprint
+//@ chunk-exfmq47h.js:8814-9026 esm-fingerprint
 function getBucketRanges(numVariations, coverage, weights) {
   coverage = coverage === undefined ? 1 : coverage;
   if (coverage < 0) coverage = 0;
@@ -150,7 +150,7 @@ function getBucketRanges(numVariations, coverage, weights) {
     return [start, start + coverage * w_2];
   });
 }
-//@ chunk-aepeg2w5.js:8566-8838 esm-fingerprint
+//@ chunk-exfmq47h.js:9026-9298 esm-fingerprint
 function getQueryStringOverride(id, url, numVariations) {
   if (!url) return null;
   let search = url.split("?")[1];
@@ -170,7 +170,7 @@ function getQueryStringOverride(id, url, numVariations) {
   if (match.length > 0 && match[0] >= 0 && match[0] < numVariations) return match[0];
   return null;
 }
-//@ chunk-aepeg2w5.js:8838-8905 esm-layout
+//@ chunk-exfmq47h.js:9298-9365 esm-layout
 function isIncluded(include) {
   try {
     return include();
@@ -179,9 +179,9 @@ function isIncluded(include) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:8905-8963 esm-fingerprint
+//@ chunk-exfmq47h.js:9365-9423 esm-fingerprint
 var base64ToBuf = (b) => Uint8Array.from(atob(b), (c) => c.charCodeAt(0));
-//@ chunk-aepeg2w5.js:8963-9364 esm-fingerprint
+//@ chunk-exfmq47h.js:9423-9824 esm-fingerprint
 async function decrypt(encryptedString, decryptionKey, subtle) {
   decryptionKey = decryptionKey || "";
   subtle = subtle || (globalThis.crypto && globalThis.crypto.subtle) || polyfills$1.SubtleCrypto;
@@ -211,12 +211,12 @@ async function decrypt(encryptedString, decryptionKey, subtle) {
     throw Error("Failed to decrypt");
   }
 }
-//@ chunk-aepeg2w5.js:9364-9436 esm-fingerprint
+//@ chunk-exfmq47h.js:9824-9896 esm-fingerprint
 function toString(input) {
   if (typeof input === "string") return input;
   return JSON.stringify(input);
 }
-//@ chunk-aepeg2w5.js:9436-9659 esm-fingerprint
+//@ chunk-exfmq47h.js:9896-10119 esm-fingerprint
 function paddedVersionString(input) {
   if (typeof input === "number") input = input + "";
   if (!input || typeof input !== "string") input = "0";
@@ -224,7 +224,7 @@ function paddedVersionString(input) {
   if (parts.length === 3) parts.push("~");
   return parts.map((v) => (v.match(/^[0-9]+$/) ? v.padStart(5, " ") : v)).join("-");
 }
-//@ chunk-aepeg2w5.js:9659-9716 esm-fingerprint
+//@ chunk-exfmq47h.js:10119-10176 esm-fingerprint
 function loadSDKVersion() {
   let version;
   try {
@@ -234,7 +234,7 @@ function loadSDKVersion() {
   }
   return version;
 }
-//@ chunk-aepeg2w5.js:9716-9951 esm-fingerprint
+//@ chunk-exfmq47h.js:10176-10411 esm-fingerprint
 function mergeQueryStrings(oldUrl, newUrl) {
   let currUrl;
   let redirectUrl;
@@ -251,7 +251,7 @@ function mergeQueryStrings(oldUrl, newUrl) {
   });
   return redirectUrl.toString();
 }
-//@ chunk-aepeg2w5.js:10395-11436 esm-layout
+//@ chunk-exfmq47h.js:10855-11896 esm-layout
 var cacheSettings = {
   staleTTL: 60000,
   maxAge: 14400000,
@@ -305,27 +305,27 @@ var helpers = {
   },
   stopIdleListener: () => {},
 };
-//@ chunk-aepeg2w5.js:11436-11517 esm-fingerprint
+//@ chunk-exfmq47h.js:11896-11977 esm-fingerprint
 try {
   if (globalThis.localStorage) polyfills.localStorage = globalThis.localStorage;
 } catch (error) {}
-//@ chunk-aepeg2w5.js:11517-11582 esm-layout
+//@ chunk-exfmq47h.js:11977-12042 esm-layout
 var subscribedInstances = new Map();
 var cacheInitialized = false;
 var cache = new Map();
 var activeFetches = new Map();
 var streams = new Map();
 var supportsSSE = new Set();
-//@ chunk-aepeg2w5.js:11582-11617 esm-layout
+//@ chunk-exfmq47h.js:12042-12077 esm-layout
 function setPolyfills(overrides) {
   Object.assign(polyfills, overrides);
 }
-//@ chunk-aepeg2w5.js:11617-11679 esm-fingerprint
+//@ chunk-exfmq47h.js:12077-12139 esm-fingerprint
 function configureCache(overrides) {
   Object.assign(cacheSettings, overrides);
   if (!cacheSettings.backgroundSync) clearAutoRefresh();
 }
-//@ chunk-aepeg2w5.js:11679-11856 esm-fingerprint
+//@ chunk-exfmq47h.js:12139-12316 esm-fingerprint
 async function refreshFeatures(_ref4) {
   let { instance, timeout, skipCache, allowStale, backgroundSync } = _ref4;
   if (!backgroundSync) cacheSettings.backgroundSync = false;
@@ -336,18 +336,18 @@ async function refreshFeatures(_ref4) {
     skipCache,
   });
 }
-//@ chunk-aepeg2w5.js:11856-11925 esm-fingerprint
+//@ chunk-exfmq47h.js:12316-12385 esm-fingerprint
 function subscribe_2(instance) {
   let key = getKey(instance);
   let subs = subscribedInstances.get(key) || new Set();
   subs.add(instance);
   subscribedInstances.set(key, subs);
 }
-//@ chunk-aepeg2w5.js:11925-11969 esm-fingerprint
+//@ chunk-exfmq47h.js:12385-12429 esm-fingerprint
 function unsubscribe(instance) {
   subscribedInstances.forEach((s) => s.delete(instance));
 }
-//@ chunk-aepeg2w5.js:11969-12036 esm-fingerprint
+//@ chunk-exfmq47h.js:12429-12496 esm-fingerprint
 function onHidden() {
   streams.forEach((channel) => {
     if (!channel) return;
@@ -355,7 +355,7 @@ function onHidden() {
     disableChannel(channel);
   });
 }
-//@ chunk-aepeg2w5.js:12036-12115 esm-fingerprint
+//@ chunk-exfmq47h.js:12496-12575 esm-fingerprint
 function onVisible() {
   streams.forEach((channel) => {
     if (!channel) return;
@@ -363,14 +363,14 @@ function onVisible() {
     enableChannel(channel);
   });
 }
-//@ chunk-aepeg2w5.js:12115-12261 esm-fingerprint
+//@ chunk-exfmq47h.js:12575-12721 esm-fingerprint
 async function updatePersistentCache() {
   try {
     if (!polyfills.localStorage) return;
     await polyfills.localStorage.setItem(cacheSettings.cacheKey, JSON.stringify(Array.from(cache.entries())));
   } catch (error) {}
 }
-//@ chunk-aepeg2w5.js:12261-12691 esm-fingerprint
+//@ chunk-exfmq47h.js:12721-13151 esm-fingerprint
 async function fetchFeaturesWithCache(_ref5) {
   let { instance, allowStale, timeout, skipCache } = _ref5;
   let key = getKey(instance);
@@ -398,12 +398,12 @@ async function fetchFeaturesWithCache(_ref5) {
       }
     );
 }
-//@ chunk-aepeg2w5.js:12691-12749 esm-fingerprint
+//@ chunk-exfmq47h.js:13151-13209 esm-fingerprint
 function getKey(instance) {
   let [apiHost, clientKey] = instance.getApiInfo();
   return `${apiHost}||${clientKey}`;
 }
-//@ chunk-aepeg2w5.js:12749-13040 esm-fingerprint
+//@ chunk-exfmq47h.js:13209-13500 esm-fingerprint
 function getCacheKey(instance) {
   let baseKey = getKey(instance);
   if (!("isRemoteEval" in instance) || !instance.isRemoteEval()) return baseKey;
@@ -421,7 +421,7 @@ function getCacheKey(instance) {
     url,
   })}`;
 }
-//@ chunk-aepeg2w5.js:13040-13394 esm-fingerprint
+//@ chunk-exfmq47h.js:13500-13854 esm-fingerprint
 async function initializeCache() {
   if (cacheInitialized) return;
   cacheInitialized = true;
@@ -447,7 +447,7 @@ async function initializeCache() {
     if (cleanupFn) helpers.stopIdleListener = cleanupFn;
   }
 }
-//@ chunk-aepeg2w5.js:13394-13631 esm-fingerprint
+//@ chunk-exfmq47h.js:13854-14091 esm-fingerprint
 function cleanupCache() {
   let entriesWithTimestamps = Array.from(cache.entries())
     .map((_ref7) => {
@@ -461,7 +461,7 @@ function cleanupCache() {
   let entriesToRemoveCount = Math.min(Math.max(0, cache.size - cacheSettings.maxEntries), cache.size);
   for (let i = 0; i < entriesToRemoveCount; i++) cache.delete(entriesWithTimestamps[i].key);
 }
-//@ chunk-aepeg2w5.js:13631-13919 esm-fingerprint
+//@ chunk-exfmq47h.js:14091-14379 esm-fingerprint
 function onNewFeatureData(key, cacheKey, data) {
   let version = data.dateUpdated || "";
   let staleAt = new Date(Date.now() + cacheSettings.staleTTL);
@@ -484,11 +484,11 @@ function onNewFeatureData(key, cacheKey, data) {
   let instances = subscribedInstances.get(key);
   if (instances) instances.forEach((instance) => refreshInstance(instance, data));
 }
-//@ chunk-aepeg2w5.js:13919-13980 esm-fingerprint
+//@ chunk-exfmq47h.js:14379-14440 esm-fingerprint
 async function refreshInstance(instance, data) {
   await instance.setPayload(data || instance.getPayload());
 }
-//@ chunk-aepeg2w5.js:13980-14718 esm-fingerprint
+//@ chunk-exfmq47h.js:14440-15178 esm-fingerprint
 async function fetchFeatures(instance) {
   let { apiHost, apiRequestHeaders } = instance.getApiHosts();
   let clientKey = instance.getClientKey();
@@ -544,7 +544,7 @@ async function fetchFeatures(instance) {
   }
   return promise;
 }
-//@ chunk-aepeg2w5.js:14718-15249 esm-fingerprint
+//@ chunk-exfmq47h.js:15178-15709 esm-fingerprint
 function startAutoRefresh(instance) {
   let forceSSE = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : false;
   let key = getKey(instance);
@@ -583,7 +583,7 @@ function startAutoRefresh(instance) {
     enableChannel(channel);
   }
 }
-//@ chunk-aepeg2w5.js:15249-15497 esm-fingerprint
+//@ chunk-exfmq47h.js:15709-15957 esm-fingerprint
 function onSSEError(channel) {
   if (channel.state === "idle") return;
   channel.errors++;
@@ -599,7 +599,7 @@ function onSSEError(channel) {
     );
   }
 }
-//@ chunk-aepeg2w5.js:15497-15632 esm-fingerprint
+//@ chunk-exfmq47h.js:15957-16092 esm-fingerprint
 function disableChannel(channel) {
   if (!channel.src) return;
   channel.src.onopen = null;
@@ -608,7 +608,7 @@ function disableChannel(channel) {
   channel.src = null;
   if (channel.state === "active") channel.state = "disabled";
 }
-//@ chunk-aepeg2w5.js:15632-15886 esm-fingerprint
+//@ chunk-exfmq47h.js:16092-16346 esm-fingerprint
 function enableChannel(channel) {
   channel.src = helpers.eventSourceCall({
     host: channel.host,
@@ -623,19 +623,19 @@ function enableChannel(channel) {
     channel.errors = 0;
   };
 }
-//@ chunk-aepeg2w5.js:15886-15922 esm-layout
+//@ chunk-exfmq47h.js:16346-16382 esm-layout
 function destroyChannel(channel, key) {
   disableChannel(channel);
   streams.delete(key);
 }
-//@ chunk-aepeg2w5.js:15922-15995 esm-fingerprint
+//@ chunk-exfmq47h.js:16382-16455 esm-fingerprint
 function clearAutoRefresh() {
   supportsSSE.clear();
   streams.forEach(destroyChannel);
   subscribedInstances.clear();
   helpers.stopIdleListener();
 }
-//@ chunk-aepeg2w5.js:15995-16136 esm-fingerprint
+//@ chunk-exfmq47h.js:16455-16596 esm-fingerprint
 function startStreaming(instance, options) {
   if (options.streaming) {
     if (!instance.getClientKey()) throw Error("Must specify clientKey to enable streaming");
@@ -643,14 +643,14 @@ function startStreaming(instance, options) {
     subscribe_2(instance);
   }
 }
-//@ chunk-aepeg2w5.js:16136-16221 esm-fingerprint
+//@ chunk-exfmq47h.js:16596-16681 esm-fingerprint
 var validAttributeName = /^[a-zA-Z:_][a-zA-Z0-9:_.-]*$/;
 var nullController = {
   revert: function () {},
 };
 var elements = new Map();
 var mutations = new Set();
-//@ chunk-aepeg2w5.js:16221-16371 esm-fingerprint
+//@ chunk-exfmq47h.js:16681-16831 esm-fingerprint
 function getObserverInit(attr) {
   return attr === "html"
     ? {
@@ -666,7 +666,7 @@ function getObserverInit(attr) {
         attributeFilter: [attr],
       };
 }
-//@ chunk-aepeg2w5.js:16371-16457 esm-fingerprint
+//@ chunk-exfmq47h.js:16831-16917 esm-fingerprint
 function getElementRecord(element) {
   var record = elements.get(element);
   if (!record) {
@@ -678,7 +678,7 @@ function getElementRecord(element) {
   }
   return record;
 }
-//@ chunk-aepeg2w5.js:16457-17154 esm-fingerprint
+//@ chunk-exfmq47h.js:16917-17614 esm-fingerprint
 function createElementPropertyRecord(el, attr, getCurrentValue, setValue, mutationRunner) {
   var currentValue = getCurrentValue(el);
   var record = {
@@ -719,7 +719,7 @@ function createElementPropertyRecord(el, attr, getCurrentValue, setValue, mutati
   else record.observer.observe(el, getObserverInit(attr));
   return record;
 }
-//@ chunk-aepeg2w5.js:17154-17371 esm-fingerprint
+//@ chunk-exfmq47h.js:17614-17831 esm-fingerprint
 function queueIfNeeded(val, record) {
   var currentVal = record.getCurrentValue(record.el);
   record.virtualValue = val;
@@ -737,7 +737,7 @@ function queueIfNeeded(val, record) {
     runDOMUpdates();
   }
 }
-//@ chunk-aepeg2w5.js:17371-17475 esm-fingerprint
+//@ chunk-exfmq47h.js:17831-17935 esm-fingerprint
 function htmlMutationRunner(record) {
   var val = record.originalValue;
   record.mutations.forEach(function (m) {
@@ -745,7 +745,7 @@ function htmlMutationRunner(record) {
   });
   queueIfNeeded(getTransformedHTML(val), record);
 }
-//@ chunk-aepeg2w5.js:17475-17649 esm-fingerprint
+//@ chunk-exfmq47h.js:17935-18109 esm-fingerprint
 function classMutationRunner(record) {
   var val = new Set(record.originalValue.split(/\s+/).filter(Boolean));
   record.mutations.forEach(function (m) {
@@ -753,7 +753,7 @@ function classMutationRunner(record) {
   });
   queueIfNeeded(Array.from(val).filter(Boolean).join(" "), record);
 }
-//@ chunk-aepeg2w5.js:17649-17749 esm-fingerprint
+//@ chunk-exfmq47h.js:18109-18209 esm-fingerprint
 function attrMutationRunner(record) {
   var val = record.originalValue;
   record.mutations.forEach(function (m) {
@@ -761,7 +761,7 @@ function attrMutationRunner(record) {
   });
   queueIfNeeded(val, record);
 }
-//@ chunk-aepeg2w5.js:17749-17957 esm-fingerprint
+//@ chunk-exfmq47h.js:18209-18417 esm-fingerprint
 function _loadDOMNodes(selectors) {
   var { parentSelector, insertBeforeSelector } = selectors;
   var parentNode = document.querySelector(parentSelector);
@@ -773,7 +773,7 @@ function _loadDOMNodes(selectors) {
     insertBeforeNode,
   };
 }
-//@ chunk-aepeg2w5.js:17957-18068 esm-fingerprint
+//@ chunk-exfmq47h.js:18417-18528 esm-fingerprint
 function positionMutationRunner(record) {
   var val = record.originalValue;
   record.mutations.forEach(function (m) {
@@ -783,14 +783,14 @@ function positionMutationRunner(record) {
   });
   queueIfNeeded(val, record);
 }
-//@ chunk-aepeg2w5.js:18068-18146 esm-fingerprint
+//@ chunk-exfmq47h.js:18528-18606 esm-fingerprint
 var getHTMLValue = function (el) {
   return el.innerHTML;
 };
 var setHTMLValue = function (el, value) {
   return (el.innerHTML = value);
 };
-//@ chunk-aepeg2w5.js:18146-18227 esm-fingerprint
+//@ chunk-exfmq47h.js:18606-18687 esm-fingerprint
 /**
  * DOM 节点 html 属性的懒缓存访问（innerHTML 读写），第三方 DOM 实现代码，被误归到 AskUserQuestion/prompt。
  */
@@ -806,7 +806,7 @@ function getElementHTMLRecord(element) {
     );
   return elementRecord.html;
 }
-//@ chunk-aepeg2w5.js:18227-18459 esm-fingerprint
+//@ chunk-exfmq47h.js:18687-18919 esm-fingerprint
 var getElementPosition = function (el) {
   return {
     parentNode: el.parentElement,
@@ -817,7 +817,7 @@ var setElementPosition = function (el, value) {
   if (value.insertBeforeNode && !value.parentNode.contains(value.insertBeforeNode)) return;
   value.parentNode.insertBefore(el, value.insertBeforeNode);
 };
-//@ chunk-aepeg2w5.js:18459-18556 esm-fingerprint
+//@ chunk-exfmq47h.js:18919-19016 esm-fingerprint
 function getElementPositionRecord(element) {
   var elementRecord = getElementRecord(element);
   if (!elementRecord.position)
@@ -830,14 +830,14 @@ function getElementPositionRecord(element) {
     );
   return elementRecord.position;
 }
-//@ chunk-aepeg2w5.js:18556-18663 esm-fingerprint
+//@ chunk-exfmq47h.js:19016-19123 esm-fingerprint
 var setClassValue = function (el, val) {
   return val ? (el.className = val) : el.removeAttribute("class");
 };
 var getClassValue = function (el) {
   return el.className;
 };
-//@ chunk-aepeg2w5.js:18663-18754 esm-fingerprint
+//@ chunk-exfmq47h.js:19123-19214 esm-fingerprint
 function getElementClassRecord(el) {
   var elementRecord = getElementRecord(el);
   if (!elementRecord.classes)
@@ -850,7 +850,7 @@ function getElementClassRecord(el) {
     );
   return elementRecord.classes;
 }
-//@ chunk-aepeg2w5.js:18754-18936 esm-fingerprint
+//@ chunk-exfmq47h.js:19214-19396 esm-fingerprint
 var getAttrValue = function (attrName) {
   return function (el) {
     var _el$getAttribute;
@@ -862,7 +862,7 @@ var setAttrValue = function (attrName) {
     return val !== null ? el.setAttribute(attrName, val) : el.removeAttribute(attrName);
   };
 };
-//@ chunk-aepeg2w5.js:18936-19047 esm-layout
+//@ chunk-exfmq47h.js:19396-19507 esm-layout
 function getElementAttributeRecord(el, attr) {
   var elementRecord = getElementRecord(el);
   if (!elementRecord.attributes[attr])
@@ -875,7 +875,7 @@ function getElementAttributeRecord(el, attr) {
     );
   return elementRecord.attributes[attr];
 }
-//@ chunk-aepeg2w5.js:19047-19514 esm-fingerprint
+//@ chunk-exfmq47h.js:19507-19974 esm-fingerprint
 function deleteElementPropertyRecord(el, attr) {
   var element = elements.get(el);
   if (!element) return;
@@ -916,15 +916,15 @@ function deleteElementPropertyRecord(el, attr) {
     delete element.attributes[attr];
   }
 }
-//@ chunk-aepeg2w5.js:19514-19521 esm-layout
+//@ chunk-exfmq47h.js:19974-19981 esm-layout
 var transformContainer;
-//@ chunk-aepeg2w5.js:19521-19611 esm-fingerprint
+//@ chunk-exfmq47h.js:19981-20071 esm-fingerprint
 function getTransformedHTML(html) {
   if (!transformContainer) transformContainer = document.createElement("div");
   transformContainer.innerHTML = html;
   return transformContainer.innerHTML;
 }
-//@ chunk-aepeg2w5.js:19611-19732 esm-fingerprint
+//@ chunk-exfmq47h.js:20071-20192 esm-fingerprint
 function setPropertyValue(el, attr, m) {
   if (!m.isDirty) return;
   m.isDirty = false;
@@ -932,7 +932,7 @@ function setPropertyValue(el, attr, m) {
   if (!m.mutations.length) deleteElementPropertyRecord(el, attr);
   m.setValue(el, val);
 }
-//@ chunk-aepeg2w5.js:19732-19924 esm-fingerprint
+//@ chunk-exfmq47h.js:20192-20384 esm-fingerprint
 function setValue(m, el) {
   if (m.html) setPropertyValue(el, "html", m.html);
   if (m.classes) setPropertyValue(el, "class", m.classes);
@@ -941,11 +941,11 @@ function setValue(m, el) {
     setPropertyValue(el, attr, m.attributes[attr]);
   });
 }
-//@ chunk-aepeg2w5.js:19924-19953 esm-layout
+//@ chunk-exfmq47h.js:20384-20413 esm-layout
 function runDOMUpdates() {
   elements.forEach(setValue);
 }
-//@ chunk-aepeg2w5.js:19953-20179 esm-fingerprint
+//@ chunk-exfmq47h.js:20413-20639 esm-fingerprint
 function startMutating(mutation, element) {
   var record = null;
   if (mutation.kind === "html") record = getElementHTMLRecord(element);
@@ -956,7 +956,7 @@ function startMutating(mutation, element) {
   record.mutations.push(mutation);
   record.mutationRunner(record);
 }
-//@ chunk-aepeg2w5.js:20179-20448 esm-fingerprint
+//@ chunk-exfmq47h.js:20639-20908 esm-fingerprint
 function stopMutating(mutation, el) {
   var record = null;
   if (mutation.kind === "html") record = getElementHTMLRecord(el);
@@ -968,7 +968,7 @@ function stopMutating(mutation, el) {
   if (index !== -1) record.mutations.splice(index, 1);
   record.mutationRunner(record);
 }
-//@ chunk-aepeg2w5.js:20448-20643 esm-fingerprint
+//@ chunk-exfmq47h.js:20908-21103 esm-fingerprint
 function refreshElementsSet(mutation) {
   if (mutation.kind === "position" && mutation.elements.size === 1) return;
   var existingElements = new Set(mutation.elements);
@@ -980,7 +980,7 @@ function refreshElementsSet(mutation) {
     }
   });
 }
-//@ chunk-aepeg2w5.js:20643-20738 esm-fingerprint
+//@ chunk-exfmq47h.js:21103-21198 esm-fingerprint
 function revertMutation(mutation) {
   mutation.elements.forEach(function (el) {
     return stopMutating(mutation, el);
@@ -988,13 +988,13 @@ function revertMutation(mutation) {
   mutation.elements.clear();
   mutations.delete(mutation);
 }
-//@ chunk-aepeg2w5.js:20738-20767 esm-layout
+//@ chunk-exfmq47h.js:21198-21227 esm-layout
 function refreshAllElementSets() {
   mutations.forEach(refreshElementsSet);
 }
-//@ chunk-aepeg2w5.js:20767-20774 esm-layout
+//@ chunk-exfmq47h.js:21227-21234 esm-layout
 var observer;
-//@ chunk-aepeg2w5.js:20774-20966 esm-fingerprint
+//@ chunk-exfmq47h.js:21234-21426 esm-fingerprint
 function connectGlobalObserver() {
   if (typeof document === "undefined") return;
   if (!observer)
@@ -1009,9 +1009,9 @@ function connectGlobalObserver() {
     characterData: false,
   });
 }
-//@ chunk-aepeg2w5.js:20966-20971 esm-layout
+//@ chunk-exfmq47h.js:21426-21431 esm-layout
 connectGlobalObserver();
-//@ chunk-aepeg2w5.js:20971-21069 esm-fingerprint
+//@ chunk-exfmq47h.js:21431-21529 esm-fingerprint
 function newMutation(m) {
   if (typeof document === "undefined") return nullController;
   mutations.add(m);
@@ -1022,7 +1022,7 @@ function newMutation(m) {
     },
   };
 }
-//@ chunk-aepeg2w5.js:21069-21148 esm-fingerprint
+//@ chunk-exfmq47h.js:21529-21608 esm-fingerprint
 function html(selector, mutate) {
   return newMutation({
     kind: "html",
@@ -1031,7 +1031,7 @@ function html(selector, mutate) {
     selector,
   });
 }
-//@ chunk-aepeg2w5.js:21148-21231 esm-fingerprint
+//@ chunk-exfmq47h.js:21608-21691 esm-fingerprint
 function position(selector, mutate) {
   return newMutation({
     kind: "position",
@@ -1040,7 +1040,7 @@ function position(selector, mutate) {
     selector,
   });
 }
-//@ chunk-aepeg2w5.js:21231-21311 esm-fingerprint
+//@ chunk-exfmq47h.js:21691-21771 esm-fingerprint
 function classes(selector, mutate) {
   return newMutation({
     kind: "class",
@@ -1049,7 +1049,7 @@ function classes(selector, mutate) {
     selector,
   });
 }
-//@ chunk-aepeg2w5.js:21311-21618 esm-fingerprint
+//@ chunk-exfmq47h.js:21771-22078 esm-fingerprint
 function attribute(selector, attribute, mutate) {
   if (!validAttributeName.test(attribute)) return nullController;
   if (attribute === "class" || attribute === "className")
@@ -1072,7 +1072,7 @@ function attribute(selector, attribute, mutate) {
     selector,
   });
 }
-//@ chunk-aepeg2w5.js:21618-22416 esm-fingerprint
+//@ chunk-exfmq47h.js:22078-22876 esm-fingerprint
 function declarative(_ref2) {
   var { selector, action, value, attribute: attr, parentSelector, insertBeforeSelector } = _ref2;
   if (attr === "html") {
@@ -1120,7 +1120,7 @@ function declarative(_ref2) {
     });
   return nullController;
 }
-//@ chunk-aepeg2w5.js:22416-22490 esm-fingerprint
+//@ chunk-exfmq47h.js:22876-22950 esm-fingerprint
 var index = {
   html,
   classes,
@@ -1129,9 +1129,9 @@ var index = {
   declarative,
 };
 var experiments = index;
-//@ chunk-aepeg2w5.js:22490-22500 esm-layout
+//@ chunk-exfmq47h.js:22950-22960 esm-layout
 var _regexCache = {};
-//@ chunk-aepeg2w5.js:22500-22773 esm-fingerprint
+//@ chunk-exfmq47h.js:22960-23233 esm-fingerprint
 function evalCondition(obj, condition, savedGroups) {
   savedGroups = savedGroups || {};
   for (let [k, v] of Object.entries(condition))
@@ -1153,7 +1153,7 @@ function evalCondition(obj, condition, savedGroups) {
     }
   return true;
 }
-//@ chunk-aepeg2w5.js:22773-22912 esm-fingerprint
+//@ chunk-exfmq47h.js:23233-23372 esm-fingerprint
 function getPath(obj, path) {
   let parts = path.split(".");
   let current = obj;
@@ -1162,12 +1162,12 @@ function getPath(obj, path) {
     else return null;
   return current;
 }
-//@ chunk-aepeg2w5.js:22912-23000 esm-fingerprint
+//@ chunk-exfmq47h.js:23372-23460 esm-fingerprint
 function getRegex(regex) {
   if (!_regexCache[regex]) _regexCache[regex] = new RegExp(regex.replace(/([^\\])\//g, "$1\\/"));
   return _regexCache[regex];
 }
-//@ chunk-aepeg2w5.js:23000-23298 esm-fingerprint
+//@ chunk-exfmq47h.js:23460-23758 esm-fingerprint
 function evalConditionValue(condition, value, savedGroups) {
   if (typeof condition === "string") return value + "" === condition;
   if (typeof condition === "number") return value * 1 === condition;
@@ -1178,12 +1178,12 @@ function evalConditionValue(condition, value, savedGroups) {
   for (let op in condition) if (!evalOperatorCondition(op, value, condition[op], savedGroups)) return false;
   return true;
 }
-//@ chunk-aepeg2w5.js:23298-23397 esm-fingerprint
+//@ chunk-exfmq47h.js:23758-23857 esm-fingerprint
 function isOperatorObject(obj) {
   let keys = Object.keys(obj);
   return keys.length > 0 && keys.filter((k) => k[0] === "$").length === keys.length;
 }
-//@ chunk-aepeg2w5.js:23397-23577 esm-fingerprint
+//@ chunk-exfmq47h.js:23857-24037 esm-fingerprint
 function getType(v) {
   if (v === null) return "null";
   if (Array.isArray(v)) return "array";
@@ -1191,7 +1191,7 @@ function getType(v) {
   if (["string", "number", "boolean", "object", "undefined"].includes(t)) return t;
   return "unknown";
 }
-//@ chunk-aepeg2w5.js:23577-23730 esm-layout
+//@ chunk-exfmq47h.js:24037-24190 esm-layout
 function elemMatch(actual, expected, savedGroups) {
   if (!Array.isArray(actual)) return false;
   let check = isOperatorObject(expected)
@@ -1200,12 +1200,12 @@ function elemMatch(actual, expected, savedGroups) {
   for (let i = 0; i < actual.length; i++) if (actual[i] && check(actual[i])) return true;
   return false;
 }
-//@ chunk-aepeg2w5.js:23730-23822 esm-fingerprint
+//@ chunk-exfmq47h.js:24190-24282 esm-fingerprint
 function isIn(actual, expected) {
   if (Array.isArray(actual)) return actual.some((el) => expected.includes(el));
   return expected.includes(actual);
 }
-//@ chunk-aepeg2w5.js:23822-24832 esm-fingerprint
+//@ chunk-exfmq47h.js:24282-25292 esm-fingerprint
 function evalOperatorCondition(operator, actual, expected, savedGroups) {
   switch (operator) {
     case "$veq":
@@ -1276,29 +1276,29 @@ function evalOperatorCondition(operator, actual, expected, savedGroups) {
       return false;
   }
 }
-//@ chunk-aepeg2w5.js:24832-24934 esm-layout
+//@ chunk-exfmq47h.js:25292-25394 esm-layout
 function evalOr(obj, conditions, savedGroups) {
   if (!conditions.length) return true;
   for (let i = 0; i < conditions.length; i++) if (evalCondition(obj, conditions[i], savedGroups)) return true;
   return false;
 }
-//@ chunk-aepeg2w5.js:24934-25015 esm-layout
+//@ chunk-exfmq47h.js:25394-25475 esm-layout
 function evalAnd(obj, conditions, savedGroups) {
   for (let i = 0; i < conditions.length; i++)
     if (!evalCondition(obj, conditions[i], savedGroups)) return false;
   return true;
 }
-//@ chunk-aepeg2w5.js:25015-25065 esm-fingerprint
+//@ chunk-exfmq47h.js:25475-25525 esm-fingerprint
 var FEATURE_EVALUATED_EVENT = "Feature Evaluated";
 var EVENT_EXPERIMENT_VIEWED = "Experiment Viewed";
-//@ chunk-aepeg2w5.js:25065-25275 esm-fingerprint
+//@ chunk-exfmq47h.js:25525-25735 esm-fingerprint
 function getForcedFeatureValues(ctx) {
   let ret = new Map();
   if (ctx.global.forcedFeatureValues) ctx.global.forcedFeatureValues.forEach((v, k) => ret.set(k, v));
   if (ctx.user.forcedFeatureValues) ctx.user.forcedFeatureValues.forEach((v, k) => ret.set(k, v));
   return ret;
 }
-//@ chunk-aepeg2w5.js:25275-25552 esm-fingerprint
+//@ chunk-exfmq47h.js:25735-26012 esm-fingerprint
 function getForcedVariations(ctx) {
   if (ctx.global.forcedVariations && ctx.user.forcedVariations)
     return {
@@ -1309,13 +1309,13 @@ function getForcedVariations(ctx) {
   else if (ctx.user.forcedVariations) return ctx.user.forcedVariations;
   else return {};
 }
-//@ chunk-aepeg2w5.js:25552-25598 esm-layout
+//@ chunk-exfmq47h.js:26012-26058 esm-layout
 async function safeCall(fn) {
   try {
     await fn();
   } catch (error) {}
 }
-//@ chunk-aepeg2w5.js:25598-26240 esm-fingerprint
+//@ chunk-exfmq47h.js:26058-26700 esm-fingerprint
 function onExperimentViewed(ctx, experiment, result) {
   if (ctx.user.trackedExperiments) {
     let k = getExperimentDedupeKey(experiment, result);
@@ -1357,7 +1357,7 @@ function onExperimentViewed(ctx, experiment, result) {
   }
   return calls;
 }
-//@ chunk-aepeg2w5.js:26240-26910 esm-fingerprint
+//@ chunk-exfmq47h.js:26700-27370 esm-fingerprint
 function onFeatureUsage(ctx, key, ret) {
   if (ctx.user.trackedFeatureUsage) {
     let stringifiedValue = JSON.stringify(ret.value);
@@ -1396,7 +1396,7 @@ function onFeatureUsage(ctx, key, ret) {
     );
   }
 }
-//@ chunk-aepeg2w5.js:26910-29050 esm-fingerprint
+//@ chunk-exfmq47h.js:27370-29510 esm-fingerprint
 function evaluateFeature(id, ctx) {
   if (ctx.stack.evaluatedFeatures.has(id)) return getFeatureResult(ctx, id, null, "cyclicPrerequisite");
   ctx.stack.evaluatedFeatures.add(id);
@@ -1484,7 +1484,7 @@ function evaluateFeature(id, ctx) {
     "defaultValue",
   );
 }
-//@ chunk-aepeg2w5.js:29050-31779 esm-fingerprint
+//@ chunk-exfmq47h.js:29510-32239 esm-fingerprint
 function runExperiment(experiment, featureId, ctx) {
   let key = experiment.key;
   let numVariations = experiment.variations.length;
@@ -1664,7 +1664,7 @@ function runExperiment(experiment, featureId, ctx) {
     trackingCall,
   };
 }
-//@ chunk-aepeg2w5.js:31779-31941 esm-fingerprint
+//@ chunk-exfmq47h.js:32239-32401 esm-fingerprint
 function getFeatureResult(ctx, key, value, source, ruleId, experiment, result) {
   let ret = {
     value,
@@ -1678,18 +1678,18 @@ function getFeatureResult(ctx, key, value, source, ruleId, experiment, result) {
   if (source !== "override") onFeatureUsage(ctx, key, ret);
   return ret;
 }
-//@ chunk-aepeg2w5.js:31941-32014 esm-fingerprint
+//@ chunk-exfmq47h.js:32401-32474 esm-fingerprint
 function getAttributes(ctx) {
   return {
     ...ctx.user.attributes,
     ...ctx.user.attributeOverrides,
   };
 }
-//@ chunk-aepeg2w5.js:32014-32075 esm-fingerprint
+//@ chunk-exfmq47h.js:32474-32535 esm-fingerprint
 function conditionPasses(condition, ctx) {
   return evalCondition(getAttributes(ctx), condition, ctx.global.savedGroups || {});
 }
-//@ chunk-aepeg2w5.js:32075-32256 esm-fingerprint
+//@ chunk-exfmq47h.js:32535-32716 esm-fingerprint
 function isFilteredOut(filters, ctx) {
   return filters.some((filter) => {
     let { hashValue } = getHashAttribute(ctx, filter.attribute);
@@ -1699,7 +1699,7 @@ function isFilteredOut(filters, ctx) {
     return !filter.ranges.some((r) => inRange(n, r));
   });
 }
-//@ chunk-aepeg2w5.js:32256-32450 esm-fingerprint
+//@ chunk-exfmq47h.js:32716-32910 esm-fingerprint
 function isIncludedInRollout(ctx, seed, hashAttribute, fallbackAttribute, range, coverage, hashVersion) {
   if (!range && coverage === undefined) return true;
   if (!range && coverage === 0) return false;
@@ -1709,7 +1709,7 @@ function isIncludedInRollout(ctx, seed, hashAttribute, fallbackAttribute, range,
   if (n === null) return false;
   return range ? inRange(n, range) : coverage !== undefined ? n <= coverage : true;
 }
-//@ chunk-aepeg2w5.js:32450-32940 esm-fingerprint
+//@ chunk-exfmq47h.js:32910-33400 esm-fingerprint
 function getExperimentResult(ctx, experiment, variationIndex, hashUsed, featureId, bucket, stickyBucketUsed) {
   let inExperiment = true;
   if (variationIndex < 0 || variationIndex >= experiment.variations.length) {
@@ -1740,7 +1740,7 @@ function getExperimentResult(ctx, experiment, variationIndex, hashUsed, featureI
   if (meta.passthrough) res.passthrough = meta.passthrough;
   return res;
 }
-//@ chunk-aepeg2w5.js:32940-33081 esm-fingerprint
+//@ chunk-exfmq47h.js:33400-33541 esm-fingerprint
 function mergeOverrides(experiment, ctx) {
   let key = experiment.key;
   let o = ctx.global.overrides;
@@ -1750,7 +1750,7 @@ function mergeOverrides(experiment, ctx) {
   }
   return experiment;
 }
-//@ chunk-aepeg2w5.js:33081-33212 esm-fingerprint
+//@ chunk-exfmq47h.js:33541-33672 esm-fingerprint
 function getHashAttribute(ctx, attr, fallback) {
   let hashAttribute = attr || "id";
   let hashValue = "";
@@ -1765,7 +1765,7 @@ function getHashAttribute(ctx, attr, fallback) {
     hashValue,
   };
 }
-//@ chunk-aepeg2w5.js:33212-33373 esm-fingerprint
+//@ chunk-exfmq47h.js:33672-33833 esm-fingerprint
 function urlIsValid(urlRegex, ctx) {
   let url = ctx.user.url;
   if (!url) return false;
@@ -1774,13 +1774,13 @@ function urlIsValid(urlRegex, ctx) {
   if (urlRegex.test(pathOnly)) return true;
   return false;
 }
-//@ chunk-aepeg2w5.js:33373-33472 esm-fingerprint
+//@ chunk-exfmq47h.js:33833-33932 esm-fingerprint
 function hasGroupOverlap(expGroups, ctx) {
   let groups = ctx.global.groups || {};
   for (let i = 0; i < expGroups.length; i++) if (groups[expGroups[i]]) return true;
   return false;
 }
-//@ chunk-aepeg2w5.js:33472-33889 esm-fingerprint
+//@ chunk-exfmq47h.js:33932-34349 esm-fingerprint
 function getStickyBucketVariation(_ref) {
   let {
     ctx,
@@ -1820,16 +1820,16 @@ function getStickyBucketVariation(_ref) {
     variation,
   };
 }
-//@ chunk-aepeg2w5.js:33889-33933 esm-layout
+//@ chunk-exfmq47h.js:34349-34393 esm-layout
 function getStickyBucketExperimentKey(experimentKey, experimentBucketVersion) {
   experimentBucketVersion = experimentBucketVersion || 0;
   return `${experimentKey}__${experimentBucketVersion}`;
 }
-//@ chunk-aepeg2w5.js:33933-33969 esm-layout
+//@ chunk-exfmq47h.js:34393-34429 esm-layout
 function getStickyBucketAttributeKey(attributeName, attributeValue) {
   return `${attributeName}||${attributeValue}`;
 }
-//@ chunk-aepeg2w5.js:33969-34386 esm-fingerprint
+//@ chunk-exfmq47h.js:34429-34846 esm-fingerprint
 function getStickyBucketAssignments(ctx, expHashAttribute, expFallbackAttribute) {
   if (!ctx.user.stickyBucketAssignmentDocs) return {};
   let { hashAttribute, hashValue } = getHashAttribute(ctx, expHashAttribute);
@@ -1848,7 +1848,7 @@ function getStickyBucketAssignments(ctx, expHashAttribute, expFallbackAttribute)
     Object.assign(assignments, ctx.user.stickyBucketAssignmentDocs[hashKey].assignments || {});
   return assignments;
 }
-//@ chunk-aepeg2w5.js:34386-34682 esm-fingerprint
+//@ chunk-exfmq47h.js:34846-35142 esm-fingerprint
 function generateStickyBucketAssignmentDoc(ctx, attributeName, attributeValue, assignments) {
   let key = getStickyBucketAttributeKey(attributeName, attributeValue);
   let existingAssignments =
@@ -1870,7 +1870,7 @@ function generateStickyBucketAssignmentDoc(ctx, attributeName, attributeValue, a
     changed,
   };
 }
-//@ chunk-aepeg2w5.js:34682-35107 esm-fingerprint
+//@ chunk-exfmq47h.js:35142-35567 esm-fingerprint
 function deriveStickyBucketIdentifierAttributes(ctx, data) {
   let attributes = new Set();
   let features = data && data.features ? data.features : ctx.global.features || {};
@@ -1891,12 +1891,12 @@ function deriveStickyBucketIdentifierAttributes(ctx, data) {
   });
   return Array.from(attributes);
 }
-//@ chunk-aepeg2w5.js:35107-35176 esm-fingerprint
+//@ chunk-exfmq47h.js:35567-35636 esm-fingerprint
 async function getAllStickyBucketAssignmentDocs(ctx, stickyBucketService, data) {
   let attributes = getStickyBucketAttributes(ctx, data);
   return stickyBucketService.getAllAssignments(attributes);
 }
-//@ chunk-aepeg2w5.js:35176-35271 esm-fingerprint
+//@ chunk-exfmq47h.js:35636-35731 esm-fingerprint
 function getStickyBucketAttributes(ctx, assignments) {
   let attributes = {};
   deriveStickyBucketIdentifierAttributes(ctx, assignments).forEach((attr) => {
@@ -1905,7 +1905,7 @@ function getStickyBucketAttributes(ctx, assignments) {
   });
   return attributes;
 }
-//@ chunk-aepeg2w5.js:35271-35752 esm-fingerprint
+//@ chunk-exfmq47h.js:35731-36212 esm-fingerprint
 async function decryptPayload(data, decryptionKey, subtle) {
   data = {
     ...data,
@@ -1936,7 +1936,7 @@ async function decryptPayload(data, decryptionKey, subtle) {
   }
   return data;
 }
-//@ chunk-aepeg2w5.js:35752-36003 esm-fingerprint
+//@ chunk-exfmq47h.js:36212-36463 esm-fingerprint
 function getApiHosts(options) {
   let defaultHost = options.apiHost || "https://cdn.growthbook.io";
   return {
@@ -1946,14 +1946,14 @@ function getApiHosts(options) {
     streamingHostRequestHeaders: options.streamingHostRequestHeaders,
   };
 }
-//@ chunk-aepeg2w5.js:36003-36075 esm-fingerprint
+//@ chunk-exfmq47h.js:36463-36535 esm-fingerprint
 function getExperimentDedupeKey(experiment, result) {
   return result.hashAttribute + result.hashValue + experiment.key + result.variationId;
 }
-//@ chunk-aepeg2w5.js:36075-36129 esm-layout
+//@ chunk-exfmq47h.js:36535-36589 esm-layout
 var isBrowser = typeof window !== "undefined" && typeof document !== "undefined";
 var SDK_VERSION$1 = loadSDKVersion();
-//@ chunk-aepeg2w5.js:36129-50738 esm-fingerprint
+//@ chunk-exfmq47h.js:36589-51198 esm-fingerprint
 class GrowthBook {
   constructor(options) {
     options = options || {};
@@ -2637,4 +2637,4 @@ class GrowthBook {
     return !!this._options.enableDevMode;
   }
 }
-export { subscribe, getPolyfills, setPolyfills, helpers, GrowthBook };
+export { subscribe, helpers, getPolyfills, setPolyfills, GrowthBook };

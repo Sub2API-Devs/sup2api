@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/sdk-metrics/build/src/MeterProvider.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-metrics@2.7.1
- * pieces: chunk-wrv5s6k4.js (1)
+ * pieces: chunk-q87n5wsq.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
@@ -12,7 +12,7 @@ import { require_MeterProviderSharedState } from "./state/MeterProviderSharedSta
 import { require_MetricCollector } from "./state/MetricCollector.js";
 import { require_View } from "./view/View.js";
 
-//@ chunk-wrv5s6k4.js:57680-58901 cjs-fingerprint
+//@ chunk-q87n5wsq.js:57680-58901 cjs-fingerprint
 var require_MeterProvider = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

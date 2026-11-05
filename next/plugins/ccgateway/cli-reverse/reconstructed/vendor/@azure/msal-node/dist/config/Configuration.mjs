@@ -1,8 +1,8 @@
 /**
  * @azure/msal-node/dist/config/Configuration.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/msal-node@3.8.1
- * pieces: chunk-mrx6y2r5.js (3)
+ * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-fingerprint 3
  */
 import { Constants, ProtocolMode, AzureCloudInstance } from "../../../msal-common/lib/index-node-DhUjlPuB.js";
@@ -13,13 +13,13 @@ import { deferInit, beginDeferredInits } from "../../../../../runtime/deferred-i
 // This module is the first evaluated of an import cycle of 4 modules closed by ../../lib/msal-node.cjs;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("vendor/@azure/msal-node/lib/msal-node.cjs");
-//@ chunk-mrx6y2r5.js:223223-224007 esm-fingerprint
+//@ chunk-b5df2wx1.js:223223-224007 esm-fingerprint
 var DEFAULT_AUTH_OPTIONS; // deferred: uses HttpClient (../../lib/msal-node.cjs) of its import cycle while loading; runs once the cycle is complete
 var DEFAULT_CACHE_OPTIONS;
 var DEFAULT_LOGGER_OPTIONS_2;
 var DEFAULT_SYSTEM_OPTIONS;
 var DEFAULT_TELEMETRY_OPTIONS;
-deferInit("chunk-mrx6y2r5.js:223223", () => {
+deferInit("chunk-b5df2wx1.js:223223", () => {
   DEFAULT_AUTH_OPTIONS = {
     clientId: Constants.EMPTY_STRING,
     authority: Constants.DEFAULT_AUTHORITY,
@@ -65,7 +65,7 @@ deferInit("chunk-mrx6y2r5.js:223223", () => {
     },
   };
 });
-//@ chunk-mrx6y2r5.js:224007-224459 esm-fingerprint
+//@ chunk-b5df2wx1.js:224007-224459 esm-fingerprint
 function buildAppConfiguration({ auth, broker, cache, system, telemetry }) {
   let systemOptions = {
     ...DEFAULT_SYSTEM_OPTIONS,
@@ -101,7 +101,7 @@ function buildAppConfiguration({ auth, broker, cache, system, telemetry }) {
     },
   };
 }
-//@ chunk-mrx6y2r5.js:224459-224805 esm-fingerprint
+//@ chunk-b5df2wx1.js:224459-224805 esm-fingerprint
 function buildManagedIdentityConfiguration({ clientCapabilities, managedIdentityIdParams, system }) {
   let managedIdentityId = new ManagedIdentityId(managedIdentityIdParams);
   let loggerOptions = system?.loggerOptions || DEFAULT_LOGGER_OPTIONS_2;

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：钩子消息
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (13)
  * attribution: placement 12
  */
 import { escapeSystemReminderTags } from "../../services/api/promptCacheBreakParts.js";
@@ -37,19 +37,19 @@ import { errorMessage } from "../errors.js";
 import { logError } from "../log.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:947704-947712 placement (moved: shares a binding it assigns)
+//@ chunk-5xgkngpb.js:959486-959494 placement (moved: shares a binding it assigns)
 /**
  * 缓存的钩子展示文本构造器。
  */
 var cachedHookDisplayBuilder;
-//@ chunk-e6aww6q8.js:947712-947779 placement
+//@ chunk-5xgkngpb.js:959494-959561 placement
 /**
  * 清洗钩子输出中的 system-reminder 标签（转义结尾的单独 `<`）。
  */
 function scrubHookOutputTags(text) {
   return escapeSystemReminderTags(text).replace(/<(?=\s*(?:\/\s*)?$)/, "&lt;");
 }
-//@ chunk-e6aww6q8.js:947779-947909 placement
+//@ chunk-5xgkngpb.js:959561-959691 placement
 function scrubHookOutputTags_2(text) {
   cachedHookDisplayBuilder ??= [
     confusableTagScrubPattern([
@@ -66,7 +66,7 @@ function scrubHookOutputTags_2(text) {
   ];
   return cachedHookDisplayBuilder.reduce((acc, pattern) => acc.replace(pattern, escapedCharPrefix), text);
 }
-//@ chunk-e6aww6q8.js:947909-948214 placement
+//@ chunk-5xgkngpb.js:959691-959996 placement
 /**
  * 把 hook 产生的任务通知加入消息队列（摘要、正文、优先级、来源等）。
  */
@@ -98,23 +98,23 @@ ${wrapInSystemReminder(body)}`,
     },
   );
 }
-//@ chunk-e6aww6q8.js:948214-948240 placement
+//@ chunk-5xgkngpb.js:959996-960022 placement
 var runningHooksStoreRegistry; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:948214", () => {
+deferInit("chunk-5xgkngpb.js:959996", () => {
   runningHooksStoreRegistry = new HostScoped(() => createStore([]));
 });
-//@ chunk-e6aww6q8.js:948240-948273 placement
+//@ chunk-5xgkngpb.js:960022-960055 placement
 /**
  * 取指定宿主的"运行中钩子"存储。
  */
 function runningHooksStoreOf(host) {
   return runningHooksStoreRegistry.of(host);
 }
-//@ chunk-e6aww6q8.js:948273-948312 placement
+//@ chunk-5xgkngpb.js:960055-960094 placement
 function currentRunningHooksStore() {
   return runningHooksStoreRegistry.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:948312-948725 placement
+//@ chunk-5xgkngpb.js:960094-960507 placement
 /**
  * 登记正在运行的一组 hook（事件、子代理、工具名），并返回结束时移除的函数。
  */
@@ -146,14 +146,14 @@ function trackRunningHooks({ hookEvent, hooks, agentId, toolName }) {
       }),
   };
 }
-//@ chunk-e6aww6q8.js:948725-948773 placement
+//@ chunk-5xgkngpb.js:960507-960555 placement
 /**
  * 判断宿主持有显示的开关（tengu_linear_owl）是否开启。
  */
 function isHostDisplayFeatureOn() {
   return getFeatureValue_SESSION_PINNED("tengu_linear_owl", false);
 }
-//@ chunk-e6aww6q8.js:948773-949257 placement
+//@ chunk-5xgkngpb.js:960555-961039 placement
 /**
  * 判断回调型 hook 是否由 SDK 宿主持有 stdin 直接处理。
  */
@@ -185,21 +185,21 @@ function sanitizeHostPermissionDisplay(permissionDisplay, hook, source) {
   }
   return permissionDisplay;
 }
-//@ chunk-e6aww6q8.js:949257-949441 placement
+//@ chunk-5xgkngpb.js:961039-961223 placement
 function dropStaleHostDisplay(result, input) {
   if (result.hostDisplay === undefined || sameMessageOrShape(result.hostDisplayInput, input)) return result;
   logFeatureSad("permission_host_worded_ask", "input_rewritten");
   let { hostDisplay, hostDisplayInput, ...rest } = result;
   return rest;
 }
-//@ chunk-e6aww6q8.js:949441-949642 placement
+//@ chunk-5xgkngpb.js:961223-961424 placement
 function hostNoResponseMessage(hookEvent) {
   let appName = isHostEntrypoint() ? "Claude Desktop" : "The app driving this session";
   return hookEvent === "SessionStart"
     ? `${appName} didn't respond; carried on without it.`
     : `${appName} didn't respond, so this turn ended without it.`;
 }
-//@ chunk-e6aww6q8.js:2075498-2075584 placement
+//@ chunk-5xgkngpb.js:2132697-2132783 placement
 /**
  * 记录钩子执行失败（"未运行"类错误只记 debug 日志）。
  */
@@ -213,14 +213,14 @@ function logHookExecutionFailure(error) {
   logError(error);
 }
 export {
+  dropStaleHostDisplay,
   scrubHookOutputTags,
-  runningHooksStoreOf,
   logHookExecutionFailure,
+  isHostDisplayFeatureOn,
   enqueueHookTaskNotification,
   scrubHookOutputTags_2,
   trackRunningHooks,
   hostNoResponseMessage,
   sanitizeHostPermissionDisplay,
-  dropStaleHostDisplay,
-  isHostDisplayFeatureOn,
+  runningHooksStoreOf,
 };

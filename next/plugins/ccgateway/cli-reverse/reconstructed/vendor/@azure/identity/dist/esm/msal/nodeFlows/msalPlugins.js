@@ -1,17 +1,17 @@
 /**
  * @azure/identity/dist/esm/msal/nodeFlows/msalPlugins.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/identity@4.10.1
- * pieces: chunk-mrx6y2r5.js (4)
+ * pieces: chunk-b5df2wx1.js (4)
  * attribution: esm-layout 2, esm-fingerprint 2
  */
 import { DEFAULT_TOKEN_CACHE_NAME, CACHE_NON_CAE_SUFFIX, CAE } from "../../constants.js";
 
-//@ chunk-mrx6y2r5.js:22705-22719 esm-layout
+//@ chunk-b5df2wx1.js:22705-22719 esm-layout
 var persistenceProvider = undefined;
-//@ chunk-mrx6y2r5.js:22719-22733 esm-layout
+//@ chunk-b5df2wx1.js:22719-22733 esm-layout
 var nativeBrokerInfo = undefined;
-//@ chunk-mrx6y2r5.js:22733-24316 esm-fingerprint
+//@ chunk-b5df2wx1.js:22733-24316 esm-fingerprint
 function generatePluginConfiguration(options) {
   var _a;
   var _b;
@@ -81,7 +81,7 @@ function generatePluginConfiguration(options) {
   }
   return config;
 }
-//@ chunk-mrx6y2r5.js:24316-24356 esm-fingerprint
+//@ chunk-b5df2wx1.js:24316-24356 esm-fingerprint
 var msalPlugins = {
   generatePluginConfiguration,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。插件发起的调查。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (5)
  * attribution: placement 5
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -17,7 +17,7 @@ import {
 import { Text } from "../../ink/components/Text.js";
 import { formatActivityLabel, MAX_RECENT_ACTIVITY } from "../../utils/pluginActivity.js";
 
-//@ chunk-18hwfzwa.js:1008312-1008526 placement
+//@ chunk-czq1j3j2.js:1042349-1042563 placement
 var MAX_LISTED_FEATURES = 3;
 var TRIGGER_DESCRIPTIONS = {
   skill: "You've used its skills recently",
@@ -26,7 +26,7 @@ var TRIGGER_DESCRIPTIONS = {
   mcp: "You've used its MCP tools recently",
   hook: "Its hooks ran recently",
 };
-//@ chunk-18hwfzwa.js:1008526-1009155 placement
+//@ chunk-czq1j3j2.js:1042563-1043192 placement
 function PluginSurveyQuestion(props) {
   let $ = useMemoCache(12);
   let { subject } = props;
@@ -88,7 +88,7 @@ function PluginSurveyQuestion(props) {
   } else questionElement = $[11];
   return questionElement;
 }
-//@ chunk-18hwfzwa.js:1009155-1009399 placement
+//@ chunk-czq1j3j2.js:1043192-1043436 placement
 function describePluginUsage(subject) {
   let features = subject.features;
   if (features.length === 0) return TRIGGER_DESCRIPTIONS[subject.trigger];
@@ -101,7 +101,7 @@ function describePluginUsage(subject) {
     features.length >= MAX_RECENT_ACTIVITY ? ", and more" : hiddenCount > 0 ? `, +${hiddenCount} more` : "";
   return `Used this session: ${mapped.join(", ")}${suffix}`;
 }
-//@ chunk-18hwfzwa.js:1009399-1009744 placement
+//@ chunk-czq1j3j2.js:1043436-1043781 placement
 /**
  * 判断调查状态是否处于活动中（非 closed/open/被动卡片态）；同一声明的 eot 为各调查的优先顺序与被动卡片状态。
  */
@@ -137,7 +137,7 @@ var SURVEY_PRIORITY = [
     passiveCard: "transcript_prompt",
   },
 ];
-//@ chunk-18hwfzwa.js:1009744-1009885 placement
+//@ chunk-czq1j3j2.js:1043781-1043922 placement
 /**
  * 按优先顺序选出当前该显示的调查：先找活动中的，再找未关闭的，没有返回 null。
  */

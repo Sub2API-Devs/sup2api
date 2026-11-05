@@ -1,13 +1,13 @@
 /**
  * gcp-metadata/build/src/gcp-residency.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: gcp-metadata@7.0.0..8.1.2
- * pieces: chunk-na3pph4p.js (1)
+ * pieces: chunk-e8d3a8an.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-na3pph4p.js:43354-44278 cjs-fingerprint
+//@ chunk-e8d3a8an.js:43354-44278 cjs-fingerprint
 var require_gcp_residency = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

@@ -3,19 +3,20 @@
  *
  * 2.1.316 新增：排队通知
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ynfbqx38.js (39)
- * attribution: placement 39
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0tcpyvr1.js (41)
+ * attribution: placement 39, layout 2
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { objectSchema, stringSchema, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, _enum, literal } from "../../../vendor/zod/v4/classic/schemas.js";
+import { isTriggerFireOrigin } from "../../bridge/inboundMessageOrigin.js";
 import { isReplBridgeActive, getIsNonInteractiveSession, mainAgentId } from "../../bootstrap/state.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { env } from "../../utils/env.js";
 import { transportStateByHost } from "../../cli/transportState.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import {
   READNOTIFICATIONS,
   READNOTIFICATIONS_PROMPT,
@@ -32,16 +33,14 @@ import { logError } from "../../utils/log.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { isSessionActive } from "../../utils/sessionActivity.js";
-import {
-  peekQueuedCommand,
-  removeQueuedByFilter,
-  enqueuePendingNotification,
-} from "../../utils/messageQueueManager.js";
+import { peek, removeByFilter, enqueuePendingNotification } from "../../utils/messageQueueManager.js";
 import { escapeXml_2 as escapeXml } from "../../utils/confusables.js";
 import { queuedNotificationsReminder, notificationKindLabels } from "../../utils/sessionNotifications.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import { isCodeModeOnlyToolsEnabled } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { isPersonQueuedInput } from "../../utils/messages/messageSource.js";
-import { dropIfAnyMessages } from "../mcp/ccrTurnId.js";
-import { count } from "../../utils/collections.js";
+import { dropIfAnyMessages, noteTurnHeard } from "../mcp/ccrTurnId.js";
+import { countWhere } from "../../utils/collections.js";
 import { logHandlerFailure } from "../../cli/print/dispatchControlRequest.js";
 import { parseIsoTimestamp } from "../../utils/parseIsoTimestamp.js";
 import { formatDurationCoarse } from "../../utils/format.js";
@@ -49,12 +48,12 @@ import { plural } from "../../utils/stringUtils.js";
 import { withSystemNotificationPrefix } from "../api/promptCacheBreakParts.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ynfbqx38.js:1057-1081 placement
+//@ chunk-0tcpyvr1.js:1275-1299 placement
 /**
  * 排队通知相关错误类。
  */
 class QueuedNotificationError extends Error {}
-//@ chunk-ynfbqx38.js:1603-1830 placement
+//@ chunk-0tcpyvr1.js:1921-2148 placement
 /**
  * 排队通知的表现层常量：几个长度/数量上限、drain 的字符预算、时钟偏差容忍、提醒重置与暂扣上限，以及两个会话级插槽。
  */
@@ -75,7 +74,7 @@ var MAX_NUDGE_REARMS;
 var MAX_NUDGE_HOLD_MS;
 var nudgeHoldTimerSlot;
 var notificationSettleListenerSlot;
-deferInit("chunk-ynfbqx38.js:1603", () => {
+deferInit("chunk-0tcpyvr1.js:1921", () => {
   QUEUED_NOTIFICATIONS = "queued_notifications";
   THIRD_PARTY_NOTIFICATION_CAUTION = "third_party_notification_caution";
   MAX_DRAINED_IDS_RETAINED = 1000;
@@ -99,32 +98,41 @@ deferInit("chunk-ynfbqx38.js:1603", () => {
     listener: undefined,
   }));
 });
-//@ chunk-ynfbqx38.js:1830-1938 placement
+//@ chunk-0tcpyvr1.js:2148-2350 placement
 /**
  * 构造排队通知的 drain（读取并清空待读通知）与 heldNudge（取被扣留的提醒消息）。
  */
 function createNotificationDrain(getAppState, setAppState, session) {
+  let sawRemaining = false;
   return {
-    drain: (options) =>
-      drainQueuedNotifications(
+    drain: (options) => {
+      let drainResult = drainQueuedNotifications(
         {
           getAppState,
           setAppState,
           session,
         },
         options,
-      ),
-    heldNudge: (session) => heldNotificationNudge(getAppState, session),
+        sawRemaining,
+      );
+      sawRemaining &&= drainResult.remaining > 0;
+      return drainResult;
+    },
+    heldNudge: (session) => {
+      let nudgeMessages = heldNotificationNudge(getAppState, session);
+      sawRemaining ||= nudgeMessages.length > 0 && !session.nobodysTurn;
+      return nudgeMessages;
+    },
   };
 }
-//@ chunk-ynfbqx38.js:1938-2218 placement
+//@ chunk-0tcpyvr1.js:2350-2775 placement
 /**
  * 空的通知 drain 与排队通知 schema（id、来源、内容、优先级、排队时间）。
  */
 var NOOP_NOTIFICATION_DRAIN; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var queuedNotificationSchema;
-var TENGU_SAFFRON_KITE;
-deferInit("chunk-ynfbqx38.js:1938", () => {
+var TRIGGER_FIRE_REASONS;
+deferInit("chunk-0tcpyvr1.js:2350", () => {
   NOOP_NOTIFICATION_DRAIN = {
     drain: () => ({
       notifications: [],
@@ -141,41 +149,52 @@ deferInit("chunk-ynfbqx38.js:1938", () => {
       content: stringSchema(),
       priority: _enum(["now", "next", "later"]).catch("later"),
       queued_at: stringSchema().max(MAX_QUEUED_AT_CHARS),
+      fire_reason: stringSchema()
+        .regex(/^[a-z_]{1,40}$/)
+        .optional()
+        .catch(undefined),
+      own_session_author: literal(true).optional().catch(undefined),
     }),
   );
-  TENGU_SAFFRON_KITE = "tengu_saffron_kite";
+  TRIGGER_FIRE_REASONS = new Set(["scheduled", "retry", "catch_up", "manual"]);
 });
-//@ chunk-ynfbqx38.js:2218-2253 placement
+//@ chunk-0tcpyvr1.js:2775-2837 layout
+function isTriggerFireNotification(notification) {
+  return isTriggerFireOrigin(notification.origin) && TRIGGER_FIRE_REASONS.has(notification.fireReason ?? "");
+}
+//@ chunk-0tcpyvr1.js:2837-2865 layout
+var TENGU_SAFFRON_KITE = "tengu_saffron_kite";
+//@ chunk-0tcpyvr1.js:2865-2900 placement
 /**
  * 满足以下条件才提醒：REPL bridge 活跃，且开关 tengu_saffron_kite 打开（默认开）。
  */
 function isSaffronKiteNudgeEnabled() {
   return isReplBridgeActive() && getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SAFFRON_KITE, true);
 }
-//@ chunk-ynfbqx38.js:2253-2300 placement
+//@ chunk-0tcpyvr1.js:2900-2947 placement
 /**
  * 远程会话（CLAUDE_CODE_REMOTE）且是非交互会话：接受排队通知的前提。
  */
 function isRemoteNonInteractiveSession() {
   return env.CLAUDE_CODE_REMOTE && getIsNonInteractiveSession();
 }
-//@ chunk-ynfbqx38.js:2300-2332 placement
+//@ chunk-0tcpyvr1.js:2947-2979 placement
 var TENGU_QUIZZICAL_TOUCAN = "tengu_quizzical_toucan";
-//@ chunk-ynfbqx38.js:2332-2366 placement
+//@ chunk-0tcpyvr1.js:2979-3013 placement
 /**
  * 远程非交互会话且开关 tengu_quizzical_toucan 打开时才开启提醒。
  */
 function isRemoteNudgeEnabled() {
   return isRemoteNonInteractiveSession() && getFeatureValue_CACHED_MAY_BE_STALE(TENGU_QUIZZICAL_TOUCAN, true);
 }
-//@ chunk-ynfbqx38.js:2366-2397 placement
+//@ chunk-0tcpyvr1.js:3013-3044 placement
 /**
  * 当前环境是否支持排队通知：远程非交互会话，或中继 bridge 下的提醒开关打开。
  */
 function isQueuedNotificationsSupported() {
   return isRemoteNonInteractiveSession() || isSaffronKiteNudgeEnabled();
 }
-//@ chunk-ynfbqx38.js:2397-2483 placement
+//@ chunk-0tcpyvr1.js:3044-3130 placement
 /**
  * 判断工具表里是否声明了 ReadNotifications，且传输层已就绪（或提醒开关打开）。
  */
@@ -183,10 +202,10 @@ function declaresQueuedNotificationTool(tools, session) {
   return (
     isQueuedNotificationsSupported() &&
     (transportStateByHost.of(session).active !== undefined || isSaffronKiteNudgeEnabled()) &&
-    tools.some((tool) => toolMatchesName(tool, READNOTIFICATIONS))
+    tools.some((tool) => matchesToolName(tool, READNOTIFICATIONS))
   );
 }
-//@ chunk-ynfbqx38.js:2483-2992 placement
+//@ chunk-0tcpyvr1.js:3130-3639 placement
 /**
  * 根据 ReadNotifications 工具描述是否被修改，决定 init 中声明的排队通知能力（未修改时附带第三方通知警示）。
  */
@@ -226,18 +245,18 @@ function queuedNotificationCapabilities(tools, session, messagesInView) {
   }
   return [QUEUED_NOTIFICATIONS];
 }
-//@ chunk-ynfbqx38.js:2992-3082 placement
+//@ chunk-0tcpyvr1.js:3639-3729 placement
 /**
  * 取工具定义的 description 字符串，非字符串时返回 null；用于判断 ReadNotifications 描述是否被改动。
  */
 function toolDescriptionOf(value) {
   return "description" in value && typeof value.description === "string" ? value.description : null;
 }
-//@ chunk-ynfbqx38.js:3082-3147 placement (2.1.88 match: processQueuedCommands, 1)
+//@ chunk-0tcpyvr1.js:3729-3794 placement (2.1.88 match: processQueuedCommands, 1)
 function isTaskNotificationFor(queued, value) {
   return queued.mode === "task-notification" && queued.value === value;
 }
-//@ chunk-ynfbqx38.js:3147-4703 placement
+//@ chunk-0tcpyvr1.js:3794-5447 placement
 /**
  * 接收远程排队通知：校验格式与大小、去重、缓冲区满时拒绝，加入 pending 并安排提醒。
  */
@@ -310,9 +329,13 @@ function acceptQueuedNotification(event, { getAppState, setAppState, session }) 
   let entry = {
     notificationId: notification.notification_id,
     origin: notification.origin,
+    ...(notification.fire_reason !== undefined && {
+      fireReason: notification.fire_reason,
+    }),
     content: notification.content,
     queuedAt: notification.queued_at,
     arrivedAt: new Date(Date.now()).toISOString(),
+    ownSessionAuthor: notification.own_session_author === true,
     eventUuid: uuid,
   };
   setAppState((state) => {
@@ -335,7 +358,7 @@ function acceptQueuedNotification(event, { getAppState, setAppState, session }) 
   );
   return entry;
 }
-//@ chunk-ynfbqx38.js:4703-4900 placement
+//@ chunk-0tcpyvr1.js:5447-5644 placement
 /**
  * 把文本追加到指定的待读通知内容后。
  */
@@ -360,7 +383,7 @@ ${content}`,
     };
   });
 }
-//@ chunk-ynfbqx38.js:4900-5478 placement
+//@ chunk-0tcpyvr1.js:5644-6222 placement
 /**
  * 会话空闲且有待读通知时重新提醒（超过次数上限后只上报一次被忽略）。
  */
@@ -380,7 +403,7 @@ function rearmNotificationNudge({ getAppState, setAppState, session }) {
     return;
   }
   let { value: nudgeValue, rearmed, reported } = queuedRemoteNotifications.nudge;
-  if (peekQueuedCommand((queued) => isTaskNotificationFor(queued, nudgeValue)) !== undefined) return;
+  if (peek((queued) => isTaskNotificationFor(queued, nudgeValue)) !== undefined) return;
   if (rearmed >= MAX_NUDGE_REARMS) {
     if (!reported) {
       logFeatureSad("ccr_queued_notifications", "nudge_ignored");
@@ -411,7 +434,7 @@ function rearmNotificationNudge({ getAppState, setAppState, session }) {
     "rearm",
   );
 }
-//@ chunk-ynfbqx38.js:5478-6315 placement
+//@ chunk-0tcpyvr1.js:6222-7122 placement
 /**
  * 为待读通知排入一条 task-notification 提醒（按来源计数），未被扣留时才发出。
  */
@@ -420,7 +443,7 @@ function queueNotificationNudge({ getAppState, setAppState }, reason) {
   if (!isQueuedNotificationsSupported()) {
     if (queuedRemoteNotifications.nudge !== null) {
       let { value: nudgeValue } = queuedRemoteNotifications.nudge;
-      removeQueuedByFilter((queued) => isTaskNotificationFor(queued, nudgeValue));
+      removeByFilter((queued) => isTaskNotificationFor(queued, nudgeValue));
     }
     return;
   }
@@ -433,7 +456,7 @@ function queueNotificationNudge({ getAppState, setAppState }, reason) {
   if (queuedRemoteNotifications.nudge !== null) {
     let { value: nudgeValue } = queuedRemoteNotifications.nudge;
     if (
-      removeQueuedByFilter((queued) => isTaskNotificationFor(queued, nudgeValue)).length === 0 &&
+      removeByFilter((queued) => isTaskNotificationFor(queued, nudgeValue)).length === 0 &&
       isSessionActive()
     )
       return;
@@ -447,7 +470,7 @@ function queueNotificationNudge({ getAppState, setAppState }, reason) {
   let reminder = queuedNotificationsReminder({
     count: queuedRemoteNotifications.pending.length,
     breakdown,
-    replScript: false,
+    replScript: codeModeAccepted() && isCodeModeOnlyToolsEnabled() ? true : false,
   });
   enqueuePendingNotification({
     mode: "task-notification",
@@ -455,6 +478,9 @@ function queueNotificationNudge({ getAppState, setAppState }, reason) {
     value: reminder,
     skipAttachments: true,
     priority: "later",
+    ...(queuedRemoteNotifications.pending.every(isTriggerFireNotification) && {
+      opensOnRoutineFire: true,
+    }),
   });
   setAppState((state) => {
     let queuedRemoteNotifications = state.queuedRemoteNotifications;
@@ -479,7 +505,7 @@ function queueNotificationNudge({ getAppState, setAppState }, reason) {
     };
   });
 }
-//@ chunk-ynfbqx38.js:6315-6470 placement
+//@ chunk-0tcpyvr1.js:7122-7277 placement
 /**
  * 通知开始监听者：提醒被消费时报告待读通知。
  */
@@ -491,9 +517,9 @@ function reportStartedNotifications({ getAppState, session }, members) {
       : [];
   });
 }
-//@ chunk-ynfbqx38.js:6470-6500 placement
+//@ chunk-0tcpyvr1.js:7277-7307 placement
 var TENGU_HUMMING_SUNDAE = "tengu_humming_sundae";
-//@ chunk-ynfbqx38.js:6500-6881 placement
+//@ chunk-0tcpyvr1.js:7307-7723 placement
 /**
  * 取被扣留的提醒消息（超过等待时间且无人回合时）。
  */
@@ -515,7 +541,7 @@ function heldNotificationNudge(getAppState, { agentId, messageQueue, ccrTurnId, 
         Date.now() - Date.parse(firstPending.arrivedAt) >= featureValue_CACHED_MAY_BE_STALE * 60000
       ) ||
       ccrTurnId !== undefined ||
-      !nobodysTurn ||
+      (!nobodysTurn && !pending.every((pendingItem) => pendingItem.ownSessionAuthor)) ||
       messageQueue.peek(isPersonQueuedInput) !== undefined
     )
       return [];
@@ -526,18 +552,20 @@ function heldNotificationNudge(getAppState, { agentId, messageQueue, ccrTurnId, 
     return [];
   }
 }
-//@ chunk-ynfbqx38.js:6881-7819 placement
+//@ chunk-0tcpyvr1.js:7723-8786 placement
 /**
  * 读取并移出待读通知（按长度预算），记录已读 id、移除提醒、确认事件，返回通知与剩余数。
  */
 function drainQueuedNotifications(
   { getAppState, setAppState, session },
   limitChars = DEFAULT_DRAIN_LIMIT_CHARS,
+  ownSessionOnly = false,
 ) {
   let queuedRemoteNotifications = getAppState().queuedRemoteNotifications;
+  let isDrainable = (pendingItem) => !ownSessionOnly || pendingItem.ownSessionAuthor;
   let drained = [];
   let usedChars = DRAIN_HEADER_BUDGET_CHARS;
-  for (let pendingNotification of queuedRemoteNotifications.pending) {
+  for (let pendingNotification of queuedRemoteNotifications.pending.filter(isDrainable)) {
     let nextSize = usedChars + pendingNotification.content.length + NOTIFICATION_ENTRY_OVERHEAD_CHARS;
     if (drained.length > 0 && nextSize > Math.min(limitChars, DEFAULT_DRAIN_LIMIT_CHARS)) break;
     drained.push(pendingNotification);
@@ -578,18 +606,31 @@ function drainQueuedNotifications(
   });
   if (queuedRemoteNotifications.nudge !== null) {
     let { value: nudgeValue } = queuedRemoteNotifications.nudge;
-    removeQueuedByFilter((queued) => isTaskNotificationFor(queued, nudgeValue));
+    removeByFilter((queued) => isTaskNotificationFor(queued, nudgeValue));
   }
   for (let eventUuid of drained) completeCommandLifecycle(eventUuid.eventUuid, session);
   dropIfAnyMessages(drained);
   notifyStartedListener(session, () => drained);
-  if (drained.length > 0) logFeatureOk("ccr_queued_notifications");
+  if (drained.length > 0) {
+    noteTurnHeard();
+    logFeatureOk("ccr_queued_notifications");
+  }
+  let pending = getAppState().queuedRemoteNotifications.pending;
+  if (!pending.every(isDrainable))
+    queueNotificationNudge(
+      {
+        getAppState,
+        setAppState,
+        session,
+      },
+      "arrival",
+    );
   return {
     notifications: drained,
-    remaining: getAppState().queuedRemoteNotifications.pending.length,
+    remaining: countWhere(pending, isDrainable),
   };
 }
-//@ chunk-ynfbqx38.js:7819-8504 placement
+//@ chunk-0tcpyvr1.js:8786-9471 placement
 /**
  * 回合结束时处理本回合读取的通知：失败或中止则保存为未完成读取，否则清空。
  */
@@ -634,7 +675,7 @@ function settleTurnReads(deps, { signal, turnEnd: { abortedAtResult, terminalRea
       });
   });
 }
-//@ chunk-ynfbqx38.js:8504-8744 placement
+//@ chunk-0tcpyvr1.js:9471-9711 placement
 /**
  * 创建提醒暂扣句柄：renew/release/keep 调整请求与切换的暂扣截止时间。
  */
@@ -670,7 +711,7 @@ function createNudgeHold(deps) {
       ),
   };
 }
-//@ chunk-ynfbqx38.js:8744-9648 placement
+//@ chunk-0tcpyvr1.js:9711-10615 placement
 /**
  * 回退对话后，把被中断回合读过、现已不在保留行中的通知重新标为未读。
  */
@@ -710,30 +751,27 @@ function restoreReadsAfterRewind(deps, { idsInKeptRows, idsInRemovedRows, target
     });
     queueNotificationNudge(deps, "arrival");
   }
-  let removedReadCount = count([...removedIds], (id) => !restoreIds.has(id) && !keptIds.has(id));
+  let removedReadCount = countWhere([...removedIds], (id) => !restoreIds.has(id) && !keptIds.has(id));
   if (removedReadCount > 0)
     logFeatureSad("ccr_queued_notifications", "read_removed_by_rewind", {
       count: removedReadCount,
     });
 }
-//@ chunk-ynfbqx38.js:9648-9864 placement
+//@ chunk-0tcpyvr1.js:10615-10831 placement
 /**
  * 执行回调并检测提醒是否被取消（取消时上报）。
  */
 function watchNudgeCancel({ getAppState }, action) {
   let isNudgeQueued = () => {
     let { nudge } = getAppState().queuedRemoteNotifications;
-    return (
-      nudge !== null &&
-      peekQueuedCommand((queued) => isTaskNotificationFor(queued, nudge.value)) !== undefined
-    );
+    return nudge !== null && peek((queued) => isTaskNotificationFor(queued, nudge.value)) !== undefined;
   };
   let wasQueued = isNudgeQueued();
   let result = action();
   if (wasQueued && !isNudgeQueued()) logFeatureSad("ccr_queued_notifications", "nudge_cancelled");
   return result;
 }
-//@ chunk-ynfbqx38.js:9864-10479 placement
+//@ chunk-0tcpyvr1.js:10831-11446 placement
 /**
  * 设置提醒暂扣截止时间，安排到期计时器并更新状态。
  */
@@ -748,7 +786,7 @@ function setNudgeHold(deps, hold) {
   let timerSlot = nudgeHoldTimerSlot.of(session);
   clearTimeout(timerSlot.timer);
   timerSlot.timer = max > 0 ? setTimeout(clearNudgeHold, max - now, deps).unref() : undefined;
-  if (max > 0 && nudge !== null) removeQueuedByFilter((queued) => isTaskNotificationFor(queued, nudge.value));
+  if (max > 0 && nudge !== null) removeByFilter((queued) => isTaskNotificationFor(queued, nudge.value));
   try {
     setAppState((state) => {
       let queuedRemoteNotifications = state.queuedRemoteNotifications;
@@ -774,7 +812,7 @@ function setNudgeHold(deps, hold) {
     if (max === 0) queueNotificationNudge(deps, "arrival");
   }
 }
-//@ chunk-ynfbqx38.js:10479-10524 placement
+//@ chunk-0tcpyvr1.js:11446-11491 placement
 function clearNudgeHold(deps) {
   runHandlerSafely(() =>
     setNudgeHold(deps, {
@@ -783,7 +821,7 @@ function clearNudgeHold(deps) {
     }),
   );
 }
-//@ chunk-ynfbqx38.js:10524-10595 placement
+//@ chunk-0tcpyvr1.js:11491-11562 placement
 /**
  * 只保留最近 MAX_PENDING_NOTIFICATIONS 条已读记录，并返回被丢弃的条数。
  */
@@ -793,7 +831,7 @@ function capReadsToLimit(reads) {
     dropped: Math.max(0, reads.length - MAX_PENDING_NOTIFICATIONS),
   };
 }
-//@ chunk-ynfbqx38.js:10595-10671 placement
+//@ chunk-0tcpyvr1.js:11562-11638 placement
 function runHandlerSafely(handler) {
   try {
     handler();
@@ -801,35 +839,35 @@ function runHandlerSafely(handler) {
     logHandlerFailure(true, "queued_notifications: nudge hold", error);
   }
 }
-//@ chunk-ynfbqx38.js:10671-10714 placement
+//@ chunk-0tcpyvr1.js:11638-11681 placement
 function collapseWhitespace(text) {
   return text.replace(/\s+/g, " ");
 }
-//@ chunk-ynfbqx38.js:10714-10764 placement
+//@ chunk-0tcpyvr1.js:11681-11731 placement
 function sanitizeOrFallback(text, allowed, fallback) {
   let collapsed = collapseWhitespace(text);
   return allowed.test(collapsed) ? collapsed : fallback;
 }
-//@ chunk-ynfbqx38.js:10764-10827 placement
+//@ chunk-0tcpyvr1.js:11731-11794 placement
 var SAFE_NOTIFICATION_ID_REGEX = /^[A-Za-z0-9_.:@=+/-]{1,128}$/;
 var SAFE_TIMESTAMP_REGEX = /^[0-9T:.+Z-]{1,40}$/;
-//@ chunk-ynfbqx38.js:10827-10868 placement
+//@ chunk-0tcpyvr1.js:11794-11835 placement
 /**
  * 规范化时间戳（非法返回 undefined）。
  */
 function sanitizeTimestamp(text) {
   return sanitizeOrFallback(text, SAFE_TIMESTAMP_REGEX, "unknown");
 }
-//@ chunk-ynfbqx38.js:10868-10961 placement
+//@ chunk-0tcpyvr1.js:11835-11928 placement
 function parseTimestampMs(value) {
   let parsedMs = typeof value === "string" ? parseIsoTimestamp(value) : Number.NaN;
   return Number.isFinite(parsedMs) ? parsedMs : undefined;
 }
-//@ chunk-ynfbqx38.js:10961-10999 placement
+//@ chunk-0tcpyvr1.js:11928-11967 placement
 function originLabel(origin) {
   return notificationKindLabels.get(origin) ?? collapseWhitespace(origin);
 }
-//@ chunk-ynfbqx38.js:10999-11173 placement
+//@ chunk-0tcpyvr1.js:11967-12141 placement
 /**
  * 通知来源的显示名（github_webhook→github、trigger_fire→scheduled trigger 等）。
  */
@@ -845,7 +883,7 @@ function notificationOriginLabel(text) {
       return collapseWhitespace(text);
   }
 }
-//@ chunk-ynfbqx38.js:11173-13889 placement
+//@ chunk-0tcpyvr1.js:12141-14858 placement
 function formatDrainedNotifications(notifications, remaining, readAt) {
   if (notifications.length === 0)
     return remaining > 0
@@ -891,7 +929,7 @@ ${remaining} more ${plural(remaining, "notification")} still queued \u2014 call 
 
 ${joined}${remainingText}`);
 }
-//@ chunk-ynfbqx38.js:13889-14034 placement
+//@ chunk-0tcpyvr1.js:14858-15003 placement
 function notifyStartedListener(session, getStarted) {
   try {
     notificationSettleListenerSlot
@@ -902,15 +940,14 @@ function notifyStartedListener(session, getStarted) {
     logError(error);
   }
 }
-//@ chunk-ynfbqx38.js:14034-14116 placement
+//@ chunk-0tcpyvr1.js:15003-15085 placement
 function completeCommandLifecycle(uuid, session) {
   if (!uuid) return;
   transportStateByHost.of(session).active?.onCommandLifecycle?.(uuid, "completed");
 }
 export {
-  queuedNotificationCapabilities,
-  QueuedNotificationError,
   notificationSettleListenerSlot,
+  queuedNotificationCapabilities,
   reportStartedNotifications,
   rearmNotificationNudge,
   settleTurnReads,
@@ -918,12 +955,13 @@ export {
   createNudgeHold,
   acceptQueuedNotification,
   appendToPendingNotification,
+  QueuedNotificationError,
   createNotificationDrain,
+  restoreReadsAfterRewind,
   NOOP_NOTIFICATION_DRAIN,
-  sanitizeTimestamp,
-  notificationOriginLabel,
   DRAIN_TOTAL_BUDGET_CHARS,
   isQueuedNotificationsSupported,
   formatDrainedNotifications,
-  restoreReadsAfterRewind,
+  sanitizeTimestamp,
+  notificationOriginLabel,
 };

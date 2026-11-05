@@ -3,9 +3,9 @@
  *
  * AppState 变化回调与外部元数据到 AppState 的转换（拒绝恢复不安全权限模式）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/state/onChangeAppState.ts
- * pieces: chunk-5hmnvmag.js (1), chunk-tbfde207.js (22)
+ * pieces: chunk-2bycp31m.js (1), chunk-ct61sn5h.js (22)
  * attribution: callgraph-fingerprint 1, placement 21, fingerprint 1
  */
 import { isCompactPairWithheldFromRemote, isBridgeBindingForeign } from "../utils/sessionStorage.js";
@@ -69,6 +69,7 @@ import {
   effortLevelValue,
   isEffortLevel,
 } from "../utils/effort.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
 import { withClientDataReseedOnModelChange, refreshBootstrapDataTracked_2 } from "../bridge/bridgeEnabled.js";
 import { getMainLoopModel } from "../utils/model/model.js";
 import { reportEffortForModel, reportBridgeEffortMetadata } from "../bridge/applyFlagSettings.js";
@@ -102,6 +103,7 @@ import {
 import { isObserverAgentTask } from "../tasks/LocalAgentTask/LocalAgentTask.js";
 import { waitForTaskCompletion } from "../tools/TaskOutputTool/TaskOutputTool.js";
 import {
+  isLocalScriptTask,
   isHoldCappedMcpTask,
   getSelectableBackgroundTasks,
   taskParentAgentId,
@@ -110,14 +112,14 @@ import {
 } from "../tasks/taskKinds.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-tbfde207.js:1529-1562 placement
+//@ chunk-ct61sn5h.js:1569-1602 placement
 /**
  * 是否应向 SDK 发出 compact_error 字段。
  */
 function shouldEmitCompactError() {
   return !isCompactPairWithheldFromRemote() && !isBridgeBindingForeign();
 }
-//@ chunk-tbfde207.js:1562-1732 placement
+//@ chunk-ct61sn5h.js:1602-1772 placement
 /**
  * 向 SDK 发出 status 事件前去掉 compact_error 字段（未开启时）。
  */
@@ -136,7 +138,7 @@ function stripCompactErrorForSdk(event) {
     };
   return event;
 }
-//@ chunk-tbfde207.js:1732-1994 placement
+//@ chunk-ct61sn5h.js:1772-2034 placement
 /**
  * 发出 system/status 事件（权限模式、压缩结果）。
  */
@@ -162,7 +164,7 @@ function emitStatusChange({ status, permissionMode, compactResult, compactError 
     logError(error);
   }
 }
-//@ chunk-tbfde207.js:1994-2181 placement
+//@ chunk-ct61sn5h.js:2034-2221 placement
 /**
  * REPL 桥接开启部分消息时，把流事件作为 stream_event 通知转发给桥接端（附首 token 时间）。
  */
@@ -182,7 +184,7 @@ function forwardStreamEventToBridge(notification) {
     logError(error);
   }
 }
-//@ chunk-tbfde207.js:2181-2588 placement (2.1.88 match: countUnseenAssistantTurns, 1)
+//@ chunk-ct61sn5h.js:2221-2628 placement (2.1.88 match: countUnseenAssistantTurns, 1)
 /**
  * 按键顺序浅比较两个对象。
  */
@@ -203,7 +205,7 @@ function shallowEqualTaskMaps(messages, dividerIndex) {
   }
   return true;
 }
-//@ chunk-tbfde207.js:2588-2687 placement
+//@ chunk-ct61sn5h.js:2628-2727 placement
 /**
  * 应用配置环境变量并抓取三方可信策略快照（无盘或未信任时跳过）。
  */
@@ -215,9 +217,9 @@ function applyStartupConfigSideEffects() {
   captureAdmin3PSteeringSnapshot();
   providerCaches?.resetProviderBoundCachesIfMoved(movedProviders);
 }
-//@ chunk-tbfde207.js:2687-2854 placement
+//@ chunk-ct61sn5h.js:2727-2894 placement
 var externalStatusSchema; // deferred: uses objectSchema (../../vendor/zod/v4/classic/schemas.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tbfde207.js:2687", () => {
+deferInit("chunk-ct61sn5h.js:2727", () => {
   externalStatusSchema = objectSchema({
     status_category: stringSchema(),
     status_detail: stringSchema(),
@@ -228,7 +230,7 @@ deferInit("chunk-tbfde207.js:2687", () => {
     standing: stringSchema().optional(),
   });
 });
-//@ chunk-tbfde207.js:2854-3646 fingerprint (2.1.88 match: externalMetadataToAppState, 0.435)
+//@ chunk-ct61sn5h.js:2894-3686 fingerprint (2.1.88 match: externalMetadataToAppState, 0.435)
 /**
  * 把外部（远程会话）元数据转换为 AppState 片段，拒绝恢复 bypassPermissions 等不安全模式。
  */
@@ -276,7 +278,7 @@ function externalMetadataToAppState(metadata) {
     };
   };
 }
-//@ chunk-tbfde207.js:4053-9479 placement
+//@ chunk-ct61sn5h.js:4093-9953 placement
 /**
  * AppState 变化时的副作用：权限模式切换、MCP roots、后台任务、模型等通知。
  */
@@ -300,6 +302,7 @@ function onAppStateChange({ newState, oldState }, session, workerConn, storageV5
       if (workerConn?.isWorkerPermissionModeRecordEnabled)
         workerConn.notifyInternalMetadataChanged({
           worker_permission_mode: externalPermissionMode_2,
+          plan_doc: null,
         });
       reportBridgePermissionMode(mode_2, isUltraplanMode);
       if (!workerConn)
@@ -311,6 +314,20 @@ function onAppStateChange({ newState, oldState }, session, workerConn, storageV5
     workerConn?.notifyPermissionModeChanged(mode_2);
     syncSessionPermissionMode(mode_2);
   } else if (isProactivityChanged) workerConn?.notifyProactivityLevelChanged();
+  let id = newState.toolPermissionContext.planDoc?.id;
+  if (id !== oldState.toolPermissionContext.planDoc?.id && workerConn?.isWorkerPermissionModeRecordEnabled)
+    workerConn.notifyInternalMetadataChanged(
+      id === undefined
+        ? {
+            plan_doc: null,
+          }
+        : {
+            plan_doc: {
+              id,
+            },
+            worker_permission_mode: toExternalPermissionMode(mode_2),
+          },
+    );
   if (mode !== mode_2 || isProactivityChanged) {
     syncRespawnFlag(
       "--permission-mode",
@@ -422,6 +439,10 @@ function onAppStateChange({ newState, oldState }, session, workerConn, storageV5
             source: switchSource.source,
           });
         releaseCarriedEffortIfModelChanged(nextModel);
+        if (codeModeAccepted()) {
+          let { noteMainModelSwitch } = require("../utils/codeMode/codeModeModelNotices.lazy.js");
+          noteMainModelSwitch(session, nextModel, switchSource.source);
+        }
       }
     } catch (error) {
       logError(toError(error));
@@ -454,6 +475,11 @@ function onAppStateChange({ newState, oldState }, session, workerConn, storageV5
       sessionEffort: newState.sessionEffort,
       settingsEffortTable: newState.settingsEffortTable,
     });
+  if (
+    newState.settingsEffortTable !== oldState.settingsEffortTable &&
+    isSameEffortSetting(newState.sessionEffort, oldState.sessionEffort)
+  )
+    reportEffortForModel(getMainLoopModel(), newState);
   if (!isSameEffortSetting(newState.sessionEffort, oldState.sessionEffort)) {
     releaseCarriedEffortForEffortChange();
     getLearnedEffortCaps().clear();
@@ -570,7 +596,7 @@ function onAppStateChange({ newState, oldState }, session, workerConn, storageV5
     });
   }
 }
-//@ chunk-tbfde207.js:9479-9662 placement
+//@ chunk-ct61sn5h.js:9953-10136 placement
 function syncEffortRespawnFlag(sessionEffort, storageV5) {
   switch (sessionEffort.kind) {
     case "inherit":
@@ -585,13 +611,13 @@ function syncEffortRespawnFlag(sessionEffort, storageV5) {
     }
   }
 }
-//@ chunk-tbfde207.js:9662-9829 placement
+//@ chunk-ct61sn5h.js:10136-10303 placement
 function isObserverOwnedTask(task, tasks) {
   if (task.type !== "local_bash" && task.type !== "monitor_mcp" && task.type !== "monitor_ws") return false;
   let agentTask = task.agentId !== undefined ? tasks[task.agentId] : undefined;
   return agentTask !== undefined && isObserverAgentTask(agentTask);
 }
-//@ chunk-tbfde207.js:9829-10178 placement
+//@ chunk-ct61sn5h.js:10303-10702 placement
 /**
  * 子代理启动的遥测字段。
  */
@@ -608,9 +634,12 @@ function agentSpawnTelemetry(task) {
       task.launchModel !== undefined && {
         launch_model: task.launchModel,
       }),
+    ...(task.requestShape && {
+      request_shape: task.requestShape,
+    }),
   };
 }
-//@ chunk-tbfde207.js:10178-10767 placement
+//@ chunk-ct61sn5h.js:10702-11293 placement
 /**
  * 列出正在运行的后台任务。
  */
@@ -651,14 +680,14 @@ function runningBackgroundTasks(state) {
       }),
     }));
 }
-//@ chunk-tbfde207.js:10767-10853 placement
+//@ chunk-ct61sn5h.js:11293-11379 placement
 /**
  * 两个任务列表的 task_id 顺序是否相同。
  */
 function sameTaskIdSequence(left, right) {
   return left.length === right.length && right.every((task, index) => task.task_id === left[index]?.task_id);
 }
-//@ chunk-tbfde207.js:10853-11161 placement
+//@ chunk-ct61sn5h.js:11379-11687 placement
 /**
  * 列出主线程直接派生的运行中代理。
  */
@@ -683,12 +712,12 @@ function runningDirectAgents({ tasks }) {
       : [],
   );
 }
-//@ chunk-tbfde207.js:11161-11231 placement
+//@ chunk-ct61sn5h.js:11687-11757 placement
 /**
  * 目标状态序列化用的字段名（condition、iterations 等）。
  */
 var GOAL_STATE_FIELDS = ["condition", "setAt", "iterations", "tokensAtStart", "lastReason"];
-//@ chunk-tbfde207.js:11231-11401 placement
+//@ chunk-ct61sn5h.js:11757-11927 placement
 /**
  * 把目标状态序列化为线上格式（condition、iterations、set_at、tokens_at_start、last_reason）。
  */
@@ -703,17 +732,18 @@ function serializeGoalState(goal) {
     }),
   };
 }
-//@ chunk-tbfde207.js:11401-11503 placement
+//@ chunk-ct61sn5h.js:11927-12029 placement
 function shallowEqualByKeys(activeGoal, activeGoal_2) {
   if (activeGoal === activeGoal_2) return true;
   if (activeGoal === undefined || activeGoal_2 === undefined) return false;
   return GOAL_STATE_FIELDS.every((field) => activeGoal[field] === activeGoal_2[field]);
 }
-//@ chunk-tbfde207.js:11503-11796 placement
+//@ chunk-ct61sn5h.js:12029-12338 placement
 function backgroundTasksForMetadata(state) {
   return Object.values(state.tasks)
     .filter(
       (task) =>
+        !(codeModeAccepted() && isLocalScriptTask(task)) &&
         waitForTaskCompletion(task) &&
         !isObserverAgentTask(task) &&
         !isHoldCappedMcpTask(task) &&
@@ -734,7 +764,7 @@ function backgroundTasksForMetadata(state) {
       }),
     }));
 }
-//@ chunk-tbfde207.js:11796-11871 placement
+//@ chunk-ct61sn5h.js:12338-12413 placement
 /**
  * 需要时发出 fast mode 不可用的提示。
  */
@@ -748,7 +778,7 @@ function fastModeNoticeIfNeeded(enabled, storageV5) {
     return;
   syncFastModeFlag(enabled, storageV5);
 }
-//@ chunk-tbfde207.js:11871-11953 placement
+//@ chunk-ct61sn5h.js:12413-12495 placement
 /**
  * 发出 background_tasks_changed 事件。
  */
@@ -759,14 +789,14 @@ function emitBackgroundTasksChanged(state) {
     tasks: backgroundTasksForMetadata(state),
   });
 }
-//@ chunk-tbfde207.js:11953-12011 placement
+//@ chunk-ct61sn5h.js:12495-12553 placement
 /**
  * 把 ultracode 活跃状态同步给会话。
  */
 function syncUltracodeActive(sessionState, ultracode, restoredWorkerState) {
   sessionState.settleUltracodeActive(isUltracodeActive(ultracode, getMainLoopModel()), restoredWorkerState);
 }
-//@ chunk-5hmnvmag.js:264-500 callgraph-fingerprint (2.1.88 match: onChangeAppState, 0.452)
+//@ chunk-2bycp31m.js:264-500 callgraph-fingerprint (2.1.88 match: onChangeAppState, 0.452)
 /**
  * AppState 变化回调：把 tasks 等变化同步到外部（会话元数据、SDK 事件）。
  */
@@ -793,14 +823,15 @@ function onChangeAppState({ newState, oldState }, session, storageV5, credential
   }
 }
 export {
-  onAppStateChange,
-  shallowEqualTaskMaps,
   syncUltracodeActive,
   stripCompactErrorForSdk,
   serializeGoalState,
   emitBackgroundTasksChanged,
-  emitStatusChange,
-  forwardStreamEventToBridge,
   onChangeAppState,
+  runningBackgroundTasks,
+  onAppStateChange,
+  shallowEqualTaskMaps,
+  emitStatusChange,
   externalMetadataToAppState,
+  forwardStreamEventToBridge,
 };

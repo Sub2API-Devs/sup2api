@@ -3,9 +3,9 @@
  *
  * 后台进程启动器（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ksvdmrg0.js (46)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6qj4xbae.js (23), chunk-y2nrbm62.js (23)
  * attribution: placement 46
  */
 import { stat, mkdtemp, open, access, realpath, readdir } from "fs/promises";
@@ -13,9 +13,7 @@ import { join, dirname } from "path";
 import { tmpdir, homedir } from "os";
 import { constants } from "fs";
 import { spawn } from "child_process";
-import { setTimeout as Ve } from "timers/promises";
-import { HostScoped } from "../../utils/hostScoped.js";
-import { getRootSession, getHostAuthTokenRefreshCallback } from "../../bootstrap/state.js";
+import { setTimeout as Be } from "timers/promises";
 import {
   MAX_BINARY_PROBE_BYTES,
   NATIVE_BINARY_MISSING_TEXT,
@@ -37,7 +35,7 @@ import { logFeatureBad, logFeatureSad } from "../analytics/featureTelemetry.js";
 import { withHostOwnedEnv } from "../../utils/settings/hostEnvWrites.js";
 import {
   getLaunchCommand,
-  resolveClaudePath,
+  claudeBinPath,
   findLatestInstalledVersion,
   withProcessWrapper,
   resolveLaunchTarget,
@@ -62,6 +60,7 @@ import {
   PROVIDER_SELECTION_ENV_VARS,
   stripHostManagedEnv,
 } from "../../utils/managedEnvConstants.js";
+import { getHostAuthTokenRefreshCallback, getRootSession } from "../../bootstrap/state.js";
 import { hostAuthEnvVarName } from "../../utils/hostCredsFile.js";
 import {
   stripSafeModeEnvKeys,
@@ -71,6 +70,7 @@ import {
 } from "../../utils/background/envCarry.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
 import { isLoginStashedInTokenSlot } from "../../utils/auth.js";
+import { HostScoped } from "../../utils/hostScoped.js";
 import { readSmallFileOrNull } from "../../utils/readSmallFile.js";
 import {
   LOCK_PROBE_LIMITS,
@@ -86,55 +86,18 @@ import { getModeFromInput } from "../../components/PromptInput/inputModes.js";
 import { writeStateAtomic, logJobWriteError } from "./jobState.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ksvdmrg0.js:6521-6888 placement
-/**
- * 后台会话启动器的进程级状态：daemon 是否确认在线、进行中的确保操作、上次临时拉起时间、前缀状态与持有的信标等，可重置。
- */
-class SpawnLauncherState {
-  daemonConfirmedUp = false;
-  ensureInFlight = null;
-  lastTransientSpawnAt = null;
-  prefixAxis = "idle";
-  prefixContractViolationLogged = false;
-  tmuxRgbApplied = false;
-  ownedBeacons = new Map();
-  reset() {
-    this.daemonConfirmedUp = false;
-    this.ensureInFlight = null;
-    this.lastTransientSpawnAt = null;
-    this.prefixAxis = "idle";
-    this.prefixContractViolationLogged = false;
-    this.tmuxRgbApplied = false;
-    this.ownedBeacons.clear();
-  }
-}
-//@ chunk-ksvdmrg0.js:6888-6913 placement
-/**
- * 按宿主保存的启动器状态。
- */
-var spawnLauncherState; // deferred: uses SpawnLauncherState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ksvdmrg0.js:6888", () => {
-  spawnLauncherState = new HostScoped(() => new SpawnLauncherState());
-});
-//@ chunk-ksvdmrg0.js:6913-6950 placement
-/**
- * 取当前宿主的启动器状态。
- */
-function getSpawnLauncherState() {
-  return spawnLauncherState.of(getRootSession().host);
-}
-//@ chunk-ksvdmrg0.js:7256-7396 placement
+//@ chunk-6qj4xbae.js:1270-1408 placement
 var STUB_WAIT_MS = 1e4;
 var POLL_MS = 250;
-var EXTENDED_WAIT_MS = 120000;
+var NPM_REINSTALL_MAX_WAIT_MS = 120000;
 var EXTENDED_POLL_MS = 1000;
 var INSTALL_IN_PROGRESS_MS = 600000;
 var HOMEBREW_WAIT_MS = 1e4;
 var HOMEBREW_CASK_RE = /^(.+)\/Caskroom\/[^/]+\/[^/]+\/claude$/;
 var NPM_SCOPE_SEGMENT = "/node_modules/@anthropic-ai/";
 var FRESH_STUB_MS = 60000;
-//@ chunk-ksvdmrg0.js:7396-7613 placement
-async function classifyBinaryStub(path) {
+//@ chunk-6qj4xbae.js:1408-1625 placement
+async function npmTargetState(path) {
   try {
     let stats = await stat(path);
     if (!stats.isFile() || stats.size >= MAX_BINARY_PROBE_BYTES) return "present";
@@ -143,12 +106,12 @@ async function classifyBinaryStub(path) {
     return getErrnoCode(error) === "ENOENT" ? "missing" : "present";
   }
 }
-//@ chunk-ksvdmrg0.js:7613-7705 placement
+//@ chunk-6qj4xbae.js:1625-1717 placement
 /**
  * 启动失败时值得重试的错误码集合。
  */
 var SPAWN_FAILURE_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ksvdmrg0.js:7613", () => {
+deferInit("chunk-6qj4xbae.js:1625", () => {
   SPAWN_FAILURE_CODES = new Set([
     "ENOENT",
     "EACCES",
@@ -160,11 +123,11 @@ deferInit("chunk-ksvdmrg0.js:7613", () => {
     "EPERM",
   ]);
 });
-//@ chunk-ksvdmrg0.js:7705-11317 placement
+//@ chunk-6qj4xbae.js:1717-5301 placement
 /**
  * 解析 CLAUDE_CODE_PROCESS_WRAPPER 等后台启动器配置
  */
-async function resolveAgentLauncher(args, storageV5, { withoutOAuthTokenEnv = false } = {}) {
+async function spawnDetachedSupervisor(args, storageV5, { withoutOAuthTokenEnv = false } = {}) {
   let wrapperError = processWrapperError();
   if (wrapperError) {
     logFeatureBad("agent_launcher", "invalid_config");
@@ -232,8 +195,8 @@ async function resolveAgentLauncher(args, storageV5, { withoutOAuthTokenEnv = fa
     let errnoCode = getErrnoCode(err);
     let gaveUpOnNpmInstallInProgress = false;
     let reinstallWaitedMs;
-    if (errnoCode !== undefined && SPAWN_FAILURE_CODES.has(errnoCode) && isNpmScopePath(target)) {
-      let recovery = await waitForBinaryRecovery(target);
+    if (errnoCode !== undefined && SPAWN_FAILURE_CODES.has(errnoCode) && isNpmWrapperLayoutPath(target)) {
+      let recovery = await waitForReinstalledBinary(target);
       gaveUpOnNpmInstallInProgress = !recovery.recovered && recovery.installInProgressAtEnd;
       reinstallWaitedMs = recovery.waitedMs;
       if (recovery.recovered) {
@@ -336,15 +299,15 @@ async function resolveAgentLauncher(args, storageV5, { withoutOAuthTokenEnv = fa
           recoveredAfterReinstallWait: waitedMs > 0,
         };
     }
-    let claudePath = resolveClaudePath();
-    if (!triedTargets.has(claudePath)) {
-      triedTargets.add(claudePath);
+    let fallbackLauncher = claudeBinPath();
+    if (!triedTargets.has(fallbackLauncher)) {
+      triedTargets.add(fallbackLauncher);
       logEvent("tengu_bg_daemon_spawn_launcher_fallback", {
         errno_enoent: errnoCode === "ENOENT",
         errno_eacces: errnoCode === "EACCES",
       });
       let detachedWithHomeCwd = await spawnDetachedWithHomeCwd(
-        await prependLauncherPrefix(aquaWrapper, [claudePath, ...args]),
+        await prependLauncherPrefix(aquaWrapper, [fallbackLauncher, ...args]),
         env,
         stderrFile?.fd,
       );
@@ -378,7 +341,7 @@ async function resolveAgentLauncher(args, storageV5, { withoutOAuthTokenEnv = fa
     await stderrFile?.close().catch(() => {});
   }
 }
-//@ chunk-ksvdmrg0.js:11317-12822 placement
+//@ chunk-6qj4xbae.js:5301-6809 placement
 async function spawnDaemonProcess(args, env, aquaWrapper, stderrFile) {
   let spawnWith = async (target) => {
     let invocation = withHostOwnedEnv(() => withProcessWrapper(target));
@@ -390,15 +353,15 @@ async function spawnDaemonProcess(args, env, aquaWrapper, stderrFile) {
   };
   let launchTarget = resolveLaunchTarget();
   if (
-    await isExecutableBinary(launchTarget.cmd, {
+    await execTokenIsRunnable(launchTarget.cmd, {
       rejectNpmStub: true,
     })
   )
     return spawnWith(launchTarget);
   let gaveUpOnNpmInstallInProgress = false;
   let reinstallWaitedMs;
-  if (isNpmScopePath(launchTarget.cmd)) {
-    let recovery = await waitForBinaryRecovery(launchTarget.cmd);
+  if (isNpmWrapperLayoutPath(launchTarget.cmd)) {
+    let recovery = await waitForReinstalledBinary(launchTarget.cmd);
     reinstallWaitedMs = recovery.waitedMs;
     logEvent("tengu_bg_daemon_spawn_reinstall_wait", {
       waited_ms: recovery.waitedMs,
@@ -419,7 +382,7 @@ async function spawnDaemonProcess(args, env, aquaWrapper, stderrFile) {
   let launchTarget_2 = resolveLaunchTarget({
     pinToCurrentBinary: true,
   });
-  if (launchTarget_2.cmd !== launchTarget.cmd && (await isExecutableBinary(launchTarget_2.cmd))) {
+  if (launchTarget_2.cmd !== launchTarget.cmd && (await execTokenIsRunnable(launchTarget_2.cmd))) {
     logEvent("tengu_bg_daemon_spawn_execpath_fallback", {
       errno_enoent: false,
       errno_eacces: false,
@@ -432,7 +395,7 @@ async function spawnDaemonProcess(args, env, aquaWrapper, stderrFile) {
   }
   let { link, waitedMs } = await waitForHomebrewLink(launchTarget_2.cmd);
   if (waitedMs > 0) reinstallWaitedMs = (reinstallWaitedMs ?? 0) + waitedMs;
-  if (link !== null && (await isExecutableBinary(link))) {
+  if (link !== null && (await execTokenIsRunnable(link))) {
     logEvent("tengu_bg_daemon_spawn_homebrew_fallback", {
       errno_enoent: false,
       errno_eacces: false,
@@ -457,7 +420,7 @@ async function spawnDaemonProcess(args, env, aquaWrapper, stderrFile) {
   if (
     latestInstalledVersion !== null &&
     latestInstalledVersion !== launchTarget_2.cmd &&
-    (await isExecutableBinary(latestInstalledVersion))
+    (await execTokenIsRunnable(latestInstalledVersion))
   )
     return {
       ...(await spawnWith({
@@ -477,8 +440,8 @@ async function spawnDaemonProcess(args, env, aquaWrapper, stderrFile) {
     reinstallWaitedMs,
   };
 }
-//@ chunk-ksvdmrg0.js:12822-12980 placement
-async function isExecutableBinary(path, options = {}) {
+//@ chunk-6qj4xbae.js:6809-6965 placement
+async function execTokenIsRunnable(path, options = {}) {
   try {
     let stats = await stat(path);
     if (!stats.isFile()) return false;
@@ -489,15 +452,15 @@ async function isExecutableBinary(path, options = {}) {
     return false;
   }
 }
-//@ chunk-ksvdmrg0.js:12980-13036 placement
+//@ chunk-6qj4xbae.js:6965-7021 placement
 /**
  * 路径是否位于 npm 全局包的 scope 目录（npm stub 判断）。
  */
-function isNpmScopePath(path) {
+function isNpmWrapperLayoutPath(path) {
   return path.replace(/\\/g, "/").includes(NPM_SCOPE_SEGMENT);
 }
-//@ chunk-ksvdmrg0.js:13036-13224 placement
-async function getHomebrewLink(path) {
+//@ chunk-6qj4xbae.js:7021-7208 placement
+async function homebrewBinLink(path) {
   let caskPath = HOMEBREW_CASK_RE.exec(path)?.[1];
   if (caskPath === undefined) return null;
   let binPath = join(caskPath, "bin", "claude");
@@ -506,7 +469,7 @@ async function getHomebrewLink(path) {
     ? binPath
     : null;
 }
-//@ chunk-ksvdmrg0.js:13224-13534 placement
+//@ chunk-6qj4xbae.js:7208-7515 placement
 /**
  * 等待 Homebrew cask 升级完成后出现可执行的 bin/claude 链接（有上限），放弃时记 tengu_bg_daemon_spawn_homebrew_wait_gave_up。
  */
@@ -518,23 +481,23 @@ async function waitForHomebrewLink(path) {
         () => true,
         () => false,
       ));
-    let homebrewLink = await getHomebrewLink(path);
-    if ((upgrading || waitedMs > 0) && homebrewLink !== null && !(await isExecutableBinary(homebrewLink)))
-      homebrewLink = null;
-    if (homebrewLink !== null || !upgrading || waitedMs >= HOMEBREW_WAIT_MS) {
-      if (homebrewLink === null && waitedMs > 0)
+    let upgradeMarker = await homebrewBinLink(path);
+    if ((upgrading || waitedMs > 0) && upgradeMarker !== null && !(await execTokenIsRunnable(upgradeMarker)))
+      upgradeMarker = null;
+    if (upgradeMarker !== null || !upgrading || waitedMs >= HOMEBREW_WAIT_MS) {
+      if (upgradeMarker === null && waitedMs > 0)
         logEvent("tengu_bg_daemon_spawn_homebrew_wait_gave_up", {
           waited_ms: waitedMs,
         });
       return {
-        link: homebrewLink,
+        link: upgradeMarker,
         waitedMs,
       };
     }
     await sleep(POLL_MS);
   }
 }
-//@ chunk-ksvdmrg0.js:13534-13943 placement
+//@ chunk-6qj4xbae.js:7515-7918 placement
 /**
  * 判断 npm 是否正在安装 @anthropic-ai 包（包目录旁有近期创建的 .包名- 临时目录）。
  */
@@ -562,17 +525,17 @@ async function isNpmInstallInProgress(path) {
   }
   return false;
 }
-//@ chunk-ksvdmrg0.js:13943-14502 placement
+//@ chunk-6qj4xbae.js:7918-8478 placement
 /**
  * 二进制暂时不可执行（npm 占位）时轮询等待恢复：先短等，若检测到安装进行中再延长等待。
  */
-async function waitForBinaryRecovery(path) {
+async function waitForReinstalledBinary(path) {
   let deadline = Date.now();
   let softDeadline = deadline + STUB_WAIT_MS;
   while (Date.now() < softDeadline) {
     await sleep(POLL_MS);
     if (
-      await isExecutableBinary(path, {
+      await execTokenIsRunnable(path, {
         rejectNpmStub: true,
       })
     )
@@ -591,11 +554,11 @@ async function waitForBinaryRecovery(path) {
       extended: false,
       installInProgressAtEnd: false,
     };
-  let extendedDeadline = deadline + EXTENDED_WAIT_MS;
+  let extendedDeadline = deadline + NPM_REINSTALL_MAX_WAIT_MS;
   while (Date.now() < extendedDeadline) {
     await sleep(EXTENDED_POLL_MS);
     if (
-      await isExecutableBinary(path, {
+      await execTokenIsRunnable(path, {
         rejectNpmStub: true,
       })
     )
@@ -615,7 +578,7 @@ async function waitForBinaryRecovery(path) {
     installInProgressAtEnd: installInProgress,
   };
 }
-//@ chunk-ksvdmrg0.js:14502-14637 placement
+//@ chunk-6qj4xbae.js:8478-8610 placement
 async function spawnDetachedWithHomeCwd(command, env, args) {
   let homeDir;
   try {
@@ -627,7 +590,7 @@ async function spawnDetachedWithHomeCwd(command, env, args) {
   if (homeDir !== undefined && detached.err) return spawnDetached(command, env, args, undefined);
   return detached;
 }
-//@ chunk-ksvdmrg0.js:14637-15023 placement
+//@ chunk-6qj4xbae.js:8610-8994 placement
 /**
  * 以分离模式启动进程（可指定 cwd），等一个事件循环检查启动错误，返回子进程 pid 与退出 Promise 或错误。
  */
@@ -673,7 +636,7 @@ async function spawnDetached(argv, env, stderr, cwd) {
         child,
       };
 }
-//@ chunk-ksvdmrg0.js:15023-15500 placement (2.1.88 match: spawnCaffeinate, 0.305)
+//@ chunk-6qj4xbae.js:8994-9470 placement (2.1.88 match: spawnCaffeinate, 0.304)
 /**
  * macOS 后台守护进程用：试运行 /bin/launchctl asuser <uid> /usr/bin/true，成功则返回该前缀让子进程进入用户 GUI（Aqua）会话；打 tengu_bg_daemon_macos_aqua_wrap。
  */
@@ -711,19 +674,19 @@ async function getMacosAquaSessionWrapper() {
   });
   return promise ? ["/bin/launchctl", "asuser", String(uid)] : [];
 }
-//@ chunk-ksvdmrg0.js:15500-15624 placement
+//@ chunk-6qj4xbae.js:9470-9595 placement
 async function prependLauncherPrefix(prefix, argv) {
   if (prefix.length === 0) return argv;
   let binary = argv[0];
   if (
-    !(await isExecutableBinary(binary, {
-      rejectNpmStub: isNpmScopePath(binary),
+    !(await execTokenIsRunnable(binary, {
+      rejectNpmStub: isNpmWrapperLayoutPath(binary),
     }))
   )
     return argv;
   return [...prefix, ...argv];
 }
-//@ chunk-ksvdmrg0.js:15624-16277 placement
+//@ chunk-6qj4xbae.js:9595-10246 placement
 /**
  * Windows 上通过 PowerShell（EncodedCommand）调用 Win32_Process.Create 启动分离进程，5 秒超时；返回 ok 或失败原因。
  */
@@ -791,7 +754,7 @@ async function spawnViaWin32ProcessCreate(argv, env) {
     });
   });
 }
-//@ chunk-ksvdmrg0.js:16277-16783 placement
+//@ chunk-6qj4xbae.js:10246-10752 placement
 function WINDOWS_DETACHED_SPAWN_SCRIPT(commandLine) {
   return [
     '$ErrorActionPreference = "Stop"',
@@ -802,14 +765,14 @@ function WINDOWS_DETACHED_SPAWN_SCRIPT(commandLine) {
   ].join(`
 `);
 }
-//@ chunk-ksvdmrg0.js:16783-16825 placement
+//@ chunk-6qj4xbae.js:10752-10794 placement
 /**
  * 按 Windows 规则把参数数组拼成命令行。
  */
 function quoteWindowsArgs(args) {
   return args.map(quoteWindowsArg).join(" ");
 }
-//@ chunk-ksvdmrg0.js:16825-17077 placement
+//@ chunk-6qj4xbae.js:10794-11046 placement
 /**
  * 按 Windows 命令行规则给参数加引号并转义反斜杠与双引号。
  */
@@ -834,26 +797,26 @@ function quoteWindowsArg(arg) {
   }
   return quoted + '"';
 }
-//@ chunk-ksvdmrg0.js:17077-17232 placement
+//@ chunk-6qj4xbae.js:11046-11201 placement
 function quotePowerShellString(text) {
   if (/[\u2018\u2019\u201A\u201B]/.test(text))
     throw Error("unsupported Unicode single-quote in command line");
   return `'${text.replaceAll("'", "''")}'`;
 }
-//@ chunk-ksvdmrg0.js:17232-17396 placement
+//@ chunk-6qj4xbae.js:11201-11365 placement
 async function hasStoredRefreshToken(accountKey) {
   let envToken = withHostOwnedEnv(() => process.env.CLAUDE_CODE_OAUTH_TOKEN);
   if (getPlatform() === "macos" || !envToken) return false;
   return !!(await getSecureStorage().readAsync(accountKey))?.claudeAiOauth?.refreshToken;
 }
-//@ chunk-ksvdmrg0.js:17396-17432 placement
+//@ chunk-6qj4xbae.js:11365-11401 placement
 /**
  * 计算后台进程要转发的环境变量并应用宿主自有环境。
  */
 function forwardedEnv(transition) {
   return withHostOwnedEnv(() => DAEMON_FORWARDED_ENV(transition));
 }
-//@ chunk-ksvdmrg0.js:17432-19118 placement
+//@ chunk-6qj4xbae.js:11401-13088 placement
 function DAEMON_FORWARDED_ENV(options) {
   let envSlice = getPreSettingsEnvHonoringLiveDeletions();
   envSlice.INVOCATION_ID = "";
@@ -929,14 +892,51 @@ function DAEMON_FORWARDED_ENV(options) {
   }
   return envSlice;
 }
-//@ chunk-ksvdmrg0.js:19118-19148 placement
+//@ chunk-y2nrbm62.js:6360-6727 placement
+/**
+ * 后台会话启动器的进程级状态：daemon 是否确认在线、进行中的确保操作、上次临时拉起时间、前缀状态与持有的信标等，可重置。
+ */
+class SpawnLauncherState {
+  daemonConfirmedUp = false;
+  ensureInFlight = null;
+  lastTransientSpawnAt = null;
+  prefixAxis = "idle";
+  prefixContractViolationLogged = false;
+  tmuxRgbApplied = false;
+  ownedBeacons = new Map();
+  reset() {
+    this.daemonConfirmedUp = false;
+    this.ensureInFlight = null;
+    this.lastTransientSpawnAt = null;
+    this.prefixAxis = "idle";
+    this.prefixContractViolationLogged = false;
+    this.tmuxRgbApplied = false;
+    this.ownedBeacons.clear();
+  }
+}
+//@ chunk-y2nrbm62.js:6727-6752 placement
+/**
+ * 按宿主保存的启动器状态。
+ */
+var spawnLauncherState; // deferred: uses SpawnLauncherState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-y2nrbm62.js:6727", () => {
+  spawnLauncherState = new HostScoped(() => new SpawnLauncherState());
+});
+//@ chunk-y2nrbm62.js:6752-6789 placement
+/**
+ * 取当前宿主的启动器状态。
+ */
+function getSpawnLauncherState() {
+  return spawnLauncherState.of(getRootSession().host);
+}
+//@ chunk-y2nrbm62.js:6835-6865 placement
 /**
  * 判断锁文件启动时间时允许的偏差（5000 毫秒）。
  */
 var EXTENDED_SPAWN_WAIT_MS = 120000;
 var LIVENESS_PROBE_INTERVAL_MS = 5000;
 var LOCK_STARTED_AT_SKEW_MS = 5000;
-//@ chunk-ksvdmrg0.js:19148-19375 placement
+//@ chunk-y2nrbm62.js:6865-7092 placement
 function createSpawnAttempt(attempt) {
   let state = {
     ...attempt,
@@ -953,13 +953,13 @@ function createSpawnAttempt(attempt) {
   });
   return state;
 }
-//@ chunk-ksvdmrg0.js:19375-19646 placement
+//@ chunk-y2nrbm62.js:7092-7365 placement
 async function isNpmStubSpawnFailure(attempt, path) {
   let childExit = attempt.childExit;
   if (!childExit || attempt.siblingHolderSeen) return false;
   if (childExit.code === 0 && childExit.signal === null) return false;
-  if (!isNpmScopePath(path)) return false;
-  switch (await classifyBinaryStub(path)) {
+  if (!isNpmWrapperLayoutPath(path)) return false;
+  switch (await npmTargetState(path)) {
     case "missing":
     case "fresh_stub":
       return true;
@@ -969,7 +969,7 @@ async function isNpmStubSpawnFailure(attempt, path) {
       return (await readSpawnStderr(attempt)).includes(NATIVE_BINARY_MISSING_TEXT);
   }
 }
-//@ chunk-ksvdmrg0.js:19646-20241 placement
+//@ chunk-y2nrbm62.js:7365-7960 placement
 /**
  * 按守护进程 stderr 内容归类失败原因（npm 占位、cwd 被删、launchctl、模块缺失、运行时崩溃、Claude 报错、其他）。
  */
@@ -988,7 +988,7 @@ function classifyDaemonStderr(stderr) {
   if (/^\s*(claude|Claude Code|daemon|bg manager)\b/im.test(stderr)) return lit("claude_error");
   return lit("other");
 }
-//@ chunk-ksvdmrg0.js:20241-20381 placement
+//@ chunk-y2nrbm62.js:7960-8100 placement
 async function readSpawnStderr(attempt, force = false) {
   if (attempt.stderr === null || force)
     attempt.stderr = attempt.stderrPath
@@ -996,7 +996,7 @@ async function readSpawnStderr(attempt, force = false) {
       : "";
   return attempt.stderr;
 }
-//@ chunk-ksvdmrg0.js:20381-20661 placement
+//@ chunk-y2nrbm62.js:8100-8380 placement
 async function shouldStopWaitingForDaemon(attempt) {
   let childExit = attempt.childExit;
   if (!childExit || attempt.siblingHolderSeen) return false;
@@ -1011,7 +1011,7 @@ async function shouldStopWaitingForDaemon(attempt) {
   }
   return true;
 }
-//@ chunk-ksvdmrg0.js:20661-21053 placement
+//@ chunk-y2nrbm62.js:8380-8772 placement
 /**
  * 轮询守护进程控制 socket 直到 ping 成功或超时；子进程已失败则提前放弃；期间检测到同级锁持有者时延长期限。
  */
@@ -1037,10 +1037,10 @@ async function waitForDaemonUp(attempt, deadline, probeLiveness) {
         endTime = Math.max(endTime, attempt.spawnIssuedAt + EXTENDED_SPAWN_WAIT_MS);
       } else if (attempt.budgetExtended && hasLock === false && Date.now() >= deadline) return false;
     }
-    await Ve(100);
+    await Be(100);
   }
 }
-//@ chunk-ksvdmrg0.js:21053-21194 placement
+//@ chunk-y2nrbm62.js:8772-8913 placement
 async function hasFreshDaemonLock(attempt, limits) {
   let lock;
   try {
@@ -1052,7 +1052,7 @@ async function hasFreshDaemonLock(attempt, limits) {
     lock !== null && !lock.bgDisabled && lock.startedAt >= attempt.spawnIssuedAt - LOCK_STARTED_AT_SKEW_MS
   );
 }
-//@ chunk-ksvdmrg0.js:21194-22324 placement
+//@ chunk-y2nrbm62.js:8913-10043 placement
 /**
  * 超时时描述守护进程锁的状态（不存在、不可读、自己的子进程、其他进程存活/已死/无权限）及持有者年龄与版本差异，用于遥测。
  */
@@ -1077,10 +1077,10 @@ async function describeDaemonLockAtDeadline(spawnContext) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
@@ -1113,7 +1113,7 @@ async function describeDaemonLockAtDeadline(spawnContext) {
     ...holderInfo,
   };
 }
-//@ chunk-ksvdmrg0.js:22484-22621 placement
+//@ chunk-y2nrbm62.js:10203-10340 placement
 /**
  * 输入是否不按普通提示处理：非 prompt 模式、斜杠命令，或当前会话处于有问题待答的阻塞状态。
  */
@@ -1125,7 +1125,7 @@ function isNonPromptInput(text, state) {
     (state?.tempo === "blocked" && (state.block?.questions.length ?? 0) > 0)
   );
 }
-//@ chunk-ksvdmrg0.js:22621-22716 placement
+//@ chunk-y2nrbm62.js:10340-10435 placement
 /**
  * 取要写进作业状态的排队提示（非普通输入时丢弃）。
  */
@@ -1134,7 +1134,7 @@ function queuedPromptOrUndefined(state) {
     ? undefined
     : state.queuedPrompt;
 }
-//@ chunk-ksvdmrg0.js:22716-22769 placement
+//@ chunk-y2nrbm62.js:10435-10488 placement
 /**
  * 判断新提示是否就是已排队的提示（允许前面有内容）。
  */
@@ -1146,7 +1146,7 @@ function promptMatchesQueued(queued, prompt) {
 ${prompt}`)
   );
 }
-//@ chunk-ksvdmrg0.js:22769-22973 placement
+//@ chunk-y2nrbm62.js:10488-10692 placement
 /**
  * 把输入作为排队提示写入作业状态（非普通提示时不写）；可与已有草稿合并。
  */
@@ -1175,10 +1175,10 @@ ${prompt}`,
     },
   );
 }
-//@ chunk-ksvdmrg0.js:22973-23155 placement
+//@ chunk-y2nrbm62.js:10692-10874 placement
 var TERMINAL_REPLY_RE =
   /\x1b\[(?:<\d+;\d+;\d+[Mm]|M[\s\S]{3}|I|O|\??\d+;\d+(?:;\d+)*R|[?>]\d+(?:;\d+)*c|\?\d+(?:;\d+)*\$y|\?997;[12]n|\?\d+u)|\x1bP[^\x1b]*\x1b\\|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g;
-//@ chunk-ksvdmrg0.js:23155-23237 placement
+//@ chunk-y2nrbm62.js:10874-10956 placement
 /**
  * 判断输出是否只包含终端按键回复（没有实际内容）。
  */
@@ -1186,14 +1186,14 @@ function isTerminalReplyOnly(reply) {
   if (!reply.includes("\x1B")) return false;
   return reply.replace(TERMINAL_REPLY_RE, "").length === 0;
 }
-//@ chunk-ksvdmrg0.js:23237-23283 placement
+//@ chunk-y2nrbm62.js:10956-11002 placement
 /**
  * 滚轮鼠标事件的位值（96）。
  */
 var MOUSE_PREFIX = "\x1B[<";
 var MOUSE_EVENT_RE = /^(\d+);\d+;\d+[Mm]/;
 var SCROLL_EVENT_BIT = 96;
-//@ chunk-ksvdmrg0.js:23283-23399 placement
+//@ chunk-y2nrbm62.js:11002-11118 placement
 function hasNonReportingMouseMode(text) {
   return text
     .split(MOUSE_PREFIX)
@@ -1203,11 +1203,11 @@ function hasNonReportingMouseMode(text) {
       return mode !== undefined && (Number(mode) & SCROLL_EVENT_BIT) === 0;
     });
 }
-//@ chunk-ksvdmrg0.js:23399-23523 placement
+//@ chunk-y2nrbm62.js:11118-11242 placement
 var MAX_PARTIAL_ESCAPE = 64;
 var PARTIAL_ESCAPE_RE =
   /^\x1b(?:$|\[(?:[<?>]?\d*(?:;\d*)*\$?|M[\s\S]{0,2})$|P(?:$|[>01][^\x1b]*\x1b?$)|\](?:$|\d[^\x07\x1b]*\x1b?$))/;
-//@ chunk-ksvdmrg0.js:23523-23706 placement
+//@ chunk-y2nrbm62.js:11242-11425 placement
 /**
  * 返回判断一段输入是否只含终端应答序列（鼠标、光标位置、DA、DECRQM 等）的函数，跨块保留未完成的转义序列。
  */
@@ -1226,7 +1226,7 @@ function createTerminalReplyFilter() {
     return false;
   };
 }
-//@ chunk-ksvdmrg0.js:23784-23828 placement
+//@ chunk-y2nrbm62.js:11503-11547 placement
 /**
  * 等待详情最多保留的字符数（50）。
  */
@@ -1236,10 +1236,12 @@ var MAX_DAEMON_STDERR_LINES = 200;
 var MAX_WAIT_FOR_DAEMON_MS = 4096;
 var MAX_DAEMON_WAIT_DETAIL_CHARS = 50;
 export {
-  queuePromptForJob,
   isNonPromptInput,
-  getSpawnLauncherState,
   queuedPromptOrUndefined,
+  queuePromptForJob,
+  getSpawnLauncherState,
+  createTerminalReplyFilter,
+  spawnDetachedSupervisor,
   promptMatchesQueued,
   MAX_DAEMON_STDERR_LINES,
   MAX_DAEMON_STDERR_LINE_CHARS,
@@ -1248,17 +1250,18 @@ export {
   MAX_DAEMON_STDERR_CHARS,
   isTerminalReplyOnly,
   hasNonReportingMouseMode,
-  resolveAgentLauncher,
-  EXTENDED_WAIT_MS,
+  NPM_REINSTALL_MAX_WAIT_MS,
   createSpawnAttempt,
   waitForDaemonUp,
   isNpmStubSpawnFailure,
-  waitForBinaryRecovery,
+  waitForReinstalledBinary,
   EXTENDED_SPAWN_WAIT_MS,
   shouldStopWaitingForDaemon,
   readSpawnStderr,
   classifyDaemonStderr,
   describeDaemonLockAtDeadline,
-  isExecutableBinary,
-  createTerminalReplyFilter,
+  execTokenIsRunnable,
+  homebrewBinLink,
+  isNpmWrapperLayoutPath,
+  npmTargetState,
 };

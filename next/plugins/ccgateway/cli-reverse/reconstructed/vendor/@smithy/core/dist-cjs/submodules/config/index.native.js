@@ -1,8 +1,8 @@
 /**
  * @smithy/core/dist-cjs/submodules/config/index.native.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/core@3.30.0
- * pieces: chunk-a3vzsfpr.js (1)
+ * pieces: chunk-7ycvgepx.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { configResolverModule } from "../../../../../unresolved-cjs/index.js";
 import { require_util_middleware } from "../../../../util-middleware/dist-cjs/index.js";
 import { require_index_browser } from "../endpoints/index.browser.js";
 
-//@ chunk-a3vzsfpr.js:7701-11897 cjs-fingerprint
+//@ chunk-7ycvgepx.js:7701-11897 cjs-fingerprint
 var require_index_native = __commonJS(function (cjsExports) {
   var configResolver = configResolverModule();
   var normalizeProvider = require_util_middleware();

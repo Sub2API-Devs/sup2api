@@ -3,10 +3,10 @@
  *
  * Messages API 调用核心：queryModel 构建请求体（模型、system、tools、thinking、output_config、context_management、beta）、加缓存断点、经 withRetry 发流式请求、解析 SSE 事件为 assistant 消息，以及 400 时逐级去特性的自愈重试；另含 queryHaiku/queryWithModel 等辅助查询。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/claude.ts
- * pieces: chunk-1ny7cxrt.js (1), chunk-1qpz7qcd.js (1), chunk-3xb70ww4.js (1), chunk-aepeg2w5.js (1), chunk-e6aww6q8.js (187), chunk-r1wk8q25.js (3), chunk-w5ndchqs.js (4)
- * attribution: fingerprint 21, placement 115, layout 54, callgraph-fingerprint 2, callgraph-witnessed 3, file-local 2, affinity 1
+ * pieces: chunk-03m9p8vx.js (1), chunk-1hnjmk23.js (1), chunk-5xgkngpb.js (204), chunk-7pwjpdkw.js (4), chunk-ck4jrdtf.js (1), chunk-exfmq47h.js (1), chunk-n7kzs9r0.js (3)
+ * attribution: fingerprint 22, affinity 3, placement 115, layout 55, sole-consumer 13, callgraph-fingerprint 2, callgraph-witnessed 3, file-local 2
  */
 import { randomUUID } from "crypto";
 import { getModelMaxOutputTokens } from "../../utils/context.js";
@@ -18,6 +18,7 @@ import { parseAttributionProject } from "../../utils/attributionProject.js";
 import { asSystemPrompt } from "../../utils/systemPromptType.js";
 import {
   logAPIPrefix,
+  inlineToolReferences,
   isStellarDriftEnabled,
   prefetchToolDescribeHooks,
   toolToApiDefinition,
@@ -81,6 +82,7 @@ import {
   adjustLastMainThreadCacheTtlMs,
   getRefusedBetasForModel,
   markBetaRefusedForModel,
+  isCcsTenant,
   getResponseBeforeCompaction,
   setLastMainThreadCacheTtlMs,
   isThirdPartyServerClassifierRefused,
@@ -101,8 +103,8 @@ import {
   markInlineToolsOkEmitted,
   markEffortUnsupported,
   markThinkingHighlightsRefused,
-  markThinkingResumptionRefused,
   markBetaHeaderRefused,
+  markThinkingResumptionRefused,
   hasRefusalFallbackOccurred,
   getRefusalFallbackModelLatch,
   consumePendingContextCompacted,
@@ -115,13 +117,16 @@ import {
   takeRefusalFallbackCarriedEffortEnd,
 } from "../../bootstrap/state.js";
 import { jsonStringify, jsonParse, clone } from "../../utils/slowOperations.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isObjectBlock } from "../../utils/toolResultStorage.js";
+import { isPdfReadToolUseId } from "../../utils/pdfUtils.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { isMainThreadSource } from "../../utils/querySource.js";
 import {
   estimateCacheWriteCost,
   resolvePromptCacheTtl,
   ONE_HOUR_TTL_SOURCES,
   matchesModelPattern,
+  stripModelDateSuffix,
   applyFiveMinuteOverride,
 } from "./promptCacheTtl.js";
 import {
@@ -152,8 +157,11 @@ import {
   BETA_PER_TURN_TIMING,
   supportsPerTurnTiming,
   getMergedBetas,
+  BETA_PROGRAM_USE_CASE_IDS,
+  programUseCaseHeaderGoesOut,
   BETA_ADVISOR_TOOL,
   BETA_THINKING_TOKEN_COUNT,
+  BETA_CCR_TOOL_PROVENANCE,
   getToolSearchBeta,
   shouldUseGlobalCacheScope,
   BETA_PROMPT_CACHING_SCOPE,
@@ -173,6 +181,7 @@ import {
   THINKING_DISPLAY_NAMED_BETA,
   BETA_MESSAGE_THREADS,
   KNOWN_BETAS,
+  BETA_CLAUDE_CODE_SIDE_QUERY,
   isAutoMode3POptIn,
   getBedrockExtraBodyParamsBetas,
   BETA_FALLBACK_CREDIT,
@@ -204,21 +213,21 @@ import {
   sanitizedClassNameForTelemetry,
 } from "../../utils/errors.js";
 import {
-  isUltrathinkEffective,
+  ultrathinkRaisesEffort,
+  ultrathinkRaisesEffortInSession,
   isEffortHigherThan,
   EFFORT_LEVELS,
   getModelSettingsKey,
   modelSupportsXhighEffort,
-  modelSupportsEffort,
   resolveEffortValue,
+  modelSupportsEffort,
   normalizeEffortLevel,
   getDefaultEffortLevel,
   resolveAppliedEffort,
   isAboveHighEffort,
-  THINKING_DISABLED_EFFORT_CAP,
   isEffortLevel,
 } from "../../utils/effort.js";
-import { enqueueTaskNotification as enqueueTaskNotification_2 } from "../../utils/task/taskNotifications.js";
+import { enqueueTaskNotification } from "../../utils/task/taskNotifications.js";
 import {
   showThinkingSummaries,
   upgradeDisabledThinkingForModel,
@@ -260,7 +269,7 @@ import {
 } from "./declaredToolSet.js";
 import { toolMatchesAnyName } from "../tools/permissionCheckGuard.js";
 import { isFoamySpringEnabled as isFoamySpringEnabled_2 } from "../mcp/mcpToolAvailability.js";
-import { toolMatchesName, findToolByName, getEmptyToolPermissionContext } from "../../Tool.js";
+import { matchesToolName, findToolByName, getEmptyToolPermissionContext } from "../../Tool.js";
 import {
   TOOL_SEARCH_TOOL_NAME,
   isDeferredToolByEngine,
@@ -268,7 +277,40 @@ import {
   isDeferredToolInConversation,
   DEFERREDTOOLPLACEHOLDER,
 } from "../../tools/ToolSearchTool/prompt.js";
-import { SYNTHETIC_MODEL, NO_CONTENT_MESSAGE } from "../../constants/messages.js";
+import {
+  SYNTHETIC_MODEL,
+  reorderByApiBlockIndex,
+  isResendableClientApiError,
+  getPromptId,
+  memoryRedactionIndex,
+  MEDIA_REMOVED_PLACEHOLDER,
+  unionSets,
+  getAdvisorStrippedMessageIds,
+  stripForeignModelThinking,
+  makeForeignModelChecker,
+  shouldKeepForeignThinking,
+  hasThinkingSignature,
+  resolveReminderFold_2,
+  stripToolReferenceBlocksFromUserMessage,
+  stripCallerFieldFromAssistantMessage,
+  ensureToolResultPairing,
+  stripAdvisorBlocks,
+  normalizeMessagesForAPI,
+  createApiErrorMessage,
+  thinkingStripAllPlan,
+  mergeMinMaps,
+  normalizeFallbackBlocks,
+  hasFallbackBlocks,
+  lastFallbackModel,
+  attachmentToMessages,
+  createInformationalSystemMessage,
+  stripThinkingFromPoint,
+  stripAllThinking,
+  normalizeContentFromAPI,
+  isPingStreamEvent,
+  createSystemAPIErrorMessage,
+  createUserMessage,
+} from "../../utils/messages.js";
 import {
   getFeatureValue_CACHED_MAY_BE_STALE,
   getFeatureValue_SESSION_PINNED,
@@ -285,10 +327,15 @@ import {
   classifyQuerySource,
   isAutoModeQuerySource,
   InvalidRequestHeaderValueError,
-  getCcrSenderAddressKey,
+  clipSlackMs,
+  slackStillFresh,
+  senderAddressKeyFor,
   prefetchCcrSenderAddress,
   canSendWigglyDoveHeader,
+  ARTIFACT_OUTPUT_SOURCE_QUERIES,
   isMainOrAgentQuerySource,
+  streamTimerSlackMs,
+  byteWatchdogSlackMs,
 } from "./requestHeaders.js";
 import {
   keepaliveRequestIds,
@@ -307,7 +354,7 @@ import {
   getFoundryRetryDirective,
   FAIL_FOUNDRY_PURPOSE_REQUEST,
 } from "./foundryCapabilities.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import {
   countCodePoints,
   CONTROL_CHARS_EXCEPT_WS_RE,
@@ -315,6 +362,7 @@ import {
   repairMalformedStringsDeep,
   plural,
 } from "../../utils/stringUtils.js";
+import { countWhere } from "../../utils/collections.js";
 import { createApiSystemMessage, joinParts } from "../../utils/messages/systemMessages.js";
 import { getDateTimeFormat } from "../../utils/intl.js";
 import {
@@ -339,6 +387,18 @@ import {
 import { identity as identity_2 } from "../../utils/identity.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
+import { messagesSince, logIdleClearingFailure } from "../compact/idleToolResultClearing.js";
+import {
+  isArrayLikeAlias,
+  baseGetAlias,
+  identityAlias,
+  baseUnaryAlias,
+  baseIterateeAlias,
+  baseFlattenAlias,
+} from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { baseEachInline2Alias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { isSymbolAlias, import_arrayMap, isArrayAlias } from "../../../vendor/lodash-es/toString.js";
+import { mergeKeys, isIterateeCall_2 } from "../../../vendor/lodash-es/_mergeWithFamily.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   objectSchema,
@@ -347,22 +407,35 @@ import {
   int as int_2,
   union,
 } from "../../../vendor/zod/v4/classic/schemas.js";
-import { isObjectBlock } from "../../utils/toolResultStorage.js";
+import { lastAdvisorToolChange } from "../../utils/advisor/advisorState.js";
+import {
+  ADVISOR_TOOL_NAME,
+  isAdvisorEnabled,
+  isAdvisorToolEnabled,
+  getAdvisorModelForQuery,
+  markAdvisorRefusedForProcess,
+  markAdvisorRefusedForHost,
+  parseAdvisorToolError,
+  parseAdvisorResult,
+  setAdvisorBaseUrlGetter,
+} from "../../utils/advisor.js";
 import {
   streamFallbackWarning,
   CONVERSATION_RESET_KINDS,
   decideStreamFallbackWarning,
   formatZodErrors,
+  awaitCacheWarmIfAny,
 } from "./streamFallbackWarning.js";
 import { isFirstPartyBaseUrl, getApiBaseUrl } from "../../utils/model/firstPartyBaseUrl.js";
 import {
   isBetaRejected as isBetaRejected_2,
+  markBetaSent,
+  isBetaSent,
   markBetaRejected,
+  conversation,
   markDeclaredToolsDecided,
   setDeclaredTools,
   mediaItemCapForModel,
-  markBetaSent,
-  isBetaSent,
   forgetBeta,
   resetDeclaredTools,
   markWebSearchHistoryRejected,
@@ -384,6 +457,17 @@ import { isFoamySpringEnabled } from "../analytics/growthbookGates.js";
 import { WAITFORMCPSERVERS, markDeclared } from "../../tools/WaitForMcpServersTool/WaitForMcpServersTool.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { lit as lit_2, fromEnumOpt, fromEnum, fromNumber } from "../analytics/safeMetadata.js";
+import {
+  isProgramUseCaseTurnScoped,
+  programUseCaseBody,
+  forgetRefusedProgramUseCase,
+} from "../../utils/programUseCase.js";
+import {
+  isSameModelForRules,
+  resolveLoopEffort,
+  classifyEffortCarryEffect,
+  getRefusedEffortCarry,
+} from "../../utils/permissions/permissionSetup.js";
 import { getDefaultHaikuModel } from "../../utils/model/planModeModel.js";
 import {
   hasDedicatedSmallFastModel,
@@ -400,7 +484,7 @@ import {
   getDefaultSonnetModel,
   getDefaultOpusModel,
   isFableModelValue,
-  isPinnedFableModel,
+  getDefaultFableModel,
   isMythosModelValue,
   toProviderWireModelId,
   SECONDARY_CONTEXT_WINDOW,
@@ -428,14 +512,17 @@ import {
   checkResponseForCacheBreak,
   logCacheDiagnosisReceived,
 } from "./promptCacheBreakDetection.js";
-import { returnValue_2 } from "../../utils/generators.js";
+import { returnValue } from "../../utils/generators.js";
 import {
   withRetry,
   CannotRetryError,
   FallbackTriggeredError,
+  GraceResend,
   is529Error,
   isSpeedParameterUnsupportedError,
   isNonFallbackError,
+  isAuthRetryableError,
+  isRemoteAuthError,
   getMaxRetriesFromEnv,
   getMaxSleptThrough,
   getMaxReconnects,
@@ -444,6 +531,7 @@ import {
   isRetryWatchdogOn,
   isFastModeNotEnabledError,
   parseMaxTokensContextOverflowError,
+  isNotFoundApiError,
   isNon529ServerError,
   RETRY_POLICY_CONST_1,
   RETRY_POLICY_CONST_HYN,
@@ -464,40 +552,8 @@ import {
   StreamIdleTimeoutError,
   StreamSuspendedError,
 } from "./client.js";
-import {
-  reorderByApiBlockIndex,
-  isResendableClientApiError,
-  getPromptId,
-  memoryRedactionIndex,
-  unionSets,
-  getAdvisorStrippedMessageIds,
-  stripForeignModelThinking,
-  makeForeignModelChecker,
-  shouldKeepForeignThinking,
-  hasThinkingSignature,
-  resolveReminderFold_2,
-  renderedAttachmentTexts,
-  stripToolReferenceBlocksFromUserMessage,
-  stripCallerFieldFromAssistantMessage,
-  ensureToolResultPairing,
-  stripAdvisorBlocks,
-  normalizeMessagesForAPI,
-  createApiErrorMessage,
-  thinkingStripAllPlan,
-  mergeMinMaps,
-  normalizeFallbackBlocks,
-  hasFallbackBlocks,
-  lastFallbackModel,
-  attachmentToMessages,
-  createInformationalSystemMessage,
-  stripThinkingFromPoint,
-  stripAllThinking,
-  normalizeContentFromAPI,
-  isPingStreamEvent,
-  createSystemAPIErrorMessage,
-  createUserMessage,
-} from "../../utils/messages.js";
-import { withStreamVCR, withVCR } from "../vcr.js";
+import { NO_CONTENT_MESSAGE } from "../../constants/messages.js";
+import { withStreamVCR, isVcrEnabled, withVCR } from "../vcr.js";
 import { recoverRegimeRefusal, isRegimeRefusal } from "./regimeRefusal.js";
 import { hasLspEverConnected, getInitializationStatus } from "../lsp/manager.js";
 import { MAX_TIMER_DELAY_MS } from "../../utils/timerDelayClamp.js";
@@ -519,6 +575,7 @@ import {
   X_CC_COMPACTION_REQUEST,
   X_CLAUDE_CODE_COMPACTION,
   X_CLAUDE_CODE_PREV_TOOL_DURATIONS,
+  formatToolDurationsHeader,
 } from "./compactionHeaders.js";
 import {
   describeResponseHeaders,
@@ -532,6 +589,7 @@ import {
   responseDiagnosticFields,
   requestIdFromHeaders,
 } from "./responseDiagnostics.js";
+import { getGzipRequestBodyBlocksMode, findRouteTurnError, takeDispatchAtGzip } from "./gzipRequestBody.js";
 import { systemClock, sleep } from "../../utils/sleep.js";
 import {
   MAX_OUTPUT_TOKENS_CAP as MAX_OUTPUT_TOKENS_CAP_2,
@@ -546,7 +604,7 @@ import {
 } from "../../utils/mediaLimits.js";
 import {
   deferredToolNameOf,
-  countToolCallsSince_2 as countToolCallsSince_2_3,
+  translateMessageToolNames,
   registerMcpStandardKeys,
   seedDeferredToolReferences,
   shouldTrackDeferredToolForQuery,
@@ -590,6 +648,8 @@ import {
   getRejectedBetas,
   BETA_REJECTION_MATCHER_KEYS,
   isCacheKeepaliveBetaRejected,
+  isProgramUseCaseBetaRejected,
+  isProgramUseCaseNotHeldError,
   isThinkingResumptionBetaRejected,
   isThinkingBindingRejected,
   getRejectedThinkingType,
@@ -609,12 +669,14 @@ import {
   getMidConvSystemRejection,
   isPerTurnEffortRejected,
   mentionsThinkingBindingBeta,
+  isToolProvenanceServerUrlError,
   isBetaListedAsUnexpected,
   isContext1mBetaRejected,
   isConversationBindingError,
   parseThinkingPrefixMismatchHeader,
   markPrefixLockHealDeclined,
   getRefusalMessage,
+  isToolUseBlockCutOffError,
   isDlpRequestDenied,
   alwaysFalseErrors,
   isRequestTooLargeError_2,
@@ -656,19 +718,18 @@ import {
   getTurnStartOriginKind,
 } from "../../utils/messages/promptOrigin.js";
 import { isLiveMemoryTool, createMemoryServerVerifier } from "../mcp/memoryServerVerification.js";
+import { countUserPromptsInMessages as countUserPromptsInMessages_2 } from "../projects/projectReadRecords.js";
 import { isBase64ImageBlock as isBase64ImageBlock_3 } from "../../utils/imageValidation.js";
-import { getResolvedWIFBaseUrlSnapshot } from "../oauth/wifCredentials.js";
 import {
-  ADVISOR_TOOL_NAME,
-  isAdvisorEnabled,
-  isAdvisorToolEnabled,
-  getAdvisorModelForQuery,
-  markAdvisorRefusedForProcess,
-  markAdvisorRefusedForHost,
-  parseAdvisorToolError,
-  parseAdvisorResult,
-  setAdvisorBaseUrlGetter,
-} from "../../utils/advisor.js";
+  unsentMediaByteLength,
+  noteToolRedescribed,
+  applyRefusedToolSchemas,
+  ToolSchemaWireCache,
+  isFoamySpringWireOn,
+  recordUnsentMedia,
+  emptyObject,
+} from "./toolSchemaWire.js";
+import { getResolvedWIFBaseUrlSnapshot } from "../oauth/wifCredentials.js";
 import { getSonnet46ContextWindowOverride } from "../../utils/model/configs.js";
 import { antGrants1MContext } from "../../utils/model/classifierModel.js";
 import {
@@ -678,7 +739,7 @@ import {
   wireInputSources,
   captureWireToolInputs,
   logWireToolInputParseFailure,
-  countToolCallsSince_4,
+  wireIngestContextStamps,
 } from "../../utils/wireToolInputEcho.js";
 import {
   isAccountMemoryRedactionOn,
@@ -692,14 +753,22 @@ import {
   queryCheckpoint,
   startProfilePhase,
   endProfilePhase,
+  noteToolSchemaBuildStart,
+  markToolSchemaBuildPart,
+  noteToolSchemaBuildEnd,
+  markMessageNormalizationPart,
+  noteMessageNormalizationCounts,
+  markRequestBuildPart,
+  noteSentBuildSpan,
+  openFirstEventWait,
   closeProfile,
   openProfileStream,
+  openProfileWindow,
   endQueryProfile,
   noteRedrive,
 } from "../../utils/queryProfiler.js";
-import { estimateTokensWithAnchor } from "../compact/autoCompact.js";
+import { estimateTokensWithAnchor, serverClearedTokens, turnTokenSizing } from "../compact/autoCompact.js";
 import { bytesPerTokenForModel, renderModelName } from "../../utils/model/modelDisplay.js";
-import { stripInProgressAssistantMessage } from "../../commands/btw/btw.js";
 import {
   hasFallbackLadders,
   recordConversationSize as recordConversationSize_2,
@@ -710,6 +779,7 @@ import { withCatalogSuppressed } from "../../utils/model/modelCatalog/servedCata
 import { blockedOverrideText } from "../../utils/model/modelErrorOverrides.js";
 import { collectRecentAssistantTexts } from "../../commands/copy/copy.js";
 import { isDynamicModelConfigEnabled, awaitModelConfigFetch } from "../../utils/model/dynamicModelConfig.js";
+import { toolDescriptionCache as toolDescriptionCache_2 } from "./toolDescriptionCache.js";
 import {
   seedWireShapeFromRecord,
   threadSourceKind,
@@ -726,14 +796,18 @@ import {
   buildTetherDelta,
   hasStructuralEchoDiff,
   logTetherEchoAudit,
+  needsTetherChannel,
   checkTetherPrefixMismatch,
   createSentPrefixChecker,
   reportThinkingDrop,
   refetchStaleClientData,
+  hasToolUse,
+  failedResponseStamp,
   liftEphemeralReminders,
   buildWireWithClearAt,
 } from "./tether.js";
 import { getModelContextInfo } from "../../utils/model/modelContextInfo.js";
+import { indexConnectorByTool } from "./connectorFields.js";
 import { awaitArtifactRosterSafe } from "../artifacts/rosterWait.js";
 import {
   isToolSearchEnabled,
@@ -743,20 +817,24 @@ import {
   extractDiscoveredToolNames,
   collectToolReferences,
 } from "../../utils/toolSearch.js";
+import {
+  withProvenanceBeta,
+  makeServerAnnotationResolver,
+  stripToolAnnotations,
+  annotateToolsWithFallback,
+  withServerUrlHeader,
+  stripUrlsFromAnnotations,
+  countWithheldUrls,
+  annotateMessageContentsWithFallback,
+  handleServerUrlRefused,
+} from "./toolProvenance.js";
 import { deltaToolNames, deferredToolNames, isDeferredCustomToolDefinition } from "./toolDefinitionShape.js";
 import {
-  alwaysFalseFeed,
-  identityValue as identityValue_2,
+  willHideCodeModeOnlyTools,
+  hideCodeModeOnlyTools,
 } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { hideAliasedV1Tools, isBatchToolsUse } from "../tools/batchTools.js";
 import { STRUCTUREDOUTPUT } from "../../tools/SyntheticOutputTool/SyntheticOutputTool.js";
-import {
-  noteToolRedescribed,
-  applyRefusedToolSchemas,
-  ToolSchemaWireCache,
-  isFoamySpringWireOn,
-  emptyObject,
-} from "./toolSchemaWire.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { noteBackgroundStopNoticeSent } from "../../tools/AgentTool/backgroundGates.js";
 import { getDeferredToolPlaceholderSchema } from "../../tools/ToolSearchTool/deferredToolPlaceholder.js";
@@ -779,12 +857,9 @@ import {
   disableTetherLiveGate,
   logKeptReminderOk,
 } from "./keptReminder.js";
-import {
-  resolveLoopEffort,
-  classifyEffortCarryEffect,
-  getRefusedEffortCarry,
-} from "../../utils/permissions/permissionSetup.js";
 import { sessionTimeZone } from "../../utils/sessionTimeZone.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import { POLL } from "../../tools/PollTool/prompt.js";
 import { computeFingerprintFromMessages } from "../../utils/fingerprint.js";
 import { isBetasSwitchSetAside } from "../../utils/permissions/serverClassifier/flags.js";
 import {
@@ -807,6 +882,14 @@ import {
 } from "../../utils/permissions/autoModeState.js";
 import { hashToolNames } from "../../utils/model/modelCatalog/maskedIds.js";
 import {
+  isBetaRejectionStatus,
+  markBetaHeaderRejectedForever,
+  buildServerClassifierRequestContext,
+  collectPriorServerContexts,
+  recordClassifierRequest,
+  pickPriorTurnContext,
+} from "../../utils/permissions/serverClassifier/context.js";
+import {
   planToolResultClearingAfterIdle,
   addClientEstimatedClearedTokens,
   recordIdleClearingServerReport,
@@ -816,7 +899,7 @@ import {
   isArbiterWithFallbackActive,
 } from "../../utils/permissions/serverClassifier/arbiter.js";
 import { isBetaTracingEnabled } from "../../utils/telemetry/betaSessionTracing.js";
-import { logApiRequestBody } from "../../utils/telemetry/otelRawBodies.js";
+import { logApiRequestBody, cyberVerificationOf } from "../../utils/telemetry/otelRawBodies.js";
 import { replayTranscriptRequest } from "../../utils/transcriptRequestBlobs.js";
 import { emptySuspendState, ANTHROPIC_USAGE_LIMIT, SLOW } from "../lowPriority/headers.js";
 import { applyMockHeaders } from "../mockRateLimits.js";
@@ -828,15 +911,10 @@ import {
   describeForwardedTurns,
   buildContextSectionsMessage,
 } from "../../utils/messages/apiNormalization.js";
-import {
-  buildServerClassifierRequestContext,
-  collectPriorServerContexts,
-  recordClassifierRequest,
-  pickPriorTurnContext,
-} from "../../utils/permissions/serverClassifier/context.js";
 import { checkInsertedTextShed } from "../../utils/cronFireTexts.js";
 import { maxOutputTokensMinusOne } from "../../screens/Doctor.js";
 import { canResumeThinking, markAbandonedThinking } from "./thinkingResumption.js";
+import { THINKING_DISABLED_EFFORT_CAP } from "../../components/ModelPicker.js";
 import { getAPIContextManagement } from "../compact/apiMicrocompact.js";
 import {
   logAPIQuery,
@@ -858,6 +936,7 @@ import {
   classifyStreamFailure,
   classifyAttemptOutcome,
 } from "./attemptDecision.js";
+import { dropProgramUseCaseId } from "../mcp/ccrTurnId.js";
 import {
   mergeUsageFromDelta,
   addResponseUsageAttributes,
@@ -887,11 +966,9 @@ import {
   hasTenderQuiltHeader,
 } from "./refusalFallbackHeaders.js";
 import { isMainQueryCompaction } from "../compact/postCompactCleanup.js";
-import { formatToolDurationsHeader } from "../../components/messages/SystemTextMessage.js";
 import { startSessionActivity, endActivity } from "../../utils/sessionActivity.js";
 import { headlessProfilerCheckpoint } from "../../utils/headlessProfiler.js";
 import { recordApiRequestSentFromSpawn } from "../../utils/startupTiming.js";
-import { takeDispatchAtGzip } from "./gzipRequestBody.js";
 import { warmHarnessPatterns } from "../../utils/harnessTagGate.js";
 import {
   takesRequestBodyBytes,
@@ -907,6 +984,7 @@ import {
 } from "./streamErrors.js";
 import { internalName } from "../mcp/serverIdentity.js";
 import { THINKING_BARE_WIDTH } from "../../components/Spinner/SpinnerAnimationRow.js";
+import { isTextOrJsonDeltaEvent } from "../../query/goalCheckIn.js";
 import { tokenCountFromLastAPIResponse } from "../../utils/tokens.js";
 import { totalTokensOf } from "../../utils/messages/usageAndStopReason.js";
 import { isFirstPartyTelemetryBlocked } from "../../utils/hostEnvironment.js";
@@ -914,7 +992,7 @@ import { getToolNameKinds } from "../../tools/SkillTool/SkillTool.js";
 import { sessionHasOwnFallback, buildAvailabilityFallbackChain } from "../../utils/model/modelFallback.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:474942-475090 fingerprint (2.1.88 match: getMaxOutputTokensForModel, 1)
+//@ chunk-exfmq47h.js:486340-486488 fingerprint (2.1.88 match: getMaxOutputTokensForModel, 1)
 /**
  * 主循环模型的 max_tokens：模型默认值，可用 CLAUDE_CODE_MAX_OUTPUT_TOKENS 在模型上限内调整。
  */
@@ -927,7 +1005,7 @@ function getMaxOutputTokensForModel(model) {
     maxOutputTokens.upperLimit,
   ).effective;
 }
-//@ chunk-1qpz7qcd.js:30432-30552 fingerprint (2.1.88 match: getPreviousRequestIdFromMessages, 0.653)
+//@ chunk-ck4jrdtf.js:30935-31055 fingerprint (2.1.88 match: getPreviousRequestIdFromMessages, 0.653)
 /**
  * 控制请求子类型在白名单内时返回 {subtype, requestId}。旧版名 getPreviousRequestIdFromMessages 为错配。
  */
@@ -939,17 +1017,17 @@ function getControlRequestInfo(messages) {
     requestId: messages.payload ? getControlRequestSubtype(messages.payload) : undefined,
   };
 }
-//@ chunk-w5ndchqs.js:2496-2556 placement
+//@ chunk-7pwjpdkw.js:2692-2752 placement
 /**
  * ti/os/sb/he/uf/ap/tk：CLAUDE_CODE_EXTRA_METADATA 不能覆盖的保留键；512 为 user_id JSON 的长度上限。
  */
 var RESERVED_METADATA_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_METADATA_USER_ID_LENGTH;
-deferInit("chunk-w5ndchqs.js:2496", () => {
+deferInit("chunk-7pwjpdkw.js:2692", () => {
   RESERVED_METADATA_KEYS = new Set(["ti", "os", "sb", "he", "uf", "ap", "tk"]);
   MAX_METADATA_USER_ID_LENGTH = 512;
 });
-//@ chunk-w5ndchqs.js:2556-2709 placement
+//@ chunk-7pwjpdkw.js:2752-2905 placement
 /**
  * 去掉保留键，只保留字符串/数字/布尔值的附加 metadata 字段。
  */
@@ -963,7 +1041,7 @@ function sanitizeExtraMetadata(parsed) {
       extraMetadata[key] = value;
   return extraMetadata;
 }
-//@ chunk-w5ndchqs.js:3172-3418 placement
+//@ chunk-7pwjpdkw.js:3370-3616 placement
 /**
  * 构造请求 system：计费/归因头、额外前缀与原 system 依次拼接（去掉空项），并记录 API 前缀。
  */
@@ -984,7 +1062,7 @@ function buildSystemWithAttribution(systemPrompt, prefix, options) {
   logAPIPrefix(systemPrompt_2);
   return systemPrompt_2;
 }
-//@ chunk-w5ndchqs.js:5496-6185 fingerprint (2.1.88 match: getAPIMetadata, 0.694)
+//@ chunk-7pwjpdkw.js:5697-6386 fingerprint (2.1.88 match: getAPIMetadata, 0.694)
 /**
  * 请求体 metadata：user_id 为 JSON 字符串 {device_id, account_uuid, session_id, parent_session_id?, tk?}，可合并 CLAUDE_CODE_EXTRA_METADATA（超长时丢弃附加字段）。
  */
@@ -1044,16 +1122,48 @@ function getAPIMetadata({ agentContext, servedSessionMode } = {}) {
     user_id: jsonStringify(metadata),
   };
 }
-//@ chunk-e6aww6q8.js:445621-445714 fingerprint (2.1.88 match: isToolResultBlock, 0.745)
+//@ chunk-03m9p8vx.js:8837-8936 fingerprint (2.1.88 match: isMedia, 1)
 /**
- * user 消息里所有 tool_result 的 tool_use_id。旧版名 isToolResultBlock 不准确。
+ * 内容数组含 image/document 块。
  */
-function getToolResultIds(block) {
-  return block.type === "user"
-    ? collectBlockFieldsByType(block.message?.content, "tool_result", "tool_use_id")
-    : [];
+function hasMediaContent(block) {
+  return (
+    Array.isArray(block) &&
+    block.some((block) => isObjectBlock(block) && (block.type === "image" || block.type === "document"))
+  );
 }
-//@ chunk-e6aww6q8.js:445714-445862 placement
+//@ chunk-5xgkngpb.js:143091-143273 fingerprint (2.1.88 match: isToolResultBlock, 1)
+function isToolResultBlock_4(block) {
+  if (typeof block !== "object" || block === null || !("type" in block)) return false;
+  return (
+    (block.type === "tool_use" && "id" in block && isPdfReadToolUseId(block.id)) ||
+    (block.type === "tool_result" && "tool_use_id" in block && isPdfReadToolUseId(block.tool_use_id))
+  );
+}
+//@ chunk-5xgkngpb.js:143273-143326 affinity
+function isDocumentContent(content) {
+  return Array.isArray(content) && content.some(isToolResultBlock_4);
+}
+//@ chunk-5xgkngpb.js:143326-143720 affinity
+function findToolResultFirstBlock(apiMessages) {
+  let filtered = apiMessages.filter((message) => message.role === "user");
+  let content = filtered.at(-1)?.content;
+  let block = Array.isArray(content) ? content.at(-1) : undefined;
+  if (isToolResultBlock_4(block)) {
+    let content =
+      typeof block === "object" && block !== null && "content" in block ? block.content : undefined;
+    if (!Array.isArray(content) || content.length > 2) return "added_to";
+    let secondBlock = content[1];
+    return typeof secondBlock === "object" &&
+      secondBlock !== null &&
+      "type" in secondBlock &&
+      secondBlock.type === "document"
+      ? "last"
+      : "no_document";
+  }
+  return filtered.some((message) => isDocumentContent(message.content)) ? "not_last" : "absent";
+}
+//@ chunk-5xgkngpb.js:448594-448742 placement
 /**
  * 从内容数组里取指定 type 块的某个字符串字段（如 tool_use 的 id、tool_result 的 tool_use_id）。
  */
@@ -1061,13 +1171,13 @@ function collectBlockFieldsByType(content, blockType, fieldName) {
   if (!Array.isArray(content)) return [];
   let values = [];
   for (let block of content)
-    if (isPlainObject_5(block) && block.type === blockType) {
+    if (isPlainObject_6(block) && block.type === blockType) {
       let value = block[fieldName];
       if (typeof value === "string") values.push(value);
     }
   return values;
 }
-//@ chunk-e6aww6q8.js:2077127-2077220 placement
+//@ chunk-5xgkngpb.js:2133520-2133613 placement
 function buildContextTokensFields(model) {
   let contextTokens = getLastMainThreadContextTokens() ?? 0;
   return {
@@ -1076,7 +1186,7 @@ function buildContextTokensFields(model) {
     ...estimateCacheWriteCost(model, contextTokens),
   };
 }
-//@ chunk-e6aww6q8.js:2476386-2476451 placement
+//@ chunk-5xgkngpb.js:2533644-2533709 placement
 /**
  * 导出函数 `canonicalNameOrUndefined`：参数 e，返回 Vpr(e, getCanonicalName(e)); } catch (error) { logError(toError(error)); return; }。
  */
@@ -1088,23 +1198,32 @@ function canonicalNameOrUndefined(model) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2476451-2476516 placement
+//@ chunk-5xgkngpb.js:2533709-2533774 placement
 /**
  * 导出函数 `ultrathinkEffectiveSafely`：参数 e, n，返回 isUltrathinkEffective(e, n()); } catch (error) { logError(toError(error)); return; }。
  */
 function ultrathinkEffectiveSafely(model, readSessionEffort) {
   try {
-    return isUltrathinkEffective(model, readSessionEffort());
+    return ultrathinkRaisesEffort(model, readSessionEffort());
   } catch (error) {
     logError(toError(error));
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2476516-2476650 placement
+//@ chunk-5xgkngpb.js:2533774-2533839 layout
+function resolveModelAlias(model, getMainLoopModel) {
+  try {
+    return ultrathinkRaisesEffortInSession(model, getMainLoopModel());
+  } catch (error) {
+    logError(toError(error));
+    return;
+  }
+}
+//@ chunk-5xgkngpb.js:2533839-2533973 placement
 function notifyPerTurnEffortInactive(messages, isPerTurnEffortActive) {
   try {
     if (!isPerTurnEffortActive && hasContextBeta(messages))
-      enqueueTaskNotification_2({
+      enqueueTaskNotification({
         type: "system",
         subtype: "per_turn_effort_changed",
         per_turn_effort_active: false,
@@ -1113,18 +1232,18 @@ function notifyPerTurnEffortInactive(messages, isPerTurnEffortActive) {
     logError(toError(error));
   }
 }
-//@ chunk-e6aww6q8.js:2476650-2476715 placement
+//@ chunk-5xgkngpb.js:2533973-2534038 placement
 function thinkingDisplayUpdatesEnabled() {
   return env.CLAUDE_CODE_THINKING_DISPLAY_UPDATES ?? true;
 }
-//@ chunk-e6aww6q8.js:2476715-2476938 placement
+//@ chunk-5xgkngpb.js:2534038-2534261 placement
 function thinkingDisplayMode(display, isThinkingDisabled) {
   if (display === "summarized" || display === "highlights") return "thinking_and_connector_text";
   if (display === "omitted" && !isThinkingDisabled) return "none";
   if (display !== "omitted" && showThinkingSummaries()) return "thinking_and_connector_text";
   return thinkingDisplayUpdatesEnabled() ? "connector_text" : "none";
 }
-//@ chunk-e6aww6q8.js:2476938-2476991 placement
+//@ chunk-5xgkngpb.js:2534261-2534314 placement
 /**
  * 导出函数 `shouldSendInterleavedThinkingBeta`：参数 e，返回 ( !areExperimentalBetasDisabled() && modelSupportsISP(e) && (shouldIncludeFirstPartyOnlyBetas() || modelHidesT…。
  */
@@ -1135,26 +1254,26 @@ function shouldSendInterleavedThinkingBeta(model) {
     (shouldIncludeFirstPartyOnlyBetas() || modelHidesThinkingByDefault(model))
   );
 }
-//@ chunk-e6aww6q8.js:2476991-2477053 placement
+//@ chunk-5xgkngpb.js:2534314-2534376 placement
 function hasThinkingDisplayProbesLeft() {
   return (getSessionFeatureValues().thinkingDisplayProbeFailures ?? 0) < 2;
 }
-//@ chunk-e6aww6q8.js:2477053-2477148 placement
+//@ chunk-5xgkngpb.js:2534376-2534471 placement
 function noteThinkingDisplayProbeFailure() {
   let sessionFeatureValues = getSessionFeatureValues();
   sessionFeatureValues.thinkingDisplayProbeFailures =
     (sessionFeatureValues.thinkingDisplayProbeFailures ?? 0) + 1;
 }
-//@ chunk-e6aww6q8.js:2495003-2495042 placement
+//@ chunk-5xgkngpb.js:2537561-2537600 placement
 var computerToolRelayModule; // deferred: loads other modules while loading; runs once its import cycle is complete
-deferInit("chunk-e6aww6q8.js:2495003", () => {
+deferInit("chunk-5xgkngpb.js:2537561", () => {
   computerToolRelayModule = require("../remoteTools/isLinkedComputerToolShownOnRelay.lazy.js");
 });
-//@ chunk-e6aww6q8.js:2495042-2495128 placement
+//@ chunk-5xgkngpb.js:2537600-2537686 placement
 function isClaudeAiAlwaysLoadMcpTool(tool) {
   return tool.isMcp === true && tool.alwaysLoad === true && tool.mcpInfo?.scope === "claudeai";
 }
-//@ chunk-e6aww6q8.js:2495128-2495583 placement
+//@ chunk-5xgkngpb.js:2537686-2538156 placement
 /**
  * 计算本次请求声明的工具集（DeclaredToolSet）：启用 ToolSearch 时排除延迟加载的工具（CLAUDE_CODE_UPFRONT_TOOLS 中的可提前声明）；条件不满足返回 undefined。
  */
@@ -1177,7 +1296,7 @@ function computeDeclaredToolSet(betas, tools, isDeferred, context, upfront = fal
     (isTurnDenied ? betas.declaredTools !== undefined : betas.declaredToolsDecided) ||
     !isFoamySpringEnabled_2() ||
     (!isTurnDenied && !hasUpfrontDeferred && !tools.some(wantsDeclared)) ||
-    !tools.some((tool) => toolMatchesName(tool, TOOL_SEARCH_TOOL_NAME))
+    !tools.some((tool) => matchesToolName(tool, TOOL_SEARCH_TOOL_NAME))
   )
     return;
   return new DeclaredToolSet(
@@ -1186,9 +1305,9 @@ function computeDeclaredToolSet(betas, tools, isDeferred, context, upfront = fal
     ),
   );
 }
-//@ chunk-e6aww6q8.js:2512232-2512247 placement
+//@ chunk-5xgkngpb.js:2554468-2554483 placement
 var MSG = "msg_";
-//@ chunk-e6aww6q8.js:2512247-2512432 placement
+//@ chunk-5xgkngpb.js:2554483-2554668 placement
 function isRealApiResponse(message) {
   if (message.isApiErrorMessage) return false;
   if (message.requestId) return true;
@@ -1196,7 +1315,7 @@ function isRealApiResponse(message) {
   let id = message.message?.id;
   return typeof id === "string" && id.startsWith(MSG) && message.message?.model !== SYNTHETIC_MODEL;
 }
-//@ chunk-e6aww6q8.js:2512432-2512602 placement
+//@ chunk-5xgkngpb.js:2554668-2554838 placement
 function lastAssistantMessageId(messages) {
   try {
     for (let idx = messages.length - 1; idx >= 0; idx--) {
@@ -1211,22 +1330,22 @@ function lastAssistantMessageId(messages) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:2533632-2533686 placement
+//@ chunk-5xgkngpb.js:2584669-2584723 placement
 /**
  * 导出函数 `isBasaltSpurEnabled`：返回 canSendFirstPartyBetas() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_basalt_spur", !1)。
  */
 function isBasaltSpurEnabled() {
   return canSendFirstPartyBetas() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_basalt_spur", false);
 }
-//@ chunk-e6aww6q8.js:2533686-2533737 placement
+//@ chunk-5xgkngpb.js:2584723-2584774 placement
 function isExtractMemoriesSkipCacheWrite(querySource, skipCacheWrite) {
   return querySource === "extract_memories" && skipCacheWrite;
 }
-//@ chunk-e6aww6q8.js:2533737-2533792 placement
+//@ chunk-5xgkngpb.js:2584774-2584829 placement
 function isBasaltScarpEnabled() {
   return canSendFirstPartyBetas() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_basalt_scarp", false);
 }
-//@ chunk-e6aww6q8.js:2533792-2533974 placement (2.1.88 match: hasThinkingContent, 1)
+//@ chunk-5xgkngpb.js:2584829-2585011 placement (2.1.88 match: hasThinkingContent, 1)
 function isRenderableContentBlock(block, whitespaceTextUnstampable) {
   if (block.type === "text") {
     if (typeof block.text !== "string" || block.text === "") return false;
@@ -1234,7 +1353,7 @@ function isRenderableContentBlock(block, whitespaceTextUnstampable) {
   }
   return block.type !== "thinking" && block.type !== "redacted_thinking" && !isFallbackMessage(block);
 }
-//@ chunk-e6aww6q8.js:2533974-2534124 placement
+//@ chunk-5xgkngpb.js:2585011-2585161 placement
 function lastBlockIsRenderable(message, whitespaceTextUnstampable) {
   if (message.type !== "assistant") return true;
   let content = message.message.content;
@@ -1242,7 +1361,7 @@ function lastBlockIsRenderable(message, whitespaceTextUnstampable) {
   let block = content.at(-1);
   return block !== undefined && isRenderableContentBlock(block, whitespaceTextUnstampable);
 }
-//@ chunk-e6aww6q8.js:2534124-2534476 placement
+//@ chunk-5xgkngpb.js:2585161-2585513 placement
 /**
  * 缓存标记尾部审计的默认条件、跳过 cache_control 的原因编码表和相关上限。
  */
@@ -1267,7 +1386,7 @@ var CACHE_SKIP_REASON_CODES = {
   unexcused: 11,
 };
 var MAX_TAIL_AUDIT_ITEMS = 256;
-//@ chunk-e6aww6q8.js:2534476-2535974 placement
+//@ chunk-5xgkngpb.js:2585513-2587013 placement
 /**
  * 计算消息上的缓存断点位置：末尾可渲染消息（可移到末尾 api_system）、分叉点/父回复前的第二个断点、fork 缓存钉；返回断点集合与审计尾部的函数。
  */
@@ -1377,7 +1496,7 @@ function pickCacheMarkerIndices({
     auditTail,
   };
 }
-//@ chunk-e6aww6q8.js:2535974-2537557 placement
+//@ chunk-5xgkngpb.js:2587013-2588600 placement
 /**
  * 说明本次请求为何没有写入缓存标记（缓存关闭、分叉尾部、代理降级、实验 beta 关闭等）。
  */
@@ -1483,7 +1602,7 @@ function explainCacheControlSkip({
     unexcusedTailTokensEst,
   };
 }
-//@ chunk-e6aww6q8.js:2537557-2537777 placement
+//@ chunk-5xgkngpb.js:2588600-2588820 placement
 function hasFoldedAttachmentEdits(block) {
   return (
     (block.foldedAttachmentSpans?.length ?? 0) > 0 ||
@@ -1494,11 +1613,11 @@ function hasFoldedAttachmentEdits(block) {
     block.toolDefinitions !== undefined
   );
 }
-//@ chunk-e6aww6q8.js:2537777-2537822 placement
+//@ chunk-5xgkngpb.js:2588820-2588865 placement
 function roughTokensOfTrimmed(text) {
   return text.trim() === "" ? 0 : roughTokenCountEstimation(text);
 }
-//@ chunk-e6aww6q8.js:2537822-2538195 placement
+//@ chunk-5xgkngpb.js:2588865-2589238 placement
 /**
  * 辅助查询（如保活）在头部开启且有第二个标记位时，找到父回复的消息 id，决定是否在父提示末尾加缓存标记。
  */
@@ -1526,18 +1645,18 @@ function parentReplyMarkPlan({ querySource, model, isKeepaliveHeaderOnWire, hasS
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2538195-2538259 placement
+//@ chunk-5xgkngpb.js:2589238-2589302 placement
 function isStructuredOutputsUnsupportedClaude(model) {
   return (
     isStructuredOutputsMarkedUnsupported(stripAnyVersatileSuffix(model)) ||
     !foundrySupportsCapability(model, "structured_outputs")
   );
 }
-//@ chunk-e6aww6q8.js:2538259-2538286 placement
+//@ chunk-5xgkngpb.js:2589302-2589329 placement
 function markStructuredOutputsUnsupportedClaude(model) {
   markStructuredOutputsUnsupported(stripAnyVersatileSuffix(model));
 }
-//@ chunk-e6aww6q8.js:2562306-2563334 placement
+//@ chunk-5xgkngpb.js:2613934-2614966 placement
 /**
  * CLAUDE_CODE_WEBSEARCH_CITATIONS 开启时，把流里相邻的带引用文本块合并成一个 assistant 消息（重算 span），并同步后续 server_fallback 里引用的消息。
  */
@@ -1583,7 +1702,8 @@ async function* joinWebSearchCitationTexts(stream, enabled) {
       });
     }
   }
-  let remapMessages = (list) => uniq(list.map((message) => replacements.get(message) ?? message));
+  let remapMessages = (list) =>
+    normalizeCaseForComparison_2(list.map((message) => replacements.get(message) ?? message));
   try {
     for await (let message of stream) {
       if (message.type === "assistant") {
@@ -1616,7 +1736,7 @@ async function* joinWebSearchCitationTexts(stream, enabled) {
   }
   yield* flushBuffer();
 }
-//@ chunk-e6aww6q8.js:2563334-2563448 placement
+//@ chunk-5xgkngpb.js:2614966-2615080 placement
 function isSingleTextBlockMessage(message) {
   return (
     message.apiBlockIndex !== undefined &&
@@ -1624,11 +1744,11 @@ function isSingleTextBlockMessage(message) {
     message.message.content[0].type === "text"
   );
 }
-//@ chunk-e6aww6q8.js:2563448-2563517 placement
+//@ chunk-5xgkngpb.js:2615080-2615149 placement
 function isNextTextBlock(prevMessage, message) {
   return isSingleTextBlockMessage(message) && message.apiBlockIndex === prevMessage.apiBlockIndex + 1;
 }
-//@ chunk-e6aww6q8.js:2563517-2563726 placement
+//@ chunk-5xgkngpb.js:2615149-2615358 placement
 function isTextStreamEvent(message) {
   if (message.type !== "stream_event") return false;
   let event = message.event;
@@ -1640,7 +1760,7 @@ function isTextStreamEvent(message) {
     (event.type === "content_block_start" && event.content_block.type === "text")
   );
 }
-//@ chunk-e6aww6q8.js:2563726-2564164 placement
+//@ chunk-5xgkngpb.js:2615358-2615796 placement
 /**
  * 合并相邻文本块并把引用的 span 改写为合并后文本中的码点区间（网页搜索位置引用除外），没有变化时返回 undefined。
  */
@@ -1677,7 +1797,7 @@ function mergeCitedTextBlocks(blocks) {
   }
   return sawCitationOrSplit ? merged : undefined;
 }
-//@ chunk-e6aww6q8.js:2564164-2564343 placement
+//@ chunk-5xgkngpb.js:2615796-2615975 placement
 /**
  * web 搜索相关的内容常量：web_search/server_tool_use、web_search_tool_result、引用位置类型、占位文案与计数初始值。
  */
@@ -1686,7 +1806,7 @@ var WEB_SEARCH_TOOL_RESULT;
 var WEB_SEARCH_RESULT_LOCATION;
 var WEB_SEARCH_REMOVED_TEXT;
 var ZERO_WEB_SEARCH_REMOVALS;
-deferInit("chunk-e6aww6q8.js:2564164", () => {
+deferInit("chunk-5xgkngpb.js:2615796", () => {
   WEB_SEARCH = "web_search";
   WEB_SEARCH_TOOL_RESULT = "web_search_tool_result";
   WEB_SEARCH_RESULT_LOCATION = "web_search_result_location";
@@ -1698,7 +1818,7 @@ deferInit("chunk-e6aww6q8.js:2564164", () => {
     placeholders: 0,
   });
 });
-//@ chunk-e6aww6q8.js:2564343-2564824 placement
+//@ chunk-5xgkngpb.js:2615975-2616456 placement
 /**
  * 去掉历史 assistant 消息中的 web search 工具调用/结果与引用，必要时补占位块，返回新消息与删除计数。
  */
@@ -1740,7 +1860,7 @@ function stripWebSearchBlocks(messages) {
     ),
   };
 }
-//@ chunk-e6aww6q8.js:2564824-2565334 placement
+//@ chunk-5xgkngpb.js:2616456-2616971 placement
 /**
  * 从助手内容中移除网页搜索相关块，必要时插入占位 thinking 块以保持思考块位置合法，并统计工具调用、结果、引用和占位数量。
  */
@@ -1774,14 +1894,14 @@ function stripWebSearchFromContent(blocks) {
   return {
     content: finalContent,
     counts: {
-      toolUses: count(blocks, isWebSearchServerToolUse),
-      results: count(blocks, (block) => block?.type === WEB_SEARCH_TOOL_RESULT),
+      toolUses: countWhere(blocks, isWebSearchServerToolUse),
+      results: countWhere(blocks, (block) => block?.type === WEB_SEARCH_TOOL_RESULT),
       citations: blocks.reduce((acc, block) => acc + countSearchCitations(block), 0),
       placeholders: finalContent.length - keptIndices.length,
     },
   };
 }
-//@ chunk-e6aww6q8.js:2565334-2565459 placement
+//@ chunk-5xgkngpb.js:2616971-2617096 placement
 function hasWebSearchContent(message) {
   return (
     message.type === "assistant" &&
@@ -1791,35 +1911,35 @@ function hasWebSearchContent(message) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:2565459-2565504 placement
+//@ chunk-5xgkngpb.js:2617096-2617141 placement
 function isRemovableWebSearchBlock(block) {
   return isWebSearchServerToolUse(block) || block?.type === WEB_SEARCH_TOOL_RESULT;
 }
-//@ chunk-e6aww6q8.js:2565504-2565569 placement
+//@ chunk-5xgkngpb.js:2617141-2617206 placement
 function isWebSearchServerToolUse(block) {
   return block?.type === "server_tool_use" && block.name === WEB_SEARCH;
 }
-//@ chunk-e6aww6q8.js:2565569-2565644 placement (2.1.88 match: hasThinkingContent, 1)
+//@ chunk-5xgkngpb.js:2617206-2617281 placement (2.1.88 match: hasThinkingContent, 1)
 function isThinkingBlockOptional(m) {
   return m?.type === "thinking" || m?.type === "redacted_thinking";
 }
-//@ chunk-e6aww6q8.js:2565644-2565682 placement
+//@ chunk-5xgkngpb.js:2617281-2617319 placement
 function isSearchCitationBlock(rebuiltBlock) {
   return rebuiltBlock != null && isFallbackMessage(rebuiltBlock);
 }
-//@ chunk-e6aww6q8.js:2565682-2565766 placement
+//@ chunk-5xgkngpb.js:2617319-2617403 placement
 function isBlankTextBlock(rebuiltBlock) {
   return (
     rebuiltBlock?.type === "text" && (typeof rebuiltBlock.text !== "string" || !rebuiltBlock.text.trim())
   );
 }
-//@ chunk-e6aww6q8.js:2565766-2565870 placement
+//@ chunk-5xgkngpb.js:2617403-2617507 placement
 function countSearchCitations(block) {
   return block?.type === "text" && Array.isArray(block.citations)
-    ? count(block.citations, (citation) => citation?.type === WEB_SEARCH_RESULT_LOCATION)
+    ? countWhere(block.citations, (citation) => citation?.type === WEB_SEARCH_RESULT_LOCATION)
     : 0;
 }
-//@ chunk-e6aww6q8.js:2565870-2565995 placement
+//@ chunk-5xgkngpb.js:2617507-2617632 placement
 function dropSearchCitations(block) {
   if (block?.type !== "text" || countSearchCitations(block) === 0) return block;
   return {
@@ -1827,7 +1947,7 @@ function dropSearchCitations(block) {
     citations: (block.citations ?? []).filter((citation) => citation?.type !== WEB_SEARCH_RESULT_LOCATION),
   };
 }
-//@ chunk-e6aww6q8.js:2565995-2566052 placement
+//@ chunk-5xgkngpb.js:2617632-2617689 placement
 function placeholderTextBlock() {
   return {
     type: "text",
@@ -1835,7 +1955,7 @@ function placeholderTextBlock() {
     citations: [],
   };
 }
-//@ chunk-e6aww6q8.js:2566052-2566525 placement
+//@ chunk-5xgkngpb.js:2617689-2618164 placement
 /**
  * 包装异步迭代器：超过 heartbeatMs 没有新值时产出 ping 事件（静默时长不超过 maxSilentMs 时）。
  */
@@ -1877,9 +1997,9 @@ async function* withHeartbeat(iterator, { maxSilentMs, heartbeatMs = 30000 }) {
     source.return?.().catch(() => {});
   }
 }
-//@ chunk-e6aww6q8.js:2566525-2566535 placement
+//@ chunk-5xgkngpb.js:2618164-2618174 placement
 var MAX_HELD_EVENTS = 8;
-//@ chunk-e6aww6q8.js:2566535-2566885 placement
+//@ chunk-5xgkngpb.js:2618174-2618524 placement
 /**
  * 包装流式事件：监视并修正护栏产生的游离文本事件，处理出错时停止监视并放出暂存事件，流结束且未中止时补发暂存事件。
  */
@@ -1916,7 +2036,7 @@ async function* fixGuardrailStrayText(source, signal) {
   if (!signal.aborted) yield* state.hold?.events ?? [];
   if (failure !== undefined) throw failure.error;
 }
-//@ chunk-e6aww6q8.js:2566885-2568242 placement
+//@ chunk-5xgkngpb.js:2618524-2619881 placement
 /**
  * 处理 Bedrock guardrail 把文本 delta 发到错误块下标的情况：暂存这些事件，若随后出现 INTERVENED 的 message_stop，就把文本移到原文本块；否则原样放出。
  */
@@ -2002,7 +2122,7 @@ function stepGuardrailHold(state, event) {
   state.hold = undefined;
   return moved;
 }
-//@ chunk-e6aww6q8.js:2568242-2568443 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-5xgkngpb.js:2619881-2620082 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * user 消息是否只包含 tool_result 块。
  */
@@ -2014,7 +2134,7 @@ function isToolResultOnlyUserMessage(message) {
     (block) => typeof block === "object" && block !== null && "type" in block && block.type === "tool_result",
   );
 }
-//@ chunk-e6aww6q8.js:2568443-2568943 placement
+//@ chunk-5xgkngpb.js:2620082-2620586 placement
 /**
  * 按每个回合的 effort 与时间，在用户消息后插入 api_system 的 output_config（effort、timing），相同的不重复。
  */
@@ -2065,7 +2185,7 @@ function attachPerTurnOutputConfig(messages, options) {
   if (outputConfig !== undefined) out.push(apiSystemMessageWithOutputConfig(outputConfig));
   return out;
 }
-//@ chunk-e6aww6q8.js:2568943-2569488 placement
+//@ chunk-5xgkngpb.js:2620586-2621300 placement
 /**
  * 从后往前为每条消息计算生效的 effort 等级（可按上限截断）、计时信息，以及该轮是否明确指定过 effort。
  */
@@ -2078,12 +2198,18 @@ function perTurnEffortLevels(messages, options) {
   while (capFrom > 0 && messages[capFrom - 1].type === "user") capFrom--;
   let { effort, now } = options;
   let hasTurnEffort = false;
+  let { parent } = options;
+  let capIndex =
+    parent === undefined ? -1 : messages.findLastIndex(({ uuid }) => uuid === parent.forkPointUuid);
+  let hasParent = parent !== undefined;
   for (let index = messages.length - 1; index >= 0; index--) {
     let message = messages[index];
     if (message.type === "assistant" && !message.isApiErrorMessage) {
       let turnEffort = message.perTurnEffort === undefined ? message.effort : message.perTurnEffort;
+      let isAfterCap = capIndex === -1 ? turnEffort === options.effort : index > capIndex;
       hasTurnEffort = turnEffort != null;
-      effort = turnEffort ?? effort;
+      effort = turnEffort ?? (hasParent && !isAfterCap ? parent?.effort : effort);
+      hasParent &&= isAfterCap;
       now = message.perTurnTiming;
     }
     answered[index] = hasTurnEffort;
@@ -2103,7 +2229,7 @@ function perTurnEffortLevels(messages, options) {
     answered,
   };
 }
-//@ chunk-e6aww6q8.js:2569488-2569689 placement
+//@ chunk-5xgkngpb.js:2621300-2621501 placement
 function lastOutputConfig(messages) {
   let config = {};
   for (let message of messages)
@@ -2114,7 +2240,7 @@ function lastOutputConfig(messages) {
     }
   return config;
 }
-//@ chunk-e6aww6q8.js:2569689-2569786 placement
+//@ chunk-5xgkngpb.js:2621501-2621598 placement
 function resolveEffortFromLastOutputConfig(messages, fallbackEffort, normalizeEffort) {
   try {
     let { effort } = lastOutputConfig(messages);
@@ -2124,23 +2250,23 @@ function resolveEffortFromLastOutputConfig(messages, fallbackEffort, normalizeEf
     return fallbackEffort;
   }
 }
-//@ chunk-e6aww6q8.js:2569786-2569834 placement
+//@ chunk-5xgkngpb.js:2621598-2621646 placement
 function isRealUserMessage(message) {
   return message.type === "user" && !isToolResultOnlyUserMessage(message);
 }
-//@ chunk-e6aww6q8.js:2569834-2569877 placement
+//@ chunk-5xgkngpb.js:2621646-2621689 placement
 function stripOutputConfigs(messages) {
   return mapOutputConfigs(messages, () => {
     return;
   });
 }
-//@ chunk-e6aww6q8.js:2569877-2569959 placement
+//@ chunk-5xgkngpb.js:2621689-2621771 placement
 function dropTimingFromOutputConfigs(messages) {
   return mapOutputConfigs(messages, ({ timing, ...rest }) =>
     Object.keys(rest).length > 0 ? rest : undefined,
   );
 }
-//@ chunk-e6aww6q8.js:2569959-2570236 placement
+//@ chunk-5xgkngpb.js:2621771-2622048 placement
 function mapOutputConfigs(messages, mapConfig) {
   let out = [];
   for (let message of messages) {
@@ -2159,16 +2285,16 @@ function mapOutputConfigs(messages, mapConfig) {
   }
   return out;
 }
-//@ chunk-e6aww6q8.js:2570236-2570286 placement
+//@ chunk-5xgkngpb.js:2622048-2622098 placement
 function apiSystemMessageWithOutputConfig(outputConfig) {
   return {
     ...createApiSystemMessage(""),
     outputConfig,
   };
 }
-//@ chunk-e6aww6q8.js:2570286-2570373 placement
+//@ chunk-5xgkngpb.js:2622098-2622185 placement
 var GMT_TIMESTAMP_RE = /^(\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d)GMT([+-]\d{2}:\d{2})?$/;
-//@ chunk-e6aww6q8.js:2570373-2571173 placement
+//@ chunk-5xgkngpb.js:2622185-2622985 placement
 function formatLocalTimestamp(date, timeZone) {
   if (timeZone) {
     try {
@@ -2204,7 +2330,7 @@ function formatLocalTimestamp(date, timeZone) {
   let absOffsetMinutes = Math.abs(offsetMinutes);
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}${sign}${pad2(Math.floor(absOffsetMinutes / 60))}:${pad2(absOffsetMinutes % 60)}`;
 }
-//@ chunk-e6aww6q8.js:2571173-2571289 placement
+//@ chunk-5xgkngpb.js:2622985-2623101 placement
 function isInvalidEffortError(error) {
   return (
     error instanceof APIError &&
@@ -2213,7 +2339,7 @@ function isInvalidEffortError(error) {
     !getFeatureValue_CACHED_MAY_BE_STALE("tengu_eager_quilt", false)
   );
 }
-//@ chunk-e6aww6q8.js:2571289-2571544 placement
+//@ chunk-5xgkngpb.js:2623101-2623356 placement
 function effortInPlay(candidateEffort, messagesForAPI) {
   let lastEffort;
   let recentEfforts = [];
@@ -2230,18 +2356,18 @@ function effortInPlay(candidateEffort, messagesForAPI) {
   }
   return EFFORT_LEVELS.findLast((level) => level === candidateEffort || recentEfforts.includes(level));
 }
-//@ chunk-e6aww6q8.js:2571544-2571665 placement
+//@ chunk-5xgkngpb.js:2623356-2623477 placement
 function learnedEffortCap(model, querySource) {
   let learnedEffortCaps = getLearnedEffortCaps();
   if (learnedEffortCaps.size === 0 || isAutoModeQuerySource(querySource)) return;
   let level = learnedEffortCaps.get(getModelSettingsKey(model))?.level;
   return level === "xhigh" && !modelSupportsXhighEffort(model) ? "high" : level;
 }
-//@ chunk-e6aww6q8.js:2571665-2571735 placement
+//@ chunk-5xgkngpb.js:2623477-2623547 placement
 function lowerEffort(level, cap) {
   return cap !== undefined && typeof level === "string" && isEffortHigherThan(level, cap) ? cap : level;
 }
-//@ chunk-e6aww6q8.js:2571735-2571918 placement
+//@ chunk-5xgkngpb.js:2623547-2623730 placement
 function lowerLearnedEffortCap(resolvedModel, level) {
   let learnedEffortCaps = getLearnedEffortCaps();
   let modelSettingsKey = getModelSettingsKey(resolvedModel);
@@ -2256,7 +2382,7 @@ function lowerLearnedEffortCap(resolvedModel, level) {
   else return level_2;
   return lowerLevel;
 }
-//@ chunk-e6aww6q8.js:2571918-2572030 placement
+//@ chunk-5xgkngpb.js:2623730-2623842 placement
 function takeEffortCapNotice(resolvedModel) {
   let modelSettingsKey = getModelSettingsKey(resolvedModel);
   let capEntry = getLearnedEffortCaps().get(modelSettingsKey);
@@ -2267,7 +2393,7 @@ function takeEffortCapNotice(resolvedModel) {
   });
   return true;
 }
-//@ chunk-e6aww6q8.js:2572030-2572120 placement
+//@ chunk-5xgkngpb.js:2623842-2623932 placement
 /**
  * 流式护栏暂存增量的上限、哨兵与最后标量缓存：暂存文本最多 8192 字，读取结束用 Symbol 标记。
  */
@@ -2275,7 +2401,7 @@ var MAX_HELD_DELTA_CHARS; // deferred: has load-time effects after a deferred st
 var EMPTY_LIST;
 var READ_ENDED_SENTINEL;
 var lastScalarSlot;
-deferInit("chunk-e6aww6q8.js:2572030", () => {
+deferInit("chunk-5xgkngpb.js:2623842", () => {
   MAX_HELD_DELTA_CHARS = 8192;
   EMPTY_LIST = [];
   READ_ENDED_SENTINEL = Symbol("read ended");
@@ -2288,7 +2414,7 @@ deferInit("chunk-e6aww6q8.js:2572030", () => {
     },
   );
 });
-//@ chunk-e6aww6q8.js:2572120-2572403 placement
+//@ chunk-5xgkngpb.js:2623932-2624215 placement
 function isDeltaFoldEnabled() {
   try {
     let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_toasty_giraffe", false);
@@ -2310,7 +2436,7 @@ function isDeltaFoldEnabled() {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:2572403-2574077 placement
+//@ chunk-5xgkngpb.js:2624215-2625894 placement
 /**
  * 合并连续的同类流式 delta（text/input_json/thinking）以减少下游事件数：同一块同一类型连续到达时暂存拼接，到下一个 tick 或类型变化时放出；出错时停止合并。
  */
@@ -2438,7 +2564,7 @@ async function* foldStreamDeltas(events, clock, counter, signal) {
     } catch {}
   }
 }
-//@ chunk-e6aww6q8.js:2574077-2574443 placement
+//@ chunk-5xgkngpb.js:2625894-2626260 placement
 /**
  * 放出暂存的合并增量：把多个同类 delta（文本、JSON 片段、思考）的文本合并到最后一个事件里，并累计折叠数量。
  */
@@ -2485,9 +2611,9 @@ function flushHeldDelta(state) {
       return [last];
   }
 }
-//@ chunk-e6aww6q8.js:2574443-2574476 placement
+//@ chunk-5xgkngpb.js:2626260-2626293 placement
 var TENGU_POLISHED_DEWDROP = "tengu_polished_dewdrop";
-//@ chunk-e6aww6q8.js:2574476-2574574 placement
+//@ chunk-5xgkngpb.js:2626293-2626391 placement
 function polishedDewdropMode(mode) {
   switch (mode) {
     case "drop":
@@ -2498,7 +2624,7 @@ function polishedDewdropMode(mode) {
       return;
   }
 }
-//@ chunk-e6aww6q8.js:2574574-2574753 placement
+//@ chunk-5xgkngpb.js:2626391-2626570 placement
 function getPolishedDewdropMode() {
   if (!isFirstPartyApiBackend()) return;
   let clientValue = getCachedClientData()?.[TENGU_POLISHED_DEWDROP];
@@ -2508,14 +2634,173 @@ function getPolishedDewdropMode() {
   if (envOrClient !== undefined) return polishedDewdropMode(envOrClient);
   return polishedDewdropMode(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_POLISHED_DEWDROP, ""));
 }
-//@ chunk-e6aww6q8.js:2574753-2574793 placement
+//@ chunk-5xgkngpb.js:2626570-2626610 placement
 function isPolishedDewdropActive(mode) {
   return mode !== undefined || isFirstPartyApiBackend();
 }
-//@ chunk-e6aww6q8.js:2579785-2580012 placement
+//@ chunk-5xgkngpb.js:2626610-2626858 sole-consumer
+function lowerTurnEffort(
+  resolvedModel,
+  { effortValue, turnEffort, isEffortPinned, forkPointUuid },
+  carriedEffort,
+  model,
+) {
+  if (!isEffortPinned || forkPointUuid === undefined) return;
+  try {
+    let lowered = lowerEffort(
+      resolveEffortValue(resolvedModel, effortValue, {
+        turnEffort,
+        carriedEffort,
+      }),
+      model,
+    );
+    return typeof lowered === "string"
+      ? {
+          effort: lowered,
+          forkPointUuid,
+        }
+      : undefined;
+  } catch (error) {
+    logError(toError(error));
+    return;
+  }
+}
+//@ chunk-5xgkngpb.js:2626858-2627101 sole-consumer
+function lastSentEffortSince(messages, anchorUuid, perTurnEffortValue, sentEffort) {
+  try {
+    let last = messagesSince(messages, anchorUuid).findLast(
+      (message) =>
+        message.type === "assistant" && !message.isApiErrorMessage && message.perTurnEffort !== undefined,
+    );
+    return (
+      last === undefined ||
+      (perTurnEffortValue === null
+        ? last.perTurnEffort === null && sentEffort === last.effort
+        : last.perTurnEffort !== null)
+    );
+  } catch (error) {
+    logError(toError(error));
+    return true;
+  }
+}
+//@ chunk-5xgkngpb.js:2633249-2633353 sole-consumer
+function mapArray(collection, iteratee) {
+  var index = -1;
+  var result = isArrayLikeAlias(collection) ? Array(collection.length) : [];
+  baseEachInline2Alias(collection, function (value, key, collection) {
+    result[++index] = iteratee(value, key, collection);
+  });
+  return result;
+}
+//@ chunk-5xgkngpb.js:2633353-2633365 sole-consumer
+var mapCollect = mapArray;
+//@ chunk-5xgkngpb.js:2633365-2633443 sole-consumer
+function sortAndUnwrap(array, comparator) {
+  var index = array.length;
+  array.sort(comparator);
+  while (index--) array[index] = array[index].value;
+  return array;
+}
+//@ chunk-5xgkngpb.js:2633443-2633455 sole-consumer
+var sortUnwrap = sortAndUnwrap;
+//@ chunk-5xgkngpb.js:2633455-2633706 sole-consumer
+function compareAscending(value, other) {
+  if (value !== other) {
+    var valueIsDefined = value !== undefined;
+    var valueIsNull = value === null;
+    var valueIsReflexive = value === value;
+    var valueIsSymbol = isSymbolAlias(value);
+    var otherIsDefined = other !== undefined;
+    var otherIsNull = other === null;
+    var otherIsReflexive = other === other;
+    var otherIsSymbol = isSymbolAlias(other);
+    if (
+      (!otherIsNull && !otherIsSymbol && !valueIsSymbol && value > other) ||
+      (valueIsSymbol && otherIsDefined && otherIsReflexive && !otherIsNull && !otherIsSymbol) ||
+      (valueIsNull && otherIsDefined && otherIsReflexive) ||
+      (!valueIsDefined && otherIsReflexive) ||
+      !valueIsReflexive
+    )
+      return 1;
+    if (
+      (!valueIsNull && !valueIsSymbol && !otherIsSymbol && value < other) ||
+      (otherIsSymbol && valueIsDefined && valueIsReflexive && !valueIsNull && !valueIsSymbol) ||
+      (otherIsNull && valueIsDefined && valueIsReflexive) ||
+      (!otherIsDefined && valueIsReflexive) ||
+      !otherIsReflexive
+    )
+      return -1;
+  }
+  return 0;
+}
+//@ chunk-5xgkngpb.js:2633706-2633718 sole-consumer
+var compareAscending_2 = compareAscending;
+//@ chunk-5xgkngpb.js:2633718-2633913 sole-consumer
+function compareMultiple(object, other, orders) {
+  var index = -1;
+  var criteria = object.criteria;
+  var criteria_2 = other.criteria;
+  var criteriaLength = criteria.length;
+  var ordersLength = orders.length;
+  while (++index < criteriaLength) {
+    var result = compareAscending_2(criteria[index], criteria_2[index]);
+    if (result) {
+      if (index >= ordersLength) return result;
+      var order = orders[index];
+      return result * (order == "desc" ? -1 : 1);
+    }
+  }
+  return object.index - other.index;
+}
+//@ chunk-5xgkngpb.js:2633913-2633925 sole-consumer
+var compareMultipleAlias = compareMultiple;
+//@ chunk-5xgkngpb.js:2633925-2634242 sole-consumer
+function baseOrderBy(collection, iteratees, orders) {
+  if (iteratees.length)
+    iteratees = import_arrayMap(iteratees, function (iteratee) {
+      if (isArrayAlias(iteratee))
+        return function (value) {
+          return baseGetAlias(value, iteratee.length === 1 ? iteratee[0] : iteratee);
+        };
+      return iteratee;
+    });
+  else iteratees = [identityAlias];
+  var index = -1;
+  iteratees = import_arrayMap(iteratees, baseUnaryAlias(baseIterateeAlias));
+  var decorated = mapCollect(collection, function (value, key, collection) {
+    var criteria = import_arrayMap(iteratees, function (iteratee) {
+      return iteratee(value);
+    });
+    return {
+      criteria,
+      index: ++index,
+      value,
+    };
+  });
+  return sortUnwrap(decorated, function (left, right) {
+    return compareMultipleAlias(left, right, orders);
+  });
+}
+//@ chunk-5xgkngpb.js:2634242-2634254 sole-consumer
+var baseOrderByAlias = baseOrderBy;
+//@ chunk-5xgkngpb.js:2634254-2634423 sole-consumer
+var orderBy; // deferred: uses baseOrderByAlias of its import cycle while loading; runs once the cycle is complete
+var orderByAlias;
+deferInit("chunk-5xgkngpb.js:2634254", () => {
+  orderBy = mergeKeys(function (collection, iteratees) {
+    if (collection == null) return [];
+    var argCount = iteratees.length;
+    if (argCount > 1 && isIterateeCall_2(collection, iteratees[0], iteratees[1])) iteratees = [];
+    else if (argCount > 2 && isIterateeCall_2(iteratees[0], iteratees[1], iteratees[2]))
+      iteratees = [iteratees[0]];
+    return baseOrderByAlias(collection, baseFlattenAlias(iteratees, 1), []);
+  });
+  orderByAlias = orderBy;
+});
+//@ chunk-5xgkngpb.js:2634423-2634650 placement
 var MAX_SEARCH_RESULTS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var SEARCH_RESULT_LOCATION_SCHEMA;
-deferInit("chunk-e6aww6q8.js:2579785", () => {
+deferInit("chunk-5xgkngpb.js:2634423", () => {
   MAX_SEARCH_RESULTS = 6;
   SEARCH_RESULT_LOCATION_SCHEMA = DoctorLazy(() =>
     objectSchema({
@@ -2531,11 +2816,11 @@ deferInit("chunk-e6aww6q8.js:2579785", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:2580012-2581746 placement
+//@ chunk-5xgkngpb.js:2634650-2636569 placement
 /**
  * 发请求前整理消息列表（合并、清理系统消息），受 tengu_jolly_sparrow 开关影响。
  */
-function prepareRequestMessages(messages, messages_2) {
+function prepareRequestMessages(messages, sourceMessages) {
   if (
     !env.CLAUDE_CODE_WEBSEARCH_CITATIONS ||
     !getFeatureValue_SESSION_PINNED("tengu_jolly_sparrow_enabled", false)
@@ -2543,7 +2828,7 @@ function prepareRequestMessages(messages, messages_2) {
     return messages;
   try {
     let citationsByMessageId = new Map();
-    for (let message of messages_2) {
+    for (let message of sourceMessages) {
       if (message.type !== "assistant") continue;
       for (let block of message.message.content)
         if (block.type === "text" && block.citations?.length) {
@@ -2554,11 +2839,17 @@ function prepareRequestMessages(messages, messages_2) {
     }
     if (citationsByMessageId.size === 0) return messages;
     let searchSources = [];
+    let toolUseIndexById = new Map();
+    let nextToolUseIndex = 0;
     let usedCountById = new Map();
     return messages.map((message) => {
       if (message.type === "api_system" || typeof message.message.content === "string") return message;
       if (message.type === "user") {
-        for (let block of message.message.content) {
+        for (let block of orderByAlias(
+          message.message.content,
+          (block) =>
+            (block.type === "tool_result" ? toolUseIndexById.get(block.tool_use_id) : undefined) ?? 1 / 0,
+        )) {
           let blocks = block.type === "tool_result" && Array.isArray(block.content) ? block.content : [block];
           for (let item of blocks)
             if (isObjectBlock(item) && item.type === "search_result" && item.citations?.enabled)
@@ -2566,11 +2857,14 @@ function prepareRequestMessages(messages, messages_2) {
         }
         return message;
       }
+      for (let block of message.message.content)
+        if (block.type === "tool_use") toolUseIndexById.set(block.id, nextToolUseIndex++);
       let id = message.message.id;
       let remainingCitations = citationsByMessageId.get(id);
       if (remainingCitations === undefined) return message;
       let usedCount =
-        (usedCountById.get(id) ?? 0) + count(message.message.content, (block) => block.type === "tool_use");
+        (usedCountById.get(id) ?? 0) +
+        countWhere(message.message.content, (block) => block.type === "tool_use");
       let startCount = usedCount;
       let out = [];
       for (let block of message.message.content) {
@@ -2642,7 +2936,7 @@ function prepareRequestMessages(messages, messages_2) {
     return messages;
   }
 }
-//@ chunk-e6aww6q8.js:2581746-2582303 placement
+//@ chunk-5xgkngpb.js:2636569-2637126 placement
 /**
  * 关闭用户消息与工具结果中 search_result 块的引用（citations.enabled=false），出错时记日志并原样返回。
  */
@@ -2693,7 +2987,36 @@ function disableSearchResultCitations(messages) {
     return messages;
   }
 }
-//@ chunk-e6aww6q8.js:2582303-2582458 placement (2.1.88 match: applyDisplayStyles, 0.545)
+//@ chunk-5xgkngpb.js:2637126-2637443 layout
+function serverToolChoice(tools, advisorActive, conversation, hasMcpServers) {
+  try {
+    let advisorDeferredBefore = advisorActive === false && lastAdvisorToolChange(conversation) !== "add";
+    return tools.some(
+      (tool) =>
+        !("input_schema" in tool) &&
+        !(
+          advisorDeferredBefore &&
+          "defer_loading" in tool &&
+          tool.defer_loading === true &&
+          matchesToolName(tool, ADVISOR_TOOL_NAME)
+        ),
+    ) || hasMcpServers
+      ? {
+          type: "none",
+        }
+      : undefined;
+  } catch (error) {
+    logError(
+      Error("serverToolChoice: could not read the tools, so this request allows no tool calls", {
+        cause: error,
+      }),
+    );
+    return {
+      type: "none",
+    };
+  }
+}
+//@ chunk-5xgkngpb.js:2637443-2637598 placement (2.1.88 match: applyDisplayStyles, 0.545)
 function readDisplayField(thinking) {
   try {
     if (typeof thinking !== "object" || thinking === null || !("display" in thinking)) return;
@@ -2704,7 +3027,7 @@ function readDisplayField(thinking) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2582541-2582784 placement
+//@ chunk-5xgkngpb.js:2637681-2637924 placement
 function thinkingStartTime(event, now) {
   try {
     if (now === undefined) return;
@@ -2718,9 +3041,9 @@ function thinkingStartTime(event, now) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2582784-2582815 placement
+//@ chunk-5xgkngpb.js:2637924-2637955 placement
 var TENGU_RUSTLING_PIXEL = "tengu_rustling_pixel";
-//@ chunk-e6aww6q8.js:2582815-2583081 placement
+//@ chunk-5xgkngpb.js:2637955-2638221 placement
 function foreignThinkingKeepMode() {
   let warningState = streamFallbackWarning();
   if (warningState.foreignThinkingKeep === undefined) {
@@ -2730,7 +3053,7 @@ function foreignThinkingKeepMode() {
   }
   return warningState.foreignThinkingKeep;
 }
-//@ chunk-e6aww6q8.js:2583081-2583301 placement
+//@ chunk-5xgkngpb.js:2638221-2638441 placement
 function dropForeignThinkingKeep(reason) {
   let warningState = streamFallbackWarning();
   if (warningState.foreignThinkingKeep === "all") logFeatureSad("api_keep_thinking_on_model_change", reason);
@@ -2739,7 +3062,7 @@ function dropForeignThinkingKeep(reason) {
   else return;
   warningState.foreignThinkingKeep = "none";
 }
-//@ chunk-e6aww6q8.js:2583301-2583382 placement
+//@ chunk-5xgkngpb.js:2638441-2638522 placement
 /**
  * 导出函数 `watchSessionSwitchForThinkingKeep`：返回 onSessionSwitch((e, n) => { if (aes.has(n)) Ws().foreignThinkingKeep = void 0; })。
  */
@@ -2748,7 +3071,7 @@ function watchSessionSwitchForThinkingKeep() {
     if (CONVERSATION_RESET_KINDS.has(resetKind)) streamFallbackWarning().foreignThinkingKeep = undefined;
   });
 }
-//@ chunk-e6aww6q8.js:2583382-2583770 placement
+//@ chunk-5xgkngpb.js:2638522-2638909 placement
 /**
  * 决定切换模型时保留历史 thinking 的策略（all/upgrade/none）：仅第一方后端；env CLAUDE_CODE_RUSTLING_PIXEL 优先，其次 client_data 与 GrowthBook。
  */
@@ -2780,11 +3103,11 @@ function resolveForeignThinkingKeep() {
   if (typeof clientValue === "string") return normalizeThinkingKeep(clientValue);
   return normalizeThinkingKeep(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_RUSTLING_PIXEL, "all"));
 }
-//@ chunk-e6aww6q8.js:2583770-2583827 placement
+//@ chunk-5xgkngpb.js:2638909-2638966 placement
 function normalizeThinkingKeep(value) {
   return value === "all" || value === "none" ? value : "upgrade";
 }
-//@ chunk-e6aww6q8.js:2583827-2584257 placement
+//@ chunk-5xgkngpb.js:2638966-2639395 placement
 /**
  * 按模型、查询来源和 beta 列表计算请求特性开关：中途 system 消息、工具变更头与内联工具、保留提醒等。
  */
@@ -2827,16 +3150,16 @@ function requestFeatureFlags(conversation, effectiveModel, ctx) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:2584257-2584360 placement
+//@ chunk-5xgkngpb.js:2639395-2639498 placement
 function isMidConvSystemForced(model) {
   return (
     !!env.CLAUDE_CODE_FORCE_MID_CONVERSATION_SYSTEM ||
     modelCapabilitiesEnvEntry("mid_conv_system", getCanonicalName(model)) === true
   );
 }
-//@ chunk-e6aww6q8.js:2647001-2647044 placement
+//@ chunk-5xgkngpb.js:2708038-2708081 placement
 var UNRECOGNIZED_MODEL_MARKER = "[claude-code:unrecognized_model]";
-//@ chunk-e6aww6q8.js:2647044-2647496 placement
+//@ chunk-5xgkngpb.js:2708081-2708532 placement
 /**
  * 遇到无法识别的模型名时（每个模型只记一次）记遥测，并在 print 模式下写 stderr，否则写调试日志。
  */
@@ -2871,12 +3194,12 @@ function logUnrecognizedModel(model, querySource) {
     logError(withTelemetryMessage(toError(error), "unrecognized-model signal failed"));
   }
 }
-//@ chunk-e6aww6q8.js:2647496-2647535 placement
+//@ chunk-5xgkngpb.js:2708532-2708571 placement
 var thinkingRelayModuleClaude; // deferred: loads other modules while loading; runs once its import cycle is complete
-deferInit("chunk-e6aww6q8.js:2647496", () => {
+deferInit("chunk-5xgkngpb.js:2708532", () => {
   thinkingRelayModuleClaude = require("../teleport/relayState.js");
 });
-//@ chunk-e6aww6q8.js:2647535-2647595 placement
+//@ chunk-5xgkngpb.js:2708571-2708631 placement
 function guardReturning(fn, fallback) {
   try {
     return fn();
@@ -2885,34 +3208,34 @@ function guardReturning(fn, fallback) {
     return fallback;
   }
 }
-//@ chunk-e6aww6q8.js:2647595-2647688 placement
+//@ chunk-5xgkngpb.js:2708631-2708724 placement
 function noteWaitForMcpServers(tools, querySource) {
   try {
     if (
       classifyQuerySource(querySource) === "main" &&
       isFoamySpringEnabled() &&
-      tools.some((tool) => toolMatchesName(tool, WAITFORMCPSERVERS))
+      tools.some((tool) => matchesToolName(tool, WAITFORMCPSERVERS))
     )
       markDeclared();
   } catch (error) {
     logError(toError(error));
   }
 }
-//@ chunk-e6aww6q8.js:2647688-2647748 placement
+//@ chunk-5xgkngpb.js:2708724-2708784 placement
 var ANTHROPIC_DISPATCH_ID = "anthropic-dispatch-id";
 var V2S = "v2s";
 var V2D = "v2d";
 var V2P = "v2p";
-//@ chunk-e6aww6q8.js:2647748-2647790 placement
+//@ chunk-5xgkngpb.js:2708784-2708826 placement
 function traceValueOrUnknown(value) {
   return sanitizeMarkName(value) ?? lit_2("unknown");
 }
-//@ chunk-e6aww6q8.js:2647790-2647800 layout
+//@ chunk-5xgkngpb.js:2708826-2708836 layout
 /**
  * 2：思考签名错误时按错误定位剥离单个 thinking 块的最多尝试次数，超过后整体剥离。
  */
 var MAX_SIGNATURE_STRIP_ATTEMPTS = 2;
-//@ chunk-e6aww6q8.js:2647800-2648004 layout (2.1.88 match: hasThinkingContent, 0.876)
+//@ chunk-5xgkngpb.js:2708836-2709040 layout (2.1.88 match: hasThinkingContent, 0.875)
 /**
  * thinking/redacted_thinking 块的稳定键（type:signature 或 type:data）。
  */
@@ -2923,7 +3246,7 @@ function getThinkingBlockKey(m) {
     block.type === "thinking" ? block.signature : block.type === "redacted_thinking" ? block.data : undefined;
   return typeof key === "string" && key.length > 0 ? `${block.type}:${key}` : undefined;
 }
-//@ chunk-e6aww6q8.js:2648004-2648185 layout (2.1.88 match: hasThinkingContent, 1)
+//@ chunk-5xgkngpb.js:2709040-2709221 layout (2.1.88 match: hasThinkingContent, 1)
 /**
  * assistant 消息里 thinking/redacted_thinking 块数。
  */
@@ -2935,7 +3258,7 @@ function countThinkingBlocks(m) {
   }
   return thinkingCount;
 }
-//@ chunk-e6aww6q8.js:2648185-2648418 layout
+//@ chunk-5xgkngpb.js:2709221-2709454 layout
 /**
  * 比较剥离前后消息：发送/剥离的思考块数与轮数。
  */
@@ -2956,7 +3279,7 @@ function summarizeThinkingStrip(before, after) {
   }
   return summary;
 }
-//@ chunk-e6aww6q8.js:2648418-2649540 fingerprint (2.1.88 match: getExtraBodyParams, 0.442)
+//@ chunk-5xgkngpb.js:2709454-2710615 fingerprint (2.1.88 match: getExtraBodyParams, 0.429)
 /**
  * 解析 CLAUDE_CODE_EXTRA_BODY（JSON 对象）作为请求体附加字段：组织禁用实验 beta 时忽略；去掉 afk-mode beta；metadata.user_id 里的 tk 去掉；合并 Bedrock 要放进 body 的 anthropic_beta。
  */
@@ -3007,9 +3330,9 @@ function getExtraBodyParams(betaHeaders) {
     else delete result[betaKey];
   }
   let metadata = result.metadata;
-  if (isPlainObject_5(metadata) && typeof metadata.user_id === "string") {
+  if (isPlainObject_6(metadata) && typeof metadata.user_id === "string") {
     let userId = safeParseJSON(metadata.user_id, false);
-    if (isPlainObject_5(userId) && "tk" in userId) {
+    if (isPlainObject_6(userId) && "tk" in userId) {
       let { tk, ...rest } = userId;
       result.metadata = {
         ...metadata,
@@ -3025,55 +3348,47 @@ function getExtraBodyParams(betaHeaders) {
       result.anthropic_beta = [...existingHeaders, ...newHeaders];
     } else result.anthropic_beta = betaValues;
   }
+  if (isProgramUseCaseTurnScoped()) delete result.program_use_case_id;
   return result;
 }
-//@ chunk-e6aww6q8.js:2649540-2649672 layout
+//@ chunk-5xgkngpb.js:2710615-2710747 layout
 /**
  * Bedrock 等把 beta 放进请求体 anthropic_beta 数组时，追加该 beta 头（已有则不加）。
  */
-function addBetaToBodyAnthropicBeta(extraBodyParams, beta, enabled) {
+function addBetaToBodyAnthropicBeta(body, beta, enabled) {
   if (!enabled) return;
-  let anthropicBeta = extraBodyParams.anthropic_beta;
+  let anthropicBeta = body.anthropic_beta;
   if (Array.isArray(anthropicBeta) && !anthropicBeta.includes(beta.header))
-    extraBodyParams.anthropic_beta = [...anthropicBeta, beta.header];
+    body.anthropic_beta = [...anthropicBeta, beta.header];
 }
-//@ chunk-e6aww6q8.js:2649672-2650149 fingerprint (2.1.88 match: getPromptCachingEnabled, 0.756)
+//@ chunk-5xgkngpb.js:2710747-2711186 fingerprint (2.1.88 match: getPromptCachingEnabled, 0.798)
 /**
  * 是否启用提示词缓存：DISABLE_PROMPT_CACHING 全关；DISABLE_PROMPT_CACHING_HAIKU/SONNET/OPUS/FABLE/MYTHOS 按模型族关闭。
  */
 function getPromptCachingEnabled(model) {
   if (env.DISABLE_PROMPT_CACHING) return false;
-  if (
-    env.DISABLE_PROMPT_CACHING_HAIKU &&
-    getCanonicalName(model, {
-      identity: true,
-    }) ===
-      getCanonicalName(getDefaultHaikuModel(), {
-        identity: true,
-      })
-  )
-    return false;
+  if (env.DISABLE_PROMPT_CACHING_HAIKU && isSameModelForRules(model, getDefaultHaikuModel())) return false;
   if (env.DISABLE_PROMPT_CACHING_HAIKU && hasDedicatedSmallFastModel()) {
     let smallFastModel = getSmallFastModel();
-    if (smallFastModel !== getMainLoopModel() && model === smallFastModel) return false;
+    if (
+      isSameModelForRules(model, smallFastModel) &&
+      !isSameModelForRules(smallFastModel, getMainLoopModel())
+    )
+      return false;
   }
-  if (env.DISABLE_PROMPT_CACHING_SONNET) {
-    let defaultSonnet = getDefaultSonnetModel();
-    if (model === defaultSonnet) return false;
-  }
-  if (env.DISABLE_PROMPT_CACHING_OPUS) {
-    let defaultOpus = getDefaultOpusModel();
-    if (model === defaultOpus) return false;
-  }
-  if (env.DISABLE_PROMPT_CACHING_FABLE) {
-    if (isFableModelValue(model) || isPinnedFableModel(model)) return false;
-  }
+  if (env.DISABLE_PROMPT_CACHING_SONNET && isSameModelForRules(model, getDefaultSonnetModel())) return false;
+  if (env.DISABLE_PROMPT_CACHING_OPUS && isSameModelForRules(model, getDefaultOpusModel())) return false;
+  if (
+    env.DISABLE_PROMPT_CACHING_FABLE &&
+    (isFableModelValue(model) || isSameModelForRules(model, getDefaultFableModel()))
+  )
+    return false;
   if (env.DISABLE_PROMPT_CACHING_MYTHOS) {
     if (isMythosModelValue(model)) return false;
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:2650149-2650247 fingerprint (2.1.88 match: getCacheControl, 0.925)
+//@ chunk-5xgkngpb.js:2711186-2711284 fingerprint (2.1.88 match: getCacheControl, 0.925)
 /**
  * 生成 cache_control：{type:"ephemeral"}，可带 ttl（1h）与 scope:"global"。
  */
@@ -3088,7 +3403,7 @@ function getCacheControl({ scope, ttl } = {}) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:2650247-2650730 fingerprint (2.1.88 match: should1hCacheTTL, 0.34)
+//@ chunk-5xgkngpb.js:2711284-2711806 fingerprint (2.1.88 match: should1hCacheTTL, 0.302)
 /**
  * 决定提示词缓存 TTL：代理覆盖优先；订阅用户且不在超额、模型在 tengu_prompt_cache_1h_config 白名单内用 1h，否则 5m；tengu_tidy_frost 时活跃 5m 缓存保持 5m。
  */
@@ -3096,9 +3411,10 @@ function should1hCacheTTL(
   querySource,
   { agentCacheTtlOverride, ignoreOverage = false, mainThreadModel } = {},
 ) {
+  let ttlSource = querySource === "resume_cache_warm" ? "sdk" : querySource;
   let userEligible = isClaudeAISubscriber();
   let billedAsOverage = userEligible && !ignoreOverage && getCurrentLimits().isUsingOverage === true;
-  let promptCacheTtl = resolvePromptCacheTtl(querySource, agentCacheTtlOverride, billedAsOverage);
+  let promptCacheTtl = resolvePromptCacheTtl(ttlSource, agentCacheTtlOverride, billedAsOverage);
   if (promptCacheTtl !== undefined) return promptCacheTtl;
   if (!userEligible || billedAsOverage)
     return {
@@ -3113,14 +3429,14 @@ function should1hCacheTTL(
       }).allowlist ?? [];
     setPromptCache1hAllowlist(allowlist);
   }
-  if (!matchesModelPattern(querySource, allowlist))
+  if (!matchesModelPattern(ttlSource, allowlist))
     return {
       ttl: "5m",
       reason: "default",
     };
   if (
     mainThreadModel !== undefined &&
-    isLastMainThreadAskLive(CACHE_TTL_5M_MS, mainThreadModel) &&
+    isLastMainThreadAskLive(CACHE_TTL_5M_MS, stripModelDateSuffix(mainThreadModel)) &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_tidy_frost", false)
   )
     return {
@@ -3132,14 +3448,14 @@ function should1hCacheTTL(
     reason: "subscriber",
   };
 }
-//@ chunk-e6aww6q8.js:2650730-2650774 layout
+//@ chunk-5xgkngpb.js:2711806-2711850 layout
 /**
  * should1hCacheTTL(...).ttl 是否为 1h。
  */
 function isOneHourCacheTtl(querySource, options) {
   return should1hCacheTTL(querySource, options).ttl === "1h";
 }
-//@ chunk-e6aww6q8.js:2650774-2651250 layout
+//@ chunk-5xgkngpb.js:2711850-2712326 layout
 /**
  * thinking.type=disabled 时去掉 display 等多余键（服务器拒收），首次记 tengu_thinking_disabled_sanitized。
  */
@@ -3165,7 +3481,7 @@ function sanitizeDisabledThinking(thinking, querySource, shouldLog) {
     type: "disabled",
   };
 }
-//@ chunk-e6aww6q8.js:2651250-2651408 layout
+//@ chunk-5xgkngpb.js:2712326-2712484 fingerprint (2.1.88 match: configureEffortParams, 0.608)
 /**
  * 模型不支持 effort 时删 output_config.effort；否则字符串 effort 写入 output_config.effort 并加 effort beta。
  */
@@ -3181,7 +3497,7 @@ function applyEffortToOutputConfig(effortValue, outputConfig, extraBodyParams, b
     betas.push(BETA_EFFORT);
   }
 }
-//@ chunk-e6aww6q8.js:2651408-2651592 fingerprint (2.1.88 match: configureTaskBudgetParams, 1)
+//@ chunk-5xgkngpb.js:2712484-2712668 fingerprint (2.1.88 match: configureTaskBudgetParams, 1)
 /**
  * 有 taskBudget 且开关允许时写 output_config.task_budget={type:"tokens",total,remaining} 并加 task-budget beta。
  */
@@ -3196,7 +3512,7 @@ function configureTaskBudgetParams(taskBudget, outputConfig, betas) {
   };
   if (!betas.includes(BETA_TASK_BUDGETS)) betas.push(BETA_TASK_BUDGETS);
 }
-//@ chunk-e6aww6q8.js:2651710-2652755 fingerprint (2.1.88 match: verifyApiKey, 0.617)
+//@ chunk-5xgkngpb.js:2712786-2713842 fingerprint (2.1.88 match: verifyApiKey, 0.617)
 /**
  * 用一次 max_tokens=1 的 "test" 请求验证 API key（带 withRetry 重试 2 次）；跳过标志为真时直接返回 true；认证错误返回 false。
  */
@@ -3205,7 +3521,7 @@ async function verifyApiKey(apiKey, isNonInteractiveSession, credentials, storag
   try {
     let model = getBareCheckModel();
     let betas = getModelBetas(model);
-    let ok = await returnValue_2(
+    let ok = await returnValue(
       withRetry(
         () =>
           getAnthropicClient({
@@ -3230,6 +3546,7 @@ async function verifyApiKey(apiKey, isNonInteractiveSession, credentials, storag
             messages,
             temperature: 1,
             ...betasRequestParam(betas),
+            ...programUseCaseBody(betas),
             metadata: getAPIMetadata(),
             ...getExtraBodyParams(),
           });
@@ -3277,7 +3594,7 @@ async function verifyApiKey(apiKey, isNonInteractiveSession, credentials, storag
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:2652755-2653166 fingerprint (2.1.88 match: userMessageToMessageParam, 0.665)
+//@ chunk-5xgkngpb.js:2713842-2714253 fingerprint (2.1.88 match: userMessageToMessageParam, 0.665)
 /**
  * 内部 user 消息转 API MessageParam；需要缓存断点时给最后一个块加 cache_control。
  */
@@ -3323,7 +3640,7 @@ function userMessageToMessageParam(message, addCache = false, enablePromptCachin
       : message.message.content,
   };
 }
-//@ chunk-e6aww6q8.js:2653166-2653398 layout
+//@ chunk-5xgkngpb.js:2714253-2714485 layout
 /**
  * 去掉空白 text 块；全空时返回一个 "(no content)" 文本块。
  */
@@ -3345,7 +3662,7 @@ function dropEmptyTextBlocks(content) {
         },
       ];
 }
-//@ chunk-e6aww6q8.js:2653398-2653480 layout
+//@ chunk-5xgkngpb.js:2714485-2714567 layout
 /**
  * echoApiBlockOrder 开启时按 API 原始块顺序重排 assistant 内容（gJe），出错记日志返回原值。
  */
@@ -3358,7 +3675,7 @@ function applyApiBlockOrderEcho(messages, echoApiBlockOrder, preserveTrailingThi
     return messages;
   }
 }
-//@ chunk-e6aww6q8.js:2653480-2653865 callgraph-fingerprint (2.1.88 match: assistantMessageToMessageParam, 0.411)
+//@ chunk-5xgkngpb.js:2714567-2714952 callgraph-fingerprint (2.1.88 match: assistantMessageToMessageParam, 0.411)
 /**
  * 内部 assistant 消息转 API MessageParam；需要缓存断点时给最后一个非 thinking 块加 cache_control。
  */
@@ -3407,7 +3724,7 @@ function assistantMessageToMessageParam(
     content: message.message.content,
   };
 }
-//@ chunk-e6aww6q8.js:2653865-2654045 layout
+//@ chunk-5xgkngpb.js:2714952-2715132 layout
 /**
  * 调用 options.onMediaStripped 观察者（媒体剥离重试时），异常只告警。
  */
@@ -3424,7 +3741,7 @@ function notifyMediaStripped(options, kind, detail) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:2654045-2654137 layout
+//@ chunk-5xgkngpb.js:2715132-2715224 layout
 /**
  * 主线程主查询返回 main_thread，否则 other。
  */
@@ -3433,7 +3750,7 @@ function getRequestRouteKind(options) {
     ? "main_thread"
     : "other";
 }
-//@ chunk-e6aww6q8.js:2654137-2654648 fingerprint (2.1.88 match: queryModelWithoutStreaming, 0.789)
+//@ chunk-5xgkngpb.js:2715224-2715735 fingerprint (2.1.88 match: queryModelWithoutStreaming, 0.788)
 /**
  * 非流式查询（queryHaiku/queryWithModel 等辅助查询用）：消费 queryModel 流取最后一条 assistant；网关上小模型失败时改用主模型重试。
  */
@@ -3489,16 +3806,27 @@ async function queryModelWithoutStreaming({
     });
   return assistantMessage;
 }
-//@ chunk-e6aww6q8.js:2654648-2654938 fingerprint (2.1.88 match: queryModelWithStreaming, 0.532)
+//@ chunk-5xgkngpb.js:2715735-2716041 fingerprint (2.1.88 match: queryModelWithStreaming, 0.532)
 /**
  * 主循环的 deps.callModel：流式产出 queryModel 的事件；FallbackTriggeredError 转成 {type:"model_fallback_triggered"} 事件交给 queryLoop 换模型。
  */
-async function* queryModelWithStreaming({ messages, systemPrompt, thinkingConfig, tools, signal, options }) {
+async function* queryModelWithStreaming(
+  { messages, systemPrompt, thinkingConfig, tools, signal, options },
+  emitPlainDelta,
+) {
   try {
     return yield* joinWebSearchCitationTexts(
       withStreamVCR(messages, async function* () {
         yield* recoverRegimeRefusal(tools, signal, (tools) =>
-          queryModelWithToolSearchRecovery(messages, systemPrompt, thinkingConfig, tools, signal, options),
+          queryModelWithToolSearchRecovery(
+            messages,
+            systemPrompt,
+            thinkingConfig,
+            tools,
+            signal,
+            options,
+            isVcrEnabled() ? undefined : emitPlainDelta,
+          ),
         );
       }),
       options.isNonInteractiveSession,
@@ -3511,7 +3839,7 @@ async function* queryModelWithStreaming({ messages, systemPrompt, thinkingConfig
     };
   }
 }
-//@ chunk-e6aww6q8.js:2654938-2655075 fingerprint (2.1.88 match: shouldDeferLspTool, 1)
+//@ chunk-5xgkngpb.js:2716041-2716178 fingerprint (2.1.88 match: shouldDeferLspTool, 1)
 /**
  * LSP 工具在 LSP 尚未连接（pending/not-started）时延迟加载。
  */
@@ -3521,12 +3849,12 @@ function shouldDeferLspTool(tool) {
   let status = getInitializationStatus();
   return status.status === "pending" || status.status === "not-started";
 }
-//@ chunk-e6aww6q8.js:2655075-2655089 layout
+//@ chunk-5xgkngpb.js:2716178-2716192 layout
 /**
  * 90000：带静默重试的重试生成器 maxSilentMs = 等待上限 + 此值。
  */
 var SILENT_RETRY_EXTRA_MS = 90000;
-//@ chunk-e6aww6q8.js:2655089-2655199 layout
+//@ chunk-5xgkngpb.js:2716192-2716302 layout
 /**
  * 非流式请求超时：API_TIMEOUT_MS（上限 int32）或远程 120s/本地 300s。
  */
@@ -3535,7 +3863,7 @@ function getNonStreamingRequestTimeoutMs() {
   if (apiTimeoutMs !== undefined && apiTimeoutMs > 0) return Math.min(apiTimeoutMs, MAX_TIMER_DELAY_MS);
   return env.CLAUDE_CODE_REMOTE ? 120000 : 300000;
 }
-//@ chunk-e6aww6q8.js:2655199-2655435 layout
+//@ chunk-5xgkngpb.js:2716302-2716632 layout
 /**
  * verbose 日志级别时打印请求的 model/thinking/output_config/temperature/betas。
  */
@@ -3546,6 +3874,9 @@ function logApiRequestDetail(params) {
       model: params.model,
       thinking: params.thinking,
       output_config: params.output_config,
+      stated_effort: params.messages
+        ?.map((message) => message.output_config)
+        .findLast((outputConfig) => outputConfig?.effort !== undefined)?.effort,
       temperature: params.temperature,
       betas: params.betas ?? [],
       anthropic_beta: params.anthropic_beta,
@@ -3555,7 +3886,7 @@ function logApiRequestDetail(params) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:2655435-2655663 layout
+//@ chunk-5xgkngpb.js:2716632-2716860 layout
 /**
  * 生成 x-client-request-id（第一方时）和 traceparent 头，并记录本次尝试。
  */
@@ -3581,7 +3912,7 @@ function buildRequestTraceHeaders(span, attempt) {
     clientRequestId,
   };
 }
-//@ chunk-e6aww6q8.js:2655663-2655822 layout
+//@ chunk-5xgkngpb.js:2716860-2717019 layout
 /**
  * 按端点设置 x-cc-/x-claude-code- 的 context-compacted 与 compaction-request 头。
  */
@@ -3598,7 +3929,7 @@ function setCompactionHeaders(headers, contextCompacted, compactionRequest) {
     if (sendGatewayHints) headers[X_CLAUDE_CODE_COMPACTION] = compactionRequest;
   }
 }
-//@ chunk-e6aww6q8.js:2655822-2655870 layout
+//@ chunk-5xgkngpb.js:2717019-2717067 layout
 /**
  * 设置 x-claude-code-prev-tool-durations 头。
  */
@@ -3606,7 +3937,7 @@ function setPrevToolDurationsHeader(headers, durations) {
   if (durations !== undefined && shouldSendGatewayHintHeaders())
     headers[X_CLAUDE_CODE_PREV_TOOL_DURATIONS] = durations;
 }
-//@ chunk-e6aww6q8.js:2655870-2656070 layout
+//@ chunk-5xgkngpb.js:2717067-2717267 layout
 /**
  * 请求分派版本：CLAUDE_CODE_DISPATCH_V2D 或 tengu_dreamy_frost → v2d；非 auxiliary 且 V2S/tengu_cedar_lattice → v2s；否则 null。
  */
@@ -3618,7 +3949,7 @@ function getDispatchVersion(querySourceCategory) {
     return V2S;
   return null;
 }
-//@ chunk-e6aww6q8.js:2656070-2656268 layout
+//@ chunk-5xgkngpb.js:2717267-2717488 layout
 /**
  * 每进程一次记录 API 路由（状态、头）诊断事件。
  */
@@ -3629,9 +3960,10 @@ function logApiRouteObserved(response, incrementalRequestBody) {
     response: describeResponseHeaders(status, headers),
     route: connectionSetupFacts(),
     incremental_request_body: incrementalRequestBody,
+    gzip_blocks_mode: getGzipRequestBodyBlocksMode(),
   }));
 }
-//@ chunk-e6aww6q8.js:2656268-2656398 layout
+//@ chunk-5xgkngpb.js:2717488-2717618 layout
 /**
  * 看起来像 JSON 的字符串尝试解析，失败原样返回。
  */
@@ -3644,7 +3976,7 @@ function tryParseJsonString(value) {
     return value;
   }
 }
-//@ chunk-e6aww6q8.js:2656398-2659669 callgraph-witnessed (2.1.88 match: executeNonStreamingRequest, 0.295)
+//@ chunk-5xgkngpb.js:2717618-2720923 callgraph-witnessed (2.1.88 match: executeNonStreamingRequest, 0.292)
 /**
  * 非流式请求执行（流式失败回退或显式非流式）：调整 max_tokens/thinking 后 create(stream:false)，带超时；返回消息与响应头。
  */
@@ -3702,7 +4034,7 @@ async function* executeNonStreamingRequest(
         let result = await anthropic.beta.messages
           .create(
             {
-              ...deferredToolNameOf(adjustedParams),
+              ...inlineToolReferences(deferredToolNameOf(adjustedParams)),
               stream: false,
             },
             {
@@ -3727,10 +4059,10 @@ async function* executeNonStreamingRequest(
             headers: result.response?.headers,
             originating: originatingRequestId,
           });
-        countToolCallsSince_2_3(message);
+        translateMessageToolNames(message);
         let headers_2 = result.response?.headers;
         if (retryOptions.lowPriorityWait) recordLowPriorityServed(retryOptions.lowPriorityWait);
-        if (headers_2) {
+        if (headers_2 && !clientOptions.leavesLimitStateAlone) {
           let longContext =
             (has1mSuffix_2(retryOptions.model) || modelHasNative1MContext(retryOptions.model)) &&
             (message.usage?.input_tokens ?? 0) +
@@ -3828,11 +4160,11 @@ async function* executeNonStreamingRequest(
       })
     : yield* generator;
 }
-//@ chunk-e6aww6q8.js:2659812-2659842 placement
+//@ chunk-5xgkngpb.js:2721066-2721096 placement
 function promptIdForMessages(messages) {
   return getPromptId(messages);
 }
-//@ chunk-e6aww6q8.js:2659842-2659965 placement
+//@ chunk-5xgkngpb.js:2721096-2721219 placement
 /**
  * 取请求所属的提示 id：优先解析自身，失败或为空时在子代理上下文中使用父提示 id。
  */
@@ -3849,7 +4181,7 @@ function promptIdForRequest(messages, agentContext) {
     (isSubagentContext(agentContext) && !agentContext.isMainSession ? agentContext.parentPromptId : undefined)
   );
 }
-//@ chunk-e6aww6q8.js:2659965-2660024 placement
+//@ chunk-5xgkngpb.js:2721219-2721278 placement
 function turnOriginSafe(messages) {
   try {
     return getTurnOrigin(messages);
@@ -3858,7 +4190,7 @@ function turnOriginSafe(messages) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2660024-2660083 placement
+//@ chunk-5xgkngpb.js:2721278-2721337 placement
 function turnPositionSafe(messages) {
   try {
     return getTurnPosition(messages);
@@ -3867,7 +4199,7 @@ function turnPositionSafe(messages) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2660083-2660203 placement
+//@ chunk-5xgkngpb.js:2721337-2721457 placement
 function memoryToolNames(messages, tools) {
   return memoryRedactionIndex(
     getRootSession().host,
@@ -3879,7 +4211,7 @@ function memoryToolNames(messages, tools) {
     ),
   );
 }
-//@ chunk-e6aww6q8.js:2660203-2660356 placement
+//@ chunk-5xgkngpb.js:2721457-2721610 placement
 function applyThreadBody(body, threadBody) {
   if (!("thread" in body)) return body;
   let { thread, ...rest } = body;
@@ -3892,7 +4224,7 @@ function applyThreadBody(body, threadBody) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:2660356-2660578 placement
+//@ chunk-5xgkngpb.js:2721610-2721832 placement
 function canSendProviderBetas() {
   if (!canSendFirstPartyBetas()) return false;
   let apiProvider = getAPIProvider();
@@ -3910,44 +4242,47 @@ function canSendProviderBetas() {
       return false;
   }
 }
-//@ chunk-e6aww6q8.js:2660578-2660708 placement
+//@ chunk-5xgkngpb.js:2721832-2721962 placement
 function isSubagentCacheEvictEnabled() {
   if (!canSendFirstPartyBetas() || !hitsAnthropicBackend()) return false;
   if (env.CLAUDE_CODE_SUBAGENT_CACHE_EVICT) return true;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_subagent_cache_evict", false);
 }
-//@ chunk-e6aww6q8.js:2660708-2660777 layout (2.1.88 match: isMedia, 1)
+//@ chunk-5xgkngpb.js:2721962-2722040 layout (2.1.88 match: isMedia, 1)
 /**
  * 对象块且类型为 image/document。
  */
 function isMediaBlock(block) {
-  return isObjectBlock(block) && (block.type === "image" || block.type === "document");
+  return (
+    isObjectBlock(block) &&
+    (block.type === "image" || (block.type === "document" && !countUserPromptsInMessages_2(block)))
+  );
 }
-//@ chunk-e6aww6q8.js:2660777-2660830 layout
+//@ chunk-5xgkngpb.js:2722040-2722093 layout
 /**
  * base64 媒体块的 data 长度，否则 0。
  */
 function base64MediaLength(block) {
   return isBase64ImageBlock_3(block) ? block.source.data.length : 0;
 }
-//@ chunk-e6aww6q8.js:2660830-2660883 file-local
+//@ chunk-5xgkngpb.js:2722093-2722146 file-local
 /**
  * 对象块且 type=tool_result。
  */
 function isToolResultBlock_2(block) {
   return isObjectBlock(block) && block.type === "tool_result";
 }
-//@ chunk-e6aww6q8.js:2660883-2660956 layout
+//@ chunk-5xgkngpb.js:2722146-2722190 layout
 /**
  * "[media removed: request limit]" 占位文本块。
  */
 function mediaRemovedPlaceholder() {
   return {
     type: "text",
-    text: "[media removed: request limit]",
+    text: MEDIA_REMOVED_PLACEHOLDER,
   };
 }
-//@ chunk-e6aww6q8.js:2660956-2661155 file-local
+//@ chunk-5xgkngpb.js:2722190-2722389 file-local
 /**
  * 统计消息中的 image/document 块数（含 tool_result 内嵌套），用于媒体数量超限的重试。auto 名 stripExcessMediaItems 不准确。
  */
@@ -3958,11 +4293,11 @@ function countMediaItems(messagesForAPI) {
     for (let block of msg.message.content)
       if (isMediaBlock(block)) toRemove++;
       else if (isToolResultBlock_2(block) && Array.isArray(block.content))
-        toRemove += count(block.content, isMediaBlock);
+        toRemove += countWhere(block.content, isMediaBlock);
   }
   return toRemove;
 }
-//@ chunk-e6aww6q8.js:2661155-2662770 layout
+//@ chunk-5xgkngpb.js:2722389-2724253 layout
 /**
  * 按数量上限与总字节上限从最旧开始移除媒体块（tool_result 内的换成占位文本），用于请求媒体数量/大小限制。
  */
@@ -3973,19 +4308,25 @@ function stripExcessMediaItems(
   mediaTotalByteCap = 1 / 0,
   reservedBytes = 0,
   documentByteCap = 1 / 0,
+  mediaTakenOut,
 ) {
   let byteLengths = [];
   let documentBytes = [];
+  let unsentIndices = new Set();
   for (let message of messages) {
     if (!Array.isArray(message.message.content)) continue;
     for (let block of message.message.content)
       if (isMediaBlock(block)) {
-        byteLengths.push(base64MediaLength(block));
+        let unsentByteLength = unsentMediaByteLength(block);
+        if (unsentByteLength !== undefined) unsentIndices.add(byteLengths.length);
+        byteLengths.push(unsentByteLength ?? base64MediaLength(block));
         documentBytes.push(block.type === "document" ? byteLengths.at(-1) : 0);
       } else if (isToolResultBlock_2(block) && Array.isArray(block.content)) {
         for (let nestedBlock of block.content)
           if (isMediaBlock(nestedBlock)) {
-            byteLengths.push(base64MediaLength(nestedBlock));
+            let unsentByteLength = unsentMediaByteLength(nestedBlock);
+            if (unsentByteLength !== undefined) unsentIndices.add(byteLengths.length);
+            byteLengths.push(unsentByteLength ?? base64MediaLength(nestedBlock));
             documentBytes.push(nestedBlock.type === "document" ? byteLengths.at(-1) : 0);
           }
       }
@@ -4041,6 +4382,7 @@ function stripExcessMediaItems(
       }
     }
   }
+  for (let index of unsentIndices) removedIndices.add(index);
   if (removedIndices.size === 0) return messages;
   let mediaIndex = 0;
   let mapped = messages.map((message) => {
@@ -4050,16 +4392,20 @@ function stripExcessMediaItems(
     let keptBlocks = [];
     for (let block of content)
       if (isMediaBlock(block)) {
-        if (removedIndices.has(mediaIndex++)) stripped = true;
-        else keptBlocks.push(block);
+        let mediaIndexInBlock = mediaIndex++;
+        if (removedIndices.has(mediaIndexInBlock)) {
+          stripped = true;
+          if (!unsentIndices.has(mediaIndexInBlock)) mediaTakenOut?.push(block);
+        } else keptBlocks.push(block);
       } else if (isToolResultBlock_2(block) && Array.isArray(block.content)) {
         let removedInToolResult = false;
         let content = block.content.map((item) => {
-          if (isMediaBlock(item) && removedIndices.has(mediaIndex++)) {
-            removedInToolResult = true;
-            return mediaRemovedPlaceholder();
-          }
-          return item;
+          if (!isMediaBlock(item)) return item;
+          let mediaIndexInItem = mediaIndex++;
+          if (!removedIndices.has(mediaIndexInItem)) return item;
+          removedInToolResult = true;
+          if (!unsentIndices.has(mediaIndexInItem)) mediaTakenOut?.push(item);
+          return mediaRemovedPlaceholder();
         });
         stripped ||= removedInToolResult;
         keptBlocks.push(
@@ -4100,15 +4446,15 @@ function stripExcessMediaItems(
   }
   return mapped;
 }
-//@ chunk-e6aww6q8.js:2662770-2662812 layout
+//@ chunk-5xgkngpb.js:2724253-2724295 layout
 /**
  * 媒体字节上限 GrowthBook 值的 schema。
  */
 var mediaByteCapSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2662770", () => {
+deferInit("chunk-5xgkngpb.js:2724253", () => {
   mediaByteCapSchema = DoctorLazy(() => union([literal(0), int_2().min(2 * MEDIA_BYTE_CAP_MIN)]));
 });
-//@ chunk-e6aww6q8.js:2662812-2662892 layout
+//@ chunk-5xgkngpb.js:2724295-2724375 layout
 /**
  * 读 GrowthBook 数值开关并校验。
  */
@@ -4116,7 +4462,7 @@ function readMediaByteCapFlag(flagName) {
   let parsed = mediaByteCapSchema().safeParse(getFeatureValue_CACHED_MAY_BE_STALE(flagName, null));
   return parsed.success ? parsed.data : undefined;
 }
-//@ chunk-e6aww6q8.js:2662892-2663034 layout
+//@ chunk-5xgkngpb.js:2724375-2724517 layout
 /**
  * 请求媒体总字节上限（tengu_keen_pudding / tengu_media_byte_cap）。
  */
@@ -4126,7 +4472,7 @@ function getMediaTotalByteCap() {
     return hitsAnthropicBackend() ? MEDIA_TOTAL_BYTES_ANTHROPIC : MEDIA_TOTAL_BYTES_DEFAULT;
   return hitsAnthropicBackend() ? flag : Math.min(flag, MEDIA_TOTAL_BYTES_ANTHROPIC);
 }
-//@ chunk-e6aww6q8.js:2663034-2663105 layout
+//@ chunk-5xgkngpb.js:2724517-2724588 layout
 /**
  * 文档字节上限（tengu_golden_dove），仅 qae() 时生效。
  */
@@ -4134,14 +4480,14 @@ function getDocumentByteCap() {
   if (!hitsAnthropicBackend()) return 0;
   return readMediaByteCapFlag("tengu_golden_dove") || DOCUMENT_TOTAL_BYTES_DEFAULT;
 }
-//@ chunk-e6aww6q8.js:2663105-2663137 layout
+//@ chunk-5xgkngpb.js:2724588-2724620 layout
 /**
  * 1e4：withStreamHeartbeat 默认心跳间隔；另两个 2e4/45e3 是流停顿余量（qae() 时 20s，否则 45s）。
  */
 var STREAM_HEARTBEAT_MS = 1e4;
 var STREAM_STALL_MARGIN_FIRST_PARTY_MS = 20000;
 var STREAM_STALL_MARGIN_MS = 45000;
-//@ chunk-e6aww6q8.js:2663137-2663206 layout
+//@ chunk-5xgkngpb.js:2724620-2724689 layout
 /**
  * 流停顿判定余量：qae() 为 20s，否则 45s。
  */
@@ -4153,19 +4499,19 @@ function getStreamStallMarginMs() {
     return STREAM_STALL_MARGIN_FIRST_PARTY_MS;
   }
 }
-//@ chunk-e6aww6q8.js:2663206-2663286 layout
+//@ chunk-5xgkngpb.js:2724689-2724769 layout
 /**
  * tool_use/server_tool_use/mcp_tool_use。
  */
 var MAX_STREAM_STALL_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_PING_EVENTS_RESETTING_IDLE;
 var TOOL_USE_BLOCK_TYPES;
-deferInit("chunk-e6aww6q8.js:2663206", () => {
+deferInit("chunk-5xgkngpb.js:2724689", () => {
   MAX_STREAM_STALL_MS = 90000;
   MAX_PING_EVENTS_RESETTING_IDLE = 30;
   TOOL_USE_BLOCK_TYPES = new Set(["tool_use", "server_tool_use", "mcp_tool_use"]);
 });
-//@ chunk-e6aww6q8.js:2663286-2663765 layout
+//@ chunk-5xgkngpb.js:2724769-2725407 layout
 /**
  * 包装 SSE 迭代器：超过间隔无事件但 lastAt 前进时插入 {type:"ping"}。
  */
@@ -4174,27 +4520,52 @@ async function* withStreamHeartbeat(
   activityClock,
   heartbeatMs = STREAM_HEARTBEAT_MS,
   clock = systemClock,
+  heartbeatFloorMs = 0,
 ) {
   if (!activityClock) {
     yield* source;
     return;
   }
-  let iterator = source[Symbol.asyncIterator]();
+  let slackMs = clipSlackMs(heartbeatFloorMs, heartbeatMs / 10);
+  let sourceIterator = source[Symbol.asyncIterator]();
   let lastAt = clock.monotonicNow();
   let pendingNext = null;
-  let timer;
   let heartbeatToken = Symbol("heartbeat");
+  let heartbeatPromise;
+  let heartbeatStartMonotonicMs = 0;
+  let heartbeatStartWallMs = 0;
+  let timer;
   try {
     while (true) {
-      pendingNext ??= iterator.next();
-      let promise = new Promise((resolve) => {
-        timer = clock.setTimeout(() => resolve(heartbeatToken), heartbeatMs, {
-          unref: true,
+      pendingNext ??= sourceIterator.next();
+      if (
+        heartbeatPromise === undefined ||
+        timer === undefined ||
+        !slackStillFresh(clock, heartbeatStartMonotonicMs, heartbeatStartWallMs, slackMs)
+      ) {
+        timer?.();
+        if (slackMs > 0) {
+          heartbeatStartMonotonicMs = clock.monotonicNow();
+          heartbeatStartWallMs = clock.now();
+        }
+        heartbeatPromise = new Promise((resolve) => {
+          timer = clock.setTimeout(
+            () => {
+              if (slackMs > 0) timer = undefined;
+              resolve(heartbeatToken);
+            },
+            heartbeatMs,
+            {
+              unref: true,
+            },
+          );
         });
-      });
-      let winner = await Promise.race([pendingNext, promise]);
-      timer?.();
-      timer = undefined;
+      }
+      let winner = await Promise.race([pendingNext, heartbeatPromise]);
+      if (slackMs === 0) {
+        timer?.();
+        timer = undefined;
+      }
       if (winner === heartbeatToken) {
         if (activityClock.lastAt > lastAt) {
           lastAt = clock.monotonicNow();
@@ -4212,11 +4583,11 @@ async function* withStreamHeartbeat(
   } finally {
     timer?.();
     try {
-      Promise.resolve(iterator.return?.(undefined)).catch(() => {});
+      Promise.resolve(sourceIterator.return?.(undefined)).catch(() => {});
     } catch {}
   }
 }
-//@ chunk-e6aww6q8.js:2663765-2663906 layout
+//@ chunk-5xgkngpb.js:2725407-2725548 layout
 /**
  * 非第一方/假定第一方/自定义 ANTHROPIC_BASE_URL/非 OAuth 时为真；否则看组织额度状态。用于 fallback credit 端点判断。
  */
@@ -4234,7 +4605,7 @@ function isFirstPartyCreditEndpoint(provider = getAPIProvider()) {
     (resolvedWIFBaseUrlSnapshot !== undefined && isFirstPartyAnthropicHost(resolvedWIFBaseUrlSnapshot))
   );
 }
-//@ chunk-e6aww6q8.js:2663906-2664027 layout
+//@ chunk-5xgkngpb.js:2725548-2725669 layout
 /**
  * 第一方、无 ANTHROPIC_UNIX_SOCKET、api.anthropic.com 直连。
  */
@@ -4251,7 +4622,7 @@ function isDirectFirstPartyApi() {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:2664027-2664279 layout
+//@ chunk-5xgkngpb.js:2725669-2725921 layout
 /**
  * bedrock/vertex/mantle/anthropicGoogleCloud 是否未设自定义 base URL。
  */
@@ -4267,41 +4638,41 @@ function usesDefaultProviderEndpoint(provider) {
       return env.ANTHROPIC_GOOGLE_CLOUD_BASE_URL === undefined;
   }
 }
-//@ chunk-e6aww6q8.js:2664279-2664552 layout
+//@ chunk-5xgkngpb.js:2725921-2726194 layout
 /**
  * 各提供商是否走自定义/网关端点。
  */
-function isCustomEndpoint(provider) {
-  switch (provider) {
+function isCustomEndpoint(providerForModel) {
+  switch (providerForModel) {
     case "gateway":
       return true;
     case "firstParty":
-      return !isFirstPartyAnthropicBaseUrl() || !isFirstPartyCreditEndpoint(provider);
+      return !isFirstPartyAnthropicBaseUrl() || !isFirstPartyCreditEndpoint(providerForModel);
     case "bedrock":
     case "mantle":
     case "vertex":
-      return !usesDefaultProviderEndpoint(provider);
+      return !usesDefaultProviderEndpoint(providerForModel);
     case "anthropicAws":
-      return !hitsAnthropicBackend(provider);
+      return !hitsAnthropicBackend(providerForModel);
     case "foundry":
       return env.ANTHROPIC_FOUNDRY_BASE_URL !== undefined;
     case "anthropicGoogleCloud":
-      return !usesDefaultProviderEndpoint(provider);
+      return !usesDefaultProviderEndpoint(providerForModel);
   }
 }
-//@ chunk-e6aww6q8.js:2664552-2664898 layout
+//@ chunk-5xgkngpb.js:2726194-2726540 layout
 /**
  * mint 模型与请求模型同提供商且端点允许 fallback credit 时为真。
  */
 function canUseFallbackCreditMintModel(fallbackCreditMintModel, model) {
-  let provider = getProviderForModel(model);
-  if (getProviderForModel(fallbackCreditMintModel) !== provider) return false;
-  switch (provider) {
+  let providerForModel = getProviderForModel(model);
+  if (getProviderForModel(fallbackCreditMintModel) !== providerForModel) return false;
+  switch (providerForModel) {
     case "gateway":
       return false;
     case "firstParty": {
       if (!isFirstPartyAnthropicBaseUrl()) return false;
-      return isFirstPartyCreditEndpoint(provider);
+      return isFirstPartyCreditEndpoint(providerForModel);
     }
     case "bedrock":
       return usesDefaultProviderEndpoint("bedrock");
@@ -4310,7 +4681,7 @@ function canUseFallbackCreditMintModel(fallbackCreditMintModel, model) {
     case "foundry":
       return true;
     case "anthropicAws":
-      return hitsAnthropicBackend(provider);
+      return hitsAnthropicBackend(providerForModel);
     case "anthropicGoogleCloud":
       return false;
     case "vertex":
@@ -4320,7 +4691,7 @@ function canUseFallbackCreditMintModel(fallbackCreditMintModel, model) {
       );
   }
 }
-//@ chunk-e6aww6q8.js:2664898-2665281 layout
+//@ chunk-5xgkngpb.js:2726540-2726923 layout
 /**
  * 从 api_system 消息的 toolAdditions/toolRemovals 里去掉 advisor 工具。
  */
@@ -4348,14 +4719,14 @@ function dropAdvisorFromApiSystem(messages) {
     };
   });
 }
-//@ chunk-e6aww6q8.js:2665281-2665313 layout
+//@ chunk-5xgkngpb.js:2726923-2726955 layout
 /**
  * 消息含 advisor 相关块（sJe 计数 >0）。
  */
 function hasAdvisorBlocks(message) {
   return countThinkingBlocks(message) > 0;
 }
-//@ chunk-e6aww6q8.js:2665313-2665503 layout
+//@ chunk-5xgkngpb.js:2726955-2727145 layout
 /**
  * advisorStripPlan 覆盖到本次消息里的 assistant 时记 tengu_advisor_strip_replayed。
  */
@@ -4371,11 +4742,11 @@ function logAdvisorStripReplayed(messages, options) {
     logError(toError(error));
   }
 }
-//@ chunk-e6aww6q8.js:2665503-2668815 layout
+//@ chunk-5xgkngpb.js:2727145-2730632 layout
 /**
  * 请求前消息规整：剥离 tool_reference/caller（无工具搜索时）、修复 tool_use/tool_result 配对、去 advisor 块、可选去 web search、媒体数量上限，然后 normalizeMessagesForAPI 并处理思考签名。返回 messagesForAPI 与多个降级回调。
  */
-function normalizeMessagesForRequest(inputMessages, normalizeOptions) {
+function normalizeMessagesForRequest(inputMessages, normalizeOptions, onNormalizeStage) {
   let modelName = normalizeOptions.bodyModel ?? normalizeOptions.model;
   let baseModelName = stripAnyVersatileSuffix(modelName);
   let keepForeignThinking = normalizeOptions.keepForeignThinking ?? "none";
@@ -4399,8 +4770,7 @@ function normalizeMessagesForRequest(inputMessages, normalizeOptions) {
     antGrants1MContext(modelName);
   let reminderFold = resolveReminderFold_2(inputMessages, normalizeOptions.reminderFold);
   let echoWireToolInputs = shouldEchoWireToolInputs(inputMessages, normalizeOptions.echoWireToolInputs);
-  let textsToFold = renderedAttachmentTexts(strippedMessages);
-  let finalizeMessageList = (messages, midConvModel) => {
+  let finalizeMessageList = (messages, midConvModel, mediaTakenOut) => {
     if (!normalizeOptions.useToolSearch)
       messages = messages.map((msg) => {
         switch (msg.type) {
@@ -4414,7 +4784,6 @@ function normalizeMessagesForRequest(inputMessages, normalizeOptions) {
       });
     messages = ensureToolResultPairing(messages, {
       reminderFold,
-      textsToFold,
       keyedRemindersStaySiblings: midConvModel !== undefined && shouldUseMidConvSystem(midConvModel),
     });
     if (!normalizeOptions.advisorModel) messages = stripAdvisorBlocks(messages);
@@ -4429,6 +4798,7 @@ function normalizeMessagesForRequest(inputMessages, normalizeOptions) {
       getMediaTotalByteCap(),
       MEDIA_BYTE_CAP_MIN,
       getDocumentByteCap(),
+      mediaTakenOut,
     );
   };
   let accountMemoryWithheld = normalizeOptions.accountMemoryWithheld ?? isAccountMemoryRedactionOn();
@@ -4467,6 +4837,9 @@ function normalizeMessagesForRequest(inputMessages, normalizeOptions) {
     ...(normalizeOptions.pollEventsAsText === true && {
       pollEventsAsText: true,
     }),
+    ...(normalizeOptions.projectDocsAsRound === true && {
+      projectDocsAsRound: true,
+    }),
     thinkingStripPlan: normalizeOptions.thinkingStripPlan,
     advisorStripPlan: normalizeOptions.advisorStripPlan,
     keptReminders:
@@ -4475,19 +4848,24 @@ function normalizeMessagesForRequest(inputMessages, normalizeOptions) {
     reminderFold,
   };
   let midConvModel = normalizeOptions.midConvLatchedOff ? undefined : modelName;
+  onNormalizeStage?.("before");
   let apiMessages = normalizeMessagesForAPI(
     strippedMessages,
     normalizeOptions.tools,
     midConvModel,
     apiMessageOptions,
   );
+  onNormalizeStage?.("normalize");
   validateImagesInMessages(apiMessages, imageLimitsForModel(normalizeOptions.model).maxBase64Size);
+  onNormalizeStage?.("images");
   queryCheckpoint("query_message_normalization_end");
+  normalizeOptions.mediaTakenOut?.splice(0);
   apiMessages = applyApiBlockOrderEcho(
-    finalizeMessageList(apiMessages, midConvModel),
+    finalizeMessageList(apiMessages, midConvModel, normalizeOptions.mediaTakenOut),
     apiMessageOptions.echoApiBlockOrder,
     apiMessageOptions.preserveTrailingThinking,
   );
+  onNormalizeStage?.("post_process");
   let included = normalizeOptions.betas.includes(BETA_PER_MESSAGE_EFFORT);
   let canonicalName = getCanonicalName(modelName);
   let perTurnConfig = {
@@ -4507,6 +4885,7 @@ function normalizeMessagesForRequest(inputMessages, normalizeOptions) {
       ? messages
       : attachPerTurnOutputConfig(messages, {
           ...perTurnConfig,
+          parent: normalizeOptions.perTurnParent,
           effortCap: normalizeOptions.perTurnEffortCap?.(),
         });
   apiMessages = attachPerTurnConfig(apiMessages);
@@ -4583,7 +4962,7 @@ function normalizeMessagesForRequest(inputMessages, normalizeOptions) {
     blocksEligible: apiMessageOptions.surfaceLateToolAdditions === true,
   };
 }
-//@ chunk-e6aww6q8.js:2668815-2669526 layout
+//@ chunk-5xgkngpb.js:2730632-2731343 layout
 /**
  * 何时在请求头 anthropic-usage-limit 发 extended（多个 tengu_lantern_* 开关、第一方订阅）。
  */
@@ -4624,12 +5003,12 @@ function shouldSendExtendedUsageLimitHeader(options, webFetchApply, isSubagentDe
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_lantern_snuffer", false) === true
   );
 }
-//@ chunk-e6aww6q8.js:2669526-2669555 layout
+//@ chunk-5xgkngpb.js:2731343-2731372 layout
 /**
  * GrowthBook 开关名 tengu_fizzy_bonbon。
  */
 var TENGU_FIZZY_BONBON = "tengu_fizzy_bonbon";
-//@ chunk-e6aww6q8.js:2669555-2669683 layout
+//@ chunk-5xgkngpb.js:2731372-2731500 layout
 /**
  * 惰性估算消息 token 数（失败时 +∞）。
  */
@@ -4639,8 +5018,7 @@ function lazyContextTokenEstimate(messages, model) {
     if (cached === undefined)
       try {
         cached =
-          estimateTokensWithAnchor(messages, bytesPerTokenForModel(model)) +
-          stripInProgressAssistantMessage(messages);
+          estimateTokensWithAnchor(messages, bytesPerTokenForModel(model)) + serverClearedTokens(messages);
       } catch (error) {
         logError(toError(error));
         cached = Number.POSITIVE_INFINITY;
@@ -4648,7 +5026,7 @@ function lazyContextTokenEstimate(messages, model) {
     return cached;
   };
 }
-//@ chunk-e6aww6q8.js:2669683-2669780 layout
+//@ chunk-5xgkngpb.js:2731500-2731597 layout
 /**
  * 若当前上下文已超过 fallback 模型窗口（GCn）则不用 accessFallbackModel，返回 undefined。
  */
@@ -4661,7 +5039,7 @@ function resolveAccessFallbackModel(fromModel, toModel, currentContextSize) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2669780-2669840 layout
+//@ chunk-5xgkngpb.js:2731597-2731657 layout
 /**
  * 有 ladders 时记录会话大小（token 估算）。
  */
@@ -4672,7 +5050,7 @@ function recordConversationSize(sessionId, estimate) {
     logError(toError(error));
   }
 }
-//@ chunk-e6aww6q8.js:2669840-2669901 layout
+//@ chunk-5xgkngpb.js:2731657-2731717 layout
 /**
  * CLAUDE_CODE_MESSAGES_PROMPT_CACHE_TTL=5m 时把消息缓存 TTL 降为 5m。
  */
@@ -4684,7 +5062,7 @@ function applyMessagesCacheTtlOverride(ttl) {
     return ttl;
   }
 }
-//@ chunk-e6aww6q8.js:2669901-2669946 layout
+//@ chunk-5xgkngpb.js:2731717-2731762 layout
 /**
  * 消息 TTL 被降级时把主线程请求日志里的缓存 TTL 调成 5 分钟。
  */
@@ -4695,7 +5073,7 @@ function noteMainThreadCacheTtl5m() {
     logError(toError(error));
   }
 }
-//@ chunk-e6aww6q8.js:2669946-2670095 layout
+//@ chunk-5xgkngpb.js:2731762-2731911 layout
 /**
  * 服务器拒绝工具搜索时抛出，携带 refusal 与是否已声明工具搜索。
  */
@@ -4710,7 +5088,7 @@ class ToolSearchRefusedError extends Error {
     this.declaredToolSearch = declaredToolSearch;
   }
 }
-//@ chunk-e6aww6q8.js:2670095-2670743 layout
+//@ chunk-5xgkngpb.js:2731911-2732568 layout
 /**
  * 包 queryModel：捕获 ToolSearchRefusedError 后加一条 critical_system_reminder（延迟工具改为直接声明）重跑一次。
  */
@@ -4755,7 +5133,7 @@ async function* queryModelWithToolSearchRecovery(...args) {
     await model.return(undefined);
   }
 }
-//@ chunk-e6aww6q8.js:2670743-2799701 callgraph-witnessed (2.1.88 match: queryModel, 0.184)
+//@ chunk-5xgkngpb.js:2732568-2867697 callgraph-witnessed (2.1.88 match: queryModel, 0.167)
 /**
  * queryModel：一次 Messages API 调用的全部逻辑（约 129KB）。依次：off-switch 与模型封锁检查 → beta 列表与模型事实 → 工具 schema 构建、工具搜索/延迟工具决策 → normalizeMessagesForRequest 规整消息 → buildSystemPromptBlocks → buildRequestParams（paramsFromContext 过滤被拒 beta、thinking/effort/output_config/context_management/speed/diagnostics、addCacheBreakpoints）→ withRetry 内 anthropic.beta.messages.create(stream:true) → 解析 SSE（message_start/content_block_*\/message_delta/message_stop）产出 stream_event 与 assistant 消息、累计 usage 与成本 → 流停顿/空闲超时/无事件时回退非流式 → onError 里按错误类型返回 "retry:<原因>"（去 beta、去 thinking.display、去媒体、降 effort 等）自愈重发。
  */
@@ -4766,6 +5144,7 @@ async function* queryModel(
   tools,
   signal,
   { modelFacts, ...baseOptions },
+  emitPlainDelta,
 ) {
   let { fallbackModel, accessFallbackModel = baseOptions.accessFallbackModel } = resolveFallbackModel(
     baseOptions.model,
@@ -4842,11 +5221,14 @@ async function* queryModel(
   }
   let previousRequestId_2 = collectRecentAssistantTexts(messages);
   let requestPromptId = promptIdForRequest(messages, options.agentContext);
-  let key = getCcrSenderAddressKey(options.agentContext, requestPromptId);
+  let key = senderAddressKeyFor(options.agentContext, requestPromptId, options.querySource);
   if (key && isFirstPartyApiBackend()) await prefetchCcrSenderAddress(key);
   let turnOrigin = turnOriginSafe(messages);
   let turnPosition = turnPositionSafe(messages);
   let isSessionTask = isSessionTaskTurn(messages);
+  let earlyToolCap = new GraceResend(
+    options.continuesInterruptedWork === true && (options.queryTracking?.depth ?? 0) === 0 && !isSessionTask,
+  );
   let lastAssistantId = lastAssistantMessageId(messages);
   let resolvedModel =
     getAPIProvider() === "bedrock" && options.model.includes("application-inference-profile")
@@ -4859,20 +5241,25 @@ async function* queryModel(
   if (isTopLevelMain) {
     endProfilePhase("model_gates");
     startProfilePhase("tool_schema_build");
+    noteToolSchemaBuildStart(toolDescriptionCache_2);
   }
   let isAgenticQuery =
     options.querySource.startsWith("repl_main_thread") ||
     options.querySource.startsWith("agent:") ||
     options.querySource === "sdk" ||
-    options.querySource === "hook_agent";
-  let conversation = stickyBetasOr(options.stickyBetas);
-  if (!conversation.declaredToolsDecided)
-    runGuarded(() => seedWireShapeFromRecord(conversation, options.recordedWireShape, options.model));
+    options.querySource === "hook_agent" ||
+    options.querySource === "resume_cache_warm";
+  let conversation_2 = stickyBetasOr(options.stickyBetas);
+  if (!conversation_2.declaredToolsDecided)
+    runGuarded(() => seedWireShapeFromRecord(conversation_2, options.recordedWireShape, options.model));
   let betaList = runGuarded(() =>
     getMergedBetas(options.model, {
       isAgenticQuery,
     }),
   );
+  if (betaList.includes(BETA_PROGRAM_USE_CASE_IDS)) markBetaSent(conversation_2, BETA_PROGRAM_USE_CASE_IDS);
+  else if (isBetaSent(conversation_2, BETA_PROGRAM_USE_CASE_IDS) && programUseCaseHeaderGoesOut())
+    betaList = [...betaList, BETA_PROGRAM_USE_CASE_IDS];
   let canonicalModel = runGuarded(() => getCanonicalName(resolvedModel));
   let modelFacts_2 =
     modelFacts?.model === resolvedModel && !isAutoModeQuerySource(options.querySource)
@@ -4898,13 +5285,15 @@ async function* queryModel(
       (creditMintModel !== undefined && runGuarded(() => isThinkingAlwaysOn(creditMintModel))),
   );
   let wireModelId = creditMintModel === undefined ? toProviderWireModelId(options.model) : undefined;
-  if (wireModelId !== undefined && !conversation.declaredToolsDecided) {
-    let contextBetaActive = hasContextBeta(conversation);
-    for (let refusedBeta of getRefusedBetasForModel(wireModelId)) markBetaRejected(conversation, refusedBeta);
-    if (options.stickyBetas === undefined) notifyPerTurnEffortInactive(conversation, contextBetaActive);
+  if (wireModelId !== undefined && !conversation_2.declaredToolsDecided) {
+    let contextBetaActive = hasContextBeta(conversation_2);
+    for (let refusedBeta of getRefusedBetasForModel(wireModelId))
+      markBetaRejected(conversation_2, refusedBeta);
+    if (options.stickyBetas === undefined) notifyPerTurnEffortInactive(conversation_2, contextBetaActive);
   }
   let latchBetaRefused = (beta, perModel) => {
-    markBetaRejected(conversation, beta);
+    markBetaRejected(conversation_2, beta);
+    if (beta === BETA_CCR_TOOL_PROVENANCE && perModel) conversation(conversation_2, beta);
     let scopeText = "in this conversation";
     if (perModel && wireModelId !== undefined) {
       markBetaRefusedForModel(wireModelId, beta);
@@ -4914,7 +5303,9 @@ async function* queryModel(
       level: "warn",
     });
   };
+  if (isTopLevelMain) markToolSchemaBuildPart("betas");
   registerMcpStandardKeys(tools);
+  indexConnectorByTool(tools);
   await awaitArtifactRosterSafe(tools);
   let deferralMode = options.withoutToolDescribeHooks ? "engine" : "hooks";
   let isDeferredByEngine = (tool, nonDeferrableBuiltins) =>
@@ -4947,12 +5338,17 @@ async function* queryModel(
       "query",
       options.credentials,
       options.recordedToolDescriptions,
-      conversation,
+      conversation_2,
     )) &&
     options.toolSearchRefusal === undefined;
+  if (isTopLevelMain) markToolSchemaBuildPart("waits");
   let echoWireToolInputs = shouldEchoWireToolInputs(messages, options.echoWireToolInputs);
   let resumeIncompleteThinking = options.resumeIncompleteThinking === true;
-  betaList = runGuarded(() => adjustToolBetas(conversation, betaList, options.model));
+  betaList = runGuarded(() => adjustToolBetas(conversation_2, betaList, options.model));
+  let betaAdjustment = withProvenanceBeta(conversation_2, betaList);
+  betaList = betaAdjustment.betas;
+  let coverage = betaAdjustment.coverage;
+  let toolCoverage = makeServerAnnotationResolver(tools, options.mcpClients ?? [], coverage);
   let announceDeferred = false;
   if (
     !useToolSearch &&
@@ -4961,8 +5357,8 @@ async function* queryModel(
   )
     try {
       announceDeferred = runGuarded(() =>
-        shouldAnnounceDeferredTools(conversation, effectiveModel, {
-          toolSearchToolFilteredOut: toolSearchToolFilteredOut(effectiveModel, tools, conversation),
+        shouldAnnounceDeferredTools(conversation_2, effectiveModel, {
+          toolSearchToolFilteredOut: toolSearchToolFilteredOut(effectiveModel, tools, conversation_2),
           toolPoolRefreshes: options.toolPoolRefreshes === true,
           aheadOfRequest: false,
         }),
@@ -4970,18 +5366,18 @@ async function* queryModel(
     } catch (error) {
       logError(toError(error));
     }
-  if (!conversation.declaredToolsDecided) {
+  if (!conversation_2.declaredToolsDecided) {
     let recordedDeferred;
     try {
       recordedDeferred = options.recordedDeferredTools?.();
       for (let announcement of recordedDeferred?.nameOnlyAnnouncements ?? [])
-        conversation.nameOnlyAnnouncements.add(announcement);
+        conversation_2.nameOnlyAnnouncements.add(announcement);
       if (recordedDeferred !== undefined)
         seedDeferredToolReferences(messages, [...recordedDeferred.entries.values()], {
           strippedReferences: recordedDeferred.strippedReferences,
           ...((useToolSearch || announceDeferred) &&
-            toolChangeHeaderAllowed(conversation) && {
-              surfacedCarrier: conversation,
+            toolChangeHeaderAllowed(conversation_2) && {
+              surfacedCarrier: conversation_2,
             }),
         });
     } catch (error) {
@@ -5011,10 +5407,10 @@ async function* queryModel(
   try {
     if (
       betaList.includes(BETA_INLINE_TOOLS) &&
-      runGuarded(() => canDeclareInlineTools(conversation, effectiveModel))
+      runGuarded(() => canDeclareInlineTools(conversation_2, effectiveModel))
     ) {
-      byValueNames = deltaToolNames(messages, conversation.nameOnlyAnnouncements);
-      byValueAnnouncements = deferredToolNames(messages, conversation.nameOnlyAnnouncements);
+      byValueNames = deltaToolNames(messages, conversation_2.nameOnlyAnnouncements);
+      byValueAnnouncements = deferredToolNames(messages, conversation_2.nameOnlyAnnouncements);
     }
   } catch (error) {
     logError(toError(error));
@@ -5025,7 +5421,7 @@ async function* queryModel(
     try {
       let nonDeferrableBuiltins = getNonDeferrableBuiltins();
       let declaredToolSet = computeDeclaredToolSet(
-        conversation,
+        conversation_2,
         tools,
         (tool) => isDeferredByEngine(tool, nonDeferrableBuiltins),
         effectiveModel,
@@ -5033,20 +5429,20 @@ async function* queryModel(
       );
       scratchDeclared = declaredToolSet;
       if (declaredToolSet !== undefined)
-        upfrontDeferredCount = count(
-          turnDeniedTools(tools, conversation),
+        upfrontDeferredCount = countWhere(
+          turnDeniedTools(tools, conversation_2),
           (tool) => declaredToolSet.has(tool.name) && isDeferredByEngine(tool, nonDeferrableBuiltins),
         );
     } catch (error) {
       logError(toError(error));
     }
   let resolvedDeclared;
-  let wasUndecided = !conversation.declaredToolsDecided;
+  let wasUndecided = !conversation_2.declaredToolsDecided;
   let advisorExperiment = deferredToolsEnabled();
   let redeclaredCount = 0;
   if (useToolSearch || announceDeferred) {
     let permissionContext;
-    if (!conversation.declaredToolsDecided)
+    if (!conversation_2.declaredToolsDecided)
       try {
         permissionContext = await options.getToolPermissionContext();
       } catch (error) {
@@ -5054,7 +5450,7 @@ async function* queryModel(
       }
     try {
       resolvedDeclared = resolveDeclaredToolSet(
-        conversation,
+        conversation_2,
         () =>
           options.recordedToolDescriptions && {
             names: options.recordedToolDescriptions.keys(),
@@ -5071,8 +5467,8 @@ async function* queryModel(
       logError(toError(error));
       scratchDeclared = undefined;
     }
-  } else if (wasUndecided) conversation.declaredTools = undefined;
-  markDeclaredToolsDecided(conversation);
+  } else if (wasUndecided) conversation_2.declaredTools = undefined;
+  markDeclaredToolsDecided(conversation_2);
   let declaredToolSet = resolvedDeclared ?? scratchDeclared;
   let deferredToolNames_2 = new Set();
   let deferredLateCount = 0;
@@ -5111,8 +5507,8 @@ async function* queryModel(
   let keptDeferred =
     useToolSearch || announceDeferred
       ? logKeptDeferredTools(messages, tools, options.querySource, {
-          keepMcp: !alwaysFalseFeed(tools),
-          surfacedOnWire: conversation.surfacedOnWire,
+          keepMcp: !willHideCodeModeOnlyTools(tools),
+          surfacedOnWire: conversation_2.surfacedOnWire,
           ...(advisorExperiment && {
             declaredInline: resolvedDeclared,
           }),
@@ -5122,7 +5518,7 @@ async function* queryModel(
     useToolSearch &&
     deferredToolNames_2.size === 0 &&
     !(declaredToolSet !== undefined && declaredToolSet === scratchDeclared && upfrontDeferredCount > 0) &&
-    (!options.hasPendingMcpServers || alwaysFalseFeed(tools)) &&
+    (!options.hasPendingMcpServers || willHideCodeModeOnlyTools(tools)) &&
     !keptDeferred?.kept.size &&
     !resolvedDeclared?.has(TOOL_SEARCH_TOOL_NAME)
   ) {
@@ -5131,8 +5527,8 @@ async function* queryModel(
     if (advisorExperiment && resolvedDeclared !== undefined && keptDeferred !== undefined)
       try {
         keptDeferred = logKeptDeferredTools(messages, tools, options.querySource, {
-          keepMcp: !alwaysFalseFeed(tools),
-          surfacedOnWire: conversation.surfacedOnWire,
+          keepMcp: !willHideCodeModeOnlyTools(tools),
+          surfacedOnWire: conversation_2.surfacedOnWire,
         });
       } catch (error) {
         logError(toError(error));
@@ -5144,11 +5540,11 @@ async function* queryModel(
   let unclassifiedDepartures = 0;
   if (toolChangeMode !== undefined) {
     let discoveredToolNames = extractDiscoveredToolNames(messages, {
-      surfaced: toolChangeHeaderAllowed(conversation)
+      surfaced: toolChangeHeaderAllowed(conversation_2)
         ? {
-            exceptAnnouncements: conversation.nameOnlyAnnouncements,
+            exceptAnnouncements: conversation_2.nameOnlyAnnouncements,
           }
-        : conversation.surfacedOnWire,
+        : conversation_2.surfacedOnWire,
     });
     let referencedToolNames = new Set();
     if (byValueNames.size > 0)
@@ -5161,7 +5557,7 @@ async function* queryModel(
       }
     requestTools = tools.filter((tool) => {
       if (!deferredToolNames_2.has(tool.name)) return true;
-      if (toolMatchesName(tool, TOOL_SEARCH_TOOL_NAME)) return true;
+      if (matchesToolName(tool, TOOL_SEARCH_TOOL_NAME)) return true;
       return (
         discoveredToolNames.has(tool.name) &&
         (!byValueNames.has(tool.name) || referencedToolNames.has(tool.name))
@@ -5176,11 +5572,11 @@ async function* queryModel(
     }
   } else {
     requestTools = tools.filter((tool) => {
-      if (toolMatchesName(tool, TOOL_SEARCH_TOOL_NAME)) return false;
+      if (matchesToolName(tool, TOOL_SEARCH_TOOL_NAME)) return false;
       if (byValueNames.has(tool.name)) return false;
       return true;
     });
-    let scratch = asScratchDeclaredToolSet(conversation);
+    let scratch = asScratchDeclaredToolSet(conversation_2);
     if (scratch !== undefined)
       try {
         let hipaaResult = await isHipaaRestricted(scratch, tools, {
@@ -5198,20 +5594,20 @@ async function* queryModel(
       }
     else if (wasUndecided && options.recordedToolDescriptions === undefined)
       try {
-        requestTools = turnDeniedTools(requestTools, conversation);
+        requestTools = turnDeniedTools(requestTools, conversation_2);
       } catch (error) {
         logError(toError(error));
       }
   }
-  let availableTools = identityValue_2(hideAliasedV1Tools(requestTools));
+  let availableTools = hideCodeModeOnlyTools(hideAliasedV1Tools(requestTools));
   noteWaitForMcpServers(availableTools, options.querySource);
   let providerForModel = getProviderForModel(options.model);
   let toolSearchBeta = useToolSearch ? getToolSearchBeta() : null;
   if (toolSearchBeta && providerForModel !== "bedrock") {
     if (!betaList.includes(toolSearchBeta)) betaList.push(toolSearchBeta);
   }
-  let Io;
-  let featureEnabled = shouldUseGlobalCacheScope();
+  let lateToolSchemas;
+  let globalCacheScope = shouldUseGlobalCacheScope();
   let isDeferredForRequest = (tool) =>
     deferredToolNames_2.has(tool.name) || (useToolSearch && shouldDeferLspTool(tool));
   let isKeptDeferredTool = (tool) => keptDeferred?.kept.has(tool.name) === true;
@@ -5228,25 +5624,25 @@ async function* queryModel(
         isLateToolAdditionsEnabled(resolvedDeclared, {
           pool: tools,
           keptDeferred: keptDeferred?.kept.keys() ?? [],
-          keepMcp: !alwaysFalseFeed(tools),
+          keepMcp: !willHideCodeModeOnlyTools(tools),
         }).length > 0);
   } catch (error) {
     logError(toError(error));
   }
-  let willDefer = (tool) =>
+  let isDeferredOrKept = (tool) =>
     toolChangeMode !== undefined &&
     (isDeferredForRequest(tool) || (hasUnkeptTools && isKeptDeferredTool(tool)));
   if (toolChangeMode !== undefined && resolvedDeclared === undefined)
     try {
-      let tools = identityValue_2(requestTools).filter((tool) => !willDefer(tool));
+      let tools = hideCodeModeOnlyTools(requestTools).filter((tool) => !isDeferredOrKept(tool));
       if (declaredToolSet !== undefined) {
-        setDeclaredTools(conversation, new DeclaredToolSet(tools));
+        setDeclaredTools(conversation_2, new DeclaredToolSet(tools));
         if (upfrontDeferredCount > 0)
           logFeatureOk("host_upfront_tools", {
             named: env.CLAUDE_CODE_UPFRONT_TOOLS?.length ?? 0,
             sent: upfrontDeferredCount,
           });
-      } else recordDeclaredToolsIfMissing(conversation, tools);
+      } else recordDeclaredToolsIfMissing(conversation_2, tools);
     } catch (error) {
       logError(toError(error));
     }
@@ -5254,7 +5650,7 @@ async function* queryModel(
   if (
     toolChangeMode === undefined &&
     wasUndecided &&
-    asScratchDeclaredToolSet(conversation) === undefined &&
+    asScratchDeclaredToolSet(conversation_2) === undefined &&
     (options.mcpClients ?? []).some((mcpClient) => mcpClient.type === "pending")
   )
     try {
@@ -5263,9 +5659,9 @@ async function* queryModel(
       logError(toError(error));
     }
   try {
-    noChannelTools = cacheNoChannelTools(conversation, toolChangeMode !== undefined, () =>
+    noChannelTools = cacheNoChannelTools(conversation_2, toolChangeMode !== undefined, () =>
       buildDeclaredToolSet(
-        identityValue_2(requestTools),
+        hideCodeModeOnlyTools(requestTools),
         tools,
         pendingMcpResult ?? noChannelTools?.recordedOnly,
       ),
@@ -5274,37 +5670,43 @@ async function* queryModel(
     logError(toError(error));
   }
   let hasLiveMcpTools =
-    featureEnabled && availableTools.some((tool) => tool.isMcp === true && !willDefer(tool));
-  if (featureEnabled && !betaList.includes(BETA_PROMPT_CACHING_SCOPE))
+    globalCacheScope && availableTools.some((tool) => tool.isMcp === true && !isDeferredOrKept(tool));
+  if (globalCacheScope && !betaList.includes(BETA_PROMPT_CACHING_SCOPE))
     betaList.push(BETA_PROMPT_CACHING_SCOPE);
-  let globalCacheStrategy = featureEnabled ? (hasLiveMcpTools ? "none" : "system_prompt") : "none";
-  let nonDeferrableBuiltins = getNonDeferrableBuiltins();
+  let globalCacheStrategy = globalCacheScope ? (hasLiveMcpTools ? "none" : "system_prompt") : "none";
+  if (isTopLevelMain) markToolSchemaBuildPart("placement");
+  let featureEnabled = getNonDeferrableBuiltins();
   let redescribedTools = options.withoutToolDescribeHooks ? undefined : options.redescribedTools;
-  let toolSchemas = await Promise.all(
-    availableTools.map((tool) =>
-      toolToApiDefinition(tool, {
+  let results = await Promise.all(
+    availableTools.map((availableTool) =>
+      toolToApiDefinition(availableTool, {
         getToolPermissionContext: options.getToolPermissionContext,
         tools,
         agents: options.agents,
         allowedAgentTypes: options.allowedAgentTypes,
         model: effectiveModel,
-        enginePlacement: isDeferredToolByEngine(tool, nonDeferrableBuiltins) ? "deferred" : "listed",
+        enginePlacement: isDeferredToolByEngine(availableTool, featureEnabled) ? "deferred" : "listed",
         querySource: options.querySource,
         withoutToolDescribeHooks: options.withoutToolDescribeHooks,
-        recordedDescription: willDefer(tool) ? undefined : options.recordedToolDescriptions?.get(tool.name),
+        recordedDescription: isDeferredOrKept(availableTool)
+          ? undefined
+          : options.recordedToolDescriptions?.get(availableTool.name),
         recordedEntry:
-          willDefer(tool) || toolMatchesName(tool, STRUCTUREDOUTPUT)
+          isDeferredOrKept(availableTool) || matchesToolName(availableTool, STRUCTUREDOUTPUT)
             ? undefined
-            : options.recordedToolEntries?.get(tool.name),
-        isRedescribed: redescribedTools?.has(tool.name) || undefined,
-        deferLoading: willDefer(tool),
+            : options.recordedToolEntries?.get(availableTool.name),
+        isRedescribed: redescribedTools?.has(availableTool.name) || undefined,
+        deferLoading: isDeferredOrKept(availableTool),
         loadedThroughToolSearch:
-          useToolSearch && willDefer(tool) && isDeferredByEngine(tool, nonDeferrableBuiltins),
+          useToolSearch &&
+          isDeferredOrKept(availableTool) &&
+          isDeferredByEngine(availableTool, featureEnabled),
       }),
     ),
   );
+  if (isTopLevelMain) markToolSchemaBuildPart("render");
   let isMainChain = isMainAgent(options.agentContext) && classifyQuerySource(options.querySource) === "main";
-  noteToolRedescribed(conversation, toolSchemas, {
+  noteToolRedescribed(conversation_2, results, {
     redescribed: redescribedTools,
     recorded: options.recordedToolDescriptions,
     isMainChain,
@@ -5312,8 +5714,8 @@ async function* queryModel(
   if (isMainChain)
     try {
       let bashDescription;
-      for (let schema of toolSchemas)
-        if ("name" in schema && "description" in schema && toolMatchesName(schema, BASH_TOOL_NAME)) {
+      for (let schema of results)
+        if ("name" in schema && "description" in schema && matchesToolName(schema, BASH_TOOL_NAME)) {
           bashDescription = schema.description;
           break;
         }
@@ -5322,15 +5724,15 @@ async function* queryModel(
       logError(toError(error));
       noteBackgroundStopNoticeSent("");
     }
-  let lateToolSchemas = [];
+  let lateToolSchemas_2 = [];
   if (toolChangeMode !== "tool_search" && byValueNames.size > 0)
     try {
       let presentNames = new Set(availableTools.map((tool) => tool.name));
       let filtered = tools.filter((tool) => byValueNames.has(tool.name) && !presentNames.has(tool.name));
       let hiddenNames = new Set(
-        identityValue_2(hideAliasedV1Tools([...requestTools, ...filtered])).map((tool) => tool.name),
+        hideCodeModeOnlyTools(hideAliasedV1Tools([...requestTools, ...filtered])).map((tool) => tool.name),
       );
-      lateToolSchemas = await Promise.all(
+      lateToolSchemas_2 = await Promise.all(
         filtered
           .filter((tool) => hiddenNames.has(tool.name))
           .map((tool) =>
@@ -5352,29 +5754,29 @@ async function* queryModel(
       );
     } catch (error) {
       logError(toError(error));
-      lateToolSchemas = [];
+      lateToolSchemas_2 = [];
     }
   let schemaByName = new Map(
     availableTools.map((tool, index) => [
       tool.name,
       {
-        schema: toolSchemas[index],
+        schema: results[index],
         isMcp: tool.isMcp === true,
       },
     ]),
   );
   let declaredSource = toolChangeMode !== undefined ? resolvedDeclared : noChannelTools;
-  let requestDeclaresSearchCitations = runGuarded(() => shouldEnableWebSearchCitations(effectiveModel));
+  let modelSupported = runGuarded(() => shouldEnableWebSearchCitations(effectiveModel));
   let lateToolAdditions = [];
   if (declaredSource !== undefined && declaredSource.recordedOnly.size > 0)
     try {
-      lateToolAdditions = computeLateToolAdditions(toolSchemas, declaredSource, {
+      lateToolAdditions = computeLateToolAdditions(results, declaredSource, {
         pool: tools,
         recordedEntries: options.recordedToolEntries,
         keptDeferred: hasUnkeptTools ? (keptDeferred?.kept.keys() ?? []) : [],
-        keepMcp: !alwaysFalseFeed(tools),
+        keepMcp: !willHideCodeModeOnlyTools(tools),
         requestCarriesStructuredOutputs: runGuarded(() => willSendStructuredOutputsBeta(effectiveModel)),
-        requestDeclaresSearchCitations,
+        requestDeclaresSearchCitations: modelSupported,
       });
     } catch (error) {
       logError(toError(error));
@@ -5391,11 +5793,11 @@ async function* queryModel(
   if (options.onInlineToolsDeclared) {
     let toolsByName = new Map(availableTools.map((tool) => [tool.name, tool]));
     let inlineTools = [];
-    for (let schema of toolSchemas) {
+    for (let schema of results) {
       if (!("input_schema" in schema)) continue;
       let tool = toolsByName.get(schema.name);
       let recordedOnly = tool === undefined ? declaredSource?.recordedOnly.get(schema.name) : undefined;
-      if (tool !== undefined && !willDefer(tool))
+      if (tool !== undefined && !isDeferredOrKept(tool))
         inlineTools.push({
           name: schema.name,
           description: schema.description ?? "",
@@ -5420,24 +5822,26 @@ async function* queryModel(
   }
   if (toolChangeMode !== undefined) {
     if (keptDeferred)
-      buildDeferredToolsForRequest(keptDeferred, toolSchemas, schemaByName, {
+      buildDeferredToolsForRequest(keptDeferred, results, schemaByName, {
         requestCarriesStructuredOutputs: runGuarded(() => willSendStructuredOutputsBeta(effectiveModel)),
-        requestDeclaresSearchCitations,
+        requestDeclaresSearchCitations: modelSupported,
       });
-    let deferredToolPlaceholderSchema = getDeferredToolPlaceholderSchema();
+    let config = getDeferredToolPlaceholderSchema();
     if (
-      deferredToolPlaceholderSchema &&
-      !requestTools.some((tool) => toolMatchesName(tool, DEFERREDTOOLPLACEHOLDER)) &&
+      config &&
+      !requestTools.some((tool) => matchesToolName(tool, DEFERREDTOOLPLACEHOLDER)) &&
       !keptDeferred?.kept.has(DEFERREDTOOLPLACEHOLDER)
     )
-      toolSchemas.splice(Math.max(toolSchemas.length - 1, 0), 0, deferredToolPlaceholderSchema);
-    let includedDeferredTools = count(requestTools, (tool) => deferredToolNames_2.has(tool.name));
-    logForDebugging(
-      `Dynamic tool loading: ${includedDeferredTools}/${deferredToolNames_2.size} deferred tools included`,
-    );
+      results.splice(Math.max(results.length - 1, 0), 0, config);
+    let tool = countWhere(requestTools, (tool) => deferredToolNames_2.has(tool.name));
+    logForDebugging(`Dynamic tool loading: ${tool}/${deferredToolNames_2.size} deferred tools included`);
   }
   queryCheckpoint("query_tool_schema_build_end");
-  if (isTopLevelMain) endProfilePhase("tool_schema_build");
+  if (isTopLevelMain) {
+    noteToolSchemaBuildEnd(availableTools.length, toolDescriptionCache_2);
+    markToolSchemaBuildPart("after");
+    endProfilePhase("tool_schema_build");
+  }
   logEvent("tengu_api_before_normalize", {
     preNormalizedMessageCount: messages.length,
   });
@@ -5447,7 +5851,7 @@ async function* queryModel(
   let prepareSendParams = (params) => {
     thinkingAlreadyStripped = params.thread?.type === "continue";
     let sentPrefix = noopRecordSentPrefix(
-      conversation,
+      conversation_2,
       {
         ...applyThreadBody(params, currentThreadBody()),
         messages: sentMessages,
@@ -5471,11 +5875,11 @@ async function* queryModel(
     if (sentPrefix?.tools !== undefined) pinnedTools = [...sentPrefix.tools];
     if (sentPrefix?.tools !== undefined && params.tools !== undefined) {
       params.tools = [...sentPrefix.tools];
-      if (keptDeferred) recordDeferredToolsSent(keptDeferred, params.tools);
+      if (keptDeferred) recordDeferredToolsSent(keptDeferred, stripToolAnnotations(params.tools));
     }
     let tools = params.tools ?? pinnedTools;
     if (deferredSchemasSent !== undefined && tools !== undefined)
-      restoreDeferredDefinitions(deferredSchemasSent, tools);
+      restoreDeferredDefinitions(deferredSchemasSent, stripToolAnnotations(tools));
     if (sentPrefix === undefined) return;
     if (sentPrefix.system !== undefined) {
       let systemValue = typeof sentPrefix.system === "string" ? sentPrefix.system : [...sentPrefix.system];
@@ -5484,42 +5888,42 @@ async function* queryModel(
     }
     if (sentPrefix.messages !== undefined) {
       sentMessages = [...sentPrefix.messages];
-      let messagesForAPI = takeTail(sentMessages, params.messages.length);
-      if (containsMalformedStringDeep(messagesForAPI))
+      let root = takeTail(sentMessages, params.messages.length);
+      if (containsMalformedStringDeep(root))
         try {
-          let repairedMessages = clone(messagesForAPI);
+          let repairedMessages = clone(root);
           repairMalformedStringsDeep(repairedMessages);
-          messagesForAPI = repairedMessages;
+          root = repairedMessages;
         } catch {}
-      params.messages = messagesForAPI;
+      params.messages = root;
     }
   };
-  let midConvRejected = isBetaRejected_2(conversation, BETA_MID_CONVERSATION_SYSTEM);
-  let perMessageEffortRejected = midConvRejected || isBetaRejected_2(conversation, BETA_PER_MESSAGE_EFFORT);
+  let midConvRejected = isBetaRejected_2(conversation_2, BETA_MID_CONVERSATION_SYSTEM);
+  let perMessageEffortRejected = midConvRejected || isBetaRejected_2(conversation_2, BETA_PER_MESSAGE_EFFORT);
   let perTurnTimingRejected =
-    perMessageEffortRejected || isBetaRejected_2(conversation, BETA_PER_TURN_TIMING);
-  let clearAtRejected = isBetaRejected_2(conversation, BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT);
+    perMessageEffortRejected || isBetaRejected_2(conversation_2, BETA_PER_TURN_TIMING);
+  let clearAtRejected = isBetaRejected_2(conversation_2, BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT);
   betaList = betaList.filter(
-    (msg) =>
-      !isBetaRejected_2(conversation, msg) &&
-      !(perMessageEffortRejected && msg === BETA_PER_MESSAGE_EFFORT) &&
-      !(perTurnTimingRejected && msg === BETA_PER_TURN_TIMING),
+    (beta) =>
+      !isBetaRejected_2(conversation_2, beta) &&
+      !(perMessageEffortRejected && beta === BETA_PER_MESSAGE_EFFORT) &&
+      !(perTurnTimingRejected && beta === BETA_PER_TURN_TIMING),
   );
   if (creditMintModel !== undefined) {
-    let fingerprint = runGuarded(() =>
+    let beta = runGuarded(() =>
       getMergedBetas(creditMintModel, {
         isAgenticQuery,
       }),
     );
     let ensureBeta = (betaHeader) => {
-      if (fingerprint.includes(betaHeader)) {
+      if (beta.includes(betaHeader)) {
         if (!betaList.includes(betaHeader)) betaList.push(betaHeader);
       } else betaList = betaList.filter((beta) => beta !== betaHeader);
     };
     if (!midConvRejected) ensureBeta(BETA_MID_CONVERSATION_SYSTEM);
     if (!perMessageEffortRejected) ensureBeta(BETA_PER_MESSAGE_EFFORT);
     if (!perTurnTimingRejected) ensureBeta(BETA_PER_TURN_TIMING);
-    betaList = runGuarded(() => toolAdditionBetas(conversation, betaList, creditMintModel, options.model));
+    betaList = runGuarded(() => toolAdditionBetas(conversation_2, betaList, creditMintModel, options.model));
     ensureBeta(BETA_STRUCTURED_OUTPUTS);
   }
   let keptRemindersOn =
@@ -5597,15 +6001,16 @@ async function* queryModel(
       return {};
     }
   };
-  let perTurnEffort =
+  let explicitEffortFields =
     typeof cappedEffort === "string" && !(betas.type === "disabled" && betas.mechanical === true)
       ? normalizedEffort
       : undefined;
+  let tool = runGuarded(() => lowerTurnEffort(resolvedModel, options, carriedEffort, learnedEffortCapFn()));
   let perTurnNow = betaList.includes(BETA_PER_TURN_TIMING)
     ? formatLocalTimestamp(new Date(), sessionTimeZone())
     : undefined;
   let hasNonDeferredTool =
-    toolSchemas.some((schema) => !("defer_loading" in schema && schema.defer_loading === true)) ||
+    results.some((schema) => !("defer_loading" in schema && schema.defer_loading === true)) ||
     (options.extraToolSchemas ?? []).some(
       (schema) => !("defer_loading" in schema && schema.defer_loading === true),
     );
@@ -5622,17 +6027,20 @@ async function* queryModel(
   let inlinedCount = 0;
   if (toolChangeMode === "tool_addition" && !betaList.includes(BETA_MID_CONV_TOOL_CHANGE))
     try {
-      let flattened = toolSchemas.flatMap((schema) => {
+      let flattened = results.flatMap((schema) => {
         if (!("defer_loading" in schema) || schema.defer_loading !== true) return [schema];
-        if (!("input_schema" in schema) || !tools.some((tool) => toolMatchesName(tool, schema.name)))
+        if (
+          !("input_schema" in schema) ||
+          !tools.some((knownTool) => matchesToolName(knownTool, schema.name))
+        )
           return [];
         let { defer_loading: deferLoading, ...rest } = schema;
         return [rest];
       });
-      let originalSchemas = new Set(toolSchemas);
-      inlinedCount = count(flattened, (schema) => !originalSchemas.has(schema));
-      deferredEntriesMoved = inlinedCount > 0 || flattened.length !== toolSchemas.length;
-      toolSchemas.splice(0, toolSchemas.length, ...flattened);
+      let originalSchemas = new Set(results);
+      inlinedCount = countWhere(flattened, (schema) => !originalSchemas.has(schema));
+      deferredEntriesMoved = inlinedCount > 0 || flattened.length !== results.length;
+      results.splice(0, results.length, ...flattened);
     } catch (error) {
       logError(toError(error));
     }
@@ -5640,7 +6048,7 @@ async function* queryModel(
     creditMintModel === undefined
       ? undefined
       : runGuarded(() =>
-          describeToolAdditionMoves(conversation, messages, {
+          describeToolAdditionMoves(conversation_2, messages, {
             mintModel: creditMintModel,
             retryModel: options.model,
             advisorEntryMoved:
@@ -5653,19 +6061,19 @@ async function* queryModel(
           }),
         );
   let deferredWireNames = new Set([
-    ...requestTools.filter(willDefer).map((tool) => tool.name),
+    ...requestTools.filter(isDeferredOrKept).map((tool) => tool.name),
     ...(keptDeferred?.kept.keys() ?? []),
   ]);
-  findLatestApiSystemDelta(conversation, messages, deferredWireNames, useToolSearch, byValueNames);
+  findLatestApiSystemDelta(conversation_2, messages, deferredWireNames, useToolSearch, byValueNames);
   if (toolChangeMode !== undefined && options.onDeferredToolsSent && areDeferredToolsKept())
     try {
-      deferredSchemasSent = toolSchemas.filter(
+      deferredSchemasSent = results.filter(
         (schema) =>
-          isDeferredCustomToolDefinition(schema) && !toolMatchesName(schema, DEFERREDTOOLPLACEHOLDER),
+          isDeferredCustomToolDefinition(schema) && !matchesToolName(schema, DEFERREDTOOLPLACEHOLDER),
       );
       options.onDeferredToolsSent({
         entries: deferredSchemasSent,
-        nameOnlyAnnouncements: conversation.nameOnlyAnnouncements,
+        nameOnlyAnnouncements: conversation_2.nameOnlyAnnouncements,
         strippedReferences: strippedToolReferences(keptDeferred),
       });
     } catch (error) {
@@ -5694,12 +6102,23 @@ async function* queryModel(
     },
   );
   let { relayThinking, relayThinkingPlan, builtForRelay } = relayPlan;
+  let mediaTakenOut =
+    isCcsTenant() &&
+    !options.modelIsFallbackForThisTurn &&
+    (classifyQuerySource(options.querySource) === "main" ||
+      (options.querySource.startsWith("agent:") && options.agentId !== undefined))
+      ? []
+      : undefined;
   let normalizeOptions = {
     model: options.model,
     bodyModel: effectiveModel,
-    pollEventsAsText: false,
+    pollEventsAsText:
+      codeModeAccepted() &&
+      classifyQuerySource(options.querySource) === "subagent" &&
+      !tools.some((tool) => matchesToolName(tool, POLL)),
+    projectDocsAsRound: options.querySource === "compact",
     accountMemoryWithheld: isAccountMemoryRedactionOn(),
-    tools: identityValue_2(requestTools),
+    tools: hideCodeModeOnlyTools(requestTools),
     ingestPool: {
       tools,
       ...(shouldTrackDeferredToolForQuery(options.querySource) && {
@@ -5709,7 +6128,7 @@ async function* queryModel(
       }),
     },
     ...(advisorExperiment && {
-      declaredToolNames: clientNames(toolSchemas),
+      declaredToolNames: clientNames(results),
     }),
     betas: betaList,
     midConvLatchedOff: midConvRejected,
@@ -5717,16 +6136,18 @@ async function* queryModel(
     useToolSearch,
     advisorModel: advisorModelForSend,
     advisorDeferred: advisorDeferredNow,
-    stripWebSearch: conversation.webSearchHistoryRejected,
-    mediaItemLimit: mediaItemCapForModel(conversation, effectiveModel)?.limit,
+    stripWebSearch: conversation_2.webSearchHistoryRejected,
+    mediaItemLimit: mediaItemCapForModel(conversation_2, effectiveModel)?.limit,
+    mediaTakenOut,
     resumeIncompleteThinking,
-    perTurnEffort,
+    perTurnEffort: explicitEffortFields,
+    perTurnParent: tool,
     perTurnEffortCap: learnedEffortCapFn,
     perTurnNow,
     deferredToolReferencePlan: keptDeferred,
     keepForeignThinking: foreignThinkingKeepMode(),
     deferredWireToolNames: deferredWireNames,
-    nameOnlyAnnouncements: conversation.nameOnlyAnnouncements,
+    nameOnlyAnnouncements: conversation_2.nameOnlyAnnouncements,
     byValueNames,
     byValueAnnouncements,
     withoutAttachmentHooks: options.withoutToolDescribeHooks,
@@ -5748,8 +6169,16 @@ async function* queryModel(
     inlineToolsFallback,
     keptForeignSignatures,
     blocksEligible,
-  } = runGuarded(() => normalizeMessagesForRequest(messages, normalizeOptions));
+  } = runGuarded(() =>
+    normalizeMessagesForRequest(
+      messages,
+      normalizeOptions,
+      isTopLevelMain ? markMessageNormalizationPart : undefined,
+    ),
+  );
   if (isTopLevelMain) {
+    noteMessageNormalizationCounts(messages.length, messagesForAPI.length);
+    markMessageNormalizationPart("after");
     endProfilePhase("message_normalization");
     startProfilePhase("request_build");
   }
@@ -5767,7 +6196,7 @@ async function* queryModel(
     } catch (error) {
       logError(toError(error));
     }
-  surfaceDeferredTools(conversation, messages, messagesForAPI_2, {
+  surfaceDeferredTools(conversation_2, messages, messagesForAPI_2, {
     useToolSearch,
     toolSearchAbsent: toolChangeMode === "tool_addition",
     blocksEligible,
@@ -5777,7 +6206,7 @@ async function* queryModel(
   if (toolChangeMode !== undefined)
     keepDepartedDeferredTools(
       messages,
-      conversation.surfacedOnWire,
+      conversation_2.surfacedOnWire,
       schemaByName,
       keptDeferred,
       options.querySource,
@@ -5813,9 +6242,11 @@ async function* queryModel(
       return echoCache.output;
     let normalizedMessages = normalizeFallbackBlocks(messages_2, fallbackBeta);
     let markable = false;
-    let system = applyApiBlockOrderEcho(normalizedMessages, echoApiBlockOrder, resumeIncompleteThinking);
+    let messages_3 = applyApiBlockOrderEcho(normalizedMessages, echoApiBlockOrder, resumeIncompleteThinking);
     let requestMessages = prepareRequestMessages(
-      runGuarded(() => isNotLegacyClaude3(effectiveModel)) ? system : disableSearchResultCitations(system),
+      runGuarded(() => isNotLegacyClaude3(effectiveModel))
+        ? messages_3
+        : disableSearchResultCitations(messages_3),
       messages,
     );
     echoCache = {
@@ -5831,7 +6262,7 @@ async function* queryModel(
   let retryRequested = false;
   let recoverMessages = (messages, recoveryCause, keepsHeal = false) => {
     retryRequested = true;
-    if (recoveryCause === "microcompact") noopLedger(conversation, recoveryCause);
+    if (recoveryCause === "microcompact") noopLedger(conversation_2, recoveryCause);
     else {
       retryCause = recoveryCause;
       retryKeepsHeal = (retryKeepsHeal ?? true) && keepsHeal;
@@ -5869,18 +6300,19 @@ async function* queryModel(
     creditMintedStateless,
   );
   let wireInputsEchoed = echoWireToolInputs;
+  if (isTopLevelMain) markRequestBuildPart("records");
   if (hasFallbackBlocks(messagesForAPI_2)) {
     let fallbackBetaPicked = isFirstPartyApiBackend()
       ? pickFallbackBeta({
           fromModel: lastFallbackModel(messagesForAPI_2),
-          sticky: conversation,
+          sticky: conversation_2,
           serverDefaultFallbacksEnabled: () => getFeatureValue_CACHED_MAY_BE_STALE(TENGU_DASH_FLAME, false),
           selfTargetDefaultFallbacksEnabled: () =>
             getFeatureValue_CACHED_MAY_BE_STALE(TENGU_ELEGANT_POSSUM, false),
         })
       : null;
-    let fallbackBetaOk = fallbackBetaPicked !== null && !isBetaRejected_2(conversation, fallbackBetaPicked);
-    if (fallbackBetaOk) markBetaSent(conversation, fallbackBetaPicked);
+    let fallbackBetaOk = fallbackBetaPicked !== null && !isBetaRejected_2(conversation_2, fallbackBetaPicked);
+    if (fallbackBetaOk) markBetaSent(conversation_2, fallbackBetaPicked);
     logEvent("tengu_rotunda_pennant_replay", {
       echo_eligible: fallbackBetaOk,
       category: fallbackBetaPicked !== null && fallbackBetaPicked === BETA_SERVER_SIDE_FALLBACK_CATEGORY,
@@ -5888,7 +6320,7 @@ async function* queryModel(
   }
   logEvent("tengu_api_after_normalize", {
     postNormalizedMessageCount: messagesForAPI_2.length,
-    apiSystemMessageCount: count(messagesForAPI_2, (message) => message.type === "api_system"),
+    apiSystemMessageCount: countWhere(messagesForAPI_2, (message) => message.type === "api_system"),
   });
   let fingerprint = computeFingerprintFromMessages(messagesPreNormalize);
   let prefix = getCLISyspromptPrefix({
@@ -5903,7 +6335,7 @@ async function* queryModel(
         options.onPromptHeadSent({
           cliPrefix: prefix,
           wireShape: runGuarded(() =>
-            requestFeatureFlags(conversation, effectiveModel, {
+            requestFeatureFlags(conversation_2, effectiveModel, {
               betas: betaList,
               keptOn: keptRemindersOn,
               safeguards,
@@ -5932,11 +6364,12 @@ async function* queryModel(
   });
   let ttlChoice = cacheTtlChoice.ttl === "1h" ? "1h" : undefined;
   let messagesTtl = applyMessagesCacheTtlOverride(cacheTtlChoice.ttl) === "1h" ? "1h" : undefined;
+  let promptCacheRequested = enablePromptCaching ? (messagesTtl ?? "5m") : "off";
   let ttlOverridden = messagesTtl !== ttlChoice;
   if (isMainThread) {
     setLastMainThreadCacheTtlMs(
       ttlChoice === "1h" ? CACHE_TTL_1H_MS : CACHE_TTL_5M_MS,
-      options.model,
+      stripModelDateSuffix(options.model),
       cacheTtlChoice.reason === "live_5m_cache",
     );
     if (ttlOverridden) noteMainThreadCacheTtl5m();
@@ -5954,19 +6387,25 @@ async function* queryModel(
         cacheReadTokens: usage.cache_read_input_tokens,
         cacheCreationTokens: usage.cache_creation_input_tokens,
       });
-    else if (forkPointMainThread && usage.cache_read_input_tokens > 0) touchPromptCache(MAIN_2, usageAt);
+    else if (
+      forkPointMainThread &&
+      usage.cache_read_input_tokens > 0 &&
+      (!options.isEffortPinned ||
+        lastSentEffortSince(messages, options.forkPointUuid, perTurnEffortValue, sentEffort))
+    )
+      touchPromptCache(MAIN_2, usageAt);
   };
   let buildSystemBlocks = () =>
     buildSystemPromptBlocks(systemPrompt, enablePromptCaching, {
       skipGlobalCacheForSystemPrompt: hasLiveMcpTools,
       cacheTtl: ttlChoice,
-      scopeRefused: isBetaRejected_2(conversation, BETA_PROMPT_CACHING_SCOPE),
+      scopeRefused: isBetaRejected_2(conversation_2, BETA_PROMPT_CACHING_SCOPE),
     });
   let systemBlocks = buildSystemBlocks();
   let hasBetas = betaList.length > 0;
-  let extraToolSchemas = [...(options.extraToolSchemas ?? [])];
+  let deferralPlaceholderSchema = [...(options.extraToolSchemas ?? [])];
   if (advisorModelForSend)
-    extraToolSchemas.push({
+    deferralPlaceholderSchema.push({
       type: ADVISOR_20260301,
       name: ADVISOR_TOOL_NAME,
       model: advisorModelForSend,
@@ -5974,12 +6413,17 @@ async function* queryModel(
         defer_loading: true,
       }),
     });
-  let allTools = [...toolSchemas, ...extraToolSchemas];
+  let tools_2 = annotateToolsWithFallback(
+    [...results, ...deferralPlaceholderSchema],
+    withServerUrlHeader(conversation_2, coverage !== undefined),
+    toolCoverage,
+  );
+  if (isTopLevelMain) markRequestBuildPart("system");
   let prefixDeltaText = prefixLedgerNotice(
-    conversation,
+    conversation_2,
     {
       model: toProviderWireModelId(options.model),
-      tools: allTools,
+      tools: tools_2,
       system: systemBlocks,
       messages: messagesForAPI_2.map((message) => ({
         role: message.message.role,
@@ -5993,17 +6437,17 @@ async function* queryModel(
     },
   );
   if (prefixDeltaText !== undefined) {
-    let attachmentMessage = createAttachmentMessage_2({
+    let fingerprint = createAttachmentMessage_2({
       type: "prefix_delta",
       text: prefixDeltaText,
     });
-    yield attachmentMessage;
+    yield fingerprint;
     let renormalized = runGuarded(() =>
-      normalizeMessagesForRequest([...messages, attachmentMessage], normalizeOptions),
+      normalizeMessagesForRequest([...messages, fingerprint], normalizeOptions),
     );
     messagesForAPI_2 = renormalized.messagesForAPI;
     accountMemoryEpoch_2 = renormalized.accountMemoryEpoch;
-    surfaceDeferredTools(conversation, messages, messagesForAPI_2, {
+    surfaceDeferredTools(conversation_2, messages, messagesForAPI_2, {
       useToolSearch,
       toolSearchAbsent: toolChangeMode === "tool_addition",
       blocksEligible: renormalized.blocksEligible,
@@ -6040,9 +6484,9 @@ async function* queryModel(
   let afkModeOn = false;
   if (isAgenticQuery) {
     if (getFeatureValue_CACHED_MAY_BE_STALE(TENGU_FIZZY_BONBON, false)) {
-      if (isAutoModeActive() && afkBetaAllowed()) markBetaSent(conversation, BETA_AFK_MODE);
-      afkModeOn = isBetaSent(conversation, BETA_AFK_MODE) && afkBetaAllowed();
-    } else if (!isAutoModeCircuitBroken() && !isBetaRejected_2(conversation, BETA_AFK_MODE))
+      if (isAutoModeActive() && afkBetaAllowed()) markBetaSent(conversation_2, BETA_AFK_MODE);
+      afkModeOn = isBetaSent(conversation_2, BETA_AFK_MODE) && afkBetaAllowed();
+    } else if (!isAutoModeCircuitBroken() && !isBetaRejected_2(conversation_2, BETA_AFK_MODE))
       try {
         let toolPermissionContext = await options.getToolPermissionContext();
         afkModeOn =
@@ -6061,12 +6505,13 @@ async function* queryModel(
       logError(toError(error));
     }
   let toolNames;
-  if (fastModeActive) markBetaSent(conversation, BETA_SPEED);
+  if (fastModeActive) markBetaSent(conversation_2, BETA_SPEED);
   let speedBetaOn =
-    isBetaSent(conversation, BETA_SPEED) && (!isAutoModeQuerySource(options.querySource) || fastModeEligible);
-  if (canSendProviderBetas()) markBetaSent(conversation, BETA_CACHE_DIAGNOSIS);
-  let cacheDiagnosisOn = () => canSendProviderBetas() && isBetaSent(conversation, BETA_CACHE_DIAGNOSIS);
-  let keepaliveHeaderOn = releaseKeepaliveChain(conversation, {
+    isBetaSent(conversation_2, BETA_SPEED) &&
+    (!isAutoModeQuerySource(options.querySource) || fastModeEligible);
+  if (canSendProviderBetas()) markBetaSent(conversation_2, BETA_CACHE_DIAGNOSIS);
+  let cacheDiagnosisOn = () => canSendProviderBetas() && isBetaSent(conversation_2, BETA_CACHE_DIAGNOSIS);
+  let keepaliveHeaderOn = releaseKeepaliveChain(conversation_2, {
     isMainLoopRequest: isMainThread,
     continuesPrefix: options.forkPointUuid !== undefined,
     cacheTtl: enablePromptCaching && !ttlOverridden ? cacheTtlChoice : undefined,
@@ -6078,7 +6523,7 @@ async function* queryModel(
     if (isMainThread) {
       requestId = streamRequestId;
       evaluateCacheKeepalive({
-        conversation,
+        conversation: conversation_2,
         headerSent: keepaliveHeaderOn,
         requestId: streamRequestId,
         headers,
@@ -6105,9 +6550,10 @@ async function* queryModel(
     if (shouldSendBetas && canSendFirstPartyBetas()) {
       if (betas.type !== "disabled") {
         dewdropMode = getPolishedDewdropMode();
-        if (isPolishedDewdropActive(dewdropMode)) markBetaSent(conversation, BETA_THINKING_BINDING_CONTROLS);
+        if (isPolishedDewdropActive(dewdropMode))
+          markBetaSent(conversation_2, BETA_THINKING_BINDING_CONTROLS);
       }
-      thinkingBindingOn = isBetaSent(conversation, BETA_THINKING_BINDING_CONTROLS);
+      thinkingBindingOn = isBetaSent(conversation_2, BETA_THINKING_BINDING_CONTROLS);
     } else if (shouldSendBetas && !areExperimentalBetasDisabled()) {
       let providerForModel = getProviderForModel(options.model);
       if (
@@ -6115,8 +6561,8 @@ async function* queryModel(
         usesDefaultProviderEndpoint(providerForModel) &&
         runGuarded(() => thirdPartyAcceptsThinkingBindingBeta(providerForModel, options.model))
       ) {
-        if (betas.type !== "disabled") markBetaSent(conversation, BETA_THINKING_BINDING_CONTROLS);
-        thinkingBindingOn = isBetaSent(conversation, BETA_THINKING_BINDING_CONTROLS);
+        if (betas.type !== "disabled") markBetaSent(conversation_2, BETA_THINKING_BINDING_CONTROLS);
+        thinkingBindingOn = isBetaSent(conversation_2, BETA_THINKING_BINDING_CONTROLS);
       }
     }
   } catch (error) {
@@ -6127,7 +6573,7 @@ async function* queryModel(
   if (!thinkingBindingOn && !shouldIncludeFirstPartyOnlyBetas())
     betaList = betaList.filter((beta) => beta !== BETA_THINKING_BINDING_CONTROLS);
   if (options.evictCacheOnComplete && options.stickyBetas !== undefined && isSubagentCacheEvictEnabled())
-    markBetaSent(conversation, BETA_PROMPT_CACHING_EVICT);
+    markBetaSent(conversation_2, BETA_PROMPT_CACHING_EVICT);
   let contextHintController =
     require("../compact/createContextHintController.lazy.js").createContextHintController({
       querySource: options.querySource,
@@ -6150,18 +6596,19 @@ async function* queryModel(
   let messageHashes;
   let getMessageHashes = () => (messageHashes ??= fingerprintMessagesForCache(messagesForAPI_2));
   let extraBodyParamsForLog = () => {
-    let extraBodyParams = getExtraBodyParams();
-    alwaysFalseResponseDiag(extraBodyParams, options.model, getProviderForModel(options.model));
-    return extraBodyParams;
+    let messages = getExtraBodyParams();
+    alwaysFalseResponseDiag(messages, options.model, getProviderForModel(options.model));
+    return messages;
   };
-  let toolSchemas_2 = (deferredFilteredTools ??= allTools.filter(
-    (tool) => !("defer_loading" in tool && tool.defer_loading),
+  if (isTopLevelMain) markRequestBuildPart("headers");
+  let toolSchemas = (deferredFilteredTools ??= tools_2.filter(
+    (toolSchema) => !("defer_loading" in toolSchema && toolSchema.defer_loading),
   ));
   betaHeaderList ??= betaHeaderValues(betaList);
   recordPromptState({
     system: systemBlocks,
     toolSchemas: deferredFilteredTools,
-    anyDeferLoading: deferredFilteredTools.length !== allTools.length,
+    anyDeferLoading: deferredFilteredTools.length !== tools_2.length,
     querySource: options.querySource,
     model: options.model,
     agentId: options.agentId,
@@ -6183,9 +6630,10 @@ async function* queryModel(
         ? options.agentContext.agentId
         : undefined,
   });
+  if (isTopLevelMain) markRequestBuildPart("cache_break_record");
   let lastLoggedMessages = messagesForAPI_2;
   let tetherDelta = null;
-  let isThirdPartyClassifier = () =>
+  let recoveryState = () =>
     getClassifierProviderKind() === "thirdParty" && sentBetaHeaders.includes(BETA_DANGEROUS_TOOL_USE.header);
   let tokenCountBetaBlocked = () =>
     thinkingBindingOn &&
@@ -6194,8 +6642,8 @@ async function* queryModel(
   let droppedBetas = [];
   let releaseClassifierRefusal = false;
   let handleDangerousToolUseRejection = (error) => {
-    if (!isBetaSent(conversation, BETA_DANGEROUS_TOOL_USE)) return;
-    let thirdParty = isThirdPartyClassifier();
+    if (!isBetaSent(conversation_2, BETA_DANGEROUS_TOOL_USE)) return;
+    let thirdParty = recoveryState();
     let CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS =
       !thirdParty &&
       sentBetaHeaders.includes(BETA_DANGEROUS_TOOL_USE.header) &&
@@ -6208,19 +6656,19 @@ async function* queryModel(
       error.message.includes(BETA_DANGEROUS_TOOL_USE.header);
     let invalidBetaFlag = serverSide && !tokenCountBetaBlocked() && isInvalidBetaFlagError(error);
     let foundryCaps = thirdParty ? (parseFoundryUnsupportedCapabilities(error) ?? []) : [];
-    let any = foundryCaps.some(
+    let hasChromeTools = foundryCaps.some(
       (capability) => capability.includes("dangerous_tool_use") || capability.includes("safeguard"),
     );
-    if (!mentionsBeta && !invalidBetaFlag && !any && !isSafeguardsRejected(error)) return;
-    markBetaRejected(conversation, BETA_DANGEROUS_TOOL_USE);
+    if (!mentionsBeta && !invalidBetaFlag && !hasChromeTools && !isSafeguardsRejected(error)) return;
+    markBetaRejected(conversation_2, BETA_DANGEROUS_TOOL_USE);
     let stopAsking = thirdParty || (CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS && isBetasSwitchSetAside());
-    if (invalidBetaFlag && !mentionsBeta && !any && !isSafeguardsRejected(error)) {
+    if (invalidBetaFlag && !mentionsBeta && !hasChromeTools && !isSafeguardsRejected(error)) {
       droppedBetas.push(BETA_DANGEROUS_TOOL_USE);
       releaseClassifierRefusal = stopAsking && !isThirdPartyServerClassifierRefused();
     }
     if (stopAsking) {
       markThirdPartyServerClassifierRefused();
-      if (any) recordFoundryUnsupportedCapabilities(options.model, foundryCaps);
+      if (hasChromeTools) recordFoundryUnsupportedCapabilities(options.model, foundryCaps);
     }
     logForDebugging(
       thirdParty
@@ -6237,7 +6685,7 @@ async function* queryModel(
     logEvent("tengu_server_classifier_beta_rejected_retry", {
       provider: getAPIProviderForAnalytics(),
       unnamed: invalidBetaFlag,
-      foundryFeature: any,
+      foundryFeature: hasChromeTools,
       unclaimed: false,
       betasSwitchSetAside: CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS,
       stopsAsking: stopAsking,
@@ -6271,7 +6719,7 @@ async function* queryModel(
         level: "warn",
       },
     );
-    for (let droppedBeta of droppedBetas) forgetBeta(conversation, droppedBeta);
+    for (let droppedBeta of droppedBetas) forgetBeta(conversation_2, droppedBeta);
     if (releaseClassifierRefusal) releaseThirdPartyServerClassifierRefusal();
     throw new ToolSearchRefusedError(error, useToolSearch);
   };
@@ -6290,22 +6738,23 @@ async function* queryModel(
     return;
   };
   let toolSearchRefusalHandled = false;
-  let handleToolSearchRefusal = () => {
+  let probeState = () => {
     let toolSearchRefusal = options.toolSearchRefusal;
     if (toolSearchRefusal === undefined || toolSearchRefusalHandled) return;
     toolSearchRefusalHandled = true;
     try {
-      let beta = getToolSearchBeta();
-      let headerRejected = isBetaRejected(toolSearchRefusal, beta);
-      if (headerRejected) latchBetaRefused(beta, isBetaHeaderRejected(toolSearchRefusal, beta));
+      let toolSearchBeta = getToolSearchBeta();
+      let headerRejected = isBetaRejected(toolSearchRefusal, toolSearchBeta);
+      if (headerRejected)
+        latchBetaRefused(toolSearchBeta, isBetaHeaderRejected(toolSearchRefusal, toolSearchBeta));
       else {
-        markBetaRejected(conversation, beta);
+        markBetaRejected(conversation_2, toolSearchBeta);
         logForDebugging(
           "[ToolSearch] the endpoint answered the request sent without tool search, so this conversation goes on without it",
         );
       }
       logEvent("tengu_beta_400_healed", {
-        beta: hashToolNames([beta.header]),
+        beta: hashToolNames([toolSearchBeta.header]),
         model: telemetrySafeModelName(options.model),
         provider: getAPIProviderForAnalytics(),
         status: toolSearchRefusal.status,
@@ -6318,35 +6767,66 @@ async function* queryModel(
   let recoverUnclaimedBeta = (error) => {
     let healed = recoverThinkingBinding(error, true);
     if (healed !== null) return healed;
-    if (!(error instanceof APIError) || (error.status !== 400 && error.status !== 422)) return;
+    if (!(error instanceof APIError) || error.status === undefined) return;
     let normalizedError = normalize422To400(error);
     if (isUnrecoverable(normalizedError) || isUnrecoverableError(normalizedError)) return;
-    if (
-      error.status === 422 ||
-      !isBetaSent(conversation, BETA_DANGEROUS_TOOL_USE) ||
-      !isThirdPartyClassifier()
-    ) {
-      if (shouldIncludeFirstPartyOnlyBetas() || conversation.systemMessagesAcceptedBy.has(effectiveModel))
-        return;
-      let midConvRecovery = recoverToolChange(error, true);
-      if (midConvRecovery !== undefined) midConvProbeState = "retrying";
-      return midConvRecovery;
+    try {
+      let httpError = isAuthRetryableError(error, options.model) || isRemoteAuthError(error);
+      if (typeof systemMessagesState === "object") {
+        if (httpError) systemMessagesState = "spent";
+        else if (isBetaRejectionStatus(error)) {
+          systemMessagesState = "spent";
+          logForDebugging(
+            "[server-classifier] the request was refused again when sent without the dangerous-tool-use beta header and the safeguards field, so it is not known whether they caused the refusal; the next request (not a retry of this one) sends them again",
+            {
+              level: "warn",
+            },
+          );
+        }
+      } else if (
+        systemMessagesState === "idle" &&
+        isBetaSent(conversation_2, BETA_DANGEROUS_TOOL_USE) &&
+        recoveryState() &&
+        !httpError &&
+        isBetaRejectionStatus(error)
+      ) {
+        logForDebugging(
+          `[server-classifier] HTTP ${error.status} with no cause Claude Code recognises, on a request that carried the dangerous-tool-use beta header; sending it once more without that header and the safeguards field, to learn whether they caused the refusal`,
+          {
+            level: "warn",
+          },
+        );
+        logEvent("tengu_server_classifier_beta_rejected_retry", {
+          provider: getAPIProviderForAnalytics(),
+          unnamed: false,
+          foundryFeature: false,
+          unclaimed: true,
+          status: error.status,
+        });
+        systemMessagesState = {
+          resentAfter: error.status,
+        };
+        return "retry:safeguards-unclaimed";
+      }
+    } catch (error) {
+      logError(error);
     }
-    markBetaRejected(conversation, BETA_DANGEROUS_TOOL_USE);
-    droppedBetas.push(BETA_DANGEROUS_TOOL_USE);
-    logForDebugging(
-      "[server-classifier] an unrecognised HTTP 400 arrived while the dangerous-tool-use beta was on the request; retrying once without it, and auto mode decides with the local classifier for the rest of this conversation",
-      {
-        level: "warn",
-      },
-    );
-    logEvent("tengu_server_classifier_beta_rejected_retry", {
-      provider: getAPIProviderForAnalytics(),
-      unnamed: false,
-      foundryFeature: false,
-      unclaimed: true,
-    });
-    return "retry:safeguards-unclaimed";
+    if (
+      (error.status !== 400 && error.status !== 422) ||
+      shouldIncludeFirstPartyOnlyBetas() ||
+      conversation_2.systemMessagesAcceptedBy.has(effectiveModel)
+    )
+      return;
+    let healState = recoverToolChange(error, true);
+    if (healState !== undefined) midConvProbeState = "retrying";
+    return healState;
+  };
+  let healState = () => {
+    if (typeof systemMessagesState === "object") {
+      let { resentAfter } = systemMessagesState;
+      systemMessagesState = "spent";
+      markBetaHeaderRejectedForever(conversation_2, resentAfter, options.model);
+    }
   };
   let probeThinkingDisplay = (error) => {
     try {
@@ -6377,19 +6857,19 @@ async function* queryModel(
       return;
     }
   };
-  let noteMidConvSystemAccepted = () => {
+  let settleProbeState = () => {
     if (midConvProbeState === "retrying") midConvProbeState = "spent";
     else if (
       !shouldIncludeFirstPartyOnlyBetas() &&
       sentMessages.some((message) => message.role === "system")
     ) {
-      conversation.systemMessagesAcceptedBy.add(effectiveModel);
+      conversation_2.systemMessagesAcceptedBy.add(effectiveModel);
       emitPromptHead();
     }
   };
   let noteMidConvGuessWrong = () => {
     if (midConvProbeState === "retrying") {
-      forgetBeta(conversation, BETA_MID_CONVERSATION_SYSTEM);
+      forgetBeta(conversation_2, BETA_MID_CONVERSATION_SYSTEM);
       emitPromptHead();
       logForDebugging(
         "[mid-conv-system] the resend without system messages was not answered either, so the guess that the platform refuses them is dropped; the next request of this conversation sends them again",
@@ -6399,13 +6879,13 @@ async function* queryModel(
       );
     }
   };
-  let settleThinkingDisplayProbe = () => {
+  let settleMidConvState = () => {
     if (thinkingDisplayProbeState === "idle" || thinkingDisplayProbeState === "spent") return;
     let withoutField = thinkingDisplayProbeState === "withoutField";
     thinkingDisplayProbeState = withoutField ? "spent" : "idle";
     try {
-      if (withoutField) markBetaRejected(conversation, THINKING_DISPLAY_NAMED_BETA);
-      markBetaRejected(conversation, BETA_THINKING_DISPLAY_UPDATES);
+      if (withoutField) markBetaRejected(conversation_2, THINKING_DISPLAY_NAMED_BETA);
+      markBetaRejected(conversation_2, BETA_THINKING_DISPLAY_UPDATES);
       logForDebugging(
         `[thinking] a request was refused (HTTP 400 or 422) and went through when sent again ${withoutField ? "without thinking.display" : "with the session's own display in place of 'updates'"}; this conversation no longer sends ${withoutField ? "thinking.display" : "'updates'"}.`,
         {
@@ -6456,7 +6936,7 @@ async function* queryModel(
       return;
     }
   };
-  let settleThinkingTokenCountProbe = () => {
+  let settleTokenCountState = () => {
     if (thinkingTokenProbeState !== "resent") return;
     thinkingTokenProbeState = "spent";
     try {
@@ -6572,7 +7052,7 @@ async function* queryModel(
     noteThreadsRefused(error);
     if (betaList.includes(BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT) && isKeptReminderClearAtRejected(error)) {
       betaList = betaList.filter((beta) => beta !== BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT);
-      markBetaRejected(conversation, BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT);
+      markBetaRejected(conversation_2, BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT);
       retireKeptReminder();
       emitPromptHead();
       tetherDelta?.forceCreate("clear_at_header_retired");
@@ -6588,9 +7068,9 @@ async function* queryModel(
     if (
       BETA_MESSAGE_THREADS !== null &&
       isTetherBetaRejected(error) &&
-      !isBetaRejected_2(conversation, BETA_MESSAGE_THREADS)
+      !isBetaRejected_2(conversation_2, BETA_MESSAGE_THREADS)
     ) {
-      markBetaRejected(conversation, BETA_MESSAGE_THREADS);
+      markBetaRejected(conversation_2, BETA_MESSAGE_THREADS);
       disableTetherLiveGate();
       logForDebugging(
         "[tether] server rejected the message-threads beta header \u2014 dropping it and threading for this session",
@@ -6610,6 +7090,13 @@ async function* queryModel(
     (toolName) => findToolByName(normalizeOptions.tools, toolName)?.name,
     options.forkPointUuid,
   );
+  let tetherDecision;
+  if (toolResultClearingPlan)
+    try {
+      tetherDecision = turnTokenSizing(messages, options.model, bytesPerTokenForModel(options.model));
+    } catch (error) {
+      logIdleClearingFailure(error, "sad", "sizing_history_before_clearing_threw");
+    }
   let contextManagementEligible = false;
   let sentMessages = [];
   let wireIndexMap = [];
@@ -6624,6 +7111,7 @@ async function* queryModel(
   let threadSliced = false;
   let threadSliceFrom = 0;
   let threadType = "none";
+  let pinnedSystemValue = false;
   let currentThreadBody = () => ({
     messages: sentMessages,
     system: pinnedSystem,
@@ -6632,15 +7120,17 @@ async function* queryModel(
   {
     let agentType = threadSourceKind(options.querySource);
     if (agentType !== null && isTetherLive()) {
-      deferredFilteredTools ??= allTools.filter((tool) => !("defer_loading" in tool && tool.defer_loading));
+      deferredFilteredTools ??= tools_2.filter(
+        (pinnedTools) => !("defer_loading" in pinnedTools && pinnedTools.defer_loading),
+      );
       betaHeaderList ??= betaHeaderValues(betaList);
       let previousMessageId = lastAssistantMessageId(messages);
       let dangerousToolUse =
-        isBetaSent(conversation, BETA_DANGEROUS_TOOL_USE) ||
+        isBetaSent(conversation_2, BETA_DANGEROUS_TOOL_USE) ||
         (options.serverClassifier === true &&
           options.autoModeServerContext !== undefined &&
           canUseServerClassifier() &&
-          !isBetaRejected_2(conversation, BETA_DANGEROUS_TOOL_USE) &&
+          !isBetaRejected_2(conversation_2, BETA_DANGEROUS_TOOL_USE) &&
           !isThirdPartyServerClassifierRefused());
       let engine = logTetherDecisionSafely({
         querySource: options.querySource,
@@ -6658,7 +7148,7 @@ async function* queryModel(
           fastMode: speedBetaOn,
           autoMode: afkModeOn,
           cacheTtl1h: ttlChoice === "1h",
-          evictOnComplete: isBetaSent(conversation, BETA_PROMPT_CACHING_EVICT),
+          evictOnComplete: isBetaSent(conversation_2, BETA_PROMPT_CACHING_EVICT),
           cacheDiagnosis: cacheDiagnosisOn(),
           cacheKeepalive: keepaliveHeaderOn,
           dangerousToolUse,
@@ -6671,11 +7161,12 @@ async function* queryModel(
         previousMessageId,
       });
       if (isSubagentOrUnknown(agentType, options.agentId)) {
-        let effort = auditTetherEchoSafely(messages, messagesForAPI_2);
+        let tetherEchoAudit = auditTetherEchoSafely(messages, messagesForAPI_2);
         tetherDelta = buildTetherDelta({
           engine,
           previousMessageId,
-          anchorRewritten: effort !== null && hasStructuralEchoDiff(effort, previousMessageId),
+          anchorRewritten:
+            tetherEchoAudit !== null && hasStructuralEchoDiff(tetherEchoAudit, previousMessageId),
           messages: messagesForAPI_2,
           agentId: options.agentId,
           model: options.model,
@@ -6687,8 +7178,8 @@ async function* queryModel(
           toolResultClearingHeldStateless: toolResultClearingPlan !== undefined,
           clock,
         });
-        if (effort !== null)
-          logTetherEchoAudit(effort, {
+        if (tetherEchoAudit !== null)
+          logTetherEchoAudit(tetherEchoAudit, {
             sourceCategory: agentType,
             messageCount: messagesForAPI_2.length,
             anchorMessageId: previousMessageId,
@@ -6703,7 +7194,7 @@ async function* queryModel(
 `),
         userSystemPrompt: options.userSystemPrompt,
         querySource: options.querySource,
-        tools: jsonStringify(allTools),
+        tools: jsonStringify(stripToolAnnotations(tools_2)),
       }
     : undefined;
   let memoMemoryKeys;
@@ -6746,7 +7237,7 @@ async function* queryModel(
     noteClassifierUnsupported(settleServerClassifierResult(session, payload, callIds));
   };
   let cacheMarkable = false;
-  let keptReminderSent = false;
+  let toolRefs = false;
   let clearAtOnWire = false;
   let clearAtProbeState = "idle";
   let clearAtProbeRequestId;
@@ -6756,19 +7247,26 @@ async function* queryModel(
   let thinkingDisplayProbeState = "idle";
   let thinkingTokenProbeState = "idle";
   let midConvProbeState = "idle";
+  let systemMessagesState = "idle";
   let contextBetaState = "idle";
   let contextBetaRefused = () => contextBetaState !== "idle" && contextBetaState !== "spent";
   let longContextRequested = false;
   let firstAttemptRequestId = undefined;
-  let rawRequestBodyId = undefined;
-  let requestRef;
+  let healOutcome = undefined;
+  let healRequestId;
   let recordRequestBodies = (params, stream) => {
     prepareSendParams(params);
-    let snapshottedParams = applyThreadBody(params, currentThreadBody());
+    let snapshottedParams = stripUrlsFromAnnotations(applyThreadBody(params, currentThreadBody()));
+    let healState = stripUrlsFromAnnotations(params);
+    if (snapshottedParams === undefined || healState === undefined) {
+      healOutcome = undefined;
+      healRequestId = undefined;
+      return;
+    }
     captureAPIRequest(snapshottedParams, options.querySource, isMainAgent(options.agentContext));
-    rawRequestBodyId = logApiRequestBody(
+    healOutcome = logApiRequestBody(
       {
-        ...params,
+        ...healState,
         stream,
       },
       options.querySource,
@@ -6776,19 +7274,20 @@ async function* queryModel(
       snapshottedParams.messages,
       options.agentContext,
     );
-    requestRef = replayTranscriptRequest({
+    healRequestId = replayTranscriptRequest({
       params: snapshottedParams,
       querySource: options.querySource,
       agentId: options.agentId,
       storageV5: options.storageV5,
       conversation: messages,
-      stickyBetas: conversation,
+      stickyBetas: conversation_2,
       readInjectedBody: () => getExtraBodyParams(),
+      markAddresses: countWithheldUrls(snapshottedParams),
     });
   };
   let clientRequestId = undefined;
   let responseBody = undefined;
-  let FT;
+  let streamResponse;
   let isLowPriority = false;
   let lowPriorityWait = emptySuspendState();
   let headersReceivedAt = undefined;
@@ -6796,13 +7295,14 @@ async function* queryModel(
   let limitsAccountEpoch = getLimitsAccountEpoch();
   let onQuotaWindowWait = (rejection, retryPlan) => {
     let requestRouteKind = getRequestRouteKind(options);
-    extractQuotaStatusFromError(
-      rejection,
-      requestRouteKind,
-      clock.now(),
-      limitsAccountEpoch,
-      options.storageV5,
-    );
+    if (!options.leavesLimitStateAlone)
+      extractQuotaStatusFromError(
+        rejection,
+        requestRouteKind,
+        clock.now(),
+        limitsAccountEpoch,
+        options.storageV5,
+      );
     return beginUsageLimitWait({
       route: requestRouteKind,
       querySource: options.querySource,
@@ -6837,7 +7337,9 @@ async function* queryModel(
     }
   }
   let sentBetaHeaders = [];
-  let bodyBetaHeaders = [];
+  let betasToDrop = false;
+  let serverUrlBetaTried = [];
+  let thinkingTokenCountState = undefined;
   let sentThinkingDisplay = undefined;
   let requestedDisplayField = undefined;
   let solicited = false;
@@ -6910,6 +7412,7 @@ async function* queryModel(
   let buildRequestParamsGuarded = (context, allowClassifier = true) =>
     runGuarded(() => buildRequestParams(context, allowClassifier));
   let buildRequestParams = (context, allowClassifierRetry) => {
+    let withClassifier = allowClassifierRetry && isTopLevelMain;
     if (messagesForAPI_2 !== lastLoggedMessages) {
       lastLoggedMessages = messagesForAPI_2;
       messageHashes = undefined;
@@ -6920,8 +7423,7 @@ async function* queryModel(
         messages: messagesForAPI_2,
       });
     }
-    let paramsFromContext = (retryContext) =>
-      !KNOWN_BETAS.has(retryContext) && isBetaRejected_2(conversation, retryContext);
+    let isRejectedBeta = (beta) => !KNOWN_BETAS.has(beta) && isBetaRejected_2(conversation_2, beta);
     let betas_2 = betaList.filter((beta) => beta !== BETA_LONG_CONTEXT || !contextBetaRefused());
     if (
       !betas_2.includes(BETA_LONG_CONTEXT) &&
@@ -6930,6 +7432,28 @@ async function* queryModel(
     )
       betas_2.push(BETA_LONG_CONTEXT);
     let provider = getProviderForModel(context.model);
+    if (betas_2.includes(BETA_CCR_TOOL_PROVENANCE) && !isFirstPartyCreditEndpoint(provider))
+      betas_2.splice(betas_2.indexOf(BETA_CCR_TOOL_PROVENANCE), 1);
+    if (
+      (ARTIFACT_OUTPUT_SOURCE_QUERIES.has(options.querySource) || options.sendSideQueryBeta === true) &&
+      provider === "firstParty" &&
+      canSendFirstPartyBetas() &&
+      isFirstPartyAnthropicBaseUrl() &&
+      isFirstPartyCreditEndpoint(provider) &&
+      !env.ANTHROPIC_UNIX_SOCKET &&
+      !betas_2.includes(BETA_CLAUDE_CODE_SIDE_QUERY)
+    )
+      betas_2.push(BETA_CLAUDE_CODE_SIDE_QUERY);
+    if (
+      options.querySource === "generate_session_title" &&
+      provider === "firstParty" &&
+      canSendFirstPartyBetas() &&
+      isFirstPartyAnthropicBaseUrl() &&
+      isFirstPartyCreditEndpoint(provider) &&
+      !env.ANTHROPIC_UNIX_SOCKET &&
+      !betas_2.includes(BETA_CLAUDE_CODE_SIDE_QUERY)
+    )
+      betas_2.push(BETA_CLAUDE_CODE_SIDE_QUERY);
     let afkBetaViaBody =
       provider === "bedrock" && BETA_AFK_MODE && afkModeOn && isAgenticQuery && isAutoMode3POptIn();
     if (afkBetaViaBody)
@@ -6944,7 +7468,7 @@ async function* queryModel(
             ),
             ...(toolSearchBeta ? [toolSearchBeta] : []),
             ...(afkBetaViaBody && BETA_AFK_MODE ? [BETA_AFK_MODE] : []),
-          ].filter((header) => !paramsFromContext(header))
+          ].filter((header) => !isRejectedBeta(header))
         : [];
     let extraBodyParams = getExtraBodyParams(betaHeaders);
     addBetaToBodyAnthropicBeta(
@@ -6952,35 +7476,37 @@ async function* queryModel(
       BETA_THINKING_TOKEN_COUNT,
       provider === "bedrock" && betas_2.includes(BETA_THINKING_TOKEN_COUNT),
     );
-    let outputConfig = {
+    let outputConfigSlots = {
       ...(extraBodyParams.output_config ?? {}),
     };
     delete extraBodyParams.output_config;
-    applyEffortToOutputConfig(effortValue, outputConfig, extraBodyParams, betas_2, resolvedModel);
+    applyEffortToOutputConfig(effortValue, outputConfigSlots, extraBodyParams, betas_2, resolvedModel);
     responseDiagFlag = alwaysFalseResponseDiag(extraBodyParams, context.model, provider);
-    configureTaskBudgetParams(options.taskBudget, outputConfig, betas_2);
-    if (paramsFromContext(BETA_EFFORT)) delete outputConfig.effort;
-    if (paramsFromContext(BETA_TASK_BUDGETS) && "task_budget" in outputConfig)
-      delete outputConfig.task_budget;
-    hasOutputFormat = hasStringFormat(options.outputFormat, outputConfig, betas_2, options.model);
+    configureTaskBudgetParams(options.taskBudget, outputConfigSlots, betas_2);
+    if (isRejectedBeta(BETA_EFFORT)) delete outputConfigSlots.effort;
+    if (isRejectedBeta(BETA_TASK_BUDGETS) && "task_budget" in outputConfigSlots)
+      delete outputConfigSlots.task_budget;
+    hasOutputFormat = hasStringFormat(options.outputFormat, outputConfigSlots, betas_2, options.model);
     let silentArmActive = options.refusalFallbackSilentArmActive === true;
     let serverFallbackPlanResult = serverFallbackPlan(
       options.serverRefusalFallback,
       context.model,
       betas_2,
-      conversation,
+      conversation_2,
       silentArmActive,
       allowsNoTransientReminders,
     );
     applyRefusalFallbackBeta(
       options.fallbackCreditLaneArmed === true || options.fallbackCreditCode !== undefined,
       betas_2,
-      conversation,
+      conversation_2,
       silentArmActive,
       provider === "bedrock" ? extraBodyParams : undefined,
     );
     creditBetaOnWire = betas_2.includes(BETA_FALLBACK_CREDIT);
-    let serverClassifierEligible = thirdPartyAcceptsDangerousToolUseBeta(provider, resolvedModel);
+    let serverClassifierEligible =
+      systemMessagesState === "idle" && thirdPartyAcceptsDangerousToolUseBeta(provider, resolvedModel);
+    let classifierContext = withClassifier ? performance.now() : 0;
     let serverReminders =
       options.serverClassifier === true && options.autoModeServerContext !== undefined
         ? markInsertedTextProvenance(
@@ -6994,7 +7520,7 @@ async function* queryModel(
             messagesForAPI_2,
           )
         : [];
-    let classifierContext =
+    let classifierContext_2 =
       options.serverClassifier === true && options.autoModeServerContext !== undefined
         ? buildServerClassifierRequestContext({
             autoModeServerContext: options.autoModeServerContext,
@@ -7003,20 +7529,21 @@ async function* queryModel(
             textProvenance: buildContextSectionsMessage(messages, messagesForAPI_2, attachmentToMessages),
           })
         : undefined;
+    if (withClassifier) noteSentBuildSpan("safety_context", classifierContext);
     let includeClassifier =
       options.serverClassifier === true &&
-      classifierContext !== undefined &&
+      classifierContext_2 !== undefined &&
       serverClassifierEligible &&
       canUseServerClassifier() &&
-      !isBetaRejected_2(conversation, BETA_DANGEROUS_TOOL_USE) &&
+      !isBetaRejected_2(conversation_2, BETA_DANGEROUS_TOOL_USE) &&
       !isThirdPartyServerClassifierRefused();
     if (includeClassifier) {
-      markBetaSent(conversation, BETA_DANGEROUS_TOOL_USE);
-      checkInsertedTextShed(serverReminders, classifierContext?.system_reminders ?? []);
+      markBetaSent(conversation_2, BETA_DANGEROUS_TOOL_USE);
+      checkInsertedTextShed(serverReminders, classifierContext_2?.system_reminders ?? []);
     }
     if (
       serverClassifierEligible &&
-      isBetaSent(conversation, BETA_DANGEROUS_TOOL_USE) &&
+      isBetaSent(conversation_2, BETA_DANGEROUS_TOOL_USE) &&
       !betas_2.includes(BETA_DANGEROUS_TOOL_USE)
     )
       betas_2.push(BETA_DANGEROUS_TOOL_USE);
@@ -7037,7 +7564,7 @@ async function* queryModel(
     let sendThinkingDisplay =
       thinkingEnabled &&
       shouldSendInterleavedThinkingBeta(resolvedModel) &&
-      !isBetaRejected_2(conversation, THINKING_DISPLAY_NAMED_BETA) &&
+      !isBetaRejected_2(conversation_2, THINKING_DISPLAY_NAMED_BETA) &&
       (thinkingDisplayProbeState === "idle" || thinkingDisplayProbeState === "withoutUpdates");
     let thinkingDisplay = !sendThinkingDisplay
       ? undefined
@@ -7058,11 +7585,11 @@ async function* queryModel(
           display: thinkingDisplay,
         };
       else {
-        let thinkingBudget = maxOutputTokensMinusOne(resolvedModel);
-        if (betas.type === "enabled" && betas.budgetTokens !== undefined) thinkingBudget = betas.budgetTokens;
-        thinkingBudget = Math.max(1024, Math.min(min - 1, thinkingBudget));
+        let budgetTokens = maxOutputTokensMinusOne(resolvedModel);
+        if (betas.type === "enabled" && betas.budgetTokens !== undefined) budgetTokens = betas.budgetTokens;
+        budgetTokens = Math.max(1024, Math.min(min - 1, budgetTokens));
         thinking = {
-          budget_tokens: thinkingBudget,
+          budget_tokens: budgetTokens,
           type: "enabled",
           display: thinkingDisplay,
         };
@@ -7120,7 +7647,7 @@ async function* queryModel(
           (thinking?.type === "adaptive" || thinking?.type === "enabled") &&
           sendThinkingDisplay &&
           !("thinking" in extraBodyParams) &&
-          !isBetaRejected_2(conversation, BETA_THINKING_DISPLAY_UPDATES) &&
+          !isBetaRejected_2(conversation_2, BETA_THINKING_DISPLAY_UPDATES) &&
           thinkingDisplayProbeState === "idle" &&
           !env.CLAUDE_CODE_SIMULATE_PROXY_USAGE
         ) {
@@ -7154,13 +7681,13 @@ async function* queryModel(
     if (
       thinking?.type === "disabled" &&
       (mechanicalDisabled || modelFacts_2.thinking.capsEffortWhenDisabled) &&
-      typeof outputConfig.effort === "string" &&
-      isAboveHighEffort(outputConfig.effort)
+      typeof outputConfigSlots.effort === "string" &&
+      isAboveHighEffort(outputConfigSlots.effort)
     ) {
       if (!effortClampedLogged) {
         effortClampedLogged = true;
         logForDebugging(
-          `output_config.effort '${outputConfig.effort}' clamped to '${THINKING_DISABLED_EFFORT_CAP}': thinking is ${mechanicalDisabled ? "mechanically " : ""}disabled for this request, and this model rejects higher effort when thinking is disabled`,
+          `output_config.effort '${outputConfigSlots.effort}' clamped to '${THINKING_DISABLED_EFFORT_CAP}': thinking is ${mechanicalDisabled ? "mechanically " : ""}disabled for this request, and this model rejects higher effort when thinking is disabled`,
         );
       }
       if (
@@ -7169,13 +7696,13 @@ async function* queryModel(
         streamFallbackWarning().once("effort_thinking_disabled_clamp")
       )
         logEvent("tengu_effort_clamped_thinking_disabled", {
-          from: fromEnum(outputConfig.effort),
+          from: fromEnum(outputConfigSlots.effort),
           to: fromEnum(THINKING_DISABLED_EFFORT_CAP),
           query_source: agentTypeForTelemetry(options.querySource),
         });
-      outputConfig.effort = THINKING_DISABLED_EFFORT_CAP;
+      outputConfigSlots.effort = THINKING_DISABLED_EFFORT_CAP;
     }
-    let contextManagement = getAPIContextManagement({
+    let apiContextManagement = getAPIContextManagement({
       hasThinking: thinkingEnabled,
       toolClearing: toolResultClearingPlan?.edit,
     });
@@ -7188,7 +7715,7 @@ async function* queryModel(
       !isFastModeCooldown() &&
       runGuarded(() => supportsFastMode(effectiveModel)) &&
       !!context.fastMode &&
-      !paramsFromContext(BETA_SPEED) &&
+      !isRejectedBeta(BETA_SPEED) &&
       !isFallbackModelFastRejected(context.model);
     if (fastModeEligibleRetry) speedValue = "fast";
     fastModelUsed = fastModeEligibleRetry ? context.model : undefined;
@@ -7215,7 +7742,7 @@ async function* queryModel(
       contextHintBody = contextHintParams.body;
     }
     let evictBody = null;
-    if (isBetaSent(conversation, BETA_PROMPT_CACHING_EVICT) && promptCachingEnabled) {
+    if (isBetaSent(conversation_2, BETA_PROMPT_CACHING_EVICT) && promptCachingEnabled) {
       if (!betas_2.includes(BETA_PROMPT_CACHING_EVICT)) betas_2.push(BETA_PROMPT_CACHING_EVICT);
       evictBody = {
         cache_control: {
@@ -7241,21 +7768,27 @@ async function* queryModel(
         : null;
     let threadsOff =
       BETA_MESSAGE_THREADS !== null &&
-      (isBetaRejected_2(conversation, BETA_MESSAGE_THREADS) || threadsProbeState !== "idle");
+      (isBetaRejected_2(conversation_2, BETA_MESSAGE_THREADS) || threadsProbeState !== "idle");
     let threadPlanActive = threadsOff ? null : threadPlan;
     if (BETA_MESSAGE_THREADS !== null) {
-      if (threadPlanActive !== null) markBetaSent(conversation, BETA_MESSAGE_THREADS);
+      if (threadPlanActive !== null) markBetaSent(conversation_2, BETA_MESSAGE_THREADS);
       if (threadsOff) {
         for (let idx = betas_2.length - 1; idx >= 0; idx--)
           if (betas_2[idx] === BETA_MESSAGE_THREADS) betas_2.splice(idx, 1);
       } else if (
-        (threadPlanActive !== null || isBetaSent(conversation, BETA_MESSAGE_THREADS)) &&
+        (threadPlanActive !== null ||
+          isBetaSent(conversation_2, BETA_MESSAGE_THREADS) ||
+          (options.querySource === "resume_cache_warm" &&
+            canUseNoTransientReminders("sdk", undefined, options.model) &&
+            !needsTetherChannel(messagesForAPI_2))) &&
         !betas_2.includes(BETA_MESSAGE_THREADS)
       )
         betas_2.push(BETA_MESSAGE_THREADS);
     }
+    if (options.querySource === "resume_cache_warm" && !betas_2.includes(BETA_CLAUDE_CODE_SIDE_QUERY))
+      betas_2.push(BETA_CLAUDE_CODE_SIDE_QUERY);
     let betas_3 = betas_2.filter(
-      (beta) => !paramsFromContext(beta) && (!CLAUDE_CODE_SIMULATE_PROXY_USAGE || beta === BETA_OAUTH_AUTH),
+      (beta) => !isRejectedBeta(beta) && (!CLAUDE_CODE_SIMULATE_PROXY_USAGE || beta === BETA_OAUTH_AUTH),
     );
     if (CLAUDE_CODE_SIMULATE_PROXY_USAGE)
       logForDebugging(
@@ -7264,7 +7797,7 @@ async function* queryModel(
     let temperature =
       !thinkingEnabled && modelFacts_2.acceptsTemperature ? (options.temperatureOverride ?? 1) : undefined;
     sentBetaHeaders = betaHeaderValues(betas_3);
-    bodyBetaHeaders = betaHeaderValues(betaHeaders);
+    serverUrlBetaTried = betaHeaderValues(betaHeaders);
     longContextRequested = betas_3.includes(BETA_LONG_CONTEXT) || betaHeaders.includes(BETA_LONG_CONTEXT);
     sentThinkingDisplay =
       thinking !== undefined && "display" in thinking && !("thinking" in extraBodyParams)
@@ -7277,7 +7810,9 @@ async function* queryModel(
       hasBetas &&
       (!CLAUDE_CODE_SIMULATE_PROXY_USAGE || betas_3.length > 0) &&
       betaHeaderValues(betaHeaderValues_2).length > 0;
-    keptReminderSent = clearAtEligible;
+    let programUseCaseId = sendBetas ? programUseCaseBody(betaHeaderValues_2, options.model) : {};
+    thinkingTokenCountState = programUseCaseId.program_use_case_id;
+    toolRefs = clearAtEligible;
     clearAtOnWire = false;
     let fallbackBetaOnWire =
       sendBetas &&
@@ -7307,6 +7842,12 @@ async function* queryModel(
     let messageCachingOn = promptCachingEnabled && !options.skipMessageCacheMarkers;
     let topLevelCacheControl =
       (!CLAUDE_CODE_SIMULATE_PROXY_USAGE && evictBody !== null) || extraBodyParams.cache_control != null;
+    let messageMarkersWanted = withClassifier ? performance.now() : 0;
+    let effort = withServerUrlHeader(
+      conversation_2,
+      sendBetas && betaHeaderValues_2.includes(BETA_CCR_TOOL_PROVENANCE),
+    );
+    betasToDrop = effort.header && effort.serverUrls;
     let cacheMessages = buildEchoedMessages(messagesForAPI_2, fallbackBetaOnWire, markable);
     let parentReplyPlan =
       allowClassifierRetry && promptEndMarkState === "idle"
@@ -7319,13 +7860,13 @@ async function* queryModel(
             messages: cacheMessages,
           })
         : undefined;
-    let apiMessages = (sentMessages = addCacheBreakpoints(
+    let messagesWithCacheMarks = addCacheBreakpoints(
       cacheMessages,
       messageCachingOn,
       messagesTtl,
       options.skipCacheWrite,
       options.forkPointUuid,
-      isBetaRejected_2(conversation, BETA_MID_CONV_CACHE_PROMOTION_LATCH) ||
+      isBetaRejected_2(conversation_2, BETA_MID_CONV_CACHE_PROMOTION_LATCH) ||
         isMidConvCachePromotionRejected(),
       provider,
       threadPlanActive !== null,
@@ -7342,8 +7883,19 @@ async function* queryModel(
       isExtractMemoriesSkipCacheWrite(options.querySource, options.skipCacheWrite === true),
       allowClassifierRetry,
       parentReplyPlan,
+    );
+    let apiMessages = (sentMessages = annotateMessageContentsWithFallback(
+      messagesWithCacheMarks,
+      effort,
+      toolCoverage,
     ));
     wireIndexMap = wireIndexOut.some((entry, index) => entry !== index) ? wireIndexOut : [];
+    if (allowClassifierRetry && options.onWrittenPdfReadSent)
+      try {
+        options.onWrittenPdfReadSent(findToolResultFirstBlock(apiMessages));
+      } catch (error) {
+        logError(toError(error));
+      }
     let hasCacheControl = (apiMessage) =>
       Array.isArray(apiMessage.content) &&
       apiMessage.content.some(
@@ -7365,6 +7917,7 @@ async function* queryModel(
         let role = apiMessage.role;
         return messagePos < lastMarkedIndex && role === "system" && hasCacheControl(apiMessage);
       });
+    if (withClassifier) noteSentBuildSpan("cache_breakpoints", messageMarkersWanted);
     classifierOnRequest =
       includeClassifier &&
       hasBetas &&
@@ -7374,18 +7927,22 @@ async function* queryModel(
       if (classifierSession !== undefined) settleServerStreamEnded(classifierSession);
       classifierSession = classifierOnRequest
         ? createServerClassifierResult(randomUUID(), {
-            artifacts: classifierContext?.artifacts,
+            artifacts: classifierContext_2?.artifacts,
             thread: threadPlanActive !== null,
-            exactMcpAllowRules: classifierContext && getExactMcpAllowRules(classifierContext),
+            exactMcpAllowRules: classifierContext_2 && getExactMcpAllowRules(classifierContext_2),
             judgeOnlyTools: options.autoModeServerContext?.judgeOnlyTools,
             agentId: options.agentId,
           })
         : undefined;
-      if (classifierSession !== undefined && classifierContext !== undefined)
-        recordClassifierRequest(classifierSession.key, pickPriorTurnContext(classifierContext));
+      if (classifierSession !== undefined && classifierContext_2 !== undefined)
+        recordClassifierRequest(classifierSession.key, pickPriorTurnContext(classifierContext_2));
     }
-    let toolsForRequest = stripUnsupportedFoundryCapabilities(allTools, options.model);
-    toolsForRequest = applyRefusedToolSchemas(toolsForRequest, conversation);
+    let toolsForRequest = stripUnsupportedFoundryCapabilities(tools_2, options.model);
+    toolsForRequest = annotateToolsWithFallback(
+      applyRefusedToolSchemas(toolsForRequest, conversation_2),
+      effort,
+      toolCoverage,
+    );
     let shapedRequest =
       tetherDelta !== null
         ? tetherDelta.shapeInheritedFields(threadPlanActive, {
@@ -7402,6 +7959,7 @@ async function* queryModel(
     threadSliced = threadPlanActive !== null;
     threadSliceFrom = threadPlanActive?.sliceFrom ?? 0;
     threadType = threadPlanActive?.thread.type ?? "none";
+    pinnedSystemValue = threadPlanActive?.reason === "thread_presumed_expired";
     let requestParams = {
       model: toProviderWireModelId(options.model),
       messages:
@@ -7422,17 +7980,18 @@ async function* queryModel(
       ...(temperature !== undefined && {
         temperature,
       }),
-      ...(contextManagement &&
+      ...(apiContextManagement &&
         hasBetas &&
         betas_2.includes(BETA_CONTEXT_MANAGEMENT) && {
-          context_management: contextManagement,
+          context_management: apiContextManagement,
         }),
+      ...programUseCaseId,
       ...(classifierOnRequest &&
-        classifierContext !== undefined && {
+        classifierContext_2 !== undefined && {
           safeguards: [
             {
               type: DANGEROUS_TOOL_USE_2,
-              classifier_context: classifierContext,
+              classifier_context: classifierContext_2,
             },
           ],
         }),
@@ -7441,8 +8000,8 @@ async function* queryModel(
       ...fallbackBody,
       ...extraBodyParams,
       ...{},
-      ...(Object.keys(outputConfig).length > 0 && {
-        output_config: outputConfig,
+      ...(Object.keys(outputConfigSlots).length > 0 && {
+        output_config: outputConfigSlots,
       }),
       ...(speedValue !== undefined && {
         speed: speedValue,
@@ -7459,8 +8018,23 @@ async function* queryModel(
           },
         }),
     };
+    if (options.noServerToolCalls !== undefined) {
+      let llmSpan = serverToolChoice(
+        requestParams.tools ?? toolsForRequest,
+        options.advisorActive,
+        messages,
+        requestParams.mcp_servers !== undefined && requestParams.mcp_servers !== null,
+      );
+      if (llmSpan !== undefined) {
+        requestParams = {
+          ...requestParams,
+          tool_choice: llmSpan,
+        };
+        options.noServerToolCalls.onForcedNone();
+      }
+    }
     contextManagementEligible =
-      toolResultClearingPlan !== undefined && requestParams.context_management === contextManagement;
+      toolResultClearingPlan !== undefined && requestParams.context_management === apiContextManagement;
     clearAtOnWire =
       clearAtEligible && requestParams.messages.some((message) => message.clear_at !== undefined);
     let sanitizedThinking = sanitizeDisabledThinking(
@@ -7478,6 +8052,7 @@ async function* queryModel(
         thinking?.type === "adaptive" || thinking?.type === "enabled" ? thinking.type : "disabled";
       requestedDisplayField = readDisplayField(thinking);
     }
+    let requestedDisplay = withClassifier ? performance.now() : 0;
     if (allowClassifierRetry && containsMalformedStringDeep(requestParams)) {
       try {
         requestParams = clone(requestParams);
@@ -7490,20 +8065,21 @@ async function* queryModel(
         });
       }
     }
-    let logEffortValue = requestParams.output_config?.effort;
-    sentEffort =
-      typeof logEffortValue === "string" && isEffortLevel(logEffortValue) ? logEffortValue : undefined;
+    if (withClassifier) noteSentBuildSpan("surrogate_scan", requestedDisplay);
+    let effort_2 = requestParams.output_config?.effort;
+    sentEffort = typeof effort_2 === "string" && isEffortLevel(effort_2) ? effort_2 : undefined;
     let lastConfig = lastOutputConfig(messagesForAPI_2);
     perTurnEffortValue = lastConfig.effort ?? null;
     perTurnNowValue = lastConfig.now;
     return requestParams;
   };
+  if (isTopLevelMain) markRequestBuildPart("plans");
   let apiQueryLogged = false;
-  let logApiQueryOnce = (permissionContext) => {
+  let logApiQueryOnce = (perTurnStamp) => {
     if (apiQueryLogged) return;
     apiQueryLogged = true;
-    let betas = hasBetas ? (permissionContext.betas ?? []) : [];
-    let thinkingType = permissionContext.thinking?.type ?? "disabled";
+    let betas = hasBetas ? (perTurnStamp.betas ?? []) : [];
+    let thinkingType = perTurnStamp.thinking?.type ?? "disabled";
     let messagesLength = messagesForAPI_2.length;
     let thinkingPrefixMismatchBehavior = prefixMismatchBehavior;
     let effortValue = normalizedEffort;
@@ -7550,12 +8126,15 @@ async function* queryModel(
   let sentAtMonotonic = 0;
   let sentAtWall = 0;
   let profileHandle = false;
+  let requestedEffort;
+  let effortLevel = false;
   let queryOverheadMs;
   let dispatchedAt = 0;
   let partialMessage = undefined;
   let blocks = [];
   let usage = EMPTY_USAGE;
-  let contextManagement = null;
+  let creditState = null;
+  let creditBytes = null;
   let costUSD = 0;
   let reason = null;
   let complete = false;
@@ -7581,13 +8160,13 @@ async function* queryModel(
   let fallbackTriggered = false;
   let maxOutputTokens = 0;
   let responseHeaders = undefined;
-  let NMs = undefined;
+  let streamStarted = undefined;
   let cacheMissReason;
   let fallbackActive = fastModeActive;
   let advisorToolInFlight = false;
   let isReplMainThread =
     isMainAgent(options.agentContext) && options.querySource.startsWith("repl_main_thread");
-  let $Ms = undefined;
+  let responseDone = undefined;
   let mediaStripErrors = new Map();
   let lastMediaStripLimit = 3;
   let lastMediaStripCount = {
@@ -7641,7 +8220,7 @@ async function* queryModel(
     }
   };
   let handleDispatchError = async (error) => {
-    if (dispatchEscalated) return;
+    if (dispatchEscalated || findRouteTurnError(error) !== undefined) return;
     let status = error instanceof APIError ? error.status : undefined;
     let is5xx = status !== undefined && status >= 500;
     let isConnErr = error instanceof APIConnectionError;
@@ -7711,21 +8290,21 @@ async function* queryModel(
       creditStripped = true;
       fallbackCreditCode = undefined;
       if (creditClass === "credit_beta_header") {
-        markBetaRejected(conversation, BETA_FALLBACK_CREDIT);
+        markBetaRejected(conversation_2, BETA_FALLBACK_CREDIT);
         if (mentionsCategory && BETA_SERVER_SIDE_FALLBACK_CATEGORY !== null) {
-          markBetaRejected(conversation, BETA_SERVER_SIDE_FALLBACK_CATEGORY);
+          markBetaRejected(conversation_2, BETA_SERVER_SIDE_FALLBACK_CATEGORY);
           categoryBetaRefused = true;
         }
         if (matches) {
-          markBetaRejected(conversation, BETA_SERVER_SIDE_FALLBACK);
+          markBetaRejected(conversation_2, BETA_SERVER_SIDE_FALLBACK);
           fallbackBetaRefused = true;
         }
         if (
           mentionsCategory &&
           serverFallbackWithBlocks &&
-          !isBetaRejected_2(conversation, BETA_SERVER_SIDE_FALLBACK)
+          !isBetaRejected_2(conversation_2, BETA_SERVER_SIDE_FALLBACK)
         )
-          markBetaSent(conversation, BETA_SERVER_SIDE_FALLBACK);
+          markBetaSent(conversation_2, BETA_SERVER_SIDE_FALLBACK);
       }
       if (transport === "stream") logCreditOutcome(creditClass, error.requestID ?? null, null);
       logStripped(creditClass);
@@ -7739,18 +8318,18 @@ async function* queryModel(
       !categoryBetaRefused
     ) {
       categoryBetaRefused = true;
-      markBetaRejected(conversation, BETA_SERVER_SIDE_FALLBACK_CATEGORY);
+      markBetaRejected(conversation_2, BETA_SERVER_SIDE_FALLBACK_CATEGORY);
       if (included) {
-        markBetaRejected(conversation, BETA_FALLBACK_CREDIT);
+        markBetaRejected(conversation_2, BETA_FALLBACK_CREDIT);
         creditStripped = true;
         fallbackCreditCode = undefined;
       }
       if (matches) {
-        markBetaRejected(conversation, BETA_SERVER_SIDE_FALLBACK);
+        markBetaRejected(conversation_2, BETA_SERVER_SIDE_FALLBACK);
         fallbackBetaRefused = true;
       }
-      if (serverFallbackWithBlocks && !isBetaRejected_2(conversation, BETA_SERVER_SIDE_FALLBACK))
-        markBetaSent(conversation, BETA_SERVER_SIDE_FALLBACK);
+      if (serverFallbackWithBlocks && !isBetaRejected_2(conversation_2, BETA_SERVER_SIDE_FALLBACK))
+        markBetaSent(conversation_2, BETA_SERVER_SIDE_FALLBACK);
       logStripped(fallbackClass);
       return "retry:server-fallback-category-strip";
     }
@@ -7760,9 +8339,9 @@ async function* queryModel(
       !fallbackBetaRefused
     ) {
       fallbackBetaRefused = true;
-      markBetaRejected(conversation, BETA_SERVER_SIDE_FALLBACK);
+      markBetaRejected(conversation_2, BETA_SERVER_SIDE_FALLBACK);
       if (fallbackClass === "beta_header" && included) {
-        markBetaRejected(conversation, BETA_FALLBACK_CREDIT);
+        markBetaRejected(conversation_2, BETA_FALLBACK_CREDIT);
         creditStripped = true;
         fallbackCreditCode = undefined;
       }
@@ -7775,6 +8354,7 @@ async function* queryModel(
     if (alwaysFalseD(error)) return;
     if (alwaysFalseB(error)) return;
     if (isInvalidEffortError(error) && serverFallbackMode !== "explicit") return;
+    if (isBetaRejected(error, BETA_CLAUDE_CODE_SIDE_QUERY)) return;
     if (isFastModeNotEnabledError(error) || parseMaxTokensContextOverflowError(error) !== undefined) return;
     if (isSpeedUnsupported(error)) {
       if (transport === "stream" && creditEchoedStream && !creditStripped)
@@ -7799,15 +8379,15 @@ async function* queryModel(
     }
     if ((serverFallbackExplicit || serverFallbackWithBlocks) && !fallbackBetaRefused) {
       fallbackBetaRefused = true;
-      markBetaRejected(conversation, BETA_SERVER_SIDE_FALLBACK);
+      markBetaRejected(conversation_2, BETA_SERVER_SIDE_FALLBACK);
       if (BETA_SERVER_SIDE_FALLBACK_CATEGORY !== null)
-        markBetaRejected(conversation, BETA_SERVER_SIDE_FALLBACK_CATEGORY);
+        markBetaRejected(conversation_2, BETA_SERVER_SIDE_FALLBACK_CATEGORY);
       logStripped("unattributed");
       return "retry:server-fallback-strip";
     }
     if (creditBetaOnWire && !creditHeaderRefused) {
       creditHeaderRefused = true;
-      markBetaRejected(conversation, BETA_FALLBACK_CREDIT);
+      markBetaRejected(conversation_2, BETA_FALLBACK_CREDIT);
       droppedBetas.push(BETA_FALLBACK_CREDIT);
       logStripped("unattributed");
       return "retry:fallback-credit-header-strip";
@@ -7824,6 +8404,8 @@ async function* queryModel(
     getMediaErrorFromApiError(error) !== undefined ||
     getRejectedBetas(error, betaHeaderValues(BETA_REJECTION_MATCHER_KEYS)).length > 0 ||
     isCacheKeepaliveBetaRejected(error) ||
+    isProgramUseCaseBetaRejected(error) ||
+    isProgramUseCaseNotHeldError(error) ||
     isThinkingResumptionBetaRejected(error) ||
     isThinkingBindingRejected(error) ||
     getRejectedThinkingType(error) !== null ||
@@ -7840,46 +8422,49 @@ async function* queryModel(
     if (toolChangeMode === "tool_search") return;
     try {
       let lateCount = 0;
-      if (toolChangeMode === undefined) allTools = allTools.slice();
+      if (toolChangeMode === undefined) tools_2 = tools_2.slice();
       else
-        allTools = allTools.flatMap((tool) => {
-          if (!("input_schema" in tool)) return [tool];
-          if (!tools.some((tool_2) => toolMatchesName(tool_2, tool.name))) return [];
-          if (tool.defer_loading !== true) return [tool];
+        tools_2 = tools_2.flatMap((lateSchema) => {
+          if (!("input_schema" in lateSchema)) return [lateSchema];
+          if (!tools.some((poolTool) => matchesToolName(poolTool, lateSchema.name))) return [];
+          if (lateSchema.defer_loading !== true) return [lateSchema];
           lateCount++;
-          let { defer_loading: deferLoading, ...rest } = tool;
+          let { defer_loading: deferLoading, ...rest } = lateSchema;
           return [rest];
         });
-      let presentNames = new Set(allTools.flatMap((tool) => ("name" in tool ? [tool.name] : [])));
-      let indexByName = new Map(tools.map((tool, index) => [tool.name, index]));
-      for (let schema of lateToolSchemas) {
+      let presentNames = new Set(
+        tools_2.flatMap((lateSchema) => ("name" in lateSchema ? [lateSchema.name] : [])),
+      );
+      let indexByName = new Map(tools.map((poolTool, index) => [poolTool.name, index]));
+      for (let schema of lateToolSchemas_2) {
         if (!("name" in schema) || presentNames.has(schema.name)) continue;
         let insertBefore = indexByName.get(schema.name) ?? 1 / 0;
-        let index = allTools.findIndex(
-          (tool) => !("input_schema" in tool) || (indexByName.get(tool.name) ?? -1) > insertBefore,
+        let index = tools_2.findIndex(
+          (schema_2) =>
+            !("input_schema" in schema_2) || (indexByName.get(schema_2.name) ?? -1) > insertBefore,
         );
-        if (index === -1) index = allTools.length;
-        allTools.splice(index, 0, schema);
+        if (index === -1) index = tools_2.length;
+        tools_2.splice(index, 0, schema);
         presentNames.add(schema.name);
         lateCount++;
       }
       if (toolChangeMode === "tool_addition") {
         deferredSchemasSent?.splice(0, deferredSchemasSent.length);
-        resetDeclaredTools(conversation);
-        markDeclaredToolsDecided(conversation);
+        resetDeclaredTools(conversation_2);
+        markDeclaredToolsDecided(conversation_2);
       } else if (lateCount === 0) return;
       else {
         let sliced = requestTools.slice();
-        for (let tool of tools) {
-          if (!presentNames.has(tool.name) || !byValueNames.has(tool.name)) continue;
-          let insertBefore = indexByName.get(tool.name) ?? 1 / 0;
+        for (let poolTool of tools) {
+          if (!presentNames.has(poolTool.name) || !byValueNames.has(poolTool.name)) continue;
+          let insertBefore = indexByName.get(poolTool.name) ?? 1 / 0;
           let index = sliced.findIndex((entry) => (indexByName.get(entry.name) ?? -1) > insertBefore);
           if (index === -1) index = sliced.length;
-          sliced.splice(index, 0, tool);
+          sliced.splice(index, 0, poolTool);
         }
-        noChannelTools = cacheNoChannelTools(conversation, false, () =>
+        noChannelTools = cacheNoChannelTools(conversation_2, false, () =>
           buildDeclaredToolSet(
-            identityValue_2(sliced),
+            hideCodeModeOnlyTools(sliced),
             tools,
             pendingMcpResult ?? noChannelTools?.recordedOnly,
           ),
@@ -7919,15 +8504,15 @@ async function* queryModel(
   let advisorRefused = false;
   let handleAdvisorUnavailable = (error) => {
     if (advisorRefused || !isAdvisorUnavailableError(error)) return;
-    let isAdvisorEntry = (tool) =>
-      !("input_schema" in tool) && "name" in tool && tool.name === ADVISOR_TOOL_NAME;
-    let any = allTools.some(isAdvisorEntry);
+    let isAdvisorEntry = (schema) =>
+      !("input_schema" in schema) && "name" in schema && schema.name === ADVISOR_TOOL_NAME;
+    let any = tools_2.some(isAdvisorEntry);
     let betaRefused = sentBetaHeaders.includes(BETA_ADVISOR_TOOL.header) && isAdvisorBetaRejected(error);
     if (!any && !betaRefused) return;
     advisorRefused = true;
     try {
       if (any) {
-        allTools = allTools.filter((tool) => !isAdvisorEntry(tool));
+        tools_2 = tools_2.filter((schema) => !isAdvisorEntry(schema));
         messagesForAPI_2 = recoverMessages(
           dropAdvisorFromApiSystem(stripAdvisorBlocks(messagesForAPI_2)),
           "error_recovery",
@@ -7936,25 +8521,25 @@ async function* queryModel(
         retryCause = "error_recovery";
         retryKeepsHeal = false;
       }
-      conversation.advisorHeld = {
+      conversation_2.advisorHeld = {
         model: undefined,
-        viaToolChange: conversation.advisorHeld?.viaToolChange ?? false,
+        viaToolChange: conversation_2.advisorHeld?.viaToolChange ?? false,
         refused: true,
       };
-      let advisorRefusalScope = getAdvisorRefusalScope(error);
-      if (advisorRefusalScope === "process") markAdvisorRefusedForProcess();
-      else if (advisorRefusalScope === "host") markAdvisorRefusedForHost();
+      let thinkingBudget = getAdvisorRefusalScope(error);
+      if (thinkingBudget === "process") markAdvisorRefusedForProcess();
+      else if (thinkingBudget === "host") markAdvisorRefusedForHost();
       dropAdvisorBeta();
       logForDebugging(
-        `[advisor] the server refused the advisor ${betaRefused ? "beta header" : "entry"} (scope: ${advisorRefusalScope}); retrying once without the advisor`,
+        `[advisor] the server refused the advisor ${betaRefused ? "beta header" : "entry"} (scope: ${thinkingBudget}); retrying once without the advisor`,
         {
           level: "warn",
         },
       );
       logEvent("tengu_advisor_entry_refused_retry", {
         query_source: agentTypeForTelemetry(options.querySource),
-        organization_wide: advisorRefusalScope === "process",
-        host_wide: advisorRefusalScope === "host",
+        organization_wide: thinkingBudget === "process",
+        host_wide: thinkingBudget === "host",
         beta_header_refused: betaRefused,
       });
     } catch (error) {
@@ -7962,7 +8547,7 @@ async function* queryModel(
     }
     return "retry:advisor-entry-refused";
   };
-  let wireCache = new ToolSchemaWireCache(conversation);
+  let wireCache = new ToolSchemaWireCache(conversation_2);
   let recoverViaWireCache = (error) => {
     try {
       let resolved = wireCache.resolve(error, pinnedTools, tools, options.querySource);
@@ -7979,7 +8564,7 @@ async function* queryModel(
   let recoverFromHintError = (error) => {
     return;
   };
-  let HMs = "idle";
+  let advisorState = "idle";
   let classifyHintRecovery = (error) => {
     return;
   };
@@ -7987,17 +8572,17 @@ async function* queryModel(
     try {
       let foundDeferred = false;
       let advisorActive = options.advisorActive !== false;
-      allTools = allTools.flatMap((tool) => {
+      tools_2 = tools_2.flatMap((schema) => {
         if (
-          "input_schema" in tool ||
-          !("defer_loading" in tool) ||
-          tool.defer_loading !== true ||
-          tool.name !== ADVISOR_TOOL_NAME
+          "input_schema" in schema ||
+          !("defer_loading" in schema) ||
+          schema.defer_loading !== true ||
+          schema.name !== ADVISOR_TOOL_NAME
         )
-          return [tool];
+          return [schema];
         foundDeferred = true;
         if (!advisorActive) return [];
-        let { defer_loading: deferLoading, ...rest } = tool;
+        let { defer_loading: deferLoading, ...rest } = schema;
         return [rest];
       });
       if (foundDeferred) {
@@ -8009,9 +8594,9 @@ async function* queryModel(
           wrapFallbacksAdvisorDrop();
           dropAdvisorBeta();
         }
-        if (advisorActive && conversation.advisorHeld?.viaToolChange === true)
-          conversation.advisorHeld = {
-            ...conversation.advisorHeld,
+        if (advisorActive && conversation_2.advisorHeld?.viaToolChange === true)
+          conversation_2.advisorHeld = {
+            ...conversation_2.advisorHeld,
             inFallback: true,
           };
         retryCause = "error_recovery";
@@ -8034,7 +8619,7 @@ async function* queryModel(
     let { messages, removed } = stripWebSearchBlocks(messagesForAPI_2);
     if (messages === messagesForAPI_2) return;
     messagesForAPI_2 = recoverMessages(messages, "error_recovery");
-    markWebSearchHistoryRejected(conversation);
+    markWebSearchHistoryRejected(conversation_2);
     wrapFallbacksWebSearchStrip();
     logForDebugging(
       `[web-search-strip] The API could not decrypt web search content in this conversation's history: removed ${removed.toolUses} ${plural(removed.toolUses, "search call")}, ${removed.results} ${plural(removed.results, "result block")} and ${removed.citations} ${plural(removed.citations, "citation")} from the request; retrying once. Later requests in this conversation leave them out too.`,
@@ -8054,7 +8639,7 @@ async function* queryModel(
   };
   let mediaLimitStep;
   let handleUnprocessableMedia = (error) => {
-    let mediaCap = mediaItemCapForModel(conversation, effectiveModel);
+    let mediaCap = mediaItemCapForModel(conversation_2, effectiveModel);
     if (!isUnprocessableRequest(error) || mediaCap?.gaveUp) return;
     try {
       let mediaCount = countMediaItems(messagesForAPI_2);
@@ -8064,7 +8649,7 @@ async function* queryModel(
         if (mediaLimitStep !== undefined) {
           let { steps, refusedAt } = mediaLimitStep;
           mediaLimitStep = undefined;
-          setMediaItemCap(conversation, {
+          setMediaItemCap(conversation_2, {
             model: effectiveModel,
             limit: mediaCap?.limit,
             gaveUp: true,
@@ -8111,11 +8696,11 @@ async function* queryModel(
   };
   let recordMediaLimitSuccess = () => {
     try {
-      let mediaCap = mediaItemCapForModel(conversation, effectiveModel);
+      let mediaCap = mediaItemCapForModel(conversation_2, effectiveModel);
       if (mediaLimitStep === undefined) {
-        if (mediaCap?.gaveUp && mediaCap.limit === undefined) clearMediaItemCap(conversation);
+        if (mediaCap?.gaveUp && mediaCap.limit === undefined) clearMediaItemCap(conversation_2);
         else if (mediaCap?.gaveUp)
-          setMediaItemCap(conversation, {
+          setMediaItemCap(conversation_2, {
             ...mediaCap,
             gaveUp: false,
           });
@@ -8123,7 +8708,7 @@ async function* queryModel(
       }
       let { limit, steps, refusedAt } = mediaLimitStep;
       mediaLimitStep = undefined;
-      setMediaItemCap(conversation, {
+      setMediaItemCap(conversation_2, {
         model: effectiveModel,
         limit: Math.min(limit, mediaCap?.limit ?? 1 / 0),
         gaveUp: false,
@@ -8193,12 +8778,12 @@ async function* queryModel(
           "error_recovery",
         );
         thinkingWasStripped = thinkingStripMarked;
-        addNameOnlyAnnouncements(conversation, byValueAnnouncements);
+        addNameOnlyAnnouncements(conversation_2, byValueAnnouncements);
         if (toolChangeMode === undefined) inlineLateTools();
       }
       getInlineToolsFallback = null;
       betaList = betaList.filter((beta) => beta !== BETA_INLINE_TOOLS);
-      handleInlineToolsRejection(conversation, inlineClass);
+      handleInlineToolsRejection(conversation_2, inlineClass);
       emitPromptHead();
       logEvent("tengu_inline_tools_refused_retry", {
         cause: fromEnum(inlineClass),
@@ -8227,7 +8812,7 @@ async function* queryModel(
         betaList.includes(BETA_INLINE_TOOLS) &&
         classifyInlineToolDefinitionError(error) === "header_rejected";
       betaList = betaList.filter((beta) => beta !== BETA_MID_CONV_TOOL_CHANGE && beta !== BETA_INLINE_TOOLS);
-      classifyToolAdditionRejection(conversation, toolChangeClass, options.model, inlineHeaderRejected);
+      classifyToolAdditionRejection(conversation_2, toolChangeClass, options.model, inlineHeaderRejected);
       emitPromptHead();
       inlineLateTools();
       inlineAdvisorEntry();
@@ -8243,7 +8828,7 @@ async function* queryModel(
     if (included && isOutputTimingRejected(error) && !midConvCandidate && !effortRejected) {
       messagesForAPI_2 = recoverMessages(dropTimingFromOutputConfigs(messagesForAPI_2), "error_recovery");
       betaList = betaList.filter((beta) => beta !== BETA_PER_TURN_TIMING);
-      markBetaRejected(conversation, BETA_PER_TURN_TIMING);
+      markBetaRejected(conversation_2, BETA_PER_TURN_TIMING);
       logForDebugging(
         `[per-turn-timing] the server refused the current-time statement (${errorMessage(error)}); leaving it out for the rest of this conversation (until /clear or /compact)`,
         {
@@ -8258,7 +8843,7 @@ async function* queryModel(
         !sentMessages.some((message) => message.role === "system" && message.content.length > 0)
       )
         return;
-      let contextBetaWasActive = hasContextBeta(conversation);
+      let contextBetaWasActive = hasContextBeta(conversation_2);
       let wireCount = sentMessages.length;
       let messageCount = messagesForAPI_2.length;
       let mismatchDetail =
@@ -8285,8 +8870,8 @@ async function* queryModel(
             beta !== BETA_INLINE_TOOLS &&
             beta !== BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT,
         );
-        markBetaRejected(conversation, BETA_MID_CONVERSATION_SYSTEM);
-        dropToolChangeState(conversation);
+        markBetaRejected(conversation_2, BETA_MID_CONVERSATION_SYSTEM);
+        dropToolChangeState(conversation_2);
         emitPromptHead();
         inlineLateTools();
         inlineAdvisorEntry();
@@ -8300,7 +8885,8 @@ async function* queryModel(
         latchBetaRefused(BETA_PER_MESSAGE_EFFORT, isPerTurnEffortRejected(error));
         if (perTurnEffortValue !== null) logFeatureSad("api_per_turn_effort", "server_rejected");
       }
-      if (options.stickyBetas === undefined) notifyPerTurnEffortInactive(conversation, contextBetaWasActive);
+      if (options.stickyBetas === undefined)
+        notifyPerTurnEffortInactive(conversation_2, contextBetaWasActive);
       logForDebugging(
         mismatchDetail !== undefined
           ? `[mid-conv-system] API refused where a system message sits (${mismatchDetail}) \u2014 retrying once without system messages; off for this conversation until /clear or /compact`
@@ -8329,10 +8915,10 @@ async function* queryModel(
     }
     if (
       apiSystemHasCacheControl &&
-      !isBetaRejected_2(conversation, BETA_MID_CONV_CACHE_PROMOTION_LATCH) &&
+      !isBetaRejected_2(conversation_2, BETA_MID_CONV_CACHE_PROMOTION_LATCH) &&
       isCacheControlFieldRejected(error)
     ) {
-      markBetaRejected(conversation, BETA_MID_CONV_CACHE_PROMOTION_LATCH);
+      markBetaRejected(conversation_2, BETA_MID_CONV_CACHE_PROMOTION_LATCH);
       markMidConvCachePromotionRejected();
       logForDebugging(
         "[mid-conv-system] proxy rejected cache_control on the api_system tail \u2014 demoting the breakpoint to the trailing message for this conversation",
@@ -8349,8 +8935,8 @@ async function* queryModel(
     if (
       apiSystemHasCacheControl &&
       !sideRequestMarked &&
-      !isBetaRejected_2(conversation, BETA_MID_CONV_CACHE_PROMOTION_LATCH) &&
-      !isBetaRejected_2(conversation, BETA_MID_CONV_CACHE_PROMOTION_OK_LATCH)
+      !isBetaRejected_2(conversation_2, BETA_MID_CONV_CACHE_PROMOTION_LATCH) &&
+      !isBetaRejected_2(conversation_2, BETA_MID_CONV_CACHE_PROMOTION_OK_LATCH)
     ) {
       let inputTokens = usage?.input_tokens ?? 0;
       let cacheReadInputTokens = usage?.cache_read_input_tokens ?? 0;
@@ -8359,9 +8945,9 @@ async function* queryModel(
         (usage?.cache_creation?.ephemeral_5m_input_tokens ?? 0) +
         (usage?.cache_creation?.ephemeral_1h_input_tokens ?? 0);
       let hasAnyTokens = inputTokens + cacheReadInputTokens + creationTokens > 0;
-      let proxyStripped = creationTokens > 0 && inputTokens < MIDCONV_CACHE_PROXY_READ_THRESHOLD;
+      let proxyStripped = creationTokens > 0 && inputTokens < PROXY_STRIPPED_INPUT_TOKEN_THRESHOLD;
       if (hasAnyTokens && !proxyStripped) return;
-      markBetaRejected(conversation, BETA_MID_CONV_CACHE_PROMOTION_OK_LATCH);
+      markBetaRejected(conversation_2, BETA_MID_CONV_CACHE_PROMOTION_OK_LATCH);
       logFeatureOk("api_midconv_cache_proxy");
     }
   };
@@ -8370,7 +8956,7 @@ async function* queryModel(
       return;
     let coverageDecision = decideStreamFallbackWarning(
       streamFallbackWarning().cacheCoverage,
-      conversation,
+      conversation_2,
       usage,
     );
     if (coverageDecision.kind === "confirm") {
@@ -8395,7 +8981,7 @@ async function* queryModel(
       provider: fromEnum(getProviderForModel(options.model)),
     });
   };
-  let noteEffortOk = () => {
+  let notePerTurnEffortOk = () => {
     if (!isPerTurnEffortOkEmitted() && perTurnEffortValue !== null) {
       markPerTurnEffortOkEmitted();
       logFeatureOk("api_per_turn_effort");
@@ -8424,7 +9010,7 @@ async function* queryModel(
     if (threadsProbeState === "retrying") {
       threadsProbeState = "spent";
       try {
-        if (BETA_MESSAGE_THREADS !== null) markBetaRejected(conversation, BETA_MESSAGE_THREADS);
+        if (BETA_MESSAGE_THREADS !== null) markBetaRejected(conversation_2, BETA_MESSAGE_THREADS);
         if (threadsProbePlannerBacked) disableTetherLiveGate();
         logEvent("tengu_tether_unrecognised_400", {
           phase: lit_2("healed"),
@@ -8441,10 +9027,10 @@ async function* queryModel(
         logError(error);
       }
     }
-    if (keptReminderSent) logKeptReminderOk();
+    if (toolRefs) logKeptReminderOk();
     if (clearAtProbeState === "retrying") {
       clearAtProbeState = "spent";
-      markBetaRejected(conversation, BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT);
+      markBetaRejected(conversation_2, BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT);
       retireKeptReminder();
       emitPromptHead();
       logFeatureSad("api_kept_reminder_clear_at", "unrecognised_400");
@@ -8475,7 +9061,8 @@ async function* queryModel(
       if (perTurnEffortValue !== null)
         messagesForAPI_2 = recoverMessages(
           attachPerTurnOutputConfig(stripOutputConfigs(messagesForAPI_2), {
-            effort: perTurnEffort,
+            effort: explicitEffortFields,
+            parent: tool,
             effortCap: learnedEffortCapFn(),
             now: perTurnNowValue,
           }),
@@ -8578,7 +9165,7 @@ async function* queryModel(
     thinkingBindingOn = false;
     dewdropMode = undefined;
     betaList = betaList.filter((beta) => beta !== BETA_THINKING_BINDING_CONTROLS);
-    markBetaRejected(conversation, BETA_THINKING_BINDING_CONTROLS);
+    markBetaRejected(conversation_2, BETA_THINKING_BINDING_CONTROLS);
     logForDebugging(
       betaRejected
         ? "[thinking] server rejected the thinking-binding-controls beta; dropping the header and the block_binding value for this conversation and retrying."
@@ -8596,7 +9183,7 @@ async function* queryModel(
     if (!sentBetaHeaders.includes(BETA_THINKING_TOKEN_COUNT.header)) return null;
     if (tokenCountBetaBlocked() || !isInvalidBetaFlagError(error)) return null;
     betaList = betaList.filter((beta) => beta !== BETA_THINKING_TOKEN_COUNT);
-    markBetaRejected(conversation, BETA_THINKING_TOKEN_COUNT);
+    markBetaRejected(conversation_2, BETA_THINKING_TOKEN_COUNT);
     droppedBetas.push(BETA_THINKING_TOKEN_COUNT);
     logForDebugging(
       "[thinking-token-count] server rejected the beta; dropping it for this conversation and retrying.",
@@ -8612,11 +9199,16 @@ async function* queryModel(
     return "retry:thinking-token-count-beta";
   };
   let recoverMentionedBetas = (error) => {
+    if (!handleServerUrlRefused(conversation_2, betasToDrop, isToolProvenanceServerUrlError(error))) return;
+    return "retry:tool-provenance-server-url";
+  };
+  let recoverRejectedBetas = (error) => {
     try {
-      let rejectedBetas = getRejectedBetas(error, [...sentBetaHeaders, ...bodyBetaHeaders]);
+      let rejectedBetas = getRejectedBetas(error, [...sentBetaHeaders, ...serverUrlBetaTried]);
       if (rejectedBetas.length === 0) return;
       let refusedSet = new Set(rejectedBetas);
       betaList = betaList.filter((beta) => !refusedSet.has(beta));
+      if (refusedSet.has(BETA_CCR_TOOL_PROVENANCE)) logFeatureBad("api_tool_provenance", "refused");
       for (let beta of rejectedBetas) {
         let onlyMentioned = isBetaHeaderRejected(error, beta);
         latchBetaRefused(beta, onlyMentioned);
@@ -8690,7 +9282,48 @@ async function* queryModel(
       logError(error);
     }
   };
-  let handleThinkingResumption = (error) => {
+  let recoverProgramUseCaseBeta = (error) => {
+    if (!sentBetaHeaders.includes(BETA_PROGRAM_USE_CASE_IDS.header) || !isProgramUseCaseBetaRejected(error))
+      return null;
+    markBetaHeaderRefused(BETA_PROGRAM_USE_CASE_IDS);
+    betaList = betaList.filter((beta) => beta !== BETA_PROGRAM_USE_CASE_IDS);
+    logForDebugging(
+      "[program-use-case] server rejected the program-use-case-ids beta header; the use case is not named again in this process",
+      {
+        level: "warn",
+      },
+    );
+    logFeatureSad("api_program_use_case", "header_rejected");
+    return "retry:program-use-case-beta";
+  };
+  let recoverProgramUseCaseNotHeld = (error) => {
+    let turnUseCaseNotFound =
+      thinkingTokenCountState !== undefined && isProgramUseCaseTurnScoped() && isNotFoundApiError(error);
+    if (
+      !sentBetaHeaders.includes(BETA_PROGRAM_USE_CASE_IDS.header) ||
+      !(isProgramUseCaseNotHeldError(error) || turnUseCaseNotFound)
+    )
+      return null;
+    betaList = betaList.filter((beta) => beta !== BETA_PROGRAM_USE_CASE_IDS);
+    if (turnUseCaseNotFound) {
+      dropProgramUseCaseId(options.model);
+      logForDebugging(
+        "[program-use-case] a request naming the turn's use case got a 404; this turn names nothing on that model",
+        {
+          level: "warn",
+        },
+      );
+      logFeatureSad("api_program_use_case", "not_found");
+      return "retry:program-use-case-not-held";
+    }
+    forgetRefusedProgramUseCase(options, thinkingTokenCountState);
+    logForDebugging("[program-use-case] server refused the use case this process holds; dropped it", {
+      level: "warn",
+    });
+    logFeatureSad("api_program_use_case", "not_held");
+    return "retry:program-use-case-not-held";
+  };
+  let recoverThinkingResumptionBeta = (error) => {
     if (
       !sentBetaHeaders.includes(BETA_THINKING_RESUMPTION.header) ||
       !isThinkingResumptionBetaRejected(error)
@@ -8909,7 +9542,7 @@ async function* queryModel(
           },
     );
   }
-  async function* BMs() {}
+  async function* queryModelCore() {}
   function blockKeyAt({ messageIndex, blockIndex }) {
     let message = sentMessages[messageIndex];
     return message?.role === "assistant" && Array.isArray(message.content)
@@ -8921,6 +9554,7 @@ async function* queryModel(
       if (
         !isTetherLive() ||
         thinkingAlreadyStripped ||
+        pinnedSystemValue ||
         sawApiError ||
         retryRequested ||
         retryCause !== undefined
@@ -8949,7 +9583,7 @@ async function* queryModel(
         sentThreadPrefix: createSentPrefixChecker({
           model: options.model,
           system: systemBlocks,
-          toolSchemas: toolSchemas_2,
+          toolSchemas,
           thinkingConfig: betas,
           getMessageHashes,
         }),
@@ -9167,6 +9801,7 @@ async function* queryModel(
     if (message.stop_reason === "refusal" && fallbackModel !== undefined) {
       recordMediaLimitSuccess();
       fallbackTriggered = true;
+      let cyberVerification = cyberVerificationOf(message.stop_details);
       yield {
         type: "fallback_request",
         trigger: "refusal",
@@ -9176,6 +9811,9 @@ async function* queryModel(
         refusedEffort: refusedEffortInfo(),
         apiRefusalCategory: message.stop_details?.category ?? null,
         apiRefusalExplanation: message.stop_details?.explanation ?? null,
+        ...(cyberVerification !== undefined && {
+          apiRefusalCyberVerification: cyberVerification,
+        }),
         creditCode: creditCode ?? null,
         mintedStateless: !threadSliced,
         ...describeFallbackRoute(route, refusalFallbackCascadeHop),
@@ -9278,6 +9916,7 @@ async function* queryModel(
         storageV5: options.storageV5,
         clock,
         queryTracking: options.queryTracking,
+        leavesLimitStateAlone: options.leavesLimitStateAlone,
         llmSpan: llmRequestSpan,
         contextCompactedKindForWire: contextCompactedKind,
         compactionRequestKindForWire: compactionRequestKind,
@@ -9333,14 +9972,16 @@ async function* queryModel(
           if (toolChangeRetry) return toolChangeRetry;
           let effortRetry = handleEffortUnsupported(error);
           if (effortRetry !== null) return effortRetry;
-          let resumptionRetry = handleThinkingResumption(error);
+          let programUseCaseRetry = recoverProgramUseCaseBeta(error) ?? recoverProgramUseCaseNotHeld(error);
+          if (programUseCaseRetry !== null) return programUseCaseRetry;
+          let resumptionRetry = recoverThinkingResumptionBeta(error);
           if (resumptionRetry === "surface:resume-prefill") return;
           if (resumptionRetry !== null) return resumptionRetry;
           let highlightsRetry = handleThinkingHighlights(error);
           if (highlightsRetry !== null) return highlightsRetry;
           let tokenCountProbe = recoverThinkingTokenCountBeta(error);
           if (tokenCountProbe !== null) return tokenCountProbe;
-          let mentionedBetasRetry = recoverMentionedBetas(error);
+          let mentionedBetasRetry = recoverMentionedBetas(error) ?? recoverRejectedBetas(error);
           if (mentionedBetasRetry !== undefined) return mentionedBetasRetry;
           maybeRefuseToolSearch(error);
           let context1mRetry = probeContext1mBeta(error);
@@ -9387,16 +10028,17 @@ async function* queryModel(
       noteCacheCoverageUsage(message.usage);
       noteCacheCoverageSustained(message.usage);
     } catch {}
-    noteEffortOk();
+    notePerTurnEffortOk();
     noteLateToolsOk();
     noopAfterSend();
     noopAfterSuccess();
     settleHealsAtSuccess();
-    settleThinkingTokenCountProbe();
-    settleThinkingDisplayProbe();
-    noteMidConvSystemAccepted();
+    settleTokenCountState();
+    settleMidConvState();
+    settleProbeState();
+    healState();
     settleContext1mProbe();
-    handleToolSearchRefusal();
+    probeState();
     settlePromptEndMark();
     logEvent("tengu_nonstreaming_fallback_success", {
       model: telemetrySafeModelName(options.model),
@@ -9413,7 +10055,7 @@ async function* queryModel(
     let wireInputs = wireInputsEchoed ? captureWireToolInputs(parsed.content) : undefined;
     if (wireInputs?.degraded) logWireToolInputParseFailure();
     let inputs = wireInputs?.inputs;
-    let ingestContext = countToolCallsSince_4(parsed.content, inputs);
+    let ingestContext = wireIngestContextStamps(parsed.content, inputs);
     let { content, batchToolUses } = isBatchToolsUse(
       normalizeContentFromAPI(
         parsed.content,
@@ -9436,17 +10078,20 @@ async function* queryModel(
     let advisorStrippedMsg = advisorStrippedMessage();
     if (advisorStrippedMsg) yield advisorStrippedMsg;
     if (dropAttachment) yield dropAttachment;
+    let usage_2 = mergeUsageFromDelta(EMPTY_USAGE, message.usage);
     let assistantMessage = {
       message: {
         ...message,
         content,
-        usage: mergeUsageFromDelta(EMPTY_USAGE, message.usage),
+        usage: usage_2,
         ...(contextManagementEligible &&
           message.context_management && {
             context_management: addClientEstimatedClearedTokens(
               message.context_management,
               toolResultClearingPlan?.edit,
               sentMessages,
+              tetherDecision,
+              usage_2,
             ),
           }),
       },
@@ -9462,8 +10107,9 @@ async function* queryModel(
       ...(classifierSession !== undefined && classifierResultPayload(classifierSession)),
       apiBlockIndex: 0,
       requestId: responseRequestId ?? undefined,
-      requestRef,
+      requestRef: healRequestId,
       requestedModel: options.model,
+      promptCacheRequested,
       ...buildAttribution(
         options.querySource,
         options.spawnedBySkill,
@@ -9485,7 +10131,7 @@ async function* queryModel(
       perTurnTiming: perTurnNowValue,
       ...{},
     };
-    noopNotice(conversation, assistantMessage);
+    noopNotice(conversation_2, assistantMessage);
     yieldedMessages.push(assistantMessage);
     nonStreamingAssistant = assistantMessage;
     usageRecorded = false;
@@ -9560,23 +10206,33 @@ async function* queryModel(
         );
       };
       let armStreamWatchdogs = function () {
+        if (
+          idleTimeoutBaseMs > 0 &&
+          streamIdleWarningTimer !== null &&
+          !idleTimedOut &&
+          suspendedError === undefined &&
+          slackStillFresh(clock, lastWatchdogArmMonotonicMs, lastWatchdogArmWallMs, idleTimeoutBaseMs)
+        )
+          return;
         clearStreamTimers();
         armStallWatcher();
         if (!CLAUDE_ENABLE_STREAM_WATCHDOG) return;
         let armedAt = clock.monotonicNow();
-        let wallArmedAt = clock.now();
-        let warningMs = warningThresholdMs;
+        let warningThresholdMs = clock.now();
+        lastWatchdogArmMonotonicMs = armedAt;
+        lastWatchdogArmWallMs = warningThresholdMs;
+        let warningMs = warningThresholdMs_2;
         streamWatchdogFiredAt = clock.setTimeout(() => {
           if (clock.monotonicNow() - armedAt < warningMs) return;
           logForDebugging(`Streaming idle warning: no chunks received for ${warningMs / 1000}s`, {
             level: "warn",
           });
           logForDiagnosticsNoPII("warn", "cli_streaming_idle_warning");
-        }, warningThresholdMs);
+        }, warningThresholdMs_2);
         streamIdleWarningTimer = clock.setTimeout(() => {
           suspendedError = checkSuspendedStreamIdle(clock, {
             armedAt,
-            wallArmedAt,
+            wallArmedAt: warningThresholdMs,
             idleMs: streamIdleTimeoutMs,
           });
           if (suspendedError !== undefined) {
@@ -9591,7 +10247,9 @@ async function* queryModel(
               level: "error",
             },
           );
-          logForDiagnosticsNoPII("error", "cli_streaming_idle_timeout");
+          logForDiagnosticsNoPII("error", "cli_streaming_idle_timeout", {
+            rearm_slack_ms: idleTimeoutBaseMs,
+          });
           logEvent("tengu_streaming_idle_timeout", {
             model: telemetrySafeModelName(options.model),
             request_id: traceValueOrUnknown(responseRequestId),
@@ -9604,6 +10262,7 @@ async function* queryModel(
       responseMeta = undefined;
       queryCheckpoint("query_client_creation_start");
       if (isTopLevelMain) {
+        markRequestBuildPart("retry_setup");
         endProfilePhase("request_build");
         startProfilePhase("client_creation");
       }
@@ -9640,6 +10299,7 @@ async function* queryModel(
             startProfilePhase("request_build");
           }
           let params = buildRequestParamsGuarded(context);
+          if (isTopLevelMain) markRequestBuildPart("sent_build");
           try {
             logApiQueryOnce(params);
           } catch (error) {
@@ -9648,6 +10308,14 @@ async function* queryModel(
           logApiRequestDetail(params);
           recordRequestBodies(params, true);
           maxOutputTokens = params.max_tokens;
+          if (attempt === 1 && isMainThread && !options.agentId) {
+            let requestParams = awaitCacheWarmIfAny(options.model, signal);
+            if (requestParams !== undefined) {
+              await requestParams;
+              attemptStartAt = clock.monotonicNow();
+              attemptStartTimes[attemptStartTimes.length - 1] = attemptStartAt;
+            }
+          }
           queryCheckpoint("query_api_request_sent");
           logForDebugging(
             `[API:timing] dispatching to ${getProviderForModel(options.model)} model=${options.model}`,
@@ -9661,7 +10329,12 @@ async function* queryModel(
           }
           if (!options.agentId) {
             if (isMainThread) headlessProfilerCheckpoint("api_request_sent");
-            if (isTopLevelMain) endProfilePhase("request_build");
+            if (isTopLevelMain) {
+              markRequestBuildPart("record_attempt");
+              endProfilePhase("request_build");
+              requestedEffort ??= openFirstEventWait(!effortLevel);
+              effortLevel = true;
+            }
             if (attempt === 1 && !sentAtMonotonic) {
               sentAtMonotonic = clock.monotonicNow();
               sentAtWall = clock.now();
@@ -9698,7 +10371,7 @@ async function* queryModel(
           let headers = requestTraceHeaders.headers;
           isLowPriority = isFirstPartyApiBackend() && isLowPriorityActiveSafe();
           if (isLowPriority) headers[ANTHROPIC_USAGE_LIMIT] = SLOW;
-          if (shouldSendExtendedUsageLimitHeader(options, isLowPriority, isSessionTask))
+          if (shouldSendExtendedUsageLimitHeader(options, isLowPriority, isSessionTask || earlyToolCap.asks))
             headers[ANTHROPIC_USAGE_LIMIT] = "extended";
           stampDispatchHeader(headers, isLowPriority);
           if (
@@ -9733,17 +10406,14 @@ async function* queryModel(
           if (classifyQuerySource(options.querySource) === "main") setTimeout(warmHarnessPatterns, 0);
           setTimeout(flushMessageOutlines, 0, options.querySource, options.agentId);
           let streamRequestBody = {
-            ...deferredToolNameOf(params),
+            ...inlineToolReferences(deferredToolNameOf(params)),
             ...(creditToken !== undefined && {
               fallback_credit_token: creditToken,
             }),
             stream: true,
           };
           let incrementalBody = takesRequestBodyBytes(options.fetchOverride)
-            ? checkIncrementalRequestBody(
-                streamRequestBody,
-                classifyQuerySource(options.querySource) === "main" && options.agentId === undefined,
-              )
+            ? checkIncrementalRequestBody(streamRequestBody, options)
             : undefined;
           let responseWithMeta = await reportIncrementalBodyMismatch(incrementalBody, streamRequestBody, () =>
             anthropic.beta.messages
@@ -9773,6 +10443,7 @@ async function* queryModel(
           );
           responseBody = responseWithMeta.response;
           headersReceivedAt = clock.now();
+          earlyToolCap.noteServed();
           noteResponse(responseRequestId, responseWithMeta.response?.headers, false);
           responseMeta = responseWithMeta.response && {
             status: responseWithMeta.response.status,
@@ -9823,6 +10494,12 @@ async function* queryModel(
             logApiQueryOnError();
             let recovered = handleKeptReminderRejection(error);
             if (recovered !== undefined) return recovered;
+            if (
+              earlyToolCap.takeAfter(error, () =>
+                shouldSendExtendedUsageLimitHeader(options, isLowPriority, true),
+              )
+            )
+              return "retry:usage-limit-grace";
             let hookRetry = recoverHookRetry(error);
             if (hookRetry !== undefined) return hookRetry;
             let classifierRetry = handleDangerousToolUseRejection(error);
@@ -9831,7 +10508,7 @@ async function* queryModel(
             if (recoveredResult !== null) return recoveredResult;
             if (afkModeOn && isAfkModeBetaRejected(error)) {
               afkModeOn = false;
-              if (BETA_AFK_MODE) markBetaRejected(conversation, BETA_AFK_MODE);
+              if (BETA_AFK_MODE) markBetaRejected(conversation_2, BETA_AFK_MODE);
               setAutoModeActive(false);
               setAutoModeCircuitBroken(true);
               logForDebugging(
@@ -9877,7 +10554,7 @@ async function* queryModel(
                             message.message.id === id &&
                             Array.isArray(message.message.content)
                           )
-                            thinkingIndex += count(
+                            thinkingIndex += countWhere(
                               message.message.content,
                               (block) => block.type === "thinking" || block.type === "redacted_thinking",
                             );
@@ -10023,10 +10700,12 @@ async function* queryModel(
             }
             if (keepaliveHeaderOn && isCacheKeepaliveBetaRejected(error)) {
               keepaliveHeaderOn = false;
-              onKeepaliveHeaderRejected(conversation, limitsAccountEpoch, isMainThread);
+              onKeepaliveHeaderRejected(conversation_2, limitsAccountEpoch, isMainThread);
               return "retry:cache-keepalive-beta";
             }
-            let resumptionRetry = handleThinkingResumption(error);
+            let body = recoverProgramUseCaseBeta(error) ?? recoverProgramUseCaseNotHeld(error);
+            if (body !== null) return body;
+            let resumptionRetry = recoverThinkingResumptionBeta(error);
             if (resumptionRetry === "surface:resume-prefill") return;
             if (resumptionRetry !== null) return resumptionRetry;
             {
@@ -10049,7 +10728,7 @@ async function* queryModel(
             if (highlightsRetry !== null) return highlightsRetry;
             let tokenCountRetry = recoverThinkingTokenCountBeta(error);
             if (tokenCountRetry !== null) return tokenCountRetry;
-            let mentionedBetasRetry = recoverMentionedBetas(error);
+            let mentionedBetasRetry = recoverMentionedBetas(error) ?? recoverRejectedBetas(error);
             if (mentionedBetasRetry !== undefined) return mentionedBetasRetry;
             maybeRefuseToolSearch(error);
             let context1mRetry = probeContext1mBeta(error);
@@ -10139,13 +10818,13 @@ async function* queryModel(
         if (!("controller" in next.value)) yield next.value;
       } while (!next.done);
       activeStream = next.value;
-      noteEffortOk();
+      notePerTurnEffortOk();
       noteLateToolsOk();
       noopAfterSend();
       noopAfterSuccess();
       settleHealsAtSuccess();
-      settleThinkingTokenCountProbe();
-      settleThinkingDisplayProbe();
+      settleTokenCountState();
+      settleMidConvState();
       settlePromptEndMark();
       if (retryStatusShown) {
         retryStatusShown = false;
@@ -10187,7 +10866,8 @@ async function* queryModel(
       pendingFallback = undefined;
       creditLogged = false;
       usage = EMPTY_USAGE;
-      contextManagement = null;
+      creditState = null;
+      creditBytes = null;
       reason = null;
       complete = false;
       costState = "none";
@@ -10253,11 +10933,19 @@ async function* queryModel(
       let wireInputDegraded = false;
       let CLAUDE_ENABLE_STREAM_WATCHDOG = env.CLAUDE_ENABLE_STREAM_WATCHDOG ?? true;
       let streamIdleTimeoutMs = getStreamIdleTimeoutMs();
-      let warningThresholdMs = streamIdleTimeoutMs / 2;
+      let warningThresholdMs_2 = streamIdleTimeoutMs / 2;
       let streamStallMarginMs = getStreamStallMarginMs();
+      let byteIdleTimeoutForProvider = getByteIdleTimeoutForProvider(getAPIProvider());
       let min = Math.min(
-        getByteIdleTimeoutForProvider(getAPIProvider()),
+        byteIdleTimeoutForProvider,
         CLAUDE_ENABLE_STREAM_WATCHDOG ? streamIdleTimeoutMs : 1 / 0,
+      );
+      let streamWatchdogEnabled = streamTimerSlackMs();
+      let idleTimeoutBaseMs = byteWatchdogSlackMs(
+        streamWatchdogEnabled,
+        streamIdleTimeoutMs,
+        byteIdleTimeoutForProvider,
+        options.onRetryStatus !== undefined,
       );
       let min_2 = Math.min(MAX_STREAM_STALL_MS, min - streamStallMarginMs);
       let idleTimedOut = false;
@@ -10267,6 +10955,8 @@ async function* queryModel(
       let streamIdleWarningTimer = null;
       let streamIdleTimer = null;
       let stallNotified = false;
+      let lastWatchdogArmMonotonicMs = 0;
+      let lastWatchdogArmWallMs = 0;
       armStreamWatchdogs();
       let partialOnAbortMessage = () => {
         if (options.querySource !== "sdk" && options.keepPartialMessageOnAbort !== true) return;
@@ -10295,8 +10985,9 @@ async function* queryModel(
           },
           apiBlockIndex: yieldedMessages.length,
           requestId: responseRequestId ?? undefined,
-          requestRef,
+          requestRef: healRequestId,
           requestedModel: options.model,
+          promptCacheRequested,
           ...buildAttribution(
             options.querySource,
             options.spawnedBySkill,
@@ -10354,7 +11045,7 @@ async function* queryModel(
         let isFirstEvent = true;
         let STALL_THRESHOLD_MS = 30000;
         let pingCount = 0;
-        let events = fixGuardrailStrayText(activeStream, signal);
+        let events = isDirectFirstPartyApi() ? activeStream : fixGuardrailStrayText(activeStream, signal);
         let counter = {
           count: 0,
         };
@@ -10365,6 +11056,7 @@ async function* queryModel(
           chunkTimes,
           STREAM_HEARTBEAT_MS,
           clock,
+          streamWatchdogEnabled,
         )) {
           if (isPingStreamEvent(event)) {
             pingCount++;
@@ -10414,7 +11106,9 @@ async function* queryModel(
             );
             queryCheckpoint("query_first_chunk_received");
             if (!options.agentId && isMainThread) headlessProfilerCheckpoint("first_chunk");
-            if (isTopLevelMain) finishProfile = openProfileStream();
+            finishProfile = isTopLevelMain ? openProfileStream() : openProfileWindow("side_stream");
+            requestedEffort?.();
+            requestedEffort = undefined;
             endQueryProfile();
             isFirstEvent = false;
           }
@@ -10537,9 +11231,10 @@ async function* queryModel(
                 lit_2("message_start_without_message"),
               );
               envelopeOpen = true;
-              noteMidConvSystemAccepted();
+              settleProbeState();
+              healState();
               settleContext1mProbe();
-              handleToolSearchRefusal();
+              probeState();
               partialMessage = event.message;
               if (partialMessage !== undefined && "resumable" in partialMessage) {
                 let { resumable, ...rest } = partialMessage;
@@ -10800,7 +11495,7 @@ async function* queryModel(
               let wireInputs = wireInputsEchoed ? captureWireToolInputs([block]) : undefined;
               wireInputDegraded ||= wireInputs?.degraded === true;
               let inputs = wireInputs?.inputs;
-              let ingestContext = countToolCallsSince_4([block], inputs);
+              let ingestContext = wireIngestContextStamps([block], inputs);
               let thinkingDurationMs = elapsedSinceMs(weakMap, block, clock);
               let thinkingDisplay = THINKING_BARE_WIDTH(block, requestedDisplayField);
               let assistantMessage = {
@@ -10829,8 +11524,9 @@ async function* queryModel(
                 ...(classifierSession !== undefined && classifierResultPayload(classifierSession)),
                 apiBlockIndex: event.index,
                 requestId: responseRequestId ?? undefined,
-                requestRef,
+                requestRef: healRequestId,
                 requestedModel: options.model,
+                promptCacheRequested,
                 ...buildAttribution(
                   options.querySource,
                   options.spawnedBySkill,
@@ -10852,7 +11548,7 @@ async function* queryModel(
                 perTurnTiming: perTurnNowValue,
                 ...{},
               };
-              noopNotice(conversation, assistantMessage);
+              noopNotice(conversation_2, assistantMessage);
               yieldedMessages.push(assistantMessage);
               completedBlockCount++;
               blockMessages.set(event.index, assistantMessage);
@@ -10878,7 +11574,7 @@ async function* queryModel(
             }
             case "message_delta": {
               usage = mergeUsageFromDelta(usage, event.usage);
-              contextManagement = event.context_management ?? contextManagement;
+              creditState = event.context_management ?? creditState;
               assertStreamPart(
                 typeof event.delta === "object" && event.delta !== null,
                 event,
@@ -10939,13 +11635,16 @@ async function* queryModel(
               if (delta.diagnostics?.cache_miss_reason) cacheMissReason = delta.diagnostics.cache_miss_reason;
               let resumable = getResumableFlag(event.delta) ?? getResumableFlag(event);
               let contextManagementUpdate =
-                contextManagementEligible && contextManagement
+                contextManagementEligible && creditState
                   ? addClientEstimatedClearedTokens(
-                      contextManagement,
+                      creditState,
                       toolResultClearingPlan?.edit,
                       sentMessages,
+                      tetherDecision,
+                      usage,
                     )
                   : null;
+              creditBytes = contextManagementUpdate;
               for (let msg of yieldedMessages) {
                 msg.message.usage = usage;
                 msg.message.stop_reason = reason;
@@ -11096,6 +11795,7 @@ async function* queryModel(
               if (stopReason === "refusal" && fallbackModelChosen !== undefined) {
                 recordMediaLimitSuccess();
                 fallbackTriggered = true;
+                let fallbackModel = cyberVerificationOf(event.delta.stop_details);
                 yield {
                   type: "fallback_request",
                   trigger: "refusal",
@@ -11105,6 +11805,9 @@ async function* queryModel(
                   refusedEffort: refusedEffortInfo(),
                   apiRefusalCategory: event.delta.stop_details?.category ?? null,
                   apiRefusalExplanation: event.delta.stop_details?.explanation ?? null,
+                  ...(fallbackModel !== undefined && {
+                    apiRefusalCyberVerification: fallbackModel,
+                  }),
                   creditCode: fallbackCreditToken ?? null,
                   mintedStateless: !threadSliced,
                   ...(silentRearm !== undefined && {
@@ -11198,7 +11901,7 @@ async function* queryModel(
             openContentBlockIndex = null;
             openBlockIsToolUse = false;
           }
-          yield {
+          let streamEvent = {
             type: "stream_event",
             event,
             ...(event.type === "message_start"
@@ -11233,6 +11936,12 @@ async function* queryModel(
                 }
               : undefined),
           };
+          if (
+            emitPlainDelta === undefined ||
+            !isTextOrJsonDeltaEvent(streamEvent) ||
+            !emitPlainDelta(streamEvent, true)
+          )
+            yield streamEvent;
         }
         clearStreamTimers();
         finishProfile?.(streamEventCount, chunkTimes?.chunks);
@@ -11342,7 +12051,7 @@ async function* queryModel(
         }
         recordIdleClearingServerReport({
           returnAfterIdle: contextManagementEligible ? toolResultClearingPlan?.returnAfterIdle : undefined,
-          contextManagement,
+          contextManagement: creditBytes,
           usage,
           querySource: options.querySource,
           agentId: options.agentId,
@@ -11362,7 +12071,7 @@ async function* queryModel(
           recordLowPriorityServed(lowPriorityWait, headersReceivedAt);
           extractGraceStatusFromHeaders(
             response.headers,
-            classifyQuerySource(options.querySource) !== "auxiliary",
+            classifyQuerySource(options.querySource) !== "auxiliary" && !options.leavesLimitStateAlone,
             headersReceivedAt,
             limitsAccountEpoch,
           );
@@ -11370,17 +12079,19 @@ async function* queryModel(
             (has1mSuffix_2(options.model) || modelHasNative1MContext(options.model)) &&
             usage.input_tokens + usage.cache_read_input_tokens + usage.cache_creation_input_tokens >
               SECONDARY_CONTEXT_WINDOW;
-          let quotaStatusFromHeaders = extractQuotaStatusFromHeaders(
-            response.headers,
-            options.model,
-            longContext,
-            headersReceivedAt,
-            limitsAccountEpoch,
-            options.storageV5,
-          );
-          if (quotaStatusFromHeaders && options.queryTracking) {
+          let longContextInUse = options.leavesLimitStateAlone
+            ? null
+            : extractQuotaStatusFromHeaders(
+                response.headers,
+                options.model,
+                longContext,
+                headersReceivedAt,
+                limitsAccountEpoch,
+                options.storageV5,
+              );
+          if (longContextInUse && options.queryTracking) {
             options.queryTracking.answeredQuerySource = options.querySource;
-            options.queryTracking.billedToUsageCredits = quotaStatusFromHeaders.overageInUse === true;
+            options.queryTracking.billedToUsageCredits = longContextInUse.overageInUse === true;
             options.queryTracking.longContextBilled = longContext;
           }
           refetchStaleClientData(response.headers, options, fallbackActive);
@@ -11395,6 +12106,7 @@ async function* queryModel(
             ? suspendedError
             : streamingError;
         clearStreamTimers();
+        if (isTopLevelMain && !signal.aborted) requestedEffort ??= openFirstEventWait(false);
         finishProfile?.(streamEventCount, chunkTimes?.chunks);
         cancelFirstByteTimer();
         {
@@ -11535,6 +12247,18 @@ async function* queryModel(
           fallbackCause,
           streamError instanceof APIUserAbortError ? effectiveError : streamError,
         );
+        if (isToolUseBlockCutOffError(streamError)) {
+          for (let yieldedMessage of yieldedMessages) {
+            yieldedMessage.message.usage = usage;
+            yieldedMessage.message.stop_reason = "max_tokens";
+          }
+          tetherDelta?.noteClientTruncated(yieldedMessages[0]?.message.id);
+          if (envelopeOpen) creditCostOnce();
+          yield* emitStopEvents({
+            responseUnfinished: true,
+          });
+          throw streamError;
+        }
         let isServerError =
           is529Error(streamError) ||
           isNon529ServerError(streamError) ||
@@ -11600,9 +12324,7 @@ async function* queryModel(
           if (decision !== "fail") {
             releaseStreamResources();
             let wasWatchdog = idleTimedOut;
-            let any = yieldedMessages.some((message) =>
-              message.message.content.some((params) => params.type === "tool_use"),
-            );
+            let wasIdleTimedOut = hasToolUse(yieldedMessages);
             if (decision === "retry") {
               if (!anyOutputShown) markAbandonedThinking(yieldedMessages, resolvedModel);
               if (wasWatchdog) {
@@ -11702,7 +12424,7 @@ async function* queryModel(
               });
               break e;
             }
-            let synthesizedStopReason = any ? "tool_use" : "end_turn";
+            let synthesizedStopReason = wasIdleTimedOut ? "tool_use" : "end_turn";
             reason = synthesizedStopReason;
             for (let message of yieldedMessages) {
               message.message.usage = usage;
@@ -11765,7 +12487,7 @@ async function* queryModel(
                     : isConnectionError(streamError)
                       ? "connection_failed"
                       : undefined,
-              truncatedAfterOutput: anyOutputShown && !any ? true : undefined,
+              truncatedAfterOutput: anyOutputShown && !wasIdleTimedOut ? true : undefined,
             });
             apiErrorMessage.streamCutCause = cutCause;
             if (wasWatchdog && !anyOutputShown) apiErrorMessage.streamWatchdogGaveUp = true;
@@ -12277,7 +12999,7 @@ async function* queryModel(
         wasUndecided &&
         (failure instanceof ToolSearchRefusedError || options.toolSearchRefusal !== undefined)
       )
-        resetDeclaredTools(conversation);
+        resetDeclaredTools(conversation_2);
       if (failure instanceof ToolSearchRefusedError) {
         deferredSchemasSent?.splice(0, deferredSchemasSent.length);
         throw failure;
@@ -12307,7 +13029,7 @@ async function* queryModel(
       }
       if (attemptOutcome !== undefined && isRequestTooLargeError_2(surfaceError))
         attemptOutcome.ended = "filtered_again";
-      if (surfaceError instanceof APIError)
+      if (surfaceError instanceof APIError && !options.leavesLimitStateAlone)
         extractQuotaStatusFromError(
           surfaceError,
           getRequestRouteKind(options),
@@ -12383,6 +13105,7 @@ async function* queryModel(
         ...(watchdogGaveUp && {
           streamWatchdogGaveUp: true,
         }),
+        ...failedResponseStamp(yieldedMessages, signal.aborted),
         ...((isNonFallbackError(surfaceError) ||
           alwaysFalseErrors(surfaceError) ||
           isVerificationRequiredError(surfaceError) ||
@@ -12402,6 +13125,7 @@ async function* queryModel(
     } catch (error) {
       logError(toError(error));
     }
+    requestedEffort?.();
     endActivity("api_call", backgroundAgentId);
     noteMidConvGuessWrong();
     flushMessageOutlines(options.querySource, options.agentId);
@@ -12504,10 +13228,11 @@ async function* queryModel(
         ? Math.max(estimate + usage.output_tokens, usageTotal)
         : usageTotal || estimate;
     });
-  noopRecordRequest(conversation, {
+  noopRecordRequest(conversation_2, {
     isMainConversation: isMainThread,
   });
   recordMediaLimitSuccess();
+  if (mediaTakenOut !== undefined) recordUnsentMedia(options.agentId, mediaTakenOut);
   wireCache.served();
   if (cacheDiagnosisOn() && cacheMissReason)
     logCacheDiagnosisReceived(cacheMissReason, {
@@ -12528,7 +13253,7 @@ async function* queryModel(
     : sentImageStats(messagesForAPI_2, threadSliceFrom);
   let prefixStats = isFirstPartyTelemetryBlocked()
     ? undefined
-    : requestPrefixStats(systemBlocks, allTools, getToolNameKinds(tools, extraToolSchemas));
+    : requestPrefixStats(systemBlocks, tools_2, getToolNameKinds(tools, deferralPlaceholderSchema));
   let carriedEffortEnded = isMainThread ? takeRefusalFallbackCarriedEffortEnd() : undefined;
   options
     .getToolPermissionContext()
@@ -12546,7 +13271,7 @@ async function* queryModel(
         messageCount: logMessageCount,
         messageTokens: logMessageTokens,
         requestId: responseRequestId ?? null,
-        rawRequestBodyId,
+        rawRequestBodyId: healOutcome,
         accountMemoryKeys,
         clientRequestId: fellBackToNonStreaming ? undefined : clientRequestId,
         firstAttemptRequestId: firstAttemptRequestId ?? null,
@@ -12564,7 +13289,7 @@ async function* queryModel(
         headers: responseHeaders,
         extraEventFields: {
           ...{},
-          ...emptyObject(conversation),
+          ...emptyObject(conversation_2),
         },
         costUSD,
         isDefaultModel: isMainThread ? options.isDefaultModel : undefined,
@@ -12611,7 +13336,7 @@ async function* queryModel(
     .catch((error) => logError(withTelemetryMessage(toError(error), "api success logging failed")));
   releaseStreamResources();
 }
-//@ chunk-e6aww6q8.js:2799701-2799795 fingerprint (2.1.88 match: cleanupStream, 1)
+//@ chunk-5xgkngpb.js:2867697-2867791 fingerprint (2.1.88 match: cleanupStream, 1)
 /**
  * 中止尚未结束的 SDK 流（释放连接）。
  */
@@ -12621,12 +13346,9 @@ function cleanupStream(stream) {
     if (!stream.controller.signal.aborted) stream.controller.abort();
   } catch {}
 }
-//@ chunk-e6aww6q8.js:2802858-2802871 affinity
-/**
- * 1024：中途 system 消息缓存代理判定阈值（cache read 小于此值）。
- */
-var MIDCONV_CACHE_PROXY_READ_THRESHOLD = 1024;
-//@ chunk-e6aww6q8.js:2802871-2804890 callgraph-fingerprint (2.1.88 match: addCacheBreakpoints, 0.234)
+//@ chunk-5xgkngpb.js:2870854-2870867 affinity
+var PROXY_STRIPPED_INPUT_TOKEN_THRESHOLD = 1024;
+//@ chunk-5xgkngpb.js:2870867-2872888 callgraph-fingerprint (2.1.88 match: addCacheBreakpoints, 0.234)
 /**
  * 给 API 消息加 cache_control 断点：kun() 选出标记位置（最后一条消息、fork 点、api_system 等），记 tengu_api_cache_breakpoints，再把内部消息转成 MessageParam（user/assistant/api_system）。
  */
@@ -12789,7 +13511,7 @@ function addCacheBreakpoints(
   wireIndexOf?.push(...messages_2.keys(), messages_2.length);
   return messages_2;
 }
-//@ chunk-e6aww6q8.js:2805133-2805379 fingerprint (2.1.88 match: buildSystemPromptBlocks, 0.617)
+//@ chunk-5xgkngpb.js:2873131-2873377 fingerprint (2.1.88 match: buildSystemPromptBlocks, 0.618)
 /**
  * 把 system 提示词数组切成带缓存范围的块（s2o），每块转成 {type:"text",text,cache_control?}；cacheScope=global 时带 scope:"global"。
  */
@@ -12808,7 +13530,7 @@ function buildSystemPromptBlocks(systemPrompt, enablePromptCaching, options) {
       }),
   }));
 }
-//@ chunk-e6aww6q8.js:2805379-2805821 layout
+//@ chunk-5xgkngpb.js:2873377-2873819 layout
 /**
  * 小模型查询：按小模型 fallback 链依次尝试，只在 permission_denied 时换下一个。
  */
@@ -12841,7 +13563,7 @@ async function queryHaikuWithFallback(options) {
         throw error;
     }
 }
-//@ chunk-e6aww6q8.js:2805821-2806412 callgraph-witnessed (2.1.88 match: queryWithModel, 0.749)
+//@ chunk-5xgkngpb.js:2873819-2874410 callgraph-witnessed (2.1.88 match: queryWithModel, 0.749)
 /**
  * 单轮无工具辅助查询（指定模型、可带 fallback）：用 VCR 包装，thinking 机械关闭，默认不开缓存。
  */
@@ -12904,7 +13626,7 @@ async function queryWithModel(
     )
   )[0];
 }
-//@ chunk-e6aww6q8.js:2806412-2806944 fingerprint (2.1.88 match: queryHaiku, 0.838)
+//@ chunk-5xgkngpb.js:2874410-2874942 fingerprint (2.1.88 match: queryHaiku, 0.838)
 /**
  * 小模型（Haiku）辅助查询：单条用户消息、无工具、thinking 默认机械关闭，走 queryModelWithoutStreaming，VCR 可录放。
  */
@@ -12961,7 +13683,7 @@ async function queryHaiku({
     )
   )[0];
 }
-//@ chunk-e6aww6q8.js:2806944-2807696 layout
+//@ chunk-5xgkngpb.js:2874942-2875694 layout
 /**
  * stop_reason 为 max_tokens / model_context_window_exceeded 时生成 API 错误消息（提示 CLAUDE_CODE_MAX_OUTPUT_TOKENS）。
  */
@@ -12991,7 +13713,7 @@ function getMaxTokensStopMessage(stopReason, maxTokens, outputTokens, withoutStr
   }
   return;
 }
-//@ chunk-e6aww6q8.js:2807696-2807918 fingerprint (2.1.88 match: adjustParamsForNonStreaming, 1)
+//@ chunk-5xgkngpb.js:2875694-2875916 fingerprint (2.1.88 match: adjustParamsForNonStreaming, 1)
 /**
  * 非流式回退时把 max_tokens 限到上限，并把 thinking.budget_tokens 限到 max_tokens-1。
  */
@@ -13010,14 +13732,14 @@ function adjustParamsForNonStreaming(params, maxTokensCap) {
     max_tokens: cappedMaxTokens,
   };
 }
-//@ chunk-e6aww6q8.js:2807918-2808007 layout
+//@ chunk-5xgkngpb.js:2875916-2876005 layout
 /**
  * 消息上布尔 resumable 字段（未完成思考可续写）。
  */
 function getResumableFlag(message) {
   return "resumable" in message && typeof message.resumable === "boolean" ? message.resumable : undefined;
 }
-//@ chunk-e6aww6q8.js:2808007-2808146 placement
+//@ chunk-5xgkngpb.js:2876005-2876144 placement
 function assertStreamPart(ok, part, errorType) {
   if (ok) return;
   logEvent("tengu_streaming_error", {
@@ -13027,11 +13749,11 @@ function assertStreamPart(ok, part, errorType) {
   });
   throw new StreamMalformedEventError("unreadable");
 }
-//@ chunk-e6aww6q8.js:2808146-2808222 placement
+//@ chunk-5xgkngpb.js:2876144-2876220 placement
 function blockIndexOf(event) {
   return "index" in event && typeof event.index === "number" ? event.index : undefined;
 }
-//@ chunk-e6aww6q8.js:2808222-2808342 placement
+//@ chunk-5xgkngpb.js:2876220-2876340 placement
 function isRestartedBlock({ previous, closedContentBlocks, started }) {
   return (
     previous !== undefined &&
@@ -13041,7 +13763,7 @@ function isRestartedBlock({ previous, closedContentBlocks, started }) {
     previous.id === started.id
   );
 }
-//@ chunk-e6aww6q8.js:2808342-2808410 placement
+//@ chunk-5xgkngpb.js:2876340-2876408 placement
 function recordMonotonicTime(weakMap, block, clock) {
   try {
     weakMap.set(block, clock.monotonicNow());
@@ -13049,7 +13771,7 @@ function recordMonotonicTime(weakMap, block, clock) {
     logError(toError(error));
   }
 }
-//@ chunk-e6aww6q8.js:2808410-2808545 placement
+//@ chunk-5xgkngpb.js:2876408-2876543 placement
 function elapsedSinceMs(weakMap, block, clock) {
   try {
     let startedAt = weakMap.get(block);
@@ -13060,30 +13782,22 @@ function elapsedSinceMs(weakMap, block, clock) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2808545-2808554 placement
+//@ chunk-5xgkngpb.js:2876543-2876552 placement
 // deferred: uses setAdvisorBaseUrlGetter (../../utils/advisor.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2808545", () => {
+deferInit("chunk-5xgkngpb.js:2876543", () => {
   setAdvisorBaseUrlGetter(getApiBaseUrl);
 });
-//@ chunk-3xb70ww4.js:2887-2932 fingerprint (2.1.88 match: isMedia, 1)
-/**
- * text/image/document：contentBlockStableKeys 不为这几类生成键。旧版名 isMedia 为错配。
- */
-var KEYLESS_BLOCK_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3xb70ww4.js:2887", () => {
-  KEYLESS_BLOCK_TYPES = new Set(["text", "image", "document"]);
-});
-//@ chunk-r1wk8q25.js:12135-12238 placement
+//@ chunk-n7kzs9r0.js:13296-13399 placement
 var UPGRADE_RELAY_USAGE_LIMIT = "upgrade_relay_usage_limit";
 var UPGRADE_RELAY_REQUEST_CLASS = "upgrade_relay_request_class";
 var UPGRADE_RELAY_INHERITED_TOOLS = "upgrade_relay_inherited_tools";
-//@ chunk-r1wk8q25.js:12368-12389 placement
+//@ chunk-n7kzs9r0.js:13529-13550 placement
 /**
  * 60000 / 15000：非流式回退超时常量；getNonstreamingFallbackTimeoutMs 用 15s 或 API_TIMEOUT_MS/2 的较小者。
  */
 var NON_STREAMING_FALLBACK_LONG_TIMEOUT_MS = 60000;
 var NON_STREAMING_FALLBACK_TIMEOUT_MS = 15000;
-//@ chunk-r1wk8q25.js:12389-12479 fingerprint (2.1.88 match: getNonstreamingFallbackTimeoutMs, 0.768)
+//@ chunk-n7kzs9r0.js:13550-13640 fingerprint (2.1.88 match: getNonstreamingFallbackTimeoutMs, 0.77)
 /**
  * 非流式回退请求超时：15s，设置 API_TIMEOUT_MS 时取其一半与 15s 的较小值。
  */
@@ -13093,7 +13807,7 @@ function getNonstreamingFallbackTimeoutMs() {
     ? Math.min(NON_STREAMING_FALLBACK_TIMEOUT_MS, Math.floor(API_TIMEOUT_MS / 2))
     : NON_STREAMING_FALLBACK_TIMEOUT_MS;
 }
-//@ chunk-1ny7cxrt.js:1377013-1377628 fingerprint (2.1.88 match: updateUsage, 0.876)
+//@ chunk-1hnjmk23.js:1378844-1379459 fingerprint (2.1.88 match: updateUsage, 0.876)
 /**
  * 把内部 usage 规整成 SDK/外部格式：缓存细分、server_tool_use 只保留 web_search、speed 只认 fast，其余置 null。旧版名 updateUsage 为错配。
  */
@@ -13122,45 +13836,45 @@ function toSdkUsage(rawUsage) {
   };
 }
 export {
-  queryHaiku,
-  isToolResultOnlyUserMessage,
-  getAPIMetadata,
+  hasMediaContent,
   collectBlockFieldsByType,
-  getToolResultIds,
+  queryModelWithoutStreaming,
   shouldSendInterleavedThinkingBeta,
-  promptIdForRequest,
-  getPromptCachingEnabled,
-  isOneHourCacheTtl,
-  verifyApiKey,
-  queryHaikuWithFallback,
-  isStructuredOutputsUnsupportedClaude,
   canonicalNameOrUndefined,
   ultrathinkEffectiveSafely,
+  resolveModelAlias,
   computeDeclaredToolSet,
-  KEYLESS_BLOCK_TYPES,
-  toSdkUsage,
-  getControlRequestInfo,
-  getCacheControl,
+  promptIdForRequest,
   getExtraBodyParams,
-  isBasaltSpurEnabled,
-  queryModelWithoutStreaming,
-  getMaxOutputTokensForModel,
-  watchSessionSwitchForThinkingKeep,
-  isInvalidEffortError,
-  queryModelWithStreaming,
-  isRealApiResponse,
-  should1hCacheTTL,
+  getPromptCachingEnabled,
+  toSdkUsage,
+  isToolResultOnlyUserMessage,
+  queryHaikuWithFallback,
   isMidConvSystemForced,
   notifyPerTurnEffortInactive,
+  isRealApiResponse,
+  getMaxOutputTokensForModel,
+  isOneHourCacheTtl,
+  getCacheControl,
+  isInvalidEffortError,
+  queryModelWithStreaming,
+  should1hCacheTTL,
+  isStructuredOutputsUnsupportedClaude,
   logUnrecognizedModel,
   lowerEffort,
   learnedEffortCap,
   applyEffortToOutputConfig,
+  getAPIMetadata,
   getDispatchVersion,
   V2P,
   ANTHROPIC_DISPATCH_ID,
   markStructuredOutputsUnsupportedClaude,
   buildContextTokensFields,
+  isBasaltSpurEnabled,
+  queryHaiku,
+  getControlRequestInfo,
+  verifyApiKey,
+  watchSessionSwitchForThinkingKeep,
   NON_STREAMING_FALLBACK_LONG_TIMEOUT_MS,
   getNonstreamingFallbackTimeoutMs,
   UPGRADE_RELAY_USAGE_LIMIT,

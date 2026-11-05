@@ -3,9 +3,9 @@
  *
  * 远程控制下发的 apply_flag_settings 处理（effort 等）（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7rha57gt.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-76c076m4.js (8)
  * attribution: placement 8
  */
 import {
@@ -35,7 +35,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { parseEffortOrKeyword } from "../utils/permissions/permissionSetup.js";
 import { bridgeHostState } from "./bridgeHostState.js";
 
-//@ chunk-7rha57gt.js:440-506 placement
+//@ chunk-76c076m4.js:440-506 placement
 /**
  * 把远程控制下发的 effort 取值解析成字符串，非字符串时返回 null（apply_flag_settings 用）。
  */
@@ -43,7 +43,7 @@ function resolveEffortLevelOrNull(mainLoopModel, effortLevel) {
   let effortValue = resolveEffortValue(mainLoopModel, effortLevel);
   return typeof effortValue === "string" ? effortValue : null;
 }
-//@ chunk-7rha57gt.js:506-1889 placement
+//@ chunk-76c076m4.js:506-1889 placement
 /**
  * 应用远程控制下发的 apply_flag_settings（effort 等），对远程控制禁止的项给出说明
  */
@@ -135,7 +135,7 @@ function applyBridgeFlagSettings(settings, { model, getAppState, setAppState }) 
     ok: true,
   };
 }
-//@ chunk-7rha57gt.js:1889-2401 placement
+//@ chunk-76c076m4.js:1889-2401 placement
 /**
  * 解析并种下远程控制会话的 effort 等级（含 ultracode/auto），未知值报错
  */
@@ -176,7 +176,7 @@ function seedBridgeEffortLevel(rawEffort, { getAppState, setAppState, latch }) {
     ok: true,
   };
 }
-//@ chunk-7rha57gt.js:2401-2860 placement
+//@ chunk-76c076m4.js:2401-2860 placement
 /**
  * 把 effort 等级、ultracode 状态和请求 id 中有变化的部分通过桥接 reportMetadata 上报（effort_level / is_ultracode_active / effort_request_id）。
  */
@@ -205,7 +205,7 @@ function reportBridgeEffortMetadata({ level, ultracodeActive, requestId }) {
   }
   if (Object.keys(payload).length > 0) activeOutboundBridgeHandle.reportMetadata(payload);
 }
-//@ chunk-7rha57gt.js:2860-2994 placement
+//@ chunk-76c076m4.js:2860-2994 placement
 /**
  * 按当前模型与应用状态算出 effort 默认值和 ultracode 状态并上报给桥接。
  */
@@ -223,7 +223,7 @@ function reportEffortForModel(model, appState) {
     ultracodeActive: isUltracodeActive(appState.ultracode, model),
   });
 }
-//@ chunk-7rha57gt.js:2994-3034 placement
+//@ chunk-76c076m4.js:2994-3034 placement
 /**
  * 按 requestId 上报一次桥接 effort 元数据（先做有界标签化）。
  */
@@ -232,13 +232,13 @@ function reportBridgeEffortForRequest(requestId) {
     requestId: toBoundedLabel(requestId),
   });
 }
-//@ chunk-7rha57gt.js:3034-3125 placement
+//@ chunk-76c076m4.js:3034-3125 placement
 function getActiveOutboundBridgeHandle() {
   let hostState = bridgeHostState();
   let handle = hostState.replHandle ?? hostState.sdkHostedHandle;
   return handle && !handle.outboundOnly ? handle : null;
 }
-//@ chunk-7rha57gt.js:3125-3327 placement
+//@ chunk-76c076m4.js:3125-3327 placement
 /**
  * 清空“已上报”记录后把最后一次已知的 effort 状态重新上报（桥接重连时用）。
  */
@@ -253,9 +253,9 @@ function resendBridgeEffortMetadata() {
   });
 }
 export {
-  resolveEffortLevelOrNull,
   seedBridgeEffortLevel,
   reportEffortForModel,
+  resolveEffortLevelOrNull,
   applyBridgeFlagSettings,
   reportBridgeEffortForRequest,
   reportBridgeEffortMetadata,

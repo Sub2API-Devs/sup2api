@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：渲染预算（嵌入、文档、警告）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-06y4szbn.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-51jy8ztq.js (11)
  * attribution: placement 11
  */
 import { READ_BACK_LIMITS, floored } from "./readBack.js";
@@ -25,7 +25,7 @@ import { ARTIFACT_SLUG_RE } from "../../tools/ArtifactTool/constants.js";
 import { SAFE_LABEL_RE } from "./textSanitize.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-06y4szbn.js:65657-65891 placement
+//@ chunk-51jy8ztq.js:67909-68143 placement
 function renderWarnings(res) {
   let warnings = res !== null && typeof res === "object" ? res.warnings : undefined;
   if (!Array.isArray(warnings)) return [];
@@ -38,14 +38,14 @@ function renderWarnings(res) {
   }
   return out;
 }
-//@ chunk-06y4szbn.js:65891-66058 placement
+//@ chunk-51jy8ztq.js:68143-68310 placement
 function parseRenderBudgetReason(reason) {
   if (/^live_over_budget:(.{1,1024})$/.exec(reason)) return reason;
   if (/^render_unavailable:(.{1,1024})$/.exec(reason)) return reason;
   if (reason === "render_over_budget") return reason;
   return;
 }
-//@ chunk-06y4szbn.js:66058-66498 placement
+//@ chunk-51jy8ztq.js:68310-68750 placement
 function renderDocs(response) {
   let docs =
     response !== null && typeof response === "object" && "docs" in response
@@ -75,34 +75,34 @@ function renderDocs(response) {
     )
     .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
-//@ chunk-06y4szbn.js:66498-66539 placement
+//@ chunk-51jy8ztq.js:68750-68791 placement
 /**
  * 渲染输出转换的占位实现（本构建中均返回空数组）。
  */
 function embedsToDocs(docs) {
   return docs.flatMap((doc) => []);
 }
-//@ chunk-06y4szbn.js:66539-66562 placement
+//@ chunk-51jy8ztq.js:68791-68814 placement
 function emptyList() {
   return [];
 }
-//@ chunk-06y4szbn.js:66562-66603 placement
+//@ chunk-51jy8ztq.js:68814-68855 placement
 function pinsToDocs(docs) {
   return docs.flatMap((doc) => []);
 }
-//@ chunk-06y4szbn.js:66603-66629 placement
+//@ chunk-51jy8ztq.js:68855-68881 placement
 function warningsToDocs(detach, detachList) {
   return [];
 }
-//@ chunk-06y4szbn.js:66629-66670 placement
+//@ chunk-51jy8ztq.js:68881-68922 placement
 function docsToDocs(docs) {
   return docs.flatMap((doc) => []);
 }
-//@ chunk-06y4szbn.js:66670-66741 placement
+//@ chunk-51jy8ztq.js:68922-68993 placement
 function newWarnings(paths, known) {
   return (paths ?? []).filter((path) => !known.has(path)).flatMap((path) => []);
 }
-//@ chunk-06y4szbn.js:66741-67153 placement
+//@ chunk-51jy8ztq.js:68993-69405 placement
 /**
  * 渲染输出限额：32、16 条警告、200 字符来源、路径正则，以及 embeds/pins/warnings 的 schema。
  */
@@ -113,7 +113,7 @@ var SAFE_RENDER_PATH_RE;
 var embedsSchema;
 var pinSchema;
 var warningSchema;
-deferInit("chunk-06y4szbn.js:66741", () => {
+deferInit("chunk-51jy8ztq.js:68993", () => {
   RENDER_LIMITS = 32;
   MAX_RENDER_WARNINGS = 16;
   MAX_RENDER_SRC_CHARS = 200;
@@ -140,7 +140,7 @@ deferInit("chunk-06y4szbn.js:66741", () => {
     }),
   );
 });
-//@ chunk-06y4szbn.js:67153-67830 placement
+//@ chunk-51jy8ztq.js:69405-70082 placement
 function renderEmbeds(response) {
   if (
     response === null ||

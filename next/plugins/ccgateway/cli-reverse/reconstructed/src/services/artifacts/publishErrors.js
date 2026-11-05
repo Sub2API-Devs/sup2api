@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：发布失败的描述与拒绝信息
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-06y4szbn.js (35)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-51jy8ztq.js (35)
  * attribution: placement 35
  */
 import { publishError, strandedSlugFrom } from "./publishConflicts.js";
@@ -20,12 +20,12 @@ import { parseRetryAfterMs } from "../../bridge/debugUtils.js";
 import { artifactViewerUrl, PATCH_ERROR_PATTERNS, EMPTY_MANIFEST_RE } from "./publishInstanceFiles.js";
 import { dailyCapNotice } from "./publishArtifact.js";
 import { getLiveState } from "../liveReplica/liveReplica.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { isCredentialRefusalBody, isFrameNotFoundBody } from "./frameRelay.js";
 import { SAFE_LABEL_RE, SAFE_LABEL_TEXT } from "./textSanitize.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-06y4szbn.js:163613-163838 placement
+//@ chunk-51jy8ztq.js:169368-169593 placement
 function publishErrorResult(status, body, detail = "") {
   return {
     ...publishError((status.msg ?? body) + detail),
@@ -40,11 +40,11 @@ function publishErrorResult(status, body, detail = "") {
     }),
   };
 }
-//@ chunk-06y4szbn.js:163838-163886 placement
+//@ chunk-51jy8ztq.js:169593-169641 placement
 function liveConflictOf(result) {
   return refusalReasonOf(result) === undefined ? readLiveConflict(result) : null;
 }
-//@ chunk-06y4szbn.js:163886-164182 placement
+//@ chunk-51jy8ztq.js:169641-169937 placement
 function preconditionConflictOf(response, extra) {
   if (refusalReasonOf(response) !== "precondition_failed") return null;
   let liveConflict = readLiveConflict(response);
@@ -61,9 +61,9 @@ function preconditionConflictOf(response, extra) {
     paths: conflictPaths,
   };
 }
-//@ chunk-06y4szbn.js:164182-164304 placement
+//@ chunk-51jy8ztq.js:169937-170059 placement
 var HASH_MISMATCH_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-06y4szbn.js:164182", () => {
+deferInit("chunk-51jy8ztq.js:169937", () => {
   HASH_MISMATCH_SCHEMA = DoctorLazy(() =>
     objectSchema({
       path: stringSchema(),
@@ -76,7 +76,7 @@ deferInit("chunk-06y4szbn.js:164182", () => {
     }),
   );
 });
-//@ chunk-06y4szbn.js:164304-164720 placement
+//@ chunk-51jy8ztq.js:170059-170475 placement
 function readLiveConflict(res) {
   if (
     !res ||
@@ -103,7 +103,7 @@ function readLiveConflict(res) {
     }),
   };
 }
-//@ chunk-06y4szbn.js:164720-164894 placement (2.1.88 match: REASON_TAG, 1)
+//@ chunk-51jy8ztq.js:170475-170649 placement (2.1.88 match: REASON_TAG, 1)
 function denyPolicyBody(data) {
   if (
     data &&
@@ -119,7 +119,7 @@ function denyPolicyBody(data) {
     };
   return null;
 }
-//@ chunk-06y4szbn.js:164894-166190 placement
+//@ chunk-51jy8ztq.js:170649-171945 placement
 /**
  * 发布被拒的原因码表：denied 与 refused 两组（合规、组织、限额、渲染、版本冲突等），以及 "publish denied: " 前缀。
  */
@@ -194,7 +194,7 @@ var PUBLISH_REFUSAL_REASONS = [
   "unknown_version",
   "write_conflict",
 ];
-//@ chunk-06y4szbn.js:166190-166273 placement
+//@ chunk-51jy8ztq.js:171945-172028 placement
 function refusalReasonField(body) {
   let reason = refusalReasonOf(body);
   let found = PUBLISH_REFUSAL_REASONS.find((known) => known === reason);
@@ -204,7 +204,7 @@ function refusalReasonField(body) {
       }
     : {};
 }
-//@ chunk-06y4szbn.js:166273-166379 placement
+//@ chunk-51jy8ztq.js:172028-172134 placement
 function publishDeniedReason(status, body) {
   let why =
     typeof status === "string"
@@ -212,20 +212,20 @@ function publishDeniedReason(status, body) {
       : (denyPolicyBody(status)?.error ?? formatFrameErrorBody(status));
   return scrubServerLine(why, body);
 }
-//@ chunk-06y4szbn.js:166379-166430 placement
+//@ chunk-51jy8ztq.js:172134-172185 placement
 var CAPABILITY_REFUSAL_RE = /^capabilities\.([a-z][a-z0-9_]*)(?=[:. ])/;
-//@ chunk-06y4szbn.js:166430-166475 placement
+//@ chunk-51jy8ztq.js:172185-172230 placement
 function isContractRefusalText(text) {
   return /^contract[ :]/.test(text);
 }
-//@ chunk-06y4szbn.js:166475-166596 placement
+//@ chunk-51jy8ztq.js:172230-172351 placement
 var PUBLISH_ERROR_PATTERNS = / is newer than the preferred /;
 var TYPE_INSTANCE_TEXT_RE = /the artifact's type|built from an artifact type/;
 var EMPTY_CAPABILITY_CONTEXT = {
   capNames: [],
   hostDecl: false,
 };
-//@ chunk-06y4szbn.js:166596-166707 placement
+//@ chunk-51jy8ztq.js:172351-172462 placement
 function rateLimitedResult(body) {
   return rateLimitedMessage(
     retryAfterSeconds(parseRetryAfterMs(body.retryAfter)),
@@ -233,7 +233,7 @@ function rateLimitedResult(body) {
     body.refusedStep,
   );
 }
-//@ chunk-06y4szbn.js:166707-166816 placement
+//@ chunk-51jy8ztq.js:172462-172571 placement
 function isRateLimitedResponse(status, body) {
   let reason = refusalReasonOf(body);
   return (
@@ -242,11 +242,11 @@ function isRateLimitedResponse(status, body) {
     (reason === "rate_limited" || reason === "too_many_concurrent")
   );
 }
-//@ chunk-06y4szbn.js:166816-166881 placement
+//@ chunk-51jy8ztq.js:172571-172636 placement
 function ensureSentence(text, punctuation) {
   return /[.!?]$/.test(text) ? `${text} ${punctuation}` : `${text}. ${punctuation}`;
 }
-//@ chunk-06y4szbn.js:166881-167983 placement
+//@ chunk-51jy8ztq.js:172636-173738 placement
 function declarationRejectedMessage(body, extra) {
   let capability = CAPABILITY_REFUSAL_RE.exec(body)?.[1];
   if (capability === undefined)
@@ -262,27 +262,27 @@ function declarationRejectedMessage(body, extra) {
     return `Nothing was published; drop capabilities.${capability} \u2014 the runtime provides it without a declaration.`;
   return `Nothing was published; correct capabilities.${capability} as described and publish again.`;
 }
-//@ chunk-06y4szbn.js:167983-168331 placement
+//@ chunk-51jy8ztq.js:173738-174086 placement
 var SHARE_CHANGE_REFUSED_TEXT =
   "Nothing was published. Only the artifact's owner can change who it is shared with (in its share settings on claude.ai), not this session \u2014 if the page can do without what the message names, publish a version without it; otherwise tell the user.";
 var SLUG_GONE_MSG = "the artifact you're updating was deleted, or you no longer have write access to it";
-//@ chunk-06y4szbn.js:168331-168375 placement
+//@ chunk-51jy8ztq.js:174086-174130 placement
 function relayHttpUnknown(status) {
   return outcomeUnknownMessage(`relay HTTP ${status}`);
 }
-//@ chunk-06y4szbn.js:168375-168411 placement
+//@ chunk-51jy8ztq.js:174130-174166 placement
 var PUBLISH_OUTCOME_UNKNOWN_FRAME = "publish outcome unknown (";
-//@ chunk-06y4szbn.js:168411-168524 placement
+//@ chunk-51jy8ztq.js:174166-174279 placement
 function outcomeUnknownMessage(cause) {
   return `${PUBLISH_OUTCOME_UNKNOWN_FRAME}${cause}) \u2014 it may have published; check the artifact list before publishing again`;
 }
-//@ chunk-06y4szbn.js:168524-168601 placement
+//@ chunk-51jy8ztq.js:174279-174356 placement
 var TYPE_FILE_WRITE_REFUSAL = "this file belongs to the artifact's type and can't be changed here";
-//@ chunk-06y4szbn.js:168601-168643 placement
+//@ chunk-51jy8ztq.js:174356-174398 placement
 function isTypeFileRefusal(body) {
   return formatFrameErrorBody(body).includes(TYPE_FILE_WRITE_REFUSAL);
 }
-//@ chunk-06y4szbn.js:168643-169650 placement
+//@ chunk-51jy8ztq.js:174398-175405 placement
 /**
  * 从类型创建的 artifact 不允许改页面的说明文案（无法发布自身文件、重试无用等）。
  */
@@ -294,7 +294,7 @@ var TYPE_INSTANCE_NO_PUBLISH_TEXT = ` \u2014 this Artifact was created from an A
 var TYPE_INSTANCE_FILES_UNAVAILABLE = `this file can't be published: the Artifact being updated was created from an Artifact type, and no file or page can be published to it from this session. ${TYPE_INSTANCE_NO_RETRY_TEXT}`;
 var TYPE_INSTANCE_POSSIBLE_TAIL =
   "If the Artifact being updated was created from an Artifact type, that will be refused too, because nothing can be published to it from this session; in that case tell the user so.";
-//@ chunk-06y4szbn.js:169650-169784 placement
+//@ chunk-51jy8ztq.js:175405-175539 placement
 /**
  * 把部署失败响应（状态码 + 正文）映射为发布结果：冲突、日上限、被拒、类型锁定、限流等。
  */
@@ -319,7 +319,7 @@ function classifyPublishResponse(
         },
       };
 }
-//@ chunk-06y4szbn.js:169784-173145 placement
+//@ chunk-51jy8ztq.js:175539-178900 placement
 function describePublishFailure(status, body, isRedeploy, detail, isRetry, sent, extra) {
   let classified = classifyDeployError(status, body, isRetry);
   if (classified !== undefined) return classified;
@@ -387,7 +387,7 @@ function describePublishFailure(status, body, isRedeploy, detail, isRetry, sent,
       filtered.length > index ? `${filtered.length - index} more not shown` : "",
       overflow ?? "",
     ].filter(Boolean);
-    let uniqLines = uniq(
+    let uniqLines = normalizeCaseForComparison_2(
       filtered
         .filter(
           (item) =>
@@ -479,19 +479,19 @@ function describePublishFailure(status, body, isRedeploy, detail, isRetry, sent,
     };
   return {};
 }
-//@ chunk-06y4szbn.js:173145-173337 placement
+//@ chunk-51jy8ztq.js:178900-179092 placement
 function refusalReasonOf(body) {
   if (typeof body === "string") return regExp_2.exec(body.trimEnd())?.[1];
   if (body === null || typeof body !== "object" || !("reason" in body)) return;
   let reason = body.reason;
   return typeof reason === "string" && SAFE_LABEL_RE.test(reason) ? reason : undefined;
 }
-//@ chunk-06y4szbn.js:173337-173375 placement
+//@ chunk-51jy8ztq.js:179092-179130 placement
 var regExp_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-06y4szbn.js:173337", () => {
+deferInit("chunk-51jy8ztq.js:179092", () => {
   regExp_2 = new RegExp(` \\[(${SAFE_LABEL_TEXT})\\]$`);
 });
-//@ chunk-06y4szbn.js:173506-173653 placement (2.1.88 match: getRequestTooLargeErrorMessage, 0.789)
+//@ chunk-51jy8ztq.js:179261-179408 placement (2.1.88 match: getRequestTooLargeErrorMessage, 0.79)
 /**
  * 对象的 max 字段为正安全整数时返回。旧版名 getRequestTooLargeErrorMessage 为错配。疑似归错文件（部署/live-path 错误解析）。
  */
@@ -500,7 +500,7 @@ function readPositiveMax(value) {
   let max = value.max;
   return typeof max === "number" && Number.isSafeInteger(max) && max > 0 ? max : undefined;
 }
-//@ chunk-06y4szbn.js:173653-174615 placement
+//@ chunk-51jy8ztq.js:179408-180370 placement
 /**
  * 部署接口 409/422 错误码（path_is_live/one_live_path/live_path_cap/live-editing budget）映射成 {code,msg}。疑似归错文件。
  */
@@ -558,34 +558,38 @@ function classifyDeployError(status, body, isRetry) {
     };
   return;
 }
-//@ chunk-06y4szbn.js:174615-174656 placement
+//@ chunk-51jy8ztq.js:180370-180411 placement
 /**
  * "exceeds the live-editing budget"。
  */
 var LIVE_EDITING_BUDGET_REGEX = /exceeds the live-editing budget/;
-//@ chunk-06y4szbn.js:174656-174706 placement
+//@ chunk-51jy8ztq.js:180411-180461 placement
 function deploy400Message(status, emptyPatch) {
   return `deploy 400: ${scrubServerLine(status, 200)}`;
 }
-//@ chunk-06y4szbn.js:174706-174754 placement
+//@ chunk-51jy8ztq.js:180461-180509 placement
 function deploy400Fallback(body) {
   return `deploy 400: ${scrubServerLine(body, 200)}`;
 }
-//@ chunk-06y4szbn.js:174754-174780 placement
+//@ chunk-51jy8ztq.js:180509-180535 placement
 function isIgnorable400(status, body) {
   return false;
 }
-//@ chunk-06y4szbn.js:174780-174852 placement
+//@ chunk-51jy8ztq.js:180535-180607 placement
 function isUnknownLiveFieldError(status, body) {
   return (
     (body.liveKey && PATCH_ERROR_PATTERNS.test(status)) || (body.emptyPatch && EMPTY_MANIFEST_RE.test(status))
   );
 }
-//@ chunk-06y4szbn.js:174852-174888 placement
+//@ chunk-51jy8ztq.js:180607-180643 placement
 function errBody(data) {
   return scrubServerLine(formatFrameErrorBody(data), 200);
 }
 export {
+  TYPE_FILE_WRITE_REFUSAL,
+  SLUG_GONE_MSG,
+  TYPE_INSTANCE_FILES_UNAVAILABLE,
+  TYPE_INSTANCE_POSSIBLE_TAIL,
   errBody,
   refusalReasonOf,
   outcomeUnknownMessage,
@@ -604,11 +608,7 @@ export {
   isUnknownLiveFieldError,
   deploy400Message,
   preconditionConflictOf,
-  TYPE_FILE_WRITE_REFUSAL,
-  SLUG_GONE_MSG,
-  TYPE_INSTANCE_FILES_UNAVAILABLE,
-  TYPE_INSTANCE_POSSIBLE_TAIL,
+  denyPolicyBody,
   PUBLISH_OUTCOME_UNKNOWN_FRAME,
   PUBLISH_DENIED_FRAME,
-  denyPolicyBody,
 };

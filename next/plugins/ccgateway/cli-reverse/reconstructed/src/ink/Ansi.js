@@ -3,14 +3,14 @@
  *
  * <Ansi> 组件：把含 ANSI 转义的字符串解析成样式段并渲染为 <Text>（粗体/暗/斜体/颜色/超链接）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/Ansi.tsx
- * pieces: chunk-x6v6jz2y.js (6)
+ * pieces: chunk-emhzq435.js (6)
  * attribution: fingerprint 6
  */
 import { Parser } from "./termio/parser.js";
 
-//@ chunk-x6v6jz2y.js:15379-15751 fingerprint (2.1.88 match: parseToSpans, 0.926)
+//@ chunk-emhzq435.js:15316-15688 fingerprint (2.1.88 match: parseToSpans, 0.926)
 /**
  * 用 termio Parser 把 ANSI 字符串转成 {text, props} 片段（相邻同样式合并，携带超链接）。
  */
@@ -42,7 +42,7 @@ function parseToSpans(input) {
   }
   return spans;
 }
-//@ chunk-x6v6jz2y.js:15751-16008 fingerprint (2.1.88 match: textStyleToSpanProps, 0.943)
+//@ chunk-emhzq435.js:15688-15945 fingerprint (2.1.88 match: textStyleToSpanProps, 0.943)
 /**
  * 把解析出的 ANSI 文本样式转成 <Text> 的属性（颜色、粗体、暗、斜体、下划线、删除线、反显）。
  */
@@ -59,7 +59,7 @@ function textStyleToSpanProps(style) {
     hyperlink: undefined,
   };
 }
-//@ chunk-x6v6jz2y.js:16008-16413 fingerprint (2.1.88 match: NAMED_COLOR_MAP, 1)
+//@ chunk-emhzq435.js:15945-16350 fingerprint (2.1.88 match: NAMED_COLOR_MAP, 1)
 var NAMED_COLOR_MAP = {
   black: "ansi:black",
   red: "ansi:red",
@@ -78,7 +78,7 @@ var NAMED_COLOR_MAP = {
   brightCyan: "ansi:cyanBright",
   brightWhite: "ansi:whiteBright",
 };
-//@ chunk-x6v6jz2y.js:16413-16581 fingerprint (2.1.88 match: colorToString, 1)
+//@ chunk-emhzq435.js:16350-16518 fingerprint (2.1.88 match: colorToString, 1)
 function colorToString(color) {
   switch (color.type) {
     case "named":
@@ -91,7 +91,7 @@ function colorToString(color) {
       return;
   }
 }
-//@ chunk-x6v6jz2y.js:16581-16827 fingerprint (2.1.88 match: propsEqual, 1)
+//@ chunk-emhzq435.js:16518-16764 fingerprint (2.1.88 match: propsEqual, 1)
 function propsEqual(a, b) {
   return (
     a.color === b.color &&
@@ -105,7 +105,7 @@ function propsEqual(a, b) {
     a.hyperlink === b.hyperlink
   );
 }
-//@ chunk-x6v6jz2y.js:16827-16990 fingerprint (2.1.88 match: hasAnyTextProps, 1)
+//@ chunk-emhzq435.js:16764-16926 fingerprint (2.1.88 match: hasAnyTextProps, 1)
 function hasAnyTextProps(props) {
   return (
     props.color !== undefined ||

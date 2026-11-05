@@ -3,9 +3,9 @@
  *
  * /context 的优化建议列表（每条建议与可节省的 token）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ContextSuggestions.tsx
- * pieces: chunk-10q8r8ck.js (2)
+ * pieces: chunk-qt8k81nz.js (2)
  * attribution: fingerprint 2
  */
 import {
@@ -19,7 +19,7 @@ import { formatTokens } from "../utils/format.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 
-//@ chunk-10q8r8ck.js:16647-16988 fingerprint (2.1.88 match: _temp, 0.831)
+//@ chunk-qt8k81nz.js:17829-18170 fingerprint (2.1.88 match: _temp, 0.832)
 /**
  * 渲染一条 /context 优化建议：严重度图标、标题、可节省 token 数与说明。
  */
@@ -65,7 +65,7 @@ function renderContextSuggestion(suggestion, i) {
     i,
   );
 }
-//@ chunk-10q8r8ck.js:16988-17306 fingerprint (2.1.88 match: ContextSuggestions, 0.431)
+//@ chunk-qt8k81nz.js:18170-18488 fingerprint (2.1.88 match: ContextSuggestions, 0.431)
 function ContextSuggestions(props) {
   let $ = useMemoCache(5);
   let { suggestions } = props;

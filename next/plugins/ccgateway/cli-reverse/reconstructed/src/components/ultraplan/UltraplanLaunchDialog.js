@@ -3,11 +3,17 @@
  *
  * 2.1.316 新增。ultraplan 启动对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (9)
  * attribution: placement 9
  */
+import {
+  init_react_production,
+  useState,
+  suspenseTypeExport,
+  use,
+} from "../../../vendor/react/cjs/react.production.js";
 import { detectCurrentRepositoryWithHost, isNestedGitLabProject } from "../../utils/detectRepository.js";
 import { checkGate_CACHED_OR_BLOCKING } from "../../services/analytics/growthbook.js";
 import { findGitRoot } from "../../utils/git.js";
@@ -19,13 +25,7 @@ import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useRegisterOverlay } from "../../context/overlayContext.js";
 import { getUltraplanCopy, CCR_TERMS_URL_ULTRAPLAN } from "../../commands/ultraplan.js";
 import { useAppState } from "../../state/AppState.js";
-import {
-  useState,
-  suspenseTypeExport,
-  use,
-  init_react_production,
-} from "../../../vendor/react/cjs/react.production.js";
-import { useInputRefusalWindow, useRefusalTracker } from "../CustomSelect/selectTypeahead.js";
+import { useRecentInputWithin, useRefusalTracker } from "../CustomSelect/selectTypeahead.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   jsxProd_default,
@@ -38,7 +38,12 @@ import { sanitizeOneLineLabel } from "../EffortMediumNudgeDialog.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1254974-1255258 placement
+//@ chunk-czq1j3j2.js:1278029-1278033 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1278029", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1280727-1281011 placement
 async function isCcrBundleSeedEnabled() {
   let [currentRepositoryWithHost, bundleSeedGate] = await Promise.all([
     detectCurrentRepositoryWithHost(),
@@ -59,28 +64,28 @@ async function isCcrBundleSeedEnabled() {
     bundleSeedEnabled,
   };
 }
-//@ chunk-18hwfzwa.js:1255258-1255303 placement (2.1.88 match: _temp2, 1)
+//@ chunk-czq1j3j2.js:1281011-1281056 placement (2.1.88 match: _temp2, 1)
 function selectReplBridgeEnabled(s_0) {
   return s_0.replBridgeEnabled;
 }
-//@ chunk-18hwfzwa.js:1255303-1255329 placement
+//@ chunk-czq1j3j2.js:1281056-1281082 placement
 function getTermsState() {
   return TERMS_DEFAULT_STATE;
 }
-//@ chunk-18hwfzwa.js:1255329-1255542 placement
+//@ chunk-czq1j3j2.js:1281082-1281295 placement
 function ultraplanUploadNote(sourceState) {
   if (!sourceState.bundleSeedEnabled) return null;
   return sourceState.cloneViable
     ? "This will try to clone your git remote and fall back to uploading this repository."
     : "This will upload your repository to a cloud session.";
 }
-//@ chunk-18hwfzwa.js:1255542-1255614 placement
+//@ chunk-czq1j3j2.js:1281295-1281367 placement
 var TERMS_DEFAULT_STATE = {
   cloneViable: false,
   bundleSeedEnabled: true,
 };
 var NOTHING_PRINTABLE_TEXT = "(nothing printable)";
-//@ chunk-18hwfzwa.js:1255614-1257026 placement
+//@ chunk-czq1j3j2.js:1281367-1282779 placement
 function UltraplanLaunchDialog(props) {
   let $ = useMemoCache(27);
   let { promptIdentifier, showTerms, prompt, deliveredByRelay, onDone, wouldTakeAnswer } = props;
@@ -100,7 +105,7 @@ function UltraplanLaunchDialog(props) {
     $[3] = loadSourceState;
   } else loadSourceState = $[3];
   let [sourcePromise] = useState(loadSourceState);
-  let inputRefusalWindow = useInputRefusalWindow();
+  let isRecentInput = useRecentInputWithin();
   let { refusedWithin, noteRefused } = useRefusalTracker();
   let handleChoice;
   if ($[4] !== onDone) {
@@ -112,20 +117,15 @@ function UltraplanLaunchDialog(props) {
   } else handleChoice = $[5];
   let onChoice_ = handleChoice;
   let refuseInput;
-  if (
-    $[6] !== inputRefusalWindow ||
-    $[7] !== noteRefused ||
-    $[8] !== refusedWithin ||
-    $[9] !== wouldTakeAnswer
-  ) {
+  if ($[6] !== isRecentInput || $[7] !== noteRefused || $[8] !== refusedWithin || $[9] !== wouldTakeAnswer) {
     refuseInput = function refuseInput_() {
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (isRecentInput() || refusedWithin()) {
         noteRefused();
         return true;
       }
       return wouldTakeAnswer?.() === false;
     };
-    $[6] = inputRefusalWindow;
+    $[6] = isRecentInput;
     $[7] = noteRefused;
     $[8] = refusedWithin;
     $[9] = wouldTakeAnswer;
@@ -195,7 +195,7 @@ function UltraplanLaunchDialog(props) {
   } else dialogElement = $[26];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1257026-1259550 placement
+//@ chunk-czq1j3j2.js:1282779-1285305 placement
 function UltraplanLaunchBody(props) {
   let $ = useMemoCache(41);
   let { showTerms, prompt, deliveredByRelay, sourcePromise, copy, replBridgeEnabled, onChoice, refuseInput } =
@@ -215,18 +215,18 @@ function UltraplanLaunchBody(props) {
     $[3] = promptLabel;
   } else promptLabel = $[3];
   let promptText = promptLabel;
-  let inputRefusalWindow = useInputRefusalWindow();
+  let isRecentInput = useRecentInputWithin();
   let { refusedWithin, noteRefused } = useRefusalTracker();
   let isInputRefused;
-  if ($[4] !== inputRefusalWindow || $[5] !== noteRefused || $[6] !== refusedWithin) {
+  if ($[4] !== isRecentInput || $[5] !== noteRefused || $[6] !== refusedWithin) {
     isInputRefused = function isInputRefused_() {
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (isRecentInput() || refusedWithin()) {
         noteRefused();
         return true;
       }
       return false;
     };
-    $[4] = inputRefusalWindow;
+    $[4] = isRecentInput;
     $[5] = noteRefused;
     $[6] = refusedWithin;
     $[7] = isInputRefused;
@@ -401,12 +401,7 @@ function UltraplanLaunchBody(props) {
   } else bodyElement_ = $[40];
   return bodyElement_;
 }
-//@ chunk-18hwfzwa.js:1259550-1259554 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1259550", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1259554-1259603 placement
+//@ chunk-czq1j3j2.js:1285309-1285358 placement
 function renderPlainText(children, key) {
   return jsxProd_default(
     Text,

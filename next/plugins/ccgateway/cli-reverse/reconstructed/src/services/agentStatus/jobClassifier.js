@@ -3,9 +3,9 @@
  *
  * 后台作业状态分类与命名（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wd9kxbpn.js (26)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rytc8e8q.js (26)
  * attribution: placement 26
  */
 import { open } from "fs/promises";
@@ -18,11 +18,12 @@ import {
   getClassifierModel,
   thinkingBudgetFor,
   logBgAgentDispatch,
-  describeToolActivity,
+  toolUseStatusLine,
   getBgClassifierConfig,
   DEFAULT_THROTTLE_MS,
   MAX_CLASSIFY_AGE_MS,
   MIN_CLASSIFY_INTERVAL_MS,
+  isJigglyLollipopOn,
   agentKindForDispatch,
   surfaceFlags,
   isVelvetyAuroraEnabled,
@@ -72,19 +73,8 @@ import {
 } from "../daemon/sessionCron.js";
 import { uiSignals } from "../../state/uiSignals.js";
 import { isSessionActive } from "../../utils/sessionActivity.js";
-import { classifyApiErrorForSummary } from "../../entrypoints/sdk/coreSchemas.js";
-import { truncate } from "../../utils/format.js";
 import {
-  redactSecrets,
-  REDACT_WINDOW_CHARS,
-  redactSecrets_2,
-  redactSecretContext,
-  regExp_10,
-  regExp_11,
-  redactSecretTokens,
-  redactAndTruncate,
-} from "../teamMemorySync/secretScanner.js";
-import {
+  classifyApiErrorForSummary,
   MAX_HEADLINE_LENGTH,
   openCodeFenceCloser,
   truncateWithEllipsis,
@@ -100,6 +90,17 @@ import {
   recapToSessionState,
   classifyMessageEnding,
 } from "../sessionStatus/sessionStateClassifier.js";
+import { truncate } from "../../utils/format.js";
+import {
+  redactSecrets,
+  REDACT_WINDOW_CHARS,
+  redactSecrets_2,
+  redactSecretContext,
+  regExp_10,
+  regExp_11,
+  redactSecretTokens,
+  redactAndTruncate,
+} from "../teamMemorySync/secretScanner.js";
 import { sideQueryWithCounter } from "../../utils/sideQuery.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { countCharInString, takeLastChars, truncateCodePoints } from "../../utils/stringUtils.js";
@@ -107,10 +108,14 @@ import { renameSessionName } from "../../utils/sessionTitle.js";
 import { logError } from "../../utils/log.js";
 import { regExp } from "../../utils/sanitization.js";
 import { sleep, withTimeout } from "../../utils/sleep.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import { POLL } from "../../tools/PollTool/prompt.js";
+import { isCodeModeExperimentEnabled } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { isEvalToolName } from "../../tools/REPLTool/constants.js";
 import { getAssistantMessageText } from "../../utils/messages.js";
 import { replCallNotesText } from "../../tools/REPLTool/replCallNotes.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { getTerminalMcpTools } from "../../utils/transcript/deserialize.js";
+import { getTerminalMcpTools, hasNoReplyTerminalTool } from "../../utils/transcript/deserialize.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { ensureJobFolder } from "../daemon/jobFolder.js";
 import { forkMarkerFields } from "../../utils/conversationRecovery.js";
@@ -124,12 +129,11 @@ import { CRON_CREATE_TOOL_NAME } from "../../tools/ScheduleCronTool/prompt.js";
 import { MONITOR } from "../../tools/MonitorTool/constants.js";
 import { shouldUseGlobalCacheScope, BETA_PROMPT_CACHING_SCOPE } from "../../utils/betas.js";
 import { getCacheControl, isOneHourCacheTtl } from "../api/claude.js";
-import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { uuidSlugFromUrl } from "../../tools/ArtifactTool/constants.js";
 import { jsonParse } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-wd9kxbpn.js:18427-19486 placement
+//@ chunk-rytc8e8q.js:19428-20487 placement
 function classifyJobCleanliness(classifier, retryMs = MAX_CACHED_CLASSIFICATIONS) {
   if (classifier.permissionBridgeSubscribed) return () => {};
   classifier.permissionBridgeSubscribed = true;
@@ -208,7 +212,7 @@ function classifyJobCleanliness(classifier, retryMs = MAX_CACHED_CLASSIFICATIONS
     classifier.permissionBridgeSubscribed = false;
   };
 }
-//@ chunk-wd9kxbpn.js:19486-20345 placement
+//@ chunk-rytc8e8q.js:20487-21346 placement
 async function classifyJobKind(ownJobShortId, storageV5, fromScheduled = false) {
   if (!isBgSession() && getOwnJobShortId() !== ownJobShortId) return false;
   let jobDir = getJobDir(ownJobShortId);
@@ -266,7 +270,7 @@ async function classifyJobKind(ownJobShortId, storageV5, fromScheduled = false) 
   );
   return cronCoversWork && jobState.tempo !== "active" && pendingKind;
 }
-//@ chunk-wd9kxbpn.js:20345-20524 placement
+//@ chunk-rytc8e8q.js:21346-21525 placement
 async function scanTranscriptLinks(jobState, storageV5) {
   let transcriptPath = getMaterializedSessionFile() ?? getTranscriptPath();
   let offset =
@@ -278,14 +282,14 @@ async function scanTranscriptLinks(jobState, storageV5) {
     scan,
   };
 }
-//@ chunk-wd9kxbpn.js:20524-20631 placement
+//@ chunk-rytc8e8q.js:21525-21632 placement
 function resetMidturnLlmState(classifier) {
   classifier.midturnLlmEpoch++;
   classifier.lastMidturnLlmAt = 0;
   classifier.lastMidturnLlmDetail = "";
   classifier.midturnLlmIntervalMs = 0;
 }
-//@ chunk-wd9kxbpn.js:20631-21246 placement
+//@ chunk-rytc8e8q.js:21632-22247 placement
 /**
  * 回合结束时（作为后台作业运行）把作业状态从 active 改为 idle，并更新子会话链接扫描偏移与 worktree 信息；写入串行化在 bridgeWriteChain 上。
  */
@@ -330,7 +334,7 @@ function markJobIdleAfterTurn(classifier, jobId) {
     })
     .catch(logJobWriteError);
 }
-//@ chunk-wd9kxbpn.js:21246-22424 placement
+//@ chunk-rytc8e8q.js:22247-23425 placement
 /**
  * 把 API 错误分类为作业状态（failed 或需要处理的 blocked），去掉登录提示前后缀并脱敏截断后写入作业状态与时间线，然后重置分类器状态。
  */
@@ -402,7 +406,7 @@ async function recordJobApiError(classifier, jobId, error, message, details) {
   classifier.lastEmittedDetail = "";
   classifier.lastClassifyAt = 0;
 }
-//@ chunk-wd9kxbpn.js:22424-22675 placement
+//@ chunk-rytc8e8q.js:23425-23676 placement
 /**
  * 作业命名用的常量：最少词数、占位名正则（unspecified/untitled/unknown task 等）、拒答开头正则（I'm/sorry/unable 等）。
  */
@@ -410,7 +414,7 @@ var MIN_JOB_NAME_WORDS = 3;
 var PLACEHOLDER_NAME_RE = /^(unspecified|untitled|unnamed)\b|^(unknown|no) (request|task|job|input)\b/;
 var REFUSAL_NAME_RE =
   /^(i|i['\u2019]m|i['\u2019]ve|i['\u2019]ll|i['\u2019]d|sorry|unfortunately|unable|please|cannot|can['\u2019]t)(?=$|[\s,.\u2026:;!?\u2014\u2013])|^no access\b/;
-//@ chunk-wd9kxbpn.js:22675-24294 placement
+//@ chunk-rytc8e8q.js:23676-25295 placement
 /**
  * 让模型给后台作业起名（避开已用名字）
  */
@@ -509,17 +513,17 @@ Skip generic verbs like fix/add/update. Respond with ONLY the label.${avoidNote}
     .catch(logJobWriteError);
   await classifier.bridgeWriteChain;
 }
-//@ chunk-wd9kxbpn.js:24294-24315 placement
+//@ chunk-rytc8e8q.js:25295-25316 placement
 /**
  * 后台分类器的输入裁剪常量：输入上限约 4 MB、密钥遮盖回溯窗口 8 段、重试前等待 8 s。
  */
 var CLASSIFIER_RETRY_DELAY_MS; // deferred: uses REDACT_WINDOW_CHARS (../teamMemorySync/secretScanner.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_REDACT_SCAN_CHARS;
-deferInit("chunk-wd9kxbpn.js:24294", () => {
+deferInit("chunk-rytc8e8q.js:25295", () => {
   CLASSIFIER_RETRY_DELAY_MS = 8000;
   MAX_REDACT_SCAN_CHARS = 8 * REDACT_WINDOW_CHARS;
 });
-//@ chunk-wd9kxbpn.js:24315-24798 placement
+//@ chunk-rytc8e8q.js:25316-25799 placement
 function redactJobText(content) {
   let redacted = redactSecrets_2(content);
   let tailChars = MAX_REDACT_SCAN_CHARS + 3 * (CLASSIFIER_RETRY_DELAY_MS + 2 * REDACT_WINDOW_CHARS);
@@ -566,12 +570,12 @@ function redactJobText(content) {
     if (dropped - 10 * removed >= MAX_REDACT_SCAN_CHARS) return redacted_2;
   }
 }
-//@ chunk-wd9kxbpn.js:24798-24856 placement
+//@ chunk-rytc8e8q.js:25799-25857 placement
 function lineStartOfSecret(text, index) {
   while (index > 0 && regExp_10.test(text[index - 1])) index--;
   return index;
 }
-//@ chunk-wd9kxbpn.js:24856-25168 placement
+//@ chunk-rytc8e8q.js:25857-26169 placement
 /**
  * 从疑似密钥的位置向前查找赋值或键名（最多回溯 8 次），找到时返回该行起始位置，用于遮盖整行密钥。
  */
@@ -600,7 +604,7 @@ function findSecretAssignmentStart(text, start) {
       ) + 1
     : start;
 }
-//@ chunk-wd9kxbpn.js:25168-25534 placement
+//@ chunk-rytc8e8q.js:26169-26535 placement
 /**
  * 对输出尾部做秘密脱敏：从尾部按倍增窗口取到行边界，窗口足够大时只脱敏尾段并在前面加省略号，返回 {redacted, dropped}。
  */
@@ -645,7 +649,7 @@ function redactOutputTail(output, prefixText) {
     }
   }
 }
-//@ chunk-wd9kxbpn.js:25534-25784 placement
+//@ chunk-rytc8e8q.js:26535-26937 placement
 /**
  * 运行一次作业状态分类：先上报派发事件，等待上一次分类（最多 60 秒），再调用 deriveJobState，结束后清除 inFlight 并同步权限桥需求。
  */
@@ -655,32 +659,38 @@ async function runJobClassification(
   agentDefinition,
   todos,
   messages,
-  sessions,
-  asks,
+  session,
+  prompt,
   surfaces,
-  extras,
+  extra,
   projectsRecap,
 ) {
+  let onClassified = extra ? undefined : classifier.onClassified;
   logBgAgentDispatch(classifier, agentDefinition, surfaces);
+  let deadline = performance.now() + 60000;
   let inFlight = classifier.inFlight;
-  if (inFlight)
+  while (inFlight) {
     await Promise.race([
       inFlight.catch(logJobWriteError),
-      sleep(60000, undefined, {
+      sleep(Math.max(0, Math.ceil(deadline - performance.now())), undefined, {
         unref: true,
       }),
     ]);
+    let inFlight_2 = classifier.inFlight;
+    inFlight = inFlight_2 !== inFlight && performance.now() < deadline ? inFlight_2 : null;
+  }
   let jobState = deriveJobState(
     classifier,
     jobId,
     agentDefinition,
     todos,
     messages,
-    sessions,
-    asks,
+    session,
+    prompt,
     surfaces,
-    extras,
+    extra,
     projectsRecap,
+    onClassified,
   );
   classifier.inFlight = jobState;
   try {
@@ -691,28 +701,49 @@ async function runJobClassification(
     syncPermissionNeeds(classifier, jobId);
   }
 }
-//@ chunk-wd9kxbpn.js:25784-26149 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince(messages, sinceUuid) {
+//@ chunk-rytc8e8q.js:26937-27563 placement
+function latestToolUseIndex(messages, describeToolUse) {
   for (let j = messages.length - 1; j >= 0; j--) {
     let content = messages[j]?.message.content;
     if (!Array.isArray(content)) continue;
     let toolDescription;
-    for (let j = content.length - 1; j >= 0; j--) {
-      let block = content[j];
+    for (let j_2 = content.length - 1; j_2 >= 0; j_2--) {
+      let block = content[j_2];
+      if (
+        codeModeAccepted() &&
+        block.type === "tool_use" &&
+        block.name === POLL &&
+        isCodeModeExperimentEnabled()
+      ) {
+        let id = messages[j].message.id;
+        let skipMessage = false;
+        for (let earlierIndex = j; earlierIndex >= 0; earlierIndex--) {
+          let earlier = messages[earlierIndex];
+          if (earlier.message.id !== id) break;
+          if (
+            Array.isArray(earlier.message.content) &&
+            earlier.message.content.some((block) => block.type === "tool_use" && isEvalToolName(block.name))
+          ) {
+            skipMessage = true;
+            break;
+          }
+        }
+        if (skipMessage) continue;
+      }
       if (block.type === "text") {
         let trimmed = redactAndTruncate(block.text, MAX_HEADLINE_LENGTH).replace(/\s+/g, " ").trim();
         if (trimmed.length > 8) return truncateWithEllipsis(trimmed, MAX_HEADLINE_LENGTH);
       }
       if (block.type === "tool_use" && toolDescription === undefined) {
         let input = block.input;
-        toolDescription = describeToolActivity(input, () => sinceUuid?.(block.name, input ?? {}));
+        toolDescription = toolUseStatusLine(input, () => describeToolUse?.(block.name, input ?? {}));
       }
     }
     if (toolDescription !== undefined) return toolDescription;
   }
   return "";
 }
-//@ chunk-wd9kxbpn.js:26149-33035 placement
+//@ chunk-rytc8e8q.js:27563-34484 placement
 /**
  * 由转录推导后台作业状态：active/blocked/working/midturn
  */
@@ -727,6 +758,7 @@ async function deriveJobState(
   toolUses,
   extra,
   projectsRecap,
+  onClassified,
 ) {
   let midturnLlmEpoch = classifier.midturnLlmEpoch;
   let jobDir = getJobDir(jobId);
@@ -754,7 +786,7 @@ async function deriveJobState(
     nextState = {
       state: "working",
       tempo: "active",
-      detail: classifier.lastMidturnLlmDetail || countToolCallsSince(messages, classifier.describeToolUse),
+      detail: classifier.lastMidturnLlmDetail || latestToolUseIndex(messages, classifier.describeToolUse),
       needs: undefined,
       output: {},
       source: "midturn",
@@ -855,7 +887,7 @@ async function deriveJobState(
         surfaces: toolUses,
         credentials: classifier.credentials,
         projectsRecap,
-        chatRelay: getTerminalMcpTools().size > 0,
+        chatRelay: getTerminalMcpTools().size > 0 && (hasNoReplyTerminalTool() || !isJigglyLollipopOn()),
       });
     }
   }
@@ -878,7 +910,7 @@ async function deriveJobState(
     classifier.prevStateSince = Date.now();
   }
   classifier.accumulatedOutputs = nextState.output;
-  classifier.onClassified?.(nextState, extra);
+  (extra ? classifier.onClassified : onClassified)?.(nextState, extra);
   if (!isActingAsBgJob()) {
     if (!extra) classifier.lastMsgCount = messageCount;
     if (detailSources ?? isBeingWatched())
@@ -984,10 +1016,10 @@ async function deriveJobState(
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
@@ -1061,12 +1093,12 @@ async function deriveJobState(
     `[classifier] ${nextState.state} (${source}) \xB7 ${nextState.detail}${terminalNeeds ? ` \xB7 needs: ${terminalNeeds}` : ""}`,
   );
 }
-//@ chunk-wd9kxbpn.js:33035-33062 placement
+//@ chunk-rytc8e8q.js:34484-34511 placement
 var SCHEDULING_TOOL_NAMES; // deferred: uses CRON_CREATE_TOOL_NAME (../../tools/ScheduleCronTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-wd9kxbpn.js:33035", () => {
+deferInit("chunk-rytc8e8q.js:34484", () => {
   SCHEDULING_TOOL_NAMES = new Set([SCHEDULE_WAKEUP_TOOL_NAME, CRON_CREATE_TOOL_NAME, MONITOR]);
 });
-//@ chunk-wd9kxbpn.js:33062-33342 placement (2.1.88 match: countToolCallsSince, 1)
+//@ chunk-rytc8e8q.js:34511-34791 placement
 function summarizeTopToolNames(messages) {
   let counts = new Map();
   for (let message of messages)
@@ -1081,7 +1113,7 @@ function summarizeTopToolNames(messages) {
     .map(([name, count]) => (count > 1 ? `${name}\xD7${count}` : name))
     .join(", ");
 }
-//@ chunk-wd9kxbpn.js:33342-36580 placement
+//@ chunk-rytc8e8q.js:34791-38007 placement
 /**
  * 预分类失败时用模型判断作业是否阻塞/失败
  */
@@ -1146,16 +1178,12 @@ async function classifyJobWithModel(messages, params) {
       CLASSIFIER_HAND_OFF_ADDENDUM,
     } = await import("./CLASSIFIER_CHAT_RELAY_ADDENDUM.lazy.js");
     leadingAskOn = !params.detailOnly && isShimmeringFireflyEnabled();
-    handOffOn =
-      !params.detailOnly &&
-      !projectsRecap &&
-      params.chatRelay !== true &&
-      getFeatureValue_CACHED_MAY_BE_STALE("tengu_jiggly_lollipop", false);
+    handOffOn = !params.detailOnly && !projectsRecap && params.chatRelay !== true && isJigglyLollipopOn();
     source = "apiError";
     let parsedState = null;
     let parsedSummary = null;
-    for (let j = 0; j < 2 && !parsedState && !parsedSummary; j++) {
-      attempts = j + 1;
+    for (let idx = 0; idx < 2 && !parsedState && !parsedSummary; idx++) {
+      attempts = idx + 1;
       let response;
       try {
         response = await sideQueryWithCounter({
@@ -1208,7 +1236,7 @@ async function classifyJobWithModel(messages, params) {
             {
               role: "user",
               content:
-                j === 0
+                idx === 0
                   ? sessionStatePrompt
                   : projectsRecap
                     ? `${sessionStatePrompt}
@@ -1297,7 +1325,7 @@ Previous response was not valid JSON. Respond with ONLY the JSON object, nothing
   });
   return state;
 }
-//@ chunk-wd9kxbpn.js:36580-36924 placement
+//@ chunk-rytc8e8q.js:38007-38351 placement
 /**
  * 从链接扫描得到的 worktree 信息中取 worktreePath/Branch/HookBased；未扫描到沿用旧值，进入已存在 worktree 或 null 时清空。
  */
@@ -1320,12 +1348,12 @@ function pickWorktreeFields(worktree, previous) {
     worktreeHookBased: worktree.hookBased,
   };
 }
-//@ chunk-wd9kxbpn.js:36924-36939 placement
+//@ chunk-rytc8e8q.js:38351-38366 placement
 /**
  * 导出常量或表 `MAX_CLASSIFIER_INPUT_BYTES`：值为 4194304。
  */
 var MAX_CLASSIFIER_INPUT_BYTES = 4194304;
-//@ chunk-wd9kxbpn.js:36939-37551 placement
+//@ chunk-rytc8e8q.js:38366-38978 placement
 async function scanLinkRecords(transcriptPath, children, offset, storageV5) {
   let transcriptStorageKey = getTranscriptStorageKey(transcriptPath, storageV5);
   if (transcriptStorageKey !== undefined) return scanLinkRecordsV5(transcriptStorageKey, children, offset);
@@ -1373,11 +1401,11 @@ async function scanLinkRecords(transcriptPath, children, offset, storageV5) {
     await handle.close().catch(logError);
   }
 }
-//@ chunk-wd9kxbpn.js:37551-37627 placement
+//@ chunk-rytc8e8q.js:38978-39054 placement
 function frameRef(ref) {
   return ref.kind === "frame" ? `frame:${uuidSlugFromUrl(ref.href) ?? ref.href}` : ref.href;
 }
-//@ chunk-wd9kxbpn.js:37627-38328 placement
+//@ chunk-rytc8e8q.js:39054-39755 placement
 function parseLinkRecord(text, children) {
   let byRef = new Map((children ?? []).map((child) => [frameRef(child), child]));
   let worktree;
@@ -1421,7 +1449,7 @@ function parseLinkRecord(text, children) {
     worktree,
   };
 }
-//@ chunk-wd9kxbpn.js:38328-38855 placement
+//@ chunk-rytc8e8q.js:39755-40282 placement
 /**
  * 从 v5 存储增量读取转录，自上次偏移起（最多一个窗口）按完整行解析子会话链接记录，返回子会话、新偏移与 worktree。
  */
@@ -1465,7 +1493,7 @@ async function scanLinkRecordsV5(stream, children, offset) {
     worktree,
   };
 }
-//@ chunk-wd9kxbpn.js:38855-39103 placement
+//@ chunk-rytc8e8q.js:40282-40530 placement
 async function readTranscriptRange(stream, offset, length) {
   let result = await stream.backend.read([
     {

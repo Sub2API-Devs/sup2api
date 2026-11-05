@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Artifact 输入规范化。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-n5x6bf26.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b9fmanyv.js (2)
  * attribution: placement 2
  */
 import { VERSION_LABEL_MAX } from "../../tools/ArtifactTool/artifactUrls.js";
@@ -14,10 +14,10 @@ import { countCodePoints, truncateCodePoints } from "../../utils/stringUtils.js"
 import { stripProtoKeys } from "../../utils/objectSafety.js";
 import { safeParseJSON } from "../../utils/json.js";
 
-//@ chunk-n5x6bf26.js:374-579 placement
+//@ chunk-b9fmanyv.js:374-579 placement
 var LEGACY_INPUT_FIELDS = ["note", "lang"];
 var LABEL_CUT_NOTE = `Note: \`label\` was longer than ${VERSION_LABEL_MAX} characters and was cut to that length; only its start was kept. A label is a few words naming the version, not a description of the changes.`;
-//@ chunk-n5x6bf26.js:579-1829 placement
+//@ chunk-b9fmanyv.js:579-1829 placement
 /**
  * 规范化 Artifact 工具输入的旧形状：删除旧字段 note/lang，call_endpoint 的 body 与 write_db 的 data 从 JSON 字符串解析为对象/数组，files 字符串列表转 {path}，空 edits 删掉，过长 label 截断；返回新输入、形状类别标签（+ 连接）与可选的截断提示；无需改动时返回 null。
  */

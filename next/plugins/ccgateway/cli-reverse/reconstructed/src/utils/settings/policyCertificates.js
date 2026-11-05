@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：校验 JWS（种类、组织、账号、时间、根证书）；评估缓存是否可信（组织固定、签名）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (54)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (54)
  * attribution: placement 54
  */
 import {
@@ -42,7 +42,7 @@ import { hasUnsafeJsonValue } from "./settingsSourceTrust.js";
 import { isStagingOauthConfig } from "../../constants/oauth.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:173837-174221 placement
+//@ chunk-z20c443b.js:173987-174371 placement
 /**
  * 同步读取证书文件（Windows 拒绝链接）。
  */
@@ -81,7 +81,7 @@ function readCertFileSync(path, maxBytes, { refuseLinkOnWindows }) {
       } catch {}
   }
 }
-//@ chunk-dcmhvw5a.js:174386-174824 placement
+//@ chunk-z20c443b.js:174536-174974 placement
 /**
  * 读取存储的证书。
  */
@@ -108,9 +108,9 @@ async function readStoredCertificate(path, text) {
     closeSync(fd);
   }
 }
-//@ chunk-dcmhvw5a.js:174879-174897 placement
+//@ chunk-z20c443b.js:175029-175047 placement
 var DER_SEQUENCE_TAG = [85, 29, 19];
-//@ chunk-dcmhvw5a.js:174897-175386 placement
+//@ chunk-z20c443b.js:175047-175536 placement
 /**
  * 读取 DER 元素头。
  */
@@ -140,7 +140,7 @@ function readDerElement(bytes, start, end) {
     end: elementEnd,
   };
 }
-//@ chunk-dcmhvw5a.js:175386-175484 placement
+//@ chunk-z20c443b.js:175536-175634 placement
 function readDerChildren(bytes, container) {
   let children = [];
   let start = container.start;
@@ -151,19 +151,19 @@ function readDerChildren(bytes, container) {
   }
   return children;
 }
-//@ chunk-dcmhvw5a.js:175484-175569 placement
+//@ chunk-z20c443b.js:175634-175719 placement
 function derBytesEqual(bytes, element, expected) {
   return (
     element.end - element.start === expected.length &&
     expected.every((byte, index) => bytes[element.start + index] === byte)
   );
 }
-//@ chunk-dcmhvw5a.js:175569-175643 placement
+//@ chunk-z20c443b.js:175719-175793 placement
 function requireDerTag(element, tag) {
   if (element.tag !== tag) throw Error("DER: unexpected tag");
   return element;
 }
-//@ chunk-dcmhvw5a.js:175643-176553 placement
+//@ chunk-z20c443b.js:175793-176703 placement
 /**
  * 解析 DER 证书结构。
  */
@@ -204,7 +204,7 @@ function parseCertificateDer(bytes) {
   }
   return pathLen;
 }
-//@ chunk-dcmhvw5a.js:176553-176911 placement
+//@ chunk-z20c443b.js:176703-177061 placement
 /**
  * 读取 DER 整数。
  */
@@ -220,18 +220,18 @@ function readDerInteger(bytes, element) {
   for (let start = element.start; start < element.end; start++) value = value * 256 + bytes[start];
   return value;
 }
-//@ chunk-dcmhvw5a.js:176911-176965 placement
+//@ chunk-z20c443b.js:177061-177115 placement
 var PLAN_KINDS = ["enterprise", "team", "consumer", "api", "other"];
-//@ chunk-dcmhvw5a.js:176965-177016 placement
+//@ chunk-z20c443b.js:177115-177166 placement
 function normalizePlanKind(plan) {
   return PLAN_KINDS.find((kind) => kind === plan) ?? "other";
 }
-//@ chunk-dcmhvw5a.js:177016-177051 placement
+//@ chunk-z20c443b.js:177166-177201 placement
 var SIGNED_CACHE_MINT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dcmhvw5a.js:177016", () => {
+deferInit("chunk-z20c443b.js:177166", () => {
   SIGNED_CACHE_MINT = Symbol("signed-cache mint");
 });
-//@ chunk-dcmhvw5a.js:177051-177503 placement
+//@ chunk-z20c443b.js:177201-177653 placement
 /**
  * 签名缓存验证结果（种类、状态、过期、组织）。
  */
@@ -261,11 +261,11 @@ class SignedCacheVerdict {
     return #e in value;
   }
 }
-//@ chunk-dcmhvw5a.js:177503-177579 placement
+//@ chunk-z20c443b.js:177653-177729 placement
 function isVerifierMadeVerdict(verified) {
   return typeof verified === "object" && verified !== null && SignedCacheVerdict.isMadeByVerifier(verified);
 }
-//@ chunk-dcmhvw5a.js:177579-178116 placement
+//@ chunk-z20c443b.js:177729-178266 placement
 /**
  * 签名缓存根证书指纹与各类缓存有效期。
  */
@@ -282,7 +282,7 @@ var BASE64_RE;
 var jwsHeaderSchema;
 var signedCachePayloadSchema;
 var signedCacheVersionSchema;
-deferInit("chunk-dcmhvw5a.js:177579", () => {
+deferInit("chunk-z20c443b.js:177729", () => {
   SIGNED_CACHE_ROOT_FINGERPRINT = "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a";
   SIGNED_CACHE_TTL_SECONDS = {
     "managed-settings": 86400,
@@ -325,7 +325,7 @@ deferInit("chunk-dcmhvw5a.js:177579", () => {
     }),
   );
 });
-//@ chunk-dcmhvw5a.js:178116-178548 placement
+//@ chunk-z20c443b.js:178266-178698 placement
 /**
  * 校验缓存的 JWS 签名。
  */
@@ -366,7 +366,7 @@ function verifyCacheSignature({ jws, ...claims }) {
     };
   }
 }
-//@ chunk-dcmhvw5a.js:178548-181170 placement
+//@ chunk-z20c443b.js:178698-181311 placement
 /**
  * 校验 JWS（种类、组织、账号、时间、根证书）。
  */
@@ -486,7 +486,7 @@ function verifyJws(
     accountUuid: parsed.data.sub,
   };
 }
-//@ chunk-dcmhvw5a.js:181170-181490 placement
+//@ chunk-z20c443b.js:181311-181631 placement
 /**
  * 按分隔符拆分（处理转义）。
  */
@@ -525,31 +525,31 @@ function splitEscaped(text) {
   parts.push(current);
   return parts;
 }
-//@ chunk-dcmhvw5a.js:181490-181569 placement
+//@ chunk-z20c443b.js:181631-181710 placement
 function isCertIssuedBy(child, parent) {
   return parent.ca && Boolean(child.checkIssued(parent)) && child.verify(parent.publicKey);
 }
-//@ chunk-dcmhvw5a.js:181569-181657 placement
+//@ chunk-z20c443b.js:181710-181798 placement
 function certificateCommonName(certificate) {
   let CN = certificate.toLegacyObject().subject?.CN;
   return typeof CN === "string" ? CN : undefined;
 }
-//@ chunk-dcmhvw5a.js:181657-181713 placement
+//@ chunk-z20c443b.js:181798-181854 placement
 function hasCertificateVersionAbove(certificate, depth) {
   let certificateDer = parseCertificateDer(certificate.raw);
   return certificateDer !== undefined && depth > certificateDer;
 }
-//@ chunk-dcmhvw5a.js:181713-181836 placement
+//@ chunk-z20c443b.js:181854-181977 placement
 function parseX509Strict(der) {
   let certificate = new X509Certificate(der);
   if (certificate.raw.length !== der.length) throw Error("trailing bytes after x5c certificate DER");
   return certificate;
 }
-//@ chunk-dcmhvw5a.js:181836-181916 placement
+//@ chunk-z20c443b.js:181977-182057 placement
 function isWithinCertificateValidity(certificate, atMs) {
   return atMs >= Date.parse(certificate.validFrom) - CLOCK_SKEW_MS && atMs <= Date.parse(certificate.validTo);
 }
-//@ chunk-dcmhvw5a.js:181916-182004 placement
+//@ chunk-z20c443b.js:182057-182145 placement
 function parseBase64UrlJson(text) {
   try {
     return jsonParse(Buffer.from(text, "base64url").toString("utf8"));
@@ -557,11 +557,11 @@ function parseBase64UrlJson(text) {
     return;
   }
 }
-//@ chunk-dcmhvw5a.js:182004-182092 placement
+//@ chunk-z20c443b.js:182145-182233 placement
 var X_CLAUDE_CODE_SIGNATURE; // deferred: uses SIGNED_CACHE_ROOT_FINGERPRINT of its import cycle while loading; runs once the cycle is complete
 var MAX_SIGNATURE_HEADER_LENGTH;
 var signedCacheFileSchema;
-deferInit("chunk-dcmhvw5a.js:182004", () => {
+deferInit("chunk-z20c443b.js:182145", () => {
   X_CLAUDE_CODE_SIGNATURE = "x-claude-code-signature";
   MAX_SIGNATURE_HEADER_LENGTH = MAX_JWS_LENGTH + 256;
   signedCacheFileSchema = DoctorLazy(() =>
@@ -571,26 +571,26 @@ deferInit("chunk-dcmhvw5a.js:182004", () => {
     }),
   );
 });
-//@ chunk-dcmhvw5a.js:182092-182136 placement
+//@ chunk-z20c443b.js:182233-182277 placement
 /**
  * 签名文件路径。
  */
 function signatureFileFor(name) {
   return `${name}.signature.json`;
 }
-//@ chunk-dcmhvw5a.js:182136-182184 placement
+//@ chunk-z20c443b.js:182277-182325 placement
 /**
  * 签名时间文件路径。
  */
 function signatureIatFileFor(name) {
   return `${name}.signature-iat.json`;
 }
-//@ chunk-dcmhvw5a.js:182184-182247 placement
+//@ chunk-z20c443b.js:182325-182388 placement
 var mapped; // deferred: uses signatureIatFileFor of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:182184", () => {
+deferInit("chunk-z20c443b.js:182325", () => {
   mapped = ["remote-settings.json", "policy-limits.json"].map(signatureIatFileFor);
 });
-//@ chunk-dcmhvw5a.js:182247-182591 placement
+//@ chunk-z20c443b.js:182388-182732 placement
 /**
  * 检查缓存文件权限。
  */
@@ -613,7 +613,7 @@ async function checkCacheFilePermissions(path) {
     await writeFd.close();
   }
 }
-//@ chunk-dcmhvw5a.js:182591-182643 placement
+//@ chunk-z20c443b.js:182732-182784 placement
 /**
  * signatureHeaderValue：取 x-claude-code-signature 头值。
  */
@@ -622,7 +622,7 @@ function signatureHeaderValue(headers) {
     headers && X_CLAUDE_CODE_SIGNATURE in headers ? headers[X_CLAUDE_CODE_SIGNATURE] : undefined,
   );
 }
-//@ chunk-dcmhvw5a.js:182643-182721 placement
+//@ chunk-z20c443b.js:182784-182862 placement
 /**
  * validSignatureHeader：合法签名头值。
  */
@@ -631,7 +631,7 @@ function validSignatureHeader(signature) {
     ? signature
     : undefined;
 }
-//@ chunk-dcmhvw5a.js:182721-182853 placement
+//@ chunk-z20c443b.js:182862-182994 placement
 /**
  * 保存或删除签名缓存的 JWS 文件（记录接收时间）。
  */
@@ -647,14 +647,14 @@ async function saveSignedCacheJws(name, jws) {
   };
   await writeSignedCacheFile(signatureFileFor(name), record);
 }
-//@ chunk-dcmhvw5a.js:182853-182929 placement
+//@ chunk-z20c443b.js:182994-183070 placement
 /**
  * maybePersistSignature：有改动时保存或删除签名文件。
  */
 async function maybePersistSignature(name, signature, { keptVerifiable }) {
   if (signature !== undefined || !keptVerifiable) await saveSignedCacheJws(name, signature);
 }
-//@ chunk-dcmhvw5a.js:182929-183014 placement
+//@ chunk-z20c443b.js:183070-183155 placement
 /**
  * removeSignatureFiles：删除签名文件与收件时间文件。
  */
@@ -663,7 +663,7 @@ async function removeSignatureFiles(name) {
   await removeSignedCacheFile(signatureFileFor(name));
   await checkCacheFilePermissions(signatureIatFileFor(name)).catch(() => {});
 }
-//@ chunk-dcmhvw5a.js:183014-183105 placement
+//@ chunk-z20c443b.js:183155-183246 placement
 /**
  * clearSignatureIfStale：文件不存在且需清理时删除签名。
  */
@@ -673,7 +673,7 @@ async function clearSignatureIfStale(name, kept) {
   await removeSignatureFiles(name);
   return true;
 }
-//@ chunk-dcmhvw5a.js:183105-183174 placement
+//@ chunk-z20c443b.js:183246-183315 placement
 async function pathExistsOrError(path) {
   try {
     await lstat(path);
@@ -682,19 +682,19 @@ async function pathExistsOrError(path) {
     return !isENOENT(error);
   }
 }
-//@ chunk-dcmhvw5a.js:183174-183219 placement
+//@ chunk-z20c443b.js:183315-183360 placement
 /**
  * readSignatureAsync：异步读签名文件。
  */
 async function readSignatureAsync(cachePath) {
   return readSignedCacheValue(signatureFileFor(cachePath), signedCacheFileSchema());
 }
-//@ chunk-dcmhvw5a.js:183219-183290 placement
+//@ chunk-z20c443b.js:183360-183431 placement
 function readSignatureSync(cachePath) {
   let signedCacheFile = readSignedCacheFileSync(signatureFileFor(cachePath), signedCacheFileSchema());
   return signedCacheFile.kind === "ok" ? signedCacheFile.value : null;
 }
-//@ chunk-dcmhvw5a.js:183290-183432 placement
+//@ chunk-z20c443b.js:183431-183573 placement
 async function writeSignedCacheFile(path, value) {
   try {
     if (NOFOLLOW_NONBLOCK_FLAGS === 0 && (await isSymlinkOrFalse(path))) return;
@@ -704,7 +704,7 @@ async function writeSignedCacheFile(path, value) {
     logForDebugging(`Signed cache: failed to write ${path} - ${errorMessage(error)}`);
   }
 }
-//@ chunk-dcmhvw5a.js:183432-183510 placement
+//@ chunk-z20c443b.js:183573-183651 placement
 async function isSymlinkOrFalse(path) {
   try {
     return (await lstat(path)).isSymbolicLink();
@@ -712,7 +712,7 @@ async function isSymlinkOrFalse(path) {
     return false;
   }
 }
-//@ chunk-dcmhvw5a.js:183510-183617 placement
+//@ chunk-z20c443b.js:183651-183758 placement
 async function removeSignedCacheFile(path) {
   try {
     await unlink(path);
@@ -720,7 +720,7 @@ async function removeSignedCacheFile(path) {
     if (!isENOENT(error)) logForDebugging(`Signed cache: failed to remove ${path} - ${errorMessage(error)}`);
   }
 }
-//@ chunk-dcmhvw5a.js:183617-183874 placement
+//@ chunk-z20c443b.js:183758-184015 placement
 async function readSignedCacheFile(path, schema) {
   if (isDiskless())
     return {
@@ -747,7 +747,7 @@ async function readSignedCacheFile(path, schema) {
     };
   }
 }
-//@ chunk-dcmhvw5a.js:183874-184168 placement
+//@ chunk-z20c443b.js:184015-184309 placement
 function readSignedCacheFileSync(path, schema) {
   if (isDiskless())
     return {
@@ -780,19 +780,19 @@ function readSignedCacheFileSync(path, schema) {
     };
   }
 }
-//@ chunk-dcmhvw5a.js:184168-184245 placement
+//@ chunk-z20c443b.js:184309-184386 placement
 async function readSignedCacheValue(path, schema) {
   let signedCacheFile = await readSignedCacheFile(path, schema);
   return signedCacheFile.kind === "ok" ? signedCacheFile.value : null;
 }
-//@ chunk-dcmhvw5a.js:184245-184297 placement
+//@ chunk-z20c443b.js:184386-184438 placement
 /**
  * cacheTrustLabel：缓存信任状态标签。
  */
 function cacheTrustLabel(trustEvaluation) {
   return trustEvaluation.trusted ? "trusted" : trustEvaluation.reason;
 }
-//@ chunk-dcmhvw5a.js:184297-184440 placement
+//@ chunk-z20c443b.js:184438-184581 placement
 /**
  * 缓存信任状态答复。
  */
@@ -801,7 +801,7 @@ function cacheTrustAnswer({ enforced, gateAnswer, hadCopy }, storedCopyShadow) {
   if (!hadCopy) return "none";
   return storedCopyShadow === undefined ? "pending" : cacheTrustLabel(storedCopyShadow);
 }
-//@ chunk-dcmhvw5a.js:184440-184521 placement
+//@ chunk-z20c443b.js:184581-184662 placement
 /**
  * 可信的主体。
  */
@@ -810,11 +810,11 @@ function trustedPrincipal(principalInfo) {
     ? principalInfo.principal
     : undefined;
 }
-//@ chunk-dcmhvw5a.js:184521-184597 placement
+//@ chunk-z20c443b.js:184662-184738 placement
 function orgPinMismatch(orgUuid, pinnedOrgs) {
   return pinnedOrgs === undefined || pinnedOrgs.includes(orgUuid) ? undefined : "org_pin_mismatch";
 }
-//@ chunk-dcmhvw5a.js:184597-185511 placement
+//@ chunk-z20c443b.js:184738-185652 placement
 /**
  * 评估缓存是否可信（组织固定、签名）。
  */
@@ -885,7 +885,7 @@ function evaluateCacheTrust({ verification, held, pinnedOrgs }) {
     },
   };
 }
-//@ chunk-dcmhvw5a.js:185511-185921 placement
+//@ chunk-z20c443b.js:185652-186062 placement
 /**
  * 验证失败是否为可容忍类型（过期、未签名等）。
  */
@@ -915,7 +915,7 @@ function isSoftVerificationFailure(reason) {
       return false;
   }
 }
-//@ chunk-dcmhvw5a.js:185921-186584 placement
+//@ chunk-z20c443b.js:186062-186725 placement
 /**
  * 验证签名缓存文件。
  */
@@ -964,7 +964,7 @@ function verifySignedCache({ kind, cachePath, live, body, bodySha, account, pinn
     };
   }
 }
-//@ chunk-dcmhvw5a.js:186584-187471 placement
+//@ chunk-z20c443b.js:186725-187612 placement
 /**
  * 签名缓存根证书。
  */
@@ -991,11 +991,11 @@ XA==
   end: "-----SIGNED-CACHE-ROOTS-END-----",
 };
 var roots = SIGNED_CACHE_ROOTS_2.roots;
-//@ chunk-dcmhvw5a.js:187471-187752 placement
+//@ chunk-z20c443b.js:187612-187893 placement
 var PRODUCTION_SIGNED_CACHE_ROOT; // deferred: uses SIGNED_CACHE_ROOTS_2 of its import cycle while loading; runs once the cycle is complete
 var STAGING_SIGNED_CACHE_ROOT;
 var SIGNED_CACHE_ROOTS;
-deferInit("chunk-dcmhvw5a.js:187471", () => {
+deferInit("chunk-z20c443b.js:187612", () => {
   PRODUCTION_SIGNED_CACHE_ROOT = {
     marker: "urn:anthropic:claude-code:signed-cache:production",
     issuingCommonName: "Claude Code Signed Cache Issuing CA",
@@ -1013,7 +1013,7 @@ deferInit("chunk-dcmhvw5a.js:187471", () => {
     ),
   );
 });
-//@ chunk-dcmhvw5a.js:187752-187858 placement
+//@ chunk-z20c443b.js:187893-187999 placement
 function signedCacheMarker() {
   if (
     STAGING_SIGNED_CACHE_ROOT !== undefined &&
@@ -1024,27 +1024,27 @@ function signedCacheMarker() {
   return PRODUCTION_SIGNED_CACHE_ROOT.marker;
 }
 export {
+  readCertFileSync,
+  verifySignedCache,
+  cacheTrustLabel,
+  trustedPrincipal,
   mapped,
   checkCacheFilePermissions,
+  signatureFileFor,
+  signatureIatFileFor,
   verifyCacheSignature,
-  verifySignedCache,
   signatureHeaderValue,
   saveSignedCacheJws,
   readStoredCertificate,
   cacheTrustAnswer,
-  trustedPrincipal,
   maybePersistSignature,
   clearSignatureIfStale,
   removeSignatureFiles,
-  readCertFileSync,
-  cacheTrustLabel,
+  SIGNED_CACHE_ROOTS,
+  signedCacheMarker,
   readSignatureAsync,
   evaluateCacheTrust,
   SIGNED_CACHE_ROOT_FINGERPRINT,
   validSignatureHeader,
-  signatureFileFor,
-  signatureIatFileFor,
-  SIGNED_CACHE_ROOTS,
-  signedCacheMarker,
   isSoftVerificationFailure,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：备用（spare）进程池
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-89ebz077.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-v6a0t823.js (11)
  * attribution: placement 11
  */
 import { unlinkSync } from "fs";
@@ -77,7 +77,7 @@ import { encodeControlFrame } from "../../utils/framedSocket.js";
 import { sleep } from "../../utils/sleep.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-89ebz077.js:64813-65885 placement
+//@ chunk-v6a0t823.js:65009-66081 placement
 async function runBgSpare(argv) {
   let claimSock = argv[0];
   if (!claimSock) {
@@ -147,7 +147,7 @@ async function runBgSpare(argv) {
     throw error;
   }
 }
-//@ chunk-89ebz077.js:65885-66233 placement
+//@ chunk-v6a0t823.js:66081-66429 placement
 /**
  * 读取并清除环境中的认领令牌：有令牌文件时从中读 claimAuth 并删除文件。
  */
@@ -165,12 +165,12 @@ async function readClaimAuth() {
     });
   return sessionAuthFile?.claimAuth ?? CLAUDE_BG_CLAIM_AUTH;
 }
-//@ chunk-89ebz077.js:66233-66245 placement
+//@ chunk-v6a0t823.js:66429-66441 placement
 /**
  * 启动器启动后多少毫秒内退出视为 daemonize 违背契约（2000）。
  */
 var LAUNCHER_EXIT_GRACE_MS = 2000;
-//@ chunk-89ebz077.js:66245-69267 placement
+//@ chunk-v6a0t823.js:66441-69463 placement
 async function spawnSpare(context) {
   if (getPlatform() === "windows") return null;
   if (processWrapperError()) return null;
@@ -266,10 +266,10 @@ async function spawnSpare(context) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
@@ -337,7 +337,7 @@ ${trimmed}`,
     return spare;
   });
 }
-//@ chunk-89ebz077.js:69267-69987 placement
+//@ chunk-v6a0t823.js:69463-70184 placement
 /**
  * 为备用后台会话构造环境：去掉携带的认证与宿主托管变量、自定义端点令牌、Mac 上的 OAuth 令牌，设置会话类型、颜色、BROWSER 与 pty/认领认证。
  */
@@ -382,7 +382,7 @@ function buildSpareSessionEnv(opts) {
   applySilentPeersFlag(env);
   return env;
 }
-//@ chunk-89ebz077.js:69987-70514 placement
+//@ chunk-v6a0t823.js:70184-70711 placement
 function claimSpare(dispatch, spare, spawnPty, getAuthSnapshot, storageV5, credentials) {
   spare.claimed = true;
   let supervisor = DaemonSupervisor.claim(dispatch, {
@@ -424,7 +424,7 @@ function claimSpare(dispatch, spare, spawnPty, getAuthSnapshot, storageV5, crede
     });
   return supervisor;
 }
-//@ chunk-89ebz077.js:70514-70640 placement
+//@ chunk-v6a0t823.js:70711-70837 placement
 function buildClaimRequest(dispatch, pid, ptyAuth, auth) {
   let { env, argv } = DaemonSupervisor.buildClaimFrame(dispatch, pid, ptyAuth);
   return {
@@ -435,12 +435,12 @@ function buildClaimRequest(dispatch, pid, ptyAuth, auth) {
     auth,
   };
 }
-//@ chunk-89ebz077.js:70640-70688 placement
+//@ chunk-v6a0t823.js:70837-70885 placement
 /**
  * 重试启动器的退避序列。
  */
 var LAUNCHER_RETRY_DELAYS_MS = [50, 100, 150, 200, 250, 300, 400, 500, 500, 500];
-//@ chunk-89ebz077.js:70688-70936 placement
+//@ chunk-v6a0t823.js:70885-71133 placement
 async function sendClaimWithRetry(socketPath, request) {
   let now = Date.now();
   let deadline = 5000;
@@ -457,7 +457,7 @@ async function sendClaimWithRetry(socketPath, request) {
     }
   }
 }
-//@ chunk-89ebz077.js:70936-71060 placement
+//@ chunk-v6a0t823.js:71133-71257 placement
 function sendClaimFrame(socketPath, request) {
   return new Promise((resolve, reject) => {
     let socket = connect(socketPath);
@@ -472,7 +472,7 @@ function sendClaimFrame(socketPath, request) {
     });
   });
 }
-//@ chunk-89ebz077.js:71060-71830 placement
+//@ chunk-v6a0t823.js:71257-72027 placement
 async function reapOrphanSpares(spares, log) {
   if (getPlatform() === "windows") return;
   let knownSockets = new Set();

@@ -3,21 +3,21 @@
  *
  * acceptEdits 模式下自动允许 mkdir/touch/rm/rmdir/mv/cp/sed；混入 DesignSync 前置条件代码
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/modeValidation.ts
- * pieces: chunk-e6aww6q8.js (4)
+ * pieces: chunk-5xgkngpb.js (4)
  * attribution: fingerprint 3, file-local 1
  */
 import { stripSafeWrappers } from "./bashPermissions.js";
 import { splitCommand } from "../../utils/bash/commands.js";
 
-//@ chunk-e6aww6q8.js:1163179-1163234 fingerprint (2.1.88 match: ACCEPT_EDITS_ALLOWED_COMMANDS, 1)
+//@ chunk-5xgkngpb.js:1158542-1158597 fingerprint (2.1.88 match: ACCEPT_EDITS_ALLOWED_COMMANDS, 1)
 var ACCEPT_EDITS_ALLOWED_COMMANDS = ["mkdir", "touch", "rm", "rmdir", "mv", "cp", "sed"];
-//@ chunk-e6aww6q8.js:1163234-1163273 file-local
+//@ chunk-5xgkngpb.js:1158597-1158636 file-local
 function isFilesystemCommand(command) {
   return ACCEPT_EDITS_ALLOWED_COMMANDS.includes(command);
 }
-//@ chunk-e6aww6q8.js:1163273-1163720 fingerprint (2.1.88 match: validateCommandForMode, 0.931)
+//@ chunk-5xgkngpb.js:1158636-1159083 fingerprint (2.1.88 match: validateCommandForMode, 0.927)
 /**
  * acceptEdits 模式下，mkdir/touch/rm/rmdir/mv/cp/sed 这类文件系统命令自动允许（touch 的参数需是简单路径）。
  */
@@ -52,7 +52,7 @@ function validateCommandForMode(cmd, toolPermissionContext) {
     message: `No mode-specific handling for '${baseCmd}' in ${toolPermissionContext.mode} mode`,
   };
 }
-//@ chunk-e6aww6q8.js:1163720-1164354 fingerprint (2.1.88 match: checkPermissionMode, 0.89)
+//@ chunk-5xgkngpb.js:1159083-1159717 fingerprint (2.1.88 match: checkPermissionMode, 0.913)
 /**
  * 按权限模式校验：bypass/dontAsk 交给主流程；所有子命令都被 acceptEdits 允许时整体 allow，否则 passthrough。
  */

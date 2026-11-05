@@ -3,9 +3,9 @@
  *
  * 共享记忆库提示词（如何保存、只读/可写库）（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-82kqcve8.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a2q0x549.js (7)
  * attribution: placement 7
  */
 import { MEMORY_INDEX_FILENAME, MAX_ENTRYPOINT_LINES } from "./memdir.js";
@@ -43,7 +43,7 @@ import { isFirstPartyAnthropicBaseUrl } from "../utils/model/providers.js";
 import { isClaudeAISubscriber, hasStoredOAuthToken, hasOAuthScope } from "../utils/auth.js";
 import { CLAUDE_AI_INFERENCE_SCOPE, CLAUDE_AI_PROFILE_SCOPE } from "../constants/oauth.js";
 
-//@ chunk-82kqcve8.js:114321-115139 placement
+//@ chunk-a2q0x549.js:111764-112582 placement
 function HOW_TO_SAVE_MEMORIES_SECTION(options) {
   let {
     skipIndex,
@@ -79,7 +79,7 @@ function HOW_TO_SAVE_MEMORIES_SECTION(options) {
         ...MEMORY_MAINTENANCE_RULES,
       ];
 }
-//@ chunk-82kqcve8.js:115139-115289 placement
+//@ chunk-a2q0x549.js:112582-112732 placement
 /**
  * 构造记忆库条目：id、描述、索引路径、项目目录与是否只读。
  */
@@ -94,7 +94,7 @@ function buildMemoryStoreEntry(store, writable, id, description) {
     readOnly: !writable,
   };
 }
-//@ chunk-82kqcve8.js:115289-115460 placement
+//@ chunk-a2q0x549.js:112732-112903 placement
 /**
  * 生成记忆库列表中的一行说明。
  */
@@ -102,7 +102,7 @@ function formatMemoryStoreLine(store) {
   let accessLabel = store.readOnly ? "read-only" : "writable";
   return `- \`${store.id}\` \u2014 ${store.description} (${accessLabel}); memories under \`${store.projectDir}\`, index \`${store.indexPath}\``;
 }
-//@ chunk-82kqcve8.js:115460-121464 placement
+//@ chunk-a2q0x549.js:112903-118910 placement
 /**
  * 生成"共享记忆库"提示段：只读/可写库、是否镜像到本地
  */
@@ -218,21 +218,21 @@ function buildSharedMemoryStoresPrompt(stores, options) {
   ].join(`
 `);
 }
-//@ chunk-82kqcve8.js:121464-121514 placement
+//@ chunk-a2q0x549.js:118910-118960 placement
 /**
  * 标记共享记忆走工具
  */
 function setSharedMemoryServedViaTools(sharedMemoryServedViaTools) {
   getSessionFeatureValues().sharedMemoryServedViaTools = sharedMemoryServedViaTools;
 }
-//@ chunk-82kqcve8.js:121514-121572 placement
+//@ chunk-a2q0x549.js:118960-119018 placement
 /**
  * 共享记忆是否走工具
  */
 function isSharedMemoryServedViaTools() {
   return getSessionFeatureValues().sharedMemoryServedViaTools ?? false;
 }
-//@ chunk-82kqcve8.js:121572-121650 placement
+//@ chunk-a2q0x549.js:119018-119096 placement
 /**
  * 第一方 + 订阅 + 令牌 + scope 齐全
  */
@@ -246,11 +246,11 @@ function canUseClaudeAiMemory() {
   );
 }
 export {
-  isSharedMemoryServedViaTools,
-  canUseClaudeAiMemory,
-  HOW_TO_SAVE_MEMORIES_SECTION,
   setSharedMemoryServedViaTools,
+  HOW_TO_SAVE_MEMORIES_SECTION,
+  isSharedMemoryServedViaTools,
   buildMemoryStoreEntry,
   buildSharedMemoryStoresPrompt,
+  canUseClaudeAiMemory,
   formatMemoryStoreLine,
 };

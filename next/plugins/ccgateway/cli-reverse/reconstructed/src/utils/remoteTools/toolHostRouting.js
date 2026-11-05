@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工具宿主路由
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (12)
  * attribution: placement 12
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
@@ -22,6 +22,7 @@ import {
   hostFieldNotForwardedMessage,
   remoteToolCallsDisabledMessage,
   canRunToolsOnThisMachine,
+  isRemoteToolsForwardEnabled2,
   requestedMachineLabel,
 } from "../../bridge/deviceRegistration.js";
 import { ToolHostRegistry } from "../../remote/tools/toolHostRegistry.js";
@@ -35,23 +36,23 @@ import { isolationRuntimeService } from "../worktreeIsolation.js";
 import { getToolRemoteExecution } from "../../Tool.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1406520-1406548 placement
+//@ chunk-5xgkngpb.js:1406000-1406028 placement
 var toolHostRoutingSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1406520", () => {
+deferInit("chunk-5xgkngpb.js:1406000", () => {
   toolHostRoutingSlot = new SessionRootSlot(() => new Map());
 });
-//@ chunk-e6aww6q8.js:1406548-1406620 placement
+//@ chunk-5xgkngpb.js:1406028-1406100 placement
 function logToolHostRefused(name, reason) {
   logEvent("tengu_tool_host_refused", {
     tool: sanitizeToolNameForAnalytics(name),
     reason: fromEnum(reason),
   });
 }
-//@ chunk-e6aww6q8.js:1406620-1406711 placement
+//@ chunk-5xgkngpb.js:1406100-1406191 placement
 function hostOnlyToolMessage(name, name_2) {
   return `${name_2} runs only in this session's ${name} environment; omit "${HOST_TOOL_INPUT_FIELD}".`;
 }
-//@ chunk-e6aww6q8.js:1406711-1406826 placement
+//@ chunk-5xgkngpb.js:1406191-1406306 placement
 /**
  * 在会话的宿主中找提供该工具的宿主。
  */
@@ -60,7 +61,7 @@ function findHostServingTool(session, name) {
   let hostsBySession = toolHostRoutingSlot.peek(session);
   return hostsBySession && [...hostsBySession.values()].find((host) => host.servedTools.has(name));
 }
-//@ chunk-e6aww6q8.js:1406826-1407661 placement
+//@ chunk-5xgkngpb.js:1406306-1407140 placement
 function resolveToolHost(tool, input, context) {
   let hostServingTool = findHostServingTool(context.session, tool.name);
   if (hostServingTool === undefined) return;
@@ -111,7 +112,7 @@ function resolveToolHost(tool, input, context) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1407661-1408033 placement
+//@ chunk-5xgkngpb.js:1407140-1407512 placement
 /**
  * 路由工具调用；接管的重启调用不能路由到别处时拒绝并记录。
  */
@@ -147,13 +148,13 @@ async function routeToolCallWithAdoption(tool, input, context, toolUseId, status
     ),
   };
 }
-//@ chunk-e6aww6q8.js:1408033-1408104 placement
+//@ chunk-5xgkngpb.js:1407512-1407583 placement
 function adoptedToolHost(context, toolUseId) {
   return toolUseId === undefined || !isRemoteToolForwardingSwitchOn()
     ? undefined
     : context.toolState.get(ServedCallRegistry);
 }
-//@ chunk-e6aww6q8.js:1408104-1408195 placement
+//@ chunk-5xgkngpb.js:1407583-1407674 placement
 function withToolHostField(tool, input, adoptedCall) {
   return adoptedCall !== undefined &&
     isHostOnlyNativeTool(tool) &&
@@ -164,7 +165,7 @@ function withToolHostField(tool, input, adoptedCall) {
       }
     : input;
 }
-//@ chunk-e6aww6q8.js:1408195-1408963 placement
+//@ chunk-5xgkngpb.js:1407674-1408442 placement
 async function routeToolCallToHost(tool, input, context, statusStream) {
   if (context.remoteCall !== undefined) {
     let hostServingTool = findHostServingTool(context.session, tool.name);
@@ -211,14 +212,14 @@ async function routeToolCallToHost(tool, input, context, statusStream) {
         hosts: remote,
       };
 }
-//@ chunk-e6aww6q8.js:1408963-1409008 placement
+//@ chunk-5xgkngpb.js:1408442-1408487 placement
 /**
  * supportsRemoteExecution：工具支持远程执行。
  */
 function supportsRemoteExecution(tool) {
   return canRunToolsOnThisMachine() && getToolRemoteExecution(tool).supported;
 }
-//@ chunk-e6aww6q8.js:1409008-1409084 placement
+//@ chunk-5xgkngpb.js:1408487-1408563 placement
 /**
  * shouldRouteToolToHost：该调用是否转给远程宿主。
  */
@@ -228,12 +229,12 @@ function shouldRouteToolToHost(tool, input, context, toolUseId) {
     (hasHostField(input) || adoptedToolHost(context, toolUseId)?.adopted(toolUseId) !== undefined)
   );
 }
-//@ chunk-e6aww6q8.js:1409084-1409130 placement
+//@ chunk-5xgkngpb.js:1408563-1408609 placement
 /**
  * remoteRoutingCandidate：远程路由候选。
  */
 function remoteRoutingCandidate(input) {
-  if (!isRemoteToolForwardingSwitchOn()) return;
+  if (!isRemoteToolsForwardEnabled2()) return;
   return requestedMachineLabel(input);
 }
 export { remoteRoutingCandidate, shouldRouteToolToHost, routeToolCallWithAdoption, supportsRemoteExecution };

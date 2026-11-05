@@ -3,9 +3,9 @@
  *
  * 并入旧版已有路径：快捷键格式化。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/keybindings/shortcutFormat.ts
- * pieces: chunk-bn7jsn5n.js (1), chunk-v6kts6xw.js (14), chunk-x1mwqya5.js (3)
+ * pieces: chunk-81c4jqdt.js (1), chunk-820m5cev.js (14), chunk-m2f3rb0f.js (3)
  * attribution: placement 12, affinity 5, fingerprint 1
  */
 import { logEvent } from "../services/analytics/index.js";
@@ -17,15 +17,15 @@ import { init_react_production } from "../../vendor/react/cjs/react.production.j
 import { DEFAULT_VOICE_KEYSTROKE } from "../hooks/useVoiceIntegration.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-x1mwqya5.js:17871-17892 placement
+//@ chunk-m2f3rb0f.js:17869-17890 placement
 var MACOS_OPTION_CHAR_TO_KEY = {
   "\u2020": "t",
 };
-//@ chunk-x1mwqya5.js:17892-17933 placement
+//@ chunk-m2f3rb0f.js:17890-17931 placement
 function isMacOptionChar(key) {
   return Object.hasOwn(MACOS_OPTION_CHAR_TO_KEY, key);
 }
-//@ chunk-x1mwqya5.js:22493-22606 fingerprint (2.1.88 match: getShortcutDisplay, 0.741)
+//@ chunk-m2f3rb0f.js:22491-22604 fingerprint (2.1.88 match: getShortcutDisplay, 0.741)
 /**
  * 发 tengu_keybinding_fallback_used：显示快捷键时找不到绑定、用了组件给的回退文字。
  */
@@ -37,7 +37,7 @@ function logShortcutFallbackUsed(action, context, fallback, reason) {
     reason: fromEnum(reason),
   });
 }
-//@ chunk-bn7jsn5n.js:347-537 placement
+//@ chunk-81c4jqdt.js:347-537 placement
 /**
  * 取某快捷键动作的显示文本；动作找不到时返回 fallback，并对每个（上下文:动作）只记一次回退日志。
  */
@@ -55,12 +55,12 @@ function getShortcutDisplay(context, action, fallback) {
   }
   return actionDisplayText === null ? "" : actionDisplayText;
 }
-//@ chunk-v6kts6xw.js:411-415 placement
+//@ chunk-820m5cev.js:411-415 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-v6kts6xw.js:411", () => {
+deferInit("chunk-820m5cev.js:411", () => {
   init_react_production();
 });
-//@ chunk-v6kts6xw.js:415-848 placement
+//@ chunk-820m5cev.js:415-848 placement
 /**
  * 快捷键显示风格（default/compact/symbol）
  */
@@ -99,7 +99,7 @@ var SHORTCUT_FORMAT_STYLES = {
     platform: "other",
   },
 };
-//@ chunk-v6kts6xw.js:848-917 placement
+//@ chunk-820m5cev.js:848-917 placement
 function resolveShortcutFormat(options) {
   let { style, ...rest } = options;
   return {
@@ -107,13 +107,13 @@ function resolveShortcutFormat(options) {
     ...omitUndefinedKeys(rest),
   };
 }
-//@ chunk-v6kts6xw.js:917-991 placement
+//@ chunk-820m5cev.js:917-991 placement
 function omitUndefinedKeys(obj) {
   let clean = {};
   for (let key in obj) if (obj[key] !== undefined) clean[key] = obj[key];
   return clean;
 }
-//@ chunk-v6kts6xw.js:991-1399 placement
+//@ chunk-820m5cev.js:991-1399 placement
 /**
  * 把多组按键和弦格式化为显示文本
  */
@@ -144,7 +144,7 @@ function formatKeyChords(chords, style = {}) {
   }
   return singleKeystrokes.map(formatChord).join(arrowSep);
 }
-//@ chunk-v6kts6xw.js:1399-2277 affinity
+//@ chunk-820m5cev.js:1399-2277 affinity
 /**
  * 快捷键显示用的按键名称（标题、小写、符号三种形式）、修饰键名称（按平台区分）与方向键集合。
  */
@@ -153,7 +153,7 @@ var KEY_CASE_INDEX;
 var MODIFIER_DISPLAY_NAMES;
 var ARROW_KEYS;
 var NO_MODIFIERS;
-deferInit("chunk-v6kts6xw.js:1399", () => {
+deferInit("chunk-820m5cev.js:1399", () => {
   KEY_DISPLAY_NAMES = {
     enter: ["Enter", "enter", "\u23CE"],
     escape: ["Esc", "esc", "\u238B"],
@@ -206,7 +206,7 @@ deferInit("chunk-v6kts6xw.js:1399", () => {
     super: false,
   };
 });
-//@ chunk-v6kts6xw.js:2277-2419 affinity (2.1.88 match: keystrokeToString, 0.803)
+//@ chunk-820m5cev.js:2277-2419 affinity (2.1.88 match: keystrokeToString, 0.803)
 function getModifierNames(ks) {
   let parts = [];
   if (ks.ctrl) parts.push("ctrl");
@@ -215,7 +215,7 @@ function getModifierNames(ks) {
   if (ks.super) parts.push("super");
   return parts;
 }
-//@ chunk-v6kts6xw.js:2419-2502 affinity
+//@ chunk-820m5cev.js:2419-2502 affinity
 /**
  * 按 modCase 取出修饰键的显示文本（可能是按平台区分的函数）。
  */
@@ -223,13 +223,13 @@ function modifierDisplayName(modifierName, options) {
   let name = MODIFIER_DISPLAY_NAMES[modifierName][options.modCase];
   return typeof name === "function" ? name(options.platform) : name;
 }
-//@ chunk-v6kts6xw.js:2502-2603 affinity
+//@ chunk-820m5cev.js:2502-2603 affinity
 function formatKeyName(key, options) {
   let names = KEY_DISPLAY_NAMES[key];
   if (names) return names[KEY_CASE_INDEX[options.keyCase]];
   return options.charCase === "upper" ? key.toUpperCase() : key;
 }
-//@ chunk-v6kts6xw.js:2710-2965 affinity
+//@ chunk-820m5cev.js:2710-2965 affinity
 function formatKeyChord(chord, options) {
   if (options.shiftAsCase && DEFAULT_VOICE_KEYSTROKE(chord)) return chord.key.toUpperCase();
   let modifierNames = getModifierNames(chord);
@@ -241,18 +241,18 @@ function formatKeyChord(chord, options) {
     options.modSep,
   );
 }
-//@ chunk-v6kts6xw.js:2965-3059 placement
+//@ chunk-820m5cev.js:2965-3059 placement
 function sharedModifierChord(keystrokes, options) {
   let [first, ...rest] = keystrokes;
   if (!modifiersOf(first, options).length) return;
   return rest.every((keystroke) => sameModifiers(first, keystroke, options)) ? first : undefined;
 }
-//@ chunk-v6kts6xw.js:3059-3119 placement
+//@ chunk-820m5cev.js:3059-3119 placement
 function modifiersOf(chord, options) {
   if (options.shiftAsCase && DEFAULT_VOICE_KEYSTROKE(chord)) return [];
   return getModifierNames(chord);
 }
-//@ chunk-v6kts6xw.js:3119-3212 placement
+//@ chunk-820m5cev.js:3119-3212 placement
 function sameModifiers(left, right, options) {
   let leftMods = modifiersOf(left, options);
   let rightMods = modifiersOf(right, options);
@@ -260,7 +260,7 @@ function sameModifiers(left, right, options) {
     leftMods.length === rightMods.length && leftMods.every((modifier, index) => modifier === rightMods[index])
   );
 }
-//@ chunk-v6kts6xw.js:3212-3401 placement
+//@ chunk-820m5cev.js:3212-3401 placement
 /**
  * 格式化修饰键前缀（^、glyph 或 ctrl+）
  */
@@ -275,9 +275,9 @@ function formatModifierPrefix(modifiers, options) {
   );
 }
 export {
+  logShortcutFallbackUsed,
   getShortcutDisplay,
   formatKeyChords,
-  logShortcutFallbackUsed,
   isMacOptionChar,
   MACOS_OPTION_CHAR_TO_KEY,
 };

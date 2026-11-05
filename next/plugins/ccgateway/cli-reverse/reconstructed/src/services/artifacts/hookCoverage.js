@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。PreToolUse hook 是否可能覆盖 artifact 工具调用。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-rxmpx0xj.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-am4n5h4j.js (8)
  * attribution: placement 8
  */
 import { ARTIFACT_TOOL_NAME, ARTIFACT_DATA_TOOL_NAME } from "../../tools/ArtifactTool/constants.js";
@@ -22,19 +22,19 @@ import {
 } from "../../plugins/hooksModules/loadedModuleFilters.js";
 import { hasLink } from "../../utils/hasLink.js";
 import { getHooksForEvent, hasNonInternalHook } from "../../utils/hooks.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-rxmpx0xj.js:537-579 placement
+//@ chunk-am4n5h4j.js:570-612 placement
 var flattened; // deferred: uses ARTIFACT_TOOL_NAME (../../tools/ArtifactTool/constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-rxmpx0xj.js:537", () => {
+deferInit("chunk-am4n5h4j.js:570", () => {
   flattened = [ARTIFACT_TOOL_NAME, ARTIFACT_DATA_TOOL_NAME].flatMap((name) => [
     name,
     ...legacyToolNamesFor(name),
   ]);
 });
-//@ chunk-rxmpx0xj.js:579-827 placement
+//@ chunk-am4n5h4j.js:612-860 placement
 /**
  * 按工具别名扩展工具名列表
  */
@@ -50,7 +50,7 @@ function expandToolAliases(context, names) {
   let flattened_2 = aliases.flatMap(([alias, canonical]) => (flattened.includes(canonical) ? [alias] : []));
   return [...names, ...flattened, ...flattened_2];
 }
-//@ chunk-rxmpx0xj.js:882-1130 placement
+//@ chunk-am4n5h4j.js:915-1163 placement
 /**
  * hook matcher 是否覆盖给定工具
  */
@@ -68,7 +68,7 @@ function matcherCoversTools(pattern, tools, allowLegacy = true) {
     return allowLegacy || error instanceof MatcherUnsupportableError;
   }
 }
-//@ chunk-rxmpx0xj.js:1130-1364 placement
+//@ chunk-am4n5h4j.js:1163-1397 placement
 /**
  * hooks 模块的 tool.call/check 是否可能覆盖工具
  */
@@ -100,7 +100,7 @@ function hooksModuleMayCoverTools(site, tools, hasLink = () => false) {
     )
   );
 }
-//@ chunk-rxmpx0xj.js:1364-1480 placement
+//@ chunk-am4n5h4j.js:1397-1513 placement
 function hooksModuleMayCover(site, tools) {
   try {
     let names = tools.flatMap((tool) => [tool, ...legacyToolNamesFor(tool)]);
@@ -110,7 +110,7 @@ function hooksModuleMayCover(site, tools) {
     return true;
   }
 }
-//@ chunk-rxmpx0xj.js:1480-1733 placement
+//@ chunk-am4n5h4j.js:1513-1766 placement
 /**
  * PreToolUse hook 是否可能覆盖 artifact 工具调用。
  */
@@ -128,15 +128,12 @@ function preToolUseHookMayCoverArtifact(context, hookContext) {
     return true;
   }
 }
-//@ chunk-rxmpx0xj.js:1733-1775 placement
+//@ chunk-am4n5h4j.js:1766-1808 placement
 var flattened_2; // deferred: uses legacyToolNamesFor (../../utils/permissions/permissionRuleParser.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-rxmpx0xj.js:1733", () => {
-  flattened_2 = [FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME].flatMap((name) => [
-    name,
-    ...legacyToolNamesFor(name),
-  ]);
+deferInit("chunk-am4n5h4j.js:1766", () => {
+  flattened_2 = [EDIT, FILE_WRITE_TOOL_NAME].flatMap((name) => [name, ...legacyToolNamesFor(name)]);
 });
-//@ chunk-rxmpx0xj.js:1775-1861 placement
+//@ chunk-am4n5h4j.js:1808-1894 placement
 function fileEditHookLoaded() {
   return (
     hooksModuleMayCoverTools(flattened_2, false, hasLink) ||
@@ -145,4 +142,4 @@ function fileEditHookLoaded() {
     )
   );
 }
-export { hooksModuleMayCover, preToolUseHookMayCoverArtifact, fileEditHookLoaded };
+export { preToolUseHookMayCoverArtifact, fileEditHookLoaded, hooksModuleMayCover };

@@ -1,15 +1,15 @@
 /**
  * openid-client/lib/token_set.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: openid-client@5.7.1
- * pieces: chunk-1ny7cxrt.js (1)
+ * pieces: chunk-1hnjmk23.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_base64url } from "./helpers/base64url.js";
 import { require_unix_timestamp } from "./helpers/unix_timestamp.js";
 
-//@ chunk-1ny7cxrt.js:10077-10596 cjs-fingerprint
+//@ chunk-1hnjmk23.js:10446-10965 cjs-fingerprint
 var require_token_set = __commonJS(function (cjsExports, cjsModule) {
   var base64url = require_base64url();
   var now = require_unix_timestamp();

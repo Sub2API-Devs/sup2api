@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：安全子进程启动。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-m4p5zn6n.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-t889g22j.js (5)
  * attribution: placement 5
  */
 import { assertProgramLaunchAllowed } from "./disklessSession.js";
@@ -19,7 +19,7 @@ import { resolveExecutableSafely } from "./findExecutableWindows.js";
 import { execa, execaSync } from "../../vendor/execa/index.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "./errors.js";
 
-//@ chunk-m4p5zn6n.js:40919-41221 placement
+//@ chunk-t889g22j.js:40942-41244 placement
 /**
  * 安全执行命令（拒绝当前目录下的可执行文件，套工具 cgroup）。
  */
@@ -41,7 +41,7 @@ async function safeExecFile(command, args = [], options = {}) {
   }
   return execa(command, args, spawnOptions);
 }
-//@ chunk-m4p5zn6n.js:41221-41720 placement
+//@ chunk-t889g22j.js:41244-41743 placement
 /**
  * 安全 spawn（拒绝当前目录下的可执行文件，套工具 cgroup）。
  */
@@ -78,7 +78,7 @@ function safeSpawn(command, args = [], options = {}) {
   child.catch(() => {});
   return child;
 }
-//@ chunk-m4p5zn6n.js:41720-42013 placement
+//@ chunk-t889g22j.js:41743-42036 placement
 /**
  * 同步安全执行命令。
  */
@@ -100,7 +100,7 @@ function safeExecFileSync(command, args = [], options = {}) {
   }
   return execaSync(command, args, spawnOptions);
 }
-//@ chunk-m4p5zn6n.js:42013-42174 placement
+//@ chunk-t889g22j.js:42036-42197 placement
 /**
  * 以 shell 执行命令。
  */
@@ -116,7 +116,7 @@ async function safeExecShell(command, options = {}) {
     shell: true,
   });
 }
-//@ chunk-m4p5zn6n.js:42174-42328 placement
+//@ chunk-t889g22j.js:42197-42351 placement
 /**
  * 同步以 shell 执行命令。
  */
@@ -132,4 +132,4 @@ function safeExecShellSync(command, options = {}) {
     shell: true,
   });
 }
-export { safeExecShell, safeExecFile, safeSpawn, safeExecFileSync, safeExecShellSync };
+export { safeExecShell, safeSpawn, safeExecFile, safeExecFileSync, safeExecShellSync };

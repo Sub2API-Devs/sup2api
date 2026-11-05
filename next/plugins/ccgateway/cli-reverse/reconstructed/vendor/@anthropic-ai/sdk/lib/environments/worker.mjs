@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/lib/environments/worker.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (9)
+ * pieces: chunk-vn3g7zt8.js (9)
  * attribution: esm-layout 1, esm-fingerprint 8
  */
 import { decodeUtf8 } from "../../internal/utils/bytes.mjs";
@@ -21,7 +21,7 @@ import { isStatus, isFatal4xx } from "../../internal/utils/backoff.mjs";
 import { isObj } from "../../internal/utils/values.mjs";
 import { sleepUnlessAborted } from "../../tools/agent-toolset/memories.mjs";
 
-//@ chunk-hwmsct5x.js:71272-71327 esm-layout
+//@ chunk-vn3g7zt8.js:71643-71698 esm-layout
 var _EnvironmentWorker_instances;
 var _EnvironmentWorker_signal;
 var _EnvironmentWorker_handleItem;
@@ -30,11 +30,11 @@ var _Lease_endReason;
 var HEARTBEAT_DEFAULT_MS = 30000;
 var HEARTBEAT_TTL_DEFAULT_MS = 90000;
 var NO_HEARTBEAT_SENTINEL = "NO_HEARTBEAT";
-//@ chunk-hwmsct5x.js:71327-71396 esm-fingerprint
+//@ chunk-vn3g7zt8.js:71698-71767 esm-fingerprint
 function hasMemoryStore(session) {
   return session.resources.some((r) => r.type === "memory_store");
 }
-//@ chunk-hwmsct5x.js:71396-71694 esm-fingerprint
+//@ chunk-vn3g7zt8.js:71767-72065 esm-fingerprint
 function sessionsTokenFromSecret(secret) {
   if (!secret) return null;
   let parsed;
@@ -49,7 +49,7 @@ function sessionsTokenFromSecret(secret) {
   let token = parsed.sessions_token;
   return typeof token === "string" && token !== "" ? token : null;
 }
-//@ chunk-hwmsct5x.js:71694-77525 esm-fingerprint
+//@ chunk-vn3g7zt8.js:72065-77905 esm-fingerprint
 var EnvironmentWorker = (() => {
   class EnvironmentWorker {
     constructor(opts) {
@@ -329,7 +329,7 @@ var EnvironmentWorker = (() => {
   };
   return EnvironmentWorker;
 })();
-//@ chunk-hwmsct5x.js:77525-77694 esm-fingerprint
+//@ chunk-vn3g7zt8.js:77905-78074 esm-fingerprint
 async function withTimeout(p, ms) {
   let timer;
   try {
@@ -346,7 +346,7 @@ async function withTimeout(p, ms) {
     if (timer !== undefined) clearTimeout(timer);
   }
 }
-//@ chunk-hwmsct5x.js:77694-77933 esm-fingerprint
+//@ chunk-vn3g7zt8.js:78074-78313 esm-fingerprint
 async function forceStop(client, work, log, requestOptions) {
   try {
     await client.beta.environments.work.stop(
@@ -368,7 +368,7 @@ async function forceStop(client, work, log, requestOptions) {
       });
   }
 }
-//@ chunk-hwmsct5x.js:77933-78266 esm-fingerprint
+//@ chunk-vn3g7zt8.js:78313-78646 esm-fingerprint
 var Lease = (() => {
   class Lease {
     constructor(ctrl) {
@@ -399,7 +399,7 @@ var Lease = (() => {
   _Lease_endReason = new WeakMap();
   return Lease;
 })();
-//@ chunk-hwmsct5x.js:78266-78411 esm-fingerprint
+//@ chunk-vn3g7zt8.js:78646-78791 esm-fingerprint
 function serverLeaseState(error) {
   let node = error instanceof APIError ? error.error : undefined;
   for (let key of ["error", "details", "current_state"]) {
@@ -408,7 +408,7 @@ function serverLeaseState(error) {
   }
   return isObj(node) ? node : {};
 }
-//@ chunk-hwmsct5x.js:78411-79802 esm-fingerprint
+//@ chunk-vn3g7zt8.js:78791-80182 esm-fingerprint
 async function heartbeatLoop(client, work, lease, logger, requestOptions, onLeaseTtl) {
   let intervalMs = HEARTBEAT_DEFAULT_MS;
   let ttlMs = HEARTBEAT_TTL_DEFAULT_MS;

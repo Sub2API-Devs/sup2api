@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：频道记忆（claude.ai 频道里的 MEMORY.md）的读写 API：拉取、写入与重试退避。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dz3q485w.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jndyh8cy.js (9)
  * attribution: placement 9
  */
 import {
@@ -21,18 +21,18 @@ import { sleep } from "../../utils/sleep.js";
 import { AbortError } from "../../utils/errors.js";
 import { MEMORY_ID_PATTERN } from "../../utils/taggedId.js";
 
-//@ chunk-dz3q485w.js:30880-30946 placement
+//@ chunk-jndyh8cy.js:30624-30690 placement
 var MEMORY_FILE_REQUEST_TIMEOUT_MS = 15000;
 var MEMORY_FILE_PATH = "/MEMORY.md";
 var MEMORY_WRITE_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 12000];
 var MEMORY_WRITE_MAX_ATTEMPTS = 10;
-//@ chunk-dz3q485w.js:30946-31122 placement
+//@ chunk-jndyh8cy.js:30690-30866 placement
 function channelMemoriesPath(channelId, action) {
   if (!CHANNEL_ID_REGEX.test(channelId))
     throw new ChannelApiError(action, null, "the project id has an unexpected shape", "invalid_input");
   return `/v1/code/memory/channel/${encodeURIComponent(channelId)}/memories`;
 }
-//@ chunk-dz3q485w.js:31122-31667 placement
+//@ chunk-jndyh8cy.js:30866-31411 placement
 /**
  * 在项目记忆中创建文件（前置条件：路径不存在）：404 表示存储未就绪，409 表示已存在（路径与其他文件重叠时抛错）。
  */
@@ -75,7 +75,7 @@ async function createMemoryFile(channelId, file, signal, credentials) {
     status: checkChannelResponse(response, "save to project memory").status,
   };
 }
-//@ chunk-dz3q485w.js:31667-32122 placement
+//@ chunk-jndyh8cy.js:31411-31866 placement
 /**
  * 保存项目记忆文件（若已存在则保留原文件）：存储未就绪时按间隔重试，返回 created / kept-existing / null，并记录特性状态。
  */
@@ -115,7 +115,7 @@ async function saveMemoryFileIfAbsent(
     throw error;
   }
 }
-//@ chunk-dz3q485w.js:32122-32381 placement
+//@ chunk-jndyh8cy.js:31866-32125 placement
 function parseMemoryFileList(payload) {
   let rawEntries = payload?.data;
   if (!Array.isArray(rawEntries)) return [];
@@ -135,7 +135,7 @@ function parseMemoryFileList(payload) {
       : [];
   });
 }
-//@ chunk-dz3q485w.js:32381-32964 placement
+//@ chunk-jndyh8cy.js:32125-32708 placement
 /**
  * 分页列出项目记忆文件，按路径查找条目（id、路径、内容 sha256），页数过多时抛错。
  */
@@ -172,7 +172,7 @@ async function findMemoryFileByPath(channelId, path, signal, credentials) {
     "bad_response",
   );
 }
-//@ chunk-dz3q485w.js:32964-33662 placement
+//@ chunk-jndyh8cy.js:32708-33406 placement
 /**
  * 读取项目记忆中指定路径的文件内容与 sha256，不存在时返回 null。
  */
@@ -218,7 +218,7 @@ async function readMemoryFile(channelId, path, signal, credentials) {
     throw error;
   }
 }
-//@ chunk-dz3q485w.js:33662-34247 placement
+//@ chunk-jndyh8cy.js:33406-33991 placement
 /**
  * 以内容 sha256 为前置条件替换项目记忆文件内容。
  */
@@ -260,7 +260,7 @@ async function replaceMemoryFile(channelId, update, signal, credentials) {
     throw error;
   }
 }
-//@ chunk-dz3q485w.js:34247-34702 placement
+//@ chunk-jndyh8cy.js:33991-34446 placement
 /**
  * 保存项目记忆文件：不存在时创建，已存在时按当前 sha256 替换，返回 created / replaced / null。
  */

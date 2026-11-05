@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：跨会话消息的显示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e766yyad.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qe4ze26w.js (8)
  * attribution: placement 8
  */
 import {
@@ -33,10 +33,10 @@ import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/inde
 import { MarkdownText_2 } from "../pluginUi/render/MarkdownBlock.js";
 import { parseAddress } from "../../utils/peerAddress.js";
 
-//@ chunk-e766yyad.js:686-728 placement
+//@ chunk-qe4ze26w.js:686-728 placement
 var CROSS_SESSION_CLOSE_TAG = "</cross-session-message>";
 var PEER = "peer";
-//@ chunk-e766yyad.js:728-946 placement
+//@ chunk-qe4ze26w.js:728-946 placement
 function parseCrossSessionSender(text) {
   let found = PEER_MESSAGE_PREFIXES.find((prefix) => text.startsWith(prefix));
   let attrs = (found ? text.slice(found.length) : text).match(/^<cross-session-message\b([^>]*)>/)?.[1] ?? "";
@@ -44,7 +44,7 @@ function parseCrossSessionSender(text) {
   let displayName = attrs.match(/\bfrom-name="([^"]+)"/)?.[1];
   return hasCrossSessionBody(displayName, peer);
 }
-//@ chunk-e766yyad.js:946-995 placement
+//@ chunk-qe4ze26w.js:946-995 placement
 function hasCrossSessionBody(displayName, peer) {
   return (
     (displayName && clipTeammateText(displayName)) ||
@@ -52,7 +52,7 @@ function hasCrossSessionBody(displayName, peer) {
     PEER
   );
 }
-//@ chunk-e766yyad.js:995-1295 placement
+//@ chunk-qe4ze26w.js:995-1295 placement
 /**
  * 去掉跨会话消息的前缀、外层 cross-session-message 标签与已知的尾随说明，得到正文。
  */
@@ -68,7 +68,7 @@ function stripCrossSessionWrapper(text, hostInjected) {
   }
   return rest.replace(/^<cross-session-message[^>]*>\n/, "").replace(/\n<\/cross-session-message>$/, "");
 }
-//@ chunk-e766yyad.js:1295-1438 placement
+//@ chunk-qe4ze26w.js:1295-1438 placement
 function crossSessionPreviewHidesBody(text, hostInjected) {
   let stripped = stripCrossSessionWrapper(text, hostInjected);
   let trimmed = stripInvisibleChars(stripAnsiPerLine(stripped.replace(/\p{Cs}/gu, "\u200B")), " ", {
@@ -78,7 +78,7 @@ function crossSessionPreviewHidesBody(text, hostInjected) {
     .trim();
   return firstLineOfPeerBody(stripped) !== trimmed;
 }
-//@ chunk-e766yyad.js:1438-2381 placement
+//@ chunk-qe4ze26w.js:1438-2381 placement
 function UserCrossSessionMessage(props) {
   let $ = useMemoCache(22);
   let { addMargin, param, hostInjected, verbose, isTranscriptMode, messageId, origin, followsSpeakerLabel } =
@@ -169,7 +169,7 @@ function UserCrossSessionMessage(props) {
   } else bodyElement = $[21];
   return BriefTimestampNamespace.useUserMessageSite(bodyElement);
 }
-//@ chunk-e766yyad.js:2381-3364 placement
+//@ chunk-qe4ze26w.js:2381-3364 placement
 /**
  * 跨会话消息正文：紧跟说话人标签时直接显示可折叠文本；未展开时显示 ctrl+o 展开提示；展开时显示"@ 发送者 <插件>"与正文。
  */
@@ -265,7 +265,7 @@ function CrossSessionMessageBody(props) {
   } else containerElement = $[18];
   return containerElement;
 }
-//@ chunk-e766yyad.js:3364-3581 placement
+//@ chunk-qe4ze26w.js:3364-3581 placement
 function shortPeerAddressLabel(address) {
   let { scheme, target } = parseAddress(address);
   switch (scheme) {

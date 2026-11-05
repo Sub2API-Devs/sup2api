@@ -3,11 +3,18 @@
  *
  * 精简版 Logo 行（已有会话/窄终端时）：显示模型、agent、ultracode、cwd 与过期等状态。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/LogoV2/CondensedLogo.tsx
- * pieces: chunk-ag5x7vhf.js (13)
- * attribution: sole-consumer 1, placement 9, layout 2, fingerprint 1
+ * pieces: chunk-hnxhr3bs.js (13)
+ * attribution: placement 9, sole-consumer 1, layout 2, fingerprint 1
  */
+import {
+  init_react_production,
+  useState,
+  useEffect,
+  createContext,
+  useContext,
+} from "../../../vendor/react/cjs/react.production.js";
 import { uiSignals } from "../../state/uiSignals.js";
 import {
   getForcedFirstLaunch,
@@ -17,16 +24,9 @@ import {
   markClawdEntranceSeen,
 } from "./AnimatedClawd.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
-import { chalkForChart } from "./Clawd.js";
+import { notAppleTerminal } from "./Clawd.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
-import {
-  useState,
-  useEffect,
-  init_react_production,
-  createContext,
-  useContext,
-} from "../../../vendor/react/cjs/react.production.js";
 import { announcementState } from "../../services/announcements/announcementState.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
@@ -61,16 +61,21 @@ import { rcPillLabel, logRcPillClicked, RemoteControlStatus } from "../PromptInp
 import { FreezeWhenOffscreen } from "../FreezeWhenOffscreen.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:56868-57055 sole-consumer
+//@ chunk-hnxhr3bs.js:48128-48132 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:48128", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:56323-56510 sole-consumer
 function pickClawdEntranceAnimation() {
   if (uiSignals.clawdEntranceTaken) return;
   if (!getForcedFirstLaunch() && !isNewerClawdEntranceVersion(getGlobalConfig().lastClawdEntranceVersion))
     return;
   uiSignals.clawdEntranceTaken = true;
-  let candidates = filterEntranceAnimations(CLAWD_ANIMATION_NAMES, chalkForChart());
+  let candidates = filterEntranceAnimations(CLAWD_ANIMATION_NAMES, notAppleTerminal());
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
-//@ chunk-ag5x7vhf.js:57055-57344 placement
+//@ chunk-hnxhr3bs.js:56510-56799 placement
 function useClawdEntranceAnimation(enabled) {
   let $ = useMemoCache(6);
   let { storageV5 } = useTheme_2();
@@ -105,32 +110,27 @@ function useClawdEntranceAnimation(enabled) {
   useEffect(markSeen, markDeps);
   return animation;
 }
-//@ chunk-ag5x7vhf.js:57344-57348 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:57344", () => {
-  init_react_production();
-});
-//@ chunk-ag5x7vhf.js:61638-61729 placement
+//@ chunk-hnxhr3bs.js:61189-61280 placement
 function claimNoticeImpression(noticeKey) {
   let countedNoticeImpressions = announcementState().countedNoticeImpressions;
   if (countedNoticeImpressions.has(noticeKey)) return false;
   countedNoticeImpressions.add(noticeKey);
   return true;
 }
-//@ chunk-ag5x7vhf.js:61729-61789 placement
+//@ chunk-hnxhr3bs.js:61280-61340 placement
 function hasNoticeImpression(noticeKey) {
   return announcementState().countedNoticeImpressions.has(noticeKey);
 }
-//@ chunk-ag5x7vhf.js:61789-61803 placement
+//@ chunk-hnxhr3bs.js:61340-61354 placement
 var noticeImpressionEnabled; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:61789", () => {
+deferInit("chunk-hnxhr3bs.js:61340", () => {
   noticeImpressionEnabled = createContext(true);
 });
-//@ chunk-ag5x7vhf.js:61803-61831 placement
+//@ chunk-hnxhr3bs.js:61354-61382 placement
 function useNoticeImpressionEnabled() {
   return useContext(noticeImpressionEnabled);
 }
-//@ chunk-ag5x7vhf.js:61831-61926 placement
+//@ chunk-hnxhr3bs.js:61382-61477 placement
 function useNoticeImpression(noticeKey, onShown, { enabled = true } = {}) {
   let noticeImpressionEnabled = useNoticeImpressionEnabled();
   useEffect(() => {
@@ -138,15 +138,15 @@ function useNoticeImpression(noticeKey, onShown, { enabled = true } = {}) {
     if (claimNoticeImpression(noticeKey)) onShown();
   }, [enabled, noticeImpressionEnabled, noticeKey, onShown]);
 }
-//@ chunk-ag5x7vhf.js:61926-61958 layout
+//@ chunk-hnxhr3bs.js:61477-61509 layout
 function selectAgent(state) {
   return state.agent;
 }
-//@ chunk-ag5x7vhf.js:61958-61994 layout
+//@ chunk-hnxhr3bs.js:61509-61545 layout
 function selectUltracode(state) {
   return state.ultracode;
 }
-//@ chunk-ag5x7vhf.js:61994-64759 fingerprint (2.1.88 match: CondensedLogo, 0.508)
+//@ chunk-hnxhr3bs.js:61545-64311 fingerprint (2.1.88 match: CondensedLogo, 0.509)
 function CondensedLogo(props) {
   let $ = useMemoCache(34);
   let options;
@@ -408,7 +408,7 @@ function CondensedLogo(props) {
         children: logo,
       });
 }
-//@ chunk-ag5x7vhf.js:64759-65228 placement
+//@ chunk-hnxhr3bs.js:64311-64780 placement
 /**
  * 精简 Logo 里可点击的 Remote Control 状态胶囊：悬停高亮，点击时打点并放行默认行为。
  */
@@ -461,7 +461,7 @@ function RemoteControlPill_2(props) {
   } else pill = $[9];
   return pill;
 }
-//@ chunk-ag5x7vhf.js:65228-65318 placement
+//@ chunk-hnxhr3bs.js:64780-64870 placement
 function viewedAgentTask(state) {
   let { teammate, localAgent } = viewedTaskParts(state.viewingAgentTaskId, state.tasks);
   return teammate ?? localAgent;

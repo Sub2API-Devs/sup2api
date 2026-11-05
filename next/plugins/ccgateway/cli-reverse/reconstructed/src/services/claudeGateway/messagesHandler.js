@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关 /v1/messages 处理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (4)
  * attribution: placement 4
  */
 import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
@@ -33,7 +33,7 @@ import { UPSTREAM_REQUEST_ID_HEADERS } from "./proxyRequest.js";
 import { redactAwsSessionName } from "./upstreams/aws.js";
 import { normalizeFullWidthSpace } from "../../utils/stringUtils.js";
 
-//@ chunk-1ny7cxrt.js:1363661-1369477 placement
+//@ chunk-1hnjmk23.js:1365386-1371256 placement
 /**
  * 网关 /v1/messages 处理：读取并解析请求体、校验、按策略选择上游、计量与转发。
  */
@@ -192,17 +192,18 @@ async function handleGatewayMessagesRequest(
           );
         }
         let criModel = isCri ? model : undefined;
-        let user = requestContext?.user;
+        let isCountTokens = pathname === "/v1/messages/count_tokens";
+        let user = isCountTokens ? undefined : requestContext?.user;
         let traceContext = upstream.guardrailTrace
           ? {
               request_id: requestId,
-              sub: user?.sub,
-              email: user?.email,
+              sub: requestContext?.user?.sub,
+              email: requestContext?.user?.email,
               upstream: upstream.name,
             }
           : undefined;
         let assumeRoleSession =
-          upstream.assumeRole && pathname !== "/v1/messages/count_tokens"
+          upstream.assumeRole && !(isCountTokens && upstream.provider === "bedrock")
             ? await upstream.assumeRole.clientFor(user)
             : undefined;
         response = await forwardViaSdk(
@@ -375,7 +376,7 @@ async function handleGatewayMessagesRequest(
   }
   return failureResponse;
 }
-//@ chunk-1ny7cxrt.js:1369477-1369593 placement
+//@ chunk-1hnjmk23.js:1371256-1371372 placement
 /**
  * 头部值规范化：去空白、全角空格转换，非可打印 ASCII 与 % 做 URL 编码。
  */
@@ -385,14 +386,14 @@ function encodeHeaderValue(email) {
     : normalizeFullWidthSpace(email.trim()).replace(/[^\x21-\x7e]|%/gu, (char) => encodeURIComponent(char)) ||
         undefined;
 }
-//@ chunk-1ny7cxrt.js:1369593-1369666 placement
+//@ chunk-1hnjmk23.js:1371372-1371445 placement
 /**
  * 把来源对象的 headers 逐项 set 到目标 Headers 上。
  */
 function copyHeadersInto(headers, source) {
   for (let [key, value] of Object.entries(source.headers ?? {})) headers.set(key, value);
 }
-//@ chunk-1ny7cxrt.js:1369666-1369882 placement
+//@ chunk-1hnjmk23.js:1371445-1371661 placement
 /**
  * 开启身份转发时设置 x-litellm-end-user-id、x-claude-gateway-user-id/email 头。
  */

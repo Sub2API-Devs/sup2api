@@ -3,9 +3,9 @@
  *
  * WebFetch 结果渲染
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/WebFetchTool/UI.tsx
- * pieces: chunk-14ezrfvp.js (2)
+ * pieces: chunk-abqy9pdy.js (2)
  * attribution: placement 1, fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -17,7 +17,7 @@ import {
 import { Text, Box } from "../../ink/components/Text.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 
-//@ chunk-14ezrfvp.js:465-795 placement
+//@ chunk-abqy9pdy.js:465-795 placement
 function renderToolUseProgressMessage(props) {
   let $ = useMemoCache(7);
   let { bytes, status } = props;
@@ -51,7 +51,7 @@ function renderToolUseProgressMessage(props) {
   } else element = $[6];
   return element;
 }
-//@ chunk-14ezrfvp.js:795-1023 fingerprint (2.1.88 match: renderToolResultMessage, 0.787)
+//@ chunk-abqy9pdy.js:795-1023 fingerprint (2.1.88 match: renderToolResultMessage, 0.787)
 /**
  * WebFetch 结果渲染：显示字节数与状态码；verbose 时附结果文本。
  */

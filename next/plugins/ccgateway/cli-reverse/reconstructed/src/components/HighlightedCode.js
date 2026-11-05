@@ -3,9 +3,9 @@
  *
  * 语法高亮代码块（带行号、宽度裁剪、"… from line N" 截断），高亮结果按内容缓存。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/HighlightedCode.tsx
- * pieces: chunk-ag5x7vhf.js (1), chunk-yqj79cx2.js (4)
+ * pieces: chunk-abjyap5m.js (4), chunk-hnxhr3bs.js (1)
  * attribution: fingerprint 2, placement 3
  */
 import { memo, useRef, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
@@ -43,13 +43,13 @@ import { shrinkTerminalSize } from "./Messages.js";
 import { TerminalSizeContext } from "../ink/terminalModes.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-yqj79cx2.js:3215-5545 fingerprint (2.1.88 match: HighlightedCode, 0.345)
+//@ chunk-abjyap5m.js:3215-5545 fingerprint (2.1.88 match: HighlightedCode, 0.346)
 /**
  * 语法高亮代码：{code, filePath, width, dim, startLine, lineNumbers}；按扩展名选语言，结果缓存，超长截断为 "… from line N"。
  */
 var HIGHLIGHT_MAX_WIDTH; // deferred: uses useTheme (./design-system/ThemeProvider.js) of its import cycle while loading; runs once the cycle is complete
 var HighlightedCode;
-deferInit("chunk-yqj79cx2.js:3215", () => {
+deferInit("chunk-abjyap5m.js:3215", () => {
   HIGHLIGHT_MAX_WIDTH = 80;
   HighlightedCode = memo(function (props) {
     let $ = useMemoCache(40);
@@ -280,7 +280,7 @@ deferInit("chunk-yqj79cx2.js:3215", () => {
     return element;
   });
 });
-//@ chunk-yqj79cx2.js:5545-6164 placement
+//@ chunk-abjyap5m.js:5545-6164 placement
 /**
  * 计算代码每个逻辑行折行后占用的屏幕行数：无高亮器或禁用高亮时按纯文本折行估算，否则用高亮器 renderSplit 的 gutter 位置差得出。
  */
@@ -344,7 +344,7 @@ function useHighlightedLineHeights(code, filePath, width) {
   } else heights = $[5];
   return heights;
 }
-//@ chunk-yqj79cx2.js:6164-6225 placement
+//@ chunk-abjyap5m.js:6164-6225 placement
 function countLines(code) {
   let count =
     countCharInString(
@@ -357,7 +357,7 @@ function countLines(code) {
     ? count - 1
     : count;
 }
-//@ chunk-yqj79cx2.js:6225-6653 placement
+//@ chunk-abjyap5m.js:6225-6653 placement
 /**
  * 渲染代码的一行：不可选中的行号槽位加内容。
  */
@@ -406,7 +406,7 @@ function CodeLineRow(props) {
   } else row = $[7];
   return row;
 }
-//@ chunk-ag5x7vhf.js:150071-150628 fingerprint (2.1.88 match: CodeLine, 0.514)
+//@ chunk-hnxhr3bs.js:154391-154948 fingerprint (2.1.88 match: CodeLine, 0.514)
 function CodeLine(props) {
   let $ = useMemoCache(13);
   let { verbose, children } = props;
@@ -464,4 +464,4 @@ function CodeLine(props) {
   } else t5 = $[12];
   return t5;
 }
-export { HighlightedCode, CodeLine, useHighlightedLineHeights };
+export { useHighlightedLineHeights, HighlightedCode, CodeLine };

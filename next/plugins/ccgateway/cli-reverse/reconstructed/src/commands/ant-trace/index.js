@@ -3,13 +3,13 @@
  *
  * 内部命令存根（name "stub"，外部构建恒不可用）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/ant-trace/index.js
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-e6aww6q8.js:1686326-1686377 fingerprint (2.1.88 match: default, 1)
+//@ chunk-5xgkngpb.js:1761535-1761586 fingerprint (2.1.88 match: default, 1)
 var stubAntTraceCommand = {
   isEnabled: () => false,
   isHidden: true,

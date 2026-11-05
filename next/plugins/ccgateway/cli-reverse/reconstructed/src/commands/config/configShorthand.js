@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：应用 /config key=value 速记：匹配设置行、校验并写入，返回结果或拒绝原因；生成速记可用的设置行列表（含工作流开关等）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-snd3g4y1.js (43)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xmfcjh5p.js (43)
  * attribution: placement 43
  */
-import { count, uniq } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { isBridgeOrVerifiedSlackTurn } from "../../utils/promptSubmissionOrigin.js";
 import { readUnattendedServingConsent } from "../../services/remoteTools/unattendedConsentStore.js";
 import {
@@ -37,18 +37,18 @@ import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getEmptyToolPermissionContext } from "../../Tool.js";
 import {
-  getInitialSettings_2,
+  getInitialSettings,
   getSettingsForSource,
   getSettingsForSourceForUpkeep,
   updateSettingsForSource,
 } from "../../utils/settings/settings.js";
 import { getAutoContinueSettingValue } from "../../services/autoContinueAtUsageLimit.js";
 import { resolveSetting, saveUserIntentSetting } from "../../utils/settings/userIntentSettings.js";
-import { isEligibleForOverageCreditGrant } from "../../components/LogoV2/OverageCreditUpsell.js";
+import { workflowsUsableNow } from "../../utils/workflows/workflowGates.js";
 import { hasWorkflowSizeSetting } from "../../utils/workflowSizeGuideline.js";
 import { isAutoContinueUserSetting } from "../../services/quotaAutoResume/quotaAutoResume.js";
 import { isArtifactConfigToggleable } from "../../services/artifacts/artifactToolGates.js";
-import { DEFAULT } from "../../constants/outputStyles.js";
+import { DEFAULT_2 } from "../../constants/outputStyles.js";
 import { useMainLoopModel } from "../../utils/model/modelSwitchHooks.js";
 import { isFastModeEnabled } from "../../utils/fastMode.js";
 import { shouldShowConfigGate } from "../../components/Settings/configGates.js";
@@ -64,6 +64,7 @@ import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { refreshOptions } from "../../plugins/functionHooks/hooksModuleLoader.js";
 import { logOptionsReloads } from "../../plugins/functionHooks/devModsWatch.js";
 import { logForDebugging } from "../../utils/debug.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { stripControlChars } from "../../utils/settings/writeQueues.js";
 import {
   COMPOSER_CONFIG_ORIGIN,
@@ -77,12 +78,12 @@ import { SET_MODEL_PREFIX, toInlineCode, SAVED_AS_DEFAULT_SUFFIX } from "../mode
 import { renderModelLabel } from "../model/model.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-snd3g4y1.js:31790-32132 placement
+//@ chunk-xmfcjh5p.js:31897-32239 placement
 function parseConfigShorthand(text) {
   let trimmed = text.trim();
   if (!trimmed || !trimmed.includes("=")) return null;
   let parts = trimmed.split(/\s+/);
-  if (count(parts, (part) => part.includes("=")) === 1) {
+  if (countWhere(parts, (part) => part.includes("=")) === 1) {
     let index = trimmed.indexOf("=");
     let sliced = trimmed.slice(0, index);
     if (!sliced || /\s/.test(sliced)) return null;
@@ -104,13 +105,13 @@ function parseConfigShorthand(text) {
   }
   return segments;
 }
-//@ chunk-snd3g4y1.js:32132-32268 placement
+//@ chunk-xmfcjh5p.js:32239-32375 placement
 function findSettingRow(key, rows) {
   let lower = key.toLowerCase();
   let filtered = rows.filter((row) => row.id.toLowerCase() === lower);
   return rows.find((row) => row.id === key) ?? (filtered.length === 1 ? filtered[0] : undefined);
 }
-//@ chunk-snd3g4y1.js:32268-32422 placement
+//@ chunk-xmfcjh5p.js:32375-32529 placement
 function shorthandRows({ settings, dialogFieldRows }, context) {
   if (isBridgeOrVerifiedSlackTurn(context)) return settings;
   let agentsViewKey = "defaultToAgentsView";
@@ -119,23 +120,23 @@ function shorthandRows({ settings, dialogFieldRows }, context) {
     ...dialogFieldRows.filter((row) => row.id === agentsViewKey),
   ];
 }
-//@ chunk-snd3g4y1.js:32422-32583 placement
+//@ chunk-xmfcjh5p.js:32529-32690 placement
 var SETTING_REDIRECTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-snd3g4y1.js:32422", () => {
+deferInit("chunk-xmfcjh5p.js:32529", () => {
   SETTING_REDIRECTS = new Map([
     ["agentsView", "/config (Agents view row)"],
     ["autoUpdatesChannel", "/channel"],
     ["showExternalIncludesDialog", "/config (External CLAUDE.md row)"],
   ]);
 });
-//@ chunk-snd3g4y1.js:32583-32698 placement
+//@ chunk-xmfcjh5p.js:32690-32805 placement
 function isLockedForKey(settingRow, key) {
   return (
     settingRow.lock !== undefined &&
     !settingRow.lock.writableWhileLocked?.some((id) => id.toLowerCase() === key.toLowerCase())
   );
 }
-//@ chunk-snd3g4y1.js:32698-33014 placement
+//@ chunk-xmfcjh5p.js:32805-33120 placement
 async function applyConfigShorthand(settings, context, options) {
   let shorthandRows_2 = buildShorthandRows(context, options);
   await readUnattendedServingConsent().catch(() => {
@@ -160,7 +161,7 @@ async function applyConfigShorthand(settings, context, options) {
   for (let { key, raw } of settings) lines.push(await applyConfigShorthandEntry(key, raw, rows));
   return lines;
 }
-//@ chunk-snd3g4y1.js:33014-35205 placement
+//@ chunk-xmfcjh5p.js:33120-35311 placement
 /**
  * 应用 /config key=value 速记：匹配设置行、校验并写入，返回结果或拒绝原因。
  */
@@ -284,7 +285,7 @@ async function applyConfigShorthandEntry(key, key_2, rows) {
     }
   }
 }
-//@ chunk-snd3g4y1.js:35205-35434 placement
+//@ chunk-xmfcjh5p.js:35311-35540 placement
 function collapseShorthandResultOffBox(result, refusal) {
   if (!refusal) return result.message;
   switch (result.kind) {
@@ -296,7 +297,7 @@ function collapseShorthandResultOffBox(result, refusal) {
       return result.message;
   }
 }
-//@ chunk-snd3g4y1.js:35434-35687 placement
+//@ chunk-xmfcjh5p.js:35540-35793 placement
 function listConfigKeys(context) {
   return withPluginSettingRows(shorthandRows(buildConfigRows(buildShorthandRows(context)), context), context)
     .flatMap((row) => {
@@ -314,7 +315,7 @@ function listConfigKeys(context) {
     .sort().join(`
 `);
 }
-//@ chunk-snd3g4y1.js:35687-36220 placement
+//@ chunk-xmfcjh5p.js:35793-36326 placement
 function getConfigArgumentCompletions(arg, context) {
   let rows = DETACHED_CONFIG_KEYS_SLOT.of(getRootSession().host).lookup();
   let index = context.indexOf("=");
@@ -341,7 +342,7 @@ function getConfigArgumentCompletions(arg, context) {
       isFinal: true,
     }));
 }
-//@ chunk-snd3g4y1.js:36220-36395 placement
+//@ chunk-xmfcjh5p.js:36326-36501 placement
 class DetachedConfigKeysCache {
   keys = undefined;
   remoteWorkspace = false;
@@ -354,12 +355,12 @@ class DetachedConfigKeysCache {
     return this.keys;
   }
 }
-//@ chunk-snd3g4y1.js:36395-36420 placement
+//@ chunk-xmfcjh5p.js:36501-36526 placement
 var DETACHED_CONFIG_KEYS_SLOT; // deferred: uses DetachedConfigKeysCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-snd3g4y1.js:36395", () => {
+deferInit("chunk-xmfcjh5p.js:36501", () => {
   DETACHED_CONFIG_KEYS_SLOT = new HostScoped(() => new DetachedConfigKeysCache());
 });
-//@ chunk-snd3g4y1.js:36420-36949 placement
+//@ chunk-xmfcjh5p.js:36526-37055 placement
 /**
  * 构造不依赖 REPL 的最小 AppState 上下文，用于非交互地计算设置行。
  */
@@ -395,14 +396,14 @@ function createDetachedConfigContext() {
     return [];
   });
 }
-//@ chunk-snd3g4y1.js:36949-38487 placement
+//@ chunk-xmfcjh5p.js:37055-38593 placement
 /**
  * 生成速记可用的设置行列表（含工作流开关等）。
  */
 function buildShorthandRows(context, options) {
   let appState = context.getAppState();
   let base = {
-    ...getInitialSettings_2(),
+    ...getInitialSettings(),
     ...remoteForwardedSettings(),
     autoContinueAtUsageLimit: getAutoContinueSettingValue() ?? true,
   };
@@ -410,7 +411,7 @@ function buildShorthandRows(context, options) {
   let setting = resolveSetting("disableWorkflows", false);
   let setting_2 = resolveSetting("enableWorkflows", false);
   let workflowsToggleable =
-    isEligibleForOverageCreditGrant() &&
+    workflowsUsableNow() &&
     (setting.value !== true || setting.source === "userSettings") &&
     (setting_2.source === "default" || setting_2.source === "userSettings");
   let workflowSizeGuidelineToggleable = !hasWorkflowSizeSetting();
@@ -423,7 +424,7 @@ function buildShorthandRows(context, options) {
     storageV5: context.storageV5,
     mayBeAuthoredByNonOwner: isBridgeOrVerifiedSlackTurn(context),
     themeSetting: effectiveConfigValues.theme,
-    currentOutputStyle: base?.outputStyle || DEFAULT,
+    currentOutputStyle: base?.outputStyle || DEFAULT_2,
     currentLanguage: base?.language,
     externalIncludesApproved: false,
     thinkingEnabled: appState.thinkingEnabled,
@@ -471,16 +472,16 @@ function buildShorthandRows(context, options) {
     ...NOOP_CONFIG_WRITERS,
   };
 }
-//@ chunk-snd3g4y1.js:38487-38742 placement
+//@ chunk-xmfcjh5p.js:38593-38848 placement
 var PLUGIN_SETTINGS_REMOTE_REFUSAL =
   "a plugin's settings can't be changed over Remote Control or from a relayed message \u2014 open /config in the session itself";
 var MANAGED_PLUGIN_CONFIG_NOTE = "Set by your organization's managed settings (pluginConfigs)";
 var FLAG_PLUGIN_CONFIG_NOTE = "Set by --settings for this session (pluginConfigs)";
-//@ chunk-snd3g4y1.js:38742-38791 placement
+//@ chunk-xmfcjh5p.js:38848-38897 placement
 function pluginSettingOption(source, key, defaultValue) {
   return trustedPluginSetting(source).options?.[key] ?? defaultValue;
 }
-//@ chunk-snd3g4y1.js:38791-38971 placement (2.1.88 match: getEnabledSettingSources, 0.836)
+//@ chunk-xmfcjh5p.js:38897-39077 placement (2.1.88 match: getEnabledSettingSources, 0.836)
 function getPluginOptionLockingSource(source, key) {
   let hasOption = (pluginId) => {
     let pluginConfigs = getSettingsForSource(pluginId)?.pluginConfigs;
@@ -491,7 +492,7 @@ function getPluginOptionLockingSource(source, key) {
   if (hasOption("policySettings")) return MANAGED_PLUGIN_CONFIG_NOTE;
   return hasOption("flagSettings") ? FLAG_PLUGIN_CONFIG_NOTE : undefined;
 }
-//@ chunk-snd3g4y1.js:38971-39346 placement
+//@ chunk-xmfcjh5p.js:39077-39452 placement
 /**
  * 把插件配置项写入 userSettings.pluginConfigs，值未变则跳过。
  */
@@ -527,12 +528,12 @@ async function savePluginConfigOption(plugin, key, value, storageV5) {
   clearPluginOptionsCache();
   return pluginConfigSaveSuffix(plugin, key);
 }
-//@ chunk-snd3g4y1.js:39346-39361 placement
+//@ chunk-xmfcjh5p.js:39452-39467 placement
 var PLUGIN_SAVE_HINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-snd3g4y1.js:39346", () => {
+deferInit("chunk-xmfcjh5p.js:39452", () => {
   PLUGIN_SAVE_HINTS = new Map();
 });
-//@ chunk-snd3g4y1.js:39361-39862 placement
+//@ chunk-xmfcjh5p.js:39467-39968 placement
 /**
  * 插件配置保存后给出提示后缀（需要 /reload-plugins 等）。
  */
@@ -559,7 +560,7 @@ async function pluginConfigSaveSuffix(plugin, storageV5) {
     };
   }
 }
-//@ chunk-snd3g4y1.js:39862-41272 placement
+//@ chunk-xmfcjh5p.js:39968-41378 placement
 function pluginConfigSettings(enabled, options = {}) {
   let rows = [];
   for (let plugin of enabled) {
@@ -623,7 +624,9 @@ function pluginConfigSettings(enabled, options = {}) {
         continue;
       }
       if (value.type === "string" && value.options !== undefined) {
-        let options = uniq(value.options.map(sanitizeTelemetryString)).filter((option) => option !== "");
+        let options = normalizeCaseForComparison_2(value.options.map(sanitizeTelemetryString)).filter(
+          (option) => option !== "",
+        );
         rows.push({
           ...row,
           value: shownValue === undefined ? "" : String(shownValue),
@@ -663,14 +666,14 @@ function pluginConfigSettings(enabled, options = {}) {
   }
   return rows;
 }
-//@ chunk-snd3g4y1.js:41272-41395 placement
+//@ chunk-xmfcjh5p.js:41378-41501 placement
 function shownSettingValue(row) {
   let shown = String(row.value);
   return row.provided !== undefined && row.type !== "boolean"
     ? recursivelySanitizeUnicode_2(stripControlChars(shown.replace(/[\t\n\r]/g, " ")))
     : shown;
 }
-//@ chunk-snd3g4y1.js:41395-41525 placement
+//@ chunk-xmfcjh5p.js:41501-41631 placement
 function withPluginSettingRows(rows, context) {
   let enabled = context.getAppState().plugins?.enabled ?? [];
   return [
@@ -683,7 +686,7 @@ function withPluginSettingRows(rows, context) {
     }),
   ];
 }
-//@ chunk-snd3g4y1.js:41525-41608 placement
+//@ chunk-xmfcjh5p.js:41631-41714 placement
 function withBridgeRows(rows, context) {
   let origin = isBridgeOrVerifiedSlackTurn(context)
     ? {
@@ -692,7 +695,7 @@ function withBridgeRows(rows, context) {
     : COMPOSER_CONFIG_ORIGIN;
   return withPluginSettingRows(rows, context).map((row) => throughConfigSet(row, origin));
 }
-//@ chunk-snd3g4y1.js:41608-42209 placement
+//@ chunk-xmfcjh5p.js:41714-42315 placement
 /**
  * 推断设置行的值类型（boolean/number/choice/text）与可选项。
  */
@@ -734,7 +737,7 @@ function describeConfigRowKind(row) {
     }),
   };
 }
-//@ chunk-snd3g4y1.js:42209-43139 placement
+//@ chunk-xmfcjh5p.js:42315-43245 placement
 /**
  * 检查设置行能否修改（同意门槛、托管锁定等），不能时返回原因。
  */
@@ -771,26 +774,26 @@ async function checkConfigRowWritable(row, raw) {
     }
   }
 }
-//@ chunk-snd3g4y1.js:43139-43190 placement
+//@ chunk-xmfcjh5p.js:43245-43296 placement
 function describeWritableConfigRow(row) {
   return {
     ...describeConfigRowKind(row),
     write: (value) => checkConfigRowWritable(row, value),
   };
 }
-//@ chunk-snd3g4y1.js:43190-43247 placement
+//@ chunk-xmfcjh5p.js:43296-43353 placement
 function configRowHandles(row) {
   return withPluginSettingRows(buildConfigRows(buildShorthandRows(row)).settings, row).map(
     describeWritableConfigRow,
   );
 }
-//@ chunk-snd3g4y1.js:43247-43399 placement
+//@ chunk-xmfcjh5p.js:43353-43505 placement
 function coerceShorthandValue(row, raw) {
   if (row.type === "boolean") return typeof raw === "boolean" ? raw : undefined;
   if (typeof raw === "number") return String(raw);
   return typeof raw === "string" ? raw : undefined;
 }
-//@ chunk-snd3g4y1.js:43399-44448 placement
+//@ chunk-xmfcjh5p.js:43505-44554 placement
 /**
  * 把输入值按设置行类型转换并校验。
  */
@@ -855,7 +858,7 @@ function coerceConfigRowValue(row, raw, context, origin = COMPOSER_CONFIG_ORIGIN
     };
   });
 }
-//@ chunk-snd3g4y1.js:44448-44537 placement
+//@ chunk-xmfcjh5p.js:44554-44643 placement
 function throughConfigSet(context, origin = COMPOSER_CONFIG_ORIGIN) {
   let onChange = context.onChange;
   return {
@@ -864,21 +867,21 @@ function throughConfigSet(context, origin = COMPOSER_CONFIG_ORIGIN) {
       isConfigSetHooked() ? coerceConfigRowValue(context, value, onChange, origin) : onChange(value),
   };
 }
-//@ chunk-snd3g4y1.js:44537-44605 placement
+//@ chunk-xmfcjh5p.js:44643-44711 placement
 function commitThroughConfigSet(context, key, raw, options) {
   return context !== undefined && isConfigSetHooked()
     ? coerceConfigRowValue(context, key, raw, COMPOSER_CONFIG_ORIGIN, options)
     : raw(key);
 }
-//@ chunk-snd3g4y1.js:44605-44679 placement
+//@ chunk-xmfcjh5p.js:44711-44785 placement
 var WITHHELD_SAVE_ERROR_TEXT = "Couldn't save this setting (detail withheld on this connection).";
-//@ chunk-snd3g4y1.js:44679-44712 placement
+//@ chunk-xmfcjh5p.js:44785-44818 placement
 function saveErrorText(refusal, denial) {
   return denial() ? WITHHELD_SAVE_ERROR_TEXT : refusal;
 }
-//@ chunk-snd3g4y1.js:44712-44786 placement
+//@ chunk-xmfcjh5p.js:44818-44892 placement
 var MODEL_MOVED_DURING_HOOK_TEXT = "The model changed while a plugin's hook was deciding; pick again";
-//@ chunk-snd3g4y1.js:44786-45756 placement
+//@ chunk-xmfcjh5p.js:44892-45862 placement
 async function commitRowThroughConfigSet(row, key, raw, readContext, options = {}) {
   let describedRow = isConfigSetHooked()
     ? buildConfigRows(buildShorthandRows(raw)).settings.find((setting) => setting.id === row)
@@ -942,11 +945,11 @@ async function commitRowThroughConfigSet(row, key, raw, readContext, options = {
     refusal: `Couldn't save ${label}: a plugin's hook answered without writing`,
   };
 }
-//@ chunk-snd3g4y1.js:45756-45847 placement
+//@ chunk-xmfcjh5p.js:45862-45953 placement
 function configSaveRefusalText(refusal, label) {
   return `Couldn't save ${refusal}: ${label.error?.message ?? ""}${label.messageSuffix ?? ""}`;
 }
-//@ chunk-snd3g4y1.js:45847-45931 placement
+//@ chunk-xmfcjh5p.js:45953-46037 placement
 function configSaveRefusal(refusal) {
   return {
     error: new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -955,7 +958,7 @@ function configSaveRefusal(refusal) {
     ),
   };
 }
-//@ chunk-snd3g4y1.js:45931-46583 placement
+//@ chunk-xmfcjh5p.js:46037-46689 placement
 async function savedModelPickReply(model, session, readContext, storageV5) {
   let chosen = model ?? "default";
   let text = "";
@@ -1014,12 +1017,12 @@ async function savedModelPickReply(model, session, readContext, storageV5) {
     rewrittenTo: written,
   };
 }
-//@ chunk-snd3g4y1.js:46583-46625 placement
+//@ chunk-xmfcjh5p.js:46689-46731 placement
 var FAST_TOGGLE_NOT_APPLIED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-snd3g4y1.js:46583", () => {
+deferInit("chunk-xmfcjh5p.js:46689", () => {
   FAST_TOGGLE_NOT_APPLIED = Symbol("fast toggle not applied");
 });
-//@ chunk-snd3g4y1.js:46625-46903 placement
+//@ chunk-xmfcjh5p.js:46731-47009 placement
 async function savedFastModeToggle(value, session, save, storageV5) {
   let result = {};
   let committed = await commitRowThroughConfigSet(
@@ -1040,7 +1043,7 @@ async function savedFastModeToggle(value, session, save, storageV5) {
   if (result.isDone) return result.refusal;
   return "refusal" in committed ? saveErrorText(committed.refusal, storageV5) : undefined;
 }
-//@ chunk-snd3g4y1.js:46903-47126 placement
+//@ chunk-xmfcjh5p.js:47009-47232 placement
 async function describedSettings(rows) {
   let byId = new Map();
   await Promise.all(
@@ -1061,26 +1064,26 @@ async function describedSettings(rows) {
   );
   return byId;
 }
-//@ chunk-snd3g4y1.js:47126-47203 placement
+//@ chunk-xmfcjh5p.js:47232-47309 placement
 var ROW_COMMIT = {
   isHooked: () => isConfigSetHooked(),
   savedModelPickReply,
   savedFastModeToggle,
 };
 export {
-  savedModelPickReply,
   FAST_TOGGLE_NOT_APPLIED,
   savedFastModeToggle,
-  commitRowThroughConfigSet,
+  listConfigKeys,
+  parseConfigShorthand,
+  applyConfigShorthand,
+  collapseShorthandResultOffBox,
+  savedModelPickReply,
   pluginConfigSettings,
   describedSettings,
   throughConfigSet,
   commitThroughConfigSet,
   shownSettingValue,
-  listConfigKeys,
-  parseConfigShorthand,
-  applyConfigShorthand,
-  collapseShorthandResultOffBox,
+  commitRowThroughConfigSet,
   ROW_COMMIT,
   configRowHandles,
   getConfigArgumentCompletions,

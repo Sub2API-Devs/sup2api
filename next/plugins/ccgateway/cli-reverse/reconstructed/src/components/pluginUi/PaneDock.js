@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。插件面板停靠区（多面板布局、焦点）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (86), chunk-agxr4brz.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6zn3tmh5.js (2), chunk-czq1j3j2.js (86)
  * attribution: placement 88
  */
 import { HostScoped } from "../../utils/hostScoped.js";
@@ -24,6 +24,15 @@ import {
   heldRowOffset,
   PaneContent,
 } from "./PaneBody.js";
+import {
+  init_react_production,
+  useRef,
+  useState,
+  useCallback,
+  useEffect,
+  useSyncExternalStore,
+  useMemo,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
@@ -37,25 +46,16 @@ import {
   useViewedAgentIdProps,
   hotkeysOf,
   useInputFields,
-  AbovePromptSelect,
+  useSelectFields,
   useClickedPress,
   useReleaseGoneHold,
   fieldContext,
-  usePaneKeyRouting,
+  useKeysAheadOfRender,
   useHotkeyPresses,
 } from "./AbovePromptBand.js";
 import { HEAVY_MULTIPLICATION_X } from "../../constants/figures.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { DIFF_SIDEBAR_MIN_COLUMNS } from "../../plugins/bundled/diff/index.js";
-import {
-  init_react_production,
-  useRef,
-  useState,
-  useCallback,
-  useEffect,
-  useSyncExternalStore,
-  useMemo,
-} from "../../../vendor/react/cjs/react.production.js";
 import { createStore } from "../../state/store.js";
 import { useHasAutoDialog, useHasOpenDialog as useHasOpenDialog_2 } from "../../state/dialogQueue.js";
 import {
@@ -117,17 +117,17 @@ import {
 } from "../../plugins/functionHooks/uiToast.js";
 import { holdsToasts as holdsToasts_2, useNotifications } from "../../context/notifications.js";
 import { useClock } from "../../ink/components/ClockContext.js";
-import { pluginStateRegistry } from "../../plugins/functionHooks/api/state.js";
+import { stateSession } from "../../plugins/functionHooks/api/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-agxr4brz.js:298-320 placement
+//@ chunk-6zn3tmh5.js:298-320 placement
 var paneDockRoomSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-agxr4brz.js:298", () => {
+deferInit("chunk-6zn3tmh5.js:298", () => {
   paneDockRoomSlot = new HostScoped(() => createSignal());
 });
-//@ chunk-agxr4brz.js:320-377 placement
+//@ chunk-6zn3tmh5.js:320-377 placement
 var noRoomForTabsSignal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-agxr4brz.js:320", () => {
+deferInit("chunk-6zn3tmh5.js:320", () => {
   noRoomForTabsSignal = identity(
     {
       hasRoomForTabs: false,
@@ -137,11 +137,11 @@ deferInit("chunk-agxr4brz.js:320", () => {
     },
   );
 });
-//@ chunk-18hwfzwa.js:32946-32956 placement
+//@ chunk-czq1j3j2.js:34507-34517 placement
 var PaneDockNamespace = {};
-//@ chunk-18hwfzwa.js:32956-34226 placement
+//@ chunk-czq1j3j2.js:34517-35787 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:32956", () => {
+deferInit("chunk-czq1j3j2.js:34517", () => {
   __export(PaneDockNamespace, {
     BORDER_COLUMNS: () => BORDER_COLUMNS,
     BORDER_MARK_INSET: () => BORDER_MARK_INSET,
@@ -172,12 +172,12 @@ deferInit("chunk-18hwfzwa.js:32956", () => {
     askedFill: () => askedFill,
     chooseRoom: () => chooseRoom,
     chromeRows: () => chromeRows,
-    dealBarToasts: () => useToastQueueBridge,
+    dealBarToasts: () => dealBarToasts,
     default: () => PaneDockNamespace,
     dockColumns: () => dockColumns,
     dockLitStore: () => dockLitStore,
     firstDrawnTab: () => firstDrawnTab,
-    focusedPaneId: () => selectFocusedId,
+    focusedPaneId: () => focusedPaneId,
     hasOpenPanes: () => hasOpenPanes,
     hasShownPane: () => hasShownPane,
     inlineRows: () => inlineRows,
@@ -186,7 +186,7 @@ deferInit("chunk-18hwfzwa.js:32956", () => {
     keptCells: () => keptCells,
     keptLatch: () => keptLatch,
     keptRoom: () => keptRoom,
-    openPanes: () => selectOpen,
+    openPanes: () => openPanes,
     paneFill: () => paneFill,
     paneHandlers: () => paneHandlers,
     paneRing: () => paneRing,
@@ -206,11 +206,11 @@ deferInit("chunk-18hwfzwa.js:32956", () => {
     useResize: () => useResize,
   });
 });
-//@ chunk-18hwfzwa.js:34226-34236 placement
+//@ chunk-czq1j3j2.js:35787-35797 placement
 var PaneDockNamespace2 = {};
-//@ chunk-18hwfzwa.js:34236-34353 placement
+//@ chunk-czq1j3j2.js:35797-35914 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:34236", () => {
+deferInit("chunk-czq1j3j2.js:35797", () => {
   __export(PaneDockNamespace2, {
     BORDER_MARK_INSET: () => BORDER_MARK_INSET,
     CLOSE_MARK_CELLS: () => CLOSE_MARK_CELLS,
@@ -219,11 +219,11 @@ deferInit("chunk-18hwfzwa.js:34236", () => {
     default: () => PaneDockNamespace2,
   });
 });
-//@ chunk-18hwfzwa.js:35469-35479 placement
+//@ chunk-czq1j3j2.js:37030-37040 placement
 var PaneDockNamespace3 = {};
-//@ chunk-18hwfzwa.js:35479-35636 placement
+//@ chunk-czq1j3j2.js:37040-37197 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:35479", () => {
+deferInit("chunk-czq1j3j2.js:37040", () => {
   __export(PaneDockNamespace3, {
     DOCK_GRIP_COLUMNS: () => DOCK_GRIP_COLUMNS,
     DOCK_KEY_COLUMNS: () => DOCK_KEY_COLUMNS,
@@ -233,21 +233,21 @@ deferInit("chunk-18hwfzwa.js:35479", () => {
     default: () => PaneDockNamespace3,
   });
 });
-//@ chunk-18hwfzwa.js:35636-35646 placement
+//@ chunk-czq1j3j2.js:37197-37207 placement
 var PaneDockNamespace4 = {};
-//@ chunk-18hwfzwa.js:35646-35690 placement
+//@ chunk-czq1j3j2.js:37207-37251 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:35646", () => {
+deferInit("chunk-czq1j3j2.js:37207", () => {
   __export(PaneDockNamespace4, {
     default: () => PaneDockNamespace4,
     dockLitStore: () => dockLitStore,
   });
 });
-//@ chunk-18hwfzwa.js:35690-35700 placement
+//@ chunk-czq1j3j2.js:37251-37261 placement
 var PaneDockNamespace5 = {};
-//@ chunk-18hwfzwa.js:35700-35827 placement
+//@ chunk-czq1j3j2.js:37261-37388 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:35700", () => {
+deferInit("chunk-czq1j3j2.js:37261", () => {
   __export(PaneDockNamespace5, {
     INLINE_KEY_ROWS: () => INLINE_KEY_ROWS,
     INLINE_MIN_ROWS: () => INLINE_MIN_ROWS,
@@ -256,11 +256,11 @@ deferInit("chunk-18hwfzwa.js:35700", () => {
     default: () => PaneDockNamespace5,
   });
 });
-//@ chunk-18hwfzwa.js:35827-35837 placement
+//@ chunk-czq1j3j2.js:37388-37398 placement
 var PaneDockNamespace6 = {};
-//@ chunk-18hwfzwa.js:35837-36007 placement
+//@ chunk-czq1j3j2.js:37398-37568 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:35837", () => {
+deferInit("chunk-czq1j3j2.js:37398", () => {
   __export(PaneDockNamespace6, {
     chooseRoom: () => chooseRoom,
     default: () => PaneDockNamespace6,
@@ -273,11 +273,31 @@ deferInit("chunk-18hwfzwa.js:35837", () => {
     useInlineRows: () => useInlineRows,
   });
 });
-//@ chunk-18hwfzwa.js:496344-496398 placement
+//@ chunk-czq1j3j2.js:512162-512166 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:512162", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:514421-514425 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:514421", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:514480-514484 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:514480", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:514782-514786 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:514782", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:522821-522875 placement
 function stopClickPropagation(event) {
   return event.stopImmediatePropagation();
 }
-//@ chunk-18hwfzwa.js:496398-496729 placement
+//@ chunk-czq1j3j2.js:522875-523206 placement
 var CloseMark = (props) => {
   let $ = useMemoCache(6);
   let children;
@@ -306,25 +326,25 @@ var CloseMark = (props) => {
   } else markElement = $[5];
   return markElement;
 };
-//@ chunk-18hwfzwa.js:496729-496738 placement
+//@ chunk-czq1j3j2.js:523206-523215 placement
 var CLOSE_MARK_CELLS = 1;
-//@ chunk-18hwfzwa.js:496738-496748 placement
+//@ chunk-czq1j3j2.js:523215-523225 placement
 var CLOSE_MARK_COLUMNS = 2;
-//@ chunk-18hwfzwa.js:496748-496757 placement
+//@ chunk-czq1j3j2.js:523225-523234 placement
 var DOCK_GRIP_COLUMNS = 1;
-//@ chunk-18hwfzwa.js:496757-496767 placement
+//@ chunk-czq1j3j2.js:523234-523244 placement
 var DOCK_KEY_COLUMNS = 4;
-//@ chunk-18hwfzwa.js:496767-496780 placement
+//@ chunk-czq1j3j2.js:523244-523257 placement
 var DOCK_MAX_SHARE_2 = 0.45;
-//@ chunk-18hwfzwa.js:496780-496829 placement
+//@ chunk-czq1j3j2.js:523257-523306 placement
 var computeMaxDockColumns = (columns) => Math.min(Math.floor(columns * 0.45), 90, columns - 70);
-//@ chunk-18hwfzwa.js:496829-496841 placement
+//@ chunk-czq1j3j2.js:523306-523318 placement
 var DOCK_MAX_SHARE = DOCK_MAX_SHARE_2;
-//@ chunk-18hwfzwa.js:496841-496851 placement
+//@ chunk-czq1j3j2.js:523318-523328 placement
 var DOCK_MIN_COLUMNS = 24;
-//@ chunk-18hwfzwa.js:496851-496862 placement
+//@ chunk-czq1j3j2.js:523328-523339 placement
 var DOCK_TRANSCRIPT_MIN_COLUMNS = 60;
-//@ chunk-18hwfzwa.js:496862-497077 placement
+//@ chunk-czq1j3j2.js:523339-523554 placement
 function dockColumns(columns, preferred) {
   let isTooNarrow = columns < DIFF_SIDEBAR_MIN_COLUMNS;
   let min = Math.min(Math.floor(columns * DOCK_MAX_SHARE), columns - DOCK_TRANSCRIPT_MIN_COLUMNS);
@@ -340,17 +360,17 @@ function dockColumns(columns, preferred) {
       : computeMaxDockColumns(columns);
   return isTooNarrow ? 0 : columnsOut;
 }
-//@ chunk-18hwfzwa.js:497077-497081 placement
+//@ chunk-czq1j3j2.js:523554-523558 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:497077", () => {
+deferInit("chunk-czq1j3j2.js:523554", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:497081-497123 placement
+//@ chunk-czq1j3j2.js:523558-523600 placement
 var dockLitStore; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:497081", () => {
+deferInit("chunk-czq1j3j2.js:523558", () => {
   dockLitStore = identity(createStore(false), (store) => store.setState(() => false));
 });
-//@ chunk-18hwfzwa.js:497123-497617 placement
+//@ chunk-czq1j3j2.js:523600-524094 placement
 var DockRule = (props) => {
   let $ = useMemoCache(6);
   const borderLeftDimColor = !props.isLit;
@@ -389,12 +409,12 @@ var DockRule = (props) => {
   } else ruleElement = $[5];
   return ruleElement;
 };
-//@ chunk-18hwfzwa.js:497617-497621 placement
+//@ chunk-czq1j3j2.js:524094-524098 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:497617", () => {
+deferInit("chunk-czq1j3j2.js:524094", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:497621-498163 placement
+//@ chunk-czq1j3j2.js:524098-524640 placement
 function useGrip(props) {
   let { axis, cells, onResize, onSettle } = props;
   let dragStateRef = useRef(null);
@@ -441,15 +461,15 @@ function useGrip(props) {
     onMouseLeave,
   };
 }
-//@ chunk-18hwfzwa.js:498163-498187 placement
+//@ chunk-czq1j3j2.js:524640-524664 placement
 function getFalseFlag() {
   return false;
 }
-//@ chunk-18hwfzwa.js:498187-498239 placement
+//@ chunk-czq1j3j2.js:524664-524716 placement
 function clearDockLit() {
   return PaneDockNamespace4.dockLitStore.setState(getFalseFlag);
 }
-//@ chunk-18hwfzwa.js:498239-498744 placement
+//@ chunk-czq1j3j2.js:524716-525221 placement
 function DockGrip(props) {
   let $ = useMemoCache(10);
   let props_2;
@@ -496,16 +516,16 @@ function DockGrip(props) {
   } else ruleElement = $[9];
   return ruleElement;
 }
-//@ chunk-18hwfzwa.js:498744-498775 placement
+//@ chunk-czq1j3j2.js:525221-525252 placement
 var isHoldingKeys = (state) => state.focusedId !== null;
-//@ chunk-18hwfzwa.js:498775-498812 placement
+//@ chunk-czq1j3j2.js:525252-525289 placement
 var askedFill = (state) => shownPane(state)?.backgroundColor;
-//@ chunk-18hwfzwa.js:498812-498816 placement
+//@ chunk-czq1j3j2.js:525289-525293 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:498812", () => {
+deferInit("chunk-czq1j3j2.js:525289", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:498816-498895 placement
+//@ chunk-czq1j3j2.js:525293-525372 placement
 function usePanesAtOnce(selector) {
   let registry = paneRegistry();
   return useSyncExternalStore(
@@ -513,11 +533,11 @@ function usePanesAtOnce(selector) {
     useCallback(() => selector(registry.getState()), [selector, registry]),
   );
 }
-//@ chunk-18hwfzwa.js:498895-498975 placement
+//@ chunk-czq1j3j2.js:525372-525452 placement
 function useDockFill() {
   return usePanesAtOnce(askedFill) === "transparent" ? undefined : "composerSidebarBackground";
 }
-//@ chunk-18hwfzwa.js:498975-499276 placement
+//@ chunk-czq1j3j2.js:525452-525753 placement
 function DockTail() {
   let $ = useMemoCache(5);
   let backgroundColor = useDockFill();
@@ -546,26 +566,26 @@ function DockTail() {
   } else tailBox = $[4];
   return tailBox;
 }
-//@ chunk-18hwfzwa.js:499276-499305 placement
+//@ chunk-czq1j3j2.js:525753-525782 placement
 var hasOpenPanes = (state) => state.open.length > 0;
-//@ chunk-18hwfzwa.js:499305-499333 placement
+//@ chunk-czq1j3j2.js:525782-525810 placement
 var hasShownPane = (state) => shownPane(state) !== undefined;
-//@ chunk-18hwfzwa.js:499333-499343 placement
+//@ chunk-czq1j3j2.js:525810-525820 placement
 var INLINE_KEY_ROWS = 1;
-//@ chunk-18hwfzwa.js:499343-499353 placement
+//@ chunk-czq1j3j2.js:525820-525830 placement
 var INLINE_MIN_ROWS = 5;
-//@ chunk-18hwfzwa.js:499353-499363 placement
+//@ chunk-czq1j3j2.js:525830-525840 placement
 var PROMPT_FLOOR_ROWS = 8;
-//@ chunk-18hwfzwa.js:499363-499373 placement
+//@ chunk-czq1j3j2.js:525840-525850 placement
 var TRANSCRIPT_PEEK_ROWS = 3;
-//@ chunk-18hwfzwa.js:499373-499377 placement
+//@ chunk-czq1j3j2.js:525850-525854 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:499373", () => {
+deferInit("chunk-czq1j3j2.js:525850", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:499377-499387 placement
+//@ chunk-czq1j3j2.js:525854-525864 placement
 var INLINE_ROWS_SHARE = 3;
-//@ chunk-18hwfzwa.js:499387-499631 placement
+//@ chunk-czq1j3j2.js:525864-526108 placement
 function inlineRows(rows, mode, preferred) {
   let floored = Math.floor(rows / INLINE_ROWS_SHARE);
   let maxRows =
@@ -578,32 +598,32 @@ function inlineRows(rows, mode, preferred) {
   let clampRows = (value) => Math.min(maxRows, Math.max(min, value));
   return hasChosen ? clampRows(chosen) : hasRequested ? clampRows(requested) : floored;
 }
-//@ chunk-18hwfzwa.js:499631-499656 placement
-var selectFocusedId = (state) => state.focusedId;
-//@ chunk-18hwfzwa.js:499656-499676 placement
-var selectOpen = (state) => state.open;
-//@ chunk-18hwfzwa.js:499676-499680 placement
+//@ chunk-czq1j3j2.js:526108-526133 placement
+var focusedPaneId = (state) => state.focusedId;
+//@ chunk-czq1j3j2.js:526133-526153 placement
+var openPanes = (state) => state.open;
+//@ chunk-czq1j3j2.js:526153-526157 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:499676", () => {
+deferInit("chunk-czq1j3j2.js:526153", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:499680-499684 placement
+//@ chunk-czq1j3j2.js:526157-526161 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:499680", () => {
+deferInit("chunk-czq1j3j2.js:526157", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:499684-499756 placement
+//@ chunk-czq1j3j2.js:526161-526233 placement
 function paneFill(backgroundColor) {
   return backgroundColor === undefined || backgroundColor === "transparent"
     ? undefined
     : validThemeName(resolvePaneColor(backgroundColor));
 }
-//@ chunk-18hwfzwa.js:499756-499815 placement
+//@ chunk-czq1j3j2.js:526233-526292 placement
 var resizeHandlers = (resize) => ({
   "pane:grow": resize.grow,
   "pane:shrink": resize.shrink,
 });
-//@ chunk-18hwfzwa.js:499815-500025 placement
+//@ chunk-czq1j3j2.js:526292-526502 placement
 function paneHandlers(pane) {
   let {
     "pane:scrollUp": scrollUp,
@@ -622,7 +642,7 @@ function paneHandlers(pane) {
     "pane:close": pane.close,
   };
 }
-//@ chunk-18hwfzwa.js:500025-500771 placement
+//@ chunk-czq1j3j2.js:526502-527248 placement
 function paneRing(props) {
   let { ring, engine, moveByPerson, setIndex, leave } = props;
   let ringBindings = ringHandlers(ring);
@@ -663,11 +683,11 @@ function paneRing(props) {
     "pane:scrollDown": () => stepRing(1),
   };
 }
-//@ chunk-18hwfzwa.js:500771-500782 placement
+//@ chunk-czq1j3j2.js:527248-527259 placement
 var TAB_MIN_COLUMNS = 12;
-//@ chunk-18hwfzwa.js:500782-500816 placement
+//@ chunk-czq1j3j2.js:527259-527293 placement
 var tabFloorColumns = (title) => Math.min(bunStringWidth(title) + 2, TAB_MIN_COLUMNS);
-//@ chunk-18hwfzwa.js:500816-501004 placement
+//@ chunk-czq1j3j2.js:527293-527481 placement
 function firstDrawnTab({ open, shownId, columns }) {
   let index = open.findIndex((tab) => tab.id === shownId);
   let max = Math.max(0, index);
@@ -679,12 +699,12 @@ function firstDrawnTab({ open, shownId, columns }) {
   }
   return max;
 }
-//@ chunk-18hwfzwa.js:501004-501008 placement
+//@ chunk-czq1j3j2.js:527481-527485 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:501004", () => {
+deferInit("chunk-czq1j3j2.js:527481", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:501008-501882 placement
+//@ chunk-czq1j3j2.js:527485-528359 placement
 function PaneTab(props) {
   let $ = useMemoCache(16);
   let { pane, isShown, isHeld, onPick } = props;
@@ -754,7 +774,7 @@ function PaneTab(props) {
   } else tabElement = $[15];
   return tabElement;
 }
-//@ chunk-18hwfzwa.js:501882-502419 placement
+//@ chunk-czq1j3j2.js:528359-528896 placement
 var PaneTabs = (props) => {
   let $ = useMemoCache(9);
   const width = props.columns;
@@ -800,12 +820,12 @@ var PaneTabs = (props) => {
   } else tabsRow = $[8];
   return tabsRow;
 };
-//@ chunk-18hwfzwa.js:502419-502423 placement
+//@ chunk-czq1j3j2.js:528896-528900 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:502419", () => {
+deferInit("chunk-czq1j3j2.js:528896", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:502423-502969 placement
+//@ chunk-czq1j3j2.js:528900-529446 placement
 function usePromptEscapeClose(props) {
   let { pane, focused, working, promptOwnsEscape } = props;
   let hasOpenDialog = useHasOpenDialog_2();
@@ -851,7 +871,7 @@ function usePromptEscapeClose(props) {
     },
   );
 }
-//@ chunk-18hwfzwa.js:502969-507893 placement
+//@ chunk-czq1j3j2.js:529446-534370 placement
 /**
  * PaneSite：插件面板停靠区中的单个面板位置，负责尺寸、焦点与渲染。
  */
@@ -988,7 +1008,7 @@ function PaneSite(props) {
   let heldTop = useMeasured(() => heldRowOffset(heldState(), "top"));
   let heldBottom = useMeasured(() => heldRowOffset(heldState(), "bottom"));
   let inputFields = useInputFields(focusables, "Pane", pane.id);
-  let selectState = AbovePromptSelect({
+  let selectState = useSelectFields({
     focusables,
     focusIndex: focusIndexValue,
     focusIndexNow,
@@ -1167,7 +1187,7 @@ function PaneSite(props) {
     context: "AbovePromptSelect",
     isActive: isSelectTag,
   });
-  usePaneKeyRouting({
+  useKeysAheadOfRender({
     isAhead: () =>
       isFocusedNow() !== focused || focusIndexNow() !== focusIndexValue || heldNow() !== heldIndex,
     contextNow,
@@ -1264,11 +1284,11 @@ function PaneSite(props) {
     }),
   });
 }
-//@ chunk-18hwfzwa.js:507893-508517 placement
+//@ chunk-czq1j3j2.js:534370-534994 placement
 function PaneHost(props) {
   let panesAt = usePanesAtOnce(shownPane);
-  let open = usePanesAtOnce(selectOpen);
-  let panesAt_2 = usePanesAtOnce(selectFocusedId);
+  let open = usePanesAtOnce(openPanes);
+  let panesAt_2 = usePanesAtOnce(focusedPaneId);
   let hasAutoDialog = useHasAutoDialog();
   useEffect(() => {
     if (hasAutoDialog) focusPane(null);
@@ -1314,9 +1334,9 @@ function PaneHost(props) {
     `${panesAt.id} ${askCountFor("Pane", panesAt.id)}`,
   );
 }
-//@ chunk-18hwfzwa.js:508517-508625 placement
+//@ chunk-czq1j3j2.js:534994-535102 placement
 var roomStore; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:508517", () => {
+deferInit("chunk-czq1j3j2.js:534994", () => {
   roomStore = identity(
     createStore({
       dockColumns: null,
@@ -1329,7 +1349,7 @@ deferInit("chunk-18hwfzwa.js:508517", () => {
       })),
   );
 });
-//@ chunk-18hwfzwa.js:508625-508745 placement
+//@ chunk-czq1j3j2.js:535102-535222 placement
 var chooseRoom = (patch) =>
   roomStore.setState((state) => {
     let next = {
@@ -1338,7 +1358,7 @@ var chooseRoom = (patch) =>
     };
     return next.dockColumns === state.dockColumns && next.inlineRows === state.inlineRows ? state : next;
   });
-//@ chunk-18hwfzwa.js:508745-509084 placement
+//@ chunk-czq1j3j2.js:535222-535561 placement
 function keepRoom() {
   let state = roomStore.getState();
   saveGlobalConfigDurably((config) => {
@@ -1360,16 +1380,16 @@ function keepRoom() {
     else logFeatureSad("plugin_function_hooks_pane_resize", "not_persisted");
   });
 }
-//@ chunk-18hwfzwa.js:509084-509171 placement
+//@ chunk-czq1j3j2.js:535561-535648 placement
 function keptCells(cells) {
   return typeof cells === "number" && Number.isFinite(cells) && cells >= 1 ? Math.floor(cells) : null;
 }
-//@ chunk-18hwfzwa.js:509171-509206 placement
+//@ chunk-czq1j3j2.js:535648-535683 placement
 var keptLatch; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:509171", () => {
+deferInit("chunk-czq1j3j2.js:535648", () => {
   keptLatch = identity(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-18hwfzwa.js:509206-509364 placement
+//@ chunk-czq1j3j2.js:535683-535841 placement
 function keptRoom() {
   let cached = keptLatch.get();
   if (cached !== undefined) return cached;
@@ -1381,30 +1401,30 @@ function keptRoom() {
   keptLatch.set(room);
   return room;
 }
-//@ chunk-18hwfzwa.js:509364-509432 placement
+//@ chunk-czq1j3j2.js:535841-535909 placement
 function requestedColumns(state) {
   let columns = shownPane(state)?.columns;
   return columns === undefined ? undefined : columns + DOCK_GRIP_COLUMNS;
 }
-//@ chunk-18hwfzwa.js:509432-509522 placement
+//@ chunk-czq1j3j2.js:535909-535999 placement
 var useDockColumns = (columns) =>
   dockColumns(columns, {
     chosen: useStoreSelector(roomStore, (state) => state.dockColumns) ?? keptRoom().dockColumns,
     requested: usePanesAtOnce(requestedColumns),
   });
-//@ chunk-18hwfzwa.js:509522-509610 placement
+//@ chunk-czq1j3j2.js:535999-536087 placement
 function requestedRows(state) {
   let rows = shownPane(state)?.rows;
   if (rows === undefined) return;
   return rows + chromeRows(state.open.length > 1, true);
 }
-//@ chunk-18hwfzwa.js:509610-509702 placement
+//@ chunk-czq1j3j2.js:536087-536179 placement
 var useInlineRows = (rows, mode) =>
   inlineRows(rows, mode, {
     chosen: useStoreSelector(roomStore, (state) => state.inlineRows) ?? keptRoom().inlineRows,
     requested: usePanesAtOnce(requestedRows),
   });
-//@ chunk-18hwfzwa.js:509702-510137 placement
+//@ chunk-czq1j3j2.js:536179-536614 placement
 var RowGrip = (props) => {
   let $ = useMemoCache(6);
   let gripProps;
@@ -1434,12 +1454,7 @@ var RowGrip = (props) => {
   } else gripProps = $[5];
   return gripProps;
 };
-//@ chunk-18hwfzwa.js:510137-510141 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:510137", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:510141-510285 placement
+//@ chunk-czq1j3j2.js:536618-536762 placement
 function useResize(props) {
   let { cells, step, resizeTo } = props;
   return useMemo(() => {
@@ -1452,7 +1467,7 @@ function useResize(props) {
     };
   }, [cells, step, resizeTo]);
 }
-//@ chunk-18hwfzwa.js:510285-511855 placement
+//@ chunk-czq1j3j2.js:536762-538333 placement
 function InlinePanes(props) {
   let $ = useMemoCache(24);
   let { rows, columns } = useTerminalSize();
@@ -1586,12 +1601,7 @@ function InlinePanes(props) {
   } else contentElement = $[23];
   return contentElement;
 }
-//@ chunk-18hwfzwa.js:511855-511859 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:511855", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:511859-513108 placement
+//@ chunk-czq1j3j2.js:538337-539586 placement
 function PaneDock(props) {
   let $ = useMemoCache(19);
   let { columns } = useTerminalSize();
@@ -1700,8 +1710,8 @@ function PaneDock(props) {
   } else dockElement = $[18];
   return dockElement;
 }
-//@ chunk-18hwfzwa.js:513108-513548 placement
-function useToastQueueBridge(options) {
+//@ chunk-czq1j3j2.js:539586-540026 placement
+function dealBarToasts(options) {
   let { clock, store, pending, last } = options;
   let queueView = pluginToastQueueView(
     store.getState().notifications,
@@ -1724,15 +1734,10 @@ function useToastQueueBridge(options) {
   });
   pending.current = [shownToastEndsAt(plan.ledger)]
     .flatMap((finishAt) => finishAt ?? [])
-    .map((finishAt) => clock.setTimeout(() => useToastQueueBridge(options), finishAt - clock.now()))
+    .map((finishAt) => clock.setTimeout(() => dealBarToasts(options), finishAt - clock.now()))
     .at(0);
 }
-//@ chunk-18hwfzwa.js:513548-513552 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:513548", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:513552-513858 placement
+//@ chunk-czq1j3j2.js:540030-540336 placement
 function useBarToasts() {
   let clock = useClock();
   let appStoreDirect = useAppStoreDirect();
@@ -1742,13 +1747,13 @@ function useBarToasts() {
     [state.notifications.current, ...state.notifications.queue].map((toast) => toast?.key).join(" "),
   );
   let appState = useAppState(holdsToasts_2);
-  let barToastKey = useStoreSelector(pluginStateRegistry().values, (values) =>
+  let barToastKey = useStoreSelector(stateSession().values, (values) =>
     readBarToasts(values)
       .toasts.map((toast) => toast.key)
       .join(" "),
   );
   useEffect(() => {
-    useToastQueueBridge({
+    dealBarToasts({
       clock,
       store: appStoreDirect,
       pending: pendingRef,
@@ -1757,12 +1762,7 @@ function useBarToasts() {
     return () => pendingRef.current?.();
   }, [clock, appStoreDirect, toastKey, appState, barToastKey]);
 }
-//@ chunk-18hwfzwa.js:513858-513862 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:513858", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:513862-514080 placement
+//@ chunk-czq1j3j2.js:540340-540558 placement
 function usePaneToastHold() {
   let storeSelector = useStoreSelector(paneRegistry(), holdsToasts);
   let setAppState = useSetAppState();

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。跨会话空闲通知订阅（notify_when_idle / peer_idle_notice）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-v3mh8g28.js (42)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fq59qf81.js (42)
  * attribution: placement 42
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -14,7 +14,7 @@ import { isUuid } from "./udsMessaging/messageEnvelope.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { canonicalSocketPath } from "./udsPaths.js";
 import { currentPolicyValue, heldInboundCount, inboundPolicyFor } from "./crossSessionInbound/inboundGate.js";
-import { count } from "./collections.js";
+import { countWhere } from "./collections.js";
 import { logForDebugging } from "./debug.js";
 import {
   fragmentForLog,
@@ -23,7 +23,7 @@ import {
   classifyPeerSendError,
 } from "./udsMessaging/peerGuard.js";
 import { getSessionId, mainAgentId } from "../bootstrap/state.js";
-import { getMainThreadQueueLength, enqueueCommand } from "./messageQueueManager.js";
+import { getMainThreadQueueLength, enqueue } from "./messageQueueManager.js";
 import { logError } from "./log.js";
 import { classifySessionStateHeuristic } from "../services/sessionStatus/sessionStateClassifier.js";
 import { truncateToLength } from "./stringUtils.js";
@@ -32,7 +32,7 @@ import { isCrossSessionMessagingEnabled } from "./crossSessionMessagingGate.js";
 import { isSaneEpochMs } from "./sessionRecords.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-v3mh8g28.js:837-1149 placement
+//@ chunk-fq59qf81.js:836-1148 placement
 /**
  * 空闲订阅上限与帧 schema
  */
@@ -45,7 +45,7 @@ var UNAVAILABLE_RETRY_DELAY_MS;
 var IDLE_DETAIL_MAX_WIDTH;
 var notifyWhenIdleFrameSchema;
 var peerIdleNoticeFrameSchema;
-deferInit("chunk-v3mh8g28.js:837", () => {
+deferInit("chunk-fq59qf81.js:836", () => {
   IDLE_SUBSCRIPTION_LIMITS = 43200000;
   MAX_IDLE_SUBSCRIPTIONS = 32;
   MAX_QUEUED_NOTICES_PER_TARGET = 3;
@@ -73,7 +73,7 @@ deferInit("chunk-v3mh8g28.js:837", () => {
     }),
   );
 });
-//@ chunk-v3mh8g28.js:1149-2373 placement
+//@ chunk-fq59qf81.js:1148-2372 placement
 /**
  * 空闲订阅状态
  */
@@ -133,18 +133,18 @@ class IdleSubscriptionState {
     this.onNotice = null;
   }
 }
-//@ chunk-v3mh8g28.js:2373-2397 placement
+//@ chunk-fq59qf81.js:2372-2396 placement
 var idleSubscriptionState; // deferred: uses IdleSubscriptionState of its import cycle while loading; runs once the cycle is complete
 var MAX_SUBSCRIBERS_PER_SOCKET;
 var MAX_SUBSCRIBERS_PER_PEER_PID;
 var MAX_UNVERIFIED_SUBSCRIBERS_PER_TARGET;
-deferInit("chunk-v3mh8g28.js:2373", () => {
+deferInit("chunk-fq59qf81.js:2372", () => {
   idleSubscriptionState = new IdleSubscriptionState();
   MAX_SUBSCRIBERS_PER_SOCKET = 8;
   MAX_SUBSCRIBERS_PER_PEER_PID = 4;
   MAX_UNVERIFIED_SUBSCRIBERS_PER_TARGET = 4;
 });
-//@ chunk-v3mh8g28.js:2397-3745 placement
+//@ chunk-fq59qf81.js:2396-3744 placement
 /**
  * 记录对端的空闲通知订阅（notify_when_idle），空闲时发出 peer_idle_notice。
  */
@@ -188,7 +188,7 @@ function recordIdleSubscription(
   if (index !== -1) subscribers.splice(index, 1);
   else if (verifiedPeerPid !== undefined) {
     if (
-      count(subscribers, (subscriber) => subscriber.verifiedPeerPid === verifiedPeerPid) >=
+      countWhere(subscribers, (subscriber) => subscriber.verifiedPeerPid === verifiedPeerPid) >=
       MAX_SUBSCRIBERS_PER_PEER_PID
     ) {
       let index = subscribers.findIndex((subscriber) => subscriber.verifiedPeerPid === verifiedPeerPid);
@@ -197,13 +197,13 @@ function recordIdleSubscription(
     } else if (isQueueFull()) return queueFullResult();
   } else if (!authenticated) {
     let isAnonymous = (subscriber) => subscriber.verifiedPeerPid === undefined && !subscriber.authenticated;
-    if (count(subscribers, isAnonymous) >= MAX_SUBSCRIBERS_PER_SOCKET) {
+    if (countWhere(subscribers, isAnonymous) >= MAX_SUBSCRIBERS_PER_SOCKET) {
       let index = subscribers.findIndex(isAnonymous);
       if (index === -1) return queueFullResult();
       evictSubscription(subscribers, index);
     } else if (isQueueFull()) return queueFullResult();
   } else if (
-    count(
+    countWhere(
       subscribers,
       (subscriber) =>
         subscriber.verifiedPeerPid === undefined &&
@@ -232,7 +232,7 @@ function recordIdleSubscription(
   if (state.idle) scheduleIdleFlush();
   return "recorded";
 }
-//@ chunk-v3mh8g28.js:3745-4114 placement
+//@ chunk-fq59qf81.js:3744-4113 placement
 function notePeerIdleStatus(isIdle, wasBusy) {
   let state = idleSubscriptionState;
   if (!isIdle && wasBusy) {
@@ -257,13 +257,13 @@ function notePeerIdleStatus(isIdle, wasBusy) {
     state.debounce = null;
   }
 }
-//@ chunk-v3mh8g28.js:4114-4199 placement
+//@ chunk-fq59qf81.js:4113-4198 placement
 function scheduleIdleFlush(delayMs = DEFAULT_IDLE_DEBOUNCE_MS) {
   if (idleSubscriptionState.debounce) return;
   idleSubscriptionState.debounce = setTimeout(flushIdleOnDebounce, delayMs);
   idleSubscriptionState.debounce.unref?.();
 }
-//@ chunk-v3mh8g28.js:4199-4454 placement
+//@ chunk-fq59qf81.js:4198-4453 placement
 /**
  * 防抖后发出空闲通知
  */
@@ -287,7 +287,7 @@ function flushIdleOnDebounce() {
   });
   idleSubscriptionState.inflight.add(flushPromise);
 }
-//@ chunk-v3mh8g28.js:4454-5010 placement
+//@ chunk-fq59qf81.js:4453-5010 placement
 async function flushIdleSubscribers(kind) {
   let state = idleSubscriptionState;
   if (kind === "exited") {
@@ -317,7 +317,7 @@ async function flushIdleSubscribers(kind) {
     state.inflightBatch = state.inflightBatch.filter((pendingTarget) => !batch.includes(pendingTarget));
   }
 }
-//@ chunk-v3mh8g28.js:5010-6699 placement
+//@ chunk-fq59qf81.js:5010-6700 placement
 /**
  * 发出空闲通知
  */
@@ -419,12 +419,12 @@ async function fireIdleNotices(state, sendNotice, targets, kind, noticeKind) {
     }),
   );
 }
-//@ chunk-v3mh8g28.js:6699-6770 placement
+//@ chunk-fq59qf81.js:6700-6771 placement
 function queueFullResult() {
   logFeatureSad("cross_session_notify_idle", "table_full");
   return "full";
 }
-//@ chunk-v3mh8g28.js:6770-6969 placement
+//@ chunk-fq59qf81.js:6771-6970 placement
 /**
  * 驱逐订阅
  */
@@ -440,7 +440,7 @@ function evictSubscription(subscribers, index) {
     removed.verifiedPeerProcStart,
   );
 }
-//@ chunk-v3mh8g28.js:6969-7120 placement
+//@ chunk-fq59qf81.js:6970-7121 placement
 /**
  * 过期未触发的订阅
  */
@@ -452,7 +452,7 @@ function expireSubscriptions(now) {
       subscribers.splice(index, 1);
     }
 }
-//@ chunk-v3mh8g28.js:7120-7394 placement
+//@ chunk-fq59qf81.js:7121-7395 placement
 /**
  * 最后回合文本摘要
  */
@@ -478,11 +478,11 @@ function lastTurnDetail() {
     .find((line) => line.trim().length > 0);
   return detail === undefined ? undefined : safeIdleDetail(detail);
 }
-//@ chunk-v3mh8g28.js:7394-7443 placement
+//@ chunk-fq59qf81.js:7395-7444 placement
 function safeIdleLabel(detail) {
   return safeIdleDetail(detail) ?? "(unnamed session)";
 }
-//@ chunk-v3mh8g28.js:7443-7701 placement
+//@ chunk-fq59qf81.js:7444-7701 placement
 /**
  * 清洗空闲通知详情
  */
@@ -499,7 +499,7 @@ function safeIdleDetail(detail) {
   if (replaced.length === 0) return;
   return truncateToWidth(replaced, IDLE_DETAIL_MAX_WIDTH);
 }
-//@ chunk-v3mh8g28.js:7701-8401 placement
+//@ chunk-fq59qf81.js:7701-8401 placement
 function registerIdleSubscription(msgId, label, peerSocket) {
   let outstanding = idleSubscriptionState.outstanding;
   let targetKey = canonicalSocketPath(peerSocket);
@@ -547,7 +547,7 @@ function registerIdleSubscription(msgId, label, peerSocket) {
     priors: mapped,
   };
 }
-//@ chunk-v3mh8g28.js:8401-8711 placement
+//@ chunk-fq59qf81.js:8401-8711 placement
 /**
  * 移除本方发出的空闲订阅记录
  */
@@ -572,7 +572,7 @@ function forgetOutstandingSubscription(msgId) {
   }
   expireOutstanding(removed);
 }
-//@ chunk-v3mh8g28.js:8711-8888 placement
+//@ chunk-fq59qf81.js:8711-8888 placement
 /**
  * 本方订阅过期时提示
  */
@@ -589,14 +589,14 @@ function expireOutstanding(entry) {
       gate: "local",
     });
 }
-//@ chunk-v3mh8g28.js:8888-8969 placement
+//@ chunk-fq59qf81.js:8888-8969 placement
 function hasOutstandingIdleSubscription(origMsgId) {
   return (
     typeof origMsgId === "string" &&
     idleSubscriptionState.outstanding.some((entry) => entry.msgId === origMsgId)
   );
 }
-//@ chunk-v3mh8g28.js:8969-9115 placement
+//@ chunk-fq59qf81.js:8969-9115 placement
 function forgetIdleSubscription(msgId) {
   let state = idleSubscriptionState;
   let index = state.outstanding.findIndex((entry) => entry.msgId === msgId);
@@ -604,7 +604,7 @@ function forgetIdleSubscription(msgId) {
   let [removed] = state.outstanding.splice(index, 1);
   if (removed) clearTimeout(removed.expiry);
 }
-//@ chunk-v3mh8g28.js:9115-10021 placement
+//@ chunk-fq59qf81.js:9115-10021 placement
 function admitIdleNotice(origMsgId, state, finishedAt, detail, fromMode, selfSent) {
   if (typeof origMsgId !== "string") return false;
   let noticeState = idleSubscriptionState;
@@ -652,7 +652,7 @@ function admitIdleNotice(origMsgId, state, finishedAt, detail, fromMode, selfSen
   });
   return true;
 }
-//@ chunk-v3mh8g28.js:10021-10208 placement
+//@ chunk-fq59qf81.js:10021-10208 placement
 /**
  * 按闸门决定通知是否对模型可见
  */
@@ -670,7 +670,7 @@ function admitIdleNoticeUnchecked(notice) {
       }),
   };
 }
-//@ chunk-v3mh8g28.js:10208-10658 placement
+//@ chunk-fq59qf81.js:10208-10658 placement
 /**
  * 投递空闲通知或缓存
  */
@@ -702,7 +702,7 @@ function deliverIdleNotice(notice) {
     logError(error);
   }
 }
-//@ chunk-v3mh8g28.js:10658-11081 placement
+//@ chunk-fq59qf81.js:10658-11081 placement
 function setOnPeerIdleNotice(onNotice) {
   let state = idleSubscriptionState;
   state.onNotice = onNotice;
@@ -725,16 +725,16 @@ function setOnPeerIdleNotice(onNotice) {
     logFeatureSad("cross_session_notify_idle", "notice_premount_overflow");
   }
 }
-//@ chunk-v3mh8g28.js:11081-11117 placement
+//@ chunk-fq59qf81.js:11081-11117 placement
 function setIdleLastTurnTextProvider(getLastTurnText) {
   idleSubscriptionState.getLastTurnText = getLastTurnText;
 }
-//@ chunk-v3mh8g28.js:11117-11172 placement
+//@ chunk-fq59qf81.js:11117-11172 placement
 function setIdleNoticeSender(sendNotice) {
   if (sendNotice !== null) idleSubscriptionState.exited = false;
   idleSubscriptionState.sendNotice = sendNotice;
 }
-//@ chunk-v3mh8g28.js:11172-11404 placement
+//@ chunk-fq59qf81.js:11172-11404 placement
 function setOnIdleSubscribed(onSubscribed, onReplayDone = null) {
   idleSubscriptionState.onSubscribed = onSubscribed;
   idleSubscriptionState.onReplayDone = onReplayDone;
@@ -750,7 +750,7 @@ function setOnIdleSubscribed(onSubscribed, onReplayDone = null) {
     }
   }
 }
-//@ chunk-v3mh8g28.js:11404-11604 placement
+//@ chunk-fq59qf81.js:11404-11604 placement
 /**
  * 通知宿主有新订阅（未挂载时缓存）
  */
@@ -768,21 +768,21 @@ function announceSubscribed(address, verified, replayed = false) {
     logError(error);
   }
 }
-//@ chunk-v3mh8g28.js:11604-11645 placement
+//@ chunk-fq59qf81.js:11604-11645 placement
 function setRegisteredInboxOfPidReader(registeredInboxOfPid) {
   idleSubscriptionState.registeredInboxOfPid = registeredInboxOfPid;
 }
-//@ chunk-v3mh8g28.js:11645-11992 placement
+//@ chunk-fq59qf81.js:11645-11992 placement
 function idleSubscribedSystemLine(address, verified) {
   return `A process claiming the address ${address}${verified ? "" : " (no verifiable pid)"} asked to be told when this session is next idle \u2014 it will get one automated status notice; a one-line status detail is included only if that address is registered to the same process in the session registry (a same-user process can register itself).`;
 }
-//@ chunk-v3mh8g28.js:11992-12151 placement
+//@ chunk-fq59qf81.js:11992-12151 placement
 /**
  * 订阅丢失原因
  */
 var SUBSCRIPTION_LOST_REASONS =
   "it is shutting down, its subscription table is full, a newer subscription displaced this one, or it answered in a form this version does not recognize";
-//@ chunk-v3mh8g28.js:12151-12284 placement
+//@ chunk-fq59qf81.js:12151-12284 placement
 function formatClockTime(finishedAt) {
   if (finishedAt === undefined) return "";
   return new Date(finishedAt).toLocaleTimeString(undefined, {
@@ -791,7 +791,7 @@ function formatClockTime(finishedAt) {
     hourCycle: "h23",
   });
 }
-//@ chunk-v3mh8g28.js:12284-12801 placement
+//@ chunk-fq59qf81.js:12284-12801 placement
 function idleNoticeSystemLine(notice) {
   switch (notice.kind) {
     case "idle": {
@@ -806,7 +806,7 @@ function idleNoticeSystemLine(notice) {
       return `No idle signal from ${notice.label} within ${IDLE_SUBSCRIPTION_LIMITS / 3600000} h \u2014 idle subscription expired.`;
   }
 }
-//@ chunk-v3mh8g28.js:12801-14199 placement
+//@ chunk-fq59qf81.js:12801-14199 placement
 /**
  * 空闲通知的说明文字
  */
@@ -825,16 +825,16 @@ function idleNoticeText(request) {
       return `[Cross-session idle notice] No idle signal arrived from "${request.label}" within ${IDLE_SUBSCRIPTION_LIMITS / 3600000} hours; the subscription has expired (it may still be busy, be waiting on its user, refuse inbound requests, run a version without idle notices, or have ended abruptly). Do not keep waiting for it; if you still need to know, ask your user or list the sessions to check its status. ${prefix}`;
   }
 }
-//@ chunk-v3mh8g28.js:14199-14239 placement
+//@ chunk-fq59qf81.js:14199-14239 placement
 function noteParkedAtShutdown() {
   idleSubscriptionState.parkedHoldBack = heldInboundCount() > 0;
 }
-//@ chunk-v3mh8g28.js:14239-14309 placement
+//@ chunk-fq59qf81.js:14239-14309 placement
 function setHostStatusSubscription(hostStatusUnsubscribe) {
   idleSubscriptionState.hostStatusUnsubscribe?.();
   idleSubscriptionState.hostStatusUnsubscribe = hostStatusUnsubscribe;
 }
-//@ chunk-v3mh8g28.js:14309-14619 placement
+//@ chunk-fq59qf81.js:14309-14619 placement
 /**
  * 清理已通知的订阅
  */
@@ -859,7 +859,7 @@ function settleFiredSubscribers(firedTargets) {
     )
       subscribers.push(firedTarget);
 }
-//@ chunk-v3mh8g28.js:14619-15308 placement
+//@ chunk-fq59qf81.js:14619-15308 placement
 function sendUnavailableNotice(
   replyTarget,
   origMsgId,
@@ -910,7 +910,7 @@ function sendUnavailableNotice(
     },
   );
 }
-//@ chunk-v3mh8g28.js:15308-15380 placement
+//@ chunk-fq59qf81.js:15308-15380 placement
 function retryUnavailableNotice(
   replyTarget,
   origMsgId,
@@ -921,14 +921,14 @@ function retryUnavailableNotice(
   idleSubscriptionState.unavailableRetries.delete(origMsgId);
   sendUnavailableNotice(replyTarget, origMsgId, verifiedPeerPid, authenticated, verifiedPeerProcStart, true);
 }
-//@ chunk-v3mh8g28.js:15380-15417 placement
+//@ chunk-fq59qf81.js:15380-15417 placement
 function isVerifiedOrAuthenticated(verifiedPid, isAuthenticated) {
   return verifiedPid !== undefined || isAuthenticated;
 }
-//@ chunk-v3mh8g28.js:15417-15582 placement
+//@ chunk-fq59qf81.js:15417-15582 placement
 function enqueueIdleNoticesForModel(requests) {
   if (requests.length === 0) return;
-  enqueueCommand({
+  enqueue({
     mode: "prompt",
     agentId: mainAgentId(),
     value: requests.map(idleNoticeText).join(`
@@ -939,7 +939,7 @@ function enqueueIdleNoticesForModel(requests) {
     skipAttachments: true,
   });
 }
-//@ chunk-v3mh8g28.js:15582-15835 placement
+//@ chunk-fq59qf81.js:15582-15835 placement
 /**
  * 发送失败分类
  */
@@ -958,16 +958,6 @@ function classifySendFailure(error) {
   }
 }
 export {
-  notifyWhenIdleFrameSchema,
-  recordIdleSubscription,
-  sendUnavailableNotice,
-  peerIdleNoticeFrameSchema,
-  hasOutstandingIdleSubscription,
-  admitIdleNotice,
-  noteParkedAtShutdown,
-  flushIdleSubscribers,
-  setIdleNoticeSender,
-  setRegisteredInboxOfPidReader,
   idleNoticeSystemLine,
   enqueueIdleNoticesForModel,
   setOnPeerIdleNotice,
@@ -977,7 +967,17 @@ export {
   notePeerIdleStatus,
   registerIdleSubscription,
   forgetIdleSubscription,
+  hasOutstandingIdleSubscription,
   safeIdleLabel,
   MAX_IDLE_SUBSCRIPTIONS,
+  notifyWhenIdleFrameSchema,
+  recordIdleSubscription,
+  sendUnavailableNotice,
+  peerIdleNoticeFrameSchema,
+  admitIdleNotice,
+  noteParkedAtShutdown,
+  flushIdleSubscribers,
+  setIdleNoticeSender,
+  setRegisteredInboxOfPidReader,
   setHostStatusSubscription,
 };

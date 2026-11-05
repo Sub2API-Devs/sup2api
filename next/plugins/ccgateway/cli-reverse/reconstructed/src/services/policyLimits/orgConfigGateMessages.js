@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：组织配置门控阻止/拒绝的说明文本
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-c18v4hz4.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c33twnyh.js (11)
  * attribution: placement 11
  */
 import { policyRefusalReason, settingsOutcome, storedSettingsState } from "./orgConfigGate.js";
@@ -15,7 +15,7 @@ import { isOAuthEffective } from "./orgConfigEligibility.js";
 import { getOauthAccountInfo } from "../../utils/auth.js";
 import { stripControlChars } from "../../utils/settings/writeQueues.js";
 
-//@ chunk-c18v4hz4.js:10863-10961 placement (2.1.88 match: hasOpusAccess, 1)
+//@ chunk-c33twnyh.js:10898-10996 placement (2.1.88 match: hasOpusAccess, 1)
 function hasOpusAccess(tier) {
   switch (tier) {
     case "max":
@@ -27,7 +27,7 @@ function hasOpusAccess(tier) {
       return;
   }
 }
-//@ chunk-c18v4hz4.js:10961-11919 placement
+//@ chunk-c33twnyh.js:10996-11954 placement
 function orgConfigTelemetryFields(policyLimitsGateSnapshot) {
   let base = {
     hasAdmittedCache: policyLimitsGateSnapshot.hasCache,
@@ -107,14 +107,14 @@ function orgConfigTelemetryFields(policyLimitsGateSnapshot) {
     httpStatus: policyLimitsGateSnapshot.loadHttpStatus,
   };
 }
-//@ chunk-c18v4hz4.js:11919-11950 placement
+//@ chunk-c33twnyh.js:11954-11985 placement
 /**
  * 当前门控快照的遥测字段。
  */
 function orgConfigTelemetryFieldsNow() {
   return orgConfigTelemetryFields(getPolicyLimitsGateSnapshot());
 }
-//@ chunk-c18v4hz4.js:11950-12000 placement
+//@ chunk-c33twnyh.js:11985-12036 placement
 function currentSettingsOutcome() {
   return settingsOutcome(
     undefined,
@@ -124,14 +124,14 @@ function currentSettingsOutcome() {
     isOAuthEffective(),
   );
 }
-//@ chunk-c18v4hz4.js:12000-12048 placement
+//@ chunk-c33twnyh.js:12036-12084 placement
 function currentGateOutcomes() {
   return {
     policy: orgConfigTelemetryFieldsNow(),
     settings: currentSettingsOutcome(),
   };
 }
-//@ chunk-c18v4hz4.js:12048-12201 placement
+//@ chunk-c33twnyh.js:12084-12237 placement
 function orgConfigContext(outcomes, resource) {
   let httpStatus = resource === undefined ? undefined : outcomes[resource].httpStatus;
   let organizationName = getOauthAccountInfo()?.organizationName;
@@ -143,23 +143,23 @@ function orgConfigContext(outcomes, resource) {
     httpStatus,
   };
 }
-//@ chunk-c18v4hz4.js:12201-12304 placement
+//@ chunk-c33twnyh.js:12237-12340 placement
 var POLICY_ENDPOINTS_LABEL =
   "api.anthropic.com/api/claude_code/policy_limits and api.anthropic.com/api/claude_code/settings";
-//@ chunk-c18v4hz4.js:12304-12421 placement
+//@ chunk-c33twnyh.js:12340-12457 placement
 function organizationDisplayName(context) {
   let organizationName =
     context.organizationName !== undefined ? stripControlChars(context.organizationName).trim() : "";
   return organizationName !== "" ? organizationName : "Your organization";
 }
-//@ chunk-c18v4hz4.js:12421-12501 placement
+//@ chunk-c33twnyh.js:12457-12537 placement
 /**
  * 拼出「 Request id: …」后缀（无请求 id 时为空串）。
  */
 function requestIdClause(context) {
   return context.requestId !== undefined ? ` Request id: ${stripControlChars(context.requestId)}.` : "";
 }
-//@ chunk-c18v4hz4.js:12501-16305 placement
+//@ chunk-c33twnyh.js:12537-16341 placement
 /**
  * 把组织配置门控的阻止/拒绝结果转成给用户的说明文字（含组织名、HTTP 状态、恢复命令）。
  */
@@ -203,7 +203,7 @@ function orgConfigGateMessage(decision, context = {}) {
       return;
   }
 }
-//@ chunk-c18v4hz4.js:16305-16457 placement
+//@ chunk-c33twnyh.js:16341-16493 placement
 function retryHint(decision) {
   switch (decision.surface) {
     case "startup":

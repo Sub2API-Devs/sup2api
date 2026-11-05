@@ -1,8 +1,8 @@
 /**
  * @smithy/middleware-endpoint/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/middleware-endpoint@4.3.0..4.3.15
- * pieces: chunk-edce4vxq.js (1)
+ * pieces: chunk-3p78mpxm.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -12,7 +12,7 @@ import { require_core as require_core_3 } from "../../core/dist-cjs/index.js";
 import { require_util_middleware } from "../../util-middleware/dist-cjs/index.js";
 import { require_middleware_serde } from "../../middleware-serde/dist-cjs/index.js";
 
-//@ chunk-edce4vxq.js:116495-120842 cjs-fingerprint
+//@ chunk-3p78mpxm.js:116495-120842 cjs-fingerprint
 var require_middleware_endpoint = __commonJS(function (cjsExports) {
   var getEndpointFromConfig = require_getEndpointFromConfig();
   var urlParser = require_url_parser();

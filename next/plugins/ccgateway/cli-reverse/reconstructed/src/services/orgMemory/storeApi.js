@@ -3,9 +3,9 @@
  *
  * 记忆库 HTTP 客户端（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-82kqcve8.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a2q0x549.js (14)
  * attribution: placement 14
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -30,13 +30,13 @@ import { apiClient } from "../routines/routinesApi.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:64788-64930 placement
+//@ chunk-a2q0x549.js:65953-66095 placement
 function parseContextStopHeader(headers) {
   let headerValue = headers?.["x-memory-context-stop"];
   let normalized = typeof headerValue === "string" ? headerValue.trim().toLowerCase() : "";
   return normalized === "org" || normalized === "credential" ? normalized : undefined;
 }
-//@ chunk-82kqcve8.js:64930-65145 placement (2.1.88 match: getRetryAfter, 0.889)
+//@ chunk-a2q0x549.js:66095-66310 placement (2.1.88 match: getRetryAfter, 1)
 /**
  * 从普通头对象解析 retry-after（秒或 HTTP 日期）为毫秒，非正数忽略，上限 1 小时。旧版名 getRetryAfter 为同名族错配（另一个 getRetryAfter 是 #GQe）。疑似归错文件（chunk-82kqcve8 属其他 HTTP 客户端）。
  */
@@ -48,14 +48,14 @@ function parseRetryAfterHeaderMs(error) {
   if (!Number.isFinite(delayMs) || delayMs <= 0) return;
   return Math.min(delayMs, 3600000);
 }
-//@ chunk-82kqcve8.js:65145-65180 placement
+//@ chunk-a2q0x549.js:66310-66345 placement
 /**
  * retry-after 毫秒，缺省 60 秒。
  */
 function getRetryAfterMsOrDefault(error) {
   return parseRetryAfterHeaderMs(error) ?? 60000;
 }
-//@ chunk-82kqcve8.js:65180-65733 placement
+//@ chunk-a2q0x549.js:66345-66898 placement
 /**
  * 记忆库 HTTP API 的超时、分页与上限，路径，以及条目、列表页、带内容条目与错误体的 schema。
  */
@@ -69,7 +69,7 @@ var memoryListPageSchema;
 var memoryWithContentSchema;
 var memoryMetaSchema;
 var memoryErrorSchema;
-deferInit("chunk-82kqcve8.js:65180", () => {
+deferInit("chunk-a2q0x549.js:66345", () => {
   STORE_API_TIMEOUT_MS = 30000;
   LIST_PAGE_SIZE = 100;
   MAX_STORE_ENTRIES = 200000;
@@ -113,28 +113,28 @@ deferInit("chunk-82kqcve8.js:65180", () => {
     }),
   );
 });
-//@ chunk-82kqcve8.js:65733-65805 placement
+//@ chunk-a2q0x549.js:66898-66970 placement
 /**
  * 规范路径前缀（补前导斜杠、合并重复斜杠）。
  */
 function normalizePathPrefix(path) {
   return (path.startsWith("/") ? path : "/" + path).replace(/\/{2,}/g, "/");
 }
-//@ chunk-82kqcve8.js:65805-65953 placement
+//@ chunk-a2q0x549.js:66970-67118 placement
 function buildQueryString(query) {
   let mapped = Object.entries(query).map(
     ([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`,
   );
   return mapped.length ? "?" + mapped.join("&") : "";
 }
-//@ chunk-82kqcve8.js:65953-66032 placement
+//@ chunk-a2q0x549.js:67118-67197 placement
 /**
  * 判断值是否为异步可迭代（流）。
  */
 function isAsyncIterable(value) {
   return typeof value === "object" && value !== null && Symbol.asyncIterator in value;
 }
-//@ chunk-82kqcve8.js:66032-66138 placement
+//@ chunk-a2q0x549.js:67197-67303 placement
 function destroyStream(stream) {
   if (
     typeof stream === "object" &&
@@ -144,14 +144,14 @@ function destroyStream(stream) {
   )
     stream.destroy();
 }
-//@ chunk-82kqcve8.js:66138-67027 placement
+//@ chunk-a2q0x549.js:67303-68192 placement
 /**
  * 表示存储已归档的错误文本前缀。
  */
 var MEMORY_STORE_LIMIT_ERRORS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var SERVER_ERROR_TO_REASON;
 var ARCHIVED_PREFIX;
-deferInit("chunk-82kqcve8.js:66138", () => {
+deferInit("chunk-a2q0x549.js:67303", () => {
   MEMORY_STORE_LIMIT_ERRORS = DoctorLazy(() =>
     looseObject({
       message: stringSchema().optional(),
@@ -179,7 +179,7 @@ deferInit("chunk-82kqcve8.js:66138", () => {
   ]);
   ARCHIVED_PREFIX = "cannot modify archived resource";
 });
-//@ chunk-82kqcve8.js:67027-67518 placement
+//@ chunk-a2q0x549.js:68192-68683 placement
 function parseStoreHttpError(status, message, body, headers) {
   if (status === 429 || status >= 500) {
     let retryable = status === 429 || status === 503 || typeof headers["retry-after"] === "string";
@@ -202,7 +202,7 @@ function parseStoreHttpError(status, message, body, headers) {
   let messageSuffix = message_2 !== undefined ? ` (${message_2})` : "";
   throw new MemoryPermanentError(`http_${status}`, `${message}: HTTP ${status}${messageSuffix}`);
 }
-//@ chunk-82kqcve8.js:67518-67707 placement
+//@ chunk-a2q0x549.js:68683-68872 placement
 function getStopError(error, what) {
   if (error.status !== 204 && error.status !== 401 && error.status !== 403) return;
   let contextStopHeader = parseContextStopHeader(error.response.headers);
@@ -213,12 +213,12 @@ function getStopError(error, what) {
         `${what}: HTTP ${error.status} (stop: ${contextStopHeader})`,
       );
 }
-//@ chunk-82kqcve8.js:67707-67827 placement (2.1.88 match: isPermanentFailure, 0.566)
+//@ chunk-a2q0x549.js:68872-68992 placement (2.1.88 match: isPermanentFailure, 0.561)
 function throwForSkippedRequest(skip, what) {
   if (skip.reason === "no-auth") throw new MemoryPermanentError("no_oauth", `${what}: ${skip.detail}`);
   throw new MemoryUnavailableError(`${what}: ${skip.reason}`);
 }
-//@ chunk-82kqcve8.js:67827-74424 placement
+//@ chunk-a2q0x549.js:68992-75592 placement
 /**
  * 记忆库 HTTP 客户端（/memories、/memories/export，session-jwt 认证）
  */
@@ -582,11 +582,11 @@ class MemoryStoreClient {
       parseStoreHttpError(response.status, operation, response.data, response.response.headers);
   }
 }
-//@ chunk-82kqcve8.js:74424-74473 placement
+//@ chunk-a2q0x549.js:75592-75641 placement
 /**
  * 批量创建记忆库客户端。
  */
 function createStoreClients(stores, credentialProvider) {
   return stores.map((store) => new MemoryStoreClient(store, credentialProvider));
 }
-export { MemoryStoreClient, normalizePathPrefix, MAX_STORE_ENTRIES, createStoreClients };
+export { normalizePathPrefix, MAX_STORE_ENTRIES, createStoreClients, MemoryStoreClient };

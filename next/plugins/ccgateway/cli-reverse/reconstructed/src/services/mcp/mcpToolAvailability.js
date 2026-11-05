@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 工具/服务器对模型的可用性判定（策略屏蔽、组织屏蔽、禁用、重连、需认证、撤回）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-a76knw89.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-03tec5k5.js (8)
  * attribution: placement 8
  */
 import { getDenyRuleIndex, isToolDeniedByIndex } from "../../utils/permissions/permissions.js";
@@ -16,14 +16,14 @@ import {
   isToolOmittedByLaunchToolList,
 } from "../../utils/permissions/filterToolsByDenyRules.js";
 import { isBuiltInArtifactReplacedByMcp } from "../artifacts/artifactsMcpTools.js";
-import { normalizeNameForMCP } from "./normalization.js";
+import { CLAUDEAI_SERVER_PREFIX } from "./normalization.js";
 import { normalizeMcpServerName, AUTHENTICATE, COMPLETE_AUTHENTICATION } from "../api/deferredToolsState.js";
 import { isCliOwnedConfig } from "./cliOwnedClients.js";
 import { isPolicyDisabledReason, isReservedAddressReason, isUnconfiguredFailure } from "./redactMcpErrors.js";
 import { isEntryRowNotServed } from "./client.js";
 import { isFoamySpringEnabled as isFoamySpringEnabled_2 } from "../analytics/growthbookGates.js";
 
-//@ chunk-a76knw89.js:41458-41763 placement
+//@ chunk-03tec5k5.js:27452-27757 placement
 function isPermanentUnavailability(availability) {
   switch (availability.kind) {
     case "policy_blocked":
@@ -44,14 +44,14 @@ function isPermanentUnavailability(availability) {
       return false;
   }
 }
-//@ chunk-a76knw89.js:41763-41814 placement
+//@ chunk-03tec5k5.js:27757-27808 placement
 /**
  * 判断错误是否为“永久不可用”（排除 replaced）。
  */
 function isPermanentUnavailabilityFor(availability) {
   return isPermanentUnavailability(availability) && availability.kind !== "replaced";
 }
-//@ chunk-a76knw89.js:41814-42411 placement
+//@ chunk-03tec5k5.js:27808-28405 placement
 /**
  * 判定一个工具名对应的 MCP 工具当前是否可用及原因。
  */
@@ -119,7 +119,7 @@ function describeToolAvailability(
         kind: "not_configured",
       };
 }
-//@ chunk-a76knw89.js:42411-42512 placement
+//@ chunk-03tec5k5.js:28405-28506 placement
 /**
  * 列出可能提供该工具、仍在连接中的 MCP 服务器名。
  */
@@ -128,13 +128,13 @@ function pendingServersForTool(toolName, clients) {
     .filter(({ row }) => row.type === "pending")
     .map(({ row }) => row.name);
 }
-//@ chunk-a76knw89.js:42512-42879 placement
+//@ chunk-03tec5k5.js:28506-28873 placement
 /**
  * 找出可能提供该工具名的 MCP 服务器行（按最长前缀匹配，或按给定的服务器与工具名）。
  */
 function serverRowsForTool(toolName, clients, mcpInfo) {
   if (mcpInfo !== undefined) {
-    let upstream = normalizeNameForMCP(mcpInfo.toolName);
+    let upstream = CLAUDEAI_SERVER_PREFIX(mcpInfo.toolName);
     return clients
       .filter((client) => client.name === mcpInfo.serverName)
       .map((row) => ({
@@ -156,7 +156,7 @@ function serverRowsForTool(toolName, clients, mcpInfo) {
       upstream: toolName.slice(prefix.length),
     }));
 }
-//@ chunk-a76knw89.js:42879-43637 placement
+//@ chunk-03tec5k5.js:28873-29631 placement
 /**
  * 把 MCP 服务器状态归类为 denied/org_blocked/disabled/needs_auth/reconnecting 等。
  */
@@ -228,16 +228,16 @@ function classifyMcpServerAvailability(client, upstreamName, deniedByRules) {
           };
   }
 }
-//@ chunk-a76knw89.js:43637-43809 placement
+//@ chunk-03tec5k5.js:29631-29803 placement
 function isBlockedByToolPermissions(client, upstreamName) {
   if (!("toolPermissions" in client.config)) return false;
   let toolPermissions = client.config.toolPermissions;
   if (!toolPermissions) return false;
   return Object.entries(toolPermissions).some(
-    ([key, value]) => value === "blocked" && normalizeNameForMCP(key) === upstreamName,
+    ([key, value]) => value === "blocked" && CLAUDEAI_SERVER_PREFIX(key) === upstreamName,
   );
 }
-//@ chunk-a76knw89.js:43809-43836 placement
+//@ chunk-03tec5k5.js:29803-29830 placement
 /**
  * 读 foamy spring 开关（用于工具可用性判断）。
  */
@@ -245,8 +245,8 @@ function isFoamySpringEnabled() {
   return isFoamySpringEnabled_2();
 }
 export {
-  describeToolAvailability,
   isFoamySpringEnabled,
+  describeToolAvailability,
   isPermanentUnavailabilityFor,
   isPermanentUnavailability,
   pendingServersForTool,

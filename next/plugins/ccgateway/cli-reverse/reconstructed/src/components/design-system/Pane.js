@@ -3,9 +3,9 @@
  *
  * 面板容器（带边框和标题的列布局）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/design-system/Pane.tsx
- * pieces: chunk-gtxctzsd.js (2)
+ * pieces: chunk-q3hnngce.js (2)
  * attribution: placement 1, fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -17,17 +17,18 @@ import {
 import { Box } from "../../ink/components/Text.js";
 import { Divider } from "./Divider.js";
 
-//@ chunk-gtxctzsd.js:370-389 placement
+//@ chunk-q3hnngce.js:370-389 placement
 /**
  * Pane 组件的内边距常量。
  */
 var PANE_PADDING = 2;
 var PANE_PADDING_X = 1;
 var PANE_WIDTH_RESERVE = 2;
-//@ chunk-gtxctzsd.js:389-859 fingerprint (2.1.88 match: Pane, 1)
+//@ chunk-q3hnngce.js:389-903 fingerprint (2.1.88 match: Pane, 0.807)
 function Pane(props) {
-  let $ = useMemoCache(9);
-  let { children, color } = props;
+  let $ = useMemoCache(10);
+  let { children, color, insetX } = props;
+  let paddingX = insetX === undefined ? PANE_PADDING : insetX;
   if (useHasScrollViewport()) {
     let t1;
     if ($[0] !== children) {
@@ -50,27 +51,28 @@ function Pane(props) {
     $[2] = color;
     $[3] = t1;
   } else t1 = $[3];
-  let t2;
-  if ($[4] !== children) {
-    t2 = jsxProd_default(Box, {
+  let bodyBox;
+  if ($[4] !== children || $[5] !== paddingX) {
+    bodyBox = jsxProd_default(Box, {
       flexDirection: "column",
-      paddingX: PANE_PADDING,
+      paddingX,
       children,
     });
     $[4] = children;
-    $[5] = t2;
-  } else t2 = $[5];
+    $[5] = paddingX;
+    $[6] = bodyBox;
+  } else bodyBox = $[6];
   let t3;
-  if ($[6] !== t1 || $[7] !== t2) {
+  if ($[7] !== t1 || $[8] !== bodyBox) {
     t3 = jsxProd_default_2(Box, {
       flexDirection: "column",
       paddingTop: 1,
-      children: [t1, t2],
+      children: [t1, bodyBox],
     });
-    $[6] = t1;
-    $[7] = t2;
-    $[8] = t3;
-  } else t3 = $[8];
+    $[7] = t1;
+    $[8] = bodyBox;
+    $[9] = t3;
+  } else t3 = $[9];
   return t3;
 }
-export { PANE_PADDING, Pane, PANE_WIDTH_RESERVE, PANE_PADDING_X };
+export { Pane, PANE_PADDING_X, PANE_PADDING, PANE_WIDTH_RESERVE };

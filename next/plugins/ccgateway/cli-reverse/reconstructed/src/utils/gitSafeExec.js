@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：安全运行 git：清除危险环境与 config（hooksPath、fsmonitor、askPass）、禁用交互凭据与 ssh 主机确认、发现上限
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sycgf9xs.js (48)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hb44av3w.js (48)
  * attribution: placement 48
  */
 import { parse, sep, isAbsolute, delimiter, resolve, basename, dirname } from "path";
@@ -20,7 +20,7 @@ import { GIT_SAFE_GLOBAL_ARGS, LFS_SKIP_ENV, GIT_LOCATION_ENV_VARS } from "./git
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "./errors.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-sycgf9xs.js:4108-4321 placement
+//@ chunk-hb44av3w.js:4141-4354 placement
 function formatGitErrorFrames(error, frames) {
   return [
     `${error.name}: ${error.message}`,
@@ -31,7 +31,7 @@ function formatGitErrorFrames(error, frames) {
   ].join(`
 `);
 }
-//@ chunk-sycgf9xs.js:4378-4612 placement
+//@ chunk-hb44av3w.js:4411-4645 placement
 class GitStartFolderError {
   #e;
   constructor(path) {
@@ -48,7 +48,7 @@ class GitStartFolderError {
     return new GitStartFolderError(path);
   }
 }
-//@ chunk-sycgf9xs.js:4612-4758 placement
+//@ chunk-hb44av3w.js:4645-4791 placement
 function buildGitInvocation(gitStartsIn, cwd, args, env) {
   let cleanedEnv = {
     ...env,
@@ -60,16 +60,16 @@ function buildGitInvocation(gitStartsIn, cwd, args, env) {
     env: cleanedEnv,
   };
 }
-//@ chunk-sycgf9xs.js:4758-4801 placement
+//@ chunk-hb44av3w.js:4791-4834 placement
 var CLAUDE_CODE_FOUND_REPOSITORY_GIT = "CLAUDE_CODE_FOUND_REPOSITORY_GIT";
-//@ chunk-sycgf9xs.js:4838-4918 placement
+//@ chunk-hb44av3w.js:4871-4951 placement
 /**
  * 归一化一次环境读取结果（payload 显式给出默认主机时取反）。
  */
 function resolveEnvRead(read, fallback) {
   return read.value === !fallback && read.source === "payload" && read.defaultHost ? !fallback : fallback;
 }
-//@ chunk-sycgf9xs.js:4918-5076 placement
+//@ chunk-hb44av3w.js:4951-5111 placement
 class envReaderHolder {
   reader = null;
   register(reader) {
@@ -87,26 +87,26 @@ class envReaderHolder {
     }
   }
 }
-//@ chunk-sycgf9xs.js:5197-5276 placement
+//@ chunk-hb44av3w.js:5232-5311 placement
 /**
  * 替代 core.alternateRefsCommand 的安全脚本（用 git-dir 列 ref 名）。
  */
 var ALTERNATE_REFS_COMMAND = `f() { git --git-dir="$1" for-each-ref --format='%(objectname)'; }; f`;
-//@ chunk-sycgf9xs.js:5310-5355 placement
+//@ chunk-hb44av3w.js:5345-5390 placement
 /**
  * 路径含路径分隔列表符时返回 null（拒绝）。
  */
 function rejectSeparatorPath(path) {
   return path.includes(delimiter) ? null : path;
 }
-//@ chunk-sycgf9xs.js:5355-5433 placement
+//@ chunk-hb44av3w.js:5390-5468 placement
 /**
  * 判断是否应优先用 HTTPS 传输（远程或插件偏好）。
  */
 function preferHttpsGitTransport() {
   return env.CLAUDE_CODE_REMOTE || env.CLAUDE_CODE_PLUGIN_PREFER_HTTPS;
 }
-//@ chunk-sycgf9xs.js:5433-5673 placement
+//@ chunk-hb44av3w.js:5468-5707 placement
 /**
  * 运行 git 时附加的安全 -c 参数（upload-pack、alternateRefsCommand、签名显示等）。
  */
@@ -121,14 +121,14 @@ var MAINTENANCE_OFF_CONFIG = [
   ["maintenance.auto", "false"],
 ];
 var DIFF_SAFETY_CONFIG = [["diff.autoRefreshIndex", "false"]];
-//@ chunk-sycgf9xs.js:5673-5736 placement
+//@ chunk-hb44av3w.js:5707-5770 placement
 /**
  * 返回平台的空设备路径（Windows 用 \\.\NUL）。
  */
 function nullDevicePath() {
   return getPlatform() === "windows" ? "\\\\.\\NUL" : "/dev/null";
 }
-//@ chunk-sycgf9xs.js:5736-6340 placement
+//@ chunk-hb44av3w.js:5770-6376 placement
 /**
  * 空 hooksPath 配置匹配正则、git 钩子名清单与对应的 hook.<name>.enabled=false 覆盖，以及环境读取器单例。
  */
@@ -137,7 +137,7 @@ var GIT_HOOK_NAMES;
 var mapped;
 var TENGU_COZY_PARASOL;
 var envReaderSingleton;
-deferInit("chunk-sycgf9xs.js:5736", () => {
+deferInit("chunk-hb44av3w.js:5770", () => {
   NULL_HOOKS_PATH_PATTERN = /^core\.hooksPath=(?:\/dev\/null|\\\\\.\\nul)$/i;
   GIT_HOOK_NAMES = [
     "applypatch-msg",
@@ -173,18 +173,18 @@ deferInit("chunk-sycgf9xs.js:5736", () => {
   TENGU_COZY_PARASOL = "tengu_cozy_parasol";
   envReaderSingleton = new envReaderHolder();
 });
-//@ chunk-sycgf9xs.js:6340-6378 placement
+//@ chunk-hb44av3w.js:6376-6414 placement
 /**
  * 注册环境读取器（返回旧值）。
  */
 function registerEnvReader(reader) {
   return envReaderSingleton.register(reader);
 }
-//@ chunk-sycgf9xs.js:6378-6414 placement
+//@ chunk-hb44av3w.js:6414-6450 placement
 function isAlternateRefsCommandEnabled() {
   return envReaderSingleton.read(TENGU_COZY_PARASOL, true);
 }
-//@ chunk-sycgf9xs.js:6414-6640 placement
+//@ chunk-hb44av3w.js:6450-6676 placement
 /**
  * （切分错误，git 安全）运行 git 时强制的 -c 配置：清空 core.fsmonitor、core.hooksPath 指向安全目录、清空 core.askPass、禁 ext 协议、submodule.recurse=false 等。
  */
@@ -202,7 +202,7 @@ function getGitSafetyConfigPairs() {
     ...mapped,
   ];
 }
-//@ chunk-sycgf9xs.js:7888-7984 placement
+//@ chunk-hb44av3w.js:7924-8020 placement
 /**
  * 补齐禁止交互提示的 git 环境变量默认值（不覆盖已有值）。
  */
@@ -212,7 +212,7 @@ function noPromptEnvDefaults(env) {
     if (getEnvVarCaseInsensitiveOnWindows(env, key) === undefined) missing[key] = value;
   return missing;
 }
-//@ chunk-sycgf9xs.js:7984-8146 placement
+//@ chunk-hb44av3w.js:8020-8182 placement
 function withGitNoPromptEnv(env = process.env) {
   return {
     ...env,
@@ -225,25 +225,25 @@ function withGitNoPromptEnv(env = process.env) {
     ),
   };
 }
-//@ chunk-sycgf9xs.js:8146-8244 placement
+//@ chunk-hb44av3w.js:8182-8280 placement
 function blankEnvKeys(env, predicate) {
   let cleared = {};
   for (let key of Object.keys(env)) if (predicate(key.toUpperCase(), key)) cleared[key] = undefined;
   return cleared;
 }
-//@ chunk-sycgf9xs.js:8244-8391 placement
+//@ chunk-hb44av3w.js:8280-8427 placement
 function getEnvVarCaseInsensitiveOnWindows(env, name) {
   if (env[name] !== undefined || getPlatform() !== "windows") return env[name];
   for (let [key, value] of Object.entries(env))
     if (key.toUpperCase() === name && value !== undefined) return value;
   return;
 }
-//@ chunk-sycgf9xs.js:8391-8509 placement
+//@ chunk-hb44av3w.js:8427-8545 placement
 function hasEnvVar(env, name) {
   if (Object.hasOwn(env, name)) return true;
   return getPlatform() === "windows" && Object.keys(env).some((key) => key.toUpperCase() === name);
 }
-//@ chunk-sycgf9xs.js:8509-8780 placement
+//@ chunk-hb44av3w.js:8545-8816 placement
 function buildGitConfigEnv(count, pairs, env = {}) {
   let baseCount = Number(count);
   let existingCount = Number.isInteger(baseCount) && baseCount > 0 ? baseCount : 0;
@@ -260,12 +260,12 @@ function buildGitConfigEnv(count, pairs, env = {}) {
     ...out,
   };
 }
-//@ chunk-sycgf9xs.js:8780-8948 placement
+//@ chunk-hb44av3w.js:8816-8984 placement
 var SSH_BATCH_CONFIG_ARGS = ["-c", "core.sshCommand=ssh -o BatchMode=yes -o StrictHostKeyChecking=yes"];
 var SSH_BATCH_STRICT_OPTIONS = "-o BatchMode=yes -o StrictHostKeyChecking=yes";
 var SSH_BATCH_OPTIONS = "-o BatchMode=yes";
 var PLINK_BATCH_OPTION = "-batch";
-//@ chunk-sycgf9xs.js:8948-9042 placement
+//@ chunk-hb44av3w.js:8984-9078 placement
 function sshBatchOptionsFor(variant, strictHostKeys) {
   switch (variant) {
     case "ssh":
@@ -276,12 +276,12 @@ function sshBatchOptionsFor(variant, strictHostKeys) {
       return;
   }
 }
-//@ chunk-sycgf9xs.js:9042-9174 placement
+//@ chunk-hb44av3w.js:9078-9210 placement
 function wrapWithCdCommand(dir, command) {
   let posixDir = getPlatform() === "windows" ? dir.replace(/\\/g, "/") : dir;
   return `CDPATH= cd -- ${shellQuoteArgs([posixDir])} 2>/dev/null || cd / || exit 1; ${command}`;
 }
-//@ chunk-sycgf9xs.js:9174-9238 placement
+//@ chunk-hb44av3w.js:9210-9274 placement
 /**
  * 取主目录，取不到时返回 "/"。
  */
@@ -292,7 +292,7 @@ function homeDirOrDefault() {
   } catch {}
   return isAbsolute(home) ? home : resolve("/");
 }
-//@ chunk-sycgf9xs.js:9238-9397 placement
+//@ chunk-hb44av3w.js:9274-9433 placement
 function resolveSshVariant(variant, command) {
   if (variant !== undefined && variant !== "auto") return variant;
   let replaced = quoteForShell(command)
@@ -300,7 +300,7 @@ function resolveSshVariant(variant, command) {
     .replace(/\.exe$/, "");
   return ["ssh", "plink", "tortoiseplink"].includes(replaced) ? replaced : "auto";
 }
-//@ chunk-sycgf9xs.js:9397-9775 placement
+//@ chunk-hb44av3w.js:9433-9811 placement
 function quoteForShell(command) {
   let plain = "";
   let quote;
@@ -327,7 +327,7 @@ function quoteForShell(command) {
       .at(-1) ?? ""
   );
 }
-//@ chunk-sycgf9xs.js:9775-9888 placement
+//@ chunk-hb44av3w.js:9811-9924 placement
 function withGitSshCommand(env, command) {
   return {
     ...env,
@@ -336,7 +336,7 @@ function withGitSshCommand(env, command) {
     GIT_SSH_COMMAND: command,
   };
 }
-//@ chunk-sycgf9xs.js:9888-10094 placement
+//@ chunk-hb44av3w.js:9924-10130 placement
 /**
  * 构造非交互的 git ssh 命令：从 GIT_SSH_COMMAND/GIT_SSH 或给定命令选出 ssh 程序，按变体（ssh/plink）追加 BatchMode（可选 StrictHostKeyChecking）或 -batch；已有 -batch 时不重复，返回命令与更新后的环境。
  */
@@ -357,7 +357,7 @@ function buildBatchSshCommand(env, command, { strictHostKeys = true } = {}) {
     env: withGitSshCommand(env, withOptions),
   };
 }
-//@ chunk-sycgf9xs.js:10094-10228 placement
+//@ chunk-hb44av3w.js:10130-10264 placement
 function chooseSshCommand(env, configured) {
   let command =
     safeSshVariant(getEnvVarCaseInsensitiveOnWindows(env, "GIT_SSH_COMMAND")) ?? safeSshVariant(configured);
@@ -367,7 +367,7 @@ function chooseSshCommand(env, configured) {
     named: command !== undefined ? firstShellWord(command) : program,
   };
 }
-//@ chunk-sycgf9xs.js:10228-10404 placement
+//@ chunk-hb44av3w.js:10264-10440 placement
 function unknownSshCommandVariant(env, configured) {
   let envVarCaseInsensitiveOnWindows = getEnvVarCaseInsensitiveOnWindows(env, "GIT_SSH_VARIANT");
   let { chosen, named } = chooseSshCommand(env, configured);
@@ -377,7 +377,7 @@ function unknownSshCommandVariant(env, configured) {
     ? chosen
     : undefined;
 }
-//@ chunk-sycgf9xs.js:10404-10760 placement
+//@ chunk-hb44av3w.js:10440-10796 placement
 async function readSshCommandConfig(env, runGit) {
   if (getPlatform() !== "windows") return env;
   let envVarCaseInsensitiveOnWindows = getEnvVarCaseInsensitiveOnWindows(env, "GIT_SSH_COMMAND");
@@ -395,11 +395,11 @@ async function readSshCommandConfig(env, runGit) {
     strictHostKeys: false,
   }).env;
 }
-//@ chunk-sycgf9xs.js:10760-10816 placement
+//@ chunk-hb44av3w.js:10796-10852 placement
 function safeSshVariant(value) {
   return value !== undefined && value.trim() !== "" ? value : undefined;
 }
-//@ chunk-sycgf9xs.js:10816-11029 placement
+//@ chunk-hb44av3w.js:10852-11065 placement
 function detectSshVariant(env, name) {
   let envVarCaseInsensitiveOnWindows = getEnvVarCaseInsensitiveOnWindows(env, "GIT_SSH_VARIANT");
   if (envVarCaseInsensitiveOnWindows !== undefined && envVarCaseInsensitiveOnWindows !== "auto")
@@ -411,23 +411,23 @@ function detectSshVariant(env, name) {
   let programName = normalizeSshProgramName(name);
   return programName === "ssh" || programName === "plink" ? programName : "other";
 }
-//@ chunk-sycgf9xs.js:11029-11118 placement
+//@ chunk-hb44av3w.js:11065-11154 placement
 function normalizeSshProgramName(name) {
   return basename(name.trim().replace(/\\/g, "/"))
     .toLowerCase()
     .replace(/\.exe$/, "");
 }
-//@ chunk-sycgf9xs.js:11118-11253 placement
+//@ chunk-hb44av3w.js:11154-11289 placement
 function hasPlinkBatchFlag(chosen) {
   let firstWord = chosen.trim().match(/^(?:"[^"]*"|'[^']*'|\S+)/)?.[0] ?? "";
   return /(?:^|\s)-batch(?:\s|$)/.test(chosen.trim().slice(firstWord.length));
 }
-//@ chunk-sycgf9xs.js:11253-11357 placement
+//@ chunk-hb44av3w.js:11289-11393 placement
 function firstShellWord(command) {
   let match = command.trim().match(/^(?:"([^"]*)"|'([^']*)'|(\S+))/);
   return match?.[1] ?? match?.[2] ?? match?.[3] ?? "";
 }
-//@ chunk-sycgf9xs.js:11357-11526 placement
+//@ chunk-hb44av3w.js:11393-11562 placement
 var DISABLED_GIT_PROTOCOL_ARGS = [
   "-c",
   "protocol.ext.allow=never",
@@ -440,7 +440,7 @@ var DISABLED_GIT_PROTOCOL_ARGS = [
   "-c",
   "protocol.ftps.allow=never",
 ];
-//@ chunk-sycgf9xs.js:11526-11618 placement
+//@ chunk-hb44av3w.js:11562-11654 placement
 function withoutAllowProtocolEnv(env) {
   return {
     ...env,
@@ -448,7 +448,7 @@ function withoutAllowProtocolEnv(env) {
     GIT_ALLOW_PROTOCOL: undefined,
   };
 }
-//@ chunk-sycgf9xs.js:11618-11825 placement
+//@ chunk-hb44av3w.js:11654-11861 placement
 function restrictGitProtocols(env) {
   let envVarCaseInsensitiveOnWindows = getEnvVarCaseInsensitiveOnWindows(env, "GIT_ALLOW_PROTOCOL");
   if (envVarCaseInsensitiveOnWindows === undefined) return [];
@@ -457,16 +457,16 @@ function restrictGitProtocols(env) {
     .filter((protocol) => !allowed.has(protocol))
     .flatMap((protocol) => ["-c", `protocol.${protocol}.allow=never`]);
 }
-//@ chunk-sycgf9xs.js:11825-11863 placement
+//@ chunk-hb44av3w.js:11861-11899 placement
 function FILE_REF_BACKEND_ARGS(env) {
   return [...DISABLED_GIT_PROTOCOL_ARGS, ...restrictGitProtocols(env)];
 }
-//@ chunk-sycgf9xs.js:11863-11943 placement
+//@ chunk-hb44av3w.js:11899-11979 placement
 var sameAsFileRefBackendArgs = ["-c", "init.defaultRefFormat=files"];
 var FILE_REF_BACKEND_ENV = {
   GIT_DEFAULT_REF_FORMAT: "files",
 };
-//@ chunk-sycgf9xs.js:11943-12347 placement
+//@ chunk-hb44av3w.js:11979-12383 placement
 function buildSshCommand(env = withGitNoPromptEnv(scrubbedGitEnv()), sshConfig) {
   let pinArgs = [...FILE_REF_BACKEND_ARGS(env), ...sameAsFileRefBackendArgs];
   let envVarCaseInsensitiveOnWindows = getEnvVarCaseInsensitiveOnWindows(env, "GIT_SSH_VARIANT");
@@ -499,7 +499,7 @@ function buildSshCommand(env = withGitNoPromptEnv(scrubbedGitEnv()), sshConfig) 
     },
   };
 }
-//@ chunk-sycgf9xs.js:12347-12480 placement
+//@ chunk-hb44av3w.js:12383-12516 placement
 function scrubbedGitEnv() {
   let locationVars = new Set(GIT_LOCATION_ENV_VARS);
   let env = process.env;
@@ -509,7 +509,7 @@ function scrubbedGitEnv() {
     ...Object.fromEntries([...locationVars].map((key) => [key, undefined])),
   };
 }
-//@ chunk-sycgf9xs.js:12480-12578 placement
+//@ chunk-hb44av3w.js:12516-12614 placement
 /**
  * 运行 git 时附加 GIT_CEILING_DIRECTORIES 的版本。
  */
@@ -523,7 +523,7 @@ function runGitWithCeilingDirs(dirPath, gitSshConfig) {
     },
   };
 }
-//@ chunk-sycgf9xs.js:12578-12705 placement
+//@ chunk-hb44av3w.js:12614-12741 placement
 function pickGitNoPromptEnv(env) {
   let picked = {};
   for (let key of [...Object.keys(GIT_NO_PROMPT_ENV), "GIT_CEILING_DIRECTORIES"]) {
@@ -532,7 +532,7 @@ function pickGitNoPromptEnv(env) {
   }
   return picked;
 }
-//@ chunk-sycgf9xs.js:12705-13184 placement
+//@ chunk-hb44av3w.js:12741-13220 placement
 function checkGitCeilingPath(path) {
   let resolved = rejectSeparatorPath(resolve(path));
   if (resolved === null)
@@ -542,7 +542,7 @@ function checkGitCeilingPath(path) {
     );
   return resolved;
 }
-//@ chunk-sycgf9xs.js:13184-13305 placement
+//@ chunk-hb44av3w.js:13220-13341 placement
 async function prepareGitWorkDir(dirPath, env) {
   let parentDir = dirname(dirPath);
   await mkdir(parentDir, {
@@ -557,17 +557,8 @@ async function prepareGitWorkDir(dirPath, env) {
   };
 }
 export {
-  withGitNoPromptEnv,
-  readSshCommandConfig,
-  runGitWithCeilingDirs,
-  SAFE_UPLOAD_PACK_ARG_2,
-  buildGitConfigEnv,
-  ALTERNATE_REFS_COMMAND,
-  preferHttpsGitTransport,
-  SSH_BATCH_CONFIG_ARGS,
-  prepareGitWorkDir,
-  pickGitNoPromptEnv,
   getEnvVarCaseInsensitiveOnWindows,
+  buildGitConfigEnv,
   buildBatchSshCommand,
   wrapWithCdCommand,
   homeDirOrDefault,
@@ -575,19 +566,29 @@ export {
   getGitSafetyConfigPairs,
   CLAUDE_CODE_FOUND_REPOSITORY_GIT,
   GitStartFolderError,
-  registerEnvReader,
-  formatGitErrorFrames,
-  resolveEnvRead,
-  unknownSshCommandVariant,
-  noPromptEnvDefaults,
-  SAFE_UPLOAD_PACK_ARG,
+  preferHttpsGitTransport,
+  runGitWithCeilingDirs,
+  SSH_BATCH_CONFIG_ARGS,
+  prepareGitWorkDir,
+  SAFE_UPLOAD_PACK_ARG_2,
+  pickGitNoPromptEnv,
+  ALTERNATE_REFS_COMMAND,
   LOG_SAFETY_CONFIG,
   MAINTENANCE_OFF_CONFIG,
   DIFF_SAFETY_CONFIG,
-  rejectSeparatorPath,
-  mapped,
+  withGitNoPromptEnv,
+  unknownSshCommandVariant,
+  noPromptEnvDefaults,
+  readSshCommandConfig,
+  SAFE_UPLOAD_PACK_ARG,
   buildGitInvocation,
+  resolveEnvRead,
+  rejectSeparatorPath,
+  registerEnvReader,
+  mapped,
+  envReaderHolder,
   hasEnvVar,
   NULL_HOOKS_PATH_PATTERN,
   nullDevicePath,
+  formatGitErrorFrames,
 };

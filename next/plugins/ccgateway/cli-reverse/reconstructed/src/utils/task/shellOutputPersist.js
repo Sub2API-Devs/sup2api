@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：shell 输出持久化
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (10)
  * attribution: placement 10
  */
 import { realpath } from "fs/promises";
@@ -26,30 +26,32 @@ import {
 import { telemetrySafeModelName } from "../model/telemetryModelName.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3098919-3098958 placement
+//@ chunk-5xgkngpb.js:3185307-3185346 placement
 var PERSIST_RETRYABLE_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3098919", () => {
+deferInit("chunk-5xgkngpb.js:3185307", () => {
   PERSIST_RETRYABLE_ERRNOS = new Set(["ELOOP", SOURCENOTREGULAR, SOURCESHARED, SOURCEOUTSIDE]);
 });
-//@ chunk-e6aww6q8.js:3098958-3099043 placement
+//@ chunk-5xgkngpb.js:3185346-3185431 placement
 function storageTelemetryCode(error) {
   return error.code === "Failed" && "telemetryCode" in error ? error.telemetryCode : undefined;
 }
-//@ chunk-e6aww6q8.js:3099043-3099933 placement
+//@ chunk-5xgkngpb.js:3185431-3186323 placement
 /**
  * 持久化后台 shell 输出文件。
  */
-async function persistShellOutput(taskId, requestId, path, maxBytes, taskOutputRootDir) {
-  let { handle, size } = await openVerifiedTaskOutput(path, maxBytes);
+async function persistShellOutput(taskId, requestId, outputFilePath, maxBytes, taskOutputRootDir) {
+  let { handle, size } = await openVerifiedTaskOutput(outputFilePath, maxBytes);
   await handle.close();
   let realRoot = await realpath(taskOutputRootDir).catch(() => {
     return;
   });
   if (realRoot === undefined) {
-    logForDebugging(`Shell output ${path}: its temp root could not be resolved; persisting it as today`);
+    logForDebugging(
+      `Shell output ${outputFilePath}: its temp root could not be resolved; persisting it as today`,
+    );
     return "today";
   }
-  let result = await taskId.writeFromFile(requestId, path, {
+  let result = await taskId.writeFromFile(requestId, outputFilePath, {
     mode: 438 & ~process.umask(),
     copy: true,
     growth: "prefix",
@@ -62,7 +64,7 @@ async function persistShellOutput(taskId, requestId, path, maxBytes, taskOutputR
   if (!result.ok) {
     let error = storageTelemetryCode(result.error);
     if (error !== undefined && PERSIST_RETRYABLE_ERRNOS.has(error)) {
-      let size = `shell output moved or replaced before it could be stored (${error}): ${path}`;
+      let size = `shell output moved or replaced before it could be stored (${error}): ${outputFilePath}`;
       logForDebugging(size, {
         level: "error",
       });
@@ -75,22 +77,22 @@ async function persistShellOutput(taskId, requestId, path, maxBytes, taskOutputR
       return;
     }
     logForDebugging(
-      `Shell output ${path} not taken by the storage interface (${formatStorageError(result.error)}); persisting it as today`,
+      `Shell output ${outputFilePath} not taken by the storage interface (${formatStorageError(result.error)}); persisting it as today`,
     );
     return "today";
   }
   let { bytes, grew, capped } = result.value;
   logForDebugging(
-    `Stored shell output ${path} through the storage interface (copied, ${bytes} bytes${capped ? ", capped" : ""}${grew ? ", grew while copied" : ""})`,
+    `Stored shell output ${outputFilePath} through the storage interface (copied, ${bytes} bytes${capped ? ", capped" : ""}${grew ? ", grew while copied" : ""})`,
   );
   return size;
 }
-//@ chunk-e6aww6q8.js:3099933-3099944 placement
+//@ chunk-5xgkngpb.js:3186323-3186334 placement
 /**
  * 阻塞式 sleep 检测时保留的首尾行数（25）。
  */
 var MAX_BLOCKED_SLEEP_LINES = 25;
-//@ chunk-e6aww6q8.js:3099944-3100122 placement
+//@ chunk-5xgkngpb.js:3186334-3186512 placement
 /**
  * 去掉文本首尾的空白行。
  */
@@ -105,16 +107,16 @@ function trimBlankEdgeLines(text) {
   return lines.slice(first, last + 1).join(`
 `);
 }
-//@ chunk-e6aww6q8.js:3100122-3100190 placement
+//@ chunk-5xgkngpb.js:3186512-3186580 placement
 /**
  * 是否 base64 图片 data URI。
  */
 function isBase64DataUri(uri) {
   return /^data:image\/[a-z0-9.+_-]+;base64,/i.test(uri);
 }
-//@ chunk-e6aww6q8.js:3100190-3100227 placement
+//@ chunk-5xgkngpb.js:3186580-3186617 placement
 var DATA_URI_RE = /^data:([^;]+);base64,(.+)$/;
-//@ chunk-e6aww6q8.js:3100227-3100334 placement
+//@ chunk-5xgkngpb.js:3186617-3186724 placement
 /**
  * 解析 data URI，取出媒体类型与数据（不匹配返回 null）。
  */
@@ -126,14 +128,14 @@ function parseDataUri(source) {
     data: match[2],
   };
 }
-//@ chunk-e6aww6q8.js:3104591-3104641 placement
+//@ chunk-5xgkngpb.js:3191111-3191161 placement
 /**
  * 取（已脱敏的）请求模型名。
  */
 function safeRequestedModelName(parentMessage, fallbackModel) {
   return telemetrySafeModelName(parentMessage?.requestedModel ?? fallbackModel);
 }
-//@ chunk-e6aww6q8.js:3104641-3105251 placement
+//@ chunk-5xgkngpb.js:3191161-3191771 placement
 function copyShellOutputFile(taskRegistry) {
   let pendingCopy;
   return {
@@ -168,11 +170,11 @@ function copyShellOutputFile(taskRegistry) {
   };
 }
 export {
+  persistShellOutput,
   MAX_BLOCKED_SLEEP_LINES,
   safeRequestedModelName,
   copyShellOutputFile,
-  trimBlankEdgeLines,
-  persistShellOutput,
   isBase64DataUri,
+  trimBlankEdgeLines,
   parseDataUri,
 };

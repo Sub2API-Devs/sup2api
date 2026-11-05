@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。子代理转录列表。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-51xseqzx.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2rq3z8nh.js (6)
  * attribution: placement 6
  */
 import { relative, sep, isAbsolute, join } from "path";
@@ -17,7 +17,7 @@ import { isStorageV5Enabled } from "./hoverRest.js";
 import { isENOENT } from "./errors.js";
 import { readAllPages } from "./pagedRead.js";
 
-//@ chunk-51xseqzx.js:535-689 placement
+//@ chunk-2rq3z8nh.js:535-689 placement
 function subagentPathParts(filePath) {
   let relativePath = relative(getProjectsDir(), filePath);
   if (
@@ -30,7 +30,7 @@ function subagentPathParts(filePath) {
   let parts = relativePath.split(sep);
   return parts.length < 4 || parts[2] !== "subagents" ? null : parts;
 }
-//@ chunk-51xseqzx.js:689-967 placement
+//@ chunk-2rq3z8nh.js:689-967 placement
 /**
  * 由子代理转录文件路径（.../agent-<id>.jsonl）推出存储键，路径格式不符时返回 null。
  */
@@ -48,7 +48,7 @@ function subagentTranscriptKey(filePath) {
   let key = STORAGE_SPACES.transcript(parts[0], parts[1], sliced, sliced_2.length > 0 ? sliced_2 : undefined);
   return validateStorageKey(key) === undefined ? key : null;
 }
-//@ chunk-51xseqzx.js:967-1418 placement
+//@ chunk-2rq3z8nh.js:967-1418 placement
 async function listSubagentTranscripts(rootDir, store, { rejectUnlistable: throwOnIncomplete = false } = {}) {
   let scope = isStorageV5Enabled() && store !== undefined ? subagentsScopeForDir(rootDir) : null;
   if (store !== undefined && scope !== null)
@@ -76,7 +76,7 @@ async function listSubagentTranscripts(rootDir, store, { rejectUnlistable: throw
   await walk(rootDir);
   return found;
 }
-//@ chunk-51xseqzx.js:1418-1675 placement
+//@ chunk-2rq3z8nh.js:1418-1675 placement
 function subagentsScopeForDir(dir) {
   let relativePath = relative(getProjectsDir(), dir);
   if (relativePath === "" || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath)) return null;
@@ -90,9 +90,9 @@ function subagentsScopeForDir(dir) {
   };
   return validateStorageScope(scope) === undefined ? scope : null;
 }
-//@ chunk-51xseqzx.js:1675-1685 placement
+//@ chunk-2rq3z8nh.js:1675-1685 placement
 var MAX_SUBAGENT_TRANSCRIPT_PAGES = 1e4;
-//@ chunk-51xseqzx.js:1685-2605 placement
+//@ chunk-2rq3z8nh.js:1685-2605 placement
 /**
  * 在存储 v5 中遍历某会话 transcript 作用域（含嵌套 agentRelPath）列出全部子代理转录，返回 {agentId, filePath}；超出页数上限或未读完时抛错或返回空（取决于 o）。
  */
@@ -163,4 +163,4 @@ async function listSubagentTranscripts_2(store, scope, subagentsDir, maxPages, t
   }
   return found;
 }
-export { subagentTranscriptKey, listSubagentTranscripts };
+export { listSubagentTranscripts, subagentTranscriptKey };

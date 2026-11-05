@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 工具被丢弃的附件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (4)
  * attribution: placement 4
  */
 import { normalizeMcpServerName } from "../../services/api/deferredToolsState.js";
@@ -15,26 +15,26 @@ import { buildMcpToolName } from "../../services/mcp/mcpStringUtils.js";
 import { getDenyRuleIndex, isToolDeniedByIndex } from "../permissions/permissions.js";
 import { logEvent } from "../../services/analytics/index.js";
 
-//@ chunk-e6aww6q8.js:3288241-3288316 placement
+//@ chunk-5xgkngpb.js:3373852-3373927 placement
 /**
  * 描述一个被丢弃的 MCP 工具（服务器、工具名与原因）。
  */
 function describeDroppedMcpTool(name, toolName, reason) {
   return `"${normalizeMcpServerName(toolName)}" (MCP server "${normalizeMcpServerName(name)}"): "${normalizeMcpServerName(reason)}"`;
 }
-//@ chunk-e6aww6q8.js:3288316-3288327 placement
+//@ chunk-5xgkngpb.js:3373927-3373938 placement
 /**
  * 逐条列出的被丢弃工具上限（30），超出改给汇总。
  */
 var MAX_LISTED_DROPPED_TOOLS = 30;
-//@ chunk-e6aww6q8.js:3288327-3288419 placement
+//@ chunk-5xgkngpb.js:3373938-3374030 placement
 /**
  * 汇总某 MCP 服务器被丢弃工具数量的说明。
  */
 function describeDroppedToolSummary(name, toolCount) {
   return `MCP server "${normalizeMcpServerName(name)}": ${toolCount} tools excluded (invalid input schema)`;
 }
-//@ chunk-e6aww6q8.js:3288419-3289161 placement
+//@ chunk-5xgkngpb.js:3374030-3374772 placement
 /**
  * 生成 MCP 工具被丢弃的增量附件。
  */

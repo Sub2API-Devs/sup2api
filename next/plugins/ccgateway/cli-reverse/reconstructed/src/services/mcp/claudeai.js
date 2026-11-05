@@ -3,10 +3,10 @@
  *
  * claude.ai 连接器（托管 MCP 服务器）的获取与代理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/claudeai.ts
- * pieces: chunk-0qx6sn4e.js (25)
- * attribution: placement 13, fingerprint 2, layout 9, file-local 1
+ * pieces: chunk-06vyq63w.js (29)
+ * attribution: placement 13, fingerprint 2, layout 13, file-local 1
  */
 import { getCliOwnedState } from "./cliOwnedClients.js";
 import { sequential } from "../../utils/sequential.js";
@@ -41,21 +41,33 @@ import {
 } from "./mcpClientCapabilities.js";
 import { isTransientNetworkError_2 } from "../../utils/teleport/api.js";
 import { backoffDelayMs, sleep } from "../../utils/sleep.js";
-import { CLAUDE_AI } from "./firstPartyServerIds.js";
-import { normalizeNameForMCP, CLAUDE_AI as CLAUDE_AI_2 } from "./normalization.js";
+import { ARTIFACTS_SERVER_NAME } from "./firstPartyServerIds.js";
+import { CLAUDEAI_SERVER_PREFIX, CLAUDE_AI } from "./normalization.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
+import { recordConnectors, dropConnectorIndex } from "../api/connectorFields.js";
 import { sanitizedConnectionCodeForTelemetry } from "../../utils/errors.js";
 import { saveGlobalConfig, getGlobalConfig } from "../../utils/config.js";
 import { stringArray } from "../../utils/collections.js";
+import {
+  enforcesGrants,
+  ownsLegacyKey,
+  isLegacyKeyUnclaimed,
+  mayRecordServerOwner,
+} from "./serverIdentity.js";
+import {
+  PROMPT_TOOL_ALLOW_IMITATOR_DENY_REASON,
+  PROMPT_TOOL_ALLOW_SHARED_NAME_DENY_REASON,
+  PROMPT_TOOL_ALLOW_REFUSED_GRANT_DENY_REASON,
+} from "../../types/permissions.js";
 
-//@ chunk-0qx6sn4e.js:3725-3798 placement
+//@ chunk-06vyq63w.js:3403-3476 placement
 /**
  * 该服务器是否记录过 claude.ai 配置拉取的暂时失败。
  */
 function hasTransientConfigFailure(flag) {
   return getCliOwnedState().claudeAiConfigsFetchTransientFailures.has(flag);
 }
-//@ chunk-0qx6sn4e.js:3798-3890 placement
+//@ chunk-06vyq63w.js:3476-3568 placement
 /**
  * 取出并清空待显示的跨组织提示。
  */
@@ -65,7 +77,7 @@ function takePendingCrossOrgNotice() {
   cliOwnedState.pendingCrossOrgNotice = undefined;
   return pendingCrossOrgNotice;
 }
-//@ chunk-0qx6sn4e.js:3890-4035 placement
+//@ chunk-06vyq63w.js:3568-3713 placement
 /**
  * 把 claude.ai 连接器的通知（错误或警告）写到标准错误。
  */
@@ -77,7 +89,7 @@ function printClaudeAiConnectorNotice() {
   process.stderr.write(`${line}
 `);
 }
-//@ chunk-0qx6sn4e.js:4035-4271 placement
+//@ chunk-06vyq63w.js:3713-3949 placement
 function connectorMaxPermissions(tools) {
   let permissions = Object.create(null);
   for (let tool of tools ?? []) {
@@ -87,7 +99,7 @@ function connectorMaxPermissions(tools) {
   }
   return Object.keys(permissions).length > 0 ? permissions : undefined;
 }
-//@ chunk-0qx6sn4e.js:4271-4347 placement
+//@ chunk-06vyq63w.js:3949-4025 placement
 /**
  * 规范化 URL（去掉结尾斜杠），解析失败原样返回。
  */
@@ -98,7 +110,7 @@ function normalizeUrlNoTrailingSlash(url) {
     return url;
   }
 }
-//@ chunk-0qx6sn4e.js:4347-4466 placement
+//@ chunk-06vyq63w.js:4025-4143 placement
 /**
  * 获取 claude.ai 连接器配置，同一会话内只发起一次请求。
  */
@@ -108,7 +120,7 @@ function fetchClaudeAiConfigsOnce(credentials) {
     cliOwnedState.claudeAiConfigsFetch = fetchClaudeAIMcpConfigsIfEligible(credentials);
   return cliOwnedState.claudeAiConfigsFetch;
 }
-//@ chunk-0qx6sn4e.js:4466-9777 fingerprint (2.1.88 match: fetchClaudeAIMcpConfigsIfEligible, 0.42)
+//@ chunk-06vyq63w.js:4143-9517 fingerprint (2.1.88 match: fetchClaudeAIMcpConfigsIfEligible, 0.416)
 /**
  * fetchClaudeAIMcpConfigsIfEligible：拉取 claude.ai 组织连接器列表（GET {BASE_API_URL}/v1/mcp_servers?limit=1000&include_additional_installs=true）。依次检查 ENABLE_CLAUDEAI_MCP_SERVERS、disableClaudeAiConnectors、安全模式、一方提供商、API key 优先、user:mcp_servers 作用域；瞬时错误按退避重试，非 401/429 错误时去掉 include_additional_installs 再试一次。结果转成 "claude.ai <显示名>" 的 claudeai-proxy 配置（含 stateless、cached_init/discover、discoverSupport 等），显示名冲突加 (2)。
  */
@@ -261,7 +273,7 @@ async function fetchClaudeAIMcpConfigsIfEligible(credentials) {
       usedNormalizedNames.set(normalizedUrl, server);
     }
     let configs = {};
-    let usedNormalized = new Set([CLAUDE_AI]);
+    let usedNormalized = new Set([ARTIFACTS_SERVER_NAME]);
     additionalInstalls.sort(
       (left, right) =>
         (Date.parse(left.created_at) || 0) - (Date.parse(right.created_at) || 0) ||
@@ -270,12 +282,12 @@ async function fetchClaudeAIMcpConfigsIfEligible(credentials) {
     for (let server of [...usedNormalizedNames.values(), ...additionalInstalls]) {
       let baseName = `claude.ai ${server.display_name}`;
       let finalName = baseName;
-      let finalNormalized = normalizeNameForMCP(finalName);
+      let finalNormalized = CLAUDEAI_SERVER_PREFIX(finalName);
       let count = 1;
       while (usedNormalized.has(finalNormalized)) {
         count++;
         finalName = `${baseName} (${count})`;
-        finalNormalized = normalizeNameForMCP(finalName);
+        finalNormalized = CLAUDEAI_SERVER_PREFIX(finalName);
       }
       if (count > 1)
         logForDebugging(
@@ -285,6 +297,9 @@ async function fetchClaudeAIMcpConfigsIfEligible(credentials) {
       configs[finalName] = {
         type: "claudeai-proxy",
         url: server.url,
+        ...(server.url_reportable === true && {
+          urlReportable: true,
+        }),
         id: server.id,
         displayName: server.display_name,
         iconUrl: server.icon_url,
@@ -315,6 +330,7 @@ async function fetchClaudeAIMcpConfigsIfEligible(credentials) {
         response.data.data,
         usedNormalizedNames,
       );
+      recordConnectors(connectorServers(response.data.data));
       state.claudeAiConnectorListStatus = "settled";
       state.claudeAiConnectorListSettledSeq = fetchSeq;
       settled = true;
@@ -358,7 +374,7 @@ async function fetchClaudeAIMcpConfigsIfEligible(credentials) {
       state.claudeAiConnectorListStatus = "unavailable";
   }
 }
-//@ chunk-0qx6sn4e.js:9777-10132 layout
+//@ chunk-06vyq63w.js:9517-9872 layout
 /**
  * buildConnectorIdIndex：建立连接器 id → {name, config, siblingIds} 索引，additional_install 条目按相同上游 URL 挂到主连接器下。
  */
@@ -387,7 +403,7 @@ function buildConnectorIdIndex(configs, listedServers, primaryByUrl) {
   }
   return index;
 }
-//@ chunk-0qx6sn4e.js:10132-10217 layout
+//@ chunk-06vyq63w.js:9872-9957 layout
 /**
  * 清空 claude.ai 连接器列表的进行中请求缓存与待显示的跨组织提示，使下次重新拉取。
  */
@@ -396,7 +412,7 @@ function clearClaudeAiConfigsFetch() {
   cliOwnedState.claudeAiConfigsFetch = null;
   cliOwnedState.pendingCrossOrgNotice = undefined;
 }
-//@ chunk-0qx6sn4e.js:10217-10495 layout
+//@ chunk-06vyq63w.js:9957-10235 layout
 /**
  * lookupClaudeAiConnectorById：按连接器 id 查索引，列表未就绪返回 pending/unavailable，找不到返回 absent。
  */
@@ -421,7 +437,7 @@ function lookupClaudeAiConnectorById(id) {
         ...entry,
       };
 }
-//@ chunk-0qx6sn4e.js:10495-10610 layout
+//@ chunk-06vyq63w.js:10235-10350 layout
 /**
  * 把 claude.ai 连接器列表状态标为 unavailable（已 settled 的不覆盖），用于拉取失败时让界面显示不可用。
  */
@@ -430,18 +446,19 @@ function markConnectorListUnavailable() {
   if (cliOwnedState.claudeAiConnectorListStatus !== "settled")
     cliOwnedState.claudeAiConnectorListStatus = "unavailable";
 }
-//@ chunk-0qx6sn4e.js:10610-10782 layout
+//@ chunk-06vyq63w.js:10350-10528 layout
 /**
  * resetConnectorIdIndex：清空连接器索引并把状态置回 pending，代际 +1。
  */
 function resetConnectorIdIndex() {
   let cliOwnedState = getCliOwnedState();
+  dropConnectorIndex();
   cliOwnedState.claudeAiConnectorIdIndex = undefined;
   cliOwnedState.claudeAiConnectorListStatus = "pending";
   cliOwnedState.claudeAiConnectorListSettledSeq = 0;
   cliOwnedState.claudeAiConnectorListGeneration += 1;
 }
-//@ chunk-0qx6sn4e.js:10782-10938 file-local
+//@ chunk-06vyq63w.js:10528-10684 file-local
 /**
  * recordClaudeAiMcpConnected：记入本会话已连接集合，并持久化到全局配置 claudeAiMcpEverConnected。
  */
@@ -456,14 +473,14 @@ function recordClaudeAiMcpConnected(name, storageV5) {
     };
   }, storageV5);
 }
-//@ chunk-0qx6sn4e.js:10938-11002 layout
+//@ chunk-06vyq63w.js:10684-10748 layout
 /**
  * isClaudeAiMcpConnectedThisSession：本会话是否连上过该 claude.ai 连接器。
  */
 function isClaudeAiMcpConnectedThisSession(serverName) {
   return getCliOwnedState().claudeAiConnectedThisSession.has(serverName);
 }
-//@ chunk-0qx6sn4e.js:11002-11064 layout
+//@ chunk-06vyq63w.js:10748-10810 layout
 /**
  * 清空"本会话已连接过的 claude.ai 连接器"集合并重置连接器 id 索引（登录账号切换等场景）。
  */
@@ -471,36 +488,53 @@ function resetClaudeAiSessionConnections() {
   getCliOwnedState().claudeAiConnectedThisSession.clear();
   resetConnectorIdIndex();
 }
-//@ chunk-0qx6sn4e.js:11064-11107 layout
+//@ chunk-06vyq63w.js:10810-10853 layout
 /**
  * hasClaudeAiMcpEverConnected：全局配置里是否记录该连接器曾连接过。
  */
 function hasClaudeAiMcpEverConnected(name) {
   return getEverConnectedClaudeAiMcps(getGlobalConfig()).includes(name);
 }
-//@ chunk-0qx6sn4e.js:11107-11146 layout
+//@ chunk-06vyq63w.js:10853-10892 layout
 /**
  * 返回全局配置中记录的"曾经连上过的 claude.ai 连接器"名字集合（Set）。
  */
 function getEverConnectedClaudeAiMcpSet() {
   return new Set(getEverConnectedClaudeAiMcps(getGlobalConfig()));
 }
-//@ chunk-0qx6sn4e.js:11146-11198 fingerprint (2.1.88 match: markClaudeAiMcpConnected, 1)
+//@ chunk-06vyq63w.js:10892-10944 fingerprint (2.1.88 match: markClaudeAiMcpConnected, 1)
 function getEverConnectedClaudeAiMcps(name) {
   return stringArray(name.claudeAiMcpEverConnected);
 }
-//@ chunk-0qx6sn4e.js:11198-11267 placement
+//@ chunk-06vyq63w.js:10944-11012 placement
 function getConnectorsSettingsUrl() {
   return `${getOauthConfig().CLAUDE_AI_ORIGIN}/customize/connectors`;
 }
-//@ chunk-0qx6sn4e.js:11267-11357 placement
+//@ chunk-06vyq63w.js:11012-11105 layout
+function connectorsSettingsUrlFor(needed) {
+  let uRLSearchParams = new URLSearchParams({
+    needed,
+    return: "terminal",
+  });
+  return `${getConnectorsSettingsUrl()}?${uRLSearchParams}`;
+}
+//@ chunk-06vyq63w.js:11105-11233 layout
+function addConnectorUrl(connectorName, connectorUrl) {
+  let uRLSearchParams = new URLSearchParams({
+    modal: "add-custom-connector",
+    connectorName,
+    connectorUrl,
+  });
+  return `${getConnectorsSettingsUrl()}?${uRLSearchParams}`;
+}
+//@ chunk-06vyq63w.js:11233-11323 placement
 /**
  * 把 mcprs 前缀的连接器 id 改成 mcpsrv。
  */
 function normalizeConnectorId(id) {
   return typeof id === "string" && id.startsWith("mcprs") ? `mcpsrv${id.slice(5)}` : id;
 }
-//@ chunk-0qx6sn4e.js:11357-11450 placement
+//@ chunk-06vyq63w.js:11323-11416 placement
 /**
  * 取 claude.ai 代理配置的连接器 id（非 claude.ai 作用域返回 undefined）。
  */
@@ -509,30 +543,53 @@ function connectorServerId(config) {
     ? normalizeConnectorId(config.id)
     : undefined;
 }
-//@ chunk-0qx6sn4e.js:11450-11691 placement
+//@ chunk-06vyq63w.js:11416-11734 layout
+function connectorServers(server) {
+  return server.flatMap((server) => {
+    if (typeof server.id !== "string" || server.id === "") return [];
+    let ids =
+      typeof server.directory_entry_id === "string" && server.directory_entry_id !== ""
+        ? server.directory_entry_id
+        : undefined;
+    return [
+      {
+        id: normalizeConnectorId(server.id),
+        ...(ids !== undefined && {
+          directoryEntry: ids,
+        }),
+        ...(ids !== undefined &&
+          server.url_reportable === true &&
+          typeof server.url === "string" && {
+            url: server.url,
+          }),
+      },
+    ];
+  });
+}
+//@ chunk-06vyq63w.js:11734-11974 placement
 /**
  * 生成 claude.ai 连接器的授权地址（组织 id、连接器 id 与产品入口）。
  */
-function claudeAiConnectorAuthUrl(config) {
+function claudeAiConnectorAuthUrl(connectorAuthUrl) {
   let organizationUuid = getOauthAccountInfo()?.organizationUuid;
-  if (!organizationUuid || !config.id) return null;
+  if (!organizationUuid || !connectorAuthUrl.id) return null;
   let CLAUDE_AI_ORIGIN = getOauthConfig().CLAUDE_AI_ORIGIN;
-  let connectorId = normalizeConnectorId(config.id);
+  let connectorId = normalizeConnectorId(connectorAuthUrl.id);
   let encoded = encodeURIComponent(env.CLAUDE_CODE_ENTRYPOINT || "cli");
   return `${CLAUDE_AI_ORIGIN}/api/organizations/${organizationUuid}/mcp/start-auth/${connectorId}?product_surface=${encoded}`;
 }
-//@ chunk-0qx6sn4e.js:11691-11769 placement
+//@ chunk-06vyq63w.js:11974-12052 placement
 /**
  * 判断该工具是否需要连接器授权。
  */
 function requiresConnectorGrant(serverName, config) {
   return (
-    normalizeNameForMCP(serverName).startsWith(CLAUDE_AI_2) &&
+    CLAUDEAI_SERVER_PREFIX(serverName).startsWith(CLAUDE_AI) &&
     config.scope !== "claudeai" &&
     !isMintedDynamicServer(serverName, config)
   );
 }
-//@ chunk-0qx6sn4e.js:11769-11979 placement
+//@ chunk-06vyq63w.js:12052-12351 placement
 /**
  * 判断 MCP 工具调用是否需要连接器授权：旧授权被拒（插件来源或未豁免），或服务器需要逐次授权。
  */
@@ -540,12 +597,25 @@ function requiresConnectorGrant_2(tool) {
   return (
     tool.mcpInfo !== undefined &&
     tool.mcpInfo.isAuthStub !== true &&
-    ((tool.mcpInfo.legacyGrantRefused === true &&
-      (tool.mcpInfo.source === "plugin" || !isMintedDynamicServer(tool.mcpInfo.serverName, tool.mcpInfo))) ||
+    (tool.mcpInfo.toolNameShared === true ||
+      (enforcesGrants() &&
+        ((tool.mcpInfo.legacyGrantRefused === true && !ownsLegacyKey(tool.mcpInfo)) ||
+          isLegacyKeyUnclaimed(tool.mcpInfo) ||
+          mayRecordServerOwner(tool.mcpInfo)) &&
+        (tool.mcpInfo.source === "plugin" ||
+          !isMintedDynamicServer(tool.mcpInfo.serverName, tool.mcpInfo))) ||
       requiresConnectorGrant(tool.mcpInfo.serverName, tool.mcpInfo))
   );
 }
-//@ chunk-0qx6sn4e.js:11979-12047 placement
+//@ chunk-06vyq63w.js:12351-12482 layout
+function promptToolAllowDenyReason(tool) {
+  if (tool.mcpInfo !== undefined && requiresConnectorGrant(tool.mcpInfo.serverName, tool.mcpInfo))
+    return PROMPT_TOOL_ALLOW_IMITATOR_DENY_REASON;
+  return tool.mcpInfo?.toolNameShared === true
+    ? PROMPT_TOOL_ALLOW_SHARED_NAME_DENY_REASON
+    : PROMPT_TOOL_ALLOW_REFUSED_GRANT_DENY_REASON;
+}
+//@ chunk-06vyq63w.js:12482-12550 placement
 /**
  * 判断是否为已铸币（minted）的动态服务器。
  */
@@ -554,14 +624,17 @@ function isMintedDynamicServer(serverName, config) {
 }
 export {
   requiresConnectorGrant_2,
+  requiresConnectorGrant,
+  connectorServerId,
+  isMintedDynamicServer,
+  claudeAiConnectorAuthUrl,
+  promptToolAllowDenyReason,
+  recordClaudeAiMcpConnected,
   normalizeConnectorId,
+  getEverConnectedClaudeAiMcpSet,
   lookupClaudeAiConnectorById,
   fetchClaudeAiConfigsOnce,
   printClaudeAiConnectorNotice,
-  requiresConnectorGrant,
-  connectorServerId,
-  recordClaudeAiMcpConnected,
-  claudeAiConnectorAuthUrl,
   hasClaudeAiMcpEverConnected,
   isClaudeAiMcpConnectedThisSession,
   markConnectorListUnavailable,
@@ -569,7 +642,7 @@ export {
   resetClaudeAiSessionConnections,
   hasTransientConfigFailure,
   takePendingCrossOrgNotice,
-  getEverConnectedClaudeAiMcpSet,
   getConnectorsSettingsUrl,
-  isMintedDynamicServer,
+  connectorsSettingsUrlFor,
+  addConnectorUrl,
 };

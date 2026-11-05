@@ -3,14 +3,14 @@
  *
  * 并入已有模块：从 MCP 配置的 tools 字段收集 allow/deny/ask 规则；替换或追加权限上下文中的 mcpServerPolicy等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/mcpStringUtils.ts
- * pieces: chunk-6mwt0myy.js (15), chunk-e6aww6q8.js (1), chunk-gz7b768t.js (3)
- * attribution: fingerprint 3, callgraph-witnessed 1, shared-adjacent 1, placement 9, layout 1, callgraph-fingerprint 1, affinity 1, facade-majority 2
+ * pieces: chunk-5xgkngpb.js (1), chunk-c378z4w4.js (3), chunk-evj8g37g.js (17)
+ * attribution: placement 14, fingerprint 1, layout 3, callgraph-witnessed 1, shared-adjacent 2
  */
-import { normalizeNameForMCP } from "./normalization.js";
+import { CLAUDEAI_SERVER_PREFIX } from "./normalization.js";
 import { parseToolPolicyEntry, isServerIdentityActive, denyOrAskNamesFor } from "./serverIdentity.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { REMOTE_BROWSER_SERVER_NAME } from "./remoteBrowserServer.js";
 import { isAutoModeCircuitBroken } from "../../utils/permissions/autoModeState.js";
 import { isCoworkAny } from "../../utils/entrypointKinds.js";
@@ -20,9 +20,9 @@ import { isRemoteBrowserClassifierEnabled } from "../../utils/permissions/classi
 import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6mwt0myy.js:18150-18165 fingerprint (2.1.88 match: getMcpPrefix, 1)
+//@ chunk-evj8g37g.js:19896-19911 placement
 var MCP_TOOL_PREFIX = "mcp__";
-//@ chunk-6mwt0myy.js:18165-18311 fingerprint (2.1.88 match: mcpInfoFromString, 1)
+//@ chunk-evj8g37g.js:19911-20057 fingerprint (2.1.88 match: mcpInfoFromString, 1)
 /**
  * mcpInfoFromString：把 mcp__server__tool 拆成 {serverName, toolName}（工具名可含 __），不是 mcp 前缀返回 null。
  */
@@ -36,14 +36,23 @@ function mcpInfoFromString(toolString) {
     toolName,
   };
 }
-//@ chunk-6mwt0myy.js:18311-18350 callgraph-witnessed (2.1.88 match: buildMcpToolName, 0)
+//@ chunk-evj8g37g.js:20057-20188 layout
+function isServerToolName(serverName, name) {
+  let info = mcpInfoFromString(name);
+  return (
+    info?.serverName === serverName &&
+    info.toolName !== undefined &&
+    /^[A-Za-z0-9-]+(?:_[A-Za-z0-9-]+)*$/.test(info.toolName)
+  );
+}
+//@ chunk-evj8g37g.js:20188-20227 callgraph-witnessed (2.1.88 match: buildMcpToolName, 0)
 /**
  * getMcpPrefix：mcp__<规范化服务器名>__。
  */
 function getMcpPrefix(serverName) {
-  return `${MCP_TOOL_PREFIX}${normalizeNameForMCP(serverName)}__`;
+  return `${MCP_TOOL_PREFIX}${CLAUDEAI_SERVER_PREFIX(serverName)}__`;
 }
-//@ chunk-6mwt0myy.js:18350-18470 shared-adjacent (2.1.88 match: getToolNameForPermissionCheck, 1)
+//@ chunk-evj8g37g.js:20227-20347 layout (2.1.88 match: getToolNameForPermissionCheck, 1)
 /**
  * isToolFromMcpServer：工具 mcpInfo.serverName 等于给定名，或名字以该服务器前缀开头。
  */
@@ -51,25 +60,29 @@ function isToolFromMcpServer(tool, serverName, toolPrefix) {
   if (tool.mcpInfo?.serverName !== undefined) return tool.mcpInfo.serverName === serverName;
   return tool.name.startsWith(toolPrefix ?? getMcpPrefix(serverName));
 }
-//@ chunk-6mwt0myy.js:18527-18630 placement
+//@ chunk-evj8g37g.js:20347-20404 layout
+function getPrefixServerKey(name) {
+  return mcpInfoFromString(`${getMcpPrefix(name)}x`)?.serverName ?? CLAUDEAI_SERVER_PREFIX(name);
+}
+//@ chunk-evj8g37g.js:20404-20507 placement
 function matchesListedOrParsedServer(name, { listedServer, parsedServer }) {
   if (listedServer !== undefined) return name === listedServer;
   return parsedServer !== undefined && isSameMcpServerName(parsedServer, name);
 }
-//@ chunk-6mwt0myy.js:18630-18672 placement
+//@ chunk-evj8g37g.js:20507-20549 placement
 /**
  * 拼接 mcp__服务器__工具 名。
  */
 function buildMcpToolName(serverName, toolName) {
-  return `${getMcpPrefix(serverName)}${normalizeNameForMCP(toolName)}`;
+  return `${getMcpPrefix(serverName)}${CLAUDEAI_SERVER_PREFIX(toolName)}`;
 }
-//@ chunk-6mwt0myy.js:18672-18722 placement
+//@ chunk-evj8g37g.js:20549-20599 placement
 var PERMISSION_POLICY_RANK = {
   always_allow: 0,
   always_ask: 1,
   always_deny: 2,
 };
-//@ chunk-6mwt0myy.js:18722-19287 placement
+//@ chunk-evj8g37g.js:20599-21164 placement (2.1.88 match: TransportSchema, 0.383)
 /**
  * 从 MCP 配置的 tools 字段收集 allow/deny/ask 规则。
  */
@@ -110,7 +123,7 @@ function collectServerToolPolicies(...configSets) {
     ask,
   };
 }
-//@ chunk-6mwt0myy.js:19287-19719 placement
+//@ chunk-evj8g37g.js:21164-21596 placement
 /**
  * 把动态 MCP 服务器的工具策略合并进权限上下文。
  */
@@ -142,11 +155,11 @@ function applyDynamicServerToolPolicies(toolPermissionContext, configs) {
     },
   };
 }
-//@ chunk-6mwt0myy.js:19719-20222 placement
+//@ chunk-evj8g37g.js:21596-22099 placement
 /**
  * 替换或追加权限上下文中的 mcpServerPolicy。
  */
-function mergeMcpServerPolicyRules(toolPermissionContext, policies, mode) {
+function mergeMcpServerPolicyRules(serverName, policies, mode) {
   let mergeInto = (ruleset, names) => {
     let mcpServerPolicy = ruleset.mcpServerPolicy ?? [];
     let merged =
@@ -167,30 +180,30 @@ function mergeMcpServerPolicyRules(toolPermissionContext, policies, mode) {
       mcpServerPolicy: merged,
     };
   };
-  let allowRules = mergeInto(toolPermissionContext.alwaysAllowRules, policies.allow);
-  let denyRules = mergeInto(toolPermissionContext.alwaysDenyRules, policies.deny);
-  let askRules = mergeInto(toolPermissionContext.alwaysAskRules, policies.ask);
+  let allowRules = mergeInto(serverName.alwaysAllowRules, policies.allow);
+  let denyRules = mergeInto(serverName.alwaysDenyRules, policies.deny);
+  let askRules = mergeInto(serverName.alwaysAskRules, policies.ask);
   if (
-    allowRules === toolPermissionContext.alwaysAllowRules &&
-    denyRules === toolPermissionContext.alwaysDenyRules &&
-    askRules === toolPermissionContext.alwaysAskRules
+    allowRules === serverName.alwaysAllowRules &&
+    denyRules === serverName.alwaysDenyRules &&
+    askRules === serverName.alwaysAskRules
   )
-    return toolPermissionContext;
+    return serverName;
   return {
-    ...toolPermissionContext,
+    ...serverName,
     alwaysAllowRules: allowRules,
     alwaysDenyRules: denyRules,
     alwaysAskRules: askRules,
   };
 }
-//@ chunk-6mwt0myy.js:20222-20305 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
+//@ chunk-evj8g37g.js:22099-22182 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 /**
  * 工具的完整名（MCP 工具带前缀）。
  */
 function getToolNameForPermissionCheck(tool) {
   return tool.mcpInfo ? buildMcpToolName(tool.mcpInfo.serverName, tool.mcpInfo.toolName) : tool.name;
 }
-//@ chunk-6mwt0myy.js:20305-20569 placement
+//@ chunk-evj8g37g.js:22182-22446 placement
 /**
  * getMcpToolAliasNames：工具在标准键/拒绝键等别名服务器名下的完整名字，用于规则匹配。
  */
@@ -198,22 +211,22 @@ function getMcpToolAliasNames(tool) {
   if (!tool.mcpInfo || !isServerIdentityActive()) return [];
   let toolName = getToolNameForPermissionCheck(tool);
   let ruleNames = denyOrAskNamesFor(toolName);
-  let prefix = `${MCP_TOOL_PREFIX}${normalizeNameForMCP(tool.mcpInfo.serverName)}__`;
+  let prefix = `${MCP_TOOL_PREFIX}${CLAUDEAI_SERVER_PREFIX(tool.mcpInfo.serverName)}__`;
   let sliced = toolName.slice(prefix.length);
   let flattened = [tool.mcpInfo.standardKey?.key, tool.mcpInfo.denyKey].flatMap((keyName) =>
     keyName === undefined ? [] : [`${MCP_TOOL_PREFIX}${keyName}__${sliced}`],
   );
-  return uniq([...ruleNames, ...flattened]).filter((alias) => alias !== toolName);
+  return normalizeCaseForComparison_2([...ruleNames, ...flattened]).filter((alias) => alias !== toolName);
 }
-//@ chunk-6mwt0myy.js:20569-20634 layout (2.1.88 match: getMcpPrefix, 1)
+//@ chunk-evj8g37g.js:22446-22511 shared-adjacent (2.1.88 match: getMcpPrefix, 1)
 /**
  * getMcpDisplayName：去掉 mcp__server__ 前缀得到工具显示名。
  */
 function getMcpDisplayName(fullName, serverName) {
-  let prefix = `mcp__${normalizeNameForMCP(serverName)}__`;
+  let prefix = `mcp__${CLAUDEAI_SERVER_PREFIX(serverName)}__`;
   return fullName.replace(prefix, "");
 }
-//@ chunk-6mwt0myy.js:20634-20771 fingerprint (2.1.88 match: extractMcpToolDisplayName, 1)
+//@ chunk-evj8g37g.js:22511-22648 shared-adjacent (2.1.88 match: extractMcpToolDisplayName, 1)
 /**
  * extractMcpToolDisplayName：从 "server - Tool (MCP)" 形式的用户可见名取出工具部分。
  */
@@ -224,24 +237,24 @@ function extractMcpToolDisplayName(userFacingName) {
   if (dashIndex !== -1) return withoutSuffix.substring(dashIndex + 3).trim();
   return withoutSuffix;
 }
-//@ chunk-6mwt0myy.js:21056-21160 placement (2.1.88 match: addPluginScopeToLspServers, 0.709)
+//@ chunk-evj8g37g.js:22933-23037 placement
 /**
  * isSameMcpServerName：plugin: 名精确比较，其他比较规范化名。
  */
-function isSameMcpServerName(servers, pluginName) {
-  if (servers.startsWith("plugin:") || pluginName.startsWith("plugin:")) return servers === pluginName;
-  return normalizeNameForMCP(servers) === normalizeNameForMCP(pluginName);
+function isSameMcpServerName(name, serverName) {
+  if (name.startsWith("plugin:") || serverName.startsWith("plugin:")) return name === serverName;
+  return CLAUDEAI_SERVER_PREFIX(name) === CLAUDEAI_SERVER_PREFIX(serverName);
 }
-//@ chunk-gz7b768t.js:5309-5540 affinity
+//@ chunk-c378z4w4.js:5309-5540 placement
 var BROWSER_READ_TOOL_ARGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-gz7b768t.js:5309", () => {
+deferInit("chunk-c378z4w4.js:5309", () => {
   BROWSER_READ_TOOL_ARGS = new Map([
     ["browser_take_screenshot", new Set(["type", "fullPage", "scale", "region"])],
     ["browser_snapshot", new Set(["ref", "depth", "filter", "find", "max_chars", "offset"])],
     ["browser_wait_for", new Set(["time", "text", "textGone"])],
   ]);
 });
-//@ chunk-gz7b768t.js:5540-5877 facade-majority
+//@ chunk-c378z4w4.js:5540-5877 placement
 /**
  * （归属疑误：权限/auto 模式）remote-browser 截图类工具在 auto 模式下可由分类器自动批准的判定。
  */
@@ -268,13 +281,13 @@ function isRemoteBrowserReadWithoutClassifier(tool, input, toolPermissionContext
     isRemoteBrowserClassifierEnabled()
   );
 }
-//@ chunk-gz7b768t.js:6058-6271 facade-majority
+//@ chunk-c378z4w4.js:6058-6271 placement
 /**
  * （归属疑误：权限）remote-browser 工具只能由模型调用的拒绝消息。
  */
 var REMOTE_BROWSER_OUTSIDE_CHECKS_REFUSED =
   "Tools of MCP server 'remote-browser' (the cloud browser) can only be called by the model in this session, where each call gets auto mode's safety check or a person's approval; this call would skip both.";
-//@ chunk-e6aww6q8.js:993330-993627 callgraph-fingerprint (2.1.88 match: getMcpDisplayName, 0.535)
+//@ chunk-5xgkngpb.js:1007095-1007392 placement
 /**
  * resolveMcpConnectionForTool：按工具名找对应服务器连接；多个同规范化名的已连接服务器时返回 ambiguous。
  */
@@ -290,7 +303,9 @@ function resolveMcpConnectionForTool(fullName, serverName) {
       connection: undefined,
       ambiguous: false,
     };
-  let filtered = serverName.filter((candidate) => normalizeNameForMCP(candidate.name) === mcpInfo.serverName);
+  let filtered = serverName.filter(
+    (candidate) => CLAUDEAI_SERVER_PREFIX(candidate.name) === mcpInfo.serverName,
+  );
   let filtered_2 = filtered.filter(isConnectedOrCached);
   if (filtered_2.length > 1)
     return {
@@ -303,21 +318,23 @@ function resolveMcpConnectionForTool(fullName, serverName) {
   };
 }
 export {
-  getMcpPrefix,
-  mcpInfoFromString,
   buildMcpToolName,
   MCP_TOOL_PREFIX,
   getToolNameForPermissionCheck,
+  mcpInfoFromString,
   getMcpToolAliasNames,
   isRemoteBrowserReadWithoutClassifier,
+  getMcpPrefix,
+  getPrefixServerKey,
   isToolFromMcpServer,
   collectServerToolPolicies,
   mergeMcpServerPolicyRules,
   matchesListedOrParsedServer,
-  applyDynamicServerToolPolicies,
-  isSameMcpServerName,
-  resolveMcpConnectionForTool,
   REMOTE_BROWSER_OUTSIDE_CHECKS_REFUSED,
+  resolveMcpConnectionForTool,
+  isSameMcpServerName,
+  isServerToolName,
+  applyDynamicServerToolPolicies,
   getMcpDisplayName,
   extractMcpToolDisplayName,
 };

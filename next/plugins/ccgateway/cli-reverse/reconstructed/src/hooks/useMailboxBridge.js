@@ -3,9 +3,9 @@
  *
  * 把 mailbox 消息桥接到当前回合（提交为提示）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useMailboxBridge.ts
- * pieces: chunk-18hwfzwa.js (2)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: placement 1, fingerprint 1
  */
 import {
@@ -18,9 +18,9 @@ import {
 import { useMailbox } from "../context/mailbox.js";
 import { useStoreSelector } from "./useStoreSelector.js";
 
-//@ chunk-18hwfzwa.js:1665839-1665843 placement
+//@ chunk-czq1j3j2.js:1703141-1703145 placement
 init_react_production();
-//@ chunk-18hwfzwa.js:1665843-1666058 fingerprint (2.1.88 match: useMailboxBridge, 0.742)
+//@ chunk-czq1j3j2.js:1711880-1712095 fingerprint (2.1.88 match: useMailboxBridge, 0.743)
 function useMailboxBridge(onSubmitMessage) {
   let mailbox = useMailbox();
   let isLoading = useStoreSelector(onSubmitMessage, (state) => state.isLoading);

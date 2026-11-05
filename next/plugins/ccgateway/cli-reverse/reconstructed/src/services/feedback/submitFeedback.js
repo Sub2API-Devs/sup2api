@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/feedback 请求组装：挑选会话记录、列出近期会话、错误分类。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xx1vmpsq.js (33)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pwdsqzsj.js (33)
  * attribution: placement 33
  */
 import { dirname, basename, join } from "path";
@@ -50,13 +50,14 @@ import { redactSecrets as redactSecrets_2 } from "../teamMemorySync/secretScanne
 import { findCompactBoundaryIndex } from "../projects/threadRows.js";
 import { normalizeMessagesForAPI } from "../../utils/messages.js";
 import { nullStub } from "../../utils/externalBuildStubs.js";
+import { isOn } from "../../utils/codeMode/accepted.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { isUuidShaped } from "../../utils/sessionStoragePortable.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-xx1vmpsq.js:4432-4589 placement
+//@ chunk-pwdsqzsj.js:4787-4944 placement
 let FeedbackPayloadBuilder; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-xx1vmpsq.js:4432", () => {
+deferInit("chunk-pwdsqzsj.js:4787", () => {
   FeedbackPayloadBuilder = class FeedbackPayloadBuilder {
     chunks = [];
     static encoder = new TextEncoder();
@@ -68,7 +69,7 @@ deferInit("chunk-xx1vmpsq.js:4432", () => {
     }
   };
 });
-//@ chunk-xx1vmpsq.js:4589-5324 placement
+//@ chunk-pwdsqzsj.js:4944-5679 placement
 /**
  * 组装 /feedback 提交体：按字段集合挑出 transcript、子代理转录等，逐段 JSON 序列化并控制大小。
  */
@@ -125,14 +126,14 @@ function buildFeedbackPayload(payload, transcriptFields, subagentFields, options
   builder.push("}");
   return builder.toBuffer();
 }
-//@ chunk-xx1vmpsq.js:5324-5635 placement
+//@ chunk-pwdsqzsj.js:5679-5990 placement
 /**
  * 反馈接口错误响应的 schema。
  */
 var FEEDBACK_DISABLED_MESSAGE; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var FEEDBACK_THIRD_PARTY_BLOCKED_MESSAGE;
 var errorResponseSchema;
-deferInit("chunk-xx1vmpsq.js:5324", () => {
+deferInit("chunk-pwdsqzsj.js:5679", () => {
   FEEDBACK_DISABLED_MESSAGE = "Feedback has not been enabled for your organization.";
   FEEDBACK_THIRD_PARTY_BLOCKED_MESSAGE =
     "Feedback containing third-party provider content cannot be submitted.";
@@ -150,7 +151,7 @@ deferInit("chunk-xx1vmpsq.js:5324", () => {
     }),
   );
 });
-//@ chunk-xx1vmpsq.js:5635-6631 placement
+//@ chunk-pwdsqzsj.js:5990-6986 placement
 /**
  * 解析反馈接口的错误响应：区分组织禁用、第三方内容拒收、ZDR 组织、OAuth 权限不足等拒绝类型。
  */
@@ -219,23 +220,23 @@ function classifyFeedbackError(status, body) {
     },
   };
 }
-//@ chunk-xx1vmpsq.js:6631-6732 placement
+//@ chunk-pwdsqzsj.js:6986-7087 placement
 var ZDR_FEEDBACK_MESSAGE =
   "Feedback collection is not available for organizations with custom data retention policies.";
-//@ chunk-xx1vmpsq.js:6732-6884 placement
+//@ chunk-pwdsqzsj.js:7087-7239 placement
 function orgFeedbackRefusalMessage(session) {
   if (session.isZdrOrg) return ZDR_FEEDBACK_MESSAGE;
   if (session.refusal?.kind !== "org") return;
   return session.refusal.serverMessage ?? "Your organization does not accept feedback.";
 }
-//@ chunk-xx1vmpsq.js:6884-6976 placement
+//@ chunk-pwdsqzsj.js:7239-7331 placement
 function orgRefusalError(session) {
   let message = orgFeedbackRefusalMessage(session);
   return message === undefined
     ? undefined
     : appendBugReportHint(`Couldn't send feedback: ${message}`, message);
 }
-//@ chunk-xx1vmpsq.js:6976-7275 placement
+//@ chunk-pwdsqzsj.js:7331-7630 placement
 function credentialRefusalMessage(session) {
   if (session.refusal?.kind !== "credential") return;
   let suffix = serverStatusSuffix(session) ?? "";
@@ -243,13 +244,13 @@ function credentialRefusalMessage(session) {
     ? `Couldn't send feedback: the sign-in this session uses is not allowed to send feedback${suffix}.`
     : `Couldn't send feedback: the server did not accept the credentials this session uses${suffix}.`;
 }
-//@ chunk-xx1vmpsq.js:7275-7433 placement
+//@ chunk-pwdsqzsj.js:7630-7788 placement
 function serverStatusSuffix(session) {
   if (!session.statusCode) return;
   let replaced = session.refusal?.serverMessage?.replace(/\.$/, "");
   return ` (server returned ${session.statusCode}${replaced === undefined ? "" : `: ${replaced}`})`;
 }
-//@ chunk-xx1vmpsq.js:7541-7589 placement
+//@ chunk-pwdsqzsj.js:7896-7944 placement
 /**
  * 最近会话转录的总字节上限（1 MiB）。
  */
@@ -258,7 +259,7 @@ var RETENTION_WINDOW_MS = {
   week: 604800000,
 };
 var MAX_RECENT_TRANSCRIPT_BYTES = 1048576;
-//@ chunk-xx1vmpsq.js:7589-8138 placement
+//@ chunk-pwdsqzsj.js:7944-8492 placement
 async function readSessionTranscriptForFeedback(
   { transcriptPath, scope = "session", maxRawTranscriptBytes, excludeThirdPartyTranscripts = false, host },
   input,
@@ -297,7 +298,7 @@ async function readSessionTranscriptForFeedback(
     },
   };
 }
-//@ chunk-xx1vmpsq.js:8138-9698 placement
+//@ chunk-pwdsqzsj.js:8492-10053 placement
 /**
  * 收集要随反馈附带的转录：主会话、后台任务、子代理转录；含第三方内容标记的转录被扣下（withheld）。
  */
@@ -369,10 +370,10 @@ async function collectFeedbackTranscripts(
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -384,7 +385,7 @@ async function collectFeedbackTranscripts(
     },
   };
 }
-//@ chunk-xx1vmpsq.js:9698-9974 placement (2.1.88 match: getTaskOutput, 1)
+//@ chunk-pwdsqzsj.js:10053-10329 placement (2.1.88 match: getTaskOutput, 1)
 async function getTaskOutput(dir, maxBytes, storage) {
   if (maxBytes === undefined) return null;
   if (storage !== undefined) {
@@ -404,7 +405,7 @@ async function getTaskOutput(dir, maxBytes, storage) {
     return null;
   }
 }
-//@ chunk-xx1vmpsq.js:9974-10364 placement
+//@ chunk-pwdsqzsj.js:10329-10719 placement
 async function readRecentRecords(storage, key, maxBytes) {
   let records = await storage.readRecords(key, {
     order: "backward",
@@ -431,7 +432,7 @@ async function readRecentRecords(storage, key, maxBytes) {
   ).toString("utf8");
   return str.trim().length > 0 ? str : null;
 }
-//@ chunk-xx1vmpsq.js:10364-11267 placement
+//@ chunk-pwdsqzsj.js:10719-11621 placement
 async function collectRecentSessionTranscripts(dir, scope, excludeThirdParty, storage) {
   if (scope === "session")
     return {
@@ -495,7 +496,7 @@ async function collectRecentSessionTranscripts(dir, scope, excludeThirdParty, st
     droppedThirdParty,
   };
 }
-//@ chunk-xx1vmpsq.js:11267-12540 placement
+//@ chunk-pwdsqzsj.js:11621-12893 placement
 async function listRecentSessions(storage, current, scope, excludeThirdParty) {
   let cutoffMs = Date.now() - RETENTION_WINDOW_MS[scope];
   let candidates = [];
@@ -570,7 +571,7 @@ async function listRecentSessions(storage, current, scope, excludeThirdParty) {
     droppedThirdParty,
   };
 }
-//@ chunk-xx1vmpsq.js:12540-12850 placement
+//@ chunk-pwdsqzsj.js:12893-13203 placement
 /**
  * 各提供商在反馈文案里的显示名。
  */
@@ -585,7 +586,7 @@ var PROVIDER_LABELS = {
   mantle: "Amazon Bedrock (Mantle)",
   gateway: "an API gateway",
 };
-//@ chunk-xx1vmpsq.js:12850-13194 placement
+//@ chunk-pwdsqzsj.js:13203-13547 placement
 /**
  * 判定 /feedback 的提交方式：post（发 Anthropic）、share、disabled（第三方提供商、非第一方认证等），返回 kind 与原因。
  */
@@ -621,7 +622,7 @@ function feedbackMode(command = "/feedback") {
     kind: "post",
   };
 }
-//@ chunk-xx1vmpsq.js:13194-13380 placement
+//@ chunk-pwdsqzsj.js:13547-13733 placement
 function feedbackCredentialStatus() {
   let authHeaders = getAuthHeaders();
   if (authHeaders.error)
@@ -637,7 +638,7 @@ function feedbackCredentialStatus() {
       }
     : null;
 }
-//@ chunk-xx1vmpsq.js:13380-13620 placement
+//@ chunk-pwdsqzsj.js:13733-13973 placement
 /**
  * 可从请求里挑选的字段名（model、system、tools 等）。
  */
@@ -648,7 +649,7 @@ var MAX_PRECOMPACT_TRANSCRIPT_BYTES;
 var MAX_PAYLOAD_PART_COUNT;
 var MAX_RECOMMENDED_TRANSCRIPT_BYTES;
 var PICKABLE_REQUEST_FIELDS;
-deferInit("chunk-xx1vmpsq.js:13380", () => {
+deferInit("chunk-pwdsqzsj.js:13733", () => {
   TRANSCRIPT_FIELDS = new Set(["transcript"]);
   SUBAGENT_TRANSCRIPT_FIELDS = new Set(["subagentTranscripts"]);
   MAX_RAW_TRANSCRIPT_BYTES = 4194304;
@@ -668,7 +669,7 @@ deferInit("chunk-xx1vmpsq.js:13380", () => {
     "output_config",
   ];
 });
-//@ chunk-xx1vmpsq.js:13620-13715 placement
+//@ chunk-pwdsqzsj.js:13973-14068 placement
 function pickFeedbackFields(input) {
   let picked = {};
   for (let field of PICKABLE_REQUEST_FIELDS)
@@ -678,11 +679,11 @@ function pickFeedbackFields(input) {
       });
   return picked;
 }
-//@ chunk-xx1vmpsq.js:13715-13758 placement
+//@ chunk-pwdsqzsj.js:14068-14111 placement
 function feedbackPayloadPartCount(input) {
   return buildFeedbackPayload(input, TRANSCRIPT_FIELDS, SUBAGENT_TRANSCRIPT_FIELDS).length;
 }
-//@ chunk-xx1vmpsq.js:13758-13843 placement
+//@ chunk-pwdsqzsj.js:14111-14196 placement
 function headlessFeedbackMode() {
   let mode = feedbackMode();
   if (mode.kind === "disabled" && !isFeedbackDisabledByEnv()) return;
@@ -690,7 +691,7 @@ function headlessFeedbackMode() {
     kind: mode.kind,
   };
 }
-//@ chunk-xx1vmpsq.js:13843-14209 placement
+//@ chunk-pwdsqzsj.js:14196-14562 placement
 async function submitHeadlessFeedback({ messages, description, surface, storageV5, host }) {
   let mode = feedbackMode();
   if (mode.kind === "disabled")
@@ -715,7 +716,7 @@ async function submitHeadlessFeedback({ messages, description, surface, storageV
     bundle_path: payload.zipPath,
   };
 }
-//@ chunk-xx1vmpsq.js:14209-14596 placement
+//@ chunk-pwdsqzsj.js:14562-14949 placement
 function feedbackUnavailableReason() {
   let mode = feedbackMode();
   switch (mode.kind) {
@@ -736,7 +737,7 @@ function feedbackUnavailableReason() {
       }
   }
 }
-//@ chunk-xx1vmpsq.js:14596-14709 placement
+//@ chunk-pwdsqzsj.js:14949-15062 placement
 function getRedactedInMemoryErrors() {
   return getInMemoryErrors().map((entry) => {
     let copy = {
@@ -746,7 +747,7 @@ function getRedactedInMemoryErrors() {
     return copy;
   });
 }
-//@ chunk-xx1vmpsq.js:14709-15702 placement
+//@ chunk-pwdsqzsj.js:15062-16055 placement (2.1.88 match: toInternalMessages, 0.382)
 /**
  * 从原始会话 JSONL 读取最后一次压缩边界之前的主线消息（跳过已包含与重复的 uuid），按字节预算从尾部保留。
  */
@@ -816,7 +817,7 @@ function readPreCompactTranscript(jsonl, budget, seenUuids) {
   let sliced = messages.slice(start, boundaryIndex);
   return oversized.size === 0 ? sliced : sliced.filter((message, index) => !oversized.has(start + index));
 }
-//@ chunk-xx1vmpsq.js:15702-15893 placement
+//@ chunk-pwdsqzsj.js:16055-16246 placement
 /**
  * 从末尾向前选择不超过字节预算的条目（单条超预算的跳过），返回保留范围与跳过的下标。
  */
@@ -842,7 +843,7 @@ function selectTailWithinBudget(sizes, budget, boundaryIndex = sizes.length) {
     oversized,
   };
 }
-//@ chunk-xx1vmpsq.js:15893-16282 placement
+//@ chunk-pwdsqzsj.js:16246-16635 placement
 /**
  * 把压缩前的消息按时间合并进当前转录：早于最早消息的放在前面，其余插到最后一条压缩摘要之前。
  */
@@ -865,7 +866,7 @@ function mergePreCompactMessages(messages, preCompactMessages) {
   let insertAt = lastIndex === -1 ? messages.length : lastIndex;
   return [...older, ...messages.slice(0, insertAt), ...recent, ...messages.slice(insertAt)];
 }
-//@ chunk-xx1vmpsq.js:16282-16531 placement
+//@ chunk-pwdsqzsj.js:16635-16884 placement
 async function readDebugLogTail() {
   let debugLogPath = getDebugLogPath();
   if (!debugLogPath) return null;
@@ -886,7 +887,7 @@ ${tail}`;
     return null;
   }
 }
-//@ chunk-xx1vmpsq.js:16531-18454 placement
+//@ chunk-pwdsqzsj.js:16884-18828 placement
 /**
  * 构造反馈请求：消息、描述、转录范围、调试日志尾部、压缩前快照，超出载荷上限时降级。
  */
@@ -960,7 +961,11 @@ async function buildFeedbackRequest({
     terminal: feedbackTranscripts.terminal,
     version: feedbackTranscripts.version,
     ...false,
-    ...{},
+    ...(isOn()
+      ? {
+          replMode: true,
+        }
+      : {}),
     transcript,
     errors: getRedactedInMemoryErrors(),
     lastApiRequest: lastAPIRequest ? pickFeedbackFields(lastAPIRequest) : null,
@@ -1010,7 +1015,7 @@ async function buildFeedbackRequest({
     laptopMemoryDroppedCount,
   };
 }
-//@ chunk-xx1vmpsq.js:18454-18593 placement
+//@ chunk-pwdsqzsj.js:18828-18967 placement
 function redactError(err) {
   if (err instanceof Error) {
     let copy = Error(redactSecrets_2(err.message));
@@ -1021,7 +1026,7 @@ function redactError(err) {
     logError(Error(copy));
   }
 }
-//@ chunk-xx1vmpsq.js:18593-18905 placement
+//@ chunk-pwdsqzsj.js:18967-19279 placement
 /**
  * 从 JSONL 会话日志末尾向前查找指定 assistant 消息 id 所在记录，返回其会话 id（须为 UUID 形状）。
  */
@@ -1052,25 +1057,25 @@ function findSessionIdForMessage(rawTranscriptJsonl, latestAssistantAPIMessageId
   return;
 }
 export {
-  feedbackMode,
   submitHeadlessFeedback,
   feedbackUnavailableReason,
   orgFeedbackRefusalMessage,
   headlessFeedbackMode,
-  getTaskOutput,
-  MAX_RAW_TRANSCRIPT_BYTES,
-  pickFeedbackFields,
-  buildFeedbackPayload,
+  feedbackPayloadPartCount,
   MAX_PAYLOAD_PART_COUNT,
+  selectTailWithinBudget,
+  MAX_RAW_TRANSCRIPT_BYTES,
+  orgRefusalError,
+  credentialRefusalMessage,
+  serverStatusSuffix,
+  buildFeedbackPayload,
   TRANSCRIPT_FIELDS,
   SUBAGENT_TRANSCRIPT_FIELDS,
   redactError,
   classifyFeedbackError,
-  orgRefusalError,
-  credentialRefusalMessage,
-  serverStatusSuffix,
-  feedbackPayloadPartCount,
-  selectTailWithinBudget,
+  getTaskOutput,
+  feedbackMode,
+  pickFeedbackFields,
   feedbackCredentialStatus,
   buildFeedbackRequest,
   findSessionIdForMessage,

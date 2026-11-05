@@ -1,15 +1,15 @@
 /**
  * @azure/identity/dist/esm/credentials/managedIdentityCredential/utils.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/identity@4.10.1
- * pieces: chunk-mrx6y2r5.js (4)
+ * pieces: chunk-b5df2wx1.js (4)
  * attribution: esm-fingerprint 4
  */
 
-//@ chunk-mrx6y2r5.js:82373-82650 esm-fingerprint
+//@ chunk-b5df2wx1.js:82373-82650 esm-fingerprint
 var serviceFabricErrorMessage =
   "Specifying a `clientId` or `resourceId` is not supported by the Service Fabric managed identity environment. The managed identity configuration is determined by the Service Fabric cluster resource configuration. See https://aka.ms/servicefabricmi for more information";
-//@ chunk-mrx6y2r5.js:82650-82840 esm-fingerprint
+//@ chunk-b5df2wx1.js:82650-82840 esm-fingerprint
 function mapScopesToResource(scopes) {
   let scope = "";
   if (Array.isArray(scopes)) {
@@ -19,7 +19,7 @@ function mapScopesToResource(scopes) {
   if (!scope.endsWith("/.default")) return scope;
   return scope.substr(0, scope.lastIndexOf("/.default"));
 }
-//@ chunk-mrx6y2r5.js:82840-83237 esm-fingerprint
+//@ chunk-b5df2wx1.js:82840-83237 esm-fingerprint
 function parseExpirationTimestamp(body) {
   if (typeof body.expires_on === "number") return body.expires_on * 1000;
   if (typeof body.expires_on === "string") {
@@ -33,7 +33,7 @@ function parseExpirationTimestamp(body) {
     `Failed to parse token expiration from body. expires_in="${body.expires_in}", expires_on="${body.expires_on}"`,
   );
 }
-//@ chunk-mrx6y2r5.js:83237-83557 esm-fingerprint
+//@ chunk-b5df2wx1.js:83237-83557 esm-fingerprint
 function parseRefreshTimestamp(body) {
   if (body.refresh_on) {
     if (typeof body.refresh_on === "number") return body.refresh_on * 1000;

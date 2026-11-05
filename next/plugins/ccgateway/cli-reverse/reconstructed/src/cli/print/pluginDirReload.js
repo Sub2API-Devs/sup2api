@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：--plugin-dir 插件目录加入/重载时的缓存影响记录与沙箱重建
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sfjpx19.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nh1pvp1m.js (3)
  * attribution: placement 3
  */
 import { computePluginReloadImpact } from "../../utils/plugins/reloadImpact.js";
@@ -15,7 +15,7 @@ import { getInlinePlugins, setInlinePlugins } from "../../bootstrap/state.js";
 import { mergePluginDirs } from "../../utils/plugins/pluginDirsEnv.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 
-//@ chunk-0sfjpx19.js:128792-129161 placement
+//@ chunk-nh1pvp1m.js:123798-124168 placement
 async function logPluginDirReload(host, { storageV5, credentials, ...options }) {
   try {
     let { wouldInvalidateCache } = await computePluginReloadImpact({
@@ -38,7 +38,7 @@ async function logPluginDirReload(host, { storageV5, credentials, ...options }) 
     throw error;
   }
 }
-//@ chunk-0sfjpx19.js:129161-129280 placement
+//@ chunk-nh1pvp1m.js:124168-124287 placement
 /**
  * 把插件目录加入内联插件列表并重建沙箱（目录已在列表中则不变），返回可撤销的修改。
  */
@@ -51,7 +51,7 @@ async function addPluginDirAndRebuildSandbox(dir) {
     return () => setInlinePlugins(inlinePlugins);
   });
 }
-//@ chunk-0sfjpx19.js:129280-129913 placement
+//@ chunk-nh1pvp1m.js:124287-124920 placement
 /**
  * 插件目录加入后重建沙箱以把 shell 命令挡在插件根之外。
  */

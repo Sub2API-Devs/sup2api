@@ -3,9 +3,9 @@
  *
  * TaskStop 结果渲染
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TaskStopTool/UI.tsx
- * pieces: chunk-ah34pb7m.js (1)
+ * pieces: chunk-wjygkcr4.js (1)
  * attribution: fingerprint 1
  */
 import { truncateFindingSummary } from "../ReportFindingsTool/UI.js";
@@ -16,7 +16,7 @@ import {
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { Text } from "../../ink/components/Text.js";
 
-//@ chunk-ah34pb7m.js:29236-29385 fingerprint (2.1.88 match: renderToolResultMessage, 0.756)
+//@ chunk-wjygkcr4.js:30200-30349 fingerprint (2.1.88 match: renderToolResultMessage, 0.755)
 /**
  * TaskStop 结果渲染："<命令> · stopped"。
  */

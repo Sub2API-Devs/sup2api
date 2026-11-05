@@ -3,20 +3,25 @@
  *
  * 2.1.316 新增。提议切换到更新模型的对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: placement 2
  */
+import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { fillNewerModelCopy } from "../utils/newerModelOffer.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { Dialog } from "./design-system/Dialog.js";
-import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1198448-1199258 placement
+//@ chunk-czq1j3j2.js:1159031-1159035 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1159031", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1228611-1229421 placement
 function NewerModelOfferDialog(props) {
   let $ = useMemoCache(20);
   let { offer, onDone } = props;
@@ -88,9 +93,4 @@ function NewerModelOfferDialog(props) {
   } else dialogElement = $[19];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1199296-1199300 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1199296", () => {
-  init_react_production();
-});
 export { NewerModelOfferDialog };

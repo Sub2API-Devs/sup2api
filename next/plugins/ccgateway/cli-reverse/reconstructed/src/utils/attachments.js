@@ -3,14 +3,14 @@
  *
  * 每轮附件生成：getAttachments 按用户输入（@ 文件/MCP 资源/代理/技能/同伴提及）与会话状态（队列命令、计划/自动模式、待办与任务提醒、延迟工具/代理/MCP 指令增量、嵌套与相关记忆、IDE 选区、诊断、token/预算提醒等）并发产出 Attachment 对象，由 getAttachmentMessages 包成 attachment 消息进入对话，normalizeAttachmentForAPI 再转成 system-reminder。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/attachments.ts
- * pieces: chunk-bnwcqde4.js (1), chunk-e6aww6q8.js (133)
- * attribution: fingerprint 49, placement 8, layout 70, file-local 5, callgraph-fingerprint 2
+ * pieces: chunk-1z79zgep.js (1), chunk-5xgkngpb.js (136), chunk-f14qge9c.js (1)
+ * attribution: fingerprint 49, placement 9, layout 71, file-local 6, callgraph-fingerprint 2, sole-consumer 1
  */
 import { randomUUID } from "crypto";
 import { join, relative, dirname, resolve as resolve_2, parse, basename, isAbsolute, sep } from "path";
-import { setImmediate as THo } from "timers/promises";
+import { setImmediate as Gjo } from "timers/promises";
 import { stat, readdir, lstat } from "fs/promises";
 import { buildGoalSentinelAttachment } from "../commands/goal/goal.js";
 import { memoryFreshnessText } from "../memdir/memoryAge.js";
@@ -50,7 +50,7 @@ import {
   getFeatureValue_CACHED_MAY_BE_STALE,
   getFeatureValue_SESSION_PINNED,
 } from "../services/analytics/growthbook.js";
-import { getServerUrl as getServerUrl_2, unwrapCcrProxyUrl } from "../services/mcp/config.js";
+import { getServerUrl as getServerUrl_2, firstMcpUrlOrDefault } from "../services/mcp/config.js";
 import { isHostedDesktopSession } from "./computerUse/toolRendering.js";
 import { COMPUTER_USE_MCP_SERVER_NAME } from "./computerUse/common.js";
 import { env } from "./env.js";
@@ -72,6 +72,7 @@ import {
   seedDeferredToolReferences,
   keptDeferredToolNames,
   logRetractionFailure,
+  AUTHENTICATE,
 } from "../services/api/deferredToolsState.js";
 import { isEchoWireToolInputsEnabled, adoptWireToolInputCopies } from "./wireToolInputEcho.js";
 import { logError } from "./log.js";
@@ -89,14 +90,19 @@ import {
 } from "../services/accountMemory/memoryContext.js";
 import { getAttachmentTimingStore, timeAttachment } from "./attachments/attachmentTiming.js";
 import { createAbortController, createChildAbortController } from "./abortController.js";
+import { replyGatePolicy } from "../query/turnEndReasons.js";
 import {
-  getReplyGatePolicy,
+  normalizeCaseForComparison_2,
+  pathInAllowedWorkingPath,
+  outsideReadBlocked,
+} from "./permissions/filesystem.js";
+import {
   getDisableFileMentions,
   getDisableSlashCommands,
   getIsNonInteractiveSession,
   getStickyBetas,
   notePersonPrompt,
-  getConversationToolsUsed,
+  getRootSession,
   isDiskless,
   getSessionId,
   hasExitedPlanModeInSession,
@@ -113,9 +119,8 @@ import {
   getProjectRootOrNull,
   getSdkBetas,
 } from "../bootstrap/state.js";
-import { uniq, stringArray as stringArray_2, count } from "./collections.js";
 import { isCoordinatorMainThread } from "../coordinator/coordinatorMode.js";
-import { toolMatchesName, isProactivityActive } from "../Tool.js";
+import { matchesToolName, isProactivityActive } from "../Tool.js";
 import { SKILL } from "../tools/SkillTool/skillToolNames.js";
 import {
   isSkillMentionAttachmentEnabled,
@@ -145,6 +150,11 @@ import {
 } from "../remote/tools/toolHostsNotice.js";
 import { prefetchArtifactOpening } from "./attachments/artifactOpeningPrefetch.js";
 import { getRuntimeModelSwitchAnnouncements, SECONDARY_CONTEXT_WINDOW } from "./model/model.js";
+import { codeModeAccepted, contextKeyAccepted } from "./codeMode/accepted.js";
+import {
+  willHideCodeModeOnlyTools,
+  hasBuiltInEvalTool,
+} from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { isSurfaceFailedServersEnabled, isSortedOtterOn } from "../services/mcp/mcpGates.js";
 import { collectFailedMcpServers, redialAllowsServer } from "../services/mcp/redactMcpErrors.js";
 import {
@@ -175,9 +185,12 @@ import { getCriticalReminderAttachment } from "./attachments/criticalReminders.j
 import {
   isTurnCompanion,
   extractTextContent_2,
+  getContentText,
   isOnlySystemReminders,
   isParsedWillowEnabled,
+  isDeepTwilightEnabled,
   isDapperCupcakeOn,
+  NO_RESPONSE_REQUESTED,
   getUserMessageText,
   isThinkingOnlyMessage,
 } from "./messages.js";
@@ -228,7 +241,7 @@ import {
   unreadableToolsUsed,
   joinWithNewlineIfAny,
   unreadableToolsLine,
-  listUnreadableToolsUsed,
+  unreadableToolsFromEntries,
 } from "./agentListing.js";
 import { hasSendMessageTool } from "../tools/SendMessageTool/constants.js";
 import { isMessagingLimitedToOwnAgents } from "../tools/SendMessageTool/SendMessageTool.js";
@@ -249,6 +262,10 @@ import {
 import { isHumanOrigin } from "./turnOrigin.js";
 import { replacePromptText, formatNewDiagnosticsAttachment } from "./attachments/diagnostics.js";
 import { getTaskRunState } from "./task/taskNotifications.js";
+import { isSdkOwnedHostedTurn } from "./sessionShape.js";
+import { logFeatureOk, logFeatureSad, logFeatureBad } from "../services/analytics/featureTelemetry.js";
+import { readerStatesFromHookMessage } from "./widgetContext.js";
+import { getWidgetStates } from "../tools/ReadWidgetContextTool/widgetState.js";
 import { keepBridgeFileIds } from "./attachments/bridgeAttachments.js";
 import { normalizeTaskNotificationOrigin } from "./backgroundSessionResume.js";
 import {
@@ -263,15 +280,15 @@ import { declaredRoundStamp } from "./pollEvents/declarations.js";
 import { drainPendingMessages } from "../tasks/LocalAgentTask/pendingMessages.js";
 import { agentMessageOrigin, receiveAgentMessage } from "../plugins/functionHooks/sessionReceive.js";
 import { stripPeerMessageBody } from "./peerMessageHeaders.js";
-import { dropIfAnyMessages } from "../services/mcp/ccrTurnId.js";
+import { dropIfAnyMessages, allPeerOrigins } from "../services/mcp/ccrTurnId.js";
 import { isNonEmptyImageAttachment } from "./messages/messagePredicates.js";
-import { NO_CONTENT_MESSAGE, NO_RESPONSE_REQUESTED } from "../constants/messages.js";
+import { NO_CONTENT_MESSAGE } from "../constants/messages.js";
 import { ASKUSERQUESTION } from "../tools/AskUserQuestionTool/prompt.js";
 import { BRIEF_TOOL_NAME, LEGACY_BRIEF_TOOL_NAME } from "./conversationRecovery.js";
 import { EXITPLANMODE } from "../tools/ExitPlanModeTool/constants.js";
 import { SEND_USER_FILE_TOOL_NAME } from "../tools/SendUserFileTool/prompt.js";
 import { isVirtualConversationMessage } from "../bootstrap/sessionSlices.js";
-import { logFeatureOk, logFeatureSad, logFeatureBad } from "../services/analytics/featureTelemetry.js";
+import { planDocRef, planDocsServerNameFor } from "../services/mcp/claudeDocsLinks.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
 import { settlePlanFileCachePrime, getPlanSlug, getPlanFilePath, getPlan } from "./plans.js";
 import {
@@ -281,9 +298,9 @@ import {
   bashFirstSteerVariant,
 } from "./model/promptBundles.js";
 import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
-import { FILE_EDIT_TOOL_NAME } from "../tools/FileEditTool/constants.js";
+import { EDIT } from "../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../tools/FileWriteTool/prompt.js";
-import { isTeammate, getTeamName, getAgentId, getAgentName, getTeammateContext } from "./teammate.js";
+import { isTeammate, getTeamName, getAgentId, getAgentName } from "./teammate.js";
 import {
   isAutoModeConsentFlowEnabled,
   getDenyRuleIndex,
@@ -298,7 +315,7 @@ import {
   getNonDeferrableBuiltins,
   toolSearchToolFilteredOut,
   isToolSearchEnabledOptimistic,
-  modelSupportsToolReference,
+  supportsToolReferenceOrPelican,
   isVertexModelWithoutToolSearch,
   isToolSearchToolAvailable,
   toolSearchDeclaredIn,
@@ -328,6 +345,7 @@ import {
 import { AGENT, FORK } from "../tools/AgentTool/constants.js";
 import { getMcpServerNameOfTool } from "../services/mcp/utils.js";
 import { filterAgentsByMcpRequirements } from "../tools/AgentTool/loadAgentsDir.js";
+import { stringArray as stringArray_2, countWhere } from "./collections.js";
 import { compareStringsGrouped, plural, countCharInString } from "./stringUtils.js";
 import { formatAgentLine, shouldSteerCostToHost } from "../tools/AgentTool/prompt.js";
 import { marketplaceSuffix } from "./plugins/pluginIdentifier.js";
@@ -362,6 +380,7 @@ import {
   hasInstructionsLoadedHook,
   executeInstructionsLoadedHooks,
   executePreToolHooks,
+  hookTextLeavesThisMachine,
   emitHookMetrics,
 } from "./hooks.js";
 import { getReadTimestamp } from "../tools/FileReadTool/savedOutputPaths.js";
@@ -377,15 +396,15 @@ import {
   hasFullFileContent,
 } from "./remoteFileState.js";
 import { collectNestedMemoryContents } from "./attachments/nestedMemory.js";
-import { pathInAllowedWorkingPath, outsideReadBlocked } from "./permissions/filesystem.js";
 import { memoryPickerMaps, memoryPickerSets, selectMemoryRecall } from "../memdir/memoryRecallSelect.js";
 import { getModelContextInfo } from "./model/modelContextInfo.js";
 import {
   getAutoCompactThresholdTokens,
   estimateTokensWithAnchor,
+  serverClearedTokens,
   hasUsageAnchor,
 } from "../services/compact/autoCompact.js";
-import { stripInProgressAssistantMessage } from "../commands/btw/btw.js";
+import { getEffectiveContextWindow } from "../entrypoints/sdk/coreSchemas.js";
 import { isCoworkAny } from "./entrypointKinds.js";
 import { getDefaultFileReadingLimits } from "../tools/FileReadTool/limits.js";
 import { MAX_LINES_TO_READ } from "../tools/FileReadTool/prompt.js";
@@ -402,6 +421,7 @@ import {
   MaxFileReadTokenExceededError,
   allowLargeRoomTokens,
   FileReadTool,
+  readResultFraming,
   readImageWithTokenBudget,
   isUncountedPDFOverWholeReadCap,
 } from "../tools/FileReadTool/FileReadTool.js";
@@ -409,7 +429,7 @@ import { expandPath, isNotebookPath } from "./path.js";
 import { logAtMention } from "./telemetry/thirdPartyEventRecords.js";
 import { hasBinaryExtension } from "../constants/files.js";
 import { isCrossSessionMessagingEnabled } from "./crossSessionMessagingGate.js";
-import { parsePeerMentions, resolveTeamName, resolvePeerMentions } from "./peerAddressing.js";
+import { parsePeerMentions, resolvePeerAddressFromState, resolvePeerMentions } from "./peerAddressing.js";
 import { isConnectedOrCached } from "../skills/bundled/scheduleRemoteAgents.js";
 import { hasWithheldResources } from "../services/mcp/withheldResources.js";
 import {
@@ -423,6 +443,7 @@ import { recordToolUsed } from "../services/compact/keptTools.js";
 import { READMCPRESOURCETOOL } from "../tools/ReadMcpResourceTool/prompt.js";
 import { readMcpResource, callMcpTool } from "../services/mcp/mcpWireUtils.js";
 import { reportOnce } from "./reportOnce.js";
+import { extractReadFilesFromMessages } from "./queryHelpers.js";
 import { getSnippetForTwoFileDiff } from "../tools/FileEditTool/utils.js";
 import { isSensitiveFileName } from "./permissions/sensitivePaths.js";
 import { getFileExtensionForAnalytics, agentTypeForTelemetry } from "../services/analytics/metadata.js";
@@ -441,7 +462,7 @@ import { waitForFirstStorePull, firstStorePullPending } from "../services/orgMem
 import { resolveAgentMemoryDirForRecall, isRealpathWithin } from "../tools/AgentTool/agentMemory.js";
 import { isMultiStoreSyncAvailable } from "../services/memorySync/availability.js";
 import { readMemoryFileForRecall } from "../memdir/memoryRecall.js";
-import { FILE_READ_TOOL_NAME, isImageOrPdfExtension } from "../tools/FileReadTool/constants.js";
+import { READ, isImageOrPdfExtension } from "../tools/FileReadTool/constants.js";
 import { MEMDIR_RELEVANCE } from "../memdir/findRelevantMemories.js";
 import { normalizeNfkc, isNonEmptyIdentifier, CONTROL_CHARS_OR_ANGLE_RE } from "./sanitization.js";
 import { hasClearedToolResultsAfterIdle } from "../services/compact/microCompact.js";
@@ -455,8 +476,7 @@ import { getContextWindow } from "./model/configs.js";
 import { getSkillUsageScore } from "./suggestions/skillUsageTracking.js";
 import { bytesPerTokenForModel } from "./model/modelDisplay.js";
 import { WORD_BOUNDARY_PATTERN, CJK_PUNCTUATION, isWordCharCodeAt } from "./attachments/atMentions.js";
-import { SHELL_TOOL_NAMES as SHELL_TOOL_NAMES_3 } from "./shell/shellToolUtils.js";
-import { alwaysFalseStream } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { SHELL_TOOL_NAMES as SHELL_TOOL_NAMES_2 } from "./shell/shellToolUtils.js";
 import { diagnosticTrackingSlot } from "../services/diagnosticTracking.js";
 import { checkForLSPDiagnostics, clearAllLSPDiagnostics } from "../services/lsp/LSPDiagnosticRegistry.js";
 import { roughTokenCountEstimationForObject } from "../services/tokenEstimation.js";
@@ -477,15 +497,16 @@ import { checkForNewAsyncHookResponses } from "./hooks/AsyncHookRegistry.js";
 import { isAsyncHookResponseDuplicate } from "./attachments/asyncHookResponses.js";
 import { stripMetricsForMcpInbound } from "./hooks/hookEventHelpers.js";
 import { messageIdentityKey, markMessagesAsReadByPredicate } from "./teammateMailbox.js";
-import { getClaudeConfigDir } from "./envUtils.js";
+import { getTeammateContext } from "./teammateContext.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { effectiveContextWindow } from "../services/compact/autoCompactWindow.js";
 import { tokenCountFromLastAPIResponse, getTokenUsage } from "./tokens.js";
 import { isForkBoilerplateMessage } from "../constants/xml.js";
-import { getTokenCountFromUsage as getTokenCountFromUsage_5 } from "./messages/usageAndStopReason.js";
+import { getTokenCountFromUsage_2 } from "./messages/usageAndStopReason.js";
 import { getSessionCostUSD } from "../cost-tracker.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bnwcqde4.js:4394-4502 fingerprint (2.1.88 match: createAttachmentMessage, 1)
+//@ chunk-f14qge9c.js:4581-4689 fingerprint (2.1.88 match: createAttachmentMessage, 1)
 /**
  * 把一个 Attachment 包成内部 attachment 消息 {type:"attachment", uuid, timestamp, attachment}（jlr 规整附件字段）。
  */
@@ -497,7 +518,14 @@ function createAttachmentMessage(condition, condition_2) {
     attachment: buildGoalSentinelAttachment(condition, condition_2),
   };
 }
-//@ chunk-e6aww6q8.js:117298-117385 fingerprint (2.1.88 match: memoryHeader, 1)
+//@ chunk-1z79zgep.js:2184-2264 fingerprint (2.1.88 match: INLINE_NOTIFICATION_MODES, 1)
+/**
+ * origin.kind 为 task-notification 时返回 "task-notification"，否则 "prompt"。旧版名 INLINE_NOTIFICATION_MODES 为错配（那是常量集合 jxr）。
+ */
+function getQueuedNotificationMode(notification) {
+  return notification?.kind === "task-notification" ? "task-notification" : "prompt";
+}
+//@ chunk-5xgkngpb.js:120072-120159 fingerprint (2.1.88 match: memoryHeader, 1)
 /**
  * 记忆文件标题行："<相对时间> Memory: <路径>:"，无时间时 "Memory: <路径>:"；relevant_memories 附件与 normalizeAttachmentForAPI 共用。
  */
@@ -510,14 +538,7 @@ function memoryHeader(path, mtimeMs) {
 Memory: ${displayPath}:`
     : `Memory: ${displayPath}:`;
 }
-//@ chunk-e6aww6q8.js:195424-195506 fingerprint (2.1.88 match: INLINE_NOTIFICATION_MODES, 1)
-/**
- * origin.kind 为 task-notification 时返回 "task-notification"，否则 "prompt"。旧版名 INLINE_NOTIFICATION_MODES 为错配（那是常量集合 jxr）。
- */
-function getQueuedNotificationMode(notification) {
-  return notification?.kind === "task-notification" ? "task-notification" : "prompt";
-}
-//@ chunk-e6aww6q8.js:1327724-1327982 placement
+//@ chunk-5xgkngpb.js:1326874-1327132 placement
 /**
  * （误归 computerUse）判断目录项在读权限下是否应隐藏。
  */
@@ -535,17 +556,17 @@ async function isEntryHiddenByPermissions(entry, ctx, signal) {
     (!entry.isFile() && isFileReadDenied(filePath, ctx.context))
   );
 }
-//@ chunk-e6aww6q8.js:1327982-1327994 placement
+//@ chunk-5xgkngpb.js:1327132-1327144 placement
 /**
  * 目录项扫描上限 1 万。
  */
 var MAX_SCANNED_ENTRIES = 1e4;
-//@ chunk-e6aww6q8.js:1327994-1328007 placement
+//@ chunk-5xgkngpb.js:1327144-1327157 placement
 /**
  * 目录项列出上限 1000。
  */
 var MAX_LISTED_ENTRIES = 1000;
-//@ chunk-e6aww6q8.js:1328056-1328376 placement (2.1.88 match: sanitizeAppNames, 0.528)
+//@ chunk-5xgkngpb.js:1327206-1327526 placement (2.1.88 match: sanitizeAppNames, 0.524)
 /**
  * （误归 computerUse）过滤被拒绝的目录项，最多扫描 1 万、列出 1000，超出追加 "… and N more entries"。
  */
@@ -555,7 +576,7 @@ async function filterListableEntries(entries, ctx, signal) {
   let min = Math.min(entries.length, MAX_SCANNED_ENTRIES);
   let index = 0;
   while (index < min && names.length < MAX_LISTED_ENTRIES) {
-    if (instructionRestricted && index > 0 && index % WALK_FLUSH_INTERVAL === 0) await THo();
+    if (instructionRestricted && index > 0 && index % WALK_FLUSH_INTERVAL === 0) await Gjo();
     let entry = entries[index];
     let hidden =
       entry === undefined || (await isEntryHiddenByPermissions(entry, ctx, signal).catch(() => true));
@@ -565,7 +586,7 @@ async function filterListableEntries(entries, ctx, signal) {
   }
   return index < entries.length ? [...names, `\u2026 and ${entries.length - index} more entries`] : names;
 }
-//@ chunk-e6aww6q8.js:1351122-1351244 fingerprint (2.1.88 match: getNestedMemoryAttachmentsForFile, 0.777)
+//@ chunk-5xgkngpb.js:1350291-1350413 fingerprint (2.1.88 match: getNestedMemoryAttachmentsForFile, 0.777)
 /**
  * 记忆文件是否计入：tengu_paper_halyard 开时排除 Project/Local 类型，其余要求有内容。旧版名 getNestedMemoryAttachmentsForFile 为错配。
  */
@@ -577,7 +598,7 @@ function shouldIncludeMemoryFile(memoryFile) {
     return false;
   return Boolean(memoryFile.content);
 }
-//@ chunk-e6aww6q8.js:2305550-2305865 placement
+//@ chunk-5xgkngpb.js:2360947-2361262 placement
 /**
  * URL 是否为 https://mcp.slack.com（严格校验）。
  */
@@ -597,7 +618,7 @@ function isSlackMcpUrl(urlText) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:2305865-2311068 placement
+//@ chunk-5xgkngpb.js:2361262-2366465 placement
 /**
  * computer-use MCP 的使用说明长文本（工具分层选择、访问流程、链接与金融操作安全）。
  */
@@ -631,13 +652,13 @@ The tier is enforced by the frontmost-app check: if a tier-"read" app is in fron
 - **Inside the Chrome extension** you can click links with the extension's tools, but the suspicion check still applies \u2014 verify unfamiliar URLs with the user.
 
 **Financial actions - do not execute trades or move money.** Budgeting and accounting apps (Quicken, YNAB, QuickBooks, etc.) are granted at full tier so you can categorize transactions, generate reports, and help the user organize their finances. But never execute a trade, place an order, send money, or initiate a transfer on the user's behalf - always ask the user to perform those actions themselves.`;
-//@ chunk-e6aww6q8.js:2311068-2311297 placement
+//@ chunk-5xgkngpb.js:2366465-2366694 placement
 /**
  * Slack MCP 发消息前查看频道说明的提示。
  */
 var SLACK_MCP_POSTING_GUIDANCE =
   "Before posting a new message to a Slack channel the user didn't name, read its topic and description with slack_search_channels, and if they say that kind of message belongs elsewhere, tell the user instead of posting.";
-//@ chunk-e6aww6q8.js:2311297-2311501 placement (2.1.88 match: pinCacheEdits, 0.707)
+//@ chunk-5xgkngpb.js:2366694-2366898 placement (2.1.88 match: pinCacheEdits, 0.708)
 /**
  * MCP 服务器附加说明块：Slack MCP 的发帖提示，以及（未禁用时）computer-use 说明。旧版名 pinCacheEdits 为错配；属于 MCP 说明，归错文件。
  */
@@ -647,7 +668,7 @@ function getMcpServerInstructionBlocks(mcpClients) {
       mcpClients
         .filter((mcpClient) => {
           let url = getServerUrl_2(mcpClient.config);
-          return url !== null && isSlackMcpUrl(unwrapCcrProxyUrl(url));
+          return url !== null && isSlackMcpUrl(firstMcpUrlOrDefault(url));
         })
         .map((mcpClient) => mcpClient.name),
     ),
@@ -665,7 +686,14 @@ function getMcpServerInstructionBlocks(mcpClients) {
         ...mapped,
       ];
 }
-//@ chunk-e6aww6q8.js:3310228-3310295 fingerprint (2.1.88 match: TODO_REMINDER_CONFIG, 1)
+//@ chunk-5xgkngpb.js:3372440-3372527 placement
+/**
+ * 判断是否禁用附件（CLAUDE_CODE_DISABLE_ATTACHMENTS 或 CLAUDE_CODE_SIMPLE）。
+ */
+function areAttachmentsDisabled() {
+  return Boolean(env.CLAUDE_CODE_DISABLE_ATTACHMENTS || env.CLAUDE_CODE_SIMPLE);
+}
+//@ chunk-5xgkngpb.js:3395337-3395404 fingerprint (2.1.88 match: TODO_REMINDER_CONFIG, 1)
 /**
  * {TURNS_SINCE_WRITE:10, TURNS_BETWEEN_REMINDERS:10}：距上次 TodoWrite 与上次提醒都满 10 轮才发 todo_reminder。
  */
@@ -674,7 +702,7 @@ var TODO_REMINDER_CONFIG = {
   TURNS_SINCE_WRITE: 10,
   TURNS_BETWEEN_REMINDERS: 10,
 };
-//@ chunk-e6aww6q8.js:3310295-3310443 layout
+//@ chunk-5xgkngpb.js:3395404-3395552 layout
 /**
  * CLAUDE_CODE_TODO_REMINDER_MODE 优先；否则 GrowthBook tengu_soft_slate_nudge 为 off 时 "off"，默认 "baseline"。
  */
@@ -685,7 +713,7 @@ function getTodoReminderMode() {
     ? "off"
     : "baseline";
 }
-//@ chunk-e6aww6q8.js:3310443-3310552 fingerprint (2.1.88 match: PLAN_MODE_ATTACHMENT_CONFIG, 0.8)
+//@ chunk-5xgkngpb.js:3395552-3395661 fingerprint (2.1.88 match: PLAN_MODE_ATTACHMENT_CONFIG, 0.8)
 /**
  * {TURNS_BETWEEN_MAINTENANCE:10}：ultra effort 维持期间每 10 轮重发一次精简 ultra_effort_enter。
  */
@@ -696,7 +724,7 @@ var PLAN_MODE_ATTACHMENT_CONFIG = {
 var ULTRA_EFFORT_CONFIG = {
   TURNS_BETWEEN_MAINTENANCE: 10,
 };
-//@ chunk-e6aww6q8.js:3310552-3310652 layout
+//@ chunk-5xgkngpb.js:3395661-3395761 layout
 /**
  * 有限数字向下取整且至少为 1，否则 undefined。
  */
@@ -704,7 +732,7 @@ function toPositiveInt(value) {
   if (typeof value !== "number" || !Number.isFinite(value)) return;
   return Math.max(1, Math.floor(value));
 }
-//@ chunk-e6aww6q8.js:3310652-3310891 layout
+//@ chunk-5xgkngpb.js:3395761-3396000 layout
 /**
  * ultra effort 精简提醒间隔：CLAUDE_CODE_JUNIPER_SUNDIAL → 远程设置/GrowthBook tengu_juniper_sundial → 默认 10。
  */
@@ -717,23 +745,21 @@ function getUltraEffortReminderInterval() {
   if (positiveInt_2 !== undefined) return positiveInt_2;
   return ULTRA_EFFORT_CONFIG.TURNS_BETWEEN_MAINTENANCE;
 }
-//@ chunk-e6aww6q8.js:3310891-3310925 fingerprint (2.1.88 match: RELEVANT_MEMORIES_CONFIG, 1)
+//@ chunk-5xgkngpb.js:3396000-3396034 fingerprint (2.1.88 match: RELEVANT_MEMORIES_CONFIG, 1)
 /**
  * {MAX_SESSION_BYTES:61440}：一个会话里相关记忆附件累计上限 60KB，超过不再预取。
  */
 var RELEVANT_MEMORIES_CONFIG = {
   MAX_SESSION_BYTES: 61440,
 };
-//@ chunk-e6aww6q8.js:3310925-3311033 layout
+//@ chunk-5xgkngpb.js:3396034-3396092 layout
 /**
  * CLAUDE_CODE_DISABLE_ATTACHMENTS、CLAUDE_CODE_SIMPLE 或 bareFork 时为真；此时 getAttachments 只产出队列命令与少数必需增量。
  */
-function areAttachmentsDisabled(toolUseContext) {
-  return Boolean(
-    env.CLAUDE_CODE_DISABLE_ATTACHMENTS || env.CLAUDE_CODE_SIMPLE || toolUseContext.options.bareFork,
-  );
+function areAttachmentsDisabled_2(toolUseContext) {
+  return areAttachmentsDisabled() || Boolean(toolUseContext.options.bareFork);
 }
-//@ chunk-e6aww6q8.js:3311033-3319176 fingerprint (2.1.88 match: getAttachments, 0.511)
+//@ chunk-5xgkngpb.js:3396092-3404362 fingerprint (2.1.88 match: getAttachments, 0.505)
 /**
  * getAttachments：每轮生成附件的入口。子代理委托观察时返回空；附件被禁用时只给队列命令、代理列表增量、沙箱说明等。否则在 1 秒超时的独立 AbortController 下并发运行各生成器（每个经 maybe 包装、计时、出错返回空）：用户输入类（@ 文件、MCP 资源、代理/技能/同伴提及）、全线程类（队列命令、环境、模型、延迟工具/代理/MCP 增量、变更文件、嵌套记忆、技能列表、计划/自动模式、待办、团队、关键提醒、token/预算提醒…）、仅主线程类（IDE 选区/打开文件、输出风格、诊断、任务状态、异步钩子、记忆更新、withheld 记忆、token 用量）。结果经 dedupeWithheldMemory 去重。
  */
@@ -791,7 +817,7 @@ async function getAttachments(
   let toolPoolRefreshes = toolUseContext.options.refreshTools !== undefined;
   let modelImageLimits = imageLimitsForModel(toolUseContext.options.mainLoopModel);
   let remainingWakePolls = toolUseContext.messageQueue.countRemainingWakePollEventsAfter(queuedCommands);
-  if (areAttachmentsDisabled(toolUseContext)) {
+  if (areAttachmentsDisabled_2(toolUseContext)) {
     if (options?.inputMentionsOnly) return [];
     let queuedCommandAttachments = await getQueuedCommandAttachments(
       queuedCommands,
@@ -824,9 +850,12 @@ async function getAttachments(
     abortController: attachmentAbortController,
   };
   let isMainThread = !toolUseContext.agentId;
-  let hostStatusNudge = getReplyGatePolicy()?.statusNudge;
-  let hostPromptReminder = getReplyGatePolicy()?.promptReminder;
-  let mentionedFiles = input ? extractAtMentionedFiles(input) : uniq(options?.ownFilePaths ?? []);
+  let policy = replyGatePolicy().policy;
+  let hostStatusNudge = policy?.statusNudge;
+  let hostPromptReminder = policy?.promptReminder;
+  let mentionedFiles = input
+    ? extractAtMentionedFiles(input)
+    : normalizeCaseForComparison_2(options?.ownFilePaths ?? []);
   let atMentionedFilesPromise =
     mentionedFiles.length > 0 && !env.CLAUDE_CODE_EVAL_CONFINED
       ? getDisableFileMentions() || env.CLAUDE_CODE_DISABLE_FILE_MENTIONS
@@ -863,7 +892,7 @@ async function getAttachments(
               isMainThread &&
               !isCoordinatorMainThread(toolUseContext) &&
               !getDisableSlashCommands() &&
-              toolUseContext.options.tools.some((tool) => toolMatchesName(tool, SKILL)) &&
+              toolUseContext.options.tools.some((tool) => matchesToolName(tool, SKILL)) &&
               isSkillMentionAttachmentEnabled()
               ? buildSkillMentionAttachments(
                   options.preExpansionInput ?? input,
@@ -943,6 +972,13 @@ async function getAttachments(
     maybe("model", () => getRuntimeModelSwitchAnnouncements(toolUseContext, messages)),
     maybe("session_settings", () => getOutputStyleAndLanguageAttachments(toolUseContext, messages)),
     maybe("ultrathink_effort", () => Promise.resolve(getUltrathinkEffortAttachment(input))),
+    ...(codeModeAccepted()
+      ? [
+          maybe("repl_mcp_needs_auth", () =>
+            Promise.resolve(replMcpNeedsAuthAttachment(toolUseContext, messages)),
+          ),
+        ]
+      : []),
     maybe("deferred_tools_delta", () =>
       Promise.resolve(
         getDeferredToolsDeltaAttachments(
@@ -953,9 +989,11 @@ async function getAttachments(
             callSite: isMainThread ? "attachments_main" : "attachments_subagent",
             querySource,
           },
-          toolUseContext.options.mcpClients
-            .filter((mcpClient) => mcpClient.type === "pending")
-            .map((mcpClient) => mcpClient.name),
+          codeModeAccepted() && willHideCodeModeOnlyTools(toolUseContext.options.tools)
+            ? []
+            : toolUseContext.options.mcpClients
+                .filter((mcpClient) => mcpClient.type === "pending")
+                .map((mcpClient) => mcpClient.name),
           getIsNonInteractiveSession()
             ? getNeedsAuthMcpServerNames(toolUseContext.options.mcpClients, toolUseContext.options.tools)
             : undefined,
@@ -967,14 +1005,14 @@ async function getAttachments(
             : undefined,
           () => {
             let tools = toolUseContext.options.tools;
-            let reminderBudgetOnTop = true;
+            let reminderBudgetOnTop = !(codeModeAccepted() && willHideCodeModeOnlyTools(tools));
             let keptDeferred = keptDeferredToolNames(normalizedMessages, tools, {
-              keepMcp: true,
+              keepMcp: reminderBudgetOnTop,
               surfacedOnWire: (toolUseContext.stickyBetas ?? getStickyBetas()).surfacedOnWire,
             });
             let revokedToolNames = [];
             try {
-              revokedToolNames = hasDeclaredToolSet(declaredToolSource, tools, true);
+              revokedToolNames = hasDeclaredToolSet(declaredToolSource, tools, reminderBudgetOnTop);
             } catch (error) {
               logRetractionFailure(error);
               let currentToolNames = new Set(tools.map((tool) => tool.name));
@@ -984,7 +1022,7 @@ async function getAttachments(
             return classifyRevokedTools(
               keptDeferred === undefined && revokedToolNames.length === 0
                 ? undefined
-                : uniq([...(keptDeferred ?? []), ...revokedToolNames]),
+                : normalizeCaseForComparison_2([...(keptDeferred ?? []), ...revokedToolNames]),
               toolUseContext.options.mcpClients,
               getToolPermissionContext(toolUseContext),
               declaredToolSource,
@@ -1254,7 +1292,9 @@ async function getAttachments(
         maybe("unified_tasks", async () =>
           getUnifiedTaskAttachments(toolUseContext.options.tools, toolUseContext.taskRegistry),
         ),
-        maybe("async_hook_responses", async () => getAsyncHookResponseAttachments(messages ?? [])),
+        maybe("async_hook_responses", async () =>
+          getAsyncHookResponseAttachments(messages ?? [], toolUseContext),
+        ),
         ...(options?.afterToolStep &&
         classifyQuerySource(querySource) === "main" &&
         env.CLAUDE_CODE_MEMORY_CONTEXT_NO_WAIT
@@ -1306,7 +1346,7 @@ async function getAttachments(
     ),
   );
 }
-//@ chunk-e6aww6q8.js:3319176-3319423 layout
+//@ chunk-5xgkngpb.js:3404362-3404609 layout
 /**
  * 去掉 withheld_memory 里已作为 nested_memory 出现或重复的路径，条目为空则丢弃整条附件。
  */
@@ -1329,7 +1369,7 @@ function dedupeWithheldMemory(attachments) {
         ];
   });
 }
-//@ chunk-e6aww6q8.js:3319423-3320109 fingerprint (2.1.88 match: maybe, 0.706)
+//@ chunk-5xgkngpb.js:3404609-3405295 fingerprint (2.1.88 match: maybe, 0.706)
 /**
  * maybe(label, fn)：运行一个附件生成器并计时；5% 采样记 tengu_attachment_compute_duration（大小、数量、是否出错）；出错时记日志并返回空数组，不影响其他附件。
  */
@@ -1373,15 +1413,15 @@ async function maybe(label, f) {
     return [];
   }
 }
-//@ chunk-e6aww6q8.js:3320109-3320157 layout (2.1.88 match: INLINE_NOTIFICATION_MODES, 1)
+//@ chunk-5xgkngpb.js:3405295-3405343 layout (2.1.88 match: INLINE_NOTIFICATION_MODES, 1)
 /**
  * 能作为队列命令附件送入的模式集合：prompt、task-notification。
  */
 var INLINE_NOTIFICATION_MODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3320109", () => {
+deferInit("chunk-5xgkngpb.js:3405295", () => {
   INLINE_NOTIFICATION_MODES = new Set(["prompt", "task-notification"]);
 });
-//@ chunk-e6aww6q8.js:3320157-3320260 layout
+//@ chunk-5xgkngpb.js:3405343-3405446 layout
 /**
  * 队列命令自带 toolsUsed 且开关开启时，算出与对话里已用工具的差集 {toolsUsedDelta}。
  */
@@ -1396,7 +1436,7 @@ function getToolsUsedDelta(toolsUsed, messages) {
         toolsUsedDelta: unreadable,
       };
 }
-//@ chunk-e6aww6q8.js:3320260-3320322 layout
+//@ chunk-5xgkngpb.js:3405446-3405509 layout
 /**
  * 开关关闭时把队列命令 toolsUsed 说明拼进提示词文本；开启时原样返回（改由 toolsUsedDelta 字段携带）。
  */
@@ -1405,14 +1445,14 @@ function appendToolsUsedNote(text, toolsUsed, messages) {
     ? text
     : joinWithNewlineIfAny(text, unreadableToolsLine(toolsUsed, messages));
 }
-//@ chunk-e6aww6q8.js:3320322-3320361 layout
+//@ chunk-5xgkngpb.js:3405509-3405548 layout
 /**
  * 队列命令模式是否在 INLINE_NOTIFICATION_MODES 里。
  */
 function isInlineNotificationMode(command) {
   return INLINE_NOTIFICATION_MODES.has(command.mode);
 }
-//@ chunk-e6aww6q8.js:3320361-3323197 layout
+//@ chunk-5xgkngpb.js:3405548-3408800 layout
 /**
  * 把消息队列里的 prompt/task-notification 命令转成 queued_command 附件（含图片块、粘贴内容、来源、uuid、delivery_id），前面加上 poll_events 附件；记录用户提交的提示词。2.1.88 同名函数的 316 版本。
  */
@@ -1516,7 +1556,40 @@ async function getQueuedCommandAttachments(commands, imageLimits, remainingWakeP
                 ...imageBlocks,
               ];
       }
+      let promptRewritten = text !== undefined && text !== (getContentText(command.value) ?? "");
+      let onlySystemReminders = isOnlySystemReminders(
+        (typeof promptValue === "string"
+          ? promptValue
+          : extractTextContent_2(
+              promptValue,
+              `
+`,
+            )
+        ).trimStart(),
+      );
+      let hostsOwnTurn =
+        command.mode === "prompt" &&
+        !command.isMeta &&
+        command.origin === undefined &&
+        command.localStdinOrigin === true &&
+        command.declaresNoSender === true &&
+        command.hostAsked === true &&
+        command.ownWord === true &&
+        !command.verifiedSlackHumanTurn &&
+        !promptRewritten &&
+        !onlySystemReminders &&
+        isSdkOwnedHostedTurn() &&
+        isParsedWillowEnabled() &&
+        isDeepTwilightEnabled();
+      if (hostsOwnTurn) logFeatureOk("input_host_mid_turn_prompt");
       command.deliveryId ??= randomUUID();
+      let widgetViews =
+        opts?.tools !== undefined && command.namesWidgetViews
+          ? readerStatesFromHookMessage(getWidgetStates(getRootSession()), {
+              queries: true,
+              tools: opts.tools,
+            })
+          : undefined;
       return {
         type: "queued_command",
         prompt: promptValue,
@@ -1526,19 +1599,17 @@ async function getQueuedCommandAttachments(commands, imageLimits, remainingWakeP
         fileAttachments: command.fileAttachments,
         inlinedImagePaths: command.inlinedImagePaths,
         imageFileUuids: keepBridgeFileIds(command.imageFileUuids, command.value, promptValue),
+        ...(widgetViews !== undefined && {
+          widgetViews: widgetViews.views,
+          ...(widgetViews.more > 0 && {
+            widgetViewsMore: widgetViews.more,
+          }),
+        }),
         commandMode: command.mode,
         origin: normalizeTaskNotificationOrigin(command.origin),
-        ...(text !== undefined &&
-          text !==
-            (typeof command.value === "string"
-              ? command.value
-              : extractTextContent_2(
-                  command.value,
-                  `
-`,
-                )) && {
-            promptRewritten: true,
-          }),
+        ...(promptRewritten && {
+          promptRewritten: true,
+        }),
         ...(command.runId !== undefined && {
           runId: command.runId,
         }),
@@ -1581,19 +1652,14 @@ async function getQueuedCommandAttachments(commands, imageLimits, remainingWakeP
           !command.isMeta &&
           isHumanOrigin(command.origin) &&
           !command.verifiedSlackHumanTurn &&
-          !isOnlySystemReminders(
-            (typeof promptValue === "string"
-              ? promptValue
-              : extractTextContent_2(
-                  promptValue,
-                  `
-`,
-                )
-            ).trimStart(),
-          ) &&
+          !promptRewritten &&
+          !onlySystemReminders &&
           isParsedWillowEnabled() && {
             humanTurn: true,
           }),
+        ...(hostsOwnTurn && {
+          hostsOwnTurn: true,
+        }),
         ...(isProjectsRelay(command.origin) &&
           isDapperCupcakeOn() && {
             besideToolResults: true,
@@ -1610,7 +1676,7 @@ async function getQueuedCommandAttachments(commands, imageLimits, remainingWakeP
     .then(batchRelayedSlackPrompts)
     .then((attachments) => (pollEventsAttachment ? [pollEventsAttachment, ...attachments] : attachments));
 }
-//@ chunk-e6aww6q8.js:3323197-3323716 layout
+//@ chunk-5xgkngpb.js:3408800-3409308 layout
 /**
  * 队列中的轮询事件（poll event）合并成一个 poll_events 附件：envelopes、kinds、toolsUsed、媒体、剩余唤醒数、来源等。
  */
@@ -1621,7 +1687,7 @@ function buildPollEventsAttachment(commands, remainingWakeCount, messages) {
   let mapped = entries.map((command) => command.pollEvent?.kind ?? "unknown");
   let toolsUsed = mapped.every(mentionsSessionNoticeKind)
     ? []
-    : listUnreadableToolsUsed(getConversationToolsUsed().names(), messages);
+    : unreadableToolsFromEntries(entries, messages);
   return {
     type: "poll_events",
     envelopes: entries.map(getPollEventEnvelope),
@@ -1646,7 +1712,7 @@ function buildPollEventsAttachment(commands, remainingWakeCount, messages) {
     ...declaredRoundStamp(entries),
   };
 }
-//@ chunk-e6aww6q8.js:3323716-3324119 layout
+//@ chunk-5xgkngpb.js:3409308-3409735 layout
 /**
  * 连续的已验证 Slack 人工轮次提示词合并：第一条带 batchedRelayPrompts，其余标记 renderedByBatchHead。
  */
@@ -1657,7 +1723,8 @@ function batchRelayedSlackPrompts(attachments) {
     isHumanOrUnset(attachment.origin) &&
     typeof attachment.prompt === "string" &&
     !attachment.inlinedImagePaths?.length &&
-    !attachment.toolsUsedDelta?.length;
+    !attachment.toolsUsedDelta?.length &&
+    attachment.widgetViews === undefined;
   let index = 0;
   while (index < attachments.length) {
     if (!isRelayable(attachments[index])) {
@@ -1675,7 +1742,7 @@ function batchRelayedSlackPrompts(attachments) {
   }
   return attachments;
 }
-//@ chunk-e6aww6q8.js:3324119-3324744 layout
+//@ chunk-5xgkngpb.js:3409735-3410369 layout
 /**
  * 子代理待处理消息（来自主线程/同伴）转成 queued_command 附件；同伴来源时经过转发处理，缺 SendMessage 工具时标记 sendMessageToolAbsent。
  */
@@ -1704,6 +1771,7 @@ async function getAgentPendingMessageAttachments(agentId, taskRegistry, tools, m
       );
   }
   dropIfAnyMessages(keptMessages);
+  allPeerOrigins(keptMessages);
   let sendMessageToolAbsent = !hasSendMessageTool(tools);
   let forwardedDeliveries = mintedDeliveries(keptMessages.map((message) => message.forwarded));
   return keptMessages.flatMap((message, index) => [
@@ -1726,7 +1794,7 @@ async function getAgentPendingMessageAttachments(agentId, taskRegistry, tools, m
     },
   ]);
 }
-//@ chunk-e6aww6q8.js:3324744-3325029 layout
+//@ chunk-5xgkngpb.js:3410369-3410654 layout
 /**
  * 把粘贴内容里的图片转成 image 块（按模型限制压缩），返回块与粘贴 id。
  */
@@ -1756,7 +1824,7 @@ async function buildPastedImageBlocks(pastedContents, limits) {
     ids: filtered.map((attachment) => attachment.id),
   };
 }
-//@ chunk-e6aww6q8.js:3325029-3325400 fingerprint (2.1.88 match: getPlanModeAttachmentTurnCount, 0.9)
+//@ chunk-5xgkngpb.js:3410654-3411025 fingerprint (2.1.88 match: getPlanModeAttachmentTurnCount, 0.899)
 /**
  * 从最新往回数自上一条 plan_mode/plan_mode_reentry 附件以来的真实用户轮数；遇到 plan_mode_exit 停止。
  */
@@ -1780,7 +1848,7 @@ function getPlanModeAttachmentTurnCount(messages) {
     foundPlanModeAttachment,
   };
 }
-//@ chunk-e6aww6q8.js:3325400-3325461 layout
+//@ chunk-5xgkngpb.js:3411025-3411086 layout
 /**
  * 文本非空且不是 "(no content)" 等占位。
  */
@@ -1788,12 +1856,12 @@ function isMeaningfulText(text) {
   let trimmed = text.trim();
   return trimmed !== "" && trimmed !== NO_CONTENT_MESSAGE && trimmed !== NO_RESPONSE_REQUESTED;
 }
-//@ chunk-e6aww6q8.js:3325461-3325497 layout
+//@ chunk-5xgkngpb.js:3411086-3411122 layout
 /**
  * AskUserQuestion、ExitPlanMode、SendUserFile、Brief 等会被视为"对用户说话"的工具名集合（静默轮判断用）。
  */
-var USER_FACING_TOOL_NAMES; // deferred: uses briefToolModule (./conversationRecovery.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3325461", () => {
+var USER_FACING_TOOL_NAMES; // deferred: uses ASKUSERQUESTION (../tools/AskUserQuestionTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-5xgkngpb.js:3411086", () => {
   USER_FACING_TOOL_NAMES = new Set([
     ASKUSERQUESTION,
     BRIEF_TOOL_NAME,
@@ -1802,7 +1870,7 @@ deferInit("chunk-e6aww6q8.js:3325461", () => {
     SEND_USER_FILE_TOOL_NAME,
   ]);
 });
-//@ chunk-e6aww6q8.js:3325497-3326453 file-local
+//@ chunk-5xgkngpb.js:3411122-3412081 file-local
 /**
  * 统计静默轮：从最新往回数没有对用户输出（文本/可见思考/用户可见工具）的助手轮数、本段内已发 silent_turn_reminder 次数、静默开始时间。旧版名 getAutoModeAttachmentTurnCount 为错配。
  */
@@ -1885,7 +1953,7 @@ function getSilentTurnStats(messages) {
     silentSince,
   };
 }
-//@ chunk-e6aww6q8.js:3326453-3326819 layout
+//@ chunk-5xgkngpb.js:3412081-3412447 layout
 /**
  * 静默轮达到阈值（轮数或秒数，按模型配置）时产出 silent_turn_reminder 附件。
  */
@@ -1916,7 +1984,7 @@ function getSilentTurnReminderAttachment(messages, mainLoopModel, nowMs) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3326819-3327007 fingerprint (2.1.88 match: countPlanModeAttachmentsSinceLastExit, 1)
+//@ chunk-5xgkngpb.js:3412447-3412635 fingerprint (2.1.88 match: countPlanModeAttachmentsSinceLastExit, 1)
 /**
  * 最近一次 plan_mode_exit 之后的 plan_mode 附件数（决定完整/精简提醒）。
  */
@@ -1931,7 +1999,7 @@ function countPlanModeAttachmentsSinceLastExit(messages) {
   }
   return count;
 }
-//@ chunk-e6aww6q8.js:3327007-3327339 layout (2.1.88 match: countPlanModeAttachmentsSinceLastExit, 0.837)
+//@ chunk-5xgkngpb.js:3412635-3412967 layout (2.1.88 match: countPlanModeAttachmentsSinceLastExit, 0.836)
 /**
  * 最近一条 plan_mode 附件的 planFilePath/planGoesToExitTool；先遇到 plan_mode_exit 返回 null。
  */
@@ -1949,18 +2017,20 @@ function getLastPlanModeAttachmentInfo(messages) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:3327339-3327384 layout
+//@ chunk-5xgkngpb.js:3412967-3413012 layout
 /**
  * 工具列表里有 ExitPlanMode。
  */
 function hasExitPlanModeTool(tools) {
-  return tools.some((tool) => toolMatchesName(tool, EXITPLANMODE));
+  return tools.some((tool) => matchesToolName(tool, EXITPLANMODE));
 }
-//@ chunk-e6aww6q8.js:3327384-3327508 layout
+//@ chunk-5xgkngpb.js:3413012-3413234 layout
 /**
  * 构造 plan_mode 附件 {reminderType, isSubAgent, planExists:false, planGoesToExitTool?}。
  */
-function buildPlanModeAttachment(reminderType, agentId, tools) {
+function buildPlanModeAttachment(reminderType, agentId, tools, permissionContext) {
+  let options = planDocRef(permissionContext);
+  let exitToolInfo = planDocsServerNameFor(tools, permissionContext);
   return {
     type: "plan_mode",
     reminderType,
@@ -1968,15 +2038,23 @@ function buildPlanModeAttachment(reminderType, agentId, tools) {
     planExists: false,
     ...(hasExitPlanModeTool(tools) && {
       planGoesToExitTool: true,
+      ...(exitToolInfo !== undefined && {
+        planDocServer: exitToolInfo,
+      }),
+      ...(exitToolInfo !== undefined &&
+        options !== undefined && {
+          planDoc: options,
+        }),
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3327508-3328319 fingerprint (2.1.88 match: getPlanModeAttachments, 0.856)
+//@ chunk-5xgkngpb.js:3413234-3414059 fingerprint (2.1.88 match: getPlanModeAttachments, 0.856)
 /**
  * 计划模式（permission mode=plan）时产出 plan_mode 附件：首轮或每 5 轮一次，每 5 次一次完整版，其余精简；计划文件状态变化时立即重发；曾退出后重新进入时给 plan_mode_reentry。
  */
 async function getPlanModeAttachments(planSlugSeed, messages, toolUseContext, options) {
-  if (getToolPermissionContext(toolUseContext).mode !== "plan") return [];
+  let toolPermissionContext = getToolPermissionContext(toolUseContext);
+  if (toolPermissionContext.mode !== "plan") return [];
   let lastPlanModeAttachmentInfo = getLastPlanModeAttachmentInfo(messages ?? []);
   let needsRefresh =
     lastPlanModeAttachmentInfo !== null &&
@@ -1999,6 +2077,7 @@ async function getPlanModeAttachments(planSlugSeed, messages, toolUseContext, op
         useFullReminder || needsRefresh ? "full" : "sparse",
         toolUseContext.agentId,
         toolUseContext.options.tools,
+        toolPermissionContext,
       ),
     ];
   if (isStorageV5Enabled() && toolUseContext.storageV5 !== undefined) await settlePlanFileCachePrime();
@@ -2024,7 +2103,7 @@ async function getPlanModeAttachments(planSlugSeed, messages, toolUseContext, op
   });
   return attachments;
 }
-//@ chunk-e6aww6q8.js:3328319-3328611 fingerprint (2.1.88 match: getPlanModeExitAttachment, 0.8)
+//@ chunk-5xgkngpb.js:3414059-3414351 fingerprint (2.1.88 match: getPlanModeExitAttachment, 0.8)
 /**
  * 刚离开计划模式时产出一次 plan_mode_exit（带计划文件路径与是否存在）。
  */
@@ -2053,7 +2132,7 @@ async function getPlanModeExitAttachment(messages, toolUseContext) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3328611-3328823 fingerprint (2.1.88 match: countAutoModeAttachmentsSinceLastExit, 1)
+//@ chunk-5xgkngpb.js:3414351-3414563 fingerprint (2.1.88 match: countAutoModeAttachmentsSinceLastExit, 1)
 /**
  * 返回最近一条 auto_mode 附件（遇到 auto_mode_exit 返回 null）。旧版名 countAutoModeAttachmentsSinceLastExit 不准确。
  */
@@ -2066,7 +2145,7 @@ function getLastAutoModeAttachment(messages) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:3328823-3329537 callgraph-fingerprint (2.1.88 match: getAutoModeAttachments, 0.186)
+//@ chunk-5xgkngpb.js:3414563-3415294 callgraph-fingerprint (2.1.88 match: getAutoModeAttachments, 0.186)
 /**
  * auto/bypassPermissions 模式下产出 auto_mode 附件（同意流程、bashFirst、steerOnly、finishExposedWork 等字段），已发过且状态未变则不重复。
  */
@@ -2077,12 +2156,10 @@ async function getAutoModeAttachments(messages, toolUseContext) {
   let steerOnly = isBypassMode || leanPromptFor(getPromptModel(toolUseContext.options.mainLoopModel));
   let tools = toolUseContext.options.tools;
   let bashFirst =
-    tools.some((tool) => toolMatchesName(tool, BASH_TOOL_NAME)) &&
-    tools.some(
-      (tool) => toolMatchesName(tool, FILE_EDIT_TOOL_NAME) || toolMatchesName(tool, FILE_WRITE_TOOL_NAME),
-    ) &&
+    tools.some((tool) => matchesToolName(tool, BASH_TOOL_NAME)) &&
+    tools.some((tool) => matchesToolName(tool, EDIT) || matchesToolName(tool, FILE_WRITE_TOOL_NAME)) &&
     true &&
-    true &&
+    !(codeModeAccepted() && willHideCodeModeOnlyTools(tools)) &&
     isThriftySonicEnabled();
   let canFinishExposedWork =
     !isBypassMode &&
@@ -2120,7 +2197,7 @@ async function getAutoModeAttachments(messages, toolUseContext) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3329537-3329793 fingerprint (2.1.88 match: getAutoModeExitAttachment, 0.507)
+//@ chunk-5xgkngpb.js:3415294-3415550 fingerprint (2.1.88 match: getAutoModeExitAttachment, 0.507)
 /**
  * 离开 auto 模式时产出一次 auto_mode_exit（主线程）。
  */
@@ -2140,7 +2217,44 @@ async function getAutoModeExitAttachment(messages, toolUseContext) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3334304-3334413 fingerprint (2.1.88 match: getUltrathinkEffortAttachment, 0.855)
+//@ chunk-5xgkngpb.js:3420321-3420923 sole-consumer
+function replMcpNeedsAuthAttachment(toolUseContext, messages) {
+  if (codeModeAccepted()) {
+    if (getIsNonInteractiveSession() || !willHideCodeModeOnlyTools(toolUseContext.options.tools)) return [];
+    let { replMcpNeedsAuthServersOf } = require("./codeMode/renderReplMcpNeedsAuthNotice.lazy.js");
+    let alreadyAttached = new Set();
+    for (let message of messages ?? [])
+      if (message.type === "attachment" && message.attachment.type === "repl_mcp_needs_auth")
+        for (let serverName of replMcpNeedsAuthServersOf(message.attachment))
+          alreadyAttached.add(serverName.name);
+    let result = [];
+    for (let mcpClient of toolUseContext.options.mcpClients) {
+      let tool = mcpClient.name;
+      if (mcpClient.type !== "needs-auth" || alreadyAttached.has(tool)) continue;
+      let found = toolUseContext.options.tools.find((tool_2) => {
+        let mcpInfo = tool_2.mcpInfo;
+        return (
+          mcpInfo?.isAuthStub === true && mcpInfo.serverName === tool && mcpInfo.toolName === AUTHENTICATE
+        );
+      });
+      if (found !== undefined)
+        result.push({
+          name: tool,
+          authTool: found.name,
+        });
+    }
+    return result.length > 0
+      ? [
+          {
+            type: "repl_mcp_needs_auth",
+            servers: result,
+          },
+        ]
+      : [];
+  }
+  return [];
+}
+//@ chunk-5xgkngpb.js:3420923-3421032 fingerprint (2.1.88 match: getUltrathinkEffortAttachment, 0.855)
 /**
  * 输入含 ultrathink 关键词且开关开启时产出 ultrathink_effort（记 tengu_ultrathink）。
  */
@@ -2153,7 +2267,7 @@ function getUltrathinkEffortAttachment(input) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3334413-3334527 layout
+//@ chunk-5xgkngpb.js:3421032-3421146 layout
 /**
  * 人工输入含工作流关键词时产出 workflow_keyword_request（记 tengu_workflow_keyword）。
  */
@@ -2166,7 +2280,7 @@ function getWorkflowKeywordAttachment(input) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3334527-3335234 layout
+//@ chunk-5xgkngpb.js:3421146-3421853 layout
 /**
  * effort 为 ultra 时：首次给完整 ultra_effort_enter，之后每 N 轮给精简版；退出 ultra 时给 ultra_effort_exit。
  */
@@ -2232,7 +2346,7 @@ function getUltraEffortAttachments(messages, toolUseContext) {
   }
   return [];
 }
-//@ chunk-e6aww6q8.js:3335234-3335333 layout
+//@ chunk-5xgkngpb.js:3421853-3421952 layout
 /**
  * 无已记录工具声明时，从对话推断上次请求声明的工具集合（Fmn）。
  */
@@ -2246,7 +2360,7 @@ function inferDeclaredToolsFromHistory(betas, tools, context, messages) {
     !messages.some((message) => message.type === "assistant"),
   );
 }
-//@ chunk-e6aww6q8.js:3335333-3335492 layout
+//@ chunk-5xgkngpb.js:3421952-3422111 layout
 /**
  * 由 toolUseContext 构造延迟工具增量所需的上下文 {latches, toolPoolRefreshes, byValue}。
  */
@@ -2263,7 +2377,7 @@ function buildDeferredToolsLatchContext(latches, toolUseContext, querySource) {
         ),
       };
 }
-//@ chunk-e6aww6q8.js:3335492-3335577 layout
+//@ chunk-5xgkngpb.js:3422111-3422196 layout
 /**
  * 同上，参数直接给出（runAgent 用）。
  */
@@ -2280,7 +2394,7 @@ function buildDeferredToolsLatchContextFrom(
     byValue: buildToolListingRenderer(() => getToolPermissionContext, agentDefinitions, querySource),
   };
 }
-//@ chunk-e6aww6q8.js:3335577-3335663 layout
+//@ chunk-5xgkngpb.js:3422196-3422282 layout
 /**
  * 把历史里只宣布名字的延迟工具并入会话门闩。
  */
@@ -2288,7 +2402,7 @@ function mergeNameOnlyAnnouncements(latches, recorded) {
   for (let nameOnlyAnnouncement of recorded.nameOnlyAnnouncements)
     latches.nameOnlyAnnouncements.add(nameOnlyAnnouncement);
 }
-//@ chunk-e6aww6q8.js:3335663-3335862 layout
+//@ chunk-5xgkngpb.js:3422282-3422481 layout
 /**
  * 生成工具描述渲染参数（权限上下文、代理列表、listed/deferred 放置）与 querySource。
  */
@@ -2303,7 +2417,7 @@ function buildToolListingRenderer(getToolPermissionContext, agentDefinitions, qu
     querySource,
   };
 }
-//@ chunk-e6aww6q8.js:3335862-3336096 layout
+//@ chunk-5xgkngpb.js:3422481-3422715 layout
 /**
  * 取上次请求声明的工具（名字/服务器/条目），没有记录时推断。
  */
@@ -2334,7 +2448,7 @@ function getDeclaredToolSource(latches, messages, options, tools, permissionCont
     return;
   }
 }
-//@ chunk-e6aww6q8.js:3336096-3336970 layout
+//@ chunk-5xgkngpb.js:3422715-3423591 layout
 /**
  * 工具搜索可用时产出 deferred_tools_delta：新出现/撤回的延迟工具名（getDeferredToolsDelta）；按值声明的工具改为 computeByValueToolsDelta 的结果；有工具被拒时可加 deniedLead（tengu_composed_treehouse）。
  */
@@ -2365,7 +2479,7 @@ async function getDeferredToolsDeltaAttachments(
     }
   if (!announceDeferred) {
     if (!isToolSearchEnabledOptimistic()) return [];
-    if (!modelSupportsToolReference(model)) return [];
+    if (!supportsToolReferenceOrPelican(model)) return [];
     if (isVertexModelWithoutToolSearch(getCanonicalName(model))) return [];
     if (!isToolSearchToolAvailable(tools)) return [];
     if (
@@ -2429,7 +2543,7 @@ async function getDeferredToolsDeltaAttachments(
     return baseAttachments;
   }
 }
-//@ chunk-e6aww6q8.js:3336970-3338419 layout
+//@ chunk-5xgkngpb.js:3423591-3425046 layout
 /**
  * 按值内联声明的工具：比较当前描述与已声明描述，得出需要重新声明、移除的工具。
  */
@@ -2450,7 +2564,7 @@ async function computeByValueToolsDelta(
   let readdedListings = new Map();
   for (let toolName of deferredToolsDelta?.readdedNames ?? []) {
     let defined = definedByValue.get(toolName);
-    let found = getToolPermissionContext.find((tool) => toolMatchesName(tool, toolName));
+    let found = getToolPermissionContext.find((tool) => matchesToolName(tool, toolName));
     if (!withdrawn.has(toolName) || defined === undefined || found === undefined) continue;
     let listing = await hashForTool(found);
     readdedListings.set(
@@ -2525,7 +2639,7 @@ async function computeByValueToolsDelta(
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3338419-3338745 layout
+//@ chunk-5xgkngpb.js:3425046-3425372 layout
 /**
  * 已声明但现在被撤回（权限或配置变化，不含未配置/替换）的工具名。压缩时使用。
  */
@@ -2554,7 +2668,7 @@ function getRevokedDeferredToolNames(declaredToolSource, context) {
       .map((revokedTool) => revokedTool.name) ?? []
   );
 }
-//@ chunk-e6aww6q8.js:3338745-3339051 layout
+//@ chunk-5xgkngpb.js:3425372-3425678 layout
 /**
  * 对一组工具名逐个判断撤回原因，返回 {revoked:[{name,cause}], causeCounts}。
  */
@@ -2595,7 +2709,7 @@ function classifyRevokedTools(toolNames, mcpClients, toolPermissionContext, decl
     };
   }
 }
-//@ chunk-e6aww6q8.js:3339051-3339285 layout
+//@ chunk-5xgkngpb.js:3425678-3425912 layout
 /**
  * 返回 causeKindOf/holdWhileConnecting/connectingServersOf，供延迟工具增量判断 MCP 连接中的工具。
  */
@@ -2623,12 +2737,12 @@ function buildToolRevocationClassifier(toolUseContext) {
     connectingServersOf: (toolName) => pendingServersForTool(toolName, toolUseContext.options.mcpClients),
   };
 }
-//@ chunk-e6aww6q8.js:3339285-3340409 fingerprint (2.1.88 match: getAgentListingDeltaAttachment, 0.709)
+//@ chunk-5xgkngpb.js:3425912-3427068 fingerprint (2.1.88 match: getAgentListingDeltaAttachment, 0.708)
 /**
  * 有 Agent 工具时，对比历史 agent_listing_delta，产出可用代理类型的增减（addedTypes/removedTypes/addedLines）。
  */
 async function getAgentListingDeltaAttachment(toolUseContext, messages) {
-  if (!toolUseContext.options.tools.some((t) => toolMatchesName(t, AGENT))) return [];
+  if (!toolUseContext.options.tools.some((t) => matchesToolName(t, AGENT))) return [];
   let { activeAgents, allowedAgentTypes } = toolUseContext.options.agentDefinitions;
   let mcpServers = new Set();
   for (let tool of toolUseContext.options.tools) {
@@ -2672,7 +2786,7 @@ async function getAgentListingDeltaAttachment(toolUseContext, messages) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3340409-3340643 layout
+//@ chunk-5xgkngpb.js:3427068-3427302 layout
 /**
  * 需要认证（needs-auth）且未有认证占位工具的 MCP 服务器名。
  */
@@ -2693,7 +2807,7 @@ function getNeedsAuthMcpServerNames(mcpClients, tools = []) {
     )
     .map((mcpClient) => mcpClient.name);
 }
-//@ chunk-e6aww6q8.js:3340643-3340968 fingerprint (2.1.88 match: getMcpInstructionsDeltaAttachment, 0.777)
+//@ chunk-5xgkngpb.js:3427302-3427627 fingerprint (2.1.88 match: getMcpInstructionsDeltaAttachment, 0.778)
 /**
  * MCP 服务器 instructions 的增减 → mcp_instructions_delta；含内置服务器附加说明。
  */
@@ -2714,7 +2828,7 @@ function getMcpInstructionsDeltaAttachment(
     });
   if (
     isToolSearchEnabledOptimistic() &&
-    modelSupportsToolReference(model) &&
+    supportsToolReferenceOrPelican(model) &&
     !isVertexModelWithoutToolSearch(getCanonicalName(model)) &&
     isToolSearchToolAvailable(tools) &&
     tools.some(
@@ -2741,7 +2855,7 @@ function getMcpInstructionsDeltaAttachment(
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3340968-3341091 layout
+//@ chunk-5xgkngpb.js:3427627-3427750 layout
 /**
  * MCP 工具被丢弃时产出 mcp_dropped_tools_delta。
  */
@@ -2759,7 +2873,7 @@ function getMcpDroppedToolsAttachment(toolUseContext, messages) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3341091-3341174 fingerprint (2.1.88 match: getCriticalSystemReminderAttachment, 0.764)
+//@ chunk-5xgkngpb.js:3427750-3427833 fingerprint (2.1.88 match: getCriticalSystemReminderAttachment, 0.761)
 /**
  * 有 criticalSystemReminder_EXPERIMENTAL 文本时产出 critical_system_reminder（宿主 promptReminder 也复用它）。
  */
@@ -2772,7 +2886,7 @@ function getCriticalSystemReminderAttachment(toolUseContext) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3341174-3341636 layout
+//@ chunk-5xgkngpb.js:3427833-3428295 layout
 /**
  * 非默认输出风格时产出 output_style（风格名与本轮提醒文本；有后台任务运行时用 waitingTurnReminder）。
  */
@@ -2801,7 +2915,7 @@ async function getOutputStyleAttachment(toolUseContext) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3341636-3342183 fingerprint (2.1.88 match: getSelectedLinesFromIDE, 0.751)
+//@ chunk-5xgkngpb.js:3428295-3428842 fingerprint (2.1.88 match: getSelectedLinesFromIDE, 0.752)
 /**
  * IDE 选区：diff 视图选区给 selected_lines_in_diff；普通选区（连接了 IDE MCP、路径未被拒）给 selected_lines_in_ide（行号、内容、显示路径）。
  */
@@ -2843,7 +2957,7 @@ async function getSelectedLinesFromIDE(ideSelection, toolUseContext) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3342183-3342595 fingerprint (2.1.88 match: getDirectoriesToProcess, 0.715)
+//@ chunk-5xgkngpb.js:3428842-3429254 fingerprint (2.1.88 match: getDirectoriesToProcess, 0.715)
 /**
  * 计算从 cwd 到目标文件之间需要加载 CLAUDE.md 的目录：嵌套目录、cwd 及其祖先、worktree 信息、检出目标路径。
  */
@@ -2878,7 +2992,7 @@ function getDirectoriesToProcess(targetPath, originalCwd) {
       worktreeForPath === null ? targetPath : join(checkoutTargetDir, basename(resolve_2(targetPath))),
   };
 }
-//@ chunk-e6aww6q8.js:3342595-3342705 layout
+//@ chunk-5xgkngpb.js:3429254-3429364 layout
 /**
  * 附加工作目录不在 cwd 下且其 CLAUDE.md 没有嵌套目录。
  */
@@ -2890,14 +3004,14 @@ function isAdditionalDirWithoutNestedMemory(dir) {
     getDirectoriesToProcess(join(dir, "CLAUDE.md"), originalCwd).nestedDirs.length === 0
   );
 }
-//@ chunk-e6aww6q8.js:3342705-3342782 callgraph-fingerprint (2.1.88 match: isInstructionsMemoryType, 1)
+//@ chunk-5xgkngpb.js:3429364-3429441 callgraph-fingerprint (2.1.88 match: isInstructionsMemoryType, 1)
 /**
  * 记忆类型是否为 User/Project/Local/Managed。
  */
 function isInstructionsMemoryType_2(type) {
   return type === "User" || type === "Project" || type === "Local" || type === "Managed";
 }
-//@ chunk-e6aww6q8.js:3342782-3344175 fingerprint (2.1.88 match: memoryFilesToAttachments, 0.665)
+//@ chunk-5xgkngpb.js:3429441-3430841 fingerprint (2.1.88 match: memoryFilesToAttachments, 0.665)
 /**
  * 把记忆文件（CLAUDE.md 等）转成 nested_memory 附件：跳过已读文件、已在上下文里的相同内容；超长时按模型截断（记 context_claude_md_load nested_file_cut）。
  */
@@ -2911,24 +3025,22 @@ async function memoryFilesToAttachments(
 ) {
   let attachments = [];
   let shouldFireHook = hasInstructionsLoadedHook();
-  let maxMemoryFileChars = getMaxMemoryFileChars(toolUseContext.options.mainLoopModel);
+  let maxChars = getMaxMemoryFileChars(toolUseContext.options.mainLoopModel);
   for (let memoryFile of memoryFiles) {
     if (toolUseContext.readFileState.has(memoryFile.path)) continue;
     let timestamp = await getReadTimestamp(memoryFile, !isTriggerRead, toolUseContext.storageV5);
     if (toolUseContext.readFileState.has(memoryFile.path)) continue;
     let trimmed = memoryFile.content.trim();
-    let flattened = uniq([memoryFile.path, mapCheckoutPathIntoWorktree(memoryFile.path, worktree)]).flatMap(
-      (path) => announcementState?.announced?.get(path) ?? [],
-    );
+    let flattened = normalizeCaseForComparison_2([
+      memoryFile.path,
+      mapCheckoutPathIntoWorktree(memoryFile.path, worktree),
+    ]).flatMap((path) => announcementState?.announced?.get(path) ?? []);
     let any = flattened.some((announced) => announced.content === trimmed);
     let isTruncatedCopyOfPrior = !any && flattened.some((announced) => isTruncatedCopyOf(announced, trimmed));
     let alreadyAnnounced = any || isTruncatedCopyOfPrior;
     let isTruncated =
-      isTruncatedCopyOfPrior ||
-      (!any && memoryFile.type !== "Managed" && trimmed.length > maxMemoryFileChars);
-    let content = isTruncated
-      ? truncateInstructionsAtLine(trimmed, memoryFile.path, maxMemoryFileChars)
-      : trimmed;
+      isTruncatedCopyOfPrior || (!any && memoryFile.type !== "Managed" && trimmed.length > maxChars);
+    let content = isTruncated ? truncateInstructionsAtLine(trimmed, memoryFile.path, maxChars) : trimmed;
     let nestedAnnounced = announcementState?.nested.get(memoryFile.path);
     let isNestedAnnounced = nestedAnnounced === content || nestedAnnounced === trimmed;
     if (!alreadyAnnounced && !isNestedAnnounced) {
@@ -2989,7 +3101,7 @@ async function memoryFilesToAttachments(
   }
   return attachments;
 }
-//@ chunk-e6aww6q8.js:3344175-3344488 layout
+//@ chunk-5xgkngpb.js:3430841-3431154 layout
 /**
  * 汇总对话里已宣布/嵌套/withheld 的记忆文件，用于去重。
  */
@@ -3021,7 +3133,7 @@ async function getMemoryAnnouncementState(toolUseContext, messages) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:3344488-3344799 layout
+//@ chunk-5xgkngpb.js:3431154-3431465 layout
 /**
  * 按 getDirectoriesToProcess 的目录顺序依次产出各级目录的记忆文件（异步生成器）。
  */
@@ -3055,7 +3167,7 @@ async function* iterateMemoryFilesForPath(
         : heldOutsideTracker?.above(cwdLevelDir),
     );
 }
-//@ chunk-e6aww6q8.js:3344799-3344886 layout
+//@ chunk-5xgkngpb.js:3431465-3431552 layout
 /**
  * 读取受限时返回记录"被拦在外面"的记忆文件的跟踪器。
  */
@@ -3071,7 +3183,7 @@ function buildHeldOutsideTracker(context, onHeldOutside) {
       )
     : undefined;
 }
-//@ chunk-e6aww6q8.js:3344886-3345142 layout
+//@ chunk-5xgkngpb.js:3431552-3431808 layout
 /**
  * 因权限未显示的记忆文件 → withheld_memory 附件。
  */
@@ -3093,7 +3205,7 @@ function getWithheldMemoryAttachment(context, files) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3345142-3346117 layout
+//@ chunk-5xgkngpb.js:3431808-3432789 layout
 /**
  * 某文件路径触发的嵌套记忆（CLAUDE.md）附件；CLAUDE_CODE_DISABLE_CLAUDE_MDS 时为空。
  */
@@ -3180,7 +3292,7 @@ async function getNestedMemoryAttachmentsForFile(
   }
   return attachments;
 }
-//@ chunk-e6aww6q8.js:3346117-3346436 fingerprint (2.1.88 match: getOpenedFileFromIDE, 0.784)
+//@ chunk-5xgkngpb.js:3432789-3433108 fingerprint (2.1.88 match: getOpenedFileFromIDE, 0.829)
 /**
  * IDE 打开文件：附带该文件触发的嵌套记忆，再加 opened_file_in_ide。
  */
@@ -3215,7 +3327,7 @@ async function getOpenedFileFromIDE(ideSelection, toolUseContext, messages) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3346436-3347306 layout
+//@ chunk-5xgkngpb.js:3433108-3434048 layout
 /**
  * 文件提及只作引用（CLAUDE_CODE_DISABLE_FILE_MENTIONS 或宿主不读时）：已缓存内容能内联的读出，其余汇成 at_mention_reference。
  */
@@ -3229,11 +3341,12 @@ async function getFileMentionReferences(mentionedFiles, toolUseContext, messages
     if (autoCompactThresholdTokens > SECONDARY_CONTEXT_WINDOW) {
       let heldTokens =
         estimateTokensWithAnchor(messages, modelContextInfo.bytesPerToken) +
-        stripInProgressAssistantMessage(messages) +
+        serverClearedTokens(messages) +
         (hasUsageAnchor(messages) ? 0 : SECONDARY_CONTEXT_WINDOW);
       let claimedTokens = 0;
       tokenBudget = {
         threshold: autoCompactThresholdTokens,
+        apiLimit: getEffectiveContextWindow(modelContextInfo),
         held: () => heldTokens,
         claimed: () => claimedTokens,
         claim: (count) => {
@@ -3247,7 +3360,8 @@ async function getFileMentionReferences(mentionedFiles, toolUseContext, messages
   let unreadPaths = [];
   let plainPdfPaths = [];
   let isCoworkNonGitRepo = () => isCoworkAny() && getToolsMachine()?.directory?.isGitRepo === false;
-  let maxSizeBytes = getDefaultFileReadingLimits().maxSizeBytes;
+  let { maxSizeBytes } = getDefaultFileReadingLimits();
+  let sizeBudget = maxSizeBytes;
   for (let mentionedPath of mentionedFiles) {
     if (pickerSet?.delete(mentionedPath)) {
       plainPdfPaths.push(mentionedPath);
@@ -3255,16 +3369,17 @@ async function getFileMentionReferences(mentionedFiles, toolUseContext, messages
     }
     let cachedContent = pickerMap?.get(mentionedPath);
     pickerMap?.delete(mentionedPath);
-    let contentBytes = Buffer.isBuffer(cachedContent) ? cachedContent.length : 0;
+    let sizeBytes =
+      Buffer.isBuffer(cachedContent) && cachedContent.length <= maxSizeBytes ? cachedContent.length : 0;
     let fileAttachment =
       cachedContent &&
-      contentBytes <= maxSizeBytes &&
+      sizeBytes <= sizeBudget &&
       getAttachmentReadBlockReason(mentionedPath, getToolPermissionContext(toolUseContext), "person") ===
         undefined &&
       (await readCachedMentionContent(mentionedPath, cachedContent, toolUseContext, tokenBudget));
     if (fileAttachment) {
       attachments.push(fileAttachment);
-      maxSizeBytes -= contentBytes;
+      sizeBudget -= fileAttachment.type === "file" ? sizeBytes : 0;
     } else if (isAbsolute(mentionedPath) || !isCoworkNonGitRepo()) unreadPaths.push(mentionedPath);
   }
   if (unreadPaths.length + plainPdfPaths.length > 0)
@@ -3282,7 +3397,12 @@ async function getFileMentionReferences(mentionedFiles, toolUseContext, messages
     });
   return attachments;
 }
-//@ chunk-e6aww6q8.js:3347306-3348215 layout
+//@ chunk-5xgkngpb.js:3434048-3434127 layout
+function maxReadAllBytes(sizeBytes) {
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_jolly_candy", 0);
+  return Number.isFinite(featureValue_CACHED_MAY_BE_STALE) && sizeBytes <= featureValue_CACHED_MAY_BE_STALE;
+}
+//@ chunk-5xgkngpb.js:3434127-3435384 layout
 /**
  * 宿主提供的提及文件内容：太大给 at_mention_reference（too_large），否则按读取上限截断后生成文件附件。
  */
@@ -3296,10 +3416,13 @@ async function readCachedMentionContent(filePath, buffer, { credentials }, token
       mentions: [filePath],
       unread: "too_large",
       fileSize: buffer.tooLargeBytes,
+      ...(maxReadAllBytes(buffer.tooLargeBytes) && {
+        readAllOfIt: "over_size_limit",
+      }),
       displayPath,
     };
   }
-  let { maxTokens } = getDefaultFileReadingLimits();
+  let { maxTokens, maxSizeBytes } = getDefaultFileReadingLimits();
   let ext = parse(filePath).ext.toLowerCase().slice(1);
   for (let lineLimit of [undefined, MAX_LINES_TO_READ]) {
     let { content, lineCount, totalLines } = readFileInRangeFast(
@@ -3328,7 +3451,20 @@ async function readCachedMentionContent(filePath, buffer, { credentials }, token
         logError(error);
         return;
       }
-      if (tokenBudget === undefined || numberedBytes > allowLargeRoomTokens(tokenBudget, 0)) continue;
+      if (tokenBudget === undefined || numberedBytes > allowLargeRoomTokens(tokenBudget, 0)) {
+        if (buffer.length > maxSizeBytes)
+          return readCachedMentionContent(
+            filePath,
+            {
+              tooLargeBytes: buffer.length,
+            },
+            {
+              credentials,
+            },
+            tokenBudget,
+          );
+        continue;
+      }
       overTokenLimit = true;
     }
     tokenBudget?.claim(numberedBytes);
@@ -3356,9 +3492,18 @@ async function readCachedMentionContent(filePath, buffer, { credentials }, token
       displayPath,
     };
   }
-  return;
+  if (!maxReadAllBytes(buffer.length)) return;
+  logFeatureSad("input_file_at_mention", "referenced_not_read");
+  return {
+    type: "at_mention_reference",
+    mentions: [filePath],
+    unread: "too_large",
+    fileSize: buffer.length,
+    readAllOfIt: "within_size_limit",
+    displayPath,
+  };
 }
-//@ chunk-e6aww6q8.js:3348215-3348324 layout
+//@ chunk-5xgkngpb.js:3435384-3435493 layout
 /**
  * 运行 processAtMentionedFiles，合并附件与钩子上下文。
  */
@@ -3376,7 +3521,7 @@ async function getAtMentionedFileAttachments(
   );
   return [...result.attached, ...result.hookContexts].filter(Boolean);
 }
-//@ chunk-e6aww6q8.js:3348324-3352037 fingerprint (2.1.88 match: processAtMentionedFiles, 0.3)
+//@ chunk-5xgkngpb.js:3435493-3439211 fingerprint (2.1.88 match: processAtMentionedFiles, 0.302)
 /**
  * 处理 @ 提及的文件/目录：解析 #L 行范围，权限检查（拒绝/网络路径跳过），目录列出、文件生成 file/compact_file_reference/pdf_reference 等，记 tengu_at_mention_* 事件。
  */
@@ -3533,7 +3678,7 @@ async function processAtMentionedFiles(
               let filename = normalizePath(raised);
               readStateBackup.set(filename, {
                 state: toolUseContext.readFileState.get(filename),
-                triggers: count(
+                triggers: countWhere(
                   toolUseContext.nestedMemoryAttachmentTriggers ?? [],
                   (trigger) => trigger === filename,
                 ),
@@ -3585,7 +3730,7 @@ async function processAtMentionedFiles(
               let triggers = backup?.triggers ?? 0;
               while (
                 nestedMemoryAttachmentTriggers !== undefined &&
-                count(nestedMemoryAttachmentTriggers, (trigger) => trigger === path) > triggers
+                countWhere(nestedMemoryAttachmentTriggers, (trigger) => trigger === path) > triggers
               )
                 nestedMemoryAttachmentTriggers.splice(nestedMemoryAttachmentTriggers.lastIndexOf(path), 1);
             },
@@ -3639,7 +3784,7 @@ async function processAtMentionedFiles(
     hookContexts,
   };
 }
-//@ chunk-e6aww6q8.js:3352037-3352324 fingerprint (2.1.88 match: processAgentMentions, 0.595)
+//@ chunk-5xgkngpb.js:3439211-3439498 fingerprint (2.1.88 match: processAgentMentions, 0.593)
 /**
  * @agent-xxx 或 @"xxx (agent)" 提及 → agent_mention 附件（找不到的代理丢弃）。
  */
@@ -3663,7 +3808,7 @@ function processAgentMentions(input, agents) {
     })
     .filter((result) => result !== null);
 }
-//@ chunk-e6aww6q8.js:3352324-3352884 layout
+//@ chunk-5xgkngpb.js:3439498-3440058 layout
 /**
  * @ 同伴提及解析：唯一匹配给 resolved，多个候选给 ask（peer_mention）。
  */
@@ -3680,7 +3825,7 @@ async function getPeerMentionAttachments(text, toolUseContext, attachments) {
       (mention) => mention.ref !== undefined || !attachmentPaths.has(mention.name),
     );
     if (mentions.length === 0) return [];
-    let peers = await resolveTeamName(toolUseContext.session, toolUseContext.getAppState(), {
+    let peers = await resolvePeerAddressFromState(toolUseContext.session, toolUseContext.getAppState(), {
       storageV5: toolUseContext.storageV5,
     });
     return resolvePeerMentions(mentions, peers).map((resolved) =>
@@ -3703,7 +3848,7 @@ async function getPeerMentionAttachments(text, toolUseContext, attachments) {
   }
   return [];
 }
-//@ chunk-e6aww6q8.js:3352884-3355459 layout
+//@ chunk-5xgkngpb.js:3440058-3442998 layout
 /**
  * @server:uri 提及的 MCP 资源读取成 mcp_resource 附件（检查连接、权限与资源存在）。
  */
@@ -3772,18 +3917,27 @@ async function getMcpResourceAttachments(
             );
             if (listing.case === "unlisted") {
               logMentionResult(index, "mcp_resource", false);
-              logForDebugging(
-                listing.reason === "uri_too_long"
-                  ? `MCP resource ${serverName} (an address of ${Buffer.byteLength(uri)} bytes) not read: its address is longer than 2048 bytes, and ${plural(listing.skills.length, "skill")} ${listing.skills.map((skill) => skill.skillName).join(", ")} from this server ${listing.skills.length === 1 ? "is" : "are"} loaded`
-                  : listing.reason === "unparseable_uri"
-                    ? `MCP resource ${serverName} ${uri} not read: its address is not a valid URL, and ${plural(listing.skills.length, "skill")} ${listing.skills.map((skill) => skill.skillName).join(", ")} from this server ${listing.skills.length === 1 ? "is" : "are"} loaded`
-                    : listing.reason === "other_spelling"
-                      ? `MCP resource ${serverName} ${uri} not read: its address begins with another spelling of the address of loaded ${plural(listing.skills.length, "skill")} ${listing.skills.map((skill) => skill.skillName).join(", ")}`
-                      : `MCP resource ${serverName} ${uri} not read: it is in the directory of loaded ${plural(listing.skills.length, "skill")} ${listing.skills.map((skill) => skill.skillName).join(", ")}, but ${listing.skills.length === 1 ? "that skill does not list it" : "none of them lists it"}, or MCP skills are turned off`,
-                {
-                  level: "warn",
-                },
-              );
+              let refusalText;
+              switch (listing.reason) {
+                case "uri_too_long":
+                  refusalText = `MCP resource ${serverName} (an address of ${Buffer.byteLength(uri)} bytes) not read: its address is longer than 2048 bytes, and ${plural(listing.skills.length, "skill")} ${listing.skills.map((skill) => skill.skillName).join(", ")} from this server ${listing.skills.length === 1 ? "is" : "are"} loaded`;
+                  break;
+                case "outside_loaded_skills":
+                  refusalText = `MCP resource ${serverName} ${uri} not read: ${plural(listing.skills.length, "skill")} ${listing.skills.map((skill) => skill.skillName).join(", ")} from this server ${listing.skills.length === 1 ? "is" : "are"} loaded, and ${listing.skills.length === 1 ? "that skill does not list it" : "none of them lists it"}`;
+                  break;
+                case "other_spelling":
+                  refusalText = `MCP resource ${serverName} ${uri} not read: its address begins with another spelling of the address of loaded ${plural(listing.skills.length, "skill")} ${listing.skills.map((skill) => skill.skillName).join(", ")}`;
+                  break;
+                case "unparseable_uri":
+                  refusalText = `MCP resource ${serverName} ${uri} not read: its address is not a valid URL, and ${plural(listing.skills.length, "skill")} ${listing.skills.map((skill) => skill.skillName).join(", ")} from this server ${listing.skills.length === 1 ? "is" : "are"} loaded`;
+                  break;
+                case "unlisted":
+                  refusalText = `MCP resource ${serverName} ${uri} not read: it is in the directory of loaded ${plural(listing.skills.length, "skill")} ${listing.skills.map((skill) => skill.skillName).join(", ")}, but ${listing.skills.length === 1 ? "that skill does not list it" : "none of them lists it"}, or MCP skills are turned off`;
+                  break;
+              }
+              logForDebugging(refusalText, {
+                level: "warn",
+              });
               return null;
             }
             recordToolUsed(READMCPRESOURCETOOL);
@@ -3838,12 +3992,12 @@ async function getMcpResourceAttachments(
     )
   ).filter((attachment) => attachment !== null);
 }
-//@ chunk-e6aww6q8.js:3355459-3355471 layout
+//@ chunk-5xgkngpb.js:3442998-3443010 layout
 /**
  * 100：每类提及最多单独上报 100 个事件，其余合并为 tengu_at_mention_unreported。
  */
 var MAX_REPORTED_MENTIONS = 100;
-//@ chunk-e6aww6q8.js:3355471-3355720 file-local
+//@ chunk-5xgkngpb.js:3443010-3443259 file-local
 /**
  * 记录一个提及处理结果事件（agent/mcp_resource 成功或失败）。旧版名 processMcpResourceAttachments 为错配。
  */
@@ -3858,7 +4012,7 @@ function logMentionResult(index, mentionType, success) {
     success,
   });
 }
-//@ chunk-e6aww6q8.js:3355720-3355812 layout
+//@ chunk-5xgkngpb.js:3443259-3443351 layout
 /**
  * 提及数超过上限时记 tengu_at_mention_unreported。
  */
@@ -3869,17 +4023,17 @@ function logUnreportedMentions(mentionType, mentionCount) {
       count: mentionCount - MAX_REPORTED_MENTIONS,
     });
 }
-//@ chunk-e6aww6q8.js:3355812-3355842 layout
+//@ chunk-5xgkngpb.js:3443351-3443381 layout
 /**
  * 按 readFileState 记录变更文件检查顺序的 WeakMap。
  */
 var MAX_CHANGED_FILE_SNIPPET_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var changedFilesOrderByState;
-deferInit("chunk-e6aww6q8.js:3355812", () => {
+deferInit("chunk-5xgkngpb.js:3443351", () => {
   MAX_CHANGED_FILE_SNIPPET_CHARS = 16384;
   changedFilesOrderByState = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:3355842-3358973 fingerprint (2.1.88 match: getChangedFiles, 0.432)
+//@ chunk-5xgkngpb.js:3443381-3446781 fingerprint (2.1.88 match: getChangedFiles, 0.405)
 /**
  * 检查已读文件（readFileState）在磁盘上是否变化：变化的文本文件给 edited_text_file（diff 片段，总长 16KB 内），图片给 edited_image_file；计划模式下跳过。
  */
@@ -3991,29 +4145,43 @@ async function getChangedFiles(toolUseContext) {
         }
         if (readResult.data.type === "text") {
           if (readResult.data.file.truncatedByTokenCap === true) return null;
-          if (matchesContentHash(fileState, readResult.data.file.content)) return null;
+          if (matchesContentHash(fileState, readResult.data.file.content)) {
+            if (fileState.contentNotInModelContext && fileState.content === "")
+              markContentNotInModelContext(toolUseContext.readFileState, normalizedPath);
+            return null;
+          }
           if (fileState.content === "" && (fileState.contentLength ?? 0) > 0) {
             markContentNotInModelContext(toolUseContext.readFileState, normalizedPath);
             return {
               type: "edited_text_file",
               filename: normalizedPath,
               snippet: "",
+              ...extractReadFilesFromMessages(toolUseContext.readFileState, normalizedPath),
             };
           }
           let snippet = getSnippetForTwoFileDiff(fileState.content, readResult.data.file.content);
           if (snippet === "") return null;
-          if (isSensitiveFileName(normalizedPath)) {
+          let enveloped =
+            (
+              readResultFraming(readResult.data) ??
+              (await require("../services/artifacts/FILE_ENVELOPE_LEAD.lazy.js").savedCopyFramingForRead(
+                normalizedPath,
+              ))
+            )?.enveloped === true;
+          if (isSensitiveFileName(normalizedPath) || enveloped) {
             markContentNotInModelContext(toolUseContext.readFileState, normalizedPath);
             return {
               type: "edited_text_file",
               filename: normalizedPath,
               snippet: "",
+              ...extractReadFilesFromMessages(toolUseContext.readFileState, normalizedPath),
             };
           }
           return {
             type: "edited_text_file",
             filename: normalizedPath,
             snippet,
+            ...extractReadFilesFromMessages(toolUseContext.readFileState, normalizedPath),
           };
         }
         if (readResult.data.type === "image")
@@ -4089,7 +4257,7 @@ async function getChangedFiles(toolUseContext) {
   }
   return filtered;
 }
-//@ chunk-e6aww6q8.js:3358973-3359439 layout
+//@ chunk-5xgkngpb.js:3446781-3447247 layout
 /**
  * 消费 nestedMemoryAttachmentTriggers（读文件等操作触发的路径），生成对应嵌套记忆附件。
  */
@@ -4128,7 +4296,7 @@ async function getNestedMemoryTriggerAttachments(toolUseContext, messages) {
   nestedMemoryAttachmentTriggers.length = 0;
   return attachments;
 }
-//@ chunk-e6aww6q8.js:3359439-3359508 layout
+//@ chunk-5xgkngpb.js:3447247-3447316 layout
 /**
  * readFileState 已有该路径（可选要求完整读取）。
  */
@@ -4138,7 +4306,7 @@ function isAlreadyReadWhole(readFileState, filePath, earlierReadsMayBeCleared) {
     (!earlierReadsMayBeCleared || readFileState.get(filePath)?.offset === undefined)
   );
 }
-//@ chunk-e6aww6q8.js:3359508-3360723 fingerprint (2.1.88 match: getRelevantMemoryAttachments, 0.541)
+//@ chunk-5xgkngpb.js:3447316-3448534 fingerprint (2.1.88 match: getRelevantMemoryAttachments, 0.541)
 /**
  * 相关记忆检索：按提及的代理记忆或自动记忆目录列出候选，用记忆选择器挑选，读取后生成 relevant_memories（可含账户召回）。
  */
@@ -4262,7 +4430,7 @@ async function getRelevantMemoryAttachments(
     ...accountAttachments,
   ];
 }
-//@ chunk-e6aww6q8.js:3360723-3361031 fingerprint (2.1.88 match: collectSurfacedMemories, 0.869)
+//@ chunk-5xgkngpb.js:3448534-3448842 fingerprint (2.1.88 match: collectSurfacedMemories, 0.869)
 /**
  * 统计对话里已出现的相关记忆路径与总字节数（含账户召回）。
  */
@@ -4283,7 +4451,7 @@ function collectSurfacedMemories(messages) {
     totalBytes,
   };
 }
-//@ chunk-e6aww6q8.js:3361031-3361660 fingerprint (2.1.88 match: readMemoriesForSurfacing, 0.843)
+//@ chunk-5xgkngpb.js:3448842-3449471 fingerprint (2.1.88 match: readMemoriesForSurfacing, 0.843)
 /**
  * 读取选中的记忆文件：限制为普通文件/目录内，截断时附提示（用 Read 看全文），返回 {path, content, mtimeMs, header, limit}。
  */
@@ -4302,7 +4470,7 @@ async function readMemoriesForSurfacing(selected, signal) {
             ? sanitizedContent +
               `
 
-> This memory file was truncated (${memoryFileForRecall.truncatedByBytes ? `${MEMORY_FILE_RECALL_BYTES} byte limit` : `first ${MAX_ENTRYPOINT_TAIL_LINES} lines`}). Use the ${FILE_READ_TOOL_NAME} tool to view the complete file at: ${singleLineMemoryText(filePath)}`
+> This memory file was truncated (${memoryFileForRecall.truncatedByBytes ? `${MEMORY_FILE_RECALL_BYTES} byte limit` : `first ${MAX_ENTRYPOINT_TAIL_LINES} lines`}). Use the ${READ} tool to view the complete file at: ${singleLineMemoryText(filePath)}`
             : sanitizedContent;
           return {
             path: filePath,
@@ -4323,12 +4491,12 @@ async function readMemoriesForSurfacing(selected, signal) {
     )
   ).filter((memory) => memory !== null);
 }
-//@ chunk-e6aww6q8.js:3361660-3361745 layout
+//@ chunk-5xgkngpb.js:3449471-3449556 layout
 /**
  * 不做相关记忆预取的 querySource：extract_memories、auto_dream、prompt_suggestion、compact 等。
  */
 var MEMORY_PREFETCH_SKIP_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3361660", () => {
+deferInit("chunk-5xgkngpb.js:3449471", () => {
   MEMORY_PREFETCH_SKIP_SOURCES = new Set([
     "extract_memories",
     "auto_dream",
@@ -4337,7 +4505,7 @@ deferInit("chunk-e6aww6q8.js:3361660", () => {
     "compact",
   ]);
 });
-//@ chunk-e6aww6q8.js:3361745-3363462 fingerprint (2.1.88 match: startRelevantMemoryPrefetch, 0.544)
+//@ chunk-5xgkngpb.js:3449556-3451276 fingerprint (2.1.88 match: startRelevantMemoryPrefetch, 0.535)
 /**
  * 在 queryLoop 入口启动相关记忆预取：主线程、非跳过来源、自动记忆或账户召回开启、最后一条用户消息有空白（或含 CJK）、会话预算未超 60KB 时，异步调用 getRelevantMemoryAttachments，返回可 using 释放的句柄。
  */
@@ -4448,12 +4616,12 @@ function startRelevantMemoryPrefetch(messages, toolUseContext, querySource, memo
   });
   return prefetchHandle;
 }
-//@ chunk-e6aww6q8.js:3363462-3363475 layout
+//@ chunk-5xgkngpb.js:3451276-3451289 layout
 /**
  * 2000：阻塞等待记忆预取的上限。
  */
 var MEMORY_PREFETCH_DEADLINE_MS = 2000;
-//@ chunk-e6aww6q8.js:3363475-3363547 layout
+//@ chunk-5xgkngpb.js:3451289-3451361 layout
 /**
  * 是否在请求前阻塞等待记忆预取（tengu_mill_orange 且记忆同步不在待定状态）。
  */
@@ -4464,7 +4632,7 @@ function shouldBlockOnMemoryPrefetch() {
     !(isMultiStoreSyncAvailable() && getOrgMemoryDecision().state === "undecided")
   );
 }
-//@ chunk-e6aww6q8.js:3363547-3364082 layout
+//@ chunk-5xgkngpb.js:3451361-3451896 layout
 /**
  * 最多等 2 秒或中止，记 tengu_memdir_prefetch_blocking_wait，返回预取到的附件。
  */
@@ -4500,21 +4668,21 @@ async function awaitMemoryPrefetch(memoryRecallPrefetch, signal) {
   });
   return signal.aborted ? undefined : attachments;
 }
-//@ chunk-e6aww6q8.js:3364082-3364192 file-local
+//@ chunk-5xgkngpb.js:3451896-3452006 file-local
 /**
  * 对象且 type=tool_result、tool_use_id 为字符串。
  */
 function isToolResultBlock_3(b) {
   return typeof b === "object" && b !== null && b.type === "tool_result" && typeof b.tool_use_id === "string";
 }
-//@ chunk-e6aww6q8.js:3364192-3364245 file-local
+//@ chunk-5xgkngpb.js:3452006-3452059 file-local
 /**
  * 内容数组里含 tool_result 块（用于区分真实用户轮与工具结果轮）。
  */
 function hasToolResultContent(content) {
   return Array.isArray(content) && content.some(isToolResultBlock_3);
 }
-//@ chunk-e6aww6q8.js:3364245-3364589 fingerprint (2.1.88 match: filterDuplicateMemoryAttachments, 0.9)
+//@ chunk-5xgkngpb.js:3452059-3452403 fingerprint (2.1.88 match: filterDuplicateMemoryAttachments, 0.9)
 /**
  * 去掉已读过的相关记忆，把新记忆写入 readFileState 并记入已呈现集合；空的附件丢弃。
  */
@@ -4543,14 +4711,18 @@ function filterDuplicateMemoryAttachments(attachments, readFileState, session, e
     })
     .filter((attachment) => attachment !== null);
 }
-//@ chunk-e6aww6q8.js:3364589-3364614 layout
+//@ chunk-5xgkngpb.js:3452403-3452483 layout
 /**
  * 技能附件附加字段（当前构建恒为空对象）。
  */
 function getSkillAttachmentExtras(tools) {
-  return {};
+  return contextKeyAccepted() && tools !== undefined && !hasBuiltInEvalTool(tools)
+    ? {
+        callsSkillToolDirectly: true,
+      }
+    : {};
 }
-//@ chunk-e6aww6q8.js:3364614-3365645 fingerprint (2.1.88 match: getDynamicSkillAttachments, 0.901)
+//@ chunk-5xgkngpb.js:3452483-3453519 fingerprint (2.1.88 match: getDynamicSkillAttachments, 0.901)
 /**
  * 文件操作触发的新技能目录：扫描技能目录，产出 dynamic_skill 附件（目录、技能名）。
  */
@@ -4560,7 +4732,7 @@ async function getDynamicSkillAttachments(toolUseContext) {
   let pendingDirs = [...dynamicSkillDirTriggers];
   dynamicSkillDirTriggers.length = 0;
   if (getDisableSlashCommands()) return [];
-  if (!toolUseContext.options.tools.some((tool) => toolMatchesName(tool, SKILL))) return [];
+  if (!toolUseContext.options.tools.some((tool) => matchesToolName(tool, SKILL))) return [];
   await addSkillDirectories(pendingDirs).catch(() => {});
   let projectRoot = getProjectRoot();
   let projectRootPrefix = projectRoot.endsWith(sep) ? projectRoot : projectRoot + sep;
@@ -4620,20 +4792,24 @@ async function getDynamicSkillAttachments(toolUseContext) {
   }
   return attachments;
 }
-//@ chunk-e6aww6q8.js:3365645-3365687 layout
+//@ chunk-5xgkngpb.js:3453519-3453579 layout (2.1.88 match: filterMcpPromptsByServer, 0.787)
+function filterMcpPromptsByServer_2(commands) {
+  if (commands.some((command) => command.loadedFrom === "mcp")) recordToolUsed(READMCPRESOURCETOOL);
+}
+//@ chunk-5xgkngpb.js:3453579-3453621 layout
 /**
  * getSkillListingAttachments 的转发包装。
  */
 async function getSkillListingAttachmentsLazy(...args) {
   return getSkillListingAttachments(...args);
 }
-//@ chunk-e6aww6q8.js:3365687-3366805 fingerprint (2.1.88 match: getSkillListingAttachments, 0.674)
+//@ chunk-5xgkngpb.js:3453621-3454749 fingerprint (2.1.88 match: getSkillListingAttachments, 0.674)
 /**
  * 有 Skill 工具时产出 skill_listing：首次完整列表，之后只给新增（对比历史 digest），带技能数与名字。
  */
 async function getSkillListingAttachments(toolUseContext, messages) {
   if (getDisableSlashCommands()) return [];
-  if (!toolUseContext.options.tools.some((t) => toolMatchesName(t, SKILL))) return [];
+  if (!toolUseContext.options.tools.some((t) => matchesToolName(t, SKILL))) return [];
   let skillToolCommands = await getSkillToolCommands(getProjectRootOrNull(), toolUseContext.storageV5);
   let hiddenCommands = hiddenCommandsWhenSlashDisabled(toolUseContext.getMcp().commands);
   let filtered = memorySkillCommands().filter(
@@ -4665,6 +4841,7 @@ async function getSkillListingAttachments(toolUseContext, messages) {
     let digestSet = announcedDigests.get(cmd.name);
     return !digestSet?.has(undefined) && !digestSet?.has(getSkillListingDigest(cmd));
   });
+  filterMcpPromptsByServer_2(mcpSkills);
   if (newSkills.length === 0) return [];
   let isInitial = announcedDigests.size === 0;
   logForDebugging(`Sending ${newSkills.length} skills via attachment (${isInitial ? "initial" : "dynamic"})`);
@@ -4687,7 +4864,7 @@ async function getSkillListingAttachments(toolUseContext, messages) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3366805-3367028 fingerprint (2.1.88 match: extractAtMentionedFiles, 0.486)
+//@ chunk-5xgkngpb.js:3454749-3454972 fingerprint (2.1.88 match: extractAtMentionedFiles, 0.486)
 /**
  * 从输入中提取 @ 文件提及（@"带空格路径" 与普通 @path，排除 (agent)）。
  */
@@ -4698,16 +4875,16 @@ function extractAtMentionedFiles(content) {
   while ((match = quotedAtMentionRegex.exec(content)) !== null)
     if (match[2] && !match[2].endsWith(" (agent)")) quotedMentions.push(match[2]);
   let filtered = extractAtTokens(content, false).filter((match) => !match.startsWith('"'));
-  return uniq([...quotedMentions, ...filtered]);
+  return normalizeCaseForComparison_2([...quotedMentions, ...filtered]);
 }
-//@ chunk-e6aww6q8.js:3367028-3367064 layout
+//@ chunk-5xgkngpb.js:3454972-3455008 layout
 /**
  * 提取 @server:uri 形式的 MCP 资源提及。
  */
 function extractMcpResourceMentions(input) {
-  return uniq(extractAtTokens(input, true));
+  return normalizeCaseForComparison_2(extractAtTokens(input, true));
 }
-//@ chunk-e6aww6q8.js:3367064-3367395 layout
+//@ chunk-5xgkngpb.js:3455008-3455339 layout
 /**
  * 按空白切词找 @ 后的 token（可要求含冒号），去掉尾部成对标点。
  */
@@ -4730,7 +4907,7 @@ function extractAtTokens(text, requireResourceUri) {
   }
   return tokens;
 }
-//@ chunk-e6aww6q8.js:3367395-3367674 layout
+//@ chunk-5xgkngpb.js:3455339-3455618 layout
 /**
  * 提取 @"name (agent)" 与 @agent-name 形式的代理提及。
  */
@@ -4742,9 +4919,9 @@ function extractAgentMentions(content) {
   let unquotedAgentRegex = new RegExp(String.raw`(^|${WORD_BOUNDARY_PATTERN})@(agent-[\w:.@-]+)`, "g");
   let unquotedMatches = content.match(unquotedAgentRegex) || [];
   for (let m of unquotedMatches) results.push(m.slice(m.indexOf("@") + 1));
-  return uniq(results);
+  return normalizeCaseForComparison_2(results);
 }
-//@ chunk-e6aww6q8.js:3367674-3367881 fingerprint (2.1.88 match: parseAtMentionedFileLines, 1)
+//@ chunk-5xgkngpb.js:3455618-3455825 fingerprint (2.1.88 match: parseAtMentionedFileLines, 1)
 /**
  * 解析 "file#L10-20" 形式的行范围。
  */
@@ -4763,7 +4940,7 @@ function parseAtMentionedFileLines(mention) {
     lineEnd,
   };
 }
-//@ chunk-e6aww6q8.js:3367881-3368060 layout
+//@ chunk-5xgkngpb.js:3455825-3456004 layout
 /**
  * 记 tengu_lsp_diagnostics_injected（字符数、诊断数、文件数、来源）。
  */
@@ -4775,17 +4952,17 @@ function logDiagnosticsInjected(fileDiagnostics, source) {
     source: fromEnum(source),
   });
 }
-//@ chunk-e6aww6q8.js:3368060-3368126 layout
+//@ chunk-5xgkngpb.js:3456004-3456070 layout
 /**
  * 工具列表含编辑类工具（诊断附件前提）。
  */
 function hasFileEditTools(tools) {
   return (
-    tools.some((tool) => SHELL_TOOL_NAMES_3.some((toolName) => toolMatchesName(tool, toolName))) ||
-    alwaysFalseStream(tools)
+    tools.some((tool) => SHELL_TOOL_NAMES_2.some((toolName) => matchesToolName(tool, toolName))) ||
+    hasBuiltInEvalTool(tools)
   );
 }
-//@ chunk-e6aww6q8.js:3368126-3368301 fingerprint (2.1.88 match: getDiagnosticAttachments, 0.782)
+//@ chunk-5xgkngpb.js:3456070-3456245 fingerprint (2.1.88 match: getDiagnosticAttachments, 0.782)
 /**
  * IDE MCP 新诊断 → diagnostics 附件（isNew）。
  */
@@ -4802,7 +4979,7 @@ async function getDiagnosticAttachments(tools, session) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3368301-3368866 fingerprint (2.1.88 match: getLSPDiagnosticAttachments, 0.958)
+//@ chunk-5xgkngpb.js:3456245-3456810 fingerprint (2.1.88 match: getLSPDiagnosticAttachments, 0.958)
 /**
  * LSP 待发诊断 → diagnostics 附件。
  */
@@ -4835,7 +5012,7 @@ async function getLSPDiagnosticAttachments(tools, toolUseContext) {
     return [];
   }
 }
-//@ chunk-e6aww6q8.js:3368866-3369068 fingerprint (2.1.88 match: getAttachmentMessages, 0.686)
+//@ chunk-5xgkngpb.js:3456810-3457014 fingerprint (2.1.88 match: getAttachmentMessages, 0.685)
 /**
  * getAttachmentMessages：调用 getAttachments，记 tengu_attachments（类型与 token 估算），逐个包装成 attachment 消息产出；记录本轮附件耗时。
  */
@@ -4860,7 +5037,7 @@ async function* getAttachmentMessages(
   let timing = timingProfile.finish();
   if (!toolUseContext.agentId) noteAttachmentPass(timing);
 }
-//@ chunk-e6aww6q8.js:3369068-3369320 layout
+//@ chunk-5xgkngpb.js:3457014-3457266 layout
 /**
  * tengu_attachments 事件字段：附件类型、token 估算、技能列表是否完整、querySource。
  */
@@ -4885,7 +5062,7 @@ function buildAttachmentsEventPayload(attachments, querySource) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3369320-3370101 fingerprint (2.1.88 match: tryGetPDFReference, 0.732)
+//@ chunk-5xgkngpb.js:3457266-3458047 fingerprint (2.1.88 match: tryGetPDFReference, 0.732)
 /**
  * PDF 超过页数/大小阈值或模型按页读取时，返回 pdf_reference（只给引用，不内联内容）。
  */
@@ -4940,7 +5117,7 @@ async function tryGetPDFReference(filename, mainLoopModel, fileHandle) {
   } catch {}
   return null;
 }
-//@ chunk-e6aww6q8.js:3370101-3373785 fingerprint (2.1.88 match: generateFileAttachment, 0.627)
+//@ chunk-5xgkngpb.js:3458047-3461530 fingerprint (2.1.88 match: generateFileAttachment, 0.647)
 /**
  * 生成单个文件的附件：权限检查后按类型产出 text/image/notebook/pdf/pdf_reference/compact_file_reference/already_read_file 等，支持 offset/limit。
  */
@@ -5134,15 +5311,11 @@ async function generateFileAttachment(
           offset: offset ?? 1,
           limit: MAX_LINES_TO_READ,
         };
-        let readContext = clearedAfterIdle
-          ? {
-              ...toolUseContext,
-              dedupUnchangedReads: false,
-            }
-          : toolUseContext;
         let result = await FileReadTool.call(
           truncatedInput,
-          isReadRestricted ? await stashAttachedReadPermission(filename, landing, readContext) : readContext,
+          isReadRestricted
+            ? await stashAttachedReadPermission(filename, landing, toolUseContext)
+            : toolUseContext,
         );
         recordToolUsed(FileReadTool.name);
         logEvent(successEventName, {});
@@ -5157,6 +5330,7 @@ async function generateFileAttachment(
           content: result.data,
           truncated: true,
           displayPath: relative(getCwd(), filename),
+          savedCopyFraming: readResultFraming(result.data),
         };
       } catch (error) {
         if (isReadRestricted && error instanceof SymlinkReadRefusedError) options?.onRefusedAtOpen?.();
@@ -5175,15 +5349,11 @@ async function generateFileAttachment(
         ? createChildAbortController(options.pdfAbortParent)
         : undefined;
     try {
-      let readContext = clearedAfterIdle
-        ? {
-            ...toolUseContext,
-            dedupUnchangedReads: false,
-          }
-        : toolUseContext;
       let readResult = await FileReadTool.call(
         fileInput,
-        isReadRestricted ? await stashAttachedReadPermission(filename, landing, readContext) : readContext,
+        isReadRestricted
+          ? await stashAttachedReadPermission(filename, landing, toolUseContext)
+          : toolUseContext,
         undefined,
         undefined,
         undefined,
@@ -5192,20 +5362,6 @@ async function generateFileAttachment(
         },
       );
       recordToolUsed(FileReadTool.name);
-      if (readResult.data.type === "file_unchanged") {
-        logEvent(successEventName, {});
-        if (mode === "at-mention")
-          logAtMention({
-            mentionType: "file",
-            success: true,
-          });
-        return {
-          type: "already_read_file",
-          filename,
-          displayPath: relative(getCwd(), filename),
-          content: readResult.data,
-        };
-      }
       if (readResult.data.type === "text" && readResult.data.file.truncatedByTokenCap === true)
         return await readTruncatedFile();
       logEvent(successEventName, {});
@@ -5228,6 +5384,7 @@ async function generateFileAttachment(
               }
             : readResult.data,
         displayPath: relative(getCwd(), filename),
+        savedCopyFraming: readResultFraming(readResult.data),
       };
     } catch (error) {
       if (
@@ -5252,7 +5409,7 @@ async function generateFileAttachment(
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:3374007-3374459 fingerprint (2.1.88 match: getTodoReminderTurnCounts, 1)
+//@ chunk-5xgkngpb.js:3461752-3462204 fingerprint (2.1.88 match: getTodoReminderTurnCounts, 1)
 /**
  * 统计距上次 TodoWrite 与上次 todo_reminder 的助手轮数。
  */
@@ -5287,12 +5444,12 @@ function getTodoReminderTurnCounts(messages) {
     turnsSinceLastReminder: assistantTurnsSinceReminder,
   };
 }
-//@ chunk-e6aww6q8.js:3374608-3375014 fingerprint (2.1.88 match: getTodoReminderAttachments, 0.943)
+//@ chunk-5xgkngpb.js:3462353-3462759 fingerprint (2.1.88 match: getTodoReminderAttachments, 0.943)
 /**
  * 有 TodoWrite 工具、提醒模式非 off、距上次写与上次提醒都 ≥10 轮时产出 todo_reminder（当前待办内容）。
  */
 async function getTodoReminderAttachments(messages, toolUseContext) {
-  if (!toolUseContext.options.tools.some((t) => toolMatchesName(t, TODO_WRITE_TOOL_NAME))) return [];
+  if (!toolUseContext.options.tools.some((t) => matchesToolName(t, TODO_WRITE_TOOL_NAME))) return [];
   if (isBriefToolActive(toolUseContext.options.tools)) return [];
   if (!messages || messages.length === 0) return [];
   if (getTodoReminderMode() === "off") return [];
@@ -5313,7 +5470,7 @@ async function getTodoReminderAttachments(messages, toolUseContext) {
   }
   return [];
 }
-//@ chunk-e6aww6q8.js:3375014-3375477 fingerprint (2.1.88 match: getTaskReminderTurnCounts, 1)
+//@ chunk-5xgkngpb.js:3462759-3463222 fingerprint (2.1.88 match: getTaskReminderTurnCounts, 1)
 /**
  * 统计距上次任务管理工具调用与上次 task_reminder 的助手轮数。
  */
@@ -5352,13 +5509,13 @@ function getTaskReminderTurnCounts(messages) {
     turnsSinceLastReminder: assistantTurnsSinceReminder,
   };
 }
-//@ chunk-e6aww6q8.js:3375477-3375851 fingerprint (2.1.88 match: getTaskReminderAttachments, 0.791)
+//@ chunk-5xgkngpb.js:3463222-3463596 fingerprint (2.1.88 match: getTaskReminderAttachments, 0.791)
 /**
  * 任务工具（新任务系统）版提醒 → task_reminder，条件同 todo。
  */
 async function getTaskReminderAttachments(messages, tools, storageV5) {
   if (!isTaskToolsEnabled()) return [];
-  if (!tools.some((t) => toolMatchesName(t, TASK_UPDATE_TOOL_NAME))) return [];
+  if (!tools.some((t) => matchesToolName(t, TASK_UPDATE_TOOL_NAME))) return [];
   if (isBriefToolActive(tools)) return [];
   if (!messages || messages.length === 0) return [];
   if (getTodoReminderMode() === "off") return [];
@@ -5378,7 +5535,7 @@ async function getTaskReminderAttachments(messages, tools, storageV5) {
   }
   return [];
 }
-//@ chunk-e6aww6q8.js:3375851-3376308 layout
+//@ chunk-5xgkngpb.js:3463596-3464053 file-local
 /**
  * 统计距上次 ToolSearch 调用与上次 tool_search_usage_reminder 的轮数。
  */
@@ -5387,8 +5544,8 @@ function getToolSearchReminderTurnCounts(messages) {
   let lastReminderIndex = -1;
   let turnsSinceLastToolSearch = 0;
   let turnsSinceLastReminder = 0;
-  for (let idx = messages.length - 1; idx >= 0; idx--) {
-    let message = messages[idx];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    let message = messages[i];
     if (message?.type === "assistant") {
       if (isThinkingOnlyMessage(message)) continue;
       if (
@@ -5399,7 +5556,7 @@ function getToolSearchReminderTurnCounts(messages) {
           (block) => block.type === "tool_use" && block.name === TOOL_SEARCH_TOOL_NAME,
         )
       )
-        lastToolSearchIndex = idx;
+        lastToolSearchIndex = i;
       if (lastToolSearchIndex === -1) turnsSinceLastToolSearch++;
       if (lastReminderIndex === -1) turnsSinceLastReminder++;
     } else if (
@@ -5407,7 +5564,7 @@ function getToolSearchReminderTurnCounts(messages) {
       message?.type === "attachment" &&
       message.attachment.type === "tool_search_usage_reminder"
     )
-      lastReminderIndex = idx;
+      lastReminderIndex = i;
     if (lastToolSearchIndex !== -1 && lastReminderIndex !== -1) break;
   }
   return {
@@ -5415,7 +5572,7 @@ function getToolSearchReminderTurnCounts(messages) {
     turnsSinceLastReminder,
   };
 }
-//@ chunk-e6aww6q8.js:3376308-3377501 layout
+//@ chunk-5xgkngpb.js:3464053-3465252 layout
 /**
  * 实验配置开启时每 N 轮提醒使用 ToolSearch（tool_search_usage_reminder），不满足条件记 tengu_juniper_shoal_shown。
  */
@@ -5445,7 +5602,7 @@ async function getToolSearchUsageReminderAttachment(
     return [];
   };
   if (getToolSearchMode() !== "tst") return skipWithTelemetry("mode_not_tst");
-  if (!modelSupportsToolReference(toolUseContext.options.mainLoopModel))
+  if (!supportsToolReferenceOrPelican(toolUseContext.options.mainLoopModel))
     return skipWithTelemetry("model_unsupported");
   if (isVertexModelWithoutToolSearch(getCanonicalName(toolUseContext.options.mainLoopModel)))
     return skipWithTelemetry("vertex_model_unsupported");
@@ -5488,7 +5645,7 @@ async function getToolSearchUsageReminderAttachment(
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3377501-3377849 fingerprint (2.1.88 match: getUnifiedTaskAttachments, 0.833)
+//@ chunk-5xgkngpb.js:3465252-3465600 fingerprint (2.1.88 match: getUnifiedTaskAttachments, 0.833)
 /**
  * 后台任务状态变化 → task_status 附件（状态、描述、增量摘要、输出文件路径）。
  */
@@ -5507,7 +5664,7 @@ async function getUnifiedTaskAttachments(tools, appState) {
     canContinueAgent,
   }));
 }
-//@ chunk-e6aww6q8.js:3377849-3378450 layout
+//@ chunk-5xgkngpb.js:3465600-3466201 layout
 /**
  * 未保存同步与待处理的记忆更新 → memory_update 附件，并清空 pendingMemoryUpdates。
  */
@@ -5554,11 +5711,11 @@ function getMemoryUpdateAttachments(toolUseContext, messages = []) {
     })),
   );
 }
-//@ chunk-e6aww6q8.js:3378450-3379394 fingerprint (2.1.88 match: getAsyncHookResponseAttachments, 0.774)
+//@ chunk-5xgkngpb.js:3466201-3467241 fingerprint (2.1.88 match: getAsyncHookResponseAttachments, 0.734)
 /**
  * 已完成的异步钩子响应 → async_hook_response 系列附件（SessionStart 重复输出跳过）。
  */
-async function getAsyncHookResponseAttachments(messages) {
+async function getAsyncHookResponseAttachments(messages, toolUseContext) {
   let responses = await checkForNewAsyncHookResponses();
   if (responses.length === 0) return [];
   logForDebugging(`Hooks: getAsyncHookResponseAttachments found ${responses.length} responses`);
@@ -5576,17 +5733,21 @@ async function getAsyncHookResponseAttachments(messages) {
     toolName,
     pluginId,
     command,
+    typeLabel,
     stdout,
     stderr,
     exitCode,
+    isPlainOutput,
   } of responses) {
+    let command_2 =
+      typeLabel !== undefined && hookTextLeavesThisMachine(toolUseContext) ? typeLabel : command;
     emitHookMetrics(response.metrics, pluginId, hookEvent);
     if (
       hookEvent === "SessionStart" &&
       isAsyncHookResponseDuplicate(
         {
           response,
-          command,
+          command: command_2,
           pluginId,
         },
         priorAttachments,
@@ -5605,10 +5766,13 @@ async function getAsyncHookResponseAttachments(messages) {
       hookEvent,
       toolName,
       ...(hookEvent === "SessionStart" && {
-        command,
+        command: command_2,
         pluginId,
       }),
       response: stripMetricsForMcpInbound(response),
+      ...(isPlainOutput && {
+        isPlainOutput,
+      }),
       stdout,
       stderr,
       exitCode,
@@ -5619,7 +5783,7 @@ async function getAsyncHookResponseAttachments(messages) {
   logForDebugging(`Hooks: getAsyncHookResponseAttachments found ${attachments.length} attachments`);
   return attachments;
 }
-//@ chunk-e6aww6q8.js:3379394-3379803 file-local
+//@ chunk-5xgkngpb.js:3467241-3467650 file-local
 /**
  * 把已附加的非结构化邮箱消息标记为已读（失败则下轮再附加）。旧版名 getTeammateMailboxAttachments 不准确。
  */
@@ -5641,7 +5805,7 @@ async function markMailboxMessagesRead(agentName, teamName, messages, store) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:3379803-3379852 layout
+//@ chunk-5xgkngpb.js:3467650-3467699 layout
 /**
  * 316 里恒返回空（邮箱消息改走别处）。
  */
@@ -5649,7 +5813,7 @@ async function getTeammateMailboxAttachments(toolUseContext) {
   if (!isAgentSwarmsEnabled()) return [];
   return [];
 }
-//@ chunk-e6aww6q8.js:3379852-3380299 fingerprint (2.1.88 match: getTeamContextAttachment, 0.901)
+//@ chunk-5xgkngpb.js:3467699-3468146 fingerprint (2.1.88 match: getTeamContextAttachment, 0.901)
 /**
  * 代理团队成员首轮产出 team_context（团队名、配置与任务列表路径、是否有任务工具）。
  */
@@ -5684,7 +5848,7 @@ function getTeamContextAttachment(messages) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3380299-3380461 fingerprint (2.1.88 match: getTokenUsageAttachment, 1)
+//@ chunk-5xgkngpb.js:3468146-3468308 fingerprint (2.1.88 match: getTokenUsageAttachment, 1)
 /**
  * CLAUDE_CODE_ENABLE_TOKEN_USAGE_ATTACHMENT 时产出 token_usage（已用/总量/剩余）。
  */
@@ -5701,7 +5865,7 @@ function getTokenUsageAttachment(messages, model, autoCompactWindow) {
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3380461-3380786 layout
+//@ chunk-5xgkngpb.js:3468308-3468634 layout
 /**
  * total_tokens_reminder：按模式（countdown/padded-countdown/fixed/infinite）输出 "<total_tokens>N tokens left</total_tokens>"。
  */
@@ -5739,7 +5903,7 @@ function getTotalTokensReminderAttachment(
     },
   ];
 }
-//@ chunk-e6aww6q8.js:3380786-3381047 layout (2.1.88 match: getTokenCountFromUsage, 0.754)
+//@ chunk-5xgkngpb.js:3468634-3468895 layout (2.1.88 match: getTokenCountFromUsage, 0.755)
 /**
  * 最近一次压缩边界之后各回答 usage 的输入 token（首个与最后一个中较小者）。
  */
@@ -5750,7 +5914,7 @@ function getMinInputTokensSinceLastCompact(usage) {
   for (let index = startIndex; index < usage.length; index++) {
     let tokenUsage = getTokenUsage(usage[index]);
     if (!tokenUsage) continue;
-    let tokenCountFromUsage = getTokenCountFromUsage_5(tokenUsage);
+    let tokenCountFromUsage = getTokenCountFromUsage_2(tokenUsage);
     let totalTokens =
       tokenCountFromUsage.input_tokens +
       tokenCountFromUsage.cache_creation_input_tokens +
@@ -5762,7 +5926,7 @@ function getMinInputTokensSinceLastCompact(usage) {
   }
   return firstTotal === undefined || lastTotal === undefined ? undefined : Math.min(firstTotal, lastTotal);
 }
-//@ chunk-e6aww6q8.js:3381047-3381159 fingerprint (2.1.88 match: getMaxBudgetUsdAttachment, 1)
+//@ chunk-5xgkngpb.js:3468895-3469007 fingerprint (2.1.88 match: getMaxBudgetUsdAttachment, 1)
 /**
  * 设置了 --max-budget-usd 时产出 budget_usd（已用/总额/剩余美元）。
  */
@@ -5780,34 +5944,35 @@ function getMaxBudgetUsdAttachment(maxBudgetUsd) {
   ];
 }
 export {
+  isAdditionalDirWithoutNestedMemory,
   memoryHeader,
-  mergeNameOnlyAnnouncements,
+  getQueuedNotificationMode,
+  shouldIncludeMemoryFile,
+  areAttachmentsDisabled,
+  getRevokedDeferredToolNames,
   getDeferredToolsDeltaAttachments,
+  buildDeferredToolsLatchContext,
+  buildToolRevocationClassifier,
+  getAgentListingDeltaAttachment,
+  areAttachmentsDisabled_2,
+  getSkillListingAttachmentsLazy,
+  getMcpInstructionsDeltaAttachment,
+  getMcpDroppedToolsAttachment,
+  generateFileAttachment,
+  buildPlanModeAttachment,
+  getMcpServerInstructionBlocks,
+  createAttachmentMessage,
+  maybe,
+  getAttachmentMessages,
+  getQueuedCommandAttachments,
+  mergeNameOnlyAnnouncements,
   getDeclaredToolSource,
   buildDeferredToolsLatchContextFrom,
-  getSkillListingAttachmentsLazy,
-  getQueuedNotificationMode,
-  getQueuedCommandAttachments,
-  isAdditionalDirWithoutNestedMemory,
   startRelevantMemoryPrefetch,
   shouldBlockOnMemoryPrefetch,
   awaitMemoryPrefetch,
   filterDuplicateMemoryAttachments,
   isInlineNotificationMode,
-  getAttachmentMessages,
-  shouldIncludeMemoryFile,
-  getRevokedDeferredToolNames,
-  buildDeferredToolsLatchContext,
-  buildToolRevocationClassifier,
-  getAgentListingDeltaAttachment,
-  areAttachmentsDisabled,
-  getMcpInstructionsDeltaAttachment,
-  getMcpDroppedToolsAttachment,
-  generateFileAttachment,
-  buildPlanModeAttachment,
-  createAttachmentMessage,
-  getMcpServerInstructionBlocks,
-  maybe,
   getChangedFiles,
   buildHeldOutsideTracker,
   iterateMemoryFilesForPath,

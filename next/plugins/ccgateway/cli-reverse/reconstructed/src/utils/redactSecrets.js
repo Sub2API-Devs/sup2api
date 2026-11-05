@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：敏感信息脱敏规则表（令牌、密钥模式）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bwbq4xvm.js (10), chunk-xtav90k5.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7kayq7nc.js (10), chunk-v33mcvy8.js (3)
  * attribution: placement 13
  */
 import {
@@ -15,9 +15,9 @@ import {
 } from "./sanitization.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bwbq4xvm.js:167134-167213 placement
+//@ chunk-7kayq7nc.js:185349-185428 placement
 var SLACK_WEBHOOK_PATTERN = /hooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9/_-]+/gi;
-//@ chunk-bwbq4xvm.js:167213-167800 placement
+//@ chunk-7kayq7nc.js:185428-186015 placement
 /**
  * 敏感信息脱敏规则表（Bearer/Basic 令牌、Slack token、sk-ant、OpenAI、AWS AKIA、JWT 等正则与替换文本）。
  */
@@ -35,7 +35,7 @@ var SECRET_REDACTIONS = [
   /\bsk-(?=[A-Za-z0-9_-]{20})(?=[A-Za-z0-9_-]{0,64}[0-9])/,
 ];
 var SECRET_REDACTION_PATTERNS = 4096;
-//@ chunk-bwbq4xvm.js:167800-168954 placement
+//@ chunk-7kayq7nc.js:186015-187169 placement
 /**
  * SLACK_TOKEN_PATTERN：Slack 令牌正则；AWS_KEY_PREFIXES：AWS access key 前缀列表；AWS_KEY_PREFIX_PATTERN：AWS access key 前缀的正则源码（同一声明共 5 个绑定）。
  */
@@ -45,7 +45,7 @@ var AWS_KEY_PREFIXES;
 var AWS_KEY_PREFIX_PATTERN;
 var AWS_ACCESS_KEY_RULES;
 var GIT_AND_CLOUD_TOKEN_RULES;
-deferInit("chunk-bwbq4xvm.js:167800", () => {
+deferInit("chunk-7kayq7nc.js:186015", () => {
   SLACK_TOKEN_PATTERN_2 = new RegExp(
     `(?:\\b(?:xox[abe-z](?:\\.xox[a-z])?|xapp|xwfp)-${requireDigitLookahead("[A-Za-z0-9+/=%_-]")}|\\bxox[cd]-|(?:xox[abe-z](?:\\.xox[a-z])?|xapp|xwfp)-(?=[0-9])|xox[cd]-${requireDigitLookahead("[A-Za-z0-9+/=%_-]")}(?=[A-Za-z0-9+/=%_-]{16}))`,
     "i",
@@ -99,7 +99,7 @@ deferInit("chunk-bwbq4xvm.js:167800", () => {
     [SLACK_WEBHOOK_PATTERN, "hooks.slack.com/<redacted>"],
   ];
 });
-//@ chunk-bwbq4xvm.js:168954-169904 placement
+//@ chunk-7kayq7nc.js:187169-188119 placement
 /**
  * JWT_TOKEN_PATTERNS：JWT 令牌正则列表；GOOGLE_API_KEY_RULES：Google API key 的脱敏规则；STRIPE_KEY_RULES：Stripe 密钥的脱敏规则（同一声明共 6 个绑定）。
  */
@@ -110,7 +110,7 @@ var STRIPE_KEY_RULES;
 var GENERIC_SECRET_RULES;
 var TOKEN_AND_JWT_RULES;
 var SHORT_PREFIX_TOKEN_RULES;
-deferInit("chunk-bwbq4xvm.js:168954", () => {
+deferInit("chunk-7kayq7nc.js:187169", () => {
   JWT_TOKEN_PATTERNS_2 = [
     new RegExp(
       "(?<![A-Za-z0-9_-])(?=[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]{10}[A-Za-z0-9_-]*\\.[A-Za-z0-9_-]{10}[A-Za-z0-9_-]*)((?:[A-Za-z0-9_-]*?-)??)ey[A-Za-z0-9_-]{10}[A-Za-z0-9_-]*\\.[A-Za-z0-9_-]{10}[A-Za-z0-9_-]*\\.[A-Za-z0-9_-]{10}[A-Za-z0-9_-]*",
@@ -150,7 +150,7 @@ deferInit("chunk-bwbq4xvm.js:168954", () => {
     [/[sr]k_(?:live|test|prod)_[A-Za-z0-9]{24,}/g, "<token>"],
   ];
 });
-//@ chunk-bwbq4xvm.js:169904-169986 placement
+//@ chunk-7kayq7nc.js:188119-188201 placement
 /**
  * 依次套用全部脱敏规则，把文本中的令牌/密钥替换为占位符。
  */
@@ -160,9 +160,9 @@ function redactSecrets(text) {
     String(text),
   );
 }
-//@ chunk-bwbq4xvm.js:169986-170099 placement
+//@ chunk-7kayq7nc.js:188201-188314 placement
 var SECRET_DETECTORS; // deferred: uses SECRET_REDACTIONS_2 of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-bwbq4xvm.js:169986", () => {
+deferInit("chunk-7kayq7nc.js:188201", () => {
   SECRET_DETECTORS = [
     ...SECRET_REDACTIONS,
     ...[
@@ -175,11 +175,11 @@ deferInit("chunk-bwbq4xvm.js:169986", () => {
     JWT_TOKEN_PATTERNS,
   ];
 });
-//@ chunk-bwbq4xvm.js:170099-170146 placement
+//@ chunk-7kayq7nc.js:188314-188361 placement
 function containsSecret(text) {
   return SECRET_DETECTORS.some((detector) => detector.test(text));
 }
-//@ chunk-bwbq4xvm.js:170146-170263 placement
+//@ chunk-7kayq7nc.js:188361-188478 placement
 function tokenPrefixPattern(
   prefix,
   charClass,
@@ -195,19 +195,19 @@ function tokenPrefixPattern(
     flags,
   );
 }
-//@ chunk-bwbq4xvm.js:170263-170306 placement
+//@ chunk-7kayq7nc.js:188478-188521 placement
 function requireDigitLookahead(charClass) {
   return `(?=${charClass}{0,64}[0-9])`;
 }
-//@ chunk-bwbq4xvm.js:170306-170430 placement
+//@ chunk-7kayq7nc.js:188521-188645 placement
 function mixedAlnumLookahead(digitCount) {
   return `(?=[A-Za-z0-9_-]{0,64}?(?=[A-Za-z0-9]{${digitCount}})(?=[A-Za-z0-9]{0,64}[0-9])(?=[A-Za-z0-9]{0,64}[A-Za-z]))`;
 }
-//@ chunk-xtav90k5.js:236-1173 placement
+//@ chunk-v33mcvy8.js:236-1173 placement
 /**
  * 敏感信息脱敏的正则构件：不可见字符、空白类、键名字符、JWT 片段；R 为普通规则（key=value、Bearer、Basic），l 为容忍不可见字符插入的加强版规则，z 检测格式/不可见字符。
  */
-var INVISIBLE_RUN; // deferred: uses allowSeparatorsInPattern (./sanitization.js) of its import cycle while loading; runs once the cycle is complete
+var INVISIBLE_RUN; // deferred: uses INVISIBLE_CHAR_CLASSES (./sanitization.js) of its import cycle while loading; runs once the cycle is complete
 var SPACE_OR_INVISIBLE;
 var WHITESPACE_CHARS;
 var KEY_CHAR;
@@ -219,7 +219,7 @@ var regExp;
 var PLAIN_SECRET_RULES;
 var OBFUSCATION_TOLERANT_RULES;
 var FORMAT_CHAR_RE;
-deferInit("chunk-xtav90k5.js:236", () => {
+deferInit("chunk-v33mcvy8.js:236", () => {
   INVISIBLE_RUN = `[${INVISIBLE_CHAR_RANGES}]*`;
   SPACE_OR_INVISIBLE = `[\\s${INVISIBLE_CHAR_RANGES}]`;
   WHITESPACE_CHARS = String.raw`\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000`;
@@ -256,12 +256,12 @@ deferInit("chunk-xtav90k5.js:236", () => {
   };
   FORMAT_CHAR_RE = /[\p{Cf}\p{Default_Ignorable_Code_Point}\p{Cs}\u2800\ufeff]/u;
 });
-//@ chunk-xtav90k5.js:1173-1227 placement
+//@ chunk-v33mcvy8.js:1173-1227 placement
 function redactSecretsInText(text) {
   let text_2 = applySecretRedaction(text, PLAIN_SECRET_RULES);
   return FORMAT_CHAR_RE.test(text) ? applySecretRedaction(text_2, OBFUSCATION_TOLERANT_RULES) : text_2;
 }
-//@ chunk-xtav90k5.js:1227-2467 placement
+//@ chunk-v33mcvy8.js:1227-2467 placement
 /**
  * 按给定规则脱敏文本：URL 中的用户信息、key=value 秘密、sk-ant 密钥、Bearer、JWT、GitHub/GitLab 等令牌、Basic 认证，替换为 [REDACTED] 类占位。
  */
@@ -285,11 +285,11 @@ function applySecretRedaction(text, patterns) {
     );
 }
 export {
-  redactSecretsInText,
+  SECRET_REDACTION_PATTERNS,
   containsSecret,
   redactSecrets,
+  redactSecretsInText,
   GENERIC_SECRET_RULES,
   TOKEN_AND_JWT_RULES,
   SHORT_PREFIX_TOKEN_RULES,
-  SECRET_REDACTION_PATTERNS,
 };

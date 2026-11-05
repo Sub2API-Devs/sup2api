@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。FleetView 附着会话所有者的 hook。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ejntaqp9.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nc5fehpa.js (5)
  * attribution: placement 5
  */
 import { init_react_production, useEffect } from "../../../vendor/react/cjs/react.production.js";
@@ -13,11 +13,11 @@ import { createSignal } from "../../utils/signal.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
 import { createReducerStore } from "../../utils/killRing.js";
 
-//@ chunk-ejntaqp9.js:336-340 placement
+//@ chunk-nc5fehpa.js:336-340 placement
 init_react_production();
-//@ chunk-ejntaqp9.js:340-349 placement
+//@ chunk-nc5fehpa.js:340-349 placement
 var EMPTY_OWNERS = [];
-//@ chunk-ejntaqp9.js:349-887 placement
+//@ chunk-nc5fehpa.js:349-887 placement
 /**
  * FleetView 会话所有者附着状态存储
  */
@@ -76,7 +76,7 @@ class FleetOwnersStore {
     return this.#t;
   }
 }
-//@ chunk-ejntaqp9.js:887-1154 placement
+//@ chunk-nc5fehpa.js:887-1154 placement
 function createFleetViewHost() {
   return {
     roster: null,
@@ -97,7 +97,7 @@ function createFleetViewHost() {
     killRing: createReducerStore(),
   };
 }
-//@ chunk-ejntaqp9.js:1154-1438 placement
+//@ chunk-nc5fehpa.js:1154-1438 placement
 /**
  * FleetView 附着会话所有者的 hook。
  */

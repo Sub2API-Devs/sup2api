@@ -3,22 +3,22 @@
  *
  * 2.1.316 新增：截断提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-33en6jc2.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qs2bes42.js (2)
  * attribution: placement 2
  */
 import { stripNonPrintable } from "./truncateGraphemes.js";
 import { truncateToLength } from "./stringUtils.js";
 
-//@ chunk-33en6jc2.js:263-324 placement
+//@ chunk-qs2bes42.js:262-323 placement
 /**
  * 把行分隔符替换为空格。
  */
 function collapseLineBreaks(text) {
   return text.replace(/[\r\n\u2028\u2029]+/g, " ");
 }
-//@ chunk-33en6jc2.js:324-516 placement
+//@ chunk-qs2bes42.js:323-514 placement
 /**
  * 去除不可打印字符后按长度截断，并注明还有多少字符未显示。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：绑定到权限批准路径的文件打开（/proc/self/fd 核对、不支持时回退）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-t0gq9gyw.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-85eyj5gy.js (6)
  * attribution: placement 6
  */
 import { realpath, lstat, readlink, open } from "fs/promises";
@@ -14,7 +14,7 @@ import { READ_LIMITS, O_NOATIME_FLAG } from "../fsBoundRead.js";
 import { getErrnoCode } from "../errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-t0gq9gyw.js:7930-8222 placement
+//@ chunk-85eyj5gy.js:8000-8292 placement
 async function readHandleBounded(handle, maxBytes, limitBytes) {
   let bufferSize = maxBytes + 1;
   let buffer = Buffer.alloc(
@@ -36,13 +36,13 @@ async function readHandleBounded(handle, maxBytes, limitBytes) {
     overLimit: totalRead > maxBytes,
   };
 }
-//@ chunk-t0gq9gyw.js:8222-8264 placement
+//@ chunk-85eyj5gy.js:8292-8334 placement
 var boundOpenFsOps = {
   realpath,
   lstat,
   readlink,
 };
-//@ chunk-t0gq9gyw.js:8264-8651 placement
+//@ chunk-85eyj5gy.js:8334-8721 placement
 async function bindCanonicalPathToHandle(handle, expectedIdentity, filePath, fsImpl = boundOpenFsOps) {
   let pathStats;
   try {
@@ -71,18 +71,18 @@ async function bindCanonicalPathToHandle(handle, expectedIdentity, filePath, fsI
   }
   return filePath;
 }
-//@ chunk-t0gq9gyw.js:8651-8741 placement
+//@ chunk-85eyj5gy.js:8721-8811 placement
 var OPEN_READ_NOFOLLOW_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var BENIGN_OPEN_ERRNOS;
-deferInit("chunk-t0gq9gyw.js:8651", () => {
+deferInit("chunk-85eyj5gy.js:8721", () => {
   OPEN_READ_NOFOLLOW_FLAGS = constants.O_RDONLY | constants.O_NONBLOCK | READ_LIMITS;
   BENIGN_OPEN_ERRNOS = new Set(["EPERM", "EINVAL", "ENOTSUP", "EOPNOTSUPP"]);
 });
-//@ chunk-t0gq9gyw.js:8741-8779 placement
+//@ chunk-85eyj5gy.js:8811-8849 placement
 async function openRegularFileForRead(filePath) {
   return open(filePath, OPEN_READ_NOFOLLOW_FLAGS);
 }
-//@ chunk-t0gq9gyw.js:8779-8948 placement
+//@ chunk-85eyj5gy.js:8849-9018 placement
 async function openRegularFileForReadWithNoAtime(filePath, noAtimeFlag = O_NOATIME_FLAG) {
   if (noAtimeFlag !== 0)
     try {
@@ -99,8 +99,8 @@ async function openRegularFileForReadWithNoAtime(filePath, noAtimeFlag = O_NOATI
   };
 }
 export {
-  openRegularFileForReadWithNoAtime,
-  openRegularFileForRead,
   readHandleBounded,
+  openRegularFileForRead,
   bindCanonicalPathToHandle,
+  openRegularFileForReadWithNoAtime,
 };

@@ -1,8 +1,8 @@
 /**
  * fuse.js/dist/fuse.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: fuse.js@7.0.0
- * pieces: chunk-dcmhvw5a.js (50)
+ * pieces: chunk-z20c443b.js (50)
  * attribution: affinity 3, esm-fingerprint 38, esm-layout 9
  */
 import {
@@ -15,15 +15,15 @@ import {
 } from "../../lodash-es/_inlinedHelpers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:27251-27294 affinity
+//@ chunk-z20c443b.js:27261-27304 affinity
 function isDefined(value) {
   return value !== undefined && value !== null;
 }
-//@ chunk-dcmhvw5a.js:27294-27332 affinity
+//@ chunk-z20c443b.js:27304-27342 affinity
 function isBlank(value) {
   return !value.trim().length;
 }
-//@ chunk-dcmhvw5a.js:27332-27444 esm-fingerprint
+//@ chunk-z20c443b.js:27342-27454 esm-fingerprint
 function getTag(value) {
   return value == null
     ? value === undefined
@@ -31,14 +31,14 @@ function getTag(value) {
       : "[object Null]"
     : Object.prototype.toString.call(value);
 }
-//@ chunk-dcmhvw5a.js:27444-27702 esm-fingerprint
+//@ chunk-z20c443b.js:27454-27712 esm-fingerprint
 var INCORRECT_INDEX_TYPE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var LOGICAL_SEARCH_INVALID_QUERY_FOR_KEY;
 var PATTERN_LENGTH_TOO_LARGE;
 var MISSING_KEY_PROPERTY;
 var INVALID_KEY_WEIGHT_VALUE;
 var hasOwn;
-deferInit("chunk-dcmhvw5a.js:27444", () => {
+deferInit("chunk-z20c443b.js:27454", () => {
   INCORRECT_INDEX_TYPE = "Incorrect 'index' type";
   LOGICAL_SEARCH_INVALID_QUERY_FOR_KEY = (key) => `Invalid value for key ${key}`;
   PATTERN_LENGTH_TOO_LARGE = (max) => `Pattern length exceeds max of ${max}.`;
@@ -46,7 +46,7 @@ deferInit("chunk-dcmhvw5a.js:27444", () => {
   INVALID_KEY_WEIGHT_VALUE = (key) => `Property 'weight' in key '${key}' must be a positive integer`;
   hasOwn = Object.prototype.hasOwnProperty;
 });
-//@ chunk-dcmhvw5a.js:27702-27984 esm-fingerprint
+//@ chunk-z20c443b.js:27712-27994 esm-fingerprint
 class KeyStore {
   constructor(keys) {
     this._keys = [];
@@ -72,7 +72,7 @@ class KeyStore {
     return JSON.stringify(this._keys);
   }
 }
-//@ chunk-dcmhvw5a.js:27984-28270 esm-fingerprint
+//@ chunk-z20c443b.js:27994-28280 esm-fingerprint
 function createKey(key) {
   let path = null;
   let id = null;
@@ -103,15 +103,15 @@ function createKey(key) {
     getFn,
   };
 }
-//@ chunk-dcmhvw5a.js:28270-28313 esm-layout
+//@ chunk-z20c443b.js:28280-28323 esm-layout
 function createKeyPath(key) {
   return isArrayInline(key) ? key : key.split(".");
 }
-//@ chunk-dcmhvw5a.js:28313-28355 esm-layout
+//@ chunk-z20c443b.js:28323-28365 esm-layout
 function createKeyId(key) {
   return isArrayInline(key) ? key.join(".") : key;
 }
-//@ chunk-dcmhvw5a.js:28355-28669 esm-fingerprint
+//@ chunk-z20c443b.js:28365-28679 esm-fingerprint
 function get(obj, path) {
   let list = [];
   let arr = false;
@@ -133,7 +133,7 @@ function get(obj, path) {
   deepGet(obj, isString(path) ? path.split(".") : path, 0);
   return arr ? list : list[0];
 }
-//@ chunk-dcmhvw5a.js:28669-29041 esm-fingerprint
+//@ chunk-z20c443b.js:28679-29051 esm-fingerprint
 var MatchOptions = {
   includeMatches: false,
   findAllMatches: false,
@@ -165,7 +165,7 @@ var Config = {
   ...AdvancedOptions,
 };
 var SPACE = /[^ ]+/g;
-//@ chunk-dcmhvw5a.js:29041-29259 esm-fingerprint
+//@ chunk-z20c443b.js:29051-29269 esm-fingerprint
 function norm(weight = 1, mantissa = 3) {
   let cache = new Map();
   let m_2 = Math.pow(10, mantissa);
@@ -183,7 +183,7 @@ function norm(weight = 1, mantissa = 3) {
     },
   };
 }
-//@ chunk-dcmhvw5a.js:29259-30662 esm-fingerprint
+//@ chunk-z20c443b.js:29269-30672 esm-fingerprint
 class FuseIndex {
   constructor({ getFn = Config.getFn, fieldNormWeight = Config.fieldNormWeight } = {}) {
     this.norm = norm(fieldNormWeight, 3);
@@ -293,7 +293,7 @@ class FuseIndex {
     };
   }
 }
-//@ chunk-dcmhvw5a.js:30662-30837 esm-fingerprint
+//@ chunk-z20c443b.js:30672-30847 esm-fingerprint
 function createIndex(keys, docs, { getFn = Config.getFn, fieldNormWeight = Config.fieldNormWeight } = {}) {
   let myIndex = new FuseIndex({
     getFn,
@@ -304,7 +304,7 @@ function createIndex(keys, docs, { getFn = Config.getFn, fieldNormWeight = Confi
   myIndex.create();
   return myIndex;
 }
-//@ chunk-dcmhvw5a.js:30837-31016 esm-fingerprint
+//@ chunk-z20c443b.js:30847-31026 esm-fingerprint
 function parseIndex(data, { getFn = Config.getFn, fieldNormWeight = Config.fieldNormWeight } = {}) {
   let { keys, records } = data;
   let myIndex = new FuseIndex({
@@ -315,7 +315,7 @@ function parseIndex(data, { getFn = Config.getFn, fieldNormWeight = Config.field
   myIndex.setIndexRecords(records);
   return myIndex;
 }
-//@ chunk-dcmhvw5a.js:31016-31229 esm-fingerprint
+//@ chunk-z20c443b.js:31026-31239 esm-fingerprint
 function computeScore$1(
   pattern,
   {
@@ -332,7 +332,7 @@ function computeScore$1(
   if (!distance) return proximity ? 1 : accuracy;
   return accuracy + proximity / distance;
 }
-//@ chunk-dcmhvw5a.js:31229-31452 esm-fingerprint
+//@ chunk-z20c443b.js:31239-31462 esm-fingerprint
 function convertMaskToIndices(matchmask = [], minMatchCharLength = Config.minMatchCharLength) {
   let indices = [];
   let start = -1;
@@ -350,9 +350,9 @@ function convertMaskToIndices(matchmask = [], minMatchCharLength = Config.minMat
   if (matchmask[i - 1] && i - start >= minMatchCharLength) indices.push([start, i - 1]);
   return indices;
 }
-//@ chunk-dcmhvw5a.js:31452-31462 esm-layout
+//@ chunk-z20c443b.js:31462-31472 esm-layout
 var MAX_BITS = 32;
-//@ chunk-dcmhvw5a.js:31462-32815 esm-fingerprint
+//@ chunk-z20c443b.js:31472-32827 esm-fingerprint
 function search(
   text,
   pattern,
@@ -420,13 +420,15 @@ function search(
     let finish = findAllMatches ? textLen : Math.min(expectedLocation + binMid, textLen) + patternLen;
     let bitArr = Array(finish + 2);
     bitArr[finish + 1] = (1 << i) - 1;
-    for (let j = finish; j >= start; j -= 1) {
-      let currentLocation = j - 1;
+    for (let textIdx = finish; textIdx >= start; textIdx -= 1) {
+      let currentLocation = textIdx - 1;
       let charMatch = patternAlphabet[text.charAt(currentLocation)];
       if (computeMatches) matchMask[currentLocation] = +!!charMatch;
-      bitArr[j] = ((bitArr[j + 1] << 1) | 1) & charMatch;
-      if (i) bitArr[j] |= ((lastBitArr[j + 1] | lastBitArr[j]) << 1) | 1 | lastBitArr[j + 1];
-      if (bitArr[j] & mask) {
+      bitArr[textIdx] = ((bitArr[textIdx + 1] << 1) | 1) & charMatch;
+      if (i)
+        bitArr[textIdx] |=
+          ((lastBitArr[textIdx + 1] | lastBitArr[textIdx]) << 1) | 1 | lastBitArr[textIdx + 1];
+      if (bitArr[textIdx] & mask) {
         finalScore = computeScore$1(pattern, {
           errors: i,
           currentLocation,
@@ -465,7 +467,7 @@ function search(
   }
   return result;
 }
-//@ chunk-dcmhvw5a.js:32815-32923 esm-fingerprint
+//@ chunk-z20c443b.js:32827-32935 esm-fingerprint
 function createPatternAlphabet(pattern) {
   let mask = {};
   for (let i = 0, len = pattern.length; i < len; i += 1) {
@@ -474,7 +476,7 @@ function createPatternAlphabet(pattern) {
   }
   return mask;
 }
-//@ chunk-dcmhvw5a.js:32923-34297 esm-fingerprint
+//@ chunk-z20c443b.js:32935-34309 esm-fingerprint
 class BitapSearch {
   constructor(
     pattern,
@@ -561,7 +563,7 @@ class BitapSearch {
     return result;
   }
 }
-//@ chunk-dcmhvw5a.js:34297-34453 esm-fingerprint
+//@ chunk-z20c443b.js:34309-34465 esm-fingerprint
 class BaseMatch {
   constructor(pattern) {
     this.pattern = pattern;
@@ -574,14 +576,14 @@ class BaseMatch {
   }
   search() {}
 }
-//@ chunk-dcmhvw5a.js:34453-34506 esm-layout
+//@ chunk-z20c443b.js:34465-34518 esm-layout
 function getMatch(pattern, exp) {
   let matches = pattern.match(exp);
   return matches ? matches[1] : null;
 }
-//@ chunk-dcmhvw5a.js:34506-34763 esm-fingerprint
+//@ chunk-z20c443b.js:34518-34775 esm-fingerprint
 let ExactMatch; // deferred: uses BaseMatch of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:34506", () => {
+deferInit("chunk-z20c443b.js:34518", () => {
   ExactMatch = class ExactMatch extends BaseMatch {
     constructor(pattern) {
       super(pattern);
@@ -605,9 +607,9 @@ deferInit("chunk-dcmhvw5a.js:34506", () => {
     }
   };
 });
-//@ chunk-dcmhvw5a.js:34763-35029 esm-fingerprint
+//@ chunk-z20c443b.js:34775-35041 esm-fingerprint
 let InverseExactMatch; // deferred: uses BaseMatch of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:34763", () => {
+deferInit("chunk-z20c443b.js:34775", () => {
   InverseExactMatch = class InverseExactMatch extends BaseMatch {
     constructor(pattern) {
       super(pattern);
@@ -631,9 +633,9 @@ deferInit("chunk-dcmhvw5a.js:34763", () => {
     }
   };
 });
-//@ chunk-dcmhvw5a.js:35029-35305 esm-fingerprint
+//@ chunk-z20c443b.js:35041-35317 esm-fingerprint
 let PrefixExactMatch; // deferred: uses BaseMatch of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:35029", () => {
+deferInit("chunk-z20c443b.js:35041", () => {
   PrefixExactMatch = class PrefixExactMatch extends BaseMatch {
     constructor(pattern) {
       super(pattern);
@@ -657,9 +659,9 @@ deferInit("chunk-dcmhvw5a.js:35029", () => {
     }
   };
 });
-//@ chunk-dcmhvw5a.js:35305-35581 esm-fingerprint
+//@ chunk-z20c443b.js:35317-35593 esm-fingerprint
 let InversePrefixExactMatch; // deferred: uses BaseMatch of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:35305", () => {
+deferInit("chunk-z20c443b.js:35317", () => {
   InversePrefixExactMatch = class InversePrefixExactMatch extends BaseMatch {
     constructor(pattern) {
       super(pattern);
@@ -683,9 +685,9 @@ deferInit("chunk-dcmhvw5a.js:35305", () => {
     }
   };
 });
-//@ chunk-dcmhvw5a.js:35581-35871 esm-fingerprint
+//@ chunk-z20c443b.js:35593-35883 esm-fingerprint
 let SuffixExactMatch; // deferred: uses BaseMatch of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:35581", () => {
+deferInit("chunk-z20c443b.js:35593", () => {
   SuffixExactMatch = class SuffixExactMatch extends BaseMatch {
     constructor(pattern) {
       super(pattern);
@@ -709,9 +711,9 @@ deferInit("chunk-dcmhvw5a.js:35581", () => {
     }
   };
 });
-//@ chunk-dcmhvw5a.js:35871-36145 esm-fingerprint
+//@ chunk-z20c443b.js:35883-36157 esm-fingerprint
 let InverseSuffixExactMatch; // deferred: uses BaseMatch of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:35871", () => {
+deferInit("chunk-z20c443b.js:35883", () => {
   InverseSuffixExactMatch = class InverseSuffixExactMatch extends BaseMatch {
     constructor(pattern) {
       super(pattern);
@@ -735,9 +737,9 @@ deferInit("chunk-dcmhvw5a.js:35871", () => {
     }
   };
 });
-//@ chunk-dcmhvw5a.js:36145-36765 esm-fingerprint
+//@ chunk-z20c443b.js:36157-36777 esm-fingerprint
 let FuzzyMatch; // deferred: uses BaseMatch of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:36145", () => {
+deferInit("chunk-z20c443b.js:36157", () => {
   FuzzyMatch = class FuzzyMatch extends BaseMatch {
     constructor(
       pattern,
@@ -778,9 +780,9 @@ deferInit("chunk-dcmhvw5a.js:36145", () => {
     }
   };
 });
-//@ chunk-dcmhvw5a.js:36765-37092 esm-fingerprint
+//@ chunk-z20c443b.js:36777-37104 esm-fingerprint
 let IncludeMatch; // deferred: uses BaseMatch of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:36765", () => {
+deferInit("chunk-z20c443b.js:36777", () => {
   IncludeMatch = class IncludeMatch extends BaseMatch {
     constructor(pattern) {
       super(pattern);
@@ -812,12 +814,12 @@ deferInit("chunk-dcmhvw5a.js:36765", () => {
     }
   };
 });
-//@ chunk-dcmhvw5a.js:37092-37185 esm-layout
+//@ chunk-z20c443b.js:37104-37197 esm-layout
 var searchers; // deferred: uses ExactMatch of its import cycle while loading; runs once the cycle is complete
 var searchersLen;
 var SPACE_RE;
 var OR_TOKEN;
-deferInit("chunk-dcmhvw5a.js:37092", () => {
+deferInit("chunk-z20c443b.js:37104", () => {
   searchers = [
     ExactMatch,
     IncludeMatch,
@@ -832,7 +834,7 @@ deferInit("chunk-dcmhvw5a.js:37092", () => {
   SPACE_RE = / +(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/;
   OR_TOKEN = "|";
 });
-//@ chunk-dcmhvw5a.js:37185-37534 esm-fingerprint
+//@ chunk-z20c443b.js:37197-37546 esm-fingerprint
 function parseQuery(pattern, options = {}) {
   return pattern.split(OR_TOKEN).map((item) => {
     let query = item
@@ -866,12 +868,12 @@ function parseQuery(pattern, options = {}) {
     return results;
   });
 }
-//@ chunk-dcmhvw5a.js:37534-37568 esm-layout
+//@ chunk-z20c443b.js:37546-37580 esm-layout
 var MultiMatchSet; // deferred: uses FuzzyMatch of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:37534", () => {
+deferInit("chunk-z20c443b.js:37546", () => {
   MultiMatchSet = new Set([FuzzyMatch.type, IncludeMatch.type]);
 });
-//@ chunk-dcmhvw5a.js:37568-38641 esm-fingerprint
+//@ chunk-z20c443b.js:37580-38653 esm-fingerprint
 class ExtendedSearch {
   constructor(
     pattern,
@@ -952,13 +954,13 @@ class ExtendedSearch {
     };
   }
 }
-//@ chunk-dcmhvw5a.js:38641-38651 esm-layout
+//@ chunk-z20c443b.js:38653-38663 esm-layout
 var registeredSearchers = [];
-//@ chunk-dcmhvw5a.js:38651-38683 esm-layout
+//@ chunk-z20c443b.js:38663-38695 esm-layout
 function register(...args) {
   registeredSearchers.push(...args);
 }
-//@ chunk-dcmhvw5a.js:38683-38803 esm-fingerprint
+//@ chunk-z20c443b.js:38695-38815 esm-fingerprint
 function createSearcher(pattern, options) {
   for (let i = 0, len = registeredSearchers.length; i < len; i += 1) {
     let searcherClass = registeredSearchers[i];
@@ -966,7 +968,7 @@ function createSearcher(pattern, options) {
   }
   return new BitapSearch(pattern, options);
 }
-//@ chunk-dcmhvw5a.js:38803-39007 esm-fingerprint
+//@ chunk-z20c443b.js:38815-39019 esm-fingerprint
 var LogicalOperator = {
   AND: "$and",
   OR: "$or",
@@ -983,7 +985,7 @@ var convertToExplicit = (query) => ({
     [key]: query[key],
   })),
 });
-//@ chunk-dcmhvw5a.js:39007-39423 esm-fingerprint
+//@ chunk-z20c443b.js:39019-39435 esm-fingerprint
 function parse(query, options, { auto = true } = {}) {
   let next = (query) => {
     let keys = Object.keys(query);
@@ -1016,7 +1018,7 @@ function parse(query, options, { auto = true } = {}) {
   if (!isExpression(query)) query = convertToExplicit(query);
   return next(query);
 }
-//@ chunk-dcmhvw5a.js:39423-39636 esm-fingerprint
+//@ chunk-z20c443b.js:39435-39648 esm-fingerprint
 function computeScore(results, { ignoreFieldNorm = Config.ignoreFieldNorm }) {
   results.forEach((result) => {
     let totalScore = 1;
@@ -1030,7 +1032,7 @@ function computeScore(results, { ignoreFieldNorm = Config.ignoreFieldNorm }) {
     result.score = totalScore;
   });
 }
-//@ chunk-dcmhvw5a.js:39636-39880 esm-fingerprint
+//@ chunk-z20c443b.js:39648-39892 esm-fingerprint
 function transformMatches(result, data) {
   let matches = result.matches;
   data.matches = [];
@@ -1047,11 +1049,11 @@ function transformMatches(result, data) {
     data.matches.push(obj);
   });
 }
-//@ chunk-dcmhvw5a.js:39880-39913 esm-fingerprint
+//@ chunk-z20c443b.js:39892-39925 esm-fingerprint
 function transformScore(result, data) {
   data.score = result.score;
 }
-//@ chunk-dcmhvw5a.js:39913-40147 esm-fingerprint
+//@ chunk-z20c443b.js:39925-40159 esm-fingerprint
 function format(
   results,
   docs,
@@ -1073,7 +1075,7 @@ function format(
     return data;
   });
 }
-//@ chunk-dcmhvw5a.js:40147-42656 esm-fingerprint
+//@ chunk-z20c443b.js:40159-42668 esm-fingerprint
 class Fuse {
   constructor(docs, options = {}, index) {
     this.options = {
@@ -1268,34 +1270,34 @@ class Fuse {
     return matches;
   }
 }
-//@ chunk-dcmhvw5a.js:42656-42676 esm-fingerprint
+//@ chunk-z20c443b.js:42668-42688 esm-fingerprint
 // deferred: uses Fuse of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:42656", () => {
+deferInit("chunk-z20c443b.js:42668", () => {
   Fuse.version = "7.0.0";
 });
-//@ chunk-dcmhvw5a.js:42676-42695 esm-fingerprint
+//@ chunk-z20c443b.js:42688-42707 esm-fingerprint
 // deferred: uses Fuse of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:42676", () => {
+deferInit("chunk-z20c443b.js:42688", () => {
   Fuse.createIndex = createIndex;
 });
-//@ chunk-dcmhvw5a.js:42695-42713 esm-fingerprint
+//@ chunk-z20c443b.js:42707-42725 esm-fingerprint
 // deferred: uses Fuse of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:42695", () => {
+deferInit("chunk-z20c443b.js:42707", () => {
   Fuse.parseIndex = parseIndex;
 });
-//@ chunk-dcmhvw5a.js:42713-42727 esm-layout
+//@ chunk-z20c443b.js:42725-42739 esm-layout
 // deferred: uses Fuse of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:42713", () => {
+deferInit("chunk-z20c443b.js:42725", () => {
   Fuse.config = Config;
 });
-//@ chunk-dcmhvw5a.js:42727-42745 esm-fingerprint
+//@ chunk-z20c443b.js:42739-42757 esm-fingerprint
 // deferred: uses Fuse of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:42727", () => {
+deferInit("chunk-z20c443b.js:42739", () => {
   Fuse.parseQuery = parse;
 });
-//@ chunk-dcmhvw5a.js:42745-42752 affinity
+//@ chunk-z20c443b.js:42757-42764 affinity
 // deferred: uses register of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:42745", () => {
+deferInit("chunk-z20c443b.js:42757", () => {
   register(ExtendedSearch);
 });
 export { Fuse, getTag };

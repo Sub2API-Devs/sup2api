@@ -1,8 +1,8 @@
 /**
  * form-data/lib/form_data.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: form-data@4.0.6
- * pieces: chunk-h6b7mazd.js (1)
+ * pieces: chunk-ww9agm6g.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
@@ -13,7 +13,7 @@ import { require_es_set_tostringtag } from "../../es-set-tostringtag/index.js";
 import { require_hasown_2 } from "../../hasown/index.js";
 import { require_populate } from "./populate.js";
 
-//@ chunk-h6b7mazd.js:21450-27156 cjs-fingerprint
+//@ chunk-ww9agm6g.js:21450-27156 cjs-fingerprint
 var require_form_data = __commonJS(function (cjsExports, cjsModule) {
   var CombinedStream = require_combined_stream();
   var util = importMetaRequire("util");

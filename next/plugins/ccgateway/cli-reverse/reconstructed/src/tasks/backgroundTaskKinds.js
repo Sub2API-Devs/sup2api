@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：后台任务种类常量
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: placement 1
  */
 
-//@ chunk-e6aww6q8.js:3750553-3750768 placement
+//@ chunk-5xgkngpb.js:3846306-3846521 placement
 var hasRunningBackgroundWorkForAgent = (agentId, taskRegistry) =>
   Object.values(taskRegistry.all()).some((task) => {
     let isRunningBackgroundShell =

@@ -3,9 +3,9 @@
  *
  * 开发者栏：显示 "Remote tool calling" 等远程工具调用状态与最近慢操作；本文件还混入了若干遥测 schema 常量（切分误归）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/DevBar.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-b7gstm5r.js (3)
+ * pieces: chunk-czq1j3j2.js (1), chunk-k82fyra0.js (3)
  * attribution: fingerprint 2, affinity 1, placement 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -18,9 +18,9 @@ import { Text, Box } from "../ink/components/Text.js";
 import { UNATTENDED_CONSENT_LABELS } from "../services/remoteTools/unattendedServingConsent.js";
 import { ListItem } from "./design-system/ListItem.js";
 
-//@ chunk-b7gstm5r.js:20584-20613 affinity
+//@ chunk-k82fyra0.js:21761-21790 affinity
 var DEV_BAR_TOOL_CALLING_TITLE = "Remote tool calling";
-//@ chunk-b7gstm5r.js:20613-21639 fingerprint (2.1.88 match: DevBar, 0.33)
+//@ chunk-k82fyra0.js:21790-22816 fingerprint (2.1.88 match: DevBar, 0.33)
 function DevBar(props) {
   let $ = useMemoCache(20);
   let { state, isFocused, notice } = props;
@@ -111,7 +111,7 @@ function DevBar(props) {
   } else box = $[19];
   return box;
 }
-//@ chunk-b7gstm5r.js:21639-21796 placement (2.1.88 match: _temp, 0.798)
+//@ chunk-k82fyra0.js:22816-22973 placement (2.1.88 match: _temp, 0.797)
 /**
  * React Compiler 产物：缩进 2 的灰色文本行组件（DevBar 使用），与 AskUserQuestion 无关。
  */
@@ -132,7 +132,7 @@ function IndentedInactiveText(props) {
   } else box = $[1];
   return box;
 }
-//@ chunk-18hwfzwa.js:514449-514523 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:540927-541001 fingerprint (2.1.88 match: _temp, 1)
 function formatOperationTiming(op) {
   return `${op.operation} (${Math.round(op.durationMs)}ms)`;
 }

@@ -1,8 +1,8 @@
 /**
  * @typespec/ts-http-runtime/dist/esm/nodeHttpClient.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
- * pieces: chunk-mrx6y2r5.js (10)
+ * pieces: chunk-b5df2wx1.js (10)
  * attribution: esm-layout 1, esm-fingerprint 9
  */
 import { Transform } from "stream";
@@ -14,13 +14,13 @@ import { Sanitizer } from "./util/sanitizer.js";
 import { logger_2 } from "./log.js";
 import { createHttpHeaders } from "./pipelineRequest.js";
 
-//@ chunk-mrx6y2r5.js:37932-37942 esm-layout
+//@ chunk-b5df2wx1.js:37932-37942 esm-layout
 var DEFAULT_TLS_SETTINGS = {};
-//@ chunk-mrx6y2r5.js:37942-37994 esm-fingerprint
+//@ chunk-b5df2wx1.js:37942-37994 esm-fingerprint
 function isReadableStream(body) {
   return body && typeof body.pipe === "function";
 }
-//@ chunk-mrx6y2r5.js:37994-38224 esm-fingerprint
+//@ chunk-b5df2wx1.js:37994-38224 esm-fingerprint
 function isStreamComplete(stream) {
   if (stream.readable === false) return Promise.resolve();
   return new Promise((resolve) => {
@@ -35,11 +35,11 @@ function isStreamComplete(stream) {
     stream.on("error", handler);
   });
 }
-//@ chunk-mrx6y2r5.js:38224-38280 esm-fingerprint
+//@ chunk-b5df2wx1.js:38224-38280 esm-fingerprint
 function isArrayBuffer(body) {
   return body && typeof body.byteLength === "number";
 }
-//@ chunk-mrx6y2r5.js:38280-38502 esm-fingerprint
+//@ chunk-b5df2wx1.js:38280-38502 esm-fingerprint
 class ReportTransform extends Transform {
   _transform(chunk, _encoding, callback) {
     this.push(chunk);
@@ -59,7 +59,7 @@ class ReportTransform extends Transform {
     this.progressCallback = progressCallback;
   }
 }
-//@ chunk-mrx6y2r5.js:38502-41828 esm-fingerprint
+//@ chunk-b5df2wx1.js:38502-41828 esm-fingerprint
 class NodeHttpClient {
   constructor() {
     this.cachedHttpsAgents = new WeakMap();
@@ -243,7 +243,7 @@ class NodeHttpClient {
     }
   }
 }
-//@ chunk-mrx6y2r5.js:41828-41989 esm-fingerprint
+//@ chunk-b5df2wx1.js:41828-41989 esm-fingerprint
 function getResponseHeaders(res) {
   let headers = createHttpHeaders();
   for (let header of Object.keys(res.headers)) {
@@ -254,7 +254,7 @@ function getResponseHeaders(res) {
   }
   return headers;
 }
-//@ chunk-mrx6y2r5.js:41989-42172 esm-fingerprint
+//@ chunk-b5df2wx1.js:41989-42172 esm-fingerprint
 function getDecodedResponseStream(stream, headers) {
   let contentEncoding = headers.get("Content-Encoding");
   if (contentEncoding === "gzip") {
@@ -268,7 +268,7 @@ function getDecodedResponseStream(stream, headers) {
   }
   return stream;
 }
-//@ chunk-mrx6y2r5.js:42172-42529 esm-fingerprint
+//@ chunk-b5df2wx1.js:42172-42529 esm-fingerprint
 function streamToText(stream) {
   return new Promise((resolve, reject) => {
     let buffer = [];
@@ -290,7 +290,7 @@ function streamToText(stream) {
     });
   });
 }
-//@ chunk-mrx6y2r5.js:42529-42736 esm-fingerprint
+//@ chunk-b5df2wx1.js:42529-42736 esm-fingerprint
 function getBodyLength(body) {
   if (!body) return 0;
   else if (Buffer.isBuffer(body)) return body.length;

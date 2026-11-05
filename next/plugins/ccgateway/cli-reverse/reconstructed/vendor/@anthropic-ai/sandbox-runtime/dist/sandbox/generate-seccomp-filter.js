@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/generate-seccomp-filter.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (10)
+ * pieces: chunk-qg41pqt6.js (10)
  * attribution: esm-layout 2, esm-fingerprint 8
  */
 import { execSync, exec } from "child_process";
@@ -18,13 +18,13 @@ import "fs";
 import "fs";
 import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 
-//@ chunk-fq0cr76a.js:720057-720113 esm-layout
+//@ chunk-qg41pqt6.js:721739-721795 esm-layout
 var sandboxRuntimeCache = new Map();
 var cachedGlobalNpmPaths = null;
 var pendingGlobalNpmPaths = null;
 var NPM_ROOT_COMMAND = "npm root -g";
 var NPM_ROOT_TIMEOUT_MS = 5000;
-//@ chunk-fq0cr76a.js:720113-720248 esm-fingerprint
+//@ chunk-qg41pqt6.js:721795-721930 esm-fingerprint
 function getSandboxRuntimeCandidatesSync() {
   if (cachedGlobalNpmPaths) return cachedGlobalNpmPaths;
   let npmRoot;
@@ -38,7 +38,7 @@ function getSandboxRuntimeCandidatesSync() {
   cachedGlobalNpmPaths = sandboxRuntimeCandidatePaths(npmRoot);
   return cachedGlobalNpmPaths;
 }
-//@ chunk-fq0cr76a.js:720248-720474 esm-fingerprint
+//@ chunk-qg41pqt6.js:721930-722156 esm-fingerprint
 function getSandboxRuntimeCandidates() {
   if (cachedGlobalNpmPaths) return Promise.resolve(cachedGlobalNpmPaths);
   if (pendingGlobalNpmPaths) return pendingGlobalNpmPaths;
@@ -62,7 +62,7 @@ function getSandboxRuntimeCandidates() {
   });
   return pendingGlobalNpmPaths;
 }
-//@ chunk-fq0cr76a.js:720474-720951 esm-fingerprint
+//@ chunk-qg41pqt6.js:722156-722633 esm-fingerprint
 function sandboxRuntimeCandidatePaths(npmRootOutput) {
   let paths = [];
   let npmRoot = npmRootOutput?.trim();
@@ -77,7 +77,7 @@ function sandboxRuntimeCandidatePaths(npmRootOutput) {
   );
   return paths;
 }
-//@ chunk-fq0cr76a.js:720951-721408 esm-layout
+//@ chunk-qg41pqt6.js:722633-723090 esm-layout
 function getVendorArchitecture() {
   switch ("x64") {
     case "x64":
@@ -97,7 +97,7 @@ function getVendorArchitecture() {
       return null;
   }
 }
-//@ chunk-fq0cr76a.js:721408-721555 esm-fingerprint
+//@ chunk-qg41pqt6.js:723090-723237 esm-fingerprint
 function getLocalSeccompPaths(filename) {
   let arch = getVendorArchitecture();
   if (!arch) return [];
@@ -109,7 +109,7 @@ function getLocalSeccompPaths(filename) {
     join(baseDir, "..", relativePath),
   ];
 }
-//@ chunk-fq0cr76a.js:721555-721670 esm-fingerprint
+//@ chunk-qg41pqt6.js:723237-723352 esm-fingerprint
 function getApplySeccompBinaryPath(seccompBinaryPath) {
   let cacheKey = seccompBinaryPath ?? "";
   if (sandboxRuntimeCache.has(cacheKey)) return sandboxRuntimeCache.get(cacheKey);
@@ -118,7 +118,7 @@ function getApplySeccompBinaryPath(seccompBinaryPath) {
   sandboxRuntimeCache.set(cacheKey, result);
   return result;
 }
-//@ chunk-fq0cr76a.js:721670-721797 esm-fingerprint
+//@ chunk-qg41pqt6.js:723352-723479 esm-fingerprint
 async function getApplySeccompBinaryPath_2(seccompBinaryPath) {
   let cacheKey = seccompBinaryPath ?? "";
   if (sandboxRuntimeCache.has(cacheKey)) return sandboxRuntimeCache.get(cacheKey);
@@ -127,7 +127,7 @@ async function getApplySeccompBinaryPath_2(seccompBinaryPath) {
   sandboxRuntimeCache.set(cacheKey, result);
   return result;
 }
-//@ chunk-fq0cr76a.js:721797-722314 esm-fingerprint
+//@ chunk-qg41pqt6.js:723479-723996 esm-fingerprint
 function findLocalApplySeccompPath(seccompBinaryPath) {
   if (seccompBinaryPath) {
     if (fsModule_2.existsSync(seccompBinaryPath)) {
@@ -151,7 +151,7 @@ function findLocalApplySeccompPath(seccompBinaryPath) {
     }
   return;
 }
-//@ chunk-fq0cr76a.js:722314-722629 esm-fingerprint
+//@ chunk-qg41pqt6.js:723996-724311 esm-fingerprint
 function findGlobalApplySeccompPath(globalBases) {
   let arch = getVendorArchitecture();
   if (!arch) return null;
@@ -167,4 +167,4 @@ function findGlobalApplySeccompPath(globalBases) {
   logForDebugging_2(`[SeccompFilter] apply-seccomp binary not found in any expected location (${arch})`);
   return null;
 }
-export { getApplySeccompBinaryPath_2, getSandboxRuntimeCandidates, getApplySeccompBinaryPath };
+export { getApplySeccompBinaryPath_2, getApplySeccompBinaryPath, getSandboxRuntimeCandidates };

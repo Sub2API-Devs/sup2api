@@ -3,10 +3,10 @@
  *
  * 不 spawn git 直接读 .git：HEAD、loose ref/packed-refs、commondir、config 中的 origin URL；GitFileWatcher 监视并缓存 branch/head/remote/defaultBranch；为 git 子进程固定 GIT_DIR 等环境
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/git/gitFilesystem.ts
- * pieces: chunk-ca06bv0t.js (1), chunk-dgqyqzy0.js (1), chunk-e6aww6q8.js (1), chunk-s61vbvea.js (1), chunk-t0gq9gyw.js (81), chunk-yj65zw1g.js (1)
- * attribution: fingerprint 9, callgraph-fingerprint 2, placement 2, layout 30, facade-exports 42, file-local 1
+ * pieces: chunk-5xgkngpb.js (1), chunk-77bb8s6j.js (1), chunk-85eyj5gy.js (81), chunk-fepf8jp6.js (1), chunk-s4mtq5zk.js (1)
+ * attribution: fingerprint 9, callgraph-fingerprint 2, placement 2, layout 29, facade-exports 42, file-local 1
  */
 import { open, stat, readFile, lstat, realpath, readdir } from "fs/promises";
 import { join, resolve, relative, isAbsolute, dirname, sep } from "path";
@@ -56,12 +56,11 @@ import { FileStatWatcher } from "../fileStatWatcher.js";
 import { identity } from "../pathClassification.js";
 import { isPathWithin } from "../fsJunctions.js";
 import { O_NONBLOCK } from "../fsFlags.js";
-import { lstatErrnoOrFalse } from "./gitDirResolution.js";
 import { MAX_PLACEMENT_DEPTH } from "./builderGit/gitConfigAudit.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-t0gq9gyw.js:80246-80537 callgraph-fingerprint (2.1.88 match: getRemoteUrlForDir, 0.543)
+//@ chunk-85eyj5gy.js:81097-81388 callgraph-fingerprint (2.1.88 match: getRemoteUrlForDir, 0.542)
 /**
  * 读某仓库目录的 git config 解析 origin URL；config 含 NUL、路径不安全或读失败时记录并返回标记值。
  */
@@ -78,7 +77,7 @@ function getRemoteUrlForDir_2(cwd) {
   };
   return readOriginValue("pushurl") ?? readOriginValue("url") ?? REPO_NEGATIVE_RESULT;
 }
-//@ chunk-t0gq9gyw.js:86395-86531 placement
+//@ chunk-85eyj5gy.js:87370-87506 placement
 class TrustGuardHolder {
   guards = null;
   setGuards(guards) {
@@ -93,15 +92,15 @@ class TrustGuardHolder {
     }
   }
 }
-//@ chunk-t0gq9gyw.js:86531-86557 placement
+//@ chunk-85eyj5gy.js:87506-87532 placement
 /**
  * 宿主隔离的信任守卫状态注册表。
  */
 var trustGuardRegistry; // deferred: uses TrustGuardHolder of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-t0gq9gyw.js:86531", () => {
+deferInit("chunk-85eyj5gy.js:87506", () => {
   trustGuardRegistry = new HostScoped(() => new TrustGuardHolder());
 });
-//@ chunk-t0gq9gyw.js:86622-86684 layout
+//@ chunk-85eyj5gy.js:87597-87659 layout
 var PACKED_REFS_CHUNK_BYTES = 65536;
 var PACKED_REFS_OVERLAP_BYTES = 4096;
 var NEWLINE_CODE = 10;
@@ -109,7 +108,7 @@ var SHA256_HEX_LENGTH = 32;
 var CARET_CODE = 94;
 var SPACE_CODE = 35;
 var HEX_STRING_RE = /^[0-9a-f]+$/;
-//@ chunk-t0gq9gyw.js:86684-87558 layout
+//@ chunk-85eyj5gy.js:87659-88533 layout
 /**
  * 打开 packed-refs，按块二分查找 ref 名，跳过注释与剥离行，自动识别 sha1/sha256 长度；找到返回对象 id，否则 null。
  */
@@ -182,11 +181,11 @@ async function lookupPackedRef(gitDir, refName) {
     await handle?.close();
   }
 }
-//@ chunk-t0gq9gyw.js:87558-87598 facade-exports
+//@ chunk-85eyj5gy.js:88533-88573 facade-exports
 function clearResolveGitDirCache() {
   getGitRepoCache().gitDirByCwd.clear();
 }
-//@ chunk-t0gq9gyw.js:87598-87749 facade-exports
+//@ chunk-85eyj5gy.js:88573-88724 facade-exports
 async function resolveGitDir(cwd) {
   let startPath = cwd ?? (isRemoteSessionAvailable() ? getOriginalCwdOrNull() : getCwdOrNull());
   if (startPath === null) return null;
@@ -195,12 +194,12 @@ async function resolveGitDir(cwd) {
   if (cached !== undefined) return cached;
   return resolveGitDirForCwd(resolved, findGitRoot(resolved));
 }
-//@ chunk-t0gq9gyw.js:87749-87802 facade-exports
+//@ chunk-85eyj5gy.js:88724-88777 facade-exports
 async function refreshGitDir(cwd) {
   let resolved = resolve(cwd);
   return resolveGitDirForCwd(resolved, findGitRootUncached(resolved));
 }
-//@ chunk-t0gq9gyw.js:87802-88271 layout
+//@ chunk-85eyj5gy.js:88777-89246 layout
 /**
  * 解析目录的 git 目录（.git 文件中的 gitdir 指针，带安全检查与缓存）。
  */
@@ -244,7 +243,7 @@ async function resolveGitDirForCwd(cwd, gitRoot) {
     return null;
   }
 }
-//@ chunk-t0gq9gyw.js:88271-88470 layout
+//@ chunk-85eyj5gy.js:89246-89445 layout
 function lstatKind(path) {
   try {
     let stats = lstatSync(path);
@@ -255,7 +254,7 @@ function lstatKind(path) {
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "absent" : "other";
   }
 }
-//@ chunk-t0gq9gyw.js:88470-88641 facade-exports
+//@ chunk-85eyj5gy.js:89445-89616 facade-exports
 function readLinkTextSafe(linkPath) {
   try {
     let raw = readlinkSync(linkPath, {
@@ -268,32 +267,32 @@ function readLinkTextSafe(linkPath) {
     return null;
   }
 }
-//@ chunk-t0gq9gyw.js:88641-88740 facade-exports
+//@ chunk-85eyj5gy.js:89616-89715 facade-exports
 function pointerFileIsSuspect(filePath, baseDir) {
   if (!walkPathSafely(filePath, baseDir)) return true;
   let kind = lstatKind(filePath);
   return kind === "symlink" || kind === "special" || kind === "other";
 }
-//@ chunk-t0gq9gyw.js:88740-88814 file-local
+//@ chunk-85eyj5gy.js:89715-89789 file-local
 function isSafeRefName(filePath, baseDir) {
   let relPath = relative(baseDir, filePath);
   return !(relPath === "" || relPath.startsWith("..") || isAbsolute(relPath));
 }
-//@ chunk-t0gq9gyw.js:88814-88867 facade-exports
+//@ chunk-85eyj5gy.js:89789-89842 facade-exports
 function readPositionIsUnsafe(filePath, baseDir) {
   if (!isSafeRefName(filePath, baseDir)) return true;
   return !walkPathSafely(filePath, baseDir);
 }
-//@ chunk-t0gq9gyw.js:88867-88899 layout
+//@ chunk-85eyj5gy.js:89842-89874 layout
 function isPathOnForeignMount(path, baseDir) {
   return isOnForeignMount(path, baseDir);
 }
-//@ chunk-t0gq9gyw.js:88899-88939 layout
+//@ chunk-85eyj5gy.js:89874-89914 layout
 var SEPARATOR_RUN_RE = /\/+/;
 var TRAILING_SEPARATOR_RE = /\/$/;
 var LEADING_SLASH_RE = /^\//;
 var LEADING_SLASH_ANCHORED_RE = /^\//;
-//@ chunk-t0gq9gyw.js:88939-89847 layout
+//@ chunk-85eyj5gy.js:89914-90822 layout
 /**
  * 逐段检查路径（拒绝特殊文件、记录链接与缺失）。
  */
@@ -312,12 +311,12 @@ function walkPathSafely(
   let currentPath = match ? match[0] : "";
   let parts = startPath.slice(currentPath.length).split(SEPARATOR_RUN_RE);
   let min = Math.min(tailParts, parts.length);
-  for (let j = 0; j < parts.length; j++) {
-    let segment = parts[j];
+  for (let idx = 0; idx < parts.length; idx++) {
+    let segment = parts[idx];
     if (segment === "" || segment === ".") continue;
     if (segment === "..") {
       currentPath = dirname(currentPath);
-      if (report && j >= parts.length - min) report.missingTail = null;
+      if (report && idx >= parts.length - min) report.missingTail = null;
       continue;
     }
     currentPath = join(currentPath, segment);
@@ -334,7 +333,7 @@ function walkPathSafely(
       };
     if (kind === "other" || (kind === "special" && !allowSpecial)) return false;
     if (kind === "absent" && report && report.missingTail === undefined)
-      report.missingTail = j >= parts.length - min ? parts.length - j : null;
+      report.missingTail = idx >= parts.length - min ? parts.length - idx : null;
     if (kind === "symlink") {
       if (report) report.throughLink = true;
       let linkText = memo
@@ -343,7 +342,7 @@ function walkPathSafely(
       if (linkText === null) return false;
       if (isPathOnForeignMount(linkText, dirname(currentPath))) return false;
       let nextPath = LEADING_SLASH_RE.test(linkText) ? linkText : dirname(currentPath) + sep + linkText;
-      let joined = parts.slice(j + 1).join(sep);
+      let joined = parts.slice(idx + 1).join(sep);
       let restPath = joined
         ? TRAILING_SEPARATOR_RE.test(nextPath)
           ? nextPath + joined
@@ -356,7 +355,7 @@ function walkPathSafely(
         mountBase,
         allowSpecial,
         report,
-        Math.min(min, parts.length - j - 1),
+        Math.min(min, parts.length - idx - 1),
         memo,
       );
     }
@@ -364,14 +363,14 @@ function walkPathSafely(
   if (report && report.missingTail === undefined) report.missingTail = 0;
   return true;
 }
-//@ chunk-t0gq9gyw.js:89847-89902 facade-exports
+//@ chunk-85eyj5gy.js:90822-90877 facade-exports
 function createWalkMemo() {
   return {
     kinds: new Map(),
     linkTexts: new Map(),
   };
 }
-//@ chunk-t0gq9gyw.js:89902-89988 layout
+//@ chunk-85eyj5gy.js:90877-90963 layout
 function memoizedCall(memo, key, compute) {
   let value = memo.get(key);
   if (value === undefined && !memo.has(key)) {
@@ -380,7 +379,7 @@ function memoizedCall(memo, key, compute) {
   }
   return value;
 }
-//@ chunk-t0gq9gyw.js:89988-90249 layout
+//@ chunk-85eyj5gy.js:90963-91224 layout
 function isPointerPathUnsafe(pointer, baseDir, mountBase = baseDir, allowSpecial = false, report, memo) {
   let spelledPath = LEADING_SLASH_RE.test(pointer) ? pointer : baseDir + sep + pointer;
   let resolved = resolve(baseDir, pointer);
@@ -405,31 +404,31 @@ function isPointerPathUnsafe(pointer, baseDir, mountBase = baseDir, allowSpecial
   if (report) report.missingTail = null;
   return !walkPathSafely(resolved, baseDir, undefined, mountBase, allowSpecial, undefined, undefined, memo);
 }
-//@ chunk-t0gq9gyw.js:90249-90287 facade-exports
+//@ chunk-85eyj5gy.js:91224-91262 facade-exports
 function rawPointerPathIsUnsafe(pointer, cwd, mountBase = cwd) {
   return isPointerPathUnsafe(pointer, cwd, mountBase);
 }
-//@ chunk-t0gq9gyw.js:90287-90450 facade-exports
-function rawPointerPathWalk(gitDir, cwdState, memo) {
+//@ chunk-85eyj5gy.js:91262-91425 facade-exports
+function rawPointerPathWalk(gitDir, cwd, memo) {
   let report = {
     missingTail: undefined,
   };
   return {
-    unsafe: isPointerPathUnsafe(gitDir, cwdState, cwdState, false, report, memo),
+    unsafe: isPointerPathUnsafe(gitDir, cwd, cwd, false, report, memo),
     missingTail: report.missingTail ?? null,
     stoppedAt: report.stoppedAt,
     throughLink: report.throughLink ?? false,
   };
 }
-//@ chunk-t0gq9gyw.js:90450-90488 facade-exports
+//@ chunk-85eyj5gy.js:91425-91463 facade-exports
 function linkChainIsUnsafeToFollow(pointer, cwd) {
   return isPointerPathUnsafe(pointer, cwd, cwd, true);
 }
-//@ chunk-t0gq9gyw.js:90488-90560 facade-exports
+//@ chunk-85eyj5gy.js:91463-91535 facade-exports
 function isValidGitSha(s) {
   return /^[0-9a-f]{40}$/.test(s) || /^[0-9a-f]{64}$/.test(s);
 }
-//@ chunk-t0gq9gyw.js:90560-91195 facade-exports (2.1.88 match: readGitHead, 0.817)
+//@ chunk-85eyj5gy.js:91535-92170 facade-exports (2.1.88 match: readGitHead, 0.816)
 /**
  * 不 spawn git 直接读 <gitDir>/HEAD：`ref: refs/heads/x` 返回分支，40/64 位 hex 返回 detached sha；reftable 仓库回退 git symbolic-ref。
  */
@@ -482,7 +481,7 @@ async function readGitHead(gitDir) {
     return null;
   }
 }
-//@ chunk-t0gq9gyw.js:91195-91551 facade-exports (2.1.88 match: resolveRef, 0)
+//@ chunk-85eyj5gy.js:92170-92526 facade-exports (2.1.88 match: resolveRef, 0)
 /**
  * 把 ref 解析成 sha：先在 gitDir 再在 commondir 查 loose ref 文件与 packed-refs，最多跟随 5 层符号引用；reftable 时用 git show-ref。
  */
@@ -506,7 +505,7 @@ async function resolveRef(gitDir, refName, hopsLeft = 5) {
   if (commonDir && commonDir !== gitDir) return resolveRefInDir(commonDir, refName, hopsLeft);
   return null;
 }
-//@ chunk-t0gq9gyw.js:91551-91831 fingerprint (2.1.88 match: resolveRefInDir, 1)
+//@ chunk-85eyj5gy.js:92526-92806 fingerprint (2.1.88 match: resolveRefInDir, 1)
 /**
  * 在单个 git 目录中按 loose 文件 → packed-refs 顺序查找 ref。
  */
@@ -525,9 +524,9 @@ async function resolveRefInDir(gitDir, refName, hopsLeft) {
   if (readPositionIsUnsafe(join(gitDir, "packed-refs"), gitDir)) return null;
   return lookupPackedRef(gitDir, refName);
 }
-//@ chunk-t0gq9gyw.js:91831-91845 facade-exports
+//@ chunk-85eyj5gy.js:92806-92820 facade-exports
 var GIT_POINTER_MAX_BYTES = 65536;
-//@ chunk-t0gq9gyw.js:91845-92117 facade-exports
+//@ chunk-85eyj5gy.js:92820-93092 facade-exports
 /**
  * 读 <gitDir>/commondir 并解析为绝对路径（限 64KB、拒绝不安全路径）。
  */
@@ -547,7 +546,7 @@ async function getCommonDir(gitDir) {
     return null;
   }
 }
-//@ chunk-t0gq9gyw.js:92117-92607 layout
+//@ chunk-85eyj5gy.js:93092-93582 layout
 async function resolveSymrefTarget(commonDir, refName, prefix) {
   if (await keepsRefsInReftable(commonDir)) {
     if (!refName.startsWith("refs/") || !isSafeRefName_2(refName)) return null;
@@ -577,15 +576,15 @@ async function resolveSymrefTarget(commonDir, refName, prefix) {
   } catch {}
   return null;
 }
-//@ chunk-t0gq9gyw.js:92607-92649 layout
+//@ chunk-85eyj5gy.js:93582-93624 layout
 var REFS_HEADS_INVALID = "refs/heads/.invalid";
 var INVALID_HEAD_REF = 5000;
 var GIT_PROBE_RETRIES = 3;
-//@ chunk-t0gq9gyw.js:92649-92697 layout
+//@ chunk-85eyj5gy.js:93624-93672 layout
 function isGitSpawnBlocked() {
   return trustGuardRegistry.of(getRootSession().host).blocked();
 }
-//@ chunk-t0gq9gyw.js:92697-92866 facade-exports (2.1.88 match: readRawSymref, 0.832)
+//@ chunk-85eyj5gy.js:93672-93841 facade-exports (2.1.88 match: readRawSymref, 0.832)
 /**
  * 读 HEAD 原始内容判断是否为 reftable（refs/heads/.invalid）布局。
  */
@@ -598,7 +597,7 @@ async function keepsRefsInReftable(gitDir) {
     return false;
   }
 }
-//@ chunk-t0gq9gyw.js:92866-93644 layout
+//@ chunk-85eyj5gy.js:93841-94619 layout
 async function runGitForWatcher(gitDir, args) {
   if (isGitSpawnBlocked()) return null;
   let commonDir = (await getCommonDir(gitDir)) ?? gitDir;
@@ -655,12 +654,12 @@ async function runGitForWatcher(gitDir, args) {
   if (result.exitCode === undefined) getGitFileWatcher().noteInconclusiveRefRead();
   return result;
 }
-//@ chunk-t0gq9gyw.js:93644-93679 layout
+//@ chunk-85eyj5gy.js:94619-94654 layout
 var GIT_WATCH_POLL_MS_2 = 1000;
 var GIT_WATCH_POLL_MS = 60000;
 var GIT_WATCH_SAFETY_POLL_MS = 200;
 var GIT_CHECK_DEADLINE_MS = 100;
-//@ chunk-t0gq9gyw.js:93679-93846 layout
+//@ chunk-85eyj5gy.js:94654-94821 layout
 async function statFileIdentity(path) {
   try {
     let { dev, ino, size, mtimeNs, ctimeNs, birthtimeNs } = await stat(path, {
@@ -671,7 +670,7 @@ async function statFileIdentity(path) {
     return "absent";
   }
 }
-//@ chunk-t0gq9gyw.js:93846-101450 fingerprint (2.1.88 match: GitFileWatcher, 0.399)
+//@ chunk-85eyj5gy.js:94821-102442 fingerprint (2.1.88 match: GitFileWatcher, 0.391)
 /**
  * GitFileWatcher：监视 .git/HEAD、config、当前分支 ref 等文件（fs 事件或轮询），缓存 branch/head/remoteUrl/defaultBranch，变化时失效并通知 onStateChange；也可登记额外仓库跟踪其分支变化。
  */
@@ -961,6 +960,7 @@ class GitFileWatcher {
             fallbackPollMs: GIT_WATCH_POLL_MS_2,
             safetyPollMs: GIT_WATCH_POLL_MS,
             settleMs: GIT_WATCH_SAFETY_POLL_MS,
+            label: "git_head",
           },
           this.checkFilesNow,
         ),
@@ -1049,19 +1049,19 @@ class GitFileWatcher {
     this.reftable = false;
   }
 }
-//@ chunk-t0gq9gyw.js:101450-101475 layout
+//@ chunk-85eyj5gy.js:102442-102467 layout
 var gitFileWatcherByHost; // deferred: uses GitFileWatcher of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-t0gq9gyw.js:101450", () => {
+deferInit("chunk-85eyj5gy.js:102442", () => {
   gitFileWatcherByHost = new HostScoped(() => new GitFileWatcher());
 });
-//@ chunk-t0gq9gyw.js:101475-101512 layout
+//@ chunk-85eyj5gy.js:102467-102504 layout
 /**
  * 取当前宿主的 GitFileWatcher 单例。
  */
 function getGitFileWatcher() {
   return gitFileWatcherByHost.of(getRootSession().host);
 }
-//@ chunk-t0gq9gyw.js:101512-101678 fingerprint (2.1.88 match: computeHead, 1)
+//@ chunk-85eyj5gy.js:102504-102670 fingerprint (2.1.88 match: computeHead, 1)
 async function computeHead() {
   let gitDir = await resolveGitDir();
   if (!gitDir) return "";
@@ -1070,7 +1070,7 @@ async function computeHead() {
   if (head.type === "branch") return (await resolveRef(gitDir, `refs/heads/${head.name}`)) ?? "";
   return head.sha;
 }
-//@ chunk-t0gq9gyw.js:101678-101820 layout
+//@ chunk-85eyj5gy.js:102670-102812 layout
 /**
  * 从 <gitDir>/config 文本解析 remote.origin.pushurl 或 url。
  */
@@ -1081,7 +1081,7 @@ async function readOriginUrlFromConfig(gitDir) {
     (await readGitConfigValueAsync(gitDir, "remote", "origin", "url"))
   );
 }
-//@ chunk-t0gq9gyw.js:101820-101962 layout
+//@ chunk-85eyj5gy.js:102812-102954 layout
 async function computeRemoteUrl() {
   let gitDir = await resolveGitDir();
   if (!gitDir) return null;
@@ -1091,9 +1091,9 @@ async function computeRemoteUrl() {
   if (commonDir && commonDir !== gitDir) return readOriginUrlFromConfig(commonDir);
   return null;
 }
-//@ chunk-t0gq9gyw.js:101962-101988 facade-exports
+//@ chunk-85eyj5gy.js:102954-102980 facade-exports
 var CONVENTIONAL_DEFAULT_BRANCH_NAMES = ["main", "master"];
-//@ chunk-t0gq9gyw.js:101988-102264 fingerprint (2.1.88 match: computeDefaultBranch, 0.831)
+//@ chunk-85eyj5gy.js:102980-103256 fingerprint (2.1.88 match: computeDefaultBranch, 0.831)
 /**
  * 不 spawn 计算默认分支：读 refs/remotes/origin/HEAD 符号引用，否则看 origin/main、origin/master 是否存在，默认 main。
  */
@@ -1112,69 +1112,69 @@ async function computeDefaultBranch() {
     if (await resolveRef(commonDir, `refs/remotes/origin/${candidate}`)) return candidate;
   return "main";
 }
-//@ chunk-t0gq9gyw.js:102264-102315 facade-exports (2.1.88 match: getCachedBranch, 1)
+//@ chunk-85eyj5gy.js:103256-103307 facade-exports (2.1.88 match: getCachedBranch, 1)
 /**
  * GitFileWatcher 缓存的当前分支名。
  */
 function getCachedBranch() {
   return getGitFileWatcher().get("branch", () => getBranchForDir());
 }
-//@ chunk-t0gq9gyw.js:102315-102357 facade-exports (2.1.88 match: getCachedHead, 1)
+//@ chunk-85eyj5gy.js:103307-103349 facade-exports (2.1.88 match: getCachedHead, 1)
 /**
  * GitFileWatcher 缓存的 HEAD sha。
  */
 function getCachedHead() {
   return getGitFileWatcher().get("head", computeHead);
 }
-//@ chunk-t0gq9gyw.js:102357-102404 facade-exports (2.1.88 match: getCachedRemoteUrl, 1)
+//@ chunk-85eyj5gy.js:103349-103396 facade-exports (2.1.88 match: getCachedRemoteUrl, 1)
 /**
  * GitFileWatcher 缓存的 origin URL（config 中 remote.origin.pushurl 优先于 url）。
  */
 function getCachedRemoteUrl() {
   return getGitFileWatcher().get("remoteUrl", computeRemoteUrl);
 }
-//@ chunk-t0gq9gyw.js:102404-102455 facade-exports (2.1.88 match: getCachedDefaultBranch, 1)
+//@ chunk-85eyj5gy.js:103396-103447 facade-exports (2.1.88 match: getCachedDefaultBranch, 1)
 /**
  * GitFileWatcher 缓存的默认分支。
  */
 function getCachedDefaultBranch() {
   return getGitFileWatcher().get("defaultBranch", computeDefaultBranch);
 }
-//@ chunk-t0gq9gyw.js:102455-102516 facade-exports
+//@ chunk-85eyj5gy.js:103447-103508 facade-exports
 function getCachedDefaultBranchIfKnown() {
   return getGitFileWatcher().getDefaultBranchIfKnownAnchored();
 }
-//@ chunk-t0gq9gyw.js:102516-102555 facade-exports
+//@ chunk-85eyj5gy.js:103508-103547 facade-exports
 function addWatchedRepo(checkoutPath) {
   return getGitFileWatcher().addRepo(checkoutPath);
 }
-//@ chunk-t0gq9gyw.js:102555-102590 facade-exports
+//@ chunk-85eyj5gy.js:103547-103582 facade-exports
 function removeWatchedRepo(repoPath) {
   getGitFileWatcher().removeRepo(repoPath);
 }
-//@ chunk-t0gq9gyw.js:102590-102640 facade-exports
+//@ chunk-85eyj5gy.js:103582-103632 facade-exports
 function onRepoBranchChange(listener) {
   return getGitFileWatcher().onRepoBranchChange(listener);
 }
-//@ chunk-t0gq9gyw.js:102640-102711 facade-exports
+//@ chunk-85eyj5gy.js:103632-103703 facade-exports
 function onWatchedGitStateChange(listener) {
   let gitFileWatcher = getGitFileWatcher();
   gitFileWatcher.ensureStarted();
   return gitFileWatcher.onStateChange(listener);
 }
-//@ chunk-t0gq9gyw.js:102711-102759 facade-exports
+//@ chunk-85eyj5gy.js:103703-103751 facade-exports
 function getCachedBranchForRepo(checkoutPath) {
   return getGitFileWatcher().getBranchForRepo(checkoutPath);
 }
-//@ chunk-t0gq9gyw.js:102759-102787 facade-exports
+//@ chunk-85eyj5gy.js:103751-103779 facade-exports
 function resetGitFileWatcher() {
   getGitFileWatcher().reset();
 }
-//@ chunk-t0gq9gyw.js:102787-102817 facade-exports
+//@ chunk-85eyj5gy.js:103779-103809 facade-exports
 function reanchorGitFileWatcher() {
   getGitFileWatcher().reanchor();
 }
-//@ chunk-t0gq9gyw.js:102817-102982 facade-exports (2.1.88 match: computeHead, 1)
+//@ chunk-85eyj5gy.js:103809-103974 facade-exports (2.1.88 match: computeHead, 1)
 async function getHeadForDir(startPath) {
   let gitDir = await resolveGitDir(startPath);
   if (!gitDir) return null;
@@ -1183,23 +1183,23 @@ async function getHeadForDir(startPath) {
   if (head.type === "branch") return resolveRef(gitDir, `refs/heads/${head.name}`);
   return head.sha;
 }
-//@ chunk-t0gq9gyw.js:102982-103100 facade-exports (2.1.88 match: computeBranch, 1)
+//@ chunk-85eyj5gy.js:103974-104092 facade-exports (2.1.88 match: computeBranch, 1)
 async function getBranchForDir(startPath) {
   let gitDir = await resolveGitDir(startPath);
   if (!gitDir) return "HEAD";
   let head = await readGitHead(gitDir);
   return head?.type === "branch" ? head.name : "HEAD";
 }
-//@ chunk-t0gq9gyw.js:103100-103190 layout
+//@ chunk-85eyj5gy.js:104092-104182 layout
 var reflogWatchesByGitDir; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var reflogWatchRegistry;
 var COMMIT_SUBJECT_RE;
-deferInit("chunk-t0gq9gyw.js:103100", () => {
+deferInit("chunk-85eyj5gy.js:104092", () => {
   reflogWatchesByGitDir = new Map();
   reflogWatchRegistry = 4096;
   COMMIT_SUBJECT_RE = /^commit(?: \((?:amend|initial|merge|cherry-pick|rebase)\))?: /;
 });
-//@ chunk-t0gq9gyw.js:103190-103383 layout
+//@ chunk-85eyj5gy.js:104182-104375 layout
 async function getHeadReflogSize(gitDir) {
   if (readPositionIsUnsafe(join(gitDir, "logs", "HEAD"), gitDir)) return null;
   try {
@@ -1210,7 +1210,7 @@ async function getHeadReflogSize(gitDir) {
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? 0 : null;
   }
 }
-//@ chunk-t0gq9gyw.js:103383-103828 facade-exports
+//@ chunk-85eyj5gy.js:104375-104820 facade-exports
 async function markHeadReflog(cwd) {
   if (isRemoteSessionAvailable()) return;
   let mark;
@@ -1249,7 +1249,7 @@ async function markHeadReflog(cwd) {
     return;
   }
 }
-//@ chunk-t0gq9gyw.js:103828-103913 facade-exports
+//@ chunk-85eyj5gy.js:104820-104905 facade-exports
 function releaseHeadReflogMark(mark) {
   for (let [realGitDir, marks] of reflogWatchesByGitDir)
     if (marks.delete(mark)) {
@@ -1257,7 +1257,7 @@ function releaseHeadReflogMark(mark) {
       return;
     }
 }
-//@ chunk-t0gq9gyw.js:103913-104542 facade-exports
+//@ chunk-85eyj5gy.js:104905-105534 facade-exports
 async function readCommitAppendedToHeadReflog(mark) {
   if (mark.reftableNewest !== undefined) return readNewCommitFromReftable(mark, mark.reftableNewest);
   let reflogPath = join(mark.gitDir, "logs", "HEAD");
@@ -1294,7 +1294,7 @@ async function readCommitAppendedToHeadReflog(mark) {
     return;
   return getHeadForDir_2(mark, oldId);
 }
-//@ chunk-t0gq9gyw.js:104542-104732 layout
+//@ chunk-85eyj5gy.js:105534-105724 layout
 async function readNewCommitFromReftable(mark, reftableNewest) {
   if (mark.overlapped) return;
   let reflogEntries = await readReflogEntries(mark.gitDir, 2);
@@ -1309,7 +1309,7 @@ async function readNewCommitFromReftable(mark, reftableNewest) {
     return;
   return getHeadForDir_2(mark, newest.id);
 }
-//@ chunk-t0gq9gyw.js:104732-104937 callgraph-fingerprint (2.1.88 match: getHeadForDir, 0.683)
+//@ chunk-85eyj5gy.js:105724-105929 callgraph-fingerprint (2.1.88 match: getHeadForDir, 0.683)
 async function getHeadForDir_2(mark, commitId) {
   let gitDir = await readGitHead(mark.gitDir);
   if (
@@ -1325,7 +1325,7 @@ async function getHeadForDir_2(mark, commitId) {
     }),
   };
 }
-//@ chunk-t0gq9gyw.js:104937-105584 layout
+//@ chunk-85eyj5gy.js:105929-106576 layout
 async function readReflogEntries(gitDir, count) {
   let result = await runGitForWatcher(gitDir, [
     "log",
@@ -1364,7 +1364,7 @@ async function readReflogEntries(gitDir, count) {
   }
   return entries;
 }
-//@ chunk-t0gq9gyw.js:105584-106036 facade-exports
+//@ chunk-85eyj5gy.js:106576-107028 facade-exports
 async function probeHeadForDirBounded(dir, cwd) {
   if (isDiskless())
     return {
@@ -1419,7 +1419,7 @@ async function probeHeadForDirBounded(dir, cwd) {
     sha: await getHeadForDir(resolvedDir),
   };
 }
-//@ chunk-t0gq9gyw.js:106036-106173 layout
+//@ chunk-85eyj5gy.js:107028-107165 layout
 async function hasNoNestedRepoBetween(dir, limitDir, limitKey) {
   let currentDir = dir;
   for (;;) {
@@ -1430,7 +1430,7 @@ async function hasNoNestedRepoBetween(dir, limitDir, limitKey) {
     currentDir = parentDir;
   }
 }
-//@ chunk-t0gq9gyw.js:106173-106276 layout (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-85eyj5gy.js:107165-107268 layout (2.1.88 match: isRealPathWithinTeamDir, 1)
 async function isPathAbsentLstat(realCandidate) {
   try {
     await lstat(realCandidate);
@@ -1440,12 +1440,12 @@ async function isPathAbsentLstat(realCandidate) {
     return code === "ENOENT" || code === "ENOTDIR";
   }
 }
-//@ chunk-t0gq9gyw.js:106276-106342 layout
+//@ chunk-85eyj5gy.js:107268-107334 layout
 async function normalizedRealpathOrNull(path) {
   let real = await realpathAsyncOrNull(path);
   return real === null ? null : identity(real);
 }
-//@ chunk-t0gq9gyw.js:106342-106405 layout
+//@ chunk-85eyj5gy.js:107334-107397 layout
 async function realpathAsyncOrNull(path) {
   try {
     return await realpath(path);
@@ -1453,7 +1453,7 @@ async function realpathAsyncOrNull(path) {
     return null;
   }
 }
-//@ chunk-t0gq9gyw.js:106405-106760 facade-exports (2.1.88 match: readWorktreeHeadSha, 1)
+//@ chunk-85eyj5gy.js:107397-107752 facade-exports (2.1.88 match: readWorktreeHeadSha, 1)
 /**
  * 读 worktree 目录 .git 文件指向的 gitdir 下的 HEAD，返回 sha（分支则解析 ref），不存在返回 null。
  */
@@ -1475,13 +1475,13 @@ async function readWorktreeHeadSha(worktreePath) {
   if (head.type === "branch") return resolveRef(gitDir, `refs/heads/${head.name}`);
   return head.sha;
 }
-//@ chunk-t0gq9gyw.js:106760-106832 facade-exports
+//@ chunk-85eyj5gy.js:107752-107824 facade-exports
 async function getRemoteUrlForDir(dir) {
   let gitDir = await resolveGitDir(dir);
   if (!gitDir) return null;
   return getRemoteUrlForGitDir(gitDir);
 }
-//@ chunk-t0gq9gyw.js:106832-106946 facade-exports
+//@ chunk-85eyj5gy.js:107824-107938 facade-exports
 async function getRemoteUrlForGitDir(gitDir, commonDir) {
   let originUrlFromConfig = await readOriginUrlFromConfig(gitDir);
   if (originUrlFromConfig) return originUrlFromConfig;
@@ -1489,16 +1489,16 @@ async function getRemoteUrlForGitDir(gitDir, commonDir) {
   if (commonDir_2 && commonDir_2 !== gitDir) return readOriginUrlFromConfig(commonDir_2);
   return null;
 }
-//@ chunk-t0gq9gyw.js:106946-107057 facade-exports
+//@ chunk-85eyj5gy.js:107938-108049 facade-exports
 function getRemoteUrlForDirSync(startPath) {
   let gitDir = resolveGitDirSync(startPath);
   if (!gitDir) return null;
   let originUrl = readOriginUrlSync(gitDir);
   if (originUrl) return originUrl;
-  let gitDir_2 = readCommonDirSync(gitDir);
-  return gitDir_2 && gitDir_2 !== gitDir ? readOriginUrlSync(gitDir_2) : null;
+  let commonDir = readCommonDirSync(gitDir);
+  return commonDir && commonDir !== gitDir ? readOriginUrlSync(commonDir) : null;
 }
-//@ chunk-t0gq9gyw.js:107057-107383 layout
+//@ chunk-85eyj5gy.js:108049-108375 layout
 /**
  * 同步解析 cwd 对应的 git 目录（.git 目录本身，或 .git 文件中 gitdir: 指向），结果缓存在 gitDirByCwd。
  */
@@ -1522,7 +1522,7 @@ function resolveGitDirSync(startPath) {
     return null;
   }
 }
-//@ chunk-t0gq9gyw.js:107383-107548 layout
+//@ chunk-85eyj5gy.js:108375-108540 fingerprint (2.1.88 match: getCommonDir, 0.736)
 function readCommonDirSync(gitDir) {
   try {
     if (pointerFileIsSuspect(join(gitDir, "commondir"), gitDir)) return null;
@@ -1534,9 +1534,9 @@ function readCommonDirSync(gitDir) {
     return null;
   }
 }
-//@ chunk-t0gq9gyw.js:107548-107560 facade-exports
+//@ chunk-85eyj5gy.js:108540-108552 facade-exports
 var GIT_CONFIG_MAX_BYTES = 1e6;
-//@ chunk-t0gq9gyw.js:107560-107743 layout
+//@ chunk-85eyj5gy.js:108552-108735 layout
 function readOriginUrlSync(gitDir) {
   let configPath = join(gitDir, "config");
   if (readPositionIsUnsafe(configPath, gitDir)) return null;
@@ -1547,7 +1547,7 @@ function readOriginUrlSync(gitDir) {
     firstGitConfigValue(bounded, "remote", "origin", "url")
   );
 }
-//@ chunk-t0gq9gyw.js:107743-108024 facade-exports
+//@ chunk-85eyj5gy.js:108735-109016 facade-exports
 /**
  * 以 O_NONBLOCK 同步读取小文件：必须是普通文件且不超过上限，否则返回 undefined（避免读到 FIFO/设备或巨型文件）。
  */
@@ -1571,7 +1571,7 @@ function readBoundedSync(filePath, maxBytes) {
     if (fd !== undefined) closeSync(fd);
   }
 }
-//@ chunk-t0gq9gyw.js:108024-108197 facade-exports (2.1.88 match: getWorktreeCountFromFs, 1)
+//@ chunk-85eyj5gy.js:109016-109189 facade-exports (2.1.88 match: getWorktreeCountFromFs, 1)
 /**
  * 统计 <commondir>/worktrees 下的条目数（不 spawn）。
  */
@@ -1586,14 +1586,7 @@ async function getWorktreeCountFromFs() {
     return 1;
   }
 }
-//@ chunk-dgqyqzy0.js:3870-3908 fingerprint (2.1.88 match: getCommonDir, 0.737)
-/**
- * 读 gitDir/commondir 得到共享 git 目录，没有则返回 gitDir 本身。
- */
-function getCommonDir_2(gitDir) {
-  return lstatErrnoOrFalse(gitDir, "commondir");
-}
-//@ chunk-s61vbvea.js:254014-254155 fingerprint (2.1.88 match: isShallowClone, 0.431)
+//@ chunk-fepf8jp6.js:48090-48231 fingerprint (2.1.88 match: isShallowClone, 0.431)
 /**
  * 根据 .git/shallow 等文件判断是否浅克隆。
  */
@@ -1604,7 +1597,7 @@ function isShallowClone(layout, sharedIndexNames) {
     ...sharedIndexNames.slice(0, MAX_PLACEMENT_DEPTH).map((name) => [layout.gitDir, name, "shared_index"]),
   ];
 }
-//@ chunk-e6aww6q8.js:3599115-3599365 fingerprint (2.1.88 match: resolveGitDir, 1)
+//@ chunk-5xgkngpb.js:3694395-3694645 fingerprint (2.1.88 match: resolveGitDir, 1)
 /**
  * 异步解析 .git：目录直接返回，文件则解析 gitdir: 指向的路径。
  */
@@ -1621,7 +1614,7 @@ async function resolveGitDir_2(startPath) {
     return null;
   }
 }
-//@ chunk-yj65zw1g.js:625-708 fingerprint (2.1.88 match: resetGitFileWatcher, 0.682)
+//@ chunk-77bb8s6j.js:625-708 fingerprint (2.1.88 match: resetGitFileWatcher, 0.682)
 class resetGitFileWatcher_2 {
   #e = 0;
   next(input, factor) {
@@ -1632,7 +1625,7 @@ class resetGitFileWatcher_2 {
     this.#e = 0;
   }
 }
-//@ chunk-ca06bv0t.js:16992-17085 fingerprint (2.1.88 match: computeRemoteUrl, 0.798)
+//@ chunk-s4mtq5zk.js:16996-17089 fingerprint (2.1.88 match: computeRemoteUrl, 0.798)
 var computeRemoteUrl_2 = (text) =>
   hasNulByte(text)
     ? ""
@@ -1640,11 +1633,18 @@ var computeRemoteUrl_2 = (text) =>
       firstGitConfigValue(text, "remote", "origin", "url") ||
       "";
 export {
+  linkChainIsUnsafeToFollow,
+  addWatchedRepo,
+  onRepoBranchChange,
+  getCachedBranchForRepo,
+  getCachedHead,
+  resolveGitDir,
+  getCommonDir,
   reanchorGitFileWatcher,
+  probeHeadForDirBounded,
+  getRemoteUrlForDir,
   rawPointerPathIsUnsafe,
   pointerFileIsSuspect,
-  resolveGitDir,
-  getCachedHead,
   getCachedBranch,
   getCachedDefaultBranch,
   CONVENTIONAL_DEFAULT_BRANCH_NAMES,
@@ -1653,40 +1653,32 @@ export {
   getRemoteUrlForDir_2,
   readPositionIsUnsafe,
   getWorktreeCountFromFs,
-  getRemoteUrlForGitDir,
-  getRemoteUrlForDir,
-  onWatchedGitStateChange,
-  resetGitFileWatcher,
-  linkChainIsUnsafeToFollow,
-  clearResolveGitDirCache,
-  refreshGitDir,
-  getCommonDir,
-  addWatchedRepo,
-  onRepoBranchChange,
-  getCachedBranchForRepo,
-  keepsRefsInReftable,
+  readGitHead,
+  createWalkMemo,
+  rawPointerPathWalk,
+  readLinkTextSafe,
+  getBranchForDir,
   readWorktreeHeadSha,
   resolveRef,
   resolveGitDir_2,
   isValidGitSha,
-  markHeadReflog,
-  releaseHeadReflogMark,
-  computeRemoteUrl_2,
-  createWalkMemo,
-  rawPointerPathWalk,
-  getCommonDir_2,
-  readLinkTextSafe,
   readBoundedSync,
   GIT_POINTER_MAX_BYTES,
-  GIT_CONFIG_MAX_BYTES,
-  readGitHead,
-  getBranchForDir,
+  markHeadReflog,
+  releaseHeadReflogMark,
   resetGitFileWatcher_2,
-  probeHeadForDirBounded,
-  getHeadForDir,
-  isShallowClone,
+  getRemoteUrlForGitDir,
   readCommitAppendedToHeadReflog,
+  getHeadForDir,
+  clearResolveGitDirCache,
+  refreshGitDir,
+  keepsRefsInReftable,
+  resetGitFileWatcher,
+  onWatchedGitStateChange,
+  GIT_CONFIG_MAX_BYTES,
+  isShallowClone,
   trustGuardRegistry,
+  computeRemoteUrl_2,
   getRemoteUrlForDirSync,
   removeWatchedRepo,
 };

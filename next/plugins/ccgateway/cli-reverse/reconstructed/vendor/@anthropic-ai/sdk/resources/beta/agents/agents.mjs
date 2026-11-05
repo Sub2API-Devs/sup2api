@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/resources/beta/agents/agents.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (1)
+ * pieces: chunk-vn3g7zt8.js (1)
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../../core/resource.mjs";
@@ -11,7 +11,7 @@ import { buildHeaders } from "../../../internal/headers.mjs";
 import { parseUrl_2 } from "../../../internal/utils/path.mjs";
 import { TokenPage } from "../../../core/pagination.mjs";
 
-//@ chunk-hwmsct5x.js:53975-55405 esm-fingerprint
+//@ chunk-vn3g7zt8.js:54346-55776 esm-fingerprint
 var Agents = (() => {
   class Agents extends APIResource {
     constructor() {

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/skill-doctor：统计技能上下文占用与使用量并生成整理建议
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7s2ajdvd.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bsb3cv9t.js (6)
  * attribution: placement 6
  */
 import { bunStringWidth } from "../../ink/stringWidth.js";
@@ -25,18 +25,18 @@ import { recordSkillUsage } from "../../utils/suggestions/skillUsageTracking.js"
 import { printablePluginName } from "../../components/ManagedSettingsSecurityDialog/utils.js";
 import { isSyncedMarketplacePlugin } from "../../utils/permissions/permissionRulePayload.js";
 import { CLAUDE_AI_SYNC_LABEL } from "../../utils/settings/commandSyncNames.js";
-import { uniq } from "../../utils/collections.js";
-import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
+import { CLAUDEAI_SERVER_PREFIX } from "../../services/mcp/normalization.js";
 
-//@ chunk-7s2ajdvd.js:690-749 placement
+//@ chunk-bsb3cv9t.js:690-749 placement
 function padEndToWidth(text, width) {
   return text + " ".repeat(Math.max(0, width - bunStringWidth(text)));
 }
-//@ chunk-7s2ajdvd.js:749-806 placement
+//@ chunk-bsb3cv9t.js:749-806 placement
 function padStartToWidth(text, width) {
   return " ".repeat(Math.max(0, width - bunStringWidth(text))) + text;
 }
-//@ chunk-7s2ajdvd.js:806-1322 placement
+//@ chunk-bsb3cv9t.js:806-1322 placement
 function formatSkillUsageTable(rows) {
   let mapped = rows.map((row) => ({
     context: row.listingTokens === null ? "-" : formatTokenEstimate(row.listingTokens),
@@ -59,7 +59,7 @@ function formatSkillUsageTable(rows) {
     },
   };
 }
-//@ chunk-7s2ajdvd.js:1322-1450 placement
+//@ chunk-bsb3cv9t.js:1322-1450 placement
 class SkillDoctorStageError extends Error {
   featureErrorCode;
   constructor(featureErrorCode, cause) {
@@ -69,7 +69,7 @@ class SkillDoctorStageError extends Error {
     this.featureErrorCode = featureErrorCode;
   }
 }
-//@ chunk-7s2ajdvd.js:1450-1668 placement
+//@ chunk-bsb3cv9t.js:1450-1668 placement
 function buildSkillDoctorContext(context) {
   return {
     commands: context.options.commands,
@@ -81,7 +81,7 @@ function buildSkillDoctorContext(context) {
     storageV5: context.storageV5,
   };
 }
-//@ chunk-7s2ajdvd.js:1668-4052 placement
+//@ chunk-bsb3cv9t.js:1668-4052 placement
 /**
  * /skill-doctor：扫描已装技能的上下文占用、近一周使用量与最后使用时间，生成整理建议。
  */
@@ -190,11 +190,11 @@ async function runSkillDoctor(options) {
     let serverName = mcpServerNameOf(row);
     return serverName === undefined || !usedMcpServers.has(serverName);
   });
-  let unusedMcpServers = uniq(
+  let unusedMcpServers = normalizeCaseForComparison_2(
     filtered_2.map(mcpServerNameOf).filter((serverName) => serverName !== undefined),
   ).map((serverName) =>
     printablePluginName(
-      options.mcpClients.find((mcpClient) => normalizeNameForMCP(mcpClient.name) === serverName)?.name ??
+      options.mcpClients.find((mcpClient) => CLAUDEAI_SERVER_PREFIX(mcpClient.name) === serverName)?.name ??
         serverName,
     ),
   );

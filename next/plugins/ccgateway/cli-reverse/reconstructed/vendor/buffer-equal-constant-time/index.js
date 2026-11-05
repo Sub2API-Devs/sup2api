@@ -1,13 +1,13 @@
 /**
  * buffer-equal-constant-time/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: buffer-equal-constant-time@1.0.1
- * pieces: chunk-82d8c88w.js (1)
+ * pieces: chunk-ww3dkdtg.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 
-//@ chunk-82d8c88w.js:4019-4461 cjs-fingerprint
+//@ chunk-ww3dkdtg.js:4019-4461 cjs-fingerprint
 var require_buffer_equal_constant_time = __commonJS(function (cjsExports, cjsModule) {
   var BufferCtor = importMetaRequire("buffer").Buffer;
   var SlowBuffer = importMetaRequire("buffer").SlowBuffer;

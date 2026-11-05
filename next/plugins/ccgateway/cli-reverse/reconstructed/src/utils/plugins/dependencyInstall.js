@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：安装缺失的插件依赖（跨市场、策略阻止时跳过）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jnt55rm1.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kbra36ja.js (6)
  * attribution: placement 6
  */
 import { OFFICIAL_MARKETPLACE_NAME } from "./officialMarketplaceNames.js";
@@ -26,10 +26,10 @@ import { installResolvedPlugin } from "./pluginInstallationHelpers.js";
 import { errorMessage } from "../errors.js";
 import { loadAllPluginsCacheOnly } from "./pluginLoader.js";
 import { isDependencyError } from "./marketplaceNames.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { formatDependencyCountSuffix, missingDependenciesHint } from "./dependencyResolver.js";
 
-//@ chunk-jnt55rm1.js:532-617 placement
+//@ chunk-kbra36ja.js:532-617 placement
 /**
  * ensureCatalogForOfficialDeps：依赖里有官方市场插件时加载插件目录。
  */
@@ -38,9 +38,9 @@ async function ensureCatalogForOfficialDeps(pluginIds, storageV5) {
     ? ensurePluginDirectoryCatalog(storageV5)
     : "not_needed";
 }
-//@ chunk-jnt55rm1.js:617-650 placement
+//@ chunk-kbra36ja.js:617-650 placement
 var INSTALLABLE_SCOPES = ["user", "project", "local"];
-//@ chunk-jnt55rm1.js:650-2555 placement
+//@ chunk-kbra36ja.js:650-2555 placement
 /**
  * 找出缺失的插件依赖并按市场安装（策略阻止、跨市场依赖不在声明市场时跳过）。
  */
@@ -176,7 +176,7 @@ async function resolveMissingDependencies(errors, storageV5) {
     marketplaceMissing,
   };
 }
-//@ chunk-jnt55rm1.js:2555-2652 placement
+//@ chunk-kbra36ja.js:2555-2652 placement
 /**
  * dependencyErrorsForSource：某来源的依赖加载错误。
  */
@@ -184,7 +184,7 @@ async function dependencyErrorsForSource(source, storageV5) {
   let { errors } = await loadAllPluginsCacheOnly(storageV5);
   return errors.filter(isDependencyError).filter((error) => error.source === source);
 }
-//@ chunk-jnt55rm1.js:2652-2901 placement
+//@ chunk-kbra36ja.js:2652-2901 placement
 /**
  * 安装插件缺失的依赖并生成结果后缀文字。
  */
@@ -193,7 +193,7 @@ async function installMissingDependencies(source, storageV5) {
   if (depErrors.length === 0) return null;
   let { installed, marketplaceMissing } = await resolveMissingDependencies(depErrors, storageV5);
   let installedSet = new Set(installed);
-  let dependencyIds = uniq(depErrors.map((error) => error.dependency)).filter(
+  let dependencyIds = normalizeCaseForComparison_2(depErrors.map((error) => error.dependency)).filter(
     (dependencyId) => !installedSet.has(dependencyId),
   );
   return {
@@ -201,7 +201,7 @@ async function installMissingDependencies(source, storageV5) {
     changed: installed.length > 0,
   };
 }
-//@ chunk-jnt55rm1.js:2901-2977 placement
+//@ chunk-kbra36ja.js:2901-2977 placement
 function marketplaceWithDependency(dependencyIds, scopePluginIds) {
   for (let [scope, pluginIds] of scopePluginIds)
     for (let dependencyId of dependencyIds) if (pluginIds.has(dependencyId)) return scope;

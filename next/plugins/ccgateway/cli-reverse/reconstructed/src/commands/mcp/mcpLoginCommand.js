@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：claude mcp login / logout：为 HTTP MCP 服务器或 claude.ai 连接器做 OAuth 登录与登出
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8vfr3s4c.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sk4c360w.js (9)
  * attribution: placement 9
  */
 import { createInterface } from "readline";
@@ -46,19 +46,19 @@ import { errorMessage } from "../../utils/errors.js";
 import { signOutFailureMessage } from "../logout/logout.js";
 import { runCommandHint, claudeCommand } from "../../utils/worktreeResumeHint.js";
 
-//@ chunk-8vfr3s4c.js:12638-12689 placement
+//@ chunk-sk4c360w.js:13784-13835 placement
 function mcpModulesChunk_4() {
   return require("../../services/mcp/emitTripwireEvent.lazy.js");
 }
-//@ chunk-8vfr3s4c.js:12689-12729 placement
+//@ chunk-sk4c360w.js:13835-13875 placement
 function mcpAuthModule_2() {
   return mcpModulesChunk_4().mcpAuthModule();
 }
-//@ chunk-8vfr3s4c.js:12729-12771 placement
+//@ chunk-sk4c360w.js:13875-13917 placement
 function mcpClientModule_8() {
   return mcpModulesChunk_4().mcpClientModule();
 }
-//@ chunk-8vfr3s4c.js:12771-13549 placement
+//@ chunk-sk4c360w.js:13917-14695 placement
 async function describeServerNotLoginable(serverName, origin, storageV5, credentials) {
   await awaitMcpPolicyColdStart({
     hasDynamicMcpConfig: false,
@@ -97,7 +97,7 @@ async function describeServerNotLoginable(serverName, origin, storageV5, credent
   }
   return server;
 }
-//@ chunk-8vfr3s4c.js:13549-13807 placement
+//@ chunk-sk4c360w.js:14695-14953 placement
 async function AUTH_KINDS(config, credentials) {
   if (configHasAuthorizationHeader(config)) return "static_auth_header";
   if (isFirstPartyMcpUrl(config.url) && isFirstPartyProvider()) {
@@ -110,7 +110,7 @@ async function AUTH_KINDS(config, credentials) {
   }
   return null;
 }
-//@ chunk-8vfr3s4c.js:13807-13943 placement
+//@ chunk-sk4c360w.js:14953-15089 placement
 function formatAuthorizeUrlPrompt(browser, url) {
   return `${browser ? "If the browser didn't open, visit:" : "Visit this URL to authorize:"}
   ${createHyperlink(url, undefined, {
@@ -119,10 +119,10 @@ function formatAuthorizeUrlPrompt(browser, url) {
 
 `;
 }
-//@ chunk-8vfr3s4c.js:13943-14050 placement
+//@ chunk-sk4c360w.js:15089-15196 placement
 var CONNECTOR_AUTHORIZED_NOTE =
   "Once authorized on claude.ai, the connector will be available the next time you start Claude Code.";
-//@ chunk-8vfr3s4c.js:14050-17940 placement
+//@ chunk-sk4c360w.js:15196-19085 placement
 /**
  * claude mcp login：打开浏览器授权（claude.ai 连接器经 claudeai-proxy），不支持的传输报错（约 3.9 KB）。
  */
@@ -301,7 +301,7 @@ async function mcpLoginCommand(serverName, source, storageV5, credentials) {
     }
   }
 }
-//@ chunk-8vfr3s4c.js:17940-19216 placement
+//@ chunk-sk4c360w.js:19085-20360 placement
 async function mcpLogoutCommand(serverName, storageV5, credentials) {
   await logEventAsync("tengu_mcp_logout", {});
   let authTarget = await describeServerNotLoginable(serverName, "cli_mcp_logout", storageV5, credentials);

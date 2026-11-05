@@ -1,12 +1,12 @@
 /**
  * @anthropic-ai/vertex-sdk/client.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/vertex-sdk@0.19.3..0.20.4
- * pieces: chunk-xa96axyz.js (1)
+ * pieces: chunk-1vqm62xf.js (1)
  * attribution: esm-fingerprint 2
  */
 import { BaseAnthropic } from "../sdk/client.mjs";
-import { readEnv_4 } from "../bedrock-sdk/internal/utils/env.mjs";
+import { readEnv } from "../bedrock-sdk/internal/utils/env.mjs";
 import {
   _AnthropicVertex_instances,
   makeMessagesResource,
@@ -17,12 +17,12 @@ import {
 import { import_google_auth_library } from "../bedrock-sdk/internal/errors.mjs";
 import { VERSION } from "../sdk/version.mjs";
 
-//@ chunk-xa96axyz.js:2594-3944 esm-fingerprint
+//@ chunk-1vqm62xf.js:2594-3944 esm-fingerprint
 class AnthropicVertex extends BaseAnthropic {
   constructor({
-    baseURL = readEnv_4("ANTHROPIC_VERTEX_BASE_URL"),
-    region = readEnv_4("CLOUD_ML_REGION") ?? null,
-    projectId = readEnv_4("ANTHROPIC_VERTEX_PROJECT_ID") ?? null,
+    baseURL = readEnv("ANTHROPIC_VERTEX_BASE_URL"),
+    region = readEnv("CLOUD_ML_REGION") ?? null,
+    projectId = readEnv("ANTHROPIC_VERTEX_PROJECT_ID") ?? null,
     ...opts
   } = {}) {
     if (!region)

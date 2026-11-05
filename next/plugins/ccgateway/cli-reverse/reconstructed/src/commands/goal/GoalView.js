@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/goal 无参数时的当前目标状态视图
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hgfnw8bk.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z40zgveq.js (6)
  * attribution: placement 6
  */
 import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
@@ -37,17 +37,17 @@ import { StatusIcon } from "../../components/design-system/StatusIcon.js";
 import { HintText } from "../../components/design-system/HintText.js";
 import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 
-//@ chunk-hgfnw8bk.js:5734-5738 placement
+//@ chunk-z40zgveq.js:6042-6046 placement
 init_react_production();
-//@ chunk-hgfnw8bk.js:5738-5774 placement
+//@ chunk-z40zgveq.js:6046-6082 placement
 function selectActiveGoal(state) {
   return state.activeGoal;
 }
-//@ chunk-hgfnw8bk.js:5774-5801 placement
+//@ chunk-z40zgveq.js:6082-6109 placement
 function increment(state) {
   return state + 1;
 }
-//@ chunk-hgfnw8bk.js:5801-8335 placement
+//@ chunk-z40zgveq.js:6109-8643 placement
 /**
  * /goal 无参数时显示当前目标条件、已运行时长与轮数的视图。
  */
@@ -164,7 +164,7 @@ function GoalStatusView(props) {
   let statusLine;
   if ($[23] !== messages || $[24] !== onDone) {
     statusLine = EARLY_RETURN_SENTINEL;
-    Rt: {
+    Ot: {
       let lastMetGoal = findLastMetGoal(messages);
       if (lastMetGoal) {
         let lines = [];
@@ -231,7 +231,7 @@ function GoalStatusView(props) {
           $[33] = hintRow;
         } else hintRow = $[33];
         statusLine = hintRow;
-        break Rt;
+        break Ot;
       }
     }
     $[23] = messages;
@@ -269,7 +269,7 @@ function GoalStatusView(props) {
   } else footerRows = $[37];
   return footerRows;
 }
-//@ chunk-hgfnw8bk.js:8335-8708 placement
+//@ chunk-z40zgveq.js:8643-9016 placement
 function GoalField(props) {
   let $ = useMemoCache(7);
   let { label, children } = props;
@@ -309,7 +309,7 @@ function GoalField(props) {
   } else status = $[6];
   return status;
 }
-//@ chunk-hgfnw8bk.js:8708-9206 placement
+//@ chunk-z40zgveq.js:9016-9514 placement
 /**
  * /goal <condition>|clear：设置或清除会话目标（以会话级 Stop 钩子实现）。
  */

@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：插件目录（官方 directory）缓存与刷新：分页拉取、读写本地缓存、修复改名条目、跳过原因。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s67w32sp.js (64)
- * attribution: placement 64
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-036m2pwj.js (65)
+ * attribution: placement 64, layout 1
  */
 import { join } from "path";
 import { unlink, lstat } from "fs/promises";
@@ -29,7 +29,6 @@ import {
   isOfficialPluginDirectoryId,
   findBindingKeysFor,
 } from "./pluginDirectoryBindings.js";
-import { dateToFilename_2, logError } from "../log.js";
 import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import {
   parseDirectoryListing,
@@ -40,6 +39,7 @@ import {
 import { jsonStringify } from "../slowOperations.js";
 import { isValidPluginIdSegment } from "./schemas.js";
 import { logForDebugging } from "../debug.js";
+import { logError } from "../log.js";
 import {
   OFFICIAL_MARKETPLACE_NAME,
   OFFICIAL_MARKETPLACE_NAME_CHECK_TTL_MS,
@@ -67,7 +67,7 @@ import {
 } from "../settings/marketplaceSettingsAliases.js";
 import { encapsulatedPebbleEnabled } from "./pluginGates.js";
 
-//@ chunk-s67w32sp.js:4205-4492 placement
+//@ chunk-036m2pwj.js:4546-4833 placement
 var PLUGIN_DIRECTORY_CACHE_FILE = "plugin-directory-cache-v2.json";
 var PLUGIN_DIRECTORY_CACHE_VERSION = 2;
 var PLUGIN_DIRECTORY_CACHE_JSON = "plugin-directory-cache.json";
@@ -81,15 +81,15 @@ var COMMIT_SHA_RE = /^[0-9a-f]{40}$/;
 var CLAUDE_CODE = "claude_code";
 var REPOSITORY_URL_RE = /^https:\/\/(?!-)[A-Za-z0-9._-]+\/[^\s\\?#%]+$/;
 var regExp = new RegExp(`[\\\\:${INVISIBLE_CHAR_CLASS_SOURCE}]|[^\\S ]|^ |[ .]$|~\\d`, "u");
-//@ chunk-s67w32sp.js:4492-4569 placement
+//@ chunk-036m2pwj.js:4833-4910 placement
 function stripTrailingSlashes(text) {
   let len = text.length;
   while (len > 0 && text[len - 1] === "/") len--;
   return text.slice(0, len);
 }
-//@ chunk-s67w32sp.js:4569-4580 placement
+//@ chunk-036m2pwj.js:4910-4921 placement
 var MAX_NAME_LENGTH = 255;
-//@ chunk-s67w32sp.js:4580-4679 placement (2.1.88 match: setCwdState, 1)
+//@ chunk-036m2pwj.js:4921-5020 placement (2.1.88 match: setCwdState, 1)
 function isSafeNfcName(cwd) {
   return (
     cwd !== "" &&
@@ -100,7 +100,7 @@ function isSafeNfcName(cwd) {
     cwd === cwd.normalize("NFC")
   );
 }
-//@ chunk-s67w32sp.js:4679-5018 placement
+//@ chunk-036m2pwj.js:5020-5359 placement
 /**
  * 插件目录缓存 schema：Xe 是带 schema 版本的缓存 schema；Je 是不带版本的最小 schema；Ve 是 listing 的最长保留时间 90 天。
  */
@@ -123,23 +123,28 @@ var pluginDirectoryCacheSchema = DoctorLazy(() =>
   }),
 );
 var LISTING_MAX_AGE_MS = 7776000000;
-//@ chunk-s67w32sp.js:5018-5050 placement
+//@ chunk-036m2pwj.js:5359-5391 placement
 function pluginDirectoryCachePath() {
   return join(getPluginsDirectory(), PLUGIN_DIRECTORY_CACHE_FILE);
 }
-//@ chunk-s67w32sp.js:5139-5239 placement
+//@ chunk-036m2pwj.js:5391-5480 layout
+function fetchedAtIso(fetchedAt) {
+  let timestamp = Date.parse(fetchedAt);
+  return new Date(Number.isFinite(timestamp) ? timestamp : 0).toISOString();
+}
+//@ chunk-036m2pwj.js:5480-5580 placement
 var EntryNameClaimSchema = DoctorLazy(() =>
   objectSchema({
     repositoryKey: stringSchema().optional().catch(undefined),
     lastSeen: stringSchema().optional().catch(undefined),
   }),
 );
-//@ chunk-s67w32sp.js:5239-5305 placement
+//@ chunk-036m2pwj.js:5580-5646 placement
 function sanitizeEntryNameClaim(claim) {
   let result = EntryNameClaimSchema().safeParse(claim);
   return result.success ? result.data : {};
 }
-//@ chunk-s67w32sp.js:5305-6291 placement
+//@ chunk-036m2pwj.js:5646-6632 placement
 async function readPluginDirectoryCache(failureState) {
   let pluginsDirJsonFile = await readPluginsDirJsonFile(
     PLUGIN_DIRECTORY_CACHE_FILE,
@@ -150,7 +155,7 @@ async function readPluginDirectoryCache(failureState) {
     let parseResult = PluginDirectoryCacheSchema().safeParse(pluginsDirJsonFile.json);
     if (!parseResult.success) return null;
     return {
-      fetchedAt: dateToFilename_2(parseResult.data.fetchedAt),
+      fetchedAt: fetchedAtIso(parseResult.data.fetchedAt),
       ...(parseResult.data.listingsOmitted === true
         ? {
             listings: [],
@@ -210,14 +215,14 @@ async function readPluginDirectoryCache(failureState) {
       : undefined;
   if (!legacyResult?.success) return null;
   return {
-    fetchedAt: dateToFilename_2(legacyResult.data.fetchedAt),
+    fetchedAt: fetchedAtIso(legacyResult.data.fetchedAt),
     ...parseDirectoryListings(legacyResult.data.listings),
     entryNames: new Map(),
     missed: [],
     fromLegacyFile: true,
   };
 }
-//@ chunk-s67w32sp.js:6291-6460 placement
+//@ chunk-036m2pwj.js:6632-6801 placement
 function parseDirectoryListings(listings) {
   let filtered = listings.flatMap((raw) => parseDirectoryListing(raw) ?? []).filter(isEntryIdWithinLimit);
   let deduped = uniqByExport(filtered, (listing) => listing.id);
@@ -229,14 +234,14 @@ function parseDirectoryListings(listings) {
     }),
   };
 }
-//@ chunk-s67w32sp.js:6460-6505 placement
+//@ chunk-036m2pwj.js:6801-6846 placement
 var missedListingSchema = DoctorLazy(() =>
   objectSchema({
     missedAt: stringSchema(),
     listing: unknown(),
   }),
 );
-//@ chunk-s67w32sp.js:6505-6880 placement
+//@ chunk-036m2pwj.js:6846-7221 placement
 /**
  * 序列化插件目录缓存（条目、漏列项、名字与认领）。
  */
@@ -267,7 +272,7 @@ function serializeCatalogCache(fetchedAt, listings, entryNames, omitted, missed)
     ),
   });
 }
-//@ chunk-s67w32sp.js:6880-7105 placement
+//@ chunk-036m2pwj.js:7221-7446 placement
 function entryNameClaimBytes(id, entry) {
   let { repositoryKey, lastSeen } = entry;
   return (
@@ -283,22 +288,22 @@ function entryNameClaimBytes(id, entry) {
     4
   );
 }
-//@ chunk-s67w32sp.js:7105-7155 placement
+//@ chunk-036m2pwj.js:7446-7496 placement
 var MAX_ENTRY_ID_BYTES = 200;
 var MAX_PLUGIN_ID_SEGMENT = 128;
 var MAX_LOCAL_NAME_SEGMENT = 64;
 var MAX_OWNER_SEGMENT = 32;
 var MAX_ENTRY_NAME_BYTES = 1024;
 var MAX_NAME_CLAIMS_BYTES = 12582912;
-//@ chunk-s67w32sp.js:7155-7228 placement
+//@ chunk-036m2pwj.js:7496-7569 placement
 function isEntryIdWithinLimit(listing) {
   return Buffer.byteLength(JSON.stringify(listing.id), "utf8") <= MAX_ENTRY_ID_BYTES;
 }
-//@ chunk-s67w32sp.js:7228-7270 placement
+//@ chunk-036m2pwj.js:7569-7611 placement
 function isValidPluginIdSegmentLength(segment) {
   return segment.length <= MAX_PLUGIN_ID_SEGMENT && isValidPluginIdSegment(segment);
 }
-//@ chunk-s67w32sp.js:7270-8661 placement
+//@ chunk-036m2pwj.js:7611-9002 placement
 async function namesThatFit(names, installedIds, installRecords, budget = MAX_NAME_CLAIMS_BYTES) {
   let strippedCount = 0;
   let totalBytes = 0;
@@ -370,7 +375,7 @@ async function namesThatFit(names, installedIds, installRecords, budget = MAX_NA
   );
   return new Map([...sized].filter(([id]) => keep.has(id)).map(([id, { claim }]) => [id, claim]));
 }
-//@ chunk-s67w32sp.js:8661-8735 placement
+//@ chunk-036m2pwj.js:9002-9076 placement
 async function tryDirectoryFetch(fetchDirectory, withInstallRecords, allPages = false) {
   try {
     return await fetchDirectory(withInstallRecords, allPages);
@@ -379,7 +384,7 @@ async function tryDirectoryFetch(fetchDirectory, withInstallRecords, allPages = 
     return;
   }
 }
-//@ chunk-s67w32sp.js:8735-8902 placement
+//@ chunk-036m2pwj.js:9076-9243 placement
 async function listInstalledOfficialNames(fetchDirectory) {
   let installed = await tryDirectoryFetch(fetchDirectory, true);
   if (installed === undefined) return;
@@ -390,11 +395,11 @@ async function listInstalledOfficialNames(fetchDirectory) {
       .map((key) => key.slice(0, -suffix.length)),
   );
 }
-//@ chunk-s67w32sp.js:8902-8954 placement
+//@ chunk-036m2pwj.js:9243-9295 placement
 function isWithinCacheBytes(text) {
   return Buffer.byteLength(text, "utf8") <= MAX_PLUGIN_DIRECTORY_CACHE_BYTES;
 }
-//@ chunk-s67w32sp.js:8954-9776 placement
+//@ chunk-036m2pwj.js:9295-10117 placement
 async function writePluginDirectoryCache(fetchedAt, listings, names, installRecords, missed) {
   if (isDiskless())
     return {
@@ -449,7 +454,7 @@ async function writePluginDirectoryCache(fetchedAt, listings, names, installReco
     names: curNames,
   };
 }
-//@ chunk-s67w32sp.js:9776-10257 placement
+//@ chunk-036m2pwj.js:10117-10598 placement
 /**
  * 搜索失败原因转结果。
  */
@@ -488,7 +493,7 @@ function toSearchFailure(failure) {
       };
   }
 }
-//@ chunk-s67w32sp.js:10257-10708 placement
+//@ chunk-036m2pwj.js:10598-11049 placement
 /**
  * 在总超时与首答超时内遍历插件目录。
  */
@@ -535,14 +540,14 @@ async function walkWithTimeouts(signal, deadlineMs, firstAnswerMs) {
     clearTimeout(timer);
   }
 }
-//@ chunk-s67w32sp.js:10708-10759 placement
+//@ chunk-036m2pwj.js:11049-11100 placement
 /**
  * 插件目录请求的超时：at 是单次响应的时限（cbr）；ot 是首个答复的默认时限 15000 ms；Ne 是超时时的说明文案 "it did not answer in time"。
  */
 var MAX_DIRECTORY_RESPONSE_MS = OFFICIAL_MARKETPLACE_NAME_CHECK_TTL_MS;
 var DEFAULT_FIRST_ANSWER_MS = 15000;
 var DIRECTORY_NO_ANSWER_TEXT = "it did not answer in time";
-//@ chunk-s67w32sp.js:10759-11533 placement
+//@ chunk-036m2pwj.js:11100-11874 placement
 async function walkPluginDirectory(signal, progress) {
   let listings = [];
   let seenIds = new Set();
@@ -605,7 +610,7 @@ async function walkPluginDirectory(signal, progress) {
     },
   };
 }
-//@ chunk-s67w32sp.js:11533-11674 placement
+//@ chunk-036m2pwj.js:11874-12015 placement
 var INCOMPLETE_LIST_FAILURE = {
   ok: false,
   reason: "failed",
@@ -617,19 +622,19 @@ var DUPLICATE_LISTING_FAILURE = {
   message: "it listed a plugin twice",
 };
 var BACKOFF_MS = 300000;
-//@ chunk-s67w32sp.js:11674-11802 placement
+//@ chunk-036m2pwj.js:12015-12143 placement
 function pluginDirectoryWalkReadiness() {
   if (!isPluginDirectoryAccessAllowed()) return "not_allowed";
   let lastFailedWalk = commandSourceSession().lastFailedWalk;
   return lastFailedWalk !== undefined && Date.now() - lastFailedWalk.at < BACKOFF_MS ? "backed_off" : "ready";
 }
-//@ chunk-s67w32sp.js:11802-11902 placement
+//@ chunk-036m2pwj.js:12143-12243 placement
 async function awaitPluginDirectoryPolicyVerdict() {
   let { awaitPolicyLimitsColdStart } =
     await import("../../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js");
   await awaitPolicyLimitsColdStart();
 }
-//@ chunk-s67w32sp.js:11902-11981 placement
+//@ chunk-036m2pwj.js:12243-12322 placement
 function notePluginDirectoryWalkTimedOut() {
   let now = Date.now();
   commandSourceSession().lastFailedWalk = {
@@ -638,12 +643,12 @@ function notePluginDirectoryWalkTimedOut() {
     failedAt: now,
   };
 }
-//@ chunk-s67w32sp.js:11981-11996 placement
+//@ chunk-036m2pwj.js:12322-12337 placement
 /**
  * 判定时间戳是否可信：dt 是允许时钟超前的容差 3600000 ms；F 是失败后的退避时长。
  */
 var CLOCK_SKEW_TOLERANCE_MS = 3600000;
-//@ chunk-s67w32sp.js:11996-12243 placement
+//@ chunk-036m2pwj.js:12337-12584 placement
 function pluginDirectoryFailedWalkWindow() {
   let lastFailedWalk = commandSourceSession().lastFailedWalk;
   if (lastFailedWalk === undefined) return;
@@ -663,12 +668,12 @@ function pluginDirectoryFailedWalkWindow() {
     }),
   };
 }
-//@ chunk-s67w32sp.js:12243-12307 placement
+//@ chunk-036m2pwj.js:12584-12648 placement
 function MISSED_LISTING_MAX_AGE_MS(fetchedAt) {
   let ageMs = Date.now() - Date.parse(fetchedAt);
   return ageMs >= 0 && ageMs < CACHE_FRESH_MS;
 }
-//@ chunk-s67w32sp.js:12307-13254 placement
+//@ chunk-036m2pwj.js:12648-13595 placement
 async function loadPluginDirectoryCatalog({
   signal,
   forceRefresh = false,
@@ -735,7 +740,7 @@ async function loadPluginDirectoryCatalog({
     if (session.catalogLoadInFlight?.load === load) session.catalogLoadInFlight = undefined;
   }
 }
-//@ chunk-s67w32sp.js:13254-16547 placement
+//@ chunk-036m2pwj.js:13595-16888 placement
 async function refreshPluginDirectory(
   pluginDirectoryCache,
   forceRefresh,
@@ -990,12 +995,12 @@ async function refreshPluginDirectory(
     },
   };
 }
-//@ chunk-s67w32sp.js:16547-16562 placement
+//@ chunk-036m2pwj.js:16888-16903 placement
 /**
  * 插件从 listing 里消失后的宽限期 7200000 ms（2 小时）：只有在宽限期之后的又一次遍历仍缺失，才真正丢弃。
  */
 var DELISTING_GRACE_MS = 7200000;
-//@ chunk-s67w32sp.js:16562-17573 placement
+//@ chunk-036m2pwj.js:16903-17914 placement
 /**
  * 对比上次缓存与本次遍历：漏列且仍被已安装插件使用、未被新名字占用的条目保留（记录首次漏列时间）， 超过保留期（he）后丢弃。
  */
@@ -1046,11 +1051,11 @@ async function keepMissedListings(cache, listings, namesInUse, now, fetchDirecto
   );
   return kept;
 }
-//@ chunk-s67w32sp.js:17573-17611 placement
+//@ chunk-036m2pwj.js:17914-17952 placement
 function idTailSlug(listing) {
   return "source" in directoryListingSource(listing);
 }
-//@ chunk-s67w32sp.js:17611-17872 placement
+//@ chunk-036m2pwj.js:17952-18213 placement
 function tallyDirectoryEntries(listings, unparseable, namesById) {
   let tally = {
     installable: 0,
@@ -1070,7 +1075,7 @@ function tallyDirectoryEntries(listings, unparseable, namesById) {
   }
   return tally;
 }
-//@ chunk-s67w32sp.js:17872-18635 placement
+//@ chunk-036m2pwj.js:18213-18976 placement
 function directoryListingSource(listing) {
   let { surfaces } = listing;
   let { url, path, reviewed_commit: reviewedCommit } = listing.source.repository;
@@ -1127,7 +1132,7 @@ function directoryListingSource(listing) {
         },
   };
 }
-//@ chunk-s67w32sp.js:18635-18817 placement
+//@ chunk-036m2pwj.js:18976-19158 placement
 function slugifyName(rawName) {
   let replaced = rawName.toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
   let isTrimChar = (char) => char === "-" || char === "." || char === "_";
@@ -1137,11 +1142,11 @@ function slugifyName(rawName) {
   while (end > start && isTrimChar(replaced[end - 1])) end--;
   return replaced.slice(start, end);
 }
-//@ chunk-s67w32sp.js:18817-18859 placement
+//@ chunk-036m2pwj.js:19158-19200 placement
 function pluginDirectoryMarketplaceConfig(rawName) {
   return slugifyName(rawName).slice(-8) || "x";
 }
-//@ chunk-s67w32sp.js:18859-20838 placement
+//@ chunk-036m2pwj.js:19200-21179 placement
 /**
  * 为插件目录条目分配稳定的本地名（沿用旧名、按仓库迁移、冲突加后缀）。
  */
@@ -1282,7 +1287,7 @@ ${path ?? ""}`,
     clashed: name !== mapped[index]?.base,
   }));
 }
-//@ chunk-s67w32sp.js:20838-20977 placement
+//@ chunk-036m2pwj.js:21179-21318 placement
 function isCollisionSuffixedName(name, listing) {
   let match = /-([1-9][0-9]*)$/.exec(name);
   return (
@@ -1293,7 +1298,7 @@ function isCollisionSuffixedName(name, listing) {
       .endsWith(`-${pluginDirectoryMarketplaceConfig(listing.id)}-${shortHash(listing.id)}`)
   );
 }
-//@ chunk-s67w32sp.js:20977-21697 placement
+//@ chunk-036m2pwj.js:21318-22038 placement
 /**
  * 读安装记录与绑定，给出名字是否被占用、仓库唯一绑定名。
  */
@@ -1338,7 +1343,7 @@ async function loadNameBindingEvidence(installRecords) {
     },
   };
 }
-//@ chunk-s67w32sp.js:21697-22634 placement
+//@ chunk-036m2pwj.js:22038-22975 placement
 /**
  * 修复被加冲突后缀的条目名，改回安装插件使用的名字。
  */
@@ -1412,7 +1417,7 @@ async function repairCollisionRenames(cachedNames, listings, installRecords) {
     repairs,
   };
 }
-//@ chunk-s67w32sp.js:22634-23602 placement
+//@ chunk-036m2pwj.js:22975-23943 placement
 /**
  * 撤销 2.1.287 改过的名字（安装记录能证明时）。
  */
@@ -1469,7 +1474,7 @@ async function revertLegacyRenames(cachedNames, repairs, cachedNames2, names, li
     repaired,
   };
 }
-//@ chunk-s67w32sp.js:23602-24221 placement
+//@ chunk-036m2pwj.js:23943-24562 placement
 function directoryListingsToEntries(listings, names) {
   let assigned = assignDirectoryEntryNames(listings, names);
   let entries = [];
@@ -1521,7 +1526,7 @@ function directoryListingsToEntries(listings, names) {
   }
   return entries;
 }
-//@ chunk-s67w32sp.js:24221-24438 placement
+//@ chunk-036m2pwj.js:24562-24779 placement
 function synthesizePluginDirectoryMarketplace(
   listings,
   names,
@@ -1538,23 +1543,23 @@ function synthesizePluginDirectoryMarketplace(
     plugins: entries.flatMap((entry) => ("entry" in entry.result ? entry.result.entry : [])),
   };
 }
-//@ chunk-s67w32sp.js:24438-24640 placement
+//@ chunk-036m2pwj.js:24779-24981 placement
 var ENTRY_SKIP_REASONS = {
   other_surface: "it is not offered for Claude Code",
   no_pin: "it has no listed commit",
   bad_url: "its repository address is not one Claude Code installs from",
   bad_path: "its folder path is not valid",
 };
-//@ chunk-s67w32sp.js:24640-24712 placement
+//@ chunk-036m2pwj.js:24981-25053 placement
 async function pluginDirectoryNotInstallableMessage(name) {
   let reason = await pluginDirectoryNotInstallableReason(name);
   return reason === undefined ? undefined : pluginDirectoryNotInstallableSentence(name, reason);
 }
-//@ chunk-s67w32sp.js:24712-24830 placement
+//@ chunk-036m2pwj.js:25053-25171 placement
 function pluginDirectoryNotInstallableSentence(name, reason) {
   return `"${name}" is listed in the ${OFFICIAL_MARKETPLACE_DISPLAY} but cannot be installed by this version of Claude Code (${reason}).`;
 }
-//@ chunk-s67w32sp.js:24830-24993 placement
+//@ chunk-036m2pwj.js:25171-25334 placement
 async function pluginDirectoryNotInstallableReason(name) {
   let pluginDirectoryCache = await readPluginDirectoryCache();
   let found = directoryListingsToEntries(
@@ -1563,20 +1568,20 @@ async function pluginDirectoryNotInstallableReason(name) {
   ).find((entry) => entry.name === name);
   return found && "skipped" in found.result ? ENTRY_SKIP_REASONS[found.result.skipped] : undefined;
 }
-//@ chunk-s67w32sp.js:24993-25074 placement
+//@ chunk-036m2pwj.js:25334-25415 placement
 var PLUGIN_DIRECTORY_MARKETPLACE_JSON = "plugin-directory-marketplace.json";
 var pluginDirectoryMarketplacePath = DoctorLazy(() =>
   objectSchema({
     enabled: booleanSchema().optional(),
   }),
 );
-//@ chunk-s67w32sp.js:25074-25106 placement
+//@ chunk-036m2pwj.js:25415-25447 placement
 function MAX_PLUGIN_DIRECTORY_MARKETPLACE_BYTES() {
   return join(getPluginsDirectory(), PLUGIN_DIRECTORY_MARKETPLACE_JSON);
 }
-//@ chunk-s67w32sp.js:25106-25118 placement
+//@ chunk-036m2pwj.js:25447-25459 placement
 var MAX_SEGMENT_SLUG_LENGTH = 4096;
-//@ chunk-s67w32sp.js:25118-25490 placement
+//@ chunk-036m2pwj.js:25459-25831 placement
 async function readPluginDirectoryMarketplaceChoice() {
   let pluginsDirJsonFile = await readPluginsDirJsonFile(
     PLUGIN_DIRECTORY_MARKETPLACE_JSON,
@@ -1604,11 +1609,11 @@ async function readPluginDirectoryMarketplaceChoice() {
   if (!readFailed) session.marketplaceChoice = choice;
   return choice;
 }
-//@ chunk-s67w32sp.js:25490-25537 placement
+//@ chunk-036m2pwj.js:25831-25878 placement
 async function isPluginDirectoryMarketplaceEnabled() {
   return (await readPluginDirectoryMarketplaceChoice()).enabled;
 }
-//@ chunk-s67w32sp.js:25537-25835 placement
+//@ chunk-036m2pwj.js:25878-26176 placement
 async function setPluginDirectoryMarketplaceEnabled(enabled) {
   if (isDiskless())
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -1628,9 +1633,9 @@ async function setPluginDirectoryMarketplaceEnabled(enabled) {
     source: "user_choice",
   };
 }
-//@ chunk-s67w32sp.js:25835-25870 placement
+//@ chunk-036m2pwj.js:26176-26211 placement
 var PLUGIN_DIRECTORY_BUILT_IN = "plugin-directory:built-in";
-//@ chunk-s67w32sp.js:25870-26105 placement
+//@ chunk-036m2pwj.js:26211-26446 placement
 async function pluginDirectoryRegistryEntry() {
   let lastUpdated = new Date(0).toISOString();
   if (!isDiskless())
@@ -1648,7 +1653,7 @@ async function pluginDirectoryRegistryEntry() {
     lastUpdated,
   };
 }
-//@ chunk-s67w32sp.js:26105-26210 placement
+//@ chunk-036m2pwj.js:26446-26551 placement
 var SWITCH_PURPOSE_LABELS = {
   install: "an install",
   update: "an update",
@@ -1656,7 +1661,7 @@ var SWITCH_PURPOSE_LABELS = {
 };
 var CATALOG_TTL_MS = 1800000;
 var weakMap = new WeakMap();
-//@ chunk-s67w32sp.js:26210-26345 placement
+//@ chunk-036m2pwj.js:26551-26686 placement
 function isPluginDirectoryEntryFromAFreshWalk(plugin) {
   let walkStarted = weakMap.get(plugin);
   if (walkStarted === undefined) return false;
@@ -1664,7 +1669,7 @@ function isPluginDirectoryEntryFromAFreshWalk(plugin) {
   let monoAge = performance.now() - walkStarted.mono;
   return wallAge >= 0 && wallAge < CATALOG_TTL_MS && monoAge >= 0 && monoAge < CATALOG_TTL_MS;
 }
-//@ chunk-s67w32sp.js:26345-27908 placement
+//@ chunk-036m2pwj.js:26686-28249 placement
 async function loadPluginDirectoryMarketplace(
   mode,
   {
@@ -1777,7 +1782,7 @@ async function loadPluginDirectoryMarketplace(
     }),
   };
 }
-//@ chunk-s67w32sp.js:27908-28260 placement
+//@ chunk-036m2pwj.js:28249-28601 placement
 /**
  * 由条目合成插件目录市场并更新会话里的条目名与审核标记。
  */

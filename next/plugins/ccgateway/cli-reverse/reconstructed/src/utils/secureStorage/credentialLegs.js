@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：对凭据对象应用删除函数（需同步返回对象）；严格读取所有凭据存储腿等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (10)
  * attribution: placement 10
  */
 import { isDeepStrictEqual } from "util";
@@ -17,9 +17,9 @@ import { isPlainObject } from "../objectUtils.js";
 import { clone, jsonParse, jsonStringify } from "../slowOperations.js";
 import { primarySecureStoreKind } from "./index.js";
 
-//@ chunk-aepeg2w5.js:489436-489476 placement
+//@ chunk-exfmq47h.js:501430-501470 placement
 var ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
-//@ chunk-aepeg2w5.js:489476-489646 placement
+//@ chunk-exfmq47h.js:501470-501640 placement
 /**
  * 格式化名称列表：只列出合法名称，其余计为"及 N 个"；全都不合法时只显示数量。
  */
@@ -31,11 +31,11 @@ function formatNameList(names) {
     ? `${skipped} ${plural(skipped, "name")}`
     : `${filtered.join(", ")} and ${skipped} more`;
 }
-//@ chunk-aepeg2w5.js:489688-489722 placement
+//@ chunk-exfmq47h.js:501682-501716 placement
 function storageMarkersOrName(name) {
   return storageMarker(name) ?? [name];
 }
-//@ chunk-aepeg2w5.js:489722-490067 placement
+//@ chunk-exfmq47h.js:501716-502061 placement
 /**
  * 在所有凭据存储腿上执行修改。
  */
@@ -77,7 +77,7 @@ async function mutateEveryCredentialLeg(name, remove, options) {
     return results;
   });
 }
-//@ chunk-aepeg2w5.js:490067-490525 placement
+//@ chunk-exfmq47h.js:502061-502519 placement
 /**
  * 严格读取所有凭据存储腿。
  */
@@ -110,7 +110,7 @@ async function readEveryCredentialLeg(name, mapValue, credentials) {
   }
   return results;
 }
-//@ chunk-aepeg2w5.js:490525-490979 placement
+//@ chunk-exfmq47h.js:502519-502973 placement
 /**
  * 确认凭据已从所有存储移除。
  */
@@ -146,7 +146,7 @@ async function confirmCredentialRemoval(name, remove, mapValue) {
         reason: "credential_store_failed",
       };
 }
-//@ chunk-aepeg2w5.js:490979-491882 placement
+//@ chunk-exfmq47h.js:502973-503876 placement
 /**
  * 对凭据对象应用删除函数（需同步返回对象）。
  */
@@ -173,17 +173,17 @@ function removeFromEveryLeg(remove, data) {
     );
   return isDeepStrictEqual(after, before) ? data : after;
 }
-//@ chunk-aepeg2w5.js:491882-492000 placement
+//@ chunk-exfmq47h.js:503876-503994 placement
 function isSubsetDeepEqual(sub, full) {
   if (!isPlainObject(sub) || !isPlainObject(full)) return isDeepStrictEqual(sub, full);
   return Object.keys(full).every((key) => Object.hasOwn(sub, key) && isSubsetDeepEqual(sub[key], full[key]));
 }
-//@ chunk-aepeg2w5.js:492000-492031 placement
+//@ chunk-exfmq47h.js:503994-504025 placement
 function deepCloneJson(value) {
   return jsonParse(jsonStringify(value));
 }
-//@ chunk-aepeg2w5.js:492031-492087 placement
+//@ chunk-exfmq47h.js:504025-504081 placement
 function markerOrValue(name, index, credentials) {
   return storageMarker(name) === undefined || index > 0 ? credentials : undefined;
 }
-export { confirmCredentialRemoval, formatNameList, mutateEveryCredentialLeg, readEveryCredentialLeg };
+export { readEveryCredentialLeg, confirmCredentialRemoval, mutateEveryCredentialLeg, formatNameList };

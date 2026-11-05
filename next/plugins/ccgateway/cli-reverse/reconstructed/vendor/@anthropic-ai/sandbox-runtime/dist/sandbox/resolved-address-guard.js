@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/resolved-address-guard.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (7)
+ * pieces: chunk-qg41pqt6.js (7)
  * attribution: esm-fingerprint 6, esm-layout 1
  */
 import { networkInterfaces } from "os";
@@ -19,7 +19,7 @@ import {
 import { ipLiteralRules } from "./domain-pattern.js";
 import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 
-//@ chunk-fq0cr76a.js:650968-651542 esm-fingerprint
+//@ chunk-qg41pqt6.js:651466-652040 esm-fingerprint
 var CLOUD_METADATA_ADDRESSES = [
   "100.100.100.200",
   "168.63.129.16",
@@ -47,7 +47,7 @@ var REASON_ORDER = [
   "a non-loopback address",
   "an unparsable address",
 ];
-//@ chunk-fq0cr76a.js:651542-651650 esm-fingerprint
+//@ chunk-qg41pqt6.js:652040-652148 esm-fingerprint
 function localInterfaceAddresses() {
   let byInterface;
   try {
@@ -59,7 +59,7 @@ function localInterfaceAddresses() {
     .flat()
     .flatMap((i) => (i ? [i.address] : []));
 }
-//@ chunk-fq0cr76a.js:651650-651865 esm-fingerprint
+//@ chunk-qg41pqt6.js:652148-652363 esm-fingerprint
 class ResolvedAddressDeniedError extends Error {
   constructor(hostname, reason, addresses) {
     super(`Connection to ${hostname} blocked: ${reason}`);
@@ -70,11 +70,11 @@ class ResolvedAddressDeniedError extends Error {
     this.name = "ResolvedAddressDeniedError";
   }
 }
-//@ chunk-fq0cr76a.js:651865-651903 esm-layout
+//@ chunk-qg41pqt6.js:652363-652401 esm-layout
 function isResolvedAddressDeniedError(err) {
   return err instanceof ResolvedAddressDeniedError;
 }
-//@ chunk-fq0cr76a.js:651903-652198 esm-fingerprint
+//@ chunk-qg41pqt6.js:652401-652696 esm-fingerprint
 function buildRuleSet(rules) {
   let set = {
     anyPort: new BlockList(),
@@ -94,12 +94,12 @@ function buildRuleSet(rules) {
   }
   return set;
 }
-//@ chunk-fq0cr76a.js:652198-652285 esm-fingerprint
+//@ chunk-qg41pqt6.js:652696-652783 esm-fingerprint
 function inRuleSet(set, address, port) {
   let forPort = set.byPort.get(port);
   return addressInSet(set.anyPort, address) || (forPort !== undefined && addressInSet(forPort, address));
 }
-//@ chunk-fq0cr76a.js:652285-653509 esm-fingerprint
+//@ chunk-qg41pqt6.js:652783-654016 esm-fingerprint
 function createResolvedAddressGuard(opts = {}) {
   let refused = buildRuleSet(ipLiteralRules(opts.deniedDomains ?? []));
   let allowed = buildRuleSet(ipLiteralRules(opts.allowedDomains ?? []));

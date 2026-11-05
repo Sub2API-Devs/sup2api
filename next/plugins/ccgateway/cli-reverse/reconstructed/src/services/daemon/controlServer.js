@@ -3,10 +3,10 @@
  *
  * 后台守护进程控制服务（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ksvdmrg0.js (24)
- * attribution: placement 23, sole-consumer 1
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y2nrbm62.js (27)
+ * attribution: placement 23, layout 4
  */
 import { lstatSync, openSync, readSync, closeSync } from "fs";
 import { unlink } from "fs/promises";
@@ -16,16 +16,16 @@ import { StringDecoder } from "string_decoder";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { stripAnsiPerLine } from "../../utils/stripAnsi.js";
 import { CONTROL_CHARS_EXCEPT_WS_RE, takeLastChars } from "../../utils/stringUtils.js";
-import { sgrPatternSource, wrapAnsi } from "../../ink/wrapAnsi.js";
-import { hardWrapAnsiLine } from "../../ink/termio/parser.js";
+import { sgrPatternSource, emptySgrState, applySgrToState, wrapAnsi } from "../../ink/wrapAnsi.js";
+import { bunStringWidth } from "../../ink/stringWidth.js";
+import { getGraphemeSegmenter } from "../../utils/intl.js";
 import { jsonParseRaw, jsonStringify, jsonParse } from "../../utils/slowOperations.js";
 import { renderPluginPromptColon, TAG_OR_INTERRUPT_START_RE } from "../../utils/messages/pluginPrompts.js";
-import { identity } from "../../tools/REPLTool/constants.js";
+import { shownToolName } from "../../tools/REPLTool/constants.js";
 import { flattenPastedBlocks } from "../../utils/pastedContent.js";
 import { configureMarked, formatTokenWindowed } from "../../utils/markdown.js";
 import { marked } from "../../../vendor/marked/lib/marked.esm.js";
 import { getCliHighlightModule } from "../../utils/cliHighlight.js";
-import { bunStringWidth } from "../../ink/stringWidth.js";
 import {
   MAX_DAEMON_STDERR_LINES,
   MAX_DAEMON_STDERR_LINE_CHARS,
@@ -90,7 +90,7 @@ import { ERASE_SCREEN, CURSOR_HOME, ERASE_LINE } from "../../ink/termio/csi.js";
 import { getPlatform } from "../../utils/platform.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ksvdmrg0.js:23828-24104 placement
+//@ chunk-y2nrbm62.js:11547-11823 placement
 function isMarkdownTooComplex(text) {
   let openBrackets = 0;
   let setextRules = 0;
@@ -111,7 +111,7 @@ function isMarkdownTooComplex(text) {
   }
   return openBrackets > 256 || setextRules > 64 || quoteDepth > 512;
 }
-//@ chunk-ksvdmrg0.js:24104-24255 placement (2.1.88 match: DIM, 0.387)
+//@ chunk-y2nrbm62.js:11823-11974 placement (2.1.88 match: DIM, 0.387)
 /**
  * 暗色文本的 ANSI 前缀 ESC[2m。
  */
@@ -121,7 +121,7 @@ var INDENT;
 var DARK;
 var pointer;
 var SESSION_STARTING_NOTICE;
-deferInit("chunk-ksvdmrg0.js:24104", () => {
+deferInit("chunk-y2nrbm62.js:11823", () => {
   DIM = "\x1B[2m";
   RESET = "\x1B[0m";
   INDENT = 2;
@@ -130,7 +130,7 @@ deferInit("chunk-ksvdmrg0.js:24104", () => {
   SESSION_STARTING_NOTICE =
     "  Session is starting \u2014 showing its transcript until it appears. Ctrl+Z to detach";
 });
-//@ chunk-ksvdmrg0.js:24255-24395 placement
+//@ chunk-y2nrbm62.js:11974-12114 placement
 function sanitizeControlChars(text) {
   if (!/[\x00-\x09\x0b-\x1f\x7f-\x9f]/.test(text)) return text;
   return stripAnsiPerLine(text)
@@ -138,16 +138,16 @@ function sanitizeControlChars(text) {
     .replace(CONTROL_CHARS_EXCEPT_WS_RE, "")
     .replace(/[\v\f\r]/g, "");
 }
-//@ chunk-ksvdmrg0.js:24395-24490 placement
+//@ chunk-y2nrbm62.js:12114-12209 placement
 var regExp; // deferred: uses sgrPatternSource (../../ink/wrapAnsi.js) of its import cycle while loading; runs once the cycle is complete
 var regExp_2;
 var regExp_3;
-deferInit("chunk-ksvdmrg0.js:24395", () => {
+deferInit("chunk-y2nrbm62.js:12114", () => {
   regExp = new RegExp(`(${sgrPatternSource(";")})`);
   regExp_2 = new RegExp(`^${sgrPatternSource(";")}$`);
   regExp_3 = new RegExp(regExp.source, "g");
 });
-//@ chunk-ksvdmrg0.js:24490-25056 placement
+//@ chunk-y2nrbm62.js:12209-12775 placement
 /**
  * 去掉文本中除允许的 SGR 以外的 CSI 序列，以及 OSC/DCS/SOS/PM/APC 字符串和其他 ESC 序列。
  */
@@ -197,7 +197,45 @@ function stripNonSgrEscapes(text) {
   }
   return output;
 }
-//@ chunk-ksvdmrg0.js:25498-25581 sole-consumer
+//@ chunk-y2nrbm62.js:12775-12786 layout
+var MAX_SGR_REOPEN = 128;
+//@ chunk-y2nrbm62.js:12786-12882 layout
+function reopenSgr(activeCodes) {
+  let joined = activeCodes.filter((activeCode) => activeCode !== "").join(";");
+  return joined === "" || joined.length > MAX_SGR_REOPEN ? "" : `\x1B[${joined}m`;
+}
+//@ chunk-y2nrbm62.js:12882-13217 layout
+/**
+ * 把一行带 ANSI 的文本按显示宽度硬折，换行处关闭活动样式、下一行重新打开。
+ */
+function hardWrapAnsiLine(line, width) {
+  if (bunStringWidth(line) <= width) return [line];
+  let lines = [];
+  let current = "";
+  let currentWidth = 0;
+  let sgrState = emptySgrState();
+  for (let part of line.split(regExp)) {
+    if (part === "") continue;
+    if (part.charCodeAt(0) === 27) {
+      applySgrToState(part, sgrState);
+      current += part;
+      continue;
+    }
+    for (let { segment } of getGraphemeSegmenter().segment(part)) {
+      let segmentWidth = segment.length === 1 && segment.charCodeAt(0) < 127 ? 1 : bunStringWidth(segment);
+      if (currentWidth > 0 && currentWidth + segmentWidth > width) {
+        lines.push(sgrState.some((code) => code !== "") ? current + RESET : current);
+        current = reopenSgr(sgrState);
+        currentWidth = 0;
+      }
+      current += segment;
+      currentWidth += segmentWidth;
+    }
+  }
+  lines.push(current);
+  return lines;
+}
+//@ chunk-y2nrbm62.js:13217-13300 layout
 function wrapAnsiHard(text, width) {
   return wrapAnsi(text, width, {
     hard: false,
@@ -209,7 +247,7 @@ function wrapAnsiHard(text, width) {
     )
     .flatMap((line) => hardWrapAnsiLine(line, width));
 }
-//@ chunk-ksvdmrg0.js:25581-26658 placement
+//@ chunk-y2nrbm62.js:13300-14378 placement
 /**
  * 解析一行转录 JSONL 为预览项：只取主线的 user/assistant 消息，用户文本、助手文本、工具调用（工具名+首个字符串参数）与思考分别成项。
  */
@@ -284,7 +322,7 @@ function parseTranscriptLineForPreview(line) {
       }
       items.push({
         role: "tool",
-        text: `${identity(candidate.name)}(${inputSummary})`,
+        text: `${shownToolName(candidate.name)}(${inputSummary})`,
       });
     } else if (
       candidate?.type === "thinking" &&
@@ -301,7 +339,7 @@ function parseTranscriptLineForPreview(line) {
   flushText();
   return items;
 }
-//@ chunk-ksvdmrg0.js:26658-26850 placement
+//@ chunk-y2nrbm62.js:14378-14570 placement
 function toUserPreviewItem(text) {
   let trimmed = flattenPastedBlocks(text).trim();
   if (trimmed === "") return [];
@@ -315,7 +353,7 @@ function toUserPreviewItem(text) {
     },
   ];
 }
-//@ chunk-ksvdmrg0.js:26850-27017 placement
+//@ chunk-y2nrbm62.js:14570-14737 placement
 function renderMarkdownForPreview(markdown, theme) {
   configureMarked();
   return stripNonSgrEscapes(
@@ -334,7 +372,7 @@ function renderMarkdownForPreview(markdown, theme) {
       .join(""),
   ).trim();
 }
-//@ chunk-ksvdmrg0.js:27017-28891 placement
+//@ chunk-y2nrbm62.js:14737-16604 placement
 /**
  * 渲染附着时显示的会话尾部预览：从转录末尾倒序取若干条（字符预算内），按角色着色、折行（助手消息尝试 Markdown 渲染），按终端行数从下往上裁剪，加分隔线与"会话启动中"提示。
  */
@@ -474,7 +512,7 @@ function renderTranscriptTail(stderrText, columns, rows, options) {
   if (joined.length > 65536 + rows * max * 32) joined = joined.replace(regExp_3, "");
   return HIDE_CURSOR + joined;
 }
-//@ chunk-ksvdmrg0.js:28891-29251 placement
+//@ chunk-y2nrbm62.js:16604-16964 placement
 /**
  * 读取转录文件尾部（固定大小，从第一个完整行开始）并渲染预览。
  */
@@ -505,7 +543,7 @@ function readTranscriptTailPreview(path, columns, rows, options) {
       } catch {}
   }
 }
-//@ chunk-ksvdmrg0.js:29251-29315 placement
+//@ chunk-y2nrbm62.js:16964-17028 placement
 /**
  * 排空等待超时（30 秒）。
  */
@@ -516,7 +554,7 @@ var STATUS_TICK_MS = 1000;
 var STATUS_GRACE_MS = 500;
 var READY_TIMEOUT_MS = 6000;
 var DRAIN_TIMEOUT_MS = 30000;
-//@ chunk-ksvdmrg0.js:29315-29435 placement
+//@ chunk-y2nrbm62.js:17028-17148 placement
 function getAttachStallMs() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     "tengu_bg_attach_stall_ms",
@@ -526,7 +564,7 @@ function getAttachStallMs() {
   let floorMs = processWrapperArgv().length > 0 ? LONG_ARGV_THRESHOLD_BYTES : 2000;
   return Math.max(floorMs, featureValue_CACHED_MAY_BE_STALE);
 }
-//@ chunk-ksvdmrg0.js:29435-30392 placement
+//@ chunk-y2nrbm62.js:17148-18108 placement
 /**
  * 附着卡住时重启后台会话：发 SIGTERM 等待退出，读取作业状态与转录，有消息则以 resume 方式（活跃时附带续答标志）重新派发，否则按会话 ID 或原启动方式重启。
  */
@@ -583,13 +621,13 @@ function respawnStalledAttach(worker, socket, dispatch, isClosing, respawning, s
     .catch((error) => logError(error))
     .finally(() => respawning.delete(dispatch_2.short));
 }
-//@ chunk-ksvdmrg0.js:30392-30411 placement
+//@ chunk-y2nrbm62.js:18108-18127 placement
 /**
  * socket 重试之间的等待（2500 毫秒）。
  */
 var SOCKET_READY_TIMEOUT_MS = 1e4;
 var SOCKET_RETRY_SLEEP_MS = 2500;
-//@ chunk-ksvdmrg0.js:30411-32581 placement
+//@ chunk-y2nrbm62.js:18127-20302 placement
 async function handleDaemonLease(
   handles,
   onDispatch,
@@ -780,7 +818,7 @@ async function handleDaemonLease(
     },
   };
 }
-//@ chunk-ksvdmrg0.js:32635-32735 placement
+//@ chunk-y2nrbm62.js:20356-20456 placement
 function writeControlLine(stream, message) {
   if (stream.destroyed) return;
   if (stream.writableLength > MAX_REQUEST_BYTES) {
@@ -793,21 +831,21 @@ function writeControlLine(stream, message) {
 `,
   );
 }
-//@ chunk-ksvdmrg0.js:32735-32803 placement
+//@ chunk-y2nrbm62.js:20456-20524 placement
 /**
  * 判断 worker 是否干净可复用（没有结果、不在退役/杀死中）。
  */
 function isWorkerClean(supervisor) {
   return !supervisor.record.outcome && !supervisor.isRetiring && !supervisor.isKilling;
 }
-//@ chunk-ksvdmrg0.js:32803-32865 placement
+//@ chunk-y2nrbm62.js:20524-20586 placement
 /**
  * 等待 25 毫秒（有 worker 记录时带截止时间）。
  */
 function waitShort(promise, outcome) {
   return promise !== undefined && outcome === undefined ? withDeadline(promise, 25) : sleep(25);
 }
-//@ chunk-ksvdmrg0.js:32865-33942 placement
+//@ chunk-y2nrbm62.js:20586-21663 placement
 /**
  * 等待某次派发被确认（最多 30 秒，可延长一次）：命中冷启动记录、或找到 nonce 一致的 worker 时回写成功；旧派发仍在清理时报 ESTALE，超时报 ETIMEOUT。
  */
@@ -896,7 +934,7 @@ async function awaitDispatchAck(workers, coldRecords, socket, op, short, nonce, 
     code: "ETIMEOUT",
   });
 }
-//@ chunk-ksvdmrg0.js:33942-34037 placement
+//@ chunk-y2nrbm62.js:21663-21758 placement
 /**
  * 记录已上报过的事件键集合，避免重复上报。
  */
@@ -908,7 +946,7 @@ class FiredKeys {
     return true;
   }
 }
-//@ chunk-ksvdmrg0.js:34037-34125 placement
+//@ chunk-y2nrbm62.js:21758-21846 placement
 /**
  * 每类旧操作探针只上报一次埋点。
  */
@@ -918,7 +956,7 @@ function logLegacyOpProbeOnce(legacyOpProbe, op) {
     op: fromEnum(op),
   });
 }
-//@ chunk-ksvdmrg0.js:34125-50327 placement
+//@ chunk-y2nrbm62.js:21846-38047 placement
 /**
  * 后台守护进程控制服务：解析 JSON 请求、ping、会话租约
  */
@@ -964,10 +1002,10 @@ async function DaemonControlServer(host, socket, data, initialData) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
@@ -985,10 +1023,10 @@ async function DaemonControlServer(host, socket, data, initialData) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
@@ -1067,10 +1105,10 @@ async function DaemonControlServer(host, socket, data, initialData) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
@@ -1184,10 +1222,10 @@ async function DaemonControlServer(host, socket, data, initialData) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION
@@ -1473,10 +1511,10 @@ async function DaemonControlServer(host, socket, data, initialData) {
                 ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
                 PACKAGE_URL: "@anthropic-ai/claude-code",
                 README_URL: "https://code.claude.com/docs/en/overview",
-                VERSION: "2.1.316",
+                VERSION: "2.1.318",
                 FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                BUILD_TIME: "2026-10-30T23:28:13Z",
-                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                BUILD_TIME: "2026-11-03T18:52:53Z",
+                GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                 HOOKS_WORKER_URL:
                   import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                 DD_SOURCEMAP_GROUP: "default",
@@ -1499,10 +1537,10 @@ async function DaemonControlServer(host, socket, data, initialData) {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION,
@@ -1877,7 +1915,7 @@ async function DaemonControlServer(host, socket, data, initialData) {
       });
   }
 }
-//@ chunk-ksvdmrg0.js:50327-50407 placement
+//@ chunk-y2nrbm62.js:38047-38127 placement
 /**
  * 把租约标签解析成枚举值（未知归 other）。
  */
@@ -1885,4 +1923,4 @@ function daemonLeaseLabel(label) {
   if (label === undefined) return;
   return fromEnumOpt(DAEMON_LEASE_LABELS.find((candidate) => candidate === label)) ?? lit("other");
 }
-export { regExp, RESET, SOCKET_READY_TIMEOUT_MS, handleDaemonLease };
+export { handleDaemonLease, SOCKET_READY_TIMEOUT_MS };

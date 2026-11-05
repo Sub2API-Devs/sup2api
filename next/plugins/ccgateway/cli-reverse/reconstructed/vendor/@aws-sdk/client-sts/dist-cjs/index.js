@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/client-sts/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/client-sts@3.936.0..3.939.0
- * pieces: chunk-heg39xxp.js (46)
+ * pieces: chunk-539esr4f.js (46)
  * attribution: esm-fingerprint 28, esm-layout 18
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_schema } from "../../../@smithy/core/dist-cjs/submodules/schema
 import { require_client } from "../../../@smithy/core/dist-cjs/submodules/client/index.js";
 import { require_middleware_endpoint } from "../../../@smithy/middleware-endpoint/dist-cjs/index.js";
 
-//@ chunk-heg39xxp.js:1681-2144 esm-fingerprint
+//@ chunk-539esr4f.js:1681-2144 esm-fingerprint
 var resolveClientEndpointParameters = (options) =>
   Object.assign(options, {
     useDualstackEndpoint: options.useDualstackEndpoint ?? false,
@@ -40,18 +40,18 @@ var commonParams = {
     name: "useDualstackEndpoint",
   },
 };
-//@ chunk-heg39xxp.js:14920-14935 esm-layout
+//@ chunk-539esr4f.js:14920-14935 esm-layout
 var schema = __toESM(require_schema());
-//@ chunk-heg39xxp.js:14935-14951 esm-layout
+//@ chunk-539esr4f.js:14935-14951 esm-layout
 var import_client_6 = __toESM(require_client());
-//@ chunk-heg39xxp.js:14951-15052 esm-fingerprint
+//@ chunk-539esr4f.js:14951-15052 esm-fingerprint
 class STSServiceException$1 extends import_client_6.ServiceException {
   constructor(options) {
     super(options);
     Object.setPrototypeOf(this, STSServiceException$1.prototype);
   }
 }
-//@ chunk-heg39xxp.js:15052-15230 esm-fingerprint
+//@ chunk-539esr4f.js:15052-15230 esm-fingerprint
 class ExpiredTokenException$1 extends STSServiceException$1 {
   name = "ExpiredTokenException";
   $fault = "client";
@@ -64,7 +64,7 @@ class ExpiredTokenException$1 extends STSServiceException$1 {
     Object.setPrototypeOf(this, ExpiredTokenException$1.prototype);
   }
 }
-//@ chunk-heg39xxp.js:15230-15430 esm-fingerprint
+//@ chunk-539esr4f.js:15230-15430 esm-fingerprint
 class MalformedPolicyDocumentException$1 extends STSServiceException$1 {
   name = "MalformedPolicyDocumentException";
   $fault = "client";
@@ -77,7 +77,7 @@ class MalformedPolicyDocumentException$1 extends STSServiceException$1 {
     Object.setPrototypeOf(this, MalformedPolicyDocumentException$1.prototype);
   }
 }
-//@ chunk-heg39xxp.js:15430-15624 esm-fingerprint
+//@ chunk-539esr4f.js:15430-15624 esm-fingerprint
 class PackedPolicyTooLargeException$1 extends STSServiceException$1 {
   name = "PackedPolicyTooLargeException";
   $fault = "client";
@@ -90,7 +90,7 @@ class PackedPolicyTooLargeException$1 extends STSServiceException$1 {
     Object.setPrototypeOf(this, PackedPolicyTooLargeException$1.prototype);
   }
 }
-//@ chunk-heg39xxp.js:15624-15806 esm-fingerprint
+//@ chunk-539esr4f.js:15624-15806 esm-fingerprint
 class RegionDisabledException$1 extends STSServiceException$1 {
   name = "RegionDisabledException";
   $fault = "client";
@@ -103,7 +103,7 @@ class RegionDisabledException$1 extends STSServiceException$1 {
     Object.setPrototypeOf(this, RegionDisabledException$1.prototype);
   }
 }
-//@ chunk-heg39xxp.js:15806-15992 esm-fingerprint
+//@ chunk-539esr4f.js:15806-15992 esm-fingerprint
 class IDPRejectedClaimException$1 extends STSServiceException$1 {
   name = "IDPRejectedClaimException";
   $fault = "client";
@@ -116,7 +116,7 @@ class IDPRejectedClaimException$1 extends STSServiceException$1 {
     Object.setPrototypeOf(this, IDPRejectedClaimException$1.prototype);
   }
 }
-//@ chunk-heg39xxp.js:15992-16186 esm-fingerprint
+//@ chunk-539esr4f.js:15992-16186 esm-fingerprint
 class InvalidIdentityTokenException$1 extends STSServiceException$1 {
   name = "InvalidIdentityTokenException";
   $fault = "client";
@@ -129,7 +129,7 @@ class InvalidIdentityTokenException$1 extends STSServiceException$1 {
     Object.setPrototypeOf(this, InvalidIdentityTokenException$1.prototype);
   }
 }
-//@ chunk-heg39xxp.js:16186-16382 esm-fingerprint
+//@ chunk-539esr4f.js:16186-16382 esm-fingerprint
 class IDPCommunicationErrorException$1 extends STSServiceException$1 {
   name = "IDPCommunicationErrorException";
   $fault = "client";
@@ -142,7 +142,7 @@ class IDPCommunicationErrorException$1 extends STSServiceException$1 {
     Object.setPrototypeOf(this, IDPCommunicationErrorException$1.prototype);
   }
 }
-//@ chunk-heg39xxp.js:16382-16590 esm-fingerprint
+//@ chunk-539esr4f.js:16382-16590 esm-fingerprint
 class InvalidAuthorizationMessageException$1 extends STSServiceException$1 {
   name = "InvalidAuthorizationMessageException";
   $fault = "client";
@@ -155,7 +155,7 @@ class InvalidAuthorizationMessageException$1 extends STSServiceException$1 {
     Object.setPrototypeOf(this, InvalidAuthorizationMessageException$1.prototype);
   }
 }
-//@ chunk-heg39xxp.js:16590-16782 esm-fingerprint
+//@ chunk-539esr4f.js:16590-16782 esm-fingerprint
 class ExpiredTradeInTokenException$1 extends STSServiceException$1 {
   name = "ExpiredTradeInTokenException";
   $fault = "client";
@@ -168,7 +168,7 @@ class ExpiredTradeInTokenException$1 extends STSServiceException$1 {
     Object.setPrototypeOf(this, ExpiredTradeInTokenException$1.prototype);
   }
 }
-//@ chunk-heg39xxp.js:16782-16980 esm-fingerprint
+//@ chunk-539esr4f.js:16782-16980 esm-fingerprint
 class JWTPayloadSizeExceededException$1 extends STSServiceException$1 {
   name = "JWTPayloadSizeExceededException";
   $fault = "client";
@@ -181,7 +181,7 @@ class JWTPayloadSizeExceededException$1 extends STSServiceException$1 {
     Object.setPrototypeOf(this, JWTPayloadSizeExceededException$1.prototype);
   }
 }
-//@ chunk-heg39xxp.js:16980-17208 esm-fingerprint
+//@ chunk-539esr4f.js:16980-17208 esm-fingerprint
 class OutboundWebIdentityFederationDisabledException$1 extends STSServiceException$1 {
   name = "OutboundWebIdentityFederationDisabledException";
   $fault = "client";
@@ -194,7 +194,7 @@ class OutboundWebIdentityFederationDisabledException$1 extends STSServiceExcepti
     Object.setPrototypeOf(this, OutboundWebIdentityFederationDisabledException$1.prototype);
   }
 }
-//@ chunk-heg39xxp.js:17208-17412 esm-fingerprint
+//@ chunk-539esr4f.js:17208-17412 esm-fingerprint
 class SessionDurationEscalationException$1 extends STSServiceException$1 {
   name = "SessionDurationEscalationException";
   $fault = "client";
@@ -207,7 +207,7 @@ class SessionDurationEscalationException$1 extends STSServiceException$1 {
     Object.setPrototypeOf(this, SessionDurationEscalationException$1.prototype);
   }
 }
-//@ chunk-heg39xxp.js:17412-17571 esm-layout
+//@ chunk-539esr4f.js:17412-17571 esm-layout
 var ExpiredTokenException = [
   -3,
   "com.amazonaws.sts",
@@ -220,9 +220,9 @@ var ExpiredTokenException = [
   ["message"],
   [0],
 ];
-//@ chunk-heg39xxp.js:17571-17631 esm-fingerprint
+//@ chunk-539esr4f.js:17571-17631 esm-fingerprint
 schema.TypeRegistry.for("com.amazonaws.sts").registerError(ExpiredTokenException, ExpiredTokenException$1);
-//@ chunk-heg39xxp.js:17631-17804 esm-layout
+//@ chunk-539esr4f.js:17631-17804 esm-layout
 var ExpiredTradeInTokenException = [
   -3,
   "com.amazonaws.sts",
@@ -235,12 +235,12 @@ var ExpiredTradeInTokenException = [
   ["message"],
   [0],
 ];
-//@ chunk-heg39xxp.js:17804-17864 esm-fingerprint
+//@ chunk-539esr4f.js:17804-17864 esm-fingerprint
 schema.TypeRegistry.for("com.amazonaws.sts").registerError(
   ExpiredTradeInTokenException,
   ExpiredTradeInTokenException$1,
 );
-//@ chunk-heg39xxp.js:17864-18022 esm-layout
+//@ chunk-539esr4f.js:17864-18022 esm-layout
 var GetCallerIdentityRequest = [3, "com.amazonaws.sts", "GetCallerIdentityRequest", 0, [], []];
 var GetCallerIdentityResponse = [
   3,
@@ -250,7 +250,7 @@ var GetCallerIdentityResponse = [
   ["UserId", "Account", "Arn"],
   [0, 0, 0],
 ];
-//@ chunk-heg39xxp.js:18022-18190 esm-layout
+//@ chunk-539esr4f.js:18022-18190 esm-layout
 var IDPCommunicationErrorException = [
   -3,
   "com.amazonaws.sts",
@@ -263,12 +263,12 @@ var IDPCommunicationErrorException = [
   ["message"],
   [0],
 ];
-//@ chunk-heg39xxp.js:18190-18250 esm-fingerprint
+//@ chunk-539esr4f.js:18190-18250 esm-fingerprint
 schema.TypeRegistry.for("com.amazonaws.sts").registerError(
   IDPCommunicationErrorException,
   IDPCommunicationErrorException$1,
 );
-//@ chunk-heg39xxp.js:18250-18408 esm-layout
+//@ chunk-539esr4f.js:18250-18408 esm-layout
 var IDPRejectedClaimException = [
   -3,
   "com.amazonaws.sts",
@@ -281,12 +281,12 @@ var IDPRejectedClaimException = [
   ["message"],
   [0],
 ];
-//@ chunk-heg39xxp.js:18408-18468 esm-fingerprint
+//@ chunk-539esr4f.js:18408-18468 esm-fingerprint
 schema.TypeRegistry.for("com.amazonaws.sts").registerError(
   IDPRejectedClaimException,
   IDPRejectedClaimException$1,
 );
-//@ chunk-heg39xxp.js:18468-18657 esm-layout
+//@ chunk-539esr4f.js:18468-18657 esm-layout
 var InvalidAuthorizationMessageException = [
   -3,
   "com.amazonaws.sts",
@@ -299,12 +299,12 @@ var InvalidAuthorizationMessageException = [
   ["message"],
   [0],
 ];
-//@ chunk-heg39xxp.js:18657-18717 esm-fingerprint
+//@ chunk-539esr4f.js:18657-18717 esm-fingerprint
 schema.TypeRegistry.for("com.amazonaws.sts").registerError(
   InvalidAuthorizationMessageException,
   InvalidAuthorizationMessageException$1,
 );
-//@ chunk-heg39xxp.js:18717-18883 esm-layout
+//@ chunk-539esr4f.js:18717-18883 esm-layout
 var InvalidIdentityTokenException = [
   -3,
   "com.amazonaws.sts",
@@ -317,12 +317,12 @@ var InvalidIdentityTokenException = [
   ["message"],
   [0],
 ];
-//@ chunk-heg39xxp.js:18883-18943 esm-fingerprint
+//@ chunk-539esr4f.js:18883-18943 esm-fingerprint
 schema.TypeRegistry.for("com.amazonaws.sts").registerError(
   InvalidIdentityTokenException,
   InvalidIdentityTokenException$1,
 );
-//@ chunk-heg39xxp.js:18943-19122 esm-layout
+//@ chunk-539esr4f.js:18943-19122 esm-layout
 var JWTPayloadSizeExceededException = [
   -3,
   "com.amazonaws.sts",
@@ -335,12 +335,12 @@ var JWTPayloadSizeExceededException = [
   ["message"],
   [0],
 ];
-//@ chunk-heg39xxp.js:19122-19182 esm-fingerprint
+//@ chunk-539esr4f.js:19122-19182 esm-fingerprint
 schema.TypeRegistry.for("com.amazonaws.sts").registerError(
   JWTPayloadSizeExceededException,
   JWTPayloadSizeExceededException$1,
 );
-//@ chunk-heg39xxp.js:19182-19354 esm-layout
+//@ chunk-539esr4f.js:19182-19354 esm-layout
 var MalformedPolicyDocumentException = [
   -3,
   "com.amazonaws.sts",
@@ -353,12 +353,12 @@ var MalformedPolicyDocumentException = [
   ["message"],
   [0],
 ];
-//@ chunk-heg39xxp.js:19354-19414 esm-fingerprint
+//@ chunk-539esr4f.js:19354-19414 esm-fingerprint
 schema.TypeRegistry.for("com.amazonaws.sts").registerError(
   MalformedPolicyDocumentException,
   MalformedPolicyDocumentException$1,
 );
-//@ chunk-heg39xxp.js:19414-19623 esm-layout
+//@ chunk-539esr4f.js:19414-19623 esm-layout
 var OutboundWebIdentityFederationDisabledException = [
   -3,
   "com.amazonaws.sts",
@@ -371,12 +371,12 @@ var OutboundWebIdentityFederationDisabledException = [
   ["message"],
   [0],
 ];
-//@ chunk-heg39xxp.js:19623-19683 esm-fingerprint
+//@ chunk-539esr4f.js:19623-19683 esm-fingerprint
 schema.TypeRegistry.for("com.amazonaws.sts").registerError(
   OutboundWebIdentityFederationDisabledException,
   OutboundWebIdentityFederationDisabledException$1,
 );
-//@ chunk-heg39xxp.js:19683-19849 esm-layout
+//@ chunk-539esr4f.js:19683-19849 esm-layout
 var PackedPolicyTooLargeException = [
   -3,
   "com.amazonaws.sts",
@@ -389,12 +389,12 @@ var PackedPolicyTooLargeException = [
   ["message"],
   [0],
 ];
-//@ chunk-heg39xxp.js:19849-19909 esm-fingerprint
+//@ chunk-539esr4f.js:19849-19909 esm-fingerprint
 schema.TypeRegistry.for("com.amazonaws.sts").registerError(
   PackedPolicyTooLargeException,
   PackedPolicyTooLargeException$1,
 );
-//@ chunk-heg39xxp.js:19909-20072 esm-layout
+//@ chunk-539esr4f.js:19909-20072 esm-layout
 var RegionDisabledException = [
   -3,
   "com.amazonaws.sts",
@@ -407,12 +407,12 @@ var RegionDisabledException = [
   ["message"],
   [0],
 ];
-//@ chunk-heg39xxp.js:20072-20132 esm-fingerprint
+//@ chunk-539esr4f.js:20072-20132 esm-fingerprint
 schema.TypeRegistry.for("com.amazonaws.sts").registerError(
   RegionDisabledException,
   RegionDisabledException$1,
 );
-//@ chunk-heg39xxp.js:20132-20317 esm-layout
+//@ chunk-539esr4f.js:20132-20317 esm-layout
 var SessionDurationEscalationException = [
   -3,
   "com.amazonaws.sts",
@@ -425,19 +425,19 @@ var SessionDurationEscalationException = [
   ["message"],
   [0],
 ];
-//@ chunk-heg39xxp.js:20317-20377 esm-fingerprint
+//@ chunk-539esr4f.js:20317-20377 esm-fingerprint
 schema.TypeRegistry.for("com.amazonaws.sts").registerError(
   SessionDurationEscalationException,
   SessionDurationEscalationException$1,
 );
-//@ chunk-heg39xxp.js:20377-20463 esm-layout
+//@ chunk-539esr4f.js:20377-20463 esm-layout
 var STSServiceException = [-3, "smithy.ts.sdk.synthetic.com.amazonaws.sts", "STSServiceException", 0, [], []];
-//@ chunk-heg39xxp.js:20463-20547 esm-fingerprint
+//@ chunk-539esr4f.js:20463-20547 esm-fingerprint
 schema.TypeRegistry.for("smithy.ts.sdk.synthetic.com.amazonaws.sts").registerError(
   STSServiceException,
   STSServiceException$1,
 );
-//@ chunk-heg39xxp.js:20547-20614 esm-layout
+//@ chunk-539esr4f.js:20547-20614 esm-layout
 var GetCallerIdentity = [
   9,
   "com.amazonaws.sts",
@@ -446,10 +446,10 @@ var GetCallerIdentity = [
   () => GetCallerIdentityRequest,
   () => GetCallerIdentityResponse,
 ];
-//@ chunk-heg39xxp.js:20614-20642 esm-layout
+//@ chunk-539esr4f.js:20614-20642 esm-layout
 var import_middleware_endpoint_2 = __toESM(require_middleware_endpoint());
 var import_client_7 = __toESM(require_client());
-//@ chunk-heg39xxp.js:20642-20901 esm-fingerprint
+//@ chunk-539esr4f.js:20642-20901 esm-fingerprint
 class AssumeRoleWithWebIdentityCommand extends import_client_7.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {

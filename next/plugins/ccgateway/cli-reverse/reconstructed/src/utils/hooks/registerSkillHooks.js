@@ -3,9 +3,9 @@
  *
  * 把 skill frontmatter 的 hooks 注册为会话钩子，支持 once 一次性钩子。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/registerSkillHooks.ts
- * pieces: chunk-3g0djq3w.js (3)
+ * pieces: chunk-g88zyy4n.js (3)
  * attribution: placement 2, fingerprint 1
  */
 import { jsonStringify } from "../slowOperations.js";
@@ -20,14 +20,14 @@ import { errorMessage } from "../errors.js";
 import { tagHooksWithSource } from "./sessionHooks.js";
 import { HOOK_EVENTS } from "../../entrypoints/sdk/coreSchemas.js";
 
-//@ chunk-3g0djq3w.js:3289-3650 placement
+//@ chunk-g88zyy4n.js:3501-3862 placement
 /**
  * 技能钩子超限常量：记录上限与告诉模型钩子未注册的说明。
  */
 var MAX_UNFIT_TEXTS = 64;
 var SKILL_HOOKS_NOT_REGISTERED_TEXT =
   "This skill declares hooks, and they were not registered in this session: a limit on hooks, a matcher that cannot be tested here, or the organization's policy kept them out. The tools that its allowed-tools would grant were not granted either. If the skill relies on its hooks to check or block tool calls, nothing checks them now: tell the user.";
-//@ chunk-3g0djq3w.js:3650-4926 placement
+//@ chunk-g88zyy4n.js:3862-5138 placement
 /**
  * 检查技能声明的钩子是否在同一来源的预算内（钩子数、matcher 字符数、可测试性）；超出时不注册钩子并返回原因。
  */
@@ -95,7 +95,7 @@ function checkSkillHooksFit(sessionHooksRegistry, sessionId, source, commandRepo
   }
   return unfitReason;
 }
-//@ chunk-3g0djq3w.js:4926-5357 fingerprint (2.1.88 match: registerSkillHooks, 0.79)
+//@ chunk-g88zyy4n.js:5138-5569 fingerprint (2.1.88 match: registerSkillHooks, 0.79)
 /**
  * 把 skill frontmatter 的 hooks 注册为会话钩子（带 skillRoot）；once 钩子成功后自动移除。
  */

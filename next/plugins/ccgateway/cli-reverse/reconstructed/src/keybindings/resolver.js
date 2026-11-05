@@ -3,9 +3,9 @@
  *
  * 并入旧版已有路径：快捷键解析。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/keybindings/resolver.ts
- * pieces: chunk-x1mwqya5.js (18)
+ * pieces: chunk-m2f3rb0f.js (18)
  * attribution: placement 9, fingerprint 2, layout 4, callgraph-fingerprint 2, callgraph-witnessed 1
  */
 import { chordsEqual, keyEventToKeystroke } from "./match.js";
@@ -16,7 +16,7 @@ import { keybindingsState } from "./loadUserBindings.js";
 import { logEvent } from "../services/analytics/index.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-x1mwqya5.js:18414-18590 placement
+//@ chunk-m2f3rb0f.js:18412-18588 placement
 /**
  * 找某上下文里某动作当前生效的和弦（没被后面同和弦绑定覆盖的最后一条）；动作存在但全被覆盖返回 null，不存在返回 undefined。
  */
@@ -32,7 +32,7 @@ function getActionChord(action, context, bindings) {
   if (chord) return chord;
   return found ? null : undefined;
 }
-//@ chunk-x1mwqya5.js:18590-18705 placement
+//@ chunk-m2f3rb0f.js:18588-18703 placement
 function getActionChords(action, context, bindings) {
   let chords = [];
   bindings.forEach((binding, index) => {
@@ -41,7 +41,7 @@ function getActionChords(action, context, bindings) {
   });
   return chords;
 }
-//@ chunk-x1mwqya5.js:18705-18873 fingerprint (2.1.88 match: getBindingDisplayText, 1)
+//@ chunk-m2f3rb0f.js:18703-18871 fingerprint (2.1.88 match: getBindingDisplayText, 1)
 /**
  * 该上下文里该动作的所有和弦最终都被解绑（最后一条同和弦绑定的 action 为 null）。
  */
@@ -57,7 +57,7 @@ function isActionUnbound(action, context, bindings) {
     )
   );
 }
-//@ chunk-x1mwqya5.js:18873-19168 layout
+//@ chunk-m2f3rb0f.js:18871-19166 layout
 /**
  * 在动作的多个有效和弦里挑一个用来显示：用户自定义的优先（+3），无修饰的导航键次之（+2），无修饰单字符再次（+1）。
  */
@@ -82,9 +82,9 @@ function pickDisplayChord(action, context, bindings, defaultBindings) {
   }
   return best;
 }
-//@ chunk-x1mwqya5.js:19168-19294 layout
+//@ chunk-m2f3rb0f.js:19166-19292 layout
 var NAVIGATION_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x1mwqya5.js:19168", () => {
+deferInit("chunk-m2f3rb0f.js:19166", () => {
   NAVIGATION_KEYS = new Set([
     "up",
     "down",
@@ -102,7 +102,7 @@ deferInit("chunk-x1mwqya5.js:19168", () => {
     "delete",
   ]);
 });
-//@ chunk-x1mwqya5.js:19294-19444 layout
+//@ chunk-m2f3rb0f.js:19292-19442 layout
 function isOverriddenLater(bindings, index) {
   let binding = bindings[index];
   if (!binding) return false;
@@ -112,7 +112,7 @@ function isOverriddenLater(bindings, index) {
   }
   return false;
 }
-//@ chunk-x1mwqya5.js:19444-19589 callgraph-fingerprint (2.1.88 match: chordExactlyMatches, 1)
+//@ chunk-m2f3rb0f.js:19442-19587 callgraph-fingerprint (2.1.88 match: chordExactlyMatches, 1)
 function getSingleKeyAction(keystroke, context, bindings) {
   let action = null;
   for (let binding of bindings) {
@@ -122,7 +122,7 @@ function getSingleKeyAction(keystroke, context, bindings) {
   }
   return action;
 }
-//@ chunk-x1mwqya5.js:19589-19738 placement
+//@ chunk-m2f3rb0f.js:19587-19736 placement
 function getSingleKeyActionInContexts(keyName, contexts, bindings) {
   let action;
   for (let binding of bindings) {
@@ -132,7 +132,7 @@ function getSingleKeyActionInContexts(keyName, contexts, bindings) {
   }
   return action;
 }
-//@ chunk-x1mwqya5.js:20573-20702 callgraph-fingerprint (2.1.88 match: keystrokesEqual, 1)
+//@ chunk-m2f3rb0f.js:20571-20700 callgraph-fingerprint (2.1.88 match: keystrokesEqual, 1)
 /**
  * 两个 Keystroke 是否相同（alt 与 meta 视为同一修饰键，终端无法区分）。
  */
@@ -145,7 +145,7 @@ function keystrokesEqual(a, b) {
     a.super === b.super
   );
 }
-//@ chunk-x1mwqya5.js:20702-20858 callgraph-witnessed (2.1.88 match: chordPrefixMatches, 1)
+//@ chunk-m2f3rb0f.js:20700-20856 callgraph-witnessed (2.1.88 match: chordPrefixMatches, 1)
 function chordPrefixMatches(prefix, binding) {
   if (prefix.length >= binding.chord.length) return false;
   for (let i = 0; i < prefix.length; i++) {
@@ -156,7 +156,7 @@ function chordPrefixMatches(prefix, binding) {
   }
   return true;
 }
-//@ chunk-x1mwqya5.js:20858-21446 fingerprint (2.1.88 match: resolveKeyWithChordState, 0.887)
+//@ chunk-m2f3rb0f.js:20856-21444 fingerprint (2.1.88 match: resolveKeyWithChordState, 0.887)
 /**
  * 按键解析核心：Esc 在和弦进行中取消和弦；把当前按键追加到待定和弦，在给定上下文集合里找：有更长绑定以它为前缀且其中有非 null 动作 → chord_started；精确匹配 → match（action 为 null 则 unbound）；和弦进行中却没匹配 → chord_cancelled；否则 none。同和弦多条以列表中最后一条为准。
  */
@@ -213,7 +213,7 @@ function resolveKeyWithChordState(input, key, activeContexts, pendingChord) {
     type: "none",
   };
 }
-//@ chunk-x1mwqya5.js:21446-22075 layout (2.1.88 match: resolveKeyWithChordState, 0.887)
+//@ chunk-m2f3rb0f.js:21444-22073 layout (2.1.88 match: resolveKeyWithChordState, 0.887)
 /**
  * 按作用域链解析：同上，但精确匹配按传入上下文顺序（焦点节点到根的 keybindingScope 链）取第一个上下文的胜者，而不是全局最后一条。
  */
@@ -270,26 +270,26 @@ function resolveKeyInScopeChain(input, contexts, bindings, pendingChord) {
     type: "none",
   };
 }
-//@ chunk-x1mwqya5.js:22075-22095 placement
+//@ chunk-m2f3rb0f.js:22073-22093 placement
 var KNOWN_ACTIONS; // deferred: uses KEYBINDING_CONTEXT_DESCRIPTIONS (./schema.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-x1mwqya5.js:22075", () => {
+deferInit("chunk-m2f3rb0f.js:22073", () => {
   KNOWN_ACTIONS = new Set(KEYBINDING_ACTIONS);
 });
-//@ chunk-x1mwqya5.js:22095-22211 placement
+//@ chunk-m2f3rb0f.js:22093-22209 placement
 function toActionTelemetryId(actionId) {
   if (actionId.startsWith("command:")) return lit("command:custom");
   if (KNOWN_ACTIONS.has(actionId)) return fromSanitizer_SANITIZER_OUTPUT_ONLY(actionId);
   return lit("unknown");
 }
-//@ chunk-x1mwqya5.js:22211-22274 placement
+//@ chunk-m2f3rb0f.js:22209-22272 placement
 var SAFE_FALLBACK_TEXT_RE = /^[A-Za-z0-9 +\-_/[\]\u2191\u2193\u2190\u2192]{1,32}$/u;
-//@ chunk-x1mwqya5.js:22274-22326 placement
+//@ chunk-m2f3rb0f.js:22272-22324 placement
 function toFallbackTelemetryValue(text) {
   return SAFE_FALLBACK_TEXT_RE.test(text) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(text) : lit("invalid");
 }
-//@ chunk-x1mwqya5.js:22326-22338 placement
+//@ chunk-m2f3rb0f.js:22324-22336 placement
 var ACTION_FIRED_LOG_THROTTLE_MS = 1000;
-//@ chunk-x1mwqya5.js:22338-22493 placement
+//@ chunk-m2f3rb0f.js:22336-22491 placement
 /**
  * 动作触发时发 tengu_keybinding_fired（同一动作 1 秒内只记一次）。
  */
@@ -304,16 +304,16 @@ function logKeybindingFired(actionId) {
   });
 }
 export {
+  keystrokesEqual,
+  resolveKeyWithChordState,
+  toActionTelemetryId,
+  toFallbackTelemetryValue,
+  getSingleKeyActionInContexts,
   getSingleKeyAction,
   isActionUnbound,
   getActionChords,
   pickDisplayChord,
   getActionChord,
-  resolveKeyWithChordState,
-  getSingleKeyActionInContexts,
-  toActionTelemetryId,
-  toFallbackTelemetryValue,
-  keystrokesEqual,
   logKeybindingFired,
   resolveKeyInScopeChain,
 };

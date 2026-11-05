@@ -1,8 +1,8 @@
 /**
  * @azure/identity/dist/esm/msal/nodeFlows/msalClient.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/identity@4.10.1
- * pieces: chunk-mrx6y2r5.js (3)
+ * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-fingerprint 3
  */
 import { credentialLogger, formatSuccess } from "../../util/logging.js";
@@ -27,9 +27,9 @@ import {
 } from "../../../../../msal-node/lib/msal-node.cjs";
 import { calculateRegionalAuthority } from "../../regionalAuthority.js";
 
-//@ chunk-mrx6y2r5.js:292419-292442 esm-fingerprint
+//@ chunk-b5df2wx1.js:292419-292442 esm-fingerprint
 var msalLogger = credentialLogger("MsalClient");
-//@ chunk-mrx6y2r5.js:292442-292956 esm-fingerprint
+//@ chunk-b5df2wx1.js:292442-292956 esm-fingerprint
 function generateMsalConfiguration(clientId, tenantId, msalClientOptions = {}) {
   var _a;
   var _b;
@@ -71,7 +71,7 @@ function generateMsalConfiguration(clientId, tenantId, msalClientOptions = {}) {
     },
   };
 }
-//@ chunk-mrx6y2r5.js:292956-302180 esm-fingerprint
+//@ chunk-b5df2wx1.js:292956-302180 esm-fingerprint
 function createMsalClient(clientId, tenantId, createMsalClientOptions = {}) {
   var _a;
   let state = {

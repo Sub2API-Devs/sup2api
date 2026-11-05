@@ -3,16 +3,16 @@
  *
  * 权限请求编排：通过 toolUseContext.requestDialog 打开对话框、并行跑 PermissionRequest hooks/分类器/bridge/channel，记录 tengu_tool_use_show_permission_request 等事件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/hooks.ts
- * pieces: chunk-re9y5nwg.js (24), chunk-s4bxxzsw.js (4), chunk-wyqg6m3h.js (1)
- * attribution: placement 24, callgraph-fingerprint 1, layout 2, callgraph-witnessed 1, fingerprint 1
+ * pieces: chunk-2c3jp4kn.js (24), chunk-c7hntn0y.js (1), chunk-g4tsxwy3.js (4)
+ * attribution: placement 24, callgraph-fingerprint 1, fingerprint 1, layout 2, callgraph-witnessed 1
  */
 import { createHash } from "crypto";
 import {
   CLAUDE_FOLDER_PERMISSION_PATTERN,
   GLOBAL_CLAUDE_FOLDER_PERMISSION_PATTERN,
-  FILE_EDIT_TOOL_NAME,
+  EDIT,
 } from "../../tools/FileEditTool/constants.js";
 import { foldName } from "../../utils/permissions/protectedDirNames.js";
 import { expandPath } from "../../utils/path.js";
@@ -20,8 +20,10 @@ import { coerceBooleanString } from "../../utils/spellcheck.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
-import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
-import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFlag.js";
+import {
+  parseRuleString,
+  permissionRuleValueFromString,
+} from "../../utils/permissions/permissionRuleParser.js";
 import {
   permissionRequestOrigin,
   buildPermissionPromptPayload,
@@ -53,6 +55,7 @@ import { getToolPermissionContext } from "../../utils/permissions/toolPermission
 import {
   PERMISSION_PROMPT_DIALOG,
   isUnattendedAgentContext,
+  isUnattendedRun,
   isSubagentContext,
 } from "../../utils/agentContext.js";
 import { CFC_TOOL_PREFIX } from "../../utils/claudeInChrome/common.js";
@@ -62,8 +65,9 @@ import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage, isAbortError, withTelemetryMessage, toError } from "../../utils/errors.js";
 import { BashTool } from "../../tools/BashTool/BashTool.js";
 import { HostScoped } from "../../utils/hostScoped.js";
-import { lit, fromEnumOpt, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { logEvent } from "../../services/analytics/index.js";
+import { fromEnum, lit, fromEnumOpt } from "../../services/analytics/safeMetadata.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { sanitizeToolNameForAnalytics } from "../../services/analytics/metadata.js";
 import { mcpToolLogFields } from "../../hooks/toolPermission/permissionLogging.js";
@@ -74,6 +78,7 @@ import { attentionRegistryStore } from "../fleet/sessionAttention.js";
 import {
   handleInteractivePermission,
   bridgeApprovalPrompt,
+  isLocalOnlyAsk,
 } from "../../hooks/toolPermission/handlers/interactiveHandler.js";
 import { commitProvisionalRecord, dropPermissionRecord } from "../../utils/permissions/permissionRecord.js";
 import { isAsyncIterable } from "../dialogs/dialogRequests.js";
@@ -94,9 +99,9 @@ import { logError } from "../../utils/log.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import {
   resetUnansweredSafetyCheckCount,
+  setUnansweredWindowExpired,
   isUnansweredWindowExpired,
   incrementUnansweredSafetyCheckCount,
-  setUnansweredWindowExpired,
 } from "../../tools/BashTool/bashPermissionFlags.js";
 import { OUTSIDE_READS_BLOCKED_DENY_REASON } from "../../types/permissions.js";
 import { SUBAGENT_REJECT_MESSAGE } from "../../utils/messages.js";
@@ -104,7 +109,7 @@ import { otherDialogOnScreen, onBlockingDialogChange } from "../../services/requ
 import { sanitizeName } from "../../plugins/bundled/diffPane/diffModel.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-re9y5nwg.js:459-587 placement (2.1.88 match: parseSkillPaths, 0.822)
+//@ chunk-2c3jp4kn.js:13272-13400 placement (2.1.88 match: parseSkillPaths, 0.822)
 /**
  * 判断 frontmatter 字符串是否为指定前缀下、以 /** 结尾且不含 .. 的目录 glob。
  */
@@ -117,7 +122,7 @@ function isSkillDirGlob(frontmatter) {
     frontmatter.endsWith("/**")
   );
 }
-//@ chunk-re9y5nwg.js:587-834 placement
+//@ chunk-2c3jp4kn.js:13400-13647 placement
 function isSkillDirectoryGlob(ruleContent) {
   let found = [CLAUDE_FOLDER_PERMISSION_PATTERN, GLOBAL_CLAUDE_FOLDER_PERMISSION_PATTERN]
     .map((pattern) => `${pattern.slice(0, -2)}skills/`)
@@ -128,9 +133,9 @@ function isSkillDirectoryGlob(ruleContent) {
     /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(sliced) && !sliced.includes("..") && foldName(sliced) !== "synced"
   );
 }
-//@ chunk-re9y5nwg.js:834-858 placement
+//@ chunk-2c3jp4kn.js:13647-13671 placement
 var APPROVALSURFACE = "approvalSurface";
-//@ chunk-re9y5nwg.js:858-979 placement
+//@ chunk-2c3jp4kn.js:13671-13792 placement
 /**
  * 判断权限结果是否为宿主对话框批准的 allow。
  */
@@ -144,12 +149,12 @@ function isHostDialogApproval(response) {
     response[APPROVALSURFACE] === "host_dialog"
   );
 }
-//@ chunk-re9y5nwg.js:979-1319 placement
+//@ chunk-2c3jp4kn.js:13792-14133 placement
 function fileEditContextOf(toolName, toolInput) {
   let { file_path: filePath } = toolInput;
   if (typeof filePath !== "string") return;
   let context;
-  if (toolName === FILE_EDIT_TOOL_NAME) {
+  if (toolName === EDIT) {
     let { old_string: oldString, new_string: newString } = toolInput;
     if (typeof oldString !== "string" || typeof newString !== "string") return;
     context = [
@@ -166,22 +171,22 @@ function fileEditContextOf(toolName, toolInput) {
   } else return;
   return createHash("sha256").update(jsonStringify(context)).digest("hex");
 }
-//@ chunk-re9y5nwg.js:1319-1370 placement
+//@ chunk-2c3jp4kn.js:14133-14184 placement
 var permissionCallStatsStore; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-re9y5nwg.js:1319", () => {
+deferInit("chunk-2c3jp4kn.js:14133", () => {
   permissionCallStatsStore = new SessionRootSlot(() => ({
     calls: new Map(),
     hostAttests: false,
   }));
 });
-//@ chunk-re9y5nwg.js:1370-1394 placement
+//@ chunk-2c3jp4kn.js:14184-14208 placement
 /**
  * 函数 returnFalsePermissionHook（恒 false）；位于「权限请求编排：通过 toolUseContext.requestDialog 打开对话框、并行跑 PermissionRequest hooks/分类器/bridge/channel，记录 tengu_tool_use_show_permission_request 等事件」模块。
  */
 function returnFalsePermissionHook() {
   return false;
 }
-//@ chunk-re9y5nwg.js:1394-1597 placement
+//@ chunk-2c3jp4kn.js:14208-14411 placement
 /**
  * 记录宿主已确认的工具调用（工具名、展开后的文件路径与写入摘要），供后续核对写入。
  */
@@ -197,21 +202,21 @@ function recordHostAttestedCall(session, toolUseId, toolUse) {
     stats.hostAttests = true;
   }
 }
-//@ chunk-re9y5nwg.js:1597-1655 placement
+//@ chunk-2c3jp4kn.js:14411-14469 placement
 /**
  * 函数 hasHostAttestedDialog（host 佐证过且开关开启）；位于「权限请求编排：通过 toolUseContext.requestDialog 打开对话框、并行跑 PermissionRequest hooks/分类器/bridge/channel，记录 tengu_tool_use_show_permission_request 等事件」模块。
  */
 function hasHostAttestedDialog(session) {
   return permissionCallStatsStore.peek(session)?.hostAttests === true && returnFalsePermissionHook();
 }
-//@ chunk-re9y5nwg.js:1655-1695 placement
+//@ chunk-2c3jp4kn.js:14469-14509 placement
 var permissionByToolUseStore; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-re9y5nwg.js:1655", () => {
+deferInit("chunk-2c3jp4kn.js:14469", () => {
   permissionByToolUseStore = new SessionRootSlot(() => ({
     byToolUse: new Map(),
   }));
 });
-//@ chunk-re9y5nwg.js:1695-1769 placement
+//@ chunk-2c3jp4kn.js:14509-14583 placement
 /**
  * 函数 recordToolUseDecision（追加一条决定）；位于「权限请求编排：通过 toolUseContext.requestDialog 打开对话框、并行跑 PermissionRequest hooks/分类器/bridge/channel，记录 tengu_tool_use_show_permission_request 等事件」模块。
  */
@@ -219,7 +224,7 @@ function recordToolUseDecision(session, toolUseId, decision) {
   let { byToolUse } = permissionByToolUseStore.of(session);
   byToolUse.set(toolUseId, [...(byToolUse.get(toolUseId) ?? []), decision]);
 }
-//@ chunk-re9y5nwg.js:1769-1930 placement
+//@ chunk-2c3jp4kn.js:14583-14744 placement
 /**
  * 工具调用结束时清除该 toolUseId 的已记录调用与挂起的回调（并依次执行回调）。
  */
@@ -233,22 +238,19 @@ function clearToolUsePermissionState(session, toolUseId) {
     }
   }
 }
-//@ chunk-re9y5nwg.js:1930-2000 placement
+//@ chunk-2c3jp4kn.js:14744-14814 placement
 /**
  * 函数 dialogSourceFor（有记录则来源为 host_dialog）；位于「权限请求编排：通过 toolUseContext.requestDialog 打开对话框、并行跑 PermissionRequest hooks/分类器/bridge/channel，记录 tengu_tool_use_show_permission_request 等事件」模块。
  */
 function dialogSourceFor(session, toolUseId) {
   return permissionCallStatsStore.peek(session)?.calls.has(toolUseId) ? "host_dialog" : undefined;
 }
-//@ chunk-re9y5nwg.js:2000-2242 placement
+//@ chunk-2c3jp4kn.js:14814-15056 placement
 /**
  * 判断写入/编辑调用是否与宿主确认过的调用一致（同工具、同路径、同写入摘要）。
  */
 function isHostAttestedWrite(session, toolUseId, file) {
-  if (
-    toolUseId === undefined ||
-    (file.toolName !== FILE_WRITE_TOOL_NAME && file.toolName !== FILE_EDIT_TOOL_NAME)
-  )
+  if (toolUseId === undefined || (file.toolName !== FILE_WRITE_TOOL_NAME && file.toolName !== EDIT))
     return false;
   let record = permissionCallStatsStore.peek(session)?.calls.get(toolUseId);
   return (
@@ -259,10 +261,10 @@ function isHostAttestedWrite(session, toolUseId, file) {
     record.writeDigest === fileEditContextOf(file.toolName, file.input)
   );
 }
-//@ chunk-re9y5nwg.js:2242-2336 placement
+//@ chunk-2c3jp4kn.js:15056-15150 placement
 var weakRefSet; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
 var editRuleContentsStore;
-deferInit("chunk-re9y5nwg.js:2242", () => {
+deferInit("chunk-2c3jp4kn.js:15056", () => {
   weakRefSet = new Set();
   editRuleContentsStore = new SessionRootSlot(() => {
     let set = new Set();
@@ -272,33 +274,33 @@ deferInit("chunk-re9y5nwg.js:2242", () => {
     };
   });
 });
-//@ chunk-re9y5nwg.js:2336-2553 placement
+//@ chunk-2c3jp4kn.js:15150-15367 placement
 function getSessionEditRuleContents(updates) {
   return updates.flatMap((update) =>
     (update.type === "addRules" || update.type === "replaceRules") &&
     update.destination === "session" &&
     update.behavior === "allow"
       ? update.rules.flatMap((rule) =>
-          rule.toolName === FILE_EDIT_TOOL_NAME && rule.ruleContent !== undefined ? [rule.ruleContent] : [],
+          rule.toolName === EDIT && rule.ruleContent !== undefined ? [rule.ruleContent] : [],
         )
       : [],
   );
 }
-//@ chunk-re9y5nwg.js:2553-2575 placement
+//@ chunk-2c3jp4kn.js:15367-15389 placement
 function returnFalseEditRules() {
   return false;
 }
-//@ chunk-re9y5nwg.js:2575-2687 placement
+//@ chunk-2c3jp4kn.js:15389-15501 placement
 function isSkillEditRule(ruleString) {
-  let ruleValue = permissionRuleValueFromString(ruleString);
+  let ruleValue = parseRuleString(ruleString);
   return (
-    ruleValue.toolName === FILE_EDIT_TOOL_NAME &&
+    ruleValue.toolName === EDIT &&
     ruleValue.ruleContent !== undefined &&
     isSkillDirGlob(ruleValue.ruleContent) &&
     !isSkillDirectoryGlob(ruleValue.ruleContent)
   );
 }
-//@ chunk-re9y5nwg.js:2687-2955 placement
+//@ chunk-2c3jp4kn.js:15501-15769 placement
 function isSessionRuleUpdate(update) {
   if (
     returnFalseEditRules() &&
@@ -306,7 +308,7 @@ function isSessionRuleUpdate(update) {
     update.destination === "session" &&
     update.behavior === "allow"
   ) {
-    let filtered = update.rules.filter((rule) => !isSkillEditRule(formatPermissionRule(rule)));
+    let filtered = update.rules.filter((rule) => !isSkillEditRule(permissionRuleValueFromString(rule)));
     if (filtered.length === update.rules.length) return update;
     return filtered.length === 0 && update.type === "addRules"
       ? undefined
@@ -317,14 +319,14 @@ function isSessionRuleUpdate(update) {
   }
   return update;
 }
-//@ chunk-re9y5nwg.js:2955-3005 placement
+//@ chunk-2c3jp4kn.js:15769-15819 placement
 /**
  * 函数 filterEditableRules（开关关闭时保持原列表）；位于「权限请求编排：通过 toolUseContext.requestDialog 打开对话框、并行跑 PermissionRequest hooks/分类器/bridge/channel，记录 tengu_tool_use_show_permission_request 等事件」模块。
  */
 function filterEditableRules(rules) {
   return returnFalseEditRules() ? rules.filter((rule) => !isSkillEditRule(rule)) : rules;
 }
-//@ chunk-re9y5nwg.js:3005-3073 placement
+//@ chunk-2c3jp4kn.js:15819-15887 placement
 /**
  * 函数 recordEditedRuleContents（登记编辑后的规则内容）；位于「权限请求编排：通过 toolUseContext.requestDialog 打开对话框、并行跑 PermissionRequest hooks/分类器/bridge/channel，记录 tengu_tool_use_show_permission_request 等事件」模块。
  */
@@ -332,7 +334,7 @@ function recordEditedRuleContents(session, ruleContents) {
   for (let ruleContent of getSessionEditRuleContents(ruleContents))
     editRuleContentsStore.of(session).editRuleContents.add(ruleContent);
 }
-//@ chunk-re9y5nwg.js:3073-3176 placement
+//@ chunk-2c3jp4kn.js:15887-15990 placement
 /**
  * 从会话的编辑规则内容表中删除指定规则。
  */
@@ -341,7 +343,7 @@ function forgetSessionEditRules(session, ruleContents) {
   if (editRuleContents === undefined) return;
   for (let ruleContent of getSessionEditRuleContents(ruleContents)) editRuleContents.delete(ruleContent);
 }
-//@ chunk-re9y5nwg.js:3176-3322 placement (2.1.88 match: propagateAbort, 1)
+//@ chunk-2c3jp4kn.js:15990-16136 placement (2.1.88 match: propagateAbort, 1)
 function propagateAbort(updates) {
   let sessionEditRuleContents = getSessionEditRuleContents(updates);
   if (sessionEditRuleContents.length === 0) return;
@@ -354,7 +356,7 @@ function propagateAbort(updates) {
     for (let sessionEditRuleContent of sessionEditRuleContents) parent.delete(sessionEditRuleContent);
   }
 }
-//@ chunk-re9y5nwg.js:3322-3811 callgraph-fingerprint (2.1.88 match: decisionReasonToString, 0.167)
+//@ chunk-2c3jp4kn.js:16136-16625 callgraph-fingerprint (2.1.88 match: decisionReasonToString, 0.167)
 /**
  * 把决策原因映射为日志 surface 字符串（rule/session/host_dialog 等）。
  */
@@ -363,10 +365,8 @@ function decisionReasonToString(session, decisionReason, toolPermissionContext) 
   if (editRuleContents === undefined || editRuleContents.size === 0) return;
   let covered = new Set(
     (toolPermissionContext.alwaysAllowRules.session ?? []).flatMap((ruleString) => {
-      let rule = permissionRuleValueFromString(ruleString);
-      return rule.toolName === FILE_EDIT_TOOL_NAME && rule.ruleContent !== undefined
-        ? [rule.ruleContent]
-        : [];
+      let rule = parseRuleString(ruleString);
+      return rule.toolName === EDIT && rule.ruleContent !== undefined ? [rule.ruleContent] : [];
     }),
   );
   for (let editRuleContent of editRuleContents)
@@ -375,13 +375,13 @@ function decisionReasonToString(session, decisionReason, toolPermissionContext) 
     decisionReason?.type !== "rule" ||
     decisionReason.rule.source !== "session" ||
     decisionReason.rule.ruleBehavior !== "allow" ||
-    decisionReason.rule.ruleValue.toolName !== FILE_EDIT_TOOL_NAME ||
+    decisionReason.rule.ruleValue.toolName !== EDIT ||
     decisionReason.rule.ruleValue.ruleContent === undefined
   )
     return;
   return editRuleContents.has(decisionReason.rule.ruleValue.ruleContent) ? "host_dialog" : undefined;
 }
-//@ chunk-s4bxxzsw.js:46009-49187 placement
+//@ chunk-g4tsxwy3.js:46272-49450 placement
 async function repromptFilePermission(request, respond) {
   let { ctx, description, result } = request;
   let requestSource = permissionRequestOrigin(ctx.toolUseContext);
@@ -581,7 +581,7 @@ async function repromptFilePermission(request, respond) {
   }
   showGenericDialog();
 }
-//@ chunk-s4bxxzsw.js:49187-49241 layout
+//@ chunk-g4tsxwy3.js:49450-49504 layout
 class MonotonicCounter {
   last = 0;
   next() {
@@ -589,12 +589,12 @@ class MonotonicCounter {
     return this.last;
   }
 }
-//@ chunk-s4bxxzsw.js:49241-49266 layout
+//@ chunk-g4tsxwy3.js:49504-49529 layout
 var counterSlot; // deferred: uses MonotonicCounter of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s4bxxzsw.js:49241", () => {
+deferInit("chunk-g4tsxwy3.js:49504", () => {
   counterSlot = new HostScoped(() => new MonotonicCounter());
 });
-//@ chunk-s4bxxzsw.js:49266-60333 callgraph-witnessed (2.1.88 match: usePermissionRequestLogging, 0.155)
+//@ chunk-g4tsxwy3.js:49529-61771 callgraph-witnessed (2.1.88 match: usePermissionRequestLogging, 0.133)
 /**
  * 打开并管理一个权限对话框：用 toolUseContext.requestDialog(dialog, descriptor, …) 入对话框队列，记录 tengu_tool_use_show_permission_request，处理对话框结果（allow/reject/反馈/模式切换/规则持久化）、超时与中止，结束时执行 teardown。
  */
@@ -610,13 +610,50 @@ function showPermissionDialog(request, claimState, spec) {
   let { resolve, isResolved, claim, countedAsk } = claimState;
   let unusedB;
   let unusedFlag = false;
-  let ctx = request.ctx;
+  let ctx =
+    result.oneTimeAnswersOnly === true
+      ? {
+          ...request.ctx,
+          logDecision(decision, teardown) {
+            request.ctx.logDecision(decision, teardown);
+            if (unusedFlag) return;
+            unusedFlag = true;
+            let sourceKind = decision.source === "config" ? "config" : decision.source.type;
+            let how =
+              decision.decision === "accept"
+                ? sourceKind === "user"
+                  ? "yes"
+                  : sourceKind === "hook"
+                    ? "hook_allow"
+                    : sourceKind === "config"
+                      ? "rules_or_mode"
+                      : "classifier_allow"
+                : sourceKind === "user_reject"
+                  ? "no"
+                  : sourceKind === "user_abort"
+                    ? signal.aborted
+                      ? "closed"
+                      : "esc"
+                    : unusedB !== undefined
+                      ? "expired"
+                      : "hook_deny";
+            logEvent("tengu_repl_script_call_prompt_ended", {
+              ...request.ctx.toolUseContext.replScriptCallLabels,
+              how: fromEnum(how),
+              followsAnExpiry: unusedB?.followsAnother,
+              timeoutMs: autoDenyAfterMs,
+              elapsedMs: Date.now() - now,
+              lane: fromEnum(request.ctx.toolUseContext.replAsyncAsk === true ? "async" : "classic"),
+            });
+          },
+        }
+      : request.ctx;
   let requestDialog = ctx.toolUseContext.requestDialog;
   if (requestDialog === undefined) return;
   let openDialog = requestDialog;
   let agentContext = ctx.toolUseContext.agentContext;
   let isUnattended = isUnattendedAgentContext(ctx.toolUseContext);
-  let unattended = isUnattended;
+  let unattended = codeModeAccepted() ? isUnattendedRun(ctx.toolUseContext) : isUnattended;
   let askPatience = result.askPatience;
   askPatience?.hold();
   let now = Date.now();
@@ -766,6 +803,10 @@ function showPermissionDialog(request, claimState, spec) {
   };
   let onPresenceChange = () => {
     if (tornDown || isResolved()) return;
+    if (codeModeAccepted() && teardownAutoDeny === undefined) {
+      tornDown = true;
+      return;
+    }
     teardownAutoDeny?.();
     if (lastDescriptor !== undefined)
       pushDescriptor?.({
@@ -775,7 +816,12 @@ function showPermissionDialog(request, claimState, spec) {
   };
   let recheckUnsubscribe = permissionModeSignal.subscribe(() => {
     if (isResolved()) return;
-    if (teardownAutoDeny !== undefined && !tornDown) {
+    if (
+      (codeModeAccepted()
+        ? result.denialLimitFallback?.autoDenyAfterMs !== undefined || result.autoDenyWindow !== undefined
+        : teardownAutoDeny !== undefined) &&
+      !tornDown
+    ) {
       let autoMode = isAutoAllowedInMode(ctx.tool, getToolPermissionContext(ctx.toolUseContext));
       if (!(
         isAutoClassifierActive(autoMode) ||
@@ -846,7 +892,8 @@ function showPermissionDialog(request, claimState, spec) {
     let roundId = ++round;
     askPatience?.hold();
     lastDescriptor = undefined;
-    if (true) armAutoDeny();
+    let armsAutoDeny = codeModeAccepted() && unattended && autoDenyAfterMs !== undefined;
+    if (!armsAutoDeny) armAutoDeny();
     let abortController = new AbortController();
     roundAbort = abortController;
     let abortHandler = () => abortController.abort();
@@ -969,8 +1016,20 @@ function showPermissionDialog(request, claimState, spec) {
         result.denialLimitFallback !== undefined ||
         result.autoDenyWindow !== undefined ||
         result.oneTimeAnswersOnly === true,
-      ...false,
-      onFirstReveal: askPatience?.resume,
+      ...(codeModeAccepted() &&
+        ctx.toolUseContext.replAsyncAsk === true &&
+        autoDenyAfterMs === undefined &&
+        isLocalOnlyAsk(result_2, ctx.toolUseContext) && {
+          holdsIdleDrain: false,
+        }),
+      onFirstReveal: !codeModeAccepted()
+        ? askPatience?.resume
+        : askPatience !== undefined || armsAutoDeny
+          ? () => {
+              askPatience?.resume();
+              if (armsAutoDeny && roundId === round && !isResolved()) armAutoDeny();
+            }
+          : undefined,
       ...(isNotAskUserQuestionCard(spec.dialog.kind) && {
         countedAsk,
       }),
@@ -1011,7 +1070,10 @@ function showPermissionDialog(request, claimState, spec) {
           logFeatureOk("permission_safety_check_timed_dialog", {
             autoDenied: false,
           });
-        }
+        } else if (surface === "host_dialog" && answer.updatedInput?.afkTimeoutMs === undefined)
+          setUnansweredWindowExpired({
+            expired: false,
+          });
         if (result_2.offersBlockOutsideReads === true && answer.askAgainOutsideReads !== true)
           markOutsideReadPromptSeen(ctx.toolUseContext);
         if (networkHosts !== undefined)
@@ -1048,7 +1110,10 @@ function showPermissionDialog(request, claimState, spec) {
           logFeatureOk("permission_safety_check_timed_dialog", {
             autoDenied: false,
           });
-        }
+        } else if (surface === "host_dialog")
+          setUnansweredWindowExpired({
+            expired: false,
+          });
         let declineMessage =
           ACCOUNT_MEMORY_PERMISSION_MODULE !== null &&
           spec.dialog.kind === ACCOUNT_MEMORY_PERMISSION_MODULE.accountMemoryWritePermissionDialog.kind
@@ -1259,6 +1324,13 @@ function showPermissionDialog(request, claimState, spec) {
         logFeatureOk("permission_safety_check_timed_dialog", {
           autoDenied: true,
         });
+      } else {
+        unusedB = {
+          followsAnother: isUnansweredWindowExpired(),
+        };
+        setUnansweredWindowExpired({
+          expired: true,
+        });
       }
       logResponse("reject");
       ctx.logDecision(
@@ -1285,6 +1357,11 @@ function showPermissionDialog(request, claimState, spec) {
     let timeoutMs = suppressSchedule ? 0 : autoDenyAfterMs;
     autoDenyDeadline ??= Date.now() + timeoutMs;
     scheduleAutoDeny(timeoutMs, autoDenyDeadline);
+    if (codeModeAccepted() && lastDescriptor !== undefined)
+      pushDescriptor?.({
+        ...lastDescriptor,
+        permissionResult: result_2,
+      });
     teardowns.push(() => clearTimeout(autoDenyTimer));
     teardownAutoDeny = () => {
       tornDown = true;
@@ -1348,24 +1425,24 @@ function showPermissionDialog(request, claimState, spec) {
   });
   showDialog();
 }
-//@ chunk-wyqg6m3h.js:36666-36692 fingerprint (2.1.88 match: permissionResultToLog, 0.387)
+//@ chunk-c7hntn0y.js:37030-37056 fingerprint (2.1.88 match: permissionResultToLog, 0.408)
 var askKeyOf = (permissionResult) => `ask:${sanitizeName(permissionResult)}`;
 export {
-  isSkillDirGlob,
-  decisionReasonToString,
-  repromptFilePermission,
-  isSessionRuleUpdate,
-  propagateAbort,
   returnFalsePermissionHook,
   recordHostAttestedCall,
   isHostDialogApproval,
-  hasHostAttestedDialog,
-  isHostAttestedWrite,
+  isSkillDirGlob,
   clearToolUsePermissionState,
+  repromptFilePermission,
   recordToolUseDecision,
+  isSessionRuleUpdate,
+  propagateAbort,
+  askKeyOf,
   filterEditableRules,
-  dialogSourceFor,
+  decisionReasonToString,
   forgetSessionEditRules,
   recordEditedRuleContents,
-  askKeyOf,
+  dialogSourceFor,
+  hasHostAttestedDialog,
+  isHostAttestedWrite,
 };

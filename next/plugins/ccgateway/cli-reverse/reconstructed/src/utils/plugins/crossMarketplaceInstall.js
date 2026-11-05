@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：跨市场安装
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (20)
  * attribution: placement 20
  */
 import { quotedPrintable, printableName } from "../printableName.js";
@@ -104,10 +104,11 @@ import { recordProducerDir } from "./pluginCachePaths.js";
 import { isReviewerMarkedEntry } from "./commandSourceErrors.js";
 import { isOfficialMarketplaceName_3 } from "./pluginIdentifier.js";
 import { plural, capitalize } from "../stringUtils.js";
-import { uniq, count } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
+import { countWhere } from "../collections.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4431671-4432044 placement
+//@ chunk-5xgkngpb.js:4538320-4538693 placement
 /**
  * 拒绝安装的提示：插件会与另一个来自不同仓库的已安装插件共用数据目录，提示先卸载那个再安装。
  */
@@ -124,11 +125,11 @@ function formatSharedDataFolderMessage(name, dataDirConflictingRecord) {
   }
   return "";
 }
-//@ chunk-e6aww6q8.js:4432044-4432083 placement
+//@ chunk-5xgkngpb.js:4538693-4538732 placement
 function isSameNormalizedPath(pathA, pathB) {
   return normalizePathForPlatform(pathA) === normalizePathForPlatform(pathB);
 }
-//@ chunk-e6aww6q8.js:4432083-4432171 placement
+//@ chunk-5xgkngpb.js:4538732-4538820 placement
 function sharedPluginStorageKind(pluginIdA, pluginIdB) {
   return isSameNormalizedPath(getPluginCacheDirIn("", pluginIdA), getPluginCacheDirIn("", pluginIdB))
     ? "folder"
@@ -136,11 +137,11 @@ function sharedPluginStorageKind(pluginIdA, pluginIdB) {
       ? "data"
       : null;
 }
-//@ chunk-e6aww6q8.js:4432171-4432240 placement
+//@ chunk-5xgkngpb.js:4538820-4538889 placement
 function hasNoOtherMarketplaceInstalls(plugins, pluginId) {
   return !pluginId.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`) && (plugins[pluginId]?.length ?? 0) === 0;
 }
-//@ chunk-e6aww6q8.js:4432240-4432515 placement
+//@ chunk-5xgkngpb.js:4538889-4539164 placement
 function findDataDirHolders(plugins, pluginId) {
   if (!hasNoOtherMarketplaceInstalls(plugins, pluginId)) return [];
   return Object.entries(plugins).flatMap(([key, value]) => {
@@ -164,7 +165,7 @@ function findDataDirHolders(plugins, pluginId) {
         ];
   });
 }
-//@ chunk-e6aww6q8.js:4432515-4432792 placement
+//@ chunk-5xgkngpb.js:4539164-4539441 placement
 function findSharedStorageConflict(pluginIds, closure, plugins) {
   for (let pluginId of pluginIds) {
     if (!hasNoOtherMarketplaceInstalls(plugins, pluginId)) continue;
@@ -191,7 +192,7 @@ function findSharedStorageConflict(pluginIds, closure, plugins) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:4432792-4432956 placement
+//@ chunk-5xgkngpb.js:4539441-4539605 placement
 function describeNameCollision(id, refused, shares) {
   return {
     capitals:
@@ -202,9 +203,9 @@ function describeNameCollision(id, refused, shares) {
     atSign: shares === "data",
   };
 }
-//@ chunk-e6aww6q8.js:4436041-4436257 placement
+//@ chunk-5xgkngpb.js:4542693-4542909 placement
 let PluginFolderHeldError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4436041", () => {
+deferInit("chunk-5xgkngpb.js:4542693", () => {
   PluginFolderHeldError = class PluginFolderHeldError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -217,7 +218,7 @@ deferInit("chunk-e6aww6q8.js:4436041", () => {
     }
   };
 });
-//@ chunk-e6aww6q8.js:4436257-4443773 placement
+//@ chunk-5xgkngpb.js:4542909-4550432 placement
 /**
  * 安装插件并更新安装记录，记录与实际不符时拒绝。
  */
@@ -648,7 +649,7 @@ async function installPluginWithRecords(
     defaultEnabled: cached.manifest.defaultEnabled,
   };
 }
-//@ chunk-e6aww6q8.js:4443773-4443885 placement
+//@ chunk-5xgkngpb.js:4550432-4550544 placement
 /**
  * 拆分 名@市场，格式不对返回 null。
  */
@@ -660,7 +661,7 @@ function parsePluginAtMarketplace(pluginId) {
     marketplace: parts[1],
   };
 }
-//@ chunk-e6aww6q8.js:4443885-4443952 placement
+//@ chunk-5xgkngpb.js:4550544-4550611 placement
 /**
  * qualifiedMarketplaceLabel：市场显示名。
  */
@@ -671,28 +672,28 @@ function qualifiedMarketplaceLabel(pluginId, fallbackLabel) {
   }
   return fallbackLabel;
 }
-//@ chunk-e6aww6q8.js:4443952-4443990 placement
+//@ chunk-5xgkngpb.js:4550611-4550649 placement
 /**
  * truncateMarketplaceLabel：截断市场显示名。
  */
 function truncateMarketplaceLabel(marketplace) {
   return quotedPrintable(marketplaceDisplayName(marketplace), 120);
 }
-//@ chunk-e6aww6q8.js:4443990-4444133 placement
+//@ chunk-5xgkngpb.js:4550649-4550792 placement
 /**
  * 安装数比展示的多、未做更改。
  */
 function formatMoreInstallsThanShownMessage(pluginId) {
   return `More installs of "${quotedPrintable(pluginId, 120)}" were found than were shown. Nothing was changed; open the plugin again to see them all`;
 }
-//@ chunk-e6aww6q8.js:4444133-4444317 placement
+//@ chunk-5xgkngpb.js:4550792-4550976 placement
 /**
  * 切换会替换的内容已变化、未做更改。
  */
 function formatSwitchTargetChangedMessage(pluginId) {
   return `What switching "${quotedPrintable(pluginId, 120)}" would replace has changed since it was shown. Nothing was changed; open the plugin again to see whether a switch is still offered`;
 }
-//@ chunk-e6aww6q8.js:4444531-4444616 placement
+//@ chunk-5xgkngpb.js:4551190-4551275 placement
 function isOfficialFamilyEntry(pluginId) {
   {
     let marketplaceName = marketplaceNameOfId(pluginId);
@@ -703,7 +704,7 @@ function isOfficialFamilyEntry(pluginId) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:4444616-4444842 placement
+//@ chunk-5xgkngpb.js:4551275-4551501 placement
 /**
  * 其他市场的安装都在官方市场族内，可直接替换。
  */
@@ -724,7 +725,7 @@ function canReplaceOfficialInstalls(pluginId, installs, isOfficialFamily) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:4444842-4445182 placement
+//@ chunk-5xgkngpb.js:4551501-4551841 placement
 /**
  * 已从其他市场安装时的阻止判定：有不可替换的记录（或不能按官方规则替换）返回 installed-from-other-marketplace； 已安装记录多于展示给用户的返回 more-installed-than-shown；否则 undefined。
  */
@@ -755,11 +756,11 @@ function findOtherMarketplaceInstallBlocker(pluginId, installs, shownPluginIds, 
         blocking: firstInstall,
       };
 }
-//@ chunk-e6aww6q8.js:4445182-4445353 placement
+//@ chunk-5xgkngpb.js:4551841-4552012 placement
 function formatMissingCopiesWarning(count, dependentCount) {
   return `without ${dependentCount === "that" ? "that copy" : `the ${plural(dependentCount, "copy", "copies")} ${plural(count, "it needs", "they need")}`}, turning ${plural(count, "it", "them")} back on may not work`;
 }
-//@ chunk-e6aww6q8.js:4445353-4450827 placement
+//@ chunk-5xgkngpb.js:4552012-4557491 placement
 /**
  * 插件已从其他市场安装时的处理：提示 --replace 或指定作用域。
  */
@@ -790,7 +791,9 @@ function installFromOtherMarketplace(
       }).format(items);
     let marketplaceNamesOf = (install) =>
       formatList(
-        uniq(install.map((install) => qualifiedMarketplaceLabel(install.pluginId, "another marketplace"))),
+        normalizeCaseForComparison_2(
+          install.map((install) => qualifiedMarketplaceLabel(install.pluginId, "another marketplace")),
+        ),
       );
     let quoteIds = (requiredBy) => requiredBy.map((requiredBy) => `"${quotedPrintable(requiredBy, 120)}"`);
     let isOtherMarketplace = (install) => {
@@ -887,10 +890,10 @@ function installFromOtherMarketplace(
         )
         .join("");
       let disableHint = (allInstalls, exclude = []) => {
-        let filtered = uniq(allInstalls.flatMap((install) => install.requiredBy)).filter(
-          (id) => !exclude.includes(id),
-        );
-        let dependentInstallCount = count(installs, (install) =>
+        let filtered = normalizeCaseForComparison_2(
+          allInstalls.flatMap((install) => install.requiredBy),
+        ).filter((id) => !exclude.includes(id));
+        let dependentInstallCount = countWhere(installs, (install) =>
           install.requiredBy.some((id) => filtered.includes(id)),
         );
         return filtered.length === 0
@@ -968,7 +971,7 @@ function installFromOtherMarketplace(
   }
   return "";
 }
-//@ chunk-e6aww6q8.js:4450827-4450972 placement
+//@ chunk-5xgkngpb.js:4557491-4557636 placement
 /**
  * 去掉 12 位哈希后缀，纯哈希/unknown 返回 undefined。
  */
@@ -982,18 +985,18 @@ function displayableGitHeadName(name) {
     : replaced;
 }
 export {
-  PluginFolderHeldError,
-  installPluginWithRecords,
-  formatSharedDataFolderMessage,
-  formatSwitchTargetChangedMessage,
   findOtherMarketplaceInstallBlocker,
-  formatMoreInstallsThanShownMessage,
-  installFromOtherMarketplace,
-  displayableGitHeadName,
-  canReplaceOfficialInstalls,
-  truncateMarketplaceLabel,
   findSharedStorageConflict,
+  installPluginWithRecords,
+  PluginFolderHeldError,
+  installFromOtherMarketplace,
+  formatMoreInstallsThanShownMessage,
+  formatSwitchTargetChangedMessage,
   describeNameCollision,
+  formatSharedDataFolderMessage,
+  displayableGitHeadName,
   qualifiedMarketplaceLabel,
+  canReplaceOfficialInstalls,
   parsePluginAtMarketplace,
+  truncateMarketplaceLabel,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：claude mcp serve 中单次调用的工作目录隔离与结束时采纳
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1mqwyc6a.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g5ww0vze.js (1)
  * attribution: placement 1
  */
 import { getSessionProject } from "../../bootstrap/sessionSlices.js";
@@ -18,7 +18,7 @@ import { invalidateSessionEnvCache } from "../../utils/sessionEnvironment.js";
 import { onCwdChanged } from "../../utils/hooks/fileChangedWatcher.js";
 import { logError } from "../../utils/log.js";
 
-//@ chunk-1mqwyc6a.js:11848-12627 placement
+//@ chunk-g5ww0vze.js:13001-13780 placement
 function createCallDirectoryScope(session, callerGone) {
   let cwd = getSessionProject(session).cwd;
   let scopedSession = session.withProject({

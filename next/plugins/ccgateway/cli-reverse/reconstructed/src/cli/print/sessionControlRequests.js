@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：会话类控制请求：generate_session_title、rename_session、stop_task、send_task_message 等
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-nkdv7dw8.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vxsfen55.js (12)
  * attribution: placement 12
  */
 import { WireSafeControlError } from "../../utils/errors.js";
@@ -37,6 +37,7 @@ import {
   handleMcpReadResource,
   isValidPrefetchAttachmentsRequest,
   noop,
+  handleSetAttachedProject,
   isUnadoptedSdkServer,
 } from "./mcpControlRequests.js";
 import { sanitizeSessionTitle } from "../../utils/stringUtils.js";
@@ -63,7 +64,7 @@ import { tailOutputOfTask } from "../../utils/task/diskOutput.js";
 import { handleSetMaxThinkingTokens } from "./setMaxThinkingTokens.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-nkdv7dw8.js:37689-38282 placement
+//@ chunk-vxsfen55.js:41951-42544 placement
 async function handleGenerateSessionTitle(request, context) {
   let titles = requireSessionTitles(context);
   if ("recordRename" in titles) throw new WireSafeControlError(NO_SESSION_TITLES_ERROR);
@@ -96,7 +97,7 @@ async function handleGenerateSessionTitle(request, context) {
     title: getCurrentSessionTitle(sessionId) ?? currentTitle,
   };
 }
-//@ chunk-nkdv7dw8.js:38282-38414 placement
+//@ chunk-vxsfen55.js:42544-42676 placement
 /**
  * 订阅会话标题变化并以 session_title_changed 系统通知发出（立即先发一次当前标题），返回取消订阅函数。
  */
@@ -113,7 +114,7 @@ function emitSessionTitleChanges() {
   readCurrentTitle();
   return subscribeSessionTitleChanged(readCurrentTitle);
 }
-//@ chunk-nkdv7dw8.js:38414-38559 placement
+//@ chunk-vxsfen55.js:42676-42821 placement
 /**
  * 启动时（非 sdkUrl 模式）在会话注册后重新声明会话名：用当前标题或 agent 名，自动来源，保留启动名。
  */
@@ -127,7 +128,7 @@ async function reclaimSessionNameAtStart(context) {
     keepLaunchName: true,
   });
 }
-//@ chunk-nkdv7dw8.js:38559-39258 placement
+//@ chunk-vxsfen55.js:42821-43520 placement
 function handleRenameSession(request, context) {
   let titles = requireSessionTitles(context);
   if (typeof request.title !== "string")
@@ -163,20 +164,20 @@ function handleRenameSession(request, context) {
   cacheSessionTitle(title);
   applySessionRename(titles, title, sessionId, fromHost);
 }
-//@ chunk-nkdv7dw8.js:39258-39374 placement
+//@ chunk-vxsfen55.js:43520-43636 placement
 function applySessionRename(titleChange, context, sessionId, options) {
   titleChange.titles.attempted = true;
   if (options && getSessionId() === sessionId) titleChange.pushHostRenameToBridge(context, sessionId);
   titleChange.applyRenamedSessionName(context);
 }
-//@ chunk-nkdv7dw8.js:39374-39384 placement
+//@ chunk-vxsfen55.js:43636-43646 placement
 var NO_SESSION_TITLES_ERROR = UNSUPPORTED_CONTROL_SUBTYPE_TEXT;
-//@ chunk-nkdv7dw8.js:39384-39465 placement
+//@ chunk-vxsfen55.js:43646-43727 placement
 function requireSessionTitles(commandContext) {
   if (commandContext.sessionTitles === null) throw new WireSafeControlError(NO_SESSION_TITLES_ERROR);
   return commandContext.sessionTitles;
 }
-//@ chunk-nkdv7dw8.js:39465-39546 placement
+//@ chunk-vxsfen55.js:43727-43808 placement
 function logTitleChangeError(context, error) {
   if (context.redactsPersistedLane()) {
     controlHandlerError(true, "auto_title", error);
@@ -184,7 +185,7 @@ function logTitleChangeError(context, error) {
   }
   logError(error);
 }
-//@ chunk-nkdv7dw8.js:39546-40998 placement
+//@ chunk-vxsfen55.js:43808-45260 placement
 /**
  * 补充的控制请求处理器：stop_task（按用户停任务，校验 task_id）、send_task_message、会话标题类请求（sessionTitles 为空即报错）。
  */
@@ -263,13 +264,13 @@ var handleSendTaskMessage = (request, context) => {
 var handleSessionTitleControl = (request, context) => {
   throw new QueuedNotificationError(`${UNSUPPORTED_CONTROL_SUBTYPE_TEXT}: send_task_message`);
 };
-//@ chunk-nkdv7dw8.js:40998-41511 placement
+//@ chunk-vxsfen55.js:45260-45797 placement
 /**
  * 核心控制请求处理器表：mcp_status、get_context_usage、get_usage、get_session_cost、list_models、get_binary_version、reload_output_styles 等。
  */
-var CONTROL_REQUEST_HANDLERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CONTROL_REQUEST_HANDLERS; // deferred: uses handleMcpStatus (./mcpControlRequests.js) of its import cycle while loading; runs once the cycle is complete
 var READ_ONLY_TASK_CONTROL_SUBTYPES;
-deferInit("chunk-nkdv7dw8.js:40998", () => {
+deferInit("chunk-vxsfen55.js:45260", () => {
   CONTROL_REQUEST_HANDLERS = {
     mcp_status: handleMcpStatus,
     get_context_usage: handleGetContextUsage,
@@ -291,6 +292,7 @@ deferInit("chunk-nkdv7dw8.js:40998", () => {
     send_task_message: handleSessionTitleControl,
     prefetch_attachments: isValidPrefetchAttachmentsRequest,
     mcp_tasks_changed: noop,
+    set_attached_project: handleSetAttachedProject,
   };
   READ_ONLY_TASK_CONTROL_SUBTYPES = new Set([
     "generate_session_title",
@@ -299,7 +301,7 @@ deferInit("chunk-nkdv7dw8.js:40998", () => {
     "get_task_output",
   ]);
 });
-//@ chunk-nkdv7dw8.js:41511-41917 placement
+//@ chunk-vxsfen55.js:45797-46203 placement
 function handleSendTaskMessage_2(request, taskControl) {
   if (READ_ONLY_TASK_CONTROL_SUBTYPES.has(request.subtype)) return true;
   if (request.subtype === "send_task_message")
@@ -325,7 +327,7 @@ function handleSendTaskMessage_2(request, taskControl) {
     return false;
   }
 }
-//@ chunk-nkdv7dw8.js:41917-41968 placement
+//@ chunk-vxsfen55.js:46203-46254 placement
 /**
  * 判断控制请求 subtype 是否在已知处理器表里。
  */
@@ -333,10 +335,10 @@ function isKnownControlRequestSubtype(request) {
   return Object.hasOwn(CONTROL_REQUEST_HANDLERS, request.subtype);
 }
 export {
-  CONTROL_REQUEST_HANDLERS,
   emitSessionTitleChanges,
   isKnownControlRequestSubtype,
   handleSendTaskMessage_2,
   reclaimSessionNameAtStart,
+  CONTROL_REQUEST_HANDLERS,
   logTitleChangeError,
 };

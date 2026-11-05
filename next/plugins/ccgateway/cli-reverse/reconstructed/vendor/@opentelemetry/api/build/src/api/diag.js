@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/api/build/src/api/diag.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/api@1.9.0
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_logLevelLogger } from "../diag/internal/logLevelLogger.js";
 import { require_types } from "../diag/types.js";
 import { require_global_utils } from "../internal/global-utils.js";
 
-//@ chunk-bwbq4xvm.js:32235-33515 cjs-fingerprint
+//@ chunk-7kayq7nc.js:32321-33601 cjs-fingerprint
 var require_diag = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

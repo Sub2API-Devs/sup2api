@@ -1,13 +1,13 @@
 /**
  * fast-sha256/sha256.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: fast-sha256@1.3.0
- * pieces: chunk-hwmsct5x.js (1)
+ * pieces: chunk-vn3g7zt8.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 
-//@ chunk-hwmsct5x.js:7869-14156 cjs-fingerprint
+//@ chunk-vn3g7zt8.js:8212-14524 cjs-fingerprint
 var require_sha256 = __commonJS(function (cjsExports, cjsModule) {
   (function (root, factory) {
     var umdExports = {};

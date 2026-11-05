@@ -3,42 +3,33 @@
  *
  * 工具结果清理（microcompact）：keep-recent 型本地清理（替换为 "[Old tool result content cleared]"）、空闲返回后的服务端 clear_tool_uses 规划与上报估算。另混入若干无关声明（日期解析、MCP 服务器说明），见过程文档。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/compact/microCompact.ts
- * pieces: chunk-e6aww6q8.js (1), chunk-g54kbxqw.js (23)
- * attribution: fingerprint 3, placement 11, callgraph-fingerprint 1, layout 8, affinity 1
+ * pieces: chunk-5xgkngpb.js (24)
+ * attribution: placement 20, callgraph-fingerprint 1, layout 1, fingerprint 2
  */
 import {
   microCompactFlagStore,
-  SHELL_TOOL_NAMES,
+  SHELL_TOOL_NAMES as SHELL_TOOL_NAMES_2,
   notePendingConversationEdit,
 } from "../../utils/shell/shellToolUtils.js";
-import { ARTIFACT_CONTENT_AUTHORED_TAG_LEAD, ARTIFACT_CONTENT_AUTHORED_TAG } from "../../constants/xml.js";
-import { isObjectBlock } from "../../utils/toolResultStorage.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
 import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
 import { WEBSEARCH } from "../../tools/WebSearchTool/prompt.js";
 import { WEBFETCH } from "../../tools/WebFetchTool/prompt.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import {
   roughTokenCountEstimation,
   roughTokenCountEstimationForBlock,
   roughTokenCountEstimationForContent,
 } from "../tokenEstimation.js";
-import { classifyQuerySource, isAutoModeQuerySource } from "../api/requestHeaders.js";
-import { logEvent } from "../analytics/index.js";
-import { lit, fromEnumOpt } from "../analytics/safeMetadata.js";
-import { logFeatureOk } from "../analytics/featureTelemetry.js";
-import { logForDebugging } from "../../utils/debug.js";
-import { suppressCompactWarning } from "./compactWarningState.js";
-import { notifyCacheDeletion, getTrackingKey } from "../api/promptCacheBreakDetection.js";
-import { GET_TASK_TOOL_TEXT } from "../../remote/tools/nativeToolErrors.js";
-import { POLL } from "../../tools/PollTool/prompt.js";
-import { SessionRootSlot, isNonConversationMessage } from "../../bootstrap/sessionSlices.js";
-import { getRootSession } from "../../bootstrap/state.js";
+import { isObjectBlock } from "../../utils/toolResultStorage.js";
+import { isPdfReadToolUseId } from "../../utils/pdfUtils.js";
+import { stripLeafPrefixes } from "../../constants/xml.js";
 import {
+  hasClearedMarker,
   idleClearingMode,
   hasAppliedContextEdits,
   supportsContextEditing,
@@ -48,80 +39,75 @@ import {
   isNewIdlePeriod,
   clearableMessageKind,
   isUserContentMessage,
-  hasClearedMarker,
   estimateLargeContentTokens,
 } from "./idleToolResultClearing.js";
+import { classifyQuerySource, isAutoModeQuerySource } from "../api/requestHeaders.js";
+import { logEvent } from "../analytics/index.js";
+import { lit as lit_2, fromEnumOpt } from "../analytics/safeMetadata.js";
+import { logFeatureOk } from "../analytics/featureTelemetry.js";
+import { logForDebugging } from "../../utils/debug.js";
+import { suppressCompactWarning } from "./compactWarningState.js";
+import { notifyCacheDeletion, getTrackingKey } from "../api/promptCacheBreakDetection.js";
+import { GET_TASK_TOOL_TEXT } from "../../remote/tools/nativeToolErrors.js";
+import { POLL } from "../../tools/PollTool/prompt.js";
+import { SessionRootSlot, isNonConversationMessage } from "../../bootstrap/sessionSlices.js";
+import { getRootSession } from "../../bootstrap/state.js";
+import { latestPdfReads, hasPdfReads } from "../../utils/attachments/pdf.js";
 import { trackedProjectReads } from "../../tools/ProjectsTool/readTracking.js";
 import { PROJECTS_TOOL_NAME } from "../../tools/ProjectsTool/prompt.js";
 import {
   isToolUseStop,
   totalTokensOf,
   isNonNegativeNumber,
+  countClearedToolUses,
+  sentInputTokensOf,
 } from "../../utils/messages/usageAndStopReason.js";
 import { canonicalToolName } from "../../utils/permissions/permissionRuleParser.js";
+import { countWhere } from "../../utils/collections.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { imageTileCount, PDF_TILE_WIDTH, PDF_TILE_HEIGHT } from "../../utils/mediaLimits.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-g54kbxqw.js:146530-146567 placement
+//@ chunk-5xgkngpb.js:1590166-1590204 placement
 function clearMicroCompactFlag() {
   microCompactFlagStore().setState(() => false);
 }
-//@ chunk-g54kbxqw.js:146567-146605 placement
+//@ chunk-5xgkngpb.js:1590204-1590243 placement
 function getMicroCompactFlag() {
   return microCompactFlagStore().getState();
 }
-//@ chunk-g54kbxqw.js:146605-146646 placement
+//@ chunk-5xgkngpb.js:1590243-1590285 placement
 function onMicroCompactFlag(listener) {
   return microCompactFlagStore().subscribe(listener);
 }
-//@ chunk-g54kbxqw.js:146646-146720 placement
+//@ chunk-5xgkngpb.js:1590285-1590354 placement
 /**
  * 持久化工具结果的标记前缀。
  */
 var CLEARED_TOOL_RESULT_TEXT = "[Old tool result content cleared]";
 var PERSISTED_OUTPUT_TAG = "<persisted-output>";
-var PERSISTED_OUTPUT_PREFIX = ARTIFACT_CONTENT_AUTHORED_TAG_LEAD;
-//@ chunk-g54kbxqw.js:146720-146902 placement
-/**
- * 内容中是否已有清理标记。
- */
-function containsClearedMarker(content) {
-  if (typeof content === "string") return content.includes(ARTIFACT_CONTENT_AUTHORED_TAG);
-  return (
-    Array.isArray(content) &&
-    content.some(
-      (block) =>
-        isObjectBlock(block) &&
-        block.type === "text" &&
-        "text" in block &&
-        typeof block.text === "string" &&
-        block.text.includes(ARTIFACT_CONTENT_AUTHORED_TAG),
-    )
-  );
-}
-//@ chunk-g54kbxqw.js:146902-146965 placement
+//@ chunk-5xgkngpb.js:1590541-1590606 placement
 /**
  * 可被微压缩清理的工具名单（读、shell、grep、glob、搜索、编辑、写）。
  */
 var MICROCOMPACT_LIMITS; // deferred: uses SHELL_TOOL_NAMES (../../utils/shell/shellToolUtils.js) of its import cycle while loading; runs once the cycle is complete
 var IMAGE_RESULT_TOKENS;
 var CLEARABLE_TOOL_NAMES;
-deferInit("chunk-g54kbxqw.js:146902", () => {
+deferInit("chunk-5xgkngpb.js:1590541", () => {
   MICROCOMPACT_LIMITS = 20000;
   IMAGE_RESULT_TOKENS = 2000;
   CLEARABLE_TOOL_NAMES = new Set([
-    FILE_READ_TOOL_NAME,
-    ...SHELL_TOOL_NAMES,
+    READ,
+    ...SHELL_TOOL_NAMES_2,
     GREP_TOOL_NAME,
     GLOB_TOOL_NAME,
     WEBSEARCH,
     WEBFETCH,
-    FILE_EDIT_TOOL_NAME,
+    EDIT,
     FILE_WRITE_TOOL_NAME,
   ]);
 });
-//@ chunk-g54kbxqw.js:146965-147371 callgraph-fingerprint (2.1.88 match: calculateToolResultTokens, 0.748)
+//@ chunk-5xgkngpb.js:1590606-1591014 callgraph-fingerprint (2.1.88 match: calculateToolResultTokens, 0.747)
 /**
  * 估算 tool_result 的 token：文本按字符粗估，图片固定 2000，文档/搜索结果按块估算。
  */
@@ -139,19 +125,24 @@ function calculateToolResultTokens(block) {
     return sum;
   }, 0);
 }
-//@ chunk-g54kbxqw.js:147371-147568 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince(messages) {
+//@ chunk-5xgkngpb.js:1591014-1591224 placement
+function collectCompactableToolIds(messages) {
   let ids = [];
   for (let message of messages)
     if (message.type === "assistant" && Array.isArray(message.message.content)) {
       for (let block of message.message.content)
-        if (isObjectBlock(block) && block.type === "tool_use" && CLEARABLE_TOOL_NAMES.has(block.name))
+        if (
+          isObjectBlock(block) &&
+          block.type === "tool_use" &&
+          CLEARABLE_TOOL_NAMES.has(block.name) &&
+          !isPdfReadToolUseId(block.id)
+        )
           ids.push(block.id);
     }
   return ids;
 }
-//@ chunk-g54kbxqw.js:147568-147840 placement (2.1.88 match: hasMemoryFileRead, 1)
-function hasMemoryFileRead(messages, toolUseIds) {
+//@ chunk-5xgkngpb.js:1591224-1591496 placement
+function readPathsOfToolUses(messages, toolUseIds) {
   let paths = [];
   for (let message of messages) {
     if (message.type !== "assistant" || !Array.isArray(message.message.content)) continue;
@@ -159,29 +150,27 @@ function hasMemoryFileRead(messages, toolUseIds) {
       if (
         isObjectBlock(block) &&
         block.type === "tool_use" &&
-        block.name === FILE_READ_TOOL_NAME &&
+        block.name === READ &&
         toolUseIds.has(block.id)
       ) {
-        let input = (block.input ?? {}).file_path;
-        if (typeof input === "string") paths.push(input);
+        let filePath = (block.input ?? {}).file_path;
+        if (typeof filePath === "string") paths.push(filePath);
       }
   }
   return paths;
 }
-//@ chunk-g54kbxqw.js:147840-147963 placement
+//@ chunk-5xgkngpb.js:1591496-1591591 placement
 /**
  * 文本是否为已清理的工具结果占位。
  */
-function isClearedResultText(content) {
-  if (typeof content !== "string") return false;
-  let rest = content.startsWith(PERSISTED_OUTPUT_PREFIX)
-    ? content.slice(PERSISTED_OUTPUT_PREFIX.length)
-    : content;
+function isClearedResultText(text) {
+  if (typeof text !== "string") return false;
+  let rest = stripLeafPrefixes(text);
   return rest === CLEARED_TOOL_RESULT_TEXT || rest.startsWith(PERSISTED_OUTPUT_TAG);
 }
-//@ chunk-g54kbxqw.js:147963-148408 placement
+//@ chunk-5xgkngpb.js:1591591-1592083 placement
 function selectClearableToolUses(messages, keepRecent) {
-  let allIds = countToolCallsSince(messages);
+  let allIds = collectCompactableToolIds(messages);
   let max = Math.max(1, keepRecent);
   let keepSet = new Set(allIds.slice(-max));
   let clearSet = new Set(allIds.filter((id) => !keepSet.has(id)));
@@ -201,7 +190,8 @@ function selectClearableToolUses(messages, keepRecent) {
         isObjectBlock(block) &&
         block.type === "tool_result" &&
         clearSet.has(block.tool_use_id) &&
-        !isClearedResultText(block.content)
+        !isClearedResultText(block.content) &&
+        !(isMedia(block.content) && hasClearedMarker(block.content).length > 0)
       ) {
         tokensSaved += calculateToolResultTokens(block);
         candidates.push(block);
@@ -214,7 +204,14 @@ function selectClearableToolUses(messages, keepRecent) {
     candidates,
   };
 }
-//@ chunk-g54kbxqw.js:148408-148938 placement (2.1.88 match: isMedia, 1)
+//@ chunk-5xgkngpb.js:1592083-1592184 layout (2.1.88 match: isMedia, 1)
+function isMedia(block) {
+  return (
+    Array.isArray(block) &&
+    block.some((block) => isObjectBlock(block) && (block.type === "image" || block.type === "document"))
+  );
+}
+//@ chunk-5xgkngpb.js:1592184-1592666 placement
 /**
  * 把指定 tool_use_id 的 tool_result 内容替换成清理文本（hint_clears 用）。
  */
@@ -226,18 +223,19 @@ function replaceToolResultContent(messages, clearSet, replacements) {
     let content = message.message.content.map((block) => {
       if (!isObjectBlock(block) || block.type !== "tool_result" || !clearSet.has(block.tool_use_id))
         return block;
-      let hasMedia =
-        Array.isArray(block.content) &&
-        block.content.some(
-          (inner) => isObjectBlock(inner) && (inner.type === "image" || inner.type === "document"),
-        );
+      let hasMedia = isMedia(block.content);
       let replacement = hasMedia
         ? CLEARED_TOOL_RESULT_TEXT
         : (replacements?.get(block.tool_use_id) ?? CLEARED_TOOL_RESULT_TEXT);
-      let nextContent =
-        !hasMedia && !replacement.startsWith(PERSISTED_OUTPUT_PREFIX) && containsClearedMarker(block.content)
-          ? `${PERSISTED_OUTPUT_PREFIX}${replacement}`
-          : replacement;
+      let markerLines = hasMedia
+        ? ""
+        : hasClearedMarker(block.content)
+            .map(
+              (inner) => `${inner}
+`,
+            )
+            .join("");
+      let nextContent = replacement.startsWith(markerLines) ? replacement : `${markerLines}${replacement}`;
       if (block.content === nextContent) return block;
       changed = true;
       return {
@@ -256,7 +254,7 @@ function replaceToolResultContent(messages, clearSet, replacements) {
       : message;
   });
 }
-//@ chunk-g54kbxqw.js:148938-149648 fingerprint (2.1.88 match: maybeTimeBasedMicrocompact, 0.588)
+//@ chunk-5xgkngpb.js:1592666-1593377 fingerprint (2.1.88 match: maybeTimeBasedMicrocompact, 0.588)
 /**
  * keep-recent 型 microcompact（context_hint 触发）：保留最近 N 个可清理工具结果，节省 ≥20000 token 时把其余结果替换为清理文本（可先持久化原文），记 tengu_time_based_microcompact，并抑制压缩警告、通知缓存删除。
  */
@@ -279,7 +277,7 @@ async function maybeTimeBasedMicrocompact(messages, querySource, options) {
     toolsKept: keepSet.size,
     keepRecent: options.keepRecent,
     tokensSaved,
-    trigger: lit("context_hint"),
+    trigger: lit_2("context_hint"),
   });
   logFeatureOk("compact_micro_keep_recent");
   logForDebugging(
@@ -294,16 +292,17 @@ async function maybeTimeBasedMicrocompact(messages, querySource, options) {
     clearedContent,
   };
 }
-//@ chunk-g54kbxqw.js:149648-149740 layout
+//@ chunk-5xgkngpb.js:1593377-1593480 placement
 /**
  * 3
  */
 var TENGU_JIGGLY_BLOSSOM = "tengu_jiggly_blossom";
-var SMALL_RESULT_BYTES = 64;
-var BYTES_PER_TOKEN_ESTIMATE = 3;
+var TEXT_CLEAR_THRESHOLD = 64;
+var SUBAGENT_TEXT_CLEAR_THRESHOLD = 48;
+var MAX_REUSE_MISMATCH_REPORTS = 3;
 var TOOL_NAME_RE = /^[a-zA-Z0-9_-]{1,128}$/;
 var MCP_CONTAINER = "mcp__container__";
-//@ chunk-g54kbxqw.js:149740-149818 layout
+//@ chunk-5xgkngpb.js:1593480-1593563 placement
 /**
  * 工具名（含 mcp__container__ 前缀）在可清理工具集合中（Read/Bash/Grep/WebFetch 等）。
  */
@@ -313,7 +312,7 @@ function isClearableToolName(name) {
     (name.startsWith(MCP_CONTAINER) && CLEARABLE_TOOL_NAMES.has(name.slice(MCP_CONTAINER.length)))
   );
 }
-//@ chunk-g54kbxqw.js:149818-150058 layout
+//@ chunk-5xgkngpb.js:1593563-1593810 placement
 /**
  * 空闲后清理配置：空闲 ≥3900 秒、保留 12 个工具调用、至少清 20000 token、触发阈值等。
  */
@@ -322,7 +321,7 @@ var MAX_TRACKING_KEYS;
 var IDLE_CLEAR_KEEP_TOOL_USES;
 var IDLE_CLEARING_CONFIG;
 var idleClearingStateSlot;
-deferInit("chunk-g54kbxqw.js:149818", () => {
+deferInit("chunk-5xgkngpb.js:1593563", () => {
   ALWAYS_EXCLUDED_TOOLS = [GET_TASK_TOOL_TEXT, POLL];
   MAX_TRACKING_KEYS = 64;
   IDLE_CLEAR_KEEP_TOOL_USES = 12;
@@ -339,14 +338,14 @@ deferInit("chunk-g54kbxqw.js:149818", () => {
     failuresLogged: new Set(),
   }));
 });
-//@ chunk-g54kbxqw.js:150058-150094 layout
+//@ chunk-5xgkngpb.js:1593810-1593848 placement
 /**
  * 取当前会话（默认全局 host）的空闲清理状态：已决定的空闲、按追踪键记录的上次清理、已记录的失败。
  */
 function getIdleClearingState(session) {
   return idleClearingStateSlot.of(session ?? getRootSession());
 }
-//@ chunk-g54kbxqw.js:150094-150662 layout
+//@ chunk-5xgkngpb.js:1593848-1594464 placement
 /**
  * 用户空闲超过约 65 分钟（缓存已失效）返回后，规划服务端 clear_tool_uses_20250919 编辑（trigger/keep/clear_at_least/exclude_tools）；开关 tengu_jiggly_blossom（on/shadow/off）。queryModel 把它作为 context_management 的 toolClearing。
  */
@@ -384,17 +383,18 @@ function planToolResultClearingAfterIdle(
     )
       return;
     if (!isIdleClearingActive(rolloutMode, idleReturn)) return;
+    let clearableToolUsesSinceReturn = idleReturn.clearableToolUsesSinceReturn;
     return {
       returnAfterIdle: idleReturn,
       edit: {
         type: "clear_tool_uses_20250919",
         trigger: {
           type: "tool_uses",
-          value: idleReturn.triggerToolUses,
+          value: idleReturn.triggerToolUses + clearableToolUsesSinceReturn,
         },
         keep: {
           type: "tool_uses",
-          value: config.keepToolUses,
+          value: config.keepToolUses + clearableToolUsesSinceReturn,
         },
         clear_at_least: {
           type: "input_tokens",
@@ -408,7 +408,7 @@ function planToolResultClearingAfterIdle(
     return;
   }
 }
-//@ chunk-g54kbxqw.js:150662-150956 layout
+//@ chunk-5xgkngpb.js:1594464-1594766 placement
 /**
  * 空闲清理已生效（或将生效）时为真，供文件附件/记忆预取判断工具结果是否会被清除。
  */
@@ -429,7 +429,7 @@ function hasClearedToolResultsAfterIdle(messages, mainLoopModel, config, session
     return false;
   }
 }
-//@ chunk-g54kbxqw.js:150956-153418 layout
+//@ chunk-5xgkngpb.js:1594766-1597614 placement
 /**
  * 扫描消息找“空闲后返回”的位置，统计可清理工具调用及其 token、排除工具、自空闲以来的回复数与服务端已清数量，不满足阈值返回 undefined。
  */
@@ -465,11 +465,14 @@ function analyzeIdleReturn(messages, config, extraTimestamp, resolveAlias, endIn
   }
   if (idleBoundary === undefined) return;
   let clearableIds = new Set();
+  let idsAfterIdle = new Set();
   let toolNamesById = new Map();
   let excludeTools = new Set(ALWAYS_EXCLUDED_TOOLS);
   let alreadyCleared = new Set();
-  let sizes = [];
-  let repliedIds = new Set();
+  let nullRenderingAttachments = latestPdfReads(messages);
+  let clearableSizes = [];
+  let clearableSinceReturn = [];
+  let assistantIdsAfterIdle = new Set();
   let serverClearedSinceIdle = false;
   let clearedSinceIdle = 0;
   let serverClearedBeforeIdle = false;
@@ -481,6 +484,12 @@ function analyzeIdleReturn(messages, config, extraTimestamp, resolveAlias, endIn
       (trackedProjectReads(message.attachment)?.length ?? 0) > 0
     )
       excludeTools.add(PROJECTS_TOOL_NAME);
+    if (
+      message.type === "attachment" &&
+      hasPdfReads(message.attachment) &&
+      !nullRenderingAttachments.has(message)
+    )
+      alreadyCleared.add(READ);
     if (
       (message.type !== "assistant" && message.type !== "user") ||
       isNonConversationMessage(message) ||
@@ -506,7 +515,7 @@ function analyzeIdleReturn(messages, config, extraTimestamp, resolveAlias, endIn
           }
           if (hasToolUseStop) serverClearedBeforeIdle = hasAppliedContextEdits(message);
         } else if (hasToolUseStop) {
-          repliedIds.add(message.message.id);
+          assistantIdsAfterIdle.add(message.message.id);
           serverClearedSinceIdle = hasAppliedContextEdits(message);
           clearedSinceIdle = 0;
           for (let appliedEdit of message.message.context_management?.applied_edits ?? [])
@@ -534,22 +543,27 @@ function analyzeIdleReturn(messages, config, extraTimestamp, resolveAlias, endIn
         } else if (block.type === "tool_use" && !toolNamesById.has(block.id)) {
           toolNamesById.set(block.id, canonical);
           if (index < idleBoundary) clearableIds.add(block.id);
+          else idsAfterIdle.add(block.id);
         }
       } else if (block?.type === "tool_result") {
         let toolName = toolNamesById.get(block.tool_use_id);
         if (toolName === undefined) continue;
-        if (hasClearedMarker(block.content)) alreadyCleared.add(toolName);
+        if (hasClearedMarker(block.content).length > 0) alreadyCleared.add(toolName);
         if (index < idleBoundary && clearableIds.delete(block.tool_use_id)) {
-          let tokens = estimateLargeContentTokens(block.content);
+          let tokens = estimateLargeContentTokens(block.content, false);
           if (tokens !== undefined)
-            sizes.push({
+            clearableSizes.push({
               sentName: toolName,
               tokens,
             });
-        }
+        } else if (
+          idsAfterIdle.delete(block.tool_use_id) &&
+          estimateLargeContentTokens(block.content, true) !== undefined
+        )
+          clearableSinceReturn.push(toolName);
       }
   }
-  let mapped = sizes.filter((size) => !alreadyCleared.has(size.sentName)).map((size) => size.tokens);
+  let mapped = clearableSizes.filter((size) => !alreadyCleared.has(size.sentName)).map((size) => size.tokens);
   for (let toolName of alreadyCleared) excludeTools.add(toolName);
   let clearableCount = mapped.length;
   let triggerCount = clearableCount - config.triggerToolUsesBelowCount;
@@ -561,17 +575,21 @@ function analyzeIdleReturn(messages, config, extraTimestamp, resolveAlias, endIn
     idleStartedAtMs: returnedAtMs - returnGapMs,
     idleSeconds: Math.round(returnGapMs / 1000),
     clearableToolUses: clearableCount,
+    clearableToolUsesSinceReturn: countWhere(
+      clearableSinceReturn,
+      (toolName) => !alreadyCleared.has(toolName),
+    ),
     triggerToolUses: triggerCount,
     roughTokensToClear,
     excludeTools: [...excludeTools].sort(),
-    repliesSinceIdle: repliedIds.size,
+    repliesSinceIdle: assistantIdsAfterIdle.size,
     serverClearedSinceIdle,
     toolUsesClearedSinceIdle: clearedSinceIdle,
     serverClearedBeforeIdle,
     contextTokensBeforeIdle,
   };
 }
-//@ chunk-g54kbxqw.js:153418-154388 layout
+//@ chunk-5xgkngpb.js:1597614-1598703 placement
 /**
  * 读响应的 context_management.applied_edits，记录清掉的工具数并在变化时通知缓存删除、记遥测。
  */
@@ -604,10 +622,13 @@ function recordIdleClearingServerReport({ returnAfterIdle, contextManagement, us
       previous?.returnedAtMs === returnAfterIdle.returnedAtMs &&
       previous.clearedToolUses !== clearedToolUses;
     if (changed) notifyCacheDeletion(querySource, agentId);
-    if (changed || firstAfterIdle)
+    if (changed || firstAfterIdle) {
+      let sameReturn = countClearedToolUses(contextManagement);
       logEvent("tengu_tool_result_clearing_after_idle_server_report", {
         cleared_tool_uses: clearedToolUses,
         cleared_input_tokens: clearedInputTokens,
+        cleared_input_tokens_used: sameReturn.inputTokens,
+        cleared_input_tokens_used_is_measured: sameReturn.isMeasured,
         trigger_tool_uses: returnAfterIdle.triggerToolUses,
         is_first_request_after_idle: firstAfterIdle,
         replies_since_idle: returnAfterIdle.repliesSinceIdle,
@@ -615,23 +636,64 @@ function recordIdleClearingServerReport({ returnAfterIdle, contextManagement, us
         cache_read_input_tokens: usage.cache_read_input_tokens ?? 0,
         query_source_category: fromEnumOpt(classifyQuerySource(querySource)),
       });
+    }
   } catch (error) {
     logIdleClearingFailure(error, "sad", "reading_response_threw");
   }
 }
-//@ chunk-g54kbxqw.js:154388-155243 fingerprint (2.1.88 match: estimateMessageTokens, 0.375)
+//@ chunk-5xgkngpb.js:1598703-1600317 placement
 /**
  * 根据 applied_edits 中清掉的工具结果，在 context_management 上补 client_estimated_cleared_input_tokens。旧版名 estimateMessageTokens 不准确。
  */
-function addClientEstimatedClearedTokens(contextManagement, edit, messages) {
+function addClientEstimatedClearedTokens(contextManagement, edit, messages, report, sentMessages) {
+  if (!edit) return contextManagement;
+  let withTriggerCounts = {
+    ...contextManagement,
+    client_sent_trigger_tool_uses: edit.trigger.value,
+    client_sent_keep_tool_uses: edit.keep.value,
+  };
   try {
-    if (!edit) return contextManagement;
-    let budget = 0;
+    let serverClearedCount = 0;
     for (let appliedEdit of contextManagement.applied_edits)
       if (appliedEdit.type === "clear_tool_uses_20250919")
-        budget += isNonNegativeNumber(appliedEdit.cleared_tool_uses)
+        serverClearedCount += isNonNegativeNumber(appliedEdit.cleared_tool_uses)
           ? appliedEdit.cleared_tool_uses
           : Number.POSITIVE_INFINITY;
+    if (report?.clearedTokensAreMeasured && report.clearedToolUses === serverClearedCount)
+      return {
+        ...withTriggerCounts,
+        client_estimated_cleared_input_tokens: report.clearedTokens,
+        client_estimate_measured_from_prompts: true,
+      };
+    let sentTokens = sentMessages ? sentInputTokensOf(sentMessages) : undefined;
+    let historyDelta = report && sentTokens !== undefined ? report.historyTokens - sentTokens : undefined;
+    if (
+      report &&
+      historyDelta !== undefined &&
+      !report.addedADocumentOfUnknownSize &&
+      serverClearedCount > 0 &&
+      Number.isFinite(serverClearedCount) &&
+      serverClearedCount !== report.clearedToolUses
+    ) {
+      let max = Math.max(
+        historyDelta,
+        serverClearedCount > report.clearedToolUses ? report.clearedTokens : 0,
+      );
+      if (historyDelta >= 0 || max > 0)
+        return {
+          ...withTriggerCounts,
+          client_estimated_cleared_input_tokens: max,
+          client_estimate_measured_from_prompts: true,
+        };
+    }
+    let withServerEstimate =
+      report && historyDelta !== undefined && (historyDelta >= 0 || report.clearedTokens > 0)
+        ? {
+            ...withTriggerCounts,
+            client_estimated_cleared_input_tokens: Math.max(report.clearedTokens, historyDelta),
+          }
+        : withTriggerCounts;
+    let remaining = serverClearedCount;
     let excludeTools = new Set(edit.exclude_tools);
     let toolNamesById = new Map();
     let clientEstimatedClearedInputTokens = 0;
@@ -640,7 +702,7 @@ function addClientEstimatedClearedTokens(contextManagement, edit, messages) {
       if (typeof message.content === "string") continue;
       for (let block of message.content) {
         if (block.type === "tool_use") toolNamesById.set(block.id, block.name);
-        if (block.type !== "tool_result" || budget <= 0) continue;
+        if (block.type !== "tool_result" || remaining <= 0) continue;
         let toolName = toolNamesById.get(block.tool_use_id);
         if (toolName === undefined || excludeTools.has(toolName)) continue;
         let textBytes = 0;
@@ -653,28 +715,28 @@ function addClientEstimatedClearedTokens(contextManagement, edit, messages) {
               },
             ]
           : (block.content ?? [])) {
-          if (part.type === "document") return contextManagement;
+          if (part.type === "document") return withServerEstimate;
           if (part.type === "image") imageCount++;
           else textBytes += Buffer.byteLength(part.type === "text" ? part.text : jsonStringify(part));
         }
         clientEstimatedClearedInputTokens +=
-          Math.ceil(textBytes / BYTES_PER_TOKEN_ESTIMATE) +
+          Math.ceil(textBytes / MAX_REUSE_MISMATCH_REPORTS) +
           imageCount * imageTileCount(PDF_TILE_WIDTH, PDF_TILE_HEIGHT);
         anyCleared = true;
-        if (imageCount > 0 || textBytes > SMALL_RESULT_BYTES) budget--;
+        if (imageCount > 0 || textBytes > TEXT_CLEAR_THRESHOLD) remaining--;
       }
     }
-    if (!anyCleared) return contextManagement;
+    if (!anyCleared) return withServerEstimate;
     return {
-      ...contextManagement,
+      ...withTriggerCounts,
       client_estimated_cleared_input_tokens: clientEstimatedClearedInputTokens,
     };
   } catch (error) {
     logIdleClearingFailure(error, "sad", "estimating_cleared_threw");
-    return contextManagement;
+    return withTriggerCounts;
   }
 }
-//@ chunk-g54kbxqw.js:155243-155349 affinity
+//@ chunk-5xgkngpb.js:1600317-1600424 placement
 /**
  * 空闲清理是否生效：shadow 模式不生效；空闲后首个请求要求模式为 on，之后看服务端是否已清理过。
  */
@@ -682,27 +744,29 @@ function isIdleClearingActive(mode, analysis) {
   if (mode === "shadow") return false;
   return analysis.repliesSinceIdle === 0 ? mode === "on" : analysis.serverClearedSinceIdle;
 }
-//@ chunk-e6aww6q8.js:4906272-4906316 fingerprint (2.1.88 match: TIME_BASED_MC_CLEARED_MESSAGE, 1)
+//@ chunk-5xgkngpb.js:5052269-5052313 fingerprint (2.1.88 match: TIME_BASED_MC_CLEARED_MESSAGE, 1)
 /**
  * microcompact 清理后的替换文本 "[Old tool result content cleared]"。
  */
 var TIME_BASED_MC_CLEARED_MESSAGE = "[Old tool result content cleared]";
 export {
-  TIME_BASED_MC_CLEARED_MESSAGE,
-  onMicroCompactFlag,
-  getMicroCompactFlag,
-  replaceToolResultContent,
   planToolResultClearingAfterIdle,
   addClientEstimatedClearedTokens,
   recordIdleClearingServerReport,
-  clearMicroCompactFlag,
-  hasMemoryFileRead,
+  TIME_BASED_MC_CLEARED_MESSAGE,
   hasClearedToolResultsAfterIdle,
   getIdleClearingState,
   MAX_TRACKING_KEYS,
   TENGU_JIGGLY_BLOSSOM,
-  SMALL_RESULT_BYTES,
+  SUBAGENT_TEXT_CLEAR_THRESHOLD,
+  TEXT_CLEAR_THRESHOLD,
+  replaceToolResultContent,
+  onMicroCompactFlag,
+  getMicroCompactFlag,
   maybeTimeBasedMicrocompact,
   selectClearableToolUses,
   MICROCOMPACT_LIMITS,
+  clearMicroCompactFlag,
+  readPathsOfToolUses,
+  IDLE_CLEARING_CONFIG,
 };

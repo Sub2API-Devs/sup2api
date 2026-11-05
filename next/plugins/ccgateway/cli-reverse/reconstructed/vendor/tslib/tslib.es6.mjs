@@ -1,14 +1,14 @@
 /**
  * tslib/tslib.es6.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: tslib@2.6.3..2.7.0
- * pieces: chunk-6r5wanw7.js (1)
+ * pieces: chunk-01zearth.js (1)
  * attribution: esm-layout 1
  */
 import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_tslib } from "./tslib.js";
 
-//@ chunk-6r5wanw7.js:264-840 esm-layout
+//@ chunk-01zearth.js:264-840 esm-layout
 var import_tslib = __toESM(require_tslib(), 1);
 var {
   __extends,

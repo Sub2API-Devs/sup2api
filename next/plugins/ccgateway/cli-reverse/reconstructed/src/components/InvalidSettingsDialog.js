@@ -3,9 +3,9 @@
  *
  * 设置文件校验失败时的对话框（列出被跳过/按严格解读替换的值）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/InvalidSettingsDialog.tsx
- * pieces: chunk-td6byj4s.js (5)
+ * pieces: chunk-27bnjej4.js (5)
  * attribution: sole-consumer 3, affinity 1, fingerprint 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -19,23 +19,23 @@ import { Text } from "../ink/components/Text.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-td6byj4s.js:15306-15353 sole-consumer
+//@ chunk-27bnjej4.js:16454-16501 sole-consumer
 function isNotWarning(error) {
   return error.severity !== "warning";
 }
-//@ chunk-td6byj4s.js:15353-15402 sole-consumer
+//@ chunk-27bnjej4.js:16501-16550 sole-consumer
 function loadedWithoutGuard(error) {
   return error.loadedWithoutGuardHook;
 }
-//@ chunk-td6byj4s.js:15402-15440 sole-consumer
+//@ chunk-27bnjej4.js:16550-16588 sole-consumer
 function isSubstituted(error) {
   return error.substituted;
 }
-//@ chunk-td6byj4s.js:15440-15487 affinity
+//@ chunk-27bnjej4.js:16588-16635 affinity
 function isWarning(error) {
   return error.severity === "warning";
 }
-//@ chunk-td6byj4s.js:15487-17218 fingerprint (2.1.88 match: InvalidSettingsDialog, 0.523)
+//@ chunk-27bnjej4.js:16635-18366 fingerprint (2.1.88 match: InvalidSettingsDialog, 0.524)
 function InvalidSettingsDialog(props) {
   let $ = useMemoCache(21);
   let { settingsErrors, onContinue, onFix, onExit } = props;

@@ -3,9 +3,9 @@
  *
  * /login 命令对象（描述随登录状态变化，云会话可拒绝）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/login/index.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
 import { hasAnthropicApiKeyAuth } from "../../utils/auth.js";
@@ -14,7 +14,7 @@ import { env } from "../../utils/env.js";
 import { isCommandEnabled } from "../../commands.js";
 import { getLoginAvailability } from "./loginAvailability.js";
 
-//@ chunk-e6aww6q8.js:1731476-1731822 fingerprint (2.1.88 match: default, 0.788)
+//@ chunk-5xgkngpb.js:1806928-1807274 fingerprint (2.1.88 match: default, 0.788)
 /**
  * /login 命令对象：描述随是否已用 API key 登录变化，可用 DISABLE_LOGIN_COMMAND 禁用，登录被拒时隐藏。
  */

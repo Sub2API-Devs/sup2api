@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：英文动词变形（进行时/过去式），用于状态文案。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sddr5zxg.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-v6da31bp.js (11)
  * attribution: placement 11
  */
-//@ chunk-sddr5zxg.js:191-2050 placement
+//@ chunk-v6da31bp.js:191-2050 placement
 /**
  * 动词变形用的正则与词表：元音、辅音-元音-辅音结尾、不规则过去式、双写辅音的进行时、已是过去/完成形式的词。
  */
@@ -150,11 +150,11 @@ var PAST_FORMS = new Set([
   "worn",
   "written",
 ]);
-//@ chunk-sddr5zxg.js:2050-2104 placement
+//@ chunk-v6da31bp.js:2050-2104 placement
 function countVowels(text) {
   return (text.match(/[aeiou]/gi) ?? []).length;
 }
-//@ chunk-sddr5zxg.js:2104-2368 placement
+//@ chunk-v6da31bp.js:2104-2368 placement
 function toProgressive(text) {
   let lower = text.toLowerCase();
   if (Object.hasOwn(DOUBLED_PROGRESSIVE, lower)) return DOUBLED_PROGRESSIVE[lower];
@@ -164,7 +164,7 @@ function toProgressive(text) {
   if (/c$/i.test(text)) return text + "king";
   return text + "ing";
 }
-//@ chunk-sddr5zxg.js:2368-2666 placement
+//@ chunk-v6da31bp.js:2368-2666 placement
 function toPastTense(text) {
   let lower = text.toLowerCase();
   if (Object.hasOwn(IRREGULAR_PAST, lower)) return IRREGULAR_PAST[lower];
@@ -175,11 +175,11 @@ function toPastTense(text) {
   if (Object.hasOwn(DOUBLED_PROGRESSIVE, lower)) return DOUBLED_PROGRESSIVE[lower].slice(0, -3) + "ed";
   return text + "ed";
 }
-//@ chunk-sddr5zxg.js:2666-2744 placement (2.1.88 match: capitalize, 1)
+//@ chunk-v6da31bp.js:2666-2744 placement (2.1.88 match: capitalize, 1)
 function capitalize(str, text) {
   return /^[A-Z]/.test(str) ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
-//@ chunk-sddr5zxg.js:2744-3123 placement
+//@ chunk-v6da31bp.js:2744-3123 placement
 /**
  * 判断单词像不像动词原形（字母、长度、不是全大写、不是 -ing/-ed/-s 形式或已知过去式）。
  */
@@ -195,7 +195,7 @@ function looksLikeBaseVerb(verb) {
   if (/s$/i.test(verb) && !/(ss|us)$/i.test(verb) && verb.length > 3) return false;
   return VOWEL_REGEX.test(verb) || /y/i.test(verb);
 }
-//@ chunk-sddr5zxg.js:3123-5321 placement
+//@ chunk-v6da31bp.js:3123-5321 placement
 /**
  * 动词串联变形用的词表与正则：不参与串联的动词、可串联的常见动词、"and/then/逗号 + 动词"的匹配与后面接系动词时不变形的判断。
  */
@@ -411,7 +411,7 @@ var VERB_CHAIN_REGEX =
   /(?:(?<![\w-])((?:(?:[Aa]nd|[Tt]hen)\s+)+)|(,\s+(?:(?:and|then)\s+)*))([a-z]{2,16})(?=$|[\s,;!?]|\.(?:\s|$))/g;
 var NOT_IMPERATIVE_FOLLOW_REGEX =
   /^(?:\s+\w+){0,2}\s+(?:is|are|was|were|has|have|do|does|did|will|would|should|can|could|passes|passed|fails|failed|exists|works|worked|succeeds|succeeded|stays|remains|looks|runs|ran|not|if|when|unless|whether)(?:n['\u2019]t)?\b/;
-//@ chunk-sddr5zxg.js:5321-5427 placement
+//@ chunk-v6da31bp.js:5321-5427 placement
 function inflectChainedVerbs(text, inflectVerb) {
   return text.replace(VERB_CHAIN_REGEX, (verb, leadingGroup, middleGroup, verbGroup, offset) =>
     CHAINABLE_VERBS.has(verbGroup) && !NOT_IMPERATIVE_FOLLOW_REGEX.test(text.slice(offset + verb.length))
@@ -419,9 +419,9 @@ function inflectChainedVerbs(text, inflectVerb) {
       : verb,
   );
 }
-//@ chunk-sddr5zxg.js:5427-5488 placement
+//@ chunk-v6da31bp.js:5427-5488 placement
 var HYPHENATED_VERB_RE = /^(re|un|de|pre|co|sub|over|out|mis|auto|post)-(.+)$/i;
-//@ chunk-sddr5zxg.js:5488-6028 placement
+//@ chunk-v6da31bp.js:5488-6028 placement
 /**
  * 把以祈使动词开头的状态文案变形为进行时与完成时（含 re-/un- 等连字符前缀、以 and/then/逗号串联的后续动词），返回 running/done/infinitive 三种形式；首词不像基础动词时返回 undefined。
  */
@@ -462,7 +462,7 @@ function inflectStatusText(text) {
     infinitive: leading + verb.charAt(0).toLowerCase() + verb.slice(1) + rest,
   };
 }
-//@ chunk-sddr5zxg.js:6028-6206 placement
+//@ chunk-v6da31bp.js:6028-6206 placement
 /**
  * 仅当首词是已知动词时，把状态文案变形为进行时与完成时。
  */
@@ -476,4 +476,4 @@ function inflectKnownVerbText(text) {
     ? inflectStatusText(text)
     : undefined;
 }
-export { inflectStatusText, inflectKnownVerbText };
+export { inflectKnownVerbText, inflectStatusText };

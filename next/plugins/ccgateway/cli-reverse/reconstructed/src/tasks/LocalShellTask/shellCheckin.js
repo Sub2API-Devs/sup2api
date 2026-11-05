@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：后台 shell 长时间无输出时的提醒
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (7)
  * attribution: placement 7
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
@@ -33,7 +33,7 @@ import { formatTaskNotification } from "../../utils/xmlTags.js";
 import { BACKGROUND_COMMAND_PREFIX } from "../../constants/xml.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-e6aww6q8.js:4741827-4741912 placement
+//@ chunk-5xgkngpb.js:4860295-4860380 placement
 /**
  * 读 tengu_silent_heron 作为后台 shell 检查间隔（过小视为 0）。
  */
@@ -44,7 +44,7 @@ function silentHeronCheckinMs() {
     ? featureValue_CACHED_MAY_BE_STALE
     : 0;
 }
-//@ chunk-e6aww6q8.js:4741912-4742386 placement
+//@ chunk-5xgkngpb.js:4860380-4860854 placement
 /**
  * 为后台 shell 注册无输出检查：按代理归属加入观察集合并按需启动轮询计时器；返回注销函数（同时撤回未送达的提醒）。
  */
@@ -79,7 +79,7 @@ function watchQuietShell(request, queue) {
     }
   };
 }
-//@ chunk-e6aww6q8.js:4742386-4742661 placement
+//@ chunk-5xgkngpb.js:4860854-4861129 placement
 function getQuietShellOwner(agentId) {
   let quietShellOwners = getTaskRunState().quietShellOwners;
   let existing = quietShellOwners.get(agentId);
@@ -99,7 +99,7 @@ function getQuietShellOwner(agentId) {
   quietShellOwners.set(agentId, owner);
   return owner;
 }
-//@ chunk-e6aww6q8.js:4742661-4742771 placement
+//@ chunk-5xgkngpb.js:4861129-4861239 placement
 function unwatchQuietShell(watch) {
   let owner = watch.owner;
   owner.watches.delete(watch);
@@ -108,7 +108,7 @@ function unwatchQuietShell(watch) {
     owner.timer = undefined;
   }
 }
-//@ chunk-e6aww6q8.js:4742771-4742891 placement
+//@ chunk-5xgkngpb.js:4861239-4861359 placement
 function isShellCheckinNotice(queued, owner) {
   return (
     queued.origin?.kind === "task-notification" &&
@@ -116,7 +116,7 @@ function isShellCheckinNotice(queued, owner) {
     queued.agentId === owner.agentId
   );
 }
-//@ chunk-e6aww6q8.js:4742891-4743232 placement
+//@ chunk-5xgkngpb.js:4861359-4861700 placement
 /**
  * 检查安静的后台 shell：用户已提交新输入等情况下停止观察，再读取各任务输出大小并生成签到提示。
  */
@@ -145,7 +145,7 @@ function pollQuietShells(owner) {
     }
   });
 }
-//@ chunk-e6aww6q8.js:4743232-4745578 placement
+//@ chunk-5xgkngpb.js:4861700-4864049 placement
 /**
  * 后台 shell 长时间无新输出时生成提醒，说明运行时长与输出文件位置。
  */

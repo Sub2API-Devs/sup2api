@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增。内置插件 youShouldKnow 的提示卡片。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bss4k1z9.js (55)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-775n2x67.js (55)
  * attribution: placement 55
  */
 import { PressEnterToContinue } from "../../../components/PressEnterToContinue.js";
 import { CC_PLUGIN_YOU_SHOULD_KNOW } from "../../../services/tips/youShouldKnowTip.js";
 
-//@ chunk-bss4k1z9.js:13092-13231 placement
+//@ chunk-775n2x67.js:13400-13539 placement
 function renderNoteRuns(ui, runs, style) {
   let { Text } = ui;
   return runs
@@ -35,9 +35,9 @@ function renderNoteRuns(ui, runs, style) {
       ),
     );
 }
-//@ chunk-bss4k1z9.js:13231-13241 placement
+//@ chunk-775n2x67.js:13539-13549 placement
 var CARD_WIDTH = 60;
-//@ chunk-bss4k1z9.js:13241-13477 placement
+//@ chunk-775n2x67.js:13549-13785 placement
 function aboutCard(ui, runs) {
   let { Box, Text } = ui;
   return h(
@@ -65,16 +65,16 @@ function aboutCard(ui, runs) {
     ),
   );
 }
-//@ chunk-bss4k1z9.js:13477-13579 placement
+//@ chunk-775n2x67.js:13785-13887 placement
 var aboutChoice = (state) => ({
   hotkey: "3",
   label: state.isOpen ? "Return to topic" : "What is this",
   onPress: state.onPress,
   isDim: true,
 });
-//@ chunk-bss4k1z9.js:13579-13641 placement
+//@ chunk-775n2x67.js:13887-13949 placement
 var plainText = (runs) => runs.map((run) => run.map((part) => part.text).join("")).join(" ");
-//@ chunk-bss4k1z9.js:13641-13739 placement
+//@ chunk-775n2x67.js:13949-14047 placement
 var LEARN = [
   {
     text: "Learn more",
@@ -84,9 +84,9 @@ var LEARN = [
     text: " to get a deeper explanation and chat about it.",
   },
 ];
-//@ chunk-bss4k1z9.js:13739-13779 placement
+//@ chunk-775n2x67.js:14047-14087 placement
 var OFF_COMMAND = `/plugin disable ${CC_PLUGIN_YOU_SHOULD_KNOW}@builtin`;
-//@ chunk-bss4k1z9.js:13779-13860 placement
+//@ chunk-775n2x67.js:14087-14168 placement
 var PLUGIN_OFF = [
   {
     text: "Disable on this machine with ",
@@ -99,25 +99,25 @@ var PLUGIN_OFF = [
     text: ".",
   },
 ];
-//@ chunk-bss4k1z9.js:13860-13933 placement
+//@ chunk-775n2x67.js:14168-14241 placement
 var WATCHING = [
   {
     text: "A side agent is watching your back while Claude works.",
   },
 ];
-//@ chunk-bss4k1z9.js:13933-14042 placement
+//@ chunk-775n2x67.js:14241-14350 placement
 var WHEN = [
   {
     text: "When something comes up that you should know but might miss, this plugin flags it for you.",
   },
 ];
-//@ chunk-bss4k1z9.js:14042-14060 placement
+//@ chunk-775n2x67.js:14350-14368 placement
 var APP_COPY = [WATCHING, WHEN, LEARN];
-//@ chunk-bss4k1z9.js:14060-14081 placement
+//@ chunk-775n2x67.js:14368-14389 placement
 var TERMINAL_COPY = [WATCHING, WHEN, LEARN, PLUGIN_OFF];
-//@ chunk-bss4k1z9.js:14081-14095 placement
+//@ chunk-775n2x67.js:14389-14403 placement
 var ABOUT_THIS = plainText(TERMINAL_COPY);
-//@ chunk-bss4k1z9.js:14095-14347 placement
+//@ chunk-775n2x67.js:14403-14655 placement
 function offerHead(ui, { lead, body, surface, copy }) {
   let { Box, Text } = ui;
   let isDesktop = surface === "desktop";
@@ -155,7 +155,7 @@ function offerHead(ui, { lead, body, surface, copy }) {
         body,
       );
 }
-//@ chunk-bss4k1z9.js:14347-14431 placement
+//@ chunk-775n2x67.js:14655-14739 placement
 var ABOUT_CLOSED = {
   isOpen: false,
   surface: "terminal",
@@ -165,18 +165,18 @@ var ABOUT_CLOSED = {
   copy: TERMINAL_COPY,
   budget: "scrolls",
 };
-//@ chunk-bss4k1z9.js:14431-14440 placement
+//@ chunk-775n2x67.js:14739-14748 placement
 var CHOICE_GAP = 3;
-//@ chunk-bss4k1z9.js:14440-14453 placement
+//@ chunk-775n2x67.js:14748-14761 placement
 var KEY_TEXT = "0: ";
-//@ chunk-bss4k1z9.js:14453-14465 placement
+//@ chunk-775n2x67.js:14761-14773 placement
 var WIDE_FROM = 4352;
-//@ chunk-bss4k1z9.js:14465-14535 placement
+//@ chunk-775n2x67.js:14773-14843 placement
 var cellsAtMost = (text) =>
   [...text].reduce((acc, char) => acc + ((char.codePointAt(0) ?? 0) >= WIDE_FROM ? 2 : 1), 0);
-//@ chunk-bss4k1z9.js:14535-14544 placement
+//@ chunk-775n2x67.js:14843-14852 placement
 var WRAP_RESERVE_CELLS = 1;
-//@ chunk-bss4k1z9.js:14544-14736 placement
+//@ chunk-775n2x67.js:14852-15044 placement
 function wrapRows(text, width) {
   let max = Math.max(width - WRAP_RESERVE_CELLS, 1);
   let rowCount = 0;
@@ -190,7 +190,7 @@ function wrapRows(text, width) {
   }
   return rowCount;
 }
-//@ chunk-bss4k1z9.js:14736-14914 placement
+//@ chunk-775n2x67.js:15044-15222 placement
 function choicesRows({ columns, labels }) {
   let max = Math.max(columns, 1);
   let rows = 1;
@@ -207,13 +207,13 @@ function choicesRows({ columns, labels }) {
   }
   return rows;
 }
-//@ chunk-bss4k1z9.js:14914-14923 placement
+//@ chunk-775n2x67.js:15222-15231 placement
 var OFFER_MARGIN_ROWS = 1;
-//@ chunk-bss4k1z9.js:14923-14932 placement
+//@ chunk-775n2x67.js:15231-15240 placement
 var STAR_CELLS = 2;
-//@ chunk-bss4k1z9.js:14932-14957 placement
+//@ chunk-775n2x67.js:15240-15265 placement
 var taggedLeadText = (tag) => `${tag} \xB7 `;
-//@ chunk-bss4k1z9.js:14957-15024 placement
+//@ chunk-775n2x67.js:15265-15332 placement
 var headedRows = (text, frame) =>
   OFFER_MARGIN_ROWS +
   wrapRows(text, frame.columns - STAR_CELLS) +
@@ -221,11 +221,11 @@ var headedRows = (text, frame) =>
     ...frame,
     columns: frame.columns - 2,
   });
-//@ chunk-bss4k1z9.js:15024-15059 placement
+//@ chunk-775n2x67.js:15332-15367 placement
 var closedOfferRows = (offer) => headedRows(taggedLeadText(offer.tag) + offer.line, offer);
-//@ chunk-bss4k1z9.js:15059-15084 placement
+//@ chunk-775n2x67.js:15367-15392 placement
 var offerRows = (offer) => headedRows(offer.note, offer);
-//@ chunk-bss4k1z9.js:15084-15250 placement
+//@ chunk-775n2x67.js:15392-15558 placement
 function fittedCopy(offer) {
   let fits = (count) =>
     offerRows({
@@ -235,7 +235,7 @@ function fittedCopy(offer) {
     }) <= offer.maxRows;
   return offer.copy.slice(0, offer.copy.map((line, index) => offer.copy.length - index).find(fits) ?? 0);
 }
-//@ chunk-bss4k1z9.js:15250-15626 placement
+//@ chunk-775n2x67.js:15558-15934 placement
 function aboutFit(about, frame) {
   let closedChoice = aboutChoice(about);
   let openChoice = aboutChoice({
@@ -270,11 +270,11 @@ function aboutFit(about, frame) {
     choices: showChoices ? [closedChoice] : [],
   };
 }
-//@ chunk-bss4k1z9.js:15626-15747 placement
-var aboutFrame = (isCompact, { maxRows, bodyColumns }, userType) => {
+//@ chunk-775n2x67.js:15934-16055 placement
+var aboutFrame = (isCompact, { maxRows, bodyColumns }, hideCopy) => {
   let copy = isCompact ? APP_COPY : TERMINAL_COPY;
   return {
-    copy: userType ? [] : copy,
+    copy: hideCopy ? [] : copy,
     budget: isCompact
       ? "scrolls"
       : {
@@ -283,9 +283,9 @@ var aboutFrame = (isCompact, { maxRows, bodyColumns }, userType) => {
         },
   };
 };
-//@ chunk-bss4k1z9.js:15747-15801 placement
+//@ chunk-775n2x67.js:16055-16109 placement
 var aboutKeyOf = ({ line, shownAt }) => `${shownAt ?? "unstamped"} ${line}`;
-//@ chunk-bss4k1z9.js:15801-15933 placement
+//@ chunk-775n2x67.js:16109-16241 placement
 async function aboutShown(ctx, id) {
   try {
     return (
@@ -299,7 +299,7 @@ async function aboutShown(ctx, id) {
     return;
   }
 }
-//@ chunk-bss4k1z9.js:15933-16141 placement
+//@ chunk-775n2x67.js:16241-16449 placement
 async function toggleAbout(ctx, { sid, key }) {
   let stateKey = {
     plugin: "cc-plugin-you-should-know",
@@ -316,7 +316,7 @@ async function toggleAbout(ctx, { sid, key }) {
     return;
   }
 }
-//@ chunk-bss4k1z9.js:16141-16544 placement
+//@ chunk-775n2x67.js:16449-16852 placement
 var ANSWERS = [
   "helpful",
   "yes_explain",
@@ -347,24 +347,24 @@ var ANSWERS = [
   "off_confirmed",
   "off_abandoned",
 ];
-//@ chunk-bss4k1z9.js:16544-16574 placement
+//@ chunk-775n2x67.js:16852-16882 placement
 var choiceOf = (value, of) => ({
   value,
   of,
 });
-//@ chunk-bss4k1z9.js:16574-16606 placement
+//@ chunk-775n2x67.js:16882-16914 placement
 var CLEARED_BY = ["prompt", "session_end"];
-//@ chunk-bss4k1z9.js:16606-16667 placement
+//@ chunk-775n2x67.js:16914-16975 placement
 var EXPLAIN_DIRECTIONS = ["first", "simpler_words", "less_detail", "more_detail"];
-//@ chunk-bss4k1z9.js:16667-16699 placement
+//@ chunk-775n2x67.js:16975-17007 placement
 var EXPLAINED_OUTCOMES = ["shown", "fork", "empty"];
-//@ chunk-bss4k1z9.js:16699-16735 placement
+//@ chunk-775n2x67.js:17007-17043 placement
 var LEFT_BY = ["session_end", "pushed_out"];
-//@ chunk-bss4k1z9.js:16735-16780 placement
+//@ chunk-775n2x67.js:17043-17088 placement
 var OPENERS = ["understand", "review", "learn", "see"];
-//@ chunk-bss4k1z9.js:16780-16808 placement
+//@ chunk-775n2x67.js:17088-17116 placement
 var QUESTION_WORDS = ["why", "how", "what"];
-//@ chunk-bss4k1z9.js:16808-17021 placement
+//@ chunk-775n2x67.js:17116-17329 placement
 function lineKind(line) {
   let parts = (line ?? "").toLowerCase().split(/[^a-z0-9']+/);
   let firstWord = parts[0] ?? "";
@@ -375,7 +375,7 @@ function lineKind(line) {
     asks: choiceOf(last ?? "none", [...QUESTION_WORDS, "none"]),
   };
 }
-//@ chunk-bss4k1z9.js:17021-17093 placement
+//@ chunk-775n2x67.js:17329-17401 placement
 var markOf = (feature, kind, reason) =>
   kind === "ok"
     ? {
@@ -387,9 +387,9 @@ var markOf = (feature, kind, reason) =>
         kind,
         reason,
       };
-//@ chunk-bss4k1z9.js:17093-17124 placement
+//@ chunk-775n2x67.js:17401-17432 placement
 var OFF_VIA = ["row", "offer", "typed"];
-//@ chunk-bss4k1z9.js:17124-17220 placement
+//@ chunk-775n2x67.js:17432-17528 placement
 var PAGE_KINDS = {
   ready: "ok",
   reset: null,
@@ -399,16 +399,16 @@ var PAGE_KINDS = {
   blocked: "sad",
   timeout: "bad",
 };
-//@ chunk-bss4k1z9.js:17220-17284 placement
+//@ chunk-775n2x67.js:17528-17592 placement
 function pageMark(reason) {
   let kind = PAGE_KINDS[reason];
   return kind ? markOf("learn_page", kind, reason) : undefined;
 }
-//@ chunk-bss4k1z9.js:17284-17354 placement
+//@ chunk-775n2x67.js:17592-17662 placement
 var PAGE_OUTCOMES = ["ready", "reset", "fork", "empty", "publish", "blocked", "timeout"];
-//@ chunk-bss4k1z9.js:17354-17391 placement
+//@ chunk-775n2x67.js:17662-17699 placement
 var PROMPT_ORIGINS = ["composer", "bridge", "other"];
-//@ chunk-bss4k1z9.js:17391-17505 placement
+//@ chunk-775n2x67.js:17699-17813 placement
 var PROPOSED_KINDS = {
   shown: "ok",
   none: "ok",
@@ -419,12 +419,12 @@ var PROPOSED_KINDS = {
   api_error: "bad",
   error: "bad",
 };
-//@ chunk-bss4k1z9.js:17505-17630 placement
+//@ chunk-775n2x67.js:17813-17938 placement
 function proposedMark(result) {
   let kind = result.outcome === "none" && result.usage === null ? null : PROPOSED_KINDS[result.outcome];
   return kind ? markOf("you_should_know", kind, result.outcome) : undefined;
 }
-//@ chunk-bss4k1z9.js:17630-17717 placement
+//@ chunk-775n2x67.js:17938-18025 placement
 var PROPOSED_OUTCOMES = [
   "shown",
   "none",
@@ -435,16 +435,16 @@ var PROPOSED_OUTCOMES = [
   "api_error",
   "error",
 ];
-//@ chunk-bss4k1z9.js:17717-17784 placement
+//@ chunk-775n2x67.js:18025-18092 placement
 var TAG_OPENERS = {
   "You should know": "you_should_know",
   "Heads up": "heads_up",
 };
-//@ chunk-bss4k1z9.js:17784-17864 placement
+//@ chunk-775n2x67.js:18092-18172 placement
 var tagOpener = (tag) => ({
   opener: choiceOf(tag === undefined ? "none" : TAG_OPENERS[tag], [...Object.values(TAG_OPENERS), "none"]),
 });
-//@ chunk-bss4k1z9.js:17864-17961 placement
+//@ chunk-775n2x67.js:18172-18269 placement
 var UNANSWERED_OUTCOMES = {
   "nothing-to-fork": "none",
   "api-error": "api_error",

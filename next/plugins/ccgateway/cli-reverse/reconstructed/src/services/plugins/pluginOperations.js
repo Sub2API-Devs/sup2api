@@ -3,10 +3,10 @@
  *
  * 并入已有模块：插件被组织或策略阻止时的结果；--plugin-dir 等无法安装/更新/卸载的插件说明等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/plugins/pluginOperations.ts
- * pieces: chunk-1qpz7qcd.js (1), chunk-csq9ftr9.js (1), chunk-e6aww6q8.js (1), chunk-pp50kewz.js (114)
- * attribution: fingerprint 10, callgraph-fingerprint 3, placement 38, file-local 2, layout 63, callgraph-witnessed 1
+ * pieces: chunk-5xgkngpb.js (1), chunk-ck4jrdtf.js (1), chunk-md9fmgw9.js (114), chunk-n0gp41wj.js (1)
+ * attribution: fingerprint 9, placement 39, callgraph-fingerprint 3, file-local 2, layout 63, callgraph-witnessed 1
  */
 import { join, dirname, relative, resolve, sep } from "path";
 import {
@@ -97,6 +97,7 @@ import {
 } from "../../utils/plugins/marketplacePolicy.js";
 import {
   isMarketplaceAutoUpdate,
+  isLocalMarketplaceSource,
   isUnavailablePackageMarketplace,
   formatPackageMarketplaceUnavailable,
   isAsciiImpersonatingOfficialName,
@@ -126,7 +127,6 @@ import {
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { logFeatureOk, logFeatureBad, logFeatureSad } from "../analytics/featureTelemetry.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
-import { isLocalMarketplaceSource } from "../../utils/plugins/reconciler.js";
 import {
   oneLineClipped,
   plural,
@@ -203,7 +203,7 @@ import {
 } from "../../utils/plugins/pluginDirectories.js";
 import { stripInvisibleKeepEmoji } from "../../utils/settings/marketplaceSettingsAliases.js";
 import { tildify } from "../../utils/path.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { isBuiltinPluginId, getBuiltinPlugin, getBuiltinPlugins } from "../../plugins/builtinPlugins.js";
 import {
   matchPolicyPluginEntry,
@@ -374,7 +374,7 @@ import {
   getEnabledPluginIdsInSource,
 } from "../../utils/plugins/pluginPolicy.js";
 import { logError } from "../../utils/log.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import {
   installSelectedPlugins,
   getPluginEditableScopes,
@@ -399,6 +399,7 @@ import {
 } from "../../utils/plugins/loadPluginHooks.js";
 import { isSyncWanted, isSyncAvailable } from "./accountSync/syncedPluginHooks.js";
 import { ensureSyncedPluginDirsRegistered } from "../../utils/claudeAiSync/pluginsSync.js";
+import { countWhere } from "../../utils/collections.js";
 import { getPluginAttribution } from "../../utils/plugins/pluginAttribution.js";
 import { getFsImplementation } from "../../utils/fsOperations.js";
 import { CLAUDE_PLUGINS_OFFICIAL } from "../../utils/plugins/officialMarketplace.js";
@@ -408,7 +409,7 @@ import { isReviewerMarkedEntry } from "../../utils/plugins/commandSourceErrors.j
 import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-csq9ftr9.js:8420-8587 callgraph-fingerprint (2.1.88 match: updatePluginOp, 0.187)
+//@ chunk-n0gp41wj.js:8420-8587 callgraph-fingerprint (2.1.88 match: updatePluginOp, 0.187)
 /**
  * 按插件 ID 对一组条目分组（名字配错，见 lead 建议）。
  */
@@ -422,7 +423,7 @@ function countByPluginKey(userHooks) {
   }
   return countsByKey.size > 0 ? hashEntries(countsByKey) : undefined;
 }
-//@ chunk-1qpz7qcd.js:7508-7648 fingerprint (2.1.88 match: disableAllPluginsOp, 0.338)
+//@ chunk-ck4jrdtf.js:7993-8133 placement
 /**
  * 插件批量操作的错误转文本（用户可见错误原样，其他记日志后返回“X failed”）。属 CLI 处理器，见 lead 建议。
  */
@@ -434,7 +435,7 @@ function formatOperationFailure(subtype, error) {
   });
   return `${subtype} failed`;
 }
-//@ chunk-e6aww6q8.js:4444317-4444531 fingerprint (2.1.88 match: resolveDelistedPluginId, 0.791)
+//@ chunk-5xgkngpb.js:4550976-4551190 fingerprint (2.1.88 match: resolveDelistedPluginId, 0.791)
 /**
  * 已下架插件 ID 的解析：排除已有结果的，从安装记录中找出仍存在的。
  */
@@ -450,15 +451,15 @@ async function resolveDelistedPluginId(keys, resolved, storageV5) {
     (key) => installedData.plugins[key]?.some(isInstallationRelevantToCurrentProject) === true,
   );
 }
-//@ chunk-pp50kewz.js:2631-2649 placement
+//@ chunk-md9fmgw9.js:2633-2651 placement
 /**
  * 懒加载的 semver 模块。
  */
 var semverModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-pp50kewz.js:2631", () => {
+deferInit("chunk-md9fmgw9.js:2633", () => {
   semverModule = __toESM(require_semver_3(), 1);
 });
-//@ chunk-pp50kewz.js:2731-3129 placement
+//@ chunk-md9fmgw9.js:2733-3131 placement
 /**
  * 安装时插件不在目录中则刷新一次市场（失败时用缓存）。
  */
@@ -490,7 +491,7 @@ async function refreshMarketplaceOnCatalogMiss(marketplaceName, knownMarketplace
     return "refresh-failed";
   }
 }
-//@ chunk-pp50kewz.js:3129-3330 placement
+//@ chunk-md9fmgw9.js:3131-3332 placement
 /**
  * 记录"安装前先刷新市场"的特性状态：已刷新、刷新失败或不适用。
  */
@@ -499,7 +500,7 @@ function logInstallRefreshFirst(outcome) {
   else if (outcome === "refresh-failed") logFeatureBad("plugin_install_refresh_first", "refresh_failed");
   else logFeatureSad("plugin_install_refresh_first", "ineligible");
 }
-//@ chunk-pp50kewz.js:3330-4013 placement
+//@ chunk-md9fmgw9.js:3332-4015 placement
 /**
  * 按作用域安装前刷新 github 来源的市场。
  */
@@ -552,7 +553,7 @@ async function refreshBeforeScopedInstall(marketplaceName, knownMarketplace, sto
     };
   }
 }
-//@ chunk-pp50kewz.js:4013-4187 placement
+//@ chunk-md9fmgw9.js:4015-4189 placement
 async function installedAndAvailableVersions(input) {
   let installedVersion = await installedVersionAtScope(input);
   let available = await getAvailablePluginVersion(input).catch(() => NO_AVAILABLE_VERSION);
@@ -562,7 +563,7 @@ async function installedAndAvailableVersions(input) {
     loadsInPlaceFrom: available.loadsInPlaceFrom,
   };
 }
-//@ chunk-pp50kewz.js:4187-4838 placement
+//@ chunk-md9fmgw9.js:4189-4840 placement
 /**
  * 描述插件可更新版本与更新命令。
  */
@@ -591,17 +592,17 @@ function describeUpdateAvailability(pluginId, scope, marketplace) {
   let updateHint = updateCommand !== null ? `run \`${updateCommand}\` to get it` : "update it from /plugin";
   return `${` \u2014 the marketplace now offers ${availableLabel}`} (installed: ${installedLabel}); ${updateHint}`;
 }
-//@ chunk-pp50kewz.js:4838-4869 placement
+//@ chunk-md9fmgw9.js:4840-4871 placement
 /**
  * 版本号展示的最大字符数（64）。
  */
 var MAX_VERSION_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NO_AVAILABLE_VERSION;
-deferInit("chunk-pp50kewz.js:4838", () => {
+deferInit("chunk-md9fmgw9.js:4840", () => {
   MAX_VERSION_CHARS = 64;
   NO_AVAILABLE_VERSION = Object.freeze({});
 });
-//@ chunk-pp50kewz.js:4869-5087 placement
+//@ chunk-md9fmgw9.js:4871-5089 placement
 async function installedVersionAtScope({ pluginId, scope, projectPath, storageV5 }) {
   let installedPlugins =
     isStorageV5Enabled() && storageV5 !== undefined
@@ -613,7 +614,7 @@ async function installedVersionAtScope({ pluginId, scope, projectPath, storageV5
   );
   return (installationAtTarget(filtered, scope, projectPath) ?? filtered[0])?.version;
 }
-//@ chunk-pp50kewz.js:5087-5704 placement
+//@ chunk-md9fmgw9.js:5089-5707 placement
 /**
  * 查询插件可用版本（市场条目或系统市场）。
  */
@@ -670,20 +671,20 @@ async function getAvailablePluginVersion({
     loadsInPlaceFrom: loadsInPlace ? pluginEntryPath.entryPath : undefined,
   };
 }
-//@ chunk-pp50kewz.js:5704-5827 placement
+//@ chunk-md9fmgw9.js:5707-5830 placement
 function claudeAiSourceVersion(entry) {
   let { source } = entry;
   if (!(typeof source !== "string" && source.source === "claudeai")) return;
   return entry.version || source.version || undefined;
 }
-//@ chunk-pp50kewz.js:5827-5873 placement
+//@ chunk-md9fmgw9.js:5830-5876 placement
 /**
  * 清洗版本号（去掉不可见字符但保留 emoji）。
  */
 function cleanVersion(version) {
   return version === undefined ? undefined : stripInvisibleKeepEmoji(version);
 }
-//@ chunk-pp50kewz.js:5873-6648 placement
+//@ chunk-md9fmgw9.js:5876-6651 placement
 /**
  * --plugin-dir 等无法安装/更新/卸载的插件说明。
  */
@@ -702,7 +703,7 @@ function unmanageablePluginMessage(marketplaceName, operation) {
       return `This plugin is loaded from ${tildify(join(getClaudeConfigDir(), "skills"))}/ with no marketplace backing \u2014 it cannot be ${pastTense}. Delete the directory to remove it; \`claude plugin disable\` to turn it off; edits there take effect after /reload-plugins.`;
   }
 }
-//@ chunk-pp50kewz.js:6648-6968 placement
+//@ chunk-md9fmgw9.js:6651-6971 placement
 /**
  * 插件操作被拒原因（内置插件、托管插件等）。
  */
@@ -714,18 +715,18 @@ function pluginOperationRefusal(pluginId, marketplaceName, operation) {
     return `This is a built-in plugin \u2014 built-in plugins cannot be installed, updated or uninstalled. ${managedPluginRefusal(pluginId)?.message ?? "Use `claude plugin enable` / `claude plugin disable` to turn it on or off."}`;
   return;
 }
-//@ chunk-pp50kewz.js:6968-7071 placement
+//@ chunk-md9fmgw9.js:6971-7074 placement
 function unmanageablePluginReason(pluginId, marketplaceName) {
   if (isUnavailablePackageMarketplace(marketplaceName)) return "marketplace_not_available";
   return isBuiltinPluginId(pluginId) ? "builtin" : "directory_loaded";
 }
-//@ chunk-pp50kewz.js:7071-7172 placement
+//@ chunk-md9fmgw9.js:7074-7175 placement
 function lockedDependentName(pluginId, marketplaceName) {
   let { name: pluginName } = parsePluginId(pluginId);
   let match = matchPolicyPluginEntry(getPolicyEnabledPluginEntries(), pluginName, marketplaceName);
   return match.outcome === "locked" ? match.entry.name : undefined;
 }
-//@ chunk-pp50kewz.js:7172-7293 placement
+//@ chunk-md9fmgw9.js:7175-7296 placement
 function nonInstallableSourceLabel(marketplace) {
   switch (marketplace) {
     case INLINE_PLUGIN_MARKETPLACE:
@@ -736,7 +737,7 @@ function nonInstallableSourceLabel(marketplace) {
       return "claude.ai-synced";
   }
 }
-//@ chunk-pp50kewz.js:7293-7484 callgraph-fingerprint (2.1.88 match: VALID_INSTALLABLE_SCOPES, 0.443)
+//@ chunk-md9fmgw9.js:7296-7487 callgraph-fingerprint (2.1.88 match: VALID_INSTALLABLE_SCOPES, 0.443)
 /**
  * 插件作用域常量：可安装作用域 user/project/local，更新可用作用域额外含 managed；SCOPE_PRECEDENCE 表示同名设置的覆盖优先级（local 最高）。
  */
@@ -749,7 +750,7 @@ var SCOPE_PRECEDENCE = {
   local: 2,
 };
 var VALID_UPDATE_SCOPES = ["user", "project", "local", "managed"];
-//@ chunk-pp50kewz.js:7484-7590 fingerprint (2.1.88 match: assertInstallableScope, 1)
+//@ chunk-md9fmgw9.js:7487-7593 fingerprint (2.1.88 match: assertInstallableScope, 1)
 /**
  * 校验作用域是 user/project/local 之一，否则抛错。
  */
@@ -757,21 +758,21 @@ function assertInstallableScope(scope) {
   if (!VALID_INSTALLABLE_SCOPES.includes(scope))
     throw Error(`Invalid scope "${scope}". Must be one of: ${VALID_INSTALLABLE_SCOPES.join(", ")}`);
 }
-//@ chunk-pp50kewz.js:7590-7629 file-local
+//@ chunk-md9fmgw9.js:7593-7632 file-local
 /**
  * 作用域是否为可安装作用域（user/project/local）。
  */
 function isInstallableScope(scope) {
   return VALID_INSTALLABLE_SCOPES.includes(scope);
 }
-//@ chunk-pp50kewz.js:7629-7691 layout (2.1.88 match: isMcpServerFromProjectOrLocalSettings, 1)
+//@ chunk-md9fmgw9.js:7632-7694 layout (2.1.88 match: isMcpServerFromProjectOrLocalSettings, 1)
 /**
  * 插件作用域对应的项目路径：project/local 作用域返回当前项目根，其他返回 undefined。旧版名 isMcpServerFromProjectOrLocalSettings 配错。
  */
 function getProjectPathForScope(config) {
   return config === "project" || config === "local" ? getOriginalCwd() : undefined;
 }
-//@ chunk-pp50kewz.js:7691-7822 fingerprint (2.1.88 match: isPluginEnabledAtProjectScope, 1)
+//@ chunk-md9fmgw9.js:7694-7825 fingerprint (2.1.88 match: isPluginEnabledAtProjectScope, 1)
 /**
  * 插件是否在项目设置（.claude/settings.json）的 enabledPlugins 中启用（按插件 ID 宽松匹配）。
  */
@@ -781,16 +782,16 @@ function isPluginEnabledAtProjectScope(pluginId) {
   let pluginName = findPluginName(Object.keys(enabledPlugins), pluginId);
   return pluginName !== undefined && enabledPlugins[pluginName] === true;
 }
-//@ chunk-pp50kewz.js:7822-7859 layout
+//@ chunk-md9fmgw9.js:7825-7862 layout
 /**
  * failureCode 是否属于“sad”（用户侧/预期内）类别，决定遥测走 f 还是 m。
  */
 function isSadFailureCode(failureCode) {
   return FAILURE_CODE_SEVERITY[failureCode] === "sad";
 }
-//@ chunk-pp50kewz.js:7859-8716 layout
+//@ chunk-md9fmgw9.js:7862-8719 layout
 var FAILURE_CODE_SEVERITY; // deferred: uses ENTRY_HELPER_FAILURE_SEVERITY (../../utils/plugins/headersHelper.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-pp50kewz.js:7859", () => {
+deferInit("chunk-md9fmgw9.js:7862", () => {
   FAILURE_CODE_SEVERITY = {
     ...ENTRY_HELPER_FAILURE_SEVERITY,
     not_installed: "bad",
@@ -824,7 +825,7 @@ deferInit("chunk-pp50kewz.js:7859", () => {
     dependencies_not_screened: "bad",
   };
 });
-//@ chunk-pp50kewz.js:8716-8925 layout (2.1.88 match: findPluginInSettings, 0.828)
+//@ chunk-md9fmgw9.js:8719-8928 layout (2.1.88 match: findPluginInSettings, 0.828)
 /**
  * 在 installed_plugins 中把用户输入的名字解析成已安装的完整插件 ID。
  */
@@ -840,7 +841,7 @@ function findPluginInSettings_2(plugin) {
   }
   return plugin;
 }
-//@ chunk-pp50kewz.js:8925-9019 layout
+//@ chunk-md9fmgw9.js:8928-9022 layout
 /**
  * 综合各设置源 enabledPlugins、manifest.defaultEnabled 与安装偏好，判断插件当前是否实际启用。
  */
@@ -852,13 +853,13 @@ function isPluginEffectivelyEnabled(pluginId, plugin, builtinPlugins) {
     plugin.installationPreference,
   );
 }
-//@ chunk-pp50kewz.js:9019-9103 layout
+//@ chunk-md9fmgw9.js:9022-9106 layout
 function findScopeDeclaringPlugin(scopes, pluginId) {
   return scopes.find((scope) =>
     Object.hasOwn(getSettingsForSourceForUpkeep(scopeToSettingSource(scope))?.enabledPlugins ?? {}, pluginId),
   );
 }
-//@ chunk-pp50kewz.js:9103-9662 fingerprint (2.1.88 match: findPluginInSettings, 0.869)
+//@ chunk-md9fmgw9.js:9106-9665 fingerprint (2.1.88 match: findPluginInSettings, 0.869)
 /**
  * 在 local > project > user 设置的 enabledPlugins 中找插件，返回 {pluginId, scope}。
  */
@@ -901,19 +902,19 @@ function findPluginInSettings(pluginId, scopes = ["local", "project", "user"]) {
   }
   return null;
 }
-//@ chunk-pp50kewz.js:9662-9724 layout
+//@ chunk-md9fmgw9.js:9665-9727 layout
 function isSameRepoRoot(key, pluginId) {
   let canonicalId = canonicalPluginId(key);
   return legacyPluginIds(canonicalId).length > 0 && canonicalId === canonicalPluginId(pluginId);
 }
-//@ chunk-pp50kewz.js:9724-9760 layout
+//@ chunk-md9fmgw9.js:9727-9763 layout
 /**
  * 插件是否出现在任一可写设置源的 enabledPlugins 中。
  */
 function isPluginInSettings(pluginId) {
   return findPluginInSettings(pluginId) !== null;
 }
-//@ chunk-pp50kewz.js:9760-9971 callgraph-fingerprint (2.1.88 match: findPluginByIdentifier, 1)
+//@ chunk-md9fmgw9.js:9763-9974 callgraph-fingerprint (2.1.88 match: findPluginByIdentifier, 1)
 function findPluginByIdentifier(plugin, plugins) {
   let { name, marketplace } = parsePluginId(plugin);
   return plugins.find((plugin_2) => {
@@ -926,7 +927,7 @@ function findPluginByIdentifier(plugin, plugins) {
     return false;
   });
 }
-//@ chunk-pp50kewz.js:9971-10385 layout
+//@ chunk-md9fmgw9.js:9974-10388 layout
 function resolveInstalledPluginId(pluginId, scope, projectPath) {
   let { name: pluginName } = parsePluginIdentifier(pluginId);
   let installedPlugins = getInstalledPlugins();
@@ -962,7 +963,7 @@ function resolveInstalledPluginId(pluginId, scope, projectPath) {
     };
   return null;
 }
-//@ chunk-pp50kewz.js:10385-10954 fingerprint (2.1.88 match: getPluginInstallationFromV2, 1)
+//@ chunk-md9fmgw9.js:10388-10957 fingerprint (2.1.88 match: getPluginInstallationFromV2, 1)
 /**
  * 从 installed_plugins V2 记录中按作用域与当前项目路径找到对应安装条目。
  */
@@ -1009,7 +1010,7 @@ function getPluginInstallationFromV2(pluginId) {
     projectPath: installations[0].projectPath,
   };
 }
-//@ chunk-pp50kewz.js:10954-11366 layout
+//@ chunk-md9fmgw9.js:10957-11369 layout
 function describePolicyBlock(block) {
   switch (block.reason) {
     case "blocked-by-policy":
@@ -1024,7 +1025,7 @@ function describePolicyBlock(block) {
       };
   }
 }
-//@ chunk-pp50kewz.js:11366-11515 layout
+//@ chunk-md9fmgw9.js:11369-11518 layout
 /**
  * 是否“仅缺少依赖”：插件在该作用域启用且缓存存在，加载问题只有依赖未找到（dependency-unsatisfied/not-found）。
  */
@@ -1034,7 +1035,7 @@ async function hasOnlyMissingDependencyIssues(pluginId, scope, storageV5) {
     (error) => error.type !== "dependency-unsatisfied" || error.reason !== "not-found",
   );
 }
-//@ chunk-pp50kewz.js:11515-11715 layout
+//@ chunk-md9fmgw9.js:11518-11718 layout
 function hasDirectoryCounterpartInstalled(pluginName, marketplaceName) {
   {
     let officialMarketplaceTarget = marketplaceName === OFFICIAL_MARKETPLACE_NAME;
@@ -1053,14 +1054,14 @@ function hasDirectoryCounterpartInstalled(pluginName, marketplaceName) {
   }
   return false;
 }
-//@ chunk-pp50kewz.js:11715-11882 layout
+//@ chunk-md9fmgw9.js:11718-11885 layout
 /**
  * --replace 需要完整 name@marketplace 的提示。
  */
 function replaceNeedsFullIdMessage() {
   return "--replace switches one copy of a plugin for another, so it needs the full id of the copy to switch to: name@marketplace. Nothing was installed.";
 }
-//@ chunk-pp50kewz.js:11882-12052 layout
+//@ chunk-md9fmgw9.js:11885-12055 layout
 /**
  * --replace 切换市场副本在本会话不可用的原因：插件目录不在会话中、工作区受限（不读项目/本地设置）、设置源被缩小。
  */
@@ -1071,7 +1072,7 @@ function getReplaceUnavailableReason() {
     return "setting-sources-narrowed";
   return;
 }
-//@ chunk-pp50kewz.js:12052-12766 layout
+//@ chunk-md9fmgw9.js:12055-12769 layout
 /**
  * 把 --replace 不可用原因转成用户提示（CLI 与界面两种措辞）。
  */
@@ -1091,7 +1092,7 @@ function describeReplaceUnavailable(reason, surface) {
   }
   return "";
 }
-//@ chunk-pp50kewz.js:12766-12879 layout
+//@ chunk-md9fmgw9.js:12769-12883 layout
 function describeImpersonatingMarketplace(marketplaceName, knownMarketplace) {
   return `${isAsciiImpersonatingOfficialName(marketplaceName) ? reservedMarketplaceNameError(marketplaceName) : marketplaceLoadFailedMessage(marketplaceName, IMPERSONATION_ERROR_MESSAGE)}. ${marketplaceRemovalAdvice(
     marketplaceName,
@@ -1100,7 +1101,7 @@ function describeImpersonatingMarketplace(marketplaceName, knownMarketplace) {
     },
   )}`;
 }
-//@ chunk-pp50kewz.js:12879-13496 layout
+//@ chunk-md9fmgw9.js:12883-13501 layout
 async function whyNotInstallableInPlace(official, storageV5) {
   if ((official.entry.dependencies?.length ?? 0) > 0) return "its catalog entry declares dependencies";
   let source = official.entry.source;
@@ -1132,28 +1133,28 @@ async function whyNotInstallableInPlace(official, storageV5) {
     return `it could not be checked (${quotedPrintable(errorMessage(error), 200)})`;
   }
 }
-//@ chunk-pp50kewz.js:13496-13557 layout
+//@ chunk-md9fmgw9.js:13501-13562 layout
 async function readInstalledPlugins(storageV5) {
   return isStorageV5Enabled() && storageV5 !== undefined
     ? await loadInstalledPlugins(storageV5)
     : loadInstalledPluginsSync();
 }
-//@ chunk-pp50kewz.js:13557-13611 layout
+//@ chunk-md9fmgw9.js:13562-13616 layout
 async function getInstallationsOf(pluginId, storageV5) {
   return (await readInstalledPlugins(storageV5)).plugins[pluginId];
 }
-//@ chunk-pp50kewz.js:13611-13694 layout
+//@ chunk-md9fmgw9.js:13616-13699 layout
 async function isPluginPossiblyInstalled(key, storageV5) {
   let installedPlugins = await readInstalledPlugins(storageV5);
   return hasFailedInstalledPluginsRead(installedPlugins) || (installedPlugins.plugins[key]?.length ?? 0) > 0;
 }
-//@ chunk-pp50kewz.js:13694-13756 layout
+//@ chunk-md9fmgw9.js:13699-13761 layout
 function latestInstallationAtScope(installationsOf, scope) {
   return hasInstallationForCurrentProject(
     (installationsOf ?? []).filter((installation) => installation.scope === scope),
   );
 }
-//@ chunk-pp50kewz.js:13756-36288 callgraph-witnessed (2.1.88 match: installPluginOp, 0.16)
+//@ chunk-md9fmgw9.js:13761-36337 callgraph-witnessed (2.1.88 match: installPluginOp, 0.16)
 /**
  * 安装插件的操作入口（CLI claude plugin install 与 /plugin 界面）：解析 name[@marketplace]、校验作用域与策略（blocklist/policy、市场被禁）、取 marketplace 条目、处理依赖（自动安装同市场或白名单市场的依赖）、下载缓存、写 installed_plugins.json 与 settings 的 enabledPlugins；支持 --replace 在不同市场副本间切换。
  */
@@ -1884,7 +1885,7 @@ This install runs that command; confirm it by running \`claude plugin install\` 
         dependencyReadError !== undefined ||
         (intersected !== undefined && (!intersected.ok || intersected.range !== "*"))
       ) {
-        let requirers = uniq(dependencies?.requirers.get(officialId) ?? []);
+        let requirers = normalizeCaseForComparison_2(dependencies?.requirers.get(officialId) ?? []);
         logForDebugging(
           `Bare-name install of "${quotedPrintable(pluginName)}": the ${OFFICIAL_MARKETPLACE_DISPLAY}'s copy could not be fetched, and ${quotedPrintable(officialId)} was not installed in its place: ${dependencyReadError !== undefined ? `could not read the installed plugins to check (${quotedPrintable(dependencyReadError, 300)})` : `${quotedPrintable(requirers.join(", "))} ${requirers.length === 1 ? "requires" : "require"} version ${quotedPrintable(ranges.join(", "))} of it, which could be downloaded from the marketplace's git host`}`,
         );
@@ -2363,35 +2364,35 @@ This install runs that command; confirm it by running \`claude plugin install\` 
     }),
   };
 }
-//@ chunk-pp50kewz.js:36288-36447 layout
+//@ chunk-md9fmgw9.js:36337-36496 layout
 function nothingSwitchedSuffix(isSwitchContext, pluginId) {
   return isSwitchContext
     ? `${/[.?]$/.test(pluginId) ? " " : ". "}Nothing was switched: no installed copy of this plugin from another marketplace matched this listing`
     : "";
 }
-//@ chunk-pp50kewz.js:36447-36519 layout
+//@ chunk-md9fmgw9.js:36496-36568 layout
 /**
  * 插件 ID 展示用：截断到 200 字符并去掉不可见字符，全不可见时给占位描述。
  */
 function displayPluginId(pluginId) {
   return printableLabel(printableName(pluginId, 200)) || "an id with no visible characters";
 }
-//@ chunk-pp50kewz.js:36519-36598 layout
+//@ chunk-md9fmgw9.js:36568-36647 layout
 function displayFolderName(file) {
   return printableLabel(file) || "a folder with no visible characters in its name";
 }
-//@ chunk-pp50kewz.js:36598-36663 layout
+//@ chunk-md9fmgw9.js:36647-36712 layout
 function describeFolder(folder) {
   let label = printableLabel(folder);
   return label === "" ? displayFolderName(folder) : `the folder ${label}`;
 }
-//@ chunk-pp50kewz.js:36663-36712 layout
+//@ chunk-md9fmgw9.js:36712-36761 layout
 function displayMarketplaceName(marketplaceName) {
   return marketplaceName === OFFICIAL_MARKETPLACE_NAME
     ? marketplaceDisplayName(marketplaceName)
     : printableLabel(printableName(marketplaceName, 64));
 }
-//@ chunk-pp50kewz.js:36712-36987 layout
+//@ chunk-md9fmgw9.js:36761-37036 layout
 function findOtherPluginSharingDataDir(pluginId, installedData, excluded = new Set([pluginId])) {
   {
     if (hasFailedInstalledPluginsRead(installedData))
@@ -2415,14 +2416,14 @@ function findOtherPluginSharingDataDir(pluginId, installedData, excluded = new S
     kind: "records-unreadable",
   };
 }
-//@ chunk-pp50kewz.js:36987-37402 layout
+//@ chunk-md9fmgw9.js:37036-37451 layout
 /**
  * 卸载时插件数据目录被保留的说明（另一插件共用、或安装列表读不到无法判断）。
  */
 function describeKeptDataDir(keptData, targetPluginId) {
   return `The data directory of ${displayPluginId(keptData.pluginId)} was kept: ${keptData.reason === "another-plugin-uses-it" ? `${keptData.usedBy === undefined ? "the list of installed plugins could not be read, so another installed plugin may use it" : `${displayPluginId(keptData.usedBy)} is installed and uses it`}${keptData.copied ? `; its contents were also copied to ${displayPluginId(targetPluginId)}` : ""}` : keptData.reason === "target-had-own" ? `${displayPluginId(targetPluginId)} already had its own` : "it could not be copied"}`;
 }
-//@ chunk-pp50kewz.js:37402-37589 layout
+//@ chunk-md9fmgw9.js:37451-37638 layout
 function getEnabledValueAtScope(scope, pluginId, installedIds) {
   let enabledPlugins = getSettingsForSourceForUpkeep(scopeToSettingSource(scope))?.enabledPlugins ?? {};
   let pluginName = findPluginName(Object.keys(enabledPlugins), pluginId);
@@ -2436,11 +2437,11 @@ function getEnabledValueAtScope(scope, pluginId, installedIds) {
     ? enabledPlugins[pluginName]
     : undefined;
 }
-//@ chunk-pp50kewz.js:37589-37631 layout
+//@ chunk-md9fmgw9.js:37638-37680 layout
 function dataDirKey(pluginId) {
   return pluginDataDirPath(pluginId).toLowerCase();
 }
-//@ chunk-pp50kewz.js:37631-42839 layout
+//@ chunk-md9fmgw9.js:37680-42888 layout
 /**
  * 卸载后仍残留 local 作用域安装记录时的长说明（列出文件夹、原因与清理命令）。
  */
@@ -2602,7 +2603,7 @@ function describeLeftLocalRecords({ shownId, shownNewId, folders, because }) {
   }
   return "";
 }
-//@ chunk-pp50kewz.js:42839-43471 layout
+//@ chunk-md9fmgw9.js:42888-43520 layout
 function describeSecretStore(pluginId, carriedTo) {
   {
     let storeKind = primarySecureStoreKind();
@@ -2630,7 +2631,7 @@ function describeSecretStore(pluginId, carriedTo) {
     carriedClause: () => "",
   };
 }
-//@ chunk-pp50kewz.js:43471-45146 layout
+//@ chunk-md9fmgw9.js:43520-45195 layout
 /**
  * 无安装记录但上次卸载清理未完成时的说明（残留的密钥存储项、数据目录等）。
  */
@@ -2659,7 +2660,7 @@ function describeUnfinishedCleanup({ pluginId, entry, carriedTo, dataFolder }) {
   }
   return "";
 }
-//@ chunk-pp50kewz.js:45146-46442 layout
+//@ chunk-md9fmgw9.js:45195-46491 layout
 /**
  * 移除安装记录后清理残留时的说明文本。
  */
@@ -2679,7 +2680,7 @@ function describeLeftRecordCleanup({ pluginId, folder, entry, carriedTo, dataFol
   }
   return "";
 }
-//@ chunk-pp50kewz.js:46442-47492 layout
+//@ chunk-md9fmgw9.js:46491-47541 layout
 /**
  * 找出哪些 settings.local.json（本会话目录、其他仓库目录）仍提到该插件，供卸载提示使用。
  */
@@ -2741,7 +2742,7 @@ async function findLocalSettingsMentions(
     launchProjectFileOn: undefined,
   };
 }
-//@ chunk-pp50kewz.js:47492-47607 layout
+//@ chunk-md9fmgw9.js:47541-47656 layout
 function isSameRepoPathMoved(file, otherFile) {
   if (realpathAllowMissing(file)) return false;
   let gitRootUncached = findGitRootUncached(dirname(file));
@@ -2753,7 +2754,7 @@ function isSameRepoPathMoved(file, otherFile) {
     relative(gitRootUncached, file) === relative(gitRootUncached_2, otherFile)
   );
 }
-//@ chunk-pp50kewz.js:47607-48061 layout
+//@ chunk-md9fmgw9.js:47656-48110 layout
 async function checkDirectoryBindingPersistable(pluginId) {
   {
     let outcome = await persistDirectoryBinding(pluginId, getInstalledPlugins().plugins[pluginId]);
@@ -2765,11 +2766,11 @@ async function checkDirectoryBindingPersistable(pluginId) {
   }
   return;
 }
-//@ chunk-pp50kewz.js:48061-48100 layout
+//@ chunk-md9fmgw9.js:48110-48149 layout
 function getRepoRootOrCwd() {
   return getProjectConfigRoot() ?? resolveLocalSettingsStoreRoot(getOriginalCwd(), uncachedStorageRootFor);
 }
-//@ chunk-pp50kewz.js:48100-48294 layout
+//@ chunk-md9fmgw9.js:48149-48343 layout
 function isInstallationForThisRepo(installation) {
   {
     let originalCwd = getOriginalCwd();
@@ -2787,7 +2788,7 @@ function isInstallationForThisRepo(installation) {
   }
   return false;
 }
-//@ chunk-pp50kewz.js:48294-70928 layout
+//@ chunk-md9fmgw9.js:48343-70983 layout
 /**
  * --replace 切换到另一个市场的同名插件之后的收尾：迁移启用状态与插件选项、禁用/卸载旧副本，生成结果说明。
  */
@@ -2896,7 +2897,7 @@ async function finishReplaceSwitch(
     let withDataDirUsers = (installedIds) =>
       installedIds === "unknown"
         ? installedIds
-        : uniq([
+        : normalizeCaseForComparison_2([
             ...installedIds,
             ...uninstalledCopies.flatMap((uninstalled) =>
               uninstalled.record === undefined ? [] : [uninstalled.copy.pluginId],
@@ -3628,7 +3629,7 @@ async function finishReplaceSwitch(
       })
       .join("");
     let localFolders = (copy) =>
-      uniq(
+      normalizeCaseForComparison_2(
         (installedPlugins.plugins[copy.pluginId] ?? []).flatMap((install) =>
           install.scope === "local" && install.projectPath !== undefined && isInstallationForThisRepo(install)
             ? [install.projectPath]
@@ -3702,7 +3703,7 @@ async function finishReplaceSwitch(
       let kept = keptFolders.get(copy) ?? [];
       let filtered = (
         finalInstalledIds === "unknown"
-          ? uniq((folderJudgements.get(copy) ?? []).map(({ folder }) => folder))
+          ? normalizeCaseForComparison_2((folderJudgements.get(copy) ?? []).map(({ folder }) => folder))
           : localFolders(copy)
       ).filter((folder) => !kept.includes(folder));
       let [firstFolder] = filtered;
@@ -4024,7 +4025,7 @@ async function finishReplaceSwitch(
       keptDataDir,
       from: primaryCopy.pluginId,
       replaced: copies.map((copy) => copy.pluginId),
-      oldCopyStillRecordedAt: uniq([
+      oldCopyStillRecordedAt: normalizeCaseForComparison_2([
         ...flattened_2.map((entry) => entry.scope),
         ...(joined_2 === "" ? [] : ["local"]),
       ]),
@@ -4046,15 +4047,15 @@ async function finishReplaceSwitch(
     message: "",
   };
 }
-//@ chunk-pp50kewz.js:70928-71035 layout
+//@ chunk-md9fmgw9.js:70983-71090 layout
 function directoryBlockedMessage(pluginName) {
   return `Plugin "${quotedPrintable(pluginName)}" is from the ${OFFICIAL_MARKETPLACE_DISPLAY}, which is blocked by your organization. ${pluginDirectoryPolicyBlockHint()}`;
 }
-//@ chunk-pp50kewz.js:71035-71113 layout
+//@ chunk-md9fmgw9.js:71090-71168 layout
 function directoryUnreachableMessage() {
   return `couldn't reach the ${OFFICIAL_MARKETPLACE_DISPLAY}, so this may not be the latest`;
 }
-//@ chunk-pp50kewz.js:71113-71275 layout
+//@ chunk-md9fmgw9.js:71168-71330 layout
 function appendRefreshWarning({ refreshWarning, directoryRefreshFailed }, message) {
   return refreshWarning === undefined
     ? message
@@ -4062,7 +4063,7 @@ function appendRefreshWarning({ refreshWarning, directoryRefreshFailed }, messag
       ? `${message} Warning: ${directoryUnreachableMessage()}.`
       : `${message} Warning: ${refreshWarning} \u2014 version shown may be stale.`;
 }
-//@ chunk-pp50kewz.js:71275-71493 layout
+//@ chunk-md9fmgw9.js:71330-71548 layout
 function upToDateMessage(updateInfo, version) {
   return updateInfo.directoryNotChecked
     ? `${updateInfo.pluginName} was not checked for updates: the ${OFFICIAL_MARKETPLACE_DISPLAY} isn't available in this session (installed: ${version})`
@@ -4071,7 +4072,7 @@ function upToDateMessage(updateInfo, version) {
         `${updateInfo.pluginName} is already at the latest version (${version}).`,
       );
 }
-//@ chunk-pp50kewz.js:71493-77525 fingerprint (2.1.88 match: uninstallPluginOp, 0.405)
+//@ chunk-md9fmgw9.js:71548-77581 fingerprint (2.1.88 match: uninstallPluginOp, 0.405)
 /**
  * 卸载插件：从指定作用域的安装记录与 enabledPlugins 中移除，最后一个安装被移除时删除版本缓存、插件数据目录（可保留）与密钥存储里的 userConfig 敏感值；托管插件拒绝。
  */
@@ -4195,7 +4196,7 @@ async function uninstallPluginOp(
   let flattened = Object.entries(installedPlugins.plugins).flatMap(([key, value]) =>
     key !== pluginId_2 && pluginNamesEqual(key, pluginId_2) && value.length > 0 ? [key] : [],
   );
-  flattened = uniq([
+  flattened = normalizeCaseForComparison_2([
     ...flattened,
     ...bindingKeysFor(installedPlugins.plugins, pluginId_2).flatMap(([key, installations]) =>
       key !== pluginId_2 && installations.length > 0 ? [key] : [],
@@ -4366,7 +4367,7 @@ async function uninstallPluginOp(
     reverseDependents: reverseDependents.length > 0 ? reverseDependents : undefined,
   };
 }
-//@ chunk-pp50kewz.js:77525-79169 layout
+//@ chunk-md9fmgw9.js:77581-79225 layout
 /**
  * 设置文件写入了但本会话读不到（网络路径或未被读取）时的提示文本。
  */
@@ -4403,7 +4404,7 @@ function describeSettingsWriteNotRead(pluginName, readFailure, file, error, sour
     ? `"${printableName}" was not uninstalled: it is still switched on in ${fileLabel}${errorSuffix}. It is still installed. Once that file can be saved, uninstall it again.`
     : `"${printableName}" was not uninstalled: it is still switched on in ${fileLabel}, although the settings change reported no error. It is still installed. Take it out of "enabledPlugins" in that file yourself, then uninstall it again.`;
 }
-//@ chunk-pp50kewz.js:79169-79329 layout (2.1.88 match: formatFileSize, 0.782)
+//@ chunk-md9fmgw9.js:79225-79385 layout (2.1.88 match: formatFileSize, 0.782)
 async function formatFileSize(sizeInBytes) {
   try {
     let repoSettingsBytes = await readRepoSettingsBytes(sizeInBytes);
@@ -4418,11 +4419,11 @@ async function formatFileSize(sizeInBytes) {
     return false;
   }
 }
-//@ chunk-pp50kewz.js:79329-79482 layout
+//@ chunk-md9fmgw9.js:79385-79538 layout
 function manualCleanupHint(pluginId) {
   return `take ${pluginId} entries out of "pluginConfigs" in your user settings file and out of "pluginSecrets" in your credentials store yourself`;
 }
-//@ chunk-pp50kewz.js:79482-79983 layout
+//@ chunk-md9fmgw9.js:79538-80039 layout
 /**
  * 卸载后安装列表无法重新读取时的说明：插件保存的选项、密钥、用量记录（及数据目录）被保留，并告诉用户如何删除。
  */
@@ -4430,7 +4431,7 @@ function keptSavedDataMessage(pluginId, hadDataDir) {
   let quotedId = `"${quotedPrintable(pluginId)}"`;
   return `What ${quotedId} saved was kept (its options, its secrets${hadDataDir ? ", its usage record and its data folder" : " and its usage record"}): the list of installed plugins could not be read again, so ${quotedId} may still be installed at another scope. If it is installed again, it will use what was kept without asking. To delete what was kept, uninstall ${quotedId} again; if that says it is not installed, install it and then uninstall it; if it can no longer be installed, ${manualCleanupHint("its")}.`;
 }
-//@ chunk-pp50kewz.js:79983-80981 layout
+//@ chunk-md9fmgw9.js:80039-81037 layout
 /**
  * 卸载最后一条安装记录后的清理：官方市场插件检查同目录的兄弟安装，必要时把版本目录标记为孤儿，清理已删除记录的缓存，在最后一个作用域被卸载时释放目录名绑定、删除选项/密钥与数据目录。
  */
@@ -4517,7 +4518,7 @@ async function cleanupAfterUninstall({
       (bindingResult === undefined || bindingResult.optionsGone),
   };
 }
-//@ chunk-pp50kewz.js:80981-81955 layout
+//@ chunk-md9fmgw9.js:81037-82011 layout
 /**
  * 为卸载的插件执行目录名释放计划：仍在某处启用时返回 stillOn 细节，未完全删除选项/数据或存在占用者时返回说明结构，全部清理完毕时返回 undefined。
  */
@@ -4580,7 +4581,7 @@ async function releaseDirectoryBinding(
     };
   return;
 }
-//@ chunk-pp50kewz.js:81955-82112 file-local
+//@ chunk-md9fmgw9.js:82011-82168 file-local
 function getProjectPathForScope_2(stillOn, scope) {
   return stillOn.map((stillOn) =>
     stillOn.readsBack !== "on"
@@ -4590,7 +4591,7 @@ function getProjectPathForScope_2(stillOn, scope) {
         : describeUnwritableSettingsSource(stillOn),
   );
 }
-//@ chunk-pp50kewz.js:82112-85070 layout
+//@ chunk-md9fmgw9.js:82168-85126 layout
 /**
  * 卸载一个已无安装记录、但目录名仍被绑定的官方市场插件：先从可写的设置里移除 enabledPlugins 中的同名项，确认没有其他地方启用、也没有新安装记录后，释放目录绑定并返回结果说明。
  */
@@ -4720,7 +4721,7 @@ async function uninstallLeftoverOfficialName(pluginId, scope, deleteDataDir, sto
   }
   return;
 }
-//@ chunk-pp50kewz.js:85070-86368 layout
+//@ chunk-md9fmgw9.js:85126-86424 layout
 /**
  * 列出删除插件保存的选项/密钥前用户需要先做的事：解锁钥匙串、修复不可读或不可写的设置文件与凭据存储等。
  */
@@ -4765,7 +4766,7 @@ function savedDataFixSteps(reasons, storeKind) {
   }
   return "";
 }
-//@ chunk-pp50kewz.js:86368-89406 layout
+//@ chunk-md9fmgw9.js:86424-89462 layout
 /**
  * 根据目录释放结果生成给用户的说明：仍启用的位置、安装列表不可读、存在占用者、绑定文件不可用，以及选项/密钥/数据目录未删除时的处理建议与重新卸载命令。
  */
@@ -4840,7 +4841,7 @@ function directoryReleaseNote(result) {
   }
   return "";
 }
-//@ chunk-pp50kewz.js:89406-99791 fingerprint (2.1.88 match: setPluginEnabledOp, 0.318)
+//@ chunk-md9fmgw9.js:89462-99847 fingerprint (2.1.88 match: setPluginEnabledOp, 0.318)
 /**
  * 启用/禁用插件：写入目标作用域 settings 的 enabledPlugins[pluginId]=true/false；处理托管策略锁定、被依赖（禁用时提示谁依赖它）、依赖自动启用、作用域优先级（已有更高作用域值时提示）。
  */
@@ -5357,7 +5358,7 @@ async function setPluginEnabledOp(pluginId, enabled, scope, options, storageV5) 
     if (disableAtScopes.length > 0) {
       let { name } = parsePluginIdentifier(resolvedId);
       let joined = disableAtScopes.map((entry) => `${entry.dep} (${entry.scope} scope)`).join(", ");
-      let scopes = uniq(disableAtScopes.map((entry) => entry.scope));
+      let scopes = normalizeCaseForComparison_2(disableAtScopes.map((entry) => entry.scope));
       let scopeHint =
         scopes.length === 1 ? `, or use --scope ${scopes[0]} to write where the override lives` : "";
       return {
@@ -5403,21 +5404,21 @@ async function setPluginEnabledOp(pluginId, enabled, scope, options, storageV5) 
     reverseDependents: rdeps,
   };
 }
-//@ chunk-pp50kewz.js:99791-99844 layout
+//@ chunk-md9fmgw9.js:99847-99900 layout
 /**
  * 启用插件：setPluginEnabledOp(pluginId, true, scope)。
  */
 async function enablePluginOp(pluginId, scope, storageV5) {
   return setPluginEnabledOp(pluginId, true, scope, undefined, storageV5);
 }
-//@ chunk-pp50kewz.js:99844-99897 layout
+//@ chunk-md9fmgw9.js:99900-99953 layout
 /**
  * 禁用插件：setPluginEnabledOp(pluginId, false, scope)。
  */
 async function disablePluginOp(pluginId, scope, storageV5) {
   return setPluginEnabledOp(pluginId, false, scope, undefined, storageV5);
 }
-//@ chunk-pp50kewz.js:99897-102187 layout
+//@ chunk-md9fmgw9.js:99953-102243 layout
 /**
  * 列出必须保持启用的插件：托管策略 policySettings 启用的、claude.ai 同步要求的，以及它们的依赖闭包；用于禁止禁用。
  */
@@ -5425,7 +5426,7 @@ async function listRequiredPlugins(storageV5) {
   let pluginEditableScopes = getPluginEditableScopes();
   await ensureSyncedPluginDirsRegistered();
   let syncedRequired = await listSyncedRequiredPlugins(storageV5);
-  let syncedIds = uniq(syncedRequired.map((syncedPlugin) => syncedPlugin.id));
+  let syncedIds = normalizeCaseForComparison_2(syncedRequired.map((syncedPlugin) => syncedPlugin.id));
   let requiredSyncedIds = new Set(
     syncedRequired
       .filter((syncedPlugin) => syncedPlugin.required)
@@ -5476,7 +5477,7 @@ async function listRequiredPlugins(storageV5) {
   let policyRequired = new Set(buildRequiredByPolicyMap(allPlugins).keys());
   let isPolicyRequired = (pluginId) => policyRequired.has(nfcLower(normalizePluginId(pluginId)));
   let candidates = [...pluginEditableScopes.keys(), ...filtered_2, ...filtered_3];
-  let requiredAndDisabled = uniq(
+  let requiredAndDisabled = normalizeCaseForComparison_2(
     candidates.filter(
       (pluginId) =>
         !isManagedDisabled(pluginId, isSyncedDisabled, groupedPlugins) && isPolicyRequired(pluginId),
@@ -5543,7 +5544,7 @@ async function listRequiredPlugins(storageV5) {
     else disabled.push(pluginId);
   }
   if (filtered_4.length > 0) refreshPluginCaches(storageV5);
-  let stillOnCount = count(
+  let stillOnCount = countWhere(
     disabled,
     (pluginId) => getPluginEnablingSource(pluginId, groupedPlugins) === "flagSettings",
   );
@@ -5564,7 +5565,7 @@ ${failures.join(`
     message: `Disabled ${disabled.length} ${plural(disabled.length, "plugin")}${skippedSuffix}${stillOnSuffix}`,
   };
 }
-//@ chunk-pp50kewz.js:102187-102435 layout
+//@ chunk-md9fmgw9.js:102243-102491 layout
 async function listSyncedRequiredPlugins(storageV5) {
   return (
     await Promise.all(
@@ -5585,7 +5586,7 @@ async function listSyncedRequiredPlugins(storageV5) {
     )
   ).flat();
 }
-//@ chunk-pp50kewz.js:102435-102675 layout
+//@ chunk-md9fmgw9.js:102491-102731 layout
 function buildRequiredByPolicyMap(plugins) {
   let dependentsByKey = new Map();
   let syncAvailable = isSyncAvailable();
@@ -5603,18 +5604,18 @@ function buildRequiredByPolicyMap(plugins) {
   }
   return dependentsByKey;
 }
-//@ chunk-pp50kewz.js:102675-102882 layout
+//@ chunk-md9fmgw9.js:102731-102938 layout
 function requiredDependencyMessage(name, dependents) {
   return `${name} is needed by ${dependents.map((dependent) => stripInvisibleKeepEmoji(dependent.name)).join(", ")}, which ${plural(dependents.length, "is", "are")} required by your organization, so it can't be disabled here. Contact your admin to change it.`;
 }
-//@ chunk-pp50kewz.js:102882-103014 layout
+//@ chunk-md9fmgw9.js:102938-103070 layout
 /**
  * “该插件由组织要求启用，不能在此禁用”的提示文本。
  */
 function requiredPluginMessage(pluginName) {
   return `Plugin "${pluginName}" is required by your organization and can't be disabled here. Contact your admin to change it.`;
 }
-//@ chunk-pp50kewz.js:103014-104076 layout
+//@ chunk-md9fmgw9.js:103070-104132 layout
 /**
  * 更新插件的操作入口（CLI 与 /plugin 界面共用）：执行实际更新，异常按 failureCode 分 bad/sad 记 plugin_update_op 遥测，返回 {outcome, message, scope, failureCode}。
  */
@@ -5674,7 +5675,7 @@ async function updatePluginOp(pluginId, scope, options = {}, storageV5) {
   }
   return result;
 }
-//@ chunk-pp50kewz.js:104076-105363 layout
+//@ chunk-md9fmgw9.js:104132-105419 layout
 /**
  * 更新结果为 up_to_date 时补充检查：安装路径已不存在则改报需重新安装。
  */
@@ -5747,7 +5748,7 @@ async function annotateUpToDateResult(result, installation, pluginName, storageV
     message: `Installed the packages that "${pluginName}" lists for scope ${scopeLabel}. Restart to apply changes. ${result.message}`,
   };
 }
-//@ chunk-pp50kewz.js:105363-121835 layout
+//@ chunk-md9fmgw9.js:105419-121897 layout
 /**
  * 插件更新主体：刷新所属市场（可跳过）、按作用域找到安装记录，重新 cachePlugin + copyPluginToVersionedCache 得到新版本，比较版本后更新 installed_plugins 记录；command 来源需用户同意，背景模式下跳过。
  */
@@ -6688,7 +6689,7 @@ async function updatePluginOpInner(
       });
   }
 }
-//@ chunk-pp50kewz.js:121835-121960 fingerprint (2.1.88 match: VALID_UPDATE_SCOPES, 1)
+//@ chunk-md9fmgw9.js:121897-122022 fingerprint (2.1.88 match: VALID_UPDATE_SCOPES, 1)
 /**
  * 按插件各条目的 scope 选出一个更新作用域：local < project < user，都没有则 managed。
  */
@@ -6701,7 +6702,7 @@ function pickUpdateScope(installations) {
     ) ?? "managed"
   );
 }
-//@ chunk-pp50kewz.js:121960-123943 fingerprint (2.1.88 match: performPluginUpdate, 0.358)
+//@ chunk-md9fmgw9.js:122022-124005 fingerprint (2.1.88 match: performPluginUpdate, 0.358)
 /**
  * 执行一次插件更新并整理成 CLI 输出用的结果对象（不存在时报“not installed”）。
  */
@@ -6846,7 +6847,7 @@ async function performPluginUpdate(pluginId, pluginName, scope, installations, s
     scope,
   };
 }
-//@ chunk-pp50kewz.js:123943-124391 placement
+//@ chunk-md9fmgw9.js:124005-124453 placement
 /**
  * 归档来源插件下载会运行 headersHelper 时的警告。
  */
@@ -6878,7 +6879,7 @@ async function archiveFetchWarning(pluginId, entry, storageV5) {
   if (isHeadersHelperDisabledByPolicy(marketplaceSource, marketplaceName)) return null;
   return getEntryHelperConsentSubject(consentSubject, resolvedEntry.source.url);
 }
-//@ chunk-pp50kewz.js:124391-124642 placement
+//@ chunk-md9fmgw9.js:124453-124704 placement
 /**
  * 生成插件归档获取命令的披露文本：会把 helper 生成的请求头发到哪个地址、隐藏字符警告与实际运行的本地命令。
  */
@@ -6890,7 +6891,7 @@ function archiveHelperDisclosure(entry) {
     `the local command it runs (headersHelper) is: ${details.command}`
   );
 }
-//@ chunk-pp50kewz.js:124642-124869 placement
+//@ chunk-md9fmgw9.js:124704-124931 placement
 function recordedSourceCommand(pluginId, source, installationsOf) {
   let spec = commandSourceSpecOf(source);
   if (!spec || !installationsOf || installationsOf.length === 0 || isPluginsDirOnLocalDisk()) return;
@@ -6903,7 +6904,7 @@ function recordedSourceCommand(pluginId, source, installationsOf) {
     pluginId,
   };
 }
-//@ chunk-pp50kewz.js:124869-125641 placement
+//@ chunk-md9fmgw9.js:124931-125703 placement
 /**
  * 在已知市场中自动安装缺失的插件。
  */
@@ -6954,7 +6955,7 @@ async function autoInstallFromMarketplace(
   }
   return;
 }
-//@ chunk-pp50kewz.js:125641-126162 placement
+//@ chunk-md9fmgw9.js:125703-126224 placement
 /**
  * 按名字在所有市场中搜索插件。
  */
@@ -7006,14 +7007,14 @@ async function findPluginInMarketplaces(pluginName, storageV5, onDirectoryError)
   if (firstError !== undefined) throw firstError;
   return;
 }
-//@ chunk-pp50kewz.js:126162-126219 placement
+//@ chunk-md9fmgw9.js:126224-126281 placement
 /**
  * 判断目标目录之外是否还有条目。
  */
 async function hasEntriesOutsideTarget(absolute, oldInstallPath) {
   return oldInstallPath === undefined || (await hasEntriesOutsideTarget_2(absolute, oldInstallPath));
 }
-//@ chunk-pp50kewz.js:126219-126279 placement
+//@ chunk-md9fmgw9.js:126281-126341 placement
 /**
  * 在指定作用域的启用插件里查找条目。
  */
@@ -7024,7 +7025,7 @@ function findPluginInSource(scope, pluginId, pluginName) {
     pluginName,
   );
 }
-//@ chunk-pp50kewz.js:126279-126378 placement
+//@ chunk-md9fmgw9.js:126341-126440 placement
 /**
  * 按来源缓存分组后的启用插件。
  */
@@ -7039,7 +7040,7 @@ function groupedEnabledPlugins() {
     return grouped;
   };
 }
-//@ chunk-pp50kewz.js:126378-126516 placement
+//@ chunk-md9fmgw9.js:126440-126578 placement
 function findPluginEntry(enabledPlugins, pluginId, groupPlugins) {
   if (!enabledPlugins) return;
   let key = isOfficialPluginId(pluginId)
@@ -7052,7 +7053,7 @@ function findPluginEntry(enabledPlugins, pluginId, groupPlugins) {
         value: enabledPlugins[key],
       };
 }
-//@ chunk-pp50kewz.js:126516-126997 placement
+//@ chunk-md9fmgw9.js:126578-127059 placement
 /**
  * 按作用域查找插件安装记录。
  */
@@ -7093,14 +7094,14 @@ function locatePluginInstall(pluginId, requestedScope, groupPlugins) {
     effective: pluginSetting?.enabled,
   };
 }
-//@ chunk-pp50kewz.js:126997-127038 placement
+//@ chunk-md9fmgw9.js:127059-127100 placement
 var sorted; // deferred: uses MANAGED_PLUGIN_DISABLE_MESSAGE of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-pp50kewz.js:126997", () => {
+deferInit("chunk-md9fmgw9.js:127059", () => {
   sorted = [...VALID_INSTALLABLE_SCOPES].sort(
     (left, right) => SCOPE_PRECEDENCE[right] - SCOPE_PRECEDENCE[left],
   );
 });
-//@ chunk-pp50kewz.js:127038-127856 placement
+//@ chunk-md9fmgw9.js:127100-127918 placement
 /**
  * 插件被组织或策略阻止时的结果。
  */
@@ -7125,7 +7126,7 @@ function pluginBlockedResult(pluginId, enabled, lockSource, legacyKey) {
     failureCode: "settings_flag_override",
   };
 }
-//@ chunk-pp50kewz.js:127856-128053 placement (2.1.88 match: getEnabledSettingSources, 0.862)
+//@ chunk-md9fmgw9.js:127918-128115 placement (2.1.88 match: getEnabledSettingSources, 0.861)
 function getPluginEnablementLockingSource(pluginId, desiredEnabled) {
   let result = new Set(getEnabledSettingSources());
   for (let source of ["policySettings", "flagSettings"]) {
@@ -7136,7 +7137,7 @@ function getPluginEnablementLockingSource(pluginId, desiredEnabled) {
   }
   return;
 }
-//@ chunk-pp50kewz.js:128053-128347 placement (2.1.88 match: loadAllPermissionRulesFromDisk, 0.344)
+//@ chunk-md9fmgw9.js:128115-128409 placement (2.1.88 match: loadAllPermissionRulesFromDisk, 0.344)
 /**
  * 插件启用的锁定来源：仅策略启用的插件返回 policySettings；否则看覆盖来源是否为 flagSettings 等（属插件启用管理，误归入 permissionsLoader）。
  */
@@ -7157,14 +7158,14 @@ function getPluginEnablingSource(pluginId, groupPlugins) {
     ? override.source
     : undefined;
 }
-//@ chunk-pp50kewz.js:128347-128406 placement (2.1.88 match: _temp7, 1)
+//@ chunk-md9fmgw9.js:128409-128468 placement (2.1.88 match: _temp7, 1)
 /**
  * 是否由托管策略启用（不能禁用/卸载）。
  */
 function isManagedDisabled(pluginId, isDisabledBySync, groupPlugins) {
   return isDisabledBySync(pluginId) || getPluginEnablingSource(pluginId, groupPlugins) === "policySettings";
 }
-//@ chunk-pp50kewz.js:128406-128531 placement
+//@ chunk-md9fmgw9.js:128468-128593 placement
 /**
  * 插件由托管策略设置启用时返回拒绝结果（不能禁用或卸载）。
  */
@@ -7177,7 +7178,7 @@ function managedPluginRefusal(pluginId) {
       }
     : undefined;
 }
-//@ chunk-pp50kewz.js:128531-128641 placement
+//@ chunk-md9fmgw9.js:128593-128703 placement
 /**
  * 插件由 --settings 启用时返回附注："本会话仍启用"。
  */
@@ -7186,14 +7187,14 @@ function flagSettingsEnabledNote(pluginId) {
     ? " (still enabled this session: --settings keeps it on)"
     : "";
 }
-//@ chunk-pp50kewz.js:128641-128766 placement
+//@ chunk-md9fmgw9.js:128703-128828 placement
 function matchingEnabledKeys(enabledPlugins, pluginId) {
   let keys = Object.keys(enabledPlugins ?? {});
   if (!isOfficialPluginId(pluginId)) return keys.filter((key) => key === pluginId);
   let lowerId = nfcLower(pluginId);
   return keys.filter((key) => nfcLower(key) === lowerId);
 }
-//@ chunk-pp50kewz.js:128766-129148 placement
+//@ chunk-md9fmgw9.js:128828-129210 placement
 /**
  * 写入 enabledPlugins（替换遗留键）。
  */
@@ -7228,14 +7229,14 @@ function writeEnabledPlugins(source, pluginId, enabled, extraRecords, storageV5)
     storageV5,
   );
 }
-//@ chunk-pp50kewz.js:129148-129208 placement
+//@ chunk-md9fmgw9.js:129210-129270 placement
 /**
  * 取某作用域下所有插件的记录。
  */
 function pluginRecordsFor(source, pluginId) {
   return enabledPluginsBySource(source, pluginId, undefined).map(({ record }) => record);
 }
-//@ chunk-pp50kewz.js:129208-129386 placement
+//@ chunk-md9fmgw9.js:129270-129448 placement
 function enabledPluginsBySource(overriddenSource, pluginId, overrideValue) {
   return SETTING_SOURCES_DESC.map((source) => {
     let enabledPlugins = getSettingsForSourceForUpkeep(source)?.enabledPlugins;
@@ -7257,27 +7258,35 @@ function enabledPluginsBySource(overriddenSource, pluginId, overrideValue) {
     };
   });
 }
-//@ chunk-pp50kewz.js:129386-129411 placement
+//@ chunk-md9fmgw9.js:129448-129473 placement
 var SETTING_SOURCES_DESC; // deferred: uses SETTING_SOURCES (../../utils/settings/constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-pp50kewz.js:129386", () => {
+deferInit("chunk-md9fmgw9.js:129448", () => {
   SETTING_SOURCES_DESC = [...SETTING_SOURCES].reverse();
 });
 export {
+  installPluginOp,
   updatePluginOp,
+  countByPluginKey,
+  resolveDelistedPluginId,
+  isPluginEnabledAtProjectScope,
+  VALID_INSTALLABLE_SCOPES,
+  logInstallRefreshFirst,
+  replaceNeedsFullIdMessage,
+  enablePluginOp,
+  VALID_UPDATE_SCOPES,
+  formatOperationFailure,
   findPluginInMarketplaces,
   hasOnlyMissingDependencyIssues,
   archiveFetchWarning,
   archiveHelperDisclosure,
   refreshBeforeScopedInstall,
-  installPluginOp,
   getProjectPathForScope,
   isPluginInSettings,
   uninstallPluginOp,
   disablePluginOp,
   listRequiredPlugins,
   isSadFailureCode,
-  formatOperationFailure,
-  countByPluginKey,
+  refreshMarketplaceOnCatalogMiss,
   displayPluginId,
   findPluginInSettings_2,
   getReplaceUnavailableReason,
@@ -7286,16 +7295,8 @@ export {
   getPluginInstallationFromV2,
   isInstallableScope,
   MANAGED_PLUGIN_DISABLE_MESSAGE,
-  enablePluginOp,
-  isPluginEnabledAtProjectScope,
   requiredPluginMessage,
   managedPluginRefusal,
   flagSettingsEnabledNote,
   describeKeptDataDir,
-  VALID_INSTALLABLE_SCOPES,
-  logInstallRefreshFirst,
-  replaceNeedsFullIdMessage,
-  VALID_UPDATE_SCOPES,
-  resolveDelistedPluginId,
-  refreshMarketplaceOnCatalogMiss,
 };

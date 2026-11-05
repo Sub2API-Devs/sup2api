@@ -3,30 +3,79 @@
  *
  * 2.1.316 新增。会话状态分类（启发式 + 模型）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-spwda8nt.js (35)
- * attribution: placement 34, affinity 1
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3bj63apf.js (33), chunk-hvf6qeg9.js (3)
+ * attribution: placement 34, layout 1, affinity 1
  */
+import { createSignal } from "../../utils/signal.js";
+import { HostScoped } from "../../utils/hostScoped.js";
+import { getRootSession } from "../../bootstrap/state.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { create, create_2, create_20, create_12, create_26 } from "../../../vendor/zod/lib/index.mjs";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { countCharInString } from "../../utils/stringUtils.js";
 import { jsonParse } from "../../utils/slowOperations.js";
 import { truncateContent } from "../../utils/telemetry/betaSessionTracing.js";
 import { foldConfusableCharacters } from "../../utils/confusables.js";
-import { createSignal } from "../../utils/signal.js";
-import { HostScoped } from "../../utils/hostScoped.js";
-import { getRootSession } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-spwda8nt.js:523-750 placement
+//@ chunk-hvf6qeg9.js:297-765 placement
+/**
+ * 后台会话状态：在途工作快照（任务、排队、类型）及变化信号、待处理结构化结果、迁移后的 cwd 等。
+ */
+class SessionStatusState {
+  inFlightSnapshot = {
+    tasks: 0,
+    queued: 0,
+    kinds: [],
+    items: [],
+  };
+  inFlightSnapshotChanged = createSignal();
+  pendingStructuredResult = undefined;
+  relocatedCwd = undefined;
+  ownStateWriteDepth = 0;
+  warnedUnknownDisabledSurface = false;
+  publishInFlightSnapshot(inFlightSnapshot) {
+    this.inFlightSnapshot = inFlightSnapshot;
+    try {
+      this.inFlightSnapshotChanged.emit();
+    } catch {}
+  }
+  reset() {
+    this.pendingStructuredResult = undefined;
+    this.relocatedCwd = undefined;
+    this.warnedUnknownDisabledSurface = false;
+    this.publishInFlightSnapshot({
+      tasks: 0,
+      queued: 0,
+      kinds: [],
+      items: [],
+    });
+  }
+}
+//@ chunk-hvf6qeg9.js:765-788 placement
+/**
+ * 按 host 保存的会话状态分类状态。
+ */
+var sessionStatusStateSlots; // deferred: uses SessionStatusState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hvf6qeg9.js:765", () => {
+  sessionStatusStateSlots = new HostScoped(() => new SessionStatusState());
+});
+//@ chunk-hvf6qeg9.js:788-824 placement
+/**
+ * 取当前 host 的会话状态分类状态。
+ */
+function currentSessionStatusState() {
+  return sessionStatusStateSlots.of(getRootSession().host);
+}
+//@ chunk-3bj63apf.js:417-644 placement
 /**
  * 订阅无法使用（通常是欠费）时的提示文字。
  */
 var SUBSCRIPTION_PAYMENT_ISSUE_MESSAGE =
   "Claude Code can't use your Claude subscription, usually because a payment is past due \xB7 Pay or renew at https://claude.ai/settings/billing (if you just paid, try again shortly), or use an Anthropic API key instead";
-//@ chunk-spwda8nt.js:750-1815 placement
+//@ chunk-3bj63apf.js:644-1709 placement
 /**
  * 会话状态分类用的 schema、四种状态的提示说明、输出字段说明与长度上限，以及终态集合。
  */
@@ -36,7 +85,7 @@ var OUTPUT_FIELD_DESCRIPTIONS;
 var MAX_HEADLINE_LENGTH;
 var MAX_NEEDS_LENGTH;
 var TERMINAL_STATES;
-deferInit("chunk-spwda8nt.js:750", () => {
+deferInit("chunk-3bj63apf.js:644", () => {
   SESSION_STATE_SCHEMA = DoctorLazy(() =>
     create({
       state: create_2().nullish(),
@@ -62,7 +111,7 @@ deferInit("chunk-spwda8nt.js:750", () => {
   MAX_NEEDS_LENGTH = 2000;
   TERMINAL_STATES = new Set(["done", "failed", "stopped"]);
 });
-//@ chunk-spwda8nt.js:1815-1941 placement
+//@ chunk-3bj63apf.js:1709-1835 placement
 /**
  * 截断字符串到给定长度并加省略号，避免切开代理对。
  */
@@ -73,14 +122,14 @@ function truncateWithEllipsis(text, maxLength) {
   if (code >= 55296 && code <= 56319) cutIndex--;
   return text.slice(0, cutIndex) + "\u2026";
 }
-//@ chunk-spwda8nt.js:1941-1978 placement
+//@ chunk-3bj63apf.js:1835-1872 placement
 /**
  * 判断截至给定位置之前是否有未闭合的代码围栏（据此忽略围栏里的文本）。
  */
 function hasOpenCodeFenceAt(text, endIndex) {
   return findOpenCodeFence(text, endIndex) !== null;
 }
-//@ chunk-spwda8nt.js:1978-2413 placement
+//@ chunk-3bj63apf.js:1872-2307 placement
 /**
  * 扫描到指定位置为止，找出仍未闭合的代码围栏（``` 或 ~~~，行首最多 3 个空格），返回其标记与长度或 null。
  */
@@ -129,7 +178,7 @@ function findOpenCodeFence(text, limit) {
         length: openLength,
       };
 }
-//@ chunk-spwda8nt.js:2413-2498 placement
+//@ chunk-3bj63apf.js:2307-2392 placement
 /**
  * 生成闭合当前未闭合代码围栏所需的标记行（没有则空串）。
  */
@@ -141,17 +190,108 @@ function openCodeFenceCloser(transcriptText) {
         `
 `;
 }
-//@ chunk-spwda8nt.js:2498-2561 placement
+//@ chunk-3bj63apf.js:2392-2455 placement
 /**
  * 组织需要验证时的 needs 文案。
  */
 var VERIFICATION_REQUIRED_NEEDS = "organization verification required \u2014 see detail";
-//@ chunk-spwda8nt.js:4008-4275 placement
+//@ chunk-3bj63apf.js:2455-4018 layout
+/**
+ * API 错误类型 → 轮后摘要的 {state: blocked/failed, needs: 提示}（登录、组织禁用 OAuth、限额、过载、请求过大等）。
+ */
+function classifyApiErrorForSummary(error, message = "", reason) {
+  if (reason === "dlp_request_denied" || reason === "safety_monitor_blocked")
+    return {
+      state: "failed",
+      needs: "API error",
+    };
+  if (reason === "network_edge_blocked")
+    return {
+      state: "blocked",
+      needs: "network or region blocked \u2014 check VPN or network",
+    };
+  switch (error) {
+    case "authentication_failed":
+      return {
+        state: "blocked",
+        needs: "login required \u2014 run /login",
+      };
+    case "oauth_org_not_allowed":
+      return message === SUBSCRIPTION_PAYMENT_ISSUE_MESSAGE
+        ? {
+            state: "blocked",
+            needs: "can't use subscription \u2014 pay or renew, or use API key",
+          }
+        : {
+            state: "blocked",
+            needs: "org disabled OAuth \u2014 use API key or ask admin",
+          };
+    case "account_on_hold":
+      return {
+        state: "blocked",
+        needs: "account on hold \u2014 see detail",
+      };
+    case "cloud_credential_error":
+      return {
+        state: "blocked",
+        needs: "cloud credentials unavailable \u2014 check or refresh them",
+      };
+    case "verification_required":
+      return {
+        state: "blocked",
+        needs: VERIFICATION_REQUIRED_NEEDS,
+      };
+    case "billing_error":
+      return {
+        state: "blocked",
+        needs: "usage limit reached \u2014 check plan",
+      };
+    case "rate_limit":
+      return {
+        state: "blocked",
+        needs: "rate limited \u2014 wait and retry",
+      };
+    case "overloaded":
+      return {
+        state: "blocked",
+        needs: "API overloaded \u2014 wait and retry",
+      };
+    case "server_error":
+      return {
+        state: "blocked",
+        needs: "API unavailable \u2014 retry",
+      };
+    case "invalid_request":
+      return /\b(too long|too large|exceeds|token limit|prompt is too long)\b/i.test(message)
+        ? {
+            state: "blocked",
+            needs: "request too large \u2014 /compact or trim",
+          }
+        : {
+            state: "blocked",
+            needs: "invalid API request \u2014 see detail",
+          };
+    case "max_output_tokens":
+      return null;
+    case undefined:
+      return {
+        state: "blocked",
+        needs: "API error \u2014 see detail",
+      };
+    case "unknown":
+    default:
+      return {
+        state: "failed",
+        needs: "API error",
+      };
+  }
+}
+//@ chunk-3bj63apf.js:4018-4285 placement
 var FAILED_LINE_RE = /(?:^|\n)\s*failed\s*[:\u2014\u2013-]\s*(.{3,200}?)(?=\n|$)/gi;
 var NEEDS_INPUT_LINE_RE = /(?:^|\n)\s*needs input\s*[:\u2014\u2013-]\s*(.{3,200}?)(?=\n|$)/gi;
 var BLOCKED_LINE_RE = /(?:^|\n)\s*blocked\s*[:\u2014\u2013-]\s*(.{3,200}?)(?=\n|$)/gi;
 var IM_BLOCKED_RE = /\bI'?m blocked\s*[:\u2014\u2013-]\s*(.{3,200}?)(?=\n|$)/gi;
-//@ chunk-spwda8nt.js:4275-4527 placement
+//@ chunk-3bj63apf.js:4285-4537 placement
 function findLastStatusLine(fullText, segment, offset) {
   let best;
   for (let [state, pattern] of [
@@ -172,7 +312,7 @@ function findLastStatusLine(fullText, segment, offset) {
     }
   return best;
 }
-//@ chunk-spwda8nt.js:4527-4997 placement
+//@ chunk-3bj63apf.js:4537-5007 placement
 /**
  * 判断助手消息结尾的类型：空、在代码围栏中、Result 行、Failed 行、问号结尾、列表/表格或陈述句。
  */
@@ -191,7 +331,7 @@ function classifyMessageEnding(text) {
   if (/(?:^|\n)\s*(?:[-*\u2022]|\d+\.|[|])\s/.test(sliced_2)) return "list-or-table";
   return "declarative";
 }
-//@ chunk-spwda8nt.js:4997-9386 placement
+//@ chunk-3bj63apf.js:5007-9393 placement
 /**
  * 用启发式规则判断会话状态（等待输入、运行中、出错等）。
  */
@@ -256,7 +396,7 @@ function classifySessionStateHeuristic(text) {
     };
   if (lastStatusLine?.state === "blocked") {
     let sliced = remainingText.slice(lastStatusLine.end);
-    if (count(sliced.split(/\n\s*\n/), (paragraph) => paragraph.trim().length > 0) >= 3) return null;
+    if (countWhere(sliced.split(/\n\s*\n/), (paragraph) => paragraph.trim().length > 0) >= 3) return null;
     if (
       !/\bnothing (?:needed|required) from you\b|\bno(?: user)? action (?:needed|required)\b/i.test(
         remainingText,
@@ -476,7 +616,7 @@ function classifySessionStateHeuristic(text) {
     };
   return null;
 }
-//@ chunk-spwda8nt.js:9386-9976 placement
+//@ chunk-3bj63apf.js:9393-9983 placement
 /**
  * 从给定位置起寻找"等待用户"式的请求句（排除代码块、非请求语境），后面还有正文时标记为过期；返回 {kind:'ask', needs} 或 {kind:'stale'}。
  */
@@ -516,7 +656,7 @@ function findTrailingAsk(text, lastIndex) {
       }
     : undefined;
 }
-//@ chunk-spwda8nt.js:9976-10179 placement
+//@ chunk-3bj63apf.js:9983-10186 placement
 function hasProseAfterParagraph(text, index) {
   let match = /\n[ \t]*\n/.exec(text.slice(index));
   if (!match) return false;
@@ -530,7 +670,7 @@ function hasProseAfterParagraph(text, index) {
   }
   return false;
 }
-//@ chunk-spwda8nt.js:10179-10518 placement
+//@ chunk-3bj63apf.js:10186-10525 placement
 /**
  * 取问句匹配周围的上下文：之前的句子、再之前的句子、之后到句末的文本及结束位置。
  */
@@ -552,7 +692,7 @@ function getAskContext(text, match) {
     end: match_2 ? afterIndex + match_2.index + match_2[0].length : text.length,
   };
 }
-//@ chunk-spwda8nt.js:10518-10730 placement
+//@ chunk-3bj63apf.js:10525-10737 placement
 function classifyAskCandidate(text, match, { before, previous }) {
   let clause = before.split(CLAUSE_BREAK).at(-1) ?? before;
   if (
@@ -565,7 +705,7 @@ function classifyAskCandidate(text, match, { before, previous }) {
     return "not-an-ask";
   return ASYNC_FOLLOWUP.test(text.slice(match.index)) ? "defer" : "ask";
 }
-//@ chunk-spwda8nt.js:10730-10885 placement
+//@ chunk-3bj63apf.js:10737-10892 placement
 /**
  * 用最后一行非空文本构造启发式的 working 状态。
  */
@@ -584,7 +724,7 @@ function buildWorkingState(text) {
     detail: last ? truncateWithEllipsis(last, MAX_HEADLINE_LENGTH) : "\u2014",
   };
 }
-//@ chunk-spwda8nt.js:10885-14842 placement
+//@ chunk-3bj63apf.js:10892-14846 placement
 /**
  * 会话状态启发式规则用到的文本模式表。
  */
@@ -617,7 +757,7 @@ var NEGATION_WORD;
 var OPTIONAL_OFFER;
 var DEFERRED_CONDITION;
 var ASYNC_FOLLOWUP;
-deferInit("chunk-spwda8nt.js:10885", () => {
+deferInit("chunk-3bj63apf.js:10892", () => {
   SESSION_STATE_PATTERNS = /\b(?:want|like) me to\b|\b(?:shall|should) I also\b/i;
   WORKING_VERB_START =
     /^(?:(?:Now|Next|Then|Alright|OK|Okay|Right|Good|First|Also),?\s+)?(?:Let me (?!know\b)|(?:I(?:'?ll| will) |I'?m going to |Going to )(?!need\b|require\b|wait\b|leave\b|hold\b|skip\b|stop\b)|Proceeding |Moving (?:on|to)\b|Continuing |Starting |Trying |Checking |Looking |Searching |Reading |Investigating |Running |Re-?running |Building |Rebuilding |Installing |Fetching |Applying |Fixing |Patching |Updating |Adding |Removing |Deleting |Importing |Refactoring |Rewriting |Writing |Grepping |Scanning |Wrapping |Switching |Testing |Verifying |Regenerating |Pushing |Pulling |Reviewing |Examining |Loading |Compiling |Parsing |Analyzing |Tracing |Exploring )/i;
@@ -666,7 +806,7 @@ deferInit("chunk-spwda8nt.js:10885", () => {
   ASYNC_FOLLOWUP =
     /\bnext check\b|\bagain in\b|\bre-?poll|\bpoll(?:ing)? again\b|\bshepherding\b|\b(?:check(?:ing)? (?:back|again)|re-?check(?:ing)?|report(?:ing)?(?: back)?) (?:in|when|once|after)\b(?! you)/i;
 });
-//@ chunk-spwda8nt.js:14842-15087 placement
+//@ chunk-3bj63apf.js:14846-15091 placement
 /**
  * 构造会话状态分类模型的用户提示：当前状态与持续时间、工具调用摘要、用户最近请求与助手消息尾部。
  */
@@ -683,7 +823,7 @@ User's most recent ask: "${latestAsk}"`
 Assistant message tail (last ${tail.length} chars):
 ${tail}`;
 }
-//@ chunk-spwda8nt.js:15087-15192 placement
+//@ chunk-3bj63apf.js:15091-15196 placement
 /**
  * 解析模型返回的会话状态 JSON，校验失败返回 null。
  */
@@ -693,7 +833,7 @@ function parseSessionStateResponse(text) {
   let parsed = SESSION_STATE_SCHEMA().safeParse(jsonObject);
   return parsed.success ? parsed.data : null;
 }
-//@ chunk-spwda8nt.js:15192-15372 placement
+//@ chunk-3bj63apf.js:15196-15376 placement
 function extractJsonObject(text) {
   let replaced = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
   let index = replaced.indexOf("{");
@@ -705,14 +845,14 @@ function extractJsonObject(text) {
     return;
   }
 }
-//@ chunk-spwda8nt.js:15372-15425 placement
+//@ chunk-3bj63apf.js:15376-15429 placement
 /**
  * 把非空字符串规范成返回值，否则 undefined。
  */
 function nonEmptyString(value) {
   return typeof value === "string" && value ? value : undefined;
 }
-//@ chunk-spwda8nt.js:15425-15871 placement
+//@ chunk-3bj63apf.js:15429-15875 placement
 /**
  * 合并模型给出的会话状态与上一状态：校验状态与节奏，终态强制 idle，过滤并截断输出字段，blocked 时沿用需求说明。
  */
@@ -746,12 +886,12 @@ function mergeSessionState(response, prev, previousState) {
     branch: previousState?.branch,
   };
 }
-//@ chunk-spwda8nt.js:15871-16094 placement
+//@ chunk-3bj63apf.js:15875-16098 placement
 var MAX_HEADLINE_LENGTH_2; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_NEEDS_LENGTH_2;
 var MAX_REPLY_LENGTH;
 var sessionRecapSchema;
-deferInit("chunk-spwda8nt.js:15871", () => {
+deferInit("chunk-3bj63apf.js:15875", () => {
   MAX_HEADLINE_LENGTH_2 = 140;
   MAX_NEEDS_LENGTH_2 = 64;
   MAX_REPLY_LENGTH = 80;
@@ -766,7 +906,7 @@ deferInit("chunk-spwda8nt.js:15871", () => {
     }),
   );
 });
-//@ chunk-spwda8nt.js:16094-16240 placement
+//@ chunk-3bj63apf.js:16098-16244 placement
 /**
  * 解析会话回顾 JSON，校验失败或 happened 为空时返回 null。
  */
@@ -777,7 +917,7 @@ function parseSessionRecap(text) {
   if (!parsed.success || !nonEmptyString(parsed.data.happened)?.trim()) return null;
   return parsed.data;
 }
-//@ chunk-spwda8nt.js:16395-16690 affinity
+//@ chunk-3bj63apf.js:16399-16694 affinity
 function formatHappenedSummary(recap) {
   let happened = truncateContent(recap.happened ?? "");
   let needsYou = truncateContent(recap.needs_you ?? "");
@@ -798,10 +938,10 @@ function formatHappenedSummary(recap) {
     truncated: headline.truncated || happened.truncated || needsYou.truncated || suggestedReply.truncated,
   };
 }
-//@ chunk-spwda8nt.js:16690-16833 placement
+//@ chunk-3bj63apf.js:16694-16837 placement
 var INVISIBLE_FORMAT_RE =
   /(?![\u200C\u200D\uFE0E\uFE0F\u0600-\u0605\u06DD\u070F\u0890\u0891\u08E2\u{110BD}\u{110CD}])[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu;
-//@ chunk-spwda8nt.js:16833-16936 placement
+//@ chunk-3bj63apf.js:16837-16940 placement
 function normalizeWhitespace(text) {
   return text
     .replace(/\p{Cs}/gu, "")
@@ -809,7 +949,7 @@ function normalizeWhitespace(text) {
     .replace(/[\s\u0085\p{Cc}]+/gu, " ")
     .trim();
 }
-//@ chunk-spwda8nt.js:16936-17184 placement
+//@ chunk-3bj63apf.js:16940-17188 placement
 function foldForMatching(text) {
   return foldConfusableCharacters(
     text
@@ -821,7 +961,7 @@ function foldForMatching(text) {
       .replace(/[^\p{L}\p{Nd}-]+/gu, " "),
   ).toLowerCase();
 }
-//@ chunk-spwda8nt.js:17184-17308 placement
+//@ chunk-3bj63apf.js:17188-17312 placement
 /**
  * 文本（多种规整形式）是否含批准/合并/部署/发布/支付/迁移/推送等高风险动作词。
  */
@@ -832,10 +972,10 @@ function looksLikeRiskyApproval(text) {
     foldForMatching(text.replace(/[\p{Cc}\p{Co}\p{Cn}]/gu, " ")),
   ].some((variant) => RISKY_APPROVAL_RE.test(variant) || RISKY_APPROVAL_RE.test(variant.replace(/-/g, "")));
 }
-//@ chunk-spwda8nt.js:17308-17583 placement
+//@ chunk-3bj63apf.js:17312-17587 placement
 var RISKY_APPROVAL_RE =
   /\b(?:re|auto[- ]*|un)?(?:approv|merg(?!er\b)|deploy|promot|publish|releas|ship(?!ment)|pay(?!load|pal|ment)|migrat(?:e|ing)\b|sudo\b|launch|roll(?:ing|ed|s)?(?:[- ]+(?:it|this|that|them|these|those))?[- ]*out|green[- ]*light|force[- ]*push)|\bgo[- ]*(?:ahead|live)/iu;
-//@ chunk-spwda8nt.js:17583-17863 placement
+//@ chunk-3bj63apf.js:17587-17867 placement
 /**
  * 只对 needs_reply 状态给出建议回复：回复为空、不含可见字符或涉及高风险批准时不给；过长时标记截断。
  */
@@ -865,7 +1005,7 @@ function getSuggestedReply(recap, text) {
         truncated: true,
       };
 }
-//@ chunk-spwda8nt.js:17863-18064 placement
+//@ chunk-3bj63apf.js:17867-18068 placement
 /**
  * 把会话回顾转成会话状态：需回复/需批准时为 blocked 并带需求说明，其余为 idle。
  */
@@ -880,64 +1020,16 @@ function recapToSessionState(recap) {
     recap,
   };
 }
-//@ chunk-spwda8nt.js:18064-18532 placement
-/**
- * 后台会话状态：在途工作快照（任务、排队、类型）及变化信号、待处理结构化结果、迁移后的 cwd 等。
- */
-class SessionStatusState {
-  inFlightSnapshot = {
-    tasks: 0,
-    queued: 0,
-    kinds: [],
-    items: [],
-  };
-  inFlightSnapshotChanged = createSignal();
-  pendingStructuredResult = undefined;
-  relocatedCwd = undefined;
-  ownStateWriteDepth = 0;
-  warnedUnknownDisabledSurface = false;
-  publishInFlightSnapshot(inFlightSnapshot) {
-    this.inFlightSnapshot = inFlightSnapshot;
-    try {
-      this.inFlightSnapshotChanged.emit();
-    } catch {}
-  }
-  reset() {
-    this.pendingStructuredResult = undefined;
-    this.relocatedCwd = undefined;
-    this.warnedUnknownDisabledSurface = false;
-    this.publishInFlightSnapshot({
-      tasks: 0,
-      queued: 0,
-      kinds: [],
-      items: [],
-    });
-  }
-}
-//@ chunk-spwda8nt.js:18532-18556 placement
-/**
- * 按 host 保存的会话状态分类状态。
- */
-var sessionStatusStateSlots; // deferred: uses SessionStatusState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-spwda8nt.js:18532", () => {
-  sessionStatusStateSlots = new HostScoped(() => new SessionStatusState());
-});
-//@ chunk-spwda8nt.js:18556-18593 placement
-/**
- * 取当前 host 的会话状态分类状态。
- */
-function currentSessionStatusState() {
-  return sessionStatusStateSlots.of(getRootSession().host);
-}
 export {
-  SUBSCRIPTION_PAYMENT_ISSUE_MESSAGE,
-  VERIFICATION_REQUIRED_NEEDS,
-  truncateWithEllipsis,
-  currentSessionStatusState,
-  MAX_HEADLINE_LENGTH,
   MAX_HEADLINE_LENGTH_2,
   normalizeWhitespace,
+  truncateWithEllipsis,
+  SUBSCRIPTION_PAYMENT_ISSUE_MESSAGE,
+  MAX_HEADLINE_LENGTH,
+  currentSessionStatusState,
+  VERIFICATION_REQUIRED_NEEDS,
   classifySessionStateHeuristic,
+  classifyApiErrorForSummary,
   openCodeFenceCloser,
   mergeSessionState,
   buildWorkingState,

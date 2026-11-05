@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设备钩子模板
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-y47q51t0.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gqwnfyew.js (18)
  * attribution: placement 18
  */
 import { join } from "path";
@@ -29,7 +29,7 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { logForDebugging } from "../debug.js";
 import { registerDeviceHookCallbacks, unregisterDeviceHookCallbacks } from "./deviceHooks/templates.js";
 
-//@ chunk-y47q51t0.js:3894-4491 placement
+//@ chunk-gqwnfyew.js:4202-4799 placement
 /**
  * 设备 hook 模板用的 python3 候选路径与完整性校验脚本。
  */
@@ -51,7 +51,7 @@ var buildTemplateLauncherScript = () =>
   ].join(`
 `);
 var TEMPLATE_LAUNCHER_SCRIPT = buildTemplateLauncherScript();
-//@ chunk-y47q51t0.js:4491-4581 placement
+//@ chunk-gqwnfyew.js:4799-4889 placement
 async function firstVettedPython3(templateFs) {
   for (let candidate of PYTHON3_CANDIDATES) {
     let vetted = await templateFs.vet(candidate);
@@ -59,20 +59,20 @@ async function firstVettedPython3(templateFs) {
   }
   return null;
 }
-//@ chunk-y47q51t0.js:4581-4713 placement
+//@ chunk-gqwnfyew.js:4889-5021 placement
 async function writeTemplateFile(id, content, templateFs) {
   await templateFs.mkdir(templateFs.templateDir, 448);
   let path = join(templateFs.templateDir, `${id}.py`);
   await templateFs.writeFileAtomic(path, content, 384);
   return path;
 }
-//@ chunk-y47q51t0.js:4713-4781 placement
+//@ chunk-gqwnfyew.js:5021-5089 placement
 function templateLauncherArgs(python, scriptPath, templateId, maxBytes = 262144) {
   return [python, "-I", "-S", "-c", TEMPLATE_LAUNCHER_SCRIPT, scriptPath, templateId, String(maxBytes)];
 }
-//@ chunk-y47q51t0.js:4781-4847 placement
+//@ chunk-gqwnfyew.js:5089-5155 placement
 var UNSAFE_TEMPLATE_ENV_RE = /^(?:LD_|DYLD_|GCONV_PATH$|NLSPATH$|DEVELOPER_DIR$|PYTHON)/;
-//@ chunk-y47q51t0.js:4847-4936 placement
+//@ chunk-gqwnfyew.js:5155-5244 placement
 function withoutUnsafeTemplateEnv(env) {
   let copy = {
     ...env,
@@ -80,9 +80,9 @@ function withoutUnsafeTemplateEnv(env) {
   for (let key of Object.keys(copy)) if (UNSAFE_TEMPLATE_ENV_RE.test(key)) delete copy[key];
   return copy;
 }
-//@ chunk-y47q51t0.js:4936-4948 placement
+//@ chunk-gqwnfyew.js:5244-5256 placement
 var MAX_TEMPLATE_OUTPUT_CHARS = 65536;
-//@ chunk-y47q51t0.js:4948-5131 placement
+//@ chunk-gqwnfyew.js:5256-5439 placement
 async function runTemplateWithCwdFallback(argv, options, options_2) {
   let templateProcess = await spawnTemplateProcess(options.cwd, argv, options, options_2);
   return templateProcess.status === null &&
@@ -92,7 +92,7 @@ async function runTemplateWithCwdFallback(argv, options, options_2) {
     ? spawnTemplateProcess(homedir(), argv, options, options_2)
     : templateProcess;
 }
-//@ chunk-y47q51t0.js:5131-6415 placement
+//@ chunk-gqwnfyew.js:5439-6723 placement
 /**
  * 在指定 cwd 以独立进程组启动设备钩子模板（python 启动器），把钩子输入写入 stdin，收集有上限的 stdout/stderr，处理超时与中止，返回 {stdout, stderr, status, signal, timedOut}。
  */
@@ -208,7 +208,7 @@ function spawnTemplateProcess(cwd, argv, input, options) {
     child.stdin?.end(inputJson);
   });
 }
-//@ chunk-y47q51t0.js:6415-6757 placement
+//@ chunk-gqwnfyew.js:6723-7065 placement
 /**
  * 解析模板 hook 的标准输出：空输出、JSON 回答或无法读取。
  */
@@ -247,7 +247,7 @@ function parseTemplateAnswer(result) {
     };
   }
 }
-//@ chunk-y47q51t0.js:6757-7794 placement
+//@ chunk-gqwnfyew.js:7065-8102 placement
 /**
  * 把模板 hook 的执行结果转换为 hook 输出：退出码 2 表示阻止，0 时解析回答。
  */
@@ -314,7 +314,7 @@ function templateResultToHookOutput(result) {
     };
   return base;
 }
-//@ chunk-y47q51t0.js:7794-8077 placement
+//@ chunk-gqwnfyew.js:8102-8385 placement
 function classifyTemplateOutcome(result, aborted) {
   if (aborted) return "aborted";
   if (result.timedOut) return "timeout";
@@ -324,7 +324,7 @@ function classifyTemplateOutcome(result, aborted) {
   if (result.status === 0) return parseTemplateAnswer(result).kind === "unreadable" ? "error" : "ok";
   return result.status === 2 ? "blocked" : "error";
 }
-//@ chunk-y47q51t0.js:8077-8379 placement
+//@ chunk-gqwnfyew.js:8385-8687 placement
 /**
  * 模板 hook 失败原因的说明文本。
  */
@@ -336,7 +336,7 @@ var TEMPLATE_FAILURE_REASONS = {
   interpreter_untrusted: "its interpreter can no longer be trusted",
   timeout: "it took too long",
 };
-//@ chunk-y47q51t0.js:8379-9189 placement
+//@ chunk-gqwnfyew.js:8687-9497 placement
 /**
  * 创建运行设备 hook 模板的执行函数：解析解释器、按超时运行并记录结果。
  */
@@ -394,7 +394,7 @@ function createTemplateHookRunner(argv, timeoutSec, hookEntry, report, isTrusted
     return answer;
   };
 }
-//@ chunk-y47q51t0.js:9189-10011 placement
+//@ chunk-gqwnfyew.js:9497-10319 placement
 /**
  * 模板运行所需的文件操作：vet 检查解释器路径每一级目录不可被组/其他人写、不属于当前普通用户，且目标是可执行文件；mkdir 确保模板目录属于当前用户且权限 0700。
  */
@@ -440,7 +440,7 @@ function createTemplateFs(templateDir) {
     templateDir,
   };
 }
-//@ chunk-y47q51t0.js:10011-11235 placement
+//@ chunk-gqwnfyew.js:10319-11543 placement
 /**
  * 创建设备钩子模板宿主：解析可信的绝对路径 python3，prepare 时把模板写入私有临时目录（已写过且 sha256 仍匹配则复用），并返回运行该模板的钩子执行器。
  */
@@ -527,7 +527,7 @@ function createDeviceHookTemplateHost(options) {
     remove: (owner) => unregisterDeviceHookCallbacks(owner, "templates"),
   };
 }
-//@ chunk-y47q51t0.js:11235-11578 placement
+//@ chunk-gqwnfyew.js:11543-11886 placement
 /**
  * 校验模板文件摘要：不跟随链接地打开普通文件，大小受限，计算哈希比较。
  */
@@ -547,7 +547,7 @@ async function verifyTemplateFileDigest(path, digest, maxBytes) {
     await handle?.close().catch(() => {});
   }
 }
-//@ chunk-y47q51t0.js:11578-11622 placement
+//@ chunk-gqwnfyew.js:11886-11930 placement
 function hookTemplateId(templateId) {
   return getHookTemplate(templateId)?.id ?? "unknown";
 }

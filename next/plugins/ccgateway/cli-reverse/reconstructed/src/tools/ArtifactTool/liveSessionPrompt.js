@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：实时会话提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hantmvxa.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ne2890fx.js (4)
  * attribution: placement 4
  */
 import { isArtifactToolsetSplit } from "../../services/artifacts/artifactToolGates.js";
@@ -27,13 +27,13 @@ import { ARTIFACT_CAPABILITY_KEY, SELF } from "../../services/artifacts/capabili
 import { ARTIFACT_DATA_TOOL_NAME, ARTIFACT_CHECK_TOOL_NAME } from "./constants.js";
 import { previewEngineKind } from "../../services/artifactPreview/browserDiscovery.js";
 
-//@ chunk-hantmvxa.js:4170-4191 placement
+//@ chunk-ne2890fx.js:4318-4339 placement
 /**
  * 本会话追加 Artifact 提示段所用的 live 编辑模块（未注入时为 null）。
  */
 var artifactLiveEditModule = null;
 var ROOM = "room";
-//@ chunk-hantmvxa.js:4191-4720 placement
+//@ chunk-ne2890fx.js:4339-4868 placement
 /**
  * 拆分工具集时为本会话追加的 Artifact 提示段：页面状态存放位置、Live files/sync、Live room，以及交付前的验证说明。
  */
@@ -72,7 +72,7 @@ ${liftPromptParagraphs(ROOM_PROMPT_PARAGRAPH, artifactToolsPresent(tools).commen
   if (verifySection !== "") sections.push(verifySection);
   return sections;
 }
-//@ chunk-hantmvxa.js:4720-5700 placement
+//@ chunk-ne2890fx.js:4868-5848 placement
 /**
  * "页面状态放在哪里"段落：按声明的能力说明浏览器存储、artifact 能力（页面即记录、整页重新发布）、db 能力（页面外数据、访问规则、实时快照）各自适用场景。
  */
@@ -93,7 +93,7 @@ ${[
 ].filter(Boolean).join(`
 `)}`;
 }
-//@ chunk-hantmvxa.js:5700-6838 placement
+//@ chunk-ne2890fx.js:5848-6986 placement
 /**
  * "交付链接前先验证"段落：声明了能力的页面只做一次功能检查（preview 一次、db 每个集合 list 一次并用低权限复读、endpoints 各 GET 路由调用一次），然后一句话告诉用户验证了什么。
  */

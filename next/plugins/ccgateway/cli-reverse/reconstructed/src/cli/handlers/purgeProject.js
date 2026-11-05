@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：claude project purge 入口：解析路径/--all/-i/--dry-run，确认后删除项目数据；收集清理某项目需要删除的条目（项目目录、任务、调试日志、文件历史、配置键、history 行）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5f8vf2zr.js (48)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-75v47sk5.js (48)
  * attribution: placement 48
  */
 import { stat, readdir, lstat, rm } from "fs/promises";
@@ -50,7 +50,7 @@ import {
   sanitizePath,
 } from "../../utils/sessionStoragePortable.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { storageRootsFor } from "../../utils/settings/settingsStorage.js";
 import { getTaskOutputDir } from "../../utils/tasks.js";
 import { normalizePathForConfigKey } from "../../utils/path.js";
@@ -73,12 +73,12 @@ import { isOwnTempName } from "../../utils/atomicPublishWrite.js";
 import { isHashTempFile } from "../../services/memorySync/syncFiles.js";
 import { confirmYesNo } from "./util.js";
 
-//@ chunk-5f8vf2zr.js:15947-15994 placement
+//@ chunk-75v47sk5.js:17123-17170 placement
 function printOut(text = "") {
   process.stdout.write(`${text}
 `);
 }
-//@ chunk-5f8vf2zr.js:15994-16119 placement
+//@ chunk-75v47sk5.js:17170-17295 placement
 async function pathOrScopeExists(path, storageKey, checkStorage) {
   if (isStorageV5Enabled() && storageKey !== undefined) {
     let inStorage = await checkStorage(storageKey);
@@ -91,7 +91,7 @@ async function pathOrScopeExists(path, storageKey, checkStorage) {
     return false;
   }
 }
-//@ chunk-5f8vf2zr.js:16119-16344 placement
+//@ chunk-75v47sk5.js:17295-17520 placement
 async function scopeExistsInStorage(storage, scope) {
   try {
     let result = await storage.scopeKind(scope, {
@@ -111,7 +111,7 @@ async function scopeExistsInStorage(storage, scope) {
     return;
   }
 }
-//@ chunk-5f8vf2zr.js:16344-16471 placement
+//@ chunk-75v47sk5.js:17520-17647 placement
 async function keyExistsInStorage(storage, key) {
   try {
     let meta = await storage.statMeta(key);
@@ -121,7 +121,7 @@ async function keyExistsInStorage(storage, key) {
     return;
   }
 }
-//@ chunk-5f8vf2zr.js:16471-16532 placement
+//@ chunk-75v47sk5.js:17647-17708 placement
 async function pathExists(path) {
   try {
     await stat(path);
@@ -130,7 +130,7 @@ async function pathExists(path) {
     return false;
   }
 }
-//@ chunk-5f8vf2zr.js:16532-16878 placement
+//@ chunk-75v47sk5.js:17708-18054 placement
 /**
  * 在 Ink 中渲染一次性的选择列表并等待用户选择。
  */
@@ -173,11 +173,11 @@ async function promptSelect(children, options, defaultValue) {
   await waitUntilExit();
   return promise;
 }
-//@ chunk-5f8vf2zr.js:16878-16930 placement
+//@ chunk-75v47sk5.js:18054-18106 placement
 function knownProjectDirs() {
   return Object.keys(getGlobalConfig().projects ?? {});
 }
-//@ chunk-5f8vf2zr.js:16930-17156 placement
+//@ chunk-75v47sk5.js:18106-18332 placement
 async function promptPurgeProject() {
   let defaultValue = resolve(getOriginalCwd());
   let knownDirs = knownProjectDirs();
@@ -199,12 +199,12 @@ async function promptPurgeProject() {
   }
   return promptSelect("Select a project to purge:", options, defaultValue);
 }
-//@ chunk-5f8vf2zr.js:17156-17235 placement
+//@ chunk-75v47sk5.js:18332-18411 placement
 function isPathUnderAny(path, roots) {
   for (let root of roots) if (path === root || path.startsWith(root + sep)) return true;
   return false;
 }
-//@ chunk-5f8vf2zr.js:17235-17350 placement
+//@ chunk-75v47sk5.js:18411-18526 placement
 function historyLineMatchesProjects(line, projects) {
   if (!line) return false;
   try {
@@ -214,7 +214,7 @@ function historyLineMatchesProjects(line, projects) {
     return false;
   }
 }
-//@ chunk-5f8vf2zr.js:17350-17570 placement (2.1.88 match: getErrorsPath, 1)
+//@ chunk-75v47sk5.js:18526-18746 placement (2.1.88 match: getErrorsPath, 1)
 async function anyTranscriptInProjects(projectDir, projects, storage) {
   let storageNames = await listTranscriptFileNames(storage, projectDir);
   let fileNames;
@@ -231,7 +231,7 @@ async function anyTranscriptInProjects(projectDir, projects, storage) {
   }
   return false;
 }
-//@ chunk-5f8vf2zr.js:17570-17659 placement
+//@ chunk-75v47sk5.js:18746-18835 placement
 function readCwdFromJsonLine(line) {
   try {
     let entry = jsonParse(line);
@@ -240,9 +240,9 @@ function readCwdFromJsonLine(line) {
     return;
   }
 }
-//@ chunk-5f8vf2zr.js:17659-17669 placement
+//@ chunk-75v47sk5.js:18835-18845 placement
 var MAX_HISTORY_SCAN_LINES = 50;
-//@ chunk-5f8vf2zr.js:17669-17889 placement
+//@ chunk-75v47sk5.js:18845-19065 placement
 async function readTranscriptCwdFallback(transcriptPath, storage) {
   let transcriptCwd = await readTranscriptCwd(transcriptPath, storage);
   if (transcriptCwd !== undefined) return transcriptCwd;
@@ -262,10 +262,10 @@ async function readTranscriptCwdFallback(transcriptPath, storage) {
   }
   return null;
 }
-//@ chunk-5f8vf2zr.js:17889-17912 placement
+//@ chunk-75v47sk5.js:19065-19088 placement
 var FIRST_PAGE_BYTES = 16384;
 var NEXT_PAGE_BYTES = 262144;
-//@ chunk-5f8vf2zr.js:17912-18193 placement
+//@ chunk-75v47sk5.js:19088-19369 placement
 async function readTranscriptCwd(transcriptPath, storage) {
   let transcriptStorageKey = getTranscriptStorageKey(transcriptPath, storage);
   if (transcriptStorageKey === undefined) return;
@@ -285,7 +285,7 @@ async function readTranscriptCwd(transcriptPath, storage) {
       return;
   }
 }
-//@ chunk-5f8vf2zr.js:18193-19013 placement
+//@ chunk-75v47sk5.js:19369-20189 placement
 /**
  * 分页正向读取存储记录流并逐条交给 judge，超过页数上限返回 cannotAnswer。
  */
@@ -352,7 +352,7 @@ async function scanRecordsPaged(backend, stream, options) {
     };
   }
 }
-//@ chunk-5f8vf2zr.js:19013-19187 placement
+//@ chunk-75v47sk5.js:20189-20363 placement
 function parseRecordBytes(item) {
   let { buffer, byteOffset, byteLength } = item;
   let str = Buffer.from(buffer, byteOffset, byteLength).toString("utf8");
@@ -362,9 +362,9 @@ function parseRecordBytes(item) {
     : str;
   return splitHistoryLines(chomped.endsWith("\r") ? chomped.slice(0, -1) : chomped);
 }
-//@ chunk-5f8vf2zr.js:19187-19202 placement
+//@ chunk-75v47sk5.js:20363-20378 placement
 var HISTORY_SCAN_PAGE_BYTES = 1048576;
-//@ chunk-5f8vf2zr.js:19202-19581 placement
+//@ chunk-75v47sk5.js:20378-20757 placement
 /**
  * 扫描 history 记录，统计属于指定项目的提示词条数（可收集保留项）。
  */
@@ -405,7 +405,7 @@ async function countHistoryMatches(storage, projects, kept) {
       };
   }
 }
-//@ chunk-5f8vf2zr.js:19581-19726 placement
+//@ chunk-75v47sk5.js:20757-20902 placement
 async function historyMatchCount(storage, projects) {
   let result = await countHistoryMatches(storage, projects);
   switch (result.kind) {
@@ -418,9 +418,9 @@ async function historyMatchCount(storage, projects) {
       return;
   }
 }
-//@ chunk-5f8vf2zr.js:19726-19745 placement
+//@ chunk-75v47sk5.js:20902-20921 placement
 class HistoryRewriteRefusedError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {}
-//@ chunk-5f8vf2zr.js:19745-20984 placement
+//@ chunk-75v47sk5.js:20921-22160 placement
 /**
  * purge 历史：从 history.jsonl 中删除属于给定项目目录的行（storage 后端或文件，带锁），拒绝时抛 history.jsonl was not rewritten。
  */
@@ -493,7 +493,7 @@ async function purgeProjectHistory(storage, historyPath, projects) {
       throw historyRewriteRefusedError(`the storage interface declined the rewrite (${error.code})`);
   }
 }
-//@ chunk-5f8vf2zr.js:20984-21252 placement
+//@ chunk-75v47sk5.js:22160-22428 placement
 async function historyHasTornTail(storage) {
   try {
     let stats = await storage.stat(STORAGE_SPACES.history());
@@ -506,22 +506,22 @@ async function historyHasTornTail(storage) {
     return;
   }
 }
-//@ chunk-5f8vf2zr.js:21252-21336 placement
+//@ chunk-75v47sk5.js:22428-22512 placement
 function issueWithTelemetryCode(error) {
   return error.telemetryCode === undefined ? error.code : `${error.code} ${error.telemetryCode}`;
 }
-//@ chunk-5f8vf2zr.js:21336-21442 placement
+//@ chunk-75v47sk5.js:22512-22618 placement
 function historyRewriteRefusedError(reason) {
   return new HistoryRewriteRefusedError(
     `history.jsonl was not rewritten \u2014 ${reason}`,
     "purge history rewrite refused",
   );
 }
-//@ chunk-5f8vf2zr.js:21442-21492 placement
+//@ chunk-75v47sk5.js:22618-22668 placement
 async function countHistoryForProjects(historyPath, projects, storage) {
   return rewriteHistoryFile(historyPath, projects, "count", storage);
 }
-//@ chunk-5f8vf2zr.js:21492-22073 placement
+//@ chunk-75v47sk5.js:22668-23249 placement
 /**
  * 在 history 锁保护下重写 history 文件（filter 模式按项目过滤）。
  */
@@ -565,9 +565,9 @@ async function rewriteHistoryFile(historyPath, projects, mode, storage) {
     await releaseLockQuietly(lockHandle, "history purge");
   }
 }
-//@ chunk-5f8vf2zr.js:22073-22084 placement
+//@ chunk-75v47sk5.js:23249-23260 placement
 var MAX_STORAGE_LIST_PAGES = 1e4;
-//@ chunk-5f8vf2zr.js:22084-22344 placement
+//@ chunk-75v47sk5.js:23260-23520 placement
 /**
  * 分页列出存储空间的全部条目并回调；任一页失败或页数超过上限（ye）时返回 false，否则 true。
  */
@@ -596,7 +596,7 @@ async function listAllStorageEntries(storage, scope, onItem, options = {}) {
   }
   return !cursor;
 }
-//@ chunk-5f8vf2zr.js:22344-22634 placement
+//@ chunk-75v47sk5.js:23520-23810 placement
 async function listTranscriptProjectKeys(storage) {
   if (!storage) return null;
   let keys = [];
@@ -622,7 +622,7 @@ async function listTranscriptProjectKeys(storage) {
     ? keys.sort()
     : null;
 }
-//@ chunk-5f8vf2zr.js:22634-22924 placement
+//@ chunk-75v47sk5.js:23810-24100 placement
 async function listTranscriptKeysForProjectDir(storage, projectDir) {
   if (!storage || dirname(projectDir) !== getProjectsDir()) return null;
   let projectKey = basename(projectDir);
@@ -647,17 +647,17 @@ async function listTranscriptKeysForProjectDir(storage, projectDir) {
     ? sessionIds.sort()
     : null;
 }
-//@ chunk-5f8vf2zr.js:22924-23016 placement
+//@ chunk-75v47sk5.js:24100-24192 placement
 async function transcriptKeysForProject(storage, projectDir) {
   let keys = await listTranscriptKeysForProjectDir(storage, projectDir);
   return keys === null ? null : keys.filter((key) => normalizeUuidOrNull(key) !== null);
 }
-//@ chunk-5f8vf2zr.js:23016-23112 placement (2.1.88 match: getErrorsPath, 1)
+//@ chunk-75v47sk5.js:24192-24288 placement (2.1.88 match: getErrorsPath, 1)
 async function listTranscriptFileNames(storage, projectDir) {
   let keys = await listTranscriptKeysForProjectDir(storage, projectDir);
   return keys === null ? null : keys.map((key) => `${key}.jsonl`).sort();
 }
-//@ chunk-5f8vf2zr.js:23112-23307 placement (2.1.88 match: getErrorsPath, 1)
+//@ chunk-75v47sk5.js:24288-24483 placement (2.1.88 match: getErrorsPath, 1)
 async function listSessionTranscriptFiles(dir, storage) {
   let keys = await transcriptKeysForProject(storage, dir);
   if (keys !== null) return keys;
@@ -672,7 +672,7 @@ async function listSessionTranscriptFiles(dir, storage) {
     .map((name) => name.slice(0, -6))
     .filter((sessionId) => normalizeUuidOrNull(sessionId) !== null);
 }
-//@ chunk-5f8vf2zr.js:23307-25113 placement
+//@ chunk-75v47sk5.js:24483-26289 placement
 /**
  * 收集清理某项目需要删除的条目（项目目录、任务、调试日志、文件历史、配置键、history 行）。
  */
@@ -794,7 +794,7 @@ async function collectProjectPurgeItems(projectPath, storage) {
     warnings,
   };
 }
-//@ chunk-5f8vf2zr.js:25113-26120 placement
+//@ chunk-75v47sk5.js:26289-27296 placement
 /**
  * --all 时收集所有项目数据目录的清理条目。
  */
@@ -852,7 +852,7 @@ async function collectAllPurgeItems(storage) {
     warnings,
   };
 }
-//@ chunk-5f8vf2zr.js:26120-26373 placement
+//@ chunk-75v47sk5.js:27296-27549 placement
 async function deletePathForPurge(path, recursive) {
   try {
     await rm(path, {
@@ -871,7 +871,7 @@ async function deletePathForPurge(path, recursive) {
     };
   }
 }
-//@ chunk-5f8vf2zr.js:26373-27276 placement
+//@ chunk-75v47sk5.js:27549-28452 placement
 /**
  * 删除单个清理条目（配置键、history 行、目录等），返回失败信息。
  */
@@ -927,7 +927,7 @@ async function deletePurgeItem(item, storage) {
       return deletePathForPurge(item.path, true);
   }
 }
-//@ chunk-5f8vf2zr.js:27276-27519 placement
+//@ chunk-75v47sk5.js:28452-28695 placement
 /**
  * 项目清理中途失败时：记日志、打印错误与重试提示、记遥测后以错误退出。
  */
@@ -943,7 +943,7 @@ Some items may still be on disk. Run the command again; \`--dry-run\` lists what
   );
   return cliErrorAfterAnalyticsFlush();
 }
-//@ chunk-5f8vf2zr.js:27519-27978 placement
+//@ chunk-75v47sk5.js:28695-29154 placement
 /**
  * 汇总并输出清理失败项与提示。
  */
@@ -969,21 +969,21 @@ What could not be deleted is still on disk: fix the cause and run the command ag
   await logFeatureOkAsync("cli_purge_project");
   return cliOkAfterAnalyticsFlush();
 }
-//@ chunk-5f8vf2zr.js:27978-28094 placement
+//@ chunk-75v47sk5.js:29154-29270 placement
 async function reportDryRun(count) {
   printOut(`Dry run: ${count} item(s) would be deleted.`);
   await logFeatureOkAsync("cli_purge_project_dry_run");
   return cliOkAfterAnalyticsFlush();
 }
-//@ chunk-5f8vf2zr.js:28094-28166 placement
+//@ chunk-75v47sk5.js:29270-29342 placement
 async function abortPurgeProject(message, reason) {
   printCliError(message);
   await logFeatureSadAsync("cli_purge_project", reason);
   return cliErrorAfterAnalyticsFlush();
 }
-//@ chunk-5f8vf2zr.js:28267-28280 placement
+//@ chunk-75v47sk5.js:29443-29456 placement
 var STALE_HISTORY_TMP_AGE_MS = 60000;
-//@ chunk-5f8vf2zr.js:28280-29557 placement
+//@ chunk-75v47sk5.js:29456-30733 placement
 /**
  * 删除 history.jsonl 的临时副本（.tmp 等），受 history 锁保护。
  */
@@ -1053,7 +1053,7 @@ async function removeHistoryStagingSiblings(configDir) {
     };
   return null;
 }
-//@ chunk-5f8vf2zr.js:29557-29882 placement
+//@ chunk-75v47sk5.js:30733-31058 placement
 /**
  * 把清理条目格式化为一行描述。
  */
@@ -1077,7 +1077,7 @@ function describePurgeItem(item) {
   return `${line}
            ${item.reason}`;
 }
-//@ chunk-5f8vf2zr.js:29882-30082 placement
+//@ chunk-75v47sk5.js:31058-31258 placement
 function printPurgePlan(target, items, warnings) {
   printOut(`
 Purge plan for ${target}:
@@ -1090,7 +1090,7 @@ Purge plan for ${target}:
   printOut(`
 Purging deletes data only on this computer, not anything stored by Anthropic.`);
 }
-//@ chunk-5f8vf2zr.js:30082-31900 placement
+//@ chunk-75v47sk5.js:31258-33076 placement
 /**
  * claude project purge 入口：解析路径/--all/-i/--dry-run，确认后删除项目数据。
  */

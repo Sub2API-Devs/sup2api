@@ -3,20 +3,20 @@
  *
  * 2.1.316 新增：远程工具准入判定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3qz57b12.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xydwfwgj.js (6)
  * attribution: placement 6
  */
 import { ensureDeviceSandboxPosture } from "../../remote/tools/deviceSandboxPosture.js";
 import { isAbortError } from "../../utils/errors.js";
 
-//@ chunk-3qz57b12.js:264-274 placement
+//@ chunk-xydwfwgj.js:264-274 placement
 /**
  * 远端工具默认的并发在飞上限。
  */
 var DEFAULT_MAX_IN_FLIGHT = 4;
-//@ chunk-3qz57b12.js:274-383 placement
+//@ chunk-xydwfwgj.js:274-383 placement
 /**
  * 创建简单的并发计数器：tryAcquire 在未满时占位并返回只能调用一次的释放函数。
  */
@@ -37,7 +37,7 @@ function createConcurrencyLimiter(limit) {
     },
   };
 }
-//@ chunk-3qz57b12.js:383-1090 placement
+//@ chunk-xydwfwgj.js:383-1090 placement
 /**
  * 设备工具调用的准入：检查会话、设备绑定与模式是否有效，占用并发槽位，确认沙箱真正限制（文件系统与网络）后再执行；拒绝时生成说明，中止时返回 cancelled。
  */
@@ -78,14 +78,14 @@ function createAdmissionGate(options) {
     },
   };
 }
-//@ chunk-3qz57b12.js:1090-1244 placement
+//@ chunk-xydwfwgj.js:1090-1244 placement
 function admissionRefusal(options, request) {
   if (request.sessionId === undefined) return "no_session";
   if (!options.getDeviceId()) return "unbound_device";
   if (!options.isModeCurrent()) return "mode_withdrawn";
   return;
 }
-//@ chunk-3qz57b12.js:1244-4682 placement
+//@ chunk-xydwfwgj.js:1244-4682 placement
 /**
  * 按准入拒绝原因（无会话、设备未绑定、模式已撤回、并发过多、沙箱未开启/不支持/启动失败/不够严格/被削弱/允许 Unix socket/缺 seccomp/注入凭证）生成给模型的说明。
  */
@@ -117,15 +117,15 @@ function admissionRefusalText(toolName, { limiter }, reason) {
       return `${toolName} refused: this device's sandbox is configured to inject real credentials into sandboxed network requests (sandbox.credentials entries with mode "mask"), so this device serves no device tools. Tell the user; do not retry in a loop.`;
   }
 }
-//@ chunk-3qz57b12.js:4682-4738 placement
+//@ chunk-xydwfwgj.js:4682-4738 placement
 var CORE = "core";
 var REMOTE_TOOLS = "remote-tools";
 var MCP_PASSTHROUGH = "mcp-passthrough";
 export {
   createConcurrencyLimiter,
   DEFAULT_MAX_IN_FLIGHT,
-  createAdmissionGate,
-  REMOTE_TOOLS,
   MCP_PASSTHROUGH,
+  REMOTE_TOOLS,
   CORE,
+  createAdmissionGate,
 };

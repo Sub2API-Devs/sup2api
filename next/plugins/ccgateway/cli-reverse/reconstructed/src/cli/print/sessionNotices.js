@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：会话通知（session notices）的处理与能力声明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (13)
  * attribution: placement 13
  */
 import { logForDebugging } from "../../utils/debug.js";
@@ -35,25 +35,27 @@ import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { escapedEventJsonBody } from "../../utils/pollEvents/declarations.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { errorMessage, isAbortError } from "../../utils/errors.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { getCommandQueueSnapshot, enqueuePollEvent } from "../../utils/messageQueueManager.js";
 import { executeUserPromptSubmitHooksForSession } from "../../utils/hooks.js";
 import { flushSessionStorage } from "../../utils/sessionStorage.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:33333-33361 placement
+//@ chunk-0yw3taqg.js:51847-51875 placement
 function isNoticeKindServed(kind) {
   return NOTICE_KIND_SERVED[kind];
 }
-//@ chunk-tyg7f3ek.js:33361-33654 placement
+//@ chunk-0yw3taqg.js:51875-52204 placement
 var NOTICE_KIND_SERVED = {
   directories: false,
   file_state: false,
+  file_search: false,
   unfit_text: false,
   no_file: false,
   tie: false,
   held_file_unreadable: false,
   needs_file_search: false,
+  search_incomplete: false,
   too_many: false,
   outside: false,
   hipaa: false,
@@ -68,7 +70,7 @@ var NOTICE_KIND_SERVED = {
   waited_too_long: true,
   session_ending: true,
 };
-//@ chunk-tyg7f3ek.js:33654-33738 placement
+//@ chunk-0yw3taqg.js:52204-52288 placement
 class LaneAssignmentMap {
   #t = new WeakMap();
   mark(key, lane) {
@@ -78,14 +80,14 @@ class LaneAssignmentMap {
     return this.#t.get(key);
   }
 }
-//@ chunk-tyg7f3ek.js:33738-33764 placement
+//@ chunk-0yw3taqg.js:52288-52314 placement
 var HOST_INGRESS_LANES; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:33738", () => {
+deferInit("chunk-0yw3taqg.js:52288", () => {
   HOST_INGRESS_LANES = new SessionRootSlot(() => new LaneAssignmentMap());
 });
-//@ chunk-tyg7f3ek.js:33764-33775 placement
+//@ chunk-0yw3taqg.js:52314-52325 placement
 var MAX_TRACKED_NOTICE_UUIDS = 1e4;
-//@ chunk-tyg7f3ek.js:33775-34034 placement
+//@ chunk-0yw3taqg.js:52325-52584 placement
 class RecentUuidSet {
   uuids = new Set();
   order = [];
@@ -103,12 +105,12 @@ class RecentUuidSet {
     return true;
   }
 }
-//@ chunk-tyg7f3ek.js:34034-34060 placement
+//@ chunk-0yw3taqg.js:52584-52610 placement
 var RECEIVED_MESSAGE_UUIDS; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:34034", () => {
+deferInit("chunk-0yw3taqg.js:52584", () => {
   RECEIVED_MESSAGE_UUIDS = new SessionRootSlot(() => new RecentUuidSet());
 });
-//@ chunk-tyg7f3ek.js:34060-34371 placement
+//@ chunk-0yw3taqg.js:52610-52921 placement
 /**
  * session_notices 特性：默认关闭（false）、消息类型常量 session_notices，以及通知载荷的 zod schema。
  */
@@ -116,7 +118,7 @@ var SESSION_NOTICES_FLAG; // deferred: uses DoctorLazy (../handlers/util.js) of 
 var SESSION_NOTICES_DEFAULT_OFF;
 var SESSION_NOTICES;
 var sessionNoticeSchema;
-deferInit("chunk-tyg7f3ek.js:34060", () => {
+deferInit("chunk-0yw3taqg.js:52610", () => {
   SESSION_NOTICES_FLAG = "tengu_polished_lagoon";
   SESSION_NOTICES_DEFAULT_OFF = false;
   SESSION_NOTICES = "session_notices";
@@ -132,7 +134,7 @@ deferInit("chunk-tyg7f3ek.js:34060", () => {
     }),
   );
 });
-//@ chunk-tyg7f3ek.js:34371-34448 placement
+//@ chunk-0yw3taqg.js:52921-52998 placement
 function isSessionNoticesEnabled() {
   return (
     env.CLAUDE_CODE_REMOTE === true &&
@@ -142,7 +144,7 @@ function isSessionNoticesEnabled() {
     !isHostIngressPollEvents()
   );
 }
-//@ chunk-tyg7f3ek.js:34448-34754 placement
+//@ chunk-0yw3taqg.js:52998-53304 placement
 function sessionNoticesCapability(session, permissionMode) {
   let isRemote = transportStateByHost.of(session).active?.isRemoteTransport() === true;
   let noticesOn = permissionMode === "auto" && isSessionNoticesEnabled() && isRemote;
@@ -155,12 +157,12 @@ function sessionNoticesCapability(session, permissionMode) {
   );
   return noticesOn;
 }
-//@ chunk-tyg7f3ek.js:34754-34845 placement
+//@ chunk-0yw3taqg.js:53304-53395 placement
 function completeCommandLifecycleForHost(uuid, session) {
   if (uuid === undefined) return;
   transportStateByHost.of(session).active?.onCommandLifecycle?.(uuid, "completed");
 }
-//@ chunk-tyg7f3ek.js:34845-38288 placement
+//@ chunk-0yw3taqg.js:53395-56847 placement
 /**
  * 处理 CCR 下发的 session_notice（仅 RemoteIO 传输）：校验载荷、去重、截断后作为系统提醒注入。
  */
@@ -279,7 +281,7 @@ function handleSessionNotice(
   };
   ingressTail.current = ingressTail.current
     .then(async () => {
-      if (count(getCommandQueueSnapshot(), isPollEventMode) >= POLL_KIND_DEFAULT_TIMEOUT_MS) {
+      if (countWhere(getCommandQueueSnapshot(), isPollEventMode) >= POLL_KIND_DEFAULT_TIMEOUT_MS) {
         showNotice();
         logFeatureSad("ccr_session_notices", "queue_cap_will_retry");
         return;
@@ -374,7 +376,7 @@ function handleSessionNotice(
       logFeatureBad("ccr_session_notices", "ingress_tail_link_failed");
     });
 }
-//@ chunk-tyg7f3ek.js:38288-38353 placement
+//@ chunk-0yw3taqg.js:56847-56912 placement
 var HELD_MESSAGE_FLAGS = "tengu_mellow_heron";
 var TENGU_SNAPPY_SUNRISE_KILLSWITCH = "tengu_snappy_sunrise_killswitch";
 export {
@@ -382,8 +384,8 @@ export {
   HOST_INGRESS_LANES,
   isNoticeKindServed,
   handleSessionNotice,
-  sessionNoticesCapability,
-  SESSION_NOTICES,
   HELD_MESSAGE_FLAGS,
   TENGU_SNAPPY_SUNRISE_KILLSWITCH,
+  sessionNoticesCapability,
+  SESSION_NOTICES,
 };

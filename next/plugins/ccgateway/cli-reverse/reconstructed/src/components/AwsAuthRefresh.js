@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：AWS 凭据刷新组件：设置变更后触发刷新、显示状态框、处理冷却与项目级设置提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s5p7fp0c.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mx6cbnn0.js (1)
  * attribution: placement 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -27,7 +27,7 @@ import { Box, Text } from "../ink/components/Text.js";
 import { Spinner } from "./Spinner.js";
 import { AwsAuthStatusBox } from "./AwsAuthStatusBox.js";
 
-//@ chunk-s5p7fp0c.js:24518-25025 placement (2.1.88 match: call, 0.356)
+//@ chunk-mx6cbnn0.js:24795-25302 placement (2.1.88 match: call, 0.356)
 function call(props) {
   let $ = useMemoCache(4);
   let { onComplete } = props;

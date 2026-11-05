@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。切换提供商后重置相关缓存。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xsm5gfzq.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y3w95ygc.js (1)
  * attribution: placement 1
  */
 import {
@@ -19,7 +19,7 @@ import { clearAwsCredentialsCache, clearGcpCredentialsCache } from "../auth.js";
 import { resetDatadogInit } from "../../services/analytics/datadog.js";
 import { refreshGrowthBookFeatures } from "../../services/analytics/growthbook.js";
 
-//@ chunk-xsm5gfzq.js:360-467 placement
+//@ chunk-y3w95ygc.js:360-467 placement
 /**
  * 切换提供商后重置相关缓存。
  */

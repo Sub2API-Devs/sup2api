@@ -3,19 +3,19 @@
  *
  * 2.1.316 新增：plugin eval 校验模拟替身注册与调用记录（与 trace 对照）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (8)
  * attribution: placement 8
  */
 import { rm as rm_2 } from "fs/promises";
 import { EVAL_ABORTED_BY_MOCK, checkExpectGuards } from "../../../cli/handlers/pluginEval/mockGuards.js";
 import { assistantContent, ToolResultBlockSchema } from "../runTrace.js";
 import { readReadyMockServers, MAX_RELAY_LOG_BYTES } from "./mockRelayProtocol.js";
-import { count } from "../../../utils/collections.js";
+import { countWhere } from "../../../utils/collections.js";
 import { replaceControlChars } from "../../../utils/resultError.js";
 
-//@ chunk-qchp9vrd.js:174088-175581 placement
+//@ chunk-af1hzzme.js:175483-176976 placement
 function findMockServersInInit(mocks) {
   let mockedTools = new Set(mocks.mockedTools);
   let expectsByTool = new Map();
@@ -96,7 +96,7 @@ function findMockServersInInit(mocks) {
     return null;
   };
 }
-//@ chunk-qchp9vrd.js:175581-176875 placement
+//@ chunk-af1hzzme.js:176976-178270 placement
 /**
  * 确认每个模拟替身已注册进子会话的 MCP 服务器（可能被托管策略剔除）。
  */
@@ -137,7 +137,7 @@ async function checkMockRegistration(initMessage, mocks) {
   }).catch(() => {});
   return null;
 }
-//@ chunk-qchp9vrd.js:176875-177034 placement
+//@ chunk-af1hzzme.js:178270-178429 placement
 /**
  * 把工具结果内容（字符串或文本块数组）转换为文本。
  */
@@ -149,7 +149,7 @@ function toolResultText(content) {
       .join("");
   return "";
 }
-//@ chunk-qchp9vrd.js:177034-177173 placement
+//@ chunk-af1hzzme.js:178429-178568 placement
 function parseMockAbortReason(reason) {
   let match = /^([^/\s]+)\/(\S+) \u2014 (.*)$/s.exec(reason);
   return match
@@ -164,7 +164,7 @@ function parseMockAbortReason(reason) {
         reason,
       };
 }
-//@ chunk-qchp9vrd.js:177173-177535 placement
+//@ chunk-af1hzzme.js:178568-178930 placement
 /**
  * 给 trace 里调用了模拟工具的条目标注应答者类型与结论（ok、tool_error、abort、no_result）。
  */
@@ -192,7 +192,7 @@ function annotateMockedToolCalls(toolCalls, mocks) {
     };
   }
 }
-//@ chunk-qchp9vrd.js:177535-179018 placement
+//@ chunk-af1hzzme.js:178930-180413 placement
 /**
  * 把替身的调用日志与 trace 对照，超出大小上限时无法验证。
  */
@@ -219,7 +219,7 @@ function verifyMockCallLog(toolCalls, callLog, mocks, provocation) {
     for (let server of mocks.servers)
       for (let tool of server.tools) {
         if (server.responderKinds[tool] !== "agent") continue;
-        let resultCount = count(
+        let resultCount = countWhere(
           toolCalls,
           (toolCall) => toolCall.name === server.toolFullNames[tool] && toolCall.isError !== undefined,
         );
@@ -247,14 +247,14 @@ function verifyMockCallLog(toolCalls, callLog, mocks, provocation) {
   }
   return null;
 }
-//@ chunk-qchp9vrd.js:179018-179140 placement
+//@ chunk-af1hzzme.js:180413-180535 placement
 function isMcpDisconnectError(message) {
   return (
     /^MCP server "[^"\n]*" is not connected\b/.test(message) ||
     /^MCP error -32000: Connection closed\b/.test(message)
   );
 }
-//@ chunk-qchp9vrd.js:179140-179573 placement
+//@ chunk-af1hzzme.js:180535-180968 placement
 /**
  * 统计模拟工具调用次数与错误数，并列出调用了被测服务器但未被模拟的工具及次数。
  */

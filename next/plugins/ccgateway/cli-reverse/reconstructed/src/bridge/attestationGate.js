@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Remote Control/云会话入站事件的设备签名判定：按签名状态与强制策略接受、提示或丢弃事件，并去重通知
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1qpz7qcd.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ck4jrdtf.js (29)
  * attribution: affinity 1, placement 28
  */
 import { getControlRequestSubtype, createUnsignedEventNotice } from "./controlRequests.js";
@@ -24,7 +24,7 @@ import { BRIDGE_FORWARDED_MESSAGE_TYPES } from "../entrypoints/sdk/controlSchema
 import { isImmediateInterruptRequest } from "../cli/print.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-1qpz7qcd.js:30552-30692 affinity
+//@ chunk-ck4jrdtf.js:31055-31195 affinity
 /**
  * 取 payload.request.subtype（控制请求子类型），不是字符串时返回 undefined。疑似归错文件。
  */
@@ -34,14 +34,14 @@ function getControlRequestSubtype_2(message) {
     typeof request === "object" && request !== null && "subtype" in request ? request.subtype : undefined;
   return typeof subtype === "string" ? subtype : undefined;
 }
-//@ chunk-1qpz7qcd.js:30692-30743 placement
+//@ chunk-ck4jrdtf.js:31195-31246 placement
 var ATTESTATION_EXEMPT_CONTROL_SUBTYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_VOUCHED_SETTINGS_SUBTYPE_CHARS;
-deferInit("chunk-1qpz7qcd.js:30692", () => {
+deferInit("chunk-ck4jrdtf.js:31195", () => {
   ATTESTATION_EXEMPT_CONTROL_SUBTYPES = new Set(["interrupt", "end_session"]);
   MAX_VOUCHED_SETTINGS_SUBTYPE_CHARS = 128;
 });
-//@ chunk-1qpz7qcd.js:30743-30992 placement
+//@ chunk-ck4jrdtf.js:31246-31495 placement
 /**
  * 服务端担保（SERVICE_VOUCHED）的 control_request 且子类型为 set_model/apply_flag_settings、载荷形状严格匹配时返回 true，用于放行无设备签名但由服务端担保的设置类请求。
  */
@@ -56,7 +56,7 @@ function isServiceVouchedSettingsRequest(message) {
     ? requestId
     : undefined;
 }
-//@ chunk-1qpz7qcd.js:30992-31505 placement
+//@ chunk-ck4jrdtf.js:31495-32008 placement
 /**
  * 校验 set_model / apply_flag_settings 请求对象只含预期键（model,subtype 或 settings,subtype）。
  */
@@ -85,12 +85,12 @@ function isStrictSettingsRequestShape(request, isVouchableModel) {
     ) && entries.some(([key]) => key === "effortLevel")
   );
 }
-//@ chunk-1qpz7qcd.js:31505-31537 placement
+//@ chunk-ck4jrdtf.js:32008-32040 placement
 var INBOUND_REQUEST_ID_CAP = 2000;
 var OUTBOUND_REQUEST_ID_CAP = 200;
 var MAX_KNOWN_REQUEST_ID_CHARS = 128;
 var RECENT_DROP_EVENT_ID_CAP = 256;
-//@ chunk-1qpz7qcd.js:31537-31623 placement
+//@ chunk-ck4jrdtf.js:32040-32126 placement
 function rememberBoundedId(idSet, maxSize, id) {
   idSet.delete(id);
   idSet.add(id);
@@ -100,7 +100,7 @@ function rememberBoundedId(idSet, maxSize, id) {
       break;
     }
 }
-//@ chunk-1qpz7qcd.js:31623-31824 placement
+//@ chunk-ck4jrdtf.js:32126-32327 placement
 /**
  * 请求 id 是否超长或已记录为入站/出站/elicitation/宿主询问请求，用于识别"自己发出的请求的应答"。
  */
@@ -114,7 +114,7 @@ function isKnownControlRequestId(requestId) {
     attestation.hostAskOutboundRequestIds.has(requestId)
   );
 }
-//@ chunk-1qpz7qcd.js:31824-31943 placement
+//@ chunk-ck4jrdtf.js:32327-32446 placement
 function isOwnOutboundRequestId(requestId) {
   let attestation = bridgeHostState().attestation;
   return (
@@ -122,7 +122,7 @@ function isOwnOutboundRequestId(requestId) {
     attestation.elicitationOutboundRequestIds.has(requestId)
   );
 }
-//@ chunk-1qpz7qcd.js:31943-32071 placement
+//@ chunk-ck4jrdtf.js:32446-32574 placement
 /**
  * 记录本端发出的 control_request id（带上限的集合），automated=true 时同时记入自动请求集合。
  */
@@ -132,9 +132,9 @@ function rememberOutboundRequestId(requestId, { automated }) {
   if (automated)
     rememberBoundedId(attestation.automatedOutboundRequestIds, OUTBOUND_REQUEST_ID_CAP, requestId);
 }
-//@ chunk-1qpz7qcd.js:32071-32082 placement
+//@ chunk-ck4jrdtf.js:32574-32585 placement
 var DEVICE_OUTBOUND_REQUEST_ID_CAP = 512;
-//@ chunk-1qpz7qcd.js:32082-32148 placement
+//@ chunk-ck4jrdtf.js:32585-32651 placement
 function rememberDeviceOutboundRequestId(requestId) {
   rememberBoundedId(
     bridgeHostState().attestation.deviceOutboundRequestIds,
@@ -142,7 +142,7 @@ function rememberDeviceOutboundRequestId(requestId) {
     requestId,
   );
 }
-//@ chunk-1qpz7qcd.js:32148-32218 placement
+//@ chunk-ck4jrdtf.js:32651-32721 placement
 function rememberElicitationRequestId(requestId) {
   rememberBoundedId(
     bridgeHostState().attestation.elicitationOutboundRequestIds,
@@ -150,7 +150,7 @@ function rememberElicitationRequestId(requestId) {
     requestId,
   );
 }
-//@ chunk-1qpz7qcd.js:32218-32284 placement
+//@ chunk-ck4jrdtf.js:32721-32787 placement
 function rememberHostAskRequestId(requestId) {
   rememberBoundedId(
     bridgeHostState().attestation.hostAskOutboundRequestIds,
@@ -158,7 +158,7 @@ function rememberHostAskRequestId(requestId) {
     requestId,
   );
 }
-//@ chunk-1qpz7qcd.js:32284-32528 placement
+//@ chunk-ck4jrdtf.js:32787-33031 placement
 function isOwnOutboundControlResponse(message) {
   let response = message.payload?.response;
   if (typeof response !== "object" || response === null) return false;
@@ -171,13 +171,13 @@ function isOwnOutboundControlResponse(message) {
       attestation.hostAskOutboundRequestIds.has(controlRequestSubtype))
   );
 }
-//@ chunk-1qpz7qcd.js:32528-32605 placement
+//@ chunk-ck4jrdtf.js:33031-33108 placement
 function isToolHostEndedReminder(message) {
   return message.payload?.inbound_origin === "tool_host_ended_reminder";
 }
-//@ chunk-1qpz7qcd.js:32605-32616 placement
+//@ chunk-ck4jrdtf.js:33108-33119 placement
 var RESOLVED_PROMPT_REQUEST_ID_CAP = 200;
-//@ chunk-1qpz7qcd.js:32616-32682 placement
+//@ chunk-ck4jrdtf.js:33119-33185 placement
 function rememberResolvedPromptRequestId(requestId) {
   rememberBoundedId(
     bridgeHostState().attestation.resolvedPromptRequestIds,
@@ -185,7 +185,7 @@ function rememberResolvedPromptRequestId(requestId) {
     requestId,
   );
 }
-//@ chunk-1qpz7qcd.js:32682-32846 placement
+//@ chunk-ck4jrdtf.js:33185-33349 placement
 function isResolvedPromptControlResponse(message) {
   let response = message.payload?.response;
   if (typeof response !== "object" || response === null) return false;
@@ -195,10 +195,10 @@ function isResolvedPromptControlResponse(message) {
     bridgeHostState().attestation.resolvedPromptRequestIds.has(controlRequestSubtype)
   );
 }
-//@ chunk-1qpz7qcd.js:32846-32865 placement
+//@ chunk-ck4jrdtf.js:33349-33368 placement
 var DROP_NOTICE_WINDOW_MS = 60000;
 var DROP_NOTICE_WINDOW_MAX = 10;
-//@ chunk-1qpz7qcd.js:32865-33365 placement
+//@ chunk-ck4jrdtf.js:33368-33868 placement
 /**
  * 未签名事件被丢弃时去重后通知 dropNotifier / 发送方回执写入器（每个事件 id 只通知一次）。
  */
@@ -231,7 +231,7 @@ function notifyDroppedEvent(notice, eventId) {
       }),
     });
 }
-//@ chunk-1qpz7qcd.js:33365-33692 placement
+//@ chunk-ck4jrdtf.js:33868-34195 placement
 function dispatchDropNotice(notice) {
   let attestation = bridgeHostState().attestation;
   if (attestation.dropNotifier !== undefined)
@@ -258,7 +258,7 @@ function dispatchDropNotice(notice) {
       );
     }
 }
-//@ chunk-1qpz7qcd.js:33692-33907 placement
+//@ chunk-ck4jrdtf.js:34195-34410 placement
 function rememberInboundRequestId(message) {
   let requestId =
     (typeof message.payload?.type === "string" ? message.payload.type : message.event_type) ===
@@ -272,7 +272,7 @@ function rememberInboundRequestId(message) {
       requestId,
     );
 }
-//@ chunk-1qpz7qcd.js:33907-34066 placement
+//@ chunk-ck4jrdtf.js:34410-34569 placement
 function noteInboundControlRequestAttestation(requestId, payloadType, isCloudWorker) {
   if (payloadType !== "control_request") return;
   rememberInboundRequestId(requestId);
@@ -281,7 +281,7 @@ function noteInboundControlRequestAttestation(requestId, payloadType, isCloudWor
       isCloudWorker ? "ccr_worker_control_request_attestation" : "bridge_control_request_attestation",
     );
 }
-//@ chunk-1qpz7qcd.js:34151-34682 placement
+//@ chunk-ck4jrdtf.js:34654-35185 placement
 /**
  * 按（状态, 载荷类型）去重记录一次设备签名丢弃诊断与遥测。
  */
@@ -319,11 +319,11 @@ function reportAttestationDropOnce(message, status, payloadType, isCloudWorker) 
     );
   }
 }
-//@ chunk-1qpz7qcd.js:34682-34755 placement
+//@ chunk-ck4jrdtf.js:35185-35258 placement
 function attestationLogPrefix(isCloudWorker) {
   return isCloudWorker ? "[ccr-worker:attestation]" : "[bridge:attestation]";
 }
-//@ chunk-1qpz7qcd.js:34755-35119 placement
+//@ chunk-ck4jrdtf.js:35258-35622 placement
 /**
  * 计算事件的有效签名状态：非云 worker 时把 SERVER_AUTHORED/REPLAYED 视为 UNSPECIFIED；TRANSITIVELY_VOUCHED 在接受级别允许时视为已验证。
  */
@@ -344,7 +344,7 @@ function resolveEffectiveAttestation(rawStatus, policy, { isCloudWorker, vouchWi
       (effectiveStatus === "TRANSITIVELY_VOUCHED" && policy.acceptStatuses.has("UNSPECIFIED")),
   };
 }
-//@ chunk-1qpz7qcd.js:35119-37859 placement
+//@ chunk-ck4jrdtf.js:35622-38362 placement
 /**
  * Remote Control/云会话入站事件的设备签名判定核心：根据事件类型、状态、过滤策略决定接受、提示或丢弃，并处理 user/control_response 的特殊放行。
  */
@@ -499,7 +499,7 @@ function evaluateInboundAttestation(message, policy, isCloudWorker, acceptUnstam
   if (hadConfigException) noteInboundControlRequestAttestation(message, payloadType, isCloudWorker);
   return !hadConfigException;
 }
-//@ chunk-1qpz7qcd.js:37859-37933 placement
+//@ chunk-ck4jrdtf.js:38362-38436 placement
 function evaluateInboundAttestationWithPolicy(message) {
   return evaluateInboundAttestation(
     message,
@@ -508,7 +508,7 @@ function evaluateInboundAttestationWithPolicy(message) {
     true,
   );
 }
-//@ chunk-1qpz7qcd.js:37933-38428 placement
+//@ chunk-ck4jrdtf.js:38436-38931 placement
 /**
  * 云 worker 通道上非 client 来源的事件按 enforce 策略丢弃或仅告警（"would drop"），再进入签名判定。
  */
@@ -537,18 +537,18 @@ function filterInboundEventBySource(message, policy, acceptUnstamped = false, is
   return evaluateInboundAttestation(message, policy, true, acceptUnstamped, isVouchableModel);
 }
 export {
-  resolveEffectiveAttestation,
   getControlRequestSubtype_2,
-  attestationLogPrefix,
   rememberResolvedPromptRequestId,
-  rememberOutboundRequestId,
   rememberElicitationRequestId,
   rememberHostAskRequestId,
+  rememberOutboundRequestId,
   rememberDeviceOutboundRequestId,
-  evaluateInboundAttestationWithPolicy,
+  resolveEffectiveAttestation,
   isOwnOutboundRequestId,
   isKnownControlRequestId,
+  evaluateInboundAttestationWithPolicy,
   rememberInboundRequestId,
   isServiceVouchedSettingsRequest,
   filterInboundEventBySource,
+  attestationLogPrefix,
 };

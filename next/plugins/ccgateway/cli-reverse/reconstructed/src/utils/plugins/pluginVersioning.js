@@ -3,15 +3,15 @@
  *
  * 插件版本（缓存目录名）计算：manifest 版本 > 条目版本 > git sha > archive sha256 > 内容哈希。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/pluginVersioning.ts
- * pieces: chunk-e6aww6q8.js (18), chunk-f3qhjfah.js (2)
- * attribution: placement 18, fingerprint 2
+ * pieces: chunk-5s0qaz1x.js (2), chunk-5xgkngpb.js (18)
+ * attribution: fingerprint 2, placement 18
  */
 import { join, resolve as resolve_2, relative, isAbsolute, sep } from "path";
 import { createHash } from "crypto";
 import { pathToFileURL } from "url";
-import { getClaudeConfigDir } from "../envUtils.js";
+import { getClaudeConfigDir } from "../markdownConfigLoader.js";
 import { splitPluginCachePath } from "./pluginDirectories.js";
 import { areValidKeySegments } from "../storage/storageSpaces.js";
 import { getSettingsForSourceWriteSeed } from "../settings/settings.js";
@@ -37,14 +37,14 @@ import { lsRemoteMarketplace } from "./marketplaceGitCheckout.js";
 import { redactUrlQuery } from "../redaction/urlRedaction.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-f3qhjfah.js:2695-2741 fingerprint (2.1.88 match: getVersionFromPath, 0.904)
+//@ chunk-5s0qaz1x.js:2796-2842 fingerprint (2.1.88 match: getVersionFromPath, 0.904)
 /**
  * 旧版插件缓存根目录 <configHome>/plugins/cache。
  */
 function getVersionFromPath() {
   return join(getClaudeConfigDir(), "plugins", "cache");
 }
-//@ chunk-f3qhjfah.js:4167-4415 placement
+//@ chunk-5s0qaz1x.js:4268-4516 placement
 /**
  * 缓存目录路径转存储作用域（根、市场或插件级）。
  */
@@ -69,14 +69,14 @@ function pluginCacheStorageScope(path, versionRoot) {
         plugin,
       };
 }
-//@ chunk-e6aww6q8.js:4320786-4320831 placement
+//@ chunk-5xgkngpb.js:4427312-4427357 placement
 /**
  * enabledPluginSettings：设置里的启用插件表。
  */
 function enabledPluginSettings(source) {
   return getSettingsForSourceWriteSeed(source)?.enabledPlugins;
 }
-//@ chunk-e6aww6q8.js:4320831-4320895 placement
+//@ chunk-5xgkngpb.js:4427357-4427421 placement
 /**
  * hasInstalledOfficialEntry：官方市场里有安装记录。
  */
@@ -87,19 +87,19 @@ function hasInstalledOfficialEntry(name) {
     ) ?? false
   );
 }
-//@ chunk-e6aww6q8.js:4320895-4320914 placement
+//@ chunk-5xgkngpb.js:4427421-4427440 placement
 var semverCompatPlugin; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4320895", () => {
+deferInit("chunk-5xgkngpb.js:4427421", () => {
   semverCompatPlugin = __toESM(require_semver_3(), 1);
 });
-//@ chunk-e6aww6q8.js:4321080-4321135 placement
+//@ chunk-5xgkngpb.js:4427606-4427661 placement
 /**
  * shortLowerPrefix：小写后的前 12 个字符。
  */
 function shortLowerPrefix(sha) {
   return sha.toLowerCase().substring(0, 12);
 }
-//@ chunk-e6aww6q8.js:4321135-4321780 placement
+//@ chunk-5xgkngpb.js:4427661-4428306 placement
 /**
  * 官方插件目录插件（或已绑定仓库的）必须有列出的提交且拉取到的 commit 一致，否则返回拒绝消息； npm 或已绑定但本版本无法校验时也拒绝。通过时返回 reviewedCommit。
  */
@@ -137,7 +137,7 @@ function verifyReviewedCommit({ pluginId, pluginName, source, boundByRecord, fet
     reviewedCommit: undefined,
   };
 }
-//@ chunk-e6aww6q8.js:4321780-4323479 fingerprint (2.1.88 match: calculatePluginVersion, 0.569)
+//@ chunk-5xgkngpb.js:4428306-4430024 fingerprint (2.1.88 match: calculatePluginVersion, 0.569)
 /**
  * 计算插件版本（缓存目录名）：manifest.version > 条目 version > git commit sha（短）> archive sha256 > 内容哈希；command 来源按其输出目录内容哈希。
  */
@@ -224,7 +224,7 @@ async function calculatePluginVersion(
   logForDebugging(`No version found for ${pluginId}, using 'unknown'`);
   return "unknown";
 }
-//@ chunk-e6aww6q8.js:4323479-4323551 placement
+//@ chunk-5xgkngpb.js:4430024-4430096 placement
 /**
  * pluginGitHead：插件目录对应的 git HEAD。
  */
@@ -232,7 +232,7 @@ async function pluginGitHead(installPath, containmentRoot = installPath) {
   let head = await probePluginGitHead(installPath, containmentRoot);
   return head.repo ? head.sha : null;
 }
-//@ chunk-e6aww6q8.js:4323551-4323770 placement
+//@ chunk-5xgkngpb.js:4430096-4430315 placement
 /**
  * 探测插件目录的 git HEAD（位于插件目录仓库内时视为非仓库）。
  */
@@ -250,21 +250,21 @@ async function probePluginGitHead(installPath, containmentRoot = installPath) {
   }
   return head;
 }
-//@ chunk-e6aww6q8.js:4323770-4323817 placement
+//@ chunk-5xgkngpb.js:4430315-4430362 placement
 /**
  * pluginVersionOrNull：取插件版本或 null。
  */
 async function pluginVersionOrNull(path) {
   return (await marketplaceCommitSha(path)) ?? null;
 }
-//@ chunk-e6aww6q8.js:4323817-4323864 placement
+//@ chunk-5xgkngpb.js:4430362-4430409 placement
 /**
  * marketplaceCommitSha：市场仓库的提交 sha。
  */
 async function marketplaceCommitSha(path) {
   return commitShaOf(await readMarketplaceCommit(path));
 }
-//@ chunk-e6aww6q8.js:4323864-4323978 placement
+//@ chunk-5xgkngpb.js:4430409-4430523 placement
 /**
  * 提交读取结果转 sha（absent/malformed 为 null）。
  */
@@ -279,7 +279,7 @@ function commitShaOf(commit) {
       return;
   }
 }
-//@ chunk-e6aww6q8.js:4323978-4324378 placement
+//@ chunk-5xgkngpb.js:4430523-4430923 placement
 /**
  * 读市场检出中记录的提交 sha。
  */
@@ -312,7 +312,7 @@ async function readMarketplaceCommit(installPath) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:4324378-4324611 placement
+//@ chunk-5xgkngpb.js:4430923-4431156 placement
 /**
  * 插件源的 git 克隆 URL。
  */
@@ -331,7 +331,7 @@ function getPluginCloneUrl(source) {
       return null;
   }
 }
-//@ chunk-e6aww6q8.js:4324691-4324858 placement
+//@ chunk-5xgkngpb.js:4431236-4431403 placement
 /**
  * 市场源的克隆 URL（directory 为 file:）。
  */
@@ -348,7 +348,7 @@ function getMarketplaceCloneUrl(source) {
       return null;
   }
 }
-//@ chunk-e6aww6q8.js:4324858-4325080 placement
+//@ chunk-5xgkngpb.js:4431403-4431625 placement
 /**
  * 市场内相对路径插件转为 github/url/git-subdir 源。
  */
@@ -372,16 +372,16 @@ function toRelativePluginSource(source, source_2) {
     path: replaced,
   };
 }
-//@ chunk-e6aww6q8.js:4325080-4325094 placement
+//@ chunk-5xgkngpb.js:4431625-4431639 placement
 var VERSION_FLAG_PREFIX = "--v";
-//@ chunk-e6aww6q8.js:4325094-4325135 placement
+//@ chunk-5xgkngpb.js:4431639-4431680 placement
 /**
  * versionFlagSpec：版本范围标志串。
  */
 function versionFlagSpec(name, version) {
   return `${name}${VERSION_FLAG_PREFIX}${version}`;
 }
-//@ chunk-e6aww6q8.js:4325135-4326097 placement
+//@ chunk-5xgkngpb.js:4431680-4432658 placement
 /**
  * 用 git ls-remote 解析插件版本范围对应的标签。
  */
@@ -442,22 +442,22 @@ async function resolveVersionRange(url, name, range, cache) {
   return candidates.find((candidate) => candidate.version === best) ?? null;
 }
 export {
+  pluginCacheStorageScope,
   calculatePluginVersion,
+  probePluginGitHead,
+  pluginVersionOrNull,
   getPluginCloneUrl,
+  pluginGitHead,
+  getVersionFromPath,
+  enabledPluginSettings,
+  hasInstalledOfficialEntry,
+  marketplaceCommitSha,
   getMarketplaceCloneUrl,
   resolveVersionRange,
   toRelativePluginSource,
   verifyReviewedCommit,
   shortLowerPrefix,
-  probePluginGitHead,
   readMarketplaceCommit,
   commitShaOf,
-  pluginCacheStorageScope,
-  pluginVersionOrNull,
-  pluginGitHead,
-  getVersionFromPath,
   versionFlagSpec,
-  enabledPluginSettings,
-  hasInstalledOfficialEntry,
-  marketplaceCommitSha,
 };

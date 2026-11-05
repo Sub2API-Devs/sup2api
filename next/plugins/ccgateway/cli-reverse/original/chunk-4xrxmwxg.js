@@ -1,6 +1,0 @@
-
-// @bun @bytecode
-// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
-
-// Version: 2.1.316
-import{p}from"./chunk-kpa9nk58.js";import"./chunk-0777tkjc.js";import"./chunk-vk5xfx8n.js";import"./chunk-0wqny7vr.js";import"./chunk-2g090z7k.js";import"./chunk-eabawhjj.js";import"./chunk-aat7wt0p.js";import"./chunk-x7vma94a.js";import"./chunk-cgcrer2m.js";import"./chunk-fq90vph4.js";import"./chunk-jhrww53q.js";import"./chunk-kcjh5jnz.js";import"./chunk-ndmse9kj.js";import"./chunk-6ysndsgz.js";import"./chunk-cgr0tezp.js";import"./chunk-cmr2yp8m.js";import"./chunk-j3nx1xyn.js";import"./chunk-m41h77x8.js";import"./chunk-bbtre4r8.js";import"./chunk-znrryf4y.js";import"./chunk-qnshrmd1.js";import{Rl}from"./chunk-3pdgd98q.js";import{oa}from"./chunk-1sq3634h.js";import{o,oe,A,u}from"./chunk-7vp249v4.js";import"./chunk-58wc6nbw.js";var i=p(()=>u({skills:A(oe()),nextCursor:o().nullish()})),s=p(()=>u({skill:oe()}));function c(t,e){return oa(t.client).request({method:"skills/list",params:e===void 0?{}:{cursor:e}},i(),{timeout:Rl()})}function S(t,e,l){return oa(t.client).request({method:"skills/get",params:{uri:e}},s(),{timeout:Rl(),signal:l?.signal})}export{S as getMcpSkill,c as listMcpSkillPage};

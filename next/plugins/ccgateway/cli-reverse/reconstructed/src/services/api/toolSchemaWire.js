@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：工具 schema 线上表示的缓存与替换
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (10)
- * attribution: placement 10
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (21)
+ * attribution: placement 10, layout 11
  */
 import { isDeepStrictEqual } from "util";
 import { noopLedger, PromptPrefixLedger } from "./promptPrefixLedger.js";
@@ -26,8 +26,8 @@ import {
 } from "../../tools/ArtifactTool/constants.js";
 import { SENDMESSAGE } from "../../tools/SendMessageTool/constants.js";
 import { SEND_USER_FILE_TOOL_NAME } from "../../tools/SendUserFileTool/prompt.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
 import { MONITOR } from "../../tools/MonitorTool/constants.js";
@@ -44,18 +44,25 @@ import { findToolByName } from "../../Tool.js";
 import { isMcpTool } from "../mcp/utils.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { agentTypeForTelemetry } from "../analytics/metadata.js";
+import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
+import { getRootSession, isCcsTenant } from "../../bootstrap/state.js";
+import { isUnsentImageBlock, UNSENT } from "../../utils/messages.js";
+import { readFlagWithOverride } from "../analytics/flagOverrides.js";
+import { isBase64ImageBlock as isBase64ImageBlock_3 } from "../../utils/imageValidation.js";
+import { isObjectBlock } from "../../utils/toolResultStorage.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { isFoamySpringEnabled } from "../analytics/growthbookGates.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1521691-1521994 placement
+//@ chunk-5xgkngpb.js:1524433-1524736 placement
 /**
  * 发现非延迟工具的描述与记录不一致时，标记"工具描述变化"，主链上预期缓存失效。
  */
-function noteToolRedescribed(conversation, toolSchemas, { redescribed, recorded, isMainChain }) {
+function noteToolRedescribed(conversation, tools, { redescribed, recorded, isMainChain }) {
   try {
     if (redescribed === undefined || recorded === undefined) return;
     if (
-      !toolSchemas.some(
+      !tools.some(
         (schema) =>
           "description" in schema &&
           !("defer_loading" in schema && schema.defer_loading === true) &&
@@ -71,16 +78,16 @@ function noteToolRedescribed(conversation, toolSchemas, { redescribed, recorded,
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:1521994-1522019 placement
+//@ chunk-5xgkngpb.js:1524736-1524761 placement
 function emptyObject(conversation) {
   return {};
 }
-//@ chunk-e6aww6q8.js:1522019-1522092 placement
+//@ chunk-5xgkngpb.js:1524761-1524834 placement
 function promptPrefixLedgerFor(conversation) {
   conversation.sentPrefix.ledger ??= new PromptPrefixLedger();
   return conversation.sentPrefix.ledger;
 }
-//@ chunk-e6aww6q8.js:1522092-1522288 placement
+//@ chunk-5xgkngpb.js:1524834-1525030 placement
 function querySourceBucket(querySource) {
   if (querySource === "sdk") return lit_2("sdk");
   if (querySource.startsWith("repl_main_thread")) return lit_2("main");
@@ -88,13 +95,13 @@ function querySourceBucket(querySource) {
   if (querySource === "compact") return lit_2("compact");
   return lit_2("side");
 }
-//@ chunk-e6aww6q8.js:1522288-1522951 placement
+//@ chunk-5xgkngpb.js:1525030-1525693 placement
 /**
  * 遥测用的工具名到站点标签映射，以及缓存失效涉及部位（messages/system/tools 组合）的编码表。
  */
 var TOOL_SITE_LABELS; // deferred: uses AGENT (../../tools/AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
 var PREFIX_SEGMENT_LABELS;
-deferInit("chunk-e6aww6q8.js:1522288", () => {
+deferInit("chunk-5xgkngpb.js:1525030", () => {
   TOOL_SITE_LABELS = new Map([
     [BASH_TOOL_NAME, lit_2("tools:Bash")],
     [SCHEDULE_WAKEUP_TOOL_NAME, lit_2("tools:ScheduleWakeup")],
@@ -107,8 +114,8 @@ deferInit("chunk-e6aww6q8.js:1522288", () => {
     [ARTIFACT_CHECK_TOOL_NAME, lit_2("tools:ArtifactCheck")],
     [SENDMESSAGE, lit_2("tools:SendMessage")],
     [SEND_USER_FILE_TOOL_NAME, lit_2("tools:SendUserFile")],
-    [FILE_READ_TOOL_NAME, lit_2("tools:Read")],
-    [FILE_EDIT_TOOL_NAME, lit_2("tools:Edit")],
+    [READ, lit_2("tools:Read")],
+    [EDIT, lit_2("tools:Edit")],
     [FILE_WRITE_TOOL_NAME, lit_2("tools:Write")],
     [POWERSHELL_TOOL_NAME, lit_2("tools:PowerShell")],
     [MONITOR, lit_2("tools:Monitor")],
@@ -125,16 +132,16 @@ deferInit("chunk-e6aww6q8.js:1522288", () => {
     [7, lit_2("tools+system+messages")],
   ]);
 });
-//@ chunk-e6aww6q8.js:1522994-1523024 placement
+//@ chunk-5xgkngpb.js:1525736-1525766 placement
 var MAX_SCHEMA_SUBSTITUTIONS = 8;
 var EMPTY_OBJECT_SCHEMA = {
   type: "object",
 };
-//@ chunk-e6aww6q8.js:1523024-1523057 placement
+//@ chunk-5xgkngpb.js:1525766-1525799 placement
 function schemaHash(inputSchema) {
   return computeContentHash(jsonStringifyRaw(inputSchema));
 }
-//@ chunk-e6aww6q8.js:1523057-1523335 placement
+//@ chunk-5xgkngpb.js:1525799-1526077 placement
 function applyRefusedToolSchemas(toolsForRequest, conversation) {
   let refusedToolSchemas = conversation.refusedToolSchemas;
   if (refusedToolSchemas.size === 0) return toolsForRequest;
@@ -159,7 +166,7 @@ function applyRefusedToolSchemas(toolsForRequest, conversation) {
     return toolsForRequest;
   }
 }
-//@ chunk-e6aww6q8.js:1523335-1524578 placement
+//@ chunk-5xgkngpb.js:1526077-1527320 placement
 /**
  * 工具 schema 线上缓存：在限额内用已发送的 schema 引用替换重复的 input_schema。
  */
@@ -219,16 +226,219 @@ class ToolSchemaWireCache {
     }
   }
 }
-//@ chunk-e6aww6q8.js:1524578-1524605 placement
+//@ chunk-5xgkngpb.js:1527320-1527401 layout
+var TENGU_HAZY_HAMSTER; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var ccsUnsentMediaByAgent;
+var ccsUnsentMediaBlocks;
+deferInit("chunk-5xgkngpb.js:1527320", () => {
+  TENGU_HAZY_HAMSTER = "tengu_hazy_hamster";
+  ccsUnsentMediaByAgent = new SessionRootSlot(() => new Map());
+  ccsUnsentMediaBlocks = new SessionRootSlot(() => new WeakSet());
+});
+//@ chunk-5xgkngpb.js:1527401-1527472 layout
+function unsentMediaReportFor(agentId) {
+  try {
+    return ccsUnsentMediaByAgent.peek(getRootSession())?.get(agentId);
+  } catch (error) {
+    logError(error);
+    return;
+  }
+}
+//@ chunk-5xgkngpb.js:1527472-1527603 layout
+function unsentMediaByteLength(block) {
+  if (!isUnsentImageBlock(block)) return;
+  return ccsUnsentMediaBlocks.peek(getRootSession())?.has(block.source)
+    ? Number(block.source.data.slice(UNSENT.length))
+    : block.source.data.length;
+}
+//@ chunk-5xgkngpb.js:1527603-1527944 layout
+function recordUnsentMedia(agentId, blocks) {
+  try {
+    if (
+      blocks.length === 0 ||
+      !isCcsTenant() ||
+      readFlagWithOverride(TENGU_HAZY_HAMSTER, {
+        safe: false,
+      })
+    )
+      return;
+    let report = unsentMediaReportFor(agentId);
+    if (report === undefined) {
+      report = {
+        blocks: new WeakSet(),
+        reports: 0,
+      };
+      ccsUnsentMediaByAgent.of(getRootSession()).set(agentId, report);
+      logFeatureOk("ccs_unsent_media");
+    }
+    let sawNewBlock = false;
+    for (let block of blocks)
+      if (isBase64ImageBlock_3(block) && block.source.data.length > 0 && !report.blocks.has(block)) {
+        report.blocks.add(block);
+        sawNewBlock = true;
+      }
+    if (sawNewBlock) report.reports++;
+  } catch (error) {
+    logError(error);
+    logFeatureBad("ccs_unsent_media", "report_failed");
+  }
+}
+//@ chunk-5xgkngpb.js:1527944-1528195 layout
+class UnsentMediaReporter {
+  agentId;
+  seenOf;
+  seen = 0;
+  constructor(agentId) {
+    this.agentId = agentId;
+  }
+  hasReports() {
+    return unsentMediaReportFor(this.agentId) !== undefined;
+  }
+  hasNews() {
+    let report = unsentMediaReportFor(this.agentId);
+    if (report === undefined || (report === this.seenOf && report.reports === this.seen)) return false;
+    this.seenOf = report;
+    this.seen = report.reports;
+    return true;
+  }
+}
+//@ chunk-5xgkngpb.js:1528195-1528236 layout
+function forgetUnsentMediaReport(agentId) {
+  ccsUnsentMediaByAgent.peek(getRootSession())?.delete(agentId);
+}
+//@ chunk-5xgkngpb.js:1528236-1529191 layout
+function letGoOfUnsentMedia(messages, agentId, shouldSkip) {
+  try {
+    let blocks = unsentMediaReportFor(agentId)?.blocks;
+    if (blocks === undefined) return messages;
+    let unsentBlocks = ccsUnsentMediaBlocks.of(getRootSession());
+    let next;
+    for (let [index, message] of messages.entries()) {
+      if (message.type !== "user" || !Array.isArray(message.message.content)) continue;
+      let unsentByData = new Map();
+      let mapped = message.message.content.map((block) => {
+        if (
+          !isObjectBlock(block) ||
+          block.type !== "tool_result" ||
+          !Array.isArray(block.content) ||
+          !block.content.some((item) => blocks.has(item)) ||
+          shouldSkip?.(block.tool_use_id)
+        )
+          return block;
+        return {
+          ...block,
+          content: block.content.map((item) => {
+            if (!blocks.has(item)) return item;
+            if (item.type === "image" && item.source.type === "base64")
+              return {
+                ...item,
+                source: markUnsentSource(item.source, unsentByData, unsentBlocks),
+              };
+            if (item.type === "document" && item.source.type === "base64")
+              return {
+                ...item,
+                source: markUnsentSource(item.source, unsentByData, unsentBlocks),
+              };
+            return item;
+          }),
+        };
+      });
+      if (unsentByData.size > 0) {
+        for (let mappedMessage of mapped)
+          if (
+            isObjectBlock(mappedMessage) &&
+            mappedMessage.type === "tool_result" &&
+            Array.isArray(mappedMessage.content)
+          ) {
+            for (let block of mappedMessage.content)
+              if (isBase64ImageBlock_3(block)) unsentByData.delete(block.source.data);
+          }
+        next ??= [...messages];
+        next[index] = {
+          ...message,
+          message: {
+            ...message.message,
+            content: mapped,
+          },
+          ...(message.toolUseResult !== undefined && {
+            toolUseResult: replaceUnsentMediaMarkers(message.toolUseResult, unsentByData, 4),
+          }),
+        };
+      }
+    }
+    return next ?? messages;
+  } catch (error) {
+    logError(error);
+    logFeatureBad("ccs_unsent_media", "let_go_failed");
+    return messages;
+  }
+}
+//@ chunk-5xgkngpb.js:1529191-1529271 layout
+function letGoOfUnsentMediaInPlace(messages, agentId, shouldSkip) {
+  let next = letGoOfUnsentMedia(messages, agentId, shouldSkip);
+  if (next !== messages) for (let [index, message] of next.entries()) messages[index] = message;
+}
+//@ chunk-5xgkngpb.js:1529271-1529453 layout
+function toolResultUseIds(messages) {
+  return new Set(
+    messages
+      .flatMap((message) =>
+        message.type === "user" && Array.isArray(message.message.content) ? message.message.content : [],
+      )
+      .flatMap((block) => (isObjectBlock(block) && block.type === "tool_result" ? [block.tool_use_id] : [])),
+  );
+}
+//@ chunk-5xgkngpb.js:1529453-1529558 layout
+function markUnsentSource(source, unsentByData, unsentBlocks) {
+  let marker = `${UNSENT}${source.data.length}`;
+  unsentByData.set(source.data, marker);
+  let unsentBlock = {
+    ...source,
+    data: marker,
+  };
+  unsentBlocks.add(unsentBlock);
+  return unsentBlock;
+}
+//@ chunk-5xgkngpb.js:1529558-1530003 layout
+function replaceUnsentMediaMarkers(value, unsentByData, depth) {
+  if (typeof value === "string") {
+    let replaced = unsentByData.get(value);
+    if (replaced !== undefined) return replaced;
+    for (let [data, marker] of unsentByData)
+      if (value.endsWith(`,${data}`)) return `${value.slice(0, value.length - data.length)}${marker}`;
+    return value;
+  }
+  if (depth === 0) return value;
+  if (Array.isArray(value)) {
+    let mapped = value.map((item) => replaceUnsentMediaMarkers(item, unsentByData, depth - 1));
+    return mapped.some((item, index) => item !== value[index]) ? mapped : value;
+  }
+  if (!isPlainObject_6(value) || ArrayBuffer.isView(value)) return value;
+  let mapped = Object.entries(value).map(([key, value]) => [
+    key,
+    replaceUnsentMediaMarkers(value, unsentByData, depth - 1),
+  ]);
+  return mapped.some(([key, mappedValue]) => mappedValue !== Reflect.get(value, key))
+    ? Object.fromEntries(mapped)
+    : value;
+}
+//@ chunk-5xgkngpb.js:1530003-1530030 placement
 function isFoamySpringWireOn() {
   return isFoamySpringEnabled();
 }
 export {
+  unsentMediaByteLength,
   noteToolRedescribed,
   applyRefusedToolSchemas,
   ToolSchemaWireCache,
   isFoamySpringWireOn,
+  recordUnsentMedia,
   emptyObject,
+  UnsentMediaReporter,
+  toolResultUseIds,
+  letGoOfUnsentMediaInPlace,
+  letGoOfUnsentMedia,
   promptPrefixLedgerFor,
   querySourceBucket,
+  forgetUnsentMediaReport,
 };

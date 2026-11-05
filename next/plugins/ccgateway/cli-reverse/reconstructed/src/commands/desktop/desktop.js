@@ -3,20 +3,29 @@
  *
  * /desktop 实现：把当前会话交接给 Claude Desktop
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/desktop/desktop.tsx
- * pieces: chunk-ds2d8kad.js (1)
+ * pieces: chunk-nj7rp16y.js (1)
  * attribution: callgraph-fingerprint 1
  */
+import { isAccepted } from "../../utils/codeMode/accepted.js";
+import { isCodeModeEnabled } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { CODE_MODE_EXPERIMENTAL_LABEL } from "../../constants/codeMode.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { DesktopHandoff, nullRef } from "../../components/DesktopHandoff.js";
 import { submittedMessages } from "../../utils/promptSubmissionOrigin.js";
 
-//@ chunk-ds2d8kad.js:18318-18400 callgraph-fingerprint (2.1.88 match: call, 0.394)
-/**
- * /desktop 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
- */
+//@ chunk-nj7rp16y.js:19487-19699 callgraph-fingerprint (2.1.88 match: call, 0.155)
 async function call(onDone, context) {
+  if (isAccepted() && isCodeModeEnabled()) {
+    onDone(
+      `This session is in ${CODE_MODE_EXPERIMENTAL_LABEL}, which Claude Desktop can't use yet, so it stays here.`,
+      {
+        display: "system",
+      },
+    );
+    return null;
+  }
   return jsxProd_default(DesktopHandoff, {
     onDone,
     handoff: nullRef(),

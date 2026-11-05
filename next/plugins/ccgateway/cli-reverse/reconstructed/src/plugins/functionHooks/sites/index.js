@@ -3,9 +3,9 @@
  *
  * 钩子站点规则命名空间（h3t）汇总（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (6)
  * attribution: placement 6
  */
 import { __export } from "../../../../runtime/bun-runtime.js";
@@ -67,6 +67,7 @@ import {
   UI_FOCUS_SITE,
   UI_OPEN_SITE,
   MAX_KEPT_TEXT_CHARS,
+  checkBackdropProps,
   toolUseIdOf,
   toolUseIdList,
   checkPinnedKeysWith,
@@ -158,6 +159,7 @@ import {
   UI_RESOLVE_SITE,
   UI_SELECT_SITE,
   checkPropsControlChars,
+  hasBackdropSurface,
   checkUiRenderPinned,
   createUiValueSite,
   checkToolGroupCalls,
@@ -288,14 +290,14 @@ import { normalizeFrontmatter } from "../../../skills/bundled/verify.js";
 import { createSignal } from "../../../utils/signal.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:2077-2088 placement
+//@ chunk-j8f885h1.js:2132-2143 placement
 /**
  * 站点规则命名空间
  */
 var SITE_RULES_NAMESPACE = {};
-//@ chunk-4121qate.js:2088-8118 placement
+//@ chunk-j8f885h1.js:2143-8227 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4121qate.js:2088", () => {
+deferInit("chunk-j8f885h1.js:2143", () => {
   __export(SITE_RULES_NAMESPACE, {
     AGENT_OFFER: () => AGENT_OFFER_SITE,
     AGENT_SPAWN: () => AGENT_SPAWN_SITE,
@@ -397,6 +399,7 @@ deferInit("chunk-4121qate.js:2088", () => {
     appendViewProblem: () => checkMessageIdentity,
     appendViewRestored: () => restoreAppendIdentity,
     autocompleteResultProblem: () => checkSuggestions,
+    backdropIdentityProblem: () => checkBackdropProps,
     boxSite: () => createPromptBoxSite,
     boxTextProblem: () => checkPromptOriginAndText,
     callIdOf: () => toolUseIdOf,
@@ -430,6 +433,7 @@ deferInit("chunk-4121qate.js:2088", () => {
     denyAnswerProblem: () => checkDenyResult,
     denyRule: () => checkValueOrDeny,
     describedFieldsProblem: () => checkCommandDescription,
+    drawsBackdrop: () => hasBackdropSurface,
     droppedKeysKept: () => keepSettingsKeys,
     editArgumentProblem: () => checkPromptEditArgument,
     editResultProblem: () => checkPromptEditResult,
@@ -563,22 +567,22 @@ deferInit("chunk-4121qate.js:2088", () => {
     wrongTypeFieldsOf: () => mistypedClassicFields,
   });
 });
-//@ chunk-4121qate.js:8118-8153 placement
+//@ chunk-j8f885h1.js:8227-8262 placement
 /**
  * plugin key
  */
 var paneOwnerLabel = (owner) => `${owner.plugin} ${owner.key}`;
-//@ chunk-4121qate.js:8153-8216 placement
+//@ chunk-j8f885h1.js:8262-8325 placement
 /**
  * 界面预算键
  */
 var surfaceBudgetKey = (owner) => `${owner.surface.length} ${owner.surface} ${owner.requestId}`;
-//@ chunk-4121qate.js:8216-8226 placement
+//@ chunk-j8f885h1.js:8325-8335 placement
 /**
  * 64
  */
 var MAX_SURFACES = 64;
-//@ chunk-4121qate.js:8226-8957 placement
+//@ chunk-j8f885h1.js:8335-9066 placement
 /**
  * 按界面（surface + requestId）记录各客户端占用的行数，判断是否放得下，行数减少时发出 freed 信号（最多保留 64 个界面）。
  */
@@ -639,4 +643,4 @@ function createSurfaceRowLedger() {
     },
   };
 }
-export { SITE_RULES_NAMESPACE, createSurfaceRowLedger, surfaceBudgetKey };
+export { surfaceBudgetKey, SITE_RULES_NAMESPACE, createSurfaceRowLedger };

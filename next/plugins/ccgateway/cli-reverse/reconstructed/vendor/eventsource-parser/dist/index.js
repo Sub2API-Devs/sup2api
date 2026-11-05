@@ -1,12 +1,12 @@
 /**
  * eventsource-parser/dist/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: eventsource-parser@3.0.8
- * pieces: chunk-ccwj2pkk.js (6)
+ * pieces: chunk-sdd6eajv.js (6)
  * attribution: esm-fingerprint 2, esm-layout 4
  */
 
-//@ chunk-ccwj2pkk.js:191-335 esm-fingerprint
+//@ chunk-sdd6eajv.js:191-335 esm-fingerprint
 class ParseError extends Error {
   constructor(message, options) {
     super(message);
@@ -17,13 +17,13 @@ class ParseError extends Error {
     this.line = options.line;
   }
 }
-//@ chunk-ccwj2pkk.js:335-354 esm-layout
+//@ chunk-sdd6eajv.js:335-354 esm-layout
 var LF = 10;
 var CR = 13;
 var SPACE = 32;
-//@ chunk-ccwj2pkk.js:354-369 esm-layout
-function noop(n) {}
-//@ chunk-ccwj2pkk.js:369-2857 esm-fingerprint
+//@ chunk-sdd6eajv.js:354-369 esm-layout
+function noop(noop) {}
+//@ chunk-sdd6eajv.js:369-2857 esm-fingerprint
 function createParser(callbacks) {
   if (typeof callbacks == "function")
     throw TypeError("`callbacks` must be an object, got a function instead. Did you mean `{onEvent: fn}`?");
@@ -263,7 +263,7 @@ ${value}`;
     reset,
   };
 }
-//@ chunk-ccwj2pkk.js:2857-2987 esm-layout
+//@ chunk-sdd6eajv.js:2857-2987 esm-layout
 function isDataPrefix(chunk, i, firstCharCode) {
   return (
     firstCharCode === 100 &&
@@ -273,7 +273,7 @@ function isDataPrefix(chunk, i, firstCharCode) {
     chunk.charCodeAt(i + 4) === 58
   );
 }
-//@ chunk-ccwj2pkk.js:2987-3144 esm-layout
+//@ chunk-sdd6eajv.js:2987-3144 esm-layout
 function isEventPrefix(chunk, i, firstCharCode) {
   return (
     firstCharCode === 101 &&

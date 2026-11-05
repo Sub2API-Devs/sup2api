@@ -3,9 +3,9 @@
  *
  * installed_plugins.json（V2：插件 ID → 各作用域安装记录）的读写、迁移、内存缓存与按当前项目筛选。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/installedPluginsManager.ts
- * pieces: chunk-e6aww6q8.js (112)
+ * pieces: chunk-5xgkngpb.js (112)
  * attribution: fingerprint 21, layout 54, callgraph-fingerprint 3, placement 33, affinity 1
  */
 import { join, resolve as resolve_2, sep, dirname, basename } from "path";
@@ -51,7 +51,7 @@ import {
   ONE_MIB,
   parsePluginBinaries,
 } from "./schemas.js";
-import { writeAndPublishSync } from "../atomicPublishWrite.js";
+import { syncTarget } from "../atomicPublishWrite.js";
 import { logError } from "../log.js";
 import { anchoredPluginCachePath, getVersionedCachePath } from "./pluginLoader.js";
 import {
@@ -62,7 +62,7 @@ import {
 } from "./localMarketplacePaths.js";
 import { getOriginalCwd, isDiskless } from "../../bootstrap/state.js";
 import { toComparablePath } from "../fsJunctions.js";
-import { regExp as regExp_18 } from "./commandSource.js";
+import { regExp as regExp_21 } from "./commandSource.js";
 import {
   classifyDirEntrySafe,
   removeDirectoryTreeNoFollow as removeDirectoryTreeNoFollow_2,
@@ -107,7 +107,7 @@ import {
 import { pluginGitHead, getPluginCloneUrl } from "./pluginVersioning.js";
 import { STORAGE_SPACES } from "../storage/storageSpaces.js";
 import { stripBom } from "../json.js";
-import { count } from "../collections.js";
+import { countWhere } from "../collections.js";
 import { isRemoteSettingsFetchFailed } from "../../services/cloudSessions/eligibility.js";
 import { isLocalSettingsGitTracked } from "../config.js";
 import { EDITABLE_SETTING_SOURCES } from "../settings/constants.js";
@@ -119,18 +119,18 @@ import { isTempSiblingName } from "./pluginCacheMaterialize.js";
 import { readOnlyNoFollowFlags } from "../platformTargets.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4326097-4326152 fingerprint (2.1.88 match: getInstalledPluginsFilePath, 1)
+//@ chunk-5xgkngpb.js:4432658-4432713 fingerprint (2.1.88 match: getInstalledPluginsFilePath, 1)
 /**
  * installed_plugins.json 路径：<plugins 目录>/installed_plugins.json。
  */
 function getInstalledPluginsFilePath() {
   return join(getPluginsDirectory(), "installed_plugins.json");
 }
-//@ chunk-e6aww6q8.js:4326152-4326211 fingerprint (2.1.88 match: getInstalledPluginsV2FilePath, 1)
+//@ chunk-5xgkngpb.js:4432713-4432772 fingerprint (2.1.88 match: getInstalledPluginsV2FilePath, 1)
 function getInstalledPluginsV2FilePath() {
   return join(getPluginsDirectory(), "installed_plugins_v2.json");
 }
-//@ chunk-e6aww6q8.js:4326211-4326360 fingerprint (2.1.88 match: clearInstalledPluginsCache, 0.595)
+//@ chunk-5xgkngpb.js:4432772-4432921 fingerprint (2.1.88 match: clearInstalledPluginsCache, 0.595)
 /**
  * 清掉 installed_plugins 的内存缓存（全局 installedPluginsFile 与快照），下次读取会重新加载。
  */
@@ -141,18 +141,18 @@ function clearInstalledPluginsCache() {
   pluginRegistry.installedPluginsEpoch++;
   logForDebugging("Cleared installed plugins cache");
 }
-//@ chunk-e6aww6q8.js:4326360-4326438 layout
+//@ chunk-5xgkngpb.js:4432921-4432999 layout
 function setInstalledPluginsCache(installedPluginsFile) {
   let pluginRegistry = getPluginRegistry();
   pluginRegistry.installedPluginsFile = installedPluginsFile;
   pluginRegistry.installedPluginsEpoch++;
 }
-//@ chunk-e6aww6q8.js:4326438-4326477 layout
+//@ chunk-5xgkngpb.js:4432999-4433038 layout
 var UNPARSEABLE_RECORD_IDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4326438", () => {
+deferInit("chunk-5xgkngpb.js:4432999", () => {
   UNPARSEABLE_RECORD_IDS = Symbol("unparseableRecordIds");
 });
-//@ chunk-e6aww6q8.js:4326477-4326633 layout
+//@ chunk-5xgkngpb.js:4433038-4433194 layout
 /**
  * 在错误对象上附加无法解析的记录 ID 列表（不可枚举属性）。
  */
@@ -164,14 +164,14 @@ function markUnparseableRecords(firstUnparseableError, recordIds) {
   });
   return error;
 }
-//@ chunk-e6aww6q8.js:4326633-4326689 layout
+//@ chunk-5xgkngpb.js:4433194-4433250 layout
 /**
  * 读取错误对象上的无法解析记录 ID 列表。
  */
 function getUnparseableRecordIds(error) {
   return error instanceof Error ? error[UNPARSEABLE_RECORD_IDS] : undefined;
 }
-//@ chunk-e6aww6q8.js:4326689-4326986 layout
+//@ chunk-5xgkngpb.js:4433250-4433547 layout
 /**
  * 记录插件状态文件错误遥测 tengu_plugin_state_file_error（操作、错误种类：无法解析的记录/未替换/JSON 语法…）。
  */
@@ -191,7 +191,7 @@ function logPluginStateFileError(operation, error, recovered) {
     recovered,
   });
 }
-//@ chunk-e6aww6q8.js:4326986-4328557 fingerprint (2.1.88 match: migrateToSinglePluginFile, 0.69)
+//@ chunk-5xgkngpb.js:4433547-4435122 fingerprint (2.1.88 match: migrateToSinglePluginFile, 0.69)
 /**
  * 一次性迁移：把旧的 installed_plugins_v2.json 与旧版单文件合并成单一 installed_plugins.json（V2 形状），不会覆盖已有列表。
  */
@@ -275,7 +275,7 @@ async function migrateToSinglePluginFile(storageV5) {
       let v1Data = InstalledPluginsFileSchemaV1().parse(mainData);
       let v2Data = migrateV1ToV2(v1Data);
       assertInstalledPluginsReplaceable_2(readInstalledPluginsFileRaw(mainFilePath_2));
-      writeAndPublishSync(mainFilePath_2, jsonStringify(v2Data, null, 2));
+      syncTarget(mainFilePath_2, jsonStringify(v2Data, null, 2));
       logForDebugging(
         `Converted installed_plugins.json from V1 to V2 format (${Object.keys(v1Data.plugins).length} plugins)`,
       );
@@ -293,7 +293,7 @@ async function migrateToSinglePluginFile(storageV5) {
   }
   await cleanupPromise;
 }
-//@ chunk-e6aww6q8.js:4328557-4329866 fingerprint (2.1.88 match: cleanupLegacyCache, 0.4)
+//@ chunk-5xgkngpb.js:4435122-4436435 fingerprint (2.1.88 match: cleanupLegacyCache, 0.4)
 /**
  * 清理旧版“扁平缓存”目录（非版本化布局）中不再被任何安装记录引用的插件目录；installed_plugins 读不到时跳过。
  */
@@ -336,7 +336,7 @@ async function cleanupLegacyCache(v2Data) {
     let entries = await fs.readdir(cachePath);
     for (let dirent of entries) {
       let entry = dirent.name;
-      if (regExp_18.test(entry)) continue;
+      if (regExp_21.test(entry)) continue;
       let entryPath = join(cachePath, entry);
       try {
         if (!(await classifyDirEntrySafe(cachePath, dirent))?.isDirectory) continue;
@@ -383,7 +383,7 @@ async function cleanupLegacyCache(v2Data) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:4330013-4330286 callgraph-fingerprint (2.1.88 match: readInstalledPluginsFileRaw, 0.319)
+//@ chunk-5xgkngpb.js:4436582-4436855 callgraph-fingerprint (2.1.88 match: readInstalledPluginsFileRaw, 0.32)
 async function readInstalledPluginsFileRaw_2(storageV5, storageKey) {
   let readResult = await storageV5.read([storageKey]);
   if (!readResult.ok) throw storageAccessError(readResult.error);
@@ -393,7 +393,7 @@ async function readInstalledPluginsFileRaw_2(storageV5, storageKey) {
   if (!item.found) return null;
   return parseInstalledPluginsJson(Buffer.from(item.value).toString("utf-8"));
 }
-//@ chunk-e6aww6q8.js:4330286-4330544 layout
+//@ chunk-5xgkngpb.js:4436855-4437113 layout
 /**
  * 经存储层读取 installed_plugins.json 原文（不存在返回 null）。
  */
@@ -405,7 +405,7 @@ async function readInstalledPluginsViaStorage(storageV5, storageKey) {
     throw Error("installed plugins registry read settled without an outcome for its key");
   return item.found ? Buffer.from(item.value).toString("utf-8") : null;
 }
-//@ chunk-e6aww6q8.js:4330544-4330635 layout
+//@ chunk-5xgkngpb.js:4437113-4437204 layout
 /**
  * 解析 installed_plugins.json 文本，返回 {version, data}（无 version 视为 1）。
  */
@@ -416,13 +416,13 @@ function parseInstalledPluginsJson(text) {
     data: parsed,
   };
 }
-//@ chunk-e6aww6q8.js:4330635-4330731 layout
+//@ chunk-5xgkngpb.js:4437204-4437300 layout
 function toInstalledPluginsV2(raw) {
   return raw.version === 2
     ? normalizeInstallPaths(parseInstalledPluginsV2Strict(raw.data, "load-from-disk"))
     : migrateV1ToV2(InstalledPluginsFileSchemaV1().parse(raw.data));
 }
-//@ chunk-e6aww6q8.js:4330731-4330882 fingerprint (2.1.88 match: hasPendingUpdates, 0.783)
+//@ chunk-5xgkngpb.js:4437300-4437451 fingerprint (2.1.88 match: hasPendingUpdates, 0.783)
 function normalizeInstallPaths(installedPluginsV2Strict) {
   for (let plugin of Object.values(installedPluginsV2Strict.plugins))
     for (let diskEntry of plugin) {
@@ -431,7 +431,7 @@ function normalizeInstallPaths(installedPluginsV2Strict) {
     }
   return installedPluginsV2Strict;
 }
-//@ chunk-e6aww6q8.js:4330882-4332310 layout
+//@ chunk-5xgkngpb.js:4437451-4438881 layout
 /**
  * 生成“插件 id 不合法、无法安装”的说明：区分多个 @、npm 包名不合法、插件名/市场名哪个不合法；名字含不可见字符时补一句； 是依赖的 id 不合法时以依赖方口吻描述。
  */
@@ -463,7 +463,7 @@ function formatInvalidPluginIdMessage(pluginId, dependentId, parts) {
     ? `Plugin "${quotedPrintable(dependentId)}" cannot be installed, because it depends on "${printableId}", whose id is invalid: ${invalidText}${hiddenNote}`
     : `Plugin "${printableId}" cannot be installed, because its id is invalid: ${invalidText}${hiddenNote}`;
 }
-//@ chunk-e6aww6q8.js:4332310-4332478 layout (2.1.88 match: setCwdState, 1)
+//@ chunk-5xgkngpb.js:4438881-4439049 layout (2.1.88 match: setCwdState, 1)
 function normalizeQuotes(cwd) {
   return cwd
     .normalize("NFC")
@@ -472,16 +472,16 @@ function normalizeQuotes(cwd) {
     .replace(/"/g, "\u201D")
     .replace(/'/g, "\u2019");
 }
-//@ chunk-e6aww6q8.js:4332478-4332527 layout
+//@ chunk-5xgkngpb.js:4439049-4439098 layout
 /**
  * isRecordablePluginId：插件 id 符合 schema。
  */
 function isRecordablePluginId(pluginId) {
   return PluginIdSchema().safeParse(pluginId).success;
 }
-//@ chunk-e6aww6q8.js:4332527-4332706 layout
+//@ chunk-5xgkngpb.js:4439098-4439277 layout
 let UnrecordablePluginIdError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4332527", () => {
+deferInit("chunk-5xgkngpb.js:4439098", () => {
   UnrecordablePluginIdError = class UnrecordablePluginIdError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -492,23 +492,23 @@ deferInit("chunk-e6aww6q8.js:4332527", () => {
     }
   };
 });
-//@ chunk-e6aww6q8.js:4332706-4332750 layout
+//@ chunk-5xgkngpb.js:4439277-4439321 layout
 /**
  * assertRecordablePluginId：id 不可记录时抛错。
  */
 function assertRecordablePluginId(pluginId) {
   if (!isRecordablePluginId(pluginId)) throw new UnrecordablePluginIdError(pluginId);
 }
-//@ chunk-e6aww6q8.js:4332750-4332791 layout
+//@ chunk-5xgkngpb.js:4439321-4439362 layout
 var SET_ASIDE_RECORDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4332750", () => {
+deferInit("chunk-5xgkngpb.js:4439321", () => {
   SET_ASIDE_RECORDS = Symbol("setAsideInstallRecords");
 });
-//@ chunk-e6aww6q8.js:4332791-4332821 layout
+//@ chunk-5xgkngpb.js:4439362-4439392 layout
 function setAsideRecordsOf(error) {
   return error[SET_ASIDE_RECORDS];
 }
-//@ chunk-e6aww6q8.js:4332821-4332920 layout
+//@ chunk-5xgkngpb.js:4439392-4439491 layout
 function attachSetAsideRecords(target, value) {
   Object.defineProperty(target, SET_ASIDE_RECORDS, {
     value,
@@ -517,17 +517,17 @@ function attachSetAsideRecords(target, value) {
     writable: true,
   });
 }
-//@ chunk-e6aww6q8.js:4332920-4332974 layout
+//@ chunk-5xgkngpb.js:4439491-4439545 layout
 function copySetAsideRecords(source, v2Data) {
   let setAside = setAsideRecordsOf(source);
   if (setAside !== undefined) attachSetAsideRecords(v2Data, setAside);
 }
-//@ chunk-e6aww6q8.js:4332974-4333016 layout
+//@ chunk-5xgkngpb.js:4439545-4439587 layout
 function serializeInstalledPlugins(data) {
   writeSetAsideRecords(data);
   return jsonStringify(data, null, 2);
 }
-//@ chunk-e6aww6q8.js:4333016-4333932 layout
+//@ chunk-5xgkngpb.js:4439587-4440503 layout
 /**
  * 宽松解析 installed_plugins.json V2：存在键合法但本版本解析不了的记录时记 warn 并抛出（视为不可读、不覆盖文件）； 键本身不合法的记录登记为 set-aside（下次写时复制到带日期的旁文件后丢弃）。返回解析后的文件对象。
  */
@@ -566,7 +566,7 @@ function parseInstalledPluginsV2Strict(raw, operation) {
   }
   return file;
 }
-//@ chunk-e6aww6q8.js:4333932-4334071 layout
+//@ chunk-5xgkngpb.js:4440503-4440642 layout
 function tryParseInstalledPluginsV2(raw) {
   try {
     let { file, keptRaw } = parseInstalledPluginsV2Leniently(raw);
@@ -584,7 +584,7 @@ function tryParseInstalledPluginsV2(raw) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:4334071-4334459 layout
+//@ chunk-5xgkngpb.js:4440642-4441030 layout
 /**
  * set-aside 记录旁文件写失败的错误。
  */
@@ -594,7 +594,7 @@ function setAsideCopyFailedError(sidePath, reason) {
     "the side copy of set-aside install records could not be written",
   );
 }
-//@ chunk-e6aww6q8.js:4334459-4334920 layout
+//@ chunk-5xgkngpb.js:4441030-4441491 layout
 /**
  * 写 installed_plugins.json 前，把被 set aside 的记录按键排序写到插件目录下带日期与内容哈希的旁文件（权限 0600），失败抛 Sys 错误；成功后清空登记。
  */
@@ -610,7 +610,7 @@ function writeSetAsideRecords(data) {
   );
   try {
     ensurePluginsDirectoryExists();
-    writeAndPublishSync(sidePath, sideJson, 384);
+    syncTarget(sidePath, sideJson, 384);
   } catch (error) {
     throw setAsideCopyFailedError(sidePath, errorMessage(error));
   }
@@ -622,7 +622,7 @@ function writeSetAsideRecords(data) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:4334920-4335171 fingerprint (2.1.88 match: migrateV1ToV2, 1)
+//@ chunk-5xgkngpb.js:4441491-4441742 fingerprint (2.1.88 match: migrateV1ToV2, 1)
 function migrateV1ToV2(v1Data) {
   let v2Plugins = {};
   for (let [pluginId, plugin] of Object.entries(v1Data.plugins)) {
@@ -643,7 +643,7 @@ function migrateV1ToV2(v1Data) {
     plugins: v2Plugins,
   };
 }
-//@ chunk-e6aww6q8.js:4335171-4335366 layout
+//@ chunk-5xgkngpb.js:4441742-4441937 layout
 /**
  * 同步返回 installed_plugins.json（V2 形状），首次调用从磁盘读并缓存在全局状态 installedPluginsFile；读失败返回带错误标记的空表（isInstalledPluginsReadFailure 可识别）。
  */
@@ -657,7 +657,7 @@ function getInstalledPlugins() {
   }
   return pluginRegistry.installedPluginsFile;
 }
-//@ chunk-e6aww6q8.js:4335366-4335893 layout
+//@ chunk-5xgkngpb.js:4441937-4442464 layout
 /**
  * 经存储后端（storageV5）异步读取 installed_plugins.json 并缓存；内存已有时直接返回缓存。
  */
@@ -685,14 +685,14 @@ async function getInstalledPluginsAsync(storageV5) {
     pluginRegistry.installedPluginsFile ??= loaded;
   return pluginRegistry.installedPluginsFile ?? loaded;
 }
-//@ chunk-e6aww6q8.js:4335893-4335943 layout
+//@ chunk-5xgkngpb.js:4442464-4442514 layout
 /**
  * 存储后端可用时预读 installed_plugins 到内存缓存。
  */
 async function primeInstalledPluginsCache(storageV5) {
   if (installedStorageKey(storageV5) !== null) await getInstalledPluginsAsync(storageV5);
 }
-//@ chunk-e6aww6q8.js:4335943-4336352 fingerprint (2.1.88 match: loadInstalledPluginsV2, 0.737)
+//@ chunk-5xgkngpb.js:4442514-4442923 fingerprint (2.1.88 match: loadInstalledPluginsV2, 0.737)
 /**
  * 从磁盘读取 installed_plugins.json，V1 自动迁移为 V2，结果做路径规范化。
  */
@@ -716,19 +716,19 @@ function loadInstalledPluginsV2(rawData) {
     plugins: {},
   };
 }
-//@ chunk-e6aww6q8.js:4336352-4336372 layout
+//@ chunk-5xgkngpb.js:4442923-4442943 layout
 var failedInstalledPluginsReads; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4336352", () => {
+deferInit("chunk-5xgkngpb.js:4442923", () => {
   failedInstalledPluginsReads = new WeakSet();
 });
-//@ chunk-e6aww6q8.js:4336372-4336405 placement
+//@ chunk-5xgkngpb.js:4442943-4442976 placement
 /**
  * hasFailedInstalledPluginsRead：该路径曾读失败。
  */
 function hasFailedInstalledPluginsRead(state) {
   return failedInstalledPluginsReads.has(state);
 }
-//@ chunk-e6aww6q8.js:4336405-4336577 placement
+//@ chunk-5xgkngpb.js:4442976-4443148 placement
 async function getInstalledPluginsMap(storageV5, sync = false) {
   if (sync) {
     let installedPlugins = loadInstalledPluginsSync();
@@ -739,7 +739,7 @@ async function getInstalledPluginsMap(storageV5, sync = false) {
   let state = installedPluginsFile ?? getInstalledPlugins();
   return hasFailedInstalledPluginsRead(state) ? undefined : state.plugins;
 }
-//@ chunk-e6aww6q8.js:4336577-4336721 placement
+//@ chunk-5xgkngpb.js:4443148-4443292 placement
 /**
  * 其他与该插件共用（大小写不敏感）数据目录的插件 id。
  */
@@ -749,7 +749,7 @@ function findDataDirSharers(pluginId, state, exclude = new Set([pluginId])) {
     (key) => key !== pluginId && !exclude.has(key) && pluginDataDirPath(key).toLowerCase() === lower,
   );
 }
-//@ chunk-e6aww6q8.js:4336721-4336799 placement
+//@ chunk-5xgkngpb.js:4443292-4443370 placement
 /**
  * isPluginUnreadableOrShared：插件读失败或数据目录被共享。
  */
@@ -757,7 +757,7 @@ function isPluginUnreadableOrShared(pluginId, state, exclude = new Set([pluginId
   if (hasFailedInstalledPluginsRead(state)) return true;
   return findDataDirSharers(pluginId, state, exclude).length > 0;
 }
-//@ chunk-e6aww6q8.js:4336799-4336899 placement
+//@ chunk-5xgkngpb.js:4443370-4443470 placement
 /**
  * 有安装记录的插件 id；读失败返回 unknown。
  */
@@ -766,7 +766,7 @@ function listInstalledPluginIds(data) {
     ? "unknown"
     : Object.entries(data.plugins).flatMap(([key, value]) => (value.length > 0 ? [key] : []));
 }
-//@ chunk-e6aww6q8.js:4336899-4337148 placement
+//@ chunk-5xgkngpb.js:4443470-4443719 placement
 function emptyStateAfterLoadFailure(error) {
   let reason = errorMessage(error);
   logForDebugging(`Failed to load installed_plugins.json: ${reason}. Starting with empty state.`, {
@@ -786,15 +786,15 @@ function emptyStateAfterLoadFailure(error) {
   failedInstalledPluginsReads.add(state);
   return state;
 }
-//@ chunk-e6aww6q8.js:4337148-4337208 placement
+//@ chunk-5xgkngpb.js:4443719-4443779 placement
 function installedStorageKey(storageV5) {
   return !isStorageV5Enabled() || storageV5 === undefined ? null : pluginRegistrySpace("installed");
 }
-//@ chunk-e6aww6q8.js:4337208-4337251 placement
+//@ chunk-5xgkngpb.js:4443779-4443822 placement
 function installedPluginsFileMode() {
   return 438 & ~process.umask();
 }
-//@ chunk-e6aww6q8.js:4337251-4338298 placement
+//@ chunk-5xgkngpb.js:4443822-4444869 placement
 /**
  * 读取 installed_plugins.json，遇到未知版本格式时报错。
  */
@@ -809,9 +809,9 @@ function readInstalledPluginsFile(refusal) {
   let idsText = `${mapped.join(", ")}${moreCount > 0 ? ` and ${moreCount} more` : ""}`;
   return `installed_plugins.json holds ${isSingle ? "a record" : "records"} under ${idsText} that this version of Claude Code cannot read, so plugins cannot be changed from this version, and some may not load. Update Claude Code on this machine (claude update); or uninstall ${isSingle ? "that plugin" : "those plugins"} with the version of Claude Code that wrote ${isSingle ? "the record" : "the records"}; or, if neither helps, delete ${isSingle ? "that record" : "each of those records"} from ${getInstalledPluginsFilePath()} by hand, then restart or run /reload-plugins.`;
 }
-//@ chunk-e6aww6q8.js:4338298-4338628 placement
+//@ chunk-5xgkngpb.js:4444869-4445199 placement
 let InstalledListNotReplacedError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:4338298", () => {
+deferInit("chunk-5xgkngpb.js:4444869", () => {
   InstalledListNotReplacedError = class InstalledListNotReplacedError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -834,14 +834,14 @@ deferInit("chunk-e6aww6q8.js:4338298", () => {
     }
   };
 });
-//@ chunk-e6aww6q8.js:4338628-4338664 placement (2.1.88 match: appendEntryToFile, 0.638)
+//@ chunk-5xgkngpb.js:4445199-4445235 placement
 /**
  * 写已安装插件清单前确保插件数据目录存在（mkdirSync，已存在则无操作）。
  */
 function ensurePluginsDirectoryExists() {
   getFsImplementation().mkdirSync(getPluginsDirectory());
 }
-//@ chunk-e6aww6q8.js:4338664-4339067 placement
+//@ chunk-5xgkngpb.js:4445235-4445638 placement
 /**
  * 不可读文件的保留副本写失败的错误。
  */
@@ -851,9 +851,9 @@ function keptCopyWriteFailedError(filePath, reason) {
     "the kept copy of an unreadable installed_plugins.json could not be written",
   );
 }
-//@ chunk-e6aww6q8.js:4339067-4339084 placement
+//@ chunk-5xgkngpb.js:4445638-4445655 placement
 var MAX_INSTALLED_PLUGINS_BYTES = 16777216;
-//@ chunk-e6aww6q8.js:4339084-4339548 placement
+//@ chunk-5xgkngpb.js:4445655-4446119 placement
 /**
  * 安全地同步读取文件：O_RDONLY|O_NOFOLLOW|O_NONBLOCK 打开，fstat 与 lstat 必须同为单硬链接普通文件且 dev/ino 一致， 大小不超过 Rys；读满或出错返回 undefined。
  */
@@ -895,7 +895,7 @@ function readSmallRegularFileSync(installedPluginsFilePath) {
       } catch {}
   }
 }
-//@ chunk-e6aww6q8.js:4339548-4340376 placement
+//@ chunk-5xgkngpb.js:4446119-4446947 placement
 function readInstalledPluginsRaw(raw) {
   let rawBuf = typeof raw === "string" ? Buffer.from(raw, "latin1") : Buffer.from(raw);
   let smallRegularFile = readSmallRegularFileSync(getInstalledPluginsFilePath());
@@ -920,7 +920,7 @@ function readInstalledPluginsRaw(raw) {
   );
   try {
     ensurePluginsDirectoryExists();
-    writeAndPublishSync(keptPath, smallRegularFile, 384);
+    syncTarget(keptPath, smallRegularFile, 384);
   } catch (error) {
     let keptCopyError = keptCopyWriteFailedError(keptPath, errorMessage(error));
     let errnoCode = getErrnoCode(error);
@@ -946,12 +946,12 @@ function readInstalledPluginsRaw(raw) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:4340376-4340451 placement
+//@ chunk-5xgkngpb.js:4446947-4447022 placement
 function assertInstalledPluginsReplaceable(raw) {
   let refusal = raw === null ? undefined : checkInstalledPluginsReplaceable(raw).refusal;
   if (refusal !== undefined) throw refusal;
 }
-//@ chunk-e6aww6q8.js:4340529-4341033 placement
+//@ chunk-5xgkngpb.js:4447100-4447604 placement
 /**
  * 分析现有文件原文：版本高于 2 或有本版本不能解析的记录时返回 refusal；完全无法解析返回 unreadableAtAll； V2 正常时附带 set-aside 记录。
  */
@@ -997,7 +997,7 @@ function checkInstalledPluginsReplaceable(raw) {
         setAside,
       };
 }
-//@ chunk-e6aww6q8.js:4341033-4341216 placement
+//@ chunk-5xgkngpb.js:4447604-4447787 placement
 function assertInstalledPluginsReplaceable_2(raw, target) {
   if (raw === null) return;
   let check = checkInstalledPluginsReplaceable(raw);
@@ -1009,7 +1009,7 @@ function assertInstalledPluginsReplaceable_2(raw, target) {
     });
   if (check.unreadableAtAll) readInstalledPluginsRaw(raw);
 }
-//@ chunk-e6aww6q8.js:4341216-4341381 placement
+//@ chunk-5xgkngpb.js:4447787-4447952 placement
 /**
  * 列出 installed_plugins 不可读时保留的副本文件。
  */
@@ -1026,7 +1026,7 @@ async function listUnreadableKeptFiles() {
     return [];
   }
 }
-//@ chunk-e6aww6q8.js:4341381-4341546 placement
+//@ chunk-5xgkngpb.js:4447952-4448117 placement
 /**
  * 列出 set-aside 旁文件。
  */
@@ -1043,7 +1043,7 @@ async function listSetAsideFiles() {
     return [];
   }
 }
-//@ chunk-e6aww6q8.js:4341546-4341807 placement
+//@ chunk-5xgkngpb.js:4448117-4448379 placement
 /**
  * 读文件检查是否会拒绝覆盖，返回未读记录 id 与格式版本。
  */
@@ -1066,7 +1066,7 @@ async function getInstalledListRefusal(storageV5) {
       : undefined;
   }
 }
-//@ chunk-e6aww6q8.js:4341807-4342000 placement
+//@ chunk-5xgkngpb.js:4448379-4448572 placement
 async function readInstalledPluginsLenient(storageV5) {
   try {
     let storageKey = installedStorageKey(storageV5);
@@ -1083,7 +1083,7 @@ async function readInstalledPluginsLenient(storageV5) {
     return {};
   }
 }
-//@ chunk-e6aww6q8.js:4342000-4342192 placement
+//@ chunk-5xgkngpb.js:4448572-4448764 placement
 async function isInstalledListReplaceRefused(storageV5) {
   try {
     let storageKey = installedStorageKey(storageV5);
@@ -1100,7 +1100,7 @@ async function isInstalledListReplaceRefused(storageV5) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:4342192-4342553 placement
+//@ chunk-5xgkngpb.js:4448764-4449125 placement
 /**
  * 以 latin1 读原始字节；不存在返回 null，读不了抛不可覆盖错误。
  */
@@ -1135,7 +1135,7 @@ function readInstalledPluginsFileRaw(filePath) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:4342553-4343100 fingerprint (2.1.88 match: saveInstalledPluginsV2, 0.547)
+//@ chunk-5xgkngpb.js:4449125-4449672 fingerprint (2.1.88 match: saveInstalledPluginsV2, 0.547)
 /**
  * 写回 installed_plugins.json（V2），存储后端模式下经存储接口原子写。
  */
@@ -1169,7 +1169,7 @@ async function saveInstalledPluginsV2(installedPluginsFile, storageV5) {
     fs.mkdirSync(getPluginsDirectory());
     assertInstalledPluginsReplaceable_2(readInstalledPluginsFileRaw(filePath), installedPluginsFile);
     let jsonContent = serializeInstalledPlugins(installedPluginsFile);
-    writeAndPublishSync(filePath, jsonContent);
+    syncTarget(filePath, jsonContent);
     getPluginRegistry().installedPluginsFile = installedPluginsFile;
     logForDebugging(
       `Saved ${Object.keys(installedPluginsFile.plugins).length} installed plugins to ${filePath}`,
@@ -1182,7 +1182,7 @@ async function saveInstalledPluginsV2(installedPluginsFile, storageV5) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:4343100-4343460 layout
+//@ chunk-5xgkngpb.js:4449672-4450032 layout
 function storageSaveError(error) {
   let formatted = formatStorageError(error);
   logForDebugging(`Failed to save installed_plugins.json through the storage interface: ${formatted}`, {
@@ -1204,7 +1204,7 @@ function storageSaveError(error) {
   logPluginStateFileError("save", wrapped, false);
   return wrapped;
 }
-//@ chunk-e6aww6q8.js:4343460-4343685 layout
+//@ chunk-5xgkngpb.js:4450032-4450257 layout
 function storageAccessError(storageError) {
   return storageError.code === "Failed" && storageError.cause instanceof Error
     ? attachErrnoFields(storageError.cause, storageError)
@@ -1219,16 +1219,16 @@ function storageAccessError(storageError) {
         },
       );
 }
-//@ chunk-e6aww6q8.js:4343685-4343742 layout
+//@ chunk-5xgkngpb.js:4450257-4450314 layout
 function attachErrnoFields(cause, storageError) {
   return isSyscallError(cause) ? cause : Object.assign(cause, errnoFieldsFromStorageError(storageError));
 }
-//@ chunk-e6aww6q8.js:4343742-4343785 layout
+//@ chunk-5xgkngpb.js:4450314-4450357 layout
 var ERRNO_BY_CODE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4343742", () => {
+deferInit("chunk-5xgkngpb.js:4450314", () => {
   ERRNO_BY_CODE = new Map(Object.entries(constants_8.errno));
 });
-//@ chunk-e6aww6q8.js:4343785-4343936 layout
+//@ chunk-5xgkngpb.js:4450357-4450508 layout
 function errnoFieldsFromStorageError(storageError) {
   let telemetryCode = "telemetryCode" in storageError ? storageError.telemetryCode : undefined;
   let errno = telemetryCode === undefined ? undefined : ERRNO_BY_CODE.get(telemetryCode);
@@ -1239,14 +1239,14 @@ function errnoFieldsFromStorageError(storageError) {
         errno: -errno,
       };
 }
-//@ chunk-e6aww6q8.js:4343936-4343958 layout
+//@ chunk-5xgkngpb.js:4450508-4450530 layout
 var STORAGE_UPDATE_MAX_ATTEMPTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var storageUpdateBackoff;
-deferInit("chunk-e6aww6q8.js:4343936", () => {
+deferInit("chunk-5xgkngpb.js:4450508", () => {
   STORAGE_UPDATE_MAX_ATTEMPTS = 5;
   storageUpdateBackoff = createJitteredBackoff(50);
 });
-//@ chunk-e6aww6q8.js:4343958-4344319 layout
+//@ chunk-5xgkngpb.js:4450530-4450891 layout
 async function updateInstalledPluginsViaStorage(storageV5, storageKey, update) {
   let outcome = await storageUpdateWithRetry(
     storageV5,
@@ -1268,7 +1268,7 @@ async function updateInstalledPluginsViaStorage(storageV5, storageKey, update) {
   }
   return outcome.result;
 }
-//@ chunk-e6aww6q8.js:4344319-4344708 layout
+//@ chunk-5xgkngpb.js:4450891-4451280 layout
 async function storageUpdateWithRetry(storageV5, storageKey, update, toError) {
   for (let idx = 1; ; idx++) {
     let result = await storageV5.update(storageKey, update, {
@@ -1293,7 +1293,7 @@ async function storageUpdateWithRetry(storageV5, storageKey, update, toError) {
     return updateResult;
   }
 }
-//@ chunk-e6aww6q8.js:4344708-4344862 layout
+//@ chunk-5xgkngpb.js:4451280-4451434 layout
 /**
  * 存储后端模式下把旧的 V1 installed_plugins.json 原地迁移为 V2 并刷新内存缓存。
  */
@@ -1309,7 +1309,7 @@ async function migrateStoredV1ToV2(storageV5, storageKey) {
   if (converted !== undefined) setInstalledPluginsCache(converted.data);
   return converted;
 }
-//@ chunk-e6aww6q8.js:4344862-4345201 layout
+//@ chunk-5xgkngpb.js:4451434-4451773 layout
 function convertStoredV1(current) {
   if (current === undefined)
     return {
@@ -1339,7 +1339,7 @@ function convertStoredV1(current) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:4345201-4345509 layout
+//@ chunk-5xgkngpb.js:4451773-4452081 layout
 function applyUpdateToStoredFile(current, update) {
   let stateFile = {
     version: 2,
@@ -1372,7 +1372,7 @@ function applyUpdateToStoredFile(current, update) {
         result,
       };
 }
-//@ chunk-e6aww6q8.js:4345509-4345649 layout
+//@ chunk-5xgkngpb.js:4452081-4452221 layout
 /**
  * installed_plugins.json 的读-改-写入口：回调拿到当前文件，返回 {write, result}；write 为真时保存（存储后端模式下走带重试的 update）。
  */
@@ -1385,7 +1385,7 @@ async function updateInstalledPlugins(update, storageV5) {
   if (updateResult.write) await saveInstalledPluginsV2(installedPlugins);
   return updateResult.result;
 }
-//@ chunk-e6aww6q8.js:4345649-4345876 fingerprint (2.1.88 match: removePluginInstallation, 0.661)
+//@ chunk-5xgkngpb.js:4452221-4452448 fingerprint (2.1.88 match: removePluginInstallation, 0.661)
 /**
  * 删除某插件在指定作用域/项目下的安装记录。
  */
@@ -1406,7 +1406,7 @@ async function removePluginInstallation(pluginId, scope, projectPath, storageV5,
     }
   }
 }
-//@ chunk-e6aww6q8.js:4345876-4346380 layout
+//@ chunk-5xgkngpb.js:4452448-4452955 layout
 /**
  * 从 V2 数据中删除指定作用域/项目的安装记录（给定期望记录不匹配时保留，返回 kept）。
  */
@@ -1449,7 +1449,7 @@ function removeInstallationFromFile(entry, pluginId, scope, projectPath, keepRec
     },
   };
 }
-//@ chunk-e6aww6q8.js:4346380-4346491 layout
+//@ chunk-5xgkngpb.js:4452955-4453066 layout
 /**
  * 批量删除安装记录，有变化时清空全局快照。
  */
@@ -1463,7 +1463,7 @@ async function removeInstallationsAndRefreshSnapshot(renames, storageV5) {
   )
     getPluginRegistry().installedPluginsSnapshot = null;
 }
-//@ chunk-e6aww6q8.js:4346491-4346739 layout
+//@ chunk-5xgkngpb.js:4453066-4453314 layout
 function dropRenamedNonManagedInstallations(stateFile, renames) {
   let changed = false;
   for (let { oldId, newId } of renames) {
@@ -1480,7 +1480,7 @@ function dropRenamedNonManagedInstallations(stateFile, renames) {
     result: changed,
   };
 }
-//@ chunk-e6aww6q8.js:4346739-4346833 layout
+//@ chunk-5xgkngpb.js:4453314-4453408 layout
 /**
  * 会话内固定的 installed_plugins 快照（首次读取后不再变）。
  */
@@ -1489,7 +1489,7 @@ function getInstalledPluginsSnapshot() {
   pluginRegistry.installedPluginsSnapshot ??= getInstalledPlugins();
   return pluginRegistry.installedPluginsSnapshot;
 }
-//@ chunk-e6aww6q8.js:4346833-4346926 callgraph-fingerprint (2.1.88 match: getPendingUpdateCount, 0.43)
+//@ chunk-5xgkngpb.js:4453408-4453501 callgraph-fingerprint (2.1.88 match: getPendingUpdateCount, 0.43)
 /**
  * 同步读取 installed_plugins.json 并转为 V2；读不到文件返回空表，出错走统一的失败处理。
  */
@@ -1506,7 +1506,7 @@ function loadInstalledPluginsSync() {
     return loadInstalledPluginsFromDisk(error);
   }
 }
-//@ chunk-e6aww6q8.js:4346926-4347089 callgraph-fingerprint (2.1.88 match: removeInstalledPlugin, 0.228)
+//@ chunk-5xgkngpb.js:4453501-4453664 callgraph-fingerprint (2.1.88 match: removeInstalledPlugin, 0.228)
 /**
  * 读取 installed_plugins.json（有存储后端时经存储层）并转为 V2，不使用内存缓存。
  */
@@ -1526,7 +1526,7 @@ async function loadInstalledPlugins(pluginId) {
     return loadInstalledPluginsFromDisk(error);
   }
 }
-//@ chunk-e6aww6q8.js:4347089-4347261 fingerprint (2.1.88 match: loadInstalledPluginsFromDisk, 0.729)
+//@ chunk-5xgkngpb.js:4453664-4453836 fingerprint (2.1.88 match: loadInstalledPluginsFromDisk, 0.729)
 function loadInstalledPluginsFromDisk(error) {
   let errorMsg = errorMessage(error);
   logForDebugging(`Failed to load installed plugins from disk: ${errorMsg}`, {
@@ -1540,7 +1540,7 @@ function loadInstalledPluginsFromDisk(error) {
   failedInstalledPluginsReads.add(state);
   return state;
 }
-//@ chunk-e6aww6q8.js:4347261-4348020 fingerprint (2.1.88 match: updateInstallationPathOnDisk, 0.516)
+//@ chunk-5xgkngpb.js:4453836-4454597 fingerprint (2.1.88 match: updateInstallationPathOnDisk, 0.516)
 /**
  * 插件更新后把磁盘上安装记录的 installPath/version/gitCommitSha/command 来源字段改成新值（找不到记录时报错）。
  */
@@ -1589,7 +1589,7 @@ async function updateInstallationPathOnDisk(
         readInstalledPluginsFileRaw(getInstalledPluginsFilePath()),
         filePath,
       );
-      writeAndPublishSync(getInstalledPluginsFilePath(), serializeInstalledPlugins(filePath));
+      syncTarget(getInstalledPluginsFilePath(), serializeInstalledPlugins(filePath));
       getPluginRegistry().installedPluginsFile = null;
     }
   }
@@ -1604,7 +1604,7 @@ async function updateInstallationPathOnDisk(
       logForDebugging(`Updated ${pluginId} on disk to version ${version} at ${installPath}`);
   }
 }
-//@ chunk-e6aww6q8.js:4348020-4348384 layout
+//@ chunk-5xgkngpb.js:4454597-4454961 layout
 /**
  * 为插件目录市场安装的插件记录 directoryRepositoryKey（仓库名绑定）。
  */
@@ -1633,12 +1633,12 @@ async function recordDirectoryRepositoryKey(pluginId, scope, projectPath, direct
         readInstalledPluginsFileRaw(getInstalledPluginsFilePath()),
         installedPlugins,
       );
-      writeAndPublishSync(getInstalledPluginsFilePath(), serializeInstalledPlugins(installedPlugins));
+      syncTarget(getInstalledPluginsFilePath(), serializeInstalledPlugins(installedPlugins));
       getPluginRegistry().installedPluginsFile = null;
     }
   }
 }
-//@ chunk-e6aww6q8.js:4348384-4349921 layout
+//@ chunk-5xgkngpb.js:4454961-4456501 layout
 function updateInstallationRecord(
   stateFile,
   pluginId,
@@ -1714,7 +1714,7 @@ function updateInstallationRecord(
     result: "no-installation",
   };
 }
-//@ chunk-e6aww6q8.js:4349921-4350299 fingerprint (2.1.88 match: initializeVersionedPlugins, 0.663)
+//@ chunk-5xgkngpb.js:4456501-4456879 fingerprint (2.1.88 match: initializeVersionedPlugins, 0.663)
 /**
  * 启动时初始化版本化插件：迁移旧单文件格式、清理旧缓存布局、从 enabledPlugins 同步安装记录。
  */
@@ -1735,7 +1735,7 @@ async function initializeVersionedPlugins(storageV5) {
   let data = getInstalledPluginsSnapshot();
   logForDebugging(`Initialized versioned plugins system with ${Object.keys(data.plugins).length} plugins`);
 }
-//@ chunk-e6aww6q8.js:4350299-4350559 fingerprint (2.1.88 match: removeAllPluginsForMarketplace, 0.701)
+//@ chunk-5xgkngpb.js:4456879-4457139 fingerprint (2.1.88 match: removeAllPluginsForMarketplace, 0.701)
 /**
  * 删除市场时移除该市场所有插件的安装记录，返回被孤立的缓存路径与受影响的插件 ID。
  */
@@ -1755,7 +1755,7 @@ async function removeAllPluginsForMarketplace(marketplaceName, storageV5) {
     logForDebugging(`Removed installed plugin for marketplace removal: ${removedPluginId}`);
   return result;
 }
-//@ chunk-e6aww6q8.js:4350559-4351122 layout
+//@ chunk-5xgkngpb.js:4457139-4457702 layout
 /**
  * 从安装记录中删除 id 以 @市场 结尾的全部插件，返回待写标志与结果：孤儿安装路径、删除的 id、 与其他插件共用数据目录的 id、仍被共用者使用的安装路径。
  */
@@ -1789,7 +1789,7 @@ function removeMarketplacePluginRecords(file, marketplaceName) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:4351122-4351306 fingerprint (2.1.88 match: isInstallationRelevantToCurrentProject, 1)
+//@ chunk-5xgkngpb.js:4457702-4457886 fingerprint (2.1.88 match: isInstallationRelevantToCurrentProject, 1)
 /**
  * 安装记录是否与当前项目相关：user/managed 作用域总是；project/local 需 projectPath 等于当前工作目录。
  */
@@ -1801,7 +1801,7 @@ function isInstallationRelevantToCurrentProject(inst) {
   let currentRoot = storageRootFor(originalCwd);
   return currentRoot !== null && storageRootFor(inst.projectPath) === currentRoot;
 }
-//@ chunk-e6aww6q8.js:4351306-4351526 layout (2.1.88 match: isInstallationRelevantToCurrentProject, 1)
+//@ chunk-5xgkngpb.js:4457886-4458106 layout (2.1.88 match: isInstallationRelevantToCurrentProject, 1)
 function isInstallationRelevantToCurrentProject_2(inst) {
   if (inst.scope === "user" || inst.scope === "managed") return true;
   if (!inst.projectPath) return false;
@@ -1812,11 +1812,11 @@ function isInstallationRelevantToCurrentProject_2(inst) {
   let otherRoot = storageRootFor(inst.projectPath);
   return otherRoot !== null && isSameNormalizedProjectPath(otherRoot, currentRoot);
 }
-//@ chunk-e6aww6q8.js:4351526-4351564 layout
+//@ chunk-5xgkngpb.js:4458106-4458144 layout
 function isWindows() {
   return getPlatform() === "windows";
 }
-//@ chunk-e6aww6q8.js:4351564-4351675 layout
+//@ chunk-5xgkngpb.js:4458144-4458255 layout
 /**
  * 从一个插件的安装记录里筛出与当前项目相关的（user/managed 全局记录，或 project/local 且 projectPath 为当前目录）；Windows 下找不到时按路径的另一种拼写回退并记日志。
  */
@@ -1828,7 +1828,7 @@ function filterInstallationsForCurrentProject(installations) {
   logRecordSpellingFallback(filtered_2[0]);
   return filtered_2;
 }
-//@ chunk-e6aww6q8.js:4351675-4351779 layout
+//@ chunk-5xgkngpb.js:4458255-4458359 layout
 /**
  * 在一个插件的安装记录里找与当前项目相关的那条（Windows 路径拼写回退同 filterInstallationsForCurrentProject）。
  */
@@ -1840,14 +1840,14 @@ function findInstallationForCurrentProject(installations) {
   logRecordSpellingFallback(installation);
   return installation;
 }
-//@ chunk-e6aww6q8.js:4351779-4351818 layout
+//@ chunk-5xgkngpb.js:4458359-4458398 layout
 /**
  * 是否存在与当前项目相关的安装记录。
  */
 function hasInstallationForCurrentProject(installations) {
   return findInstallationForCurrentProject(installations) !== undefined;
 }
-//@ chunk-e6aww6q8.js:4351818-4352285 layout
+//@ chunk-5xgkngpb.js:4458398-4458865 layout
 function countRecordSpellings() {
   let pluginRegistry = getPluginRegistry();
   let installedPluginsFile = pluginRegistry.installedPluginsFile;
@@ -1884,7 +1884,7 @@ function countRecordSpellings() {
     plugins_with_both_spellings: bothCount,
   });
 }
-//@ chunk-e6aww6q8.js:4352285-4352707 layout
+//@ chunk-5xgkngpb.js:4458865-4459287 layout
 function logRecordSpellingFallback(installation) {
   if (installation === undefined) return;
   let { scope } = installation;
@@ -1900,7 +1900,7 @@ function logRecordSpellingFallback(installation) {
     scope: fromEnum(scope),
   });
 }
-//@ chunk-e6aww6q8.js:4352707-4352786 layout
+//@ chunk-5xgkngpb.js:4459287-4459366 layout
 /**
  * 取第一个已知版本并加 v 前缀（unknown 跳过）。
  */
@@ -1908,7 +1908,7 @@ function formatFirstKnownVersion(...versions) {
   let found = versions.find((version) => version && version !== "unknown");
   return found ? `v${found}` : undefined;
 }
-//@ chunk-e6aww6q8.js:4352786-4352913 fingerprint (2.1.88 match: isPluginInstalled, 1)
+//@ chunk-5xgkngpb.js:4459366-4459493 fingerprint (2.1.88 match: isPluginInstalled, 1)
 /**
  * 插件是否已安装（存在与当前项目相关的安装记录）。
  */
@@ -1918,7 +1918,7 @@ function isPluginInstalled(pluginId) {
   if (!hasInstallationForCurrentProject(installations)) return false;
   return getSettings_DEPRECATED().enabledPlugins?.[pluginId] !== undefined;
 }
-//@ chunk-e6aww6q8.js:4352913-4353085 fingerprint (2.1.88 match: isPluginGloballyInstalled, 1)
+//@ chunk-5xgkngpb.js:4459493-4459665 fingerprint (2.1.88 match: isPluginGloballyInstalled, 1)
 /**
  * 插件是否以 user 或 managed 作用域全局安装。
  */
@@ -1928,7 +1928,7 @@ function isPluginGloballyInstalled(pluginId) {
   if (!installations.some((entry) => entry.scope === "user" || entry.scope === "managed")) return false;
   return getSettings_DEPRECATED().enabledPlugins?.[pluginId] !== undefined;
 }
-//@ chunk-e6aww6q8.js:4353085-4353299 layout
+//@ chunk-5xgkngpb.js:4459665-4459879 layout
 /**
  * 当前项目相关安装记录的 gitCommitSha（多条记录 sha 不一致时返回 undefined）。
  */
@@ -1943,7 +1943,7 @@ function getInstalledGitCommitSha(pluginId, options = {}) {
   if (new Set(relevant.map((installation) => installation.gitCommitSha)).size !== 1) return;
   return relevant[0]?.gitCommitSha;
 }
-//@ chunk-e6aww6q8.js:4353299-4353602 fingerprint (2.1.88 match: addInstalledPlugin, 0.595)
+//@ chunk-5xgkngpb.js:4459879-4460182 fingerprint (2.1.88 match: addInstalledPlugin, 0.595)
 /**
  * 新增或更新一条安装记录（scope、projectPath、installPath、version、gitCommitSha…）并保存。
  */
@@ -1961,7 +1961,7 @@ async function addInstalledPlugin(pluginId, installPath, metadata = "user", proj
   logForDebugging(`${isUpdate ? "Updated" : "Added"} installed plugin: ${pluginId} (scope: ${metadata})`);
   return before;
 }
-//@ chunk-e6aww6q8.js:4353602-4354776 fingerprint (2.1.88 match: addPluginInstallation, 0.369)
+//@ chunk-5xgkngpb.js:4460182-4461361 fingerprint (2.1.88 match: addPluginInstallation, 0.369)
 /**
  * 在 V2 数据中为插件新增或替换一条安装记录（按作用域+projectPath 匹配），保留显式安装标记（auto 只在新记录或原本也是 auto 时保留）。
  */
@@ -2038,7 +2038,7 @@ function addPluginInstallation(pluginId, scope, installPath, metadata, projectPa
     },
   };
 }
-//@ chunk-e6aww6q8.js:4354890-4355072 placement
+//@ chunk-5xgkngpb.js:4461475-4461657 placement
 async function restoreEarlierInstallRecord(pluginId, target, record, storageV5) {
   let changed = await updateInstalledPlugins(
     (stateFile) => getPendingUpdatesDetails(stateFile, pluginId, target, record),
@@ -2050,7 +2050,7 @@ async function restoreEarlierInstallRecord(pluginId, target, record, storageV5) 
   }
   return changed;
 }
-//@ chunk-e6aww6q8.js:4355072-4355307 placement
+//@ chunk-5xgkngpb.js:4461657-4461892 placement
 function getPendingUpdatesDetails(stateFile, pluginId, target, record) {
   let memoryInstallations = stateFile.plugins[pluginId];
   let index =
@@ -2074,7 +2074,7 @@ function getPendingUpdatesDetails(stateFile, pluginId, target, record) {
     result: true,
   };
 }
-//@ chunk-e6aww6q8.js:4355307-4355420 placement
+//@ chunk-5xgkngpb.js:4461892-4462005 placement
 /**
  * 去掉安装记录的 auto 标记（用户显式安装）。
  */
@@ -2086,7 +2086,7 @@ async function clearAutoInstalledFlag(pluginId, scope, projectPathForScope, stor
   if (changed) getPluginRegistry().installedPluginsSnapshot = null;
   return changed;
 }
-//@ chunk-e6aww6q8.js:4355420-4355558 placement
+//@ chunk-5xgkngpb.js:4462005-4462143 placement
 function clearAutoFlagUpdate(stateFile, pluginId, scope, projectPath) {
   let installations = stateFile.plugins[pluginId];
   let installation = installationAtTarget(installations, scope, projectPath);
@@ -2101,16 +2101,16 @@ function clearAutoFlagUpdate(stateFile, pluginId, scope, projectPath) {
     result: true,
   };
 }
-//@ chunk-e6aww6q8.js:4355558-4355614 placement
+//@ chunk-5xgkngpb.js:4462143-4462199 placement
 /**
  * readInstalledPluginsIfAny：读取安装记录，缺失返回 undefined。
  */
 async function readInstalledPluginsIfAny(installPath, containmentRoot = installPath) {
   return (await pluginGitHead(installPath, containmentRoot)) ?? undefined;
 }
-//@ chunk-e6aww6q8.js:4355614-4355628 placement
+//@ chunk-5xgkngpb.js:4462199-4462213 placement
 var MAX_PLUGIN_MANIFEST_BYTES = 65536;
-//@ chunk-e6aww6q8.js:4355628-4356541 placement
+//@ chunk-5xgkngpb.js:4462213-4463126 placement
 /**
  * 从插件清单读取版本号，清单超过 64 KB 时视为无版本。
  */
@@ -2160,7 +2160,7 @@ async function readManifestVersion(installPath, pluginId, storageV5) {
     return "unknown";
   }
 }
-//@ chunk-e6aww6q8.js:4356541-4365369 fingerprint (2.1.88 match: migrateFromEnabledPlugins, 0.464)
+//@ chunk-5xgkngpb.js:4463126-4471960 fingerprint (2.1.88 match: migrateFromEnabledPlugins, 0.464)
 /**
  * 启动时把 settings 的 enabledPlugins 与 installed_plugins.json 对齐：为已启用但无安装记录的市场插件补记录（或排队安装），跳过托管/种子/读失败情况。
  */
@@ -2172,7 +2172,7 @@ async function migrateFromEnabledPlugins(storageV5) {
         level: "warn",
       },
     );
-    let requiredCount = count(
+    let requiredCount = countWhere(
       Object.values(getSettingsForSource("policySettings")?.enabledPlugins ?? {}),
       (value) => value === true,
     );
@@ -2608,7 +2608,7 @@ async function migrateFromEnabledPlugins(storageV5) {
     logForDebugging(`Sync completed: ${addedCount} added, ${updatedCount} updated in installed_plugins.json`);
   }
 }
-//@ chunk-e6aww6q8.js:4365369-4365510 affinity
+//@ chunk-5xgkngpb.js:4471960-4472101 affinity
 function isGitShaVersionName({ isGitBacked, sourceHasPinnedSha, entryHasVersion, versionName }) {
   return (
     isGitBacked &&
@@ -2617,7 +2617,7 @@ function isGitShaVersionName({ isGitBacked, sourceHasPinnedSha, entryHasVersion,
     /^[0-9a-f]{12}(-[0-9a-f]{8})?$/.test(versionName)
   );
 }
-//@ chunk-e6aww6q8.js:4373603-4374071 fingerprint (2.1.88 match: getPluginVersionFromManifest, 0.817)
+//@ chunk-5xgkngpb.js:4480199-4480667 fingerprint (2.1.88 match: getPluginVersionFromManifest, 0.818)
 /**
  * 从插件目录 .claude-plugin/plugin.json 读 version（存储后端模式下经存储层读）。
  */
@@ -2648,7 +2648,7 @@ async function getPluginVersionFromManifest(installPath, storageV5, storageKey) 
   }
   return readManifestBinaries(text);
 }
-//@ chunk-e6aww6q8.js:4374071-4374185 placement
+//@ chunk-5xgkngpb.js:4480667-4480781 placement
 function readManifestBinaries(text) {
   let parsed;
   try {
@@ -2659,7 +2659,7 @@ function readManifestBinaries(text) {
   if (typeof parsed !== "object" || parsed === null) return;
   return parsePluginBinaries(parsed.binaries);
 }
-//@ chunk-e6aww6q8.js:4374185-4374535 placement
+//@ chunk-5xgkngpb.js:4480781-4481131 placement
 /**
  * 经 v5 存储读缓存版本里的 plugin.json（≤1 MiB）。
  */
@@ -2685,46 +2685,46 @@ async function readPluginManifestViaStorage(storageV5, coords) {
   return item.value;
 }
 export {
+  clearInstalledPluginsCache,
+  filterInstallationsForCurrentProject,
+  removeInstallationsAndRefreshSnapshot,
+  primeInstalledPluginsCache,
   loadInstalledPlugins,
   loadInstalledPluginsSync,
-  filterInstallationsForCurrentProject,
-  getInstalledGitCommitSha,
-  getInstalledPlugins,
-  isPluginInstalled,
+  getInstalledPluginsSnapshot,
   hasFailedInstalledPluginsRead,
-  isInstallationRelevantToCurrentProject,
-  listInstalledPluginIds,
-  hasInstallationForCurrentProject,
+  readInstalledPluginsLenient,
   getInstalledListRefusal,
   readInstalledPluginsFile,
-  clearAutoInstalledFlag,
-  formatInvalidPluginIdMessage,
-  addInstalledPlugin,
-  removePluginInstallation,
-  findDataDirSharers,
-  isPluginUnreadableOrShared,
-  primeInstalledPluginsCache,
-  findInstallationForCurrentProject,
-  recordDirectoryRepositoryKey,
-  updateInstallationPathOnDisk,
-  removeInstallationsAndRefreshSnapshot,
-  getInstalledPluginsSnapshot,
-  readInstalledPluginsLenient,
-  getInstalledPluginsAsync,
-  initializeVersionedPlugins,
-  clearInstalledPluginsCache,
+  getInstalledPlugins,
+  formatFirstKnownVersion,
   getInstalledPluginsFilePath,
   parseInstalledPluginsJson,
-  formatFirstKnownVersion,
-  listSetAsideFiles,
-  listUnreadableKeptFiles,
+  isInstallationRelevantToCurrentProject,
   removeAllPluginsForMarketplace,
+  listInstalledPluginIds,
   getInstalledPluginsMap,
+  getPluginVersionFromManifest,
+  isPluginInstalled,
   readManifestVersion,
   isRecordablePluginId,
   restoreEarlierInstallRecord,
-  getPluginVersionFromManifest,
+  removePluginInstallation,
+  formatInvalidPluginIdMessage,
+  getInstalledGitCommitSha,
+  isPluginUnreadableOrShared,
   assertRecordablePluginId,
   readInstalledPluginsIfAny,
+  addInstalledPlugin,
+  hasInstallationForCurrentProject,
+  clearAutoInstalledFlag,
+  findDataDirSharers,
+  findInstallationForCurrentProject,
+  recordDirectoryRepositoryKey,
+  updateInstallationPathOnDisk,
+  getInstalledPluginsAsync,
+  listSetAsideFiles,
+  listUnreadableKeptFiles,
+  initializeVersionedPlugins,
   isPluginGloballyInstalled,
 };

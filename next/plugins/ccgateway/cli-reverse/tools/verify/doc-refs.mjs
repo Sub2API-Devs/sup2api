@@ -46,7 +46,7 @@ const refParts = walk(path.join(R, 'references/claude-code-analysis/src'), [], /
 const refCorpus = refParts.join('\n');
 const refRoot = 'references/claude-code-analysis/src/';
 
-const ROOTS = ['reconstructed/', 'docs/', 'analysis/', 'tools/', 'naming/', 'original/', 'references/', 'artifacts/', 'runnable/', 'build/', 'vendor-ref/'];
+const ROOTS = ['reconstructed/', 'docs/', 'research/', 'analysis/', 'tools/', 'naming/', 'original/', 'references/', 'artifacts/', 'runnable/', 'build/', 'vendor-ref/'];
 const isPlaceholder = (t) => /<[^>]*>|xxx|NNN|…|\.\.\.|压缩名|起-止|^a\.\.b$/.test(t);
 function globExists(p) {
   // p is repo-relative with * wildcards in the last segment(s)

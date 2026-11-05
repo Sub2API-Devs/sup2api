@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：宿主措辞的权限询问
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: placement 3
  */
 
-//@ chunk-e6aww6q8.js:3884981-3885637 placement
+//@ chunk-5xgkngpb.js:3983553-3984209 placement
 function forwardHostWordedAsk(name, hostName, options) {
   let isHostWorded = options?.forMcpSkill === true && !options.hostWorded;
   let remedy =
@@ -29,7 +29,7 @@ function forwardHostWordedAsk(name, hostName, options) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:3885637-3885739 placement
+//@ chunk-5xgkngpb.js:3984209-3984311 placement
 /**
  * 消息是否只在本地显示（localDisplayOnly、宿主显示或 MCP 技能元数据）。
  */
@@ -38,7 +38,7 @@ function isHostWordedAsk(ask) {
     ask.localDisplayOnly === true || ask.hostDisplay !== undefined || ask.metadata?.mcpSkill !== undefined
   );
 }
-//@ chunk-e6aww6q8.js:3885739-3885866 placement
+//@ chunk-5xgkngpb.js:3984311-3984438 placement
 /**
  * 错误信息是否表示仅本地显示或宿主措辞的询问未被转发。
  */

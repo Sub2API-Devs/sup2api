@@ -3,16 +3,16 @@
  *
  * 粘贴图片缓存 <配置目录>/image-cache/<sessionId>/，按会话清理旧缓存。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/imageStore.ts
- * pieces: chunk-08s5p3av.js (10), chunk-23fm9f0d.js (2), chunk-4121qate.js (1), chunk-93kwxas0.js (1), chunk-p52gp8zk.js (1)
+ * pieces: chunk-2snqx25v.js (10), chunk-avy0g5d4.js (1), chunk-j8f885h1.js (1), chunk-pc3x100t.js (2), chunk-s584m62r.js (1)
  * attribution: placement 9, fingerprint 6
  */
 import { join } from "path";
 import { readdir, open, unlink } from "fs/promises";
 import { EVENT_RECORD_LIMITS } from "./telemetry/thirdPartyEventRecords.js";
 import { getFsImplementation } from "./fsOperations.js";
-import { getClaudeConfigDir } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { getSessionId, isDiskless } from "../bootstrap/state.js";
 import { logForDebugging } from "./debug.js";
 import { isTranscriptPersistenceDisabled } from "./sessionStorage.js";
@@ -26,7 +26,7 @@ import { makeTempSiblingPath, retryFsOp } from "./atomicPublishWrite.js";
 import { mintPasteId, formatImageRef } from "../history.js";
 import { PasteEvent } from "../ink/frame.js";
 
-//@ chunk-p52gp8zk.js:9282-9407 fingerprint (2.1.88 match: evictOldestIfAtCap, 0.629)
+//@ chunk-s584m62r.js:1102-1225 fingerprint (2.1.88 match: evictOldestIfAtCap, 0.63)
 function evictOldestIfAtCap(frame, records, totalBytes) {
   let remaining = totalBytes;
   while (remaining > EVENT_RECORD_LIMITS && records.size > 0) {
@@ -37,11 +37,11 @@ function evictOldestIfAtCap(frame, records, totalBytes) {
   }
   return remaining;
 }
-//@ chunk-4121qate.js:154104-154140 fingerprint (2.1.88 match: getImagePath, 1)
+//@ chunk-j8f885h1.js:135281-135317 fingerprint (2.1.88 match: getImagePath, 1)
 var getImagePath = (entry) => Object.hasOwn(entry, "png");
-//@ chunk-23fm9f0d.js:2810-2831 fingerprint (2.1.88 match: IMAGE_STORE_DIR, 1)
+//@ chunk-pc3x100t.js:2818-2839 fingerprint (2.1.88 match: IMAGE_STORE_DIR, 1)
 var IMAGE_STORE_DIR = "image-cache";
-//@ chunk-23fm9f0d.js:2831-3149 fingerprint (2.1.88 match: cleanupOldImageCaches, 0.943)
+//@ chunk-pc3x100t.js:2839-3157 fingerprint (2.1.88 match: cleanupOldImageCaches, 0.942)
 /**
  * 清理 image-cache 下其他会话的旧图片缓存目录。
  */
@@ -72,10 +72,10 @@ async function cleanupOldImageCaches() {
     } catch {}
   } catch {}
 }
-//@ chunk-08s5p3av.js:4411-4428 placement
+//@ chunk-2snqx25v.js:4478-4495 placement
 var MAX_CACHED_IMAGES = 200;
 var BASE64_SNIFF_CHARS = 64;
-//@ chunk-08s5p3av.js:4428-4566 placement
+//@ chunk-2snqx25v.js:4495-4633 placement
 function getImageStoreDir() {
   if (isDiskless() || isTranscriptPersistenceDisabled()) return null;
   try {
@@ -87,14 +87,14 @@ function getImageStoreDir() {
     return null;
   }
 }
-//@ chunk-08s5p3av.js:4566-4599 placement
+//@ chunk-2snqx25v.js:4633-4666 placement
 /**
  * 判断图片缓存目录是否可用。
  */
 function isImageStoreAvailable() {
   return getImageStoreDir() !== null;
 }
-//@ chunk-08s5p3av.js:4599-4858 placement
+//@ chunk-2snqx25v.js:4666-4925 placement
 /**
  * 扫描图片缓存目录，返回已保存图片的最大编号。
  */
@@ -118,7 +118,7 @@ async function getMaxStoredImageId() {
   }
   return maxId;
 }
-//@ chunk-08s5p3av.js:4858-5069 placement
+//@ chunk-2snqx25v.js:4925-5136 placement
 function storedImagePath(content) {
   if (
     !Number.isSafeInteger(content.id) ||
@@ -132,7 +132,7 @@ function storedImagePath(content) {
   let mediaType = detectImageFormatFromBase64(content.content.slice(0, BASE64_SNIFF_CHARS));
   return join(imageStoreDir, `${content.id}.${MIME_TO_EXTENSION[mediaType]}`);
 }
-//@ chunk-08s5p3av.js:5069-5172 placement (2.1.88 match: _temp, 1)
+//@ chunk-2snqx25v.js:5136-5239 placement (2.1.88 match: _temp, 1)
 /**
  * 为图片内容计算缓存路径并记录到粘贴内容中。
  */
@@ -142,7 +142,7 @@ function recordImagePath(content, record) {
   if (imagePath !== null) record((pathsById) => mapSetBounded(pathsById, content.id, imagePath));
   return imagePath;
 }
-//@ chunk-08s5p3av.js:5172-5248 placement
+//@ chunk-2snqx25v.js:5239-5315 placement
 /**
  * 保存图片并把缓存路径记录回粘贴内容。
  */
@@ -151,7 +151,7 @@ async function storeImageAndRecord(content, record) {
   if (imagePath) record((pathsById) => mapSetBounded(pathsById, content.id, imagePath));
   return imagePath;
 }
-//@ chunk-08s5p3av.js:5248-5458 placement (2.1.88 match: _temp, 1)
+//@ chunk-2snqx25v.js:5315-5525 placement (2.1.88 match: _temp, 1)
 /**
  * 保存粘贴内容中的所有图片，并把缓存路径记录回粘贴内容。
  */
@@ -170,7 +170,7 @@ async function storePastedImages(pasteContents, record) {
     });
   return storedById;
 }
-//@ chunk-08s5p3av.js:5458-6143 fingerprint (2.1.88 match: storeImage, 0.689)
+//@ chunk-2snqx25v.js:5525-6210 fingerprint (2.1.88 match: storeImage, 0.689)
 /**
  * 把粘贴的图片存入 image-cache/<sessionId>/，返回路径。
  */
@@ -222,7 +222,7 @@ async function storeImage(content) {
     return null;
   }
 }
-//@ chunk-08s5p3av.js:6143-6314 placement
+//@ chunk-2snqx25v.js:6210-6381 placement
 function mapSetBounded(pathsById, id, path) {
   if (pathsById.get(id) === path) return pathsById;
   let next = new Map(pathsById);
@@ -235,7 +235,7 @@ function mapSetBounded(pathsById, id, path) {
   next.set(id, path);
   return next;
 }
-//@ chunk-93kwxas0.js:45837-46084 fingerprint (2.1.88 match: cacheImagePath, 0.654)
+//@ chunk-avy0g5d4.js:45890-46137 fingerprint (2.1.88 match: cacheImagePath, 0.652)
 function cacheImagePath(getPastedContents, handlePaste, { onMinted } = {}) {
   return (content, options) => {
     let pastedContents = getPastedContents();
@@ -255,12 +255,12 @@ function cacheImagePath(getPastedContents, handlePaste, { onMinted } = {}) {
 }
 export {
   getMaxStoredImageId,
+  cleanupOldImageCaches,
+  evictOldestIfAtCap,
+  cacheImagePath,
   recordImagePath,
   storeImageAndRecord,
-  cleanupOldImageCaches,
   isImageStoreAvailable,
   storePastedImages,
   getImagePath,
-  cacheImagePath,
-  evictOldestIfAtCap,
 };

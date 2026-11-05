@@ -3,9 +3,9 @@
  *
  * 工具宿主助手进程（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3zy56vtn.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3emqeq9c.js (29)
  * attribution: placement 29
  */
 import { StringDecoder } from "string_decoder";
@@ -58,23 +58,23 @@ import { isEnvTruthy } from "../../utils/envUtils.js";
 import { isFirstPartyAnthropicHost } from "../../utils/model/providers.js";
 import { decodeTaggedUuid } from "../../services/mcp/serverIdentity.js";
 import { hashIdForLog } from "../../bridge/debugUtils.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { retryAfterMsOf, hasFatalClientStatus } from "../../bridge/bridgeMain.js";
 import { EXIT_CONFIG_ERROR } from "../../utils/exitCodes.js";
 import { isSafeBridgeId } from "../../bridge/sessionIdCompat.js";
 import { invalidateCommandNames } from "../../utils/settings/commandSyncNames.js";
 import {
-  getSettingsWithErrors_2,
+  getSettingsWithErrors,
   getSecuritySensitiveSetting,
   getAllPolicyTierSettings,
   getPolicySettingsLoadErrors,
   getSettingsParseErrorsForSource,
 } from "../../utils/settings/settings.js";
 
-//@ chunk-3zy56vtn.js:1728-1741 placement
+//@ chunk-3emqeq9c.js:1798-1811 placement
 var MAX_HELPER_CONCURRENCY = 10080;
-//@ chunk-3zy56vtn.js:1741-1876 placement
+//@ chunk-3emqeq9c.js:1811-1946 placement
 function readHelperConcurrencyFlag(fallback) {
   let value;
   try {
@@ -86,7 +86,7 @@ function readHelperConcurrencyFlag(fallback) {
     ? value
     : undefined;
 }
-//@ chunk-3zy56vtn.js:1924-2574 placement
+//@ chunk-3emqeq9c.js:1994-2644 placement
 /**
  * 工具宿主辅助进程的长度上限、名称格式等常量与 schema。
  */
@@ -135,7 +135,7 @@ var recentCallSchema = DoctorLazy(() =>
     at: parsed.at,
   })),
 );
-//@ chunk-3zy56vtn.js:2574-2710 placement
+//@ chunk-3emqeq9c.js:2644-2780 placement
 function lenientArraySchema(itemSchema) {
   return array(unknown())
     .transform((items) =>
@@ -146,7 +146,7 @@ function lenientArraySchema(itemSchema) {
     )
     .catch([]);
 }
-//@ chunk-3zy56vtn.js:2710-2944 placement
+//@ chunk-3emqeq9c.js:2780-3014 placement
 var cloudSessionDeltaSchema = DoctorLazy(() =>
   objectSchema({
     type: literal("system"),
@@ -166,7 +166,7 @@ var cloudSessionDeltaSchema = DoctorLazy(() =>
     }),
   }),
 );
-//@ chunk-3zy56vtn.js:2944-3187 placement
+//@ chunk-3emqeq9c.js:3014-3257 placement
 function parseCloudSessionDelta(line) {
   if (!line.includes("cloud_session_delta")) return;
   let parsedJson;
@@ -184,7 +184,7 @@ function parseCloudSessionDelta(line) {
     recent: calls?.recent ?? [],
   };
 }
-//@ chunk-3zy56vtn.js:3187-3468 placement
+//@ chunk-3emqeq9c.js:3257-3538 placement
 /**
  * 创建按行解析助手进程 stdout 的读取器：只处理包含 cloud_session_delta 的行并回调解析结果；单行超过上限时丢弃直到下一行。
  */
@@ -216,7 +216,7 @@ function createStatusLineReader(options) {
     }
   };
 }
-//@ chunk-3zy56vtn.js:3468-4426 placement
+//@ chunk-3emqeq9c.js:3538-4496 placement
 /**
  * 工具宿主助手子进程的环境裁剪：无人值守开关与会话键、要携带的登录/路径类变量、会改写登录或流量的变量（拒绝）、提供方选择变量，以及会话/环境 id 的正则。
  */
@@ -265,7 +265,7 @@ var PROVIDER_SELECTION_ENV_KEYS = new Set([
   ...PROVIDER_SELECTION_ENV_VARS.filter((envName) => envName.startsWith("CLAUDE_CODE_USE_")),
   "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
 ]);
-//@ chunk-3zy56vtn.js:4426-5014 placement
+//@ chunk-3emqeq9c.js:4496-5085 placement
 /**
  * 为工具宿主助手子进程构造环境：要求能锚定到已存储登录，拒绝会把登录或流量导向别处的变量，删除内部/文件描述符变量；可选去掉 shell 密钥类变量，写入无人值守授权与并发上限。
  */
@@ -307,7 +307,7 @@ function buildToolHostHelperEnv(env_2, { unattendedGrant, withoutShellSecrets, g
   if (helperConcurrencyFlag !== undefined) sanitizedEnv[IDLE_RELEASE_ENV_KEY] = String(helperConcurrencyFlag);
   return sanitizedEnv;
 }
-//@ chunk-3zy56vtn.js:5014-5320 placement
+//@ chunk-3emqeq9c.js:5085-5391 placement
 /**
  * 构造发给工具宿主辅助进程的 initialize 控制请求行；请求 id 不合法时不带上。
  */
@@ -333,7 +333,7 @@ function buildInitializeRequestLine({ workId, environmentId }, requestId) {
 `
   );
 }
-//@ chunk-3zy56vtn.js:5320-5665 placement
+//@ chunk-3emqeq9c.js:5391-5736 placement
 /**
  * 检查能否启动工具宿主辅助进程：环境变量不能把登录或流量指向别处。
  */
@@ -360,7 +360,7 @@ function checkToolHostHelperPreconditions(envVars) {
   }
   return;
 }
-//@ chunk-3zy56vtn.js:5665-7769 placement
+//@ chunk-3emqeq9c.js:5736-7846 placement
 /**
  * 启动工具宿主助手进程（--attach-serve、stream-json）
  */
@@ -527,14 +527,14 @@ function spawnToolHostHelper(
     },
   };
 }
-//@ chunk-3zy56vtn.js:7769-7904 placement
+//@ chunk-3emqeq9c.js:7846-7981 placement
 function redactIds(text) {
   return text.replace(
     /(?:cse|session|env)_[A-Za-z0-9_-]{16,}|[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}/g,
     "<id>",
   );
 }
-//@ chunk-3zy56vtn.js:7904-8062 placement
+//@ chunk-3emqeq9c.js:7981-8139 placement
 function envRedirectsSignInOrTraffic(name, value, envVars) {
   if (!value) return false;
   if (PROVIDER_SELECTION_ENV_KEYS.has(name)) return isEnvTruthy(value);
@@ -544,20 +544,20 @@ function envRedirectsSignInOrTraffic(name, value, envVars) {
     (name.startsWith("CLAUDE_LOCAL_OAUTH_") && !isLoopbackUrl(value))
   );
 }
-//@ chunk-3zy56vtn.js:8062-8162 placement
+//@ chunk-3emqeq9c.js:8139-8239 placement
 function storedLoginUnsupportedError() {
   return Error("tool host helper: this build cannot hold a helper to the stored login");
 }
-//@ chunk-3zy56vtn.js:8162-8263 placement
+//@ chunk-3emqeq9c.js:8239-8340 placement
 function redirectedSignInError() {
   return Error("tool host helper: this process signs in or sends its traffic elsewhere");
 }
-//@ chunk-3zy56vtn.js:8318-8389 placement
+//@ chunk-3emqeq9c.js:8395-8466 placement
 function isAcceptableBaseUrl(url, envVars) {
   if (isFirstPartyAnthropicHost(url)) return true;
   return isEnvTruthy(envVars.USE_LOCAL_OAUTH) && isLoopbackUrl(url);
 }
-//@ chunk-3zy56vtn.js:8389-8494 placement
+//@ chunk-3emqeq9c.js:8466-8571 placement
 function isLoopbackUrl(url) {
   try {
     return ["localhost", "127.0.0.1", "[::1]"].includes(new URL(url).hostname);
@@ -565,13 +565,13 @@ function isLoopbackUrl(url) {
     return false;
   }
 }
-//@ chunk-3zy56vtn.js:8494-8570 placement
+//@ chunk-3emqeq9c.js:8571-8647 placement
 function afterMs(ms, fn) {
   let timer = setTimeout(fn, ms);
   timer.unref();
   return () => clearTimeout(timer);
 }
-//@ chunk-3zy56vtn.js:8570-8660 placement
+//@ chunk-3emqeq9c.js:8647-8737 placement
 function killQuietly(child, signal) {
   try {
     child.kill(signal);
@@ -579,7 +579,7 @@ function killQuietly(child, signal) {
     logForDebugging(`[tool-host] ${signal} not delivered: ${redactIds(errorMessage(error))}`);
   }
 }
-//@ chunk-3zy56vtn.js:8660-8742 placement
+//@ chunk-3emqeq9c.js:8737-8819 placement
 var MAX_ACTIVE_HELPERS = 4;
 var MIN_HEALTHY_RUN_MS = 30000;
 var SERVING_OFF_MEMORY_MS = 600000;
@@ -591,7 +591,7 @@ var DEFAULT_RETRY_AFTER_MS = 5000;
 var MAX_RETRY_AFTER_MS = 30000;
 var MAX_TRACKED_IDENTITIES = 64;
 var MAX_ENVIRONMENT_ID_CHARS = 128;
-//@ chunk-3zy56vtn.js:8742-13508 placement
+//@ chunk-3emqeq9c.js:8819-13589 placement
 /**
  * 工具宿主助手主循环：处理队列条目、环境 id 校验、结果回传
  */
@@ -731,8 +731,8 @@ function runToolHostLoop(options) {
     let windowStart = now() - SERVING_OFF_MEMORY_MS;
     let envStarts = startedAt.get(id) ?? [];
     if (
-      count(envStarts, (at) => at > windowStart) >= MAX_REFUSALS_PER_ENV ||
-      count(pending, (at) => at > windowStart) >= MAX_REFUSALS_TOTAL
+      countWhere(envStarts, (at) => at > windowStart) >= MAX_REFUSALS_PER_ENV ||
+      countWhere(pending, (at) => at > windowStart) >= MAX_REFUSALS_TOTAL
     )
       return "at_capacity";
     let reuseCount = perEnvironment.has(id) ? 1 : 0;
@@ -884,7 +884,7 @@ function runToolHostLoop(options) {
     liveCount: () => waiters.size,
   };
 }
-//@ chunk-3zy56vtn.js:13508-13614 placement
+//@ chunk-3emqeq9c.js:13589-13695 placement
 function safeWorkId(work, options) {
   let id = work.id;
   return typeof id === "string" &&
@@ -894,7 +894,7 @@ function safeWorkId(work, options) {
     ? id
     : undefined;
 }
-//@ chunk-3zy56vtn.js:13614-13710 placement
+//@ chunk-3emqeq9c.js:13695-13791 placement
 function runLogged(label, run) {
   (async () => {
     try {
@@ -904,7 +904,7 @@ function runLogged(label, run) {
     }
   })();
 }
-//@ chunk-3zy56vtn.js:13710-13814 placement (2.1.88 match: STATUS_TAG, 1)
+//@ chunk-3emqeq9c.js:13791-13895 placement (2.1.88 match: STATUS_TAG, 1)
 /**
  * 错误带数字 status 时返回 "status N"，否则错误名或 "unknown"。旧版名 STATUS_TAG 为错配。
  */
@@ -913,7 +913,7 @@ function describeErrorStatus(error) {
   if (status !== undefined) return `status ${status}`;
   return error instanceof Error ? error.name : "unknown";
 }
-//@ chunk-3zy56vtn.js:13814-13951 placement
+//@ chunk-3emqeq9c.js:13895-14032 placement
 function readSwitchSafely(read) {
   try {
     return read();
@@ -927,7 +927,7 @@ function readSwitchSafely(read) {
     return false;
   }
 }
-//@ chunk-3zy56vtn.js:13951-14037 placement
+//@ chunk-3emqeq9c.js:14032-14118 placement
 function setBounded(map, key, value) {
   map.set(key, value);
   for (let key of map.keys()) {
@@ -935,20 +935,20 @@ function setBounded(map, key, value) {
     map.delete(key);
   }
 }
-//@ chunk-3zy56vtn.js:14037-14147 placement
+//@ chunk-3emqeq9c.js:14118-14228 placement
 function statusOfError(error) {
   return typeof error === "object" && error !== null && "status" in error && typeof error.status === "number"
     ? error.status
     : undefined;
 }
-//@ chunk-3zy56vtn.js:14147-14494 placement
+//@ chunk-3emqeq9c.js:14228-14575 placement
 /**
  * 判断设置是否禁止 Remote Control：任一层 disableRemoteControl 为 true，或策略/flag/用户设置存在影响该键的解析错误时视为禁用。
  */
 function isRemoteControlDisabledBySettings() {
   invalidateCommandNames();
   if (
-    getSettingsWithErrors_2().settings.disableRemoteControl === true ||
+    getSettingsWithErrors().settings.disableRemoteControl === true ||
     getSecuritySensitiveSetting("disableRemoteControl").some((flag) => flag === true) ||
     getAllPolicyTierSettings().some((settings) => settings.disableRemoteControl === true)
   )

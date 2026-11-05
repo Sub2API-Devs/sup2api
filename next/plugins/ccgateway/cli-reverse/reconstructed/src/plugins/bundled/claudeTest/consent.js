@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Claude Test 的同意、可用性与清理：allowed-starts、登录账号、GrowthBook 开关、旧版本文件夹清理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ae5g0zb5.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mhn0amzz.js (22)
  * attribution: placement 22
  */
 import { utimes, readdir, stat, rm, lstat, rmdir } from "fs/promises";
@@ -52,7 +52,7 @@ import { TENGU_MELLOW_HOLLERITH } from "../../../services/api/withRetry.js";
 import { claudeTestState, isPlainObjectNonArray } from "./appFacts.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-ae5g0zb5.js:76654-76790 placement
+//@ chunk-mhn0amzz.js:77892-78028 placement
 /**
  * 旧版本文件夹、哈希后缀与运行目录的名称格式。
  */
@@ -60,7 +60,7 @@ var VERSION_DIR_RE = /^\d+\.\d+\.\d+(-[0-9a-f]{12})?$/;
 var HASH_SUFFIX_RE = /-[0-9a-f]{64}$/;
 var RUN_DIR_NAME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(-\d+)?$/;
 var ALLOWED_STARTS_JSON = "allowed-starts.json";
-//@ chunk-ae5g0zb5.js:76790-77881 placement
+//@ chunk-mhn0amzz.js:78028-79119 placement
 /**
  * 清理旧版本文件夹、过期的 live 页面与记住的同意记录。
  */
@@ -131,7 +131,7 @@ async function cleanupOldClaudeTestFiles(markerPath) {
     );
   }
 }
-//@ chunk-ae5g0zb5.js:77881-77973 placement
+//@ chunk-mhn0amzz.js:79119-79211 placement
 /**
  * 读取浏览器助手的文件与服务状态，顺便把 server 记到共享状态里。
  */
@@ -145,7 +145,7 @@ var describeHelperState = async () => {
     helperServerState.server = server;
   }
 };
-//@ chunk-ae5g0zb5.js:77973-78837 placement
+//@ chunk-mhn0amzz.js:79211-80075 placement
 async function describeHelperFilesState() {
   if (isDiskless()) {
     logFeatureBad("claude_test_helper_files", "diskless");
@@ -212,7 +212,7 @@ async function describeHelperFilesState() {
         server,
       };
 }
-//@ chunk-ae5g0zb5.js:78837-79040 placement
+//@ chunk-mhn0amzz.js:80075-80278 placement
 /**
  * 在要写入的文件的各级父目录中找符号链接目录。
  */
@@ -231,17 +231,17 @@ async function findSymlinkedAncestor(rootDir, relativePaths) {
       return dir;
   return;
 }
-//@ chunk-ae5g0zb5.js:79040-79050 placement
+//@ chunk-mhn0amzz.js:80278-80288 placement
 /**
  * Claude Test 的“开关开着但标记关闭”状态占位值（当前恒 false）。
  */
 var IS_ON_WITH_FLAGS_OFF = false;
-//@ chunk-ae5g0zb5.js:79050-79075 placement
+//@ chunk-mhn0amzz.js:80288-80313 placement
 /**
  * 没有存储登录时使用的占位文本。
  */
 var NO_STORED_LOGIN = "no stored login";
-//@ chunk-ae5g0zb5.js:79075-79400 placement
+//@ chunk-mhn0amzz.js:80313-80638 placement
 function readSignedInAccount() {
   try {
     if (
@@ -265,7 +265,7 @@ function readSignedInAccount() {
     return;
   }
 }
-//@ chunk-ae5g0zb5.js:79400-79735 placement
+//@ chunk-mhn0amzz.js:80638-80973 placement
 function readFlagAccount() {
   try {
     let oauthAccountInfo = getOauthAccountInfo();
@@ -286,7 +286,7 @@ function readFlagAccount() {
     return false;
   }
 }
-//@ chunk-ae5g0zb5.js:79735-79816 placement
+//@ chunk-mhn0amzz.js:80973-81054 placement
 /**
  * 新建 Claude Test 开关的说明状态（按登录保留的 Map 与上次提示）。
  */
@@ -297,7 +297,7 @@ function createGateNoteState() {
     loginWhenLastEmpty: undefined,
   };
 }
-//@ chunk-ae5g0zb5.js:79816-80457 placement
+//@ chunk-mhn0amzz.js:81054-81695 placement
 /**
  * 读取 Claude Test 开关（override/disabled/payload）。
  */
@@ -332,15 +332,15 @@ function readClaudeTestGate(source, state = createGateNoteState()) {
     },
   };
 }
-//@ chunk-ae5g0zb5.js:80457-80474 placement
+//@ chunk-mhn0amzz.js:81695-81712 placement
 /**
  * 按宿主保存 Claude Test 开关的评估状态。
  */
 var claudeTestGateStateSlot; // deferred: uses createGateNoteState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ae5g0zb5.js:80457", () => {
+deferInit("chunk-mhn0amzz.js:81695", () => {
   claudeTestGateStateSlot = new HostScoped(createGateNoteState);
 });
-//@ chunk-ae5g0zb5.js:80474-80613 placement
+//@ chunk-mhn0amzz.js:81712-81851 placement
 /**
  * 读取 Claude Test 开关（GrowthBook tengu_mellow_hollerith + 登录账号）。
  */
@@ -356,7 +356,7 @@ function readClaudeTestGateState() {
     claudeTestGateStateSlot.of(getRootSession().host),
   );
 }
-//@ chunk-ae5g0zb5.js:80613-80664 placement
+//@ chunk-mhn0amzz.js:81851-81902 placement
 /**
  * 把开关状态包装成 {note, isOn} 两个取值函数。
  */
@@ -364,7 +364,7 @@ var claudeTestGateApi = {
   note: () => readClaudeTestGateState().note(),
   isOn: () => readClaudeTestGateState().isOn(),
 };
-//@ chunk-ae5g0zb5.js:80664-80857 placement
+//@ chunk-mhn0amzz.js:81902-82095 placement
 /**
  * 打开计数与代次
  */
@@ -381,7 +381,7 @@ var CLAUDE_TEST_CONSENT_KINDS = [
   "claude_test_remember",
 ];
 var gateGeneration = 0;
-//@ chunk-ae5g0zb5.js:80857-80892 placement
+//@ chunk-mhn0amzz.js:82095-82130 placement
 /**
  * 打开计数 +1 并返回代次
  */
@@ -389,14 +389,14 @@ function openGate() {
   CLAUDE_TEST_GATE_STATE.open += 1;
   return gateGeneration;
 }
-//@ chunk-ae5g0zb5.js:80892-80947 placement
+//@ chunk-mhn0amzz.js:82130-82185 placement
 /**
  * 代次一致时减少打开计数
  */
 function closeGate(gate) {
   if (gate === gateGeneration) CLAUDE_TEST_GATE_STATE.open = Math.max(0, CLAUDE_TEST_GATE_STATE.open - 1);
 }
-//@ chunk-ae5g0zb5.js:80947-80977 placement
+//@ chunk-mhn0amzz.js:82185-82215 placement
 /**
  * 清零计数并递代次
  */
@@ -404,19 +404,19 @@ function resetGates() {
   CLAUDE_TEST_GATE_STATE.open = 0;
   gateGeneration += 1;
 }
-//@ chunk-ae5g0zb5.js:80977-81008 placement
+//@ chunk-mhn0amzz.js:82215-82246 placement
 /**
  * 是否有打开的同意
  */
 function isGateOpen() {
   return CLAUDE_TEST_GATE_STATE.open > 0;
 }
-//@ chunk-ae5g0zb5.js:81008-81020 placement
+//@ chunk-mhn0amzz.js:82246-82258 placement
 /**
  * 4000
  */
 var MAX_PANE_JSON_BYTES = 4000;
-//@ chunk-ae5g0zb5.js:81020-81160 placement
+//@ chunk-mhn0amzz.js:82258-82398 placement
 /**
  * 取会话根目录对应的项目目录及其工具权限决定（异步）。
  */
@@ -433,7 +433,7 @@ async function resolveProjectAndPermission(ctx) {
     answer: decideToolPermission(ctx, dir),
   };
 }
-//@ chunk-ae5g0zb5.js:81160-81518 placement
+//@ chunk-mhn0amzz.js:82398-82757 placement
 async function decideToolPermission(ctx, project) {
   try {
     if (

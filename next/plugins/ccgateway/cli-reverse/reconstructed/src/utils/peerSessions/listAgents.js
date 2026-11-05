@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。生成给模型看的可达代理列表：本会话、子代理、队友、本机与云端其他会话，以及能否用 SendMessage 联系。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5cp2fssw.js (30)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0jvevkh1.js (30)
  * attribution: placement 30
  */
 import { basename } from "path";
@@ -58,15 +58,15 @@ import { getTeamName, getAgentId } from "../teammate.js";
 import { readTeamFileAsync } from "../swarm/teamHelpers.js";
 import { ProactiveCountdown } from "../../components/PromptInput/PromptInputFooterLeftSide.js";
 
-//@ chunk-5cp2fssw.js:792-885 placement
+//@ chunk-0jvevkh1.js:792-885 placement
 function unreachableFromCloudText() {
   return `not reachable with ${SENDMESSAGE}${isPeerSendFileEnabled() ? ` or ${SENDFILE}` : ""} from this cloud session`;
 }
-//@ chunk-5cp2fssw.js:885-1033 placement
+//@ chunk-0jvevkh1.js:885-1033 placement
 var CLAUDE_DESKTOP_SESSION_LABEL = "Claude Desktop session";
 var SESSION_LIST_TRUNCATED_NOTE =
   "(session list too long to fetch completely \u2014 sessions beyond the first pages are missing from this listing)";
-//@ chunk-5cp2fssw.js:1033-2116 placement
+//@ chunk-0jvevkh1.js:1033-2116 placement
 async function listAllPeers(session, context, options) {
   let messagingEnabled = isCrossSessionMessagingEnabled();
   let didFocused = false;
@@ -156,7 +156,7 @@ async function listAllPeers(session, context, options) {
     listTruncated: cloudResult.truncated === true || bridgeResult.truncated === true,
   };
 }
-//@ chunk-5cp2fssw.js:2116-2345 placement
+//@ chunk-0jvevkh1.js:2116-2345 placement
 /**
  * 本会话名字与地址标记
  */
@@ -173,7 +173,7 @@ function getSelfSessionAddress(callerIsSubagent = false) {
     nameIsUserChosen: getUserTypedSessionName() !== undefined,
   };
 }
-//@ chunk-5cp2fssw.js:2345-2925 placement
+//@ chunk-0jvevkh1.js:2345-2925 placement
 /**
  * 本会话自我说明
  */
@@ -188,11 +188,11 @@ function describeSelfSession(session, localSessions = [], shadowed = false) {
     ? `This process's main session is ${address} \u2014 the name OTHER sessions use to message it (it is not listed below; from inside this process, address the main conversation as "${MAIN}").${stableAddressNote}`
     : `This session is ${address} \u2014 the name other sessions use to message it (it is not listed below; a message to it would be a message to yourself).${stableAddressNote}`;
 }
-//@ chunk-5cp2fssw.js:2925-2988 placement
+//@ chunk-0jvevkh1.js:2925-2988 placement
 function sessionAddressFor(session, localSessions, shadowed) {
   return isOwnSessionIdAmbiguous(localSessions, session.sock, shadowed) ? session.socketToken : session.token;
 }
-//@ chunk-5cp2fssw.js:2988-3257 placement
+//@ chunk-0jvevkh1.js:2988-3257 placement
 async function buildSubagentExtras(context, callerIsSubagent) {
   let appState = context.getAppState();
   let teamName = getTeamName(appState.teamContext);
@@ -208,7 +208,7 @@ async function buildSubagentExtras(context, callerIsSubagent) {
     self: getSelfSessionAddress(callerIsSubagent),
   };
 }
-//@ chunk-5cp2fssw.js:3257-5102 placement
+//@ chunk-0jvevkh1.js:3257-5102 placement
 /**
  * 生成给模型看的可达代理列表：本会话、子代理、队友、本机与云端其他会话，以及能否用 SendMessage 联系。
  */
@@ -347,7 +347,7 @@ ${mapped.join(`
     ...structured,
   };
 }
-//@ chunk-5cp2fssw.js:5102-5504 placement
+//@ chunk-0jvevkh1.js:5102-5504 placement
 /**
  * 收集本会话子代理
  */
@@ -371,7 +371,7 @@ function collectSubagents(appState) {
   }
   return subagents;
 }
-//@ chunk-5cp2fssw.js:5504-5945 placement
+//@ chunk-0jvevkh1.js:5504-5945 placement
 /**
  * 列表中的说明文字
  */
@@ -380,7 +380,7 @@ var MESSAGING_DISABLED_NOTE =
   "Cross-session messaging is switched off in this session right now \u2014 no sessions were listed, and this session is not reachable by name until it is switched back on.";
 var LOCAL_LIST_FAILED_NOTE =
   "(the session list on this machine could not be read just now \u2014 other local sessions may be missing from this listing; a later listing retries)";
-//@ chunk-5cp2fssw.js:5945-6923 placement
+//@ chunk-0jvevkh1.js:5945-6923 placement
 /**
  * 收集队友
  */
@@ -441,13 +441,13 @@ function collectTeammates(appState, teamFile, callerTeammateId) {
   }
   return teammatesList;
 }
-//@ chunk-5cp2fssw.js:6923-7050 placement
+//@ chunk-0jvevkh1.js:6923-7050 placement
 function peerNameReachability(name, appState, reservedSlugs) {
   let normalizedName = normalizeSessionTitle(name) ?? name;
   if (!reservedSlugs.has(slugifySessionName(normalizedName))) return false;
   return appState.agentNameRegistry.has(name) || normalizedName !== name ? "unreachable" : "bare-only";
 }
-//@ chunk-5cp2fssw.js:7050-7225 placement
+//@ chunk-0jvevkh1.js:7050-7225 placement
 /**
  * 多久前加入或启动
  */
@@ -461,18 +461,18 @@ function describeSince(entry, now) {
     return;
   return `${entry.backend === "roster" ? "joined" : "started"} ${ProactiveCountdown(now - entry.since)} ago`;
 }
-//@ chunk-5cp2fssw.js:7225-7288 placement
+//@ chunk-0jvevkh1.js:7225-7288 placement
 function formatListingText(title, lines, total = lines.length) {
   return `${title} (${total}):
 ${lines.join(`
 `)}`;
 }
-//@ chunk-5cp2fssw.js:7288-7326 placement
+//@ chunk-0jvevkh1.js:7288-7326 placement
 var MAX_AGENT_ROWS = 100;
 var MAX_SESSION_ROWS = 100;
 var MAX_ROW_AGENTS = 100;
 var MAX_SINCE_AGE_MS = 315360000000;
-//@ chunk-5cp2fssw.js:7326-7482 placement
+//@ chunk-0jvevkh1.js:7326-7482 placement
 /**
  * 面向用户的分区
  */
@@ -484,7 +484,7 @@ function formatSectionForUser(title, entries, format) {
 ${mapped.join(`
 `)}`;
 }
-//@ chunk-5cp2fssw.js:7482-7661 placement
+//@ chunk-0jvevkh1.js:7482-7661 placement
 /**
  * 曾用名说明
  */
@@ -498,7 +498,7 @@ function formerNameNote(entry, now, formatName) {
     ? `says it was ${formattedName} until ${ProactiveCountdown(now - formerName.until)} ago`
     : undefined;
 }
-//@ chunk-5cp2fssw.js:7661-7945 placement
+//@ chunk-0jvevkh1.js:7661-7945 placement
 /**
  * 一行代理信息
  */
@@ -523,7 +523,7 @@ function formatAgentRow(row, extras) {
     line: `  ${lineParts.join("  \xB7  ")}`,
   };
 }
-//@ chunk-5cp2fssw.js:7945-8085 placement
+//@ chunk-0jvevkh1.js:7945-8085 placement
 function shownNameFields(candidate, fallbackName, printed) {
   if (candidate)
     return {
@@ -545,7 +545,7 @@ function shownNameFields(candidate, fallbackName, printed) {
         printed: fallbackName,
       };
 }
-//@ chunk-5cp2fssw.js:8085-8256 placement
+//@ chunk-0jvevkh1.js:8085-8256 placement
 /**
  * 组装列表分区
  */
@@ -560,7 +560,7 @@ function buildListingSection(kind, title, rows, total = rows.length) {
     text: formatListingText(title, lines, total),
   };
 }
-//@ chunk-5cp2fssw.js:8256-8578 placement
+//@ chunk-0jvevkh1.js:8256-8578 placement
 /**
  * 子代理行
  */
@@ -600,7 +600,7 @@ function buildSubagentRows(subagents, candidateByKey) {
     }),
   );
 }
-//@ chunk-5cp2fssw.js:8578-9232 placement
+//@ chunk-0jvevkh1.js:8578-9232 placement
 /**
  * 队友行
  */
@@ -628,7 +628,7 @@ function buildTeammateRows(teammates, candidateByKey) {
   });
   return buildListingSection("teammates", "Teammates", rows, teammates.length);
 }
-//@ chunk-5cp2fssw.js:9232-11111 placement
+//@ chunk-0jvevkh1.js:9232-11111 placement
 /**
  * 其他会话行
  */
@@ -761,7 +761,7 @@ function buildSessionRows(
         : joined,
   };
 }
-//@ chunk-5cp2fssw.js:11111-12839 placement
+//@ chunk-0jvevkh1.js:11111-12839 placement
 function formatForUser(
   peers,
   subagentExtras,
@@ -828,7 +828,7 @@ ${parts.join(`
 
 `);
 }
-//@ chunk-5cp2fssw.js:12839-13041 placement
+//@ chunk-0jvevkh1.js:12839-13041 placement
 /**
  * 面向用户的子代理列表
  */
@@ -842,7 +842,7 @@ function formatSubagentsForUser(subagents) {
     }),
   );
 }
-//@ chunk-5cp2fssw.js:13041-13426 placement
+//@ chunk-0jvevkh1.js:13041-13426 placement
 /**
  * 面向用户的队友列表
  */
@@ -862,22 +862,22 @@ function formatTeammatesForUser(entries) {
     return `  [${addressableSessionTitle(teammate.status) ?? teammate.backend}]  \xB7  ${label}${sinceText ? `  \xB7  ${sinceText}` : ""}${shadowNote}`;
   });
 }
-//@ chunk-5cp2fssw.js:13426-13494 placement
+//@ chunk-0jvevkh1.js:13426-13494 placement
 function describeRemoteStatus(remoteStatus, fallbackStatus) {
   return remoteStatus === "requires_action" ? "waiting on a human" : fallbackStatus;
 }
-//@ chunk-5cp2fssw.js:13494-13567 placement
+//@ chunk-0jvevkh1.js:13494-13567 placement
 function describeSessionStatus(bridge, fallbackStatus) {
   if (hasEnvironmentKindOtherThanBridge(bridge)) return describeRemoteStatus(bridge.status, fallbackStatus);
   return isDisconnectedNonBridge(bridge) ? "offline" : fallbackStatus;
 }
-//@ chunk-5cp2fssw.js:13567-13656 placement
+//@ chunk-0jvevkh1.js:13567-13656 placement
 function getSessionDisplayTitle(rawTitle) {
   if (!rawTitle) return;
   let normalizedTitle = normalizeSessionTitle(rawTitle);
   return normalizedTitle === null || normalizedTitle === "untitled session" ? undefined : normalizedTitle;
 }
-//@ chunk-5cp2fssw.js:13656-14565 placement
+//@ chunk-0jvevkh1.js:13656-14565 placement
 function buildOtherSessionsSection(peers, omitDirectories = false) {
   let now = Date.now();
   return formatListingText(

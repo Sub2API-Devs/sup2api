@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。终端探测。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (9), chunk-q6rfp6n3.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3xmyjkbh.js (5), chunk-czq1j3j2.js (9)
  * attribution: placement 14
  */
 import { fromSanitizer_SANITIZER_OUTPUT_ONLY, lit, fromEnum } from "../services/analytics/safeMetadata.js";
@@ -33,9 +33,9 @@ import { useIsFullscreen } from "../ink/renderModeContext.js";
 import { sleep } from "./sleep.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-q6rfp6n3.js:598-641 placement
+//@ chunk-3xmyjkbh.js:598-641 placement
 var TERMINAL_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/;
-//@ chunk-q6rfp6n3.js:641-727 placement
+//@ chunk-3xmyjkbh.js:641-727 placement
 /**
  * 校验终端名，不合规记 nonconforming。
  */
@@ -44,7 +44,7 @@ function sanitizeTerminalName(name) {
   if (TERMINAL_NAME_RE.test(name)) return fromSanitizer_SANITIZER_OUTPUT_ONLY(name);
   return lit("nonconforming");
 }
-//@ chunk-q6rfp6n3.js:727-1357 placement
+//@ chunk-3xmyjkbh.js:727-1357 placement
 /**
  * 已知终端名与版本号格式正则。
  */
@@ -54,7 +54,7 @@ var VERSION_PREFIX_RE;
 var NAME_REST_RE;
 var DASHED_NAME_REST_RE;
 var TRAILING_PUNCT_RE;
-deferInit("chunk-q6rfp6n3.js:727", () => {
+deferInit("chunk-3xmyjkbh.js:727", () => {
   KNOWN_TERMINAL_NAMES = new Set([
     "Apple_Terminal",
     "contour",
@@ -95,7 +95,7 @@ deferInit("chunk-q6rfp6n3.js:727", () => {
   DASHED_NAME_REST_RE = /^([A-Za-z][A-Za-z0-9_.-]*[A-Za-z0-9_.])(.*)$/;
   TRAILING_PUNCT_RE = /[):]{1,4}$/;
 });
-//@ chunk-q6rfp6n3.js:1357-1822 placement
+//@ chunk-3xmyjkbh.js:1357-1822 placement
 /**
  * 把终端版本回复规范为 “名字(版本)” 等安全形式。
  */
@@ -123,21 +123,21 @@ function sanitizeTerminalReply(xtversionName) {
       return fromSanitizer_SANITIZER_OUTPUT_ONLY(`${reply} ${version}`);
   }
 }
-//@ chunk-q6rfp6n3.js:1822-1867 placement
+//@ chunk-3xmyjkbh.js:1822-1867 placement
 /**
  * 异步发送通知（包一层 sendNotification）。
  */
 async function notifyAsync(notification, terminal, options = {}) {
   await sendNotification(notification, terminal, options);
 }
-//@ chunk-18hwfzwa.js:207065-207200 placement
+//@ chunk-czq1j3j2.js:211864-211999 placement
 function detectTerminalMultiplexer() {
   if (env.TMUX) return isTmuxControlMode() ? "tmux_cc" : "tmux";
   if (process.env.ZELLIJ != null) return "zellij";
   if (env.STY) return "screen";
   return "none";
 }
-//@ chunk-18hwfzwa.js:207200-207333 placement
+//@ chunk-czq1j3j2.js:211999-212132 placement
 function logTerminalProbe() {
   let terminalProbeState = getTerminalProbeState();
   if (terminalProbeState.probeEventLogged) return;
@@ -146,7 +146,7 @@ function logTerminalProbe() {
   setRendererModeForAnalytics(fullscreenDecisionMode(fullscreenDecision));
   logEvent("tengu_terminal_probe", terminalProbeFields(fullscreenDecision));
 }
-//@ chunk-18hwfzwa.js:207333-207650 placement
+//@ chunk-czq1j3j2.js:212132-212449 placement
 function terminalProbeFields(fullscreenDecision) {
   return {
     xtversion: sanitizeTerminalReply(getXtversionName()),
@@ -162,27 +162,32 @@ function terminalProbeFields(fullscreenDecision) {
     vte_terminal: isVteTerminal(),
   };
 }
-//@ chunk-18hwfzwa.js:207650-207654 placement
+//@ chunk-czq1j3j2.js:212449-212453 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:207650", () => {
+deferInit("chunk-czq1j3j2.js:212449", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:207782-207786 placement
+//@ chunk-czq1j3j2.js:212581-212585 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:207782", () => {
+deferInit("chunk-czq1j3j2.js:212581", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:208031-208035 placement
+//@ chunk-czq1j3j2.js:212830-212834 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:208031", () => {
+deferInit("chunk-czq1j3j2.js:212830", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:920856-920860 placement
+//@ chunk-czq1j3j2.js:891756-891760 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:920856", () => {
+deferInit("chunk-czq1j3j2.js:891756", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:920860-921229 placement
+//@ chunk-czq1j3j2.js:896916-896920 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:896916", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:953765-954134 placement
 function queryTerminalBackground() {
   let { internal_querier: internalQuerier } = useStdin();
   let terminal = useSyncExternalStore(
@@ -207,9 +212,4 @@ function queryTerminalBackground() {
     return () => abortController.abort();
   }, [isFullscreen, internalQuerier, terminal]);
 }
-//@ chunk-18hwfzwa.js:921229-921233 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:921229", () => {
-  init_react_production();
-});
-export { queryTerminalBackground, notifyAsync, sanitizeTerminalName, logTerminalProbe };
+export { sanitizeTerminalName, logTerminalProbe, notifyAsync, queryTerminalBackground };

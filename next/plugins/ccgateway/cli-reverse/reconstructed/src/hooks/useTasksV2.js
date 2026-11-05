@@ -3,10 +3,10 @@
  *
  * TasksV2Store：订阅任务列表文件变化，提供 useTasksV2 与折叠联动。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useTasksV2.ts
- * pieces: chunk-0n43rj0b.js (9), chunk-55ht3bcx.js (1)
- * attribution: placement 7, layout 1, callgraph-fingerprint 1, fingerprint 1
+ * pieces: chunk-0nvx3515.js (1), chunk-hnsp0svy.js (9)
+ * attribution: fingerprint 1, placement 7, layout 1, callgraph-fingerprint 1
  */
 import { watch } from "fs";
 import { currentPolicyNoticeHolder, getPolicyNotice } from "../services/policyLimits/cacheStamp.js";
@@ -17,9 +17,9 @@ import {
   useEffect,
 } from "../../vendor/react/cjs/react.production.js";
 import { errorMessage, getErrnoCode, isSadFsErrno, isEnvFsErrno } from "../utils/errors.js";
-import { logError } from "../utils/log.js";
 import { logForDebugging } from "../utils/debug.js";
 import { createSignal } from "../utils/signal.js";
+import { logError } from "../utils/log.js";
 import {
   isNonEmptyString,
   arraysShallowEqual,
@@ -40,21 +40,21 @@ import { isTeamLead } from "../utils/teammate.js";
 import { useStoreSelector } from "./useStoreSelector.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-55ht3bcx.js:5347-5413 fingerprint (2.1.88 match: useTasksV2, 0.488)
+//@ chunk-0nvx3515.js:5383-5449 fingerprint (2.1.88 match: useTasksV2, 0.487)
 var useTasksV2 = {
   subscribe: (listener) => currentPolicyNoticeHolder().changed.subscribe(listener),
   getSnapshot: getPolicyNotice,
 };
-//@ chunk-0n43rj0b.js:691-695 placement
+//@ chunk-hnsp0svy.js:691-695 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0n43rj0b.js:691", () => {
+deferInit("chunk-hnsp0svy.js:691", () => {
   init_react_production();
 });
-//@ chunk-0n43rj0b.js:722-745 layout
+//@ chunk-hnsp0svy.js:722-745 layout
 var TASK_LIST_POLL_MS = 5000;
 var MAX_RENDERED_TASKS = 50;
 var TASK_REFRESH_MS = 5000;
-//@ chunk-0n43rj0b.js:745-4964 callgraph-fingerprint (2.1.88 match: TasksV2Store, 0.214)
+//@ chunk-hnsp0svy.js:745-4964 callgraph-fingerprint (2.1.88 match: TasksV2Store, 0.214)
 class TasksV2Store {
   #c = undefined;
   #d = false;
@@ -369,17 +369,17 @@ class TasksV2Store {
     this.#a = false;
   }
 }
-//@ chunk-0n43rj0b.js:4964-4990 placement
+//@ chunk-hnsp0svy.js:4964-4990 placement
 /**
  * 导出值：同一声明里的多个绑定：taskListSignal（任务列表信号）；noopTaskListener（空实现）；位于「TasksV2Store：订阅任务列表文件变化，提供 useTasksV2 与折叠联动」模块。
  */
 var taskListSignal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var noopTaskListener;
-deferInit("chunk-0n43rj0b.js:4964", () => {
+deferInit("chunk-hnsp0svy.js:4964", () => {
   taskListSignal = createContext(null);
   noopTaskListener = () => {};
 });
-//@ chunk-0n43rj0b.js:4990-5228 placement
+//@ chunk-hnsp0svy.js:4990-5228 placement
 function useTasksV2StoreIfEnabled() {
   let store = useContext(taskListSignal);
   let teamContext = useAppState((appState) => appState.teamContext);
@@ -391,14 +391,14 @@ function useTasksV2StoreIfEnabled() {
     );
   return store;
 }
-//@ chunk-0n43rj0b.js:5228-5258 placement
+//@ chunk-hnsp0svy.js:5228-5258 placement
 /**
  * 函数 useTaskListSnapshot（订阅任务列表）；位于「TasksV2Store：订阅任务列表文件变化，提供 useTasksV2 与折叠联动」模块。
  */
 function useTaskListSnapshot() {
   return useStoreSelector(useTasksV2StoreIfEnabled());
 }
-//@ chunk-0n43rj0b.js:5258-5331 placement
+//@ chunk-hnsp0svy.js:5258-5331 placement
 /**
  * 函数 useTaskListSubscription（仅订阅不取值）；位于「TasksV2Store：订阅任务列表文件变化，提供 useTasksV2 与折叠联动」模块。
  */
@@ -409,14 +409,14 @@ function useTaskListSubscription() {
     return tasksV2StoreIfEnabled.subscribe(noopTaskListener);
   }, [tasksV2StoreIfEnabled]);
 }
-//@ chunk-0n43rj0b.js:5331-5367 placement
+//@ chunk-hnsp0svy.js:5331-5367 placement
 /**
  * 函数 useHasTaskSelection（有选中任务）；位于「TasksV2Store：订阅任务列表文件变化，提供 useTasksV2 与折叠联动」模块。
  */
 function useHasTaskSelection() {
   return useStoreSelector(useTasksV2StoreIfEnabled(), isNonEmptyString) ?? false;
 }
-//@ chunk-0n43rj0b.js:5367-5681 placement (2.1.88 match: TaskSchema, 0.644)
+//@ chunk-hnsp0svy.js:5367-5681 placement (2.1.88 match: TaskSchema, 0.643)
 /**
  * 两个任务数组逐字段相等（useTasksV2 避免无谓重渲染）。
  */
@@ -440,10 +440,10 @@ function areTaskListsEqual(previous, next) {
   return true;
 }
 export {
-  useTaskListSubscription,
   useHasTaskSelection,
-  useTaskListSnapshot,
-  useTasksV2,
+  useTaskListSubscription,
   TasksV2Store,
   taskListSignal,
+  useTaskListSnapshot,
+  useTasksV2,
 };

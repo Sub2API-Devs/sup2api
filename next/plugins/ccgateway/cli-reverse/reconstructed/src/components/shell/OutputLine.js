@@ -3,9 +3,9 @@
  *
  * Shell 输出行：尝试把 JSON 格式化，按 error/warning 着色，截断显示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/shell/OutputLine.tsx
- * pieces: chunk-s3fw2t2g.js (11)
+ * pieces: chunk-9a7hrf78.js (11)
  * attribution: placement 9, fingerprint 1, file-local 1
  */
 import {
@@ -26,27 +26,27 @@ import { MessageResponse } from "../MessageResponse.js";
 import { Text } from "../../ink/components/Text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s3fw2t2g.js:634-638 placement
+//@ chunk-9a7hrf78.js:634-638 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s3fw2t2g.js:634", () => {
+deferInit("chunk-9a7hrf78.js:634", () => {
   init_react_production();
 });
-//@ chunk-s3fw2t2g.js:638-642 placement
+//@ chunk-9a7hrf78.js:638-642 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s3fw2t2g.js:638", () => {
+deferInit("chunk-9a7hrf78.js:638", () => {
   init_react_production();
 });
-//@ chunk-s3fw2t2g.js:642-646 placement
+//@ chunk-9a7hrf78.js:642-646 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s3fw2t2g.js:642", () => {
+deferInit("chunk-9a7hrf78.js:642", () => {
   init_react_production();
 });
-//@ chunk-s3fw2t2g.js:646-659 placement
+//@ chunk-9a7hrf78.js:646-659 placement
 var outputLineSignal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s3fw2t2g.js:646", () => {
+deferInit("chunk-9a7hrf78.js:646", () => {
   outputLineSignal = createContext(false);
 });
-//@ chunk-s3fw2t2g.js:659-788 placement
+//@ chunk-9a7hrf78.js:659-788 placement
 /**
  * 为子树标记处于工具结果中。
  */
@@ -64,11 +64,11 @@ function InsideToolResultProvider(props) {
   } else boxElement = $[1];
   return boxElement;
 }
-//@ chunk-s3fw2t2g.js:788-814 placement
+//@ chunk-9a7hrf78.js:788-814 placement
 function useOutputLineSignal() {
   return useContext(outputLineSignal);
 }
-//@ chunk-s3fw2t2g.js:814-972 placement
+//@ chunk-9a7hrf78.js:814-972 placement
 function linkifyUrlsInText(line) {
   try {
     let parsed = jsonParse(line);
@@ -81,9 +81,9 @@ function linkifyUrlsInText(line) {
     return line;
   }
 }
-//@ chunk-s3fw2t2g.js:972-982 placement
+//@ chunk-9a7hrf78.js:972-982 placement
 var MAX_OUTPUT_LINE = 1e4;
-//@ chunk-s3fw2t2g.js:982-1056 placement
+//@ chunk-9a7hrf78.js:982-1056 placement
 function tryJsonFormatContent(content) {
   if (content.length > MAX_OUTPUT_LINE) return content;
   return content
@@ -94,10 +94,10 @@ function tryJsonFormatContent(content) {
     .map(linkifyUrlsInText).join(`
 `);
 }
-//@ chunk-s3fw2t2g.js:1296-1893 fingerprint (2.1.88 match: OutputLine, 0.829)
+//@ chunk-9a7hrf78.js:1296-1869 fingerprint (2.1.88 match: OutputLine, 0.619)
 function OutputLine(props) {
   let $ = useMemoCache(14);
-  let { content, verbose, isError, isWarning } = props;
+  let { content, verbose, isError } = props;
   let { columns } = useTerminalSize();
   let [themeName] = useTheme();
   let expandShellOutput = useOutputLineSignal();
@@ -112,7 +112,7 @@ function OutputLine(props) {
   } else validationErrors = $[2];
   let content_2 = validationErrors;
   let formatted;
-  ur: {
+  ct: {
     if (shouldShowFull) {
       let jsonResult;
       if ($[3] !== content_2) {
@@ -121,7 +121,7 @@ function OutputLine(props) {
         $[4] = jsonResult;
       } else jsonResult = $[4];
       formatted = jsonResult;
-      break ur;
+      break ct;
     }
     let body;
     if ($[5] !== columns || $[6] !== content_2 || $[7] !== suppressExpandHint) {
@@ -134,7 +134,7 @@ function OutputLine(props) {
     formatted = body;
   }
   let formattedContent = formatted;
-  let color = isError ? "error" : isWarning ? "warning" : undefined;
+  let color = isError ? "error" : undefined;
   let children;
   if ($[9] !== formattedContent) {
     children = jsxProd_default(Ansi, {
@@ -157,7 +157,7 @@ function OutputLine(props) {
   } else t3 = $[13];
   return t3;
 }
-//@ chunk-s3fw2t2g.js:1893-2004 file-local
+//@ chunk-9a7hrf78.js:1869-1980 file-local
 function tryFormatJson(content) {
   return content.replace(/\u001b\[([0-9]+;)*4(;[0-9]+)*m|\u001b\[4(;[0-9]+)*m|\u001b\[([0-9]+;)*4m/g, "");
 }

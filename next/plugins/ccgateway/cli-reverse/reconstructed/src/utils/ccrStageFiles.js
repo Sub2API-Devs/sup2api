@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：云会话中暂存文件仍在复制时的等待与提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (11)
  * attribution: placement 11
  */
 import { posix } from "path";
@@ -24,6 +24,7 @@ import { logError } from "./log.js";
 import { sleep, systemClock } from "./sleep.js";
 import { createSignal } from "./signal.js";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
+import { isSelfHostedByocEnvironment } from "./remoteEnvironment.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { logForDiagnosticsNoPII } from "./diagLogs.js";
 import { startSessionActivity, endActivity } from "./sessionActivity.js";
@@ -31,7 +32,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3755090-3755149 placement
+//@ chunk-5xgkngpb.js:3850845-3850904 placement
 /**
  * 被认为是暂存文件挂载点的路径前缀。
  */
@@ -39,13 +40,13 @@ var STAGE_FILE_PREFIXES; // deferred: uses dirname (./stageFileRoots.js) of its 
 var STAGE_POLL_MIN_MS;
 var STAGE_POLL_MAX_MS;
 var STAGE_FILE_MAX_AGE_MS;
-deferInit("chunk-e6aww6q8.js:3755090", () => {
+deferInit("chunk-5xgkngpb.js:3850845", () => {
   STAGE_FILE_PREFIXES = [STAGE_FILE_HOME_MOUNT_PREFIX, `${STAGE_FILE_MOUNT_PREFIX}/hearth`];
   STAGE_POLL_MIN_MS = 1000;
   STAGE_POLL_MAX_MS = 60000;
   STAGE_FILE_MAX_AGE_MS = 60000;
 });
-//@ chunk-e6aww6q8.js:3755149-3755308 placement
+//@ chunk-5xgkngpb.js:3850904-3851063 placement
 function classifyStageWriteError(error) {
   switch (error.match(/^(?:write|mkdir) failed: (\w+)$/)?.[1]) {
     case "ENOSPC":
@@ -56,7 +57,7 @@ function classifyStageWriteError(error) {
       return;
   }
 }
-//@ chunk-e6aww6q8.js:3755308-3755434 placement
+//@ chunk-5xgkngpb.js:3851063-3851189 placement
 function isStageMountPath(path) {
   return (
     typeof path === "string" &&
@@ -66,7 +67,7 @@ function isStageMountPath(path) {
     !STAGE_FILE_PREFIXES.some((filePrefix) => path.startsWith(`${filePrefix}/`))
   );
 }
-//@ chunk-e6aww6q8.js:3755434-3755839 placement
+//@ chunk-5xgkngpb.js:3851189-3851595 placement
 /**
  * 校验并规范化 CCR 暂存挂载路径：拒绝 NUL、..、CLI 专用前缀等。
  */
@@ -93,7 +94,7 @@ function resolveStageMountPath(path) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:3755839-3756762 placement
+//@ chunk-5xgkngpb.js:3851595-3852531 placement
 function tellStageFileNotPlaced(clock, onNotPlaced) {
   let openStages = new Map();
   let notPlaced = new Map();
@@ -165,20 +166,20 @@ function tellStageFileNotPlaced(clock, onNotPlaced) {
     tellNow: flushNotPlaced,
   };
 }
-//@ chunk-e6aww6q8.js:3756762-3756785 placement
+//@ chunk-5xgkngpb.js:3852531-3852554 placement
 /**
  * 等待暂存文件就绪的总超时（1 分钟）。
  */
 var STAGE_WAIT_MAX_MS = 60000;
 var DEFAULT_STAGE_WAIT_TIMEOUT_MS = 8000;
-//@ chunk-e6aww6q8.js:3756785-3756834 placement
+//@ chunk-5xgkngpb.js:3852554-3852603 placement
 /**
  * 按是否为暂存挂载路径返回等待超时，否则 undefined。
  */
 function stageWaitTimeoutFor(path, permanent = false) {
   return !permanent && isStageMountPath(path) ? DEFAULT_STAGE_WAIT_TIMEOUT_MS : undefined;
 }
-//@ chunk-e6aww6q8.js:3756834-3759246 placement
+//@ chunk-5xgkngpb.js:3852603-3855020 placement
 /**
  * 云会话中等待暂存文件复制完成，超时时告诉模型文件仍在复制。
  */
@@ -347,13 +348,13 @@ function waitForCcrStageFiles(clock = systemClock) {
   };
   return waiter;
 }
-//@ chunk-e6aww6q8.js:3759246-3759332 placement
+//@ chunk-5xgkngpb.js:3855020-3855106 placement
 /**
  * 按会话根保存的暂存文件等待器。
  */
 var stagedFilesWaiterByRoot; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
 var STAGE_WAIT_OUTCOME_CODES;
-deferInit("chunk-e6aww6q8.js:3759246", () => {
+deferInit("chunk-5xgkngpb.js:3855020", () => {
   stagedFilesWaiterByRoot = new SessionRootSlot(waitForCcrStageFiles);
   STAGE_WAIT_OUTCOME_CODES = {
     settled: 1,
@@ -363,7 +364,7 @@ deferInit("chunk-e6aww6q8.js:3759246", () => {
     limit_spent: 5,
   };
 });
-//@ chunk-e6aww6q8.js:3759332-3760390 placement
+//@ chunk-5xgkngpb.js:3855106-3856174 placement
 /**
  * 工具调用前等待暂存文件就绪，受开关与等待额度限制。
  */
@@ -378,7 +379,11 @@ async function waitForStagedToolCallFiles(waiter, signal, activityId) {
     };
     let remainingMs = STAGE_WAIT_MAX_MS - waiter.waitedMs();
     let skipReason;
-    if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_cozy_kite", false) !== true) skipReason = "not_enabled";
+    if (
+      !isSelfHostedByocEnvironment() &&
+      getFeatureValue_CACHED_MAY_BE_STALE("tengu_cozy_kite", false) !== true
+    )
+      skipReason = "not_enabled";
     else if (remainingMs <= 0) skipReason = "limit_spent";
     if (skipReason !== undefined) {
       if (skipReason === "limit_spent") logFeatureSad("ccr_stage_file_tool_call_wait", skipReason, snapshot);
@@ -425,7 +430,7 @@ async function waitForStagedToolCallFiles(waiter, signal, activityId) {
     if (!signal.aborted) waiter.tellOfStagesStillCopying(STAGE_WAIT_MAX_MS);
   }
 }
-//@ chunk-e6aww6q8.js:3760390-3760835 placement
+//@ chunk-5xgkngpb.js:3856174-3856619 placement
 /**
  * 创建等待暂存文件就绪的函数：有待处理文件时限时等待并记录结果。
  */

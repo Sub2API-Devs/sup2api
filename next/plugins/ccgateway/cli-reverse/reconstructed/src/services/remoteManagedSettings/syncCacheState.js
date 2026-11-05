@@ -3,9 +3,9 @@
  *
  * 远程设置缓存文件名常量（remote-settings.json、remote-settings-helper-consent）与大小上限。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/remoteManagedSettings/syncCacheState.ts
- * pieces: chunk-82kqcve8.js (1)
+ * pieces: chunk-a2q0x549.js (1)
  * attribution: placement 1
  */
 import { open } from "fs/promises";
@@ -13,7 +13,7 @@ import { constants } from "fs";
 import { syncStampPath, isSymlinkPath, MAX_SYNC_STAMP_BYTES } from "./consentRecords.js";
 import { NOFOLLOW_NONBLOCK_FLAGS } from "../../utils/fsFlags.js";
 
-//@ chunk-82kqcve8.js:161260-161594 placement (2.1.88 match: getSessionMemoryContent, 0.632)
+//@ chunk-a2q0x549.js:159349-159683 placement (2.1.88 match: getSessionMemoryContent, 0.683)
 /**
  * 读取远程设置同步时间戳文件 <remote-settings>.synced-at（只接受 1–16 位数字，拒绝符号链接）。
  */

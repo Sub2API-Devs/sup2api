@@ -3,10 +3,10 @@
  *
  * 模糊搜索选择器：搜索框 + 结果列表（可反向从底部排列），无结果提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/design-system/FuzzyPicker.tsx
- * pieces: chunk-18hwfzwa.js (8)
- * attribution: sole-consumer 4, affinity 1, fingerprint 2, file-local 1
+ * pieces: chunk-czq1j3j2.js (7)
+ * attribution: placement 1, sole-consumer 2, affinity 1, fingerprint 2, file-local 1
  */
 import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -31,27 +31,22 @@ import { HintText } from "./HintText.js";
 import { ListItem } from "./ListItem.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:654611-654615 sole-consumer
+//@ chunk-czq1j3j2.js:664190-664194 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:654611", () => {
+deferInit("chunk-czq1j3j2.js:664190", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:654615-654619 sole-consumer
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:654615", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:654619-654643 sole-consumer
+//@ chunk-czq1j3j2.js:675323-675347 sole-consumer
 function returnFalse_4() {
   return false;
 }
-//@ chunk-18hwfzwa.js:654643-654659 sole-consumer
+//@ chunk-czq1j3j2.js:675347-675363 sole-consumer
 function noop_3() {}
-//@ chunk-18hwfzwa.js:654659-654682 affinity
+//@ chunk-czq1j3j2.js:675363-675386 affinity
 var DEFAULT_VISIBLE_COUNT = 8;
 var PICKER_CHROME_ROWS = 10;
 var MIN_VISIBLE_COUNT = 2;
-//@ chunk-18hwfzwa.js:654682-661223 fingerprint (2.1.88 match: FuzzyPicker, 0.812)
+//@ chunk-czq1j3j2.js:675386-681927 fingerprint (2.1.88 match: FuzzyPicker, 0.812)
 /**
  * 模糊搜索选择器：顶部（或底部）搜索框，按查询过滤并高亮，上下选择，回车确认，Esc 取消，无结果显示 "No results"。
  */
@@ -608,7 +603,7 @@ function FuzzyPicker(props) {
   } else pickerElement = $[114];
   return pickerElement;
 }
-//@ chunk-18hwfzwa.js:661223-662906 fingerprint (2.1.88 match: List, 0.841)
+//@ chunk-czq1j3j2.js:681927-683610 fingerprint (2.1.88 match: List, 0.84)
 function List(props) {
   let $ = useMemoCache(38);
   let {
@@ -757,7 +752,7 @@ function List(props) {
   } else listBoxElement = $[37];
   return listBoxElement;
 }
-//@ chunk-18hwfzwa.js:662906-662972 file-local
+//@ chunk-czq1j3j2.js:683610-683676 file-local
 function firstWord(s) {
   let i = s.indexOf(" ");
   return i === -1 ? s : s.slice(0, i);

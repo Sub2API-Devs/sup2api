@@ -3,12 +3,12 @@
  *
  * pane 型 teammate 启动命令：需透传的环境变量与继承的 CLI 参数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/spawnUtils.ts
- * pieces: chunk-ae5g0zb5.js (1), chunk-cne5hsvz.js (1)
+ * pieces: chunk-355mdh7x.js (1), chunk-5j7d17eb.js (1)
  * attribution: fingerprint 1, callgraph-witnessed 1
  */
-import { buildInheritedCliFlags_2 } from "../../tools/shared/spawnMultiAgent.js";
+import { buildInheritedCliFlags as buildInheritedCliFlags_2 } from "../../tools/shared/spawnMultiAgent.js";
 import { proactivityLevelIfActive } from "../proactivityLevel.js";
 import { antBuiltinDenyRules } from "../permissions/permissionSetup.js";
 import { splitRuleList } from "../permissions/disallowedToolsFlag.js";
@@ -39,11 +39,14 @@ import { filterPluginDirs } from "../../plugins/functionHooks/hooksWorkerClient.
 import { getProviderState } from "../model/providerCaches.js";
 import { isRestrictedLaunch } from "../../services/daemon/relaunchArgs.js";
 
-//@ chunk-cne5hsvz.js:19463-21257 callgraph-witnessed (2.1.88 match: buildInheritedCliFlags, 0.297)
+//@ chunk-355mdh7x.js:105055-105175 fingerprint (2.1.88 match: TEAMMATE_ENV_VARS, 0.465)
+var PROXY_ENV_VARS = ["https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY"];
+var ALL_PROXY_ENV_NAMES = [...PROXY_ENV_VARS, "all_proxy", "ALL_PROXY", "no_proxy", "NO_PROXY"];
+//@ chunk-5j7d17eb.js:17107-18908 callgraph-witnessed (2.1.88 match: buildInheritedCliFlags, 0.297)
 /**
  * 拼出 pane 型 teammate 继承的 CLI 参数：权限模式/计划模式、--proactivity、--disallowed-tools（无法原样重放的 deny 规则直接中止派生）、--tools、--model、--effort、--settings、--managed-settings、插件目录/URL、--mcp-config、--strict-mcp-config、--chrome 等。
  */
-function buildInheritedCliFlags(options) {
+function buildInheritedCliFlags_2_2(options) {
   let {
     planModeRequired,
     permissionMode,
@@ -119,19 +122,4 @@ function buildInheritedCliFlags(options) {
   if (isRestrictedLaunch()) inheritedCliFlags.push("--restricted");
   return inheritedCliFlags.join(" ");
 }
-//@ chunk-ae5g0zb5.js:30138-30268 fingerprint (2.1.88 match: TEAMMATE_ENV_VARS, 0.444)
-/**
- * 需要透传给 pane 型 teammate 的环境变量（代理设置、CLAUDE_TEST_HEADED）。
- */
-var TEAMMATE_ENV_VARS = [
-  "CLAUDE_TEST_HEADED",
-  "HTTP_PROXY",
-  "http_proxy",
-  "HTTPS_PROXY",
-  "https_proxy",
-  "ALL_PROXY",
-  "all_proxy",
-  "NO_PROXY",
-  "no_proxy",
-];
-export { TEAMMATE_ENV_VARS, buildInheritedCliFlags };
+export { PROXY_ENV_VARS, ALL_PROXY_ENV_NAMES, buildInheritedCliFlags_2_2 };

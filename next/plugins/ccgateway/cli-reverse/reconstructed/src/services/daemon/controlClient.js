@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。向后台守护进程的控制 socket 发请求；另有守护进程租约（必要时启动守护进程）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6ffkpva1.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-v1xy4c4g.js (5)
  * attribution: placement 5
  */
 import { connect } from "net";
@@ -24,7 +24,7 @@ import { safeParseJSON } from "../../utils/json.js";
 import { bgSupervisorStalledMessage } from "../../utils/fleetGates.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6ffkpva1.js:683-1455 placement
+//@ chunk-v1xy4c4g.js:684-1457 placement
 /**
  * 向后台守护进程的控制 socket 发请求；另有守护进程租约（必要时启动守护进程）。
  */
@@ -108,17 +108,17 @@ async function controlRequest(request, options) {
   });
   return promise;
 }
-//@ chunk-6ffkpva1.js:1455-1520 placement
+//@ chunk-v1xy4c4g.js:1457-1522 placement
 /**
  * 结束租约的操作集合（shutdown_op、upgrade、yield、displaced）。
  */
 var MAX_DAEMON_SPAWNS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var LEASE_END_OPS;
-deferInit("chunk-6ffkpva1.js:1455", () => {
+deferInit("chunk-v1xy4c4g.js:1457", () => {
   MAX_DAEMON_SPAWNS = 4;
   LEASE_END_OPS = new Set(["shutdown_op", "upgrade", "yield", "displaced"]);
 });
-//@ chunk-6ffkpva1.js:1520-1581 placement
+//@ chunk-v1xy4c4g.js:1522-1583 placement
 function openDaemonLease(label) {
   return openDaemonLeaseLoop({
     label,
@@ -126,7 +126,7 @@ function openDaemonLease(label) {
     pid: process.pid,
   });
 }
-//@ chunk-6ffkpva1.js:1581-2874 placement
+//@ chunk-v1xy4c4g.js:1583-2877 placement
 /**
  * 维持守护进程租约，必要时启动守护进程
  */
@@ -239,7 +239,7 @@ function openDaemonLeaseLoop(client, leaseClient) {
     socket?.destroy();
   };
 }
-//@ chunk-6ffkpva1.js:2874-3368 placement
+//@ chunk-v1xy4c4g.js:2877-3372 placement
 function subscribeControl(short, tail, onEvent, onError) {
   let socket;
   try {

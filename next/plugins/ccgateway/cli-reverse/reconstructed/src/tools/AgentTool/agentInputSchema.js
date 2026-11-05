@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：AgentTool 的错误类与输入模式（subagent_type、model、effort、name、isolation、cwd 等字段说明）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0m7em5b4.js (1), chunk-0tkmvwy0.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tmsx2mh0.js (7), chunk-yz2nt7xx.js (1)
  * attribution: placement 8
  */
 import { parseAgentIdArg } from "../ObserverReportTool/ObserverReportTool.js";
@@ -32,7 +32,7 @@ import { getBackgroundLaunchRule } from "../../tasks/backgroundLaunchRules.js";
 import { RELATIVE_EFFORT_VALUES, isRelativeEffortDisabled } from "./agentEffort.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0m7em5b4.js:3624-3783 placement
+//@ chunk-yz2nt7xx.js:3691-3850 placement
 /**
  * 校验观察者报告的 cwd/代理参数：须为本地路径、无 ..、每段可检查。
  */
@@ -44,7 +44,7 @@ async function validateAgentCwd(cwdArg) {
       : undefined)
   );
 }
-//@ chunk-0tkmvwy0.js:11923-11998 placement
+//@ chunk-tmsx2mh0.js:19848-19923 placement
 /**
  * AgentTypeError：subagent_type 不存在、歧义、被 deny 规则拒绝或插件代理加载失败。
  */
@@ -54,7 +54,7 @@ class AgentTypeError extends Error {
     this.name = "AgentTypeError";
   }
 }
-//@ chunk-0tkmvwy0.js:11998-12087 placement
+//@ chunk-tmsx2mh0.js:19923-20012 placement
 /**
  * RemoteAgentPreconditionError：isolation:"remote" 云端代理不可用（未登录、不合格、受限配置）。
  */
@@ -64,13 +64,13 @@ class RemoteAgentPreconditionError extends Error {
     this.name = "RemoteAgentPreconditionError";
   }
 }
-//@ chunk-0tkmvwy0.js:12087-12309 placement
+//@ chunk-tmsx2mh0.js:20012-20234 placement
 /**
  * 受 CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG 限制时禁止 isolation:"remote" 的错误文本。
  */
 var REMOTE_AGENT_RESTRICTED_CONFIG_ERROR =
   'Cannot launch cloud agent: this session limits what your own Claude Code files can do (CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG), and a cloud session would not apply those limits. Set isolation to "worktree" instead.';
-//@ chunk-0tkmvwy0.js:12309-12391 placement
+//@ chunk-tmsx2mh0.js:20234-20316 placement
 /**
  * AgentPreconditionError：启动子代理的前置条件不满足（深度/并发/预算/队友限制等），错误文本直接回给模型。
  */
@@ -80,7 +80,7 @@ class AgentPreconditionError extends Error {
     this.name = "AgentPreconditionError";
   }
 }
-//@ chunk-0tkmvwy0.js:12391-12651 placement
+//@ chunk-tmsx2mh0.js:20316-20576 placement
 /**
  * 校验 cwd 参数（或 agent.spawn 钩子设置的 cwd）是否允许，不允许抛 AgentPreconditionError。
  */
@@ -95,7 +95,7 @@ async function assertAgentCwdAllowed(cwd, origin) {
     );
   }
 }
-//@ chunk-0tkmvwy0.js:12651-16660 placement
+//@ chunk-tmsx2mh0.js:20576-24585 placement
 /**
  * 2000：同步子代理启动 2 秒后发 background_hint 进度（提示可转后台）；Go/xo/Qn/qo 为输入 schema 各层：base（description/prompt/subagent_type/model/effort/run_in_background）→ 加 name/team_name/mode/isolation/cwd → 去掉 cwd 并按开关裁剪 → 允许相对 effort（lower/higher）。
  */
@@ -104,7 +104,7 @@ var baseAgentInputSchema;
 var fullAgentInputSchema;
 var agentInputSchema;
 var agentInputSchemaWithRelativeEffort;
-deferInit("chunk-0tkmvwy0.js:12651", () => {
+deferInit("chunk-tmsx2mh0.js:20576", () => {
   BACKGROUND_HINT_DELAY_MS = 2000;
   baseAgentInputSchema = DoctorLazy(() =>
     objectSchema({
@@ -219,7 +219,7 @@ deferInit("chunk-0tkmvwy0.js:12651", () => {
     }),
   );
 });
-//@ chunk-0tkmvwy0.js:16660-16698 placement
+//@ chunk-tmsx2mh0.js:24585-24623 placement
 /**
  * 返回 Agent 当前输入 schema：tengu_snappy_pelican（或 CLAUDE_CODE_SNAPPY_PELICAN）开启且无模型强制时用含相对 effort 的版本，否则用常规版本。
  */

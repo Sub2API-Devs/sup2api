@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 运行时绊线检测
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-asne9cp8.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9hx1mne2.js (12)
  * attribution: placement 12
  */
 import { claimOnce } from "../api/verificationRequired.js";
@@ -14,7 +14,7 @@ import { logEventAsync } from "../analytics/index.js";
 import { fromEnum, lit } from "../analytics/safeMetadata.js";
 import { mcpSdkGeneration } from "./mcpSdkGeneration.js";
 
-//@ chunk-asne9cp8.js:3397-3561 placement
+//@ chunk-9hx1mne2.js:3705-3869 placement
 /**
  * 上报 MCP 运行时模块不一致的绊线事件（只报一次）。
  */
@@ -27,7 +27,7 @@ function emitTripwireEvent(expected, loaded) {
     }).catch(() => {}),
   );
 }
-//@ chunk-asne9cp8.js:3561-4020 placement
+//@ chunk-9hx1mne2.js:3869-4328 placement
 /**
  * 按选定的 MCP SDK 代加载客户端模块，并校验模块的 MCP_TREE_ID 一致，否则上报并抛错。
  */
@@ -53,14 +53,14 @@ function mcpClientModule() {
   }
   return v1Module;
 }
-//@ chunk-asne9cp8.js:4020-4064 placement
+//@ chunk-9hx1mne2.js:4328-4372 placement
 /**
  * 触发加载 v2 客户端模块（副作用加载）。
  */
 function loadV2ClientModule() {
   require("./ClaudeAiProxyBearerRejectedError.lazy.js");
 }
-//@ chunk-asne9cp8.js:4064-4162 placement
+//@ chunk-9hx1mne2.js:4372-4470 placement
 /**
  * 按 SDK 代返回 SEP-2663 任务绑定实现。
  */
@@ -69,7 +69,7 @@ function loadSep2663TaskBinding() {
     return require("./ClaudeAiProxyBearerRejectedError.lazy.js").createSep2663TaskBinding;
   return;
 }
-//@ chunk-asne9cp8.js:4162-4266 placement
+//@ chunk-9hx1mne2.js:4470-4574 placement
 /**
  * 按 MCP SDK 代加载 auth 模块。
  */
@@ -77,15 +77,15 @@ function mcpAuthModule() {
   if (mcpSdkGeneration() === "v2") return require("./auth.lazy.js");
   return require("./auth.js");
 }
-//@ chunk-asne9cp8.js:4266-4370 placement
+//@ chunk-9hx1mne2.js:4574-4678 placement
 /**
  * 按 MCP SDK 代加载 elicitation 处理模块。
  */
 function mcpElicitationHandlerModule() {
-  if (mcpSdkGeneration() === "v2") return require("./elicitationHandler.lazy.js");
-  return require("./elicitationHandler.js");
+  if (mcpSdkGeneration() === "v2") return require("./elicitationHandler.js");
+  return require("./elicitationHandler.lazy.js");
 }
-//@ chunk-asne9cp8.js:4370-4474 placement
+//@ chunk-9hx1mne2.js:4678-4782 placement
 /**
  * 按 MCP SDK 代加载任务监视/持久化模块。
  */
@@ -93,7 +93,7 @@ function mcpTaskWatcherModule() {
   if (mcpSdkGeneration() === "v2") return require("./mcpTaskPersistence.js");
   return require("../../tasks/McpTask/mcpTaskNotifications.js");
 }
-//@ chunk-asne9cp8.js:4474-4578 placement
+//@ chunk-9hx1mne2.js:4782-4886 placement
 /**
  * 按 MCP SDK 代加载 SDK 错误分类模块。
  */
@@ -101,23 +101,23 @@ function mcpSdkErrorClassificationModule() {
   if (mcpSdkGeneration() === "v2") return require("./getMcpErrorCode.lazy.js");
   return require("./getMcpErrorCode_2.lazy.js");
 }
-//@ chunk-asne9cp8.js:4578-4682 placement
+//@ chunk-9hx1mne2.js:4886-4990 placement
 /**
  * 按 MCP SDK 代加载目录读取模块。
  */
 function mcpDirectoryReadModule() {
-  if (mcpSdkGeneration() === "v2") return require("./readMcpDirectory.js");
-  return require("./directoryRead.js");
+  if (mcpSdkGeneration() === "v2") return require("./readMcpDirectory.lazy.js");
+  return require("./readMcpDirectory_2.lazy.js");
 }
-//@ chunk-asne9cp8.js:4682-4786 placement
+//@ chunk-9hx1mne2.js:4990-5094 placement
 /**
  * 按 MCP SDK 代加载列表认证错误判断模块。
  */
 function mcpIsListAuthErrorModule() {
-  if (mcpSdkGeneration() === "v2") return require("./listAuthError.js");
-  return require("./isClaudeAiBearerRejectedError.lazy.js");
+  if (mcpSdkGeneration() === "v2") return require("./isClaudeAiBearerRejectedError.lazy.js");
+  return require("./listAuthError.js");
 }
-//@ chunk-asne9cp8.js:4786-4890 placement
+//@ chunk-9hx1mne2.js:5094-5198 placement
 /**
  * 按 MCP SDK 代加载 XAA IdP 登录模块。
  */
@@ -125,7 +125,7 @@ function mcpXaaIdpLoginModule() {
   if (mcpSdkGeneration() === "v2") return require("./xaaIdpLogin.lazy.js");
   return require("./xaaIdpLogin.js");
 }
-//@ chunk-asne9cp8.js:4890-4941 placement
+//@ chunk-9hx1mne2.js:5198-5249 placement
 /**
  * 加载 MCP 技能模块。
  */

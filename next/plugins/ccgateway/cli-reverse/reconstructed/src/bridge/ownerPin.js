@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。桥接会话的所有者绑定（[bridge:owner-pin]），防止会话被其他账号接管。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-zq2w8cvy.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8b8mbw6q.js (6)
  * attribution: placement 6
  */
 import {
@@ -24,7 +24,7 @@ import { readFreshOauthAccountFromDisk, subscribeGlobalConfigInstalled } from ".
 import { withDeadline } from "../utils/sleep.js";
 import { validateOauthToken } from "../services/oauth/validateOauthToken.js";
 
-//@ chunk-zq2w8cvy.js:433-871 placement
+//@ chunk-8b8mbw6q.js:433-871 placement
 /**
  * 确定守护进程的 owner 账号：优先本地登录账号；否则在开关允许时请服务端识别守护进程凭证，识别不了时警告。
  */
@@ -47,7 +47,7 @@ async function resolveDaemonOwner(getAccessToken) {
     );
   return owner;
 }
-//@ chunk-zq2w8cvy.js:871-918 placement
+//@ chunk-8b8mbw6q.js:871-918 placement
 /**
  * owner pin 刷新节奏常量：最小刷新间隔 1s、未变化 5 分钟、有变化 15 秒、无法判定 10 秒重试、最多 4 次、归属查询超时 3s。
  */
@@ -57,7 +57,7 @@ var OWNER_PIN_CHANGED_TTL_MS = 15000;
 var OWNER_PIN_MAX_ATTEMPTS = 4;
 var OWNER_PIN_INCONCLUSIVE_TTL_MS = 1e4;
 var OWNER_ATTRIBUTE_TIMEOUT_MS = 3000;
-//@ chunk-zq2w8cvy.js:918-990 placement
+//@ chunk-8b8mbw6q.js:918-990 placement
 /**
  * 判断是否为存储支撑的第一方登录：未覆盖桥接令牌、第一方提供商，且 OAuth 令牌来源为 store。
  */
@@ -68,14 +68,14 @@ async function isStoreBackedFirstPartyLogin(credentials) {
     (await getClaudeAIOAuthTokenOriginAsync(credentials)) === "store"
   );
 }
-//@ chunk-zq2w8cvy.js:990-1037 placement
+//@ chunk-8b8mbw6q.js:990-1037 placement
 /**
  * 只解析并取回桥接会话所有者绑定的 pin（不返回原因）。
  */
 async function resolveBridgeOwnerPinOnly(credentials) {
   return (await resolveBridgeOwnerPin(credentials)).pin;
 }
-//@ chunk-zq2w8cvy.js:1037-5120 placement
+//@ chunk-8b8mbw6q.js:1037-5120 placement
 /**
  * 解析 Remote Control 桥接会话的所有者绑定。
  */
@@ -353,7 +353,7 @@ async function resolveBridgeOwnerPin({ getAccessToken, storageV5, credentials, p
     pin,
   };
 }
-//@ chunk-zq2w8cvy.js:5120-5291 placement
+//@ chunk-8b8mbw6q.js:5120-5291 placement
 /**
  * 带超时调用 validateOauthToken，返回 token 所属 {accountUuid, organizationUuid}。
  */

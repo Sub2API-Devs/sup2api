@@ -3,9 +3,9 @@
  *
  * 修改 iTerm2 偏好前备份 com.googlecode.iterm2.plist，中断时恢复
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/iTermBackup.ts
- * pieces: chunk-fhdzwff4.js (4)
+ * pieces: chunk-ag1kt2k5.js (4)
  * attribution: fingerprint 4
  */
 import { join } from "path";
@@ -16,7 +16,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { logForDebugging } from "./debug.js";
 
-//@ chunk-fhdzwff4.js:14223-14294 fingerprint (2.1.88 match: markITerm2SetupComplete, 1)
+//@ chunk-ag1kt2k5.js:15427-15498 fingerprint (2.1.88 match: markITerm2SetupComplete, 1)
 async function markITerm2SetupComplete(config) {
   await saveGlobalConfig(
     (current) => ({
@@ -26,7 +26,7 @@ async function markITerm2SetupComplete(config) {
     config,
   );
 }
-//@ chunk-fhdzwff4.js:14294-14402 fingerprint (2.1.88 match: getIterm2RecoveryInfo, 1)
+//@ chunk-ag1kt2k5.js:15498-15606 fingerprint (2.1.88 match: getIterm2RecoveryInfo, 1)
 function getIterm2RecoveryInfo() {
   let config = getGlobalConfig();
   return {
@@ -34,11 +34,11 @@ function getIterm2RecoveryInfo() {
     backupPath: config.iterm2BackupPath || null,
   };
 }
-//@ chunk-fhdzwff4.js:14402-14486 fingerprint (2.1.88 match: getITerm2PlistPath, 1)
+//@ chunk-ag1kt2k5.js:15606-15690 fingerprint (2.1.88 match: getITerm2PlistPath, 1)
 function getITerm2PlistPath() {
   return join(homedir(), "Library", "Preferences", "com.googlecode.iterm2.plist");
 }
-//@ chunk-fhdzwff4.js:14486-14946 fingerprint (2.1.88 match: checkAndRestoreITerm2Backup, 0.732)
+//@ chunk-ag1kt2k5.js:15690-16150 fingerprint (2.1.88 match: checkAndRestoreITerm2Backup, 0.732)
 /**
  * 若上次修改 iTerm2 配置中断，则从备份恢复 com.googlecode.iterm2.plist。
  */

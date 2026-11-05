@@ -3,10 +3,10 @@
  *
  * 邀请/Guest Passes：资格检查与缓存、推荐奖励与剩余次数、货币格式，以及远程会话 teleport 请求构建。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/referral.ts
- * pieces: chunk-ag5x7vhf.js (1), chunk-e6aww6q8.js (1), chunk-s61vbvea.js (23)
- * attribution: fingerprint 8, callgraph-fingerprint 1, layout 5, placement 11
+ * pieces: chunk-5xgkngpb.js (1), chunk-7jxyna5q.js (23), chunk-hnxhr3bs.js (1)
+ * attribution: callgraph-fingerprint 1, fingerprint 8, layout 5, placement 11
  */
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
@@ -36,13 +36,13 @@ import {
 import { arePromoOffersAllowed, isConsumerPlan as isConsumerPlan_2 } from "../../utils/planTiers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:499888-500019 fingerprint (2.1.88 match: CURRENCY_SYMBOLS, 0.783)
+//@ chunk-7jxyna5q.js:416991-417122 fingerprint (2.1.88 match: CURRENCY_SYMBOLS, 0.783)
 /**
  * 货币符号表；JPY/KRW/VND 为零小数位货币。
  */
 var CURRENCY_SYMBOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ZERO_DECIMAL_CURRENCIES;
-deferInit("chunk-s61vbvea.js:499888", () => {
+deferInit("chunk-7jxyna5q.js:416991", () => {
   CURRENCY_SYMBOLS = {
     USD: "$",
     EUR: "\u20AC",
@@ -56,7 +56,7 @@ deferInit("chunk-s61vbvea.js:499888", () => {
   };
   ZERO_DECIMAL_CURRENCIES = new Set(["JPY", "KRW", "VND"]);
 });
-//@ chunk-s61vbvea.js:500019-500079 layout
+//@ chunk-7jxyna5q.js:417122-417182 layout
 /**
  * 货币符号，未知时 "<CODE> "。
  */
@@ -64,7 +64,7 @@ function getCurrencySymbol(currency) {
   let upper = currency.toUpperCase();
   return CURRENCY_SYMBOLS[upper] ?? `${upper} `;
 }
-//@ chunk-s61vbvea.js:500079-500439 placement
+//@ chunk-7jxyna5q.js:417182-417542 placement
 function formatCurrency(amount, currency, precision = "precise") {
   let upper = currency.toUpperCase();
   let currencySymbol = getCurrencySymbol(upper);
@@ -78,34 +78,34 @@ function formatCurrency(amount, currency, precision = "precise") {
     maximumFractionDigits: 2,
   })}`;
 }
-//@ chunk-s61vbvea.js:500439-500455 placement
+//@ chunk-7jxyna5q.js:417542-417558 placement
 var REFERRAL_CACHE_TTL_MS = 86400000;
-//@ chunk-s61vbvea.js:500455-500539 placement
+//@ chunk-7jxyna5q.js:417558-417642 placement
 function isStaleTimestamp(timestamp, now) {
   return typeof timestamp === "number" && Number.isFinite(timestamp)
     ? Math.abs(now - timestamp) > REFERRAL_CACHE_TTL_MS
     : true;
 }
-//@ chunk-s61vbvea.js:500539-500562 placement
+//@ chunk-7jxyna5q.js:417642-417665 placement
 class ReferralState {
   inFlight = null;
 }
-//@ chunk-s61vbvea.js:500562-500587 placement
+//@ chunk-7jxyna5q.js:417665-417690 placement
 var referralStateSlot; // deferred: uses ReferralState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:500562", () => {
+deferInit("chunk-7jxyna5q.js:417665", () => {
   referralStateSlot = new HostScoped(() => new ReferralState());
 });
-//@ chunk-s61vbvea.js:500587-500624 placement
+//@ chunk-7jxyna5q.js:417690-417727 placement
 function referralState() {
   return referralStateSlot.of(getRootSession().host);
 }
-//@ chunk-s61vbvea.js:500624-500737 placement
+//@ chunk-7jxyna5q.js:417727-417840 placement
 var REFERRAL_REASON_CODES = {
   "no-auth": "no_auth",
   "data-residency": "data_residency",
   "essential-traffic-only": "essential_traffic_only",
 };
-//@ chunk-s61vbvea.js:500737-500862 placement
+//@ chunk-7jxyna5q.js:417840-417965 placement
 class ReferralEligibilityUnavailableError extends Error {
   errorCode;
   constructor(message, errorCode) {
@@ -114,7 +114,7 @@ class ReferralEligibilityUnavailableError extends Error {
     this.errorCode = errorCode;
   }
 }
-//@ chunk-s61vbvea.js:501122-501433 placement
+//@ chunk-7jxyna5q.js:418225-418536 placement
 /**
  * 请求组织推荐活动资格接口，失败抛带原因分类的 ReferralEligibilityUnavailableError。
  */
@@ -136,7 +136,7 @@ async function fetchReferralEligibility(credentials, credentials_2) {
     );
   return response.data;
 }
-//@ chunk-s61vbvea.js:501433-501785 placement
+//@ chunk-7jxyna5q.js:418536-418888 placement
 async function fetchReferralRedemptions(campaign, credentials) {
   return withFeatureTelemetry("api_referral_redemptions_fetch", async () => {
     let response = await apiClient.get(
@@ -156,7 +156,7 @@ async function fetchReferralRedemptions(campaign, credentials) {
     return response.data;
   });
 }
-//@ chunk-s61vbvea.js:501785-501879 placement (2.1.88 match: isConsumerPlan, 0.894)
+//@ chunk-7jxyna5q.js:418888-418982 placement (2.1.88 match: isConsumerPlan, 0.895)
 function isConsumerPlan() {
   let plan = getSubscriptionType();
   return !!(
@@ -166,7 +166,7 @@ function isConsumerPlan() {
     (plan === "max" || plan === "pro")
   );
 }
-//@ chunk-s61vbvea.js:501879-502222 fingerprint (2.1.88 match: checkCachedPassesEligibility, 1)
+//@ chunk-7jxyna5q.js:418982-419325 fingerprint (2.1.88 match: checkCachedPassesEligibility, 1)
 /**
  * 读缓存的 Passes 资格 {eligible, needsRefresh, hasCache}。
  */
@@ -199,19 +199,19 @@ function checkCachedPassesEligibility() {
     hasCache: true,
   };
 }
-//@ chunk-s61vbvea.js:502222-502287 layout
+//@ chunk-7jxyna5q.js:419325-419390 layout
 /**
  * 按货币格式化最小单位金额。
  */
 function formatMinorUnits(amount) {
   return formatCurrency(amount.amount_minor_units, amount.currency, "fit");
 }
-//@ chunk-s61vbvea.js:502287-502365 fingerprint (2.1.88 match: formatCreditAmount, 0.734)
+//@ chunk-7jxyna5q.js:419390-419468 fingerprint (2.1.88 match: formatCreditAmount, 0.734)
 /**
  * {amount_minor_units, currency}。旧版名 formatCreditAmount 为错配。
  */
 var creditAmountSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:502287", () => {
+deferInit("chunk-7jxyna5q.js:419390", () => {
   creditAmountSchema = DoctorLazy(() =>
     objectSchema({
       amount_minor_units: numberSchema(),
@@ -219,7 +219,7 @@ deferInit("chunk-s61vbvea.js:502287", () => {
     }),
   );
 });
-//@ chunk-s61vbvea.js:502365-502433 layout
+//@ chunk-7jxyna5q.js:419468-419536 layout
 /**
  * 校验并解析 {amount_minor_units, currency}。
  */
@@ -227,12 +227,12 @@ function parseCreditAmount(referrerReward) {
   let parsed = creditAmountSchema().safeParse(referrerReward);
   return parsed.success ? parsed.data : null;
 }
-//@ chunk-s61vbvea.js:502433-502668 layout
+//@ chunk-7jxyna5q.js:419536-419771 layout
 /**
  * 推荐活动 schema：campaign、code、referral_link（只接受 http/https）。
  */
 var referralCampaignSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:502433", () => {
+deferInit("chunk-7jxyna5q.js:419536", () => {
   referralCampaignSchema = DoctorLazy(() =>
     objectSchema({
       campaign: stringSchema(),
@@ -251,7 +251,7 @@ deferInit("chunk-s61vbvea.js:502433", () => {
     }),
   );
 });
-//@ chunk-s61vbvea.js:502668-502738 layout
+//@ chunk-7jxyna5q.js:419771-419841 layout
 /**
  * 解析推荐活动。
  */
@@ -259,7 +259,7 @@ function parseReferralCampaign(referralCodeDetails) {
   let parsed = referralCampaignSchema().safeParse(referralCodeDetails);
   return parsed.success ? parsed.data : undefined;
 }
-//@ chunk-s61vbvea.js:502738-502869 fingerprint (2.1.88 match: getCachedReferrerReward, 1)
+//@ chunk-7jxyna5q.js:419841-419972 fingerprint (2.1.88 match: getCachedReferrerReward, 1)
 /**
  * 缓存中的推荐奖励金额。
  */
@@ -269,7 +269,7 @@ function getCachedReferrerReward() {
   let cachedEntry = getGlobalConfig().passesEligibilityCache?.[orgId];
   return parseCreditAmount(cachedEntry?.referrer_reward);
 }
-//@ chunk-s61vbvea.js:502869-503022 fingerprint (2.1.88 match: getCachedRemainingPasses, 1)
+//@ chunk-7jxyna5q.js:419972-420125 fingerprint (2.1.88 match: getCachedRemainingPasses, 1)
 /**
  * 缓存中的剩余 Pass 数。
  */
@@ -279,7 +279,7 @@ function getCachedRemainingPasses() {
   let config = getGlobalConfig().passesEligibilityCache?.[orgId]?.remaining_passes;
   return typeof config === "number" ? config : null;
 }
-//@ chunk-s61vbvea.js:503022-503691 fingerprint (2.1.88 match: fetchAndStorePassesEligibility, 0.681)
+//@ chunk-7jxyna5q.js:420125-420794 fingerprint (2.1.88 match: fetchAndStorePassesEligibility, 0.681)
 /**
  * 拉取并保存 Passes 资格（复用进行中请求）。
  */
@@ -326,7 +326,7 @@ async function fetchAndStorePassesEligibility(credentials, fetchCredentials) {
   })();
   return state.inFlight;
 }
-//@ chunk-s61vbvea.js:503691-504239 fingerprint (2.1.88 match: getCachedOrFetchPassesEligibility, 0.889)
+//@ chunk-7jxyna5q.js:420794-421342 fingerprint (2.1.88 match: getCachedOrFetchPassesEligibility, 0.888)
 /**
  * 读缓存，无缓存时后台拉取。
  */
@@ -354,7 +354,7 @@ async function getCachedOrFetchPassesEligibility(credentials, key) {
     referrer_reward: parseCreditAmount(rest.referrer_reward),
   };
 }
-//@ chunk-e6aww6q8.js:1878148-1878366 callgraph-fingerprint (2.1.88 match: fetchReferralEligibility, 0.319)
+//@ chunk-5xgkngpb.js:1956968-1957186 callgraph-fingerprint (2.1.88 match: fetchReferralEligibility, 0.319)
 /**
  * 构建远程会话请求描述（url、组织头、bearer 与恢复回调）。旧版名 fetchReferralEligibility 为错配。
  */
@@ -375,7 +375,7 @@ function fetchReferralEligibility_2(credentials, storageV5, sessionId, profile, 
     reauthorized: false,
   };
 }
-//@ chunk-ag5x7vhf.js:94515-94708 fingerprint (2.1.88 match: shouldCheckForPasses, 0.644)
+//@ chunk-hnxhr3bs.js:98096-98289 fingerprint (2.1.88 match: shouldCheckForPasses, 0.643)
 /**
  * 是否检查 Guest Passes（Max/Team 订阅、组织匹配等），返回组织 id。
  */
@@ -395,14 +395,14 @@ function shouldCheckForPasses() {
 }
 export {
   formatCurrency,
-  getCurrencySymbol,
-  fetchReferralEligibility_2,
+  getCachedOrFetchPassesEligibility,
   getCachedReferrerReward,
   formatMinorUnits,
   checkCachedPassesEligibility,
-  getCachedOrFetchPassesEligibility,
+  fetchReferralEligibility_2,
+  ReferralEligibilityUnavailableError,
   fetchReferralRedemptions,
   getCachedRemainingPasses,
-  ReferralEligibilityUnavailableError,
+  getCurrencySymbol,
   shouldCheckForPasses,
 };

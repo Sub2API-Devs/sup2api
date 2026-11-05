@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/tools/agent-toolset/node.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-2cw52qnf.js (26)
+ * pieces: chunk-m6wtswwx.js (26)
  * attribution: esm-fingerprint 22, esm-layout 4
  */
 import * as fsPromisesModule from "fs/promises";
@@ -26,7 +26,7 @@ import { promiseWithResolvers } from "../../internal/utils/promise.mjs";
 import { betaTool } from "../../helpers/beta/json-schema.mjs";
 import { ToolError } from "../../lib/tools/ToolError.mjs";
 
-//@ chunk-2cw52qnf.js:26431-26563 esm-fingerprint
+//@ chunk-m6wtswwx.js:26431-26563 esm-fingerprint
 var _BashSession_instances;
 var _BashSession_proc;
 var _BashSession_buf;
@@ -55,7 +55,7 @@ var NEWLINE = Buffer.from(`
 var GREP_OUTPUT_LIMIT = 102400;
 var GREP_MAX_LINE_LENGTH = 2000;
 var GLOB_RESULT_LIMIT = 200;
-//@ chunk-2cw52qnf.js:26563-26690 esm-fingerprint
+//@ chunk-m6wtswwx.js:26563-26690 esm-fingerprint
 class BashTimeoutError extends AnthropicError {
   constructor(timeoutMs) {
     super(`bash command timed out after ${timeoutMs}ms`);
@@ -63,21 +63,21 @@ class BashTimeoutError extends AnthropicError {
     this.timeoutMs = timeoutMs;
   }
 }
-//@ chunk-2cw52qnf.js:26690-26736 esm-fingerprint
+//@ chunk-m6wtswwx.js:26690-26736 esm-fingerprint
 var ANSI_RE = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
 var fsGlob = fsPromisesModule.glob;
-//@ chunk-2cw52qnf.js:26736-26774 esm-layout
+//@ chunk-m6wtswwx.js:26736-26774 esm-layout
 function resolveMaxBytes(configured) {
   return configured === undefined ? DEFAULT_MAX_FILE_BYTES : configured;
 }
-//@ chunk-2cw52qnf.js:26774-27205 esm-layout
+//@ chunk-m6wtswwx.js:26774-27205 esm-layout
 function rejectUnrestrictedPaths(value) {
   if (value === undefined) return;
   throw new AnthropicError(
     "The `unrestrictedPaths` option you passed to the agent toolset (AgentToolContext) is no longer supported. The toolset's file tools (read, write, edit, glob, grep) are now always confined to the working directory plus the directories listed in `allowedRoots`. Remove `unrestrictedPaths` from your context; to let the file tools reach any other directory, add it to `allowedRoots`.",
   );
 }
-//@ chunk-2cw52qnf.js:27205-27264 esm-layout
+//@ chunk-m6wtswwx.js:27205-27264 esm-layout
 function allowedRootCandidates(ctx) {
   return [
     betaBashTool(ctx),
@@ -88,18 +88,18 @@ function allowedRootCandidates(ctx) {
     betaGrepTool(ctx),
   ];
 }
-//@ chunk-2cw52qnf.js:27264-27366 esm-fingerprint
+//@ chunk-m6wtswwx.js:27264-27366 esm-fingerprint
 async function resolvePath(ctx, p) {
   rejectUnrestrictedPaths(ctx.unrestrictedPaths);
   return confineToRoot(ctx.workdir, p, {
     allowedRoots: ctx.allowedRoots ?? [],
   });
 }
-//@ chunk-2cw52qnf.js:27366-27416 esm-fingerprint
+//@ chunk-m6wtswwx.js:27366-27416 esm-fingerprint
 function readOnlyRootFor(ctx, target) {
   return containingRoot(ctx.readOnlyRoots ?? [], target);
 }
-//@ chunk-2cw52qnf.js:27416-27538 esm-fingerprint
+//@ chunk-m6wtswwx.js:27416-27538 esm-fingerprint
 function scrubbedShellEnv() {
   let env = {};
   for (let [key, value] of Object.entries(process.env)) {
@@ -108,7 +108,7 @@ function scrubbedShellEnv() {
   }
   return env;
 }
-//@ chunk-2cw52qnf.js:27538-29892 esm-fingerprint
+//@ chunk-m6wtswwx.js:27538-29892 esm-fingerprint
 var BashSession = (() => {
   class BashSession {
     constructor(dir, env = scrubbedShellEnv()) {
@@ -271,7 +271,7 @@ ${out}`;
   };
   return BashSession;
 })();
-//@ chunk-2cw52qnf.js:29892-30880 esm-fingerprint
+//@ chunk-m6wtswwx.js:29892-30880 esm-fingerprint
 function betaBashTool(ctx) {
   rejectUnrestrictedPaths(ctx.unrestrictedPaths);
   let session;
@@ -336,7 +336,7 @@ function betaBashTool(ctx) {
     },
   });
 }
-//@ chunk-2cw52qnf.js:30880-31966 esm-fingerprint
+//@ chunk-m6wtswwx.js:30880-31966 esm-fingerprint
 function betaReadTool(ctx) {
   rejectUnrestrictedPaths(ctx.unrestrictedPaths);
   return betaTool({
@@ -392,7 +392,7 @@ function betaReadTool(ctx) {
     },
   });
 }
-//@ chunk-2cw52qnf.js:31966-32201 esm-fingerprint
+//@ chunk-m6wtswwx.js:31966-32201 esm-fingerprint
 async function readRangeStreaming(abs, filePath, startLine, endLine, limit) {
   let lines = new LineRangeCollector(filePath, startLine, endLine, limit);
   if (lines.rangeIsEmpty()) return "";
@@ -409,7 +409,7 @@ async function readRangeStreaming(abs, filePath, startLine, endLine, limit) {
   }
   return lines.text();
 }
-//@ chunk-2cw52qnf.js:32201-32973 esm-fingerprint
+//@ chunk-m6wtswwx.js:32201-32973 esm-fingerprint
 class LineRangeCollector {
   constructor(filePath, startLine, endLine, limit) {
     _LineRangeCollector_instances.add(this);
@@ -473,7 +473,7 @@ class LineRangeCollector {
     ).toString("utf8");
   }
 }
-//@ chunk-2cw52qnf.js:32973-33801 esm-fingerprint
+//@ chunk-m6wtswwx.js:32973-33801 esm-fingerprint
 _LineRangeCollector_filePath = new WeakMap();
 _LineRangeCollector_startLine = new WeakMap();
 _LineRangeCollector_endLine = new WeakMap();
@@ -529,7 +529,7 @@ _LineRangeCollector_overLimitError = function () {
     `read: view_range [${__classPrivateFieldGet(this, _LineRangeCollector_startLine, "f")}, ${__classPrivateFieldGet(this, _LineRangeCollector_endLine, "f")}] of ${__classPrivateFieldGet(this, _LineRangeCollector_filePath, "f")} exceeds ${__classPrivateFieldGet(this, _LineRangeCollector_limit, "f")}-byte limit. Narrow the view_range to read a smaller portion.`,
   );
 };
-//@ chunk-2cw52qnf.js:33801-34461 esm-fingerprint
+//@ chunk-m6wtswwx.js:33801-34461 esm-fingerprint
 function betaWriteTool(ctx) {
   rejectUnrestrictedPaths(ctx.unrestrictedPaths);
   return betaTool({
@@ -565,7 +565,7 @@ function betaWriteTool(ctx) {
     },
   });
 }
-//@ chunk-2cw52qnf.js:34461-35832 esm-fingerprint
+//@ chunk-m6wtswwx.js:34461-35832 esm-fingerprint
 function betaEditTool(ctx) {
   rejectUnrestrictedPaths(ctx.unrestrictedPaths);
   return betaTool({
@@ -628,11 +628,11 @@ function betaEditTool(ctx) {
     },
   });
 }
-//@ chunk-2cw52qnf.js:35832-35889 esm-fingerprint
+//@ chunk-m6wtswwx.js:35832-35889 esm-fingerprint
 function patternCanAscend(pattern) {
   return pattern.split(/[\\/{},]/).includes("..");
 }
-//@ chunk-2cw52qnf.js:35889-37073 esm-fingerprint
+//@ chunk-m6wtswwx.js:35889-37073 esm-fingerprint
 function betaGlobTool(ctx) {
   rejectUnrestrictedPaths(ctx.unrestrictedPaths);
   return betaTool({
@@ -698,7 +698,7 @@ function betaGlobTool(ctx) {
     },
   });
 }
-//@ chunk-2cw52qnf.js:37073-37540 esm-fingerprint
+//@ chunk-m6wtswwx.js:37073-37540 esm-fingerprint
 function betaGrepTool(ctx) {
   rejectUnrestrictedPaths(ctx.unrestrictedPaths);
   return betaTool({
@@ -727,7 +727,7 @@ function betaGrepTool(ctx) {
     },
   });
 }
-//@ chunk-2cw52qnf.js:37540-38141 esm-fingerprint
+//@ chunk-m6wtswwx.js:37540-38141 esm-fingerprint
 function runRipgrep(rg, pattern, searchPath, signal) {
   return new Promise((resolve, reject) => {
     let proc = child_processModule.spawn(rg, ["-n", "--no-heading", "-e", pattern, "--", searchPath], {
@@ -768,7 +768,7 @@ function runRipgrep(rg, pattern, searchPath, signal) {
     });
   });
 }
-//@ chunk-2cw52qnf.js:38141-38604 esm-fingerprint
+//@ chunk-m6wtswwx.js:38141-38604 esm-fingerprint
 async function runWalkGrep(pattern, root, signal) {
   let re;
   try {
@@ -794,7 +794,7 @@ async function runWalkGrep(pattern, root, signal) {
   return hits.join(`
 `);
 }
-//@ chunk-2cw52qnf.js:38604-38860 esm-fingerprint
+//@ chunk-m6wtswwx.js:38604-38860 esm-fingerprint
 async function grepFile(file, re, push) {
   let stream = fsModule.createReadStream(file, {
     encoding: "utf8",
@@ -816,10 +816,10 @@ async function grepFile(file, re, push) {
   }
   return true;
 }
-//@ chunk-2cw52qnf.js:38860-38879 esm-layout
+//@ chunk-m6wtswwx.js:38860-38879 esm-layout
 var WALK_MAX_DEPTH = 40;
 var WALK_MAX_ENTRIES = 50000;
-//@ chunk-2cw52qnf.js:38879-39314 esm-fingerprint
+//@ chunk-m6wtswwx.js:38879-39314 esm-fingerprint
 async function walk_2(root, rel, fn, signal) {
   let remaining = WALK_MAX_ENTRIES;
   async function inner(rel, depth) {
@@ -848,7 +848,7 @@ async function walk_2(root, rel, fn, signal) {
   }
   await inner(rel, 0);
 }
-//@ chunk-2cw52qnf.js:39314-39487 esm-fingerprint
+//@ chunk-m6wtswwx.js:39314-39487 esm-fingerprint
 async function findRg() {
   let dirs = (process.env.PATH ?? "").split(pathModule.delimiter);
   for (let d of dirs) {

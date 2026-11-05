@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/nested-clients/dist-cjs/submodules/signin/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-y366fgzk.js (2)
+ * pieces: chunk-csa0qt1j.js (2)
  * attribution: cjs-fingerprint 1, affinity 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -24,7 +24,7 @@ import { require_runtimeConfig } from "./runtimeConfig.js";
 import { require_region_config_resolver } from "../../../../region-config-resolver/dist-cjs/index.js";
 import { require_protocol_http } from "../../../../../@smithy/protocol-http/dist-cjs/index.js";
 
-//@ chunk-y366fgzk.js:7546-13429 cjs-fingerprint
+//@ chunk-csa0qt1j.js:7546-13429 cjs-fingerprint
 var require_signin = __commonJS(function (cjsExports) {
   var middlewareHostHeader = require_middleware_host_header();
   var middlewareLogger = require_middleware_logger();
@@ -462,5 +462,5 @@ var require_signin = __commonJS(function (cjsExports) {
   cjsExports.TooManyRequestsError = TooManyRequestsError$1;
   cjsExports.ValidationException = ValidationException$1;
 });
-//@ chunk-y366fgzk.js:13429-13449 affinity
+//@ chunk-csa0qt1j.js:13429-13449 affinity
 export default require_signin();

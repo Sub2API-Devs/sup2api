@@ -3,9 +3,9 @@
  *
  * 自托管 runner API 错误分类与重试（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3nztfxrw.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a3r2kq46.js (14)
  * attribution: placement 14
  */
 import { isSnakeCaseReasonCode } from "../bridge/codeSessionApi.js";
@@ -15,11 +15,11 @@ import { axios_default } from "../../vendor/axios/dist/esm/axios.js";
 import { sleep } from "../utils/sleep.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3nztfxrw.js:5466-5501 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-a3r2kq46.js:5466-5501 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function getErrorBodyType(data) {
   return getErrorBodyField(data, "type");
 }
-//@ chunk-3nztfxrw.js:5501-5680 placement
+//@ chunk-a3r2kq46.js:5501-5680 placement
 /**
  * 读响应体 error 对象上的某个字符串字段。
  */
@@ -36,19 +36,19 @@ function getErrorBodyField(body, field) {
   }
   return;
 }
-//@ chunk-3nztfxrw.js:5680-5739 placement
+//@ chunk-a3r2kq46.js:5680-5739 placement
 function getErrorBodyReason(body) {
   let errorBodyField = getErrorBodyField(body, "reason");
   return isSnakeCaseReasonCode(errorBodyField) ? errorBodyField : undefined;
 }
-//@ chunk-3nztfxrw.js:5739-5778 placement
+//@ chunk-a3r2kq46.js:5739-5778 placement
 function getErrorBodyResource(body) {
   return getErrorBodyField(body, "resource");
 }
-//@ chunk-3nztfxrw.js:5778-5851 placement
+//@ chunk-a3r2kq46.js:5778-5851 placement
 var SELF_HOSTED_RUNNERS_DISABLED_BY_ORG = "self_hosted_runners_disabled_by_org";
 var DISPATCH_TOKEN_REVOKED = "dispatch_token_revoked";
-//@ chunk-3nztfxrw.js:5851-7266 placement
+//@ chunk-a3r2kq46.js:5851-7266 placement
 /**
  * 自托管 runner API 错误文本（401、组织未开通等）
  */
@@ -141,7 +141,7 @@ function formatRunnerApiError(status, body, fallbackReason, retryable = false) {
       );
   }
 }
-//@ chunk-3nztfxrw.js:7266-7450 placement
+//@ chunk-a3r2kq46.js:7266-7450 placement
 /**
  * 从错误对象中取 HTTP 状态码（httpStatus 或 response.status）。
  */
@@ -153,7 +153,7 @@ function getHttpStatus(error) {
   }
   return;
 }
-//@ chunk-3nztfxrw.js:7450-7767 placement
+//@ chunk-a3r2kq46.js:7450-7767 placement
 /**
  * 从自托管 runner API 错误对象中安全提取 errorType、errorReason 与 serverMessage 字符串字段。
  */
@@ -167,7 +167,7 @@ function getRunnerErrorFields(error) {
       "serverMessage" in value && typeof value.serverMessage === "string" ? value.serverMessage : undefined,
   };
 }
-//@ chunk-3nztfxrw.js:7767-7960 placement
+//@ chunk-a3r2kq46.js:7767-7960 placement
 /**
  * 判断自托管 runner API 错误是否可重试：非取消、非不可读工具宿主错误，且无状态码、429 或 5xx。
  */
@@ -180,10 +180,10 @@ function isRetryableRunnerError(error) {
   let httpStatus = getHttpStatus(error);
   return httpStatus === undefined || httpStatus === 429 || httpStatus >= 500;
 }
-//@ chunk-3nztfxrw.js:7960-8094 placement
+//@ chunk-a3r2kq46.js:7960-8094 placement
 var RUNNER_RETRY_DELAYS_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var RETRYABLE_NETWORK_CODES;
-deferInit("chunk-3nztfxrw.js:7960", () => {
+deferInit("chunk-a3r2kq46.js:7960", () => {
   RUNNER_RETRY_DELAYS_MS = [500, 1000, 2000];
   RETRYABLE_NETWORK_CODES = new Set([
     "ECONNRESET",
@@ -195,7 +195,7 @@ deferInit("chunk-3nztfxrw.js:7960", () => {
     "EAI_AGAIN",
   ]);
 });
-//@ chunk-3nztfxrw.js:8094-8492 placement
+//@ chunk-a3r2kq46.js:8094-8492 placement
 async function retryReleaseSession({ release, sessionId, onStatus, stop, waitsMs = RUNNER_RETRY_DELAYS_MS }) {
   for (let [attempt, delayMs] of waitsMs.entries())
     try {
@@ -217,12 +217,12 @@ async function retryReleaseSession({ release, sessionId, onStatus, stop, waitsMs
     }
   return release();
 }
-//@ chunk-3nztfxrw.js:8492-8542 placement
+//@ chunk-a3r2kq46.js:8492-8542 placement
 /**
  * runner API 错误的分类集合（transport/timeout/5xx/429/4xx）与计数初始化。
  */
 var RUNNER_ERROR_CATEGORIES = ["transport", "timeout", "5xx", "429", "4xx"];
-//@ chunk-3nztfxrw.js:8542-8762 placement
+//@ chunk-a3r2kq46.js:8542-8762 placement
 /**
  * 把 runner API 错误分类为 timeout、transport、5xx、429 或其他状态类别。
  */
@@ -237,7 +237,7 @@ function classifyRunnerError(error) {
   if (httpStatus === 429) return "429";
   return "4xx";
 }
-//@ chunk-3nztfxrw.js:8762-8831 placement
+//@ chunk-a3r2kq46.js:8762-8831 placement
 /**
  * 导出函数 `emptyErrorCategoryCounts`：返回 { transport: 0, timeout: 0, "5xx": 0, 429: 0, "4xx": 0 }; } export { formatRunnerApiError, gvr, classifyRunner…。
  */
@@ -253,10 +253,10 @@ function emptyErrorCategoryCounts() {
 export {
   formatRunnerApiError,
   RUNNER_ERROR_CATEGORIES,
-  classifyRunnerError,
-  getHttpStatus,
-  emptyErrorCategoryCounts,
   isRetryableRunnerError,
+  getHttpStatus,
   getRunnerErrorFields,
+  emptyErrorCategoryCounts,
+  classifyRunnerError,
   retryReleaseSession,
 };

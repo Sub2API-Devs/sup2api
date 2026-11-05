@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：远程代理缺少 GitHub 设置时的提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fepf8jp6.js (1)
  * attribution: placement 1
  */
 
-//@ chunk-e6aww6q8.js:1776430-1776548 placement
+//@ chunk-fepf8jp6.js:83091-83209 placement
 /**
  * 项目还没有 GitHub 仓库时的提示：到 github.com/new 创建并推送。
  */

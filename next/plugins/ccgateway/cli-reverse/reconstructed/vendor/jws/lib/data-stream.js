@@ -1,14 +1,14 @@
 /**
  * jws/lib/data-stream.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jws@3.2.3..4.0.1
- * pieces: chunk-82d8c88w.js (1)
+ * pieces: chunk-ww3dkdtg.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_safe_buffer } from "../../safe-buffer/index.js";
 
-//@ chunk-82d8c88w.js:3287-4019 cjs-fingerprint
+//@ chunk-ww3dkdtg.js:3287-4019 cjs-fingerprint
 var require_data_stream = __commonJS(function (cjsExports, cjsModule) {
   var BufferCtor = require_safe_buffer().Buffer;
   var Stream = importMetaRequire("stream");

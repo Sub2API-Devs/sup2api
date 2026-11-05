@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：解析 OSC 序列参数。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-rnaw3pc3.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-zjspdyjm.js (10)
  * attribution: placement 10
  */
 import { isBridgeOrTransport } from "../../cli/transportState.js";
@@ -21,7 +21,7 @@ import { truncateToLength, firstLineOf, toWellFormedString } from "../stringUtil
 import { escapeXml_2 as escapeXml, truncateBeforeEscape } from "../confusables.js";
 import { stripAnsiSequences } from "../printableName.js";
 
-//@ chunk-rnaw3pc3.js:679-842 placement
+//@ chunk-zjspdyjm.js:678-841 placement
 /**
  * 描述 Bash 启动失败：bridge 连接下隐去细节，否则返回错误消息。
  */
@@ -32,7 +32,7 @@ function describeSpawnFailure(error, session) {
   });
   return "shell command failed (detail withheld on this connection)";
 }
-//@ chunk-rnaw3pc3.js:998-1251 placement
+//@ chunk-zjspdyjm.js:997-1250 placement
 var MAX_BASH_OUTPUT_CHARS = 262144;
 var OTHER_DIRECTORY_WORDS =
   "Not run: this command was sent for a different folder than the one the session is in now. Ask Claude to run it instead.";
@@ -40,7 +40,7 @@ var BASH_TIMEOUT_MS = 600000;
 var BASH_INTERRUPTED_NOTE = "[interrupted]";
 var TIMED_OUT_NOTE = "[timed out after 10 minutes]";
 var OUTPUT_LIMIT_NOTE = "[stopped: the command printed more than 100 MB]";
-//@ chunk-rnaw3pc3.js:1251-2497 placement
+//@ chunk-zjspdyjm.js:1250-2496 placement
 async function runHeadlessBashCommand(options) {
   let { command } = options;
   let cwd = options.cwd ?? getCwd();
@@ -112,7 +112,7 @@ async function runHeadlessBashCommand(options) {
     exitCode: finalExitCode,
   };
 }
-//@ chunk-rnaw3pc3.js:2497-2685 placement
+//@ chunk-zjspdyjm.js:2496-2683 placement
 function formatBashOutput(text, maxOutputChars, note) {
   let noteSuffix =
     note === ""
@@ -134,14 +134,14 @@ ${note}`;
         );
   return `${output}${output === "" ? note : noteSuffix}`;
 }
-//@ chunk-rnaw3pc3.js:2685-2783 placement
+//@ chunk-zjspdyjm.js:2683-2781 placement
 function formatTruncationNotice(droppedChars) {
   return `
 [output truncated: ${droppedChars.toLocaleString("en-US")} more characters not shown]`;
 }
-//@ chunk-rnaw3pc3.js:2783-2808 placement
+//@ chunk-zjspdyjm.js:2781-2806 placement
 var ANSI_SGR_RE = /\x1b\[[0-9;:]*m/g;
-//@ chunk-rnaw3pc3.js:2808-3443 placement
+//@ chunk-zjspdyjm.js:2806-3441 placement
 /**
  * 解析 OSC 序列参数。
  */
@@ -188,7 +188,7 @@ function parseOscSequence(sequence) {
   }
   return sgrParams.length === 0 ? "" : `\x1B[${sgrParams.join(";")}m`;
 }
-//@ chunk-rnaw3pc3.js:3443-3589 placement
+//@ chunk-zjspdyjm.js:3441-3587 placement
 function cleanShellOutputForViewers(text, options = {}) {
   if (options.keepColors !== true) return sanitizeTerminalText(text);
   let sgrMatches = text.match(ANSI_SGR_RE) ?? [];
@@ -201,7 +201,7 @@ function cleanShellOutputForViewers(text, options = {}) {
     )
     .join("");
 }
-//@ chunk-rnaw3pc3.js:3589-3828 placement
+//@ chunk-zjspdyjm.js:3587-3826 placement
 function sanitizeTerminalText(text) {
   return stripAnsiSequences(toWellFormedString(text))
     .replace(
@@ -214,7 +214,7 @@ function sanitizeTerminalText(text) {
       "",
     );
 }
-//@ chunk-rnaw3pc3.js:3828-3881 placement
+//@ chunk-zjspdyjm.js:3826-3879 placement
 function isOscNumericParam(param) {
   return param !== undefined && /^\d{1,3}$/.test(param);
 }

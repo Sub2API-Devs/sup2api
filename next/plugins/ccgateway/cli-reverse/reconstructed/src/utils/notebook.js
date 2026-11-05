@@ -3,9 +3,9 @@
  *
  * 读取 .ipynb 并把单元转换为 tool_result 内容块
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/notebook.ts
- * pieces: chunk-e6aww6q8.js (19)
+ * pieces: chunk-5xgkngpb.js (19)
  * attribution: placement 8, layout 1, fingerprint 9, affinity 1
  */
 import { jsonParse } from "./slowOperations.js";
@@ -17,12 +17,12 @@ import { formatOutput } from "../tools/BashTool/utils.js";
 import { sniffImageMediaType } from "../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { readHandleUpTo } from "./fsOperations.js";
 
-//@ chunk-e6aww6q8.js:3150675-3150692 placement
+//@ chunk-5xgkngpb.js:3237294-3237311 placement
 /**
  * notebook 文件大小上限（100 MB）。
  */
 var MAX_NOTEBOOK_BYTES = 104857600;
-//@ chunk-e6aww6q8.js:3150692-3150890 placement
+//@ chunk-5xgkngpb.js:3237311-3237509 placement
 /**
  * cells 是数组且每个单元 source 为字符串或字符串数组。
  */
@@ -39,7 +39,7 @@ function isValidNotebook(notebook) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:3150890-3151004 placement
+//@ chunk-5xgkngpb.js:3237509-3237623 placement
 function parseCellId(cellId) {
   let match = cellId.match(/^cell-(\d+)$/);
   if (match && match[1]) {
@@ -48,7 +48,7 @@ function parseCellId(cellId) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:3151004-3151363 placement
+//@ chunk-5xgkngpb.js:3237623-3237982 placement
 /**
  * 按 id 或序号找单元的源码（unparsable/cell-missing/found）。
  */
@@ -81,9 +81,9 @@ function findNotebookCellSource(content, cellId) {
     source: Array.isArray(cell.source) ? cell.source.join("") : cell.source,
   };
 }
-//@ chunk-e6aww6q8.js:3151363-3151375 placement
+//@ chunk-5xgkngpb.js:3237982-3237994 placement
 var MAX_NOTEBOOK_OUTPUT_CHARS = 1e4;
-//@ chunk-e6aww6q8.js:3151375-3152263 placement
+//@ chunk-5xgkngpb.js:3237994-3238882 placement
 function NOTEBOOK_TOO_LARGE_HINT() {
   return isBashAvailable()
     ? `Use ${BASH_TOOL_NAME} with jq to read specific portions:
@@ -97,24 +97,24 @@ function NOTEBOOK_TOO_LARGE_HINT() {
   (Get-Content <notebook_path> | ConvertFrom-Json).cells.Count # Count total cells
   Get-Content <notebook_path> | ConvertFrom-Json | Select-Object -ExpandProperty cells | Where-Object cell_type -eq code | Select-Object -ExpandProperty source`;
 }
-//@ chunk-e6aww6q8.js:3152263-3152366 placement
+//@ chunk-5xgkngpb.js:3238882-3238985 placement
 /**
  * notebook 超过可读大小的提示。
  */
 function notebookTooLargeMessage() {
   return `Notebook file exceeds the maximum size this tool can read (${formatFileSize(MAX_NOTEBOOK_BYTES)}). ${NOTEBOOK_TOO_LARGE_HINT()}`;
 }
-//@ chunk-e6aww6q8.js:3152366-3152521 placement
+//@ chunk-5xgkngpb.js:3238985-3239140 placement
 var INVALID_NOTEBOOK_MESSAGE =
   'Notebook file is not a valid Jupyter notebook (top-level "cells" must be an array of cell objects, each with a string or string-array "source").';
-//@ chunk-e6aww6q8.js:3152521-3152599 layout
+//@ chunk-5xgkngpb.js:3239140-3239218 layout
 class NotebookReadError extends Error {
   constructor(message) {
     super(message);
     this.name = "NotebookReadError";
   }
 }
-//@ chunk-e6aww6q8.js:3152599-3152736 fingerprint (2.1.88 match: isLargeOutputs, 1)
+//@ chunk-5xgkngpb.js:3239218-3239355 fingerprint (2.1.88 match: isLargeOutputs, 1)
 function isLargeOutputs(outputs) {
   let size = 0;
   for (let output of outputs) {
@@ -124,14 +124,14 @@ function isLargeOutputs(outputs) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:3152736-3152840 fingerprint (2.1.88 match: processOutputText, 1)
+//@ chunk-5xgkngpb.js:3239355-3239459 fingerprint (2.1.88 match: processOutputText, 1)
 function processOutputText(text) {
   if (!text) return "";
   let rawText = Array.isArray(text) ? text.join("") : text;
   let { truncatedContent } = formatOutput(rawText);
   return truncatedContent;
 }
-//@ chunk-e6aww6q8.js:3152840-3153051 fingerprint (2.1.88 match: extractImage, 0.737)
+//@ chunk-5xgkngpb.js:3239459-3239670 fingerprint (2.1.88 match: extractImage, 0.736)
 function extractImage(data) {
   for (let mediaType of ["image/png", "image/jpeg"]) {
     let base64Data = data[mediaType];
@@ -145,7 +145,7 @@ function extractImage(data) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:3153051-3153394 fingerprint (2.1.88 match: processOutput, 1)
+//@ chunk-5xgkngpb.js:3239670-3240013 fingerprint (2.1.88 match: processOutput, 1)
 function processOutput(output) {
   switch (output.output_type) {
     case "stream":
@@ -169,7 +169,7 @@ ${output.traceback.join(`
       };
   }
 }
-//@ chunk-e6aww6q8.js:3153394-3154075 fingerprint (2.1.88 match: processCell, 0.893)
+//@ chunk-5xgkngpb.js:3240013-3240694 fingerprint (2.1.88 match: processCell, 0.893)
 function processCell(cell, index, codeLanguage, includeLargeOutputs) {
   let cellId = cell.id ?? `cell-${index}`;
   let cellData = {
@@ -195,7 +195,7 @@ function processCell(cell, index, codeLanguage, includeLargeOutputs) {
   }
   return cellData;
 }
-//@ chunk-e6aww6q8.js:3154075-3154362 fingerprint (2.1.88 match: cellContentToToolResult, 1)
+//@ chunk-5xgkngpb.js:3240694-3240981 fingerprint (2.1.88 match: cellContentToToolResult, 1)
 function cellContentToToolResult(cell) {
   let metadata = [];
   if (cell.cellType !== "code") metadata.push(`<cell_type>${cell.cellType}</cell_type>`);
@@ -206,7 +206,7 @@ function cellContentToToolResult(cell) {
     type: "text",
   };
 }
-//@ chunk-e6aww6q8.js:3154362-3154557 fingerprint (2.1.88 match: cellOutputToToolResult, 1)
+//@ chunk-5xgkngpb.js:3240981-3241176 fingerprint (2.1.88 match: cellOutputToToolResult, 1)
 function cellOutputToToolResult(output) {
   let outputs = [];
   if (output.text)
@@ -226,7 +226,7 @@ ${output.text}`,
     });
   return outputs;
 }
-//@ chunk-e6aww6q8.js:3154557-3154631 fingerprint (2.1.88 match: getToolResultFromCell, 1)
+//@ chunk-5xgkngpb.js:3241176-3241250 fingerprint (2.1.88 match: getToolResultFromCell, 1)
 /**
  * 把 notebook 单元转成 tool_result 内容块（源码 + 各输出）。
  */
@@ -235,7 +235,7 @@ function getToolResultFromCell(cell) {
   let outputResults = cell.outputs?.flatMap(cellOutputToToolResult);
   return [contentResult, ...(outputResults ?? [])];
 }
-//@ chunk-e6aww6q8.js:3154631-3155317 fingerprint (2.1.88 match: readNotebook, 0.73)
+//@ chunk-5xgkngpb.js:3241250-3241936 fingerprint (2.1.88 match: readNotebook, 0.73)
 /**
  * 读取 .ipynb：拒绝非普通文件与超过上限的文件，解析 JSON，按 Read 的格式处理所有单元（可按 cellId 取单个）。
  */
@@ -264,7 +264,7 @@ async function readNotebook(notebookPath, cellId) {
   }
   return notebookToReadCells(notebook);
 }
-//@ chunk-e6aww6q8.js:3155317-3155422 affinity
+//@ chunk-5xgkngpb.js:3241936-3242041 affinity
 /**
  * 按 Read 的渲染方式处理 notebook 所有单元（NotebookEdit 用它判断模型上下文中的内容是否最新）。
  */
@@ -273,14 +273,14 @@ function notebookToReadCells(notebook) {
   return notebook.cells.map((cell, index) => processCell(cell, index, codeLanguage, false));
 }
 export {
-  MAX_NOTEBOOK_BYTES,
-  isValidNotebook,
-  parseCellId,
   getToolResultFromCell,
   readNotebook,
   NOTEBOOK_TOO_LARGE_HINT,
+  MAX_NOTEBOOK_BYTES,
   notebookTooLargeMessage,
+  isValidNotebook,
   INVALID_NOTEBOOK_MESSAGE,
+  parseCellId,
   notebookToReadCells,
   findNotebookCellSource,
 };

@@ -3,16 +3,21 @@
  *
  * 2.1.316 新增。云会话恢复时找回孤儿后台代理并提示中断任务。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-z4g2ta8k.js (9)
- * attribution: placement 9
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (4), chunk-1kk50rk6.js (10)
+ * attribution: placement 13, layout 1
  */
 import { getTaskOutputData } from "../../tools/TaskOutputTool/TaskOutputTool.js";
 import { SENDMESSAGE } from "../../tools/SendMessageTool/constants.js";
 import { escapeXml_2 as escapeXml } from "../../utils/confusables.js";
-import { mainAgentId } from "../../bootstrap/state.js";
+import { mainAgentId, getSessionCronTasks } from "../../bootstrap/state.js";
 import { formatTaskNotification } from "../../utils/xmlTags.js";
+import { isDrainableMainThreadCommand } from "../../utils/messageQueueManager.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
+import { findToolByName } from "../../Tool.js";
+import { logEvent } from "../../services/analytics/index.js";
+import { logForDebugging } from "../../utils/debug.js";
 import { rememberResumableAgents, rememberStoppedAgents } from "../../tools/AgentTool/agentLaunch.js";
 import { isTurnHandoffResumeEnabled } from "./turnHandoff.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
@@ -20,9 +25,15 @@ import { normalizeAgentIdOrNull } from "../../utils/agentId.js";
 import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { restoreAgentSidecarFromStream, readAgentMetadata } from "../../utils/sessionStorage.js";
 import { validateAgentMetadata, describeStorageError } from "../../utils/agentMetadata.js";
-import { logForDebugging } from "../../utils/debug.js";
+import { getRemoteFeatureGateState, needsGrowthBookRefresh } from "../../utils/permissions/yoloClassifier.js";
+import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
+import { runningBackgroundTasks } from "../../state/onChangeAppState.js";
+import { MAX_PENDING_ACTION_ARGS } from "../../utils/sessionState.js";
+import { TENGU_CCR_INHERITED_APPROVAL_KILLSWITCH } from "../print/elicitationRegistrar.js";
+import { hasActiveInProcessTeammates, hasNonLeadTeammate } from "../../utils/teammate.js";
+import { canResumeAgentsInBackground, isIterativeHavenGateOn } from "../print/agentResume.js";
 
-//@ chunk-z4g2ta8k.js:5081-6451 placement
+//@ chunk-1kk50rk6.js:5151-6521 placement
 function orphanAgentRestoreNotice(recorded, hasTool, alsoResumable, autoResumed) {
   let mapped = recorded.filter((task) => autoResumed?.has(task.task_id)).map((task) => task.task_id);
   let mapped_2 = recorded
@@ -43,7 +54,7 @@ function orphanAgentRestoreNotice(recorded, hasTool, alsoResumable, autoResumed)
     ? resumableText
     : `These stopped agents are being resumed automatically from their saved transcripts: ${mapped.join(", ")}. Each goes on where it stopped and reports back to you in a notification when it is done, so you need not launch it again.${hasTool(SENDMESSAGE) ? ` If one does not report back, send a message to its agent id with the ${SENDMESSAGE} tool to resume it.` : ""} ${resumableText || "Every other stopped task listed here is lost: do not send a message to its id."}`;
 }
-//@ chunk-z4g2ta8k.js:6451-6923 placement
+//@ chunk-1kk50rk6.js:6521-6993 placement
 /**
  * 从任务列表中挑出不在已有列表里的任务，按 task_id 去重并规范化字段（类型、描述、状态、输出文件）。
  */
@@ -70,7 +81,7 @@ function collectOrphanTasks(recorded, live) {
   }
   return Array.from(byId.values());
 }
-//@ chunk-z4g2ta8k.js:6923-7300 placement
+//@ chunk-1kk50rk6.js:6993-7370 placement
 /**
  * 把被中断的任务归类为 agent / monitor / shell：本地代理与工作流算 agent；监控类任务由代理拥有时算 agent，环境或观察者所有的忽略；纯 bash 只在允许时算 shell。
  */
@@ -90,7 +101,7 @@ function interruptedTaskKind(task, includeShells) {
       return;
   }
 }
-//@ chunk-z4g2ta8k.js:7300-9091 placement
+//@ chunk-1kk50rk6.js:7370-9202 placement
 function describeInterruptedTasks(
   tasks,
   {
@@ -98,6 +109,7 @@ function describeInterruptedTasks(
     hasQueuedMainThreadCommand,
     deferredResumePending,
     rescueSuppressed,
+    agentCardMark,
     enabled,
     includeShells,
     hasTool,
@@ -123,7 +135,7 @@ function describeInterruptedTasks(
     (recorded.length === 0 && lostTimers.length === 0 && filtered.length === 0) ||
     interruptionKind !== "none" ||
     (filtered.length === 0 && (hasQueuedMainThreadCommand || deferredResumePending)) ||
-    rescueSuppressed
+    (rescueSuppressed && agentCardMark === undefined)
   )
     return;
   let joined = recorded
@@ -148,7 +160,7 @@ function describeInterruptedTasks(
       priority: "later",
       agentId: mainAgentId(),
       isMeta: true,
-      startedBy: "restart",
+      startedBy: agentCardMark ?? "restart",
       ...(lostTimers.length > 0 && {
         wakesForLostTimers: true,
       }),
@@ -161,9 +173,34 @@ function describeInterruptedTasks(
     counts,
   };
 }
-//@ chunk-z4g2ta8k.js:9091-9101 placement
+//@ chunk-1kk50rk6.js:9202-9894 layout
+function enqueueOrphanRestoreWake({ orphans, messageQueue, tools, answerMarks, ...rest }, answeredToolUseId) {
+  let wakeCommand = describeInterruptedTasks(orphans, {
+    ...rest,
+    hasQueuedMainThreadCommand: messageQueue.peek(isDrainableMainThreadCommand) !== undefined,
+    agentCardMark: answeredToolUseId === undefined ? undefined : answerMarks?.markOf(answeredToolUseId),
+    enabled: getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_orphan_restore_wake", true),
+    includeShells: getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_orphan_restore_wake_shells", true),
+    hasTool: (toolName) => findToolByName(tools, toolName) !== undefined,
+  });
+  if (wakeCommand === undefined) return;
+  let { command, counts } = wakeCommand;
+  logEvent("tengu_ccr_orphan_restore_wake", {
+    orphan_count: orphans.length,
+    wake_agent_count: counts.agent,
+    wake_monitor_count: counts.monitor,
+    wake_shell_count: counts.shell,
+    wake_timer_count: rest.lostTimers.length,
+  });
+  logForDebugging(
+    "[orphanRestoreWake] Waking the session for background tasks or timers lost to the restart",
+  );
+  messageQueue.enqueuePendingNotification(command);
+  if (answeredToolUseId !== undefined) answerMarks?.queued(answeredToolUseId);
+}
+//@ chunk-1kk50rk6.js:9894-9904 placement
 var MAX_RESTORED_AGENTS_LISTED = 50;
-//@ chunk-z4g2ta8k.js:9101-10867 placement
+//@ chunk-1kk50rk6.js:9904-11670 placement
 async function restoreOrphanAgents({ recorded, stopped, toldOfAnyway, readAgentMetadataEvents, storageV5 }) {
   let resumable = new Set(stopped.filter(getTaskOutputData).map((task) => task.task_id));
   rememberResumableAgents(resumable);
@@ -258,14 +295,14 @@ async function restoreOrphanAgents({ recorded, stopped, toldOfAnyway, readAgentM
     };
   }
 }
-//@ chunk-z4g2ta8k.js:10867-10926 placement
+//@ chunk-1kk50rk6.js:11670-11729 placement
 /**
  * 判断子代理是否可被恢复：以默认参数启动且属于可恢复的孤儿代理。
  */
 function isRestorableDefaultLaunchedAgent(agent) {
   return agent?.launchedWithDefaults === true && isRestorableOrphanAgent(agent);
 }
-//@ chunk-z4g2ta8k.js:10926-11070 placement
+//@ chunk-1kk50rk6.js:11729-11873 placement
 function isRestorableOrphanAgent(launch) {
   return (
     launch !== undefined &&
@@ -276,7 +313,7 @@ function isRestorableOrphanAgent(launch) {
     launch.finished !== true
   );
 }
-//@ chunk-z4g2ta8k.js:11070-11186 placement
+//@ chunk-1kk50rk6.js:11873-11989 placement
 async function readAgentMetadataSafe(agentId, storageV5) {
   try {
     return await readAgentMetadata(agentId, storageV5);
@@ -287,10 +324,70 @@ async function readAgentMetadataSafe(agentId, storageV5) {
     return;
   }
 }
+//@ chunk-0yw3taqg.js:35313-35608 placement
+function shouldAcknowledgeAgentStart(task, agentIds, runningTasksById, store) {
+  return (
+    task.type === "local_agent" &&
+    task.pendingMessages.length === 0 &&
+    agentIds.includes(task.agentId) &&
+    store.peek((entry) => entry.agentId === task.agentId) === undefined &&
+    !Object.values(runningTasksById).some(
+      (entry) =>
+        entry.status === "running" &&
+        (entry.type === "local_bash" || entry.type === "monitor_mcp" || entry.type === "monitor_ws") &&
+        entry.agentId === task.agentId,
+    )
+  );
+}
+//@ chunk-0yw3taqg.js:49344-49374 placement
+var TENGU_PATIENT_BEACON = "tengu_patient_beacon";
+//@ chunk-0yw3taqg.js:49374-49423 placement
+function isAmbientRunning() {
+  return (
+    getRemoteFeatureGateState(TENGU_PATIENT_BEACON) === "on" &&
+    !needsGrowthBookRefresh() &&
+    isRemoteManagedEnvironment()
+  );
+}
+//@ chunk-0yw3taqg.js:49423-50065 placement
+/**
+ * 判断后台等待能否提前醒来：仅当开关开启、没有待答询问、任务都已结算且存在可恢复的孤儿代理时才成立。
+ */
+function shouldKeepTurnOpen({ state: options, runningTasks, sessionState, messageQueue, tools }) {
+  if (!isAmbientRunning()) return false;
+  let tasks = runningTasks.filter((task) => !(task.type === "monitor_ws" && task.ambient === true));
+  let pendingActions = sessionState.getPendingActionDetails?.() ?? [];
+  let pendingAgentIds = pendingActions.map((action) => action.agent_id);
+  let blocked = runningBackgroundTasks(options);
+  return (
+    tasks.length > 0 &&
+    pendingActions.length === tasks.length &&
+    pendingActions.length < MAX_PENDING_ACTION_ARGS &&
+    pendingActions.every((task) => sessionState.doesStoredAnswerStand(task)) &&
+    getRemoteFeatureGateState(TENGU_CCR_INHERITED_APPROVAL_KILLSWITCH) === "off" &&
+    sessionState.heldRequiresAction?.() === undefined &&
+    sessionState.getState() === "requires_action" &&
+    !hasActiveInProcessTeammates(options) &&
+    !hasNonLeadTeammate(options.teamContext) &&
+    messageQueue.peek() === undefined &&
+    getSessionCronTasks().length === 0 &&
+    tasks.every(
+      (task) =>
+        shouldAcknowledgeAgentStart(task, pendingAgentIds, options.tasks, messageQueue) &&
+        canResumeAgentsInBackground(tools(), options.toolPermissionContext, task.agentType) &&
+        blocked.some((action) => action.task_id === task.id && getTaskOutputData(action)),
+    ) &&
+    isIterativeHavenGateOn() &&
+    isTurnHandoffResumeEnabled() &&
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_orphan_restore_wake", true)
+  );
+}
 export {
   collectOrphanTasks,
   restoreOrphanAgents,
+  isAmbientRunning,
   orphanAgentRestoreNotice,
-  describeInterruptedTasks,
+  enqueueOrphanRestoreWake,
   isRestorableDefaultLaunchedAgent,
+  shouldKeepTurnOpen,
 };

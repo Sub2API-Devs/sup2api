@@ -3,18 +3,18 @@
  *
  * 2.1.316 新增：设备绑定状态的解析与合法值判断
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xfkf9vr6.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rvwc68ta.js (3)
  * attribution: placement 3
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { union, objectSchema, literal, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-xfkf9vr6.js:268-340 placement
+//@ chunk-rvwc68ta.js:268-340 placement
 var deviceBindingStateSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-xfkf9vr6.js:268", () => {
+deferInit("chunk-rvwc68ta.js:268", () => {
   deviceBindingStateSchema = DoctorLazy(() =>
     union([
       objectSchema({
@@ -28,7 +28,7 @@ deferInit("chunk-xfkf9vr6.js:268", () => {
     ]),
   );
 });
-//@ chunk-xfkf9vr6.js:340-641 placement
+//@ chunk-rvwc68ta.js:340-641 placement
 function deviceBindingState(toolHostStatus, deviceBindPosture) {
   if (toolHostStatus === undefined || toolHostStatus === null)
     return typeof deviceBindPosture === "object" && deviceBindPosture !== null ? "none" : "unstated";
@@ -44,8 +44,8 @@ function deviceBindingState(toolHostStatus, deviceBindPosture) {
       return "other_state";
   }
 }
-//@ chunk-xfkf9vr6.js:641-708 placement
+//@ chunk-rvwc68ta.js:641-708 placement
 function isKnownBindingState(toolHostLink) {
   return toolHostLink === "none" || toolHostLink === "bridge" || toolHostLink === "this_helper";
 }
-export { isKnownBindingState, deviceBindingState };
+export { deviceBindingState, isKnownBindingState };

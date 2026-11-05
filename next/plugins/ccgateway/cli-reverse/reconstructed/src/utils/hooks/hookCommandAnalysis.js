@@ -3,39 +3,40 @@
  *
  * 2.1.316 新增：分析钩子命令：解释器与脚本路径识别（shebang、/usr/bin/env、uv 项目）、脚本位置（检出、配置目录、插件）与可读性，用于 /hooks 显示与信任判断
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qmzcskz6.js (53)
- * attribution: placement 53
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-deax24jz.js (55)
+ * attribution: placement 53, affinity 2
  */
 import { posix } from "path";
+import { hostname } from "os";
 import { getPlatform } from "../platform.js";
-import { isLocalHost_2, normalizeCommandForPlatform } from "../git.js";
+import { firstLineOf } from "../stringUtils.js";
+import { getLocalInterfaceAddresses, normalizeCommandForPlatform } from "../git.js";
 import { foldName } from "../permissions/protectedDirNames.js";
 import { isOnSameWslMount } from "../wslMounts.js";
-import { firstLineOf } from "../stringUtils.js";
 import { isDosShortName } from "../windowsProfileFolders.js";
 import { isPathAbsent } from "../errors.js";
 import { computeContentHash } from "../commitAttribution.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-qmzcskz6.js:527-746 placement
+//@ chunk-deax24jz.js:527-746 placement
 var HIDDEN_PATH_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PRIVATE_DOTDIR_RE;
 var CLAUDE_TRANSIENT_DIRS;
 var regExp;
-deferInit("chunk-qmzcskz6.js:527", () => {
+deferInit("chunk-deax24jz.js:527", () => {
   HIDDEN_PATH_PATTERN = /(^|\/)\.[^/]*$/;
   PRIVATE_DOTDIR_RE = /(^|\/)\.(?!\.\/)(?!claude[^/]*\/|config\/)[^/]+\//i;
   CLAUDE_TRANSIENT_DIRS = ["shell-snapshots", "session-env", "projects", "file-history", "backups"];
   regExp = new RegExp(String.raw`(^|/)\.claude[^/]*/(?:${CLAUDE_TRANSIENT_DIRS.join("|")})/`, "i");
 });
-//@ chunk-qmzcskz6.js:746-839 placement
+//@ chunk-deax24jz.js:746-839 placement
 function isScriptFileName(name) {
   let sliced = name.slice(name.lastIndexOf("/") + 1);
   return SCRIPT_EXTENSION_RE.test(sliced) || (sliced !== "" && !sliced.includes("."));
 }
-//@ chunk-qmzcskz6.js:839-899 placement
+//@ chunk-deax24jz.js:839-899 placement
 function shellWord(text, quote) {
   return {
     text,
@@ -44,16 +45,16 @@ function shellWord(text, quote) {
     end: text.length,
   };
 }
-//@ chunk-qmzcskz6.js:899-955 placement
+//@ chunk-deax24jz.js:899-955 placement
 var COMMON_INTERPRETERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-qmzcskz6.js:899", () => {
+deferInit("chunk-deax24jz.js:899", () => {
   COMMON_INTERPRETERS = new Set(["python3", "python", "bash", "sh", "node"]);
 });
-//@ chunk-qmzcskz6.js:955-986 placement
+//@ chunk-deax24jz.js:955-986 placement
 function isCommonInterpreter(name) {
   return COMMON_INTERPRETERS.has(name);
 }
-//@ chunk-qmzcskz6.js:986-1676 placement
+//@ chunk-deax24jz.js:986-1676 placement
 /**
  * 匹配解释器名（sh/bash/zsh/python/node 等）的正则。
  */
@@ -70,7 +71,7 @@ var PLUGIN_ROOT_REFERENCE_RE = /\$\{?CLAUDE_PLUGIN_ROOT\b/;
 var PLUGIN_ROOT_PLACEHOLDER = "${CLAUDE_PLUGIN_ROOT}";
 var SHELL_META_OR_SPACE_RE = /[$~*?[\]()\{\}#!|&;<>`\\\p{Cc}\p{Cf}]|[^\S ]/u;
 var CONTROL_CHARS_RE = /[\p{Cc}\p{Cf}]/u;
-//@ chunk-qmzcskz6.js:1676-2279 placement
+//@ chunk-deax24jz.js:1676-2279 placement
 function resolveScriptPath(command) {
   let words = [];
   let index = 0;
@@ -126,11 +127,11 @@ function resolveScriptPath(command) {
   }
   return words;
 }
-//@ chunk-qmzcskz6.js:2279-2341 placement
+//@ chunk-deax24jz.js:2279-2341 placement
 function homePrefixPatternFor(word) {
   return word.quote === null ? ASSIGNMENT_PREFIX_RE : word.quote === '"' ? QUOTED_HOME_PREFIX_RE : null;
 }
-//@ chunk-qmzcskz6.js:2341-2686 placement
+//@ chunk-deax24jz.js:2341-2686 placement
 function classifyScriptRoot(word) {
   let pattern = homePrefixPatternFor(word);
   if (pattern !== null && pattern.test(word.text))
@@ -157,26 +158,26 @@ function classifyScriptRoot(word) {
     base: null,
   };
 }
-//@ chunk-qmzcskz6.js:2686-2706 placement
+//@ chunk-deax24jz.js:2686-2706 placement
 var GLOB_META_RE = /[\s*?[\]]/u;
-//@ chunk-qmzcskz6.js:2706-2783 placement
+//@ chunk-deax24jz.js:2706-2783 placement
 function isPlainRelativeLiteral(path, rest) {
   return path.quote !== null || path.text.startsWith("~/") || !GLOB_META_RE.test(rest);
 }
-//@ chunk-qmzcskz6.js:2783-2925 placement
+//@ chunk-deax24jz.js:2783-2925 placement
 var SCRIPT_EXTENSION_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SYSTEM_BIN_DIRS;
 var DOT_DOT_SEGMENT_RE;
-deferInit("chunk-qmzcskz6.js:2783", () => {
+deferInit("chunk-deax24jz.js:2783", () => {
   SCRIPT_EXTENSION_RE = /\.(?:py|sh|bash|zsh|js|mjs|cjs|ts|rb|pl)$/iu;
   SYSTEM_BIN_DIRS = new Set(["/usr/bin", "/bin", "/usr/local/bin", "/opt/homebrew/bin"]);
   DOT_DOT_SEGMENT_RE = /(^|\/)\.\.(\/|$)/;
 });
-//@ chunk-qmzcskz6.js:2925-2984 placement
+//@ chunk-deax24jz.js:2925-2984 placement
 function hasDotDotSegment(text) {
   return DOT_DOT_SEGMENT_RE.test(text.replace(/^(?:\.\.?\/)+/, ""));
 }
-//@ chunk-qmzcskz6.js:2984-3266 placement
+//@ chunk-deax24jz.js:2984-3266 placement
 function looksLikeScriptPath(word) {
   if (word.quote === null && INTERPRETER_NAME_PATTERN_2.test(word.text)) return false;
   let { rest, hadPrefix } = classifyScriptRoot(word);
@@ -197,12 +198,12 @@ function looksLikeScriptPath(word) {
     (rest.includes("/") && SCRIPT_EXTENSION_RE.test(rest))
   );
 }
-//@ chunk-qmzcskz6.js:3266-3337 placement
+//@ chunk-deax24jz.js:3266-3337 placement
 function isScriptishArgument(word) {
   let { rest } = classifyScriptRoot(word);
   return looksLikeScriptPath(word) || rest.includes("/") || SCRIPT_EXTENSION_RE.test(rest);
 }
-//@ chunk-qmzcskz6.js:3337-3599 placement
+//@ chunk-deax24jz.js:3337-3599 placement
 function describeOpaqueCommand(
   interpreter,
   word,
@@ -228,7 +229,7 @@ function describeOpaqueCommand(
     site,
   };
 }
-//@ chunk-qmzcskz6.js:3599-3744 placement
+//@ chunk-deax24jz.js:3599-3744 placement
 function rootDirForBase(base, options) {
   switch (base) {
     case "home":
@@ -241,7 +242,7 @@ function rootDirForBase(base, options) {
       return "";
   }
 }
-//@ chunk-qmzcskz6.js:3744-4427 placement
+//@ chunk-deax24jz.js:3744-4427 placement
 /**
  * 解析命令的解释器与脚本参数（uv run、不支持的解释器、程序有歧义）。
  */
@@ -291,7 +292,7 @@ function parseInterpreterInvocation(scriptPath) {
     refusal: any ? "unsupported_interpreter" : null,
   };
 }
-//@ chunk-qmzcskz6.js:4427-6950 placement
+//@ chunk-deax24jz.js:4427-6950 placement
 /**
  * 分析钩子命令得到解释器与脚本：shell 语法则为 opaque，插件命令展开 ${CLAUDE_PLUGIN_ROOT}（约 2.5 KB）。
  */
@@ -451,11 +452,11 @@ function analyzeHookCommand(hook, options) {
     };
   return describeOpaqueCommand(interpreter, path, options);
 }
-//@ chunk-qmzcskz6.js:6950-6993 placement
+//@ chunk-deax24jz.js:6950-6993 placement
 function substitutePluginRoot(text, pluginRoot) {
   return text.split(PLUGIN_ROOT_PLACEHOLDER).join(pluginRoot);
 }
-//@ chunk-qmzcskz6.js:6993-7204 placement
+//@ chunk-deax24jz.js:6993-7204 placement
 /**
  * POSIX 分隔符常量与 Windows 路径形态正则（盘符、UNC、设备前缀、命名空间）。
  */
@@ -465,30 +466,30 @@ var WIN32_UNC_HOST_RE = /^[\\/]{2}[^\\/]+[\\/]+[^\\/]+/;
 var WIN32_DEVICE_PREFIX_RE = /^(?:[\\/]{2,}[?.][\\/]+|\\\?\?\\)(?=[A-Za-z]:)/;
 var WIN32_DEVICE_UNC_RE = /^(?:[\\/]{2,}[?.][\\/]+|\\\?\?\\)UNC[\\/]+/i;
 var WIN32_DEVICE_NAMESPACE_RE = /^(?:[\\/]{2}[?.]|[\\/]\?\?)(?:[\\/]|$)/;
-//@ chunk-qmzcskz6.js:7204-7261 placement
+//@ chunk-deax24jz.js:7204-7261 placement
 /**
  * 按平台判断路径 n 是否位于 e 之下。
  */
 function isPathUnderForPlatform(path, root) {
   return getPlatform() === "windows" ? isWindowsPathUnder(path, root) : isPosixPathUnder(path, root);
 }
-//@ chunk-qmzcskz6.js:7261-7377 placement
+//@ chunk-deax24jz.js:7261-7377 placement
 function isPosixPathUnder(path, root) {
   let prefix = root.length > 1 && root.endsWith("/") ? root.slice(0, -1) : root;
   return path === prefix || path.startsWith(prefix === "/" ? "/" : `${prefix}/`);
 }
-//@ chunk-qmzcskz6.js:7377-7491 placement
+//@ chunk-deax24jz.js:7377-7491 placement
 function isWindowsPathUnder(path, root) {
   let replaced = toWindowsBackslashPath(root).replace(/\\+$/, "");
   if (replaced === "") return true;
   let windowsBackslashPath = toWindowsBackslashPath(path);
   return windowsBackslashPath === replaced || windowsBackslashPath.startsWith(`${replaced}\\`);
 }
-//@ chunk-qmzcskz6.js:7491-7578 placement
+//@ chunk-deax24jz.js:7491-7578 placement
 function toWindowsBackslashPath(path) {
   return path.replace(/\//g, "\\").replace(/^[a-z](?=:)/, (drive) => drive.toUpperCase());
 }
-//@ chunk-qmzcskz6.js:7578-7653 placement
+//@ chunk-deax24jz.js:7578-7653 placement
 /**
  * 去掉 Win32 设备前缀（\\?\、\\?\UNC\ 按需转换）。
  */
@@ -497,17 +498,42 @@ function stripWin32DevicePrefix(path) {
     ? `\\\\${path.replace(WIN32_DEVICE_UNC_RE, "")}`
     : path.replace(WIN32_DEVICE_PREFIX_RE, "");
 }
-//@ chunk-qmzcskz6.js:7653-7762 placement
+//@ chunk-deax24jz.js:7653-7762 placement
 function uncAdminShareToDrive(path) {
   let stripped = stripWin32DevicePrefix(path);
   let match = WIN32_ADMIN_SHARE_RE.exec(stripped);
-  return match !== null && isLocalHost_2(match[1], false)
+  return match !== null && isLocalHost(match[1], false)
     ? `${match[2]}:\\${stripped.slice(match[0].length)}`
     : stripped;
 }
-//@ chunk-qmzcskz6.js:7762-7821 placement
+//@ chunk-deax24jz.js:7762-7821 placement
 var WIN32_ADMIN_SHARE_RE = /^[\\/]{2,}([^\\/]+)[\\/]+([A-Za-z])\$(?:[\\/]+|$)/;
-//@ chunk-qmzcskz6.js:8678-9310 placement (2.1.88 match: extractBaseCommand, 0.679)
+//@ chunk-deax24jz.js:7821-8135 affinity (2.1.88 match: isLocalHost, 1)
+/**
+ * 判断主机名是否指向本机（localhost、127.x、本机 hostname 及其短名、本机网卡 IP/ipv6-literal.net 形式）。
+ */
+function isLocalHost(hostnameCandidate, allowShortNames = true) {
+  let replaced = hostnameCandidate.toLowerCase().replace(/\.$/, "");
+  let isWindows = getPlatform() === "windows";
+  let fold = isWindows && allowShortNames ? foldWindowsPathComponent : (value) => value.toLowerCase();
+  let localHost = fold(hostname());
+  let localShortName = firstLineOf(localHost, ".");
+  return (
+    replaced === "localhost" ||
+    /^127(?:\.\d{1,3}){3}$/.test(replaced) ||
+    replaced === localHost ||
+    (isWindows &&
+      (replaced === localShortName ||
+        (allowShortNames &&
+          (replaced === localShortName.slice(0, SHORT_WINDOWS_PATH_CHARS) ||
+            replaced === fold(firstLineOf(hostname(), ".").slice(0, SHORT_WINDOWS_PATH_CHARS)))))) ||
+    replaced.startsWith(`${localShortName}.`) ||
+    (IP_LITERAL_PATTERN.test(replaced) && (getLocalInterfaceAddresses()?.has(replaced) ?? allowShortNames))
+  );
+}
+//@ chunk-deax24jz.js:8135-8191 affinity
+var IP_LITERAL_PATTERN = /^\d{1,3}(?:\.\d{1,3}){3}$|\.ipv6-literal\.net$/;
+//@ chunk-deax24jz.js:8678-9310 placement (2.1.88 match: extractBaseCommand, 0.678)
 /**
  * （旧版名配错）Windows 路径规范化：处理盘符、UNC 前缀、.. 折叠、去掉尾随点空格，用于路径比较。
  */
@@ -535,24 +561,24 @@ function normalizeWindowsPathForCompare(path) {
     (/[\\/]$/.test(path_2) && filtered.length > 0 ? "\\" : "")
   );
 }
-//@ chunk-qmzcskz6.js:9310-9456 placement
+//@ chunk-deax24jz.js:9310-9456 placement
 function foldWindowsPathComponent(component) {
   if (/^[?.]$/.test(component)) return component;
   let lower = component.toLowerCase().toUpperCase().toLowerCase();
   return component.includes(":") ? lower.replace(/[. ]+$/, "") : foldName(lower);
 }
-//@ chunk-qmzcskz6.js:9456-9555 placement (2.1.88 match: setCwdState, 0.867)
+//@ chunk-deax24jz.js:9456-9555 placement (2.1.88 match: setCwdState, 0.867)
 function caseFoldKey(cwd) {
   return cwd.normalize("NFC").toLowerCase().toUpperCase().toLowerCase().normalize("NFC");
 }
-//@ chunk-qmzcskz6.js:9555-9597 placement
+//@ chunk-deax24jz.js:9555-9597 placement
 /**
  * 规范化后判断两条命令路径是否相同。
  */
 function isSameCommandPath(a, b) {
   return isReachableOrSamePath(normalizeCommandForPlatform(a), normalizeCommandForPlatform(b));
 }
-//@ chunk-qmzcskz6.js:9597-9712 placement
+//@ chunk-deax24jz.js:9597-9712 placement
 /**
  * 判断两个路径是否相同或互相可达（含 Windows 短名、UNC、WSL 挂载）。
  */
@@ -564,18 +590,18 @@ function isReachableOrSamePath(a, b) {
     isOnSameWslMount(a, b)
   );
 }
-//@ chunk-qmzcskz6.js:9712-9760 placement
+//@ chunk-deax24jz.js:9712-9760 placement
 function isUncOrShortNamePair(a, b) {
   return [a, b].some(isSpecialUncPath) || differsByUncPrefix(a, b);
 }
-//@ chunk-qmzcskz6.js:9760-9807 placement
+//@ chunk-deax24jz.js:9760-9807 placement
 /**
  * 判断两个路径是否只在 UNC 前缀上不同。
  */
 function differsByUncPrefix(a, b) {
   return UNC_PREFIX_RE.test(a) !== UNC_PREFIX_RE.test(b);
 }
-//@ chunk-qmzcskz6.js:9807-9935 placement
+//@ chunk-deax24jz.js:9807-9935 placement
 /**
  * 判断两个 UNC 路径主机相同、共享名一个是短名（8.3）形式。
  */
@@ -590,10 +616,10 @@ function isSameUncHostShortNamePair(a, b) {
     (SHARE_ALIAS_SUFFIX_RE.test(match[2]) || SHARE_ALIAS_SUFFIX_RE.test(match_2[2]))
   );
 }
-//@ chunk-qmzcskz6.js:9935-9981 placement
+//@ chunk-deax24jz.js:9935-9981 placement
 var UNC_HOST_AND_SHARE_RE = /^\\\\([^\\]+)\\([^\\]+)/;
 var SHARE_ALIAS_SUFFIX_RE = /^[a-z]\$$/;
-//@ chunk-qmzcskz6.js:9981-10123 placement
+//@ chunk-deax24jz.js:9981-10123 placement
 /**
  * 把 UNC 路径的主机名改写为参考路径的主机名。
  */
@@ -602,7 +628,7 @@ function rewriteUncHostFromReference(path, reference) {
   let host = /^\\\\([^\\]+)(?=\\|$)/.exec(reference)?.[1];
   return host === undefined ? path : path.replace(/^\\\\[^\\]+/, () => `\\\\${host}`);
 }
-//@ chunk-qmzcskz6.js:10123-10337 placement
+//@ chunk-deax24jz.js:10123-10337 placement
 function isSameUncHost(a, b) {
   let hostA = firstLineOf(firstLineOf(/^\\\\([^\\]+)(?=\\)/.exec(a)?.[1] ?? "", "@"), ".");
   let hostB = firstLineOf(firstLineOf(/^\\\\([^\\]+)(?=\\|$)/.exec(b)?.[1] ?? "", "@"), ".");
@@ -614,28 +640,28 @@ function isSameUncHost(a, b) {
       (isShortWindowsPath(hostB) && hostA.startsWith(hostB)))
   );
 }
-//@ chunk-qmzcskz6.js:10337-10346 placement
+//@ chunk-deax24jz.js:10337-10346 placement
 /**
  * Windows 短路径的字符阈值。
  */
 var SHORT_WINDOWS_PATH_CHARS = 15;
-//@ chunk-qmzcskz6.js:10346-10444 placement
+//@ chunk-deax24jz.js:10346-10444 placement
 function isShortWindowsPath(name) {
   let ssCount = getPlatform() === "windows" ? (name.match(/ss/g)?.length ?? 0) : 0;
   return name.length >= SHORT_WINDOWS_PATH_CHARS && name.length - ssCount <= SHORT_WINDOWS_PATH_CHARS;
 }
-//@ chunk-qmzcskz6.js:10444-10482 placement
+//@ chunk-deax24jz.js:10444-10482 placement
 function isSpecialUncPath(path) {
   return classifyUncPath(path) !== undefined;
 }
-//@ chunk-qmzcskz6.js:10482-10928 placement
+//@ chunk-deax24jz.js:10482-10928 placement
 /**
  * 分类 Windows UNC/特殊路径（本机、WSL、短名、设备命名空间、WebDAV 等）。
  */
 function classifyUncPath(path) {
   let host = /^\\\\([^\\]+)\\/.exec(path)?.[1];
   let share = host === undefined ? undefined : WSL_UNC_SHARE_RE.exec(host)?.[1];
-  if (host !== undefined && isLocalHost_2(share ?? host)) return "own_host";
+  if (host !== undefined && isLocalHost(share ?? host)) return "own_host";
   if (host !== undefined && WSL_UNC_HOSTS.has(host)) return "wsl_host";
   if (path.split("\\").some(isShortNameComponent)) return "short_name";
   if (WIN32_DEVICE_NAMESPACE_RE.test(path)) return "device_namespace";
@@ -646,28 +672,28 @@ function classifyUncPath(path) {
   if (NUMERIC_HOST_RE.test(host)) return "numeric_host";
   return;
 }
-//@ chunk-qmzcskz6.js:10928-11011 placement
+//@ chunk-deax24jz.js:10928-11011 placement
 var WSL_UNC_SHARE_RE = /^((?=[^@]*[a-z])[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?:@ssl(?:@\d+)?|@\d+)$/i;
-//@ chunk-qmzcskz6.js:11011-11113 placement
+//@ chunk-deax24jz.js:11011-11113 placement
 function isShortNameComponent(component) {
   return /^[\x20-\x7e]*$/.test(component)
     ? isDosShortName(component.replaceAll("ss", "s"))
     : /~\d+(?:\.[^.]*)?$/.test(component);
 }
-//@ chunk-qmzcskz6.js:11113-11303 placement
+//@ chunk-deax24jz.js:11113-11303 placement
 var UNC_PREFIX_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DRIVE_RELATIVE_RE;
 var WSL_UNC_HOSTS;
 var ODD_UNC_HOST_RE;
 var NUMERIC_HOST_RE;
-deferInit("chunk-qmzcskz6.js:11113", () => {
+deferInit("chunk-deax24jz.js:11113", () => {
   UNC_PREFIX_RE = /^\\[^\\]/;
   DRIVE_RELATIVE_RE = /^[a-z]:(?![\\/]|$)/;
   WSL_UNC_HOSTS = new Set(["wsl.localhost", "wsl$"]);
   ODD_UNC_HOST_RE = /[:@]|[^\x21-\x7e]|^\.+$/;
   NUMERIC_HOST_RE = /^(?:(?:0x[0-9a-f]*|\d+)(?:\.(?:0x[0-9a-f]*|\d+)){0,3}|.*\.ipv6-literal\.net)$/i;
 });
-//@ chunk-qmzcskz6.js:11303-11395 placement
+//@ chunk-deax24jz.js:11303-11395 placement
 function isInspectableScriptPath(path) {
   return (
     posix.isAbsolute(path) &&
@@ -678,7 +704,7 @@ function isInspectableScriptPath(path) {
     isScriptFileName(path)
   );
 }
-//@ chunk-qmzcskz6.js:11395-11928 placement
+//@ chunk-deax24jz.js:11395-11928 placement
 async function classifyScriptLocation(path, state, deps) {
   let realPath;
   try {
@@ -718,9 +744,9 @@ async function classifyScriptLocation(path, state, deps) {
     realPath,
   };
 }
-//@ chunk-qmzcskz6.js:11928-11942 placement
+//@ chunk-deax24jz.js:11928-11942 placement
 var MAX_SCRIPT_PROBE_BYTES = 262144;
-//@ chunk-qmzcskz6.js:11942-12469 placement
+//@ chunk-deax24jz.js:11942-12469 placement
 async function checkScriptFile(path, fs, maxBytes = MAX_SCRIPT_PROBE_BYTES) {
   let handle;
   try {
@@ -770,13 +796,13 @@ async function checkScriptFile(path, fs, maxBytes = MAX_SCRIPT_PROBE_BYTES) {
     await handle.close().catch(() => {});
   }
 }
-//@ chunk-qmzcskz6.js:12469-13820 placement
+//@ chunk-deax24jz.js:12469-13820 placement
 /**
  * /usr/bin/env 与各 shell 的单字母选项表，用于解析 shebang 参数。
  */
 var ENV_PROGRAM_PATHS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SHEBANG_INTERPRETER_RULES;
-deferInit("chunk-qmzcskz6.js:12469", () => {
+deferInit("chunk-deax24jz.js:12469", () => {
   ENV_PROGRAM_PATHS = new Set(["/usr/bin/env", "/bin/env"]);
   SHEBANG_INTERPRETER_RULES = [
     {
@@ -873,7 +899,7 @@ deferInit("chunk-qmzcskz6.js:12469", () => {
     },
   ];
 });
-//@ chunk-qmzcskz6.js:13820-14660 placement
+//@ chunk-deax24jz.js:13820-14660 placement
 function parseShebangArgs(args, name, { childStartsInReach = true } = {}) {
   let found = SHEBANG_INTERPRETER_RULES.find((rule) => rule.names.test(name.toLowerCase()));
   if (found === undefined) return !childStartsInReach && args.length === 0;
@@ -911,7 +937,7 @@ function parseShebangArgs(args, name, { childStartsInReach = true } = {}) {
       isFlag(arg) || takesValue(arg) || (argIndex === filtered.length - 1 && isTerminalWord(arg)),
   );
 }
-//@ chunk-qmzcskz6.js:14660-15660 placement
+//@ chunk-deax24jz.js:14660-15660 placement
 /**
  * 读取脚本前 512 字节的 shebang 并解析解释器。
  */
@@ -973,28 +999,26 @@ function readShebang(bytes) {
     : "unjudgeable";
 }
 export {
-  foldWindowsPathComponent,
-  SHORT_WINDOWS_PATH_CHARS,
-  stripWin32DevicePrefix,
-  WIN32_DEVICE_NAMESPACE_RE,
-  POSIX_SEP,
-  WIN32_UNC_HOST_RE,
-  caseFoldKey,
   normalizeWindowsPathForCompare,
-  analyzeHookCommand,
-  POSIX_SEP_2,
   classifyUncPath,
   uncAdminShareToDrive,
   rewriteUncHostFromReference,
   isPathUnderForPlatform,
   differsByUncPrefix,
   isSameUncHostShortNamePair,
-  parseShebangArgs,
+  POSIX_SEP_2,
+  isReachableOrSamePath,
+  analyzeHookCommand,
+  classifyScriptLocation,
   checkScriptFile,
   isSameCommandPath,
-  isPosixPathUnder,
-  isReachableOrSamePath,
-  classifyScriptLocation,
   readShebang,
+  isPosixPathUnder,
   INTERPRETER_NAME_PATTERN,
+  parseShebangArgs,
+  stripWin32DevicePrefix,
+  WIN32_DEVICE_NAMESPACE_RE,
+  POSIX_SEP,
+  WIN32_UNC_HOST_RE,
+  caseFoldKey,
 };

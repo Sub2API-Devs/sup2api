@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设置提案 schema
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dz3q485w.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qfmb95nn.js (10)
  * attribution: placement 10
  */
 import {
@@ -19,7 +19,7 @@ import { DoctorLazy } from "../../cli/handlers/util.js";
 import { plural } from "../../utils/stringUtils.js";
 import { isNetworkPath } from "../../utils/fsSafety/networkPathCheck.js";
 
-//@ chunk-dz3q485w.js:36455-37532 placement
+//@ chunk-qfmb95nn.js:762-1822 placement
 /**
  * 设置提案的大小上限常量（摘要、说明、例行任务与线程各字段的字节数、条目数、证据计数、整体字节），以及可选颜色、颜色值与图标列表。
  */
@@ -117,7 +117,7 @@ var PROJECT_ICONS = [
 ];
 var PROJECT_ICONS_HINT =
   "Projects, Folder, Code, Database, HandHeart, Beaker, Wrench, Activity, Chart, Team, Users, Book, Box, Note, File, Lightbulb, Palette, Star, Flag, Home, Sun, Clock, Calendar, Scroll";
-//@ chunk-dz3q485w.js:37532-37658 placement
+//@ chunk-qfmb95nn.js:1822-1948 placement
 function boundedText(maxBytes, minLength = 1) {
   return stringSchema()
     .min(minLength)
@@ -126,7 +126,7 @@ function boundedText(maxBytes, minLength = 1) {
       message: `must be at most ${maxBytes} bytes`,
     });
 }
-//@ chunk-dz3q485w.js:37658-38370 placement
+//@ chunk-qfmb95nn.js:1948-2638 placement
 /**
  * 设置提案的 zod schema：例行任务、建议线程、整体提案（名称/图标/颜色/摘要/说明/证据），以及线程负责人与产出类型的显示文案。
  */
@@ -173,7 +173,7 @@ var THREAD_PRODUCES_LABELS = {
   doc: "Doc",
   decision: "Decision",
 };
-//@ chunk-dz3q485w.js:38370-40009 placement
+//@ chunk-qfmb95nn.js:2638-4278 placement
 /**
  * 把设置提案格式化为给用户确认的纯文本：名称/图标/颜色、摘要、建议线程（负责人与产出）、例行任务（cron UTC）、项目说明、各线程与例行任务的起始指令，以及证据计数。
  */
@@ -247,7 +247,7 @@ function formatProposalForReview(proposal, opts = {}) {
   return lines.join(`
 `);
 }
-//@ chunk-dz3q485w.js:40009-40301 placement
+//@ chunk-qfmb95nn.js:4278-4571 placement
 function proposalContentsSummary(proposal) {
   let parts = [];
   let threadCount = proposal.sessions?.length ?? 0;
@@ -258,7 +258,7 @@ function proposalContentsSummary(proposal) {
   if (parts.length === 0) parts.push("summary only");
   return parts.join(", ");
 }
-//@ chunk-dz3q485w.js:40301-41182 placement
+//@ chunk-qfmb95nn.js:4571-5450 placement
 /**
  * 把设置提案渲染为 Markdown 简报：标题、摘要、说明（无项目名时注明只是提议）、待开启线程与例行任务，指令以引用块形式列出。
  */
@@ -324,18 +324,18 @@ function proposalToMarkdown(proposal, projectName) {
 `
   );
 }
-//@ chunk-dz3q485w.js:41182-41405 placement
+//@ chunk-qfmb95nn.js:5450-5670 placement
 var BRIEF_HEADING = "# Project setup brief";
 var PROPOSED_INSTRUCTIONS_HEADING = "## Proposed instructions";
 var PROPOSAL_ONLY_NOTE =
   "A proposal only. Saving this brief set no instructions on the project: the user applies them from the project\u2019s setup card, where the card offers them.";
-//@ chunk-dz3q485w.js:41405-41507 placement
+//@ chunk-qfmb95nn.js:5670-5771 placement
 function normalizeInlineText(text) {
   return isNetworkPath(text.normalize("NFKC").replace(/[\s\u2800]+/gu, " "))
     .replace(/\s+/g, " ")
     .trim();
 }
-//@ chunk-dz3q485w.js:41507-41672 placement
+//@ chunk-qfmb95nn.js:5771-5935 placement
 function normalizeMultilineText(text) {
   return text
     .replace(
@@ -356,7 +356,7 @@ function normalizeMultilineText(text) {
     .trim()
     .replace(/\uFF20/g, "@");
 }
-//@ chunk-dz3q485w.js:41672-42510 placement
+//@ chunk-qfmb95nn.js:5935-6762 placement
 /**
  * 规范化设置提案：单行字段压缩空白，多行字段统一换行并去除行尾空白，cron 表达式只保留合法字符，空字段去掉。
  */
@@ -402,15 +402,15 @@ function normalizeProposal(proposal) {
 export {
   setupProposalSchema,
   normalizeProposal,
-  THREAD_WHO_LABELS,
-  THREAD_PRODUCES_LABELS,
-  PROJECT_COLOR_HEX,
+  proposalToMarkdown,
+  PROJECT_ICONS_HINT,
   proposalContentsSummary,
   formatProposalForReview,
   MAX_SESSIONS_COUNTED,
   MAX_WINDOW_DAYS,
   MAX_SUMMARY_BYTES,
-  proposalToMarkdown,
   MAX_PROPOSAL_BYTES,
-  PROJECT_ICONS_HINT,
+  THREAD_WHO_LABELS,
+  THREAD_PRODUCES_LABELS,
+  PROJECT_COLOR_HEX,
 };

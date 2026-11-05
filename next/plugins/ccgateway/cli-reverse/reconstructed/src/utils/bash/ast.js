@@ -3,10 +3,10 @@
  *
  * Bash 命令安全分析：把解析树遍历成 SimpleCommand 列表（argv/envVars/redirects），跟踪变量值，遇到无法静态确定的 shell 特性返回 too-complex，并做语义检查（checkSemantics）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/bash/ast.ts
- * pieces: chunk-38axkkfw.js (1), chunk-e6aww6q8.js (6), chunk-jxcqr1hv.js (1), chunk-r01896cg.js (139)
- * attribution: fingerprint 21, placement 15, facade-majority 35, layout 63, file-local 3, callgraph-fingerprint 1, sole-consumer 8, callgraph-witnessed 1
+ * pieces: chunk-5xgkngpb.js (6), chunk-9jzjcqxe.js (1), chunk-nzz6y5xm.js (148)
+ * attribution: fingerprint 20, placement 15, layout 71, facade-majority 36, file-local 3, callgraph-fingerprint 1, sole-consumer 8, callgraph-witnessed 1
  */
 import { AsyncLocalStorage } from "async_hooks";
 import { isDeepStrictEqual } from "util";
@@ -20,6 +20,7 @@ import {
 } from "./parser.js";
 import {
   isSnappyTowerEnabled,
+  isSturdyLanternDefault,
   isVastPuddleEnabled,
   isBashReadingMode,
   isNestedRippleEnabled,
@@ -34,21 +35,17 @@ import { hasZshMultibyteName, SHELL_KEYWORDS, getParserModule } from "./bashPars
 import { getOwn } from "../objectSafety.js";
 import { isXargsToSafeFilter } from "../../tools/BashTool/readOnlyValidation.js";
 import { stripCommandBuiltinPrefixes } from "../../tools/BashTool/bashSecurity.js";
-import {
-  unattendedServingConsentView,
-  unattendedServingConsentMayHoldYes,
-} from "../../services/remoteTools/unattendedConsentStore.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-r01896cg.js:3046-3060 placement
+//@ chunk-nzz6y5xm.js:3050-3064 placement
 /**
  * 记录是否发生拒绝的 AsyncLocalStorage。
  */
 var refusalTrackingStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r01896cg.js:3046", () => {
+deferInit("chunk-nzz6y5xm.js:3050", () => {
   refusalTrackingStorage = new AsyncLocalStorage();
 });
-//@ chunk-r01896cg.js:3060-3165 placement
+//@ chunk-nzz6y5xm.js:3064-3169 placement
 /**
  * 在拒绝跟踪上下文中运行函数，返回结果与是否发生拒绝。
  */
@@ -62,7 +59,7 @@ async function runWithRefusalTracking(accepted, fn) {
     refused: tracker.refused,
   };
 }
-//@ chunk-r01896cg.js:3165-3255 placement
+//@ chunk-nzz6y5xm.js:3169-3259 placement
 /**
  * 标记本次分析发生拒绝，并返回是否为首次。
  */
@@ -72,7 +69,150 @@ function noteRefusal() {
   tracker.refused = true;
   return !tracker.accepted;
 }
-//@ chunk-r01896cg.js:3255-3655 facade-majority (2.1.88 match: VAR_PLACEHOLDER, 0.159)
+//@ chunk-nzz6y5xm.js:3259-3361 layout
+function substitutionIsRisky(node, buffer) {
+  let line = renderNodeText(node, buffer, "line");
+  let at = line.search(SUBST_START_RE);
+  return (at !== -1 && RISKY_SYNTAX_RE.test(line.slice(at + 2))) || walkExpansionRisk(node, buffer, false);
+}
+//@ chunk-nzz6y5xm.js:3361-3536 layout
+var SUBST_MARK = "\x03";
+var HEREDOC_MARK = "\x02";
+var SUBST_START_RE = /[$<>]\((?!\(?\x03)/;
+var RISKY_SYNTAX_RE =
+  /(?:^|[ \t\n;&|()<>])(?:#|(?:case|esac)(?=$|[ \t\n;&|()<>]))|(?:^|[^<])(?:<<(?![<\x02])|<<<+[<\x02])|\$(?=$|[ \t\n;&|)<>])/;
+//@ chunk-nzz6y5xm.js:3536-4029 layout
+function walkExpansionRisk(node, buffer, risky) {
+  let firstChildType = node.children[0]?.type;
+  if (
+    node.type === "process_substitution" ||
+    (node.type === "command_substitution" && firstChildType === "$(")
+  ) {
+    let substitutionText = renderNodeText(node, buffer, "substitution");
+    if (
+      risky ||
+      RISKY_SYNTAX_RE.test(substitutionText.slice(2, -1)) ||
+      !isSingleBalancedGroup(substitutionText.slice(1))
+    )
+      return true;
+  } else if (
+    firstChildType === "$((" &&
+    !isSingleBalancedGroup(renderNodeText(node, buffer, "substitution").slice(1))
+  )
+    return true;
+  let childrenRisky =
+    risky ||
+    node.type === "arithmetic_expansion" ||
+    node.type === "c_style_for_statement" ||
+    firstChildType === "((" ||
+    (node.type === "string" &&
+      node.children.some(
+        (child, sibling) => child.type === "$" && node.children[sibling + 1]?.text.startsWith("["),
+      ));
+  return node.children.some((child) => walkExpansionRisk(child, buffer, childrenRisky));
+}
+//@ chunk-nzz6y5xm.js:4029-4156 layout
+function isSingleBalancedGroup(text) {
+  let depth = 0;
+  for (let i = 0; i < text.length; i++)
+    if (text[i] === "(") depth++;
+    else if (text[i] === ")" && --depth === 0) return i === text.length - 1;
+  return false;
+}
+//@ chunk-nzz6y5xm.js:4156-4422 layout
+function renderNodeText(node, buffer, mode) {
+  let text = "";
+  let startIndex = node.startIndex;
+  let sorted = mk(node, mode).sort((startIndex, replacements) => startIndex.start - replacements.start);
+  for (let replacement of sorted)
+    if (replacement.start >= startIndex) {
+      text += buffer.toString("latin1", startIndex, replacement.start) + replacement.left;
+      startIndex = replacement.end;
+    }
+  return (text + buffer.toString("latin1", startIndex, node.endIndex)).replace(
+    /\\([^])/g,
+    (escaped, parentNode) =>
+      parentNode ===
+      `
+`
+        ? ""
+        : parentNode === " " || parentNode === "\t"
+          ? parentNode
+          : "_",
+  );
+}
+//@ chunk-nzz6y5xm.js:4422-4556 layout (2.1.88 match: mk, 0.815)
+function mk(node, parentNode) {
+  return node.children.flatMap((child) => {
+    let kid = treeNode(child, parentNode);
+    return kid === null
+      ? mk(child, parentNode)
+      : [
+          {
+            start: child.startIndex,
+            end: child.endIndex,
+            left: kid,
+          },
+        ];
+  });
+}
+//@ chunk-nzz6y5xm.js:4556-5088 layout
+function treeNode(node, mode) {
+  switch (node.type) {
+    case "raw_string":
+      return "''";
+    case "string":
+      return '""';
+    case "ansi_c_string":
+      return "$''";
+    case "simple_expansion":
+      return "$x";
+    case "comment":
+      return " #";
+    case "heredoc_body":
+      return mode === "line" ? " " : null;
+    case "heredoc_redirect":
+      return mode === "substitution" && redirect(node) ? "<<" + HEREDOC_MARK : null;
+    case "command_substitution":
+      return node.children[0]?.type === "$(" ? "$(" + SUBST_MARK + ")" : "``";
+    case "process_substitution":
+      return node.text.charAt(0) + "(" + SUBST_MARK + ")";
+    case "arithmetic_expansion":
+      return node.children[0]?.type === "$((" ? "$((" + SUBST_MARK + "))" : null;
+    default:
+      return null;
+  }
+}
+//@ chunk-nzz6y5xm.js:5088-5579 layout
+function redirect(node) {
+  let [operator, start, body, end] = node.children;
+  if (
+    !operator ||
+    !start ||
+    !body ||
+    !end ||
+    (operator.type !== "<<" && operator.type !== "<<-") ||
+    start.type !== "heredoc_start" ||
+    !/^(?:(?!(?:case|esac)$)\w+|'[^'\\\s()]+'|"[^"$`\\\s()]+")$/.test(start.text) ||
+    body.type !== "heredoc_body" ||
+    body.startIndex !== start.endIndex + 1 ||
+    end.type !== "heredoc_end"
+  )
+    return false;
+  let text = body.text + end.text;
+  return [text, text.replaceAll("\\\n", "")].every((variant) => {
+    let lines = variant.split(`
+`);
+    return (
+      lines.findIndex((line) => {
+        let lines = operator.type === "<<-" ? line.replace(/^\t+/, "") : line;
+        return lines === end.text || lines.startsWith(end.text + ")");
+      }) ===
+      lines.length - 1
+    );
+  });
+}
+//@ chunk-nzz6y5xm.js:5579-5979 facade-majority (2.1.88 match: VAR_PLACEHOLDER, 0.159)
 var STRUCTURAL_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SEPARATOR_TYPES;
 var REDIRECTABLE_COMMAND_TYPES;
@@ -81,7 +221,7 @@ var CMDSUB_PLACEHOLDER;
 var VAR_PLACEHOLDER;
 var REDIRECT_NODE_TYPES;
 var UNCERTAIN_VAR_PLACEHOLDER;
-deferInit("chunk-r01896cg.js:3255", () => {
+deferInit("chunk-nzz6y5xm.js:5579", () => {
   STRUCTURAL_TYPES = new Set(["program", "list", "pipeline", "redirected_statement"]);
   SEPARATOR_TYPES = new Set([
     "&&",
@@ -107,7 +247,7 @@ deferInit("chunk-r01896cg.js:3255", () => {
   REDIRECT_NODE_TYPES = new Set(["file_redirect", "herestring_redirect", "heredoc_redirect"]);
   UNCERTAIN_VAR_PLACEHOLDER = "__UNCERTAIN_VAR__";
 });
-//@ chunk-r01896cg.js:3655-3722 facade-majority
+//@ chunk-nzz6y5xm.js:5979-6046 facade-majority
 /**
  * 值中是否含任一占位符（CMDSUB / TRACKED_VAR / UNCERTAIN_VAR）。
  */
@@ -118,23 +258,23 @@ function containsAnyPlaceholder(value) {
     value.includes(UNCERTAIN_VAR_PLACEHOLDER)
   );
 }
-//@ chunk-r01896cg.js:3722-3799 facade-majority
+//@ chunk-nzz6y5xm.js:6046-6123 facade-majority
 /**
  * 把占位符换成 $(…) / ${…}，用于给用户看的理由文本。
  */
 function redactPlaceholdersForDisplay(text) {
   return text.replaceAll(CMDSUB_PLACEHOLDER, "$(\u2026)").replaceAll(VAR_PLACEHOLDER, "${\u2026}");
 }
-//@ chunk-r01896cg.js:3799-3859 facade-majority
+//@ chunk-nzz6y5xm.js:6123-6183 facade-majority
 function deletePlaceholders(text) {
   return text.replaceAll(CMDSUB_PLACEHOLDER, "").replaceAll(VAR_PLACEHOLDER, "");
 }
-//@ chunk-r01896cg.js:3859-3888 layout
+//@ chunk-nzz6y5xm.js:6183-6212 layout
 var substitutionCount = 0;
 var catHeredocInlineCount = 0;
 var quoteScanCarveOutCount = 0;
 var QUOTE_OR_BACKSLASH_RE = /["`\\]/;
-//@ chunk-r01896cg.js:3888-3930 layout
+//@ chunk-nzz6y5xm.js:6212-6254 layout
 function isPrecededByNewline(text, index) {
   return (
     index > 0 &&
@@ -143,7 +283,7 @@ function isPrecededByNewline(text, index) {
 `
   );
 }
-//@ chunk-r01896cg.js:3930-4079 facade-majority
+//@ chunk-nzz6y5xm.js:6254-6403 facade-majority
 /**
  * 文本中是否含运行时才确定的占位符：变量或不确定变量占位，或不在行首的命令替换输出占位。
  */
@@ -156,7 +296,7 @@ function containsRuntimePlaceholder(text) {
   }
   return false;
 }
-//@ chunk-r01896cg.js:4079-4153 facade-majority
+//@ chunk-nzz6y5xm.js:6403-6477 facade-majority
 /**
  * 文本是否以任一占位符（命令替换输出、变量、不确定变量）开头。
  */
@@ -167,7 +307,7 @@ function startsWithAnyPlaceholder(argValue) {
     argValue.startsWith(UNCERTAIN_VAR_PLACEHOLDER)
   );
 }
-//@ chunk-r01896cg.js:4153-4961 fingerprint (2.1.88 match: SAFE_ENV_VARS, 0.606)
+//@ chunk-nzz6y5xm.js:6477-7285 fingerprint (2.1.88 match: SAFE_ENV_VARS, 0.606)
 var BARE_VAR_UNSAFE_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var STDBUF_SHORT_SEP_RE;
 var STDBUF_SHORT_FUSED_RE;
@@ -177,7 +317,7 @@ var SAFE_ENV_VARS;
 var SPECIAL_VAR_NAMES;
 var DANGEROUS_NODE_TYPES;
 var DANGEROUS_TYPE_IDS;
-deferInit("chunk-r01896cg.js:4153", () => {
+deferInit("chunk-nzz6y5xm.js:6477", () => {
   BARE_VAR_UNSAFE_RE = /[ \t\n*?[]/;
   STDBUF_SHORT_SEP_RE = /^-[ioe]$/;
   STDBUF_SHORT_FUSED_RE = /^-[ioe]./;
@@ -242,7 +382,7 @@ deferInit("chunk-r01896cg.js:4153", () => {
   ]);
   DANGEROUS_TYPE_IDS = [...DANGEROUS_NODE_TYPES];
 });
-//@ chunk-r01896cg.js:4961-5054 facade-majority (2.1.88 match: nodeTypeId, 1)
+//@ chunk-nzz6y5xm.js:7285-7378 facade-majority (2.1.88 match: nodeTypeId, 1)
 /**
  * 把节点类型映射为数字 id（未定义 -2、ERROR -1、DANGEROUS_TYPE_IDS 下标+1、其他 0），用于 tengu_bash_ast_too_complex 遥测。
  */
@@ -252,7 +392,7 @@ function nodeTypeId(nodeType) {
   let i = DANGEROUS_TYPE_IDS.indexOf(nodeType);
   return i >= 0 ? i + 1 : 0;
 }
-//@ chunk-r01896cg.js:5054-5653 facade-majority (2.1.88 match: REDIRECT_OPS, 1)
+//@ chunk-nzz6y5xm.js:7378-7989 facade-majority (2.1.88 match: REDIRECT_OPS, 1)
 var REDIRECT_OPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var BRACE_EXPANSION_RE;
 var BRACE_ESCAPED_CLOSE_RE;
@@ -269,7 +409,7 @@ var ZSH_TILDE_BRACKET_RE;
 var ZSH_EQUALS_EXPANSION_RE;
 var ZSH_NUMERIC_GLOB_RE;
 var BRACE_WITH_QUOTE_RE;
-deferInit("chunk-r01896cg.js:5054", () => {
+deferInit("chunk-nzz6y5xm.js:7378", () => {
   REDIRECT_OPS = {
     ">": ">",
     ">>": ">>",
@@ -288,7 +428,7 @@ deferInit("chunk-r01896cg.js:5054", () => {
   LONE_SURROGATE_RE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
   UNICODE_WHITESPACE_RE = /[\u00A0\u1680\u2000-\u200B\u2028\u2029\u202F\u205F\u3000\uFEFF]/;
   BACKSLASH_ESCAPED_SPACE_RE = /\\[ \t]/;
-  BACKSLASH_LINE_CONTINUATION_RE = /(?:^|[^ \t\\])(?:\\\\)*\\\n|[ \t](?:\\\\)+\\\n/;
+  BACKSLASH_LINE_CONTINUATION_RE = /(?:^|[^ \t\\])(?:\\\\)*\\\n|[ \t](?:\\\\)+\\\n|\\[ \t]\\\n/;
   BACKSLASH_WHITESPACE_RE = new RegExp(
     `${BACKSLASH_ESCAPED_SPACE_RE.source}|${BACKSLASH_LINE_CONTINUATION_RE.source}`,
   );
@@ -299,7 +439,7 @@ deferInit("chunk-r01896cg.js:5054", () => {
   ZSH_NUMERIC_GLOB_RE = /<\d*-\d*>/;
   BRACE_WITH_QUOTE_RE = /\{[^}]*['"]/;
 });
-//@ chunk-r01896cg.js:5653-6301 layout
+//@ chunk-nzz6y5xm.js:7989-8637 layout
 /**
  * 简易扫描：命令文本在未加引号处（跳过单/双引号、反引号、注释）出现 * ? [ 即为真。写入 SimpleCommand.hasUnquotedGlob。
  */
@@ -374,13 +514,13 @@ function hasUnquotedGlob(text) {
   }
   return false;
 }
-//@ chunk-r01896cg.js:6301-6326 layout
+//@ chunk-nzz6y5xm.js:8637-8662 layout
 var GLOB_PATTERN_RE = /[*?]|\[[^\]]*\]/;
-//@ chunk-r01896cg.js:6326-6359 layout
+//@ chunk-nzz6y5xm.js:8662-8695 layout
 function looksLikeGlob(text) {
   return GLOB_PATTERN_RE.test(text);
 }
-//@ chunk-r01896cg.js:6359-6680 facade-majority
+//@ chunk-nzz6y5xm.js:8695-9016 facade-majority
 /**
  * 判断命令 argv 或非 heredoc 重定向目标中是否有会被 shell 通配展开的模式（结合 argvUnquotedGlob 与占位符）。
  */
@@ -402,7 +542,7 @@ function hasSourceUnquotedGlob(command) {
     (arg, index) => looksLikeGlob(arg) && (argvUnquotedGlob[index] === true || containsAnyPlaceholder(arg)),
   );
 }
-//@ chunk-r01896cg.js:6680-7494 file-local
+//@ chunk-nzz6y5xm.js:9016-9830 file-local
 /**
  * 把单/双引号与反引号内的 { 替换为空格，用于 BRACE_WITH_QUOTE_RE 预检，避免把引号里的花括号当成展开混淆。
  */
@@ -489,18 +629,18 @@ function maskBracesInQuotedContexts(cmd) {
   }
   return out.join("");
 }
-//@ chunk-r01896cg.js:7494-7525 callgraph-fingerprint (2.1.88 match: DOLLAR, 1)
+//@ chunk-nzz6y5xm.js:9830-9861 callgraph-fingerprint (2.1.88 match: DOLLAR, 1)
 var DOLLAR; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r01896cg.js:7494", () => {
+deferInit("chunk-nzz6y5xm.js:9830", () => {
   DOLLAR = String.fromCharCode(36);
 });
-//@ chunk-r01896cg.js:7525-7621 file-local
+//@ chunk-nzz6y5xm.js:9861-9957 file-local
 function collectCommandSubstitution(node, type) {
   if (node.type === type) return true;
   for (let child of node.children) if (child && collectCommandSubstitution(child, type)) return true;
   return false;
 }
-//@ chunk-r01896cg.js:7621-7947 facade-majority
+//@ chunk-nzz6y5xm.js:9957-10283 facade-majority
 /**
  * 安全解析入口（2.1.88 parseForSecurity 的 316 版）：空串/解析失败返回空 simple；否则调用 parseForSecurityFromAstWithLoopCheck，simple 结果附带 tree。选项 readsDivergentShapes 用于按“分歧形态”重读。被 Shell.exec 的 worktree 守卫、命令文本日志与 shell -c 递归检查使用。
  */
@@ -528,7 +668,7 @@ async function parseForSecurity(command, { readsDivergentShapes = false } = {}) 
     };
   return result;
 }
-//@ chunk-r01896cg.js:7947-8297 facade-majority
+//@ chunk-nzz6y5xm.js:10283-10633 facade-majority
 /**
  * 为 n 个声明前缀生成“bash 是否保留赋值”的若干种布尔组合：n≤3 全枚举（exhaustive），否则取全假/全真/单个为真，并补上当前组合。供 shell -c 递归检查逐种读法判定。
  */
@@ -562,12 +702,25 @@ function declarationPrefixReadings(count, currentReading) {
     exhaustive: false,
   };
 }
-//@ chunk-r01896cg.js:8297-8451 facade-majority
+//@ chunk-nzz6y5xm.js:10633-11013 facade-majority
 /**
  * parseForSecurityFromAst 的包装：先以 first 轮运行；若结果 simple 且含循环、且 GrowthBook tengu_snappy_tower 打开，再以 later 轮（循环体按迭代后状态重走）运行，两次结果不深度相等时加 laterLoopPassesDiffer。BashTool 权限检查的主要调用点。
  */
 function parseForSecurityFromAst(command, root, options = {}) {
   let firstPass = parseForSecurityFromAst_2(command, root, options, "first");
+  if (
+    firstPass.kind === "simple" &&
+    options.readsDivergentShapes !== true &&
+    root !== PARSE_ABORTED &&
+    failsSubstitutionTextCheck(command, root)
+  )
+    return {
+      kind: "too-complex",
+      reason: "A nested command in this command can't be checked before it runs",
+      differential: true,
+      divergentShape: true,
+      keepsRemovalVerdict: true,
+    };
   return firstPass.kind === "simple" &&
     firstPass.hasLoop === true &&
     isSnappyTowerEnabled() &&
@@ -578,14 +731,27 @@ function parseForSecurityFromAst(command, root, options = {}) {
       }
     : firstPass;
 }
-//@ chunk-r01896cg.js:8451-11790 fingerprint (2.1.88 match: parseForSecurityFromAst, 0.455)
+//@ chunk-nzz6y5xm.js:11013-11090 facade-majority
+function failsSubstitutionTextCheck(command, commandText) {
+  return (
+    command.includes("(") &&
+    isSturdyLanternDefault() &&
+    substitutionIsRisky(commandText, Buffer.from(command, "utf8"))
+  );
+}
+//@ chunk-nzz6y5xm.js:11090-14464 fingerprint (2.1.88 match: parseForSecurityFromAst, 0.449)
 /**
  * Bash 安全分析核心：先做字节级预检（孤立代理项、控制字符、Unicode 空白、反斜杠空白、zsh ~[ / =cmd / <N-M>、花括号内引号），再查解析中止、反引号扫描异常、顶层语句之间/末尾是否有解析器跳过的字节、fd 变量重定向、重定向形状、结构性解析错误；然后保存/重置模块级分析状态，调用 walkProgram 收集 SimpleCommand。返回 {kind:'simple', commands, bareAssignmentNames, hasLoop, …} 或 {kind:'too-complex', reason, nodeType?, differential?, divergentShape?, keepsRemovalVerdict?}；可附 usesAssignedValue、uncertainWrite、declarationPrefixes。
  */
 function parseForSecurityFromAst_2(
   command,
   root,
-  { plainUnquotedHeredocs = false, declarationPrefix, readsDivergentShapes = false },
+  {
+    plainUnquotedHeredocs = false,
+    declarationPrefix,
+    readsDivergentShapes = false,
+    passesEscapedBlanks = false,
+  },
   pass,
 ) {
   if (LONE_SURROGATE_RE.test(command))
@@ -606,7 +772,7 @@ function parseForSecurityFromAst_2(
       reason: "Contains Unicode whitespace",
       differential: true,
     };
-  if (BACKSLASH_WHITESPACE_RE.test(command))
+  if ((passesEscapedBlanks ? BACKSLASH_LINE_CONTINUATION_RE : BACKSLASH_WHITESPACE_RE).test(command))
     return {
       kind: "too-complex",
       reason: "Contains backslash-escaped whitespace",
@@ -729,7 +895,7 @@ function parseForSecurityFromAst_2(
   let savedUncertainWrite = sawUncertainWrite;
   let savedBudget = reExpansionBudget;
   let savedPrefix = currentDeclarationPrefix;
-  let _ = declarationPrefixCount;
+  let laterPass = declarationPrefixCount;
   let savedPrefixValues = declarationPrefixValues;
   let savedPrefixInBranch = prefixAssignInBranch;
   let savedUnsetNames = unsetNames;
@@ -793,7 +959,7 @@ function parseForSecurityFromAst_2(
     sawUncertainWrite = savedUncertainWrite;
     reExpansionBudget = savedBudget;
     currentDeclarationPrefix = savedPrefix;
-    declarationPrefixCount = _;
+    declarationPrefixCount = laterPass;
     declarationPrefixValues = savedPrefixValues;
     prefixAssignInBranch = savedPrefixInBranch;
     unsetNames = savedUnsetNames;
@@ -814,7 +980,7 @@ function parseForSecurityFromAst_2(
     };
   return result;
 }
-//@ chunk-r01896cg.js:11790-12124 layout
+//@ chunk-nzz6y5xm.js:14464-14798 layout
 /**
  * 找结构性解析错误：空的非 heredoc 节点返回 Parse error；[ 紧贴后续单词时返回理由。
  */
@@ -829,14 +995,14 @@ function findStructuralParseError(node) {
     ? "[ glued to the next word names another command"
     : null;
 }
-//@ chunk-r01896cg.js:12124-12261 layout (2.1.88 match: nodeTypeId, 1)
+//@ chunk-nzz6y5xm.js:14798-14935 layout (2.1.88 match: nodeTypeId, 1)
 function hasDollarNonAsciiError(nodeType) {
   if (nodeType.type === "ERROR" && (nodeType.text.startsWith("${") || isDollarNonAsciiName(nodeType.text)))
     return true;
   for (let child of nodeType.children) if (child && hasDollarNonAsciiError(child)) return true;
   return false;
 }
-//@ chunk-r01896cg.js:12261-12680 layout
+//@ chunk-nzz6y5xm.js:14935-15354 layout
 function hasZshLengthOfNonAsciiSubscript(node) {
   let children = node.children;
   for (let k = 0; k < children.length; k++) {
@@ -859,11 +1025,11 @@ function hasZshLengthOfNonAsciiSubscript(node) {
   }
   return false;
 }
-//@ chunk-r01896cg.js:12680-12769 layout
+//@ chunk-nzz6y5xm.js:15354-15443 layout
 function isDollarNonAsciiName(text) {
   return /^\$[#^=~+]*[\w\u0080-\uffff]+$/.test(text) && /[\u0080-\uffff]/.test(text);
 }
-//@ chunk-r01896cg.js:12769-14269 layout
+//@ chunk-nzz6y5xm.js:15443-16943 layout
 /**
  * 递归查找 bash 与 zsh 解读不同的语法（注释紧贴括号、case 模式组内注释、无 () 的 function 括号体、关键字紧贴括号），命中时返回 too-complex（differential）。
  */
@@ -930,15 +1096,15 @@ function findZshDifferentialSyntax(node, bytes, baseOffset) {
   }
   return null;
 }
-//@ chunk-r01896cg.js:14269-14329 layout
+//@ chunk-nzz6y5xm.js:16943-17003 layout
 /**
  * 复合语句节点类型（if/elif/else/while/until/case）。
  */
 var COMPOUND_STATEMENT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r01896cg.js:14269", () => {
+deferInit("chunk-nzz6y5xm.js:16943", () => {
   COMPOUND_STATEMENT_TYPES = new Set(["if", "elif", "else", "while", "until", "case"]);
 });
-//@ chunk-r01896cg.js:14329-19184 layout
+//@ chunk-nzz6y5xm.js:17003-21858 layout
 /**
  * 递归检查 declare/unset 语句的写法：标志会改变赋值语义且有会被求值的操作数、相邻引号片段拼成一个操作数、$'…' 标志、拼写成别的命令但实为声明等，返回 too-complex。（实为 ast.ts 安全检查，被切到 bashParser.ts）
  */
@@ -1171,7 +1337,7 @@ function checkDeclarationOperands(node) {
   }
   return null;
 }
-//@ chunk-r01896cg.js:19184-19657 placement (2.1.88 match: DECL_KEYWORDS, 0.884)
+//@ chunk-nzz6y5xm.js:21858-22331 placement (2.1.88 match: DECL_KEYWORDS, 0.884)
 /**
  * 声明类命令的正则与选项规则：前缀包装（builtin/command/exec/time/coproc/noglob/nocorrect/-）、声明命令名、declare/export 会改变语义的标志字母，以及 declare/typeset/local/export/readonly 的赋值型与列出型选项。
  */
@@ -1183,7 +1349,7 @@ var EXPORT_SEMANTIC_FLAG_RE;
 var EXPORT_FLAG_CHARS_RE;
 var DECLARE_OPTION_CLASSES;
 var DECLARATION_OPTION_RULES;
-deferInit("chunk-r01896cg.js:19184", () => {
+deferInit("chunk-nzz6y5xm.js:21858", () => {
   PREFIX_WRAPPER_RE = /^(?:builtin|command|exec|time|coproc|noglob|nocorrect|-)$/;
   DECLARATION_NAME_RE = /^(?:declare|typeset|local|export|readonly|unset|integer|float|private)$/;
   DECLARE_SEMANTIC_FLAG_RE = /^[-+].*[nialuAEFLRZ]/;
@@ -1218,7 +1384,7 @@ deferInit("chunk-r01896cg.js:19184", () => {
     ],
   ]);
 });
-//@ chunk-r01896cg.js:19657-20601 placement
+//@ chunk-nzz6y5xm.js:22331-23275 placement
 /**
  * 检查声明命令的选项组合：列举型选项与赋值同用、readonly 重复命名、选项出现在名字之后、bash/zsh 不共同支持的选项，返回理由或 null。
  */
@@ -1246,7 +1412,7 @@ function checkDeclarationOptions(commandName, words) {
       return `${commandName} option '${redactPlaceholdersForDisplay(word)}' is not one bash and zsh are both known to accept \u2014 a shell that rejects it assigns nothing, so the names it declares cannot be statically verified`;
   return null;
 }
-//@ chunk-r01896cg.js:20601-21033 placement
+//@ chunk-nzz6y5xm.js:23275-23707 placement
 /**
  * 检查声明上下文分歧：local 在函数外赋值、export/readonly 给名字加数组属性，返回理由或 null。
  */
@@ -1262,10 +1428,10 @@ function checkDeclarationContext(commandName, words) {
     return `'${commandName}' gives a name the array attribute \u2014 zsh empties a value it held and bash keeps it, so it cannot be statically verified`;
   return null;
 }
-//@ chunk-r01896cg.js:21033-21092 placement
+//@ chunk-nzz6y5xm.js:23707-23766 placement
 var PLAIN_VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 var FUNCTION_NAME_RE = /^[A-Za-z_][\w.:-]*$/;
-//@ chunk-r01896cg.js:21092-21403 placement
+//@ chunk-nzz6y5xm.js:23766-24077 placement
 function isPlainDeclarationOperand(text, allowFunctionName, isReadonly = false) {
   let assignmentName = getAssignmentName(text);
   let quoteChar = text[0];
@@ -1283,21 +1449,21 @@ function isPlainDeclarationOperand(text, allowFunctionName, isReadonly = false) 
     PLAIN_VAR_NAME_RE.test(assignmentName) || (allowFunctionName && FUNCTION_NAME_RE.test(assignmentName))
   );
 }
-//@ chunk-r01896cg.js:21403-21491 placement
+//@ chunk-nzz6y5xm.js:24077-24165 placement
 function containsAnsiCString(node) {
   return (
     node.type === "ansi_c_string" ||
     node.children.some((child) => child !== undefined && containsAnsiCString(child))
   );
 }
-//@ chunk-r01896cg.js:21491-21563 placement
+//@ chunk-nzz6y5xm.js:24165-24237 placement
 function stripQuoteChars(text) {
   return text.replace(/\$(['"])/g, "$1").replace(/["'\\]/g, "");
 }
-//@ chunk-r01896cg.js:21563-21689 placement
+//@ chunk-nzz6y5xm.js:24237-24363 placement
 var EXPANSION_NODE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EXPANSION_MASK;
-deferInit("chunk-r01896cg.js:21563", () => {
+deferInit("chunk-nzz6y5xm.js:24237", () => {
   EXPANSION_NODE_TYPES = new Set([
     "command_substitution",
     "process_substitution",
@@ -1307,7 +1473,7 @@ deferInit("chunk-r01896cg.js:21563", () => {
   ]);
   EXPANSION_MASK = "$_";
 });
-//@ chunk-r01896cg.js:21689-22087 placement (2.1.88 match: mk, 0.834)
+//@ chunk-nzz6y5xm.js:24363-24761 placement (2.1.88 match: mk, 0.833)
 function maskExpansions(node) {
   let ranges = [];
   let walk = (current) => {
@@ -1331,12 +1497,12 @@ function maskExpansions(node) {
   }
   return out + buffer.subarray(cursor).toString("utf8");
 }
-//@ chunk-r01896cg.js:22087-22234 sole-consumer
+//@ chunk-nzz6y5xm.js:24761-24908 sole-consumer
 function hasParenInExpansion(node) {
   if (node.type === "expansion" && node.text.replace(/\$\(\(?|[<>]\(/g, "").includes("(")) return true;
   return node.children.some((child) => child !== undefined && hasParenInExpansion(child));
 }
-//@ chunk-r01896cg.js:22234-22898 sole-consumer
+//@ chunk-nzz6y5xm.js:24908-25572 sole-consumer
 /**
  * 判断 declare/export 等的参数是否为安全的变量名或 name=value：拒绝大括号展开、ANSI-C 字符串、展开中的括号与以 ( 开头的值，数组赋值与数字直接接受。
  */
@@ -1370,7 +1536,7 @@ function isSafeDeclarationArg(node, allowExtendedNames) {
     else break;
   return !valueRest.startsWith("(");
 }
-//@ chunk-r01896cg.js:22898-23179 sole-consumer
+//@ chunk-nzz6y5xm.js:25572-25853 sole-consumer
 function getAssignmentName(text) {
   let bracketDepth = 0;
   let otherQuote = null;
@@ -1386,7 +1552,7 @@ function getAssignmentName(text) {
   }
   return text;
 }
-//@ chunk-r01896cg.js:23263-23390 sole-consumer
+//@ chunk-nzz6y5xm.js:25937-26064 sole-consumer
 function isOnlyBlankBetween(bytes, start, end) {
   let index = start;
   while (index < end) {
@@ -1397,7 +1563,7 @@ function isOnlyBlankBetween(bytes, start, end) {
   }
   return true;
 }
-//@ chunk-r01896cg.js:23390-23760 sole-consumer
+//@ chunk-nzz6y5xm.js:26064-26434 sole-consumer
 /**
  * 判断 declare 类命令的各参数是否都是简单赋值：带 -i/-E/-F 时只允许算术表达式值，否则只允许普通字符串或简单数组。
  */
@@ -1414,24 +1580,24 @@ function areDeclareArgsSimple(node) {
     return argPattern.test(child.text);
   });
 }
-//@ chunk-r01896cg.js:23760-23870 sole-consumer
+//@ chunk-nzz6y5xm.js:26434-26544 sole-consumer
 function unquoteFlagWord(text) {
   let match = /^\$?(['"])([-+][^'"]*)\1$/.exec(text);
   if (match) return match[2];
   return /^\\[-+]/.test(text) ? text.slice(1) : text;
 }
-//@ chunk-r01896cg.js:23870-23927 sole-consumer
+//@ chunk-nzz6y5xm.js:26544-26601 sole-consumer
 var LOOP_STATEMENT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_LOOP_NESTING;
-deferInit("chunk-r01896cg.js:23870", () => {
+deferInit("chunk-nzz6y5xm.js:26544", () => {
   LOOP_STATEMENT_TYPES = new Set(["for_statement", "while_statement"]);
   MAX_LOOP_NESTING = 5;
 });
-//@ chunk-r01896cg.js:23927-23970 sole-consumer
+//@ chunk-nzz6y5xm.js:26601-26644 sole-consumer
 function isLoopBlockedByEnvScrub(node) {
   return LOOP_STATEMENT_TYPES.has(node.type) && isScrubEnabled();
 }
-//@ chunk-r01896cg.js:23970-24387 callgraph-witnessed (2.1.88 match: walkProgram, 0.331)
+//@ chunk-nzz6y5xm.js:26644-27061 callgraph-witnessed (2.1.88 match: walkProgram, 0.33)
 /**
  * 遍历 program：先跑 Tar 预检，再 collectCommands 收集命令与裸赋值名；对每条命令检查 zsh stat -A/-H 与声明上下文（local 在函数外等）。返回 {kind:'simple', commands, bareAssignmentNames, hasLoop}。
  */
@@ -1467,7 +1633,7 @@ function walkProgram(root) {
     hasLoop,
   };
 }
-//@ chunk-r01896cg.js:24387-24554 layout (2.1.88 match: mk, 0.834)
+//@ chunk-nzz6y5xm.js:27061-27228 layout (2.1.88 match: mk, 0.833)
 function isSameLine(parent, left, right) {
   return !Buffer.from(parent.text, "utf8")
     .subarray(left.endIndex - parent.startIndex, right.startIndex - parent.startIndex)
@@ -1475,10 +1641,10 @@ function isSameLine(parent, left, right) {
     .replace(/\\\r?\n/g, "").includes(`
 `);
 }
-//@ chunk-r01896cg.js:24554-24959 layout (2.1.88 match: extractCompoundStructure, 0.753)
+//@ chunk-nzz6y5xm.js:27228-27633 layout (2.1.88 match: extractCompoundStructure, 0.753)
 var STATEMENT_NODE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SCOPED_STATEMENT_TYPES;
-deferInit("chunk-r01896cg.js:24554", () => {
+deferInit("chunk-nzz6y5xm.js:27228", () => {
   STATEMENT_NODE_TYPES = new Set([
     "command",
     "variable_assignment",
@@ -1507,7 +1673,7 @@ deferInit("chunk-r01896cg.js:24554", () => {
     "subshell",
   ]);
 });
-//@ chunk-r01896cg.js:24959-25668 facade-majority
+//@ chunk-nzz6y5xm.js:27633-28342 facade-majority
 /**
  * 递归扫描同一行上紧贴前一语句的语句或 (…) 组：bash 会把它们读成一条命令或报错，zsh 会当成 glob 组，存在解析分歧，返回 too-complex（differential）。
  */
@@ -1540,7 +1706,7 @@ function scanSameLineStatementSplits(node) {
   }
   return null;
 }
-//@ chunk-r01896cg.js:25668-38155 fingerprint (2.1.88 match: collectCommands, 0.636)
+//@ chunk-nzz6y5xm.js:28342-40829 fingerprint (2.1.88 match: collectCommands, 0.636)
 /**
  * 递归收集简单命令（2.1.88 collectCommands 的大幅扩展版）：处理 command、redirected_statement、program/list/pipeline（|| 与 & 分支复制作用域，pipeline 末段外的赋值不外泄）、negated_command、declaration_command（declare/typeset/local/export/readonly 的大量 zsh/bash 分歧检查与变量跟踪）、variable_assignment（执行影响变量、整数属性变量拒绝）、for/while/if（作用域合并与循环变量限制）、subshell、test_command、unset_command；不认识的节点交给 tooComplex。返回 null 表示继续，返回结果对象表示终止。
  */
@@ -2190,9 +2356,9 @@ function collectCommands(node, commands, varScope, bareAssignmentNames, isProgra
   }
   return tooComplex(node);
 }
-//@ chunk-r01896cg.js:38155-38260 fingerprint (2.1.88 match: walkTestExpr, 0.752)
+//@ chunk-nzz6y5xm.js:40829-40934 fingerprint (2.1.88 match: walkTestExpr, 0.753)
 var TEST_EXPRESSION_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r01896cg.js:38155", () => {
+deferInit("chunk-nzz6y5xm.js:40829", () => {
   TEST_EXPRESSION_TYPES = new Set([
     "unary_expression",
     "binary_expression",
@@ -2200,7 +2366,7 @@ deferInit("chunk-r01896cg.js:38155", () => {
     "parenthesized_expression",
   ]);
 });
-//@ chunk-r01896cg.js:38260-38497 layout
+//@ chunk-nzz6y5xm.js:40934-41171 layout
 function isBlankTestGap(text, allowComments) {
   let index = 0;
   while (index < text.length) {
@@ -2242,7 +2408,7 @@ function isBlankTestGap(text, allowComments) {
   }
   return true;
 }
-//@ chunk-r01896cg.js:38497-39147 layout
+//@ chunk-nzz6y5xm.js:41171-41821 layout
 function findTestCommandGap(node, allowComments) {
   let buffer = Buffer.from(node.text, "utf8");
   let startIndex = node.startIndex;
@@ -2276,7 +2442,7 @@ function findTestCommandGap(node, allowComments) {
   }
   return null;
 }
-//@ chunk-r01896cg.js:39147-39491 layout
+//@ chunk-nzz6y5xm.js:41821-42165 layout
 function hasZshEqualsProcSubst(text) {
   let inSingleQuote = false;
   let inDoubleQuote = false;
@@ -2308,7 +2474,7 @@ function hasZshEqualsProcSubst(text) {
   }
   return false;
 }
-//@ chunk-r01896cg.js:39491-39763 facade-majority
+//@ chunk-nzz6y5xm.js:42165-42437 facade-majority
 /**
  * 文本中是否有独立的 ]]（排除 [[:class:]] 等字符类写法，以及两侧都是单词字符的情况），用于发现 [[ ]] 条件的提前闭合。
  */
@@ -2324,10 +2490,10 @@ function containsStandaloneCondCloser(text) {
   }
   return false;
 }
-//@ chunk-r01896cg.js:39763-39871 facade-majority
+//@ chunk-nzz6y5xm.js:42437-42545 facade-majority
 var ZSH_SUBSCRIPT_OR_MODIFIER_RE = /^([\w\u0080-\uffff]*|[-?*@!#])(\[|:[a-zA-Z&])/;
 var ZSH_SPECIAL_SUBSCRIPT_TESTEXPR_RE = /^([\w\u0080-\uffff]*|[-?*@!#$])(\[|:[a-zA-Z&])/;
-//@ chunk-r01896cg.js:39871-43362 layout
+//@ chunk-nzz6y5xm.js:42545-46036 layout
 /**
  * 遍历 [[ ]]/[ ] 内表达式，把运算符和操作数压入 argv：拒绝 zsh $name[expr]、!( 粘连、regex/extglob 中的展开/进程替换/=(CMD)/未加引号 &/粘连 ||/括号不平衡、独立 ]] 闭合符等 shell 词法分歧。
  */
@@ -2523,7 +2689,7 @@ function walkTestExpr(node, argv, innerCommands, varScope, bareAssignmentNames, 
     }
   }
 }
-//@ chunk-r01896cg.js:43362-43617 layout
+//@ chunk-nzz6y5xm.js:46036-46291 layout
 function findUnsupportedListTail(node) {
   let lastChild = null;
   for (let child of node.children) {
@@ -2537,7 +2703,7 @@ function findUnsupportedListTail(node) {
     return lastChild;
   return null;
 }
-//@ chunk-r01896cg.js:43617-43676 layout
+//@ chunk-nzz6y5xm.js:46291-46350 layout
 /**
  * 把变量在作用域中标为未知值 VAR_PLACEHOLDER（已是不确定值时保持）。
  */
@@ -2545,18 +2711,18 @@ function markVarUnknown(varScope, name) {
   if (varScope.get(name)?.includes(UNCERTAIN_VAR_PLACEHOLDER)) return;
   varScope.set(name, VAR_PLACEHOLDER);
 }
-//@ chunk-r01896cg.js:43676-43694 layout
+//@ chunk-nzz6y5xm.js:46350-46368 layout
 var UNCERTAIN_PREFIX; // deferred: uses STRUCTURAL_TYPES of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-r01896cg.js:43676", () => {
+deferInit("chunk-nzz6y5xm.js:46350", () => {
   UNCERTAIN_PREFIX = `${UNCERTAIN_VAR_PLACEHOLDER}\x00`;
 });
-//@ chunk-r01896cg.js:43694-43757 layout
+//@ chunk-nzz6y5xm.js:46368-46431 layout
 function stripUncertainPrefix(text) {
   return readingDivergentShapes && text.startsWith(UNCERTAIN_PREFIX)
     ? text.slice(UNCERTAIN_PREFIX.length)
     : text;
 }
-//@ chunk-r01896cg.js:43757-43952 layout
+//@ chunk-nzz6y5xm.js:46431-46626 layout
 function uncertainValueResult(value, reason, nodeType) {
   if (value === undefined) return null;
   if (!containsAnyPlaceholder(stripUncertainPrefix(value))) return null;
@@ -2573,7 +2739,7 @@ function uncertainValueResult(value, reason, nodeType) {
         nodeType,
       };
 }
-//@ chunk-r01896cg.js:43952-44016 layout
+//@ chunk-nzz6y5xm.js:46626-46690 layout
 function recordUnset(varScope, name, hasPriorCommands) {
   unsetNames.add(name);
   if (hasPriorCommands && readingDivergentShapes) sawUncertainWrite = true;
@@ -2582,7 +2748,7 @@ function recordUnset(varScope, name, hasPriorCommands) {
     !hasPriorCommands ? "" : readingDivergentShapes ? UNCERTAIN_PREFIX : UNCERTAIN_VAR_PLACEHOLDER,
   );
 }
-//@ chunk-r01896cg.js:44016-44179 layout
+//@ chunk-nzz6y5xm.js:46690-46853 layout
 function mergeScopeAfterConditional(varScope, snapshot) {
   for (let [varName, value] of varScope)
     if (snapshot.get(varName) !== value) {
@@ -2600,7 +2766,7 @@ function mergeScopeAfterConditional(varScope, snapshot) {
     }
   for (let key of snapshot.keys()) if (!varScope.has(key)) varScope.set(key, UNCERTAIN_VAR_PLACEHOLDER);
 }
-//@ chunk-r01896cg.js:44179-45723 fingerprint (2.1.88 match: walkRedirectedStatement, 0.821)
+//@ chunk-nzz6y5xm.js:46853-48397 fingerprint (2.1.88 match: walkRedirectedStatement, 0.821)
 /**
  * 处理 redirected_statement：分离 file/heredoc 重定向与内层命令；内层是 a && b 的 list 时分两段收集；随后解析每个文件重定向、检查重定向读前缀变量、校验 heredoc，并把重定向挂到最后一条命令上（无命令时推入空 argv 命令）。
  */
@@ -2733,7 +2899,7 @@ function walkRedirectedStatement(node, commands, varScope, bareAssignmentNames, 
       });
   return null;
 }
-//@ chunk-r01896cg.js:45723-47196 layout
+//@ chunk-nzz6y5xm.js:48397-49870 layout
 /**
  * 检查 file_redirect：子节点之间不能有被解析器丢掉的字节，不能用 fd 变量，>&/<& 后不能以 - 开头，关闭 fd 后不能跟词，目标不能多于一个。
  */
@@ -2806,11 +2972,11 @@ function checkFileRedirectShape(node) {
     };
   return null;
 }
-//@ chunk-r01896cg.js:47196-47372 layout
+//@ chunk-nzz6y5xm.js:49870-50046 layout
 var HEREDOC_PART_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var HEREDOC_TRAILER_TYPES;
 var FD_VARIABLE_RE;
-deferInit("chunk-r01896cg.js:47196", () => {
+deferInit("chunk-nzz6y5xm.js:49870", () => {
   HEREDOC_PART_TYPES = new Set([
     "heredoc_start",
     "heredoc_body",
@@ -2822,14 +2988,14 @@ deferInit("chunk-r01896cg.js:47196", () => {
   HEREDOC_TRAILER_TYPES = new Set(["file_redirect", "pipeline"]);
   FD_VARIABLE_RE = /^\{(?:\w|[^\x00-\x7F])+(\[.*\])?\}$/su;
 });
-//@ chunk-r01896cg.js:47372-47557 layout
+//@ chunk-nzz6y5xm.js:50046-50231 layout
 function describeFdVariable(text) {
   let name = /^\{((?:\w|[^\x00-\x7F])+)/u.exec(text)?.[1];
   if (name === undefined) return "{\u2026}";
   let safeName = /^\w{1,64}$/.test(name) ? name : "\u2026";
   return text[name.length + 1] === "[" ? `{${safeName}[\u2026]}` : `{${safeName}}`;
 }
-//@ chunk-r01896cg.js:47557-47918 layout (2.1.88 match: mk, 1)
+//@ chunk-nzz6y5xm.js:50231-50592 layout (2.1.88 match: mk, 1)
 /**
  * 在子树中找 {name}> / {name}< 形式的 fd 变量重定向，返回其文本（会给 shell 变量赋值，属副作用）。
  */
@@ -2861,7 +3027,7 @@ function findFdVariableRedirect(node, bytes) {
     }
   return null;
 }
-//@ chunk-r01896cg.js:47918-48514 layout
+//@ chunk-nzz6y5xm.js:50592-51188 layout
 /**
  * 递归检查所有重定向节点的形状：文件重定向交给 checkFileRedirectShape；here-string/heredoc 禁止 fd 变量，heredoc 起始行后只能跟文件重定向或管道。
  */
@@ -2893,7 +3059,7 @@ function findRedirectShapeError(node) {
     }
   return null;
 }
-//@ chunk-r01896cg.js:48514-51279 fingerprint (2.1.88 match: walkFileRedirect, 0.464)
+//@ chunk-nzz6y5xm.js:51188-53953 fingerprint (2.1.88 match: walkFileRedirect, 0.463)
 /**
  * 解析单个 file_redirect 为 {op, target, fd, targetSourceLiteral}：拒绝 fd 变量、关闭 fd 后跟词、多目标、>& 后以 - 开头、含花括号/替换的目标、含命令替换输出/换行/以 ! 或 = 开头的目标，以及 >& 后非简单路径。
  */
@@ -3018,7 +3184,7 @@ function walkFileRedirect(node, innerCommands, varScope, bareAssignmentNames) {
       substitutionCount === substitutionsBefore && catHeredocInlineCount === inlineHeredocsBefore,
   };
 }
-//@ chunk-r01896cg.js:51279-51375 layout
+//@ chunk-nzz6y5xm.js:53953-54049 layout
 var allowPlainUnquotedHeredocs; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var readingDivergentShapes;
 var sawUncertainWrite;
@@ -3034,7 +3200,7 @@ var isLaterLoopPass;
 var currentLoopNode;
 var loopDepth;
 var unsetNames;
-deferInit("chunk-r01896cg.js:51279", () => {
+deferInit("chunk-nzz6y5xm.js:53953", () => {
   allowPlainUnquotedHeredocs = false;
   readingDivergentShapes = false;
   sawUncertainWrite = false;
@@ -3049,7 +3215,7 @@ deferInit("chunk-r01896cg.js:51279", () => {
   loopDepth = 0;
   unsetNames = new Set();
 });
-//@ chunk-r01896cg.js:51375-51452 layout
+//@ chunk-nzz6y5xm.js:54049-54126 layout
 function divergentShapeResult(reason) {
   return readingDivergentShapes
     ? null
@@ -3059,25 +3225,25 @@ function divergentShapeResult(reason) {
         divergentShape: true,
       };
 }
-//@ chunk-r01896cg.js:51452-51648 layout
+//@ chunk-nzz6y5xm.js:54126-54322 layout
 function prefixAssignmentMayFailResult(varName) {
   return divergentShapeResult(
     `'${varName}' is set for one command that carries an expansion which can fail at runtime \u2014 whether the assignment stands for later commands cannot be statically verified`,
   );
 }
-//@ chunk-r01896cg.js:51648-51671 layout
+//@ chunk-nzz6y5xm.js:54322-54345 layout
 function getDeclarationPrefixBashKeeps() {
   return declarationPrefixBashKeeps;
 }
-//@ chunk-r01896cg.js:51671-51694 layout
+//@ chunk-nzz6y5xm.js:54345-54368 layout
 function getDeclarationPrefixCount() {
   return declarationPrefixCount;
 }
-//@ chunk-r01896cg.js:51694-51836 layout
+//@ chunk-nzz6y5xm.js:54368-54510 layout
 var HEREDOC_BODY_ESCAPE_RE; // deferred: uses PLAIN_VAR_NAME_RE of its import cycle while loading; runs once the cycle is complete
 var VAR_NAME_SOURCE;
 var PLAIN_VAR_REF_RE;
-deferInit("chunk-r01896cg.js:51694", () => {
+deferInit("chunk-nzz6y5xm.js:54368", () => {
   HEREDOC_BODY_ESCAPE_RE = /`|\\[$`\\\n]/;
   VAR_NAME_SOURCE = PLAIN_VAR_NAME_RE.source.slice(1, -1);
   PLAIN_VAR_REF_RE = new RegExp(
@@ -3085,7 +3251,7 @@ deferInit("chunk-r01896cg.js:51694", () => {
     "g",
   );
 });
-//@ chunk-r01896cg.js:51836-54371 layout
+//@ chunk-nzz6y5xm.js:54510-57045 layout
 /**
  * 校验 heredoc：必须有被扫描的正文；分界符未加引号时只在 plainUnquotedHeredocs 模式且正文只含可静态解析的 $name 时放行，否则 too-complex（differential）；引号分界符含反斜杠、<<- 配制表符分界符、正文行以分界符开头后跟 ) ` } 等也拒绝。可选允许分界行后紧跟一个简单管道。
  */
@@ -3226,7 +3392,7 @@ function walkHeredocRedirect(node, varScope, trailingPipeline) {
   }
   return null;
 }
-//@ chunk-r01896cg.js:54371-54707 layout
+//@ chunk-nzz6y5xm.js:57045-57381 layout
 /**
  * 校验 here-string（<<<）：参数需可静态解析，禁止 fd 变量与换行后注释。
  */
@@ -3245,14 +3411,14 @@ function walkHerestringRedirect(node, innerCommands, varScope, bareAssignmentNam
   }
   return null;
 }
-//@ chunk-r01896cg.js:54707-55086 facade-majority
+//@ chunk-nzz6y5xm.js:57381-57760 facade-majority
 var COMMAND_WRAPPER_BUILTINS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SAFE_PREFIX_ASSIGN_RE;
 var ASSIGNING_WRAPPERS;
 var DECLARATION_BUILTINS;
 var DECLARATION_BUILTINS_ZSH;
 var POSIX_SPECIAL_BUILTINS_NONEVAL;
-deferInit("chunk-r01896cg.js:54707", () => {
+deferInit("chunk-nzz6y5xm.js:57381", () => {
   COMMAND_WRAPPER_BUILTINS = new Set(["command", "builtin", "noglob", "nocorrect", "time"]);
   SAFE_PREFIX_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*\+?=[A-Za-z0-9_.,:/@%+=-]*$/;
   ASSIGNING_WRAPPERS = new Set(["builtin", "command", "noglob"]);
@@ -3272,7 +3438,7 @@ deferInit("chunk-r01896cg.js:54707", () => {
     "unset",
   ]);
 });
-//@ chunk-r01896cg.js:55086-55887 layout
+//@ chunk-nzz6y5xm.js:57760-58561 layout
 function checkZshReadDivergence(operand, flag, bareNameOnly, varScope, bareAssignmentNames) {
   if (operand === undefined) return null;
   let [, name = "", rest = ""] = /^([A-Za-z_][A-Za-z0-9_]*)([\s\S]*)$/.exec(operand) ?? [];
@@ -3309,7 +3475,7 @@ function checkZshReadDivergence(operand, flag, bareNameOnly, varScope, bareAssig
     differential: true,
   };
 }
-//@ chunk-r01896cg.js:55887-62370 layout
+//@ chunk-nzz6y5xm.js:58561-65044 layout
 /**
  * 按命令语义更新变量作用域：识别 builtin/command/noglob 包装（zsh/bash 行为不同时拒绝）、前缀赋值、declare 类、read（含 zsh read 分歧检查）、printf -v、unset、print、set -A、mapfile、cd/pushd/popd（标 PWD/OLDPWD 未知），以及声明前缀（declarationPrefix）模式下的赋值核对；写入受保护变量即 too-complex。
  */
@@ -3738,7 +3904,7 @@ function applyCommandVariableWrites(
   bareAssignmentNames.push(...assignedNames);
   return null;
 }
-//@ chunk-r01896cg.js:62370-62591 layout
+//@ chunk-nzz6y5xm.js:65044-65265 layout
 function wrappedGlobResult(commandName, word) {
   return readingDivergentShapes
     ? null
@@ -3750,10 +3916,10 @@ function wrappedGlobResult(commandName, word) {
         keepsRemovalVerdict: true,
       };
 }
-//@ chunk-r01896cg.js:62591-62655 layout
+//@ chunk-nzz6y5xm.js:65265-65329 layout
 var ASSIGNMENT_WORD_RE = /^([A-Za-z_]\w*)(?:\[[\s\S]*?\])?(\+?)=([\s\S]*)$/;
 var RE_EXPANSION_FACTOR = 16;
-//@ chunk-r01896cg.js:62655-64008 layout
+//@ chunk-nzz6y5xm.js:65329-66682 layout
 function checkRedirectReadsPrefixVar(children, command, redirects, commands, varScope, bareAssignmentNames) {
   let assignments = [...command.envVars];
   let wordNodes = argvWordNodes.get(command.argv);
@@ -3833,13 +3999,13 @@ function checkRedirectReadsPrefixVar(children, command, redirects, commands, var
   }
   return null;
 }
-//@ chunk-r01896cg.js:64008-64080 layout
+//@ chunk-nzz6y5xm.js:66682-66754 layout
 function consumeReExpansionBudget(node) {
   if (node.text.length > reExpansionBudget) return false;
   reExpansionBudget -= node.text.length;
   return true;
 }
-//@ chunk-r01896cg.js:64080-66702 fingerprint (2.1.88 match: walkCommand, 0.699)
+//@ chunk-nzz6y5xm.js:66754-69376 fingerprint (2.1.88 match: walkCommand, 0.698)
 /**
  * 把一个 command 节点变成 SimpleCommand：逐子节点处理前缀赋值（同命令内前缀互相引用即拒绝）、command_name（环境清洗开启时命令名不能是变量）、参数（以 - 开头且含运行期内容拒绝）、$var、file/herestring 重定向；之后检查重定向读前缀变量、按命令更新变量作用域（applyCommandVariableWrites）。text 字段在含 $ 或换行时用重新加引号的 argv 重建。
  */
@@ -4029,9 +4195,9 @@ function walkCommand(node, extraRedirects, innerCommands, varScope, bareAssignme
     bareAssignmentNames: [],
   };
 }
-//@ chunk-r01896cg.js:66702-66715 layout
+//@ chunk-nzz6y5xm.js:69376-69389 layout
 var GLOB_CHARS = "*?[";
-//@ chunk-r01896cg.js:66715-67046 layout
+//@ chunk-nzz6y5xm.js:69389-69720 layout
 function nodeHasUnquotedGlob(child) {
   switch (child.type) {
     case "word":
@@ -4051,7 +4217,7 @@ function nodeHasUnquotedGlob(child) {
       return true;
   }
 }
-//@ chunk-r01896cg.js:67046-67903 layout
+//@ chunk-nzz6y5xm.js:69720-70577 layout
 /**
  * 递归分析 $(…)：要求子节点之间只有空白/分号/续行（否则“bytes no parsed node accounts for”），内部命令以复制的作用域收集进同一命令列表，空替换补一条 true 命令。
  */
@@ -4106,7 +4272,7 @@ function walkCommandSubstitution(node, innerCommands, varScope, bareAssignmentNa
   if (sawContent && innerCommands.length === innerCommandCount) pushTrueCommand(innerCommands, node);
   return null;
 }
-//@ chunk-r01896cg.js:67903-70413 fingerprint (2.1.88 match: walkArgument, 0.634)
+//@ chunk-nzz6y5xm.js:70577-73087 fingerprint (2.1.88 match: walkArgument, 0.634)
 /**
  * 把参数节点解析成字符串：word（拒绝花括号展开、转义花括号、漏解析的 $ 或反引号、被吞的引号）、number、raw_string、string、concatenation（拒绝子节点间遗漏字节、zsh $name[expr]）、算术展开（返回 VAR_PLACEHOLDER）、$var；其余 too-complex。
  */
@@ -4238,7 +4404,7 @@ function walkArgument(node, innerCommands, varScope, bareAssignmentNames) {
       return tooComplex(node);
   }
 }
-//@ chunk-r01896cg.js:70413-73069 fingerprint (2.1.88 match: walkString, 0.51)
+//@ chunk-nzz6y5xm.js:73087-75743 fingerprint (2.1.88 match: walkString, 0.508)
 /**
  * 解析双引号字符串：拼接 string_content，处理 $（拒绝 $[...]、zsh $+ 等前缀标志）、$(cat <<EOF) 安全内联、其他命令替换（递归收集并以 CMDSUB_PLACEHOLDER 代替）、$var（按作用域取值）、算术展开；子节点间间隙含反引号时拒绝。
  */
@@ -4401,10 +4567,10 @@ function walkString(node, innerCommands, varScope, bareAssignmentNames) {
   }
   return result;
 }
-//@ chunk-r01896cg.js:73069-73190 layout
+//@ chunk-nzz6y5xm.js:75743-75864 layout
 var ARITH_LITERAL_TOKEN_RE =
   /^(?:[0-9]+|0[xX][0-9a-fA-F]+|[0-9]+#[0-9a-zA-Z]+|[-+*/%^&|~!<>=?:(),]+|<<|>>|\*\*|&&|\|\||[<>=!]=|\$\(\(|\)\))$/;
-//@ chunk-r01896cg.js:73190-73619 fingerprint (2.1.88 match: walkArithmetic, 1)
+//@ chunk-nzz6y5xm.js:75864-76293 fingerprint (2.1.88 match: walkArithmetic, 1)
 /**
  * 校验算术展开：叶子只能是数字字面量或运算符，引用变量即 too-complex。
  */
@@ -4435,7 +4601,7 @@ function walkArithmetic(node) {
   }
   return null;
 }
-//@ chunk-r01896cg.js:73619-73721 layout
+//@ chunk-nzz6y5xm.js:76293-76395 layout
 function pushTrueCommand(commands, node) {
   commands.push({
     argv: ["true"],
@@ -4445,13 +4611,13 @@ function pushTrueCommand(commands, node) {
     hasUnquotedGlob: hasUnquotedGlob(node.text),
   });
 }
-//@ chunk-r01896cg.js:73721-73834 layout
+//@ chunk-nzz6y5xm.js:76395-76508 layout
 function containsArithmeticExpansion(child) {
   if (child.type === "arithmetic_expansion") return true;
   for (let child_2 of child.children) if (child_2 && containsArithmeticExpansion(child_2)) return true;
   return false;
 }
-//@ chunk-r01896cg.js:73834-74513 fingerprint (2.1.88 match: extractSafeCatHeredoc, 0.925)
+//@ chunk-nzz6y5xm.js:76508-77187 fingerprint (2.1.88 match: extractSafeCatHeredoc, 0.926)
 /**
  * 识别 $(cat <<'EOF' … EOF) 这种安全的字面量替换：只含一个 cat 命令和一个合法 heredoc 时返回正文；正文含 /proc/*\/environ 或危险 awk 程序时返回 'DANGEROUS'；否则 null。
  */
@@ -4487,7 +4653,7 @@ function extractSafeCatHeredoc(subNode) {
   if (awkProgramHasExecBridge(body) !== false) return "DANGEROUS";
   return body;
 }
-//@ chunk-r01896cg.js:74513-76097 fingerprint (2.1.88 match: walkVariableAssignment, 0.966)
+//@ chunk-nzz6y5xm.js:77187-78771 fingerprint (2.1.88 match: walkVariableAssignment, 0.966)
 /**
  * 解析 NAME=value / NAME+=value：命令替换值记为 CMDSUB_PLACEHOLDER，$var 按作用域解析，其余经 walkArgument；返回 {name, value, isAppend} 或 too-complex。
  */
@@ -4565,12 +4731,12 @@ function walkVariableAssignment(node, innerCommands, varScope, bareAssignmentNam
     isAppend,
   };
 }
-//@ chunk-r01896cg.js:76097-76691 facade-majority
+//@ chunk-nzz6y5xm.js:78771-79365 facade-majority
 /**
  * bash/zsh 会隐式改写的特殊变量集合（_、RANDOM、SECONDS、REPLY、PIPESTATUS、BASH_REMATCH、MATCH、OPTARG、PS1 等），这些变量的值不能当作已跟踪的常量。
  */
 var BASH_IMPLICITLY_REBOUND_VARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r01896cg.js:76097", () => {
+deferInit("chunk-nzz6y5xm.js:78771", () => {
   BASH_IMPLICITLY_REBOUND_VARS = new Set([
     "_",
     "RANDOM",
@@ -4631,7 +4797,7 @@ deferInit("chunk-r01896cg.js:76097", () => {
     "RPROMPT2",
   ]);
 });
-//@ chunk-r01896cg.js:76691-77367 fingerprint (2.1.88 match: resolveSimpleExpansion, 0.525)
+//@ chunk-nzz6y5xm.js:79365-80041 fingerprint (2.1.88 match: resolveSimpleExpansion, 0.526)
 /**
  * 解析 $var：作用域里有值时返回值（不确定值→too-complex+divergentShape；动态变量只在引号内且是安全环境变量时返回占位符；裸用时空值或含空白/通配的值拒绝）；HOME 取本机 homedir；引号内的安全环境变量与特殊变量返回 VAR_PLACEHOLDER；其余 too-complex。
  */
@@ -4689,11 +4855,11 @@ function resolveSimpleExpansion(node, varScope, insideString) {
   }
   return tooComplex(node);
 }
-//@ chunk-r01896cg.js:77367-77392 layout
+//@ chunk-nzz6y5xm.js:80041-80066 layout
 function markLoopWritesUnknown(varScope, node) {
   markWrittenVarsUnknown(node, varScope);
 }
-//@ chunk-r01896cg.js:77392-77739 layout
+//@ chunk-nzz6y5xm.js:80066-80413 layout
 /**
  * later 轮次下重新遍历循环体（嵌套超过 MAX_LOOP_NESTING=5 即 too-complex），返回循环中值被改变的变量名；保存/恢复相关模块级状态。
  */
@@ -4727,7 +4893,7 @@ function collectLoopWrites(loopNode, commands, varScope, bareAssignmentNames) {
   prefixAssignInBranch = savedPrefixInBranch;
   return commands_2 ?? [...varScope.keys()].filter((key) => probeScope.get(key) !== varScope.get(key));
 }
-//@ chunk-r01896cg.js:77739-78254 layout
+//@ chunk-nzz6y5xm.js:80413-80928 layout
 function markUnsetOperandsUnknown(operands, varScope) {
   let markAllUnknown = () => {
     for (let key of varScope.keys()) markVarUnknown(varScope, key);
@@ -4760,7 +4926,7 @@ function markUnsetOperandsUnknown(operands, varScope) {
     markAllUnknown();
   }
 }
-//@ chunk-r01896cg.js:78254-78693 layout
+//@ chunk-nzz6y5xm.js:80928-81367 layout
 function staticWordValue(child) {
   if (!child) return null;
   switch (child.type) {
@@ -4788,7 +4954,7 @@ function staticWordValue(child) {
       return null;
   }
 }
-//@ chunk-r01896cg.js:78693-81485 layout
+//@ chunk-nzz6y5xm.js:81367-84159 layout
 /**
  * 遍历子树，把可能被写入的变量在作用域中标为未知（赋值、for 变量、read/mapfile/unset、包装命令中的赋值等；跳过函数定义/子 shell/替换与后台命令）。用于循环与 while 条件。
  */
@@ -4982,7 +5148,7 @@ function markWrittenVarsUnknown(node, varScope) {
   }
   for (let child of node.children) if (child) markWrittenVarsUnknown(child, varScope);
 }
-//@ chunk-r01896cg.js:81485-81650 layout
+//@ chunk-nzz6y5xm.js:84159-84324 layout
 function mergeScopeInto(target, branchScope) {
   for (let [name, value] of branchScope) {
     let existing = target.get(name);
@@ -4995,7 +5161,7 @@ function mergeScopeInto(target, branchScope) {
   }
   for (let key of target.keys()) if (!branchScope.has(key)) markVarUnknown(target, key);
 }
-//@ chunk-r01896cg.js:81650-81885 fingerprint (2.1.88 match: applyVarToScope, 1)
+//@ chunk-nzz6y5xm.js:84324-84559 fingerprint (2.1.88 match: applyVarToScope, 1)
 /**
  * 把赋值写入变量作用域：分支内或值冲突时标为未知（VAR_PLACEHOLDER），+= 累加，否则覆盖。
  */
@@ -5018,11 +5184,11 @@ function applyVarToScope(varScope, assignment, markUnknown = false) {
   let combined = assignment.isAppend ? (existing ?? "") + assignment.value : assignment.value;
   varScope.set(assignment.name, combined);
 }
-//@ chunk-r01896cg.js:81885-81921 file-local
+//@ chunk-nzz6y5xm.js:84559-84595 file-local
 function stripRawString(text) {
   return text.slice(1, -1);
 }
-//@ chunk-r01896cg.js:81921-82065 layout
+//@ chunk-nzz6y5xm.js:84595-84739 layout
 function containsExpansionNode(node) {
   for (let child of node.children) {
     if (!child) continue;
@@ -5031,14 +5197,14 @@ function containsExpansionNode(node) {
   }
   return false;
 }
-//@ chunk-r01896cg.js:82065-82229 layout
+//@ chunk-nzz6y5xm.js:84739-84903 layout
 function tildeVarName(text) {
   if (text === "~" || text.startsWith("~/")) return "HOME";
   if (text === "~+" || text.startsWith("~+/")) return "PWD";
   if (text === "~-" || text.startsWith("~-/")) return "OLDPWD";
   return null;
 }
-//@ chunk-r01896cg.js:82229-82512 layout
+//@ chunk-nzz6y5xm.js:84903-85186 layout
 function findReferencedVar(child, names) {
   let isDefinition = child.type === "variable_assignment";
   for (let child_2 of child.children) {
@@ -5056,7 +5222,7 @@ function findReferencedVar(child, names) {
   }
   return null;
 }
-//@ chunk-r01896cg.js:82512-82897 fingerprint (2.1.88 match: tooComplex, 0.518)
+//@ chunk-nzz6y5xm.js:85186-85571 fingerprint (2.1.88 match: tooComplex, 0.517)
 /**
  * 把无法分析的节点转成 too-complex：ERROR 节点按是否为 $+非 ASCII 给不同理由，其他类型用 DANGEROUS_TYPES 中的中文化描述（如“A nested command”）。
  */
@@ -5077,12 +5243,12 @@ function tooComplex(node) {
     nodeType: node.type,
   };
 }
-//@ chunk-r01896cg.js:82897-83970 fingerprint (2.1.88 match: DANGEROUS_TYPES, 0.478)
+//@ chunk-nzz6y5xm.js:85571-86644 fingerprint (2.1.88 match: DANGEROUS_TYPES, 0.477)
 /**
  * 节点类型 → 用户可读描述（A variable、A nested command、A here-document…），tooComplex 生成理由时使用。
  */
 var DANGEROUS_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-r01896cg.js:82897", () => {
+deferInit("chunk-nzz6y5xm.js:85571", () => {
   DANGEROUS_TYPES = new Map([
     ["simple_expansion", "A variable"],
     ["expansion", "A variable in braces"],
@@ -5112,7 +5278,7 @@ deferInit("chunk-r01896cg.js:82897", () => {
     ["variable_assignments", "Variable assignments"],
   ]);
 });
-//@ chunk-r01896cg.js:83970-84415 facade-majority
+//@ chunk-nzz6y5xm.js:86644-87089 facade-majority
 /**
  * 提取文本中所有 ${…} 的内部内容（尊重引号与嵌套）。
  */
@@ -5164,7 +5330,7 @@ function liveBracedExpansionBodies(text) {
   }
   return bodies;
 }
-//@ chunk-r01896cg.js:84415-84691 facade-majority
+//@ chunk-nzz6y5xm.js:87089-87365 facade-majority
 /**
  * 去掉反斜杠转义（保留会影响引号或展开的转义），单引号区原样保留，用于比较命令文本的字面形态。
  */
@@ -5201,7 +5367,7 @@ function stripLiteralQuotedRegions(text) {
   }
   return out;
 }
-//@ chunk-r01896cg.js:84691-84934 facade-majority
+//@ chunk-nzz6y5xm.js:87365-87608 facade-majority
 /**
  * 去掉引号内的内容和转义字符，只保留未加引号的部分。
  */
@@ -5231,13 +5397,13 @@ function stripQuotedRegions(text) {
   }
   return out;
 }
-//@ chunk-r01896cg.js:84934-85146 facade-majority
+//@ chunk-nzz6y5xm.js:87608-87820 facade-majority
 /**
  * 会写变量的 zsh 模块函数名（strftime、zstat、zselect、zftp 等），以及会写变量的 zsh 内建集合（zformat、zparseopts、zstyle、vared……）。
  */
 var ZSH_MODULE_NAME_WRITERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ZSH_VAR_WRITING_BUILTINS;
-deferInit("chunk-r01896cg.js:84934", () => {
+deferInit("chunk-nzz6y5xm.js:87608", () => {
   ZSH_MODULE_NAME_WRITERS = [
     "strftime",
     "pcre_match",
@@ -5262,19 +5428,19 @@ deferInit("chunk-r01896cg.js:84934", () => {
     ...ZSH_MODULE_NAME_WRITERS,
   ]);
 });
-//@ chunk-r01896cg.js:85146-85388 layout
+//@ chunk-nzz6y5xm.js:87820-88062 layout
 function zshStatWritesVarReason(commandName, args) {
   return commandName === "stat" && args.some((arg) => /^-[gnNolLtTrs]*[AH]/.test(arg)) && noteRefusal()
     ? "'stat' with -A or -H \u2014 zsh's stat builtin stores its result in the variable that option names, so a tracked value cannot be statically verified"
     : null;
 }
-//@ chunk-r01896cg.js:85388-85787 facade-majority (2.1.88 match: ZSH_DANGEROUS_BUILTINS, 0.649)
+//@ chunk-nzz6y5xm.js:88062-88461 facade-majority (2.1.88 match: ZSH_DANGEROUS_BUILTINS, 0.649)
 /**
  * zsh 危险内建集合（zmodload、emulate、sysopen、zpty、ztcp、zf_rm……、setopt、autoload，以及会写变量的内建），checkSemantics 遇到即拒绝；同一语句定义 find 的执行/写类动作集合 FIND_EXEC_ACTIONS（-exec、-delete、-fprint 等）。
  */
 var ZSH_DANGEROUS_BUILTINS; // deferred: uses ZSH_MODULE_NAME_WRITERS of its import cycle while loading; runs once the cycle is complete
 var FIND_EXEC_ACTIONS;
-deferInit("chunk-r01896cg.js:85388", () => {
+deferInit("chunk-nzz6y5xm.js:88062", () => {
   ZSH_DANGEROUS_BUILTINS = new Set([
     "zmodload",
     "emulate",
@@ -5318,11 +5484,11 @@ deferInit("chunk-r01896cg.js:85388", () => {
     "-files0-from",
   ]);
 });
-//@ chunk-r01896cg.js:85787-85828 facade-majority
+//@ chunk-nzz6y5xm.js:88461-88502 facade-majority
 function isFindDangerousAction(action) {
   return FIND_EXEC_ACTIONS.has(action) && isRmModifierAllowed(action);
 }
-//@ chunk-r01896cg.js:85828-86374 layout
+//@ chunk-nzz6y5xm.js:88502-89048 layout
 /**
  * 匹配 find 的 -newerXY 谓词。
  */
@@ -5330,7 +5496,7 @@ var FIND_ARG_TAKING_PREDICATES; // deferred: has load-time effects after a defer
 var FIND_NEWER_XY_RE_2;
 var FIND_NEWER_XY_RE;
 var FIND_ACTION_FLAG_RE;
-deferInit("chunk-r01896cg.js:85828", () => {
+deferInit("chunk-nzz6y5xm.js:88502", () => {
   FIND_ARG_TAKING_PREDICATES = new Set([
     "-name",
     "-iname",
@@ -5383,26 +5549,26 @@ deferInit("chunk-r01896cg.js:85828", () => {
   FIND_NEWER_XY_RE = /^-(?:[EHLPXdsx]*D|f|[dsx]*[EHLPX][EHLPXdsx]*f)$/;
   FIND_ACTION_FLAG_RE = /^-[dsx]+f$/;
 });
-//@ chunk-r01896cg.js:86374-86431 facade-majority
+//@ chunk-nzz6y5xm.js:89048-89105 facade-majority
 function findWordTakesOperand(word) {
   return FIND_ARG_TAKING_PREDICATES.has(word) || FIND_NEWER_XY_RE_2.test(word) || FIND_NEWER_XY_RE.test(word);
 }
-//@ chunk-r01896cg.js:86431-86465 facade-majority
+//@ chunk-nzz6y5xm.js:89105-89139 facade-majority
 function findWordTakesFlagValue(word) {
   return FIND_NEWER_XY_RE.test(word);
 }
-//@ chunk-r01896cg.js:86465-86499 facade-majority
+//@ chunk-nzz6y5xm.js:89139-89173 facade-majority
 function isAmbiguousFindWord(word) {
   return FIND_ACTION_FLAG_RE.test(word);
 }
-//@ chunk-r01896cg.js:86499-86734 facade-majority (2.1.88 match: EVAL_LIKE_BUILTINS, 0.812)
+//@ chunk-nzz6y5xm.js:89173-89408 facade-majority (2.1.88 match: EVAL_LIKE_BUILTINS, 0.812)
 /**
  * eval 类内建集合（eval、source、.、exec、trap、alias、let、mapfile、bind、complete……），这类命令的参数会被当成代码执行；同时定义 awk 程序名集合，以及 awk 读取程序文件的选项正则。
  */
 var EVAL_LIKE_BUILTINS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var AWK_NAMES;
 var AWK_PROGRAM_FILE_OPT_RE;
-deferInit("chunk-r01896cg.js:86499", () => {
+deferInit("chunk-nzz6y5xm.js:89173", () => {
   EVAL_LIKE_BUILTINS = new Set([
     "eval",
     "source",
@@ -5425,7 +5591,7 @@ deferInit("chunk-r01896cg.js:86499", () => {
   AWK_NAMES = new Set(["awk", "gawk", "mawk", "nawk"]);
   AWK_PROGRAM_FILE_OPT_RE = /^(?:-[FvW]$|--(?:fie|a$|as))/;
 });
-//@ chunk-r01896cg.js:86734-87486 facade-majority
+//@ chunk-nzz6y5xm.js:89408-90160 facade-majority
 /**
  * 检查 awk 程序文本：system()、命令管道/getline、@load/@include/间接调用、extension()、/inet/ 网络套接字，命中返回理由，否则 false。
  */
@@ -5442,7 +5608,7 @@ function awkProgramHasExecBridge(program) {
     return "awk program opens a gawk /inet/ network socket which can exfiltrate data";
   return false;
 }
-//@ chunk-r01896cg.js:87486-87916 facade-majority
+//@ chunk-nzz6y5xm.js:90160-90590 facade-majority
 /**
  * shell 程序名集合（POSIX shell、busybox/toybox/wsl/su 等 applet、fish/csh、cmd/powershell）、可透明剥离的启动包装（time、command、env、nice、nohup、sudo、doas、timeout……）和不处理的执行包装（watch、setsid、strace、flock、unshare……）。
  */
@@ -5451,7 +5617,7 @@ var APPLET_SHELL_NAMES;
 var SHELL_PROGRAM_NAMES;
 var TRANSPARENT_LAUNCHER_NAMES;
 var UNHANDLED_EXEC_WRAPPERS;
-deferInit("chunk-r01896cg.js:87486", () => {
+deferInit("chunk-nzz6y5xm.js:90160", () => {
   POSIX_SHELL_NAMES = new Set(["bash", "sh", "zsh", "dash", "ksh", "mksh", "ash", "hush", "rbash"]);
   APPLET_SHELL_NAMES = new Set(["busybox", "toybox", "wsl", "su", "runuser"]);
   SHELL_PROGRAM_NAMES = new Set([
@@ -5492,11 +5658,11 @@ deferInit("chunk-r01896cg.js:87486", () => {
     "nsenter",
   ]);
 });
-//@ chunk-r01896cg.js:87916-87970 layout
+//@ chunk-nzz6y5xm.js:90590-90644 layout
 function isZshDangerousBuiltin(name) {
   return ZSH_DANGEROUS_BUILTINS.has(name) && (!ZSH_VAR_WRITING_BUILTINS.has(name) || noteRefusal());
 }
-//@ chunk-r01896cg.js:87970-88068 facade-majority
+//@ chunk-nzz6y5xm.js:90644-90742 facade-majority
 /**
  * 命令名是否为 eval 类内建、zsh 危险内建、exec 包装或 rm/rmdir。
  */
@@ -5511,7 +5677,7 @@ function isSandboxAutoAllowUnsafeBase(name) {
     baseName === "rmdir"
   );
 }
-//@ chunk-r01896cg.js:88068-89928 facade-majority
+//@ chunk-nzz6y5xm.js:90742-92602 facade-majority
 /**
  * Bash 语义检查用的常量表：会对下标求值的选项（test -v、printf -v、read -a…）、算术比较运算符、声明类关键字与内建、set -o 安全选项与字母，以及影响命令查找/执行的变量名（PATH、BASH_ENV、LANG、LC_* 等）。
  */
@@ -5526,7 +5692,7 @@ var SET_O_SAFE_OPTS;
 var SET_O_SAFE_LETTERS;
 var EXEC_INFLUENCING_VARS;
 var INTEGER_ATTR_DEFAULT_VARS;
-deferInit("chunk-r01896cg.js:88068", () => {
+deferInit("chunk-nzz6y5xm.js:90742", () => {
   SUBSCRIPT_EVAL_FLAGS = {
     test: new Set(["-v", "-R", "-t"]),
     "[": new Set(["-v", "-R", "-t"]),
@@ -5682,7 +5848,7 @@ deferInit("chunk-r01896cg.js:88068", () => {
     "status",
   ]);
 });
-//@ chunk-r01896cg.js:89928-90092 layout
+//@ chunk-nzz6y5xm.js:92602-92766 layout
 function isIntegerVarAssignUnsafe(name, value) {
   if (!INTEGER_ATTR_DEFAULT_VARS.has(name)) return false;
   if (value.includes("[") || value.includes("`") || /\$\(/.test(value) || containsAnyPlaceholder(value))
@@ -5690,7 +5856,7 @@ function isIntegerVarAssignUnsafe(name, value) {
   if (!/^(0|[1-9][0-9]{0,17})$/.test(value)) return true;
   return false;
 }
-//@ chunk-r01896cg.js:90092-90219 facade-majority
+//@ chunk-nzz6y5xm.js:92766-92893 facade-majority
 /**
  * 是否为影响命令查找/执行的变量（PATH、HOME、IFS 之外的 fpath/cdpath/LANG/LC_* 等，及 LD_*\/DYLD_*\/BASH_FUNC_* 前缀），大小写不敏感。
  */
@@ -5703,7 +5869,7 @@ function isExecInfluencingVar(name) {
     lower.startsWith("bash_func_")
   );
 }
-//@ chunk-r01896cg.js:90219-90297 facade-majority
+//@ chunk-nzz6y5xm.js:92893-92971 facade-majority
 /**
  * 受保护 shell 变量：执行影响变量、IFS、PS4、PROMPT4 或整数属性变量。ShellSnapshot 解析导出变量时也用它过滤。
  */
@@ -5716,7 +5882,7 @@ function isAssignmentNameUnsafeForSandbox(name) {
     INTEGER_ATTR_DEFAULT_VARS.has(name)
   );
 }
-//@ chunk-r01896cg.js:90297-90558 facade-majority
+//@ chunk-nzz6y5xm.js:92971-93232 facade-majority
 /**
  * read 内建的选项表：带数据参数的选项、需再检查参数的选项、数值参数选项与数值正则；另有带下标变量名正则、组合短选项里吃参数的字母、/proc/*\/environ 正则和“换行后 #”正则。
  */
@@ -5728,7 +5894,7 @@ var SUBSCRIPTED_NAME_RE;
 var OPTION_LETTERS_TAKING_ARGUMENT;
 var PROC_ENVIRON_RE;
 var NEWLINE_HASH_RE;
-deferInit("chunk-r01896cg.js:90297", () => {
+deferInit("chunk-nzz6y5xm.js:92971", () => {
   READ_DATA_FLAGS = new Set(["-p", "-d", "-n", "-N", "-t", "-u", "-i"]);
   READ_FLAGS_WITH_CHECKED_OPERAND = new Set(["-p", "-t", "-n"]);
   READ_NUMERIC_ARG_FLAGS = new Set(["-t", "-n", "-N"]);
@@ -5738,7 +5904,7 @@ deferInit("chunk-r01896cg.js:90297", () => {
   PROC_ENVIRON_RE = /\/proc\/.*\/environ/;
   NEWLINE_HASH_RE = /\n\s*#/;
 });
-//@ chunk-r01896cg.js:90558-103152 facade-majority (2.1.88 match: checkSemantics, 0.488)
+//@ chunk-nzz6y5xm.js:93232-105826 facade-majority (2.1.88 match: checkSemantics, 0.488)
 /**
  * 对 simple 结果做语义检查（2.1.88 checkSemantics 的扩展）：先剥去 time/nohup/timeout/nice/env/stdbuf/command/builtin/noglob/xargs 包装（参数不规范即拒绝），再检查命令名为空/占位符/片段、test -v 等下标求值、eval 类内建、zsh 危险内建、awk 危险程序、find -exec 类、shell 关键字作命令名、/proc/*\/environ、换行后 #（kind:'newline-hash'）等。返回 {ok:true} 或 {ok:false, reason, kind?}。
  */
@@ -6334,12 +6500,12 @@ function checkSemantics(commands, options) {
     ok: true,
   };
 }
-//@ chunk-38axkkfw.js:4923-5089 fingerprint (2.1.88 match: walkHeredocRedirect, 0.627)
+//@ chunk-9jzjcqxe.js:5577-5743 fingerprint (2.1.88 match: walkHeredocRedirect, 0.621)
 /**
  * 重定向相关的操作符与节点类型集合（< > >> << <<- <<< <& >& &> &>> >| 以及 file_descriptor、heredoc_*），判断重定向子节点是否只含这些记号。
  */
 var REDIRECT_OPERATOR_TOKENS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-38axkkfw.js:4923", () => {
+deferInit("chunk-9jzjcqxe.js:5577", () => {
   REDIRECT_OPERATOR_TOKENS = new Set([
     "<",
     ">",
@@ -6361,7 +6527,7 @@ deferInit("chunk-38axkkfw.js:4923", () => {
     "heredoc_end",
   ]);
 });
-//@ chunk-e6aww6q8.js:1144304-1144468 fingerprint (2.1.88 match: parseForSecurity, 0.861)
+//@ chunk-5xgkngpb.js:1139641-1139805 fingerprint (2.1.88 match: parseForSecurity, 0.86)
 /**
  * 快速判断命令是否含 zsh 危险命令：能安全解析时用 AST argv，否则用 splitCommand + tryParseShellCommand 回退，逐条交给 validateZshDangerousCommands。
  */
@@ -6374,17 +6540,17 @@ function hasZshDangerousCommand(cmd) {
       : splitCommand(cmd).map(getCommandArgv)
   ).some((argv) => isXargsToSafeFilter(stripCommandBuiltinPrefixes(argv)));
 }
-//@ chunk-e6aww6q8.js:1151910-1151949 fingerprint (2.1.88 match: walkHerestringRedirect, 1)
+//@ chunk-5xgkngpb.js:1147250-1147289 fingerprint (2.1.88 match: walkHerestringRedirect, 1)
 var INPUT_REDIRECT_OPS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1151910", () => {
+deferInit("chunk-5xgkngpb.js:1147250", () => {
   INPUT_REDIRECT_OPS_2 = new Set(["<", "<<", "<<<", "<&"]);
 });
-//@ chunk-e6aww6q8.js:1155366-1155446 placement
+//@ chunk-5xgkngpb.js:1150718-1150798 placement
 /**
  * 匹配命令开头的 command/builtin/noglob 包装前缀；stripCommandPrefixes 循环剥除。
  */
 var COMMAND_PREFIX_STRIP_RE = /^(?:(?:command(?:[ \t]+-p+)*|builtin)(?:[ \t]+--)?|noglob)[ \t]+(?!-)/;
-//@ chunk-e6aww6q8.js:1155446-1155517 placement
+//@ chunk-5xgkngpb.js:1150798-1150869 placement
 /**
  * 循环剥掉 command/builtin/noglob 前缀，得到实际执行的命令文本。
  */
@@ -6393,7 +6559,7 @@ function stripCommandPrefixes(text) {
   while (COMMAND_PREFIX_STRIP_RE.test(stripped)) stripped = stripped.replace(COMMAND_PREFIX_STRIP_RE, "");
   return stripped;
 }
-//@ chunk-e6aww6q8.js:1155517-1155651 placement
+//@ chunk-5xgkngpb.js:1150869-1151003 placement
 /**
  * 判断语法树中是否含子 shell 或复合语句节点。
  */
@@ -6402,21 +6568,33 @@ function hasSubshellNode(node) {
   for (let child of node.children) if (child && hasSubshellNode(child)) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:1155651-1155721 fingerprint (2.1.88 match: STRUCTURAL_TYPES, 1)
+//@ chunk-5xgkngpb.js:1151003-1151073 fingerprint (2.1.88 match: STRUCTURAL_TYPES, 1)
 /**
  * 结构性节点类型集合：program、list、pipeline、redirected_statement，遍历时只下钻不当作命令。
  */
 var STRUCTURAL_TYPES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1155651", () => {
+deferInit("chunk-5xgkngpb.js:1151003", () => {
   STRUCTURAL_TYPES_2 = new Set(["program", "list", "pipeline", "redirected_statement"]);
 });
-//@ chunk-jxcqr1hv.js:657-705 fingerprint (2.1.88 match: BARE_SUBSCRIPT_NAME_BUILTINS, 0.702)
-function BARE_SUBSCRIPT_NAME_BUILTINS_2(fallback) {
-  return unattendedServingConsentView() !== "unset" || unattendedServingConsentMayHoldYes() || fallback;
-}
 export {
+  parseForSecurityFromAst,
+  parseForSecurity,
+  containsRuntimePlaceholder,
   containsAnyPlaceholder,
-  startsWithAnyPlaceholder,
+  redactPlaceholdersForDisplay,
+  awkProgramHasExecBridge,
+  isFindDangerousAction,
+  INPUT_REDIRECT_OPS_2,
+  POSIX_SHELL_NAMES,
+  TEST_ARITH_CMP_OPS,
+  TEST_ARITH_NUMERIC_RE,
+  isAmbiguousFindWord,
+  findWordTakesFlagValue,
+  findWordTakesOperand,
+  hasSourceUnquotedGlob,
+  STRUCTURAL_TYPES_2,
+  hasSubshellNode,
+  stripCommandPrefixes,
   BACKSLASH_ESCAPED_SPACE_RE,
   CONTROL_CHAR_RE,
   LONE_SURROGATE_RE,
@@ -6424,63 +6602,47 @@ export {
   ZSH_TILDE_BRACKET_RE,
   ZSH_EQUALS_EXPANSION_RE,
   ZSH_NUMERIC_GLOB_RE,
+  WORD_LEAF_EXPANSION_RE,
   scanSameLineStatementSplits,
   stripQuotedRegions,
   REDIRECT_OPERATOR_TOKENS,
-  WORD_LEAF_EXPANSION_RE,
   WORD_LEAF_QUOTE_RE,
-  SHELL_PROGRAM_NAMES,
-  TRANSPARENT_LAUNCHER_NAMES,
-  AWK_NAMES,
-  SET_O_SAFE_OPTS,
-  INTEGER_ATTR_DEFAULT_VARS,
-  UNHANDLED_EXEC_WRAPPERS,
-  ZSH_SPECIAL_SUBSCRIPT_TESTEXPR_RE,
-  containsStandaloneCondCloser,
-  BASH_IMPLICITLY_REBOUND_VARS,
-  isAssignmentNameUnsafeForSandbox,
-  isExecInfluencingVar,
-  TEST_ARITH_CMP_OPS,
-  EVAL_LIKE_BUILTINS,
-  POSIX_SHELL_NAMES,
-  parseForSecurityFromAst,
-  POSIX_SPECIAL_BUILTINS_NONEVAL,
-  APPLET_SHELL_NAMES,
-  SET_O_SAFE_LETTERS,
-  READ_DATA_FLAGS,
-  READ_NUMERIC_ARG_FLAGS,
-  READ_NUMERIC_OPERAND_RE,
-  awkProgramHasExecBridge,
-  redactPlaceholdersForDisplay,
+  runWithRefusalTracking,
   deletePlaceholders,
   noteRefusal,
   CMDSUB_PLACEHOLDER,
   hasZshDangerousCommand,
+  isAssignmentNameUnsafeForSandbox,
   isSandboxAutoAllowUnsafeBase,
-  isFindDangerousAction,
-  isAmbiguousFindWord,
-  findWordTakesOperand,
-  findWordTakesFlagValue,
+  AWK_NAMES,
   PRINT_PROMPT_FLAG,
+  SET_O_SAFE_OPTS,
+  SET_O_SAFE_LETTERS,
   DECLARATION_LIKE_BUILTINS,
-  parseForSecurity,
   declarationPrefixReadings,
   checkSemantics,
   nodeTypeId,
-  runWithRefusalTracking,
-  BARE_SUBSCRIPT_NAME_BUILTINS_2,
-  containsRuntimePlaceholder,
-  INPUT_REDIRECT_OPS_2,
-  TEST_ARITH_NUMERIC_RE,
-  hasSourceUnquotedGlob,
-  STRUCTURAL_TYPES_2,
-  hasSubshellNode,
-  stripCommandPrefixes,
   UNICODE_WHITESPACE_RE,
   stripLiteralQuotedRegions,
+  EVAL_LIKE_BUILTINS,
+  UNHANDLED_EXEC_WRAPPERS,
   ZSH_DANGEROUS_BUILTINS,
   liveBracedExpansionBodies,
   SUBSCRIPT_EVAL_FLAGS,
   BARE_SUBSCRIPT_NAME_BUILTINS,
+  SHELL_PROGRAM_NAMES,
+  TRANSPARENT_LAUNCHER_NAMES,
   ZSH_MODULE_NAME_WRITERS,
+  failsSubstitutionTextCheck,
+  isExecInfluencingVar,
+  startsWithAnyPlaceholder,
+  INTEGER_ATTR_DEFAULT_VARS,
+  ZSH_SPECIAL_SUBSCRIPT_TESTEXPR_RE,
+  containsStandaloneCondCloser,
+  BASH_IMPLICITLY_REBOUND_VARS,
+  POSIX_SPECIAL_BUILTINS_NONEVAL,
+  APPLET_SHELL_NAMES,
+  READ_DATA_FLAGS,
+  READ_NUMERIC_ARG_FLAGS,
+  READ_NUMERIC_OPERAND_RE,
 };

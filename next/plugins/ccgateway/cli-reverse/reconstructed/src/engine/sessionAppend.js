@@ -3,24 +3,24 @@
  *
  * 2.1.316 新增：查询引擎的会话追加。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1nk4j4sn.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8fb5jme0.js (1)
  * attribution: placement 1
  */
-import { rowWithContent, mergeMessageInPlace } from "./renderedRows.js";
+import { rowWithContent, filledRow } from "./renderedRows.js";
 import { summarizeMessageForExport } from "../plugins/functionHooks/api/sessionAppend.js";
 import { safeDeepEqual } from "../plugins/functionHooks/apiDispatch.js";
 import { logForDebugging } from "../utils/debug.js";
 
-//@ chunk-1nk4j4sn.js:15092-15461 placement
+//@ chunk-8fb5jme0.js:16240-16609 placement
 var appendCoreOf = (options, row, onApplied) => ({
   name: "core",
   isCore: true,
   budgetMs: 0,
   run: async (input) => {
     let rewritten = rowWithContent(row, input.message);
-    let message = options.fills || row.type === "assistant" ? mergeMessageInPlace(row, rewritten) : rewritten;
+    let message = options.fills || row.type === "assistant" ? filledRow(row, rewritten) : rewritten;
     let summarized = summarizeMessageForExport(message);
     if (rewritten === row && !safeDeepEqual(input.message.content, summarized.content))
       logForDebugging(

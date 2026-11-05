@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/loop 动态模式唤醒安排
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b3265t9j.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s60tdaw6.js (17)
  * attribution: placement 17
  */
 import { logEvent } from "../../services/analytics/index.js";
@@ -38,7 +38,7 @@ import { CACHE_LEAD_MIN_INTERVAL_MS } from "../cronTasks.js";
 import { CACHE_TTL_1H_MS } from "../../services/api/promptCacheBreakDetection.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-b3265t9j.js:609-680 placement
+//@ chunk-s60tdaw6.js:610-681 placement
 /**
  * 动态循环唤醒的限制常量（最小延迟、最大年龄、宽限、默认唤醒间隔、连续保活次数）。
  */
@@ -48,7 +48,7 @@ var MAX_LOOP_AGE_SECONDS;
 var KEEPALIVE_GRACE_MS;
 var DEFAULT_KEEPALIVE_WAKE_MS;
 var MAX_CONSECUTIVE_KEEPALIVES;
-deferInit("chunk-b3265t9j.js:609", () => {
+deferInit("chunk-s60tdaw6.js:610", () => {
   LOOP_WAKE_LIMITS = require("./LOOP_FILE_DYNAMIC_SENTINEL.lazy.js");
   MIN_LOOP_DELAY_S = 60;
   MAX_LOOP_AGE_SECONDS = 3600;
@@ -56,7 +56,7 @@ deferInit("chunk-b3265t9j.js:609", () => {
   DEFAULT_KEEPALIVE_WAKE_MS = 1200;
   MAX_CONSECUTIVE_KEEPALIVES = 1;
 });
-//@ chunk-b3265t9j.js:680-751 placement
+//@ chunk-s60tdaw6.js:681-752 placement
 function endLoop(reason, extraFields) {
   logEvent("tengu_loop_ended", {
     reason: fromEnum(reason),
@@ -65,13 +65,13 @@ function endLoop(reason, extraFields) {
   setLoopEnded(true);
   resetLoopWakeFires();
 }
-//@ chunk-b3265t9j.js:751-867 placement
+//@ chunk-s60tdaw6.js:752-868 placement
 function loopKeepaliveSetting() {
   let CLAUDE_CODE_LOOP_KEEPALIVE = env.CLAUDE_CODE_LOOP_KEEPALIVE;
   if (CLAUDE_CODE_LOOP_KEEPALIVE !== undefined) return CLAUDE_CODE_LOOP_KEEPALIVE;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_kairos_loop_keepalive", true);
 }
-//@ chunk-b3265t9j.js:867-961 placement
+//@ chunk-s60tdaw6.js:868-962 placement
 function scheduleLoopWakeup(delaySeconds, prompt, reason, toolUseId, caller) {
   return armLoopWakeup(delaySeconds, prompt, {
     viaKeepalive: false,
@@ -82,7 +82,7 @@ function scheduleLoopWakeup(delaySeconds, prompt, reason, toolUseId, caller) {
     },
   });
 }
-//@ chunk-b3265t9j.js:961-1189 placement
+//@ chunk-s60tdaw6.js:962-1190 placement
 function scheduleKeepaliveWakeup(prompt, rearmedFor) {
   if (getLoopConsecutiveKeepalives() >= MAX_CONSECUTIVE_KEEPALIVES) {
     logForDebugging(
@@ -100,12 +100,12 @@ function scheduleKeepaliveWakeup(prompt, rearmedFor) {
     },
   });
 }
-//@ chunk-b3265t9j.js:1189-1218 placement
+//@ chunk-s60tdaw6.js:1190-1219 placement
 function resetLoopState() {
   setLoopEnded(false);
   resetLoopWakeFires();
 }
-//@ chunk-b3265t9j.js:1218-1755 placement
+//@ chunk-s60tdaw6.js:1219-1757 placement
 function endLoopIfIdle() {
   let loopEnded = getLoopEnded();
   let filtered = getSessionCronTasks().filter((task) => task.kind === "loop");
@@ -131,7 +131,7 @@ function endLoopIfIdle() {
   logFeatureOk("loop_schedule_wakeup");
   return filtered.length;
 }
-//@ chunk-b3265t9j.js:1755-3043 placement
+//@ chunk-s60tdaw6.js:1757-3045 placement
 /**
  * 为 /loop 动态模式安排下一次唤醒：记录原因、调用者与是否保活，创建会话定时任务。
  */
@@ -206,7 +206,7 @@ function armLoopWakeup(delaySeconds, prompt, options) {
     wasClamped,
   };
 }
-//@ chunk-b3265t9j.js:3043-3385 placement
+//@ chunk-s60tdaw6.js:3045-3387 placement
 function scheduleWakeupAt({ scheduledFor, prompt, reason, chainStartedAt, plugin }) {
   let now = Date.now();
   if (scheduledFor <= now || hasLoopTask()) return;
@@ -224,7 +224,7 @@ function scheduleWakeupAt({ scheduledFor, prompt, reason, chainStartedAt, plugin
   });
   logForDebugging(`[loop] re-armed pending wakeup for ${new Date(scheduledFor).toISOString()} after resume`);
 }
-//@ chunk-b3265t9j.js:3385-3841 placement
+//@ chunk-s60tdaw6.js:3387-3843 placement
 function createLoopWakeTask({
   targetMs,
   createdAt,
@@ -265,7 +265,7 @@ function createLoopWakeTask({
       chainStartedAt,
     });
 }
-//@ chunk-b3265t9j.js:3841-4296 placement
+//@ chunk-s60tdaw6.js:3843-4298 placement
 function clampDelaySeconds(delaySeconds) {
   let roundedSeconds;
   if (Number.isNaN(delaySeconds)) roundedSeconds = MIN_LOOP_DELAY_S;
@@ -298,17 +298,17 @@ function clampDelaySeconds(delaySeconds) {
     createdAt,
   };
 }
-//@ chunk-b3265t9j.js:4296-4342 placement
+//@ chunk-s60tdaw6.js:4298-4344 placement
 function roundUpToMinute(timestampMs) {
   return Math.ceil(timestampMs / 60000) * 60000;
 }
-//@ chunk-b3265t9j.js:4342-4428 placement
+//@ chunk-s60tdaw6.js:4344-4430 placement
 function randomWakeupId() {
   return Math.floor(Math.random() * 4294967295)
     .toString(16)
     .padStart(8, "0");
 }
-//@ chunk-b3265t9j.js:4428-4534 placement
+//@ chunk-s60tdaw6.js:4430-4537 placement
 function removeLoopCronTasks() {
   let mapped = getSessionCronTasks()
     .filter((task) => task.kind === "loop")
@@ -316,15 +316,15 @@ function removeLoopCronTasks() {
   if (mapped.length === 0) return 0;
   return removeSessionCronTasks(mapped);
 }
-//@ chunk-b3265t9j.js:4534-4559 placement
+//@ chunk-s60tdaw6.js:4537-4562 placement
 function clearPendingLoopWakeup() {
   announcePendingLoopWakeup(undefined);
 }
-//@ chunk-b3265t9j.js:4559-4612 placement
+//@ chunk-s60tdaw6.js:4562-4615 placement
 function hasLoopTask() {
   return getSessionCronTasks().some((task) => task.kind === "loop");
 }
-//@ chunk-b3265t9j.js:4612-5009 placement
+//@ chunk-s60tdaw6.js:4615-5013 placement
 function syncLoopTickState() {
   let filtered = getSessionCronTasks().filter((task) => task.kind === "loop");
   let loopTickInFlightPrompt = getLoopTickInFlightPrompt();
@@ -346,12 +346,12 @@ function syncLoopTickState() {
 }
 export {
   MAX_LOOP_AGE_SECONDS,
-  hasLoopTask,
-  scheduleWakeupAt,
-  syncLoopTickState,
   loopKeepaliveSetting,
+  hasLoopTask,
   scheduleKeepaliveWakeup,
-  resetLoopState,
+  syncLoopTickState,
   endLoopIfIdle,
   scheduleLoopWakeup,
+  scheduleWakeupAt,
+  resetLoopState,
 };

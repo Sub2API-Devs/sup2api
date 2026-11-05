@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。Artifact 帧/预览渲染辅助。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (26)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (26)
  * attribution: placement 26
  */
 import { basename, parse } from "path";
@@ -29,6 +29,7 @@ import {
 } from "../../services/artifacts/openArtifact.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { openValidatedUrl } from "../../utils/browser.js";
+import { deleteDeferredSurface } from "../../services/liveReplica/liveReplica.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -44,12 +45,12 @@ import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js"
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:649982-649986 placement
+//@ chunk-czq1j3j2.js:561218-561222 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:649982", () => {
+deferInit("chunk-czq1j3j2.js:561218", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:650033-650641 placement
+//@ chunk-czq1j3j2.js:670714-671322 placement
 function visibleArtifactFrames(frameUrls) {
   let frameBySlug = new Map();
   for (let [key, value] of Object.entries(frameUrls).reverse()) {
@@ -82,11 +83,11 @@ function visibleArtifactFrames(frameUrls) {
   }
   return Array.from(frameBySlug.values(), (entry) => entry.artifact);
 }
-//@ chunk-18hwfzwa.js:650641-650674 placement
+//@ chunk-czq1j3j2.js:671322-671355 placement
 function sanitizeFrameTitle(title) {
   return sanitizeDisplayTitle(stripAnsiAndControls(title));
 }
-//@ chunk-18hwfzwa.js:650674-650761 placement
+//@ chunk-czq1j3j2.js:671355-671442 placement
 /**
  * 按 slug 从 frameUrls 里找出对应条目（比较 URL 里的 uuid slug）。
  */
@@ -95,7 +96,7 @@ function framesForSlug(frameUrls, slug) {
     .filter(([, value]) => uuidSlugFromUrl(value.url) === slug)
     .map(([key]) => key);
 }
-//@ chunk-18hwfzwa.js:650761-650971 placement
+//@ chunk-czq1j3j2.js:671442-671652 placement
 /**
  * 关闭某个 Artifact 帧：特定类型直接从 frameUrls 删除，否则标记 dismissed。
  */
@@ -120,14 +121,14 @@ function dismissFrameUrl(state, key) {
     },
   };
 }
-//@ chunk-18hwfzwa.js:650971-651055 placement
+//@ chunk-czq1j3j2.js:671652-671736 placement
 function frameOpenFailed(state) {
   if (state.frameOpenFailedPath == null) return state.frameOpenFailedSeen;
   return true;
 }
-//@ chunk-18hwfzwa.js:651381-651414 placement
+//@ chunk-czq1j3j2.js:672062-672095 placement
 var CLOUD_ARTIFACT_CHECKING = "cloud-artifact-checking";
-//@ chunk-18hwfzwa.js:651414-652537 placement
+//@ chunk-czq1j3j2.js:672095-673218 placement
 function openArtifactRow(row, store, notifications, cloudRowCheck) {
   if (row.fromCloudSession !== true && row.mcpPublished !== true) {
     openArtifactInBrowser(row.url, store.setState, notifications);
@@ -181,14 +182,14 @@ function openArtifactRow(row, store, notifications, cloudRowCheck) {
     });
   })().catch(() => {});
 }
-//@ chunk-18hwfzwa.js:652537-652618 placement
+//@ chunk-czq1j3j2.js:673218-673299 placement
 function hasLiveFrameUrl(frameUrls, url) {
   return Object.values(frameUrls).some((entry) => entry.url === url && entry.dismissed !== true);
 }
-//@ chunk-18hwfzwa.js:652618-652969 placement
+//@ chunk-czq1j3j2.js:673299-673673 placement
 function openArtifactInBrowser(url, setState, notifications) {
   openValidatedUrl(withBannerOpenVia(url)).then((validatedUrl) => {
-    if (!validatedUrl.ok && validatedUrl.reason !== "timeout")
+    if (!validatedUrl.ok && validatedUrl.reason !== "timeout") {
       notifications.addNotification({
         key: "artifact-browser-not-opened",
         kind: "feedback",
@@ -196,6 +197,9 @@ function openArtifactInBrowser(url, setState, notifications) {
         priority: "medium",
         invalidates: [CLOUD_ARTIFACT_CHECKING],
       });
+      return;
+    }
+    deleteDeferredSurface(uuidSlugFromUrl(url) ?? "");
   });
   logFeatureOk("frame_link_open");
   setState((prevState) => {
@@ -208,19 +212,19 @@ function openArtifactInBrowser(url, setState, notifications) {
         };
   });
 }
-//@ chunk-18hwfzwa.js:652969-653062 placement
+//@ chunk-czq1j3j2.js:673673-673766 placement
 function liveFramesForSlug(frameUrls, slug) {
   return Object.values(frameUrls)
     .filter((entry) => entry.dismissed !== true && uuidSlugFromUrl(entry.url) === slug)
     .at(-1);
 }
-//@ chunk-18hwfzwa.js:653062-653157 placement
+//@ chunk-czq1j3j2.js:673766-673861 placement
 function visibleFrameUrls(frameUrls) {
   return Object.values(frameUrls)
     .filter((entry) => entry.dismissed !== true && uuidSlugFromUrl(entry.url) !== null)
     .at(-1);
 }
-//@ chunk-18hwfzwa.js:653157-653270 placement
+//@ chunk-czq1j3j2.js:673861-673974 placement
 function withBannerOpenVia(url) {
   try {
     let parsedUrl = new URL(url);
@@ -230,11 +234,11 @@ function withBannerOpenVia(url) {
     return url;
   }
 }
-//@ chunk-18hwfzwa.js:653270-653307 placement
+//@ chunk-czq1j3j2.js:673974-674011 placement
 function selectFrameUrls(appState) {
   return appState.frameUrls;
 }
-//@ chunk-18hwfzwa.js:653307-653476 placement
+//@ chunk-czq1j3j2.js:674011-674180 placement
 /**
  * 渲染 Artifact 列表中的一项：标题、图标、来源文件与相对更新时间。
  */
@@ -255,16 +259,26 @@ function renderArtifactListItem(artifact) {
     artifact.slug,
   );
 }
-//@ chunk-18hwfzwa.js:770990-770994 placement
+//@ chunk-czq1j3j2.js:729342-729346 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:770990", () => {
+deferInit("chunk-czq1j3j2.js:729342", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:771025-771073 placement
+//@ chunk-czq1j3j2.js:742624-742628 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:742624", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:746961-746965 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:746961", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:803450-803498 placement
 function selectHasVisibleFrames(appState) {
   return visibleArtifactFrames(appState.frameUrls).length > 0;
 }
-//@ chunk-18hwfzwa.js:771073-771229 placement
+//@ chunk-czq1j3j2.js:803498-803654 placement
 function shouldShowFrameOpenFailure(appState) {
   let failedEntry =
     appState.frameOpenFailedPath != null ? appState.frameUrls[appState.frameOpenFailedPath] : undefined;
@@ -272,17 +286,17 @@ function shouldShowFrameOpenFailure(appState) {
     failedEntry !== undefined && failedEntry.dismissed !== true && appState.frameOpenFailedSeen === false
   );
 }
-//@ chunk-18hwfzwa.js:771229-771266 placement
+//@ chunk-czq1j3j2.js:803654-803691 placement
 function selectFrameUrls2(appState) {
   return appState.frameUrls;
 }
-//@ chunk-18hwfzwa.js:771266-771319 placement
+//@ chunk-czq1j3j2.js:803691-803744 placement
 function selectFrameFooter(appState) {
   return appState.footerSelection === "frame";
 }
-//@ chunk-18hwfzwa.js:771319-771330 placement
+//@ chunk-czq1j3j2.js:803744-803755 placement
 var MAX_FRAME_TITLE_WIDTH = 24;
-//@ chunk-18hwfzwa.js:771330-771424 placement
+//@ chunk-czq1j3j2.js:803755-803849 placement
 function useFrameFooterState() {
   let $ = useMemoCache(2);
   let appState = useAppState(selectHasVisibleFrames);
@@ -294,11 +308,11 @@ function useFrameFooterState() {
   } else enabled = $[1];
   return enabled;
 }
-//@ chunk-18hwfzwa.js:771424-771452 placement
+//@ chunk-czq1j3j2.js:803849-803877 placement
 function useFrameOpenFailure() {
   return useAppState(shouldShowFrameOpenFailure);
 }
-//@ chunk-18hwfzwa.js:771452-772576 placement
+//@ chunk-czq1j3j2.js:803877-805001 placement
 function ArtifactFramesPill(props) {
   let $ = useMemoCache(16);
   let { onOpen } = props;
@@ -403,27 +417,17 @@ function ArtifactFramesPill(props) {
   } else clickablePill = $[15];
   return clickablePill;
 }
-//@ chunk-18hwfzwa.js:772576-772580 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:772576", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:772580-772584 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:772580", () => {
-  init_react_production();
-});
 export {
-  useFrameFooterState,
-  frameOpenFailed,
+  useFrameOpenFailure,
   visibleArtifactFrames,
-  liveFramesForSlug,
-  openArtifactRow,
+  useFrameFooterState,
+  ArtifactFramesPill,
   visibleFrameUrls,
+  openArtifactRow,
+  frameOpenFailed,
+  liveFramesForSlug,
   selectFrameUrls,
   renderArtifactListItem,
-  useFrameOpenFailure,
-  ArtifactFramesPill,
   framesForSlug,
   dismissFrameUrl,
 };

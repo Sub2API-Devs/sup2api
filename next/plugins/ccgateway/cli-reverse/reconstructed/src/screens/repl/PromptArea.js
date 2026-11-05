@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。REPL 输入区。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (14)
  * attribution: placement 14
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -19,45 +19,45 @@ import {
 import { CommandKeybindingHandlers } from "../../hooks/useCommandKeybindings.js";
 import { createAgentsKilledMessage } from "../../utils/messages.js";
 import { CancelRequestHandler } from "../../hooks/useCancelRequest.js";
-import { PaneDockNamespace } from "../../components/pluginUi/PaneDock.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { PaneDockNamespace } from "../../components/pluginUi/PaneDock.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:473910-473953 placement
+//@ chunk-czq1j3j2.js:500380-500423 placement
 function selectAbortController3(state) {
   return state.abortController;
 }
-//@ chunk-18hwfzwa.js:473953-473994 placement
+//@ chunk-czq1j3j2.js:500423-500464 placement
 function selectBashesDialogPromptArea(state) {
   return !!state.bashesDialog;
 }
-//@ chunk-18hwfzwa.js:473994-474042 placement
+//@ chunk-czq1j3j2.js:500464-500512 placement
 function selectIsInputOverlayActive(state) {
   return state.isInputOverlayActive;
 }
-//@ chunk-18hwfzwa.js:474042-474082 placement
+//@ chunk-czq1j3j2.js:500512-500552 placement
 function selectIsVimEditing(state) {
   return state.isVimEditing;
 }
-//@ chunk-18hwfzwa.js:474082-474114 placement
+//@ chunk-czq1j3j2.js:500552-500584 placement
 function selectMode(state) {
   return state.mode;
 }
-//@ chunk-18hwfzwa.js:474114-474152 placement
+//@ chunk-czq1j3j2.js:500584-500622 placement
 function selectDraftEmpty(draft) {
   return draft.value === "";
 }
-//@ chunk-18hwfzwa.js:474152-474205 placement
+//@ chunk-czq1j3j2.js:500622-500675 placement
 function selectHasDetachHandler(props) {
   return props.onDetachToCaller !== undefined;
 }
-//@ chunk-18hwfzwa.js:474205-474258 placement
+//@ chunk-czq1j3j2.js:500675-500728 placement
 function selectCloudMessageHeld(state) {
   return state.cloudMessageHeld !== undefined;
 }
-//@ chunk-18hwfzwa.js:474258-474270 placement
+//@ chunk-czq1j3j2.js:500728-500740 placement
 var PROMPT_ACCESSORY_COMPONENT = null;
-//@ chunk-18hwfzwa.js:474270-475900 placement
+//@ chunk-czq1j3j2.js:500740-502376 placement
 function PromptArea(props) {
   let $ = useMemoCache(29);
   let {
@@ -172,7 +172,7 @@ function PromptArea(props) {
   let composerSlot;
   if ($[25] !== accessory || $[26] !== keybindingHandlers || $[27] !== cancelHandler) {
     composerSlot = jsxProd_default_2(Fragment, {
-      children: [accessory, keybindingHandlers, cancelHandler],
+      children: [accessory, keybindingHandlers, null, cancelHandler],
     });
     $[25] = accessory;
     $[26] = keybindingHandlers;
@@ -181,15 +181,20 @@ function PromptArea(props) {
   } else composerSlot = $[28];
   return composerSlot;
 }
-//@ chunk-18hwfzwa.js:514080-514117 placement
+//@ chunk-czq1j3j2.js:536614-536618 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:536614", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:540558-540595 placement
 function selectIsLoading(turn) {
   return turn.isLoading;
 }
-//@ chunk-18hwfzwa.js:514117-514160 placement
+//@ chunk-czq1j3j2.js:540595-540638 placement
 function selectInputOwnsEscape(draft) {
   return draft.inputOwnsEscape;
 }
-//@ chunk-18hwfzwa.js:514160-514445 placement
+//@ chunk-czq1j3j2.js:540638-540923 placement
 function PromptDock(props) {
   let $ = useMemoCache(5);
   let { turn, draft, isOffered, width } = props;
@@ -211,9 +216,4 @@ function PromptDock(props) {
   } else dock = $[4];
   return dock;
 }
-//@ chunk-18hwfzwa.js:514445-514449 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:514445", () => {
-  init_react_production();
-});
 export { PromptArea, PromptDock };

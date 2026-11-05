@@ -3,10 +3,10 @@
  *
  * 自动模式设置预收集报告（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2a8yx6fc.js (74)
- * attribution: placement 73, affinity 1
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fta1hp2w.js (76)
+ * attribution: placement 73, affinity 1, layout 2
  */
 import { win32, posix, resolve, join, relative, isAbsolute } from "path";
 import { spawn } from "child_process";
@@ -21,6 +21,7 @@ import { SAFE_GIT_CONFIG_ARGS } from "../../selfHostedRunner/git/fetchErrors.js"
 import {
   stripTrailingNewline,
   normalizeHostedRemote,
+  isValidRemotePathSegment,
   redactRemoteUrl,
   getHomeDirOrNull,
   isNetworkHomePath,
@@ -44,12 +45,11 @@ import { getFileReader } from "../../utils/fileStore.js";
 import { withTimeout, sleep } from "../../utils/sleep.js";
 import { getFsImplementation, safeResolvePath } from "../../utils/fsOperations.js";
 import { readFileGuarded, isMissingPathError } from "../../utils/fsSafety/guardedFileRead.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { ripGrep_2, ripGrepStream } from "../../utils/ripgrep.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
-import { getRemoteHost } from "../../utils/shell/readOnlyCommandValidation.js";
-import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
+import { parseRuleString } from "../../utils/permissions/permissionRuleParser.js";
 import {
   isDangerousPermissionRule,
   classifyAllShellEnabled,
@@ -58,7 +58,7 @@ import { getSettingsFilePathForSource } from "../../utils/settings/settings.js";
 import { USER_SETTINGS_FILE_NAMES } from "../../utils/settings/settingsFileParsing.js";
 import { getErrnoCode } from "../../utils/errors.js";
 import { isDangerousRuleContent } from "../../utils/permissions/dangerousPatterns.js";
-import { extractSafeHostname } from "../../tools/WebFetchTool/utils.js";
+import { countWhere } from "../../utils/collections.js";
 import { getPlatform } from "../../utils/platform.js";
 import { env } from "../../utils/env.js";
 import { isAttachmentReadDeniedOrThrown } from "../../utils/attachments/fileAttachments.js";
@@ -68,7 +68,7 @@ import { getDefaultExternalAutoModeRules } from "../../utils/permissions/yoloCla
 import { ruleLabelOf } from "../../cli/handlers/autoMode.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-2a8yx6fc.js:12102-12265 placement
+//@ chunk-fta1hp2w.js:12168-12331 placement
 /**
  * 预收集相关常量：安全的仓库名正则、仓库可见性小节标题、输出上限、"此处无法查询"文案与分支名显示正则。
  */
@@ -77,7 +77,7 @@ var REPO_VISIBILITY_SECTION = "Repo visibility & branch protection (via gh)";
 var MAX_GH_OUTPUT_CHARS = 4000;
 var NOT_QUERYABLE = "not queryable here";
 var DISPLAYABLE_NAME_REGEX = /^[\w.][\w ./-]{0,119}$/;
-//@ chunk-2a8yx6fc.js:12265-12457 placement
+//@ chunk-fta1hp2w.js:12331-12523 placement
 /**
  * 给 gh 命令准备环境变量：强制 GH_HOST 为 github.com，原 GH_HOST 指向其他主机时清掉 GH_TOKEN/GITHUB_TOKEN，并去掉企业版令牌，避免把令牌发到别的主机。
  */
@@ -95,14 +95,14 @@ function githubDotComGhEnv() {
     GITHUB_ENTERPRISE_TOKEN: undefined,
   };
 }
-//@ chunk-2a8yx6fc.js:12457-12531 placement
+//@ chunk-fta1hp2w.js:12523-12597 placement
 /**
  * 判断 git/gh 命令是否“根本不可用”（退出码 127/4，或退出码 1 且无 stderr），此时不算采集失败。
  */
 function isCommandUnavailableError(error) {
   return error.code === 127 || error.code === 4 || (error.code === 1 && error.stderr === "");
 }
-//@ chunk-2a8yx6fc.js:12531-14314 placement
+//@ chunk-fta1hp2w.js:12597-14380 placement
 async function gatherSiblingRepoDocs(allProjects, cwd) {
   if (isEssentialTrafficOnly() || !isPolicyAllowed("allow_auto_mode_sibling_docs"))
     return renderRepoVisibilitySection(
@@ -173,13 +173,13 @@ async function gatherSiblingRepoDocs(allProjects, cwd) {
 `),
   );
 }
-//@ chunk-2a8yx6fc.js:14432-14572 placement
+//@ chunk-fta1hp2w.js:14498-14638 placement
 function formatCodeList(codes, maxCount) {
   let sliced = codes.slice(0, maxCount);
   let moreSuffix = codes.length > sliced.length ? ` (+${codes.length - sliced.length} more)` : "";
   return `${sliced.map((code) => `\`${code}\``).join(", ")}${moreSuffix}`;
 }
-//@ chunk-2a8yx6fc.js:14572-14815 placement
+//@ chunk-fta1hp2w.js:14638-14881 placement
 function describeRepoVisibility(ghResult) {
   if (ghResult.code !== 0) return NOT_QUERYABLE;
   try {
@@ -193,7 +193,7 @@ function describeRepoVisibility(ghResult) {
     return NOT_QUERYABLE;
   }
 }
-//@ chunk-2a8yx6fc.js:14815-15686 placement
+//@ chunk-fta1hp2w.js:14881-15752 placement
 /**
  * 把 gh 返回的仓库规则集列表格式化为"`名称` - 状态"的列表：不合法或名称超出显示字符集的条目计数并脱敏，达 100 条时注明可能还有更多。
  */
@@ -238,7 +238,7 @@ function describeRulesets(result) {
   let moreSuffix = shown.length > sliced.length ? ` (+${shown.length - sliced.length} more)` : "";
   return `${sliced.join(", ")}${moreSuffix}${redactedNote}${moreNote}`;
 }
-//@ chunk-2a8yx6fc.js:15686-16122 placement
+//@ chunk-fta1hp2w.js:15752-16188 placement
 /**
  * 描述受保护分支列表：截断显示合法名称，统计被隐去的名称，列满 100 条时注明可能还有更多。
  */
@@ -261,7 +261,7 @@ function describeProtectedBranches(ghResult) {
     ? `${formatCodeList(codes, 20)}${redactedNote}${moreNote}`
     : `${filtered.length} listed, all names outside the display charset, redacted${moreNote}`;
 }
-//@ chunk-2a8yx6fc.js:16122-17301 placement
+//@ chunk-fta1hp2w.js:16188-17367 placement
 function gatherOrgRepos(ghResult) {
   if (ghResult.code !== 0)
     return `_${NOT_QUERYABLE} (gh unavailable, unauthenticated, or token lacks org scope)._`;
@@ -325,12 +325,12 @@ _${redactedNote}_`
     : mapped.join(`
 `);
 }
-//@ chunk-2a8yx6fc.js:17301-17375 placement
+//@ chunk-fta1hp2w.js:17367-17441 placement
 /**
  * 仓库可见性无法确认时给模型的提示句：从远程主机名推断，或直接询问用户。
  */
 var REPO_VISIBILITY_HINT = "Infer visibility from the remote hostname in Repo facts, or ask.";
-//@ chunk-2a8yx6fc.js:17375-17423 placement
+//@ chunk-fta1hp2w.js:17441-17489 placement
 /**
  * 把一段内容渲染成 Repo visibility 小节。
  */
@@ -340,16 +340,16 @@ function renderRepoVisibilitySection(text) {
 ${text.trim()}
 `;
 }
-//@ chunk-2a8yx6fc.js:17423-17491 placement
+//@ chunk-fta1hp2w.js:17489-17557 placement
 var NO_PREGATHER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-2a8yx6fc.js:17423", () => {
+deferInit("chunk-fta1hp2w.js:17489", () => {
   NO_PREGATHER = Object.freeze({
     allProjects: false,
     shellHistory: false,
     homeRepos: false,
   });
 });
-//@ chunk-2a8yx6fc.js:17491-17876 placement
+//@ chunk-fta1hp2w.js:17557-17942 placement
 /**
  * 把自动模式设置的范围与深度回答转换为预收集选项（是否全部项目、是否读 shell 历史、是否扫描主目录仓库）。
  */
@@ -385,20 +385,20 @@ function pregatherOptionsFromAnswer(answer) {
       return NO_PREGATHER;
   }
 }
-//@ chunk-2a8yx6fc.js:17918-17940 placement
+//@ chunk-fta1hp2w.js:17984-18006 placement
 /**
  * 每个 shell 历史文件最多取用的条目数（4000）。
  */
 var MAX_HISTORY_FILE_BYTES = 262144;
 var MAX_HISTORY_ENTRIES = 4000;
-//@ chunk-2a8yx6fc.js:17940-17986 placement
+//@ chunk-fta1hp2w.js:18006-18052 placement
 /**
  * shell 历史采集的等待上限：Windows 8 秒，其他平台 4 秒。
  */
 function getShellHistoryTimeoutMs(platform) {
   return platform === "windows" ? 8000 : 4000;
 }
-//@ chunk-2a8yx6fc.js:17986-19013 affinity
+//@ chunk-fta1hp2w.js:18052-19079 affinity
 /**
  * 要读取的 shell 历史文件来源表：$HISTFILE、zsh、bash、Windows/非 Windows 上的 PowerShell PSReadLine、fish，各自带格式（posix/psreadline/fish）和按平台解析路径的函数。
  */
@@ -476,7 +476,7 @@ var SHELL_HISTORY_SOURCES = [
           },
   },
 ];
-//@ chunk-2a8yx6fc.js:19287-19693 placement
+//@ chunk-fta1hp2w.js:19353-19759 placement
 /**
  * 按 shell 类型解析历史文件行：处理 BOM、续行、fish 的 cmd 前缀、bash 时间戳行与 zsh 扩展格式。
  */
@@ -505,7 +505,7 @@ function parseHistoryLines(content, format, truncated) {
   }
   return commands;
 }
-//@ chunk-2a8yx6fc.js:19693-20038 placement
+//@ chunk-fta1hp2w.js:19759-20104 placement
 /**
  * 从历史命令中提取命令词（包装命令如 sudo 取第二个词），可在截止时间前停止。
  */
@@ -545,13 +545,13 @@ function extractCommandWords(commands, format, deadlineMs = 1 / 0) {
     hitDeadline,
   };
 }
-//@ chunk-2a8yx6fc.js:20038-20056 placement
+//@ chunk-fta1hp2w.js:20104-20122 placement
 /**
  * 单条命令最多解析出的候选词数（20）。
  */
 var MAX_HISTORY_COMMAND_CHARS = 4000;
 var MAX_WORDS_PER_COMMAND = 20;
-//@ chunk-2a8yx6fc.js:20056-20192 placement
+//@ chunk-fta1hp2w.js:20122-20258 placement
 function parseCommandWords(command) {
   if (command.length === 0 || command.length > MAX_HISTORY_COMMAND_CHARS) return [];
   let rootNode = getParserModule()?.parse(command, MAX_WORDS_PER_COMMAND);
@@ -559,18 +559,18 @@ function parseCommandWords(command) {
   let commandNode = findCommandNode(rootNode, null);
   return commandNode === null ? [] : extractCommandArguments(commandNode);
 }
-//@ chunk-2a8yx6fc.js:20192-20298 placement
+//@ chunk-fta1hp2w.js:20258-20364 placement
 var PRIVILEGE_WRAPPERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PS_PRIVILEGE_WRAPPERS;
 var COMMAND_WORD_REGEX;
 var FISH_CMD_PREFIX;
-deferInit("chunk-2a8yx6fc.js:20192", () => {
+deferInit("chunk-fta1hp2w.js:20258", () => {
   PRIVILEGE_WRAPPERS = new Set(["sudo", "doas", "env"]);
   PS_PRIVILEGE_WRAPPERS = new Set(["sudo", "gsudo"]);
   COMMAND_WORD_REGEX = /^[a-z][\w.+-]{0,19}$/;
   FISH_CMD_PREFIX = "- cmd: ";
 });
-//@ chunk-2a8yx6fc.js:20298-20459 placement
+//@ chunk-fta1hp2w.js:20364-20525 placement
 function stripZshExtendedPrefix(line) {
   if (!line.startsWith(": ")) return line;
   let position = skipDigits(line, 2);
@@ -580,7 +580,7 @@ function stripZshExtendedPrefix(line) {
   if (position === afterFirstDigits || line[position] !== ";") return line;
   return line.slice(position + 1);
 }
-//@ chunk-2a8yx6fc.js:20459-20552 placement
+//@ chunk-fta1hp2w.js:20525-20618 placement
 /**
  * 从指定下标起跳过连续数字，返回第一个非数字的位置。
  */
@@ -592,21 +592,21 @@ function skipDigits(text, position) {
   }
   return position;
 }
-//@ chunk-2a8yx6fc.js:20552-20594 placement
+//@ chunk-fta1hp2w.js:20618-20660 placement
 /**
  * 按平台返回 path 模块（windows → win32，其他 → posix）。
  */
 function getPathModuleForPlatform(platform) {
   return platform === "windows" ? win32 : posix;
 }
-//@ chunk-2a8yx6fc.js:20594-20732 placement
+//@ chunk-fta1hp2w.js:20660-20798 placement
 function historyFormatFor(fileName) {
   let lower = fileName.toLowerCase();
   if (lower === "fish_history") return "fish";
   if (lower === "consolehost_history.txt") return "psreadline";
   return "posix";
 }
-//@ chunk-2a8yx6fc.js:20732-20855 placement
+//@ chunk-fta1hp2w.js:20798-20921 placement
 function xdgDataHome(ctx) {
   let pathModuleForPlatform = getPathModuleForPlatform(ctx.platform);
   let trimmed = ctx.xdgDataHome?.trim();
@@ -614,7 +614,7 @@ function xdgDataHome(ctx) {
     ? trimmed
     : pathModuleForPlatform.join(ctx.homeDir, ".local", "share");
 }
-//@ chunk-2a8yx6fc.js:20855-20977 placement
+//@ chunk-fta1hp2w.js:20921-21043 placement
 function windowsAppData(ctx) {
   let pathModuleForPlatform = getPathModuleForPlatform(ctx.platform);
   let trimmed = ctx.appData?.trim();
@@ -622,7 +622,7 @@ function windowsAppData(ctx) {
     ? trimmed
     : pathModuleForPlatform.join(ctx.homeDir, "AppData", "Roaming");
 }
-//@ chunk-2a8yx6fc.js:20977-21138 placement
+//@ chunk-fta1hp2w.js:21043-21204 placement
 function fishCommandFirstLine(text) {
   for (let index = text.indexOf("\\n"); index !== -1; index = text.indexOf("\\n", index + 1)) {
     let backslashCount = 0;
@@ -631,7 +631,7 @@ function fishCommandFirstLine(text) {
   }
   return text;
 }
-//@ chunk-2a8yx6fc.js:21138-21282 placement
+//@ chunk-fta1hp2w.js:21204-21348 placement
 var MAX_DOC_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_CLAUDE_MD_CHARS;
 var MAX_HISTORY_BYTES;
@@ -645,7 +645,7 @@ var HISTORY_TAIL_BYTES;
 var MAX_TRANSCRIPT_BYTES;
 var MAX_LINE_CHARS;
 var MAX_HISTORY_LINES;
-deferInit("chunk-2a8yx6fc.js:21138", () => {
+deferInit("chunk-fta1hp2w.js:21204", () => {
   MAX_DOC_CHARS = 1e4;
   MAX_CLAUDE_MD_CHARS = 200000;
   MAX_HISTORY_BYTES = 26214400;
@@ -660,7 +660,7 @@ deferInit("chunk-2a8yx6fc.js:21138", () => {
   MAX_LINE_CHARS = 8000;
   MAX_HISTORY_LINES = 2000;
 });
-//@ chunk-2a8yx6fc.js:21282-21535 placement
+//@ chunk-fta1hp2w.js:21348-21601 placement
 async function runPregatherSection(sectionTitle, build) {
   try {
     return await build();
@@ -674,7 +674,7 @@ async function runPregatherSection(sectionTitle, build) {
     );
   }
 }
-//@ chunk-2a8yx6fc.js:21535-22425 placement
+//@ chunk-fta1hp2w.js:21601-22491 placement
 /**
  * 自动模式设置前的预收集报告（仓库、CLAUDE.md、已有设置、历史用法）
  */
@@ -734,13 +734,13 @@ async function buildPregatherReport(repoDir, options = NO_PREGATHER, permissionC
   logFeatureOk("auto_mode_pregather");
   return joined.replace(URL_USERINFO_RE, "://");
 }
-//@ chunk-2a8yx6fc.js:22425-22513 placement
+//@ chunk-fta1hp2w.js:22491-22579 placement
 /**
  * 匹配 s3/gs/az 存储桶地址的正则。
  */
 var URL_USERINFO_RE = /:\/\/[^/\s\\]*@/g;
 var BUCKET_URL_RE = /(?<![a-z0-9.+-])(?:s3|gs|az):\/\/([a-z0-9][a-z0-9._-]*)/g;
-//@ chunk-2a8yx6fc.js:22513-22893 placement
+//@ chunk-fta1hp2w.js:22579-22959 placement
 /**
  * 运行 git 命令并统计输出行数（失败或无输出时为 0）。
  */
@@ -775,7 +775,7 @@ function countGitOutputLines(repoDir, args) {
     child.on("close", (exitCode) => resolve(exitCode === 0 && sawOutput ? lineCount : 0));
   });
 }
-//@ chunk-2a8yx6fc.js:22893-23047 placement
+//@ chunk-fta1hp2w.js:22959-23113 placement
 async function runGitSafe(repoDir, args) {
   let { stdout, code } = await execFileNoThrow("git", ["-C", repoDir, ...SAFE_GIT_CONFIG_ARGS, ...args], {
     timeout: SUBPROCESS_TIMEOUT_MS,
@@ -784,7 +784,7 @@ async function runGitSafe(repoDir, args) {
   });
   return code === 0 ? stripTrailingNewline(stdout) : "";
 }
-//@ chunk-2a8yx6fc.js:23047-23308 placement
+//@ chunk-fta1hp2w.js:23113-23374 placement
 async function readStorageConfigBytes(backend, key, maxBytes) {
   let readResult = await backend.read([
     {
@@ -801,7 +801,7 @@ async function readStorageConfigBytes(backend, key, maxBytes) {
     });
   return Buffer.from(item.value);
 }
-//@ chunk-2a8yx6fc.js:23308-23552 placement
+//@ chunk-fta1hp2w.js:23374-23618 placement
 async function readConfigCapped(filePath, maxBytes, storageRef) {
   let readPromise = storageRef
     ? readStorageConfigBytes(storageRef.backend, storageRef.key, maxBytes)
@@ -815,7 +815,7 @@ async function readConfigCapped(filePath, maxBytes, storageRef) {
 \u2026[truncated at ${maxBytes} bytes]`
     : str;
 }
-//@ chunk-2a8yx6fc.js:23552-23836 placement
+//@ chunk-fta1hp2w.js:23618-23902 placement
 /**
  * 在仓库内安全读取一个相对路径的文件：两端都必须是规范路径、目标不能逃出仓库、不跟随符号链接，按字节上限读取，失败返回 null。
  */
@@ -832,21 +832,21 @@ async function readRepoFileSafely(repoDir, relPath, maxChars = MAX_DOC_CHARS) {
     noFollow: true,
   });
 }
-//@ chunk-2a8yx6fc.js:23836-23847 placement
+//@ chunk-fta1hp2w.js:23902-23913 placement
 /**
  * 统计里单个 token/词的最大长度（256），超出丢弃。
  */
 var MAX_WORD_CHARS = 256;
-//@ chunk-2a8yx6fc.js:23847-23922 placement
+//@ chunk-fta1hp2w.js:23913-23988 placement
 /**
  * 去重、按长度过滤后排序取前 n 个词。
  */
 function topShortWords(words, limit = TOP_N) {
-  return uniq(words.filter((word) => word.length <= MAX_WORD_CHARS))
+  return normalizeCaseForComparison_2(words.filter((word) => word.length <= MAX_WORD_CHARS))
     .sort()
     .slice(0, limit);
 }
-//@ chunk-2a8yx6fc.js:23922-24094 placement
+//@ chunk-fta1hp2w.js:23988-24160 placement
 function topCounts(values, limit = TOP_N) {
   let counts = new Map();
   for (let value of values)
@@ -855,7 +855,7 @@ function topCounts(values, limit = TOP_N) {
     .sort((entryA, entryB) => entryB[1] - entryA[1] || entryA[0].localeCompare(entryB[0]))
     .slice(0, limit);
 }
-//@ chunk-2a8yx6fc.js:24094-24186 placement
+//@ chunk-fta1hp2w.js:24160-24252 placement
 /**
  * 收集字符串中正则第 1 组的所有匹配。
  */
@@ -864,7 +864,48 @@ function collectRegexGroup(text, regex) {
   for (let match of text.matchAll(regex)) if (match[1] !== undefined) matches.push(match[1]);
   return matches;
 }
-//@ chunk-2a8yx6fc.js:24834-24900 placement
+//@ chunk-fta1hp2w.js:24252-24664 layout (2.1.88 match: validateURL, 1)
+/**
+ * 从 URL 安全地提取主机名：防止 user@host 形式伪装，非法时返回 null。
+ */
+function extractSafeHostname(url) {
+  let replaced = url.replace(/^https?:\/\//i, "");
+  if (!replaced.includes("@")) return replaced.match(/^([a-zA-Z0-9.][a-zA-Z0-9.-]*)/)?.[1] ?? null;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.username !== "" || parsed.password !== "") {
+    let match = replaced.match(/[/?#]/);
+    if (
+      (match?.index === undefined ? "" : replaced.slice(match.index + 1)).includes("@") ||
+      !parsed.hostname.includes(".")
+    )
+      return null;
+  }
+  return parsed.hostname && /^[a-zA-Z0-9.][a-zA-Z0-9.-]*$/.test(parsed.hostname) ? parsed.hostname : null;
+}
+//@ chunk-fta1hp2w.js:24664-24900 layout (2.1.88 match: ghIsDangerousCallback, 1)
+/**
+ * 从 git remote URL（scheme:// 或 scp 风格 host:path）取主机名，单字母主机（Windows 盘符）排除，主机名不合法返回 undefined。属于 auto mode 环境采集的 repo 信息，误归只读校验（旧版名 ghIsDangerousCallback 错配）。
+ */
+function getRemoteHost(path) {
+  let index = path.indexOf("://");
+  let host;
+  if (index !== -1) {
+    let sliced = path.slice(index + 3);
+    let index_2 = sliced.indexOf("/");
+    host = index_2 > 0 ? sliced.slice(0, index_2) : undefined;
+  } else {
+    let index = path.indexOf(":");
+    host = index > 0 ? path.slice(0, index) : undefined;
+    if (host !== undefined && host.length === 1) host = undefined;
+  }
+  return host !== undefined && isValidRemotePathSegment(host) ? host : undefined;
+}
+//@ chunk-fta1hp2w.js:24900-24966 placement
 /**
  * 渲染一个 “### 标题 + 正文” 的 Markdown 小节，正文为空时写 _nothing found_。
  */
@@ -874,7 +915,7 @@ function renderMarkdownSection(title, body) {
 ${body.trim() || "_nothing found_"}
 `;
 }
-//@ chunk-2a8yx6fc.js:24900-24950 placement
+//@ chunk-fta1hp2w.js:24966-25016 placement
 /**
  * 渲染 “#### 文件路径” 加 JSON 正文的小节（正文做转义）。
  */
@@ -882,7 +923,7 @@ function renderJsonSubsection(label, repoFile) {
   return `#### ${displaySafeName(label)}
 ${escapeUnsafeChars(jsonStringify(repoFile))}`;
 }
-//@ chunk-2a8yx6fc.js:24950-25200 placement
+//@ chunk-fta1hp2w.js:25016-25266 placement
 async function listRepoFiles(globPatterns, cwd, limit, maxDepth = 4, includeRegex) {
   try {
     let files = await ripGrep_2(
@@ -908,7 +949,7 @@ async function listRepoFiles(globPatterns, cwd, limit, maxDepth = 4, includeRege
     return [];
   }
 }
-//@ chunk-2a8yx6fc.js:25200-25378 placement
+//@ chunk-fta1hp2w.js:25266-25444 placement
 function toRelativePaths(paths, cwd, platform = "linux") {
   let pathSep = platform === "win32" ? "\\" : "/";
   let cwdWithSep = cwd.endsWith(pathSep) ? cwd : cwd + pathSep;
@@ -916,7 +957,7 @@ function toRelativePaths(paths, cwd, platform = "linux") {
     .map((pathValue) => (pathValue.startsWith(cwdWithSep) ? pathValue.slice(cwdWithSep.length) : pathValue))
     .map((relPath) => (platform === "win32" ? relPath.replaceAll("\\", "/") : relPath));
 }
-//@ chunk-2a8yx6fc.js:25378-25552 placement
+//@ chunk-fta1hp2w.js:25444-25618 placement
 function displaySafeName(nameValue) {
   let trimmed = nameValue.trim();
   return trimmed.length > 0 &&
@@ -927,7 +968,7 @@ function displaySafeName(nameValue) {
     ? nameValue
     : "(unusual name redacted)";
 }
-//@ chunk-2a8yx6fc.js:25552-25786 placement
+//@ chunk-fta1hp2w.js:25618-25852 placement
 /**
  * 预收集报告中两个小节标题：自动模式会忽略的 allow 条目、运行时直接放行的破坏性 allow 条目。
  */
@@ -935,13 +976,13 @@ var IGNORED_ALLOW_ENTRIES_HEADING =
   "#### permissions.allow entries auto mode ignores (classifier-bypassing, in your user settings)";
 var DESTRUCTIVE_ALLOW_ENTRIES_HEADING =
   "#### Destructive permissions.allow entries (honored at runtime \u2014 auto-approved with no prompt, in your user settings)";
-//@ chunk-2a8yx6fc.js:25786-25856 placement (2.1.88 match: ghIsDangerousCallback, 1)
+//@ chunk-fta1hp2w.js:25852-25922 placement (2.1.88 match: ghIsDangerousCallback, 1)
 function ghIsDangerousCallback(rule) {
   return (
     displaySafeName(rule) === rule && rule.trim() === rule && rule.replace(URL_USERINFO_RE, "://") === rule
   );
 }
-//@ chunk-2a8yx6fc.js:25856-26544 placement
+//@ chunk-fta1hp2w.js:25922-26610 placement
 /**
  * 预收集"CLAUDE.md 与项目文档"段：~/.claude/CLAUDE.md、仓库的 CLAUDE.md、README 前 40 行、.env 示例，以及 .claude/skills|rules|agents 下的 Markdown 文件。
  */
@@ -1000,7 +1041,7 @@ async function gatherProjectDocs(repoDir, storage) {
 `),
   );
 }
-//@ chunk-2a8yx6fc.js:26544-28755 placement
+//@ chunk-fta1hp2w.js:26610-28821 placement
 async function gatherRepoFacts(repoDir) {
   let [remotesText, headRef, trackedFileCount, originUrl] = await Promise.all([
     runGitSafe(repoDir, ["remote"]),
@@ -1073,8 +1114,8 @@ async function gatherRepoFacts(repoDir) {
       ].map(async (relPath) => {
         try {
           let parts = relPath.split("/");
-          for (let idx = 1; idx <= parts.length; idx++)
-            if ((await fsPromisesModule_2.lstat(join(repoDir, ...parts.slice(0, idx)))).isSymbolicLink())
+          for (let depth = 1; depth <= parts.length; depth++)
+            if ((await fsPromisesModule_2.lstat(join(repoDir, ...parts.slice(0, depth)))).isSymbolicLink())
               return;
           return relPath;
         } catch {
@@ -1118,7 +1159,7 @@ Repo visibility, rulesets/protected branches, and sibling org repo docs are gath
     thisRepoHost,
   };
 }
-//@ chunk-2a8yx6fc.js:28755-29420 placement
+//@ chunk-fta1hp2w.js:28821-29486 placement
 /**
  * 预收集报告各小节标题及其遥测标签映射（文档、仓库事实、可见性、兄弟仓库文档、设置、用量、shell 历史、主目录仓库等）。
  */
@@ -1127,7 +1168,7 @@ var SHELL_HISTORY_SECTION;
 var HOME_REPOS_SECTION;
 var ALL_PROJECTS_USAGE_SECTION;
 var SECTION_TELEMETRY_IDS;
-deferInit("chunk-2a8yx6fc.js:28755", () => {
+deferInit("chunk-fta1hp2w.js:28821", () => {
   SIBLING_DOCS_SECTION = "Sibling repo docs (via gh \u2014 unverified provenance)";
   SHELL_HISTORY_SECTION = "Shell history (command words only)";
   HOME_REPOS_SECTION = "Other git repos under the home directory";
@@ -1146,7 +1187,7 @@ deferInit("chunk-2a8yx6fc.js:28755", () => {
     ["Shipped default auto-mode rule labels", lit("default_rule_labels")],
   ]);
 });
-//@ chunk-2a8yx6fc.js:29420-31749 placement
+//@ chunk-fta1hp2w.js:29486-31815 placement
 /**
  * 预收集同组织兄弟仓库的文档：从 origin 推出 github.com 上的组织，用 gh 列出最近推送的 3 个其他仓库，读取它们的 CLAUDE.md 或 README 开头；未授权、非 github.com、策略禁止时给出相应说明。
  */
@@ -1281,22 +1322,22 @@ async function gatherSiblingDocsViaGh(enabled, repoDir) {
       : "_No sibling docs found (org repos have no CLAUDE.md/README, or none listed)._",
   );
 }
-//@ chunk-2a8yx6fc.js:31749-31816 placement
+//@ chunk-fta1hp2w.js:31815-31882 placement
 /**
  * 判断一条 permissions.allow 规则字符串是否属于危险规则（按工具名与规则内容）。
  */
 function isDangerousAllowRule(rule) {
-  let { toolName, ruleContent } = permissionRuleValueFromString(rule);
+  let { toolName, ruleContent } = parseRuleString(rule);
   return isDangerousPermissionRule(toolName, ruleContent);
 }
-//@ chunk-2a8yx6fc.js:31816-31965 placement
+//@ chunk-fta1hp2w.js:31882-32031 placement
 function formatAutoModeSettings(autoMode) {
   let kept = {};
   for (let key of ["environment", "allow", "soft_deny", "hard_deny", "deny"])
     if (autoMode[key] != null && autoMode[key] !== false) kept[key] = autoMode[key];
   return escapeUnsafeChars(jsonStringify(kept, null, 1));
 }
-//@ chunk-2a8yx6fc.js:31965-34105 placement
+//@ chunk-fta1hp2w.js:32031-34171 placement
 async function gatherLocalAutoModeSettings(projectDir) {
   let claudeDir = join(projectDir, ".claude");
   let settingsPath = join(claudeDir, "settings.local.json");
@@ -1367,7 +1408,7 @@ Present but SKIPPED: failed the indirection gate (requires a regular non-symlink
   ].join(`
 `);
 }
-//@ chunk-2a8yx6fc.js:34105-35860 placement
+//@ chunk-fta1hp2w.js:34171-35926 placement
 async function gatherUserAutoModeSettings(
   repoDir,
   settingsPath = getSettingsFilePathForSource("userSettings") ?? join(getClaudeConfigDir(), "settings.json"),
@@ -1407,12 +1448,12 @@ async function gatherUserAutoModeSettings(
       let filtered_3 = filtered
         .filter((rule) => !isDangerousAllowRule(rule))
         .filter((rule) => {
-          let { toolName, ruleContent } = permissionRuleValueFromString(rule);
+          let { toolName, ruleContent } = parseRuleString(rule);
           return isDangerousRuleContent(toolName, ruleContent);
         });
       unshowableCount =
-        count(filtered_2, (rule) => !ghIsDangerousCallback(rule)) +
-        count(filtered_3, (rule) => !ghIsDangerousCallback(rule));
+        countWhere(filtered_2, (rule) => !ghIsDangerousCallback(rule)) +
+        countWhere(filtered_3, (rule) => !ghIsDangerousCallback(rule));
       let filtered_4 = filtered_2.filter(ghIsDangerousCallback);
       let filtered_5 = filtered_3.filter(ghIsDangerousCallback);
       ignoredRulesOverflow = Math.max(0, filtered_4.length - TOP_N);
@@ -1458,14 +1499,14 @@ ${unshowableCount} additional flagged ${unshowableCount === 1 ? "entry" : "entri
 `),
   );
 }
-//@ chunk-2a8yx6fc.js:35860-35978 placement
+//@ chunk-fta1hp2w.js:35926-36044 placement
 function escapeUnsafeChars(text) {
   return text.replace(
     /[\u2028\u2029\u0085`]/g,
     (char) => `\\u${char.codePointAt(0)?.toString(16).padStart(4, "0")}`,
   );
 }
-//@ chunk-2a8yx6fc.js:35978-36635 placement
+//@ chunk-fta1hp2w.js:36044-36701 placement
 /**
  * 统计项目用量时使用的规则：忽略的抓取主机、自动模式分类器拒绝文案与原因正则、不计入的常见 shell 命令词。
  */
@@ -1473,7 +1514,7 @@ var IGNORED_FETCH_HOST_REGEX; // deferred: has load-time effects after a deferre
 var CLASSIFIER_DENIAL_TEXT;
 var CLASSIFIER_DENIAL_REASON_REGEX;
 var COMMON_SHELL_WORDS;
-deferInit("chunk-2a8yx6fc.js:35978", () => {
+deferInit("chunk-fta1hp2w.js:36044", () => {
   IGNORED_FETCH_HOST_REGEX = /^(127\.0\.0\.1|localhost|.*jsdelivr.*|.*unpkg.*|example\.com)$/;
   CLASSIFIER_DENIAL_TEXT = "denied by the Claude Code auto mode classifier";
   CLASSIFIER_DENIAL_REASON_REGEX =
@@ -1484,14 +1525,14 @@ deferInit("chunk-2a8yx6fc.js:35978", () => {
     ),
   );
 });
-//@ chunk-2a8yx6fc.js:36635-36706 placement
+//@ chunk-fta1hp2w.js:36701-36772 placement
 /**
  * 判断命令名是否常见 shell 词或 python/pip 变体，用于过滤无意义的统计。
  */
 function isCommonCommandName(word) {
   return COMMON_SHELL_WORDS.has(word) || /^(python[0-9.]*|pip[0-9]*)$/.test(word);
 }
-//@ chunk-2a8yx6fc.js:36706-38741 placement
+//@ chunk-fta1hp2w.js:36772-38807 placement
 async function gatherProjectUsage(cwd) {
   let projectDir = getProjectDir(cwd);
   let transcripts = [];
@@ -1624,10 +1665,10 @@ Other projects\u2019 transcripts are NOT mined here (a Q2 opt-in). Shell history
 `),
   );
 }
-//@ chunk-2a8yx6fc.js:38741-38900 placement
+//@ chunk-fta1hp2w.js:38807-38966 placement
 var NETWORK_HOME_HISTORY_NOTE =
   '_NOT GATHERED \u2014 the home directory resolves to a network path. Treat shell history as "not queryable here". Do not read history files yourself._';
-//@ chunk-2a8yx6fc.js:38900-40166 placement
+//@ chunk-fta1hp2w.js:38966-40232 placement
 /**
  * 预收集"shell 历史"段（需用户同意）：在时间预算内读取各历史文件，只统计命令词出现次数（不读入原始行），网络路径 home 不读，输出读了哪些文件与常用命令。
  */
@@ -1687,7 +1728,7 @@ The user opted into this at setup. Raw history lines were never read into the tr
 `);
   return renderMarkdownSection(SHELL_HISTORY_SECTION, joined);
 }
-//@ chunk-2a8yx6fc.js:40166-41236 placement
+//@ chunk-fta1hp2w.js:40232-41302 placement
 /**
  * 逐个读取 shell 历史文件的尾部并提取命令词：跳过被拒读或网络路径、按真实路径去重、超时或读不全时标记 partial。
  */
@@ -1775,7 +1816,7 @@ async function readShellHistoryWords(env, permissionContext, signal) {
     partial,
   };
 }
-//@ chunk-2a8yx6fc.js:41236-42746 placement
+//@ chunk-fta1hp2w.js:41302-42812 placement
 /**
  * 预收集 home 下其他 git 仓库（需用户同意）：遍历得到仓库路径与规范化远程，网络 home 或不可读时说明原因，提示这些只是候选。
  */
@@ -1827,7 +1868,7 @@ These are CANDIDATES, not vetted context: keep only the ones whose org already a
 `),
   );
 }
-//@ chunk-2a8yx6fc.js:42746-49599 placement
+//@ chunk-fta1hp2w.js:42812-49665 placement
 /**
  * 预收集 home 目录下其他 git 仓库（遵守权限、时间预算，网络 home 不遍历）
  */
@@ -1855,13 +1896,13 @@ async function gatherOtherHomeRepos(
       ALL_PROJECTS_USAGE_SECTION,
       "_NOT GATHERED \u2014 no permission context was available to enforce permissions.deny, so no other project\u2019s transcripts were read._",
     );
-  let platform = getPlatform();
+  let deadline = getPlatform();
   let isReadDenied = (pathToCheck) => isAttachmentReadDeniedOrThrown(pathToCheck, permissionContext);
   let fileReader = getFileReader();
   let storageScope = storage !== undefined && options.projectsDir === getProjectsDir() ? storage : undefined;
   let deadlineAt = Date.now() + options.deadlineMs;
   let realProjectsDir = fsPromisesModule_2.realpath(options.projectsDir).catch(() => options.projectsDir);
-  let normalizeCase = (pathValue) => (platform === "windows" ? pathValue.toLowerCase() : pathValue);
+  let normalizeCase = (pathValue) => (deadline === "windows" ? pathValue.toLowerCase() : pathValue);
   let knownProjectDirSet = new Set((skipScope?.projectDirs ?? []).map(normalizeCase));
   let knownTranscriptFiles = new Set((skipScope?.transcriptFiles ?? []).map(normalizeCase));
   let enumerationPromise = (async () => {
@@ -1951,7 +1992,7 @@ async function gatherOtherHomeRepos(
       return {
         candidates: sliced_2.filter(({ path }) => {
           if (
-            isExcludedUnderEitherHome(path, options.projectsDir, resolvedProjectsDir, isReadDenied, platform)
+            isExcludedUnderEitherHome(path, options.projectsDir, resolvedProjectsDir, isReadDenied, deadline)
           ) {
             deniedCount++;
             return false;
@@ -2010,7 +2051,7 @@ async function gatherOtherHomeRepos(
                 options.projectsDir,
                 resolvedProjectsDir,
                 isReadDenied,
-                platform,
+                deadline,
               )
             ) {
               deniedCount++;
@@ -2101,7 +2142,7 @@ async function gatherOtherHomeRepos(
           realProjectsRoot,
           options.projectsDir,
           isReadDenied,
-          platform,
+          deadline,
         ) ||
         !isPathUnder(resolvedPath, realProjectsRoot)
       ) {
@@ -2120,7 +2161,7 @@ async function gatherOtherHomeRepos(
               realProjectsRoot,
               options.projectsDir,
               isReadDenied,
-              platform,
+              deadline,
             ) &&
               isPathUnder(handlePath, realProjectsRoot)),
         }),
@@ -2228,7 +2269,7 @@ The user opted into this at Q2. Raw command lines were never read into the trans
 `),
   );
 }
-//@ chunk-2a8yx6fc.js:49599-50002 placement
+//@ chunk-fta1hp2w.js:49665-50068 placement
 /**
  * 主目录仓库遍历提前停止时的附注：超时、目录预算用尽或达到仓库数上限。
  */
@@ -2249,10 +2290,10 @@ _The walk hit its directory budget \u2014 this list is INCOMPLETE, not exhaustiv
 _Result cap reached \u2014 the walk stopped at the repo cap; more may exist._`;
   }
 }
-//@ chunk-2a8yx6fc.js:50002-50184 placement
+//@ chunk-fta1hp2w.js:50068-50250 placement
 var PUBLIC_REGISTRY_HOST_REGEX =
   /^(docker\.io|ghcr\.io|registry\.npmjs\.org|pypi\.org|mcr\.microsoft\.com|nvcr\.io|gcr\.io|public\.ecr\.aws|lscr\.io|quay\.io|registry-1\.docker\.io|127\.0\.0\.1|localhost)$/;
-//@ chunk-2a8yx6fc.js:50184-50332 placement
+//@ chunk-fta1hp2w.js:50250-50398 placement
 async function scanConfigMatches(repoDir, cwd, regex, limit, includeRegex) {
   let files = await listRepoFiles(cwd, repoDir, 40, 4, includeRegex);
   let matches = [];
@@ -2262,7 +2303,7 @@ async function scanConfigMatches(repoDir, cwd, regex, limit, includeRegex) {
   }
   return topShortWords(matches, limit);
 }
-//@ chunk-2a8yx6fc.js:50332-50421 placement
+//@ chunk-fta1hp2w.js:50398-50487 placement
 /**
  * 按仓库扫一遍配置类文件（toml/yaml/json/cfg）找 s3/gs/az 存储桶名：mn 是判定生产环境路径的正则；Qr 扫描超时 8 s；eo 最多收录的桶地址数 20000；to 传给 ripgrep 的 --max-filesize "4M"；no 聚类至少要出现的次数 3；ro 每类前缀最多列出 10 条。
  */
@@ -2272,7 +2313,7 @@ var MAX_BUCKET_URLS = 20000;
 var MAX_SCAN_FILE_SIZE = "4M";
 var MIN_BUCKET_URL_OCCURRENCES = 3;
 var TOP_BUCKET_URLS = 10;
-//@ chunk-2a8yx6fc.js:50421-51440 placement
+//@ chunk-fta1hp2w.js:50487-51506 placement
 /**
  * 用 ripgrep 在仓库配置文件（toml/yaml/json/cfg）中搜索 s3/gs/az 存储桶地址，统计出现次数与文件数，超过上限或超时标记截断，返回前若干名与前缀聚类。
  */
@@ -2353,7 +2394,7 @@ async function scanBucketUrls(repoDir, maxDistinct = MAX_BUCKET_URLS) {
     truncated: capped || timeoutSignal.aborted || failed,
   };
 }
-//@ chunk-2a8yx6fc.js:51440-51673 placement
+//@ chunk-fta1hp2w.js:51506-51739 placement
 function clusterByPrefix(names) {
   let counts = new Map();
   for (let name of names) {
@@ -2367,7 +2408,7 @@ function clusterByPrefix(names) {
     .sort((entryA, entryB) => entryB[1] - entryA[1] || entryA[0].localeCompare(entryB[0]))
     .slice(0, TOP_BUCKET_URLS);
 }
-//@ chunk-2a8yx6fc.js:51673-52657 placement
+//@ chunk-fta1hp2w.js:51739-52723 placement
 function gatherBucketNames(scan) {
   if (scan === null)
     return `
@@ -2403,7 +2444,7 @@ ${scan.clusters.map(([prefix, distinctCount]) => `- ${prefix}-* (${distinctCount
   ].filter(Boolean).join(`
 `);
 }
-//@ chunk-2a8yx6fc.js:52657-54883 placement
+//@ chunk-fta1hp2w.js:52723-54949 placement
 /**
  * 扫描仓库中的包管理/容器配置文件（.npmrc、pip.conf、pyproject.toml、Dockerfile）
  */
@@ -2562,7 +2603,7 @@ ${sensitivePaths.map((filePath) => `- ${displaySafeName(filePath)}`).join(`
 `),
   );
 }
-//@ chunk-2a8yx6fc.js:54883-55219 placement
+//@ chunk-fta1hp2w.js:54949-55285 placement
 /**
  * 预收集报告中"内置默认自动模式规则标签"小节：列出默认 allow 与 soft-deny 标签，提醒建议不要重复覆盖。
  */
@@ -2588,8 +2629,8 @@ ${toLabels(defaultExternalAutoModeRules.soft_deny).map((label) => `- ${label}`).
 export {
   SHELL_HISTORY_SOURCES,
   getPathModuleForPlatform,
-  ghIsDangerousCallback,
   pregatherOptionsFromAnswer,
+  ghIsDangerousCallback,
   buildPregatherReport,
   IGNORED_ALLOW_ENTRIES_HEADING,
   DESTRUCTIVE_ALLOW_ENTRIES_HEADING,

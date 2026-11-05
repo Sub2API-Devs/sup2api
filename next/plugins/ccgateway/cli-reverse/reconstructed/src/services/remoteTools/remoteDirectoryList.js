@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增。为远端列目录：逐段打开、不跟随符号链接、按读权限规则过滤。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-htc3qf7e.js (9)
- * attribution: placement 9
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-aejveeja.js (11)
+ * attribution: placement 11
  */
 import { win32, isAbsolute, resolve, join, sep } from "path";
 import { readlink, open, lstat, opendir } from "fs/promises";
@@ -20,7 +20,7 @@ import { pathVettingReason } from "../../utils/permissions/pathVetting.js";
 import { getErrnoCode, sanitizedErrCodeForTelemetry } from "../../utils/errors.js";
 import { runInRemoteCallFrameMain } from "../../remote/remoteMode.js";
 import { O_NOFOLLOW_ANY, READ_LIMITS } from "../../utils/fsBoundRead.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { getFileKind } from "../../utils/fileKind.js";
 import {
   layeredReadVerdictForPaths,
@@ -29,14 +29,14 @@ import {
 } from "../../utils/permissions/filesystem.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-htc3qf7e.js:854-883 placement
+//@ chunk-aejveeja.js:4690-4720 placement
 /**
  * 远端目录列表的条目上限与路径长度上限。
  */
 var REMOTE_LIST_DIRECTORY_MAX_ENTRIES = 5000;
 var MAX_LISTED_ENTRIES_RAW = 10 * REMOTE_LIST_DIRECTORY_MAX_ENTRIES;
 var MAX_REMOTE_PATH_CHARS = 1024;
-//@ chunk-htc3qf7e.js:883-2033 placement
+//@ chunk-aejveeja.js:4720-5887 placement
 /**
  * 为远端列目录：逐段打开、不跟随符号链接、按读权限规则过滤。
  */
@@ -59,10 +59,10 @@ async function listDirectoryForRemote(path, projectRoot, getPermissions, isWorks
     if (pathVettingReason(absPath, permissions.trustedNetworkDirectories) !== undefined)
       throw repoRootError("unsupported_name");
     if (isListingDenied(projectRoot, absPath, permissions)) throw repoRootError("read_rule");
-    await using directoryNoFollow = await openDirectoryNoFollow(projectRoot, absPath);
+    await using withoutLinks = await openWithoutLinks(projectRoot, absPath);
     if (
       !(
-        await readlink(`/proc/self/fd/${directoryNoFollow.fd}`, {
+        await readlink(`/proc/self/fd/${withoutLinks.fd}`, {
           encoding: "buffer",
         }).catch((error) => {
           throw getErrnoCode(error) === "ENOENT" ? repoRootError("unexpected_error") : error;
@@ -70,7 +70,7 @@ async function listDirectoryForRemote(path, projectRoot, getPermissions, isWorks
       ).equals(Buffer.from(absPath))
     )
       throw repoRootError("path_not_canonical");
-    let dirEntriesBounded = await readDirEntriesBounded(directoryNoFollow);
+    let dirEntriesBounded = await readDirEntriesBounded(withoutLinks);
     if (isWorkspaceMoved()) throw repoRootError("workspace_moved");
     let latestPermissions = getPermissions();
     if (latestPermissions !== permissions && isListingDenied(projectRoot, absPath, latestPermissions))
@@ -82,10 +82,10 @@ async function listDirectoryForRemote(path, projectRoot, getPermissions, isWorks
     let hitEntryLimit = runInRemoteCallFrameMain(projectRoot, () => {
       for (let entry of dirEntriesBounded) {
         let entryPath = join(absPath, entry.name);
-        if (isFileReadDenied(entryPath, latestPermissions, !entry.isFile())) continue;
+        if (isReadRefusedByRule(entryPath, latestPermissions, !entry.isFile())) continue;
         if (
           entry.name.trimEnd() !== entry.name &&
-          isFileReadDenied(`${entryPath}${sep}`, latestPermissions, !entry.isFile())
+          isReadRefusedByRule(`${entryPath}${sep}`, latestPermissions, !entry.isFile())
         )
           continue;
         if (allowedEntries.length === REMOTE_LIST_DIRECTORY_MAX_ENTRIES) return true;
@@ -93,9 +93,7 @@ async function listDirectoryForRemote(path, projectRoot, getPermissions, isWorks
       }
       return false;
     });
-    let results = await Promise.all(
-      allowedEntries.map((entry) => describeDirEntry(directoryNoFollow, entry)),
-    );
+    let results = await Promise.all(allowedEntries.map((entry) => describeDirEntry(withoutLinks, entry)));
     return {
       absPath,
       entries: results.filter((described) => described !== null),
@@ -105,15 +103,15 @@ async function listDirectoryForRemote(path, projectRoot, getPermissions, isWorks
     throw repoRootErrorClass(error) !== undefined ? error : listErrorFromErrno(error);
   }
 }
-//@ chunk-htc3qf7e.js:2033-2072 placement
+//@ chunk-aejveeja.js:5887-5929 placement
 var DIRECTORY_OPEN_FLAGS = O_NOFOLLOW_ANY | constants.O_DIRECTORY | constants.O_NOFOLLOW | READ_LIMITS;
-//@ chunk-htc3qf7e.js:2072-2512 placement
+//@ chunk-aejveeja.js:5929-6378 placement
 /**
  * 逐段打开目录，不跟随符号链接
  */
-async function openDirectoryNoFollow(projectRoot, targetPath) {
+async function openWithoutLinks(projectRoot, targetPath) {
   let filtered = targetPath.split(sep).filter((segment) => segment !== "");
-  let rootDepth = count(resolve(projectRoot).split(sep), (segment) => segment !== "") - 1;
+  let rootDepth = countWhere(resolve(projectRoot).split(sep), (segment) => segment !== "") - 1;
   let dirHandle = await open(sep, DIRECTORY_OPEN_FLAGS);
   for (let [index, segment] of filtered.entries()) {
     await using parentHandle = dirHandle;
@@ -131,12 +129,12 @@ async function openDirectoryNoFollow(projectRoot, targetPath) {
   }
   return dirHandle;
 }
-//@ chunk-htc3qf7e.js:2512-2697 placement
+//@ chunk-aejveeja.js:6378-6565 placement
 /**
  * 有界读取目录条目
  */
-async function readDirEntriesBounded(directoryNoFollow) {
-  let dir = await opendir(`/proc/self/fd/${directoryNoFollow.fd}`).catch((error) => {
+async function readDirEntriesBounded(withoutLinks) {
+  let dir = await opendir(`/proc/self/fd/${withoutLinks.fd}`).catch((error) => {
     throw getErrnoCode(error) === "ENOENT" ? repoRootError("unexpected_error") : error;
   });
   let entries = [];
@@ -146,12 +144,12 @@ async function readDirEntriesBounded(directoryNoFollow) {
   }
   return entries;
 }
-//@ chunk-htc3qf7e.js:2697-2980 placement
+//@ chunk-aejveeja.js:6565-6849 placement
 /**
  * 描述目录条目
  */
-async function describeDirEntry(directoryNoFollow, entry) {
-  let fileKind = await getFileKind(entry, `/proc/self/fd/${directoryNoFollow.fd}/${entry.name}`, "unknown");
+async function describeDirEntry(withoutLinks, entry) {
+  let fileKind = await getFileKind(entry, `/proc/self/fd/${withoutLinks.fd}/${entry.name}`, "unknown");
   if (fileKind === "unknown") return null;
   if (fileKind === "symlink")
     return {
@@ -170,22 +168,35 @@ async function describeDirEntry(directoryNoFollow, entry) {
     isDirectory: fileKind === "dir",
   };
 }
-//@ chunk-htc3qf7e.js:2980-3104 placement
+//@ chunk-aejveeja.js:6849-6902 placement
 function isListingDenied(projectRoot, absPath, permissions) {
   return (
-    layeredReadVerdictForPaths([], permissions).layer !== "allow" ||
-    runInRemoteCallFrameMain(
-      projectRoot,
-      () =>
-        isFileReadDenied(absPath, permissions, true) ||
-        ["deny", "ask"].some(
-          (behavior) => matchingDenyRuleForDirectoryContents(absPath, permissions, "read", behavior) !== null,
-        ),
+    isReadToolRefusedByRule(permissions) ||
+    runInRemoteCallFrameMain(projectRoot, () => isDirectoryRefusedByRule(absPath, permissions))
+  );
+}
+//@ chunk-aejveeja.js:6902-6951 placement
+/**
+ * 目录列表判定的层级是否不是 allow（供远端列目录决策）。
+ */
+function isReadToolRefusedByRule(filePath) {
+  return layeredReadVerdictForPaths([], filePath).layer !== "allow";
+}
+//@ chunk-aejveeja.js:6951-7040 placement (2.1.88 match: isFileReadDenied, 1)
+/**
+ * 远端列目录是否放行：先看工作目录许可，再看是否有 read 的 deny/ask 规则。
+ */
+function isDirectoryRefusedByRule(filePath, toolPermissionContext) {
+  return (
+    isReadRefusedByRule(filePath, toolPermissionContext, true) ||
+    ["deny", "ask"].some(
+      (layer) =>
+        matchingDenyRuleForDirectoryContents(filePath, toolPermissionContext, "read", layer) !== null,
     )
   );
 }
-//@ chunk-htc3qf7e.js:3104-3222 placement (2.1.88 match: isFileReadDenied, 1)
-function isFileReadDenied(absPath, permissions, alsoAsDir) {
+//@ chunk-aejveeja.js:7040-7160 placement (2.1.88 match: isFileReadDenied, 1)
+function isReadRefusedByRule(absPath, permissions, alsoAsDir) {
   return (
     alsoAsDir
       ? [
@@ -201,7 +212,7 @@ function isFileReadDenied(absPath, permissions, alsoAsDir) {
     ),
   );
 }
-//@ chunk-htc3qf7e.js:3222-3601 placement
+//@ chunk-aejveeja.js:7160-7540 placement
 /**
  * errno 转目录列举错误
  */
@@ -226,4 +237,11 @@ function listErrorFromErrno(error) {
       return repoRootError("unexpected_error", message);
   }
 }
-export { REMOTE_LIST_DIRECTORY_MAX_ENTRIES, listDirectoryForRemote };
+export {
+  isDirectoryRefusedByRule,
+  isReadRefusedByRule,
+  isReadToolRefusedByRule,
+  openWithoutLinks,
+  REMOTE_LIST_DIRECTORY_MAX_ENTRIES,
+  listDirectoryForRemote,
+};

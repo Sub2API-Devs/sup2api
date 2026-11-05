@@ -3,31 +3,35 @@
  *
  * 2.1.316 新增：无头回合分派器与忙碌判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (1), chunk-tyg7f3ek.js (6)
- * attribution: placement 7
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (7), chunk-5xgkngpb.js (1)
+ * attribution: placement 7, layout 1
  */
-import { count, uniq } from "../../utils/collections.js";
-import { canBatchWith } from "../print.js";
+import { countWhere } from "../../utils/collections.js";
+import { isQueuedUserTurnCommand } from "../../utils/messageQueueManager.js";
+import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
 import { hasTurnAttribution } from "./userFrameIntake.js";
 import { isPassiveOrAttachedCommand } from "../../utils/messages/messagePredicates.js";
 import { collectDeclaredPollEvents } from "../../utils/pollEvents.js";
 import { resolveTaskNotificationOrigin } from "../../utils/backgroundSessionResume.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
+import { isHumanOriginLoosely, EMAIL_HUMAN } from "../../bridge/inboundMessageOrigin.js";
 import { HeadlessHeapCensus, HeadlessUploadsCensus } from "./headlessCensus.js";
-import { cliError_2 } from "../exit.js";
+import { runInOutermostCallFrame } from "../exit.js";
 import { createAbortController, unwrapAbortReason, userAbortReason } from "../../utils/abortController.js";
 import { getTotalAPIDuration, getAutoModeUnavailableStopNotice } from "../../bootstrap/state.js";
 import { attributionKeyOrUndefined, messageTurnAttributionKey } from "../../utils/turnAttributionKey.js";
 import { setForegroundTurnBusy } from "../../utils/plugins/hooksModulesLoadGate.js";
 import { passModelFallback, countUnsentBatchMessages } from "./sdkMessageStream.js";
 import { isTextOrJsonDeltaEvent } from "../../query/goalCheckIn.js";
-import { SYNTHETIC_MODEL } from "../../constants/messages.js";
+import { SYNTHETIC_MODEL } from "../../utils/messages.js";
 import { isAbortedTerminalReason } from "../../entrypoints/sdk/coreSchemas.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { droppedDebugOutputTotals } from "../../utils/debug.js";
+import { env } from "../../utils/env.js";
 import { publishFailedSummary } from "./sessionResult.js";
 import { minimalUnavailableNotice } from "../../utils/permissions/serverClassifier/results.js";
 import { areAttachmentFilesArriving, waitForAttachmentFiles } from "../../bridge/attachmentFilesWait.js";
@@ -37,20 +41,25 @@ import { DoctorLazy } from "../handlers/util.js";
 import { looseObject, array, numberSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:554048-554106 placement
-function hasBatchableQueuedPrompt(messageQueue) {
-  return count(messageQueue.getCommandQueueSnapshot(), canBatchWith);
+//@ chunk-5xgkngpb.js:560825-560883 placement
+function getQueuedUserTurnCount(messageQueue) {
+  return countWhere(messageQueue.getCommandQueueSnapshot(), isQueuedUserTurnCommand);
 }
-//@ chunk-tyg7f3ek.js:256443-256543 placement
+//@ chunk-0yw3taqg.js:284056-284156 placement
 function isBusy({ running, runPhase, mainThreadQueueLength }) {
   return (running && runPhase !== "waiting_for_agents") || mainThreadQueueLength > 0;
 }
-//@ chunk-tyg7f3ek.js:256543-256631 placement
+//@ chunk-0yw3taqg.js:284156-284244 placement
 function isBusyOrClosed({ running, runPhase, inputClosed }) {
   return (running && runPhase !== "waiting_for_agents") || inputClosed;
 }
-//@ chunk-tyg7f3ek.js:256631-259614 placement
+//@ chunk-0yw3taqg.js:284244-284271 layout
+var TENGU_SNUG_PUDDLE = "tengu_snug_puddle";
+//@ chunk-0yw3taqg.js:284271-287975 placement
 function buildTurnDispatchInfo(command, members) {
+  let snugPuddleOn = readFlagWithOverride(TENGU_SNUG_PUDDLE, {
+    safe: true,
+  });
   let filtered = members
     .flatMap((member) => [
       ...(member.mergedSendUuids ?? []),
@@ -94,17 +103,24 @@ function buildTurnDispatchInfo(command, members) {
         ? command.clientBashCommandCwd
         : undefined,
     stopHookActive: command.stopHookActive,
+    continuesInterruptedWork: command.continuesInterruptedWork,
     fileAttachments: command.fileAttachments,
     inlinedImagePaths: command.inlinedImagePaths,
     imageFileUuids: command.imageFileUuids,
     savedFiles: members.flatMap((member) => member.savedFiles ?? []),
     withdrawnFileUuids: members.flatMap((member) => member.withdrawnFileUuids ?? []),
+    hidePicturesWithNoFileIdBefore: Math.max(
+      ...members.map((member) => member.hidePicturesWithNoFileIdBefore ?? 0),
+    ),
+    picturesToHide: members.findLast((member) => member.picturesToHide)?.picturesToHide,
     stampThreadState: command.stampThreadState,
+    namesWidgetViews: command.namesWidgetViews,
     frameTiming: command.frameTiming,
     skipSlashCommands: command.skipSlashCommands,
     bridgeOrigin: command.bridgeOrigin,
     localStdinOrigin: command.localStdinOrigin,
     sessionChannelPersonTyped: command.sessionChannelPersonTyped,
+    ultrathinkTyped: command.ultrathinkTyped,
     ownWordUuids: members
       .filter((member) => member.ownWord === true)
       .map((member) => member.uuid ?? member.stopKey),
@@ -116,9 +132,9 @@ function buildTurnDispatchInfo(command, members) {
     artifactCommentTurn: command.artifactCommentTurn,
     origin: resolveTaskNotificationOrigin(command.origin, command.mode, command.runId),
     clientPlatform: command.clientPlatform,
-    disallowedTools: uniq(members.flatMap((member) => member.disallowedTools ?? [])),
+    disallowedTools: normalizeCaseForComparison_2(members.flatMap((member) => member.disallowedTools ?? [])),
     clientDisallowedTools: members.some((member) => member.replacesDisallowedTools)
-      ? uniq(
+      ? normalizeCaseForComparison_2(
           members.flatMap((member) => (member.replacesDisallowedTools ? (member.disallowedTools ?? []) : [])),
         )
       : undefined,
@@ -126,18 +142,33 @@ function buildTurnDispatchInfo(command, members) {
       (members.length > 0 &&
         members.every(
           (member) =>
-            member.disallowedTools === undefined &&
-            (member.mode === "task-notification" ||
-              member.wakeupSource !== undefined ||
-              member.keepsDisallowedTools === true),
+            member.replacesDisallowedTools !== true &&
+            ((snugPuddleOn &&
+              member.inboundOrigin !== undefined &&
+              (!isHumanOriginLoosely(member.inboundOrigin) ||
+                member.isMeta === true ||
+                (member.inboundOrigin === EMAIL_HUMAN && member.emailSenderTurn === undefined))) ||
+              (member.disallowedTools === undefined && member.inboundOrigin === undefined)),
         )) ||
       undefined,
+    opensOnRoutineFire:
+      (!snugPuddleOn &&
+        members.length > 0 &&
+        members.every((member) => member.opensOnRoutineFire === true)) ||
+      undefined,
+    carriedOnDisallowedTools: members.some((member) => member.carriedOnDisallowedTools !== undefined)
+      ? normalizeCaseForComparison_2(members.flatMap((member) => member.carriedOnDisallowedTools ?? []))
+      : undefined,
     verifiedSlackHumanTurn: command.verifiedSlackHumanTurn,
     projectsUserTurn: command.projectsUserTurn,
     emailSenderTurn: command.emailSenderTurn,
+    turnEffortCap: members.every((member) => member.turnEffortCap === command.turnEffortCap)
+      ? command.turnEffortCap
+      : undefined,
     textNotTyped: command.textNotTyped,
     ownFilePaths: command.ownFilePaths,
     noPersonArrived: command.noPersonArrived,
+    typedByPerson: command.typedByPerson,
     hearthRelayRows: command.hearthRelayRows,
     hearthRelayThreadTs: command.hearthRelayThreadTs,
     hearthRelayMessageIds: command.hearthRelayMessageIds,
@@ -147,7 +178,7 @@ function buildTurnDispatchInfo(command, members) {
     handedOffTurnUserMessageUuids: command.handedOffTurnUserMessageUuids,
   };
 }
-//@ chunk-tyg7f3ek.js:259614-265770 placement
+//@ chunk-0yw3taqg.js:287975-294901 placement
 /**
  * print 主循环的轮次分派器：从队列取批次、运行 QueryEngine、处理中断/重跑/结果与 SDK 事件排空。
  */
@@ -169,6 +200,7 @@ class TurnDispatcher {
   onFrame;
   teeFrame;
   plainDeltasNeedOnlyEmit;
+  writePlainDeltaNow;
   onResult;
   afterTurnFinally;
   pendingMcpServerCount;
@@ -205,6 +237,7 @@ class TurnDispatcher {
     onFrame,
     teeFrame,
     plainDeltasNeedOnlyEmit,
+    writePlainDeltaNow,
     onResult,
     afterTurnFinally,
     pendingMcpServerCount,
@@ -221,11 +254,12 @@ class TurnDispatcher {
     this.drainSdkEvents = drainSdkEvents;
     this.deferredToolUse = deferredToolUse;
     this.takeErrorRowBehind = takeErrorRowBehind;
-    this.inTurnScope = (command, batch) => cliError_2(() => inTurnScope(command, batch));
+    this.inTurnScope = (command, batch) => runInOutermostCallFrame(() => inTurnScope(command, batch));
     this.onTurnStart = onTurnStart;
     this.onFrame = onFrame;
     this.teeFrame = teeFrame;
     this.plainDeltasNeedOnlyEmit = plainDeltasNeedOnlyEmit;
+    this.writePlainDeltaNow = writePlainDeltaNow;
     this.onResult = onResult;
     this.afterTurnFinally = afterTurnFinally;
     this.pendingMcpServerCount = pendingMcpServerCount;
@@ -271,14 +305,16 @@ class TurnDispatcher {
       uuids: new Set(),
     };
     let compactions = 0;
+    let plainDeltasSentDirectly = 0;
+    let plainDeltasNormal = 0;
+    let plainDeltasWrittenNow = 0;
+    let plainDeltasTakenAtSource = 0;
     await this.inTurnScope(context, async () => {
       let sawRetry = false;
       let retryStatus = 0;
       let totalAPIDuration = getTotalAPIDuration();
       let startLength = this.messages().length;
       let mcpPendingAtStart = this.pendingMcpServerCount?.();
-      let plainDeltasDirect = 0;
-      let plainDeltasNormal = 0;
       this.onTurnStart?.(context);
       this.turnOutcome.startTurn(attributionKeyOrUndefined(messageTurnAttributionKey(command)));
       setForegroundTurnBusy(true, busyToken);
@@ -290,7 +326,8 @@ class TurnDispatcher {
             ? undefined
             : members.find((member) => member.mode === "prompt" && member.resumeReason !== undefined);
         let turnDispatchInfo = buildTurnDispatchInfo(command, members);
-        let turnContext = {
+        let picturesToHide = this.io.sessionState.picturesToHide;
+        let submitInfo = {
           ...turnDispatchInfo,
           ...(refusedPrompt !== undefined && {
             ...buildTurnDispatchInfo(refusedPrompt, [refusedPrompt]),
@@ -298,7 +335,17 @@ class TurnDispatcher {
             disallowedTools: turnDispatchInfo.disallowedTools,
             clientDisallowedTools: turnDispatchInfo.clientDisallowedTools,
             keepsDisallowedTools: turnDispatchInfo.keepsDisallowedTools,
+            opensOnRoutineFire: turnDispatchInfo.opensOnRoutineFire,
+            carriedOnDisallowedTools: turnDispatchInfo.carriedOnDisallowedTools,
           }),
+          withdrawnFileUuids: normalizeCaseForComparison_2([
+            ...(picturesToHide?.fileUuids ?? []),
+            ...(turnDispatchInfo.withdrawnFileUuids ?? []),
+          ]),
+          hidePicturesWithNoFileIdBefore: Math.max(
+            picturesToHide?.hideBefore ?? 0,
+            turnDispatchInfo.hidePicturesWithNoFileIdBefore ?? 0,
+          ),
           abortController: this.drain.abortController,
           onCommandTakenIn: (uuid, answersClient) => this.drain.noteTakenIn(uuid, answersClient),
           onPromptCheckInterrupted: () => {
@@ -308,10 +355,13 @@ class TurnDispatcher {
           emitPlainDelta:
             this.plainDeltasNeedOnlyEmit === undefined
               ? undefined
-              : (frame) => {
+              : (message, resumedMember) => {
                   if (!this.plainDeltasNeedOnlyEmit?.()) return false;
-                  this.emit(passModelFallback(frame));
-                  plainDeltasDirect++;
+                  let plainDelta = passModelFallback(message);
+                  if (this.writePlainDeltaNow?.(plainDelta)) plainDeltasWrittenNow++;
+                  else this.emit(plainDelta);
+                  plainDeltasSentDirectly++;
+                  if (resumedMember) plainDeltasTakenAtSource++;
                   return true;
                 },
           inPlaceOfFirstRequest,
@@ -327,7 +377,7 @@ class TurnDispatcher {
         let engine = this.engine();
         for await (let frame of engine.submitMessage(
           refusedPrompt === undefined ? input : refusedPrompt.value,
-          turnContext,
+          submitInfo,
         )) {
           if (frame.type === "system" && frame.subtype === "compact_boundary") {
             compactions++;
@@ -353,6 +403,7 @@ class TurnDispatcher {
           }
           if (frame.type === "result") {
             this.drain.turnUnderWay = false;
+            this.drain.lastResultAt = performance.now();
             aborted = this.drain.abortController?.signal.aborted ?? false;
             intake.noteTurnEnded(aborted, command, frame);
             terminalReason = frame.terminal_reason;
@@ -393,9 +444,16 @@ class TurnDispatcher {
                 installed_mods: this.turnOutcome.installedModsSeen(),
                 ...droppedDebugOutputTotals(),
                 ...(this.plainDeltasNeedOnlyEmit !== undefined && {
-                  plain_deltas_sent_directly: plainDeltasDirect,
+                  plain_deltas_sent_directly: plainDeltasSentDirectly,
                   plain_deltas_sent_normally: plainDeltasNormal,
                 }),
+                ...(this.writePlainDeltaNow !== undefined && {
+                  plain_deltas_written_now: plainDeltasWrittenNow,
+                }),
+                ...(this.plainDeltasNeedOnlyEmit !== undefined &&
+                  env.CLAUDE_CODE_PLAIN_DELTA_TAKE_AT_SOURCE && {
+                    plain_deltas_taken_at_source: plainDeltasTakenAtSource,
+                  }),
               });
               this.turnOutcome.endTurn();
             }
@@ -424,7 +482,7 @@ class TurnDispatcher {
             frame.queued_turn_count =
               this.drain.endSessionRequested || this.stopping()
                 ? 0
-                : hasBatchableQueuedPrompt(this.messageQueue);
+                : getQueuedUserTurnCount(this.messageQueue);
             for (let event of this.drainSdkEvents()) this.emit(event);
             let pending = hasPutBack ? undefined : this.onResult(frame, context);
             if (pending !== undefined) await pending;
@@ -454,10 +512,16 @@ class TurnDispatcher {
       result,
       putBack: putBack.uuids,
       compactions,
+      ...(this.plainDeltasNeedOnlyEmit !== undefined && {
+        plainDeltas: {
+          sentDirectly: plainDeltasSentDirectly,
+          sentNormally: plainDeltasNormal,
+        },
+      }),
     };
   }
 }
-//@ chunk-tyg7f3ek.js:265770-266188 placement
+//@ chunk-0yw3taqg.js:294901-295319 placement
 function countMcpToolCallsSince(messages, start, tools) {
   let toolUseCount = 0;
   let mcpCalls = 0;
@@ -482,7 +546,7 @@ function countMcpToolCallsSince(messages, start, tools) {
     builtin_tool_calls: toolUseCount - mcpCalls - toolSearchCalls,
   };
 }
-//@ chunk-tyg7f3ek.js:266188-266540 placement
+//@ chunk-0yw3taqg.js:295319-295671 placement
 /**
  * 回合派发常量：最大年龄 24 小时、批量提示 id 长度 64、UUID 正则、续跑载荷 schema（starts/new_frames）与空对象 schema。
  */
@@ -493,7 +557,7 @@ var TURN_DISPATCH_WAITS;
 var UUID_HEX_PATTERN;
 var turnDispatchContinuationSchema;
 var emptyObjectSchema;
-deferInit("chunk-tyg7f3ek.js:266188", () => {
+deferInit("chunk-0yw3taqg.js:295319", () => {
   TURN_DISPATCH_CONSTANTS = 10;
   TURN_DISPATCH_MAX_AGE_MS = 86400000;
   MAX_BATCHED_PROMPT_ID_CHARS = 64;
@@ -517,12 +581,12 @@ deferInit("chunk-tyg7f3ek.js:266188", () => {
   emptyObjectSchema = DoctorLazy(() => looseObject({}));
 });
 export {
-  turnDispatchContinuationSchema,
-  MAX_BATCHED_PROMPT_ID_CHARS,
-  hasBatchableQueuedPrompt,
+  getQueuedUserTurnCount,
   TurnDispatcher,
   isBusyOrClosed,
   isBusy,
+  turnDispatchContinuationSchema,
+  MAX_BATCHED_PROMPT_ID_CHARS,
   TURN_DISPATCH_CONSTANTS,
   TURN_DISPATCH_MAX_AGE_MS,
   TURN_DISPATCH_WAITS,

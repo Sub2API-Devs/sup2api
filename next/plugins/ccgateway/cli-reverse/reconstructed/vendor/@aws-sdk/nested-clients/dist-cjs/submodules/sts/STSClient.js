@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/nested-clients/dist-cjs/submodules/sts/STSClient.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-a8ee6x44.js (1)
+ * pieces: chunk-brqnbz3r.js (1)
  * attribution: cjs-require-graph 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -25,9 +25,9 @@ import { require_runtimeConfig } from "./runtimeConfig.js";
 import { require_runtimeExtensions } from "./runtimeExtensions.js";
 import { deferInit, runDeferredInits } from "../../../../../../runtime/deferred-init.js";
 
-//@ chunk-a8ee6x44.js:11130-12668 cjs-require-graph
+//@ chunk-brqnbz3r.js:11130-12668 cjs-require-graph
 var require_STSClient; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-a8ee6x44.js:11130", () => {
+deferInit("chunk-brqnbz3r.js:11130", () => {
   require_STSClient = __commonJS(function (cjsExports) {
     Object.defineProperty(cjsExports, "__esModule", {
       value: true,

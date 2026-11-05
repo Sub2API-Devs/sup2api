@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。MCP 懒拨号失败闩锁。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sw4g2q2j.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-f7j1db99.js (4)
  * attribution: placement 4
  */
 import {
@@ -16,7 +16,7 @@ import { isHiddenReplyServer, appToolServerUnavailableText } from "./appToolServ
 import { getConnectionTimeoutMs } from "./client.js";
 import { createCombinedAbortSignal } from "../../utils/combinedAbortSignal.js";
 
-//@ chunk-sw4g2q2j.js:341-983 placement
+//@ chunk-f7j1db99.js:341-983 placement
 /**
  * 带超时与中止的懒拨号
  */
@@ -63,7 +63,7 @@ function boundDialWithLatch(dial, signal, serverName, context = "connection", si
     );
   });
 }
-//@ chunk-sw4g2q2j.js:983-1160 placement
+//@ chunk-f7j1db99.js:983-1160 placement
 async function boundDial(dial, options) {
   let timeoutMs = options.timeoutMs ?? getConnectionTimeoutMs();
   let { signal, cleanup } = createCombinedAbortSignal(options.signal, {
@@ -76,13 +76,13 @@ async function boundDial(dial, options) {
     cleanup();
   }
 }
-//@ chunk-sw4g2q2j.js:1160-1180 placement
+//@ chunk-f7j1db99.js:1160-1180 placement
 /**
  * 拨号失败闩锁的默认最长保持时间（300000 毫秒）。
  */
 var DEFAULT_BASE_HOLD_MS = 5000;
 var DEFAULT_MAX_HOLD_MS = 300000;
-//@ chunk-sw4g2q2j.js:1180-1562 placement
+//@ chunk-f7j1db99.js:1180-1562 placement
 /**
  * MCP 懒拨号失败闩锁。
  */
@@ -115,4 +115,4 @@ function createDialFailureLatch(options) {
     },
   };
 }
-export { createDialFailureLatch, boundDial };
+export { boundDial, createDialFailureLatch };

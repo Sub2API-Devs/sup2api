@@ -1,14 +1,14 @@
 /**
  * yallist/yallist.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: yallist@4.0.0
- * pieces: chunk-1ny7cxrt.js (1)
+ * pieces: chunk-1hnjmk23.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_iterator } from "./iterator.js";
 
-//@ chunk-1ny7cxrt.js:10965-15716 cjs-fingerprint
+//@ chunk-1hnjmk23.js:11334-16085 cjs-fingerprint
 var require_yallist = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Yallist;
   Yallist.Node = Node;

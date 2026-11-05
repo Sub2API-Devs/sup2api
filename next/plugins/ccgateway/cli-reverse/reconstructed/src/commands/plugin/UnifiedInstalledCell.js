@@ -3,9 +3,9 @@
  *
  * 已安装插件/MCP/技能统一列表中的单元格
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/UnifiedInstalledCell.tsx
- * pieces: chunk-vrb44rx7.js (3)
+ * pieces: chunk-wb51jffc.js (3)
  * attribution: placement 2, fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -28,7 +28,7 @@ import { plural } from "../../utils/stringUtils.js";
 import { getPluginDisplayName } from "../../components/ManagedSettingsSecurityDialog/utils.js";
 import { formatToolConnectionState } from "../../components/mcp/CapabilitiesSection.js";
 
-//@ chunk-vrb44rx7.js:142243-143655 placement
+//@ chunk-wb51jffc.js:142442-143854 placement
 function InstalledItemRow(props) {
   let $ = useMemoCache(16);
   let { item, isSelected, health, nameWidth, statusHoisted } = props;
@@ -161,7 +161,7 @@ function InstalledItemRow(props) {
   } else content = $[5];
   return content;
 }
-//@ chunk-vrb44rx7.js:143655-143808 placement
+//@ chunk-wb51jffc.js:143854-144007 placement
 /**
  * 渲染"Enter auth"快捷键提示（可配置键位 select:accept）。
  */
@@ -179,7 +179,7 @@ function AuthShortcutHint() {
   } else content = $[0];
   return content;
 }
-//@ chunk-vrb44rx7.js:143808-146689 fingerprint (2.1.88 match: UnifiedInstalledCell, 0.475)
+//@ chunk-wb51jffc.js:144007-146888 fingerprint (2.1.88 match: UnifiedInstalledCell, 0.478)
 function UnifiedInstalledCell(t0) {
   switch (t0.type) {
     case "plugin": {

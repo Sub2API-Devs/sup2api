@@ -1,8 +1,8 @@
 /**
  * @aws-crypto/sha256-js/build/module/RawSha256.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-crypto/sha256-js@5.2.0
- * pieces: chunk-cdckcchh.js (1)
+ * pieces: chunk-er1d5ga0.js (1)
  * attribution: esm-fingerprint 1
  */
 import {
@@ -13,7 +13,7 @@ import {
   SHA256_ROUND_CONSTANTS,
 } from "./constants.js";
 
-//@ chunk-cdckcchh.js:1106-2960 esm-fingerprint
+//@ chunk-er1d5ga0.js:1106-2960 esm-fingerprint
 /**
  * 第三方 SHA-256 原始哈希类（update/digest）。应归 vendor。
  */

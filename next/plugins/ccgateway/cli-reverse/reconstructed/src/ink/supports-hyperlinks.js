@@ -3,9 +3,9 @@
  *
  * 判断终端是否支持 OSC 8 超链接（npm supports-hyperlinks 加补充终端列表与 FORCE_HYPERLINK）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/supports-hyperlinks.ts
- * pieces: chunk-avfhvhz8.js (4)
+ * pieces: chunk-1jphxy9b.js (4)
  * attribution: sole-consumer 1, fingerprint 2, layout 1
  */
 import { __toESM } from "../../runtime/bun-runtime.js";
@@ -14,12 +14,12 @@ import { getAttacherCaps } from "../bootstrap/state.js";
 import { isEnvDefinedFalsy } from "../utils/envUtils.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-avfhvhz8.js:2914-2930 sole-consumer
+//@ chunk-1jphxy9b.js:2914-2930 sole-consumer
 var supportsHyperlinksModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-avfhvhz8.js:2914", () => {
+deferInit("chunk-1jphxy9b.js:2914", () => {
   supportsHyperlinksModule = __toESM(supportsHyperlinksPackage(), 1);
 });
-//@ chunk-avfhvhz8.js:2930-3012 fingerprint (2.1.88 match: ADDITIONAL_HYPERLINK_TERMINALS, 0.918)
+//@ chunk-1jphxy9b.js:2930-3012 fingerprint (2.1.88 match: ADDITIONAL_HYPERLINK_TERMINALS, 0.918)
 /**
  * supports-hyperlinks 之外额外认为支持 OSC 8 的终端名（TERM_PROGRAM / LC_TERMINAL）。
  */
@@ -32,7 +32,7 @@ var ADDITIONAL_HYPERLINK_TERMINALS = [
   "iTerm2",
   "WarpTerminal",
 ];
-//@ chunk-avfhvhz8.js:3012-3166 layout
+//@ chunk-1jphxy9b.js:3012-3166 layout
 /**
  * 超链接支持的显式设置：会话状态里的 hyperlinks 优先，其次 FORCE_HYPERLINK（0/假值为关）；都没有返回 undefined。
  */
@@ -43,7 +43,7 @@ function getForcedHyperlinkSetting(options) {
   if (!FORCE_HYPERLINK) return;
   return !(isEnvDefinedFalsy(FORCE_HYPERLINK) || parseInt(FORCE_HYPERLINK, 10) === 0);
 }
-//@ chunk-avfhvhz8.js:3166-3701 fingerprint (2.1.88 match: supportsHyperlinks, 0.444)
+//@ chunk-1jphxy9b.js:3166-3701 fingerprint (2.1.88 match: supportsHyperlinks, 0.444)
 /**
  * 终端是否支持 OSC 8 超链接：显式设置 → supports-hyperlinks 包 → 额外终端名单 → JetBrains → Windows Terminal（不在 tmux 内）→ tmux ≥3.4 → LC_TERMINAL → TERM 含 kitty。
  */
@@ -68,4 +68,4 @@ function supportsHyperlinks(options) {
   if (env.TERM?.includes("kitty")) return true;
   return false;
 }
-export { supportsHyperlinks, getForcedHyperlinkSetting };
+export { getForcedHyperlinkSetting, supportsHyperlinks };

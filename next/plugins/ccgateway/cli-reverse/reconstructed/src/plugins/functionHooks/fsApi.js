@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件 $.fs 接口（受限文件访问、祖先目录查找）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (14)
  * attribution: placement 14
  */
 import { sep, parse, dirname, join, isAbsolute, resolve as resolve_2 } from "path";
@@ -45,12 +45,12 @@ import { validateNamesArg, checkPathArg, checkFsReadArgs, checkFsStatArgs } from
 import { getErrnoPath } from "./apiDispatch.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3725242-3725299 placement
+//@ chunk-5xgkngpb.js:3820968-3821025 placement
 var AGENTS_FILE_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3725242", () => {
+deferInit("chunk-5xgkngpb.js:3820968", () => {
   AGENTS_FILE_NAMES = Object.freeze(["AGENTS.md", ".claude/AGENTS.md"]);
 });
-//@ chunk-e6aww6q8.js:3725299-3726779 placement
+//@ chunk-5xgkngpb.js:3821025-3822511 placement
 /**
  * 插件 $.fs.ancestors：列出项目、用户、托管设置的祖先目录；项目记忆关闭或工作区在远端时拒绝。
  */
@@ -133,12 +133,12 @@ async function fsAncestors(args, caller, { start = getOriginalCwd(), below, held
   }
   return path;
 }
-//@ chunk-e6aww6q8.js:3726779-3726840 placement
+//@ chunk-5xgkngpb.js:3822511-3822572 placement
 /**
  * file/dir/other
  */
 var statKind = (stat) => (stat.isFile() ? "file" : stat.isDirectory() ? "dir" : "other");
-//@ chunk-e6aww6q8.js:3727137-3727301 placement
+//@ chunk-5xgkngpb.js:3822869-3823033 placement
 function candidatePaths(base, rawPath) {
   let replaced = rawPath.replace(/^\\\\\?\\(?=[A-Za-z]:[\\/])/, "");
   if (isAbsolute(replaced)) return [replaced];
@@ -146,12 +146,12 @@ function candidatePaths(base, rawPath) {
   let prefix = dir.endsWith(sep) ? dir : `${dir}${sep}`;
   return [replaced, `${prefix}${replaced}`, resolve_2(dir, replaced)];
 }
-//@ chunk-e6aww6q8.js:3727301-3727315 placement
+//@ chunk-5xgkngpb.js:3823033-3823047 placement
 /**
  * 65536
  */
 var MAX_FS_READ_BYTES = 65536;
-//@ chunk-e6aww6q8.js:3727315-3729142 placement
+//@ chunk-5xgkngpb.js:3823047-3824876 placement
 /**
  * 插件 $.fs.* 的统一拒绝出口：说明为何不可访问（网络位置、Windows 限制、资源繁忙）。
  */
@@ -270,7 +270,7 @@ async function refuseFsAccess(request, plugin, cwd) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:3729142-3729308 placement
+//@ chunk-5xgkngpb.js:3824876-3825042 placement
 function readDenyRulesForAncestors(plugin) {
   let denyRules = mergePersistedDenyRules(
     getToolPermissionContext(
@@ -287,19 +287,19 @@ function readDenyRulesForAncestors(plugin) {
       )
     : undefined;
 }
-//@ chunk-e6aww6q8.js:3729308-3729362 placement
+//@ chunk-5xgkngpb.js:3825042-3825096 placement
 /**
  * 网络位置不可达
  */
 var NETWORK_LOCATION_TEXT = "a network location is not reached from here";
-//@ chunk-e6aww6q8.js:3729362-3729388 placement
+//@ chunk-5xgkngpb.js:3825096-3825122 placement
 /**
  * 取根会话
  */
 function rootSession() {
   return getRootSession();
 }
-//@ chunk-e6aww6q8.js:3729388-3729847 placement
+//@ chunk-5xgkngpb.js:3825122-3825581 placement
 /**
  * $.fs.ancestors 表项：拒绝网络位置，从 of（默认原始 cwd）向上查找给定文件名，可用 below 限定上界，受拒绝规则约束。
  */
@@ -332,7 +332,7 @@ var FS_ANCESTORS_API = {
     });
   },
 };
-//@ chunk-e6aww6q8.js:3729847-3729933 placement
+//@ chunk-5xgkngpb.js:3825581-3825667 placement
 /**
  * $.fs.list 实现
  */
@@ -349,7 +349,7 @@ var FS_LIST_OP = {
       caller.cwd,
     ),
 };
-//@ chunk-e6aww6q8.js:3729933-3730027 placement
+//@ chunk-5xgkngpb.js:3825667-3825761 placement
 /**
  * $.fs.read 实现
  */
@@ -367,7 +367,7 @@ var FS_READ_OP = {
       caller.cwd,
     ),
 };
-//@ chunk-e6aww6q8.js:3730027-3730131 placement
+//@ chunk-5xgkngpb.js:3825761-3825865 placement
 /**
  * $.fs.stat 表项：校验参数后以插件身份执行 stat。
  */
@@ -385,7 +385,7 @@ var FS_STAT_API = {
       caller.cwd,
     ),
 };
-//@ chunk-e6aww6q8.js:3730131-3730319 placement
+//@ chunk-5xgkngpb.js:3825865-3826053 placement
 /**
  * $.fs.write 表项：校验路径与文本后以插件身份写文件。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：git SHA 固定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: placement 3
  */
 import { relative, sep, join } from "path";
@@ -21,7 +21,7 @@ import { execFileNoThrowWithCwd } from "../execFileNoThrow.js";
 import { gitExe } from "../git.js";
 import { logForDebugging } from "../debug.js";
 
-//@ chunk-e6aww6q8.js:4523506-4523989 placement
+//@ chunk-5xgkngpb.js:4630429-4630913 placement
 async function hasSymlinkBetween(cloneDir, resolvedSubdir, subdirPath) {
   let filtered = relative(cloneDir, resolvedSubdir).split(sep).filter(Boolean);
   let current = cloneDir;
@@ -55,12 +55,12 @@ async function hasSymlinkBetween(cloneDir, resolvedSubdir, subdirPath) {
       );
   }
 }
-//@ chunk-e6aww6q8.js:4523989-4524148 placement
+//@ chunk-5xgkngpb.js:4630913-4631072 placement
 function assertFullCommitSha(sha) {
   if (sha !== undefined && !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(sha))
     throw Error(`Invalid sha "${sha}": must be a full commit hash (40 or 64 hex digits)`);
 }
-//@ chunk-e6aww6q8.js:4524148-4524665 placement
+//@ chunk-5xgkngpb.js:4631072-4631589 placement
 /**
  * 在检出目录里 git rev-parse <ref>，与 marketplace 条目钉住的 sha 比对，不符拒绝安装。
  */

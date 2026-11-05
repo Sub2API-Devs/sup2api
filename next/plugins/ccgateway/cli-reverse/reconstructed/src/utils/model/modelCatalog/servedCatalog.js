@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：内置的模型目录 JSON（version 3444）；目录通知（标题、文本、按钮）schema等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (67)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (67)
  * attribution: placement 67
  */
 import {
@@ -49,12 +49,12 @@ import {
 } from "../../../../vendor/zod/v4/classic/schemas.js";
 import { safeParseJSON } from "../../json.js";
 import { logForDebugging } from "../../debug.js";
-import { uniq } from "../../collections.js";
+import { normalizeCaseForComparison_2 } from "../../permissions/filesystem.js";
 import { logError } from "../../log.js";
 import { MODEL_KEY_BY_FIRST_PARTY_ID } from "../configs.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:143350-143420 placement (2.1.88 match: modelMatchesVersionPrefix, 1)
+//@ chunk-exfmq47h.js:152861-152931 placement (2.1.88 match: modelMatchesVersionPrefix, 1)
 /**
  * 含 claude- 且可解析为版本化模型。
  */
@@ -62,7 +62,7 @@ function isVersionedClaudeModelSpec(modelSpec) {
   let normalized = normalizeModelId(modelSpec);
   return normalized.includes("claude-") && parseModelId(normalized) !== null;
 }
-//@ chunk-aepeg2w5.js:143420-143564 placement
+//@ chunk-exfmq47h.js:152931-153075 placement
 /**
  * 对字段值（字符串或数组）中的模型 id 做遮盖，无变化时返回原值。
  */
@@ -73,7 +73,7 @@ function maskModelFieldValue(value, maskAll, isModelField) {
   );
   return mapped.some((item, index) => item !== value[index]) ? mapped : value;
 }
-//@ chunk-aepeg2w5.js:143564-143813 placement
+//@ chunk-exfmq47h.js:153075-153324 placement
 function maskModelIdList(value, maskAll, shorthandOk) {
   let maskPart = (part) => {
     if (maskAll && (shorthandOk ? /[-0-9]/.test(part) : isVersionedClaudeModelSpec(part)))
@@ -91,7 +91,7 @@ function maskModelIdList(value, maskAll, shorthandOk) {
   });
   return changed ? mapped.join(",") : value;
 }
-//@ chunk-aepeg2w5.js:143813-143904 placement
+//@ chunk-exfmq47h.js:153324-153416 placement
 /**
  * 判断字符串是否为需遮盖的保密模型简写。
  */
@@ -105,21 +105,21 @@ function isConfidentialShorthand(value) {
     !isPublicModelId(normalized)
   );
 }
-//@ chunk-aepeg2w5.js:143904-143959 placement
+//@ chunk-exfmq47h.js:153416-153471 placement
 /**
  * 当前目录来源。
  */
 function servedCatalogSource() {
   return getProviderState().servedCatalogActive?.source;
 }
-//@ chunk-aepeg2w5.js:143959-144006 placement
+//@ chunk-exfmq47h.js:153471-153518 placement
 /**
  * 取当前生效的服务端目录激活信息。
  */
 function servedCatalogActive() {
   return getProviderState().servedCatalogActive;
 }
-//@ chunk-aepeg2w5.js:144006-144173 placement
+//@ chunk-exfmq47h.js:153518-153685 placement
 /**
  * 当前生效的服务端目录（被抑制时为 null）。
  */
@@ -131,12 +131,12 @@ function activeServedCatalog() {
   if (catalog === null || !catalogSourceAllowed(servedCatalogActive?.source)) return null;
   return catalog;
 }
-//@ chunk-aepeg2w5.js:144173-144243 placement
+//@ chunk-exfmq47h.js:153685-153755 placement
 function catalogSourceAllowed(source) {
   if (source === "published") return getAPIProvider() !== "gateway";
   return isFirstPartyApiBackend();
 }
-//@ chunk-aepeg2w5.js:144243-144407 placement
+//@ chunk-exfmq47h.js:153755-153919 placement
 /**
  * 返回生效的服务端目录（激活的目录，或第一方后端下保留的停用行）。
  */
@@ -153,35 +153,35 @@ function getEffectiveServedCatalog() {
     return null;
   return servedCatalogDeactivatedRows;
 }
-//@ chunk-aepeg2w5.js:144407-144486 placement
+//@ chunk-exfmq47h.js:153919-153998 placement
 /**
  * 判断生效目录的来源是否为 served（服务端下发）。
  */
 function isServedCatalogActive() {
   return activeServedCatalog() !== null && getProviderState().servedCatalogActive?.source === "served";
 }
-//@ chunk-aepeg2w5.js:144486-144568 placement
+//@ chunk-exfmq47h.js:153998-154080 placement
 /**
  * 是否使用已发布目录。
  */
 function isPublishedCatalogActive() {
   return activeServedCatalog() !== null && getProviderState().servedCatalogActive?.source === "published";
 }
-//@ chunk-aepeg2w5.js:144568-144602 placement
+//@ chunk-exfmq47h.js:154080-154114 placement
 /**
  * 已发布目录生效且启用。
  */
 function isPublishedCatalogInUse() {
   return isPublishedCatalogActive() && isFirstPartyApiBackend();
 }
-//@ chunk-aepeg2w5.js:144602-144636 placement
+//@ chunk-exfmq47h.js:154114-154148 placement
 /**
  * 判断当前是否有生效目录。
  */
 function isEffectiveCatalogActive() {
   return activeServedCatalog() !== null;
 }
-//@ chunk-aepeg2w5.js:144636-144686 placement
+//@ chunk-exfmq47h.js:154148-154198 placement
 /**
  * 取生效目录中的模型行列表。
  */
@@ -189,7 +189,7 @@ function activeCatalogModels() {
   let catalog = activeServedCatalog();
   return catalog === null ? [] : catalogModels(catalog);
 }
-//@ chunk-aepeg2w5.js:144686-144798 placement
+//@ chunk-exfmq47h.js:154198-154310 placement
 /**
  * 在抑制目录的状态下执行。
  */
@@ -202,28 +202,28 @@ function withCatalogSuppressed(fn) {
     providerState.servedCatalogSuppressDepth--;
   }
 }
-//@ chunk-aepeg2w5.js:144798-144853 placement
+//@ chunk-exfmq47h.js:154310-154365 placement
 /**
  * 目录是否被抑制。
  */
 function isCatalogSuppressed() {
   return getProviderState().servedCatalogSuppressDepth > 0;
 }
-//@ chunk-aepeg2w5.js:144853-144890 placement
+//@ chunk-exfmq47h.js:154365-154402 placement
 /**
  * 在生效目录中查找模型条目。
  */
 function findEffectiveServedEntry(...modelIds) {
   return findServedEntry(getEffectiveServedCatalog(), modelIds);
 }
-//@ chunk-aepeg2w5.js:144890-144926 placement
+//@ chunk-exfmq47h.js:154402-154438 placement
 /**
  * 在服务端目录中查找模型。
  */
 function findServedModel(...modelIds) {
   return findServedEntry(activeServedCatalog(), modelIds);
 }
-//@ chunk-aepeg2w5.js:144926-144996 placement
+//@ chunk-exfmq47h.js:154438-154508 placement
 /**
  * 按 id 或身份拼写在生效目录中查模型条目。
  */
@@ -232,7 +232,7 @@ function findActiveServedByIdentity(identity) {
   if (catalog === null) return;
   return findServedCatalogRow(catalog, identity) ?? findByIdentitySpelling(catalog, identity);
 }
-//@ chunk-aepeg2w5.js:144996-145265 placement
+//@ chunk-exfmq47h.js:154508-154777 placement
 function findServedEntry(catalog, modelIds) {
   if (catalog === null) return;
   let [first, ...rest] = modelIds;
@@ -251,7 +251,7 @@ function findServedEntry(catalog, modelIds) {
   }
   return;
 }
-//@ chunk-aepeg2w5.js:145265-145467 placement
+//@ chunk-exfmq47h.js:154777-154979 placement
 function findByIdentitySpelling(catalog, modelId) {
   let identitySpelling = getCatalogState().modelKnowledge?.identitySpelling;
   if (identitySpelling === undefined) return;
@@ -264,14 +264,14 @@ function findByIdentitySpelling(catalog, modelId) {
     (row) => normalizeModelId(row.id) !== identity && normalizeModelId(identitySpelling(row.id)) === identity,
   );
 }
-//@ chunk-aepeg2w5.js:145467-145511 placement
+//@ chunk-exfmq47h.js:154979-155023 placement
 /**
  * 取生效目录中某模型的 runtime 信息。
  */
 function servedRuntime(...modelIds) {
   return findEffectiveServedEntry(...modelIds)?.runtime;
 }
-//@ chunk-aepeg2w5.js:145511-145562 placement
+//@ chunk-exfmq47h.js:155023-155074 placement
 /**
  * 输入/输出 token 数的合法区间。
  */
@@ -283,14 +283,14 @@ var OUTPUT_TOKEN_RANGE = {
   min: 1024,
   max: 128000,
 };
-//@ chunk-aepeg2w5.js:145562-145601 placement
+//@ chunk-exfmq47h.js:155074-155113 placement
 /**
  * 取生效目录模型的 max_input_tokens（限制在合法区间）。
  */
 function servedMaxInputTokens(...modelIds) {
   return clampInputTokens(findEffectiveServedEntry(...modelIds));
 }
-//@ chunk-aepeg2w5.js:145601-145679 placement
+//@ chunk-exfmq47h.js:155113-155191 placement
 /**
  * 把输入 token 值限制在合法区间，不合法返回 undefined。
  */
@@ -300,28 +300,28 @@ function clampInputTokens(effectiveServedEntry) {
     MAX_INPUT_TOKEN_RANGE,
   );
 }
-//@ chunk-aepeg2w5.js:145679-145741 placement
+//@ chunk-exfmq47h.js:155191-155253 placement
 /**
  * 取生效目录模型的 max_output_tokens。
  */
 function servedMaxOutputTokens(...modelIds) {
   return clampInRange(servedRuntime(...modelIds)?.max_output_tokens, OUTPUT_TOKEN_RANGE);
 }
-//@ chunk-aepeg2w5.js:145741-145807 placement
+//@ chunk-exfmq47h.js:155253-155319 placement
 /**
  * 取生效目录模型的 default_output_tokens。
  */
 function servedDefaultOutputTokens(...modelIds) {
   return clampInRange(servedRuntime(...modelIds)?.default_output_tokens, OUTPUT_TOKEN_RANGE);
 }
-//@ chunk-aepeg2w5.js:145807-145891 placement
+//@ chunk-exfmq47h.js:155319-155403 placement
 /**
  * 模型支持的 effort 级别。
  */
 function modelEffortLevels(...modelIds) {
   return servedRuntime(...modelIds)?.effort_levels?.map((effortLevel) => effortLevel.trim().toLowerCase());
 }
-//@ chunk-aepeg2w5.js:145891-145989 placement
+//@ chunk-exfmq47h.js:155403-155501 placement
 /**
  * 取生效目录模型的默认 effort 级别（小写）。
  */
@@ -329,14 +329,14 @@ function servedDefaultEffort(...modelIds) {
   let defaultEffort = servedRuntime(...modelIds)?.default_effort;
   return defaultEffort === undefined ? undefined : defaultEffort.trim().toLowerCase();
 }
-//@ chunk-aepeg2w5.js:145989-146038 placement
+//@ chunk-exfmq47h.js:155501-155550 placement
 /**
  * 取生效目录模型的能力列表。
  */
 function servedCapabilities(...modelIds) {
   return servedRuntime(...modelIds)?.capabilities;
 }
-//@ chunk-aepeg2w5.js:146038-146221 placement
+//@ chunk-exfmq47h.js:155550-155733 placement
 /**
  * 判断名字是否在目录列表中（以 - 前缀表示显式排除），未列出返回 undefined。
  */
@@ -347,7 +347,7 @@ function matchesCatalogList(name, ...modelIds) {
   if (mapped.includes(lower)) return true;
   return mapped.includes(`-${lower}`) ? false : undefined;
 }
-//@ chunk-aepeg2w5.js:146221-146287 placement
+//@ chunk-exfmq47h.js:155733-155799 placement
 /**
  * 取生效目录模型所属的模型族。
  */
@@ -355,7 +355,7 @@ function servedRowFamily(...modelIds) {
   let effectiveServedEntry = findEffectiveServedEntry(...modelIds);
   return effectiveServedEntry === undefined ? undefined : getRowFamily(effectiveServedEntry);
 }
-//@ chunk-aepeg2w5.js:146287-146702 placement
+//@ chunk-exfmq47h.js:155799-156214 placement
 /**
  * 组织强制/配置的默认模型。
  */
@@ -382,7 +382,7 @@ function orgDefaultModelState() {
     accountResolved: orgConfigured || (!!trimmed_3 && trimmed_3 !== "global_default"),
   };
 }
-//@ chunk-aepeg2w5.js:146702-146788 placement
+//@ chunk-exfmq47h.js:156214-156300 placement
 /**
  * 整数且在区间内时返回原值，否则 undefined。
  */
@@ -391,16 +391,16 @@ function clampInRange(value, range) {
     ? value
     : undefined;
 }
-//@ chunk-aepeg2w5.js:146788-210373 placement
+//@ chunk-exfmq47h.js:156300-219885 placement
 /**
  * 内置的模型目录 JSON（version 3444）。
  */
 var BUNDLED_MODEL_CATALOG = {
   $schema: "https://downloads.claude.ai/model-catalog/v1/schema.json",
   schema_version: 1,
-  version: 3444,
-  issued_at: "2026-10-30T01:05:05Z",
-  expires_at: "2026-11-06T01:05:05Z",
+  version: 3819,
+  issued_at: "2026-11-03T01:58:05Z",
+  expires_at: "2026-11-10T01:58:05Z",
   key_id: "claude-code-release-signing-key",
   surfaces: {
     cc: {
@@ -5150,24 +5150,24 @@ var BUNDLED_MODEL_CATALOG = {
     },
   },
 };
-//@ chunk-aepeg2w5.js:210373-210446 placement
+//@ chunk-exfmq47h.js:219885-219958 placement
 /**
  * 客户端数据缓存的键前缀与合法路径正则。
  */
 var CLIENT_DATA_CACHE_PREFIX = "claude-code-client-data-v1\x00";
 var CLIENT_DATA_PATH_RE = /^\/[A-Za-z0-9_./-]{1,300}$/;
-//@ chunk-aepeg2w5.js:210446-210484 placement
+//@ chunk-exfmq47h.js:219958-219996 placement
 /**
  * 拼出某客户端的缓存键。
  */
 function clientDataSchema(pathname) {
   return `${CLIENT_DATA_CACHE_PREFIX}${pathname}\x00`;
 }
-//@ chunk-aepeg2w5.js:210484-210746 placement
+//@ chunk-exfmq47h.js:219996-220258 placement
 var CLIENT_DATA_SCHEMA_VERSIONS; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var SEMVER_RE_2;
 var clientDataConfigSchema;
-deferInit("chunk-aepeg2w5.js:210484", () => {
+deferInit("chunk-exfmq47h.js:219996", () => {
   CLIENT_DATA_SCHEMA_VERSIONS = [1, 2];
   SEMVER_RE_2 = /^\d{1,9}\.\d{1,9}\.\d{1,9}$/;
   clientDataConfigSchema = DoctorLazy(() =>
@@ -5184,7 +5184,7 @@ deferInit("chunk-aepeg2w5.js:210484", () => {
     }).loose(),
   );
 });
-//@ chunk-aepeg2w5.js:210746-211370 placement
+//@ chunk-exfmq47h.js:220258-220882 placement
 /**
  * 解析目录文档字节。
  */
@@ -5228,14 +5228,14 @@ function parseCatalogDocument(documentBytes) {
     },
   };
 }
-//@ chunk-aepeg2w5.js:211370-211452 placement
+//@ chunk-exfmq47h.js:220882-220964 placement
 /**
  * 匹配模型的客户端数据。
  */
 function clientDataForModel(catalog, modelId) {
   return catalog.entries.find((entry) => entry.pattern.test(modelId))?.clientData ?? null;
 }
-//@ chunk-aepeg2w5.js:211452-211532 placement
+//@ chunk-exfmq47h.js:220964-221044 placement
 /**
  * 目录表面的名单与体量常量：Rpr = ["cc","ccr","ccd"]；M3t 响应体上限 2 MiB（作 maxContentLength）；aN 是 ETag 格式正则；uN 是 ETag 字符上限 256。
  */
@@ -5243,7 +5243,7 @@ var SURFACE_NAMES = ["cc", "ccr", "ccd"];
 var MAX_CATALOG_RESPONSE_BYTES = 2097152;
 var ETAG_PATTERN = /^(?:W\/)?"[!#-~\x80-\xff]*"$/;
 var MAX_ETAG_CHARS = 256;
-//@ chunk-aepeg2w5.js:211532-211612 placement
+//@ chunk-exfmq47h.js:221044-221124 placement
 /**
  * 是否为合法 ETag。
  */
@@ -5252,7 +5252,7 @@ function isValidEtag(etag) {
     typeof etag === "string" && etag.length > 0 && etag.length <= MAX_ETAG_CHARS && ETAG_PATTERN.test(etag)
   );
 }
-//@ chunk-aepeg2w5.js:211612-213697 placement
+//@ chunk-exfmq47h.js:221124-223209 placement
 /**
  * 目录（catalog）的 schema 组：gb 是目录通知 notice schema；_b 单个选项 schema；lN 选项组 schema；dN 价格 schema；cN 运行时（token 上限、effort 等级）schema；fN 模型行 schema；hb 是解析目录行时的行数上限 64。
  */
@@ -5263,7 +5263,7 @@ var pricingSchema;
 var runtimeSchema;
 var modelRowSchema;
 var MAX_CATALOG_ROWS;
-deferInit("chunk-aepeg2w5.js:211612", () => {
+deferInit("chunk-exfmq47h.js:221124", () => {
   CatalogNoticeSchema = DoctorLazy(() =>
     objectSchema({
       title: stringSchema().nullish(),
@@ -5379,7 +5379,7 @@ deferInit("chunk-aepeg2w5.js:211612", () => {
   );
   MAX_CATALOG_ROWS = 64;
 });
-//@ chunk-aepeg2w5.js:213697-214096 placement
+//@ chunk-exfmq47h.js:223209-223608 placement
 /**
  * 把目录模型分为有效、部分有效、无效。
  */
@@ -5417,11 +5417,11 @@ function partitionCatalogModels(models) {
     unidentifiedDropCount,
   };
 }
-//@ chunk-aepeg2w5.js:214096-214288 placement
+//@ chunk-exfmq47h.js:223608-223800 placement
 var idOnlySchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var confidentialMarkerSchema;
 var aliasEntrySchema;
-deferInit("chunk-aepeg2w5.js:214096", () => {
+deferInit("chunk-exfmq47h.js:223608", () => {
   idOnlySchema = DoctorLazy(() =>
     objectSchema({
       id: stringSchema(),
@@ -5441,7 +5441,7 @@ deferInit("chunk-aepeg2w5.js:214096", () => {
     }).loose(),
   );
 });
-//@ chunk-aepeg2w5.js:214288-215471 placement
+//@ chunk-exfmq47h.js:223800-224983 placement
 /**
  * 目录模型 schema（wire/stored 两种）。
  */
@@ -5491,11 +5491,12 @@ function catalogModelSchema(mode) {
         logForDebugging(
           `[servedCatalog] surface ${rest.id}: ${partition.invalidCount} of ${rest.models?.length ?? 0} served rows failed row validation`,
         );
-      let allDropped = uniq([...drops.ids, ...(partition?.droppedModelIds ?? [])]);
+      let allDropped = normalizeCaseForComparison_2([...drops.ids, ...(partition?.droppedModelIds ?? [])]);
       let sliced = allDropped.slice(0, MAX_CATALOG_ROWS);
-      let filtered = uniq([...drops.confidentialIds, ...(partition?.droppedConfidentialIds ?? [])]).filter(
-        (id) => sliced.includes(id),
-      );
+      let filtered = normalizeCaseForComparison_2([
+        ...drops.confidentialIds,
+        ...(partition?.droppedConfidentialIds ?? []),
+      ]).filter((id) => sliced.includes(id));
       let unidentified =
         drops.unidentified ||
         (partition?.unidentifiedDropCount ?? 0) > 0 ||
@@ -5515,7 +5516,7 @@ function catalogModelSchema(mode) {
       };
     });
 }
-//@ chunk-aepeg2w5.js:215471-215973 placement
+//@ chunk-exfmq47h.js:224983-225485 placement
 /**
  * 目录模型 wire/stored schema 实例。
  */
@@ -5524,7 +5525,7 @@ var storedRowSchema;
 var selectorStateSchema;
 var ACCOUNT_KIND_VALUES;
 var catalogDocumentSchema;
-deferInit("chunk-aepeg2w5.js:215471", () => {
+deferInit("chunk-exfmq47h.js:224983", () => {
   CatalogModelWireSchema = DoctorLazy(() => catalogModelSchema("wire"));
   storedRowSchema = DoctorLazy(() => catalogModelSchema("stored"));
   selectorStateSchema = DoctorLazy(() =>
@@ -5555,7 +5556,7 @@ deferInit("chunk-aepeg2w5.js:215471", () => {
     }).loose(),
   );
 });
-//@ chunk-aepeg2w5.js:215973-216153 placement
+//@ chunk-exfmq47h.js:225485-225665 placement
 /**
  * 取目录中某选择器界面的配置与状态。
  */
@@ -5571,7 +5572,7 @@ function getSelectorSurface(catalog, surface) {
     }),
   };
 }
-//@ chunk-aepeg2w5.js:216153-216422 placement
+//@ chunk-exfmq47h.js:225665-225934 placement
 /**
  * 已发布目录常量：schema 版本、全部保留标记、大小上限、签名 schema 与时间戳正则。
  */
@@ -5583,7 +5584,7 @@ var SIGNATURE_SCHEMA_VERSION;
 var RSASSA_PKCS1_V1_5_SHA512;
 var catalogSignatureSchema;
 var ISO_TIMESTAMP_RE_2;
-deferInit("chunk-aepeg2w5.js:216153", () => {
+deferInit("chunk-exfmq47h.js:225665", () => {
   CATALOG_SCHEMA_VERSION = 1;
   HOLD_ALL = "*";
   CATALOG_SCHEMA = MAX_CATALOG_RESPONSE_BYTES;
@@ -5600,7 +5601,7 @@ deferInit("chunk-aepeg2w5.js:216153", () => {
   );
   ISO_TIMESTAMP_RE_2 = /^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$/;
 });
-//@ chunk-aepeg2w5.js:216422-216527 placement
+//@ chunk-exfmq47h.js:225934-226039 placement
 /**
  * 解析 ISO 时间戳字符串为毫秒。
  */
@@ -5609,12 +5610,12 @@ function parseIsoTimestamp(expiresAt) {
   let timestamp = Date.parse(expiresAt);
   return Number.isFinite(timestamp) ? timestamp : undefined;
 }
-//@ chunk-aepeg2w5.js:216527-216763 placement
+//@ chunk-exfmq47h.js:226039-226275 placement
 /**
  * 目录文档 schema。
  */
 var CatalogDocumentSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:216527", () => {
+deferInit("chunk-exfmq47h.js:226039", () => {
   CatalogDocumentSchema = DoctorLazy(() =>
     objectSchema({
       $schema: stringSchema().optional(),
@@ -5628,7 +5629,7 @@ deferInit("chunk-aepeg2w5.js:216527", () => {
     }).loose(),
   );
 });
-//@ chunk-aepeg2w5.js:216763-216863 placement
+//@ chunk-exfmq47h.js:226275-226375 placement
 /**
  * 判断条目是否对某模型（或全部）保留。
  */
@@ -5638,7 +5639,7 @@ function isHeldForModel(entry, modelId) {
     return lower === HOLD_ALL || lower === modelId;
   });
 }
-//@ chunk-aepeg2w5.js:216863-217003 placement
+//@ chunk-exfmq47h.js:226375-226515 placement
 /**
  * 读取文档的 schema_version 数字。
  */
@@ -5652,7 +5653,7 @@ function getSchemaVersion(catalogDocument) {
   let schemaVersion = catalogDocument.schema_version;
   return typeof schemaVersion === "number" ? schemaVersion : undefined;
 }
-//@ chunk-aepeg2w5.js:217003-217348 placement
+//@ chunk-exfmq47h.js:226515-226860 placement
 /**
  * 取指定界面（cc/ccr/ccd）的目录状态。
  */
@@ -5684,7 +5685,7 @@ function surfaceStateFor(catalog, surface) {
   }
   return null;
 }
-//@ chunk-aepeg2w5.js:217348-217467 placement
+//@ chunk-exfmq47h.js:226860-226979 placement
 /**
  * 列出文档所有界面选择器配置中的模型。
  */
@@ -5693,9 +5694,9 @@ function listSurfaceModels(catalog) {
     (surface.model_selector_config ?? []).flatMap((config) => config.models ?? []),
   );
 }
-//@ chunk-aepeg2w5.js:217467-217618 placement
+//@ chunk-exfmq47h.js:226979-227130 placement
 var bundledCatalogSeed; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:217467", () => {
+deferInit("chunk-exfmq47h.js:226979", () => {
   bundledCatalogSeed = DoctorLazy(() => {
     let parsed = CatalogDocumentSchema().safeParse(BUNDLED_MODEL_CATALOG);
     if (!parsed.success) logError(Error("published model-catalog seed does not parse"));
@@ -5704,21 +5705,21 @@ deferInit("chunk-aepeg2w5.js:217467", () => {
     };
   });
 });
-//@ chunk-aepeg2w5.js:217618-217654 placement
+//@ chunk-exfmq47h.js:227130-227166 placement
 /**
  * 取内置的模型目录文档。
  */
 function bundledCatalogDocument() {
   return bundledCatalogSeed().document;
 }
-//@ chunk-aepeg2w5.js:217654-217694 placement
+//@ chunk-exfmq47h.js:227166-227206 placement
 /**
  * 取内置目录的版本号。
  */
 function bundledCatalogVersion() {
   return bundledCatalogDocument()?.version ?? 0;
 }
-//@ chunk-aepeg2w5.js:217694-217752 placement
+//@ chunk-exfmq47h.js:227206-227264 placement
 /**
  * 取内置目录在某表面下的状态。
  */
@@ -5726,11 +5727,11 @@ function bundledSurfaceState(surface) {
   let cachedDocument = bundledCatalogDocument();
   return cachedDocument === null ? null : surfaceStateFor(cachedDocument, surface);
 }
-//@ chunk-aepeg2w5.js:217752-217802 placement
+//@ chunk-exfmq47h.js:227264-227314 placement
 function stripDateSuffixFromId(id) {
   return normalizeModelId(id).replace(/-\d{8}$/, "");
 }
-//@ chunk-aepeg2w5.js:217802-218052 placement
+//@ chunk-exfmq47h.js:227314-227564 placement
 /**
  * 查找目录中缺少的族默认模型（种子有、编译期有但目录没有）。
  */
@@ -5751,16 +5752,16 @@ function findMissingFamilyDefault(catalog) {
   }
   return null;
 }
-//@ chunk-aepeg2w5.js:218052-218106 placement
+//@ chunk-exfmq47h.js:227564-227618 placement
 /**
  * 判断后端是否属于目录表面（firstParty/gateway）。
  */
 function isCatalogSurfaceBackend(provider) {
   return provider === "firstParty" || provider === "gateway";
 }
-//@ chunk-aepeg2w5.js:218106-218152 placement
+//@ chunk-exfmq47h.js:227618-227664 placement
 var PROVIDER_MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:@-]{0,255}$/;
-//@ chunk-aepeg2w5.js:218152-218260 placement
+//@ chunk-exfmq47h.js:227664-227772 placement
 /**
  * 取目录条目在指定提供商下的模型 id（不合法时返回 undefined）。
  */
@@ -5769,7 +5770,7 @@ function getProviderModelIdForEntry(entry, provider) {
   if (trimmed !== undefined && !PROVIDER_MODEL_ID_RE.test(trimmed)) return;
   return trimmed ? trimmed : undefined;
 }
-//@ chunk-aepeg2w5.js:218260-218340 placement
+//@ chunk-exfmq47h.js:227772-227852 placement
 /**
  * 取目录条目的模型键（按 firstParty id 查表）。
  */
@@ -5779,7 +5780,7 @@ function entryModelKey(id) {
     ? MODEL_KEY_BY_FIRST_PARTY_ID[firstPartyId]
     : undefined;
 }
-//@ chunk-aepeg2w5.js:218340-218439 placement
+//@ chunk-exfmq47h.js:227852-227952 placement
 /**
  * 从目录解析模型的 firstParty id。
  */
@@ -5788,7 +5789,7 @@ function firstPartyIdFromCatalog(id) {
   if (catalogId === undefined) return;
   return getCatalogEntry(catalogId)?.provider_ids.first_party ?? undefined;
 }
-//@ chunk-aepeg2w5.js:218439-218511 placement
+//@ chunk-exfmq47h.js:227952-228024 placement
 /**
  * 生成模型的身份键（有模型键用 key:，否则 id:）。
  */
@@ -5797,26 +5798,40 @@ function modelIdentityKey(id) {
   return key === undefined ? `id:${normalizeModelId(id)}` : `key:${key}`;
 }
 export {
-  findServedModel,
-  isEffectiveCatalogActive,
+  withCatalogSuppressed,
   isServedCatalogActive,
+  findServedModel,
+  CATALOG_SCHEMA,
+  MAX_DOCUMENT_CHARS,
+  isValidEtag,
+  catalogSignatureSchema,
+  modelEffortLevels,
+  servedDefaultEffort,
+  findEffectiveServedEntry,
+  clampInputTokens,
+  isPublishedCatalogInUse,
+  isEffectiveCatalogActive,
   activeServedCatalog,
   activeCatalogModels,
   entryModelKey,
-  findEffectiveServedEntry,
   servedMaxInputTokens,
-  modelEffortLevels,
-  servedDefaultEffort,
+  isCatalogSuppressed,
+  servedMaxOutputTokens,
+  servedDefaultOutputTokens,
   servedRuntime,
-  withCatalogSuppressed,
+  CatalogDocumentSchema,
+  SURFACE_NAMES,
+  getSelectorSurface,
+  parseIsoTimestamp,
+  servedCatalogActive,
   ACCOUNT_KIND_VALUES,
-  isValidEtag,
-  CATALOG_SCHEMA,
+  storedRowSchema,
+  selectorStateSchema,
+  MAX_CATALOG_RESPONSE_BYTES,
+  catalogDocumentSchema,
   getSchemaVersion,
   CATALOG_SCHEMA_VERSION,
-  CatalogDocumentSchema,
   bundledCatalogVersion,
-  servedCatalogActive,
   bundledCatalogDocument,
   isHeldForModel,
   findMissingFamilyDefault,
@@ -5826,36 +5841,22 @@ export {
   clampInRange,
   OUTPUT_TOKEN_RANGE,
   servedCatalogSource,
-  clientDataForModel,
-  CLIENT_DATA_PATH_RE,
-  clientDataSchema,
-  parseCatalogDocument,
   isConfidentialShorthand,
   maskModelFieldValue,
   isCatalogSurfaceBackend,
   getEffectiveServedCatalog,
   listSurfaceModels,
-  servedDefaultOutputTokens,
-  isCatalogSuppressed,
   MAX_INPUT_TOKEN_RANGE,
   getProviderModelIdForEntry,
   firstPartyIdFromCatalog,
   servedRowFamily,
-  isPublishedCatalogInUse,
   matchesCatalogList,
   findActiveServedByIdentity,
   isPublishedCatalogActive,
   orgDefaultModelState,
-  clampInputTokens,
-  servedMaxOutputTokens,
-  SURFACE_NAMES,
-  storedRowSchema,
-  selectorStateSchema,
-  MAX_CATALOG_RESPONSE_BYTES,
-  catalogDocumentSchema,
-  getSelectorSurface,
-  MAX_DOCUMENT_CHARS,
-  catalogSignatureSchema,
+  clientDataForModel,
+  CLIENT_DATA_PATH_RE,
+  clientDataSchema,
+  parseCatalogDocument,
   servedCapabilities,
-  parseIsoTimestamp,
 };

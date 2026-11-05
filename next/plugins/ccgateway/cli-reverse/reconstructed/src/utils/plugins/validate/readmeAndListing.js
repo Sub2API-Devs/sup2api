@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件目录校验：README 与上架信息
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5aas12zq.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6vxyfwtv.js (19)
  * attribution: placement 18, layout 1
  */
 import { readdir } from "fs/promises";
@@ -46,7 +46,7 @@ import {
   SVG_EVENT_HANDLER_RE,
   SVG_EXTERNAL_REF_RE,
 } from "./validatePluginDirectory.js";
-import { count } from "../../collections.js";
+import { countWhere } from "../../collections.js";
 import { trimEndChars, plural } from "../../stringUtils.js";
 import {
   PRIVACY_POLICY_KEYS,
@@ -55,7 +55,7 @@ import {
   DOCUMENTATION_URL_KEYS,
 } from "../validatePlugin.js";
 
-//@ chunk-5aas12zq.js:25014-25298 placement
+//@ chunk-6vxyfwtv.js:25302-25586 placement
 function countReadmeWords(text) {
   let wordCount = 0;
   let inFence = false;
@@ -74,17 +74,17 @@ function countReadmeWords(text) {
       cursor = link.end;
     }
     stripped = (stripped + line.slice(cursor)).replace(URL_PATTERN_GLOBAL, "");
-    wordCount += count(stripped.split(LISTING_WHITESPACE_RE), (token) => token !== "");
+    wordCount += countWhere(stripped.split(LISTING_WHITESPACE_RE), (token) => token !== "");
   }
   return wordCount;
 }
-//@ chunk-5aas12zq.js:25298-25316 placement
+//@ chunk-6vxyfwtv.js:25586-25604 placement
 /**
  * README_LINE_BREAK_CHARS：README 里算换行的字符。
  */
 var README_LINE_BREAK_CHARS = `) 	
 \f\r`;
-//@ chunk-5aas12zq.js:25316-25474 placement
+//@ chunk-6vxyfwtv.js:25604-25762 placement
 function isShortLinkSpan(source, start, end) {
   let length = end - start;
   if (length < 0 || length > 160) return false;
@@ -96,7 +96,7 @@ function isShortLinkSpan(source, start, end) {
   }
   return visibleCount <= 80;
 }
-//@ chunk-5aas12zq.js:25909-26118 placement
+//@ chunk-6vxyfwtv.js:26197-26406 placement
 function findTopicUrl(text, topicPattern) {
   for (let line of text.split(`
 `)) {
@@ -109,7 +109,7 @@ function findTopicUrl(text, topicPattern) {
   }
   return "";
 }
-//@ chunk-5aas12zq.js:26118-26240 placement
+//@ chunk-6vxyfwtv.js:26406-26528 placement
 function linkTargetOf(text, link) {
   return (
     (link.text.startsWith("![") || (link.start >= 2 && text.slice(link.start - 2, link.start) === "[!")
@@ -117,7 +117,7 @@ function linkTargetOf(text, link) {
       : undefined) ?? link.url
   );
 }
-//@ chunk-5aas12zq.js:26240-26468 layout (2.1.88 match: isUrl, 1)
+//@ chunk-6vxyfwtv.js:26528-26756 layout (2.1.88 match: isUrl, 1)
 function isUrl_2(text, end) {
   let index = end + 2;
   let schemeLength = text.startsWith("https://", index) ? 8 : text.startsWith("http://", index) ? 7 : 0;
@@ -126,7 +126,7 @@ function isUrl_2(text, end) {
   while (cursor < text.length && !README_LINE_BREAK_CHARS.includes(text[cursor] ?? "")) cursor++;
   return text[cursor] === ")" && cursor > index + schemeLength ? text.slice(index, cursor) : undefined;
 }
-//@ chunk-5aas12zq.js:26468-26953 placement
+//@ chunk-6vxyfwtv.js:26756-27241 placement
 /**
  * README 过大或 markdown 结构过复杂时给出原因与修复。
  */
@@ -144,7 +144,7 @@ function checkReadmeRenderable(text) {
         fix: "Use less of what the message names: square brackets, emphasis or code markers, quote or list markers stacked on one line, or deep indentation. The README's text is still counted and read.",
       };
 }
-//@ chunk-5aas12zq.js:26953-27510 placement
+//@ chunk-6vxyfwtv.js:27241-27798 placement
 /**
  * 方括号、强调符、缩进、嵌套过多时返回原因。
  */
@@ -171,7 +171,7 @@ function findReadmeComplexity(text) {
   }
   return;
 }
-//@ chunk-5aas12zq.js:27510-27605 placement
+//@ chunk-6vxyfwtv.js:27798-27893 placement
 function leadingIndentWidth(line) {
   let width = 0;
   for (let char of line)
@@ -180,7 +180,7 @@ function leadingIndentWidth(line) {
     else break;
   return width;
 }
-//@ chunk-5aas12zq.js:27605-28154 placement
+//@ chunk-6vxyfwtv.js:27893-28441 placement
 /**
  * 一行开头的引用/列表嵌套层数。
  */
@@ -219,7 +219,7 @@ function countLineNesting(line) {
   }
   return depth;
 }
-//@ chunk-5aas12zq.js:28154-28345 placement (2.1.88 match: setCwdState, 0.845)
+//@ chunk-6vxyfwtv.js:28441-28632 placement (2.1.88 match: setCwdState, 0.845)
 async function findFileCaseInsensitive(cwd) {
   let lowerNames = new Set(README_CANDIDATES.map((candidate) => candidate.toLowerCase()));
   return (
@@ -228,7 +228,7 @@ async function findFileCaseInsensitive(cwd) {
     }).catch(() => [])
   ).find((dirent) => dirent.isFile() && lowerNames.has(dirent.name.normalize("NFC").toLowerCase()))?.name;
 }
-//@ chunk-5aas12zq.js:28345-29062 placement
+//@ chunk-6vxyfwtv.js:28632-29349 placement
 /**
  * 依次检查 manifest 中 homepage、repository 及几类主题链接（缺失时尝试从 README 中找），不是 https://（或允许时 mailto:）的记 LISTING_URL_SCHEME； 返回作为主链接的 URL 及是否来自 README。
  */
@@ -297,7 +297,7 @@ function checkListingUrls(manifest, text, findings) {
   }
   return privacyUrl;
 }
-//@ chunk-5aas12zq.js:29062-29610 placement
+//@ chunk-6vxyfwtv.js:29349-29897 placement
 /**
  * 链接是 https://（或允许的 mailto:）且主机名合法。
  */
@@ -325,7 +325,7 @@ function isAllowedListingUrl(url, allowMailto) {
     return false;
   return URL.canParse(url) && new URL(url).hostname !== "";
 }
-//@ chunk-5aas12zq.js:29610-30113 placement
+//@ chunk-6vxyfwtv.js:29897-30400 placement
 /**
  * screenshots 中非 https 的 URL 记发现项（超出上限只计数）。
  */
@@ -357,7 +357,7 @@ function checkScreenshotUrls(manifest, notices) {
     );
   return findings;
 }
-//@ chunk-5aas12zq.js:30113-31684 placement
+//@ chunk-6vxyfwtv.js:30400-31971 placement
 /**
  * 检查 icon 字段与图标文件（路径、协议、存在性、格式）。
  */
@@ -442,7 +442,7 @@ async function checkPluginIcon(rootDir, manifest) {
   }
   return findings;
 }
-//@ chunk-5aas12zq.js:31684-31902 placement
+//@ chunk-6vxyfwtv.js:31971-32189 placement
 function hasPathTraversal(path) {
   let current = path;
   for (let idx = 0; ; idx++) {
@@ -454,7 +454,7 @@ function hasPathTraversal(path) {
     current = replaced;
   }
 }
-//@ chunk-5aas12zq.js:31902-32063 placement
+//@ chunk-6vxyfwtv.js:32189-32350 placement
 function stripHtmlComments(text) {
   let out = "";
   let cursor = 0;
@@ -467,7 +467,7 @@ function stripHtmlComments(text) {
     cursor = index_2 + 3;
   }
 }
-//@ chunk-5aas12zq.js:32063-32752 placement
+//@ chunk-6vxyfwtv.js:32350-33039 placement
 /**
  * 按扩展名校验图片魔数；SVG 拒绝脚本、实体与外部引用。
  */
@@ -512,7 +512,7 @@ function isValidImageContent(path, bytes) {
       return false;
   }
 }
-//@ chunk-5aas12zq.js:32752-32821 placement
+//@ chunk-6vxyfwtv.js:33039-33108 placement
 /**
  * toArray：标量转数组。
  */

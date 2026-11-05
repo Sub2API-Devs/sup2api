@@ -3,9 +3,9 @@
  *
  * 删除 Artifact（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pc7vb93h.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-zke6e043.js (11)
  * attribution: placement 11
  */
 import { isCoworkHostSession } from "../../../services/artifacts/artifactToolGates.js";
@@ -37,20 +37,20 @@ import { env } from "../../../utils/env.js";
 import { durableRowFor, unwatchArtifactDurably } from "../../../services/artifacts/durableWatch.js";
 import { logError } from "../../../utils/log.js";
 
-//@ chunk-pc7vb93h.js:978-1473 placement
+//@ chunk-zke6e043.js:978-1473 placement
 function deleteUnavailableReason() {
   return isCoworkHostSession()
     ? `Deleting Artifacts isn't available in this cloud session right now, so nothing was deleted; do not retry here. If the Artifact is the user's own, ${userCanDeleteThemselves(true)}`
     : "Deleting Artifacts isn't available in this cloud session right now, so nothing was deleted; do not retry here. If the Artifact is the user's own, they can delete it themselves on claude.ai from the Artifact's own menu, or with `/artifacts` in Claude Code on their own machine (press d on the selected one).";
 }
-//@ chunk-pc7vb93h.js:1473-1507 placement
+//@ chunk-zke6e043.js:1473-1507 placement
 /**
  * 判断删除是否走直连（有直连且不在 frame 中继模式）。
  */
 function canDeleteViaDirectRoute() {
   return isRemoteManagedEnvironment() && !frameVerbRelayActive();
 }
-//@ chunk-pc7vb93h.js:1507-1584 placement
+//@ chunk-zke6e043.js:1507-1584 placement
 /**
  * 中继不可用时的删除结果（失败、0 状态、relay 路径）。
  */
@@ -61,25 +61,25 @@ var RELAY_UNAVAILABLE_DELETE_RESULT = {
   route: "relay",
   fromFrame: false,
 };
-//@ chunk-pc7vb93h.js:1584-1764 placement
+//@ chunk-zke6e043.js:1584-1764 placement
 function deleteUnconfirmedMessage(reason) {
   return `Couldn't confirm the delete (the cloud relay failed: ${reason}) \u2014 it may have gone through; check with action "list" before telling the user or trying again.`;
 }
-//@ chunk-pc7vb93h.js:1764-1789 placement
+//@ chunk-zke6e043.js:1764-1789 placement
 /**
  * 删除请求的响应体上限与重试退避区间。
  */
 var DELETE_MAX_RESPONSE_BYTES = 65536;
 var DELETE_RETRY_DEFAULT_MS = 1000;
 var DELETE_RETRY_MAX_MS = 1e4;
-//@ chunk-pc7vb93h.js:1789-1842 placement
+//@ chunk-zke6e043.js:1789-1842 placement
 /**
  * 字符串去空白，非字符串返回空串。
  */
 function trimmedOrEmpty(value) {
   return typeof value === "string" ? value.trim() : "";
 }
-//@ chunk-pc7vb93h.js:1842-2156 placement
+//@ chunk-zke6e043.js:1842-2156 placement
 /**
  * 删除 Artifact 的埋点字段：来源（工具/对话框）、路径（relay/direct）、是否本会话创建、存在时长、距上次更新时长、是否重试。
  */
@@ -101,7 +101,7 @@ function deleteTelemetryFields(context, retried, route) {
     }),
   };
 }
-//@ chunk-pc7vb93h.js:2156-4854 placement
+//@ chunk-zke6e043.js:2156-4854 placement
 async function deleteArtifact(slug, credentials, options) {
   let sendDelete = () =>
     canDeleteViaDirectRoute()
@@ -250,7 +250,7 @@ async function deleteArtifact(slug, credentials, options) {
     alreadyGone: false,
   };
 }
-//@ chunk-pc7vb93h.js:4854-5450 placement
+//@ chunk-zke6e043.js:4854-5450 placement
 /**
  * 从 AppState 中移除某个 slug：删掉对应的 frameUrls、artifactRefs、读版本与观察者条目；没有变化时返回原状态。
  */
@@ -278,7 +278,7 @@ function forgetSlugInAppState(appState, slug) {
     }),
   };
 }
-//@ chunk-pc7vb93h.js:5450-5957 placement
+//@ chunk-zke6e043.js:5450-5957 placement
 /**
  * Artifact 被删除后清理本地状态：从 AppState 移除 frameUrls/引用/读版本，解除路径链接，清理类型创建、协调编辑者、监视与 live 文档订阅，必要时注销 durable 订阅。
  */
@@ -307,7 +307,7 @@ function forgetDeletedArtifact(slug, options) {
       context: options.context,
     }).catch(logError);
 }
-//@ chunk-pc7vb93h.js:5957-6258 placement
+//@ chunk-zke6e043.js:5957-6258 placement
 /**
  * 用户在 /artifacts 删除了 Artifact 的提示：链接对所有人失效、不可恢复、不能再发布到原地址，不要再把该 url 传给 Artifact 工具。
  */

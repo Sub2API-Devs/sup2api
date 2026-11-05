@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。依次显示一组对话步骤（用 Ink 渲染）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-d6c8e5w8.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-t0a3c9vf.js (8)
  * attribution: placement 8
  */
 import {
@@ -20,17 +20,17 @@ import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { AppRoot } from "../components/AppRoot.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-d6c8e5w8.js:375-379 placement
+//@ chunk-t0a3c9vf.js:375-379 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-d6c8e5w8.js:375", () => {
+deferInit("chunk-t0a3c9vf.js:375", () => {
   init_react_production();
 });
-//@ chunk-d6c8e5w8.js:379-397 placement
+//@ chunk-t0a3c9vf.js:379-397 placement
 var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-d6c8e5w8.js:379", () => {
+deferInit("chunk-t0a3c9vf.js:379", () => {
   weakMap = new WeakMap();
 });
-//@ chunk-d6c8e5w8.js:397-528 placement
+//@ chunk-t0a3c9vf.js:397-528 placement
 function getRunStepsState(root) {
   let state = weakMap.get(root);
   if (!state) {
@@ -46,7 +46,7 @@ function getRunStepsState(root) {
   }
   return state;
 }
-//@ chunk-d6c8e5w8.js:528-1806 placement
+//@ chunk-t0a3c9vf.js:528-1806 placement
 /**
  * 依次显示一组对话步骤（用 Ink 渲染）。
  */
@@ -164,7 +164,7 @@ function runSteps(root, steps, options = {}) {
     settle(advanceFrom(0));
   });
 }
-//@ chunk-d6c8e5w8.js:1806-2048 placement
+//@ chunk-t0a3c9vf.js:1806-2048 placement
 function showScreen(root, dialog, options = {}) {
   let runStepsState = getRunStepsState(root);
   runStepsState.run++;
@@ -192,7 +192,7 @@ function showScreen(root, dialog, options = {}) {
     replaced: replaced_2,
   };
 }
-//@ chunk-d6c8e5w8.js:2048-2214 placement
+//@ chunk-t0a3c9vf.js:2048-2214 placement
 /**
  * 渲染当前步骤
  */
@@ -208,7 +208,7 @@ function renderStep(runStepsState, screen) {
     }),
   );
 }
-//@ chunk-d6c8e5w8.js:2214-2581 placement
+//@ chunk-t0a3c9vf.js:2214-2581 placement
 /**
  * 步骤树组件
  */
@@ -258,7 +258,7 @@ function StepTree(props) {
   } else element = $[7];
   return element;
 }
-//@ chunk-d6c8e5w8.js:2581-3147 placement
+//@ chunk-t0a3c9vf.js:2581-3147 placement
 /**
  * 步骤屏幕渲染
  */

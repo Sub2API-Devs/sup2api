@@ -3,20 +3,20 @@
  *
  * 设置校验错误的修正提示与文档链接表。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/validationTips.ts
- * pieces: chunk-dcmhvw5a.js (5)
+ * pieces: chunk-z20c443b.js (5)
  * attribution: placement 3, fingerprint 2
  */
 import { firstLineOf } from "../stringUtils.js";
 
-//@ chunk-dcmhvw5a.js:432640-432668 placement
+//@ chunk-z20c443b.js:431102-431130 placement
 var INTERNAL_DOC_TAG_RE = /^@internal(?:\b|$)/;
-//@ chunk-dcmhvw5a.js:432668-432722 placement
+//@ chunk-z20c443b.js:431130-431184 placement
 function hasInternalDocTag(description) {
   return typeof description === "string" && INTERNAL_DOC_TAG_RE.test(description);
 }
-//@ chunk-dcmhvw5a.js:432722-433495 placement
+//@ chunk-z20c443b.js:431184-431957 placement
 /**
  * 收集设置校验提示。
  */
@@ -70,7 +70,7 @@ function collectValidationTips(value, includeInternal) {
     }
   for (let child of Object.values(node)) collectValidationTips(child, includeInternal);
 }
-//@ chunk-dcmhvw5a.js:433495-437157 fingerprint (2.1.88 match: TIP_MATCHERS, 0.876)
+//@ chunk-z20c443b.js:431957-435619 fingerprint (2.1.88 match: TIP_MATCHERS, 0.876)
 /**
  * SETTINGS_TIP_RULES：设置校验提示规则（同一声明共 2 个绑定）。
  */
@@ -183,7 +183,7 @@ var settingsTipRules = {
   env: `${HTTPS_CODE_CLAUDE_COM_DOCS_EN}/settings#environment-variables`,
   hooks: `${HTTPS_CODE_CLAUDE_COM_DOCS_EN}/hooks`,
 };
-//@ chunk-dcmhvw5a.js:437157-437432 fingerprint (2.1.88 match: getValidationTip, 1)
+//@ chunk-z20c443b.js:435619-435894 fingerprint (2.1.88 match: getValidationTip, 1)
 function getValidationTip(context) {
   let matcher = SETTINGS_TIP_RULES.find((m) => m.matches(context));
   if (!matcher) return null;

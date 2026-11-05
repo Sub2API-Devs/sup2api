@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：钩子与设置清点
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-axmbhcjg.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vb7ng9fr.js (29)
  * attribution: placement 29
  */
 import { join, relative, sep, isAbsolute } from "path";
@@ -15,7 +15,7 @@ import { hasPreToolUseHooks } from "./deviceRuleFilter.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { hasWildcard, matchRulePattern } from "../../utils/permissions/permissionRuleParser.js";
 import { preToolUseMatcherListedTools, preToolUseMatcherCoversTool } from "../../utils/hooks.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2, getBundledSkillsRoot } from "../../utils/permissions/filesystem.js";
 import { nfcLower } from "../../utils/stringUtils.js";
 import { marketplaceSuffix } from "../../utils/plugins/pluginIdentifier.js";
 import { SYNCED, SKILLS_DIR } from "../../utils/telemetry/pluginTelemetry.js";
@@ -28,7 +28,7 @@ import {
 import {
   getSettingsForSource,
   getSettingsForSourceTightenOnly,
-  getSettingsWithErrors_2,
+  getSettingsWithErrors,
   getSettingsFilePathForSource,
   getLegacyLocalSettingsFilePath,
   parseSettingsFileUncached,
@@ -47,14 +47,14 @@ import {
 } from "../../utils/fsOperations.js";
 import { loadAllPluginsForPreview } from "../../utils/plugins/pluginLoader.js";
 import { getAddDirEnabledPlugins } from "../../utils/plugins/addDirPluginSettings.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
+import { countWhere } from "../../utils/collections.js";
 import { getErrnoCode } from "../../utils/errors.js";
-import { getBundledSkillsRoot } from "../../utils/permissions/filesystem.js";
 import { SYNCED_DIR } from "../../utils/plugins/syncedItems.js";
 import { invalidateCommandNames } from "../../utils/settings/commandSyncNames.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-axmbhcjg.js:28530-28874 placement
+//@ chunk-vb7ng9fr.js:28565-28909 placement
 /**
  * 构造不发送的条目结果：记录主文件及其非样式 import 的原因（各真实路径只记一次）。
  */
@@ -89,14 +89,14 @@ function buildWithheldEntry(candidate, reason, seenReal, path = candidate.destin
     leftBehind,
   };
 }
-//@ chunk-axmbhcjg.js:28874-28948 placement
+//@ chunk-vb7ng9fr.js:28909-28983 placement
 /**
  * 以本地路径读取一个工作文件。
  */
 function readNativeWorkingFile(walkState, location) {
   return readWorkingFile(walkState.realConfigHome, walkState.realConfigHome, location.nativeRel);
 }
-//@ chunk-axmbhcjg.js:28948-29454 placement
+//@ chunk-vb7ng9fr.js:28983-29489 placement
 /**
  * 把文件跳过原因映射为清点的未发送原因（符号链接、超限、敏感、拒读，其余为不可读）。
  */
@@ -130,14 +130,14 @@ function mapSkipReasonToLeftBehind(reason) {
       return "unreadable";
   }
 }
-//@ chunk-axmbhcjg.js:29564-29585 placement
+//@ chunk-vb7ng9fr.js:29599-29620 placement
 /**
  * 表示“覆盖全部”的钩子覆盖结果。
  */
 var ALWAYS_COVERS = {
   covers: "all",
 };
-//@ chunk-axmbhcjg.js:29585-29868 placement
+//@ chunk-vb7ng9fr.js:29620-29903 placement
 function getPreToolUseMatchers(settings) {
   if (!hasPreToolUseHooks(settings))
     return {
@@ -158,7 +158,7 @@ function getPreToolUseMatchers(settings) {
     matchers,
   };
 }
-//@ chunk-axmbhcjg.js:29868-30062 placement
+//@ chunk-vb7ng9fr.js:29903-30097 placement
 function makeHookCoveragePredicate(hookCoverage) {
   if (hookCoverage.covers === "all") return true;
   let matchers = hookCoverage.matchers;
@@ -173,7 +173,7 @@ function makeHookCoveragePredicate(hookCoverage) {
         })
       : matchers.some((matcher) => preToolUseMatcherCoversTool(matcher, covers));
 }
-//@ chunk-axmbhcjg.js:30062-30231 placement
+//@ chunk-vb7ng9fr.js:30097-30266 placement
 function mergePreToolUseHooks(settingsList) {
   let filtered = settingsList.filter(hasPreToolUseHooks);
   if (filtered.length === 0) return;
@@ -184,23 +184,26 @@ function mergePreToolUseHooks(settingsList) {
     }
   );
 }
-//@ chunk-axmbhcjg.js:30231-30309 placement
+//@ chunk-vb7ng9fr.js:30266-30344 placement
 /**
  * 取设置里 PreToolUse 钩子配置。
  */
 function PreToolUseHooksOf(settings) {
   return isPlainObject(settings) && Object.hasOwn(settings, "PreToolUse") ? settings.PreToolUse : undefined;
 }
-//@ chunk-axmbhcjg.js:30309-30432 placement
+//@ chunk-vb7ng9fr.js:30344-30467 placement
 function mergeHookCoverage(preToolUseMatchers, preToolUseMatchers_2) {
   return preToolUseMatchers.covers === "all" || preToolUseMatchers_2.covers === "all"
     ? ALWAYS_COVERS
     : {
         covers: "matchers",
-        matchers: uniq([...preToolUseMatchers.matchers, ...preToolUseMatchers_2.matchers]),
+        matchers: normalizeCaseForComparison_2([
+          ...preToolUseMatchers.matchers,
+          ...preToolUseMatchers_2.matchers,
+        ]),
       };
 }
-//@ chunk-axmbhcjg.js:30432-31072 placement
+//@ chunk-vb7ng9fr.js:30467-31107 placement
 /**
  * 计算 PreToolUse 钩子对工具的覆盖：来源不完整、插件加载出错/被抑制/改名或钩子未解析时视为覆盖全部；否则合并进程守卫、各设置来源与相关插件的 matcher。
  */
@@ -247,13 +250,13 @@ function computePreToolUseCoverage({
     matchers: [],
   });
 }
-//@ chunk-axmbhcjg.js:31072-31177 placement
+//@ chunk-vb7ng9fr.js:31107-31212 placement
 function hasHookAffectingErrors(errors) {
   return errors.some(
     (error) => error.severity !== "warning" || error.path === "hooks" || error.path.startsWith("hooks."),
   );
 }
-//@ chunk-axmbhcjg.js:31177-32640 placement
+//@ chunk-vb7ng9fr.js:31212-32675 placement
 /**
  * 构造 PreToolUse 钩子覆盖计算的数据源：各设置来源的钩子、来源是否不完整、进程级守卫（主线程代理与技能钩子）、插件加载（附加不完整警告/错误）与仓库启用的插件键。
  */
@@ -270,7 +273,7 @@ function createHookCoverageSources(pluginOptions, getSkillHooks, settingsToCloud
       ]);
     },
     sourcesIncomplete: () =>
-      hasHookAffectingErrors(getSettingsWithErrors_2().errors) ||
+      hasHookAffectingErrors(getSettingsWithErrors().errors) ||
       getAdditionalDirSettingsPaths().some((path) =>
         hasHookAffectingErrors(readSettingsStrict(path).errors),
       ) ||
@@ -318,7 +321,7 @@ function createHookCoverageSources(pluginOptions, getSkillHooks, settingsToCloud
         enabledPluginIds({
           enabledPlugins: {
             ...getAddDirEnabledPlugins(),
-            ...(getSettingsWithErrors_2().settings?.enabledPlugins ?? {}),
+            ...(getSettingsWithErrors().settings?.enabledPlugins ?? {}),
           },
         }),
       );
@@ -352,7 +355,7 @@ function createHookCoverageSources(pluginOptions, getSkillHooks, settingsToCloud
     settingsToCloud,
   };
 }
-//@ chunk-axmbhcjg.js:32640-32897 placement
+//@ chunk-vb7ng9fr.js:32675-32932 placement
 async function countUnloadedProjectSkills() {
   let dir = join(getProjectConfigRoot() ?? getOriginalCwd(), ".claude", "skills");
   if (dir === join(getClaudeConfigDir(), "skills")) return 0;
@@ -360,30 +363,30 @@ async function countUnloadedProjectSkills() {
   return readdir(dir, {
     withFileTypes: true,
   }).then(
-    (entries) => count(entries, (count) => count.isDirectory() || count.isSymbolicLink()),
+    (entries) => countWhere(entries, (count) => count.isDirectory() || count.isSymbolicLink()),
     (error) => (["ENOENT", "ENOTDIR"].includes(getErrnoCode(error) ?? "") ? 0 : 1),
   );
 }
-//@ chunk-axmbhcjg.js:32897-33009 placement (2.1.88 match: _temp, 0.703)
+//@ chunk-vb7ng9fr.js:32932-33044 placement (2.1.88 match: _temp, 0.701)
 /**
  * 判断设置里（主设置或任一来源）是否配置了 agent。
  */
 function hasAgentSetting() {
   return (
-    getSettingsWithErrors_2().settings?.agent !== undefined ||
+    getSettingsWithErrors().settings?.agent !== undefined ||
     filtered_2
       .flatMap((source) => settingsPathsForSource(source).map(readSettingsFileStrict))
       .some((source) => source?.agent !== undefined)
   );
 }
-//@ chunk-axmbhcjg.js:33009-33064 placement
+//@ chunk-vb7ng9fr.js:33044-33099 placement
 var filtered_2; // deferred: uses SETTING_SOURCES (../../utils/settings/constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-axmbhcjg.js:33009", () => {
+deferInit("chunk-vb7ng9fr.js:33044", () => {
   filtered_2 = SETTING_SOURCES.filter(
     (source) => source !== "policySettings" && REPO_DIR_SETTING_SOURCES.has(source),
   );
 });
-//@ chunk-axmbhcjg.js:33064-33160 placement
+//@ chunk-vb7ng9fr.js:33099-33195 placement
 /**
  * 技能目录：自有的 skills/commands/bundled 与同步目录。
  */
@@ -394,7 +397,7 @@ function skillDirs() {
     synced: join(opposite, SYNCED_DIR),
   };
 }
-//@ chunk-axmbhcjg.js:33160-33238 placement
+//@ chunk-vb7ng9fr.js:33195-33273 placement
 /**
  * 技能根目录是否属于自有目录（不在同步目录里）。
  */
@@ -405,7 +408,7 @@ function isOwnSkillRoot(parent, info) {
     info.own.some((own) => isPathUnder(own, parent))
   );
 }
-//@ chunk-axmbhcjg.js:33238-33314 placement
+//@ chunk-vb7ng9fr.js:33273-33349 placement
 /**
  * 判断路径是否位于给定目录之下。
  */
@@ -413,7 +416,7 @@ function isPathUnder(child, parent) {
   let rel = relative(child, parent);
   return rel !== "" && rel.split(sep)[0] !== ".." && !isAbsolute(rel);
 }
-//@ chunk-axmbhcjg.js:33314-33399 placement (2.1.88 match: _temp8, 1)
+//@ chunk-vb7ng9fr.js:33349-33434 placement (2.1.88 match: _temp8, 1)
 /**
  * 某设置来源对应的配置文件路径（localSettings 还带旧路径）。
  */
@@ -423,7 +426,7 @@ function settingsPathsForSource(a_3) {
     a_3 === "localSettings" ? getLegacyLocalSettingsFilePath() : undefined,
   ].filter((source) => source !== undefined);
 }
-//@ chunk-axmbhcjg.js:33399-33507 placement (2.1.88 match: isClaudeSettingsPath, 1)
+//@ chunk-vb7ng9fr.js:33434-33542 placement (2.1.88 match: isClaudeSettingsPath, 1)
 /**
  * 列出每个附加目录下的 .claude/settings.json 与 settings.local.json 路径。旧版名 isClaudeSettingsPath 误配。
  */
@@ -432,13 +435,13 @@ function getAdditionalDirSettingsPaths() {
     ["settings.json", "settings.local.json"].map((settingsPath) => join(dir, ".claude", settingsPath)),
   );
 }
-//@ chunk-axmbhcjg.js:33507-33620 placement
+//@ chunk-vb7ng9fr.js:33542-33655 placement
 function readSettingsFileStrict(path) {
   let { settings, errors } = readSettingsStrict(path);
   if (hasHookAffectingErrors(errors)) throw Error("a settings file could not be read");
   return settings;
 }
-//@ chunk-axmbhcjg.js:33620-33707 placement
+//@ chunk-vb7ng9fr.js:33655-33742 placement
 /**
  * 严格读取设置文件（含其他主机的记录时抛错）。
  */
@@ -446,7 +449,7 @@ function readSettingsStrict(path) {
   if (hasUntouchableRecordSpelling(path)) throw Error("a settings file names another host");
   return parseSettingsFileUncached(path);
 }
-//@ chunk-axmbhcjg.js:33707-33791 placement
+//@ chunk-vb7ng9fr.js:33742-33826 placement
 /**
  * 汇总附加目录里启用的插件 id。
  */
@@ -456,7 +459,7 @@ function allEnabledPluginIds() {
     ...getAdditionalDirSettingsPaths().map(readSettingsFileStrict),
   ].flatMap(enabledPluginIds);
 }
-//@ chunk-axmbhcjg.js:33791-33888 placement
+//@ chunk-vb7ng9fr.js:33826-33923 placement
 /**
  * 取某设置里启用的插件 id。
  */
@@ -465,7 +468,7 @@ function enabledPluginIds(settingsForSource) {
     .filter(([, value]) => value !== false)
     .map(([key]) => key);
 }
-//@ chunk-axmbhcjg.js:33888-34348 placement
+//@ chunk-vb7ng9fr.js:33923-34383 placement
 /**
  * 依次调用数据源（每步出错按保守值处理），算出 PreToolUse 钩子覆盖；设置上云开关关闭时视为覆盖全部。
  */
@@ -520,7 +523,7 @@ async function resolvePreToolUseCoverage(hookCoverageSources) {
     repoEnabledPluginKeys: repoKeys,
   });
 }
-//@ chunk-axmbhcjg.js:34348-34557 placement
+//@ chunk-vb7ng9fr.js:34383-34592 placement
 async function readUserSettingsForSeed() {
   invalidateCommandNames();
   let settingsParseErrorsForSource = getSettingsParseErrorsForSource("userSettings");
@@ -536,7 +539,7 @@ async function readUserSettingsForSeed() {
         hasLostAnAllowEntry: settingsParseErrorsForSource.some(isPermissionsAllowPath),
       };
 }
-//@ chunk-axmbhcjg.js:34557-34669 placement
+//@ chunk-vb7ng9fr.js:34592-34704 placement
 function isBlockingSettingsError(error) {
   return (
     error.severity !== "warning" ||
@@ -544,14 +547,14 @@ function isBlockingSettingsError(error) {
     (error.path.startsWith("permissions.") && !isPermissionsAllowPath(error))
   );
 }
-//@ chunk-axmbhcjg.js:34669-34732 placement
+//@ chunk-vb7ng9fr.js:34704-34767 placement
 /**
  * 判断错误路径是否属于 permissions.allow。
  */
 function isPermissionsAllowPath({ path }) {
   return path.startsWith("permissions.allow");
 }
-//@ chunk-axmbhcjg.js:34732-34831 placement
+//@ chunk-vb7ng9fr.js:34767-34866 placement
 /**
  * 判断路径是否为符号链接（读不到视为否）。
  */

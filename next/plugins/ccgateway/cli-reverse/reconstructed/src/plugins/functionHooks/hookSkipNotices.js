@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件钩子被跳过、调用被拒、结果被扣留时的提示与遥测
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (25)
  * attribution: placement 25
  */
 import { dirname } from "path";
@@ -39,11 +39,11 @@ import { scrubLine } from "./ui/textScrub.js";
 import { logFeatureSad, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4090917-4091019 placement
+//@ chunk-5xgkngpb.js:4196841-4196943 placement
 function describeSkippedHook(event, by) {
   return `its ${event} hook was skipped. "${by}" runs first and sent the event on past it.`;
 }
-//@ chunk-e6aww6q8.js:4091019-4091337 placement
+//@ chunk-5xgkngpb.js:4196943-4197260 placement
 /**
  * 个人插件的钩子被跳过时，告诉该插件作者一次。
  */
@@ -73,12 +73,12 @@ function tellSkippedPersonsHook(ctx, name, sighting) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:4091337-4091348 placement
+//@ chunk-5xgkngpb.js:4197260-4197271 placement
 /**
  * 16
  */
 var MAX_TAG_DEPTH = 16;
-//@ chunk-e6aww6q8.js:4091348-4091592 placement
+//@ chunk-5xgkngpb.js:4197271-4197515 placement
 function passedByMapForSession(session) {
   let hooksPassedBy = getPluginRegistry().hooksPassedBy;
   let sessionId = String(getSessionId());
@@ -95,7 +95,7 @@ function passedByMapForSession(session) {
   hooksPassedBy.set(key, fresh);
   return fresh;
 }
-//@ chunk-e6aww6q8.js:4091592-4091754 placement
+//@ chunk-5xgkngpb.js:4197515-4197677 placement
 /**
  * 记录一次"钩子被更高层越过"的观察：校验后计数，对首次出现的个人插件提示用户。
  */
@@ -110,7 +110,7 @@ function recordPassedBySighting(sighting, plugin) {
   for (let entry of recordSkipNotices(passedByMapForSession(plugin.session), plugin))
     tellSkippedPersonsHook(sighting, entry, plugin);
 }
-//@ chunk-e6aww6q8.js:4091754-4092161 placement
+//@ chunk-5xgkngpb.js:4197677-4198084 placement
 /**
  * 判断值是否为合法的"被经过"记录（link 与插件列表）。
  */
@@ -136,7 +136,7 @@ function isPassedBySighting(value) {
     typeof value.session === "string"
   );
 }
-//@ chunk-e6aww6q8.js:4092161-4092434 placement
+//@ chunk-5xgkngpb.js:4198084-4198357 placement
 /**
  * 接收 hooks worker 发来的越过记录，校验形状后记录。
  */
@@ -162,7 +162,7 @@ function acceptWorkerPassedBy(sighting, sighting_2) {
     );
   }
 }
-//@ chunk-e6aww6q8.js:4092434-4092593 placement
+//@ chunk-5xgkngpb.js:4198357-4198516 placement
 /**
  * 构造 hook.failed 事件。
  */
@@ -175,7 +175,7 @@ var toHookFailedEvent = ({ plugin, environmentId, event, reason, effect, hasOver
   hasOverrun,
   skip,
 });
-//@ chunk-e6aww6q8.js:4092593-4092758 placement
+//@ chunk-5xgkngpb.js:4198516-4198681 placement
 /**
  * 把插件标记为在进行中的分发里已失败。
  */
@@ -188,7 +188,7 @@ function markInFlightFailed(state, hookFailedEvent) {
     )
       frame.failed.add(hookFailedEvent.plugin);
 }
-//@ chunk-e6aww6q8.js:4092758-4093118 placement
+//@ chunk-5xgkngpb.js:4198681-4199041 placement
 /**
  * 处理 worker 的加载完成消息：解析注册表后完成等待；无等待或解析失败时通知卸载。
  */
@@ -219,7 +219,7 @@ function settlePendingLoad(state, env) {
     registered,
   });
 }
-//@ chunk-e6aww6q8.js:4093118-4093648 placement
+//@ chunk-5xgkngpb.js:4199041-4199571 placement
 /**
  * 处理 worker 的 next 请求：调用宿主侧的下层链并把结果或错误回传 worker。
  */
@@ -277,7 +277,7 @@ function handleWorkerNext(state, msg) {
         }),
     );
 }
-//@ chunk-e6aww6q8.js:4093648-4093835 placement
+//@ chunk-5xgkngpb.js:4199571-4199758 placement
 function openWorkerStream({ stream, pending, frame }) {
   let abortController = new AbortController();
   pending.calls.set(frame.nextId, abortController);
@@ -289,7 +289,7 @@ function openWorkerStream({ stream, pending, frame }) {
   stream.opened.set(frame.nextId, secondStream);
   return secondStream;
 }
-//@ chunk-e6aww6q8.js:4093835-4094654 placement
+//@ chunk-5xgkngpb.js:4199758-4200577 placement
 /**
  * 处理 worker 的流式 next：打开或继续宿主侧流，逐块回传 next_step，结束或出错时清理。
  */
@@ -374,7 +374,7 @@ function handleWorkerStreamNext(state, msg) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:4094654-4094775 placement
+//@ chunk-5xgkngpb.js:4200577-4200698 placement
 /**
  * 处理 worker 送来的流拉取结果，结算等待中的 pull。
  */
@@ -386,7 +386,7 @@ function handleWorkerStreamPull(state, msg) {
     pull.resolve(msg.step);
   }
 }
-//@ chunk-e6aww6q8.js:4094775-4095057 placement
+//@ chunk-5xgkngpb.js:4200698-4200980 placement
 /**
  * 取出已应答的调用，借出的帧在分发结束后释放。
  */
@@ -410,30 +410,30 @@ function takeAnsweredCall(state, callId) {
   });
   return pending;
 }
-//@ chunk-e6aww6q8.js:4095057-4095092 placement
+//@ chunk-5xgkngpb.js:4200980-4201015 placement
 /**
  * 标记缓存
  */
 var tagCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4095057", () => {
+deferInit("chunk-5xgkngpb.js:4200980", () => {
   tagCache = identity_2(new Map(), (map) => map.clear());
 });
-//@ chunk-e6aww6q8.js:4095092-4095166 placement
+//@ chunk-5xgkngpb.js:4201015-4201089 placement
 /**
  * plugin#env event s
  */
 var tagKey = ({ plugin, environmentId, event }, kind) => `${plugin}#${environmentId ?? ""} ${event} ${kind}`;
-//@ chunk-e6aww6q8.js:4095166-4095176 placement
+//@ chunk-5xgkngpb.js:4201089-4201099 placement
 /**
  * 5
  */
 var MAX_TAGS_PER_KEY = 5;
-//@ chunk-e6aww6q8.js:4095176-4095225 placement
+//@ chunk-5xgkngpb.js:4201099-4201148 placement
 /**
  * 已有标签或已满
  */
 var hasTagOrFull = (tags, tag) => tags?.has(tag) === true || (tags?.size ?? 0) >= MAX_TAGS_PER_KEY;
-//@ chunk-e6aww6q8.js:4095258-4095434 placement
+//@ chunk-5xgkngpb.js:4201181-4201357 placement
 function devModEnvironmentOf(plugin) {
   let found = getPluginRegistry().loadedModules.find((loadedModule) => loadedModule.name === plugin);
   return found !== undefined &&
@@ -442,7 +442,7 @@ function devModEnvironmentOf(plugin) {
     ? found.environmentId
     : undefined;
 }
-//@ chunk-e6aww6q8.js:4095434-4095653 placement
+//@ chunk-5xgkngpb.js:4201357-4201576 placement
 function describeModFailureForModel(plugin, message, skip) {
   let hasSubject = skip.subject !== undefined;
   return [
@@ -451,15 +451,15 @@ function describeModFailureForModel(plugin, message, skip) {
     "Edit the mod to mend it: it reloads when your turn ends.",
   ].join(" ");
 }
-//@ chunk-e6aww6q8.js:4095653-4095688 placement
+//@ chunk-5xgkngpb.js:4201576-4201611 placement
 /**
  * mod 失败上报表
  */
 var modFailureReported; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4095653", () => {
+deferInit("chunk-5xgkngpb.js:4201576", () => {
   modFailureReported = identity_2(new Map(), (map) => map.clear());
 });
-//@ chunk-e6aww6q8.js:4095688-4096159 placement
+//@ chunk-5xgkngpb.js:4201611-4202082 placement
 /**
  * mod 失败时（每个插件每种原因一次）告诉模型。
  */
@@ -482,15 +482,15 @@ function tellModelOfModFailure(ctx, skip, told) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:4096159-4096194 placement
+//@ chunk-5xgkngpb.js:4202082-4202117 placement
 /**
  * 已上报的问题集合
  */
 var reportedProblems; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4096159", () => {
+deferInit("chunk-5xgkngpb.js:4202082", () => {
   reportedProblems = identity_2(new Set(), (set) => set.clear());
 });
-//@ chunk-e6aww6q8.js:4096194-4096791 placement
+//@ chunk-5xgkngpb.js:4202117-4202717 placement
 /**
  * 处理钩子被跳过/拒绝/扣留的上报：计数、必要时告知模型（开发中 mod）、首次时报告插件问题并提示个人插件。
  */

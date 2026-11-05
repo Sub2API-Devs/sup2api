@@ -3,11 +3,12 @@
  *
  * 并入旧版已有路径：iTerm2 设置提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/It2SetupPrompt.tsx
- * pieces: chunk-18hwfzwa.js (9)
+ * pieces: chunk-czq1j3j2.js (9)
  * attribution: placement 8, fingerprint 1
  */
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
@@ -21,10 +22,19 @@ import { Spinner } from "../../components/Spinner.js";
 import { getPythonApiInstructions } from "./backends/it2Setup.js";
 import { StatusIcon } from "../../components/design-system/StatusIcon.js";
 import { renderPlainText } from "../../components/ultraplan/UltraplanLaunchDialog.js";
-import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1264443-1265953 placement
+//@ chunk-czq1j3j2.js:1280723-1280727 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1280723", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1285305-1285309 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1285305", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1290236-1291746 placement
 /**
  * iTerm2 原生分屏队友所需的 it2 CLI 安装提示：选项为用包管理器安装、改用 tmux（可用时）或取消。
  */
@@ -100,14 +110,14 @@ function It2InstallPrompt(props) {
   let onChange;
   if ($[9] !== onCancel || $[10] !== onInstall || $[11] !== onUseTmux) {
     onChange = (selectedValue) => {
-      It: switch (selectedValue) {
+      xt: switch (selectedValue) {
         case "install": {
           onInstall();
-          break It;
+          break xt;
         }
         case "tmux": {
           onUseTmux();
-          break It;
+          break xt;
         }
         case "cancel": {
           onCancel();
@@ -148,7 +158,7 @@ function It2InstallPrompt(props) {
   } else dialog = $[17];
   return dialog;
 }
-//@ chunk-18hwfzwa.js:1265953-1266381 placement
+//@ chunk-czq1j3j2.js:1291746-1292174 placement
 /**
  * it2 安装进行中界面：显示转圈和所用的包管理器。
  */
@@ -193,7 +203,7 @@ function It2Installing(props) {
   } else elements = $[5];
   return elements;
 }
-//@ chunk-18hwfzwa.js:1266381-1268003 fingerprint (2.1.88 match: It2SetupPrompt, 0.535)
+//@ chunk-czq1j3j2.js:1292174-1293796 fingerprint (2.1.88 match: It2SetupPrompt, 0.535)
 /**
  * it2 安装失败界面：显示错误与手动安装命令，选项为重试、改用 tmux（tmux 可用时）、取消。
  */
@@ -274,14 +284,14 @@ function It2SetupPrompt(props) {
   let onChange;
   if ($[10] !== onCancel || $[11] !== onRetry || $[12] !== onUseTmux) {
     onChange = (value) => {
-      Et: switch (value) {
+      It: switch (value) {
         case "retry": {
           onRetry();
-          break Et;
+          break It;
         }
         case "tmux": {
           onUseTmux();
-          break Et;
+          break It;
         }
         case "cancel": {
           onCancel();
@@ -326,7 +336,7 @@ function It2SetupPrompt(props) {
   } else elements = $[22];
   return elements;
 }
-//@ chunk-18hwfzwa.js:1268003-1268531 placement
+//@ chunk-czq1j3j2.js:1293796-1294324 placement
 /**
  * it2 安装成功的提示界面。
  */
@@ -390,7 +400,7 @@ function It2InstalledSuccess() {
   } else elements = $[5];
   return elements;
 }
-//@ chunk-18hwfzwa.js:1268531-1268695 placement
+//@ chunk-czq1j3j2.js:1294324-1294488 placement
 function It2Verifying() {
   let $ = useMemoCache(1);
   let elements;
@@ -407,7 +417,7 @@ function It2Verifying() {
   } else elements = $[0];
   return elements;
 }
-//@ chunk-18hwfzwa.js:1268695-1268987 placement
+//@ chunk-czq1j3j2.js:1294488-1294780 placement
 function It2SplitPaneReady() {
   let $ = useMemoCache(1);
   let elements;
@@ -435,7 +445,7 @@ function It2SplitPaneReady() {
   } else elements = $[0];
   return elements;
 }
-//@ chunk-18hwfzwa.js:1268987-1270661 placement
+//@ chunk-czq1j3j2.js:1294780-1296454 placement
 function It2SetupError(props) {
   let $ = useMemoCache(22);
   let { error, tmuxAvailable, onRetry, onUseTmux, onCancel, refuseInput } = props;
@@ -521,14 +531,14 @@ function It2SetupError(props) {
   let onChange;
   if ($[10] !== onCancel || $[11] !== onRetry || $[12] !== onUseTmux) {
     onChange = (value) => {
-      Ot: switch (value) {
+      Ft: switch (value) {
         case "retry": {
           onRetry();
-          break Ot;
+          break Ft;
         }
         case "tmux": {
           onUseTmux();
-          break Ot;
+          break Ft;
         }
         case "cancel": {
           onCancel();
@@ -572,16 +582,6 @@ function It2SetupError(props) {
   } else elements = $[21];
   return elements;
 }
-//@ chunk-18hwfzwa.js:1270661-1270665 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1270661", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1270665-1270669 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1270665", () => {
-  init_react_production();
-});
 export {
   It2InstallPrompt,
   It2Installing,

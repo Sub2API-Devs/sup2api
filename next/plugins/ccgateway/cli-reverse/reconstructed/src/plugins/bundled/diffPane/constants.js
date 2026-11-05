@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：diff 面板常量：测试文件/生成文件判定等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wyqg6m3h.js (30)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c7hntn0y.js (30)
  * attribution: placement 30
  */
 import { baseNameOf } from "./diffSources.js";
@@ -17,9 +17,9 @@ import {
 } from "../../../utils/generatedFiles.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-wyqg6m3h.js:26852-26891 placement
+//@ chunk-c7hntn0y.js:27216-27255 placement
 var rootedPathOf = (path) => `/${path.replace(/^\/+/, "")}`;
-//@ chunk-wyqg6m3h.js:26891-27044 placement
+//@ chunk-c7hntn0y.js:27255-27408 placement
 function isGeneratedFile(path) {
   let lower = baseNameOf(path).toLowerCase();
   let rootedPath = rootedPathOf(path);
@@ -31,7 +31,7 @@ function isGeneratedFile(path) {
     GENERATED_FILENAME_PATTERNS.some((pattern) => pattern.test(lower))
   );
 }
-//@ chunk-wyqg6m3h.js:27044-27180 placement
+//@ chunk-c7hntn0y.js:27408-27544 placement
 var TEST_DIRECTORIES = [
   "/test/",
   "/tests/",
@@ -44,9 +44,9 @@ var TEST_DIRECTORIES = [
   "/fixtures/",
   "/testdata/",
 ];
-//@ chunk-wyqg6m3h.js:27180-27289 placement
+//@ chunk-c7hntn0y.js:27544-27653 placement
 var TEST_FILENAME_PATTERNS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wyqg6m3h.js:27180", () => {
+deferInit("chunk-c7hntn0y.js:27544", () => {
   TEST_FILENAME_PATTERNS = Object.freeze([
     /\.test\.[a-z]+$/i,
     /\.spec\.[a-z]+$/i,
@@ -55,7 +55,7 @@ deferInit("chunk-wyqg6m3h.js:27180", () => {
     /\.snap$/i,
   ]);
 });
-//@ chunk-wyqg6m3h.js:27289-27384 placement
+//@ chunk-c7hntn0y.js:27653-27748 placement
 function isTestFile(path) {
   let fileName = baseNameOf(path);
   let rootedPath = rootedPathOf(path);
@@ -64,74 +64,74 @@ function isTestFile(path) {
     TEST_FILENAME_PATTERNS.some((pattern) => pattern.test(fileName))
   );
 }
-//@ chunk-wyqg6m3h.js:27384-27409 placement
+//@ chunk-c7hntn0y.js:27748-27773 placement
 var isNoiseFile = (path) => isTestFile(path) || isGeneratedFile(path);
-//@ chunk-wyqg6m3h.js:27409-27468 placement
+//@ chunk-c7hntn0y.js:27773-27832 placement
 var COMMAND_DESCRIPTION = "Toggle the diff panel showing uncommitted changes";
-//@ chunk-wyqg6m3h.js:27468-27482 placement
+//@ chunk-c7hntn0y.js:27832-27846 placement (2.1.88 match: getStagedFiles, 0.454)
 var COMMAND_NAME = "diff";
-//@ chunk-wyqg6m3h.js:27482-27506 placement
+//@ chunk-c7hntn0y.js:27846-27870 placement
 var baseStoreKeyOf = (toplevel) => `base:${toplevel}`;
-//@ chunk-wyqg6m3h.js:27506-27520 placement
+//@ chunk-c7hntn0y.js:27870-27884 placement
 var STORE_OPEN_KEY = "open";
-//@ chunk-wyqg6m3h.js:27520-27534 placement
+//@ chunk-c7hntn0y.js:27884-27898 placement
 var PANE_ID = "diff";
-//@ chunk-wyqg6m3h.js:27534-27548 placement
+//@ chunk-c7hntn0y.js:27898-27912 placement
 var PANE_TITLE = "Diff";
-//@ chunk-wyqg6m3h.js:27548-27581 placement
+//@ chunk-c7hntn0y.js:27912-27945 placement
 var PLUGIN_NAMES = ["diff", "cc-plugin-diff"];
-//@ chunk-wyqg6m3h.js:27581-27666 placement
+//@ chunk-c7hntn0y.js:27945-28030 placement
 var AWAITS_SURFACE_TEXT = "Nothing here can draw the diff panel yet; it opens as soon as something can";
-//@ chunk-wyqg6m3h.js:27666-27706 placement
+//@ chunk-c7hntn0y.js:28030-28070 placement
 var BUILTIN_HOLDS_PATTERN = /refused: it is the built-in \//;
-//@ chunk-wyqg6m3h.js:27706-27799 placement
+//@ chunk-c7hntn0y.js:28070-28163 placement
 var GIT_UNANSWERED_TEXT =
   "The diff panel couldn't read git state \u2014 git didn't answer; run /diff " + "again";
-//@ chunk-wyqg6m3h.js:27799-27842 placement
+//@ chunk-c7hntn0y.js:28163-28206 placement
 var MORE_BELOW_TEXT = "more below (opt+\u2193 to scroll)";
-//@ chunk-wyqg6m3h.js:27842-27942 placement
+//@ chunk-c7hntn0y.js:28206-28306 placement
 var NOT_IN_REPOSITORY_TEXT =
   "The diff panel shows git changes \u2014 the current directory isn't in a " + "git repository";
-//@ chunk-wyqg6m3h.js:27942-27973 placement
+//@ chunk-c7hntn0y.js:28306-28337 placement
 var DIALOG_DISMISSED_TEXT = "Diff dialog dismissed";
-//@ chunk-wyqg6m3h.js:27973-28000 placement
+//@ chunk-c7hntn0y.js:28337-28364 placement
 var PANEL_HIDDEN_TEXT = "Diff panel hidden";
-//@ chunk-wyqg6m3h.js:28000-28026 placement
+//@ chunk-c7hntn0y.js:28364-28390 placement
 var PANEL_SHOWN_TEXT = "Diff panel shown";
-//@ chunk-wyqg6m3h.js:28026-28115 placement
+//@ chunk-c7hntn0y.js:28390-28479 placement
 var registerFailedTextOf = (error) =>
   `could not register /diff: ${error}; the diff panel is unavailable this session`;
-//@ chunk-wyqg6m3h.js:28115-28192 placement
+//@ chunk-c7hntn0y.js:28479-28556 placement
 var RESIZE_TERMINAL_TEXT = "Resize your terminal to at least 110 columns to show the diff panel";
-//@ chunk-wyqg6m3h.js:28192-28287 placement
+//@ chunk-c7hntn0y.js:28556-28651 placement
 var untrackedWithheldTextOf = (status) =>
   `Untracked files unavailable (${status.words.lister} could not list them); not counted`;
-//@ chunk-wyqg6m3h.js:28287-28319 placement
+//@ chunk-c7hntn0y.js:28651-28683 placement
 var COMMAND_SPEC = {
   name: COMMAND_NAME,
   description: COMMAND_DESCRIPTION,
 };
-//@ chunk-wyqg6m3h.js:28319-28379 placement
+//@ chunk-c7hntn0y.js:28683-28743 placement
 var isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
-//@ chunk-wyqg6m3h.js:28379-28418 placement (2.1.88 match: CODE_EDITING_TOOLS, 1)
+//@ chunk-c7hntn0y.js:28743-28782 placement (2.1.88 match: CODE_EDITING_TOOLS, 1)
 var CODE_EDITING_TOOLS = ["Edit", "Write", "NotebookEdit"];
-//@ chunk-wyqg6m3h.js:28418-28495 placement
+//@ chunk-c7hntn0y.js:28782-28859 placement
 function mayHaveWritten(result) {
   let value = result;
   return value === undefined || (value.deny === undefined && value.isReadOnly !== true);
 }
-//@ chunk-wyqg6m3h.js:28495-28524 placement
+//@ chunk-c7hntn0y.js:28859-28888 placement
 var SHELL_TOOLS = ["Bash", "PowerShell"];
-//@ chunk-wyqg6m3h.js:28524-28543 placement (2.1.88 match: TODO_WRITE_TOOL_NAME, 1)
+//@ chunk-c7hntn0y.js:28888-28907 placement (2.1.88 match: TODO_WRITE_TOOL_NAME, 1)
 /**
  * "TodoWrite"（另一块中的副本）。
  */
 var TODO_TOOL = "TodoWrite";
 export {
-  TODO_TOOL,
-  isRecord,
   STORE_OPEN_KEY,
   PANE_ID,
+  TODO_TOOL,
+  isRecord,
   AWAITS_SURFACE_TEXT,
   BUILTIN_HOLDS_PATTERN,
   COMMAND_DESCRIPTION,

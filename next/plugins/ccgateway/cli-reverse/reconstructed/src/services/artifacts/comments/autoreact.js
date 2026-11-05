@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：评论自动响应主流程（线程激活、去重、回复/编辑/交给后台 agent）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9tgt55am.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c0pq6qyx.js (11)
  * attribution: placement 11
  */
 import { isAutoAllowedInMode } from "../../../utils/permissions/browserToolNames.js";
@@ -108,7 +108,7 @@ import {
 } from "./postReply.js";
 import { isSlugStoppedAnywhere, scanStamp, emitSummonArm } from "../summonArms.js";
 import { isBusyShorterThan, isBusyAtLeast } from "../../../utils/plugins/hooksModulesLoadGate.js";
-import { count, uniq } from "../../../utils/collections.js";
+import { countWhere } from "../../../utils/collections.js";
 import { readRecordedDecl } from "./commentReply.js";
 import { getLiveState } from "../../liveReplica/liveReplica.js";
 import {
@@ -136,6 +136,7 @@ import {
 import { isOwnPrincipal } from "./commentAuthorship.js";
 import { PREVIEW_FEATURE_PROMPT } from "../../../tools/AskUserQuestionTool/prompt.js";
 import { extractJsonScriptById } from "../pageScripts.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
 import { isFixedFastAckEnabled, makeFixedAckPermissionProbe } from "./ackReplies.js";
 import { preToolUseHookMayCoverArtifact } from "../hookCoverage.js";
 import { ARTIFACT_COMMENTS_TOOL_NAME } from "../../../tools/ArtifactTool/constants.js";
@@ -158,7 +159,7 @@ import {
   PAGE_OWNS_THREADS_REASON,
   RESOLVE_AFTER_REPLY_NOTE,
 } from "./autoEdit.js";
-import { mayHaveForeignWriters } from "../frameComments.js";
+import { readMarkedForeign } from "../frameComments.js";
 import { isResponderDispatchEnabled, triageArtifactComment } from "./threadClassifier.js";
 import { runCommentThreadAnalyst } from "./threadAnalyst.js";
 import { upperFirstAlias } from "../../../../vendor/lodash-es/upperFirst.js";
@@ -166,7 +167,7 @@ import { containsBlockedChars } from "./commentMentions.js";
 import { createChildAbortController } from "../../../utils/abortController.js";
 import { flushAutoreactLedger } from "./autoreactLedger.js";
 
-//@ chunk-9tgt55am.js:77626-78056 placement
+//@ chunk-c0pq6qyx.js:73535-73965 placement
 async function checkReplyPermission(options) {
   let { url, thread, context, replyTool } = options;
   if (isAutoAllowedInMode(replyTool, getToolPermissionContext(context)) === "bypassPermissions")
@@ -203,7 +204,7 @@ async function checkReplyPermission(options) {
     )
   );
 }
-//@ chunk-9tgt55am.js:78056-78597 placement
+//@ chunk-c0pq6qyx.js:73965-74506 placement
 async function handOffThreadToBackgroundAgent(options) {
   let permissionPromptPerson = getPermissionPromptPerson();
   if (permissionPromptPerson === null) {
@@ -247,17 +248,17 @@ async function handOffThreadToBackgroundAgent(options) {
     return false;
   }
 }
-//@ chunk-9tgt55am.js:78597-78656 placement
+//@ chunk-c0pq6qyx.js:74506-74565 placement
 function getLocalSourcePath(thread, slug) {
   return isProbedLivePage(thread) ? undefined : slug.localSourcePath(thread);
 }
-//@ chunk-9tgt55am.js:78656-78736 placement
+//@ chunk-c0pq6qyx.js:74565-74645 placement
 function localSourcePathIfEditCapable(thread, slug, recordedPages) {
   return isNewelFlagOn() || (thread.editCapable === true && !thread.resolved)
     ? getLocalSourcePath(slug, recordedPages)
     : undefined;
 }
-//@ chunk-9tgt55am.js:78736-79281 placement
+//@ chunk-c0pq6qyx.js:74645-75190 placement
 function collectPendingSummons(thread, threadState) {
   let out = [];
   let failed = false;
@@ -291,7 +292,7 @@ function collectPendingSummons(thread, threadState) {
     activationPending: result,
   };
 }
-//@ chunk-9tgt55am.js:79281-81163 placement
+//@ chunk-c0pq6qyx.js:75190-77075 placement
 /**
  * 线程被激活/有人发评论给 Claude 时，决定立即自动回复、交给后台 agent 还是排队，并发出通知。
  */
@@ -437,14 +438,14 @@ async function handleThreadActivation(request) {
     working,
   });
 }
-//@ chunk-9tgt55am.js:81163-82635 placement
+//@ chunk-c0pq6qyx.js:77075-78547 placement
 async function forecastReplyPermission(options) {
   let { tool, context, artifactState } = options;
   let now = Date.now();
   let isRecent = (at) => now - at < 3600000;
   if (
-    count(artifactState.turnTimestamps, isRecent) >= getMaxAutoTurns() ||
-    count(artifactState.forecastTimestamps, isRecent) >= getMaxAutoTurns()
+    countWhere(artifactState.turnTimestamps, isRecent) >= getMaxAutoTurns() ||
+    countWhere(artifactState.forecastTimestamps, isRecent) >= getMaxAutoTurns()
   )
     return null;
   if (getToolPermissionContext(context).mode === "plan")
@@ -550,7 +551,7 @@ async function forecastReplyPermission(options) {
         reason: "queued",
       };
 }
-//@ chunk-9tgt55am.js:82635-83551 placement
+//@ chunk-c0pq6qyx.js:78547-79463 placement
 async function probeReplyPermission(options) {
   let { tool, context, url, threadId } = options;
   let input = {
@@ -623,11 +624,11 @@ async function probeReplyPermission(options) {
     };
   }
 }
-//@ chunk-9tgt55am.js:83551-83577 placement
+//@ chunk-c0pq6qyx.js:79463-79489 placement
 function alwaysFalseAutoreact(tool, context) {
   return false;
 }
-//@ chunk-9tgt55am.js:83577-83721 placement
+//@ chunk-c0pq6qyx.js:79489-79633 placement
 function canPageReplyDirectly(options) {
   if (!options.pageOwnsThreads || options.handsOffToTurn) return false;
   return (
@@ -637,7 +638,7 @@ function canPageReplyDirectly(options) {
     options.editRejudgedByAutoMode
   );
 }
-//@ chunk-9tgt55am.js:83721-112316 placement
+//@ chunk-c0pq6qyx.js:79633-108242 placement
 /**
  * 评论自动响应主流程：读取线程、去重已见评论、判断是否该回应、组织回复/编辑、处理各种降级与遥测。
  */
@@ -1162,9 +1163,11 @@ async function processArtifactThread(input) {
     !analystSpoke &&
     !context.artifactRegistries.recordedPages.isWorkshopPage(slug) &&
     !(await anchorReadsForeign()) &&
-    (await Promise.all(uniq(pagesRead).map((html) => extractJsonScriptById(html, "ws-decisions")))).every(
-      (mark) => mark === null,
-    );
+    (
+      await Promise.all(
+        normalizeCaseForComparison_2(pagesRead).map((html) => extractJsonScriptById(html, "ws-decisions")),
+      )
+    ).every((mark) => mark === null);
   if (hiddenForMcpNow) {
     let blockedReason =
       ownSendWithheld() ??
@@ -1690,12 +1693,13 @@ async function processArtifactThread(input) {
     let eligibility = await checkAutoEditEligibility(slug, context, autoreactSuppressed);
     if (eligibility.read !== undefined) pagesRead.push(eligibility.read.html);
     if (yieldGuard("editability")) return;
-    let pageForeign = eligibility.read !== undefined ? mayHaveForeignWriters(eligibility.read) : undefined;
+    let pageForeign = eligibility.read !== undefined ? readMarkedForeign(eligibility.read) : undefined;
     let composition = "unavailable";
     if (eligibility.editable) {
       let analystBrief = null;
       if (isResponderDispatchEnabled() && triggerComment !== undefined) {
         let triage = await triageArtifactComment({
+          slug,
           thread,
           context,
           foreign: hasCommentsFromOthers(thread, account),
@@ -2217,9 +2221,9 @@ async function processArtifactThread(input) {
   artifactState.heldReplyChain = chain;
 }
 export {
+  getLocalSourcePath,
   processArtifactThread,
   collectPendingSummons,
   localSourcePathIfEditCapable,
   checkReplyPermission,
-  getLocalSourcePath,
 };

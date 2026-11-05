@@ -3,12 +3,29 @@
  *
  * 2.1.316 新增。REPL 远程传输控制器（RemoteTransport）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (8)
- * attribution: placement 8
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (11)
+ * attribution: placement 9, sole-consumer 2
  */
 import { randomUUID } from "crypto";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { logForDebugging } from "../utils/debug.js";
+import { stringSchema, objectSchema } from "../../vendor/zod/v4/classic/schemas.js";
+import { Text, Box } from "../ink/components/Text.js";
+import { logEvent } from "../services/analytics/index.js";
+import { env } from "../utils/env.js";
+import { DETACHED_SHELL_POLL_MS, AUTO_RESTORE_CANCEL } from "../tasks/LocalShellTask/DetachedShellProcess.js";
+import { logError } from "../utils/log.js";
+import {
+  logFeatureBad,
+  logFeatureSad,
+  logFeatureOk,
+  cmdFeature,
+} from "../services/analytics/featureTelemetry.js";
 import { BOXED_DIAMOND_GLYPH } from "../constants/figures.js";
 import {
   createRemoteModeHandle,
@@ -16,15 +33,12 @@ import {
   isRemoteControlChannelAvailable,
   canUseRemoteFeature,
 } from "./remoteMode.js";
-import {
-  jsxProd_default,
-  jsxProd_default_2,
-} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { logForDebugging } from "../utils/debug.js";
-import { stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
-import { Text, Box } from "../ink/components/Text.js";
 import { createSignal } from "../utils/signal.js";
-import { createRetractionState, mergeSessionCapabilities } from "./remoteSessionEvents.js";
+import {
+  createRetractionState,
+  retractedUserMessageUuids,
+  mergeSessionCapabilities,
+} from "./remoteSessionEvents.js";
 import {
   createModeSyncState,
   recordOwnSend,
@@ -40,19 +54,10 @@ import {
   useRemotePermissionModeSync,
 } from "./remotePermissionModeSync.js";
 import { mainAgentId, getCaps, setCaps } from "../bootstrap/state.js";
-import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { createStore } from "../state/store.js";
-import { env } from "../utils/env.js";
-import { logEvent } from "../services/analytics/index.js";
-import { isDeviceIdentityEnabledCached } from "../services/analytics/violinGates.js";
-import { logError } from "../utils/log.js";
 import { errorMessage, withTelemetryMessage, toError } from "../utils/errors.js";
-import {
-  logFeatureOk,
-  logFeatureSad,
-  logFeatureBad,
-  cmdFeature,
-} from "../services/analytics/featureTelemetry.js";
+import { isDeviceIdentityEnabledCached } from "../services/analytics/violinGates.js";
+import { DoctorLazy } from "../cli/handlers/util.js";
 import { applyInProgressToolUses } from "../state/inProgressToolUses.js";
 import { EXTERNAL_PERMISSION_MODES } from "../types/permissions.js";
 import { setPermissionModeWithGuards } from "../utils/permissions/permissionSetup.js";
@@ -73,9 +78,9 @@ import { getThinClientDispatchMode } from "../utils/commandPredicates.js";
 import { getLoginAvailability } from "../commands/login/loginAvailability.js";
 import { isSelfAddressableSessionId, toCompatSessionId } from "../bridge/sessionIdCompat.js";
 import { resolvePastedTextReference } from "../components/PromptInput/inputPaste.js";
-import { DoctorLazy } from "../cli/handlers/util.js";
-import { buildUnavailablePasteError, describeRemovedPastes } from "../history.js";
-import { getActiveNotices } from "../utils/statusNoticeDefinitions.js";
+import { fromEnum } from "../services/analytics/safeMetadata.js";
+import { buildUnavailablePasteError, describeRemovedPastes, getHistoryGeneration } from "../history.js";
+import { buildNotices } from "../utils/statusNoticeDefinitions.js";
 import { createAbortController } from "../utils/abortController.js";
 import { escapeForkedSkillTag } from "../utils/xmlTagText.js";
 import { sanitizeTelemetryString } from "../utils/sanitization.js";
@@ -94,13 +99,74 @@ import { useDirectConnect } from "../hooks/useDirectConnect.js";
 import { useSSHSession } from "../hooks/useSSHSession.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:312946-313440 placement
+//@ chunk-czq1j3j2.js:337506-337520 placement
+var DETACHED_DEFAULT_GRACE_MS = 45000;
+//@ chunk-czq1j3j2.js:337713-338281 sole-consumer
+class EscTakeBack {
+  #e;
+  #t;
+  #o = new Map();
+  #n = 0;
+  #r;
+  #s;
+  #l;
+  #i;
+  constructor(
+    transcript,
+    waitingLines,
+    firstPromptUuid,
+    graceMs = DETACHED_DEFAULT_GRACE_MS,
+    pollMs = DETACHED_SHELL_POLL_MS,
+  ) {
+    this.#e = transcript;
+    this.#t = waitingLines;
+    this.#s = graceMs;
+    this.#l = pollMs;
+    this.#r = transcript
+      .getSnapshot()
+      .find((entry) => entry.type === "user" && entry.uuid === firstPromptUuid);
+  }
+  noteSent(sent) {
+    this.#n++;
+    this.#o.set(sent.message.uuid, sent);
+  }
+  noteStoppedTurnEnded(uuids) {
+    this.#i?.(uuids);
+  }
+  noteTurnEnded() {
+    for (let [uuid, sent] of this.#o)
+      if (sent.overRunningTurn) sent.overRunningTurn = false;
+      else this.#o.delete(uuid);
+  }
+  forgetSends() {
+    this.#o.clear();
+    this.#n++;
+  }
+  beforeInterrupt(error, context) {
+    let pending = this.#o;
+    this.#o = new Map();
+    try {
+    } catch (error) {
+      logTakeBackError(error);
+    }
+    return;
+  }
+  async #a(signal, { sends, rowsAtEsc, lastSeenUuid, sendCount, screen }) {}
+}
+//@ chunk-czq1j3j2.js:338281-338367 sole-consumer
+function logTakeBackError(error) {
+  logFeatureBad("repl_rewind_conversation", "esc_take_back_threw", {
+    source: AUTO_RESTORE_CANCEL,
+  });
+  logError(error);
+}
+//@ chunk-czq1j3j2.js:338367-338861 placement
 /**
  * 远程会话里不支持的命令说明表（ide/resume/continue/statusline/workflows/artifacts）及统一提示。
  */
 var REMOTE_UNSUPPORTED_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var REMOTE_UNSUPPORTED_COMMAND_NOTICES;
-deferInit("chunk-18hwfzwa.js:312946", () => {
+deferInit("chunk-czq1j3j2.js:338367", () => {
   REMOTE_UNSUPPORTED_COMMANDS =
     "run /exit, then `claude --cloud <session-id>` to open another one (ids are listed at claude.ai/code)";
   REMOTE_UNSUPPORTED_COMMAND_NOTICES = new Map([
@@ -118,15 +184,15 @@ deferInit("chunk-18hwfzwa.js:312946", () => {
     ],
   ]);
 });
-//@ chunk-18hwfzwa.js:313440-313463 placement
+//@ chunk-czq1j3j2.js:338861-338884 placement
 function remoteCommandNoticeStub(args) {
   return;
 }
-//@ chunk-18hwfzwa.js:313463-313533 placement
+//@ chunk-czq1j3j2.js:338884-338954 placement
 function isSameStringArray(left, right) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
-//@ chunk-18hwfzwa.js:313533-313741 placement
+//@ chunk-czq1j3j2.js:338954-339162 placement
 function remoteTransportKind({ ssh, direct, ccr, ccrViewerOnly, ccrSessionId, ccrConsoleProfileBearer }) {
   return ssh.isRemoteMode
     ? createRemoteModeHandle("ssh", ssh, false)
@@ -136,7 +202,7 @@ function remoteTransportKind({ ssh, direct, ccr, ccrViewerOnly, ccrSessionId, cc
         ? createRemoteModeHandle("ccr", ccr, ccrViewerOnly, ccrSessionId, ccrConsoleProfileBearer)
         : LOCAL_MODE_HANDLE;
 }
-//@ chunk-18hwfzwa.js:313741-322610 placement
+//@ chunk-czq1j3j2.js:339162-349406 placement
 /**
  * 远端传输（ccr-api / ssh / direct）：订阅云会话事件、权限模式广播、等待行、会话记录与能力查询；未绑定屏幕时报 "RemoteTransport: used before…"。
  */
@@ -147,29 +213,48 @@ class RemoteTransport {
   #n = {
     activeRemote: LOCAL_MODE_HANDLE,
   };
-  #s = createSignal();
+  #r = createSignal();
   retraction = createRetractionState();
   modeWire = createModeSyncState();
-  #r = mainAgentId();
-  #c = createStore([]);
-  waitingLines = this.#c;
+  #s = mainAgentId();
+  #l = createStore([]);
+  waitingLines = this.#l;
   #i = new Set();
+  #a = new Set();
+  #c = new Set();
+  escTakeBack;
   constructor(services) {
     this.#e = services;
+    this.escTakeBack = new EscTakeBack(services.transcript, this.waitingLines, services.firstPromptUuid);
   }
-  subscribe = this.#s.subscribe;
+  subscribe = this.#r.subscribe;
   getSnapshot = () => this.#n;
   get activeRemote() {
     return this.#n.activeRemote;
   }
-  #a() {
+  get hasLineToSendNow() {
+    return this.#a.size > 0;
+  }
+  takeLinesToSendNow = () => {
+    let held = [...this.#a];
+    for (let uuid of held) this.#c.add(uuid);
+    this.#a.clear();
+    if (held.length > 0) this.#r.emit();
+    return held;
+  };
+  sendNowMovedNothing = (uuids) => {
+    let filtered = uuids.filter((uuid) => this.#c.delete(uuid));
+    for (let uuid of filtered) this.#a.add(uuid);
+    if (filtered.length > 0) this.#r.emit();
+  };
+  #d() {
     let activeRemote = this.#n.activeRemote;
     return isDeviceIdentityEnabledCached() && activeRemote.isRemoteMode && activeRemote.caps.sessionRecord;
   }
   bindHost(host) {
     this.#t = host;
   }
-  #l() {
+  #u() {
     if (this.#t === null) throw Error("RemoteTransport: used before its screen bound a host");
     return this.#t;
   }
@@ -189,27 +274,40 @@ class RemoteTransport {
       activeRemote,
     };
     if (!activeRemote.isRemoteMode) this.#e.workerCommands.setState(() => null);
-    this.#s.emit();
+    this.#r.emit();
   }
   setMessages = (updater) => {
     this.#e.transcript.replace(updater);
   };
-  setIsLoading = (loading) => {
-    if (!loading) this.landWaitingLines();
+  setIsLoading = (loading, reason) => {
+    if (!loading) {
+      if (reason === undefined) {
+        this.#a.clear();
+        this.#c.clear();
+      }
+      this.landWaitingLines();
+    }
     this.#e.turn.setExternalLoading(loading);
   };
-  holdLine = (line) => {
-    this.#c.setState((waitingLines) =>
+  holdLine = (line, isRefused = false) => {
+    (isRefused ? this.#c : this.#a).add(line.uuid.toLowerCase());
+    this.#l.setState((waitingLines) =>
       waitingLines.some((waiting) => waiting.uuid === line.uuid) ? waitingLines : [...waitingLines, line],
     );
   };
-  lineTaken = (uuid) => {
+  forgetLine = (uuid) => {
     let lower = uuid.toLowerCase();
-    let takenCount = this.#d((waiting) => waiting.uuid.toLowerCase() === lower);
+    this.#c.delete(lower);
+    if (this.#a.delete(lower)) this.#r.emit();
+  };
+  lineTaken = (uuid) => {
+    this.forgetLine(uuid);
+    let lower = uuid.toLowerCase();
+    let takenCount = this.#p((waiting) => waiting.uuid.toLowerCase() === lower);
     for (let idx = 0; idx < takenCount; idx++) logFeatureOk("cloud_waiting_line");
   };
   landWaitingLines = () => {
-    let landedCount = this.#d(() => true);
+    let landedCount = this.#p(() => true);
     for (let idx = 0; idx < landedCount; idx++) logFeatureSad("cloud_waiting_line", "landed_without_report");
   };
   rowsDrawn = (drawnRows) => {
@@ -219,10 +317,10 @@ class RemoteTransport {
     let filtered = [...this.#i].filter((uuid) => drawnUuids.has(uuid) || !transcriptUuids.has(uuid));
     for (let uuid of filtered) this.#i.delete(uuid);
     if (filtered.length > 0)
-      this.#c.setState((waitingLines) => waitingLines.filter((line) => !filtered.includes(line.uuid)));
+      this.#l.setState((waitingLines) => waitingLines.filter((line) => !filtered.includes(line.uuid)));
   };
-  #d(predicate) {
-    let filtered = this.#c.getState().filter((line) => predicate(line) && !this.#i.has(line.uuid));
+  #p(predicate) {
+    let filtered = this.#l.getState().filter((line) => predicate(line) && !this.#i.has(line.uuid));
     if (filtered.length === 0) return 0;
     for (let line of filtered) this.#i.add(line.uuid);
     this.#e.transcript.replace((rows) => [
@@ -240,7 +338,7 @@ class RemoteTransport {
   };
   setInProgressToolUseIDs = (toolUseIds) => {
     this.#e.store.setState((appState) => {
-      let nextTranscripts = applyInProgressToolUses(appState.transcripts, this.#r, toolUseIds);
+      let nextTranscripts = applyInProgressToolUses(appState.transcripts, this.#s, toolUseIds);
       return nextTranscripts === appState.transcripts
         ? appState
         : {
@@ -250,19 +348,26 @@ class RemoteTransport {
     });
   };
   onTurnComplete = (completion) => {
+    this.escTakeBack.noteTurnEnded();
+    this.escTakeBack.noteStoppedTurnEnded(retractedUserMessageUuids(completion));
     this.#e.turn.markRemoteTurnComplete(completion);
   };
+  onKilledTurnEnded = (frame) => {
+    this.escTakeBack.noteStoppedTurnEnded(retractedUserMessageUuids(frame));
+  };
   onTurnStopped = () => {
+    this.escTakeBack.noteTurnEnded();
     this.#e.turn.markRemoteTurnStopped();
   };
   onOtherTurnComplete = (otherCompletion) => {
+    this.escTakeBack.noteTurnEnded();
     this.#e.idleNudge.onOtherTurnComplete(otherCompletion);
   };
   onConversationReset = (reset) => {
     this.#e.applyConversationReset(reset);
   };
   onInit = (initFrame) => {
-    this.#s.emit();
+    this.#r.emit();
     let { workerCommands, setAppState } = this.#e;
     if (initFrame.slash_commands !== undefined) {
       let commandNames = new Set(initFrame.slash_commands);
@@ -298,7 +403,7 @@ class RemoteTransport {
       );
   };
   noteOwnPermissionModePush = (mode) => {
-    let personOriginated = this.#a();
+    let personOriginated = this.#d();
     let sent = recordOwnSend(this.modeWire, mode, personOriginated ? "person" : "wire");
     return personOriginated
       ? () => {
@@ -311,7 +416,7 @@ class RemoteTransport {
       : () => {};
   };
   noteOwnPermissionModeAnswer = (answer) => {
-    if (!this.#a()) return;
+    if (!this.#d()) return;
     noteOwnModeAnswerPending(this.modeWire, answer);
     let activeRemote = this.#n.activeRemote;
     if (activeRemote.isRemoteMode && activeRemote.sessionId !== undefined) {
@@ -320,7 +425,7 @@ class RemoteTransport {
     }
   };
   noteOwnUnrecordedModeAnswer = () => {
-    if (this.#a()) {
+    if (this.#d()) {
       nextOwnSendSeq(this.modeWire);
       let activeRemote = this.#n.activeRemote;
       if (activeRemote.isRemoteMode && activeRemote.sessionId !== undefined) {
@@ -331,9 +436,10 @@ class RemoteTransport {
   };
   onPermissionModeChange = (mode, origin = "worker") => {
     if (!EXTERNAL_PERMISSION_MODES.includes(mode)) {
-      if (this.#a()) recordModeBroadcast(this.modeWire, null);
+      if (this.#d()) recordModeBroadcast(this.modeWire, null);
       return;
     }
+    let autoModeBroadcast = this.modeWire.lastBroadcast?.mode === "auto";
     recordModeBroadcast(this.modeWire, mode);
     let personAnswer = origin === "worker" && consumeOwnAnswer(this.modeWire, mode);
     let { store, setAppState } = this.#e;
@@ -341,12 +447,27 @@ class RemoteTransport {
     let applyResult = setPermissionModeWithGuards(mode, store.getState().toolPermissionContext, (guard) => {
       recordAppliedMode(this.modeWire, mode, personAnswer);
       let activeRemote = this.#n.activeRemote;
-      if (this.#a() && activeRemote.isRemoteMode && activeRemote.sessionId !== undefined)
+      if (this.#d() && activeRemote.isRemoteMode && activeRemote.sessionId !== undefined)
         applyRemoteMode(setAppState, activeRemote.sessionId, mode, personAnswer ? "person" : "wire");
-      setAppState((prevState) => ({
-        ...prevState,
-        toolPermissionContext: guard(prevState.toolPermissionContext),
-      }));
+      setAppState((prevState) => {
+        let nextContext = guard(prevState.toolPermissionContext);
+        let restoredContext =
+          activeRemote.isRemoteMode &&
+          (activeRemote.caps.sessionRecord || !activeRemote.caps.setPermissionMode) &&
+          nextContext.mode === "plan" &&
+          nextContext.prePlanMode === "auto" &&
+          !autoModeBroadcast &&
+          this.modeWire.ownAck?.mode !== "auto";
+        return {
+          ...prevState,
+          toolPermissionContext: restoredContext
+            ? {
+                ...nextContext,
+                prePlanMode: "default",
+              }
+            : nextContext,
+        };
+      });
     });
     if (!applyResult.ok) {
       logForDebugging(`[remote] Permission-mode broadcast '${mode}' rejected locally: ${applyResult.error}`, {
@@ -370,7 +491,7 @@ class RemoteTransport {
   #m(activeRemote, text, sentByPerson, pastedContents) {
     this.#o = undefined;
     let noticeText;
-    let { addNotification } = this.#l();
+    let { addNotification } = this.#u();
     addNotification({
       key: "remote-bash-mode-unavailable",
       kind: "feedback",
@@ -389,7 +510,7 @@ class RemoteTransport {
       this.#e.transcript.replace((rows) => [...rows, createSystemMessage(noticeText, "warning")]);
     return;
   }
-  submit(text, { inputMode, pastedContents, fromKeybinding, sentByPerson, recordHistory }) {
+  submit(text, { inputMode, pastedContents, fromKeybinding, sentByPerson, sentNow, recordHistory }) {
     if (remoteSessionAwaits() && !prependModeCharacterToInput_2_2(text, inputMode, this.#e.scope.commands)) {
       this.#e.transcript.replace((rows) => [
         ...rows,
@@ -402,7 +523,7 @@ class RemoteTransport {
     }
     let activeRemote = this.activeRemote;
     if (!activeRemote.isRemoteMode) return null;
-    let { addNotification } = this.#l();
+    let { addNotification } = this.#u();
     if (inputMode === "bash") {
       let heldBash = this.#o;
       this.#o = undefined;
@@ -482,12 +603,13 @@ claude --teleport ${toCompatSessionId(activeRemote.sessionId)}`
     }
     if (dispatchMode !== "post-text") return null;
     let pastedTextReference = resolvePastedTextReference(text, fromKeybinding ? {} : pastedContents);
-    return this.#p(activeRemote, pastedTextReference, {
+    return this.#f(activeRemote, pastedTextReference, {
       clearsConversation: cmd?.name === "clear",
+      sentNow: sentNow ?? false,
       recordHistory,
     });
   }
-  async #p(activeRemote, splice, { clearsConversation, recordHistory }) {
+  async #f(activeRemote, splice, { clearsConversation, sentNow, recordHistory }) {
     if (splice.kind === "cancel") {
       logFeatureBad("remote_paste_splice", splice.reason);
       let errorText =
@@ -502,7 +624,7 @@ claude --teleport ${toCompatSessionId(activeRemote.sessionId)}`
     if (splice.removed.length === 0 && splice.inlinePastes.length > 0) logFeatureOk("remote_paste_splice");
     if (splice.removed.length > 0) {
       logFeatureSad("remote_paste_splice", "paste_gone");
-      this.#l().addNotification({
+      this.#u().addNotification({
         key: "pasted-text-unavailable",
         kind: "feedback",
         text: describeRemovedPastes(splice.removed),
@@ -550,22 +672,21 @@ claude --teleport ${toCompatSessionId(activeRemote.sessionId)}`
         kind: "human",
       },
     });
-    if (
-      activeRemote.caps.deliveryReports &&
-      this.#e.turn.isExternalLoading &&
-      !clearsConversation &&
-      !activeRemote.holdsSends()
-    )
-      this.holdLine(userMessage);
+    let isExternalLoading = this.#e.turn.isExternalLoading && !activeRemote.holdsSends();
+    if (activeRemote.caps.deliveryReports && isExternalLoading && !clearsConversation)
+      this.holdLine(userMessage, sentNow);
     else {
       this.landWaitingLines();
       this.#e.transcript.replace((rows) => [...rows, userMessage]);
+      if (activeRemote.holdsSends() && !clearsConversation) this.#a.add(userMessage.uuid.toLowerCase());
     }
     this.#e.turn.stream.clearApiMetrics();
+    let historyGeneration = getHistoryGeneration();
     recordHistory({
       startsTurn: true,
     });
-    let sendResult = await activeRemote.sendMessage(postedText, {
+    let historyGeneration_2 = getHistoryGeneration();
+    let sendResult = activeRemote.sendMessage(postedText, {
       uuid: userMessage.uuid,
       ...(splice.inlinePastes.length > 0 && {
         inlinePastes: splice.inlinePastes,
@@ -574,29 +695,39 @@ claude --teleport ${toCompatSessionId(activeRemote.sessionId)}`
         clearsConversation: true,
       }),
     });
-    if (!sendResult) this.landWaitingLines();
-    if (sendResult && clearsConversation) {
+    if (!clearsConversation)
+      this.escTakeBack.noteSent({
+        message: userMessage,
+        sending: sendResult,
+        overRunningTurn: isExternalLoading,
+        postedText: splice.postedText,
+        historyGeneration: historyGeneration_2 === historyGeneration ? undefined : historyGeneration_2,
+      });
+    let sendResult_2 = await sendResult;
+    if (!sendResult_2) this.landWaitingLines();
+    if (sendResult_2 && clearsConversation) {
       this.landWaitingLines();
       this.#e.transcript.replace(() => []);
       this.#e.applyLocalConversationReset(randomUUID());
     }
-    return sendResult && !activeRemote.holdsSends()
+    return sendResult_2 && !activeRemote.holdsSends()
       ? {
           sent: true,
           uuid: userMessage.uuid,
         }
       : undefined;
   }
-  runBridgeImmediateCommand = (command, args, displayName, submissionOrigin) => {
+  runBridgeImmediateCommand = (command, args, displayName, submissionOrigin, relayAuthored = false) => {
     if (command.type !== "local") return;
     let { turn, transcript } = this.#e;
     (async () => {
       let activeNotices;
       try {
-        let { mainLoopModel } = this.#l();
-        activeNotices = getActiveNotices(
+        let { mainLoopModel } = this.#u();
+        activeNotices = buildNotices(
           turn.buildToolUseContext(transcript.getSnapshot(), [], createAbortController(), mainLoopModel),
           turn.guard,
+          relayAuthored,
         );
       } catch (error) {
         logError(withTelemetryMessage(toError(error), "bridge immediate command context failed"));
@@ -639,15 +770,15 @@ claude --teleport ${toCompatSessionId(activeRemote.sessionId)}`
     })();
   };
 }
-//@ chunk-18hwfzwa.js:322610-322653 placement
+//@ chunk-czq1j3j2.js:349406-349449 placement
 function selectIsExternalLoading_2(state) {
   return state.isExternalLoading;
 }
-//@ chunk-18hwfzwa.js:322653-322699 placement
+//@ chunk-czq1j3j2.js:349449-349495 placement
 function selectCombinedInitialTools(state) {
   return state.combinedInitialTools;
 }
-//@ chunk-18hwfzwa.js:322699-323813 placement
+//@ chunk-czq1j3j2.js:349495-350646 placement
 function useRemoteTransport({
   remoteSessionConfig,
   directConnectConfig,
@@ -676,6 +807,7 @@ function useRemoteTransport({
         applyConversationReset,
         applyLocalConversationReset,
         workerCommands: scope.workerCommands,
+        firstPromptUuid: remoteSessionConfig?.initialPromptUuid,
       }),
   );
   let toolPermissionContext = useAppState((appState) => appState.toolPermissionContext);

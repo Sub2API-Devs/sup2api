@@ -3,9 +3,9 @@
  *
  * 从 settings 各层加载权限规则与 additionalDirectories（托管独占、工作区信任门控、评测受限），以及向 settings 增删规则。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/permissionsLoader.ts
- * pieces: chunk-anrta56w.js (45), chunk-bwpc82tt.js (1)
+ * pieces: chunk-9s2vygnp.js (45), chunk-t58ha4ac.js (1)
  * attribution: placement 3, facade-majority 24, layout 17, file-local 1, fingerprint 1
  */
 import { getSessionFunctionHooks } from "../hooks/sessionHooks.js";
@@ -70,7 +70,7 @@ import {
   getEnabledSettingSources,
   EDITABLE_SETTING_SOURCES as EDITABLE_SETTING_SOURCES_2,
 } from "../settings/constants.js";
-import { permissionRuleValueFromString } from "./permissionRuleParser.js";
+import { normalizeRuleString, parseRuleValue } from "./legacyWildcardRules.js";
 import { env, describeGlobalConfigFile } from "../env.js";
 import {
   isWorkspacePersistedTrusted,
@@ -85,11 +85,11 @@ import {
   PERSISTED_TRUST_IGNORED,
 } from "../config.js";
 import { jsonStringify } from "../slowOperations.js";
-import { formatPermissionRule } from "./disallowedToolsFlag.js";
+import { permissionRuleValueFromString } from "./permissionRuleParser.js";
 import { isPlainObject } from "../isPlainObject.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-anrta56w.js:1051-1170 placement
+//@ chunk-9s2vygnp.js:1118-1237 placement
 /**
  * 取命令的来源仓库：插件命令取插件仓库，内置命令取其会话函数钩子，其他为 undefined。
  */
@@ -97,13 +97,13 @@ function getCommandRepository(hook) {
   if (hook.source === "plugin") return hook.pluginInfo?.repository;
   return hook.source === "bundled" ? getSessionFunctionHooks(hook.hooks) : undefined;
 }
-//@ chunk-anrta56w.js:1170-1202 placement
+//@ chunk-9s2vygnp.js:1237-1269 placement
 /**
  * isVouchedMarketplaceRef：官方或受信策略插件的市场引用。
  */
 var isVouchedMarketplaceRef = (ref) =>
   isOfficialMarketplaceRef(ref) || hasSimilarMarketplaceName(ref, getVouchedPolicyPluginIds());
-//@ chunk-anrta56w.js:1202-1379 placement
+//@ chunk-9s2vygnp.js:1269-1446 placement
 /**
  * 是否加载权限规则（信任与远程设置状态）。
  */
@@ -125,22 +125,22 @@ function shouldLoadPermissionRules(hooks, marketplaceRef) {
   if (shouldHold) markOrganizationAskHeld();
   return shouldHold;
 }
-//@ chunk-anrta56w.js:1379-1459 facade-majority (2.1.88 match: shouldAllowManagedPermissionRulesOnly, 1)
+//@ chunk-9s2vygnp.js:1446-1526 facade-majority (2.1.88 match: shouldAllowManagedPermissionRulesOnly, 1)
 /**
  * policySettings.allowManagedPermissionRulesOnly=true 时只使用托管策略里的权限规则。
  */
 function shouldAllowManagedPermissionRulesOnly() {
   return getSettingsForSource("policySettings")?.allowManagedPermissionRulesOnly === true;
 }
-//@ chunk-anrta56w.js:1459-1485 facade-majority
+//@ chunk-9s2vygnp.js:1526-1552 facade-majority
 function shouldShowAlwaysAllowOptions() {
   return !shouldAllowManagedPermissionRulesOnly();
 }
-//@ chunk-anrta56w.js:1485-1533 layout
+//@ chunk-9s2vygnp.js:1552-1600 layout
 function isToolGrantAllowed(source, pluginOrigin, fromHostCatalog = false) {
   return frontmatterToolGrantWithheldReason(source, pluginOrigin, fromHostCatalog) === undefined;
 }
-//@ chunk-anrta56w.js:1533-1671 facade-majority
+//@ chunk-9s2vygnp.js:1600-1738 facade-majority
 /**
  * 前置声明（frontmatter）里 allowed-tools 授权被扣留的原因：仅托管规则模式且来源非托管 → managed_rules_only；限制个人配置时来自个人配置 → personal_config。
  */
@@ -153,7 +153,7 @@ function frontmatterToolGrantWithheldReason(source, pluginOrigin, fromHostCatalo
     ? "personal_config"
     : undefined;
 }
-//@ chunk-anrta56w.js:1671-1998 layout
+//@ chunk-9s2vygnp.js:1738-2065 layout
 /**
  * 规则来源是否不可信：用户设置或未知来源；插件来自非组织 claude.ai 市场、未认证的同步市场或指定的内联插件时也视为不可信。
  */
@@ -178,7 +178,7 @@ function isUntrustedRuleOrigin(source, pluginOrigin) {
       return false;
   }
 }
-//@ chunk-anrta56w.js:1998-2436 layout
+//@ chunk-9s2vygnp.js:2065-2503 layout
 /**
  * 插件来源是否被担保：内置；同步市场需官方认证；npm 需策略担保的解析；官方市场名需官方来源；其他需策略担保的市场源。
  */
@@ -214,16 +214,16 @@ function isVouchedPluginOrigin(pluginOrigin) {
     isMarketplaceSourceVouchedByPolicy(pluginOrigin.marketplaceSource, pluginOrigin.home)
   );
 }
-//@ chunk-anrta56w.js:2436-2461 layout
+//@ chunk-9s2vygnp.js:2503-2528 layout
 var warnedGrantHosts; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-anrta56w.js:2436", () => {
+deferInit("chunk-9s2vygnp.js:2503", () => {
   warnedGrantHosts = new HostScoped(() => new Set());
 });
-//@ chunk-anrta56w.js:2461-2498 facade-majority
+//@ chunk-9s2vygnp.js:2528-2565 facade-majority
 function getIgnoredFrontmatterToolGrants() {
   return warnedGrantHosts.of(getRootSession().host);
 }
-//@ chunk-anrta56w.js:2498-3696 facade-majority
+//@ chunk-9s2vygnp.js:2565-3762 facade-majority
 /**
  * 报告被忽略的 skill/command frontmatter allowed-tools：记告警（区分 allowManagedPermissionRulesOnly 与 CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG），上报 tengu_frontmatter_grant_withheld，文本模式下也打印到 stderr。
  */
@@ -260,7 +260,7 @@ function reportIgnoredFrontmatterToolGrants(skillName, origin, tools, reason = "
         : `allowed-tools from ${sourceLabel} ignored: your organization restricts permission rules to managed settings (allowManagedPermissionRulesOnly). Ask an admin to add the rules it needs to managed settings.`,
     );
 }
-//@ chunk-anrta56w.js:3696-3913 layout
+//@ chunk-9s2vygnp.js:3762-3979 layout
 function getRuleSourceLabel(source) {
   switch (source) {
     case "userSettings":
@@ -277,7 +277,7 @@ function getRuleSourceLabel(source) {
       return source;
   }
 }
-//@ chunk-anrta56w.js:3913-4091 facade-majority
+//@ chunk-9s2vygnp.js:3979-4157 facade-majority
 /**
  * 命令/skill 实际生效的 allowed-tools：读取工具列表；带有被扣留的钩子或授权被扣留时返回空。
  */
@@ -289,7 +289,7 @@ async function armedAllowedToolsOf(command) {
     ? tools
     : [];
 }
-//@ chunk-anrta56w.js:4091-4337 layout
+//@ chunk-9s2vygnp.js:4157-4403 layout
 function getPluginOriginInfo(command) {
   return command.source === "plugin"
     ? {
@@ -301,11 +301,11 @@ function getPluginOriginInfo(command) {
       }
     : undefined;
 }
-//@ chunk-anrta56w.js:4337-4385 facade-majority (2.1.88 match: _temp0, 1)
+//@ chunk-9s2vygnp.js:4403-4451 facade-majority (2.1.88 match: _temp0, 1)
 function arePluginHooksHeld(a_5) {
   return isPersonalConfigRestricted() && isUntrustedRuleOrigin("plugin", pluginGrantProvenanceOf(a_5));
 }
-//@ chunk-anrta56w.js:4385-4509 facade-majority
+//@ chunk-9s2vygnp.js:4451-4575 facade-majority
 /**
  * 插件授权的来源信息：插件 id、是否官方认证、市场来源。
  */
@@ -316,14 +316,14 @@ function pluginGrantProvenanceOf(origin) {
     marketplaceSource: origin.marketplaceSource,
   };
 }
-//@ chunk-anrta56w.js:4509-4562 facade-majority
+//@ chunk-9s2vygnp.js:4575-4628 facade-majority
 function takesNarrowingModeOnly(selectedAgent) {
   return (
     isRestrictedPersonalAgent(selectedAgent) ||
     shouldLoadPermissionRules(selectedAgent.hooks, selectedAgent.plugin)
   );
 }
-//@ chunk-anrta56w.js:4562-4704 facade-majority
+//@ chunk-9s2vygnp.js:4628-4770 facade-majority
 /**
  * 代理是否属于被限制的个人配置（运行时注册的不算）。
  */
@@ -338,7 +338,7 @@ function isRestrictedPersonalAgent(agent) {
       : undefined,
   );
 }
-//@ chunk-anrta56w.js:4704-4774 facade-majority
+//@ chunk-9s2vygnp.js:4770-4840 facade-majority
 /**
  * 命令的钩子是否被扣留：开启个人配置限制、非宿主目录来源且来源受限。
  */
@@ -349,9 +349,9 @@ function areCommandHooksHeld(command) {
     isUntrustedRuleOrigin(command.source, getPluginOriginInfo(command))
   );
 }
-//@ chunk-anrta56w.js:4774-4803 file-local
+//@ chunk-9s2vygnp.js:4840-4869 file-local
 var SUPPORTED_RULE_BEHAVIORS = ["allow", "deny", "ask"];
-//@ chunk-anrta56w.js:4803-4983 facade-majority (2.1.88 match: settingsJsonToRules, 1)
+//@ chunk-9s2vygnp.js:4869-5051 facade-majority (2.1.88 match: deletePermissionRuleFromSettings, 1)
 /**
  * 把一个 settings JSON 的 permissions.allow/deny/ask 转成规则对象列表（带来源）。
  */
@@ -366,19 +366,19 @@ function settingsJsonToRules(data, source) {
         rules.push({
           source,
           ruleBehavior: behavior,
-          ruleValue: permissionRuleValueFromString(ruleString),
+          ruleValue: normalizeRuleString(ruleString, behavior),
         });
   }
   return rules;
 }
-//@ chunk-anrta56w.js:4983-5038 facade-majority
+//@ chunk-9s2vygnp.js:5051-5106 facade-majority
 /**
  * CLAUDE_CODE_EVAL_CONFINED（插件评测）下为真：忽略 settings 的 allow 规则与额外目录。
  */
 function settingsGrantsConfined() {
   return env.CLAUDE_CODE_EVAL_CONFINED === true;
 }
-//@ chunk-anrta56w.js:5038-5122 facade-majority
+//@ chunk-9s2vygnp.js:5106-5190 facade-majority
 /**
  * 加载 settings 各层的权限规则；评测受限模式下去掉 allow 规则。
  */
@@ -386,7 +386,7 @@ function loadAllPermissionRulesFromDisk(options = {}) {
   let rules = loadSettingsPermissionRules(options);
   return settingsGrantsConfined() ? rules.filter((rule) => rule.ruleBehavior !== "allow") : rules;
 }
-//@ chunk-anrta56w.js:5122-5614 layout
+//@ chunk-9s2vygnp.js:5190-5682 layout
 /**
  * 托管独占时只读 policySettings；否则读全部启用层。工作区未受信任时丢弃 projectSettings/localSettings 的 allow 规则并给出一次性警告。
  */
@@ -415,7 +415,7 @@ function loadSettingsPermissionRules(options = {}) {
   }
   return rules;
 }
-//@ chunk-anrta56w.js:5614-5923 facade-majority
+//@ chunk-9s2vygnp.js:5682-5991 facade-majority
 /**
  * 仓库内的设置来源：projectSettings，以及在 settings.local.json 被 git 跟踪（或曾见过被跟踪）时加上 localSettings；首次发现被跟踪时持久化标记。
  */
@@ -437,7 +437,7 @@ function repoResidentSettingSources(storage) {
     ? ["projectSettings", "localSettings"]
     : ["projectSettings"];
 }
-//@ chunk-anrta56w.js:5923-6130 layout
+//@ chunk-9s2vygnp.js:5991-6198 layout
 class GitTrackedLocalSettingsState {
   tracked = new Set();
   persisted = new Set();
@@ -454,16 +454,16 @@ class GitTrackedLocalSettingsState {
     this.persisted.add(workspace);
   }
 }
-//@ chunk-anrta56w.js:6130-6153 layout
+//@ chunk-9s2vygnp.js:6198-6221 layout
 var GIT_TRACKED_LOCAL_SETTINGS_STATE; // deferred: uses GitTrackedLocalSettingsState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-anrta56w.js:6130", () => {
+deferInit("chunk-9s2vygnp.js:6198", () => {
   GIT_TRACKED_LOCAL_SETTINGS_STATE = new HostScoped(() => new GitTrackedLocalSettingsState());
 });
-//@ chunk-anrta56w.js:6153-6229 layout
+//@ chunk-9s2vygnp.js:6221-6297 layout
 function hasSeenGitTrackedLocalSettings() {
   return getGlobalConfig().projects?.[getWorkspacePersistedTrustKey()]?.localSettingsSeenGitTracked === true;
 }
-//@ chunk-anrta56w.js:6229-6428 layout
+//@ chunk-9s2vygnp.js:6297-6496 layout
 function markLocalSettingsSeenGitTracked(storage) {
   let workspacePersistedTrustKey = getWorkspacePersistedTrustKey();
   saveGlobalConfig((config) => {
@@ -480,7 +480,7 @@ function markLocalSettingsSeenGitTracked(storage) {
     };
   }, storage);
 }
-//@ chunk-anrta56w.js:6428-6704 facade-majority
+//@ chunk-9s2vygnp.js:6496-6772 facade-majority
 /**
  * 汇总各层 settings 声明的 additionalDirectories，区分只由仓库控制层（project/local）声明的目录 repoOnly。
  */
@@ -503,7 +503,7 @@ function additionalDirectoryProvenance(expand, storage) {
     repoOnly: repoDirs,
   };
 }
-//@ chunk-anrta56w.js:6704-7199 facade-majority
+//@ chunk-9s2vygnp.js:6772-7267 facade-majority
 /**
  * 读取 settings 各层 permissions.additionalDirectories；未受信任工作区跳过 project/local 层并告警；评测受限模式返回空。
  */
@@ -536,7 +536,7 @@ function loadTrustedAdditionalDirectoriesFromDisk(options = {}) {
   if (count > 0) warnDroppedUntrustedGrants("permissions.additionalDirectories", count, [...gatedFiles]);
   return directories;
 }
-//@ chunk-anrta56w.js:7199-7284 facade-majority
+//@ chunk-9s2vygnp.js:7267-7352 facade-majority
 /**
  * 返回 {gateProject, gateLocal}：projectSettings 与 userSettings 不是同一文件（且工作区未信任）时 gateProject；localSettings 被 git 跟踪时 gateLocal。
  */
@@ -548,7 +548,7 @@ function getProjectGrantGates() {
     }),
   };
 }
-//@ chunk-anrta56w.js:7284-7436 layout
+//@ chunk-9s2vygnp.js:7352-7504 layout
 function sourceGrantsPermissions(source) {
   if (!getEnabledSettingSources().includes(source)) return false;
   return (
@@ -556,7 +556,7 @@ function sourceGrantsPermissions(source) {
     (getSettingsForSource(source)?.permissions?.additionalDirectories?.length ?? 0) > 0
   );
 }
-//@ chunk-anrta56w.js:7436-7568 facade-majority
+//@ chunk-9s2vygnp.js:7504-7636 facade-majority
 /**
  * 工作区信任闸门的豁免：CLAUDE_CODE_SANDBOXED、远程/SDK/非交互等环境不施加项目授权闸门。
  */
@@ -568,12 +568,12 @@ function isGatedGrantsBackstopExempt() {
   if (isHomeDirectorySession()) return true;
   return isWorkspacePersistedTrusted();
 }
-//@ chunk-anrta56w.js:7568-7612 layout
+//@ chunk-9s2vygnp.js:7636-7680 layout
 function shouldWarnUntrustedGrants() {
   if (isGatedGrantsBackstopExempt()) return false;
   return workspaceHasGatedGrants();
 }
-//@ chunk-anrta56w.js:7612-7718 facade-majority
+//@ chunk-9s2vygnp.js:7680-7786 facade-majority
 /**
  * 工作区是否有被信任闸门挡住的授权：被闸门的 projectSettings/localSettings 中确有授权项。
  */
@@ -584,7 +584,7 @@ function workspaceHasGatedGrants() {
     (gateLocal && sourceGrantsPermissions("localSettings"))
   );
 }
-//@ chunk-anrta56w.js:7718-7846 layout
+//@ chunk-9s2vygnp.js:7786-7914 layout
 class OnceWarner {
   warned = new Set();
   firstTimeFor(key) {
@@ -596,16 +596,16 @@ class OnceWarner {
     this.warned.clear();
   }
 }
-//@ chunk-anrta56w.js:7846-7869 layout
+//@ chunk-9s2vygnp.js:7914-7937 layout
 var DROPPED_GRANTS_WARNER; // deferred: uses OnceWarner of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-anrta56w.js:7846", () => {
+deferInit("chunk-9s2vygnp.js:7914", () => {
   DROPPED_GRANTS_WARNER = new HostScoped(() => new OnceWarner());
 });
-//@ chunk-anrta56w.js:7869-7923 facade-majority
+//@ chunk-9s2vygnp.js:7937-7991 facade-majority
 function firstGatedTrustDiagnosticFor(key) {
   return DROPPED_GRANTS_WARNER.of(getRootSession().host).firstTimeFor(key);
 }
-//@ chunk-anrta56w.js:7923-8631 layout
+//@ chunk-9s2vygnp.js:7991-8698 layout
 /**
  * 未受信任工作区丢弃 project/local 的放宽项时，每类只警告一次（stderr 说明如何信任工作区）。
  */
@@ -634,43 +634,43 @@ function warnDroppedUntrustedGrants(settingKey, count, files) {
       `this workspace has not been trusted. Run Claude Code interactively here once and accept the trust dialog, or set projects[${jsonStringify(workspacePersistedTrustKey)}].hasTrustDialogAccepted: true in ${describeGlobalConfigFile()}.`,
   );
 }
-//@ chunk-anrta56w.js:8631-8674 facade-majority
+//@ chunk-9s2vygnp.js:8698-8741 facade-majority
 function getPermissionRulesForSource(source) {
   let settingsData = getSettingsForSource(source);
   return settingsJsonToRules(settingsData, source);
 }
-//@ chunk-anrta56w.js:8674-8683 layout
+//@ chunk-9s2vygnp.js:8741-8750 layout
 var EDITABLE_SETTING_SOURCES; // deferred: uses EDITABLE_SETTING_SOURCES (../settings/constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-anrta56w.js:8674", () => {
+deferInit("chunk-9s2vygnp.js:8741", () => {
   EDITABLE_SETTING_SOURCES = EDITABLE_SETTING_SOURCES_2;
 });
-//@ chunk-anrta56w.js:8683-9266 facade-majority (2.1.88 match: deletePermissionRuleFromSettings, 0.709)
+//@ chunk-9s2vygnp.js:8750-9355 facade-majority (2.1.88 match: settingsJsonToRules, 0.708)
 /**
  * 从可编辑 settings 文件删除一条规则（按规范化串比较）；localSettings 另查实际文件确认。
  */
-async function deletePermissionRuleFromSettings(rule, storageV5) {
-  if (!EDITABLE_SETTING_SOURCES.includes(rule.source)) return false;
-  let ruleString = formatPermissionRule(rule.ruleValue);
-  let normalizeEntry = (raw) => formatPermissionRule(permissionRuleValueFromString(raw));
+async function deletePermissionRuleFromSettings(data, storageV5) {
+  if (!EDITABLE_SETTING_SOURCES.includes(data.source)) return false;
+  let ruleValue = permissionRuleValueFromString(data.ruleValue);
+  let identity = data.ruleBehavior === "allow" ? parseRuleValue(ruleValue) : ruleValue;
   try {
     let inLegacyFile = false;
-    if (rule.source === "localSettings") {
+    if (data.source === "localSettings") {
       let legacyLocalSettingsFilePath = getLegacyLocalSettingsFilePath();
       if (legacyLocalSettingsFilePath)
         inLegacyFile = !!parseSettingsFile(legacyLocalSettingsFilePath).settings?.permissions?.[
-          rule.ruleBehavior
-        ]?.some((raw) => normalizeEntry(raw) === ruleString);
+          data.ruleBehavior
+        ]?.some((raw) => parseRuleValue(raw) === identity);
     }
     let removed = false;
     let { error } = await updateSettingsForSourceWithTransform(
-      rule.source,
+      data.source,
       (settings) => {
-        let behaviorArray = settings?.permissions?.[rule.ruleBehavior];
-        if (!behaviorArray || !behaviorArray.some((raw) => normalizeEntry(raw) === ruleString)) return null;
+        let behaviorArray = settings?.permissions?.[data.ruleBehavior];
+        if (!behaviorArray || !behaviorArray.some((raw) => parseRuleValue(raw) === identity)) return null;
         removed = true;
         return {
           permissions: {
-            [rule.ruleBehavior]: behaviorArray.filter((raw) => normalizeEntry(raw) !== ruleString),
+            [data.ruleBehavior]: behaviorArray.filter((raw) => parseRuleValue(raw) !== identity),
           },
         };
       },
@@ -682,8 +682,8 @@ async function deletePermissionRuleFromSettings(rule, storageV5) {
       let legacyLocalSettingsFilePath = getLegacyLocalSettingsFilePath();
       if (legacyLocalSettingsFilePath)
         return !parseSettingsFile(legacyLocalSettingsFilePath).settings?.permissions?.[
-          rule.ruleBehavior
-        ]?.some((raw) => normalizeEntry(raw) === ruleString);
+          data.ruleBehavior
+        ]?.some((raw) => parseRuleValue(raw) === identity);
     }
     return removed || inLegacyFile;
   } catch (error) {
@@ -691,21 +691,21 @@ async function deletePermissionRuleFromSettings(rule, storageV5) {
     return false;
   }
 }
-//@ chunk-anrta56w.js:9266-9736 facade-majority (2.1.88 match: addPermissionRulesToSettings, 0.549)
+//@ chunk-9s2vygnp.js:9355-9827 facade-majority (2.1.88 match: addPermissionRulesToSettings, 0.548)
 /**
  * 把规则追加写入某层 settings（去重）；托管独占时拒绝。
  */
 async function addPermissionRulesToSettings({ ruleValues, ruleBehavior }, destination, storage) {
   if (shouldAllowManagedPermissionRulesOnly()) return false;
   if (ruleValues.length < 1) return true;
-  let ruleStrings = ruleValues.map(formatPermissionRule);
+  let ruleStrings = ruleValues.map(permissionRuleValueFromString);
   try {
     let updateResult = await updateSettingsForSourceWithTransform(
       destination,
       (currentSettings) => {
         let existingRules = currentSettings?.permissions?.[ruleBehavior] || [];
         let existingRulesSet = new Set(
-          existingRules.map((raw) => formatPermissionRule(permissionRuleValueFromString(raw))),
+          existingRules.map((raw) => permissionRuleValueFromString(normalizeRuleString(raw, ruleBehavior))),
         );
         let newRules = ruleStrings.filter((rule) => !existingRulesSet.has(rule));
         if (newRules.length === 0) return null;
@@ -730,7 +730,7 @@ async function addPermissionRulesToSettings({ ruleValues, ruleBehavior }, destin
     return false;
   }
 }
-//@ chunk-bwpc82tt.js:6091-6346 fingerprint (2.1.88 match: getEmptyPermissionSettingsJson, 0.688)
+//@ chunk-t58ha4ac.js:6190-6445 fingerprint (2.1.88 match: getEmptyPermissionSettingsJson, 0.687)
 /**
  * 从设置对象中只提取限制性权限（deny 与 ask 的字符串数组），没有则返回 null。
  */
@@ -749,32 +749,32 @@ function extractRestrictivePermissions(settings) {
       };
 }
 export {
-  shouldAllowManagedPermissionRulesOnly,
-  getIgnoredFrontmatterToolGrants,
-  isRestrictedPersonalAgent,
   loadAllPermissionRulesFromDisk,
+  loadTrustedAdditionalDirectoriesFromDisk,
+  shouldAllowManagedPermissionRulesOnly,
+  additionalDirectoryProvenance,
   settingsGrantsConfined,
   deletePermissionRuleFromSettings,
-  armedAllowedToolsOf,
-  takesNarrowingModeOnly,
   isGatedGrantsBackstopExempt,
   workspaceHasGatedGrants,
   getPermissionRulesForSource,
   settingsJsonToRules,
   getProjectGrantGates,
-  loadTrustedAdditionalDirectoriesFromDisk,
-  firstGatedTrustDiagnosticFor,
-  arePluginHooksHeld,
-  shouldShowAlwaysAllowOptions,
-  addPermissionRulesToSettings,
-  getCommandRepository,
-  areCommandHooksHeld,
-  shouldLoadPermissionRules,
-  additionalDirectoryProvenance,
-  repoResidentSettingSources,
+  isRestrictedPersonalAgent,
+  getIgnoredFrontmatterToolGrants,
   isVouchedMarketplaceRef,
-  pluginGrantProvenanceOf,
-  extractRestrictivePermissions,
+  arePluginHooksHeld,
+  shouldLoadPermissionRules,
   frontmatterToolGrantWithheldReason,
   reportIgnoredFrontmatterToolGrants,
+  repoResidentSettingSources,
+  armedAllowedToolsOf,
+  firstGatedTrustDiagnosticFor,
+  pluginGrantProvenanceOf,
+  takesNarrowingModeOnly,
+  getCommandRepository,
+  areCommandHooksHeld,
+  shouldShowAlwaysAllowOptions,
+  addPermissionRulesToSettings,
+  extractRestrictivePermissions,
 };

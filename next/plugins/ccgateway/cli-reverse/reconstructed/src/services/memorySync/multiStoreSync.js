@@ -3,9 +3,9 @@
  *
  * 多记忆库同步一轮（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (14)
  * attribution: placement 14
  */
 import { join, sep } from "path";
@@ -45,10 +45,15 @@ import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import {
   isTypedKoalaEnabled,
   EMPTY_CONTENT_SHA256,
-  getMemoryPushDeleteMode,
+  memoryPushDeleteMode,
+  dropPresentRemovals,
+  deleteModeAllowsCorroborate,
+  isRemoveAlreadyRecorded,
   PUSH_TIMEOUT_MS,
+  pruneNamedDeletes,
   getMassDeleteThreshold,
   LOCAL_IO_CONCURRENCY,
+  namedDeleteHintMessage,
   EMPTY_CONTENT_HASH,
   isUsableSuppressedReason,
 } from "./syncConfig.js";
@@ -64,11 +69,12 @@ import {
   storeRecoveredText,
   quoteMemoryFilePath,
   MEMORY_SYNC_REJECT_TEXTS,
+  noticeDeleteBlocked,
   noticeStoreRecovered,
   formatMemorySyncPausedNotice,
 } from "./syncNotices.js";
 import { readSyncManifest, clearBasis, writeSyncBasis, writeSyncManifest } from "./syncManifest.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   MemoryPermanentError,
   MemoryUnavailableError,
@@ -80,7 +86,7 @@ import { storageKeyForMountPath } from "../../memdir/teamMemPrompts.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:148738-148836 placement
+//@ chunk-7jxyna5q.js:150819-150917 placement
 /**
  * 同步无操作时的结果对象。
  */
@@ -92,7 +98,7 @@ var NOOP_SYNC_RESULT = {
   secretsSkipped: 0,
   oversizedSkipped: 0,
 };
-//@ chunk-s61vbvea.js:148836-149044 placement
+//@ chunk-7jxyna5q.js:150917-151125 placement
 async function resolveStoreKeyPath(store, key) {
   switch (store.scope) {
     case "user":
@@ -103,7 +109,7 @@ async function resolveStoreKeyPath(store, key) {
       return validateTeamMemKey(join(store.mountName, key).split(sep).join("/"));
   }
 }
-//@ chunk-s61vbvea.js:149044-149198 placement
+//@ chunk-7jxyna5q.js:151125-151279 placement
 async function checkMountDirLocation(store) {
   switch (store.scope) {
     case "user":
@@ -114,7 +120,7 @@ async function checkMountDirLocation(store) {
       return checkPathInTeamMemDir(store.mountDir, "team", store.mountName);
   }
 }
-//@ chunk-s61vbvea.js:149198-149572 placement
+//@ chunk-7jxyna5q.js:151279-151653 placement
 /**
  * 检查团队记忆根与挂载目录是否偏离规范位置，偏离时记错误并按关闭失败处理。
  */
@@ -139,7 +145,7 @@ async function isMountEscaped(store) {
   }
   return false;
 }
-//@ chunk-s61vbvea.js:149572-150178 placement
+//@ chunk-7jxyna5q.js:151653-152259 placement
 async function scanUnsavedWrites(store, allowDeletes, storage) {
   if (!allowDeletes || env.CLAUDE_CODE_DISABLE_MEMORY_RO_UNSAVED_NOTICE || (await isMountEscaped(store)))
     return [];
@@ -175,7 +181,7 @@ async function scanUnsavedWrites(store, allowDeletes, storage) {
   store.notices.roUnsavedNoticed.set(store.mountDir, noticedPaths);
   return newPaths.sort();
 }
-//@ chunk-s61vbvea.js:150178-150556 placement
+//@ chunk-7jxyna5q.js:152259-152637 placement
 /**
  * 运行一轮多库同步，结束后若有本轮的基线不可用报告且未上报，则记 tengu_team_mem_basis_unusable。
  */
@@ -200,7 +206,7 @@ async function runSyncCycleWithReport(store, options, storage) {
     }
   }
 }
-//@ chunk-s61vbvea.js:150556-158789 placement
+//@ chunk-7jxyna5q.js:152637-161916 placement
 /**
  * 多记忆库同步一轮：只读库未保存写入、冲突、批量删除保护
  */
@@ -282,6 +288,8 @@ async function runMultiStoreSyncCycle(store, basisUnusableReport, options, stora
         ...released,
       });
   }
+  let skipReason =
+    localMemoryEntries.skippedOversizedPaths[0]?.path ?? localMemoryEntries.skippedSecretPaths[0];
   let emptySkipped = 0;
   let refusedWrites = (store.refusedWrites ??= new Map());
   for (let key of refusedWrites.keys()) {
@@ -303,7 +311,10 @@ async function runMultiStoreSyncCycle(store, basisUnusableReport, options, stora
     }
     if (known === undefined && heldLocal?.get(path) === entry.sha256) continue;
     let refusal = refusedWrites.get(path);
-    if (refusal?.sha256 === entry.sha256 && Date.now() - refusal.atMs < memorySyncPausedText) continue;
+    if (refusal?.sha256 === entry.sha256 && Date.now() - refusal.atMs < memorySyncPausedText) {
+      skipReason ??= path;
+      continue;
+    }
     toPush.push({
       path,
       content: entry.content,
@@ -322,34 +333,40 @@ async function runMultiStoreSyncCycle(store, basisUnusableReport, options, stora
   let basisUsable =
     syncManifest.state === "present" && syncManifest.manifest.partition === store.backend.partitionId;
   let basisForeign = syncManifest.state === "present" && !basisUsable;
-  let memoryPushDeleteMode = getMemoryPushDeleteMode();
+  let pendingDeletes = memoryPushDeleteMode();
   let toDelete = [];
   let deletesDeferred = 0;
   let deletesReappeared = 0;
-  let pendingDeletes = (store.pendingDeletes ??= new Map());
-  for (let key of pendingDeletes.keys())
+  let pendingDeletes_2 = (store.pendingDeletes ??= new Map());
+  for (let key of pendingDeletes_2.keys())
     if (localMemoryEntries.diskPaths.has(key)) {
-      pendingDeletes.delete(key);
+      pendingDeletes_2.delete(key);
       deletesReappeared++;
     }
+  dropPresentRemovals(store, localMemoryEntries.diskPaths);
   if (options?.allowDeletes && localMemoryEntries.diskTrusted && basisUsable) {
     let now = Date.now();
     for (let [path, ref] of store.remoteHashes) {
       if (localMemoryEntries.diskPaths.has(path)) continue;
-      if (memoryPushDeleteMode === "never") {
-        deletesDeferred++;
+      if (!deleteModeAllowsCorroborate(pendingDeletes)) {
+        if (isRemoveAlreadyRecorded(store, path, ref))
+          toDelete.push({
+            path,
+            ref,
+          });
+        else deletesDeferred++;
         continue;
       }
-      if (memoryPushDeleteMode === "immediate") {
+      if (pendingDeletes === "immediate") {
         toDelete.push({
           path,
           ref,
         });
         continue;
       }
-      let pending = pendingDeletes.get(path);
+      let pending = pendingDeletes_2.get(path);
       if (pending === undefined) {
-        pendingDeletes.set(path, {
+        pendingDeletes_2.set(path, {
           firstMissingAtMs: now,
           missingWalks: 1,
         });
@@ -364,29 +381,30 @@ async function runMultiStoreSyncCycle(store, basisUnusableReport, options, stora
         else deletesDeferred++;
       }
     }
-    for (let key of pendingDeletes.keys()) if (!store.remoteHashes.has(key)) pendingDeletes.delete(key);
+    for (let key of pendingDeletes_2.keys()) if (!store.remoteHashes.has(key)) pendingDeletes_2.delete(key);
   }
   let deletesHeld = 0;
   if (toDelete.length > 0) {
-    let missingCount = count(
-      [...store.remoteHashes.keys()],
-      (path) => !localMemoryEntries.diskPaths.has(path),
-    );
+    let deleteCandidates = pruneNamedDeletes(store);
+    let missingCount =
+      countWhere([...store.remoteHashes.keys()], (path) => !localMemoryEntries.diskPaths.has(path)) +
+      deleteCandidates;
     let massDeleteThreshold = getMassDeleteThreshold(store.remoteHashes.size);
     if (missingCount > massDeleteThreshold) {
       deletesHeld = toDelete.length;
       toDelete.length = 0;
       logForDebugging(
-        `multi-store-sync[${store.mountName}]: holding ${deletesHeld} corroborated delete(s): ${missingCount} of ${store.remoteHashes.size} synced files are missing locally at once (mass-delete guard)`,
+        `multi-store-sync[${store.mountName}]: holding ${deletesHeld} delete(s): ${missingCount} synced files are missing locally or were just deleted, of ${store.remoteHashes.size} tracked (mass-delete guard)`,
         {
           level: "warn",
         },
       );
-      formatMassDeleteGuardNotice(store, missingCount, massDeleteThreshold);
+      formatMassDeleteGuardNotice(store, missingCount, massDeleteThreshold, deleteCandidates);
       store.invalidatedBasis = store.remoteHashes;
       store.remoteHashes = new Map();
       store.pulled = false;
-      pendingDeletes.clear();
+      pendingDeletes_2.clear();
+      store.namedRemovals?.clear();
       await clearBasis(store, storage);
     }
   }
@@ -396,6 +414,7 @@ async function runMultiStoreSyncCycle(store, basisUnusableReport, options, stora
   let conflictRecoveries = 0;
   let failed = false;
   let backedOff = false;
+  let counts = false;
   let notStarted = 0;
   let error;
   let permanentReason;
@@ -469,6 +488,7 @@ async function runMultiStoreSyncCycle(store, basisUnusableReport, options, stora
             throw error;
           let remoteEntry = await findRemoteEntry(store, item.path);
           if (remoteEntry === null) {
+            skipReason ??= item.path;
             recordPushFailure(error, item.path);
             return;
           }
@@ -506,9 +526,14 @@ async function runMultiStoreSyncCycle(store, basisUnusableReport, options, stora
         await queueConflictNotice(
           store,
           item.path,
-          `The memory file ${quoteStoreName(item.path)} was deleted from shared memory by another session while you had local changes. Your local version has been saved to shared memory as a new copy. If the deletion was intended, delete the file.`,
+          `The memory file ${quoteStoreName(item.path)} was deleted from shared memory by another session while you had local changes. Your local version has been saved to shared memory as a new copy. ` +
+            (!deleteModeAllowsCorroborate(pendingDeletes)
+              ? namedDeleteHintMessage(store)
+              : "If the deletion was intended, delete the file."),
         );
     } catch (error) {
+      if (error instanceof MemoryPermanentError && error.reason === "store_full") counts = true;
+      else skipReason ??= item.path;
       if (error instanceof MemoryConflictError) {
         logForDebugging(
           `multi-store-sync[${store.mountName}]: push conflict on ${item.path}: ${errorMessage(error)}`,
@@ -593,29 +618,39 @@ async function runMultiStoreSyncCycle(store, basisUnusableReport, options, stora
           alreadyGone = !meta.ok && meta.error.code === "NotFound";
         } catch {}
         if (!alreadyGone) {
-          pendingDeletes.delete(item.path);
+          pendingDeletes_2.delete(item.path);
+          store.namedRemovals?.delete(item.path);
           deletesReappeared++;
           return;
         }
       } else {
         await stat(mountPath);
-        pendingDeletes.delete(item.path);
+        pendingDeletes_2.delete(item.path);
+        store.namedRemovals?.delete(item.path);
         deletesReappeared++;
         return;
       }
     } catch {}
-    let forgetRemoteEntry = () => {
+    let forget = () => {
       store.remoteHashes.delete(item.path);
-      pendingDeletes.delete(item.path);
+      pendingDeletes_2.delete(item.path);
+      store.namedRemovals?.delete(item.path);
       store.pullWritten.delete(item.path);
     };
     if (backedOff) {
       notStarted++;
       return;
     }
+    if (!deleteModeAllowsCorroborate(pendingDeletes) && skipReason !== undefined) {
+      store.namedRemovals?.delete(item.path);
+      deletesDeferred++;
+      await noticeDeleteBlocked(store, item.path, skipReason);
+      return;
+    }
     try {
       await store.backend.delete(item.ref.id, item.ref.sha256);
-      forgetRemoteEntry();
+      if (store.namedRemovals?.has(item.path)) (store.namedDeletesSentAtMs ??= []).push(Date.now());
+      forget();
       filesDeleted++;
       logForDebugging(`multi-store-sync[${store.mountName}]: pushed ${item.path} (delete ${item.ref.id})`, {
         level: "debug",
@@ -628,7 +663,7 @@ async function runMultiStoreSyncCycle(store, basisUnusableReport, options, stora
             level: "debug",
           },
         );
-        pendingDeletes.delete(item.path);
+        pendingDeletes_2.delete(item.path);
         conflicts++;
         if (
           allowConflictRefetch(store, item.path) &&
@@ -644,7 +679,7 @@ async function runMultiStoreSyncCycle(store, basisUnusableReport, options, stora
             () => false,
           )
         )
-          forgetRemoteEntry();
+          forget();
         else
           logForDebugging(
             `multi-store-sync[${store.mountName}]: delete of ${item.path} 404'd but the path is still listed (or the listing failed) \u2014 retrying next cycle`,
@@ -652,6 +687,27 @@ async function runMultiStoreSyncCycle(store, basisUnusableReport, options, stora
               level: "debug",
             },
           );
+        return;
+      }
+      if (
+        !deleteModeAllowsCorroborate(pendingDeletes) &&
+        error instanceof MemoryPermanentError &&
+        error.reason !== "store_archived" &&
+        error.reason !== "no_oauth" &&
+        error.reason !== "http_401"
+      ) {
+        logForDebugging(
+          `multi-store-sync[${store.mountName}]: could not delete ${item.path}, so the next pull restores it: ${errorSummary(error)}`,
+          {
+            level: "warn",
+          },
+        );
+        store.namedRemovals?.delete(item.path);
+        await queueConflictNotice(
+          store,
+          item.path,
+          `Memory sync could not delete ${quoteStoreName(item.path)} from shared memory, so it stays there and will be restored on this machine at the next sync.`,
+        );
         return;
       }
       recordPushFailure(error, item.path);
@@ -665,15 +721,20 @@ async function runMultiStoreSyncCycle(store, basisUnusableReport, options, stora
       },
     );
   if (basisUsable && deletesHeld === 0) await writeSyncBasis(store, storage);
-  if (deletesDeferred > 0 || deletesReappeared > 0 || deletesHeld > 0)
+  if (
+    deletesDeferred > 0 ||
+    deletesReappeared > 0 ||
+    deletesHeld > 0 ||
+    (!deleteModeAllowsCorroborate(pendingDeletes) && filesDeleted > 0)
+  )
     logEvent("tengu_team_mem_push_delete_deferred", {
       scope: fromEnum(store.scope),
-      mode: fromEnum(memoryPushDeleteMode),
+      mode: fromEnum(pendingDeletes),
       deferred: deletesDeferred,
       reappeared: deletesReappeared,
       held: deletesHeld,
       executed: filesDeleted,
-      pending: pendingDeletes.size,
+      pending: pendingDeletes_2.size,
     });
   return {
     success: !failed,
@@ -683,6 +744,7 @@ async function runMultiStoreSyncCycle(store, basisUnusableReport, options, stora
     conflictRecoveries,
     secretsSkipped: localMemoryEntries.skippedSecretPaths.length,
     oversizedSkipped: localMemoryEntries.skippedOversizedPaths.length,
+    retryWrites: (counts && filesDeleted > 0 && !deleteModeAllowsCorroborate(pendingDeletes)) || undefined,
     deletesDeferred,
     deletesReappeared,
     deletesHeld,
@@ -696,13 +758,13 @@ async function runMultiStoreSyncCycle(store, basisUnusableReport, options, stora
     error,
   };
 }
-//@ chunk-s61vbvea.js:158789-158804 placement
+//@ chunk-7jxyna5q.js:161916-161931 placement
 /**
  * 重同步间隔的下限（1 分钟）。
  */
 var DEFAULT_RESYNC_INTERVAL_MIN = 60;
 var MIN_RESYNC_INTERVAL_MIN = 1;
-//@ chunk-s61vbvea.js:158804-158998 placement
+//@ chunk-7jxyna5q.js:161931-162125 placement
 /**
  * memory store 周期重同步间隔：CLAUDE_CODE_DISABLE_MEMORY_PERIODIC_RESYNC 关闭；否则 tengu_memory_store_resync_interval_minutes（有下限）。
  */
@@ -715,12 +777,12 @@ function getMemoryStoreResyncIntervalMs() {
   if (!Number.isFinite(featureValue_CACHED_MAY_BE_STALE) || featureValue_CACHED_MAY_BE_STALE <= 0) return 0;
   return Math.max(featureValue_CACHED_MAY_BE_STALE, MIN_RESYNC_INTERVAL_MIN) * 60000;
 }
-//@ chunk-s61vbvea.js:158998-159159 placement
+//@ chunk-7jxyna5q.js:162125-162286 placement
 var SKIPPED_RESULT; // deferred: uses NOOP_SYNC_RESULT of its import cycle while loading; runs once the cycle is complete
 var NOOP_RESULT;
 var BACKED_OFF_RESULT;
 var BACKED_OFF_PULL_RESULT;
-deferInit("chunk-s61vbvea.js:158998", () => {
+deferInit("chunk-7jxyna5q.js:162125", () => {
   SKIPPED_RESULT = {
     success: true,
     skipped: true,
@@ -740,19 +802,19 @@ deferInit("chunk-s61vbvea.js:158998", () => {
     backedOff: true,
   };
 });
-//@ chunk-s61vbvea.js:159159-159327 placement
+//@ chunk-7jxyna5q.js:162286-162454 placement
 function noteServerBackoff(store, error) {
   if (!(error instanceof MemoryUnavailableError) || error.retryAfterMs === undefined) return false;
   store.serverBackoffUntilMs = Math.max(store.serverBackoffUntilMs ?? 0, Date.now() + error.retryAfterMs);
   return true;
 }
-//@ chunk-s61vbvea.js:159327-159346 placement
+//@ chunk-7jxyna5q.js:162454-162473 placement
 /**
  * 抑制同步的时长（300000 毫秒）。
  */
 var MAX_PERMANENT_FAILURES = 3;
 var SUPPRESS_MS = 300000;
-//@ chunk-s61vbvea.js:159346-159490 placement
+//@ chunk-7jxyna5q.js:162473-162617 placement
 async function syncTeamMemoryOnce(root, trigger = "watch", storageV5, offRetries = 0) {
   if (root.inFlight) return root.inFlight;
   let run = syncTeamMemoryRoot(root, trigger, storageV5, offRetries);
@@ -763,7 +825,7 @@ async function syncTeamMemoryOnce(root, trigger = "watch", storageV5, offRetries
     root.inFlight = null;
   }
 }
-//@ chunk-s61vbvea.js:159490-166798 placement
+//@ chunk-7jxyna5q.js:162617-170009 placement
 /**
  * 团队记忆根目录同步与 manifest 校正
  */
@@ -951,6 +1013,10 @@ async function syncTeamMemoryRoot(root, trigger, storage, offRetries) {
   );
   for (let store of root.stores) {
     if (store.suppressedReason !== null) continue;
+    if (extraResults[store.mountName]?.retryWrites) {
+      store.consecutivePermanentFailures = 0;
+      continue;
+    }
     if (results[store.mountName]?.skipped === true) continue;
     let permanent = results[store.mountName]?.permanent ?? extraResults[store.mountName]?.permanent;
     if (!permanent) {
@@ -990,8 +1056,8 @@ async function syncTeamMemoryRoot(root, trigger, storage, offRetries) {
   }
   let counts = {
     stores: root.stores.length,
-    stores_suppressed: count(root.stores, (store) => store.suppressedReason !== null),
-    stores_backed_off: count(root.stores, (store) => (store.serverBackoffUntilMs ?? 0) > Date.now()),
+    stores_suppressed: countWhere(root.stores, (store) => store.suppressedReason !== null),
+    stores_backed_off: countWhere(root.stores, (store) => (store.serverBackoffUntilMs ?? 0) > Date.now()),
     pull_written: Object.values(results).reduce((acc, pull) => acc + pull.filesWritten, 0),
     pull_deleted: Object.values(results).reduce((acc, pull) => acc + pull.filesDeleted, 0),
     push_written: Object.values(extraResults).reduce((acc, push) => acc + push.filesWritten, 0),
@@ -1028,8 +1094,8 @@ async function syncTeamMemoryRoot(root, trigger, storage, offRetries) {
       (acc, pull) => acc + (pull.unmarkedReceiptRefetched ?? 0),
       0,
     ),
-    pull_failures: count(Object.values(results), (pull) => !pull.success),
-    push_failures: count(Object.values(extraResults), (push) => !push.success),
+    pull_failures: countWhere(Object.values(results), (pull) => !pull.success),
+    push_failures: countWhere(Object.values(extraResults), (push) => !push.success),
   };
   for (let store of root.stores) store.failedWritesMarked = 0;
   if (root.stores.length > 0 && root.stores.every((store) => store.scope === "account"))

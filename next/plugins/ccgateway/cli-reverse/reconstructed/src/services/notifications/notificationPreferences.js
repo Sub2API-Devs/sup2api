@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：启动时拉取通知偏好并更新本地状态；获取 /api/claude_code/notification/preferences等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dyv7vy4v.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4tzngyac.js (13)
  * attribution: placement 13
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -21,7 +21,7 @@ import { createStore } from "../../state/store.js";
 import { createSignal } from "../../utils/signal.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import {
-  getInitialSettings_2,
+  getInitialSettings,
   drainSettingsWrites,
   updateSettingsForSource,
 } from "../../utils/settings/settings.js";
@@ -36,12 +36,12 @@ import { logError } from "../../utils/log.js";
 import { logEvent } from "../analytics/index.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dyv7vy4v.js:680-1094 placement
+//@ chunk-4tzngyac.js:680-1094 placement
 /**
  * 通知偏好 API 的响应 schema。
  */
 var NotificationPreferencesSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dyv7vy4v.js:680", () => {
+deferInit("chunk-4tzngyac.js:680", () => {
   NotificationPreferencesSchema = DoctorLazy(() => {
     let channelPrefs = objectSchema({
       enable_email: booleanSchema().nullish(),
@@ -68,50 +68,50 @@ deferInit("chunk-dyv7vy4v.js:680", () => {
     });
   });
 });
-//@ chunk-dyv7vy4v.js:1094-1159 placement
+//@ chunk-4tzngyac.js:1094-1159 placement
 /**
  * 按宿主保存的通知偏好状态。
  */
 var PREFERENCES_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var notificationPrefsState;
-deferInit("chunk-dyv7vy4v.js:1094", () => {
+deferInit("chunk-4tzngyac.js:1094", () => {
   PREFERENCES_TIMEOUT_MS = 1e4;
   notificationPrefsState = new HostScoped(() => ({
     reachability: createStore(undefined),
     hydrated: createSignal(),
   }));
 });
-//@ chunk-dyv7vy4v.js:1159-1194 placement
+//@ chunk-4tzngyac.js:1159-1194 placement
 /**
  * 取当前宿主的通知偏好状态。
  */
 function getNotificationPrefsState() {
   return notificationPrefsState.of(getRootSession().host);
 }
-//@ chunk-dyv7vy4v.js:1194-1244 placement
+//@ chunk-4tzngyac.js:1194-1244 placement
 /**
  * 取可送达性状态。
  */
 function getReachability() {
   return getNotificationPrefsState().reachability.getState();
 }
-//@ chunk-dyv7vy4v.js:1244-1297 placement
+//@ chunk-4tzngyac.js:1244-1297 placement
 /**
  * 订阅可送达性变化。
  */
 function onReachabilityChange(listener) {
   return getNotificationPrefsState().reachability.subscribe(listener);
 }
-//@ chunk-dyv7vy4v.js:1297-1346 placement
+//@ chunk-4tzngyac.js:1297-1346 placement
 /**
  * 订阅“已水合”信号。
  */
 function onHydrated(listener) {
   return getNotificationPrefsState().hydrated.subscribe(listener);
 }
-//@ chunk-dyv7vy4v.js:1346-1593 placement
+//@ chunk-4tzngyac.js:1346-1593 placement
 function localNotificationPreferences() {
-  let initialSettings = getInitialSettings_2();
+  let initialSettings = getInitialSettings();
   let globalConfig = getGlobalConfig();
   return {
     agentPushNotifEnabled:
@@ -122,19 +122,19 @@ function localNotificationPreferences() {
       validateConfigValue("inputNeededNotifEnabled", globalConfig.inputNeededNotifEnabled),
   };
 }
-//@ chunk-dyv7vy4v.js:1593-1643 placement
+//@ chunk-4tzngyac.js:1593-1643 placement
 /**
  * 通知偏好的接口路径。
  */
 var PREFERENCES_PATH = "/api/claude_code/notification/preferences";
-//@ chunk-dyv7vy4v.js:1643-1668 placement
+//@ chunk-4tzngyac.js:1643-1668 placement
 /**
  * 判断是否为 claude.ai 订阅者。
  */
 function isClaudeAISubscriber_2() {
   return isClaudeAISubscriber();
 }
-//@ chunk-dyv7vy4v.js:1668-2130 placement
+//@ chunk-4tzngyac.js:1668-2130 placement
 /**
  * 获取 /api/claude_code/notification/preferences。
  */
@@ -178,7 +178,7 @@ async function fetchNotificationPreferences() {
     };
   }
 }
-//@ chunk-dyv7vy4v.js:2130-2420 placement
+//@ chunk-4tzngyac.js:2130-2420 placement
 async function patchNotificationPreferences(preferences) {
   if (!isClaudeAISubscriber_2()) return;
   try {
@@ -202,7 +202,7 @@ async function patchNotificationPreferences(preferences) {
     logFeatureBad("notif_prefs_patch", "http_error");
   }
 }
-//@ chunk-dyv7vy4v.js:2420-2766 placement
+//@ chunk-4tzngyac.js:2420-2766 placement
 /**
  * 把本地推送通知设置同步到服务端。
  */
@@ -228,7 +228,7 @@ function pushNotificationPreferences() {
     })
     .catch(logError);
 }
-//@ chunk-dyv7vy4v.js:2766-3873 placement
+//@ chunk-4tzngyac.js:2766-3873 placement
 /**
  * 启动时拉取通知偏好并更新本地状态。
  */
@@ -282,9 +282,9 @@ async function hydrateNotificationPreferences(storageV5) {
   logFeatureOk("notif_prefs_hydrate");
 }
 export {
+  hydrateNotificationPreferences,
   onReachabilityChange,
   getReachability,
   onHydrated,
-  hydrateNotificationPreferences,
   pushNotificationPreferences,
 };

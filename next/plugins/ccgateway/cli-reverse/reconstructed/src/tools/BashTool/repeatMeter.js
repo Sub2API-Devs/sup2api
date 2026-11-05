@@ -3,10 +3,10 @@
  *
  * 重复 Bash 命令计数（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (11)
- * attribution: placement 11
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (17)
+ * attribution: placement 12, layout 5
  */
 import { resolve } from "path";
 import { TODO_WRITE_TOOL_NAME } from "../TodoWriteTool/constants.js";
@@ -15,34 +15,41 @@ import { TASK_UPDATE_TOOL_NAME } from "../TaskUpdateTool/constants.js";
 import { TASKSTOP } from "../TaskStopTool/prompt.js";
 import { EXITPLANMODE } from "../ExitPlanModeTool/constants.js";
 import { SKILL } from "../SkillTool/skillToolNames.js";
-import { FILE_EDIT_TOOL_NAME } from "../FileEditTool/constants.js";
+import { EDIT } from "../FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../FileWriteTool/prompt.js";
+import { isTelemetryDisabled } from "../../utils/privacyLevel.js";
+import { isFeedbackSurveyOtelOn } from "../../utils/hostEnvironment.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
+import { bunHashOf } from "../../utils/pastedContent.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { env } from "../../utils/env.js";
 import { logError } from "../../utils/log.js";
-import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { logEvent } from "../../services/analytics/index.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
+import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { errorMessage } from "../../utils/errors.js";
+import { DoctorLazy } from "../../cli/handlers/util.js";
 import { getTotalLinesAdded, getTotalLinesRemoved } from "../../bootstrap/state.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { bunHashOf } from "../../utils/pastedContent.js";
-import { TOOL_RESULT_CLEARED_MESSAGE, isContentAlreadyCompacted } from "../../utils/toolResultStorage.js";
-import { count } from "../../utils/collections.js";
+import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { isLocalShellTask } from "../../tasks/LocalShellTask/guards.js";
 import { BASH_TOOL_NAME } from "./toolName.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../NotebookEditTool/constants.js";
+import { countWhere } from "../../utils/collections.js";
 import { SPLIT_MAX_LEN } from "../../utils/bash/commands.js";
 import { getParserModule } from "../../utils/bash/bashParser.js";
 import { classifyBashCommand } from "./commandClassification.js";
-import { errorMessage } from "../../utils/errors.js";
+import { TOOL_RESULT_CLEARED_MESSAGE, isPersistableContent } from "../../utils/toolResultStorage.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:610670-611839 placement
+//@ chunk-7jxyna5q.js:528083-529267 placement
 /**
  * 重复命令统计的常量与辅助集合：保留的文本哈希数、语句数上限、遥测计数封顶、视为中性的工具、敏感工具、只读管道命令、写文件类命令与重定向集合等。
  */
-var REPEATABLE_READ_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_TRACKED_ENTRIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_REPEAT_TEXT_HASHES;
+var MAX_AGENTS_PER_WORK_KEY;
+var TEXT_KEY_SEPARATOR;
 var MAX_REPEAT_STATEMENTS;
 var MAX_REPORTED_COUNTS;
 var MAX_REPORTED_LINES;
@@ -64,9 +71,11 @@ var COMMAND_SUBSTITUTION_RE;
 var OUTPUT_REDIRECT_NODE_TYPES;
 var CHAIN_NODE_TYPES;
 var SHELL_SAFE_ARG_RE;
-deferInit("chunk-s61vbvea.js:610670", () => {
-  REPEATABLE_READ_COMMANDS = 500;
+deferInit("chunk-7jxyna5q.js:528083", () => {
+  MAX_TRACKED_ENTRIES = 500;
   MAX_REPEAT_TEXT_HASHES = 8;
+  MAX_AGENTS_PER_WORK_KEY = 4;
+  TEXT_KEY_SEPARATOR = "\x00";
   MAX_REPEAT_STATEMENTS = 20;
   MAX_REPORTED_COUNTS = 1000;
   MAX_REPORTED_LINES = 1e5;
@@ -80,7 +89,7 @@ deferInit("chunk-s61vbvea.js:610670", () => {
     EXITPLANMODE,
     SKILL,
   ]);
-  SENSITIVE_TOOLS = new Set([FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME]);
+  SENSITIVE_TOOLS = new Set([EDIT, FILE_WRITE_TOOL_NAME]);
   READ_PIPE_COMMANDS = new Set([
     "tail",
     "head",
@@ -143,52 +152,72 @@ deferInit("chunk-s61vbvea.js:610670", () => {
   CHAIN_NODE_TYPES = new Set(["&&", "||", ";", "&"]);
   SHELL_SAFE_ARG_RE = /^[\w@%+=:,./][\w@%+=:,./ -]*$/;
 });
-//@ chunk-s61vbvea.js:611839-615870 placement
+//@ chunk-7jxyna5q.js:529267-529496 placement
+/**
+ * bash 重复命令检测的采样开关：按内容哈希与 tengu_vivid_peach 概率决定是否统计。
+ */
+function isBashRepeatMetered(id) {
+  return safeRepeatMeter(() => {
+    if (isTelemetryDisabled() || isFeedbackSurveyOtelOn()) return false;
+    let defaultRate = 0.1;
+    let featureValue = getFeatureValue_CACHED_MAY_BE_STALE("tengu_vivid_peach", undefined);
+    let rate =
+      featureValue === undefined
+        ? defaultRate
+        : typeof featureValue === "number" && featureValue >= 0 && featureValue <= 1
+          ? featureValue
+          : 0;
+    return Number(BigInt(bunHashOf(`bash repeat meter\x00${id}`)) % 2n ** 32n) / 4294967296 < rate;
+  }, false);
+}
+//@ chunk-7jxyna5q.js:529496-535389 placement
 /**
  * 跟踪重复执行的只读 Bash 命令（tail/grep 等），用于提示改用后台或 Monitor
  */
 class BashRepeatMeter {
   #e = new Map();
-  #t = 0;
-  #n = 0;
+  #t = new Map();
+  #n = new Map();
   #i = 0;
+  #a = 0;
+  #s = 0;
+  #c = 0;
   #l = 0;
   #o = 0;
-  #a = 0;
-  #c = 0;
+  #r = 0;
   begin(call) {
     return safeRepeatMeter(
-      () => this.#r(call),
+      () => this.#d(call),
       new BashRepeatMeter_2(this, undefined, {}, [0, 0, 0, 0], false),
     );
   }
-  #r(call) {
+  skip() {
+    this.#o++;
+    return new BashRepeatMeter_2(this, undefined, {}, this.#p(), true);
+  }
+  #d(call) {
     let lineDelta = getTotalLinesAdded() + getTotalLinesRemoved();
-    this.#t += lineDelta < this.#n ? lineDelta : lineDelta - this.#n;
-    this.#n = lineDelta;
-    let { toolUseId, messages } = call;
-    if (toolUseId === undefined || messages.length === 0) {
-      this.#a++;
-      return new BashRepeatMeter_2(this, undefined, {}, this.#s(), true);
-    }
+    this.#i += lineDelta < this.#a ? lineDelta : lineDelta - this.#a;
+    this.#a = lineDelta;
+    let { toolUseId: countsAtStart, messages: runsAtStart } = call;
+    if (countsAtStart === undefined || runsAtStart.length === 0) return this.skip();
     let { command, description, timeout, run_in_background: runInBackground, ...restInput } = call.input;
     let shapes = commandShapeKey(command, call.cwd, call.isReadOnly);
-    let any = shapes.some((shape) => shape.heavy && !shape.onlyOnFailure);
-    let scopeKeyParts = [
-      call.agentId ?? "",
-      jsonStringify({
-        ...restInput,
-        dangerouslyDisableSandbox: restInput.dangerouslyDisableSandbox === true,
-        ...false,
-      }),
-    ];
-    let countsAtStart = this.#s();
-    let [runsAtStart, failuresAtStart, heavyRunsAtStart, wastedAtStart] = countsAtStart;
-    let runsLeft = 0;
-    let failuresLeft = 0;
+    let anyHeavy = shapes.some((shape) => shape.heavy && !shape.onlyOnFailure);
+    let scopeKeyParts = call.agentId ?? "";
+    let inputJsonText = jsonStringify({
+      ...restInput,
+      dangerouslyDisableSandbox: restInput.dangerouslyDisableSandbox === true,
+      ...false,
+    });
+    let counts = this.#p();
+    let writesLeft = 0;
+    let checksLeft = 0;
     let repeatedShapes = [];
     let wastedLeft = 0;
-    let earliestRecord;
+    let repeatHit;
+    let otherAgent;
+    let otherAgentHit;
     for (let shape of shapes.length > 0
       ? shapes
       : [
@@ -203,89 +232,110 @@ class BashRepeatMeter {
             goesOnRunning: false,
           },
         ]) {
-      let shouldCount = !shape.onlyOnFailure && (!any || shape.heavy);
-      let scopeKey = bunHashOf([...scopeKeyParts, shape.place, shape.stem].join("\x00"));
-      let textKey = bunHashOf(shape.text);
-      let earlier = shouldCount ? this.#e.get(scopeKey) : undefined;
-      if (earlier !== undefined) {
-        let backgroundAtStart = earlier.backgroundCommandsAtStart + this.#a + this.#c;
-        let record = {
-          earlier,
-          sameText: earlier.textHashes.includes(textKey),
-          lines: runsAtStart - earlier.linesChanged,
-          writes: failuresAtStart - earlier.possibleWrites + backgroundAtStart + runsLeft,
-          checks: heavyRunsAtStart - earlier.testsAndLints + failuresLeft,
-          unseen: wastedAtStart - earlier.unseenWrites + backgroundAtStart + runsLeft + failuresLeft,
-        };
-        if (record.lines + record.writes === 0) wastedLeft++;
-        if (
-          earliestRecord === undefined ||
-          record.lines + record.writes < earliestRecord.lines + earliestRecord.writes ||
-          (record.lines + record.writes === earliestRecord.lines + earliestRecord.writes &&
-            record.checks < earliestRecord.checks)
-        )
-          earliestRecord = record;
+      let shouldCount = !shape.onlyOnFailure && (!anyHeavy || shape.heavy);
+      let scopeKey = scopeKeyOf(scopeKeyParts, inputJsonText, shape);
+      let workKey = scopeKeyOf(TEXT_KEY_SEPARATOR, inputJsonText, shape);
+      let textHash = bunHashOf(shape.text);
+      let stored = shouldCount ? this.#e.get(scopeKey) : undefined;
+      if (stored !== undefined) {
+        let hit = this.#f(stored, textHash, counts, writesLeft, checksLeft);
+        if (hit.lines + hit.writes === 0) wastedLeft++;
+        if (isBiggerHit(hit, repeatHit)) repeatHit = hit;
       }
-      if (shape.testsOrLints) failuresLeft++;
-      else if (shapes.length > 0) runsLeft++;
+      if (shouldCount) {
+        otherAgent ??= this.#n.get(workKey)?.find((hit) => hit !== scopeKeyParts);
+        for (let otherStored of this.#t.get(workKey)?.toReversed() ?? []) {
+          let otherRow =
+            otherStored === scopeKeyParts
+              ? undefined
+              : this.#e.get(scopeKeyOf(otherStored, inputJsonText, shape));
+          if (otherRow === undefined) continue;
+          let otherHit = this.#f(otherRow, textHash, counts, writesLeft, checksLeft);
+          if (isBiggerHit(otherHit, otherAgentHit))
+            otherAgentHit = {
+              ...otherHit,
+              agent: otherStored,
+            };
+        }
+      }
+      if (shape.testsOrLints) checksLeft++;
+      else if (shapes.length > 0) writesLeft++;
       if (shouldCount)
         repeatedShapes.push({
           key: scopeKey,
-          textHash: textKey,
-          writes: runsLeft,
-          checks: failuresLeft,
+          workKey,
+          textHash,
+          writes: writesLeft,
+          checks: checksLeft,
           ranOnlyIf: shape.ranOnlyIf,
         });
     }
-    let earlier = earliestRecord?.earlier;
-    let earlierMessageIdx =
-      earlier === undefined
-        ? -1
-        : messages.findLastIndex(
-            (message) =>
-              message.type === "user" &&
-              !message.isVirtual &&
-              Array.isArray(message.message.content) &&
-              message.message.content.some(
-                (contentBlock) =>
-                  contentBlock.type === "tool_result" &&
-                  contentBlock.tool_use_id === earlier.toolUseId &&
-                  (earlier.outputPersisted
-                    ? contentBlock.content !== TOOL_RESULT_CLEARED_MESSAGE
-                    : isContentAlreadyCompacted(contentBlock.content)),
-              ),
-          );
-    let meter = new BashRepeatMeter_2(
+    let earlierMessageIdx = repeatHit === undefined ? -1 : earlierResultIndex(runsAtStart, repeatHit.earlier);
+    let backgroundTaskCount = Object.values(call.taskRegistry.all()).filter(
+      (task) => isLocalShellTask(task) && task.isBackgrounded && task.status === "running",
+    );
+    let otherAgentId = otherAgent ?? otherAgentHit?.agent;
+    let view = new BashRepeatMeter_2(
       this,
       {
         pieces: repeatedShapes,
-        writes: runsLeft,
-        checks: failuresLeft,
-        goesOnRunning: shapes.some((shape) => shape.goesOnRunning),
-        toolUseId,
+        agent: scopeKeyParts,
+        writes: writesLeft,
+        checks: checksLeft,
+        goesOnRunning: shapes.some((view) => view.goesOnRunning),
+        toolUseId: countsAtStart,
         startsInBackground: runInBackground === true,
-        backgroundCommandsAtStart: count(
-          Object.values(call.taskRegistry.all()),
-          (task) => isLocalShellTask(task) && task.isBackgrounded && task.status === "running",
-        ),
+        backgroundCommandsAtStart: backgroundTaskCount.length,
       },
       {
-        repeat: earliestRecord !== undefined,
+        repeat: repeatHit !== undefined,
         compared_statements: repeatedShapes.length,
         unchanged_repeats: wastedLeft,
-        ...(earliestRecord !== undefined && {
-          same_text_as_earlier_call: earliestRecord.sameText,
-          seconds_since_that_call: Math.min(
-            Math.max(0, Math.round((Date.now() - earliestRecord.earlier.returnedAt) / 1000)),
-            MAX_REPORTED_SECONDS,
+        ...(scopeKeyParts !== "" && {
+          subagent_in_agent_worktree: call.inAgentWorktree,
+        }),
+        other_agent_repeat: otherAgentId !== undefined,
+        ...(otherAgentId !== undefined && {
+          other_agent_direction: fromEnum(
+            scopeKeyParts === ""
+              ? "main_after_subagent"
+              : otherAgentId === ""
+                ? "subagent_after_main"
+                : "subagent_after_subagent",
           ),
-          ...((earliestRecord.lines > 0 || earliestRecord.unseen === 0) && {
-            lines_changed_since_that_call: Math.min(earliestRecord.lines, MAX_REPORTED_LINES),
+          other_agent_call_running_at_start:
+            otherAgent !== undefined ||
+            backgroundTaskCount.some((task) => task.toolUseId === otherAgentHit?.earlier.toolUseId),
+        }),
+        ...(otherAgent === undefined &&
+          otherAgentHit !== undefined && {
+            other_agent_same_text_as_earlier_call: otherAgentHit.sameText,
+            other_agent_seconds_since_that_call: secondsSince(otherAgentHit.earlier),
+            ...((otherAgentHit.lines > 0 || otherAgentHit.unseen === 0) && {
+              other_agent_lines_changed_since_that_call: Math.min(otherAgentHit.lines, MAX_REPORTED_LINES),
+            }),
+            other_agent_possible_writes_since_that_call: Math.min(otherAgentHit.writes, MAX_REPORTED_COUNTS),
+            other_agent_possible_writes_by_running_commands: Math.min(
+              otherAgentHit.running,
+              MAX_REPORTED_COUNTS,
+            ),
+            other_agent_tests_and_lints_since_that_call: Math.min(otherAgentHit.checks, MAX_REPORTED_COUNTS),
+            other_agent_changed_since_that_call: fromEnum(changedKind(otherAgentHit)),
+            other_agent_earlier_call_outcome: fromEnum(otherAgentHit.earlier.outcome),
+            other_agent_earlier_result_in_context:
+              earlierResultIndex(runsAtStart, otherAgentHit.earlier) >= 0,
           }),
-          possible_writes_since_that_call: Math.min(earliestRecord.writes, MAX_REPORTED_COUNTS),
-          tests_and_lints_since_that_call: Math.min(earliestRecord.checks, MAX_REPORTED_COUNTS),
+        ...(repeatHit !== undefined && {
+          same_text_as_earlier_call: repeatHit.sameText,
+          seconds_since_that_call: secondsSince(repeatHit.earlier),
+          changed_since_that_call: fromEnum(changedKind(repeatHit)),
+          ...((repeatHit.lines > 0 || repeatHit.unseen === 0) && {
+            lines_changed_since_that_call: Math.min(repeatHit.lines, MAX_REPORTED_LINES),
+          }),
+          possible_writes_since_that_call: Math.min(repeatHit.writes, MAX_REPORTED_COUNTS),
+          tests_and_lints_since_that_call: Math.min(repeatHit.checks, MAX_REPORTED_COUNTS),
           ...(earlierMessageIdx >= 0 && {
-            new_message_since_that_call: messages
+            new_message_since_that_call: runsAtStart
               .slice(earlierMessageIdx + 1)
               .some((message) =>
                 message.type === "attachment"
@@ -299,18 +349,44 @@ class BashRepeatMeter {
                     ),
               ),
           }),
-          earlier_call_outcome: fromEnum(earliestRecord.earlier.outcome),
+          earlier_call_outcome: fromEnum(repeatHit.earlier.outcome),
           earlier_result_in_context: earlierMessageIdx >= 0,
+          ...(repeatHit.earlier.longOutput !== undefined && {
+            earlier_output_persisted: repeatHit.earlier.longOutput.persisted,
+            earlier_output_end_shown: repeatHit.earlier.longOutput.endShown,
+          }),
+          earlier_tail_input_candidate: repeatHit.earlier.tailInputLine === "check",
+          earlier_tail_input_candidate_other: repeatHit.earlier.tailInputLine === "other",
+          ...(repeatHit.earlier.tailInputFlagOn !== undefined && {
+            earlier_tail_input_flag_on: repeatHit.earlier.tailInputFlagOn,
+          }),
+          ...(repeatHit.earlier.tailInputKept !== undefined && {
+            earlier_tail_input_kept: repeatHit.earlier.tailInputKept,
+          }),
         }),
       },
-      countsAtStart,
-      runsLeft + failuresLeft > 0,
+      counts,
+      writesLeft + checksLeft > 0,
     );
-    if (meter.countedAsRunning) this.#a++;
-    return meter;
+    if (view.countedAsRunning) this.#o++;
+    for (let { workKey: copyArgs } of repeatedShapes)
+      this.#n.set(copyArgs, [...(this.#n.get(copyArgs) ?? []), scopeKeyParts]);
+    return view;
   }
-  #s() {
-    return [this.#t, this.#i, this.#l, this.#o];
+  #f(hit, hash, [lines, writes, checks, unseen], extraWrites, extraChecks) {
+    let runningTotal = hit.backgroundCommandsAtStart + this.#o + this.#r;
+    return {
+      earlier: hit,
+      sameText: hit.textHashes.includes(hash),
+      lines: lines - hit.linesChanged,
+      writes: writes - hit.possibleWrites + runningTotal + extraWrites,
+      running: runningTotal,
+      checks: checks - hit.testsAndLints + extraChecks,
+      unseen: unseen - hit.unseenWrites + runningTotal + extraWrites + extraChecks,
+    };
+  }
+  #p() {
+    return [this.#i, this.#s, this.#c, this.#l];
   }
   noteOtherToolCall(toolCall, countIt) {
     safeRepeatMeter(() => {
@@ -321,32 +397,40 @@ class BashRepeatMeter {
         LARGE_OUTPUT_COMMANDS.has(toolCall.name)
       )
         return;
-      if (toolCall.name === NOTEBOOK_EDIT_TOOL_NAME) this.#t++;
+      if (toolCall.name === NOTEBOOK_EDIT_TOOL_NAME) this.#i++;
       else {
-        this.#i++;
-        this.#o++;
+        this.#s++;
+        this.#l++;
       }
     }, undefined);
   }
   clear() {
     this.#e.clear();
-    this.#c = 0;
+    this.#t.clear();
+    this.#r = 0;
   }
   settle(info) {
     safeRepeatMeter(() => this.#u(info), undefined);
   }
   #u(info) {
     let { call, outcome, mayHaveWritten, linesWritten } = info;
-    if (info.countedAsRunning) this.#a--;
+    if (info.countedAsRunning) this.#o--;
+    for (let { workKey } of call?.pieces ?? []) {
+      let holders = this.#n.get(workKey) ?? [];
+      let index = holders.indexOf(call?.agent ?? "");
+      let remaining = index === -1 ? holders : holders.toSpliced(index, 1);
+      if (remaining.length > 0) this.#n.set(workKey, remaining);
+      else this.#n.delete(workKey);
+    }
     let didWork = outcome !== undefined || mayHaveWritten;
     let checks = didWork ? (call?.checks ?? 0) : 0;
     let writes = didWork ? (call?.writes ?? (mayHaveWritten ? 1 : 0)) : 0;
     let unseen = writes + checks > 0 && !info.diffTaken ? 1 : 0;
-    this.#t += linesWritten;
-    this.#i += writes;
-    this.#l += checks;
-    this.#o += unseen;
-    if (didWork && call?.goesOnRunning) this.#c++;
+    this.#i += linesWritten;
+    this.#s += writes;
+    this.#c += checks;
+    this.#l += unseen;
+    if (didWork && call?.goesOnRunning) this.#r++;
     if (call === undefined || outcome === undefined) return;
     let [linesAtStart, writesAtStart, checksAtStart, unseenAtStart] = info.countsAtStart;
     let filtered = call.pieces.filter((piece) =>
@@ -370,15 +454,22 @@ class BashRepeatMeter {
         unseenWrites: unseenAtStart + (isPrimaryPiece ? unseen : 0),
         backgroundCommandsAtStart: call.backgroundCommandsAtStart,
         outcome,
-        outputPersisted: info.outputPersisted,
+        longOutput: info.longOutput,
+        tailInputLine: info.tailInputLine,
+        tailInputFlagOn: info.tailInputFlagOn,
+        tailInputKept: info.tailInputKept,
       });
+      let otherAgents = this.#t.get(piece.workKey)?.filter((otherAgent) => otherAgent !== call.agent) ?? [];
+      this.#t.delete(piece.workKey);
+      this.#t.set(piece.workKey, [...otherAgents, call.agent].slice(-MAX_AGENTS_PER_WORK_KEY));
     }
-    while (this.#e.size > REPEATABLE_READ_COMMANDS) this.#e.delete(this.#e.keys().next().value ?? "");
+    for (let map of [this.#e, this.#t])
+      while (map.size > MAX_TRACKED_ENTRIES) map.delete(map.keys().next().value ?? "");
   }
 }
-//@ chunk-s61vbvea.js:615870-616862 placement
+//@ chunk-7jxyna5q.js:535389-537684 placement
 let BashRepeatMeter_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:615870", () => {
+deferInit("chunk-7jxyna5q.js:535389", () => {
   BashRepeatMeter_2 = class BashRepeatMeter_2 {
     meter;
     call;
@@ -387,7 +478,10 @@ deferInit("chunk-s61vbvea.js:615870", () => {
     countedAsRunning;
     outcome;
     exitedZero = false;
-    outputPersisted = false;
+    longOutput;
+    tailInputLine;
+    tailInputFlagOn;
+    tailInputKept;
     mayHaveWritten = false;
     linesWritten = 0;
     diffTaken = false;
@@ -398,8 +492,49 @@ deferInit("chunk-s61vbvea.js:615870", () => {
       this.countsAtStart = countsAtStart;
       this.countedAsRunning = countedAsRunning;
     }
-    ended(result, failed, outputPersisted) {
-      this.outputPersisted = outputPersisted;
+    forSettleRow() {
+      let {
+        repeat,
+        compared_statements: comparedStatements,
+        unchanged_repeats: unchangedRepeats,
+        changed_since_that_call: changedSinceThatCall,
+        other_agent_repeat: otherAgentRepeat,
+        other_agent_direction: otherAgentDirection,
+        other_agent_call_running_at_start: otherAgentCallRunningAtStart,
+        other_agent_same_text_as_earlier_call: otherAgentSameTextAsEarlierCall,
+        other_agent_seconds_since_that_call: otherAgentSecondsSinceThatCall,
+        other_agent_lines_changed_since_that_call: otherAgentLinesChangedSinceThatCall,
+        other_agent_possible_writes_since_that_call: otherAgentPossibleWritesSinceThatCall,
+        other_agent_possible_writes_by_running_commands: runningWrites,
+        other_agent_tests_and_lints_since_that_call: otherAgentTestsAndLintsSinceThatCall,
+        other_agent_changed_since_that_call: otherAgentChangedSinceThatCall,
+        other_agent_earlier_call_outcome: otherAgentEarlierCallOutcome,
+        other_agent_earlier_result_in_context: otherAgentEarlierResultInContext,
+      } = this.fields;
+      return {
+        repeat,
+        compared_statements: comparedStatements,
+        unchanged_repeats: unchangedRepeats,
+        changed_since_that_call: changedSinceThatCall,
+        other_agent_repeat: otherAgentRepeat,
+        other_agent_direction: otherAgentDirection,
+        other_agent_call_running_at_start: otherAgentCallRunningAtStart,
+        other_agent_same_text_as_earlier_call: otherAgentSameTextAsEarlierCall,
+        other_agent_seconds_since_that_call: otherAgentSecondsSinceThatCall,
+        other_agent_lines_changed_since_that_call: otherAgentLinesChangedSinceThatCall,
+        other_agent_possible_writes_since_that_call: otherAgentPossibleWritesSinceThatCall,
+        other_agent_possible_writes_by_running_commands: runningWrites,
+        other_agent_tests_and_lints_since_that_call: otherAgentTestsAndLintsSinceThatCall,
+        other_agent_changed_since_that_call: otherAgentChangedSinceThatCall,
+        other_agent_earlier_call_outcome: otherAgentEarlierCallOutcome,
+        other_agent_earlier_result_in_context: otherAgentEarlierResultInContext,
+      };
+    }
+    ended(result, failed, seenAt, persisted) {
+      this.longOutput = result.outputFileSize === undefined ? undefined : seenAt;
+      this.tailInputLine = persisted.line;
+      this.tailInputFlagOn = persisted.flagOn;
+      this.tailInputKept = result.backgroundTaskId === undefined ? persisted.kept : undefined;
       this.exitedZero = result.code === 0;
       this.outcome =
         result.backgroundTaskId !== undefined
@@ -419,7 +554,7 @@ deferInit("chunk-s61vbvea.js:615870", () => {
         ...this.fields,
         ...(result.outputFileSize !== undefined && {
           output_total_bytes: Math.min(result.outputFileSize, MAX_REPORTED_BYTES),
-          output_persisted: outputPersisted,
+          output_persisted: seenAt.persisted,
         }),
       };
     }
@@ -433,7 +568,7 @@ deferInit("chunk-s61vbvea.js:615870", () => {
               acc +
               Math.max(
                 1,
-                count(
+                countWhere(
                   file.hunks.flatMap((hunk) => hunk.lines),
                   (line) => line.startsWith("+") || line.startsWith("-"),
                 ),
@@ -448,7 +583,7 @@ deferInit("chunk-s61vbvea.js:615870", () => {
     }
   };
 });
-//@ chunk-s61vbvea.js:616862-619381 placement
+//@ chunk-7jxyna5q.js:537684-540209 placement
 /**
  * 从 Bash AST 计算命令形状键，用于重复命令计数
  */
@@ -617,7 +752,53 @@ function commandShapeKey(command, cwd, isReadOnly) {
   }
   return shapes;
 }
-//@ chunk-s61vbvea.js:619381-619504 placement
+//@ chunk-7jxyna5q.js:540209-540273 layout
+function scopeKeyOf(agent, shape, shape_2) {
+  return bunHashOf([agent, shape, shape_2.place, shape_2.stem].join("\x00"));
+}
+//@ chunk-7jxyna5q.js:540273-540399 layout
+function isBiggerHit(candidate, previous) {
+  return (
+    previous === undefined ||
+    candidate.lines + candidate.writes < previous.lines + previous.writes ||
+    (candidate.lines + candidate.writes === previous.lines + previous.writes &&
+      candidate.checks < previous.checks)
+  );
+}
+//@ chunk-7jxyna5q.js:540399-540649 layout
+function earlierResultIndex(runsAtStart, earlier) {
+  return runsAtStart.findLastIndex(
+    (message) =>
+      message.type === "user" &&
+      !message.isVirtual &&
+      Array.isArray(message.message.content) &&
+      message.message.content.some(
+        (block) =>
+          block.type === "tool_result" &&
+          block.tool_use_id === earlier.toolUseId &&
+          (earlier.longOutput?.persisted
+            ? block.content !== TOOL_RESULT_CLEARED_MESSAGE
+            : isPersistableContent(block.content)),
+      ),
+  );
+}
+//@ chunk-7jxyna5q.js:540649-540814 layout
+function changedKind(hit) {
+  return hit.lines > 0
+    ? "lines_changed"
+    : hit.writes > hit.running
+      ? "possible_writes"
+      : hit.running > 0
+        ? "running_commands_only"
+        : hit.checks > 0
+          ? "tests_and_lints_only"
+          : "nothing";
+}
+//@ chunk-7jxyna5q.js:540814-540904 layout
+function secondsSince(earlier) {
+  return Math.min(Math.max(0, Math.round((Date.now() - earlier.returnedAt) / 1000)), MAX_REPORTED_SECONDS);
+}
+//@ chunk-7jxyna5q.js:540904-541027 placement
 function safeRepeatMeter(fn, fallback) {
   try {
     return fn();
@@ -627,7 +808,7 @@ function safeRepeatMeter(fn, fallback) {
     return fallback;
   }
 }
-//@ chunk-s61vbvea.js:619504-619721 placement
+//@ chunk-7jxyna5q.js:541027-541244 placement
 function flattenStatements(node) {
   switch (node.type) {
     case "program":
@@ -641,7 +822,7 @@ function flattenStatements(node) {
       return [node];
   }
 }
-//@ chunk-s61vbvea.js:619721-619806 placement
+//@ chunk-7jxyna5q.js:541244-541329 placement
 /**
  * 判断重定向节点是否是输出到文件的重定向。
  */
@@ -650,7 +831,7 @@ function isOutputRedirect(node) {
     node.type === "file_redirect" && node.children.some((child) => OUTPUT_REDIRECT_NODE_TYPES.has(child.type))
   );
 }
-//@ chunk-s61vbvea.js:619806-619946 placement
+//@ chunk-7jxyna5q.js:541329-541469 placement
 function isFileOutputRedirect(redirect) {
   let text = redirect.children.at(-1)?.text ?? "";
   return (
@@ -659,7 +840,7 @@ function isFileOutputRedirect(redirect) {
     !(redirect.children.some((child) => child.type === ">&") && /^(\d+|-)$/.test(text))
   );
 }
-//@ chunk-s61vbvea.js:619946-620047 placement
+//@ chunk-7jxyna5q.js:541469-541570 placement
 function statementParts(node, keepFileRedirects) {
   return node.type !== "redirected_statement"
     ? [node]
@@ -667,14 +848,14 @@ function statementParts(node, keepFileRedirects) {
         (child) => !isOutputRedirect(child) || (keepFileRedirects && isFileOutputRedirect(child)),
       );
 }
-//@ chunk-s61vbvea.js:620047-620152 placement
+//@ chunk-7jxyna5q.js:541570-541675 placement
 function getCommandNode(node) {
   let commandNode = node.type === "redirected_statement" ? node.children[0] : node;
   return commandNode?.type === "command" ? commandNode : undefined;
 }
-//@ chunk-s61vbvea.js:620152-620272 placement
+//@ chunk-7jxyna5q.js:541675-541795 placement
 function getCommandBaseName(node) {
   let text = getCommandNode(node)?.children.find((child) => child.type === "command_name")?.text;
   return text?.slice(text.lastIndexOf("/") + 1) ?? "";
 }
-export { BashRepeatMeter };
+export { BashRepeatMeter, isBashRepeatMetered };

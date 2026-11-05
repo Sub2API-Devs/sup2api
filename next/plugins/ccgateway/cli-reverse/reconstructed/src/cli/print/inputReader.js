@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：可暂停的输入读取器
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (1)
  * attribution: placement 1
  */
 import { logForDebugging } from "../../utils/debug.js";
@@ -14,12 +14,12 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/gr
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:81434-83041 placement
+//@ chunk-0yw3taqg.js:104839-106450 placement
 /**
  * stdin/SDK 输入读取器：支持把消息临时放回、在请求发出时暂停读取，供 print 主循环拉取。
  */
 let HeldInputReader; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tyg7f3ek.js:81434", () => {
+deferInit("chunk-0yw3taqg.js:104839", () => {
   HeldInputReader = class HeldInputReader {
     setAside = [];
     pull;

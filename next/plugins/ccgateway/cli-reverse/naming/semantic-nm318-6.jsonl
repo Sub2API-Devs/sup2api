@@ -1,0 +1,1666 @@
+{"file":"chunk-hnxhr3bs.js","key":"@121487","name":"hideLogoFlag","source":"semantic","confidence":0.8,"note":"hideLogo 的默认值（129487? )；316 里同一个 prop 解构后是 L，318 新增：它参与 memo 依赖并作为 hideLogo 传给 StartupUpdateSummary"}
+{"file":"chunk-hnxhr3bs.js","key":"@121547","name":"updateSummary","source":"semantic","confidence":0.85,"note":"316 同名（@117382），!hideWelcome && jsx(StartupUpdateSummary)"}
+{"file":"chunk-hnxhr3bs.js","key":"@121633","name":"logoElement","source":"semantic","confidence":0.85,"note":"316 同名（@117468），hasSession && 包 LogoV2 的 suspense"}
+{"file":"chunk-hnxhr3bs.js","key":"@181691","name":"isNotInformational","source":"semantic","confidence":0.8,"note":"Messages 里 messages.findIndex(iU) 找第一条非 informational 系统消息，作为顶部通知的切点"}
+{"file":"chunk-hnxhr3bs.js","key":"@181694","name":"message","source":"semantic","confidence":0.8}
+{"file":"chunk-hnxhr3bs.js","key":"@183561","name":"dropSucceededBriefTurns","source":"semantic","confidence":0.75,"note":"brief 模式下丢掉 brief 工具已成功返回的那些轮次的消息，只留未成功/无轮次的"}
+{"file":"chunk-hnxhr3bs.js","key":"@184135","name":"message","source":"semantic","confidence":0.8}
+{"file":"chunk-hnxhr3bs.js","key":"@195714","name":"scriptSourceSelection","source":"semantic","confidence":0.75,"note":"ae() && scriptSources ? {all: scriptSources==='whole', keys: expandedKeys} : null，作为 SuggestionSlot 的 value"}
+{"file":"chunk-hnxhr3bs.js","key":"@195840","name":"scriptSourceSelectionStable","source":"semantic","confidence":0.7,"note":"scriptSourceSelection 的稳定副本，供 isItemClickable 与 SuggestionSlot 使用"}
+{"file":"chunk-hnxhr3bs.js","key":"@198510","name":"suggestionSlotEnabled","source":"semantic","confidence":0.75,"note":"useContext(vte)（SlashCommandLink 的布尔 context）；只有开启时才计算顶部通知切点"}
+{"file":"chunk-hnxhr3bs.js","key":"@198521","name":"topNoticeBoundary","source":"semantic","confidence":0.75,"note":"顶部通知区域的结束下标：未开启时为 0，否则取第一条非 informational 消息或消息总数"}
+{"file":"chunk-hnxhr3bs.js","key":"@198554","name":"firstNonInformationalIndex","source":"semantic","confidence":0.7}
+{"file":"chunk-hnxhr3bs.js","key":"@198635","name":"cutIndex","source":"semantic","confidence":0.7}
+{"file":"chunk-hnxhr3bs.js","key":"@198669","name":"topNoticeCutIndex","source":"semantic","confidence":0.75,"note":"renderOffset + index < topNoticeCutIndex 即 joinsTopNotices"}
+{"file":"chunk-hnxhr3bs.js","key":"@200710","name":"renderItemStable","source":"semantic","confidence":0.85,"note":"316 同名；renderItem 的稳定引用，传给 VirtualMessageList/sequence"}
+{"file":"chunk-hnxhr3bs.js","key":"@204602","name":"firstBlock","source":"semantic","confidence":0.75,"note":"msg.message.content[0]，再取 .name/.id"}
+{"file":"chunk-wjygkcr4.js","key":"@64434","name":"containerElement","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@64586","name":"rowElement","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@69295","name":"resultMsg","source":"semantic","confidence":0.8,"note":"lookups.toolResultByToolUseID.get(param.id)"}
+{"file":"chunk-wjygkcr4.js","key":"@69301","name":"isVirtual","source":"semantic","confidence":0.8,"note":"resultMsg.type==='user' && resultMsg.isVirtual===!0"}
+{"file":"chunk-wjygkcr4.js","key":"@71052","name":"innerRow","source":"semantic","confidence":0.85,"note":"316 同名 @70122"}
+{"file":"chunk-wjygkcr4.js","key":"@71055","name":"contentColumn","source":"semantic","confidence":0.85,"note":"316 同名 @70125"}
+{"file":"chunk-wjygkcr4.js","key":"@71058","name":"outerBox","source":"semantic","confidence":0.85,"note":"316 同名 @70128"}
+{"file":"chunk-wjygkcr4.js","key":"@71064","name":"isResolved","source":"semantic","confidence":0.85,"note":"316 同名 @70134"}
+{"file":"chunk-wjygkcr4.js","key":"@71067","name":"isPendingClassifier","source":"semantic","confidence":0.85,"note":"316 同名 @70137"}
+{"file":"chunk-wjygkcr4.js","key":"@71079","name":"statusDot","source":"semantic","confidence":0.85,"note":"316 同名 @70149"}
+{"file":"chunk-wjygkcr4.js","key":"@71085","name":"paramText","source":"semantic","confidence":0.85,"note":"316 同名 @70155"}
+{"file":"chunk-wjygkcr4.js","key":"@71088","name":"renderTag","source":"semantic","confidence":0.85,"note":"316 同名 @70158"}
+{"file":"chunk-wjygkcr4.js","key":"@72762","name":"scriptSourceRow","source":"semantic","confidence":0.75,"note":"ae() && isTranscriptMode && isEvalToolCallName 时渲染的 ScriptSourceRow"}
+{"file":"chunk-wjygkcr4.js","key":"@73201","name":"scriptSourceRowElement","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@73211","name":"progressMessage","source":"semantic","confidence":0.85,"note":"316 同名 @71745；renderToolUseProgressMessage_3(...)"}
+{"file":"chunk-wjygkcr4.js","key":"@78995","name":"toolNameText","source":"semantic","confidence":0.75,"note":"jsx(Text,{bold,children: tool.userFacingName(inputData)})"}
+{"file":"chunk-wjygkcr4.js","key":"@79208","name":"statusRow","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@79800","name":"resultBox","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@159289","name":"stripAiPrefix","source":"semantic","confidence":0.75,"note":"stripPrefix(name, 'claude.ai ')"}
+{"file":"chunk-wjygkcr4.js","key":"@159524","name":"STYLE_SEPARATOR","source":"semantic","confidence":0.7,"note":"\\x00，用来把 hint 文本与样式串拼在一起再拆开"}
+{"file":"chunk-wjygkcr4.js","key":"@159577","name":"renderCollapsedPart","source":"semantic","confidence":0.75,"note":"按 collapsed part 的 kind（hint/keep/ownRow）返回要渲染的内容"}
+{"file":"chunk-wjygkcr4.js","key":"@159580","name":"part","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@159582","name":"input","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@159586","name":"activeAgents","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@159711","name":"renderRunningCallHint","source":"semantic","confidence":0.75,"note":"给运行中的调用算一行折叠提示，WeakMap 按 input 缓存，出错记 telemetry"}
+{"file":"chunk-wjygkcr4.js","key":"@159716","name":"input","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@159718","name":"theme","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@159720","name":"activeAgents","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@159735","name":"cached","source":"semantic","confidence":0.7,"note":"weakMap 里按 input 缓存的 {tool,theme,cwd,activeAgents,hint}"}
+{"file":"chunk-wjygkcr4.js","key":"@159824","name":"logHintError","source":"semantic","confidence":0.75,"note":"logError(TelemetrySafeError…'Error rendering a running call's hint')"}
+{"file":"chunk-wjygkcr4.js","key":"@159941","name":"hint","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@159943","name":"parsedInput","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@159963","name":"parsedData","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@159989","name":"renderedHint","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@160043","name":"hintSource","source":"semantic","confidence":0.7,"note":"字符串渲染结果或 tool.getToolUseSummary(data)"}
+{"file":"chunk-wjygkcr4.js","key":"@160099","name":"collapsedHint","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@160108","name":"toolName","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@162251","name":"resultMsg","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@162408","name":"resultMsgStable","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@162613","name":"isResolved","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@158689","name":"isReplToolCallProgress","source":"semantic","confidence":0.8,"note":"toolResultRendering 里的 FF：progress message 的 data.type==='repl_tool_call'"}
+{"file":"chunk-wjygkcr4.js","key":"@158867","name":"toolCallId","source":"semantic","confidence":0.75,"note":"filtered.map(qF) 取调用 id"}
+{"file":"chunk-wjygkcr4.js","key":"@158896","name":"isErroredPhase","source":"semantic","confidence":0.8,"note":"phase==='error'"}
+{"file":"chunk-wjygkcr4.js","key":"@158938","name":"runningCallId","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@158967","name":"liveCallId","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@158996","name":"isErrorPhase","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@159038","name":"erroredCallId","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@169808","name":"isBriefOnly","source":"semantic","confidence":0.8,"note":"316 同名；BRIDGE_PLACED_KEYS_CONTEXT 非空且 isNoAgentViewInAutoMode 为真"}
+{"file":"chunk-wjygkcr4.js","key":"@171685","name":"replResultIds","source":"semantic","confidence":0.8,"note":"316 同名；REPL 调用里还没有结果的 tool_use id"}
+{"file":"chunk-wjygkcr4.js","key":"@171923","name":"replResultId","source":"semantic","confidence":0.7,"note":"316 是 replResultIds_2"}
+{"file":"chunk-wjygkcr4.js","key":"@171955","name":"getToolResultOf","source":"semantic","confidence":0.75,"note":"按 tool_use id 取 toolResultByToolUseID 里的 user 结果"}
+{"file":"chunk-wjygkcr4.js","key":"@171998","name":"toolUseId","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@172008","name":"resultMsg","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@172153","name":"getToolResult","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@172178","name":"isReplCallWithoutResult","source":"semantic","confidence":0.75,"note":"REPL 调用且结果不是错误行"}
+{"file":"chunk-wjygkcr4.js","key":"@172413","name":"hookToolCalls","source":"semantic","confidence":0.8,"note":"code mode 实验下 isHookToolResult 的调用"}
+{"file":"chunk-wjygkcr4.js","key":"@172478","name":"hasInterruptedHookCall","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@172496","name":"hookCall","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@172586","name":"call","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@172596","name":"resultMsg","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@172772","name":"hookCallIds","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@172818","name":"shouldShowInterrupted","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@173112","name":"renderErroredCall","source":"semantic","confidence":0.8,"note":"把错误调用渲染成 UserToolErrorMessage"}
+{"file":"chunk-wjygkcr4.js","key":"@173218","name":"renderErroredCallImpl","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@173221","name":"call","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@173224","name":"isVerbose","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@173232","name":"resultMsg","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@173395","name":"block","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@173868","name":"renderErroredCallStable","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@175309","name":"activeAgentsForRepl","source":"semantic","confidence":0.7,"note":"只有存在 REPL 结果时才取 agentDefinitions.activeAgents"}
+{"file":"chunk-wjygkcr4.js","key":"@175316","name":"appState","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@175384","name":"denialRef","source":"semantic","confidence":0.8,"note":"316 同名；useHasAutoModeDenialFor 的 ref，挂在最外层 Box"}
+{"file":"chunk-wjygkcr4.js","key":"@175402","name":"viewingAgentTaskSelector","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@175423","name":"appState","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@175516","name":"hasLiveError","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@175522","name":"hintCall","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@175525","name":"hintText","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@175581","name":"progressMessages","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@175653","name":"liveCalls","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@175828","name":"liveCall","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@175842","name":"displayHintText","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@176218","name":"statusLine","source":"semantic","confidence":0.7,"note":"toolUseStatusLine(...) 返回值"}
+{"file":"chunk-wjygkcr4.js","key":"@176469","name":"pendingHintCall","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@176536","name":"hintWithStyle","source":"semantic","confidence":0.7,"note":"用分隔符把提示文本与样式串拼起来"}
+{"file":"chunk-wjygkcr4.js","key":"@176680","name":"hintLine","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@177373","name":"liveCallsFromHistory","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@177383","name":"runningCallIds","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@177561","name":"liveCall","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@177663","name":"liveCall","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@177768","name":"message","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@178711","name":"verboseLiveCallRows","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@178728","name":"liveCall","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@179205","name":"standaloneInterruptedRow","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@179228","name":"call","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@179307","name":"hookErrorRows","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@179324","name":"hookCall","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@179334","name":"errorRow","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@179411","name":"hooksRow","source":"semantic","confidence":0.85,"note":"316 同名；verbose 下 Ran N PreToolUse hooks 那一段"}
+{"file":"chunk-wjygkcr4.js","key":"@180310","name":"lastCall","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@180541","name":"hookCall","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@180551","name":"hookErrorRow","source":"semantic","confidence":0.7,"note":"316 是 emptyRowList"}
+{"file":"chunk-wjygkcr4.js","key":"@180714","name":"interruptedRow","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-wjygkcr4.js","key":"@181307","name":"progressMessagesOf","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@181328","name":"toolUseId","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@182192","name":"scriptStartedAt","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@182205","name":"replResultId","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@182219","name":"hintCall","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@189781","name":"headerRow","source":"semantic","confidence":0.85,"note":"316 同名；leadingIcon + partsRow"}
+{"file":"chunk-wjygkcr4.js","key":"@189914","name":"interruptedNotice","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-wjygkcr4.js","key":"@189991","name":"autoBlockedNotice","source":"semantic","confidence":0.85,"note":"316 同名；auto mode 拦截提示"}
+{"file":"chunk-wjygkcr4.js","key":"@190571","name":"deniedNotice","source":"semantic","confidence":0.85,"note":"316 同名；权限拒绝提示"}
+{"file":"chunk-wjygkcr4.js","key":"@190993","name":"unavailableNotice","source":"semantic","confidence":0.85,"note":"316 同名；模型不可用未运行提示"}
+{"file":"chunk-wjygkcr4.js","key":"@191214","name":"hintRow","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-wjygkcr4.js","key":"@191764","name":"hooksNotice","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-wjygkcr4.js","key":"@202384","name":"agent","source":"semantic","confidence":0.8,"note":"{id,agentType,toolUseId} 的 agent 引用对象"}
+{"file":"chunk-wjygkcr4.js","key":"@202582","name":"remoteTasks","source":"semantic","confidence":0.75,"note":"mjt(state.remoteBackgroundTasks) 的结果，与 filtered 拼接"}
+{"file":"chunk-wjygkcr4.js","key":"@216076","name":"iconSpacer","source":"semantic","confidence":0.7,"note":"和提示图标对齐用的 Box minWidth 2"}
+{"file":"chunk-wjygkcr4.js","key":"@150358","name":"value","source":"semantic","confidence":0.8,"note":"被节流的值"}
+{"file":"chunk-wjygkcr4.js","key":"@120628","name":"updatesBox","source":"semantic","confidence":0.75,"note":"容器 Box，children 是 renderResourceUpdateRow 的结果"}
+{"file":"chunk-wjygkcr4.js","key":"@107909","name":"label","source":"semantic","confidence":0.8,"note":"316 同名；lkn(parsed) 的结果"}
+{"file":"chunk-wjygkcr4.js","key":"@107911","name":"earlyResult","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@108231","name":"pointerLabel","source":"semantic","confidence":0.75,"note":"Text aria-label='you:' 加 figures_default.pointer"}
+{"file":"chunk-wjygkcr4.js","key":"@108435","name":"commandBox","source":"semantic","confidence":0.75}
+{"file":"chunk-wjygkcr4.js","key":"@111564","name":"outputBody","source":"semantic","confidence":0.75,"note":"header/body/hint/container 四段拼接的 Text"}
+{"file":"chunk-czq1j3j2.js","key":"@323782","name":"confirmText","source":"semantic","confidence":0.75,"note":"confirmDescription?.(preselectedMessage) 的结果，显示在恢复选项旁"}
+{"file":"chunk-czq1j3j2.js","key":"@323785","name":"setConfirmText","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@323825","name":"now","source":"semantic","confidence":0.8,"note":"316 同名；new Date()"}
+{"file":"chunk-czq1j3j2.js","key":"@323828","name":"setNow","source":"semantic","confidence":0.8,"note":"316 同名"}
+{"file":"chunk-vr5v4gzz.js","key":"@15376","name":"hasNoBridgeControl","source":"semantic","confidence":0.75,"note":"noBridgeControlContext() 的结果，与 NUDGE_ID_B 同列"}
+{"file":"chunk-dkh1nd34.js","key":"@373","name":"heldServer","source":"semantic","confidence":0.75,"note":"host.servers 里从启动起一直持有的同名 http server"}
+{"file":"chunk-dkh1nd34.js","key":"@386","name":"serverEntry","source":"semantic","confidence":0.75}
+{"file":"chunk-dkh1nd34.js","key":"@683","name":"meta","source":"semantic","confidence":0.8,"note":"toolRequest.meta，含 ANTHROPIC_FILEINPUTS 绑定"}
+{"file":"chunk-je0zymfm.js","key":"@3153","name":"i","source":"semantic","confidence":0.8,"note":"循环下标"}
+{"file":"chunk-je0zymfm.js","key":"@13951","name":"hintElement","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-je0zymfm.js","key":"@14214","name":"footerElement","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-je0zymfm.js","key":"@15879","name":"useRedesignOff","source":"semantic","confidence":0.75,"note":"恒返回 !1，作为 redesign 开关的占位 hook"}
+{"file":"chunk-je0zymfm.js","key":"@16010","name":"isRedesign","source":"semantic","confidence":0.75,"note":"useRedesignOff() 的结果，作为 isRedesign 传给下游"}
+{"file":"chunk-je0zymfm.js","key":"@16019","name":"hint","source":"semantic","confidence":0.75}
+{"file":"chunk-je0zymfm.js","key":"@17335","name":"titleText","source":"semantic","confidence":0.75}
+{"file":"chunk-je0zymfm.js","key":"@17369","name":"header","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-je0zymfm.js","key":"@17527","name":"counterSpacer","source":"semantic","confidence":0.7,"note":"!isRedesign && ' '"}
+{"file":"chunk-je0zymfm.js","key":"@17541","name":"counter","source":"semantic","confidence":0.85,"note":"316 同名；unlocked.size / POWERUP_LESSONS.length"}
+{"file":"chunk-je0zymfm.js","key":"@17714","name":"progressBar","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-je0zymfm.js","key":"@17834","name":"headerBox","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-je0zymfm.js","key":"@18760","name":"demo","source":"semantic","confidence":0.85,"note":"316 同名；showDemo && ModeCycleDemo"}
+{"file":"chunk-czq1j3j2.js","key":"@1313466","name":"hideOther","source":"semantic","confidence":0.8,"note":"hideOtherRow 的默认值"}
+{"file":"chunk-czq1j3j2.js","key":"@1315732","name":"otherOptionElement","source":"semantic","confidence":0.75,"note":"316 是 otherOption_2"}
+{"file":"chunk-czq1j3j2.js","key":"@1315928","name":"otherOptions","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1349547","name":"buildAllowResult","source":"semantic","confidence":0.75,"note":"选中行时构造 {behavior:allow,updatedInput[,permissionUpdates]}"}
+{"file":"chunk-czq1j3j2.js","key":"@1349863","name":"prefixRow","source":"semantic","confidence":0.75,"note":"directoryRow(...) 得到的可编辑前缀行"}
+{"file":"chunk-czq1j3j2.js","key":"@1263974","name":"useDialogPadding","source":"semantic","confidence":0.75,"note":"currentToolPermissionContext() ? 0 : 1，作为 paddingX/paddingY"}
+{"file":"chunk-czq1j3j2.js","key":"@1264181","name":"getDialogPadding","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1265438","name":"isRecentInput","source":"semantic","confidence":0.8,"note":"Js() 即 selectTypeahead 的近期输入守卫"}
+{"file":"chunk-czq1j3j2.js","key":"@1266950","name":"padding","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1267318","name":"tccStatusColumn","source":"semantic","confidence":0.85,"note":"316 同名；Accessibility/Screen Recording 两行"}
+{"file":"chunk-czq1j3j2.js","key":"@1267680","name":"modelSelector","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@1270036","name":"appsList","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1271455","name":"extraFlags","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1366702","name":"isRecentInput","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1370353","name":"autoGatedByModel","source":"semantic","confidence":0.7,"note":"modelNeedsAutoOrPlan && isAutoModeOffered"}
+{"file":"chunk-czq1j3j2.js","key":"@1370363","name":"bypassPreferred","source":"semantic","confidence":0.7,"note":"有 bypass 且不需要 auto/plan"}
+{"file":"chunk-czq1j3j2.js","key":"@1373154","name":"forcePlain","source":"semantic","confidence":0.7,"note":"y(() => !1) 的占位，恒 false"}
+{"file":"chunk-czq1j3j2.js","key":"@1373415","name":"showUltraplan","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1373831","name":"isDirectRequest","source":"semantic","confidence":0.75,"note":"payload.requestSource === undefined"}
+{"file":"chunk-czq1j3j2.js","key":"@1373860","name":"allowRestrictedModel","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1373889","name":"canResumeAutoMode","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1373958","name":"defaultModeRow","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@1375853","name":"switchToAutoMode","source":"semantic","confidence":0.8,"note":"设置 auto mode 相关标志、logPermissionModeChanged、去掉危险权限"}
+{"file":"chunk-czq1j3j2.js","key":"@1375937","name":"appState","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1375947","name":"nextContext","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@1379266","name":"nextContext","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@1360630","name":"isRecentInput","source":"semantic","confidence":0.8}
+{"file":"chunk-g4tsxwy3.js","key":"@7895","name":"DATE_TIME_TYPES","source":"semantic","confidence":0.75,"note":"[\"date-time\"] 一组类型，用于判断用哪种卡片"}
+{"file":"chunk-w3ch4xq2.js","key":"@128712","name":"expandToolScopedRules","source":"semantic","confidence":0.75,"note":"autoModeContext 里对 deny/ask 规则按工具名展开，并按 source+rule 去重"}
+{"file":"chunk-w3ch4xq2.js","key":"@128757","name":"seenRules","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@128893","name":"expandedRuleValue","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@128917","name":"dedupeKey","source":"semantic","confidence":0.75}
+{"file":"chunk-dbmqtrf0.js","key":"@3176","name":"useForcePlain","source":"semantic","confidence":0.7,"note":"恒 !1，决定是否跳过 frame 分支"}
+{"file":"chunk-dbmqtrf0.js","key":"@3401","name":"paddingX","source":"semantic","confidence":0.8}
+{"file":"chunk-dbmqtrf0.js","key":"@3418","name":"screenReaderPrefix","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-dbmqtrf0.js","key":"@3583","name":"forcePlain","source":"semantic","confidence":0.75}
+{"file":"chunk-dbmqtrf0.js","key":"@5840","name":"frameProps","source":"semantic","confidence":0.7}
+{"file":"chunk-dbmqtrf0.js","key":"@6036","name":"framePropsStable","source":"semantic","confidence":0.7}
+{"file":"chunk-dbmqtrf0.js","key":"@6330","name":"framedChildren","source":"semantic","confidence":0.7}
+{"file":"chunk-dbmqtrf0.js","key":"@6610","name":"permissionsHint","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-dbmqtrf0.js","key":"@6773","name":"hintList","source":"semantic","confidence":0.85,"note":"316 同名；frame.hints 转成数组"}
+{"file":"chunk-xgksxb70.js","key":"@704","name":"SCRIPT_DESCRIPTION_TOOLS","source":"semantic","confidence":0.75,"note":"需要把脚本描述带进说明的工具名"}
+{"file":"chunk-xgksxb70.js","key":"@723","name":"MAX_DESCRIPTION_WIDTH","source":"semantic","confidence":0.75,"note":"截断宽度 80"}
+{"file":"chunk-xgksxb70.js","key":"@830","name":"truncatedDescription","source":"semantic","confidence":0.8}
+{"file":"chunk-8prszgkd.js","key":"@37521","name":"permissionChoicePrompt","source":"semantic","confidence":0.85,"note":"PermissionPrompt 组件主体（重渲染后已带该名）"}
+{"file":"chunk-8prszgkd.js","key":"@38103","name":"optionValue","source":"semantic","confidence":0.75}
+{"file":"chunk-8prszgkd.js","key":"@38220","name":"feedbackKind","source":"semantic","confidence":0.75,"note":"feedbackConfig.type（accept/reject）"}
+{"file":"chunk-8prszgkd.js","key":"@38241","name":"isActiveInputMode","source":"semantic","confidence":0.7}
+{"file":"chunk-8prszgkd.js","key":"@38281","name":"defaultPlaceholder","source":"semantic","confidence":0.75}
+{"file":"chunk-8prszgkd.js","key":"@38479","name":"value","source":"semantic","confidence":0.8}
+{"file":"chunk-8prszgkd.js","key":"@38965","name":"selector","source":"semantic","confidence":0.75}
+{"file":"chunk-8prszgkd.js","key":"@24744","name":"PERMISSIONS_SLASH_COMMAND","source":"semantic","confidence":0.75,"note":"\"/permissions to update rules\""}
+{"file":"chunk-8prszgkd.js","key":"@26925","name":"isFramed","source":"semantic","confidence":0.8}
+{"file":"chunk-8prszgkd.js","key":"@27014","name":"consentStrings","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-8prszgkd.js","key":"@27505","name":"askRuleStrings","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-8prszgkd.js","key":"@28737","name":"askRuleText","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-8prszgkd.js","key":"@28895","name":"themeColor","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-8prszgkd.js","key":"@28977","name":"renderRuleBlock","source":"semantic","confidence":0.7,"note":"包 Blockquote 的渲染函数"}
+{"file":"chunk-8prszgkd.js","key":"@28996","name":"needsGutterValue","source":"semantic","confidence":0.7}
+{"file":"chunk-8prszgkd.js","key":"@29084","name":"slashCommandHint","source":"semantic","confidence":0.7}
+{"file":"chunk-8prszgkd.js","key":"@29195","name":"consentBlock","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-8prszgkd.js","key":"@29437","name":"consentConfigText","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-8prszgkd.js","key":"@29528","name":"askRuleBlock","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-8prszgkd.js","key":"@29839","name":"disclosureBlock","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@1441029","name":"usesSandbox","source":"semantic","confidence":0.7,"note":"sandboxingEnabled && !isSandboxed，决定 title 后缀 unsandboxed"}
+{"file":"chunk-czq1j3j2.js","key":"@1441040","name":"insetPadding","source":"semantic","confidence":0.7,"note":"display.isFitted ? 0 : 1，同时用作 paddingX 与 inset"}
+{"file":"chunk-czq1j3j2.js","key":"@1441059","name":"dialogTitle","source":"semantic","confidence":0.7}
+{"file":"chunk-h5wy8vq5.js","key":"@44396","name":"describeRuleSource","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-h5wy8vq5.js","key":"@51060","name":"useCancelHint","source":"semantic","confidence":0.7,"note":"stableEmptyObject(!1)，作为 ConfigurableShortcutHint 的覆盖项（空）"}
+{"file":"chunk-h5wy8vq5.js","key":"@51088","name":"RuleDetailsDialog","source":"semantic","confidence":0.8,"note":"带默认标题 Rule details 的 Dialog 包装，权限规则详情共用"}
+{"file":"chunk-h5wy8vq5.js","key":"@51170","name":"cancelHint","source":"semantic","confidence":0.75}
+{"file":"chunk-h5wy8vq5.js","key":"@51317","name":"dialog","source":"semantic","confidence":0.75}
+{"file":"chunk-h5wy8vq5.js","key":"@23178","name":"ruleLabel","source":"semantic","confidence":0.7,"note":"labelElement + childrenElement + boxElement 组成的 Text"}
+{"file":"chunk-h5wy8vq5.js","key":"@54059","name":"summaryText","source":"semantic","confidence":0.75,"note":"旧规则或由 Fe 描述的来源说明"}
+{"file":"chunk-h5wy8vq5.js","key":"@55259","name":"reasonText","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-h5wy8vq5.js","key":"@55280","name":"actions","source":"semantic","confidence":0.85,"note":"316 同名；AutoModeRuleSummary"}
+{"file":"chunk-h5wy8vq5.js","key":"@55342","name":"content","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-h5wy8vq5.js","key":"@57533","name":"isUserControlled","source":"semantic","confidence":0.85,"note":"316 同名；state.control === 'user'"}
+{"file":"chunk-h5wy8vq5.js","key":"@61365","name":"autoModeRuleSummaryElement","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-h5wy8vq5.js","key":"@67938","name":"ruleName","source":"semantic","confidence":0.75}
+{"file":"chunk-h5wy8vq5.js","key":"@68010","name":"ruleDescription","source":"semantic","confidence":0.75}
+{"file":"chunk-h5wy8vq5.js","key":"@68106","name":"ruleSourceText","source":"semantic","confidence":0.75}
+{"file":"chunk-h5wy8vq5.js","key":"@68167","name":"ruleSummaryBox","source":"semantic","confidence":0.7}
+{"file":"chunk-h5wy8vq5.js","key":"@68308","name":"ruleTextElement","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-h5wy8vq5.js","key":"@68757","name":"readOnlyDialog","source":"semantic","confidence":0.7}
+{"file":"chunk-h5wy8vq5.js","key":"@68888","name":"readOnlySource","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-h5wy8vq5.js","key":"@69011","name":"deletePrompt","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1274117","name":"inSandboxContext","source":"semantic","confidence":0.7,"note":"y(currentToolPermissionContext) 的当前上下文，决定标题与内边距"}
+{"file":"chunk-czq1j3j2.js","key":"@1274127","name":"insetPadding","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1276333","name":"onCancel","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1277183","name":"questionText","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1277317","name":"promptBody","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1277616","name":"promptBox","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-8prszgkd.js","key":"@22031","name":"headingDivider","source":"semantic","confidence":0.7,"note":"jsx(Divider,{width:剩余宽度})"}
+{"file":"chunk-8prszgkd.js","key":"@22115","name":"bannerRow","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@18989","name":"formatStepLine","source":"semantic","confidence":0.75,"note":"`${序号}. ${标题}` 加 detail 与 promptsPreview"}
+{"file":"chunk-5z2maphr.js","key":"@18992","name":"step","source":"semantic","confidence":0.8}
+{"file":"chunk-5z2maphr.js","key":"@18995","name":"index","source":"semantic","confidence":0.8}
+{"file":"chunk-5z2maphr.js","key":"@19608","name":"ARGS_LABEL","source":"semantic","confidence":0.75,"note":"\"args: \"，宽度也按它算"}
+{"file":"chunk-5z2maphr.js","key":"@19620","name":"MAX_ARGS_ROWS","source":"semantic","confidence":0.7,"note":"fitTextToRows 的行数上限 2"}
+{"file":"chunk-5z2maphr.js","key":"@19625","name":"VIEW_MODE_OPTIONS","source":"semantic","confidence":0.75,"note":"summary/raw/args 三个视图选项文案"}
+{"file":"chunk-5z2maphr.js","key":"@20795","name":"permissionContext","source":"semantic","confidence":0.75}
+{"file":"chunk-5z2maphr.js","key":"@20804","name":"isTooLarge","source":"semantic","confidence":0.85,"note":"316 同名；脚本过长或伪造"}
+{"file":"chunk-5z2maphr.js","key":"@21008","name":"isSuspiciousFlag","source":"semantic","confidence":0.85,"note":"316 是 isSuspicious_2"}
+{"file":"chunk-5z2maphr.js","key":"@22085","name":"scriptSteps","source":"semantic","confidence":0.85,"note":"316 是 steps_2"}
+{"file":"chunk-5z2maphr.js","key":"@22091","name":"showSummary","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-5z2maphr.js","key":"@22093","name":"setShowSummary","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-5z2maphr.js","key":"@22110","name":"showRaw","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@22112","name":"setShowRaw","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@22631","name":"forgedNotice","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@23005","name":"forgedNoticeStable","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@23011","name":"alwaysAllowOption","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-5z2maphr.js","key":"@23136","name":"allowOption","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@23142","name":"onKeyDownStable","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-5z2maphr.js","key":"@23169","name":"stepsDisplay","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@23315","name":"stepsText","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@23321","name":"hasSteps","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@23387","name":"gutterNeeded","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@23399","name":"commandDisplay","source":"semantic","confidence":0.75}
+{"file":"chunk-5z2maphr.js","key":"@23417","name":"emptyPayload","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@23502","name":"forgedPayload","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@23650","name":"fitted","source":"semantic","confidence":0.75}
+{"file":"chunk-5z2maphr.js","key":"@23802","name":"argsDisplayValue","source":"semantic","confidence":0.75}
+{"file":"chunk-5z2maphr.js","key":"@23842","name":"fittedArgs","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@23875","name":"fitResult","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@24010","name":"argsDisplayStable","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@24015","name":"viewMode","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@24068","name":"alwaysAllow","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@25561","name":"toolAnalytics","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-5z2maphr.js","key":"@25846","name":"ruleExplanation","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-5z2maphr.js","key":"@26193","name":"descriptionBlock","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@26318","name":"phasesIntro","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@26522","name":"argsLabelRow","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@26618","name":"commandPreview","source":"semantic","confidence":0.75}
+{"file":"chunk-5z2maphr.js","key":"@26737","name":"argsBlock","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@26955","name":"explanationRow","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@27307","name":"autoDenyNotice","source":"semantic","confidence":0.75,"note":"DenialLimitFallbackNotice"}
+{"file":"chunk-5z2maphr.js","key":"@27533","name":"usageWarning","source":"semantic","confidence":0.75,"note":"DYNAMIC_WORKFLOW_USAGE_WARNING"}
+{"file":"chunk-5z2maphr.js","key":"@27900","name":"DialogComponent","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-5z2maphr.js","key":"@28007","name":"fallbackExplanation","source":"semantic","confidence":0.7}
+{"file":"chunk-5z2maphr.js","key":"@28245","name":"descriptionBox","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@500123","name":"canShowCloseSessionConfirm","source":"semantic","confidence":0.7,"note":"状态行被抑制、非 remote、且有根会话或 bg 会话时才需要关闭确认"}
+{"file":"chunk-czq1j3j2.js","key":"@500134","name":"hasRootSession","source":"semantic","confidence":0.75,"note":"useContext(rootSessionSlot) !== null"}
+{"file":"chunk-czq1j3j2.js","key":"@500187","name":"hasPaneContext","source":"semantic","confidence":0.75,"note":"activeContexts 含 Pane 或 PaneField 时不弹关闭确认"}
+{"file":"chunk-sa8rbrfs.js","key":"@15483","name":"isRecentInput","source":"semantic","confidence":0.8}
+{"file":"chunk-sa8rbrfs.js","key":"@15490","name":"isRecentInputForSend","source":"semantic","confidence":0.75,"note":"Js(DECAY_TICK_MS)，send 动作用它"}
+{"file":"chunk-gxrznpbn.js","key":"@15123","name":"isRecentInput","source":"semantic","confidence":0.8}
+{"file":"chunk-gxrznpbn.js","key":"@15130","name":"isRecentInputForDecay","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@951495","name":"MemoizedPromptInput","source":"semantic","confidence":0.8,"note":"memo(PromptInput)"}
+{"file":"chunk-czq1j3j2.js","key":"@802997","name":"ConfirmDialog","source":"semantic","confidence":0.75,"note":"title + ConfirmSelect(focus cancel) + Dialog"}
+{"file":"chunk-czq1j3j2.js","key":"@962263","name":"viewingAgentTaskIdSelector","source":"semantic","confidence":0.8,"note":"state.viewingAgentTaskId"}
+{"file":"chunk-czq1j3j2.js","key":"@962708","name":"idleTeammatesExpandedSelector","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@962909","name":"selectRemoteWorkflowRunIds","source":"semantic","confidence":0.75,"note":"kA(state.remoteWorkflowRuns).map(selectId3).join"}
+{"file":"chunk-czq1j3j2.js","key":"@962980","name":"idSelector","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@963176","name":"selectWorkflowFooterRunId","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@963225","name":"clearWorkflowFooterSelection","source":"semantic","confidence":0.75,"note":"footerSelection==='workflows' 时清掉选择与 workflowFooterRunId"}
+{"file":"chunk-czq1j3j2.js","key":"@966469","name":"taskDecorations","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@966478","name":"hasBackgroundTasks","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@969044","name":"runningWorkflowIds","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@970391","name":"setWorkflowFooterIndexThunk","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@970518","name":"runningWorkflowId","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@970532","name":"nextWorkflowRunId","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@852984","name":"remoteTasks","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@853357","name":"taskDecorations","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@853366","name":"visibleTaskCount","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@861868","name":"MIN_WIDTH_FOR_USE_CASE_HINT","source":"semantic","confidence":0.7,"note":"80，列宽够才显示 program use case 提示"}
+{"file":"chunk-czq1j3j2.js","key":"@863181","name":"decorations","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@863751","name":"footerIndicator","source":"semantic","confidence":0.75,"note":"resolveFooterIndicator(...) 的结果"}
+{"file":"chunk-czq1j3j2.js","key":"@863809","name":"programUseCaseChoice","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@864432","name":"visibleUseCaseHint","source":"semantic","confidence":0.75}
+{"file":"chunk-tvbhy3tn.js","key":"@11045","name":"snappedRanges","source":"semantic","confidence":0.75,"note":"对齐到字素边界并合并后的区间"}
+{"file":"chunk-czq1j3j2.js","key":"@133985","name":"EXIT_HINTS","source":"semantic","confidence":0.75,"note":"exit/detach/quit 三种退出提示文案"}
+{"file":"chunk-czq1j3j2.js","key":"@955994","name":"SAVED_MODEL_OFFER_MS","source":"semantic","confidence":0.8,"note":"1000，savedModelSuccessor 的冷却"}
+{"file":"chunk-czq1j3j2.js","key":"@956057","name":"sessionStoreRef","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@127334","name":"rowBox","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@128190","name":"MemoizedQueuedCommandsList","source":"semantic","confidence":0.75}
+{"file":"chunk-sp3m4m72.js","key":"@48133","name":"linkifiedRow","source":"semantic","confidence":0.75}
+{"file":"chunk-4b7tnq3g.js","key":"@2961","name":"progressBox","source":"semantic","confidence":0.75}
+{"file":"chunk-h5403648.js","key":"@20741","name":"dialog","source":"semantic","confidence":0.75}
+{"file":"chunk-18rrbwq1.js","key":"@50173","name":"isInputFocused","source":"semantic","confidence":0.75,"note":"WSe(inputRef)，没传 isFocused 时用它判断焦点"}
+{"file":"chunk-e98td4c6.js","key":"@26507","name":"isRecentInput","source":"semantic","confidence":0.8}
+{"file":"chunk-e98td4c6.js","key":"@30339","name":"isWithinChoiceTimeout","source":"semantic","confidence":0.75,"note":"Gv(yesPressedAt.at)，按 CHOICE_TIMEOUT_MS 判断"}
+{"file":"chunk-kh7eenke.js","key":"@24074","name":"isWithinGuard","source":"semantic","confidence":0.75,"note":"Gv(lastShownAt.current)，按 RECENT_INPUT_GUARD_MS 判断"}
+{"file":"chunk-j6tt9nsa.js","key":"@51376","name":"rowsBox","source":"semantic","confidence":0.75}
+{"file":"chunk-j6tt9nsa.js","key":"@53418","name":"loopsBox","source":"semantic","confidence":0.75}
+{"file":"chunk-9f7pg4vv.js","key":"@1547","name":"slashCommandLinkContext","source":"semantic","confidence":0.8,"note":"createContext(!1)，导出为 vte 供 LogoV2/Notices/MessageArea 使用"}
+{"file":"chunk-hzenv5c0.js","key":"@19696","name":"messageText","source":"semantic","confidence":0.75,"note":"overrideMessage ?? waitLine"}
+{"file":"chunk-2sbb399z.js","key":"@8834","name":"setWaitLine","source":"semantic","confidence":0.8,"note":"316 同名"}
+{"file":"chunk-2sbb399z.js","key":"@8836","name":"waitLine","source":"semantic","confidence":0.8}
+{"file":"chunk-2sbb399z.js","key":"@8844","name":"entry","source":"semantic","confidence":0.8}
+{"file":"chunk-2sbb399z.js","key":"@8893","name":"setColors","source":"semantic","confidence":0.8}
+{"file":"chunk-2sbb399z.js","key":"@8895","name":"color","source":"semantic","confidence":0.8,"note":"316 同名"}
+{"file":"chunk-2sbb399z.js","key":"@8897","name":"shimmerColor","source":"semantic","confidence":0.8,"note":"316 同名"}
+{"file":"chunk-2sbb399z.js","key":"@10908","name":"heading","source":"semantic","confidence":0.8,"note":"316 同名"}
+{"file":"chunk-2sbb399z.js","key":"@10949","name":"waitLine","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@459094","name":"runningRemoteWorkflows","source":"semantic","confidence":0.75,"note":"过滤 status==='running' 且 presence!=='unlisted' 的远端工作流"}
+{"file":"chunk-czq1j3j2.js","key":"@459116","name":"run","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@459205","name":"selectWorkflowFooterTask","source":"semantic","confidence":0.75,"note":"按 workflowFooterIndex / workflowFooterRunId 取当前选中的工作流"}
+{"file":"chunk-czq1j3j2.js","key":"@459323","name":"run","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@810346","name":"showCloseSessionConfirm","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@810441","name":"pendingChordText","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@749561","name":"isLocalScriptTask","source":"semantic","confidence":0.75,"note":"P1e(type)：ae() 且 type==='local_script'"}
+{"file":"chunk-czq1j3j2.js","key":"@749565","name":"task","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@749854","name":"logTaskError","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@749858","name":"error","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@750465","name":"isLocalScriptTaskRow","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@750469","name":"task","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@12802","name":"countNonAmbientTasks","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-wjygkcr4.js","key":"@12808","name":"localWorkflowsEnabled","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@12840","name":"workflowsEnabled","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@12867","name":"task","source":"semantic","confidence":0.8,"note":"316 同名"}
+{"file":"chunk-34x4ecrv.js","key":"@17202","name":"isDisplayableTranscriptTask","source":"semantic","confidence":0.75,"note":"PollEventsTool 用它过滤要展示的任务"}
+{"file":"chunk-czq1j3j2.js","key":"@838458","name":"footerTasks","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@838551","name":"localWorkflowsEnabled","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@838603","name":"remoteTasks","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@838836","name":"footerElement","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@838977","name":"ctaHint","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@839109","name":"earlyReturnValue","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-h6gkxbpm.js","key":"@1542","name":"agentId","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@744459","name":"runtimeLabel","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@744536","name":"runtimeRow","source":"semantic","confidence":0.75}
+{"file":"chunk-4sn4vdvx.js","key":"@14879","name":"isRecentInput","source":"semantic","confidence":0.8}
+{"file":"chunk-d5bmvsqk.js","key":"@1363","name":"TEXT_STYLE_INTRO","source":"semantic","confidence":0.75,"note":"\"Choose the text style that looks best with your terminal\""}
+{"file":"chunk-d5bmvsqk.js","key":"@1570","name":"showIntroText_","source":"semantic","confidence":0.85,"note":"316 同名（注意：是 showIntroText 的默认值）"}
+{"file":"chunk-d5bmvsqk.js","key":"@1590","name":"helpText_","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-d5bmvsqk.js","key":"@1610","name":"hideEscToCancel_","source":"semantic","confidence":0.75}
+{"file":"chunk-d5bmvsqk.js","key":"@2080","name":"cleanupDeps","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-d5bmvsqk.js","key":"@2083","name":"cancelOnUnmount","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-d5bmvsqk.js","key":"@2788","name":"skipExitHandling_","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@817418","name":"percentLeft","source":"semantic","confidence":0.75,"note":"pctLeft 取整后的值，用于 context used 提示"}
+{"file":"chunk-sac13h7c.js","key":"@1100","name":"PROGRESS_HINT_CHORDS","source":"semantic","confidence":0.75,"note":"ctrl+b 与 ctrl+x ctrl+b 归一化后的集合，用于判断按键冲突"}
+{"file":"chunk-wabs2mr4.js","key":"@17542","name":"isRecentInput","source":"semantic","confidence":0.7}
+{"file":"chunk-y1bp9wp9.js","key":"@5136","name":"glyphOf","source":"semantic","confidence":0.8,"note":"treeExpandGlyph(flatNode)，生成节点前缀标记"}
+{"file":"chunk-czq1j3j2.js","key":"@1281685","name":"isRecentInput","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1283083","name":"isRecentInput","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1212559","name":"logConfirmShown","source":"semantic","confidence":0.8,"note":"logEvent('tengu_usage_credits_admin_request_confirm_shown')"}
+{"file":"chunk-czq1j3j2.js","key":"@1212752","name":"isRecentInput","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1214163","name":"bodyText_","source":"semantic","confidence":0.85,"note":"316 同名，按 extraUsage 选择动作短语"}
+{"file":"chunk-czq1j3j2.js","key":"@1214433","name":"noteElement","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@1214620","name":"confirmElement","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@1215750","name":"withinStepGuard","source":"semantic","confidence":0.75,"note":"Gv(stepStartedAt)，按近期输入判断是否忽略"}
+{"file":"chunk-czq1j3j2.js","key":"@1215760","name":"isRecentInput","source":"semantic","confidence":0.8}
+{"file":"chunk-hnxhr3bs.js","key":"@177019","name":"getStableMessageKey","source":"semantic","confidence":0.75,"note":"有 tool_use/tool_result 时用其 id，否则用 uuid，作为列表 key"}
+{"file":"chunk-pqe1nn4c.js","key":"@3053","name":"dialog","source":"semantic","confidence":0.75}
+{"file":"chunk-n6w10qzg.js","key":"@16764","name":"errorLines","source":"semantic","confidence":0.75,"note":"把错误结果的头一行拼成红色文本行"}
+{"file":"chunk-n6w10qzg.js","key":"@16778","name":"errorHead","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@125968","name":"MAX_SECRET_LENGTH","source":"semantic","confidence":0.75,"note":"256，密钥类字符串的长度上限"}
+{"file":"chunk-5xgkngpb.js","key":"@126014","name":"TOOL_USE_ID_PATTERN","source":"semantic","confidence":0.8,"note":"匹配 toolu_/rekeyed_ 形式的 tool_use id 正则"}
+{"file":"chunk-5ythzcas.js","key":"@37903","name":"DELETED_IMAGE_PLACEHOLDER","source":"semantic","confidence":0.8,"note":"\"[An image was attached here. It was deleted at a later time…]\""}
+{"file":"chunk-5xgkngpb.js","key":"@2310460","name":"ORIGINAL_GAMES_LINE","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-5xgkngpb.js","key":"@2310732","name":"ORIGINAL_GAMES_SHORT","source":"semantic","confidence":0.75}
+{"file":"chunk-my2r02mp.js","key":"@511","name":"SAVED_ARTIFACT_AUTHOR_WARNING","source":"semantic","confidence":0.75,"note":"保存副本可能含他人内容的提示"}
+{"file":"chunk-my2r02mp.js","key":"@561","name":"EXTERNAL_ARTIFACT_AUTHOR_WARNING","source":"semantic","confidence":0.75,"note":"未在别处使用的同族提示，按命名规律取名"}
+{"file":"chunk-5xgkngpb.js","key":"@1354321","name":"extraStatusLine","source":"semantic","confidence":0.7,"note":"拼在 git status 上下文末尾的额外行；318 里从未赋值，恒为 undefined"}
+{"file":"chunk-m7rax0fa.js","key":"@313","name":"useTaskFramework","source":"semantic","confidence":0.8,"note":"useMemo 里 createTaskFramework(getState,setState)"}
+{"file":"chunk-4qfkyrk4.js","key":"@5775","name":"isScratchpadEnabled","source":"semantic","confidence":0.75,"note":"require chunk-b7wwb3bh 的 isScratchpadEnabled()"}
+{"file":"chunk-4qfkyrk4.js","key":"@8609","name":"artifactClient","source":"semantic","confidence":0.75,"note":"artifactsMcpClient() 的结果"}
+{"file":"chunk-e5z7dpjd.js","key":"@23176","name":"releaseLock","source":"semantic","confidence":0.75,"note":"tryAcquireLock 返回的释放函数"}
+{"file":"chunk-e5z7dpjd.js","key":"@23184","name":"exitHookInstalled","source":"semantic","confidence":0.75}
+{"file":"chunk-e5z7dpjd.js","key":"@23217","name":"release","source":"semantic","confidence":0.75}
+{"file":"chunk-e5z7dpjd.js","key":"@23271","name":"onExit","source":"semantic","confidence":0.75}
+{"file":"chunk-ergqq6hs.js","key":"@21345","name":"platform","source":"semantic","confidence":0.8,"note":"P() 的返回值，决定是否用轮询"}
+{"file":"chunk-s1nv1t5k.js","key":"@2851","name":"bootAgentId","source":"semantic","confidence":0.75,"note":"lTo() 得到的引导会话 agent id"}
+{"file":"chunk-bjxz9pt3.js","key":"@41582","name":"platform","source":"semantic","confidence":0.8}
+{"file":"chunk-8899qs36.js","key":"@2738","name":"layers","source":"semantic","confidence":0.75,"note":"按 SNAPSHOT_FIELD_POLICY 只保留 keep 的层"}
+{"file":"chunk-x51wp4j2.js","key":"@24547","name":"hasTypedEarlyInputValue","source":"semantic","confidence":0.7}
+{"file":"chunk-pwdsqzsj.js","key":"@70021","name":"newsTracker","source":"semantic","confidence":0.75,"note":"new khe(agentId)，用 hasNews() 判断是否有新消息"}
+{"file":"chunk-pwdsqzsj.js","key":"@84049","name":"serverName","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-pwdsqzsj.js","key":"@84051","name":"options","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-pwdsqzsj.js","key":"@84053","name":"extra","source":"semantic","confidence":0.7}
+{"file":"chunk-8fb5jme0.js","key":"@18378","name":"findToolName","source":"semantic","confidence":0.75,"note":"从倒序消息列表里找该 tool_use id 的工具名，找不到返回 unknown"}
+{"file":"chunk-8fb5jme0.js","key":"@18380","name":"toolUseId","source":"semantic","confidence":0.8}
+{"file":"chunk-8fb5jme0.js","key":"@18393","name":"list","source":"semantic","confidence":0.75}
+{"file":"chunk-8fb5jme0.js","key":"@18506","name":"block","source":"semantic","confidence":0.75}
+{"file":"chunk-8fb5jme0.js","key":"@18726","name":"toolUseId","source":"semantic","confidence":0.8}
+{"file":"cli.js","key":"@16768","name":"setRestrictedSession","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"cli.js","key":"@16841","name":"setRestrictedSession_2","source":"semantic","confidence":0.7}
+{"file":"cli.js","key":"@16904","name":"cliCarriesConfigBeyondSessionState","source":"semantic","confidence":0.8}
+{"file":"chunk-fxk1e28j.js","key":"@10635","name":"configErrorMessage","source":"semantic","confidence":0.75}
+{"file":"chunk-fxk1e28j.js","key":"@10691","name":"advice","source":"semantic","confidence":0.75,"note":"unparseable 全局配置的处置建议（或空）"}
+{"file":"chunk-aw801t9e.js","key":"@7956","name":"cpuReportModule","source":"semantic","confidence":0.75,"note":"require chunk-0784ah8d，含 withCpuReport/lookAtOtherPrograms"}
+{"file":"chunk-fb9qe48t.js","key":"@16473","name":"readBaselineOfCallSchema","source":"semantic","confidence":0.8,"note":"{sha256,bytes} 的对象 schema"}
+{"file":"chunk-fb9qe48t.js","key":"@16564","name":"readBaselineOfCall","source":"semantic","confidence":0.8,"note":"解析 meta[ANTHROPIC_READBASELINEOFCALL]"}
+{"file":"chunk-y080jnb6.js","key":"@4870","name":"OTHER_PROGRAMS_METRIC_NAME","source":"semantic","confidence":0.75,"note":"anthropic/toolContainerOtherPrograms 指标名"}
+{"file":"chunk-y080jnb6.js","key":"@4976","name":"reportsOtherPrograms","source":"semantic","confidence":0.75}
+{"file":"chunk-y080jnb6.js","key":"@6193","name":"leftoverTracker","source":"semantic","confidence":0.75}
+{"file":"chunk-y080jnb6.js","key":"@6388","name":"jitPolicy","source":"semantic","confidence":0.75}
+{"file":"chunk-y080jnb6.js","key":"@6396","name":"collectionTimerOff","source":"semantic","confidence":0.75}
+{"file":"chunk-y080jnb6.js","key":"@4776","name":"leftoverCounter","source":"semantic","confidence":0.7,"note":"__K4776.count(...) 的结果"}
+{"file":"chunk-fb9qe48t.js","key":"@31737","name":"gonePath","source":"semantic","confidence":0.75,"note":"拼进报错消息的消失目录"}
+{"file":"chunk-0tcpyvr1.js","key":"@1314","name":"name","source":"semantic","confidence":0.8}
+{"file":"chunk-xgksxb70.js","key":"@1914","name":"messages","source":"semantic","confidence":0.8}
+{"file":"chunk-xgksxb70.js","key":"@1916","name":"detachedToolUseIds","source":"semantic","confidence":0.8}
+{"file":"chunk-xgksxb70.js","key":"@1918","name":"settleLost","source":"semantic","confidence":0.75}
+{"file":"chunk-xgksxb70.js","key":"@2102","name":"message","source":"semantic","confidence":0.8}
+{"file":"chunk-xgksxb70.js","key":"@2188","name":"block","source":"semantic","confidence":0.8}
+{"file":"chunk-0h9p4sxp.js","key":"@30279","name":"resultMessage","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-0h9p4sxp.js","key":"@30363","name":"message","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-0h9p4sxp.js","key":"@30525","name":"maxTurnsMatch","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-0h9p4sxp.js","key":"@30871","name":"resultMessage_2","source":"semantic","confidence":0.7}
+{"file":"chunk-7kayq7nc.js","key":"@202958","name":"askedMcpSkillVersions","source":"semantic","confidence":0.8,"note":"Symbol('askedMcpSkillVersions')"}
+{"file":"chunk-7kayq7nc.js","key":"@256188","name":"uuidSchema","source":"semantic","confidence":0.8,"note":"反复用到的 uuid 字段 schema"}
+{"file":"chunk-7kayq7nc.js","key":"@208555","name":"displayNameField","source":"semantic","confidence":0.75,"note":"MCP 服务器的可读名称字段（可选、catch 成 undefined）"}
+{"file":"chunk-7kayq7nc.js","key":"@339828","name":"CLAUDEAI_CREDENTIAL_END_DESCRIPTION","source":"semantic","confidence":0.75}
+{"file":"chunk-7kayq7nc.js","key":"@530956","name":"tailUuidSchema","source":"semantic","confidence":0.6}
+{"file":"chunk-7kayq7nc.js","key":"@791363","name":"MAX_DRAWS_PER_ELEMENT","source":"semantic","confidence":0.7,"note":"64，keyed 元素 draws 数组上限"}
+{"file":"chunk-7kayq7nc.js","key":"@791357","name":"MAX_KEYED_ELEMENTS","source":"semantic","confidence":0.7,"note":"16"}
+{"file":"chunk-a3r2kq46.js","key":"@24235","name":"sessionId","source":"semantic","confidence":0.8}
+{"file":"chunk-a3r2kq46.js","key":"@24237","name":"turnState","source":"semantic","confidence":0.75}
+{"file":"chunk-a3r2kq46.js","key":"@24266","name":"platform","source":"semantic","confidence":0.75}
+{"file":"chunk-h7hgs1mf.js","key":"@42217","name":"reason","source":"semantic","confidence":0.75,"note":"ce(hint.spawn_reason) ?? '-'"}
+{"file":"chunk-h7hgs1mf.js","key":"@7314","name":"spawnReason","source":"semantic","confidence":0.75}
+{"file":"chunk-h7hgs1mf.js","key":"@5011","name":"sanitizeSpawnReason","source":"semantic","confidence":0.7,"note":"ce_K5011，把 spawn_reason 过环境导出闸门"}
+{"file":"chunk-h7hgs1mf.js","key":"@7384","name":"escapedSpawnReason","source":"semantic","confidence":0.7}
+{"file":"chunk-h7hgs1mf.js","key":"@11235","name":"waitForExit","source":"semantic","confidence":0.7,"note":"超时/中止时调用的等待函数"}
+{"file":"chunk-h7hgs1mf.js","key":"@11448","name":"timeoutMs","source":"semantic","confidence":0.7}
+{"file":"chunk-h7hgs1mf.js","key":"@11456","name":"logLine","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1826603","name":"config","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1826772","name":"candidate","source":"semantic","confidence":0.7,"note":"待验证的日期字符串"}
+{"file":"chunk-czq1j3j2.js","key":"@1790795","name":"DAY_MS","source":"semantic","confidence":0.75,"note":"ONE_DAY_MS 的别名"}
+{"file":"chunk-czq1j3j2.js","key":"@1793062","name":"ageMs","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1793459","name":"isCallWithinBudget","source":"semantic","confidence":0.7,"note":"时间戳在一天以内且不超过上限"}
+{"file":"chunk-czq1j3j2.js","key":"@1793465","name":"limit","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1793502","name":"at","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1794705","name":"verdict","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1795000","name":"warningShownSchema","source":"semantic","confidence":0.75,"note":"{views,lastShownAt} 的 schema"}
+{"file":"chunk-czq1j3j2.js","key":"@1795065","name":"parseWarningShown","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1795330","name":"shownState","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1795569","name":"sources","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1795708","name":"candidates","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1795704","name":"firstApplicableSource","source":"semantic","confidence":0.7}
+{"file":"chunk-vxsfen55.js","key":"@9892","name":"serversNeedingNotReconnect","source":"semantic","confidence":0.7,"note":"挑出配置变了或连不上的服务器，返回 name→config"}
+{"file":"chunk-vxsfen55.js","key":"@9896","name":"clientsById","source":"semantic","confidence":0.7}
+{"file":"chunk-vxsfen55.js","key":"@9898","name":"policies","source":"semantic","confidence":0.7}
+{"file":"chunk-vxsfen55.js","key":"@9900","name":"statuses","source":"semantic","confidence":0.7}
+{"file":"chunk-vxsfen55.js","key":"@9907","name":"result","source":"semantic","confidence":0.75}
+{"file":"chunk-vxsfen55.js","key":"@9925","name":"clientId","source":"semantic","confidence":0.7}
+{"file":"chunk-vxsfen55.js","key":"@9933","name":"host","source":"semantic","confidence":0.75}
+{"file":"chunk-vxsfen55.js","key":"@9942","name":"config","source":"semantic","confidence":0.8}
+{"file":"chunk-vxsfen55.js","key":"@9965","name":"status","source":"semantic","confidence":0.75}
+{"file":"chunk-vxsfen55.js","key":"@9981","name":"policy","source":"semantic","confidence":0.75}
+{"file":"chunk-vxsfen55.js","key":"@8893","name":"configFingerprint","source":"semantic","confidence":0.7,"note":"比较两份配置是否同一"}
+{"file":"chunk-czq1j3j2.js","key":"@1798895","name":"subscribeCodeModeNotices","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1799007","name":"notice","source":"semantic","confidence":0.75}
+{"file":"chunk-g4tsxwy3.js","key":"@38981","name":"ask","source":"semantic","confidence":0.75,"note":"权限询问记录；只显示、或带兜底/自动拒绝窗口等视为 local-only"}
+{"file":"chunk-frs14hy1.js","key":"@33304","name":"input","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1840199","name":"erroredToolUseIds","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1131841","name":"joinedKinds","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@493416","name":"footerSelected","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@493422","name":"state","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@495796","name":"panelTaskOnStore","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1418195","name":"NOTICE_PADDING","source":"semantic","confidence":0.7,"note":"8"}
+{"file":"chunk-czq1j3j2.js","key":"@1418201","name":"MAX_NOTICE_COLUMNS","source":"semantic","confidence":0.7,"note":"120"}
+{"file":"chunk-czq1j3j2.js","key":"@1418216","name":"MAX_NOTICE_WIDTH","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1418228","name":"MAX_NOTICE_WRAP_WIDTH","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1418240","name":"ZERO_WIDTH_RESERVE","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1692313","name":"isReplToolWithoutMcpInfo","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1692317","name":"tool","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1692714","name":"MAX_TASK_DESCRIPTION","source":"semantic","confidence":0.75,"note":"40"}
+{"file":"chunk-czq1j3j2.js","key":"@1692721","name":"MAX_TASK_LABEL","source":"semantic","confidence":0.75,"note":"40，工具名/描述截断宽度"}
+{"file":"chunk-czq1j3j2.js","key":"@1692784","name":"toolNameOf","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1692788","name":"tool","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1692790","name":"fallback","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1692811","name":"bumpGauge","source":"semantic","confidence":0.75,"note":"按 key 递增计数器，同 key 或时间窗内累加"}
+{"file":"chunk-czq1j3j2.js","key":"@1692815","name":"gauge","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1692817","name":"key","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1692828","name":"current","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1692858","name":"isSameKey","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1692881","name":"entry","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1692974","name":"describeTask","source":"semantic","confidence":0.75,"note":"取 userFacingName 后清洗并截断成任务标签"}
+{"file":"chunk-czq1j3j2.js","key":"@1692980","name":"input","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1692989","name":"toolName","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1694525","name":"commandFieldName","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@1695061","name":"commandText","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@1693332","name":"gaugeRef","source":"semantic","confidence":0.75,"note":"{count,lastAt} 计数器"}
+{"file":"chunk-czq1j3j2.js","key":"@1696431","name":"cleanedReason","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1696288","name":"previousNotice","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@213688","name":"themePrefix","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@213723","name":"readThemeFile","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@213751","name":"themePath","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@213754","name":"themeName","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@213971","name":"themesPath","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-y9ge9zb9.js","key":"@529","name":"atGuard","source":"semantic","confidence":0.7}
+{"file":"chunk-y9ge9zb9.js","key":"@589","name":"withinFrom","source":"semantic","confidence":0.7,"note":"Gv(at)，返回按时间点判定的函数"}
+{"file":"chunk-czq1j3j2.js","key":"@269609","name":"WorkerReadyHold","source":"semantic","confidence":0.7,"note":"控制 worker 就绪提示的显示/延时收起"}
+{"file":"chunk-czq1j3j2.js","key":"@269729","name":"previousStatus","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@269913","name":"frame","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@269915","name":"sequence","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@270160","name":"sequence","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@270353","name":"SendNowTracker","source":"semantic","confidence":0.75,"note":"跟踪 send-now 被按下/已应答的轮次，用来给消息打 interruptedBySendNow"}
+{"file":"chunk-czq1j3j2.js","key":"@270381","name":"isHeld","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@270436","name":"ticket","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@270438","name":"outcome","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@270620","name":"message","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@272747","name":"REFUSAL_CACHE_MESSAGE","source":"semantic","confidence":0.75,"note":"云会话启动失败但消息已发出时的提醒文案"}
+{"file":"chunk-czq1j3j2.js","key":"@272892","name":"describeUnsentHeld","source":"semantic","confidence":0.75,"note":"按断开原因生成“N 条消息未发送”的说明"}
+{"file":"chunk-czq1j3j2.js","key":"@272896","name":"count","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@272898","name":"reason","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@272905","name":"headline","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1419779","name":"WINDOWS_PATH_RE","source":"semantic","confidence":0.8,"note":"形如 C: 开头且非反斜杠/斜杠的 Windows 路径"}
+{"file":"chunk-czq1j3j2.js","key":"@1419817","name":"classifyHeldFiles","source":"semantic","confidence":0.7,"note":"判断 input 里哪些文件能在当前 cwd 下展示；返回 unknown 或 {count,held}"}
+{"file":"chunk-czq1j3j2.js","key":"@1419821","name":"input","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1419830","name":"writtenPaths","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1419062","name":"writtenPathsOf","source":"semantic","confidence":0.7,"note":"rbt(reason)?.written"}
+{"file":"chunk-czq1j3j2.js","key":"@1419839","name":"keptPaths","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1419101","name":"keptPathsOf","source":"semantic","confidence":0.7,"note":"ibt(reason)?.liesAt"}
+{"file":"chunk-czq1j3j2.js","key":"@1419894","name":"allowedPaths","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1419986","name":"heldByIndex","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1419997","name":"seenPaths","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1421777","name":"cwdMatches","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1420101","name":"index","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1420104","name":"value","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1420185","name":"matches","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1421427","name":"pathMatches","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1420275","name":"match","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1420308","name":"length","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1420406","name":"matches","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1421029","name":"collectPathsDeep","source":"semantic","confidence":0.7,"note":"对任意值递归收集能匹配的路径，带步数上限"}
+{"file":"chunk-czq1j3j2.js","key":"@1420496","name":"match","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1420529","name":"heldPlaces","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1420540","name":"hasNonString","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1420575","name":"item","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1420643","name":"matches","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1420783","name":"match","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1420932","name":"path","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1421033","name":"value","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1421035","name":"allowedPaths","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1421042","name":"found","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1421052","name":"stack","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1421058","name":"budget","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1421115","name":"current","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1421187","name":"matches","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1421242","name":"match","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1421295","name":"item","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1421431","name":"value","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1421433","name":"allowedPaths","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1421440","name":"matches","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1421502","name":"matchPathSuffix","source":"semantic","confidence":0.7,"note":"绝对/~ 路径归一后比较，否则按路径后缀匹配"}
+{"file":"chunk-czq1j3j2.js","key":"@1421506","name":"pathText","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1421508","name":"allowedPaths","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1421570","name":"absolutePath","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1423311","name":"stripParseRoot","source":"semantic","confidence":0.7,"note":"fbt：去掉路径 parse 根的公共前缀"}
+{"file":"chunk-czq1j3j2.js","key":"@1421609","name":"candidate","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1421664","name":"segment","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1421736","name":"candidate","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1421783","name":"allowedPaths","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1421790","name":"cwdForms","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1422320","name":"decodePercentRuns","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1421828","name":"path","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1421908","name":"cwdFragments","source":"semantic","confidence":0.7,"note":"从路径里取可用于匹配的片段（非 ASCII、末段、去扩展名、首行）"}
+{"file":"chunk-czq1j3j2.js","key":"@1421845","name":"fragment","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1421858","name":"cwdForm","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1421886","name":"NON_ASCII_RE","source":"semantic","confidence":0.75,"note":"/[^ -~]/"}
+{"file":"chunk-czq1j3j2.js","key":"@1421912","name":"path","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1421947","name":"segment","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1421994","name":"segment","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1422013","name":"lastSegment","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1422076","name":"fragment","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1422192","name":"fragment","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1422324","name":"cwd","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1422369","name":"run","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1422434","name":"heldLineMask","source":"semantic","confidence":0.7,"note":"按参数行算出每行是否被 held 高亮"}
+{"file":"chunk-czq1j3j2.js","key":"@1422438","name":"rows","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1422440","name":"held","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1422442","name":"width","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1422491","name":"row","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1422596","name":"row","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1422599","name":"index","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1422609","name":"heldForRow","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1422688","name":"wrappedKey","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1422762","name":"headerRows","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1423251","name":"wrappedLineCount","source":"semantic","confidence":0.7,"note":"MZ：按宽度折行后的行数"}
+{"file":"chunk-czq1j3j2.js","key":"@1422838","name":"lineStarts","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1422844","name":"lineOffset","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1422896","name":"isBracketShape","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1423084","name":"unused","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1423087","name":"lineIndex","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1423251","name":"wrappedLineCount","source":"semantic","confidence":0.75,"note":"MZ：按宽度折行后的行数（+1）"}
+{"file":"chunk-czq1j3j2.js","key":"@1423256","name":"width","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1423311","name":"stripParseRoot","source":"semantic","confidence":0.75,"note":"fbt：去掉路径 parse 根的公共前缀"}
+{"file":"chunk-czq1j3j2.js","key":"@1423315","name":"pathText","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1423444","name":"tooShortAdvice","source":"semantic","confidence":0.75,"note":"终端太矮时的提示；scrollKey 为空时另给文案"}
+{"file":"chunk-czq1j3j2.js","key":"@1423448","name":"scrollKey","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1423602","name":"PROCEED_QUESTION","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1423632","name":"FILES_TOO_LONG_MESSAGE","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1423795","name":"NO_FILES_DECLARED_MESSAGE","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1423909","name":"MAX_BRIDGE_HEADER_ROWS","source":"semantic","confidence":0.7,"note":"11"}
+{"file":"chunk-czq1j3j2.js","key":"@1423922","name":"MAX_BRIDGE_MEMBERS","source":"semantic","confidence":0.7,"note":"4"}
+{"file":"chunk-czq1j3j2.js","key":"@1619322","name":"bridgeHandle","source":"semantic","confidence":0.7,"note":"外部注入的句柄，附带 tellPerson 覆盖"}
+{"file":"chunk-czq1j3j2.js","key":"@1619454","name":"text","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1619822","name":"flushedRelaySet","source":"semantic","confidence":0.7,"note":"WeakSet，记录已转发的 relay"}
+{"file":"chunk-czq1j3j2.js","key":"@1622649","name":"relayAuthored","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1622905","name":"taskRegistry","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1619268","name":"MAX_CONSECUTIVE_INIT_FAILURES","source":"semantic","confidence":0.75,"note":"3，达到后按策略断开"}
+{"file":"chunk-czq1j3j2.js","key":"@1618693","name":"REVIVE_DELAY_MS","source":"semantic","confidence":0.7,"note":"1e4"}
+{"file":"chunk-czq1j3j2.js","key":"@1641998","name":"redirectUriOnly","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1643723","name":"wrapAuthError","source":"semantic","confidence":0.7}
+{"file":"chunk-1d743z54.js","key":"@678","name":"isRecentInput","source":"semantic","confidence":0.8}
+{"file":"chunk-1c4mt1y2.js","key":"@1743","name":"exitKeybindings","source":"semantic","confidence":0.7}
+{"file":"chunk-1vwpwerm.js","key":"@19200","name":"splitFileName","source":"semantic","confidence":0.75,"note":"去扩展名后按标识符拆分"}
+{"file":"chunk-q9vyeahf.js","key":"@301","name":"isFocusedIn","source":"semantic","confidence":0.75,"note":"焦点是否在 nodeRef 子树内"}
+{"file":"chunk-emhzq435.js","key":"@20709","name":"repeatCount","source":"semantic","confidence":0.8}
+{"file":"chunk-emhzq435.js","key":"@20786","name":"textElement","source":"semantic","confidence":0.75}
+{"file":"chunk-hnxhr3bs.js","key":"@16197","name":"i","source":"semantic","confidence":0.8}
+{"file":"chunk-edrpfa7j.js","key":"@1790","name":"attrsState","source":"semantic","confidence":0.75}
+{"file":"chunk-yq5f910z.js","key":"@10001","name":"optInResult","source":"semantic","confidence":0.75}
+{"file":"chunk-swe0kb5q.js","key":"@5150","name":"pendingChordText","source":"semantic","confidence":0.75}
+{"file":"chunk-p762h6ag.js","key":"@1316","name":"onFirstPress","source":"semantic","confidence":0.7}
+{"file":"chunk-h61dq9nz.js","key":"@21484","name":"MAX_REPLY_GATE_POLICY_LENGTH","source":"semantic","confidence":0.75,"note":"32768，超过按 too_long 处理"}
+{"file":"chunk-h61dq9nz.js","key":"@21541","name":"applyLaunchReplyGatePolicy","source":"semantic","confidence":0.8}
+{"file":"chunk-h61dq9nz.js","key":"@21550","name":"policyText","source":"semantic","confidence":0.75}
+{"file":"chunk-h61dq9nz.js","key":"@21613","name":"parsedPolicy","source":"semantic","confidence":0.75}
+{"file":"chunk-h61dq9nz.js","key":"@21650","name":"canWarn","source":"semantic","confidence":0.7,"note":"stderr 是 TTY 或远端环境下才打警告"}
+{"file":"chunk-h61dq9nz.js","key":"@22498","name":"source","source":"semantic","confidence":0.75}
+{"file":"chunk-h61dq9nz.js","key":"@22559","name":"ignoredWarning","source":"semantic","confidence":0.75}
+{"file":"chunk-h61dq9nz.js","key":"@22801","name":"ignoredLine","source":"semantic","confidence":0.75}
+{"file":"chunk-h61dq9nz.js","key":"@27711","name":"notice","source":"semantic","confidence":0.75}
+{"file":"chunk-nhaxap13.js","key":"@34300","name":"hasWarningNotice","source":"semantic","confidence":0.75,"note":"当前消息、队列或 pinned 里有 warning 提示"}
+{"file":"chunk-nhaxap13.js","key":"@34303","name":"messages","source":"semantic","confidence":0.8}
+{"file":"chunk-nhaxap13.js","key":"@34314","name":"current","source":"semantic","confidence":0.75}
+{"file":"chunk-nhaxap13.js","key":"@34350","name":"message","source":"semantic","confidence":0.8}
+{"file":"chunk-nhaxap13.js","key":"@34444","name":"queued","source":"semantic","confidence":0.75}
+{"file":"chunk-nhaxap13.js","key":"@45363","name":"handles","source":"semantic","confidence":0.7,"note":"withStartupHandles 回传的句柄，取其 args"}
+{"file":"chunk-nhaxap13.js","key":"@67131","name":"moveNotices","source":"semantic","confidence":0.7}
+{"file":"chunk-nhaxap13.js","key":"@67137","name":"sessionTitle","source":"semantic","confidence":0.7}
+{"file":"chunk-nhaxap13.js","key":"@67140","name":"moveAsk","source":"semantic","confidence":0.7,"note":"askMoveFirstMessage(root) 的结果"}
+{"file":"chunk-nhaxap13.js","key":"@67143","name":"moveResult","source":"semantic","confidence":0.7}
+{"file":"chunk-nhaxap13.js","key":"@69446","name":"askMove","source":"semantic","confidence":0.7}
+{"file":"chunk-nhaxap13.js","key":"@69949","name":"handleRefusal","source":"semantic","confidence":0.7}
+{"file":"chunk-nhaxap13.js","key":"@70115","name":"askedMove","source":"semantic","confidence":0.7}
+{"file":"chunk-nhaxap13.js","key":"@72007","name":"unused","source":"semantic","confidence":0.7}
+{"file":"chunk-nhaxap13.js","key":"@75181","name":"secondAsk","source":"semantic","confidence":0.7}
+{"file":"chunk-nhaxap13.js","key":"@77419","name":"unstoredHint","source":"semantic","confidence":0.7}
+{"file":"chunk-nhaxap13.js","key":"@77424","name":"attachFailure","source":"semantic","confidence":0.7}
+{"file":"chunk-nhaxap13.js","key":"@78133","name":"localMoveModule","source":"semantic","confidence":0.7}
+{"file":"chunk-nhaxap13.js","key":"@78166","name":"settledMove","source":"semantic","confidence":0.7}
+{"file":"chunk-nhaxap13.js","key":"@81007","name":"line","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3387753","name":"pdfPickerSlot","source":"semantic","confidence":0.7,"note":"按会话保存 { pdf } 的 SessionRootSlot"}
+{"file":"chunk-7jxyna5q.js","key":"@342947","name":"relativePath","source":"semantic","confidence":0.75}
+{"file":"chunk-7jxyna5q.js","key":"@342956","name":"filePath","source":"semantic","confidence":0.8}
+{"file":"chunk-2avr6cej.js","key":"@147965","name":"config","source":"semantic","confidence":0.8}
+{"file":"chunk-mhn0amzz.js","key":"@31383","name":"PROXY_ENV_NAMES","source":"semantic","confidence":0.75,"note":"代理相关环境变量名，node 环境里要透传"}
+{"file":"chunk-7stfs6p0.js","key":"@85119","name":"NON_WORD_RE","source":"semantic","confidence":0.75,"note":"/[^\\w-]/，判断工具名是否已规范化"}
+{"file":"chunk-7stfs6p0.js","key":"@86358","name":"resolveToolName","source":"semantic","confidence":0.7,"note":"把行里的工具名换成 transcript 里记录的原始名"}
+{"file":"chunk-7stfs6p0.js","key":"@86361","name":"loadTranscript","source":"semantic","confidence":0.7}
+{"file":"chunk-7stfs6p0.js","key":"@86365","name":"row","source":"semantic","confidence":0.75}
+{"file":"chunk-7stfs6p0.js","key":"@86436","name":"cachedName","source":"semantic","confidence":0.7}
+{"file":"chunk-7stfs6p0.js","key":"@86520","name":"calls","source":"semantic","confidence":0.7}
+{"file":"chunk-7stfs6p0.js","key":"@86539","name":"call","source":"semantic","confidence":0.75}
+{"file":"chunk-7stfs6p0.js","key":"@86601","name":"recordedName","source":"semantic","confidence":0.7}
+{"file":"chunk-7stfs6p0.js","key":"@87866","name":"row","source":"semantic","confidence":0.75}
+{"file":"chunk-7stfs6p0.js","key":"@87891","name":"row","source":"semantic","confidence":0.75}
+{"file":"chunk-7stfs6p0.js","key":"@88782","name":"toolName","source":"semantic","confidence":0.8}
+{"file":"chunk-q80fh8vc.js","key":"@17704","name":"rankAnchor","source":"semantic","confidence":0.7,"note":"按是否翻转与方向把 rank 变成坐标"}
+{"file":"chunk-1q7gzm2x.js","key":"@11540","name":"toolPrefixOf","source":"semantic","confidence":0.75,"note":"mcp_<归一化服务器名>_"}
+{"file":"chunk-08q4d92p.js","key":"@7664","name":"isPlainObjectValue","source":"semantic","confidence":0.75}
+{"file":"chunk-775n2x67.js","key":"@20449","name":"isProposalFrame","source":"semantic","confidence":0.7,"note":"校验 {number,step,latencyMs,at,outcome} 形状的帧"}
+{"file":"chunk-775n2x67.js","key":"@20452","name":"value","source":"semantic","confidence":0.8}
+{"file":"chunk-775n2x67.js","key":"@34241","name":"offerOffAvailable","source":"semantic","confidence":0.7}
+{"file":"chunk-775n2x67.js","key":"@78714","name":"offerOff","source":"semantic","confidence":0.7}
+{"file":"chunk-775n2x67.js","key":"@15970","name":"hideCopy","source":"semantic","confidence":0.7,"note":"为真时不带文案"}
+{"file":"chunk-5xgkngpb.js","key":"@3790983","name":"hasBackdropSurface","source":"semantic","confidence":0.7,"note":"某处是否有 backdrop 且 draws 含 Backdrop"}
+{"file":"chunk-5xgkngpb.js","key":"@3791012","name":"capability","source":"semantic","confidence":0.75}
+{"file":"chunk-j8f885h1.js","key":"@276801","name":"payload","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4130619","name":"effortOk","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4130649","name":"level","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4130667","name":"effortIsObject","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4137853","name":"args","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4097573","name":"checkBackdropArgs","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4137869","name":"args","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4137871","name":"ctx","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4098175","name":"runBackdrop","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4250047","name":"loadFailedLine","source":"semantic","confidence":0.75,"note":"\"Couldn't load: …\""}
+{"file":"chunk-5xgkngpb.js","key":"@4250052","name":"reason","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@3818467","name":"envFingerprint","source":"semantic","confidence":0.75,"note":"改环境变量前后的代理指纹，用于重建全局 agent"}
+{"file":"chunk-5xgkngpb.js","key":"@753720","name":"getHooksModuleScan","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@3804687","name":"platform","source":"semantic","confidence":0.8}
+{"file":"chunk-f284hj51.js","key":"@38982","name":"target","source":"semantic","confidence":0.75,"note":"字符串或 {sessionId}/{agentId} 形式的目标"}
+{"file":"chunk-5xgkngpb.js","key":"@4087584","name":"envRaisesEffort","source":"semantic","confidence":0.7,"note":"环境变量把 effort 抬高时为真，pinnedEffort 随之让位"}
+{"file":"chunk-5xgkngpb.js","key":"@4088101","name":"forkedUuids","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4088396","name":"sentEffort","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4088429","name":"effortNote","source":"semantic","confidence":0.7}
+{"file":"chunk-k4mxxz7x.js","key":"@3052","name":"KEYED_DRAW_TYPES","source":"semantic","confidence":0.75,"note":"Backdrop/Input/Select 三类需要 keyed 的绘制"}
+{"file":"chunk-k4mxxz7x.js","key":"@3097","name":"normalizeDraws","source":"semantic","confidence":0.7}
+{"file":"chunk-k4mxxz7x.js","key":"@3141","name":"draw","source":"semantic","confidence":0.75}
+{"file":"chunk-k4mxxz7x.js","key":"@3171","name":"EMPTY_COLUMN_BOX","source":"semantic","confidence":0.75}
+{"file":"chunk-k4mxxz7x.js","key":"@3239","name":"isInputLike","source":"semantic","confidence":0.75}
+{"file":"chunk-k4mxxz7x.js","key":"@3243","name":"type","source":"semantic","confidence":0.8}
+{"file":"chunk-k4mxxz7x.js","key":"@3288","name":"blockInputsOnMobile","source":"semantic","confidence":0.7,"note":"mobile 下把不受支持的 Input/Select 换成空 Box"}
+{"file":"chunk-k4mxxz7x.js","key":"@3292","name":"node","source":"semantic","confidence":0.8}
+{"file":"chunk-k4mxxz7x.js","key":"@3294","name":"surface","source":"semantic","confidence":0.75}
+{"file":"chunk-k4mxxz7x.js","key":"@3296","name":"supportedTypes","source":"semantic","confidence":0.7}
+{"file":"chunk-k4mxxz7x.js","key":"@3496","name":"mapped","source":"semantic","confidence":0.75}
+{"file":"chunk-k4mxxz7x.js","key":"@3498","name":"index","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@4094502","name":"forgetSessionStartCall","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-5xgkngpb.js","key":"@4094506","name":"name","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-5xgkngpb.js","key":"@778002","name":"checkPromptSubmitArgs","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@781003","name":"refusal","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-5xgkngpb.js","key":"@781123","name":"holdRefusal","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@793490","name":"sessionIdentityWithEmail","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@793500","name":"identity","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@4096390","name":"MAX_BLUR_PX","source":"semantic","confidence":0.75,"note":"64"}
+{"file":"chunk-5xgkngpb.js","key":"@4096397","name":"MAX_TINT_LENGTH","source":"semantic","confidence":0.75,"note":"64"}
+{"file":"chunk-5xgkngpb.js","key":"@4096404","name":"NUMBER_SOURCE","source":"semantic","confidence":0.7,"note":"数字（可带 %）正则片段"}
+{"file":"chunk-5xgkngpb.js","key":"@4096442","name":"SEPARATOR_SOURCE","source":"semantic","confidence":0.7,"note":"逗号/斜杠/空格分隔片段"}
+{"file":"chunk-5xgkngpb.js","key":"@4096643","name":"checkBackdrop","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4096647","name":"backdrop","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@4096774","name":"idProblem","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4097573","name":"checkBackdropArgs","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4097577","name":"event","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@4097897","name":"clearBackdropFor","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4097901","name":"plugin","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@4097928","name":"current","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4097960","name":"DEFAULT_GLASS","source":"semantic","confidence":0.75,"note":"{blur:16,opacity:0.6}"}
+{"file":"chunk-5xgkngpb.js","key":"@4097995","name":"normalizeGlass","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4098128","name":"getBackdropState","source":"semantic","confidence":0.75,"note":"getPluginRegistry().backdrop.getState()"}
+{"file":"chunk-5xgkngpb.js","key":"@4098175","name":"runBackdrop","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4098181","name":"ctx","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@4098183","name":"reason","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@4098205","name":"samePlugin","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4098407","name":"nextState","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4098509","name":"changed","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4098747","name":"backdropInstanceOf","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@4098758","name":"state","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4098904","name":"subscribeBackdrop","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4098908","name":"listener","source":"semantic","confidence":0.75}
+{"file":"chunk-nh1pvp1m.js","key":"@117465","name":"answers","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-nh1pvp1m.js","key":"@117467","name":"draws","source":"semantic","confidence":0.8}
+{"file":"chunk-j8f885h1.js","key":"@113697","name":"checkBackdropProps","source":"semantic","confidence":0.75}
+{"file":"chunk-j8f885h1.js","key":"@113744","name":"sameTarget","source":"semantic","confidence":0.75}
+{"file":"chunk-j8f885h1.js","key":"@113791","name":"sameStyle","source":"semantic","confidence":0.75}
+{"file":"chunk-j8f885h1.js","key":"@116800","name":"hasBackdropSurface","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@53232","name":"fallbackHookName","source":"semantic","confidence":0.75,"note":"调用方给的 hook 名兜底（PreToolUse）"}
+{"file":"chunk-5xgkngpb.js","key":"@53925","name":"result","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-5xgkngpb.js","key":"@53956","name":"rest","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@4265944","name":"originName","source":"semantic","confidence":0.7}
+{"file":"chunk-7jxyna5q.js","key":"@548425","name":"jsonSchema","source":"semantic","confidence":0.75}
+{"file":"chunk-7jxyna5q.js","key":"@548555","name":"restProperties","source":"semantic","confidence":0.7}
+{"file":"chunk-7jxyna5q.js","key":"@583123","name":"built","source":"semantic","confidence":0.8}
+{"file":"chunk-7jxyna5q.js","key":"@549569","name":"result","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@4100493","name":"BACKDROP_CLEAR_DELAY_MS","source":"semantic","confidence":0.7,"note":"5000"}
+{"file":"chunk-shzdmqn1.js","key":"@240","name":"toolResults","source":"semantic","confidence":0.8}
+{"file":"chunk-shzdmqn1.js","key":"@301","name":"result","source":"semantic","confidence":0.8}
+{"file":"chunk-shzdmqn1.js","key":"@341","name":"row","source":"semantic","confidence":0.8}
+{"file":"chunk-w3ch4xq2.js","key":"@171777","name":"messageCountBefore","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@171798","name":"nextMessages","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@173136","name":"pdfReadSent","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@155067","name":"drainIfStopsAtToolGap","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@173550","name":"abortedRows","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@122422","name":"canResumeThinking","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@48020","name":"refusalMessageOf","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@182823","name":"resendResult","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@47091","name":"resendEmptyCompletion","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@183568","name":"retryRefusalNow","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@249216","name":"markVirtual","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@80381","name":"noteTurnStart","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@80468","name":"isSomething","source":"semantic","confidence":0.65,"note":"zr_K80468：为真时改用空生成器 callModel"}
+{"file":"chunk-w3ch4xq2.js","key":"@168498","name":"emptyCallModel","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@196641","name":"baseCallModel","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@196647","name":"onByteWritten","source":"semantic","confidence":0.65}
+{"file":"chunk-w3ch4xq2.js","key":"@196650","name":"takeAtSource","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@196712","name":"wrappedCallModel","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@196719","name":"params","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@196729","name":"chunk","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@196732","name":"meta","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@200446","name":"writer","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@201859","name":"pendingEvent","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@155668","name":"fixStopSequence","source":"semantic","confidence":0.75,"note":"把 stop_sequence 改成 tool_use"}
+{"file":"chunk-w3ch4xq2.js","key":"@155807","name":"fixOutgoingStopReason","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@80300","name":"recordPushedMessage","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@224380","name":"messages","source":"semantic","confidence":0.8}
+{"file":"chunk-w3ch4xq2.js","key":"@225102","name":"completionMessage","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@48204","name":"emptyCompletionResendMessage","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@232814","name":"someRow","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@129666","name":"collectRulesBySource","source":"semantic","confidence":0.8,"note":"316 同名"}
+{"file":"chunk-w3ch4xq2.js","key":"@130363","name":"wholeToolRules","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@130488","name":"rulesByToolName","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@130499","name":"patternRulesByTool","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@130546","name":"declaredRules","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@130582","name":"rule","source":"semantic","confidence":0.8}
+{"file":"chunk-w3ch4xq2.js","key":"@131303","name":"isKnownToolName","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@128712","name":"expandToolScopedRules","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@2575407","name":"meta","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@155671","name":"event","source":"semantic","confidence":0.8}
+{"file":"chunk-w3ch4xq2.js","key":"@92223","name":"onClassified","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@96893","name":"verdict","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@109565","name":"evaluateReplyGate","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@97002","name":"result","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@98250","name":"rest","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@15244","name":"normalizeSecurityPrompt","source":"semantic","confidence":0.7,"note":"小写、压空白并去掉同义词，用于判断是否为安全类提问"}
+{"file":"chunk-w3ch4xq2.js","key":"@15248","name":"prompt","source":"semantic","confidence":0.8}
+{"file":"chunk-w3ch4xq2.js","key":"@20229","name":"meta","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@22396","name":"meta","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@23378","name":"meta","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@29101","name":"markPatched","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@139528","name":"messages","source":"semantic","confidence":0.8}
+{"file":"chunk-w3ch4xq2.js","key":"@139616","name":"currentOrgUuid","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@147883","name":"promptSnapshot","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@149169","name":"promptSnapshot","source":"semantic","confidence":0.75}
+{"file":"chunk-frs14hy1.js","key":"@8352","name":"shouldRetryRefusalNow","source":"semantic","confidence":0.75}
+{"file":"chunk-frs14hy1.js","key":"@8358","name":"retryRefusal","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@122440","name":"tokenCount","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@122486","name":"totalTokens","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@122515","name":"thresholdBelowSecondary","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@122537","name":"contextWindow","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@76241","name":"installTakePlainDelta","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@76335","name":"canTakeNow","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@76338","name":"executor","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@76395","name":"currentExecutor","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@76397","name":"lastSeenStep","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@76430","name":"guard","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@76471","name":"chunk","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@76473","name":"meta","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@76482","name":"taken","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@78513","name":"drainReplToolResults","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@78518","name":"meta","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@78883","name":"unwaited","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@78904","name":"statusLine","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@78975","name":"pending","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@79008","name":"row","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@79091","name":"sessionId","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@79103","name":"liveCall","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@79136","name":"result","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@79164","name":"message","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@79310","name":"step","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@79404","name":"output","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@79446","name":"toolUseId","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@79528","name":"progress","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@79577","name":"event","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@79597","name":"task","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@79609","name":"queued","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@79647","name":"call","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@79698","name":"item","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@79783","name":"rows","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@79797","name":"next","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@79929","name":"entry","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@79950","name":"toolUseId","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@79987","name":"message","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@80050","name":"chunk","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@80207","name":"delta","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@80300","name":"noteToolUseId","source":"semantic","confidence":0.75,"note":"toolState 里 add(id, abortController)"}
+{"file":"chunk-w3ch4xq2.js","key":"@80381","name":"forgetTurnStart","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@80468","name":"endIfTurnEnded","source":"semantic","confidence":0.75,"note":"该 signal 已判为结束回合则 abort"}
+{"file":"chunk-w3ch4xq2.js","key":"@82639","name":"messages","source":"semantic","confidence":0.8}
+{"file":"chunk-w3ch4xq2.js","key":"@84469","name":"block","source":"semantic","confidence":0.8}
+{"file":"chunk-w3ch4xq2.js","key":"@109565","name":"policyContext","source":"semantic","confidence":0.75,"note":"把策略加水到 kind:'policy' 的 context"}
+{"file":"chunk-w3ch4xq2.js","key":"@109570","name":"ctx","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@3373718","name":"launchAccepted","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@3373739","name":"launchPolicyOff","source":"semantic","confidence":0.75,"note":"z7r()：被 vouched 设置关掉"}
+{"file":"chunk-5xgkngpb.js","key":"@3373603","name":"launchDisablesReplyCheck","source":"semantic","confidence":0.7}
+{"file":"chunk-frs14hy1.js","key":"@7048","name":"messages","source":"semantic","confidence":0.8}
+{"file":"chunk-frs14hy1.js","key":"@23655","name":"endPendingBlocks","source":"semantic","confidence":0.7}
+{"file":"chunk-frs14hy1.js","key":"@21507","name":"isFailedWithoutWire","source":"semantic","confidence":0.7}
+{"file":"chunk-frs14hy1.js","key":"@21560","name":"closeAllBlocks","source":"semantic","confidence":0.7}
+{"file":"chunk-frs14hy1.js","key":"@23469","name":"closingReason","source":"semantic","confidence":0.7}
+{"file":"chunk-frs14hy1.js","key":"@23554","name":"skipStopEvent","source":"semantic","confidence":0.7}
+{"file":"chunk-frs14hy1.js","key":"@28466","name":"meta","source":"semantic","confidence":0.7}
+{"file":"chunk-frs14hy1.js","key":"@29383","name":"meta","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@110267","name":"messages","source":"semantic","confidence":0.8}
+{"file":"chunk-0yw3taqg.js","key":"@110283","name":"hideBefore","source":"semantic","confidence":0.8}
+{"file":"chunk-0yw3taqg.js","key":"@110295","name":"earlier","source":"semantic","confidence":0.8}
+{"file":"chunk-0yw3taqg.js","key":"@110309","name":"withdrawnPaths","source":"semantic","confidence":0.75,"note":"返回值：被撤下的文件路径"}
+{"file":"chunk-0yw3taqg.js","key":"@110542","name":"savedFile","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@110606","name":"allPaths","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@110623","name":"savedFile","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@110638","name":"uploadRoots","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@110662","name":"keptToolUseIds","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@115795","name":"collectKeptToolUseIds","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@110686","name":"hiddenPictureCount","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@110831","name":"fileUuid","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@110990","name":"readCutCount","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@110999","name":"block","source":"semantic","confidence":0.8}
+{"file":"chunk-0yw3taqg.js","key":"@116295","name":"renderBlock","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@111041","name":"isHumanVisible","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@111097","name":"block","source":"semantic","confidence":0.8}
+{"file":"chunk-0yw3taqg.js","key":"@111298","name":"keepIndex","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@112018","name":"isWithdrawn","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@112031","name":"isImage","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@112131","name":"root","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@113158","name":"keepIndex","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@113952","name":"computeWithdrawStamp","source":"semantic","confidence":0.7,"note":"汇总本轮要记下的 withdrawnBefore/withdrawnFilesBefore/hiddenBefore"}
+{"file":"chunk-0yw3taqg.js","key":"@113955","name":"messages","source":"semantic","confidence":0.8}
+{"file":"chunk-0yw3taqg.js","key":"@113996","name":"message","source":"semantic","confidence":0.8}
+{"file":"chunk-0yw3taqg.js","key":"@114023","name":"withdrawnNames","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@114040","name":"uuidText","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@114062","name":"alreadyListed","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@114083","name":"message","source":"semantic","confidence":0.8}
+{"file":"chunk-0yw3taqg.js","key":"@114165","name":"withdrawableUuids","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@114178","name":"message","source":"semantic","confidence":0.8}
+{"file":"chunk-0yw3taqg.js","key":"@114191","name":"pictureCount","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@114195","name":"reminderCount","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@114199","name":"alreadyHidden","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@114211","name":"message","source":"semantic","confidence":0.8}
+{"file":"chunk-0yw3taqg.js","key":"@115732","name":"toCount","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@114536","name":"uuid","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@114595","name":"message","source":"semantic","confidence":0.8}
+{"file":"chunk-0yw3taqg.js","key":"@114669","name":"savedFile","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@114781","name":"savedFile","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@114821","name":"uuid","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@115030","name":"stampDeletionNote","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@115033","name":"messages","source":"semantic","confidence":0.8}
+{"file":"chunk-0yw3taqg.js","key":"@115158","name":"message","source":"semantic","confidence":0.8}
+{"file":"chunk-0yw3taqg.js","key":"@115227","name":"target","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@115581","name":"defaultValue","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@115659","name":"defaultValue","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@115735","name":"value","source":"semantic","confidence":0.8}
+{"file":"chunk-0yw3taqg.js","key":"@440781","name":"STILL_LOADING","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@440828","name":"DID_NOT_LOAD","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@440870","name":"HAS_LOADED","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@440924","name":"remoteSettingsNotice","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@440927","name":"said","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@440973","name":"leftNoAnswer","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@441154","name":"word","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@441260","name":"text","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@449093","name":"collectedReplIds","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@456716","name":"turnSettings","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@456871","name":"displayToSend","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@455272","name":"isTransitionDue","source":"semantic","confidence":0.65}
+{"file":"chunk-0yw3taqg.js","key":"@459982","name":"moveShellToDir","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@459985","name":"dir","source":"semantic","confidence":0.8}
+{"file":"chunk-0yw3taqg.js","key":"@459987","name":"callOptions","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@459994","name":"cdCall","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@460022","name":"toolUseId","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@460040","name":"decision","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@470375","name":"activeSessionSpelling","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@50759","name":"sessionWriterSpelling","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@476946","name":"resolveTurnEffortCap","source":"semantic","confidence":0.7,"note":"校验后按需返回 turnEffortCap，否则 undefined"}
+{"file":"chunk-0yw3taqg.js","key":"@477766","name":"newsTracker","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@478168","name":"remoteSettingsSaid","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@481978","name":"path","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@353829","name":"disallowedToolsFromMessages","source":"semantic","confidence":0.65}
+{"file":"chunk-0yw3taqg.js","key":"@482379","name":"declaredDisallowed","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@482408","name":"storeDisallowedTools","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@484503","name":"carryAllowed","source":"semantic","confidence":0.65}
+{"file":"chunk-0yw3taqg.js","key":"@484579","name":"effectiveDisallowed","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@484663","name":"asDeclared","source":"semantic","confidence":0.65}
+{"file":"chunk-0yw3taqg.js","key":"@484708","name":"toolName","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@484817","name":"carried","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@484879","name":"applied","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@353627","name":"applyDisallowedTools","source":"semantic","confidence":0.65}
+{"file":"chunk-0yw3taqg.js","key":"@493124","name":"path","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@496139","name":"remoteNotice","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@497484","name":"meta","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@513155","name":"writeTurnMessages","source":"semantic","confidence":0.65}
+{"file":"chunk-0yw3taqg.js","key":"@513158","name":"writer","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@513161","name":"turnMessages","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@513173","name":"storedRow","source":"semantic","confidence":0.65}
+{"file":"chunk-0yw3taqg.js","key":"@513191","name":"sourceUuid","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@513223","name":"conversation","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@513250","name":"row","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@337510","name":"DETACHED_DEFAULT_GRACE_MS","source":"semantic","confidence":0.7,"note":"45000"}
+{"file":"chunk-0p9n1dy7.js","key":"@14629","name":"event","source":"semantic","confidence":0.8}
+{"file":"chunk-0p9n1dy7.js","key":"@20328","name":"entries","source":"semantic","confidence":0.75}
+{"file":"chunk-h29vk4wn.js","key":"@36985","name":"MAX_NAMED_UUIDS","source":"semantic","confidence":0.7,"note":"64"}
+{"file":"chunk-h29vk4wn.js","key":"@36991","name":"MAX_UUID_LENGTH","source":"semantic","confidence":0.7,"note":"128"}
+{"file":"chunk-h29vk4wn.js","key":"@79049","name":"handoffUuidOf","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@58442","name":"hasPendingHandoff","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@58455","name":"sendWithHandoff","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@58492","name":"handoffResult","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@73280","name":"finishInterrupt","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@73437","name":"resendUuids","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@73636","name":"frame","source":"semantic","confidence":0.75}
+{"file":"chunk-h29vk4wn.js","key":"@73638","name":"moveInfo","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@73645","name":"firstUuid","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@73717","name":"namedUuids","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@79135","name":"advanceMoveState","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@78773","name":"namedUuidsOf","source":"semantic","confidence":0.75}
+{"file":"chunk-h29vk4wn.js","key":"@78776","name":"frame","source":"semantic","confidence":0.75}
+{"file":"chunk-h29vk4wn.js","key":"@78838","name":"isAcceptableUuid","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@78891","name":"namedUuids","source":"semantic","confidence":0.7}
+{"file":"chunk-h29vk4wn.js","key":"@79140","name":"info","source":"semantic","confidence":0.75}
+{"file":"chunk-h29vk4wn.js","key":"@79365","name":"uuid","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@337719","name":"EscTakeBack","source":"semantic","confidence":0.7,"note":"按 ESC 撤回发送的跟踪器"}
+{"file":"chunk-czq1j3j2.js","key":"@337775","name":"graceMs","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@337781","name":"pollMs","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@337860","name":"entry","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@337905","name":"sent","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@337969","name":"uuids","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@338009","name":"uuid","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@338011","name":"sent","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@338145","name":"error","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@338147","name":"context","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@338154","name":"pending","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@338290","name":"logTakeBackError","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@338216","name":"signal","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@337533","name":"takeBackSource","source":"semantic","confidence":0.65}
+{"file":"chunk-czq1j3j2.js","key":"@339611","name":"held","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@339634","name":"uuid","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@339732","name":"uuids","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@339753","name":"uuid","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@339784","name":"uuid","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@340444","name":"reason","source":"semantic","confidence":0.65}
+{"file":"chunk-czq1j3j2.js","key":"@340574","name":"isRefused","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@340706","name":"uuid","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@342029","name":"frame","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@343540","name":"autoModeBroadcast","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@343950","name":"nextContext","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@347883","name":"isExternalLoading","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@348203","name":"sendResult","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@348713","name":"relayAuthored","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@322471","name":"buildNotices","source":"semantic","confidence":0.65}
+{"file":"chunk-0p9n1dy7.js","key":"@8802","name":"refusalNotice","source":"semantic","confidence":0.7}
+{"file":"chunk-7jxyna5q.js","key":"@453152","name":"platform","source":"semantic","confidence":0.8}
+{"file":"chunk-k0v80sg8.js","key":"@1073","name":"interfaceFitOf","source":"semantic","confidence":0.7}
+{"file":"chunk-k0v80sg8.js","key":"@1193","name":"DEFAULT_INTERFACE_RANGE","source":"semantic","confidence":0.7,"note":"{version:1,min_version:1}"}
+{"file":"chunk-k0v80sg8.js","key":"@1231","name":"compareWithStated","source":"semantic","confidence":0.7}
+{"file":"chunk-k0v80sg8.js","key":"@1237","name":"theirs","source":"semantic","confidence":0.75}
+{"file":"chunk-k0v80sg8.js","key":"@1292","name":"misfitDirection","source":"semantic","confidence":0.7,"note":"self_too_old → computer_too_old"}
+{"file":"chunk-k0v80sg8.js","key":"@1371","name":"misfitOfFit","source":"semantic","confidence":0.7}
+{"file":"chunk-k0v80sg8.js","key":"@1375","name":"fit","source":"semantic","confidence":0.75}
+{"file":"chunk-k0v80sg8.js","key":"@1426","name":"interfaceTelemetry","source":"semantic","confidence":0.7}
+{"file":"chunk-k0v80sg8.js","key":"@1432","name":"fit","source":"semantic","confidence":0.75}
+{"file":"chunk-k0v80sg8.js","key":"@20679","name":"withSessionInterface","source":"semantic","confidence":0.7}
+{"file":"chunk-k0v80sg8.js","key":"@20682","name":"remoteMeta","source":"semantic","confidence":0.75}
+{"file":"chunk-k0v80sg8.js","key":"@20689","name":"interfaceFit","source":"semantic","confidence":0.7}
+{"file":"chunk-k0v80sg8.js","key":"@23329","name":"splitRemoteMeta","source":"semantic","confidence":0.7}
+{"file":"chunk-k0v80sg8.js","key":"@23333","name":"input","source":"semantic","confidence":0.75}
+{"file":"chunk-6d2p9h2d.js","key":"@6107","name":"isMarkedMode","source":"semantic","confidence":0.75,"note":"modeStamp 为 present 或 REQUEST_REAUTHORED"}
+{"file":"chunk-nvm0wye1.js","key":"@73411","name":"arrivedSize","source":"semantic","confidence":0.7}
+{"file":"chunk-nvm0wye1.js","key":"@73653","name":"statedInterface","source":"semantic","confidence":0.7}
+{"file":"chunk-nvm0wye1.js","key":"@34904","name":"tool","source":"semantic","confidence":0.8}
+{"file":"chunk-6d2p9h2d.js","key":"@19123","name":"platform","source":"semantic","confidence":0.8}
+{"file":"chunk-6d2p9h2d.js","key":"@25900","name":"platform","source":"semantic","confidence":0.8}
+{"file":"chunk-6d2p9h2d.js","key":"@33933","name":"candidate","source":"semantic","confidence":0.75}
+{"file":"chunk-6d2p9h2d.js","key":"@33942","name":"joined","source":"semantic","confidence":0.75}
+{"file":"chunk-6d2p9h2d.js","key":"@33950","name":"uppercased","source":"semantic","confidence":0.7}
+{"file":"chunk-6d2p9h2d.js","key":"@34016","name":"command","source":"semantic","confidence":0.75}
+{"file":"chunk-6d2p9h2d.js","key":"@34056","name":"platform","source":"semantic","confidence":0.8}
+{"file":"chunk-6d2p9h2d.js","key":"@60231","name":"settingsCause","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-6d2p9h2d.js","key":"@67802","name":"offersRule","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-6d2p9h2d.js","key":"@67906","name":"isAlwaysAllow","source":"semantic","confidence":0.75}
+{"file":"chunk-6d2p9h2d.js","key":"@49085","name":"words","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-6d2p9h2d.js","key":"@49070","name":"settingsWrite","source":"semantic","confidence":0.7}
+{"file":"chunk-7jxyna5q.js","key":"@251861","name":"platform","source":"semantic","confidence":0.8}
+{"file":"chunk-4z1ntdgk.js","key":"@165618","name":"judgeAnnouncedInterface","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@165621","name":"ours","source":"semantic","confidence":0.75}
+{"file":"chunk-4z1ntdgk.js","key":"@165685","name":"stated","source":"semantic","confidence":0.75}
+{"file":"chunk-4z1ntdgk.js","key":"@165721","name":"fit","source":"semantic","confidence":0.75}
+{"file":"chunk-4z1ntdgk.js","key":"@165783","name":"judgement","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@165866","name":"telemetry","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@166221","name":"seenEpoch","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@166514","name":"judgement","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@167119","name":"misfit","source":"semantic","confidence":0.75}
+{"file":"chunk-k0v80sg8.js","key":"@26773","name":"sanitizeServedCall","source":"semantic","confidence":0.7}
+{"file":"chunk-k0v80sg8.js","key":"@26777","name":"request","source":"semantic","confidence":0.8}
+{"file":"chunk-k0v80sg8.js","key":"@26779","name":"parseRequest","source":"semantic","confidence":0.75}
+{"file":"chunk-k0v80sg8.js","key":"@20276","name":"parseRemoteToolRequest","source":"semantic","confidence":0.85}
+{"file":"chunk-k0v80sg8.js","key":"@26789","name":"parsed","source":"semantic","confidence":0.75}
+{"file":"chunk-k0v80sg8.js","key":"@26865","name":"name","source":"semantic","confidence":0.8}
+{"file":"chunk-k0v80sg8.js","key":"@26870","name":"rest","source":"semantic","confidence":0.75}
+{"file":"chunk-k0v80sg8.js","key":"@26887","name":"remoteMeta","source":"semantic","confidence":0.75}
+{"file":"chunk-k0v80sg8.js","key":"@26892","name":"toolInput","source":"semantic","confidence":0.75}
+{"file":"chunk-k0v80sg8.js","key":"@26897","name":"sanitizedName","source":"semantic","confidence":0.75}
+{"file":"chunk-k0v80sg8.js","key":"@26925","name":"requestParse","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@160935","name":"ENVELOPE_FIELDS","source":"semantic","confidence":0.75,"note":"envelope 顶层字段名，出现即视为两格式混用"}
+{"file":"chunk-4z1ntdgk.js","key":"@161000","name":"MAX_METRICS_DEPTH","source":"semantic","confidence":0.7,"note":"1000"}
+{"file":"chunk-4z1ntdgk.js","key":"@161017","name":"refuseSharedRequest","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@161085","name":"isEnvelopeShaped","source":"semantic","confidence":0.75,"note":"有 step 字段"}
+{"file":"chunk-4z1ntdgk.js","key":"@161088","name":"value","source":"semantic","confidence":0.75}
+{"file":"chunk-4z1ntdgk.js","key":"@161138","name":"measureSharedRequest","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@161141","name":"request","source":"semantic","confidence":0.8}
+{"file":"chunk-4z1ntdgk.js","key":"@161148","name":"jsonText","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@161247","name":"resolveClaim","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@161252","name":"rest","source":"semantic","confidence":0.75}
+{"file":"chunk-4z1ntdgk.js","key":"@161259","name":"claimKind","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@161360","name":"parsedCall","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@161696","name":"isRerequested","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@161780","name":"arrivedBytes","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@161797","name":"rest","source":"semantic","confidence":0.75}
+{"file":"chunk-4z1ntdgk.js","key":"@161808","name":"which","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@161882","name":"resolveSharedRequest","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@161885","name":"claim","source":"semantic","confidence":0.75}
+{"file":"chunk-4z1ntdgk.js","key":"@161887","name":"rest","source":"semantic","confidence":0.75}
+{"file":"chunk-4z1ntdgk.js","key":"@161889","name":"modeStamp","source":"semantic","confidence":0.75}
+{"file":"chunk-4z1ntdgk.js","key":"@161891","name":"arrivedBytes","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@161944","name":"field","source":"semantic","confidence":0.75}
+{"file":"chunk-hp4m40y1.js","key":"@944","name":"CLAUDE_CODE_MCP_SERVE_TUNNEL_BINARY_FRAMES","source":"semantic","confidence":0.8,"note":"导出名同名"}
+{"file":"chunk-pfe3pddp.js","key":"@989","name":"args","source":"semantic","confidence":0.7}
+{"file":"chunk-z20c443b.js","key":"@50720","name":"hookFailureModeSchema","source":"semantic","confidence":0.8,"note":"continue/block 的可选枚举，供 onFailure 使用"}
+{"file":"chunk-czq1j3j2.js","key":"@1833814","name":"workingCopyNotUsedCheck","source":"semantic","confidence":0.8,"note":"id:'working-copy-not-used' 的 setup 检查项"}
+{"file":"chunk-czq1j3j2.js","key":"@1833870","name":"workingCopyNotUsedSetup","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@151125","name":"QUEUED_PROMPT_NOTICES","source":"semantic","confidence":0.75,"note":"三种未发送原因对应的文案"}
+{"file":"chunk-czq1j3j2.js","key":"@151492","name":"QueuedEarlyPromptController","source":"semantic","confidence":0.7,"note":"开机时处理已排队早期输入的控制器"}
+{"file":"chunk-czq1j3j2.js","key":"@151538","name":"host","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@151563","name":"queuedInput","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@151571","name":"launchWarning","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@151673","name":"text","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@151906","name":"hasQuestion","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@151909","name":"isDraftKept","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@151912","name":"isReady","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@151915","name":"isWaiting","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@152117","name":"expectedText","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@152647","name":"noticeKey","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@152649","name":"expectedText","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@152854","name":"stillMine","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@152909","name":"expectedText","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1698569","name":"useCanUseToolRef","source":"semantic","confidence":0.85}
+{"file":"chunk-czq1j3j2.js","key":"@1837536","name":"STARTUP_CHECKS","source":"semantic","confidence":0.7,"note":"启动检查项列表"}
+{"file":"chunk-czq1j3j2.js","key":"@1887359","name":"isStopWaitPending","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1887363","name":"turn","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1714788","name":"shouldPauseForToolProgress","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1907484","name":"queuedPromptController","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1907862","name":"controller","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1907872","name":"startEffect","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1907875","name":"startDeps","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1909248","name":"runningScriptsSource","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1798895","name":"useCodeModeNotices","source":"semantic","confidence":0.65}
+{"file":"chunk-czq1j3j2.js","key":"@350734","name":"SessionOwnerDialog","source":"semantic","confidence":0.75,"note":"会话属于其他账号时的选择框"}
+{"file":"chunk-czq1j3j2.js","key":"@350786","name":"isCopied","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@350789","name":"setCopied","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@350799","name":"refuseInput","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@350809","name":"onChange","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@350849","name":"handleChoice","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@350852","name":"choice","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@350953","name":"onChangeStable","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@351065","name":"copiedText","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@351665","name":"copiedDialog","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@352081","name":"startedLabel","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@352177","name":"startedAccount","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@352205","name":"startedRow","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@352289","name":"loggedInLabel","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@352383","name":"loggedInRow","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@352464","name":"accountsBox","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@352594","name":"exitOption","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@352597","name":"loginOption","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@352875","name":"selector","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@353178","name":"dialog","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1484021","name":"LOGO_LEAVE_STEP_MS","source":"semantic","confidence":0.7,"note":"90"}
+{"file":"chunk-czq1j3j2.js","key":"@1484037","name":"nextLogoPhase","source":"semantic","confidence":0.75,"note":"按位置/状态推出 home/logo/leaving/gone"}
+{"file":"chunk-czq1j3j2.js","key":"@1484041","name":"phase","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1484222","name":"useLogoRetirement","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1484248","name":"phase","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1484250","name":"setPhase","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1484295","name":"fadeStep","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1484298","name":"setFadeStep","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1484361","name":"nextPhase","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@361304","name":"SessionOwnerCheck","source":"semantic","confidence":0.7,"note":"切换账号/会话归属检查与提示"}
+{"file":"chunk-czq1j3j2.js","key":"@361576","name":"currentIdentity","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@361701","name":"state","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@361988","name":"state","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@362064","name":"startedAccount","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@362085","name":"handle","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@362131","name":"choice","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@362317","name":"choice","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@362319","name":"startedAccount","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@362688","name":"currentIdentity","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@362798","name":"copyError","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@362880","name":"error","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@363251","name":"heldInitialMessage","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@363312","name":"state","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1509143","name":"sumToolCounts","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1509147","name":"counts","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1543946","name":"DRAINED_SHELL_MARK","source":"semantic","confidence":0.6,"note":"空数组常量，紧邻 DRAINED_SHELL_LINE"}
+{"file":"chunk-czq1j3j2.js","key":"@1714788","name":"shouldPauseForToolProgress","source":"semantic","confidence":0.75,"note":"某类进度显示为 all 就暂停动画"}
+{"file":"chunk-czq1j3j2.js","key":"@1500652","name":"stateRowSource","source":"semantic","confidence":0.7,"note":"缓存的 StateRowSourceContext 模块"}
+{"file":"chunk-czq1j3j2.js","key":"@1501226","name":"logoRetired","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1501489","name":"showHomePage","source":"semantic","confidence":0.75,"note":"logo 已退役或处于 leaving 时显示首页"}
+{"file":"chunk-czq1j3j2.js","key":"@1502866","name":"homePageElement","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1503047","name":"logoHeader","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1503210","name":"sessionHeaderLine","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1503601","name":"headerChildren","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1503777","name":"messageFrame","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@548683","name":"DRAFT_SETTLE_MS","source":"semantic","confidence":0.7,"note":"600"}
+{"file":"chunk-wzw7szp3.js","key":"@1813","name":"shownAsByMessage","source":"semantic","confidence":0.7}
+{"file":"chunk-wzw7szp3.js","key":"@1884","name":"uuid","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1673863","name":"scriptAskHolds","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1675085","name":"bridgeControlKey","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1675270","name":"isExitSelection","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1682961","name":"unsubTranscript_2","source":"semantic","confidence":0.75,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@1683989","name":"linesToSendNow","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@205607","name":"from","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@205609","name":"into","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@451481","name":"MAX_SANDBOX_ASK_MS","source":"semantic","confidence":0.7,"note":"60000"}
+{"file":"chunk-czq1j3j2.js","key":"@453902","name":"answeredLate","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@453908","name":"answer","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@409331","name":"artifactsEntryWatch","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@411663","name":"session","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@411666","name":"log","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@411669","name":"mode","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@411716","name":"command","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@451193","name":"finishToolsCapture","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@417871","name":"askedOwner","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@418129","name":"warningText","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@419011","name":"capturedRecords","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@421244","name":"receipt","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@421640","name":"toolNames","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@421656","name":"toolsToRecord","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@427000","name":"loginCounter","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@427012","name":"loginSwitchHolder","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@433800","name":"askedOwnerAgain","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@443564","name":"entry","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@443568","name":"prior","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@443669","name":"restoredDrafts","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@443862","name":"entries","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@443871","name":"first","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@443876","name":"rest","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@444001","name":"messages","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@444018","name":"message","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@444199","name":"message","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@176044","name":"BOOTSTRAP_WAIT_MS","source":"semantic","confidence":0.7,"note":"6000"}
+{"file":"chunk-czq1j3j2.js","key":"@176053","name":"useCaseSpec","source":"semantic","confidence":0.7,"note":"withHideWhile 包住的程序用途问题规格"}
+{"file":"chunk-czq1j3j2.js","key":"@176210","name":"waitForBootstrapAnswer","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@176279","name":"done","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@176346","name":"unsubscribe","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@176441","name":"askProgramUseCase","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@176447","name":"ctx","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@176449","name":"deps","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@176528","name":"answer","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@176610","name":"choices","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@176634","name":"choice","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@176676","name":"unsubscribe","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@176705","name":"choice","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@368764","name":"isPanelObscured","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1552132","name":"FILE_CHANGED_NOTICE_MS","source":"semantic","confidence":0.7,"note":"2000"}
+{"file":"chunk-czq1j3j2.js","key":"@1552206","name":"responsePairRegistry","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1509186","name":"sumScores","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1563597","name":"promptText","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1563668","name":"securityScore","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1570327","name":"takeBack","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1572373","name":"turnAbortController","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1573284","name":"stopWaitDelta","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1580484","name":"event","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1584311","name":"rows","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1586491","name":"taskHost","source":"semantic","confidence":0.75}
+{"file":"chunk-agvpb1pj.js","key":"@29636","name":"LOAD_PAGE_SIZE","source":"semantic","confidence":0.7,"note":"50，一次补载条数"}
+{"file":"chunk-agvpb1pj.js","key":"@29642","name":"AUTO_LOAD_MORE_THRESHOLD","source":"semantic","confidence":0.7,"note":"10"}
+{"file":"chunk-agvpb1pj.js","key":"@29648","name":"MAX_AUTO_LOAD_INDEX","source":"semantic","confidence":0.7,"note":"2000"}
+{"file":"chunk-agvpb1pj.js","key":"@30453","name":"isResuming","source":"semantic","confidence":0.75}
+{"file":"chunk-agvpb1pj.js","key":"@30456","name":"setIsResuming","source":"semantic","confidence":0.75}
+{"file":"chunk-agvpb1pj.js","key":"@30653","name":"visibleLogs","source":"semantic","confidence":0.75}
+{"file":"chunk-agvpb1pj.js","key":"@30826","name":"isExhausted","source":"semantic","confidence":0.7}
+{"file":"chunk-agvpb1pj.js","key":"@30829","name":"setIsExhausted","source":"semantic","confidence":0.7}
+{"file":"chunk-agvpb1pj.js","key":"@30840","name":"loadPageCount","source":"semantic","confidence":0.7}
+{"file":"chunk-agvpb1pj.js","key":"@31191","name":"signal","source":"semantic","confidence":0.75}
+{"file":"chunk-agvpb1pj.js","key":"@31903","name":"onLogsChanged","source":"semantic","confidence":0.7}
+{"file":"chunk-a3r2kq46.js","key":"@37068","name":"platform","source":"semantic","confidence":0.8}
+{"file":"chunk-a3r2kq46.js","key":"@37315","name":"platform","source":"semantic","confidence":0.8}
+{"file":"chunk-a3r2kq46.js","key":"@38402","name":"pid","source":"semantic","confidence":0.75}
+{"file":"chunk-a3r2kq46.js","key":"@38404","name":"pgrp","source":"semantic","confidence":0.75}
+{"file":"chunk-7jxyna5q.js","key":"@70156","name":"withdrawalAttachmentFor","source":"semantic","confidence":0.7}
+{"file":"chunk-7jxyna5q.js","key":"@70163","name":"leg","source":"semantic","confidence":0.8}
+{"file":"chunk-7jxyna5q.js","key":"@72749","name":"markServedVersion","source":"semantic","confidence":0.7}
+{"file":"chunk-7jxyna5q.js","key":"@73470","name":"signal","source":"semantic","confidence":0.75}
+{"file":"chunk-7jxyna5q.js","key":"@78122","name":"joinedEndedUnanswered","source":"semantic","confidence":0.7}
+{"file":"chunk-7jxyna5q.js","key":"@78128","name":"answerPromise","source":"semantic","confidence":0.75}
+{"file":"chunk-7jxyna5q.js","key":"@81563","name":"normalizedText","source":"semantic","confidence":0.7}
+{"file":"chunk-ndr12bqk.js","key":"@4439","name":"platform","source":"semantic","confidence":0.8}
+{"file":"chunk-ndr12bqk.js","key":"@5422","name":"platform","source":"semantic","confidence":0.8}
+{"file":"chunk-rytc8e8q.js","key":"@26618","name":"deadline","source":"semantic","confidence":0.7}
+{"file":"chunk-rytc8e8q.js","key":"@26946","name":"latestToolUseIndex","source":"semantic","confidence":0.65}
+{"file":"chunk-rytc8e8q.js","key":"@26949","name":"messages","source":"semantic","confidence":0.8}
+{"file":"chunk-rytc8e8q.js","key":"@27162","name":"skipMessage","source":"semantic","confidence":0.7}
+{"file":"chunk-rytc8e8q.js","key":"@27175","name":"earlierIndex","source":"semantic","confidence":0.7}
+{"file":"chunk-rytc8e8q.js","key":"@27193","name":"earlier","source":"semantic","confidence":0.75}
+{"file":"chunk-rytc8e8q.js","key":"@27287","name":"block","source":"semantic","confidence":0.75}
+{"file":"chunk-rytc8e8q.js","key":"@15117","name":"isJigglyLollipopOn","source":"semantic","confidence":0.7}
+{"file":"chunk-rytc8e8q.js","key":"@16525","name":"stripReminderPrefix","source":"semantic","confidence":0.7,"note":"去掉最后一个 </system-reminder> 之前的内容"}
+{"file":"chunk-frs14hy1.js","key":"@132712","name":"jsSummaryProviders","source":"semantic","confidence":0.6}
+{"file":"chunk-frs14hy1.js","key":"@136587","name":"SUMMARY_MAX_TRIES","source":"semantic","confidence":0.7,"note":"2"}
+{"file":"chunk-frs14hy1.js","key":"@136592","name":"SUMMARY_TIMEOUT_MS","source":"semantic","confidence":0.7,"note":"1e4"}
+{"file":"chunk-exfmq47h.js","key":"@767097","name":"gzipped","source":"semantic","confidence":0.75}
+{"file":"chunk-exfmq47h.js","key":"@924106","name":"waitForEmits","source":"semantic","confidence":0.7}
+{"file":"chunk-jynns2s2.js","key":"@6539","name":"reason","source":"semantic","confidence":0.75}
+{"file":"chunk-exfmq47h.js","key":"@139252","name":"hasEnvBearerFallback","source":"semantic","confidence":0.7}
+{"file":"chunk-exfmq47h.js","key":"@926543","name":"shouldUseEnvBearerFallback","source":"semantic","confidence":0.7}
+{"file":"chunk-exfmq47h.js","key":"@649627","name":"forceSaving","source":"semantic","confidence":0.7}
+{"file":"chunk-exfmq47h.js","key":"@850372","name":"config","source":"semantic","confidence":0.8}
+{"file":"chunk-exfmq47h.js","key":"@887369","name":"platform","source":"semantic","confidence":0.8}
+{"file":"chunk-exfmq47h.js","key":"@891585","name":"MEMORY_READ_TTL_MS","source":"semantic","confidence":0.7,"note":"1000"}
+{"file":"chunk-exfmq47h.js","key":"@891758","name":"memoryReadingAgeMs","source":"semantic","confidence":0.7}
+{"file":"chunk-exfmq47h.js","key":"@139309","name":"baseApiHost","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1546989","name":"MIN_WARM_HOLD_MS","source":"semantic","confidence":0.7,"note":"1500"}
+{"file":"chunk-5xgkngpb.js","key":"@1547007","name":"awaitCacheWarmIfAny","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1547013","name":"signal","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@1547137","name":"awaitCacheWarm","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@1547145","name":"model","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@1547147","name":"signal","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@1547178","name":"ageMs","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@1547191","name":"end","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@1547466","name":"waitForWarmSettle","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@1547470","name":"inFlight","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@1547472","name":"signal","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@1547560","name":"onAbort","source":"semantic","confidence":0.7}
+{"file":"chunk-03tec5k5.js","key":"@8602","name":"stripSafeguardsField","source":"semantic","confidence":0.85}
+{"file":"chunk-03tec5k5.js","key":"@8605","name":"schema","source":"semantic","confidence":0.8}
+{"file":"chunk-03tec5k5.js","key":"@8660","name":"rest","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2707787","name":"messages","source":"semantic","confidence":0.8}
+{"file":"chunk-9dxf3ckd.js","key":"@4640","name":"options","source":"semantic","confidence":0.75}
+{"file":"chunk-9dxf3ckd.js","key":"@7788","name":"viaOAuth","source":"semantic","confidence":0.75}
+{"file":"chunk-9dxf3ckd.js","key":"@9753","name":"isAnthropicAuth","source":"semantic","confidence":0.7}
+{"file":"chunk-9dxf3ckd.js","key":"@9764","name":"shouldOffer","source":"semantic","confidence":0.7}
+{"file":"chunk-9dxf3ckd.js","key":"@9872","name":"useCaseChoice","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@143282","name":"isDocumentContent","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@143335","name":"findToolResultFirstBlock","source":"semantic","confidence":0.7,"note":"判断 tool_result 首块里有没有 document 内容"}
+{"file":"chunk-5xgkngpb.js","key":"@143358","name":"message","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@143567","name":"secondBlock","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@143680","name":"message","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@2533783","name":"resolveModelAlias","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2533789","name":"getMainLoopModel","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2554681","name":"messages","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@2618195","name":"signal","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2620835","name":"capIndex","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2620903","name":"hasParent","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2621073","name":"isAfterCap","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2626619","name":"lowerTurnEffort","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2626689","name":"model","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@2626725","name":"lowered","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2626867","name":"lastSentEffortSince","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2626871","name":"messages","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@2626909","name":"message","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@2633258","name":"mapArray","source":"semantic","confidence":0.7,"note":"lodash map"}
+{"file":"chunk-5xgkngpb.js","key":"@2633262","name":"collection","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@2633264","name":"iteratee","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2633271","name":"index","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2633276","name":"result","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2633326","name":"value","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2633328","name":"key","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2633330","name":"collection","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@2633374","name":"sortAndUnwrap","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2633378","name":"array","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@2633380","name":"comparator","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2633387","name":"index","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2633464","name":"compareAscending","source":"semantic","confidence":0.7,"note":"lodash compareAscending"}
+{"file":"chunk-5xgkngpb.js","key":"@2633468","name":"value","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2633470","name":"other","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2633487","name":"valueIsDefined","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2633500","name":"valueIsNull","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2633511","name":"valueIsReflexive","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2633519","name":"valueIsSymbol","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2633527","name":"otherIsDefined","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2633540","name":"otherIsNull","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2633551","name":"otherIsReflexive","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2633559","name":"otherIsSymbol","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2633727","name":"compareMultiple","source":"semantic","confidence":0.7,"note":"lodash compareMultiple"}
+{"file":"chunk-5xgkngpb.js","key":"@2633731","name":"object","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@2633733","name":"other","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2633735","name":"orders","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2633742","name":"index","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2633773","name":"criteriaLength","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2633784","name":"ordersLength","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2633812","name":"result","source":"semantic","confidence":0.75}
+{"file":"chunk-5xgkngpb.js","key":"@2633856","name":"order","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@269609","name":"WorkerReadyHold","source":"semantic","confidence":0.75,"note":"显示 worker 就绪等待行，延时后自动收起"}
+{"file":"chunk-czq1j3j2.js","key":"@270353","name":"SendNowTracker","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@272747","name":"REFUSAL_CACHE_MESSAGE","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@274076","name":"sendNowTracker","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@274102","name":"isLoading","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@274105","name":"connectionStatus","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@274336","name":"previousUses","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@274401","name":"workerReadyHold","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@274450","name":"callback","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@274453","name":"delayMs","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@274542","name":"notifyConnStatus","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@274922","name":"clearServedCalls","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@275054","name":"pendingElicitationRef","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@275065","name":"pendingPromptRef","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@275502","name":"isAccepted","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@275511","name":"isDialogsDone","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@275585","name":"droppedNoticeRef","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@275609","name":"reason","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@275639","name":"heldCount","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@276053","name":"closeDialogs","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@276168","name":"wasReconnecting","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@276452","name":"failureReason","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@276601","name":"previousMessages","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@278912","name":"onTaskRemove","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@279194","name":"onPrompt","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@280243","name":"onRetry","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@280302","name":"onConnect","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@281508","name":"timeoutNoticeRef","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@281519","name":"lastOpenedAt","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@282077","name":"setupProgressCount","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@282085","name":"onSetupProgress","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@282177","name":"busyTaskIds","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@282579","name":"boundManager","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@283128","name":"manager","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@283898","name":"heldCandidate","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@284703","name":"previousMessages","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@284887","name":"unsubscribe","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@285008","name":"notice","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@285847","name":"askerId","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@286313","name":"seededReplyChannelToolUseIds","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@288244","name":"outcome","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@288247","name":"mode","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@288250","name":"misfit","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@288260","name":"noticeKey","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@288380","name":"revokedHandler","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@288389","name":"previous","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@288850","name":"listener","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@289436","name":"releaseSessionUrl","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@289439","name":"isReleased","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@289445","name":"releaseUrl","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@289471","name":"releaseAll","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@289957","name":"frame","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@289960","name":"meta","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@291442","name":"hasSetup","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@291500","name":"setupState","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@291755","name":"droppedNotice","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@291789","name":"previousMessages","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@291809","name":"message","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@292279","name":"uuid","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@292554","name":"previousMessages","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@292589","name":"message","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@292671","name":"previousMessages","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@292702","name":"message","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@293351","name":"state","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@293592","name":"isAdoptable","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@293984","name":"requestId","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@297047","name":"taskId","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@297654","name":"previousMessages","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@297769","name":"converted","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@299506","name":"incoming","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@302217","name":"mayHaveArrived","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@304828","name":"heartbeatAtStart","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@312924","name":"timeoutInfo","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@315059","name":"handleQueueEmpty","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@316157","name":"uuid","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@317016","name":"ticket","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@317056","name":"ticket","source":"semantic","confidence":0.7}
+{"file":"chunk-g4tsxwy3.js","key":"@49729","name":"ctx","source":"semantic","confidence":0.75}
+{"file":"chunk-g4tsxwy3.js","key":"@49779","name":"decision","source":"semantic","confidence":0.75}
+{"file":"chunk-g4tsxwy3.js","key":"@49781","name":"teardown","source":"semantic","confidence":0.7}
+{"file":"chunk-g4tsxwy3.js","key":"@49828","name":"sourceKind","source":"semantic","confidence":0.7}
+{"file":"chunk-g4tsxwy3.js","key":"@49873","name":"how","source":"semantic","confidence":0.75}
+{"file":"chunk-g4tsxwy3.js","key":"@54177","name":"armsAutoDeny","source":"semantic","confidence":0.7}
+{"file":"chunk-g4tsxwy3.js","key":"@55970","name":"surface","source":"semantic","confidence":0.75}
+{"file":"chunk-j6tt9nsa.js","key":"@68272","name":"firstStart","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-j6tt9nsa.js","key":"@68290","name":"firstEnd","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-j6tt9nsa.js","key":"@68306","name":"secondEnd","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-j6tt9nsa.js","key":"@68347","name":"creditLabel","source":"semantic","confidence":0.7}
+{"file":"chunk-pzdhtgn4.js","key":"@3964","name":"reportPluginProblem","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-pzdhtgn4.js","key":"@3967","name":"plugin","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-pzdhtgn4.js","key":"@3969","name":"problem","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-pzdhtgn4.js","key":"@3971","name":"repeat","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-j8f885h1.js","key":"@117095","name":"checkToolGroupCalls","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-j8f885h1.js","key":"@117107","name":"engineCalls","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-j8f885h1.js","key":"@117164","name":"answerCalls","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-j8f885h1.js","key":"@117239","name":"id","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-j8f885h1.js","key":"@117241","name":"index","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-j8f885h1.js","key":"@119897","name":"checkOnScreenProp","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-j8f885h1.js","key":"@120116","name":"checkCommandProp","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-j8f885h1.js","key":"@120331","name":"checkPlacementProp","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-j8f885h1.js","key":"@120531","name":"checkPlacedProps","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-j8f885h1.js","key":"@120543","name":"hasChangedPlugin","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-j8f885h1.js","key":"@120595","name":"hasChangedId","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-j8f885h1.js","key":"@121068","name":"checkSummaryProp","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-j8f885h1.js","key":"@121624","name":"checkViewProp","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-frs14hy1.js","key":"@15889","name":"chain","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-frs14hy1.js","key":"@16123","name":"tail","source":"semantic","confidence":0.7}
+{"file":"chunk-nvm0wye1.js","key":"@45585","name":"refuseForMisfit","source":"semantic","confidence":0.7}
+{"file":"chunk-nvm0wye1.js","key":"@45589","name":"target","source":"semantic","confidence":0.75}
+{"file":"chunk-nvm0wye1.js","key":"@45598","name":"misfit","source":"semantic","confidence":0.75}
+{"file":"chunk-nvm0wye1.js","key":"@45794","name":"outcome","source":"semantic","confidence":0.75}
+{"file":"chunk-nvm0wye1.js","key":"@46218","name":"refusal","source":"semantic","confidence":0.7}
+{"file":"chunk-nvm0wye1.js","key":"@46640","name":"refusal","source":"semantic","confidence":0.7}
+{"file":"chunk-nvm0wye1.js","key":"@48142","name":"refusal","source":"semantic","confidence":0.7}
+{"file":"chunk-nvm0wye1.js","key":"@48171","name":"known","source":"semantic","confidence":0.7}
+{"file":"chunk-nvm0wye1.js","key":"@71927","name":"misfit","source":"semantic","confidence":0.75}
+{"file":"chunk-7jxyna5q.js","key":"@69769","name":"attachment","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@808469","name":"noticeList","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1174730","name":"isRecentInput","source":"semantic","confidence":0.8}
+{"file":"chunk-pqe1nn4c.js","key":"@2495","name":"step","source":"semantic","confidence":0.8}
+{"file":"chunk-7kayq7nc.js","key":"@203197","name":"kind","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1423357","name":"TERMINAL_TOO_SHORT_MESSAGE","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@1618557","name":"sessionModeModule","source":"semantic","confidence":0.7}
+{"file":"chunk-2avr6cej.js","key":"@228980","name":"terminalProbeContext","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@166221","name":"queryKind","source":"semantic","confidence":0.7}
+{"file":"chunk-frs14hy1.js","key":"@132712","name":"SHORT_SUMMARY_PROVIDERS","source":"semantic","confidence":0.7}
+{"file":"chunk-frs14hy1.js","key":"@132843","name":"model","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@2633357","name":"mapCollect","source":"semantic","confidence":0.7,"note":"lodash map 的别名导出"}
+{"file":"chunk-5xgkngpb.js","key":"@2633258","name":"mapCollectImpl","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2633447","name":"sortUnwrap","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2633374","name":"sortUnwrapImpl","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2633710","name":"compareAscending","source":"semantic","confidence":0.7}
+{"file":"chunk-5xgkngpb.js","key":"@2633464","name":"compareAscendingImpl","source":"semantic","confidence":0.7}
+{"file":"chunk-exfmq47h.js","key":"@935651","name":"featureKey","source":"semantic","confidence":0.7}
+{"file":"chunk-exfmq47h.js","key":"@935653","name":"fallback","source":"semantic","confidence":0.7}
+{"file":"chunk-frs14hy1.js","key":"@132727","name":"jsSummaryProviderList","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@36702","name":"triggerIndex","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1385239","name":"isRecentInput","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@181582","name":"countedAsk","source":"semantic","confidence":0.85}
+{"file":"chunk-czq1j3j2.js","key":"@181593","name":"answerPromise","source":"semantic","confidence":0.85}
+{"file":"chunk-ndr12bqk.js","key":"@6342","name":"platform","source":"semantic","confidence":0.8}
+{"file":"chunk-ndr12bqk.js","key":"@6915","name":"platform","source":"semantic","confidence":0.8}
+{"file":"chunk-frs14hy1.js","key":"@132712","name":"SHORT_SUMMARY_PROVIDERS","source":"semantic","confidence":0.7}
+{"file":"chunk-frs14hy1.js","key":"@139382","name":"lastResponsesBegun","source":"semantic","confidence":0.85}
+{"file":"chunk-frs14hy1.js","key":"@139393","name":"writerFailedFlag","source":"semantic","confidence":0.85}
+{"file":"chunk-frs14hy1.js","key":"@140047","name":"result","source":"semantic","confidence":0.85}
+{"file":"chunk-wjygkcr4.js","key":"@158692","name":"progress","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@158870","name":"call","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@158899","name":"entry","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@158941","name":"call","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@158970","name":"call","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@158999","name":"entry","source":"semantic","confidence":0.8}
+{"file":"chunk-wjygkcr4.js","key":"@159041","name":"call","source":"semantic","confidence":0.8}
+{"file":"chunk-y080jnb6.js","key":"@6504","name":"followedSessions","source":"semantic","confidence":0.75}
+{"file":"chunk-y080jnb6.js","key":"@6529","name":"meta","source":"semantic","confidence":0.75}
+{"file":"chunk-h7hgs1mf.js","key":"@11235","name":"onTimeout","source":"semantic","confidence":0.7}
+{"file":"chunk-h7hgs1mf.js","key":"@11247","name":"spawnedChild","source":"semantic","confidence":0.75}
+{"file":"chunk-h7hgs1mf.js","key":"@11446","name":"jti","source":"semantic","confidence":0.75}
+{"file":"chunk-h7hgs1mf.js","key":"@11450","name":"status","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@493617","name":"hasAgentPanelTask","source":"semantic","confidence":0.85}
+{"file":"chunk-czq1j3j2.js","key":"@495445","name":"shouldDrain","source":"semantic","confidence":0.85}
+{"file":"chunk-czq1j3j2.js","key":"@495459","name":"hasPanelTask","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@495470","name":"canStop","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1693332","name":"agentActionGaugeRef","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1694706","name":"agentActionCount","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1696472","name":"blockGauge","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1696288","name":"config","source":"semantic","confidence":0.75}
+{"file":"chunk-7stfs6p0.js","key":"@88782","name":"toolName","source":"semantic","confidence":0.85}
+{"file":"chunk-7stfs6p0.js","key":"@90826","name":"payload","source":"semantic","confidence":0.85}
+{"file":"chunk-7stfs6p0.js","key":"@90828","name":"next","source":"semantic","confidence":0.85}
+{"file":"chunk-7stfs6p0.js","key":"@90899","name":"toolName","source":"semantic","confidence":0.8}
+{"file":"chunk-k0v80sg8.js","key":"@20368","name":"unlistedOp","source":"semantic","confidence":0.85}
+{"file":"chunk-k0v80sg8.js","key":"@20513","name":"parsed","source":"semantic","confidence":0.85}
+{"file":"chunk-dkh1nd34.js","key":"@683","name":"meta","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@962708","name":"idleTeammatesExpandedSelector","source":"semantic","confidence":0.85}
+{"file":"chunk-czq1j3j2.js","key":"@962909","name":"remoteWorkflowRunIdsSelector","source":"semantic","confidence":0.85}
+{"file":"chunk-czq1j3j2.js","key":"@962980","name":"idSelector","source":"semantic","confidence":0.85}
+{"file":"chunk-czq1j3j2.js","key":"@963176","name":"workflowFooterRunIdSelector","source":"semantic","confidence":0.85}
+{"file":"chunk-czq1j3j2.js","key":"@963225","name":"clearWorkflowFooterSelection","source":"semantic","confidence":0.85}
+{"file":"chunk-frs14hy1.js","key":"@22043","name":"hasUnwiredBlock","source":"semantic","confidence":0.85}
+{"file":"chunk-frs14hy1.js","key":"@21507","name":"isFailedWithoutWire","source":"semantic","confidence":0.75}
+{"file":"chunk-frs14hy1.js","key":"@21560","name":"closeAllBlocks","source":"semantic","confidence":0.75}
+{"file":"chunk-frs14hy1.js","key":"@23469","name":"closingReason","source":"semantic","confidence":0.75}
+{"file":"chunk-frs14hy1.js","key":"@23554","name":"skipStopEvent","source":"semantic","confidence":0.75}
+{"file":"chunk-frs14hy1.js","key":"@23467","name":"current","source":"semantic","confidence":0.8}
+{"file":"chunk-frs14hy1.js","key":"@23671","name":"blockState","source":"semantic","confidence":0.8}
+{"file":"chunk-frs14hy1.js","key":"@23488","name":"blockState","source":"semantic","confidence":0.8}
+{"file":"chunk-frs14hy1.js","key":"@21975","name":"current","source":"semantic","confidence":0.8}
+{"file":"chunk-w3ch4xq2.js","key":"@130546","name":"declaredRules","source":"semantic","confidence":0.75}
+{"file":"chunk-w3ch4xq2.js","key":"@130582","name":"rule","source":"semantic","confidence":0.8}
+{"file":"chunk-w3ch4xq2.js","key":"@131303","name":"isKnownToolName","source":"semantic","confidence":0.75}
+{"file":"chunk-h29vk4wn.js","key":"@58463","name":"content","source":"semantic","confidence":0.85}
+{"file":"chunk-h29vk4wn.js","key":"@58465","name":"opts","source":"semantic","confidence":0.85}
+{"file":"chunk-h29vk4wn.js","key":"@58715","name":"content","source":"semantic","confidence":0.85}
+{"file":"chunk-h29vk4wn.js","key":"@58717","name":"opts","source":"semantic","confidence":0.85}
+{"file":"chunk-czq1j3j2.js","key":"@343785","name":"guard","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@343940","name":"prevState","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@343982","name":"restoredContext","source":"semantic","confidence":0.7}
+{"file":"chunk-4z1ntdgk.js","key":"@161806","name":"envelope","source":"semantic","confidence":0.8}
+{"file":"chunk-5xgkngpb.js","key":"@2575405","name":"chunk","source":"semantic","confidence":0.8}
+{"file":"chunk-w3ch4xq2.js","key":"@22394","name":"params","source":"semantic","confidence":0.8}
+{"file":"chunk-7stfs6p0.js","key":"@87924","name":"row","source":"semantic","confidence":0.85}
+{"file":"chunk-a3r2kq46.js","key":"@38201","name":"killedGroups","source":"semantic","confidence":0.75}
+{"file":"chunk-y080jnb6.js","key":"@6350","name":"daemonUsage","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1682931","name":"unsubTranscript","source":"semantic","confidence":0.85}
+{"file":"chunk-czq1j3j2.js","key":"@414818","name":"quotaSurface","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@414863","name":"toolsCapture","source":"semantic","confidence":0.8}
+{"file":"chunk-czq1j3j2.js","key":"@416904","name":"captured","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@416914","name":"pointerFailedToAppend","source":"semantic","confidence":0.85}
+{"file":"chunk-czq1j3j2.js","key":"@419034","name":"startRows","source":"semantic","confidence":0.85}
+{"file":"chunk-czq1j3j2.js","key":"@993095","name":"findSelectedTaskStable","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@465039","name":"canStopRemoteWorkflow","source":"semantic","confidence":0.75,"note":"远端控制可用且 worker 未报消失"}
+{"file":"chunk-czq1j3j2.js","key":"@465076","name":"stopRemoteWorkflow","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@1004918","name":"cloudWorkflowsDialog","source":"semantic","confidence":0.75}
+{"file":"chunk-czq1j3j2.js","key":"@838560","name":"pillLabelByState","source":"semantic","confidence":0.7}
+{"file":"chunk-y080jnb6.js","key":"@6404","name":"cpuDelta","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-nhaxap13.js","key":"@71120","name":"attachNeedsAnswer","source":"semantic","confidence":0.7}
+{"file":"chunk-nhaxap13.js","key":"@71339","name":"attachMode","source":"semantic","confidence":0.75}
+{"file":"chunk-nhaxap13.js","key":"@72640","name":"isAttachModeValue","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-nhaxap13.js","key":"@83203","name":"targetFileContent","source":"semantic","confidence":0.7}
+{"file":"chunk-nhaxap13.js","key":"@83245","name":"droppedMcpMessages","source":"semantic","confidence":0.75}
+{"file":"chunk-nhaxap13.js","key":"@83251","name":"pendingResumeMessages","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-nhaxap13.js","key":"@83695","name":"baseInitialSessionState","source":"semantic","confidence":0.7}
+{"file":"chunk-nhaxap13.js","key":"@84537","name":"initialMessages","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@183555","name":"retryRefusal","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-w3ch4xq2.js","key":"@233708","name":"nextRound","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@49986","name":"recoveryMessage","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@244677","name":"toolResultCount","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@110682","name":"cutPictureCount","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@110690","name":"cutReadCount","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@110733","name":"isBeforeCut","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@110797","name":"withdrawnBeforeCount","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@111150","name":"keptBlock","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@111188","name":"removedCount","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-0yw3taqg.js","key":"@111773","name":"pathKeepMask","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@111795","name":"keptPaths","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@113015","name":"isVisibleBeforeCut","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@113084","name":"removedPromptCount","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@482291","name":"storedDenyLists","source":"semantic","confidence":0.75}
+{"file":"chunk-0yw3taqg.js","key":"@482357","name":"canCarry","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@482411","name":"turnDisallowedTools","source":"semantic","confidence":0.7}
+{"file":"chunk-0yw3taqg.js","key":"@482552","name":"toolList","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-0yw3taqg.js","key":"@514003","name":"initExtras","source":"semantic","confidence":0.65}
+{"file":"chunk-czq1j3j2.js","key":"@1898723","name":"hasLocalOverlay","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@1908674","name":"topBarNode","source":"semantic","confidence":0.7}
+{"file":"chunk-agvpb1pj.js","key":"@30607","name":"filterByPrValue","source":"semantic","confidence":0.7}
+{"file":"chunk-agvpb1pj.js","key":"@30843","name":"setLoadPageCount","source":"semantic","confidence":0.7}
+{"file":"chunk-agvpb1pj.js","key":"@31182","name":"loadMore","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-agvpb1pj.js","key":"@31299","name":"morePending","source":"semantic","confidence":0.85,"note":"316 同名"}
+{"file":"chunk-czq1j3j2.js","key":"@962712","name":"state","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@962913","name":"state","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@962984","name":"state","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@963180","name":"state","source":"semantic","confidence":0.7}
+{"file":"chunk-czq1j3j2.js","key":"@963229","name":"state","source":"semantic","confidence":0.7}
+{"file":"chunk-h7hgs1mf.js","key":"@11444","name":"doSpawn","source":"semantic","confidence":0.7}
+{"file":"chunk-7stfs6p0.js","key":"@88779","name":"shouldChart","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@130711","name":"isAutoAllowed","source":"semantic","confidence":0.7}
+{"file":"chunk-w3ch4xq2.js","key":"@130714","name":"toolRules","source":"semantic","confidence":0.7}
+{"file":"chunk-frs14hy1.js","key":"@21973","name":"isFailedUnclosed","source":"semantic","confidence":0.7}
+{"file":"chunk-frs14hy1.js","key":"@21568","name":"current","source":"semantic","confidence":0.7}
+{"file":"chunk-wjygkcr4.js","key":"@12663","name":"localWorkflowsOn","source":"semantic","confidence":0.7}
+{"file":"chunk-hnxhr3bs.js","key":"@125096","name":"groupToolUses","source":"semantic","confidence":0.7}
+{"file":"chunk-dkh1nd34.js","key":"@679","name":"bindingSpecOf","source":"semantic","confidence":0.7}

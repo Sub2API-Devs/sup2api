@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。把动态工作流注册成斜杠命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qzez70vf.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-dn8avk1p.js (3)
  * attribution: placement 3
  */
 import { isWorkflowsDisabled, isWorkflowsAvailable } from "../../utils/workflows/workflowGates.js";
@@ -14,12 +14,12 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { isWorkflowAuthoringSkillVisible } from "../../skills/skillVisibility.js";
 import { WORKFLOW_AUTHORING } from "../../skills/bundled/bundledSkillNames.js";
 
-//@ chunk-qzez70vf.js:11972-12025 placement
+//@ chunk-dn8avk1p.js:13120-13173 placement
 async function refreshDynamicWorkflowsIfEnabled(host, storageV5) {
   if (isWorkflowsDisabled()) return;
   await allWorkflowsForHost(host, storageV5);
 }
-//@ chunk-qzez70vf.js:12025-13135 placement
+//@ chunk-dn8avk1p.js:13173-14283 placement
 /**
  * 动态生成的 prompt 命令对象（name=o.name）；描述：o.description。
  */
@@ -87,7 +87,7 @@ Invoke: Workflow(${invocation})${authoringNote}`,
     },
   };
 }
-//@ chunk-qzez70vf.js:13135-13205 placement
+//@ chunk-dn8avk1p.js:14283-14353 placement
 async function listDynamicWorkflowCommands(host, storageV5) {
   if (!isWorkflowsAvailable()) return [];
   return (await allWorkflowsForHost(host, storageV5)).map(dynamicWorkflowToCommand);

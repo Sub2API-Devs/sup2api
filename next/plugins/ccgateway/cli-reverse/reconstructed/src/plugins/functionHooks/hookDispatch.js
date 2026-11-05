@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：worker 在分发中途死亡时，用替换 worker 重试剩余插件；按调用者链与借出状态筛出某模块对事件的有效视图等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vr8smdd9.js (43)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pzdhtgn4.js (43)
  * attribution: placement 43
  */
 import { isDeepStrictEqual } from "util";
@@ -42,14 +42,15 @@ import { pushToKillRing } from "../../utils/Cursor.js";
 import {
   matchesRegExpMatcher,
   isPlainDataObject,
-  matchesFields,
+  matchesAllFields,
 } from "../../utils/hooks/functionHookMatchers.js";
 import { lookupPathTable } from "../../utils/pathTable.js";
 import { raceWithAbortSignal } from "../../utils/sleep.js";
 import { asHooksError } from "./api/operations.js";
+import { matchWithPathTable } from "../hooksModules/loadedModuleMatchers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vr8smdd9.js:30936-30996 placement
+//@ chunk-pzdhtgn4.js:30999-31059 placement
 /**
  * 生成插件的 hooks 标签（名称 + 存储 id）。
  */
@@ -58,17 +59,17 @@ var hookPluginLabel = (loadedModule) =>
     pluginName: loadedModule.name,
     pluginStorageId: marketplaceSource(loadedModule),
   });
-//@ chunk-vr8smdd9.js:30996-31055 placement
+//@ chunk-pzdhtgn4.js:31059-31118 placement
 /**
  * 某插件在 N 毫秒内未回答
  */
 var hookTimeoutText = (event, plugin, ms) => `${event}: ${plugin} did not answer within ${ms}ms`;
-//@ chunk-vr8smdd9.js:31055-31120 placement
+//@ chunk-pzdhtgn4.js:31118-31183 placement
 /**
  * 插件已卸载
  */
 var PLUGIN_UNLOADED_TEXT = "the plugin is unloaded; /reload-plugins brings it back";
-//@ chunk-vr8smdd9.js:31120-31646 placement
+//@ chunk-pzdhtgn4.js:31183-31710 placement
 /**
  * 为一次事件分发组装参与插件链（嵌套检查、排除项、层级、截止）。
  */
@@ -106,7 +107,7 @@ function buildHookChain({ members, event, e, hookOrigin, origin, raise, floors, 
     }),
   };
 }
-//@ chunk-vr8smdd9.js:31646-32524 placement
+//@ chunk-pzdhtgn4.js:31710-32588 placement
 /**
  * 按调用者链与借出状态筛出某模块对事件的有效视图。
  */
@@ -151,7 +152,7 @@ function scopeModuleForEvent(loadedModule, event, chain) {
     standingFor: (event, extra = []) => loadedModule.standingFor(event, [...filtered, ...extra]),
   };
 }
-//@ chunk-vr8smdd9.js:32524-33087 placement
+//@ chunk-pzdhtgn4.js:32588-33151 placement
 /**
  * hooks worker 死亡时等待替换的 worker 后再分发。
  */
@@ -182,7 +183,7 @@ async function awaitWorkerReplacement({ members, event, hookOrigin, signal }) {
     return replacement === undefined ? [] : [replacement];
   });
 }
-//@ chunk-vr8smdd9.js:33087-34400 placement
+//@ chunk-pzdhtgn4.js:33151-34465 placement
 /**
  * worker 在分发中途死亡时，用替换 worker 重试剩余插件。
  */
@@ -265,7 +266,7 @@ async function retryAfterWorkerDeath({ hop, dispatchId, members, error, called, 
     );
   return;
 }
-//@ chunk-vr8smdd9.js:34400-34576 placement
+//@ chunk-pzdhtgn4.js:34465-34641 placement
 function invalidFloorsError(hops) {
   let error = new HooksError(
     `${joinLabels(hops)}: next refused: the floors handed back are not ones a next.to of these plugins leaves (host rule)`,
@@ -275,7 +276,7 @@ function invalidFloorsError(hops) {
   });
   return error;
 }
-//@ chunk-vr8smdd9.js:34618-35011 placement
+//@ chunk-pzdhtgn4.js:34683-35076 placement
 /**
  * 按插件声明的 nextTo 扩展分发链。
  */
@@ -314,7 +315,7 @@ function extendChainWithNextTo(chain, floors, to, payload, raised) {
         )
         .find((floor) => isDeepStrictEqual(floor.at(-1), to));
 }
-//@ chunk-vr8smdd9.js:35011-35131 placement
+//@ chunk-pzdhtgn4.js:35076-35196 placement
 function extendChainForFloors(floors, chain, nextFloors, payload, raised) {
   if (!Array.isArray(nextFloors)) return;
   let current = floors;
@@ -324,7 +325,7 @@ function extendChainForFloors(floors, chain, nextFloors, payload, raised) {
   }
   return current;
 }
-//@ chunk-vr8smdd9.js:35131-35986 placement
+//@ chunk-pzdhtgn4.js:35196-36052 placement
 /**
  * 跨 worker 分发一次 hook 调用（层级 floors、跳转、错误处理）。
  */
@@ -381,14 +382,14 @@ async function dispatchHookCall(options) {
   if (result.withheld === true) options.withheld?.();
   return identityPo(result.result);
 }
-//@ chunk-vr8smdd9.js:35986-36129 placement
+//@ chunk-pzdhtgn4.js:36052-36195 placement
 function logNativeSettled(loaded, event, startTime) {
   loaded.leave();
   logForDebugging(
     `hooks module ${loaded.label} ${event} settled in ${(performance.now() - startTime).toFixed(1)}ms (native link, next() included)`,
   );
 }
-//@ chunk-vr8smdd9.js:36129-36289 placement
+//@ chunk-pzdhtgn4.js:36195-36355 placement
 function isNativeLinkable({ loaded, event, origin }, payload) {
   let canLink =
     liveModulesForDispatch([loaded], event).length === 1 && moduleMatcherAdmits(loaded, event, payload);
@@ -398,7 +399,7 @@ function isNativeLinkable({ loaded, event, origin }, payload) {
     );
   return canLink;
 }
-//@ chunk-vr8smdd9.js:36289-36808 placement
+//@ chunk-pzdhtgn4.js:36355-36874 placement
 /**
  * 对原生（进程内）模块建立 hook 链接，非原生模块报错。
  */
@@ -449,7 +450,7 @@ function linkNativeHook(options) {
     }),
   });
 }
-//@ chunk-vr8smdd9.js:36808-37341 placement
+//@ chunk-pzdhtgn4.js:36874-37408 placement
 /**
  * 分发流式 hook（open），逐个插件包裹。
  */
@@ -486,7 +487,7 @@ function dispatchHookOpen(options) {
     }
   })();
 }
-//@ chunk-vr8smdd9.js:37341-37836 placement
+//@ chunk-pzdhtgn4.js:37408-37903 placement
 /**
  * 对原生模块建立流式 hook 链接。
  */
@@ -532,14 +533,14 @@ function linkNativeStreamHook(options) {
       };
     });
 }
-//@ chunk-vr8smdd9.js:37836-37968 placement
+//@ chunk-pzdhtgn4.js:37903-38035 placement
 var hopMembers = (members, byName, event) =>
   members.map((member) => {
     let found = byName.get(member);
     if (found === undefined) throw new HooksError(`${event}: a hop member is not one of these handlers`);
     return found;
   });
-//@ chunk-vr8smdd9.js:37968-38503 placement
+//@ chunk-pzdhtgn4.js:38035-38570 placement
 /**
  * 把已加载模块包装成分发链成员（名称、层级、run）。
  */
@@ -586,14 +587,14 @@ var toHookMember = ({ loaded, event, origin, raise, gestureAt, owners, withheld 
       }),
   },
 });
-//@ chunk-vr8smdd9.js:38503-38560 placement
+//@ chunk-pzdhtgn4.js:38570-38627 placement
 /**
  * 链接或包装成钩子成员
  */
 function toHookMemberOrLink(options) {
   return options.loaded.link !== undefined ? linkNativeHook(options) : toHookMember(options);
 }
-//@ chunk-vr8smdd9.js:38560-38670 placement
+//@ chunk-pzdhtgn4.js:38627-38737 placement
 function pluginTierOf(pluginName) {
   let { loadedModules, moduleSeats } = getPluginRegistry();
   return (
@@ -602,12 +603,12 @@ function pluginTierOf(pluginName) {
     "user"
   );
 }
-//@ chunk-vr8smdd9.js:38670-38708 placement
+//@ chunk-pzdhtgn4.js:38737-38775 placement
 /**
  * 插件层级是否属于策略层。
  */
 var isPolicyTier = (pluginName) => pushToKillRing.some((tier) => tier === pluginTierOf(pluginName));
-//@ chunk-vr8smdd9.js:38708-38937 placement
+//@ chunk-pzdhtgn4.js:38775-39004 placement
 /**
  * 判断模块对某事件的 matcher 是否接受该载荷（无 matcher 为真；matcher 抛错时交由 hop 决定）。
  */
@@ -625,7 +626,7 @@ function matcherAdmits(hookModule, event, e) {
   warnMatcherMiss(hookModule, event, e);
   return false;
 }
-//@ chunk-vr8smdd9.js:38937-39230 placement
+//@ chunk-pzdhtgn4.js:39004-39297 placement
 function pinnedKeysRejected(hookModule, event, { keys, e }) {
   let matcher = hookModule.matcherFor(event);
   if (matcher === undefined || !isPlainDataObject(e)) return false;
@@ -634,7 +635,7 @@ function pinnedKeysRejected(hookModule, event, { keys, e }) {
     let any = keys.some(
       (key) =>
         Object.hasOwn(e, key) &&
-        !matchesFields(
+        !matchesAllFields(
           matcher,
           {
             [key]: e[key],
@@ -651,7 +652,7 @@ function pinnedKeysRejected(hookModule, event, { keys, e }) {
     return false;
   }
 }
-//@ chunk-vr8smdd9.js:39230-39532 placement
+//@ chunk-pzdhtgn4.js:39297-39599 placement
 /**
  * 列出监听某事件且策略允许的已加载模块（可限定插件、范围、固定项）。
  */
@@ -670,7 +671,7 @@ function modulesHookingEvent(event, origin, { only, e, among, pinned } = {}) {
   let index = flattened.findIndex((key) => matcherAdmits(key, event, e));
   return index === -1 ? [] : flattened.slice(index);
 }
-//@ chunk-vr8smdd9.js:39532-39875 placement
+//@ chunk-pzdhtgn4.js:39599-39942 placement
 /**
  * hooks worker 不可用时生成拒绝错误。
  */
@@ -695,15 +696,15 @@ function refuseIfWorkerMissing({ event, e, origin, only }) {
         `${event} refused: the hooks worker is being replaced, and a hook on it with a .catch (${mapped.join(", ")}) cannot be asked until the reload is in`,
       );
 }
-//@ chunk-vr8smdd9.js:39924-39939 placement
+//@ chunk-pzdhtgn4.js:39991-40006 placement
 /**
  * 分发帧 ALS
  */
 var dispatchFrameStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vr8smdd9.js:39924", () => {
+deferInit("chunk-pzdhtgn4.js:39991", () => {
   dispatchFrameStorage = new AsyncLocalStorage();
 });
-//@ chunk-vr8smdd9.js:39939-40029 placement
+//@ chunk-pzdhtgn4.js:40006-40096 placement
 /**
  * 分发帧执行
  */
@@ -718,17 +719,17 @@ function runDispatchFrame(store, fn) {
   running.then(finish, finish);
   return running;
 }
-//@ chunk-vr8smdd9.js:40029-40053 placement
+//@ chunk-pzdhtgn4.js:40096-40120 placement
 /**
  * 在分发帧里执行
  */
 var inDispatchFrame = (fn) => runDispatchFrame(dispatchFrameStorage, fn);
-//@ chunk-vr8smdd9.js:40053-40093 placement
+//@ chunk-pzdhtgn4.js:40120-40160 placement
 /**
  * 分发帧是否未结束
  */
 var isDispatchFrameOpen = () => dispatchFrameStorage.getStore()?.isOver === false;
-//@ chunk-vr8smdd9.js:40093-40371 placement
+//@ chunk-pzdhtgn4.js:40160-40438 placement
 /**
  * 若有 hooks worker 正在重启，等待其全部就绪（可被中止）后再检查一次；重启进行中而 worker 缺失则拒绝。
  */
@@ -750,7 +751,7 @@ function waitForHooksRespawn(options, reason) {
     reason !== undefined ? raceWithAbortSignal(respawn, reason, () => asHooksError(reason)) : respawn
   ).then(() => waitForHooksRespawn(options, reason));
 }
-//@ chunk-vr8smdd9.js:40371-40508 placement
+//@ chunk-pzdhtgn4.js:40438-40575 placement
 /**
  * 有 worker 正在重启且模块监听该事件时等待其就绪。
  */
@@ -763,7 +764,7 @@ function awaitHooksRespawn(options, signal) {
     ? waitForHooksRespawn(options, signal)
     : undefined;
 }
-//@ chunk-vr8smdd9.js:40508-40660 placement
+//@ chunk-pzdhtgn4.js:40575-40727 placement
 /**
  * 同上，但 SessionEnd 不等待；中止时改抛中止错误。
  */
@@ -773,7 +774,7 @@ function awaitHooksRespawnUnlessSessionEnd(options, signal) {
     ? respawn.catch((error) => Promise.reject(signal.aborted ? abortErrorFor(signal) : error))
     : respawn;
 }
-//@ chunk-vr8smdd9.js:40660-40874 placement
+//@ chunk-pzdhtgn4.js:40727-40941 placement
 /**
  * 为事件生成分发链成员列表。
  */
@@ -796,7 +797,7 @@ function hookMembersFor(event, origin, options = {}) {
   }
   return members;
 }
-//@ chunk-vr8smdd9.js:40874-41060 placement
+//@ chunk-pzdhtgn4.js:40941-41115 placement
 /**
  * 列出匹配某事件和匹配器的插件名。
  */
@@ -809,26 +810,26 @@ function pluginsMatchingEvent(event, payload, origin) {
           ? scopeModuleForEvent(loadedModule, event, origin)
           : undefined;
       if (scopedModule === undefined) return false;
-      return matchesFields(scopedModule.matcherFor(event), payload, pathTable);
+      return matchWithPathTable(scopedModule, event, payload, pathTable);
     })
     .map((loadedModule) => loadedModule.name);
 }
-//@ chunk-vr8smdd9.js:41060-41074 placement
+//@ chunk-pzdhtgn4.js:41115-41129 placement
 /**
  * 原样返回
  */
 var identityPo = (value) => value;
-//@ chunk-vr8smdd9.js:41074-41088 placement
+//@ chunk-pzdhtgn4.js:41129-41143 placement
 /**
  * 原样返回
  */
 var identityYt = (value) => value;
-//@ chunk-vr8smdd9.js:41088-41107 placement
+//@ chunk-pzdhtgn4.js:41143-41162 placement
 /**
  * 拷贝成数组
  */
 var toArray = (value) => [...value];
-//@ chunk-vr8smdd9.js:41107-41235 placement
+//@ chunk-pzdhtgn4.js:41162-41290 placement
 /**
  * 从调用者栈取 hook 来源插件与层级。
  */
@@ -840,7 +841,7 @@ function hookOriginFromStack(frames) {
     tier: pluginTierOf(pluginName),
   });
 }
-//@ chunk-vr8smdd9.js:41235-41357 placement
+//@ chunk-pzdhtgn4.js:41290-41412 placement
 /**
  * 登记一次 hooks 重生：返回重生 Promise 与加载完成时的回调。
  */
@@ -855,7 +856,7 @@ function registerRespawn(hooksRespawns) {
     },
   };
 }
-//@ chunk-vr8smdd9.js:41357-41766 placement
+//@ chunk-pzdhtgn4.js:41412-41821 placement
 /**
  * 把已加载模块包装成流式分发成员。
  */
@@ -890,7 +891,7 @@ var toStreamHookMember = (member, readOn) => ({
       }),
   },
 });
-//@ chunk-vr8smdd9.js:41766-41999 placement
+//@ chunk-pzdhtgn4.js:41821-42054 placement
 /**
  * 列出监听某流式事件的模块并转为流式链成员（原生模块直接链接）。
  */
@@ -919,29 +920,29 @@ function streamMembersFor(event, origin, options = {}) {
     return [streamHookMember];
   });
 }
-//@ chunk-vr8smdd9.js:41999-42009 placement
+//@ chunk-pzdhtgn4.js:42054-42064 placement
 /**
  * 无法归因到具体插件的崩溃累计 3 次后不再重启 hooks worker，改为整体报错。
  */
 var MAX_UNATTRIBUTED_CRASHES = 3;
-//@ chunk-vr8smdd9.js:42009-42088 placement
+//@ chunk-pzdhtgn4.js:42064-42143 placement
 /**
  * 环境卸载导致中止
  */
 var envUnloadedAbortText = (name) => `${name}: the op was aborted: the plugin's environment was unloaded`;
 export {
-  hookMembersFor,
   pluginsMatchingEvent,
-  isPolicyTier,
-  hookOriginFromStack,
   awaitHooksRespawnUnlessSessionEnd,
-  modulesHookingEvent,
-  hookPluginLabel,
+  hookMembersFor,
+  hookOriginFromStack,
   waitForHooksRespawn,
   awaitHooksRespawn,
+  modulesHookingEvent,
   streamMembersFor,
+  hookPluginLabel,
   dispatchHookCall,
   PLUGIN_UNLOADED_TEXT,
+  isPolicyTier,
   runDispatchFrame,
   envUnloadedAbortText,
   hookTimeoutText,

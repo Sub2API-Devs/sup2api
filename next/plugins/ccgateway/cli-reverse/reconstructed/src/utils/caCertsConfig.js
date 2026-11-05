@@ -3,9 +3,9 @@
  *
  * 从设置或 ~/.claude.json 的 env 中读取 NODE_EXTRA_CA_CERTS 并注入 process.env。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/caCertsConfig.ts
- * pieces: chunk-v772wxfr.js (2)
+ * pieces: chunk-qzajzc00.js (2)
  * attribution: fingerprint 2
  */
 import { env } from "./env.js";
@@ -21,7 +21,7 @@ import { isSettingSourceEnabled } from "./settings/constants.js";
 import { getSettingsForSource } from "./settings/settings.js";
 import { logFeatureSad } from "../services/analytics/featureTelemetry.js";
 
-//@ chunk-v772wxfr.js:556-728 fingerprint (2.1.88 match: applyExtraCACertsFromConfig, 1)
+//@ chunk-qzajzc00.js:556-728 fingerprint (2.1.88 match: applyExtraCACertsFromConfig, 1)
 /**
  * 未设置 NODE_EXTRA_CA_CERTS 时，从 settings.env 或 ~/.claude.json env 读取并写入 process.env。
  */
@@ -33,7 +33,7 @@ function applyExtraCACertsFromConfig() {
     logForDebugging(`CA certs: Applied NODE_EXTRA_CA_CERTS from config to process.env: ${configPath}`);
   }
 }
-//@ chunk-v772wxfr.js:728-1463 fingerprint (2.1.88 match: getExtraCertsPathFromConfig, 0.675)
+//@ chunk-qzajzc00.js:728-1463 fingerprint (2.1.88 match: getExtraCertsPathFromConfig, 0.675)
 /**
  * 从用户设置或全局配置的 env 中找 NODE_EXTRA_CA_CERTS；宿主托管提供方、远程、diskless 时跳过。
  */

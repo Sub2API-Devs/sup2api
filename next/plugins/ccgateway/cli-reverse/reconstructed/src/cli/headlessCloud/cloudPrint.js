@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：`--cloud -p` 无头打印模式：在云会话里跑一次提示并输出结果。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-54xbtc53.js (13)
- * attribution: placement 13
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0h9p4sxp.js (15)
+ * attribution: placement 13, layout 2
  */
 import { randomUUID } from "crypto";
 import { StructuredIO } from "../structuredIO.js";
@@ -15,6 +15,16 @@ import { sanitizeCloudText, clipCloudText } from "../cloudSession/headlessCloudC
 import { errorMessage } from "../../utils/errors.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { readSetupStepFields } from "../../services/cloudSessions/setupProgress.js";
+import { isPlainObject } from "../../utils/isPlainObject.js";
+import { parseStartRefusal, describeStartRefusal } from "../../remote/startRefusalNotice.js";
+import {
+  isKnownForwardedMessageType,
+  filterResultErrors,
+  stripCloudSessionKey,
+  identity,
+  stripApiErrorOrigin,
+  stripProtoKey,
+} from "./streamFilter.js";
 import { autoRespondUnattended } from "../../entrypoints/sdk/controlSchemas.js";
 import { displaySessionId } from "../cloudSession/launchFlags.js";
 import { RemoteSessionManager, getSessionRequestConfig } from "../../remote/RemoteSessionManager.js";
@@ -38,27 +48,20 @@ import { setIsRemoteMode } from "../../bootstrap/state.js";
 import { fetchSession } from "../../utils/teleport/api.js";
 import { runHeadlessCloudClient } from "./HeadlessCloudClient.js";
 import { registerCleanup } from "../../utils/cleanupRegistry.js";
-import { writePrintResult } from "../../entrypoints/sdk/coreSchemas.js";
+import { SDKResultErrorSchema } from "../../entrypoints/sdk/coreSchemas.js";
 import { drainSdkEvents } from "../../utils/sdkEventQueue.js";
 import { fetchLatestEvents } from "../../assistant/sessionHistory.js";
-import {
-  filterResultErrors,
-  stripCloudSessionKey,
-  identity,
-  stripApiErrorOrigin,
-  stripProtoKey,
-} from "./streamFilter.js";
 import { logEventAsync } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-54xbtc53.js:18487-18528 placement
+//@ chunk-0h9p4sxp.js:20130-20171 placement
 var CLOUD_PRINT_INITIALIZE = "cloud-print-initialize";
 var MAX_CLOUD_PRINT_SESSION_READS = 3;
 var CLOUD_PRINT_HISTORY_PAGE_SIZE = 200;
-//@ chunk-54xbtc53.js:18528-18633 placement
+//@ chunk-0h9p4sxp.js:20171-20276 placement
 let FrameCaptureIO; // deferred: uses StructuredIO (../structuredIO.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-54xbtc53.js:18528", () => {
+deferInit("chunk-0h9p4sxp.js:20171", () => {
   FrameCaptureIO = class FrameCaptureIO extends StructuredIO {
     onFrame;
     constructor(input, output, onFrame) {
@@ -70,7 +73,7 @@ deferInit("chunk-54xbtc53.js:18528", () => {
     }
   };
 });
-//@ chunk-54xbtc53.js:18633-24895 placement
+//@ chunk-0h9p4sxp.js:20276-27050 placement
 /**
  * `--cloud -p` 单次运行的状态机：发送用户消息、跟踪 worker 与宿主帧、识别本消息对应的 result；worker 消失时查询会话状态与已存结果；超时、中断与失败时给出相应说明与结果类别。
  */
@@ -79,12 +82,16 @@ class CloudPrintRun {
   progressShown;
   readSession;
   readLatestResults;
+  refusalWaitMs;
   input = new Stream();
   result = undefined;
   viewUrl = undefined;
+  orgUuid = undefined;
   cloudSessionId = undefined;
   startFailed = false;
   timedOut = false;
+  refusal = undefined;
+  refusalWait = undefined;
   workerSeen = false;
   giveUp = new AbortController();
   ownMessageUuid = null;
@@ -96,11 +103,12 @@ class CloudPrintRun {
   checkAgain = false;
   sessionReads = 0;
   notedOnce = new Set();
-  constructor(note, progressShown, readSession, readLatestResults) {
+  constructor(note, progressShown, readSession, readLatestResults, refusalWaitMs) {
     this.note = note;
     this.progressShown = progressShown;
     this.readSession = readSession;
     this.readLatestResults = readLatestResults;
+    this.refusalWaitMs = refusalWaitMs;
   }
   noteOnce(message) {
     if (!this.notedOnce.has(message)) {
@@ -239,11 +247,21 @@ class CloudPrintRun {
     if (frame.type === "result") {
       if (this.result === undefined && this.resultIsOwn(frame)) {
         this.result = sanitizeCloudResult(frame);
-        this.input.done();
+        if ("runner_exit" in frame && isPlainObject(frame.runner_exit) && frame.runner_exit.phase === "setup")
+          this.refusalWait = setTimeout(endRunRefusalWait, this.refusalWaitMs, this).unref();
+        else this.input.done();
       }
       return;
     }
-    if (frame.type !== "user") this.workerSeen = true;
+    let refusal = parseStartRefusal(frame);
+    if (refusal !== null) {
+      if (this.refusalWait !== undefined) {
+        this.refusal = refusal;
+        this.endRefusalWait();
+      }
+      return;
+    }
+    if (frame.type !== "user" && isKnownForwardedMessageType(frame.type)) this.workerSeen = true;
   }
   onHostFrame(controlRequest) {
     if (controlRequest.type === "control_request") this.send(autoRespondUnattended(controlRequest));
@@ -269,6 +287,7 @@ class CloudPrintRun {
     if (result.kind !== "opened") return result;
     let cloudSession = result.session.cloudSession();
     this.viewUrl = cloudSession.view_url;
+    this.orgUuid = result.session.orgUuid;
     this.cloudSessionId = displaySessionId(cloudSession.id);
     this.note(`Cloud session: ${this.cloudSessionId} (${cloudSession.view_url})`);
     return {
@@ -303,7 +322,14 @@ class CloudPrintRun {
       },
     };
   }
+  endRefusalWait() {
+    clearTimeout(this.refusalWait);
+    this.refusalWait = undefined;
+    this.input.done();
+  }
   abandon() {
+    clearTimeout(this.refusalWait);
+    this.refusalWait = undefined;
     this.timedOut = true;
     this.giveUp.abort();
     this.input.done();
@@ -375,22 +401,28 @@ class CloudPrintRun {
     }
   }
 }
-//@ chunk-54xbtc53.js:24895-24938 placement
+//@ chunk-0h9p4sxp.js:27050-27093 placement
 function cloudPrintCreateGates(options, host, entry) {
   return cloudCreateGates(options, host, entry, deviceLessGates(options, entry));
 }
-//@ chunk-54xbtc53.js:24938-25002 placement
+//@ chunk-0h9p4sxp.js:27093-27157 placement
 function deviceLessGates(options, host) {
   return {
     isDeviceLess: true,
     poolLaunchFolder: undefined,
   };
 }
-//@ chunk-54xbtc53.js:25002-25028 placement
+//@ chunk-0h9p4sxp.js:27157-27183 placement
 function abandonOnTimeout(run) {
   run.abandon();
 }
-//@ chunk-54xbtc53.js:25028-27303 placement
+//@ chunk-0h9p4sxp.js:27183-27194 layout
+var REFUSAL_WAIT_MS = 8000;
+//@ chunk-0h9p4sxp.js:27194-27227 layout
+function endRunRefusalWait(run) {
+  run.endRefusalWait();
+}
+//@ chunk-0h9p4sxp.js:27227-29586 placement
 async function runHeadlessCloudPrint(options, host, runOptions, seams = {}) {
   let exit = seams.exit ?? gracefulShutdown;
   let stdout = seams.stdout ?? writeToStdout;
@@ -426,6 +458,7 @@ async function runHeadlessCloudPrint(options, host, runOptions, seams = {}) {
           accessToken: target.getAccessToken(),
         })),
     seams.readLatestResults ?? ((target) => readLatestWorkerResults(target.sessionId, options.credentials)),
+    seams.startRefusalWaitMs ?? REFUSAL_WAIT_MS,
   );
   let openSession =
     seams.openSession ??
@@ -524,7 +557,8 @@ async function runHeadlessCloudPrint(options, host, runOptions, seams = {}) {
     return;
   }
   if (final.message !== undefined && final.exitCode === 0) note(final.message);
-  writePrintResult(
+  if (run.refusal !== undefined) stderr(describeStartRefusal(run.refusal, run.viewUrl, run.orgUuid));
+  SDKResultErrorSchema(
     drainSdkEvents(run.result, run.cloudSessionId, run.viewUrl),
     runOptions.outputFormat,
     stdout,
@@ -539,7 +573,7 @@ async function runHeadlessCloudPrint(options, host, runOptions, seams = {}) {
   );
   await exit(exitCode);
 }
-//@ chunk-54xbtc53.js:27303-27546 placement
+//@ chunk-0h9p4sxp.js:29586-29829 placement
 async function readLatestWorkerResults(sessionId, credentials) {
   let latestEvents = await fetchLatestEvents(
     await getSessionRequestConfig(sessionId, credentials),
@@ -553,11 +587,11 @@ async function readLatestWorkerResults(sessionId, credentials) {
     .filter((event) => event.source === "worker" && event.payload.type === "result")
     .map((event) => event.payload);
 }
-//@ chunk-54xbtc53.js:27635-27683 placement
+//@ chunk-0h9p4sxp.js:29918-29966 placement
 function sanitizeCloudResult(result) {
   return filterResultErrors(stripCloudSessionKey(identity(stripApiErrorOrigin(stripProtoKey(result)))));
 }
-//@ chunk-54xbtc53.js:27683-27985 placement
+//@ chunk-0h9p4sxp.js:29966-30268 placement
 /**
  * 记录远程无头打印结束：上报结果、退出码、输出格式与等待时长，并按结果记成功或失败。
  */
@@ -576,10 +610,10 @@ async function logCloudPrintEnded(outcome, exitCode, outputFormat, startedAt, de
   if (outcome === "result") await logFeatureOkAsync("remote_headless_print");
   else if (outcome !== "interrupted") await logFeatureBadAsync("remote_headless_print", detail ?? outcome);
 }
-//@ chunk-54xbtc53.js:28866-28880 placement
+//@ chunk-0h9p4sxp.js:31149-31163 placement
 var MAX_LISTED_MCP_SERVER_NAMES = 64;
 var MAX_MCP_SERVER_NAME_CHARS = 64;
-//@ chunk-54xbtc53.js:28880-29153 placement
+//@ chunk-0h9p4sxp.js:31163-31436 placement
 function getResultUserMessageUuids(result) {
   let userMessageUuids = "user_message_uuids" in result ? result.user_message_uuids : undefined;
   let isValid = (userMessageUuid) =>
@@ -593,9 +627,9 @@ function getResultUserMessageUuids(result) {
   let userMessageUuid = "user_message_uuid" in result ? result.user_message_uuid : undefined;
   return isValid(userMessageUuid) ? [userMessageUuid] : undefined;
 }
-//@ chunk-54xbtc53.js:29153-29246 placement
-function firstErrorText(resultMessage) {
-  let errors = resultMessage.errors;
+//@ chunk-0h9p4sxp.js:31436-31529 placement
+function firstErrorText(controlRequest) {
+  let errors = controlRequest.errors;
   return Array.isArray(errors) && typeof errors[0] === "string" ? sanitizeCloudText(errors[0]) : undefined;
 }
 export { firstErrorText, runHeadlessCloudPrint };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。唤醒事件路由。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: placement 3
  */
 import {
@@ -34,10 +34,10 @@ import { isMainAgentCommand } from "../../utils/messageQueueManager.js";
 import { strandedResumeFailedNotification } from "../../hooks/notifs/useIDEStatusIndicator.js";
 import { getTaskRunState } from "../../utils/task/taskNotifications.js";
 
-//@ chunk-18hwfzwa.js:345665-345687 placement
+//@ chunk-czq1j3j2.js:383386-383408 placement
 var WAKE_TIMEOUT_MS = 60000;
 var WAKE_RELEASE_TIMEOUT_MS = WAKE_TIMEOUT_MS;
-//@ chunk-18hwfzwa.js:345687-347706 placement
+//@ chunk-czq1j3j2.js:383408-385428 placement
 /**
  * 唤醒路由：把 poll/monitor/artifact 等外部事件派发给对应代理（delivered_to_agent）或主线程，超时释放 inFlight，hook 可丢弃(dropped_by_hook)。
  */
@@ -169,7 +169,7 @@ function WakeRouter({ clock, store, queue, taskRegistry, dispatchWake }) {
     unsubscribes.clear();
   };
 }
-//@ chunk-18hwfzwa.js:347706-348364 placement
+//@ chunk-czq1j3j2.js:385428-386086 placement
 function resumeStrandedAgent({
   taskRegistry,
   getToolUseContext,

@@ -3,9 +3,9 @@
  *
  * 记忆库拉取/推送与挂载目录对账（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (23)
  * attribution: placement 23
  */
 import { readdir, stat, readFile } from "fs/promises";
@@ -29,9 +29,13 @@ import {
   MAX_PULL_RETRIES,
   isUsableSuppressedReason,
   canDeleteRemotely,
+  dropPresentRemovals,
+  canPushStore,
   EMPTY_CONTENT_SHA256,
+  isRemoveAlreadyRecorded,
   LOCAL_IO_CONCURRENCY,
   EMPTY_CONTENT_HASH,
+  namedDeleteHintMessage,
   SYNC_INTERVAL_MS,
   MAX_MEMORY_BYTES,
 } from "./syncConfig.js";
@@ -44,6 +48,8 @@ import {
   getV5MemoryContext,
   collectLocalMemoryEntries,
   removeEmptyStoreReceipt,
+  resolveMountPath,
+  statLocalEntry,
   isLocallyEdited,
   getEntryBaseline,
   isLocallyEditedFile,
@@ -52,8 +58,6 @@ import {
   isPublished,
   deleteLocalEntry,
   isLocalContentEqual,
-  resolveMountPath,
-  statLocalEntry,
   readLocalEntry,
 } from "./mountWalk.js";
 import {
@@ -77,6 +81,7 @@ import {
   noticeStoreSyncOff,
   formatStoreBackOnNotice,
   heldLocalOnlyPaths,
+  noticeDeleteBlocked,
   queueConflictNotice,
   buildLocalCopyReplacedNotice,
   buildWriteConflictNotice,
@@ -87,10 +92,10 @@ import {
 import { isMountEscaped, NOOP_RESULT, SKIPPED_RESULT, noteServerBackoff } from "./multiStoreSync.js";
 import { isMemoryDocumentKey_2 } from "../memoryStore/memoryKeys.js";
 import { PathTraversalError } from "../../memdir/teamMemPaths.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:119754-119832 placement
+//@ chunk-7jxyna5q.js:120052-120130 placement
 /**
  * 生成错误摘要文本。
  */
@@ -99,7 +104,7 @@ function errorSummary(error) {
     errorMessage(error) || getErrnoCode(error) || (error instanceof Error && error.name) || "unknown error"
   );
 }
-//@ chunk-s61vbvea.js:119832-119984 placement
+//@ chunk-7jxyna5q.js:120130-120282 placement
 async function runWithConcurrency(items, limit, worker) {
   let nextIndex = 0;
   let list = Array.from(
@@ -115,7 +120,7 @@ async function runWithConcurrency(items, limit, worker) {
   );
   await Promise.all(list);
 }
-//@ chunk-s61vbvea.js:119984-120874 placement
+//@ chunk-7jxyna5q.js:120282-121197 placement
 async function checkPushManifestGate(store, storage) {
   let syncManifest = await readSyncManifest(store.mountDir, storage, store.v5MemoryBase);
   let matched =
@@ -148,10 +153,11 @@ async function checkPushManifestGate(store, storage) {
   store.remoteHashes = new Map();
   store.pulled = false;
   store.pendingDeletes?.clear();
+  store.namedRemovals?.clear();
   if (syncManifest.state !== "present") await clearBasis(store, storage);
   return "other";
 }
-//@ chunk-s61vbvea.js:120874-121353 placement
+//@ chunk-7jxyna5q.js:121197-121676 placement
 function checkUnmanifestedMountDir(store) {
   store.suppressedReason = "mount_dir_unmanifested_nonempty";
   store.suppressedUntilMs = null;
@@ -168,7 +174,7 @@ function checkUnmanifestedMountDir(store) {
     trigger: fromEnum("firstPullUnmanifested"),
   });
 }
-//@ chunk-s61vbvea.js:121353-121552 placement
+//@ chunk-7jxyna5q.js:121676-121875 placement
 async function getMountDirOccupancy(mountDir) {
   try {
     return (
@@ -182,7 +188,7 @@ async function getMountDirOccupancy(mountDir) {
     return getErrnoCode(error) === "ENOENT" ? "empty" : "unreadable";
   }
 }
-//@ chunk-s61vbvea.js:121552-121751 placement
+//@ chunk-7jxyna5q.js:121875-122074 placement
 async function isMountDirEffectivelyEmpty(store, localEntries) {
   if (!localEntries.rootMissing) return false;
   try {
@@ -198,7 +204,7 @@ async function isMountDirEffectivelyEmpty(store, localEntries) {
     return false;
   }
 }
-//@ chunk-s61vbvea.js:121751-122002 placement
+//@ chunk-7jxyna5q.js:122074-122325 placement
 async function containsOnlyRegularFiles(dir) {
   let entries = await readdir(dir, {
     withFileTypes: true,
@@ -215,7 +221,7 @@ async function containsOnlyRegularFiles(dir) {
   }
   return true;
 }
-//@ chunk-s61vbvea.js:122002-123201 placement
+//@ chunk-7jxyna5q.js:122325-123524 placement
 async function enumerateMountDir(store, storage) {
   let storageV5Enabled = isStorageV5Enabled();
   let v5MemoryContext = getV5MemoryContext(store, storage);
@@ -316,13 +322,14 @@ async function enumerateMountDir(store, storage) {
     outcome: "match",
   };
 }
-//@ chunk-s61vbvea.js:123201-123647 placement
+//@ chunk-7jxyna5q.js:123524-123995 placement
 function checkForeignPartition(store, trigger) {
   store.suppressedReason = "mount_dir_foreign_partition";
   store.suppressedUntilMs = null;
   store.remoteHashes = new Map();
   store.pulled = false;
   store.pendingDeletes?.clear();
+  store.namedRemovals?.clear();
   logForDebugging(
     `multi-store-sync[${store.mountName}]: mount dir holds a different partition's .memory-sync \u2014 suppressing sync (remove the dir to re-mount)`,
     {
@@ -334,29 +341,29 @@ function checkForeignPartition(store, trigger) {
     trigger: fromEnum(trigger),
   });
 }
-//@ chunk-s61vbvea.js:123647-123729 placement
+//@ chunk-7jxyna5q.js:123995-124077 placement
 /**
  * 表示“挂载目录属于外来分区/未登记非空”的原因码。
  */
 var FOREIGN_PARTITION_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:123647", () => {
+deferInit("chunk-7jxyna5q.js:123995", () => {
   FOREIGN_PARTITION_REASONS = new Set(["mount_dir_foreign_partition", "mount_dir_unmanifested_nonempty"]);
 });
-//@ chunk-s61vbvea.js:123729-123771 placement
+//@ chunk-7jxyna5q.js:124077-124119 placement
 /**
  * 判断原因是否属于外来分区类。
  */
 function isForeignPartitionReason(suppressedReason) {
   return suppressedReason !== null && FOREIGN_PARTITION_REASONS.has(suppressedReason);
 }
-//@ chunk-s61vbvea.js:123771-123816 placement
+//@ chunk-7jxyna5q.js:124119-124164 placement
 /**
  * 判断存储是否因外来分区被抑制。
  */
 function isStoreForeignPartition(store) {
   return isForeignPartitionReason(store.suppressedReason);
 }
-//@ chunk-s61vbvea.js:123816-124514 placement
+//@ chunk-7jxyna5q.js:124164-124862 placement
 async function readoptMountDir(store, syncManifest, storage) {
   let suppressedReason = store.suppressedReason;
   if (!isForeignPartitionReason(suppressedReason)) return false;
@@ -387,7 +394,7 @@ async function readoptMountDir(store, syncManifest, storage) {
   });
   return true;
 }
-//@ chunk-s61vbvea.js:124514-124694 placement
+//@ chunk-7jxyna5q.js:124862-125042 placement
 function noteStreamListFailure(store) {
   store.streamListSuccessStreak = 0;
   let streak = (store.streamListFailureStreak ?? 0) + 1;
@@ -395,14 +402,14 @@ function noteStreamListFailure(store) {
   if (streak >= MAX_RETRIES) store.streamListRetryAfterMs = Date.now() + SUPPRESS_MS_2;
   return streak;
 }
-//@ chunk-s61vbvea.js:124694-124736 placement
+//@ chunk-7jxyna5q.js:125042-125084 placement
 /**
  * 判断存储作用域是否不是 account。
  */
 function isNonAccountStore(store) {
   return store.scope !== "account";
 }
-//@ chunk-s61vbvea.js:124736-126054 placement
+//@ chunk-7jxyna5q.js:125084-126402 placement
 async function listStoreStream(store) {
   let backend = store.backend;
   if (
@@ -468,13 +475,13 @@ async function listStoreStream(store) {
   }
   return backend.list();
 }
-//@ chunk-s61vbvea.js:126054-126169 placement
+//@ chunk-7jxyna5q.js:126402-126517 placement
 function isOrgMemoryDecisionClosed(store) {
   if ((store.source ?? "env") !== "discovery") return false;
   let orgMemoryDecision = getOrgMemoryDecision();
   return orgMemoryDecision.state === "parked" || orgMemoryDecision.state === "ended";
 }
-//@ chunk-s61vbvea.js:126169-126456 placement
+//@ chunk-7jxyna5q.js:126517-126804 placement
 function shouldMirrorAllUncovered(store) {
   if ((store.source ?? "env") !== "discovery" || !hasMirror()) return false;
   if (grantedModeFor(store.backend.partitionId) !== undefined) {
@@ -488,7 +495,7 @@ function shouldMirrorAllUncovered(store) {
   store.notices.rearmMirrorAllUncovered();
   return true;
 }
-//@ chunk-s61vbvea.js:126456-127011 placement
+//@ chunk-7jxyna5q.js:126804-127359 placement
 async function rejoinTeamMemory(store, storage) {
   let pullResult = await pullStore(store, storage);
   if (!store.pulled) store.lastPersistedBasisBody = undefined;
@@ -514,7 +521,7 @@ async function rejoinTeamMemory(store, storage) {
   }
   return pullResult;
 }
-//@ chunk-s61vbvea.js:127011-135467 placement
+//@ chunk-7jxyna5q.js:127359-136598 placement
 /**
  * 拉取一个记忆库：检查挂载目录、处理 404、按基线合并本地文件
  */
@@ -679,7 +686,11 @@ async function pullStore(store, storage) {
     };
   }
   let canDelete = canDeleteRemotely(store);
-  let refetchPaths = new Set(
+  dropPresentRemovals(store, localEntries.diskPaths);
+  let pending = new Set();
+  let kept = !canDelete && canPushStore(store);
+  let changed = new Set();
+  let missing = new Set(
     remoteEntries
       .filter(
         (entry) =>
@@ -693,10 +704,19 @@ async function pullStore(store, storage) {
   let filtered = remoteEntries.filter((entry) => {
     if (localEntries.entries.get(entry.path)?.sha256 === entry.sha256) return false;
     if (store.scope === "account") return true;
-    if (refetchPaths.has(entry.path)) return true;
+    if (missing.has(entry.path)) return true;
     if ((invalidatedBasis !== null || localEntries.rootMissing) && !localEntries.diskPaths.has(entry.path))
       return true;
-    if (!canDelete && localEntries.diskTrusted && !localEntries.diskPaths.has(entry.path)) return true;
+    if (
+      !canDelete &&
+      localEntries.diskTrusted &&
+      !localEntries.diskPaths.has(entry.path) &&
+      !isRemoveAlreadyRecorded(store, entry.path, entry)
+    ) {
+      if (kept && store.pulled && basisEntries.has(entry.path)) changed.add(entry.path);
+      if (store.pulled && canPushStore(store)) pending.add(entry.path);
+      return true;
+    }
     if (
       basis?.entriesWereOnDisk === false &&
       localEntries.diskTrusted &&
@@ -750,6 +770,32 @@ async function pullStore(store, storage) {
       let body = await store.backend.read(entry.id);
       let contentHash = computeContentHash(body.content);
       if (contentHash !== body.sha256) shaMismatches++;
+      if (pending.has(entry.path)) {
+        if (isRemoveAlreadyRecorded(store, entry.path, entry)) {
+          changed.delete(entry.path);
+          remoteByPath.set(entry.path, {
+            id: entry.id,
+            sha256: entry.sha256,
+          });
+          return;
+        }
+        if (
+          await resolveMountPath(store, entry.path)
+            .then((mountPath) => statLocalEntry(storage, store, mountPath))
+            .then(
+              () => true,
+              () => false,
+            )
+        ) {
+          writeSkipped++;
+          changed.delete(entry.path);
+          remoteByPath.set(entry.path, {
+            id: entry.id,
+            sha256: basisEntries.get(entry.path)?.sha256 ?? EMPTY_CONTENT_HASH,
+          });
+          return;
+        }
+      }
       if (
         !(invalidatedBasis !== null && localEntries.diskPaths.has(entry.path)) &&
         (await isLocallyEdited(store, entry.path, storage))
@@ -758,7 +804,7 @@ async function pullStore(store, storage) {
         remoteByPath.set(entry.path, getEntryBaseline(store, basisEntries, localEntries.diskPaths, entry));
         return;
       }
-      if (refetchPaths.has(entry.path) && !(await isLocallyEditedFile(store, entry.path, storage))) {
+      if (missing.has(entry.path) && !(await isLocallyEditedFile(store, entry.path, storage))) {
         writeSkipped++;
         remoteByPath.set(entry.path, {
           id: entry.id,
@@ -798,6 +844,9 @@ async function pullStore(store, storage) {
             locallyChanged))
       ) {
         let replaceLocal = heldConflict && sha256 === heldSha;
+        for (let name of store.namedRemovals?.keys() ?? [])
+          await noticeDeleteBlocked(store, name, entry.path);
+        store.namedRemovals?.clear();
         await queueConflictNotice(
           store,
           entry.path,
@@ -857,7 +906,9 @@ async function pullStore(store, storage) {
             (canResave
               ? "Your local copy was kept and will be re-saved to shared memory on the next sync unless it contains a detected secret. "
               : "Your local copy was kept, but it cannot be re-saved to shared memory automatically (over the sync size limit or the store is read-only) \u2014 save its contents elsewhere or trim it if you want it persisted. ") +
-            "If the deletion was intended, delete the file.",
+            (canResave && kept
+              ? namedDeleteHintMessage(store)
+              : "If the deletion was intended, delete the file."),
         );
         logForDebugging(
           `multi-store-sync[${store.mountName}]: preserving locally-modified ${path} despite remote delete`,
@@ -885,6 +936,7 @@ async function pullStore(store, storage) {
         level: "warn",
       },
     );
+  let sorted = [...changed].filter((path) => entriesWithoutRef.has(path)).sort();
   if (fetchesFailed + deletesFailed + notStarted > 0) {
     logForDebugging(
       `multi-store-sync[${store.mountName}]: pull failed: ${fetchesFailed} of ${filtered.length} download(s) and ${deletesFailed} of ${deletions.length} local removal(s) failed${notStarted > 0 ? `, ${notStarted} download(s) not started after the server asked sync to wait (waiting at least ${Math.max(0, Math.ceil(((store.serverBackoffUntilMs ?? 0) - Date.now()) / 1000))}s)` : ""}, first error: ${firstError}; the sync record is unchanged for those files and a later sync retries them${store.pulled ? "" : "; nothing is uploaded from this store until a pull succeeds"}`,
@@ -911,6 +963,9 @@ async function pullStore(store, storage) {
       permanent,
       error: firstError,
       backedOff: backedOff || undefined,
+      ...(sorted.length > 0 && {
+        putBackWhileDeletesOff: sorted,
+      }),
     };
   }
   store.downloadsDeferred = 0;
@@ -927,6 +982,8 @@ async function pullStore(store, storage) {
   store.remoteHashes = remoteByPath;
   store.pulled = true;
   store.invalidatedBasis = null;
+  for (let name of store.namedRemovals?.keys() ?? [])
+    if (!remoteByPath.has(name)) store.namedRemovals?.delete(name);
   store.basisLoaded = true;
   if (basis !== null && basis.held.size > 0) {
     store.heldLocal = basis.held;
@@ -965,11 +1022,14 @@ async function pullStore(store, storage) {
     filesWritten: entriesWithoutRef.size,
     filesDeleted: deletedPaths.length,
     filesSkippedConcurrent: writeSkipped,
-    entriesWithoutRef: count(remoteEntries, (entry) => !remoteByPath.has(entry.path)),
+    entriesWithoutRef: countWhere(remoteEntries, (entry) => !remoteByPath.has(entry.path)),
     unmarkedReceiptRefetched: unchangedCount,
+    ...(sorted.length > 0 && {
+      putBackWhileDeletesOff: sorted,
+    }),
   };
 }
-//@ chunk-s61vbvea.js:135467-139307 placement
+//@ chunk-7jxyna5q.js:136598-140442 placement
 /**
  * 推送本地记忆变更到记忆库（并发写保留、批量膨胀保护）
  */
@@ -1133,7 +1193,7 @@ async function pushStore(store, expectPresent, storage) {
     );
     return "fell-back";
   }
-  let entriesListed = count([...pathByMemoryId.values()], (mappedPath) => mappedPath !== null);
+  let entriesListed = countWhere([...pathByMemoryId.values()], (mappedPath) => mappedPath !== null);
   if (store.basisUnusable !== undefined && store.basisUnusable !== null) {
     let localSnapshot = null;
     try {
@@ -1206,13 +1266,13 @@ async function pushStore(store, expectPresent, storage) {
     entriesWithoutRef: Math.max(0, entriesListed - remoteHashes.size),
   };
 }
-//@ chunk-s61vbvea.js:139307-139326 placement
+//@ chunk-7jxyna5q.js:140442-140461 placement
 /**
  * 重试计数窗口（300000 毫秒）。
  */
 var MAX_UNAVAILABLE_RETRIES = 3;
 var UNAVAILABLE_WINDOW_MS = 300000;
-//@ chunk-s61vbvea.js:139326-139521 placement
+//@ chunk-7jxyna5q.js:140461-140656 placement
 function allowConflictRefetch(store, path) {
   let now = Date.now();
   let refetches = (store.conflictRefetches ??= new Map());

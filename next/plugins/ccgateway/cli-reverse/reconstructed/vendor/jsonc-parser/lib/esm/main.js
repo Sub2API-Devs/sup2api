@@ -1,16 +1,16 @@
 /**
  * jsonc-parser/lib/esm/main.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jsonc-parser@3.2.1..3.3.1
- * pieces: chunk-kndsyy4v.js (9)
+ * pieces: chunk-aj4djjd6.js (9)
  * attribution: esm-layout 5, esm-fingerprint 4
  */
 import { parseTree } from "./impl/parser.js";
 import { modify, applyEdit } from "./impl/edit.js";
 
-//@ chunk-kndsyy4v.js:15523-15530 esm-layout
+//@ chunk-aj4djjd6.js:15523-15530 esm-layout
 var ScanError;
-//@ chunk-kndsyy4v.js:15530-15875 esm-fingerprint
+//@ chunk-aj4djjd6.js:15530-15875 esm-fingerprint
 (function (ScanError) {
   ScanError[(ScanError.None = 0)] = "None";
   ScanError[(ScanError.UnexpectedEndOfComment = 1)] = "UnexpectedEndOfComment";
@@ -20,9 +20,9 @@ var ScanError;
   ScanError[(ScanError.InvalidEscapeCharacter = 5)] = "InvalidEscapeCharacter";
   ScanError[(ScanError.InvalidCharacter = 6)] = "InvalidCharacter";
 })(ScanError || (ScanError = {}));
-//@ chunk-kndsyy4v.js:15875-15882 esm-layout
+//@ chunk-aj4djjd6.js:15875-15882 esm-layout
 var SyntaxKind;
-//@ chunk-kndsyy4v.js:15882-16523 esm-fingerprint
+//@ chunk-aj4djjd6.js:15882-16523 esm-fingerprint
 (function (SyntaxKind) {
   SyntaxKind[(SyntaxKind.OpenBraceToken = 1)] = "OpenBraceToken";
   SyntaxKind[(SyntaxKind.CloseBraceToken = 2)] = "CloseBraceToken";
@@ -42,11 +42,11 @@ var SyntaxKind;
   SyntaxKind[(SyntaxKind.Unknown = 16)] = "Unknown";
   SyntaxKind[(SyntaxKind.EOF = 17)] = "EOF";
 })(SyntaxKind || (SyntaxKind = {}));
-//@ chunk-kndsyy4v.js:16523-16533 esm-layout
+//@ chunk-aj4djjd6.js:16523-16533 esm-layout
 var parseJsonc = parseTree;
-//@ chunk-kndsyy4v.js:16533-16540 esm-layout
+//@ chunk-aj4djjd6.js:16533-16540 esm-layout
 var ParseErrorCode;
-//@ chunk-kndsyy4v.js:16540-17313 esm-fingerprint
+//@ chunk-aj4djjd6.js:16540-17313 esm-fingerprint
 (function (ParseErrorCode) {
   ParseErrorCode[(ParseErrorCode.InvalidSymbol = 1)] = "InvalidSymbol";
   ParseErrorCode[(ParseErrorCode.InvalidNumberFormat = 2)] = "InvalidNumberFormat";
@@ -65,11 +65,11 @@ var ParseErrorCode;
   ParseErrorCode[(ParseErrorCode.InvalidEscapeCharacter = 15)] = "InvalidEscapeCharacter";
   ParseErrorCode[(ParseErrorCode.InvalidCharacter = 16)] = "InvalidCharacter";
 })(ParseErrorCode || (ParseErrorCode = {}));
-//@ chunk-kndsyy4v.js:17313-17354 esm-layout
+//@ chunk-aj4djjd6.js:17313-17354 esm-layout
 function modifyJsonc(text, path, value, options) {
   return modify(text, path, value, options);
 }
-//@ chunk-kndsyy4v.js:17354-17614 esm-fingerprint
+//@ chunk-aj4djjd6.js:17354-17614 esm-fingerprint
 function applyEdits(text, edits) {
   let sortedEdits = edits.slice(0).sort((a, b) => {
     let diff = a.offset - b.offset;

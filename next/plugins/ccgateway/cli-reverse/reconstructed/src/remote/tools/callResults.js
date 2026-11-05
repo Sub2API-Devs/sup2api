@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程工具调用结果的清洗、内容块转换与同步
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-g54kbxqw.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2c3jp4kn.js (4), chunk-k0v80sg8.js (16)
  * attribution: placement 20
  */
 import {
@@ -34,12 +34,12 @@ import { setSkillsSyncVetoed, setAccountSkillsSyncEnabled, getRootSession } from
 import { HostScoped } from "../../utils/hostScoped.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-g54kbxqw.js:29325-29379 placement
+//@ chunk-k0v80sg8.js:28074-28127 placement
 function envelopeOf(value) {
   let record = asPlainRecord(value);
   return record && ANTHROPIC_REMOTETOOLEXECUTION in record ? record : undefined;
 }
-//@ chunk-g54kbxqw.js:29379-29500 placement
+//@ chunk-k0v80sg8.js:28127-28248 placement
 function readResultEnvelope(value) {
   if (!value)
     return {
@@ -55,7 +55,7 @@ function readResultEnvelope(value) {
         status: "malformed",
       };
 }
-//@ chunk-g54kbxqw.js:29500-29822 placement (2.1.88 match: isMalformedBase64Image, 1)
+//@ chunk-k0v80sg8.js:28248-28570 placement (2.1.88 match: isMalformedBase64Image, 1)
 /**
  * 把远程工具返回的内容块转成 MCP 内容（文本保留、base64 图片保留，其余 JSON 化为文本）。
  */
@@ -90,7 +90,7 @@ function toRemoteToolContentBlocks(content) {
     }
   });
 }
-//@ chunk-g54kbxqw.js:29822-30040 placement
+//@ chunk-k0v80sg8.js:28570-28788 placement
 /**
  * 由远程工具执行信封构造 MCP CallTool 结果（refused/failed/is_error 时 isError，信封放进 structuredContent/_meta）。
  */
@@ -113,7 +113,7 @@ function buildRemoteToolCallResult({ envelope, content }) {
     }),
   };
 }
-//@ chunk-g54kbxqw.js:30040-30789 placement
+//@ chunk-k0v80sg8.js:28788-29537 placement
 /**
  * 清洗远程工具执行信封（按 outcome：completed/refused/failed/needs_approval/acknowledged/in_progress 截断与过滤字段）。
  */
@@ -175,7 +175,7 @@ function sanitizeRemoteToolEnvelope(envelope) {
       };
   }
 }
-//@ chunk-g54kbxqw.js:30789-30871 placement
+//@ chunk-k0v80sg8.js:29537-29618 placement
 /**
  * 导出函数 `clampToMaxPageSize`：参数 e，返回 1; return Math.min(Math.floor(e), Ie)。
  */
@@ -183,29 +183,29 @@ function clampToMaxPageSize(deadlineMs) {
   if (Number.isNaN(deadlineMs) || deadlineMs < 1) return 1;
   return Math.min(Math.floor(deadlineMs), MAX_INT32);
 }
-//@ chunk-g54kbxqw.js:30871-30924 placement
+//@ chunk-k0v80sg8.js:29618-29671 placement
 /**
  * 导出函数 `byteLengthOf`：参数 e，返回 Buffer.byteLength(jsonStringify(e), "utf8")。
  */
 function byteLengthOf(value) {
   return Buffer.byteLength(jsonStringify(value), "utf8");
 }
-//@ chunk-g54kbxqw.js:30924-30989 placement
+//@ chunk-k0v80sg8.js:29671-29735 placement
 function hasDifferentProtocolVersion(value) {
   let version = asPlainRecord(value)?.v;
   return typeof version === "number" && version !== REMOTE_TOOL_PROTOCOL_VERSION;
 }
-//@ chunk-g54kbxqw.js:30989-31060 placement
+//@ chunk-k0v80sg8.js:29735-29805 placement
 function isPlainRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-g54kbxqw.js:31060-31097 placement
+//@ chunk-k0v80sg8.js:29805-29840 placement
 function asPlainRecord(value) {
   return isPlainRecord(value) ? value : undefined;
 }
-//@ chunk-g54kbxqw.js:31097-31109 placement
+//@ chunk-k0v80sg8.js:29840-29852 placement
 var MAX_COLLECTED_TOOL_NAMES = 2048;
-//@ chunk-g54kbxqw.js:31109-31631 placement
+//@ chunk-k0v80sg8.js:29852-30370 placement
 function collectToolNames(inputSchema) {
   let names = new Set();
   let requiredNames = (required) =>
@@ -241,14 +241,14 @@ function collectToolNames(inputSchema) {
   };
   return walk(inputSchema, 0);
 }
-//@ chunk-g54kbxqw.js:31631-31695 placement
+//@ chunk-k0v80sg8.js:30370-30434 placement
 function includesWord(note, word) {
   return note.split(/[^A-Za-z0-9_.-]+/).includes(word);
 }
-//@ chunk-g54kbxqw.js:31695-31793 placement
+//@ chunk-k0v80sg8.js:30434-30532 placement
 var textBlockSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var imageBlockSchema;
-deferInit("chunk-g54kbxqw.js:31695", () => {
+deferInit("chunk-k0v80sg8.js:30434", () => {
   textBlockSchema = DoctorLazy(() =>
     objectSchema({
       type: literal("text"),
@@ -263,7 +263,7 @@ deferInit("chunk-g54kbxqw.js:31695", () => {
     }),
   );
 });
-//@ chunk-g54kbxqw.js:31793-32218 placement
+//@ chunk-k0v80sg8.js:30532-30955 placement
 function toContentBlocks(content) {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return [];
@@ -291,7 +291,7 @@ function toContentBlocks(content) {
     };
   });
 }
-//@ chunk-g54kbxqw.js:32218-32409 placement
+//@ chunk-k0v80sg8.js:30955-31146 placement
 function toMcpContentBlocks(remoteToolContentBlocks) {
   if (typeof remoteToolContentBlocks === "string")
     return [
@@ -313,13 +313,13 @@ function toMcpContentBlocks(remoteToolContentBlocks) {
         },
   );
 }
-//@ chunk-g54kbxqw.js:32409-32497 placement
+//@ chunk-2c3jp4kn.js:1234-1321 placement
 class HostCatalog {
   texts = new Map();
   readingForCalls = new Map();
   lastReadForCalls = Promise.resolve(undefined);
 }
-//@ chunk-g54kbxqw.js:32497-33987 placement
+//@ chunk-2c3jp4kn.js:1321-2896 placement
 class RemoteToolsSync {
   syncPromise = null;
   firstSyncPromise = null;
@@ -331,6 +331,7 @@ class RemoteToolsSync {
   resyncArmed = null;
   stopAwaitingActivity = null;
   consecutiveFailedRounds = 0;
+  failedLandings = new Map();
   lostRowsRecheckMs = 100;
   bucketGeneration = null;
   hidingFoldersGone = new Set();
@@ -338,6 +339,7 @@ class RemoteToolsSync {
   placeholders = new Map();
   listedSkills = new Map();
   textAlone = false;
+  catalogAlone = false;
   listedOwnerships = new Map();
   listedSkillsAnswer = "none_yet";
   listNeverStarted = false;
@@ -365,11 +367,13 @@ class RemoteToolsSync {
     this.resyncArmed = null;
     this.stopAwaitingActivity?.();
     this.consecutiveFailedRounds = 0;
+    this.failedLandings.clear();
     this.hidingFoldersGone = new Set();
     this.lostRowsRecheckMs = 100;
     this.bucketGeneration = null;
     this.listedSkills.clear();
     this.textAlone = false;
+    this.catalogAlone = false;
     this.listedOwnerships.clear();
     this.listedSkillsAnswer = "none_yet";
     this.listNeverStarted = false;
@@ -385,28 +389,28 @@ class RemoteToolsSync {
     this.missingSkillResync = null;
   }
 }
-//@ chunk-g54kbxqw.js:33987-34012 placement
+//@ chunk-2c3jp4kn.js:2896-2920 placement
 var remoteToolsSyncSlot; // deferred: uses RemoteToolsSync of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-g54kbxqw.js:33987", () => {
+deferInit("chunk-2c3jp4kn.js:2896", () => {
   remoteToolsSyncSlot = new HostScoped(() => new RemoteToolsSync());
 });
-//@ chunk-g54kbxqw.js:34012-34049 placement
+//@ chunk-2c3jp4kn.js:2920-2957 placement
 function remoteToolsState() {
   return remoteToolsSyncSlot.of(getRootSession().host);
 }
 export {
-  byteLengthOf,
-  buildRemoteToolCallResult,
-  clampToMaxPageSize,
-  toRemoteToolContentBlocks,
   remoteToolsState,
-  isPlainRecord,
+  buildRemoteToolCallResult,
+  byteLengthOf,
   asPlainRecord,
-  hasDifferentProtocolVersion,
-  sanitizeRemoteToolEnvelope,
   collectToolNames,
   includesWord,
+  clampToMaxPageSize,
   toContentBlocks,
   readResultEnvelope,
   envelopeOf,
+  toRemoteToolContentBlocks,
+  isPlainRecord,
+  hasDifferentProtocolVersion,
+  sanitizeRemoteToolEnvelope,
 };

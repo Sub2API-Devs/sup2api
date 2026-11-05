@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：桥接会话的磁盘补录（persistence backfill）：所有者核对、宿主注入 bearer 的归属查询、游标分页与失败降级，把本地转录补到服务端。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cg2r2hy6.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-66b9fbd5.js (16)
  * attribution: placement 16
  */
 import { stat } from "fs/promises";
@@ -72,10 +72,10 @@ import { MAX_PRESERVED_MESSAGE_UUIDS } from "../cli/transports/ccrClient.js";
 import { createPageBudget, readAllPages } from "../utils/pagedRead.js";
 import { formatStorageError } from "../utils/storage/storageErrors.js";
 
-//@ chunk-cg2r2hy6.js:13644-13666 placement
+//@ chunk-66b9fbd5.js:14858-14880 placement
 var OWNER_VOUCH_INITIAL_BACKOFF_MS = 5000;
 var OWNER_VOUCH_MAX_BACKOFF_MS = 160000;
-//@ chunk-cg2r2hy6.js:13666-14476 placement
+//@ chunk-66b9fbd5.js:14880-15690 placement
 /**
  * 桥接所有者核对：身份文件的账号与记录的 owner 不一致、且会话跑在宿主注入的 bearer 上时，向服务端查询该 bearer 的归属。返回 source=file/server/unconfirmed，并记 tengu_bridge_owner_check_attributed。
  */
@@ -130,7 +130,7 @@ async function resolveOwnerCheckIdentity({ site, fileLogin, owner, attributions,
         mismatchAgainst: attributedLogin?.accountUuid ?? fileLogin.accountUuid,
       };
 }
-//@ chunk-cg2r2hy6.js:14476-15022 placement
+//@ chunk-66b9fbd5.js:15690-16236 placement
 /**
  * 返回一个同步判断函数：当前桥接 access token 是否已被服务端确认属于 login 账号。未确认时异步查询（指数退避，超过上限即判定失败）；token 变化或归属他人后永久返回 false。
  */
@@ -193,15 +193,15 @@ function createBearerOwnerVouch({ login, bearer, attributions }) {
     }
   };
 }
-//@ chunk-cg2r2hy6.js:15022-15034 placement
+//@ chunk-66b9fbd5.js:16236-16248 placement
 var TOKEN_ABSENCE_VERDICT_TIMEOUT_MS = 3000;
-//@ chunk-cg2r2hy6.js:15034-15122 placement
+//@ chunk-66b9fbd5.js:16248-16336 placement
 async function createTokenAbsenceClassifier(credentials, credentials_2) {
   if (!(await isStoreBackedFirstPartyLogin(credentials_2)) || !getStoredOauthAccountInfo()?.accountUuid)
     return;
   return (site) => classifyBridgeTokenAbsence(site, credentials, credentials_2);
 }
-//@ chunk-cg2r2hy6.js:15122-15351 placement
+//@ chunk-66b9fbd5.js:16336-16565 placement
 /**
  * 桥接拿不到 token 时判断原因（带超时），记录 tengu_bridge_token_absence_classified 并返回结论字符串。
  */
@@ -220,7 +220,7 @@ async function classifyBridgeTokenAbsence(site, credentials, storageV5) {
   });
   return verdict;
 }
-//@ chunk-cg2r2hy6.js:15351-15871 placement
+//@ chunk-66b9fbd5.js:16565-17085 placement
 /**
  * 读磁盘 OAuth 账号与安全存储，区分 refresh_token_dead / unknown_identity_* / unknown_store_unreadable / signed_out 等情况。
  */
@@ -239,7 +239,7 @@ async function readTokenAbsenceVerdict(storageV5, credentials) {
   if (asyncStrict?.claudeAiOauth !== undefined) return "unknown_identity_absent_token_present";
   return "signed_out";
 }
-//@ chunk-cg2r2hy6.js:15871-16424 placement
+//@ chunk-66b9fbd5.js:17085-17638 placement
 /**
  * 在会话注册表里找另一个仍在运行、声明了同一桥接会话的进程（用进程启动时间核对 pid 未被复用），返回 {pid, startedAt}。
  */
@@ -278,12 +278,12 @@ async function findLiveBridgeSessionHolder(reattachTarget) {
   }
   return;
 }
-//@ chunk-cg2r2hy6.js:16488-16521 placement
+//@ chunk-66b9fbd5.js:17702-17735 placement
 var MAX_BACKFILL_SUBAGENT_TRANSCRIPTS = 20;
 var CAUGHT_UP_AFTER_RETRY_MAX_ATTEMPTS = 4;
 var BACKFILL_POLL_BASE_BACKOFF_MS = 2000;
 var BACKFILL_POLL_MAX_BACKOFF_MS = 300000;
-//@ chunk-cg2r2hy6.js:16521-19033 placement
+//@ chunk-66b9fbd5.js:17735-20244 placement
 /**
  * [persistence-sync] 把本地主会话与子代理 transcript 中服务端缺少的条目补传：先检查历史抑制污点和会话是否切换，扫描主 transcript，再读服务端子代理事件并逐个补传；返回上传计数或 rows_owed/read_failed。
  */
@@ -440,7 +440,7 @@ async function runPersistenceBackfill(
         uploadedSubagents,
       };
 }
-//@ chunk-cg2r2hy6.js:19033-20019 placement
+//@ chunk-66b9fbd5.js:20244-21230 placement
 /**
  * 补传重试循环：attemptSync 返回 read_failed 时按指数退避加抖动重试，第 N 次仍落后时调用 onFallenBehind；返回 {outcome, runNow}，runNow 立即打断等待重试一次。
  */
@@ -514,7 +514,7 @@ function createPersistenceCatchUp({
     },
   };
 }
-//@ chunk-cg2r2hy6.js:20019-20397 placement
+//@ chunk-66b9fbd5.js:21230-21608 placement
 /**
  * 列出要补传的子代理 transcript：过滤掉超过 SKIP_PRECOMPACT_THRESHOLD 的，按 mtime 取最新的若干个。
  */
@@ -536,7 +536,7 @@ async function listSubagentTranscriptsForBackfill(agentIds, storageBackend) {
     );
   return sliced;
 }
-//@ chunk-cg2r2hy6.js:20397-22079 placement
+//@ chunk-66b9fbd5.js:21608-23290 placement
 /**
  * 从尾部倒序扫描一个 transcript（或经存储后端读取），收集服务端没有的同步条目直到压缩边界；遇到历史抑制条目返回 tainted，预算耗尽/行数过多返回相应状态；压缩保留的消息读不全时只上传边界之后的部分。
  */
@@ -653,7 +653,7 @@ async function scanTranscriptForBackfill(
   }
   return rows.reverse();
 }
-//@ chunk-cg2r2hy6.js:22079-22498 placement
+//@ chunk-66b9fbd5.js:23290-23709 placement
 /**
  * await 之后重新确认：会话 id 未变、远端出口未被抑制；否则返回 rows_owed 或空上传结果。
  */
@@ -677,7 +677,7 @@ function recheckBackfillPreconditions(sessionId) {
   }
   return;
 }
-//@ chunk-cg2r2hy6.js:22498-22623 placement
+//@ chunk-66b9fbd5.js:23709-23834 placement
 /**
  * stat 一个子代理 transcript，返回 {agentId, path, size, mtimeMs}，失败返回 null。
  */
@@ -694,7 +694,7 @@ async function statSubagentTranscript(agentId, path = getAgentTranscriptPath(age
     return null;
   }
 }
-//@ chunk-cg2r2hy6.js:22623-24194 placement
+//@ chunk-66b9fbd5.js:23834-25405 placement
 /**
  * 通过存储后端分页列出各会话目录下的子代理 transcript 大小与 mtime（列举失败的目录跳过），本地路径映射不到后端键的退回 fs.stat。
  */

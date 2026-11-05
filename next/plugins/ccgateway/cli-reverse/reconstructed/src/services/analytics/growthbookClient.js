@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：GrowthBook 客户端持有者：创建/重建客户端、处理鉴权变化、日志去重、退出处理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (10)
  * attribution: placement 10
  */
 import {
@@ -41,7 +41,7 @@ import { require_resources } from "../../../vendor/@opentelemetry/resources/buil
 import { require_api } from "../../../vendor/@opentelemetry/api/build/src/index.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:630358-630526 placement
+//@ chunk-exfmq47h.js:642886-643054 placement
 /**
  * 向 GrowthBook /api/eval/<clientKey> POST 评估请求。
  */
@@ -55,7 +55,7 @@ var postGrowthBookEval = (request) =>
     body: jsonStringify(request.payload),
     redirect: "error",
   });
-//@ chunk-aepeg2w5.js:630526-648604 placement
+//@ chunk-exfmq47h.js:643054-661210 placement
 /**
  * GrowthBook 客户端持有者：创建/重建客户端、处理鉴权变化、日志去重、退出处理。
  */
@@ -348,19 +348,24 @@ class GrowthBookClientHolder {
   syncRemoteEvalToDisk(force) {
     if (this.clientSlackTagConnected) return;
     if (this.everCreatedWithAuth && !this.clientCreatedWithAuth) return;
+    if (this.deps.fetchesSignedOut?.() === true) return;
     if (this.usedNonDefaultHost) return;
     let payload = this.payloadAsSaved();
+    let forceSaving = force || this.deps.skipsSavingUnchangedFetch?.() === true;
     if (
-      (force || this.deps.skipsSavingUnchangedFetch?.() === true) &&
+      forceSaving &&
       import_sortedIndex_2(pickAlias(this.deps.readGlobalConfig(), Object.keys(payload)), payload)
     )
       return;
     this.deps.saveGlobalConfig(
-      (config) => ({
-        ...config,
-        ...payload,
-        cachedGrowthBookFeaturesAt: Date.now(),
-      }),
+      (config) =>
+        forceSaving && import_sortedIndex_2(pickAlias(config, Object.keys(payload)), payload)
+          ? config
+          : {
+              ...config,
+              ...payload,
+              cachedGrowthBookFeaturesAt: Date.now(),
+            },
       this.storageV5,
     );
   }
@@ -896,11 +901,11 @@ class GrowthBookClientHolder {
     }
   }
 }
-//@ chunk-aepeg2w5.js:648604-648641 placement
+//@ chunk-exfmq47h.js:661210-661247 placement
 function valueOrFallback(value, fallback) {
   return value === null ? fallback : value;
 }
-//@ chunk-aepeg2w5.js:648641-648715 placement
+//@ chunk-exfmq47h.js:661247-661321 placement
 function swallowAsync(promise) {
   try {
     Promise.resolve(promise()).catch((error) => {
@@ -910,35 +915,35 @@ function swallowAsync(promise) {
     logError(error);
   }
 }
-//@ chunk-aepeg2w5.js:648715-648776 placement
+//@ chunk-exfmq47h.js:661321-661382 placement
 function readGateOverride(overrides, key) {
   let isHooksGate = key === PLUGIN_HOOKS_MODULES_GATE;
   return key in overrides && (!isHooksGate || overrides[key] === true);
 }
-//@ chunk-aepeg2w5.js:648776-648865 placement
+//@ chunk-exfmq47h.js:661382-661471 placement
 function stripCredentialFields(payload) {
   let filtered = Object.keys(payload).filter((key) => TENGU_FLAG_SET.has(key));
   return filtered.length === 0 ? payload : omitAlias(payload, filtered);
 }
-//@ chunk-aepeg2w5.js:648865-648898 placement
+//@ chunk-exfmq47h.js:661471-661504 placement
 var nodeModuleA; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var nodeModuleB;
-deferInit("chunk-aepeg2w5.js:648865", () => {
+deferInit("chunk-exfmq47h.js:661471", () => {
   nodeModuleA = __toESM(require_core(), 1);
   nodeModuleB = __toESM(require_resources(), 1);
 });
-//@ chunk-aepeg2w5.js:648898-648914 placement
+//@ chunk-exfmq47h.js:661504-661520 placement
 var growthbookSdkModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:648898", () => {
+deferInit("chunk-exfmq47h.js:661504", () => {
   growthbookSdkModule = __toESM(require_api());
 });
-//@ chunk-aepeg2w5.js:648914-648933 placement
+//@ chunk-exfmq47h.js:661520-661539 placement
 class NoopEmitter {
   emit(event) {}
 }
-//@ chunk-aepeg2w5.js:648933-648947 placement
+//@ chunk-exfmq47h.js:661539-661553 placement
 var noopEmitter; // deferred: uses NoopEmitter of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:648933", () => {
+deferInit("chunk-exfmq47h.js:661539", () => {
   noopEmitter = new NoopEmitter();
 });
 export {

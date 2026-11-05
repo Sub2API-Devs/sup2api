@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：mcp serve 目录列表与文件建议调用。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wy9dbk5f.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xrwmcqkn.js (10)
  * attribution: placement 10
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -39,7 +39,7 @@ import { buildNativeDoctorDiagnostics } from "../../screens/Doctor.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-wy9dbk5f.js:18108-18295 placement
+//@ chunk-xrwmcqkn.js:18948-19135 placement
 /**
  * 文件建议结果的 schema。
  */
@@ -57,14 +57,14 @@ var fileSuggestionsResultSchema = DoctorLazy(() =>
     leftOut: numberSchema().int().min(0).max(MAX_FILE_SUGGESTIONS),
   }),
 );
-//@ chunk-wy9dbk5f.js:18295-18350 placement
+//@ chunk-xrwmcqkn.js:19135-19190 placement
 /**
  * 判断查询是否可用（非空、不超长、符合过滤规则）。
  */
 function isUsableQuery(query) {
   return query.length > 0 && query.length <= MAX_QUERY_CHARS && isAlreadySanitized(query);
 }
-//@ chunk-wy9dbk5f.js:18350-18776 placement
+//@ chunk-xrwmcqkn.js:19190-19616 placement
 async function serveFileSuggestions(input, signal, context) {
   let { query } = fileSuggestionsInputSchema().parse(input);
   let { generateFileSuggestionsWithBase, globalFileIndexCache } =
@@ -92,7 +92,7 @@ async function serveFileSuggestions(input, signal, context) {
     },
   };
 }
-//@ chunk-wy9dbk5f.js:18776-19090 placement
+//@ chunk-xrwmcqkn.js:19616-19930 placement
 /**
  * 列目录结果的 schema。
  */
@@ -129,18 +129,18 @@ var listDirectoryResultSchema = DoctorLazy(() =>
     }),
   ]),
 );
-//@ chunk-wy9dbk5f.js:19090-19226 placement
+//@ chunk-xrwmcqkn.js:19930-20066 placement
 async function serveListDirectory(input, signal, context) {
   if (isPlainObject(input) && exceedsSerializedContextLimit(input.permission_context))
     throw Error("permission_context is too large");
   return limitedListDirectory(listDirectoryWithContextSchema().parse(input), signal, context);
 }
-//@ chunk-wy9dbk5f.js:19226-19242 placement
+//@ chunk-xrwmcqkn.js:20066-20082 placement
 /**
  * 并发限制为 4 的列目录实现。
  */
 var limitedListDirectory = limitConcurrency(4, serveListDirectoryForRemote);
-//@ chunk-wy9dbk5f.js:19242-19860 placement
+//@ chunk-xrwmcqkn.js:20082-20700 placement
 async function serveListDirectoryForRemote({ permission_context: permissionContext, path }, signal, context) {
   if (signal.aborted || context.callerGone?.aborted) return deniedListing("unexpected_error");
   let readContext =
@@ -180,12 +180,12 @@ async function serveListDirectoryForRemote({ permission_context: permissionConte
     return deniedListing(repoRootErrorClass(error) ?? "unexpected_error");
   }
 }
-//@ chunk-wy9dbk5f.js:19860-19874 placement
+//@ chunk-xrwmcqkn.js:20700-20714 placement
 /**
  * 列目录结果的最大字节数（上限减 64）。
  */
 var MAX_LISTING_BYTES = MAX_REMOTE_READ_BYTES - 64;
-//@ chunk-wy9dbk5f.js:19874-19943 placement
+//@ chunk-xrwmcqkn.js:20714-20783 placement
 /**
  * 生成“列目录被拒绝”的结果。
  */
@@ -197,7 +197,7 @@ function deniedListing(reason) {
     },
   };
 }
-//@ chunk-wy9dbk5f.js:19943-20050 placement
+//@ chunk-xrwmcqkn.js:20783-20890 placement
 function fitsListingLimit(listing) {
   let totalNameLength = 0;
   for (let { name: entryName } of listing.entries) totalNameLength += entryName.length;

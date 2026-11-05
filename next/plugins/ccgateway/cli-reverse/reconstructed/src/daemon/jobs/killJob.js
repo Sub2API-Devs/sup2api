@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：附加到后台会话的完整流程：屏幕保持、首帧前门控 stdin、云/本地会话标签；附加前检查会话状态：已删除/已结束时返回错误并上报 detached等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (1), chunk-vrr64ez0.js (35)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (1), chunk-bjxz9pt3.js (35)
  * attribution: placement 36
  */
 import { dirname, basename, join, normalize, isAbsolute, relative } from "path";
@@ -122,7 +122,7 @@ import {
 } from "../../utils/fsOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3654790-3654875 placement (2.1.88 match: isDangerousFilePathToAutoEdit, 1)
+//@ chunk-5xgkngpb.js:3750168-3750253 placement (2.1.88 match: isDangerousFilePathToAutoEdit, 1)
 function isDirectlyUnderClaudeWorktreesDir(path) {
   let absolutePath = dirname(path);
   return (
@@ -131,9 +131,9 @@ function isDirectlyUnderClaudeWorktreesDir(path) {
     basename(dirname(absolutePath)) === ".claude"
   );
 }
-//@ chunk-vrr64ez0.js:28269-28293 placement
+//@ chunk-bjxz9pt3.js:28305-28329 placement
 var RECAP_TRIGGER_FILE = "recap.trigger";
-//@ chunk-vrr64ez0.js:28293-28472 placement
+//@ chunk-bjxz9pt3.js:28329-28508 placement
 function touchRecapTrigger(jobId, storageV5) {
   if (isStorageV5Enabled() && storageV5 !== undefined) {
     let key = STORAGE_SPACES.job(jobId, [RECAP_TRIGGER_FILE]);
@@ -148,7 +148,7 @@ function touchRecapTrigger(jobId, storageV5) {
   }
   writeFile(join(getJobDir(jobId), RECAP_TRIGGER_FILE), "").catch(() => {});
 }
-//@ chunk-vrr64ez0.js:28472-29740 placement
+//@ chunk-bjxz9pt3.js:28508-29776 placement
 async function killJob(short, options, flags, storageV5) {
   if (options?.backend === "peer")
     return {
@@ -255,7 +255,7 @@ async function killJob(short, options, flags, storageV5) {
     error: killReply.error,
   };
 }
-//@ chunk-vrr64ez0.js:29740-30247 placement
+//@ chunk-bjxz9pt3.js:29776-30283 placement
 async function killOrphanedWorker(short, storageV5) {
   let killed = await killViaPtySocket(daemonPtySocket(short));
   let anyMatch = false;
@@ -298,7 +298,7 @@ async function killOrphanedWorker(short, storageV5) {
     scanFailed,
   };
 }
-//@ chunk-vrr64ez0.js:30247-30605 placement
+//@ chunk-bjxz9pt3.js:30283-30641 placement
 async function listAliveDaemonJobs(storageV5) {
   let reply = await controlRequest({
     proto: BG_PROTO,
@@ -322,7 +322,7 @@ async function listAliveDaemonJobs(storageV5) {
     records: [],
   };
 }
-//@ chunk-vrr64ez0.js:30605-30880 placement
+//@ chunk-bjxz9pt3.js:30641-30916 placement
 async function probeDaemonJob(short, storageV5) {
   let reply = await controlRequest({
     proto: BG_PROTO,
@@ -350,7 +350,7 @@ async function probeDaemonJob(short, storageV5) {
     daemonUp: false,
   };
 }
-//@ chunk-vrr64ez0.js:30880-30994 placement
+//@ chunk-bjxz9pt3.js:30916-31030 placement
 async function isDaemonJobPresent(short) {
   let reply = await controlRequest({
     proto: BG_PROTO,
@@ -359,7 +359,7 @@ async function isDaemonJobPresent(short) {
   });
   return reply.ok && reply.op === "has" ? (reply.present ?? reply.alive) : false;
 }
-//@ chunk-vrr64ez0.js:30994-31299 placement
+//@ chunk-bjxz9pt3.js:31030-31335 placement
 function applyReplyPatch(jobState, patch) {
   let reply =
     jobState.tempo === "blocked" &&
@@ -382,21 +382,21 @@ function applyReplyPatch(jobState, patch) {
     updatedAt: new Date().toISOString(),
   };
 }
-//@ chunk-vrr64ez0.js:31299-31428 placement
+//@ chunk-bjxz9pt3.js:31335-31464 placement
 var REPLY_ENOJOB_MSG = "That session isn't running \u2014 respawn it first";
 var REPLY_PEER_NO_SOCK_MSG = "Can't send \u2014 that session is running in another terminal";
-//@ chunk-vrr64ez0.js:31428-31527 placement
+//@ chunk-bjxz9pt3.js:31464-31563 placement
 function daemonUnreachableMessage() {
   return `Couldn't reach the ${bgSupervisorNoun()} \u2014 it may be restarting. Press Enter to retry`;
 }
-//@ chunk-vrr64ez0.js:31527-31569 placement
+//@ chunk-bjxz9pt3.js:31563-31605 placement
 function isReplyDaemonRestartingMsg(message) {
   return message.startsWith(daemonUnreachableMessage());
 }
-//@ chunk-vrr64ez0.js:31569-31661 placement
+//@ chunk-bjxz9pt3.js:31605-31697 placement
 var MESSAGE_SAVED_SUFFIX =
   " \u2014 your message was saved and will be sent when you next restart this session";
-//@ chunk-vrr64ez0.js:31661-31797 placement
+//@ chunk-bjxz9pt3.js:31697-31833 placement
 async function isReplyDeliverable(jobDir, patch, storageV5) {
   invalidateJobStateCache(jobDir);
   let jobState = await readJobState(jobDir, storageV5);
@@ -405,7 +405,7 @@ async function isReplyDeliverable(jobDir, patch, storageV5) {
   if (prompt !== undefined) return prompt === patch;
   return queuePromptForJob(jobDir, jobState, patch, storageV5);
 }
-//@ chunk-vrr64ez0.js:31797-34943 placement
+//@ chunk-bjxz9pt3.js:31833-34979 placement
 async function replyToJob(id, text, state, jobState, extraTelemetry, storageV5, { nextTurn = false } = {}) {
   let now = Date.now();
   let logOutcome = (outcome, errorCode, code) => {
@@ -456,10 +456,10 @@ async function replyToJob(id, text, state, jobState, extraTelemetry, storageV5, 
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION
@@ -623,7 +623,7 @@ async function replyToJob(id, text, state, jobState, extraTelemetry, storageV5, 
     queued: queuedForLater,
   };
 }
-//@ chunk-vrr64ez0.js:34943-35138 placement
+//@ chunk-bjxz9pt3.js:34979-35175 placement
 async function hasConversationToResume(jobState, storageV5) {
   if (isExecLaunch(jobState)) return false;
   let storageSource = wrapStorageSource(getTranscriptStorageContext(storageV5));
@@ -638,7 +638,7 @@ async function hasConversationToResume(jobState, storageV5) {
   });
   return transcriptInfo?.hasMessages === true && !transcriptInfo.unverifiable;
 }
-//@ chunk-vrr64ez0.js:35138-36245 placement
+//@ chunk-bjxz9pt3.js:35175-36282 placement
 /**
  * 附加前检查会话状态：已删除/已结束时返回错误并上报 detached。
  */
@@ -692,19 +692,19 @@ async function resolveAttachTarget(short, gesture, storageV5) {
   }
   return;
 }
-//@ chunk-vrr64ez0.js:36245-36292 placement
+//@ chunk-bjxz9pt3.js:36282-36329 placement
 var TRANSIENT_STOP_OPTIONS = {
   forceTransient: true,
   standsDownAtExit: true,
 };
-//@ chunk-vrr64ez0.js:36292-36371 placement
+//@ chunk-bjxz9pt3.js:36329-36408 placement
 async function attachJob(short, options = {}) {
   return await attachToBackgroundSession(short, options, {
     overStream: false,
     onlyToRetry: false,
   });
 }
-//@ chunk-vrr64ez0.js:36371-41410 placement
+//@ chunk-bjxz9pt3.js:36408-41447 placement
 /**
  * 附加到后台会话的完整流程：屏幕保持、首帧前门控 stdin、云/本地会话标签。
  */
@@ -977,10 +977,10 @@ async function attachToBackgroundSession(short, options, attachOptions) {
         kind: "detached",
       };
 }
-//@ chunk-vrr64ez0.js:41410-41516 placement
+//@ chunk-bjxz9pt3.js:41447-41553 placement
 var BACKGROUND_SESSIONS_STOP_WARNING =
   "Background sessions still running will stop in about a minute. Run 'claude agents' to keep them.";
-//@ chunk-vrr64ez0.js:41516-42043 placement
+//@ chunk-bjxz9pt3.js:41553-42080 placement
 /**
  * 判断附加前是否需要拉起 daemon（ping 超时、服务管理器状态、平台）。
  */
@@ -1018,7 +1018,7 @@ async function shouldStartDaemonForAttach(phase, options, ensureResult) {
   else if (stopWarning) process.stdout.write(stopWarning);
   return heldUntilExit();
 }
-//@ chunk-vrr64ez0.js:42043-42132 placement
+//@ chunk-bjxz9pt3.js:42080-42169 placement
 /**
  * 导出值：同一声明里的多个绑定：MAX_KILL_OUTPUT_LINES（32：停止输出保留行数）；HEAD_TAIL_LINES_STOP（{head:50,tail:30}）；HEAD_TAIL_LINES_LOG（{head:60,tail:100}：日志首尾行数）。
  */
@@ -1026,7 +1026,7 @@ var MAX_KILL_OUTPUT_LINES; // deferred: has load-time effects after a deferred s
 var HEAD_TAIL_LINES_STOP;
 var HEAD_TAIL_LINES_LOG;
 var WORKTREE_DIGEST_PATTERN;
-deferInit("chunk-vrr64ez0.js:42043", () => {
+deferInit("chunk-bjxz9pt3.js:42080", () => {
   MAX_KILL_OUTPUT_LINES = 32;
   HEAD_TAIL_LINES_STOP = {
     head: 50,
@@ -1038,11 +1038,11 @@ deferInit("chunk-vrr64ez0.js:42043", () => {
   };
   WORKTREE_DIGEST_PATTERN = new RegExp(`^[0-9a-f]{${MAX_KILL_OUTPUT_LINES}}$`);
 });
-//@ chunk-vrr64ez0.js:42132-42172 placement
+//@ chunk-bjxz9pt3.js:42169-42209 placement
 function killOutputTail(worktreePath) {
   return computeContentHash(worktreePath).slice(0, MAX_KILL_OUTPUT_LINES);
 }
-//@ chunk-vrr64ez0.js:42172-48331 placement
+//@ chunk-bjxz9pt3.js:42209-48368 placement
 async function deleteJob(short, options = {}, storageV5) {
   let jobState = await readJobState(getJobDir(short), storageV5);
   let liveSessions = jobState?.worktreePath ? await listAllLiveSessions(storageV5).catch(() => []) : [];
@@ -1446,7 +1446,7 @@ async function deleteJob(short, options = {}, storageV5) {
     }),
   };
 }
-//@ chunk-vrr64ez0.js:48331-48689 placement
+//@ chunk-bjxz9pt3.js:48368-48726 placement
 /**
  * 找出与指定 worktree 路径相同的其他存活 job（已验证/无法验证）。
  */
@@ -1473,7 +1473,7 @@ async function findJobSharingWorktree(short, realPath, worktreePath, storageV5) 
   }
   return null;
 }
-//@ chunk-vrr64ez0.js:48689-48870 placement
+//@ chunk-bjxz9pt3.js:48726-48907 placement
 function matchWorktreePath(worktreePath, realPath, worktreePath_2) {
   if (isSamePath(worktreePath, worktreePath_2) || isSamePath(worktreePath, realPath)) return "match";
   if (!hasDotSegment(worktreePath)) return "no_match";
@@ -1483,20 +1483,20 @@ function matchWorktreePath(worktreePath, realPath, worktreePath_2) {
     ? "unverifiable"
     : "no_match";
 }
-//@ chunk-vrr64ez0.js:48870-48908 placement
+//@ chunk-bjxz9pt3.js:48907-48945 placement
 function isSamePath(pathA, pathB) {
   return realCwd(pathA) === realCwd(pathB);
 }
-//@ chunk-vrr64ez0.js:48908-48940 placement
+//@ chunk-bjxz9pt3.js:48945-48977 placement
 function realCwd(path) {
   return foldCaseBasic(identity(path));
 }
-//@ chunk-vrr64ez0.js:48940-49023 placement
+//@ chunk-bjxz9pt3.js:48977-49060 placement
 function isCwdInside(candidatePath, rootPath) {
   let relativePath = relative(realCwd(rootPath), realCwd(candidatePath));
   return relativePath.split(/[/\\]/, 1)[0] !== ".." && !isAbsolute(relativePath);
 }
-//@ chunk-vrr64ez0.js:49023-49451 placement
+//@ chunk-bjxz9pt3.js:49060-49488 placement
 /**
  * 在会话列表中找出与当前目录相同的交互/后台会话进程。
  */
@@ -1515,7 +1515,7 @@ async function findSessionsInDirectory(sessions, short, ownPids, realPath, rootP
   }
   return;
 }
-//@ chunk-vrr64ez0.js:49451-49672 placement
+//@ chunk-bjxz9pt3.js:49488-49709 placement
 function resolveComparablePath(worktreePath, worktreePath_2) {
   let cwd = getCwd();
   if (
@@ -1538,14 +1538,14 @@ function resolveComparablePath(worktreePath, worktreePath_2) {
     return worktreePath;
   return realpath(worktreePath).catch(() => worktreePath);
 }
-//@ chunk-vrr64ez0.js:49672-49776 placement
+//@ chunk-bjxz9pt3.js:49709-49813 placement
 async function probeJobStateFile(jobDir) {
   return lstat(join(jobDir, "state.json")).then(
     () => "present",
     (error) => (isENOENT(error) ? "missing" : "unreadable"),
   );
 }
-//@ chunk-vrr64ez0.js:49776-50285 placement
+//@ chunk-bjxz9pt3.js:49813-50322 placement
 /**
  * 扫描 jobs 目录，找出在同一目录工作的其他 job。
  */
@@ -1575,16 +1575,16 @@ async function findOtherJobsInDir(short, realPath, worktreePath, { includeUnsett
   }
   return null;
 }
-//@ chunk-vrr64ez0.js:50285-50332 placement
+//@ chunk-bjxz9pt3.js:50322-50369 placement
 async function killJobWithSignal(short, options, attachOptions) {
   return await attachToJob(short, attachOptions);
 }
-//@ chunk-vrr64ez0.js:50332-50418 placement
+//@ chunk-bjxz9pt3.js:50369-50455 placement
 function matchesJobRef(session, short) {
   return session.kind === "bg" && (session.jobId === short || session.sessionId?.startsWith(short) === true);
 }
 export {
-  RECAP_TRIGGER_FILE,
+  isDirectlyUnderClaudeWorktreesDir,
   attachJob,
   listAliveDaemonJobs,
   applyReplyPatch,
@@ -1594,7 +1594,7 @@ export {
   isReplyDaemonRestartingMsg,
   killJob,
   deleteJob,
-  isDirectlyUnderClaudeWorktreesDir,
+  RECAP_TRIGGER_FILE,
   probeDaemonJob,
   hasConversationToResume,
   WORKTREE_DIGEST_PATTERN,

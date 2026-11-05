@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：消息内容遥测属性与 OTel 上下文管理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p52gp8zk.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a0xc6evk.js (8), chunk-s584m62r.js (11)
  * attribution: placement 19
  */
 import { AsyncLocalStorage } from "async_hooks";
@@ -23,7 +23,7 @@ import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-p52gp8zk.js:12080-12358 placement
+//@ chunk-s584m62r.js:3875-4152 placement
 function collectToolUseIds(message, options, messages = message) {
   let ids = new Set();
   for (let msg of messages) {
@@ -43,21 +43,21 @@ function collectToolUseIds(message, options, messages = message) {
         };
   });
 }
-//@ chunk-p52gp8zk.js:12358-12399 placement
+//@ chunk-s584m62r.js:4152-4192 placement
 function redactMessageContent(content, redaction) {
   return redactContentBlocks(content, redaction, new Set());
 }
-//@ chunk-p52gp8zk.js:12399-12439 placement
+//@ chunk-s584m62r.js:4192-4232 placement
 function redactMessageFields(system, redaction) {
   return redactMessageContent_2(system, redaction, new Set());
 }
-//@ chunk-p52gp8zk.js:12439-12548 placement
+//@ chunk-s584m62r.js:4232-4340 placement
 function redactMessageContent_2(blocks, content, redaction) {
   if (typeof blocks === "string") return applyRedactions(blocks, content);
   let blocks_2 = redactContentBlocks(blocks, content, redaction);
   return blocks_2.every((block, index) => block === blocks[index]) ? blocks : blocks_2;
 }
-//@ chunk-p52gp8zk.js:12548-13206 placement
+//@ chunk-s584m62r.js:4340-4992 placement
 /**
  * 逐块处理消息内容（文本、思考、工具输入/结果）以便记录到遥测并去除敏感信息。
  */
@@ -108,19 +108,19 @@ function redactContentBlocks(blocks, redaction, seenIds) {
     return redactedBlock2 === block ? block : redactedBlock2;
   });
 }
-//@ chunk-p52gp8zk.js:13206-13271 placement
+//@ chunk-s584m62r.js:4992-5056 placement
 var UNREDACTED_BLOCK_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-p52gp8zk.js:13206", () => {
+deferInit("chunk-s584m62r.js:4992", () => {
   UNREDACTED_BLOCK_TYPES = new Set(["image", "redacted_thinking", "container_upload"]);
 });
-//@ chunk-p52gp8zk.js:13271-13382 placement
+//@ chunk-s584m62r.js:5056-5166 placement
 function isBase64Document(block) {
   let { source } = identityRedaction(block);
   return (
     block.type === "document" && typeof source === "object" && source !== null && source.type === "base64"
   );
 }
-//@ chunk-p52gp8zk.js:13382-13528 placement
+//@ chunk-s584m62r.js:5166-5311 placement
 function isTrustedMemoryToolUse(block, ctx) {
   let { name } = identityRedaction(block);
   return (
@@ -129,9 +129,9 @@ function isTrustedMemoryToolUse(block, ctx) {
     isTrustedMemoryTool(name, classifyPlacedTool(ctx.toolNames), "history")
   );
 }
-//@ chunk-p52gp8zk.js:13528-13537 placement
+//@ chunk-s584m62r.js:5311-5319 placement
 var MAX_REDACT_DEPTH = 6;
-//@ chunk-p52gp8zk.js:13537-13876 placement
+//@ chunk-s584m62r.js:5319-5657 placement
 function redactValue(value, redaction, depth) {
   if (typeof value === "string") return applyRedactions(value, redaction);
   if (typeof value !== "object" || value === null) return value;
@@ -149,7 +149,7 @@ function redactValue(value, redaction, depth) {
   });
   return result ? Object.fromEntries(mapped) : value;
 }
-//@ chunk-p52gp8zk.js:13876-13927 placement
+//@ chunk-s584m62r.js:5657-5707 placement
 function safeJsonString(value) {
   try {
     return jsonStringify(value) ?? "";
@@ -157,12 +157,12 @@ function safeJsonString(value) {
     return "";
   }
 }
-//@ chunk-p52gp8zk.js:13927-13944 placement
+//@ chunk-a0xc6evk.js:9535-9552 placement
 var otelApi_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-p52gp8zk.js:13927", () => {
+deferInit("chunk-a0xc6evk.js:9535", () => {
   otelApi_2 = __toESM(require_api(), 1);
 });
-//@ chunk-p52gp8zk.js:13993-14422 placement
+//@ chunk-a0xc6evk.js:9601-10029 placement
 class AsyncLocalContextManager {
   als = new AsyncLocalStorage();
   active() {
@@ -196,40 +196,40 @@ class AsyncLocalContextManager {
     return this;
   }
 }
-//@ chunk-p52gp8zk.js:14422-14437 placement
+//@ chunk-a0xc6evk.js:10029-10043 placement
 var otelContextManager; // deferred: uses AsyncLocalContextManager of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-p52gp8zk.js:14422", () => {
+deferInit("chunk-a0xc6evk.js:10029", () => {
   otelContextManager = new AsyncLocalContextManager();
 });
-//@ chunk-p52gp8zk.js:14437-14461 placement
+//@ chunk-a0xc6evk.js:10043-10066 placement
 class OtelHostContextState {
   current = undefined;
 }
-//@ chunk-p52gp8zk.js:14461-14486 placement
+//@ chunk-a0xc6evk.js:10066-10089 placement
 var otelHostContextByHost; // deferred: uses OtelHostContextState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-p52gp8zk.js:14461", () => {
+deferInit("chunk-a0xc6evk.js:10066", () => {
   otelHostContextByHost = new HostScoped(() => new OtelHostContextState());
 });
-//@ chunk-p52gp8zk.js:14486-14528 placement
+//@ chunk-a0xc6evk.js:10089-10130 placement
 function setHostOtelContext(context) {
   otelHostContextByHost.of(getRootSession().host).current = context;
 }
-//@ chunk-p52gp8zk.js:14528-14574 placement
+//@ chunk-a0xc6evk.js:10130-10175 placement
 function getHostOtelContext() {
   return otelHostContextByHost.of(getRootSession().host).current;
 }
-//@ chunk-p52gp8zk.js:14574-14655 placement
+//@ chunk-a0xc6evk.js:10175-10256 placement
 function activeOtelContext() {
   let context = otelContextManager.active();
   if (context !== otelApi_2.ROOT_CONTEXT) return context;
   return getHostOtelContext() ?? context;
 }
 export {
+  collectToolUseIds,
   otelContextManager,
   activeOtelContext,
   setHostOtelContext,
   getHostOtelContext,
-  collectToolUseIds,
   redactMessageFields,
   redactMessageContent,
 };

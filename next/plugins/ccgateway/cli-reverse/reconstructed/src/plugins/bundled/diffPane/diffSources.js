@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：diff 面板的数据来源：git 后端、分支层级、合并未跟踪文件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wyqg6m3h.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c7hntn0y.js (24)
  * attribution: placement 24
  */
 import {
@@ -38,7 +38,7 @@ import {
 } from "./gitDiffRead.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-wyqg6m3h.js:21570-21815 placement
+//@ chunk-c7hntn0y.js:21934-22179 placement
 function branchSourceOf(base) {
   switch (base.kind) {
     case "merge-base":
@@ -60,7 +60,7 @@ function branchSourceOf(base) {
       };
   }
 }
-//@ chunk-wyqg6m3h.js:21815-22019 placement
+//@ chunk-c7hntn0y.js:22179-22383 placement
 var diffDataOf = (context, result, source) => ({
   repository: context.repository,
   mode: context.mode,
@@ -72,9 +72,9 @@ var diffDataOf = (context, result, source) => ({
   stalePaths: source.stalePaths,
   isUntrackedWithheld: result.isUntrackedWithheld,
 });
-//@ chunk-wyqg6m3h.js:22019-22131 placement
+//@ chunk-c7hntn0y.js:22383-22495 placement
 var EMPTY_NUMSTAT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wyqg6m3h.js:22019", () => {
+deferInit("chunk-c7hntn0y.js:22383", () => {
   EMPTY_NUMSTAT = Object.freeze({
     stats: Object.freeze({
       filesCount: 0,
@@ -84,12 +84,12 @@ deferInit("chunk-wyqg6m3h.js:22019", () => {
     files: Object.freeze([]),
   });
 });
-//@ chunk-wyqg6m3h.js:22131-22159 placement
+//@ chunk-c7hntn0y.js:22495-22523 placement
 var mergedResultOf = (result, extra) => ({
   ...result,
   ...extra,
 });
-//@ chunk-wyqg6m3h.js:22159-22420 placement
+//@ chunk-c7hntn0y.js:22523-22784 placement
 function mergedWithUntracked(result, untracked) {
   if (!untracked)
     return mergedResultOf(result, {
@@ -112,9 +112,9 @@ function mergedWithUntracked(result, untracked) {
     },
   );
 }
-//@ chunk-wyqg6m3h.js:22420-22454 placement
+//@ chunk-c7hntn0y.js:22784-22818 placement
 var isPastDetails = (result) => result.stats.filesCount > MAX_FILES_FOR_DETAILS;
-//@ chunk-wyqg6m3h.js:22454-22575 placement
+//@ chunk-c7hntn0y.js:22818-22939 placement
 async function withUntracked(context, result, scope) {
   return isPastDetails(result)
     ? mergedResultOf(result, {
@@ -128,7 +128,7 @@ async function withUntracked(context, result, scope) {
         }),
       );
 }
-//@ chunk-wyqg6m3h.js:22575-22969 placement
+//@ chunk-c7hntn0y.js:22939-23333 placement
 async function unbornTier(context) {
   let { run } = context;
   if (!(await isUnbornHead(run)))
@@ -159,7 +159,7 @@ async function unbornTier(context) {
     }),
   };
 }
-//@ chunk-wyqg6m3h.js:22969-23328 placement
+//@ chunk-c7hntn0y.js:23333-23692 placement
 async function branchTier(context) {
   let { deps, run } = context;
   let base = await branchBaseOf(run);
@@ -183,7 +183,7 @@ async function branchTier(context) {
     }),
   };
 }
-//@ chunk-wyqg6m3h.js:23328-23432 placement
+//@ chunk-c7hntn0y.js:23692-23796 placement
 var fetchContextOf = (deps, mode) => ({
   deps,
   run: deps.run,
@@ -191,9 +191,9 @@ var fetchContextOf = (deps, mode) => ({
   mode,
   stamps: stampProbeOf(deps, deps.repository.toplevel, MAX_LISTED_DIRECTORIES),
 });
-//@ chunk-wyqg6m3h.js:23432-23568 placement
+//@ chunk-c7hntn0y.js:23796-23932 placement
 var WORKING_TREE_BASIS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wyqg6m3h.js:23432", () => {
+deferInit("chunk-c7hntn0y.js:23796", () => {
   WORKING_TREE_BASIS = Object.freeze({
     source: Object.freeze({
       kind: "working-tree",
@@ -204,7 +204,7 @@ deferInit("chunk-wyqg6m3h.js:23432", () => {
     stalePaths: Object.freeze([]),
   });
 });
-//@ chunk-wyqg6m3h.js:23568-23796 placement
+//@ chunk-c7hntn0y.js:23932-24160 placement
 async function workingTreeTier(context) {
   let head = await statsOf(context, "HEAD");
   if (!head) return unbornTier(context);
@@ -226,7 +226,7 @@ async function workingTreeTier(context) {
     ),
   };
 }
-//@ chunk-wyqg6m3h.js:23796-23940 placement
+//@ chunk-c7hntn0y.js:24160-24304 placement
 async function fetchDiff(deps, mode) {
   if (await isRebaseOrTransientState(deps.entryKindsOf, deps.repository.gitDir))
     return {
@@ -235,10 +235,10 @@ async function fetchDiff(deps, mode) {
   let contextOf = fetchContextOf(deps, mode);
   return mode === "branch" ? branchTier(contextOf) : workingTreeTier(contextOf);
 }
-//@ chunk-wyqg6m3h.js:23940-24012 placement
+//@ chunk-c7hntn0y.js:24304-24376 placement
 var isLastOfDiff = (context, file) =>
   context.files.filter((file) => !file.isUntracked).at(-1)?.path === file.path;
-//@ chunk-wyqg6m3h.js:24012-24152 placement
+//@ chunk-c7hntn0y.js:24376-24516 placement
 function withClosingLine(fileHunks) {
   let last = fileHunks.hunks.at(-1);
   return last !== undefined && !fileHunks.isTruncated
@@ -254,7 +254,7 @@ function withClosingLine(fileHunks) {
       }
     : fileHunks;
 }
-//@ chunk-wyqg6m3h.js:24152-24749 placement
+//@ chunk-c7hntn0y.js:24516-25113 placement
 async function fetchHunks(runGit, context, files) {
   let filtered = files.filter(
     (file) =>
@@ -294,14 +294,14 @@ async function fetchHunks(runGit, context, files) {
     ...retried,
   ]);
 }
-//@ chunk-wyqg6m3h.js:24749-24806 placement
+//@ chunk-c7hntn0y.js:25113-25170 placement
 var GIT_BASE_MODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wyqg6m3h.js:24749", () => {
+deferInit("chunk-c7hntn0y.js:25113", () => {
   GIT_BASE_MODES = Object.freeze(["session", "uncommitted", "branch"]);
 });
-//@ chunk-wyqg6m3h.js:24806-25021 placement
+//@ chunk-c7hntn0y.js:25170-25385 placement
 var GIT_WORDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wyqg6m3h.js:24806", () => {
+deferInit("chunk-c7hntn0y.js:25170", () => {
   GIT_WORDS = Object.freeze({
     base: "HEAD",
     diffCommand: "git diff",
@@ -314,7 +314,7 @@ deferInit("chunk-wyqg6m3h.js:24806", () => {
     ],
   });
 });
-//@ chunk-wyqg6m3h.js:25021-25579 placement
+//@ chunk-c7hntn0y.js:25385-25943 placement
 async function gitBackendOf(deps) {
   let runnerFor = (repo) => async (args) => {
     try {
@@ -363,12 +363,12 @@ async function gitBackendOf(deps) {
       ),
   };
 }
-//@ chunk-wyqg6m3h.js:25579-25624 placement
+//@ chunk-c7hntn0y.js:25943-25988 placement
 /**
  * 数组中满足条件的元素个数。
  */
 var countWhere = (items, predicate) => items.reduce((acc, item) => acc + (predicate(item) ? 1 : 0), 0);
-//@ chunk-wyqg6m3h.js:25624-25795 placement (2.1.88 match: adjustHunkLineNumbers, 0.843)
+//@ chunk-c7hntn0y.js:25988-26159 placement (2.1.88 match: adjustHunkLineNumbers, 0.844)
 /**
  * 从 hunk 的第 offset 行起切出子 hunk 并修正起始行号。
  */
@@ -380,7 +380,7 @@ function adjustHunkLineNumbers(hunks, offset) {
     lines: hunks.lines.slice(offset),
   };
 }
-//@ chunk-wyqg6m3h.js:25795-25878 placement
+//@ chunk-c7hntn0y.js:26159-26242 placement
 async function backendOf(deps, probes) {
   for (let probe of probes) {
     let backend = await probe(deps);
@@ -388,12 +388,12 @@ async function backendOf(deps, probes) {
   }
   return gitBackendOf(deps);
 }
-//@ chunk-wyqg6m3h.js:25878-25893 placement
+//@ chunk-c7hntn0y.js:26242-26257 placement
 var INSTALLED_BACKEND_PROBES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wyqg6m3h.js:25878", () => {
+deferInit("chunk-c7hntn0y.js:26242", () => {
   INSTALLED_BACKEND_PROBES = new Set();
 });
-//@ chunk-wyqg6m3h.js:25893-25928 placement
+//@ chunk-c7hntn0y.js:26257-26292 placement
 var baseNameOf = (path) => path.split("/").at(-1) ?? path;
 export {
   countWhere,

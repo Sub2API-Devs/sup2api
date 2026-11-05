@@ -3,113 +3,48 @@
  *
  * 316 中为权限结果合并工具（严重度排序、safetyCheck 合并、两遍读法择严 bashCommandIsSafeAsync）；旧版正则安全校验器已移出（改由 utils/bash/ast 语义检查），另混入 Artifact pin 与形近字符折叠代码
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/bashSecurity.ts
- * pieces: chunk-82kqcve8.js (1), chunk-e6aww6q8.js (7)
- * attribution: fingerprint 3, callgraph-fingerprint 3, layout 1, callgraph-witnessed 1
+ * pieces: chunk-5xgkngpb.js (9)
+ * attribution: fingerprint 2, callgraph-fingerprint 1, placement 1, callgraph-witnessed 2, affinity 2, sole-consumer 1
  */
-import { normalizeInternalPathRoot, safetyCheckReasonFields } from "../../utils/permissions/filesystem.js";
-import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
-import { areCommandNetworkListsOffered } from "./sandboxNetwork.js";
-import { isAutoModePermissionSurface } from "../../utils/permissions/autoModeState.js";
-import { uniq } from "../../utils/collections.js";
-import { carriesAskRuleIntent, findSafetyCheckReason } from "../../utils/permissions/permissions.js";
+import {
+  carriesAskRuleIntent,
+  findSafetyCheckReason,
+  sandboxOverrideAskGuardsOn,
+  createPermissionRequestMessage,
+} from "../../utils/permissions/permissions.js";
 import { isAllRuleReason } from "../../utils/permissions/decisionReasons.js";
 import {
   isBypassImmuneCircuitBreaker,
   isClassifierRoutedCircuitBreaker,
   isUnwaivableBypassImmuneCircuitBreaker,
 } from "../../types/permissions.js";
-import { runWithRefusalTracking } from "../../utils/bash/ast.js";
 import {
+  runCommandSafetyCheck,
   checkBashWithDeclarations,
   isBypassModeForBash,
   buildPendingClassifierCheck,
-  isPassthroughOrPlainAsk,
 } from "./bashPermissions.js";
-import { runWithoutTelemetry } from "./dangerousRemoval.js";
+import { runWithReadingRefusals, runAsBashReads, runWithRuleOff } from "../../utils/bash/bashReadingFlags.js";
+import {
+  runWithoutTelemetry,
+  isDangerousRmEnabled,
+  classifyRemovalReason,
+  logDangerousRmShape,
+} from "./dangerousRemoval.js";
+import { shouldUseSandbox } from "./shouldUseSandbox.js";
+import { askClassifierForAllowedDomains } from "./sandboxNetwork.js";
 import { BashTool } from "./BashTool.js";
+import { parseCommandRaw, PARSE_ABORTED } from "../../utils/bash/parser.js";
+import { parseForSecurityFromAst, runWithRefusalTracking } from "../../utils/bash/ast.js";
+import { mergeSafetyCheckAlso } from "./pathValidation.js";
 import { isAbortError } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
+import { safetyCheckReasonFields } from "../../utils/permissions/filesystem.js";
+import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 
-//@ chunk-82kqcve8.js:282090-282356 fingerprint (2.1.88 match: validateShellMetacharacters, 1)
-/**
- * 对一组路径/项逐个调用检查函数（passthrough 时再试替代形式）：任一 deny 返回 deny，有非 allow 返回 passthrough，全部 allow 返回第一个 allow。
- */
-function requireAllAllowed(pathsToCheck, checkPath, context) {
-  let firstAllow;
-  for (let path of pathsToCheck) {
-    let result = checkPath(path, context);
-    if (result.behavior === "passthrough") {
-      let normalizedPath = normalizeInternalPathRoot(path);
-      if (normalizedPath !== path) result = checkPath(normalizedPath, context);
-    }
-    if (result.behavior === "deny") return result;
-    if (result.behavior !== "allow")
-      return {
-        behavior: "passthrough",
-        message: "",
-      };
-    firstAllow ??= result;
-  }
-  return (
-    firstAllow ?? {
-      behavior: "passthrough",
-      message: "",
-    }
-  );
-}
-//@ chunk-e6aww6q8.js:1046433-1047016 callgraph-fingerprint (2.1.88 match: validateEmpty, 0.171)
-/**
- * 命令携带 allowed_domains（沙箱网络放行列表）且 auto 模式分类器可用时，要求分类器复核：返回 safetyCheck 类型的 ask（allow 规则/hook 只批准命令，不批准域名）。
- */
-function askClassifierForAllowedDomains(tool, input, toolUseContext, result) {
-  if (result?.behavior === "ask" || result?.behavior === "deny") return;
-  let toolPermissionContext = getToolPermissionContext(toolUseContext);
-  if (
-    tool.sandboxNetworkLists?.(input) === undefined ||
-    !areCommandNetworkListsOffered() ||
-    !isAutoModePermissionSurface(toolPermissionContext)
-  )
-    return;
-  return {
-    behavior: "ask",
-    message: `${tool.name} carries allowed_domains, which the auto-mode classifier reviews together with the command.`,
-    ...(result?.behavior === "allow" &&
-      result.updatedInput !== undefined && {
-        updatedInput: result.updatedInput,
-      }),
-    decisionReason: {
-      type: "safetyCheck",
-      reason: `A ${tool.name} call that carries allowed_domains is reviewed by the auto-mode classifier; allow rules and hook allows approve the command, not the hosts.`,
-      classifierApprovable: true,
-    },
-  };
-}
-//@ chunk-e6aww6q8.js:1117225-1117528 fingerprint (2.1.88 match: bashCommandIsSafe_DEPRECATED, 0.324)
-/**
- * 把第二个 safetyCheck 结果的 circuitBreaker/also 合并进第一个的 also 列表（去重、去掉自身）。
- */
-function mergeSafetyCheckAlso(result, otherResult) {
-  let decisionReason = result.decisionReason;
-  let decisionReason_2 = otherResult?.decisionReason;
-  if (decisionReason?.type !== "safetyCheck" || decisionReason_2?.type !== "safetyCheck") return result;
-  let filtered = uniq([
-    ...(decisionReason.also ?? []),
-    ...(decisionReason_2.circuitBreaker !== undefined ? [decisionReason_2.circuitBreaker] : []),
-    ...(decisionReason_2.also ?? []),
-  ]).filter((breaker) => breaker !== decisionReason.circuitBreaker);
-  return filtered.length === 0
-    ? result
-    : {
-        ...result,
-        decisionReason: {
-          ...decisionReason,
-          also: filtered,
-        },
-      };
-}
-//@ chunk-e6aww6q8.js:1155016-1155366 fingerprint (2.1.88 match: validateZshDangerousCommands, 0.667)
+//@ chunk-5xgkngpb.js:1150368-1150718 fingerprint (2.1.88 match: validateZshDangerousCommands, 0.668)
 /**
  * 剥离 argv 前缀的 command [-p] / builtin / noglob，返回实际命令 argv。
  */
@@ -131,7 +66,7 @@ function stripCommandBuiltinPrefixes(context) {
       sliced = sliced.slice(1);
     } else return sliced;
 }
-//@ chunk-e6aww6q8.js:1203541-1203787 callgraph-fingerprint (2.1.88 match: validateNewlines, 0.475)
+//@ chunk-5xgkngpb.js:1200793-1201039 callgraph-fingerprint (2.1.88 match: validateNewlines, 0.532)
 /**
  * 判断是否为"普通 ask"（理由为 other 或缺省；子结果都不是硬性 ask），这类 ask 可以被更宽松的读法覆盖。
  */
@@ -146,7 +81,7 @@ function isPlainAsk(context) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:1203787-1203993 layout (2.1.88 match: validateShellMetacharacters, 0.818)
+//@ chunk-5xgkngpb.js:1201039-1201245 fingerprint (2.1.88 match: validateShellMetacharacters, 1)
 /**
  * 权限结果严重度：allow(规则)0 / allow 1 / passthrough 2 / 普通 ask 3 / 安全 ask 4 / 硬安全 ask 5 / deny 6；用于两种读法的结果择严。
  */
@@ -166,21 +101,124 @@ function getDecisionSeverity(context) {
       return 6;
   }
 }
-//@ chunk-e6aww6q8.js:1203993-1204114 callgraph-fingerprint (2.1.88 match: validateGitCommit, 0.215)
+//@ chunk-5xgkngpb.js:1201245-1201366 placement
 /**
  * safetyCheck 理由的等级：存在不可降级的安全检查为 2，存在安全检查为 1，否则 0。
  */
-function getSafetyCheckRank(context) {
+function getSafetyCheckRank(decision) {
   if (
     findSafetyCheckReason(
-      context.decisionReason,
+      decision.decisionReason,
       (reason) => isBypassImmuneCircuitBreaker(reason) && !isClassifierRoutedCircuitBreaker(reason),
     ) !== undefined
   )
     return 2;
-  return findSafetyCheckReason(context.decisionReason, isBypassImmuneCircuitBreaker) !== undefined ? 1 : 0;
+  return findSafetyCheckReason(decision.decisionReason, isBypassImmuneCircuitBreaker) !== undefined ? 1 : 0;
 }
-//@ chunk-e6aww6q8.js:1226675-1227686 callgraph-witnessed (2.1.88 match: bashCommandIsSafeAsync_DEPRECATED, 0.153)
+//@ chunk-5xgkngpb.js:1222494-1223433 callgraph-witnessed (2.1.88 match: bashCommandIsSafeAsync_DEPRECATED, 0.124)
+/**
+ * 合并 Bash 权限的几路结论：常规规则检查、读法检查、沙箱覆盖检查；dangerouslyDisableSandbox 且原本可沙箱运行时按严格模式改成 too-complex ask；ask 结论标记 standsInUnderHookAsk 供 hook 处理。
+ */
+async function checkBashPermissionWithSandbox(input, permissionContext, astNode, toolUseContext) {
+  let safetyCheck = () => runCommandSafetyCheck(input, permissionContext, astNode, toolUseContext);
+  let [firstResult, reason] = await runWithReadingRefusals(safetyCheck);
+  let context = firstResult;
+  if (reason !== undefined && firstResult.behavior !== "deny") {
+    let readsResult = await runWithoutTelemetry(() => runAsBashReads(safetyCheck));
+    context = combineWithTooComplex(context, readsResult, reason);
+    let context_2 = await runWithoutTelemetry(() => runWithRuleOff(safetyCheck));
+    context = combineWithTooComplex(context, context_2, reason);
+    if (
+      input.dangerouslyDisableSandbox &&
+      !shouldUseSandbox(input) &&
+      shouldUseSandbox({
+        ...input,
+        dangerouslyDisableSandbox: false,
+      })
+    ) {
+      if (isPassthroughOrPlainAsk(context_2) && context.behavior !== "deny" && sandboxOverrideAskGuardsOn())
+        context = buildTooComplexAsk(reason);
+    } else if (isPassthroughOrPlainAsk(context))
+      context =
+        askClassifierForAllowedDomains(BashTool, input, permissionContext, {
+          behavior: "passthrough",
+          message: "",
+        }) ?? context;
+    if (
+      context.behavior === "ask" &&
+      (context_2.behavior === "allow" ||
+        context_2.behavior === "passthrough" ||
+        (context_2.behavior === "ask" &&
+          !carriesAskRuleIntent(context_2) &&
+          findSafetyCheckReason(context_2.decisionReason) === undefined &&
+          context_2.decisionReason?.type !== "sandboxOverride"))
+    )
+      context = {
+        ...context,
+        standsInUnderHookAsk: true,
+      };
+  }
+  if (context.behavior === "ask" && isPlainAsk(context)) {
+    let classifierAsk = askClassifierForAllowedDomains(BashTool, input, permissionContext, {
+      behavior: "passthrough",
+      message: "",
+    });
+    if (classifierAsk !== undefined) {
+      let astRoot = (await parseCommandRaw(input.command)) ?? PARSE_ABORTED;
+      let parsed = parseForSecurityFromAst(input.command, astRoot);
+      if (parsed.kind === "too-complex" && parsed.keepsRemovalVerdict) context = classifierAsk;
+    }
+  }
+  if (isDangerousRmEnabled()) {
+    let regexQuote = findSafetyCheckReason(
+      context.decisionReason,
+      (reason) => reason.circuitBreaker === "dangerousRemoval",
+    );
+    let removalKind = regexQuote === undefined ? undefined : classifyRemovalReason(regexQuote.reason);
+    if (removalKind !== undefined) logDangerousRmShape(removalKind);
+  }
+  return context;
+}
+//@ chunk-5xgkngpb.js:1223433-1223510 affinity (2.1.88 match: validateShellMetacharacters, 1)
+/**
+ * 结果是 passthrough 或普通 ask（可被其他读法覆盖）。
+ */
+function isPassthroughOrPlainAsk(context) {
+  return context.behavior === "passthrough" || (context.behavior === "ask" && isPlainAsk(context));
+}
+//@ chunk-5xgkngpb.js:1223510-1223721 affinity
+/**
+ * 合并规则结果与安全检查结果：deny 优先；安全 ask 去掉建议；规则 allow 而安全检查不 allow 时改为需确认。
+ */
+function combineWithTooComplex(first, second, reason) {
+  if (first.behavior === "deny") return first;
+  if (second.behavior === "deny") return second;
+  if (second.behavior === "ask" && !isPlainAsk(second))
+    return {
+      ...second,
+      suggestions: [],
+    };
+  if (first.behavior === "allow" && second.behavior !== "allow") return buildTooComplexAsk(reason);
+  return first;
+}
+//@ chunk-5xgkngpb.js:1223721-1223871 sole-consumer
+/**
+ * 生成 bashMissKind="too-complex" 的 ask 权限结论（无建议规则）。
+ */
+function buildTooComplexAsk(reason) {
+  let decisionReason = {
+    type: "other",
+    reason,
+    bashMissKind: "too-complex",
+  };
+  return {
+    behavior: "ask",
+    decisionReason,
+    message: createPermissionRequestMessage(BashTool.name, decisionReason),
+    suggestions: [],
+  };
+}
+//@ chunk-5xgkngpb.js:1224401-1225412 callgraph-witnessed (2.1.88 match: bashCommandIsSafe_DEPRECATED, 0.131)
 /**
  * Bash 安全检查入口：先按正常读法跑（XVt），若有 refused 读法差异，再在 refused 模式下跑一遍，按严重度、安全等级择严合并；必要时附加 allowed_domains 分类器复核；检查异常时返回"检查未完成"的 ask。
  */
@@ -266,12 +304,10 @@ async function bashCommandIsSafeAsync(input, context, getCommandSubcommandPrefix
   }
 }
 export {
-  askClassifierForAllowedDomains,
-  requireAllAllowed,
   stripCommandBuiltinPrefixes,
-  isPlainAsk,
+  checkBashPermissionWithSandbox,
   bashCommandIsSafeAsync,
+  isPlainAsk,
   getDecisionSeverity,
   getSafetyCheckRank,
-  mergeSafetyCheckAlso,
 };

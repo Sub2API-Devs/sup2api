@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程设置存储监视器（缓存文件与 helper 同意副本）；未验证的远程设置中扣下的环境变量键等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (43)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (43)
  * attribution: placement 43
  */
 import { join } from "path";
@@ -35,7 +35,7 @@ import {
   MAX_STORAGE_VIEW_BYTES,
   isSnapshotOnlySession,
 } from "./remoteSettingsState.js";
-import { getClaudeConfigDir, isSameConfigDir, getClaudeConfigDirOrNull } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { import_sortedIndex_2, import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { jsonParse } from "../../utils/slowOperations.js";
 import { stripBom } from "../../utils/json.js";
@@ -54,6 +54,7 @@ import {
 import { PROVIDER_ENV_FLAGS } from "../../utils/model/modelIds.js";
 import { isDiskless } from "../../bootstrap/state.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
+import { isSameConfigDir, getClaudeConfigDirOrNull } from "../../utils/envUtils.js";
 import { STORAGE_SPACES, storageSpaceId } from "../../utils/storage/storageSpaces.js";
 import { formatStorageError, storageErrorCode } from "../../utils/storage/storageErrors.js";
 import {
@@ -71,7 +72,7 @@ import { restrictionsOfUnvouchedDocumentUnsafe, CREDENTIAL_LIST_PATHS } from "./
 import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:402126-402247 placement
+//@ chunk-z20c443b.js:400544-400666 placement
 function hostSessionSkipsSharedCache() {
   return withHostOwnedEnvGuard(
     () =>
@@ -81,21 +82,21 @@ function hostSessionSkipsSharedCache() {
       isProviderManagedByHost(),
   );
 }
-//@ chunk-dcmhvw5a.js:402247-402287 placement
+//@ chunk-z20c443b.js:400666-400706 placement
 function holdsNoServedSettings(remoteSettingsEligibility) {
   return (
     remoteSettingsEligibility && !hasManagedOrCoworkSurface() && !getRemoteManagedSettingsSyncFromCache()
   );
 }
-//@ chunk-dcmhvw5a.js:402287-402327 placement
+//@ chunk-z20c443b.js:400706-400746 placement
 function getSettingsPath() {
   return getRemoteSettingsPathOverride() ?? join(getClaudeConfigDir(), SETTINGS_FILENAME);
 }
-//@ chunk-dcmhvw5a.js:402327-402349 placement
+//@ chunk-z20c443b.js:400746-400768 placement
 function getMockRemoteSettingsValue() {
   return;
 }
-//@ chunk-dcmhvw5a.js:402349-402443 placement
+//@ chunk-z20c443b.js:400768-400862 placement
 function getMockRemoteSettingsFixturePath() {
   let mockRemoteSettingsValue = getMockRemoteSettingsValue();
   return mockRemoteSettingsValue !== undefined &&
@@ -104,9 +105,9 @@ function getMockRemoteSettingsFixturePath() {
     ? mockRemoteSettingsValue.slice(1)
     : undefined;
 }
-//@ chunk-dcmhvw5a.js:402443-402458 placement
+//@ chunk-z20c443b.js:400862-400877 placement
 var MAX_REMOTE_SETTINGS_FILE_BYTES = 8388608;
-//@ chunk-dcmhvw5a.js:402458-402534 placement
+//@ chunk-z20c443b.js:400877-400953 placement
 /**
  * 把磁盘上的远程设置副本收窄为限制键集合（仅在开启相关处理时），未收窄则原样返回。
  */
@@ -115,7 +116,7 @@ function narrowToRestrictions(settings) {
   let restrictionSettings = extractRestrictionSettings(settings);
   return import_sortedIndex_2(restrictionSettings, settings) ? settings : restrictionSettings;
 }
-//@ chunk-dcmhvw5a.js:402534-403040 placement
+//@ chunk-z20c443b.js:400953-401460 placement
 /**
  * 读取磁盘上的远程设置副本（检查信任与大小）。
  */
@@ -152,7 +153,7 @@ function loadStoredRemoteSettings() {
     return null;
   }
 }
-//@ chunk-dcmhvw5a.js:403040-403459 placement
+//@ chunk-z20c443b.js:401460-401879 placement
 /**
  * 检查远程设置副本的信任（组织固定、签名）。
  */
@@ -186,7 +187,7 @@ function checkStoredCopyTrust(settings) {
   );
   return false;
 }
-//@ chunk-dcmhvw5a.js:403459-403768 placement
+//@ chunk-z20c443b.js:401879-402188 placement
 /**
  * 校验远程设置副本签名。
  */
@@ -212,7 +213,7 @@ function verifyStoredCopy(settings, pinnedOrgs) {
     };
   }
 }
-//@ chunk-dcmhvw5a.js:403768-404093 placement
+//@ chunk-z20c443b.js:402188-402513 placement
 /**
  * 拒绝不可信的远程设置副本。
  */
@@ -233,7 +234,7 @@ function refuseStoredCopy(settings, reason, mayForceRefresh) {
     `Remote settings: the stored copy is not trusted at rest (${reason}); treating it as absent`,
   );
 }
-//@ chunk-dcmhvw5a.js:404093-404268 placement (2.1.88 match: hasApiKeyHelper, 1)
+//@ chunk-z20c443b.js:402513-402688 placement (2.1.88 match: hasApiKeyHelper, 1)
 function helperTierOf(settings) {
   if (settings === null) return null;
   let { apiKeyHelper, env } = settings;
@@ -244,7 +245,7 @@ function helperTierOf(settings) {
       }
     : null;
 }
-//@ chunk-dcmhvw5a.js:404268-404403 placement
+//@ chunk-z20c443b.js:402688-402823 placement
 function helperTierFor(settings) {
   let [layer] = orderedPlatformLayers(settings);
   if (settings === null || layer === undefined) return helperTierOf(settings);
@@ -262,7 +263,7 @@ function helperTierFor(settings) {
       : layerSettings,
   );
 }
-//@ chunk-dcmhvw5a.js:404403-404499 placement
+//@ chunk-z20c443b.js:402823-402919 placement
 /**
  * 会话缓存的 helper 层级：缓存等于已验证载荷时按其自身层级判定，否则按别的规则。
  */
@@ -271,7 +272,7 @@ function helperTierOfSessionCache(state) {
     ? helperTierOf(state.sessionCache)
     : helperTierFor(state.sessionCache);
 }
-//@ chunk-dcmhvw5a.js:404499-404856 placement
+//@ chunk-z20c443b.js:402919-403276 placement
 function getRemoteHelperTier() {
   let state = currentRemoteSettingsState_2();
   let helperTierReadAtMs = state.helperTierReadAtMs;
@@ -295,7 +296,7 @@ function getRemoteHelperTier() {
         env,
       };
 }
-//@ chunk-dcmhvw5a.js:404856-405073 placement
+//@ chunk-z20c443b.js:403276-403493 placement
 function inheritedProviderEnv(droppedHelperTier, sessionCache) {
   let env = droppedHelperTier.env ?? {};
   let env_2 = isPlainObject_2(sessionCache?.env) ? sessionCache.env : {};
@@ -307,12 +308,12 @@ function inheritedProviderEnv(droppedHelperTier, sessionCache) {
   }
   return inherited;
 }
-//@ chunk-dcmhvw5a.js:405073-405159 placement
+//@ chunk-z20c443b.js:403493-403579 placement
 function isConfirmedHelperHeld() {
   let { sessionCache, verifiedPayload } = currentRemoteSettingsState_2();
   return sessionCache === verifiedPayload && helperTierOf(sessionCache) !== null;
 }
-//@ chunk-dcmhvw5a.js:405159-405407 placement
+//@ chunk-z20c443b.js:403579-403827 placement
 function getRemoteHelperGap() {
   let state = currentRemoteSettingsState_2();
   if (helperTierOfSessionCache(state) !== null)
@@ -320,9 +321,9 @@ function getRemoteHelperGap() {
   if (state.sessionCache === null && state.refusedCopyHelperTier !== null) return "settings_unloaded";
   return state.droppedHelperTier === null ? null : "restart_needed";
 }
-//@ chunk-dcmhvw5a.js:405407-405419 placement
+//@ chunk-z20c443b.js:403827-403839 placement
 var MAX_HELPER_CONSENT_BYTES = 4096;
-//@ chunk-dcmhvw5a.js:405419-405546 placement
+//@ chunk-z20c443b.js:403839-403966 placement
 function readHelperConsentAttestation() {
   let backendView = getBackendView();
   if (backendView !== undefined) return backendView.attestation;
@@ -333,9 +334,9 @@ function readHelperConsentAttestation() {
     return;
   }
 }
-//@ chunk-dcmhvw5a.js:405546-405555 placement
+//@ chunk-z20c443b.js:403966-403975 placement
 var READ_STABILITY_ATTEMPTS = 4;
-//@ chunk-dcmhvw5a.js:405555-405757 placement
+//@ chunk-z20c443b.js:403975-404177 placement
 function readRemoteSettingsFileStable() {
   let backendView = getBackendView();
   if (backendView !== undefined) return backendView.content;
@@ -351,7 +352,7 @@ function readRemoteSettingsFileStable() {
   }
   return readFileSync(getSettingsPath(), MAX_REMOTE_SETTINGS_FILE_BYTES);
 }
-//@ chunk-dcmhvw5a.js:405757-405933 placement
+//@ chunk-z20c443b.js:404177-404353 placement
 function getBackendView() {
   let backendView = currentRemoteSettingsState_2().backendView;
   if (
@@ -368,23 +369,23 @@ function getBackendView() {
   }
   return backendView;
 }
-//@ chunk-dcmhvw5a.js:405933-405993 placement
+//@ chunk-z20c443b.js:404353-404413 placement
 var REMOTE_SETTINGS_STATE_ID; // deferred: uses SETTINGS_FILENAME (./remoteSettingsState.js) of its import cycle while loading; runs once the cycle is complete
 var CONSENT_STATE_STORAGE_ID;
 var MAX_STORAGE_EVENT_LAG_MS;
-deferInit("chunk-dcmhvw5a.js:405933", () => {
+deferInit("chunk-z20c443b.js:404353", () => {
   REMOTE_SETTINGS_STATE_ID = STORAGE_SPACES.state("remote-settings");
   CONSENT_STATE_STORAGE_ID = STORAGE_SPACES.state(HELPER_CONSENT_STATE_ID);
   MAX_STORAGE_EVENT_LAG_MS = 2000;
 });
-//@ chunk-dcmhvw5a.js:405993-406058 placement
+//@ chunk-z20c443b.js:404413-404478 placement
 function remoteSettingsFileWritten(which, text) {
   currentRemoteSettingsState_2().backendView?.written(
     which === "cache" ? REMOTE_SETTINGS_STATE_ID : CONSENT_STATE_STORAGE_ID,
     text,
   );
 }
-//@ chunk-dcmhvw5a.js:406058-406388 placement
+//@ chunk-z20c443b.js:404478-404809 placement
 async function primeRemoteManagedSettingsCache(storageV5) {
   if (!isStorageV5Enabled() || storageV5 === undefined) return;
   let state = currentRemoteSettingsState_2();
@@ -401,7 +402,7 @@ async function primeRemoteManagedSettingsCache(storageV5) {
   watcher.priming = watchRemoteSettingsStorage(watcher, storageV5, state);
   return watcher.priming;
 }
-//@ chunk-dcmhvw5a.js:406388-406999 placement
+//@ chunk-z20c443b.js:404809-405420 placement
 /**
  * 订阅存储中的远程设置变化。
  */
@@ -438,7 +439,7 @@ async function watchRemoteSettingsStorage(watcher, storageV5, state) {
     watcher.standDown(`prime failed: ${errorMessage(error)}`);
   }
 }
-//@ chunk-dcmhvw5a.js:406999-410132 placement
+//@ chunk-z20c443b.js:405420-408552 placement
 /**
  * 远程设置存储监视器（缓存文件与 helper 同意副本）。
  */
@@ -604,7 +605,7 @@ class RemoteSettingsStorageWatcher {
     });
   }
 }
-//@ chunk-dcmhvw5a.js:410132-410234 placement
+//@ chunk-z20c443b.js:408552-408654 placement
 function makeWatchEntry(key, label) {
   return {
     key,
@@ -616,7 +617,7 @@ function makeWatchEntry(key, label) {
     generation: 0,
   };
 }
-//@ chunk-dcmhvw5a.js:410234-410352 placement
+//@ chunk-z20c443b.js:408654-408772 placement
 function unsubscribeSafe(subscription) {
   try {
     subscription.unsubscribe();
@@ -626,7 +627,7 @@ function unsubscribeSafe(subscription) {
     });
   }
 }
-//@ chunk-dcmhvw5a.js:410352-410476 placement
+//@ chunk-z20c443b.js:408772-408896 placement
 function eventValue(event) {
   switch (event.kind) {
     case "snapshot":
@@ -637,19 +638,19 @@ function eventValue(event) {
       return;
   }
 }
-//@ chunk-dcmhvw5a.js:410476-410536 placement
+//@ chunk-z20c443b.js:408896-408956 placement
 /**
  * 日志用描述：缓存内容为空时 "absent"，否则 "N chars"。
  */
 function describeCachedContent(text) {
   return text === null ? "absent" : `${text.length} chars`;
 }
-//@ chunk-dcmhvw5a.js:410536-412299 placement
+//@ chunk-z20c443b.js:408956-410761 placement
 /**
  * 未验证的远程设置中扣下的环境变量键。
  */
 var UNVERIFIED_WITHHELD_ENV_KEYS; // deferred: uses NETWORK_ENV_VARS (../../utils/managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:410536", () => {
+deferInit("chunk-z20c443b.js:408956", () => {
   UNVERIFIED_WITHHELD_ENV_KEYS = new Set(
     [
       ...NETWORK_ENV_VARS,
@@ -658,6 +659,7 @@ deferInit("chunk-dcmhvw5a.js:410536", () => {
       "CLAUDE_CODE_PROXY_AUTH_HELPER_TTL_MS",
       "API_FORCE_IDLE_TIMEOUT",
       "ANTHROPIC_UNIX_SOCKET",
+      "CLAUDE_CODE_DISABLE_HTTPS_AGENT_KEEPING",
       "NODE_OPTIONS",
       ...PROVIDER_SELECTION_ENV_VARS,
       ...BASE_URL_ENV_VARS,
@@ -724,7 +726,7 @@ deferInit("chunk-dcmhvw5a.js:410536", () => {
     ].map((name) => name.toUpperCase()),
   );
 });
-//@ chunk-dcmhvw5a.js:412299-412464 placement
+//@ chunk-z20c443b.js:410761-410926 placement
 function withholdUnverifiedEnv(settings) {
   if (!settings || (!settings.env && !("managedMcpServers" in settings))) return settings;
   let { managedMcpServers, ...rest } = settings;
@@ -735,7 +737,7 @@ function withholdUnverifiedEnv(settings) {
       }
     : rest;
 }
-//@ chunk-dcmhvw5a.js:412464-412585 placement
+//@ chunk-z20c443b.js:410926-411047 placement
 function withholdUnverifiedCacheKeys(settings) {
   return "managedMcpServers" in settings ||
     (!!settings.env &&
@@ -743,7 +745,7 @@ function withholdUnverifiedCacheKeys(settings) {
     ? (withholdUnverifiedEnv(settings) ?? settings)
     : settings;
 }
-//@ chunk-dcmhvw5a.js:412585-412702 placement
+//@ chunk-z20c443b.js:411047-411164 placement
 function unverifiedRemoteCacheWithholdsProvisions() {
   let remoteManagedSettingsRawCache = getRemoteManagedSettingsRawCache();
   if (
@@ -757,7 +759,7 @@ function unverifiedRemoteCacheWithholdsProvisions() {
     hasManagedMcpServers(layer),
   );
 }
-//@ chunk-dcmhvw5a.js:412702-412825 placement
+//@ chunk-z20c443b.js:411164-411287 placement
 function orderedPlatformLayers(settings) {
   let entries = policyHelperSlots(settings);
   if (entries.length === 0) return [];
@@ -765,7 +767,7 @@ function orderedPlatformLayers(settings) {
     entries.filter(([path]) => isPolicyHelperPath(path) === chainEntry),
   );
 }
-//@ chunk-dcmhvw5a.js:412825-412903 placement
+//@ chunk-z20c443b.js:411287-411365 placement
 /**
  * 判断一份远程设置里是否声明了托管的 MCP 服务器。
  */
@@ -773,14 +775,14 @@ function hasManagedMcpServers(settings) {
   let managedMcpServers = settings.managedMcpServers;
   return isPlainObject_2(managedMcpServers) && Object.keys(managedMcpServers).length > 0;
 }
-//@ chunk-dcmhvw5a.js:412903-412964 placement
+//@ chunk-z20c443b.js:411365-411426 placement
 /**
  * 给定载荷是否被视为已验证（等于已验证载荷，或配置了路径覆盖）。
  */
 function isVerifiedOrOverridden(state, payload) {
   return payload === state.verifiedPayload || Boolean(getRemoteSettingsPathOverride());
 }
-//@ chunk-dcmhvw5a.js:412964-413359 placement
+//@ chunk-z20c443b.js:411426-411821 placement
 function getRemoteManagedSettingsRawCache() {
   let state = currentRemoteSettingsState_2();
   if (!getRemoteSettingsPathOverride() && state.eligible !== true) return state.heldSoFar(null);
@@ -802,7 +804,7 @@ function getRemoteManagedSettingsRawCache() {
   }
   return state.heldSoFar(null);
 }
-//@ chunk-dcmhvw5a.js:413359-413774 placement
+//@ chunk-z20c443b.js:411821-412236 placement
 function getRemoteManagedSettingsSyncFromCache(parseSettings) {
   let payload = getRemoteManagedSettingsRawCache();
   let state = currentRemoteSettingsState_2();
@@ -832,7 +834,7 @@ function getRemoteManagedSettingsSyncFromCache(parseSettings) {
   }
   return state.projectedParse.view;
 }
-//@ chunk-dcmhvw5a.js:413774-413899 placement
+//@ chunk-z20c443b.js:412236-412361 placement
 function deepMergeInto(target, source) {
   for (let [key, value] of Object.entries(source)) {
     let current = target[key];
@@ -845,7 +847,7 @@ function deepMergeInto(target, source) {
     } else target[key] = value;
   }
 }
-//@ chunk-dcmhvw5a.js:413899-414034 placement
+//@ chunk-z20c443b.js:412361-412496 placement
 function unverifiedViewOf(state, settings) {
   if (settings === null) return null;
   if (state.unverifiedView?.raw !== settings)
@@ -856,21 +858,21 @@ function unverifiedViewOf(state, settings) {
   return state.unverifiedView.view;
 }
 export {
+  getRemoteManagedSettingsSyncFromCache,
   hostSessionSkipsSharedCache,
   holdsNoServedSettings,
-  getRemoteManagedSettingsSyncFromCache,
-  getMockRemoteSettingsValue,
+  withholdUnverifiedCacheKeys,
   getMockRemoteSettingsFixturePath,
-  remoteSettingsFileWritten,
   getSettingsPath,
+  primeRemoteManagedSettingsCache,
+  getMockRemoteSettingsValue,
+  remoteSettingsFileWritten,
   getRemoteManagedSettingsRawCache,
   unverifiedRemoteCacheWithholdsProvisions,
-  primeRemoteManagedSettingsCache,
-  narrowToRestrictions,
-  readHelperConsentAttestation,
   helperTierOf,
   isConfirmedHelperHeld,
   getRemoteHelperTier,
   getRemoteHelperGap,
-  withholdUnverifiedCacheKeys,
+  narrowToRestrictions,
+  readHelperConsentAttestation,
 };

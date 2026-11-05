@@ -3,9 +3,9 @@
  *
  * 迁移：bypassPermissionsModeAccepted 从全局配置挪到用户设置 skipDangerousModePermissionPrompt
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/migrations/migrateBypassPermissionsAcceptedToSettings.ts
- * pieces: chunk-cjydagjy.js (1)
+ * pieces: chunk-h61dq9nz.js (1)
  * attribution: fingerprint 1
  */
 import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
@@ -14,7 +14,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { logForDebugging } from "../utils/debug.js";
 
-//@ chunk-cjydagjy.js:8258-8852 fingerprint (2.1.88 match: migrateBypassPermissionsAcceptedToSettings, 0.816)
+//@ chunk-h61dq9nz.js:8435-9029 fingerprint (2.1.88 match: migrateBypassPermissionsAcceptedToSettings, 0.816)
 /**
  * 迁移：全局配置 bypassPermissionsModeAccepted → userSettings.skipDangerousModePermissionPrompt=true。
  */

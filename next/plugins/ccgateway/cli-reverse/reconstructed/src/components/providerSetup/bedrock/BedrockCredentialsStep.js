@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。Bedrock 设置向导：认证方式与访问密钥步骤。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sx9xc5ee.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3msz77wt.js (6)
  * attribution: placement 6
  */
 import { init_react_production, useState } from "../../../../vendor/react/cjs/react.production.js";
@@ -22,12 +22,12 @@ import { WizardDialogLayout } from "../../wizard/WizardDialogLayout.js";
 import { ModelSelector } from "../../agents/ModelSelector.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-sx9xc5ee.js:1426-1430 placement
+//@ chunk-3msz77wt.js:1426-1430 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-sx9xc5ee.js:1426", () => {
+deferInit("chunk-3msz77wt.js:1426", () => {
   init_react_production();
 });
-//@ chunk-sx9xc5ee.js:1430-1769 placement
+//@ chunk-3msz77wt.js:1430-1769 placement
 /**
  * Bedrock 访问密钥表单字段：Access key ID、Secret access key（掩码）、可选 Session token（仅 STS 临时凭证需要）。
  */
@@ -54,7 +54,7 @@ var ACCESS_KEY_FIELDS = [
     hint: () => "Only needed for temporary credentials from STS. Leave empty for long-lived keys.",
   },
 ];
-//@ chunk-sx9xc5ee.js:1769-2744 placement
+//@ chunk-3msz77wt.js:1769-2744 placement
 function BedrockAccessKeysStep() {
   let $ = useMemoCache(16);
   let { goBack, goNext, updateWizardData, wizardData, title } = useWizard();
@@ -128,7 +128,7 @@ function BedrockAccessKeysStep() {
   } else agentsListElement = $[15];
   return agentsListElement;
 }
-//@ chunk-sx9xc5ee.js:2744-2842 placement
+//@ chunk-3msz77wt.js:2744-2842 placement
 var BEDROCK_STEPS = {
   AUTH_METHOD: 0,
   PROFILE: 1,
@@ -139,7 +139,7 @@ var BEDROCK_STEPS = {
   PIN_MODELS: 6,
   CONFIRM: 7,
 };
-//@ chunk-sx9xc5ee.js:2842-3817 placement
+//@ chunk-3msz77wt.js:2842-3817 placement
 function BedrockAuthMethodStep() {
   let $ = useMemoCache(9);
   let { goBack, goToStep, updateWizardData } = useWizard();
@@ -223,9 +223,9 @@ function BedrockAuthMethodStep() {
   } else wizardDialogLayoutElement = $[8];
   return wizardDialogLayoutElement;
 }
-//@ chunk-sx9xc5ee.js:3817-3821 placement
+//@ chunk-3msz77wt.js:3817-3821 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-sx9xc5ee.js:3817", () => {
+deferInit("chunk-3msz77wt.js:3817", () => {
   init_react_production();
 });
 export { BEDROCK_STEPS, BedrockAuthMethodStep, BedrockAccessKeysStep };

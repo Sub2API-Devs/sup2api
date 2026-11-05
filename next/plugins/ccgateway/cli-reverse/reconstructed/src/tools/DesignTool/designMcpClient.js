@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Claude Design MCP 客户端：向 /v1/design/mcp 发 JSON-RPC。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-171dhyhe.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ma8ytfb3.js (3)
  * attribution: placement 3
  */
 import { isFirstPartyAnthropicHost } from "../../utils/model/providers.js";
@@ -28,7 +28,7 @@ import { deferInit, beginDeferredInits } from "../../../runtime/deferred-init.js
 // This module is the first evaluated of an import cycle of 3 modules closed by ./DesignTool.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("src/tools/DesignTool/DesignTool.js");
-//@ chunk-171dhyhe.js:53132-54535 placement
+//@ chunk-ma8ytfb3.js:54284-55687 placement
 /**
  * 向 api.anthropic.com/v1/design/mcp 发 JSON-RPC（带 Mcp-Session-Id、X-Anthropic-Client），解析 JSON 或 SSE 响应，策略拒绝时报错。
  */
@@ -125,7 +125,7 @@ async function postDesignMcp(
     );
   return response;
 }
-//@ chunk-171dhyhe.js:54535-55593 placement
+//@ chunk-ma8ytfb3.js:55687-56745 placement
 function designCredentialErrorMessage(designConsentKey, context) {
   let detailSuffix = designConsentKey.detail ? ` (${designConsentKey.detail})` : "";
   switch (designConsentKey.reason) {
@@ -141,9 +141,9 @@ function designCredentialErrorMessage(designConsentKey, context) {
       return "Claude Design is disabled because nonessential network traffic is restricted.";
   }
 }
-//@ chunk-171dhyhe.js:55593-55704 placement
+//@ chunk-ma8ytfb3.js:56745-56856 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-171dhyhe.js:55593", () => {
+deferInit("chunk-ma8ytfb3.js:56745", () => {
   setInteractiveHandlerHost({
     isEnabled: isDesignGrantWatchEnabled,
     createObserver: (request, state, options) =>

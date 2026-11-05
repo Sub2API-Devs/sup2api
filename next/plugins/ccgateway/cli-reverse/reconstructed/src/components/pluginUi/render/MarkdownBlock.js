@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。插件 ui.render 的 Markdown 渲染（表格、列表、流式）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bc20zedk.js (54)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rkbsrtg1.js (54)
  * attribution: placement 54
  */
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
@@ -98,7 +98,7 @@ import { measureElement } from "../../../ink/hooks/useTerminalHooks.js";
 import { SCROLL_JUMP_LINES } from "../../../ink/scrollConstants.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-bc20zedk.js:15392-16300 placement
+//@ chunk-rkbsrtg1.js:15392-16302 placement
 function layoutMarkdownTable(props) {
   let $ = useMemoCache(9);
   let { headers, rows, terminalWidth, truncatedCount } = props;
@@ -134,7 +134,7 @@ function layoutMarkdownTable(props) {
           if (!line.trim()) {
             continue;
           }
-          rowLines.push(`${line}`);
+          rowLines.push(`  ${line}`);
         }
       });
       if (rowLines.length === 0) {
@@ -171,10 +171,10 @@ function layoutMarkdownTable(props) {
   } else ansiElement = $[8];
   return ansiElement;
 }
-//@ chunk-bc20zedk.js:16300-16315 placement
+//@ chunk-rkbsrtg1.js:16302-16317 placement
 var MARKDOWN_MAX_HEADING_LEVEL = 10;
 var MARKDOWN_TABLE_PAD = 2;
-//@ chunk-bc20zedk.js:16315-16433 placement
+//@ chunk-rkbsrtg1.js:16317-16435 placement
 function listItemIndent(indent, markerWidth, room) {
   let max = Math.max(0, Math.min(indent, room - MARKDOWN_TABLE_PAD));
   let markerCell = Math.max(MARKDOWN_TABLE_PAD, Math.min(markerWidth, room - max));
@@ -183,16 +183,16 @@ function listItemIndent(indent, markerWidth, room) {
     markerCell,
   };
 }
-//@ chunk-bc20zedk.js:16433-16450 placement
+//@ chunk-rkbsrtg1.js:16435-16452 placement
 var MARKDOWN_MAX_TABLE_CELL = 300;
 var MARKDOWN_CODE_INDENT = 64;
-//@ chunk-bc20zedk.js:16450-16544 placement
+//@ chunk-rkbsrtg1.js:16452-16546 placement
 function isBlockToken(token) {
   return (
     token.type === "code" || token.type === "blockquote" || token.type === "hr" || token.type === "table"
   );
 }
-//@ chunk-bc20zedk.js:16544-16928 placement
+//@ chunk-rkbsrtg1.js:16546-16930 placement
 /**
  * 列表嵌套深度与条目数是否都在上限内（超限则不按列表渲染）。
  */
@@ -228,7 +228,7 @@ function isListWithinLimits(tokens) {
   }
   return true;
 }
-//@ chunk-bc20zedk.js:16928-17130 placement
+//@ chunk-rkbsrtg1.js:16930-17132 placement
 function MarkdownList(props) {
   let $ = useMemoCache(3);
   let { columns } = useScrollViewportSize(useTerminalSize());
@@ -248,7 +248,7 @@ function MarkdownList(props) {
   } else listElement = $[2];
   return listElement;
 }
-//@ chunk-bc20zedk.js:17130-17390 placement
+//@ chunk-rkbsrtg1.js:17132-17392 placement
 function MarkdownListItems({ token, blankLineBefore, ...restProps }) {
   let range = orderedListRange(token);
   return token.items.map((item, index) =>
@@ -273,7 +273,7 @@ function MarkdownListItems({ token, blankLineBefore, ...restProps }) {
     ),
   );
 }
-//@ chunk-bc20zedk.js:17390-17593 placement
+//@ chunk-rkbsrtg1.js:17392-17595 placement
 function endsWithBlockGap(tokens) {
   let last = tokens.tokens.at(-1);
   if (last?.type === "space" || last?.type === "heading" || last?.type === "table") return true;
@@ -283,7 +283,7 @@ function endsWithBlockGap(tokens) {
   }
   return last?.type === "html" && endsWithHardBreak(last.raw);
 }
-//@ chunk-bc20zedk.js:17593-19099 placement
+//@ chunk-rkbsrtg1.js:17595-19101 placement
 function renderMarkdownListItem({
   item,
   marker,
@@ -441,23 +441,23 @@ function renderMarkdownListItem({
   });
   return elements;
 }
-//@ chunk-bc20zedk.js:19133-19164 placement
+//@ chunk-rkbsrtg1.js:19135-19166 placement
 function selectText(state) {
   return state.text;
 }
-//@ chunk-bc20zedk.js:19164-19327 placement
+//@ chunk-rkbsrtg1.js:19166-19329 placement
 var InsideMarkdownContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TOKEN_CACHE_MAX;
 var MARKDOWN_SYNTAX_RE;
 var NBSP_ENTITY;
-deferInit("chunk-bc20zedk.js:19164", () => {
+deferInit("chunk-rkbsrtg1.js:19166", () => {
   InsideMarkdownContext = createContext(false);
   TOKEN_CACHE_MAX = 500;
   MARKDOWN_SYNTAX_RE =
     /[#*`|[>\-_~]|\n[\r\n]|\r\r|\r\n[\r\n]|(?:^|[\r\n]) {0,3}(?:\d+[.)]|\+) |(?:^|[\r\n]) {0,3}=+ *(?:[\r\n]|$)|https?:\/\/|www\./;
   NBSP_ENTITY = "&nbsp;";
 });
-//@ chunk-bc20zedk.js:19327-19446 placement
+//@ chunk-rkbsrtg1.js:19329-19448 placement
 function plainParagraphTokens(text) {
   return {
     tokens: [
@@ -477,7 +477,7 @@ function plainParagraphTokens(text) {
     isWindowed: !isSmallMarkdown(text),
   };
 }
-//@ chunk-bc20zedk.js:19446-19514 placement
+//@ chunk-rkbsrtg1.js:19448-19516 placement
 function renderMarkdownSafe(source, text) {
   try {
     return lexMarkdownWindowed(source, text);
@@ -486,14 +486,14 @@ function renderMarkdownSafe(source, text) {
     return plainParagraphTokens(text);
   }
 }
-//@ chunk-bc20zedk.js:19514-19563 placement
+//@ chunk-rkbsrtg1.js:19516-19565 placement
 function withWrappedTokens(lexed) {
   return {
     ...lexed,
     tokens: controlCharTokens(lexed.tokens),
   };
 }
-//@ chunk-bc20zedk.js:19563-19681 placement
+//@ chunk-rkbsrtg1.js:19565-19683 placement
 function reportLexerError(error, text) {
   if (error instanceof RangeError)
     logForDebugging(`marked.lexer overflow on ${text.length} chars`, {
@@ -501,7 +501,7 @@ function reportLexerError(error, text) {
     });
   else logError(error);
 }
-//@ chunk-bc20zedk.js:19681-19745 placement
+//@ chunk-rkbsrtg1.js:19683-19747 placement
 function isMarkdownSafe(text) {
   try {
     return lexInlineHtml(marked, text);
@@ -510,7 +510,7 @@ function isMarkdownSafe(text) {
     return true;
   }
 }
-//@ chunk-bc20zedk.js:19745-20064 placement
+//@ chunk-rkbsrtg1.js:19747-20066 placement
 /**
  * 词法分析并按长度+哈希 LRU 缓存，无 Markdown 语法时直接作段落。
  */
@@ -533,7 +533,7 @@ function lexMarkdownCached(cache, source, promptMode) {
   cache.set(cacheKey, lexed);
   return lexed;
 }
-//@ chunk-bc20zedk.js:20064-20681 placement
+//@ chunk-rkbsrtg1.js:20066-20683 placement
 /**
  * Markdown 渲染组件（语法高亮、宽度上限、词法缓存）。
  */
@@ -550,10 +550,10 @@ function MarkdownText_2(props) {
   let highlighter = highlight;
   let skipHighlightCache = props.skipHighlightCache ?? false;
   let highlighterValue;
-  x: {
+  h: {
     if (highlighter === null || skipHighlightCache) {
       highlighterValue = highlighter;
-      break x;
+      break h;
     }
     let fallbackHighlighter;
     if ($[2] !== highlighter || $[3] !== highlightedCode) {
@@ -588,7 +588,7 @@ function MarkdownText_2(props) {
   } else markdownTextElement = $[8];
   return markdownTextElement;
 }
-//@ chunk-bc20zedk.js:20681-23084 placement
+//@ chunk-rkbsrtg1.js:20683-23086 placement
 function MarkdownText({
   children,
   color,
@@ -834,9 +834,9 @@ function MarkdownText({
     children: children_2,
   });
 }
-//@ chunk-bc20zedk.js:23084-23093 placement
+//@ chunk-rkbsrtg1.js:23086-23095 placement
 var MARKDOWN_LIST_INDENT = 2;
-//@ chunk-bc20zedk.js:23093-24825 placement
+//@ chunk-rkbsrtg1.js:23095-24827 placement
 function MarkdownToken(props) {
   let $ = useMemoCache(21);
   let { token, theme, highlight, dimColor, linkCap, isWindowed, isScreenReader, maxWidth } = props;
@@ -998,7 +998,7 @@ function MarkdownToken(props) {
   if (result !== EARLY_RETURN_SENTINEL) return result;
   return earlyResult;
 }
-//@ chunk-bc20zedk.js:24825-25060 placement
+//@ chunk-rkbsrtg1.js:24827-25062 placement
 function hasCodeOrTable(token) {
   let stack = [token];
   for (let current = stack.pop(); current !== undefined; current = stack.pop()) {
@@ -1013,9 +1013,9 @@ function hasCodeOrTable(token) {
   }
   return false;
 }
-//@ chunk-bc20zedk.js:25060-25072 placement
+//@ chunk-rkbsrtg1.js:25062-25074 placement
 var MARKDOWN_MAX_CHARS = 4096;
-//@ chunk-bc20zedk.js:25072-25198 placement
+//@ chunk-rkbsrtg1.js:25074-25200 placement
 function createStreamState() {
   return {
     chunks: [],
@@ -1027,14 +1027,14 @@ function createStreamState() {
     isLinkless: false,
   };
 }
-//@ chunk-bc20zedk.js:25198-25239 placement
+//@ chunk-rkbsrtg1.js:25200-25241 placement
 var FENCED_CODE_RE = /^ {0,3}(`{3,}|~{3,})([^\n]*)$/gm;
-//@ chunk-bc20zedk.js:25239-25346 placement
+//@ chunk-rkbsrtg1.js:25241-25348 placement
 function closesFence(line, closingFence, trailingText) {
   let fence = line.match(/^`+|^~+/)?.[0] ?? "";
   return closingFence[0] === fence[0] && closingFence.length >= fence.length && trailingText.trim() === "";
 }
-//@ chunk-bc20zedk.js:25346-25470 placement
+//@ chunk-rkbsrtg1.js:25348-25472 placement
 function updateOpenFence(openFence, fence) {
   let updated = openFence;
   for (let match of fence.matchAll(FENCED_CODE_RE))
@@ -1042,7 +1042,7 @@ function updateOpenFence(openFence, fence) {
     else if (closesFence(updated, match[1], match[2])) updated = null;
   return updated;
 }
-//@ chunk-bc20zedk.js:25470-25604 placement
+//@ chunk-rkbsrtg1.js:25472-25606 placement
 function closingFenceEnd(text, line) {
   for (let match of text.matchAll(FENCED_CODE_RE)) {
     let matchEnd = match.index + match[0].length;
@@ -1056,7 +1056,7 @@ function closingFenceEnd(text, line) {
   }
   return -1;
 }
-//@ chunk-bc20zedk.js:25604-26077 placement
+//@ chunk-rkbsrtg1.js:25606-26079 placement
 /**
  * 把流式文本前缀冻结为一个渲染块，返回剩余部分。
  */
@@ -1093,9 +1093,9 @@ function freezeStreamChunk(chunk, text, length, prefixOnly) {
   if (prefixOnly) chunk.openTable = null;
   return text.substring(length);
 }
-//@ chunk-bc20zedk.js:26077-26089 placement
+//@ chunk-rkbsrtg1.js:26079-26091 placement
 var MAX_BASH_COMMAND_SCAN_CHARS = 1536;
-//@ chunk-bc20zedk.js:26089-26258 placement (2.1.88 match: getFileExtensionsFromBashCommand, 1)
+//@ chunk-rkbsrtg1.js:26091-26260 placement (2.1.88 match: getFileExtensionsFromBashCommand, 1)
 function getFileExtensionsFromBashCommand(command) {
   let index = command.lastIndexOf(`
 `);
@@ -1108,12 +1108,12 @@ function getFileExtensionsFromBashCommand(command) {
   }
   return index + 1;
 }
-//@ chunk-bc20zedk.js:26258-26324 placement
+//@ chunk-rkbsrtg1.js:26260-26326 placement
 var TABLE_HEADER_RE = /^ {0,3}\|[^\n]*\n[ |:\r-]*$/;
 var TABLE_ROW_RE = /^ {0,3}\|/;
 var MARKDOWN_TOKEN_LIMIT = 1024;
 var MARKDOWN_NEST_DEPTH = 64;
-//@ chunk-bc20zedk.js:26324-28498 placement
+//@ chunk-rkbsrtg1.js:26326-28500 placement
 function StreamingMarkdown({ children, hideTrailingLine = false }) {
   configureMarked();
   let source = stripPromptXMLTags(children);
@@ -1266,12 +1266,12 @@ function StreamingMarkdown({ children, hideTrailingLine = false }) {
     }),
   });
 }
-//@ chunk-bc20zedk.js:28498-28539 placement
+//@ chunk-rkbsrtg1.js:28500-28541 placement
 var MARKDOWN_LINK_SCHEMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:28498", () => {
+deferInit("chunk-rkbsrtg1.js:28500", () => {
   MARKDOWN_LINK_SCHEMES = new Set(["https", "http", "file"]);
 });
-//@ chunk-bc20zedk.js:28539-29466 placement
+//@ chunk-rkbsrtg1.js:28541-29468 placement
 function MarkdownBlock({ text, dimColor, press, part, elementKey, pressableLinks }) {
   let clock = useClock();
   let selection = useSelection();
@@ -1352,22 +1352,22 @@ function MarkdownBlock({ text, dimColor, press, part, elementKey, pressableLinks
     markdownElement,
   );
 }
-//@ chunk-bc20zedk.js:29466-29470 placement
+//@ chunk-rkbsrtg1.js:29468-29472 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:29466", () => {
+deferInit("chunk-rkbsrtg1.js:29468", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:29470-29474 placement
+//@ chunk-rkbsrtg1.js:29472-29476 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:29470", () => {
+deferInit("chunk-rkbsrtg1.js:29472", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:29474-29491 placement
+//@ chunk-rkbsrtg1.js:29476-29493 placement
 var HotkeySeat; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:29474", () => {
+deferInit("chunk-rkbsrtg1.js:29476", () => {
   HotkeySeat = createContext(null);
 });
-//@ chunk-bc20zedk.js:29491-29606 placement
+//@ chunk-rkbsrtg1.js:29493-29608 placement
 function releaseInkFocus(node) {
   if (!node) return;
   let focusManager = getFocusManager(node);
@@ -1375,7 +1375,7 @@ function releaseInkFocus(node) {
   while (activeElement && activeElement !== node) activeElement = activeElement.parentNode;
   if (activeElement === node) focusManager.blur();
 }
-//@ chunk-bc20zedk.js:29606-30537 placement
+//@ chunk-rkbsrtg1.js:29608-30539 placement
 function PressButton({
   plugin,
   handle,
@@ -1474,22 +1474,22 @@ function PressButton({
     }),
   );
 }
-//@ chunk-bc20zedk.js:30537-30541 placement
+//@ chunk-rkbsrtg1.js:30539-30543 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:30537", () => {
+deferInit("chunk-rkbsrtg1.js:30539", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:30541-30545 placement
+//@ chunk-rkbsrtg1.js:30543-30547 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:30541", () => {
+deferInit("chunk-rkbsrtg1.js:30543", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:30545-30549 placement
+//@ chunk-rkbsrtg1.js:30547-30551 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:30545", () => {
+deferInit("chunk-rkbsrtg1.js:30547", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:30549-30657 placement
+//@ chunk-rkbsrtg1.js:30551-30659 placement
 function mouseButtonName(button) {
   switch (button) {
     case 0:
@@ -1502,17 +1502,17 @@ function mouseButtonName(button) {
       return;
   }
 }
-//@ chunk-bc20zedk.js:30657-30661 placement
+//@ chunk-rkbsrtg1.js:30659-30663 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:30657", () => {
+deferInit("chunk-rkbsrtg1.js:30659", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:30661-30665 placement
+//@ chunk-rkbsrtg1.js:30663-30667 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:30661", () => {
+deferInit("chunk-rkbsrtg1.js:30663", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:30665-30848 placement
+//@ chunk-rkbsrtg1.js:30667-30850 placement
 /**
  * 点击发生在元素外（非窗口激活）时回调。
  */
@@ -1530,7 +1530,7 @@ function useClickOutside(config) {
   );
   return ref;
 }
-//@ chunk-bc20zedk.js:30848-31093 placement
+//@ chunk-rkbsrtg1.js:30850-31095 placement
 var KEY_NAME_PAIRS = [
   ["upArrow", "up"],
   ["downArrow", "down"],
@@ -1545,7 +1545,7 @@ var KEY_NAME_PAIRS = [
   ["backspace", "backspace"],
   ["delete", "delete"],
 ];
-//@ chunk-bc20zedk.js:31093-31290 placement
+//@ chunk-rkbsrtg1.js:31095-31292 placement
 function toPluginKeyEvent(input, key) {
   if (key.wheelUp || key.wheelDown) return;
   let keyName = KEY_NAME_PAIRS.find(([pairKey]) => key[pairKey])?.[1] ?? (input === " " ? "space" : input);
@@ -1564,7 +1564,7 @@ function toPluginKeyEvent(input, key) {
         }),
       };
 }
-//@ chunk-bc20zedk.js:31290-31703 placement
+//@ chunk-rkbsrtg1.js:31292-31705 placement
 /**
  * 插件面板获得焦点时转发按键，Esc/Ctrl+C 释放焦点。
  */
@@ -1596,7 +1596,7 @@ function usePluginKeyFocus(instance) {
   });
   return clickOutside;
 }
-//@ chunk-bc20zedk.js:31703-32807 placement
+//@ chunk-rkbsrtg1.js:31705-32809 placement
 function RenderHostElement({ host, instance, snapshot }) {
   let { rebuild, props, width, height, flexGrow, plugin, elementKey } = host;
   let pluginKeyFocus = usePluginKeyFocus(instance);
@@ -1699,12 +1699,12 @@ function RenderHostElement({ host, instance, snapshot }) {
       ),
   );
 }
-//@ chunk-bc20zedk.js:32807-32811 placement
+//@ chunk-rkbsrtg1.js:32809-32813 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:32807", () => {
+deferInit("chunk-rkbsrtg1.js:32809", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:32811-33028 placement
+//@ chunk-rkbsrtg1.js:32813-33030 placement
 function createTicker(clock) {
   if (clock === null)
     return {
@@ -1728,9 +1728,9 @@ function createTicker(clock) {
 }
 export {
   StreamingMarkdown,
-  MarkdownText_2,
   useClickOutside,
   HotkeySeat,
+  MarkdownText_2,
   MARKDOWN_LINK_SCHEMES,
   MarkdownBlock,
   PressButton,

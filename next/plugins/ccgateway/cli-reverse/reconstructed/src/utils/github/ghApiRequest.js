@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。gh api 请求（代理、重定向）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fy5kn7m3.js (21)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ntm2y5qw.js (21)
  * attribution: placement 21
  */
 import { X509Certificate } from "crypto";
@@ -58,18 +58,18 @@ import { readHandleUpTo } from "../fsOperations.js";
 import { getErrnoCode } from "../errors.js";
 import { isAxiosError } from "../../../vendor/axios/dist/esm/axios.js";
 
-//@ chunk-fy5kn7m3.js:27481-27565 placement
+//@ chunk-ntm2y5qw.js:28497-28581 placement
 /**
  * 生成"读不到会话 GitHub 代理 CA 证书"的错误文案。
  */
 function proxyCaBundleError(errnoCode) {
   return `could not read this session's GitHub proxy CA bundle (${errnoCode}).`;
 }
-//@ chunk-fy5kn7m3.js:27565-27641 placement
-function jqArgs(expression, platform) {
-  return [...(platform === "windows" ? ["--binary"] : []), "-r", "-c", ` ${expression}`];
+//@ chunk-ntm2y5qw.js:28581-28657 placement
+function jqArgs(expression, args) {
+  return [...(args === "windows" ? ["--binary"] : []), "-r", "-c", ` ${expression}`];
 }
-//@ chunk-fy5kn7m3.js:27641-31289 placement
+//@ chunk-ntm2y5qw.js:28657-32305 placement
 /**
  * 内置 `gh api` 实现：在没有 GitHub CLI 的云会话中，经会话 GitHub 代理转发 REST 请求，填充 {owner}/{repo}/{branch}，校验主机与路径，支持分页、字段、--jq。
  */
@@ -266,7 +266,7 @@ ${refusalNote}`,
     url = preserveQueryOnRepoRedirect(ghIsDangerousCallback(nextUrl, apiBase_2), url, apiBase_2);
   }
 }
-//@ chunk-fy5kn7m3.js:31289-31411 placement
+//@ chunk-ntm2y5qw.js:32305-32427 placement
 /**
  * 错误输出中附加请求去往的主机说明。
  */
@@ -279,7 +279,7 @@ function requestHostNote(host, answered, withProxyNote) {
   return `this request ${answered ? "went to" : "was for"} ${host}${withProxyNote ? ` ${ACTIONS_PROXY_NOTE}` : ""}
 `;
 }
-//@ chunk-fy5kn7m3.js:31411-31704 placement
+//@ chunk-ntm2y5qw.js:32427-32720 placement
 /**
  * /repositories/<id> 重定向到 /repos/<owner>/<repo> 时保留原查询串。
  */
@@ -292,7 +292,7 @@ function preserveQueryOnRepoRedirect(url, apiUrl, apiBase) {
   apiUrl_2.search = url.search;
   return apiUrl_2;
 }
-//@ chunk-fy5kn7m3.js:31704-32096 placement
+//@ chunk-ntm2y5qw.js:32720-33112 placement
 /**
  * 发送请求并跟随重定向（有次数上限，303 等改为 GET/HEAD，每跳校验目标）。
  */
@@ -324,7 +324,7 @@ async function requestFollowingRedirects(request, options, apiBase, statusState)
           };
   }
 }
-//@ chunk-fy5kn7m3.js:32096-32563 placement
+//@ chunk-ntm2y5qw.js:33112-33579 placement
 /**
  * 按方法调用外部 HTTP 客户端（仅 GET/HEAD/POST/PUT/PATCH/DELETE）。
  */
@@ -356,7 +356,7 @@ function sendByMethod({ method, url, body, headers }, options) {
       throw new GhApiRequestError("unsupported method; use GET, HEAD, POST, PUT, PATCH or DELETE");
   }
 }
-//@ chunk-fy5kn7m3.js:32563-32717 placement
+//@ chunk-ntm2y5qw.js:33579-33733 placement
 /**
  * 解析目标主机与 API 基址（github.com、已配置的 GHE 或任意 GHE 校验）。
  */
@@ -375,7 +375,7 @@ function resolveTargetHost(host, apiBase, ghesHosts) {
   if ("refusal" in enterpriseHost) throw new GhApiRequestError(enterpriseHost.refusal);
   return enterpriseHost;
 }
-//@ chunk-fy5kn7m3.js:32717-33334 placement
+//@ chunk-ntm2y5qw.js:33733-34350 placement
 /**
  * 端点是完整 URL 时校验主机与同源，返回目标主机。
  */
@@ -407,7 +407,7 @@ function resolveAbsoluteEndpoint(endpoint, apiBase, ghesHosts) {
     throw new GhApiRequestError(restPathOnlyText(targetHost.apiBase));
   return targetHost;
 }
-//@ chunk-fy5kn7m3.js:33334-33400 placement
+//@ chunk-ntm2y5qw.js:34350-34416 placement
 function isClientStatus(connectStatus) {
   return (
     connectStatus !== undefined &&
@@ -417,7 +417,7 @@ function isClientStatus(connectStatus) {
     connectStatus !== 429
   );
 }
-//@ chunk-fy5kn7m3.js:33400-33712 placement (2.1.88 match: ghIsDangerousCallback, 0.808)
+//@ chunk-ntm2y5qw.js:34416-34728 placement (2.1.88 match: ghIsDangerousCallback, 0.807)
 function ghIsDangerousCallback(_rawCommand, args) {
   assertCleanEndpoint(_rawCommand);
   let parsedUrl;
@@ -438,7 +438,7 @@ function ghIsDangerousCallback(_rawCommand, args) {
   }
   return checkSameOriginPath(parsedUrl, args, restPathOnlyText(args));
 }
-//@ chunk-fy5kn7m3.js:33712-33853 placement
+//@ chunk-ntm2y5qw.js:34728-34869 placement
 /**
  * 端点含制表符、换行、控制字符或反斜杠时报错。
  */
@@ -448,14 +448,14 @@ function assertCleanEndpoint(endpoint) {
       "the endpoint contains a tab, a line break, a control character or a backslash",
     );
 }
-//@ chunk-fy5kn7m3.js:33853-33988 placement
+//@ chunk-ntm2y5qw.js:34869-35004 placement
 /**
  * 只接受 REST 路径的提示。
  */
 function restPathOnlyText(apiBase) {
   return `this gh sends requests to ${apiBase.replace("https://", "")} only; give a REST path such as repos/{owner}/{repo}/pulls`;
 }
-//@ chunk-fy5kn7m3.js:33988-34774 placement
+//@ chunk-ntm2y5qw.js:35004-35790 placement
 function checkGhRedirect(location, url, apiBase) {
   let redirectUrl;
   try {
@@ -484,7 +484,7 @@ function checkGhRedirect(location, url, apiBase) {
         : ""),
   );
 }
-//@ chunk-fy5kn7m3.js:34774-34873 placement (2.1.88 match: isPermittedRedirect, 0.763)
+//@ chunk-ntm2y5qw.js:35790-35889 placement (2.1.88 match: isPermittedRedirect, 0.763)
 /**
  * 两个 URL 协议与 host 相同且原 URL 不带凭证。
  */
@@ -496,7 +496,7 @@ function isSameOriginWithoutCredentials(originalUrl, redirectUrl) {
     originalUrl.password === ""
   );
 }
-//@ chunk-fy5kn7m3.js:34873-35099 placement
+//@ chunk-ntm2y5qw.js:35889-36115 placement
 /**
  * 校验 URL 与 API 基址同源且路径在其下，去掉 hash。
  */
@@ -510,7 +510,7 @@ function checkSameOriginPath(originalUrl, location, refusalText) {
   originalUrl.hash = "";
   return originalUrl;
 }
-//@ chunk-fy5kn7m3.js:35099-36225 placement
+//@ chunk-ntm2y5qw.js:36115-37241 placement
 function ghRequestHeaders(headers, hasBody) {
   let headerMap = {
     accept: "*/*",
@@ -539,17 +539,17 @@ function ghRequestHeaders(headers, hasBody) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION
     }`,
   };
 }
-//@ chunk-fy5kn7m3.js:36225-36646 placement
+//@ chunk-ntm2y5qw.js:37241-37662 placement
 /**
  * 读取 --input（文件或标准输入），超过上限时报错。
  */
@@ -580,7 +580,7 @@ async function readInputBody(source, context) {
   if (body.length > GH_API_DEFAULTS_2) throw tooLargeError;
   return body;
 }
-//@ chunk-fy5kn7m3.js:36646-36955 placement
+//@ chunk-ntm2y5qw.js:37662-37971 placement
 /**
  * 把状态行与响应头格式化为 HTTP/1.1 头文本（--include）。
  */
@@ -600,7 +600,7 @@ function formatResponseHead(response) {
 \r
 `;
 }
-//@ chunk-fy5kn7m3.js:36955-37400 placement
+//@ chunk-ntm2y5qw.js:37971-38416 placement
 /**
  * 从 GitHub 错误响应体提取 message/errors 文本。
  */
@@ -627,7 +627,7 @@ function describeApiError(status, body) {
 `)
     : `HTTP ${status}`;
 }
-//@ chunk-fy5kn7m3.js:37400-38398 placement
+//@ chunk-ntm2y5qw.js:38416-39414 placement
 function ghProxyRefusalText(error, statusUrl) {
   if (
     error instanceof GhApiRequestError ||

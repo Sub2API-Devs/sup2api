@@ -1,8 +1,8 @@
 /**
  * ajv/dist/vocabularies/draft7.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: ajv@8.13.0
- * pieces: chunk-1r4fv9mg.js (1), chunk-s82q9s4x.js (1)
+ * pieces: chunk-1jdkttw7.js (1), chunk-xcs4sv9h.js (1)
  * attribution: cjs-fingerprint 2
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -17,7 +17,7 @@ import {
 } from "./format/index.js";
 import { require_metadata } from "./metadata.js";
 
-//@ chunk-s82q9s4x.js:108718-108953 cjs-fingerprint
+//@ chunk-xcs4sv9h.js:108718-108953 cjs-fingerprint
 var require_draft7_2 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
@@ -37,7 +37,7 @@ var require_draft7_2 = __commonJS(function (cjsExports) {
   ];
   cjsExports.default = draft7Vocabularies;
 });
-//@ chunk-1r4fv9mg.js:5489-5780 cjs-fingerprint
+//@ chunk-1jdkttw7.js:5490-5781 cjs-fingerprint
 var require_draft7 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

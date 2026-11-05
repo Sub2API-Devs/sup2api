@@ -3,9 +3,9 @@
  *
  * 函数钩子按层（core/prepend/user/append）分发链（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (83)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (83)
  * attribution: placement 81, layout 2
  */
 import { ALL_ELEMENT_TYPES, UI_ELEMENT_TYPES } from "../ui/elements.js";
@@ -49,19 +49,19 @@ import {
 import { scrubLine } from "../ui/textScrub.js";
 import { streamChainSlot, describeStreamHookOverrun, DEFAULT_HOOK_TIMEOUT_MS } from "./streamChain.js";
 import { matchesEventPattern } from "../eventPatterns.js";
-import { uniq } from "../../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
 import { subscribe } from "../../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
 import { isUntrustedObject } from "../../../utils/untrustedValues.js";
 import { identity } from "../../../utils/identity.js";
 import { createValueSlot } from "../../../utils/valueSlot.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:71251-71293 placement
+//@ chunk-j8f885h1.js:51853-51895 placement
 /**
  * surface:component
  */
 var uiElementKey = (site) => `${site.surface}:${site.component}`;
-//@ chunk-4121qate.js:71293-71521 placement
+//@ chunk-j8f885h1.js:51895-52123 placement
 /**
  * 生成警告器：ui.resolve 钩子扣留某 UI 元素时，每种元素只警告一次。
  */
@@ -79,7 +79,7 @@ function createWithheldElementWarner(name) {
     };
   };
 }
-//@ chunk-4121qate.js:71521-71622 placement
+//@ chunk-j8f885h1.js:52123-52224 placement
 /**
  * 钩子处理器所在层：core 为 core，托管为 prepend，其余取 tier（默认 user）。
  */
@@ -88,7 +88,7 @@ function handlerTier(handler) {
   let tier = isCore ? "core" : "prepend";
   return isCore || handler.isManaged === true ? tier : (handler.tier ?? "user");
 }
-//@ chunk-4121qate.js:71622-71669 placement
+//@ chunk-j8f885h1.js:52224-52271 placement
 /**
  * 尝试执行，抛错返回 undefined
  */
@@ -99,7 +99,7 @@ function attempt(fn, secondFn) {
     return;
   }
 }
-//@ chunk-4121qate.js:71669-71732 placement
+//@ chunk-j8f885h1.js:52271-52334 placement
 /**
  * 是否因给定信号中止而抛错
  */
@@ -109,12 +109,12 @@ var isAbortOf = (error, signal) =>
     error,
     (secondError) => isAbortError(secondError) || errorMessage(secondError) === abortReasonText(signal),
   ) === true;
-//@ chunk-4121qate.js:71732-71776 placement
+//@ chunk-j8f885h1.js:52334-52378 placement
 /**
  * 核心或托管步骤
  */
 var isCoreOrManaged = (handler) => handler.isCore === true || handler.isManaged === true;
-//@ chunk-4121qate.js:76361-76514 placement
+//@ chunk-j8f885h1.js:56963-57116 placement
 /**
  * 在 next.to 链上追加一步（冻结），to 取链中最远的目标。
  */
@@ -130,17 +130,17 @@ function appendNextToStep(steps, entry) {
     }),
   ]);
 }
-//@ chunk-4121qate.js:76514-76542 placement
+//@ chunk-j8f885h1.js:57116-57144 placement
 /**
  * 把层级名格式化成 next.to:<tier> 标签，作为分发链里「下一层」的键。
  */
 var nextToLabel = (entry) => `next.to:${entry}`;
-//@ chunk-4121qate.js:76542-76568 placement
+//@ chunk-j8f885h1.js:57144-57170 placement
 var NO_FLOORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4121qate.js:76542", () => {
+deferInit("chunk-j8f885h1.js:57144", () => {
   NO_FLOORS = Object.freeze([]);
 });
-//@ chunk-4121qate.js:76568-76818 placement
+//@ chunk-j8f885h1.js:57170-57420 placement
 /**
  * 判断插件属于哪一层：内置插件为 builtin（列在最外层时为 prepend），其他按 prepend/append 配置与是否同名市场决定。
  */
@@ -155,7 +155,7 @@ function pluginTier(pluginId, managedPluginOrder, tierLists) {
   let index = isManaged("prepend") ? "prepend" : "append";
   return isManaged("prepend") || isManaged("append") ? index : tier;
 }
-//@ chunk-4121qate.js:76818-77456 placement
+//@ chunk-j8f885h1.js:57420-58058 placement
 /**
  * 解析 next.to() 指向的层（user/append…），只允许托管插件使用
  */
@@ -183,7 +183,7 @@ function resolveNextTier(floors, to, run) {
     });
   }, floors);
 }
-//@ chunk-4121qate.js:77456-77514 placement
+//@ chunk-j8f885h1.js:58058-58116 placement
 /**
  * 毫秒或秒
  */
@@ -192,27 +192,27 @@ function formatDuration(ms) {
     ? `${ms / SLOW_HOOK_REPORT_INTERVAL_MS_2}s`
     : `${ms}ms`;
 }
-//@ chunk-4121qate.js:77514-77553 placement
+//@ chunk-j8f885h1.js:58116-58155 placement
 /**
  * 调用被替代拒绝
  */
 var REFUSED_IN_PLACE = "the call refused in its place";
-//@ chunk-4121qate.js:77553-77598 placement
+//@ chunk-j8f885h1.js:58155-58200 placement
 /**
  * .catch 兜底后的失败
  */
 var FAILED_CLOSED = "failed closed: its .catch answered";
-//@ chunk-4121qate.js:77598-77628 placement
+//@ chunk-j8f885h1.js:58200-58230 placement
 /**
  * 无文本的值
  */
 var NO_TEXT_VALUE = "a value with no text";
-//@ chunk-4121qate.js:77628-77668 placement
+//@ chunk-j8f885h1.js:58230-58270 placement
 /**
  * 错误文本
  */
 var errorTextOf = (error) => attempt(error, (error) => String(errorMessage(error))) ?? NO_TEXT_VALUE;
-//@ chunk-4121qate.js:77668-77801 placement
+//@ chunk-j8f885h1.js:58270-58403 placement
 function errorKindOf(error) {
   let kind =
     error instanceof HooksError && error.thrownName !== undefined
@@ -222,38 +222,38 @@ function errorKindOf(error) {
       : error;
   return error instanceof Error ? (sanitizeErrorName(kind) ?? "Error") : "unknown";
 }
-//@ chunk-4121qate.js:77801-77875 placement
+//@ chunk-j8f885h1.js:58403-58477 placement
 /**
  * 错误种类与长度摘要
  */
 var errorSummary = (error) =>
   `errorKind=${attempt(error, errorKindOf) ?? "unknown"} errorChars=${errorTextOf(error).length}`;
-//@ chunk-4121qate.js:77875-77965 placement
+//@ chunk-j8f885h1.js:58477-58567 placement
 /**
  * 钩子以 .catch 兜底的失败说明
  */
 function failedClosedText(name, error, event) {
   return `hook failed closed: ${name}: ${errorSummary(error)} (${event}; its .catch answered)`;
 }
-//@ chunk-4121qate.js:77965-78027 placement
+//@ chunk-j8f885h1.js:58567-58629 placement
 /**
  * 钩子失败说明
  */
 function hookFailedText(name, error, site) {
   return `hook failed: ${name}: ${errorSummary(error)} (${site})`;
 }
-//@ chunk-4121qate.js:78027-78089 placement
+//@ chunk-j8f885h1.js:58629-58691 placement
 /**
  * 加钩子名前缀
  */
 var withHookPrefix = (handler, text) =>
   text.startsWith(`${handler.name}: `) ? text : `${handler.name}: ${text}`;
-//@ chunk-4121qate.js:78089-78158 placement
+//@ chunk-j8f885h1.js:58691-58760 placement
 /**
  * 中断导致未执行
  */
 var INTERRUPTED_LEFT_OUT = "left out; the call was interrupted, so the dispatch rejects";
-//@ chunk-4121qate.js:78158-78291 placement
+//@ chunk-j8f885h1.js:58760-58893 placement
 /**
  * 钩子已结算后再调用 next() 时记警告并返回错误。
  */
@@ -261,29 +261,29 @@ function nextAfterSettledError(name) {
   matcherLog().log(`hooks module ${name}: next() after it settled; refused`, "warn");
   return new HooksError(`${name}: next() after it settled`);
 }
-//@ chunk-4121qate.js:78291-78371 placement
+//@ chunk-j8f885h1.js:58893-58973 placement
 /**
  * 中途离开流
  */
 var LEFT_MID_STREAM = "left mid-stream; what it yielded stands, the rest came from beneath it";
-//@ chunk-4121qate.js:78371-78428 placement
+//@ chunk-j8f885h1.js:58973-59030 placement
 /**
  * 结果被扣留
  */
 var RESULT_WITHHELD = "what ran beneath it stands; its result withheld";
-//@ chunk-4121qate.js:79046-79171 placement
+//@ chunk-j8f885h1.js:59647-59772 placement
 function errorNamePrefix(error) {
   let isHooksError = error instanceof HooksError;
   let isError = !isHooksError && error instanceof Error;
   let name = isHooksError ? error.thrownName : isError ? error.name : undefined;
   return name === undefined ? "" : `${name}: `;
 }
-//@ chunk-4121qate.js:79171-79214 placement
+//@ chunk-j8f885h1.js:59772-59815 placement
 /**
  * 清洗后的错误文本
  */
 var scrubErrorText = (error) => scrubLine(`${attempt(error, errorNamePrefix) ?? ""}${errorTextOf(error)}`);
-//@ chunk-4121qate.js:79214-79698 placement
+//@ chunk-j8f885h1.js:59815-60299 placement
 function describeHookOverrun(error, cause) {
   let { expiredMs, lingeredMs, shape, refusedSubject, caught } = cause;
   let secondExpiredMs = caught === undefined ? "" : `; ${caught}`;
@@ -320,7 +320,7 @@ function describeHookOverrun(error, cause) {
         ...secondLingeredMs,
       };
 }
-//@ chunk-4121qate.js:79698-80101 placement
+//@ chunk-j8f885h1.js:60299-60702 placement
 /**
  * 记录钩子处理器失败（日志 + hookFailed 事件，含效果分类）；返回带插件名的原因文本。
  */
@@ -357,25 +357,25 @@ function reportHandlerFailure({ error, handler, site, effect, cause }) {
   }
   return text;
 }
-//@ chunk-4121qate.js:80101-80132 placement
+//@ chunk-j8f885h1.js:60702-60733 placement
 /**
  * 其答案仍生效
  */
 var unappliedAnswerStands; // deferred: uses createUnappliedReporter (./valueSizing.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:80101", () => {
+deferInit("chunk-j8f885h1.js:60702", () => {
   unappliedAnswerStands = createUnappliedReporter("its answer stands");
 });
-//@ chunk-4121qate.js:80132-80184 placement
+//@ chunk-j8f885h1.js:60733-60785 placement
 /**
  * 跳过，下层代替
  */
 var SKIPPED_BELOW_RAN = "skipped; what is below it ran in its place";
-//@ chunk-4121qate.js:80184-80238 placement
+//@ chunk-j8f885h1.js:60785-60839 placement
 /**
  * 跳过，用最后一次 next 结果
  */
 var SKIPPED_LAST_NEXT = "skipped; its last next() run's result stands";
-//@ chunk-4121qate.js:80238-80606 placement
+//@ chunk-j8f885h1.js:60839-61207 placement
 /**
  * 钩子超出预算后仍在运行一段时间则记录"失控"错误与事件。
  */
@@ -402,7 +402,7 @@ function watchOverrun(budget, handler, site) {
     });
   }, lingerMs).unref?.();
 }
-//@ chunk-4121qate.js:80606-80649 placement
+//@ chunk-j8f885h1.js:61207-61250 placement
 /**
  * 空的链节点状态
  */
@@ -410,14 +410,14 @@ var emptyEntryState = () => ({
   entry: undefined,
   beneath: undefined,
 });
-//@ chunk-4121qate.js:80649-80691 placement
+//@ chunk-j8f885h1.js:61250-61292 placement
 /**
  * 冻结链节点
  */
 function freezeEntry(run, entry) {
   run.entry = Object.freeze(entry);
 }
-//@ chunk-4121qate.js:80691-80780 placement
+//@ chunk-j8f885h1.js:61292-61381 placement
 /**
  * 取错误与是否调用过
  */
@@ -429,24 +429,24 @@ function pickErrorState(state) {
     called: state.called === true,
   };
 }
-//@ chunk-4121qate.js:80780-80797 placement
+//@ chunk-j8f885h1.js:61381-61398 placement
 var CLIENT = "client";
-//@ chunk-4121qate.js:80797-80823 placement
+//@ chunk-j8f885h1.js:61398-61424 placement
 var EMPTY_TRACE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4121qate.js:80797", () => {
+deferInit("chunk-j8f885h1.js:61398", () => {
   EMPTY_TRACE = Object.freeze([]);
 });
-//@ chunk-4121qate.js:80823-80840 placement
+//@ chunk-j8f885h1.js:61424-61441 placement
 var ENGINE = "engine";
-//@ chunk-4121qate.js:80840-80888 placement
+//@ chunk-j8f885h1.js:61441-61489 placement
 var ENGINE_ORIGIN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4121qate.js:80840", () => {
+deferInit("chunk-j8f885h1.js:61441", () => {
   ENGINE_ORIGIN = Object.freeze({
     plugin: ENGINE,
     tier: "core",
   });
 });
-//@ chunk-4121qate.js:80888-81042 placement
+//@ chunk-j8f885h1.js:61489-61643 placement
 /**
  * 冻结 $ 接口对象：函数成员与对象本身的原型置为 null 后 Object.freeze。被函数钩子各处广泛使用。
  */
@@ -456,7 +456,7 @@ function freezeApiObject(object) {
   Object.setPrototypeOf(object, null);
   return Object.freeze(object);
 }
-//@ chunk-4121qate.js:81042-81096 placement
+//@ chunk-j8f885h1.js:61643-61697 placement
 /**
  * 原型为 null 的函数
  */
@@ -464,20 +464,20 @@ function nullPrototypeFunction(fn) {
   Object.setPrototypeOf(fn, null);
   return fn;
 }
-//@ chunk-4121qate.js:81096-81127 placement
+//@ chunk-j8f885h1.js:61697-61728 placement
 /**
  * 生成事件匹配器
  */
 var eventPatternMatcher = (event) => nullPrototypeFunction((args, ctx) => matchesEventPattern(args, event));
-//@ chunk-4121qate.js:81127-81193 placement
+//@ chunk-j8f885h1.js:61728-61794 placement
 var UNLIMITED_BUDGET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4121qate.js:81127", () => {
+deferInit("chunk-j8f885h1.js:61728", () => {
   UNLIMITED_BUDGET = Object.freeze({
     ms: 0,
     remainingMs: Number.POSITIVE_INFINITY,
   });
 });
-//@ chunk-4121qate.js:81193-81526 placement (2.1.88 match: CONSOLE_STDERR_METHODS, 0.333)
+//@ chunk-j8f885h1.js:61794-62127 placement (2.1.88 match: CONSOLE_STDERR_METHODS, 0.333)
 function freezeHookCall(options) {
   let { call, signal, event, origin } = options;
   let fn = nullPrototypeFunction(call);
@@ -497,19 +497,19 @@ function freezeHookCall(options) {
   });
   return Object.freeze(fn);
 }
-//@ chunk-4121qate.js:81526-81546 placement
+//@ chunk-j8f885h1.js:62127-62147 placement
 var makeHookCall = (options) => freezeHookCall(options);
-//@ chunk-4121qate.js:81546-81576 placement
+//@ chunk-j8f885h1.js:62147-62177 placement
 /**
  * 转发 next
  */
 var forwardNext = (value, hookCall, rest) => hookCall.to(value, ...rest);
-//@ chunk-4121qate.js:81576-81606 placement
+//@ chunk-j8f885h1.js:62177-62207 placement
 /**
  * 带参数调用 next
  */
 var callNextWith = (value, hookCall, rest) => hookCall.to(value, ...rest);
-//@ chunk-4121qate.js:81606-81729 placement
+//@ chunk-j8f885h1.js:62207-62330 placement
 /**
  * 从 hook call 中复制上下文字段（signal、is、event、origin、trace、budget、caught）。
  */
@@ -522,7 +522,7 @@ var hookCallContext = (hookCall) => ({
   budget: () => hookCall.budget,
   caught: pickErrorState(hookCall),
 });
-//@ chunk-4121qate.js:81729-81865 placement
+//@ chunk-j8f885h1.js:62330-62466 placement
 /**
  * 沿 beneath 链收集运行轨迹条目，冻结返回。
  */
@@ -532,7 +532,7 @@ function traceOfRun(beneath) {
     if (run.entry !== undefined) entries.push(run.entry);
   return entries.length === 0 ? EMPTY_TRACE : Object.freeze(entries);
 }
-//@ chunk-4121qate.js:81865-82126 placement
+//@ chunk-j8f885h1.js:62466-62727 placement
 var createBottomStep =
   ({ bottom, index, event }) =>
   async (e, ctx, { run, floors }) => {
@@ -556,7 +556,7 @@ var createBottomStep =
       });
     }
   };
-//@ chunk-4121qate.js:82126-82327 placement (2.1.88 match: createCapacityWake, 0.799)
+//@ chunk-j8f885h1.js:62727-62928 placement (2.1.88 match: createCapacityWake, 0.798)
 /**
  * 把源 AbortSignal 的中止转发到目标 controller，返回解除函数。
  */
@@ -572,7 +572,7 @@ function forwardAbort(sourceSignal, targetController) {
   });
   return () => sourceSignal.removeEventListener("abort", abort);
 }
-//@ chunk-4121qate.js:82327-83248 placement
+//@ chunk-j8f885h1.js:62928-63849 placement
 /**
  * 插件调用链里"向下调用"助手（runBelow/call/to/replay），带预算暂停与中止转发。与 bridge 无关。
  */
@@ -665,12 +665,12 @@ function createBelowCaller({ handler, below, site, e, budget, downstreamSignal, 
       ),
   };
 }
-//@ chunk-4121qate.js:83248-83320 placement
+//@ chunk-j8f885h1.js:63849-63921 placement
 /**
  * 无实现的拒绝
  */
 var missingImplementation = (site) => Promise.reject(new HooksError(`no implementation for ${site.event}`));
-//@ chunk-4121qate.js:83320-83375 placement
+//@ chunk-j8f885h1.js:63921-63976 placement
 /**
  * 转发中止
  */
@@ -678,14 +678,14 @@ var forwardAbortWith = (signal, abortController) =>
   forwardAbort(signal, {
     abort: (reason) => abortController.abort(attempt(reason, unwrapPlainDataError) ?? reason),
   });
-//@ chunk-4121qate.js:83375-83723 layout
+//@ chunk-j8f885h1.js:63976-64324 layout
 /**
  * 把同一跳的多个插件处理器合并为一个链节点（名字相连、层级与插件列表）。
  */
 var createHopHandler = (handler, members) => ({
   name: members.map((handler) => handler.name).join("+"),
   tier: members[0]?.tier,
-  tiers: uniq(members.map(handlerTier)),
+  tiers: normalizeCaseForComparison_2(members.map(handlerTier)),
   plugins: members.map((tier) => tier.name),
   ...(members.at(-1)?.answersForEngine && {
     answersForEngine: true,
@@ -706,7 +706,7 @@ var createHopHandler = (handler, members) => ({
       cutAt,
     }),
 });
-//@ chunk-4121qate.js:83723-83906 placement (2.1.88 match: generateUniqueTeammateName, 0.611)
+//@ chunk-j8f885h1.js:64324-64507 placement
 var groupByHop = (handlers) =>
   handlers.reduce((acc, handler) => {
     let last = acc.at(-1);
@@ -726,7 +726,7 @@ var groupByHop = (handlers) =>
           },
         ];
   }, []);
-//@ chunk-4121qate.js:83906-84042 layout
+//@ chunk-j8f885h1.js:64507-64643 layout
 /**
  * 把插件钩子成员列表按 hop 合并成执行阶段（切分误归 spawnMultiAgent）。
  */
@@ -741,28 +741,28 @@ var groupIntoHops = (handlers, isUnfolded = false) =>
     let hop = group.hop;
     return hop === undefined ? group.members[0] : createHopHandler(hop, group.members);
   });
-//@ chunk-4121qate.js:84042-84053 placement
+//@ chunk-j8f885h1.js:64643-64654 placement
 /**
  * 10000
  */
 var SLOW_HOOK_REPORT_INTERVAL_MS = 1e4;
-//@ chunk-4121qate.js:84053-84065 placement
+//@ chunk-j8f885h1.js:64654-64666 placement
 /**
  * 慢钩子上报表
  */
 var slowHookReports; // deferred: uses createSlowHookReportMap (./slowHookReports.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:84053", () => {
+deferInit("chunk-j8f885h1.js:64654", () => {
   slowHookReports = createSlowHookReportMap();
 });
-//@ chunk-4121qate.js:84065-84078 placement
+//@ chunk-j8f885h1.js:64666-64679 placement
 /**
  * 钩子作用域存储
  */
 var hookScopeStore; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4121qate.js:84065", () => {
+deferInit("chunk-j8f885h1.js:64666", () => {
   hookScopeStore = subscribe();
 });
-//@ chunk-4121qate.js:84078-84217 placement
+//@ chunk-j8f885h1.js:64679-64818 placement
 function recordPassedBy(passedBy) {
   try {
     hookScopeStore.get()?.(passedBy);
@@ -773,7 +773,7 @@ function recordPassedBy(passedBy) {
     );
   }
 }
-//@ chunk-4121qate.js:84217-84356 placement
+//@ chunk-j8f885h1.js:64818-64957 placement
 function flushBypassCount(key, message, req) {
   let count = slowHookReports.get(key)?.count ?? 0;
   slowHookReports.delete(key);
@@ -787,12 +787,12 @@ function flushBypassCount(key, message, req) {
     });
   }
 }
-//@ chunk-4121qate.js:84356-84368 placement
+//@ chunk-j8f885h1.js:64957-64969 placement
 /**
  * 跳过提示（skipped）跟踪表最多保留 256 个键，超过后不再新增条目，避免长会话里无限增长。
  */
 var MAX_TRACKED_SKIP_KEYS = 256;
-//@ chunk-4121qate.js:84368-84623 placement
+//@ chunk-j8f885h1.js:64969-65224 placement
 /**
  * 记录被跳过的插件钩子（按事件/插件/原因计数，有上限），返回首次出现的插件列表。
  */
@@ -815,15 +815,15 @@ function recordSkipNotices(seen, notice) {
   }
   return fresh;
 }
-//@ chunk-4121qate.js:84623-84636 placement
+//@ chunk-j8f885h1.js:65224-65237 placement
 /**
  * 跳过钩子的上报器
  */
 var skippedHookReporter; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4121qate.js:84623", () => {
+deferInit("chunk-j8f885h1.js:65224", () => {
   skippedHookReporter = subscribe();
 });
-//@ chunk-4121qate.js:84636-84695 placement
+//@ chunk-j8f885h1.js:65237-65296 placement
 /**
  * 取跳过报告
  */
@@ -834,7 +834,7 @@ function skippedHookReport() {
     return "";
   }
 }
-//@ chunk-4121qate.js:84695-84976 placement
+//@ chunk-j8f885h1.js:65296-65577 placement
 function noteBypass(bypass) {
   let { link, tier, event, by, session } = bypass;
   let key = `${session} ${event} ${link} ${by}`;
@@ -853,7 +853,7 @@ function noteBypass(bypass) {
     timer,
   });
 }
-//@ chunk-4121qate.js:84976-85491 placement
+//@ chunk-j8f885h1.js:65577-66092 placement
 /**
  * 若该层已被更高层的 next.to 越过，记录"被绕过"并返回新的下降状态，否则 undefined。
  */
@@ -892,7 +892,7 @@ function maybeBypassHandler({ handler, tier, index, site, e, descent }) {
     floors,
   };
 }
-//@ chunk-4121qate.js:85491-85542 placement
+//@ chunk-j8f885h1.js:66092-66143 placement
 /**
  * 未冻结则冻结
  */
@@ -900,7 +900,7 @@ function freezeUnlessFrozen(value) {
   if (!isUntrustedObject(value)) Object.freeze(value);
   return value;
 }
-//@ chunk-4121qate.js:85542-85741 placement
+//@ chunk-j8f885h1.js:66143-66342 placement
 var createChainHookCall = ({ call, to, signal, event, origin, run, budget, caught }) =>
   freezeHookCall({
     call,
@@ -913,7 +913,7 @@ var createChainHookCall = ({ call, to, signal, event, origin, run, budget, caugh
     budget: () => budget.reading(),
     caught,
   });
-//@ chunk-4121qate.js:85741-85864 placement
+//@ chunk-j8f885h1.js:66342-66465 placement
 var createChainState = () => ({
   pendingDownstream: 0,
   settled: false,
@@ -923,7 +923,7 @@ var createChainState = () => ({
   beneathMs: 0,
   beneathSince: 0,
 });
-//@ chunk-4121qate.js:85864-86080 placement
+//@ chunk-j8f885h1.js:66465-66681 placement
 /**
  * 为被中止的钩子调用生成 AbortError：优先使用现成的中止错误，否则包装中止原因（遥测里不带插件细节）。
  */
@@ -941,7 +941,7 @@ function abortErrorFor(signal, error) {
     new AbortError(NO_TEXT_VALUE)
   );
 }
-//@ chunk-4121qate.js:86080-86388 placement
+//@ chunk-j8f885h1.js:66681-66989 placement
 /**
  * 应用站点的 keptResult 规则：结果被部分保留时记录原因，出错时写入插件日志。
  */
@@ -965,20 +965,20 @@ function applyKeptResult({ handler, site, e, fromBelow }, answer) {
   }
   return kept;
 }
-//@ chunk-4121qate.js:86388-86452 placement
+//@ chunk-j8f885h1.js:66989-67053 placement
 /**
  * .catch 返回值说明
  */
 function catchReturnedText(problem, problem_2) {
   return problem_2 !== undefined ? `its .catch returned ${problem_2}` : problem;
 }
-//@ chunk-4121qate.js:86452-86561 placement
+//@ chunk-j8f885h1.js:67053-67162 placement
 function catchFailureText({ kind, error, rejection }) {
   let isThrow = kind === "throw";
   let rejectionText = rejection === undefined ? undefined : errorTextOf(rejection.error);
   return isThrow ? errorTextOf(error) : rejectionText;
 }
-//@ chunk-4121qate.js:86561-87600 placement
+//@ chunk-j8f885h1.js:67162-68201 placement
 async function runHookCatch({ handler, e, signal, state, handle, site, origin, run, cutAt, kind, error }) {
   let catchHook = handler.catch;
   if (catchHook === undefined)
@@ -1052,7 +1052,7 @@ async function runHookCatch({ handler, e, signal, state, handle, site, origin, r
     offAbort();
   }
 }
-//@ chunk-4121qate.js:87600-91403 placement
+//@ chunk-j8f885h1.js:68201-72010 placement
 /**
  * 按层运行函数钩子链：next() 传递、拒绝向上传递、超时告警
  */
@@ -1325,7 +1325,7 @@ var runHookChain =
     }
     return value;
   };
-//@ chunk-4121qate.js:91403-91578 placement
+//@ chunk-j8f885h1.js:72010-72185 placement
 /**
  * 记录钩子链各步的输入与产出：keep 追加，of/last/all/ran 查询。
  */
@@ -1343,25 +1343,25 @@ function createStepRecorder() {
     ran: () => entries.length > 0,
   };
 }
-//@ chunk-4121qate.js:91578-91614 placement
+//@ chunk-j8f885h1.js:72185-72221 placement
 /**
  * 当前分发槽
  */
 var currentDispatchSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4121qate.js:91578", () => {
+deferInit("chunk-j8f885h1.js:72185", () => {
   currentDispatchSlot = identity(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-4121qate.js:91614-91636 placement
+//@ chunk-j8f885h1.js:72221-72243 placement
 /**
  * 取当前分发
  */
 var currentDispatch = () => currentDispatchSlot.get();
-//@ chunk-4121qate.js:91636-91663 placement
+//@ chunk-j8f885h1.js:72243-72270 placement
 /**
  * 是否有当前分发
  */
 var hasCurrentDispatch = () => currentDispatch() !== undefined;
-//@ chunk-4121qate.js:91663-92357 placement
+//@ chunk-j8f885h1.js:72270-72964 placement
 async function reportChainFailure({
   e: eventInput,
   handlers,
@@ -1415,60 +1415,60 @@ async function reportChainFailure({
     .finally(offAbort);
 }
 export {
-  ENGINE,
-  nullPrototypeFunction,
+  attempt,
+  isAbortOf,
   freezeApiObject,
+  nullPrototypeFunction,
   reportChainFailure,
+  forwardAbort,
+  pluginTier,
+  ENGINE_ORIGIN,
+  hasCurrentDispatch,
+  createWithheldElementWarner,
+  NO_FLOORS,
   createStepRecorder,
-  missingImplementation,
-  currentDispatchSlot,
+  ENGINE,
+  currentDispatch,
   nextToLabel,
+  EMPTY_TRACE,
+  skippedHookReporter,
+  hookScopeStore,
+  recordSkipNotices,
+  MAX_TRACKED_SKIP_KEYS,
+  handlerTier,
+  FAILED_CLOSED,
+  CLIENT,
   freezeHookCall,
   callNextWith,
   pickErrorState,
   makeHookCall,
   hookCallContext,
   forwardNext,
-  NO_FLOORS,
+  missingImplementation,
+  currentDispatchSlot,
   isCoreOrManaged,
   UNLIMITED_BUDGET,
-  forwardAbort,
   errorTextOf,
   nextAfterSettledError,
-  handlerTier,
   maybeBypassHandler,
   freezeUnlessFrozen,
   emptyEntryState,
   resolveNextTier,
   eventPatternMatcher,
   traceOfRun,
-  isAbortOf,
   abortErrorFor,
   scrubErrorText,
   withHookPrefix,
   watchOverrun,
   failedClosedText,
-  FAILED_CLOSED,
-  attempt,
   INTERRUPTED_LEFT_OUT,
   SKIPPED_LAST_NEXT,
   LEFT_MID_STREAM,
   SKIPPED_BELOW_RAN,
   reportHandlerFailure,
   freezeEntry,
-  ENGINE_ORIGIN,
   forwardAbortWith,
   errorSummary,
   uiElementKey,
-  createWithheldElementWarner,
-  hasCurrentDispatch,
-  pluginTier,
-  currentDispatch,
-  EMPTY_TRACE,
-  skippedHookReporter,
-  hookScopeStore,
-  recordSkipNotices,
-  MAX_TRACKED_SKIP_KEYS,
-  CLIENT,
   appendNextToStep,
 };

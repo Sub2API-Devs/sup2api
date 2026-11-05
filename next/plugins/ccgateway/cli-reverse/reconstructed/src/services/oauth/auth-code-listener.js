@@ -3,9 +3,9 @@
  *
  * OAuth 本地回调服务器：在 127.0.0.1 随机端口监听 /callback，校验 state、取授权码并重定向到成功页。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/oauth/auth-code-listener.ts
- * pieces: chunk-b8krr1px.js (9)
+ * pieces: chunk-ehpqy72x.js (9)
  * attribution: affinity 1, fingerprint 1, layout 1, placement 6
  */
 import { createServer } from "http";
@@ -24,17 +24,17 @@ import { logError } from "../../utils/log.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-b8krr1px.js:661-671 affinity
+//@ chunk-ehpqy72x.js:660-670 affinity
 /**
  * 回显文本的最大字符数（200）。
  */
 var MAX_ECHOED_TEXT_CHARS = 200;
-//@ chunk-b8krr1px.js:671-4544 fingerprint (2.1.88 match: AuthCodeListener, 0.723)
+//@ chunk-ehpqy72x.js:670-4543 fingerprint (2.1.88 match: AuthCodeListener, 0.723)
 /**
  * 本地 OAuth 回调服务器：http.createServer 监听 127.0.0.1 随机端口的 /callback，校验 state 后取 code，并重定向到成功页。
  */
 let AuthCodeListener; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-b8krr1px.js:671", () => {
+deferInit("chunk-ehpqy72x.js:670", () => {
   AuthCodeListener = class AuthCodeListener {
     localServer;
     port = 0;
@@ -223,14 +223,14 @@ deferInit("chunk-b8krr1px.js:671", () => {
     }
   };
 });
-//@ chunk-b8krr1px.js:4544-4622 layout
+//@ chunk-ehpqy72x.js:4543-4620 layout
 /**
  * 清洗要回显的文本（去控制字符并截断）。
  */
 function sanitizeEchoedText(text) {
   return truncateToLength(text.replace(/[\p{Cc}\p{Cf}\p{Cs}\u2028\u2029]/gu, ""), MAX_ECHOED_TEXT_CHARS);
 }
-//@ chunk-b8krr1px.js:4622-4844 placement
+//@ chunk-ehpqy72x.js:4620-4842 placement
 class AuthCodeRefusedError extends Error {
   constructor() {
     super(
@@ -239,25 +239,25 @@ class AuthCodeRefusedError extends Error {
     this.name = "AuthCodeRefusedError";
   }
 }
-//@ chunk-b8krr1px.js:4897-4998 placement (2.1.88 match: base64URLEncode, 1)
+//@ chunk-ehpqy72x.js:4895-4996 placement (2.1.88 match: base64URLEncode, 1)
 function base64URLEncode(buffer) {
   return buffer.toString("base64").replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
-//@ chunk-b8krr1px.js:4998-5027 placement
+//@ chunk-ehpqy72x.js:4996-5025 placement
 /**
  * PKCE code verifier：32 字节随机数 base64url。
  */
 function generateCodeVerifier() {
   return base64URLEncode(randomBytes(32));
 }
-//@ chunk-b8krr1px.js:5092-5121 placement
+//@ chunk-ehpqy72x.js:5090-5119 placement
 /**
  * 生成随机 state（32 字节 base64url）。
  */
 function generateState() {
   return base64URLEncode(randomBytes(32));
 }
-//@ chunk-b8krr1px.js:5121-5305 placement
+//@ chunk-ehpqy72x.js:5119-5303 placement
 class CallbackListenerUnavailableError extends Error {
   constructor(cause) {
     super("Couldn't start the local listener that receives the browser sign-in. Try again.", {
@@ -266,7 +266,7 @@ class CallbackListenerUnavailableError extends Error {
     this.name = "CallbackListenerUnavailableError";
   }
 }
-//@ chunk-b8krr1px.js:5305-5448 placement
+//@ chunk-ehpqy72x.js:5303-5446 placement
 /**
  * 手动粘贴登录代码的提示文字。
  */
@@ -274,9 +274,9 @@ var MANUAL_CODE_HINT =
   "The browser can't return the sign-in to Claude Code automatically. After you sign in, paste the code shown.";
 var PASTE_CODE_PROMPT = "Paste code here > ";
 export {
+  AuthCodeRefusedError,
   MANUAL_CODE_HINT,
   PASTE_CODE_PROMPT,
-  AuthCodeRefusedError,
   CallbackListenerUnavailableError,
   base64URLEncode,
   generateCodeVerifier,

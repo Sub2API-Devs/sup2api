@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：退出时的反馈提示与告别语
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xs5f70ym.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9qywfjq2.js (6)
  * attribution: placement 6
  */
 import { init_react_production, useState, useRef } from "../../vendor/react/cjs/react.production.js";
@@ -36,11 +36,11 @@ import { getSessionId } from "../bootstrap/state.js";
 import { ExitFlow } from "./ExitFlow.js";
 import { submittedMessages, isMidTurnStreaming } from "../utils/promptSubmissionOrigin.js";
 
-//@ chunk-xs5f70ym.js:16739-16743 placement
+//@ chunk-9qywfjq2.js:18027-18031 placement
 init_react_production();
-//@ chunk-xs5f70ym.js:16743-16757 placement
+//@ chunk-9qywfjq2.js:18031-18045 placement
 function noopExitNudge() {}
-//@ chunk-xs5f70ym.js:16757-18245 placement
+//@ chunk-9qywfjq2.js:18045-19533 placement
 function ExitFeedbackNudge(props) {
   let $ = useMemoCache(26);
   let { sessionDrafts, messages, renderExitFlow, onExit } = props;
@@ -177,13 +177,13 @@ function ExitFeedbackNudge(props) {
   } else nudgeElement = $[25];
   return nudgeElement;
 }
-//@ chunk-xs5f70ym.js:18245-18301 placement (2.1.88 match: GOODBYE_MESSAGES, 1)
+//@ chunk-9qywfjq2.js:19533-19589 placement (2.1.88 match: GOODBYE_MESSAGES, 1)
 var GOODBYE_MESSAGES = ["Goodbye!", "See ya!", "Bye!", "Catch you later!"];
-//@ chunk-xs5f70ym.js:18301-18340 placement (2.1.88 match: getRandomGoodbyeMessage, 1)
+//@ chunk-9qywfjq2.js:19589-19628 placement (2.1.88 match: getRandomGoodbyeMessage, 1)
 function getRandomGoodbyeMessage() {
   return sampleAlias(GOODBYE_MESSAGES) ?? "Goodbye!";
 }
-//@ chunk-xs5f70ym.js:18340-19111 placement
+//@ chunk-9qywfjq2.js:19628-20399 placement
 /**
  * /exit 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

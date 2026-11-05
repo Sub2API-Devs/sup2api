@@ -1,8 +1,8 @@
 /**
  * execa/lib/stream.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: execa@8.0.1
- * pieces: chunk-m4p5zn6n.js (1)
+ * pieces: chunk-t889g22j.js (1)
  * attribution: esm-layout 1
  */
 import { readFileSync, createReadStream } from "fs";
@@ -13,7 +13,7 @@ import { isStream } from "./pipe.js";
 import { getStreamContentsImpl } from "../../get-stream/source/string.js";
 import { getStreamAsBuffer_2 } from "../../get-stream/source/buffer.js";
 
-//@ chunk-m4p5zn6n.js:24564-25888 esm-layout
+//@ chunk-t889g22j.js:24563-25887 esm-layout
 var mergeStream = __toESM(mergeStreamModule(), 1);
 var validateInputOptions = (input) => {
   if (input !== undefined) throw TypeError("The `input` and `inputFile` options cannot be both set.");

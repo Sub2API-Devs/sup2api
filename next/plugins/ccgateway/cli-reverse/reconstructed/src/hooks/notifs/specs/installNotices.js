@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。启动通知：安装类。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: placement 4
  */
 import { logFeatureOk } from "../../../services/analytics/featureTelemetry.js";
@@ -25,7 +25,7 @@ import { logSetupIssues } from "../../../utils/notifications/setupIssues.js";
 import { logError } from "../../../utils/log.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1749887-1750354 placement
+//@ chunk-czq1j3j2.js:1796908-1797375 placement
 var NO_PERMISSIONS = "no_permissions";
 var sudoNpmInstallNoticeSpec = {
   id: "sudo-npm-install",
@@ -57,7 +57,7 @@ var sudoNpmInstallNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1750354-1751044 placement
+//@ chunk-czq1j3j2.js:1797375-1798065 placement
 /**
  * 安装相关启动通知规格的列表（本构建中多个规格为 null），含 OAuth 过期警告、署名提示、子代理配置警告与市场插件推荐等。
  */
@@ -70,7 +70,7 @@ var INSTALL_NOTICE_SPEC_F;
 var INSTALL_NOTICE_SPEC_G;
 var attributionProjectNoticeSpec;
 var COMPUTED_NOTICE_SPECS;
-deferInit("chunk-18hwfzwa.js:1750354", () => {
+deferInit("chunk-czq1j3j2.js:1797375", () => {
   INSTALL_NOTICE_SPEC_A = null;
   INSTALL_NOTICE_SPEC_B = null;
   INSTALL_NOTICE_SPEC_C = null;
@@ -126,12 +126,12 @@ deferInit("chunk-18hwfzwa.js:1750354", () => {
     },
   ];
 });
-//@ chunk-18hwfzwa.js:1762535-1762579 placement
+//@ chunk-czq1j3j2.js:1809796-1809840 placement
 var installIssuesNoticeSpec = {
   id: "install-issues",
   setup: () => runInstallCheck,
 };
-//@ chunk-18hwfzwa.js:1762579-1762777 placement
+//@ chunk-czq1j3j2.js:1809840-1810038 placement
 function runInstallCheck() {
   if (getIsRemoteMode()) return;
   checkInstall()

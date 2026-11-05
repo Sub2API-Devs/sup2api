@@ -3,12 +3,12 @@
  *
  * TaskCreate 工具：创建任务列表条目（含输入纠错与 TaskCreated 钩子）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TaskCreateTool/TaskCreateTool.ts
- * pieces: chunk-e6aww6q8.js (1), chunk-kxyd0g16.js (1)
+ * pieces: chunk-5xgkngpb.js (1), chunk-fmnbrxwy.js (1)
  * attribution: fingerprint 2
  */
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import {
   isTodoListInput,
   isSubagentTaskInput,
@@ -33,13 +33,13 @@ import { StreamClosedAbortError } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1778329-1778957 fingerprint (2.1.88 match: outputSchema, 0.334)
+//@ chunk-5xgkngpb.js:1855299-1855927 fingerprint (2.1.88 match: outputSchema, 0.334)
 /**
  * TaskCreate 校验失败时的纠正提示：一次只建一个任务；误用 Agent 参数（prompt/subagent_type）时提示改用 Agent。
  */
 function getTaskCreateValidationSteer(rawInput) {
-  if (!isPlainObject_5(rawInput)) return null;
-  let task = isPlainObject_5(rawInput.task) ? rawInput.task : null;
+  if (!isPlainObject_6(rawInput)) return null;
+  let task = isPlainObject_6(rawInput.task) ? rawInput.task : null;
   if (isTodoListInput(rawInput) || (task !== null && isTodoListInput(task)))
     return "TaskCreate creates ONE task per call and has no `tasks` or `todos` parameter. Call TaskCreate once per task, passing `subject` (a brief title) and `description` (what needs to be done) as top-level string parameters.";
   if (
@@ -49,14 +49,14 @@ function getTaskCreateValidationSteer(rawInput) {
     return "This call used Agent-tool parameters (`prompt`/`subagent_type`). TaskCreate adds an item to the task list and takes `subject` and `description` string parameters. To delegate work to a subagent, use the Agent tool instead.";
   return null;
 }
-//@ chunk-kxyd0g16.js:140086-141693 fingerprint (2.1.88 match: TaskCreateTool, 0.715)
+//@ chunk-fmnbrxwy.js:154813-156690 fingerprint (2.1.88 match: TaskCreateTool, 0.699)
 /**
  * TaskCreate 工具（shouldDefer，isEnabled=任务工具启用且 todo 类工具可用）：在当前任务列表创建一条 pending 任务，运行 TaskCreated 钩子，钩子阻塞时删除刚建任务并报错；结果 "Task #id created successfully: subject"。isConcurrencySafe=false。
  */
 var taskCreateInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var taskCreateOutputSchema;
 var TaskCreateTool;
-deferInit("chunk-kxyd0g16.js:140086", () => {
+deferInit("chunk-fmnbrxwy.js:154813", () => {
   taskCreateInputSchema = DoctorLazy(() =>
     zodStrictObject({
       subject: stringSchema().describe("A brief title for the task"),
@@ -74,6 +74,12 @@ deferInit("chunk-kxyd0g16.js:140086", () => {
       task: objectSchema({
         id: stringSchema(),
         subject: stringSchema(),
+        description: stringSchema()
+          .optional()
+          .catch(undefined)
+          .describe(
+            "The task's description as saved. It can differ from the tool_use input if Claude Code corrects a malformed call or a PreToolUse hook changes the input. Absent in results from older Claude Code versions.",
+          ),
       }),
     }),
   );
@@ -163,6 +169,7 @@ deferInit("chunk-kxyd0g16.js:140086", () => {
               task: {
                 id: taskId,
                 subject,
+                description,
               },
             },
           };

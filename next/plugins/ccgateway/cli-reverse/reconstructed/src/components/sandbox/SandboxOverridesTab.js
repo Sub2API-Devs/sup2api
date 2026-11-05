@@ -3,9 +3,9 @@
  *
  * /sandbox 覆盖设置：允许非沙箱回退 / 严格模式。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/sandbox/SandboxOverridesTab.tsx
- * pieces: chunk-55w3ydvj.js (2)
+ * pieces: chunk-y07105e8.js (2)
  * attribution: fingerprint 2
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -23,7 +23,7 @@ import { sandboxSettingsErrorText } from "./WindowsSandboxStatus.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 import { LearnMoreLink } from "../LearnMoreLink.js";
 
-//@ chunk-55w3ydvj.js:22234-23177 fingerprint (2.1.88 match: SandboxOverridesTab, 0.683)
+//@ chunk-y07105e8.js:23409-24352 fingerprint (2.1.88 match: SandboxOverridesTab, 0.683)
 function SandboxOverridesTab(props) {
   let $ = useMemoCache(5);
   let { onComplete } = props;
@@ -91,7 +91,7 @@ function SandboxOverridesTab(props) {
   } else t1 = $[4];
   return t1;
 }
-//@ chunk-55w3ydvj.js:23177-25340 fingerprint (2.1.88 match: OverridesSelect, 0.777)
+//@ chunk-y07105e8.js:24352-26515 fingerprint (2.1.88 match: OverridesSelect, 0.776)
 function OverridesSelect(props) {
   let $ = useMemoCache(24);
   let { onComplete, currentMode } = props;

@@ -3,15 +3,15 @@
  *
  * 图片/文档格式嗅探与 WebP 解析（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p8kytbnw.js (20)
- * attribution: placement 20
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jf14gxs3.js (21)
+ * attribution: placement 20, layout 1
  */
 import { sniffImageMediaType } from "../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-p8kytbnw.js:191-276 placement
+//@ chunk-jf14gxs3.js:191-276 placement
 /**
  * MIME 类型到文件扩展名的映射。
  */
@@ -21,13 +21,13 @@ var MIME_TO_EXTENSION = {
   "image/gif": "gif",
   "image/webp": "webp",
 };
-//@ chunk-p8kytbnw.js:688-845 placement
+//@ chunk-jf14gxs3.js:688-845 placement
 function sniffDocumentType(head) {
   if (head.subarray(0, 4).toString("latin1").toLowerCase() === "%pdf") return "pdf";
   if (head[0] === 80 && head[1] === 75 && head[2] === 3 && head[3] === 4) return "zip";
   return null;
 }
-//@ chunk-p8kytbnw.js:845-1486 placement
+//@ chunk-jf14gxs3.js:845-1486 placement
 function detectHtmlDocument(head) {
   let head_2 = head.subarray(0, 32);
   let replaced = head_2.toString("latin1").replace(/[^\x20-\x7e]/g, ".");
@@ -43,7 +43,7 @@ function detectHtmlDocument(head) {
   if (documentType === "zip") return "ZIP archive (Office documents such as .pptx/.docx/.xlsx are ZIPs)";
   return `unrecognized bytes (hex: ${head_2.subarray(0, 8).toString("hex").replace(/(..)/g, "$1 ").trim()})`;
 }
-//@ chunk-p8kytbnw.js:1617-2382 placement
+//@ chunk-jf14gxs3.js:1617-2382 placement
 function parseWebpHeader(bytes) {
   if (bytes.length < 10) return;
   if (bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71 && bytes.length >= 24)
@@ -95,7 +95,7 @@ function parseWebpHeader(bytes) {
   }
   return;
 }
-//@ chunk-p8kytbnw.js:2382-2707 placement
+//@ chunk-jf14gxs3.js:2460-2785 placement
 /**
  * 在 JPEG 数据中查找第一个 SOF 帧头的偏移（跳过填充与无长度标记）。
  */
@@ -131,7 +131,7 @@ function findJpegSofOffset(bytes) {
   }
   return;
 }
-//@ chunk-p8kytbnw.js:2707-2766 placement
+//@ chunk-jf14gxs3.js:2785-2844 placement
 /**
  * 取 JPEG SOF 段的分量数（用于判断是否支持透明度等）。
  */
@@ -139,18 +139,25 @@ function jpegSofComponentCount(bytes) {
   let jpegSofOffset = findJpegSofOffset(bytes);
   return jpegSofOffset === undefined ? undefined : bytes[jpegSofOffset + 9];
 }
-//@ chunk-p8kytbnw.js:2766-2817 placement
+//@ chunk-jf14gxs3.js:2844-2953 layout
+function buffer(bytes) {
+  let jpegSofOffset = findJpegSofOffset(bytes);
+  if (jpegSofOffset === undefined) return false;
+  let nextByte = bytes[jpegSofOffset + 1];
+  return (nextByte === 192 || nextByte === 193 || nextByte === 194) && bytes[jpegSofOffset + 4] === 8;
+}
+//@ chunk-jf14gxs3.js:2953-3004 placement
 var JPEG_BASE_SCAN_LIMIT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var JPEG_SCAN_PER_BYTE;
-var buffer;
+var buffer_2;
 var JPEG_MARKER_PER_BYTE;
-deferInit("chunk-p8kytbnw.js:2766", () => {
+deferInit("chunk-jf14gxs3.js:2953", () => {
   JPEG_BASE_SCAN_LIMIT = 1100000;
   JPEG_SCAN_PER_BYTE = 64;
-  buffer = Buffer.from([255, 218]);
+  buffer_2 = Buffer.from([255, 218]);
   JPEG_MARKER_PER_BYTE = 8192;
 });
-//@ chunk-p8kytbnw.js:2817-3322 placement
+//@ chunk-jf14gxs3.js:3004-3509 placement
 /**
  * 统计 JPEG 的扫描段数，超过上限或发现异常/不支持的标记时返回上限加一（用于识别解码代价过高的渐进式图片）。
  */
@@ -158,7 +165,7 @@ function countJpegScans(bytes, limit) {
   if (bytes.length < 4 || bytes[0] !== 255 || bytes[1] !== 216) return 0;
   let markerCap = limit + bytes.length / JPEG_MARKER_PER_BYTE;
   let markerCount = 0;
-  for (let index = bytes.indexOf(buffer); index !== -1; index = bytes.indexOf(buffer, index + 2))
+  for (let index = bytes.indexOf(buffer_2); index !== -1; index = bytes.indexOf(buffer_2, index + 2))
     if (++markerCount > markerCap) return limit + 1;
   let segmentCap = JPEG_BASE_SCAN_LIMIT + bytes.length / JPEG_SCAN_PER_BYTE;
   let scans = 0;
@@ -185,7 +192,7 @@ function countJpegScans(bytes, limit) {
   }
   return scans;
 }
-//@ chunk-p8kytbnw.js:3322-3519 placement
+//@ chunk-jf14gxs3.js:3509-3706 placement
 var PNG_IHDR; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PNG_PLTE;
 var PNG_TRNS;
@@ -196,7 +203,7 @@ var CRITICAL_PNG_CHUNKS;
 var KEPT_ANCILLARY_PNG_CHUNKS;
 var MAX_KEPT_CHUNK_BYTES;
 var MAX_PNG_CHUNKS;
-deferInit("chunk-p8kytbnw.js:3322", () => {
+deferInit("chunk-jf14gxs3.js:3509", () => {
   PNG_IHDR = 1229472850;
   PNG_PLTE = 1347179589;
   PNG_TRNS = 1951551059;
@@ -216,7 +223,7 @@ deferInit("chunk-p8kytbnw.js:3322", () => {
   MAX_KEPT_CHUNK_BYTES = 4096;
   MAX_PNG_CHUNKS = 1e5;
 });
-//@ chunk-p8kytbnw.js:3519-3988 placement
+//@ chunk-jf14gxs3.js:3706-4175 placement
 /**
  * 去掉 PNG 的元数据块：只保留关键块与少量小的辅助块，块数过多时返回 null。
  */
@@ -248,7 +255,7 @@ function stripPngMetadata(bytes) {
   if (keptRanges.length === 1 && firstRange !== undefined && firstRange[1] === bytes.length) return bytes;
   return Buffer.concat(keptRanges.map(([start, end]) => bytes.subarray(start, end)));
 }
-//@ chunk-p8kytbnw.js:3988-4283 placement
+//@ chunk-jf14gxs3.js:4175-4470 placement
 /**
  * 判断 PNG 是否可能含透明：非标准文件或带 alpha 的颜色类型返回 true，否则看 IDAT 之前是否有 tRNS。
  */
@@ -271,7 +278,7 @@ function pngMayHaveTransparency(bytes) {
   }
   return true;
 }
-//@ chunk-p8kytbnw.js:4283-4538 placement
+//@ chunk-jf14gxs3.js:4470-4725 placement
 /**
  * 判断 PNG 的 eXIf 块中是否带方向标签。
  */
@@ -288,12 +295,12 @@ function pngHasExifOrientation(bytes) {
   }
   return false;
 }
-//@ chunk-p8kytbnw.js:4538-4563 placement
+//@ chunk-jf14gxs3.js:4725-4750 placement
 var VP8X_ALPHA_FLAG = 2;
 var VP8X_ANIMATION_FLAG = 16;
 var VP8X_ALPHA_WRITTEN = 32;
 var MAX_WEBP_CHUNKS = 1000;
-//@ chunk-p8kytbnw.js:4563-4774 placement
+//@ chunk-jf14gxs3.js:4750-4961 placement
 function parseRiffChunks(bytes, startOffset) {
   let chunks = [];
   let offset = startOffset;
@@ -309,7 +316,7 @@ function parseRiffChunks(bytes, startOffset) {
   }
   return chunks;
 }
-//@ chunk-p8kytbnw.js:4774-4922 placement
+//@ chunk-jf14gxs3.js:4961-5109 placement
 function buildRiffChunk(fourCC, payload) {
   let header = Buffer.alloc(8);
   header.write(fourCC, 0, "ascii");
@@ -317,7 +324,7 @@ function buildRiffChunk(fourCC, payload) {
   let padding = Buffer.alloc(payload.length & 1);
   return Buffer.concat([header, payload, padding]);
 }
-//@ chunk-p8kytbnw.js:4922-5092 placement
+//@ chunk-jf14gxs3.js:5109-5279 placement
 function buildWebpContainer(chunks) {
   let buffer = Buffer.concat([Buffer.from("WEBP", "ascii"), ...chunks]);
   let header = Buffer.alloc(8);
@@ -325,7 +332,7 @@ function buildWebpContainer(chunks) {
   header.writeUInt32LE(buffer.length, 4);
   return Buffer.concat([header, buffer]);
 }
-//@ chunk-p8kytbnw.js:5092-5256 placement
+//@ chunk-jf14gxs3.js:5279-5443 placement
 /**
  * 判断 WebP 是否为带 VP8X 扩展头且设置了动画标志的文件。
  */
@@ -338,7 +345,7 @@ function isAnimatedWebp(bytes) {
     ((bytes[20] ?? 0) & VP8X_ALPHA_FLAG) !== 0
   );
 }
-//@ chunk-p8kytbnw.js:5256-5405 placement
+//@ chunk-jf14gxs3.js:5443-5592 placement
 /**
  * 判断 WebP 是否为无损（VP8L）编码。
  */
@@ -351,7 +358,7 @@ function isLosslessWebp(bytes) {
     )?.fourCC === "VP8L"
   );
 }
-//@ chunk-p8kytbnw.js:5405-5546 placement
+//@ chunk-jf14gxs3.js:5592-5733 placement
 /**
  * 判断 WebP 是否带 alpha 通道（VP8X 的 alpha 标志或 VP8L 头中的 alpha 位），块解析失败时视为是。
  */
@@ -366,7 +373,7 @@ function webpHasAlpha(bytes) {
     )
   );
 }
-//@ chunk-p8kytbnw.js:5546-6435 placement
+//@ chunk-jf14gxs3.js:5733-6622 placement
 function inspectWebpChunks(bytes) {
   if (!isAnimatedWebp(bytes)) return null;
   let min = Math.min(bytes.length, 8 + bytes.readUInt32LE(4));
@@ -406,11 +413,12 @@ function inspectWebpChunks(bytes) {
   ]);
 }
 export {
-  MIME_TO_EXTENSION,
   parseWebpHeader,
-  pngMayHaveTransparency,
   isAnimatedWebp,
   detectHtmlDocument,
+  pngMayHaveTransparency,
+  MIME_TO_EXTENSION,
+  sniffDocumentType,
   inspectWebpChunks,
   countJpegScans,
   stripPngMetadata,
@@ -418,5 +426,5 @@ export {
   isLosslessWebp,
   webpHasAlpha,
   pngHasExifOrientation,
-  sniffDocumentType,
+  buffer,
 };

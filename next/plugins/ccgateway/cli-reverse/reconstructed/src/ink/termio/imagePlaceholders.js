@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：终端图片占位格的编码/解码（U+2800 加行列与 id 的附加符号）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bzr73sfg.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2avr6cej.js (3)
  * attribution: placement 3
  */
 import { COMBINING_MARK_CODES } from "../../utils/unicode/combiningMarks.js";
@@ -17,11 +17,11 @@ import {
   MAX_PLACEHOLDER_INDEX,
 } from "./iterm2Image.js";
 
-//@ chunk-bzr73sfg.js:266237-266288 placement
+//@ chunk-2avr6cej.js:265818-265869 placement
 function diacritic(index) {
   return String.fromCodePoint(COMBINING_MARK_CODES[index]);
 }
-//@ chunk-bzr73sfg.js:266288-266411 placement (2.1.88 match: GUTTER_MAP, 0.563)
+//@ chunk-2avr6cej.js:265869-265992 placement (2.1.88 match: GUTTER_MAP, 0.562)
 /**
  * 把 {id,row,column} 编码成一个占位字素：U+2800 + 行、列、id 高中低三位的附加符号。
  */
@@ -36,7 +36,7 @@ function encodeImagePlaceholder(cell) {
     diacritic(id % DIACRITIC_COUNT)
   );
 }
-//@ chunk-bzr73sfg.js:266411-266577 placement
+//@ chunk-2avr6cej.js:265992-266158 placement
 /**
  * 生成 rows×columns 的占位字素网格文本（每行一串占位字符），放进 Ink 文本里占住图片的位置。
  */

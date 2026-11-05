@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：SDK 控制请求 set_model 的处理：模型名识别、建议、回退与系统提示词切换
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sfjpx19.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-aac6cgbf.js (2), chunk-nh1pvp1m.js (23)
  * attribution: placement 25
  */
 import { getAPIProvider, isFirstPartyAnthropicBaseUrl } from "../../utils/model/providers.js";
@@ -37,7 +37,12 @@ import { isModelAllowed, managedDenyStartupRefusal } from "../../utils/model/mod
 import { parseUserSpecifiedModel } from "../../utils/model/modelDisplay.js";
 import { isHumanTurn_2 } from "../../utils/messagePredicates.js";
 import { isCompactBoundaryMessage } from "../../services/projects/threadRows.js";
-import { MODEL_SET_STDOUT_PREFIX, extractTag, getContentText } from "../../utils/messages.js";
+import {
+  MODEL_SET_STDOUT_PREFIX,
+  extractTag,
+  SYNTHETIC_MODEL,
+  getContentText,
+} from "../../utils/messages.js";
 import { COMMAND_NAME, COMMAND_ARGS } from "../../constants/xml.js";
 import { has1mSuffix_2 } from "../../utils/model/contextWindow1m.js";
 import {
@@ -67,20 +72,19 @@ import {
   withClientDataReseedOnModelChange,
   refreshBootstrapDataTracked_2,
 } from "../../bridge/bridgeEnabled.js";
-import { SYNTHETIC_MODEL } from "../../constants/messages.js";
 import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
 import { identity } from "../../utils/identity.js";
 import { createValueSlot } from "../../utils/valueSlot.js";
 import {
   isMainAgentCommand,
   getSchedulingPlugin,
-  enqueueCommand,
-  emitDiscardedCommand,
-  removeQueuedByFilter,
+  enqueue,
+  discardUnqueued,
+  removeByFilter,
   dequeueAllMatching,
   isFoldInFlight,
-  receiptQueuedProbe,
-  inFlightDrainProbe,
+  entryHold,
+  heldByHold,
   getCommandQueue,
 } from "../../utils/messageQueueManager.js";
 import {
@@ -94,7 +98,73 @@ import { runIgnoringAbort } from "../../plugins/functionHooks/dispatch/dispatchS
 import { currentSurfaceBinding } from "../../plugins/functionHooks/surfaceBinding.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0sfjpx19.js:25022-25465 placement
+//@ chunk-aac6cgbf.js:1193-1221 placement
+var MOVED_RESULT_POLL_MS = 200;
+var MOVED_RESULT_HOLD_MS = 1000;
+var MAX_MOVED_RESULT_WAITS = 8;
+var GRACE_POLL_TICKS = 2;
+//@ chunk-aac6cgbf.js:1221-2042 placement
+/**
+ * 根据轮次状态（被钩子结束、对话框占用、本地轮次）决定排队提示 stand_by/wait/deliver。
+ */
+function decideQueuedPromptAction(decision) {
+  if (decision.head === "ended_by_hook" || decision.hasFoldTakenPrompt || !decision.isLocalTurnActive)
+    return {
+      action: "stand_by",
+    };
+  if (decision.isHeldByDialog)
+    return {
+      action: "wait",
+      reason: "held_by_dialog",
+    };
+  if (decision.head === "not_ready" || !decision.isLocalTurnRunning)
+    return {
+      action: "wait",
+      reason: "not_ready",
+    };
+  if (decision.head === "behind_earlier")
+    return {
+      action: "wait",
+      reason: "behind_earlier",
+    };
+  if (decision.holderCount > decision.unmovableHolderCount)
+    return {
+      action: "background",
+    };
+  if (decision.isCompacting)
+    return {
+      action: "wait",
+      reason: "compacting",
+    };
+  if (decision.isAwaitingMovedResult)
+    return {
+      action: "wait",
+      reason: "moved_result",
+    };
+  if (decision.holderCount > 0 || decision.isExecuting) {
+    if (!decision.isUnmovableGraceOver)
+      return {
+        action: "wait",
+        reason: "unmovable_grace",
+      };
+    return decision.isBackgroundingDisabled
+      ? {
+          action: "cancel",
+        }
+      : {
+          action: "interrupt",
+        };
+  }
+  if (!decision.isMainRequestInFlight)
+    return {
+      action: "wait",
+      reason: "not_sampling",
+    };
+  return {
+    action: "interrupt",
+  };
+}
+//@ chunk-nh1pvp1m.js:52688-53132 placement
 /**
  * 判断模型名是否可识别（第一方时与目录比对），返回形状分类。
  */
@@ -140,7 +210,7 @@ function recognizeModelName(name) {
     ...formatModelDisplayName(name_2),
   };
 }
-//@ chunk-0sfjpx19.js:25465-25827 placement
+//@ chunk-nh1pvp1m.js:53132-53494 placement
 function formatModelDisplayName(name) {
   let name_2 = name.replace(/^\[(.+)\]$/s, "$1").trim();
   let found = getModelCatalog().models.find(
@@ -170,7 +240,7 @@ function formatModelDisplayName(name) {
     ...suggestModelName(name),
   };
 }
-//@ chunk-0sfjpx19.js:25827-25941 placement
+//@ chunk-nh1pvp1m.js:53494-53609 placement
 function suggestModelName(name) {
   let candidates = [...LEGACY_MODEL_IDS, ...getModelCatalog().models.map((model) => model.id)];
   let [suggestion] = similarNames(name.toLowerCase(), candidates, 1);
@@ -180,7 +250,7 @@ function suggestModelName(name) {
       }
     : {};
 }
-//@ chunk-0sfjpx19.js:25941-26139 placement
+//@ chunk-nh1pvp1m.js:53609-53807 placement
 function formatUnknownModelHint(name, suggestion) {
   let prefix = artifactPathPrefix("model");
   let hint =
@@ -191,7 +261,7 @@ function formatUnknownModelHint(name, suggestion) {
         : " Switch to a different model.";
   return `Model "${name}" is not a recognized model id.${hint}`;
 }
-//@ chunk-0sfjpx19.js:26139-26202 placement
+//@ chunk-nh1pvp1m.js:53807-53870 placement
 /**
  * 把切换请求里的模型解析成实际模型名：默认解析豁免或模型被允许才返回，否则 undefined。
  */
@@ -200,7 +270,7 @@ function resolveSwitchedModel(pick) {
     ? parseUserSpecifiedModel(pick)
     : undefined;
 }
-//@ chunk-0sfjpx19.js:26202-26562 placement
+//@ chunk-nh1pvp1m.js:53870-54230 placement
 function buildModelSwitchNotice({ messages, queriedInProcess, activeModel }) {
   if (
     queriedInProcess &&
@@ -224,7 +294,7 @@ function buildModelSwitchNotice({ messages, queriedInProcess, activeModel }) {
   }
   return;
 }
-//@ chunk-0sfjpx19.js:26562-26742 placement
+//@ chunk-nh1pvp1m.js:54230-54410 placement
 /**
  * 判断切换模型后是否需要新的上下文：与会话模型规范名不同，或同一模型但 1M 后缀变化。
  */
@@ -239,7 +309,7 @@ function modelChangeNeedsNewContext({ appliedModel, previousModel, conversationM
     has1mSuffix_2(userSpecifiedModel_2) !== has1mSuffix_2(userSpecifiedModel)
   );
 }
-//@ chunk-0sfjpx19.js:26742-27152 placement
+//@ chunk-nh1pvp1m.js:54410-54820 placement
 function classifyModelSwitch(name) {
   if (name.trim().toLowerCase() === "default")
     return {
@@ -274,7 +344,7 @@ function classifyModelSwitch(name) {
         model: steppedDown,
       };
 }
-//@ chunk-0sfjpx19.js:27152-27388 placement
+//@ chunk-nh1pvp1m.js:54820-55056 placement
 function logUnrecognizedModelSwitch(name, surface) {
   let recognized = recognizeModelName(name);
   if (recognized.recognized) return;
@@ -289,7 +359,7 @@ function logUnrecognizedModelSwitch(name, surface) {
     error: formatUnknownModelHint(displayModelName(name), recognized.suggestion),
   };
 }
-//@ chunk-0sfjpx19.js:27388-27463 placement
+//@ chunk-nh1pvp1m.js:55056-55131 placement
 function modelSwitchFailure(error, code) {
   logFeatureBad("system_prompt_switch", code);
   return {
@@ -298,7 +368,7 @@ function modelSwitchFailure(error, code) {
     code,
   };
 }
-//@ chunk-0sfjpx19.js:27463-31684 placement
+//@ chunk-nh1pvp1m.js:55131-59352 placement
 /**
  * 处理 set_model 控制请求：校验类型、识别模型、切换主循环模型与系统提示词并回复（约 4 KB）。
  */
@@ -503,21 +573,21 @@ async function handleSetModelRequest(request, host) {
     }),
   };
 }
-//@ chunk-0sfjpx19.js:31684-31797 placement
+//@ chunk-nh1pvp1m.js:59352-59465 placement
 function assistantModelOf(message) {
   if (message.type !== "assistant") return;
   let model = message.message?.model;
   return typeof model === "string" && model !== SYNTHETIC_MODEL ? model : undefined;
 }
-//@ chunk-0sfjpx19.js:31797-31863 placement
+//@ chunk-nh1pvp1m.js:59465-59531 placement
 function userMessageText(message) {
   return message.type === "user" ? getContentText(message.message?.content) : null;
 }
-//@ chunk-0sfjpx19.js:31863-31895 placement
+//@ chunk-nh1pvp1m.js:59531-59563 placement
 function canonicalModelName(userSpecifiedModel) {
   return getCanonicalName(stripAnyVersatileSuffix(userSpecifiedModel));
 }
-//@ chunk-0sfjpx19.js:31895-32051 placement
+//@ chunk-nh1pvp1m.js:59563-59719 placement
 function resolveEffortAfterModelSwitch(name) {
   let classified = classifyModelSwitch(name);
   switch (classified.kind) {
@@ -531,36 +601,36 @@ function resolveEffortAfterModelSwitch(name) {
       return;
   }
 }
-//@ chunk-0sfjpx19.js:32051-32087 placement
+//@ chunk-nh1pvp1m.js:59719-59755 placement
 /**
  * 模型切换状态的清理器（HostScoped 包装的函数槽，用于撤销待发切换）。
  */
 var MODEL_SWITCH_STATE_CLEARER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0sfjpx19.js:32051", () => {
+deferInit("chunk-nh1pvp1m.js:59719", () => {
   MODEL_SWITCH_STATE_CLEARER = identity(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-0sfjpx19.js:32087-32128 placement
+//@ chunk-nh1pvp1m.js:59755-59796 placement
 var AUTO_INPUT_ORIGIN_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0sfjpx19.js:32087", () => {
+deferInit("chunk-nh1pvp1m.js:59755", () => {
   AUTO_INPUT_ORIGIN_KINDS = new Set(["plugin", "coordinator"]);
 });
-//@ chunk-0sfjpx19.js:32128-32173 placement
+//@ chunk-nh1pvp1m.js:59796-59841 placement
 function isSchedulingPluginCommand(command) {
   return isMainAgentCommand(command) && getSchedulingPlugin(command) !== undefined;
 }
-//@ chunk-0sfjpx19.js:32173-32252 placement
+//@ chunk-nh1pvp1m.js:59841-59920 placement
 function resurrectQueuedInput(command) {
   holdQueuedInput(
     () =>
-      enqueueCommand({
+      enqueue({
         ...command,
         admissionExempt: "resurrected",
       }),
     command,
-    () => emitDiscardedCommand([command]),
+    () => discardUnqueued([command]),
   );
 }
-//@ chunk-0sfjpx19.js:32252-32349 placement
+//@ chunk-nh1pvp1m.js:59920-60018 placement
 /**
  * 取消排队中的自动输入：命中时清定时项、移除插件/协调器来源的排队消息，并取消其他可取消项。
  */
@@ -572,7 +642,7 @@ function cancelQueuedAutoInput(command, hold, discard) {
     );
   return shouldCancel;
 }
-//@ chunk-0sfjpx19.js:32349-32512 placement
+//@ chunk-nh1pvp1m.js:60018-60181 placement
 /**
  * 取消排队中的自动输入：清除待发的定时项，移除插件/协调器来源的排队消息，并取消其他可取消的项（轮次继续时保留部分）。
  */
@@ -580,7 +650,7 @@ function cancelQueuedAutoInputs({ turnGoesOn = false } = {}) {
   if (isPluginInputRefusalOn()) {
     runIgnoringAbort(() => MODEL_SWITCH_STATE_CLEARER.get()?.());
     runIgnoringAbort(() =>
-      removeQueuedByFilter(
+      removeByFilter(
         (queued) => isSchedulingPluginCommand(queued) && AUTO_INPUT_ORIGIN_KINDS.has(queued.origin?.kind),
       ),
     );
@@ -591,21 +661,21 @@ function cancelQueuedAutoInputs({ turnGoesOn = false } = {}) {
     );
   }
 }
-//@ chunk-0sfjpx19.js:32512-32548 placement
+//@ chunk-nh1pvp1m.js:60181-60217 placement
 /**
  * 被取消命令的状态槽（收集需要从队列移除的 uuid）。
  */
 var CANCELLED_COMMAND_STATE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0sfjpx19.js:32512", () => {
+deferInit("chunk-nh1pvp1m.js:60181", () => {
   CANCELLED_COMMAND_STATE = identity(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-0sfjpx19.js:32548-32875 placement
+//@ chunk-nh1pvp1m.js:60217-60545 placement
 var MODEL_SWITCH_STATE = (options = {}) =>
   runIgnoringAbort(() => {
     let binding = currentSurfaceBinding();
     let sentBefore = new Set();
-    receiptQueuedProbe.set(cancelQueuedAutoInput);
-    inFlightDrainProbe.set(countHeldCommands);
+    entryHold.set(cancelQueuedAutoInput);
+    heldByHold.set(countHeldCommands);
     if (binding !== undefined)
       pluginInputHoldSlot.set({
         session: new WeakRef(binding),
@@ -620,76 +690,7 @@ var MODEL_SWITCH_STATE = (options = {}) =>
     );
     cancelQueuedAutoInputs(options);
   });
-//@ chunk-0sfjpx19.js:32875-32896 placement
-var MOVED_RESULT_HOLD_MS = 200;
-var MAX_MOVED_RESULT_WAITS = 8;
-var GRACE_POLL_TICKS = 2;
-//@ chunk-0sfjpx19.js:32896-33717 placement
-/**
- * 根据轮次状态（被钩子结束、对话框占用、本地轮次）决定排队提示 stand_by/wait/deliver。
- */
-function decideQueuedPromptAction(decision) {
-  if (decision.head === "ended_by_hook" || decision.hasFoldTakenPrompt || !decision.isLocalTurnActive)
-    return {
-      action: "stand_by",
-    };
-  if (decision.isHeldByDialog)
-    return {
-      action: "wait",
-      reason: "held_by_dialog",
-    };
-  if (decision.head === "not_ready" || !decision.isLocalTurnRunning)
-    return {
-      action: "wait",
-      reason: "not_ready",
-    };
-  if (decision.head === "behind_earlier")
-    return {
-      action: "wait",
-      reason: "behind_earlier",
-    };
-  if (decision.holderCount > decision.unmovableHolderCount)
-    return {
-      action: "background",
-    };
-  if (decision.isCompacting)
-    return {
-      action: "wait",
-      reason: "compacting",
-    };
-  if (decision.isAwaitingMovedResult)
-    return {
-      action: "wait",
-      reason: "moved_result",
-    };
-  if (decision.holderCount > 0 || decision.isExecuting) {
-    if (!decision.isUnmovableGraceOver)
-      return {
-        action: "wait",
-        reason: "unmovable_grace",
-      };
-    return decision.isBackgroundingDisabled
-      ? {
-          action: "cancel",
-        }
-      : {
-          action: "interrupt",
-        };
-  }
-  if (!decision.isMainRequestInFlight)
-    return {
-      action: "wait",
-      reason: "not_sampling",
-    };
-  return {
-    action: "interrupt",
-  };
-}
 export {
-  MOVED_RESULT_HOLD_MS,
-  GRACE_POLL_TICKS,
-  decideQueuedPromptAction,
-  MAX_MOVED_RESULT_WAITS,
   resolveSwitchedModel,
   logUnrecognizedModelSwitch,
   handleSetModelRequest,
@@ -700,4 +701,9 @@ export {
   MODEL_SWITCH_STATE_CLEARER,
   cancelQueuedAutoInput,
   cancelQueuedAutoInputs,
+  MOVED_RESULT_HOLD_MS,
+  MOVED_RESULT_POLL_MS,
+  GRACE_POLL_TICKS,
+  decideQueuedPromptAction,
+  MAX_MOVED_RESULT_WAITS,
 };

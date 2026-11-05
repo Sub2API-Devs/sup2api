@@ -3,23 +3,23 @@
  *
  * 2.1.316 新增：/import 命令对象：从 Codex、Gemini、Cursor 等导入配置与说明文件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (8)
  * attribution: placement 8
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { getIsNonInteractiveSession, isDiskless } from "../../bootstrap/state.js";
 import { env } from "../../utils/env.js";
 
-//@ chunk-e6aww6q8.js:1696528-1696571 placement
+//@ chunk-5xgkngpb.js:1771898-1771941 placement
 /**
  * isImportEnabled：tengu_import。
  */
 function isImportEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_import", false);
 }
-//@ chunk-e6aww6q8.js:1696571-1696794 placement
+//@ chunk-5xgkngpb.js:1771941-1772164 placement
 /**
  * IMPORT_UNAVAILABLE_MESSAGE：`claude import` is not yet available。
  */
@@ -27,7 +27,7 @@ var IMPORT_UNAVAILABLE_MESSAGE =
   "`claude import` is not yet available in this build. Run `claude` and use /mcp or edit ~/.claude/settings.json directly.";
 var CONFIG_UNREADABLE_MESSAGE =
   "Could not read Claude Code config \u2014 run `claude` with no arguments to recover it.";
-//@ chunk-e6aww6q8.js:1696794-1696968 placement
+//@ chunk-5xgkngpb.js:1772164-1772338 placement
 /**
  * planImportRewrite：`claude import` → `claude -- /import ...` 改写。
  */
@@ -45,7 +45,7 @@ function planImportRewrite(importArgv, context) {
     argv: [...importArgv.prefix, "--", ["/import", ...importArgv.rest].join(" ")],
   };
 }
-//@ chunk-e6aww6q8.js:1696968-1697312 placement
+//@ chunk-5xgkngpb.js:1772338-1772682 placement
 /**
  * parseImportArgv：识别 argv 中的 import 子命令。
  */
@@ -63,7 +63,7 @@ function parseImportArgv(argv) {
     rest: sliced_2,
   };
 }
-//@ chunk-e6aww6q8.js:1697312-1697445 placement
+//@ chunk-5xgkngpb.js:1772682-1772815 placement
 /**
  * areValidImportArgs：codex|gemini|cursor|--dry-run|--yes[=digest]。
  */
@@ -71,7 +71,7 @@ function areValidImportArgs(args) {
   let valid = new Set(["codex", "gemini", "cursor", "--dry-run", "--yes"]);
   return args.every((arg) => valid.has(arg) || arg.startsWith("--yes="));
 }
-//@ chunk-e6aww6q8.js:1697445-1697884 placement
+//@ chunk-5xgkngpb.js:1772815-1773254 placement
 /**
  * /import 命令对象（local-jsx）；描述：Import config from another AI coding agent；isEnabled: N0e；isHidden: {return!N0e()}；实现 chunk-cdgppz20.js 的 Fo。
  */
@@ -98,14 +98,14 @@ var importNonInteractiveCommand = {
   load: () => import("./call.lazy.js"),
 };
 var importCommand = importCommandDefinition;
-//@ chunk-e6aww6q8.js:1697884-1698703 placement
+//@ chunk-5xgkngpb.js:1773254-1774073 placement
 /**
  * 提示模型在检测到其他 AI 工具配置时建议用户运行 /import，不要自行读取或改写。
  */
 var IMPORT_OFFER_PROMPT =
   "Do NOT read the foreign-agent config files or write Claude Code config yourself \u2014 the deterministic import (triggered by `--yes`) applies the same safe-name and path-traversal guards as the terminal picker.";
 var IMPORT_OFFER_INSTRUCTIONS = `offer to import it now \u2014 tell the user to reply \`/import\` to scan and list what's importable (MCP servers, slash commands, subagents, skills, instructions), then \`/import --yes=<digest>\` (the scan output names the digest) to apply the user-level items. ${"Do NOT read the foreign-agent config files or write Claude Code config yourself \u2014 the deterministic import (triggered by `--yes`) applies the same safe-name and path-traversal guards as the terminal picker."} If \`/import\` isn't available on this surface, tell the user to run \`claude import\` from a terminal instead.`;
-//@ chunk-e6aww6q8.js:1698703-1698787 placement
+//@ chunk-5xgkngpb.js:1774073-1774157 placement
 /**
  * useNewInitPrompt：CLAUDE_CODE_NEW_INIT 或 tengu_slate_harbor_experiment。
  */
@@ -120,9 +120,9 @@ export {
   planImportRewrite,
   CONFIG_UNREADABLE_MESSAGE,
   IMPORT_UNAVAILABLE_MESSAGE,
-  IMPORT_OFFER_PROMPT,
   importCommand,
   importNonInteractiveCommand,
   IMPORT_OFFER_INSTRUCTIONS,
   useNewInitPrompt,
+  IMPORT_OFFER_PROMPT,
 };

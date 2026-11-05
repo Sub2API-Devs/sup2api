@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：转录条目类型
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (17)
- * attribution: placement 17
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (18)
+ * attribution: placement 17, layout 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
@@ -18,6 +18,7 @@ import {
   create_6,
 } from "../../../vendor/zod/lib/index.mjs";
 import { sumByAliasField } from "../../services/artifacts/frameApi.js";
+import { codeModeAccepted } from "../codeMode/accepted.js";
 import { jsonParseRaw, jsonStringify } from "../slowOperations.js";
 import { normalizeUuidOrNull } from "../agentId.js";
 import { MAX_LOG_LINE_CHARS } from "../../types/logs.js";
@@ -27,7 +28,7 @@ import { isRemoteEnvironmentAny } from "../remoteEnvironment.js";
 import { isBeforeCompactBoundary } from "../../components/tasks/BackgroundTaskStatus.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:285760-286555 placement
+//@ chunk-5xgkngpb.js:285765-286560 placement
 /**
  * 定义转录中 cost-state 条目：费用、耗时、行数与各模型用量的 zod schema（非负有限且不超过上限，模型名不含控制字符）。
  */
@@ -36,7 +37,7 @@ var MODEL_USAGE_TOKEN_KEYS;
 var MAX_COUNTER_VALUE;
 var MAX_DURATION_VALUE;
 var CostStateEntrySchema;
-deferInit("chunk-e6aww6q8.js:285760", () => {
+deferInit("chunk-5xgkngpb.js:285765", () => {
   MAX_COST_USD = 1e9;
   MODEL_USAGE_TOKEN_KEYS = Object.keys({
     inputTokens: true,
@@ -81,7 +82,15 @@ deferInit("chunk-e6aww6q8.js:285760", () => {
     });
   });
 });
-//@ chunk-e6aww6q8.js:286555-286721 placement
+//@ chunk-5xgkngpb.js:286560-286688 layout
+function stripToolUseIdBookkeeping(message) {
+  if (codeModeAccepted() && message.type === "user") {
+    delete message.hiddenToolUseIds;
+    delete message.detachedToolUseIds;
+    delete message.withheldScriptToolUseId;
+  }
+}
+//@ chunk-5xgkngpb.js:286688-286854 placement
 /**
  * 在笔记本端（laptop leg）注入的记忆上下文附件。
  */
@@ -93,13 +102,13 @@ function isLaptopMemoryAttachment(message) {
     message.attachment.leg === "laptop"
   );
 }
-//@ chunk-e6aww6q8.js:286832-288078 placement
+//@ chunk-5xgkngpb.js:287459-288733 placement
 /**
  * 转录条目类型表：哪些算转录行、哪些是边界清除或累积/末次覆盖。
  */
 var TRANSCRIPT_ENTRY_TYPES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TRANSCRIPT_ENTRY_TYPES;
-deferInit("chunk-e6aww6q8.js:286832", () => {
+deferInit("chunk-5xgkngpb.js:287459", () => {
   TRANSCRIPT_ENTRY_TYPES_2 = {
     user: "transcript",
     assistant: "transcript",
@@ -134,6 +143,7 @@ deferInit("chunk-e6aww6q8.js:286832", () => {
     mode: "last-wins",
     "permission-mode": "last-wins",
     "isolation-latch": "last-wins",
+    "session-owner": "last-wins",
     "dev-mods": "last-wins",
     "memory-mode": "accumulate",
     "atis-latch": "last-wins",
@@ -145,11 +155,11 @@ deferInit("chunk-e6aww6q8.js:286832", () => {
   };
   TRANSCRIPT_ENTRY_TYPES = new Set(["attribution-snapshot", "artifact-autoreact-ledger"]);
 });
-//@ chunk-e6aww6q8.js:288078-288122 placement
+//@ chunk-5xgkngpb.js:288733-288805 placement
 function accumulateKindOf(type) {
-  return TRANSCRIPT_ENTRY_TYPES_2[type] ?? "accumulate";
+  return type === "repl-mode" ? "last-wins" : (TRANSCRIPT_ENTRY_TYPES_2[type] ?? "accumulate");
 }
-//@ chunk-e6aww6q8.js:288122-288235 placement
+//@ chunk-5xgkngpb.js:288805-288918 placement
 function parseJsonSkippingNuls(text) {
   if (!text) return;
   let start = 0;
@@ -160,22 +170,22 @@ function parseJsonSkippingNuls(text) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:288235-288376 placement
+//@ chunk-5xgkngpb.js:288918-289059 placement
 var buffer_5; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var buffer_2;
 var ARTIFACT_LEDGER_PREFIX_LEN;
-deferInit("chunk-e6aww6q8.js:288235", () => {
+deferInit("chunk-5xgkngpb.js:288918", () => {
   buffer_5 = Buffer.from('{"type":"artifact-autoreact-ledger"');
   buffer_2 = Buffer.from('{"type":"artifact-autoreact-ledger","v":1,"sessionId":"');
   ARTIFACT_LEDGER_PREFIX_LEN = 36;
 });
-//@ chunk-e6aww6q8.js:288376-288436 placement
+//@ chunk-5xgkngpb.js:289059-289119 placement
 function skipNuls(buffer, start, end) {
   let index = start;
   while (index < end && buffer[index] === 0) index++;
   return index;
 }
-//@ chunk-e6aww6q8.js:288553-288706 placement
+//@ chunk-5xgkngpb.js:289236-289389 placement
 function readEnvelopeSessionId(envelope) {
   let prefixLength = buffer_2.length;
   if (
@@ -186,7 +196,7 @@ function readEnvelopeSessionId(envelope) {
   let str = envelope.toString("latin1", prefixLength, prefixLength + ARTIFACT_LEDGER_PREFIX_LEN);
   return normalizeUuidOrNull(str) === null ? null : str;
 }
-//@ chunk-e6aww6q8.js:288706-288913 placement
+//@ chunk-5xgkngpb.js:289389-289596 placement
 function resetArtifactLedgerState(record, source) {
   let { artifacts } = record;
   if (typeof artifacts !== "object" || artifacts === null || Array.isArray(artifacts)) return record;
@@ -198,7 +208,7 @@ function resetArtifactLedgerState(record, source) {
     artifacts: Object.fromEntries(resetArtifacts),
   };
 }
-//@ chunk-e6aww6q8.js:288913-289067 placement
+//@ chunk-5xgkngpb.js:289596-289750 placement
 function resetArtifactRecord(record, source) {
   return typeof record === "object" && record !== null && !Array.isArray(record)
     ? {
@@ -212,9 +222,9 @@ function resetArtifactRecord(record, source) {
       }
     : record;
 }
-//@ chunk-e6aww6q8.js:289067-289082 placement
+//@ chunk-5xgkngpb.js:289750-289765 placement
 var MAX_FUTURE_SAVED_AT_MS = 300000;
-//@ chunk-e6aww6q8.js:289082-289185 placement
+//@ chunk-5xgkngpb.js:289765-289868 placement
 function savedAtOf(record) {
   let savedAt = record?.savedAt;
   return typeof savedAt === "number" &&
@@ -223,11 +233,11 @@ function savedAtOf(record) {
     ? savedAt
     : 0;
 }
-//@ chunk-e6aww6q8.js:289185-289228 placement
+//@ chunk-5xgkngpb.js:289868-289911 placement
 function interruptedFlag(record) {
   return record?.interrupted === true;
 }
-//@ chunk-e6aww6q8.js:289228-289476 placement
+//@ chunk-5xgkngpb.js:289911-290159 placement
 function artifactRecordRank(record) {
   if (typeof record !== "object" || record === null || Array.isArray(record)) return 0;
   let artifactRecord = record;
@@ -239,7 +249,7 @@ function artifactRecordRank(record) {
     ? 1
     : 0;
 }
-//@ chunk-e6aww6q8.js:289476-290803 placement
+//@ chunk-5xgkngpb.js:290159-291489 placement
 /**
  * 汇总转录中的 artifact-autoreact-ledger 行：按会话分组，账号变化时清空；同一 artifact 取 savedAt 更新（相同时取等级更低）的记录。
  */
@@ -320,7 +330,7 @@ class ArtifactLedgerCollector {
     return ledgers;
   }
 }
-//@ chunk-e6aww6q8.js:290803-293442 placement
+//@ chunk-5xgkngpb.js:291489-294131 placement
 /**
  * 读取转录文件的各类条目（摘要、文件历史快照、增量）。
  */
@@ -482,7 +492,7 @@ async function readTranscriptEntries(lines) {
     reclaimableBytes,
   };
 }
-//@ chunk-e6aww6q8.js:293442-293537 placement
+//@ chunk-5xgkngpb.js:294131-294226 placement
 function shouldKeepLine(state, index) {
   return (index >= state.lastBoundaryIdx || state.keepIdx.has(index)) && !state.supersededLastWins.has(index);
 }
@@ -491,6 +501,7 @@ export {
   skipNuls,
   readEnvelopeSessionId,
   ArtifactLedgerCollector,
+  stripToolUseIdBookkeeping,
   CostStateEntrySchema,
   resetArtifactLedgerState,
   isLaptopMemoryAttachment,

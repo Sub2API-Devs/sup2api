@@ -3,18 +3,17 @@
  *
  * 队友管理对话框：查看队友、切换其权限模式（shift+tab）、关停队友。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/teams/TeamsDialog.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-19dk83fw.js (1), chunk-82kqcve8.js (1), chunk-e6aww6q8.js (2)
- * attribution: fingerprint 4, callgraph-fingerprint 1
+ * pieces: chunk-2avr6cej.js (1), chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (1), chunk-je0zymfm.js (1)
+ * attribution: fingerprint 3, callgraph-fingerprint 1
  */
 import { randomUUID } from "crypto";
-import { isFocusModeFlag } from "../../utils/focusMode.js";
 import { wasProactivityEverOn } from "../../Tool.js";
 import { permissionModeForProactivityLevel } from "../../utils/permissions/getNextPermissionMode.js";
 import { getProactivityPolicyVerdict } from "../../utils/permissions/permissionSetup.js";
-import { isBypassAllowedInMode } from "../../utils/permissions/browserToolNames.js";
-import { isWebToolRestrictedInRelay } from "../../utils/permissions/permissionRulePayload.js";
+import { isKeyOrPaste } from "../../ink/parse-keypress.js";
+import { isMouseButtonEvent } from "../../ink/components/App.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useState } from "../../../vendor/react/cjs/react.production.js";
 import { PERMISSION_MODE_STEPS, nextModeIndex, LessonFrame } from "../onboarding/PowerupLessons.js";
@@ -34,11 +33,7 @@ import { SYSTEM } from "../../utils/swarm/constants.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-82kqcve8.js:37066-37112 fingerprint (2.1.88 match: viewTeammateOutput, 0.388)
-function viewTeammateOutput() {
-  return isFocusModeFlag() ? "focus" : "default";
-}
-//@ chunk-e6aww6q8.js:1296816-1297008 callgraph-fingerprint (2.1.88 match: cycleAllTeammateModes, 0.2)
+//@ chunk-5xgkngpb.js:1295685-1295879 callgraph-fingerprint (2.1.88 match: cycleAllTeammateModes, 0.2)
 /**
  * 一次性切换所有队友的权限模式（default/auto 循环）。
  */
@@ -56,18 +51,11 @@ function cycleAllTeammateModes(teammates, teamName, isBypassAvailable) {
     return "default";
   return teammates;
 }
-//@ chunk-e6aww6q8.js:3014808-3014916 fingerprint (2.1.88 match: cycleTeammateMode, 0.655)
-function cycleTeammateMode(toolPermissionContext, settings, suggestedRules, suggestedRules_2) {
-  return (
-    isBypassAllowedInMode(
-      toolPermissionContext,
-      suggestedRules_2,
-      suggestedRules.isBypassPermissionsModeAvailable,
-      settings.forRemoteExecution,
-    ) && !isWebToolRestrictedInRelay(toolPermissionContext.name)
-  );
+//@ chunk-2avr6cej.js:243688-243741 fingerprint (2.1.88 match: viewTeammateOutput, 0.389)
+function isDiscreteInput(item) {
+  return isKeyOrPaste(item) || isMouseButtonEvent(item) || item.kind === "focus";
 }
-//@ chunk-19dk83fw.js:4454-5071 fingerprint (2.1.88 match: TeammateDetailView, 0.314)
+//@ chunk-je0zymfm.js:4489-5106 fingerprint (2.1.88 match: TeammateDetailView, 0.314)
 function TeammateDetailView() {
   let $ = useMemoCache(11);
   let [modeIndex, setModeIndex] = useState(0);
@@ -131,7 +119,7 @@ function TeammateDetailView() {
   } else frameElement = $[10];
   return frameElement;
 }
-//@ chunk-18hwfzwa.js:1686214-1687162 fingerprint (2.1.88 match: killTeammate, 0.495)
+//@ chunk-czq1j3j2.js:1732518-1733466 fingerprint (2.1.88 match: killTeammate, 0.495)
 /**
  * 关停队友：发送 shutdown，等待完成并从 inbox 移除，记录 teammate_terminated。
  */
@@ -198,4 +186,4 @@ async function killTeammate(teammateName, appState, setState, storageV5) {
   });
   logForDebugging(`[InboxPoller] Removed ${teammateName} (${teammateId}) from teamContext`);
 }
-export { cycleAllTeammateModes, cycleTeammateMode, viewTeammateOutput, killTeammate, TeammateDetailView };
+export { cycleAllTeammateModes, isDiscreteInput, killTeammate, TeammateDetailView };

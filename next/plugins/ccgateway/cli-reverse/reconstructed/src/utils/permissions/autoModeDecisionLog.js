@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自动模式决策日志
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: placement 3
  */
 import { join } from "path";
@@ -16,7 +16,7 @@ import { jsonStringify } from "../slowOperations.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1271852-1272109 placement
+//@ chunk-5xgkngpb.js:1276716-1276973 placement
 class AutoModeDecisionLog {
   logPath = undefined;
   append(entry) {
@@ -35,12 +35,12 @@ class AutoModeDecisionLog {
     ).catch(() => {});
   }
 }
-//@ chunk-e6aww6q8.js:1272109-1272137 placement
+//@ chunk-5xgkngpb.js:1276973-1277001 placement
 var autoModeDecisionLogSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1272109", () => {
+deferInit("chunk-5xgkngpb.js:1276973", () => {
   autoModeDecisionLogSlot = new SessionRootSlot(() => new AutoModeDecisionLog());
 });
-//@ chunk-e6aww6q8.js:1272137-1272174 placement
+//@ chunk-5xgkngpb.js:1277001-1277038 placement
 /**
  * appendAutoModeDecision：往当前会话的 auto 模式决策日志追加一条。
  */

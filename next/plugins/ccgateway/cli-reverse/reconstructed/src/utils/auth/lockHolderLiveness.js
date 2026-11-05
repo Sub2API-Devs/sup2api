@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：带超时与中止的操作封装；列出进程的后代（可限定同会话）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (22)
- * attribution: placement 22
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (23)
+ * attribution: placement 21, layout 2
  */
 import { spawn } from "child_process";
 import { join } from "path";
@@ -23,66 +23,71 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { sleep } from "../sleep.js";
 import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../env.js";
+import { logError } from "../log.js";
 import { registerCleanup } from "../cleanupRegistry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:314332-314368 placement
+//@ chunk-exfmq47h.js:324581-324617 placement
 var lockHolderSocketSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:314332", () => {
+deferInit("chunk-exfmq47h.js:324581", () => {
   lockHolderSocketSlot = new HostScoped(() => ({
     socket: undefined,
   }));
 });
-//@ chunk-aepeg2w5.js:314663-314708 placement
+//@ chunk-exfmq47h.js:324912-324957 placement
 /**
  * 清空锁持有者对应的 socket 记录。
  */
 function clearLockHolderSocket() {
   lockHolderSocketSlot.of(getRootSession().host).socket = undefined;
 }
-//@ chunk-aepeg2w5.js:314708-314729 placement
+//@ chunk-exfmq47h.js:324957-324978 placement
 /**
  * 什么都不做的异步函数（占位）。
  */
 async function noopAsync() {}
-//@ chunk-aepeg2w5.js:314729-314772 placement
+//@ chunk-exfmq47h.js:324978-325021 placement
 /**
  * 取标识末尾 20 个字符（用于日志）。
  */
 function tailOfId(key) {
   return key.trim().slice(-20);
 }
-//@ chunk-aepeg2w5.js:315082-315093 placement
+//@ chunk-exfmq47h.js:325331-325342 placement
 /**
  * 杀死进程组的超时（500 毫秒）。
  */
 var KILL_GROUP_TIMEOUT_MS = 500;
-//@ chunk-aepeg2w5.js:315093-315216 placement
+//@ chunk-exfmq47h.js:325342-325498 placement
 /**
  * 杀死进程组（返回被杀 pid）。
  */
-function killProcessGroup(pid, signal = "SIGKILL") {
+function killProcessGroup(pid, signal = "SIGKILL", { groupMembersByPidToo = false } = {}) {
   if (!Number.isInteger(pid) || pid <= 1) return Promise.resolve(new Set());
-  return killGroupAndDescendants(pid, signal).catch(() => new Set());
+  return killGroupAndDescendants(pid, signal, groupMembersByPidToo).catch(() => new Set());
 }
-//@ chunk-aepeg2w5.js:315216-315408 placement
-async function killGroupAndDescendants(pid, signal) {
-  let descendants = await listDescendantPids(pid);
+//@ chunk-exfmq47h.js:325498-325765 placement
+async function killGroupAndDescendants(pid, signal, groupMembersByPidToo) {
+  let descendants = await processTableOfRoot(pid, false);
+  let groupKilled = true;
   try {
     process.kill(-pid, signal);
   } catch (error) {
+    groupKilled = false;
     try {
       process.kill(pid, signal);
     } catch {}
     if (getErrnoCode(error) !== "ESRCH") logKillError("group_kill", error);
   }
-  for (let childPid of descendants)
+  for (let [childPid, parentPid] of descendants) {
+    if (groupKilled && parentPid === pid && signal !== "SIGKILL" && !groupMembersByPidToo) continue;
     try {
       process.kill(childPid, signal);
     } catch {}
-  return descendants;
+  }
+  return new Set(descendants.keys());
 }
-//@ chunk-aepeg2w5.js:315579-315775 placement
+//@ chunk-exfmq47h.js:325936-326132 placement
 /**
  * 进程启动时间未变时才发送信号。
  */
@@ -101,7 +106,7 @@ async function killIfUnchanged(processes, signal) {
     } catch {}
   }
 }
-//@ chunk-aepeg2w5.js:315775-316101 placement
+//@ chunk-exfmq47h.js:326132-326458 placement
 /**
  * 用 ps 读取进程启动时间。
  */
@@ -125,20 +130,21 @@ async function readProcessStartTimes(pids) {
   }
   return starts;
 }
-//@ chunk-aepeg2w5.js:316101-316826 placement
-/**
- * 列出进程的后代（可限定同会话）。
- */
-async function listDescendantPids(
-  pid,
+//@ chunk-exfmq47h.js:326458-326551 layout
+async function liveRootPids(
+  rootPid,
   { sameSession } = {
     sameSession: false,
   },
 ) {
-  if (isDisklessSession()) return new Set();
-  let tableText;
+  return new Set((await processTableOfRoot(rootPid, sameSession)).keys());
+}
+//@ chunk-exfmq47h.js:326551-327280 layout
+async function processTableOfRoot(rootPid, sameSession) {
+  if (isDisklessSession()) return new Map();
+  let processTable;
   try {
-    tableText = await Promise.race([
+    processTable = await Promise.race([
       readProcessTable(sameSession),
       new Promise((resolve) => {
         let timer = setTimeout((resolve) => resolve(""), KILL_GROUP_TIMEOUT_MS, resolve);
@@ -147,42 +153,43 @@ async function listDescendantPids(
     ]);
   } catch (error) {
     logKillError("enum_spawn", error);
-    return new Set();
+    return new Map();
   }
   let childrenByParent = new Map();
   let sessionByPid = new Map();
-  for (let line of tableText.split(`
+  for (let line of processTable.split(`
 `)) {
-    let match = line.match(/^\s*(\d+)\s+(\d+)(?:\s+(\S+))?\s*$/);
+    let match = line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)(?:\s+(\S+))?\s*$/);
     if (!match) continue;
     let childPid = Number(match[1]);
     let parentPid = Number(match[2]);
-    if (match[3] !== undefined) sessionByPid.set(childPid, match[3]);
-    let children = childrenByParent.get(parentPid);
-    if (children) children.push(childPid);
-    else childrenByParent.set(parentPid, [childPid]);
+    let sessionId = Number(match[3]);
+    if (match[4] !== undefined) sessionByPid.set(childPid, match[4]);
+    let siblings = childrenByParent.get(parentPid);
+    if (siblings) siblings.push([childPid, sessionId]);
+    else childrenByParent.set(parentPid, [[childPid, sessionId]]);
   }
-  let rootSession = sessionByPid.get(pid);
-  if (sameSession && (rootSession === undefined || new Set(sessionByPid.values()).size < 2)) return new Set();
-  let found = new Set();
-  let queue = [pid];
+  let rootSession = sessionByPid.get(rootPid);
+  if (sameSession && (rootSession === undefined || new Set(sessionByPid.values()).size < 2)) return new Map();
+  let found = new Map();
+  let queue = [rootPid];
   while (queue.length > 0) {
-    let current = queue.shift();
-    for (let childPid of childrenByParent.get(current) ?? [])
+    let currentPid = queue.shift();
+    for (let [childPid, sessionId] of childrenByParent.get(currentPid) ?? [])
       if (
         childPid > 1 &&
-        childPid !== pid &&
+        childPid !== rootPid &&
         childPid !== process.pid &&
         !found.has(childPid) &&
         (!sameSession || sessionByPid.get(childPid) === rootSession)
       ) {
-        found.add(childPid);
+        found.set(childPid, sessionId);
         queue.push(childPid);
       }
   }
   return found;
 }
-//@ chunk-aepeg2w5.js:316826-317137 placement
+//@ chunk-exfmq47h.js:327280-327609 placement
 /**
  * 用 ps 读取 pid/ppid/会话表。
  */
@@ -190,8 +197,16 @@ function readProcessTable(sameSession) {
   return new Promise((resolve, reject) => {
     let child;
     try {
-      let sessionArgs = sameSession ? ["-o", getPlatform() === "macos" ? "sess=" : "sid="] : [];
-      child = spawn("ps", ["-A", "-o", "pid=", "-o", "ppid=", ...sessionArgs], {
+      let sessionArgs = [
+        "-o",
+        "pid=",
+        "-o",
+        "ppid=",
+        "-o",
+        "pgid=",
+        ...(sameSession ? ["-o", getPlatform() === "macos" ? "sess=" : "sid="] : []),
+      ];
+      child = spawn("ps", ["-A", ...sessionArgs], {
         cwd: "/",
         stdio: ["ignore", "pipe", "ignore"],
         windowsHide: true,
@@ -206,7 +221,7 @@ function readProcessTable(sameSession) {
     child.once("close", () => resolve(output));
   });
 }
-//@ chunk-aepeg2w5.js:317137-317293 placement
+//@ chunk-exfmq47h.js:327609-327765 placement
 function logKillError(stage, error) {
   try {
     let errnoCode = getErrnoCode(error);
@@ -220,7 +235,7 @@ function logKillError(stage, error) {
     });
   } catch {}
 }
-//@ chunk-aepeg2w5.js:317293-317691 placement
+//@ chunk-exfmq47h.js:327765-328163 placement
 /**
  * 用 Bun.ant.windowsProcessList 列出子进程。
  */
@@ -253,12 +268,12 @@ function windowsChildProcesses(parentPid) {
     return;
   }
 }
-//@ chunk-aepeg2w5.js:317691-317700 placement
+//@ chunk-exfmq47h.js:328163-328172 placement
 /**
  * Windows 上允许出现的短暂进程 pid（4）。
  */
 var TRANSIENT_WINDOWS_PIDS = 4;
-//@ chunk-aepeg2w5.js:317700-318051 placement
+//@ chunk-exfmq47h.js:328172-328523 placement
 /**
  * Windows 进程树快照。
  */
@@ -282,7 +297,7 @@ function windowsProcessTree() {
     ? mapped
     : undefined;
 }
-//@ chunk-aepeg2w5.js:318051-318597 placement
+//@ chunk-exfmq47h.js:328523-329069 placement
 /**
  * 用 PowerShell/CIM 列出子进程。
  */
@@ -313,7 +328,7 @@ async function powershellChildProcesses(parentPid, powershellPath, timeout) {
   }
   return children;
 }
-//@ chunk-aepeg2w5.js:318597-318924 placement
+//@ chunk-exfmq47h.js:329069-329396 placement
 /**
  * 等待 Windows 上出现指定名字的子进程。
  */
@@ -335,10 +350,10 @@ async function waitForWindowsChild(
     await sleep(pollMs);
   }
 }
-//@ chunk-aepeg2w5.js:318924-319056 placement
+//@ chunk-exfmq47h.js:329396-329528 placement
 var WINDOWS_SHELL_EXES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var WINDOWS_PROCESS_LIST_TIMEOUT_MS;
-deferInit("chunk-aepeg2w5.js:318924", () => {
+deferInit("chunk-exfmq47h.js:329396", () => {
   WINDOWS_SHELL_EXES = new Set([
     "cmd.exe",
     "powershell.exe",
@@ -352,7 +367,7 @@ deferInit("chunk-aepeg2w5.js:318924", () => {
   ]);
   WINDOWS_PROCESS_LIST_TIMEOUT_MS = 1500;
 });
-//@ chunk-aepeg2w5.js:319056-319830 placement
+//@ chunk-exfmq47h.js:329528-330302 placement
 /**
  * 带超时与中止的操作封装。
  */
@@ -407,7 +422,7 @@ class TimedOperation {
     }
   }
 }
-//@ chunk-aepeg2w5.js:319830-319951 placement
+//@ chunk-exfmq47h.js:330302-330423 placement
 async function terminateProcessTree(child, pid) {
   let descendants = await listDescendantProcesses(pid);
   for (let pid of descendants.reverse())
@@ -416,7 +431,7 @@ async function terminateProcessTree(child, pid) {
     } catch {}
   child.kill("SIGTERM");
 }
-//@ chunk-aepeg2w5.js:319951-320035 placement
+//@ chunk-exfmq47h.js:330423-330507 placement
 /**
  * 列出全部后代进程（Windows 与其他平台分别处理）。
  */
@@ -424,12 +439,12 @@ async function listDescendantProcesses(pid) {
   return getPlatform() === "windows"
     ? windowsDescendants(pid)
     : [
-        ...(await listDescendantPids(pid, {
+        ...(await liveRootPids(pid, {
           sameSession: true,
         })),
       ];
 }
-//@ chunk-aepeg2w5.js:320035-320397 placement
+//@ chunk-exfmq47h.js:330507-330869 placement
 /**
  * Windows 上列出全部后代进程。
  */
@@ -464,14 +479,14 @@ async function windowsDescendants(rootPid) {
   return [...found];
 }
 export {
+  killProcessGroup,
+  windowsProcessTree,
   tailOfId,
   TimedOperation,
   noopAsync,
-  killProcessGroup,
-  lockHolderSocketSlot,
-  clearLockHolderSocket,
-  listDescendantProcesses,
   killIfUnchanged,
   waitForWindowsChild,
-  windowsProcessTree,
+  lockHolderSocketSlot,
+  listDescendantProcesses,
+  clearLockHolderSocket,
 };

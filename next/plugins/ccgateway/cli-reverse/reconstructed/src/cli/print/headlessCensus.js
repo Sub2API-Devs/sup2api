@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：无头 worker 的上传与堆内存普查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (7)
  * attribution: placement 7
  */
 import { readFile, realpath, lstat, readdir } from "fs/promises";
@@ -32,7 +32,7 @@ import { hasBinaryExtension } from "../../constants/files.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:250538-251640 placement
+//@ chunk-0yw3taqg.js:278147-279250 placement
 /**
  * 无头堆内存普查常量：默认 2GiB 阈值、[4,2,1] 倍阈值、会话忙时重试间隔、V8 对象类型到埋点字段的映射，以及 async resource 包装后的调用器。
  */
@@ -42,7 +42,7 @@ var HEAP_CENSUS_MIB_MULTIPLIERS;
 var HEAP_CENSUS_RETRY_MS;
 var HEAP_OBJECT_TYPE_LABELS;
 var runInAsyncResource;
-deferInit("chunk-tyg7f3ek.js:250538", () => {
+deferInit("chunk-0yw3taqg.js:278147", () => {
   HEAP_CENSUS_CONFIG = 1048576;
   DEFAULT_HEAP_CENSUS_MIB = 2048;
   HEAP_CENSUS_MIB_MULTIPLIERS = [4, 2, 1];
@@ -83,7 +83,7 @@ deferInit("chunk-tyg7f3ek.js:250538", () => {
   };
   runInAsyncResource = bindAsyncResource_2((fn) => fn());
 });
-//@ chunk-tyg7f3ek.js:251640-253082 placement
+//@ chunk-0yw3taqg.js:279250-280692 placement
 /**
  * headless 会话堆计数：内存越过阈值时统计 JSC 对象类型并上报（headless_heap_census）。
  */
@@ -183,18 +183,18 @@ class HeadlessHeapCensus {
     return fields;
   }
 }
-//@ chunk-tyg7f3ek.js:253221-253284 placement
+//@ chunk-0yw3taqg.js:280831-280894 placement
 var MIB; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var UPLOADS_CENSUS_MIB_STEPS;
 var UPLOADS_CENSUS_BATCH;
 var UPLOADS_CENSUS_MAX_BYTES;
-deferInit("chunk-tyg7f3ek.js:253221", () => {
+deferInit("chunk-0yw3taqg.js:280831", () => {
   MIB = 1048576;
   UPLOADS_CENSUS_MIB_STEPS = [300, 100, 64, 30, 10, 1, 0];
   UPLOADS_CENSUS_BATCH = 4096;
   UPLOADS_CENSUS_MAX_BYTES = BigInt(MIB);
 });
-//@ chunk-tyg7f3ek.js:253284-253346 placement
+//@ chunk-0yw3taqg.js:280894-280956 placement
 function emptyUploadsTally() {
   return {
     files: 0,
@@ -203,7 +203,7 @@ function emptyUploadsTally() {
     readBytes: 0,
   };
 }
-//@ chunk-tyg7f3ek.js:253346-253755 placement
+//@ chunk-0yw3taqg.js:280956-281365 placement
 function findMountForPath(mountTable, path) {
   let best;
   for (let line of mountTable.split(`
@@ -229,12 +229,12 @@ function findMountForPath(mountTable, path) {
   let parts = best.options.split(",");
   return parts.includes("noatime") ? "noatime" : parts.includes("ro") ? "read_only_mount" : "kept";
 }
-//@ chunk-tyg7f3ek.js:253755-253775 placement
+//@ chunk-0yw3taqg.js:281365-281386 placement
 var bindAsyncResource; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tyg7f3ek.js:253755", () => {
+deferInit("chunk-0yw3taqg.js:281365", () => {
   bindAsyncResource = bindAsyncResource_2((fn) => fn());
 });
-//@ chunk-tyg7f3ek.js:253775-256443 placement
+//@ chunk-0yw3taqg.js:281386-284056 placement
 /**
  * hosted worker 上统计上传目录文件数/字节与挂载属性（ext4、noatime 等）并上报。
  */

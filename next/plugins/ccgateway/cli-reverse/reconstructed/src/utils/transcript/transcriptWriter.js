@@ -3,27 +3,27 @@
  *
  * 2.1.316 新增：转录写入
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (15)
  * attribution: placement 15
  */
 import { sep } from "path";
 import { createToolResultSlimmer } from "../wireToolInputEcho.js";
 import { logError } from "../log.js";
 import { mainTranscriptKeyOf } from "./transcriptFiles.js";
-import { getErrnoCode, sanitizedErrCodeForTelemetry } from "../errors.js";
+import { getErrnoCode, isDiskFullErrno, sanitizedErrCodeForTelemetry } from "../errors.js";
 import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { fromEnum, lit as lit_2 } from "../../services/analytics/safeMetadata.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:325108-325238 placement
-function createToolResultSlimmer_2() {
+//@ chunk-5xgkngpb.js:326524-326678 placement
+function createToolResultSlimmer_2({ cutsEveryRead = false } = {}) {
   let toolResultSlimmer = createToolResultSlimmer();
   return (slim) => {
     try {
-      let slimmed = toolResultSlimmer(slim)?.slim();
+      let slimmed = toolResultSlimmer(slim)?.slim(cutsEveryRead);
       return slimmed === undefined
         ? slim
         : {
@@ -36,7 +36,7 @@ function createToolResultSlimmer_2() {
     }
   };
 }
-//@ chunk-e6aww6q8.js:325238-325330 placement
+//@ chunk-5xgkngpb.js:326678-326770 placement
 function slimCharsOf(content) {
   let toolResultSlimmer = createToolResultSlimmer();
   let slimChars = 0;
@@ -48,11 +48,11 @@ function slimCharsOf(content) {
     }
   return slimChars;
 }
-//@ chunk-e6aww6q8.js:325359-325543 placement
+//@ chunk-5xgkngpb.js:326799-326983 placement
 var FATAL_WRITE_ERRORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PERMISSION_WRITE_ERRORS;
 var WRITE_ERROR_REASONS;
-deferInit("chunk-e6aww6q8.js:325359", () => {
+deferInit("chunk-5xgkngpb.js:326799", () => {
   FATAL_WRITE_ERRORS = new Set(["ENOSPC", "EROFS", "EDQUOT", "ENAMETOOLONG"]);
   PERMISSION_WRITE_ERRORS = new Set(["EACCES", "EPERM"]);
   WRITE_ERROR_REASONS = new Map([
@@ -62,18 +62,18 @@ deferInit("chunk-e6aww6q8.js:325359", () => {
     ["EROFS", "erofs"],
   ]);
 });
-//@ chunk-e6aww6q8.js:325543-325627 placement (2.1.88 match: getUnameSR, 0.793)
+//@ chunk-5xgkngpb.js:326983-327067 placement (2.1.88 match: getUnameSR, 0.793)
 function getUnameSR_2(errnoCode, platform) {
   if (errnoCode === undefined) return false;
   return (
     FATAL_WRITE_ERRORS.has(errnoCode) || (platform !== "win32" && PERMISSION_WRITE_ERRORS.has(errnoCode))
   );
 }
-//@ chunk-e6aww6q8.js:325627-325658 placement
+//@ chunk-5xgkngpb.js:327067-327098 placement
 var FAILURE_REPORT_THRESHOLD = 3;
 var FAILURE_SPAN_MS = 60000;
 var OK_REPORT_QUIET_MS = 300000;
-//@ chunk-e6aww6q8.js:325658-325829 placement
+//@ chunk-5xgkngpb.js:327098-327269 placement
 function isSidecarOfMainKey(writerHealth, pathKey, sameProjectOnly) {
   let mainKey = mainTranscriptKeyOf(pathKey.key);
   let { key } = writerHealth;
@@ -85,21 +85,21 @@ function isSidecarOfMainKey(writerHealth, pathKey, sameProjectOnly) {
     (sameProjectOnly || key.projectKey === mainKey.projectKey)
   );
 }
-//@ chunk-e6aww6q8.js:325829-325944 placement
+//@ chunk-5xgkngpb.js:327269-327384 placement
 function matchesPrefix(key, prefix) {
   return typeof key === "string"
     ? typeof prefix === "string" && key.startsWith(prefix)
     : typeof prefix !== "string" && isSidecarOfMainKey(key, prefix, false);
 }
-//@ chunk-e6aww6q8.js:325944-326057 placement
+//@ chunk-5xgkngpb.js:327384-327497 placement
 function matchesMarker(key, marker) {
   return typeof key === "string"
     ? typeof marker === "string" && key.includes(marker)
     : typeof marker !== "string" && isSidecarOfMainKey(key, marker, true);
 }
-//@ chunk-e6aww6q8.js:326057-326076 placement
+//@ chunk-5xgkngpb.js:327497-327516 placement
 var UNKNOWN_FILE_KEY = "<no-file>";
-//@ chunk-e6aww6q8.js:326076-326319 placement
+//@ chunk-5xgkngpb.js:327516-327759 placement
 function isLiveServedPath(writerHealth, path) {
   if (writerHealth.liveServing === null) return false;
   if (path === writerHealth.liveServing.mainFile) return true;
@@ -112,22 +112,26 @@ function isLiveServedPath(writerHealth, path) {
     writerHealth.liveServing.sidMarker !== null && matchesMarker(path, writerHealth.liveServing.sidMarker)
   );
 }
-//@ chunk-e6aww6q8.js:326319-326468 placement
+//@ chunk-5xgkngpb.js:327759-327908 placement
 function isAbandonedPath(writerHealth, path) {
   if (writerHealth.abandonedPaths.has(path) || writerHealth.abandonedPendingPaths.has(path)) return true;
   for (let abandonedPrefix of writerHealth.abandonedPrefixes)
     if (matchesPrefix(path, abandonedPrefix)) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:326468-326517 placement
+//@ chunk-5xgkngpb.js:327908-327957 placement
 var FLUSH_OPERATIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:326468", () => {
+deferInit("chunk-5xgkngpb.js:327908", () => {
   FLUSH_OPERATIONS = new Set(["drain", "materialize", "adopt"]);
 });
-//@ chunk-e6aww6q8.js:326517-327410 placement
+//@ chunk-5xgkngpb.js:327957-328921 placement
 function reportTranscriptWriteFailure(writerHealth, source, error, fileKey, nowMs = Date.now()) {
   let errnoCode = getErrnoCode(error);
   writerHealth.failureSeq++;
+  if (source === "drain" && isDiskFullErrno(error)) {
+    writerHealth.fullDiskCode ??= errnoCode;
+    if (fileKey) writerHealth.fullDiskPaths.add(fileKey);
+  }
   let failureKey = fileKey ?? UNKNOWN_FILE_KEY;
   let previous = writerHealth.failuresByFile.get(failureKey);
   let failureState =
@@ -179,7 +183,7 @@ function reportTranscriptWriteFailure(writerHealth, source, error, fileKey, nowM
     degraded: writerHealth.degradedStore.getState() !== null,
   });
 }
-//@ chunk-e6aww6q8.js:327410-327793 placement
+//@ chunk-5xgkngpb.js:328921-329304 placement
 /**
  * 写成功：首次记 ok，清失败计数，降级状态恢复时记 tengu_transcript_writer_recovered。
  */
@@ -202,7 +206,7 @@ function noteTranscriptWriteOk(writerHealth, fileKey) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:327793-329597 placement
+//@ chunk-5xgkngpb.js:329304-331113 placement
 /**
  * 写入转录 .jsonl 文件。
  */

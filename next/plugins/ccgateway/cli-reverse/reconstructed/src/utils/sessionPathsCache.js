@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：会话路径缓存（临时目录、技能根、草稿目录等）；取当前宿主的会话路径缓存。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pqycqpxn.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0eqe9we3.js (4)
  * attribution: placement 4
  */
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-pqycqpxn.js:261-1563 placement
+//@ chunk-0eqe9we3.js:927-2229 placement
 /**
  * 会话路径缓存（临时目录、技能根、草稿目录等）。
  */
@@ -59,19 +59,19 @@ class SessionPathsCache {
     this.settingsFileLinks = undefined;
   }
 }
-//@ chunk-pqycqpxn.js:1563-1586 placement
+//@ chunk-0eqe9we3.js:2229-2252 placement
 var sessionPathsCacheSlot; // deferred: uses SessionPathsCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-pqycqpxn.js:1563", () => {
+deferInit("chunk-0eqe9we3.js:2229", () => {
   sessionPathsCacheSlot = new HostScoped(() => new SessionPathsCache());
 });
-//@ chunk-pqycqpxn.js:1586-1622 placement
+//@ chunk-0eqe9we3.js:2252-2288 placement
 /**
  * 取当前宿主的会话路径缓存。
  */
 function getSessionPathsCache() {
   return sessionPathsCacheSlot.of(getRootSession().host);
 }
-//@ chunk-pqycqpxn.js:1622-1659 placement
+//@ chunk-0eqe9we3.js:2288-2325 placement
 /**
  * sessionClock：根会话的时钟。
  */

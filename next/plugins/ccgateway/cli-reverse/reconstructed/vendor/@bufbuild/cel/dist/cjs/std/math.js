@@ -1,8 +1,8 @@
 /**
  * @bufbuild/cel/dist/cjs/std/math.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @bufbuild/cel@0.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -15,7 +15,7 @@ import { require_timestamp_2 } from "../timestamp.js";
 import { require_error } from "../error.js";
 import { require_func } from "../func.js";
 
-//@ chunk-fq0cr76a.js:484761-487762 cjs-fingerprint
+//@ chunk-qg41pqt6.js:485335-488336 cjs-fingerprint
 var require_math = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

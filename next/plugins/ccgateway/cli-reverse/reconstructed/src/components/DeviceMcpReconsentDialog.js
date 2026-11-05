@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设备 MCP 重新同意对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e7qhpt47.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-47qxazwg.js (4)
  * attribution: placement 4
  */
 import { init_react_production, useEffect } from "../../vendor/react/cjs/react.production.js";
@@ -33,12 +33,12 @@ import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 import { shortServerLabel } from "../services/deviceBridge/deviceMcpConsent.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 
-//@ chunk-e7qhpt47.js:14358-14362 placement
+//@ chunk-47qxazwg.js:15534-15538 placement
 init_react_production();
-//@ chunk-e7qhpt47.js:14362-14374 placement
+//@ chunk-47qxazwg.js:15538-15550 placement
 var MAX_LISTED_RECONSENT_KEYS = 6;
 var _ = 3;
-//@ chunk-e7qhpt47.js:14374-16766 placement
+//@ chunk-47qxazwg.js:15550-17942 placement
 function DeviceMcpReconsentDialog({ withheld, storageV5, onDone }) {
   let selfOpenedDialog = useSelfOpenedDialog(onDone, {
     selfOpened: true,
@@ -198,7 +198,7 @@ function DeviceMcpReconsentDialog({ withheld, storageV5, onDone }) {
     ],
   });
 }
-//@ chunk-e7qhpt47.js:16766-17049 placement
+//@ chunk-47qxazwg.js:17942-18225 placement
 /**
  * 概括新增/变更的设备 MCP 服务器：“(N new, M changed: 名字…)”，超过上限加省略号。
  */

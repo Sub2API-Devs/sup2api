@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。转入后台的确认。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (13)
  * attribution: placement 13
  */
 import { isDaemonBgWorker } from "../../utils/concurrentSessions.js";
@@ -26,7 +26,7 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { ConfirmSelect } from "../../components/design-system/ConfirmSelect.js";
 import { Dialog } from "../../components/design-system/Dialog.js";
 
-//@ chunk-18hwfzwa.js:60922-61089 placement
+//@ chunk-czq1j3j2.js:61467-61634 placement
 function sendDetachRequest(options) {
   if (!isDaemonBgWorker()) return;
   let message = options?.message ?? formatDetachedTaskNotice();
@@ -43,28 +43,28 @@ function sendDetachRequest(options) {
   process.stdout.write(daemonDetachApc(message));
   markDetachedSinceAttach();
 }
-//@ chunk-18hwfzwa.js:61089-61113 placement
+//@ chunk-czq1j3j2.js:61634-61658 placement
 /**
  * 导出函数 `alwaysFalseBackgroundConfirm`：返回 !1。
  */
 function alwaysFalseBackgroundConfirm() {
   return false;
 }
-//@ chunk-18hwfzwa.js:61113-61137 placement
+//@ chunk-czq1j3j2.js:61658-61682 placement
 function alwaysFalseB() {
   return false;
 }
-//@ chunk-18hwfzwa.js:61137-61160 placement
+//@ chunk-czq1j3j2.js:61682-61705 placement
 /**
  * 导出函数 `noopBackgroundConfirm`：参数 h。
  */
 function noopBackgroundConfirm(request) {
   return;
 }
-//@ chunk-18hwfzwa.js:61160-61202 placement
+//@ chunk-czq1j3j2.js:61705-61747 placement
 var SEED_NAME_WITH_COUNT_RE = /^(.*\S) \((\d{1,6})\)$/;
 var LIST_JOBS_TIMEOUT_MS = 1500;
-//@ chunk-18hwfzwa.js:61202-61303 placement
+//@ chunk-czq1j3j2.js:61747-61848 placement
 /**
  * 解析 “名字 (N)” 的基名与代数。
  */
@@ -80,7 +80,7 @@ function parseGenerationSuffix(name) {
         generation: 1,
       };
 }
-//@ chunk-18hwfzwa.js:61303-61615 placement
+//@ chunk-czq1j3j2.js:61848-62159 placement
 /**
  * 名称已被占用时生成 “基名 (N)” 的新名字。
  */
@@ -104,7 +104,7 @@ function uniqueSeedName(name, takenNames) {
     if (!takenSlugs.has(slugifySessionName(candidate))) return candidate;
   }
 }
-//@ chunk-18hwfzwa.js:61615-61924 placement
+//@ chunk-czq1j3j2.js:62159-62468 placement
 async function settleSeedName(seed, store) {
   if (!seed.name) return seed;
   let existingNames;
@@ -124,12 +124,12 @@ async function settleSeedName(seed, store) {
     nameSource: "collision",
   };
 }
-//@ chunk-18hwfzwa.js:61924-62182 placement
+//@ chunk-czq1j3j2.js:62468-62726 placement
 function artifactRepliesStopNotice(artifactCount) {
   if (artifactCount === 0) return "";
   return `Automatic replies to ${artifactCount === 1 ? "Artifact comments" : `comments on ${artifactCount} Artifacts`} keep going in the background session, where you won't see each reply as it's posted. You'll see a summary of the replies when you return.`;
 }
-//@ chunk-18hwfzwa.js:62182-62507 placement
+//@ chunk-czq1j3j2.js:62726-63051 placement
 function describeCarriedTasks({ running, finished, rerun }) {
   if (running === 0) return "";
   let finishedNotice =
@@ -140,7 +140,7 @@ function describeCarriedTasks({ running, finished, rerun }) {
     rerun > 0 ? `; ${rerun} that finished after a failed one ${rerun === 1 ? "runs" : "run"} again` : "";
   return `${running} running workflow ${plural(running, "subagent")} ${running === 1 ? "restarts" : "restart"} from the beginning${finishedNotice}${rerunNotice}.`;
 }
-//@ chunk-18hwfzwa.js:62507-62719 placement
+//@ chunk-czq1j3j2.js:63051-63263 placement
 function backgroundAnywayLabel(tasksWillStop, workflowAgents) {
   if (tasksWillStop) return "Background anyway (tasks will be stopped)";
   let subagentCount = workflowAgents.running + workflowAgents.rerun;
@@ -148,7 +148,7 @@ function backgroundAnywayLabel(tasksWillStop, workflowAgents) {
     return `Background anyway (${subagentCount} ${plural(subagentCount, "subagent")} ${subagentCount === 1 ? "restarts" : "restart"})`;
   return "Background";
 }
-//@ chunk-18hwfzwa.js:62719-63754 placement
+//@ chunk-czq1j3j2.js:63263-64298 placement
 /**
  * 后台化（← 进入 agents 视图 / /background）前的确认对话框：列出将被停止的任务与可带到后台会话的任务数，选项 Stay / Background anyway。
  */
@@ -223,13 +223,13 @@ function BackgroundConfirmDialog(props) {
   } else dialog = $[19];
   return dialog;
 }
-//@ chunk-18hwfzwa.js:63754-63795 placement
+//@ chunk-czq1j3j2.js:64298-64339 placement
 function selectSessionEffort(state) {
   return state.sessionEffort;
 }
 export {
-  sendDetachRequest,
   noopBackgroundConfirm,
+  sendDetachRequest,
   artifactRepliesStopNotice,
   settleSeedName,
   describeCarriedTasks,

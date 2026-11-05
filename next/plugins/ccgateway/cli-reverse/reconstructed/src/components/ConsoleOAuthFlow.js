@@ -3,10 +3,10 @@
  *
  * 登录流程：选择订阅（claude.ai）/API 计费（console）/网关，启动 OAuth、等待浏览器授权或粘贴代码、保存凭证。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ConsoleOAuthFlow.tsx
- * pieces: chunk-s5p7fp0c.js (11), chunk-zkzpd9ky.js (1)
- * attribution: placement 8, callgraph-fingerprint 1, layout 1, facade-exports 1, fingerprint 1
+ * pieces: chunk-f94bkgbg.js (1), chunk-mx6cbnn0.js (11)
+ * attribution: fingerprint 1, placement 8, callgraph-fingerprint 1, layout 1, facade-exports 1
  */
 import {
   init_react_production,
@@ -29,7 +29,7 @@ import { plural } from "../utils/stringUtils.js";
 import { useHasScrollViewport } from "./ScrollViewportContext.js";
 import { useAppStateSlice } from "../state/AppState.js";
 import { PANE_WIDTH_RESERVE } from "./design-system/Pane.js";
-import { getInitialSettings_2 } from "../utils/settings/settings.js";
+import { getInitialSettings } from "../utils/settings/settings.js";
 import { getUserSettingsGateway, getForcedGatewayLogin } from "../services/gateway/gatewayCredentialStore.js";
 import {
   getForcedLoginMethod,
@@ -74,6 +74,18 @@ import {
   GatewayLogin,
 } from "./GatewayLogin.js";
 import { isBrowserUnavailable, openValidatedUrlSucceeded } from "../utils/browser.js";
+import {
+  SIGN_IN_AGAIN_TO_CLEAR_MESSAGE,
+  mintApiKeyIfAllowed,
+  OrgConfigLoginRefusedError,
+  revokeRefusedSignInToken,
+  checkLoginAllowed,
+  needsProfileVerification,
+  unverifiedSettingsNotice,
+  saveLoginOrWarn,
+  LOGIN_REFUSAL_REASONS,
+  rollbackFailureText,
+} from "../services/oauth/refusedSignIn.js";
 import { notifyAsync } from "../utils/terminalProbe.js";
 import { stripNonPrintable } from "../utils/truncateGraphemes.js";
 import { logForDebugging } from "../utils/debug.js";
@@ -87,17 +99,6 @@ import {
 } from "../services/oauth/oauthErrors.js";
 import { getSSLErrorHint } from "../services/api/errorUtils.js";
 import { errorTelemetryFields } from "../utils/accessibility/screenReader.js";
-import {
-  mintApiKeyIfAllowed,
-  OrgConfigLoginRefusedError,
-  revokeRefusedSignInToken,
-  checkLoginAllowed,
-  needsProfileVerification,
-  unverifiedSettingsNotice,
-  saveLoginOrWarn,
-  LOGIN_REFUSAL_REASONS,
-  rollbackFailureText,
-} from "../services/oauth/refusedSignIn.js";
 import { sanitizeStorageKindForAnalytics } from "../services/analytics/metadata.js";
 import { fromEnum, lit } from "../services/analytics/safeMetadata.js";
 import { isVerificationOrMintRefusal } from "../services/oauth/client.js";
@@ -116,12 +117,12 @@ import { WorkerBadge } from "./permissions/WorkerBadge.js";
 import { PASTE_CODE_PROMPT_3, DesignOAuthWarning } from "./DesignOAuthFlow.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s5p7fp0c.js:12637-12641 placement
+//@ chunk-mx6cbnn0.js:12718-12722 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s5p7fp0c.js:12637", () => {
+deferInit("chunk-mx6cbnn0.js:12718", () => {
   init_react_production();
 });
-//@ chunk-s5p7fp0c.js:12641-12920 placement
+//@ chunk-mx6cbnn0.js:12722-13002 placement
 function ManagedSettingsLoginNotice() {
   let $ = useMemoCache(6);
   let { storageV5 } = useTheme_2();
@@ -155,11 +156,11 @@ function ManagedSettingsLoginNotice() {
   } else notice = $[5];
   return notice;
 }
-//@ chunk-s5p7fp0c.js:12920-12952 placement
+//@ chunk-mx6cbnn0.js:13002-13034 placement
 function titleOf(option) {
   return option.title;
 }
-//@ chunk-s5p7fp0c.js:12952-13069 placement
+//@ chunk-mx6cbnn0.js:13034-13151 placement
 function providerOption(option) {
   return {
     label: jsxProd_default_2(Text, {
@@ -175,21 +176,21 @@ function providerOption(option) {
     value: option.value,
   };
 }
-//@ chunk-s5p7fp0c.js:13069-13113 placement
+//@ chunk-mx6cbnn0.js:13151-13195 placement
 function isFoundryAuthMethod(option) {
   return option.value === "foundry";
 }
-//@ chunk-s5p7fp0c.js:13113-13214 callgraph-fingerprint (2.1.88 match: PASTE_HERE_MSG, 0.632)
+//@ chunk-mx6cbnn0.js:13195-13296 callgraph-fingerprint (2.1.88 match: PASTE_HERE_MSG, 0.632)
 var PASTE_CODE_PROMPT = "Paste code here if prompted > ";
 var RECOMMENDED_SIGNIN_UNAVAILABLE_TEXT = "The recommended sign-in isn't available on this machine";
-//@ chunk-s5p7fp0c.js:13214-13339 layout
+//@ chunk-mx6cbnn0.js:13296-13421 layout
 function formatTokenLifetimeDays(seconds) {
   let rounded = Math.round(seconds / 86400);
   if (rounded < 1) return "less than a day";
   if (rounded === 365) return "1 year";
   return `${rounded} ${plural(rounded, "day")}`;
 }
-//@ chunk-s5p7fp0c.js:13339-24518 facade-exports (2.1.88 match: ConsoleOAuthFlow, 0.507)
+//@ chunk-mx6cbnn0.js:13421-24795 facade-exports (2.1.88 match: ConsoleOAuthFlow, 0.496)
 /**
  * 登录流程：选择登录方式（Claude 订阅 / Console API 计费 / 网关，可由参数预选），启动本地 OAuth 回调并打开浏览器，显示等待/粘贴代码提示，换取并保存凭证，完成后回调 onDone。
  */
@@ -214,7 +215,7 @@ function ConsoleOAuthFlow({
   let proactivityLevel = useAppStateSlice((appState) => appState.proactivityLevel);
   let toolPermissionContext = useAppStateSlice((appState) => appState.toolPermissionContext);
   let urlOutdentWidth = (hasScrollViewport ? PANE_WIDTH_RESERVE : 0) + urlOutdent;
-  let initialSettings = getInitialSettings_2();
+  let initialSettings = getInitialSettings();
   let [userSettings] = useState(getUserSettingsGateway);
   let forcedGatewayLogin = getForcedGatewayLogin(userSettings);
   let forcedGateway = forcedGatewayLogin?.url === undefined ? undefined : forcedGatewayLogin;
@@ -223,11 +224,11 @@ function ConsoleOAuthFlow({
   let loginMethod = isGatewayForced ? "gateway" : (forceLoginMethod ?? forcedLoginMethod);
   let forcedMethodMessage =
     loginMethod === "claudeai"
-      ? "Login method pre-selected: Subscription Plan (Claude Pro/Max)"
+      ? "Login method pre-selected: Claude subscription (claude.ai account)"
       : loginMethod === "console"
         ? "Login method pre-selected: API usage billing (Anthropic Console)"
         : null;
-  let Y = null;
+  let installedAccount = null;
   let terminalNotification = useTerminalNotification();
   let clock = useClock();
   let [oauthStatus, setOAuthStatus] = useState(() => {
@@ -334,10 +335,10 @@ function ConsoleOAuthFlow({
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION,
@@ -519,16 +520,23 @@ function ConsoleOAuthFlow({
           );
         let consoleInstallSource;
         try {
-          await loginWithConsoleProfile(oauthService, async (url) => onAuthorizationUrl(url), {
-            orgUUID: forceLoginOrgUUID,
-            onCallbackListenerUnavailable,
-            onInstallStart: () => {
-              consoleInstallSource = "previous";
+          let installKind = await loginWithConsoleProfile(
+            oauthService,
+            async (url) => onAuthorizationUrl(url),
+            {
+              orgUUID: forceLoginOrgUUID,
+              onCallbackListenerUnavailable,
+              onInstallStart: () => {
+                consoleInstallSource = "previous";
+              },
             },
-          });
+          );
           consoleInstallSource = "new";
           setOAuthStatus({
             state: "success",
+            ...(installKind?.departingLoginMayRemain && {
+              notice: SIGN_IN_AGAIN_TO_CLEAR_MESSAGE,
+            }),
           });
           onAuthSuccess?.();
           notifyAsync(
@@ -673,6 +681,7 @@ ${rollbackFailureText(refusalReason)}`
               backendName: storage.backendName,
               sessionAuth: storage.sessionAuth,
               transient: storage.transient,
+              departingLoginMayRemain: saveResult?.departingLoginMayRemain,
             });
             logEvent("tengu_oauth_persist_failure_shown", {
               storageBackend: sanitizeStorageKindForAnalytics(storage.backendName),
@@ -697,10 +706,15 @@ ${rollbackFailureText(refusalReason)}`
               },
             );
           } else {
+            let filtered = [
+              warning,
+              saveResult?.departingLoginMayRemain ? SIGN_IN_AGAIN_TO_CLEAR_MESSAGE : undefined,
+            ].filter((notice) => notice !== undefined);
             setOAuthStatus({
               state: "success",
-              ...(warning !== undefined && {
-                notice: warning,
+              ...(filtered.length > 0 && {
+                notice: filtered.join(`
+`),
               }),
             });
             sessionAuthKind = "new";
@@ -979,7 +993,7 @@ ${rollbackFailureText(refusalReason)}`
     ],
   });
 }
-//@ chunk-s5p7fp0c.js:25025-25420 placement
+//@ chunk-mx6cbnn0.js:25302-25697 placement
 /**
  * 第三方提供方登录选项。
  */
@@ -1009,12 +1023,12 @@ var THIRD_PARTY_PROVIDER_OPTIONS = [
     hint: "interactive setup",
   },
 ];
-//@ chunk-s5p7fp0c.js:25420-40330 placement
+//@ chunk-mx6cbnn0.js:25697-40642 placement
 /**
  * 登录流程主视图：选择方式、OAuth 状态、粘贴授权码、网关与第三方提供方。
  */
 function ConsoleOAuthFlowView(props) {
-  let $ = useMemoCache(191);
+  let $ = useMemoCache(194);
   let {
     oauthStatus,
     mode,
@@ -1070,41 +1084,42 @@ function ConsoleOAuthFlowView(props) {
     $[14] !== keyMintFallbackReason ||
     $[15] !== mode ||
     $[16] !== oauthStatus.backendName ||
-    $[17] !== oauthStatus.message ||
-    $[18] !== oauthStatus.notice ||
-    $[19] !== oauthStatus.ok ||
-    $[20] !== oauthStatus.sessionAuth ||
-    $[21] !== oauthStatus.state ||
-    $[22] !== oauthStatus.toRetry ||
-    $[23] !== oauthStatus.token ||
-    $[24] !== oauthStatus.transient ||
-    $[25] !== oauthStatus.url ||
-    $[26] !== oauthStatus.verbatim ||
-    $[27] !== onAuthSuccess ||
-    $[28] !== pasteCodePrompt ||
-    $[29] !== pastedCode ||
-    $[30] !== reloadClearedOrgDocuments ||
-    $[31] !== setConsoleProfileLogin ||
-    $[32] !== setCursorOffset ||
-    $[33] !== setHybridRowPicked ||
-    $[34] !== setLoginWithClaudeAi ||
-    $[35] !== setOAuthStatus ||
-    $[36] !== setPastedCode ||
-    $[37] !== showPastePrompt ||
-    $[38] !== startingMessage ||
-    $[39] !== textInputColumns
+    $[17] !== oauthStatus.departingLoginMayRemain ||
+    $[18] !== oauthStatus.message ||
+    $[19] !== oauthStatus.notice ||
+    $[20] !== oauthStatus.ok ||
+    $[21] !== oauthStatus.sessionAuth ||
+    $[22] !== oauthStatus.state ||
+    $[23] !== oauthStatus.toRetry ||
+    $[24] !== oauthStatus.token ||
+    $[25] !== oauthStatus.transient ||
+    $[26] !== oauthStatus.url ||
+    $[27] !== oauthStatus.verbatim ||
+    $[28] !== onAuthSuccess ||
+    $[29] !== pasteCodePrompt ||
+    $[30] !== pastedCode ||
+    $[31] !== reloadClearedOrgDocuments ||
+    $[32] !== setConsoleProfileLogin ||
+    $[33] !== setCursorOffset ||
+    $[34] !== setHybridRowPicked ||
+    $[35] !== setLoginWithClaudeAi ||
+    $[36] !== setOAuthStatus ||
+    $[37] !== setPastedCode ||
+    $[38] !== showPastePrompt ||
+    $[39] !== startingMessage ||
+    $[40] !== textInputColumns
   ) {
     contentElement = EARLY_RETURN_SENTINEL;
-    mo: {
+    fo: {
       let providerFilter;
-      if ($[41] !== allowedProviders) {
+      if ($[42] !== allowedProviders) {
         providerFilter = (provider) =>
           (allowedProviders === undefined ||
             provider.providers.some((provider) => allowedProviders.includes(provider))) &&
           (provider.value !== "aws_refresh" || !!awsRefreshConfig);
-        $[41] = allowedProviders;
-        $[42] = providerFilter;
-      } else providerFilter = $[42];
+        $[42] = allowedProviders;
+        $[43] = providerFilter;
+      } else providerFilter = $[43];
       let filtered = THIRD_PARTY_PROVIDER_OPTIONS.filter(providerFilter);
       let hybridLabel;
       switch (oauthStatus.state) {
@@ -1113,25 +1128,25 @@ function ConsoleOAuthFlowView(props) {
             ? startingMessage
             : "Claude Code can be used with your Claude subscription or billed based on API usage through your Console account.";
           let introElement;
-          if ($[43] !== children) {
+          if ($[44] !== children) {
             introElement = jsxProd_default(Text, {
               bold: true,
               children,
             });
-            $[43] = children;
-            $[44] = introElement;
-          } else introElement = $[44];
+            $[44] = children;
+            $[45] = introElement;
+          } else introElement = $[45];
           let gatewayWarningElement;
-          if ($[45] !== gatewayUnsupportedWarning) {
+          if ($[46] !== gatewayUnsupportedWarning) {
             gatewayWarningElement =
               gatewayUnsupportedWarning &&
               jsxProd_default(Text, {
                 color: "warning",
                 children: gatewayUnsupportedWarning,
               });
-            $[45] = gatewayUnsupportedWarning;
-            $[46] = gatewayWarningElement;
-          } else gatewayWarningElement = $[46];
+            $[46] = gatewayUnsupportedWarning;
+            $[47] = gatewayWarningElement;
+          } else gatewayWarningElement = $[47];
           const noProvidersElement =
             !firstPartyLoginAllowed &&
             hybridLabel === undefined &&
@@ -1143,14 +1158,14 @@ function ConsoleOAuthFlowView(props) {
                 "Your organization's managed settings (allowedProviders) admit no sign-in this screen can offer; ask your administrator.",
             });
           let selectPromptElement;
-          if ($[47] === MEMO_CACHE_SENTINEL) {
+          if ($[48] === MEMO_CACHE_SENTINEL) {
             selectPromptElement = jsxProd_default(Text, {
               children: "Select login method:",
             });
-            $[47] = selectPromptElement;
-          } else selectPromptElement = $[47];
+            $[48] = selectPromptElement;
+          } else selectPromptElement = $[48];
           let firstPartyOptions;
-          if ($[48] !== firstPartyLoginAllowed) {
+          if ($[49] !== firstPartyLoginAllowed) {
             firstPartyOptions = firstPartyLoginAllowed
               ? [
                   {
@@ -1160,7 +1175,7 @@ function ConsoleOAuthFlowView(props) {
                         " ",
                         jsxProd_default(Text, {
                           dimColor: true,
-                          children: "Pro, Max, Team, or Enterprise",
+                          children: "Individual, Team, or Enterprise",
                         }),
                         false,
                       ],
@@ -1182,11 +1197,11 @@ function ConsoleOAuthFlowView(props) {
                   },
                 ]
               : [];
-            $[48] = firstPartyLoginAllowed;
-            $[49] = firstPartyOptions;
-          } else firstPartyOptions = $[49];
+            $[49] = firstPartyLoginAllowed;
+            $[50] = firstPartyOptions;
+          } else firstPartyOptions = $[50];
           let hybridOptions;
-          if ($[50] === MEMO_CACHE_SENTINEL) {
+          if ($[51] === MEMO_CACHE_SENTINEL) {
             hybridOptions =
               hybridLabel !== undefined
                 ? [
@@ -1196,8 +1211,8 @@ function ConsoleOAuthFlowView(props) {
                     },
                   ]
                 : [];
-            $[50] = hybridOptions;
-          } else hybridOptions = $[50];
+            $[51] = hybridOptions;
+          } else hybridOptions = $[51];
           const thirdPartyOptions =
             filtered.length > 0
               ? [
@@ -1217,19 +1232,19 @@ function ConsoleOAuthFlowView(props) {
                 ]
               : [];
           let options;
-          if ($[51] !== thirdPartyOptions || $[52] !== firstPartyOptions) {
+          if ($[52] !== thirdPartyOptions || $[53] !== firstPartyOptions) {
             options = [...firstPartyOptions, ...hybridOptions, ...thirdPartyOptions];
-            $[51] = thirdPartyOptions;
-            $[52] = firstPartyOptions;
-            $[53] = options;
-          } else options = $[53];
+            $[52] = thirdPartyOptions;
+            $[53] = firstPartyOptions;
+            $[54] = options;
+          } else options = $[54];
           let onChange;
           if (
-            $[54] !== consoleProfileLoginAllowed ||
-            $[55] !== setConsoleProfileLogin ||
-            $[56] !== setHybridRowPicked ||
-            $[57] !== setLoginWithClaudeAi ||
-            $[58] !== setOAuthStatus
+            $[55] !== consoleProfileLoginAllowed ||
+            $[56] !== setConsoleProfileLogin ||
+            $[57] !== setHybridRowPicked ||
+            $[58] !== setLoginWithClaudeAi ||
+            $[59] !== setOAuthStatus
           ) {
             onChange = (selectedValue) => {
               if (selectedValue === "platform") {
@@ -1259,31 +1274,31 @@ function ConsoleOAuthFlowView(props) {
                 });
               }
             };
-            $[54] = consoleProfileLoginAllowed;
-            $[55] = setConsoleProfileLogin;
-            $[56] = setHybridRowPicked;
-            $[57] = setLoginWithClaudeAi;
-            $[58] = setOAuthStatus;
-            $[59] = onChange;
-          } else onChange = $[59];
+            $[55] = consoleProfileLoginAllowed;
+            $[56] = setConsoleProfileLogin;
+            $[57] = setHybridRowPicked;
+            $[58] = setLoginWithClaudeAi;
+            $[59] = setOAuthStatus;
+            $[60] = onChange;
+          } else onChange = $[60];
           let selectorElement;
-          if ($[60] !== options || $[61] !== onChange) {
+          if ($[61] !== options || $[62] !== onChange) {
             selectorElement = jsxProd_default(Box, {
               children: jsxProd_default(ModelSelector, {
                 options,
                 onChange,
               }),
             });
-            $[60] = options;
-            $[61] = onChange;
-            $[62] = selectorElement;
-          } else selectorElement = $[62];
+            $[61] = options;
+            $[62] = onChange;
+            $[63] = selectorElement;
+          } else selectorElement = $[63];
           let idleElement;
           if (
-            $[63] !== selectorElement ||
-            $[64] !== introElement ||
-            $[65] !== gatewayWarningElement ||
-            $[66] !== noProvidersElement
+            $[64] !== selectorElement ||
+            $[65] !== introElement ||
+            $[66] !== gatewayWarningElement ||
+            $[67] !== noProvidersElement
           ) {
             idleElement = jsxProd_default_2(Box, {
               flexDirection: "column",
@@ -1296,18 +1311,18 @@ function ConsoleOAuthFlowView(props) {
                 selectorElement,
               ],
             });
-            $[63] = selectorElement;
-            $[64] = introElement;
-            $[65] = gatewayWarningElement;
-            $[66] = noProvidersElement;
-            $[67] = idleElement;
-          } else idleElement = $[67];
+            $[64] = selectorElement;
+            $[65] = introElement;
+            $[66] = gatewayWarningElement;
+            $[67] = noProvidersElement;
+            $[68] = idleElement;
+          } else idleElement = $[68];
           contentElement = idleElement;
-          break mo;
+          break fo;
         }
         case "gateway_setup": {
           let onDone;
-          if ($[68] !== onAuthSuccess || $[69] !== reloadClearedOrgDocuments || $[70] !== setOAuthStatus) {
+          if ($[69] !== onAuthSuccess || $[70] !== reloadClearedOrgDocuments || $[71] !== setOAuthStatus) {
             onDone = () => {
               onAuthSuccess?.();
               reloadClearedOrgDocuments("new");
@@ -1315,28 +1330,28 @@ function ConsoleOAuthFlowView(props) {
                 state: "gateway_done",
               });
             };
-            $[68] = onAuthSuccess;
-            $[69] = reloadClearedOrgDocuments;
-            $[70] = setOAuthStatus;
-            $[71] = onDone;
-          } else onDone = $[71];
+            $[69] = onAuthSuccess;
+            $[70] = reloadClearedOrgDocuments;
+            $[71] = setOAuthStatus;
+            $[72] = onDone;
+          } else onDone = $[72];
           let onCancel;
-          if ($[72] !== setOAuthStatus) {
+          if ($[73] !== setOAuthStatus) {
             onCancel = () =>
               setOAuthStatus({
                 state: "idle",
               });
-            $[72] = setOAuthStatus;
-            $[73] = onCancel;
-          } else onCancel = $[73];
+            $[73] = setOAuthStatus;
+            $[74] = onCancel;
+          } else onCancel = $[74];
           let gatewaySetupElement;
           if (
-            $[74] !== forceLoginGatewayUrl ||
-            $[75] !== gatewayInternalNetworks ||
-            $[76] !== gatewayNamedBy ||
-            $[77] !== gatewayScreenLocked ||
-            $[78] !== onDone ||
-            $[79] !== onCancel
+            $[75] !== forceLoginGatewayUrl ||
+            $[76] !== gatewayInternalNetworks ||
+            $[77] !== gatewayNamedBy ||
+            $[78] !== gatewayScreenLocked ||
+            $[79] !== onDone ||
+            $[80] !== onCancel
           ) {
             gatewaySetupElement = jsxProd_default(GatewayLogin, {
               initialUrl: forceLoginGatewayUrl,
@@ -1346,28 +1361,28 @@ function ConsoleOAuthFlowView(props) {
               onDone,
               onCancel,
             });
-            $[74] = forceLoginGatewayUrl;
-            $[75] = gatewayInternalNetworks;
-            $[76] = gatewayNamedBy;
-            $[77] = gatewayScreenLocked;
-            $[78] = onDone;
-            $[79] = onCancel;
-            $[80] = gatewaySetupElement;
-          } else gatewaySetupElement = $[80];
+            $[75] = forceLoginGatewayUrl;
+            $[76] = gatewayInternalNetworks;
+            $[77] = gatewayNamedBy;
+            $[78] = gatewayScreenLocked;
+            $[79] = onDone;
+            $[80] = onCancel;
+            $[81] = gatewaySetupElement;
+          } else gatewaySetupElement = $[81];
           contentElement = gatewaySetupElement;
-          break mo;
+          break fo;
         }
         case "gateway_done": {
           let gatewayDoneText;
-          if ($[81] === MEMO_CACHE_SENTINEL) {
+          if ($[82] === MEMO_CACHE_SENTINEL) {
             gatewayDoneText = jsxProd_default(Text, {
               color: "success",
               children: "Connected to Cloud gateway.",
             });
-            $[81] = gatewayDoneText;
-          } else gatewayDoneText = $[81];
+            $[82] = gatewayDoneText;
+          } else gatewayDoneText = $[82];
           let gatewayDoneElement;
-          if ($[82] === MEMO_CACHE_SENTINEL) {
+          if ($[83] === MEMO_CACHE_SENTINEL) {
             gatewayDoneElement = jsxProd_default_2(Box, {
               flexDirection: "column",
               gap: 1,
@@ -1387,15 +1402,15 @@ function ConsoleOAuthFlowView(props) {
                 }),
               ],
             });
-            $[82] = gatewayDoneElement;
-          } else gatewayDoneElement = $[82];
+            $[83] = gatewayDoneElement;
+          } else gatewayDoneElement = $[83];
           contentElement = gatewayDoneElement;
-          break mo;
+          break fo;
         }
         case "console_method": {
           let consoleMethodTitle;
           let consoleMethodPrompt;
-          if ($[83] === MEMO_CACHE_SENTINEL) {
+          if ($[84] === MEMO_CACHE_SENTINEL) {
             consoleMethodTitle = jsxProd_default(Text, {
               bold: true,
               children: "Anthropic Console account",
@@ -1403,14 +1418,14 @@ function ConsoleOAuthFlowView(props) {
             consoleMethodPrompt = jsxProd_default(Text, {
               children: "How do you want to sign in?",
             });
-            $[83] = consoleMethodTitle;
-            $[84] = consoleMethodPrompt;
+            $[84] = consoleMethodTitle;
+            $[85] = consoleMethodPrompt;
           } else {
-            consoleMethodTitle = $[83];
-            consoleMethodPrompt = $[84];
+            consoleMethodTitle = $[84];
+            consoleMethodPrompt = $[85];
           }
           let wifOption;
-          if ($[85] === MEMO_CACHE_SENTINEL) {
+          if ($[86] === MEMO_CACHE_SENTINEL) {
             wifOption = {
               label: jsxProd_default_2(Text, {
                 children: [
@@ -1424,18 +1439,18 @@ function ConsoleOAuthFlowView(props) {
               }),
               value: "wif",
             };
-            $[85] = wifOption;
-          } else wifOption = $[85];
+            $[86] = wifOption;
+          } else wifOption = $[86];
           let legacyBadge;
-          if ($[86] === MEMO_CACHE_SENTINEL) {
+          if ($[87] === MEMO_CACHE_SENTINEL) {
             legacyBadge = jsxProd_default(Text, {
               dimColor: true,
               children: "(legacy)",
             });
-            $[86] = legacyBadge;
-          } else legacyBadge = $[86];
+            $[87] = legacyBadge;
+          } else legacyBadge = $[87];
           let options;
-          if ($[87] === MEMO_CACHE_SENTINEL) {
+          if ($[88] === MEMO_CACHE_SENTINEL) {
             options = [
               wifOption,
               {
@@ -1458,22 +1473,22 @@ function ConsoleOAuthFlowView(props) {
                 value: "back",
               },
             ];
-            $[87] = options;
-          } else options = $[87];
+            $[88] = options;
+          } else options = $[88];
           let onCancel;
-          if ($[88] !== setOAuthStatus) {
+          if ($[89] !== setOAuthStatus) {
             onCancel = () =>
               setOAuthStatus({
                 state: "idle",
               });
-            $[88] = setOAuthStatus;
-            $[89] = onCancel;
-          } else onCancel = $[89];
+            $[89] = setOAuthStatus;
+            $[90] = onCancel;
+          } else onCancel = $[90];
           let onChange;
           if (
-            $[90] !== setConsoleProfileLogin ||
-            $[91] !== setLoginWithClaudeAi ||
-            $[92] !== setOAuthStatus
+            $[91] !== setConsoleProfileLogin ||
+            $[92] !== setLoginWithClaudeAi ||
+            $[93] !== setOAuthStatus
           ) {
             onChange = (selectedValue) => {
               if (selectedValue === "back") {
@@ -1494,13 +1509,13 @@ function ConsoleOAuthFlowView(props) {
                 state: "ready_to_start",
               });
             };
-            $[90] = setConsoleProfileLogin;
-            $[91] = setLoginWithClaudeAi;
-            $[92] = setOAuthStatus;
-            $[93] = onChange;
-          } else onChange = $[93];
+            $[91] = setConsoleProfileLogin;
+            $[92] = setLoginWithClaudeAi;
+            $[93] = setOAuthStatus;
+            $[94] = onChange;
+          } else onChange = $[94];
           let consoleMethodElement;
-          if ($[94] !== onChange || $[95] !== onCancel) {
+          if ($[95] !== onChange || $[96] !== onCancel) {
             consoleMethodElement = jsxProd_default_2(Box, {
               flexDirection: "column",
               gap: 1,
@@ -1516,22 +1531,22 @@ function ConsoleOAuthFlowView(props) {
                 }),
               ],
             });
-            $[94] = onChange;
-            $[95] = onCancel;
-            $[96] = consoleMethodElement;
-          } else consoleMethodElement = $[96];
+            $[95] = onChange;
+            $[96] = onCancel;
+            $[97] = consoleMethodElement;
+          } else consoleMethodElement = $[97];
           contentElement = consoleMethodElement;
-          break mo;
+          break fo;
         }
         case "platform_setup": {
           let platformTitle;
-          if ($[97] === MEMO_CACHE_SENTINEL) {
+          if ($[98] === MEMO_CACHE_SENTINEL) {
             platformTitle = jsxProd_default(Text, {
               bold: true,
               children: "Using 3rd-party platforms",
             });
-            $[97] = platformTitle;
-          } else platformTitle = $[97];
+            $[98] = platformTitle;
+          } else platformTitle = $[98];
           const options = [
             ...filtered.map(providerOption),
             {
@@ -1541,22 +1556,22 @@ function ConsoleOAuthFlowView(props) {
           ];
           let onChange;
           let onCancel;
-          if ($[98] !== setOAuthStatus) {
+          if ($[99] !== setOAuthStatus) {
             onChange = (selectedValue) => {
-              _t: switch (selectedValue) {
+              kt: switch (selectedValue) {
                 case "bedrock": {
                   logEvent("tengu_oauth_bedrock_wizard_launched", {});
                   setOAuthStatus({
                     state: "bedrock_wizard",
                   });
-                  break _t;
+                  break kt;
                 }
                 case "aws_refresh": {
                   logEvent("tengu_oauth_aws_refresh_launched", {});
                   setOAuthStatus({
                     state: "aws_refresh_running",
                   });
-                  break _t;
+                  break kt;
                 }
                 case "foundry": {
                   logEvent("tengu_oauth_platform_docs_opened", {
@@ -1566,14 +1581,14 @@ function ConsoleOAuthFlowView(props) {
                   setOAuthStatus({
                     state: "idle",
                   });
-                  break _t;
+                  break kt;
                 }
                 case "vertex": {
                   logEvent("tengu_oauth_vertex_wizard_launched", {});
                   setOAuthStatus({
                     state: "vertex_wizard",
                   });
-                  break _t;
+                  break kt;
                 }
                 default: {
                   setOAuthStatus({
@@ -1586,12 +1601,12 @@ function ConsoleOAuthFlowView(props) {
               setOAuthStatus({
                 state: "idle",
               });
-            $[98] = setOAuthStatus;
-            $[99] = onChange;
-            $[100] = onCancel;
+            $[99] = setOAuthStatus;
+            $[100] = onChange;
+            $[101] = onCancel;
           } else {
-            onChange = $[99];
-            onCancel = $[100];
+            onChange = $[100];
+            onCancel = $[101];
           }
           contentElement = jsxProd_default_2(Box, {
             flexDirection: "column",
@@ -1616,11 +1631,11 @@ function ConsoleOAuthFlowView(props) {
                 }),
             ],
           });
-          break mo;
+          break fo;
         }
         case "aws_refresh_running": {
           let awsRefreshRunningElement;
-          if ($[101] !== setOAuthStatus) {
+          if ($[102] !== setOAuthStatus) {
             awsRefreshRunningElement = jsxProd_default(call, {
               onComplete: (ok) =>
                 setOAuthStatus({
@@ -1628,15 +1643,15 @@ function ConsoleOAuthFlowView(props) {
                   ok,
                 }),
             });
-            $[101] = setOAuthStatus;
-            $[102] = awsRefreshRunningElement;
-          } else awsRefreshRunningElement = $[102];
+            $[102] = setOAuthStatus;
+            $[103] = awsRefreshRunningElement;
+          } else awsRefreshRunningElement = $[103];
           contentElement = awsRefreshRunningElement;
-          break mo;
+          break fo;
         }
         case "aws_refresh_done": {
           let awsRefreshResultText;
-          if ($[103] !== oauthStatus.ok) {
+          if ($[104] !== oauthStatus.ok) {
             awsRefreshResultText = oauthStatus.ok
               ? jsxProd_default(Text, {
                   color: "success",
@@ -1647,11 +1662,11 @@ function ConsoleOAuthFlowView(props) {
                   children:
                     "awsAuthRefresh failed. Check the command in your settings and try running it in a separate terminal.",
                 });
-            $[103] = oauthStatus.ok;
-            $[104] = awsRefreshResultText;
-          } else awsRefreshResultText = $[104];
+            $[104] = oauthStatus.ok;
+            $[105] = awsRefreshResultText;
+          } else awsRefreshResultText = $[105];
           let pressEnterToContinue;
-          if ($[105] === MEMO_CACHE_SENTINEL) {
+          if ($[106] === MEMO_CACHE_SENTINEL) {
             pressEnterToContinue = jsxProd_default_2(Text, {
               dimColor: true,
               children: [
@@ -1663,24 +1678,24 @@ function ConsoleOAuthFlowView(props) {
                 " to continue.",
               ],
             });
-            $[105] = pressEnterToContinue;
-          } else pressEnterToContinue = $[105];
+            $[106] = pressEnterToContinue;
+          } else pressEnterToContinue = $[106];
           let awsRefreshDoneElement;
-          if ($[106] !== awsRefreshResultText) {
+          if ($[107] !== awsRefreshResultText) {
             awsRefreshDoneElement = jsxProd_default_2(Box, {
               flexDirection: "column",
               gap: 1,
               children: [awsRefreshResultText, pressEnterToContinue],
             });
-            $[106] = awsRefreshResultText;
-            $[107] = awsRefreshDoneElement;
-          } else awsRefreshDoneElement = $[107];
+            $[107] = awsRefreshResultText;
+            $[108] = awsRefreshDoneElement;
+          } else awsRefreshDoneElement = $[108];
           contentElement = awsRefreshDoneElement;
-          break mo;
+          break fo;
         }
         case "bedrock_wizard": {
           let bedrockWizardElement;
-          if ($[108] !== setOAuthStatus) {
+          if ($[109] !== setOAuthStatus) {
             bedrockWizardElement = jsxProd_default(CreateAgentWizard, {
               onComplete: (message) =>
                 setOAuthStatus({
@@ -1693,25 +1708,25 @@ function ConsoleOAuthFlowView(props) {
                 }),
               exitOnCtrlCD: true,
             });
-            $[108] = setOAuthStatus;
-            $[109] = bedrockWizardElement;
-          } else bedrockWizardElement = $[109];
+            $[109] = setOAuthStatus;
+            $[110] = bedrockWizardElement;
+          } else bedrockWizardElement = $[110];
           contentElement = bedrockWizardElement;
-          break mo;
+          break fo;
         }
         case "bedrock_done":
         case "vertex_done": {
           let wizardDoneMessage;
-          if ($[110] !== oauthStatus.message) {
+          if ($[111] !== oauthStatus.message) {
             wizardDoneMessage = jsxProd_default(Text, {
               color: "success",
               children: oauthStatus.message,
             });
-            $[110] = oauthStatus.message;
-            $[111] = wizardDoneMessage;
-          } else wizardDoneMessage = $[111];
+            $[111] = oauthStatus.message;
+            $[112] = wizardDoneMessage;
+          } else wizardDoneMessage = $[112];
           let pressEnterToRestart;
-          if ($[112] === MEMO_CACHE_SENTINEL) {
+          if ($[113] === MEMO_CACHE_SENTINEL) {
             pressEnterToRestart = jsxProd_default_2(Text, {
               dimColor: true,
               children: [
@@ -1723,24 +1738,24 @@ function ConsoleOAuthFlowView(props) {
                 " to restart Claude Code.",
               ],
             });
-            $[112] = pressEnterToRestart;
-          } else pressEnterToRestart = $[112];
+            $[113] = pressEnterToRestart;
+          } else pressEnterToRestart = $[113];
           let wizardDoneElement;
-          if ($[113] !== wizardDoneMessage) {
+          if ($[114] !== wizardDoneMessage) {
             wizardDoneElement = jsxProd_default_2(Box, {
               flexDirection: "column",
               gap: 1,
               children: [wizardDoneMessage, pressEnterToRestart],
             });
-            $[113] = wizardDoneMessage;
-            $[114] = wizardDoneElement;
-          } else wizardDoneElement = $[114];
+            $[114] = wizardDoneMessage;
+            $[115] = wizardDoneElement;
+          } else wizardDoneElement = $[115];
           contentElement = wizardDoneElement;
-          break mo;
+          break fo;
         }
         case "vertex_wizard": {
           let vertexWizardElement;
-          if ($[115] !== setOAuthStatus) {
+          if ($[116] !== setOAuthStatus) {
             vertexWizardElement = jsxProd_default(VertexSetupWizard, {
               onComplete: (message) =>
                 setOAuthStatus({
@@ -1753,15 +1768,15 @@ function ConsoleOAuthFlowView(props) {
                 }),
               exitOnCtrlCD: true,
             });
-            $[115] = setOAuthStatus;
-            $[116] = vertexWizardElement;
-          } else vertexWizardElement = $[116];
+            $[116] = setOAuthStatus;
+            $[117] = vertexWizardElement;
+          } else vertexWizardElement = $[117];
           contentElement = vertexWizardElement;
-          break mo;
+          break fo;
         }
         case "waiting_for_login": {
           let forcedMethodElement;
-          if ($[117] !== forcedMethodMessage) {
+          if ($[118] !== forcedMethodMessage) {
             forcedMethodElement =
               forcedMethodMessage &&
               jsxProd_default(Box, {
@@ -1770,11 +1785,11 @@ function ConsoleOAuthFlowView(props) {
                   children: forcedMethodMessage,
                 }),
               });
-            $[117] = forcedMethodMessage;
-            $[118] = forcedMethodElement;
-          } else forcedMethodElement = $[118];
+            $[118] = forcedMethodMessage;
+            $[119] = forcedMethodElement;
+          } else forcedMethodElement = $[119];
           let fallbackReasonElement;
-          if ($[119] !== keyMintFallbackReason) {
+          if ($[120] !== keyMintFallbackReason) {
             fallbackReasonElement =
               keyMintFallbackReason &&
               jsxProd_default(Box, {
@@ -1783,11 +1798,11 @@ function ConsoleOAuthFlowView(props) {
                   children: `${RECOMMENDED_SIGNIN_UNAVAILABLE_TEXT} (${keyMintFallbackReason.cause}), so this sign-in will create an API key.`,
                 }),
               });
-            $[119] = keyMintFallbackReason;
-            $[120] = fallbackReasonElement;
-          } else fallbackReasonElement = $[120];
+            $[120] = keyMintFallbackReason;
+            $[121] = fallbackReasonElement;
+          } else fallbackReasonElement = $[121];
           let browserOpeningElement;
-          if ($[121] !== showPastePrompt) {
+          if ($[122] !== showPastePrompt) {
             browserOpeningElement =
               !showPastePrompt &&
               jsxProd_default_2(Box, {
@@ -1798,21 +1813,21 @@ function ConsoleOAuthFlowView(props) {
                   }),
                 ],
               });
-            $[121] = showPastePrompt;
-            $[122] = browserOpeningElement;
-          } else browserOpeningElement = $[122];
+            $[122] = showPastePrompt;
+            $[123] = browserOpeningElement;
+          } else browserOpeningElement = $[123];
           let pasteCodeElement;
           if (
-            $[123] !== cursorOffset ||
-            $[124] !== handleSubmitCode ||
-            $[125] !== showCursor ||
-            $[126] !== oauthStatus.url ||
-            $[127] !== pasteCodePrompt ||
-            $[128] !== pastedCode ||
-            $[129] !== setCursorOffset ||
-            $[130] !== setPastedCode ||
-            $[131] !== showPastePrompt ||
-            $[132] !== textInputColumns
+            $[124] !== cursorOffset ||
+            $[125] !== handleSubmitCode ||
+            $[126] !== showCursor ||
+            $[127] !== oauthStatus.url ||
+            $[128] !== pasteCodePrompt ||
+            $[129] !== pastedCode ||
+            $[130] !== setCursorOffset ||
+            $[131] !== setPastedCode ||
+            $[132] !== showPastePrompt ||
+            $[133] !== textInputColumns
           ) {
             pasteCodeElement =
               showPastePrompt &&
@@ -1834,58 +1849,38 @@ function ConsoleOAuthFlowView(props) {
                   }),
                 ],
               });
-            $[123] = cursorOffset;
-            $[124] = handleSubmitCode;
-            $[125] = showCursor;
-            $[126] = oauthStatus.url;
-            $[127] = pasteCodePrompt;
-            $[128] = pastedCode;
-            $[129] = setCursorOffset;
-            $[130] = setPastedCode;
-            $[131] = showPastePrompt;
-            $[132] = textInputColumns;
-            $[133] = pasteCodeElement;
-          } else pasteCodeElement = $[133];
-          let waitingForLoginElement;
+            $[124] = cursorOffset;
+            $[125] = handleSubmitCode;
+            $[126] = showCursor;
+            $[127] = oauthStatus.url;
+            $[128] = pasteCodePrompt;
+            $[129] = pastedCode;
+            $[130] = setCursorOffset;
+            $[131] = setPastedCode;
+            $[132] = showPastePrompt;
+            $[133] = textInputColumns;
+            $[134] = pasteCodeElement;
+          } else pasteCodeElement = $[134];
+          let creatingKeyElement;
           if (
-            $[134] !== forcedMethodElement ||
-            $[135] !== fallbackReasonElement ||
-            $[136] !== browserOpeningElement ||
-            $[137] !== pasteCodeElement
+            $[135] !== forcedMethodElement ||
+            $[136] !== fallbackReasonElement ||
+            $[137] !== browserOpeningElement ||
+            $[138] !== pasteCodeElement
           ) {
-            waitingForLoginElement = jsxProd_default_2(Box, {
+            creatingKeyElement = jsxProd_default_2(Box, {
               flexDirection: "column",
               gap: 1,
               children: [forcedMethodElement, fallbackReasonElement, browserOpeningElement, pasteCodeElement],
             });
-            $[134] = forcedMethodElement;
-            $[135] = fallbackReasonElement;
-            $[136] = browserOpeningElement;
-            $[137] = pasteCodeElement;
-            $[138] = waitingForLoginElement;
-          } else waitingForLoginElement = $[138];
-          contentElement = waitingForLoginElement;
-          break mo;
-        }
-        case "creating_api_key": {
-          let creatingKeyElement;
-          if ($[139] === MEMO_CACHE_SENTINEL) {
-            creatingKeyElement = jsxProd_default(Box, {
-              flexDirection: "column",
-              gap: 1,
-              children: jsxProd_default_2(Box, {
-                children: [
-                  jsxProd_default(Spinner, {}),
-                  jsxProd_default(Text, {
-                    children: "Creating API key for Claude Code\u2026",
-                  }),
-                ],
-              }),
-            });
+            $[135] = forcedMethodElement;
+            $[136] = fallbackReasonElement;
+            $[137] = browserOpeningElement;
+            $[138] = pasteCodeElement;
             $[139] = creatingKeyElement;
           } else creatingKeyElement = $[139];
           contentElement = creatingKeyElement;
-          break mo;
+          break fo;
         }
         case "about_to_retry": {
           let retryingElement;
@@ -1901,7 +1896,7 @@ function ConsoleOAuthFlowView(props) {
             $[140] = retryingElement;
           } else retryingElement = $[140];
           contentElement = retryingElement;
-          break mo;
+          break fo;
         }
         case "success": {
           let children;
@@ -1958,7 +1953,7 @@ function ConsoleOAuthFlowView(props) {
             $[146] = successElement;
           } else successElement = $[146];
           contentElement = successElement;
-          break mo;
+          break fo;
         }
         case "storage_failed": {
           let storageLabel;
@@ -1968,13 +1963,13 @@ function ConsoleOAuthFlowView(props) {
             $[148] = storageLabel;
           } else storageLabel = $[148];
           let storageLabelStable = storageLabel;
-          let storageWarningElement;
+          let key;
           if (
             $[149] !== storageLabelStable ||
             $[150] !== oauthStatus.sessionAuth ||
             $[151] !== oauthStatus.transient
           ) {
-            storageWarningElement = jsxProd_default(Box, {
+            key = jsxProd_default(Box, {
               flexDirection: "column",
               children:
                 oauthStatus.sessionAuth === "fresh"
@@ -2031,45 +2026,56 @@ function ConsoleOAuthFlowView(props) {
             $[149] = storageLabelStable;
             $[150] = oauthStatus.sessionAuth;
             $[151] = oauthStatus.transient;
-            $[152] = storageWarningElement;
-          } else storageWarningElement = $[152];
+            $[152] = key;
+          } else key = $[152];
+          let content;
+          if ($[153] !== oauthStatus.departingLoginMayRemain) {
+            content = oauthStatus.departingLoginMayRemain
+              ? jsxProd_default(Text, {
+                  color: "warning",
+                  children: SIGN_IN_AGAIN_TO_CLEAR_MESSAGE,
+                })
+              : null;
+            $[153] = oauthStatus.departingLoginMayRemain;
+            $[154] = content;
+          } else content = $[154];
           let fixHintIntro;
-          if ($[153] === MEMO_CACHE_SENTINEL) {
+          if ($[155] === MEMO_CACHE_SENTINEL) {
             fixHintIntro = jsxProd_default(Text, {
               dimColor: true,
               children: "To avoid having to log in again each session:",
             });
-            $[153] = fixHintIntro;
-          } else fixHintIntro = $[153];
+            $[155] = fixHintIntro;
+          } else fixHintIntro = $[155];
           let fixAccessHint;
-          if ($[154] !== storageLabelStable) {
+          if ($[156] !== storageLabelStable) {
             fixAccessHint = jsxProd_default_2(Text, {
               dimColor: true,
               children: ["  ", "\u2022 fix access to ", storageLabelStable, ", then run /login again"],
             });
-            $[154] = storageLabelStable;
-            $[155] = fixAccessHint;
-          } else fixAccessHint = $[155];
+            $[156] = storageLabelStable;
+            $[157] = fixAccessHint;
+          } else fixAccessHint = $[157];
           let setupTokenHint;
-          if ($[156] === MEMO_CACHE_SENTINEL) {
+          if ($[158] === MEMO_CACHE_SENTINEL) {
             setupTokenHint = jsxProd_default_2(Text, {
               dimColor: true,
               children: ["  ", "\u2022 or run claude setup-token and set CLAUDE_CODE_OAUTH_TOKEN"],
             });
-            $[156] = setupTokenHint;
-          } else setupTokenHint = $[156];
-          let hintsElement;
-          if ($[157] !== fixAccessHint) {
-            hintsElement = jsxProd_default_2(Box, {
+            $[158] = setupTokenHint;
+          } else setupTokenHint = $[158];
+          let view;
+          if ($[159] !== fixAccessHint) {
+            view = jsxProd_default_2(Box, {
               flexDirection: "column",
               children: [fixHintIntro, fixAccessHint, setupTokenHint],
             });
-            $[157] = fixAccessHint;
-            $[158] = hintsElement;
-          } else hintsElement = $[158];
-          let continuePrompt;
-          if ($[159] !== allowContinueWithoutLogin || $[160] !== oauthStatus.sessionAuth) {
-            continuePrompt =
+            $[159] = fixAccessHint;
+            $[160] = view;
+          } else view = $[160];
+          let renderView;
+          if ($[161] !== allowContinueWithoutLogin || $[162] !== oauthStatus.sessionAuth) {
+            renderView =
               oauthStatus.sessionAuth === "fresh"
                 ? jsxProd_default_2(Text, {
                     color: "permission",
@@ -2104,37 +2110,38 @@ function ConsoleOAuthFlowView(props) {
                         : null,
                     ],
                   });
-            $[159] = allowContinueWithoutLogin;
-            $[160] = oauthStatus.sessionAuth;
-            $[161] = continuePrompt;
-          } else continuePrompt = $[161];
+            $[161] = allowContinueWithoutLogin;
+            $[162] = oauthStatus.sessionAuth;
+            $[163] = renderView;
+          } else renderView = $[163];
           let storageFailedElement;
-          if ($[162] !== continuePrompt || $[163] !== storageWarningElement || $[164] !== hintsElement) {
+          if ($[164] !== view || $[165] !== renderView || $[166] !== key || $[167] !== content) {
             storageFailedElement = jsxProd_default_2(Box, {
               flexDirection: "column",
               gap: 1,
-              children: [storageWarningElement, hintsElement, continuePrompt],
+              children: [key, content, view, renderView],
             });
-            $[162] = continuePrompt;
-            $[163] = storageWarningElement;
-            $[164] = hintsElement;
-            $[165] = storageFailedElement;
-          } else storageFailedElement = $[165];
+            $[164] = view;
+            $[165] = renderView;
+            $[166] = key;
+            $[167] = content;
+            $[168] = storageFailedElement;
+          } else storageFailedElement = $[168];
           contentElement = storageFailedElement;
-          break mo;
+          break fo;
         }
         case "account_on_hold": {
           let holdMessageText;
-          if ($[166] !== oauthStatus.message) {
+          if ($[169] !== oauthStatus.message) {
             holdMessageText = jsxProd_default(Text, {
               color: "warning",
               children: oauthStatus.message,
             });
-            $[166] = oauthStatus.message;
-            $[167] = holdMessageText;
-          } else holdMessageText = $[167];
+            $[169] = oauthStatus.message;
+            $[170] = holdMessageText;
+          } else holdMessageText = $[170];
           let holdHint;
-          if ($[168] !== mode) {
+          if ($[171] !== mode) {
             holdHint =
               mode !== "setup-token" &&
               jsxProd_default_2(Text, {
@@ -2148,29 +2155,29 @@ function ConsoleOAuthFlowView(props) {
                   " to go back to login options.",
                 ],
               });
-            $[168] = mode;
-            $[169] = holdHint;
-          } else holdHint = $[169];
+            $[171] = mode;
+            $[172] = holdHint;
+          } else holdHint = $[172];
           let accountOnHoldElement;
-          if ($[170] !== holdMessageText || $[171] !== holdHint) {
+          if ($[173] !== holdMessageText || $[174] !== holdHint) {
             accountOnHoldElement = jsxProd_default_2(Box, {
               flexDirection: "column",
               gap: 1,
               children: [holdMessageText, holdHint],
             });
-            $[170] = holdMessageText;
-            $[171] = holdHint;
-            $[172] = accountOnHoldElement;
-          } else accountOnHoldElement = $[172];
+            $[173] = holdMessageText;
+            $[174] = holdHint;
+            $[175] = accountOnHoldElement;
+          } else accountOnHoldElement = $[175];
           contentElement = accountOnHoldElement;
-          break mo;
+          break fo;
         }
         case "error": {
           let BoxComponent;
           let flexDirection;
           let gap;
           let errorElement;
-          if ($[173] !== oauthStatus.message || $[174] !== oauthStatus.verbatim) {
+          if ($[176] !== oauthStatus.message || $[177] !== oauthStatus.verbatim) {
             let urlMatch = oauthStatus.verbatim ? /\s(https:\/\/\S+)$/.exec(oauthStatus.message) : null;
             let urlRaw = urlMatch?.[1];
             let urlTrimmed = urlRaw && trimTrailingPunctuation(urlRaw);
@@ -2212,31 +2219,31 @@ function ConsoleOAuthFlowView(props) {
                       ? oauthStatus.message
                       : `OAuth error: ${oauthStatus.message}`,
                   });
-            $[173] = oauthStatus.message;
-            $[174] = oauthStatus.verbatim;
-            $[175] = BoxComponent;
-            $[176] = flexDirection;
-            $[177] = gap;
-            $[178] = errorElement;
+            $[176] = oauthStatus.message;
+            $[177] = oauthStatus.verbatim;
+            $[178] = BoxComponent;
+            $[179] = flexDirection;
+            $[180] = gap;
+            $[181] = errorElement;
           } else {
-            BoxComponent = $[175];
-            flexDirection = $[176];
-            gap = $[177];
-            errorElement = $[178];
+            BoxComponent = $[178];
+            flexDirection = $[179];
+            gap = $[180];
+            errorElement = $[181];
           }
           let fallbackNoteElement;
-          if ($[179] !== keyMintFallbackReason) {
+          if ($[182] !== keyMintFallbackReason) {
             fallbackNoteElement =
               keyMintFallbackReason &&
               jsxProd_default(Text, {
                 dimColor: true,
                 children: `${RECOMMENDED_SIGNIN_UNAVAILABLE_TEXT}: ${keyMintFallbackReason.message}`,
               });
-            $[179] = keyMintFallbackReason;
-            $[180] = fallbackNoteElement;
-          } else fallbackNoteElement = $[180];
+            $[182] = keyMintFallbackReason;
+            $[183] = fallbackNoteElement;
+          } else fallbackNoteElement = $[183];
           let retryHintElement;
-          if ($[181] !== allowContinueWithoutLogin || $[182] !== oauthStatus.toRetry) {
+          if ($[184] !== allowContinueWithoutLogin || $[185] !== oauthStatus.toRetry) {
             retryHintElement =
               (oauthStatus.toRetry || allowContinueWithoutLogin) &&
               jsxProd_default(Box, {
@@ -2269,38 +2276,38 @@ function ConsoleOAuthFlowView(props) {
                   ],
                 }),
               });
-            $[181] = allowContinueWithoutLogin;
-            $[182] = oauthStatus.toRetry;
-            $[183] = retryHintElement;
-          } else retryHintElement = $[183];
+            $[184] = allowContinueWithoutLogin;
+            $[185] = oauthStatus.toRetry;
+            $[186] = retryHintElement;
+          } else retryHintElement = $[186];
           let errorBlock;
           if (
-            $[184] !== BoxComponent ||
-            $[185] !== flexDirection ||
-            $[186] !== gap ||
-            $[187] !== errorElement ||
-            $[188] !== fallbackNoteElement ||
-            $[189] !== retryHintElement
+            $[187] !== BoxComponent ||
+            $[188] !== flexDirection ||
+            $[189] !== gap ||
+            $[190] !== errorElement ||
+            $[191] !== fallbackNoteElement ||
+            $[192] !== retryHintElement
           ) {
             errorBlock = jsxProd_default_2(BoxComponent, {
               flexDirection,
               gap,
               children: [errorElement, fallbackNoteElement, retryHintElement],
             });
-            $[184] = BoxComponent;
-            $[185] = flexDirection;
-            $[186] = gap;
-            $[187] = errorElement;
-            $[188] = fallbackNoteElement;
-            $[189] = retryHintElement;
-            $[190] = errorBlock;
-          } else errorBlock = $[190];
+            $[187] = BoxComponent;
+            $[188] = flexDirection;
+            $[189] = gap;
+            $[190] = errorElement;
+            $[191] = fallbackNoteElement;
+            $[192] = retryHintElement;
+            $[193] = errorBlock;
+          } else errorBlock = $[193];
           contentElement = errorBlock;
-          break mo;
+          break fo;
         }
         default: {
           contentElement = null;
-          break mo;
+          break fo;
         }
       }
     }
@@ -2320,34 +2327,35 @@ function ConsoleOAuthFlowView(props) {
     $[14] = keyMintFallbackReason;
     $[15] = mode;
     $[16] = oauthStatus.backendName;
-    $[17] = oauthStatus.message;
-    $[18] = oauthStatus.notice;
-    $[19] = oauthStatus.ok;
-    $[20] = oauthStatus.sessionAuth;
-    $[21] = oauthStatus.state;
-    $[22] = oauthStatus.toRetry;
-    $[23] = oauthStatus.token;
-    $[24] = oauthStatus.transient;
-    $[25] = oauthStatus.url;
-    $[26] = oauthStatus.verbatim;
-    $[27] = onAuthSuccess;
-    $[28] = pasteCodePrompt;
-    $[29] = pastedCode;
-    $[30] = reloadClearedOrgDocuments;
-    $[31] = setConsoleProfileLogin;
-    $[32] = setCursorOffset;
-    $[33] = setHybridRowPicked;
-    $[34] = setLoginWithClaudeAi;
-    $[35] = setOAuthStatus;
-    $[36] = setPastedCode;
-    $[37] = showPastePrompt;
-    $[38] = startingMessage;
-    $[39] = textInputColumns;
-    $[40] = contentElement;
-  } else contentElement = $[40];
+    $[17] = oauthStatus.departingLoginMayRemain;
+    $[18] = oauthStatus.message;
+    $[19] = oauthStatus.notice;
+    $[20] = oauthStatus.ok;
+    $[21] = oauthStatus.sessionAuth;
+    $[22] = oauthStatus.state;
+    $[23] = oauthStatus.toRetry;
+    $[24] = oauthStatus.token;
+    $[25] = oauthStatus.transient;
+    $[26] = oauthStatus.url;
+    $[27] = oauthStatus.verbatim;
+    $[28] = onAuthSuccess;
+    $[29] = pasteCodePrompt;
+    $[30] = pastedCode;
+    $[31] = reloadClearedOrgDocuments;
+    $[32] = setConsoleProfileLogin;
+    $[33] = setCursorOffset;
+    $[34] = setHybridRowPicked;
+    $[35] = setLoginWithClaudeAi;
+    $[36] = setOAuthStatus;
+    $[37] = setPastedCode;
+    $[38] = showPastePrompt;
+    $[39] = startingMessage;
+    $[40] = textInputColumns;
+    $[41] = contentElement;
+  } else contentElement = $[41];
   if (contentElement !== EARLY_RETURN_SENTINEL) return contentElement;
 }
-//@ chunk-s5p7fp0c.js:40330-40726 placement
+//@ chunk-mx6cbnn0.js:40642-41038 placement
 /**
  * 安全存储类型的显示名。
  */
@@ -2367,7 +2375,7 @@ function secureStorageLabel(backendName) {
       return "secure storage";
   }
 }
-//@ chunk-zkzpd9ky.js:20079-21845 fingerprint (2.1.88 match: OAuthStatusMessage, 0.372)
+//@ chunk-f94bkgbg.js:21223-22990 fingerprint (2.1.88 match: OAuthStatusMessage, 0.381)
 /**
  * 登录状态文案（starting/waiting_for_login/保存凭证等）。
  */
@@ -2445,17 +2453,17 @@ function OAuthStatusMessage(props) {
         $[10] = textInputColumns;
         $[11] = pasteBox;
       } else pasteBox = $[11];
-      let _;
+      let waitingBox;
       if ($[12] !== pasteBox) {
-        _ = jsxProd_default_2(Box, {
+        waitingBox = jsxProd_default_2(Box, {
           flexDirection: "column",
           gap: 1,
           children: [waitingBadge, pasteBox],
         });
         $[12] = pasteBox;
-        $[13] = _;
-      } else _ = $[13];
-      return _;
+        $[13] = waitingBox;
+      } else waitingBox = $[13];
+      return waitingBox;
     }
     case "processing": {
       let savingBadge;
@@ -2497,24 +2505,24 @@ function OAuthStatusMessage(props) {
       const children = oauthStatus.toRetry
         ? "Press Enter to retry, or any other key to cancel."
         : "Press any key to close.";
-      let _;
+      let hintText;
       if ($[18] !== children) {
-        _ = jsxProd_default(Text, {
+        hintText = jsxProd_default(Text, {
           dimColor: true,
           children,
         });
         $[18] = children;
-        $[19] = _;
-      } else _ = $[19];
+        $[19] = hintText;
+      } else hintText = $[19];
       let errorBox;
-      if ($[20] !== errorText || $[21] !== _) {
+      if ($[20] !== errorText || $[21] !== hintText) {
         errorBox = jsxProd_default_2(Box, {
           flexDirection: "column",
           gap: 1,
-          children: [errorText, _],
+          children: [errorText, hintText],
         });
         $[20] = errorText;
-        $[21] = _;
+        $[21] = hintText;
         $[22] = errorBox;
       } else errorBox = $[22];
       return errorBox;

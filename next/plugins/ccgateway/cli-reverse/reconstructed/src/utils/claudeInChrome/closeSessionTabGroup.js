@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：关闭会话浏览器标签组
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9a6n2431.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cj236k7y.js (6)
  * attribution: placement 6
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -31,7 +31,7 @@ import { logError } from "../log.js";
 import { registerCleanup } from "../cleanupRegistry.js";
 import { isTerminalShutdown } from "../terminalShutdown.js";
 
-//@ chunk-9a6n2431.js:3555-3726 placement
+//@ chunk-cj236k7y.js:3863-4034 placement
 var MAX_TABS_TO_CLOSE = 50;
 var EXIT_CLOSE_TIMEOUT_MS = 1500;
 var CLOSE_CALL_TIMEOUT_MS = 5000;
@@ -44,7 +44,7 @@ var closeToolResultSchema = DoctorLazy(() =>
     }),
   }),
 );
-//@ chunk-9a6n2431.js:3726-3808 placement
+//@ chunk-cj236k7y.js:4034-4116 placement
 /**
  * 判断关闭标签组的调用是否成功（结果为 isError 时算失败）。
  */
@@ -52,7 +52,7 @@ function closeTabGroupSucceeded(result) {
   let parseResult = closeToolResultSchema().safeParse(result);
   return parseResult.success && parseResult.data.result.isError !== true;
 }
-//@ chunk-9a6n2431.js:3808-3866 placement
+//@ chunk-cj236k7y.js:4116-4174 placement
 /**
  * 可用标签页列表的 schema（tabId 与 url）。
  */
@@ -66,7 +66,7 @@ var availableTabsSchema = DoctorLazy(() =>
     ),
   }),
 );
-//@ chunk-9a6n2431.js:3866-4347 placement
+//@ chunk-cj236k7y.js:4174-4655 placement
 function closeSessionTabGroupInBackground({
   sessionId,
   onlyIfEmpty,
@@ -101,7 +101,7 @@ function closeSessionTabGroupInBackground({
   });
   return closePromise;
 }
-//@ chunk-9a6n2431.js:4347-6061 placement
+//@ chunk-cj236k7y.js:4655-6369 placement
 /**
  * 关闭本会话在浏览器中创建的标签组（可只在为空时关闭），带超时。
  */
@@ -184,8 +184,8 @@ async function closeSessionTabGroup({ sessionId, onlyIfEmpty, clientOverride, ca
   };
   let closedCount = 0;
   let failedCount = 0;
-  for (let j = tabs.length - 1; j >= 0; j--) {
-    let { tabId } = tabs[j];
+  for (let idx = tabs.length - 1; idx >= 0; idx--) {
+    let { tabId } = tabs[idx];
     try {
       let closeResult = await withTimeout(
         client.callTool(
@@ -220,7 +220,7 @@ async function closeSessionTabGroup({ sessionId, onlyIfEmpty, clientOverride, ca
     failed: failedCount,
   };
 }
-//@ chunk-9a6n2431.js:6061-6519 placement
+//@ chunk-cj236k7y.js:6369-6827 placement
 function registerTabGroupCleanup() {
   let session = claudeInChromeSession();
   if (session.tabGroupCleanupRegistered) return;

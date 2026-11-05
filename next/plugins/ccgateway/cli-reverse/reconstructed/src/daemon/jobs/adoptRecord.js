@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：认领并删除 adopt.json 记录。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vrr64ez0.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bjxz9pt3.js (3)
  * attribution: placement 3
  */
 import { join } from "path";
@@ -21,7 +21,7 @@ import { killIfSameProcess } from "../deadProbe.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrr64ez0.js:26163-26354 placement
+//@ chunk-bjxz9pt3.js:26199-26390 placement
 /**
  * 后台作业接管记录相关常量（时间、7 天保留期、上限）与 schema：写入时间与 shell 列表（pid、进程启动标记）。
  */
@@ -29,7 +29,7 @@ var ADOPT_RECORD_SCHEMA_BASE; // deferred: uses DoctorLazy (../../cli/handlers/u
 var ADOPT_RECORD_MAX_AGE_MS;
 var MAX_ADOPT_SHELLS;
 var adoptRecordSchema;
-deferInit("chunk-vrr64ez0.js:26163", () => {
+deferInit("chunk-bjxz9pt3.js:26199", () => {
   ADOPT_RECORD_SCHEMA_BASE = 250;
   ADOPT_RECORD_MAX_AGE_MS = 604800000;
   MAX_ADOPT_SHELLS = 256;
@@ -46,7 +46,7 @@ deferInit("chunk-vrr64ez0.js:26163", () => {
     }),
   );
 });
-//@ chunk-vrr64ez0.js:26354-27235 placement
+//@ chunk-bjxz9pt3.js:26390-27271 placement
 /**
  * 认领并删除 adopt.json 记录。
  */
@@ -115,7 +115,7 @@ async function reapAdoptRecord(jobDir, options = {}) {
     await unlink(claimPath).catch(() => {});
   }
 }
-//@ chunk-vrr64ez0.js:27235-27301 placement (2.1.88 match: readHeadAndTail, 0.802)
+//@ chunk-bjxz9pt3.js:27271-27337 placement (2.1.88 match: readHeadAndTail, 0.802)
 var HEAD_TAIL_LINES_DEFAULT_2 = 7;
 var HEAD_TAIL_LINES_SEED = {
   head: 40,

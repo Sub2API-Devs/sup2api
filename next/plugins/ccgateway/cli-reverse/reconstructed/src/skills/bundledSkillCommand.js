@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：把内置插件的技能包装为提示命令（提取技能文件）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bfnfj4kx.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6sf70a86.js (1)
  * attribution: placement 1
  */
 import { getHostState } from "../utils/hostEnvironment.js";
 import { tagHooksWithSource } from "../utils/hooks/sessionHooks.js";
 import { defineLazyGetter, defineLazyGetterAlt, definePolicyGate } from "./skillPropertyGetters.js";
 
-//@ chunk-bfnfj4kx.js:78223-80118 placement
+//@ chunk-6sf70a86.js:78269-80164 placement
 /**
  * 把内置插件的技能包装为提示命令（提取技能文件）。
  */

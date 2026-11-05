@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：--watch-artifact 参数解析与待处理 artifact 关注状态
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mbd4s9s4.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3dr5qarj.js (8)
  * attribution: placement 8
  */
 import { claudeAiEnvironment } from "../constants/claudeAiOrigin.js";
@@ -15,7 +15,7 @@ import { ARTIFACT_SLUG_RE, parseArtifactUrlAnyCase } from "../tools/ArtifactTool
 import { getReplConfigArgv, setReplConfigArgv } from "../bootstrap/state.js";
 import { syncRespawnFlag } from "../services/daemon/jobState.js";
 
-//@ chunk-mbd4s9s4.js:316-752 placement
+//@ chunk-3dr5qarj.js:316-752 placement
 /**
  * 解析 --watch-artifact 的值（artifact id 或 claude.ai URL），校验与当前登录环境一致。
  */
@@ -54,23 +54,23 @@ function parseWatchArtifactArg(arg) {
     url: artifactViewerUrlFor(artifactUrlAnyCase),
   };
 }
-//@ chunk-mbd4s9s4.js:752-763 placement
+//@ chunk-3dr5qarj.js:752-763 placement
 var pendingWatchArtifact = null;
-//@ chunk-mbd4s9s4.js:763-783 placement
+//@ chunk-3dr5qarj.js:763-783 placement
 function setPendingWatchArtifact(value) {
   pendingWatchArtifact = value;
 }
-//@ chunk-mbd4s9s4.js:783-822 placement
+//@ chunk-3dr5qarj.js:783-822 placement
 function takePendingWatchArtifact() {
   let pending = pendingWatchArtifact;
   pendingWatchArtifact = null;
   return pending;
 }
-//@ chunk-mbd4s9s4.js:822-846 placement
+//@ chunk-3dr5qarj.js:822-846 placement
 function peekPendingWatchArtifact() {
   return pendingWatchArtifact;
 }
-//@ chunk-mbd4s9s4.js:846-1100 placement
+//@ chunk-3dr5qarj.js:846-1100 placement
 function stripWatchArtifactArgs(replConfigArgv) {
   let kept = [];
   for (let i = 0; i < replConfigArgv.length; i++) {
@@ -84,7 +84,7 @@ function stripWatchArtifactArgs(replConfigArgv) {
   }
   return kept;
 }
-//@ chunk-mbd4s9s4.js:1100-1466 placement
+//@ chunk-3dr5qarj.js:1100-1466 placement
 function hasWatchArtifactArg(argv, storageV5) {
   argv = argv.toLowerCase();
   let flagNames = ["--watch-artifact", "--watch-artifact-no-autoreact"];
@@ -111,7 +111,7 @@ function hasWatchArtifactArg(argv, storageV5) {
     syncRespawnFlag("--watch-artifact", ["--watch-artifact-no-autoreact"], null, undefined, storageV5);
   }
 }
-//@ chunk-mbd4s9s4.js:1466-1825 placement
+//@ chunk-3dr5qarj.js:1466-1825 placement
 function getWatchArtifactNoAutoreact(storageV5) {
   let replConfigArgv = getReplConfigArgv();
   let flag;
@@ -127,11 +127,11 @@ function getWatchArtifactNoAutoreact(storageV5) {
   return true;
 }
 export {
+  getWatchArtifactNoAutoreact,
+  parseWatchArtifactArg,
+  setPendingWatchArtifact,
   stripWatchArtifactArgs,
   peekPendingWatchArtifact,
   takePendingWatchArtifact,
-  parseWatchArtifactArg,
-  setPendingWatchArtifact,
-  getWatchArtifactNoAutoreact,
   hasWatchArtifactArg,
 };

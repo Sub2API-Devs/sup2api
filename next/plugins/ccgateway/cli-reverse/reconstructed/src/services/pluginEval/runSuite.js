@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 运行用例与套件：准备运行目录、跑子会话、评分、汇总报告
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (29)
  * attribution: placement 29
  */
 import path from "path";
@@ -61,12 +61,12 @@ import {
 } from "./mocks/pluginMcpEnumeration.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { splitRuleList } from "../../utils/permissions/disallowedToolsFlag.js";
-import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
+import { parseRuleString } from "../../utils/permissions/permissionRuleParser.js";
 import { ARTIFACT_TOOL_NAME } from "../../tools/ArtifactTool/constants.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { pMap } from "../../../vendor/p-map/index.js";
 import { logError } from "../../utils/log.js";
-import { count, uniq } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { checkCaseInsideRoot } from "./evalFence.js";
 import { checkEvalAuthPreflight } from "./authPreflight.js";
 import { EVAL_ARTIFACTS_DIR, stubPublishDir } from "./artifactStub.js";
@@ -82,13 +82,14 @@ import { cgroupSpawnOptions } from "../../utils/toolCgroup.js";
 import { env, antEnv } from "../../utils/env.js";
 import { getPlatform } from "../../utils/platform.js";
 import { shellQuoteArgs } from "../../utils/bash/bashPipeCommand.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 
-//@ chunk-qchp9vrd.js:254443-254456 placement
+//@ chunk-af1hzzme.js:255859-255872 placement
 /**
  * 运行期间刷新登录的间隔（60000 毫秒）。
  */
 var LOGIN_REFRESH_INTERVAL_MS = 60000;
-//@ chunk-qchp9vrd.js:254456-255355 placement
+//@ chunk-af1hzzme.js:255872-256771 placement
 /**
  * 运行期间定时刷新登录。
  */
@@ -151,7 +152,7 @@ class EvalLoginRefresher {
     return this.holders;
   }
 }
-//@ chunk-qchp9vrd.js:255355-272299 placement
+//@ chunk-af1hzzme.js:256771-273750 placement
 /**
  * 运行单个用例：准备目录与模拟、启动子会话、评分并产出结果（约 17 KB）。
  */
@@ -267,10 +268,10 @@ async function runEvalCase(options) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -350,10 +351,10 @@ async function runEvalCase(options) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION,
@@ -384,10 +385,10 @@ async function runEvalCase(options) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION,
@@ -424,10 +425,10 @@ async function runEvalCase(options) {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -598,9 +599,7 @@ async function runEvalCase(options) {
         ),
       );
     let grantsArtifact = (rules) =>
-      splitRuleList([rules.join(",")]).some(
-        (rule) => permissionRuleValueFromString(rule).toolName === ARTIFACT_TOOL_NAME,
-      );
+      splitRuleList([rules.join(",")]).some((rule) => parseRuleString(rule).toolName === ARTIFACT_TOOL_NAME);
     if ((grantsArtifact(runToolRules.denied) || grantsArtifact(ctx.allowTools)) && !artifactPublish)
       ctx.onLine(
         `  ${evalCase.name}: the ${ARTIFACT_TOOL_NAME} tool is not available inside eval runs; --allow-tools cannot enable it`,
@@ -742,12 +741,12 @@ async function runEvalCase(options) {
       }
       if (plan === null) continue;
       for (let arm of plan.arms)
-        for (let idx = 0; idx < plan.runs; idx++) {
+        for (let j = 0; j < plan.runs; j++) {
           if (finalizeAll()) return;
           yield {
             plan,
             arm,
-            index: idx,
+            index: j,
           };
         }
     }
@@ -831,10 +830,10 @@ async function runEvalCase(options) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -846,7 +845,7 @@ async function runEvalCase(options) {
     ctx.onNotice(
       `\u26A0 ${runState.harnessFailures} ${plural(runState.harnessFailures, "run")} could not be started by the harness (see the errors above and the debug log); the suite exits non-zero regardless of scores`,
     );
-  let apiErrorCount = count(
+  let apiErrorCount = countWhere(
     suiteReport.cases.flatMap((caseReport) => caseReport.runs.concat(caseReport.runs_without ?? [])),
     (run) => run.ended_on_api_error === true,
   );
@@ -870,12 +869,12 @@ async function runEvalCase(options) {
     harnessFailures: runState.harnessFailures,
   };
 }
-//@ chunk-qchp9vrd.js:272299-272308 placement
+//@ chunk-af1hzzme.js:273750-273759 placement
 /**
  * 启动失败重试次数（2）。
  */
 var MAX_START_RETRIES = 2;
-//@ chunk-qchp9vrd.js:272308-273279 placement
+//@ chunk-af1hzzme.js:273759-274730 placement
 async function formatCaseResultLine(
   caseSpec,
   index,
@@ -927,14 +926,14 @@ async function formatCaseResultLine(
   }
   return report;
 }
-//@ chunk-qchp9vrd.js:273279-273340 placement
+//@ chunk-af1hzzme.js:274730-274791 placement
 /**
  * 把多行文本压成一行并截断到 200 字符。
  */
 function oneLineMessage(text) {
   return truncateWithCount(replaceControlChars(text.replace(/\s*\n\s*/g, " ")), 200);
 }
-//@ chunk-qchp9vrd.js:273340-273604 placement
+//@ chunk-af1hzzme.js:274791-275055 placement
 function checkDuplicateCaseNames(cases, onLine) {
   let dirsByName = new Map();
   for (let caseSpec of cases) {
@@ -950,7 +949,7 @@ function checkDuplicateCaseNames(cases, onLine) {
         ),
       );
 }
-//@ chunk-qchp9vrd.js:273604-273672 placement
+//@ chunk-af1hzzme.js:275055-275123 placement
 /**
  * 计算用例目录相对于根目录的路径。
  */
@@ -958,7 +957,7 @@ function relativeCaseDir(root, evalCase) {
   let relativePath = path.relative(root, evalCase.caseDir);
   return relativePath === "" ? "." : relativePath;
 }
-//@ chunk-qchp9vrd.js:273672-280997 placement
+//@ chunk-af1hzzme.js:275123-282455 placement
 /**
  * 运行全部用例（with/without 插件对比）、脚手架与结果汇总（约 7 KB）。
  */
@@ -1008,7 +1007,7 @@ async function runEvalSuite(caseSpec, allowedTools, grant, options, mockServers,
     if (auth?.warning) options.onLine(`  \u26A0 ${auth.warning}`);
     try {
       if (usesAgentResponder(filterForArm(mockServers, arm)))
-        for (let idx = 1; suiteState.agentService === null; idx++) {
+        for (let j = 1; suiteState.agentService === null; j++) {
           suiteState.agentServiceStarting ??= createMockRelayPipe({
             credentials: options.credentials,
           }).catch((error) => {
@@ -1018,7 +1017,7 @@ async function runEvalSuite(caseSpec, allowedTools, grant, options, mockServers,
           try {
             suiteState.agentService = await suiteState.agentServiceStarting;
           } catch (error) {
-            if (idx >= MAX_START_RETRIES) throw error;
+            if (j >= MAX_START_RETRIES) throw error;
           }
         }
       mocks = await writeRunMocks(mockServers, arm, evalTempDir, {
@@ -1310,7 +1309,7 @@ async function runEvalSuite(caseSpec, allowedTools, grant, options, mockServers,
       });
   }
 }
-//@ chunk-qchp9vrd.js:280997-281733 placement
+//@ chunk-af1hzzme.js:282455-283191 placement
 async function runScaffoldCommand(scriptPath, evalTempDir, signal) {
   return await new Promise((resolve) => {
     let stderrText = "";
@@ -1361,7 +1360,7 @@ async function runScaffoldCommand(scriptPath, evalTempDir, signal) {
     });
   });
 }
-//@ chunk-qchp9vrd.js:281733-281920 placement
+//@ chunk-af1hzzme.js:283191-283378 placement
 async function listRunDirFiles(root) {
   let files = new Set();
   let cwdStats = await lstat(root).catch(() => null);
@@ -1375,14 +1374,14 @@ async function listRunDirFiles(root) {
   await walkRunDir(root, "", files, 0);
   return files;
 }
-//@ chunk-qchp9vrd.js:281920-282225 placement
+//@ chunk-af1hzzme.js:283378-283683 placement
 function checkRunDirUnchanged() {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
     "the run directory (or a directory inside it) is no longer the one the harness listed, or cannot be listed \u2014 moved, removed, replaced by a link, made unreadable, or too deep or too large to walk \u2014 so its file evidence cannot be trusted",
     "eval run directory replaced",
   );
 }
-//@ chunk-qchp9vrd.js:282225-282812 placement
+//@ chunk-af1hzzme.js:283683-284270 placement
 async function prepareRunDirectory(cwd, files, phase) {
   let lower = EVAL_ARTIFACTS_DIR.toLowerCase();
   let reservedState = await lstat(path.join(cwd, EVAL_ARTIFACTS_DIR)).then(
@@ -1403,19 +1402,19 @@ async function prepareRunDirectory(cwd, files, phase) {
     if (firstLineOf(relativeFile.toLowerCase().replaceAll("\\", "/"), "/") === lower) return true;
   return reservedState === "present";
 }
-//@ chunk-qchp9vrd.js:282812-282970 placement
+//@ chunk-af1hzzme.js:284270-284428 placement
 function formatRemoveRunDirCommand(root) {
   return getPlatform() === "windows"
     ? `Remove-Item -Recurse -Force -LiteralPath '${root.replaceAll("'", "''")}'`
     : `chmod -R u+rwX ${shellQuoteArgs([root])} && rm -rf ${shellQuoteArgs([root])}`;
 }
-//@ chunk-qchp9vrd.js:282970-282990 placement
+//@ chunk-af1hzzme.js:284428-284448 placement
 /**
  * 枚举运行目录时的最大条目数（200000）。
  */
 var MAX_RUN_DIR_DEPTH = 32;
 var MAX_RUN_DIR_ENTRIES = 200000;
-//@ chunk-qchp9vrd.js:282990-283509 placement
+//@ chunk-af1hzzme.js:284448-284967 placement
 /**
  * 递归列出运行目录中的文件（深度与条目数有上限），每级检查目录不是链接、realpath 未变且 inode 前后一致，否则抛出。
  */
@@ -1461,7 +1460,7 @@ async function walkRunDir(
     else files.add(relativePath);
   }
 }
-//@ chunk-qchp9vrd.js:283509-283599 placement
+//@ chunk-af1hzzme.js:284967-285057 placement
 /**
  * 返回在第二个集合里不存在的项（排序后拼接）。
  */
@@ -1471,7 +1470,7 @@ function diffSortedLines(before, after) {
   return added.sort().join(`
 `);
 }
-//@ chunk-qchp9vrd.js:283599-283689 placement
+//@ chunk-af1hzzme.js:285057-285146 placement
 /**
  * 清洗控制字符并截断后转成 JSON 字符串。
  */
@@ -1479,35 +1478,35 @@ function quotedShort(text, maxChars) {
   let clean = replaceControlChars(text.replace(invisiblePatternAccessor(), " "));
   return jsonStringify(clean.length > maxChars ? `${truncateToLength(clean, maxChars)}\u2026` : clean);
 }
-//@ chunk-qchp9vrd.js:283689-283923 placement
+//@ chunk-af1hzzme.js:285146-285380 placement
 function logArtifactPublishOutcome(grant, arm, outcome) {
   if (!grant.granted || arm === "without") return;
   if (outcome.published) logFeatureOk("cli_plugin_eval_artifact_publish");
   else if (outcome.errored) logFeatureSad("cli_plugin_eval_artifact_publish", "run_errored");
   else logFeatureSad("cli_plugin_eval_artifact_publish", "no_publish");
 }
-//@ chunk-qchp9vrd.js:283923-284021 placement
+//@ chunk-af1hzzme.js:285380-285478 placement
 /**
  * 合并用例与命令行给出的禁用工具。
  */
 function mergedDisallowedTools(caseSpec, options) {
-  return uniq([
+  return normalizeCaseForComparison_2([
     ...splitAllowedTools(caseSpec.execution.disallowed_tools ?? []).tools,
     ...(options.disallowTools ?? []),
   ]);
 }
-//@ chunk-qchp9vrd.js:284021-284311 placement
+//@ chunk-af1hzzme.js:285478-285768 placement
 function describeUndisallowableTools(rejected) {
   return `${rejected.map(formatGuardValueJson).join(", ")} cannot be disallowed: ${rejected.length === 1 ? "it is not a built-in tool" : "they are not built-in tools"} that this version of Claude Code can remove. Use bare names such as Agent or TaskStop; patterns such as Bash(rm:*) and MCP tools are not accepted.`;
 }
-//@ chunk-qchp9vrd.js:284311-284438 placement
+//@ chunk-af1hzzme.js:285768-285895 placement
 function allowsArtifactPublish(caseSpec, options) {
   return (
     (options.artifactPublish ?? antEnv.CLAUDE_CODE_EVAL_ALLOW_ARTIFACT_PUBLISH === true) &&
     caseSpec.execution.artifact_publish === true
   );
 }
-//@ chunk-qchp9vrd.js:284438-284747 placement
+//@ chunk-af1hzzme.js:285895-286204 placement
 /**
  * 解析评测套件声明的 GrowthBook 开关覆盖：只保留允许列表（参数或 CLAUDE_CODE_EVAL_ALLOW_FLAG_OVERRIDES）中的开关，其余记为丢弃。
  */
@@ -1531,13 +1530,13 @@ function resolveFlagOverrides(caseSpec, options) {
     dropped,
   };
 }
-//@ chunk-qchp9vrd.js:284747-284897 placement
+//@ chunk-af1hzzme.js:286204-286354 placement
 function getRunArms(caseSpec, ablation, withheldMocks) {
   if (ablation !== "with-without" || caseSpec.pluginDirs.length === 0) return ["with"];
   if (withheldMocks && caseSpec.context.history_file) return ["with"];
   return ["with", "without"];
 }
-//@ chunk-qchp9vrd.js:284897-285480 placement
+//@ chunk-af1hzzme.js:286354-286937 placement
 function logMockRegistration(runTraceHistory) {
   if (runTraceHistory.mockSetupFailure === "registration")
     logFeatureBad("cli_plugin_eval_mocks", "standin_registration");
@@ -1555,12 +1554,12 @@ function logMockRegistration(runTraceHistory) {
   else if (runTraceHistory.aborted !== null) logFeatureSad("cli_plugin_eval_mocks", "aborted_by_mock");
   else logFeatureOk("cli_plugin_eval_mocks");
 }
-//@ chunk-qchp9vrd.js:285480-285492 placement
+//@ chunk-af1hzzme.js:286937-286949 placement
 /**
  * 释放资源时的等待（5000 毫秒）。
  */
 var DISPOSE_TIMEOUT_MS = 5000;
-//@ chunk-qchp9vrd.js:285492-285540 placement
+//@ chunk-af1hzzme.js:286949-286997 placement
 /**
  * 安全计算内容哈希（失败返回空串）。
  */
@@ -1571,7 +1570,7 @@ function safeCanonicalHash(value) {
     return "";
   }
 }
-//@ chunk-qchp9vrd.js:285540-287311 placement
+//@ chunk-af1hzzme.js:286997-288768 placement
 /**
  * 校验 trace 中的结果都是 harness 给出的（未被事后篡改）。
  */
@@ -1661,6 +1660,6 @@ function verifyTraceIntegrity(answers, runTraceHistory, mocks) {
     deniedByChild: deniedCount,
   };
 }
-//@ chunk-qchp9vrd.js:287311-287335 placement
+//@ chunk-af1hzzme.js:288768-288792 placement
 var TRUST_PLUGIN_FLAG = "--trust-plugin";
 export { TRUST_PLUGIN_FLAG, runEvalCase };

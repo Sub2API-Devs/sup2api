@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。插件测试 kit：test()/on() 套件 API 与断言。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1tz177x8.js (33)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-f284hj51.js (33)
  * attribution: placement 33
  */
 import __cc_resource_0 from "../../../../assets/kit-modules.js-02f8fcd0.txt.zst" with { type: "file" };
@@ -51,9 +51,9 @@ import {
 } from "./uiDriver.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-1tz177x8.js:40878-41037 placement
+//@ chunk-f284hj51.js:42031-42190 placement
 var CHILD_ENV_ALLOWLIST; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1tz177x8.js:40878", () => {
+deferInit("chunk-f284hj51.js:42031", () => {
   CHILD_ENV_ALLOWLIST = [
     "PATH",
     "HOME",
@@ -72,7 +72,7 @@ deferInit("chunk-1tz177x8.js:40878", () => {
     ...ROLLOUT_ENV_PASSTHROUGH_VARS,
   ];
 });
-//@ chunk-1tz177x8.js:41037-41119 placement
+//@ chunk-f284hj51.js:42190-42272 placement
 function pickChildEnvAllowlist(env) {
   let picked = {};
   for (let name of CHILD_ENV_ALLOWLIST) {
@@ -81,7 +81,7 @@ function pickChildEnvAllowlist(env) {
   }
   return picked;
 }
-//@ chunk-1tz177x8.js:41119-41185 placement
+//@ chunk-f284hj51.js:42272-42338 placement
 function envWithoutGrowthBook(env) {
   return getGatewayAuth() === null
     ? env
@@ -90,11 +90,11 @@ function envWithoutGrowthBook(env) {
         DISABLE_GROWTHBOOK: "1",
       };
 }
-//@ chunk-1tz177x8.js:41185-41199 placement
+//@ chunk-f284hj51.js:42338-42352 placement
 var PLUGIN_TEST_FILE_TIMEOUT_MS = 600000;
-//@ chunk-1tz177x8.js:41199-41315 placement
+//@ chunk-f284hj51.js:42352-42468 placement
 var TEST_REPORT_SCHEMA; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1tz177x8.js:41199", () => {
+deferInit("chunk-f284hj51.js:42352", () => {
   TEST_REPORT_SCHEMA = DoctorLazy(() =>
     objectSchema({
       file: stringSchema(),
@@ -109,42 +109,42 @@ deferInit("chunk-1tz177x8.js:41199", () => {
     }),
   );
 });
-//@ chunk-1tz177x8.js:41315-41324 placement
+//@ chunk-f284hj51.js:42468-42477 placement
 var KIT_SETTLE_TICKS = 3;
-//@ chunk-1tz177x8.js:41324-41382 placement
+//@ chunk-f284hj51.js:42477-42535 placement
 function errorTextOf(error) {
   let { msg, name } = describeThrownValue(error);
   return msg === "" ? name : msg;
 }
-//@ chunk-1tz177x8.js:41382-41426 placement
+//@ chunk-f284hj51.js:42535-42579 placement
 var fileErrorReport = (file, error) => ({
   file,
   results: [],
   error,
 });
-//@ chunk-1tz177x8.js:41426-41489 placement
+//@ chunk-f284hj51.js:42579-42642 placement
 var cleanFileReport = (failure) => ({
   title: "the file ran to its end",
   ms: 0,
   failure,
 });
-//@ chunk-1tz177x8.js:41584-41602 placement
+//@ chunk-f284hj51.js:42737-42755 placement
 var INDEX_JS = "index.js";
-//@ chunk-1tz177x8.js:41602-41625 placement
+//@ chunk-f284hj51.js:42755-42778 placement
 var kitBundleResourceFile = __cc_resource_0;
-//@ chunk-1tz177x8.js:41625-41659 placement
+//@ chunk-f284hj51.js:42778-42812 placement
 var kitBundleText; // deferred: uses kitBundleResourceFile of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-1tz177x8.js:41625", () => {
+deferInit("chunk-f284hj51.js:42778", () => {
   kitBundleText = readEmbeddedTextSync(kitBundleResourceFile, import.meta.dirname);
 });
-//@ chunk-1tz177x8.js:41659-41669 placement
+//@ chunk-f284hj51.js:42812-42822 placement
 var kitBundleSource; // deferred: uses kitBundleText of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-1tz177x8.js:41659", () => {
+deferInit("chunk-f284hj51.js:42812", () => {
   kitBundleSource = kitBundleText;
 });
-//@ chunk-1tz177x8.js:41669-41684 placement
+//@ chunk-f284hj51.js:42822-42837 placement
 var KIT_FILE_SEPARATOR = "//// ";
-//@ chunk-1tz177x8.js:41684-41829 placement
+//@ chunk-f284hj51.js:42837-42982 placement
 var readKitSources = () =>
   new Map(
     kitBundleSource
@@ -159,9 +159,9 @@ ${KIT_FILE_SEPARATOR}`,
         return [part.slice(0, index), part.slice(index + 1)];
       }),
   );
-//@ chunk-1tz177x8.js:41859-41916 placement
+//@ chunk-f284hj51.js:43012-43069 placement
 var KIT_INTERNAL_IMPORT_PREFIX = "@/src/plugins/functionHooks/plugin-test/testing";
-//@ chunk-1tz177x8.js:41916-42304 placement
+//@ chunk-f284hj51.js:43069-43457 placement
 /**
  * 解析测试工具包内的导入路径，只允许包内模块。
  */
@@ -180,11 +180,11 @@ function resolveKitImport(specifier, fromFile, exists) {
     throw new HooksError(`the kit's ${fromFile} imports ${specifier}, which is no module of it`);
   return found;
 }
-//@ chunk-1tz177x8.js:42326-42355 placement
+//@ chunk-f284hj51.js:43479-43508 placement
 var CLAUDE_CODE_TESTING = "claude-code/testing";
-//@ chunk-1tz177x8.js:42355-42388 placement
+//@ chunk-f284hj51.js:43508-43541 placement
 var stripTestingPrefix = (identifier) => identifier.slice(CLAUDE_CODE_TESTING.length + 1);
-//@ chunk-1tz177x8.js:42388-42825 placement
+//@ chunk-f284hj51.js:43541-43978 placement
 /**
  * 在给定 vm 上下文里用 SourceTextModule 加载内置测试 kit 的全部模块（kit 内相对导入），求值后返回入口模块命名空间。
  */
@@ -220,9 +220,9 @@ async function loadKitModule(context) {
   await entryModule.evaluate();
   return entryModule.namespace;
 }
-//@ chunk-1tz177x8.js:42825-42834 placement
+//@ chunk-f284hj51.js:43978-43987 placement
 var KIT_POLL_INTERVAL_MS = 2;
-//@ chunk-1tz177x8.js:42899-43533 placement
+//@ chunk-f284hj51.js:44052-44686 placement
 /**
  * 把 zod 问题格式化为简短的中文无关英文提示（未知键、类型、取值、联合等）。
  */
@@ -260,24 +260,24 @@ function formatZodIssue(issue) {
       return `${pathPrefix}${issue.message}`;
   }
 }
-//@ chunk-1tz177x8.js:43533-43576 placement
+//@ chunk-f284hj51.js:44686-44729 placement
 var parseStringJsonOrNull = (value) => (typeof value === "string" ? jsonParse(value) : null);
-//@ chunk-1tz177x8.js:43576-43706 placement
+//@ chunk-f284hj51.js:44729-44859 placement
 function parseOrThrow(schema, jsonText, label) {
   let parsed = schema.safeParse(parseStringJsonOrNull(jsonText));
   if (!parsed.success)
     throw new HooksError(`${label}: ${parsed.error.issues.map(formatZodIssue).join("; ")}`);
   return parsed.data;
 }
-//@ chunk-1tz177x8.js:43706-43727 placement
+//@ chunk-f284hj51.js:44859-44880 placement
 var testFileSchema; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1tz177x8.js:43706", () => {
+deferInit("chunk-f284hj51.js:44859", () => {
   testFileSchema = DoctorLazy(() => array(stringSchema()));
 });
-//@ chunk-1tz177x8.js:43727-43769 placement
+//@ chunk-f284hj51.js:44880-44922 placement
 var wrapMethodForEnvironment = (environment) => (target) =>
   nullPrototypeFunction(environment.bare.wrapMethod(target));
-//@ chunk-1tz177x8.js:43769-43878 placement
+//@ chunk-f284hj51.js:44922-45031 placement
 function wrapForCopy(context, value, label) {
   let { bare } = context.environment;
   let copyValue = isFreshHeronEnabled()
@@ -285,7 +285,7 @@ function wrapForCopy(context, value, label) {
     : value;
   return cloneOrThrow(copyValue, label);
 }
-//@ chunk-1tz177x8.js:43878-44093 placement
+//@ chunk-f284hj51.js:45031-45246 placement
 function readSeat(seat) {
   let { register, holding } = isPlainObject(seat) ? seat : {};
   if (typeof holding !== "function") throw new HooksError("load: { register, holding } from the seat");
@@ -297,9 +297,9 @@ function readSeat(seat) {
     },
   };
 }
-//@ chunk-1tz177x8.js:44093-44104 placement
+//@ chunk-f284hj51.js:45246-45257 placement
 var ACTING_STALL_MS = 500;
-//@ chunk-1tz177x8.js:44104-46059 placement
+//@ chunk-f284hj51.js:45257-47212 placement
 function runPluginTestFile(options) {
   let { environment, root } = options;
   let { bare } = environment;
@@ -424,7 +424,7 @@ function runPluginTestFile(options) {
     },
   };
 }
-//@ chunk-1tz177x8.js:46059-46298 placement
+//@ chunk-f284hj51.js:47212-47451 placement
 function checkKitResults(value) {
   let stringJsonOrNull = parseStringJsonOrNull(value);
   if (!(
@@ -440,9 +440,9 @@ function checkKitResults(value) {
     throw new HooksError("the kit answered results of the wrong shape");
   return stringJsonOrNull;
 }
-//@ chunk-1tz177x8.js:46298-46348 placement
+//@ chunk-f284hj51.js:47451-47501 placement
 var KIT_EXPORT_NAMES = ["describe", "expect", "mock", "test", "tier"];
-//@ chunk-1tz177x8.js:46348-46664 placement
+//@ chunk-f284hj51.js:47501-47817 placement
 /**
  * 在测试环境中安装 kit 并返回一个合成模块（导出 test/on 等）、run（运行并校验结果形状）和 dispose。
  */

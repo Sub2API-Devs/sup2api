@@ -3,9 +3,9 @@
  *
  * 用户系统目录（Desktop/Documents/Downloads 等）按平台的路径。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/systemDirectories.ts
- * pieces: chunk-vr8smdd9.js (1)
+ * pieces: chunk-pzdhtgn4.js (1)
  * attribution: fingerprint 1
  */
 import { homedir } from "os";
@@ -13,7 +13,7 @@ import { join } from "path";
 import { getPlatform } from "./platform.js";
 import { logForDebugging } from "./debug.js";
 
-//@ chunk-vr8smdd9.js:10174-10741 fingerprint (2.1.88 match: getSystemDirectories, 1)
+//@ chunk-pzdhtgn4.js:10241-10808 fingerprint (2.1.88 match: getSystemDirectories, 1)
 function getSystemDirectories(options) {
   let platform = options?.platform ?? getPlatform();
   let homeDir = options?.homedir ?? homedir();

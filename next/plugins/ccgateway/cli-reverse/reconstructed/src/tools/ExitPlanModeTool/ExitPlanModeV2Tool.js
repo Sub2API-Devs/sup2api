@@ -3,9 +3,9 @@
  *
  * ExitPlanMode 工具：提交计划请求批准，恢复计划前的权限模式；队友走 team lead 邮箱审批；diskless 会话以参数传 plan
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ExitPlanModeTool/ExitPlanModeV2Tool.ts
- * pieces: chunk-fnhsh6ng.js (2)
+ * pieces: chunk-sc94d59g.js (2)
  * attribution: fingerprint 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -26,7 +26,15 @@ import {
   getPlanAsync,
   persistPlanEdit,
 } from "../../utils/plans.js";
-import { EXIT_PLAN_MODE_DISKLESS_PROMPT, EXIT_PLAN_MODE_PROMPT } from "./prompt.js";
+import { EXIT_PLAN_MODE_PROMPT, EXIT_PLAN_MODE_DISKLESS_PROMPT, DISKLESS_PLAN_PROMPT } from "./prompt.js";
+import {
+  isDisklessPlanDocsOn,
+  planDocRef,
+  describePlanDoc,
+  planDocsServerNameFor,
+  planDocUrl,
+  planDocIdFromPath,
+} from "../../services/mcp/claudeDocsLinks.js";
 import {
   getAllowedChannels,
   getIsNonInteractiveSession,
@@ -45,6 +53,7 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { ENTER_PLAN_MODE_TOOL_NAME } from "../EnterPlanModeTool/constants.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { stripHostOwnedInputKeys } from "../../utils/permissions/permissionAnswer.js";
+import { READ } from "../../services/mcp/firstPartyServerIds.js";
 import { PlanPreconditionError, isResumableTeammate, teammateSpawnPlanHint } from "./planPreconditions.js";
 import { chainPlanSnapshot } from "../../utils/api.js";
 import { timestampedAgentAddress, agentAddress } from "../../utils/swarm/teammateIds.js";
@@ -54,12 +63,12 @@ import { swarmHostState } from "../../utils/swarm/hostState.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logPermissionModeChanged } from "../../utils/telemetry/thirdPartyEventRecords.js";
 import { isAgentSwarmsEnabled } from "../../utils/agentSwarmsEnabled.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import { toolMissingInDiskless } from "../AgentTool/agentEffort.js";
 import { SENDMESSAGE } from "../SendMessageTool/constants.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fnhsh6ng.js:5426-6724 fingerprint (2.1.88 match: outputSchema, 0.634)
+//@ chunk-sc94d59g.js:6559-8079 fingerprint (2.1.88 match: outputSchema, 0.614)
 /**
  * ExitPlanMode 的 schema：allowedPrompts（已废弃）、diskless 下的 plan JSON schema、32768 字节上限、注入 plan/planFilePath 的规范化输入、输出（plan/isAgent/filePath/hasTaskTool/planWasEdited/awaitingLeaderApproval/requestId）。
  */
@@ -67,9 +76,10 @@ var allowedPromptSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.j
 var exitPlanModeInputSchema;
 var DISKLESS_EXIT_PLAN_INPUT_JSON_SCHEMA;
 var MAX_PLAN_JSON_BYTES;
+var DISKLESS_PLAN_JSON_SCHEMA_KEEPING_PLAN;
 var exitPlanModeNormalizedInputSchema;
 var exitPlanModeOutputSchema;
-deferInit("chunk-fnhsh6ng.js:5426", () => {
+deferInit("chunk-sc94d59g.js:6559", () => {
   allowedPromptSchema = DoctorLazy(() =>
     objectSchema({
       tool: _enum(["Bash"]).describe("The tool this prompt applies to"),
@@ -95,6 +105,17 @@ deferInit("chunk-fnhsh6ng.js:5426", () => {
     additionalProperties: false,
   };
   MAX_PLAN_JSON_BYTES = 32768;
+  DISKLESS_PLAN_JSON_SCHEMA_KEEPING_PLAN = {
+    type: "object",
+    properties: {
+      plan: {
+        type: "string",
+        description:
+          "The whole plan, in Markdown, as the user will see it. Leave it out when plan mode's reminder has you keep the plan in a Claude Doc.",
+      },
+    },
+    additionalProperties: false,
+  };
   exitPlanModeNormalizedInputSchema = DoctorLazy(() =>
     exitPlanModeInputSchema().extend({
       plan: stringSchema().optional().describe("The plan content (injected by normalizeToolInput from disk)"),
@@ -121,12 +142,12 @@ deferInit("chunk-fnhsh6ng.js:5426", () => {
     }),
   );
 });
-//@ chunk-fnhsh6ng.js:6834-13234 fingerprint (2.1.88 match: ExitPlanModeV2Tool, 0.715)
+//@ chunk-sc94d59g.js:8189-17039 fingerprint (2.1.88 match: ExitPlanModeV2Tool, 0.636)
 /**
  * ExitPlanMode 工具（V2；shouldDefer，非只读，requiresUserInteraction 除队友外为真）。isEnabled：有 channels 的非交互会话或无可用提问通道的非交互会话时关闭。diskless 会话（host launchOptions.diskless）改用 `plan` 参数（≤32768 字节 JSON），否则从计划文件读取。validateInput：fork 子代理不能退出；非计划模式报错提示先 EnterPlanMode。checkPermissions：队友直接允许，否则询问 "Exit plan mode?"。call：队友需审批时把 plan_approval_request 写入 team-lead 邮箱并返回等待状态；否则恢复 prePlanMode（auto 模式不可用时回退 default 并发通知，恢复/剥离危险规则），结果附已批准的计划与计划文件路径。
  */
 var ExitPlanModeV2Tool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fnhsh6ng.js:6834", () => {
+deferInit("chunk-sc94d59g.js:8189", () => {
   ExitPlanModeV2Tool = buildTool({
     name: EXITPLANMODE_2,
     searchHint: "present plan for approval and start coding (plan mode only)",
@@ -136,13 +157,17 @@ deferInit("chunk-fnhsh6ng.js:6834", () => {
       return "Prompts the user to exit plan mode and start coding";
     },
     async prompt() {
-      return isDisklessSession() ? EXIT_PLAN_MODE_DISKLESS_PROMPT : EXIT_PLAN_MODE_PROMPT;
+      if (!isDisklessSession()) return EXIT_PLAN_MODE_PROMPT;
+      return isDisklessPlanDocsOn() ? EXIT_PLAN_MODE_DISKLESS_PROMPT : DISKLESS_PLAN_PROMPT;
     },
     get inputSchema() {
       return exitPlanModeInputSchema();
     },
     get inputJSONSchema() {
-      return isDisklessSession() ? DISKLESS_EXIT_PLAN_INPUT_JSON_SCHEMA : undefined;
+      if (!isDisklessSession()) return;
+      return isDisklessPlanDocsOn()
+        ? DISKLESS_PLAN_JSON_SCHEMA_KEEPING_PLAN
+        : DISKLESS_EXIT_PLAN_INPUT_JSON_SCHEMA;
     },
     get outputSchema() {
       return exitPlanModeOutputSchema();
@@ -211,12 +236,25 @@ deferInit("chunk-fnhsh6ng.js:6834", () => {
             };
           }
           if (isDisklessSession()) {
+            let approvalMode = planDocRef(context.permissions());
+            if (approvalMode !== undefined)
+              return Object.keys(input).length === 0
+                ? {
+                    result: true,
+                  }
+                : {
+                    result: false,
+                    message: `This session's plan is ${describePlanDoc(approvalMode)}, and the user approves the Doc as it stands. Put any change into the Doc, then call this tool with no argument.`,
+                    errorCode: 6,
+                  };
             let plan = "plan" in input ? input.plan : undefined;
             if (typeof plan !== "string" || plan.trim() === "" || Object.keys(input).length > 1)
               return {
                 result: false,
                 message:
-                  "Pass the whole plan as non-empty text in the `plan` argument, and pass no other argument. This session has no plan file to read it from.",
+                  planDocsServerNameFor(context.tools, context.permissions()) === undefined
+                    ? "Pass the whole plan as non-empty text in the `plan` argument, and pass no other argument. This session has no plan file to read it from."
+                    : "No plan Doc is recorded for this session: none was created, or it was created with arguments other than the ones that plan mode's reminder shows. If you created none, create it with exactly that call and then call this tool with no argument. If you already created one, pass the whole plan as non-empty text in `plan` as the only argument, so that the user is not left with two Docs.",
                 errorCode: 4,
               };
             let planJsonBytes = Buffer.byteLength(jsonStringify(input));
@@ -237,10 +275,23 @@ deferInit("chunk-fnhsh6ng.js:6834", () => {
               behavior: "allow",
               updatedInput: stripHostOwnedInputKeys(EXITPLANMODE_2, input),
             };
+          let planMode = "plan" in input ? undefined : planDocRef(toolContext.permissions());
           return {
             behavior: "ask",
             message: "Exit plan mode?",
-            updatedInput: input,
+            updatedInput:
+              planMode === undefined
+                ? input
+                : {
+                    plan: `${
+                      planMode.title === undefined
+                        ? "This plan is a Claude Doc"
+                        : `**${planMode.title.replace(/[!-/:-@[-`{-~]/g, "\\$&")}**
+
+This plan is the Claude Doc of the same name`
+                    } that Claude made in this chat. To change the plan, edit the Doc before you answer. If you approve, Claude carries out the Doc as it reads at that moment; if you decline, Claude keeps planning.`,
+                    planFilePath: planDocUrl(planMode),
+                  },
           };
         },
         async call(input, { onProgress }) {
@@ -253,22 +304,43 @@ deferInit("chunk-fnhsh6ng.js:6834", () => {
           ]);
           let isAgent = !!context.agentId;
           let isDiskless = isDisklessSession();
-          let inputPlan = "plan" in input && typeof input.plan === "string" ? input.plan : undefined;
-          if (isDiskless && inputPlan === undefined)
+          let permissionMode = planDocRef(context.permissions());
+          let filePath =
+            isDisklessPlanDocsOn() && "planFilePath" in input
+              ? planDocIdFromPath(input.planFilePath)
+              : undefined;
+          let requestedMode =
+            filePath !== undefined && filePath !== permissionMode?.id
+              ? {
+                  id: filePath,
+                  title: undefined,
+                }
+              : filePath !== undefined || !("plan" in input)
+                ? permissionMode
+                : undefined;
+          let targetMode =
+            (requestedMode &&
+              `The approved plan is ${describePlanDoc(requestedMode)}, as the user left it when they approved. They may have changed it after you last wrote it, up to that moment, so what you remember writing may not be what they approved.
+
+Before your todo list or any other step, read the Doc: first call ${context.tools.find((docsNote) => docsNote.mcpInfo?.docsConnector === true && docsNote.mcpInfo.toolName === READ)?.name ?? "the Claude Docs connector's read tool"} with only \`ref\` {"object":"project","id":"${requestedMode.id}"}, which lists its tabs and the id of each tab's body (\`content.id\`); then read each body with \`ref\` {"object":"node","id":"<content.id>"} and \`container\` {"kind":"project","id":"${requestedMode.id}"}. Work to the Doc: where it differs from your draft, the Doc is the user's instruction, and following your draft would drop their corrections while they believe that the work follows their plan. If you have not started the work yet, say in one line what they changed, or that nothing changed, then start.
+
+If the read fails, try it once more. If it still fails, do not work from memory: tell the user that you could not read the approved plan, and ask whether to go ahead with it as you last wrote it.`) ??
+            ("plan" in input && typeof input.plan === "string" ? input.plan : undefined);
+          if (isDiskless && targetMode === undefined)
             throw new PlanPreconditionError(
               "The approval arrived without the plan, so plan mode was not exited. Call this tool again with the whole plan in the `plan` argument.",
             );
-          let filePath = getPlanFilePath(context.agentId);
-          if (!isDiskless) notePlanFileForgotten(filePath);
-          let plan = inputPlan ?? (await getPlanAsync(context.agentId, context.storageV5));
-          if (inputPlan !== undefined && filePath) {
-            await persistPlanEdit(filePath, inputPlan, context.storageV5);
+          let teamAgent = getPlanFilePath(context.agentId);
+          if (!isDiskless) notePlanFileForgotten(teamAgent);
+          let planText = targetMode ?? (await getPlanAsync(context.agentId, context.storageV5));
+          if (targetMode !== undefined && teamAgent) {
+            await persistPlanEdit(teamAgent, targetMode, context.storageV5);
             chainPlanSnapshot(context.storageV5);
           }
-          let effectiveTeammateContext = getEffectiveTeammateContext(context);
-          let teammateTask = effectiveTeammateContext
-            ? Object.values(context.tasks() ?? {}).find((e) =>
-                isResumableTeammate(e, effectiveTeammateContext.agentName),
+          let teammateInfo = getEffectiveTeammateContext(context);
+          let teammateTask = teammateInfo
+            ? Object.values(context.tasks() ?? {}).find((teammate) =>
+                isResumableTeammate(teammate, teammateInfo.agentName),
               )
             : undefined;
           let planRequiredByTeammate =
@@ -278,30 +350,30 @@ deferInit("chunk-fnhsh6ng.js:6834", () => {
               "This teammate's task could not be found, so plan mode was not exited. Ask the lead to approve your plan.",
             );
           let teammateInPlanMode = planRequiredByTeammate && teammateTask?.permissionMode === "plan";
-          if (effectiveTeammateContext && (effectiveTeammateContext.planModeRequired || teammateInPlanMode)) {
-            if (!plan)
+          if (teammateInfo && (teammateInfo.planModeRequired || teammateInPlanMode)) {
+            if (!planText)
               throw new PlanPreconditionError(
-                `No plan file found at ${filePath}. Please write your plan to this file before calling ExitPlanMode.`,
+                `No plan file found at ${teamAgent}. Please write your plan to this file before calling ExitPlanMode.`,
               );
-            let { agentName, teamName } = effectiveTeammateContext;
-            let requestId = timestampedAgentAddress(
+            let { agentName, teamName } = teammateInfo;
+            let approvalRequest = timestampedAgentAddress(
               "plan_approval",
               agentAddress(agentName, teamName || "default"),
             );
-            let approvalRequest = {
+            let requestBody = {
               type: "plan_approval_request",
               from: agentName,
               timestamp: new Date().toISOString(),
-              planFilePath: filePath,
-              planContent: plan,
-              requestId,
+              planFilePath: teamAgent,
+              planContent: planText,
+              requestId: approvalRequest,
             };
             if (
               (await writeToMailbox(
                 "team-lead",
                 {
                   from: agentName,
-                  text: jsonStringify(approvalRequest),
+                  text: jsonStringify(requestBody),
                   timestamp: new Date().toISOString(),
                 },
                 teamName,
@@ -313,32 +385,32 @@ deferInit("chunk-fnhsh6ng.js:6834", () => {
               );
             if (teammateTask)
               setAwaitingPlanApproval(teammateTask.id, context.taskRegistry, {
-                requestId,
+                requestId: approvalRequest,
               });
             else
               swarmHostState().swarmPermissions.pendingPlanApproval = {
-                requestId,
+                requestId: approvalRequest,
                 answered: false,
               };
             return {
               data: {
-                plan,
+                plan: planText,
                 isAgent: true,
-                filePath,
+                filePath: teamAgent,
                 awaitingLeaderApproval: true,
-                requestId,
+                requestId: approvalRequest,
               },
             };
           }
           let autoModeGateNote = null;
           {
-            let prePlanRaw = context.permissions().prePlanMode ?? "default";
-            if (prePlanRaw === "auto" && !(autoModeHelpers?.canPlanReturnToAutoMode(prePlanRaw) ?? false)) {
-              let reason = autoModeHelpers?.getAutoModeUnavailableReason() ?? "circuit-breaker";
+            let plannedMode = context.permissions().prePlanMode ?? "default";
+            if (plannedMode === "auto" && !(autoModeHelpers?.canPlanReturnToAutoMode(plannedMode) ?? false)) {
+              let autoReason = autoModeHelpers?.getAutoModeUnavailableReason() ?? "circuit-breaker";
               autoModeGateNote =
-                autoModeHelpers?.getAutoModeUnavailableNotification(reason) ?? "auto mode unavailable";
+                autoModeHelpers?.getAutoModeUnavailableNotification(autoReason) ?? "auto mode unavailable";
               logForDebugging(
-                `[auto-mode gate @ ExitPlanModeV2Tool] prePlanMode=${prePlanRaw} but plan may not return to it (reason=${reason}) \u2014 falling back to default on plan exit`,
+                `[auto-mode gate @ ExitPlanModeV2Tool] prePlanMode=${plannedMode} but plan may not return to it (reason=${autoReason}) \u2014 falling back to default on plan exit`,
                 {
                   level: "warn",
                 },
@@ -364,10 +436,10 @@ deferInit("chunk-fnhsh6ng.js:6834", () => {
             {
               if (restoreMode === "auto" && !(autoModeHelpers?.canPlanReturnToAutoMode(restoreMode) ?? false))
                 restoreMode = "default";
-              let finalRestoringAuto = restoreMode === "auto";
-              let autoWasUsedDuringPlan = autoModeModule?.isAutoModeActive() ?? false;
-              autoModeModule?.setAutoModeActive(finalRestoringAuto);
-              if (autoWasUsedDuringPlan && !finalRestoringAuto) setNeedsAutoModeExitAttachment(true);
+              let returnMode = restoreMode === "auto";
+              let isAuto = autoModeModule?.isAutoModeActive() ?? false;
+              autoModeModule?.setAutoModeActive(returnMode);
+              if (isAuto && !returnMode) setNeedsAutoModeExitAttachment(true);
             }
             logPermissionModeChanged(
               {
@@ -377,17 +449,16 @@ deferInit("chunk-fnhsh6ng.js:6834", () => {
               },
               context.agentContext,
             );
-            let restoringToAuto = restoreMode === "auto";
-            let strippedDangerousRules = permissionState.strippedDangerousRules;
+            let isAutoMode = restoreMode === "auto";
+            let strippedRules = permissionState.strippedDangerousRules;
             context.setToolPermissionContext((permissionContextBase) => {
-              let baseContext = permissionContextBase;
-              if (restoringToAuto)
-                baseContext =
-                  autoModeHelpers?.stripDangerousPermissionsForAutoMode(baseContext) ?? baseContext;
-              else if (strippedDangerousRules)
-                baseContext = autoModeHelpers?.restoreDangerousPermissions(baseContext) ?? baseContext;
+              let updated = permissionContextBase;
+              if (isAutoMode)
+                updated = autoModeHelpers?.stripDangerousPermissionsForAutoMode(updated) ?? updated;
+              else if (strippedRules)
+                updated = autoModeHelpers?.restoreDangerousPermissions(updated) ?? updated;
               return {
-                ...baseContext,
+                ...updated,
                 mode: restoreMode,
                 prePlanMode: undefined,
               };
@@ -395,30 +466,38 @@ deferInit("chunk-fnhsh6ng.js:6834", () => {
           }
           let hasTaskTool =
             isAgentSwarmsEnabled() &&
-            context.tools.some((t) => toolMatchesName(t, AGENT)) &&
+            context.tools.some((canProceed) => matchesToolName(canProceed, AGENT)) &&
             !toolMissingInDiskless(SENDMESSAGE, context.tools);
           return {
             data: {
-              plan,
+              plan: planText,
               isAgent,
-              filePath: isDiskless ? undefined : filePath,
+              filePath: isDiskless ? undefined : teamAgent,
               hasTaskTool: hasTaskTool || undefined,
-              planWasEdited: (inputPlan !== undefined && !isDiskless) || undefined,
+              planWasEdited: (targetMode !== undefined && !isDiskless) || undefined,
             },
           };
         },
       };
     },
     mapToolResultToToolResultBlockParam(
-      { isAgent, plan, filePath, hasTaskTool, planWasEdited, awaitingLeaderApproval, requestId },
-      toolUseID,
+      {
+        isAgent: output,
+        plan: isAgentOut,
+        filePath: planWasEdited,
+        hasTaskTool: awaitingLead,
+        planWasEdited: requestId,
+        awaitingLeaderApproval: requestIdOut,
+        requestId: toolResultType,
+      },
+      toolUseId,
     ) {
-      if (awaitingLeaderApproval)
+      if (requestIdOut)
         return {
           type: "tool_result",
           content: `Your plan has been submitted to the team lead for approval.
 
-Plan file: ${filePath}
+Plan file: ${planWasEdited}
 
 **What happens next:**
 1. Wait for the team lead to review your plan
@@ -428,38 +507,38 @@ Plan file: ${filePath}
 
 **Important:** Do NOT proceed until you receive approval. Check your inbox for response.
 
-Request ID: ${requestId}`,
-          tool_use_id: toolUseID,
+Request ID: ${toolResultType}`,
+          tool_use_id: toolUseId,
         };
-      if (isAgent)
+      if (output)
         return {
           type: "tool_result",
           content:
             'User has approved the plan. There is nothing else needed from you now. Please respond with "ok"',
-          tool_use_id: toolUseID,
+          tool_use_id: toolUseId,
         };
-      if (!plan || plan.trim() === "")
+      if (!isAgentOut || isAgentOut.trim() === "")
         return {
           type: "tool_result",
           content: "User has approved exiting plan mode. You can now proceed.",
-          tool_use_id: toolUseID,
+          tool_use_id: toolUseId,
         };
-      let teamHint = teammateSpawnPlanHint(Boolean(hasTaskTool));
-      let planLabel = planWasEdited ? "Approved Plan (edited by user)" : "Approved Plan";
+      let approvedText = teammateSpawnPlanHint(Boolean(awaitingLead));
+      let approvedLabel = requestId ? "Approved Plan (edited by user)" : "Approved Plan";
       return {
         type: "tool_result",
         content: `User has approved your plan. You can now start coding. Start with updating your todo list if applicable${
-          filePath === undefined
+          planWasEdited === undefined
             ? ""
             : `
 
-Your plan has been saved to: ${filePath}
+Your plan has been saved to: ${planWasEdited}
 You can refer back to it if needed during implementation.`
-        }${teamHint}
+        }${approvedText}
 
-## ${planLabel}:
-${plan}`,
-        tool_use_id: toolUseID,
+## ${approvedLabel}:
+${isAgentOut}`,
+        tool_use_id: toolUseId,
       };
     },
   });

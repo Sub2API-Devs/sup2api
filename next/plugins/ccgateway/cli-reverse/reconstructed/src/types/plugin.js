@@ -3,9 +3,9 @@
  *
  * 插件错误类型到用户可读消息的映射（getPluginErrorMessage）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/types/plugin.ts
- * pieces: chunk-f3qhjfah.js (3)
+ * pieces: chunk-5s0qaz1x.js (3)
  * attribution: placement 2, fingerprint 1
  */
 import {
@@ -27,18 +27,18 @@ import { capitalize } from "../utils/stringUtils.js";
 import { getPluginNameFromError } from "../commands/plugin/PluginSettings.js";
 import { claudeCommand } from "../utils/worktreeResumeHint.js";
 
-//@ chunk-f3qhjfah.js:14250-14391 placement
+//@ chunk-5s0qaz1x.js:14351-14492 placement
 /**
  * 来自 claude.ai 账号的插件只满足其他 claude.ai 插件依赖时的说明。
  */
 function cloudOnlyDependencyMessage(sameNameSyncedPlugin) {
   return `"${quotedPrintable(sameNameSyncedPlugin)}" is loaded from your claude.ai account but meets a marketplace dependency only for other claude.ai plugins`;
 }
-//@ chunk-f3qhjfah.js:14391-14423 placement
+//@ chunk-5s0qaz1x.js:14492-14524 placement
 function pluginErrorText(error) {
   return stripInvisibleKeepEmoji(getPluginErrorMessage(error));
 }
-//@ chunk-f3qhjfah.js:14423-19933 fingerprint (2.1.88 match: getPluginErrorMessage, 0.728)
+//@ chunk-5s0qaz1x.js:14524-20195 fingerprint (2.1.88 match: getPluginErrorMessage, 0.712)
 function getPluginErrorMessage(error) {
   switch (error.type) {
     case "generic-error":
@@ -48,7 +48,9 @@ function getPluginErrorMessage(error) {
         ? `Path not found: ${printableOrEmpty(error.path)}${error.errno ? ` (${quotedPrintable(error.errno)})` : ""}`
         : `Path not found: ${printableOrEmpty(error.path)} (${quotedPrintable(error.component)}${error.errno ? `, ${quotedPrintable(error.errno)}` : ""})`;
     case "path-traversal":
-      return `Path escapes plugin directory: ${printableOrEmpty(error.path)} (${quotedPrintable(error.component)})${error.reason ? ` \u2014 ${printableOrEmpty(error.reason)}` : ""}`;
+      return !error.reason && (error.component === "mcp-servers" || error.component === "lsp-servers")
+        ? `Server file not read: ${printableOrEmpty(error.path)} is absolute or has a ".." part (${quotedPrintable(error.component)})`
+        : `Path escapes plugin directory: ${printableOrEmpty(error.path)} (${quotedPrintable(error.component)})${error.reason ? ` \u2014 ${printableOrEmpty(error.reason)}` : ""}`;
     case "git-auth-failed":
       return `Git authentication failed (${quotedPrintable(error.authType)}): ${printableOrEmpty(error.gitUrl)}`;
     case "git-timeout":

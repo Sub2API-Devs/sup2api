@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。启动通知：设置类。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: placement 4
  */
 import { getIsRemoteMode, getTeammateAgentId } from "../../../bootstrap/state.js";
@@ -23,7 +23,7 @@ import { getOtelHeadersHelperLastFailure, onOtelHeadersHelperFailure } from "../
 import { isPlanBypass } from "../../../utils/permissions/browserToolNames.js";
 import { logFeatureOk } from "../../../services/analytics/featureTelemetry.js";
 
-//@ chunk-18hwfzwa.js:1765355-1765711 placement
+//@ chunk-czq1j3j2.js:1812616-1812973 placement
 var managedSettingsNoticeNoticeSpec = {
   id: "managed-settings-notice",
   deps: (ctx) => [ctx.hasBgAttacher, ctx.hasOpenDialog],
@@ -47,7 +47,7 @@ var managedSettingsNoticeNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1771932-1772329 placement
+//@ chunk-czq1j3j2.js:1819194-1819591 placement
 var officialMarketplaceCheckNoticeSpec = {
   id: "official-marketplace-check",
   deps: (ctx) => [ctx.store, ctx.storageV5],
@@ -75,7 +75,7 @@ var officialMarketplaceCheckNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1772329-1772761 placement
+//@ chunk-czq1j3j2.js:1819591-1820023 placement
 var OTEL_HEADERS_HELPER_FAILED = "otel-headers-helper-failed";
 var otelHeadersHelperFailedNoticeSpec = {
   id: OTEL_HEADERS_HELPER_FAILED,
@@ -102,7 +102,7 @@ var otelHeadersHelperFailedNoticeSpec = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1772761-1773348 placement
+//@ chunk-czq1j3j2.js:1820023-1820610 placement
 /**
  * 启动通知规格：以 bypass permissions 启动的会话进入计划模式时，延迟片刻提示计划模式不会在编辑前询问。
  */

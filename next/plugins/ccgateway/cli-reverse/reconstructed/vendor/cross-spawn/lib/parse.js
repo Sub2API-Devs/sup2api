@@ -1,8 +1,8 @@
 /**
  * cross-spawn/lib/parse.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: cross-spawn@7.0.5..7.0.6
- * pieces: chunk-m4p5zn6n.js (1)
+ * pieces: chunk-t889g22j.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_resolveCommand } from "./util/resolveCommand.js";
 import { require_escape } from "./util/escape.js";
 import { require_readShebang } from "./util/readShebang.js";
 
-//@ chunk-m4p5zn6n.js:5330-5816 cjs-fingerprint
+//@ chunk-t889g22j.js:5330-5815 cjs-fingerprint
 var require_parse = __commonJS(function (cjsExports, cjsModule) {
   var path = importMetaRequire("path");
   var resolveCommand = require_resolveCommand();

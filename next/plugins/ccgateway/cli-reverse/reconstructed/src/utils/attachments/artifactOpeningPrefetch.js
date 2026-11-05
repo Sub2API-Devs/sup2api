@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：打开 Artifact 时预取
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 2
  */
 import { shouldPrefetchArtifactOpening } from "./environmentChange.js";
@@ -14,7 +14,7 @@ import { isOnlySystemReminders } from "../messages.js";
 import { isDeferredTool as isDeferredTool_2 } from "../../tools/ToolSearchTool/prompt.js";
 import { errorMessage } from "../errors.js";
 
-//@ chunk-e6aww6q8.js:3329885-3330062 placement
+//@ chunk-5xgkngpb.js:3415642-3415819 placement
 /**
  * 判断是否预取工件打开相关附件（Appifact REPL 工具或快速开始开启时）。
  */
@@ -27,7 +27,7 @@ function shouldPrefetchArtifactOpening_2() {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:3330062-3331158 placement
+//@ chunk-5xgkngpb.js:3415819-3416918 placement
 /**
  * 打开 Artifact 时预取设计系统等内容，受钩子影响时跳过。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：云会话订阅 GitHub PR 事件（/v1/code/github/<repo>/subscribe-pull-request）与项目文件写入
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sdydyf7y.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q13e45p8.js (10)
  * attribution: placement 10
  */
 import { logForDebugging } from "../utils/debug.js";
@@ -20,13 +20,13 @@ import { DoctorLazy } from "../cli/handlers/util.js";
 import { objectSchema, array, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-sdydyf7y.js:565-639 placement
+//@ chunk-q13e45p8.js:565-639 placement
 /**
  * GitHub 相关常量：API 版本 "2023-06-01" 与 GitHub App 安装地址 https://github.com/apps/claude/installations/new。
  */
 var GITHUB_API_VERSION = "2023-06-01";
 var GITHUB_APP_INSTALL_URL = "https://github.com/apps/claude/installations/new";
-//@ chunk-sdydyf7y.js:639-808 placement
+//@ chunk-q13e45p8.js:639-808 placement
 /**
  * 从响应体（或其 error 字段）取 reason 字符串。
  */
@@ -37,9 +37,9 @@ function getErrorReason(body) {
     return error.reason;
   return;
 }
-//@ chunk-sdydyf7y.js:808-836 placement (2.1.88 match: CCR_BYOC_BETA_HEADER, 1)
+//@ chunk-q13e45p8.js:808-836 placement (2.1.88 match: CCR_BYOC_BETA_HEADER, 1)
 var CCR_BYOC_BETA_HEADER = "ccr-byoc-2025-07-29";
-//@ chunk-sdydyf7y.js:836-1862 placement
+//@ chunk-q13e45p8.js:836-1862 placement
 /**
  * 订阅/取消订阅 PR（未安装 GitHub App 时给出安装链接）。
  */
@@ -104,14 +104,14 @@ async function subscribeGithubPullRequest(action, options) {
     ok: true,
   };
 }
-//@ chunk-sdydyf7y.js:1862-1947 placement
+//@ chunk-q13e45p8.js:1862-1947 placement
 /**
  * 把订阅动作映射成埋点事件名：subscribe → bridge_pr_subscribe，其余 → bridge_pr_unsubscribe。
  */
 function prSubscriptionEventName(action) {
   return action === "subscribe" ? "bridge_pr_subscribe" : "bridge_pr_unsubscribe";
 }
-//@ chunk-sdydyf7y.js:1947-2255 placement
+//@ chunk-q13e45p8.js:1947-2255 placement
 function buildAuthHeaders(accessToken, { orgUUID, trustedDeviceToken } = {}) {
   let headers = {
     Authorization: `Bearer ${accessToken}`,
@@ -125,12 +125,12 @@ function buildAuthHeaders(accessToken, { orgUUID, trustedDeviceToken } = {}) {
   if (trustedDeviceToken !== undefined) headers["X-Trusted-Device-Token"] = trustedDeviceToken;
   return headers;
 }
-//@ chunk-sdydyf7y.js:2255-2291 placement
+//@ chunk-q13e45p8.js:2255-2291 placement
 /**
  * 云会话回报"已创建 PR"的 worker 接口路径 /worker/record-created-pr。
  */
 var RECORD_CREATED_PR_PATH = "/worker/record-created-pr";
-//@ chunk-sdydyf7y.js:2291-2727 placement
+//@ chunk-q13e45p8.js:2291-2727 placement
 async function buildJsonHeaders(options) {
   let url = `${options.sessionUrl.replace(/\/+$/, "")}${RECORD_CREATED_PR_PATH}`;
   try {
@@ -167,10 +167,10 @@ async function buildJsonHeaders(options) {
     };
   }
 }
-//@ chunk-sdydyf7y.js:2727-2830 placement
+//@ chunk-q13e45p8.js:2727-2830 placement
 var projectFileWriteResultSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var CHANNEL_ID_RE;
-deferInit("chunk-sdydyf7y.js:2727", () => {
+deferInit("chunk-q13e45p8.js:2727", () => {
   projectFileWriteResultSchema = DoctorLazy(() =>
     objectSchema({
       results: array(
@@ -183,7 +183,7 @@ deferInit("chunk-sdydyf7y.js:2727", () => {
   );
   CHANNEL_ID_RE = /^chan_[A-Za-z0-9_-]{1,120}$/;
 });
-//@ chunk-sdydyf7y.js:2830-4169 placement
+//@ chunk-q13e45p8.js:2830-4169 placement
 async function writeProjectFiles(options) {
   let { door, items, signal } = options;
   if (!CHANNEL_ID_RE.test(door.channelId)) {
@@ -263,12 +263,12 @@ async function writeProjectFiles(options) {
   };
 }
 export {
-  GITHUB_APP_INSTALL_URL,
+  writeProjectFiles,
+  buildAuthHeaders,
+  getErrorReason,
   subscribeGithubPullRequest,
   buildJsonHeaders,
-  writeProjectFiles,
-  RECORD_CREATED_PR_PATH,
-  getErrorReason,
-  buildAuthHeaders,
+  GITHUB_APP_INSTALL_URL,
   prSubscriptionEventName,
+  RECORD_CREATED_PR_PATH,
 };

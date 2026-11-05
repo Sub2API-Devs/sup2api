@@ -3,26 +3,26 @@
  *
  * 提示调度：筛出相关且不在冷却中的提示，挑最久未显示者，记录显示并打 tengu_tip_shown
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/tips/tipScheduler.ts
- * pieces: chunk-s8af6efx.js (9)
- * attribution: fingerprint 3, layout 6
+ * pieces: chunk-5j1n9yg4.js (10)
+ * attribution: fingerprint 3, layout 7
  */
 import { getSessionsSinceTipShown } from "./tipHistory.js";
-import { getSettings_DEPRECATED } from "../../utils/settings/settings.js";
+import { getSettings_DEPRECATED, getInitialSettings } from "../../utils/settings/settings.js";
 import { logError } from "../../utils/log.js";
 import { withTelemetryMessage, toError } from "../../utils/errors.js";
+import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { logEvent } from "../analytics/index.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { excludesDefaultTips } from "./spinnerTipsOverride.js";
 import { tipLifetimeShownCount, pluginSuggestionShownCount, recordTipShown } from "./tipIds.js";
-import { logFeatureOk } from "../analytics/featureTelemetry.js";
 import { getTipTelemetryId } from "./orgTips.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s8af6efx.js:1293-1540 fingerprint (2.1.88 match: selectTipWithLongestTimeSinceShown, 0.848)
+//@ chunk-5j1n9yg4.js:1297-1544 fingerprint (2.1.88 match: selectTipWithLongestTimeSinceShown, 0.848)
 /**
  * 在候选提示中选“距上次显示经过会话数最多”的那条，平局按 priority 高者。
  */
@@ -39,7 +39,7 @@ function selectTipWithLongestTimeSinceShown(availableTips) {
   });
   return tipsWithSessions[0]?.tip;
 }
-//@ chunk-s8af6efx.js:1540-1708 fingerprint (2.1.88 match: getTipToShowOnSpinner, 0.399)
+//@ chunk-5j1n9yg4.js:1544-1712 fingerprint (2.1.88 match: getTipToShowOnSpinner, 0.395)
 /**
  * spinner 上要显示的提示：spinnerTipsEnabled 为 false 时不显示；否则取 getRelevantTips 的结果按最久未显示挑一条。
  */
@@ -50,7 +50,7 @@ async function getTipToShowOnSpinner(context) {
   if (tips.length === 0) return;
   return selectTipWithLongestTimeSinceShown(tips);
 }
-//@ chunk-s8af6efx.js:1708-1918 layout
+//@ chunk-5j1n9yg4.js:1712-1922 layout
 /**
  * 安全获取提示内容：content() 抛错时把提示记入 failedTipIds（本会话不再尝试）并返回空串。
  */
@@ -64,9 +64,21 @@ async function getTipContentSafe(tipToShowOnSpinner, ctx) {
     return "";
   }
 }
-//@ chunk-s8af6efx.js:1918-1926 layout
+//@ chunk-5j1n9yg4.js:1922-2190 layout
+async function getSecurityReviewClosingTipSafely(context) {
+  try {
+    if (getInitialSettings().spinnerTipsEnabled === false) return null;
+    let { getSecurityReviewClosingTip } = await import("./MARKETPLACE_PLUGIN_TIP_ID_PREFIX.lazy.js");
+    return await getSecurityReviewClosingTip(context);
+  } catch (error) {
+    logError(withTelemetryMessage(toError(error), "security review closing tip threw"));
+    logFeatureSad("tips_security_review_show", "threw");
+    return null;
+  }
+}
+//@ chunk-5j1n9yg4.js:2190-2198 layout
 var TIP_MIN_SESSIONS = 2;
-//@ chunk-s8af6efx.js:1926-2173 layout
+//@ chunk-5j1n9yg4.js:2198-2445 layout
 class LegacyPluginTipCountProbe {
   fired = new Set();
   fire(shownCount, sessionsSince) {
@@ -83,16 +95,16 @@ class LegacyPluginTipCountProbe {
     });
   }
 }
-//@ chunk-s8af6efx.js:2173-2196 layout
+//@ chunk-5j1n9yg4.js:2445-2468 layout
 var legacyPluginTipProbeByHost; // deferred: uses LegacyPluginTipCountProbe of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s8af6efx.js:2173", () => {
+deferInit("chunk-5j1n9yg4.js:2445", () => {
   legacyPluginTipProbeByHost = new HostScoped(() => new LegacyPluginTipCountProbe());
 });
-//@ chunk-s8af6efx.js:2196-2231 layout
+//@ chunk-5j1n9yg4.js:2468-2503 layout
 function getLegacyPluginTipProbe() {
   return legacyPluginTipProbeByHost.of(getRootSession().host);
 }
-//@ chunk-s8af6efx.js:2231-2727 layout
+//@ chunk-5j1n9yg4.js:2503-2998 layout
 /**
  * 市场插件推荐提示：跳过已失败、显示次数达上限或仍在冷却（cooldownSessions）的提示，再按相关性筛选并挑最久未显示者。
  */
@@ -116,7 +128,7 @@ async function getMarketplacePluginTipToShow(ctx) {
   }
   return selectTipWithLongestTimeSinceShown(availableTips);
 }
-//@ chunk-s8af6efx.js:2727-2935 fingerprint (2.1.88 match: recordShownTip, 0.479)
+//@ chunk-5j1n9yg4.js:2998-3206 fingerprint (2.1.88 match: recordShownTip, 0.481)
 /**
  * 记录某提示已显示（写 tipsHistory[id]=numStartups），并打 tengu_tip_shown（surface：spinner/startup）。
  */
@@ -129,4 +141,10 @@ function recordShownTip(tip, surface = "spinner", storageV5) {
     surface: fromEnum(surface),
   });
 }
-export { recordShownTip, getTipToShowOnSpinner, getTipContentSafe, getMarketplacePluginTipToShow };
+export {
+  recordShownTip,
+  getSecurityReviewClosingTipSafely,
+  getTipToShowOnSpinner,
+  getTipContentSafe,
+  getMarketplacePluginTipToShow,
+};

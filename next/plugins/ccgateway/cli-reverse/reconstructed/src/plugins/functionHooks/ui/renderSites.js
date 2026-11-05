@@ -3,9 +3,9 @@
  *
  * 渲染站点常量（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (5), chunk-s61vbvea.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (2), chunk-j8f885h1.js (5)
  * attribution: placement 7
  */
 import { UI_ELEMENT_TYPES } from "./elements.js";
@@ -13,18 +13,18 @@ import { isPlainObject } from "../../../utils/isPlainObject.js";
 import { pluginsMatchingEvent } from "../hookDispatch.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:70291-70346 placement
+//@ chunk-j8f885h1.js:50850-50905 placement
 /**
  * 是否已知元素类型名
  */
 var isUiElementTypeName = (surface) =>
   typeof surface === "string" && Object.hasOwn(UI_ELEMENT_TYPES, surface);
-//@ chunk-4121qate.js:70346-70385 placement
+//@ chunk-j8f885h1.js:50905-50944 placement
 var UI_ELEMENT_TYPE_NAMES; // deferred: uses UI_ELEMENT_TYPES (./elements.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:70346", () => {
+deferInit("chunk-j8f885h1.js:50905", () => {
   UI_ELEMENT_TYPE_NAMES = Object.freeze(Object.keys(UI_ELEMENT_TYPES));
 });
-//@ chunk-4121qate.js:70385-70904 placement
+//@ chunk-j8f885h1.js:50944-51506 placement
 var RENDER_SITES = {
   AskUserQuestion: "AskUserQuestionPermissionDialog",
   UserMessage: "UserPromptMessage",
@@ -42,8 +42,9 @@ var RENDER_SITES = {
   AbovePrompt: "AbovePromptSite",
   Pane: "PaneSite",
   Placed: "PlacedSite",
+  Backdrop: "none: a remote surface draws it",
 };
-//@ chunk-4121qate.js:70904-71158 placement
+//@ chunk-j8f885h1.js:51506-51760 placement
 /**
  * 校验 ui.render 参数：surface 必须是已知界面，component 必须是引擎绘制的组件。
  */
@@ -55,9 +56,9 @@ function checkRenderArgument(arg) {
     ? undefined
     : `takes a ui.render argument (e.component "${componentName}" is not a component the engine draws)`;
 }
-//@ chunk-4121qate.js:71158-71251 placement
+//@ chunk-j8f885h1.js:51760-51853 placement
 var RENDER_SITE_PAIRS; // deferred: uses UI_ELEMENT_TYPE_NAMES of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:71158", () => {
+deferInit("chunk-j8f885h1.js:51760", () => {
   RENDER_SITE_PAIRS = Object.freeze(
     UI_ELEMENT_TYPE_NAMES.flatMap((surface) =>
       Object.keys(RENDER_SITES).map((component) => ({
@@ -67,19 +68,19 @@ deferInit("chunk-4121qate.js:71158", () => {
     ),
   );
 });
-//@ chunk-s61vbvea.js:52501-52520 placement
+//@ chunk-7jxyna5q.js:53114-53133 placement
 var RENDER_EVENT = "ui.render";
-//@ chunk-s61vbvea.js:52520-52554 placement
+//@ chunk-7jxyna5q.js:53133-53167 placement
 var renderPluginsFor = (component) =>
   pluginsMatchingEvent(RENDER_EVENT, {
     component,
   });
 export {
+  renderPluginsFor,
+  RENDER_SITE_PAIRS,
   isUiElementTypeName,
+  RENDER_EVENT,
   RENDER_SITES,
   UI_ELEMENT_TYPE_NAMES,
   checkRenderArgument,
-  RENDER_EVENT,
-  renderPluginsFor,
-  RENDER_SITE_PAIRS,
 };

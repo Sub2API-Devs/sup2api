@@ -3,9 +3,9 @@
  *
  * /hooks 第二级：某事件下的匹配器列表。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/hooks/SelectMatcherMode.tsx
- * pieces: chunk-bajxb7bf.js (4)
+ * pieces: chunk-5tpnqyt5.js (4)
  * attribution: placement 1, file-local 1, fingerprint 2
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -18,23 +18,23 @@ import { Text } from "../../ink/components/Text.js";
 import { hookSourceInlineDisplayString } from "../../utils/hooks/hooksSettings.js";
 import { escapeControlCharsForDisplay, plural } from "../../utils/stringUtils.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { HintText } from "../design-system/HintText.js";
 import { Dialog } from "../design-system/Dialog.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bajxb7bf.js:43222-43226 placement
+//@ chunk-5tpnqyt5.js:44718-44722 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bajxb7bf.js:43222", () => {
+deferInit("chunk-5tpnqyt5.js:44718", () => {
   init_react_production();
 });
-//@ chunk-bajxb7bf.js:43226-43257 file-local
+//@ chunk-5tpnqyt5.js:44722-44753 file-local
 function hookSource(h) {
   return h.source;
 }
-//@ chunk-bajxb7bf.js:43257-43462 fingerprint (2.1.88 match: _temp3, 0.838)
+//@ chunk-5tpnqyt5.js:44753-44958 fingerprint (2.1.88 match: _temp3, 0.838)
 function renderMatcherItem(item) {
   return jsxProd_default(
     OrderedListWithItem.Item,
@@ -49,7 +49,7 @@ function renderMatcherItem(item) {
     item.matcher,
   );
 }
-//@ chunk-bajxb7bf.js:43462-44720 fingerprint (2.1.88 match: SelectMatcherMode, 0.657)
+//@ chunk-5tpnqyt5.js:44958-46216 fingerprint (2.1.88 match: SelectMatcherMode, 0.657)
 function SelectMatcherMode(props) {
   let $ = useMemoCache(26);
   let {
@@ -66,7 +66,7 @@ function SelectMatcherMode(props) {
     if ($[4] !== hooksByEventAndMatcher || $[5] !== selectedEvent) {
       t2 = (matcher) => {
         let hooks = hooksByEventAndMatcher[selectedEvent]?.[matcher] || [];
-        let sources = uniq(hooks.map(hookSource));
+        let sources = normalizeCaseForComparison_2(hooks.map(hookSource));
         return {
           matcher,
           sources,

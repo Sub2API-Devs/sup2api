@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。REPL 副作用集合。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (11), chunk-e6aww6q8.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (11)
  * attribution: placement 12
  */
 import { alwaysFalse as alwaysFalse_2 } from "../../Tool.js";
@@ -36,7 +36,7 @@ import { INITIAL_IN_PROGRESS_STATE, EMPTY_MESSAGES } from "../../state/inProgres
 import { mergeTaskProgressUpdate } from "../../services/AgentSummary/agentSummary.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1297008-1297111 placement
+//@ chunk-5xgkngpb.js:1295879-1295983 placement
 /**
  * 切换队友模式（受主动性策略限制时回到 default）。
  */
@@ -45,7 +45,7 @@ function nextTeammateMode(mode, appState, appState_2) {
   if (appState_2 && getProactivityPolicyVerdict(appState, mode, undefined) !== undefined) return "default";
   return mode;
 }
-//@ chunk-18hwfzwa.js:207654-207782 placement
+//@ chunk-czq1j3j2.js:212453-212581 placement
 /**
  * 开启时运行一次，并在 GrowthBook 刷新时再次运行凭证相关检查。
  */
@@ -58,27 +58,27 @@ function useFlagRefreshEffect({ enabled }) {
     return onGrowthBookRefresh(refresh);
   }, [credentials, enabled, storageV5]);
 }
-//@ chunk-18hwfzwa.js:221010-221064 placement
+//@ chunk-czq1j3j2.js:226048-226102 placement
 function selectToolPermissionContextMode3(state) {
   return state.toolPermissionContext.mode;
 }
-//@ chunk-18hwfzwa.js:221064-221108 placement
+//@ chunk-czq1j3j2.js:226102-226146 placement
 function selectProactivityLevel(state) {
   return state.proactivityLevel;
 }
-//@ chunk-18hwfzwa.js:221108-221161 placement
+//@ chunk-czq1j3j2.js:226146-226199 placement
 function selectHasProactivityBaseline(state) {
   return hasLeftProactivityBaseline(state.toolPermissionContext);
 }
-//@ chunk-18hwfzwa.js:221161-221200 placement (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:226199-226238 placement (2.1.88 match: _temp, 1)
 function selectMcpClients(s) {
   return s.mcp.clients;
 }
-//@ chunk-18hwfzwa.js:221200-221216 placement
+//@ chunk-czq1j3j2.js:226238-226254 placement
 function noopEffect() {}
-//@ chunk-18hwfzwa.js:221216-221226 placement
+//@ chunk-czq1j3j2.js:226254-226264 placement
 var EMPTY_PROMPTS = [];
-//@ chunk-18hwfzwa.js:221226-222453 placement
+//@ chunk-czq1j3j2.js:226264-227492 placement
 function ReplEffects(props) {
   let $ = useMemoCache(25);
   let { chrome, mcpClients, initialMessages, isRemoteSession } = props;
@@ -190,12 +190,12 @@ function ReplEffects(props) {
   useIdeSelection(mcpClients_2, chrome.offerIdeSelection);
   return null;
 }
-//@ chunk-18hwfzwa.js:222453-222457 placement
+//@ chunk-czq1j3j2.js:227492-227496 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:222453", () => {
+deferInit("chunk-czq1j3j2.js:227492", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:222457-222662 placement
+//@ chunk-czq1j3j2.js:227496-227701 placement
 function setTranscriptMessages(store, agentId, sticky, tokenCount) {
   store.setState((state) => {
     let entry = state.transcripts[agentId] ?? INITIAL_IN_PROGRESS_STATE;
@@ -215,10 +215,10 @@ function setTranscriptMessages(store, agentId, sticky, tokenCount) {
     };
   });
 }
-//@ chunk-18hwfzwa.js:222662-222734 placement
+//@ chunk-czq1j3j2.js:227701-227773 placement
 function transcriptMessagesStore(agentId) {
   return {
     messages: useAppState((state) => state.transcripts[agentId]?.messages ?? EMPTY_MESSAGES),
   };
 }
-export { setTranscriptMessages, transcriptMessagesStore, ReplEffects };
+export { transcriptMessagesStore, setTranscriptMessages, ReplEffects };

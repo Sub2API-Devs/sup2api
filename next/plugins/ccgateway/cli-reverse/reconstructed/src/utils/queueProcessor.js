@@ -3,56 +3,65 @@
  *
  * 命令队列处理：主循环空闲时取出下一批排队输入执行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/queueProcessor.ts
- * pieces: chunk-18hwfzwa.js (8)
- * attribution: placement 7, fingerprint 1
+ * pieces: chunk-czq1j3j2.js (10)
+ * attribution: placement 7, layout 2, fingerprint 1
  */
 import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import {
-  isSendableQueuedCommand,
-  isSlashCommand,
+  isIdleDrainableMainThreadCommand,
   isMainAgentCommand,
   sameSchedulingPlugin,
-  isActiveMainAgentCommand,
+  isDrainableMainThreadCommand,
 } from "./messageQueueManager.js";
 import { peekNextQueued } from "../cli/print/rewindStandIn.js";
+import { isPeerOrSlackPing } from "./messageProvenance.js";
+import { looksLikeSlashInput, findCommand, isCommandEnabled } from "../commands.js";
 import { getActiveMessageQueue } from "../query/presenceCheck.js";
 import { isGoalIdleCheckinPaused } from "../query/goalCheckIn.js";
 import { reportQueuedSubmissions } from "./hooks/postSamplingHooks.js";
 import { markMessagesRead } from "../bridge/readReceipts.js";
+import { codeModeAccepted } from "./codeMode/accepted.js";
 import { isHumanOrigin } from "./turnOrigin.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { parseSlashCommand } from "./slashCommandParsing.js";
-import { findCommand, isCommandEnabled } from "../commands.js";
 import { lastTextBlockText } from "./historyFile.js";
 import { resolveSlashCommand } from "../screens/repl/PromptSubmitController.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1661153-1661157 placement
+//@ chunk-czq1j3j2.js:1702443-1702447 placement
 /**
  * 惰性模块初始化调用 j()。
  */
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1661153", () => {
+deferInit("chunk-czq1j3j2.js:1702443", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1661157-1661253 placement
+//@ chunk-czq1j3j2.js:1706882-1706976 placement
 /**
  * 队首可处理命令仍在审查（screeningPending）时不取，否则按优先级取下一个。
  */
 function peekNextProcessableCommand(queue) {
-  if (queue.getCommandQueue().find(isSendableQueuedCommand)?.screeningPending === true) return;
-  return peekNextQueued(queue, isSendableQueuedCommand);
+  if (queue.getCommandQueue().find(isIdleDrainableMainThreadCommand)?.screeningPending === true) return;
+  return peekNextQueued(queue, isIdleDrainableMainThreadCommand);
 }
-//@ chunk-18hwfzwa.js:1661334-1662561 fingerprint (2.1.88 match: processQueueIfReady, 0.335)
+//@ chunk-czq1j3j2.js:1706976-1707057 layout (2.1.88 match: isSlashCommand, 1)
+/**
+ * 值以 / 开头的命令；peer/slack 来源且 skipSlashCommands 时不算。
+ */
+function isSlashCommand(cmd) {
+  if (cmd.skipSlashCommands && isPeerOrSlackPing(cmd.origin)) return false;
+  return looksLikeSlashInput(cmd.value);
+}
+//@ chunk-czq1j3j2.js:1707057-1708283 fingerprint (2.1.88 match: processQueueIfReady, 0.335)
 /**
  * 主循环空闲时从命令队列取出下一批（同类 prompt 可合并、bash 单独）并执行。
  */
 function processQueueIfReady({ queue, executeInput, waitsOnSessionStart = () => true, screeningStale }) {
   if (getActiveMessageQueue() !== undefined) {
     let pausedCheckin = queue.peek(
-      (cmd) => isSendableQueuedCommand(cmd) && isGoalIdleCheckinPaused(cmd.uuid),
+      (cmd) => isIdleDrainableMainThreadCommand(cmd) && isGoalIdleCheckinPaused(cmd.uuid),
     );
     let next = pausedCheckin ?? peekNextProcessableCommand(queue);
     if (!next || (pausedCheckin === undefined && waitsOnSessionStart(next)))
@@ -113,7 +122,7 @@ function processQueueIfReady({ queue, executeInput, waitsOnSessionStart = () => 
       if (selected > 0) return false;
     }
     let drainable =
-      isActiveMainAgentCommand(cmd) &&
+      isDrainableMainThreadCommand(cmd) &&
       !isSlashCommand(cmd) &&
       cmd.mode === targetMode &&
       (cmd.shouldQuery === false) === noQuery;
@@ -149,7 +158,7 @@ function processQueueIfReady({ queue, executeInput, waitsOnSessionStart = () => 
     processed: true,
   };
 }
-//@ chunk-18hwfzwa.js:1662561-1662712 placement
+//@ chunk-czq1j3j2.js:1708283-1708434 placement
 function drainOneQueuedCommand(queue, command, executeInput) {
   let drained = [queue.dequeue((candidate) => candidate === command)];
   reportQueuedSubmissions(drained, "turn_end");
@@ -157,16 +166,20 @@ function drainOneQueuedCommand(queue, command, executeInput) {
   queue.setInFlightDrainBatch(drained);
   executeInput(drained).finally(() => queue.clearInFlightDrainBatch(drained));
 }
-//@ chunk-18hwfzwa.js:1662712-1662742 placement
+//@ chunk-czq1j3j2.js:1708434-1708464 placement
 /**
  * neverSubscribed：恒 false 的订阅判定占位。
  */
 var NOOP_UNSUBSCRIBE = () => () => {};
 var neverSubscribed = () => false;
-//@ chunk-18hwfzwa.js:1662742-1662859 placement
+//@ chunk-czq1j3j2.js:1708464-1708541 layout
+function scriptAskHoldsSlot() {
+  return codeModeAccepted() ? require("./codeMode/scriptAskDeclined.js").scriptAskHolds : null;
+}
+//@ chunk-czq1j3j2.js:1708541-1708658 placement
 var NON_INTERRUPTING_DIALOGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TENGU_WOOLLY_OWL;
-deferInit("chunk-18hwfzwa.js:1662742", () => {
+deferInit("chunk-czq1j3j2.js:1708541", () => {
   NON_INTERRUPTING_DIALOGS = new Set([
     "managed_settings_security",
     "sandbox_network_access",
@@ -174,7 +187,7 @@ deferInit("chunk-18hwfzwa.js:1662742", () => {
   ]);
   TENGU_WOOLLY_OWL = "tengu_woolly_owl";
 });
-//@ chunk-18hwfzwa.js:1662859-1663151 placement
+//@ chunk-czq1j3j2.js:1708658-1708950 placement
 /**
  * 桥接来的斜杠命令是否不可用
  */
@@ -193,7 +206,7 @@ function isBridgeSlashCommandUnavailable(command, commands) {
     isCommandEnabled(command_2)
   );
 }
-//@ chunk-18hwfzwa.js:1663151-1663315 placement (2.1.88 match: prependModeCharacterToInput, 1)
+//@ chunk-czq1j3j2.js:1708950-1709114 placement (2.1.88 match: prependModeCharacterToInput, 1)
 function prependModeCharacterToInput_2(input, mode) {
   let textBlock = input.mode === "bash" ? null : lastTextBlockText(input.value);
   let slashCommand = textBlock === null || !textBlock.startsWith("/") ? null : parseSlashCommand(textBlock);
@@ -206,6 +219,7 @@ export {
   peekNextProcessableCommand,
   prependModeCharacterToInput_2,
   isBridgeSlashCommandUnavailable,
+  scriptAskHoldsSlot,
   neverSubscribed,
   processQueueIfReady,
 };

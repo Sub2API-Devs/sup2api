@@ -3,15 +3,13 @@
  *
  * ANSI 文本解析器：识别 CSI/OSC/SGR，带样式硬折行
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/termio/parser.ts
- * pieces: chunk-ksvdmrg0.js (3), chunk-x6v6jz2y.js (5)
- * attribution: sole-consumer 3, affinity 1, fingerprint 4
+ * pieces: chunk-emhzq435.js (5)
+ * attribution: fingerprint 4, layout 1
  */
-import { bunStringWidth } from "../stringWidth.js";
-import { emptySgrState, applySgrToState } from "../wrapAnsi.js";
-import { regExp, RESET } from "../../services/daemon/controlServer.js";
 import { getGraphemeSegmenter } from "../../utils/intl.js";
+import { bunStringWidth } from "../stringWidth.js";
 import { DEC } from "./dec.js";
 import { CSI, ERASE_DISPLAY, ERASE_LINE_REGION, CURSOR_STYLES } from "./csi.js";
 import { C0 } from "./ansi.js";
@@ -21,45 +19,7 @@ import { applySGR } from "./sgr.js";
 import { parseOSC } from "./osc.js";
 import { parseEsc } from "./esc.js";
 
-//@ chunk-ksvdmrg0.js:25056-25067 sole-consumer
-var MAX_SGR_REOPEN = 128;
-//@ chunk-ksvdmrg0.js:25067-25163 affinity
-function reopenSgr(activeCodes) {
-  let joined = activeCodes.filter((activeCode) => activeCode !== "").join(";");
-  return joined === "" || joined.length > MAX_SGR_REOPEN ? "" : `\x1B[${joined}m`;
-}
-//@ chunk-ksvdmrg0.js:25163-25498 fingerprint (2.1.88 match: segmentGraphemes, 0.707)
-/**
- * 把一行带 ANSI 的文本按显示宽度硬折，换行处关闭活动样式、下一行重新打开。
- */
-function hardWrapAnsiLine(line, width) {
-  if (bunStringWidth(line) <= width) return [line];
-  let lines = [];
-  let current = "";
-  let currentWidth = 0;
-  let sgrState = emptySgrState();
-  for (let part of line.split(regExp)) {
-    if (part === "") continue;
-    if (part.charCodeAt(0) === 27) {
-      applySgrToState(part, sgrState);
-      current += part;
-      continue;
-    }
-    for (let { segment } of getGraphemeSegmenter().segment(part)) {
-      let segmentWidth = segment.length === 1 && segment.charCodeAt(0) < 127 ? 1 : bunStringWidth(segment);
-      if (currentWidth > 0 && currentWidth + segmentWidth > width) {
-        lines.push(sgrState.some((code) => code !== "") ? current + RESET : current);
-        current = reopenSgr(sgrState);
-        currentWidth = 0;
-      }
-      current += segment;
-      currentWidth += segmentWidth;
-    }
-  }
-  lines.push(current);
-  return lines;
-}
-//@ chunk-x6v6jz2y.js:8409-8729 sole-consumer
+//@ chunk-emhzq435.js:8347-8667 fingerprint (2.1.88 match: segmentGraphemes, 0.708)
 /**
  * 把文本切成 {value, width} 字素序列：纯 ASCII 快速路径，否则用 Intl 字素切分并用 Bun.stringWidth 量宽（至少 1）。
  */
@@ -95,7 +55,7 @@ function* segmentGraphemes(text) {
     };
   }
 }
-//@ chunk-x6v6jz2y.js:8729-9402 sole-consumer
+//@ chunk-emhzq435.js:8667-9340 layout
 /**
  * DEC 私有模式（光标显示、备用屏、括号粘贴、鼠标跟踪、焦点事件）的 SM/RM 转成语义动作。
  */
@@ -165,7 +125,7 @@ function decModeToAction(mode, enabled) {
       return null;
   }
 }
-//@ chunk-x6v6jz2y.js:9402-11679 fingerprint (2.1.88 match: parseCSI, 0.733)
+//@ chunk-emhzq435.js:9340-11617 fingerprint (2.1.88 match: parseCSI, 0.731)
 /**
  * 解析一个 CSI 序列为语义动作：SGR 单独返回参数串；光标移动/定位、擦除、插删行列、滚动与滚动区域、保存恢复光标、光标形状（DECSCUSR）、DEC 私有模式开关。
  */
@@ -399,7 +359,7 @@ function parseCSI(rawSequence) {
     sequence: rawSequence,
   };
 }
-//@ chunk-x6v6jz2y.js:11679-11846 fingerprint (2.1.88 match: identifySequence, 0.866)
+//@ chunk-emhzq435.js:11617-11785 fingerprint (2.1.88 match: identifySequence, 0.866)
 /**
  * 按第二个字节判断转义序列种类：csi / osc / esc。
  */
@@ -411,7 +371,7 @@ function identifySequence(seq) {
   if (second === 93) return "osc";
   return "esc";
 }
-//@ chunk-x6v6jz2y.js:11846-14043 fingerprint (2.1.88 match: Parser, 0.769)
+//@ chunk-emhzq435.js:11785-13982 fingerprint (2.1.88 match: Parser, 0.769)
 /**
  * 终端输出语义解析器（Ansi 组件、测试与录屏用）：分词后把文本切成带当前样式的字素段、BEL 单独成动作；SGR 更新内部样式；OSC 8 维护当前链接；forOutput 模式下保留可能被后续字节续上的尾部字素（ZWJ、区域旗帜、代理对）。
  */
@@ -568,4 +528,4 @@ class Parser {
     }
   }
 }
-export { hardWrapAnsiLine, Parser };
+export { Parser };

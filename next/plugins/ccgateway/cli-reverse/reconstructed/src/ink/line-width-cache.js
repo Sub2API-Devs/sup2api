@@ -3,18 +3,18 @@
  *
  * 并入已有模块：推进输入解析状态机（粘贴、鼠标前缀丢弃），产出按键；超时后刷出未完成的转义序列等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/line-width-cache.ts
- * pieces: chunk-bzr73sfg.js (4)
+ * pieces: chunk-2avr6cej.js (4)
  * attribution: placement 2, layout 1, callgraph-witnessed 1
  */
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { bunStringWidth } from "./stringWidth.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bzr73sfg.js:175327-175339 placement
+//@ chunk-2avr6cej.js:175076-175088 placement
 var MAX_LINE_WIDTH_CACHE_SIZE = 4096;
-//@ chunk-bzr73sfg.js:175339-175544 placement
+//@ chunk-2avr6cej.js:175088-175293 placement
 /**
  * 按行字符串缓存显示宽度（bunStringWidth），满 4096 条清空。
  */
@@ -35,12 +35,12 @@ class LineWidthCache {
     this.#e.clear();
   }
 }
-//@ chunk-bzr73sfg.js:175544-175558 layout
+//@ chunk-2avr6cej.js:175293-175307 layout
 var lineWidthCache; // deferred: uses LineWidthCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-bzr73sfg.js:175544", () => {
+deferInit("chunk-2avr6cej.js:175293", () => {
   lineWidthCache = new LineWidthCache();
 });
-//@ chunk-bzr73sfg.js:175558-175595 callgraph-witnessed (2.1.88 match: lineWidth, 0)
+//@ chunk-2avr6cej.js:175307-175344 callgraph-witnessed (2.1.88 match: lineWidth, 0)
 /**
  * 取一行文本的显示宽度（带缓存）。
  */

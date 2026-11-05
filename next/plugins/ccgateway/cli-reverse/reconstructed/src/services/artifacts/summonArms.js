@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：评论召唤唤醒状态（定时器、已让出消息）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fgz849qw.js (36)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-r1451fmk.js (36)
  * attribution: placement 36
  */
 import { getLiveState } from "../liveReplica/liveReplica.js";
 import { logFeatureOk } from "../analytics/featureTelemetry.js";
 
-//@ chunk-fgz849qw.js:262-651 placement
+//@ chunk-r1451fmk.js:262-651 placement
 function getSummonWakeState(slug) {
   let { wakes } = getLiveState().wakes;
   let wake = wakes.get(slug);
@@ -39,7 +39,7 @@ function getSummonWakeState(slug) {
   }
   return wake;
 }
-//@ chunk-fgz849qw.js:651-1142 placement
+//@ chunk-r1451fmk.js:651-1142 placement
 function clearSummonWakeTimers(reason) {
   for (let [slug, wake] of getLiveState().wakes.wakes) {
     if (reason !== undefined && slug !== reason) continue;
@@ -66,46 +66,46 @@ function clearSummonWakeTimers(reason) {
     wake.cancelGeneration++;
   }
 }
-//@ chunk-fgz849qw.js:1142-1185 placement
+//@ chunk-r1451fmk.js:1142-1185 placement
 function bumpScanGeneration() {
   getLiveState().wakes.scanGeneration++;
 }
-//@ chunk-fgz849qw.js:1185-1255 placement
+//@ chunk-r1451fmk.js:1185-1255 placement
 function bumpSlugEpoch(slug) {
   let { slugEpochs } = getLiveState().wakes;
   slugEpochs.set(slug, (slugEpochs.get(slug) ?? 0) + 1);
 }
-//@ chunk-fgz849qw.js:1255-1308 placement
+//@ chunk-r1451fmk.js:1255-1308 placement
 function slugEpoch(slug) {
   return getLiveState().wakes.slugEpochs.get(slug) ?? 0;
 }
-//@ chunk-fgz849qw.js:1308-1361 placement
+//@ chunk-r1451fmk.js:1308-1361 placement
 function scanStamp(slug) {
   return getLiveState().wakes.scanGeneration + slugEpoch(slug);
 }
-//@ chunk-fgz849qw.js:1361-1420 placement
+//@ chunk-r1451fmk.js:1361-1420 placement
 function stopGeneration(slug) {
   return getLiveState().wakes.stopGenerations.get(slug) ?? 0;
 }
-//@ chunk-fgz849qw.js:1420-1493 placement
+//@ chunk-r1451fmk.js:1420-1493 placement
 function bumpStopGeneration(slug) {
   let { stopGenerations } = getLiveState().wakes;
   stopGenerations.set(slug, (stopGenerations.get(slug) ?? 0) + 1);
 }
-//@ chunk-fgz849qw.js:1493-1654 placement
+//@ chunk-r1451fmk.js:1493-1654 placement
 function markLatchChanged(slug, savedAt) {
   let { latchChangedAt } = getLiveState().wakes;
   if (savedAt === undefined) latchChangedAt.set(slug, Date.now());
   else if (Number.isFinite(savedAt)) latchChangedAt.set(slug, Math.min(savedAt, Date.now()));
   else latchChangedAt.delete(slug);
 }
-//@ chunk-fgz849qw.js:1654-1664 placement
+//@ chunk-r1451fmk.js:1654-1664 placement
 var markLatchChangedArms = markLatchChanged;
-//@ chunk-fgz849qw.js:1664-1720 placement
+//@ chunk-r1451fmk.js:1664-1720 placement
 function latchChangedAt(slug) {
   return getLiveState().wakes.latchChangedAt.get(slug);
 }
-//@ chunk-fgz849qw.js:1720-1876 placement
+//@ chunk-r1451fmk.js:1720-1876 placement
 function stopSummonWakes(slug) {
   let { wakes } = getLiveState();
   markLatchChangedArms(slug);
@@ -115,7 +115,7 @@ function stopSummonWakes(slug) {
   bumpStopGeneration(slug);
   wakes.pendingResumeDisclosure.delete(slug);
 }
-//@ chunk-fgz849qw.js:1876-2019 placement
+//@ chunk-r1451fmk.js:1876-2019 placement
 function resumeSummonWakes(slug) {
   let { wakes } = getLiveState();
   if (wakes.stoppedSlugs.has(slug)) markLatchChangedArms(slug);
@@ -123,16 +123,16 @@ function resumeSummonWakes(slug) {
   wakes.sweptSlugs.delete(slug);
   wakes.orphanedSweptSlugs.delete(slug);
 }
-//@ chunk-fgz849qw.js:2019-2072 placement
+//@ chunk-r1451fmk.js:2019-2072 placement
 function isSlugStopped(slug) {
   return getLiveState().wakes.stoppedSlugs.has(slug);
 }
-//@ chunk-fgz849qw.js:2072-2169 placement
+//@ chunk-r1451fmk.js:2072-2169 placement
 function isSlugStoppedAnywhere(slug) {
   let liveState = getLiveState();
   return liveState.wakes.stoppedSlugs.has(slug) || liveState.durable.stopLatches.isStopped(slug);
 }
-//@ chunk-fgz849qw.js:2169-2483 placement
+//@ chunk-r1451fmk.js:2169-2483 placement
 function sweepSlug(slug) {
   let { wakes } = getLiveState();
   if (!wakes.stoppedSlugs.has(slug)) {
@@ -152,20 +152,20 @@ function sweepSlug(slug) {
   wakes.orphanedSweptSlugs.delete(slug);
   wakes.pendingResumeDisclosure.delete(slug);
 }
-//@ chunk-fgz849qw.js:2483-2534 placement
+//@ chunk-r1451fmk.js:2483-2534 placement
 function isSlugSwept(slug) {
   return getLiveState().wakes.sweptSlugs.has(slug);
 }
-//@ chunk-fgz849qw.js:2534-2578 placement
+//@ chunk-r1451fmk.js:2534-2578 placement
 function sweptSlugs() {
   return getLiveState().wakes.sweptSlugs;
 }
-//@ chunk-fgz849qw.js:2578-2665 placement
+//@ chunk-r1451fmk.js:2578-2665 placement
 function orphanSweptSlugs() {
   let { wakes } = getLiveState();
   for (let sweptSlug of wakes.sweptSlugs) wakes.orphanedSweptSlugs.add(sweptSlug);
 }
-//@ chunk-fgz849qw.js:2665-3133 placement
+//@ chunk-r1451fmk.js:2665-3133 placement
 function recordYieldedMessage(slug, msgId) {
   let { wakes } = getLiveState();
   let entry = wakes.yieldedSlugs.get(slug);
@@ -190,16 +190,16 @@ function recordYieldedMessage(slug, msgId) {
   markLatchChangedArms(slug, yielded.latchClockBefore ?? Number.NaN);
   yielded.stopGeneration = stopGeneration(slug);
 }
-//@ chunk-fgz849qw.js:3133-3215 placement
+//@ chunk-r1451fmk.js:3133-3215 placement
 function markYieldAnnounced(slug) {
   let entry = getLiveState().wakes.yieldedSlugs.get(slug);
   if (entry !== undefined) entry.announced = true;
 }
-//@ chunk-fgz849qw.js:3215-3285 placement
+//@ chunk-r1451fmk.js:3215-3285 placement
 function isYieldAnnounced(slug) {
   return getLiveState().wakes.yieldedSlugs.get(slug)?.announced === true;
 }
-//@ chunk-fgz849qw.js:3285-3572 placement
+//@ chunk-r1451fmk.js:3285-3572 placement
 function settleYieldedMessage(slug, msgId) {
   let { wakes } = getLiveState();
   let entry = wakes.yieldedSlugs.get(slug);
@@ -215,11 +215,11 @@ function settleYieldedMessage(slug, msgId) {
   } else markLatchChangedArms(slug);
   return true;
 }
-//@ chunk-fgz849qw.js:3572-3622 placement
+//@ chunk-r1451fmk.js:3572-3622 placement
 function forgetYieldedSlug(slug) {
   getLiveState().wakes.yieldedSlugs.delete(slug);
 }
-//@ chunk-fgz849qw.js:3622-3757 placement
+//@ chunk-r1451fmk.js:3622-3757 placement
 function isYieldedMessage(slug, msgId) {
   let entry = getLiveState().wakes.yieldedSlugs.get(slug);
   if (entry === undefined || !entry.msgIds.has(msgId)) return false;
@@ -227,15 +227,15 @@ function isYieldedMessage(slug, msgId) {
   stopSummonWakes(slug);
   return true;
 }
-//@ chunk-fgz849qw.js:3757-3834 placement
+//@ chunk-r1451fmk.js:3757-3834 placement
 function isStoppedElsewhere(slug) {
   return getLiveState().wakes.yieldedSlugs.get(slug)?.stoppedElsewhere === true;
 }
-//@ chunk-fgz849qw.js:3834-3887 placement
+//@ chunk-r1451fmk.js:3834-3887 placement
 function isSlugYielded(slug) {
   return getLiveState().wakes.yieldedSlugs.has(slug);
 }
-//@ chunk-fgz849qw.js:3887-4040 placement
+//@ chunk-r1451fmk.js:3887-4040 placement
 function isYieldResumable(slug) {
   let { wakes } = getLiveState();
   let entry = wakes.yieldedSlugs.get(slug);
@@ -246,12 +246,12 @@ function isYieldResumable(slug) {
     wakes.scanGeneration === entry.scanGeneration
   );
 }
-//@ chunk-fgz849qw.js:4040-4132 placement
+//@ chunk-r1451fmk.js:4040-4132 placement
 function isSlugOrphaned(slug) {
   let { wakes } = getLiveState();
   return wakes.orphanedSweptSlugs.has(slug) || wakes.yieldedSlugs.has(slug);
 }
-//@ chunk-fgz849qw.js:4132-4486 placement
+//@ chunk-r1451fmk.js:4132-4486 placement
 function armSummonState(slug) {
   let { autoReact, live, builtInArtifactHiddenForMcp } = getLiveState();
   let supervisor = live.supervisors.get(slug);
@@ -266,7 +266,7 @@ function armSummonState(slug) {
     (supervisor !== undefined && !supervisor.stopped && supervisor.armedVia === "mcp_write")
   );
 }
-//@ chunk-fgz849qw.js:4486-4590 placement
+//@ chunk-r1451fmk.js:4486-4590 placement
 function sendSummonArm(live, slug, state) {
   slug(state);
   if (!live.summonArmOkReported) {
@@ -274,7 +274,7 @@ function sendSummonArm(live, slug, state) {
     logFeatureOk("artifact_summon_arm_emit");
   }
 }
-//@ chunk-fgz849qw.js:4590-4804 placement
+//@ chunk-r1451fmk.js:4590-4804 placement
 /**
  * 根据是否布防，向该 slug 的活动发送端发送 arm:0 或 arm 并记录声明状态（状态未变时不发）。
  */
@@ -290,20 +290,20 @@ function updateSummonDeclared(live, slug, declared) {
     sendSummonArm(live, senders, "arm");
   }
 }
-//@ chunk-fgz849qw.js:4804-4835 placement
+//@ chunk-r1451fmk.js:4804-4835 placement
 function emitSummonArm(live, slug) {
   updateSummonDeclared(live, slug, armSummonState(slug));
 }
-//@ chunk-fgz849qw.js:4835-4897 placement
+//@ chunk-r1451fmk.js:4835-4897 placement
 function emitSummonArmsForActivity(live) {
   for (let key of live.activitySenders.keys()) emitSummonArm(live, key);
 }
-//@ chunk-fgz849qw.js:4897-4950 placement
+//@ chunk-r1451fmk.js:4897-4950 placement
 function undeclareSummon(live, slug) {
   live.summonDeclared.delete(slug);
   emitSummonArm(live, slug);
 }
-//@ chunk-fgz849qw.js:4950-4995 placement
+//@ chunk-r1451fmk.js:4950-4995 placement
 function dropSummonDeclaration(live, slug) {
   live.summonDeclared.delete(slug);
 }
@@ -323,20 +323,20 @@ export {
   settleYieldedMessage,
   getSummonWakeState,
   isSlugStoppedAnywhere,
-  bumpScanGeneration,
-  isYieldResumable,
-  stopGeneration,
+  emitSummonArmsForActivity,
   sweepSlug,
   markLatchChanged,
   latchChangedAt,
   sweptSlugs,
   orphanSweptSlugs,
-  emitSummonArmsForActivity,
   scanStamp,
   armSummonState,
   stopSummonWakes,
+  bumpScanGeneration,
+  stopGeneration,
   resumeSummonWakes,
   forgetYieldedSlug,
   undeclareSummon,
   dropSummonDeclaration,
+  isYieldResumable,
 };

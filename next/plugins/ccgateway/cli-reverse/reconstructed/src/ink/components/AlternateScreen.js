@@ -3,9 +3,9 @@
  *
  * 并入已有模块：备用屏幕上下文
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/components/AlternateScreen.tsx
- * pieces: chunk-2f336bka.js (3), chunk-yag8rcpb.js (2)
+ * pieces: chunk-pfyb8vcw.js (2), chunk-r6bx7z4z.js (3)
  * attribution: placement 3, fingerprint 1, affinity 1
  */
 import {
@@ -22,22 +22,22 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { BaseBox } from "./Box.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-yag8rcpb.js:229-233 placement
+//@ chunk-pfyb8vcw.js:229-233 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-yag8rcpb.js:229", () => {
+deferInit("chunk-pfyb8vcw.js:229", () => {
   init_react_production();
 });
-//@ chunk-yag8rcpb.js:233-250 placement
+//@ chunk-pfyb8vcw.js:233-250 placement
 var AlternateScreenContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-yag8rcpb.js:233", () => {
+deferInit("chunk-pfyb8vcw.js:233", () => {
   AlternateScreenContext = createContext(null);
 });
-//@ chunk-2f336bka.js:422-426 placement
+//@ chunk-r6bx7z4z.js:422-426 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-2f336bka.js:422", () => {
+deferInit("chunk-r6bx7z4z.js:422", () => {
   init_react_production();
 });
-//@ chunk-2f336bka.js:426-1523 fingerprint (2.1.88 match: AlternateScreen, 0.422)
+//@ chunk-r6bx7z4z.js:426-1523 fingerprint (2.1.88 match: AlternateScreen, 0.422)
 /**
  * <AlternateScreen>：挂载时进入备用屏（DEC 1049）并按 mouseTracking（默认 full）开启鼠标跟踪、可选设置 surface 背景/前景色；内容高度固定为终端行数；卸载时退出备用屏、关闭鼠标、清选区并恢复扩展键与原生光标。进/出序列会尽量并入下一帧一起写（keepForNextFrame），避免闪烁。
  */
@@ -132,7 +132,7 @@ function AlternateScreen(props) {
   } else element = $[15];
   return element;
 }
-//@ chunk-2f336bka.js:1523-1751 affinity
+//@ chunk-r6bx7z4z.js:1523-1751 affinity
 function leaveAlternateScreen(ink, modes, writeRaw) {
   let disableSeq = ink?.setAltScreenActive(false) ?? "";
   ink?.clearTextSelection();

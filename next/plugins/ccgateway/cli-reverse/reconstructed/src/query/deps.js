@@ -3,9 +3,9 @@
  *
  * queryLoop 的可注入依赖（测试可替换）：callModel、autocompact、uuid、now。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/query/deps.ts
- * pieces: chunk-ha3km179.js (3)
+ * pieces: chunk-w3ch4xq2.js (3)
  * attribution: placement 2, fingerprint 1
  */
 import { randomUUID } from "crypto";
@@ -17,7 +17,7 @@ import { SENDMESSAGE, stripObservableFields } from "../tools/SendMessageTool/con
 import { queryModelWithStreaming } from "../services/api/claude.js";
 import { runAutoCompactIfNeeded } from "../services/compact/autoCompact.js";
 
-//@ chunk-ha3km179.js:142929-143374 placement
+//@ chunk-w3ch4xq2.js:151840-152286 placement
 /**
  * 调用工具的 backfillObservableInput 补全可观察输入（失败时原样传递）。
  */
@@ -41,14 +41,14 @@ function backfillObservableInput(toolByName, input, toolName) {
     return stripSendMessageArgs(toolName, input);
   }
 }
-//@ chunk-ha3km179.js:143374-143423 placement
+//@ chunk-w3ch4xq2.js:152286-152335 placement
 /**
  * 去掉可观察字段
  */
 function stripSendMessageArgs(toolName, input) {
   return toolName === SENDMESSAGE ? (stripObservableFields(input) ?? null) : null;
 }
-//@ chunk-ha3km179.js:143460-143553 fingerprint (2.1.88 match: productionDeps, 0.873)
+//@ chunk-w3ch4xq2.js:152372-152465 fingerprint (2.1.88 match: productionDeps, 0.874)
 /**
  * productionDeps：callModel=queryModelWithStreaming、autocompact、uuid=randomUUID、now=ISO 时间串。
  */

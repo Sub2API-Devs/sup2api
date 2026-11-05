@@ -3,10 +3,10 @@
  *
  * API 调用重试器 withRetry：按错误类型决定重试/退避/换 fallback 模型/放弃（CannotRetryError），处理 401/403 凭证刷新、云厂商认证、429/529 与快速模式冷却、上下文溢出调 max_tokens、onError 返回的 "retry:<原因>" 自愈重发、持久重试（RETRY_WATCHDOG），并向 UI 产出重试状态消息。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/withRetry.ts
- * pieces: chunk-aepeg2w5.js (3), chunk-e6aww6q8.js (66), chunk-gr2vfhah.js (8), chunk-sycgf9xs.js (1)
- * attribution: placement 15, fingerprint 16, layout 43, file-local 1, callgraph-witnessed 2, affinity 1
+ * pieces: chunk-5xgkngpb.js (69), chunk-exfmq47h.js (3), chunk-hb44av3w.js (1), chunk-k1t1w9mg.js (9)
+ * attribution: fingerprint 15, layout 48, file-local 1, placement 15, callgraph-witnessed 2, affinity 1
  */
 import { backoffDelayMs, systemClock, sleep } from "../../utils/sleep.js";
 import {
@@ -35,8 +35,10 @@ import {
   StreamClosedAbortError,
   isAbortError,
   toError,
+  withTelemetryMessage,
 } from "../../utils/errors.js";
 import { env } from "../../utils/env.js";
+import { findRouteTurnError, isRoutedFinalAnswerError } from "./gzipRequestBody.js";
 import {
   getClaudeAIOAuthTokens,
   effectiveAuthTokenEnv,
@@ -52,13 +54,13 @@ import {
   getAuthTokenSource,
   isAnthropicAuthEnabled,
   getApiKeyHelperLastFailure,
+  clearApiKeyHelperCache,
   refreshAndGetAwsCredentials,
   getDefaultAwsProviderChain,
   clearAwsCredentialsCache,
   clearAwsHelperCredentialsCache,
   invalidateDefaultAwsProviderChainDebounced,
   markGcpCredentialsRejected,
-  clearApiKeyHelperCache,
   isEnterpriseSubscriber,
 } from "../../utils/auth.js";
 import {
@@ -92,9 +94,11 @@ import {
   isWebSearchContentRejected,
   isCodeExecutionOutputRejected,
   alwaysFalseB as alwaysFalseB_2,
+  isBetaRejected,
   NoApiAttemptsLeftError,
   OAuthRefreshDiskFullError,
   alwaysFalseErrors,
+  isToolUseBlockCutOffError,
   REPEATED_529_MESSAGE,
   getCloudCredentialErrorProvider,
   isNonRetryable4xx,
@@ -118,6 +122,7 @@ import {
   normalizeApiErrorTypeDiag,
   classifyApiErrorKind,
 } from "./responseDiagnostics.js";
+import { BETA_CLAUDE_CODE_SIDE_QUERY } from "../../utils/betas.js";
 import {
   isFastModeEnabled,
   isFallbackModelFastRejected,
@@ -133,6 +138,7 @@ import {
   OVERAGE_STATUS_HEADER,
   OVERAGE_DISABLED_REASON_HEADER,
   hasUnifiedRateLimitHeaders,
+  REPRESENTATIVE_CLAIM_HEADER,
 } from "../lowPriority/headers.js";
 import {
   isModelRefused,
@@ -154,6 +160,7 @@ import {
 } from "../../bootstrap/state.js";
 import { emitCredentialChange } from "../../utils/auth/credentialEpoch.js";
 import { isProviderManagedUnpinnedGateway } from "../gateway/gatewayAuth.js";
+import { peekCACertificates, getCACertificates } from "../../utils/caCerts.js";
 import {
   isLowPriorityActiveSafe,
   recordLowPriorityServed,
@@ -170,13 +177,13 @@ import {
 } from "../../utils/model/modelAccessCheck.js";
 import { isVerificationRequiredError } from "./verificationRequired.js";
 import { isRegimeRefusal } from "./regimeRefusal.js";
-import { isRoutedFinalAnswerError } from "./gzipRequestBody.js";
 import { logEvent } from "../analytics/index.js";
 import { telemetrySafeModelName } from "../../utils/model/telemetryModelName.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
+import { isMainOrAgentQuerySource, classifyQuerySource } from "./requestHeaders.js";
+import { CA_CERT_ERROR_CODES, restoreServedChainIfNeeded } from "./tether.js";
 import { findStreamNoResponseError } from "./streamErrors.js";
 import { createSystemAPIErrorMessage } from "../../utils/messages.js";
-import { isMainOrAgentQuerySource, classifyQuerySource } from "./requestHeaders.js";
 import { agentTypeForTelemetry } from "../analytics/metadata.js";
 import { getCanonicalName, strippedCanonicalName } from "../../utils/model/canonicalModelName.js";
 import {
@@ -203,21 +210,21 @@ import { getAutoModeConfigOrDefault } from "../../utils/permissions/permissionSe
 import { CLASSIFIER_MAX_RETRIES } from "../../utils/permissions/classifierHostContext.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-sycgf9xs.js:17346-17402 fingerprint (2.1.88 match: isStaleConnectionError, 0.632)
+//@ chunk-hb44av3w.js:17380-17436 fingerprint (2.1.88 match: isStaleConnectionError, 0.633)
 /**
  * EPIPE/ECONNRESET/ENOTCONN/EOF：视为连接已失效、可换新连接重试的错误码。旧版名 isStaleConnectionError 是函数名，这里是集合。
  */
 var STALE_CONNECTION_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-sycgf9xs.js:17346", () => {
+deferInit("chunk-hb44av3w.js:17380", () => {
   STALE_CONNECTION_ERROR_CODES = new Set(["EPIPE", "ECONNRESET", "ENOTCONN", "EOF"]);
 });
-//@ chunk-gr2vfhah.js:421-440 affinity
+//@ chunk-k1t1w9mg.js:1728-1747 affinity
 /**
  * 0.25：退避的比例抖动。
  */
 var BASE_RETRY_DELAY_MS = 500;
 var RETRY_JITTER_RATIO = 0.25;
-//@ chunk-gr2vfhah.js:440-657 callgraph-witnessed (2.1.88 match: getRetryDelay, 0.161)
+//@ chunk-k1t1w9mg.js:1747-1964 callgraph-witnessed (2.1.88 match: getRetryDelay, 0.161)
 /**
  * 重试等待时间：以 500ms 为基数、上限 32s、25% 抖动的指数退避；有 retry-after（秒）时取两者较大值。
  */
@@ -246,7 +253,7 @@ function getRetryDelay(
   }
   return rounded;
 }
-//@ chunk-gr2vfhah.js:1242-1441 fingerprint (2.1.88 match: isOAuthTokenRevokedError, 0.637)
+//@ chunk-k1t1w9mg.js:2549-2748 fingerprint (2.1.88 match: isOAuthTokenRevokedError, 0.637)
 /**
  * 403 "OAuth token has been revoked" 或 401 "OAuth access token has been revoked"。
  */
@@ -258,7 +265,7 @@ function isOAuthTokenRevokedError(error) {
     (error.status === 401 && message.includes("OAuth access token has been revoked"))
   );
 }
-//@ chunk-gr2vfhah.js:1441-1623 layout
+//@ chunk-k1t1w9mg.js:2748-2930 layout
 /**
  * 403 permission_error 且消息含 "model:"（模型无权访问）。
  */
@@ -270,14 +277,18 @@ function isModelPermissionDeniedError(error) {
     message.includes("model:")
   );
 }
-//@ chunk-gr2vfhah.js:1623-1728 layout
+//@ chunk-k1t1w9mg.js:2930-3035 layout
 /**
  * 错误类型为 not_found_error。
  */
 function isNotFoundErrorType(error) {
   return error.type === "not_found_error" || (error.message?.includes('"type":"not_found_error"') ?? false);
 }
-//@ chunk-gr2vfhah.js:1728-1841 layout
+//@ chunk-k1t1w9mg.js:3035-3098 layout
+function isNotFoundApiError(error) {
+  return error instanceof APIError && error.status === 404 && isNotFoundErrorType(error);
+}
+//@ chunk-k1t1w9mg.js:3098-3211 layout
 /**
  * 404 not_found_error 且消息含 "model:"。
  */
@@ -285,7 +296,7 @@ function isModelNotFoundError(error) {
   if (!(error instanceof APIError) || error.status !== 404) return false;
   return isNotFoundErrorType(error) && (error.message ?? "").includes("model:");
 }
-//@ chunk-gr2vfhah.js:1841-1962 layout
+//@ chunk-k1t1w9mg.js:3211-3332 layout
 /**
  * Azure/Foundry 404 DeploymentNotFound。
  */
@@ -293,7 +304,7 @@ function isAzureDeploymentNotFound(error) {
   if (!(error instanceof APIError) || error.status !== 404 || !hasNestedError(error)) return false;
   return error.error?.error?.code === "DeploymentNotFound";
 }
-//@ chunk-gr2vfhah.js:1962-2086 fingerprint (2.1.88 match: is529Error, 1)
+//@ chunk-k1t1w9mg.js:3332-3456 fingerprint (2.1.88 match: is529Error, 1)
 /**
  * 529 或消息含 overloaded_error。
  */
@@ -301,7 +312,7 @@ function is529Error(error) {
   if (!(error instanceof APIError)) return false;
   return error.status === 529 || (error.message?.includes('"type":"overloaded_error"') ?? false);
 }
-//@ chunk-aepeg2w5.js:375506-375866 placement
+//@ chunk-exfmq47h.js:386126-386486 placement
 /**
  * 计算回退请求的用量差值。
  */
@@ -322,12 +333,13 @@ function fallbackUsageDelta(usage) {
     (primaryUsage && fallbackFrom ? calculateCostFromTokenCounts(fallbackFrom, primaryUsage) : 0)
   );
 }
-//@ chunk-aepeg2w5.js:376032-377675 placement
+//@ chunk-exfmq47h.js:386652-388916 placement
 /**
  * withRetry 使用的一组开关名。
  */
 var MOSSY_SQUID_GATE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TENGU_TWINKLY_CLOVER;
+var TENGU_SHINY_HAMMING;
 var TENGU_CANDID_JUNIPER;
 var TENGU_CHEEKY_TOUCAN;
 var TENGU_STEADFAST_WREN;
@@ -335,11 +347,16 @@ var TENGU_COBALT_PLINTH_ORPINE;
 var TENGU_VALIANT_LANTERN;
 var TENGU_LEVEL_PLOVER;
 var TENGU_SPLENDID_LYNX;
+var TENGU_WOBBLY_FOG;
+var TENGU_LIMBER_FINCH;
 var TENGU_TENDER_MITTEN;
 var TENGU_SNUG_QUILL;
 var TENGU_MELLOW_RAINBOW;
+var TENGU_HUMBLE_BUMBLEBEE;
 var TENGU_WONDROUS_HAVEN;
 var TENGU_GOOFY_HARE;
+var TENGU_SQUISHY_ULLMAN;
+var TENGU_PLUMB_MARTEN;
 var TENGU_MIGHTY_FLASK;
 var TENGU_STEADY_SCROLL;
 var TENGU_PLAID_KETTLE;
@@ -352,14 +369,18 @@ var TENGU_KIND_DEWDROP;
 var TENGU_THISTLE_ORRERY;
 var TENGU_TOASTY_BEACON;
 var TENGU_SNUG_WALL;
+var TENGU_DEEP_TWILIGHT;
 var TENGU_IMPERATIVE_SPINDLE;
 var TENGU_PROUD_PEARL;
+var TENGU_PATIENT_WALNUT;
 var TENGU_FOAMY_PELICAN;
+var TENGU_LEXICAL_DRAGONFLY;
 var TENGU_FLAG_SET;
 var RETRY_FLAG_NAMES;
-deferInit("chunk-aepeg2w5.js:376032", () => {
+deferInit("chunk-exfmq47h.js:386652", () => {
   MOSSY_SQUID_GATE = "tengu_mossy_squid";
   TENGU_TWINKLY_CLOVER = "tengu_twinkly_clover";
+  TENGU_SHINY_HAMMING = "tengu_shiny_hamming";
   TENGU_CANDID_JUNIPER = "tengu_candid_juniper";
   TENGU_CHEEKY_TOUCAN = "tengu_cheeky_toucan";
   TENGU_STEADFAST_WREN = "tengu_steadfast_wren";
@@ -367,11 +388,16 @@ deferInit("chunk-aepeg2w5.js:376032", () => {
   TENGU_VALIANT_LANTERN = "tengu_valiant_lantern";
   TENGU_LEVEL_PLOVER = "tengu_level_plover";
   TENGU_SPLENDID_LYNX = "tengu_splendid_lynx";
+  TENGU_WOBBLY_FOG = "tengu_wobbly_fog";
+  TENGU_LIMBER_FINCH = "tengu_limber_finch";
   TENGU_TENDER_MITTEN = "tengu_tender_mitten";
   TENGU_SNUG_QUILL = "tengu_snug_quill";
   TENGU_MELLOW_RAINBOW = "tengu_mellow_rainbow";
+  TENGU_HUMBLE_BUMBLEBEE = "tengu_humble_bumblebee";
   TENGU_WONDROUS_HAVEN = "tengu_wondrous_haven";
   TENGU_GOOFY_HARE = "tengu_goofy_hare";
+  TENGU_SQUISHY_ULLMAN = "tengu_squishy_ullman";
+  TENGU_PLUMB_MARTEN = "tengu_plumb_marten";
   TENGU_MIGHTY_FLASK = "tengu_mighty_flask";
   TENGU_STEADY_SCROLL = "tengu_steady_scroll";
   TENGU_PLAID_KETTLE = "tengu_plaid_kettle";
@@ -384,22 +410,31 @@ deferInit("chunk-aepeg2w5.js:376032", () => {
   TENGU_THISTLE_ORRERY = "tengu_thistle_orrery";
   TENGU_TOASTY_BEACON = "tengu_toasty_beacon";
   TENGU_SNUG_WALL = "tengu_snug_wall";
+  TENGU_DEEP_TWILIGHT = "tengu_deep_twilight";
   TENGU_IMPERATIVE_SPINDLE = "tengu_imperative_spindle";
   TENGU_PROUD_PEARL = "tengu_proud_pearl";
+  TENGU_PATIENT_WALNUT = "tengu_patient_walnut";
   TENGU_FOAMY_PELICAN = "tengu_foamy_pelican";
+  TENGU_LEXICAL_DRAGONFLY = "tengu_lexical_dragonfly";
   TENGU_FLAG_SET = new Set([
     "tengu_steady_bittern",
     "tengu_thistle_orrery",
     "tengu_snug_wall",
     "tengu_imperative_spindle",
     "tengu_foamy_pelican",
+    "tengu_deep_twilight",
     ...[],
+    "tengu_curried_trinket",
   ]);
   RETRY_FLAG_NAMES = new Set([
     "tengu_steady_bittern",
     ...[],
     "tengu_twinkly_clover",
+    "tengu_shiny_hamming",
     "tengu_candid_juniper",
+    "tengu_wobbly_fog",
+    "tengu_cozy_hamming",
+    "tengu_mossy_kepler",
     "tengu_iterative_lightning",
     "tengu_steadfast_wren",
     "tengu_cheeky_toucan",
@@ -407,14 +442,20 @@ deferInit("chunk-aepeg2w5.js:376032", () => {
     "tengu_valiant_lantern",
     "tengu_level_plover",
     "tengu_splendid_lynx",
+    "tengu_limber_finch",
     "tengu_tender_mitten",
     "tengu_snug_quill",
     "tengu_mellow_rainbow",
+    "tengu_humble_bumblebee",
     "tengu_mellow_heron",
+    "tengu_staged_frost",
+    "tengu_crinkled_scarecrow",
     "tengu_wondrous_haven",
     "tengu_mighty_flask",
     "tengu_goofy_hare",
+    "tengu_squishy_ullman",
     "tengu_steady_scroll",
+    "tengu_plumb_marten",
     "tengu_zippy_harbor",
     "tengu_fallow_lantern",
     "tengu_mellow_hollerith",
@@ -424,22 +465,27 @@ deferInit("chunk-aepeg2w5.js:376032", () => {
     "tengu_witty_kay",
     "tengu_kind_dewdrop",
     "tengu_thistle_orrery",
+    "tengu_lexical_dragonfly",
     "tengu_proud_pearl",
+    "tengu_patient_walnut",
+    "tengu_steady_quail",
     "tengu_snug_wall",
+    "tengu_deep_twilight",
     "tengu_foamy_pelican",
     ...[],
+    "tengu_curried_trinket",
     "tengu_mossy_squid",
     "tengu_toasty_beacon",
     "tengu_plaid_kettle",
   ]);
 });
-//@ chunk-aepeg2w5.js:377792-378332 fingerprint (2.1.88 match: FOREGROUND_529_RETRY_SOURCES, 0.585)
+//@ chunk-exfmq47h.js:389033-389573 fingerprint (2.1.88 match: FOREGROUND_529_RETRY_SOURCES, 0.585)
 /**
  * 529 时允许重试的查询来源集合：前台来源 + agent:*、compact、hook_agent、side_question、web_search_tool、auto_mode 等；isForegroundQuerySource(IIe) 用它判断。
  */
 var FOREGROUND_529_RETRY_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var RETRY_ON_529_QUERY_SOURCES;
-deferInit("chunk-aepeg2w5.js:377792", () => {
+deferInit("chunk-exfmq47h.js:389033", () => {
   FOREGROUND_529_RETRY_SOURCES = {
     repl_main_thread: true,
     "repl_main_thread:outputStyle:custom": true,
@@ -468,21 +514,25 @@ deferInit("chunk-aepeg2w5.js:377792", () => {
     "artifact_comment_reply",
   ]);
 });
-//@ chunk-e6aww6q8.js:1570337-1570600 fingerprint (2.1.88 match: isGoogleAuthLibraryCredentialError, 0.547)
+//@ chunk-5xgkngpb.js:1635931-1636194 fingerprint (2.1.88 match: isGoogleAuthLibraryCredentialError, 0.547)
 /**
  * google-auth-library 凭证加载失败的典型消息片段；f5o 为令牌刷新失败片段。
  */
-var GOOGLE_AUTH_CREDENTIAL_ERROR_MESSAGES = [
-  "Could not load the default credentials",
-  "does not exist, or it is not a file",
-  "The incoming JSON object does not",
-  "Must pass in a JSON object containing",
-  "invalid_grant",
-  "invalid_client",
-  "unauthorized_client",
-];
-var GOOGLE_AUTH_REFRESH_ERROR_MESSAGES = [GOOGLE_CREDENTIAL_ERROR_TEXT, "Could not refresh access token"];
-//@ chunk-e6aww6q8.js:1570600-1570680 layout
+var GOOGLE_AUTH_CREDENTIAL_ERROR_MESSAGES; // deferred: uses CREDENTIAL_PROVIDER_ERRORS (./errorUtils.js) of its import cycle while loading; runs once the cycle is complete
+var GOOGLE_AUTH_REFRESH_ERROR_MESSAGES;
+deferInit("chunk-5xgkngpb.js:1635931", () => {
+  GOOGLE_AUTH_CREDENTIAL_ERROR_MESSAGES = [
+    "Could not load the default credentials",
+    "does not exist, or it is not a file",
+    "The incoming JSON object does not",
+    "Must pass in a JSON object containing",
+    "invalid_grant",
+    "invalid_client",
+    "unauthorized_client",
+  ];
+  GOOGLE_AUTH_REFRESH_ERROR_MESSAGES = [GOOGLE_CREDENTIAL_ERROR_TEXT, "Could not refresh access token"];
+});
+//@ chunk-5xgkngpb.js:1636194-1636274 layout
 /**
  * 沿 cause 链找一个 message 含任一片段的错误。
  */
@@ -491,17 +541,17 @@ function errorChainMessageIncludes(error, needles) {
     findInCauseChain(error, (cause) => needles.some((needle) => cause.message.includes(needle))) !== undefined
   );
 }
-//@ chunk-e6aww6q8.js:1570680-1570745 layout
+//@ chunk-5xgkngpb.js:1636274-1636339 layout
 /**
  * EACCES/EPERM；g5o 为 open/read 系统调用名。
  */
 var FS_PERMISSION_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CREDENTIAL_FILE_SYSCALLS;
-deferInit("chunk-e6aww6q8.js:1570680", () => {
+deferInit("chunk-5xgkngpb.js:1636274", () => {
   FS_PERMISSION_ERROR_CODES = new Set(["EACCES", "EPERM"]);
   CREDENTIAL_FILE_SYSCALLS = new Set(["open", "read"]);
 });
-//@ chunk-e6aww6q8.js:1570745-1570922 layout
+//@ chunk-5xgkngpb.js:1636339-1636516 layout
 /**
  * Google 凭证文件加载失败：已知消息片段，或凭证文件解析出 SyntaxError/读文件权限错误。
  */
@@ -520,14 +570,14 @@ function isGoogleCredentialLoadError(error) {
       ) !== undefined)
   );
 }
-//@ chunk-e6aww6q8.js:1570922-1571014 fingerprint (2.1.88 match: isVertexAuthError, 0.661)
+//@ chunk-5xgkngpb.js:1636516-1636608 fingerprint (2.1.88 match: isVertexAuthError, 0.661)
 /**
  * 使用 Vertex 或 anthropicGoogleCloud。旧版名 isVertexAuthError 不准确。
  */
 function isGoogleCloudProvider() {
   return !!(env.CLAUDE_CODE_USE_VERTEX || env.CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD);
 }
-//@ chunk-e6aww6q8.js:1571014-1571107 file-local
+//@ chunk-5xgkngpb.js:1636608-1636701 file-local
 /**
  * Google Cloud 提供商下的凭证加载/刷新失败或 401。覆盖 auto 名 isTransientCapacityError（错误）。
  */
@@ -539,7 +589,7 @@ function isGoogleCloudAuthError(error) {
     (error instanceof APIError && error.status === 401)
   );
 }
-//@ chunk-e6aww6q8.js:2397728-2398030 fingerprint (2.1.88 match: FallbackTriggeredError, 0.62)
+//@ chunk-5xgkngpb.js:2453301-2453603 fingerprint (2.1.88 match: FallbackTriggeredError, 0.62)
 /**
  * 触发模型回退：携带 originalModel、fallbackModel、reason（overloaded/permission_denied/model_not_found/server_error/last_resort/model_blocked）、原始错误、封锁提示。queryLoop 接到后换模型重发。
  */
@@ -559,11 +609,11 @@ class FallbackTriggeredError extends Error {
     this.name = "FallbackTriggeredError";
   }
 }
-//@ chunk-e6aww6q8.js:2616090-2616189 placement
+//@ chunk-5xgkngpb.js:2675240-2675339 placement
 function isRetryWatchdogOn() {
   return env.CLAUDE_CODE_RETRY_WATCHDOG && env.CLAUDE_CODE_RETRY_WATCHDOG_SCOPE !== "capacity";
 }
-//@ chunk-e6aww6q8.js:2616189-2616375 placement
+//@ chunk-5xgkngpb.js:2675339-2675525 placement
 /**
  * 重试相关常量：中止错误构造、最大重试次数、退避基数与上限、529 连续次数阈值、各类等待时长等。
  */
@@ -590,29 +640,33 @@ var MAX_RETRY_AFTER_WAIT_MS = 60000;
 var PERSISTENT_RETRY_MAX_DELAY_MS = 300000;
 var PERSISTENT_WAIT_CAP_MS = 21600000;
 var PERSISTENT_WAIT_CHUNK_MS = 30000;
-//@ chunk-e6aww6q8.js:2616375-2616426 placement
+//@ chunk-5xgkngpb.js:2675525-2675576 placement
 /**
  * 导出函数 `retryWatchdogEnv`：返回 env.CLAUDE_CODE_RETRY_WATCHDOG。
  */
 function retryWatchdogEnv() {
   return env.CLAUDE_CODE_RETRY_WATCHDOG;
 }
-//@ chunk-e6aww6q8.js:2616426-2616488 placement
+//@ chunk-5xgkngpb.js:2675576-2675660 placement
 function isCapacityError(error) {
-  return is529Error(error) || (error instanceof APIError && error.status === 429);
+  return (
+    is529Error(error) ||
+    (error instanceof APIError && error.status === 429) ||
+    findRouteTurnError(error)?.status === 529
+  );
 }
-//@ chunk-e6aww6q8.js:2616488-2616582 placement
+//@ chunk-5xgkngpb.js:2675660-2675754 placement
 function isRemoteAuthError(error) {
   return (
     env.CLAUDE_CODE_REMOTE && error instanceof APIError && (error.status === 401 || error.status === 403)
   );
 }
-//@ chunk-e6aww6q8.js:2616582-2616647 placement
+//@ chunk-5xgkngpb.js:2675754-2675819 placement
 function oauthTokenRotated(clientOAuthAccessToken) {
   let accessToken = getClaudeAIOAuthTokens()?.accessToken;
   return accessToken !== undefined && accessToken !== clientOAuthAccessToken;
 }
-//@ chunk-e6aww6q8.js:2616647-2616747 placement
+//@ chunk-5xgkngpb.js:2675819-2675919 placement
 function isApiKeyHelperAuthError(error) {
   return (
     !isRemoteAuthError(error) &&
@@ -623,18 +677,18 @@ function isApiKeyHelperAuthError(error) {
     isApiKeyHelperTheActiveCredential()
   );
 }
-//@ chunk-e6aww6q8.js:2616747-2616869 placement
-function isAuthRetryableError(error, authError) {
+//@ chunk-5xgkngpb.js:2675919-2676041 placement
+function isAuthRetryableError(error, model) {
   return (
     (error instanceof APIError && error.status === 401) ||
     isApiKeyHelperAuthError(error) ||
     (proxyAuthRequired(error) !== undefined && Boolean(getConfiguredProxyAuthHelper())) ||
     isOAuthTokenRevokedError(error) ||
-    isAwsAuthError(error, authError) ||
+    isAwsAuthError(error, model) ||
     isGoogleCloudAuthError(error)
   );
 }
-//@ chunk-e6aww6q8.js:2616869-2616971 placement
+//@ chunk-5xgkngpb.js:2676041-2676143 placement
 function shouldOfferReauth(lastError) {
   let kind = classifyAPIError(lastError);
   return (
@@ -645,13 +699,13 @@ function shouldOfferReauth(lastError) {
     !hasCustomAuthorizationHeader()
   );
 }
-//@ chunk-e6aww6q8.js:2616971-2617062 placement
+//@ chunk-5xgkngpb.js:2676143-2676234 placement
 function shouldRetry529(error) {
   if (!(error instanceof APIConnectionError)) return false;
   let details = extractConnectionErrorDetails(error);
   return details !== null && TRANSIENT_SOCKET_CODES.has(details.code);
 }
-//@ chunk-e6aww6q8.js:2617062-2617266 placement
+//@ chunk-5xgkngpb.js:2676234-2676438 placement
 function isTlsOrSocketError(lastError) {
   if (!(lastError instanceof APIConnectionError)) return false;
   let connectionErrorDetails = extractConnectionErrorDetails(lastError);
@@ -665,7 +719,7 @@ function isTlsOrSocketError(lastError) {
     code.startsWith("ERR_SSL_")
   );
 }
-//@ chunk-e6aww6q8.js:2617266-2617594 placement
+//@ chunk-5xgkngpb.js:2676438-2676766 placement
 /**
  * 识别代理认证错误（407，含隧道错误），返回 proxy-authenticate 头。
  */
@@ -688,7 +742,7 @@ function proxyAuthRequired(errorMessage) {
     };
   return;
 }
-//@ chunk-e6aww6q8.js:2617594-2618174 placement
+//@ chunk-5xgkngpb.js:2676766-2677346 placement
 /**
  * 连接失效时重新加载轮换后的 mTLS 客户端证书。
  */
@@ -729,7 +783,7 @@ async function reloadMtlsMaterial(reason) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:2618174-2618376 fingerprint (2.1.88 match: CannotRetryError, 0.725)
+//@ chunk-5xgkngpb.js:2677346-2677548 fingerprint (2.1.88 match: CannotRetryError, 0.725)
 /**
  * 不可再重试：包装原始错误与 retryContext（model/fastMode/maxTokensOverride），name="RetryError"。
  */
@@ -745,13 +799,13 @@ class CannotRetryError extends Error {
     if (error instanceof Error && error.stack) this.stack = error.stack;
   }
 }
-//@ chunk-e6aww6q8.js:2618376-2618504 layout
+//@ chunk-5xgkngpb.js:2677548-2677693 layout
 /**
  * 一组判定函数（DLP、内容过滤、beta 拒绝、媒体错误……）：命中的错误不触发 last_resort fallback。
  */
 var NON_RETRYABLE_STATUS_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NON_FALLBACK_ERROR_PREDICATES;
-deferInit("chunk-e6aww6q8.js:2618376", () => {
+deferInit("chunk-5xgkngpb.js:2677548", () => {
   NON_RETRYABLE_STATUS_CODES = new Set([401, 407, 429, 404, 403, 413]);
   NON_FALLBACK_ERROR_PREDICATES = [
     (error) => isConversationBindingError(error) && !isPrefixLockHealDeclined(error),
@@ -772,16 +826,17 @@ deferInit("chunk-e6aww6q8.js:2618376", () => {
     isWebSearchContentRejected,
     isCodeExecutionOutputRejected,
     alwaysFalseB_2,
+    (error) => isBetaRejected(error, BETA_CLAUDE_CODE_SIDE_QUERY),
   ];
 });
-//@ chunk-e6aww6q8.js:2618504-2618547 layout
+//@ chunk-5xgkngpb.js:2677693-2677736 layout
 /**
  * 任一 NON_FALLBACK_ERROR_PREDICATES 命中。
  */
 function isNonFallbackError(error) {
   return NON_FALLBACK_ERROR_PREDICATES.some((predicate) => predicate(error));
 }
-//@ chunk-e6aww6q8.js:2618547-2633235 callgraph-witnessed (2.1.88 match: withRetry, 0.268)
+//@ chunk-5xgkngpb.js:2677736-2693320 callgraph-witnessed (2.1.88 match: withRetry, 0.252)
 /**
  * withRetry(getClient, operation, options)：异步生成器，循环最多 maxRetries+1 次。每次：必要时（首次、401/吊销、凭证轮换、陈旧连接、mTLS 重载）刷新 OAuth/主机凭证并重建客户端 → 调 operation(client, attempt, retryContext)。出错：DLP/安全/内容过滤/验证/区域拒绝等直接 CannotRetryError；模型无权/不存在/5xx 且有 fallback → 抛 FallbackTriggeredError；onError 返回新的 "retry:<原因>" 标签则不计次立即重发（每个标签每次调用只用一次）；快速模式 429/529 进入冷却并关 fastMode；529 连续 3 次换 fallback 或报 repeated 529；上下文溢出把 maxTokensOverride 调到 contextLimit-input-1000；可重试错误按指数退避/retry-after 等待并 yield 重试状态系统消息；持久模式（CLAUDE_CODE_RETRY_WATCHDOG）对 429/529 无限等待并可在额度恢复时提前醒。
  */
@@ -824,9 +879,12 @@ async function* withRetry(getClient, operation, options) {
   let wifExchangeRetries = 0;
   let lastAwsAccessKeyId;
   let mtlsReloadFailed = false;
+  let chainReadTried = false;
+  let chainWasRestored = false;
+  let previousCACerts;
   let clientOAuthAccessToken;
   let clientHostAuthToken;
-  let usedRetryLabels = new Set();
+  let droppedBetaSet = new Set();
   let retryStatusShown = false;
   let lowPriorityMarkedAtDispatch = false;
   let noResponseLedgerLocal = {
@@ -975,6 +1033,7 @@ async function* withRetry(getClient, operation, options) {
             }
           }
           clientHostAuthToken = process.env[hostAuthEnvVarName()];
+          previousCACerts = peekCACertificates();
           client = await getClient();
           clientOAuthAccessToken = isAnthropicAuthEnabled()
             ? getClaudeAIOAuthTokens()?.accessToken
@@ -1012,6 +1071,10 @@ async function* withRetry(getClient, operation, options) {
           logFeatureBad("api_request", "api_request_safety_monitor_blocked");
           throw new CannotRetryError(error, retryContext);
         }
+        if (isToolUseBlockCutOffError(error)) {
+          logFeatureSad("api_request", "api_request_tool_use_block_cut_off");
+          throw new CannotRetryError(error, retryContext);
+        }
         if (isRequestTooLargeError_2(error)) {
           logFeatureBad("api_request", "api_request_output_content_filtered");
           throw new CannotRetryError(error, retryContext);
@@ -1044,6 +1107,14 @@ async function* withRetry(getClient, operation, options) {
           logFeatureBad("api_request", "api_request_route_answer_final");
           throw new CannotRetryError(error, retryContext);
         }
+        if (
+          findRouteTurnError(error) !== undefined &&
+          !isMainOrAgentQuerySource(options.querySource) &&
+          !isRetryWatchdogOn()
+        ) {
+          logFeatureBad("api_request", "api_request_route_turned_away_background_dropped");
+          throw new CannotRetryError(error, retryContext);
+        }
         if (options.modelCallRetries?.outOfApiAttempts()) {
           logFeatureBad("api_request", "api_request_attempts_exhausted");
           throw new CannotRetryError(error, retryContext);
@@ -1055,6 +1126,31 @@ async function* withRetry(getClient, operation, options) {
             level: "error",
           },
         );
+        let previousRestored = chainWasRestored;
+        chainWasRestored = false;
+        if (
+          error instanceof APIConnectionError &&
+          CA_CERT_ERROR_CODES.has(extractConnectionErrorDetails(error)?.code ?? "")
+        ) {
+          if (previousRestored) logFeatureSad("api_served_chain_read", "retry_failed_again");
+          else if (!chainReadTried) {
+            chainReadTried = true;
+            let caCertificates = getCACertificates();
+            let restored =
+              (previousCACerts !== undefined &&
+                caCertificates !== undefined &&
+                (caCertificates.length !== previousCACerts.length ||
+                  caCertificates.some((caCertificate, cert) => caCertificate !== previousCACerts?.[cert]))) ||
+              (await restoreServedChainIfNeeded(client?.baseURL, options.signal));
+            if (options.signal?.aborted) throw new APIUserAbortError();
+            if (restored) {
+              chainWasRestored = true;
+              client = null;
+              attempt--;
+              continue;
+            }
+          }
+        }
         if (findStreamNoResponseError(error) !== undefined) {
           if (!isRetryWatchdogOn() && noResponseRetryLedger.count >= MAX_NO_RESPONSE_RETRIES) {
             logFeatureBad("api_request", "api_request_no_response_exhausted");
@@ -1082,8 +1178,8 @@ async function* withRetry(getClient, operation, options) {
           timeoutRetry = backoffMs - nonStreamingTimeoutRetries;
         }
         let retryLabel = await options.onError?.(error);
-        if (retryLabel && !usedRetryLabels.has(retryLabel)) {
-          usedRetryLabels.add(retryLabel);
+        if (retryLabel && !droppedBetaSet.has(retryLabel)) {
+          droppedBetaSet.add(retryLabel);
           let mockError = toRetryStatusError(error, retryContext.model);
           if (mockError?.noResponse) {
             retryStatusShown = true;
@@ -1427,14 +1523,24 @@ async function* withRetry(getClient, operation, options) {
           }
           wifExchangeRetries++;
         }
+        let wifExchangeAttempt =
+          clearAwsCredentialCacheOnAuthError(error, retryContext.model) ||
+          clearGcpCredentialCacheOnAuthError(error) ||
+          (await invalidateWifTokenOnError(error));
+        let providerForModel = getProviderForModel(retryContext.model);
         if (
-          !(
-            clearAwsCredentialCacheOnAuthError(error, retryContext.model) ||
-            clearGcpCredentialCacheOnAuthError(error) ||
-            (await invalidateWifTokenOnError(error))
-          ) &&
-          (!(error instanceof APIError) || !shouldRetry(error))
-        ) {
+          wifExchangeAttempt &&
+          error instanceof APIError &&
+          error.status === 401 &&
+          !effectiveAuthTokenEnv() &&
+          ((providerForModel === "vertex" && env.CLAUDE_CODE_SKIP_VERTEX_AUTH) ||
+            (providerForModel === "anthropicGoogleCloud" &&
+              env.CLAUDE_CODE_SKIP_ANTHROPIC_GOOGLE_CLOUD_AUTH) ||
+            (providerForModel === "anthropicAws" && env.CLAUDE_CODE_SKIP_ANTHROPIC_AWS_AUTH) ||
+            (providerForModel === "mantle" && env.CLAUDE_CODE_SKIP_MANTLE_AUTH))
+        )
+          clearApiKeyHelperCache();
+        if (!wifExchangeAttempt && (!(error instanceof APIError) || !shouldRetry(error))) {
           let nonFallback =
             error instanceof APIError &&
             ((error.status !== undefined &&
@@ -1781,7 +1887,7 @@ async function* withRetry(getClient, operation, options) {
     if (retryStatusShown) options.onRetryStatus?.(null);
   }
 }
-//@ chunk-e6aww6q8.js:2633235-2633660 layout
+//@ chunk-5xgkngpb.js:2693320-2693745 layout
 /**
  * 等待指定毫秒，可被 subscribeRetryWake 提前唤醒（返回 true）；中止时抛 AbortError。
  */
@@ -1816,14 +1922,18 @@ async function sleepOrWake(delayMs, options) {
     options.signal?.removeEventListener("abort", abort);
   }
 }
-//@ chunk-e6aww6q8.js:2633660-2633750 fingerprint (2.1.88 match: getRetryAfter, 1)
+//@ chunk-5xgkngpb.js:2693745-2693855 layout (2.1.88 match: getRetryAfter, 0.832)
 /**
  * 取 API 错误响应头 retry-after 原始值。
  */
 function getRetryAfter(error) {
-  return (error.headers?.["retry-after"] || error.headers?.get?.("retry-after")) ?? null;
+  return (
+    (error.headers?.["retry-after"] || error.headers?.get?.("retry-after")) ??
+    findRouteTurnError(error)?.retryAfter ??
+    null
+  );
 }
-//@ chunk-e6aww6q8.js:2633750-2634224 fingerprint (2.1.88 match: parseMaxTokensContextOverflowError, 0.818)
+//@ chunk-5xgkngpb.js:2693855-2694329 fingerprint (2.1.88 match: parseMaxTokensContextOverflowError, 0.817)
 /**
  * 解析 400 "input length and `max_tokens` exceed context limit: a + b > c"，返回 {inputTokens,maxTokens,contextLimit}。
  */
@@ -1847,7 +1957,7 @@ function parseMaxTokensContextOverflowError(error) {
     contextLimit,
   };
 }
-//@ chunk-e6aww6q8.js:2634224-2634348 fingerprint (2.1.88 match: isFastModeNotEnabledError, 1)
+//@ chunk-5xgkngpb.js:2694329-2694453 fingerprint (2.1.88 match: isFastModeNotEnabledError, 1)
 /**
  * 400 "Fast mode is not enabled"。
  */
@@ -1855,7 +1965,7 @@ function isFastModeNotEnabledError(error) {
   if (!(error instanceof APIError)) return false;
   return error.status === 400 && (error.message?.includes("Fast mode is not enabled") ?? false);
 }
-//@ chunk-e6aww6q8.js:2634348-2634558 layout
+//@ chunk-5xgkngpb.js:2694453-2694663 layout
 /**
  * 400 "'<model>' does not support the `speed` parameter" 且模型与当前模型同族。
  */
@@ -1869,7 +1979,7 @@ function isSpeedParameterUnsupportedError(error, model) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:2634558-2634661 layout
+//@ chunk-5xgkngpb.js:2694663-2694766 layout
 /**
  * 5xx 但不是 529。
  */
@@ -1882,7 +1992,7 @@ function isNon529ServerError(error) {
     error.status !== 529
   );
 }
-//@ chunk-e6aww6q8.js:2634661-2634923 layout
+//@ chunk-5xgkngpb.js:2694766-2695028 layout
 /**
  * 取当前 AWS 凭证的 accessKeyId（跳过 bearer token/跳过认证/无缓存场景），用于判断凭证是否变化。
  */
@@ -1903,7 +2013,7 @@ async function getAwsAccessKeyId(signal) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2634923-2635009 layout
+//@ chunk-5xgkngpb.js:2695028-2695114 layout
 /**
  * fallbackModel 或可用的 accessFallbackModel，且不同于当前模型。
  */
@@ -1911,7 +2021,7 @@ function getAvailableFallbackModel(options) {
   let fallback = options.fallbackModel ?? getAccessFallbackModel(options);
   return fallback !== undefined && fallback !== options.model ? fallback : undefined;
 }
-//@ chunk-e6aww6q8.js:2635009-2635124 layout
+//@ chunk-5xgkngpb.js:2695114-2695229 layout
 /**
  * accessFallbackModel 在允许、可用且（无工具辅助请求或支持）时返回。
  */
@@ -1923,7 +2033,7 @@ function getAccessFallbackModel({ accessFallbackModel, toolFreeHelper }) {
     ? accessFallbackModel
     : undefined;
 }
-//@ chunk-e6aww6q8.js:2635124-2635299 fingerprint (2.1.88 match: isBedrockAuthError, 0.49)
+//@ chunk-5xgkngpb.js:2695229-2695404 fingerprint (2.1.88 match: isBedrockAuthError, 0.49)
 /**
  * Bedrock/anthropicAws/mantle 下的 AWS 凭证错误或 403，或 isAwsProvider401。旧版名 isBedrockAuthError 近似。
  */
@@ -1934,7 +2044,7 @@ function isAwsAuthError(error, authError) {
   }
   return isAwsProvider401(error, authError);
 }
-//@ chunk-e6aww6q8.js:2635299-2635416 layout
+//@ chunk-5xgkngpb.js:2695404-2695521 layout
 /**
  * anthropicAws/mantle 端点上的 401。
  */
@@ -1943,7 +2053,7 @@ function isAwsProvider401(error, providerError) {
   let providerForModel = getProviderForModel(providerError);
   return providerForModel === "anthropicAws" || providerForModel === "mantle";
 }
-//@ chunk-e6aww6q8.js:2635416-2635534 layout
+//@ chunk-5xgkngpb.js:2695521-2695639 layout
 /**
  * AWS 凭证错误（SDK 错误、401、x-amzn-errortype 指示过期）。
  */
@@ -1955,7 +2065,7 @@ function isAwsCredentialExpiredError(error, message) {
       isAwsCredentialError(error.headers?.get("x-amzn-errortype") ?? undefined, error.message))
   );
 }
-//@ chunk-e6aww6q8.js:2635534-2635652 layout
+//@ chunk-5xgkngpb.js:2695639-2695757 layout
 /**
  * 重试提示里的"最大次数"：无响应时受 noResponse 账本限制。
  */
@@ -1966,7 +2076,7 @@ function clampRetryDisplayMax(baseMs, attempt, displayMax, count, attemptCount) 
   if (attemptCount !== undefined) current = Math.min(current, attempt + attemptCount);
   return current;
 }
-//@ chunk-e6aww6q8.js:2635652-2635921 layout
+//@ chunk-5xgkngpb.js:2695757-2696026 layout
 /**
  * 把错误转成重试状态展示对象（formatted、rateLimits、noResponse 等）；云凭证错误标 isCloudCredentialError。
  */
@@ -1995,7 +2105,7 @@ function toRetryStatusError(error, model) {
       }
     : quotaInfo;
 }
-//@ chunk-e6aww6q8.js:2635921-2636010 layout
+//@ chunk-5xgkngpb.js:2696026-2696115 layout
 /**
  * AWS 认证错误时清 AWS 凭证缓存，返回是否处理。
  */
@@ -2008,7 +2118,7 @@ function clearAwsCredentialCacheOnAuthError(error, model) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:2636010-2636060 layout
+//@ chunk-5xgkngpb.js:2696115-2696165 layout
 /**
  * Google Cloud 认证错误时清凭证缓存。
  */
@@ -2019,7 +2129,7 @@ function clearGcpCredentialCacheOnAuthError(error) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:2636060-2636312 layout
+//@ chunk-5xgkngpb.js:2696165-2696417 layout
 /**
  * 工作负载身份联合（WIF）交换出错（无状态码/401/5xx）时让令牌失效以便重试。
  */
@@ -2038,7 +2148,7 @@ async function invalidateWifTokenOnError(error) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:2636312-2636431 fingerprint (2.1.88 match: shouldRetry, 0.474)
+//@ chunk-5xgkngpb.js:2696417-2696536 fingerprint (2.1.88 match: shouldRetry, 0.473)
 /**
  * 响应头 x-should-retry: false。旧版名 shouldRetry 语义相反。
  */
@@ -2047,7 +2157,7 @@ function isShouldRetryFalse(error) {
   let is5xxError = error.status !== undefined && error.status >= 500;
   return true;
 }
-//@ chunk-e6aww6q8.js:2636431-2637870 layout
+//@ chunk-5xgkngpb.js:2696536-2697975 layout
 /**
  * 判断错误是否可重试：额度/用量上限（credits_required、spend cap）不重试；x-should-retry=false 尊重；持久重试下 429/529 重试；远程 401/403、API key helper、overloaded、上下文溢出、OAuth 401/吊销、代理 407、x-should-retry=true、网络错误（非 SSL）、408/409/429（非订阅或企业）、5xx 重试。旧版同名。
  */
@@ -2125,7 +2235,7 @@ function shouldRetry(error) {
   if (error.status && error.status >= 500) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:2637870-2637941 layout
+//@ chunk-5xgkngpb.js:2697975-2698046 layout
 /**
  * 429 且不是订阅额度用尽（无 overage-disabled-reason 头）。
  */
@@ -2136,14 +2246,14 @@ function isRateLimitWithoutQuotaInfo(error) {
     !error.headers?.get?.(OVERAGE_DISABLED_REASON_HEADER)
   );
 }
-//@ chunk-e6aww6q8.js:2637941-2638157 layout
+//@ chunk-5xgkngpb.js:2698046-2698262 layout
 /**
  * 组织消费上限类 overage 禁用原因；cyn 加上 out_of_credits 等。
  */
 var SPEND_CAP_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var OVERAGE_EXHAUSTED_REASONS;
 var OVERAGE_DISABLED_REASON_REGEX;
-deferInit("chunk-e6aww6q8.js:2637941", () => {
+deferInit("chunk-5xgkngpb.js:2698046", () => {
   SPEND_CAP_REASONS = new Set(["org_spend_cap_reached", "org_level_disabled_until"]);
   OVERAGE_EXHAUSTED_REASONS = new Set([
     ...SPEND_CAP_REASONS,
@@ -2153,7 +2263,7 @@ deferInit("chunk-e6aww6q8.js:2637941", () => {
   ]);
   OVERAGE_DISABLED_REASON_REGEX = /\\?"overageDisabledReason\\?":\s*\\?"([a-z_]+)\\?"/;
 });
-//@ chunk-e6aww6q8.js:2638157-2638444 layout
+//@ chunk-5xgkngpb.js:2698262-2698549 layout
 /**
  * 429 且是服务/组织消费上限或额度耗尽（头或消息体 overageDisabledReason）。
  */
@@ -2172,7 +2282,7 @@ function isSpendLimitError(error) {
     : undefined;
   return mentionsLimit !== undefined && OVERAGE_EXHAUSTED_REASONS.has(mentionsLimit);
 }
-//@ chunk-e6aww6q8.js:2638444-2638679 layout
+//@ chunk-5xgkngpb.js:2698549-2698784 layout
 /**
  * CLAUDE_CODE_MAX_RETRIES（非持久模式上限 15），默认 10；持久重试模式默认 300。
  */
@@ -2191,21 +2301,21 @@ function getMaxRetriesFromEnv() {
   }
   return watchdogOn ? UNATTENDED_MAX_RETRIES : DEFAULT_MAX_RETRIES;
 }
-//@ chunk-e6aww6q8.js:2638679-2638722 layout
+//@ chunk-5xgkngpb.js:2698784-2698827 layout
 /**
  * options.maxRetries 或 getMaxRetriesFromEnv()。
  */
 function resolveMaxRetries(options) {
   return options.maxRetries ?? getMaxRetriesFromEnv();
 }
-//@ chunk-e6aww6q8.js:2638722-2638759 layout
+//@ chunk-5xgkngpb.js:2698827-2698864 layout
 /**
  * 快速模式 429/529 冷却：缺 retry-after 时 30 分钟；短等待阈值 20 秒；最短冷却 10 分钟。
  */
 var FAST_MODE_DEFAULT_COOLDOWN_MS = 1800000;
 var FAST_MODE_SHORT_RETRY_THRESHOLD_MS = 20000;
 var FAST_MODE_MIN_COOLDOWN_MS = 600000;
-//@ chunk-e6aww6q8.js:2638759-2638854 layout
+//@ chunk-5xgkngpb.js:2698864-2698959 layout
 /**
  * retry-after 头（秒）转毫秒。
  */
@@ -2217,7 +2327,7 @@ function getRetryAfterMs(error) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:2638854-2639052 fingerprint (2.1.88 match: getRateLimitResetDelayMs, 1)
+//@ chunk-5xgkngpb.js:2698959-2699157 fingerprint (2.1.88 match: getRateLimitResetDelayMs, 1)
 /**
  * 429 时按 anthropic-ratelimit-unified-reset 计算距重置的毫秒数（持久重试等额度窗口用）。
  */
@@ -2229,7 +2339,64 @@ function getRateLimitResetDelayMs(error, clock) {
   let delayMs = Math.round(resetUnixSec * 1000 - clock.now());
   return delayMs > 0 ? delayMs : null;
 }
-//@ chunk-e6aww6q8.js:2639052-2639204 layout
+//@ chunk-5xgkngpb.js:2699157-2699199 layout
+var TENGU_GLITTERY_TOWER_KILLSWITCH = "tengu_glittery_tower_killswitch";
+//@ chunk-5xgkngpb.js:2699199-2699236 layout
+function isGraceResendKillswitchOn() {
+  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_GLITTERY_TOWER_KILLSWITCH, false) === true;
+}
+//@ chunk-5xgkngpb.js:2699236-2699908 layout
+class GraceResend {
+  #e = "none";
+  #t;
+  constructor(enabled) {
+    this.#t = enabled;
+  }
+  get asks() {
+    return this.#e !== "none";
+  }
+  takeAfter(error, isAllowed) {
+    try {
+      if (
+        !this.#t ||
+        !(error instanceof APIError) ||
+        error.status !== 429 ||
+        error.headers?.get?.("anthropic-ratelimit-unified-status") !== "rejected"
+      )
+        return false;
+      if (this.#e !== "none") {
+        if (this.#e === "sent") {
+          this.#e = "settled";
+          logFeatureBad("usage_limit_grace_resend", "refused_again");
+        }
+        return false;
+      }
+      let claim = error.headers?.get?.(REPRESENTATIVE_CLAIM_HEADER);
+      let overageDisabledReason = error.headers?.get?.(OVERAGE_DISABLED_REASON_HEADER) ?? null;
+      if (
+        (claim !== "five_hour" && claim !== "seven_day") ||
+        overageDisabledReason === null ||
+        overageDisabledReason === "fetch_error" ||
+        overageDisabledReason === "unknown" ||
+        !isAllowed() ||
+        isGraceResendKillswitchOn()
+      )
+        return false;
+      this.#e = "sent";
+      return true;
+    } catch (error) {
+      logError(withTelemetryMessage(toError(error), "GraceResend.takeAfter failed"));
+      return false;
+    }
+  }
+  noteServed() {
+    if (this.#e === "sent") {
+      this.#e = "settled";
+      logFeatureOk("usage_limit_grace_resend");
+    }
+  }
+}
+//@ chunk-5xgkngpb.js:2699908-2700060 layout
 /**
  * 流式请求重试计数初值（retries/sleptThrough/reconnects/overloaded/stalls/truncations/afterThinkingOnly/outputFiltered/triedWithoutStreaming）。
  */
@@ -2245,7 +2412,7 @@ var EMPTY_RETRY_COUNTS = {
   triedWithoutStreaming: false,
 };
 var RETRY_POLICY_CONST_1 = 1;
-//@ chunk-e6aww6q8.js:2639204-2639241 layout
+//@ chunk-5xgkngpb.js:2700060-2700097 layout
 /**
  * 2/1/1/10/300：重试策略常量（输出过滤重试、默认值、睡眠穿越上限 10、patient tide 上限 300）。
  */
@@ -2254,7 +2421,7 @@ var RETRY_POLICY_CONST_HYN = 1;
 var RETRY_POLICY_CONST_JEE = 1;
 var MAX_SLEPT_THROUGH = 10;
 var MAX_PATIENT_RETRIES = 300;
-//@ chunk-e6aww6q8.js:2639241-2639518 layout
+//@ chunk-5xgkngpb.js:2700097-2700509 layout
 /**
  * 流式模型调用重试决策入口：noResponse（休眠/断网）、httpError、streamFailed 三类分派，返回 {decision, counts}（retry/useFallbackModel/retryWithoutStreaming/keepPartial/fail）。
  */
@@ -2262,6 +2429,18 @@ function decideStreamRetry(failure, counts, limits, fallbackCouldHelp) {
   switch (failure.kind) {
     case "noResponse":
       if (failure.suspended) return retryAfterSleep(counts, limits);
+      if (failure.turnedAwayOverloaded) {
+        if (limits.background && !isPersistentForAllErrors(limits))
+          return {
+            decision: "fail",
+            counts,
+          };
+        if (limits.persistent)
+          return {
+            decision: "retry",
+            counts,
+          };
+      }
       return failure.networkDown && counts.reconnects < limits.maxReconnects
         ? {
             decision: "retry",
@@ -2277,7 +2456,7 @@ function decideStreamRetry(failure, counts, limits, fallbackCouldHelp) {
       return decideStreamFailureRetry(failure, counts, limits, fallbackCouldHelp);
   }
 }
-//@ chunk-e6aww6q8.js:2639518-2639876 layout
+//@ chunk-5xgkngpb.js:2700509-2700867 layout
 /**
  * HTTP 错误：529→overloaded 逻辑；持久模式 429 重试；fallback 可帮助时换模型；408/409/429/5xx 计次重试；404 改非流式；否则失败。
  */
@@ -2301,7 +2480,7 @@ function decideHttpErrorRetry({ status, fallbackModelCouldHelp }, none, firstSlo
     counts: none,
   };
 }
-//@ chunk-e6aww6q8.js:2639876-2641193 layout
+//@ chunk-5xgkngpb.js:2700867-2702184 layout
 /**
  * 流中途失败按原因（denied/outputFiltered/stalled/connectionLost/suspended/truncated/malformed/serverError/timedOut/overloaded）与进度（nothing/started/thinkingOnly/partialOutput/output）决定重试、保留部分输出或改非流式。
  */
@@ -2399,7 +2578,7 @@ function decideStreamFailureRetry(
       return withoutStreaming;
   }
 }
-//@ chunk-e6aww6q8.js:2641193-2641607 layout
+//@ chunk-5xgkngpb.js:2702184-2702598 layout
 /**
  * 529 计数 +1：后台查询（非持久）只能换 fallback 或失败；未达上限继续重试；达上限换 fallback 或失败。
  */
@@ -2436,7 +2615,7 @@ function decideOverloadedRetry(counts, failure, limit) {
   if (hasLimit) return decision;
   return failure.persistent ? retryResult : retryIfBudgetLeft(nextCounts, failure);
 }
-//@ chunk-e6aww6q8.js:2641607-2641740 layout
+//@ chunk-5xgkngpb.js:2702598-2702731 layout
 /**
  * 电脑休眠导致断流：sleptThrough 未达上限则重试。
  */
@@ -2451,7 +2630,7 @@ function retryAfterSleep(state, error, attempt) {
       }
     : retryIfBudgetLeft(state, error, attempt);
 }
-//@ chunk-e6aww6q8.js:2641740-2641871 layout
+//@ chunk-5xgkngpb.js:2702731-2702862 layout
 /**
  * retries 未达 maxRetries 时 retries+1 重试，否则返回给定的失败决策。
  */
@@ -2473,7 +2652,7 @@ function retryIfBudgetLeft(
       }
     : fallback;
 }
-//@ chunk-e6aww6q8.js:2641871-2641936 layout
+//@ chunk-5xgkngpb.js:2702862-2702927 layout
 /**
  * 指定计数器未达上限时自增并按 retryIfBudgetLeft 决策。
  */
@@ -2489,7 +2668,7 @@ function retryWithCounter(counts, failure, key, limit, fallback) {
       )
     : fallback;
 }
-//@ chunk-e6aww6q8.js:2641936-2642203 layout
+//@ chunk-5xgkngpb.js:2702927-2703194 layout
 /**
  * 改用非流式重试（只一次）；已试过且重试用尽则失败。
  */
@@ -2513,19 +2692,19 @@ function retryWithoutStreaming(budget, error, counts) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:2642203-2642270 layout
+//@ chunk-5xgkngpb.js:2703194-2703261 layout
 /**
  * 持久重试且不是只对容量错误持久。
  */
 function isPersistentForAllErrors(error) {
   return error.persistent && error.persistentCapacityOnly !== true;
 }
-//@ chunk-e6aww6q8.js:2642270-2642280 layout
+//@ chunk-5xgkngpb.js:2703261-2703271 layout
 /**
  * 常量 2（流重试策略）。
  */
 var STREAM_RETRY_CONST_2 = 2;
-//@ chunk-e6aww6q8.js:2642280-2642346 layout
+//@ chunk-5xgkngpb.js:2703271-2703337 layout
 /**
  * tengu_tidy_cloud（默认开）时允许最多 10 次休眠穿越重试。
  */
@@ -2534,7 +2713,7 @@ function getMaxSleptThrough(maxRetriesFromEnv) {
     ? Math.min(maxRetriesFromEnv, MAX_SLEPT_THROUGH)
     : 0;
 }
-//@ chunk-e6aww6q8.js:2642346-2642526 fingerprint (2.1.88 match: getDefaultMaxRetries, 0.344)
+//@ chunk-5xgkngpb.js:2703337-2703518 fingerprint (2.1.88 match: getDefaultMaxRetries, 0.344)
 /**
  * 主线程、订阅用户、未设 CLAUDE_CODE_MAX_RETRIES 时按 tengu_patient_tide 允许的断网重连次数（上限 300）。旧版名 getDefaultMaxRetries 不准确。
  */
@@ -2551,7 +2730,7 @@ function getMaxReconnects(querySource) {
     ? Math.min(featureValue_CACHED_MAY_BE_STALE, MAX_PATIENT_RETRIES)
     : 0;
 }
-//@ chunk-e6aww6q8.js:2945716-2945853 fingerprint (2.1.88 match: getMaxRetries, 0.526)
+//@ chunk-5xgkngpb.js:3015317-3015454 fingerprint (2.1.88 match: getMaxRetries, 0.525)
 /**
  * 分类器请求的最大重试次数：GrowthBook 配置的 maxRetries（非负整数）或默认值，并返回来源 gb/default。
  */
@@ -2568,70 +2747,84 @@ function resolveClassifierMaxRetries() {
       };
 }
 export {
-  TENGU_IMPERATIVE_SPINDLE,
-  TENGU_KIND_DEWDROP,
   fallbackUsageDelta,
-  TENGU_STEADY_SCROLL,
-  TENGU_GOOFY_HARE,
-  TENGU_WONDROUS_HAVEN,
-  TENGU_WITTY_KAY,
-  retryWatchdogEnv,
-  getRetryDelay,
   withRetry,
   CannotRetryError,
   FallbackTriggeredError,
+  GraceResend,
   is529Error,
   isSpeedParameterUnsupportedError,
   isNonFallbackError,
+  isAuthRetryableError,
+  isRemoteAuthError,
   getMaxRetriesFromEnv,
   getMaxSleptThrough,
   getMaxReconnects,
   MAX_529_RETRIES,
+  retryWatchdogEnv,
   isRetryWatchdogOn,
   isFastModeNotEnabledError,
   parseMaxTokensContextOverflowError,
+  isNotFoundApiError,
   isNon529ServerError,
   RETRY_POLICY_CONST_1,
   RETRY_POLICY_CONST_HYN,
   MAX_OUTPUT_FILTERED_RETRIES,
+  getRetryDelay,
   RETRY_POLICY_CONST_JEE,
   FOREGROUND_529_RETRY_SOURCES,
-  isModelNotFoundError,
+  TENGU_GOOFY_HARE,
+  TENGU_SQUISHY_ULLMAN,
+  TENGU_WONDROUS_HAVEN,
+  TENGU_WITTY_KAY,
+  TENGU_DEEP_TWILIGHT,
+  TENGU_IMPERATIVE_SPINDLE,
+  TENGU_PROUD_PEARL,
+  TENGU_PATIENT_WALNUT,
+  TENGU_HUMBLE_BUMBLEBEE,
+  TENGU_SNUG_QUILL,
+  TENGU_SPLENDID_LYNX,
+  TENGU_MELLOW_RAINBOW,
+  TENGU_LEXICAL_DRAGONFLY,
+  TENGU_CHEEKY_TOUCAN,
+  TENGU_TWINKLY_CLOVER,
+  TENGU_SHINY_HAMMING,
+  TENGU_TENDER_MITTEN,
+  TENGU_WOBBLY_FOG,
+  TENGU_STEADFAST_WREN,
+  TENGU_LIMBER_FINCH,
+  TENGU_STEADY_SCROLL,
+  isGraceResendKillswitchOn,
+  TENGU_CANDID_JUNIPER,
+  TENGU_FALLOW_LANTERN,
+  PERSISTENT_WAIT_CHUNK_MS,
+  MOSSY_SQUID_GATE,
   TENGU_TOASTY_BEACON,
+  TENGU_ZIPPY_HARBOR,
   TENGU_VALIANT_LANTERN,
+  TENGU_STEADY_BITTERN,
   isGoogleCloudProvider,
   isGoogleCredentialLoadError,
   isOAuthTokenRevokedError,
-  TENGU_MELLOW_HOLLERITH,
-  RETRY_ON_529_QUERY_SOURCES,
   isModelPermissionDeniedError,
-  RETRY_FLAG_NAMES,
-  TENGU_FLAG_SET,
-  TENGU_STEADY_BITTERN,
   TENGU_SNUG_WALL,
-  TENGU_ZIPPY_HARBOR,
   TENGU_FOAMY_PELICAN,
+  TENGU_KIND_DEWDROP,
   TENGU_MIGHTY_FLASK,
+  TENGU_PLUMB_MARTEN,
   TENGU_PLAID_KETTLE,
   EMPTY_RETRY_COUNTS,
   STREAM_RETRY_CONST_2,
   decideStreamRetry,
   resolveClassifierMaxRetries,
-  TENGU_LEVEL_PLOVER,
-  TENGU_THISTLE_ORRERY,
-  TENGU_COBALT_PLINTH_ORPINE,
+  isModelNotFoundError,
   isAzureDeploymentNotFound,
   STALE_CONNECTION_ERROR_CODES,
-  TENGU_PROUD_PEARL,
-  TENGU_CHEEKY_TOUCAN,
-  TENGU_TWINKLY_CLOVER,
-  TENGU_TENDER_MITTEN,
-  TENGU_STEADFAST_WREN,
-  TENGU_SPLENDID_LYNX,
-  TENGU_CANDID_JUNIPER,
-  TENGU_SNUG_QUILL,
-  TENGU_MELLOW_RAINBOW,
-  TENGU_FALLOW_LANTERN,
-  PERSISTENT_WAIT_CHUNK_MS,
-  MOSSY_SQUID_GATE,
+  TENGU_THISTLE_ORRERY,
+  RETRY_ON_529_QUERY_SOURCES,
+  RETRY_FLAG_NAMES,
+  TENGU_FLAG_SET,
+  TENGU_MELLOW_HOLLERITH,
+  TENGU_COBALT_PLINTH_ORPINE,
+  TENGU_LEVEL_PLOVER,
 };

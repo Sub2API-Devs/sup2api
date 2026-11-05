@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：ProposeGoal 工具（提议会话目标完成条件）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1rwh0063.js (3), chunk-nwnm868w.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bktadp8a.js (1), chunk-cnjyw3ht.js (3)
  * attribution: placement 4
  */
 import { randomUUID } from "crypto";
@@ -42,7 +42,7 @@ import { GOAL_PROPOSAL_DIALOG } from "../../components/goal/goalProposalDialog.j
 import { logError } from "../../utils/log.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-nwnm868w.js:191-1781 placement
+//@ chunk-bktadp8a.js:191-1781 placement
 /**
  * 目标完成条件允许的最大字符数（500）。
  */
@@ -57,13 +57,13 @@ ask_user true (the default) asks the user first, with a one-keypress approval di
 Propose only when the user has asked for an outcome with a verifiable end state ("make the tests pass", "migrate every call site") and the work spans multiple turns. Not for one-off tasks, and never to widen scope: the condition must follow from their request.
 
 The evaluator verifies the condition from the conversation alone \u2014 it cannot run commands or read files \u2014 so state one measurable end state with its check (e.g. "bun test exits 0"), in at most ${500} characters. One goal is active at a time; a newly approved or directly set proposal replaces the current one.`;
-//@ chunk-1rwh0063.js:4788-5719 placement
+//@ chunk-cnjyw3ht.js:4872-5803 placement
 /**
  * ProposeGoal 的输出 schema。
  */
 var proposeGoalInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var proposeGoalOutputSchema;
-deferInit("chunk-1rwh0063.js:4788", () => {
+deferInit("chunk-cnjyw3ht.js:4872", () => {
   proposeGoalInputSchema = DoctorLazy(() =>
     zodStrictObject({
       condition: stringSchema()
@@ -90,7 +90,7 @@ deferInit("chunk-1rwh0063.js:4788", () => {
     }),
   );
 });
-//@ chunk-1rwh0063.js:5719-5805 placement
+//@ chunk-cnjyw3ht.js:5803-5889 placement
 /**
  * 记录一次“目标提议可用”事件（每进程只记一次）。
  */
@@ -101,12 +101,12 @@ function logGoalProposalAvailable(modelProposedGoalsSettingParsed) {
     setting: fromEnum(modelProposedGoalsSettingParsed),
   });
 }
-//@ chunk-1rwh0063.js:5805-10027 placement
+//@ chunk-cnjyw3ht.js:5889-10111 placement
 /**
  * ProposeGoal 工具：向用户提议会话目标完成条件，由独立评审判断是否达成。
  */
 var ProposeGoalTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-1rwh0063.js:5805", () => {
+deferInit("chunk-cnjyw3ht.js:5889", () => {
   ProposeGoalTool = buildTool({
     name: PROPOSEGOAL,
     backgrounding: "never",

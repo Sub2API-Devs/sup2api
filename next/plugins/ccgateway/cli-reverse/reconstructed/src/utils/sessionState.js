@@ -3,13 +3,15 @@
  *
  * 会话状态（idle/running/requires_action）变化通知。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sessionState.ts
- * pieces: chunk-achyj058.js (11), chunk-fp6aqx1j.js (1)
- * attribution: placement 11, fingerprint 1
+ * pieces: chunk-v7p9necf.js (11)
+ * attribution: placement 11
  */
 import { truncate } from "./format.js";
 import { MAX_DESCRIPTION_CHARS } from "../constants/outputLimits.js";
+import { askedInDirectoryOf } from "./sessionStateCwd.js";
+import { jsonStringify } from "./slowOperations.js";
 import { truncateToLength } from "./stringUtils.js";
 import { createSignal } from "./signal.js";
 import { logForDiagnosticsNoPII } from "./diagLogs.js";
@@ -23,7 +25,7 @@ import { isDiskless } from "../bootstrap/state.js";
 import { logError } from "./log.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-achyj058.js:655-774 placement
+//@ chunk-v7p9necf.js:1892-2011 placement
 /**
  * 取请求 id（或被抑制的请求 id）。
  */
@@ -32,17 +34,27 @@ function requestIdOf(request) {
     if (typeof requestId === "string" && requestId.length > 0) return requestId;
   return;
 }
-//@ chunk-achyj058.js:774-785 placement
+//@ chunk-v7p9necf.js:2011-2051 placement
 /**
  * MAX_PENDING_ACTION_ARGS：待决动作参数最多保留几项。
  */
-var MAX_PENDING_ACTION_ARGS = 32;
-//@ chunk-achyj058.js:785-1349 placement
+var MAX_PENDING_ACTION_ARGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_SINGLE_INPUT_BYTES;
+var MAX_PENDING_INPUT_BYTES;
+var weakMap;
+deferInit("chunk-v7p9necf.js:2011", () => {
+  MAX_PENDING_ACTION_ARGS = 32;
+  MAX_SINGLE_INPUT_BYTES = 4096;
+  MAX_PENDING_INPUT_BYTES = 32768;
+  weakMap = new WeakMap();
+});
+//@ chunk-v7p9necf.js:2051-2816 placement
 /**
  * 生成待决动作的描述（工具名、显示名、原始命令）。
  */
-function pendingActionPayload(action) {
+function pendingActionPayload(action, withInput) {
   let { display_tool_name: displayToolName, raw_command: rawCommand } = action;
+  let input = withInput ? action.input : undefined;
   return {
     tool_name: action.tool_name,
     ...(displayToolName === undefined
@@ -54,9 +66,14 @@ function pendingActionPayload(action) {
     ...(rawCommand === undefined
       ? {}
       : {
-          raw_command: truncate(rawCommand, MAX_DESCRIPTION_CHARS),
+          raw_command: input === undefined ? truncate(rawCommand, MAX_DESCRIPTION_CHARS) : rawCommand,
         }),
     tool_use_id: action.tool_use_id,
+    ...(input === undefined
+      ? {}
+      : {
+          input,
+        }),
     request_id: action.request_id,
     ...(action.suppressed_request_id === undefined
       ? {}
@@ -78,23 +95,48 @@ function pendingActionPayload(action) {
       : {
           agent_id: action.agent_id,
         }),
+    ...(action.chrome_site === undefined
+      ? {}
+      : {
+          chrome_site: action.chrome_site,
+        }),
+    ...(action.asked_in_directory === undefined
+      ? {}
+      : {
+          asked_in_directory: askedInDirectoryOf(action.asked_in_directory),
+        }),
   };
 }
-//@ chunk-achyj058.js:1349-1404 placement
+//@ chunk-v7p9necf.js:2816-3087 placement
 /**
  * pendingActionRows：待决动作的展示行。
  */
 function pendingActionRows(lead, rest) {
-  return [lead, ...rest.slice(0, MAX_PENDING_ACTION_ARGS - 1).map(pendingActionPayload)];
+  let remainingBytes = MAX_PENDING_INPUT_BYTES;
+  return [
+    lead,
+    ...rest.slice(0, MAX_PENDING_ACTION_ARGS - 1).map((action) => {
+      if (action.input === undefined) return pendingActionPayload(action, false);
+      let inputBytes = weakMap.get(action);
+      if (inputBytes === undefined) {
+        inputBytes = Buffer.byteLength(jsonStringify(action.input), "utf8");
+        weakMap.set(action, inputBytes);
+      }
+      let totalBytes = inputBytes + Buffer.byteLength(action.raw_command ?? "", "utf8");
+      let fits = inputBytes <= MAX_SINGLE_INPUT_BYTES && totalBytes <= remainingBytes;
+      if (fits) remainingBytes -= totalBytes;
+      return pendingActionPayload(action, fits);
+    }),
+  ];
 }
-//@ chunk-achyj058.js:1404-1481 placement
+//@ chunk-v7p9necf.js:3087-3163 placement
 function truncateForPendingAction(text) {
   let truncated = truncate(text, MAX_DESCRIPTION_CHARS);
   return truncated.length <= 4 * MAX_DESCRIPTION_CHARS
     ? truncated
     : `${truncateToLength(truncated, 4 * MAX_DESCRIPTION_CHARS - 1)}\u2026`;
 }
-//@ chunk-achyj058.js:1481-1642 placement
+//@ chunk-v7p9necf.js:3163-3324 placement
 function parseCrossSessionInboundCapability(externalMetadata) {
   switch (externalMetadata?.cross_session_inbound) {
     case "unavailable":
@@ -109,12 +151,12 @@ function parseCrossSessionInboundCapability(externalMetadata) {
       return;
   }
 }
-//@ chunk-achyj058.js:1642-1656 placement
+//@ chunk-v7p9necf.js:3324-3338 placement
 /**
  * SESSION_STATE_IDLE_TTL_MS：会话状态空闲有效期。
  */
 var SESSION_STATE_IDLE_TTL_MS = 60000;
-//@ chunk-achyj058.js:1656-9513 placement
+//@ chunk-v7p9necf.js:3338-11684 placement
 /**
  * 会话状态跟踪（运行/空闲/等待决定、待决动作、状态变化事件）。
  */
@@ -127,6 +169,7 @@ class SessionStateTracker {
   getPendingActionDetails;
   leadsWithOldestCard = false;
   slimsRefusedLead = false;
+  storedAnswerStands = new WeakSet();
   slimLeads = new WeakSet();
   writtenLead;
   pendingActionLeadRequestId;
@@ -280,16 +323,20 @@ class SessionStateTracker {
     this.onMetadataChanged?.(patch);
     emitSafely(this.pendingActionWritten, lead_2);
   }
-  leadRecordRefused(action) {
+  leadRecordRefused(lead) {
     let writtenLead = this.writtenLead;
     let slimsRefusedLead = this.slimsRefusedLead;
     if (
       writtenLead === undefined ||
+      lead.tool_use_id !== writtenLead.tool_use_id ||
+      requestIdOf(lead) !== requestIdOf(writtenLead)
+    )
+      return false;
+    this.storedAnswerStands.delete(writtenLead);
+    if (
       !(typeof slimsRefusedLead === "function" ? slimsRefusedLead(writtenLead) : slimsRefusedLead) ||
       this.slimLeads.has(writtenLead) ||
-      writtenLead.tool_name.startsWith("dialog:") ||
-      action.tool_use_id !== writtenLead.tool_use_id ||
-      requestIdOf(action) !== requestIdOf(writtenLead)
+      writtenLead.tool_name.startsWith("dialog:")
     )
       return false;
     this.slimLeads.add(writtenLead);
@@ -298,6 +345,12 @@ class SessionStateTracker {
   }
   forgetWrittenLead() {
     this.writtenLead = undefined;
+  }
+  noteStoredAnswerStands(lead) {
+    this.storedAnswerStands.add(lead);
+  }
+  doesStoredAnswerStand(lead) {
+    return this.storedAnswerStands.has(lead);
   }
   isWrittenSlim(lead) {
     return this.slimLeads.has(lead);
@@ -309,6 +362,8 @@ class SessionStateTracker {
       deadlineAt,
       settled: false,
       superseded: false,
+      endedAt: undefined,
+      ended: Promise.withResolvers(),
     };
     let markSettled = () => {
       heldSummary.settled = true;
@@ -322,8 +377,17 @@ class SessionStateTracker {
     return (
       pendingTurnEndSummary !== undefined &&
       !pendingTurnEndSummary.settled &&
+      pendingTurnEndSummary.endedAt === undefined &&
       now < pendingTurnEndSummary.deadlineAt
     );
+  }
+  endTurnEndSummaryHold() {
+    let pendingTurnEndSummary = this.pendingTurnEndSummary;
+    if (pendingTurnEndSummary !== undefined && this.turnEndSummaryOutstanding()) {
+      pendingTurnEndSummary.superseded = true;
+      pendingTurnEndSummary.endedAt = performance.now();
+      pendingTurnEndSummary.ended.resolve();
+    }
   }
   supersedeTurnEndSummary() {
     let pendingTurnEndSummary = this.pendingTurnEndSummary;
@@ -336,6 +400,7 @@ class SessionStateTracker {
     let abortController = new AbortController();
     return Promise.race([
       pendingTurnEndSummary.promise.catch(() => {}),
+      pendingTurnEndSummary.ended.promise,
       sleep(
         Math.max(0, Math.ceil(pendingTurnEndSummary.deadlineAt - performance.now()) + 1),
         abortController.signal,
@@ -369,15 +434,16 @@ class SessionStateTracker {
         : undefined) ?? action;
     this.pendingActionLeadRequestId = requestIdOf(lead);
     this.writtenLead = lead;
-    let rest = details.filter((detail) => detail !== lead).reverse();
+    let others = details.filter((detail) => detail !== lead).reverse();
     let leadPayload = this.slimLeads.has(lead)
       ? {
-          ...pendingActionPayload(lead),
+          ...pendingActionPayload(lead, false),
           ...(lead.display_tool_name !== undefined && {
             display_tool_name: truncateForPendingAction(lead.display_tool_name),
           }),
           action_description: truncateForPendingAction(lead.action_description),
           raw_command: undefined,
+          input: undefined,
           ...(lead.request_id && {
             request_id: "",
             suppressed_request_id: lead.request_id,
@@ -389,12 +455,20 @@ class SessionStateTracker {
       lead,
       patch: {
         pending_action: leadPayload,
-        pending_actions: pendingActionRows(leadPayload, rest),
+        pending_actions: pendingActionRows(
+          leadPayload,
+          leadPayload === lead
+            ? others
+            : others.map((detail) => ({
+                ...detail,
+                input: undefined,
+              })),
+        ),
       },
     };
   }
-  notifyMetadataChanged(patch, options) {
-    if ("post_turn_summary" in patch && options?.turnEndVerdict !== true) this.supersedeTurnEndSummary();
+  notifyMetadataChanged(patch) {
+    if ("post_turn_summary" in patch) this.supersedeTurnEndSummary();
     this.onMetadataChanged?.(patch);
     if ("is_ultracode_active" in patch && this.onMetadataChanged) {
       this.ultracodeActiveSent = patch.is_ultracode_active === true;
@@ -451,6 +525,7 @@ class SessionStateTracker {
     this.onProactivityLevelChanged?.();
   }
   resumableOrphanedAgents = [];
+  picturesToHide;
   restartNoticeShown = false;
   markResumableOrphanedAgentsToldAtTurnEnd() {
     if (
@@ -480,22 +555,22 @@ class SessionStateTracker {
     this.onConversationReset?.();
   }
 }
-//@ chunk-achyj058.js:9513-9954 placement
+//@ chunk-v7p9necf.js:11684-12125 placement
 /**
  * 会话结束时可能被停止的长期任务类型与提示。
  */
 var LONG_RUNNING_TASK_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var LONG_RUNNING_PROCESS_NOTE;
-deferInit("chunk-achyj058.js:9513", () => {
+deferInit("chunk-v7p9necf.js:11684", () => {
   LONG_RUNNING_TASK_TYPES = new Set(["local_bash", "monitor_mcp", "monitor_ws"]);
   LONG_RUNNING_PROCESS_NOTE =
     "In this session every process left running is likely stopped a few minutes after each reply, so a command you re-create now will likely be stopped after your next reply too: run in the foreground, with a long enough `timeout`, any that must finish and can finish within the foreground maximum, and otherwise tell the user it will likely be stopped a few minutes after your reply.";
 });
-//@ chunk-achyj058.js:9954-11007 placement
+//@ chunk-v7p9necf.js:12125-13178 placement
 /**
  * 描述仍在运行的后台进程（会话结束前提醒）。
  */
-function describeRunningProcesses(stoppedTasks, orphanTasks, canUseTool) {
+function describeRunningProcesses(stoppedTasks, orphanTasks, recreateHint) {
   let sections = [];
   if (stoppedTasks.length > 0) {
     let mapped = stoppedTasks.map(
@@ -504,7 +579,7 @@ function describeRunningProcesses(stoppedTasks, orphanTasks, canUseTool) {
     sections.push(`The following background tasks were running and are now stopped:
 ${mapped.join(`
 `)}
-${canUseTool ? `${canUseTool} Re-create anything else` : "Re-create them"} if still needed.${hasBackgroundBashStopAfterReply() && stoppedTasks.some((task) => LONG_RUNNING_TASK_TYPES.has(task.task_type ?? "")) ? ` ${LONG_RUNNING_PROCESS_NOTE}` : ""}`);
+${recreateHint ? `${recreateHint} Re-create anything else` : "Re-create them"} if still needed.${hasBackgroundBashStopAfterReply() && stoppedTasks.some((task) => LONG_RUNNING_TASK_TYPES.has(task.task_type ?? "")) ? ` ${LONG_RUNNING_PROCESS_NOTE}` : ""}`);
   }
   if (orphanTasks.length > 0) {
     let mapped = orphanTasks.map((task) => (isDiskless() ? undefined : task.output_file));
@@ -526,7 +601,7 @@ The container was restarted. ${sections.join(`
 `)}
 </system-reminder>`;
 }
-//@ chunk-achyj058.js:11007-11058 placement
+//@ chunk-v7p9necf.js:13178-13229 placement
 function emitSafely(signal, ...args) {
   try {
     signal.emit(...args);
@@ -534,31 +609,12 @@ function emitSafely(signal, ...args) {
     logError(error);
   }
 }
-//@ chunk-fp6aqx1j.js:20341-20599 fingerprint (2.1.88 match: notifySessionStateChanged, 0.33)
-/**
- * 通知会话状态变化（idle/running/requires_action），供 SDK/远程控制显示。
- */
-function notifySessionStateChanged(state, details) {
-  if (state === "requires_action")
-    return {
-      reported: state,
-    };
-  let pendingActions = details.external?.pending_actions;
-  return {
-    reported: state,
-    pendingActionOutstanding:
-      details.readFailed === true ||
-      (details.external?.pending_action !== undefined && details.external.pending_action !== null) ||
-      (Array.isArray(pendingActions) && pendingActions.length > 0),
-  };
-}
 export {
-  SessionStateTracker,
   describeRunningProcesses,
+  SessionStateTracker,
+  MAX_PENDING_ACTION_ARGS,
   requestIdOf,
-  notifySessionStateChanged,
   pendingActionRows,
   parseCrossSessionInboundCapability,
   SESSION_STATE_IDLE_TTL_MS,
-  MAX_PENDING_ACTION_ARGS,
 };

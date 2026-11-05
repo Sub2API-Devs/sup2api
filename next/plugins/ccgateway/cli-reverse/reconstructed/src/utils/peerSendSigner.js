@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：对等发送签名。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fwcps4x0.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-eb5q174j.js (3)
  * attribution: placement 3
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
@@ -18,7 +18,7 @@ import { resolveCurrentDeviceBinding } from "../bridge/deviceBindingRecord.js";
 import { bridgeOwnerAccount } from "./entrypointKinds.js";
 import { readDeviceKeyOutcome, createClientEventSigner } from "../bridge/clientEventSigner.js";
 
-//@ chunk-fwcps4x0.js:5673-5818 placement
+//@ chunk-eb5q174j.js:5954-6099 placement
 var SessionSecuritySchema = DoctorLazy(() => {
   let securitySchema = objectSchema({
     security_tier: stringSchema().nullish(),
@@ -29,7 +29,7 @@ var SessionSecuritySchema = DoctorLazy(() => {
     session: securitySchema.nullish(),
   });
 });
-//@ chunk-fwcps4x0.js:5818-5995 placement
+//@ chunk-eb5q174j.js:6099-6276 placement
 async function signForElevatedPeer(fetchSessionSecurity, event, context, options) {
   let signer = createPeerSendSigner(fetchSessionSecurity, options).catch((error) => {
     logForDebugging(`[peerSendSigner] event not signed: ${errorMessage(error)}`, {
@@ -40,7 +40,7 @@ async function signForElevatedPeer(fetchSessionSecurity, event, context, options
   });
   return signClientEvent(signer, event, context);
 }
-//@ chunk-fwcps4x0.js:5995-6658 placement
+//@ chunk-eb5q174j.js:6276-6940 placement
 /**
  * 创建跨会话发送签名器（账号、所有者、设备密钥校验）。
  */

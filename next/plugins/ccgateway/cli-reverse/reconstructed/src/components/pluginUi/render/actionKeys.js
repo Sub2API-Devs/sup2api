@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。插件渲染元素的动作按键。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bc20zedk.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rkbsrtg1.js (18)
  * attribution: placement 18
  */
 import { __export } from "../../../../runtime/bun-runtime.js";
@@ -85,17 +85,17 @@ import {
   useEffect,
 } from "../../../../vendor/react/cjs/react.production.js";
 import { identity } from "../../../utils/identity.js";
-import { uniq } from "../../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
 import { handleUiPress } from "../../../plugins/functionHooks/ui/interactions.js";
 import { useKeybindingContext } from "../../../keybindings/KeybindingContext.js";
 import { useHasAutoDialog } from "../../../state/dialogQueue.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-bc20zedk.js:2583-2593 placement
+//@ chunk-rkbsrtg1.js:2583-2593 placement
 var actionKeysNamespace = {};
-//@ chunk-bc20zedk.js:2593-4019 placement
+//@ chunk-rkbsrtg1.js:2593-4019 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:2593", () => {
+deferInit("chunk-rkbsrtg1.js:2593", () => {
   __export(actionKeysNamespace, {
     ActionKeysSeat: () => ActionKeysSeat,
     BodyColumns: () => BodyColumns,
@@ -167,14 +167,14 @@ deferInit("chunk-bc20zedk.js:2593", () => {
     withHexColors: () => withHexColors,
   });
 });
-//@ chunk-bc20zedk.js:4019-4023 placement
+//@ chunk-rkbsrtg1.js:4019-4023 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:4019", () => {
+deferInit("chunk-rkbsrtg1.js:4019", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:4023-4081 placement
+//@ chunk-rkbsrtg1.js:4023-4081 placement
 var compareActionRank = (a, b) => a.rank > b.rank || (a.rank === b.rank && a.seq > b.seq);
-//@ chunk-bc20zedk.js:4081-4343 placement
+//@ chunk-rkbsrtg1.js:4081-4343 placement
 function createActionKeyRegistry() {
   let registrations = [];
   let seq = 0;
@@ -199,17 +199,19 @@ function createActionKeyRegistry() {
     },
   };
 }
-//@ chunk-bc20zedk.js:4343-4374 placement
+//@ chunk-rkbsrtg1.js:4343-4374 placement
 var clearActionKeys; // deferred: uses createActionKeyRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-bc20zedk.js:4343", () => {
+deferInit("chunk-rkbsrtg1.js:4343", () => {
   clearActionKeys = identity(createActionKeyRegistry(), (state) => state.clear());
 });
-//@ chunk-bc20zedk.js:4374-4439 placement
+//@ chunk-rkbsrtg1.js:4374-4439 placement
 var contextsForAction = (action, registrations) =>
-  uniq(registrations.filter((state) => state.action === action).map((state) => state.context));
-//@ chunk-bc20zedk.js:4439-4486 placement
+  normalizeCaseForComparison_2(
+    registrations.filter((state) => state.action === action).map((state) => state.context),
+  );
+//@ chunk-rkbsrtg1.js:4439-4486 placement
 var renderPriorityOf = (component) => (component === "Pane" ? 2 : component === "AbovePrompt" ? 1 : 0);
-//@ chunk-bc20zedk.js:4486-4599 placement
+//@ chunk-rkbsrtg1.js:4486-4599 placement
 var pressFromTerminal = (registration, link) =>
   void logRejection(
     `ui.press ${registration.plugin}`,
@@ -220,17 +222,17 @@ var pressFromTerminal = (registration, link) =>
       link,
     }),
   );
-//@ chunk-bc20zedk.js:4599-4603 placement
+//@ chunk-rkbsrtg1.js:4599-4603 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:4599", () => {
+deferInit("chunk-rkbsrtg1.js:4599", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:4603-4619 placement
+//@ chunk-rkbsrtg1.js:4603-4619 placement
 var RenderInstance; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:4603", () => {
+deferInit("chunk-rkbsrtg1.js:4603", () => {
   RenderInstance = createContext(null);
 });
-//@ chunk-bc20zedk.js:4619-5146 placement
+//@ chunk-rkbsrtg1.js:4619-5146 placement
 function useActionKeys(props) {
   let { plugin, handle, action } = props;
   let renderInstance = useContext(RenderInstance);
@@ -279,34 +281,34 @@ function useActionKeys(props) {
     };
   }, [keybindingContext, action, contexts, hasAutoDialog]);
 }
-//@ chunk-bc20zedk.js:5146-5179 placement
+//@ chunk-rkbsrtg1.js:5146-5179 placement
 function ActionKeysSeat(props) {
   useActionKeys(props);
   return null;
 }
-//@ chunk-bc20zedk.js:5179-5183 placement
+//@ chunk-rkbsrtg1.js:5179-5183 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:5179", () => {
+deferInit("chunk-rkbsrtg1.js:5179", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:5183-5200 placement
+//@ chunk-rkbsrtg1.js:5183-5200 placement
 var BodyColumns; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:5183", () => {
+deferInit("chunk-rkbsrtg1.js:5183", () => {
   BodyColumns = createContext(null);
 });
-//@ chunk-bc20zedk.js:5200-5204 placement
+//@ chunk-rkbsrtg1.js:5200-5204 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:5200", () => {
+deferInit("chunk-rkbsrtg1.js:5200", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:5204-5221 placement
+//@ chunk-rkbsrtg1.js:5204-5221 placement
 var ClickedPress; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:5204", () => {
+deferInit("chunk-rkbsrtg1.js:5204", () => {
   ClickedPress = createContext(null);
 });
-//@ chunk-bc20zedk.js:5221-5225 placement
+//@ chunk-rkbsrtg1.js:5221-5225 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:5221", () => {
+deferInit("chunk-rkbsrtg1.js:5221", () => {
   init_react_production();
 });
-export { ClickedPress, BodyColumns, actionKeysNamespace, pressFromTerminal, ActionKeysSeat, RenderInstance };
+export { actionKeysNamespace, ClickedPress, BodyColumns, pressFromTerminal, ActionKeysSeat, RenderInstance };

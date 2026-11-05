@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/read-deny-glob.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (4)
+ * pieces: chunk-qg41pqt6.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
  */
 import {
@@ -14,13 +14,13 @@ import {
 } from "./sandbox-utils.js";
 import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 
-//@ chunk-fq0cr76a.js:756340-756351 esm-layout
+//@ chunk-qg41pqt6.js:758042-758053 esm-layout
 var READ_DENY_GLOB_MOUNT_WARN_THRESHOLD = 256;
-//@ chunk-fq0cr76a.js:756351-756403 esm-fingerprint
+//@ chunk-qg41pqt6.js:758053-758105 esm-fingerprint
 function parentOf(p) {
   return p.slice(0, p.lastIndexOf("/"));
 }
-//@ chunk-fq0cr76a.js:756403-756612 esm-fingerprint
+//@ chunk-qg41pqt6.js:758105-758314 esm-fingerprint
 function collapseReadDenyLocations({ locations, reExposedPaths }) {
   let sorted = [...new Set(locations)].sort();
   let kept = new Set();
@@ -38,7 +38,7 @@ function collapseReadDenyLocations({ locations, reExposedPaths }) {
   }
   return kept;
 }
-//@ chunk-fq0cr76a.js:756612-758463 esm-fingerprint
+//@ chunk-qg41pqt6.js:758314-760165 esm-fingerprint
 function* expandReadDenyGlobLinuxSteps(globPattern, reExposedPaths, unlistableDirs, opts = {}) {
   let walk = yield* walkGlobPatternSteps(globPattern, {
     withDirectoryForm: true,

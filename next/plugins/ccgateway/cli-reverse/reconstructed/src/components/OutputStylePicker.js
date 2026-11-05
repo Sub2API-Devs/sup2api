@@ -3,9 +3,9 @@
  *
  * /output-style 选择器：加载内置与自定义输出样式并选择。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/OutputStylePicker.tsx
- * pieces: chunk-9h8dr0qb.js (7)
+ * pieces: chunk-j6tt9nsa.js (7)
  * attribution: placement 1, layout 1, fingerprint 2, file-local 1, sole-consumer 2
  */
 import {
@@ -33,18 +33,18 @@ import { bunStringWidth } from "../ink/stringWidth.js";
 import { OrderedListWithItem } from "./CustomSelect/selectTable.js";
 import { StatusIcon } from "./design-system/StatusIcon.js";
 
-//@ chunk-9h8dr0qb.js:7565-7569 placement
+//@ chunk-j6tt9nsa.js:7560-7564 placement
 init_react_production();
-//@ chunk-9h8dr0qb.js:7569-7597 layout
+//@ chunk-j6tt9nsa.js:7564-7593 layout
 function getConcreteOutputStyle() {
   return mapConfigsToOptions(OUTPUT_STYLE_CONFIG);
 }
-//@ chunk-9h8dr0qb.js:7597-7754 fingerprint (2.1.88 match: DEFAULT_OUTPUT_STYLE_DESCRIPTION, 0.529)
+//@ chunk-j6tt9nsa.js:7593-7750 fingerprint (2.1.88 match: DEFAULT_OUTPUT_STYLE_DESCRIPTION, 0.529)
 var DEFAULT = "Default";
 var CONCISE_STYLE_DESCRIPTION = "Claude completes coding tasks efficiently and provides concise responses";
 var OUTPUT_STYLE_EFFECT_NOTE = "This changes how Claude Code communicates with you";
 var STYLE_ROW_HEIGHT = 24;
-//@ chunk-9h8dr0qb.js:7754-7869 file-local
+//@ chunk-j6tt9nsa.js:7750-7865 file-local
 function mapConfigsToOptions(styles) {
   return Object.entries(styles).map(([style, config]) => ({
     label: config?.name ?? DEFAULT,
@@ -52,7 +52,7 @@ function mapConfigsToOptions(styles) {
     description: config?.description ?? CONCISE_STYLE_DESCRIPTION,
   }));
 }
-//@ chunk-9h8dr0qb.js:7869-8816 fingerprint (2.1.88 match: OutputStylePicker, 0.601)
+//@ chunk-j6tt9nsa.js:7865-8807 fingerprint (2.1.88 match: OutputStylePicker, 0.602)
 function OutputStylePicker(props) {
   let $ = useMemoCache(15);
   let { initialStyle, onComplete, onCancel, isStandaloneCommand, visibleCount } = props;
@@ -133,7 +133,7 @@ function OutputStylePicker(props) {
   } else dialogElement = $[14];
   return dialogElement;
 }
-//@ chunk-9h8dr0qb.js:8816-10273 sole-consumer
+//@ chunk-j6tt9nsa.js:8807-10258 sole-consumer
 /**
  * /output-style 选项列表：等待样式选项加载，标出当前样式；安全模式下已保存的自定义样式被禁用时给出提示；宽屏 redesign 模式下描述放在 meta 列。
  */
@@ -253,6 +253,6 @@ function OutputStyleList(props) {
   } else fragmentElement = $[30];
   return fragmentElement;
 }
-//@ chunk-9h8dr0qb.js:10273-10277 sole-consumer
+//@ chunk-j6tt9nsa.js:10258-10262 sole-consumer
 init_react_production();
 export { OutputStylePicker };

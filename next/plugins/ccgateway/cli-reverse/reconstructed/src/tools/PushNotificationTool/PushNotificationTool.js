@@ -3,9 +3,9 @@
  *
  * 推送通知工具（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4rqaac63.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-frtnsz4x.js (1)
  * attribution: placement 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -28,7 +28,7 @@ import { logEvent } from "../../services/analytics/index.js";
 import { fromEnumOpt } from "../../services/analytics/safeMetadata.js";
 import { resolveSetting } from "../../utils/settings/userIntentSettings.js";
 
-//@ chunk-4rqaac63.js:4619-7369 placement
+//@ chunk-frtnsz4x.js:4703-7464 placement
 /**
  * PushNotification 的输出 schema（是否推送、是否本地、禁用原因）。
  */
@@ -37,7 +37,7 @@ var PushNotificationTool_2 = DoctorLazy(() =>
     message: stringSchema()
       .min(1)
       .describe("The notification body. Keep it under 200 characters; mobile OSes truncate."),
-    status: literal("proactive"),
+    status: literal("proactive").optional(),
   }),
 );
 var pushNotificationOutputSchema = DoctorLazy(() =>

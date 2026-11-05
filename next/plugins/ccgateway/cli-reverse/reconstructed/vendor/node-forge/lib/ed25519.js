@@ -1,8 +1,8 @@
 /**
  * node-forge/lib/ed25519.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: node-forge@1.4.0
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -13,7 +13,7 @@ import { require_sha512 } from "./sha512.js";
 import { require_util } from "./util.js";
 import { require_asn1_validator } from "./asn1-validator.js";
 
-//@ chunk-fq0cr76a.js:260717-274277 cjs-fingerprint
+//@ chunk-qg41pqt6.js:261215-274814 cjs-fingerprint
 var require_ed25519 = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_jsbn();
@@ -330,7 +330,7 @@ var require_ed25519 = __commonJS(function (cjsExports, cjsModule) {
   }
   function add(p, q) {
     var a = gf();
-    var b_2 = gf();
+    var b = gf();
     var c = gf();
     var d = gf();
     var e = gf();
@@ -341,17 +341,17 @@ var require_ed25519 = __commonJS(function (cjsExports, cjsModule) {
     Z(a, p[1], p[0]);
     Z(t, q[1], q[0]);
     M(a, a, t);
-    A(b_2, p[0], p[1]);
+    A(b, p[0], p[1]);
     A(t, q[0], q[1]);
-    M(b_2, b_2, t);
+    M(b, b, t);
     M(c, p[3], q[3]);
     M(c, c, D2);
     M(d, p[2], q[2]);
     A(d, d, d);
-    Z(e, b_2, a);
+    Z(e, b, a);
     Z(f, d, c);
     A(g, d, c);
-    A(h, b_2, a);
+    A(h, b, a);
     M(p[0], e, f);
     M(p[1], h, g);
     M(p[2], g, f);
@@ -373,7 +373,7 @@ var require_ed25519 = __commonJS(function (cjsExports, cjsModule) {
   function pack25519(o, input) {
     var i;
     var j;
-    var b_2;
+    var b;
     var m = gf();
     var t = gf();
     for (i = 0; i < 16; ++i) t[i] = input[i];
@@ -387,9 +387,9 @@ var require_ed25519 = __commonJS(function (cjsExports, cjsModule) {
         m[i - 1] &= 65535;
       }
       m[15] = t[15] - 32767 - ((m[14] >> 16) & 1);
-      b_2 = (m[15] >> 16) & 1;
+      b = (m[15] >> 16) & 1;
       m[14] &= 65535;
-      sel25519(t, m, 1 - b_2);
+      sel25519(t, m, 1 - b);
     }
     for (i = 0; i < 16; i++) {
       o[2 * i] = t[i] & 255;
@@ -538,7 +538,7 @@ var require_ed25519 = __commonJS(function (cjsExports, cjsModule) {
   function S(o, a) {
     M(o, a, a);
   }
-  function M(o, a, b_2) {
+  function M(o, a, b) {
     var v;
     var c;
     var t0 = 0;
@@ -572,22 +572,22 @@ var require_ed25519 = __commonJS(function (cjsExports, cjsModule) {
     var t28 = 0;
     var t29 = 0;
     var t30 = 0;
-    var b0 = b_2[0];
-    var b1 = b_2[1];
-    var b2 = b_2[2];
-    var b3 = b_2[3];
-    var b4 = b_2[4];
-    var b5 = b_2[5];
-    var b6 = b_2[6];
-    var b7 = b_2[7];
-    var b8 = b_2[8];
-    var b9 = b_2[9];
-    var b10 = b_2[10];
-    var b11 = b_2[11];
-    var b12 = b_2[12];
-    var b13 = b_2[13];
-    var b14 = b_2[14];
-    var b15 = b_2[15];
+    var b0 = b[0];
+    var b1 = b[1];
+    var b2 = b[2];
+    var b3 = b[3];
+    var b4 = b[4];
+    var b5 = b[5];
+    var b6 = b[6];
+    var b7 = b[7];
+    var b8 = b[8];
+    var b9 = b[9];
+    var b10 = b[10];
+    var b11 = b[11];
+    var b12 = b[12];
+    var b13 = b[13];
+    var b14 = b[14];
+    var b15 = b[15];
     v = a[0];
     t0 += v * b0;
     t1 += v * b1;

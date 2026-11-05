@@ -3,9 +3,9 @@
  *
  * 跨轮次携带的写入（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1bmxdqa0.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xmpe3wef.js (6)
  * attribution: placement 6
  */
 import { realpath, lstat, rmdir, open, readlink } from "fs/promises";
@@ -43,12 +43,12 @@ import { cloneFileStateCache } from "../../utils/fileStateCache.js";
 import { listSessionsImpl } from "../../utils/listSessionsImpl.js";
 import { sweepStaleStageTmps } from "../../utils/stageFile.js";
 import { placeBytesAsHomeFile } from "../../utils/filePersistence/placeFilesByName.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { NOFOLLOW_NONBLOCK_FLAGS } from "../../utils/fsFlags.js";
 import { READ_LIMITS } from "../../utils/fsBoundRead.js";
 import { getPlatform } from "../../utils/platform.js";
 
-//@ chunk-1bmxdqa0.js:12569-13460 placement
+//@ chunk-xmpe3wef.js:13755-14646 placement
 async function carryTurnWrites(request, tools, toolUseContext) {
   let carriedWrites = request.carriedWrites ?? [];
   let startTime = performance.now();
@@ -90,7 +90,7 @@ async function carryTurnWrites(request, tools, toolUseContext) {
   else if (refusal !== "aborted") logFeatureSad("ccr_turn_handoff_carried_writes", refusal);
   return refusal === undefined;
 }
-//@ chunk-1bmxdqa0.js:13460-16776 placement
+//@ chunk-xmpe3wef.js:14646-17962 placement
 /**
  * 把上一轮未完成的写入带到新一轮执行，处理路径移动、home 外、无写工具等情况
  */
@@ -306,7 +306,7 @@ async function applyCarriedWrite(carriedWrites, tools, toolUseContext) {
           ))
         )
           break;
-    let takenBackCount = count(results, Boolean);
+    let takenBackCount = countWhere(results, Boolean);
     return {
       ...failure,
       counts: {
@@ -326,7 +326,7 @@ async function applyCarriedWrite(carriedWrites, tools, toolUseContext) {
     placedBytes,
   };
 }
-//@ chunk-1bmxdqa0.js:16861-16917 placement
+//@ chunk-xmpe3wef.js:18047-18103 placement
 /**
  * 构造携带失败的结果对象：给定拒绝原因、零计数与零字节。
  */
@@ -337,7 +337,7 @@ function refusalCarryResult(refusal) {
     placedBytes: 0,
   };
 }
-//@ chunk-1bmxdqa0.js:16917-17018 placement
+//@ chunk-xmpe3wef.js:18103-18204 placement
 function describeCarryError(error) {
   return isAbortError(error)
     ? refusalCarryResult("aborted")
@@ -346,7 +346,7 @@ function describeCarryError(error) {
         lastErrorCode: sanitizeErrnoForTelemetry(error) ?? lit("unknown"),
       };
 }
-//@ chunk-1bmxdqa0.js:17018-17398 placement
+//@ chunk-xmpe3wef.js:18204-18584 placement
 /**
  * 对交接回合中携带的写入的权限决定分类：拒绝、需询问、自动模式、其他原因允许，或输入被修改。
  */
@@ -361,7 +361,7 @@ function classifyCarriedWriteDecision(decision, input) {
     ? undefined
     : "input_changed";
 }
-//@ chunk-1bmxdqa0.js:17398-17898 placement
+//@ chunk-xmpe3wef.js:18584-19084 placement
 /**
  * 文件已存在时，确认它位于允许的根目录下（经 /proc/self/fd 或 realpath）且内容与待写入字节完全相同，返回其 mtime 毫秒。
  */

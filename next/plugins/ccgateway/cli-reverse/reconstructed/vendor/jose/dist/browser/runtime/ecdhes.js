@@ -1,8 +1,8 @@
 /**
  * jose/dist/browser/runtime/ecdhes.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (4)
+ * pieces: chunk-pd6th42n.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
  */
 import { __esm } from "../../../../../runtime/bun-runtime.js";
@@ -14,7 +14,7 @@ import { checkEncCryptoKey } from "../../node/esm/lib/crypto_key.js";
 import { concat, lengthAndInput, uint32be, concatKdf } from "../../node/esm/lib/buffer_utils.js";
 import { encoder } from "./base64url.js";
 
-//@ chunk-2tyrgda4.js:10578-10616 esm-layout
+//@ chunk-pd6th42n.js:10578-10616 esm-layout
 var init_ecdhes = __esm(() => {
   init_content_encryption_6();
   init_buffer_utils();
@@ -22,7 +22,7 @@ var init_ecdhes = __esm(() => {
   noopInit();
   init_is_key_like();
 });
-//@ chunk-2tyrgda4.js:10616-11087 esm-fingerprint
+//@ chunk-pd6th42n.js:10616-11087 esm-fingerprint
 async function deriveKey(
   publicKey,
   privateKey,
@@ -57,12 +57,12 @@ async function deriveKey(
   );
   return concatKdf(sharedSecret, keyLength, value);
 }
-//@ chunk-2tyrgda4.js:11087-11203 esm-fingerprint
+//@ chunk-pd6th42n.js:11087-11203 esm-fingerprint
 async function generateEpk(key) {
   if (!isCryptoKey(key)) throw TypeError(keyMustBeTypeError(key, ...keyObjectTypes));
   return cryptoModule.subtle.generateKey(key.algorithm, true, ["deriveBits"]);
 }
-//@ chunk-2tyrgda4.js:11203-11375 esm-fingerprint
+//@ chunk-pd6th42n.js:11203-11375 esm-fingerprint
 function ecdhAllowed(key) {
   if (!isCryptoKey(key)) throw TypeError(keyMustBeTypeError(key, ...keyObjectTypes));
   return (

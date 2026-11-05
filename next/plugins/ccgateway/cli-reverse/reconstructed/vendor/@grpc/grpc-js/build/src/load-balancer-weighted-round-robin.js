@@ -1,8 +1,8 @@
 /**
  * @grpc/grpc-js/build/src/load-balancer-weighted-round-robin.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @grpc/grpc-js@1.14.4
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
@@ -17,7 +17,7 @@ import { require_picker } from "./picker.js";
 import { require_priority_queue } from "./priority-queue.js";
 import { require_subchannel_address } from "./subchannel-address.js";
 
-//@ chunk-pwh5dx3n.js:372594-380538 cjs-fingerprint
+//@ chunk-3k21nfa0.js:372594-380538 cjs-fingerprint
 var require_load_balancer_weighted_round_robin = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

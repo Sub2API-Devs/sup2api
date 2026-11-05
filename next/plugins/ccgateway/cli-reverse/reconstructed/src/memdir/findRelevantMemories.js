@@ -3,10 +3,10 @@
  *
  * 列出可召回的记忆（MEMORY.md + 扫描到的记忆文件），并用小模型挑选与当前查询相关的记忆。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/memdir/findRelevantMemories.ts
- * pieces: chunk-7sekx49c.js (2), chunk-e6aww6q8.js (9)
- * attribution: affinity 1, fingerprint 2, placement 8
+ * pieces: chunk-5xgkngpb.js (9), chunk-y9j01yc9.js (2)
+ * attribution: placement 8, fingerprint 2, affinity 1
  */
 import { stat } from "fs/promises";
 import { sep } from "path";
@@ -17,7 +17,7 @@ import {
   SELECTOR_MAX_TOKENS,
   tryModelsUntilAccepted,
   iterateSelectorModels,
-  regExp_16,
+  regExp_18,
   isUnusableSelectorModel,
 } from "./memoryRecallSelect.js";
 import { logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
@@ -28,9 +28,9 @@ import { errorMessage } from "../utils/errors.js";
 import { getAutoMemEntrypoint, getAutoMemPath } from "./paths.js";
 import { scanMemoryFiles } from "./memoryScan.js";
 
-//@ chunk-e6aww6q8.js:1628861-1628888 placement
+//@ chunk-5xgkngpb.js:1696567-1696594 placement
 var MEMDIR_RELEVANCE = "memdir_relevance";
-//@ chunk-e6aww6q8.js:1628888-1628940 placement
+//@ chunk-5xgkngpb.js:1696594-1696646 placement
 /**
  * 记忆选择器对话的初始状态（按目录分表与最近使用）。
  */
@@ -40,7 +40,7 @@ function emptyPickerState() {
     lastUsage: null,
   };
 }
-//@ chunk-e6aww6q8.js:1628940-1629001 placement
+//@ chunk-5xgkngpb.js:1696646-1696707 placement
 /**
  * 清空记忆选择器对话的状态。
  */
@@ -49,14 +49,14 @@ function resetPickerState(memorySelector) {
   memorySelector.stateByDir = {};
   memorySelector.lastUsage = null;
 }
-//@ chunk-e6aww6q8.js:1629001-1629042 placement
+//@ chunk-5xgkngpb.js:1696707-1696748 placement
 /**
  * 取指定记忆目录的选择器对话状态。
  */
 function pickerStateForDir(pickerState, dir) {
   return pickerState.stateByDir[dir];
 }
-//@ chunk-e6aww6q8.js:1629042-1629370 placement
+//@ chunk-5xgkngpb.js:1696748-1697076 placement
 /**
  * 为某个记忆目录建立挑选器对话状态：首条用户消息列出可用记忆（可带缓存控制），保留旧对话的后续消息与账号上下文。
  */
@@ -91,7 +91,7 @@ ${memoriesText}`,
   selectorCtx.stateByDir[memoryDir] = nextState;
   return nextState;
 }
-//@ chunk-e6aww6q8.js:1629370-1629679 placement
+//@ chunk-5xgkngpb.js:1697076-1697385 placement
 /**
  * 把一问一答追加到记忆挑选器对话里，返回撤销函数（最后一条仍是这次回答时删掉这两条）。
  */
@@ -129,7 +129,7 @@ function appendPickerExchange(selectorCtx, memoryDir, text, text_2) {
       currentState.messages = currentState.messages.slice(0, -2);
   };
 }
-//@ chunk-e6aww6q8.js:1629679-1630077 placement
+//@ chunk-5xgkngpb.js:1697385-1697783 placement
 /**
  * 设置记忆挑选器的账号上下文消息：账号范围变化时截断对话并清除旧账号；同一账号 key 不重复设置。
  */
@@ -173,7 +173,7 @@ function setPickerAccountContext(
     },
   };
 }
-//@ chunk-e6aww6q8.js:1630077-1630181 placement
+//@ chunk-5xgkngpb.js:1697783-1697887 placement
 /**
  * 生成记忆挑选器发送的消息列表：首条清单消息后插入账号上下文消息（如有），再接其余对话。
  */
@@ -183,7 +183,7 @@ function pickerMessages(pickerState) {
     ? restMessages
     : [systemMessage, ...(pickerState.account ? [pickerState.account.message] : []), ...restMessages];
 }
-//@ chunk-e6aww6q8.js:3306853-3308623 fingerprint (2.1.88 match: selectRelevantMemories, 0.434)
+//@ chunk-5xgkngpb.js:3391960-3393732 fingerprint (2.1.88 match: selectRelevantMemories, 0.434)
 /**
  * 用小模型从记忆清单中挑选与当前查询相关的记忆（JSON schema 输出），结果用于自动注入相关记忆。
  */
@@ -282,7 +282,7 @@ ${query}`;
       .map((selectedMemory) =>
         typeof selectedMemory !== "string" || isKnownMemoryName(selectedMemory)
           ? selectedMemory
-          : selectedMemory.replace(regExp_16, ""),
+          : selectedMemory.replace(regExp_18, ""),
       )
       .filter((selectedMemory) => typeof selectedMemory === "string" && isKnownMemoryName(selectedMemory));
   } catch (e) {
@@ -298,14 +298,14 @@ ${query}`;
     return [];
   }
 }
-//@ chunk-7sekx49c.js:12092-12145 affinity
+//@ chunk-y9j01yc9.js:13241-13294 affinity
 /**
  * 记忆索引文件名 "MEMORY.md"、索引标题与扫描记忆文件的超时（5 秒）。
  */
 var MEMORY_INDEX_NAME = "MEMORY.md";
 var _ = "Index of saved memories";
 var MEMORY_SCAN_TIMEOUT_MS = 5000;
-//@ chunk-7sekx49c.js:12145-12672 fingerprint (2.1.88 match: findRelevantMemories, 0.534)
+//@ chunk-y9j01yc9.js:13294-13821 fingerprint (2.1.88 match: findRelevantMemories, 0.534)
 /**
  * 列出可召回的记忆：MEMORY.md 索引本身 + scanMemoryFiles 结果（5 秒超时），去掉与入口同一 inode 的重复。
  */
@@ -352,11 +352,11 @@ async function findRelevantMemories(storageV5) {
 export {
   emptyPickerState,
   resetPickerState,
-  findRelevantMemories,
   MEMDIR_RELEVANCE,
   pickerStateForDir,
   startMemoryPickerState,
   setPickerAccountContext,
   pickerMessages,
   selectRelevantMemories,
+  findRelevantMemories,
 };

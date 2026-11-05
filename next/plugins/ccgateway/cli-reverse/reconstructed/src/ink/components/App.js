@@ -3,10 +3,10 @@
  *
  * Ink 根组件：管理 stdin 原始模式、读取并解析输入、分发键盘/粘贴/鼠标/焦点事件、点击与悬停、终端应答、挂起恢复
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/components/App.tsx
- * pieces: chunk-bzr73sfg.js (14)
- * attribution: affinity 2, fingerprint 3, sole-consumer 4, layout 5
+ * pieces: chunk-2avr6cej.js (13)
+ * attribution: affinity 2, fingerprint 3, placement 1, layout 5, sole-consumer 2
  */
 import { PureComponent_default } from "../../../vendor/react/cjs/react.production.js";
 import { EventEmitter } from "../events/emitter.js";
@@ -28,6 +28,7 @@ import {
   noopRetainFinePointer,
   noopCursorDeclaration,
   InputNowContext,
+  terminalProbeContext,
   reprobeCellSize,
   probeTerminalCapabilities,
   releaseOwedReplyHold,
@@ -58,7 +59,8 @@ import { waitForAttachSettle, isAttachSettled, getAttachStampMs } from "../../ut
 import { resumeNonBlockingStdout } from "../nonBlockingStdout.js";
 import { updateLastInteractionTime } from "../../bootstrap/state.js";
 import { endStartupQuiet } from "../../utils/accessibility/screenReader.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
+import { isDiscreteInput } from "../../components/teams/TeamsDialog.js";
 import { noteFullscreenObserved } from "../../utils/fullscreen.js";
 import { finishSelection, hasSelection, clearSelection } from "../selection.js";
 import { pixelToCellPoint } from "./AppContext.js";
@@ -66,15 +68,15 @@ import { readClipboard } from "../termio/osc.js";
 import { terminalDetector } from "../terminalColorSupport.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bzr73sfg.js:233477-233493 affinity
+//@ chunk-2avr6cej.js:233093-233109 affinity
 var CLICK_SLOP_CELLS = 1;
 var WINDOW_ACTIVATION_WINDOW_MS = 400;
-//@ chunk-bzr73sfg.js:233493-243685 fingerprint (2.1.88 match: App, 0.507)
+//@ chunk-2avr6cej.js:233109-243361 fingerprint (2.1.88 match: App, 0.507)
 /**
  * Ink 根组件（类组件 InternalApp）：提供尺寸、AppContext、StdinContext、终端焦点、时钟等上下文；原始模式引用计数（打开时写括号粘贴/主题报告/焦点事件/扩展键模式并启动能力探测，关闭时复位）；stdin readable → 输入读取器（feedInputReader/flushInputReader）→ processKeysInBatch；鼠标点击/多击/悬停/拖动选区；Ctrl+Z 挂起与 SIGCONT 恢复；tmux pane 与单元格尺寸重探测；渲染错误时显示 ErrorOverview。
  */
 let App; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bzr73sfg.js:233493", () => {
+deferInit("chunk-2avr6cej.js:233109", () => {
   App = class App extends PureComponent_default {
     static displayName = "InternalApp";
     static getDerivedStateFromError(error) {
@@ -153,11 +155,14 @@ deferInit("chunk-bzr73sfg.js:233493", () => {
                   value: this.props.onCursorDeclaration ?? noopCursorDeclaration,
                   children: jsxProd_default(InputNowContext.Provider, {
                     value: this.inputNow,
-                    children: this.state.error
-                      ? jsxProd_default(ErrorOverview, {
-                          error: this.state.error,
-                        })
-                      : this.props.children,
+                    children: jsxProd_default(terminalProbeContext.Provider, {
+                      value: this.props.subscribeFrames,
+                      children: this.state.error
+                        ? jsxProd_default(ErrorOverview, {
+                            error: this.state.error,
+                          })
+                        : this.props.children,
+                    }),
                   }),
                 }),
               }),
@@ -502,7 +507,7 @@ Read about how to prevent this error on https://github.com/vadimdemedes/ink/#isr
     };
   };
 });
-//@ chunk-bzr73sfg.js:243685-243839 affinity
+//@ chunk-2avr6cej.js:243361-243515 affinity
 /**
  * 输入项是否算用户操作（粘贴、按键、非悬停移动的鼠标），用于空闲计时与附着后静默期过滤。
  */
@@ -519,15 +524,11 @@ function isUserInput(item) {
       return item.name !== "mouse";
   }
 }
-//@ chunk-bzr73sfg.js:243954-244012 sole-consumer
+//@ chunk-2avr6cej.js:243630-243688 placement
 function isMouseButtonEvent(item) {
   return item.kind === "mouse" && (item.button & 32) === 0;
 }
-//@ chunk-bzr73sfg.js:244012-244065 sole-consumer
-function isDiscreteInput(item) {
-  return isKeyOrPaste(item) || isMouseButtonEvent(item) || item.kind === "focus";
-}
-//@ chunk-bzr73sfg.js:244065-245685 fingerprint (2.1.88 match: processKeysInBatch, 0.506)
+//@ chunk-2avr6cej.js:243741-245361 fingerprint (2.1.88 match: processKeysInBatch, 0.506)
 /**
  * 在 discreteUpdates 里处理一批输入：JetBrains 终端滚动 bug 修正、方向键连发检测；终端应答交给 querier；鼠标交给 handleMouseEvent（滚动模式下忽略按键）；焦点事件；粘贴 → dispatchPasteEvent；Ctrl+Z 挂起；滚轮 → dispatchWheelEvent；其余 → dispatchKeyboardEvent，若处理器要求按“ESC + 键”重读则拆开重放。同批多个离散输入之间 flushSyncWork，保证逐个生效。
  */
@@ -544,8 +545,8 @@ function processKeysInBatch(app, items, isReplay, _unused2) {
     app.emitJediTermScrollBug,
   );
   detectArrowBurst(app, filtered);
-  let soloKeypress = count(filtered, isUserInput) === 1;
-  let multipleDiscrete = count(filtered, isDiscreteInput) > 1;
+  let soloKeypress = countWhere(filtered, isUserInput) === 1;
+  let multipleDiscrete = countWhere(filtered, isDiscreteInput) > 1;
   let flushedOne = false;
   for (let item of filtered) {
     if (inQuietDrain && !isReplay && isUserInput(item) && !(item.kind === "key" && item.name === "left")) {
@@ -627,14 +628,14 @@ function processKeysInBatch(app, items, isReplay, _unused2) {
   }
   if (multipleDiscrete && flushedOne) reconcilerAlias.flushSyncWork();
 }
-//@ chunk-bzr73sfg.js:245685-245728 layout
+//@ chunk-2avr6cej.js:245361-245404 layout
 /**
  * SGR 鼠标按钮码表示“无按键移动”（运动位 32 且按钮=3）。
  */
 function isHoverMotion(button) {
   return (button & 32) !== 0 && (button & 3) === 3;
 }
-//@ chunk-bzr73sfg.js:245728-245859 layout
+//@ chunk-2avr6cej.js:245404-245535 layout
 /**
  * 像素鼠标模式下把像素坐标换算成格坐标（保留 fine 精确值）。
  */
@@ -646,7 +647,7 @@ function mouseToCells(app, mouse) {
     ...pixelToCellPoint(mouse.col, mouse.row, cellPixels),
   };
 }
-//@ chunk-bzr73sfg.js:245859-246045 layout
+//@ chunk-2avr6cej.js:245535-245721 layout
 function wheelKeyToCells(app, key) {
   let cellPixels = getTerminalProbeState().cellPixels;
   let { col, row } = key;
@@ -664,7 +665,7 @@ function wheelKeyToCells(app, key) {
     row: point.row,
   };
 }
-//@ chunk-bzr73sfg.js:246045-246114 layout
+//@ chunk-2avr6cej.js:245721-245790 layout
 function mouseMods(button) {
   return {
     shift: (button & 4) !== 0,
@@ -672,7 +673,7 @@ function mouseMods(button) {
     ctrl: (button & 16) !== 0,
   };
 }
-//@ chunk-bzr73sfg.js:246114-246607 layout
+//@ chunk-2avr6cej.js:245790-246283 layout
 /**
  * 右键/中键松开（与按下位置相同）时：Windows/WSL/Linux 右键有选区则清除选区（复制已发生），否则粘贴系统剪贴板（xterm.js 除外）；Linux 中键粘贴 PRIMARY 选区。
  */
@@ -705,7 +706,7 @@ function handleMiddleOrRightClickPaste(app, button, col, row) {
       if (clipboard) app.props.dispatchPasteEvent(clipboard);
     });
 }
-//@ chunk-bzr73sfg.js:246607-249193 fingerprint (2.1.88 match: handleMouseEvent, 0.731)
+//@ chunk-2avr6cej.js:246283-248869 fingerprint (2.1.88 match: handleMouseEvent, 0.731)
 /**
  * 处理一个鼠标事件：悬停（onHoverAt/onPointerHover）；按下时左键开始选区或计多击（双击选词、三击选行，窗口激活点击不计）；拖动更新选区；右/中键记下待粘贴；松开时结束选区，没有选区则当点击（onClickAt），点在超链接上且带 Cmd/Ctrl 时延迟 500ms 打开（多击取消）。
  */
@@ -841,10 +842,10 @@ function handleMouseEvent(app, mouse) {
   }
   app.props.onSelectionChange();
 }
-//@ chunk-bzr73sfg.js:249193-249209 sole-consumer
+//@ chunk-2avr6cej.js:248869-248885 sole-consumer
 var ARROW_BURST_WINDOW_MS = 100;
 var ARROW_BURST_THRESHOLD = 8;
-//@ chunk-bzr73sfg.js:249209-249748 sole-consumer
+//@ chunk-2avr6cej.js:248885-249424 sole-consumer
 /**
  * 100ms 内同方向无修饰上/下方向键累计 ≥8 个时发出 arrow-burst 事件（滚轮被终端翻译成方向键的情况）。
  */
@@ -885,4 +886,4 @@ function detectArrowBurst(app, items) {
     arrowWindow.length = 0;
   }
 }
-export { App };
+export { isMouseButtonEvent, App };

@@ -3,9 +3,9 @@
  *
  * 并入旧版已有路径：/loop skill。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/loop.ts
- * pieces: chunk-gbtb0mjv.js (14)
+ * pieces: chunk-x774raa9.js (14)
  * attribution: fingerprint 1, placement 13
  */
 import { isAgentPushNotificationEnabled } from "../../tools/PushNotificationTool/prompt.js";
@@ -50,29 +50,29 @@ import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { resetLoopState } from "../../utils/loop/loopWakeups.js";
 
-//@ chunk-gbtb0mjv.js:5877-5922 fingerprint (2.1.88 match: DEFAULT_INTERVAL, 0.659)
+//@ chunk-x774raa9.js:6162-6207 fingerprint (2.1.88 match: DEFAULT_INTERVAL, 0.659)
 /**
  * 延迟 require 的提示词模块。
  */
 var prompterModule = require("../../utils/loop/LOOP_FILE_DYNAMIC_SENTINEL.lazy.js");
 var DEFAULT_LOOP_INTERVAL = "10m";
-//@ chunk-gbtb0mjv.js:5922-6150 placement
+//@ chunk-x774raa9.js:6207-6435 placement
 function loopStopNotificationHint() {
   return isAgentPushNotificationEnabled()
     ? ` Before you stop, send a one-line outcome via ${PUSHNOTIFICATION} \u2014 the user may be away and waiting to hear it's done. Skip this if you're stopping because the user just told you to; they're already here.`
     : "";
 }
-//@ chunk-gbtb0mjv.js:6150-6256 placement
+//@ chunk-x774raa9.js:6435-6541 placement
 function loopOutcomeHint() {
   return ` Then ${loopOutcomeInstruction({
     briefMode: isBriefEnabled(),
   })} \u2014 a stopped loop has no next tick to surface it.`;
 }
-//@ chunk-gbtb0mjv.js:6256-6387 placement
+//@ chunk-x774raa9.js:6541-6672 placement
 var INTERVAL_SUFFIX_RE = /^\d+[smhd]$/;
 var EVERY_INTERVAL_RE =
   /^every\s+(\d+)\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days)\s*$/i;
-//@ chunk-gbtb0mjv.js:6387-6552 placement
+//@ chunk-x774raa9.js:6672-6837 placement
 function normalizeEveryInterval(match) {
   let amount = match[1];
   let lower = match[2].toLowerCase();
@@ -81,10 +81,10 @@ function normalizeEveryInterval(match) {
   if (lower.startsWith("d")) return `${amount}d`;
   return `${amount}m`;
 }
-//@ chunk-gbtb0mjv.js:6552-7456 placement
+//@ chunk-x774raa9.js:6837-7741 placement
 var LOOP_SKILL_PROMPT =
   "| Interval pattern      | Cron expression     | Notes                                    |\n|-----------------------|---------------------|------------------------------------------|\n| `Nm` where N \u2264 59   | `*/N * * * *`     | every N minutes                          |\n| `Nm` where N \u2265 60   | `0 */H * * *`     | round to hours (H = N/60, must divide 24)|\n| `Nh` where N \u2264 23   | `0 */N * * *`     | every N hours                            |\n| `Nd`                | `0 0 */N * *`     | every N days at midnight local           |\n| `Ns`                | treat as `ceil(N/60)m` | cron minimum granularity is 1 minute  |\n\n**If the interval doesn't cleanly divide its unit** (e.g. `7m` \u2192 `*/7 * * * *` gives uneven gaps at :56\u2192:00; `90m` \u2192 1.5h which cron can't express), pick the nearest clean interval and tell the user what you rounded to before scheduling.";
-//@ chunk-gbtb0mjv.js:7456-9308 placement
+//@ chunk-x774raa9.js:7741-9593 placement
 function loopCloudOffer() {
   if (
     !env.CLAUDE_CODE_REMOTE &&
@@ -115,7 +115,7 @@ If neither trigger condition was met: continue below.
 `;
   return "";
 }
-//@ chunk-gbtb0mjv.js:9308-9923 placement
+//@ chunk-x774raa9.js:9593-10208 placement
 /**
  * 满足条件（第一方订阅、策略允许远程会话与例程等）时返回云端定时任务的提示行。
  */
@@ -134,13 +134,13 @@ function cloudScheduleOfferLine() {
   }
   return "";
 }
-//@ chunk-gbtb0mjv.js:9923-10031 placement
+//@ chunk-x774raa9.js:10208-10316 placement
 function monitorArmInstruction() {
   return isMonitorPersistentAllowed()
     ? `arm one now with \`timeout_ms: ${monitorMaxTimeoutMs()}\``
     : "arm one now with `persistent: true`";
 }
-//@ chunk-gbtb0mjv.js:10031-10420 placement
+//@ chunk-x774raa9.js:10316-10705 placement
 /**
  * 生成监视器过期后如何重新布置的说明。
  */
@@ -151,7 +151,7 @@ function monitorRearmInstruction(cadenceWord) {
     ? `Arm once; on later iterations call ${TASK_LIST_TOOL_NAME} first and skip this step if a monitor is already running.`
     : `Arm once; on later ticks call ${TASK_LIST_TOOL_NAME} first and skip if a monitor is already running.`;
 }
-//@ chunk-gbtb0mjv.js:10420-10984 placement
+//@ chunk-x774raa9.js:10705-11269 placement
 /**
  * 生成 loop 技能第 3、4 步的说明：布置前状态、确认与决策段落。
  */
@@ -175,7 +175,7 @@ function buildLoopSteps34({ preArmStatus, confirmBody, decideBody }) {
     rearmUpdate: (nextStep) => `${nextStep}, then ${briefUpdateClause}`,
   };
 }
-//@ chunk-gbtb0mjv.js:10984-16070 placement
+//@ chunk-x774raa9.js:11269-16355 placement
 /**
  * /loop skill 中自定节奏（动态间隔）的循环提示词。
  */
@@ -246,7 +246,7 @@ ${dynamicInstructions}
 
 ${prompt}`;
 }
-//@ chunk-gbtb0mjv.js:16070-21459 placement
+//@ chunk-x774raa9.js:16355-21744 placement
 /**
  * /loop skill 中基于文件的循环提示词。
  */
@@ -330,7 +330,7 @@ ${tasksHeading}
 
 ${instructions}`;
 }
-//@ chunk-gbtb0mjv.js:21459-22666 placement
+//@ chunk-x774raa9.js:21744-22951 placement
 function registerLoopSkill() {
   registerBundledSkill({
     name: LOOP,

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。/output-style 设置输出风格。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ehcpf9z.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nrr9gtx9.js (2)
  * attribution: placement 2
  */
 import {
@@ -28,10 +28,10 @@ import { logEvent } from "../../services/analytics/index.js";
 import { markCustomSetting } from "../../components/Settings/Config.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
 
-//@ chunk-1ehcpf9z.js:12942-13038 placement
+//@ chunk-nrr9gtx9.js:14091-14187 placement
 var _ = "Couldn't save the output style (detail withheld on this connection).";
 var CUSTOM_STYLE_LABEL = "a custom style";
-//@ chunk-1ehcpf9z.js:13038-14349 placement
+//@ chunk-nrr9gtx9.js:14187-15499 placement
 /**
  * /output-style 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */

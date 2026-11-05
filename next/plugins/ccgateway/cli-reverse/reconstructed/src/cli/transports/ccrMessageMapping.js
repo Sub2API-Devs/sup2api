@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：消息映射到 CCR（云端会话）格式：媒体、工具结果与转录条目。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f25sswmp.js (15)
- * attribution: placement 15
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vr5v4gzz.js (16)
+ * attribution: placement 14, layout 2
  */
 import { RawJson } from "../../bridge/readReceipts.js";
 import { isPlainObject as isPlainObject_2 } from "../../utils/isPlainObject.js";
@@ -15,9 +15,9 @@ import { hasImageBlock } from "../../utils/toolResultStorage.js";
 import { isNonConversationMessage } from "../../bootstrap/sessionSlices.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-f25sswmp.js:11201-11300 placement
+//@ chunk-vr5v4gzz.js:11234-11333 placement
 var TOOL_RESULT_FIELD_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-f25sswmp.js:11201", () => {
+deferInit("chunk-vr5v4gzz.js:11234", () => {
   TOOL_RESULT_FIELD_NAMES = new Set([
     "content",
     "_meta",
@@ -26,7 +26,7 @@ deferInit("chunk-f25sswmp.js:11201", () => {
     "resourceLinks",
   ]);
 });
-//@ chunk-f25sswmp.js:11300-11579 placement
+//@ chunk-vr5v4gzz.js:11333-11612 placement
 function stripInlineMediaBase64(value, flags) {
   if (flags.media !== true) return value;
   if (value instanceof RawJson) {
@@ -51,7 +51,51 @@ function stripInlineMediaBase64(value, flags) {
     };
   return value;
 }
-//@ chunk-f25sswmp.js:11579-11750 placement
+//@ chunk-vr5v4gzz.js:11612-11834 layout
+function withholdFileBodiesDeep(input) {
+  if (input instanceof RawJson) {
+    let json = input.toJSON();
+    let mapped = withholdFileBodiesDeep(json);
+    return mapped === json ? input : RawJson.of(mapped);
+  }
+  if (!isPlainObject_2(input)) return input;
+  let next = withholdFileBodies(input);
+  for (let key of ["content", "structuredContent"]) {
+    let value = next[key];
+    let mappedValue = isPlainObject_2(value) ? withholdFileBodies(value) : value;
+    if (mappedValue !== value)
+      next = {
+        ...next,
+        [key]: mappedValue,
+      };
+  }
+  return next;
+}
+//@ chunk-vr5v4gzz.js:11834-12202 layout
+function withholdFileBodies(payload) {
+  let withheld = {};
+  if (
+    typeof payload.originalFile === "string" &&
+    payload.originalFile !== "" &&
+    payload.originalFile !== payload.content
+  )
+    withheld.originalFile = null;
+  if (
+    payload.type === "update" &&
+    Array.isArray(payload.structuredPatch) &&
+    payload.structuredPatch.length > 0
+  )
+    withheld.structuredPatch = [];
+  for (let key of ["original_file", "updated_file"])
+    if (typeof payload[key] === "string" && payload[key] !== "") withheld[key] = "";
+  return Object.keys(withheld).length > 0
+    ? {
+        ...payload,
+        ...withheld,
+      }
+    : payload;
+}
+//@ chunk-vr5v4gzz.js:12202-12373 placement
 function dedupeMcpImageData(value, message, flags) {
   if (flags.mcp_images !== true) return value;
   let map = (value) => mapToolResultImageData(value, message, (data, other) => (data === other ? "" : data));
@@ -60,14 +104,14 @@ function dedupeMcpImageData(value, message, flags) {
   let mapped = map(json);
   return mapped === json ? value : RawJson.of(mapped);
 }
-//@ chunk-f25sswmp.js:11750-11801 placement
+//@ chunk-vr5v4gzz.js:12373-12424 placement
 /**
  * 把工具结果里的图片数据映射成标准形状，保留已有文本、替换图片。
  */
 function mapToolResultImages(toolUseResult, message) {
   return mapToolResultImageData(toolUseResult, message, (data, other) => (data === "" ? other : data));
 }
-//@ chunk-f25sswmp.js:11801-11941 placement
+//@ chunk-vr5v4gzz.js:12424-12564 placement
 function normalizeUserToolUseResult(payload) {
   if (!isPlainObject_2(payload) || payload.type !== "user") return payload;
   let result = mapToolResultImages(payload.toolUseResult, payload.message);
@@ -78,7 +122,7 @@ function normalizeUserToolUseResult(payload) {
         toolUseResult: result,
       };
 }
-//@ chunk-f25sswmp.js:11941-12447 placement
+//@ chunk-vr5v4gzz.js:12564-13070 placement
 /**
  * 当工具结果内容与原 tool_result 块一一对应时，用回调逐个变换其中 image 块的 base64 数据；无变化时返回原对象。
  */
@@ -115,19 +159,19 @@ function mapToolResultImageData(toolUseResult, message, choose) {
       }
     : mapped;
 }
-//@ chunk-f25sswmp.js:12447-12506 placement
+//@ chunk-vr5v4gzz.js:13070-13129 placement
 var SDK_MESSAGE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-f25sswmp.js:12447", () => {
+deferInit("chunk-vr5v4gzz.js:13070", () => {
   SDK_MESSAGE_TYPES = new Set(["user", "assistant", "attachment", "system"]);
 });
-//@ chunk-f25sswmp.js:12506-12576 placement
+//@ chunk-vr5v4gzz.js:13129-13199 placement
 function isTranscriptMessage(value) {
   return isPlainObject_2(value) && typeof value.type === "string" && SDK_MESSAGE_TYPES.has(value.type);
 }
-//@ chunk-f25sswmp.js:12576-12671 placement
+//@ chunk-vr5v4gzz.js:13199-13294 placement
 var BASE_MESSAGE_META_FIELDS = ["cwd", "gitBranch", "version", "userType", "entrypoint", "promptId"];
 var MESSAGE_META_FIELDS_WITH_REQUEST_ID = [...BASE_MESSAGE_META_FIELDS, "requestId"];
-//@ chunk-f25sswmp.js:12671-12776 placement
+//@ chunk-vr5v4gzz.js:13294-13399 placement
 function isAssistantWithMessageId(message) {
   let message_2 = message.message;
   return (
@@ -137,7 +181,7 @@ function isAssistantWithMessageId(message) {
     message_2.id.length > 0
   );
 }
-//@ chunk-f25sswmp.js:12776-12907 placement
+//@ chunk-vr5v4gzz.js:13399-13530 placement
 function stripTranscriptOnlyFields(message, keepsRequestId) {
   if (!isTranscriptMessage(message)) return message;
   let fields =
@@ -154,7 +198,7 @@ function stripTranscriptOnlyFields(message, keepsRequestId) {
     }
   return copy ?? message;
 }
-//@ chunk-f25sswmp.js:12907-13043 placement
+//@ chunk-vr5v4gzz.js:13530-13666 placement
 function fillMissingTranscriptFields(payload, fields) {
   if (!isTranscriptMessage(payload)) return payload;
   let copy;
@@ -167,7 +211,7 @@ function fillMissingTranscriptFields(payload, fields) {
     }
   return copy ?? payload;
 }
-//@ chunk-f25sswmp.js:13043-14106 placement
+//@ chunk-vr5v4gzz.js:13666-14729 placement
 /**
  * 扫描消息数组，找出从未完成 thinking 恢复（resumedFromIncompleteThinking）的 assistant 行，向前、向后合并同一 message.id 的片段（跳过中间的无关行），返回每段的 {fromIdx, toIdx}。
  */
@@ -257,22 +301,18 @@ function findResumedThinkingRanges(messages) {
   }
   return ranges;
 }
-//@ chunk-f25sswmp.js:14106-14137 placement
+//@ chunk-vr5v4gzz.js:14729-14760 placement
 var SHA256_DIGEST_SUFFIX_RE = /@sha256:[0-9a-f]{64}$/;
-//@ chunk-f25sswmp.js:14137-14170 placement
-function hasPinnedDigest(value) {
-  return SHA256_DIGEST_SUFFIX_RE.test(value);
-}
 export {
-  mapToolResultImages,
   isTranscriptMessage,
   fillMissingTranscriptFields,
   findResumedThinkingRanges,
+  mapToolResultImages,
+  normalizeUserToolUseResult,
   isAssistantWithMessageId,
+  withholdFileBodiesDeep,
   stripInlineMediaBase64,
   dedupeMcpImageData,
   stripTranscriptOnlyFields,
-  normalizeUserToolUseResult,
-  hasPinnedDigest,
   SHA256_DIGEST_SUFFIX_RE,
 };

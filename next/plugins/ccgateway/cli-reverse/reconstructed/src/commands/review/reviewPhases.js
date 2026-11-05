@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：审查各阶段（收集 diff、发现、验证、汇报）提示词与等级表
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hantmvxa.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ne2890fx.js (4)
  * attribution: placement 4
  */
 import { plural } from "../../utils/stringUtils.js";
@@ -30,11 +30,11 @@ import {
 import { AGENT } from "../../tools/AgentTool/constants.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hantmvxa.js:58017-58106 placement
+//@ chunk-ne2890fx.js:58191-58280 placement
 function findingCapPhrase(cap) {
   return cap === "all" ? "**every finding**" : `at most **${cap} ${plural(cap, "finding")}**`;
 }
-//@ chunk-hantmvxa.js:58106-63982 placement
+//@ chunk-ne2890fx.js:58280-64156 placement
 /**
  * 低 effort 评审提示词：输出段落、低 effort 单次 diff、报告工具不可用时的说明与单次扫描提示。
  */
@@ -45,7 +45,7 @@ var buildLowEffortInlinePrompt;
 var REVIEW_ANGLES_BLOCK;
 var REPORT_FINDINGS_UNAVAILABLE_NOTE;
 var SINGLE_PASS_NOTICE;
-deferInit("chunk-hantmvxa.js:58106", () => {
+deferInit("chunk-ne2890fx.js:58280", () => {
   buildReviewOutputSection = (cap) => `## Output
 
 Return findings as a JSON array ${cap === "all" ? "with one object for every finding that survives, no maximum" : `of at most ${cap} ${plural(cap, "object")}`}:
@@ -185,7 +185,7 @@ the ${AGENT} tool, not the full multi-agent fan-out, so whoever reads
 it isn't misled about what actually ran.
 `;
 });
-//@ chunk-hantmvxa.js:63982-64879 placement
+//@ chunk-ne2890fx.js:64156-65053 placement
 function composeReviewPhases({ tag, leadIn, angleCount, angles, cap, output, sweepFocus }) {
   let sweepSection = sweepFocus
     ? `
@@ -216,7 +216,7 @@ Re-check each remaining candidate yourself against the diff before keeping it.
 ${sweepSection}
 ${output(cap)}${SINGLE_PASS_NOTICE}`;
 }
-//@ chunk-hantmvxa.js:64879-68578 placement
+//@ chunk-ne2890fx.js:65053-68752 placement
 /**
  * 高/xhigh/max effort 评审提示词构造器与报告工具不可用时的说明。
  */
@@ -226,7 +226,7 @@ var REVIEW_ANGLES_BLOCK_HIGH;
 var makeEffortPromptBuilder;
 var buildXhighEffortPrompt;
 var buildMaxEffortPrompt;
-deferInit("chunk-hantmvxa.js:64879", () => {
+deferInit("chunk-ne2890fx.js:65053", () => {
   buildMediumReviewPrompt = (outputBuilder, canSpawn = true, cap = 8) => {
     if (!canSpawn)
       return composeReviewPhases({

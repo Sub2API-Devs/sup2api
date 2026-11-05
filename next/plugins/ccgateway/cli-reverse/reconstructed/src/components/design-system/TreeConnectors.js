@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：树形连接线组件（Tree/Node/Group）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3n80spb1.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xq6cmpjt.js (10)
  * attribution: placement 10
  */
 import {
@@ -26,12 +26,12 @@ import { NoSelect } from "../../ink/components/Input.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3n80spb1.js:421-425 placement
+//@ chunk-xq6cmpjt.js:421-425 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3n80spb1.js:421", () => {
+deferInit("chunk-xq6cmpjt.js:421", () => {
   init_react_production();
 });
-//@ chunk-3n80spb1.js:425-507 placement
+//@ chunk-xq6cmpjt.js:425-507 placement
 function _(connector, key) {
   return jsxProd_default(
     Box,
@@ -45,9 +45,9 @@ function _(connector, key) {
     key,
   );
 }
-//@ chunk-3n80spb1.js:507-567 placement
+//@ chunk-xq6cmpjt.js:507-567 placement
 var TREE_CONNECTOR_GLYPHS; // deferred: uses ROUNDED_BOX_CORNERS (../../../vendor/chart.js/dist/chart.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-3n80spb1.js:507", () => {
+deferInit("chunk-xq6cmpjt.js:507", () => {
   TREE_CONNECTOR_GLYPHS = {
     branch: TREE_GLYPHS.branch,
     last: TREE_GLYPHS.last,
@@ -55,7 +55,7 @@ deferInit("chunk-3n80spb1.js:507", () => {
     space: "",
   };
 });
-//@ chunk-3n80spb1.js:567-970 placement
+//@ chunk-xq6cmpjt.js:567-970 placement
 function TreeConnectorsRow(props) {
   let $ = useMemoCache(7);
   let { connectors, children } = props;
@@ -95,17 +95,17 @@ function TreeConnectorsRow(props) {
   } else row = $[6];
   return row;
 }
-//@ chunk-3n80spb1.js:970-1022 placement
+//@ chunk-xq6cmpjt.js:970-1022 placement
 var LIST_CONTEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var IS_LAST_ITEM_CONTEXT;
-deferInit("chunk-3n80spb1.js:970", () => {
+deferInit("chunk-xq6cmpjt.js:970", () => {
   LIST_CONTEXT = createContext({
     variant: "outline",
     ancestors: [],
   });
   IS_LAST_ITEM_CONTEXT = createContext(true);
 });
-//@ chunk-3n80spb1.js:1022-1135 placement
+//@ chunk-xq6cmpjt.js:1022-1135 placement
 function wrapWithLastChildFlag(children, isLastParent = true) {
   let items = childrenExport.toArray(children);
   return items.map((children, index) =>
@@ -119,7 +119,7 @@ function wrapWithLastChildFlag(children, isLastParent = true) {
     ),
   );
 }
-//@ chunk-3n80spb1.js:1135-1564 placement
+//@ chunk-xq6cmpjt.js:1135-1564 placement
 function Tree(props) {
   let $ = useMemoCache(10);
   let { children, variant } = props;
@@ -165,7 +165,7 @@ function Tree(props) {
   } else tree = $[9];
   return tree;
 }
-//@ chunk-3n80spb1.js:1564-2386 placement
+//@ chunk-xq6cmpjt.js:1564-2386 placement
 function TreeNode(props) {
   let $ = useMemoCache(19);
   let { label, children, dimColor, color } = props;
@@ -242,7 +242,7 @@ function TreeNode(props) {
   } else column = $[18];
   return column;
 }
-//@ chunk-3n80spb1.js:2386-2509 placement
+//@ chunk-xq6cmpjt.js:2386-2509 placement
 function TreeGroup(props) {
   let $ = useMemoCache(3);
   let { children } = props;
@@ -256,9 +256,9 @@ function TreeGroup(props) {
   } else items = $[2];
   return items;
 }
-//@ chunk-3n80spb1.js:2509-2550 placement
+//@ chunk-xq6cmpjt.js:2509-2550 placement
 var TreeConnectors; // deferred: uses Tree of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-3n80spb1.js:2509", () => {
+deferInit("chunk-xq6cmpjt.js:2509", () => {
   TreeConnectors = Object.assign(Tree, {
     Node: TreeNode,
     Group: TreeGroup,

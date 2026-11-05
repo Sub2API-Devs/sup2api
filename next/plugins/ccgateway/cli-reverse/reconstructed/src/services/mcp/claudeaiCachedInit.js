@@ -3,19 +3,21 @@
  *
  * 2.1.316 新增：claude.ai MCP 缓存的 initialize/discover 结果，本地应答握手。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8t8n4kdh.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sywnjtqb.js (10)
  * attribution: placement 10
  */
 import { isStatelessSkipInitEnabled, discoverProjectionPrior } from "./mcpClientCapabilities.js";
 import {
   InitializeResultSchema,
-  SUPPORTED_PROTOCOL_VERSIONS as SUPPORTED_PROTOCOL_VERSIONS_2,
   DiscoverResultSchema,
-  PARSE_ERROR,
 } from "../../../vendor/@modelcontextprotocol/core/dist/auth-CUe6YdwF.mjs";
 import { logForDebugging } from "../../utils/debug.js";
+import {
+  SUPPORTED_PROTOCOL_VERSIONS as SUPPORTED_PROTOCOL_VERSIONS_2,
+  PARSE_ERROR,
+} from "../../../vendor/@modelcontextprotocol/core/dist/schemas-lGLjBX8n.cjs";
 import { sanitizeCallMark, MCP_PROTOCOL_NEXT } from "./mcpCallConstants.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { looseObject, literal, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
@@ -25,19 +27,19 @@ import {
 } from "../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-8t8n4kdh.js:43097-43170 placement
+//@ chunk-sywnjtqb.js:43115-43188 placement
 /**
  * isStatelessClaudeAiProxy：claudeai-proxy 配置 stateless=true 且开关打开。
  */
-function isStatelessClaudeAiProxy(serverRef) {
+function isStatelessClaudeAiProxy_2(serverRef) {
   return serverRef.type === "claudeai-proxy" && serverRef.stateless === true && isStatelessSkipInitEnabled();
 }
-//@ chunk-8t8n4kdh.js:43170-43679 placement
+//@ chunk-sywnjtqb.js:43188-43697 placement
 /**
  * getCachedInitializeResult：stateless 代理的 cached_init_response 校验（InitializeResult、协议版本受支持），否则真实 initialize。
  */
-function getCachedInitializeResult(serverRef) {
-  if (!isStatelessClaudeAiProxy(serverRef) || serverRef.type !== "claudeai-proxy") return;
+function getCachedInitializeResult_2(serverRef) {
+  if (!isStatelessClaudeAiProxy_2(serverRef) || serverRef.type !== "claudeai-proxy") return;
   if (serverRef.cachedInitResponse == null) return;
   let parsed = InitializeResultSchema.safeParse(serverRef.cachedInitResponse);
   if (!parsed.success) {
@@ -54,12 +56,12 @@ function getCachedInitializeResult(serverRef) {
   }
   return parsed.data;
 }
-//@ chunk-8t8n4kdh.js:43679-43743 placement
+//@ chunk-sywnjtqb.js:43697-43761 placement
 /**
  * 缓存的 discover 结果 schema（cacheScope=public、ttlMs 为正）。
  */
 var cachedDiscoverResponseSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-8t8n4kdh.js:43679", () => {
+deferInit("chunk-sywnjtqb.js:43697", () => {
   cachedDiscoverResponseSchema = DoctorLazy(() =>
     looseObject({
       cacheScope: literal("public"),
@@ -67,7 +69,7 @@ deferInit("chunk-8t8n4kdh.js:43679", () => {
     }),
   );
 });
-//@ chunk-8t8n4kdh.js:43743-44498 placement
+//@ chunk-sywnjtqb.js:43761-44516 placement
 /**
  * getCachedDiscoverResult：cached_discover_response 校验（DiscoverResult、含 2026-07-28、cacheScope public 且 ttlMs>0）。
  */
@@ -94,12 +96,12 @@ function getCachedDiscoverResult(serverRef) {
   }
   return parsed.data;
 }
-//@ chunk-8t8n4kdh.js:44498-44747 placement
+//@ chunk-sywnjtqb.js:44516-44765 placement
 /**
  * getLocalDiscoverAnswer：stateless 代理 discoverSupport=legacy → 本地回 method-not-found；supported 且开关为 all → 本地回缓存的 DiscoverResult。
  */
 function getLocalDiscoverAnswer(serverRef) {
-  if (!isStatelessClaudeAiProxy(serverRef) || serverRef.type !== "claudeai-proxy") return;
+  if (!isStatelessClaudeAiProxy_2(serverRef) || serverRef.type !== "claudeai-proxy") return;
   let projectionPrior = discoverProjectionPrior();
   if (projectionPrior === "off") return;
   if (serverRef.discoverSupport === "legacy") return "method-not-found";
@@ -111,11 +113,11 @@ function getLocalDiscoverAnswer(serverRef) {
         result: cachedDiscoverResult,
       };
 }
-//@ chunk-8t8n4kdh.js:44747-45268 placement
+//@ chunk-sywnjtqb.js:44765-45288 placement
 /**
  * answerHandshakeLocally：包装 transport.send，在本地应答 server/discover（结果或 -32601）与 initialize（缓存结果），吞掉 notifications/initialized，不发到线上。
  */
-function answerHandshakeLocally(transport, cachedInitialize, discoverAnswer) {
+function answerHandshakeLocally_2(transport, cachedInitialize, discoverAnswer) {
   let sendBase = transport.send.bind(transport);
   transport.send = async (message, options) => {
     if (
@@ -154,11 +156,11 @@ function answerHandshakeLocally(transport, cachedInitialize, discoverAnswer) {
     return sendBase(message, options);
   };
 }
-//@ chunk-8t8n4kdh.js:45268-45557 placement
+//@ chunk-sywnjtqb.js:45288-45577 placement
 /**
  * answerGetStreamLocally：GET 通知流请求本地回 405（stateless 或禁用 GET 流的连接器）。
  */
-function answerGetStreamLocally(originalFetch, url) {
+function answerGetStreamLocally_2(originalFetch, url) {
   let href = new URL(url).href;
   return async (input, init) => {
     if ((init?.method ?? "GET").toUpperCase() !== "GET") return originalFetch(input, init);
@@ -172,12 +174,12 @@ function answerGetStreamLocally(originalFetch, url) {
     return originalFetch(input, init);
   };
 }
-//@ chunk-8t8n4kdh.js:45557-45629 placement
+//@ chunk-sywnjtqb.js:45577-45649 placement
 function incrementCallsInProgress(transportErrorState) {
   if (transportErrorState !== undefined)
     transportErrorState.callsInProgress = (transportErrorState.callsInProgress ?? 0) + 1;
 }
-//@ chunk-8t8n4kdh.js:45629-45782 placement
+//@ chunk-sywnjtqb.js:45649-45802 placement
 function decrementCallsInProgress(transportErrorState) {
   if (transportErrorState === undefined) return;
   transportErrorState.callsInProgress = (transportErrorState.callsInProgress ?? 1) - 1;
@@ -187,7 +189,7 @@ function decrementCallsInProgress(transportErrorState) {
     onCallsIdle?.();
   }
 }
-//@ chunk-8t8n4kdh.js:45782-45856 placement
+//@ chunk-sywnjtqb.js:45802-45876 placement
 function trackCallInProgress(transportErrorState) {
   incrementCallsInProgress(transportErrorState);
   let isTracked = true;
@@ -202,11 +204,11 @@ function trackCallInProgress(transportErrorState) {
 }
 export {
   getCachedDiscoverResult,
-  isStatelessClaudeAiProxy,
-  answerGetStreamLocally,
-  getCachedInitializeResult,
+  isStatelessClaudeAiProxy_2,
+  answerGetStreamLocally_2,
+  getCachedInitializeResult_2,
   getLocalDiscoverAnswer,
-  answerHandshakeLocally,
+  answerHandshakeLocally_2,
   trackCallInProgress,
   incrementCallsInProgress,
   decrementCallsInProgress,

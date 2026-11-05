@@ -3,9 +3,9 @@
  *
  * 转录行隐藏（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-z8ysw2qd.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q93abe8z.js (1), chunk-t3ztrybq.js (15)
  * attribution: placement 16
  */
 import { hasRecordedText } from "./telemetry/thirdPartyEventRecords.js";
@@ -23,19 +23,19 @@ import {
 } from "../services/remoteTools/classifierContext.js";
 import { jsonParseRaw, jsonStringify } from "./slowOperations.js";
 import { isTextBlock as isTextBlock_2 } from "./messages/textLineCount.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { coworkMemoryTexts, unwrapSystemReminder } from "./messages.js";
 
-//@ chunk-z8ysw2qd.js:542-576 placement
+//@ chunk-q93abe8z.js:228-262 placement
 /**
  * 该宿主是否记录了需扣留的文本。
  */
 function hasRecordedTextForHost(host) {
   return hasRecordedText(host) || false;
 }
-//@ chunk-z8ysw2qd.js:576-647 placement
+//@ chunk-t3ztrybq.js:542-613 placement
 var WITHHELD_SUMMARY_PLACEHOLDER = "[conversation summary withheld: it may include account memory]";
-//@ chunk-z8ysw2qd.js:647-800 placement
+//@ chunk-t3ztrybq.js:613-767 placement
 /**
  * 导出转录：去掉账号记忆与不持久化的消息，隐藏压缩摘要。
  */
@@ -50,11 +50,11 @@ function withholdForExport(messages, withholdOptions) {
     isCompactSummaryLike(message, shouldWithhold) ? withheldPlaceholder(message) : message,
   );
 }
-//@ chunk-z8ysw2qd.js:800-850 placement
+//@ chunk-t3ztrybq.js:767-817 placement
 function shouldWithholdTranscript(messages, { host }) {
   return hasRecordedTextForHost(host) || messages.some(isLaptopMemoryAttachment);
 }
-//@ chunk-z8ysw2qd.js:850-992 placement
+//@ chunk-t3ztrybq.js:817-959 placement
 /**
  * 是否为压缩摘要或压缩后钩子内容。
  */
@@ -67,7 +67,7 @@ function isCompactSummaryLike(msg, withholdOptions) {
     isPostCompactHookContent(message?.content)
   );
 }
-//@ chunk-z8ysw2qd.js:992-1296 placement
+//@ chunk-t3ztrybq.js:959-1263 placement
 /**
  * 把消息内容替换为隐藏占位并去掉额外字段。
  */
@@ -99,7 +99,7 @@ function withheldPlaceholder(msg) {
     },
   };
 }
-//@ chunk-z8ysw2qd.js:1296-2135 placement
+//@ chunk-t3ztrybq.js:1263-2102 placement
 function withholdTranscriptLine(jsonl, withholdOptions) {
   if (!shouldWithholdTranscript([], withholdOptions))
     return {
@@ -179,7 +179,7 @@ function withholdTranscriptLine(jsonl, withholdOptions) {
     hits: hitCount,
   };
 }
-//@ chunk-z8ysw2qd.js:2135-2219 placement
+//@ chunk-t3ztrybq.js:2102-2186 placement
 var WITHHOLD_MARKERS = [
   '"isCompactSummary"',
   '"repeatsCompactSummary"',
@@ -187,7 +187,7 @@ var WITHHOLD_MARKERS = [
   COMPACT_CONTINUATION_PREAMBLE,
 ];
 var API_REQUEST_BLOB = "api-request-blob";
-//@ chunk-z8ysw2qd.js:2219-2566 placement
+//@ chunk-t3ztrybq.js:2186-2533 placement
 /**
  * 替换含压缩续接前言的用户消息内容。
  */
@@ -227,23 +227,23 @@ function withholdContinuationPreamble(msg) {
       }
     : undefined;
 }
-//@ chunk-z8ysw2qd.js:2566-2636 placement
+//@ chunk-t3ztrybq.js:2533-2603 placement
 function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-z8ysw2qd.js:2636-3100 placement
+//@ chunk-t3ztrybq.js:2603-3067 placement
 /**
  * 从请求消息中去掉笔记本记忆文本，统计替换次数。
  */
 function removeLaptopMemoryText(a, messages, replacedTexts = []) {
   let scrubState = {
-    keys: uniq(
+    keys: normalizeCaseForComparison_2(
       a
         .filter((memoryText) => memoryText.trim() !== "")
         .flatMap(coworkMemoryTexts)
         .filter((memoryText) => !WITHHELD_SUMMARY_PLACEHOLDER.includes(memoryText)),
     ).sort((firstText, secondText) => secondText.length - firstText.length),
-    replaced: uniq(
+    replaced: normalizeCaseForComparison_2(
       replacedTexts
         .map((replacedText) => replacedText.trim())
         .filter(
@@ -272,7 +272,7 @@ function removeLaptopMemoryText(a, messages, replacedTexts = []) {
     hits: scrubState.hits,
   };
 }
-//@ chunk-z8ysw2qd.js:3100-3365 placement
+//@ chunk-t3ztrybq.js:3067-3332 placement
 /**
  * 去掉内容中的记忆文本（空则删除）。
  */
@@ -304,15 +304,15 @@ function scrubContent(text, scrubState) {
   });
   return flattened.length === 0 ? undefined : flattened;
 }
-//@ chunk-z8ysw2qd.js:3365-3440 placement
+//@ chunk-t3ztrybq.js:3332-3407 placement
 function isTextBlock(block) {
   return block.type === "text" && "text" in block && typeof block.text === "string";
 }
-//@ chunk-z8ysw2qd.js:3440-3484 placement
+//@ chunk-t3ztrybq.js:3407-3451 placement
 function isToolResultBlock(block) {
   return block.type === "tool_result";
 }
-//@ chunk-z8ysw2qd.js:3484-3757 placement
+//@ chunk-t3ztrybq.js:3451-3724 placement
 /**
  * 反复删除文本中的记忆片段或替换为占位。
  */
@@ -330,8 +330,8 @@ function scrubText(text, scrubState) {
     current = parts.join(matchedText === found ? WITHHELD_SUMMARY_PLACEHOLDER : "");
   }
 }
-//@ chunk-z8ysw2qd.js:3757-3797 placement
+//@ chunk-t3ztrybq.js:3724-3764 placement
 function isBlankReminder(text) {
   return unwrapSystemReminder(text).trim() === "";
 }
-export { withholdForExport, withholdTranscriptLine, removeLaptopMemoryText, hasRecordedTextForHost };
+export { withholdForExport, withholdTranscriptLine, hasRecordedTextForHost, removeLaptopMemoryText };

@@ -3,9 +3,9 @@
  *
  * WIF 凭据解析、锁与刷新（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3wydcdvj.js (22)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gjbr82c9.js (22)
  * attribution: placement 22
  */
 import { dirname } from "path";
@@ -49,7 +49,7 @@ import { federationCacheDir } from "../../utils/subprocessEnv.js";
 import { TokenCache } from "../../../vendor/@anthropic-ai/sdk/lib/credentials/token-cache.mjs";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3wydcdvj.js:14703-14743 placement
+//@ chunk-gjbr82c9.js:14703-14743 placement
 /**
  * WIF 锁的超时秒数（fail-closed 5 秒 / fail-open 15 秒）。
  */
@@ -57,21 +57,21 @@ var WIF_LOCK_TIMEOUT_S = {
   "fail-closed": 5,
   "fail-open": 15,
 };
-//@ chunk-3wydcdvj.js:14743-14788 placement
+//@ chunk-gjbr82c9.js:14743-14788 placement
 /**
  * 包上 WIF 凭据锁后执行提供方逻辑。
  */
 function withWifLock(run, lockDir, onLockFailure) {
   return (signal) => acquireWifCredentialsLock(lockDir, () => run(signal), onLockFailure);
 }
-//@ chunk-3wydcdvj.js:14788-14838 placement
+//@ chunk-gjbr82c9.js:14788-14838 placement
 /**
  * 以文件所在目录为锁执行 WIF 逻辑。
  */
 function withWifLockForDir(credentialDir, refresh) {
   return acquireWifCredentialsLock(dirname(credentialDir), refresh, "fail-closed");
 }
-//@ chunk-3wydcdvj.js:14838-15282 placement
+//@ chunk-gjbr82c9.js:14838-15282 placement
 async function acquireWifCredentialsLock(path, refresh, mode) {
   let maxRetries = WIF_LOCK_TIMEOUT_S[mode];
   let release;
@@ -101,7 +101,7 @@ async function acquireWifCredentialsLock(path, refresh, mode) {
     }
   }
 }
-//@ chunk-3wydcdvj.js:15282-15815 placement
+//@ chunk-gjbr82c9.js:15282-15815 placement
 /**
  * 获取 WIF 凭证文件锁，被占用时重试（随机等待），超过次数报错并记遥测。
  */
@@ -138,7 +138,7 @@ async function acquireLockWithRetry(path, maxRetries, mode) {
       await sleep(1000 + Math.random() * 1000);
     }
 }
-//@ chunk-3wydcdvj.js:15815-16102 placement
+//@ chunk-gjbr82c9.js:15815-16102 placement
 class WifCredentialState {
   generation = 0;
   credentialsPromise = undefined;
@@ -153,35 +153,35 @@ class WifCredentialState {
     this.failedAccessTokens.clear();
   }
 }
-//@ chunk-3wydcdvj.js:16102-16126 placement
+//@ chunk-gjbr82c9.js:16102-16126 placement
 /**
  * 按宿主保存的 WIF 凭据状态。
  */
 var wifCredentialState; // deferred: uses WifCredentialState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-3wydcdvj.js:16102", () => {
+deferInit("chunk-gjbr82c9.js:16102", () => {
   wifCredentialState = new HostScoped(() => new WifCredentialState());
 });
-//@ chunk-3wydcdvj.js:16126-16162 placement
+//@ chunk-gjbr82c9.js:16126-16162 placement
 /**
  * 取当前宿主的 WIF 凭据状态。
  */
 function getWifCredentialState() {
   return wifCredentialState.of(getRootSession().host);
 }
-//@ chunk-3wydcdvj.js:16162-16172 placement
+//@ chunk-gjbr82c9.js:16162-16172 placement
 /**
  * 记录失败令牌的上限（20）。
  */
 var MAX_FAILED_TOKENS = 20;
-//@ chunk-3wydcdvj.js:16172-16222 placement
+//@ chunk-gjbr82c9.js:16172-16222 placement
 function getResolvedWIFBaseUrlSnapshot() {
   return getWifCredentialState().resolvedBaseUrlSnapshot;
 }
-//@ chunk-3wydcdvj.js:16222-16251 placement
+//@ chunk-gjbr82c9.js:16222-16251 placement
 function getWIFCredentials() {
   return resolveWifCredentials(getWifCredentialState());
 }
-//@ chunk-3wydcdvj.js:16251-17807 placement
+//@ chunk-gjbr82c9.js:16251-17807 placement
 /**
  * 解析 WIF（工作负载身份联合）凭据，env 四元组或缓存
  */
@@ -293,12 +293,12 @@ function resolveWifCredentials(state) {
   }
   return state.credentialsPromise;
 }
-//@ chunk-3wydcdvj.js:17807-17907 placement
+//@ chunk-gjbr82c9.js:17807-17907 placement
 function retryAfterReset(state) {
   logForDebugging("wif: sign-in state was reset during this lookup; looking it up again");
   return resolveWifCredentials(state);
 }
-//@ chunk-3wydcdvj.js:17907-18141 placement
+//@ chunk-gjbr82c9.js:17907-18141 placement
 async function invalidateWIFToken(authToken) {
   let wifCredentialState = getWifCredentialState();
   let tokenCache = await getWifTokenCache(wifCredentialState).catch(() => null);
@@ -313,11 +313,11 @@ async function invalidateWIFToken(authToken) {
   }
   tokenCache.invalidate();
 }
-//@ chunk-3wydcdvj.js:18141-18170 placement
+//@ chunk-gjbr82c9.js:18141-18170 placement
 function getWIFTokenCache() {
   return getWifTokenCache(getWifCredentialState());
 }
-//@ chunk-3wydcdvj.js:18170-18542 placement
+//@ chunk-gjbr82c9.js:18170-18542 placement
 /**
  * 获取 WIF 令牌缓存（懒创建）：交换令牌时记遥测，错误统一包装。
  */
@@ -348,7 +348,7 @@ function getWifTokenCache(state) {
   });
   return state.tokenCachePromise;
 }
-//@ chunk-3wydcdvj.js:18542-19255 placement
+//@ chunk-gjbr82c9.js:18542-19255 placement
 /**
  * 包装令牌提供函数：强制刷新时先检查凭证文件里是否已有其他进程轮换好的、未失败且未过期的访问令牌，有则直接采用以跳过刷新。
  */
@@ -391,7 +391,7 @@ function withSiblingTokenAdoption(provider, credentialsPath, mode, failedTokens)
     return provider(options);
   };
 }
-//@ chunk-3wydcdvj.js:19255-19979 placement
+//@ chunk-gjbr82c9.js:19255-19979 placement
 function refreshWifToken(provider, credentialsPath) {
   let readCredentials = async () => {
     try {
@@ -436,7 +436,7 @@ function refreshWifToken(provider, credentialsPath) {
     }
   };
 }
-//@ chunk-3wydcdvj.js:19979-20222 placement
+//@ chunk-gjbr82c9.js:19979-20222 placement
 function isWIFTransientExchangeError(error) {
   if (error instanceof WorkloadIdentityError && typeof error.statusCode === "number")
     return error.statusCode >= 500 || error.statusCode === 429 || error.statusCode === 408;
@@ -447,7 +447,7 @@ function isWIFTransientExchangeError(error) {
   }
   return false;
 }
-//@ chunk-3wydcdvj.js:20222-20637 placement
+//@ chunk-gjbr82c9.js:20222-20637 placement
 /**
  * 判断错误码是否为临时网络错误（连接重置、拒绝、超时、DNS 等，以及锁占用）。
  */
@@ -475,7 +475,7 @@ function isTransientNetworkCode(error) {
       return false;
   }
 }
-//@ chunk-3wydcdvj.js:20637-21038 placement
+//@ chunk-gjbr82c9.js:20637-21038 placement
 function classifyWifRefreshError(error) {
   if (isWIFUserOAuthDeadError(error)) return "no_refresh_available";
   if (getWIFAccountOnHold(error)) return "account_on_hold";
@@ -488,16 +488,16 @@ function classifyWifRefreshError(error) {
   if (lower.includes("parse") || lower.includes("json")) return "parse_failed";
   return "network_error";
 }
-//@ chunk-3wydcdvj.js:21038-21071 placement
+//@ chunk-gjbr82c9.js:21038-21071 placement
 function resetWIFCredentialState() {
   getWifCredentialState().reset();
   clearWIFPrecedenceCache();
 }
 export {
   getResolvedWIFBaseUrlSnapshot,
-  getWIFTokenCache,
   getWIFCredentials,
   invalidateWIFToken,
+  getWIFTokenCache,
   withWifLockForDir,
   resetWIFCredentialState,
   isWIFTransientExchangeError,

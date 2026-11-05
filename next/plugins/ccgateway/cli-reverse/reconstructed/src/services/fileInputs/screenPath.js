@@ -3,23 +3,43 @@
  *
  * 2.1.316 新增：附件路径筛查与失败说明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5rtc26v0.js (11)
- * attribution: placement 11
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-r9fjrg7c.js (15)
+ * attribution: placement 11, layout 4
  */
+import { homedir, tmpdir as tmpdir_2 } from "os";
+import { dirname } from "path";
 import {
   validateUploadPath,
   isRestrictedReadBlocked,
   CredentialPathError,
+  OutsideWorkingFoldersRefusal,
 } from "../../utils/claudeInChrome/fileUpload.js";
-import { expandPath } from "../../utils/path.js";
-import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../utils/errors.js";
-import { getStageFileRoot } from "../../utils/stageFileRoots.js";
+import { expandPath, expandPathOrNull } from "../../utils/path.js";
+import {
+  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+  isPathAbsent,
+  getErrnoCode,
+} from "../../utils/errors.js";
+import { fromEnum, lit } from "../analytics/safeMetadata.js";
+import { getClaudeConfigDirOrNull } from "../../utils/envUtils.js";
+import { getOriginalCwd } from "../../bootstrap/state.js";
+import {
+  DEFAULT_STAGE_FILE_ROOT,
+  DEFAULT_OUTPUTS_ROOT,
+  PROJECT_FILES_MOUNT_PATH,
+  DEFAULT_HOME_FILES_ROOT,
+  getStageFileRoot,
+} from "../../utils/stageFileRoots.js";
+import { allWorkingDirectories, pathInWorkingPath } from "../../utils/permissions/filesystem.js";
+import { tmpdir } from "../../utils/tempDir.js";
+import { logError } from "../../utils/log.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-5rtc26v0.js:342-381 placement
+//@ chunk-r9fjrg7c.js:627-666 placement
 var BIDI_CONTROL_PATTERN = /[\u202a-\u202e\u2066-\u2069]/;
-//@ chunk-5rtc26v0.js:381-484 placement
+//@ chunk-r9fjrg7c.js:666-769 placement
 function isSafeFileName(name) {
   return (
     name !== "" &&
@@ -30,11 +50,11 @@ function isSafeFileName(name) {
     !BIDI_CONTROL_PATTERN.test(name)
   );
 }
-//@ chunk-5rtc26v0.js:484-518 placement
+//@ chunk-r9fjrg7c.js:769-803 placement
 function screenUploadPath(filePath, context) {
   return validateUploadPath(filePath, context);
 }
-//@ chunk-5rtc26v0.js:518-952 placement
+//@ chunk-r9fjrg7c.js:803-1237 placement
 function assertPathNotBlocked(path, resolved, permissionContext) {
   let candidates = [expandPath(path), resolved.realPath];
   if (candidates.some((candidate) => isRestrictedReadBlocked(candidate, permissionContext)))
@@ -53,11 +73,99 @@ function assertPathNotBlocked(path, resolved, permissionContext) {
           "fileInputs/screenPath: read block refused a file the upload screen passed",
         );
 }
-//@ chunk-5rtc26v0.js:952-1026 placement
+//@ chunk-r9fjrg7c.js:1237-1311 placement
 function pathRejectionKind(error) {
   return error instanceof CredentialPathError ? "credential_name" : "path_rejected";
 }
-//@ chunk-5rtc26v0.js:1026-1366 placement
+//@ chunk-r9fjrg7c.js:1311-2432 layout
+var REJECTION_BY_SOURCE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-r9fjrg7c.js:1311", () => {
+  REJECTION_BY_SOURCE = new Map([
+    ["claudeInChrome/fileUpload: path read not allowed by session permissions", "read_not_allowed"],
+    ["claudeInChrome/fileUpload: path matches a read deny rule", "read_deny_rule"],
+    ["claudeInChrome/fileUpload: path matches a read ask rule", "read_ask_rule"],
+    ["claudeInChrome/fileUpload: Read tool denied or ask-gated for this session", "read_tool_restricted"],
+    ["claudeInChrome/fileUpload: path outside the working directories under the read block", "read_block"],
+    ["claudeInChrome/fileUpload: restricted mode refused a file only an allow rule opens", "restricted_mode"],
+    [
+      "claudeInChrome/fileUpload: kernel or device path, or one of Claude Code's own credentials",
+      "own_credential_or_device",
+    ],
+    ["claudeInChrome/fileUpload: network path rejected before filesystem access", "network_path"],
+    ["claudeInChrome/fileUpload: network path rejected", "network_path"],
+    ["claudeInChrome/fileUpload: over-long path rejected", "too_long"],
+    ["claudeInChrome/fileUpload: suspicious Windows path pattern rejected", "odd_spelling"],
+    [
+      "claudeInChrome/fileUpload: unvettable path ancestry rejected before filesystem access",
+      "unvettable_ancestry",
+    ],
+  ]);
+});
+//@ chunk-r9fjrg7c.js:2432-2663 layout
+function pathRejectionReason(error) {
+  if (isPathAbsent(error)) return "not_found";
+  if (error instanceof CredentialPathError) return "credential_name";
+  if (error instanceof OutsideWorkingFoldersRefusal) return "outside_working_folders";
+  return (
+    (error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+      ? REJECTION_BY_SOURCE.get(error.telemetryMessage)
+      : undefined) ?? (getErrnoCode(error) === undefined ? "other" : "fs_error")
+  );
+}
+//@ chunk-r9fjrg7c.js:2663-2730 layout
+function isVmSessionsPath(path) {
+  return path === "/sessions" || path.startsWith("/sessions/");
+}
+//@ chunk-r9fjrg7c.js:2730-3324 layout
+function describeFileRefPath(path, source, toolPermissionContext) {
+  let reason = {
+    reason: fromEnum(source),
+    fileRefPathKind: lit("other"),
+  };
+  if (isVmSessionsPath(path))
+    return {
+      ...reason,
+      fileRefPathKind: lit("vm_sessions"),
+    };
+  if (expandPathOrNull(path) === null) return reason;
+  try {
+    let compareOptions = {
+      caseFold: true,
+      uncShapeParity: true,
+    };
+    let home = homedir();
+    let claudeConfigDirOrNull = getClaudeConfigDirOrNull();
+    let besideCwd = dirname(getOriginalCwd());
+    let roots = [
+      ["uploads", [DEFAULT_STAGE_FILE_ROOT]],
+      ["outputs", [DEFAULT_OUTPUTS_ROOT]],
+      ["project_files", [PROJECT_FILES_MOUNT_PATH]],
+      ["claude_config", claudeConfigDirOrNull === null ? [] : [claudeConfigDirOrNull]],
+      ["working_folder", [...allWorkingDirectories(toolPermissionContext)]],
+      ["tmp", [tmpdir(), tmpdir_2()]],
+      [
+        "beside_working_folder",
+        besideCwd === dirname(besideCwd) || pathInWorkingPath(home, besideCwd, compareOptions)
+          ? []
+          : [besideCwd],
+      ],
+      ["home", [home, DEFAULT_HOME_FILES_ROOT]],
+    ].find(([, candidateRoots]) =>
+      candidateRoots.some((root) => pathInWorkingPath(path, root, compareOptions)),
+    )?.[0];
+    return roots === undefined
+      ? reason
+      : {
+          ...reason,
+          fileRefPathKind: fromEnum(roots),
+        };
+  } catch (error) {
+    let errnoCode = getErrnoCode(error);
+    if (errnoCode !== "ENOENT" && errnoCode !== "ERR_SYSTEM_ERROR") logError(error);
+    return reason;
+  }
+}
+//@ chunk-r9fjrg7c.js:3324-3664 placement
 function credentialFileRefusalMessage(path, context, nothingDone) {
   let advice =
     getIsRemoteMode(context) === undefined
@@ -65,7 +173,7 @@ function credentialFileRefusalMessage(path, context, nothingDone) {
       : "If the user wants it sent, ask them to attach it to the chat themselves.";
   return `Cannot attach "${path}": its name or folder is one that credentials are kept under (such as .env, a .pem or .key file, or .ssh), so it is not sent on Claude's word alone. ${advice} ${nothingDone}`;
 }
-//@ chunk-5rtc26v0.js:1366-1761 placement
+//@ chunk-r9fjrg7c.js:3664-4059 placement
 function fileNotSharedMessage(path, context, nothingDone) {
   let isRemoteMode = getIsRemoteMode(context);
   let advice =
@@ -74,7 +182,7 @@ function fileNotSharedMessage(path, context, nothingDone) {
       : `Files the user attached to this chat are usually in ${isRemoteMode}; give the full path of one of those. If the file is not there, ask the user to attach it to the chat.`;
   return `Cannot attach "${path}": only files this session is allowed to read can be attached. ${advice} ${nothingDone}`;
 }
-//@ chunk-5rtc26v0.js:1761-1837 placement (2.1.88 match: getIsRemoteMode, 1)
+//@ chunk-r9fjrg7c.js:4059-4135 placement (2.1.88 match: getIsRemoteMode, 1)
 function getIsRemoteMode(context) {
   if (context.isRemoteMode !== true) return;
   try {
@@ -83,7 +191,7 @@ function getIsRemoteMode(context) {
     return;
   }
 }
-//@ chunk-5rtc26v0.js:1837-1936 placement
+//@ chunk-r9fjrg7c.js:4135-4234 placement
 var ATTACH_FAILURE_KINDS = {
   too_large: true,
   hard_links: true,
@@ -93,11 +201,11 @@ var ATTACH_FAILURE_KINDS = {
   open_failed: true,
   read_failed: true,
 };
-//@ chunk-5rtc26v0.js:1936-1980 placement
+//@ chunk-r9fjrg7c.js:4234-4278 placement
 function isAttachFailureKind(kind) {
   return Object.hasOwn(ATTACH_FAILURE_KINDS, kind);
 }
-//@ chunk-5rtc26v0.js:1980-2615 placement
+//@ chunk-r9fjrg7c.js:4278-4913 placement
 function attachFailureMessage(path, kind, maxBytes, nothingDone) {
   switch (kind) {
     case "too_large":
@@ -126,15 +234,18 @@ function attachFailureMessage(path, kind, maxBytes, nothingDone) {
   }
 }
 export {
-  BIDI_CONTROL_PATTERN,
-  screenUploadPath,
-  assertPathNotBlocked,
-  pathRejectionKind,
   isSafeFileName,
   isAttachFailureKind,
   attachFailureMessage,
   credentialFileRefusalMessage,
   fileNotSharedMessage,
+  screenUploadPath,
+  describeFileRefPath,
+  pathRejectionReason,
+  assertPathNotBlocked,
+  BIDI_CONTROL_PATTERN,
+  isVmSessionsPath,
+  pathRejectionKind,
   getIsRemoteMode,
   ATTACH_FAILURE_KINDS,
 };

@@ -3,9 +3,9 @@
  *
  * LSP 工具按 operation 判别的严格输入 schema
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/LSPTool/schemas.ts
- * pieces: chunk-kxyd0g16.js (1)
+ * pieces: chunk-fmnbrxwy.js (1)
  * attribution: fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -18,12 +18,12 @@ import {
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:100287-103223 fingerprint (2.1.88 match: lspToolInputSchema, 0.895)
+//@ chunk-fmnbrxwy.js:115001-117937 fingerprint (2.1.88 match: lspToolInputSchema, 0.895)
 /**
  * LSP 工具严格输入 schema：按 operation 的判别联合，validateInput 用它校验。
  */
 var lspToolInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kxyd0g16.js:100287", () => {
+deferInit("chunk-fmnbrxwy.js:115001", () => {
   lspToolInputSchema = DoctorLazy(() => {
     let goToDefinitionSchema = zodStrictObject({
       operation: literal("goToDefinition"),

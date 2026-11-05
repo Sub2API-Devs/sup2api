@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：Android 命令识别
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xcsefmky.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8bpxxmz0.js (12)
  * attribution: placement 12
  */
-import { FILE_EDIT_TOOL_NAME } from "../FileEditTool/constants.js";
+import { EDIT } from "../FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../FileWriteTool/prompt.js";
 import { SHELL_TOOL_NAMES } from "../../utils/shell/shellToolUtils.js";
 import {
@@ -26,7 +26,7 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-xcsefmky.js:566-1114 placement
+//@ chunk-8bpxxmz0.js:599-1147 placement
 /**
  * Android 开发意图识别：manifest、gradle 插件、import android 的正则，adb/emulator/sdkmanager/gradlew assemble 等命令正则，Kotlin/Java 扩展名与编辑工具集合。
  */
@@ -36,7 +36,7 @@ var ANDROID_IMPORT_RE;
 var ANDROID_COMMAND_RE;
 var KOTLIN_JAVA_EXTENSIONS;
 var FILE_WRITE_TOOLS;
-deferInit("chunk-xcsefmky.js:566", () => {
+deferInit("chunk-8bpxxmz0.js:599", () => {
   ANDROID_MANIFEST_RE = /AndroidManifest\.xml|<manifest xmlns:android=/;
   ANDROID_GRADLE_PLUGIN_RE = /com\.android\.(application|library|tools\.build)/;
   ANDROID_IMPORT_RE = /\bimport android\./;
@@ -53,9 +53,9 @@ deferInit("chunk-xcsefmky.js:566", () => {
     "m",
   );
   KOTLIN_JAVA_EXTENSIONS = [".kt", ".kts", ".java"];
-  FILE_WRITE_TOOLS = new Set([FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME]);
+  FILE_WRITE_TOOLS = new Set([EDIT, FILE_WRITE_TOOL_NAME]);
 });
-//@ chunk-xcsefmky.js:1114-1175 placement
+//@ chunk-8bpxxmz0.js:1147-1208 placement
 /**
  * 创建 Android 开发证据检测的初始状态：未编辑 Kotlin/Java、无证据。
  */
@@ -65,14 +65,14 @@ function createAndroidEvidenceState() {
     evidence: null,
   };
 }
-//@ chunk-xcsefmky.js:1175-1240 placement
+//@ chunk-8bpxxmz0.js:1208-1273 placement
 /**
  * 判断是否已收集到 Android 开发证据（编辑过 Kotlin/Java 且找到证据）。
  */
 function hasAndroidEvidence(state) {
   return state.kotlinOrJavaFileEdited && state.evidence !== null;
 }
-//@ chunk-xcsefmky.js:1240-2152 placement
+//@ chunk-8bpxxmz0.js:1273-2185 placement
 /**
  * 扫描消息（含 agent/skill 进度中的消息），记录是否编辑了 Kotlin/Java 文件，并从写入内容、Android 命令或工具结果中找出 Android 开发证据。
  */
@@ -124,7 +124,7 @@ function absorbAndroidEvidence(state, events) {
     }
   }
 }
-//@ chunk-xcsefmky.js:2152-2222 placement
+//@ chunk-8bpxxmz0.js:2185-2255 placement
 /**
  * 判断路径是否为 Kotlin/Java 源文件（按扩展名，忽略大小写）。
  */
@@ -132,7 +132,7 @@ function isKotlinOrJavaPath(filePath) {
   let lower = filePath.toLowerCase();
   return KOTLIN_JAVA_EXTENSIONS.some((extension) => lower.endsWith(extension));
 }
-//@ chunk-xcsefmky.js:2222-2319 placement
+//@ chunk-8bpxxmz0.js:2255-2352 placement
 /**
  * 在文本里找 Android 证据：先看 import，再看清单与 gradle 插件。
  */
@@ -141,7 +141,7 @@ function detectAndroidImportEvidence(text) {
   if (ANDROID_IMPORT_RE.test(text)) return "android_import";
   return detectAndroidFileEvidence(text);
 }
-//@ chunk-xcsefmky.js:2319-2409 placement
+//@ chunk-8bpxxmz0.js:2352-2442 placement
 /**
  * 在文本里识别 AndroidManifest.xml 引用或 com.android.application 插件。
  */
@@ -149,7 +149,7 @@ function detectAndroidFileEvidence(text) {
   if (ANDROID_MANIFEST_RE.test(text)) return "android_manifest";
   return ANDROID_GRADLE_PLUGIN_RE.test(text) ? "gradle_plugin" : null;
 }
-//@ chunk-xcsefmky.js:2409-2577 placement
+//@ chunk-8bpxxmz0.js:2442-2610 placement
 function findAndroidEvidenceInResult(text) {
   if (typeof text === "string") return detectAndroidFileEvidence(text);
   if (!Array.isArray(text)) return null;
@@ -159,7 +159,7 @@ function findAndroidEvidenceInResult(text) {
   }
   return null;
 }
-//@ chunk-xcsefmky.js:2577-2747 placement
+//@ chunk-8bpxxmz0.js:2610-2780 placement
 var DEV_INTENT_DETECTORS = {
   ios_app: () => {
     let evidenceState = emptyProjectFactsEvidence();
@@ -176,11 +176,11 @@ var DEV_INTENT_DETECTORS = {
     };
   },
 };
-//@ chunk-xcsefmky.js:2747-2801 placement
+//@ chunk-8bpxxmz0.js:2780-2834 placement
 function _() {
   return new Map(MOBILE_APP_KINDS.map((kind) => [kind, DEV_INTENT_DETECTORS[kind]()]));
 }
-//@ chunk-xcsefmky.js:2801-3470 placement
+//@ chunk-8bpxxmz0.js:2834-3503 placement
 /**
  * 开发意图检测器：对新消息逐个运行各探测器（iOS/Android），首次触发时排入 dev_intent 系统通知并上报，异常只上报一次。
  */
@@ -238,12 +238,12 @@ class DevIntentDetector {
     this.#r = new WeakSet();
   }
 }
-//@ chunk-xcsefmky.js:3470-3495 placement
+//@ chunk-8bpxxmz0.js:3503-3528 placement
 /**
  * 按宿主会话隔离的 Android 开发意图检测器实例，供 CLI 与 QueryEngine 记录/取出证据。
  */
 var androidEvidenceByHost; // deferred: uses DevIntentDetector of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-xcsefmky.js:3470", () => {
+deferInit("chunk-8bpxxmz0.js:3503", () => {
   androidEvidenceByHost = new HostScoped(() => new DevIntentDetector());
 });
 export { androidEvidenceByHost };

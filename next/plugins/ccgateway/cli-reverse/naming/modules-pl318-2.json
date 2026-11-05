@@ -1,0 +1,21 @@
+{
+ "commands/project/index.ts": "/project 命令注册：设置本次会话用量上报所属的 claude.ai Project（2.1.318 新增）",
+ "commands/setup-bedrock/index.ts": "/setup-bedrock 命令的 local-jsx 注册对象，Bedrock 设置未完成时才可用（2.1.318 新增）",
+ "commands/setup-vertex/index.ts": "/setup-vertex 命令的 local-jsx 注册对象，Vertex 设置未完成时才可用（2.1.318 新增）",
+ "commands/skill-doctor/index.ts": "/skill-doctor 的 local-jsx 与 thin-client 两个命令对象：列出未使用却占上下文的技能（2.1.318 新增）",
+ "services/api/toolProvenance.ts": "工具与工具结果的 ownership_metadata 归属信息：按 server 类型推导来源、是否可带 server_url，并决定 api_tool_provenance beta（2.1.318 新增）",
+ "services/mcp/applyArtifactFileCard.ts": "MCP 文件类工具的文件卡片权限包装：判断是否要弹「会把会话文件发出去」的询问（2.1.318 新增）",
+ "tasks/LocalShellTask/limitStopTelemetry.ts": "后台 shell 因限时/CPU 被停时的诊断上报与重载停止结案（2.1.318 新增）",
+ "tasks/scriptLaunchedAgents.ts": "恢复上一会话里由脚本启动、仍未结束的子代理：读 sidecar 元数据并给 code mode 附 send-message 提示（2.1.318 新增）",
+ "tools/ReadWidgetContextTool/ReadWidgetContextTool.ts": "ReadWidgetContext 工具的 schema 与执行：读取 MCP App view 主动上报的状态（2.1.318 新增）",
+ "tools/ReadWidgetContextTool/prompt.ts": "ReadWidgetContext 工具的提示词：何时读 view 状态、结果形状与信任边界（2.1.318 新增）",
+ "tools/ReadWidgetContextTool/widgetState.ts": "按会话保存 view 状态的槽位：解析、去重、按内容变更记序号（2.1.318 新增）",
+ "utils/bash/heredocLexing.ts": "bash 命令的 heredoc/引号/注释逐字节词法与 tree-sitter 区间比对，判断命令是否需要特殊读取（2.1.318 新增）",
+ "utils/codeMode.ts": "REPL/code mode 的状态判定：引擎检查、沙箱条件、pin/unpin、定时与分片上限、关闭时的提示文案（2.1.318 新增）",
+ "utils/codeModeOptIn.ts": "code mode 选择流程：前提检查、托管/本机设置来源判定、询问对话框回答与重启标记（2.1.318 新增）",
+ "utils/hooks/mcpToolHook.ts": "mcp_tool 钩子的执行：等 MCP server 连接后调用钩子并返回结果（2.1.318 新增）",
+ "utils/leftRunningFamilyWatch.ts": "观察回合结束后仍在运行的进程族并上报 left_running_family 诊断（2.1.318 新增）",
+ "utils/programUseCase.ts": "program use case（主机给的用量用途 id）的选择开关、打标门值、请求体字段与 bootstrap 重取退避（2.1.318 新增）",
+ "utils/shell/bashVersionRefusal.ts": "bash 版本过旧时拒绝执行：检测标记、给模型的改写建议和前置判断脚本（2.1.318 新增）",
+ "utils/widgetContext.ts": "MCP App view 状态的控制消息解析与用户消息旁的 view 提醒文本（2.1.318 新增）"
+}

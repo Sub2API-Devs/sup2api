@@ -3,15 +3,15 @@
  *
  * lorem-ipsum 测试 skill：按目标 token 数生成填充文本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/loremIpsum.ts
- * pieces: chunk-hantmvxa.js (2), chunk-p583jsvp.js (1)
- * attribution: fingerprint 1, callgraph-fingerprint 2
+ * pieces: chunk-6fr52gnc.js (1), chunk-ne2890fx.js (2)
+ * attribution: callgraph-fingerprint 2, fingerprint 1
  */
 import { registerBundledSkill } from "../bundledSkills.js";
 import { isArtifactTypeAliasReady, buildArtifactTypeAliasPrompt } from "./artifactTypeAlias.js";
 
-//@ chunk-p583jsvp.js:4803-5032 callgraph-fingerprint (2.1.88 match: registerLoremIpsumSkill, 0.389)
+//@ chunk-6fr52gnc.js:4803-5032 callgraph-fingerprint (2.1.88 match: registerLoremIpsumSkill, 0.389)
 /**
  * 通用注册器：按传入定义注册一个只能用户调用的内置 skill（例如 lorem-ipsum 测试 skill），isEnabled 由调用方给出。
  */
@@ -34,7 +34,7 @@ function registerLoremIpsumSkill(skillDefinition, policyGate) {
     },
   });
 }
-//@ chunk-hantmvxa.js:181559-182847 fingerprint (2.1.88 match: ONE_TOKEN_WORDS, 1)
+//@ chunk-ne2890fx.js:181740-183028 fingerprint (2.1.88 match: ONE_TOKEN_WORDS, 1)
 /**
  * lorem-ipsum skill 用的「一个 token 的英文单词」表，用于生成指定 token 数的填充文本。
  */
@@ -228,7 +228,7 @@ var ONE_TOKEN_WORDS = [
   "end",
   "start",
 ];
-//@ chunk-hantmvxa.js:182847-183105 callgraph-fingerprint (2.1.88 match: generateLoremIpsum, 1)
+//@ chunk-ne2890fx.js:183028-183286 callgraph-fingerprint (2.1.88 match: generateLoremIpsum, 1)
 function generateLoremIpsum(targetTokens) {
   let tokens = 0;
   let result = "";

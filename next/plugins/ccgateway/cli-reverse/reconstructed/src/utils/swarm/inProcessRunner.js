@@ -3,10 +3,10 @@
  *
  * 同进程 teammate 的运行循环：权限经 leader 中继、轮询 mailbox 等下一条指令或 shutdown、领取任务列表任务、空闲/失败通知、上下文压缩
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/inProcessRunner.ts
- * pieces: chunk-8xs34hez.js (10), chunk-phrnybk8.js (1)
- * attribution: affinity 1, fingerprint 5, layout 2, sole-consumer 1, facade-exports 1, placement 1
+ * pieces: chunk-2dv3kn8z.js (1), chunk-gjfaq3rj.js (10)
+ * attribution: placement 1, affinity 1, fingerprint 5, layout 2, sole-consumer 1, facade-exports 1
  */
 import { appendBounded, MAX_APPENDED_ENTRIES, appendReplacingUuid } from "../../tasks/taskKinds.js";
 import {
@@ -22,11 +22,15 @@ import {
   SUBAGENT_REJECT_MESSAGE,
   SUBAGENT_REJECT_MESSAGE_WITH_REASON_PREFIX,
   createUserMessage,
-  API_REQUEST_ABORTED_MESSAGE,
   createApiErrorMessage,
   getTrailingApiErrorInfo,
 } from "../messages.js";
-import { getToolPermissionContext } from "../permissions/toolPermissionContext.js";
+import {
+  getToolPermissionContext,
+  getEffortLayerOverride,
+  getOwnEffortOffPickedModel,
+  getPickedEffortModel,
+} from "../permissions/toolPermissionContext.js";
 import {
   teammatePermissionContextBySessionRoot,
   safeTeammateIdleResult,
@@ -74,8 +78,9 @@ import { jsonStringify } from "../slowOperations.js";
 import { listTasks, claimTask, updateTask } from "../tasks.js";
 import { findAvailableTask, formatTaskAsPrompt } from "../../hooks/useTaskListWatcher.js";
 import { filterMailboxThroughReceiveHooks } from "./teammateMailbox.js";
-import { count, uniq } from "../collections.js";
+import { countWhere } from "../collections.js";
 import { applyPlanApprovalResponse } from "./planApprovalResponse.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { sleep } from "../sleep.js";
 import { hasRunningBackgroundWorkForAgent } from "../../tasks/backgroundTaskKinds.js";
 import { hasOtherActiveAgents, MCP_TASK_KEEPALIVE_MS, TASK_EVICTION_GRACE_MS } from "../task/framework.js";
@@ -93,7 +98,7 @@ import { TASK_CREATE_TOOL_NAME } from "../../tools/TaskCreateTool/constants.js";
 import { TASK_GET_TOOL_NAME } from "../../tools/TaskGetTool/constants.js";
 import { TASK_LIST_TOOL_NAME } from "../../tools/TaskListTool/constants.js";
 import { TASK_UPDATE_TOOL_NAME } from "../../tools/TaskUpdateTool/constants.js";
-import { permissionRuleValueFromString } from "../permissions/permissionRuleParser.js";
+import { parseRuleString } from "../permissions/permissionRuleParser.js";
 import { removeMemberByAgentId } from "./teamHelpers.js";
 import { createContentReplacementState } from "../toolResultStorage.js";
 import { createStickyBetaLatches } from "../../bootstrap/stateSlices.js";
@@ -114,18 +119,20 @@ import {
   compactConversation,
   buildPostCompactMessages,
   COMPACTION_BLOCKED_BY_HOOK,
+  API_REQUEST_ABORTED_MESSAGE,
   applyPreservedMessages,
 } from "../../services/compact/compact.js";
 import { asSystemPrompt } from "../systemPromptType.js";
 import {
   createProgressTracker,
-  createActivityDescriptionResolver,
+  makeActivityDescription,
   applyStreamTokenEvent,
   getProgressUpdate,
   updateProgressFromMessage,
 } from "../../tasks/LocalAgentTask/LocalAgentTask.js";
-import { runWithTeammateContext } from "../teammate.js";
+import { runWithTeammateContext } from "../teammateContext.js";
 import { runWithCwdOverride } from "../cwd.js";
+import { resolveModelAliasSpelling } from "../model/model.js";
 import { isLoggableMessage } from "../sessionStorage.js";
 import { inProgressToolUpdate } from "../../state/inProgressToolUses.js";
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
@@ -133,7 +140,7 @@ import { evictTaskOutput } from "../task/diskOutput.js";
 import { emitTaskNotification } from "../task/taskNotifications.js";
 import { unregisterPerfettoAgent } from "../telemetry/perfettoTracing.js";
 
-//@ chunk-phrnybk8.js:411-533 placement
+//@ chunk-2dv3kn8z.js:411-533 placement
 function appendTeammateTranscript(taskId, userMessage, taskRegistry) {
   if (taskRegistry.get(taskId)?.status !== "running") return;
   taskRegistry.updateTranscript(taskId, (task) => ({
@@ -141,10 +148,10 @@ function appendTeammateTranscript(taskId, userMessage, taskRegistry) {
     messages: appendBounded(task.messages, userMessage),
   }));
 }
-//@ chunk-8xs34hez.js:1900-1918 affinity
+//@ chunk-gjfaq3rj.js:1947-1965 affinity
 var PERMISSION_POLL_INTERVAL_MS = 500;
 var MAILBOX_POLL_INTERVAL_MS = 500;
-//@ chunk-8xs34hez.js:1918-5490 fingerprint (2.1.88 match: createInProcessCanUseTool, 0.512)
+//@ chunk-gjfaq3rj.js:1965-5538 fingerprint (2.1.88 match: createInProcessCanUseTool, 0.509)
 /**
  * 为同进程 teammate 生成 canUseTool：先本地判定；需询问时，有 UI 对话通道就走协调者权限处理并弹本地对话框；
  * 否则构造权限请求经 mailbox 发给 leader，并每 500ms 轮询自己的 inbox 等 permission_response（只接受 team-lead 发的）。
@@ -411,11 +418,11 @@ function createInProcessCanUseTool(identity, abortController, onPermissionWait, 
     });
   };
 }
-//@ chunk-8xs34hez.js:5490-5563 layout (2.1.88 match: _temp6, 0.826)
+//@ chunk-gjfaq3rj.js:5538-5611 layout (2.1.88 match: _temp6, 0.826)
 function updateInProcessTeammateTask(taskId, updater, taskRegistry) {
   taskRegistry.update(taskId, (task) => (task.type === "in_process_teammate" ? updater(task) : task));
 }
-//@ chunk-8xs34hez.js:5563-5669 fingerprint (2.1.88 match: sendMessageToLeader, 1)
+//@ chunk-gjfaq3rj.js:5611-5717 fingerprint (2.1.88 match: sendMessageToLeader, 1)
 /**
  * 以 teammate 身份给 team-lead 的 inbox 写一条消息。
  */
@@ -432,7 +439,7 @@ async function sendMessageToLeader(fromName, text, color, teamName, storage) {
     storage,
   );
 }
-//@ chunk-8xs34hez.js:5669-5789 sole-consumer
+//@ chunk-gjfaq3rj.js:5717-5837 sole-consumer
 async function sendIdleNotificationToLeader(agentName, color, teamName, options, storageV5) {
   let idleNotification = createIdleNotification(agentName, options);
   let sendResult;
@@ -449,7 +456,7 @@ async function sendIdleNotificationToLeader(agentName, color, teamName, options,
   }
   return sendResult !== undefined;
 }
-//@ chunk-8xs34hez.js:6128-6522 fingerprint (2.1.88 match: tryClaimNextTask, 1)
+//@ chunk-gjfaq3rj.js:6176-6570 fingerprint (2.1.88 match: tryClaimNextTask, 1)
 /**
  * 从团队任务列表找一个可领取的任务，领取并置 in_progress，返回格式化后的任务提示词。
  */
@@ -479,7 +486,7 @@ async function tryClaimNextTask(taskListId, agentName, hasTaskListTools, storage
     return;
   }
 }
-//@ chunk-8xs34hez.js:6522-10170 layout
+//@ chunk-gjfaq3rj.js:6570-10218 layout
 /**
  * 读一次 teammate 的 inbox：伪造来源的消息过滤；优先处理 shutdown 请求（之前先投递被压住的普通消息）；
  * 处理协议帧（leader 的 plan_approval_response 生效、mode_set_request 一律丢弃、其余丢弃）；普通消息标已读后批量返回，标记失败时有限次重试后不标记直接投递。
@@ -527,19 +534,19 @@ async function pollTeammateInbox(identity, taskId, taskRegistry, storage, pollSt
   };
   let shutdownIndex = -1;
   let shutdownRequest = null;
-  for (let j = 0; j < messages.length; j++) {
-    let message = messages[j];
-    if (message && !message.read && !isForged(message)) {
-      let request = isShutdownRequest(message.text);
+  for (let message = 0; message < messages.length; message++) {
+    let message_2 = messages[message];
+    if (message_2 && !message_2.read && !isForged(message_2)) {
+      let request = isShutdownRequest(message_2.text);
       let trustedRequest =
-        (provenance.get(message) === "verified" ||
-          message.from === TEAM_LEAD ||
-          findTeammateByName(message.from, roster) !== undefined) &&
-        request?.from === message.from
+        (provenance.get(message_2) === "verified" ||
+          message_2.from === TEAM_LEAD ||
+          findTeammateByName(message_2.from, roster) !== undefined) &&
+        request?.from === message_2.from
           ? request
           : null;
       if (trustedRequest) {
-        shutdownIndex = j;
+        shutdownIndex = message;
         shutdownRequest = trustedRequest;
         break;
       }
@@ -581,7 +588,7 @@ async function pollTeammateInbox(identity, taskId, taskRegistry, storage, pollSt
       }
     }
     let targetMessage = messages[shutdownIndex];
-    let unreadCount = count(messages.slice(0, shutdownIndex), (message) => !message.read);
+    let unreadCount = countWhere(messages.slice(0, shutdownIndex), (message) => !message.read);
     logForDebugging(
       `[inProcessRunner] ${identity.agentName} received shutdown request from ${shutdownRequest?.from} (prioritized over ${unreadCount} unread messages)`,
     );
@@ -677,7 +684,7 @@ async function pollTeammateInbox(identity, taskId, taskRegistry, storage, pollSt
         pollState.deliveredUnmarked.add(messageIdentityKey(plainMessage));
     }
     logForDebugging(
-      `[inProcessRunner] ${identity.agentName} draining ${plainMessages.length} message(s) from ${uniq(plainMessages.map((plainMessage) => plainMessage.from)).join(", ")}`,
+      `[inProcessRunner] ${identity.agentName} draining ${plainMessages.length} message(s) from ${normalizeCaseForComparison_2(plainMessages.map((plainMessage) => plainMessage.from)).join(", ")}`,
     );
     let filtered = await filterThroughHooks(plainMessages);
     if (filtered.length === 0) return null;
@@ -693,7 +700,7 @@ async function pollTeammateInbox(identity, taskId, taskRegistry, storage, pollSt
   }
   return null;
 }
-//@ chunk-8xs34hez.js:10170-12164 fingerprint (2.1.88 match: waitForNextPromptOrShutdown, 0.676)
+//@ chunk-gjfaq3rj.js:10218-12212 fingerprint (2.1.88 match: waitForNextPromptOrShutdown, 0.681)
 /**
  * 空闲后的等待循环（每 500ms）：优先取 UI 注入的用户消息；检查 abort；读 inbox；尝试领取任务；开启空闲超时时超过阈值返回 idle_timeout。
  */
@@ -847,7 +854,7 @@ async function waitForNextPromptOrShutdown(
     type: "aborted",
   };
 }
-//@ chunk-8xs34hez.js:12164-23605 fingerprint (2.1.88 match: runInProcessTeammate, 0.651)
+//@ chunk-gjfaq3rj.js:12212-23666 fingerprint (2.1.88 match: runInProcessTeammate, 0.631)
 /**
  * 同进程 teammate 主循环：构造 teammate 代理上下文与系统提示词（默认工具提示 + 自定义代理指令，可 replace/append），强制包含 SendMessage 与任务列表工具；
  * 每轮在 teammate 上下文中 runAgent，必要时先自动压缩历史；回合结束读 inbox 决定继续，否则标空闲并给 leader 发 idle_notification，再进入等待循环；结束或异常时标 completed/failed 并通知。
@@ -864,8 +871,6 @@ async function runInProcessTeammate(config) {
     toolUseContext,
     abortController,
     model,
-    systemPrompt,
-    systemPromptMode,
     allowedTools,
     allowPermissionPrompts,
     invokingRequestId,
@@ -901,37 +906,32 @@ async function runInProcessTeammate(config) {
     isBackgroundAgent: true,
   };
   let { tools, mainLoopModel } = toolUseContext.rootToolSurface;
-  let systemPrompt_2;
-  if (systemPromptMode === "replace" && systemPrompt) systemPrompt_2 = systemPrompt;
-  else {
-    let promptParts = [
-      ...(
-        await getSystemPrompt(tools, mainLoopModel, {
-          teammate: true,
-        })
-      ).filter((block) => block !== SYSTEM_PROMPT_DYNAMIC_BOUNDARY),
-      TEAMMATE_SYSTEM_PROMPT_ADDENDUM,
-    ];
-    if (agentDefinition) {
-      let customPrompt = agentDefinition.getSystemPrompt({
-        toolUseContext,
-        primedAgentMemory: await readAgentMemoryScope(agentDefinition, toolUseContext.storageV5),
-      });
-      if (customPrompt)
-        promptParts.push(`
+  let promptParts = [
+    ...(
+      await getSystemPrompt(tools, mainLoopModel, {
+        teammate: true,
+      })
+    ).filter((block) => block !== SYSTEM_PROMPT_DYNAMIC_BOUNDARY),
+    TEAMMATE_SYSTEM_PROMPT_ADDENDUM,
+  ];
+  if (agentDefinition) {
+    let customPrompt = agentDefinition.getSystemPrompt({
+      toolUseContext,
+      primedAgentMemory: await readAgentMemoryScope(agentDefinition, toolUseContext.storageV5),
+    });
+    if (customPrompt)
+      promptParts.push(`
 # Custom Agent Instructions
 ${customPrompt}`);
-      if (agentDefinition.memory)
-        logEvent("tengu_agent_memory_loaded", {
-          ...false,
-          scope: fromEnum(agentDefinition.memory),
-          source: lit("in-process-teammate"),
-        });
-    }
-    if (systemPromptMode === "append" && systemPrompt) promptParts.push(systemPrompt);
-    systemPrompt_2 = promptParts.join(`
-`);
+    if (agentDefinition.memory)
+      logEvent("tengu_agent_memory_loaded", {
+        ...false,
+        scope: fromEnum(agentDefinition.memory),
+        source: lit("in-process-teammate"),
+      });
   }
+  let joined = promptParts.join(`
+`);
   let hasTaskListTools = teammateContext.hasTaskListTools;
   let requiredTools = [
     SENDMESSAGE,
@@ -940,13 +940,15 @@ ${customPrompt}`);
       : []),
   ];
   let disallowedTools = agentDefinition?.disallowedTools?.filter(
-    (disallowedTool) => !requiredTools.includes(permissionRuleValueFromString(disallowedTool).toolName),
+    (disallowedTool) => !requiredTools.includes(parseRuleString(disallowedTool).toolName),
   );
   let agentDefinitionForRun = {
     agentType: identity.agentName,
     whenToUse: `In-process teammate: ${identity.agentName}`,
-    getSystemPrompt: () => systemPrompt_2,
-    tools: agentDefinition?.tools ? uniq([...agentDefinition.tools, ...requiredTools]) : ["*"],
+    getSystemPrompt: () => joined,
+    tools: agentDefinition?.tools
+      ? normalizeCaseForComparison_2([...agentDefinition.tools, ...requiredTools])
+      : ["*"],
     ...(disallowedTools?.length && {
       disallowedTools,
     }),
@@ -1204,7 +1206,7 @@ ${customPrompt}`);
       let task = taskRegistry.get(taskId);
       if (task !== undefined && "progress" in task && task.progress !== undefined)
         tracker.latestInputTokens = task.progress.tokenCount;
-      let resolveActivity = createActivityDescriptionResolver(tools);
+      let resolveActivity = makeActivityDescription(tools);
       let responseMessages = [];
       let currentTask = toolUseContext.getAppState().tasks[taskId];
       let currentPermissionMode =
@@ -1234,6 +1236,18 @@ ${customPrompt}`);
             turnStartTime: Date.now(),
           }));
           retryStatus.setMode("responding");
+          if (
+            model !== undefined &&
+            agentDefinitionForRun.effort === undefined &&
+            getEffortLayerOverride(toolUseContext.permissionLayers) === undefined
+          ) {
+            let model_2 = resolveModelAliasSpelling(model);
+            retryStatus.setTurnEffort(
+              getOwnEffortOffPickedModel(toolUseContext, model_2, getPickedEffortModel(toolUseContext)) ??
+                null,
+              model_2,
+            );
+          }
           for await (let message of runAgent({
             agentDefinition: iterationAgentDefinition,
             promptMessages,
@@ -1671,7 +1685,7 @@ ${customPrompt}`);
     };
   }
 }
-//@ chunk-8xs34hez.js:23605-23719 facade-exports (2.1.88 match: startInProcessTeammate, 1)
+//@ chunk-gjfaq3rj.js:23666-23780 facade-exports (2.1.88 match: startInProcessTeammate, 1)
 /**
  * 后台启动 runInProcessTeammate，未捕获异常只记日志。
  */

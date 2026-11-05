@@ -3,21 +3,21 @@
  *
  * 2.1.316 新增。网关模式进程的优雅退出（CLAUDE_GATEWAY_DRAIN_TIMEOUT_MS 排空等待）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-c82nj8g9.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z2h12mty.js (3)
  * attribution: placement 3
  */
 import { env } from "../../utils/env.js";
 import { gatewayLog } from "../../services/gateway/gatewayBanner.js";
 
-//@ chunk-c82nj8g9.js:1438-1450 placement
+//@ chunk-z2h12mty.js:1550-1562 placement
 var GATEWAY_DRAIN_TIMEOUT_MS = 25000;
-//@ chunk-c82nj8g9.js:1450-1479 placement
+//@ chunk-z2h12mty.js:1562-1591 placement
 function exitZero() {
   process.exit(0);
 }
-//@ chunk-c82nj8g9.js:1479-2438 placement
+//@ chunk-z2h12mty.js:1591-2550 placement
 function installGatewayShutdownHandlers(gateway, onSignal) {
   let CLAUDE_GATEWAY_DRAIN_TIMEOUT_MS = env.CLAUDE_GATEWAY_DRAIN_TIMEOUT_MS || GATEWAY_DRAIN_TIMEOUT_MS;
   let isShuttingDown = false;

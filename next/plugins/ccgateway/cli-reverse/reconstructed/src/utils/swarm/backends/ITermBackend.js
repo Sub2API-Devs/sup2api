@@ -3,9 +3,9 @@
  *
  * iTerm2 pane 后端：用 it2 CLI 分屏创建 teammate pane、发命令、关闭 pane
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/backends/ITermBackend.ts
- * pieces: chunk-vdskh52v.js (4)
+ * pieces: chunk-awtbq7k3.js (4)
  * attribution: sole-consumer 1, file-local 1, fingerprint 2
  */
 import { execFileNoThrow } from "../../execFileNoThrow.js";
@@ -16,17 +16,17 @@ import { logForDebugging } from "../../debug.js";
 import { SwarmPaneError, assertNoControlChars } from "../teamHelpers.js";
 import { logFeatureBad } from "../../../services/analytics/featureTelemetry.js";
 
-//@ chunk-vdskh52v.js:1125-1158 sole-consumer
+//@ chunk-awtbq7k3.js:1210-1243 sole-consumer
 function runIt2(splitArgs) {
   return execFileNoThrow(getIt2Command(), splitArgs);
 }
-//@ chunk-vdskh52v.js:1158-1253 file-local
+//@ chunk-awtbq7k3.js:1243-1338 file-local
 function parseSplitOutput(output) {
   let match = output.match(/Created new pane:\s*(.+)/);
   if (match && match[1]) return match[1].trim();
   return "";
 }
-//@ chunk-vdskh52v.js:1253-1372 fingerprint (2.1.88 match: getLeaderSessionId, 1)
+//@ chunk-awtbq7k3.js:1338-1457 fingerprint (2.1.88 match: getLeaderSessionId, 1)
 /**
  * 从 ITERM_SESSION_ID 取 leader 会话 ID（冒号后部分）。
  */
@@ -37,7 +37,7 @@ function getLeaderSessionId() {
   if (colonIndex === -1) return null;
   return itermSessionId.slice(colonIndex + 1);
 }
-//@ chunk-vdskh52v.js:1372-3907 fingerprint (2.1.88 match: ITermBackend, 0.923)
+//@ chunk-awtbq7k3.js:1457-3993 fingerprint (2.1.88 match: ITermBackend, 0.923)
 /**
  * iTerm2 后端：首个 teammate 从 leader 会话垂直分屏，之后从上一个 teammate 分屏；目标会话已死时剪除并重试；发命令前先发 Ctrl-U 清行；不支持边框颜色/标题。
  */

@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：网关遥测资源属性
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (6)
  * attribution: placement 6
  */
 import { isEnvTruthy } from "../../../utils/envUtils.js";
 import { listGatewayModels, supports1mContext } from "../models.js";
 
-//@ chunk-1ny7cxrt.js:1383830-1384039 placement
+//@ chunk-1hnjmk23.js:1385667-1385876 placement
 /**
  * 保留的遥测标签前缀（enduser.、user.、identity.）。
  */
@@ -27,7 +27,7 @@ var RESERVED_RESOURCE_LABELS = new Set([
   "wsl.version",
 ]);
 var RESERVED_LABEL_PREFIXES = ["enduser.", "user.", "identity."];
-//@ chunk-1ny7cxrt.js:1384039-1384657 placement
+//@ chunk-1hnjmk23.js:1385876-1386494 placement
 /**
  * 校验遥测资源属性的标签名与值（字符集、保留名、长度），返回错误或 undefined。
  */
@@ -46,7 +46,7 @@ function validateResourceLabel(name, value) {
     return `label '${name}' has too long a value: the limit is 255 characters, and characters such as / : @ count as three`;
   return;
 }
-//@ chunk-1ny7cxrt.js:1384657-1384924 placement
+//@ chunk-1hnjmk23.js:1386494-1386761 placement
 /**
  * 为用户生成 OTLP 资源属性：enduser.id、user.email、user.groups、enduser.sub（值需合法）。
  */
@@ -68,7 +68,7 @@ function buildUserResourceAttributes(claims, resourceAttributes) {
   if (!INVALID_LABEL_CHARS_RE.test(sub) && isWithinEncodedLength(sub)) attrs[ENDUSER_SUB] = sub;
   return attrs;
 }
-//@ chunk-1ny7cxrt.js:1384924-1385000 placement
+//@ chunk-1hnjmk23.js:1386761-1386837 placement
 /**
  * 判断 URI 编码后的长度是否不超过 255。
  */
@@ -79,7 +79,7 @@ function isWithinEncodedLength(value) {
     return false;
   }
 }
-//@ chunk-1ny7cxrt.js:1385000-1385366 placement
+//@ chunk-1hnjmk23.js:1386837-1387203 placement
 /**
  * 生成发给客户端的 inferenceModels（显示名覆盖、可用时标 supports1m）。
  */
@@ -113,7 +113,7 @@ function buildInferenceModels(config, policy, bootstrap) {
       }
     : {};
 }
-//@ chunk-1ny7cxrt.js:1385366-1385435 placement
+//@ chunk-1hnjmk23.js:1387203-1387272 placement
 /**
  * 取对象上的 env 字段，不是对象时给空对象。
  */

@@ -1,14 +1,14 @@
 /**
  * supports-color/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: supports-color@7.2.0
- * pieces: chunk-avfhvhz8.js (2), chunk-h6b7mazd.js (1)
+ * pieces: chunk-1jphxy9b.js (2), chunk-ww9agm6g.js (1)
  * attribution: cjs-fingerprint 2, cjs-fingerprint+context 1
  */
 import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_has_flag } from "../has-flag/index.js";
 
-//@ chunk-h6b7mazd.js:33555-35154 cjs-fingerprint
+//@ chunk-ww9agm6g.js:33555-35154 cjs-fingerprint
 var require_supports_color_2 = __commonJS(function (cjsExports, cjsModule) {
   var os = importMetaRequire("os");
   var tty = importMetaRequire("tty");
@@ -90,7 +90,7 @@ var require_supports_color_2 = __commonJS(function (cjsExports, cjsModule) {
     }),
   };
 });
-//@ chunk-avfhvhz8.js:341-1755 cjs-fingerprint
+//@ chunk-1jphxy9b.js:341-1755 cjs-fingerprint
 var require_supports_color = __commonJS(function (cjsExports, cjsModule) {
   var os = importMetaRequire("os");
   var tty = importMetaRequire("tty");
@@ -157,7 +157,7 @@ var require_supports_color = __commonJS(function (cjsExports, cjsModule) {
     stderr: translateLevel(supportsColor(true, tty.isatty(2))),
   };
 });
-//@ chunk-avfhvhz8.js:1755-2914 cjs-fingerprint+context
+//@ chunk-1jphxy9b.js:1755-2914 cjs-fingerprint+context
 var supportsHyperlinksPackage = __commonJS(function (cjsExports, cjsModule) {
   var supportsColor = require_supports_color();
   var hasFlag = require_has_flag();

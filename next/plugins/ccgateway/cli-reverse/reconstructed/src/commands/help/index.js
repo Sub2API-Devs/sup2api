@@ -3,12 +3,12 @@
  *
  * /help 命令对象
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/help/index.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:1696260-1696406 fingerprint (2.1.88 match: help, 0.7)
+//@ chunk-5xgkngpb.js:1771630-1771776 fingerprint (2.1.88 match: help, 0.7)
 /**
  * /help 命令对象（local-jsx）；描述：Show help and available commands；实现 chunk-yxcx2jtr.js 的 as。
  */

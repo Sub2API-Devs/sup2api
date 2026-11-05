@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增。SuggestConnectors 工具名与提示词。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ydxavk0r.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nw75ad8q.js (1)
  * attribution: placement 1
  */
-//@ chunk-ydxavk0r.js:191-1082 placement
+//@ chunk-nw75ad8q.js:191-1082 placement
 var SUGGEST_CONNECTORS_TOOL_NAME = "SuggestConnectors";
 var DESCRIPTION = "Resolve full connector payloads for directoryUuid values returned by SearchMcpRegistry.";
 var PROMPT = `Resolve full connector payloads for a set of directoryUuid values returned by SearchMcpRegistry. Do NOT call this unless you already have directoryUuid values from a SearchMcpRegistry result, or installed connectors' server_id values listed in your system prompt \u2014 do not guess UUIDs or pass connector names.

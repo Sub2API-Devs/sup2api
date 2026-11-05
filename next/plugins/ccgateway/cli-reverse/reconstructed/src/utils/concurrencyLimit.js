@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：并发限制辅助
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pjxxyp13.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bv0qpck0.js (3)
  * attribution: placement 3
  */
 
-//@ chunk-pjxxyp13.js:191-422 placement
+//@ chunk-bv0qpck0.js:191-422 placement
 /**
  * 包装异步函数使其并发数不超过 t，超出的调用排队等待。
  */
@@ -37,7 +37,7 @@ function limitConcurrency(limit, fn) {
     }
   };
 }
-//@ chunk-pjxxyp13.js:422-489 placement
+//@ chunk-bv0qpck0.js:422-489 placement
 /**
  * 先异步取得参数，再在并发限制内执行函数。
  */
@@ -45,7 +45,7 @@ function preloadThenLimit(limit, preload, fn) {
   let limited = limitConcurrency(limit, fn);
   return async (item) => limited(item, await preload(item));
 }
-//@ chunk-pjxxyp13.js:489-593 placement
+//@ chunk-bv0qpck0.js:489-593 placement
 /**
  * 创建计数信号量：acquire 返回释放函数，同时持有数不超过 t。
  */
@@ -55,4 +55,4 @@ function createSemaphore(limit) {
     acquire: () => new Promise((resolve) => void limited(resolve)),
   };
 }
-export { limitConcurrency, createSemaphore, preloadThenLimit };
+export { createSemaphore, limitConcurrency, preloadThenLimit };

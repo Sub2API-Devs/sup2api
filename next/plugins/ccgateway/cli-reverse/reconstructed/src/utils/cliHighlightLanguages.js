@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：CLI 语法高亮语言表
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-egr0twnb.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-636gp747.js (5)
  * attribution: placement 5
  */
 import { require_abnf } from "../../vendor/highlight.js/lib/languages/abnf.js";
@@ -200,7 +200,7 @@ import { canonicalLanguageName, pluginHighlightLanguages } from "./highlight/plu
 import { HIGHLIGHT_LANGUAGE_ALIASES } from "./cliHighlight.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-egr0twnb.js:586332-589295 placement
+//@ chunk-636gp747.js:586332-589295 placement
 var HIGHLIGHT_LANGUAGE_LOADERS = {
   abnf: () => require_abnf(),
   accesslog: () => require_accesslog(),
@@ -389,12 +389,12 @@ var HIGHLIGHT_LANGUAGE_LOADERS = {
   yaml: () => require_yaml(),
   zephir: () => require_zephir(),
 };
-//@ chunk-egr0twnb.js:589295-589415 placement
+//@ chunk-636gp747.js:589295-589415 placement
 /**
  * 高亮库加载器（核心、语言 id 解析、语言加载器、子语言依赖）。
  */
 var HIGHLIGHT_LOADER; // deferred: uses LANGUAGE_NAMES (./cliHighlight.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-egr0twnb.js:589295", () => {
+deferInit("chunk-636gp747.js:589295", () => {
   HIGHLIGHT_LOADER = {
     loadCore() {
       let highlightModule = require_core();
@@ -407,21 +407,21 @@ deferInit("chunk-egr0twnb.js:589295", () => {
     subLanguageDeps: HIGHLIGHT_LANGUAGE_ALIASES,
   };
 });
-//@ chunk-egr0twnb.js:589415-589450 placement
+//@ chunk-636gp747.js:589415-589450 placement
 /**
  * 用共享加载器做基础高亮。
  */
 function highlightCore() {
   return pluginHighlightLanguages.core(HIGHLIGHT_LOADER);
 }
-//@ chunk-egr0twnb.js:589450-589509 placement
+//@ chunk-636gp747.js:589450-589509 placement
 /**
  * 以消息样式作为背景做高亮。
  */
 function highlightUnderMessage(work, language) {
   return pluginHighlightLanguages.highlightUnderMessage(HIGHLIGHT_LOADER, work, language);
 }
-//@ chunk-egr0twnb.js:589509-589557 placement
+//@ chunk-636gp747.js:589509-589557 placement
 /**
  * 按需加载（并确认）高亮语言。
  */

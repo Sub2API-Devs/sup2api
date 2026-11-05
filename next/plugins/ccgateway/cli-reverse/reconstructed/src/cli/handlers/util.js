@@ -3,10 +3,10 @@
  *
  * 并入已有模块：惰性构建并可批量重置的单例注册表（lazy/builtCount/releaseBuiltSince）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/handlers/util.tsx
- * pieces: chunk-2f5p3gsj.js (8), chunk-g54kbxqw.js (2), chunk-kpa9nk58.js (3)
- * attribution: facade-exports 5, layout 3, fingerprint 2, sole-consumer 1, placement 2
+ * pieces: chunk-2c3jp4kn.js (2), chunk-k6qypy1d.js (3), chunk-wd99377v.js (8)
+ * attribution: fingerprint 2, sole-consumer 1, placement 2, facade-exports 5, layout 3
  */
 import { createInterface } from "readline";
 import { stripVTControlCharacters } from "util";
@@ -64,7 +64,7 @@ import { replaceControlChars } from "../../utils/resultError.js";
 import { env } from "../../utils/env.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kpa9nk58.js:191-494 placement
+//@ chunk-k6qypy1d.js:191-494 placement
 /**
  * 惰性构建并可批量重置的单例注册表（lazy/builtCount/releaseBuiltSince）。
  */
@@ -96,22 +96,22 @@ class LazyRegistry {
     this.built.length = 0;
   }
 }
-//@ chunk-kpa9nk58.js:494-508 placement
+//@ chunk-k6qypy1d.js:494-508 placement
 /**
  * DoctorLazy/React.lazy 用的单例 LazyRegistry，提供 .lazy() 包装。
  */
 var LAZY_COMPONENT_REGISTRY; // deferred: uses LazyRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kpa9nk58.js:494", () => {
+deferInit("chunk-k6qypy1d.js:494", () => {
   LAZY_COMPONENT_REGISTRY = new LazyRegistry();
 });
-//@ chunk-kpa9nk58.js:508-541 fingerprint (2.1.88 match: DoctorLazy, 1)
+//@ chunk-k6qypy1d.js:508-541 fingerprint (2.1.88 match: DoctorLazy, 1)
 /**
  * React.lazy 包装（懒加载组件）。
  */
 function DoctorLazy(logArtifactGatesFrozen) {
   return LAZY_COMPONENT_REGISTRY.lazy(logArtifactGatesFrozen);
 }
-//@ chunk-g54kbxqw.js:35039-35119 fingerprint (2.1.88 match: DoctorWithPlugins, 0.498)
+//@ chunk-2c3jp4kn.js:3942-4022 fingerprint (2.1.88 match: DoctorWithPlugins, 0.499)
 /**
  * Doctor 屏幕用的插件信息适配（显示名转换）。
  */
@@ -122,11 +122,11 @@ function DoctorWithPlugins(t0) {
     fallback: undefined,
   };
 }
-//@ chunk-g54kbxqw.js:35119-35166 sole-consumer
+//@ chunk-2c3jp4kn.js:4022-4069 sole-consumer
 function escapeOptionalXmlInline(displayName) {
   return displayName === undefined ? undefined : escapeXmlInline(displayName);
 }
-//@ chunk-2f5p3gsj.js:1375-1612 facade-exports
+//@ chunk-wd99377v.js:1375-1612 facade-exports
 function confirmYesNo(question, input = process.stdin) {
   let resolveValue = () => {};
   let promise = new Promise((resolve) => {
@@ -144,14 +144,14 @@ function confirmYesNo(question, input = process.stdin) {
   rl.once("close", () => resolveValue(false));
   return promise;
 }
-//@ chunk-2f5p3gsj.js:1612-1667 facade-exports
+//@ chunk-wd99377v.js:1612-1667 facade-exports
 function createSubcommandRoot() {
   return createRoot({
     ...getBaseRenderOptions(false),
     patchConsole: false,
   });
 }
-//@ chunk-2f5p3gsj.js:1667-1716 layout
+//@ chunk-wd99377v.js:1667-1716 layout
 function setupTokenExpiryInfo(expiresInDays) {
   return {
     ok: true,
@@ -159,7 +159,7 @@ function setupTokenExpiryInfo(expiresInDays) {
     seconds: LONG_LIVED_OAUTH_TOKEN_TTL_SECONDS,
   };
 }
-//@ chunk-2f5p3gsj.js:1716-3537 facade-exports (2.1.88 match: setupTokenHandler, 0.303)
+//@ chunk-wd99377v.js:1716-3537 facade-exports (2.1.88 match: setupTokenHandler, 0.303)
 /**
  * claude setup-token：登录并生成长期有效的订阅令牌。
  */
@@ -273,7 +273,7 @@ setup-token creates a long-lived Claude.ai subscription token, which this machin
   await logFeatureOkAsync("cli_setup_token");
   await exitAfterAnalyticsFlush(0);
 }
-//@ chunk-2f5p3gsj.js:3537-8026 facade-exports (2.1.88 match: Doctor, 0.257)
+//@ chunk-wd99377v.js:3537-8026 facade-exports (2.1.88 match: Doctor, 0.258)
 async function doctorHandler(storageV5) {
   logEvent("tengu_doctor_command", {});
   let catchError;
@@ -291,10 +291,10 @@ async function doctorHandler(storageV5) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.GIT_SHA
@@ -303,10 +303,10 @@ async function doctorHandler(storageV5) {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             }.GIT_SHA.slice(0, 12)}`,
@@ -464,11 +464,11 @@ async function doctorHandler(storageV5) {
   await logFeatureOkAsync("cli_doctor", catchError);
   await exitAfterAnalyticsFlush(0);
 }
-//@ chunk-2f5p3gsj.js:8026-8075 layout
+//@ chunk-wd99377v.js:8026-8075 layout
 function sanitizeDisplayText(text) {
   return replaceControlChars(stripVTControlCharacters(text)).replaceAll("`", "");
 }
-//@ chunk-2f5p3gsj.js:8075-8320 layout
+//@ chunk-wd99377v.js:8075-8320 layout
 function describeLastUpdateAttempt(lastUpdateResult) {
   if (!lastUpdateResult) return "none recorded";
   let dateText = sanitizeDisplayText(lastUpdateResult.timestamp.slice(0, 10));
@@ -481,7 +481,7 @@ function describeLastUpdateAttempt(lastUpdateResult) {
       return `failed (${sanitizeDisplayText(lastUpdateResult.status)}) \u2014 ${dateText}`;
   }
 }
-//@ chunk-2f5p3gsj.js:8320-8994 facade-exports (2.1.88 match: installHandler, 0.39)
+//@ chunk-wd99377v.js:8320-8994 facade-exports (2.1.88 match: installHandler, 0.39)
 /**
  * claude install [target]：安装原生构建（stable/latest/版本号）；DISABLE_UPDATES 时直接退出。
  */
@@ -518,9 +518,9 @@ async function installHandler(target, options, storage) {
 }
 export {
   DoctorLazy,
-  confirmYesNo,
   LAZY_COMPONENT_REGISTRY,
   DoctorWithPlugins,
+  confirmYesNo,
   createSubcommandRoot,
   doctorHandler,
   installHandler,

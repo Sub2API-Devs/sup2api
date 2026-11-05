@@ -3,13 +3,14 @@
  *
  * 2.1.316 新增：判断上一回合的提醒状态；排空工具结果流，等待未完成工具和唤醒等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ha3km179.js (25)
- * attribution: placement 25
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5f80vvsf.js (2), chunk-w3ch4xq2.js (26)
+ * attribution: placement 24, layout 4
  */
 import { posix } from "path";
-import { isTextOrJsonDeltaEvent, hasUltrathinkKeyword } from "./goalCheckIn.js";
+import { logFeatureBad, logFeatureOk, logFeatureSad } from "../services/analytics/featureTelemetry.js";
+import { guardGoalCheck, isTextOrJsonDeltaEvent, hasUltrathinkKeyword } from "./goalCheckIn.js";
 import { isBgSession } from "../utils/concurrentSessions.js";
 import { usesPayAsYouGo } from "../utils/planTiers.js";
 import {
@@ -19,7 +20,7 @@ import {
 } from "../services/analytics/growthbook.js";
 import { withTimeout, withDeadline, raceWithAbortSignal } from "../utils/sleep.js";
 import { logForDebugging, createAttachmentMessage_2 } from "../utils/debug.js";
-import { toError, errorMessage, isAbortError } from "../utils/errors.js";
+import { toError, isAbortError, errorMessage } from "../utils/errors.js";
 import { logError } from "../utils/log.js";
 import { isPlainHeronEnabled, isGentleAnchorEnabled } from "../services/compact/compactSettings.js";
 import { shouldEnforceUnknownModelWindow } from "../utils/context.js";
@@ -29,9 +30,15 @@ import { windowSource } from "../services/compact/autoCompactWindow.js";
 import { agentTypeForTelemetry } from "../services/analytics/metadata.js";
 import { isOver1mThreshold } from "../utils/model/configs.js";
 import { getSdkBetas, mainAgentId } from "../bootstrap/state.js";
-import { logFeatureOk, logFeatureBad, logFeatureSad } from "../services/analytics/featureTelemetry.js";
-import { shouldUltrathinkRaiseEffort } from "../utils/effort.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
+import {
+  isAsyncReplEnabled,
+  REPL_MAIN_THREAD_KEY,
+} from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { replSettleWindowMs } from "../utils/codeMode.js";
+import { TurnRegistry } from "./replTurnLedger.js";
 import { isHumanOrigin } from "../utils/turnOrigin.js";
+import { shouldUltrathinkRaiseEffort } from "../utils/effort.js";
 import { createAgentStatusEmitter } from "../utils/processUserInput/processSlashCommand.js";
 import { ensureClientDataFetch, markClientDataFetchOver } from "../bridge/bridgeEnabled.js";
 import { hasClientDataCacheSlot } from "../utils/config.js";
@@ -52,38 +59,74 @@ import { readUntrustedArray, UNREADABLE_ARRAY } from "../utils/untrustedArray.js
 import { escapeForTag } from "../utils/sanitization.js";
 import { BRIEF_TOOL_NAME } from "../tools/BriefTool/prompt.js";
 
-//@ chunk-ha3km179.js:69131-69853 placement
+//@ chunk-5f80vvsf.js:226-307 placement
+/**
+ * 静默/报错两种原因
+ */
+var REPLY_GATE_SILENT_REASONS = {
+  silent_turn: "tool_ended_silent",
+  reply_errored: "tool_ended_after_error",
+};
+//@ chunk-5f80vvsf.js:307-361 placement
+/**
+ * 记录策略失败
+ */
+function logReplyGatePolicy(reason, fields) {
+  logFeatureBad("projects_reply_gate_policy", reason, fields);
+}
+//@ chunk-w3ch4xq2.js:76217-77110 placement
 /**
  * 排空工具结果流，等待未完成工具和唤醒。
  */
-async function* drainToolResults(source, getExecutor, takePlainDelta) {
+async function* drainToolResults(source, getExecutor, takePlainDelta, installTakePlainDelta) {
   let iterator = Symbol.asyncIterator in source ? source[Symbol.asyncIterator]() : source[Symbol.iterator]();
   let pendingStream;
   let executor = getExecutor();
   let drainGeneration = 0;
+  let canTakeNow = (executor) =>
+    getExecutor() === executor && !executor.hasUnfinishedTools() && !executor.hasWakeSince(drainGeneration);
+  let currentExecutor;
+  let lastSeenStep;
+  if (takePlainDelta !== undefined && installTakePlainDelta !== undefined) {
+    let guard = guardGoalCheck(
+      "query",
+      () => currentExecutor !== undefined && canTakeNow(currentExecutor),
+      takePlainDelta,
+    );
+    installTakePlainDelta((chunk, meta) => {
+      let taken = guard(chunk, meta);
+      if (!taken) lastSeenStep = chunk;
+      return taken;
+    });
+  }
   try {
     while (true) {
-      let currentExecutor = getExecutor();
-      if (currentExecutor !== executor) {
-        executor = currentExecutor;
+      let currentExecutor_2 = getExecutor();
+      if (currentExecutor_2 !== executor) {
+        executor = currentExecutor_2;
         drainGeneration = 0;
       }
       if (
         pendingStream === undefined &&
-        !currentExecutor.hasUnfinishedTools() &&
-        !currentExecutor.hasWakeSince(drainGeneration)
+        !currentExecutor_2.hasUnfinishedTools() &&
+        !currentExecutor_2.hasWakeSince(drainGeneration)
       ) {
-        let step = await iterator.next();
-        while (
-          takePlainDelta !== undefined &&
-          !step.done &&
-          isTextOrJsonDeltaEvent(step.value) &&
-          getExecutor() === currentExecutor &&
-          !currentExecutor.hasUnfinishedTools() &&
-          !currentExecutor.hasWakeSince(drainGeneration) &&
-          takePlainDelta(step.value)
-        )
+        currentExecutor = currentExecutor_2;
+        let step;
+        try {
           step = await iterator.next();
+          while (
+            takePlainDelta !== undefined &&
+            !step.done &&
+            isTextOrJsonDeltaEvent(step.value) &&
+            step.value !== lastSeenStep &&
+            canTakeNow(currentExecutor_2) &&
+            takePlainDelta(step.value)
+          )
+            step = await iterator.next();
+        } finally {
+          currentExecutor = undefined;
+        }
         if (step.done) return;
         yield step.value;
         continue;
@@ -94,7 +137,7 @@ async function* drainToolResults(source, getExecutor, takePlainDelta) {
       }));
       let winner = await Promise.race([
         pendingStream,
-        currentExecutor.waitForDrainable(drainGeneration).then((gen) => ({
+        currentExecutor_2.waitForDrainable(drainGeneration).then((gen) => ({
           kind: "drain",
           gen,
         })),
@@ -114,13 +157,13 @@ async function* drainToolResults(source, getExecutor, takePlainDelta) {
     Promise.resolve(iterator.return?.(undefined)).catch(() => {});
   }
 }
-//@ chunk-ha3km179.js:69853-69923 placement
+//@ chunk-w3ch4xq2.js:77110-77180 placement
 /**
  * 4000
  */
 var GROWTHBOOK_READY_TIMEOUT_MS = 4000;
 var GROWTHBOOK_TIMEOUT_TEXT = "bg consent gate: own GrowthBook evaluation not ready";
-//@ chunk-ha3km179.js:69923-70258 placement
+//@ chunk-w3ch4xq2.js:77180-77515 placement
 /**
  * 后台会话等待自身 GrowthBook 评估就绪（超时用缓存）。
  */
@@ -144,7 +187,7 @@ async function awaitBgConsentGate() {
     logError(toError(error));
   }
 }
-//@ chunk-ha3km179.js:70258-70366 placement
+//@ chunk-w3ch4xq2.js:77515-77623 placement
 function createDisposableGuard(onDispose) {
   let armed = true;
   return {
@@ -162,7 +205,7 @@ function createDisposableGuard(onDispose) {
     },
   };
 }
-//@ chunk-ha3km179.js:70366-70566 placement
+//@ chunk-w3ch4xq2.js:77623-77823 placement
 function shouldBypassPtlPreempt(model, autoCompactWindow, querySource, compactFailure) {
   try {
     if (!isPlainHeronEnabled() || !shouldEnforceUnknownModelWindow(model)) return false;
@@ -177,7 +220,7 @@ function shouldBypassPtlPreempt(model, autoCompactWindow, querySource, compactFa
     return false;
   }
 }
-//@ chunk-ha3km179.js:70566-70867 placement
+//@ chunk-w3ch4xq2.js:77823-78124 placement
 /**
  * 汇总压缩检查事实用于遥测。
  */
@@ -195,7 +238,7 @@ function compactCheckFacts({ outcome, compactionCheckFacts, blockingCheck, confi
     return {};
   }
 }
-//@ chunk-ha3km179.js:70867-71166 placement
+//@ chunk-w3ch4xq2.js:78124-78423 placement
 function isCompactNotNeededAtLimit(autocompactOutcome, attemptModelFacts, logPayload) {
   try {
     if (
@@ -214,41 +257,173 @@ function isCompactNotNeededAtLimit(autocompactOutcome, attemptModelFacts, logPay
     return false;
   }
 }
-//@ chunk-ha3km179.js:71166-71241 placement
+//@ chunk-w3ch4xq2.js:78423-78498 placement
 /**
  * 是否应排空工具
  */
 function canDrainTools(state) {
   return !state.foldSuspended && (!state.isMainThread || !state.lastIteration);
 }
-//@ chunk-ha3km179.js:71241-71267 placement
-/**
- * 空实现
- */
-async function noopAsyncDrain(toolUseContext, queueFilterForThread, getCommands) {}
-//@ chunk-ha3km179.js:71267-71727 placement
+//@ chunk-w3ch4xq2.js:78498-80291 layout
+async function drainReplToolResults(toolUseContext, meta, pendingFoldCommands) {
+  if (codeModeAccepted()) {
+    if (!isAsyncReplEnabled()) return;
+    let agentId = toolUseContext.agentId ?? REPL_MAIN_THREAD_KEY;
+    try {
+      let {
+        isEvalSettleCommand,
+        REPL_STATUS_EVENT_KIND,
+      } = require("../utils/pollEvents/EVAL_LOST_STATUS.lazy.js");
+      let { getReplSessions } = require("../state/replSessions.js");
+      let { enqueueReplStatus } = require("../utils/codeMode/enqueueReplStatus.lazy.js");
+      let replSessions = getReplSessions(toolUseContext);
+      let { isReplSpliceWaitEnabled } = require("../utils/codeMode/waitForNews.js");
+      if (isReplSpliceWaitEnabled()) {
+        let signal = toolUseContext.abortController.signal;
+        let messageQueue = toolUseContext.messageQueue;
+        let unwaited = replSessions.takeUnwaited(agentId);
+        let statusLine = replSessions.takeStatusLineGiven(agentId);
+        if (signal.aborted) return;
+        if (unwaited.length === 0) {
+          let pending = replSessions.pending(agentId);
+          if (!statusLine && pending.some((row) => row.state === "detached"))
+            enqueueReplStatus(messageQueue, pending, toolUseContext.agentId, true);
+          return;
+        }
+        let abortController = new AbortController();
+        let sessionId = () => {
+          let liveCall = replSessions.undelivered(agentId);
+          if (!unwaited.some((result) => liveCall.has(result))) abortController.abort();
+        };
+        let message = replSessions.onRunningScriptsChange(sessionId);
+        sessionId();
+        let { replSpliceEventBatching, waitForNews } = require("../utils/codeMode/waitForNews.js");
+        let news = () => {
+          try {
+            return pendingFoldCommands().filter(
+              (step) => !(step.mode === "poll-event" && step.pollEvent?.kind === REPL_STATUS_EVENT_KIND),
+            );
+          } catch (error) {
+            if (!isAbortError(error)) logError(error);
+            return [];
+          }
+        };
+        let output = undefined;
+        try {
+          await waitForNews({
+            news,
+            subscribe: (toolUseId) => messageQueue.subscribe(toolUseId),
+            signal,
+            settled: abortController.signal,
+            ...replSpliceEventBatching(),
+          });
+        } finally {
+          output?.();
+          message();
+        }
+        let progress = replSessions.pending(agentId);
+        if (progress.length > 0 && !signal.aborted) {
+          let event = replSessions.undelivered(agentId);
+          let task =
+            progress.some((queued) => queued.state === "detached") &&
+            unwaited.some((call) => !event.has(call));
+          enqueueReplStatus(messageQueue, progress, toolUseContext.agentId, task);
+        }
+        return;
+      }
+      let item = replSessions.attached(agentId);
+      if (item === undefined) return;
+      let signal = toolUseContext.abortController.signal;
+      let messageQueue = toolUseContext.messageQueue;
+      let rows = () =>
+        messageQueue.peek((next) => meta(next) && !isEvalSettleCommand(next) && next.priority !== "later") !==
+        undefined;
+      if (signal.aborted || rows()) return;
+      let max = Math.max(
+        0,
+        replSettleWindowMs() - Math.max(0, ...replSessions.pending(agentId).map((entry) => entry.runningMs)),
+      );
+      let toolUseId = false;
+      await new Promise((resolve) => {
+        let message = messageQueue.subscribe(() => {
+          if (rows()) chunk();
+        });
+        let timer = setTimeout(chunk, max);
+        function chunk() {
+          clearTimeout(timer);
+          message();
+          signal.removeEventListener("abort", chunk);
+          resolve();
+        }
+        signal.addEventListener("abort", chunk, {
+          once: true,
+        });
+        item.then(() => {
+          toolUseId = true;
+          chunk();
+        });
+      });
+      if (toolUseId || signal.aborted) return;
+      let delta = replSessions.pending(agentId);
+      if (delta.length > 0 && !rows()) enqueueReplStatus(messageQueue, delta, toolUseContext.agentId);
+    } catch (error) {
+      if (isAbortError(error)) return;
+      logError(error);
+    }
+  }
+}
+//@ chunk-w3ch4xq2.js:80291-80372 layout
+function noteToolUseId(toolUseContext, id) {
+  try {
+    toolUseContext.toolState.get(TurnRegistry).add(id, toolUseContext.abortController);
+  } catch (error) {
+    logError(error);
+  }
+}
+//@ chunk-w3ch4xq2.js:80372-80459 layout
+function forgetTurnStart(toolUseContext) {
+  try {
+    toolUseContext.toolState.get(TurnRegistry).forget(toolUseContext.abortController.signal);
+  } catch (error) {
+    logError(error);
+  }
+}
+//@ chunk-w3ch4xq2.js:80459-80652 layout
+function endIfTurnEnded(toolUseContext) {
+  try {
+    let signal = toolUseContext.abortController.signal;
+    if (!toolUseContext.toolState.get(TurnRegistry).endedTurns.has(signal)) return false;
+    if (!signal.aborted) toolUseContext.abortController.abort("end_conversation");
+    return true;
+  } catch (error) {
+    logError(error);
+    return false;
+  }
+}
+//@ chunk-w3ch4xq2.js:80652-81149 placement
 /**
  * 是否在发送前预防提示过长。
  */
 function shouldPreemptPromptTooLong(commands, model, appState, deps) {
   try {
-    if (!(
-      shouldUltrathinkRaiseEffort(model, appState) &&
-      commands.some(
+    if (
+      !commands.some(
         (command) =>
           command.mode === "prompt" &&
           !command.isMeta &&
           command.shouldQuery !== false &&
           isHumanOrigin(command.origin) &&
           !command.textNotTyped &&
-          hasUltrathinkKeyword({
-            composerEnter: command.composerEnter,
-            preExpansion: command.preExpansionValue,
-            localStdinOrigin: command.localStdinOrigin,
-            input: command.value,
-          }),
+          (command.ultrathinkTyped ||
+            hasUltrathinkKeyword({
+              composerEnter: command.composerEnter,
+              preExpansion: command.preExpansionValue,
+              localStdinOrigin: command.localStdinOrigin,
+              input: command.value,
+            })) &&
+          shouldUltrathinkRaiseEffort(model, appState, command.ultrathinkTyped),
       )
-    ))
+    )
       return;
     let reminder = createAttachmentMessage_2(
       {
@@ -271,12 +446,12 @@ function shouldPreemptPromptTooLong(commands, model, appState, deps) {
     return;
   }
 }
-//@ chunk-ha3km179.js:71727-71739 placement
+//@ chunk-w3ch4xq2.js:81149-81161 placement
 /**
  * 1500
  */
 var MCP_SETTLE_WAIT_MS = 1500;
-//@ chunk-ha3km179.js:71739-72230 placement
+//@ chunk-w3ch4xq2.js:81161-81652 placement
 /**
  * 等待 MCP 连接稳定（tengu_deep_shore）。
  */
@@ -316,7 +491,7 @@ async function awaitMcpSettle(
   }
   return getModelContextInfo(model);
 }
-//@ chunk-ha3km179.js:72230-72338 placement
+//@ chunk-w3ch4xq2.js:81652-81760 placement
 function runBookkeepingSafe(onThrow) {
   try {
     onThrow();
@@ -326,7 +501,7 @@ function runBookkeepingSafe(onThrow) {
     });
   }
 }
-//@ chunk-ha3km179.js:72338-72533 placement
+//@ chunk-w3ch4xq2.js:81760-81955 placement
 function shouldRunMcpStopHooks({ requested, lastIteration }) {
   try {
     return (
@@ -340,7 +515,7 @@ function shouldRunMcpStopHooks({ requested, lastIteration }) {
     return false;
   }
 }
-//@ chunk-ha3km179.js:72533-73053 placement
+//@ chunk-w3ch4xq2.js:81955-82475 placement
 /**
  * 安全运行 stop hooks（异常时上报并结束）。
  */
@@ -376,41 +551,26 @@ async function* runStopHooksSafely({ throughStopHooks, onThrow, queryChainId, qu
   });
   return outcome;
 }
-//@ chunk-ha3km179.js:73053-73133 placement
-/**
- * 静默/报错两种原因
- */
-var REPLY_GATE_SILENT_REASONS = {
-  silent_turn: "tool_ended_silent",
-  reply_errored: "tool_ended_after_error",
-};
-//@ chunk-ha3km179.js:73133-73186 placement
-/**
- * 记录策略失败
- */
-function logReplyGatePolicy(reason, fields) {
-  logFeatureBad("projects_reply_gate_policy", reason, fields);
-}
-//@ chunk-ha3km179.js:73186-73214 placement
+//@ chunk-w3ch4xq2.js:82475-82503 placement
 var TENGU_JOYFUL_GLOBE = "tengu_joyful_globe";
-//@ chunk-ha3km179.js:73214-73250 placement
+//@ chunk-w3ch4xq2.js:82503-82539 placement
 /**
  * foamy spring + tengu_joyful_globe
  */
 function isJoyfulGlobeOn() {
   return isFoamySpringEnabled() && getFeatureValue_CACHED_MAY_BE_STALE(TENGU_JOYFUL_GLOBE, true);
 }
-//@ chunk-ha3km179.js:73280-73338 placement
+//@ chunk-w3ch4xq2.js:82569-82627 placement
 /**
  * cowork + tengu_resilient_galaxy
  */
 function isResilientGalaxyOn() {
   return isClaudeAiChatCowork() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_resilient_galaxy", false);
 }
-//@ chunk-ha3km179.js:73338-73480 placement
-function endsWithReminder(messagesForQuery) {
+//@ chunk-w3ch4xq2.js:82627-82769 placement
+function endsWithReminder(messages) {
   if (!isResilientGalaxyOn()) return false;
-  let message = messagesForQuery.findLast(
+  let message = messages.findLast(
     (message) =>
       message.type === "assistant" ||
       isQueuedCommandAttachment(message) ||
@@ -419,7 +579,7 @@ function endsWithReminder(messagesForQuery) {
   );
   return message !== undefined && isReminderMessage(message);
 }
-//@ chunk-ha3km179.js:73480-74891 placement
+//@ chunk-w3ch4xq2.js:82769-84181 placement
 /**
  * 判断上一回合的提醒状态。
  */
@@ -483,11 +643,11 @@ function lastTurnReminderState(messages) {
     text: `${LINKED_BUT_NOT_SENT_PREFIX} ${joined}. The user did not write this note and cannot see it. It is about your reply above only. A link to a file that you did not send may not open for them. If they should have a file, call ${SEND_USER_FILE_TOOL_NAME} with it now, then say in one short line that you sent it, or that the send failed. If they should have none, end your turn with no text. Do not repeat your reply, and do not mention this note.`,
   };
 }
-//@ chunk-ha3km179.js:74891-74973 placement (2.1.88 match: buildTranscriptEntries, 0.777)
+//@ chunk-w3ch4xq2.js:84181-84263 placement (2.1.88 match: buildTranscriptEntries, 0.902)
 function isQueuedCommandAttachment(message) {
   return message.type === "attachment" && message.attachment.type === "queued_command";
 }
-//@ chunk-ha3km179.js:74973-75098 placement
+//@ chunk-w3ch4xq2.js:84263-84388 placement
 function isReminderMessage(message) {
   return (
     message.type === "user" &&
@@ -496,7 +656,7 @@ function isReminderMessage(message) {
     message.message.content.startsWith(LINKED_BUT_NOT_SENT_PREFIX)
   );
 }
-//@ chunk-ha3km179.js:75098-75409 placement (2.1.88 match: collectRecentSuccessfulTools, 0.869)
+//@ chunk-w3ch4xq2.js:84388-84699 placement (2.1.88 match: extractErrorDetail, 1)
 /**
  * 收集助手文本块与 SendUserMessage 调用的 message 文本。旧版名 collectRecentSuccessfulTools 为错配；归属存疑。
  */
@@ -520,19 +680,22 @@ function collectUserFacingTexts(messages) {
 }
 export {
   awaitMcpSettle,
+  logReplyGatePolicy,
+  forgetTurnStart,
   createDisposableGuard,
   awaitBgConsentGate,
   compactCheckFacts,
   shouldBypassPtlPreempt,
   isCompactNotNeededAtLimit,
+  endIfTurnEnded,
   drainToolResults,
+  noteToolUseId,
   endsWithReminder,
   shouldRunMcpStopHooks,
   runStopHooksSafely,
   canDrainTools,
-  noopAsyncDrain,
+  drainReplToolResults,
   shouldPreemptPromptTooLong,
-  logReplyGatePolicy,
   isResilientGalaxyOn,
   lastTurnReminderState,
   isJoyfulGlobeOn,

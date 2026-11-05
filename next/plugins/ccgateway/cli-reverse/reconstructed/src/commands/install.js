@@ -3,9 +3,9 @@
  *
  * /install（CLI 子命令）原生构建安装界面
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/install.tsx
- * pieces: chunk-na8jp6ng.js (6)
+ * pieces: chunk-g2yr2739.js (6)
  * attribution: placement 1, file-last-pair 1, fingerprint 4
  */
 import { homedir } from "os";
@@ -36,9 +36,9 @@ import { logEvent } from "../services/analytics/index.js";
 import { ManifestSignatureError } from "../utils/nativeInstaller/download.js";
 import { useTimeout, render } from "../ink/hooks/useTerminalHooks.js";
 
-//@ chunk-na8jp6ng.js:13095-13099 placement
+//@ chunk-g2yr2739.js:14299-14303 placement
 init_react_production();
-//@ chunk-na8jp6ng.js:13156-13228 file-last-pair
+//@ chunk-g2yr2739.js:14360-14432 file-last-pair
 function renderDimMessage(message, index) {
   return jsxProd_default(
     BulletRow,
@@ -51,14 +51,14 @@ function renderDimMessage(message, index) {
     index,
   );
 }
-//@ chunk-na8jp6ng.js:13228-13368 fingerprint (2.1.88 match: getInstallationPath, 1)
+//@ chunk-g2yr2739.js:14432-14572 fingerprint (2.1.88 match: getInstallationPath, 1)
 function getInstallationPath() {
   let isWindows = env.platform === "win32";
   let homeDir = homedir();
   if (isWindows) return join(homeDir, ".local", "bin", "claude.exe").replaceAll("/", "\\");
   return "~/.local/bin/claude";
 }
-//@ chunk-na8jp6ng.js:13368-13807 fingerprint (2.1.88 match: SetupNotes, 0.431)
+//@ chunk-g2yr2739.js:14572-15011 fingerprint (2.1.88 match: SetupNotes, 0.43)
 function SetupNotes(props) {
   let $ = useMemoCache(5);
   let { messages } = props;
@@ -107,7 +107,7 @@ function SetupNotes(props) {
   } else t3 = $[4];
   return t3;
 }
-//@ chunk-na8jp6ng.js:13807-18584 fingerprint (2.1.88 match: Install, 0.73)
+//@ chunk-g2yr2739.js:15011-19692 fingerprint (2.1.88 match: Install, 0.732)
 function Install({ onDone, force, target, storageV5 }) {
   let [state, setState] = useState({
     type: "checking",
@@ -166,10 +166,10 @@ function Install({ onDone, force, target, storageV5 }) {
                 ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
                 PACKAGE_URL: "@anthropic-ai/claude-code",
                 README_URL: "https://code.claude.com/docs/en/overview",
-                VERSION: "2.1.316",
+                VERSION: "2.1.318",
                 FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                BUILD_TIME: "2026-10-30T23:28:13Z",
-                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                BUILD_TIME: "2026-11-03T18:52:53Z",
+                GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
                 HOOKS_WORKER_URL:
                   import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                 DD_SOURCEMAP_GROUP: "default",
@@ -254,11 +254,6 @@ function Install({ onDone, force, target, storageV5 }) {
         jsxProd_default(Text, {
           color: "claude",
           children: "Checking installation status...",
-        }),
-      state.type === "cleaning-npm" &&
-        jsxProd_default(Text, {
-          color: "warning",
-          children: "Cleaning up old npm installations...",
         }),
       state.type === "installing" &&
         jsxProd_default_2(Text, {
@@ -387,7 +382,7 @@ function Install({ onDone, force, target, storageV5 }) {
     ],
   });
 }
-//@ chunk-na8jp6ng.js:18584-18880 fingerprint (2.1.88 match: install, 1)
+//@ chunk-g2yr2739.js:19692-19988 fingerprint (2.1.88 match: install, 1)
 /**
  * /install 命令对象（local-jsx）；描述：Install Claude Code native build。
  */

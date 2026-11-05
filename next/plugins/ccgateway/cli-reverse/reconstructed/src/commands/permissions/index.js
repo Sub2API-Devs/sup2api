@@ -3,16 +3,13 @@
  *
  * /permissions（别名 allowed-tools）命令对象
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/permissions/index.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-e6aww6q8.js:2026953-2027141 fingerprint (2.1.88 match: permissions, 0.629)
-/**
- * /permissions 命令对象（local-jsx）；描述：Manage allow and deny tool permission rules；别名 ["allowed-tools"]；实现 chunk-p2qwpk2k.js 的 Aw。
- */
-var permissionsCommandDefinition = {
+//@ chunk-5xgkngpb.js:2082770-2082958 fingerprint (2.1.88 match: permissions, 0.629)
+var permissionsCommand = {
   type: "local-jsx",
   name: "permissions",
   aliases: ["allowed-tools"],
@@ -20,5 +17,5 @@ var permissionsCommandDefinition = {
   immediate: true,
   thinClientDispatch: "control-request",
 };
-var permissionsCommand = permissionsCommandDefinition;
-export { permissionsCommand };
+var permissionsCommandAlias = permissionsCommand;
+export { permissionsCommandAlias };

@@ -3,9 +3,9 @@
  *
  * 用小模型把自然语言日期/时间解析为 ISO 8601，供 elicitation 表单的日期字段。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/mcp/dateTimeParser.ts
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { asSystemPrompt } from "../systemPromptType.js";
@@ -15,7 +15,7 @@ import { extractTextContent_2 } from "../messages.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { logError } from "../log.js";
 
-//@ chunk-18hwfzwa.js:1199300-1201454 fingerprint (2.1.88 match: parseNaturalLanguageDateTime, 0.95)
+//@ chunk-czq1j3j2.js:1229463-1231617 fingerprint (2.1.88 match: parseNaturalLanguageDateTime, 0.95)
 /**
  * parseNaturalLanguageDateTime：用小模型（querySource mcp_datetime_parse）把自然语言日期/时间转成 ISO 8601，无法解析返回失败；用于 elicitation 表单的 date/date-time 字段。
  */

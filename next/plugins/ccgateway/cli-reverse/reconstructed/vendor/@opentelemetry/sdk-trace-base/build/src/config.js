@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/sdk-trace-base/build/src/config.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-trace-base@2.2.0
- * pieces: chunk-9vvvg0d3.js (6)
+ * pieces: chunk-3wgj3rdg.js (6)
  * attribution: esm-layout 2, esm-fingerprint 4
  */
 import { import_core_6, import_api_4 } from "../esm/Sampler.js";
@@ -11,9 +11,9 @@ import { AlwaysOffSampler } from "../esm/sampler/AlwaysOffSampler.js";
 import { ParentBasedSampler } from "./sampler/ParentBasedSampler.js";
 import { TraceIdRatioBasedSampler } from "./sampler/TraceIdRatioBasedSampler.js";
 
-//@ chunk-9vvvg0d3.js:13166-13172 esm-layout
+//@ chunk-3wgj3rdg.js:13538-13544 esm-layout
 var TracesSamplerValues;
-//@ chunk-9vvvg0d3.js:13172-13423 esm-fingerprint
+//@ chunk-3wgj3rdg.js:13544-13795 esm-fingerprint
 (function (TracesSamplerValues) {
   TracesSamplerValues.AlwaysOff = "always_off";
   TracesSamplerValues.AlwaysOn = "always_on";
@@ -22,9 +22,9 @@ var TracesSamplerValues;
   TracesSamplerValues.ParentBasedTraceIdRatio = "parentbased_traceidratio";
   TracesSamplerValues.TraceIdRatio = "traceidratio";
 })(TracesSamplerValues || (TracesSamplerValues = {}));
-//@ chunk-9vvvg0d3.js:13423-13432 esm-layout
+//@ chunk-3wgj3rdg.js:13795-13804 esm-layout
 var DEFAULT_RATIO = 1;
-//@ chunk-9vvvg0d3.js:13432-14190 esm-fingerprint
+//@ chunk-3wgj3rdg.js:13804-14562 esm-fingerprint
 function loadDefaultConfig() {
   return {
     sampler: buildSamplerFromEnv(),
@@ -46,7 +46,7 @@ function loadDefaultConfig() {
     },
   };
 }
-//@ chunk-9vvvg0d3.js:14190-14695 esm-fingerprint
+//@ chunk-3wgj3rdg.js:14562-15067 esm-fingerprint
 function buildSamplerFromEnv() {
   let sampler =
     import_core_6.getStringFromEnv("OTEL_TRACES_SAMPLER") ?? TracesSamplerValues.ParentBasedAlwaysOn;
@@ -78,7 +78,7 @@ function buildSamplerFromEnv() {
       });
   }
 }
-//@ chunk-9vvvg0d3.js:14695-14996 esm-fingerprint
+//@ chunk-3wgj3rdg.js:15067-15368 esm-fingerprint
 function getSamplerProbabilityFromEnv() {
   let probability = import_core_6.getNumberFromEnv("OTEL_TRACES_SAMPLER_ARG");
   if (probability == null) {

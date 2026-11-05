@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：从权限建议解析授权选项行（规则、目录、模式切换）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0e8j1zzj.js (27), chunk-xkyzvvf1.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-60gvymh4.js (1), chunk-8prszgkd.js (27)
  * attribution: placement 28
  */
 import { isRuleRoundTripStable } from "../../utils/permissions/PermissionUpdate.js";
@@ -17,13 +17,13 @@ import {
   disambiguateLabels,
   uniqueLabels,
 } from "../../utils/permissions/approvalPayloadSerialization.js";
-import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFlag.js";
-import { stripNonPrintable } from "../../utils/truncateGraphemes.js";
 import {
   permissionRuleValueFromString,
+  parseRuleString,
   hasWildcard,
   unescapeRuleContent_2,
 } from "../../utils/permissions/permissionRuleParser.js";
+import { stripNonPrintable } from "../../utils/truncateGraphemes.js";
 import { mcpInfoFromString } from "../../services/mcp/mcpStringUtils.js";
 import { identityFreeze4, identityFreeze3, mintDisplayedUpdates } from "../../utils/deepFreezePlainData.js";
 import {
@@ -32,8 +32,8 @@ import {
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
-import { uniq } from "../../utils/collections.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { formatPathList } from "./shellPermissionHelpers.js";
 import { stripInvisibleChars } from "../../utils/invisibleChars.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
@@ -42,16 +42,16 @@ import { custom } from "../../../vendor/zod/v4/classic/schemas.js";
 import { permissionUpdateSchema } from "../../utils/hooks/hookSpecificOutput.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-xkyzvvf1.js:227-257 placement
+//@ chunk-60gvymh4.js:227-257 placement
 /**
  * 无效工具名使用的占位文本。
  */
 var INVALID_TOOL_NAME_TEXT = "(invalid tool name)";
-//@ chunk-0e8j1zzj.js:2881-2910 placement
+//@ chunk-8prszgkd.js:3145-3174 placement
 function isStorableRuleValue(value) {
   return isRuleRoundTripStable(value);
 }
-//@ chunk-0e8j1zzj.js:2910-3356 placement (2.1.88 match: extractRules, 0.859)
+//@ chunk-8prszgkd.js:3174-3620 placement (2.1.88 match: extractRules, 0.859)
 /**
  * 过滤外部传入的更新列表：addRules 只保留形状合法且可存储的规则，其他类型原样保留。
  */
@@ -85,7 +85,7 @@ function filterValidAddRules(updates) {
   }
   return kept;
 }
-//@ chunk-0e8j1zzj.js:3356-3421 placement
+//@ chunk-8prszgkd.js:3620-3685 placement
 /**
  * 导出值：同一声明里的多个绑定：MAX_CONSENT_RULE_WIDTH（64：同意行规则宽度）；MAX_CONSENT_SUGGESTION_WIDTH（160：建议规则宽度上限）；INLINE_DESTINATIONS（可内联展示的规则去向）。
  */
@@ -93,13 +93,13 @@ var CONSENT_ROW_LIMITS; // deferred: has load-time effects after a deferred stat
 var MAX_CONSENT_RULE_WIDTH;
 var MAX_CONSENT_SUGGESTION_WIDTH;
 var INLINE_DESTINATIONS;
-deferInit("chunk-0e8j1zzj.js:3356", () => {
+deferInit("chunk-8prszgkd.js:3620", () => {
   CONSENT_ROW_LIMITS = 8;
   MAX_CONSENT_RULE_WIDTH = 64;
   MAX_CONSENT_SUGGESTION_WIDTH = 160;
   INLINE_DESTINATIONS = new Set(["localSettings", "session"]);
 });
-//@ chunk-0e8j1zzj.js:3421-4155 placement
+//@ chunk-8prszgkd.js:3685-4419 placement
 /**
  * 从权限更新建议中筛出可展示的“始终允许”规则行（限目标来源、类型与数量）。
  */
@@ -143,7 +143,7 @@ function consentRuleRows(
     if (version.rules === undefined) continue;
     let filtered = version.rules.filter((rule) =>
       fitsLabelLimit(
-        formatPermissionRule({
+        permissionRuleValueFromString({
           toolName: rule.toolName,
           ...(rule.ruleContent !== undefined && {
             ruleContent: rule.ruleContent,
@@ -160,17 +160,17 @@ function consentRuleRows(
   }
   return allowed;
 }
-//@ chunk-0e8j1zzj.js:4155-4228 placement
+//@ chunk-8prszgkd.js:4419-4492 placement
 /**
  * 导出值：DISPLAYED_UPDATE_TYPES（只展示 addRules 更新）。
  */
 var CONSENT_UPDATE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DISPLAYED_UPDATE_TYPES;
-deferInit("chunk-0e8j1zzj.js:4155", () => {
+deferInit("chunk-8prszgkd.js:4419", () => {
   CONSENT_UPDATE_TYPES = new Set(["addRules", "addDirectories"]);
   DISPLAYED_UPDATE_TYPES = new Set(["addRules"]);
 });
-//@ chunk-0e8j1zzj.js:4228-4319 placement
+//@ chunk-8prszgkd.js:4492-4583 placement
 function isUnsafeRuleText(ruleText) {
   return (
     ruleText.trim() !== ruleText ||
@@ -181,12 +181,12 @@ function isUnsafeRuleText(ruleText) {
     bunStringWidth(ruleText) === 0
   );
 }
-//@ chunk-0e8j1zzj.js:4319-4523 placement
+//@ chunk-8prszgkd.js:4583-4787 placement
 function isRuleableToolName(toolName) {
   if (toolName === INVALID_TOOL_NAME_TEXT) return false;
   if (isUnsafeRuleText(toolName)) return false;
-  let ruleValue = permissionRuleValueFromString(
-    formatPermissionRule({
+  let ruleValue = parseRuleString(
+    permissionRuleValueFromString({
       toolName,
     }),
   );
@@ -196,13 +196,13 @@ function isRuleableToolName(toolName) {
   if (mcpInfo !== null && !mcpInfo.toolName) return false;
   return true;
 }
-//@ chunk-0e8j1zzj.js:4523-4622 placement
+//@ chunk-8prszgkd.js:4787-4886 placement
 function titleFromRule(rule) {
   if (typeof rule !== "string" || rule.trim() === "" || bunStringWidth(rule) === 0 || !fitsLabelLimit(rule))
     return null;
   return identityFreeze4(rule);
 }
-//@ chunk-0e8j1zzj.js:4622-4945 placement
+//@ chunk-8prszgkd.js:4886-5209 placement
 function joinBoldNames(names) {
   switch (names.length) {
     case 0:
@@ -243,28 +243,28 @@ function joinBoldNames(names) {
       });
   }
 }
-//@ chunk-0e8j1zzj.js:5290-5390 placement
+//@ chunk-8prszgkd.js:5554-5654 placement
 function normalizeRulePath(rulePath) {
   return unescapeRuleContent_2(
     (rulePath?.replace(/\/\*\*$/, "") || "").replace(/^\.\//, "").replace(/^\/\//, "/"),
   );
 }
-//@ chunk-0e8j1zzj.js:5390-5478 placement
+//@ chunk-8prszgkd.js:5654-5742 placement
 function stripTrailingWildcard(ruleText) {
   if (!ruleText) return "";
   return ruleText.endsWith(":*") || ruleText.endsWith(" *") ? ruleText.slice(0, -2) : ruleText;
 }
-//@ chunk-0e8j1zzj.js:5478-5644 placement
+//@ chunk-8prszgkd.js:5742-5908 placement
 function ruleMatchesTool(rule, toolName, stripBashRedirections) {
   if (rule.toolName === toolName) {
     let trimmedContent = stripTrailingWildcard(rule.ruleContent);
     if (!trimmedContent) return false;
     return Boolean(stripBashRedirections ? stripBashRedirections(trimmedContent) : trimmedContent);
   }
-  if (rule.toolName === FILE_READ_TOOL_NAME) return Boolean(normalizeRulePath(rule.ruleContent));
+  if (rule.toolName === READ) return Boolean(normalizeRulePath(rule.ruleContent));
   return false;
 }
-//@ chunk-0e8j1zzj.js:5644-5743 placement
+//@ chunk-8prszgkd.js:5908-6007 placement
 function safeDisplayText(text) {
   return text !== undefined &&
     stripNonPrintable(text) === text &&
@@ -273,11 +273,11 @@ function safeDisplayText(text) {
     ? identityFreeze3(text)
     : undefined;
 }
-//@ chunk-0e8j1zzj.js:5743-5772 placement
+//@ chunk-8prszgkd.js:6007-6036 placement
 function consentRowLabel(value) {
   return listLabel(value);
 }
-//@ chunk-0e8j1zzj.js:5772-7696 placement
+//@ chunk-8prszgkd.js:6036-7962 placement
 function parseSuggestionRows(suggestions, toolName, stripBashRedirections, machineLabel) {
   if (!Array.isArray(suggestions)) return null;
   if (suggestions.length > MAX_CONSENT_RULE_WIDTH) return null;
@@ -299,7 +299,7 @@ function parseSuggestionRows(suggestions, toolName, stripBashRedirections, machi
   )
     return null;
   if (flattened.length + flattened_2.length > CONSENT_ROW_LIMITS) return null;
-  let filtered = flattened.filter((rule) => rule.toolName === FILE_READ_TOOL_NAME);
+  let filtered = flattened.filter((rule) => rule.toolName === READ);
   let filtered_2 = flattened.filter((rule) => rule.toolName === toolName);
   if (
     flattened_2.some(
@@ -311,14 +311,14 @@ function parseSuggestionRows(suggestions, toolName, stripBashRedirections, machi
     )
   )
     return null;
-  let uniqueDirectories = uniq(flattened_2);
-  let uniqueReadPaths = uniq(
+  let uniqueDirectories = normalizeCaseForComparison_2(flattened_2);
+  let uniqueReadPaths = normalizeCaseForComparison_2(
     filtered.flatMap((rule) =>
       rule.ruleContent && normalizeRulePath(rule.ruleContent) ? rule.ruleContent : [],
     ),
   );
   if (uniqueReadPaths.some((path) => !fitsLabelLimit(path))) return null;
-  let uniqueToolPaths = uniq(
+  let uniqueToolPaths = normalizeCaseForComparison_2(
     filtered_2.flatMap((rule) => {
       if (!rule.ruleContent) return [];
       return stripTrailingWildcard(rule.ruleContent) ? [rule.ruleContent] : [];
@@ -408,12 +408,12 @@ function parseSuggestionRows(suggestions, toolName, stripBashRedirections, machi
   }
   return null;
 }
-//@ chunk-0e8j1zzj.js:7696-7735 placement
+//@ chunk-8prszgkd.js:7962-8001 placement
 var CONSENT_ROW_MINT_TOKEN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0e8j1zzj.js:7696", () => {
+deferInit("chunk-8prszgkd.js:7962", () => {
   CONSENT_ROW_MINT_TOKEN = Symbol("ConsentRow mint token");
 });
-//@ chunk-0e8j1zzj.js:7735-7978 placement
+//@ chunk-8prszgkd.js:8001-8244 placement
 /**
  * 同意选项行：只能由 consentRows 工厂（私有令牌）构造，冻结的 {node, applies}；ConsentRow.is 用私有字段判定实例。
  */
@@ -432,17 +432,17 @@ class ConsentRow {
     return typeof candidate === "object" && candidate !== null && #e in candidate;
   }
 }
-//@ chunk-0e8j1zzj.js:7978-8009 placement
+//@ chunk-8prszgkd.js:8244-8275 placement
 /**
  * 导出值：ConsentRowSchema（同意行的 schema）。
  */
 var isConsentRow; // deferred: uses ConsentRow of its import cycle while loading; runs once the cycle is complete
 var ConsentRowSchema;
-deferInit("chunk-0e8j1zzj.js:7978", () => {
+deferInit("chunk-8prszgkd.js:8244", () => {
   isConsentRow = ConsentRow.is;
   ConsentRowSchema = DoctorLazy(() => custom(isConsentRow));
 });
-//@ chunk-0e8j1zzj.js:8009-8180 placement
+//@ chunk-8prszgkd.js:8275-8446 placement
 function parsePermissionUpdates(updates) {
   if (updates.length > MAX_CONSENT_RULE_WIDTH) return null;
   let rows = [];
@@ -458,7 +458,7 @@ function parsePermissionUpdates(updates) {
   }
   return mintDisplayedUpdates(rows);
 }
-//@ chunk-0e8j1zzj.js:8180-9079 placement
+//@ chunk-8prszgkd.js:8446-9345 placement
 /**
  * 把 SDK 传来的权限建议数组校验并转成授权选项行，非法时返回 null。
  */
@@ -532,7 +532,7 @@ function parseConsentSuggestions(suggestions, options) {
   if (label == null || typeof label === "boolean" || label === "") return null;
   return new ConsentRow(CONSENT_ROW_MINT_TOKEN, label, displayedUpdates);
 }
-//@ chunk-0e8j1zzj.js:9079-9454 placement
+//@ chunk-8prszgkd.js:9345-9720 placement
 var PERMISSION_MODE_LABELS = {
   default: "default (ask each time)",
   acceptEdits: "accept edits (auto-approve file edits and common file commands)",
@@ -541,7 +541,7 @@ var PERMISSION_MODE_LABELS = {
   plan: "plan mode (research and propose changes without making them)",
   bypassPermissions: "BYPASS PERMISSIONS (no further prompts)",
 };
-//@ chunk-0e8j1zzj.js:9454-9992 placement
+//@ chunk-8prszgkd.js:9720-10258 placement
 function modeSwitchRow(mode, options) {
   if (mode === "bypassPermissions" && options?.isBypassPermissionsModeAvailable === false) return null;
   let permissionUpdates = parsePermissionUpdates([
@@ -583,7 +583,7 @@ function modeSwitchRow(mode, options) {
     permissionUpdates,
   );
 }
-//@ chunk-0e8j1zzj.js:9992-10587 placement
+//@ chunk-8prszgkd.js:10258-10853 placement
 function parseModeSuggestions(directories) {
   if (!Array.isArray(directories)) return null;
   let directoryCount;
@@ -606,7 +606,7 @@ function parseModeSuggestions(directories) {
       let label = titleFromRule(directory);
       if (label !== null) dirList.push(label);
     } catch {}
-  let uniqueDirs = uniq(dirList);
+  let uniqueDirs = normalizeCaseForComparison_2(dirList);
   if (uniqueDirs.length === 0) return null;
   if (uniqueDirs.length > CONSENT_ROW_LIMITS) return null;
   let labels = uniqueLabels(uniqueDirs, (dir) => listLabel(dir));
@@ -634,7 +634,7 @@ function parseModeSuggestions(directories) {
     permissionUpdates,
   );
 }
-//@ chunk-0e8j1zzj.js:10587-11216 placement
+//@ chunk-8prszgkd.js:10853-11482 placement
 function directoryRow(editablePrefixSeed, editablePrefix, toolName) {
   if (typeof editablePrefixSeed !== "string" || safeDisplayText(editablePrefixSeed) !== editablePrefixSeed)
     return null;
@@ -690,13 +690,13 @@ function directoryRow(editablePrefixSeed, editablePrefix, toolName) {
     permissionUpdates,
   );
 }
-//@ chunk-0e8j1zzj.js:11216-11416 placement
+//@ chunk-8prszgkd.js:11482-11682 placement
 /**
  * 导出值：EMPTY_DISPLAYED_UPDATES（空的已展示更新列表（非空断言））。
  */
 var AUTO_MODE_ROW_LABELS; // deferred: uses parsePermissionUpdates of its import cycle while loading; runs once the cycle is complete
 var EMPTY_DISPLAYED_UPDATES;
-deferInit("chunk-0e8j1zzj.js:11216", () => {
+deferInit("chunk-8prszgkd.js:11482", () => {
   AUTO_MODE_ROW_LABELS = {
     workflow: "Yes, and switch to auto mode",
     "exit-plan-resume": "Yes, and use auto mode",
@@ -707,11 +707,11 @@ deferInit("chunk-0e8j1zzj.js:11216", () => {
     return permissionUpdates;
   })();
 });
-//@ chunk-0e8j1zzj.js:11416-11460 placement
+//@ chunk-8prszgkd.js:11682-11726 placement
 function autoModeRow(variant) {
   return new ConsentRow(CONSENT_ROW_MINT_TOKEN, AUTO_MODE_ROW_LABELS[variant], EMPTY_DISPLAYED_UPDATES);
 }
-//@ chunk-0e8j1zzj.js:11460-11902 placement
+//@ chunk-8prszgkd.js:11726-12168 placement
 function combineRows(first, ...rest) {
   let rows = [first, ...rest];
   for (let row of rows)
@@ -738,15 +738,17 @@ function combineRows(first, ...rest) {
   );
 }
 export {
+  parseModeSuggestions,
   CONSENT_ROW_LIMITS,
+  normalizeRulePath,
   consentRowLabel,
   MAX_CONSENT_SUGGESTION_WIDTH,
   isConsentRow,
   parseConsentSuggestions,
   isRuleableToolName,
   autoModeRow,
-  ConsentRowSchema,
   INVALID_TOOL_NAME_TEXT,
+  ConsentRowSchema,
   AUTO_MODE_ROW_LABELS,
   ruleMatchesTool,
   CONSENT_UPDATE_TYPES,
@@ -754,8 +756,6 @@ export {
   directoryRow,
   safeDisplayText,
   modeSwitchRow,
-  normalizeRulePath,
-  parseModeSuggestions,
   combineRows,
   DISPLAYED_UPDATE_TYPES,
   MAX_CONSENT_RULE_WIDTH,

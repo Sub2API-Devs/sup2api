@@ -3,16 +3,12 @@
  *
  * 2.1.316 新增：钩子来源展示与策略汇总
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-w5j5chas.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gavd4ahg.js (8)
  * attribution: placement 8
  */
-import {
-  getSettingsForSource,
-  getSettings_DEPRECATED,
-  getSettingsWithErrors_2,
-} from "../settings/settings.js";
+import { getSettingsForSource, getSettings_DEPRECATED, getSettingsWithErrors } from "../settings/settings.js";
 import {
   getHookDisplayText,
   isHookPluginSatisfied,
@@ -41,7 +37,7 @@ import {
 import { isSettingSourceEnabled } from "../settings/constants.js";
 import { hasPolicySettings } from "../plugins/managedPluginSeating.js";
 
-//@ chunk-w5j5chas.js:647-792 placement (2.1.88 match: isHTTPConfig, 0.785)
+//@ chunk-gavd4ahg.js:648-793 placement (2.1.88 match: isHTTPConfig, 0.785)
 function redactHttpHeaderValues(config) {
   if (config.type !== "http" || config.headers === undefined) return config;
   return {
@@ -49,7 +45,7 @@ function redactHttpHeaderValues(config) {
     headers: Object.fromEntries(Object.keys(config.headers).map((key) => [key, ""])),
   };
 }
-//@ chunk-w5j5chas.js:792-940 placement
+//@ chunk-gavd4ahg.js:793-941 placement
 function countHooksInSource(source) {
   let count = 0;
   let hooks = getSettingsForSource(source)?.hooks ?? {};
@@ -59,7 +55,7 @@ function countHooksInSource(source) {
   }
   return count;
 }
-//@ chunk-w5j5chas.js:940-1181 placement
+//@ chunk-gavd4ahg.js:941-1182 placement
 function hookContentLabel(config) {
   switch (config.type) {
     case "command":
@@ -77,12 +73,12 @@ function hookContentLabel(config) {
       return "Definition";
   }
 }
-//@ chunk-w5j5chas.js:1181-1257 placement
+//@ chunk-gavd4ahg.js:1182-1258 placement
 function hookCommandDisplayText(config) {
   if (config.type === "script") return config.file ?? config.script ?? "";
   return getHookDisplayText(config);
 }
-//@ chunk-w5j5chas.js:1257-1614 placement
+//@ chunk-gavd4ahg.js:1258-1615 placement
 function isHookSourceActive(hook) {
   if (hook.source === "sessionHook")
     return (
@@ -103,7 +99,7 @@ function isHookSourceActive(hook) {
   }
   return !managedOnly && !isRestrictedToPluginOnly("hooks");
 }
-//@ chunk-w5j5chas.js:1614-2544 placement
+//@ chunk-gavd4ahg.js:1615-2546 placement
 function hookSourceLabel(hook) {
   let config = hook.config;
   let editableSource =
@@ -161,7 +157,7 @@ function hookSourceLabel(hook) {
     }),
   };
 }
-//@ chunk-w5j5chas.js:2544-2798 placement (2.1.88 match: getEnabledSettingSources, 0.773)
+//@ chunk-gavd4ahg.js:2546-2800 placement (2.1.88 match: getEnabledSettingSources, 0.772)
 function getManagedHooksForEventMatcher(event, matcher) {
   let labels = [];
   for (let sourceName of ["flagSettings", "policySettings"]) {
@@ -182,7 +178,7 @@ function getManagedHooksForEventMatcher(event, matcher) {
   }
   return labels;
 }
-//@ chunk-w5j5chas.js:2798-4160 placement
+//@ chunk-gavd4ahg.js:2800-4162 placement
 /**
  * 汇总托管策略对钩子的限制（仅托管钩子、仅插件、全部禁用等）用于展示。
  */
@@ -237,7 +233,7 @@ function hookPolicySummary(appState) {
       allLabels.push(...labels);
     }
   }
-  let mapped = getSettingsWithErrors_2()
+  let mapped = getSettingsWithErrors()
     .errors.filter((error) => error.severity !== "warning")
     .map((error) => ({
       file: error.file,

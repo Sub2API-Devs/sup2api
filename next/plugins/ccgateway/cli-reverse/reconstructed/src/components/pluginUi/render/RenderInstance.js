@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。插件 ui.render 渲染实例与宿主元素。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bc20zedk.js (48)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rkbsrtg1.js (48)
  * attribution: placement 48
  */
 import {
@@ -92,7 +92,7 @@ import { ENGINE_ELEMENT } from "../../../plugins/functionHooks/sites/promptConte
 import { useIsFullscreen } from "../../../ink/renderModeContext.js";
 import { logForDebugging } from "../../../utils/debug.js";
 import { errorMessage } from "../../../utils/errors.js";
-import { renderInstanceKey, mountStateReader } from "../../../plugins/functionHooks/api/state.js";
+import { renderInstanceKey, holdInstance } from "../../../plugins/functionHooks/api/state.js";
 import { eventCallersWrapper2 } from "../../../plugins/functionHooks/eventCatalog.js";
 import { HooksError } from "../../../plugins/functionHooks/hooksErrors.js";
 import { useStoreSelector } from "../../../hooks/useStoreSelector.js";
@@ -105,12 +105,12 @@ import { dispatchInputQueued, dispatchSelectQueued } from "../../../plugins/func
 import { paneHostSlot } from "../../../plugins/functionHooks/panes.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-bc20zedk.js:37224-37228 placement
+//@ chunk-rkbsrtg1.js:37226-37230 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:37224", () => {
+deferInit("chunk-rkbsrtg1.js:37226", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:37228-37428 placement
+//@ chunk-rkbsrtg1.js:37230-37430 placement
 function useImageFileSupport(props) {
   let { terminalImages } = useApp();
   let { internal_querier: internalQuerier } = useStdin();
@@ -128,10 +128,10 @@ function useImageFileSupport(props) {
   }, [props, internalQuerier, terminalImages, terminalImageFiles]);
   return files;
 }
-//@ chunk-bc20zedk.js:37428-37466 placement
+//@ chunk-rkbsrtg1.js:37430-37468 placement
 var imagePresenter = (protocol, props) =>
   protocol === "iterm" ? itermImageSequenceThunk(props) : terminalImagePainter(props);
-//@ chunk-bc20zedk.js:37466-39109 placement
+//@ chunk-rkbsrtg1.js:37468-39111 placement
 function KittyImage(props) {
   let { plugin, elementKey, source, columns, rows } = props;
   let { terminalImages } = useApp();
@@ -272,7 +272,7 @@ function KittyImage(props) {
   );
   return transmitted;
 }
-//@ chunk-bc20zedk.js:39109-39491 placement
+//@ chunk-rkbsrtg1.js:39111-39493 placement
 /**
  * 插件图片元素（Kitty/iTerm 占位网格，无 id 时显示 alt）。
  */
@@ -318,17 +318,17 @@ function PluginImage(props) {
     }),
   );
 }
-//@ chunk-bc20zedk.js:39491-39495 placement
+//@ chunk-rkbsrtg1.js:39493-39497 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:39491", () => {
+deferInit("chunk-rkbsrtg1.js:39493", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:39495-39499 placement
+//@ chunk-rkbsrtg1.js:39497-39501 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:39495", () => {
+deferInit("chunk-rkbsrtg1.js:39497", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:39499-39931 placement
+//@ chunk-rkbsrtg1.js:39501-39933 placement
 /**
  * 按最小间隔合并重绘的调度器。
  */
@@ -375,28 +375,28 @@ function createPaintScheduler(draw) {
     },
   };
 }
-//@ chunk-bc20zedk.js:39931-39969 placement
+//@ chunk-rkbsrtg1.js:39933-39971 placement
 var withPaintOverride = (base, extra, paint) => ({
   ...base,
   ...extra,
   paint,
 });
-//@ chunk-bc20zedk.js:39969-40067 placement
+//@ chunk-rkbsrtg1.js:39971-40069 placement
 function setRawText(node, rawText) {
   if (node === null || node.attributes.rawText === rawText) return;
   node.attributes.rawText = rawText;
   markDirty(node);
   scheduleRenderFrom(node);
 }
-//@ chunk-bc20zedk.js:40067-40078 placement
+//@ chunk-rkbsrtg1.js:40069-40080 placement
 var STANDING_REDRAW_MS = 250;
-//@ chunk-bc20zedk.js:40078-40173 placement
+//@ chunk-rkbsrtg1.js:40080-40175 placement
 function scheduleStandingRedraw(scheduler, standing, redraw) {
   let state = standing.standing();
   if (state !== "complete")
     scheduler?.schedule(redraw, state === "progressing" ? SCROLL_JUMP_LINES : STANDING_REDRAW_MS);
 }
-//@ chunk-bc20zedk.js:40173-40555 placement
+//@ chunk-rkbsrtg1.js:40175-40557 placement
 /**
  * 订阅栅格流并把帧绘制到原始 ANSI 节点。
  */
@@ -438,7 +438,7 @@ function useRasterPainter(props, rasters, words) {
   }, [words, rasters]);
   return nodeRef;
 }
-//@ chunk-bc20zedk.js:40555-40903 placement
+//@ chunk-rkbsrtg1.js:40557-40905 placement
 /**
  * 插件栅格元素。
  */
@@ -480,9 +480,9 @@ function PluginRaster(props) {
     }),
   );
 }
-//@ chunk-bc20zedk.js:40903-40912 placement
+//@ chunk-rkbsrtg1.js:40905-40914 placement
 var VISIBLE_OPTIONS = 8;
-//@ chunk-bc20zedk.js:40912-41043 placement
+//@ chunk-rkbsrtg1.js:40914-41045 placement
 function listWindow(count, highlight) {
   let max = Math.max(0, highlight - VISIBLE_OPTIONS + 1);
   let max_2 = Math.max(0, Math.min(VISIBLE_OPTIONS, count - max));
@@ -494,22 +494,22 @@ function listWindow(count, highlight) {
     rows: max_2 + (hidden > 0 ? 1 : 0),
   };
 }
-//@ chunk-bc20zedk.js:41043-41047 placement
+//@ chunk-rkbsrtg1.js:41045-41049 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:41043", () => {
+deferInit("chunk-rkbsrtg1.js:41045", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:41047-41051 placement
+//@ chunk-rkbsrtg1.js:41049-41053 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:41047", () => {
+deferInit("chunk-rkbsrtg1.js:41049", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:41051-41068 placement
+//@ chunk-rkbsrtg1.js:41053-41070 placement
 var SelectFields; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:41051", () => {
+deferInit("chunk-rkbsrtg1.js:41053", () => {
   SelectFields = createContext(null);
 });
-//@ chunk-bc20zedk.js:41068-41893 placement
+//@ chunk-rkbsrtg1.js:41070-41895 placement
 function SelectField(props) {
   let { plugin, handle, element, options } = props;
   let siteFocus = useSiteFocus({
@@ -574,7 +574,7 @@ function SelectField(props) {
     ],
   });
 }
-//@ chunk-bc20zedk.js:41893-42026 placement
+//@ chunk-rkbsrtg1.js:41895-42028 placement
 function textStyleProps(style) {
   let weightInfo = weightAndBold(style);
   if (weightInfo === undefined) return weightInfo;
@@ -586,7 +586,7 @@ function textStyleProps(style) {
       }
     : restStyle;
 }
-//@ chunk-bc20zedk.js:42026-44565 placement
+//@ chunk-rkbsrtg1.js:42028-44567 placement
 function rebuild(node, renderRef, visiting = new Set()) {
   if (typeof node === "string") return createElement(Text, null, node);
   if (node.type === "engine") return renderRef(node.ref);
@@ -741,7 +741,7 @@ function rebuild(node, renderRef, visiting = new Set()) {
         children: mapped,
       });
 }
-//@ chunk-bc20zedk.js:44565-44720 placement
+//@ chunk-rkbsrtg1.js:44567-44722 placement
 function DrawnTree({ tree, input, draw }) {
   let { component, requestId } = input;
   return createElement(
@@ -758,12 +758,12 @@ function DrawnTree({ tree, input, draw }) {
     rebuild(tree, (ref) => draw(heldFor(tree, ref, input))),
   );
 }
-//@ chunk-bc20zedk.js:44720-44745 placement
+//@ chunk-rkbsrtg1.js:44722-44747 placement
 var HOST_BOUNDED_COMPONENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:44720", () => {
+deferInit("chunk-rkbsrtg1.js:44722", () => {
   HOST_BOUNDED_COMPONENTS = new Set(["Pane"]);
 });
-//@ chunk-bc20zedk.js:44745-45115 placement
+//@ chunk-rkbsrtg1.js:44747-45117 placement
 function boundedDrawing({ tree, input, draw, submittedBy, onThrown }) {
   let { component } = input;
   let treeElement = jsxProd_default(DrawnTree, {
@@ -799,23 +799,23 @@ function boundedDrawing({ tree, input, draw, submittedBy, onThrown }) {
         children: treeElement,
       });
 }
-//@ chunk-bc20zedk.js:45115-45119 placement
+//@ chunk-rkbsrtg1.js:45117-45121 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:45115", () => {
+deferInit("chunk-rkbsrtg1.js:45117", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:45119-45123 placement
+//@ chunk-rkbsrtg1.js:45121-45125 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:45119", () => {
+deferInit("chunk-rkbsrtg1.js:45121", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:45123-45186 placement
+//@ chunk-rkbsrtg1.js:45125-45188 placement
 function useEngineDrew(isActive) {
   let hasDrawnRef = useRef(false);
   if (!isActive) hasDrawnRef.current = true;
   return hasDrawnRef.current;
 }
-//@ chunk-bc20zedk.js:45186-45385 placement
+//@ chunk-rkbsrtg1.js:45188-45387 placement
 function heldBack(held, props) {
   let { input, drawn, contentRows, isFallback } = props;
   return held.rows !== undefined &&
@@ -833,7 +833,7 @@ function heldBack(held, props) {
         }
       : held;
 }
-//@ chunk-bc20zedk.js:45385-45634 placement
+//@ chunk-rkbsrtg1.js:45387-45636 placement
 function heldOff(held, props) {
   let { input, drawn, lastRows, contentRows } = props;
   let isContentEmpty = contentRows === 0;
@@ -865,12 +865,12 @@ function heldOff(held, props) {
             drawn,
           };
 }
-//@ chunk-bc20zedk.js:45634-45638 placement
+//@ chunk-rkbsrtg1.js:45636-45640 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:45634", () => {
+deferInit("chunk-rkbsrtg1.js:45636", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:45638-45870 placement
+//@ chunk-rkbsrtg1.js:45640-45872 placement
 function useHeldRows(props) {
   let { isOff, input, drawn, lastRows } = props;
   let [heldRows, setHeldRows] = useState(() => ({
@@ -889,12 +889,12 @@ function useHeldRows(props) {
     setHeldRows(nextHeld);
   return nextHeld.rows;
 }
-//@ chunk-bc20zedk.js:45870-45874 placement
+//@ chunk-rkbsrtg1.js:45872-45876 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:45870", () => {
+deferInit("chunk-rkbsrtg1.js:45872", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:45874-46153 placement
+//@ chunk-rkbsrtg1.js:45876-46155 placement
 function useOnScreenInput(component, shouldTrack, submittedBy) {
   let isActive = useIsFullscreen() && shouldTrack;
   let submitterList = submittedBy === undefined ? undefined : [submittedBy];
@@ -922,20 +922,20 @@ function useOnScreenInput(component, shouldTrack, submittedBy) {
     [component, setPaintedRows, paintedRows, getPaintedRows, paintedRowsRef, heldRows],
   );
 }
-//@ chunk-bc20zedk.js:46153-46157 placement
+//@ chunk-rkbsrtg1.js:46155-46159 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:46153", () => {
+deferInit("chunk-rkbsrtg1.js:46155", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:46157-46222 placement
+//@ chunk-rkbsrtg1.js:46159-46224 placement
 var renderInputKey = (isEnabled, input) =>
   isEnabled ? `${input.component}\x00${input.requestId}\x00` + valueKeyOf(input) : "";
-//@ chunk-bc20zedk.js:46222-46321 placement
+//@ chunk-rkbsrtg1.js:46224-46323 placement
 var siteFailed = (input, error) =>
   logForDebugging(`ui.render (${input.component} ${input.requestId}): site failed: ${errorMessage(error)}`, {
     level: "error",
   });
-//@ chunk-bc20zedk.js:46321-46855 placement
+//@ chunk-rkbsrtg1.js:46323-46857 placement
 function useRenderAnswer(isEnabled, input, { version, staticFrame, submittedBy }) {
   let submitterList = submittedBy === undefined ? undefined : [submittedBy];
   let [answer, setAnswer] = useState(() =>
@@ -944,7 +944,7 @@ function useRenderAnswer(isEnabled, input, { version, staticFrame, submittedBy }
   let inputKey = renderInputKey(isEnabled, input);
   let hasRealRequest = isEnabled && input.requestId !== "" ? renderInstanceKey(input) : undefined;
   useEffect(
-    () => (hasRealRequest !== undefined ? mountStateReader(hasRealRequest) : undefined),
+    () => (hasRealRequest !== undefined ? holdInstance(hasRealRequest) : undefined),
     [hasRealRequest],
   );
   useEffect(() => {
@@ -981,10 +981,10 @@ function useRenderAnswer(isEnabled, input, { version, staticFrame, submittedBy }
     onThrown,
   };
 }
-//@ chunk-bc20zedk.js:46855-46890 placement
+//@ chunk-rkbsrtg1.js:46857-46892 placement
 var useRenderVersion = (component) =>
   useStoreSelector(renderVersions(), (versions) => siteVersionOf(versions, component));
-//@ chunk-bc20zedk.js:46890-47671 placement
+//@ chunk-rkbsrtg1.js:46892-47673 placement
 function useRenderDrawing(component, input, submittedBy) {
   let renderVersion = useRenderVersion(component);
   let staticStorage = useContext(staticRenderStorageSlot);
@@ -1056,9 +1056,9 @@ function useRenderDrawing(component, input, submittedBy) {
     hasThrown,
   };
 }
-//@ chunk-bc20zedk.js:47671-47701 placement
+//@ chunk-rkbsrtg1.js:47673-47703 placement
 var fieldKey = (plugin, element) => `${plugin}\x00${element}`;
-//@ chunk-bc20zedk.js:47701-47773 placement
+//@ chunk-rkbsrtg1.js:47703-47775 placement
 var inputFromTerminal = (input) =>
   logRejection(
     `ui.input ${input.plugin}`,
@@ -1067,7 +1067,7 @@ var inputFromTerminal = (input) =>
       surface: "terminal",
     }),
   );
-//@ chunk-bc20zedk.js:47773-47846 placement
+//@ chunk-rkbsrtg1.js:47775-47848 placement
 var selectFromTerminal = (select) =>
   logRejection(
     `ui.select ${select.plugin}`,
@@ -1076,16 +1076,16 @@ var selectFromTerminal = (select) =>
       surface: "terminal",
     }),
   );
-//@ chunk-bc20zedk.js:47846-47879 placement
+//@ chunk-rkbsrtg1.js:47848-47881 placement
 var useHasRenderHooks = (component) => useStoreSelector(renderVersions(), () => hasRenderHooks(component));
-//@ chunk-bc20zedk.js:47879-47911 placement
+//@ chunk-rkbsrtg1.js:47881-47913 placement
 var useRenderHook = (component, input, submittedBy) => useRenderDrawing(component, input, submittedBy).node;
-//@ chunk-bc20zedk.js:47911-47915 placement
+//@ chunk-rkbsrtg1.js:47913-47917 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bc20zedk.js:47911", () => {
+deferInit("chunk-rkbsrtg1.js:47913", () => {
   init_react_production();
 });
-//@ chunk-bc20zedk.js:47915-48217 placement
+//@ chunk-rkbsrtg1.js:47917-48219 placement
 function useRenderInput(component, buildInput, inputDeps) {
   let input = useMemo(buildInput, inputDeps);
   let renderVersion = useRenderVersion({
@@ -1111,17 +1111,18 @@ function useRenderInput(component, buildInput, inputDeps) {
     };
   }, [component, input, renderVersion, viewportVersion, isFullscreen]);
 }
-//@ chunk-bc20zedk.js:48217-48245 placement
+//@ chunk-rkbsrtg1.js:48219-48247 placement
 var useSettledDraw = (input) => renderDraws.settled(input);
 export {
+  fieldKey,
   useRenderDrawing,
   useRenderInput,
   SelectFields,
-  fieldKey,
+  listWindow,
   inputFromTerminal,
   selectFromTerminal,
-  listWindow,
   useHasRenderHooks,
+  useRenderHook,
   DrawnTree,
   HOST_BOUNDED_COMPONENTS,
   SelectField,
@@ -1136,7 +1137,6 @@ export {
   useHeldRows,
   useOnScreenInput,
   useRenderAnswer,
-  useRenderHook,
   useRenderVersion,
   useSettledDraw,
 };

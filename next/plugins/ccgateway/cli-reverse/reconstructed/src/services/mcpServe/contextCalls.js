@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：mcp serve 上下文调用：读取项目上下文、嵌套上下文与变更文件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wy9dbk5f.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xrwmcqkn.js (19)
  * attribution: placement 19
  */
 import { randomUUID } from "crypto";
@@ -42,6 +42,7 @@ import {
 } from "../../utils/attachments.js";
 import { identityAgentId2 } from "../../utils/agentId.js";
 import { ProxyEnvironmentSchema, getAgentProxyNoteObject } from "../../constants/agentProxyPrompt.js";
+import { diskStateSchema, diskState } from "./toolHostIds.js";
 import { getOriginalCwd, setClaudeMdAdditionalDirectoriesAsked } from "../../bootstrap/state.js";
 import { findGitRootUncached } from "../../utils/git.js";
 import { env } from "../../utils/env.js";
@@ -73,7 +74,7 @@ import { isClaudeMdLoadingDisabled } from "../../utils/settings/customizationDis
 import { clearMemoryFilesCache } from "../../components/Message.js";
 import { pathInAllowedWorkingPath } from "../../utils/permissions/filesystem.js";
 
-//@ chunk-wy9dbk5f.js:25979-26244 placement
+//@ chunk-xrwmcqkn.js:31218-31483 placement
 /**
  * 变更文件结果的 schema。
  */
@@ -102,14 +103,14 @@ var changedFilesResultSchema = DoctorLazy(() =>
     isBusy: literal(true).optional(),
   }),
 );
-//@ chunk-wy9dbk5f.js:26244-26307 placement
+//@ chunk-xrwmcqkn.js:31483-31546 placement
 /**
  * 当文件按 inode 操作符变化时分两次写入。
  */
 function updateFileMap(fileMap, { path, was, now }) {
   if (fileMap.get(path) === was) fileMap.set(path, now);
 }
-//@ chunk-wy9dbk5f.js:26307-28335 placement
+//@ chunk-xrwmcqkn.js:31546-33574 placement
 async function serveReadChangedFiles(input, signal, context) {
   if (isPlainObject(input) && exceedsSerializedContextLimit(input.permission_context))
     throw Error("permission_context is too large");
@@ -267,7 +268,7 @@ async function serveReadChangedFiles(input, signal, context) {
     },
   };
 }
-//@ chunk-wy9dbk5f.js:28335-28493 placement
+//@ chunk-xrwmcqkn.js:33574-33772 placement
 /**
  * 读取环境结果的 schema。
  */
@@ -278,9 +279,10 @@ var readEnvironmentResultSchema = DoctorLazy(() =>
     shellDirectory: stringSchema().optional(),
     isGitRepo: booleanSchema(),
     agentProxy: ProxyEnvironmentSchema().nullable().optional().catch(undefined),
+    toolHost: diskStateSchema().optional().catch(undefined),
   }),
 );
-//@ chunk-wy9dbk5f.js:28493-28713 placement
+//@ chunk-xrwmcqkn.js:33772-34020 placement
 async function serveReadEnvironment(input, signal, { session }) {
   let originalCwd = getOriginalCwd();
   return {
@@ -290,16 +292,17 @@ async function serveReadEnvironment(input, signal, { session }) {
       shellDirectory: getSessionProject(session).cwd,
       isGitRepo: findGitRootUncached(originalCwd) !== null,
       agentProxy: getAgentProxyNoteObject() ?? (env.CCR_AGENT_PROXY_ENABLED ? undefined : null),
+      toolHost: diskState.of(session.host).ids,
     },
   };
 }
-//@ chunk-wy9dbk5f.js:28775-28841 placement
+//@ chunk-xrwmcqkn.js:34082-34148 placement
 /**
  * 空列表常量。
  */
 var AGENTS_MD_MODES = ["claude-md-or-agents-md", "claude-md-and-agents-md"];
 var EMPTY_LIST = [];
-//@ chunk-wy9dbk5f.js:28841-28912 placement
+//@ chunk-xrwmcqkn.js:34148-34219 placement
 /**
  * 在上下文里补上 AGENTS.md 指令。
  */
@@ -307,7 +310,7 @@ async function withAgentsMdInstructions(sessionMemoryFiles, agentsMdMode, sessio
   let files = await readAgentsMdInstructions(sessionMemoryFiles, agentsMdMode, session, context);
   return files ? fromPluginInstructionFiles(files, sessionMemoryFiles) : sessionMemoryFiles;
 }
-//@ chunk-wy9dbk5f.js:28912-29173 placement
+//@ chunk-xrwmcqkn.js:34219-34480 placement
 async function readAncestorInstructions(
   filePath,
   sessionMemoryFiles,
@@ -339,7 +342,7 @@ async function readAncestorInstructions(
     [],
   );
 }
-//@ chunk-wy9dbk5f.js:29173-29381 placement
+//@ chunk-xrwmcqkn.js:34480-34688 placement
 async function readAgentsMdInstructions(sessionMemoryFiles, agentsMdMode, session, context) {
   let dir = getOriginalCwd();
   let files = sessionMemoryFiles.map(toPluginInstructionFile);
@@ -360,7 +363,7 @@ async function readAgentsMdInstructions(sessionMemoryFiles, agentsMdMode, sessio
     dedupeInstructionFiles(flattenProjectInstructionParts(agentsInstructions), files),
   );
 }
-//@ chunk-wy9dbk5f.js:29381-29439 placement
+//@ chunk-xrwmcqkn.js:34688-34746 placement
 /**
  * 读取 AGENTS.md 指令。
  */
@@ -370,7 +373,7 @@ function readAgentsMdInstructionsFor(filenames, session, judgedBy) {
     session,
   });
 }
-//@ chunk-wy9dbk5f.js:29439-29484 placement
+//@ chunk-xrwmcqkn.js:34746-34791 placement
 /**
  * 读规则参数的 schema。
  */
@@ -379,7 +382,7 @@ var readRulesInputSchema = DoctorLazy(() =>
     readRules: unknown().optional(),
   }),
 );
-//@ chunk-wy9dbk5f.js:29484-29789 placement
+//@ chunk-xrwmcqkn.js:34791-35096 placement
 /**
  * 解析读取调用的权限上下文：未发送读规则时用当前工具上下文；发送了则与启动时权限上下文合并，无效时返回 undefined。
  */
@@ -404,7 +407,7 @@ function resolveReadPermissionContext(input, context) {
     bySentRules: true,
   };
 }
-//@ chunk-wy9dbk5f.js:29789-30496 placement
+//@ chunk-xrwmcqkn.js:35096-35803 placement
 /**
  * 项目上下文文件列表的 schema。
  */
@@ -447,7 +450,7 @@ var projectContextFilesSchema = DoctorLazy(() =>
     rulesJudged: booleanSchema().optional(),
   }),
 );
-//@ chunk-wy9dbk5f.js:30496-30941 placement
+//@ chunk-xrwmcqkn.js:35803-36248 placement
 async function serveReadProjectContext(input, signal, context) {
   if (isClaudeMdLoadingDisabled())
     return {
@@ -476,7 +479,7 @@ async function serveReadProjectContext(input, signal, context) {
     readPermissionContext.bySentRules,
   );
 }
-//@ chunk-wy9dbk5f.js:30941-31445 placement
+//@ chunk-xrwmcqkn.js:36248-36752 placement
 async function serveReadNestedProjectContext(input, signal, context) {
   let request = readNestedProjectContextInputSchema().parse(input);
   setClaudeMdAdditionalDirectoriesAsked(request.addedDirectories);
@@ -524,7 +527,7 @@ async function serveReadNestedProjectContext(input, signal, context) {
     readPermissionContext.bySentRules,
   );
 }
-//@ chunk-wy9dbk5f.js:31445-31563 placement
+//@ chunk-xrwmcqkn.js:36752-36870 placement
 var RULES_UNREAD_RESULT = {
   summary: "no memory files: the session's read rules could not be read",
   output: {
@@ -532,7 +535,7 @@ var RULES_UNREAD_RESULT = {
     rulesUnread: true,
   },
 };
-//@ chunk-wy9dbk5f.js:31563-31711 placement
+//@ chunk-xrwmcqkn.js:36870-37018 placement
 function loadSessionMemoryFiles(context, judgedBy) {
   let { session, storageV5, credentials } = context.toolUseContext();
   setClaudeMdJudgedBy(session, judgedBy);
@@ -540,7 +543,7 @@ function loadSessionMemoryFiles(context, judgedBy) {
   if (context.callerLogsSharedEvents) markInitialLoadLogged(session);
   return getMemoryFilesCached(session, false, storageV5, credentials);
 }
-//@ chunk-wy9dbk5f.js:31711-32088 placement
+//@ chunk-xrwmcqkn.js:37018-37395 placement
 /**
  * 只保留 Project/Local 记忆文件构造 ReadProjectContext 结果；总大小超上限时返回 tooLarge。
  */
@@ -579,7 +582,7 @@ function buildProjectContextResult(memoryFiles, maxChars, maxBytes, bySentRules)
     },
   };
 }
-//@ chunk-wy9dbk5f.js:32088-32230 placement
+//@ chunk-xrwmcqkn.js:37395-37537 placement
 function measureMemoryFiles(memoryFiles) {
   let totalChars = 0;
   for (let file of memoryFiles) {

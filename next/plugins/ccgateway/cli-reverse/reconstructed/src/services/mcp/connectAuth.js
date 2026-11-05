@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。MCP 连接时的认证处理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-z1n5m6nf.js (31)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h44h5gdv.js (31)
  * attribution: placement 31
  */
 import { randomUUID } from "crypto";
@@ -23,7 +23,12 @@ import { isLegacyProtocolEra } from "./connectionRegistry.js";
 import { ZodError } from "../../../vendor/zod/v4/classic/errors.js";
 import { logEvent } from "../analytics/index.js";
 import { fromEnum, lit } from "../analytics/safeMetadata.js";
-import { mcpBaseUrlAnalytics, isMcpAuthCached_3, NEEDS_AUTH_CACHE_REFRESHABLE_TTL_MS_2 } from "./client.js";
+import {
+  mcpBaseUrlAnalytics,
+  setMcpAuthCacheEntry,
+  NEEDS_AUTH_CACHE_REFRESHABLE_TTL_MS,
+  serverCacheKey,
+} from "./client.js";
 import { logMCPDebug, logMCPError } from "../../utils/log.js";
 import {
   hasStoredRefreshToken,
@@ -32,6 +37,7 @@ import {
   isFirstPartyMcpUrl,
 } from "./auth.js";
 import { isCurrentIdentityEpoch } from "./identityChange.js";
+import { getConnectionCache } from "./needsAuthCache.js";
 import { logFeatureSad, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { isDiscoveryCacheUsable } from "./mcpAccountKey.js";
 import { flushDiscoveryCache, deleteDiscoveryCache } from "./discoveryCache.js";
@@ -44,7 +50,6 @@ import { stripRedirectLocation } from "./connectionLifecycle.js";
 import { getSessionIngressAuthToken } from "../../utils/sessionIngressAuth.js";
 import { getPresentedCredentialLog } from "./discoveryIdentity.js";
 import { getCurrentCallId, X_CCR_TURN_ID } from "./ccrTurnId.js";
-import { getConnectionCache } from "./needsAuthCache.js";
 import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { safeParseJSON } from "../../utils/json.js";
 import {
@@ -88,7 +93,7 @@ import { isFirstPartyProvider } from "../../utils/model/providers.js";
 import { getMCPUserAgent } from "../../utils/http.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-z1n5m6nf.js:46289-46748 placement
+//@ chunk-h44h5gdv.js:47816-48275 placement
 /**
  * logMcpConnectionOtelEvent（v1 副本）。
  */
@@ -120,8 +125,8 @@ function logMcpConnectionOtelEvent_2(serverName, serverRef, result) {
     }),
   });
 }
-//@ chunk-z1n5m6nf.js:46748-47381 placement
-async function handleRemoteAuthFailure_2(
+//@ chunk-h44h5gdv.js:48275-48938 placement (2.1.88 match: handleRemoteAuthFailure, 0.71)
+async function handleRemoteAuthFailure(
   serverName,
   serverRef,
   transportType,
@@ -158,11 +163,12 @@ async function handleRemoteAuthFailure_2(
     (serverRef.type === "http" || serverRef.type === "sse") &&
     (await hasStoredRefreshToken(serverName, serverRef));
   if (roundEpoch === undefined || isCurrentIdentityEpoch(roundEpoch))
-    isMcpAuthCached_3(
+    setMcpAuthCacheEntry(
       serverName,
       serverRef.type === "claudeai-proxy" ? serverRef.id : undefined,
-      canRefresh ? NEEDS_AUTH_CACHE_REFRESHABLE_TTL_MS_2 : undefined,
+      canRefresh ? NEEDS_AUTH_CACHE_REFRESHABLE_TTL_MS : undefined,
       storageV5,
+      getConnectionCache().lapsedSignInKey(serverCacheKey(serverName, serverRef)),
     );
   await purgeDiscoveryCacheOnAuthFailure(serverName, serverRef, roundEpoch);
   logFeatureSad("mcp_connect", "mcp_connect_needs_auth");
@@ -173,7 +179,7 @@ async function handleRemoteAuthFailure_2(
     error: error_2,
   };
 }
-//@ chunk-z1n5m6nf.js:47381-47613 placement
+//@ chunk-h44h5gdv.js:48938-49171 placement
 async function purgeDiscoveryCacheOnAuthFailure(serverName, serverRef, roundEpoch) {
   let identityCurrent = roundEpoch === undefined || isCurrentIdentityEpoch(roundEpoch);
   if (isDiscoveryCacheUsable())
@@ -184,7 +190,7 @@ async function purgeDiscoveryCacheOnAuthFailure(serverName, serverRef, roundEpoc
         "Discovery cache 401/403 purge skipped: identity changed since this connect round started (the current entry belongs to the new principal)",
       );
 }
-//@ chunk-z1n5m6nf.js:47613-48018 placement
+//@ chunk-h44h5gdv.js:49171-49576 placement
 var AUTH_REJECTION_SEVERITY = {
   AUTH_HEADER_REJECTED: {
     severity: "bad",
@@ -203,7 +209,7 @@ var AUTH_REJECTION_SEVERITY = {
     featureErrorCode: "mcp_connect_first_party_auth_rejected",
   },
 };
-//@ chunk-z1n5m6nf.js:48018-48422 placement
+//@ chunk-h44h5gdv.js:49576-49980 placement
 function failWithAuthRejection({
   name: serverName,
   serverRef,
@@ -234,7 +240,7 @@ function failWithAuthRejection({
     errorCode,
   };
 }
-//@ chunk-z1n5m6nf.js:48422-49991 placement
+//@ chunk-h44h5gdv.js:49980-51549 placement
 function failFirstPartyAuthRejected(credentialKind, name, config, transportType, statusCode) {
   let host = "api.anthropic.com";
   try {
@@ -279,7 +285,7 @@ function failFirstPartyAuthRejected(credentialKind, name, config, transportType,
     message,
   });
 }
-//@ chunk-z1n5m6nf.js:49991-50071 placement
+//@ chunk-h44h5gdv.js:51549-51629 placement
 /**
  * 判断错误是否属于认证失败（401/403 或认证错误）。
  */
@@ -291,7 +297,7 @@ function isAuthFailure_2(error, statusCode, sawAuthChallenge) {
     statusCode === 403
   );
 }
-//@ chunk-z1n5m6nf.js:50071-51610 placement
+//@ chunk-h44h5gdv.js:51629-53168 placement
 async function handleRemoteConnectAuthError_2({
   name: serverName,
   serverRef,
@@ -365,7 +371,7 @@ async function handleRemoteConnectAuthError_2({
     authProvider,
     isRefreshPath401,
     needsAuth: () =>
-      handleRemoteAuthFailure_2(
+      handleRemoteAuthFailure(
         serverName,
         serverRef,
         transportType,
@@ -379,7 +385,7 @@ async function handleRemoteConnectAuthError_2({
     await purgeDiscoveryCacheOnAuthFailure(serverName, serverRef, roundEpoch);
     return rejectedTokenResult;
   }
-  return handleRemoteAuthFailure_2(
+  return handleRemoteAuthFailure(
     serverName,
     serverRef,
     transportType,
@@ -389,7 +395,7 @@ async function handleRemoteConnectAuthError_2({
     storageV5,
   );
 }
-//@ chunk-z1n5m6nf.js:51610-52203 placement
+//@ chunk-h44h5gdv.js:53168-53736 placement
 /**
  * wrapFetchWithCcrSessionAuth（v1 副本）。
  */
@@ -413,7 +419,6 @@ function wrapFetchWithCcrSessionAuth_2(wsHeadersForLogging, dialOptions, connect
       if (handshakeKind === "handshake" || (handshakeKind === "listing" && dialOptions.withListings))
         headers.set(X_CCR_DIAL_TOOL_USE_ID, dialOptions.toolUseId);
     }
-    getConnectionCache().attachCcrTicket(url, headers);
     let redirect = init?.redirect === "error" ? "error" : "manual";
     let response = await wsHeadersForLogging(url, {
       ...init,
@@ -421,7 +426,7 @@ function wrapFetchWithCcrSessionAuth_2(wsHeadersForLogging, dialOptions, connect
       redirect,
     });
     let connectionCache = getConnectionCache();
-    connectionCache.noteCcrTicket(url, headers, response);
+    connectionCache.noteHostDraining(url, response);
     if (
       connectionKey !== undefined &&
       (response.status === 401 || connectionCache.lapsedCcrSignIns.has(connectionKey)) &&
@@ -431,7 +436,7 @@ function wrapFetchWithCcrSessionAuth_2(wsHeadersForLogging, dialOptions, connect
     return response;
   };
 }
-//@ chunk-z1n5m6nf.js:52203-52460 placement
+//@ chunk-h44h5gdv.js:53736-53993 placement
 function classifyHandshakeRequest(init) {
   if (init?.method?.toUpperCase() !== "POST" || typeof init.body !== "string") return;
   let method = objectSchema({
@@ -440,10 +445,10 @@ function classifyHandshakeRequest(init) {
   if (method === "initialize" || method === "notifications/initialized") return "handshake";
   return method === "tools/list" ? "listing" : undefined;
 }
-//@ chunk-z1n5m6nf.js:52460-52525 placement
+//@ chunk-h44h5gdv.js:53993-54058 placement
 var X_CCR_DIAL_TOOL_USE_ID = "X-CCR-Dial-Tool-Use-Id";
 var TOOL_USE_ID_PATTERN = /^toolu_[A-Za-z0-9_-]{1,64}$/;
-//@ chunk-z1n5m6nf.js:52525-53469 placement
+//@ chunk-h44h5gdv.js:54058-55002 placement
 /**
  * wrapFetchWithCliOwnedBearer（v1 副本）。
  */
@@ -514,7 +519,7 @@ function wrapFetchWithCliOwnedBearer_2(wsHeadersForLogging, config) {
     return retryResult.response;
   };
 }
-//@ chunk-z1n5m6nf.js:53469-53731 placement
+//@ chunk-h44h5gdv.js:55002-55264 placement
 /**
  * ClaudeAiProxyBearerRejectedError（v1 副本）。
  */
@@ -528,11 +533,11 @@ class ClaudeAiProxyBearerRejectedError extends Error {
     this.name = "ClaudeAiProxyBearerRejectedError";
   }
 }
-//@ chunk-z1n5m6nf.js:53731-54902 placement
+//@ chunk-h44h5gdv.js:55264-56435 placement (2.1.88 match: createClaudeAiProxyFetch, 0.635)
 /**
  * createClaudeAiProxyFetch（v1 副本）。
  */
-function createClaudeAiProxyFetch_2(fetchFn, credentials) {
+function createClaudeAiProxyFetch(fetchFn, credentials) {
   fetchFn = stripRedirectLocation(fetchFn);
   return async (url, init) => {
     let doRequest = async () => {
@@ -601,7 +606,7 @@ function createClaudeAiProxyFetch_2(fetchFn, credentials) {
     return normalizeErrorResponse(response_2);
   };
 }
-//@ chunk-z1n5m6nf.js:54902-55414 placement
+//@ chunk-h44h5gdv.js:56435-56947 placement
 async function expandFirstPartyDesignScopes(url, credentials) {
   if (isDesignMcpUrl(url)) {
     let scaffoldResult = await getScaffoldResolver()?.(credentials);
@@ -633,7 +638,7 @@ async function expandFirstPartyDesignScopes(url, credentials) {
     bearer: tokens.scopes?.includes("user:design:read") ? "design_scoped_login" : "login",
   };
 }
-//@ chunk-z1n5m6nf.js:55414-55643 placement
+//@ chunk-h44h5gdv.js:56947-57176 placement
 /**
  * readNeedsConsentBit（v1 副本）。
  */
@@ -650,7 +655,7 @@ async function readNeedsConsentBit(response) {
   let consent = body.consent;
   return notice.isConsentBit(consent) ? consent : null;
 }
-//@ chunk-z1n5m6nf.js:55643-55780 placement
+//@ chunk-h44h5gdv.js:57176-57313 placement
 function noteDesignProjectId(designSession, isDesignServer, name, payload) {
   if (!isDesignServer || !MEMBERSHIP_METHODS.has(name)) return;
   let projectId = payload.project_id;
@@ -661,12 +666,12 @@ function noteDesignProjectId(designSession, isDesignServer, name, payload) {
     markRecardProject(designSession, projectId);
   }
 }
-//@ chunk-z1n5m6nf.js:55780-55845 placement
+//@ chunk-h44h5gdv.js:57313-57378 placement
 var DESIGN_WRITE_TOOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-z1n5m6nf.js:55780", () => {
+deferInit("chunk-h44h5gdv.js:57313", () => {
   DESIGN_WRITE_TOOLS = new Set(["write_files", "create_support_js", "copy_files"]);
 });
-//@ chunk-z1n5m6nf.js:55845-56372 placement
+//@ chunk-h44h5gdv.js:57378-57905 placement
 /**
  * gateDesignWriteWithoutPlanToken（v1 副本）。
  */
@@ -685,9 +690,9 @@ function gateDesignWriteWithoutPlanToken(isFirstPartyDesignServer, name, input) 
     },
   };
 }
-//@ chunk-z1n5m6nf.js:56372-56434 placement
+//@ chunk-h44h5gdv.js:57905-57967 placement
 var DESIGN_PLAN_TOOLS; // deferred: uses DESIGN_WRITE_TOOLS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-z1n5m6nf.js:56372", () => {
+deferInit("chunk-h44h5gdv.js:57905", () => {
   DESIGN_PLAN_TOOLS = new Set([
     ...DESIGN_WRITE_TOOLS,
     "finalize_plan",
@@ -695,11 +700,11 @@ deferInit("chunk-z1n5m6nf.js:56372", () => {
     ...MEMBERSHIP_METHODS,
   ]);
 });
-//@ chunk-z1n5m6nf.js:56434-56471 placement
+//@ chunk-h44h5gdv.js:57967-58004 placement
 function isDesignGatedTool(isFirstPartyDesignServer, name) {
   return isFirstPartyDesignServer && DESIGN_PLAN_TOOLS.has(name);
 }
-//@ chunk-z1n5m6nf.js:56471-56763 placement
+//@ chunk-h44h5gdv.js:58004-58296 placement
 /**
  * askDesignConsent（v1 副本）。
  */
@@ -720,7 +725,7 @@ function askDesignConsent(message, input, __consentNonce) {
     },
   };
 }
-//@ chunk-z1n5m6nf.js:56763-56837 placement
+//@ chunk-h44h5gdv.js:58296-58370 placement
 function isDesignServerConfig(config) {
   return (
     (config.type === "sse" || config.type === "http") &&
@@ -728,7 +733,7 @@ function isDesignServerConfig(config) {
     !configHasAuthorizationHeader(config)
   );
 }
-//@ chunk-z1n5m6nf.js:56837-56991 placement
+//@ chunk-h44h5gdv.js:58370-58524 placement
 /**
  * canAskDesignConsent（v1 副本）。
  */
@@ -740,7 +745,7 @@ function canAskDesignConsent(tool) {
     !(toolPermissionContext.mode === "plan" && toolPermissionContext.isBypassPermissionsModeAvailable)
   );
 }
-//@ chunk-z1n5m6nf.js:56991-57163 placement
+//@ chunk-h44h5gdv.js:58524-58696 placement
 /**
  * canPromptForPermission（v1 副本）。
  */
@@ -753,9 +758,9 @@ function canPromptForPermission(tool) {
     !toolPermissionContext.shouldAvoidPermissionPrompts
   );
 }
-//@ chunk-z1n5m6nf.js:57163-57174 placement
+//@ chunk-h44h5gdv.js:58696-58707 placement
 var MAX_DESIGN_CONSENT_ASKS = 100;
-//@ chunk-z1n5m6nf.js:57174-57446 placement
+//@ chunk-h44h5gdv.js:58707-58979 placement
 /**
  * rememberDesignConsentAsk（v1 副本）。
  */
@@ -777,7 +782,7 @@ function rememberDesignConsentAsk(toolUseId, consentBit, askReachesUser) {
   }
   return nonce;
 }
-//@ chunk-z1n5m6nf.js:57446-57656 placement
+//@ chunk-h44h5gdv.js:58979-59189 placement
 /**
  * takeDesignConsentAsk（v1 副本）。
  */
@@ -792,7 +797,7 @@ function takeDesignConsentAsk(toolUseId, nonce) {
     askReachesUser: ask.askReachesUser,
   };
 }
-//@ chunk-z1n5m6nf.js:57656-58489 placement
+//@ chunk-h44h5gdv.js:59189-60022 placement
 /**
  * wrapCallWithDesignConsent（v1 副本）。
  */
@@ -827,7 +832,7 @@ function wrapCallWithDesignConsent(callTool, options) {
     }
   };
 }
-//@ chunk-z1n5m6nf.js:58489-59383 placement
+//@ chunk-h44h5gdv.js:60022-60916 placement
 /**
  * wrapFetchWithFirstPartyAuth（v1 副本）。
  */
@@ -894,7 +899,7 @@ function wrapFetchWithFirstPartyAuth_2(fetchFn, credentials, bearerTracker) {
     return retryAttempt.response;
   };
 }
-//@ chunk-z1n5m6nf.js:59383-59606 placement
+//@ chunk-h44h5gdv.js:60916-61139 placement
 /**
  * mergeRequestHeaders（v1 副本）。
  */
@@ -914,10 +919,10 @@ export {
   mergeRequestHeaders_2,
   wrapFetchWithCcrSessionAuth_2,
   wrapFetchWithCliOwnedBearer_2,
-  createClaudeAiProxyFetch_2,
+  createClaudeAiProxyFetch,
   isAuthFailure_2,
   handleRemoteConnectAuthError_2,
-  handleRemoteAuthFailure_2,
+  handleRemoteAuthFailure,
   logMcpConnectionOtelEvent_2,
   TOOL_USE_ID_PATTERN,
   isDesignGatedTool,

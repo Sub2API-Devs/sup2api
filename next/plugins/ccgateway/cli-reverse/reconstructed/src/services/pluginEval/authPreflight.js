@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 运行前的认证预检（WIF 联邦、网关会话剩余时长）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (6)
  * attribution: placement 6
  */
 import { getAPIProvider, isFirstPartyProvider } from "../../utils/model/providers.js";
@@ -36,7 +36,7 @@ import {
 } from "../../utils/authFileDescriptor.js";
 import { loginToHandOn } from "../../utils/auth/launcherHostLogin.js";
 
-//@ chunk-qchp9vrd.js:112515-112606 placement (2.1.88 match: logEventTo1P, 1)
+//@ chunk-af1hzzme.js:113868-113959 placement (2.1.88 match: logEventTo1P, 1)
 async function logEventTo1P() {
   if (getAPIProvider() !== "firstParty")
     return {
@@ -47,7 +47,7 @@ async function logEventTo1P() {
     ok: true,
   };
 }
-//@ chunk-qchp9vrd.js:112606-112718 placement
+//@ chunk-af1hzzme.js:113959-114071 placement
 function isEnvQuadAuthWithoutKey() {
   return (
     getWIFPrecedenceSource() === "env-quad" &&
@@ -56,7 +56,7 @@ function isEnvQuadAuthWithoutKey() {
     !env.ANTHROPIC_UNIX_SOCKET
   );
 }
-//@ chunk-qchp9vrd.js:112718-113543 placement
+//@ chunk-af1hzzme.js:114071-114896 placement
 /**
  * 配置工作负载身份联邦（WIF）时预先换取令牌，失败给出说明。
  */
@@ -100,15 +100,15 @@ async function setupWorkloadIdentityForEval() {
     };
   }
 }
-//@ chunk-qchp9vrd.js:113543-113719 placement
+//@ chunk-af1hzzme.js:114896-115072 placement
 var TRANSIENT_AUTH_ERROR_RE =
   /Failed to reach token endpoint|Unable to connect|timed out|TimeoutError|^no answer |ENOTFOUND|EAI_AGAIN|ECONNRESET|ECONNREFUSED|ETIMEDOUT|socket hang up|fetch failed/i;
-//@ chunk-qchp9vrd.js:113854-113868 placement
+//@ chunk-af1hzzme.js:115207-115221 placement
 /**
  * 认证预检的过期余量（300000 毫秒）。
  */
 var AUTH_EXPIRY_MARGIN_MS = 300000;
-//@ chunk-qchp9vrd.js:113868-115552 placement
+//@ chunk-af1hzzme.js:115221-116905 placement
 /**
  * 预检本次运行的认证：网关会话是否会在超时前过期、是否需要 /login。
  */

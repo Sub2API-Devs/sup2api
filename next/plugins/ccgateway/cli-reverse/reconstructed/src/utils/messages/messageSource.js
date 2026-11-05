@@ -3,9 +3,9 @@
  *
  * 消息来源分类（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-651cmq7s.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9pwtn8hb.js (9)
  * attribution: placement 9
  */
 import { classifyMessageFrame, isPeerOrObserver } from "../messageProvenance.js";
@@ -16,7 +16,7 @@ import { allUserTurnsSatisfy } from "../turnOrigin.js";
 import { isInterruptionOnlyMessage } from "../messages.js";
 import { isHumanAuthoredTurn } from "../messagePredicates.js";
 
-//@ chunk-651cmq7s.js:382-666 placement
+//@ chunk-9pwtn8hb.js:382-666 placement
 /**
  * 把消息帧归类为 person（人类/中继人类/摘要/以用户身份的插件）、machine（其他非用户来源）或 unseen（不可见，Projects 中继除外视为 person）。
  */
@@ -35,7 +35,7 @@ function classifyMessageSource(message) {
       return "person";
   }
 }
-//@ chunk-651cmq7s.js:666-775 placement
+//@ chunk-9pwtn8hb.js:666-775 placement
 function isAuthoritativeProvenance(provenance) {
   switch (provenance?.authority) {
     case undefined:
@@ -46,7 +46,7 @@ function isAuthoritativeProvenance(provenance) {
       return true;
   }
 }
-//@ chunk-651cmq7s.js:775-830 placement
+//@ chunk-9pwtn8hb.js:775-830 placement
 function tryOrFallback(fn, fallback) {
   try {
     return fn();
@@ -55,7 +55,7 @@ function tryOrFallback(fn, fallback) {
     return fallback;
   }
 }
-//@ chunk-651cmq7s.js:830-931 placement
+//@ chunk-9pwtn8hb.js:830-931 placement
 /**
  * 判断队列输入是否来自人类（poll 事件来源可信或消息归类为 person），出错时视为是。
  */
@@ -70,7 +70,7 @@ function isPersonQueuedInput(command) {
     true,
   );
 }
-//@ chunk-651cmq7s.js:931-1061 placement
+//@ chunk-9pwtn8hb.js:931-1061 placement
 /**
  * 判断消息是否是来源可信的 poll 事件附件，出错时视为是。
  */
@@ -83,14 +83,14 @@ function hasAuthoritativePollEvents(message) {
     true,
   );
 }
-//@ chunk-651cmq7s.js:1061-1120 placement
+//@ chunk-9pwtn8hb.js:1061-1120 placement
 /**
  * 判断工具名是否为提问类工具（AskUserQuestion 等），异常时按是处理。
  */
 function isQuestionTool({ name: toolName }) {
   return tryOrFallback(() => toolName === ASKUSERQUESTION || HEARTH_READ_TOOLS.has(toolName), true);
 }
-//@ chunk-651cmq7s.js:1120-1418 placement
+//@ chunk-9pwtn8hb.js:1120-1418 placement
 /**
  * 判断一段消息里所有用户回合都不是人类输入（或只是关机中断），且没有特定工具调用；出错时返回 false。
  */
@@ -113,7 +113,7 @@ function isMachineOnlyTurnRange(messages) {
     false,
   );
 }
-//@ chunk-651cmq7s.js:1418-1577 placement
+//@ chunk-9pwtn8hb.js:1418-1577 placement
 /**
  * 判断消息末尾是否从一个由机器发起的人类形式回合开始全部为机器回合，出错时返回 false。
  */
@@ -129,7 +129,7 @@ function endsWithMachineTurn(messages) {
     return lastIndex !== -1 && isMachineOnlyTurnRange(messages.slice(lastIndex));
   }, false);
 }
-//@ chunk-651cmq7s.js:1577-1875 placement
+//@ chunk-9pwtn8hb.js:1577-1875 placement
 function classifyMessageSource_2(messages) {
   return tryOrFallback(() => {
     let lastIndex = messages.findLastIndex(
@@ -150,10 +150,10 @@ function classifyMessageSource_2(messages) {
   }, false);
 }
 export {
+  classifyMessageSource_2,
+  isPersonQueuedInput,
   isMachineOnlyTurnRange,
   endsWithMachineTurn,
-  isPersonQueuedInput,
   hasAuthoritativePollEvents,
   isQuestionTool,
-  classifyMessageSource_2,
 };

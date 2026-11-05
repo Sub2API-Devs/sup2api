@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：自托管 runner 的启动器钩子（launcher_hooks）与会话 git 配置/提示文件准备
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hm0ce8vc.js (46)
- * attribution: placement 46
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-asf5gh8x.js (47)
+ * attribution: placement 45, layout 2
  */
 import { homedir, tmpdir } from "os";
 import { join, dirname, basename } from "path";
@@ -29,7 +29,7 @@ import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   getErrnoCode,
 } from "../../utils/errors.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { cgroupSpawnOptions } from "../../utils/toolCgroup.js";
 import { writeFileAtomic, retryFsOpLong } from "../../utils/atomicPublishWrite.js";
 import { CCR_GIT_DIR_NAME, isHooksDirSafe, isHostConfigSnapshotError } from "./hostConfigSnapshot.js";
@@ -42,13 +42,43 @@ import {
 } from "../../selfHostedRunner/lifecycleHooks.js";
 import { logFeatureBad } from "../analytics/featureTelemetry.js";
 import { MAX_SETTINGS_JSON_BYTES } from "../../utils/settings/settings.js";
-import { SYSTEM_PROMPT_FILE_ARGS as SYSTEM_PROMPT_FILE_ARGS_2 } from "./childArgs.js";
-import { RUNNER_DECLARES_ARG_KEY } from "./runnerDeclaration.js";
 import { getHttpStatus } from "../../selfHostedRunner/runnerApiErrors.js";
 import { RepoSettingsRejectedError } from "./repoSettingsConfinement.js";
 import { runDeferredInits } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hm0ce8vc.js:67301-68065 placement
+//@ chunk-asf5gh8x.js:65793-65935 placement
+function envPositiveMs(envName) {
+  let rawValue = getEnvVar(envName);
+  if (rawValue === undefined || rawValue === "") return 0;
+  let value = Number(rawValue);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.min(value, 2147483647);
+}
+//@ chunk-asf5gh8x.js:65935-65964 layout
+function hasEnvVar(ms) {
+  return !!getEnvVar(ms);
+}
+//@ chunk-asf5gh8x.js:65964-66001 layout
+function getEnvVar(envName) {
+  return process.env[envName];
+}
+//@ chunk-asf5gh8x.js:66001-66015 placement
+var DEFAULT_STARTUP_TIMEOUT_MS = 900000;
+//@ chunk-asf5gh8x.js:66015-66158 placement
+function getStartupTimeoutMs() {
+  let envSelfHostedRunnerStartupTimeoutMs = process.env.SELF_HOSTED_RUNNER_STARTUP_TIMEOUT_MS;
+  return envSelfHostedRunnerStartupTimeoutMs === undefined || envSelfHostedRunnerStartupTimeoutMs === ""
+    ? DEFAULT_STARTUP_TIMEOUT_MS
+    : envPositiveMs("SELF_HOSTED_RUNNER_STARTUP_TIMEOUT_MS");
+}
+//@ chunk-asf5gh8x.js:66158-66336 placement
+function getDrainWaitMs() {
+  let envSelfHostedRunnerDrainWaitMs = process.env.SELF_HOSTED_RUNNER_DRAIN_WAIT_MS;
+  return envSelfHostedRunnerDrainWaitMs !== undefined && envSelfHostedRunnerDrainWaitMs !== ""
+    ? envPositiveMs("SELF_HOSTED_RUNNER_DRAIN_WAIT_MS")
+    : envPositiveMs("SELF_HOSTED_RUNNER_DRAIN_WAIT_BG_TASKS_MS");
+}
+//@ chunk-asf5gh8x.js:76968-77732 placement
 /**
  * 校验服务器下发的 launcher_hooks：数组、事件名、文件名、重名、脚本大小。
  */
@@ -72,31 +102,7 @@ function validateLauncherHooks(hooks) {
   }
   return;
 }
-//@ chunk-hm0ce8vc.js:68065-68216 placement
-function envPositiveMs(envName) {
-  let rawValue = process.env[envName];
-  if (rawValue === undefined || rawValue === "") return 0;
-  let value = Number(rawValue);
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  return Math.min(value, 2147483647);
-}
-//@ chunk-hm0ce8vc.js:68216-68230 placement
-var DEFAULT_STARTUP_TIMEOUT_MS = 900000;
-//@ chunk-hm0ce8vc.js:68230-68373 placement
-function getStartupTimeoutMs() {
-  let envSelfHostedRunnerStartupTimeoutMs = process.env.SELF_HOSTED_RUNNER_STARTUP_TIMEOUT_MS;
-  return envSelfHostedRunnerStartupTimeoutMs === undefined || envSelfHostedRunnerStartupTimeoutMs === ""
-    ? DEFAULT_STARTUP_TIMEOUT_MS
-    : envPositiveMs("SELF_HOSTED_RUNNER_STARTUP_TIMEOUT_MS");
-}
-//@ chunk-hm0ce8vc.js:68373-68551 placement
-function getDrainWaitMs() {
-  let envSelfHostedRunnerDrainWaitMs = process.env.SELF_HOSTED_RUNNER_DRAIN_WAIT_MS;
-  return envSelfHostedRunnerDrainWaitMs !== undefined && envSelfHostedRunnerDrainWaitMs !== ""
-    ? envPositiveMs("SELF_HOSTED_RUNNER_DRAIN_WAIT_MS")
-    : envPositiveMs("SELF_HOSTED_RUNNER_DRAIN_WAIT_BG_TASKS_MS");
-}
-//@ chunk-hm0ce8vc.js:68551-69049 placement
+//@ chunk-asf5gh8x.js:77732-78230 placement
 /**
  * 启动器钩子与会话 github 准备的相关常量：MCP 配置文件名、空 MCP 配置、检出失败说明、各类超时与最低 git 版本。
  */
@@ -123,21 +129,21 @@ var INGRESS_TOKEN_DEADLINE_MS = SYSTEM_PROMPT_FILE_WRITE_TIMEOUT_MS + 3 * TOKEN_
 var PUSH_ON_RELEASE_TIMEOUT_MS = 30000;
 var SETUP_STEP_DEADLINE_MS = 3000;
 var MIN_GIT_VERSION_FOR_MOUNT = [2, 26];
-//@ chunk-hm0ce8vc.js:69049-69101 placement
+//@ chunk-asf5gh8x.js:78230-78282 placement
 /**
  * 会话 JWT 是否仍在有效期内。
  */
 function isSessionJwtFresh(token, nowSeconds = Date.now() / 1000) {
   return (decodeSessionJwt(token) ?? 0) > nowSeconds;
 }
-//@ chunk-hm0ce8vc.js:69101-69124 placement
+//@ chunk-asf5gh8x.js:78282-78305 placement
 /**
  * 恒返回 0 的占位实现（当前没有混合登录令牌）。
  */
 function noHybridToken() {
   return 0;
 }
-//@ chunk-hm0ce8vc.js:69124-69204 placement
+//@ chunk-asf5gh8x.js:78305-78385 placement
 /**
  * 使用自定义 OAuth 地址时给凭据标签加 -custom-oauth 后缀。
  */
@@ -145,7 +151,7 @@ function customOauthUrlSuffix(apiBaseUrl) {
   if (env.CLAUDE_CODE_CUSTOM_OAUTH_URL) return "-custom-oauth";
   return "";
 }
-//@ chunk-hm0ce8vc.js:69204-70649 placement
+//@ chunk-asf5gh8x.js:78385-79830 placement
 /**
  * 读取操作员 ~/.gitconfig 与 XDG git 配置，供会话 git 使用。
  */
@@ -192,7 +198,7 @@ async function snapshotOperatorGitConfig(onStatus) {
       return index === index_2 ? fullKey : `${fullKey.slice(0, index)}.*${fullKey.slice(index_2)}`;
     };
     let filtered = entries.filter(([key, value]) => !SAFE_GIT_CONFIG_KEYS(key, value));
-    let sorted = uniq(filtered.map(([key]) => gitConfigKeyFamily(key))).sort();
+    let sorted = normalizeCaseForComparison_2(filtered.map(([key]) => gitConfigKeyFamily(key))).sort();
     onStatus(
       `[runner] governed git: seed filter dropped ${filtered.length} non-allowlisted gitconfig entries (families: ${sorted.join(", ")})`,
     );
@@ -217,7 +223,7 @@ async function snapshotOperatorGitConfig(onStatus) {
       }).catch(() => {});
   }
 }
-//@ chunk-hm0ce8vc.js:70649-71092 placement
+//@ chunk-asf5gh8x.js:79830-80273 placement
 function SAFE_GIT_CONFIG_KEYS(key, value) {
   let lower = key.toLowerCase();
   if (lower.startsWith("user.")) return true;
@@ -235,9 +241,9 @@ function SAFE_GIT_CONFIG_KEYS(key, value) {
   }
   return false;
 }
-//@ chunk-hm0ce8vc.js:71092-71164 placement
+//@ chunk-asf5gh8x.js:80273-80345 placement
 var NON_PORTABLE_GIT_KEYS = new Set(["postbuffer", "lowspeedlimit", "lowspeedtime", "version"]);
-//@ chunk-hm0ce8vc.js:71164-71750 placement
+//@ chunk-asf5gh8x.js:80345-80931 placement
 async function runGit(args) {
   return await new Promise((resolve, reject) => {
     let child = spawn("git", args, {
@@ -273,21 +279,21 @@ async function runGit(args) {
     });
   });
 }
-//@ chunk-hm0ce8vc.js:71750-71791 placement
+//@ chunk-asf5gh8x.js:80931-80972 placement
 /**
  * 以 0600 权限原子地写入文件。
  */
 async function writeFileAtomicDefaultMode(path, contents) {
   await writeFileAtomic(path, contents, 384);
 }
-//@ chunk-hm0ce8vc.js:71791-71830 placement
+//@ chunk-asf5gh8x.js:80972-81011 placement
 /**
  * 会话 CCR git 的 hooks 目录路径。
  */
 function hooksDirPath(configDir) {
   return join(configDir, "hooks", CCR_GIT_DIR_NAME);
 }
-//@ chunk-hm0ce8vc.js:71830-73604 placement
+//@ chunk-asf5gh8x.js:81011-82785 placement
 /**
  * --configure-git：在会话目录生成受控 gitconfig、钩子桩与签名工件。
  */
@@ -385,14 +391,14 @@ async function materializeSessionGitConfig(options) {
     );
   }
 }
-//@ chunk-hm0ce8vc.js:73604-73670 placement
+//@ chunk-asf5gh8x.js:82785-82851 placement
 /**
  * 生成 core.hooksPath 条目（默认 /dev/null）。
  */
 function hooksPathEntry(snapshot) {
   return ["core.hooksPath", snapshot?.hooksPath ?? "/dev/null"];
 }
-//@ chunk-hm0ce8vc.js:73670-73777 placement
+//@ chunk-asf5gh8x.js:82851-82958 placement
 function sessionGitConfig(configDir, snapshot, paths = ALLOWED_SIGNING_PROGRAMS) {
   return [
     ...configureGitOverlayEntries(configDir).map(([key, value]) =>
@@ -402,7 +408,7 @@ function sessionGitConfig(configDir, snapshot, paths = ALLOWED_SIGNING_PROGRAMS)
     ...lifecycleHookGpgProgramPins(paths, false),
   ];
 }
-//@ chunk-hm0ce8vc.js:73777-73856 placement
+//@ chunk-asf5gh8x.js:82958-83037 placement
 /**
  * 取 git 覆盖条目，可选择去掉 core.hooksPath。
  */
@@ -410,13 +416,13 @@ function overlayEntriesWithoutHooks(configDir, dropHooksPath) {
   let entries = configureGitOverlayEntries(configDir);
   return dropHooksPath ? entries.filter(([key]) => key !== "core.hooksPath") : entries;
 }
-//@ chunk-hm0ce8vc.js:73856-73939 placement
+//@ chunk-asf5gh8x.js:83037-83120 placement
 var ALLOWED_SIGNING_PROGRAMS = {
   gpg: "/usr/bin/gpg",
   gpgsm: "/usr/bin/gpgsm",
   sshKeygen: "/usr/bin/ssh-keygen",
 };
-//@ chunk-hm0ce8vc.js:73939-74044 placement
+//@ chunk-asf5gh8x.js:83120-83225 placement
 function lifecycleHookGitConfig(snapshot, paths = ALLOWED_SIGNING_PROGRAMS) {
   return [
     hooksPathEntry(snapshot),
@@ -426,7 +432,7 @@ function lifecycleHookGitConfig(snapshot, paths = ALLOWED_SIGNING_PROGRAMS) {
     ["tag.gpgsign", "false"],
   ];
 }
-//@ chunk-hm0ce8vc.js:74044-74834 placement
+//@ chunk-asf5gh8x.js:83225-84015 placement
 /**
  * 校验并写入 launcher_hooks 脚本；失败时整组丢弃。
  */
@@ -483,7 +489,7 @@ async function installLauncherHooks(configDir, hooks, writtenPaths, onStatus) {
   }
   return hooksByEvent;
 }
-//@ chunk-hm0ce8vc.js:74834-75731 placement
+//@ chunk-asf5gh8x.js:84015-84912 placement
 /**
  * 把服务器的 auto mode 列表写成 launcher-settings.json（超过 --settings 文件大小上限则不应用）。
  */
@@ -534,7 +540,7 @@ async function writeLauncherSettings(configDir, launcherConfig, writtenPaths, on
     autoModeWritten: autoMode !== undefined,
   };
 }
-//@ chunk-hm0ce8vc.js:75731-75912 placement
+//@ chunk-asf5gh8x.js:84912-85093 placement
 async function writeBestEffort(debugTokenDir, fileName, contents, onStatus) {
   try {
     await mkdir(debugTokenDir, {
@@ -548,33 +554,33 @@ async function writeBestEffort(debugTokenDir, fileName, contents, onStatus) {
     onStatus(`[runner:debug] failed to write ${fileName} to ${debugTokenDir} (best-effort): ${error}`);
   }
 }
-//@ chunk-hm0ce8vc.js:75912-75980 placement
+//@ chunk-asf5gh8x.js:85093-85161 placement
 function getToolServerConfigDir(baseDir, sessionId) {
   return join(baseDir, "_sessions", `${sessionId}.tool-server-config`);
 }
-//@ chunk-hm0ce8vc.js:75980-76043 placement
+//@ chunk-asf5gh8x.js:85161-85224 placement
 function getSessionClaudeConfigDir(baseDir, sessionId) {
   return join(baseDir, "_sessions", `${sessionId}.claude-config`);
 }
-//@ chunk-hm0ce8vc.js:76043-76104 placement
+//@ chunk-asf5gh8x.js:85224-85285 placement
 function getIngressTokenTempPrefix(baseDir, epoch) {
   return join(baseDir, `.session_ingress_token.e${epoch}`);
 }
-//@ chunk-hm0ce8vc.js:76104-76164 placement
+//@ chunk-asf5gh8x.js:85285-85345 placement
 /**
  * 是否为不小于 1 的整数。
  */
 function isPositiveInteger(value) {
   return value !== undefined && Number.isInteger(value) && value >= 1;
 }
-//@ chunk-hm0ce8vc.js:76164-76197 placement
+//@ chunk-asf5gh8x.js:85345-85378 placement
 /**
  * 是否为大于 1 的正整数。
  */
 function isGreaterThanOne(value) {
   return isPositiveInteger(value) && value > 1;
 }
-//@ chunk-hm0ce8vc.js:76197-76544 placement
+//@ chunk-asf5gh8x.js:85378-85725 placement
 /**
  * 写会话 ingress 令牌文件（staged-file 方式）。
  */
@@ -609,7 +615,7 @@ async function writeSessionIngressTokenFile(
     return false;
   }
 }
-//@ chunk-hm0ce8vc.js:76544-76688 placement
+//@ chunk-asf5gh8x.js:85725-85869 placement
 async function withStuckTimeout(promise, timeoutMs, label, onStuck) {
   let isSettled = false;
   promise.then(
@@ -633,7 +639,7 @@ async function withStuckTimeout(promise, timeoutMs, label, onStuck) {
     throw error;
   }
 }
-//@ chunk-hm0ce8vc.js:76688-77632 placement
+//@ chunk-asf5gh8x.js:85869-86813 placement
 /**
  * 删除会话 ingress 令牌文件并清扫残留临时文件。
  */
@@ -691,30 +697,7 @@ async function cleanupSessionIngressTokenFiles(
     if (!isENOENT(error)) onStatus(`[runner:session] token temp sweep readdir failed: ${error}`);
   }
 }
-//@ chunk-hm0ce8vc.js:77632-77907 placement
-var CHILD_FORWARDED_FLAGS = new Set([
-  "sdk-url",
-  "resume",
-  "print",
-  "input-format",
-  "output-format",
-  "replay-user-messages",
-  "debug-file",
-  "mcp-config",
-  "settings",
-  ...SYSTEM_PROMPT_FILE_ARGS_2,
-  "agents",
-  RUNNER_DECLARES_ARG_KEY,
-]);
-var CHILD_EXTRA_FORWARDED_FLAGS = new Set(["add-dir", "setting-sources"]);
-var LAUNCHER_ONLY_FLAGS = new Set([
-  ...CHILD_FORWARDED_FLAGS,
-  "deep-link-origin",
-  "deep-link-cwd-b64",
-  "worktree",
-  "tmux",
-]);
-//@ chunk-hm0ce8vc.js:77907-78089 placement
+//@ chunk-asf5gh8x.js:87114-87296 placement
 async function serializeByKey(canonicalLocks, key, fn) {
   let previous = canonicalLocks.get(key) ?? Promise.resolve();
   let release;
@@ -730,15 +713,15 @@ async function serializeByKey(canonicalLocks, key, fn) {
     if (canonicalLocks.get(key) === promise) canonicalLocks.delete(key);
   }
 }
-//@ chunk-hm0ce8vc.js:78089-78103 placement
+//@ chunk-asf5gh8x.js:87296-87310 placement
 var DEFAULT_GIT_SLOTS = 2;
 var DEFAULT_HOOK_SLOTS = 1;
-//@ chunk-hm0ce8vc.js:78103-78127 placement
+//@ chunk-asf5gh8x.js:87310-87334 placement
 /**
  * 并发槽位调度中表示「被取消」的错误。
  */
 class SlotCancelledError extends Error {}
-//@ chunk-hm0ce8vc.js:78127-78178 placement
+//@ chunk-asf5gh8x.js:87334-87385 placement
 /**
  * 无法取得并发槽位时的占位句柄（take 恒 false，leave 空实现）。
  */
@@ -746,7 +729,7 @@ var NO_SLOTS_AVAILABLE = {
   take: () => Promise.resolve(false),
   leave: () => {},
 };
-//@ chunk-hm0ce8vc.js:78178-78996 placement
+//@ chunk-asf5gh8x.js:87385-88203 placement
 /**
  * 按种类（hook/git）并发上限执行一组任务：git 任务等待前面的 hook 任务完成，一个失败后让排队任务放弃，最终抛出优先错误或返回全部结果。
  */
@@ -830,7 +813,7 @@ async function runWithSlots(kinds, limits, run, isPreferred = () => false) {
   if (chosen) throw chosen.error;
   return results;
 }
-//@ chunk-hm0ce8vc.js:78996-79487 placement
+//@ chunk-asf5gh8x.js:88203-88694 placement
 /**
  * 会话分支在远端不存在（多为合并后被删除）。
  */
@@ -848,9 +831,9 @@ class SourceRefNotFoundError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_C
     this.ref = ref;
   }
 }
-//@ chunk-hm0ce8vc.js:79487-79521 placement
+//@ chunk-asf5gh8x.js:88694-88728 placement
 var setupFailureKindSymbol = Symbol("setupFailureKind");
-//@ chunk-hm0ce8vc.js:79521-79679 placement
+//@ chunk-asf5gh8x.js:88728-88886 placement
 function tagFailureStage(error, value) {
   try {
     if (
@@ -866,7 +849,7 @@ function tagFailureStage(error, value) {
   } catch {}
   return error;
 }
-//@ chunk-hm0ce8vc.js:79679-80799 placement
+//@ chunk-asf5gh8x.js:88886-90006 placement
 /**
  * 准备阶段错误分类用的 errno 集合与仓库设置拒绝项到失败种类的映射。
  */
@@ -922,7 +905,7 @@ var REPO_SETTINGS_REJECTION_LABELS = {
   "operator-posture override": "SETUP_FAILURE_KIND_REPO_SETTINGS_REJECTED",
   "scan-fs-error": "SETUP_FAILURE_KIND_FILESYSTEM_ERROR",
 };
-//@ chunk-hm0ce8vc.js:80799-81095 placement
+//@ chunk-asf5gh8x.js:90006-90302 placement
 /**
  * 把准备阶段错误归类为 SETUP_FAILURE_KIND_*（文件系统、API、网络等）。
  */
@@ -937,7 +920,7 @@ function classifySetupFailure(error) {
   }
   return;
 }
-//@ chunk-hm0ce8vc.js:81095-81302 placement
+//@ chunk-asf5gh8x.js:90302-90509 placement
 function classifySourcePrepFailure(error) {
   let kind = "SETUP_FAILURE_KIND_SOURCE_PREP_FAILED";
   try {
@@ -950,7 +933,7 @@ function classifySourcePrepFailure(error) {
   } catch {}
   return tagFailureStage(error, kind);
 }
-//@ chunk-hm0ce8vc.js:81302-81635 placement
+//@ chunk-asf5gh8x.js:90509-90842 placement
 function setupFailureKindOf(error) {
   if (error === null || typeof error !== "object") return "SETUP_FAILURE_KIND_OTHER";
   let taggedKind = error[setupFailureKindSymbol];
@@ -960,7 +943,7 @@ function setupFailureKindOf(error) {
   if (error instanceof CheckoutHookFailedError) return "SETUP_FAILURE_KIND_SOURCE_PREP_FAILED";
   return classifySetupFailure(error) ?? "SETUP_FAILURE_KIND_OTHER";
 }
-//@ chunk-hm0ce8vc.js:81635-82431 placement
+//@ chunk-asf5gh8x.js:90842-91638 placement
 /**
  * --remove-session-state：把会话目录改名为 .removing- 后删除。
  */
@@ -1023,7 +1006,7 @@ async function removeSessionState(options) {
   return removed;
 }
 
-// The import cycle this module closes (5 modules) is complete: run the load-time work its statements
+// The import cycle this module closes (8 modules) is complete: run the load-time work its statements
 // marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
 runDeferredInits("src/services/selfHostedRunner/launcherHooks.js");
 export {
@@ -1068,9 +1051,8 @@ export {
   SIGKILL_DELAY_MS,
   cleanupSessionIngressTokenFiles,
   getStartupTimeoutMs,
-  CHILD_EXTRA_FORWARDED_FLAGS,
-  CHILD_FORWARDED_FLAGS,
   envPositiveMs,
+  hasEnvVar,
   HOOK_WORKDIR_TIMEOUT_MS,
   getDrainWaitMs,
   noHybridToken,

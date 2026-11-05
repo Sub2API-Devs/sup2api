@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：构建 hooks 模块的导入图（大小上限、禁止顶层 await）；扫描单个 hooks 文件（嵌套深度上限、拒绝信息带摘录）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bfnfj4kx.js (88)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6sf70a86.js (88)
  * attribution: placement 88
  */
 import { relative } from "path";
@@ -32,12 +32,12 @@ import {
 import { HooksError } from "./hooksErrors.js";
 import { memoizeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { import_sortedLastIndex } from "../../../vendor/lodash-es/_inlinedHelpers.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { yieldToEventLoop } from "../../native-ts/file-index/index.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bfnfj4kx.js:13278-13806 placement
+//@ chunk-6sf70a86.js:13320-13848 placement
 /**
  * AST 节点类型 → 是否声明某标识符的判定表。
  */
@@ -57,24 +57,24 @@ var DECLARES_IDENTIFIER = {
   ImportDefaultSpecifier: (node, identifier) => node.local === identifier,
   ImportNamespaceSpecifier: (node, identifier) => node.local === identifier,
 };
-//@ chunk-bfnfj4kx.js:13806-13829 placement
+//@ chunk-6sf70a86.js:13848-13871 placement
 /**
  * 节点是否声明标识符
  */
 var declaresIdentifier = (node) => DECLARES_IDENTIFIER[node.type];
-//@ chunk-bfnfj4kx.js:13829-13952 placement
+//@ chunk-6sf70a86.js:13871-13994 placement
 var isPropertyKey = (node, parent) =>
   (parent?.type === "Property" ||
     parent?.type === "PropertyDefinition" ||
     parent?.type === "MethodDefinition") &&
   parent.key === node &&
   !parent.computed;
-//@ chunk-bfnfj4kx.js:13952-14020 placement
+//@ chunk-6sf70a86.js:13994-14062 placement
 /**
  * 像 AST 节点
  */
 var isAstNode = (value) => typeof value === "object" && value !== null && typeof value.type === "string";
-//@ chunk-bfnfj4kx.js:14020-14135 placement
+//@ chunk-6sf70a86.js:14062-14177 placement
 function memoizeByObject(collectTopConsts) {
   let weakMap = new WeakMap();
   return (program) => {
@@ -85,7 +85,7 @@ function memoizeByObject(collectTopConsts) {
     return collected;
   };
 }
-//@ chunk-bfnfj4kx.js:14135-14620 placement
+//@ chunk-6sf70a86.js:14177-14662 placement
 /**
  * 迭代式遍历 AST（附父、祖父节点），可剪枝。
  */
@@ -124,7 +124,7 @@ function walkAst(node, visit, prune) {
     }
   }
 }
-//@ chunk-bfnfj4kx.js:14620-14712 placement
+//@ chunk-6sf70a86.js:14662-14754 placement
 /**
  * 建立父节点表
  */
@@ -135,7 +135,7 @@ function buildParentMap(program) {
   });
   return parents;
 }
-//@ chunk-bfnfj4kx.js:14712-14994 placement
+//@ chunk-6sf70a86.js:14754-15036 placement
 /**
  * hooks 模块不允许 import()：找到最早的动态导入并生成扫描拒绝。
  */
@@ -151,7 +151,7 @@ function refuseDynamicImport(program) {
     'a dynamic import(); a hooks module imports its own files with an import declaration, as in import { name } from "./file.js"',
   );
 }
-//@ chunk-bfnfj4kx.js:14994-15355 placement
+//@ chunk-6sf70a86.js:15036-15397 placement
 /**
  * 收集模块的导入映射。
  */
@@ -174,7 +174,7 @@ function collectImports(program) {
   }
   return imports;
 }
-//@ chunk-bfnfj4kx.js:15355-15592 placement
+//@ chunk-6sf70a86.js:15397-15634 placement
 function importSpecifiers(program) {
   let specifiers = new Set();
   for (let statement of program.body) {
@@ -185,17 +185,17 @@ function importSpecifiers(program) {
   }
   return [...specifiers];
 }
-//@ chunk-bfnfj4kx.js:15592-15604 placement
+//@ chunk-6sf70a86.js:15634-15646 placement
 /**
  * 2000
  */
 var MAX_EXCERPT_CHARS = 2000;
-//@ chunk-bfnfj4kx.js:15604-16033 placement
+//@ chunk-6sf70a86.js:15646-16075 placement
 /**
  * hooks 模块静态扫描拒绝错误（插件、文件、行、摘录、原因）。
  */
 let ScanRefusal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bfnfj4kx.js:15604", () => {
+deferInit("chunk-6sf70a86.js:15646", () => {
   ScanRefusal = class ScanRefusal extends HooksError {
     name = "ScanRefusal";
     plugin;
@@ -215,7 +215,7 @@ deferInit("chunk-bfnfj4kx.js:15604", () => {
     }
   };
 });
-//@ chunk-bfnfj4kx.js:16033-16329 placement
+//@ chunk-6sf70a86.js:16075-16371 placement
 function passesValueThrough(node, valueNode) {
   switch (node.type) {
     case "SequenceExpression":
@@ -233,7 +233,7 @@ function passesValueThrough(node, valueNode) {
       return false;
   }
 }
-//@ chunk-bfnfj4kx.js:16329-16498 placement
+//@ chunk-6sf70a86.js:16371-16540 placement
 /**
  * 取对象属性的静态键名（标识符或字面量），计算键返回 undefined。
  */
@@ -244,25 +244,25 @@ function propertyKeyName(property) {
   let isLiteralKey = !property.computed && key.type === "Literal";
   return isIdentifierKey ? key.name : isLiteralKey ? String(key.value) : undefined;
 }
-//@ chunk-bfnfj4kx.js:16498-16606 placement
+//@ chunk-6sf70a86.js:16540-16648 placement
 var hasNonPlainProperties = (objectNode) =>
   objectNode.properties.some(
     (property) =>
       property.type === "Property" &&
       (property.kind !== "init" || (!property.shorthand && propertyKeyName(property) === "__proto__")),
   );
-//@ chunk-bfnfj4kx.js:16606-16718 placement
+//@ chunk-6sf70a86.js:16648-16760 placement
 var isFunctionNode = (node) =>
   node?.type === "FunctionDeclaration" ||
   node?.type === "FunctionExpression" ||
   node?.type === "ArrowFunctionExpression";
-//@ chunk-bfnfj4kx.js:16718-16792 placement
+//@ chunk-6sf70a86.js:16760-16834 placement
 /**
  * 函数或实例属性值
  */
 var isFunctionOrPropertyValue = (node, valueNode) =>
   isFunctionNode(node) || (node.type === "PropertyDefinition" && !node.static && node.value === valueNode);
-//@ chunk-bfnfj4kx.js:16792-16966 placement
+//@ chunk-6sf70a86.js:16834-17008 placement
 function isContainerSlot(node, parentNode, isNonPlain) {
   switch (node.type) {
     case "ArrayExpression":
@@ -275,7 +275,7 @@ function isContainerSlot(node, parentNode, isNonPlain) {
       return false;
   }
 }
-//@ chunk-bfnfj4kx.js:16966-17240 placement
+//@ chunk-6sf70a86.js:17008-17282 placement
 function isBlockScopeNode(node) {
   switch (node.type) {
     case "Program":
@@ -293,7 +293,7 @@ function isBlockScopeNode(node) {
       return false;
   }
 }
-//@ chunk-bfnfj4kx.js:17240-17393 placement
+//@ chunk-6sf70a86.js:17282-17435 placement
 function isPatternNode(node) {
   switch (node.type) {
     case "Property":
@@ -306,7 +306,7 @@ function isPatternNode(node) {
       return false;
   }
 }
-//@ chunk-bfnfj4kx.js:17393-17520 placement
+//@ chunk-6sf70a86.js:17435-17562 placement
 function isVarScopeNode(node, parent) {
   switch (node.type) {
     case "Program":
@@ -318,7 +318,7 @@ function isVarScopeNode(node, parent) {
       return isFunctionNode(node);
   }
 }
-//@ chunk-bfnfj4kx.js:17520-17805 placement
+//@ chunk-6sf70a86.js:17562-17847 placement
 function createAncestorFinder(parentOf, matchOf) {
   let cache = new Map();
   return (startNode) => {
@@ -341,7 +341,7 @@ function createAncestorFinder(parentOf, matchOf) {
     return match ?? undefined;
   };
 }
-//@ chunk-bfnfj4kx.js:17805-18150 placement
+//@ chunk-6sf70a86.js:17847-18192 placement
 /**
  * 构造作用域查询函数组（父节点、所在函数、词法/var 作用域等）。
  */
@@ -382,7 +382,7 @@ function makeScopeClimbs(parentOf) {
     ),
   };
 }
-//@ chunk-bfnfj4kx.js:18150-18487 placement
+//@ chunk-6sf70a86.js:18192-18529 placement
 /**
  * 节点是否开启作用域。
  */
@@ -406,7 +406,7 @@ function isScopeNode(node) {
       return false;
   }
 }
-//@ chunk-bfnfj4kx.js:18487-18666 placement
+//@ chunk-6sf70a86.js:18529-18708 placement
 function splitShadowedUses(uses, names) {
   let mapped = uses.map((use, at) => ({
     use,
@@ -417,13 +417,13 @@ function splitShadowedUses(uses, names) {
     doubted: mapped.filter((use) => names.writtenShadowOf(use.use) !== names.shadowOf(use.use)),
   };
 }
-//@ chunk-bfnfj4kx.js:18666-18768 placement
+//@ chunk-6sf70a86.js:18708-18810 placement
 function statementList(node) {
   return node.type === "Program" || node.type === "BlockStatement" || node.type === "StaticBlock"
     ? node.body
     : [];
 }
-//@ chunk-bfnfj4kx.js:18768-19132 placement
+//@ chunk-6sf70a86.js:18810-19174 placement
 /**
  * 收集顶层 const 声明。
  */
@@ -449,13 +449,13 @@ function collectTopConsts(program) {
   }
   return consts;
 }
-//@ chunk-bfnfj4kx.js:19132-19214 placement
+//@ chunk-6sf70a86.js:19174-19256 placement
 /**
  * 写入未被遮蔽
  */
 var hasUnshadowedWrite = (use, names) =>
   names.writtenShadowOf(use) === undefined || names.writtenShadowOf(use) !== names.shadowOf(use);
-//@ chunk-bfnfj4kx.js:19214-19261 placement
+//@ chunk-6sf70a86.js:19256-19303 placement
 /**
  * 原因与位置
  */
@@ -466,12 +466,12 @@ var causeAt = (cause, location) =>
         at: location,
         cause,
       };
-//@ chunk-bfnfj4kx.js:19261-19989 placement
+//@ chunk-6sf70a86.js:19303-20031 placement
 /**
  * 扫描问题的说明文字表。
  */
 var SCAN_PROBLEM_TEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bfnfj4kx.js:19261", () => {
+deferInit("chunk-6sf70a86.js:19303", () => {
   SCAN_PROBLEM_TEXT = Object.freeze({
     declared: "is declared here too, so the value it names cannot be listed. Declare it once",
     assigned:
@@ -484,7 +484,7 @@ deferInit("chunk-bfnfj4kx.js:19261", () => {
       "is read here as the file loads, above its declaration, where it is still undefined, so the value it names cannot be listed. Declare it above this read",
   });
 });
-//@ chunk-bfnfj4kx.js:19989-20607 placement
+//@ chunk-6sf70a86.js:20031-20649 placement
 /**
  * 求声明所在作用域。
  */
@@ -519,7 +519,7 @@ function declaringScopeOf(identifier, { parentOf, declarerOf, lexicalScopeOf, va
       return "unplaced";
   }
 }
-//@ chunk-bfnfj4kx.js:20607-21059 placement
+//@ chunk-6sf70a86.js:20649-21101 placement
 /**
  * 检查名字只在顶层声明一次且未被赋值。
  */
@@ -551,7 +551,7 @@ function checkSingleTopDeclaration(declarator, { names, climbs }) {
     )
   );
 }
-//@ chunk-bfnfj4kx.js:21059-21349 placement
+//@ chunk-6sf70a86.js:21101-21391 placement
 function patternIdentifiers(pattern) {
   switch (pattern?.type) {
     case "Identifier":
@@ -570,7 +570,7 @@ function patternIdentifiers(pattern) {
       return [];
   }
 }
-//@ chunk-bfnfj4kx.js:21349-21708 placement
+//@ chunk-6sf70a86.js:21391-21750 placement
 /**
  * 收集被赋值/更新的名字。
  */
@@ -599,13 +599,13 @@ function collectAssignedNames(program) {
     inLoopHeads: Map.groupBy(loopHeadAssigned, (identifier) => identifier.name),
   };
 }
-//@ chunk-bfnfj4kx.js:21708-21757 placement
+//@ chunk-6sf70a86.js:21750-21799 placement
 /**
  * 是否在该处声明
  */
 var declaresIn = (node, node_2, grandparent) =>
   node_2 !== undefined && (declaresIdentifier(node_2)?.(node_2, node, grandparent) ?? false);
-//@ chunk-bfnfj4kx.js:21757-21893 placement
+//@ chunk-6sf70a86.js:21799-21935 placement
 /**
  * 在 AST 中找出声明为名字 o 的标识符节点。
  */
@@ -617,7 +617,7 @@ function findDeclaredIdentifiers(program, name) {
   });
   return declared;
 }
-//@ chunk-bfnfj4kx.js:21893-21995 placement
+//@ chunk-6sf70a86.js:21935-22037 placement
 /**
  * 导出说明符的名字文本（标识符名或字符串字面量）。
  */
@@ -626,7 +626,7 @@ function exportNameText(node) {
   let isLiteral = node.type === "Literal";
   return isIdentifier ? node.name : isLiteral ? String(node.value) : "";
 }
-//@ chunk-bfnfj4kx.js:21995-22404 placement
+//@ chunk-6sf70a86.js:22037-22446 placement
 /**
  * 标识符是否为引用（非属性名、标签等）。
  */
@@ -644,7 +644,7 @@ var isReferenceIdentifier = (node, parent, grandparent) =>
   parent?.type !== "MetaProperty" &&
   parent?.type !== "ExportAllDeclaration" &&
   parent?.type !== "ImportAttribute";
-//@ chunk-bfnfj4kx.js:22404-22897 placement
+//@ chunk-6sf70a86.js:22446-22939 placement
 /**
  * 收集顶层函数与 const 绑定。
  */
@@ -673,7 +673,7 @@ function collectFunctionsAndConsts(program) {
   }
   return functionsById;
 }
-//@ chunk-bfnfj4kx.js:22897-23129 placement
+//@ chunk-6sf70a86.js:22939-23171 placement
 /**
  * 遍历 AST，把标识符按名字分为声明与读取两组。
  */
@@ -690,7 +690,7 @@ function collectIdentifierUses(program) {
     read: Map.groupBy(read, (identifier) => identifier.name),
   };
 }
-//@ chunk-bfnfj4kx.js:23129-23531 placement
+//@ chunk-6sf70a86.js:23171-23573 placement
 /**
  * 把区间排序成嵌套结构。
  */
@@ -726,12 +726,12 @@ function nestSpans(spans) {
     });
   return (position) => declarations[import_sortedLastIndex(places, position) - 1];
 }
-//@ chunk-bfnfj4kx.js:23531-23583 placement
+//@ chunk-6sf70a86.js:23573-23625 placement
 /**
  * 作用域标签
  */
 var scopeLabel = (scope) => (typeof scope === "string" || isScopeNode(scope) ? scope : "unplaced");
-//@ chunk-bfnfj4kx.js:23583-23942 placement
+//@ chunk-6sf70a86.js:23625-23984 placement
 /**
  * 生成作用域的源码区间。
  */
@@ -771,7 +771,7 @@ function scopeSpans(byScope, parentOf, mode) {
     ];
   });
 }
-//@ chunk-bfnfj4kx.js:23942-24421 placement
+//@ chunk-6sf70a86.js:23984-24463 placement
 /**
  * 构造按位置解析遮蔽绑定的函数。
  */
@@ -804,7 +804,7 @@ function makeShadowResolver(declared, climbs, mode) {
     return resolved;
   };
 }
-//@ chunk-bfnfj4kx.js:24421-24658 placement
+//@ chunk-6sf70a86.js:24463-24700 placement
 function buildNameTables(program, climbs) {
   let { declared, read } = collectIdentifierUses(program);
   let assignedNames = collectAssignedNames(program);
@@ -819,7 +819,7 @@ function buildNameTables(program, climbs) {
     writtenShadowOf: makeShadowResolver(declared, climbs, "written"),
   };
 }
-//@ chunk-bfnfj4kx.js:24658-24912 placement
+//@ chunk-6sf70a86.js:24700-24954 placement
 /**
  * 在模块顶层的 export ... from 中找导出名为 o 的说明符及其来源。
  */
@@ -838,7 +838,7 @@ function findReExportSpecifier(scan, exportedName) {
   }
   return;
 }
-//@ chunk-bfnfj4kx.js:24912-25150 placement
+//@ chunk-6sf70a86.js:24954-25192 placement
 /**
  * 在 AST 中找出名字 o 的全部引用（"own" 模式不进入内层函数）。
  */
@@ -861,7 +861,7 @@ function findReferences(program, name, scope = "all") {
   );
   return references;
 }
-//@ chunk-bfnfj4kx.js:25150-25224 placement
+//@ chunk-6sf70a86.js:25192-25266 placement
 /**
  * 指定名字的标识符
  */
@@ -870,7 +870,7 @@ function isIdentifierOrBinding(program, name) {
     ? program.name === name
     : findDeclaredIdentifiers(program, name).length > 0;
 }
-//@ chunk-bfnfj4kx.js:25224-25555 placement
+//@ chunk-6sf70a86.js:25266-25597 placement
 /**
  * 取解构模式中的所有名字。
  */
@@ -892,12 +892,12 @@ function patternNames(pattern) {
       return [];
   }
 }
-//@ chunk-bfnfj4kx.js:25555-25564 placement
+//@ chunk-6sf70a86.js:25597-25606 placement
 /**
  * 4
  */
 var MAX_DESTRUCTURE_NAMES = 4;
-//@ chunk-bfnfj4kx.js:25564-25831 placement
+//@ chunk-6sf70a86.js:25606-25873 placement
 function findTopConstInit(scan, name) {
   for (let statement of scan.program.body) {
     let declaration = statement.type === "ExportNamedDeclaration" ? statement.declaration : statement;
@@ -908,7 +908,7 @@ function findTopConstInit(scan, name) {
   }
   return;
 }
-//@ chunk-bfnfj4kx.js:25831-25967 placement
+//@ chunk-6sf70a86.js:25873-26009 placement
 /**
  * 变量/函数/类声明引入的名字列表。
  */
@@ -920,7 +920,7 @@ function declaredNames(declaration) {
       ? []
       : [declaration.id.name];
 }
-//@ chunk-bfnfj4kx.js:25967-26363 placement
+//@ chunk-6sf70a86.js:26009-26405 placement
 /**
  * 语句是否声明了某名字。
  */
@@ -944,22 +944,22 @@ function declaresName(astNode, name) {
       return false;
   }
 }
-//@ chunk-bfnfj4kx.js:26363-26443 placement
+//@ chunk-6sf70a86.js:26405-26485 placement
 /**
  * 可直接展示的摘录
  */
 var SAFE_EXCERPT_RE = /^(?!(?:true|false|null|undefined|NaN|Infinity)$)(?![-\d])[\w:@*!$#-]+$/;
-//@ chunk-bfnfj4kx.js:26443-26453 placement
+//@ chunk-6sf70a86.js:26485-26495 placement
 /**
  * 16
  */
 var MAX_STATE_KEY_PARTS = 16;
-//@ chunk-bfnfj4kx.js:26453-26464 placement
+//@ chunk-6sf70a86.js:26495-26506 placement
 /**
  * 120
  */
 var MAX_EXCERPT_LEN = 120;
-//@ chunk-bfnfj4kx.js:26464-26736 placement
+//@ chunk-6sf70a86.js:26506-26778 placement
 function quoteExcerpt(text) {
   let sliced = text.slice(0, MAX_EXCERPT_LEN);
   let droppedChars = text.length - sliced.length;
@@ -970,19 +970,19 @@ function quoteExcerpt(text) {
     .replace(/ {2,}/g, (spaceRun) => " ".concat(spaceRun.slice(1).replaceAll(" ", "\\u0020")));
   return droppedChars === 0 ? replaced : `${replaced}[+${droppedChars} chars]`;
 }
-//@ chunk-bfnfj4kx.js:26736-26790 placement
+//@ chunk-6sf70a86.js:26778-26832 placement
 /**
  * 摘录或加引号
  */
 function excerptOrQuoted(text) {
   return text.length <= MAX_EXCERPT_LEN && SAFE_EXCERPT_RE.test(text) ? text : quoteExcerpt(text);
 }
-//@ chunk-bfnfj4kx.js:26790-26800 placement
+//@ chunk-6sf70a86.js:26832-26842 placement
 /**
  * "?"
  */
 var UNKNOWN_PLACEHOLDER = "?";
-//@ chunk-bfnfj4kx.js:26800-27102 placement
+//@ chunk-6sf70a86.js:26842-27144 placement
 /**
  * 描述对象字面量的形状（用于状态键）。
  */
@@ -1004,7 +1004,7 @@ function describeObjectShape(objectNode, context, seen) {
     })
     .join(", ");
 }
-//@ chunk-bfnfj4kx.js:27102-27479 placement
+//@ chunk-6sf70a86.js:27144-27521 placement
 /**
  * 判断标识符是自由变量还是 const 绑定。
  */
@@ -1034,7 +1034,7 @@ function classifyBinding(scanner, identifier) {
         kind: "shadowed",
       };
 }
-//@ chunk-bfnfj4kx.js:27479-27704 placement
+//@ chunk-6sf70a86.js:27521-27746 placement
 function resolveLiteralConst(scanner, identifier) {
   let init =
     classifyBinding(scanner, identifier).kind === "free"
@@ -1046,7 +1046,7 @@ function resolveLiteralConst(scanner, identifier) {
     ? init
     : undefined;
 }
-//@ chunk-bfnfj4kx.js:27704-27903 placement
+//@ chunk-6sf70a86.js:27746-27945 placement
 function resolveSealedConst(scanner, identifier) {
   let init =
     classifyBinding(scanner, identifier).kind === "free"
@@ -1059,13 +1059,13 @@ function resolveSealedConst(scanner, identifier) {
     ? init
     : undefined;
 }
-//@ chunk-bfnfj4kx.js:27903-27934 placement
+//@ chunk-6sf70a86.js:27945-27976 placement
 /**
  * 解析常量字面量
  */
 var resolveConstValue = (scanner, identifier) =>
   resolveLiteralConst(scanner, identifier) ?? resolveSealedConst(scanner, identifier);
-//@ chunk-bfnfj4kx.js:27934-28164 placement
+//@ chunk-6sf70a86.js:27976-28206 placement
 function followObjectConst(node, scanner, seen) {
   let current = node;
   let seenNames = seen;
@@ -1083,7 +1083,7 @@ function followObjectConst(node, scanner, seen) {
       }
     : undefined;
 }
-//@ chunk-bfnfj4kx.js:28164-28379 placement
+//@ chunk-6sf70a86.js:28206-28421 placement
 function describeObjectPath(resolved, context) {
   let [firstProperty, ...restProperties] = resolved.node.properties;
   let isSingleProperty = restProperties.length === 0 && firstProperty?.type === "Property";
@@ -1093,7 +1093,7 @@ function describeObjectPath(resolved, context) {
     ? `.${excerptOrQuoted(keyName)}${describeObjectPath(nested, context)}`
     : ` has {${describeObjectShape(resolved.node, context, resolved.seen)}}`;
 }
-//@ chunk-bfnfj4kx.js:28379-28761 placement
+//@ chunk-6sf70a86.js:28421-28803 placement
 /**
  * 把字面量数组转成文本。
  */
@@ -1114,9 +1114,9 @@ function literalArrayText(arrayNode) {
     if (cooked === undefined || cooked === null) return;
     items.push(excerptOrQuoted(cooked));
   }
-  return uniq(items);
+  return normalizeCaseForComparison_2(items);
 }
-//@ chunk-bfnfj4kx.js:28761-28919 placement
+//@ chunk-6sf70a86.js:28803-28961 placement
 function loopArrayText(scan, loop, name) {
   let { right } = loop;
   return right.type === "ArrayExpression" &&
@@ -1126,7 +1126,7 @@ function loopArrayText(scan, loop, name) {
     ? literalArrayText(right)?.join("|")
     : undefined;
 }
-//@ chunk-bfnfj4kx.js:28919-29118 placement
+//@ chunk-6sf70a86.js:28961-29160 placement
 function identifierLiteralText(identifier, scanner, seen) {
   if (seen.has(identifier.name)) return UNKNOWN_PLACEHOLDER;
   let binding = classifyBinding(scanner, identifier);
@@ -1137,12 +1137,12 @@ function identifierLiteralText(identifier, scanner, seen) {
   if (constValue === undefined) return UNKNOWN_PLACEHOLDER;
   return literalText(constValue, scanner, new Set([...seen, identifier.name]));
 }
-//@ chunk-bfnfj4kx.js:29118-29149 placement
+//@ chunk-6sf70a86.js:29160-29191 placement
 /**
  * /…/o 形式
  */
 var regexSourceText = (text, flags) => `/${quoteExcerpt(text)}/${flags}`;
-//@ chunk-bfnfj4kx.js:29149-29631 placement
+//@ chunk-6sf70a86.js:29191-29673 placement
 /**
  * 把字面量/模板转成规范文本。
  */
@@ -1175,7 +1175,7 @@ function literalText(node, scanner, seen = new Set()) {
       return UNKNOWN_PLACEHOLDER;
   }
 }
-//@ chunk-bfnfj4kx.js:29631-29716 placement
+//@ chunk-6sf70a86.js:29673-29758 placement
 /**
  * 字面量或对象路径
  */
@@ -1184,13 +1184,13 @@ function literalOrObjectPath(node, scanner, seen) {
   if (resolved === undefined) return `=${literalText(node, scanner, seen)}`;
   return describeObjectPath(resolved, scanner);
 }
-//@ chunk-bfnfj4kx.js:29716-29762 placement
+//@ chunk-6sf70a86.js:29758-29804 placement
 /**
  * 拼接字面量
  */
 var appendLiteral = (event, matcher, scanner) =>
   matcher === undefined ? event : `${event}${literalText(matcher, scanner)}`;
-//@ chunk-bfnfj4kx.js:29762-30312 placement
+//@ chunk-6sf70a86.js:29804-30354 placement
 /**
  * 静态求值字面量表达式。
  */
@@ -1215,7 +1215,7 @@ function evaluateLiteral(node, scanner, seen = new Set()) {
   if (!constValue) return new RegExp("");
   return evaluateLiteral(constValue, scanner, new Set([...seen, node.name]));
 }
-//@ chunk-bfnfj4kx.js:30312-30620 placement
+//@ chunk-6sf70a86.js:30354-30662 placement
 /**
  * 语句是否导出某名字。
  */
@@ -1232,12 +1232,12 @@ function exportsName(statement, name) {
     specifiers.some((specifier) => exportNameText(specifier.local) === name);
   return exportsDeclared || exportsLocal;
 }
-//@ chunk-bfnfj4kx.js:30620-30661 placement
+//@ chunk-6sf70a86.js:30662-30703 placement
 /**
  * 是否导出该名
  */
 var exportsName_2 = (program, name) => program.body.some((statement) => exportsName(statement, name));
-//@ chunk-bfnfj4kx.js:30661-31061 placement
+//@ chunk-6sf70a86.js:30703-31103 placement
 /**
  * 收集导出的声明。
  */
@@ -1265,7 +1265,7 @@ function collectExportedDeclarations(program) {
   }
   return byName;
 }
-//@ chunk-bfnfj4kx.js:31061-31463 placement
+//@ chunk-6sf70a86.js:31103-31505 placement
 /**
  * 节点是否作为状态 API（read/update/atom）的参数。
  */
@@ -1291,7 +1291,7 @@ function isStateArgument(node, parentOf, stateFacts) {
     parentOf(parent)?.type === "ObjectExpression"
   );
 }
-//@ chunk-bfnfj4kx.js:31463-31575 placement
+//@ chunk-6sf70a86.js:31505-31617 placement
 function sortUsesByStart(uses) {
   let placed = uses.toSorted((useA, useB) => useA.use.start - useB.use.start);
   return {
@@ -1299,7 +1299,7 @@ function sortUsesByStart(uses) {
     starts: placed.map((use) => use.use.start),
   };
 }
-//@ chunk-bfnfj4kx.js:31575-31800 placement
+//@ chunk-6sf70a86.js:31617-31842 placement
 function createScanCaches(program, names, scopeClimbs) {
   let splitUses = memoizeAlias((name) => splitShadowedUses(names.read.get(name) ?? [], names));
   return {
@@ -1323,7 +1323,7 @@ function createScanCaches(program, names, scopeClimbs) {
     ),
   };
 }
-//@ chunk-bfnfj4kx.js:31800-31955 placement
+//@ chunk-6sf70a86.js:31842-31997 placement
 /**
  * 生成解析器插件：作用域嵌套超过上限时抛出（防止过深嵌套的源码）。
  */
@@ -1334,7 +1334,7 @@ var limitScopeDepth = (maxDepth, refuseAtLine) => (BaseParser) =>
       if (this.scopeStack.length > maxDepth + 1) throw refuseAtLine(this.lastTokStartLoc.line);
     };
   };
-//@ chunk-bfnfj4kx.js:31955-32749 placement
+//@ chunk-6sf70a86.js:31997-32790 placement
 /**
  * 扫描单个 hooks 文件（嵌套深度上限、拒绝信息带摘录）。
  */
@@ -1389,7 +1389,7 @@ function scanHooksFile(file, source, pluginName) {
     specifiers: importSpecifiers(program),
   };
 }
-//@ chunk-bfnfj4kx.js:32749-33042 placement
+//@ chunk-6sf70a86.js:32790-33083 placement
 /**
  * 在函数体之外找第一个 await/for await/await using 节点（hooks 模块不允许顶层 await）。
  */
@@ -1413,7 +1413,7 @@ function findTopLevelAwait(program) {
   );
   return found;
 }
-//@ chunk-bfnfj4kx.js:33042-34380 placement
+//@ chunk-6sf70a86.js:33083-34421 placement
 /**
  * 构建 hooks 模块的导入图（大小上限、禁止顶层 await）。
  */
@@ -1501,14 +1501,14 @@ async function buildModuleGraph(entry, pluginName, resolveImport) {
     files,
   };
 }
-//@ chunk-bfnfj4kx.js:34380-34512 placement
+//@ chunk-6sf70a86.js:34421-34553 placement
 var singleTextImportRefusal = (pluginName) => (specifier, importer) =>
   Promise.reject(
     new HooksError(
       `${pluginName}: cannot import "${specifier}" (from ${importer}): the module is one text with no files beside it`,
     ),
   );
-//@ chunk-bfnfj4kx.js:34512-34752 placement
+//@ chunk-6sf70a86.js:34553-34793 placement
 /**
  * 读取（内置或磁盘上的）hooks 模块源码并构建导入图。
  */
@@ -1542,12 +1542,12 @@ async function loadHooksModuleGraph(file, pluginRoot, pluginName) {
     ),
   };
 }
-//@ chunk-bfnfj4kx.js:34789-34820 placement
+//@ chunk-6sf70a86.js:34830-34861 placement
 /**
  * 长度+内容（图摘要用）
  */
 var lengthPrefixed = (text) => `${text.length}:${text}`;
-//@ chunk-bfnfj4kx.js:34820-35000 placement
+//@ chunk-6sf70a86.js:34861-35041 placement
 /**
  * 计算模块图的 sha256 摘要（根目录、各文件编译结果与链接）。
  */
@@ -1561,23 +1561,23 @@ function moduleGraphDigest(graph) {
   return hash.digest("hex");
 }
 export {
-  refuseDynamicImport,
-  scanHooksFile,
+  loadHooksModuleGraph,
   walkAst,
   exportNameText,
+  exportsName_2,
+  findReferences,
+  appendLiteral,
+  evaluateLiteral,
+  buildModuleGraph,
   declaringScopeOf,
   SCAN_PROBLEM_TEXT,
   isStateArgument,
   propertyKeyName,
   findDeclaredIdentifiers,
-  findReferences,
   collectIdentifierUses,
   findReExportSpecifier,
   moduleGraphDigest,
   declaredNames,
-  loadHooksModuleGraph,
-  exportsName_2,
-  appendLiteral,
-  evaluateLiteral,
-  buildModuleGraph,
+  refuseDynamicImport,
+  scanHooksFile,
 };

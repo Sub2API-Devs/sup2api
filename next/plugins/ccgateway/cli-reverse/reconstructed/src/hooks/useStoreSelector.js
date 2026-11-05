@@ -3,9 +3,9 @@
  *
  * 状态仓库选择器 hook（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-yn45f1gp.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-szn71z8n.js (3)
  * attribution: placement 3
  */
 import {
@@ -16,9 +16,9 @@ import {
 } from "../../vendor/react/cjs/react.production.js";
 import { SpinnerPaceContext } from "../components/Spinner/paceContext.js";
 
-//@ chunk-yn45f1gp.js:270-274 placement
+//@ chunk-szn71z8n.js:270-274 placement
 init_react_production();
-//@ chunk-yn45f1gp.js:274-312 placement
+//@ chunk-szn71z8n.js:274-312 placement
 /**
  * 导出值：同一声明里的多个绑定：ZERO_SELECTOR（选择器返回常量 a）；returnConstantA（返回 a）；returnUndefined（返回 undefined）；位于「状态仓库选择器 hook（2.1.316 新增）」模块。
  */
@@ -27,7 +27,7 @@ var returnConstantA = () => {};
 var returnUndefined = () => {
   return;
 };
-//@ chunk-yn45f1gp.js:312-842 placement
+//@ chunk-szn71z8n.js:312-842 placement
 /**
  * 订阅状态仓库并按选择器取值：缓存上次快照与结果避免重复计算，订阅可经节奏控制器限速，仓库为空时返回默认值。
  */

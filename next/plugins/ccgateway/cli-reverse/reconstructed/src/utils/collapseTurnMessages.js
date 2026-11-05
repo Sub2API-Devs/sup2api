@@ -3,23 +3,22 @@
  *
  * 2.1.316 新增：渲染前的消息整理：合并连续的钩子附件为按事件计数的批次、去掉计数未变的重复回合耗时行、去掉重复的远程错误提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ag5x7vhf.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hnxhr3bs.js (5)
  * attribution: placement 5
  */
-import { deriveUUID } from "./messages.js";
+import { deriveUUID, SYNTHETIC_MODEL } from "./messages.js";
 import { isHumanTurn_3 } from "./messagePredicates.js";
 import { isHumanOrUnset } from "./messageProvenance.js";
 import { resolveTaskNotificationOrigin } from "./backgroundSessionResume.js";
-import { SYNTHETIC_MODEL } from "../constants/messages.js";
 import { sanitizedMessageText } from "./messages/mappers.js";
 
-//@ chunk-ag5x7vhf.js:118205-118292 placement
+//@ chunk-hnxhr3bs.js:122396-122483 placement
 function isAsyncHookResponse(message) {
   return message.type === "attachment" && message.attachment.type === "async_hook_response";
 }
-//@ chunk-ag5x7vhf.js:118292-118764 placement
+//@ chunk-hnxhr3bs.js:122483-122955 placement
 /**
  * 把连续的钩子附件合并为按事件计数的一条。
  */
@@ -68,7 +67,7 @@ function collapseHookAttachments(messages) {
   }
   return result;
 }
-//@ chunk-ag5x7vhf.js:118764-119283 placement
+//@ chunk-hnxhr3bs.js:122955-123474 placement
 /**
  * 去掉后台代理/工作流计数未变的重复回合耗时行。
  */
@@ -110,12 +109,12 @@ function dropRepeatedTurnDurations(messages, keepAll) {
   }
   return kept ?? messages;
 }
-//@ chunk-ag5x7vhf.js:119283-119362 placement
+//@ chunk-hnxhr3bs.js:123474-123553 placement
 function dropDuplicateRemoteErrors(messages, skip) {
   if (skip || !messages.some(isDuplicateRemoteError)) return messages;
   return messages.filter((message, index) => !isDuplicateRemoteError(message, index, messages));
 }
-//@ chunk-ag5x7vhf.js:119362-119609 placement
+//@ chunk-hnxhr3bs.js:123553-123800 placement
 function isDuplicateRemoteError(message, index, messages) {
   let previous = messages[index - 1];
   if (

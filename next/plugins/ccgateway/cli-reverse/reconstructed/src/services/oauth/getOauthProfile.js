@@ -3,9 +3,9 @@
  *
  * 拉取账户 profile：/api/oauth/profile（Bearer）与 /api/claude_cli_profile（x-api-key），校验形状并分类失败原因。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/oauth/getOauthProfile.ts
- * pieces: chunk-aepeg2w5.js (4)
+ * pieces: chunk-exfmq47h.js (4)
  * attribution: placement 3, fingerprint 1
  */
 import { getGlobalConfig } from "../../utils/config.js";
@@ -26,7 +26,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 import { isSessionsToken } from "./sessionsBearerHooks.js";
 
-//@ chunk-aepeg2w5.js:292428-292931 placement (2.1.88 match: getOauthProfileFromApiKey, 0.622)
+//@ chunk-exfmq47h.js:302049-302552 placement (2.1.88 match: getOauthProfileFromApiKey, 0.622)
 /**
  * GET <BASE_API_URL>/api/claude_cli_profile（x-api-key + oauth beta），API key 用户取账户信息。
  */
@@ -62,7 +62,7 @@ async function getOauthProfileFromApiKey() {
     }
   }
 }
-//@ chunk-aepeg2w5.js:292931-293028 placement
+//@ chunk-exfmq47h.js:302552-302649 placement
 async function getOauthProfileWithOriginFromOauthToken(accessToken) {
   let oauthProfileFromOauthToken = await getOauthProfileFromOauthToken_2(accessToken);
   return oauthProfileFromOauthToken.ok
@@ -72,7 +72,7 @@ async function getOauthProfileWithOriginFromOauthToken(accessToken) {
       }
     : undefined;
 }
-//@ chunk-aepeg2w5.js:293028-293097 placement
+//@ chunk-exfmq47h.js:302649-302718 placement
 /**
  * GET <BASE_API_URL>/api/oauth/profile（Bearer），校验响应形状，失败分类 no_auth/rate_limited/timeout/network_error。
  */
@@ -80,7 +80,7 @@ async function getOauthProfileFromOauthToken(accessToken) {
   let oauthProfileFromOauthToken = await getOauthProfileFromOauthToken_2(accessToken);
   return oauthProfileFromOauthToken.ok ? oauthProfileFromOauthToken.profile : undefined;
 }
-//@ chunk-aepeg2w5.js:293097-293799 fingerprint (2.1.88 match: getOauthProfileFromOauthToken, 0.434)
+//@ chunk-exfmq47h.js:302718-303420 fingerprint (2.1.88 match: getOauthProfileFromOauthToken, 0.435)
 async function getOauthProfileFromOauthToken_2(accessToken) {
   let endpoint = `${getOauthConfig().BASE_API_URL}/api/oauth/profile`;
   try {

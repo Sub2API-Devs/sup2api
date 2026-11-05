@@ -1,11 +1,11 @@
 /**
  * get-stream/source/contents.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: get-stream@8.0.1
- * pieces: chunk-m4p5zn6n.js (2)
+ * pieces: chunk-t889g22j.js (2)
  * attribution: esm-fingerprint 2
  */
-//@ chunk-m4p5zn6n.js:21236-22730 esm-fingerprint
+//@ chunk-t889g22j.js:21235-22729 esm-fingerprint
 var getStreamContents = async (
   stream,
   { init, convertChunk, getSize, truncateChunk, addChunk, getFinalChunk, finalize },
@@ -89,7 +89,7 @@ var getChunkType = (chunk) => {
   return "others";
 };
 var { toString: objectToString } = Object.prototype;
-//@ chunk-m4p5zn6n.js:22730-22818 esm-fingerprint
+//@ chunk-t889g22j.js:22729-22817 esm-fingerprint
 class MaxBufferError extends Error {
   name = "MaxBufferError";
   constructor() {

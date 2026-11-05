@@ -3,9 +3,9 @@
  *
  * 插件安装后的选项配置流程（userConfig 步骤、保存与激活结果提示）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/PluginOptionsFlow.tsx
- * pieces: chunk-hwmsct5x.js (1), chunk-vrb44rx7.js (16)
+ * pieces: chunk-vn3g7zt8.js (1), chunk-wb51jffc.js (16)
  * attribution: fingerprint 2, placement 15
  */
 import { stripAnsi } from "../../utils/stripAnsi.js";
@@ -45,7 +45,7 @@ import { SettingsDialogCancelBinding } from "../../utils/settings/mdm/constants.
 import { PluginOptionsDialog } from "./PluginOptionsDialog.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hwmsct5x.js:222410-222714 fingerprint (2.1.88 match: findPluginOptionsTarget, 0.49)
+//@ chunk-vn3g7zt8.js:222818-223122 fingerprint (2.1.88 match: findPluginOptionsTarget, 0.492)
 function findPluginOptionsTarget(pluginId) {
   if (typeof pluginId.value !== "string") return null;
   let resolvedPluginId = pluginId.value === "default" ? null : stripAnsi(pluginId.value);
@@ -60,48 +60,48 @@ function findPluginOptionsTarget(pluginId) {
     }),
   };
 }
-//@ chunk-vrb44rx7.js:43972-43976 placement
+//@ chunk-wb51jffc.js:44123-44127 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:43972", () => {
+deferInit("chunk-wb51jffc.js:44123", () => {
   init_react_production();
 });
-//@ chunk-vrb44rx7.js:43976-43980 placement
+//@ chunk-wb51jffc.js:44127-44131 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:43976", () => {
+deferInit("chunk-wb51jffc.js:44127", () => {
   init_react_production();
 });
-//@ chunk-vrb44rx7.js:43980-44043 placement
+//@ chunk-wb51jffc.js:44131-44194 placement
 function channelNeedsOptions(channel) {
   return Object.keys(channel.userConfig ?? {}).length > 0;
 }
-//@ chunk-vrb44rx7.js:44043-44076 placement
+//@ chunk-wb51jffc.js:44194-44227 placement
 function optionsSteps(steps) {
   return {
     steps,
   };
 }
-//@ chunk-vrb44rx7.js:44076-44091 placement
+//@ chunk-wb51jffc.js:44227-44242 placement
 function noop() {}
-//@ chunk-vrb44rx7.js:44091-44200 placement
+//@ chunk-wb51jffc.js:44242-44351 placement
 function toPluginOptionsSaveError(error) {
   logForDebugging(`Failed to save plugin options: ${errorMessage(error)}`, {
     level: "error",
   });
   return error ?? Error("save failed");
 }
-//@ chunk-vrb44rx7.js:44200-44291 placement
+//@ chunk-wb51jffc.js:44351-44442 placement
 async function findMarketplaceOfAllPlugins(pluginIds, state, storageV5) {
   let { enabled, disabled } = await loadAllPlugins(state, storageV5);
   return findMarketplace([...enabled, ...disabled], pluginIds);
 }
-//@ chunk-vrb44rx7.js:44291-44385 placement
+//@ chunk-wb51jffc.js:44442-44536 placement
 async function hasUnconfiguredOptions(plugin, targetPlugin) {
   return (
     Object.keys(await getUnconfiguredOptions(plugin, targetPlugin)).length > 0 ||
     (await getUnconfiguredChannels(plugin, targetPlugin)).length > 0
   );
 }
-//@ chunk-vrb44rx7.js:44385-44810 placement
+//@ chunk-wb51jffc.js:44536-44961 placement
 async function savePluginOptions(pluginId, options, state, credentials) {
   let marketplaceOfAllPlugins = await findMarketplaceOfAllPlugins(pluginId, state, credentials);
   if (!marketplaceOfAllPlugins || !(await hasUnconfiguredOptions(marketplaceOfAllPlugins, credentials)))
@@ -127,7 +127,7 @@ async function savePluginOptions(pluginId, options, state, credentials) {
       saveResult === undefined && marketplaceOfAllPlugins.manifest.defaultEnabled === false,
   };
 }
-//@ chunk-vrb44rx7.js:44810-47061 placement
+//@ chunk-wb51jffc.js:44961-47212 placement
 /**
  * 生成安装/配置结果提示（已安装、需重载、加载失败、默认禁用、已激活等）。
  */
@@ -234,27 +234,27 @@ function formatInstallOutcome(props) {
         let chosen = (value) => {
           if (!finishedRef.current) onFinish(value);
         };
-        oe: switch (outcome) {
+        te: switch (outcome) {
           case "configured": {
             let hasExtra = Boolean(extra);
             let canProceed = canInstall || hasExtra;
             chosen(
               `\u2713 ${hasExtra ? (alreadyInstalled ? "Configured" : "Installed and configured") : tabLabel} ${getPluginDisplayName(plugin)}${depNote}.${await install(canProceed)}`,
             );
-            break oe;
+            break te;
           }
           case "skipped": {
             let needsDeps = canInstall || Boolean(extra);
             chosen(
               `\u2713 ${tabLabel} ${getPluginDisplayName(plugin)}${depNote}.${await install(needsDeps)}`,
             );
-            break oe;
+            break te;
           }
           case "read-error": {
             chosen(
               `${tabLabel} ${getPluginDisplayName(plugin)}${depNote}, but its saved options could not be read (${config}).${await install(canInstall)}`,
             );
-            break oe;
+            break te;
           }
           case "error": {
             let failed = false;
@@ -292,7 +292,7 @@ function formatInstallOutcome(props) {
   } else details = $[21];
   return details;
 }
-//@ chunk-vrb44rx7.js:47061-48783 fingerprint (2.1.88 match: PluginOptionsFlow, 0.768)
+//@ chunk-wb51jffc.js:47212-48934 fingerprint (2.1.88 match: PluginOptionsFlow, 0.769)
 function PluginOptionsFlow(props) {
   let $ = useMemoCache(24);
   let { plugin, pluginId, onDone } = props;
@@ -429,7 +429,7 @@ function PluginOptionsFlow(props) {
   } else suspenseWrapper = $[23];
   return suspenseWrapper;
 }
-//@ chunk-vrb44rx7.js:48783-48932 placement
+//@ chunk-wb51jffc.js:48934-49083 placement
 function PluginOptionsStepsLoader(props) {
   let $ = useMemoCache(3);
   let { steps, onDone } = props;
@@ -446,7 +446,7 @@ function PluginOptionsStepsLoader(props) {
   } else content = $[2];
   return content;
 }
-//@ chunk-vrb44rx7.js:48932-50819 placement
+//@ chunk-wb51jffc.js:49083-50970 placement
 /**
  * 读取已保存的插件选项并决定配置步骤（读失败、跳过、已配置）。
  */
@@ -608,7 +608,7 @@ function PluginOptionsLoader(props) {
   } else content = $[33];
   return content;
 }
-//@ chunk-vrb44rx7.js:50819-51351 placement
+//@ chunk-wb51jffc.js:50970-51502 placement
 /**
  * 异步执行 load 取已保存的插件选项（失败时记日志），在 Suspense 下渲染选项对话框；加载期间只挂取消键绑定。
  */
@@ -668,13 +668,13 @@ function PluginOptionsDialogLoader(props) {
   } else footer = $[13];
   return footer;
 }
-//@ chunk-vrb44rx7.js:51351-51441 placement
+//@ chunk-wb51jffc.js:51502-51592 placement
 function logOptionsReadFailure(pluginId, error) {
   logForDebugging(`Failed to read saved plugin options (${pluginId}): ${errorMessage(error)}`, {
     level: "error",
   });
 }
-//@ chunk-vrb44rx7.js:51441-51594 placement
+//@ chunk-wb51jffc.js:51592-51745 placement
 function PluginOptionsDialogWithSaved(props) {
   let $ = useMemoCache(3);
   let { dialog, saved } = props;
@@ -693,9 +693,9 @@ function PluginOptionsDialogWithSaved(props) {
 }
 export {
   findPluginOptionsTarget,
-  PluginOptionsFlow,
-  PluginOptionsDialogLoader,
   findMarketplaceOfAllPlugins,
   savePluginOptions,
   formatInstallOutcome,
+  PluginOptionsFlow,
+  PluginOptionsDialogLoader,
 };

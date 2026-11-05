@@ -3,9 +3,9 @@
  *
  * 迁移：旧版 Opus 模型名改为当前 opus 别名
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/migrations/migrateLegacyOpusToCurrent.ts
- * pieces: chunk-cjydagjy.js (1)
+ * pieces: chunk-h61dq9nz.js (1)
  * attribution: fingerprint 1
  */
 import { getAPIProvider } from "../utils/model/providers.js";
@@ -17,7 +17,7 @@ import { saveGlobalConfig } from "../utils/config.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 
-//@ chunk-cjydagjy.js:9439-10044 fingerprint (2.1.88 match: migrateLegacyOpusToCurrent, 0.818)
+//@ chunk-h61dq9nz.js:9616-10221 fingerprint (2.1.88 match: migrateLegacyOpusToCurrent, 0.818)
 /**
  * 迁移（仅 firstParty）：userSettings.model 为 Opus 4/4.1 的全名时改成当前 opus 别名。
  */

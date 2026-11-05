@@ -1,12 +1,12 @@
 /**
  * @opentelemetry/resources/build/esm/detectors/platform/node/utils.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/resources@2.2.0
- * pieces: chunk-9vvvg0d3.js (1)
+ * pieces: chunk-3wgj3rdg.js (1)
  * attribution: esm-fingerprint 1
  */
 
-//@ chunk-9vvvg0d3.js:34768-34883 esm-fingerprint
+//@ chunk-3wgj3rdg.js:35152-35267 esm-fingerprint
 function normalizeArchForOtel(nodeArchString) {
   switch (nodeArchString) {
     case "arm":

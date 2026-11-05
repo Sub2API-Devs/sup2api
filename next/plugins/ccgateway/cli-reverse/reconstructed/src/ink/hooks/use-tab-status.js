@@ -3,16 +3,14 @@
  *
  * 仅并入模块初始化调用
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/hooks/use-tab-status.ts
- * pieces: chunk-x6v6jz2y.js (2)
- * attribution: placement 1, fingerprint 1
+ * pieces: chunk-czq1j3j2.js (2)
+ * attribution: fingerprint 1, placement 1
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 
-//@ chunk-x6v6jz2y.js:27197-27201 placement
-init_react_production();
-//@ chunk-x6v6jz2y.js:27201-27473 fingerprint (2.1.88 match: TAB_STATUS_PRESETS, 0.846)
+//@ chunk-czq1j3j2.js:1465040-1465320 fingerprint (2.1.88 match: TAB_STATUS_PRESETS, 0.844)
 /**
  * 标签页状态预设：idle（绿点，“Idle”）、busy（橙点，“Working…”）、waiting（蓝点，“Waiting”）。
  */
@@ -39,4 +37,6 @@ var TAB_STATUS_PRESETS = {
     statusColor: rgb(95, 135, 255),
   },
 };
+//@ chunk-czq1j3j2.js:1886890-1886894 placement
+init_react_production();
 export { TAB_STATUS_PRESETS };

@@ -3,9 +3,9 @@
  *
  * 基于 Bun WebSocket 的 MCP 传输（ws 与 ws-ide），单条消息大小上限与状态检查。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/mcpWebSocketTransport.ts
- * pieces: chunk-29pqxdaf.js (2)
+ * pieces: chunk-323717f6.js (2)
  * attribution: affinity 1, fingerprint 1
  */
 import { logForDiagnosticsNoPII } from "./diagLogs.js";
@@ -13,10 +13,10 @@ import { toError, TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } 
 import { MAX_STRUCTURED_RESULT_BYTES } from "../services/mcp/mcpCallConstants.js";
 import { jsonParse, jsonStringify } from "./slowOperations.js";
 
-//@ chunk-29pqxdaf.js:1914-1927 affinity
+//@ chunk-323717f6.js:2261-2274 affinity
 var WS_CONNECTING = 0;
 var WS_OPEN = 1;
-//@ chunk-29pqxdaf.js:1927-3927 fingerprint (2.1.88 match: WebSocketTransport, 0.856)
+//@ chunk-323717f6.js:2274-4274 fingerprint (2.1.88 match: WebSocketTransport, 0.856)
 /**
  * WebSocketTransport：基于 Bun WebSocket 的 MCP 传输（ws 与 ws-ide），等待 open 后 start；单条消息超过上限（16 MiB）时报错并关闭；send 前检查 OPEN 状态。
  */

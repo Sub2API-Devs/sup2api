@@ -3,19 +3,24 @@
  *
  * 2.1.316 新增：恢复加载报告
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (18)
- * attribution: placement 18
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (19)
+ * attribution: affinity 1, placement 18
  */
-import { SYNTHETIC_MODEL } from "../../constants/messages.js";
-import { getDiagnosticLogFile, logForDiagnosticsNoPII } from "../diagLogs.js";
+import { env } from "../env.js";
+import { SYNTHETIC_MODEL } from "../messages.js";
 import { weakMap_2, weakMap_3, weakMap_5, MAX_ANNOUNCEMENTS, weakMap_4 } from "./resumeAnnouncements.js";
 import { logError } from "../log.js";
-import { count } from "../collections.js";
+import { countWhere } from "../collections.js";
+import { logForDiagnosticsNoPII } from "../diagLogs.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:313222-313344 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-5xgkngpb.js:313978-314040 affinity (2.1.88 match: getDiagnosticLogFile, 1)
+function getDiagnosticLogFile() {
+  return Boolean(env.CLAUDE_CODE_DIAGNOSTICS_FILE);
+}
+//@ chunk-5xgkngpb.js:314040-314162 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function listBlockTypes(content) {
   return Array.isArray(content)
     ? content.map((block) =>
@@ -23,7 +28,7 @@ function listBlockTypes(content) {
       )
     : [];
 }
-//@ chunk-e6aww6q8.js:313344-313532 placement
+//@ chunk-5xgkngpb.js:314162-314350 placement
 function hasVisibleText(content) {
   if (typeof content === "string") return content.trim() !== "";
   return (
@@ -38,7 +43,7 @@ function hasVisibleText(content) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:313532-314111 placement
+//@ chunk-5xgkngpb.js:314350-314929 placement
 /**
  * 把转录末条消息归类用于恢复报告：助手消息分 synthetic/calls/text/thinking/blank，用户消息分 tool_result/summary/meta/prompt，其余按类型。
  */
@@ -61,7 +66,7 @@ function classifyTailMessage(entry) {
   }
   return entry.type === "attachment" || entry.type === "system" ? entry.type : "other";
 }
-//@ chunk-e6aww6q8.js:314111-314271 placement
+//@ chunk-5xgkngpb.js:314929-315089 placement
 function secondsBetween(timestamp, timestamp_2) {
   let timestamp_3 = Date.parse(timestamp ?? "");
   let seconds = typeof timestamp_2 === "number" ? timestamp_2 : Date.parse(timestamp_2 ?? "");
@@ -69,23 +74,23 @@ function secondsBetween(timestamp, timestamp_2) {
     ? Math.round((seconds - timestamp_3) / 1000)
     : undefined;
 }
-//@ chunk-e6aww6q8.js:314271-314359 placement
+//@ chunk-5xgkngpb.js:315089-315177 placement
 function isCountedRow(row) {
   return !row.isSidechain && !(row.type === "system" && row.subtype === "file_snapshot");
 }
-//@ chunk-e6aww6q8.js:314359-314399 placement
+//@ chunk-5xgkngpb.js:315177-315208 placement
 function recordLoadReportFor(messages, report) {
-  if (getDiagnosticLogFile()) weakMap_2.set(messages, report);
+  weakMap_2.set(messages, report);
 }
-//@ chunk-e6aww6q8.js:314399-314453 placement
+//@ chunk-5xgkngpb.js:315208-315262 placement
 function rememberValidatedTip(entry, updatedAt) {
   if (typeof updatedAt === "string") weakMap_3.set(entry, updatedAt);
 }
-//@ chunk-e6aww6q8.js:314453-314505 placement
+//@ chunk-5xgkngpb.js:315262-315314 placement
 function validatedTipOf(validatedCCRTip) {
   return validatedCCRTip === undefined ? undefined : weakMap_3.get(validatedCCRTip);
 }
-//@ chunk-e6aww6q8.js:314505-314565 placement
+//@ chunk-5xgkngpb.js:315314-315374 placement
 function rememberHydrateNote(project, sessionId, note) {
   if (getDiagnosticLogFile())
     weakMap_5.set(project, {
@@ -93,7 +98,7 @@ function rememberHydrateNote(project, sessionId, note) {
       note,
     });
 }
-//@ chunk-e6aww6q8.js:314565-314636 placement
+//@ chunk-5xgkngpb.js:315374-315445 placement
 function recordLoadReportSafely(report, rows, priorRows, outcome) {
   if (!getDiagnosticLogFile()) return;
   try {
@@ -102,7 +107,7 @@ function recordLoadReportSafely(report, rows, priorRows, outcome) {
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:314636-315072 placement
+//@ chunk-5xgkngpb.js:315445-315881 placement
 /**
  * 记录本次加载的行数与被排除的可见行（供恢复报告）。
  */
@@ -113,7 +118,7 @@ function recordLoadReport(report, rows, priorRows, pick) {
   for (let row of rows.values()) if (isCountedRow(row)) countedRows++;
   let leftOutRows = [];
   let leftOutTotal = 0;
-  if (countedRows > count(priorRows, isCountedRow)) {
+  if (countedRows > countWhere(priorRows, isCountedRow)) {
     let priorUuids = new Set();
     for (let row of priorRows) priorUuids.add(row.uuid);
     for (let row of rows.values()) {
@@ -131,7 +136,7 @@ function recordLoadReport(report, rows, priorRows, pick) {
     leftOut: leftOutRows.slice(-MAX_ANNOUNCEMENTS),
   });
 }
-//@ chunk-e6aww6q8.js:315072-315114 placement
+//@ chunk-5xgkngpb.js:315881-315923 placement
 function reportResumeLoad(log) {
   try {
     buildResumeLoadReport(log);
@@ -139,7 +144,7 @@ function reportResumeLoad(log) {
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:315114-318109 placement
+//@ chunk-5xgkngpb.js:315923-318928 placement
 /**
  * 生成恢复加载报告，记录加载了哪些消息。
  */
@@ -222,11 +227,11 @@ function buildResumeLoadReport({
       rows_after_tail: stored.length - 1 - lastIndex_2,
       conversation_has_prompt: lastIndex !== -1,
       rows_after_last_prompt: rowsAfterPrompt.length,
-      replies_after_last_prompt: count(
+      replies_after_last_prompt: countWhere(
         rowsAfterPrompt,
         (row) => classifyTailMessage(row) === "assistant_text",
       ),
-      other_user_rows_after_last_prompt: count(
+      other_user_rows_after_last_prompt: countWhere(
         rowsAfterPrompt,
         (row) => row.type === "user" && classifyTailMessage(row) !== "user_tool_result",
       ),
@@ -268,16 +273,16 @@ function buildResumeLoadReport({
     };
   });
 }
-//@ chunk-e6aww6q8.js:318109-318129 placement
+//@ chunk-5xgkngpb.js:318928-318948 placement
 var weakMap_6; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:318109", () => {
+deferInit("chunk-5xgkngpb.js:318928", () => {
   weakMap_6 = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:318129-318163 placement
+//@ chunk-5xgkngpb.js:318948-318982 placement
 function conversationChainOf(messages) {
   return weakMap_6.get(messages);
 }
-//@ chunk-e6aww6q8.js:318163-318486 placement
+//@ chunk-5xgkngpb.js:318982-319305 placement
 /**
  * 跟踪显式回退检查点后被剪掉的行。
  */
@@ -306,7 +311,7 @@ function createRewindTracker(byUuid) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:318486-318653 placement
+//@ chunk-5xgkngpb.js:319305-319472 placement
 function dropAncestorsUntilBoundary(messages, byUuid, row) {
   let ancestorRow = row.parentUuid ? byUuid.get(row.parentUuid) : undefined;
   for (let idx = 0; idx < 64 && ancestorRow !== undefined && !isConversationRow(ancestorRow); idx++) {
@@ -314,13 +319,11 @@ function dropAncestorsUntilBoundary(messages, byUuid, row) {
     ancestorRow = ancestorRow.parentUuid ? byUuid.get(ancestorRow.parentUuid) : undefined;
   }
 }
-//@ chunk-e6aww6q8.js:318653-318714 placement
+//@ chunk-5xgkngpb.js:319472-319533 placement
 function isConversationRow(row) {
   return row.type === "user" || row.type === "assistant";
 }
 export {
-  classifyTailMessage,
-  reportResumeLoad,
   rememberValidatedTip,
   validatedTipOf,
   rememberHydrateNote,
@@ -328,4 +331,6 @@ export {
   createRewindTracker,
   recordLoadReportFor,
   recordLoadReportSafely,
+  classifyTailMessage,
+  reportResumeLoad,
 };

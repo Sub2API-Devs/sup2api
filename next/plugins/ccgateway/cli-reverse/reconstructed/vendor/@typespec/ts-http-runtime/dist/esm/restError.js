@@ -1,16 +1,16 @@
 /**
  * @typespec/ts-http-runtime/dist/esm/restError.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
- * pieces: chunk-mrx6y2r5.js (6)
+ * pieces: chunk-b5df2wx1.js (6)
  * attribution: esm-layout 2, esm-fingerprint 4
  */
 import { Sanitizer, custom } from "./util/sanitizer.js";
 import { isError } from "./util/error.js";
 
-//@ chunk-mrx6y2r5.js:37067-37081 esm-layout
+//@ chunk-b5df2wx1.js:37067-37081 esm-layout
 var errorSanitizer = new Sanitizer();
-//@ chunk-mrx6y2r5.js:37081-37573 esm-fingerprint
+//@ chunk-b5df2wx1.js:37081-37573 esm-fingerprint
 class RestError extends Error {
   constructor(message, options = {}) {
     super(message);
@@ -38,16 +38,16 @@ class RestError extends Error {
     Object.setPrototypeOf(this, RestError.prototype);
   }
 }
-//@ chunk-mrx6y2r5.js:37573-37616 esm-fingerprint
+//@ chunk-b5df2wx1.js:37573-37616 esm-fingerprint
 RestError.REQUEST_SEND_ERROR = "REQUEST_SEND_ERROR";
-//@ chunk-mrx6y2r5.js:37616-37645 esm-fingerprint
+//@ chunk-b5df2wx1.js:37616-37645 esm-fingerprint
 RestError.PARSE_ERROR = "PARSE_ERROR";
-//@ chunk-mrx6y2r5.js:37645-37723 esm-fingerprint
+//@ chunk-b5df2wx1.js:37645-37723 esm-fingerprint
 function isRestError(error) {
   if (error instanceof RestError) return true;
   return isError(error) && error.name === "RestError";
 }
-//@ chunk-mrx6y2r5.js:37832-37903 esm-layout
+//@ chunk-b5df2wx1.js:37832-37903 esm-layout
 class AbortError_2 extends Error {
   constructor(message) {
     super(message);

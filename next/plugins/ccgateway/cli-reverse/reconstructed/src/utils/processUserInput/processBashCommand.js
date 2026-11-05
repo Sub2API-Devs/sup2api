@@ -3,9 +3,9 @@
  *
  * ! 前缀输入：直接执行 bash 并把输入/输出作为消息
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/processUserInput/processBashCommand.tsx
- * pieces: chunk-w235911v.js (3)
+ * pieces: chunk-mgqrtm9t.js (3)
  * attribution: fingerprint 1, affinity 1, sole-consumer 1
  */
 import { resolve } from "path";
@@ -13,7 +13,7 @@ import { randomUUID } from "crypto";
 import { isVirtualPancakeEnabled } from "../permissions/permissionSetup.js";
 import { isPowerShellToolEnabled } from "../shell/shellToolUtils.js";
 import { resolveDefaultShell } from "../shell/resolveDefaultShell.js";
-import { getInitialSettings_2 } from "../settings/settings.js";
+import { getInitialSettings } from "../settings/settings.js";
 import { logEvent } from "../../services/analytics/index.js";
 import {
   createUserMessage,
@@ -29,12 +29,12 @@ import { INNER_TASK_SUFFIX } from "../../tasks/LocalShellTask/backgroundNotices.
 import { env } from "../env.js";
 import { BashTool } from "../../tools/BashTool/BashTool.js";
 import { recordToolUsed } from "../../services/compact/keptTools.js";
-import { processToolResultBlock, toolResultsDirFor_2, PERSISTED_OUTPUT_TAG } from "../toolResultStorage.js";
+import { persistLargeToolResult, toolResultsDirFor_2, PERSISTED_OUTPUT_TAG } from "../toolResultStorage.js";
 import { ShellError } from "../errors.js";
 import { shutdownInterruptStamp } from "../abortController.js";
 import { wrapUserTurnContent } from "../userTurnTags.js";
 
-//@ chunk-w235911v.js:12039-14517 fingerprint (2.1.88 match: processBashCommand, 0.652)
+//@ chunk-mgqrtm9t.js:13182-15660 fingerprint (2.1.88 match: processBashCommand, 0.661)
 /**
  * processBashCommand：! 前缀的 bash 输入直接执行并把输出作为 <bash-stdout> 消息。
  */
@@ -42,7 +42,7 @@ async function processBashCommand(inputString, precedingInputBlocks, context, op
   let transformOutput =
     options.markOutputAsPasted === true && isVirtualPancakeEnabled() ? escapePastedOutput : identity;
   let isPowerShell = isPowerShellToolEnabled() && resolveDefaultShell() === "powershell";
-  let respondToBashCommands = getInitialSettings_2().respondToBashCommands ?? true;
+  let respondToBashCommands = getInitialSettings().respondToBashCommands ?? true;
   logEvent("tengu_input_bash", {
     powershell: isPowerShell,
     respond: respondToBashCommands,
@@ -134,7 +134,7 @@ async function processBashCommand(inputString, precedingInputBlocks, context, op
       },
       randomUUID(),
     );
-    let processed = await processToolResultBlock(
+    let processed = await persistLargeToolResult(
       resultBlock,
       tool,
       toolResultsDirFor_2(context.session),
@@ -218,11 +218,11 @@ async function processBashCommand(inputString, precedingInputBlocks, context, op
     });
   }
 }
-//@ chunk-w235911v.js:14517-14540 affinity
+//@ chunk-mgqrtm9t.js:15660-15683 affinity
 function identity(value) {
   return value;
 }
-//@ chunk-w235911v.js:14540-14578 sole-consumer
+//@ chunk-mgqrtm9t.js:15683-15721 sole-consumer
 function escapePastedOutput(text) {
   return text === "" ? "" : wrapUserTurnContent(text);
 }

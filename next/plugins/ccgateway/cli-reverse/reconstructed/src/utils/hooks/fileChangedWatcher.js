@@ -3,9 +3,9 @@
  *
  * CwdChanged/FileChanged 钩子的文件监听器（chokidar），以及主题目录监听。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/fileChangedWatcher.ts
- * pieces: chunk-e6aww6q8.js (2)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: callgraph-witnessed 1, placement 1
  */
 import { isAbsolute, join } from "path";
@@ -18,7 +18,7 @@ import {
 } from "../../bootstrap/state.js";
 import { getHooksConfigFromSnapshot, shouldAllowManagedHooksOnly } from "./hooksConfigSnapshot.js";
 import { registerCleanup } from "../cleanupRegistry.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { isWindowsDevicePath } from "../windowsUncPaths.js";
 import { logForDebugging } from "../debug.js";
 import { isHttpMcpServeInvocation } from "../../entrypoints/mcpServeArgs.js";
@@ -29,7 +29,7 @@ import { executeFileChangedHooks, executeCwdChangedHooks } from "../hooks.js";
 import { clearCwdEnvFiles } from "../sessionEnvironment.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2072396-2075384 callgraph-witnessed (2.1.88 match: onCwdChangedForHooks, 0.263)
+//@ chunk-5xgkngpb.js:2129593-2132583 callgraph-witnessed (2.1.88 match: onCwdChangedForHooks, 0.264)
 /**
  * CwdChanged/FileChanged 钩子的监听器：按 FileChanged 的 matcher（| 分隔文件名）和钩子返回的 watchPaths 用 chokidar 监听，变化时执行 FileChanged 钩子；cwd 变化时清 env 文件并执行 CwdChanged 钩子；HTTP MCP serve 模式不监听。
  */
@@ -72,7 +72,7 @@ function onCwdChangedForHooks() {
         staticPaths.push(isAbsolute(name) ? name : join(cwd, name));
       }
     }
-    let allPaths = uniq([...staticPaths, ...watchPaths]);
+    let allPaths = normalizeCaseForComparison_2([...staticPaths, ...watchPaths]);
     let filtered = allPaths.filter((path) => !isWindowsDevicePath(path));
     if (filtered.length !== allPaths.length)
       logForDebugging("FileChanged: dropped remote UNC watch path(s)", {
@@ -162,7 +162,10 @@ function onCwdChangedForHooks() {
     restartWatcher();
   }
   function addWatchPaths(paths) {
-    updateWatchPaths([...watchPaths, ...uniq(paths).filter((path) => !watchPaths.includes(path))]);
+    updateWatchPaths([
+      ...watchPaths,
+      ...normalizeCaseForComparison_2(paths).filter((path) => !watchPaths.includes(path)),
+    ]);
   }
   function restartWatcher() {
     if (watcher) {
@@ -245,15 +248,15 @@ function onCwdChangedForHooks() {
     [Symbol.dispose]: dispose,
   };
 }
-//@ chunk-e6aww6q8.js:2075384-2075498 placement
+//@ chunk-5xgkngpb.js:2132583-2132697 placement
 var fileChangedWatcherApi; // deferred: uses onCwdChangedForHooks of its import cycle while loading; runs once the cycle is complete
 var initialize;
 var setEnvHookNotifier;
 var updateWatchPaths;
 var addWatchPaths;
 var onCwdChanged;
-deferInit("chunk-e6aww6q8.js:2075384", () => {
+deferInit("chunk-5xgkngpb.js:2132583", () => {
   fileChangedWatcherApi = onCwdChangedForHooks();
   ({ initialize, setEnvHookNotifier, updateWatchPaths, addWatchPaths, onCwdChanged } = fileChangedWatcherApi);
 });
-export { setEnvHookNotifier, onCwdChanged, addWatchPaths, updateWatchPaths, initialize };
+export { onCwdChanged, addWatchPaths, updateWatchPaths, initialize, setEnvHookNotifier };

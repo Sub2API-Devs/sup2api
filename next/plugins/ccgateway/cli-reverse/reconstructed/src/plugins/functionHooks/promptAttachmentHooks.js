@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：prompt.attachment 事件钩子
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (7)
  * attribution: placement 7
  */
 import { identity as identity_2 } from "../../utils/identity.js";
 
-//@ chunk-e6aww6q8.js:85695-86018 placement
+//@ chunk-5xgkngpb.js:88500-88823 placement
 /**
  * prompt.attachment 答案缓存：answerOf/pendingOf 查询，settle/resolve 写入（带代号防旧结果覆盖），可整体失效。
  */
@@ -46,21 +46,21 @@ function createPromptAttachmentCache() {
     },
   };
 }
-//@ chunk-e6aww6q8.js:86018-86072 placement
+//@ chunk-5xgkngpb.js:88823-88877 placement
 /**
  * 提示附件缓存
  */
 var promptAttachmentCache = identity_2(createPromptAttachmentCache(), (cache) =>
   cache.invalidatePromptAttachments(),
 );
-//@ chunk-e6aww6q8.js:86072-86092 placement
+//@ chunk-5xgkngpb.js:88877-88897 placement
 var answerOf = promptAttachmentCache.answerOf;
-//@ chunk-e6aww6q8.js:86092-86131 placement
+//@ chunk-5xgkngpb.js:88897-88936 placement
 var invalidatePromptAttachments = promptAttachmentCache.invalidatePromptAttachments;
-//@ chunk-e6aww6q8.js:86131-86152 placement
+//@ chunk-5xgkngpb.js:88936-88957 placement
 var pendingOf = promptAttachmentCache.pendingOf;
-//@ chunk-e6aww6q8.js:86152-86171 placement
+//@ chunk-5xgkngpb.js:88957-88976 placement
 var resolve = promptAttachmentCache.resolve;
-//@ chunk-e6aww6q8.js:86171-86189 placement
+//@ chunk-5xgkngpb.js:88976-88994 placement
 var settle = promptAttachmentCache.settle;
-export { answerOf, pendingOf, settle, resolve, invalidatePromptAttachments };
+export { answerOf, invalidatePromptAttachments, pendingOf, settle, resolve };

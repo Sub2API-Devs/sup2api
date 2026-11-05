@@ -1,8 +1,8 @@
 /**
  * open/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: open@10.2.0
- * pieces: chunk-20ppca50.js (13)
+ * pieces: chunk-j8hasev3.js (13)
  * attribution: esm-fingerprint 10, esm-layout 3
  */
 import { promisify } from "util";
@@ -18,12 +18,12 @@ import { defaultBrowser } from "../default-browser/index.js";
 import { isInsideContainer } from "../is-inside-container/index.js";
 import { defineLazyProperty } from "../default-browser-id/index.js";
 
-//@ chunk-20ppca50.js:4541-4641 esm-fingerprint
+//@ chunk-j8hasev3.js:4541-4641 esm-fingerprint
 var execFileAsync_2 = promisify(child_process.execFile);
 var dir = path.dirname(fileURLToPath(import.meta.url));
 var localXdgOpenPath = path.join(dir, "xdg-open");
 var { platform, arch } = E;
-//@ chunk-20ppca50.js:4641-5137 esm-fingerprint
+//@ chunk-j8hasev3.js:4641-5137 esm-fingerprint
 async function getWindowsDefaultBrowserFromWsl() {
   let powershellPath = await powerShellPath();
   let rawCommand = String.raw`(Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice").ProgId`;
@@ -48,7 +48,7 @@ async function getWindowsDefaultBrowserFromWsl() {
       }
     : {};
 }
-//@ chunk-20ppca50.js:5137-7294 esm-layout
+//@ chunk-j8hasev3.js:5137-7294 esm-layout
 var pTryEach = async (array, mapper) => {
   let latestError;
   for (let item of array)
@@ -186,22 +186,22 @@ var open = (target, options) => {
     target,
   });
 };
-//@ chunk-20ppca50.js:7294-7423 esm-fingerprint
+//@ chunk-j8hasev3.js:7294-7423 esm-fingerprint
 function detectArchBinary(binary) {
   if (typeof binary === "string" || Array.isArray(binary)) return binary;
   let { [arch]: archBinary } = binary;
   if (!archBinary) throw Error(`${arch} is not supported`);
   return archBinary;
 }
-//@ chunk-20ppca50.js:7423-7526 esm-fingerprint
+//@ chunk-j8hasev3.js:7423-7526 esm-fingerprint
 function detectPlatformBinary({ [platform]: platformBinary }, { wsl }) {
   if (wsl && is_wsl_default) return detectArchBinary(wsl);
   if (!platformBinary) throw Error(`${platform} is not supported`);
   return detectArchBinary(platformBinary);
 }
-//@ chunk-20ppca50.js:7526-7535 esm-layout
+//@ chunk-j8hasev3.js:7526-7535 esm-layout
 var apps = {};
-//@ chunk-20ppca50.js:7535-7865 esm-fingerprint
+//@ chunk-j8hasev3.js:7535-7865 esm-fingerprint
 defineLazyProperty(apps, "chrome", () =>
   detectPlatformBinary(
     {
@@ -220,7 +220,7 @@ defineLazyProperty(apps, "chrome", () =>
     },
   ),
 );
-//@ chunk-20ppca50.js:7865-8206 esm-fingerprint
+//@ chunk-j8hasev3.js:7865-8206 esm-fingerprint
 defineLazyProperty(apps, "brave", () =>
   detectPlatformBinary(
     {
@@ -239,7 +239,7 @@ defineLazyProperty(apps, "brave", () =>
     },
   ),
 );
-//@ chunk-20ppca50.js:8206-8383 esm-fingerprint
+//@ chunk-j8hasev3.js:8206-8383 esm-fingerprint
 defineLazyProperty(apps, "firefox", () =>
   detectPlatformBinary(
     {
@@ -252,7 +252,7 @@ defineLazyProperty(apps, "firefox", () =>
     },
   ),
 );
-//@ chunk-20ppca50.js:8383-8562 esm-fingerprint
+//@ chunk-j8hasev3.js:8383-8562 esm-fingerprint
 defineLazyProperty(apps, "edge", () =>
   detectPlatformBinary(
     {
@@ -265,10 +265,10 @@ defineLazyProperty(apps, "edge", () =>
     },
   ),
 );
-//@ chunk-20ppca50.js:8562-8591 esm-fingerprint
+//@ chunk-j8hasev3.js:8562-8591 esm-fingerprint
 defineLazyProperty(apps, "browser", () => "browser");
-//@ chunk-20ppca50.js:8591-8634 esm-fingerprint
+//@ chunk-j8hasev3.js:8591-8634 esm-fingerprint
 defineLazyProperty(apps, "browserPrivate", () => "browserPrivate");
-//@ chunk-20ppca50.js:8634-8644 esm-layout
+//@ chunk-j8hasev3.js:8634-8644 esm-layout
 var open_default = open;
 export { open_default };

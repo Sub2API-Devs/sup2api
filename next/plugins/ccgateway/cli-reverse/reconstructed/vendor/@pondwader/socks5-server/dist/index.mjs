@@ -1,13 +1,13 @@
 /**
  * @pondwader/socks5-server/dist/index.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @pondwader/socks5-server@1.0.10
- * pieces: chunk-fq0cr76a.js (4)
+ * pieces: chunk-qg41pqt6.js (4)
  * attribution: esm-fingerprint 4
  */
 import net from "net";
 
-//@ chunk-fq0cr76a.js:694208-697469 esm-fingerprint
+//@ chunk-qg41pqt6.js:694792-698053 esm-fingerprint
 var Socks5ConnectionCommand = ((Socks5ConnectionCommand2) => {
   Socks5ConnectionCommand2[(Socks5ConnectionCommand2.connect = 1)] = "connect";
   Socks5ConnectionCommand2[(Socks5ConnectionCommand2.bind = 2)] = "bind";
@@ -156,7 +156,7 @@ var Socks5Connection = class {
     this.socket.resume();
   }
 };
-//@ chunk-fq0cr76a.js:697469-698080 esm-fingerprint
+//@ chunk-qg41pqt6.js:698053-698664 esm-fingerprint
 function connectionHandler_default(connection, sendStatus) {
   if (connection.command !== "connect") return sendStatus("COMMAND_NOT_SUPPORTED");
   connection.socket.on("error", () => {});
@@ -195,7 +195,7 @@ function connectionHandler_default(connection, sendStatus) {
   connection.socket.on("close", () => stream.destroy());
   return stream;
 }
-//@ chunk-fq0cr76a.js:698080-698757 esm-fingerprint
+//@ chunk-qg41pqt6.js:698664-699341 esm-fingerprint
 var Socks5Server = class {
   constructor() {
     this.supportedCommands = new Set(["connect"]);
@@ -242,7 +242,7 @@ var Socks5Server = class {
     return this;
   }
 };
-//@ chunk-fq0cr76a.js:698757-698926 esm-fingerprint
+//@ chunk-qg41pqt6.js:699341-699510 esm-fingerprint
 function createServer(opts) {
   let server = new Socks5Server();
   if (opts?.auth)

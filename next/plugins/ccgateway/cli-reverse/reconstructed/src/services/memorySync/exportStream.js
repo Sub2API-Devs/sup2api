@@ -3,9 +3,9 @@
  *
  * 记忆库导出流读取（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (9)
  * attribution: placement 9
  */
 import { StringDecoder } from "string_decoder";
@@ -17,12 +17,12 @@ import { withTimeout } from "../../utils/sleep.js";
 import { jsonParseRaw } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:91861-91872 placement
+//@ chunk-7jxyna5q.js:90685-90696 placement
 /**
  * 执行器定期让出事件循环的时间预算（200 毫秒）。
  */
 var DEFAULT_YIELD_BUDGET_MS = 200;
-//@ chunk-s61vbvea.js:91872-92370 placement
+//@ chunk-7jxyna5q.js:90696-91194 placement
 /**
  * 创建并发受限且定期让出事件循环的执行器：runBounded 限制并发数，maybeYield 超过时间预算时让出。
  */
@@ -77,13 +77,13 @@ function createYieldingRunner(options = {}) {
     runBounded,
   };
 }
-//@ chunk-s61vbvea.js:92370-92634 placement
+//@ chunk-7jxyna5q.js:91194-91458 placement
 var EXPORT_IDLE_TIMEOUT_MS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var EXPORT_TOTAL_TIMEOUT_MS;
 var exportLineTypeSchema;
 var exportMemoryLineSchema;
 var exportCompleteLineSchema;
-deferInit("chunk-s61vbvea.js:92370", () => {
+deferInit("chunk-7jxyna5q.js:91194", () => {
   EXPORT_IDLE_TIMEOUT_MS = 60000;
   EXPORT_TOTAL_TIMEOUT_MS = 300000;
   exportLineTypeSchema = DoctorLazy(() =>
@@ -109,21 +109,21 @@ deferInit("chunk-s61vbvea.js:92370", () => {
     }),
   );
 });
-//@ chunk-s61vbvea.js:92634-92742 placement
+//@ chunk-7jxyna5q.js:91458-91566 placement
 class LineTooLongError extends Error {
   constructor(maxLineLength) {
     super(`NDJSON line exceeds ${maxLineLength} bytes`);
     this.name = "LineTooLongError";
   }
 }
-//@ chunk-s61vbvea.js:92742-92858 placement
+//@ chunk-7jxyna5q.js:91566-91682 placement
 class TooManyLinesError extends Error {
   constructor() {
     super("NDJSON stream exceeded its line budget");
     this.name = "TooManyLinesError";
   }
 }
-//@ chunk-s61vbvea.js:92858-93629 placement
+//@ chunk-7jxyna5q.js:91682-92453 placement
 /**
  * 逐行读取记忆导出 NDJSON 流，带总时限与停滞检测
  */
@@ -179,7 +179,7 @@ async function* readExportStreamLines(
     });
   }
 }
-//@ chunk-s61vbvea.js:93629-95181 placement
+//@ chunk-7jxyna5q.js:92453-94010 placement
 async function pullStoreExport({
   source,
   handleMemory,
@@ -308,10 +308,10 @@ async function pullStoreExport({
     memoryLines: memoryCount,
   };
 }
-//@ chunk-s61vbvea.js:95181-95361 placement
+//@ chunk-7jxyna5q.js:94010-94190 placement
 var exportStoreLineSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var exportMemoryRefLineSchema;
-deferInit("chunk-s61vbvea.js:95181", () => {
+deferInit("chunk-7jxyna5q.js:94010", () => {
   exportStoreLineSchema = DoctorLazy(() =>
     looseObject({
       type: literal("store"),
@@ -328,7 +328,7 @@ deferInit("chunk-s61vbvea.js:95181", () => {
     }),
   );
 });
-//@ chunk-s61vbvea.js:95361-96918 placement
+//@ chunk-7jxyna5q.js:94190-95747 placement
 async function pullStoreView({
   source,
   maxLineLength,

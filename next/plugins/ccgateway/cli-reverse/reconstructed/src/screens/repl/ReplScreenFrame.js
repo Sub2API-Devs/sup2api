@@ -3,11 +3,16 @@
  *
  * 2.1.316 新增。REPL 屏幕框架。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (8)
  * attribution: placement 8
  */
+import {
+  init_react_production,
+  useLayoutEffect,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppStoreDirect, useAppState } from "../../state/AppState.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
@@ -21,11 +26,6 @@ import { useVoiceIntegration, useVoiceKeybindingHandler } from "../../hooks/useV
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { mainAgentId } from "../../bootstrap/state.js";
 import { transcriptMessagesStore } from "./ReplEffects.js";
-import {
-  useLayoutEffect,
-  useEffect,
-  init_react_production,
-} from "../../../vendor/react/cjs/react.production.js";
 import { isHumanTurnNotInterrupt } from "../../utils/messages.js";
 import {
   jsxProd_default,
@@ -41,19 +41,24 @@ import { isMouseTrackingEnabled } from "../../utils/fullscreen.js";
 import { AlternateScreen } from "../../ink/components/AlternateScreen.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1438659-1438702 placement
+//@ chunk-czq1j3j2.js:1472239-1472243 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1472239", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1478886-1478929 placement
 function selectInputOwnsEscape2(draft) {
   return draft.inputOwnsEscape;
 }
-//@ chunk-18hwfzwa.js:1438702-1438748 placement (2.1.88 match: _temp2, 1)
+//@ chunk-czq1j3j2.js:1478929-1478975 placement (2.1.88 match: _temp2, 1)
 function selectViewingAgentTaskId_5(s_0) {
   return s_0.viewingAgentTaskId;
 }
-//@ chunk-18hwfzwa.js:1438748-1438795 placement
+//@ chunk-czq1j3j2.js:1478975-1479022 placement
 function hasToolProgress(stream) {
   return stream.toolProgress.size > 0;
 }
-//@ chunk-18hwfzwa.js:1438795-1442441 placement
+//@ chunk-czq1j3j2.js:1479022-1482670 placement
 /**
  * ReplScreenFrame：REPL 屏幕框架（全屏/经典布局、消息区与输入区的排布）。
  */
@@ -340,20 +345,15 @@ function ReplScreenFrame(props) {
   } else frame = $[66];
   return frame;
 }
-//@ chunk-18hwfzwa.js:1442441-1442445 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1442441", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1442445-1442484 placement
+//@ chunk-czq1j3j2.js:1482674-1482713 placement
 function selectIsBriefOnly2(state) {
   return state.isBriefOnly;
 }
-//@ chunk-18hwfzwa.js:1442484-1442521 placement
+//@ chunk-czq1j3j2.js:1482713-1482750 placement
 function selectUltracode2(state) {
   return state.ultracode;
 }
-//@ chunk-18hwfzwa.js:1442521-1442557 placement
+//@ chunk-czq1j3j2.js:1482750-1482786 placement
 function selectFastMode_3(state) {
   return state.fastMode;
 }

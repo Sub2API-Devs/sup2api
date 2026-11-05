@@ -1,12 +1,12 @@
 /**
  * jsonc-parser/lib/esm/impl/scanner.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jsonc-parser@3.2.1..3.3.1
- * pieces: chunk-kndsyy4v.js (6)
+ * pieces: chunk-aj4djjd6.js (6)
  * attribution: esm-fingerprint 2, esm-layout 4
  */
 
-//@ chunk-kndsyy4v.js:481-3493 esm-fingerprint
+//@ chunk-aj4djjd6.js:481-3493 esm-fingerprint
 function createScanner(text, ignoreTrivia = false) {
   let len = text.length;
   let pos = 0;
@@ -302,21 +302,21 @@ function createScanner(text, ignoreTrivia = false) {
     getTokenError: () => scanError,
   };
 }
-//@ chunk-kndsyy4v.js:3493-3528 esm-layout
+//@ chunk-aj4djjd6.js:3493-3528 esm-layout
 function isWhiteSpace(ch) {
   return ch === 32 || ch === 9;
 }
-//@ chunk-kndsyy4v.js:3528-3564 esm-layout
+//@ chunk-aj4djjd6.js:3528-3564 esm-layout
 function isLineBreak(ch) {
   return ch === 10 || ch === 13;
 }
-//@ chunk-kndsyy4v.js:3564-3598 esm-layout
+//@ chunk-aj4djjd6.js:3564-3598 esm-layout
 function isDigit(ch) {
   return ch >= 48 && ch <= 57;
 }
-//@ chunk-kndsyy4v.js:3598-3604 esm-layout
+//@ chunk-aj4djjd6.js:3598-3604 esm-layout
 var CharacterCodes;
-//@ chunk-kndsyy4v.js:3604-5028 esm-fingerprint
+//@ chunk-aj4djjd6.js:3604-5028 esm-fingerprint
 (function (CharacterCodes) {
   CharacterCodes[(CharacterCodes.lineFeed = 10)] = "lineFeed";
   CharacterCodes[(CharacterCodes.carriageReturn = 13)] = "carriageReturn";

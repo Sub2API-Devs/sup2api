@@ -3,9 +3,9 @@
  *
  * 检测到环境变量 ANTHROPIC_API_KEY 时询问是否使用（显示 sk-ant-… 截断），结果写入配置。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ApproveApiKey.tsx
- * pieces: chunk-7hdssadt.js (1)
+ * pieces: chunk-nbnpv1z8.js (1)
  * attribution: facade-exports 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -22,7 +22,7 @@ import { Text, Box } from "../ink/components/Text.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-7hdssadt.js:493-1880 facade-exports (2.1.88 match: ApproveApiKey, 0.444)
+//@ chunk-nbnpv1z8.js:493-1880 facade-exports (2.1.88 match: ApproveApiKey, 0.444)
 /**
  * 询问是否使用环境中的 ANTHROPIC_API_KEY（推荐否时使用订阅登录），结果记入配置的已批准/已拒绝列表。
  */

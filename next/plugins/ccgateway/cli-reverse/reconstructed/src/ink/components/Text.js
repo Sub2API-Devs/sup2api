@@ -3,9 +3,9 @@
  *
  * 并入 Text、Link、Box 等基础组件声明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/components/Text.tsx
- * pieces: chunk-bzr73sfg.js (5), chunk-x6v6jz2y.js (9)
+ * pieces: chunk-2avr6cej.js (5), chunk-emhzq435.js (9)
  * attribution: placement 13, fingerprint 1
  */
 import {
@@ -26,17 +26,17 @@ import { getForcedHyperlinkSetting, supportsHyperlinks } from "../supports-hyper
 import { onAttacherCapsChange } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bzr73sfg.js:224554-224558 placement
+//@ chunk-2avr6cej.js:224149-224153 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bzr73sfg.js:224554", () => {
+deferInit("chunk-2avr6cej.js:224149", () => {
   init_react_production();
 });
-//@ chunk-bzr73sfg.js:224558-224576 placement
+//@ chunk-2avr6cej.js:224153-224171 placement
 var textColorizer; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bzr73sfg.js:224558", () => {
+deferInit("chunk-2avr6cej.js:224153", () => {
   textColorizer = __toESM(require_stack_utils(), 1);
 });
-//@ chunk-bzr73sfg.js:224611-224689 placement
+//@ chunk-2avr6cej.js:224206-224284 placement
 function textWrapStyle(textWrap) {
   return {
     flexGrow: 0,
@@ -45,12 +45,12 @@ function textWrapStyle(textWrap) {
     textWrap,
   };
 }
-//@ chunk-bzr73sfg.js:224689-224944 fingerprint (2.1.88 match: memoizedStylesForWrap, 0.853)
+//@ chunk-2avr6cej.js:224284-224539 fingerprint (2.1.88 match: memoizedStylesForWrap, 0.853)
 /**
  * 各 textWrap 取值对应的 ink-text 样式对象（预先建好，避免每次渲染新建）。
  */
 var memoizedStylesForWrap; // deferred: uses textWrapStyle of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-bzr73sfg.js:224689", () => {
+deferInit("chunk-2avr6cej.js:224284", () => {
   memoizedStylesForWrap = {
     wrap: textWrapStyle("wrap"),
     "wrap-trim": textWrapStyle("wrap-trim"),
@@ -63,7 +63,7 @@ deferInit("chunk-bzr73sfg.js:224689", () => {
     "truncate-start": textWrapStyle("truncate-start"),
   };
 });
-//@ chunk-bzr73sfg.js:224944-227142 placement (2.1.88 match: Text, 0.457)
+//@ chunk-2avr6cej.js:224539-226737 placement (2.1.88 match: Text, 0.457)
 /**
  * <Text> 组件：把颜色/背景/faintInk/粗体/暗淡/斜体/下划线/删除线/反显组合成 textStyles，wrap 选择折行样式（默认 wrap），dir 设文字方向；支持悬停回调与 aria-* 无障碍属性；渲染为 ink-text 元素。
  */
@@ -289,27 +289,30 @@ function BaseText(props) {
   } else textElement = $[50];
   return textElement;
 }
-//@ chunk-x6v6jz2y.js:6240-6249 placement
+//@ chunk-emhzq435.js:6178-6187 placement
+/**
+ * Text 的导出别名（组件）。
+ */
 var Box = ThemedBox;
-//@ chunk-x6v6jz2y.js:6249-6253 placement
+//@ chunk-emhzq435.js:6187-6191 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:6249", () => {
+deferInit("chunk-emhzq435.js:6187", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:6253-6257 placement
+//@ chunk-emhzq435.js:6191-6195 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:6253", () => {
+deferInit("chunk-emhzq435.js:6191", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:6257-6272 placement
+//@ chunk-emhzq435.js:6195-6210 placement
 /**
  * 导出值：textSignal（文本标记）；位于「并入 Text、Link、Box 等基础组件声明」模块。
  */
 var textSignal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:6257", () => {
+deferInit("chunk-emhzq435.js:6195", () => {
   textSignal = createContext(false);
 });
-//@ chunk-x6v6jz2y.js:6272-6428 placement (2.1.88 match: resolveColor, 1)
+//@ chunk-emhzq435.js:6210-6366 placement (2.1.88 match: resolveColor, 1)
 function resolveColor_2(color, theme) {
   if (!color) return;
   if (
@@ -321,16 +324,16 @@ function resolveColor_2(color, theme) {
     return color;
   return isBuiltinTheme(color) ? theme[color] : undefined;
 }
-//@ chunk-x6v6jz2y.js:6428-7543 placement (2.1.88 match: ThemedText, 0.933)
+//@ chunk-emhzq435.js:6366-7481 placement (2.1.88 match: ThemedText, 0.933)
 /**
- * 主题文本：color/backgroundColor 支持主题键或原始颜色，dimColor 用主题 inactive 色，其余属性透传给 Ink Text。
+ * 文本组件：把 color/bold/italic/underline 等属性解析后交给底层 Text（含 faint 时的暗色处理）。
  */
-function Text(t0) {
+function Text(props) {
   let $ = useMemoCache(32);
-  let color;
+  let backgroundColorProp;
   let children;
-  let color_2;
-  let rest;
+  let colorProp;
+  let restProps;
   let dimColorProp;
   let boldProp;
   let italicProp;
@@ -338,10 +341,10 @@ function Text(t0) {
   let strikethroughProp;
   let inverseProp;
   let wrapProp;
-  if ($[0] !== t0) {
+  if ($[0] !== props) {
     ({
-      color: color_2,
-      backgroundColor: color,
+      color: colorProp,
+      backgroundColor: backgroundColorProp,
       dimColor: dimColorProp,
       bold: boldProp,
       italic: italicProp,
@@ -350,13 +353,13 @@ function Text(t0) {
       inverse: inverseProp,
       wrap: wrapProp,
       children,
-      ...rest
-    } = t0);
-    $[0] = t0;
-    $[1] = color;
+      ...restProps
+    } = props);
+    $[0] = props;
+    $[1] = backgroundColorProp;
     $[2] = children;
-    $[3] = color_2;
-    $[4] = rest;
+    $[3] = colorProp;
+    $[4] = restProps;
     $[5] = dimColorProp;
     $[6] = boldProp;
     $[7] = italicProp;
@@ -365,10 +368,10 @@ function Text(t0) {
     $[10] = inverseProp;
     $[11] = wrapProp;
   } else {
-    color = $[1];
+    backgroundColorProp = $[1];
     children = $[2];
-    color_2 = $[3];
-    rest = $[4];
+    colorProp = $[3];
+    restProps = $[4];
     dimColorProp = $[5];
     boldProp = $[6];
     italicProp = $[7];
@@ -377,101 +380,101 @@ function Text(t0) {
     inverseProp = $[10];
     wrapProp = $[11];
   }
-  let isDim = dimColorProp === undefined ? false : dimColorProp;
-  let bold = boldProp === undefined ? false : boldProp;
-  let italic = italicProp === undefined ? false : italicProp;
-  let underline = underlineProp === undefined ? false : underlineProp;
-  let strikethrough = strikethroughProp === undefined ? false : strikethroughProp;
-  let inverse = inverseProp === undefined ? false : inverseProp;
-  let wrap = wrapProp === undefined ? "wrap" : wrapProp;
+  let dim = dimColorProp === undefined ? false : dimColorProp;
+  let boldOn = boldProp === undefined ? false : boldProp;
+  let italicOn = italicProp === undefined ? false : italicProp;
+  let underlineOn = underlineProp === undefined ? false : underlineProp;
+  let strikethroughOn = strikethroughProp === undefined ? false : strikethroughProp;
+  let inverseOn = inverseProp === undefined ? false : inverseProp;
+  let wrapMode = wrapProp === undefined ? "wrap" : wrapProp;
   let theme = useResolvedTheme();
-  let theme_2 = useContext(textSignal);
-  let resolvedColor;
-  if ($[12] !== color_2 || $[13] !== isDim || $[14] !== theme_2 || $[15] !== theme) {
-    resolvedColor = isDim && !theme_2 ? theme.inactive : resolveColor_2(color_2, theme);
-    $[12] = color_2;
-    $[13] = isDim;
-    $[14] = theme_2;
+  let textContext = useContext(textSignal);
+  let colorResolved;
+  if ($[12] !== colorProp || $[13] !== dim || $[14] !== textContext || $[15] !== theme) {
+    colorResolved = dim && !textContext ? theme.inactive : resolveColor_2(colorProp, theme);
+    $[12] = colorProp;
+    $[13] = dim;
+    $[14] = textContext;
     $[15] = theme;
-    $[16] = resolvedColor;
-  } else resolvedColor = $[16];
-  let textColor = resolvedColor;
-  let resolvedBackground;
-  if ($[17] !== color || $[18] !== theme) {
-    resolvedBackground = resolveColor_2(color, theme);
-    $[17] = color;
+    $[16] = colorResolved;
+  } else colorResolved = $[16];
+  let textColor = colorResolved;
+  let backgroundColorResolved;
+  if ($[17] !== backgroundColorProp || $[18] !== theme) {
+    backgroundColorResolved = resolveColor_2(backgroundColorProp, theme);
+    $[17] = backgroundColorProp;
     $[18] = theme;
-    $[19] = resolvedBackground;
-  } else resolvedBackground = $[19];
-  let backgroundColor = resolvedBackground;
-  const faintInk = isDim && !theme_2 ? textColor : undefined;
-  let t8;
+    $[19] = backgroundColorResolved;
+  } else backgroundColorResolved = $[19];
+  let backgroundColor = backgroundColorResolved;
+  const faintInk = dim && !textContext ? textColor : undefined;
+  let element;
   if (
-    $[20] !== bold ||
+    $[20] !== boldOn ||
     $[21] !== children ||
-    $[22] !== rest ||
-    $[23] !== inverse ||
-    $[24] !== italic ||
+    $[22] !== restProps ||
+    $[23] !== inverseOn ||
+    $[24] !== italicOn ||
     $[25] !== backgroundColor ||
     $[26] !== textColor ||
-    $[27] !== strikethrough ||
+    $[27] !== strikethroughOn ||
     $[28] !== faintInk ||
-    $[29] !== underline ||
-    $[30] !== wrap
+    $[29] !== underlineOn ||
+    $[30] !== wrapMode
   ) {
-    t8 = jsxProd_default(BaseText, {
+    element = jsxProd_default(BaseText, {
       color: textColor,
       backgroundColor,
-      bold,
+      bold: boldOn,
       faintInk,
-      italic,
-      underline,
-      strikethrough,
-      inverse,
-      wrap,
-      ...rest,
+      italic: italicOn,
+      underline: underlineOn,
+      strikethrough: strikethroughOn,
+      inverse: inverseOn,
+      wrap: wrapMode,
+      ...restProps,
       children,
     });
-    $[20] = bold;
+    $[20] = boldOn;
     $[21] = children;
-    $[22] = rest;
-    $[23] = inverse;
-    $[24] = italic;
+    $[22] = restProps;
+    $[23] = inverseOn;
+    $[24] = italicOn;
     $[25] = backgroundColor;
     $[26] = textColor;
-    $[27] = strikethrough;
+    $[27] = strikethroughOn;
     $[28] = faintInk;
-    $[29] = underline;
-    $[30] = wrap;
-    $[31] = t8;
-  } else t8 = $[31];
-  return t8;
+    $[29] = underlineOn;
+    $[30] = wrapMode;
+    $[31] = element;
+  } else element = $[31];
+  return element;
 }
-//@ chunk-x6v6jz2y.js:7543-7547 placement
+//@ chunk-emhzq435.js:7481-7485 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:7543", () => {
+deferInit("chunk-emhzq435.js:7481", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:7547-7551 placement
+//@ chunk-emhzq435.js:7485-7489 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x6v6jz2y.js:7547", () => {
+deferInit("chunk-emhzq435.js:7485", () => {
   init_react_production();
 });
-//@ chunk-x6v6jz2y.js:7551-7918 placement (2.1.88 match: Link, 0.487)
+//@ chunk-emhzq435.js:7489-7856 placement (2.1.88 match: Link, 0.487)
 /**
- * <Link>：终端支持超链接时输出 ink-link（OSC 8），否则显示 fallback 或文字本身；assumeSupport 时以显式设置为准。
+ * 链接组件：支持超链接时输出 ink-link，否则退回 fallback 文本。
  */
 function Link(props) {
   let $ = useMemoCache(7);
   let { children, url, fallback, assumeSupport } = props;
   let content = children ?? url;
-  let supportsLinks;
+  let getSupported;
   if ($[0] !== assumeSupport) {
-    supportsLinks = () => (assumeSupport ? (getForcedHyperlinkSetting() ?? true) : supportsHyperlinks());
+    getSupported = () => (assumeSupport ? (getForcedHyperlinkSetting() ?? true) : supportsHyperlinks());
     $[0] = assumeSupport;
-    $[1] = supportsLinks;
-  } else supportsLinks = $[1];
-  if (useSyncExternalStore(onAttacherCapsChange, supportsLinks)) {
+    $[1] = getSupported;
+  } else getSupported = $[1];
+  if (useSyncExternalStore(onAttacherCapsChange, getSupported)) {
     let t1;
     if ($[2] !== content || $[3] !== url) {
       t1 = jsxProd_default(BaseText, {
@@ -486,15 +489,15 @@ function Link(props) {
     } else t1 = $[4];
     return t1;
   }
-  const children_2 = fallback ?? content;
+  const children2 = fallback ?? content;
   let t2;
-  if ($[5] !== children_2) {
+  if ($[5] !== children2) {
     t2 = jsxProd_default(BaseText, {
-      children: children_2,
+      children: children2,
     });
-    $[5] = children_2;
+    $[5] = children2;
     $[6] = t2;
   } else t2 = $[6];
   return t2;
 }
-export { Text, Box, Link, textSignal, textWrapStyle, BaseText, textColorizer };
+export { Box, Text, Link, textWrapStyle, textColorizer, BaseText, textSignal };

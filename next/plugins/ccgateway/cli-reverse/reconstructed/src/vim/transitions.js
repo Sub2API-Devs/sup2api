@@ -3,10 +3,10 @@
  *
  * 并入旧版已有路径：vim 状态转换。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/vim/transitions.ts
- * pieces: chunk-530hfzwb.js (37)
- * attribution: fingerprint 12, layout 8, file-local 2, placement 15
+ * pieces: chunk-880p06ha.js (37)
+ * attribution: fingerprint 12, file-local 3, layout 7, placement 15
  */
 import {
   executeToggleCase,
@@ -39,11 +39,11 @@ import {
   CHAR_MOTIONS,
   MAX_VIM_COUNT,
 } from "./types.js";
-import { truncatePathMiddle, Cursor } from "../utils/Cursor.js";
+import { moveLogicalLinesToColumn, Cursor } from "../utils/Cursor.js";
 import { findTextObject } from "./textObjects.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-530hfzwb.js:19998-20379 fingerprint (2.1.88 match: transition, 1)
+//@ chunk-880p06ha.js:20003-20384 fingerprint (2.1.88 match: transition, 1)
 /**
  * 普通模式状态机入口：按当前命令状态（idle/count/operator/operatorCount/operatorFind/operatorTextObj/find/g/operatorG/replace/indent）分派处理一个输入，返回 {next 下一状态} 或 {execute 要执行的动作}（可带 wanted 目标列）。
  */
@@ -73,12 +73,12 @@ function transition(state, input, ctx) {
       return fromIndent(state, input, ctx);
   }
 }
-//@ chunk-530hfzwb.js:20379-21423 fingerprint (2.1.88 match: handleNormalInput, 0.433)
+//@ chunk-880p06ha.js:20384-21428 fingerprint (2.1.88 match: handleNormalInput, 0.421)
 /**
  * 普通模式单键命令表：g r > < 进入子状态；~ x s S J p P D C Y ; , u i I a A o O 直接执行。
  */
 var NORMAL_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-530hfzwb.js:20379", () => {
+deferInit("chunk-880p06ha.js:20384", () => {
   NORMAL_COMMANDS = Object.assign(Object.create(null), {
     g: (count) => ({
       next: {
@@ -170,7 +170,7 @@ deferInit("chunk-530hfzwb.js:20379", () => {
     }),
   });
 });
-//@ chunk-530hfzwb.js:21423-22339 layout
+//@ chunk-880p06ha.js:21428-22344 file-local
 /**
  * idle/count 状态下解析一个键：操作符 d c y 进入 operator 状态；G 跳行；j k 保持目标列移动；$ 记住列为无穷；其余简单移动；f F t T 进入 find；. 重复上次修改；否则查单键命令表。
  */
@@ -196,7 +196,7 @@ function handleNormalInput(input, count, countTyped, ctx) {
       },
     };
   if (input === "j" || input === "k") {
-    let { offset, column } = truncatePathMiddle(input === "j", count, ctx);
+    let { offset, column } = moveLogicalLinesToColumn(input === "j", count, ctx);
     let { text } = ctx.cursor;
     if (offset === null)
       return {
@@ -261,7 +261,7 @@ function handleNormalInput(input, count, countTyped, ctx) {
     };
   return NORMAL_COMMANDS[input]?.(count, ctx) ?? null;
 }
-//@ chunk-530hfzwb.js:22339-22711 fingerprint (2.1.88 match: handleOperatorInput, 0.95)
+//@ chunk-880p06ha.js:22344-22716 fingerprint (2.1.88 match: handleOperatorInput, 0.947)
 /**
  * operator 状态下的后续键：i/a 进文本对象、f/F/t/T 进查找、移动键直接执行、G 到行、g 进 operatorG。
  */
@@ -305,7 +305,7 @@ function handleOperatorInput(op, count, countTyped, input, ctx) {
     };
   return null;
 }
-//@ chunk-530hfzwb.js:22711-22919 fingerprint (2.1.88 match: fromIdle, 0.878)
+//@ chunk-880p06ha.js:22716-22924 fingerprint (2.1.88 match: fromIdle, 0.916)
 /**
  * idle：1-9 开始计数，0 回行首，其他交给 handleNormalInput。
  */
@@ -325,7 +325,7 @@ function fromIdle(input, ctx) {
   if (result) return result;
   return {};
 }
-//@ chunk-530hfzwb.js:22919-23071 fingerprint (2.1.88 match: fromCount, 0.794)
+//@ chunk-880p06ha.js:22924-23076 fingerprint (2.1.88 match: fromCount, 0.854)
 /**
  * count：继续累积数字（上限 10000），否则带计数执行。
  */
@@ -345,7 +345,7 @@ function fromCount(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:23071-23336 fingerprint (2.1.88 match: fromOperator, 0.777)
+//@ chunk-880p06ha.js:23076-23341 fingerprint (2.1.88 match: fromOperator, 0.758)
 /**
  * operator：同一操作符键（dd/cc/yy）做整行操作；1-9 开始移动计数；否则交给 handleOperatorInput。
  */
@@ -372,7 +372,7 @@ function fromOperator(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:23336-23566 layout (2.1.88 match: fromOperatorTextObj, 0.872)
+//@ chunk-880p06ha.js:23341-23571 layout (2.1.88 match: fromOperatorTextObj, 0.853)
 /**
  * operatorCount（如 d3w）：累积移动计数，总计数 = 操作符计数 × 移动计数。
  */
@@ -397,7 +397,7 @@ function fromOperatorCount(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:23566-23669 fingerprint (2.1.88 match: fromOperatorFind, 0.803)
+//@ chunk-880p06ha.js:23571-23674 fingerprint (2.1.88 match: fromOperatorFind, 0.749)
 function fromOperatorFind(state, input, ctx) {
   return {
     execute: () => {
@@ -406,7 +406,7 @@ function fromOperatorFind(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:23669-23777 fingerprint (2.1.88 match: fromOperatorTextObj, 1)
+//@ chunk-880p06ha.js:23674-23782 fingerprint (2.1.88 match: fromOperatorTextObj, 1)
 function fromOperatorTextObj(state, input, ctx) {
   if (TEXT_OBJ_TYPES.has(input))
     return {
@@ -418,7 +418,7 @@ function fromOperatorTextObj(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:23777-23926 fingerprint (2.1.88 match: fromFind, 1)
+//@ chunk-880p06ha.js:23782-23931 fingerprint (2.1.88 match: fromFind, 1)
 function fromFind(state, input, ctx) {
   return {
     execute: () => {
@@ -428,7 +428,7 @@ function fromFind(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:23926-24261 fingerprint (2.1.88 match: fromG, 1)
+//@ chunk-880p06ha.js:23931-24266 fingerprint (2.1.88 match: fromG, 1)
 /**
  * g 前缀：gj/gk 按屏幕行移动，gg/{count}gg 跳到第一行/第 count 行。
  */
@@ -457,7 +457,7 @@ function fromG(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:24261-24483 layout (2.1.88 match: fromOperatorTextObj, 0.876)
+//@ chunk-880p06ha.js:24266-24488 layout (2.1.88 match: fromOperatorTextObj, 0.857)
 /**
  * operatorG：dgj/dgk 按屏幕行，dgg 到首行。
  */
@@ -479,7 +479,7 @@ function fromOperatorG(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:24483-24575 fingerprint (2.1.88 match: fromReplace, 1)
+//@ chunk-880p06ha.js:24488-24580 fingerprint (2.1.88 match: fromReplace, 1)
 function fromReplace(state, input, ctx) {
   if (input === "")
     return {
@@ -491,7 +491,7 @@ function fromReplace(state, input, ctx) {
     execute: () => executeReplace(input, state.count, ctx),
   };
 }
-//@ chunk-530hfzwb.js:24575-24674 layout (2.1.88 match: fromReplace, 1)
+//@ chunk-880p06ha.js:24580-24679 layout (2.1.88 match: fromReplace, 1)
 /**
  * indent：同一方向键（>> 或 <<）执行缩进，否则回 idle。
  */
@@ -506,7 +506,7 @@ function fromIndent(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:24674-24845 fingerprint (2.1.88 match: executeRepeatFind, 1)
+//@ chunk-880p06ha.js:24679-24850 fingerprint (2.1.88 match: executeRepeatFind, 1)
 /**
  * ; 与 ,：按上次查找（, 时方向反转）再找一次。
  */
@@ -524,7 +524,7 @@ function executeRepeatFind(reverse, count, ctx) {
   let result = ctx.cursor.findCharacter(lastFind.char, findType, count);
   if (result !== null) ctx.setOffset(result);
 }
-//@ chunk-530hfzwb.js:24845-25103 layout
+//@ chunk-880p06ha.js:24850-25108 layout
 /**
  * 可视模式（316 新增）状态机入口：按 idle/count/find/g/replace/textObject 分派，返回 {next, move, wanted} 或 {exit: 结束可视模式要执行的操作}。
  */
@@ -553,12 +553,12 @@ function visualTransition(state, input, ctx) {
       return visualFromTextObject(state, input, ctx);
   }
 }
-//@ chunk-530hfzwb.js:25103-26227 layout
+//@ chunk-880p06ha.js:25108-26232 layout
 /**
  * 可视模式单键命令：x/s/X/D/C/S/R/Y → 删除/修改/复制（大写强制整行）；r 进替换；~ u U 切换/小写/大写；p P 粘贴；> < 缩进；v V 切换字符/整行可视；o 交换选区两端；J 合并；$ g ; , 移动。
  */
 var VISUAL_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-530hfzwb.js:25103", () => {
+deferInit("chunk-880p06ha.js:25108", () => {
   VISUAL_COMMANDS = Object.assign(Object.create(null), {
     x: () => ({
       exit: "operator",
@@ -679,7 +679,7 @@ deferInit("chunk-530hfzwb.js:25103", () => {
     }),
   });
 });
-//@ chunk-530hfzwb.js:26227-26893 layout
+//@ chunk-880p06ha.js:26232-26898 layout
 function handleVisualInput(input, count, countTyped, ctx) {
   if (isOperatorKey(input))
     return {
@@ -711,7 +711,7 @@ function handleVisualInput(input, count, countTyped, ctx) {
       },
     };
   if (input === "j" || input === "k") {
-    let screenLineMove = truncatePathMiddle(input === "j", count, ctx);
+    let screenLineMove = moveLogicalLinesToColumn(input === "j", count, ctx);
     let offset = screenLineMove.offset ?? ctx.cursor.offset;
     return {
       next: {
@@ -750,7 +750,7 @@ function handleVisualInput(input, count, countTyped, ctx) {
     };
   return null;
 }
-//@ chunk-530hfzwb.js:26893-27117 file-local
+//@ chunk-880p06ha.js:26898-27122 file-local
 function visualFromIdle(input, ctx) {
   if (/[1-9]/.test(input))
     return {
@@ -774,7 +774,7 @@ function visualFromIdle(input, ctx) {
     }
   );
 }
-//@ chunk-530hfzwb.js:27117-27251 layout (2.1.88 match: fromCount, 0.794)
+//@ chunk-880p06ha.js:27122-27256 layout (2.1.88 match: fromCount, 0.854)
 function visualFromCount(state, input, ctx) {
   if (/[0-9]/.test(input))
     return {
@@ -791,7 +791,7 @@ function visualFromCount(state, input, ctx) {
     }
   );
 }
-//@ chunk-530hfzwb.js:27251-27416 file-local
+//@ chunk-880p06ha.js:27256-27421 file-local
 function visualFromFind(state, input, ctx) {
   return {
     next: {
@@ -804,7 +804,7 @@ function visualFromFind(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:27416-27781 placement
+//@ chunk-880p06ha.js:27421-27786 placement
 function visualFromG(state, input, ctx) {
   if (input === "j" || input === "k") {
     let { offset, column } = computeScreenLineMove(`g${input}`, state.count, ctx);
@@ -839,7 +839,7 @@ function visualFromG(state, input, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:27781-27950 placement
+//@ chunk-880p06ha.js:27786-27955 placement
 function visualFromTextObject(state, objType, ctx) {
   if (TEXT_OBJ_TYPES.has(objType)) {
     let textObject = findTextObject(ctx.text, ctx.cursor.offset, objType, state.scope === "inner");
@@ -856,19 +856,19 @@ function visualFromTextObject(state, objType, ctx) {
     },
   };
 }
-//@ chunk-530hfzwb.js:27950-27999 placement
+//@ chunk-880p06ha.js:27955-28004 placement
 function isSimpleMotion(input, countTyped) {
   return SIMPLE_MOTIONS.has(input) && !(input === "%" && countTyped);
 }
-//@ chunk-530hfzwb.js:27999-28040 placement
+//@ chunk-880p06ha.js:28004-28045 placement
 function isNoOpWhenUnmoved(input) {
   return CHAR_MOTIONS.has(input) || input === "%";
 }
-//@ chunk-530hfzwb.js:28040-28097 placement
+//@ chunk-880p06ha.js:28045-28102 placement
 function appendCountDigit(count, digit) {
   return Math.min(count * 10 + parseInt(digit, 10), MAX_VIM_COUNT);
 }
-//@ chunk-530hfzwb.js:28097-28322 placement
+//@ chunk-880p06ha.js:28102-28327 placement
 function getInsertOffset(command, cursor) {
   switch (command) {
     case "i":
@@ -886,7 +886,7 @@ function getInsertOffset(command, cursor) {
       return cursor.endOfLogicalLine().offset;
   }
 }
-//@ chunk-530hfzwb.js:28322-28414 placement
+//@ chunk-880p06ha.js:28327-28419 placement
 function executeInsertCommand(command, ctx) {
   ctx.enterInsert(getInsertOffset(command, ctx.cursor));
   ctx.recordChange({
@@ -894,7 +894,7 @@ function executeInsertCommand(command, ctx) {
     key: command,
   });
 }
-//@ chunk-530hfzwb.js:28414-28612 placement
+//@ chunk-880p06ha.js:28419-28617 placement
 function applyCharMotionAcrossLines(motionKey, cursor, count) {
   let position = cursor;
   for (let k = 0; k < count; k++) {
@@ -918,7 +918,7 @@ function applyCharMotionAcrossLines(motionKey, cursor, count) {
   }
   return position;
 }
-//@ chunk-530hfzwb.js:28975-29179 placement
+//@ chunk-880p06ha.js:28980-29184 placement (2.1.88 match: fromG, 0.776)
 function toScreenLineMoveResult(screenLineMove, ctx) {
   let clampedOffset = clampOffsetOutsidePlaceholder(ctx.cursor, screenLineMove.offset);
   if (clampedOffset === ctx.cursor.offset)
@@ -939,10 +939,10 @@ function toScreenLineMoveResult(screenLineMove, ctx) {
           },
   };
 }
-//@ chunk-530hfzwb.js:29179-29410 placement
+//@ chunk-880p06ha.js:29184-29415 placement
 var META_CHAR_SEQUENCE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NON_TEXT_KEY_NAMES;
-deferInit("chunk-530hfzwb.js:29179", () => {
+deferInit("chunk-880p06ha.js:29184", () => {
   META_CHAR_SEQUENCE = /^\x1b(?![[\]P_\\])[\x21-\x7e]$/;
   NON_TEXT_KEY_NAMES = new Set([
     "backspace",
@@ -972,11 +972,11 @@ deferInit("chunk-530hfzwb.js:29179", () => {
     "f12",
   ]);
 });
-//@ chunk-530hfzwb.js:29410-29467 placement
+//@ chunk-880p06ha.js:29415-29472 placement
 function isTextInputKey(key, allowUnnamed) {
   return (allowUnnamed || key.name === "") && !NON_TEXT_KEY_NAMES.has(key.name);
 }
-//@ chunk-530hfzwb.js:29467-29685 placement
+//@ chunk-880p06ha.js:29472-29690 placement
 function changeEntersInsert(change) {
   if (!change) return false;
   switch (change.type) {
@@ -993,7 +993,7 @@ function changeEntersInsert(change) {
       return false;
   }
 }
-//@ chunk-530hfzwb.js:29685-29872 placement
+//@ chunk-880p06ha.js:29690-29877 placement
 function isCursorMovingChange(change) {
   switch (change.type) {
     case "x":
@@ -1007,7 +1007,7 @@ function isCursorMovingChange(change) {
       return false;
   }
 }
-//@ chunk-530hfzwb.js:29872-30058 placement
+//@ chunk-880p06ha.js:29877-30063 placement
 function wrapCtxWithHook(ctx, onMutate) {
   return {
     ...ctx,
@@ -1029,7 +1029,7 @@ function wrapCtxWithHook(ctx, onMutate) {
     },
   };
 }
-//@ chunk-530hfzwb.js:30058-30136 placement
+//@ chunk-880p06ha.js:30063-30141 placement
 function clampCursorInPlace(cursor, key) {
   let clampedOffset = clampOffsetOutsidePlaceholder(cursor, cursor.offset);
   if (clampedOffset !== cursor.offset) key.setOffset(clampedOffset);

@@ -3,9 +3,9 @@
  *
  * AWS（Bedrock）认证刷新状态框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/AwsAuthStatusBox.tsx
- * pieces: chunk-znr63w8n.js (4)
+ * pieces: chunk-8x8rp0fx.js (4)
  * attribution: placement 1, file-local 1, layout 1, fingerprint 1
  */
 import { init_react_production, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
@@ -21,12 +21,12 @@ import { ErrorText } from "./ErrorText.js";
 import { ShutdownRequestDisplay } from "./messages/ShutdownMessage.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-znr63w8n.js:521-525 placement
+//@ chunk-8x8rp0fx.js:521-525 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-znr63w8n.js:521", () => {
+deferInit("chunk-8x8rp0fx.js:521", () => {
   init_react_production();
 });
-//@ chunk-znr63w8n.js:525-745 file-local
+//@ chunk-8x8rp0fx.js:525-745 file-local
 function renderLineWithLinks(line, index) {
   let m = line.match(URL_PATTERN);
   if (!m) {
@@ -59,9 +59,9 @@ function renderLineWithLinks(line, index) {
     index,
   );
 }
-//@ chunk-znr63w8n.js:745-768 layout
+//@ chunk-8x8rp0fx.js:745-768 layout
 var URL_PATTERN = /https?:\/\/\S+/;
-//@ chunk-znr63w8n.js:768-1479 fingerprint (2.1.88 match: AwsAuthStatusBox, 0.535)
+//@ chunk-8x8rp0fx.js:768-1479 fingerprint (2.1.88 match: AwsAuthStatusBox, 0.534)
 function AwsAuthStatusBox() {
   let $ = useMemoCache(10);
   let t0;

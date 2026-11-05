@@ -3,14 +3,21 @@
  *
  * Remote Control（bridge）：把本地 REPL 会话桥接到 claude.ai，双向转发消息、权限、命令（/clear、fork、teleport pull 等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useReplBridge.tsx
- * pieces: chunk-18hwfzwa.js (13), chunk-tw3rx20q.js (2)
- * attribution: placement 13, layout 1, callgraph-witnessed 1
+ * pieces: chunk-7swgcwav.js (2), chunk-czq1j3j2.js (28)
+ * attribution: placement 13, layout 16, callgraph-witnessed 1
  */
+import { isAbsolute, resolve, normalize, sep, parse } from "path";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { createSignal } from "../utils/signal.js";
 import { setCurrentForKey, getCurrentForKey } from "../utils/currentRefByKey.js";
+import { WINDOWS_PATH_RE } from "../components/dialogs/PermissionPromptDialog.js";
+import { expandPathOrNull } from "../utils/path.js";
+import { identity as identity_3 } from "../utils/pathClassification.js";
+import { firstLineOf, countCharInString } from "../utils/stringUtils.js";
+import { normalizeCaseForComparison_2 } from "../utils/permissions/filesystem.js";
+import { wrapAnsi } from "../ink/wrapAnsi.js";
 import {
   init_react_production,
   useEffect,
@@ -43,7 +50,7 @@ import {
   hasQueuedTaskNotification,
   setTaskNotificationListener,
 } from "../utils/task/taskNotifications.js";
-import { isEphemeralSdkFrame, isEligibleBridgeMessage } from "../bridge/bridgeMessaging.js";
+import { isEphemeralSdkFrame, isBridgeableMessage } from "../bridge/bridgeMessaging.js";
 import {
   stripCompactErrorForSdk,
   emitStatusChange,
@@ -65,6 +72,12 @@ import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import { useCommandQueueOrDefault, useQueuedMessageText } from "../context/QueuedMessageContext.js";
 import { useSession } from "../context/session.js";
 import { useClock } from "../ink/components/ClockContext.js";
+import {
+  createSystemMessage,
+  isCompactBoundaryOrSummary,
+  createBridgeStatusMessage,
+  extractAgentIdsFromMessages_2,
+} from "../utils/messages.js";
 import { useAppStateSession, useSetAppState, useAppStoreDirect, useAppState } from "../state/AppState.js";
 import { transportStateByHost } from "../cli/transportState.js";
 import {
@@ -95,7 +108,7 @@ import {
 } from "../bootstrap/state.js";
 import { env } from "../utils/env.js";
 import { logEvent } from "../services/analytics/index.js";
-import { useSetVoiceState } from "../context/voice.js";
+import { useTaskFramework } from "../context/voice.js";
 import { useNotifications } from "../context/notifications.js";
 import { loginEventCounter } from "../services/oauth/loginEvents.js";
 import { useStoreSelector } from "./useStoreSelector.js";
@@ -107,8 +120,7 @@ import {
   reportBridgeEffortMetadata,
 } from "../bridge/applyFlagSettings.js";
 import { getMainLoopModel } from "../utils/model/model.js";
-import { subscribeFocusMode } from "../utils/focusMode.js";
-import { viewTeammateOutput } from "../components/teams/TeamsDialog.js";
+import { subscribeFocusMode, currentViewMode } from "../utils/focusMode.js";
 import { isHumanTurn_2 } from "../utils/messagePredicates.js";
 import { setOwnBridgePeerResolver } from "../utils/udsMessaging/peerGuard.js";
 import {
@@ -145,27 +157,16 @@ import {
 import { onMemorySkillsChanged } from "../services/memorySync/memorySkills.js";
 import { connectedBridgePolicyRefusal, isBridgeEnabled } from "../bridge/bridgeEntitlement.js";
 import { logError } from "../utils/log.js";
-import {
-  createSystemMessage,
-  isCompactBoundaryOrSummary,
-  createBridgeStatusMessage,
-  extractAgentIdsFromMessages_2,
-} from "../utils/messages.js";
 import { lit as lit_2, fromEnum } from "../services/analytics/safeMetadata.js";
 import { isLovelyUmbrellaOn } from "../utils/settings/settingsSourceTrust.js";
 import { onPolicyVerdictChanged } from "../services/policyLimits/policyState.js";
 import {
   BRIDGE_FAILED,
+  isActionableHint,
   BRIDGE_FAILED_FOOTER_TEXT,
   bridgeStatusLines,
   REMOTE_CONTROL_NOT_STARTED_TEXT,
 } from "../bridge/bridgeStatusUtil.js";
-import {
-  BRIDGE_MALFORMED_RESPONSE_HINT,
-  BRIDGE_SIGNATURE_WANTED_HINT,
-  BRIDGE_ACCOUNT_UNVERIFIED_HINT,
-  BRIDGE_LOGIN_HINT,
-} from "../bridge/types.js";
 import { readFreshOAuthCredentialSnapshot, sameOwnerAccount, getOauthAccountInfo } from "../utils/auth.js";
 import { readFreshOauthAccountFromDisk } from "../utils/config.js";
 import {
@@ -190,6 +191,7 @@ import {
   recordReadyPushSent,
 } from "../services/tips/remoteControlNudges.js";
 import { buildSyntheticPushNotificationToolUse, assertMcpReconnected } from "../bridge/replControlHandler.js";
+import { BRIDGE_ACCOUNT_UNVERIFIED_HINT, BRIDGE_LOGIN_HINT } from "../bridge/types.js";
 import { getThinkingDisplayOverride } from "../utils/thinking.js";
 import { thinkingConfigFor } from "../cli/print/setMaxThinkingTokens.js";
 import { isBetaHeaderAllowed } from "../utils/betas.js";
@@ -278,22 +280,193 @@ import { detectCurrentRepositoryWithHost } from "../utils/detectRepository.js";
 import { subagentProgressToSDKMessages, shouldForwardSubagentMessage } from "../utils/queryHelpers.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-tw3rx20q.js:299-324 placement
+//@ chunk-7swgcwav.js:299-324 placement
 var replBridgeEvents; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tw3rx20q.js:299", () => {
+deferInit("chunk-7swgcwav.js:299", () => {
   replBridgeEvents = new SessionRootSlot(() => createSignal());
 });
-//@ chunk-tw3rx20q.js:324-377 placement
+//@ chunk-7swgcwav.js:324-377 placement
 function emitReplBridgeEvent(session, event, payload) {
   setCurrentForKey(session, undefined);
   replBridgeEvents.of(session).emit(event, payload);
 }
-//@ chunk-18hwfzwa.js:1574185-1574189 placement
+//@ chunk-czq1j3j2.js:1421008-1421020 placement
+var BRIDGE_FLUSH_TIMEOUT_MS = 1e4;
+//@ chunk-czq1j3j2.js:1421020-1421418 layout
+function collectPathsDeep(value, allowedPaths) {
+  let found = new Set();
+  let stack = [value];
+  let budget = BRIDGE_FLUSH_TIMEOUT_MS;
+  while (stack.length > 0) {
+    if (budget-- === 0) return "unknown";
+    let current = stack.pop();
+    if (typeof current === "string") {
+      if (WINDOWS_PATH_RE.test(current)) return "unknown";
+      let matches = pathMatches(current, allowedPaths);
+      if (matches === "unknown") return "unknown";
+      for (let match of matches) found.add(match);
+    } else if (Array.isArray(current)) for (let item of current) stack.push(item);
+    else if (typeof current === "object" && current !== null)
+      for (let [key, value] of Object.entries(current)) stack.push(key, value);
+  }
+  return [...found];
+}
+//@ chunk-czq1j3j2.js:1421418-1421493 layout
+function pathMatches(value, allowedPaths) {
+  let matches = matchPathSuffix(value, allowedPaths);
+  return matches.length === 0 && cwdMatches(value, allowedPaths) ? "unknown" : matches;
+}
+//@ chunk-czq1j3j2.js:1421493-1421768 layout
+function matchPathSuffix(pathText, allowedPaths) {
+  let trimmed = pathText.trim();
+  if (trimmed === "~" || trimmed.startsWith("~/") || isAbsolute(trimmed)) {
+    let absolutePath = stripParseRoot(resolve(expandPathOrNull(trimmed) ?? trimmed));
+    return allowedPaths.filter((candidate) => stripParseRoot(candidate) === absolutePath);
+  }
+  let joined = identity_3(normalize(trimmed))
+    .split(sep)
+    .filter((segment) => segment !== ".." && segment !== "." && segment !== "")
+    .join(sep);
+  return joined === "" ? [] : allowedPaths.filter((candidate) => candidate.endsWith(`${sep}${joined}`));
+}
+//@ chunk-czq1j3j2.js:1421768-1421882 layout
+function cwdMatches(cwd, allowedPaths) {
+  let cwdForms = [setCwdState_2(cwd), setCwdState_2(decodePercentRuns(cwd))];
+  return allowedPaths.some((path) =>
+    cwdFragments(path).some((fragment) => cwdForms.some((cwdForm) => cwdForm.includes(fragment))),
+  );
+}
+//@ chunk-czq1j3j2.js:1421882-1421899 layout
+var NON_ASCII_RE = /[^ -~]/;
+//@ chunk-czq1j3j2.js:1421899-1422206 layout
+function cwdFragments(path) {
+  let filtered = path
+    .split(/[\\/]+/)
+    .filter((segment) => segment !== "" && segment !== "." && segment !== "..");
+  let filtered_2 = filtered.filter((segment) => NON_ASCII_RE.test(segment));
+  let lastSegment = filtered.at(-1) ?? "";
+  let filtered_3 = [lastSegment.replace(/\.[^.]*$/, ""), firstLineOf(lastSegment, ".")].filter(
+    (fragment) => fragment !== lastSegment && NON_ASCII_RE.test(fragment) && Array.from(fragment).length >= 3,
+  );
+  return normalizeCaseForComparison_2([
+    ...(filtered_2.length > 0 ? filtered_2 : filtered.slice(-1)),
+    ...filtered_3,
+  ])
+    .map(setCwdState_2)
+    .filter((fragment) => fragment !== "");
+}
+//@ chunk-czq1j3j2.js:1422206-1422311 layout (2.1.88 match: setCwdState, 1)
+function setCwdState_2(cwd) {
+  return cwd
+    .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
+    .normalize("NFC")
+    .toLowerCase();
+}
+//@ chunk-czq1j3j2.js:1422311-1422425 layout
+function decodePercentRuns(cwd) {
+  return cwd.replace(/(?:%[0-9A-Fa-f]{2})+/g, (run) => {
+    try {
+      return decodeURIComponent(run);
+    } catch {
+      return run;
+    }
+  });
+}
+//@ chunk-czq1j3j2.js:1422425-1423242 layout
+function heldLineMask(rows, held, width) {
+  if (
+    held === "unknown" ||
+    rows.length !== held.count ||
+    rows.some((row) => row.unrenderable === true && row.key === "input")
+  )
+    return rows.map(() => [true]);
+  let max = Math.max(10, width - 4);
+  return rows.map((row, index) => {
+    let heldForRow = held.held.get(index);
+    if (heldForRow === undefined) return [];
+    if (row.kind === "inline") return [true];
+    let wrappedKey = wrapAnsi(`${row.key}:`, Math.max(10, width - 2), {
+      hard: true,
+      trim: false,
+    });
+    let index_2 = wrappedKey.indexOf(`
+`);
+    let headerRows =
+      index_2 === -1 ? 1 : 1 + wrappedLineCount(wrappedKey.slice(index_2 + 1).replace(/\n/g, ""), max);
+    let lines = row.text.split(`
+`);
+    let lineStarts = [];
+    let lineOffset = headerRows;
+    for (let line of lines) {
+      lineStarts.push(lineOffset);
+      lineOffset += wrappedLineCount(line, max);
+    }
+    let isBracketShape =
+      heldForRow !== "whole" &&
+      lines.length === heldForRow.members + 2 &&
+      lines[0] === "[" &&
+      lines.at(-1) === "]" &&
+      lineOffset - headerRows === wrappedLineCount(row.text, max);
+    if (heldForRow === "whole" || !isBracketShape) {
+      let max_2 = Math.max(lineOffset - headerRows, wrappedLineCount(row.text, max));
+      return Array.from(
+        {
+          length: headerRows + max_2,
+        },
+        (unused, lineIndex) => lineIndex >= headerRows,
+      );
+    }
+    let list = Array.from(
+      {
+        length: lineOffset,
+      },
+      () => false,
+    );
+    for (let place of heldForRow.places)
+      list.fill(true, lineStarts[place + 1] ?? headerRows, lineStarts[place + 2] ?? lineOffset);
+    return list.slice(0, list.lastIndexOf(true) + 1);
+  });
+}
+//@ chunk-czq1j3j2.js:1423242-1423302 layout
+function wrappedLineCount(text, width) {
+  return (
+    countCharInString(
+      wrapAnsi(text, width, {
+        hard: true,
+        trim: false,
+      }),
+      `
+`,
+    ) + 1
+  );
+}
+//@ chunk-czq1j3j2.js:1423302-1423353 layout
+function stripParseRoot(pathText) {
+  return pathText.slice(parse(pathText).root.length);
+}
+//@ chunk-czq1j3j2.js:1423353-1423435 layout
+var TERMINAL_TOO_SHORT_MESSAGE = "This terminal is too short. Make it taller to choose Yes, or choose No.";
+//@ chunk-czq1j3j2.js:1423435-1423598 layout
+function tooShortAdvice(scrollKey) {
+  return scrollKey === ""
+    ? "To choose Yes, bring the first lines back, or choose No."
+    : `To choose Yes, press ${scrollKey} until the first lines are back, or choose No.`;
+}
+//@ chunk-czq1j3j2.js:1423598-1423928 placement
+var PROCEED_QUESTION = "Do you want to proceed?";
+var FILES_TOO_LONG_MESSAGE =
+  "This list of files is too long to show in full, or has characters that can't be shown as written, so it can't be approved. Choose No, and no files are sent.";
+var NO_FILES_DECLARED_MESSAGE =
+  "This call doesn't say which files it would send, so it can't be approved. Choose No, and no files are sent.";
+var MAX_BRIDGE_HEADER_ROWS = 11;
+var MAX_BRIDGE_INIT_FAILURES = 3;
+var MAX_BRIDGE_MEMBERS = 4;
+//@ chunk-czq1j3j2.js:1609862-1609866 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1574185", () => {
+deferInit("chunk-czq1j3j2.js:1609862", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1574189-1574407 placement
+//@ chunk-czq1j3j2.js:1618185-1618403 placement
 function useForwardRateLimitEventsToBridge(replBridgeConnected, getHandle) {
   useEffect(() => {
     if (!replBridgeConnected) return;
@@ -312,7 +485,7 @@ function useForwardRateLimitEventsToBridge(replBridgeConnected, getHandle) {
     return onLimitsStatusChanged(onLimitsChanged);
   }, [replBridgeConnected, getHandle]);
 }
-//@ chunk-18hwfzwa.js:1574407-1574557 placement
+//@ chunk-czq1j3j2.js:1618403-1618553 placement
 function reportConcurrentBridgeSessions(outboundOnly) {
   (outboundOnly ? Promise.resolve(0) : countLiveBridgeProcesses())
     .then((count) => {
@@ -323,22 +496,22 @@ function reportConcurrentBridgeSessions(outboundOnly) {
     })
     .catch(() => {});
 }
-//@ chunk-18hwfzwa.js:1574557-1574596 placement
-var bridgeCoordinatorModule; // deferred: loads other modules while loading; runs once its import cycle is complete
-deferInit("chunk-18hwfzwa.js:1574557", () => {
-  bridgeCoordinatorModule = require("../coordinator/coordinatorMode.js");
+//@ chunk-czq1j3j2.js:1618553-1618592 layout
+var sessionModeModule; // deferred: loads other modules while loading; runs once its import cycle is complete
+deferInit("chunk-czq1j3j2.js:1618553", () => {
+  sessionModeModule = require("../coordinator/coordinatorMode.js");
 });
-//@ chunk-18hwfzwa.js:1574596-1574649 placement
+//@ chunk-czq1j3j2.js:1618592-1618645 placement
 function mcpAuthModule() {
   return require("../services/mcp/emitTripwireEvent.lazy.js");
 }
-//@ chunk-18hwfzwa.js:1574649-1574693 placement
+//@ chunk-czq1j3j2.js:1618645-1618689 placement
 function getMcpAuthModule() {
   return mcpAuthModule().mcpAuthModule();
 }
-//@ chunk-18hwfzwa.js:1574693-1574705 placement
-var BRIDGE_FLUSH_TIMEOUT_MS = 1e4;
-//@ chunk-18hwfzwa.js:1574705-1574880 placement
+//@ chunk-czq1j3j2.js:1618689-1618701 layout
+var REVIVE_DELAY_MS = 1e4;
+//@ chunk-czq1j3j2.js:1618701-1618876 placement
 function forwardQueuedSdkEventsToBridge(handle) {
   try {
     let mapped = drainTaskNotifications().filter(isEphemeralSdkFrame).map(stripCompactErrorForSdk);
@@ -349,7 +522,7 @@ function forwardQueuedSdkEventsToBridge(handle) {
     });
   }
 }
-//@ chunk-18hwfzwa.js:1574880-1574965 placement
+//@ chunk-czq1j3j2.js:1618876-1618961 placement
 function shouldSkipConversationReset(bridgeHandle, replBridgeSessionActive) {
   return (
     !replBridgeSessionActive &&
@@ -357,10 +530,10 @@ function shouldSkipConversationReset(bridgeHandle, replBridgeSessionActive) {
     hasQueuedTaskNotification((notification) => notification.type === "conversation_reset")
   );
 }
-//@ chunk-18hwfzwa.js:1574965-1575003 placement
+//@ chunk-czq1j3j2.js:1618961-1618999 placement
 var BASELINE_PENDING_SENTINEL = "\x00baseline-pending";
 var AUTH_REVIVE_POLL_LIMIT = 10;
-//@ chunk-18hwfzwa.js:1575003-1575268 placement
+//@ chunk-czq1j3j2.js:1618999-1619264 placement
 /**
  * 解析从 Remote Control 收到的输入是否为可立即执行的斜杠命令：找到命令且允许即时执行时，返回桥接安全的本地命令（或其回退）、参数与显示名，否则 null。
  */
@@ -380,9 +553,9 @@ function resolveBridgeImmediateCommand_2(text, commands, renderMode, author) {
     displayName: getCommandName(command),
   };
 }
-//@ chunk-18hwfzwa.js:1575268-1575278 layout
-var MAX_BRIDGE_INIT_FAILURES = 3;
-//@ chunk-18hwfzwa.js:1575278-1611905 callgraph-witnessed (2.1.88 match: useReplBridge, 0.238)
+//@ chunk-czq1j3j2.js:1619264-1619274 layout
+var MAX_CONSECUTIVE_INIT_FAILURES = 3;
+//@ chunk-czq1j3j2.js:1619274-1655977 callgraph-witnessed (2.1.88 match: useReplBridge, 0.238)
 /**
  * Remote Control 桥：启用后注册环境并建立会话，把本地消息/工具结果/权限请求转发到 claude.ai，把远程提示、权限回复、命令（/clear、fork、模式切换、teleport pull）应用到本地；处理错误与重连。
  */
@@ -400,6 +573,7 @@ function useReplBridge(
   updateDynamicMcpConfig,
   isTurnLive,
   flag,
+  bridgeHandle,
 ) {
   let renderMode = useRenderMode();
   let { storageV5, credentials } = useTheme_2();
@@ -407,8 +581,20 @@ function useReplBridge(
   let session = useSession();
   let clock = useClock();
   let handleRef = useEffectEvent(cancelTurn);
-  let teardownPromiseRef = useRef(null);
-  let getHandle = useCallback(() => teardownPromiseRef.current, []);
+  let teardownPromiseRef = useEffectEvent(() =>
+    bridgeHandle === undefined
+      ? undefined
+      : {
+          ...bridgeHandle,
+          tellPerson: (text) =>
+            transcript.apply({
+              type: "append",
+              messages: [createSystemMessage(text, "warning")],
+            }),
+        },
+  );
+  let lastWrittenIndexRef = useRef(null);
+  let getHandle = useCallback(() => lastWrittenIndexRef.current, []);
   let appStateSession = useAppStateSession();
   useEffect(() => {
     let sessionHosts = new Set([transportStateByHost.of(session), transportStateByHost.of(appStateSession)]);
@@ -416,15 +602,15 @@ function useReplBridge(
       [...sessionHosts].map((sessionHost) => [sessionHost, sessionHost.remoteBridgeLive]),
     );
     for (let transportState of sessionHosts)
-      transportState.remoteBridgeLive = () => teardownPromiseRef.current !== null;
+      transportState.remoteBridgeLive = () => lastWrittenIndexRef.current !== null;
     return () => {
       for (let [sessionHost, savedProbe] of savedProbes) sessionHost.remoteBridgeLive = savedProbe;
     };
   }, [session, appStateSession]);
-  let lastWrittenIndexRef = useRef(undefined);
-  let flushedUUIDsRef = useRef(null);
+  let flushedUUIDsRef = useRef(undefined);
   let failureTimeoutRef = useRef(null);
-  let consecutiveFailuresRef = useRef(new WeakSet());
+  let consecutiveFailuresRef = useRef(null);
+  let flushedRelaySet = useRef(new WeakSet());
   let forwardedCount = useRef(0);
   let seenUuids = useRef(new Set());
   let recentAuthAt = useRef(new Map());
@@ -481,11 +667,11 @@ function useReplBridge(
       if (!pulledUuids) return;
       let setAppState = getSessionId();
       let bridgeSessionId =
-        teardownPromiseRef.current !== null &&
+        lastWrittenIndexRef.current !== null &&
         !isForeignSession.current &&
         !didTranscriptReset.current &&
         mainLoopModelRef.current === setAppState
-          ? teardownPromiseRef.current?.bridgeSessionId
+          ? lastWrittenIndexRef.current?.bridgeSessionId
           : bindingToken.current?.sid === setAppState
             ? PENDING_BRIDGE_SESSION
             : resolveBridgeSessionId(setAppState);
@@ -538,7 +724,7 @@ function useReplBridge(
   function isForegroundBinding() {
     let bridgeWindow = binding.current;
     if (bridgeWindow === undefined || !bridgeWindow.sids.has(getSessionId())) return false;
-    let bridgeSessionId = teardownPromiseRef.current?.bridgeSessionId;
+    let bridgeSessionId = lastWrittenIndexRef.current?.bridgeSessionId;
     return (
       bridgeWindow.bridgeSessionId === bridgeSessionId ||
       bridgeWindow.bridgeSessionId === PENDING_BRIDGE_SESSION
@@ -564,7 +750,7 @@ function useReplBridge(
   useEffect(
     () =>
       onInteraction(() => {
-        if (teardownPromiseRef.current) hadInteraction.current = true;
+        if (lastWrittenIndexRef.current) hadInteraction.current = true;
       }),
     [],
   );
@@ -639,11 +825,12 @@ function useReplBridge(
       bridgeImmediateCommand.args,
       bridgeImmediateCommand.displayName,
       origin,
+      relayAuthored,
     );
     return true;
   });
   let store_2 = useAppStoreDirect();
-  let setVoiceState = useSetVoiceState();
+  let taskRegistry = useTaskFramework();
   let { addNotification, removeNotification } = useNotifications();
   let replBridgeEnabled = useAppState((state) => state.replBridgeEnabled);
   let replBridgeConnected = useAppState((state) => state.replBridgeConnected);
@@ -665,7 +852,7 @@ function useReplBridge(
   let effortLevel = replBridgeConnected
     ? resolveEffortLevelOrNull(getMainLoopModel(), queuedMessageText)
     : null;
-  let teammateView = useSyncExternalStore(subscribeFocusMode, viewTeammateOutput);
+  let teammateView = useSyncExternalStore(subscribeFocusMode, currentViewMode);
   let [isSpareProcess, setIsSpareProcess] = useState(() => process.env.CLAUDE_BG_SOURCE === "spare");
   if (isSpareProcess && messages.some(isHumanTurn_2)) setIsSpareProcess(false);
   useEffect(() => {
@@ -680,7 +867,7 @@ function useReplBridge(
     });
   }, [store_2, isSpareProcess]);
   let sendInitFrame = useEffectEvent(({ seedPermissionMode = false } = {}) => {
-    let handle = teardownPromiseRef.current;
+    let handle = lastWrittenIndexRef.current;
     if (!handle) return;
     let externalMode = seedPermissionMode
       ? toExternalPermissionMode(store_2.getState().toolPermissionContext.mode)
@@ -714,7 +901,7 @@ function useReplBridge(
         });
         recordInitTiming(message, startTime);
         handle.writeSdkMessages([message]);
-        if (needsModeStatus && teardownPromiseRef.current === handle)
+        if (needsModeStatus && lastWrittenIndexRef.current === handle)
           emitStatusChange({
             status: null,
             permissionMode: toExternalPermissionMode(state.toolPermissionContext.mode),
@@ -880,20 +1067,12 @@ function useReplBridge(
     }
     function handleStateChange(state, detail_0) {
       if (outboundOnly) return;
-      let isSelfExplanatory =
-        state === BRIDGE_MALFORMED_RESPONSE_HINT ||
-        state === BRIDGE_SIGNATURE_WANTED_HINT ||
-        state?.includes("/login") ||
-        state?.includes("/remote-control") ||
-        state?.includes("restart") ||
-        state?.includes("policy") ||
-        state?.includes("update");
       let reconnectHint =
         detail_0 === "auth"
           ? state?.includes("/login")
             ? ""
             : " \u2014 run /login to restore Remote Control"
-          : detail_0 === "ended_elsewhere" || isSelfExplanatory
+          : detail_0 === "ended_elsewhere" || isActionableHint(state)
             ? ""
             : " \u2014 run /remote-control to reconnect";
       let noticeText = `Remote Control disconnected${state ? ` \u2014 ${state}` : ""}${reconnectHint}`;
@@ -943,7 +1122,7 @@ function useReplBridge(
           accessTokenRef.current = prev_9?.accessToken;
         });
     }
-    if (consecutiveFailures.current >= MAX_BRIDGE_INIT_FAILURES && !isReviveInitiated.current) {
+    if (consecutiveFailures.current >= MAX_CONSECUTIVE_INIT_FAILURES && !isReviveInitiated.current) {
       logForDebugging(
         `[bridge:repl] Hook: ${consecutiveFailures.current} consecutive init failures, not retrying this session`,
       );
@@ -1013,7 +1192,7 @@ function useReplBridge(
           return [...prev_7, createSystemMessage(warningText, "warning")];
         });
         if (payloadType === "control_request" && requestId)
-          teardownPromiseRef.current?.sendControlResponse(
+          lastWrittenIndexRef.current?.sendControlResponse(
             {
               type: "control_response",
               response: {
@@ -1067,7 +1246,7 @@ function useReplBridge(
       messagesRef.current = clock.setTimeout(() => {
         if (isCancelled) return;
         messagesRef.current = undefined;
-        let handle = teardownPromiseRef.current;
+        let handle = lastWrittenIndexRef.current;
         if (handle) {
           bridgeSessionIdRef.current = handle.bridgeSessionId;
           lastSequenceNumRef.current = handle.getLastSequenceNum();
@@ -1114,7 +1293,7 @@ function useReplBridge(
             }),
           };
         });
-      }, BRIDGE_FLUSH_TIMEOUT_MS);
+      }, REVIVE_DELAY_MS);
     }
     let pendingPermissionHandlers = new Map();
     let pendingDialogs = new Map();
@@ -1207,7 +1386,7 @@ function useReplBridge(
         transcriptPath = getTranscriptPath();
         forwardedCount.current = 0;
         reboundSession = true;
-        let handle = teardownPromiseRef.current;
+        let handle = lastWrittenIndexRef.current;
         if (handle && !outboundOnly)
           restoreSessionMetadata({
             bridgeSessionId: handle.bridgeSessionId,
@@ -1291,8 +1470,8 @@ function useReplBridge(
             };
           });
         else if (state === "ready" || state === "connected") {
-          if (state === "connected" && teardownPromiseRef.current && !store_2.getState().replBridgeConnected)
-            logBridgeRateLimitForward(teardownPromiseRef.current);
+          if (state === "connected" && lastWrittenIndexRef.current && !store_2.getState().replBridgeConnected)
+            logBridgeRateLimitForward(lastWrittenIndexRef.current);
           store((prev) => {
             if (prev.replBridgeConnected) return prev;
             return {
@@ -1303,7 +1482,7 @@ function useReplBridge(
         }
         return;
       }
-      let handle = teardownPromiseRef.current;
+      let handle = lastWrittenIndexRef.current;
       switch (state) {
         case "ready":
           removeNotification(BRIDGE_FAILED);
@@ -1414,10 +1593,10 @@ function useReplBridge(
     let transcriptPath_2 = transcriptTorn ? undefined : (materializedSessionFile ?? transcriptPath);
     (async () => {
       try {
-        if (lastWrittenIndexRef.current) {
+        if (flushedUUIDsRef.current) {
           logForDebugging("[bridge:repl] Hook: waiting for previous teardown to complete before re-init");
-          await lastWrittenIndexRef.current;
-          lastWrittenIndexRef.current = undefined;
+          await flushedUUIDsRef.current;
+          flushedUUIDsRef.current = undefined;
           logForDebugging("[bridge:repl] Hook: previous teardown complete, proceeding with re-init");
         }
         if (isCancelled) return;
@@ -1508,7 +1687,7 @@ function useReplBridge(
           (await readFreshOauthAccountFromDisk(storageV5).catch(() => {
             return;
           }));
-        if (isCancelled) return;
+        if (isCancelled || !store_2.getState().replBridgeEnabled) return;
         currentOwnerAccount.current = ownerAccount_2;
         let dropStash = ownerUnreadable && transcriptRewritten;
         let reattachSessionId = transcriptRewritten ? undefined : bridgeSessionIdRef.current;
@@ -1629,7 +1808,7 @@ function useReplBridge(
               () => {
                 let next = cancelPendingDialogs(
                   pendingDialogs,
-                  (currentQueue) => teardownPromiseRef.current?.sendControlCancelRequest(currentQueue),
+                  (currentQueue) => lastWrittenIndexRef.current?.sendControlCancelRequest(currentQueue),
                   REFUSAL_FALLBACK_DIALOG.kind,
                 );
                 for (let dialogKind of next)
@@ -1664,7 +1843,7 @@ function useReplBridge(
             ? undefined
             : (kinds, revision) => {
                 logBridgeDialogKindsDeclared(dialogKinds, kinds, revision, () => {
-                  let handle = teardownPromiseRef.current;
+                  let handle = lastWrittenIndexRef.current;
                   if (handle) handlePermissionResponse(handle);
                 });
               },
@@ -1682,8 +1861,8 @@ function useReplBridge(
                   getMessages: transcript.getSnapshot,
                   isTurnActive,
                   queuedCommandCount: queue.getDrainableMainThreadQueueLength,
-                  ownBridgeSessionId: () => teardownPromiseRef.current?.bridgeSessionId,
-                  ownSessionGroupingId: () => teardownPromiseRef.current?.sessionGroupingId,
+                  ownBridgeSessionId: () => lastWrittenIndexRef.current?.bridgeSessionId,
+                  ownSessionGroupingId: () => lastWrittenIndexRef.current?.sessionGroupingId,
                   getLaunchState: store_2.getState,
                   recordChildBridgeSession: (jobShort, bridgeSessionId, groupingId) =>
                     persistBridgeSessionToJobState(
@@ -1855,7 +2034,7 @@ function useReplBridge(
               ok: true,
             };
           },
-          async onMcpAuthenticate(serverName, redirectUri) {
+          async onMcpAuthenticate(serverName, redirectUri, redirectUriOnly) {
             let config = store_2
               .getState()
               .mcp.clients.find((prev_16) => prev_16.name === serverName)?.config;
@@ -1929,6 +2108,7 @@ function useReplBridge(
                 {
                   skipBrowserOpen: true,
                   redirectUri,
+                  redirectUriOnly,
                   onWaitingForCallback: (port, callbackPort_2, oauthState) => {
                     callbackPort = callbackPort_2;
                     state = oauthState;
@@ -1952,15 +2132,22 @@ function useReplBridge(
             let flowResult = null;
             let redirectKind = "localhost";
             let useCustomRedirect =
-              Boolean(redirectUri) &&
-              !url.config.oauth?.clientId &&
-              !(await shouldSkipCustomRedirect(serverName, url.config));
+              Boolean(redirectUriOnly) ||
+              (Boolean(redirectUri) &&
+                !url.config.oauth?.clientId &&
+                !(await shouldSkipCustomRedirect(serverName, url.config)));
             assertServerUsable();
+            let wrapAuthError = (error) =>
+              new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+                `MCP OAuth failed for ${serverName}: ${normalizeMcpServerName(redactMcpErrorDetail(serverName, url.config, errorMessage(error)))}`,
+                "MCP OAuth flow failed (detail clamped in the local log)",
+              );
             if (useCustomRedirect)
               try {
                 flowResult = await runOauthFlow(redirectUri);
                 redirectKind = "custom";
               } catch (error) {
+                if (redirectUriOnly) throw wrapAuthError(error);
                 logForDebugging(
                   `[bridge:mcp] AS rejected custom redirectUri for ${serverName}; falling back to localhost: ${sanitizeErrorDetail(redactMcpErrorDetail(serverName, url.config, errorMessage(error)))}`,
                 );
@@ -1970,10 +2157,7 @@ function useReplBridge(
               try {
                 flowResult = await runOauthFlow();
               } catch (error) {
-                throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                  `MCP OAuth failed for ${serverName}: ${normalizeMcpServerName(redactMcpErrorDetail(serverName, url.config, errorMessage(error)))}`,
-                  "MCP OAuth flow failed (detail clamped in the local log)",
-                );
+                throw wrapAuthError(error);
               }
             if (!flowResult)
               return {
@@ -2195,7 +2379,7 @@ function useReplBridge(
             );
           return;
         }
-        teardownPromiseRef.current = replBridge;
+        lastWrittenIndexRef.current = replBridge;
         setReplBridgeHandle(replBridge, storageV5);
         setCurrentForKey(session, undefined);
         registerLiveSuppressionProbe(() => getReplBridgeHandle()?.noHistoryBackfill === true);
@@ -2346,7 +2530,7 @@ function useReplBridge(
         logFeatureSad("bridge_conversation_reset", "undelivered_at_teardown");
         setCurrentForKey(session, undefined);
         resetBinding({
-          archiveAbandoned: teardownPromiseRef.current === null,
+          archiveAbandoned: lastWrittenIndexRef.current === null,
         });
         flushDeferredClears();
       }
@@ -2358,8 +2542,8 @@ function useReplBridge(
             replBridgeSkipNextArchive: false,
           };
         });
-      if (teardownPromiseRef.current) {
-        let handle = teardownPromiseRef.current;
+      if (lastWrittenIndexRef.current) {
+        let handle = lastWrittenIndexRef.current;
         let userDisabled = !store_2.getState().replBridgeEnabled && !autoDisabled;
         let shouldClearSession = (userDisabled && !replBridgeSkipNextArchive) || hasUndeliveredReset;
         let unusedFlag = replBridgeSkipNextArchive && !(autoDisabled && hasUndeliveredReset);
@@ -2387,11 +2571,11 @@ function useReplBridge(
         logForDebugging(
           `[bridge:repl] Hook cleanup: starting teardown for session=${handle.bridgeSessionId}${unusedFlag ? " (skipArchive)" : ""}${clearProblem ? ` reason=${clearProblem}` : ""}`,
         );
-        lastWrittenIndexRef.current = handle.teardown({
+        flushedUUIDsRef.current = handle.teardown({
           skipArchive: unusedFlag,
           reason: clearProblem,
         });
-        teardownPromiseRef.current = null;
+        lastWrittenIndexRef.current = null;
         setReplBridgeHandle(null, storageV5);
         noopHandler(handle);
         setCurrentForKey(session, undefined);
@@ -2450,7 +2634,7 @@ function useReplBridge(
   function forwardTranscriptDelta(messages) {
     let state = store_2.getState();
     if (!state.replBridgeConnected) return;
-    let handle_1 = teardownPromiseRef.current;
+    let handle_1 = lastWrittenIndexRef.current;
     if (!handle_1) return;
     if (shouldSkipConversationReset(handle_1, state.replBridgeSessionActive)) return;
     let wasDetached = sawForeignEvent.current;
@@ -2483,7 +2667,7 @@ function useReplBridge(
       let bridgeSubagentFrameGate = getBridgeSubagentFrameGate();
       for (let index = startIndex; index < messages.length; index++) {
         let msg_1 = messages[index];
-        if (!msg_1 || !isEligibleBridgeMessage(msg_1)) {
+        if (!msg_1 || !isBridgeableMessage(msg_1)) {
           if (msg_1 && extractAgentIdsFromMessages_2(msg_1) && !seenUuids_2.has(msg_1.uuid)) {
             seenUuids_2.add(msg_1.uuid);
             if (!wasDetached && bridgeSubagentFrameGate.enabled) {
@@ -2536,7 +2720,7 @@ function useReplBridge(
   useEffect(() => {
     if (!replBridgeConnected) return;
     let forwardEvents = () => {
-      let handle = teardownPromiseRef.current;
+      let handle = lastWrittenIndexRef.current;
       if (!handle || shouldSkipConversationReset(handle, store_2.getState().replBridgeSessionActive)) return;
       forwardQueuedSdkEventsToBridge(handle);
     };
@@ -2664,7 +2848,7 @@ function useReplBridge(
   ]);
   let sendBridgeResult = (result) => {
     forwardTranscriptDelta(transcript.getSnapshot());
-    teardownPromiseRef.current?.sendResult(result);
+    lastWrittenIndexRef.current?.sendResult(result);
     let mainLoopModel_2 = getMainLoopModel();
     reportBridgeModel(mainLoopModel_2);
     reportBridgeEffortMetadata({
@@ -2693,7 +2877,7 @@ function useReplBridge(
         ),
     );
     mirrorTokenUsageToBridge();
-    if (teardownPromiseRef.current) bumpSentCount();
+    if (lastWrittenIndexRef.current) bumpSentCount();
     try {
       if (result !== undefined && result.terminalReason === undefined && result.sendNowCut !== true)
         rearmNotificationNudge({
@@ -2709,11 +2893,27 @@ function useReplBridge(
     }
   };
   let sendBridgeResult_2 = useCallback((action) => {
-    teardownPromiseRef.current?.stampReply(action);
+    lastWrittenIndexRef.current?.stampReply(action);
   }, []);
   return {
     sendBridgeResult,
     stampBridgeReply: sendBridgeResult_2,
   };
 }
-export { emitReplBridgeEvent, resolveBridgeImmediateCommand_2, useReplBridge };
+export {
+  emitReplBridgeEvent,
+  cwdMatches,
+  pathMatches,
+  collectPathsDeep,
+  heldLineMask,
+  MAX_BRIDGE_MEMBERS,
+  MAX_BRIDGE_HEADER_ROWS,
+  MAX_BRIDGE_INIT_FAILURES,
+  tooShortAdvice,
+  FILES_TOO_LONG_MESSAGE,
+  NO_FILES_DECLARED_MESSAGE,
+  TERMINAL_TOO_SHORT_MESSAGE,
+  PROCEED_QUESTION,
+  resolveBridgeImmediateCommand_2,
+  useReplBridge,
+};

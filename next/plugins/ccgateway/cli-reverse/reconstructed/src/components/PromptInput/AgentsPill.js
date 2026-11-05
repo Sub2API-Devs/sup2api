@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。输入框页脚的后台代理计数胶囊。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (8)
  * attribution: placement 8
  */
 import {
@@ -36,19 +36,24 @@ import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:806983-806987 placement
+//@ chunk-czq1j3j2.js:827731-827735 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:806983", () => {
+deferInit("chunk-czq1j3j2.js:827731", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:806987-807031 placement
+//@ chunk-czq1j3j2.js:827735-827739 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:827735", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:839708-839752 placement
 function selectLeftArrowLeadsTo(state) {
   return state.leftArrowLeadsTo;
 }
-//@ chunk-18hwfzwa.js:807031-807051 placement
+//@ chunk-czq1j3j2.js:839752-839772 placement
 var AGENTS_PILL_DONE_CLEAR_MS = 2500;
 var NARROW_AGENTS_PILL_COLUMNS = 100;
-//@ chunk-18hwfzwa.js:807051-807243 placement
+//@ chunk-czq1j3j2.js:839772-839964 placement
 function AgentsPillHint(props) {
   let $ = useMemoCache(2);
   let { words, narrow } = props;
@@ -65,7 +70,7 @@ function AgentsPillHint(props) {
   } else hintElement = $[1];
   return hintElement;
 }
-//@ chunk-18hwfzwa.js:807243-809924 placement
+//@ chunk-czq1j3j2.js:839964-842647 placement
 function AgentsPill(props) {
   let $ = useMemoCache(36);
   let { available, restingHintExpired } = props;
@@ -292,7 +297,7 @@ function AgentsPill(props) {
   } else content = $[35];
   return content;
 }
-//@ chunk-18hwfzwa.js:809924-810035 placement
+//@ chunk-czq1j3j2.js:842647-842758 placement
 /**
  * 侧问（/btw）界面里的代理入口胶囊（始终可用、不显示静止提示）。
  */
@@ -308,16 +313,11 @@ function SideQuestionAgentsPill() {
   } else props = $[0];
   return AgentsPill(props);
 }
-//@ chunk-18hwfzwa.js:810035-810039 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:810035", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:810039-810094 placement
+//@ chunk-czq1j3j2.js:842762-842817 placement
 var SIDE_QUESTION_HINT_MS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var sideQuestionAgentsSchema;
 var SIDE_QUESTION_MAX_AGENTS;
-deferInit("chunk-18hwfzwa.js:810039", () => {
+deferInit("chunk-czq1j3j2.js:842762", () => {
   SIDE_QUESTION_HINT_MS = 5000;
   sideQuestionAgentsSchema = DoctorLazy(() =>
     objectSchema({
@@ -328,8 +328,8 @@ deferInit("chunk-18hwfzwa.js:810039", () => {
   SIDE_QUESTION_MAX_AGENTS = 16;
 });
 export {
-  AgentsPill,
   SIDE_QUESTION_MAX_AGENTS,
+  AgentsPill,
   SIDE_QUESTION_HINT_MS,
   sideQuestionAgentsSchema,
   SideQuestionAgentsPill,

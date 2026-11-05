@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。子代理发布 artifact 后，主会话接管其实时订阅（artifact_live_subscribe）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-59vafc9k.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cwq05khv.js (7)
  * attribution: placement 7
  */
 import {
@@ -20,12 +20,12 @@ import { resolveVisibleSubagentId } from "../../tasks/LocalAgentTask/LocalAgentT
 import { maybeSubscribeFrameLive } from "../../services/artifacts/frameLive.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 
-//@ chunk-59vafc9k.js:485-494 placement
+//@ chunk-cwq05khv.js:485-494 placement
 /**
  * 待处理子代理预备条目的上限。
  */
 var PENDING_SUBAGENT_ARMS_MAX = 32;
-//@ chunk-59vafc9k.js:494-712 placement
+//@ chunk-cwq05khv.js:494-712 placement
 function subagentPublishAdopter(options) {
   if (
     options.publishContext !== "subagent" ||
@@ -39,13 +39,17 @@ function subagentPublishAdopter(options) {
   });
   return isConsentUiKind(publishContext) ? publishContext : null;
 }
-//@ chunk-59vafc9k.js:712-1056 placement
+//@ chunk-cwq05khv.js:712-1088 placement
 function stageSubagentPublishArm(agentId, arm) {
   let pendingSubagentArms = getLiveState().live.pendingSubagentArms;
   let arms = pendingSubagentArms.get(agentId) ?? [];
   let index = arms.findIndex((existing) => existing.slug === arm.slug);
   if (index === -1) arms.push(arm);
-  else arms[index] = arm;
+  else
+    arms[index] = {
+      ...arm,
+      title: arm.title ?? arms[index]?.title,
+    };
   pendingSubagentArms.delete(agentId);
   pendingSubagentArms.set(agentId, arms);
   let total = 0;
@@ -58,7 +62,7 @@ function stageSubagentPublishArm(agentId, arm) {
     logFeatureSad("artifact_live_subscribe", "subagent_arm_evicted");
   }
 }
-//@ chunk-59vafc9k.js:1056-1142 placement
+//@ chunk-cwq05khv.js:1088-1174 placement
 /**
  * 取出并清空某键的待处理子代理预备条目。
  */
@@ -68,12 +72,12 @@ function takePendingSubagentArms(agentId) {
   pendingSubagentArms.delete(agentId);
   return arms;
 }
-//@ chunk-59vafc9k.js:1142-1152 placement
+//@ chunk-cwq05khv.js:1174-1184 placement
 /**
  * 已完成子代理收养者记录的保留上限。
  */
 var FINISHED_SUBAGENT_ADOPTERS_MAX = 256;
-//@ chunk-59vafc9k.js:1152-1277 placement
+//@ chunk-cwq05khv.js:1184-1309 placement
 function rememberSubagentAdopter(agentId) {
   let finishedSubagentAdopters = getLiveState().live.finishedSubagentAdopters;
   finishedSubagentAdopters.delete(agentId);
@@ -81,7 +85,7 @@ function rememberSubagentAdopter(agentId) {
   while (finishedSubagentAdopters.size > FINISHED_SUBAGENT_ADOPTERS_MAX)
     finishedSubagentAdopters.delete(finishedSubagentAdopters.values().next().value);
 }
-//@ chunk-59vafc9k.js:1277-2062 placement
+//@ chunk-cwq05khv.js:1309-2094 placement
 /**
  * 子代理发布 artifact 后，主会话接管其实时订阅（artifact_live_subscribe）。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：内置 claude-test 插件的名称、代理名与工具名常量
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ae5g0zb5.js (13), chunk-e6aww6q8.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (24), chunk-mhn0amzz.js (13)
  * attribution: placement 37
  */
 import { createHash } from "crypto";
@@ -16,6 +16,7 @@ import { BUILTIN } from "../../../utils/telemetry/pluginTelemetry.js";
 import { __export } from "../../../../runtime/bun-runtime.js";
 import {
   SCRUBBED_APP_ENV_VARS,
+  PROXY_ENV_NAMES,
   getTeammateEnvVarsToForward,
   isOutsideProject,
   loadInstalledFiles,
@@ -131,7 +132,6 @@ import {
   registerClaudeTestCommand,
   noteAppProbeResult,
 } from "./commandHook.js";
-import { TEAMMATE_ENV_VARS } from "../../../utils/swarm/spawnUtils.js";
 import {
   CLAUDE_TEST_SANDBOX_MARK,
   CLAUDE_TEST_LISTEN,
@@ -153,22 +153,22 @@ import { effectiveEnvSnapshot } from "../../../utils/settings/envSources.js";
 import { isSettingsSourcedEnvValue } from "../../../utils/managedEnvApply.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:190679-190709 placement
+//@ chunk-5xgkngpb.js:191342-191372 placement
 /**
  * claude-test 内置插件的标识常量（claude-test@builtin），用于定位插件数据目录。
  */
 var TEST_PLUGIN_ID = "claude-test@builtin";
-//@ chunk-e6aww6q8.js:190709-190727 placement
+//@ chunk-5xgkngpb.js:191372-191390 placement
 /**
  * claude-test 内置插件的版本号常量（0.4.259），用于拼内容 id 与安装目录。
  */
 var TEST_PLUGIN_VERSION = "0.4.259";
-//@ chunk-e6aww6q8.js:190727-190774 placement
+//@ chunk-5xgkngpb.js:191390-191437 placement
 /**
  * 保存 claude-test 插件已加载的文本内容（含 name）；未加载时 name 为 undefined，installedRoot 依赖它。
  */
 var testPluginTexts; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:190727", () => {
+deferInit("chunk-5xgkngpb.js:191390", () => {
   testPluginTexts = identity_2(
     {
       name: undefined,
@@ -178,7 +178,7 @@ deferInit("chunk-e6aww6q8.js:190727", () => {
     },
   );
 });
-//@ chunk-e6aww6q8.js:190774-190976 placement
+//@ chunk-5xgkngpb.js:191437-191639 placement
 /**
  * 由插件文本内容（按键排序、带长度前缀）计算 sha256，生成 claude-test 插件的内容 id。
  */
@@ -190,7 +190,7 @@ function testPluginContentId(texts) {
   }
   return `${TEST_PLUGIN_VERSION}-${hash.digest("hex").slice(0, 12)}`;
 }
-//@ chunk-e6aww6q8.js:190976-191183 placement
+//@ chunk-5xgkngpb.js:191639-191846 placement
 /**
  * claude-test 插件的安装根目录（插件数据目录下，用正斜杠）；文本未加载时抛错。
  */
@@ -201,7 +201,7 @@ function claudeTestInstalledRoot() {
     );
   return join(pluginDataDirPath(TEST_PLUGIN_ID), testPluginTexts.name).split(sep).join("/");
 }
-//@ chunk-e6aww6q8.js:191183-191232 placement
+//@ chunk-5xgkngpb.js:191846-191895 placement
 /**
  * 调用取安装根目录的函数并吞掉异常：根目录不可得时返回 undefined。
  */
@@ -212,16 +212,16 @@ function tryGetInstalledRoot(lookup = claudeTestInstalledRoot) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:191232-191283 placement
+//@ chunk-5xgkngpb.js:191895-191946 placement
 var STOP_ON_EXIT_SCRIPT_SUFFIX = "/skills/run/scripts/stop-on-exit.mjs && ";
-//@ chunk-e6aww6q8.js:191283-191326 placement
+//@ chunk-5xgkngpb.js:191946-191989 placement
 /**
  * 生成 claude-test 插件 run skill 的命令行：node <安装根目录>/skills/run/scripts/stop-on-exit.mjs && 。
  */
 function buildRunSkillCommand() {
   return `node ${claudeTestInstalledRoot()}${STOP_ON_EXIT_SCRIPT_SUFFIX}`;
 }
-//@ chunk-e6aww6q8.js:191326-191405 placement
+//@ chunk-5xgkngpb.js:191989-192068 placement
 /**
  * 判断一条命令是否以本插件 run skill 的前缀开头（安装根目录不可得时为 false）。
  */
@@ -231,50 +231,50 @@ function isRunSkillCommand(command) {
     installedRoot !== undefined && command.startsWith(`node ${installedRoot}${STOP_ON_EXIT_SCRIPT_SUFFIX}`)
   );
 }
-//@ chunk-e6aww6q8.js:4677720-4677749 placement
+//@ chunk-5xgkngpb.js:4786326-4786355 placement
 var CLAUDE_TEST_AUTHOR = "claude-test:author";
-//@ chunk-e6aww6q8.js:4677749-4677781 placement
+//@ chunk-5xgkngpb.js:4786355-4786387 placement
 var CLAUDE_TEST_CONDUCTOR = "claude-test:conductor";
-//@ chunk-e6aww6q8.js:4677781-4677812 placement
+//@ chunk-5xgkngpb.js:4786387-4786418 placement
 var CLAUDE_TEST_EXPLORER = "claude-test:explorer";
-//@ chunk-e6aww6q8.js:4677812-4677830 placement
+//@ chunk-5xgkngpb.js:4786418-4786436 placement
 var BROWSER = "browser";
-//@ chunk-e6aww6q8.js:4677830-4677852 placement
+//@ chunk-5xgkngpb.js:4786436-4786458 placement
 var CLAUDE_TEST = "claude-test";
-//@ chunk-e6aww6q8.js:4677852-4677882 placement
+//@ chunk-5xgkngpb.js:4786458-4786489 placement (2.1.88 match: addPluginScopeToLspServers, 0.71)
 /**
  * 浏览器助手 MCP 服务器的名字 plugin:claude-test:browser，由助手名与 scope 拼成；另一种写法的工具名前缀见 HELPER_TOOL_PREFIX。
  */
 var HELPER_SERVER_NAME = `plugin:${CLAUDE_TEST}:${BROWSER}`;
-//@ chunk-e6aww6q8.js:4677882-4677920 placement
+//@ chunk-5xgkngpb.js:4786489-4786527 placement
 /**
  * 浏览器助手工具名的统一前缀。
  */
 var HELPER_TOOL_PREFIX = `mcp__plugin_${CLAUDE_TEST}_${BROWSER}__`;
-//@ chunk-e6aww6q8.js:4677920-4677949 placement
+//@ chunk-5xgkngpb.js:4786527-4786556 placement
 var CLAUDE_TEST_APP_UP = "claude_test_app_up";
-//@ chunk-e6aww6q8.js:4677949-4677971 placement
+//@ chunk-5xgkngpb.js:4786556-4786578 placement
 var CLAUDE_TEST_2 = "claude-test";
-//@ chunk-e6aww6q8.js:4677971-4677996 placement
+//@ chunk-5xgkngpb.js:4786578-4786603 placement
 var RELOAD_PLUGINS = "reload-plugins";
-//@ chunk-e6aww6q8.js:4677996-4678025 placement
+//@ chunk-5xgkngpb.js:4786603-4786632 placement
 var CLAUDE_TEST_RUNNER = "claude-test:runner";
-//@ chunk-e6aww6q8.js:4678025-4678083 placement
+//@ chunk-5xgkngpb.js:4786632-4786690 placement
 /**
  * claude_test_write 草稿文件名的正则片段（小写字母数字与连字符，最长 80 字符），拼成 ^…\.md$ 后用于校验草稿名。
  */
 var CLAUDE_TEST_WRITE = "claude_test_write";
 var DRAFT_NAME_RE = "[a-z0-9][a-z0-9-]{0,79}";
-//@ chunk-e6aww6q8.js:4678083-4678114 placement
+//@ chunk-5xgkngpb.js:4786690-4786721 placement
 var CC_PLUGIN_CLAUDE_TEST = "cc-plugin-claude-test";
-//@ chunk-e6aww6q8.js:4678495-4678559 placement
+//@ chunk-5xgkngpb.js:4787103-4787167 placement
 var MCP_CLAUDE_TEST_WRITE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-var regExp_17;
-deferInit("chunk-e6aww6q8.js:4678495", () => {
+var regExp_20;
+deferInit("chunk-5xgkngpb.js:4787103", () => {
   MCP_CLAUDE_TEST_WRITE = "mcp-claude-test-write";
-  regExp_17 = new RegExp(`^${DRAFT_NAME_RE}\\.md$`);
+  regExp_20 = new RegExp(`^${DRAFT_NAME_RE}\\.md$`);
 });
-//@ chunk-e6aww6q8.js:4678559-4678621 placement
+//@ chunk-5xgkngpb.js:4787167-4787230 placement
 /**
  * 判断某次工具调用是否来自 claude-test 插件对 claude_test_write 的调用。
  */
@@ -285,14 +285,14 @@ function isClaudeTestWriteCall(name, pluginSource, name_2) {
     name_2 === CLAUDE_TEST_WRITE
   );
 }
-//@ chunk-ae5g0zb5.js:24040-24050 placement
+//@ chunk-mhn0amzz.js:25280-25290 placement
 /**
  * 空对象默认导出
  */
 var emptyExportsFirst = {};
-//@ chunk-ae5g0zb5.js:24050-27585 placement
+//@ chunk-mhn0amzz.js:25290-28826 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ae5g0zb5.js:24050", () => {
+deferInit("chunk-mhn0amzz.js:25290", () => {
   __export(emptyExportsFirst, {
     ALWAYS_SET: () => SCRUBBED_APP_ENV_VARS,
     AUTHOR_AGENT_TYPE: () => CLAUDE_TEST_AUTHOR,
@@ -347,7 +347,7 @@ deferInit("chunk-ae5g0zb5.js:24050", () => {
     PANE_PICTURE_ALT: () => PANE_TITLE,
     PANE_REPORT_LINK_TEXT: () => OPEN_REPORT_LABEL,
     PANE_TITLE: () => CLAUDE_TEST_TITLE,
-    PERSONS_CHOICES: () => TEAMMATE_ENV_VARS,
+    PERSONS_CHOICES: () => PROXY_ENV_NAMES,
     PLUGIN_DESCRIPTION: () => LOCAL_RUN_DESCRIPTION,
     PLUGIN_NAME: () => CC_PLUGIN_CLAUDE_TEST,
     PLUGIN_VERSION: () => TEST_PLUGIN_VERSION,
@@ -448,14 +448,14 @@ deferInit("chunk-ae5g0zb5.js:24050", () => {
     wasFlagServiceToldStoredLogin: () => readFlagAccount,
   });
 });
-//@ chunk-ae5g0zb5.js:27585-27595 placement
+//@ chunk-mhn0amzz.js:28826-28836 placement
 /**
  * 空对象默认导出
  */
 var emptyExportsSecond = {};
-//@ chunk-ae5g0zb5.js:27595-29135 placement
+//@ chunk-mhn0amzz.js:28836-30377 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ae5g0zb5.js:27595", () => {
+deferInit("chunk-mhn0amzz.js:28836", () => {
   __export(emptyExportsSecond, {
     AUTHOR_AGENT_TYPE: () => CLAUDE_TEST_AUTHOR,
     CONDUCTOR_AGENT_TYPE: () => CLAUDE_TEST_CONDUCTOR,
@@ -522,12 +522,12 @@ deferInit("chunk-ae5g0zb5.js:27595", () => {
     waitPrompt: () => tellPersonAndStop,
   });
 });
-//@ chunk-ae5g0zb5.js:29135-29217 placement
+//@ chunk-mhn0amzz.js:30377-30459 placement
 /**
  * 助手服务器状态（server/toldIgnored）
  */
 var helperServerState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ae5g0zb5.js:29135", () => {
+deferInit("chunk-mhn0amzz.js:30377", () => {
   helperServerState = identity_2(
     {
       server: undefined,
@@ -539,7 +539,7 @@ deferInit("chunk-ae5g0zb5.js:29135", () => {
     },
   );
 });
-//@ chunk-ae5g0zb5.js:29217-29388 placement
+//@ chunk-mhn0amzz.js:30459-30630 placement
 /**
  * 生成浏览器助手 MCP 服务器配置，按需追加 --preview/--pane 参数。
  */
@@ -557,23 +557,23 @@ function buildHelperServerConfig(preview, pane = false) {
           },
   };
 }
-//@ chunk-ae5g0zb5.js:29388-29486 placement
+//@ chunk-mhn0amzz.js:30630-30728 placement
 var SKILL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ae5g0zb5.js:29388", () => {
+deferInit("chunk-mhn0amzz.js:30630", () => {
   SKILL_NAMES = Object.freeze({
     run: "claude-test",
     execute: "claude-test-execute",
     draft: "claude-test-draft",
   });
 });
-//@ chunk-ae5g0zb5.js:29486-29569 placement
+//@ chunk-mhn0amzz.js:30728-30811 placement
 /**
  * 把文本里的 claude-test:run/execute/draft 替换为已冻结的命令名。
  */
 function portedCommandNames(text) {
   return text.replace(/claude-test:(run|execute|draft)\b/g, (match, commandName) => SKILL_NAMES[commandName]);
 }
-//@ chunk-ae5g0zb5.js:29569-29650 placement
+//@ chunk-mhn0amzz.js:30811-30892 placement
 /**
  * 对以 .md/.mjs 结尾的文件值做命令名替换（其他原样）。
  */
@@ -582,20 +582,20 @@ function portPortedFiles(files) {
     fileName.endsWith(".md") || fileName.endsWith(".mjs") ? portedCommandNames(content) : content,
   );
 }
-//@ chunk-ae5g0zb5.js:29650-29795 placement
+//@ chunk-mhn0amzz.js:30892-31037 placement
 function expandSkillDirPlaceholders(text, skillDir) {
   return text
     .replaceAll("${CLAUDE_SKILL_DIR}/../run", () => `${skillDir}/skills/run`)
     .replaceAll("${CLAUDE_SKILL_DIR}", () => `${skillDir}/skills/run`);
 }
-//@ chunk-ae5g0zb5.js:29795-29884 placement (2.1.88 match: getEssentialTrafficOnlyReason, 0.775)
+//@ chunk-mhn0amzz.js:31037-31125 placement (2.1.88 match: getEssentialTrafficOnlyReason, 0.775)
 function getEssentialTrafficOnlyReason() {
   return (
     isEssentialTrafficOnly() ||
     Boolean(getEnvCaseInsensitive(effectiveEnvSnapshot(), "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"))
   );
 }
-//@ chunk-ae5g0zb5.js:29884-30079 placement
+//@ chunk-mhn0amzz.js:31125-31320 placement
 /**
  * 生成运行 skills/run/scripts/playwright-mcp.mjs 的 MCP 服务器条目（带项目目录与精简流量开关）。
  */
@@ -612,7 +612,7 @@ function buildPlaywrightMcpServer(command, unsafeInheritedEnv) {
     },
   };
 }
-//@ chunk-ae5g0zb5.js:30079-30138 placement
+//@ chunk-mhn0amzz.js:31320-31379 placement
 /**
  * 环境变量值是否与基线不同（需要显式透传）。
  */
@@ -625,6 +625,9 @@ function isEnvOverridden(name, value, env) {
 }
 export {
   isClaudeTestWriteCall,
+  MCP_CLAUDE_TEST_WRITE,
+  regExp_20,
+  isRunSkillCommand,
   isEnvOverridden,
   testPluginTexts,
   testPluginContentId,
@@ -650,9 +653,6 @@ export {
   TEST_PLUGIN_VERSION,
   buildHelperServerConfig,
   emptyExportsSecond,
-  MCP_CLAUDE_TEST_WRITE,
-  regExp_17,
-  isRunSkillCommand,
   DRAFT_NAME_RE,
   CLAUDE_TEST,
   CLAUDE_TEST_WRITE,

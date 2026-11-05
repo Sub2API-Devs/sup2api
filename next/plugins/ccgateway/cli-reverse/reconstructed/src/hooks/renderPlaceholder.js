@@ -3,15 +3,15 @@
  *
  * 渲染输入框占位符（光标位于首字符时反显）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/renderPlaceholder.ts
- * pieces: chunk-81qqq1aq.js (1)
+ * pieces: chunk-3t80v0fz.js (1)
  * attribution: fingerprint 1
  */
 import { inverseText } from "../ink/screen.js";
 import { sequential } from "../utils/sequential.js";
 
-//@ chunk-81qqq1aq.js:6714-7027 fingerprint (2.1.88 match: renderPlaceholder, 0.952)
+//@ chunk-3t80v0fz.js:6717-7030 fingerprint (2.1.88 match: renderPlaceholder, 0.952)
 function renderPlaceholder({
   placeholder,
   value,

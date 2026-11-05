@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/internal/parse.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (3)
+ * pieces: chunk-vn3g7zt8.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
 import { AnthropicError } from "../core/error.mjs";
@@ -12,7 +12,7 @@ import { loggerFor, debugLogRequestDetails } from "./utils/log.mjs";
 import { Stream } from "../core/streaming.mjs";
 import { releaseAbortListener } from "./request-signal.mjs";
 
-//@ chunk-hwmsct5x.js:32502-33815 esm-layout
+//@ chunk-vn3g7zt8.js:32873-34186 esm-layout
 async function* iterateSseEvents(response, controller) {
   if (!response.body) {
     controller.abort();
@@ -104,7 +104,7 @@ async function* iterateSseEvents(response, controller) {
       if (event) yield event;
     }
 }
-//@ chunk-hwmsct5x.js:33815-34546 esm-fingerprint
+//@ chunk-vn3g7zt8.js:34186-34917 esm-fingerprint
 async function defaultParseResponse(client, props) {
   let { response, requestLogID, retryOfRequestLogID, startTime } = props;
   let parsed = await (async () => {
@@ -133,7 +133,7 @@ async function defaultParseResponse(client, props) {
   });
   return parsed;
 }
-//@ chunk-hwmsct5x.js:34546-34791 esm-fingerprint
+//@ chunk-vn3g7zt8.js:34917-35162 esm-fingerprint
 function addResponseIDs(value, response) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   return Object.defineProperties(value, {

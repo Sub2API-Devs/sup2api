@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：权限规则目标
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-rbtj21yz.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rgh5rrjm.js (10)
  * attribution: placement 10
  */
 import { artifactContentOriginUrlFor, artifactViewerUrlSpellings } from "../artifactUrls.js";
@@ -25,15 +25,15 @@ import {
 } from "../../../services/artifacts/artifactToolActions.js";
 import {
   getDenyRuleForTool,
-  getAskRuleForTool,
+  findAskRuleForTool,
   matchToolRule,
   getContentRulesMapForToolName,
 } from "../../../utils/permissions/permissions.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-rbtj21yz.js:664-718 placement
+//@ chunk-rgh5rrjm.js:664-718 placement
 var _ = /^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^/?#]*)(.*)$/;
-//@ chunk-rbtj21yz.js:718-924 placement
+//@ chunk-rgh5rrjm.js:718-924 placement
 function normalizeUrlPattern(pattern) {
   let match = pattern.match(_);
   if (!match) return pattern;
@@ -45,7 +45,7 @@ function normalizeUrlPattern(pattern) {
     .replace(/\.(?=$|:\d+$)/, "");
   return `${lower}://${replaced}${match[3] ?? ""}`;
 }
-//@ chunk-rbtj21yz.js:924-1357 placement (2.1.88 match: getServerUrl, 1)
+//@ chunk-rgh5rrjm.js:924-1357 placement (2.1.88 match: getServerUrl, 1)
 /**
  * 按 "url:<模式>" 键在映射中查找与服务器（slug/env/URL）匹配的值。归属疑为插件/连接器选项映射。
  */
@@ -68,7 +68,7 @@ function getServerUrl(contentRulesMapForToolName, target, url, fieldName = "url"
   }
   return null;
 }
-//@ chunk-rbtj21yz.js:1357-1481 placement
+//@ chunk-rgh5rrjm.js:1357-1481 placement
 function artifactUrlParses(url) {
   let artifactUrl = parseArtifactUrl(url);
   let artifactUrlInput = parseArtifactUrlInput(url);
@@ -82,7 +82,7 @@ function artifactUrlParses(url) {
       : []),
   ];
 }
-//@ chunk-rbtj21yz.js:1481-1963 placement
+//@ chunk-rgh5rrjm.js:1481-1963 placement
 /**
  * 在 "url:<模式>" 内容规则映射中查找与输入 url/type_url/from_url/files 复制来源匹配的规则（规范化协议、端口与结尾点）。
  */
@@ -111,19 +111,19 @@ function matchUrlRule(contentRulesMapForToolName, input) {
   }
   return null;
 }
-//@ chunk-rbtj21yz.js:1963-2002 placement
+//@ chunk-rgh5rrjm.js:1963-2002 placement
 /**
  * Artifact 动作到等价数据工具名的映射。
  */
 var ARTIFACT_ACTION_TOOL_NAMES; // deferred: uses ARTIFACT_TOOL_NAME (../constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-rbtj21yz.js:1963", () => {
+deferInit("chunk-rgh5rrjm.js:1963", () => {
   ARTIFACT_ACTION_TOOL_NAMES = {
     comments: ARTIFACT_COMMENTS_TOOL_NAME,
     data: ARTIFACT_DATA_TOOL_NAME,
     check: ARTIFACT_CHECK_TOOL_NAME,
   };
 });
-//@ chunk-rbtj21yz.js:2002-2189 placement
+//@ chunk-rgh5rrjm.js:2002-2189 placement
 /**
  * 把 Artifact 动作映射到等价的数据工具（ArtifactData 等）与对应输入，用于规则匹配。
  */
@@ -143,7 +143,7 @@ function dataToolEquivalent(toolRef, input) {
         input: fromParentArtifactInput(addon, input),
       };
 }
-//@ chunk-rbtj21yz.js:2189-2321 placement
+//@ chunk-rgh5rrjm.js:2189-2321 placement
 /**
  * 按等价数据工具查找 deny 或 ask 规则（工具级规则优先，再按输入匹配）。
  */
@@ -153,11 +153,11 @@ function artifactDataRule(toolPermissionContext, permissionContext, input, behav
   return (
     (behavior === "deny"
       ? getDenyRuleForTool(toolPermissionContext, equivalent.tool)
-      : getAskRuleForTool(toolPermissionContext, equivalent.tool)) ??
+      : findAskRuleForTool(toolPermissionContext, equivalent.tool)) ??
     matchToolRule(toolPermissionContext, equivalent.tool, equivalent.input, behavior)
   );
 }
-//@ chunk-rbtj21yz.js:2321-2458 placement
+//@ chunk-rgh5rrjm.js:2321-2458 placement
 /**
  * 在 Artifact 工具及其等价数据工具的内容规则中查找匹配输入的规则。
  */
@@ -174,7 +174,7 @@ function findUrlContentRule(toolPermissionContext, input, behavior) {
   }
   return null;
 }
-//@ chunk-rbtj21yz.js:2458-2556 placement
+//@ chunk-rgh5rrjm.js:2458-2556 placement
 /**
  * 先按 Artifact 工具匹配规则，再按等价数据工具匹配。
  */

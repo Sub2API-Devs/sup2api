@@ -3,10 +3,10 @@
  *
  * 桌面通知：执行 Notification hooks 后按 preferredNotifChannel（auto/iterm2/iterm2_with_bell/kitty/ghostty/terminal_bell）用终端转义序列发送
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/notifier.ts
- * pieces: chunk-18hwfzwa.js (1), chunk-q6rfp6n3.js (6)
- * attribution: fingerprint 5, affinity 1, callgraph-fingerprint 1
+ * pieces: chunk-3xmyjkbh.js (6)
+ * attribution: fingerprint 5, callgraph-fingerprint 1
  */
 import { resolveSetting } from "../utils/settings/userIntentSettings.js";
 import { executeNotificationHooks } from "../utils/hooks.js";
@@ -23,7 +23,7 @@ import { execFileNoThrow } from "../utils/execFileNoThrow.js";
 import { parsePlistXml, isPlainObjectPlist } from "../utils/plistParser.js";
 import { logForDebugging } from "../utils/debug.js";
 
-//@ chunk-q6rfp6n3.js:1867-2350 fingerprint (2.1.88 match: sendNotification, 0.49)
+//@ chunk-3xmyjkbh.js:1867-2350 fingerprint (2.1.88 match: sendNotification, 0.49)
 /**
  * 发送桌面通知：先执行 Notification hooks，再按 preferredNotifChannel（默认 auto）选择通道发送，打 tengu_notification_method_used（通道、类型、终端）。
  */
@@ -48,9 +48,9 @@ async function sendNotification(notification, terminal, { storageV5, credentials
   });
   return methodUsed;
 }
-//@ chunk-q6rfp6n3.js:2350-2370 affinity (2.1.88 match: DEFAULT_TITLE, 1)
-var DEFAULT_TITLE_2 = "Claude Code";
-//@ chunk-q6rfp6n3.js:2659-2913 fingerprint (2.1.88 match: sendAuto, 0.848)
+//@ chunk-3xmyjkbh.js:2350-2370 fingerprint (2.1.88 match: DEFAULT_TITLE, 1)
+var DEFAULT_TITLE = "Claude Code";
+//@ chunk-3xmyjkbh.js:2659-2913 fingerprint (2.1.88 match: sendAuto, 0.848)
 /**
  * auto 通道解析：Apple Terminal（铃声被关时用 terminal_bell）、iTerm2、kitty、ghostty 各用专有转义序列，其他终端无可用方式。
  */
@@ -68,7 +68,7 @@ async function resolveAutoNotificationChannel() {
       return "no_method_available";
   }
 }
-//@ chunk-q6rfp6n3.js:2913-3271 fingerprint (2.1.88 match: sendToChannel, 0.849)
+//@ chunk-3xmyjkbh.js:2913-3271 fingerprint (2.1.88 match: sendToChannel, 0.849)
 /**
  * 按通道发送通知：iterm2（OSC 9）、iterm2_with_bell、kitty（OSC 99，带随机 id）、ghostty、terminal_bell；disabled/none 不发。
  */
@@ -84,14 +84,14 @@ function sendToChannel(channel, opts, terminal) {
     case "kitty":
       terminal.notifyKitty({
         ...opts,
-        title: opts.title || DEFAULT_TITLE_2,
+        title: opts.title || DEFAULT_TITLE,
         id: generateKittyId(),
       });
       return;
     case "ghostty":
       terminal.notifyGhostty({
         ...opts,
-        title: opts.title || DEFAULT_TITLE_2,
+        title: opts.title || DEFAULT_TITLE,
       });
       return;
     case "terminal_bell":
@@ -103,11 +103,11 @@ function sendToChannel(channel, opts, terminal) {
       return;
   }
 }
-//@ chunk-q6rfp6n3.js:3271-3321 callgraph-fingerprint (2.1.88 match: generateKittyId, 1)
+//@ chunk-3xmyjkbh.js:3271-3321 callgraph-fingerprint (2.1.88 match: generateKittyId, 1)
 function generateKittyId() {
   return Math.floor(Math.random() * 1e4);
 }
-//@ chunk-q6rfp6n3.js:3321-4001 fingerprint (2.1.88 match: isAppleTerminalBellDisabled, 0.718)
+//@ chunk-3xmyjkbh.js:3321-4001 fingerprint (2.1.88 match: isAppleTerminalBellDisabled, 0.718)
 /**
  * 用 osascript/defaults 读 Apple Terminal 当前配置文件，判断是否关闭了响铃。
  */
@@ -144,6 +144,4 @@ async function isAppleTerminalBellDisabled() {
     return false;
   }
 }
-//@ chunk-18hwfzwa.js:173849-173871 fingerprint (2.1.88 match: DEFAULT_TITLE, 1)
-var DEFAULT_TITLE = "Claude Code";
-export { DEFAULT_TITLE, sendNotification, resolveAutoNotificationChannel, sendToChannel };
+export { resolveAutoNotificationChannel, sendToChannel, sendNotification };

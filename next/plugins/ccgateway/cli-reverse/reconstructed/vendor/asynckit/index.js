@@ -1,8 +1,8 @@
 /**
  * asynckit/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: asynckit@0.4.0..0.5.0
- * pieces: chunk-h6b7mazd.js (2)
+ * pieces: chunk-ww9agm6g.js (2)
  * attribution: cjs-layout 1, cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_state_2 } from "./lib/state.js";
 import { require_serial } from "./serial.js";
 import { require_serialOrdered } from "./serialOrdered.js";
 
-//@ chunk-h6b7mazd.js:5492-5653 cjs-layout
+//@ chunk-ww9agm6g.js:5492-5653 cjs-layout
 var require_asynckit = __commonJS(function (cjsExports, cjsModule) {
   var deferModule = require_defer();
   cjsModule.exports = asyncify;
@@ -29,7 +29,7 @@ var require_asynckit = __commonJS(function (cjsExports, cjsModule) {
     };
   }
 });
-//@ chunk-h6b7mazd.js:7348-7433 cjs-fingerprint
+//@ chunk-ww9agm6g.js:7348-7433 cjs-fingerprint
 var require_asynckit_2 = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
     parallel: require_state_2(),

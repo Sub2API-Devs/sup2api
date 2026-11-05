@@ -3,10 +3,10 @@
  *
  * 并入旧版已有路径：插件推荐提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/hintRecommendation.ts
- * pieces: chunk-18hwfzwa.js (6)
- * attribution: placement 1, layout 1, fingerprint 4
+ * pieces: chunk-czq1j3j2.js (6)
+ * attribution: placement 1, affinity 1, fingerprint 4
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { isFirstPartyTelemetryBlocked } from "../hostEnvironment.js";
@@ -25,14 +25,14 @@ import { lit as lit_2 } from "../../services/analytics/safeMetadata.js";
 import { getPluginDisplayName } from "../../components/ManagedSettingsSecurityDialog/utils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1804920-1804924 placement
+//@ chunk-czq1j3j2.js:1845364-1845368 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1804920", () => {
+deferInit("chunk-czq1j3j2.js:1845364", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1804924-1804936 layout
+//@ chunk-czq1j3j2.js:1852903-1852915 affinity
 var MAX_PLUGIN_HINTS_PER_SESSION = 100;
-//@ chunk-18hwfzwa.js:1804936-1805306 fingerprint (2.1.88 match: maybeRecordPluginHint, 0.607)
+//@ chunk-czq1j3j2.js:1852915-1853285 fingerprint (2.1.88 match: maybeRecordPluginHint, 0.607)
 /**
  * 记录 CLI/工具输出中的 <claude-code-hint> 插件推荐（全局 claudeCodeHints，每会话最多一次）。
  */
@@ -55,7 +55,7 @@ function maybeRecordPluginHint(hint, pendingHint) {
   hintedPluginIds.add(pluginId);
   pendingHint.offer(hint);
 }
-//@ chunk-18hwfzwa.js:1805306-1805970 fingerprint (2.1.88 match: resolvePluginHint, 0.814)
+//@ chunk-czq1j3j2.js:1853285-1853949 fingerprint (2.1.88 match: resolvePluginHint, 0.814)
 /**
  * 解析插件推荐：已安装（含别名 ID）则丢弃，否则从市场取条目供提示安装。
  */
@@ -93,7 +93,7 @@ async function resolvePluginHint(hint, storageV5) {
     sourceCommand: hint.sourceCommand,
   };
 }
-//@ chunk-18hwfzwa.js:1805970-1806131 fingerprint (2.1.88 match: markHintPluginShown, 1)
+//@ chunk-czq1j3j2.js:1853949-1854110 fingerprint (2.1.88 match: markHintPluginShown, 1)
 /**
  * 记下某插件推荐已展示过（全局配置 claudeCodeHints.plugin）。
  */
@@ -110,7 +110,7 @@ function markHintPluginShown(pluginId, storageV5) {
     };
   }, storageV5);
 }
-//@ chunk-18hwfzwa.js:1806131-1806264 fingerprint (2.1.88 match: disableHintRecommendations, 1)
+//@ chunk-czq1j3j2.js:1854110-1854243 fingerprint (2.1.88 match: disableHintRecommendations, 1)
 /**
  * 关闭插件推荐（claudeCodeHints.disabled=true）。
  */

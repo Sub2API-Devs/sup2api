@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：Claude Design 同步工具
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-98n6ge4d.js (22)
- * attribution: placement 22
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-zevfa8jm.js (26)
+ * attribution: placement 22, layout 4
  */
 import { resolve, sep, extname } from "path";
 import { stat, realpath } from "fs/promises";
@@ -24,9 +24,12 @@ import {
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   MAX_PLAN_PATH_CHARS,
-  DesignGateState,
-  normalizePlanPath,
   hasGlobChars,
+  normalizePlanPath,
+  planPathKey,
+  collisionOf,
+  DesignGateState,
+  normalizePattern,
   registerDesignPlan,
   getPlanByToken,
   isReservedDesignPath,
@@ -37,6 +40,7 @@ import {
   DESIGNSYNC,
   isDesignSyncAllowed,
   buildDesignSyncPrompt,
+  PREVIEW_FORMAT_MAP,
 } from "../../tools/DesignSyncTool/DesignSyncTool.js";
 import {
   uploadPlanTitle,
@@ -49,7 +53,7 @@ import {
   buildCreateProjectQuestionLines,
   NEW_PROJECT_NOTE,
 } from "./syncApprovalDialog.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { plural } from "../../utils/stringUtils.js";
 import {
   needsDesignLogin,
@@ -64,6 +68,7 @@ import {
   listOrgProjects,
   PROJECT_TYPE_DESIGN_SYSTEM,
   getDesignProject,
+  getProjectArtifactExport,
   listDesignFiles,
   getDesignFile,
   writeDesignFiles,
@@ -84,8 +89,11 @@ import {
 } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { jsonStringify, didInodeChange } from "../../utils/slowOperations.js";
-import { layeredReadVerdictForPaths } from "../../utils/permissions/filesystem.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import {
+  layeredReadVerdictForPaths,
+  normalizeCaseForComparison_2,
+} from "../../utils/permissions/filesystem.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import {
   isCredentialPath,
   isSensitiveBasenameWithVariants,
@@ -102,7 +110,7 @@ import { getPlatform } from "../../utils/platform.js";
 import { SymlinkReadRefusedError } from "../../utils/fsSafety/atomicWriteStaging.js";
 import { raceWithAbortSignal } from "../../utils/sleep.js";
 
-//@ chunk-98n6ge4d.js:12747-17170 placement
+//@ chunk-zevfa8jm.js:13379-17802 placement
 /**
  * design 同步工具支持的方法表。
  */
@@ -279,7 +287,47 @@ var DESIGN_SYNC_METHODS = {
     nonEmpty: [],
   },
 };
-//@ chunk-98n6ge4d.js:17170-17350 placement
+//@ chunk-zevfa8jm.js:17802-18804 layout
+function planPathProblem(plan) {
+  let writePaths = [
+    ...(plan.writes ?? []).filter((path) => !hasGlobChars(normalizePlanPath(path))),
+    ...(plan.files ?? []).map((file) => file.path),
+  ];
+  let allPaths = [
+    ...writePaths,
+    ...(plan.deletes ?? []).filter((path) => !hasGlobChars(normalizePlanPath(path))),
+    ...(plan.paths ?? []),
+    ...(plan.assets ?? []).map((asset) => asset.path),
+  ];
+  let typed = allPaths.filter(
+    (path) => planPathKey(path) === "" && !/^$|(^|\/)\.\.$/.test(normalizePlanPath(path)),
+  );
+  if (typed.length > 0)
+    return `${plan.method}: claude.ai/design drops "#", "?" and invisible characters from a file's name, which leaves no usable name for: ${quoteList(typed)}. Rename a file before uploading it. Leave such a path out of a delete: no stored file has that name.`;
+  let typed_2 = allPaths.filter((tooLong) => planPathKey(tooLong).length > MAX_PLAN_PATH_CHARS);
+  if (typed_2.length > 0)
+    return `${plan.method}: claude.ai/design stores "\u2026" as three dots, which takes these paths past ${MAX_PLAN_PATH_CHARS} characters, the longest this tool handles: ${quoteList(typed_2)}. Shorten an upload's path. A stored file with so long a path has to be deleted on claude.ai/design.`;
+  let collision = collisionOf(writePaths);
+  return collision === undefined
+    ? undefined
+    : `${plan.method}: claude.ai/design would store ${quoteList(collision.typed)} under one name, "${collision.stored}". Give one of them another path in the project.`;
+}
+//@ chunk-zevfa8jm.js:18804-18858 layout
+function quoteList(typed) {
+  return typed.map((path) => `"${path}"`).join(", ");
+}
+//@ chunk-zevfa8jm.js:18858-18942 layout
+function storedVersusTyped(stored) {
+  let [normalized, given] = [planPathKey(stored), normalizePlanPath(stored)];
+  return normalized === given || normalized === "" ? given : `${normalized} (given as ${given})`;
+}
+//@ chunk-zevfa8jm.js:18942-19153 layout
+function planPathsRetyped(paths) {
+  return paths.some((path) => storedVersusTyped(path) !== normalizePlanPath(path))
+    ? "Re-run finalize_plan with the full set, each file under the name claude.ai/design stores, which is the one shown first."
+    : "Re-run finalize_plan with the full set.";
+}
+//@ chunk-zevfa8jm.js:19153-19333 placement
 function missingRequiredFields(input) {
   let methodSpec = DESIGN_SYNC_METHODS[input.method];
   let filtered = methodSpec.present.filter((field) => input[field] === undefined);
@@ -289,7 +337,7 @@ function missingRequiredFields(input) {
   });
   return [...filtered, ...filtered_2];
 }
-//@ chunk-98n6ge4d.js:17350-18234 placement
+//@ chunk-zevfa8jm.js:19333-20260 placement
 /**
  * Design 同步工具各方法的输出结构（列项目、读项目、列文件、读文件、提交计划、写/删文件、资源登记、建项目等）。
  */
@@ -320,6 +368,7 @@ var DESIGN_SYNC_OUTPUT_SCHEMA = DoctorLazy(() =>
       ownerDisplayName: stringSchema().optional(),
       isOwned: booleanSchema().optional(),
       canEdit: booleanSchema().optional(),
+      moveState: _enum(["moving", "moved"]).optional(),
     }),
     objectSchema({
       method: literal("list_files"),
@@ -374,7 +423,7 @@ var DESIGN_SYNC_OUTPUT_SCHEMA = DoctorLazy(() =>
     }),
   ]),
 );
-//@ chunk-98n6ge4d.js:18234-18352 placement
+//@ chunk-zevfa8jm.js:20260-20378 placement
 function isReadOnlySyncMethod(method) {
   return (
     method === "list_projects" ||
@@ -384,7 +433,7 @@ function isReadOnlySyncMethod(method) {
     method === "report_validate"
   );
 }
-//@ chunk-98n6ge4d.js:18352-18428 placement
+//@ chunk-zevfa8jm.js:20378-20454 placement
 /**
  * 把 id 截短成前 8 位加省略号（空值用 ?）。
  */
@@ -392,7 +441,7 @@ function shortId(projectId) {
   if (!projectId) return "?";
   return projectId.length > 12 ? `${projectId.slice(0, 8)}\u2026` : projectId;
 }
-//@ chunk-98n6ge4d.js:18428-19367 placement
+//@ chunk-zevfa8jm.js:20454-21394 placement
 /**
  * 为 Design 同步调用生成简短描述（读取、写入多少文件、删除等）。
  */
@@ -410,7 +459,7 @@ function describeSyncCall(input) {
       return uploadPlanTitle(input);
     case "write_files": {
       let fileCount = input.files?.length ?? 0;
-      let fromDiskCount = count(input.files ?? [], (file) => file.localPath !== undefined);
+      let fromDiskCount = countWhere(input.files ?? [], (file) => file.localPath !== undefined);
       let sourceNote =
         fromDiskCount > 0 && fromDiskCount < fileCount
           ? ` (${fromDiskCount} from disk, ${fileCount - fromDiskCount} inline)`
@@ -433,7 +482,7 @@ function describeSyncCall(input) {
       return "Design sync";
   }
 }
-//@ chunk-98n6ge4d.js:19367-20868 placement
+//@ chunk-zevfa8jm.js:21394-22895 placement
 /**
  * （切分错误，DesignSync）把 DesignSync 前置条件失败原因（需 /design-login、刷新失败、非 claude.ai 认证、仅必要流量）转成给用户的说明。
  */
@@ -453,7 +502,7 @@ function formatDesignSyncPreconditionMessage(reason, context) {
       return "DesignSync is unavailable while nonessential network traffic is restricted (CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC is set). Unset it to use /design-sync.";
   }
 }
-//@ chunk-98n6ge4d.js:20868-20955 placement
+//@ chunk-zevfa8jm.js:22895-22982 placement
 /**
  * （切分错误）DesignSync 前置条件错误类。
  */
@@ -463,9 +512,9 @@ class DesignSyncPreconditionError extends Error {
     this.name = "DesignSyncPreconditionError";
   }
 }
-//@ chunk-98n6ge4d.js:20955-21004 placement (2.1.88 match: getAutoAllowedCommands, 0.728)
+//@ chunk-zevfa8jm.js:22982-23031 placement
 var DESIGN_LOGIN_AUTO_PROMPT_MODES = new Set(["default", "acceptEdits", "auto"]);
-//@ chunk-98n6ge4d.js:21004-21509 placement
+//@ chunk-zevfa8jm.js:23031-23536 placement
 /**
  * （切分错误，DesignSync）取 design 访问令牌；需要登录且在可交互的允许模式下自动发起登录，否则抛 DesignSyncPreconditionError。
  */
@@ -497,7 +546,7 @@ async function getDesignSyncAccessToken(credentials, options) {
   }
   return designConsentKey.accessToken;
 }
-//@ chunk-98n6ge4d.js:21509-21691 placement
+//@ chunk-zevfa8jm.js:23536-23718 placement
 function readConsentNeeded(error) {
   if (!(error instanceof DesignAuthError) || error.status !== 403) return null;
   let body = error.body;
@@ -510,7 +559,7 @@ function readConsentNeeded(error) {
     return null;
   return body.consent;
 }
-//@ chunk-98n6ge4d.js:21691-21847 placement
+//@ chunk-zevfa8jm.js:23718-23874 placement
 function canAskForApproval(toolPermissionContext) {
   let permissions = toolPermissionContext.permissions();
   return (
@@ -519,7 +568,7 @@ function canAskForApproval(toolPermissionContext) {
     !(permissions.mode === "plan" && permissions.isBypassPermissionsModeAvailable)
   );
 }
-//@ chunk-98n6ge4d.js:21847-28024 placement
+//@ chunk-zevfa8jm.js:23874-30117 placement
 /**
  * 把本地设计系统组件同步到 claude.ai/design 项目的工具。
  */
@@ -610,6 +659,13 @@ var DesignSyncTool = buildTool({
           return {
             result: false,
             message: "finalize_plan needs at least one write or delete path.",
+            errorCode: 1,
+          };
+        let writeError = planPathProblem(input);
+        if (writeError !== undefined)
+          return {
+            result: false,
+            message: writeError,
             errorCode: 1,
           };
         if (input.method === "write_files")
@@ -857,7 +913,7 @@ var DesignSyncTool = buildTool({
     };
   },
 });
-//@ chunk-98n6ge4d.js:28024-28101 placement
+//@ chunk-zevfa8jm.js:30117-30194 placement
 /**
  * 必填字段校验，缺失时抛 “<方法> requires \"<字段>\"”。
  */
@@ -865,7 +921,7 @@ function requireField(value, fieldName, method) {
   if (value === undefined) throw Error(`${method} requires "${fieldName}"`);
   return value;
 }
-//@ chunk-98n6ge4d.js:28101-28246 placement
+//@ chunk-zevfa8jm.js:30194-30347 placement
 var TEXT_FILE_EXTENSIONS = new Set([
   "html",
   "css",
@@ -888,14 +944,15 @@ var TEXT_FILE_EXTENSIONS = new Set([
   "toml",
 ]);
 var MAX_LOCAL_FILE_BYTES = 12582912;
-//@ chunk-98n6ge4d.js:28246-28293 placement
+var MAX_UPLOAD_BYTES = 5000;
+//@ chunk-zevfa8jm.js:30347-30394 placement
 /**
  * 把路径解析成相对当前工作目录的真实路径。
  */
 async function realpathFromCwd(localDir) {
   return realpath(resolve(getCwd(), localDir ?? "."));
 }
-//@ chunk-98n6ge4d.js:28293-29003 placement
+//@ chunk-zevfa8jm.js:30394-31104 placement
 /**
  * 检查 write_files 的本地路径能否在不询问用户的情况下读取，否则抛出前置条件错误。
  */
@@ -918,12 +975,12 @@ function assertReadableWithoutAsking(path, displayPath, permissionContext) {
   }
   throw withTelemetryMessage(
     new DesignSyncPreconditionError(
-      `write_files: the localPath for ${displayPath} may not be read without asking the user, and write_files can't ask. The cause is a ${FILE_READ_TOOL_NAME} rule or setting, a network path, a link that can't be resolved, or a name Windows treats specially (such as NAME~1, or one ending in a dot) in the file's name or in any folder above it. Nothing in this call was uploaded. Stop and ask the user how to proceed.`,
+      `write_files: the localPath for ${displayPath} may not be read without asking the user, and write_files can't ask. The cause is a ${READ} rule or setting, a network path, a link that can't be resolved, or a name Windows treats specially (such as NAME~1, or one ending in a dot) in the file's name or in any folder above it. Nothing in this call was uploaded. Stop and ask the user how to proceed.`,
     ),
-    `${DESIGNSYNC} localPath needs ${FILE_READ_TOOL_NAME} permission`,
+    `${DESIGNSYNC} localPath needs ${READ} permission`,
   );
 }
-//@ chunk-98n6ge4d.js:29003-29386 placement
+//@ chunk-zevfa8jm.js:31104-31487 placement
 /**
  * 拒绝读取凭证文件、设备或 Claude Code 自己的配置与令牌文件作为上传来源。
  */
@@ -941,7 +998,7 @@ async function assertNotProtectedFile(path, realPath, displayPath) {
       `${DESIGNSYNC} localPath is a protected file`,
     );
 }
-//@ chunk-98n6ge4d.js:29386-29683 placement
+//@ chunk-zevfa8jm.js:31487-31784 placement
 function hardLinkRefusal(path) {
   return withTelemetryMessage(
     new DesignSyncPreconditionError(
@@ -950,7 +1007,7 @@ function hardLinkRefusal(path) {
     `${DESIGNSYNC} localPath is a hard link`,
   );
 }
-//@ chunk-98n6ge4d.js:29683-30122 placement
+//@ chunk-zevfa8jm.js:31784-32223 placement
 /**
  * 构造"打开的文件不是检查过的那个文件"的错误。
  */
@@ -960,12 +1017,12 @@ function openedFileMismatch(path) {
     "write_files: the file at localPath could not be opened as the file that was checked",
   );
 }
-//@ chunk-98n6ge4d.js:30122-32516 placement
+//@ chunk-zevfa8jm.js:32223-34618 placement
 /**
  * 准备 write_files 的单个文件：只有内联 data 时直接返回；有 localPath 时校验在已批准目录内、长度、非受保护/凭证文件、可无需询问读取、真实路径仍在目录内、不是硬链接、打开的正是检查过的文件、大小上限，然后按扩展名以 utf8 或 base64 读入。
  */
 async function readLocalFileForUpload(file, approvedDir, permissionContext, getPermissionContext) {
-  let planPath = normalizePlanPath(file.path);
+  let planPath = planPathKey(file.path);
   if (file.localPath === undefined) {
     if (file.data === undefined) throw Error(`write_files: ${planPath} has neither data nor localPath`);
     return {
@@ -1033,17 +1090,17 @@ async function readLocalFileForUpload(file, approvedDir, permissionContext, getP
   let handle = opened.handle;
   let contents;
   try {
-    let after = await handle.stat({
+    let stats_2 = await handle.stat({
       bigint: true,
     });
-    if (!after.isFile()) throw Error("write_files: localPath must be a regular file.");
-    if (after.nlink > 1n) throw hardLinkRefusal(planPath);
-    if (didInodeChange(stats, after)) throw openedFileMismatch(planPath);
+    if (!stats_2.isFile()) throw Error("write_files: localPath must be a regular file.");
+    if (stats_2.nlink > 1n) throw hardLinkRefusal(planPath);
+    if (didInodeChange(stats, stats_2)) throw openedFileMismatch(planPath);
     if (getPlatform() === "linux" || getPlatform() === "wsl") {
       let fdPath = await readFdTargetPath(handle.fd).catch(() => null);
       if (fdPath !== undefined && fdPath !== realPath) throw openedFileMismatch(planPath);
     }
-    if (after.size > BigInt(MAX_LOCAL_FILE_BYTES))
+    if (stats_2.size > BigInt(MAX_LOCAL_FILE_BYTES))
       throw Error(`write_files: file at localPath exceeds the ${MAX_LOCAL_FILE_BYTES} byte limit.`);
     contents = await handle.readFile();
   } finally {
@@ -1063,8 +1120,14 @@ async function readLocalFileForUpload(file, approvedDir, permissionContext, getP
         mimeType: file.mimeType,
       };
 }
-//@ chunk-98n6ge4d.js:32516-36768 placement
+//@ chunk-zevfa8jm.js:34618-39358 placement
 async function runDesignSyncMethod(session, input, credentials, signal, getPermissionContext) {
+  let file = planPathProblem(input);
+  if (file !== undefined)
+    throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+      file,
+      "DesignSync: a file name that the server can't keep",
+    );
   switch (input.method) {
     case "list_projects": {
       let { items } = await listOrgProjects(
@@ -1093,7 +1156,7 @@ async function runDesignSyncMethod(session, input, credentials, signal, getPermi
     case "get_project": {
       let projectId = requireField(input.projectId, "projectId", input.method);
       let designProject = await getDesignProject(credentials, projectId, signal);
-      return {
+      let projectIdValue = {
         method: "get_project",
         projectId: designProject.projectId,
         name: designProject.name,
@@ -1102,6 +1165,38 @@ async function runDesignSyncMethod(session, input, credentials, signal, getPermi
         isOwned: designProject.isOwned,
         canEdit: designProject.callerCanEdit ?? designProject.canEdit,
       };
+      if (designProject.type !== PROJECT_TYPE_DESIGN_SYSTEM) return projectIdValue;
+      if (designProject.moveState === "MOVE_STATE_MOVING")
+        return {
+          ...projectIdValue,
+          moveState: "moving",
+          notice: PREVIEW_FORMAT_MAP.moving,
+        };
+      if (designProject.moveState === "MOVE_STATE_MOVED") {
+        let project = await getProjectArtifactExport(
+          credentials,
+          projectId,
+          AbortSignal.any([signal, AbortSignal.timeout(MAX_UPLOAD_BYTES)]),
+        ).catch((error) => {
+          if (!signal.aborted)
+            logForDebugging(
+              `DesignSync could not read where the moved design system went, so its notice has no link: ${redactOAuthToken(errorMessage(error), credentials)}`,
+              {
+                level: "error",
+              },
+            );
+          return;
+        });
+        if (signal.aborted) throw new AbortError();
+        return {
+          ...projectIdValue,
+          moveState: "moved",
+          notice: project
+            ? `${PREVIEW_FORMAT_MAP.moved} ${PREVIEW_FORMAT_MAP.openInClaude} ${project}`
+            : PREVIEW_FORMAT_MAP.moved,
+        };
+      }
+      return projectIdValue;
     }
     case "list_files": {
       let projectId = requireField(input.projectId, "projectId", input.method);
@@ -1125,8 +1220,8 @@ async function runDesignSyncMethod(session, input, credentials, signal, getPermi
     }
     case "finalize_plan": {
       let projectId = requireField(input.projectId, "projectId", input.method);
-      let writes = requireField(input.writes, "writes", input.method).map(normalizePlanPath);
-      let deletes = requireField(input.deletes, "deletes", input.method).map(normalizePlanPath);
+      let writes = requireField(input.writes, "writes", input.method).map(normalizePattern);
+      let deletes = requireField(input.deletes, "deletes", input.method).map(normalizePattern);
       let localDir = await realpathFromCwd(input.localDir);
       return {
         method: "finalize_plan",
@@ -1147,17 +1242,20 @@ async function runDesignSyncMethod(session, input, credentials, signal, getPermi
       let planByToken = getPlanByToken(session, planId);
       if (!planByToken || planByToken.projectId !== projectId)
         throw Error("Plan token is missing or does not match this project. Call finalize_plan first.");
-      let filtered = inputFiles.map((file) => file.path).filter(isReservedDesignPath);
+      let mapped = inputFiles
+        .map((file) => file.path)
+        .filter(isReservedDesignPath)
+        .map(storedVersusTyped);
+      if (mapped.length > 0)
+        throw Error(
+          `Cannot write reserved paths: ${mapped.join(", ")}. CLAUDE.md and .claude/ carry instructions to the design agent and are blocked regardless of the plan.`,
+        );
+      let filtered = inputFiles
+        .map((file) => file.path)
+        .filter((writePath) => !pathMatchesAny(writePath, planByToken.writes));
       if (filtered.length > 0)
         throw Error(
-          `Cannot write reserved paths: ${filtered.join(", ")}. CLAUDE.md and .claude/ carry instructions to the design agent and are blocked regardless of the plan.`,
-        );
-      let filtered_2 = inputFiles
-        .map((file) => normalizePlanPath(file.path))
-        .filter((writePath) => !pathMatchesAny(writePath, planByToken.writes));
-      if (filtered_2.length > 0)
-        throw Error(
-          `Cannot write paths outside the finalized plan: ${filtered_2.join(", ")}. Re-run finalize_plan with the full set.`,
+          `Cannot write paths outside the finalized plan: ${filtered.map(storedVersusTyped).join(", ")}. ${planPathsRetyped(filtered)}`,
         );
       let batchSize = 32;
       let files = [];
@@ -1190,21 +1288,24 @@ async function runDesignSyncMethod(session, input, credentials, signal, getPermi
       let planByToken = getPlanByToken(session, planId);
       if (!planByToken || planByToken.projectId !== projectId)
         throw Error("Plan token is missing or does not match this project. Call finalize_plan first.");
-      let filtered = deletePaths.filter(isReservedDesignPath);
+      let mapped = deletePaths.filter(isReservedDesignPath).map(storedVersusTyped);
+      if (mapped.length > 0)
+        throw Error(
+          `Cannot delete reserved paths: ${mapped.join(", ")}. CLAUDE.md and .claude/ carry instructions to the design agent and are blocked regardless of the plan.`,
+        );
+      let filtered = deletePaths.filter((deletePath) => !pathMatchesAny(deletePath, planByToken.deletes));
       if (filtered.length > 0)
         throw Error(
-          `Cannot delete reserved paths: ${filtered.join(", ")}. CLAUDE.md and .claude/ carry instructions to the design agent and are blocked regardless of the plan.`,
-        );
-      let filtered_2 = deletePaths
-        .map(normalizePlanPath)
-        .filter((deletePath) => !pathMatchesAny(deletePath, planByToken.deletes));
-      if (filtered_2.length > 0)
-        throw Error(
-          `Cannot delete paths outside the finalized plan: ${filtered_2.join(", ")}. Re-run finalize_plan with the full set.`,
+          `Cannot delete paths outside the finalized plan: ${filtered.map(storedVersusTyped).join(", ")}. ${planPathsRetyped(filtered)}`,
         );
       return {
         method: "delete_files",
-        deleted: await deleteDesignFiles(credentials, projectId, deletePaths.map(normalizePlanPath), signal),
+        deleted: await deleteDesignFiles(
+          credentials,
+          projectId,
+          normalizeCaseForComparison_2(deletePaths.map(planPathKey)),
+          signal,
+        ),
       };
     }
     case "register_assets": {
@@ -1215,11 +1316,11 @@ async function runDesignSyncMethod(session, input, credentials, signal, getPermi
       if (!planByToken || planByToken.projectId !== projectId)
         throw Error("Plan token is missing or does not match this project. Call finalize_plan first.");
       let filtered = assets
-        .map((asset) => normalizePlanPath(asset.path))
+        .map((asset) => asset.path)
         .filter((assetPath) => !pathMatchesAny(assetPath, planByToken.writes));
       if (filtered.length > 0)
         throw Error(
-          `Cannot register paths outside the finalized plan: ${filtered.join(", ")}. Re-run finalize_plan with the full set.`,
+          `Cannot register paths outside the finalized plan: ${filtered.map(storedVersusTyped).join(", ")}. ${planPathsRetyped(filtered)}`,
         );
       let registered = 0;
       for (let asset of assets) {
@@ -1229,7 +1330,7 @@ async function runDesignSyncMethod(session, input, credentials, signal, getPermi
           projectId,
           {
             ...asset,
-            path: normalizePlanPath(asset.path),
+            path: planPathKey(asset.path),
           },
           signal,
         );
@@ -1247,15 +1348,13 @@ async function runDesignSyncMethod(session, input, credentials, signal, getPermi
       let planByToken = getPlanByToken(session, planId);
       if (!planByToken || planByToken.projectId !== projectId)
         throw Error("Plan token is missing or does not match this project. Call finalize_plan first.");
-      let filtered = paths
-        .map(normalizePlanPath)
-        .filter((assetPath) => !pathMatchesAny(assetPath, planByToken.deletes));
+      let filtered = paths.filter((assetPath) => !pathMatchesAny(assetPath, planByToken.deletes));
       if (filtered.length > 0)
         throw Error(
-          `Cannot unregister cards for paths outside the finalized plan's deletes: ${filtered.join(", ")}. Re-run finalize_plan with the full set.`,
+          `Cannot unregister cards for paths outside the finalized plan's deletes: ${filtered.map(storedVersusTyped).join(", ")}. ${planPathsRetyped(filtered)}`,
         );
       let unregistered = 0;
-      for (let assetPath of paths.map(normalizePlanPath)) {
+      for (let assetPath of normalizeCaseForComparison_2(paths.map(planPathKey))) {
         if (signal.aborted) throw new AbortError();
         await deleteDesignAsset(credentials, projectId, assetPath, signal);
         unregistered++;

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。记录最后一条提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (5)
  * attribution: placement 5
  */
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
@@ -27,7 +27,7 @@ import { withExpandedPastes } from "../../utils/hooks/postSamplingHooks.js";
 import { gracefulShutdownSync } from "../../utils/gracefulShutdown.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1473473-1474045 placement
+//@ chunk-czq1j3j2.js:1514875-1515447 placement
 /**
  * rewind 后跟踪新回合消息，写入后补写 last-prompt 元数据。
  */
@@ -75,12 +75,12 @@ class LastPromptRestamp {
     if (rows.some((row) => this.#o.has(row.uuid))) this.#o.clear();
   }
 }
-//@ chunk-18hwfzwa.js:1474045-1474072 placement
+//@ chunk-czq1j3j2.js:1515447-1515474 placement
 var lastPromptRestampSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:1474045", () => {
+deferInit("chunk-czq1j3j2.js:1515447", () => {
   lastPromptRestampSlot = new SessionRootSlot(() => new LastPromptRestamp());
 });
-//@ chunk-18hwfzwa.js:1474110-1474259 placement
+//@ chunk-czq1j3j2.js:1515512-1515661 placement
 /**
  * 非斜杠命令或非本地命令的输入才记录为提示。
  */
@@ -91,7 +91,7 @@ function shouldRecordPrompt(text, commands) {
   if (!command) return !looksLikeCommand(slashCommand.commandName);
   return command.type !== "local" && command.type !== "local-jsx";
 }
-//@ chunk-18hwfzwa.js:1474259-1474466 placement
+//@ chunk-czq1j3j2.js:1515661-1515868 placement
 /**
  * 生成写历史记录的函数（命令参数变化时写展开后的文本，只写一次）。
  */
@@ -109,7 +109,7 @@ function createPromptHistoryWriter({ entry, name, typed, write }) {
     write(writtenEntry === typed ? entry : withExpandedPastes(entry, `/${name} ${writtenEntry}`.trim()));
   };
 }
-//@ chunk-18hwfzwa.js:1474466-1474487 placement
+//@ chunk-czq1j3j2.js:1515868-1515889 placement
 function shutdownNow() {
   gracefulShutdownSync(0);
 }

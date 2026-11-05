@@ -3,12 +3,12 @@
  *
  * 确保后台守护进程运行与二进制接管（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ksvdmrg0.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y2nrbm62.js (29)
  * attribution: placement 29
  */
-import { setTimeout as Ve } from "timers/promises";
+import { setTimeout as Be } from "timers/promises";
 import { rm, realpath, lstat, readFile } from "fs/promises";
 import { dirname } from "path";
 import { controlRequest } from "./controlClient.js";
@@ -60,18 +60,18 @@ import {
 import { getGlobalConfig } from "../../utils/config.js";
 import {
   getSpawnLauncherState,
-  resolveAgentLauncher,
-  EXTENDED_WAIT_MS,
+  spawnDetachedSupervisor,
+  NPM_REINSTALL_MAX_WAIT_MS,
   createSpawnAttempt,
   waitForDaemonUp,
   isNpmStubSpawnFailure,
-  waitForBinaryRecovery,
+  waitForReinstalledBinary,
   EXTENDED_SPAWN_WAIT_MS,
   shouldStopWaitingForDaemon,
   readSpawnStderr,
   classifyDaemonStderr,
   describeDaemonLockAtDeadline,
-  isExecutableBinary,
+  execTokenIsRunnable,
 } from "./spawnLauncher.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { getCwd } from "../../utils/cwd.js";
@@ -86,12 +86,12 @@ import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
 import { storageErrorCode } from "../../utils/storage/storageErrors.js";
 
-//@ chunk-ksvdmrg0.js:50407-50420 placement
+//@ chunk-y2nrbm62.js:38127-38140 placement
 /**
  * 等待守护进程启动的总预算（45 秒）。
  */
 var DAEMON_START_BUDGET_MS = 45000;
-//@ chunk-ksvdmrg0.js:50420-50552 placement
+//@ chunk-y2nrbm62.js:38140-38272 placement
 /**
  * 在给定时间内反复 ping daemon，成功返回 true。
  */
@@ -107,11 +107,11 @@ async function waitForDaemonPing(timeoutMs) {
       ).ok
     )
       return true;
-    await Ve(100);
+    await Be(100);
   }
   return false;
 }
-//@ chunk-ksvdmrg0.js:50552-50841 placement
+//@ chunk-y2nrbm62.js:38272-38561 placement
 /**
  * 等待服务方式启动的 daemon 就绪：ping 通后读取服务锁，来源为 service 时返回，前台来源或超时返回 null。
  */
@@ -129,11 +129,11 @@ async function waitForServiceDaemon(timeoutMs, storageV5) {
         if (lock?.origin === "service") return lock;
         if (lock?.origin === "foreground") return null;
       }
-      await Ve(100);
+      await Be(100);
     }
   }
 }
-//@ chunk-ksvdmrg0.js:50841-52454 placement
+//@ chunk-y2nrbm62.js:38561-40174 placement
 async function restartDaemon(forceTransient, storageV5) {
   let now = Date.now();
   let extendedWindow = false;
@@ -175,10 +175,10 @@ async function restartDaemon(forceTransient, storageV5) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION;
@@ -192,13 +192,13 @@ async function restartDaemon(forceTransient, storageV5) {
         return "up";
       }
       outcome = "restarting";
-      await Ve(100);
+      await Be(100);
       continue;
     }
     if (!nudge.ok && nudge.code === "ETIMEOUT") {
       extendedWindow = true;
       outcome = "etimeout";
-      await Ve(100);
+      await Be(100);
       continue;
     }
     if (!nudge.ok && nudge.code === "ENOCONN") {
@@ -210,7 +210,7 @@ async function restartDaemon(forceTransient, storageV5) {
       connectErrno = sanitizeErrnoTokenForTelemetry(nudge.errno);
       if (!extendedWindow) return "down";
       outcome = "enoconn";
-      await Ve(100);
+      await Be(100);
       continue;
     }
     {
@@ -238,7 +238,7 @@ async function restartDaemon(forceTransient, storageV5) {
   });
   return "down";
 }
-//@ chunk-ksvdmrg0.js:52454-52617 placement
+//@ chunk-y2nrbm62.js:40174-40337 placement
 /**
  * 确保后台守护进程运行；非 Windows 上 uid 折叠（如 sudo 下）时直接失败。
  */
@@ -253,7 +253,7 @@ async function ensureDaemon(options = {}, spawnArgs) {
   }
   return ensureDaemonRunning(options, spawnArgs, false);
 }
-//@ chunk-ksvdmrg0.js:52617-59870 placement
+//@ chunk-y2nrbm62.js:40337-47589 placement
 /**
  * 确保后台守护进程在运行（必要时经 agent_launcher 拉起）
  */
@@ -401,7 +401,7 @@ async function ensureDaemonRunning(options, storageV5, isRetry) {
   let now_3 = Date.now();
   let daemonArgs = ["daemon", "run", "--origin", "transient", "--spawned-by", spawnedBy];
   let spawnDaemon = () =>
-    resolveAgentLauncher(daemonArgs, undefined, {
+    spawnDetachedSupervisor(daemonArgs, undefined, {
       withoutOAuthTokenEnv: options.withoutOAuthTokenEnv,
     });
   let launchResult = await spawnDaemon();
@@ -429,7 +429,7 @@ async function ensureDaemonRunning(options, storageV5, isRetry) {
     return {
       ok: false,
       reason: gaveUpOnNpmInstallInProgress
-        ? `Claude Code is being updated by npm on this machine (still not runnable after ${Math.round(EXTENDED_WAIT_MS / 60000)} min, ${sanitizeErrnoForTelemetry(err) ?? "spawn failed"}) \u2014 try again when the update finishes`
+        ? `Claude Code is being updated by npm on this machine (still not runnable after ${Math.round(NPM_REINSTALL_MAX_WAIT_MS / 60000)} min, ${sanitizeErrnoForTelemetry(err) ?? "spawn failed"}) \u2014 try again when the update finishes`
         : `spawn ${bgSupervisorNoun()}: ${errorMessage(err)}`,
       causeCode: sanitizeErrnoForTelemetry(err) ?? "spawn",
     };
@@ -457,7 +457,7 @@ async function ensureDaemonRunning(options, storageV5, isRetry) {
   let waitedMsTotal = 0;
   let gaveUpOnNpmInstall = false;
   if (!daemonUp && !clockJumpLate && (await isNpmStubSpawnFailure(spawnAttempt, getLaunchTarget()))) {
-    let recovery = await waitForBinaryRecovery(getLaunchTarget());
+    let recovery = await waitForReinstalledBinary(getLaunchTarget());
     waitedMsTotal += recovery.waitedMs;
     logEvent("tengu_bg_daemon_spawn_reinstall_wait", {
       waited_ms: recovery.waitedMs,
@@ -631,7 +631,7 @@ ${stderr}`,
   }
   logFeatureBad("daemon_ensure_running", "daemon_ensure_transient_unreachable");
   let npmNote = gaveUpOnNpmInstall
-    ? ` \u2014 Claude Code is being updated by npm on this machine (still not runnable after ${Math.round(EXTENDED_WAIT_MS / 60000)} min); try again when the update finishes`
+    ? ` \u2014 Claude Code is being updated by npm on this machine (still not runnable after ${Math.round(NPM_REINSTALL_MAX_WAIT_MS / 60000)} min); try again when the update finishes`
     : "";
   let launcherCommand = processWrapperArgv()[0];
   if (launcherCommand) {
@@ -665,7 +665,7 @@ ${stderr}`,
     reason: `${bgSupervisorNoun()} ${DAEMON_UNREACHABLE_TIMEOUT_PHRASE} ${budgetMs / 1000}s${npmNote}`,
   };
 }
-//@ chunk-ksvdmrg0.js:59870-60182 placement
+//@ chunk-y2nrbm62.js:47589-47901 placement
 /**
  * 进程正在退出时放弃启动 daemon：记录日志与事件，返回 stoodDown 结果。
  */
@@ -684,7 +684,7 @@ function standDownAtExit(viaService, exiting) {
     reason: "this process is exiting",
   };
 }
-//@ chunk-ksvdmrg0.js:60182-60299 placement
+//@ chunk-y2nrbm62.js:47901-48018 placement
 function logEnsureOutcome(jumped) {
   if (jumped) {
     logFeatureSad("daemon_ensure_running", "daemon_ensure_clock_jump_retried");
@@ -692,14 +692,14 @@ function logEnsureOutcome(jumped) {
   }
   logFeatureOk("daemon_ensure_running");
 }
-//@ chunk-ksvdmrg0.js:60299-60332 placement
+//@ chunk-y2nrbm62.js:48018-48051 placement
 /**
  * 取启动命令的目标（当前可执行文件/通道）。
  */
 function getLaunchTarget() {
   return getLaunchCommand().target;
 }
-//@ chunk-ksvdmrg0.js:60332-60787 placement
+//@ chunk-y2nrbm62.js:48051-48506 placement
 /**
  * 判断客户端是否应接管临时守护进程：版本与目标不同且客户端更新（同通道比构建时间，否则按 semver）。
  */
@@ -720,7 +720,7 @@ function shouldTakeOverDaemon(info) {
     semverModule.gt(info.clientVersion, info.daemonVersion)
   );
 }
-//@ chunk-ksvdmrg0.js:60787-64175 placement
+//@ chunk-y2nrbm62.js:48506-51896 placement
 /**
  * 后台二进制接管：新版本替换正在运行的后台守护进程
  */
@@ -733,10 +733,10 @@ async function takeOverBackgroundBinary(version, standsDownAtExit, hasLauncher, 
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION;
@@ -755,11 +755,11 @@ async function takeOverBackgroundBinary(version, standsDownAtExit, hasLauncher, 
   let targetPath = await realpath(getLaunchTarget()).catch(() => null);
   if (!targetPath) return false;
   let cmd = resolveLaunchTarget().cmd;
-  if (!(await isExecutableBinary(cmd))) {
+  if (!(await execTokenIsRunnable(cmd))) {
     let cmd_2 = resolveLaunchTarget({
       pinToCurrentBinary: true,
     }).cmd;
-    if (cmd_2 === cmd || !(await isExecutableBinary(cmd_2))) return false;
+    if (cmd_2 === cmd || !(await execTokenIsRunnable(cmd_2))) return false;
   }
   let lock = await readLiveServerLock(1, storageV5).catch(() => null);
   if (!lock) return false;
@@ -775,10 +775,10 @@ async function takeOverBackgroundBinary(version, standsDownAtExit, hasLauncher, 
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -794,10 +794,10 @@ async function takeOverBackgroundBinary(version, standsDownAtExit, hasLauncher, 
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION ||
@@ -819,10 +819,10 @@ async function takeOverBackgroundBinary(version, standsDownAtExit, hasLauncher, 
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION
@@ -840,7 +840,7 @@ async function takeOverBackgroundBinary(version, standsDownAtExit, hasLauncher, 
   });
   return true;
 }
-//@ chunk-ksvdmrg0.js:64175-64960 placement
+//@ chunk-y2nrbm62.js:51896-52681 placement
 /**
  * 判断是否经启动器（CLAUDE_CODE_PROCESS_WRAPPER）拉起守护进程：已由启动器接管后又出现裸进程时记一次警告与事件。
  */
@@ -866,7 +866,7 @@ function shouldUseLauncherPrefix(hasLauncher, prefixMode) {
   launcherState.prefixAxis = "attempted";
   return true;
 }
-//@ chunk-ksvdmrg0.js:64960-67060 placement
+//@ chunk-y2nrbm62.js:52681-54782 placement
 async function checkBackgroundDisabled(storageV5) {
   let lock = await readLiveServerLock(1, storageV5).catch(() => null);
   if (!lock) return null;
@@ -902,10 +902,10 @@ async function checkBackgroundDisabled(storageV5) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
@@ -959,7 +959,7 @@ async function checkBackgroundDisabled(storageV5) {
   });
   return null;
 }
-//@ chunk-ksvdmrg0.js:67060-67138 placement
+//@ chunk-y2nrbm62.js:54782-54860 placement
 /**
  * 系统级守护进程是否在运行（有 systemd 用户会话且服务状态正常）。
  */
@@ -967,31 +967,31 @@ async function isSystemdDaemonActive() {
   if (isConfigDirOverridden() || !(await hasSystemdUserSession())) return false;
   return daemonServiceStatus().catch(() => false);
 }
-//@ chunk-ksvdmrg0.js:67138-67198 placement
+//@ chunk-y2nrbm62.js:54860-54920 placement
 /**
  * CLAUDE_CONFIG_DIR 是否被覆盖（覆盖时不用服务）。
  */
 function isConfigDirOverridden() {
   return Boolean(process.env.CLAUDE_CONFIG_DIR);
 }
-//@ chunk-ksvdmrg0.js:67198-67237 placement
+//@ chunk-y2nrbm62.js:54920-54959 placement
 /**
  * 是否可用服务形式守护进程。
  */
 async function canUseServiceDaemon() {
   return !isConfigDirOverridden() && isDaemonServiceInstalled();
 }
-//@ chunk-ksvdmrg0.js:67237-67377 placement
+//@ chunk-y2nrbm62.js:54959-55099 placement
 function getInvocationLabel() {
   let sliced = process.argv.slice(2);
   if (sliced[0] === "agents") return "claude agents";
   if (sliced.includes("--bg")) return "claude --bg";
   return "claude";
 }
-//@ chunk-ksvdmrg0.js:67377-67782 placement
+//@ chunk-y2nrbm62.js:55099-55504 placement
 async function readLogindConfig() {
-  let platform = getPlatform();
-  if (platform !== "linux" && platform !== "wsl") return;
+  let configPath = getPlatform();
+  if (configPath !== "linux" && configPath !== "wsl") return;
   let text = await readFile("/etc/systemd/logind.conf", "utf8").catch(() => "");
   if (!/^\s*KillUserProcesses\s*=\s*yes\b/im.test(text)) return;
   logForDebugging(
@@ -1001,18 +1001,18 @@ async function readLogindConfig() {
     },
   );
 }
-//@ chunk-ksvdmrg0.js:67782-67954 placement
+//@ chunk-y2nrbm62.js:55504-55676 placement
 function describeMissingLauncher() {
   return `${PROCESS_WRAPPER_ENV}: launcher \`${processWrapperArgv()[0]}\` was deleted or is not executable \u2014 restore it (or fix the setting); background sessions are not started unwrapped`;
 }
-//@ chunk-ksvdmrg0.js:67954-68082 placement
+//@ chunk-y2nrbm62.js:55676-55804 placement
 function logLauncherMatch(processWrapper) {
   let actual = processWrapperRecord();
   if (actual === "" || !processWrapper) return;
   if (processWrapper === actual) logFeatureOk("agent_launcher");
   else logFeatureSad("agent_launcher", "served_by_skewed_wrapper");
 }
-//@ chunk-ksvdmrg0.js:68082-68167 placement
+//@ chunk-y2nrbm62.js:55804-55889 placement
 /**
  * 是否应提供/安装守护进程服务（开关、systemd、无自定义配置目录、CLI 开关）。
  */
@@ -1024,14 +1024,14 @@ async function shouldInstallDaemonService() {
     isDaemonCliEnabled()
   );
 }
-//@ chunk-ksvdmrg0.js:68167-68220 placement
+//@ chunk-y2nrbm62.js:55889-55942 placement
 /**
  * 宿主墓碑文件的存储位置。
  */
 function hostTombstonePath(hostKey) {
   return STORAGE_SPACES.daemon(["host-managed", hostKey]);
 }
-//@ chunk-ksvdmrg0.js:68220-68345 placement
+//@ chunk-y2nrbm62.js:55942-56067 placement
 /**
  * 把网关与网关谱系标记编码为多行文本。
  */
@@ -1047,7 +1047,7 @@ function encodeHostLineage(env) {
       : "")
   );
 }
-//@ chunk-ksvdmrg0.js:68345-68451 placement
+//@ chunk-y2nrbm62.js:56067-56173 placement
 /**
  * 从多行文本解析网关与网关谱系标记。
  */
@@ -1058,7 +1058,7 @@ function decodeHostLineage(file) {
     lineage: text.has("lineage"),
   };
 }
-//@ chunk-ksvdmrg0.js:68451-68504 placement
+//@ chunk-y2nrbm62.js:56173-56226 placement
 /**
  * 宿主墓碑所在的存储作用域（daemon/host-managed）。
  */
@@ -1066,7 +1066,7 @@ var HOST_MANAGED_SCOPE = {
   namespace: "daemon",
   relPath: ["host-managed"],
 };
-//@ chunk-ksvdmrg0.js:68504-68639 placement
+//@ chunk-y2nrbm62.js:56226-56361 placement
 /**
  * 确保宿主墓碑目录存在，失败时抛出带原因的错误。
  */
@@ -1080,7 +1080,7 @@ async function ensureTombstoneScope(storage) {
       result.error,
     );
 }
-//@ chunk-ksvdmrg0.js:68639-68805 placement
+//@ chunk-y2nrbm62.js:56361-56527 placement
 /**
  * 原地写入宿主墓碑记录，失败时抛出带原因的错误。
  */
@@ -1096,14 +1096,14 @@ async function writeHostTombstone(storage, hostKey, content) {
       result.error,
     );
 }
-//@ chunk-ksvdmrg0.js:68805-68866 placement
+//@ chunk-y2nrbm62.js:56527-56588 placement
 /**
  * 删除宿主墓碑文件（出错忽略）。
  */
 async function deleteHostTombstone(storageV5, short) {
   await storageV5.delete(hostTombstonePath(short)).catch(() => {});
 }
-//@ chunk-ksvdmrg0.js:68866-68942 placement
+//@ chunk-y2nrbm62.js:56588-56664 placement
 /**
  * 给错误对象补上存储错误码。
  */
@@ -1120,14 +1120,14 @@ function withStorageErrorCode(error, error_2) {
 }
 export {
   ensureDaemon,
-  waitForDaemonPing,
-  DAEMON_START_BUDGET_MS,
-  ensureTombstoneScope,
-  writeHostTombstone,
-  encodeHostLineage,
-  decodeHostLineage,
   canUseServiceDaemon,
   hostTombstonePath,
   deleteHostTombstone,
+  encodeHostLineage,
+  writeHostTombstone,
+  ensureTombstoneScope,
+  DAEMON_START_BUDGET_MS,
   waitForServiceDaemon,
+  waitForDaemonPing,
+  decodeHostLineage,
 };

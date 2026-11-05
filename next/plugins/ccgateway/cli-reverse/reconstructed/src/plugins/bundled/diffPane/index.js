@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：diff 面板插件注册与可用性。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6vnxsn99.js (1), chunk-wyqg6m3h.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-01kgd7xg.js (1), chunk-c7hntn0y.js (10)
  * attribution: placement 11
  */
 import { isRemoteSessionAvailable } from "../../../remote/remoteMode.js";
@@ -35,7 +35,7 @@ import { getGlobalConfig } from "../../../utils/config.js";
 import { diffPaneManifest } from "./manifest.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-6vnxsn99.js:62167-62273 placement
+//@ chunk-01kgd7xg.js:63315-63421 placement
 function isDiffPaneAvailable() {
   return (
     !isRemoteSessionAvailable() &&
@@ -44,11 +44,11 @@ function isDiffPaneAvailable() {
     isBundledModLive(CC_PLUGIN_DIFF)
   );
 }
-//@ chunk-wyqg6m3h.js:5213-5223 placement
+//@ chunk-c7hntn0y.js:5577-5587 placement
 var diffPaneModule = {};
-//@ chunk-wyqg6m3h.js:5223-5483 placement
+//@ chunk-c7hntn0y.js:5587-5847 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wyqg6m3h.js:5223", () => {
+deferInit("chunk-c7hntn0y.js:5587", () => {
   __export(diffPaneModule, {
     MOD_FOLDER: () => MOD_FOLDER,
     PLUGIN_DESCRIPTION: () => PLUGIN_DESCRIPTION,
@@ -64,7 +64,7 @@ deferInit("chunk-wyqg6m3h.js:5223", () => {
     registerPlugin: () => registerPlugin,
   });
 });
-//@ chunk-wyqg6m3h.js:64119-64346 placement (2.1.88 match: outputSchema, 0.36)
+//@ chunk-c7hntn0y.js:64483-64710 placement (2.1.88 match: outputSchema, 0.36)
 /**
  * 读取 diff 面板的已保存开关（缺省时把内置面板的旧偏好迁过来），开启时注册 diff 插件面板。与 ConfigTool 无关。
  */
@@ -89,22 +89,22 @@ async function carryPanelPreference(diffSidebarOpen) {
   }
   if ((storedOpen ?? diffSidebarOpen) === true) markPaneAsked(paneKey(CC_PLUGIN_DIFF, PANE_ID));
 }
-//@ chunk-wyqg6m3h.js:64346-64356 placement
+//@ chunk-c7hntn0y.js:64710-64720 placement
 var isOnByDefault = true;
-//@ chunk-wyqg6m3h.js:64356-64404 placement
+//@ chunk-c7hntn0y.js:64720-64768 placement
 var isPaneDrawable = () =>
   !getIsNonInteractiveSession() || (getSessionEntrypoint() === "claude-desktop" && isDesktopNonClaudecode());
-//@ chunk-wyqg6m3h.js:64404-64433 placement
+//@ chunk-c7hntn0y.js:64768-64797 placement
 var isAvailable = () => isPaneDrawable() && getFeatureValue_SESSION_PINNED(availabilityFlag(), isOnByDefault);
-//@ chunk-wyqg6m3h.js:64433-64461 placement
+//@ chunk-c7hntn0y.js:64797-64825 placement
 var isOfferedNow = () =>
   isPaneDrawable() && getFeatureValue_CACHED_MAY_BE_STALE(availabilityFlag(), isOnByDefault);
-//@ chunk-wyqg6m3h.js:64461-64475 placement
+//@ chunk-c7hntn0y.js:64825-64839 placement
 var MOD_FOLDER = "diff";
-//@ chunk-wyqg6m3h.js:64475-64607 placement
+//@ chunk-c7hntn0y.js:64839-64971 placement
 var PLUGIN_DESCRIPTION =
   "The diff panel as a plugin pane: /diff, the changed files and their hunks beside the transcript, refreshed as Claude edits";
-//@ chunk-wyqg6m3h.js:64607-64799 placement
+//@ chunk-c7hntn0y.js:64971-65163 placement
 function registerPlugin() {
   if (isOfferedNow())
     carryPanelPreference(getGlobalConfig().diffSidebarOpen).catch((error) =>

@@ -3,21 +3,23 @@
  *
  * 2.1.316 新增：提示 id。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jv3bzw2x.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hq5en695.js (9)
  * attribution: placement 9
  */
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 
-//@ chunk-jv3bzw2x.js:265-844 placement
+//@ chunk-hq5en695.js:265-902 placement
 /**
  * 内置提示（tip）的 id 列表。
  */
 var BUILT_IN_TIP_IDS = [
   "c4e-ultrareview",
   "claude-design-command",
+  "claude-security-plugin",
+  "claude-security-review-closing",
   "content-link-long-sessions",
   "default-permission-mode-config",
   "desktop-app",
@@ -44,18 +46,18 @@ var BUILT_IN_TIP_IDS = [
   "you-should-know-plugin",
   ...[],
 ];
-//@ chunk-jv3bzw2x.js:844-879 placement
+//@ chunk-hq5en695.js:902-937 placement
 /**
  * 判断 id 是否属于内置提示 id 列表。
  */
 function isBuiltInTipId(tipId) {
   return BUILT_IN_TIP_IDS.includes(tipId);
 }
-//@ chunk-jv3bzw2x.js:879-1193 placement
+//@ chunk-hq5en695.js:937-1251 placement
 /**
  * 记录提示已展示：本次启动序号写入 tipsHistory、累计展示次数加一，可记下由哪个命令触发；同一次启动重复调用不重复计数。
  */
-function recordTipShown(tipId, storageV5, advertisedCommand) {
+function recordTipShown(tipId, storageV5, TIP_ID) {
   let numStartups = getGlobalConfig().numStartups;
   saveGlobalConfig((config) => {
     let tipsHistory = config.tipsHistory ?? {};
@@ -71,10 +73,10 @@ function recordTipShown(tipId, storageV5, advertisedCommand) {
         ...tipLifetimeShownCounts,
         [tipId]: (tipLifetimeShownCounts[tipId] ?? 0) + 1,
       },
-      ...(advertisedCommand !== undefined && {
+      ...(TIP_ID !== undefined && {
         tipsHistoryByCommand: {
           ...config.tipsHistoryByCommand,
-          [advertisedCommand]: {
+          [TIP_ID]: {
             tipId,
             numStartups,
           },
@@ -83,9 +85,9 @@ function recordTipShown(tipId, storageV5, advertisedCommand) {
     };
   }, storageV5);
 }
-//@ chunk-jv3bzw2x.js:1193-1203 placement
+//@ chunk-hq5en695.js:1251-1261 placement
 var MAX_LAUNCHES_AGO = 100;
-//@ chunk-jv3bzw2x.js:1203-1441 placement
+//@ chunk-hq5en695.js:1261-1499 placement
 /**
  * 若某命令是由提示引导执行的，返回打点字段：via_tip、距提示展示过了几次启动（封顶）以及（内置提示的）tip_id。
  */
@@ -103,28 +105,28 @@ function getTipAttribution(name) {
     }),
   };
 }
-//@ chunk-jv3bzw2x.js:1441-1500 placement
+//@ chunk-hq5en695.js:1499-1557 placement
 /**
  * 读取某提示在全局配置里的累计展示次数。
  */
 function tipLifetimeShownCount(tipId) {
   return getGlobalConfig().tipLifetimeShownCounts?.[tipId] ?? 0;
 }
-//@ chunk-jv3bzw2x.js:1500-1564 placement
+//@ chunk-hq5en695.js:1557-1621 placement
 /**
  * 读取某插件建议的累计展示次数。
  */
 function pluginSuggestionShownCount(pluginId) {
   return getGlobalConfig().pluginSuggestionShownCounts?.[pluginId] ?? 0;
 }
-//@ chunk-jv3bzw2x.js:1651-1723 placement
+//@ chunk-hq5en695.js:1708-1780 placement
 /**
  * 读取某插件建议在发现页的累计展示次数。
  */
 function pluginSuggestionDiscoverShownCount(pluginId) {
   return getGlobalConfig().pluginSuggestionDiscoverShownCounts?.[pluginId] ?? 0;
 }
-//@ chunk-jv3bzw2x.js:1723-1959 placement
+//@ chunk-hq5en695.js:1780-2016 placement
 /**
  * 记录插件建议在发现页已展示（每个插件计数加一，全部已展示过时不再写）。
  */
@@ -145,10 +147,10 @@ function recordPluginSuggestionShown(pluginIds, storageV5) {
   }, storageV5);
 }
 export {
-  tipLifetimeShownCount,
   recordTipShown,
-  getTipAttribution,
+  tipLifetimeShownCount,
   pluginSuggestionShownCount,
+  getTipAttribution,
   pluginSuggestionDiscoverShownCount,
   recordPluginSuggestionShown,
 };

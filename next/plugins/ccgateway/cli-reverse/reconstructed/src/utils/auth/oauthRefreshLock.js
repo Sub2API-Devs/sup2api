@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：核对锁持有者（是否已被接管、记录是否匹配）；写入 OAuth 刷新锁的持有者记录等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (17)
  * attribution: placement 17
  */
 import { lstat, unlink, rmdir } from "fs/promises";
@@ -31,7 +31,7 @@ import { HostScoped } from "../hostScoped.js";
 import { createSignal } from "../signal.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:310460-310734 placement
+//@ chunk-exfmq47h.js:320707-320981 placement
 /**
  * 锁持有者记录的文件名（.oauth_refresh.lock.owner）。
  */
@@ -40,7 +40,7 @@ var TENGU_ZANY_BOOK;
 var LOCK_OWNER_FILE_NAME;
 var MAX_LOCK_OWNER_BYTES;
 var lockOwnerSchema;
-deferInit("chunk-aepeg2w5.js:310460", () => {
+deferInit("chunk-exfmq47h.js:320707", () => {
   TENGU_QUIET_MARTEN = "tengu_quiet_marten";
   TENGU_ZANY_BOOK = "tengu_zany_book";
   LOCK_OWNER_FILE_NAME = ".oauth_refresh.lock.owner";
@@ -56,7 +56,7 @@ deferInit("chunk-aepeg2w5.js:310460", () => {
     }),
   );
 });
-//@ chunk-aepeg2w5.js:310734-310809 placement
+//@ chunk-exfmq47h.js:320981-321056 placement
 /**
  * OAuth 锁相关开关读取器的状态类。
  */
@@ -68,22 +68,22 @@ class OAuthLockFlagReader {
     return reader_2;
   }
 }
-//@ chunk-aepeg2w5.js:310809-310823 placement
+//@ chunk-exfmq47h.js:321056-321070 placement
 /**
  * 全局唯一的 OAuth 锁开关读取器。
  */
 var oauthLockFlagReader; // deferred: uses OAuthLockFlagReader of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:310809", () => {
+deferInit("chunk-exfmq47h.js:321056", () => {
   oauthLockFlagReader = new OAuthLockFlagReader();
 });
-//@ chunk-aepeg2w5.js:310823-310860 placement
+//@ chunk-exfmq47h.js:321070-321107 placement
 /**
  * 注册 OAuth 锁开关读取器。
  */
 function setOAuthLockFlagReader(getFeatureValue_CACHED_MAY_BE_STALE) {
   return oauthLockFlagReader.register(getFeatureValue_CACHED_MAY_BE_STALE);
 }
-//@ chunk-aepeg2w5.js:310860-310925 placement
+//@ chunk-exfmq47h.js:321107-321172 placement
 /**
  * 读取指定开关；读取异常时视为开启。
  */
@@ -94,7 +94,7 @@ function isOAuthLockFlagOn(flagName) {
     return true;
   }
 }
-//@ chunk-aepeg2w5.js:310925-311401 placement
+//@ chunk-exfmq47h.js:321172-321649 placement
 /**
  * 写入 OAuth 刷新锁的持有者记录。
  */
@@ -127,7 +127,7 @@ async function writeLockOwnerRecord({ claudeDir, lockfilePath, legacyLockfilePat
     return null;
   }
 }
-//@ chunk-aepeg2w5.js:311401-311517 placement
+//@ chunk-exfmq47h.js:321649-321765 placement
 async function removeOwnLockOwnerRecord(claudeDir, lockBirthtimeMs) {
   let lockOwnerRecord = await readLockOwnerRecord(claudeDir);
   if (
@@ -138,7 +138,7 @@ async function removeOwnLockOwnerRecord(claudeDir, lockBirthtimeMs) {
     return;
   await removeLockOwnerRecord(claudeDir);
 }
-//@ chunk-aepeg2w5.js:311517-311752 placement
+//@ chunk-exfmq47h.js:321765-322000 placement
 async function checkLockStillOwned(options) {
   let outcome = await checkLockOwner(options);
   if (outcome === "taken_over" || outcome === "lock_changed" || outcome === "disabled") return outcome;
@@ -148,7 +148,7 @@ async function checkLockStillOwned(options) {
     return getErrnoCode(error) === "ENOENT" ? "lock_changed" : outcome;
   }
 }
-//@ chunk-aepeg2w5.js:311752-312876 placement
+//@ chunk-exfmq47h.js:322000-323125 placement
 /**
  * 核对锁持有者（是否已被接管、记录是否匹配）。
  */
@@ -204,14 +204,14 @@ async function checkLockOwner({ claudeDir, lockfilePath, legacyLockfilePath, wat
     return getErrnoCode(error) === "ENOENT" ? "lock_changed" : "probe_failed";
   }
 }
-//@ chunk-aepeg2w5.js:312876-312907 placement
+//@ chunk-exfmq47h.js:323125-323156 placement
 /**
  * 锁持有者记录文件的路径。
  */
 function lockOwnerRecordPath(claudeDir) {
   return join(claudeDir, LOCK_OWNER_FILE_NAME);
 }
-//@ chunk-aepeg2w5.js:312907-313066 placement
+//@ chunk-exfmq47h.js:323156-323315 placement
 async function readLockOwnerRecord(claudeDir) {
   let smallFileOrNull = await readSmallFileOrNull(lockOwnerRecordPath(claudeDir), MAX_LOCK_OWNER_BYTES);
   if (smallFileOrNull === null) return null;
@@ -224,7 +224,7 @@ async function readLockOwnerRecord(claudeDir) {
   let parseResult = lockOwnerSchema().safeParse(parsed);
   return parseResult.success ? parseResult.data : null;
 }
-//@ chunk-aepeg2w5.js:313066-313194 placement
+//@ chunk-exfmq47h.js:323315-323443 placement
 async function removeLockOwnerRecord(claudeDir) {
   try {
     await unlink(lockOwnerRecordPath(claudeDir));
@@ -233,7 +233,7 @@ async function removeLockOwnerRecord(claudeDir) {
       logForDebugging(`OAuth refresh lock owner record not removed: ${errorMessage(error)}`);
   }
 }
-//@ chunk-aepeg2w5.js:313194-313268 placement
+//@ chunk-exfmq47h.js:323443-323517 placement
 /**
  * 删除目录，ENOENT 时忽略。
  */
@@ -244,7 +244,7 @@ async function removeOrIgnoreMissing(dirPath) {
     if (getErrnoCode(error) !== "ENOENT") throw error;
   }
 }
-//@ chunk-aepeg2w5.js:313372-313833 placement
+//@ chunk-exfmq47h.js:323621-324082 placement
 /**
  * 文件系统操作的延迟结算器。
  */
@@ -292,15 +292,15 @@ class FsSettler {
     }
   }
 }
-//@ chunk-aepeg2w5.js:313833-313848 placement
+//@ chunk-exfmq47h.js:324082-324097 placement
 /**
  * 按目录保存的文件系统延迟结算器。
  */
 var fsSettlerByDir; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:313833", () => {
+deferInit("chunk-exfmq47h.js:324082", () => {
   fsSettlerByDir = new Map();
 });
-//@ chunk-aepeg2w5.js:313848-313945 placement
+//@ chunk-exfmq47h.js:324097-324194 placement
 /**
  * 取某目录的延迟结算器（按需创建）。
  */
@@ -315,12 +315,12 @@ function getFsSettler(dir) {
     fs: settler,
   };
 }
-//@ chunk-aepeg2w5.js:313945-313968 placement
+//@ chunk-exfmq47h.js:324194-324217 placement
 /**
  * 按宿主隔离的凭据变化信号。
  */
 var credentialSignalByHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:313945", () => {
+deferInit("chunk-exfmq47h.js:324194", () => {
   credentialSignalByHost = new HostScoped(() => createSignal());
 });
 export {
@@ -328,6 +328,6 @@ export {
   writeLockOwnerRecord,
   removeOwnLockOwnerRecord,
   checkLockStillOwned,
-  credentialSignalByHost,
   setOAuthLockFlagReader,
+  credentialSignalByHost,
 };

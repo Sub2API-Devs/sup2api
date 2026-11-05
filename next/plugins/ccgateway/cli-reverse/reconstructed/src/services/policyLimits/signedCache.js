@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。策略签名缓存（JWS 校验）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7t4fmt2f.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pcv9zvvv.js (9)
  * attribution: placement 9
  */
 import {
@@ -27,7 +27,7 @@ import { claudeCodeUserAgent } from "../../utils/http.js";
 import { TUNNEL_CREDENTIAL_EPOCH_HEADER, parseEpochNumber } from "../../utils/auth/credentialEpoch.js";
 import { hasSessionsTokenRequestId } from "../api/errorUtils.js";
 
-//@ chunk-7t4fmt2f.js:10080-10451 placement
+//@ chunk-pcv9zvvv.js:10082-10453 placement
 /**
  * 校验在线响应的 JWS 签名（valid/unsigned/invalid/no_answer）。
  */
@@ -52,7 +52,7 @@ function verifyLiveAnswerSignature({ kind, answer, account }) {
     return "invalid";
   }
 }
-//@ chunk-7t4fmt2f.js:10451-11479 placement
+//@ chunk-pcv9zvvv.js:10453-11481 placement
 async function verifySignedCache({
   kind,
   cachePath,
@@ -124,7 +124,7 @@ async function verifySignedCache({
     logForDebugging(`Signed cache: shadow check failed (${kind}) - ${errorMessage(error)}`);
   }
 }
-//@ chunk-7t4fmt2f.js:11479-11722 placement
+//@ chunk-pcv9zvvv.js:11481-11724 placement
 function evaluateTrustWithPin({ held, readOrgPin, verification }) {
   try {
     return evaluateCacheTrust({
@@ -142,7 +142,7 @@ function evaluateTrustWithPin({ held, readOrgPin, verification }) {
     };
   }
 }
-//@ chunk-7t4fmt2f.js:11722-12016 placement
+//@ chunk-pcv9zvvv.js:11724-12018 placement
 /**
  * 后台校验已存缓存的签名（忽略错误）。
  */
@@ -161,7 +161,7 @@ function verifyStoredCacheAsync({ kind, cachePath, bodySha, readStoredAccount, r
     }).catch(() => {});
   } catch {}
 }
-//@ chunk-7t4fmt2f.js:12016-12504 placement
+//@ chunk-pcv9zvvv.js:12018-12506 placement
 /**
  * 签名主体（aud/sub）与当前主体不同时上报。
  */
@@ -189,7 +189,7 @@ function logPrincipalChange({ kind, jws, trustedPrincipal, gate }) {
     logForDebugging(`signed-cache: live principal check failed: ${errorMessage(error)}`);
   }
 }
-//@ chunk-7t4fmt2f.js:12504-12558 placement
+//@ chunk-pcv9zvvv.js:12506-12560 placement
 /**
  * 禁用缓存的请求头（Cache-Control / Pragma）。
  */
@@ -197,14 +197,14 @@ var NO_CACHE_HEADERS = {
   "Cache-Control": "no-cache",
   Pragma: "no-cache",
 };
-//@ chunk-7t4fmt2f.js:12558-12593 placement
+//@ chunk-pcv9zvvv.js:12560-12595 placement
 /**
  * 拼出策略限制接口的完整地址。
  */
 function policyLimitsUrl(baseUrl) {
   return `${baseUrl}${POLICY_LIMITS_PATH}`;
 }
-//@ chunk-7t4fmt2f.js:12593-13420 placement
+//@ chunk-pcv9zvvv.js:12595-13422 placement
 async function fetchPolicyLimitsResponse(requestOptions) {
   let response = await axios_default
     .get(requestOptions.endpoint, {
@@ -256,17 +256,17 @@ async function fetchPolicyLimitsResponse(requestOptions) {
     tunnelCredentialEpoch,
   };
 }
-//@ chunk-7t4fmt2f.js:13420-13539 placement (2.1.88 match: isTransientNetworkError, 1)
+//@ chunk-pcv9zvvv.js:13422-13541 placement (2.1.88 match: isTransientNetworkError, 1)
 function isTransientNetworkError(error) {
   if (!axios_default.isAxiosError(error)) return;
   let rawEpochHeader = error.response?.headers?.[TUNNEL_CREDENTIAL_EPOCH_HEADER];
   return parseEpochNumber(typeof rawEpochHeader === "string" ? rawEpochHeader : undefined);
 }
 export {
-  fetchPolicyLimitsResponse,
-  isTransientNetworkError,
   verifyStoredCacheAsync,
   logPrincipalChange,
   verifyLiveAnswerSignature,
+  fetchPolicyLimitsResponse,
+  isTransientNetworkError,
   policyLimitsUrl,
 };

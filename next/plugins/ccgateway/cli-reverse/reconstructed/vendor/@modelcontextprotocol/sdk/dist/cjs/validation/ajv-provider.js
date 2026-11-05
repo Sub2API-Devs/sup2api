@@ -1,8 +1,8 @@
 /**
  * @modelcontextprotocol/sdk/dist/cjs/validation/ajv-provider.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/sdk@1.29.0
- * pieces: chunk-zykv69v4.js (4)
+ * pieces: chunk-efaj9q04.js (4)
  * attribution: esm-layout 2, esm-fingerprint 2
  */
 import { isPlainObject } from "../../esm/shared/protocol.js";
@@ -11,7 +11,7 @@ import { require_ajv } from "../../../../../ajv/dist/ajv.js";
 import { require_ajv_formats } from "../../../../../ajv-formats/dist/index.js";
 import { deferInit } from "../../../../../../runtime/deferred-init.js";
 
-//@ chunk-zykv69v4.js:27574-27722 esm-layout
+//@ chunk-efaj9q04.js:27577-27725 esm-layout
 function mergeCapabilities(mod, capabilities) {
   let result = {
     ...mod,
@@ -30,14 +30,14 @@ function mergeCapabilities(mod, capabilities) {
   }
   return result;
 }
-//@ chunk-zykv69v4.js:27722-27755 esm-layout
+//@ chunk-efaj9q04.js:27725-27758 esm-layout
 var import_ajv; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var import_ajv_formats;
-deferInit("chunk-zykv69v4.js:27722", () => {
+deferInit("chunk-efaj9q04.js:27725", () => {
   import_ajv = __toESM(require_ajv(), 1);
   import_ajv_formats = __toESM(require_ajv_formats(), 1);
 });
-//@ chunk-zykv69v4.js:27755-27876 esm-fingerprint
+//@ chunk-efaj9q04.js:27758-27879 esm-fingerprint
 function createDefaultAjvInstance() {
   let ajv = new import_ajv.default({
     strict: false,
@@ -48,7 +48,7 @@ function createDefaultAjvInstance() {
   import_ajv_formats.default(ajv);
   return ajv;
 }
-//@ chunk-zykv69v4.js:27876-28190 esm-fingerprint
+//@ chunk-efaj9q04.js:27879-28193 esm-fingerprint
 class AjvJsonSchemaValidator {
   constructor(ajv) {
     this._ajv = ajv ?? createDefaultAjvInstance();

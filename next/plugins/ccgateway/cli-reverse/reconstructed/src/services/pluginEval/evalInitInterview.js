@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：claude plugin eval init 的"访谈式"用例编写提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (5)
  * attribution: placement 5
  */
 import { EVALS_DIR_NAME, displayDir } from "./evalDir.js";
 import { escapeNonPrintable } from "../../utils/resultError.js";
 import { MOCK_TOOL_TEMPLATE } from "./mocks/mockResponders.js";
 
-//@ chunk-qchp9vrd.js:52603-67061 placement
+//@ chunk-af1hzzme.js:53943-68401 placement
 /**
  * 生成 eval init 的访谈系统提示词（约 14 KB）：指导 Claude 与用户一起编写评测用例。
  */
@@ -115,9 +115,9 @@ Defaults: \`target\`/\`focus\` = \`last_message\`, \`weight\` = 1, \`match\` = \
 
 If \`{source: file, path}\` points at an image (PNG/JPEG/GIF/WebP), an \`llm\` grader shows it to the judge *as an image* \u2014 the way to grade rendered slides, charts, or screenshots (write the rubric about what should be visible). Other binary artifacts (.pptx, .pdf, .xlsx) cannot be graded directly: have the case render them to an image or extract their text to a file, then grade that. \`regex\` over an image always fails (it never byte-matches image data) and says what to do instead \u2014 a presence check is pointed at the \`llm\` grader, an absence guard (\`not_contains\`/\`count:0\`) at a text rendering; over other binary files \`regex\` still matches ASCII sequences in them (a ZIP entry name, a \`%PDF\`/\`PK\` header \u2014 non-ASCII bytes decode to U+FFFD, so high-byte signatures cannot be matched), which is fine for existence checks.`;
 }
-//@ chunk-qchp9vrd.js:67061-67106 placement
+//@ chunk-af1hzzme.js:68401-68446 placement
 var EVAL_INIT_FIRST_MESSAGE = "Let's set up evals for this plugin.";
-//@ chunk-qchp9vrd.js:67106-67249 placement
+//@ chunk-af1hzzme.js:68446-68589 placement
 /**
  * 构建插件评测初始化访谈的提示词（访谈员说明、插件目录不可信时附加提醒）。
  */
@@ -136,7 +136,7 @@ ${buildEvalInitInterviewPrompt(prompt, caseDir, {
   audience: "parent",
 })}`;
 }
-//@ chunk-qchp9vrd.js:67249-67998 placement
+//@ chunk-af1hzzme.js:68589-69338 placement
 /**
  * 在会话内运行 init 因而未启动面试的说明。
  */
@@ -144,7 +144,7 @@ var UNTRUSTED_PLUGIN_NOTICE =
   "TRUST: this plugin directory is not yet trusted for `claude plugin eval` runs, and a pilot run started from this session cannot stop to ask. Before the first pilot run, tell the user plainly that piloting loads the plugin (its skills, hooks and MCP servers) and runs its eval suite on this machine as them, and ask whether they trust this plugin directory for that. Only on an explicit yes add `--trust-plugin` to the pilot commands below; on a no, or no answer, still write the case files but do not pilot them (say so in your summary). Never add `--trust-plugin` on your own judgement.";
 var NO_INTERVIEW_NOTE =
   "`claude plugin eval init` was run from inside a Claude Code session, so no separate interview was started (there is no terminal here to host one).";
-//@ chunk-qchp9vrd.js:67998-68294 placement
+//@ chunk-af1hzzme.js:69338-69634 placement
 function buildInterviewerInstructions(evalDirFlag) {
   return `You are the interviewer: conduct the interview below with the user now, in this session; write the case files yourself; and pilot each case with \`claude plugin eval .${evalDirFlag} --case <name> --no-publish\` (every run you start yourself keeps \`--no-publish\`). Begin at Step 0.`;
 }

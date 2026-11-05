@@ -3,9 +3,9 @@
  *
  * 询问自动启用 Chrome 集成的对话框（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p5jda2d9.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3dhdnrpg.js (3)
  * attribution: placement 3
  */
 import { init_react_production, useEffect, useRef } from "../../vendor/react/cjs/react.production.js";
@@ -14,7 +14,7 @@ import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import {
-  useInputRefusalWindow,
+  useRecentInputWithin,
   useRefusalTracker,
   useMountTime,
   settleKey,
@@ -33,13 +33,13 @@ import { Text, Box } from "../ink/components/Text.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 import { Dialog } from "./design-system/Dialog.js";
 
-//@ chunk-p5jda2d9.js:13742-13746 placement
+//@ chunk-3dhdnrpg.js:14890-14894 placement
 init_react_production();
-//@ chunk-p5jda2d9.js:13746-13806 placement
+//@ chunk-3dhdnrpg.js:14894-14954 placement
 function logChromeAutoEnablePromptShown() {
   logEvent("tengu_chrome_auto_enable_prompt_shown", {});
 }
-//@ chunk-p5jda2d9.js:13806-16263 placement
+//@ chunk-3dhdnrpg.js:14954-17411 placement
 /**
  * 询问是否自动启用 Chrome 集成的对话框
  */
@@ -56,18 +56,18 @@ function ChromeAutoEnableDialog(props) {
   } else showedLogDeps = $[0];
   useEffect(logChromeAutoEnablePromptShown, showedLogDeps);
   let answeredRef = useRef(false);
-  let inputRefusalWindow = useInputRefusalWindow(RECENT_INPUT_GUARD_MS);
+  let recentInput = useRecentInputWithin(RECENT_INPUT_GUARD_MS);
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
   let refuseInputCached;
-  if ($[1] !== inputRefusalWindow || $[2] !== noteRefused || $[3] !== refusedWithin) {
+  if ($[1] !== recentInput || $[2] !== noteRefused || $[3] !== refusedWithin) {
     refuseInputCached = function shouldRefuseInput() {
-      if (inputRefusalWindow() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
+      if (recentInput() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
         noteRefused();
         return true;
       }
       return false;
     };
-    $[1] = inputRefusalWindow;
+    $[1] = recentInput;
     $[2] = noteRefused;
     $[3] = refusedWithin;
     $[4] = refuseInputCached;

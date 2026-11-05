@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/__remote-workflow 命令：仅在 CCR 远程会话中运行环境里下发的工作流脚本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cg8zacmh.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-dyfxhj5f.js (2)
  * attribution: placement 2
  */
 import {
@@ -17,14 +17,14 @@ import { env } from "../../utils/env.js";
 import { REMOTE_WORKFLOW_ENV, CLAUDE_REMOTE_WORKFLOW_ARGS } from "../../services/workflow/loadWorkflows.js";
 import { MAX_SCRIPT_FILE_BYTES } from "../../services/workflow/scriptFile.js";
 
-//@ chunk-cg8zacmh.js:12892-12943 placement
+//@ chunk-dyfxhj5f.js:14096-14147 placement
 function remoteWorkflowTextResult(kind, message) {
   return {
     type: "text",
     value: remoteWorkflowErrorLine(kind, message),
   };
 }
-//@ chunk-cg8zacmh.js:12943-13785 placement
+//@ chunk-dyfxhj5f.js:14147-14989 placement
 /**
  * /__remote-workflow 命令：仅在 CCR 远程会话中运行环境里下发的工作流脚本。
  */

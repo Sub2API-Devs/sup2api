@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/sdk-logs/build/src/LogRecordImpl.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-logs@0.208.0
- * pieces: chunk-aepeg2w5.js (4)
+ * pieces: chunk-exfmq47h.js (4)
  * attribution: esm-layout 3, esm-fingerprint 1
  */
 import { __toESM } from "../../../../../runtime/bun-runtime.js";
@@ -10,15 +10,15 @@ import { require_resources } from "../../../resources/build/src/index.js";
 import { require_core } from "../../../core/build/src/index.js";
 import { require_api } from "../../../api/build/src/index.js";
 
-//@ chunk-aepeg2w5.js:650353-650382 esm-layout
+//@ chunk-exfmq47h.js:662959-662988 esm-layout
 var import_resources = __toESM(require_resources());
 var import_core = __toESM(require_core());
-//@ chunk-aepeg2w5.js:650382-650398 esm-layout
+//@ chunk-exfmq47h.js:662988-663004 esm-layout
 var import_api = __toESM(require_api());
-//@ chunk-aepeg2w5.js:650398-650426 esm-layout
+//@ chunk-exfmq47h.js:663004-663032 esm-layout
 var import_api_2 = __toESM(require_api());
 var import_core_2 = __toESM(require_core());
-//@ chunk-aepeg2w5.js:650426-653206 esm-fingerprint
+//@ chunk-exfmq47h.js:663032-665812 esm-fingerprint
 class LogRecordImpl {
   hrTime;
   hrTimeObserved;

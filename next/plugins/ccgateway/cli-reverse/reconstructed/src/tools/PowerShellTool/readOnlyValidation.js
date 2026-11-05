@@ -3,9 +3,9 @@
  *
  * PowerShell 只读判定：CMDLET_ALLOWLIST、别名规范化、git/docker/dotnet 只读检查、变量写入/ActionPreference 参数检测；混入 git 安全配置与代码执行参数检测
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/readOnlyValidation.ts
- * pieces: chunk-s67vc0kc.js (54)
+ * pieces: chunk-e0skvs33.js (54)
  * attribution: sole-consumer 1, placement 11, layout 26, fingerprint 9, file-local 6, callgraph-witnessed 1
  */
 import { join } from "path";
@@ -52,7 +52,7 @@ import {
 } from "../../utils/shell/readOnlyCommandValidation.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s67vc0kc.js:2386-2474 sole-consumer
+//@ chunk-e0skvs33.js:2387-2475 sole-consumer
 /**
  * 判断参数是否为 ActionPreference 通用参数的别名或缩写。
  */
@@ -63,17 +63,17 @@ function isActionParamAlias(paramName) {
     COMMON_ACTION_PARAMS.some((alias) => alias.startsWith(paramName))
   );
 }
-//@ chunk-s67vc0kc.js:2474-2577 placement (2.1.88 match: checkTokenBudget, 0.447)
+//@ chunk-e0skvs33.js:2475-2578 placement (2.1.88 match: checkTokenBudget, 0.447)
 /**
  * ActionPreference 取值（silentlycontinue/stop/continue/ignore 及数字）。
  */
 var POWERSHELL_ACTION_PARAMS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var POWERSHELL_ACTION_VALUES;
-deferInit("chunk-s67vc0kc.js:2474", () => {
+deferInit("chunk-e0skvs33.js:2475", () => {
   POWERSHELL_ACTION_PARAMS = new Set([...COMMON_ACTION_PARAMS, ...COMMON_ACTION_PARAM_ALIASES]);
   POWERSHELL_ACTION_VALUES = new Set(["silentlycontinue", "0", "stop", "1", "continue", "2", "ignore", "4"]);
 });
-//@ chunk-s67vc0kc.js:2577-2665 placement
+//@ chunk-e0skvs33.js:2578-2666 placement
 /**
  * 判断参数是否为变量相关通用参数的别名或缩写。
  */
@@ -84,7 +84,7 @@ function isVariableParamAlias(paramName) {
     COMMON_VARIABLE_PARAMS.some((param) => param.startsWith(paramName))
   );
 }
-//@ chunk-s67vc0kc.js:2665-3583 placement
+//@ chunk-e0skvs33.js:2666-3584 placement
 /**
  * PowerShell 影响命令行为的偏好变量集合（ErrorActionPreference、VerbosePreference 等）。
  */
@@ -92,7 +92,7 @@ var POWERSHELL_SCOPE_NAMES; // deferred: has load-time effects after a deferred 
 var PS_PREFERENCE_VARIABLES;
 var DOCKER_DANGEROUS_LONG_FLAGS;
 var filtered;
-deferInit("chunk-s67vc0kc.js:2665", () => {
+deferInit("chunk-e0skvs33.js:2666", () => {
   POWERSHELL_SCOPE_NAMES = new Set(["global", "script", "local", "private", "variable"]);
   PS_PREFERENCE_VARIABLES = new Set([
     "psdefaultparametervalues",
@@ -139,7 +139,7 @@ deferInit("chunk-s67vc0kc.js:2665", () => {
   ];
   filtered = DOCKER_DANGEROUS_LONG_FLAGS.filter((flag) => flag !== "-progressaction");
 });
-//@ chunk-s67vc0kc.js:3583-3683 placement
+//@ chunk-e0skvs33.js:3584-3684 placement
 function uniquePrefixMatch(prefix, candidates) {
   let match = null;
   for (let candidate of candidates)
@@ -149,7 +149,7 @@ function uniquePrefixMatch(prefix, candidates) {
     }
   return match;
 }
-//@ chunk-s67vc0kc.js:3683-3802 placement
+//@ chunk-e0skvs33.js:3684-3803 placement
 function matchesAbbreviatedParam(paramName, flags) {
   if (paramName.length < 2) return false;
   for (let flagList of [DOCKER_DANGEROUS_LONG_FLAGS, filtered]) {
@@ -158,17 +158,17 @@ function matchesAbbreviatedParam(paramName, flags) {
   }
   return false;
 }
-//@ chunk-s67vc0kc.js:3802-3848 placement
+//@ chunk-e0skvs33.js:3803-3849 placement
 /**
  * 通用参数别名集合（含 -ea/-wa/-p），在这些参数上不允许缩写匹配。
  */
 var PS_COMMON_PARAM_ALIASES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var isAbbrevAllowed;
-deferInit("chunk-s67vc0kc.js:3802", () => {
+deferInit("chunk-e0skvs33.js:3803", () => {
   PS_COMMON_PARAM_ALIASES = new Set([...COMMON_VARIABLE_PARAM_ALIASES, "-ea", "-wa", "-p"]);
   isAbbrevAllowed = false;
 });
-//@ chunk-s67vc0kc.js:3848-3925 placement
+//@ chunk-e0skvs33.js:3849-3926 placement
 /**
  * 判断参数是否匹配给定通用参数别名或缩写前缀。
  */
@@ -176,34 +176,34 @@ function matchesCommonParam(paramName, aliases, params, isAbbrevAllowed) {
   if (!isAbbrevAllowed && PS_COMMON_PARAM_ALIASES.has(paramName)) return false;
   return aliases.includes(paramName) || matchesAbbreviatedParam(paramName, params);
 }
-//@ chunk-s67vc0kc.js:3925-3963 placement
+//@ chunk-e0skvs33.js:3926-3964 placement
 /**
  * 通用参数判定封装（带缩写开关）。
  */
 function isCommonParam(paramName, aliases, params) {
   return matchesCommonParam(paramName, aliases, params, isAbbrevAllowed);
 }
-//@ chunk-s67vc0kc.js:3963-3993 placement
+//@ chunk-e0skvs33.js:3964-3994 placement
 /**
  * 判断是否为变量相关通用参数。
  */
 function isVariableParam(paramName) {
   return isCommonParam(paramName, COMMON_VARIABLE_PARAM_ALIASES, COMMON_VARIABLE_PARAMS);
 }
-//@ chunk-s67vc0kc.js:3993-4023 placement
+//@ chunk-e0skvs33.js:3994-4024 placement
 /**
  * 判断是否为 ActionPreference 类通用参数。
  */
 function isActionParam(paramName) {
   return isCommonParam(paramName, COMMON_ACTION_PARAM_ALIASES, COMMON_ACTION_PARAMS);
 }
-//@ chunk-s67vc0kc.js:4023-5032 placement
+//@ chunk-e0skvs33.js:4024-5033 placement
 /**
  * 安全动词前缀列表（get/set/copy/move 等）。
  */
 var SAFE_POWERSHELL_VERBS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SAFE_VERB_PREFIXES;
-deferInit("chunk-s67vc0kc.js:4023", () => {
+deferInit("chunk-e0skvs33.js:4024", () => {
   SAFE_POWERSHELL_VERBS = new Set([
     "add",
     "clear",
@@ -312,7 +312,7 @@ deferInit("chunk-s67vc0kc.js:4023", () => {
   ]);
   SAFE_VERB_PREFIXES = ["-variable", "-sessionvariable", "-responseheadersvariable", "-statuscodevariable"];
 });
-//@ chunk-s67vc0kc.js:5032-5106 layout
+//@ chunk-e0skvs33.js:5033-5107 layout
 /**
  * 判断动词缩写是否匹配安全动词（至少 3 个字母）。
  */
@@ -320,12 +320,12 @@ function isSafeVerbAbbreviation(prefix) {
   if (prefix.length < 3) return false;
   return SAFE_VERB_PREFIXES.some((safeVerb) => safeVerb.startsWith(prefix));
 }
-//@ chunk-s67vc0kc.js:5106-5156 fingerprint (2.1.88 match: DOTNET_READ_ONLY_FLAGS, 0.7)
+//@ chunk-e0skvs33.js:5107-5157 fingerprint (2.1.88 match: DOTNET_READ_ONLY_FLAGS, 0.7)
 var DOTNET_READ_ONLY_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s67vc0kc.js:5106", () => {
+deferInit("chunk-e0skvs33.js:5107", () => {
   DOTNET_READ_ONLY_FLAGS = new Set(["--list-runtimes", "--list-sdks"]);
 });
-//@ chunk-s67vc0kc.js:5156-5548 fingerprint (2.1.88 match: argLeaksValue, 1)
+//@ chunk-e0skvs33.js:5157-5549 fingerprint (2.1.88 match: argLeaksValue, 1)
 /**
  * 参数是否可能泄露/展开值：非字符串常量参数含 $ ( @ { [，或参数绑定的子元素不是字符串常量，或冒号绑定值含表达式。
  */
@@ -351,7 +351,7 @@ function argLeaksValue(_cmd, element) {
   }
   return false;
 }
-//@ chunk-s67vc0kc.js:5548-12203 fingerprint (2.1.88 match: CMDLET_ALLOWLIST, 0.943)
+//@ chunk-e0skvs33.js:5549-12204 fingerprint (2.1.88 match: CMDLET_ALLOWLIST, 0.943)
 /**
  * PowerShell 只读 cmdlet 白名单 CMDLET_ALLOWLIST（Get-ChildItem/Get-Content/Select-String/Get-Process/Test-Path/… 以及 git/gh/docker/dotnet 外部命令），每项列安全参数与额外危险回调；还有安全输出命令、管道尾部格式化命令、默认 PATHEXT 扩展名表。
  */
@@ -361,7 +361,7 @@ var PIPELINE_TAIL_CMDLETS;
 var SAFE_EXTERNAL_EXES;
 var EXTERNAL_READONLY_COMMANDS;
 var DEFAULT_PATHEXT_EXTENSIONS;
-deferInit("chunk-s67vc0kc.js:5548", () => {
+deferInit("chunk-e0skvs33.js:5549", () => {
   CMDLET_ALLOWLIST = Object.assign(Object.create(null), {
     "get-childitem": {
       safeFlags: [
@@ -752,7 +752,7 @@ deferInit("chunk-s67vc0kc.js:5548", () => {
     ".cpl",
   ];
 });
-//@ chunk-s67vc0kc.js:12203-12717 layout
+//@ chunk-e0skvs33.js:12204-12718 layout
 /**
  * 按当前 PATHEXT 缓存可执行扩展名列表与匹配正则（最多 64 项，扩展名≤16 字符）。
  */
@@ -786,20 +786,20 @@ class PathextCache {
     return regex;
   }
 }
-//@ chunk-s67vc0kc.js:12717-12729 layout
+//@ chunk-e0skvs33.js:12718-12730 layout
 var pathextCache; // deferred: uses PathextCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s67vc0kc.js:12717", () => {
+deferInit("chunk-e0skvs33.js:12718", () => {
   pathextCache = new PathextCache();
 });
-//@ chunk-s67vc0kc.js:12729-12759 layout
+//@ chunk-e0skvs33.js:12730-12760 layout
 function getPathextList() {
   return pathextCache.list();
 }
-//@ chunk-s67vc0kc.js:12759-12790 layout
+//@ chunk-e0skvs33.js:12760-12791 layout
 function getPathextRegex() {
   return pathextCache.regex();
 }
-//@ chunk-s67vc0kc.js:12790-12879 layout
+//@ chunk-e0skvs33.js:12791-12880 layout
 /**
  * 输出重定向/写入目标的主名集合，用于检测"先写 ./git.exe 再运行 git"的 cwd 优先解析遮蔽。
  */
@@ -808,7 +808,7 @@ function baseStems(command) {
   stems.delete("");
   return Array.from(stems);
 }
-//@ chunk-s67vc0kc.js:12879-13044 layout
+//@ chunk-e0skvs33.js:12880-13046 layout
 /**
  * 对路径的多种规范拼写求末段名（base）及去掉可执行扩展名后的主名（stem）。
  */
@@ -832,7 +832,7 @@ function commandBaseVariants(command) {
   }
   return variants;
 }
-//@ chunk-s67vc0kc.js:13044-13326 layout
+//@ chunk-e0skvs33.js:13046-13328 layout
 function commandBaseName(command, normalize) {
   let replaced = normalize(command).replace(/^[A-Za-z]:(?![\\/])/, "");
   let segments = [];
@@ -848,7 +848,7 @@ function commandBaseName(command, normalize) {
   }
   return (segments.at(-1) ?? "").toLowerCase();
 }
-//@ chunk-s67vc0kc.js:13326-13582 layout
+//@ chunk-e0skvs33.js:13328-13584 layout
 /**
  * Windows 上当前目录中是否有与命令同名（含 PATHEXT 扩展）的文件，返回文件名。
  */
@@ -869,9 +869,9 @@ function findCwdShadowingExecutable(command) {
     }
   return null;
 }
-//@ chunk-s67vc0kc.js:13582-13612 layout
+//@ chunk-e0skvs33.js:13584-13614 layout
 var EXECUTABLE_EXT_RE = /\.(exe|cmd|bat|com)$/;
-//@ chunk-s67vc0kc.js:13612-13757 file-local
+//@ chunk-e0skvs33.js:13614-13759 file-local
 /**
  * 把 PowerShell 命令名规范化：小写、去 .exe/.cmd/.bat/.com，别名（ls/cat/rm/cd…）解析为规范 cmdlet 名。
  */
@@ -882,7 +882,7 @@ function resolveToCanonical(name) {
   if (alias) return alias.toLowerCase();
   return lower;
 }
-//@ chunk-s67vc0kc.js:13757-14013 fingerprint (2.1.88 match: isCwdChangingCmdlet, 0.734)
+//@ chunk-e0skvs33.js:13759-14015 fingerprint (2.1.88 match: isCwdChangingCmdlet, 0.734)
 /**
  * 是否改变工作目录：Set-Location/Push-Location/Pop-Location/New-PSDrive、cd..、cd\、盘符切换，Windows 上还有 ndr/mount。
  */
@@ -899,7 +899,7 @@ function isCwdChangingCmdlet(name) {
     (getPlatform() === "windows" && (canonical === "ndr" || canonical === "mount"))
   );
 }
-//@ chunk-s67vc0kc.js:14013-14058 file-local
+//@ chunk-e0skvs33.js:14015-14060 file-local
 /**
  * 无参数时视为安全的输出命令（Out-Null）。
  */
@@ -907,7 +907,7 @@ function isSafeOutputCommand(name) {
   let canonical = resolveToCanonical(name);
   return SAFE_OUTPUT_CMDLETS.has(canonical);
 }
-//@ chunk-s67vc0kc.js:14058-14132 file-local
+//@ chunk-e0skvs33.js:14060-14134 file-local
 /**
  * 管道尾部的格式化/筛选命令（Format-*\/Select-Object/Sort-Object/Where-Object/Out-String…）且参数在白名单内。
  */
@@ -916,7 +916,7 @@ function isAllowlistedPipelineTail(cmd, originalCommand) {
   if (!PIPELINE_TAIL_CMDLETS.has(canonical)) return false;
   return isAllowlistedCommand(cmd, originalCommand);
 }
-//@ chunk-s67vc0kc.js:14132-14300 fingerprint (2.1.88 match: isProvablySafeStatement, 1)
+//@ chunk-e0skvs33.js:14134-14302 fingerprint (2.1.88 match: isProvablySafeStatement, 1)
 /**
  * 语句是否可证明安全：PipelineAst 且所有元素都是 CommandAst。
  */
@@ -926,7 +926,7 @@ function isProvablySafeStatement(stmt) {
   for (let cmd of stmt.commands) if (cmd.elementType !== "CommandAst") return false;
   return true;
 }
-//@ chunk-s67vc0kc.js:14300-14398 file-local
+//@ chunk-e0skvs33.js:14302-14400 file-local
 /**
  * 在只读白名单中查找命令（先原名，再规范化名）。
  */
@@ -938,7 +938,7 @@ function lookupAllowlist(name) {
   if (canonical !== lower) return CMDLET_ALLOWLIST[canonical];
   return;
 }
-//@ chunk-s67vc0kc.js:14398-14692 file-local
+//@ chunk-e0skvs33.js:14400-14694 file-local
 /**
  * 不解析就能发现的安全隐患：$( 子表达式、@splat、.Method( 调用、$var= 赋值、--% 停止解析、UNC \ 或 //、:: 静态成员。
  */
@@ -954,7 +954,7 @@ function hasSyncSecurityConcerns(command) {
   if (/::/.test(trimmed)) return true;
   return false;
 }
-//@ chunk-s67vc0kc.js:14692-15510 fingerprint (2.1.88 match: isReadOnlyCommand, 1)
+//@ chunk-e0skvs33.js:14694-15512 fingerprint (2.1.88 match: isReadOnlyCommand, 1)
 /**
  * PowerShell 只读判定：解析成功、无脚本块/子表达式/可展开字符串/splatting/成员调用/赋值/停止解析；复合命令中不能有改目录；重定向只能到 null；每段管道首命令在白名单、后续命令是白名单或无参数安全输出；不能有嵌套命令。
  */
@@ -1001,13 +1001,13 @@ function isReadOnlyCommand(command, parsed) {
   }
   return true;
 }
-//@ chunk-s67vc0kc.js:15510-15581 layout
+//@ chunk-e0skvs33.js:15512-15583 layout
 /**
  * 去掉参数名里的 - 与引号（保留首个短选项写法）。
  */
 var stripDashQuotes = (text, exact = false) =>
   exact && text.length > 1 && text[1] === "-" ? text : text.replace(/(?!^)[-']/g, "");
-//@ chunk-s67vc0kc.js:15581-16263 layout
+//@ chunk-e0skvs33.js:15583-16265 layout
 /**
  * 参数里是否有 -ErrorAction/-WarningAction 等取值不在安全集合（如 Ignore/SilentlyContinue 之外的危险值）的情况，支持缩写与冒号绑定。
  */
@@ -1053,7 +1053,7 @@ function hasNonDefaultActionPreference(args, elementTypes, mode = "full") {
   }
   return false;
 }
-//@ chunk-s67vc0kc.js:16263-17321 layout
+//@ chunk-e0skvs33.js:16265-17323 layout
 /**
  * 参数里是否有写变量的通用参数（-OutVariable/-ErrorVariable/…-Variable），或其值含 $、反引号、here-string、作用域前缀不合法等。
  */
@@ -1110,13 +1110,13 @@ function hasVariableWritingParam(args, elementTypes, mode = "full") {
   }
   return false;
 }
-//@ chunk-s67vc0kc.js:17321-17426 layout
+//@ chunk-e0skvs33.js:17323-17428 layout
 function needsNativeQuoting(text) {
   return (
     text.includes('"') || (/[\s\u0085\u180e]/.test(text) && (text.match(/\\+$/)?.[0].length ?? 0) % 2 === 1)
   );
 }
-//@ chunk-s67vc0kc.js:17426-17717 layout
+//@ chunk-e0skvs33.js:17428-17719 layout
 function parseColonBoundParam(paramText) {
   if (paramText.length === 0 || !(PS_TOKENIZER_DASH_CHARS.has(paramText[0]) || paramText[0] === "/"))
     return null;
@@ -1132,7 +1132,7 @@ function parseColonBoundParam(paramText) {
     isHereString,
   };
 }
-//@ chunk-s67vc0kc.js:17717-18021 layout
+//@ chunk-e0skvs33.js:17719-18025 layout
 /**
  * 判断参数是否存在原生程序引号传递隐患：原文或去掉续行后的文本命中检查，或冒号绑定参数（-Param:value）的值在各种解析/规范化形式下命中检查；here-string 一律视为有隐患。
  */
@@ -1166,9 +1166,9 @@ function hasNativeQuotingHazard(arg, checkColonBound = true) {
   }
   return false;
 }
-//@ chunk-s67vc0kc.js:18021-18047 layout
+//@ chunk-e0skvs33.js:18025-18051 layout
 var TENGU_HAZY_PEACH = "tengu_hazy_peach";
-//@ chunk-s67vc0kc.js:18047-18086 layout
+//@ chunk-e0skvs33.js:18051-18090 layout
 /**
  * 开关 tengu_hazy_peach：命令名按扩展空白集（含 U+0085/U+180E）切分。
  */
@@ -1177,7 +1177,7 @@ function isHazyPeachFlagOn() {
     safe: true,
   });
 }
-//@ chunk-s67vc0kc.js:18086-20051 callgraph-witnessed (2.1.88 match: isAllowlistedCommand, 0.662)
+//@ chunk-e0skvs33.js:18090-20055 callgraph-witnessed (2.1.88 match: isAllowlistedCommand, 0.662)
 /**
  * 单个 PowerShell 命令是否在只读白名单内：外部程序仅允许 where.exe；查白名单配置、regex、额外危险回调；参数必须是字符串常量或参数（值不可展开）；再按配置校验参数，git/docker/dotnet 走专用检查。
  */
@@ -1276,7 +1276,7 @@ function isAllowlistedCommand(cmd, originalCommand) {
   }
   return true;
 }
-//@ chunk-s67vc0kc.js:20051-20256 fingerprint (2.1.88 match: isExternalCommandSafe, 1)
+//@ chunk-e0skvs33.js:20055-20260 fingerprint (2.1.88 match: isExternalCommandSafe, 1)
 /**
  * 外部命令（git/gh/docker/dotnet）只读判定入口。
  */
@@ -1296,11 +1296,11 @@ function isExternalCommandSafe(command, args) {
       return false;
   }
 }
-//@ chunk-s67vc0kc.js:20256-20536 layout (2.1.88 match: GIT_GLOBAL_FLAGS_WITH_VALUES, 0.832)
+//@ chunk-e0skvs33.js:20260-20540 layout (2.1.88 match: GIT_GLOBAL_FLAGS_WITH_VALUES, 0.832)
 var GIT_UNSAFE_GLOBAL_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var GIT_GLOBAL_FLAGS_WITH_VALUE;
 var GIT_CONFIG_FLAGS;
-deferInit("chunk-s67vc0kc.js:20256", () => {
+deferInit("chunk-e0skvs33.js:20260", () => {
   GIT_UNSAFE_GLOBAL_FLAGS = new Set([
     "-c",
     "-C",
@@ -1327,14 +1327,14 @@ deferInit("chunk-s67vc0kc.js:20256", () => {
   ]);
   GIT_CONFIG_FLAGS = ["-c", "-C"];
 });
-//@ chunk-s67vc0kc.js:20536-20583 layout
+//@ chunk-e0skvs33.js:20540-20587 layout
 /**
  * 判断是否为带值的 git 全局选项。
  */
 function isValueTakingGitFlag(flag) {
   return !flag.includes("=") && GIT_GLOBAL_FLAGS_WITH_VALUE.has(flag);
 }
-//@ chunk-s67vc0kc.js:20583-20807 layout
+//@ chunk-e0skvs33.js:20587-20811 layout
 function argsTokenShapeMatch(rawArgs, normalizedArgs) {
   for (let idx = 0; idx < rawArgs.length; idx++) {
     let rawArg = rawArgs[idx] ?? "";
@@ -1351,20 +1351,20 @@ function argsTokenShapeMatch(rawArgs, normalizedArgs) {
   }
   return true;
 }
-//@ chunk-s67vc0kc.js:20807-20878 layout
+//@ chunk-e0skvs33.js:20811-20882 layout
 /**
  * 反转义参数并统一 Unicode 破折号，得到参数列表。
  */
 function normalizePsArgs(args) {
   return args.map((arg) => normalizeUnicodeDashes(unescapePsDoubleQuoted(arg.replace(/`[\r\n]+\s*/g, ""))));
 }
-//@ chunk-s67vc0kc.js:20878-20943 layout
+//@ chunk-e0skvs33.js:20882-20947 layout
 function isGitSafePS(args) {
   let normalizedArgs = normalizePsArgs(args);
   if (!argsTokenShapeMatch(args, normalizedArgs)) return false;
   return isGitSafe(args) && isGitSafe(normalizedArgs);
 }
-//@ chunk-s67vc0kc.js:20943-21780 fingerprint (2.1.88 match: isGitSafe, 0.873)
+//@ chunk-e0skvs33.js:20947-21784 fingerprint (2.1.88 match: isGitSafe, 0.873)
 /**
  * git 参数只读判定：Windows 引号风险、$ 变量、危险全局选项（-c/-C/--git-dir…）、按 GIT_READ_ONLY_COMMANDS 查子命令并校验选项，ls-remote 只允许选项。
  */
@@ -1423,7 +1423,7 @@ function isGitSafe(args) {
     commandName: "git",
   });
 }
-//@ chunk-s67vc0kc.js:21780-21845 layout
+//@ chunk-e0skvs33.js:21784-21849 layout
 /**
  * 判断两种拼写下的参数结构一致且没有安全顾虑。
  */
@@ -1432,17 +1432,17 @@ function hasMismatchedArgs(args) {
   if (!argsTokenShapeMatch(args, normalizedArgs)) return false;
   return alwaysSafe(args) && alwaysSafe(normalizedArgs);
 }
-//@ chunk-s67vc0kc.js:21845-21868 layout
+//@ chunk-e0skvs33.js:21849-21872 layout
 /**
  * 恒为 true 的占位判断（保留扩展点）。
  */
 function alwaysSafe(args) {
   return false;
 }
-//@ chunk-s67vc0kc.js:21868-21985 layout
+//@ chunk-e0skvs33.js:21872-21989 layout
 var DOCKER_DANGEROUS_SHORT_FLAGS; // deferred: uses GH_READ_ONLY_COMMANDS (../../utils/shell/readOnlyCommandValidation.js) of its import cycle while loading; runs once the cycle is complete
 var DOCKER_DANGEROUS_LONG_FLAGS_2;
-deferInit("chunk-s67vc0kc.js:21868", () => {
+deferInit("chunk-e0skvs33.js:21872", () => {
   DOCKER_DANGEROUS_SHORT_FLAGS = new Set(
     DOCKER_DANGEROUS_FLAGS.filter((flag) => /^-[^-]$/.test(flag)).map((flag) => flag[1]),
   );
@@ -1451,7 +1451,7 @@ deferInit("chunk-s67vc0kc.js:21868", () => {
     "--tls",
   ];
 });
-//@ chunk-s67vc0kc.js:21985-22567 fingerprint (2.1.88 match: isDockerSafe, 1)
+//@ chunk-e0skvs33.js:21989-22571 fingerprint (2.1.88 match: isDockerSafe, 1)
 /**
  * docker 参数只读判定：无变量、无危险全局选项（-H/--host/--tls…），子命令在只读列表或配置内并校验选项。
  */
@@ -1485,7 +1485,7 @@ function isDockerSafe(args) {
     return false;
   return validateFlags(flagArgs, 0, config);
 }
-//@ chunk-s67vc0kc.js:22567-22668 file-local
+//@ chunk-e0skvs33.js:22571-22672 file-local
 /**
  * dotnet 只读：只允许 --list-runtimes / --list-sdks。
  */
@@ -1495,19 +1495,19 @@ function isDotnetSafe(args) {
   return true;
 }
 export {
-  isAllowlistedCommand,
-  resolveToCanonical,
-  hasSyncSecurityConcerns,
-  isReadOnlyCommand,
   isHazyPeachFlagOn,
+  resolveToCanonical,
   isSafeOutputCommand,
   isCwdChangingCmdlet,
   baseStems,
   commandBaseVariants,
   argLeaksValue,
+  isReadOnlyCommand,
   SAFE_POWERSHELL_VERBS,
   hasVariableWritingParam,
   hasNonDefaultActionPreference,
   isProvablySafeStatement,
+  isAllowlistedCommand,
   isAllowlistedPipelineTail,
+  hasSyncSecurityConcerns,
 };

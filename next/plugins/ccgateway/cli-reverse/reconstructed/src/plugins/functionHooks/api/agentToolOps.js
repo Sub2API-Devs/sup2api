@@ -3,9 +3,9 @@
  *
  * 函数钩子 $ 接口：agent/tool/mcp/ui.log 操作（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (27)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (27)
  * attribution: placement 27
  */
 import { AGENT_TOOL_NAME } from "../../../tools/AgentTool/constants.js";
@@ -45,12 +45,12 @@ import { flagValueApi, coreNotAnOperation } from "./interfaces.js";
 import { CORE_ORIGIN } from "../eventPatterns.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:289524-289533 placement
+//@ chunk-j8f885h1.js:270716-270725 placement
 /**
  * 5
  */
 var MAX_QUESTION_OPTIONS = 5;
-//@ chunk-4121qate.js:289533-289814 placement
+//@ chunk-j8f885h1.js:270725-271006 placement
 var buildAgentToolInput = (args, prompt) => ({
   tool: AGENT_TOOL_NAME,
   prompt,
@@ -69,7 +69,7 @@ var buildAgentToolInput = (args, prompt) => ({
     cwd: args.cwd,
   }),
 });
-//@ chunk-4121qate.js:289814-290039 placement
+//@ chunk-j8f885h1.js:271006-271231 placement
 var PLUGIN_AGENT_FIELDS = [
   "name",
   "description",
@@ -90,7 +90,7 @@ var PLUGIN_AGENT_FIELDS = [
   "omitClaudeMd",
   "isolation",
 ];
-//@ chunk-4121qate.js:290039-290178 placement
+//@ chunk-j8f885h1.js:271231-271370 placement
 var pickAgentDefinitionFields = (value) =>
   isPlainObject(value)
     ? Object.fromEntries(
@@ -101,7 +101,7 @@ var pickAgentDefinitionFields = (value) =>
         }),
       )
     : undefined;
-//@ chunk-4121qate.js:290178-290264 placement
+//@ chunk-j8f885h1.js:271370-271456 placement
 /**
  * 取 resolvedModel 字符串
  */
@@ -109,7 +109,7 @@ function resolvedModelOf(value) {
   let resolvedModel = isPlainObject(value) ? value.resolvedModel : undefined;
   return typeof resolvedModel === "string" ? resolvedModel : undefined;
 }
-//@ chunk-4121qate.js:290264-290347 placement
+//@ chunk-j8f885h1.js:271456-271539 placement
 /**
  * 取 teammate_id
  */
@@ -117,7 +117,7 @@ function teammateIdOf(result) {
   let teammateId = isPlainObject(result) ? result.teammate_id : undefined;
   return typeof teammateId === "string" ? teammateId : undefined;
 }
-//@ chunk-4121qate.js:290347-291046 placement
+//@ chunk-j8f885h1.js:271539-272238 placement
 var AGENT_OPS = (pluginName, host) =>
   freezeApiObject({
     list: () => host("agent.list", {}),
@@ -159,7 +159,7 @@ var AGENT_OPS = (pluginName, host) =>
       );
     },
   });
-//@ chunk-4121qate.js:291046-292403 placement
+//@ chunk-j8f885h1.js:272238-273595 placement
 /**
  * $.tool.register 实现：校验 name/description/inputSchema
  */
@@ -231,7 +231,7 @@ var TOOL_REGISTER_OP = (pluginName, host) =>
             ),
           ),
   });
-//@ chunk-4121qate.js:292403-292615 placement
+//@ chunk-j8f885h1.js:273595-273807 placement
 var TURN_OPS = (pluginName, host) =>
   freezeApiObject({
     abort: (args) => {
@@ -245,37 +245,37 @@ var TURN_OPS = (pluginName, host) =>
           });
     },
   });
-//@ chunk-4121qate.js:292615-292625 placement
+//@ chunk-j8f885h1.js:273807-273817 placement
 /**
  * 12
  */
 var MAX_ROW_CELLS = 12;
-//@ chunk-4121qate.js:292625-292634 placement
+//@ chunk-j8f885h1.js:273817-273826 placement
 /**
  * 4
  */
 var MAX_UI_ROWS = 4;
-//@ chunk-4121qate.js:292634-292643 placement
+//@ chunk-j8f885h1.js:273826-273835 placement
 /**
  * 2
  */
 var MAX_OPTIONS = 2;
-//@ chunk-4121qate.js:292643-292663 placement
+//@ chunk-j8f885h1.js:273835-273855 placement
 /**
  * ["Yes","No"]
  */
 var DEFAULT_YES_NO = ["Yes", "No"];
-//@ chunk-4121qate.js:292663-292674 placement
+//@ chunk-j8f885h1.js:273855-273866 placement
 /**
  * 120
  */
 var MAX_WAIT_SECONDS = 120;
-//@ chunk-4121qate.js:292674-292699 placement (2.1.88 match: ASK_USER_QUESTION_TOOL_NAME, 1)
+//@ chunk-j8f885h1.js:273866-273891 placement (2.1.88 match: ASK_USER_QUESTION_TOOL_NAME, 1)
 /**
  * AskUserQuestion 工具名常量（另一 chunk 中的同值副本）。
  */
 var ASK_USER_QUESTION_TOOL_NAME = "AskUserQuestion";
-//@ chunk-4121qate.js:292699-293047 placement
+//@ chunk-j8f885h1.js:273891-274239 placement
 /**
  * 校验 $.ui.ask 的选项列表（最多 4 个），转成字符串数组并保留稀疏位。
  */
@@ -293,7 +293,7 @@ function normalizeAskOptions(pluginName, options) {
     if (index in rawOptions) secondOptions[index] = String(rawOptions[index]);
   return secondOptions;
 }
-//@ chunk-4121qate.js:293047-293146 placement
+//@ chunk-j8f885h1.js:274239-274338 placement
 /**
  * 不足则补 Yes/No
  */
@@ -305,14 +305,14 @@ function ensureQuestions(labels) {
         ...DEFAULT_YES_NO.filter((label) => !labels.includes(label)).slice(0, MAX_OPTIONS - labels.length),
       ];
 }
-//@ chunk-4121qate.js:293146-293219 placement
+//@ chunk-j8f885h1.js:274338-274411 placement
 /**
  * 带 cells 字符串的表格
  */
 function isCellsStringTable(value) {
   return isPlainObject(value) && typeof value.cells === "string" && value.source === undefined;
 }
-//@ chunk-4121qate.js:293219-293483 placement
+//@ chunk-j8f885h1.js:274411-274675 placement
 function normalizeRenderRequest(request) {
   let extra = {
     ...(request?.columns !== undefined && {
@@ -340,17 +340,17 @@ function normalizeRenderRequest(request) {
         ...extra,
       };
 }
-//@ chunk-4121qate.js:293483-293552 placement
+//@ chunk-j8f885h1.js:274675-274744 placement
 /**
  * ui.log/notice/invalidate/toast/status
  */
 var UI_EVENT_NAMES = ["ui.log", "ui.notice", "ui.invalidate", "ui.toast", "ui.status"];
-//@ chunk-4121qate.js:293552-293580 placement
+//@ chunk-j8f885h1.js:274744-274772 placement
 /**
  * 是否 ui.* 事件
  */
 var isUiEventName = (name) => UI_EVENT_NAMES.includes(name);
-//@ chunk-4121qate.js:293580-293797 placement
+//@ chunk-j8f885h1.js:274772-274989 placement
 function normalizeAgentIdArg(args) {
   let isAgentIdOnly =
     isPlainObject(args) &&
@@ -364,7 +364,7 @@ function normalizeAgentIdArg(args) {
         agentId: typeof agentId === "string" ? agentId : "",
       };
 }
-//@ chunk-4121qate.js:293797-295915 placement
+//@ chunk-j8f885h1.js:274989-277229 placement
 function UI_LOG_OP(pluginName, host, resolvedTable) {
   let send = (op, payload) => {
     host(op, payload).catch((error) =>
@@ -488,6 +488,17 @@ function UI_LOG_OP(pluginName, host, resolvedTable) {
       host("ui.place", {
         id: request?.id,
       }),
+    backdrop: (payload) =>
+      host("ui.backdrop", {
+        backdrop:
+          typeof payload === "object" && payload !== null
+            ? {
+                id: payload.id,
+                glass: payload.glass,
+                colorScheme: payload.colorScheme,
+              }
+            : payload,
+      }),
     selection: () => host("ui.selection", {}),
     scroll: (request) =>
       host("ui.scroll", {
@@ -514,7 +525,7 @@ function UI_LOG_OP(pluginName, host, resolvedTable) {
     view: (request) => host("ui.view", normalizeAgentIdArg(request)),
   });
 }
-//@ chunk-4121qate.js:295915-296540 placement
+//@ chunk-j8f885h1.js:277229-277854 placement
 function MCP_OPS({
   pluginName,
   host,
@@ -568,7 +579,7 @@ function MCP_OPS({
     flag: wrapNs(flagValueApi(host)),
   };
 }
-//@ chunk-4121qate.js:296540-296803 placement
+//@ chunk-j8f885h1.js:277854-278117 placement
 function buildCoreMethodTable() {
   let table = {};
   let ops = MCP_OPS({
@@ -586,15 +597,15 @@ function buildCoreMethodTable() {
   for (let [key, value] of Object.entries(ops)) table[key] = Object.freeze(Object.keys(value));
   return Object.freeze(table);
 }
-//@ chunk-4121qate.js:296803-296815 placement
+//@ chunk-j8f885h1.js:278117-278129 placement
 /**
  * 核心方法表
  */
 var coreInterfaceTable; // deferred: uses buildCoreMethodTable of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:296803", () => {
+deferInit("chunk-j8f885h1.js:278117", () => {
   coreInterfaceTable = buildCoreMethodTable();
 });
-//@ chunk-4121qate.js:296815-296923 placement
+//@ chunk-j8f885h1.js:278129-278237 placement
 /**
  * 把核心方法表转换为接口表（owner=core、方法名列表），只包含允许的命名空间。
  */
@@ -608,4 +619,4 @@ function coreInterfaceTable_2() {
       };
   return table;
 }
-export { MCP_OPS, resolvedModelOf, isUiEventName, coreInterfaceTable_2 };
+export { resolvedModelOf, isUiEventName, coreInterfaceTable_2, MCP_OPS };

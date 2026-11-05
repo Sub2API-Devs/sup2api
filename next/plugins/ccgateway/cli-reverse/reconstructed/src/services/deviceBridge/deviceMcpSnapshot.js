@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设备 MCP 快照。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-251gbqc0.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-grjat6we.js (15)
  * attribution: placement 15
  */
 import { join, dirname } from "path";
@@ -25,13 +25,13 @@ import { TOOL_META_KEYS } from "../../bridge/deviceRegistration.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage, isENOENT } from "../../utils/errors.js";
 import { normalizeHostname } from "../remoteTools/unattendedConsentStore.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { tildify } from "../../utils/path.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { getFileReader } from "../../utils/fileStore.js";
 
-//@ chunk-251gbqc0.js:711-755 placement
+//@ chunk-grjat6we.js:711-755 placement
 /**
  * 快照里单个名字的最大字符数（128）。
  */
@@ -39,14 +39,14 @@ var SNAPSHOT_SCHEMA_VERSION = 1;
 var DEVICE_MCP_SNAPSHOT = "device-mcp-snapshot";
 var MAX_SNAPSHOT_SERVERS = 8;
 var MAX_SNAPSHOT_NAME_CHARS = 128;
-//@ chunk-251gbqc0.js:755-815 placement
+//@ chunk-grjat6we.js:755-815 placement
 /**
  * 该服务器的快照是否有新增或变化。
  */
 function hasSnapshotChanges(snapshot) {
   return snapshot.added.length > 0 || snapshot.changed.length > 0;
 }
-//@ chunk-251gbqc0.js:815-957 placement
+//@ chunk-grjat6we.js:815-957 placement
 var DEVICE_MCP_SNAPSHOT_SCHEMA = DoctorLazy(() =>
   objectSchema({
     version: literal(SNAPSHOT_SCHEMA_VERSION),
@@ -61,7 +61,7 @@ var DEVICE_MCP_SNAPSHOT_SCHEMA = DoctorLazy(() =>
     ),
   }),
 );
-//@ chunk-251gbqc0.js:957-1139 placement
+//@ chunk-grjat6we.js:957-1139 placement
 /**
  * 计算 MCP 工具外观（名称、描述、输入 schema、搜索提示）的内容哈希，用于检测工具变更。
  */
@@ -76,14 +76,14 @@ function hashToolShape(tool) {
     }),
   );
 }
-//@ chunk-251gbqc0.js:1139-1206 placement
+//@ chunk-grjat6we.js:1139-1206 placement
 /**
  * 生成工具名到形状哈希的映射。
  */
 function toolShapeHashes(tools) {
   return Object.fromEntries(tools.map((tool) => [tool.name, hashToolShape(tool)]));
 }
-//@ chunk-251gbqc0.js:1206-1453 placement
+//@ chunk-grjat6we.js:1206-1453 placement
 function diffToolHashes(current, previous) {
   if (previous === "declined")
     return {
@@ -100,14 +100,14 @@ function diffToolHashes(current, previous) {
     changed: clipSnapshotEntries(entries_2),
   };
 }
-//@ chunk-251gbqc0.js:1453-1512 placement
+//@ chunk-grjat6we.js:1453-1512 placement
 /**
  * 把快照条目裁剪成最多 8 组、每组名字最多 128 字符。
  */
 function clipSnapshotEntries(entries) {
   return entries.slice(0, MAX_SNAPSHOT_SERVERS).map((entry) => entry.slice(0, MAX_SNAPSHOT_NAME_CHARS));
 }
-//@ chunk-251gbqc0.js:1512-1617 placement
+//@ chunk-grjat6we.js:1512-1617 placement
 /**
  * 合并设备 MCP 快照：服务器以新快照为准覆盖旧快照，保留新快照的 withheld。
  */
@@ -121,7 +121,7 @@ function mergeSnapshot(deviceMcpSnapshot, base) {
     withheld: deviceMcpSnapshot.withheld,
   };
 }
-//@ chunk-251gbqc0.js:1617-1960 placement
+//@ chunk-grjat6we.js:1617-1960 placement
 /**
  * 把当前各服务器的工具哈希与快照对比：新服务器直接记入；已知服务器的新增/变化工具记为扣留（需重新同意）；返回扣留明细、下一版快照与是否有变化。
  */
@@ -154,7 +154,7 @@ function reconcileSnapshot(byServer, snapshot) {
     changed: addedServers || jsonStringifyRaw(changedWithheld) !== jsonStringifyRaw(snapshot.withheld),
   };
 }
-//@ chunk-251gbqc0.js:1960-2097 placement
+//@ chunk-grjat6we.js:1960-2097 placement
 /**
  * 按用户选择更新快照中的服务器同意状态（接受则删除记录，拒绝则标记 declined），并清空 withheld。
  */
@@ -170,7 +170,7 @@ function applyConsentChoice(snapshot, serverNames, choice) {
     withheld: {},
   };
 }
-//@ chunk-251gbqc0.js:2097-2453 placement
+//@ chunk-grjat6we.js:2097-2453 placement
 /**
  * 读取设备 MCP 工具快照：读不到返回 unreadable，没有文件或主机名不一致/格式错误时返回空快照。
  */
@@ -202,7 +202,7 @@ async function readDeviceMcpSnapshot(snapshotStore) {
     return initial;
   }
 }
-//@ chunk-251gbqc0.js:2453-2681 placement
+//@ chunk-grjat6we.js:2453-2681 placement
 /**
  * 把设备 MCP 快照（版本、主机名、服务器与 withheld）写成 JSON 文件，失败时返回 false。
  */
@@ -230,21 +230,21 @@ async function writeDeviceMcpSnapshot(snapshot, snapshotStore) {
     return false;
   }
 }
-//@ chunk-251gbqc0.js:2681-2729 placement
+//@ chunk-grjat6we.js:2681-2729 placement
 /**
  * 设备 MCP 快照文件的路径。
  */
 function snapshotFilePath() {
   return join(getClaudeConfigDir(), "state", `${DEVICE_MCP_SNAPSHOT}.json`);
 }
-//@ chunk-251gbqc0.js:2729-2803 placement
+//@ chunk-grjat6we.js:2729-2803 placement
 /**
  * 重置快照的提示文案（删掉快照文件）。
  */
 function resetSnapshotHint() {
   return `delete ${tildify(snapshotFilePath())} to reset every server's baseline`;
 }
-//@ chunk-251gbqc0.js:2803-3302 placement
+//@ chunk-grjat6we.js:2803-3302 placement
 /**
  * 为设备 MCP 快照建立读写对象：启用 v5 存储时用存储的 state 键，否则用本地文件（0600 原子写）。
  */
@@ -286,13 +286,13 @@ function createSnapshotStore(storageV5) {
   };
 }
 export {
-  readDeviceMcpSnapshot,
   createSnapshotStore,
-  hasSnapshotChanges,
-  MAX_SNAPSHOT_SERVERS,
+  readDeviceMcpSnapshot,
+  mergeSnapshot,
+  reconcileSnapshot,
   writeDeviceMcpSnapshot,
   applyConsentChoice,
   resetSnapshotHint,
-  mergeSnapshot,
-  reconcileSnapshot,
+  hasSnapshotChanges,
+  MAX_SNAPSHOT_SERVERS,
 };

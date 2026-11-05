@@ -3,9 +3,9 @@
  *
  * /hooks 界面的事件元数据（说明、退出码语义、matcher 字段）与按事件/matcher 分组。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/hooksConfigManager.ts
- * pieces: chunk-409rw9nn.js (4)
+ * pieces: chunk-g4mtt8nt.js (4)
  * attribution: fingerprint 1, callgraph-witnessed 1, placement 2
  */
 import { NOTIFICATION_EVENT_KINDS } from "../config.js";
@@ -14,7 +14,7 @@ import { SESSION_END_REASONS_2, HOOK_EVENTS } from "../../entrypoints/sdk/coreSc
 import { getAllHooks, sortMatchersByPriority } from "./hooksSettings.js";
 import { getRegisteredHooks } from "../../bootstrap/state.js";
 
-//@ chunk-409rw9nn.js:382-13560 fingerprint (2.1.88 match: getHookEventMetadata, 0.846)
+//@ chunk-g4mtt8nt.js:382-13007 fingerprint (2.1.88 match: getHookEventMetadata, 0.822)
 /**
  * /hooks 界面用的事件元数据：每个事件的摘要、退出码语义说明和 matcher 字段（tool_name、notification_type、source、trigger、agent_type、error、reason、mcp_server_name、load_reason、to_model、command_name 等）及候选值。
  */
@@ -27,7 +27,6 @@ Exit code 0 - stdout/stderr not shown
 Exit code 2 - show stderr to model and block tool call
 Other exit codes - show stderr to user only but continue with tool call`,
       matcherMetadata: {
-        fieldToMatch: "tool_name",
         values: toolNames,
       },
     },
@@ -38,7 +37,6 @@ Exit code 0 - stdout shown in transcript mode (ctrl+o)
 Exit code 2 - show stderr to model immediately
 Other exit codes - show stderr to user only`,
       matcherMetadata: {
-        fieldToMatch: "tool_name",
         values: toolNames,
       },
     },
@@ -49,7 +47,6 @@ Exit code 0 - stdout shown in transcript mode (ctrl+o)
 Exit code 2 - show stderr to model immediately
 Other exit codes - show stderr to user only`,
       matcherMetadata: {
-        fieldToMatch: "tool_name",
         values: toolNames,
       },
     },
@@ -67,7 +64,6 @@ Return {"hookSpecificOutput":{"hookEventName":"PermissionDenied","retry":true}} 
 Exit code 0 - stdout shown in transcript mode (ctrl+o)
 Other exit codes - show stderr to user only`,
       matcherMetadata: {
-        fieldToMatch: "tool_name",
         values: toolNames,
       },
     },
@@ -77,7 +73,6 @@ Other exit codes - show stderr to user only`,
 Exit code 0 - stdout/stderr not shown
 Other exit codes - show stderr to user only`,
       matcherMetadata: {
-        fieldToMatch: "notification_type",
         values: [...NOTIFICATION_EVENT_KINDS, "elicitation_complete", "elicitation_response"],
       },
     },
@@ -95,7 +90,6 @@ Exit code 0 - stdout shown to Claude
 Exit code 2 - block expansion and show stderr to user only
 Other exit codes - show stderr to user only`,
       matcherMetadata: {
-        fieldToMatch: "command_name",
         values: [],
       },
     },
@@ -106,7 +100,6 @@ Exit code 0 - stdout shown to Claude
 Exit code 2 - show stderr to user only
 Other exit codes - show stderr to user only`,
       matcherMetadata: {
-        fieldToMatch: "source",
         values: ["startup", "resume", "clear", "compact", "fork"],
       },
     },
@@ -121,7 +114,6 @@ Other exit codes - show stderr to user only`,
       description:
         "Fires instead of Stop when an API error (rate limit, auth failure, etc.) ended the turn. Fire-and-forget \u2014 hook output and exit codes are ignored.",
       matcherMetadata: {
-        fieldToMatch: "error",
         values: [
           "rate_limit",
           "overloaded",
@@ -146,7 +138,6 @@ Exit code 0 - JSON additionalContext shown to subagent
 Exit code 2 - show stderr to user only
 Other exit codes - show stderr to user only`,
       matcherMetadata: {
-        fieldToMatch: "agent_type",
         values: [],
       },
     },
@@ -157,7 +148,6 @@ Exit code 0 - stdout/stderr not shown
 Exit code 2 - show stderr to subagent and continue having it run
 Other exit codes - show stderr to user only`,
       matcherMetadata: {
-        fieldToMatch: "agent_type",
         values: [],
       },
     },
@@ -168,7 +158,6 @@ Exit code 0 - stdout appended as custom compact instructions
 Exit code 2 - block compaction
 Other exit codes - show stderr to user only but continue with compaction`,
       matcherMetadata: {
-        fieldToMatch: "trigger",
         values: ["manual", "auto"],
       },
     },
@@ -178,7 +167,6 @@ Other exit codes - show stderr to user only but continue with compaction`,
 Exit code 0 - stdout shown to user
 Other exit codes - show stderr to user only`,
       matcherMetadata: {
-        fieldToMatch: "trigger",
         values: ["manual", "auto"],
       },
     },
@@ -189,7 +177,6 @@ Exit code 0 - switch proceeds; JSON permissionDecision allow/deny/ask as for Pre
 Exit code 2 - block the switch and show stderr to user
 Other exit codes - show stderr to user only and continue`,
       matcherMetadata: {
-        fieldToMatch: "to_model",
         values: [],
       },
     },
@@ -199,7 +186,6 @@ Other exit codes - show stderr to user only and continue`,
 Exit code 0 - stdout shown to Claude on the next request
 Other exit codes - show stderr to user only`,
       matcherMetadata: {
-        fieldToMatch: "to_model",
         values: [],
       },
     },
@@ -209,7 +195,6 @@ Other exit codes - show stderr to user only`,
 Exit code 0 - command completes successfully
 Other exit codes - show stderr to user only`,
       matcherMetadata: {
-        fieldToMatch: "reason",
         values: [...SESSION_END_REASONS_2],
       },
     },
@@ -220,7 +205,6 @@ Output JSON with hookSpecificOutput containing decision to allow or deny.
 Exit code 0 - use hook decision if provided
 Other exit codes - show stderr to user only`,
       matcherMetadata: {
-        fieldToMatch: "tool_name",
         values: toolNames,
       },
     },
@@ -231,7 +215,6 @@ Exit code 0 - JSON additionalContext shown to Claude
 Exit code 2 - show stderr to user only
 Other exit codes - show stderr to user only`,
       matcherMetadata: {
-        fieldToMatch: "trigger",
         values: ["init", "maintenance"],
       },
     },
@@ -264,7 +247,6 @@ Exit code 0 - use hook response if provided
 Exit code 2 - deny the elicitation
 Other exit codes - show stderr to user only`,
       matcherMetadata: {
-        fieldToMatch: "mcp_server_name",
         values: [],
       },
     },
@@ -276,7 +258,6 @@ Exit code 0 - use hook response if provided
 Exit code 2 - block the response (action becomes decline)
 Other exit codes - show stderr to user only`,
       matcherMetadata: {
-        fieldToMatch: "mcp_server_name",
         values: [],
       },
     },
@@ -287,7 +268,6 @@ Exit code 0 - allow the change
 Exit code 2 - block the change from being applied to the session
 Other exit codes - show stderr to user only`,
       matcherMetadata: {
-        fieldToMatch: "source",
         values: ["user_settings", "project_settings", "local_settings", "policy_settings", "skills"],
       },
     },
@@ -298,7 +278,6 @@ Exit code 0 - command completes successfully
 Other exit codes - show stderr to user only
 This hook is observability-only and does not support blocking.`,
       matcherMetadata: {
-        fieldToMatch: "load_reason",
         values: ["session_start", "nested_traversal", "path_glob_match", "include", "compact"],
       },
     },
@@ -339,7 +318,6 @@ Input to command is JSON with directory (absolute path) and source ("slash_comma
 Exit code 0 - command completes successfully
 Other exit codes - stderr is debug-logged on both paths; for /add-dir, a failure count is summarized to Claude and hook systemMessage output reaches Claude as bounded context; for register_repo_root, everything is debug-logged only`,
       matcherMetadata: {
-        fieldToMatch: "source",
         values: ["slash_command", "register_repo_root"],
       },
     },
@@ -353,7 +331,7 @@ Other exit codes - display the original delta`,
     },
   };
 }
-//@ chunk-409rw9nn.js:13560-14063 callgraph-witnessed (2.1.88 match: groupHooksByEventAndMatcher, 0.297)
+//@ chunk-g4mtt8nt.js:13007-13510 callgraph-witnessed (2.1.88 match: groupHooksByEventAndMatcher, 0.296)
 /**
  * 把所有钩子（各 settings、会话、插件注册）按事件和 matcher 分组，供 /hooks 界面展示。
  */
@@ -392,12 +370,12 @@ function groupHooksByEventAndMatcher(appState, toolNames) {
     }
   return grouped;
 }
-//@ chunk-409rw9nn.js:14063-14127 placement
+//@ chunk-g4mtt8nt.js:13510-13574 placement
 function getSortedMatchersForEvent(hooksByEventAndMatcher, event) {
   let matchers = Object.keys(hooksByEventAndMatcher[event] || {});
   return sortMatchersByPriority(matchers, hooksByEventAndMatcher, event);
 }
-//@ chunk-409rw9nn.js:14127-14180 placement
+//@ chunk-g4mtt8nt.js:13574-13627 placement
 /**
  * 取某来源某事件（可选 matcher）下配置的钩子列表。
  */

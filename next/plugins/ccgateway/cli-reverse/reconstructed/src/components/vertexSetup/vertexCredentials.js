@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Vertex 凭证探测、gcloud 配置列举、模型固定与项目步骤
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-y6fv30yg.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3qyfks39.js (16)
  * attribution: placement 16
  */
 import { join } from "path";
@@ -40,7 +40,7 @@ import { WorkerBadge } from "../permissions/WorkerBadge.js";
 import { MemoryStep } from "../agents/new-agent-creation/wizard-steps/MemoryStep.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-y6fv30yg.js:5805-5927 placement
+//@ chunk-3qyfks39.js:5805-5927 placement
 function vertexCredentialSource(wizardData) {
   if (wizardData.authMethod === "serviceAccount" && wizardData.keyFile)
     return {
@@ -51,9 +51,9 @@ function vertexCredentialSource(wizardData) {
     kind: "default",
   };
 }
-//@ chunk-y6fv30yg.js:5927-5940 placement
+//@ chunk-3qyfks39.js:5927-5940 placement
 var VERTEX_AUTH_TIMEOUT_MS = 12000;
-//@ chunk-y6fv30yg.js:5940-7316 placement
+//@ chunk-3qyfks39.js:5940-7316 placement
 /**
  * 用 Google 认证探测 Vertex 凭证：获取访问令牌并试调用模型，返回成功或失败原因。
  */
@@ -123,7 +123,7 @@ async function probeVertexCredentials(wizardData) {
       };
   }
 }
-//@ chunk-y6fv30yg.js:7316-7374 placement
+//@ chunk-3qyfks39.js:7316-7374 placement
 async function checkVertexAuth(wizardData, modelId) {
   return probeModelAccess(
     () => createVertexProbeClient(wizardData),
@@ -131,7 +131,7 @@ async function checkVertexAuth(wizardData, modelId) {
     () => "auth",
   );
 }
-//@ chunk-y6fv30yg.js:7374-7762 placement
+//@ chunk-3qyfks39.js:7374-7762 placement
 async function createVertexProbeClient(wizardData) {
   let [{ AnthropicVertex }, { getProxyFetchOptions }] = await Promise.all([
     import("../../../vendor/@anthropic-ai/vertex-sdk/client.js"),
@@ -156,9 +156,9 @@ async function createVertexProbeClient(wizardData) {
     }),
   );
 }
-//@ chunk-y6fv30yg.js:7762-7809 placement
+//@ chunk-3qyfks39.js:7762-7809 placement
 var ADC_LOGIN_COMMAND = "gcloud auth application-default login";
-//@ chunk-y6fv30yg.js:7809-9569 placement
+//@ chunk-3qyfks39.js:7809-9569 placement
 function explainVertexError(error, wizardData) {
   let message = error?.message ?? String(error);
   if (/ENOENT|no such file/i.test(message)) {
@@ -226,7 +226,7 @@ function explainVertexError(error, wizardData) {
     error: message,
   };
 }
-//@ chunk-y6fv30yg.js:9569-10314 placement
+//@ chunk-3qyfks39.js:9569-10314 placement
 var VERTEX_PROBE_PROVIDER = {
   reasonLabel: {
     auth: "auth failed",
@@ -254,7 +254,7 @@ var VERTEX_PROBE_PROVIDER = {
   preferOnSettle: ["current", "fallback"],
   probe: (wizardData, modelId) => checkVertexAuth(wizardData, modelId),
 };
-//@ chunk-y6fv30yg.js:10314-10446 placement
+//@ chunk-3qyfks39.js:10314-10446 placement
 function VertexModelPinsStep() {
   let $ = useMemoCache(2);
   let { updateWizardData } = useWizard();
@@ -269,12 +269,12 @@ function VertexModelPinsStep() {
   } else element = $[1];
   return element;
 }
-//@ chunk-y6fv30yg.js:10446-10450 placement
+//@ chunk-3qyfks39.js:10446-10450 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-y6fv30yg.js:10446", () => {
+deferInit("chunk-3qyfks39.js:10446", () => {
   init_react_production();
 });
-//@ chunk-y6fv30yg.js:10533-10958 placement
+//@ chunk-3qyfks39.js:10533-10958 placement
 async function listGcloudConfigurations() {
   let projects = new Set();
   let gcloudConfigDir = resolveGcloudConfigDir();
@@ -299,15 +299,15 @@ async function listGcloudConfigurations() {
   } catch {}
   return [...projects].sort();
 }
-//@ chunk-y6fv30yg.js:10958-10981 placement
+//@ chunk-3qyfks39.js:10958-10981 placement
 function emptyAccounts() {
   return [];
 }
-//@ chunk-y6fv30yg.js:10981-11017 placement
+//@ chunk-3qyfks39.js:10981-11017 placement
 function loadAccountsOrEmpty() {
   return listGcloudConfigurations().catch(emptyAccounts);
 }
-//@ chunk-y6fv30yg.js:11017-11065 placement
+//@ chunk-3qyfks39.js:11017-11065 placement
 function listItem(label) {
   return jsxProd_default(
     OrderedListWithItem.Item,
@@ -317,10 +317,10 @@ function listItem(label) {
     label,
   );
 }
-//@ chunk-y6fv30yg.js:11065-11091 placement
+//@ chunk-3qyfks39.js:11065-11091 placement
 var MANUAL_PROJECT_VALUE = "__manual__";
 var MAX_ACCOUNT_OPTIONS = 12;
-//@ chunk-y6fv30yg.js:11091-11359 placement
+//@ chunk-3qyfks39.js:11091-11359 placement
 function VertexProjectStep() {
   let $ = useMemoCache(3);
   let [projectsPromise] = useState(loadAccountsOrEmpty);

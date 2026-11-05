@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：多文件（实例文件）发布与清单校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-06y4szbn.js (21)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-51jy8ztq.js (21)
  * attribution: placement 21
  */
 import { extname } from "path";
@@ -139,12 +139,12 @@ import {
   copiedFilesLeftOutNote,
 } from "./leftOutFiles.js";
 import { frameApi, isFrameNotFoundBody } from "./frameRelay.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { getArtifactHostOverride } from "../../constants/claudeAiOrigin.js";
 import { getOauthConfig } from "../../constants/oauth.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-06y4szbn.js:103080-109169 placement
+//@ chunk-51jy8ztq.js:105336-111425 placement
 /**
  * 多文件 artifact 发布：写入/删除/复制文件、路径固定检查、预检、上传与缩略图，组装遥测。
  */
@@ -622,13 +622,13 @@ async function publishFilesVersion(
     );
   }
 }
-//@ chunk-06y4szbn.js:109169-109179 placement
+//@ chunk-51jy8ztq.js:111425-111435 placement
 var MAX_COPY_SOURCES = 4;
-//@ chunk-06y4szbn.js:109179-109242 placement
+//@ chunk-51jy8ztq.js:111435-111498 placement
 function bufferToText(content) {
   return typeof content === "string" ? content : content.toString("utf8");
 }
-//@ chunk-06y4szbn.js:109242-111832 placement
+//@ chunk-51jy8ztq.js:111498-114088 placement
 /**
  * 类型实例发布清单的类型表：可作为文本发布的 MIME、可服务的 MIME 全集，以及只按扩展名识别的代码与办公文档后缀。
  */
@@ -636,7 +636,7 @@ var MANIFEST_TEXT_TYPES; // deferred: has load-time effects after a deferred sta
 var MANIFEST_SERVABLE_TYPES;
 var MANIFEST_CODE_EXTENSIONS;
 var MANIFEST_OTHER_EXTENSIONS;
-deferInit("chunk-06y4szbn.js:109242", () => {
+deferInit("chunk-51jy8ztq.js:111498", () => {
   MANIFEST_TEXT_TYPES = new Set([
     "text/html",
     ...[],
@@ -834,7 +834,7 @@ deferInit("chunk-06y4szbn.js:109242", () => {
     "text/x-c",
   ];
 });
-//@ chunk-06y4szbn.js:111832-112146 placement
+//@ chunk-51jy8ztq.js:114088-114402 placement
 function notServedFileExtra(path, contentType) {
   let sliced = extname(path).toLowerCase().slice(1);
   let found = MANIFEST_CODE_EXTENSIONS.find((ext) => ext === sliced);
@@ -862,7 +862,7 @@ function notServedFileExtra(path, contentType) {
     refused_type: refusedType,
   };
 }
-//@ chunk-06y4szbn.js:112146-112323 placement
+//@ chunk-51jy8ztq.js:114402-114580 placement
 /**
  * 发布文件的限制常量：XML 类内容类型、单次清单请求预算、版本总字节、二进制文件上限、各类大小与条目数上限，以及识别 manifest/mode 字段的正则。
  */
@@ -876,7 +876,7 @@ var MAX_REQUEST_WIRE_BYTES;
 var MAX_PATH_SEGMENT_LENGTH;
 var VERSION_MAX_ENTRIES;
 var MANIFEST_FIELD_RE;
-deferInit("chunk-06y4szbn.js:112146", () => {
+deferInit("chunk-51jy8ztq.js:114402", () => {
   XML_CONTENT_TYPES = new Set(["image/svg+xml", "text/xml", "application/xml"]);
   MANIFEST_REQUEST_BUDGET = 67108864;
   VERSION_TOTAL_BYTES = 268435456;
@@ -888,7 +888,7 @@ deferInit("chunk-06y4szbn.js:112146", () => {
   VERSION_MAX_ENTRIES = 512;
   MANIFEST_FIELD_RE = /\b(manifest|mode)\b/;
 });
-//@ chunk-06y4szbn.js:112323-112531 placement
+//@ chunk-51jy8ztq.js:114580-114788 placement
 function encodeManifestContent(file) {
   if (MANIFEST_TEXT_TYPES.has(file.contentType))
     return typeof file.content === "string" ? file.content : file.content.toString("utf8");
@@ -896,7 +896,7 @@ function encodeManifestContent(file) {
     "base64",
   );
 }
-//@ chunk-06y4szbn.js:112531-112645 placement
+//@ chunk-51jy8ztq.js:114788-114903 placement
 function getThumbnailCount(request) {
   let count = (request.thumbnail !== undefined ? 1 : 0) + (request.thumbnailDark !== undefined ? 1 : 0);
   return count > 0 && isFrameDeclaredThumbnailEnabled()
@@ -905,19 +905,19 @@ function getThumbnailCount(request) {
       }
     : {};
 }
-//@ chunk-06y4szbn.js:112645-112710 placement
+//@ chunk-51jy8ztq.js:114903-114969 placement
 function thumbnailByteCount(bytes) {
   return bytes !== undefined && isFrameDeclaredThumbnailEnabled() ? Math.ceil(bytes.length / 3) * 4 : 0;
 }
-//@ chunk-06y4szbn.js:112710-112813 placement
+//@ chunk-51jy8ztq.js:114969-115072 placement
 function getContentByteLength(file) {
   return typeof file.content === "string" ? Buffer.byteLength(file.content, "utf8") : file.content.length;
 }
-//@ chunk-06y4szbn.js:112813-112868 placement
+//@ chunk-51jy8ztq.js:115072-115127 placement
 function jsonBodyBytes(value) {
   return Buffer.byteLength(jsonStringify(value), "utf8") - 2;
 }
-//@ chunk-06y4szbn.js:112868-113188 placement
+//@ chunk-51jy8ztq.js:115127-115447 placement
 function manifestDeltas(files, preconditions) {
   let deltas = Object.create(null);
   let keys = Object.keys(files);
@@ -942,10 +942,10 @@ function manifestDeltas(files, preconditions) {
   }
   return deltas;
 }
-//@ chunk-06y4szbn.js:113188-113259 placement
+//@ chunk-51jy8ztq.js:115447-115518 placement
 var PATCH_ERROR_PATTERNS = /unknown field "(live|reseed)"/;
 var EMPTY_MANIFEST_RE = /manifest must not be empty/;
-//@ chunk-06y4szbn.js:113259-116262 placement
+//@ chunk-51jy8ztq.js:115518-118523 placement
 function validateFileLists(html, files, removes) {
   let invalid = (msg) => ({
     kind: "files_invalid",
@@ -1033,10 +1033,10 @@ function validateFileLists(html, files, removes) {
     );
   return null;
 }
-//@ chunk-06y4szbn.js:116262-116402 placement
+//@ chunk-51jy8ztq.js:118523-118663 placement
 var COPY_FROM_DISABLED_TEXT =
   "copying files from another artifact is not enabled for this account \u2014 nothing was published; publish with local files instead";
-//@ chunk-06y4szbn.js:116402-118123 placement
+//@ chunk-51jy8ztq.js:118663-120384 placement
 function copySourcesProblem(html, files, copied, removes) {
   if (copied.length === 0) return null;
   if (files.length + copied.length + removes.length + (html === null ? 0 : 1) > MAX_PATH_SEGMENT_LENGTH)
@@ -1068,7 +1068,7 @@ function copySourcesProblem(html, files, copied, removes) {
     return `files copy from ${sources.size} source artifact versions; at most ${MAX_COPY_SOURCES} per publish`;
   return null;
 }
-//@ chunk-06y4szbn.js:118123-118323 placement
+//@ chunk-51jy8ztq.js:120384-120584 placement
 function filesOnlyPublishProblem(files, copied) {
   let problem = validateSupportingFiles(files, "file");
   if (problem !== null) return problem.err;
@@ -1080,7 +1080,7 @@ function filesOnlyPublishProblem(files, copied) {
   }
   return validateFileLists(null, files, [])?.msg ?? copySourcesProblem(null, files, copied, []);
 }
-//@ chunk-06y4szbn.js:118323-120256 placement
+//@ chunk-51jy8ztq.js:120584-122517 placement
 async function publishInstanceFiles(files, options) {
   if (getArtifactPublishStubDir() !== null)
     return publishError(
@@ -1187,7 +1187,7 @@ async function publishInstanceFiles(files, options) {
     ),
   );
 }
-//@ chunk-06y4szbn.js:120256-121268 placement
+//@ chunk-51jy8ztq.js:122517-123529 placement
 async function publishLiveDocVersion(request) {
   if (getArtifactPublishStubDir() !== null) return publishError("invalid publish options");
   if (!isFrameMultiFileEnabled()) {
@@ -1257,7 +1257,7 @@ async function publishLiveDocVersion(request) {
     ),
   );
 }
-//@ chunk-06y4szbn.js:121268-147257 placement
+//@ chunk-51jy8ztq.js:123529-149573 placement
 /**
  * 发送多文件发布请求：清单构造、内容上传（直连/中继）、合并旧版本、留空文件与重试处理。
  */
@@ -2533,7 +2533,7 @@ async function sendFilesPublish(pageContent, files, copied, removedPaths, meta, 
     let docs_2 = (mapped_2 ?? []).filter(
       (path) => (path === "index.html" ? pageEntry : inlineLive[path])?.reseed === true,
     );
-    let sliced = uniq([
+    let sliced = normalizeCaseForComparison_2([
       ...(leftOut.length > 0 ? [copiedFilesLeftOutNote(leftOut)] : []),
       ...warnings,
       ...renderWarnings(deployResult.data),
@@ -2678,7 +2678,7 @@ async function sendFilesPublish(pageContent, files, copied, removedPaths, meta, 
     return publishError((error instanceof Error ? error.message : String(error)) + createdNote);
   }
 }
-//@ chunk-06y4szbn.js:147257-147335 placement
+//@ chunk-51jy8ztq.js:149573-149651 placement
 function artifactViewerUrl(slug) {
   return new URL(
     artifactViewerPath(slug),
@@ -2686,8 +2686,13 @@ function artifactViewerUrl(slug) {
   ).toString();
 }
 export {
-  MANIFEST_SERVABLE_TYPES,
+  MAX_COPY_SOURCES,
+  artifactViewerUrl,
   notServedFileExtra,
+  filesOnlyPublishProblem,
+  publishInstanceFiles,
+  publishLiveDocVersion,
+  MANIFEST_SERVABLE_TYPES,
   MANIFEST_TEXT_TYPES,
   XML_CONTENT_TYPES,
   validateFileLists,
@@ -2696,15 +2701,10 @@ export {
   COPY_FROM_DISABLED_TEXT,
   publishFilesVersion,
   sendFilesPublish,
-  artifactViewerUrl,
   PATCH_ERROR_PATTERNS,
   EMPTY_MANIFEST_RE,
   MANIFEST_REQUEST_BUDGET,
-  MAX_COPY_SOURCES,
-  filesOnlyPublishProblem,
-  publishInstanceFiles,
-  publishLiveDocVersion,
-  VERSION_MAX_ENTRIES,
-  VERSION_TOTAL_BYTES,
   BINARY_FILE_MAX_BYTES,
+  VERSION_TOTAL_BYTES,
+  VERSION_MAX_ENTRIES,
 };

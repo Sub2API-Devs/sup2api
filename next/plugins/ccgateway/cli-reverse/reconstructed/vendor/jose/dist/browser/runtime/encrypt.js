@@ -1,8 +1,8 @@
 /**
  * jose/dist/browser/runtime/encrypt.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (4)
+ * pieces: chunk-pd6th42n.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
  */
 import { keyMustBeTypeError, noop } from "../../node/esm/lib/invalid_key_input.js";
@@ -13,7 +13,7 @@ import { keyObjectTypes, noopInit, init_is_key_like } from "./is_key_like.js";
 import {
   checkIvLengthInit,
   checkCekLengthInit,
-  JOSENotSupported,
+  JOSENotSupported_3,
   init_content_encryption_5,
   init_timing_safe_equal,
   init_content_encryption_2,
@@ -21,7 +21,7 @@ import {
 import { __esm } from "../../../../../runtime/bun-runtime.js";
 import { init_base64url } from "./base64url.js";
 
-//@ chunk-2tyrgda4.js:18435-18923 esm-fingerprint
+//@ chunk-pd6th42n.js:18435-18923 esm-fingerprint
 async function cbcEncrypt(enc, plaintext, cek, iv, aad) {
   if (!(cek instanceof Uint8Array)) throw TypeError(keyMustBeTypeError(cek, "Uint8Array"));
   let keySize = parseInt(enc.slice(1, 4), 10);
@@ -55,7 +55,7 @@ async function cbcEncrypt(enc, plaintext, cek, iv, aad) {
     tag,
   };
 }
-//@ chunk-2tyrgda4.js:18923-19230 esm-fingerprint
+//@ chunk-pd6th42n.js:18923-19230 esm-fingerprint
 async function gcmEncrypt(enc, plaintext, cek, iv, aad) {
   let encKey;
   if (cek instanceof Uint8Array)
@@ -82,7 +82,7 @@ async function gcmEncrypt(enc, plaintext, cek, iv, aad) {
     tag,
   };
 }
-//@ chunk-2tyrgda4.js:19230-19683 esm-fingerprint
+//@ chunk-pd6th42n.js:19230-19683 esm-fingerprint
 var encrypt_3 = async (enc, plaintext, cek, iv, aad) => {
   if (!isCryptoKey(cek) && !(cek instanceof Uint8Array))
     throw TypeError(keyMustBeTypeError(cek, ...keyObjectTypes, "Uint8Array"));
@@ -98,11 +98,11 @@ var encrypt_3 = async (enc, plaintext, cek, iv, aad) => {
       if (cek instanceof Uint8Array) checkCekLengthInit(cek, parseInt(enc.slice(1, 4), 10));
       return gcmEncrypt(enc, plaintext, cek, iv, aad);
     default:
-      throw new JOSENotSupported("Unsupported JWE Content Encryption Algorithm");
+      throw new JOSENotSupported_3("Unsupported JWE Content Encryption Algorithm");
   }
 };
 var encrypt_default;
-//@ chunk-2tyrgda4.js:19683-19740 esm-layout (moved: shares a binding it assigns)
+//@ chunk-pd6th42n.js:19683-19740 esm-layout (moved: shares a binding it assigns)
 var init_aesgcmkw = __esm(() => {
   init_base64url();
   init_content_encryption_5();

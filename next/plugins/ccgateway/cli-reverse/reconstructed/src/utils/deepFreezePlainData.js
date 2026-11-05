@@ -3,49 +3,49 @@
  *
  * 纯数据深冻结（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xkyzvvf1.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-60gvymh4.js (7)
  * attribution: placement 7
  */
 import { custom } from "../../vendor/zod/v4/classic/schemas.js";
 
-//@ chunk-xkyzvvf1.js:257-285 placement
+//@ chunk-60gvymh4.js:257-285 placement
 /**
  * 深度冻结工具名（占位实现，转调 hu）。
  */
 function deepFreezeToolName(toolName) {
   return custom(toolName);
 }
-//@ chunk-xkyzvvf1.js:285-310 placement
+//@ chunk-60gvymh4.js:285-310 placement
 /**
  * 原样返回输入（占位）。
  */
 function identityFreeze(value) {
   return value;
 }
-//@ chunk-xkyzvvf1.js:310-335 placement
+//@ chunk-60gvymh4.js:310-335 placement
 /**
  * 原样返回输入（占位）。
  */
 function identityFreeze2(value) {
   return value;
 }
-//@ chunk-xkyzvvf1.js:335-360 placement
+//@ chunk-60gvymh4.js:335-360 placement
 /**
  * 原样返回输入（占位）。
  */
 function identityFreeze3(value) {
   return value;
 }
-//@ chunk-xkyzvvf1.js:360-385 placement
+//@ chunk-60gvymh4.js:360-385 placement
 /**
  * 原样返回输入（占位）。
  */
 function identityFreeze4(value) {
   return value;
 }
-//@ chunk-xkyzvvf1.js:385-857 placement
+//@ chunk-60gvymh4.js:385-857 placement
 function mintDisplayedUpdates(input) {
   if (Object.getPrototypeOf(input) !== Array.prototype)
     throw TypeError("mintDisplayedUpdates: non-plain array in mint input \u2014 plain data only");
@@ -58,7 +58,7 @@ function mintDisplayedUpdates(input) {
   }
   return Object.freeze(frozen);
 }
-//@ chunk-xkyzvvf1.js:857-2216 placement
+//@ chunk-60gvymh4.js:857-2216 placement
 /**
  * 深度冻结纯数据（拒绝函数、非纯原型、稀疏数组）
  */
@@ -111,7 +111,7 @@ export {
   identityFreeze4,
   identityFreeze3,
   mintDisplayedUpdates,
-  deepFreezeToolName,
   identityFreeze,
   identityFreeze2,
+  deepFreezeToolName,
 };

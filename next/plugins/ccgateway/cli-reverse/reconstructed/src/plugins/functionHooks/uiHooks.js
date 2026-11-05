@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：ui.* 事件钩子
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (25)
  * attribution: placement 25
  */
 import { identity as identity_2 } from "../../utils/identity.js";
@@ -17,11 +17,11 @@ import { envSiteRuleFor } from "./sites/siteRules.js";
 import { hookOriginFromStack, awaitHooksRespawn, hookMembersFor } from "./hookDispatch.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { currentSurfaceBinding } from "./surfaceBinding.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { makeCoreEvent } from "./coreHandlers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:78265-78362 placement
+//@ chunk-5xgkngpb.js:80815-80912 placement
 /**
  * 键盘被别的插件占着
  */
@@ -30,30 +30,30 @@ function isOtherPluginsHolder(site, origin) {
   let holder = site.holderNow();
   return holder !== undefined && holder !== origin.name;
 }
-//@ chunk-e6aww6q8.js:78362-78471 placement (2.1.88 match: _temp0, 0.773)
+//@ chunk-5xgkngpb.js:80912-81021 placement (2.1.88 match: _temp0, 0.776)
 var isForeignFocusTarget = (site, input) =>
   input.origin.kind === "plugin" &&
   site.owner !== undefined &&
   site.owner !== input.origin.name &&
   input.plugin !== input.origin.name;
-//@ chunk-e6aww6q8.js:78471-78520 placement
+//@ chunk-5xgkngpb.js:81021-81070 placement
 /**
  * 焦点站点表
  */
 var focusSites; // deferred: uses getPluginRegistry (../../utils/plugins/pluginLoadState.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:78471", () => {
+deferInit("chunk-5xgkngpb.js:81021", () => {
   focusSites = identity_2(
     () => getPluginRegistry().focusSites,
     (registry) => registry().clear(),
   );
 });
-//@ chunk-e6aww6q8.js:78520-78631 placement (2.1.88 match: edges, 0.505)
+//@ chunk-5xgkngpb.js:81070-81181 placement (2.1.88 match: edges, 0.506)
 function nearestScrollTop(site) {
   let { offset, bodyRows, top, bottom } = site;
   let clamped = bottom > offset + bodyRows ? Math.max(0, Math.min(top, bottom - bodyRows)) : offset;
   return top < offset ? top : clamped;
 }
-//@ chunk-e6aww6q8.js:78631-78827 placement
+//@ chunk-5xgkngpb.js:81181-81377 placement
 function scrollTopForBlock(site, block) {
   let { bodyRows, top, bottom } = site;
   if (bottom - top > bodyRows) return top;
@@ -68,13 +68,13 @@ function scrollTopForBlock(site, block) {
       return nearestScrollTop(site);
   }
 }
-//@ chunk-e6aww6q8.js:78827-78896 placement (2.1.88 match: _temp0, 0.773)
+//@ chunk-5xgkngpb.js:81377-81446 placement (2.1.88 match: _temp0, 0.776)
 /**
  * 不是本插件的站点
  */
 var isOtherPluginsSite = (site, origin) =>
   origin.kind === "plugin" && site.owner !== undefined && site.owner !== origin.name;
-//@ chunk-e6aww6q8.js:78896-78987 placement
+//@ chunk-5xgkngpb.js:81446-81537 placement
 /**
  * 找带该按键行的站点
  */
@@ -89,25 +89,25 @@ function findSiteWithRows(sites, key, plugin) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:78987-79009 placement
+//@ chunk-5xgkngpb.js:81537-81559 placement
 var ABOVE_PROMPT = "above-prompt";
-//@ chunk-e6aww6q8.js:79009-79059 placement
+//@ chunk-5xgkngpb.js:81559-81609 placement
 /**
  * 滚动站点表
  */
 var scrollSites; // deferred: uses getPluginRegistry (../../utils/plugins/pluginLoadState.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:79009", () => {
+deferInit("chunk-5xgkngpb.js:81559", () => {
   scrollSites = identity_2(
     () => getPluginRegistry().scrollSites,
     (registry) => registry().clear(),
   );
 });
-//@ chunk-e6aww6q8.js:79059-79085 placement
+//@ chunk-5xgkngpb.js:81609-81635 placement
 /**
  * 界面站点的键 component:requestId，焦点与滚动表都按它索引。
  */
 var siteKey = (component, requestId) => `${component}:${requestId}`;
-//@ chunk-e6aww6q8.js:79085-79356 placement
+//@ chunk-5xgkngpb.js:81635-81906 placement
 function pluginScrollSites(args, requestId) {
   let plugin = args.plugin;
   let matchesRequest = (id) => requestId === undefined || requestId === id;
@@ -120,7 +120,7 @@ function pluginScrollSites(args, requestId) {
       : undefined;
   return [...mapped, abovePromptSite].filter((site) => site !== undefined);
 }
-//@ chunk-e6aww6q8.js:79356-79499 placement
+//@ chunk-5xgkngpb.js:81906-82049 placement
 /**
  * 以给定底层处理函数运行 ui.* 钩子链（含站点规则、中止信号与钩子来源）。
  */
@@ -133,12 +133,12 @@ var runUiChain = (request, commitScroll) =>
     origin: hookOriginFromStack(request.hookOrigin),
     bottom: (answer) => Promise.resolve(commitScroll(answer)),
   });
-//@ chunk-e6aww6q8.js:79499-79551 placement
+//@ chunk-5xgkngpb.js:82049-82101 placement
 /**
  * 取滚动站点
  */
 var scrollSiteFor = (input) => scrollSites().get(siteKey(input.component, input.requestId));
-//@ chunk-e6aww6q8.js:79551-79744 placement
+//@ chunk-5xgkngpb.js:82101-82294 placement
 function commitScroll(input) {
   let site = scrollSiteFor(input);
   if (!site)
@@ -155,7 +155,7 @@ function commitScroll(input) {
         deny: "the window moved meanwhile",
       };
 }
-//@ chunk-e6aww6q8.js:79744-80149 placement
+//@ chunk-5xgkngpb.js:82294-82699 placement
 /**
  * 运行 ui.scroll 钩子链（等待 hooks 重生），无钩子时直接提交滚动偏移，记录结果。
  */
@@ -193,7 +193,7 @@ async function dispatchUiScroll(request) {
   );
   return outcome;
 }
-//@ chunk-e6aww6q8.js:80149-80326 placement
+//@ chunk-5xgkngpb.js:82699-82876 placement
 async function scrollToEndAndFollow(input, run) {
   let maxOffset = input.maxOffset;
   let outcome = await run(input, maxOffset);
@@ -207,13 +207,13 @@ async function scrollToEndAndFollow(input, run) {
     site.followEnd();
   return outcome;
 }
-//@ chunk-e6aww6q8.js:80326-80386 placement
+//@ chunk-5xgkngpb.js:82876-82936 placement
 /**
  * ui.press/input/select
  */
 var isPersonInputEvent = (rootEvent) =>
   rootEvent === "ui.press" || rootEvent === "ui.input" || rootEvent === "ui.select";
-//@ chunk-e6aww6q8.js:80386-80521 placement
+//@ chunk-5xgkngpb.js:82936-83071 placement
 /**
  * 判断调用是否由人发起：来源只有一层且（是人输入，或根事件为 ui.press/input/select）。
  */
@@ -225,7 +225,7 @@ function isPersonInitiated(input) {
     (isSingleFrame && isPersonInputEvent(input.rootEvent))
   );
 }
-//@ chunk-e6aww6q8.js:80521-80995 placement
+//@ chunk-5xgkngpb.js:83071-83545 placement
 /**
  * 在对话记录中滚动到某 requestId（只限人发起），返回结果或拒绝原因。
  */
@@ -257,7 +257,7 @@ async function revealInTranscript(requestId, block, input) {
       };
   }
 }
-//@ chunk-e6aww6q8.js:80995-81580 placement
+//@ chunk-5xgkngpb.js:83545-84130 placement
 /**
  * 校验 $.ui.scroll 参数：to 为 {requestId}、{key}、"start" 或 "end"；start/end 需要 in；block 为 start/center/end/nearest。
  */
@@ -267,8 +267,8 @@ function checkUiScrollArgs(args) {
   let block = args?.block;
   let isEdge = to === "start" || to === "end";
   let hasRequestId =
-    isPlainObject_5(to) && typeof to.requestId === "string" && to.requestId !== "" && !("key" in to);
-  let hasKey = isPlainObject_5(to) && typeof to.key === "string" && to.key !== "" && !("requestId" in to);
+    isPlainObject_6(to) && typeof to.requestId === "string" && to.requestId !== "" && !("key" in to);
+  let hasKey = isPlainObject_6(to) && typeof to.key === "string" && to.key !== "" && !("requestId" in to);
   if (!(isEdge || hasRequestId || hasKey)) return 'takes { to } ({ requestId }, { key }, "start" or "end")';
   if (requestId !== undefined && (typeof requestId !== "string" || requestId === ""))
     return "in is the requestId of one of its sites (a string)";
@@ -281,7 +281,7 @@ function checkUiScrollArgs(args) {
     ? undefined
     : 'block is "start", "center", "end" or "nearest"';
 }
-//@ chunk-e6aww6q8.js:81580-82394 placement
+//@ chunk-5xgkngpb.js:84130-84944 placement
 /**
  * $.ui.scroll 实现：滚动插件站点到开头、结尾或某元素，或在对话记录中滚到某个 requestId。
  */
@@ -344,20 +344,20 @@ async function uiScrollOp(args, caller) {
       }
     : revealInTranscript(to.requestId, block, caller);
 }
-//@ chunk-e6aww6q8.js:82394-82421 placement
+//@ chunk-5xgkngpb.js:84944-84971 placement
 /**
  * ui.scroll 事件
  */
 var UI_SCROLL_EVENT; // deferred: uses makeCoreEvent (./coreHandlers.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:82394", () => {
+deferInit("chunk-5xgkngpb.js:84944", () => {
   UI_SCROLL_EVENT = makeCoreEvent("ui.scroll", commitScroll);
 });
-//@ chunk-e6aww6q8.js:82421-82472 placement
+//@ chunk-5xgkngpb.js:84971-85022 placement
 /**
  * 取焦点站点
  */
 var focusSiteFor = (ref) => focusSites().get(siteKey(ref.component, ref.requestId));
-//@ chunk-e6aww6q8.js:82472-82778 placement
+//@ chunk-5xgkngpb.js:85022-85328 placement
 /**
  * ui.focus 链底：站点存在且属于插件、持有键盘且未被他人元素占用时提交焦点移动，否则返回拒绝原因。
  */
@@ -386,29 +386,29 @@ function commitFocus(input) {
         deny: problem,
       };
 }
-//@ chunk-e6aww6q8.js:82778-82804 placement
+//@ chunk-5xgkngpb.js:85328-85354 placement
 /**
  * ui.focus 事件
  */
 var UI_FOCUS_EVENT; // deferred: uses makeCoreEvent (./coreHandlers.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:82778", () => {
+deferInit("chunk-5xgkngpb.js:85328", () => {
   UI_FOCUS_EVENT = makeCoreEvent("ui.focus", commitFocus);
 });
 export {
-  nearestScrollTop,
   ABOVE_PROMPT,
-  dispatchUiScroll,
-  siteKey,
   scrollSites,
+  focusSites,
+  siteKey,
+  dispatchUiScroll,
   UI_SCROLL_EVENT,
   UI_FOCUS_EVENT,
   isPersonInitiated,
-  isPersonInputEvent,
   focusSiteFor,
   isOtherPluginsHolder,
   commitFocus,
   runUiChain,
-  focusSites,
   checkUiScrollArgs,
   uiScrollOp,
+  isPersonInputEvent,
+  nearestScrollTop,
 };

@@ -3,10 +3,10 @@
  *
  * 插件 LSP 服务器：读取 .lsp.json 与 manifest.lspServers，解析变量与 userConfig，加作用域前缀。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/lspPluginIntegration.ts
- * pieces: chunk-6mwt0myy.js (3), chunk-e6aww6q8.js (11)
- * attribution: placement 5, file-local 1, layout 4, fingerprint 3, callgraph-witnessed 1
+ * pieces: chunk-5xgkngpb.js (11), chunk-evj8g37g.js (3)
+ * attribution: file-local 1, layout 4, fingerprint 3, placement 5, callgraph-witnessed 1
  */
 import { resolve as resolve_2, relative, sep, join } from "path";
 import { readFile } from "fs/promises";
@@ -14,10 +14,10 @@ import { printableName } from "../printableName.js";
 import { hasDotDotWithSpaceSegment } from "../pathClassification.js";
 import { areValidKeySegments, STORAGE_SPACES } from "../storage/storageSpaces.js";
 import { formatStorageError } from "../storage/storageErrors.js";
-import { parseVersionCachePath, ensurePluginDataDir } from "./pluginDirectories.js";
+import { parseVersionCachePath } from "./pluginDirectories.js";
 import { projectPluginCacheDir } from "./pluginCachePaths.js";
 import { isProjectLocalPlugin } from "./pluginIdentifier.js";
-import { resolvePluginDirComponentPath } from "./pluginPathContainment.js";
+import { pathEscapeError, resolvePluginDirComponentPath } from "./pluginPathContainment.js";
 import { jsonParse } from "../slowOperations.js";
 import { record, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { LspServerConfigSchema } from "./schemas.js";
@@ -31,15 +31,16 @@ import {
   loadPluginOptions,
   marketplaceSource,
 } from "./pluginOptionsStorage.js";
+import { ensurePluginDataDir } from "../sessionStorage.js";
 import { getProjectConfigRoot, getProjectRoot } from "../../bootstrap/state.js";
 import { mapStringsDeep } from "./pluginLoader.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { formatWithheldEnvNotice } from "../settings/hostEnvWrites.js";
 import { isManagedPluginScope, runWithPluginWriteScope } from "./pluginScopedWrite.js";
 import { addPluginScopeToServers } from "./mcpPluginIntegration.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6mwt0myy.js:20771-20900 placement
+//@ chunk-evj8g37g.js:22648-22777 placement
 /**
  * LSP 服务器显示名（含来源插件）。
  */
@@ -50,9 +51,9 @@ function formatMcpServerLabel(name, fromPlugin) {
     ? `${printableName(pluginServerName.serverName, SERVER_LABEL_MAX_CHARS)} (from plugin ${printableName(pluginServerName.pluginName, SERVER_LABEL_MAX_CHARS)})`
     : printableName(name, SERVER_LABEL_MAX_CHARS);
 }
-//@ chunk-6mwt0myy.js:20900-20909 placement
+//@ chunk-evj8g37g.js:22777-22786 placement
 var SERVER_LABEL_MAX_CHARS = 80;
-//@ chunk-6mwt0myy.js:20909-21056 placement
+//@ chunk-evj8g37g.js:22786-22933 placement
 /**
  * 解析 plugin:插件:服务器 形式的 id。
  */
@@ -65,7 +66,7 @@ function parsePluginServerName(name) {
     serverName: parts.slice(2).join(":"),
   };
 }
-//@ chunk-e6aww6q8.js:599782-599914 file-local
+//@ chunk-5xgkngpb.js:609656-609788 file-local
 /**
  * 把插件内相对路径解析为绝对路径，越出插件目录或为绝对路径时返回 null。
  */
@@ -82,7 +83,7 @@ function validatePathWithinPlugin(pluginPath, relativePath) {
     return null;
   return resolvedFilePath;
 }
-//@ chunk-e6aww6q8.js:599914-600301 layout
+//@ chunk-5xgkngpb.js:609788-610175 layout
 async function readLspConfigViaStorage(storageV5, coords, relPath) {
   if (!areValidKeySegments(relPath))
     return {
@@ -110,9 +111,9 @@ async function readLspConfigViaStorage(storageV5, coords, relPath) {
     text: Buffer.from(item.value).toString("utf-8"),
   };
 }
-//@ chunk-e6aww6q8.js:600301-600325 layout
+//@ chunk-5xgkngpb.js:610175-610199 layout
 class LspConfigReadError extends Error {}
-//@ chunk-e6aww6q8.js:600325-600703 layout
+//@ chunk-5xgkngpb.js:610199-610577 layout
 function toLspConfigReadError(lspConfigViaStorage) {
   switch (lspConfigViaStorage.kind) {
     case "symlink":
@@ -129,12 +130,12 @@ function toLspConfigReadError(lspConfigViaStorage) {
       );
   }
 }
-//@ chunk-e6aww6q8.js:600703-600846 layout
+//@ chunk-5xgkngpb.js:610577-610720 layout
 function describeLspConfigError(error) {
   if (error instanceof LspConfigReadError) return error.message;
   return error instanceof Error ? `Failed to parse JSON: ${error.message}` : "Failed to parse JSON file";
 }
-//@ chunk-e6aww6q8.js:600846-601987 fingerprint (2.1.88 match: loadPluginLspServers, 0.745)
+//@ chunk-5xgkngpb.js:610720-611954 fingerprint (2.1.88 match: loadPluginLspServers, 0.711)
 /**
  * 读取插件的 LSP 服务器配置：插件根目录 .lsp.json + manifest.lspServers（路径或内联），校验 LspServerConfigSchema。
  */
@@ -144,9 +145,12 @@ async function loadPluginLspServers(plugin, errors = [], storageV5) {
   let cacheCoords = storageV5 ? parseVersionCachePath(plugin.path, projectPluginCacheDir()) : null;
   let isProjectLocal = isProjectLocalPlugin(plugin);
   let lspJsonPath = join(plugin.path, ".lsp.json");
+  let escapeError = await pathEscapeError(plugin, ".lsp.json", "lsp-servers");
+  if (escapeError !== undefined) errors.push(escapeError);
   try {
     let content;
-    if (isProjectLocal) {
+    if (escapeError !== undefined) content = null;
+    else if (isProjectLocal) {
       let pluginDirComponentPath = await resolvePluginDirComponentPath(plugin, ".lsp.json");
       content = pluginDirComponentPath === null ? null : await readFile(pluginDirComponentPath, "utf-8");
     } else if (storageV5 && cacheCoords) {
@@ -203,7 +207,7 @@ async function loadPluginLspServers(plugin, errors = [], storageV5) {
   }
   return Object.keys(servers).length > 0 ? servers : undefined;
 }
-//@ chunk-e6aww6q8.js:601987-603661 fingerprint (2.1.88 match: loadLspServersFromManifest, 0.8)
+//@ chunk-5xgkngpb.js:611954-613718 fingerprint (2.1.88 match: loadLspServersFromManifest, 0.774)
 /**
  * 处理 manifest.lspServers 中的每一项（文件路径做目录逃逸检查，内联对象直接校验）。
  */
@@ -226,6 +230,11 @@ async function loadLspServersFromManifest(declaration, plugin, errors, storageV5
           validationError: "Invalid path: must be relative and within plugin directory",
           source: plugin.repository,
         });
+        continue;
+      }
+      let entryEscape = await pathEscapeError(plugin, decl, "lsp-servers");
+      if (entryEscape !== undefined) {
+        errors.push(entryEscape);
         continue;
       }
       try {
@@ -297,7 +306,7 @@ async function loadLspServersFromManifest(declaration, plugin, errors, storageV5
       }
   return Object.keys(servers).length > 0 ? servers : undefined;
 }
-//@ chunk-e6aww6q8.js:603661-604702 placement
+//@ chunk-5xgkngpb.js:613718-614772 placement
 /**
  * 对插件 LSP 服务器配置做变量替换：command/args/env/workspaceFolder 按 spawn 规则（缺用户配置抛错）， initializationOptions/settings 按 data 规则（缺失保留原文）；注入 CLAUDE_PLUGIN_ROOT/DATA/PROJECT_DIR； 被扣留的凭证变量记 error 日志，未展开的 data 变量记调试日志。
  */
@@ -339,7 +348,7 @@ function resolvePluginLspServerConfig(serverConfig, plugin, userConfig, errors) 
     resolved.initializationOptions = mapStringsDeep(resolved.initializationOptions, expandData);
   if (resolved.settings !== undefined) resolved.settings = mapStringsDeep(resolved.settings, expandData);
   if (withheldVars.length > 0) {
-    let withheld = uniq(withheldVars);
+    let withheld = normalizeCaseForComparison_2(withheldVars);
     logForDebugging(
       `In plugin LSP config: ${formatWithheldEnvNotice(
         withheld,
@@ -354,11 +363,11 @@ function resolvePluginLspServerConfig(serverConfig, plugin, userConfig, errors) 
   }
   if (unexpandedDataVars.length > 0)
     logForDebugging(
-      `Left unexpanded in plugin LSP initializationOptions/settings (not set): ${uniq(unexpandedDataVars).join(", ")}`,
+      `Left unexpanded in plugin LSP initializationOptions/settings (not set): ${normalizeCaseForComparison_2(unexpandedDataVars).join(", ")}`,
     );
   return resolved;
 }
-//@ chunk-e6aww6q8.js:604702-605143 placement
+//@ chunk-5xgkngpb.js:614772-615213 placement
 /**
  * 遍历已启用插件的 lspServers.extensionToLanguage，同一扩展名（小写）被多个 plugin:<插件>:<服务器> 声明时生成 lsp-extension-conflict 错误（先声明者生效）。
  */
@@ -388,7 +397,7 @@ function findLspExtensionConflicts(enabled) {
   }
   return errors;
 }
-//@ chunk-e6aww6q8.js:605292-606211 callgraph-witnessed (2.1.88 match: getPluginLspServers, 0.257)
+//@ chunk-5xgkngpb.js:615362-616281 callgraph-witnessed (2.1.88 match: getPluginLspServers, 0.258)
 /**
  * 已启用插件的最终 LSP 服务器配置：解析 ${CLAUDE_PLUGIN_ROOT}/${user_config.X} 等变量，缺 command 的报错；名字加 plugin:<插件>: 前缀。
  */
@@ -443,19 +452,19 @@ async function getPluginLspServers(plugin, errors = [], storageV5, credentials) 
     }
   return addPluginScopeToServers(resolvedServers, plugin.name, plugin.repository);
 }
-//@ chunk-e6aww6q8.js:3817371-3817440 fingerprint (2.1.88 match: resolvePluginLspEnvironment, 0.601)
+//@ chunk-5xgkngpb.js:3914702-3914771 fingerprint (2.1.88 match: resolvePluginLspEnvironment, 0.601)
 var PLUGIN_ENV_VAR_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PLUGIN_ENV_VAR_SET;
-deferInit("chunk-e6aww6q8.js:3817371", () => {
+deferInit("chunk-5xgkngpb.js:3914702", () => {
   PLUGIN_ENV_VAR_NAMES = ["CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA"];
   PLUGIN_ENV_VAR_SET = new Set(PLUGIN_ENV_VAR_NAMES);
 });
 export {
-  PLUGIN_ENV_VAR_NAMES,
+  formatMcpServerLabel,
   loadPluginLspServers,
   findLspExtensionConflicts,
-  parsePluginServerName,
-  formatMcpServerLabel,
   getPluginLspServers,
   PLUGIN_ENV_VAR_SET,
+  parsePluginServerName,
+  PLUGIN_ENV_VAR_NAMES,
 };

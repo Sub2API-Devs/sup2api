@@ -1,14 +1,14 @@
 /**
  * @aws-sdk/middleware-host-header/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/middleware-host-header@3.936.0
- * pieces: chunk-edce4vxq.js (2)
+ * pieces: chunk-3p78mpxm.js (2)
  * attribution: cjs-fingerprint 1, cjs-require-graph 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_protocol_http as require_protocol_http_3 } from "../../../@smithy/protocol-http/dist-cjs/index.js";
 
-//@ chunk-edce4vxq.js:724-1420 cjs-fingerprint
+//@ chunk-3p78mpxm.js:724-1420 cjs-fingerprint
 var require_middleware_host_header = __commonJS(function (cjsExports) {
   var protocolHttp = require_protocol_http_3();
   function resolveHostHeaderConfig(input) {
@@ -45,7 +45,7 @@ var require_middleware_host_header = __commonJS(function (cjsExports) {
   cjsExports.hostHeaderMiddlewareOptions = hostHeaderMiddlewareOptions;
   cjsExports.resolveHostHeaderConfig = resolveHostHeaderConfig;
 });
-//@ chunk-edce4vxq.js:115054-115651 cjs-require-graph
+//@ chunk-3p78mpxm.js:115054-115651 cjs-require-graph
 var require_middleware_host_header_2 = __commonJS(function (cjsExports) {
   var protocolHttp = require_protocol_http_3();
   var CONTENT_LENGTH_HEADER = "content-length";

@@ -3,19 +3,19 @@
  *
  * 2.1.316 新增：回收已结束后台任务
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dxgf3w3p.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8qv4gg14.js (15), chunk-98gzyqqk.js (9)
  * attribution: placement 24
  */
 import { readdir, unlink, lstat } from "fs/promises";
 import { join, basename } from "path";
 import { connect } from "net";
+import { __toESM } from "../../../runtime/bun-runtime.js";
+import { require_semver_3 } from "../../../vendor/semver/index.js";
 import { readJobStateOrAbsent, writeReapedTerminalState } from "./jobState.js";
 import { logEvent } from "../analytics/index.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
-import { __toESM } from "../../../runtime/bun-runtime.js";
-import { require_semver_3 } from "../../../vendor/semver/index.js";
 import { readSmallFileOrNull } from "../../utils/readSmallFile.js";
 import {
   getExecExitPath,
@@ -44,50 +44,31 @@ import { isENOENT, getErrnoCode } from "../../utils/errors.js";
 import { encodeControlFrame } from "../../utils/framedSocket.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dxgf3w3p.js:820-915 placement
-/**
- * 读作业状态并归类为 absent 或 unreadable（读失败也算 unreadable）。
- */
-async function probeJobState(jobDir, storageV5) {
-  return (await readJobStateOrAbsent(jobDir, storageV5).catch(() => null)) === "absent"
-    ? "absent"
-    : "unreadable";
-}
-//@ chunk-dxgf3w3p.js:915-1002 placement
-/**
- * 记录“重启时没有保存的状态”埋点。
- */
-function logRestartWithoutSavedState(trigger, reason) {
-  logEvent("tengu_bg_restart_without_saved_state", {
-    trigger: fromEnum(trigger),
-    reason: fromEnum(reason),
-  });
-}
-//@ chunk-dxgf3w3p.js:1002-1044 placement
+//@ chunk-98gzyqqk.js:263-305 placement
 /**
  * RC 版本的通道后缀（dev、engine、aot）。
  */
 var semverModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var RC_CHANNEL_SUFFIXES;
-deferInit("chunk-dxgf3w3p.js:1002", () => {
+deferInit("chunk-98gzyqqk.js:263", () => {
   semverModule = __toESM(require_semver_3(), 1);
   RC_CHANNEL_SUFFIXES = ["dev", "engine", "aot"];
 });
-//@ chunk-dxgf3w3p.js:1044-1107 placement
+//@ chunk-98gzyqqk.js:305-368 placement
 /**
  * 取版本串里的 RC 通道后缀，没有返回 null。
  */
 function rcChannelSuffix(version) {
   return RC_CHANNEL_SUFFIXES.find((suffix) => version.includes(`-${suffix}.`)) ?? null;
 }
-//@ chunk-dxgf3w3p.js:1107-1144 placement
+//@ chunk-98gzyqqk.js:368-405 placement
 /**
  * 版本串是否带 RC 通道后缀。
  */
 function isRcChannelVersion(version) {
   return rcChannelSuffix(version) !== null;
 }
-//@ chunk-dxgf3w3p.js:1144-1232 placement
+//@ chunk-98gzyqqk.js:405-493 placement
 /**
  * 判断两个带通道的 RC 版本是否属于不同通道。
  */
@@ -97,12 +78,12 @@ function rcChannelDiffers(cliVersion, current) {
   let rightSuffix = rcChannelSuffix(current);
   return leftSuffix !== null && rightSuffix !== null && leftSuffix !== rightSuffix;
 }
-//@ chunk-dxgf3w3p.js:1232-1308 placement
+//@ chunk-98gzyqqk.js:493-569 placement
 var regExp; // deferred: uses semverModule of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dxgf3w3p.js:1232", () => {
+deferInit("chunk-98gzyqqk.js:493", () => {
   regExp = new RegExp(`-(?:${RC_CHANNEL_SUFFIXES.join("|")})\\.(\\d{8})\\.t(\\d{6})(?:\\.|$)`, "g");
 });
-//@ chunk-dxgf3w3p.js:1308-1652 placement
+//@ chunk-98gzyqqk.js:569-913 placement
 /**
  * 从版本串中取出 YYYYMMDDtHHMMSS 形式的构建时间戳并校验为合法 UTC 时间，返回毫秒或 null。
  */
@@ -125,7 +106,7 @@ function parseRcVersionTimestamp(version) {
     ? ms
     : null;
 }
-//@ chunk-dxgf3w3p.js:1652-1723 placement
+//@ chunk-98gzyqqk.js:913-984 placement
 /**
  * 比较两个 RC 版本时间戳，前者是否更新。
  */
@@ -136,7 +117,7 @@ function isOlderRcVersion(target, target_2) {
     rcVersionTimestamp !== null && rcVersionTimestamp_2 !== null && rcVersionTimestamp_2 < rcVersionTimestamp
   );
 }
-//@ chunk-dxgf3w3p.js:1723-1907 placement
+//@ chunk-98gzyqqk.js:984-1168 placement
 /**
  * 比较两个版本：都带时间戳时同通道比时间；否则按 semver 比较（特殊版本返回 false）。
  */
@@ -154,7 +135,7 @@ function isNewerBuild(cliVersion, current) {
     semverModule.gt(cliVersion, current)
   );
 }
-//@ chunk-dxgf3w3p.js:1907-2070 placement
+//@ chunk-98gzyqqk.js:1168-1331 placement
 /**
  * 版本是否不低于给定发布：带时间戳时比较提交时间，否则按 semver。
  */
@@ -166,17 +147,36 @@ function isAtLeastRelease(cliVersion, minRelease, minVersion) {
   if (isRcChannelVersion(cliVersion)) return false;
   return semverModule.valid(cliVersion) !== null && semverModule.gte(cliVersion, minRelease.release);
 }
-//@ chunk-dxgf3w3p.js:2070-2150 placement
+//@ chunk-8qv4gg14.js:748-843 placement
+/**
+ * 读作业状态并归类为 absent 或 unreadable（读失败也算 unreadable）。
+ */
+async function probeJobState(jobDir, storageV5) {
+  return (await readJobStateOrAbsent(jobDir, storageV5).catch(() => null)) === "absent"
+    ? "absent"
+    : "unreadable";
+}
+//@ chunk-8qv4gg14.js:843-930 placement
+/**
+ * 记录“重启时没有保存的状态”埋点。
+ */
+function logRestartWithoutSavedState(trigger, reason) {
+  logEvent("tengu_bg_restart_without_saved_state", {
+    trigger: fromEnum(trigger),
+    reason: fromEnum(reason),
+  });
+}
+//@ chunk-8qv4gg14.js:930-1010 placement
 /**
  * 匹配私有模式 CSI ? n h/l 的正则。
  */
 var TRACKED_PRIVATE_MODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PRIVATE_MODE_RE;
-deferInit("chunk-dxgf3w3p.js:2070", () => {
+deferInit("chunk-8qv4gg14.js:930", () => {
   TRACKED_PRIVATE_MODES = new Set([1000, 1002, 1003, 1004, 1006, 2004, 2031]);
   PRIVATE_MODE_RE = /\x1b\[\?([\d;]+)([hl])/g;
 });
-//@ chunk-dxgf3w3p.js:2150-2616 placement
+//@ chunk-8qv4gg14.js:1010-1476 placement
 /**
  * 跟踪终端私有模式（CSI ? n h/l）的开关：feed 解析输出并处理被截断的转义序列，seed 预设，snapshot 返回当前已开模式。
  */
@@ -215,7 +215,7 @@ function createPrivateModeTracker() {
     },
   };
 }
-//@ chunk-dxgf3w3p.js:2749-3397 placement
+//@ chunk-8qv4gg14.js:1609-2257 placement
 /**
  * 读取 exec 型后台作业的退出记录：退出码 0 为 done（带最后一行输出），SIGINT/SIGQUIT 为 stopped，其余为 crashed（带信号/退出码与输出）。
  */
@@ -264,7 +264,7 @@ async function readExecExitStatus(ptySock, dispatch) {
     return null;
   }
 }
-//@ chunk-dxgf3w3p.js:3397-5523 placement
+//@ chunk-8qv4gg14.js:2257-4383 placement
 /**
  * 回收所有后台会话进程：汇总名册中的 worker、socket/pid 文件与孤立的 spare pty，逐个发送 kill 或终止进程组（无法确认身份的保留），写入终止状态并清理文件与存储，最后更新名册。返回回收与保留数。
  */
@@ -402,7 +402,7 @@ async function reapAllBackgroundJobs(options = {}, storageV5) {
     };
   });
 }
-//@ chunk-dxgf3w3p.js:5523-5925 placement
+//@ chunk-8qv4gg14.js:4383-4785 placement
 /**
  * 分页列出存储中 daemon/pty-pids 下记录的 PTY 进程标识。
  */
@@ -435,12 +435,12 @@ async function listStoredPtyPids(storage) {
   } while (cursor !== undefined);
   return pids;
 }
-//@ chunk-dxgf3w3p.js:5925-5938 placement
+//@ chunk-8qv4gg14.js:4785-4798 placement
 /**
  * 读取 pty pid 文件的大小上限（4096 字节）。
  */
 var MAX_PID_FILE_BYTES = 4096;
-//@ chunk-dxgf3w3p.js:5938-6036 placement
+//@ chunk-8qv4gg14.js:4798-4896 placement
 /**
  * 判断 pty pid 文件是否不可用（不是普通文件、超限、读失败）。
  */
@@ -452,7 +452,7 @@ async function isPidFileUnusable(shortId) {
     return !isENOENT(error);
   }
 }
-//@ chunk-dxgf3w3p.js:6036-6308 placement
+//@ chunk-8qv4gg14.js:4896-5168 placement
 /**
  * 读取存储中某个 PTY 的 pid 记录；进程已结束、读取失败或超出大小时返回 null。
  */
@@ -474,18 +474,18 @@ async function readStoredPtyPid(storage, shortId) {
   if (!paramShortId.found || paramShortId.totalBytes > MAX_PID_FILE_BYTES) return null;
   return paramShortId.value;
 }
-//@ chunk-dxgf3w3p.js:6308-6412 placement
+//@ chunk-8qv4gg14.js:5168-5272 placement
 async function deleteStoredPtyPid(storage, shortId) {
   await storage.delete(STORAGE_SPACES.daemon(["pty-pids", `${shortId}.pid`])).catch(() => {});
   await deleteStoredPtySidecars(storage, daemonPtySocket(shortId));
 }
-//@ chunk-dxgf3w3p.js:6412-6545 placement
+//@ chunk-8qv4gg14.js:5272-5405 placement
 async function deleteStoredPtySidecars(storage, socketPath) {
   let errFile = ptyErrFile(socketPath);
   for (let name of [basename(errFile), `${basename(errFile)}.read`, basename(ptyLateFile(socketPath))])
     await storage.delete(STORAGE_SPACES.daemon(["pty-pids", name])).catch(() => {});
 }
-//@ chunk-dxgf3w3p.js:6545-6965 placement
+//@ chunk-8qv4gg14.js:5405-5825 placement
 /**
  * 连接 pty socket 发送 SIGTERM 指令，连接关闭视为成功；连接失败时清理 socket 及附带文件；2 秒超时返回 false。
  */
@@ -527,7 +527,7 @@ function killViaPtySocket(socketPath, storageV5) {
     sock.once("close", () => finish(true));
   });
 }
-//@ chunk-dxgf3w3p.js:6965-7183 placement
+//@ chunk-8qv4gg14.js:5825-6043 placement
 /**
  * 连接 pty socket 发送 pong，250 毫秒内连上返回 true。
  */
@@ -556,7 +556,7 @@ function pingPtySocket(socketPath) {
     });
   });
 }
-//@ chunk-dxgf3w3p.js:7183-7453 placement
+//@ chunk-8qv4gg14.js:6043-6313 placement
 /**
  * 结束进程前校验身份：进程不存在为 gone/killed；有启动时间时比对，不符为 foreign、无法读取为 unverified，一致则 SIGTERM 后 SIGKILL。
  */
@@ -574,17 +574,11 @@ async function killVerifiedProcess(pid, procStart) {
   return sigtermThenKill([-pid, pid], procStart) ? "killed" : "gone";
 }
 export {
-  createPrivateModeTracker,
-  isAtLeastRelease,
   isNewerBuild,
-  rcChannelDiffers,
-  pingPtySocket,
   killViaPtySocket,
-  probeJobState,
-  logRestartWithoutSavedState,
-  parseRcVersionTimestamp,
-  rcChannelSuffix,
-  isRcChannelVersion,
+  createPrivateModeTracker,
+  pingPtySocket,
+  rcChannelDiffers,
   readExecExitStatus,
   listStoredPtyPids,
   readStoredPtyPid,
@@ -592,4 +586,10 @@ export {
   isOlderRcVersion,
   killVerifiedProcess,
   reapAllBackgroundJobs,
+  probeJobState,
+  logRestartWithoutSavedState,
+  isAtLeastRelease,
+  parseRcVersionTimestamp,
+  rcChannelSuffix,
+  isRcChannelVersion,
 };

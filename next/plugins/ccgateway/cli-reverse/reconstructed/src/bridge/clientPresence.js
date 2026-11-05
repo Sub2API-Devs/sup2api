@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增。向 /v1/code/sessions/:id/client/presence 定时上报客户端在线心跳。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5mabxk9z.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-k1czrs3z.js (3)
  * attribution: placement 3
  */
-import { randomUUID as Ude } from "crypto";
+import { randomUUID } from "crypto";
 import { stat } from "fs/promises";
 import { env } from "../utils/env.js";
 import { isUncOrDevicePath } from "../utils/pathClassification.js";
@@ -23,19 +23,19 @@ import { lacksAuthorizationHeader } from "../services/oauth/sessionsBearerHooks.
 import { getTerminalFocus, onInteraction, onTerminalFocusChange } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-5mabxk9z.js:631-698 placement
+//@ chunk-k1czrs3z.js:631-698 placement
 var PRESENCE_PULSE_MIN_INTERVAL_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var _;
 var NOOP_PRESENCE_PULSE;
-deferInit("chunk-5mabxk9z.js:631", () => {
+deferInit("chunk-k1czrs3z.js:631", () => {
   PRESENCE_PULSE_MIN_INTERVAL_MS = 5000;
-  _ = Ude();
+  _ = randomUUID();
   NOOP_PRESENCE_PULSE = {
     teardown: () => {},
     pulseIfClientPresent: () => {},
   };
 });
-//@ chunk-5mabxk9z.js:698-904 placement
+//@ chunk-k1czrs3z.js:698-904 placement
 async function hasClientPresenceMarker() {
   let CLAUDE_CLIENT_PRESENCE_FILE = env.CLAUDE_CLIENT_PRESENCE_FILE;
   if (!CLAUDE_CLIENT_PRESENCE_FILE) return false;
@@ -49,7 +49,7 @@ async function hasClientPresenceMarker() {
     return false;
   }
 }
-//@ chunk-5mabxk9z.js:904-3011 placement
+//@ chunk-k1czrs3z.js:904-3011 placement
 function startClientPresencePulse(
   sessionId,
   baseUrl,

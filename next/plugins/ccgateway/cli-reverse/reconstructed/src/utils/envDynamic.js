@@ -3,10 +3,10 @@
  *
  * 需要异步探测的环境信息（Docker、bubblewrap 沙箱、JetBrains 终端、musl）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/envDynamic.ts
- * pieces: chunk-9d1pf3s4.js (1), chunk-aepeg2w5.js (10), chunk-hvpfdswb.js (1), chunk-jhrww53q.js (1)
- * attribution: fingerprint 6, sole-consumer 2, affinity 1, layout 4
+ * pieces: chunk-exfmq47h.js (10), chunk-m1f5npav.js (1), chunk-wbfnm169.js (1), chunk-xjnnz630.js (1)
+ * attribution: sole-consumer 2, affinity 1, fingerprint 6, layout 4
  */
 import { isDisklessEnvProbe, env, hasInternetAccess_2, isDockerenvPresent } from "./env.js";
 import { getFsImplementation } from "./fsOperations.js";
@@ -15,24 +15,24 @@ import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-jhrww53q.js:49897-49964 fingerprint (2.1.88 match: getIsDocker, 0.479)
+//@ chunk-xjnnz630.js:51580-51647 fingerprint (2.1.88 match: getIsDocker, 0.479)
 function getIsDocker() {
   if (isDisklessEnvProbe()) return false;
   return getFsImplementation().existsSync("/.dockerenv");
 }
-//@ chunk-hvpfdswb.js:1601-1666 fingerprint (2.1.88 match: isMuslEnvironment, 1)
+//@ chunk-m1f5npav.js:1603-1668 fingerprint (2.1.88 match: isMuslEnvironment, 1)
 function isMuslEnvironment_2(platform) {
   return env.platform !== "linux" && platform.startsWith(`${CCR_TOKEN_DIR}/`);
 }
-//@ chunk-aepeg2w5.js:752249-752299 sole-consumer
+//@ chunk-exfmq47h.js:767598-767648 sole-consumer
 var internetAccessProbe; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:752249", () => {
+deferInit("chunk-exfmq47h.js:767598", () => {
   internetAccessProbe = new HostScoped(() => ({
     probe: undefined,
     outcome: undefined,
   }));
 });
-//@ chunk-aepeg2w5.js:752299-752384 sole-consumer
+//@ chunk-exfmq47h.js:767648-767733 sole-consumer
 function hasInternetAccess() {
   let probe = internetAccessProbe.of(getRootSession().host);
   return (probe.probe ??= hasInternetAccess_2().then((outcome) => {
@@ -40,7 +40,7 @@ function hasInternetAccess() {
     return outcome;
   }));
 }
-//@ chunk-aepeg2w5.js:752384-753511 affinity
+//@ chunk-exfmq47h.js:767733-768860 affinity
 /**
  * 环境探测：是否 Docker、bubblewrap 沙箱、沙箱外 root、受限无网容器，以及据此判断内部环境门控（结果缓存）。
  */
@@ -91,12 +91,12 @@ class EnvironmentProbe {
     return this.antDspEnvGateSettled ?? false;
   }
 }
-//@ chunk-aepeg2w5.js:753511-753829 fingerprint (2.1.88 match: getIsBubblewrapSandbox, 0.442)
+//@ chunk-exfmq47h.js:768860-769178 fingerprint (2.1.88 match: getIsBubblewrapSandbox, 0.442)
 /**
  * 按 host 缓存的 Linux 沙箱探测槽：new W(() => new yx({platform:"linux", isDockerenvPresent, isBubblewrapEnvSet, probeInternalNetworkAccess, …}))；gs() 返回 cj.of(B().host)，所以同一进程里每个 host 只有一个探测实例，不是可直接调用的函数。
  */
 var bubblewrapSandboxPerHost; // deferred: uses EnvironmentProbe of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:753511", () => {
+deferInit("chunk-exfmq47h.js:768860", () => {
   bubblewrapSandboxPerHost = new HostScoped(
     () =>
       new EnvironmentProbe({
@@ -110,24 +110,24 @@ deferInit("chunk-aepeg2w5.js:753511", () => {
       }),
   );
 });
-//@ chunk-aepeg2w5.js:753829-753866 layout
+//@ chunk-exfmq47h.js:769178-769215 layout
 function getIsBubblewrapSandbox() {
   return bubblewrapSandboxPerHost.of(getRootSession().host);
 }
-//@ chunk-aepeg2w5.js:753866-753878 layout
+//@ chunk-exfmq47h.js:769215-769227 layout
 var emptyHostFlag = null;
-//@ chunk-aepeg2w5.js:753878-753901 layout
+//@ chunk-exfmq47h.js:769227-769250 layout
 function isMuslEnvironment() {
   return false;
 }
-//@ chunk-aepeg2w5.js:753901-753924 layout
+//@ chunk-exfmq47h.js:769250-769273 layout
 function isAndroidEnvironment() {
   return false;
 }
-//@ chunk-aepeg2w5.js:753924-754397 fingerprint (2.1.88 match: getTerminalWithJetBrainsDetectionAsync, 0.532)
+//@ chunk-exfmq47h.js:769273-769746 fingerprint (2.1.88 match: getTerminalWithJetBrainsDetectionAsync, 0.532)
 var NON_INTERACTIVE_TERMINAL; // deferred: uses env (./env.js) of its import cycle while loading; runs once the cycle is complete
 var envDynamicProbe;
-deferInit("chunk-aepeg2w5.js:753924", () => {
+deferInit("chunk-exfmq47h.js:769273", () => {
   NON_INTERACTIVE_TERMINAL = "non-interactive";
   envDynamicProbe = {
     terminal:
@@ -151,13 +151,13 @@ deferInit("chunk-aepeg2w5.js:753924", () => {
     isAndroidEnvironment,
   };
 });
-//@ chunk-aepeg2w5.js:754397-754516 fingerprint (2.1.88 match: envDynamic, 0.44)
+//@ chunk-exfmq47h.js:769746-769865 fingerprint (2.1.88 match: envDynamic, 0.44)
 async function envDynamic() {
   if (envDynamicProbe.getIsBubblewrapSandbox()) return "bubblewrap";
   if (await envDynamicProbe.getIsDocker()) return "docker";
   return;
 }
-//@ chunk-9d1pf3s4.js:518-747 fingerprint
+//@ chunk-wbfnm169.js:518-747 fingerprint
 /**
  * 平台与架构对应的 musl/darwin 目标三元组（如 x86_64-unknown-linux-musl），不支持时为 undefined。
  */
@@ -180,6 +180,6 @@ export {
   getIsDocker,
   isMuslEnvironment_2,
   muslTargetTriple,
-  envDynamic,
   NON_INTERACTIVE_TERMINAL,
+  envDynamic,
 };

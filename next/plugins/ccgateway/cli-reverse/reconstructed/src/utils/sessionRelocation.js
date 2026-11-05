@@ -3,18 +3,26 @@
  *
  * 2.1.316 新增。处理 set_cwd 控制请求（/cd 与桥接）：校验目标目录、按 Cd 权限规则拦截、记录目录信任、迁移会话并重新加载项目设置与 CLAUDE.md。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1wvrnct9.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fvw87h8v.js (14)
  * attribution: placement 14
  */
 import { realpath, stat } from "fs/promises";
 import { homedir } from "os";
 import { dirname, parse } from "path";
-import { uniq } from "./collections.js";
+import {
+  normalizeCaseForComparison_2,
+  normalizeTrustedSymlink,
+  patternWithRoot,
+  relativePath,
+} from "./permissions/filesystem.js";
 import { getPathsForPermissionCheck, processChdir } from "./fsOperations.js";
-import { normalizeTrustedSymlink, patternWithRoot, relativePath } from "./permissions/filesystem.js";
-import { getDenyRules, getAllowRules, permissionRuleSourceDisplayString } from "./permissions/permissions.js";
+import {
+  deniedBashRules,
+  getAllowRules,
+  permissionRuleSourceDisplayString,
+} from "./permissions/permissions.js";
 import { getCwd } from "./cwd.js";
 import {
   setSessionTrustAccepted,
@@ -36,7 +44,7 @@ import { identity } from "./pathClassification.js";
 import { expandPath } from "./path.js";
 import { isFsInaccessible, getErrnoCode } from "./errors.js";
 import { logError } from "./log.js";
-import { formatPermissionRule } from "./permissions/disallowedToolsFlag.js";
+import { permissionRuleValueFromString } from "./permissions/permissionRuleParser.js";
 import { env } from "./env.js";
 import {
   getMemoryFilesCached,
@@ -83,24 +91,24 @@ import { UNSAFE_PATH_GLYPH_RE } from "./unsafePathGlyphs.js";
 import { vetPathSpellingsOrChain, pathVettingReason } from "./permissions/pathVetting.js";
 import { uncachedStorageRootFor } from "./settings/settingsStorage.js";
 
-//@ chunk-1wvrnct9.js:1512-1523 placement
+//@ chunk-fvw87h8v.js:1546-1557 placement
 var CD_COMMAND_NAME = "Cd";
-//@ chunk-1wvrnct9.js:1523-2131 placement
+//@ chunk-fvw87h8v.js:1557-2165 placement
 /**
  * 找匹配的 cd 规则
  */
 function findCdRule(targetInfo, context) {
-  let requestedSpellings = uniq([
+  let requestedSpellings = normalizeCaseForComparison_2([
     ...getPathsForPermissionCheck(targetInfo.requestedPath),
     targetInfo.canonicalPath,
   ]);
-  let canonicalSpellings = uniq([
+  let canonicalSpellings = normalizeCaseForComparison_2([
     targetInfo.canonicalPath,
     normalizeTrustedSymlink(targetInfo.canonicalPath),
   ]);
   let matchesAny = (ruleContent, source, spellings) =>
     spellings.some((spelling) => cdRuleMatches(ruleContent, source, spelling));
-  for (let rule of getDenyRules(context)) {
+  for (let rule of deniedBashRules(context)) {
     if (rule.ruleValue.toolName !== CD_COMMAND_NAME) continue;
     let ruleContent = rule.ruleValue.ruleContent;
     if (ruleContent === undefined || matchesAny(ruleContent, rule.source, requestedSpellings))
@@ -130,7 +138,7 @@ function findCdRule(targetInfo, context) {
       .filter((ruleContent) => ruleContent !== undefined),
   };
 }
-//@ chunk-1wvrnct9.js:2131-2334 placement
+//@ chunk-fvw87h8v.js:2165-2368 placement
 /**
  * 规则是否匹配路径
  */
@@ -144,7 +152,7 @@ function cdRuleMatches(ruleContent, source, targetPath) {
     .replace(/\/$/, "");
   return cdPatternToRegExp(pattern).test(relative);
 }
-//@ chunk-1wvrnct9.js:2334-2669 placement
+//@ chunk-fvw87h8v.js:2368-2703 placement
 /**
  * cd 规则模式转正则
  */
@@ -168,7 +176,7 @@ function cdPatternToRegExp(pattern) {
   }
   return new RegExp(`${regex}$`, "i");
 }
-//@ chunk-1wvrnct9.js:2669-2748 placement
+//@ chunk-fvw87h8v.js:2703-2782 placement
 async function recordDirectoryTrust(path, storageV5) {
   if (await isHomeDirectory(path)) {
     setSessionTrustAccepted(true);
@@ -177,7 +185,7 @@ async function recordDirectoryTrust(path, storageV5) {
   }
   return setPathTrustedDurably(path, storageV5);
 }
-//@ chunk-1wvrnct9.js:2748-2868 placement
+//@ chunk-fvw87h8v.js:2782-2902 placement
 async function isHomeDirectory(path) {
   let normalize = async (path) => {
     let resolved = path;
@@ -188,7 +196,7 @@ async function isHomeDirectory(path) {
   };
   return (await normalize(path)) === (await normalize(homedir()));
 }
-//@ chunk-1wvrnct9.js:2868-3366 placement
+//@ chunk-fvw87h8v.js:2902-3400 placement
 async function validateCdTarget(inputPath, context) {
   let expanded = expandPath(inputPath);
   try {
@@ -240,13 +248,13 @@ async function validateCdTarget(inputPath, context) {
     directory: canonical,
   };
 }
-//@ chunk-1wvrnct9.js:3366-4443 placement
+//@ chunk-fvw87h8v.js:3400-4477 placement
 function cdRuleRefusalMessage(directory, check, display = (text) => text, options) {
   let terminalAffordances = options?.terminalAffordances !== false;
   let format = options?.display ?? ((text) => text);
   directory = format(directory);
   if (check.result === "blockedByRule") {
-    let ruleText = format(formatPermissionRule(check.rule.ruleValue));
+    let ruleText = format(permissionRuleValueFromString(check.rule.ruleValue));
     let sourceText = permissionRuleSourceDisplayString(check.rule.source);
     if (check.rule.ruleValue.ruleContent === undefined)
       return terminalAffordances
@@ -260,7 +268,7 @@ function cdRuleRefusalMessage(directory, check, display = (text) => text, option
     ? `Can't move to ${display(directory)} \u2014 /cd is limited to directories matching ${check.allowedPatterns.map((allowedPattern) => display(format(allowedPattern))).join(", ")}. Pick a matching directory, or add a Cd rule in /permissions.`
     : `Can't move to ${display(directory)} \u2014 directory changes are limited to ${check.allowedPatterns.map((allowedPattern) => display(format(allowedPattern))).join(", ")}. Pick a matching directory.`;
 }
-//@ chunk-1wvrnct9.js:4443-4792 placement
+//@ chunk-fvw87h8v.js:4477-4826 placement
 /**
  * 收集目标目录的 CLAUDE.md
  */
@@ -288,7 +296,7 @@ async function collectClaudeMdForTarget(session, targetPath, storageV5) {
   keep();
   return oversizedMemoryWarning(files);
 }
-//@ chunk-1wvrnct9.js:4792-8255 placement
+//@ chunk-fvw87h8v.js:4826-8318 placement
 async function relocateSession(
   session,
   path,
@@ -297,8 +305,8 @@ async function relocateSession(
 ) {
   let cwd = getCwd();
   let originalCwd = getOriginalCwd();
-  let baseDirs = uniq([originalCwd, cwd]);
-  let departedAdditionalDirectories = uniq(
+  let baseDirs = normalizeCaseForComparison_2([originalCwd, cwd]);
+  let departedAdditionalDirectories = normalizeCaseForComparison_2(
     [
       ...(getSettingsForSourceTightenOnly("projectSettings")?.permissions?.additionalDirectories ?? []),
       ...(getSettingsForSourceTightenOnly("localSettings")?.permissions?.additionalDirectories ?? []),
@@ -358,6 +366,7 @@ async function relocateSession(
     updateHooksConfigSnapshot();
     settingsChangeDetector.notifyChange("projectSettings", {
       prevCwd: originalCwd,
+      countsAsStart: freshSession && confirmFresh?.() === true,
     });
   } catch (error) {
     logForDebugging(
@@ -485,7 +494,7 @@ async function relocateSession(
     freshSession: false,
   };
 }
-//@ chunk-1wvrnct9.js:8255-8331 placement
+//@ chunk-fvw87h8v.js:8318-8394 placement
 function reapplyProjectSettingsAfterTrustChange() {
   clearProjectPathForConfigCache();
   updateHooksConfigSnapshot();
@@ -493,7 +502,7 @@ function reapplyProjectSettingsAfterTrustChange() {
     trustFlip: true,
   });
 }
-//@ chunk-1wvrnct9.js:8331-8559 placement
+//@ chunk-fvw87h8v.js:8394-8622 placement
 function withGatedGrantsApplied(outcome) {
   if (outcome.gatedNotice === "") return outcome.modelMessage;
   return outcome.modelMessage.replace(
@@ -503,11 +512,11 @@ function withGatedGrantsApplied(outcome) {
     ),
   );
 }
-//@ chunk-1wvrnct9.js:8559-8600 placement
+//@ chunk-fvw87h8v.js:8622-8663 placement
 function safeWireMessage(message, fallback) {
   return UNSAFE_PATH_GLYPH_RE.test(message) ? fallback : message;
 }
-//@ chunk-1wvrnct9.js:8600-12643 placement
+//@ chunk-fvw87h8v.js:8663-12706 placement
 /**
  * 处理 set_cwd 控制请求（/cd 与桥接）：校验目标目录、按 Cd 权限规则拦截、记录目录信任、迁移会话并重新加载项目设置与 CLAUDE.md。
  */
@@ -725,10 +734,10 @@ async function handleSetCwdControlRequest(request, context) {
   };
 }
 export {
+  recordDirectoryTrust,
   relocateSession,
   validateCdTarget,
   cdRuleRefusalMessage,
-  recordDirectoryTrust,
   reapplyProjectSettingsAfterTrustChange,
   withGatedGrantsApplied,
   handleSetCwdControlRequest,

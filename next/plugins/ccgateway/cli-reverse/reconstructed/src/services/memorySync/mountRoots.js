@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：计算记忆库挂载根：用户记忆对应项目键，团队记忆对应项目键加相对路径，账号记忆无。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-82kqcve8.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a2q0x549.js (3)
  * attribution: placement 3
  */
 import { projectKeyFromMemoryDir, projectsRelativeParts } from "../../memdir/teamMemPrompts.js";
 import { TEAM_MEMORY_SCOPE } from "../../utils/auth.js";
 import { isValidKeySegment } from "../../utils/storage/storageSpaces.js";
 
-//@ chunk-82kqcve8.js:125363-125573 placement
+//@ chunk-a2q0x549.js:123429-123639 placement
 /**
  * 计算记忆库挂载根：用户记忆对应项目键，团队记忆对应项目键加相对路径，账号记忆无。
  */
@@ -35,7 +35,7 @@ function memoryStoreMountRoot(scope, dir) {
         baseRelPath: teamMemoryDir.relPath,
       };
 }
-//@ chunk-82kqcve8.js:125790-125913 placement
+//@ chunk-a2q0x549.js:123856-123979 placement
 /**
  * 由挂载根生成记忆存储的作用域。
  */
@@ -48,7 +48,7 @@ function memoryMountScope(base) {
     }),
   };
 }
-//@ chunk-82kqcve8.js:126057-126214 placement
+//@ chunk-a2q0x549.js:124123-124280 placement
 /**
  * 解析团队记忆目录路径，得到项目键与相对路径。
  */

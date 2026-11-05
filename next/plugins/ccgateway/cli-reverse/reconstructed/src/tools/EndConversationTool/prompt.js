@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。EndConversation 工具的描述文本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4y7fknwa.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5vpkey1h.js (7)
  * attribution: placement 7
  */
 import { END_CONVERSATION_TOOL_NAME, END_CONVERSATION_GB_FLAG } from "./constants.js";
@@ -15,7 +15,7 @@ import { getSessionEntrypoint } from "../../utils/sessionShape.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { isToolSearchEnabledOptimistic } from "../../utils/toolSearch.js";
 
-//@ chunk-4y7fknwa.js:382-5827 placement
+//@ chunk-5vpkey1h.js:382-5827 placement
 /**
  * 允许使用 EndConversation 的最低模型版本号。
  */
@@ -74,19 +74,19 @@ var END_CONVERSATION_MIN_MODEL = [
   ["fable", [5]],
   ["mythos", [5]],
 ];
-//@ chunk-4y7fknwa.js:5827-5857 placement
+//@ chunk-5vpkey1h.js:5827-5857 placement
 /**
  * 判断传入模型版本是否达到最低要求。
  */
 function isModelSupportsEndConversation(model) {
   return isModelVersionAtLeast(model, END_CONVERSATION_MIN_MODEL);
 }
-//@ chunk-4y7fknwa.js:5857-5872 placement
+//@ chunk-5vpkey1h.js:5857-5872 placement
 /**
  * 默认的允许入口类型正则（只有 cli）。
  */
 var DEFAULT_ALLOWED_ENTRYPOINTS_RE = /^cli$/i;
-//@ chunk-4y7fknwa.js:5872-5994 placement
+//@ chunk-5vpkey1h.js:5872-5994 placement
 function compileExactRegex(scope) {
   if (typeof scope !== "string") return null;
   try {
@@ -96,7 +96,7 @@ function compileExactRegex(scope) {
     return null;
   }
 }
-//@ chunk-4y7fknwa.js:5994-6211 placement
+//@ chunk-5vpkey1h.js:5994-6211 placement
 /**
  * 解析结束对话开关配置
  */
@@ -122,7 +122,7 @@ function parseEndConversationConfig(featureValue_CACHED_MAY_BE_STALE) {
     allowedEntrypoints: DEFAULT_ALLOWED_ENTRYPOINTS_RE,
   };
 }
-//@ chunk-4y7fknwa.js:6211-6366 placement
+//@ chunk-5vpkey1h.js:6211-6366 placement
 function isEndConversationToolEnabled(model) {
   let sessionEntrypoint = getSessionEntrypoint();
   if (sessionEntrypoint === undefined) return false;
@@ -133,17 +133,17 @@ function isEndConversationToolEnabled(model) {
   if (isModelEndCheckSupported()) return false;
   return enabled && allowedEntrypoints.test(sessionEntrypoint);
 }
-//@ chunk-4y7fknwa.js:6366-6646 placement
+//@ chunk-5vpkey1h.js:6366-6646 placement
 function getDeferredHintSection(model) {
   if (!isEndConversationToolEnabled(model)) return null;
   if (!isToolSearchEnabledOptimistic()) return null;
   return `${END_CONVERSATION_TOOL_NAME} (deferred tool): use only for sustained user abuse directed at the assistant, or when the user explicitly asks to see it demonstrated. Load the full guidance via ToolSearch("select:${END_CONVERSATION_TOOL_NAME}") before using it.`;
 }
 export {
+  END_CONVERSATION_REFLECTION_PROMPT,
   DESCRIPTION,
   isEndConversationToolEnabled,
   END_CONVERSATION_FORK_REFLECTION_PROMPT,
-  END_CONVERSATION_REFLECTION_PROMPT,
   END_CONVERSATION_FINAL_MESSAGE,
   END_CONVERSATION_TOOL_RESULT,
   getDeferredHintSection,

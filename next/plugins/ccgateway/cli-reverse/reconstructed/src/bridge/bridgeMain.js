@@ -3,13 +3,13 @@
  *
  * Remote Control 独立桥主循环（环境注册、轮询工作、派生会话）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/bridgeMain.ts
- * pieces: chunk-0knprqgt.js (1), chunk-3nztfxrw.js (1), chunk-b30925fy.js (14), chunk-wbbfk060.js (51)
- * attribution: fingerprint 19, placement 11, layout 22, sole-consumer 15
+ * pieces: chunk-18851qev.js (54), chunk-a3r2kq46.js (1), chunk-v3wm90pf.js (14)
+ * attribution: sole-consumer 18, fingerprint 17, layout 23, placement 11
  */
-import { join, resolve, basename } from "path";
-import { lstat } from "fs/promises";
+import { stat, realpath, lstat } from "fs/promises";
+import { dirname, basename, join, resolve } from "path";
 import { hostname } from "os";
 import { randomUUID } from "crypto";
 import { BridgeFatalError, isExpiredErrorType, createBridgeApiClient } from "./bridgeApi.js";
@@ -23,7 +23,9 @@ import { logForDebugging } from "../utils/debug.js";
 import { filterSharedEnvironment, collectHostProfileIfShared } from "../utils/toolchainDetection.js";
 import {
   errorMessage,
+  isPathAbsent,
   withTelemetryMessage,
+  toError,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   sanitizeErrorName,
   classifyAxiosError,
@@ -60,6 +62,17 @@ import {
 } from "./bridgeGates.js";
 import { sessionIdBody, toInfraSessionId, toCompatSessionId, validateBridgeId } from "./sessionIdCompat.js";
 import { MAX_POINTER_ACTIVE_SESSION_IDS } from "./bridgePointer.js";
+import {
+  claudeBinPath,
+  withProcessWrapper,
+  resolveLaunchTarget,
+  getLaunchCommand,
+} from "../utils/deepLink/registerProtocol.js";
+import { getNativeVersionsDir } from "../utils/xdg.js";
+import { isSemverVersion } from "../utils/model/modelCatalog/catalogCapabilities.js";
+import { isNewerBuild } from "../services/daemon/reapJobs.js";
+import { processWrapperError } from "../utils/processWrapper.js";
+import { onceExport } from "../../vendor/lodash-es/once.js";
 import { readBridgeSessionTags, fetchBridgeSessionTags } from "./sessionTags.js";
 import { createCapacityWake } from "./capacityWake.js";
 import { getPollIntervalConfig } from "./pollConfig.js";
@@ -112,7 +125,6 @@ import {
   untrustedDeviceHint,
 } from "./trustedDevice.js";
 import { printRemoteControlHelp, SPAWN_SESSIONS_DEFAULT } from "./remoteControlHelp.js";
-import { processWrapperError } from "../utils/processWrapper.js";
 import { lockCurrentVersion } from "../utils/nativeInstaller/installer.js";
 import { setAttestationFilterPolicy } from "./deviceAttestation.js";
 import { env } from "../utils/env.js";
@@ -121,7 +133,6 @@ import { wrapAnsi } from "../ink/wrapAnsi.js";
 import { WARNING_GLYPH } from "../constants/figures.js";
 import { sequential } from "../utils/sequential.js";
 import { resolveDaemonOwner } from "./ownerPin.js";
-import { getLaunchCommand } from "../utils/deepLink/registerProtocol.js";
 import { setRawModeSafe } from "../ink/setRawModeSafe.js";
 import { randomWordSlug } from "../utils/words.js";
 import { REMOTE_CONTROL_CLI, REMOTE_CONTROL_AUTO } from "./sessionOrigins.js";
@@ -129,22 +140,21 @@ import { drainRegisteredWriteQueues } from "../utils/settings/writeQueues.js";
 import { processChdir } from "../utils/fsOperations.js";
 import { REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE } from "./remoteControlPolicy.js";
 import { stripInvisibleChars } from "../utils/invisibleChars.js";
-import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3nztfxrw.js:44430-44564 fingerprint (2.1.88 match: formatDelay, 0.486)
+//@ chunk-a3r2kq46.js:45143-45277 fingerprint (2.1.88 match: formatDelay, 0.486)
 function formatDelay(ms) {
   if (ms < 1000) return `${ms}ms`;
   if (ms % 60000 === 0) return `${ms / 60000}min`;
   return ms % 1000 === 0 ? `${ms / 1000}s` : `${(ms / 1000).toFixed(1)}s`;
 }
-//@ chunk-b30925fy.js:10731-10769 placement
+//@ chunk-v3wm90pf.js:10731-10769 placement
 /**
  * 错误是否标记为可抑制（suppressible）。
  */
 function isSuppressibleError(error) {
   return error.suppressible;
 }
-//@ chunk-b30925fy.js:10769-10996 placement
+//@ chunk-v3wm90pf.js:10769-10996 placement
 /**
  * 错误分类给遥测：auth_failed / http_error / no_token / request_failed。
  */
@@ -156,7 +166,7 @@ function classifyApiError(error) {
   }
   return "request_failed";
 }
-//@ chunk-b30925fy.js:10996-11165 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-v3wm90pf.js:10996-11165 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 取响应体里的 error.type。
  */
@@ -173,7 +183,7 @@ function extractErrorTypeFromData(data) {
   }
   return;
 }
-//@ chunk-b30925fy.js:11165-11237 layout
+//@ chunk-v3wm90pf.js:11165-11237 layout
 /**
  * environment secret 续期参数：最少剩余 1 小时才续期，提前量为有效期的 1/10（夹在 15 分钟到 1 天之间）再加最多 25% 抖动。
  */
@@ -185,7 +195,7 @@ var MIN_RENEW_BEFORE_MS = 900000;
 var MAX_RENEW_BEFORE_MS = 86400000;
 var RENEW_JITTER_FRACTION = 0.25;
 var MIN_RENEWABLE_LIFETIME_MS = 3600000;
-//@ chunk-b30925fy.js:11237-11408 fingerprint (2.1.88 match: addJitter, 0.694)
+//@ chunk-v3wm90pf.js:11237-11408 layout
 /**
  * 根据 expires_in 计算带抖动的续期时间点；剩余不足 1 小时返回 undefined。
  */
@@ -202,12 +212,12 @@ function computeSecretRenewAt(expiresInSeconds, now = Date.now(), random = Math.
     (1 + RENEW_JITTER_FRACTION * random());
   return now + lifetimeMs - renewBeforeMs;
 }
-//@ chunk-b30925fy.js:11408-11447 layout
+//@ chunk-v3wm90pf.js:11408-11447 layout
 var RENEW_RETRY_MIN_MS = 300000;
 var RENEW_RETRY_MAX_MS = 3600000;
 var RENEW_RETRY_LIMIT = 3;
 var RENEW_FAILURE_LIMIT = 5;
-//@ chunk-b30925fy.js:11447-14560 placement
+//@ chunk-v3wm90pf.js:11447-14560 placement
 /**
  * 环境通告变化、密钥即将过期或轮询 401 时重新注册环境（[bridge:poll]）。
  */
@@ -378,7 +388,7 @@ async function reregisterEnvironment({
     pendingRequeues,
   };
 }
-//@ chunk-b30925fy.js:14560-15121 placement
+//@ chunk-v3wm90pf.js:14560-15121 placement
 async function describeAdvertChange({ api, config, environmentId, activeSessions, pacing, signal }) {
   let outcome;
   try {
@@ -407,7 +417,7 @@ async function describeAdvertChange({ api, config, environmentId, activeSessions
   pacing.notBefore = Date.now() + Math.min(MIN_RENEW_LEAD_MS * 2 ** pacing.failures, RENEW_ONE_HOUR_MS);
   return reregistered;
 }
-//@ chunk-b30925fy.js:15121-15422 placement
+//@ chunk-v3wm90pf.js:15121-15422 placement
 function classifyAdvertChange(config, toolHostAdvert, forceUnknown) {
   if (toolHostAdvert === undefined || (toolHostAdvert.kind === "unknown" && forceUnknown)) return;
   let registeredToolHostAdvert = config.registeredToolHostAdvert;
@@ -433,7 +443,7 @@ function classifyAdvertChange(config, toolHostAdvert, forceUnknown) {
       advertised: normalizedAdvert.kind === "advertise",
     });
 }
-//@ chunk-b30925fy.js:15422-15701 placement
+//@ chunk-v3wm90pf.js:15422-15701 placement
 async function describeReregisterOutcome(trackedApi, environmentId, sessionId, signal) {
   try {
     await trackedApi.reconnectSession(environmentId, sessionId, signal);
@@ -450,14 +460,14 @@ async function describeReregisterOutcome(trackedApi, environmentId, sessionId, s
     return signal.aborted ? "aborted" : "retry";
   }
 }
-//@ chunk-b30925fy.js:15701-15847 placement
+//@ chunk-v3wm90pf.js:15701-15847 placement
 function isSameAdvertState(advert, registeredToolHostAdvert) {
   if (registeredToolHostAdvert === undefined || registeredToolHostAdvert === "unconfirmed") return false;
   return advert.kind === "advertise" && registeredToolHostAdvert.kind === "advertise"
     ? import_sortedIndex_2(advert.advert, registeredToolHostAdvert.advert)
     : advert.kind === registeredToolHostAdvert.kind;
 }
-//@ chunk-b30925fy.js:15847-15969 placement
+//@ chunk-v3wm90pf.js:15847-15969 placement
 /**
  * 错误对象中的 retryAfterMs。
  */
@@ -469,14 +479,14 @@ function retryAfterMsOf(error) {
     ? error.retryAfterMs
     : undefined;
 }
-//@ chunk-b30925fy.js:15969-16006 placement
+//@ chunk-v3wm90pf.js:15969-16006 placement
 /**
  * 判断 API 错误是否带致命客户端状态（fatalClientStatus 有值即为致命，决定是否停止重试）。
  */
 function hasFatalClientStatus(error) {
   return fatalClientStatus(error) !== undefined;
 }
-//@ chunk-b30925fy.js:16006-16207 placement
+//@ chunk-v3wm90pf.js:16006-16207 placement
 function fatalClientStatus(error) {
   if (error instanceof BridgeFatalError) return error.status;
   if (
@@ -492,7 +502,7 @@ function fatalClientStatus(error) {
     return error.status;
   return;
 }
-//@ chunk-wbbfk060.js:19719-19899 sole-consumer
+//@ chunk-18851qev.js:21003-21183 sole-consumer
 var BRIDGE_WATCH_DEADLINE_MS = 210000;
 var WATCH_CONNECT_DEADLINE_MS = 30000;
 var WATCH_BACKOFF_BASE_MS = 15000;
@@ -510,49 +520,44 @@ var WATCH_RATE_LIMIT_RETRY_MS = 30000;
 var WATCH_RETRY_AFTER_CAP_MS = 600000;
 var WATCH_MAX_PENDING_SSE_CHARS = 1048576;
 var PRINTABLE_TOKEN_RE = /^[\x21-\x7e]{1,4096}$/;
-//@ chunk-wbbfk060.js:19899-19962 sole-consumer
+//@ chunk-18851qev.js:21183-21246 sole-consumer
 function clockSnapshot(clock) {
   return {
     wall: clock.now(),
     monotonic: clock.monotonicNow(),
   };
 }
-//@ chunk-wbbfk060.js:19962-20308 sole-consumer
+//@ chunk-18851qev.js:21246-21592 sole-consumer
 /**
  * 桥会话响应 schema（字符串长度上限、可空字段）。
  */
-var BoundedStringSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-var OptionalBoundedString;
-var BridgeSessionSchema;
-deferInit("chunk-wbbfk060.js:19962", () => {
-  BoundedStringSchema = DoctorLazy(() => stringSchema().max(256));
-  OptionalBoundedString = DoctorLazy(() =>
-    BoundedStringSchema()
-      .nullish()
-      .transform((value) => value ?? undefined),
-  );
-  BridgeSessionSchema = DoctorLazy(() =>
-    objectSchema({
-      id: BoundedStringSchema().min(1),
-      environment_id: OptionalBoundedString(),
-      status: OptionalBoundedString(),
-      worker_status: OptionalBoundedString(),
-      last_event_at: OptionalBoundedString(),
-      external_metadata: objectSchema({
-        tool_host_status: objectSchema({
-          state: literal("requested"),
-          environment_id: BoundedStringSchema().min(1),
-          requested_at: BoundedStringSchema().min(1),
-        })
-          .optional()
-          .catch(undefined),
+var BoundedStringSchema = DoctorLazy(() => stringSchema().max(256));
+var OptionalBoundedString = DoctorLazy(() =>
+  BoundedStringSchema()
+    .nullish()
+    .transform((value) => value ?? undefined),
+);
+var BridgeSessionSchema = DoctorLazy(() =>
+  objectSchema({
+    id: BoundedStringSchema().min(1),
+    environment_id: OptionalBoundedString(),
+    status: OptionalBoundedString(),
+    worker_status: OptionalBoundedString(),
+    last_event_at: OptionalBoundedString(),
+    external_metadata: objectSchema({
+      tool_host_status: objectSchema({
+        state: literal("requested"),
+        environment_id: BoundedStringSchema().min(1),
+        requested_at: BoundedStringSchema().min(1),
       })
         .optional()
         .catch(undefined),
-    }),
-  );
-});
-//@ chunk-wbbfk060.js:20308-24495 sole-consumer
+    })
+      .optional()
+      .catch(undefined),
+  }),
+);
+//@ chunk-18851qev.js:21592-25783 sole-consumer
 /**
  * 维护 off/连接中/已连接等状态，状态变化回调 onStateChange；每次尝试带代号与中止控制器， 失败按 HTTP 状态决定结束或在退避后重试；用墙钟与单调钟的差检测休眠。
  */
@@ -885,7 +890,7 @@ function createBridgeWatcher(options) {
     },
   };
 }
-//@ chunk-wbbfk060.js:24495-24769 sole-consumer
+//@ chunk-18851qev.js:25783-26057 sole-consumer
 function classifyWatchHttpStatus(status, retryAfterMs) {
   switch (status) {
     case 401:
@@ -913,7 +918,7 @@ function classifyWatchHttpStatus(status, retryAfterMs) {
       };
   }
 }
-//@ chunk-wbbfk060.js:24769-24919 sole-consumer
+//@ chunk-18851qev.js:26057-26207 sole-consumer
 var POLL_BACKOFF_LADDER_MS = [300, 1300, 4300, 15000, 30000, 60000];
 var ASK_BASE_WAIT_MS = 30000;
 var ASK_MAX_WAIT_MS = 16 * ASK_BASE_WAIT_MS;
@@ -928,7 +933,7 @@ var SLEEP_GAP_WINDOW = {
   to: 305000,
   retry: 4500,
 };
-//@ chunk-wbbfk060.js:24919-25026 sole-consumer
+//@ chunk-18851qev.js:26207-26314 sole-consumer
 function isSleepGap(previous, next) {
   return (
     previous !== undefined &&
@@ -937,13 +942,13 @@ function isSleepGap(previous, next) {
     )
   );
 }
-//@ chunk-wbbfk060.js:25026-25088 sole-consumer
+//@ chunk-18851qev.js:26314-26376 sole-consumer
 var ASK_OUTCOME_COUNTER_NAMES = {
   frame: "nudge",
   own: "own_request",
   free: "start_or_wake",
 };
-//@ chunk-wbbfk060.js:25088-25746 sole-consumer
+//@ chunk-18851qev.js:26376-27034 sole-consumer
 /**
  * 轮询统计计数器初值。
  */
@@ -980,7 +985,7 @@ function createPollCounters() {
     connected_ms: 0,
   };
 }
-//@ chunk-wbbfk060.js:25746-26020 sole-consumer
+//@ chunk-18851qev.js:27034-27308 sole-consumer
 function createAskBackoff(now) {
   let makeEntry = () => ({
     waitMs: ASK_BASE_WAIT_MS,
@@ -1009,7 +1014,7 @@ function createAskBackoff(now) {
     },
   };
 }
-//@ chunk-wbbfk060.js:26020-29796 sole-consumer
+//@ chunk-18851qev.js:27308-31105 sole-consumer
 /**
  * 已连接（或最近连上）用 connectedMs，否则 fallbackMs，提供工具主机时上限 30 秒； 外部事件可把下次轮询提前并唤醒，记录各原因的轮询与有工作次数。
  */
@@ -1282,11 +1287,11 @@ function createWorkPoller(options) {
     },
   };
 }
-//@ chunk-wbbfk060.js:29796-29823 sole-consumer
+//@ chunk-18851qev.js:31105-31132 sole-consumer
 function isRcChildRestartResumeEnabled() {
   return isBridgeRcChildRestartResumeEnabled();
 }
-//@ chunk-wbbfk060.js:29823-30032 sole-consumer
+//@ chunk-18851qev.js:31132-31341 sole-consumer
 function projectThreadPointer(sessionCompatIds, parkedProjectThreadIds) {
   if (sessionCompatIds.size === 0 && parkedProjectThreadIds.size === 0) return;
   let activeBodies = new Set([...sessionCompatIds].map(sessionIdBody));
@@ -1297,10 +1302,10 @@ function projectThreadPointer(sessionCompatIds, parkedProjectThreadIds) {
       .slice(0, MAX_POINTER_ACTIVE_SESSION_IDS),
   };
 }
-//@ chunk-wbbfk060.js:30032-30050 sole-consumer
+//@ chunk-18851qev.js:31341-31359 sole-consumer
 var MAX_PROJECT_THREAD_REQUEUES = 4;
 var PROJECT_THREAD_REQUEUE_TIMEOUT_MS = 60000;
-//@ chunk-wbbfk060.js:30050-30893 sole-consumer
+//@ chunk-18851qev.js:31359-32205 sole-consumer
 /**
  * 通过 bridge/reconnect 重新排队项目线程会话（超时、致命错误丢弃）。
  */
@@ -1366,7 +1371,89 @@ async function requeueProjectThreadSessions(api, environmentId, sessionIds, sign
     unattempted,
   };
 }
-//@ chunk-wbbfk060.js:30893-31061 fingerprint (2.1.88 match: DEFAULT_BACKOFF, 1)
+//@ chunk-18851qev.js:32303-32528 sole-consumer
+var PROGRAM_FILE_GONE_NOTICE =
+  "The program file this Remote Control started from is gone, most likely removed by an update. New sessions now run the newer version that replaced it. Remote Control itself stays on the old version until it restarts.";
+//@ chunk-18851qev.js:32528-33080 sole-consumer
+async function resolveRestartTarget(launch, version) {
+  if (!(await stat(launch.cmd).then(() => false, isPathAbsent)))
+    return {
+      source: "own",
+    };
+  let { execTokenIsRunnable, homebrewBinLink } = await import("../services/daemon/spawnLauncher.js");
+  let homebrewLink = await homebrewBinLink(launch.cmd);
+  let realTarget = await realpath(homebrewLink ?? claudeBinPath()).catch(() => null);
+  if (realTarget === null)
+    return {
+      source: "none",
+    };
+  let targetDir = homebrewLink === null ? realTarget : dirname(realTarget);
+  let cmdDir = homebrewLink === null ? launch.cmd : dirname(launch.cmd);
+  if (
+    dirname(targetDir) !== dirname(cmdDir) ||
+    (homebrewLink === null &&
+      dirname(cmdDir) !== (await realpath(getNativeVersionsDir()).catch(() => null))) ||
+    !isSemverVersion(basename(targetDir)) ||
+    !isNewerBuild(basename(targetDir), version) ||
+    !(await execTokenIsRunnable(realTarget, {
+      rejectNpmStub: true,
+    })) ||
+    processWrapperError() !== null
+  )
+    return {
+      source: "none",
+    };
+  return {
+    source: homebrewLink === null ? "native" : "homebrew",
+    invocation: withProcessWrapper({
+      cmd: realTarget,
+      prefixArgs: [],
+      target: realTarget,
+    }),
+  };
+}
+//@ chunk-18851qev.js:33080-33993 sole-consumer
+function createRestartSpawner(
+  spawner,
+  launchTarget = resolveLaunchTarget({
+    pinToCurrentBinary: true,
+  }),
+  version = {
+    ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+    PACKAGE_URL: "@anthropic-ai/claude-code",
+    README_URL: "https://code.claude.com/docs/en/overview",
+    VERSION: "2.1.318",
+    FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
+    HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+    DD_SOURCEMAP_GROUP: "default",
+  }.VERSION,
+) {
+  let warnOnce = onceExport(() => spawner.logWarning(PROGRAM_FILE_GONE_NOTICE));
+  return async () => {
+    try {
+      let choice = await resolveRestartTarget(launchTarget, version);
+      switch (choice.source) {
+        case "own":
+          return;
+        case "none":
+          logFeatureBad("bridge_session_stand_in", "no_stand_in");
+          return;
+        case "homebrew":
+        case "native":
+          logFeatureSad("bridge_session_stand_in", choice.source);
+          warnOnce();
+          return choice.invocation;
+      }
+    } catch (error) {
+      logFeatureBad("bridge_session_stand_in", "threw");
+      logError(withTelemetryMessage(toError(error), "Choosing a Remote Control session's program failed"));
+      return;
+    }
+  };
+}
+//@ chunk-18851qev.js:33993-34161 fingerprint (2.1.88 match: DEFAULT_BACKOFF, 1)
 /**
  * 轮询退避默认值（连接错误 2s 起、上限 120s、10 分钟放弃；一般错误 0.5s 起、上限 30s、10 分钟放弃）及若干常量（registerWorker 重试 5 次等）。
  */
@@ -1383,21 +1470,21 @@ var REGISTER_WORKER_MAX_ATTEMPTS = 5;
 var WORKER_RETRY_BASE_MS = 1000;
 var STATUS_UPDATE_INTERVAL_MS = 120000;
 var POLL_RETRY_FLOOR_MS = 3000;
-//@ chunk-wbbfk060.js:31061-31097 fingerprint (2.1.88 match: pollSleepDetectionThresholdMs, 1)
+//@ chunk-18851qev.js:34161-34197 fingerprint (2.1.88 match: pollSleepDetectionThresholdMs, 1)
 /**
  * 判定"系统睡眠"的阈值：两次轮询错误间隔超过 connCapMs 的两倍即重置错误预算。
  */
 function pollSleepDetectionThresholdMs(backoff) {
   return backoff.connCapMs * 2;
 }
-//@ chunk-wbbfk060.js:31097-31198 layout
+//@ chunk-18851qev.js:34197-34298 layout
 /**
  * 在致命错误文案末尾补上"重新运行 claude remote-control 以重连"。
  */
 function withReconnectHint(message) {
   return `${message.replace(/[.!?]?\s*$/, ".")} Re-run \`claude remote-control\` to reconnect.`;
 }
-//@ chunk-wbbfk060.js:31198-31315 layout
+//@ chunk-18851qev.js:34298-34415 layout
 /**
  * 错误是否表示 environment 已不存在（BridgeFatalError 404/410，或消息匹配 environment … not found）。
  */
@@ -1405,7 +1492,7 @@ function isEnvironmentGoneError(error) {
   if (error instanceof BridgeFatalError) return error.status === 404 || error.status === 410;
   return /environment .* not found/i.test(errorMessage(error));
 }
-//@ chunk-wbbfk060.js:31315-31454 fingerprint (2.1.88 match: safeSpawn, 0.733)
+//@ chunk-18851qev.js:34415-34554 fingerprint (2.1.88 match: safeSpawn, 0.733)
 /**
  * 调 sessionSpawner.spawn 派生子会话；抛错时记录日志并返回错误字符串。
  */
@@ -1418,7 +1505,7 @@ function safeSpawn(spawner, opts, dir) {
     return errMsg;
   }
 }
-//@ chunk-wbbfk060.js:31454-31546 layout
+//@ chunk-18851qev.js:34554-34646 layout
 /**
  * 把 expires_in 秒数换成绝对过期时间戳（非正数返回 undefined）。
  */
@@ -1427,7 +1514,7 @@ function expiresInToDeadline(expiresInSeconds) {
     ? Date.now() + expiresInSeconds * 1000
     : undefined;
 }
-//@ chunk-wbbfk060.js:31546-67919 fingerprint (2.1.88 match: runBridgeLoop, 0.603)
+//@ chunk-18851qev.js:34646-71092 fingerprint (2.1.88 match: runBridgeLoop, 0.603)
 /**
  * 主轮询循环：按容量选轮询间隔（满载/部分/空闲，或由 sessions watch 调度器决定）调用 pollForWork；对每个 work 解码 work secret、ack、registerWorker 取 epoch、
  * safeSpawn 子 CLI（--sdk-url 指向 /v1/code/sessions/{id}）；维护活动会话、心跳（heartbeatWork）、超时、工作树清理与 stopWork；连接/一般错误分别指数退避，检测系统睡眠重置预算，
@@ -2833,6 +2920,7 @@ async function runBridgeLoop(
           });
           let modelArgs = serverConfig === undefined ? carriedModelArgs(workSecret.claude_code_args) : [];
           let boundResumedTurn = boundedResumeBodies.has(sessionIdBody(sessionId));
+          let standIn = await sessionSpawner.chooseStandIn?.();
           let spawnResult = safeSpawn(
             sessionSpawner,
             {
@@ -2847,6 +2935,9 @@ async function runBridgeLoop(
               idleExitAfterMs: idleExitAfterMs_2,
               ...(sourceDir !== undefined && {
                 sourceDir,
+              }),
+              ...(standIn !== undefined && {
+                standIn,
               }),
               onActivity: (text) => {
                 switch (text.type) {
@@ -3499,24 +3590,21 @@ async function runBridgeLoop(
   logger.logVerbose("Environment offline.");
   return policyRefusal;
 }
-//@ chunk-wbbfk060.js:67919-68060 fingerprint (2.1.88 match: CONNECTION_ERROR_CODES, 0.751)
+//@ chunk-18851qev.js:71092-71233 fingerprint (2.1.88 match: CONNECTION_ERROR_CODES, 0.751)
 /**
  * 视为"连不上服务器"的 Node 错误码集合（ECONNREFUSED、ECONNRESET、ETIMEDOUT…ERR_PROXY_TUNNEL）。
  */
-var CONNECTION_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-wbbfk060.js:67919", () => {
-  CONNECTION_ERROR_CODES = new Set([
-    "ECONNREFUSED",
-    "ECONNRESET",
-    "ETIMEDOUT",
-    "ECONNABORTED",
-    "ENETUNREACH",
-    "EHOSTUNREACH",
-    "ERR_SOCKET_CLOSED",
-    "ERR_PROXY_TUNNEL",
-  ]);
-});
-//@ chunk-wbbfk060.js:68060-68173 layout (2.1.88 match: isConnectionError, 1)
+var CONNECTION_ERROR_CODES = new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "ECONNABORTED",
+  "ENETUNREACH",
+  "EHOSTUNREACH",
+  "ERR_SOCKET_CLOSED",
+  "ERR_PROXY_TUNNEL",
+]);
+//@ chunk-18851qev.js:71233-71346 layout (2.1.88 match: isConnectionError, 1)
 /**
  * 错误码是否属于 CONNECTION_ERROR_CODES。
  */
@@ -3531,7 +3619,7 @@ function isConnectionError(err) {
     return true;
   return false;
 }
-//@ chunk-wbbfk060.js:68173-68250 layout
+//@ chunk-18851qev.js:71346-71423 layout
 /**
  * 连接失败分类：timed_out / unreachable / refused（用于 watch 调度器统计）。
  */
@@ -3542,7 +3630,7 @@ function classifyConnectFailure(error) {
       ? "unreachable"
       : "refused";
 }
-//@ chunk-wbbfk060.js:68250-68357 layout
+//@ chunk-18851qev.js:71423-71530 layout
 function isTimeoutError(error) {
   return (
     !!error &&
@@ -3551,7 +3639,7 @@ function isTimeoutError(error) {
     (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT")
   );
 }
-//@ chunk-wbbfk060.js:68357-68500 layout
+//@ chunk-18851qev.js:71530-71673 layout
 function isNetworkUnreachableError(error) {
   return (
     !!error &&
@@ -3563,7 +3651,7 @@ function isNetworkUnreachableError(error) {
       error.code === "EPIPE")
   );
 }
-//@ chunk-wbbfk060.js:68500-68613 fingerprint (2.1.88 match: isServerError, 1)
+//@ chunk-18851qev.js:71673-71786 fingerprint (2.1.88 match: isServerError, 1)
 /**
  * 是否是 axios ERR_BAD_RESPONSE（5xx）。
  */
@@ -3576,25 +3664,25 @@ function isServerError(err) {
     err.code === "ERR_BAD_RESPONSE"
   );
 }
-//@ chunk-wbbfk060.js:68613-68645 layout
+//@ chunk-18851qev.js:71786-71818 layout
 var REGISTER_RETRY_MIN_MS = 30000;
 var REGISTER_RETRY_MAX_MS = 300000;
 var REGISTER_RETRY_DEFAULT_MS = 60000;
-//@ chunk-wbbfk060.js:68645-68708 layout
+//@ chunk-18851qev.js:71818-71881 layout
 /**
  * 给延迟加 ±25% 随机抖动。
  */
 function jitterDelay(ms) {
   return Math.max(0, ms + ms * 0.25 * (2 * Math.random() - 1));
 }
-//@ chunk-wbbfk060.js:68708-68785 layout
+//@ chunk-18851qev.js:71881-71958 layout
 function formatMs(ms) {
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
 }
-//@ chunk-wbbfk060.js:68785-68808 layout
+//@ chunk-18851qev.js:71958-71981 layout
 var REREGISTER_MIN_BACKOFF_MS = 60000;
 var REREGISTER_MAX_BACKOFF_MS = 300000;
-//@ chunk-wbbfk060.js:68808-69183 layout
+//@ chunk-18851qev.js:71981-72356 layout
 /**
  * 注册 environment（失败不抛出）：失败时调 onFailure，非交互模式按 retry-after（上限 5 分钟、至少约 1 分钟抖动）等待后返回 undefined。
  */
@@ -3622,7 +3710,7 @@ async function tryRegisterEnvironment({ register, interactive, onFailure }) {
     return;
   }
 }
-//@ chunk-wbbfk060.js:69183-70242 fingerprint (2.1.88 match: stopWorkWithRetry, 0.552)
+//@ chunk-18851qev.js:72356-73415 fingerprint (2.1.88 match: stopWorkWithRetry, 0.552)
 /**
  * 停止 work：最多 3 次，指数退避；BridgeFatalError 时按 403 可忽略 / environment 已失效 / 其他致命分别记录并立即放弃。
  */
@@ -3687,7 +3775,7 @@ async function stopWorkWithRetry(
       }
     }
 }
-//@ chunk-wbbfk060.js:70242-71424 layout
+//@ chunk-18851qev.js:73415-74597 layout
 /**
  * 会话结束后清理 worktree：有未提交改动、领先提交或 checkout 移动时保留并提示，否则移除（removed / left_in_place / failed）。
  */
@@ -3757,22 +3845,22 @@ async function cleanupSessionWorktree(worktree, logger, options) {
       break;
   }
 }
-//@ chunk-wbbfk060.js:71424-71465 fingerprint (2.1.88 match: SPAWN_FLAG_VALUES, 1)
+//@ chunk-18851qev.js:74597-74638 fingerprint (2.1.88 match: SPAWN_FLAG_VALUES, 1)
 var SPAWN_FLAG_VALUES = ["session", "same-dir", "worktree"];
-//@ chunk-wbbfk060.js:71465-71665 fingerprint (2.1.88 match: parseSpawnValue, 1)
+//@ chunk-18851qev.js:74638-74838 fingerprint (2.1.88 match: parseSpawnValue, 1)
 function parseSpawnValue(raw) {
   if (raw === "session") return "single-session";
   if (raw === "same-dir") return "same-dir";
   if (raw === "worktree") return "worktree";
   return `--spawn requires one of: ${SPAWN_FLAG_VALUES.join(", ")} (got: ${raw ?? "<missing>"})`;
 }
-//@ chunk-wbbfk060.js:71665-71805 fingerprint (2.1.88 match: parseCapacityValue, 1)
+//@ chunk-18851qev.js:74838-74978 fingerprint (2.1.88 match: parseCapacityValue, 1)
 function parseCapacityValue(raw) {
   let n = raw === undefined ? NaN : parseIntLoose(raw);
   if (isNaN(n) || n < 1) return `--capacity requires a positive integer (got: ${raw ?? "<missing>"})`;
   return n;
 }
-//@ chunk-wbbfk060.js:71805-71986 layout
+//@ chunk-18851qev.js:74978-75159 layout
 /**
  * 解析 --preview-port（1024–65535），错误返回提示字符串。
  */
@@ -3782,7 +3870,7 @@ function parsePreviewPortValue(raw) {
     return `--preview-port requires an integer in [1024, 65535] (got: ${raw ?? "<missing>"})`;
   return n;
 }
-//@ chunk-wbbfk060.js:71986-75709 fingerprint (2.1.88 match: parseArgs, 0.734)
+//@ chunk-18851qev.js:75159-78889 fingerprint (2.1.88 match: parseArgs, 0.734)
 /**
  * 解析 claude remote-control 参数：--name、--remote-control-session-name-prefix、-c/--continue、--session-id、--permission-mode、--[no-]chrome、--spawn、--capacity、
  * --[no-]create-session-in-dir、--allow-unattended-tool-calls、--debug-file、-v；拒绝 --sandbox，并校验互斥组合；--enable-live-preview/--preview-port 在此构建不可用。
@@ -3932,9 +4020,9 @@ Run 'claude remote-control --help' for usage.`);
     };
   }
 }
-//@ chunk-wbbfk060.js:75709-75719 layout
+//@ chunk-18851qev.js:78889-78899 layout
 var TITLE_MAX_CHARS = 80;
-//@ chunk-wbbfk060.js:75719-75998 layout
+//@ chunk-18851qev.js:78899-79178 layout
 /**
  * 取恢复会话所需的认证上下文：access token、是否用 v2 会话 CRUD、组织 UUID（v1 时）、trusted device token。
  */
@@ -3960,11 +4048,11 @@ async function getUnarchiveAuthContext(credentials) {
     trustedDeviceToken,
   };
 }
-//@ chunk-wbbfk060.js:75998-76070 layout
+//@ chunk-18851qev.js:79178-79250 layout
 function firstByte(data) {
   return typeof data === "string" ? Buffer.from(data, "utf8")[0] : data[0];
 }
-//@ chunk-wbbfk060.js:76070-77203 layout
+//@ chunk-18851qev.js:79250-80383 layout
 /**
  * 重连前解档被回收的会话（tengu_bridge_unarchive_on_resume）：untrusted_device 时注册设备后重试；2xx 记成功、409 视为已活跃、其余保持旧行为。
  */
@@ -4029,7 +4117,7 @@ async function unarchiveBridgeSessionIfNeeded(sessionId, baseUrl, credentials) {
     return false;
   }
 }
-//@ chunk-wbbfk060.js:77203-77332 fingerprint (2.1.88 match: fetchSessionTitle, 0.67)
+//@ chunk-18851qev.js:80383-80512 fingerprint (2.1.88 match: fetchSessionTitle, 0.67)
 async function fetchSessionTitle(compatSessionId, baseUrl) {
   let { getBridgeSession } = await import("./createSession.js");
   return (
@@ -4040,7 +4128,7 @@ async function fetchSessionTitle(compatSessionId, baseUrl) {
     )?.title || undefined
   );
 }
-//@ chunk-wbbfk060.js:77332-77761 layout
+//@ chunk-18851qev.js:80512-80943 layout
 /**
  * 每小时刷新一次 bridge pointer 文件（续 mtime，清理过期的 activeSessionIds），定时器 unref。
  */
@@ -4105,7 +4193,7 @@ function startPointerRefreshTimer(
   interval.unref?.();
   return interval;
 }
-//@ chunk-wbbfk060.js:77761-99405 fingerprint (2.1.88 match: bridgeMain, 0.576)
+//@ chunk-18851qev.js:80943-102611 fingerprint (2.1.88 match: bridgeMain, 0.575)
 /**
  * claude remote-control 入口：解析参数→launcher/工作区信任/Chrome 策略/登录检查→读取 bridge pointer（--continue / --session-id / 崩溃恢复）→询问 spawn 模式→
  * 创建 API 客户端并注册 environment→（可选）预创建会话、写 bridge pointer→注册信号与键盘（空格 QR、w 切换 spawn 模式）→runBridgeLoop→退出清理。
@@ -4180,8 +4268,7 @@ async function bridgeMain(args, storageV5, credentials) {
   setOriginalCwd(dir);
   setCwdState(dir);
   if (!checkHasTrustDialogAccepted()) {
-    let { canPromptForWorkspaceTrust, offerBridgeWorkspaceTrust } =
-      await import("./canPromptForWorkspaceTrust.lazy.js");
+    let { canPromptForWorkspaceTrust, offerBridgeWorkspaceTrust } = await import("./workspaceTrustPrompt.js");
     let trustResult = await offerBridgeWorkspaceTrust({
       dir,
       isHomeDir: isHomeDirectorySession(),
@@ -4500,10 +4587,10 @@ Spawn mode for this project:
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -4907,6 +4994,7 @@ The session may still be resumable \u2014 try running the same command again.`,
   let spawner_2 = createSessionSpawner({
     execPath: launchCommand.cmd,
     scriptArgs: launchCommand.prefixArgs,
+    chooseStandIn: createRestartSpawner(spawner),
     env: process.env,
     verbose,
     debugFile,
@@ -5181,14 +5269,14 @@ The session may still be resumable \u2014 try running the same command again.`,
     process.kill(process.pid, "SIGKILL");
   }
 }
-//@ chunk-wbbfk060.js:99405-99494 fingerprint (2.1.88 match: BridgeHeadlessPermanentError, 1)
+//@ chunk-18851qev.js:102611-102700 fingerprint (2.1.88 match: BridgeHeadlessPermanentError, 1)
 class BridgeHeadlessPermanentError extends Error {
   constructor(message) {
     super(message);
     this.name = "BridgeHeadlessPermanentError";
   }
 }
-//@ chunk-wbbfk060.js:99494-99936 layout
+//@ chunk-18851qev.js:102700-103142 layout
 /**
  * 把 Remote Control 策略拒绝原因转成错误：org_denied → 永久错误；latched / route_missing / 其他 → 可重试的遥测安全错误。
  */
@@ -5211,7 +5299,7 @@ function policyDenialError(kind, detail) {
     "Remote Control denied: policy cache miss (transient)",
   );
 }
-//@ chunk-wbbfk060.js:99936-107907 fingerprint (2.1.88 match: runBridgeHeadless, 0.405)
+//@ chunk-18851qev.js:103142-111136 fingerprint (2.1.88 match: runBridgeHeadless, 0.403)
 /**
  * 宿主（桌面/守护进程）托管的无头 Remote Control：与 bridgeMain 相同的检查与注册流程，但不交互、用回调日志，失败抛 BridgeHeadlessPermanentError 或可重试错误，最后调用 runBridgeLoop。
  */
@@ -5231,7 +5319,7 @@ async function runBridgeHeadless(opts, signal) {
   await enableConfigs();
   let { initSinks } = await import("../utils/sinks.js");
   initSinks();
-  let { getSettingsWithErrors } = await import("../utils/settings/settings.lazy.js");
+  let { getSettingsWithErrors } = await import("../utils/settings/settings.js");
   if (getSettingsWithErrors().settings.disableRemoteControl === true)
     throw new BridgeHeadlessPermanentError(REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE);
   let { composePolicyLimitsClient, primePolicyLimitsCache } =
@@ -5372,10 +5460,10 @@ async function runBridgeHeadless(opts, signal) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -5481,6 +5569,7 @@ async function runBridgeHeadless(opts, signal) {
   let sessionSpawner = createSessionSpawner({
     execPath: logger.cmd,
     scriptArgs: logger.prefixArgs,
+    chooseStandIn: createRestartSpawner(spawner),
     env: process.env,
     verbose: false,
     permissionMode: opts.permissionMode,
@@ -5585,7 +5674,7 @@ async function runBridgeHeadless(opts, signal) {
   let headlessPolicyError = loopResult && policyDenialError(loopResult.kind, loopResult.detail);
   if (headlessPolicyError) throw headlessPolicyError;
 }
-//@ chunk-wbbfk060.js:107907-108740 fingerprint (2.1.88 match: createHeadlessBridgeLogger, 0.953)
+//@ chunk-18851qev.js:111136-111969 fingerprint (2.1.88 match: createHeadlessBridgeLogger, 0.953)
 function createHeadlessBridgeLogger(log) {
   let noop = () => {};
   return {
@@ -5620,15 +5709,10 @@ function createHeadlessBridgeLogger(log) {
     detachTerminal: noop,
   };
 }
-//@ chunk-0knprqgt.js:13682-13722 fingerprint (2.1.88 match: isConnectionError, 1)
-function isCodeSegment(err) {
-  return err.kind === "code";
-}
 export {
-  isCodeSegment,
-  formatDelay,
   retryAfterMsOf,
   hasFatalClientStatus,
+  formatDelay,
   classifyApiError,
   extractErrorTypeFromData,
   BridgeHeadlessPermanentError,

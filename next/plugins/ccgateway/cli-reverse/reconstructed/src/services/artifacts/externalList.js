@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：列出外部 artifact
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-06y4szbn.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-51jy8ztq.js (2)
  * attribution: placement 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -18,7 +18,7 @@ import { frameApi } from "./frameRelay.js";
 import { buildFrameHeaders } from "./frameApi.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-06y4szbn.js:40305-40483 placement
+//@ chunk-51jy8ztq.js:40304-40482 placement
 /**
  * 外部 artifact 列表接口的常量（响应大小、条数、超时）与响应/行 schema（slug、标题、共享角色）。
  */
@@ -27,7 +27,7 @@ var EXTERNAL_LIST_LIMIT;
 var EXTERNAL_LIST_TIMEOUT_MS;
 var EXTERNAL_LIST_SCHEMA;
 var EXTERNAL_ROW_SCHEMA;
-deferInit("chunk-06y4szbn.js:40305", () => {
+deferInit("chunk-51jy8ztq.js:40304", () => {
   MAX_EXTERNAL_LIST_BYTES = 1048576;
   EXTERNAL_LIST_LIMIT = 50;
   EXTERNAL_LIST_TIMEOUT_MS = 5000;
@@ -44,7 +44,7 @@ deferInit("chunk-06y4szbn.js:40305", () => {
     }),
   );
 });
-//@ chunk-06y4szbn.js:40483-41496 placement
+//@ chunk-51jy8ztq.js:40482-41495 placement
 /**
  * 列出外部组织共享给用户的 artifact（/api/frame/frames/external）。
  */

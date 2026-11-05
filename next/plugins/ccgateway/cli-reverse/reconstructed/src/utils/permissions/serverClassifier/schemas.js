@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：分类器决策 schema
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nt9amew5.js (2)
  * attribution: placement 2
  */
 import { DoctorLazy } from "../../../cli/handlers/util.js";
@@ -23,7 +23,7 @@ import {
 } from "../../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:133187-135297 placement
+//@ chunk-nt9amew5.js:1832-3889 placement
 /**
  * 服务端分类器决策 schema（allow/deny/ask 与自动模式软硬拒绝）。
  */
@@ -63,7 +63,7 @@ var MAX_ARTIFACT_SLUGS;
 var MAX_ARTIFACT_PATH_LENGTH;
 var MAX_ARTIFACT_SLUG_LENGTH;
 var MAX_ARTIFACT_TEXT_LENGTH;
-deferInit("chunk-e6aww6q8.js:133187", () => {
+deferInit("chunk-nt9amew5.js:1832", () => {
   DEFAULT_MAX_SAVED_RULES = 64;
   MAX_SAVED_RULES_SETTING = 1024;
   MAX_RULE_PATTERN_LENGTH = 200;
@@ -224,7 +224,7 @@ deferInit("chunk-e6aww6q8.js:133187", () => {
   MAX_ARTIFACT_SLUG_LENGTH = 32;
   MAX_ARTIFACT_TEXT_LENGTH = 64;
 });
-//@ chunk-e6aww6q8.js:135360-137136 placement
+//@ chunk-nt9amew5.js:3950-5713 placement
 /**
  * 发给分类器的 Artifact 状态 schema：按 slug 的分享/认证/观察状态、按路径映射、实时文档、房间、最近发布与会话级能力开关。
  */
@@ -232,7 +232,7 @@ var artifactEnvSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.
 var artifactShareStateSchema;
 var artifactSlugStateSchema;
 var artifactClassifierStateSchema;
-deferInit("chunk-e6aww6q8.js:135360", () => {
+deferInit("chunk-nt9amew5.js:3950", () => {
   artifactEnvSchema = DoctorLazy(() => _enum(["prod", "staging"]));
   artifactShareStateSchema = DoctorLazy(() =>
     objectSchema({
@@ -333,6 +333,9 @@ export {
   MAX_ARTIFACT_TEXT_LENGTH,
   MAX_CONTEXT_ENTRY_LENGTH,
   MAX_TOOL_USE_IDS,
+  MAX_ID_LIST_LENGTH,
+  MAX_MCP_RULE_LENGTH,
+  classifierExtraContextSchema,
   MAX_SESSION_TITLES,
   MAX_ARTIFACT_PATH_LENGTH,
   MAX_CONTEXT_TEXT_LENGTH,
@@ -350,9 +353,6 @@ export {
   MAX_PATH_FIELD_LENGTH,
   MAX_PERMISSION_MODE_LENGTH,
   MAX_PLATFORM_LENGTH,
-  MAX_ID_LIST_LENGTH,
-  MAX_MCP_RULE_LENGTH,
-  classifierExtraContextSchema,
   MAX_AUTO_MODE_LINE_LENGTH,
   DEFAULT_MAX_SAVED_RULES,
   MAX_SAVED_RULES_SETTING,

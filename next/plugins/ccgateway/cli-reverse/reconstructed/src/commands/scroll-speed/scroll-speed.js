@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/scroll-speed 设置界面：显示演示标尺、编辑器滚轮灵敏度并保存到 userSettings；根据环境变量识别宿主编辑器（Cursor、VS Code、Devin、Antigravity 等）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-myhtjy4v.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7bzzdwfg.js (13)
  * attribution: placement 13
  */
 import {
@@ -48,32 +48,32 @@ import { env, isWindsurfOrDevin } from "../../utils/env.js";
 import { withTimeout } from "../../utils/sleep.js";
 import { readVSCodeScrollSensitivity } from "../terminalSetup/terminalSetup.js";
 
-//@ chunk-myhtjy4v.js:5514-5518 placement
+//@ chunk-7bzzdwfg.js:5851-5855 placement
 init_react_production();
-//@ chunk-myhtjy4v.js:5518-5554 placement
+//@ chunk-7bzzdwfg.js:5855-5891 placement
 function scrollSpeedEnvValue() {
   return process.env[CLAUDE_CODE_SCROLL_SPEED];
 }
-//@ chunk-myhtjy4v.js:5554-5601 placement
+//@ chunk-7bzzdwfg.js:5891-5938 placement
 var SCROLL_SPEED_TITLE = "Scroll speed";
 var SCROLL_SPEED_MIN = 1;
 var SCROLL_SPEED_DECAY_START = 0.25;
 var SCROLL_SPEED_STEP = 0.25;
 var SCROLL_SPEED_BAR_TICKS = 10;
-//@ chunk-myhtjy4v.js:5601-5676 placement
+//@ chunk-7bzzdwfg.js:5938-6013 placement
 function snapScrollSpeed(speed, minSpeed) {
   let snapped = speed < 1 ? Math.round(speed / SCROLL_SPEED_STEP) * SCROLL_SPEED_STEP : Math.round(speed);
   return clamp(snapped, minSpeed, SCROLL_SPEED_BAR_TICKS);
 }
-//@ chunk-myhtjy4v.js:5676-5709 placement
+//@ chunk-7bzzdwfg.js:6013-6046 placement
 var CLAUDE_CODE_SCROLL_SPEED = "CLAUDE_CODE_SCROLL_SPEED";
-//@ chunk-myhtjy4v.js:5709-5787 placement
+//@ chunk-7bzzdwfg.js:6046-6124 placement
 function setScrollSpeedEnv(speed) {
   if (speed === undefined) delete process.env[CLAUDE_CODE_SCROLL_SPEED];
   else process.env[CLAUDE_CODE_SCROLL_SPEED] = speed;
   invalidateCursorYankBug();
 }
-//@ chunk-myhtjy4v.js:5787-10391 placement
+//@ chunk-7bzzdwfg.js:6124-10722 placement
 /**
  * /scroll-speed 设置界面：显示演示标尺、编辑器滚轮灵敏度并保存到 userSettings。
  */
@@ -495,7 +495,7 @@ function ScrollSpeedDialog(props) {
   } else focusColumn = $[62];
   return focusColumn;
 }
-//@ chunk-myhtjy4v.js:10391-10691 placement
+//@ chunk-7bzzdwfg.js:10722-11022 placement
 /**
  * 一行"标签: 值"的小组件。
  */
@@ -533,13 +533,13 @@ function LabeledValue(props) {
   } else row = $[6];
   return row;
 }
-//@ chunk-myhtjy4v.js:10691-10812 placement
+//@ chunk-7bzzdwfg.js:11022-11143 placement
 function speedBar(speed) {
   if (speed < 1) return "\u25AA" + repeatString("\xB7", SCROLL_SPEED_BAR_TICKS - 1);
   let ticks = clamp(Math.round(speed), SCROLL_SPEED_MIN, SCROLL_SPEED_BAR_TICKS);
   return "\u25A0".repeat(ticks) + repeatString("\xB7", SCROLL_SPEED_BAR_TICKS - ticks);
 }
-//@ chunk-myhtjy4v.js:10812-11014 placement
+//@ chunk-7bzzdwfg.js:11143-11345 placement
 function environmentSummary(info) {
   let parts = [detectEditorHost(info), getPlatformDisplayName(info.platform)];
   if (info.wheelFlood) parts.push("high-rate wheel events");
@@ -547,7 +547,7 @@ function environmentSummary(info) {
   else if (info.wtSession) parts.push("Windows Terminal");
   return parts.join(" \xB7 ");
 }
-//@ chunk-myhtjy4v.js:11014-11655 placement
+//@ chunk-7bzzdwfg.js:11345-11986 placement
 /**
  * 根据环境变量识别宿主编辑器（Cursor、VS Code、Devin、Antigravity 等）。
  */
@@ -576,7 +576,7 @@ function detectEditorHost(scrollInfo) {
       return scrollInfo.termProgram;
   }
 }
-//@ chunk-myhtjy4v.js:11655-12004 placement
+//@ chunk-7bzzdwfg.js:11986-12335 placement
 /**
  * 描述编辑器滚轮灵敏度设置与推荐值。
  */
@@ -588,7 +588,7 @@ function describeWheelSensitivity(sensitivityInfo) {
     return `${editor} wheel sensitivity ${sensitivityInfo.sensitivity}`;
   return `${editor} wheel sensitivity ${sensitivityInfo.sensitivity} \xB7 /terminal-setup raises it to ${sensitivityInfo.recommended}`;
 }
-//@ chunk-myhtjy4v.js:12004-12204 placement
+//@ chunk-7bzzdwfg.js:12335-12535 placement
 /**
  * 消息少于此数时显示演示标尺。
  */

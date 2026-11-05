@@ -3,12 +3,11 @@
  *
  * 2.1.316 新增。用量上限宽限期提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (10)
- * attribution: placement 10
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (9)
+ * attribution: placement 9
  */
-import { useCanUseTool } from "../hooks/useCanUseTool.js";
 import {
   init_react_production,
   useContext,
@@ -31,24 +30,22 @@ import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { getWarningUpsellText } from "../services/rateLimitMessages.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1652841-1652853 placement
-var useCanUseToolReexport = useCanUseTool;
-//@ chunk-18hwfzwa.js:1652853-1652857 placement
+//@ chunk-czq1j3j2.js:1689527-1689531 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1652853", () => {
+deferInit("chunk-czq1j3j2.js:1689527", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1652857-1652861 placement
+//@ chunk-czq1j3j2.js:1689988-1689992 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1652857", () => {
+deferInit("chunk-czq1j3j2.js:1689988", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1652861-1653322 placement
+//@ chunk-czq1j3j2.js:1698585-1699046 placement
 var TENGU_LANTERN_SCONCE_COPY; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var DEFAULT_GRACE_NOTICE_COPY;
 var MAX_NOTICE_TEXT_WIDTH;
 var GraceNoticeCopySchema;
-deferInit("chunk-18hwfzwa.js:1652861", () => {
+deferInit("chunk-czq1j3j2.js:1698585", () => {
   TENGU_LANTERN_SCONCE_COPY = "tengu_lantern_sconce_copy";
   DEFAULT_GRACE_NOTICE_COPY = {
     running: "Usage limit reached \xB7 wrapping up",
@@ -67,14 +64,14 @@ deferInit("chunk-18hwfzwa.js:1652861", () => {
     }),
   );
 });
-//@ chunk-18hwfzwa.js:1653322-1653387 placement
+//@ chunk-czq1j3j2.js:1699046-1699111 placement
 function graceNoticeText(statusKey, featureCopy) {
   let cleanedCopy = cleanTaskDescription(featureCopy);
   return cleanedCopy === undefined
     ? DEFAULT_GRACE_NOTICE_COPY[statusKey]
     : truncateToWidth(cleanedCopy, MAX_NOTICE_TEXT_WIDTH);
 }
-//@ chunk-18hwfzwa.js:1653387-1653707 placement
+//@ chunk-czq1j3j2.js:1699111-1699431 placement
 /**
  * 解析服务端下发的用量宽限提示文案，缺失字段用默认文案补齐，并规范帮助链接。
  */
@@ -94,13 +91,13 @@ function parseGraceNoticeCopy(featureValue_CACHED_MAY_BE_STALE) {
     help_url_credits_on: getCurrentRepoHttpsUrl(data.help_url_credits_on) ?? helpUrl,
   };
 }
-//@ chunk-18hwfzwa.js:1653707-1653810 placement (2.1.88 match: getCurrentRepoHttpsUrl, 0.803)
+//@ chunk-czq1j3j2.js:1699431-1699534 placement (2.1.88 match: getCurrentRepoHttpsUrl, 0.805)
 function getCurrentRepoHttpsUrl(rawUrl) {
   let parsed = cleanTaskDescription(rawUrl);
   if (parsed === undefined) return;
   return /^[a-z][a-z0-9+.-]*:/i.test(parsed) ? parsed : `https://${parsed}`;
 }
-//@ chunk-18hwfzwa.js:1653810-1654100 placement
+//@ chunk-czq1j3j2.js:1699534-1699824 placement
 /**
  * 确定当前用量上限宽限期窗口：有模拟状态时按传入限额类型构造模拟窗口，否则在 tengu_lantern_sconce 开启时取 getWrapUpZone()。
  */
@@ -124,14 +121,14 @@ function resolveGraceWindow(rateLimitState) {
         : null,
   };
 }
-//@ chunk-18hwfzwa.js:1654100-1654164 placement
+//@ chunk-czq1j3j2.js:1699824-1699888 placement
 function linkLabelFromUrl(url) {
   return {
     url,
     text: url.replace(/^https?:\/\//, ""),
   };
 }
-//@ chunk-18hwfzwa.js:1654164-1655060 placement
+//@ chunk-czq1j3j2.js:1699888-1700784 placement
 function UsageLimitGraceNotice(isLoading) {
   let rateLimitState = useRateLimitState();
   useForceRender();
@@ -176,4 +173,4 @@ function UsageLimitGraceNotice(isLoading) {
     upsell: upsellText ? (graceNoticeCopy.upsell ?? upsellText) || null : null,
   };
 }
-export { useCanUseToolReexport, UsageLimitGraceNotice };
+export { UsageLimitGraceNotice };

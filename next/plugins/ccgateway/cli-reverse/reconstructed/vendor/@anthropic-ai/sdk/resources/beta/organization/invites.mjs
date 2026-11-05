@@ -1,15 +1,15 @@
 /**
  * @anthropic-ai/sdk/resources/beta/organization/invites.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (1)
+ * pieces: chunk-vn3g7zt8.js (1)
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../../core/resource.mjs";
 import { parseUrl_2 } from "../../../internal/utils/path.mjs";
 import { Page } from "../../../core/pagination.mjs";
 
-//@ chunk-hwmsct5x.js:120284-120666 esm-fingerprint
+//@ chunk-vn3g7zt8.js:120664-121046 esm-fingerprint
 class Invites extends APIResource {
   create(body, options) {
     return this._client.post("/v1/organizations/invites?beta=true", {

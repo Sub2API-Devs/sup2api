@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：模型固定向导。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-095ptjmr.js (10)
- * attribution: placement 10
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pqe1nn4c.js (11)
+ * attribution: placement 10, layout 1
  */
 import { env } from "../utils/env.js";
 import {
@@ -21,7 +21,6 @@ import {
   jsxProd_default_2,
   Fragment,
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { ensure1mSuffix } from "../utils/model/model.js";
 import { WizardDialogLayout } from "./wizard/WizardDialogLayout.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { TIER_LABELS } from "../utils/model/thirdPartyDefaultFallbacks.js";
@@ -34,12 +33,12 @@ import { Spinner } from "./Spinner.js";
 import { strip1mSuffix } from "../utils/model/modelIds.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-095ptjmr.js:3989-4030 placement
+//@ chunk-pqe1nn4c.js:3766-3807 placement
 /**
  * 导出值：MODEL_PIN_FAMILIES（可固定的模型家族）。
  */
 var MODEL_PIN_FAMILIES = ["sonnet", "opus", "haiku", "fable"];
-//@ chunk-095ptjmr.js:4030-4204 placement
+//@ chunk-pqe1nn4c.js:3807-3981 placement
 function readEnvModelPins() {
   return {
     sonnet: env.ANTHROPIC_DEFAULT_SONNET_MODEL,
@@ -48,12 +47,12 @@ function readEnvModelPins() {
     fable: env.ANTHROPIC_DEFAULT_FABLE_MODEL,
   };
 }
-//@ chunk-095ptjmr.js:4204-4208 placement
+//@ chunk-pqe1nn4c.js:3981-3985 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-095ptjmr.js:4204", () => {
+deferInit("chunk-pqe1nn4c.js:3981", () => {
   init_react_production();
 });
-//@ chunk-095ptjmr.js:4208-6032 placement
+//@ chunk-pqe1nn4c.js:3985-5811 placement
 /**
  * 第三方提供方（Bedrock/Vertex）配置向导中的"固定模型版本"步骤：对 sonnet/opus/haiku/fable 各探测候选模型，可一键固定可用模型（可选 1M 上下文）、手动逐档选择或跳过使用默认。
  */
@@ -234,7 +233,7 @@ function ModelPinStep({ provider, onPins }) {
     ],
   });
 }
-//@ chunk-095ptjmr.js:6032-6087 placement
+//@ chunk-pqe1nn4c.js:5811-5866 placement
 function isPinnableModel(model) {
   return (
     supports1mBeta(model) &&
@@ -243,7 +242,14 @@ function isPinnableModel(model) {
     })
   );
 }
-//@ chunk-095ptjmr.js:6140-6420 placement
+//@ chunk-pqe1nn4c.js:5866-5919 layout (2.1.88 match: resolveSkillModelOverride, 1)
+/**
+ * 已有 [1m] 原样返回，否则追加 [1m]。旧版名 resolveSkillModelOverride 为错配。
+ */
+function ensure1mSuffix(model) {
+  return /\[1m\]$/i.test(model) ? model : `${model}[1m]`;
+}
+//@ chunk-pqe1nn4c.js:5919-6199 placement
 function ModelProbe(props) {
   let $ = useMemoCache(6);
   let { candidate, probe, onState } = props;
@@ -273,7 +279,7 @@ function ModelProbe(props) {
   useEffect(probeEffect, probeDeps);
   return null;
 }
-//@ chunk-095ptjmr.js:6420-7500 placement
+//@ chunk-pqe1nn4c.js:6199-7277 placement
 /**
  * 某一档模型的手动选择：列出候选（含默认、当前、已固定），逐个探测，结果出来后可用的排前并预选。
  */
@@ -366,7 +372,7 @@ function TierModelPicker({
     }),
   });
 }
-//@ chunk-095ptjmr.js:7500-8456 placement (2.1.88 match: waitForInitialization, 0.633)
+//@ chunk-pqe1nn4c.js:7277-8233 placement (2.1.88 match: waitForInitialization, 0.632)
 /**
  * （误归此处）模型档位候选的状态行组件：pending/ok/error 三态图标 + id + 后缀 + 失败原因。
  */
@@ -467,7 +473,7 @@ function CandidateStatusRow(props) {
   } else errorRow = $[18];
   return errorRow;
 }
-//@ chunk-095ptjmr.js:8456-9639 placement
+//@ chunk-pqe1nn4c.js:8233-9416 placement
 /**
  * 模型探测状态行：pending 显示 spinner，成功绿色显示模型 id，失败显示原因。
  */
@@ -591,7 +597,7 @@ function ModelProbeStatusRow(props) {
   } else errorRow = $[25];
   return errorRow;
 }
-//@ chunk-095ptjmr.js:9639-10088 placement
+//@ chunk-pqe1nn4c.js:9416-9865 placement
 /**
  * 用一次 1 token 请求探测模型可用性：创建客户端失败用 g 映射原因；401→auth、403→permission、400/404→model、429 视为可用、无状态码→network。
  */

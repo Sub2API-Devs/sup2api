@@ -1,8 +1,8 @@
 /**
  * @bufbuild/protobuf/dist/commonjs/reflect/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @bufbuild/protobuf@2.12.1
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -15,7 +15,7 @@ import { require_scalar } from "./scalar.js";
 import { require_path } from "./path.js";
 import { require_guard } from "../../cjs/reflect/guard.js";
 
-//@ chunk-fq0cr76a.js:358179-359141 cjs-fingerprint
+//@ chunk-qg41pqt6.js:358746-359708 cjs-fingerprint
 var require_reflect_2 = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||

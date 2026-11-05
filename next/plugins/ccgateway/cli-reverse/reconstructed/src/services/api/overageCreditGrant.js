@@ -3,12 +3,11 @@
  *
  * overage 信用赠送活动（FotW）：查询资格、领取、本地缓存与已领取/已完成标记，以及组织 API 路径工具。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/overageCreditGrant.ts
- * pieces: chunk-06y4szbn.js (1), chunk-0ba63vr9.js (9), chunk-3g0djq3w.js (2), chunk-9cjx5pnm.js (1), chunk-zn8pzrw0.js (1)
- * attribution: fingerprint 5, layout 7, placement 2
+ * pieces: chunk-53f0ndkv.js (1), chunk-77qzxtqv.js (1), chunk-a76zrsb5.js (9), chunk-g88zyy4n.js (2)
+ * attribution: fingerprint 4, layout 7, placement 2
  */
-import { rosterAccountKey } from "../artifacts/capabilityRoster.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import {
   FOTW_DAY_MS,
@@ -29,29 +28,14 @@ import { isBgSession } from "../../utils/concurrentSessions.js";
 import { encodePathSegment } from "./apiPath.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-06y4szbn.js:3058-3214 fingerprint (2.1.88 match: invalidateOverageCreditGrantCache, 0.667)
-/**
- * 缓存的赠送信息属于当前账号与组织时返回。旧版名 invalidateOverageCreditGrantCache 不准确。
- */
-function invalidateOverageCreditGrantCache(orgId) {
-  let accountKey = rosterAccountKey();
-  if (
-    accountKey === undefined ||
-    !orgId.success ||
-    orgId.data.accountUuid !== accountKey.accountUuid ||
-    orgId.data.organizationUuid !== accountKey.organizationUuid
-  )
-    return;
-  return orgId.data;
-}
-//@ chunk-zn8pzrw0.js:3581-3648 fingerprint (2.1.88 match: formatGrantAmount, 0.582)
+//@ chunk-53f0ndkv.js:2392-2458 fingerprint (2.1.88 match: formatGrantAmount, 0.58)
 /**
  * 旧版名 formatGrantAmount 为错配。
  */
 function isUsdCurrency(info) {
   return typeof info === "string" && info.toUpperCase() === "USD";
 }
-//@ chunk-0ba63vr9.js:4406-4536 fingerprint (2.1.88 match: getCachedOverageCreditGrant, 0.587)
+//@ chunk-a76zrsb5.js:4406-4536 fingerprint (2.1.88 match: getCachedOverageCreditGrant, 0.588)
 /**
  * 取未过期的资格缓存。
  */
@@ -61,7 +45,7 @@ function getCachedOverageCreditGrant(orgId, feature) {
   if (Date.now() - cached.timestamp > FOTW_DAY_MS) return null;
   return cached.info;
 }
-//@ chunk-0ba63vr9.js:4536-5596 layout
+//@ chunk-a76zrsb5.js:4536-5596 layout
 /**
  * POST overage_credit_grant 领取并启用 overage。
  */
@@ -140,12 +124,12 @@ async function claimOverageCreditGrant(orgId, credentials) {
     expiresAt: response.data.expires_at ?? null,
   };
 }
-//@ chunk-0ba63vr9.js:5596-5640 layout
+//@ chunk-a76zrsb5.js:5596-5640 layout
 /**
  * 错误响应 schema {error:{message}}。
  */
 var grantErrorSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0ba63vr9.js:5596", () => {
+deferInit("chunk-a76zrsb5.js:5596", () => {
   grantErrorSchema = DoctorLazy(() =>
     create({
       error: create({
@@ -154,7 +138,7 @@ deferInit("chunk-0ba63vr9.js:5596", () => {
     }),
   );
 });
-//@ chunk-0ba63vr9.js:5640-5722 layout
+//@ chunk-a76zrsb5.js:5640-5722 layout
 /**
  * 取错误消息。
  */
@@ -162,7 +146,7 @@ function parseGrantErrorMessage(text) {
   let parsed = grantErrorSchema().safeParse(text);
   return parsed.success ? parsed.data.error.message : undefined;
 }
-//@ chunk-0ba63vr9.js:5722-5805 layout
+//@ chunk-a76zrsb5.js:5722-5805 layout
 /**
  * 该组织是否已领取该功能的赠送。
  */
@@ -170,7 +154,7 @@ function hasClaimedFeature(organizationUuid, feature) {
   let fotwClaimedFeatures = getGlobalConfig().fotwClaimedFeatures;
   return Boolean(fotwClaimedFeatures?.[organizationUuid]?.includes(feature));
 }
-//@ chunk-0ba63vr9.js:5805-5968 layout
+//@ chunk-a76zrsb5.js:5805-5968 layout
 /**
  * 记录已领取。
  */
@@ -187,7 +171,7 @@ function markFeatureClaimed(orgId, feature) {
     };
   });
 }
-//@ chunk-0ba63vr9.js:5968-6051 layout
+//@ chunk-a76zrsb5.js:5968-6051 layout
 /**
  * 该组织是否已完成该功能的 upsell。
  */
@@ -195,7 +179,7 @@ function isUpsellFulfilled(orgId, feature) {
   let fotwUpsellFulfilled = getGlobalConfig().fotwUpsellFulfilled;
   return Boolean(fotwUpsellFulfilled?.[orgId]?.includes(feature));
 }
-//@ chunk-0ba63vr9.js:6051-6311 layout
+//@ chunk-a76zrsb5.js:6051-6311 layout
 /**
  * viewer 身份且满足条件时记录 upsell 已完成。
  */
@@ -215,7 +199,7 @@ function markUpsellFulfilled(command) {
     };
   });
 }
-//@ chunk-0ba63vr9.js:6311-6770 fingerprint (2.1.88 match: refreshOverageCreditGrantCache, 0.791)
+//@ chunk-a76zrsb5.js:6311-6770 fingerprint (2.1.88 match: refreshOverageCreditGrantCache, 0.792)
 /**
  * 更新资格缓存（可只在缺失/过期时写）。
  */
@@ -249,7 +233,7 @@ function refreshOverageCreditGrantCache(orgId, feature, info, { onlyIfAbsent = f
     };
   });
 }
-//@ chunk-3g0djq3w.js:5566-5968 placement
+//@ chunk-g88zyy4n.js:5778-6180 placement
 /**
  * 运行特定命令后尝试领取超额额度赠送（交互主会话），必要时提示设置付款方式。
  */
@@ -288,7 +272,7 @@ function claimCommandOverageCredit({
     }));
   });
 }
-//@ chunk-3g0djq3w.js:5968-6432 placement
+//@ chunk-g88zyy4n.js:6180-6644 placement
 /**
  * 开始领取超额额度：设置 pending 状态，完成后更新为 granted 或 failed。
  */
@@ -333,20 +317,19 @@ function startOverageClaim(orgId, setAppState, credentials) {
       });
     });
 }
-//@ chunk-9cjx5pnm.js:14005-14069 fingerprint (2.1.88 match: fetchOverageCreditGrant, 0.561)
+//@ chunk-77qzxtqv.js:14074-14138 fingerprint (2.1.88 match: fetchOverageCreditGrant, 0.561)
 /**
  * /api/oauth/organizations/<orgId>。旧版名 fetchOverageCreditGrant 为错配。
  */
 var organizationApiPath = (account) =>
   `/api/oauth/organizations/${encodePathSegment(account.organization.id)}`;
 export {
-  invalidateOverageCreditGrantCache,
+  isUsdCurrency,
+  claimCommandOverageCredit,
+  organizationApiPath,
   hasClaimedFeature,
   getCachedOverageCreditGrant,
   isUpsellFulfilled,
   markFeatureClaimed,
   refreshOverageCreditGrantCache,
-  claimCommandOverageCredit,
-  organizationApiPath,
-  isUsdCurrency,
 };

@@ -3,9 +3,9 @@
  *
  * 并入已有模块：Ink 点击事件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/events/click-event.ts
- * pieces: chunk-bzr73sfg.js (2)
+ * pieces: chunk-2avr6cej.js (2)
  * attribution: placement 1, fingerprint 1
  */
 import { InkEvent } from "./event.js";
@@ -13,12 +13,12 @@ import { NO_MOUSE_MODS } from "../components/ErrorBoundary.js";
 import { PointerEvent } from "./pointer-event.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bzr73sfg.js:172404-172812 placement
+//@ chunk-2avr6cej.js:172153-172561 placement
 /**
  * 鼠标事件基类（继承 TerminalEvent 的基础 Event）：屏幕坐标 col/row 与相对目标的 localCol/localRow、目标格是否空白、所在格的 OSC 8 链接、是否为窗口激活点击、修饰键；allowDefault()/dropAsStray()/endClickChain() 供处理器影响默认行为（选区、多击链）。
  */
 let ClickEvent; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bzr73sfg.js:172404", () => {
+deferInit("chunk-2avr6cej.js:172153", () => {
   ClickEvent = class ClickEvent extends InkEvent {
     col;
     row;
@@ -51,7 +51,7 @@ deferInit("chunk-bzr73sfg.js:172404", () => {
     }
   };
 });
-//@ chunk-bzr73sfg.js:258255-258541 fingerprint (2.1.88 match: ClickEvent, 0.495)
+//@ chunk-2avr6cej.js:257931-258217 fingerprint (2.1.88 match: ClickEvent, 0.495)
 /**
  * 把指针事件派给节点的 onPointer，换算成节点内的局部坐标（含像素精度 fine）；节点已从树上摘下时只派发 up。
  */

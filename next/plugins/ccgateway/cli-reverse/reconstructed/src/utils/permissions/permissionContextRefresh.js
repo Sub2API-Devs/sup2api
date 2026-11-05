@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：权限上下文刷新与附加目录重建
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pc1rmcr2.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-01b7fqej.js (6)
  * attribution: placement 6
  */
 import { resolve } from "path";
@@ -33,11 +33,11 @@ import { mappedDriveSpellings } from "../remoteEnvironment.js";
 import { applyValidatedPermissionUpdate } from "./PermissionUpdate.js";
 import { expandPath } from "../path.js";
 
-//@ chunk-pc1rmcr2.js:1784-1813 placement
+//@ chunk-01b7fqej.js:1827-1856 placement
 function whenPolicyNotified(callback) {
   if (hasPolicySettingsNotified()) callback();
 }
-//@ chunk-pc1rmcr2.js:1813-2173 placement
+//@ chunk-01b7fqej.js:1856-2216 placement
 function refreshPermissionContext(toolPermissionContext, settings) {
   let nextContext = toolPermissionContext;
   if (nextContext.isBypassPermissionsModeAvailable && isBypassPermissionsModeDisabled())
@@ -61,7 +61,7 @@ function refreshPermissionContext(toolPermissionContext, settings) {
     exitedAutoMode: autoModeDisabled,
   };
 }
-//@ chunk-pc1rmcr2.js:2173-3602 placement
+//@ chunk-01b7fqej.js:2216-3645 placement
 /**
  * 根据当前设置重建附加工作目录：新增、移除、保留来自磁盘信任的目录。
  */
@@ -177,7 +177,7 @@ function rebuildAdditionalDirectories(
     }
   return nextContext;
 }
-//@ chunk-pc1rmcr2.js:3602-3877 placement
+//@ chunk-01b7fqej.js:3645-3920 placement
 function mergeTrustedDirectories(toolPermissionContext, directories) {
   let diskDirs = new Set(
     loadTrustedAdditionalDirectoriesFromDisk().flatMap((directory) => safeNormalizedDirectories(directory)),
@@ -194,11 +194,11 @@ function mergeTrustedDirectories(toolPermissionContext, directories) {
     destination: "localSettings",
   });
 }
-//@ chunk-pc1rmcr2.js:3941-3975 placement
+//@ chunk-01b7fqej.js:3984-4018 placement
 function normalizeDirectoryPath(directory, baseDir) {
   return resolve(expandPath(directory, baseDir));
 }
-//@ chunk-pc1rmcr2.js:3975-4026 placement
+//@ chunk-01b7fqej.js:4018-4069 placement
 function safeNormalizedDirectories(directory, baseDir) {
   try {
     return [normalizeDirectoryPath(directory, baseDir)];
@@ -207,8 +207,8 @@ function safeNormalizedDirectories(directory, baseDir) {
   }
 }
 export {
-  refreshPermissionContext,
   rebuildAdditionalDirectories,
+  refreshPermissionContext,
   whenPolicyNotified,
   mergeTrustedDirectories,
 };

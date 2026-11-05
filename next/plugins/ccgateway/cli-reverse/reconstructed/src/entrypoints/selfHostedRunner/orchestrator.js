@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自托管 runner 编排循环、健康检查服务与指标输出
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2cbdmxy9.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h7hgs1mf.js (6)
  * attribution: placement 6
  */
 import { createServer } from "http";
@@ -35,8 +35,9 @@ import { redactSecretsInText } from "../../utils/redactSecrets.js";
 import { errorMessage } from "../../utils/errors.js";
 import { ORCHESTRATOR_DEBUG_LIMITS } from "./orchestratorDebugDir.js";
 import { ageMs, workOrderClaims } from "./runnerConfig.js";
+import { normalizeSpawnReason } from "./runId.js";
 
-//@ chunk-2cbdmxy9.js:26067-33681 placement
+//@ chunk-h7hgs1mf.js:26961-34575 placement
 /**
  * 把 orchestrator 健康状态渲染为 Prometheus 文本格式（/metrics）。
  */
@@ -172,7 +173,7 @@ function renderRunnerMetrics(state, now = Date.now()) {
 `;
   return out;
 }
-//@ chunk-2cbdmxy9.js:33681-35678 placement
+//@ chunk-h7hgs1mf.js:34575-36572 placement
 function startRunnerHealthServer(healthPort, state, log) {
   let server = createServer((req, res) => {
     if (req.method === "GET" && req.url === "/metrics") {
@@ -251,11 +252,11 @@ function startRunnerHealthServer(healthPort, state, log) {
   server.listen(healthPort);
   return server;
 }
-//@ chunk-2cbdmxy9.js:35678-35733 placement
+//@ chunk-h7hgs1mf.js:36572-36627 placement
 function jitteredValue(pollIntervalMs, random) {
   return Math.round(pollIntervalMs * (1 + BACKOFF_RATIO * (2 * random() - 1)));
 }
-//@ chunk-2cbdmxy9.js:35733-44043 placement
+//@ chunk-h7hgs1mf.js:36627-45027 placement
 /**
  * self-hosted runner 轮询主循环：向服务器领取工作单、调用 spawn-runner 钩子启动会话、处理排空与停止。
  */
@@ -524,6 +525,8 @@ async function runOrchestratorLoop(args, signal) {
   async function sessionHook(hint, serverTime, isIdle) {
     healthState.last_hint_at = Date.now();
     if (isIdle) healthState.warm_hints_dispatched++;
+    let reason =
+      normalizeSpawnReason(typeof hint.spawn_reason === "string" ? hint.spawn_reason : undefined) ?? "-";
     let hookResult;
     let sawRetryable = false;
     pollCount++;
@@ -557,8 +560,8 @@ async function runOrchestratorLoop(args, signal) {
       healthState.spawnHooks.ok++;
       healthState.last_hook_ok_at = Date.now();
       if (isIdle) healthState.last_warm_hook_ok_at = healthState.last_hook_ok_at;
-      onDebug(
-        `[runner:orchestrator] ok session=${hint.session_uuid} attempt=${hint.attempt} jti=${hint.jti} (${hookResult.durationMs}ms)`,
+      onStatus(
+        `[runner:orchestrator] ok session=${hint.session_uuid} attempt=${hint.attempt} jti=${hint.jti} reason=${reason} (${hookResult.durationMs}ms)`,
       );
       if (state.at !== undefined) {
         state.hooksOk++;
@@ -608,7 +611,7 @@ async function runOrchestratorLoop(args, signal) {
     }
     lastPollAt = performance.now();
     onStatus(
-      `[runner:orchestrator] nack session=${hint.session_uuid} attempt=${hint.attempt} exit=${hookResult.exitCode} timedOut=${hookResult.timedOut} retryable=${outcome}: ${stderrTail}`,
+      `[runner:orchestrator] nack session=${hint.session_uuid} attempt=${hint.attempt} exit=${hookResult.exitCode} timedOut=${hookResult.timedOut} retryable=${outcome} reason=${reason}: ${stderrTail}`,
     );
     try {
       await apiClient.nackSpawnHint(
@@ -653,13 +656,13 @@ async function runOrchestratorLoop(args, signal) {
     }
   }
 }
-//@ chunk-2cbdmxy9.js:44043-44165 placement
+//@ chunk-h7hgs1mf.js:45027-45149 placement
 function fatalExitWith(emit) {
   return (message) => {
     emit(`${new Date().toISOString()} [self-hosted-runner] [runner:fatal] ${redactSecretsInText(message)}`);
     process.exit(1);
   };
 }
-//@ chunk-2cbdmxy9.js:44165-44198 placement
+//@ chunk-h7hgs1mf.js:45149-45182 placement
 var errorLogger = fatalExitWith((message) => console.error(message));
 export { startRunnerHealthServer, runOrchestratorLoop, fatalExitWith };

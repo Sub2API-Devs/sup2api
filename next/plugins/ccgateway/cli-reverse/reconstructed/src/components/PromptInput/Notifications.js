@@ -3,10 +3,10 @@
  *
  * 输入框右下的通知区：显示通知队列当前项（语音录制/处理、IDE、apiKeyHelper 慢、用量额度等），超时自动消失。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/Notifications.tsx
- * pieces: chunk-18hwfzwa.js (30), chunk-8jypjjdf.js (6)
- * attribution: placement 25, sole-consumer 7, affinity 1, fingerprint 3
+ * pieces: chunk-czq1j3j2.js (32), chunk-tvbhy3tn.js (6)
+ * attribution: placement 26, sole-consumer 5, affinity 3, layout 1, fingerprint 3
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
@@ -35,11 +35,6 @@ import {
   memo,
   useContext,
 } from "../../../vendor/react/cjs/react.production.js";
-import {
-  getRiskColor,
-  EXPLANATION_NOTICE_TIMEOUT_MS,
-  MAX_EXPLANATION_CHARS,
-} from "../permissions/PermissionExplanation.js";
 import { useTheme_2, useResolvedTheme } from "../design-system/ThemeProvider.js";
 import { isFirstPartyProvider } from "../../utils/model/providers.js";
 import {
@@ -55,15 +50,9 @@ import { logEvent } from "../../services/analytics/index.js";
 import { logError } from "../../utils/log.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { sequential } from "../../utils/sequential.js";
-import { interpolateColor, roundToStep, toRGBColor, parseRGB } from "../Spinner/utils.js";
+import { parseRGB, roundToStep, toRGBColor, interpolateColor } from "../Spinner/utils.js";
 import { isXtermJs } from "../../ink/terminal.js";
 import { useAnimationTimer, useInterval } from "../../ink/components/Input.js";
-import {
-  ASTERISK_TICK_MS,
-  ASTERISK_RAY_COUNT,
-  ASTERISK_FADE_FLOOR,
-  SETTLED_GREY_RGB,
-} from "../LogoV2/AnimatedAsterisk.js";
 import { formatDuration } from "../../utils/format.js";
 import { BULLSEYE } from "../../constants/figures.js";
 import { setEnvHookNotifier } from "../../utils/hooks/fileChangedWatcher.js";
@@ -99,7 +88,7 @@ import { FooterSlot } from "../FullscreenLayout.js";
 import { mergeClients } from "../../hooks/useMergedClients.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-8jypjjdf.js:20372-20520 placement (2.1.88 match: _temp2, 0.843)
+//@ chunk-tvbhy3tn.js:20374-20522 placement (2.1.88 match: _temp2, 0.843)
 function ToastText(props) {
   let $ = useMemoCache(2);
   let { text } = props;
@@ -116,7 +105,7 @@ function ToastText(props) {
   } else textElement = $[1];
   return textElement;
 }
-//@ chunk-8jypjjdf.js:20520-20697 placement (2.1.88 match: StyledText, 0.767)
+//@ chunk-tvbhy3tn.js:20522-20699 placement (2.1.88 match: StyledText, 0.767)
 /**
  * 渲染通知的分段文本（颜色、加粗、可点链接）。
  */
@@ -144,11 +133,11 @@ function SegmentedText({ segments }) {
         );
   });
 }
-//@ chunk-8jypjjdf.js:20697-20743 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-tvbhy3tn.js:20699-20745 fingerprint (2.1.88 match: _temp, 1)
 function selectNotificationsCurrent(s) {
   return s.notifications.current;
 }
-//@ chunk-8jypjjdf.js:20743-21713 placement
+//@ chunk-tvbhy3tn.js:20745-21715 placement
 /**
  * 输入框上方的 toast 通知行（第一行绘制时隐藏）。
  */
@@ -252,36 +241,36 @@ function PromptToast(props) {
   } else toastText = $[17];
   return toastText;
 }
-//@ chunk-8jypjjdf.js:21713-21717 placement
+//@ chunk-tvbhy3tn.js:21715-21719 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-8jypjjdf.js:21713", () => {
+deferInit("chunk-tvbhy3tn.js:21715", () => {
   init_react_production();
 });
-//@ chunk-8jypjjdf.js:21717-21747 placement
+//@ chunk-tvbhy3tn.js:21719-21749 placement
 /**
  * 导出值：同一声明里的多个绑定：MAX_NOTICE_LINES（2：通知行数）；NOTICE_WIDTH_LIMIT（15：通知宽度）；noticeDialogSlot（通知对话框槽）；位于「输入框右下的通知区：显示通知队列当前项（语音录制/处理、IDE、apiKeyHelper 慢、用量额度等），超时自动消失」模块。
  */
 var MAX_NOTICE_LINES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NOTICE_WIDTH_LIMIT;
 var noticeDialogSlot;
-deferInit("chunk-8jypjjdf.js:21717", () => {
+deferInit("chunk-tvbhy3tn.js:21719", () => {
   MAX_NOTICE_LINES = 2;
   NOTICE_WIDTH_LIMIT = 15;
   noticeDialogSlot = createContext(null);
 });
-//@ chunk-18hwfzwa.js:643509-643513 placement
+//@ chunk-czq1j3j2.js:559534-559538 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:643509", () => {
+deferInit("chunk-czq1j3j2.js:559534", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:643547-643551 placement
+//@ chunk-czq1j3j2.js:559584-559588 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:643547", () => {
+deferInit("chunk-czq1j3j2.js:559584", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:643551-643569 placement
+//@ chunk-czq1j3j2.js:664232-664250 placement
 function selectPinnedBridgeNotice(state) {}
-//@ chunk-18hwfzwa.js:643569-643741 placement
+//@ chunk-czq1j3j2.js:664250-664422 placement
 /**
  * 订阅 bridge 提示并锁存最后一次出现的值（置顶提示时在消失后仍保留）。
  */
@@ -297,7 +286,44 @@ function useLatchedBridgeNotice(props) {
   else appState;
   return null;
 }
-//@ chunk-18hwfzwa.js:781742-782121 placement
+//@ chunk-czq1j3j2.js:809750-809754 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:809750", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:809754-809758 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:809754", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:811250-811254 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:811250", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:811286-811290 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:811286", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:811323-811327 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:811323", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:814214-814291 sole-consumer
+var MAX_EXPLANATION_CHARS = 4000;
+var EXPLANATION_NOTICE_TIMEOUT_MS = 1e4;
+var ISSUE_URL_PREFIX = "https://github.com/anthropics/claude-code/issues/";
+//@ chunk-czq1j3j2.js:814291-814361 affinity (2.1.88 match: getRiskColor, 1)
+function getRiskColor(riskLevel) {
+  return {
+    text: `#${riskLevel}`,
+    color: "success",
+    url: `${ISSUE_URL_PREFIX}${riskLevel}`,
+  };
+}
+//@ chunk-czq1j3j2.js:814361-814740 placement
 /**
  * 生成 "你的 issue 已关闭" 通知的分段文本（单个或多个 issue 编号）。
  */
@@ -336,7 +362,7 @@ function formatClosedIssuesNotice(issues) {
     },
   ];
 }
-//@ chunk-18hwfzwa.js:782121-782955 sole-consumer
+//@ chunk-czq1j3j2.js:814740-815574 layout
 /**
  * 一方提供商下挂载时检查"我提交的 issue 已关闭"：先读缓存再拉取，新增未确认的关闭 issue 时弹出低优先级通知并标记已提示，记 tengu_closed_issue_notice_shown。
  */
@@ -378,8 +404,8 @@ function ClosedIssueNotifier() {
         let isCancelled = false;
         let shownIssues = [];
         let loadIssues = async function loadIssues() {
-          let closedIssuesCache = await readClosedIssuesCache(storageV5);
-          let cachedIssues = unacknowledgedClosedIssues(closedIssuesCache);
+          let inner = await readClosedIssuesCache(storageV5);
+          let cachedIssues = unacknowledgedClosedIssues(inner);
           if (!isCancelled && cachedIssues.length > 0) showClosedIssues(cachedIssues);
           let myClosedIssues = await fetchMyClosedIssues(storageV5);
           if (isCancelled || myClosedIssues === null || myClosedIssues > MAX_EXPLANATION_CHARS) {
@@ -406,22 +432,27 @@ function ClosedIssueNotifier() {
   useEffect(effect, deps);
   return null;
 }
-//@ chunk-18hwfzwa.js:782955-782959 sole-consumer
+//@ chunk-czq1j3j2.js:815574-815578 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:782955", () => {
+deferInit("chunk-czq1j3j2.js:815574", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:782959-782963 sole-consumer
+//@ chunk-czq1j3j2.js:815578-815582 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:782959", () => {
+deferInit("chunk-czq1j3j2.js:815578", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:785667-785671 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:785667", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:785728-786605 placement
+//@ chunk-czq1j3j2.js:818290-818347 affinity (2.1.88 match: SETTLED_GREY, 1)
+var ASTERISK_RAY_COUNT = 20;
+var ASTERISK_SPIN_PERIOD_MS = 4000;
+var ASTERISK_TICK_MS = ASTERISK_SPIN_PERIOD_MS / ASTERISK_RAY_COUNT;
+var ASTERISK_FADE_FLOOR = 0.18;
+var SETTLED_GREY_RGB = {
+  r: 0,
+  g: 0,
+  b: 0,
+};
+//@ chunk-czq1j3j2.js:818347-819224 placement
 /**
  * 页脚"/goal active"指示：显示目标设定以来的耗时（1 分钟内每秒刷新，之后每分钟），真彩终端下按权限色做呼吸动画。
  */
@@ -447,7 +478,7 @@ function GoalActiveIndicator({ withSeparator }) {
   let theme = useResolvedTheme();
   let pulseColors = useMemo(() => {
     if (sequential.level < 3) return null;
-    let pulseBaseColor = interpolateColor(theme.permission);
+    let pulseBaseColor = parseRGB(theme.permission);
     return pulseBaseColor ? goalPulseColors(pulseBaseColor, isXtermJs()) : null;
   }, [theme.permission, sequential.level]);
   let animationTimer = useAnimationTimer(hasGoal && pulseColors ? ASTERISK_TICK_MS : null);
@@ -483,7 +514,7 @@ function GoalActiveIndicator({ withSeparator }) {
     ],
   });
 }
-//@ chunk-18hwfzwa.js:786605-786748 placement
+//@ chunk-czq1j3j2.js:819224-819367 placement
 function goalPulseColors(baseColor, stepped) {
   return Array.from(
     {
@@ -492,51 +523,46 @@ function goalPulseColors(baseColor, stepped) {
     (unused, rayIndex) => {
       let wave = 0.5 - 0.5 * Math.cos((2 * Math.PI * rayIndex) / ASTERISK_RAY_COUNT);
       let fade = ASTERISK_FADE_FLOOR * (stepped ? roundToStep(wave) : wave);
-      return toRGBColor(parseRGB(baseColor, SETTLED_GREY_RGB, fade));
+      return toRGBColor(interpolateColor(baseColor, SETTLED_GREY_RGB, fade));
     },
   );
 }
-//@ chunk-18hwfzwa.js:786748-786752 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:786748", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:787614-787659 placement
+//@ chunk-czq1j3j2.js:820233-820278 placement
 function selectAutoCompactWindow_2(state) {
   return state.autoCompactWindow;
 }
-//@ chunk-18hwfzwa.js:787659-787709 placement
+//@ chunk-czq1j3j2.js:820278-820328 placement
 function selectRemoteAutocompactState_2(state) {
   return state.remoteAutocompactState;
 }
-//@ chunk-18hwfzwa.js:787709-787748 placement
+//@ chunk-czq1j3j2.js:820328-820367 placement
 function selectIsBriefOnly_2(state) {
   return state.isBriefOnly;
 }
-//@ chunk-18hwfzwa.js:787830-787884 sole-consumer
+//@ chunk-czq1j3j2.js:820449-820503 sole-consumer
 function hasActiveGoal(state) {
   return state.activeGoal?.setAt !== undefined;
 }
-//@ chunk-18hwfzwa.js:787884-787916 sole-consumer
+//@ chunk-czq1j3j2.js:820503-820535 sole-consumer
 function clearEnvHookNotifier() {
   return setEnvHookNotifier(null);
 }
-//@ chunk-18hwfzwa.js:787916-787946 sole-consumer
+//@ chunk-czq1j3j2.js:820535-820565 sole-consumer
 function foldKeepLatest(previous, next) {
   return next;
 }
-//@ chunk-18hwfzwa.js:787946-787984 sole-consumer
+//@ chunk-czq1j3j2.js:820565-820603 sole-consumer
 function selectVoiceState(state) {
   return state.voiceState;
 }
-//@ chunk-18hwfzwa.js:787984-788022 affinity
+//@ chunk-czq1j3j2.js:820603-820641 affinity
 function selectVoiceError(state) {
   return state.voiceError;
 }
-//@ chunk-18hwfzwa.js:788022-791970 fingerprint (2.1.88 match: Notifications, 0.62)
+//@ chunk-czq1j3j2.js:820641-824588 fingerprint (2.1.88 match: Notifications, 0.621)
 var NOTIFICATION_TIMEOUT_MS; // deferred: uses getContextTokenCount (../../utils/tokens.js) of its import cycle while loading; runs once the cycle is complete
 var Notifications;
-deferInit("chunk-18hwfzwa.js:788022", () => {
+deferInit("chunk-czq1j3j2.js:820641", () => {
   NOTIFICATION_TIMEOUT_MS = 5000;
   Notifications = memo(function (props) {
     let $ = useMemoCache(59);
@@ -886,7 +912,7 @@ deferInit("chunk-18hwfzwa.js:788022", () => {
     return footer;
   });
 });
-//@ chunk-18hwfzwa.js:791970-794488 fingerprint (2.1.88 match: NotificationContent, 0.431)
+//@ chunk-czq1j3j2.js:824588-827107 fingerprint (2.1.88 match: NotificationContent, 0.431)
 /**
  * 通知内容：语音 recording/processing、apiKeyHelper 慢、"Now using usage credits"、IDE 状态等按类型渲染；无通知时显示其他状态。
  */
@@ -1125,21 +1151,16 @@ function NotificationContent(props) {
   } else content = $[40];
   return content;
 }
-//@ chunk-18hwfzwa.js:794488-794502 placement
+//@ chunk-czq1j3j2.js:827107-827121 placement
 var UNCACHED_CONTEXT_HINT_TOKENS = 50000;
-//@ chunk-18hwfzwa.js:794502-794658 placement
+//@ chunk-czq1j3j2.js:827121-827277 placement
 function uncachedContextHint(tokenUsage, lastApiCompletionTimestamp, nowTicker) {
   if (lastApiCompletionTimestamp === null) return null;
   if (tokenUsage < UNCACHED_CONTEXT_HINT_TOKENS) return null;
   if (nowTicker - lastApiCompletionTimestamp <= CACHE_TTL_1H_MS) return null;
   return `~${Math.round(tokenUsage / 1000)}k uncached \xB7 /clear to start fresh`;
 }
-//@ chunk-18hwfzwa.js:794658-794662 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:794658", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:794662-795108 placement
+//@ chunk-czq1j3j2.js:827281-827727 placement
 /**
  * 通知区的绝对定位容器：宽度扣掉右侧占用列数，底部对齐、超出隐藏。
  */
@@ -1170,34 +1191,19 @@ function NotificationOverlay(props) {
   } else overlayElement = $[4];
   return overlayElement;
 }
-//@ chunk-18hwfzwa.js:795108-795112 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:795108", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:795112-795116 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:795112", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:795116-795120 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:795116", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:795120-795165 placement
+//@ chunk-czq1j3j2.js:827739-827784 placement
 function useMergedClients(initialClients, mcpClients) {
   return useMemo(() => mergeClients(initialClients, mcpClients), [initialClients, mcpClients]);
 }
 export {
+  useLatchedBridgeNotice,
+  noticeDialogSlot,
+  NOTICE_WIDTH_LIMIT,
+  PromptToast,
   useMergedClients,
   NOTIFICATION_TIMEOUT_MS,
   NotificationOverlay,
   Notifications,
   SegmentedText,
-  useLatchedBridgeNotice,
-  noticeDialogSlot,
-  NOTICE_WIDTH_LIMIT,
-  PromptToast,
   MAX_NOTICE_LINES,
 };

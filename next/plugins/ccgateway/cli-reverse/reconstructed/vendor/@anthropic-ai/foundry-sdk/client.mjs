@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/foundry-sdk/client.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/foundry-sdk@0.4.1..0.5.4
- * pieces: chunk-q01xm7xp.js (3)
+ * pieces: chunk-5g2k022m.js (3)
  * attribution: esm-fingerprint 3
  */
 import { Anthropic } from "../sdk/client.mjs";
@@ -13,7 +13,7 @@ import { VERSION } from "../sdk/version.mjs";
 import { Messages_2 } from "../sdk/resources/messages/messages.mjs";
 import { Beta } from "../sdk/resources/beta/beta.mjs";
 
-//@ chunk-q01xm7xp.js:1613-3141 esm-fingerprint
+//@ chunk-5g2k022m.js:1613-3141 esm-fingerprint
 class AnthropicFoundry extends Anthropic {
   constructor({
     baseURL = readEnv("ANTHROPIC_FOUNDRY_BASE_URL"),
@@ -90,13 +90,13 @@ class AnthropicFoundry extends Anthropic {
     return `AnthropicFoundry/JS ${VERSION}`;
   }
 }
-//@ chunk-q01xm7xp.js:3141-3198 esm-fingerprint
+//@ chunk-5g2k022m.js:3141-3198 esm-fingerprint
 function makeMessagesResource(client) {
   let resource = new Messages_2(client);
   delete resource.batches;
   return resource;
 }
-//@ chunk-q01xm7xp.js:3198-3264 esm-fingerprint
+//@ chunk-5g2k022m.js:3198-3264 esm-fingerprint
 function makeBetaResource(client) {
   let resource = new Beta(client);
   delete resource.messages.batches;

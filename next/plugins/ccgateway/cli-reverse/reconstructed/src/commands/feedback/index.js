@@ -3,12 +3,12 @@
  *
  * /bug（别名 share）命令对象：报错或分享对话
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/feedback/index.ts
- * pieces: chunk-e6aww6q8.js (2)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 1, fingerprint 1
  */
-//@ chunk-e6aww6q8.js:1686377-1686540 placement
+//@ chunk-5xgkngpb.js:1761586-1761749 placement
 /**
  * /feedback 命令对象（local-jsx）；描述：Send feedback to Anthropic or report a bug；实现 chunk-dnxbqwmv.js 的 EWi。
  */
@@ -22,8 +22,8 @@ var feedbackCommandDefinition = {
     ink: true,
   },
 };
-var feedbackCommand = feedbackCommandDefinition;
-//@ chunk-e6aww6q8.js:1686540-1686713 fingerprint (2.1.88 match: feedback, 0.417)
+var feedbackNonInteractiveCommand = feedbackCommandDefinition;
+//@ chunk-5xgkngpb.js:1761749-1761922 fingerprint (2.1.88 match: feedback, 0.418)
 /**
  * /bug 命令对象（local-jsx）；描述：Report a bug or share your conversation；别名 ["share"]；实现 chunk-myrezy36.js 的 t。
  */
@@ -38,5 +38,5 @@ var bugCommandDefinition = {
     ink: true,
   },
 };
-var bugCommand = bugCommandDefinition;
-export { feedbackCommand, bugCommand };
+var bugNonInteractiveCommand = bugCommandDefinition;
+export { feedbackNonInteractiveCommand, bugNonInteractiveCommand };

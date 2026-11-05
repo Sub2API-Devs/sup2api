@@ -3,10 +3,10 @@
  *
  * 设置来源常量与名称（userSettings/projectSettings/localSettings/flagSettings/policySettings）、--setting-sources 解析、启用来源计算。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/constants.ts
- * pieces: chunk-5hsd6qen.js (14), chunk-6zvepy0r.js (1)
- * attribution: facade-exports 13, layout 1, fingerprint 1
+ * pieces: chunk-0avm71bs.js (1), chunk-sq9ffh11.js (13)
+ * attribution: fingerprint 1, facade-exports 12, layout 1
  */
 import { CLAUDE_AI_SYNC_LABEL, commandSyncNameState } from "./commandSyncNames.js";
 import { capitalize } from "../stringUtils.js";
@@ -17,12 +17,12 @@ import {
 } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-5hsd6qen.js:3444-3534 facade-exports (2.1.88 match: SETTING_SOURCES, 1)
+//@ chunk-sq9ffh11.js:3481-3571 facade-exports (2.1.88 match: SETTING_SOURCES, 1)
 /**
  * 设置来源的合并顺序（低→高）：userSettings、projectSettings、localSettings、flagSettings、policySettings。
  */
 var SETTING_SOURCES = ["userSettings", "projectSettings", "localSettings", "flagSettings", "policySettings"];
-//@ chunk-5hsd6qen.js:3534-3751 facade-exports (2.1.88 match: getSettingSourceName, 1)
+//@ chunk-sq9ffh11.js:3571-3788 facade-exports (2.1.88 match: getSettingSourceName, 1)
 function getSettingSourceName(source) {
   switch (source) {
     case "userSettings":
@@ -37,7 +37,7 @@ function getSettingSourceName(source) {
       return "managed";
   }
 }
-//@ chunk-5hsd6qen.js:3751-4101 facade-exports (2.1.88 match: getSourceDisplayName, 0.827)
+//@ chunk-sq9ffh11.js:3788-4138 facade-exports (2.1.88 match: getSourceDisplayName, 0.827)
 function getSourceDisplayName(source) {
   switch (source) {
     case "userSettings":
@@ -62,7 +62,7 @@ function getSourceDisplayName(source) {
       return CLAUDE_AI_SYNC_LABEL;
   }
 }
-//@ chunk-5hsd6qen.js:4101-4703 facade-exports (2.1.88 match: getSettingSourceDisplayNameLowercase, 0.77)
+//@ chunk-sq9ffh11.js:4138-4740 facade-exports (2.1.88 match: getSettingSourceDisplayNameLowercase, 0.77)
 function getSettingSourceDisplayNameLowercase(source) {
   switch (source) {
     case "userSettings":
@@ -91,11 +91,11 @@ function getSettingSourceDisplayNameLowercase(source) {
       return "Remote Control server mount";
   }
 }
-//@ chunk-5hsd6qen.js:4703-4736 facade-exports
+//@ chunk-sq9ffh11.js:4740-4773 facade-exports
 function getSettingSourceDisplayNameCapitalized(enabledSettingSource) {
   return capitalize(getSettingSourceDisplayNameLowercase(enabledSettingSource));
 }
-//@ chunk-5hsd6qen.js:4736-4988 facade-exports
+//@ chunk-sq9ffh11.js:4773-5025 facade-exports
 /**
  * 解析 --setting-sources 逗号列表（user,project,local），非法值抛错。
  */
@@ -113,24 +113,24 @@ function parseSettingSourcesFlag(flag) {
   }
   return sources;
 }
-//@ chunk-5hsd6qen.js:4988-5100 layout
+//@ chunk-sq9ffh11.js:5025-5137 layout
 function formatSettingSourcesFlag(allowedSettingSourcesAsConfigured) {
   let mapped = SETTING_SOURCE_FLAG_PAIRS.filter(([, source]) =>
     allowedSettingSourcesAsConfigured.includes(source),
   ).map(([alias]) => alias);
   return mapped.length === SETTING_SOURCE_FLAG_PAIRS.length ? undefined : mapped.join(",");
 }
-//@ chunk-5hsd6qen.js:5100-5146 facade-exports
+//@ chunk-sq9ffh11.js:5137-5183 facade-exports
 function appliedSettingSourcesFlagValue() {
   if (isRestrictedSession()) return;
   return formatSettingSourcesFlag(getAllowedSettingSourcesAsConfigured());
 }
-//@ chunk-5hsd6qen.js:5146-5221 facade-exports
+//@ chunk-sq9ffh11.js:5183-5258 facade-exports
 function appliedSettingSourcesArgv() {
   let flagValue = appliedSettingSourcesFlagValue();
   return flagValue === undefined ? [] : [`--setting-sources=${flagValue}`];
 }
-//@ chunk-5hsd6qen.js:5221-5459 facade-exports
+//@ chunk-sq9ffh11.js:5258-5496 facade-exports
 /**
  * 返回当前启用的设置来源（--setting-sources 允许的 user/project/local，加上始终启用的 flag 与 policy），按 SETTING_SOURCES 顺序，按 allowed 缓存。
  */
@@ -148,14 +148,14 @@ function getEnabledSettingSources() {
   };
   return filtered;
 }
-//@ chunk-5hsd6qen.js:5459-5498 facade-exports
+//@ chunk-sq9ffh11.js:5496-5535 facade-exports
 /**
  * 某设置来源当前是否启用（受 --setting-sources 影响；flag/policy 总是启用）。
  */
 function isSettingSourceEnabled(source) {
   return getEnabledSettingSources().includes(source);
 }
-//@ chunk-5hsd6qen.js:5498-5706 facade-exports (2.1.88 match: parseSettingSourcesFlag, 0.698)
+//@ chunk-sq9ffh11.js:5535-5743 facade-exports (2.1.88 match: parseSettingSourcesFlag, 0.698)
 /**
  * 可由 --setting-sources 选择的三个来源 [user, project, local]；同语句定义仓库目录来源列表/集合与 flag 名映射。
  */
@@ -164,7 +164,7 @@ var REPO_DIR_SETTING_SOURCE_LIST;
 var REPO_DIR_SETTING_SOURCES;
 var SETTING_SOURCE_FLAG_NAMES;
 var SETTING_SOURCE_FLAG_PAIRS;
-deferInit("chunk-5hsd6qen.js:5498", () => {
+deferInit("chunk-sq9ffh11.js:5535", () => {
   EDITABLE_SETTING_SOURCES = ["userSettings", "projectSettings", "localSettings"];
   REPO_DIR_SETTING_SOURCE_LIST = ["projectSettings", "localSettings"];
   REPO_DIR_SETTING_SOURCES = new Set(REPO_DIR_SETTING_SOURCE_LIST);
@@ -178,34 +178,32 @@ deferInit("chunk-5hsd6qen.js:5498", () => {
     source,
   ]);
 });
-//@ chunk-5hsd6qen.js:5706-5796 facade-exports (2.1.88 match: supportsPersistence, 0.756)
+//@ chunk-sq9ffh11.js:5743-5901 facade-exports (2.1.88 match: SOURCES, 0.502)
 var SOURCES = ["localSettings", "projectSettings", "userSettings"];
 var INLINE_FLAG_SETTINGS_LABEL = "--settings (inline JSON)";
-//@ chunk-5hsd6qen.js:5796-5868 facade-exports
 var REPO_UNGRANTABLE_DEFAULT_MODES = ["auto", "bypassPermissions"];
 var HOST_FREE_FORM_SETTINGS_KEY = "organizationFreeFormSettings";
-//@ chunk-6zvepy0r.js:6733-6780 fingerprint (2.1.88 match: getEnabledSettingSources, 1)
-var SETTING_SOURCES_BY_PRIORITY; // deferred: uses EDITABLE_SETTING_SOURCES of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-6zvepy0r.js:6733", () => {
-  SETTING_SOURCES_BY_PRIORITY = ["policySettings", "flagSettings", ...EDITABLE_SETTING_SOURCES];
-});
+//@ chunk-0avm71bs.js:11683-11778 fingerprint (2.1.88 match: SETTING_SOURCES, 1)
+var TRUSTED_SETTING_SOURCES = ["policySettings", "flagSettings", "userSettings"];
+var REPO_SETTING_SOURCES = ["localSettings", "projectSettings"];
 export {
   isSettingSourceEnabled,
-  getEnabledSettingSources,
-  getSettingSourceDisplayNameCapitalized,
   SETTING_SOURCES,
   getSettingSourceDisplayNameLowercase,
   EDITABLE_SETTING_SOURCES,
-  REPO_DIR_SETTING_SOURCE_LIST,
-  getSourceDisplayName,
+  TRUSTED_SETTING_SOURCES,
+  REPO_SETTING_SOURCES,
   HOST_FREE_FORM_SETTINGS_KEY,
   parseSettingSourcesFlag,
   REPO_DIR_SETTING_SOURCES,
+  getEnabledSettingSources,
   getSettingSourceName,
-  appliedSettingSourcesFlagValue,
-  INLINE_FLAG_SETTINGS_LABEL,
-  SETTING_SOURCES_BY_PRIORITY,
+  REPO_DIR_SETTING_SOURCE_LIST,
   appliedSettingSourcesArgv,
+  getSettingSourceDisplayNameCapitalized,
+  INLINE_FLAG_SETTINGS_LABEL,
   SOURCES,
+  getSourceDisplayName,
+  appliedSettingSourcesFlagValue,
   REPO_UNGRANTABLE_DEFAULT_MODES,
 };

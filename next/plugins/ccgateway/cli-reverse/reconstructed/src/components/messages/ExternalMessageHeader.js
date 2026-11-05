@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：外部来源消息的标题行
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-nwq3j1yh.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z2q2msq9.js (3)
  * attribution: placement 3
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -24,12 +24,12 @@ import {
 import { Text, Box } from "../../ink/components/Text.js";
 import { BACK_ARROW_GLYPH } from "../../constants/figures.js";
 
-//@ chunk-nwq3j1yh.js:4810-4814 placement
+//@ chunk-z2q2msq9.js:5145-5149 placement
 init_react_production();
-//@ chunk-nwq3j1yh.js:4814-4828 placement
+//@ chunk-z2q2msq9.js:5149-5163 placement
 var _ = 40;
 var MAX_SENDER_WIDTH = 64;
-//@ chunk-nwq3j1yh.js:4828-6471 placement
+//@ chunk-z2q2msq9.js:5163-6807 placement
 function ExternalMessageHeader(props) {
   let $ = useMemoCache(27);
   let { addMargin, wake, origin, rawText, verbose, isTranscriptMode } = props;

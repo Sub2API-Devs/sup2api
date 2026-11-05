@@ -3,9 +3,9 @@
  *
  * ExitWorktree 工具：keep/remove 本会话的 worktree，统计未提交改动与提交，恢复原工作目录与缓存
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ExitWorktreeTool/ExitWorktreeTool.ts
- * pieces: chunk-kxyd0g16.js (8)
+ * pieces: chunk-fmnbrxwy.js (8)
  * attribution: affinity 1, fingerprint 2, callgraph-fingerprint 1, layout 4
  */
 import { realpath } from "fs/promises";
@@ -29,7 +29,7 @@ import {
   inspectSubmodules,
   describeSubmoduleChanges,
 } from "../../utils/git/submoduleInspection.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   countCommitsAtStake,
   getCurrentWorktreeSession,
@@ -73,7 +73,7 @@ import { fromEnum, lit } from "../../services/analytics/safeMetadata.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:126984-128969 affinity
+//@ chunk-fmnbrxwy.js:141709-143694 affinity
 /**
  * ExitWorktree 的 prompt：作用范围、何时使用、keep/remove 与 discard_changes 语义、对 tmux 的处理。
  */
@@ -109,11 +109,11 @@ If called outside an EnterWorktree session, the tool is a **no-op**: it reports 
 - Once exited, EnterWorktree can be called again to create a fresh worktree
 `;
 }
-//@ chunk-kxyd0g16.js:128969-129915 fingerprint (2.1.88 match: inputSchema, 0.514)
+//@ chunk-fmnbrxwy.js:143694-144640 fingerprint (2.1.88 match: inputSchema, 0.514)
 var exitWorktreeInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var exitWorktreeOutputSchema;
 var DISCARD_CONFIRM_HINT;
-deferInit("chunk-kxyd0g16.js:128969", () => {
+deferInit("chunk-fmnbrxwy.js:143694", () => {
   exitWorktreeInputSchema = DoctorLazy(() =>
     zodStrictObject({
       action: _enum(["keep", "remove"]).describe(
@@ -149,7 +149,7 @@ deferInit("chunk-kxyd0g16.js:128969", () => {
   DISCARD_CONFIRM_HINT =
     'Confirm with the user, then re-invoke with discard_changes: true \u2014 or use action: "keep" to preserve the worktree.';
 });
-//@ chunk-kxyd0g16.js:129915-130455 callgraph-fingerprint (2.1.88 match: countWorktreeChanges, 0.157)
+//@ chunk-fmnbrxwy.js:144640-145181 callgraph-fingerprint (2.1.88 match: countWorktreeChanges, 0.153)
 /**
  * 统计 worktree 中未提交文件数（含子模块变化）与相对起始提交新增的提交数；无法判断时返回 null。
  */
@@ -169,7 +169,7 @@ async function countWorktreeChanges(worktreePath, originalHeadCommit) {
   if (statusResult.code !== 0) return null;
   let submoduleSummary = submoduleChanges(await inspectSubmodules(worktreePath));
   let changedFiles =
-    count(
+    countWhere(
       statusResult.stdout.split(`
 `),
       (statusLine) => statusLine.trim() !== "",
@@ -201,21 +201,21 @@ async function countWorktreeChanges(worktreePath, originalHeadCommit) {
     }),
   };
 }
-//@ chunk-kxyd0g16.js:130455-130485 layout
+//@ chunk-fmnbrxwy.js:145181-145211 layout
 /**
  * 占位实现：恒返回 0，供退出 worktree 时统计路径数量。
  */
 async function listWorktreePaths(worktreePath) {
   return 0;
 }
-//@ chunk-kxyd0g16.js:130485-130509 layout
+//@ chunk-fmnbrxwy.js:145211-145235 layout
 /**
  * 占位实现：恒返回空串，代表恢复后的工作目录。
  */
 function cwdOrEmpty(listText) {
   return "";
 }
-//@ chunk-kxyd0g16.js:130509-131829 layout
+//@ chunk-fmnbrxwy.js:145235-146556 layout
 /**
  * 退出 worktree 后恢复会话：回到原 cwd（不存在时回退到 worktree、home 或临时目录），在不扩大权限锚点的前提下重设 originalCwd/项目根并迁移后台会话状态，清除 worktree 状态与 cwd 相关缓存，返回 restoredCwd 等。
  */
@@ -312,7 +312,7 @@ async function restoreSessionAfterWorktreeExit(
     fellBackToWorktree,
   };
 }
-//@ chunk-kxyd0g16.js:131829-132109 layout
+//@ chunk-fmnbrxwy.js:146556-146836 layout
 /**
  * 生成"会话已回到 X"或"原目录不存在，已回退到 Y"的说明。
  */
@@ -324,12 +324,12 @@ function formatCwdRestoredMessage(originalCwd, restoreResult) {
     ? missingDirMessage
     : `${missingDirMessage} Consider restarting Claude from an existing directory.`;
 }
-//@ chunk-kxyd0g16.js:132109-137578 fingerprint (2.1.88 match: ExitWorktreeTool, 0.67)
+//@ chunk-fmnbrxwy.js:146836-152305 fingerprint (2.1.88 match: ExitWorktreeTool, 0.67)
 /**
  * ExitWorktree 工具（shouldDefer，isDestructive 当 action=remove）。只处理本会话 EnterWorktree 创建/进入的 worktree；不在 worktree 会话时 validateInput 报 no-op；子代理禁用；进入的是别人的 worktree 时不允许 remove；remove 且未 discard_changes 时统计未提交文件与未合并提交，有则拒绝并要求确认。call：keep 保留目录与分支；remove 先杀 tmux 会话再清理 worktree；两者都调用 restoreSessionAfterWorktreeExit 恢复 cwd。
  */
 var ExitWorktreeTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kxyd0g16.js:132109", () => {
+deferInit("chunk-fmnbrxwy.js:146836", () => {
   ExitWorktreeTool = buildTool({
     name: EXIT_WORKTREE_TOOL_NAME,
     searchHint: "exit a worktree session and return to the original directory",

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件 UI 面板状态发布、滚动/聚焦与状态缓冲
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (43)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (43)
  * attribution: placement 43
  */
 import { identity } from "../../utils/identity.js";
@@ -25,11 +25,11 @@ import { subscribe_2 } from "../../components/permissions/AskUserQuestionPermiss
 import { collectSurfaceHandles } from "../../plugins/functionHooks/sessionEvents.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:490840-490853 placement
+//@ chunk-0yw3taqg.js:522466-522479 placement
 var PANE_STATUS_TTL_MS = 60000;
-//@ chunk-tyg7f3ek.js:490853-490863 placement
+//@ chunk-0yw3taqg.js:522479-522489 placement
 var PANE_STATUS_MAX = 20;
-//@ chunk-tyg7f3ek.js:490863-491397 placement
+//@ chunk-0yw3taqg.js:522489-523023 placement
 function createUiStatusBuffer(now) {
   let byPlugin = new Map();
   let recent = [];
@@ -71,9 +71,9 @@ function createUiStatusBuffer(now) {
     forLaterClient,
   };
 }
-//@ chunk-tyg7f3ek.js:491397-491473 placement
+//@ chunk-0yw3taqg.js:523023-523099 placement
 var paneSignals; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tyg7f3ek.js:491397", () => {
+deferInit("chunk-0yw3taqg.js:523023", () => {
   paneSignals = identity(
     {
       scroll: createSignal(),
@@ -85,12 +85,12 @@ deferInit("chunk-tyg7f3ek.js:491397", () => {
     },
   );
 });
-//@ chunk-tyg7f3ek.js:491473-491507 placement
+//@ chunk-0yw3taqg.js:523099-523133 placement
 var paneSites; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tyg7f3ek.js:491473", () => {
+deferInit("chunk-0yw3taqg.js:523099", () => {
   paneSites = identity(new Map(), (sites) => sites.clear());
 });
-//@ chunk-tyg7f3ek.js:491507-491969 placement
+//@ chunk-0yw3taqg.js:523133-523595 placement
 function setPaneFocus(key, request) {
   let site = paneSites.get(key);
   if (site === undefined) return "no such site";
@@ -121,7 +121,7 @@ function setPaneFocus(key, request) {
     });
   return;
 }
-//@ chunk-tyg7f3ek.js:491969-492418 placement
+//@ chunk-0yw3taqg.js:523595-524044 placement
 function scrollPaneByPerson(key, offset, origin) {
   let site = paneSites.get(key);
   if (site === undefined) return "no such site";
@@ -150,7 +150,7 @@ function scrollPaneByPerson(key, offset, origin) {
   });
   return;
 }
-//@ chunk-tyg7f3ek.js:492418-492524 placement
+//@ chunk-0yw3taqg.js:524044-524150 placement
 function scrollActor(request, element) {
   return request.by === "auto" && element !== null && element !== undefined
     ? {
@@ -161,7 +161,7 @@ function scrollActor(request, element) {
         kind: "person",
       };
 }
-//@ chunk-tyg7f3ek.js:492524-492627 placement
+//@ chunk-0yw3taqg.js:524150-524253 placement
 function paneHolder(key) {
   let holder = paneSites.get(key)?.holder;
   if (holder === undefined) return null;
@@ -170,12 +170,12 @@ function paneHolder(key) {
     key: holder.element,
   };
 }
-//@ chunk-tyg7f3ek.js:492627-492668 placement
+//@ chunk-0yw3taqg.js:524253-524294 placement
 var paneResultWithElement = (key, result) => ({
   result,
   element: paneHolder(key),
 });
-//@ chunk-tyg7f3ek.js:492668-492784 placement
+//@ chunk-0yw3taqg.js:524294-524410 placement
 function isPaneSiteOpen(component, requestId) {
   let isAbovePrompt = component === "AbovePrompt" && requestId === ABOVE_PROMPT;
   let isOpenPane =
@@ -185,12 +185,12 @@ function isPaneSiteOpen(component, requestId) {
       .open.some((pane) => pane.id === requestId);
   return isAbovePrompt || isOpenPane;
 }
-//@ chunk-tyg7f3ek.js:492784-492892 placement
+//@ chunk-0yw3taqg.js:524410-524518 placement
 function paneScrollOffset(site) {
   if (site === undefined) return 0;
   return site.isFollowingEnd ? Math.max(0, site.contentRows - site.bodyRows) : site.offset;
 }
-//@ chunk-tyg7f3ek.js:492892-493724 placement
+//@ chunk-0yw3taqg.js:524518-525350 placement
 function publishPaneState(key) {
   let site = paneSites.get(key);
   if (site === undefined) {
@@ -250,7 +250,7 @@ function publishPaneState(key) {
   });
   focusSiteDraws().emit();
 }
-//@ chunk-tyg7f3ek.js:493724-493832 placement
+//@ chunk-0yw3taqg.js:525350-525458 placement
 function keepHeldElement(previous, next) {
   return next.element === undefined && next.isHeld && previous.element !== undefined
     ? {
@@ -260,18 +260,18 @@ function keepHeldElement(previous, next) {
       }
     : next;
 }
-//@ chunk-tyg7f3ek.js:493832-493868 placement
+//@ chunk-0yw3taqg.js:525458-525494 placement
 var mergeScrollReporter = (a, b) => ({
   ...b,
   by: a.by + b.by,
 });
-//@ chunk-tyg7f3ek.js:493868-493956 placement
+//@ chunk-0yw3taqg.js:525494-525582 placement
 function pluginOfPane(component, requestId) {
   return (component === "Pane" ? allPanes(paneRegistry().getState()) : []).find(
     (pane) => pane.id === requestId,
   )?.plugin;
 }
-//@ chunk-tyg7f3ek.js:493956-494441 placement
+//@ chunk-0yw3taqg.js:525582-526067 placement
 function createSerialReporter(merge) {
   let running;
   let pending;
@@ -314,7 +314,7 @@ function createSerialReporter(merge) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:494441-494744 placement
+//@ chunk-0yw3taqg.js:526067-526370 placement
 var newPaneSite = (key, site, extra) => ({
   owner: site?.owner ?? pluginOfPane(key.component, key.requestId),
   offset: 0,
@@ -335,14 +335,14 @@ var newPaneSite = (key, site, extra) => ({
   ...site,
   ...extra,
 });
-//@ chunk-tyg7f3ek.js:494744-494801 placement
+//@ chunk-0yw3taqg.js:526370-526427 placement
 var noSuchSiteResult = () => ({
   result: {
     deny: "no such site",
   },
   element: null,
 });
-//@ chunk-tyg7f3ek.js:494801-495295 placement
+//@ chunk-0yw3taqg.js:526427-526921 placement
 async function focusPaneElement(request) {
   let { clientId, component, requestId, element } = request;
   let key = siteKey(component, requestId);
@@ -393,15 +393,15 @@ async function focusPaneElement(request) {
       });
   }
 }
-//@ chunk-tyg7f3ek.js:495295-495344 placement
+//@ chunk-0yw3taqg.js:526921-526970 placement
 var FOCUS_REQUEST_KIND = {
   turnsOf: (site) => site.focuses,
   run: focusPaneElement,
   denied: noSuchSiteResult,
 };
-//@ chunk-tyg7f3ek.js:495344-495392 placement
+//@ chunk-0yw3taqg.js:526970-527018 placement
 var isClientAttached = (clientId) => clientRegistry.list().some((client) => client.clientId === clientId);
-//@ chunk-tyg7f3ek.js:495392-495639 placement
+//@ chunk-0yw3taqg.js:527018-527265 placement
 function runPaneRequest(request, kind) {
   let { clientId, component, requestId } = request;
   let key = siteKey(component, requestId);
@@ -420,9 +420,9 @@ function runPaneRequest(request, kind) {
   paneSites.set(key, paneSite);
   return kind.turnsOf(paneSite).take(request, kind.run);
 }
-//@ chunk-tyg7f3ek.js:495639-495660 placement
+//@ chunk-0yw3taqg.js:527265-527286 placement
 var handlePaneFocusRequest = (request) => runPaneRequest(request, FOCUS_REQUEST_KIND);
-//@ chunk-tyg7f3ek.js:495660-495923 placement
+//@ chunk-0yw3taqg.js:527286-527549 placement
 function trackOpenPane(request) {
   let key = siteKey("Pane", request.requestId);
   let site = paneSites.get(key);
@@ -450,7 +450,7 @@ function trackOpenPane(request) {
   );
   publishPaneState(key);
 }
-//@ chunk-tyg7f3ek.js:495923-496085 placement
+//@ chunk-0yw3taqg.js:527549-527711 placement
 function syncOpenPanes(clientId) {
   let { open, focusedId } = paneRegistry().getState();
   for (let pane of open) {
@@ -464,7 +464,7 @@ function syncOpenPanes(clientId) {
       });
   }
 }
-//@ chunk-tyg7f3ek.js:496085-496195 placement
+//@ chunk-0yw3taqg.js:527711-527821 placement
 function dropPaneSites(predicate) {
   let filtered = [...paneSites.entries()].filter(([, site]) => predicate(site));
   for (let [key] of filtered) {
@@ -473,14 +473,14 @@ function dropPaneSites(predicate) {
   }
   return filtered.length;
 }
-//@ chunk-tyg7f3ek.js:496195-496277 placement
+//@ chunk-0yw3taqg.js:527821-527903 placement
 var dropClosedPanes = (state) =>
   dropPaneSites(
     (site) => site.component === "Pane" && !state.panes.some((pane) => pane.id === site.requestId),
   );
-//@ chunk-tyg7f3ek.js:496277-496326 placement
+//@ chunk-0yw3taqg.js:527903-527952 placement
 var maxScrollOffset = (site) => Math.max(0, site.contentRows - site.bodyRows);
-//@ chunk-tyg7f3ek.js:496326-496432 placement
+//@ chunk-0yw3taqg.js:527952-528058 placement
 function isLandedScroll(request, site) {
   let { unlandedOffset } = site;
   return (
@@ -488,7 +488,7 @@ function isLandedScroll(request, site) {
     request.offset === Math.min(Math.max(0, unlandedOffset + request.by), maxScrollOffset(request))
   );
 }
-//@ chunk-tyg7f3ek.js:496432-497004 placement
+//@ chunk-0yw3taqg.js:528058-528630 placement
 function describeOpenPanes(state) {
   let filtered = state.open.filter((pane) => isModuleAdmittedByName(pane.plugin));
   let hiddenIds = new Set(state.open.filter((pane) => !filtered.includes(pane)).map((pane) => pane.id));
@@ -520,7 +520,7 @@ function describeOpenPanes(state) {
     focusRequestedId: visible(state.focusRequest),
   };
 }
-//@ chunk-tyg7f3ek.js:497004-497172 placement
+//@ chunk-0yw3taqg.js:528630-528798 placement
 function subscribeOpenPanes(onPanes) {
   let lastJson = jsonStringify(describeOpenPanes(paneRegistry().getState()));
   function check() {
@@ -537,7 +537,7 @@ function subscribeOpenPanes(onPanes) {
     unsubscribeSignal();
   };
 }
-//@ chunk-tyg7f3ek.js:497172-497276 placement
+//@ chunk-0yw3taqg.js:528798-528902 placement
 var windowMovedResult = (site) => ({
   result: {
     deny: "the window moved meanwhile",
@@ -545,7 +545,7 @@ var windowMovedResult = (site) => ({
   offset: paneScrollOffset(site),
   isFollowingEnd: site.isFollowingEnd,
 });
-//@ chunk-tyg7f3ek.js:497276-497679 placement
+//@ chunk-0yw3taqg.js:528902-529305 placement
 function settleScrollRequest(request, result) {
   let { key, before } = request;
   let site = paneSites.get(key);
@@ -575,25 +575,25 @@ function settleScrollRequest(request, result) {
     isFollowingEnd,
   };
 }
-//@ chunk-tyg7f3ek.js:497679-497757 placement
+//@ chunk-0yw3taqg.js:529305-529383 placement
 var scrollFollowState = (request, site) => ({
   offset: maxScrollOffset(request),
   wasFollowed: site.isFollowingEnd,
   isDownward: request.by > 0,
 });
-//@ chunk-tyg7f3ek.js:497757-497833 placement
+//@ chunk-0yw3taqg.js:529383-529459 placement
 function clampScrollOffset(request, site) {
   let max = maxScrollOffset(request);
   return site.isFollowingEnd ? max : Math.min(site.offset, max);
 }
-//@ chunk-tyg7f3ek.js:497833-497928 placement
+//@ chunk-0yw3taqg.js:529459-529554 placement
 var describePaneScroll = (request, site) => ({
   key: siteKey(request.component, request.requestId),
   scrolls: site.scrolls,
   before: clampScrollOffset(request, site),
   end: scrollFollowState(request, site),
 });
-//@ chunk-tyg7f3ek.js:497928-498007 placement
+//@ chunk-0yw3taqg.js:529554-529633 placement
 var noSuchPaneSiteResult = (request) => ({
   result: {
     deny: "no such site",
@@ -601,7 +601,7 @@ var noSuchPaneSiteResult = (request) => ({
   offset: request.offset,
   isFollowingEnd: false,
 });
-//@ chunk-tyg7f3ek.js:498007-498808 placement
+//@ chunk-0yw3taqg.js:529633-530434 placement
 async function scrollPaneElement(request) {
   let { clientId, component, requestId } = request;
   let key = siteKey(component, requestId);
@@ -668,13 +668,13 @@ async function scrollPaneElement(request) {
     }
   }
 }
-//@ chunk-tyg7f3ek.js:498808-498857 placement
+//@ chunk-0yw3taqg.js:530434-530483 placement
 var SCROLL_REQUEST_KIND = {
   turnsOf: (site) => site.scrolls,
   run: scrollPaneElement,
   denied: noSuchPaneSiteResult,
 };
-//@ chunk-tyg7f3ek.js:498857-498951 placement
+//@ chunk-0yw3taqg.js:530483-530577 placement
 function pickContentRows(scroll, site) {
   return site === undefined || (site.bodyRows === 0 && site.contentRows === 0)
     ? scroll
@@ -682,7 +682,7 @@ function pickContentRows(scroll, site) {
         bodyRows: scroll.bodyRows,
       };
 }
-//@ chunk-tyg7f3ek.js:498951-499316 placement
+//@ chunk-0yw3taqg.js:530577-530942 placement
 function attachPaneClient(request) {
   let { clientId, component, requestId } = request;
   if (!(isPaneSiteOpen(component, requestId) && isClientAttached(clientId))) return;
@@ -714,7 +714,7 @@ function attachPaneClient(request) {
   );
   publishPaneState(key);
 }
-//@ chunk-tyg7f3ek.js:499316-499590 placement
+//@ chunk-0yw3taqg.js:530942-531216 placement
 function updatePaneSurface(request) {
   let { clientId, component, requestId } = request;
   let key = siteKey(component, requestId);

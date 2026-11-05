@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。CA 证书包解析。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-awy329vy.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9knfmvrf.js (9)
  * attribution: placement 8, affinity 1
  */
 import { X509Certificate } from "crypto";
@@ -16,12 +16,12 @@ import { isENOENT, isFsInaccessible } from "../utils/errors.js";
 import { findSocketOwnerPid } from "./relay.js";
 import { countAndSortItems } from "../utils/exampleCommands.js";
 
-//@ chunk-awy329vy.js:2378-2391 placement
+//@ chunk-9knfmvrf.js:2387-2400 placement
 /**
  * 读取 CA 包文件时的大小上限（64 KiB）。
  */
 var MAX_CA_BUNDLE_FILE_BYTES = 65536;
-//@ chunk-awy329vy.js:2391-3028 placement
+//@ chunk-9knfmvrf.js:2400-3037 placement
 function parseCaBundle(text) {
   let match = text.match(PEM_CERT_BLOCK_RE);
   if (!match)
@@ -67,7 +67,7 @@ function parseCaBundle(text) {
     ders,
   };
 }
-//@ chunk-awy329vy.js:3028-3296 placement
+//@ chunk-9knfmvrf.js:3037-3305 placement
 function compareCaBundles(newText, oldText) {
   if (newText === oldText) return "same";
   let caBundle = parseCaBundle(newText);
@@ -80,7 +80,7 @@ function compareCaBundles(newText, oldText) {
     ? "swapped"
     : "different";
 }
-//@ chunk-awy329vy.js:3296-3775 placement
+//@ chunk-9knfmvrf.js:3305-3784 placement
 /**
  * 安全读取 CA 证书包文件：只接受普通文件且不超过大小上限，否则返回 unreadable。
  */
@@ -118,7 +118,7 @@ async function readCaBundleFile(filePath) {
     await handle?.close().catch(() => {});
   }
 }
-//@ chunk-awy329vy.js:3775-3865 placement
+//@ chunk-9knfmvrf.js:3784-3874 placement
 /**
  * 比较文件里的 CA 包与给定内容是否相同（读不到视为不同）。
  */
@@ -126,14 +126,14 @@ async function compareBundleWithFile(filePath, bundledText) {
   let caBundleFile = await readCaBundleFile(filePath);
   return caBundleFile.state === "read" ? compareCaBundles(caBundleFile.text, bundledText) : "different";
 }
-//@ chunk-awy329vy.js:3999-4133 placement
+//@ chunk-9knfmvrf.js:4008-4142 placement
 var PEER_PROCESS_PENDING = "<pending>";
 var PEER_PROCESS_LOOKUP_FAILED = "<lookup-failed>";
 var PEER_PROCESS_PROC_NET_UNREADABLE = "<proc-net-unreadable>";
 var PEER_PROCESS_INODE_NOT_FOUND = "<inode-not-found>";
 var PEER_PROCESS_PID_NOT_FOUND = "<pid-not-found>";
 var PEER_PROCESS_COMM_UNREADABLE = "<comm-unreadable>";
-//@ chunk-awy329vy.js:4133-4338 placement
+//@ chunk-9knfmvrf.js:4142-4347 placement
 /**
  * 在 Linux 上按本地/远端端口查 /proc/net/tcp(6) 找到连接 inode，再找到持有它的进程并读取 /proc/<pid>/comm；各失败环节返回 <…> 形式的占位标记。
  */
@@ -150,14 +150,14 @@ async function lookupPeerProcessName(remotePort, localPort) {
   }
   return comm.length > 0 ? comm : PEER_PROCESS_COMM_UNREADABLE;
 }
-//@ chunk-awy329vy.js:4338-4404 placement
+//@ chunk-9knfmvrf.js:4347-4413 placement
 /**
  * 去掉不可打印字符与尖括号，取进程名（最多 64 字符）。
  */
 function sanitizeCommName(file) {
   return file.replace(/[^\x20-\x7e]|</g, "").slice(0, 64);
 }
-//@ chunk-awy329vy.js:4404-4723 affinity
+//@ chunk-9knfmvrf.js:4413-4732 affinity
 /**
  * 在 /proc/net/tcp 与 tcp6 中查找指定本地/远端地址对应的套接字 inode。
  */
@@ -185,11 +185,11 @@ async function findSocketInode(remotePort, localPort) {
   return anyProcNetRead ? PEER_PROCESS_INODE_NOT_FOUND : PEER_PROCESS_PROC_NET_UNREADABLE;
 }
 export {
+  PEER_PROCESS_PENDING,
+  lookupPeerProcessName,
+  PEER_PROCESS_LOOKUP_FAILED,
   readCaBundleFile,
   compareCaBundles,
   compareBundleWithFile,
   parseCaBundle,
-  PEER_PROCESS_PENDING,
-  lookupPeerProcessName,
-  PEER_PROCESS_LOOKUP_FAILED,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：云会话启动
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (10)
  * attribution: placement 10
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -14,7 +14,7 @@ import { printableName } from "../printableName.js";
 import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1874593-1876281 placement
+//@ chunk-5xgkngpb.js:1953413-1955101 placement
 /**
  * 云会话 --tools 相关拒绝文案组：空列表、Remote Control 环境、自托管环境、未知环境。
  */
@@ -26,7 +26,7 @@ var UNKNOWN_ENV_TOOLS_REFUSAL;
 var CLOUD_LAUNCH_TOOL_ERRORS;
 var DEVICE_BIND_REFUSAL_REASONS;
 var cloudLaunchErrorSchema;
-deferInit("chunk-e6aww6q8.js:1874593", () => {
+deferInit("chunk-5xgkngpb.js:1953413", () => {
   CLOUD_LAUNCH_TOOL_ERRORS_2 =
     "The cloud session was not started: an empty --tools list asks for no built-in tools, which cloud sessions don't support yet. List the tools to keep, or leave --tools out.";
   BRIDGE_ENV_TOOLS_REFUSAL =
@@ -49,25 +49,25 @@ deferInit("chunk-e6aww6q8.js:1874593", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:1876281-1876330 placement
+//@ chunk-5xgkngpb.js:1955101-1955150 placement
 function isCloudLaunchError(value) {
   return cloudLaunchErrorSchema().safeParse(value).success;
 }
-//@ chunk-e6aww6q8.js:1876330-1876398 placement
+//@ chunk-5xgkngpb.js:1955150-1955218 placement
 function isDeduplicatedCreateResponse(responseData) {
   return objectSchema({
     deduplicated: literal(true),
   }).safeParse(responseData).success;
 }
-//@ chunk-e6aww6q8.js:1876398-1876431 placement
+//@ chunk-5xgkngpb.js:1955218-1955251 placement
 function printableSessionUrl(sessionUrl) {
   return printableName(sessionUrl, 200);
 }
-//@ chunk-e6aww6q8.js:1876431-1876711 placement
+//@ chunk-5xgkngpb.js:1955251-1955531 placement
 function duplicateSessionMessage(result) {
   return `No new cloud session was started: the service answered with a session it had already created for this request.${result.promptHeld ? " Your prompt was not sent." : ""} That session was left as it is. Look at it before you run the command again: ${printableSessionUrl(result.sessionUrl)}`;
 }
-//@ chunk-e6aww6q8.js:1876711-1877010 placement
+//@ chunk-5xgkngpb.js:1955531-1955830 placement
 function classifyPromptSendResult(result) {
   if (result.ok)
     return {
@@ -90,7 +90,7 @@ function classifyPromptSendResult(result) {
     reason: result.reason,
   };
 }
-//@ chunk-e6aww6q8.js:1877010-1877639 placement
+//@ chunk-5xgkngpb.js:1955830-1956459 placement
 function archiveCloudSession(options, archiveResult) {
   let replaced = printableName(options.reason, 400).replace(/\.$/, "");
   let reasonText = replaced === "" ? "" : `: ${replaced}`;
@@ -108,7 +108,7 @@ function archiveCloudSession(options, archiveResult) {
     }[options.kind]
   }`;
 }
-//@ chunk-e6aww6q8.js:1877639-1877965 placement
+//@ chunk-5xgkngpb.js:1956459-1956785 placement
 /**
  * 按环境类型返回不支持的启动结果与说明；Anthropic 云环境返回 null。
  */
@@ -140,7 +140,7 @@ function unsupportedEnvironmentOutcome(kind, allowsSelfHosted) {
       };
   }
 }
-//@ chunk-e6aww6q8.js:1877965-1878115 placement
+//@ chunk-5xgkngpb.js:1956785-1956935 placement
 function logBuiltinToolsCreate(outcome, selfHostedPool = false) {
   if (outcome === "created")
     logFeatureOk("cloud_builtin_tools_create", {
@@ -151,9 +151,10 @@ function logBuiltinToolsCreate(outcome, selfHostedPool = false) {
       self_hosted_pool: selfHostedPool,
     });
 }
-//@ chunk-e6aww6q8.js:1878115-1878148 placement
+//@ chunk-5xgkngpb.js:1956935-1956968 placement
 var X_TRUSTED_DEVICE_TOKEN = "X-Trusted-Device-Token";
 export {
+  X_TRUSTED_DEVICE_TOKEN,
   isDeduplicatedCreateResponse,
   logBuiltinToolsCreate,
   duplicateSessionMessage,
@@ -164,5 +165,4 @@ export {
   CLOUD_LAUNCH_TOOL_ERRORS_2,
   CLOUD_LAUNCH_TOOL_ERRORS,
   DEVICE_BIND_REFUSAL_REASONS,
-  X_TRUSTED_DEVICE_TOKEN,
 };

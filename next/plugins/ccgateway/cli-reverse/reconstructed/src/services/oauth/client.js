@@ -3,10 +3,10 @@
  *
  * OAuth 客户端：拼 authorize URL（PKCE S256）、授权码换令牌、刷新与吊销令牌、拉 profile/roles、创建 API key、写 oauthAccount。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/oauth/client.ts
- * pieces: chunk-aepeg2w5.js (37)
- * attribution: placement 3, layout 9, facade-exports 25
+ * pieces: chunk-exfmq47h.js (38)
+ * attribution: placement 3, layout 9, facade-exports 26
  */
 import { isDeepStrictEqual } from "util";
 import {
@@ -61,44 +61,44 @@ import { planDisplayNameFromProfile } from "./validateOauthToken.js";
 import { classifyOAuthErrorResponse, HTTPS_CLAUDE_AI_RESTRICTED, ACCOUNT_ON_HOLD } from "./oauthErrors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:295624-295741 placement
+//@ chunk-exfmq47h.js:305728-305845 placement
 var API_KEY_NOT_CREATED_MESSAGE =
   "The server did not create an API key and gave no readable reason. If this keeps happening, contact support.";
-//@ chunk-aepeg2w5.js:295741-295825 placement
+//@ chunk-exfmq47h.js:305845-305929 placement
 class KeyMintRefusedError extends Error {
   constructor(message, options) {
     super(message, options);
     this.name = "KeyMintRefusedError";
   }
 }
-//@ chunk-aepeg2w5.js:295825-295881 placement
+//@ chunk-exfmq47h.js:305929-305985 placement
 /**
  * 判断是否为需要二次验证或被拒铸币的错误。
  */
 function isVerificationOrMintRefusal(error) {
   return error instanceof VerificationRequiredError || error instanceof KeyMintRefusedError;
 }
-//@ chunk-aepeg2w5.js:295881-295911 layout
+//@ chunk-exfmq47h.js:305985-306015 layout
 /**
  * 刷新令牌的有效期（30 天）。
  */
 var TOKEN_CONFIG_TTL_MS = 86400000;
 var REFRESH_TOKEN_EXPIRY_MS = 2592000000;
-//@ chunk-aepeg2w5.js:295911-296007 facade-exports
+//@ chunk-exfmq47h.js:306015-306111 facade-exports
 function resolveRefreshTokenExpiresAt(refreshTokenExpiresIn, hasExpiry) {
   if (typeof refreshTokenExpiresIn === "number") return Date.now() + refreshTokenExpiresIn * 1000;
   return hasExpiry ? Date.now() + REFRESH_TOKEN_EXPIRY_MS : undefined;
 }
-//@ chunk-aepeg2w5.js:296007-296036 facade-exports
+//@ chunk-exfmq47h.js:306111-306140 facade-exports
 function shouldUseClaudeAIAuth(scopes) {
   return isClaudeAiScopeSet(scopes);
 }
-//@ chunk-aepeg2w5.js:296036-296120 facade-exports
+//@ chunk-exfmq47h.js:306140-306224 facade-exports
 function parseScopes(scopeString) {
   if (typeof scopeString !== "string") return [];
   return scopeString.split(" ").filter(Boolean);
 }
-//@ chunk-aepeg2w5.js:296120-296969 facade-exports (2.1.88 match: buildAuthUrl, 0.957)
+//@ chunk-exfmq47h.js:306224-307073 facade-exports (2.1.88 match: buildAuthUrl, 0.957)
 /**
  * 拼 OAuth authorize URL：claude.ai 用 CLAUDE_AI_AUTHORIZE_URL，Console 用 CONSOLE_AUTHORIZE_URL；参数 code=true、client_id、response_type=code、redirect_uri（手动模式 MANUAL_REDIRECT_URL，否则 http://localhost:<port>/callback）、scope、PKCE S256、state，可选 orgUUID/login_hint/login_method。
  */
@@ -142,7 +142,7 @@ function buildAuthUrl({
   if (loginMethod) authUrl.searchParams.append("login_method", loginMethod);
   return authUrl.toString();
 }
-//@ chunk-aepeg2w5.js:296969-297709 facade-exports (2.1.88 match: exchangeCodeForTokens, 0.816)
+//@ chunk-exfmq47h.js:307073-307813 facade-exports (2.1.88 match: exchangeCodeForTokens, 0.816)
 /**
  * 用授权码 + code_verifier 向 TOKEN_URL 换取令牌（grant_type=authorization_code）。
  */
@@ -183,7 +183,7 @@ async function exchangeCodeForTokens(
   logFeatureOk("oauth_token_exchange");
   return response.data;
 }
-//@ chunk-aepeg2w5.js:297709-300375 facade-exports (2.1.88 match: refreshOAuthToken, 0.686)
+//@ chunk-exfmq47h.js:307813-310504 facade-exports (2.1.88 match: refreshOAuthToken, 0.686)
 /**
  * 用 refresh token 换新令牌（POST TOKEN_URL，30 秒超时，可带 expires_in），成功打 tengu_oauth_token_refresh_success；必要时补拉 profile 更新订阅信息与 oauthAccount。
  */
@@ -317,7 +317,7 @@ async function refreshOAuthToken(
     throw error;
   }
 }
-//@ chunk-aepeg2w5.js:300375-301017 facade-exports
+//@ chunk-exfmq47h.js:310504-311146 facade-exports
 /**
  * 吊销令牌：POST <TOKEN_URL>/revoke（token、token_type_hint、client_id），5 秒超时，用于登出。
  */
@@ -359,14 +359,14 @@ async function revokeOAuthTokenAcknowledged(token, clientId, tokenTypeHint = "re
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:301017-301055 facade-exports
+//@ chunk-exfmq47h.js:311146-311184 facade-exports
 /**
  * 吊销 refresh token（登出时）。
  */
 async function revokeOAuthToken(refreshToken, clientId) {
   await revokeOAuthTokenAcknowledged(refreshToken, clientId);
 }
-//@ chunk-aepeg2w5.js:301055-301806 facade-exports (2.1.88 match: fetchAndStoreUserRoles, 0.813)
+//@ chunk-exfmq47h.js:311184-311935 facade-exports (2.1.88 match: fetchAndStoreUserRoles, 0.813)
 /**
  * 拉取 ROLES_URL（organization_role / workspace_role）并写入 oauthAccount。
  */
@@ -409,7 +409,7 @@ async function fetchAndStoreUserRoles(accessToken, storageV5) {
   });
   logFeatureOk("oauth_fetch_roles");
 }
-//@ chunk-aepeg2w5.js:301806-302642 facade-exports (2.1.88 match: createAndStoreApiKey, 0.589)
+//@ chunk-exfmq47h.js:311935-312771 facade-exports (2.1.88 match: createAndStoreApiKey, 0.589)
 /**
  * Console 登录后用 OAuth 令牌调用 API_KEY_URL 创建 API key 并保存（tengu_oauth_api_key）。
  */
@@ -463,7 +463,7 @@ async function createAndStoreApiKey(accessToken, storageV5) {
     throw error;
   }
 }
-//@ chunk-aepeg2w5.js:302642-302710 facade-exports
+//@ chunk-exfmq47h.js:312771-312839 facade-exports
 /**
  * 令牌是否已过期或 5 分钟内过期（expiresAt 为 null 视为不过期）。
  */
@@ -471,9 +471,9 @@ function isOAuthTokenExpired(expiresAt, now = Date.now()) {
   if (expiresAt === null) return false;
   return now + 300000 >= expiresAt;
 }
-//@ chunk-aepeg2w5.js:302710-302829 facade-exports (2.1.88 match: fetchProfileInfo, 0.606)
+//@ chunk-exfmq47h.js:312839-312958 facade-exports (2.1.88 match: fetchProfileInfo, 0.606)
 var SUBSCRIPTION_TYPE_BY_ORG_TYPE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:302710", () => {
+deferInit("chunk-exfmq47h.js:312839", () => {
   SUBSCRIPTION_TYPE_BY_ORG_TYPE = new Map([
     ["claude_max", "max"],
     ["claude_pro", "pro"],
@@ -481,7 +481,7 @@ deferInit("chunk-aepeg2w5.js:302710", () => {
     ["claude_team", "team"],
   ]);
 });
-//@ chunk-aepeg2w5.js:302829-302888 facade-exports
+//@ chunk-exfmq47h.js:312958-313017 facade-exports
 /**
  * organization_type → 订阅类型（claude_max→max、claude_pro→pro、claude_enterprise→enterprise、claude_team→team）。
  */
@@ -490,9 +490,9 @@ function subscriptionTypeForOrganizationType(organizationType) {
     (organizationType !== undefined ? SUBSCRIPTION_TYPE_BY_ORG_TYPE.get(organizationType) : undefined) ?? null
   );
 }
-//@ chunk-aepeg2w5.js:302888-302928 layout
+//@ chunk-exfmq47h.js:313017-313057 layout
 var profileStampState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:302888", () => {
+deferInit("chunk-exfmq47h.js:313017", () => {
   profileStampState = identity_2(
     {
       spent: false,
@@ -502,13 +502,13 @@ deferInit("chunk-aepeg2w5.js:302888", () => {
     },
   );
 });
-//@ chunk-aepeg2w5.js:302928-302995 layout
+//@ chunk-exfmq47h.js:313057-313124 layout
 function consumeProfileStamp(tokens) {
   if (profileStampState.spent || !isUnmarkedStoredPlan(tokens)) return false;
   profileStampState.spent = true;
   return true;
 }
-//@ chunk-aepeg2w5.js:302995-303750 layout
+//@ chunk-exfmq47h.js:313124-313879 layout
 function reconcileSubscriptionType(tokens, profileInfo) {
   let subscriptionType = tokens?.subscriptionType ?? null;
   let subscriptionTypeSource = tokens?.subscriptionTypeSource;
@@ -556,7 +556,7 @@ function reconcileSubscriptionType(tokens, profileInfo) {
         subscriptionTypeSource: "profile",
       };
 }
-//@ chunk-aepeg2w5.js:303750-304677 facade-exports
+//@ chunk-exfmq47h.js:313879-314806 facade-exports
 /**
  * 拉 OAuth profile 并提取 subscriptionType（由 organization_type 映射）、rateLimitTier、seatTier、hasExtraUsageEnabled、billingType 等。
  */
@@ -585,7 +585,7 @@ async function fetchProfileInfo(accessToken) {
     originStamped: oauthProfileWithOriginFromOauthToken?.stamped,
   };
 }
-//@ chunk-aepeg2w5.js:304677-304931 facade-exports (2.1.88 match: getOrganizationUUID, 0.873)
+//@ chunk-exfmq47h.js:314806-315060 facade-exports (2.1.88 match: getOrganizationUUID, 0.873)
 /**
  * 组织 UUID：oauthAccount.organizationUuid，缺失时拉 profile。
  */
@@ -600,7 +600,7 @@ async function getOrganizationUUID() {
   if (!profileOrgUUID) return null;
   return profileOrgUUID;
 }
-//@ chunk-aepeg2w5.js:304931-306619 facade-exports (2.1.88 match: populateOAuthAccountInfoIfNeeded, 0.733)
+//@ chunk-exfmq47h.js:315060-316772 facade-exports (2.1.88 match: populateOAuthAccountInfoIfNeeded, 0.733)
 /**
  * oauthAccount 缺字段时拉 profile 补全（可覆盖 env 提供的账户信息）。
  */
@@ -674,14 +674,14 @@ async function populateOAuthAccountInfoIfNeeded(credentials, storageV5, refresh 
       claudeCodeTrialDurationDays: profile_2.organization.claude_code_trial_duration_days ?? null,
       seatTier: profile_2.organization.seat_tier ?? null,
       planDisplayName: getPlanDisplayName(profile_2),
-      profileFetchedAt: Date.now(),
+      profileFetchedAt: profileFresh && profileFetchedAt <= Date.now() ? undefined : Date.now(),
     },
     storageV5,
   );
   await recordStoredLoginPlan(tokens, profile_2, profile?.stamped === true, credentials);
   return true;
 }
-//@ chunk-aepeg2w5.js:306619-307249 layout
+//@ chunk-exfmq47h.js:316772-317402 layout
 async function recordStoredLoginPlan(stored, profile, originStamped, credentials) {
   let planUntrusted = stored.subscriptionTypeSource === "profile" || isUnmarkedStoredPlan(stored);
   if (
@@ -708,13 +708,13 @@ async function recordStoredLoginPlan(stored, profile, originStamped, credentials
         : `OAuth: stored login plan not recorded from the profile (${backfillResult})`,
   );
 }
-//@ chunk-aepeg2w5.js:307249-307324 layout
+//@ chunk-exfmq47h.js:317402-317477 layout
 function getPlanDisplayName(profile) {
   return credentialIsOwnStoredLogin()
     ? planDisplayNameFromProfile(profile)
     : (getGlobalConfig().oauthAccount?.planDisplayName ?? null);
 }
-//@ chunk-aepeg2w5.js:307324-308809 facade-exports (2.1.88 match: storeOAuthAccountInfo, 0.667)
+//@ chunk-exfmq47h.js:317477-318962 facade-exports (2.1.88 match: storeOAuthAccountInfo, 0.667)
 /**
  * 写全局配置 oauthAccount：accountUuid、emailAddress、organizationUuid、displayName、hasExtraUsageEnabled、billingType、accountCreatedAt、subscriptionCreatedAt、seatTier、planDisplayName 等。
  */
@@ -784,7 +784,7 @@ function storeOAuthAccountInfo(
     };
   }, storageV5);
 }
-//@ chunk-aepeg2w5.js:308809-309012 layout
+//@ chunk-exfmq47h.js:318962-319165 layout
 function parseOAuthErrorBody(body) {
   if (!body || typeof body !== "object")
     return {
@@ -798,21 +798,21 @@ function parseOAuthErrorBody(body) {
     description: record.error_description,
   };
 }
-//@ chunk-aepeg2w5.js:309012-309170 facade-exports (2.1.88 match: isTransientNetworkError, 1)
+//@ chunk-exfmq47h.js:319165-319323 facade-exports (2.1.88 match: isTransientNetworkError, 1)
 function isAccountOnHoldError(error) {
   if (!axios_default.isAxiosError(error) || !error.response) return false;
   let status = error.response.status;
   if (status !== 400 && status !== 401 && status !== 403) return false;
   return classifyOAuthErrorResponse(error.response.data) !== null;
 }
-//@ chunk-aepeg2w5.js:309170-309250 facade-exports (2.1.88 match: isTransientNetworkError, 1)
+//@ chunk-exfmq47h.js:319323-319403 facade-exports (2.1.88 match: isTransientNetworkError, 1)
 function getAccountOnHoldErrorUrl(error) {
   return (
     (axios_default.isAxiosError(error) ? classifyOAuthErrorResponse(error.response?.data) : null)?.url ??
     HTTPS_CLAUDE_AI_RESTRICTED
   );
 }
-//@ chunk-aepeg2w5.js:309250-309442 facade-exports
+//@ chunk-exfmq47h.js:319403-319595 facade-exports
 /**
  * OAuth 错误是否为 invalid_grant（refresh token 失效）。
  */
@@ -825,47 +825,54 @@ function isInvalidGrantError(error) {
     classifyOAuthErrorResponse(error.response.data) === null
   );
 }
-//@ chunk-aepeg2w5.js:309442-309566 facade-exports
+//@ chunk-exfmq47h.js:319595-319719 facade-exports
 function isInvalidScopeError(error) {
   if (!axios_default.isAxiosError(error) || error.response?.status !== 400) return false;
   return parseOAuthErrorBody(error.response.data).code === "invalid_scope";
 }
-//@ chunk-aepeg2w5.js:309566-309633 facade-exports (2.1.88 match: isTransientNetworkError, 1)
+//@ chunk-exfmq47h.js:319719-319786 facade-exports (2.1.88 match: isTransientNetworkError, 1)
 function isOAuthTokenRequestRefused(error) {
   return axios_default.isAxiosError(error) && isNonRetryableClientError(error.response?.status);
 }
-//@ chunk-aepeg2w5.js:309633-309706 layout
+//@ chunk-exfmq47h.js:319786-319859 layout
 var FATAL_OAUTH_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:309633", () => {
+deferInit("chunk-exfmq47h.js:319786", () => {
   FATAL_OAUTH_ERROR_CODES = new Set(["invalid_client", "invalid_scope", "unauthorized_client"]);
 });
-//@ chunk-aepeg2w5.js:309706-309850 facade-exports (2.1.88 match: isTransientNetworkError, 1)
+//@ chunk-exfmq47h.js:319859-320003 facade-exports (2.1.88 match: isTransientNetworkError, 1)
 function isExpectedOAuthTokenError(error) {
   if (!axios_default.isAxiosError(error) || error.response?.status !== 400) return false;
   let { code } = parseOAuthErrorBody(error.response.data);
   return typeof code === "string" && FATAL_OAUTH_ERROR_CODES.has(code);
 }
-//@ chunk-aepeg2w5.js:309850-310009 layout
-var TERMINAL_REFRESH_ERRORS = [
-  "Refresh token expired",
+//@ chunk-exfmq47h.js:320003-320168 layout
+var REFRESH_TOKEN_EXPIRED_MESSAGE = "Refresh token expired";
+var versionTag = [
+  REFRESH_TOKEN_EXPIRED_MESSAGE,
   "Refresh token not found or invalid",
   "No organization associated with this token",
   "No account associated with this token",
   ACCOUNT_ON_HOLD,
 ];
-//@ chunk-aepeg2w5.js:310009-310237 facade-exports
+//@ chunk-exfmq47h.js:320168-320256 facade-exports (2.1.88 match: isTransientNetworkError, 1)
+function isRefreshTokenExpiredError(error) {
+  return (
+    isInvalidGrantError(error) &&
+    axios_default.isAxiosError(error) &&
+    parseOAuthErrorBody(error.response?.data).description === REFRESH_TOKEN_EXPIRED_MESSAGE
+  );
+}
+//@ chunk-exfmq47h.js:320256-320484 facade-exports
 function extractOAuthErrorFields(error) {
   if (!axios_default.isAxiosError(error) || !error.response) return {};
   let { code, description } = parseOAuthErrorBody(error.response.data);
   return {
     oauth_error_status: fromNumber(error.response.status),
     oauth_error_type: sanitizedOAuthErrorTypeForTelemetry(code),
-    oauth_error_description: fromEnumOpt(
-      TERMINAL_REFRESH_ERRORS.find((candidate) => candidate === description),
-    ),
+    oauth_error_description: fromEnumOpt(versionTag.find((candidate) => candidate === description)),
   };
 }
-//@ chunk-aepeg2w5.js:310237-310369 facade-exports
+//@ chunk-exfmq47h.js:320484-320616 facade-exports
 async function restoreOAuthAccountAfterRefusedRefresh(storedOauthAccountInfo, storageV5) {
   await saveGlobalConfig(
     (config) =>
@@ -882,28 +889,29 @@ async function restoreOAuthAccountAfterRefusedRefresh(storedOauthAccountInfo, st
 export {
   isOAuthTokenExpired,
   getOrganizationUUID,
-  shouldUseClaudeAIAuth,
+  refreshOAuthToken,
   isInvalidGrantError,
+  shouldUseClaudeAIAuth,
+  isRefreshTokenExpiredError,
   isAccountOnHoldError,
   isExpectedOAuthTokenError,
-  refreshOAuthToken,
   isInvalidScopeError,
   getAccountOnHoldErrorUrl,
   revokeOAuthToken,
+  SUBSCRIPTION_TYPE_BY_ORG_TYPE,
   storeOAuthAccountInfo,
   restoreOAuthAccountAfterRefusedRefresh,
   fetchProfileInfo,
   subscriptionTypeForOrganizationType,
   isVerificationOrMintRefusal,
-  SUBSCRIPTION_TYPE_BY_ORG_TYPE,
-  populateOAuthAccountInfoIfNeeded,
+  fetchAndStoreUserRoles,
+  createAndStoreApiKey,
+  revokeOAuthTokenAcknowledged,
   buildAuthUrl,
   exchangeCodeForTokens,
   parseScopes,
   resolveRefreshTokenExpiresAt,
-  fetchAndStoreUserRoles,
-  createAndStoreApiKey,
-  revokeOAuthTokenAcknowledged,
+  populateOAuthAccountInfoIfNeeded,
   extractOAuthErrorFields,
   isOAuthTokenRequestRefused,
 };

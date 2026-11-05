@@ -3,10 +3,10 @@
  *
  * 图片缩放、重编码与压缩到字节/token 上限，图片格式探测与错误分类
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/imageResizer.ts
- * pieces: chunk-mvvq2nx1.js (39), chunk-p8kytbnw.js (2), chunk-qz53w8v8.js (1)
- * attribution: placement 16, affinity 1, fingerprint 13, layout 9, callgraph-witnessed 2, file-local 1
+ * pieces: chunk-dds7xhsh.js (1), chunk-jf14gxs3.js (2), chunk-nw81sbzb.js (39)
+ * attribution: placement 16, callgraph-witnessed 2, fingerprint 13, affinity 1, layout 9, file-local 1
  */
 import { sniffImageMediaType } from "../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { MAX_IMAGE_DIMENSION, IMAGE_SOURCE_MARKER_PREFIX, IMAGE_MARKER_PREFIX } from "./imageErrors.js";
@@ -21,7 +21,13 @@ import {
   isLosslessWebp,
 } from "./imageFormats.js";
 import { isDiskless, isDisklessProcess } from "../bootstrap/state.js";
-import { imageTileCount, MODEL_COPY_IMAGE_BYTES, IMAGE_LIMITS, MAX_IMAGE_SIDE_PX } from "./mediaLimits.js";
+import {
+  imageTileCount,
+  MODEL_COPY_IMAGE_BYTES,
+  IMAGE_LIMITS,
+  MAX_IMAGE_SIDE_PX,
+  weakSet_2,
+} from "./mediaLimits.js";
 import { getErrnoCode, sanitizeClassName, sanitizeErrnoForTelemetry, errorMessage } from "./errors.js";
 import { fromEnum, lit, fromEnumOpt } from "../services/analytics/safeMetadata.js";
 import { tryWebpEncoding, webpMaxBytesIfOn, chooseImageEncoding } from "./imageWebp.js";
@@ -31,17 +37,18 @@ import { toEncoderFormat } from "../tools/FileReadTool/FileReadTool.js";
 import { logError } from "./log.js";
 import { isFirstPartyApiBackend } from "./model/providers.js";
 import { formatFileSize } from "./format.js";
+import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { isPlainObject } from "./isPlainObject.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-p8kytbnw.js:1486-1528 callgraph-witnessed (2.1.88 match: detectImageFormatFromBuffer, 0.384)
+//@ chunk-jf14gxs3.js:1486-1528 callgraph-witnessed (2.1.88 match: detectImageFormatFromBuffer, 0.385)
 /**
  * 按魔数识别图片 MIME，默认 image/png。
  */
 function detectImageFormatFromBuffer(buffer) {
   return sniffImageMediaType(buffer) ?? "image/png";
 }
-//@ chunk-p8kytbnw.js:1528-1617 fingerprint (2.1.88 match: detectImageFormatFromBase64, 1)
+//@ chunk-jf14gxs3.js:1528-1617 fingerprint (2.1.88 match: detectImageFormatFromBase64, 1)
 /**
  * 从 base64 数据识别图片格式。
  */
@@ -53,7 +60,7 @@ function detectImageFormatFromBase64(base64Data) {
     return "image/png";
   }
 }
-//@ chunk-mvvq2nx1.js:5350-5451 placement
+//@ chunk-nw81sbzb.js:5358-5459 placement
 /**
  * 官方行为，保留：imageDecodingOff 只初始化为 false、本 chunk 内从不赋 true（死开关），isImageDecodingDisabled 实际由 !isDisklessMode() 决定；不要把名字当成可配置项。
  */
@@ -64,7 +71,7 @@ var ENCODE_CONCURRENCY;
 var limitedToBuffer;
 var imageDecoderState;
 var weakMap;
-deferInit("chunk-mvvq2nx1.js:5350", () => {
+deferInit("chunk-nw81sbzb.js:5358", () => {
   imageDecodingForcedOff = false;
   ERR_IMAGE_DECODING_OFF = "ERR_IMAGE_DECODING_OFF";
   MAX_DECODE_PIXELS = MAX_IMAGE_DIMENSION * MAX_IMAGE_DIMENSION;
@@ -73,7 +80,7 @@ deferInit("chunk-mvvq2nx1.js:5350", () => {
   imageDecoderState = 100;
   weakMap = new WeakMap();
 });
-//@ chunk-mvvq2nx1.js:5451-5575 placement
+//@ chunk-nw81sbzb.js:5459-5583 placement
 /**
  * 返回“图片解码代价过高”的拒绝。
  */
@@ -84,7 +91,7 @@ function rejectCostlyDecode() {
     }),
   );
 }
-//@ chunk-mvvq2nx1.js:5575-5771 placement
+//@ chunk-nw81sbzb.js:5583-5779 placement
 /**
  * 包装图片处理管线，使 toBuffer 经过并发限制。
  */
@@ -99,7 +106,7 @@ function wrapImagePipeline(pipeline) {
     toBuffer: () => limitedToBuffer(pipeline),
   };
 }
-//@ chunk-mvvq2nx1.js:5771-5882 placement
+//@ chunk-nw81sbzb.js:5779-5890 placement
 /**
  * 所有变换都返回自身的管线（固定输出）。
  */
@@ -115,14 +122,14 @@ function staticImagePipeline(rejectCostlyDecode) {
   };
   return pipeline;
 }
-//@ chunk-mvvq2nx1.js:5882-5914 placement
+//@ chunk-nw81sbzb.js:5890-5922 placement
 /**
  * 判断图片解码是否被禁用（显式关闭或无盘）。
  */
 function isImageDecodingDisabled() {
   return imageDecodingForcedOff || !isDisklessMode();
 }
-//@ chunk-mvvq2nx1.js:5914-6388 placement
+//@ chunk-nw81sbzb.js:5922-6396 placement
 function loadImageDecoder_2(bytes) {
   let diskless = isDisklessMode();
   if (!isImageDecodingDisabled())
@@ -157,25 +164,25 @@ function loadImageDecoder_2(bytes) {
         }),
       );
 }
-//@ chunk-mvvq2nx1.js:6388-6429 placement
+//@ chunk-nw81sbzb.js:6396-6437 placement
 /**
  * 加载图片解码器（返回 Promise）。
  */
 function loadImageDecoder() {
   return Promise.resolve(loadImageDecoder_2);
 }
-//@ chunk-mvvq2nx1.js:6429-6460 placement
+//@ chunk-nw81sbzb.js:6437-6468 placement
 function isDisklessMode() {
   return isDiskless() || isDisklessProcess();
 }
-//@ chunk-mvvq2nx1.js:6460-6508 placement
+//@ chunk-nw81sbzb.js:6468-6516 placement
 var MAX_TILE_SIDE = 1568;
 var MAX_TILE_HEIGHT = 1568;
 var MIN_SCALED_SIDE = 85;
 var SCALE_STEP = 5;
 var MIN_SEARCH_SIDE = 10;
 var MAX_TILE_PIXELS = 1398100;
-//@ chunk-mvvq2nx1.js:6508-6759 placement
+//@ chunk-nw81sbzb.js:6516-6767 placement
 /**
  * 按最大边与 tile 数上限缩小尺寸（保持比例，二分搜索）。
  */
@@ -197,7 +204,7 @@ function fitWithinTileBudget(width, height, maxSide = MAX_TILE_SIDE, maxTiles = 
   }
   return [low, Math.max(Math.round(low / aspectRatio), 1)];
 }
-//@ chunk-mvvq2nx1.js:6759-6963 placement
+//@ chunk-nw81sbzb.js:6767-6973 placement
 /**
  * 按最大宽高与 token 上限计算缩放后的尺寸。
  */
@@ -214,7 +221,7 @@ function fitImageDimensions(width, height, limits) {
     ? [width, height]
     : fitWithinTileBudget(width, height, 1 / 0, limits.maxImageTokens);
 }
-//@ chunk-mvvq2nx1.js:6963-7285 placement
+//@ chunk-nw81sbzb.js:6973-7295 placement
 /**
  * 把截图缩放并逐步降低质量编码为 JPEG，直到大小在上限内。
  */
@@ -245,7 +252,7 @@ async function encodePreviewJpeg(buffer) {
     h: targetHeight,
   };
 }
-//@ chunk-mvvq2nx1.js:7285-7393 affinity (2.1.88 match: IMAGE_EXTENSIONS, 0.776)
+//@ chunk-nw81sbzb.js:7295-7403 affinity (2.1.88 match: IMAGE_EXTENSIONS, 0.775)
 /**
  * 图片处理错误类型编号（2 未知格式、3 未知、4 像素超限、5 内存、8 权限、9 格式不支持、10 解码失败、11 解码关闭）与 tengu_parsed_eagle 开关名、直通格式集合。
  */
@@ -259,7 +266,7 @@ var ERROR_TYPE_DECODE_FAILED;
 var ERROR_TYPE_DECODING_OFF;
 var TENGU_PARSED_EAGLE;
 var PASSTHROUGH_IMAGE_FORMATS;
-deferInit("chunk-mvvq2nx1.js:7285", () => {
+deferInit("chunk-nw81sbzb.js:7295", () => {
   ERROR_TYPE_UNKNOWN_FORMAT = 2;
   ERROR_TYPE_UNKNOWN = 3;
   ERROR_TYPE_PIXEL_LIMIT = 4;
@@ -271,7 +278,7 @@ deferInit("chunk-mvvq2nx1.js:7285", () => {
   TENGU_PARSED_EAGLE = "tengu_parsed_eagle";
   PASSTHROUGH_IMAGE_FORMATS = new Set(["png", "jpeg", "gif", "webp"]);
 });
-//@ chunk-mvvq2nx1.js:7497-7574 fingerprint (2.1.88 match: ImageResizeError, 1)
+//@ chunk-nw81sbzb.js:7507-7584 fingerprint (2.1.88 match: ImageResizeError, 1)
 /**
  * 图片缩放/处理失败的错误类型。
  */
@@ -281,7 +288,7 @@ class ImageResizeError extends Error {
     this.name = "ImageResizeError";
   }
 }
-//@ chunk-mvvq2nx1.js:7574-8055 layout
+//@ chunk-nw81sbzb.js:7584-8065 layout
 function describeUndecodableImage(buffer) {
   if (jpegSofComponentCount(buffer) === 4)
     return {
@@ -299,7 +306,7 @@ function describeUndecodableImage(buffer) {
     advice: "Re-save it as a PNG or JPEG and try again.",
   };
 }
-//@ chunk-mvvq2nx1.js:8055-8344 layout
+//@ chunk-nw81sbzb.js:8065-8354 layout
 /**
  * 把图片错误码映射为 ERROR_TYPE_* 编号。
  */
@@ -324,14 +331,14 @@ function classifyImageErrorCode(error) {
       return ERROR_TYPE_UNKNOWN;
   }
 }
-//@ chunk-mvvq2nx1.js:8344-8374 layout
+//@ chunk-nw81sbzb.js:8354-8384 layout
 /**
  * 是否为未知类型的图片错误。
  */
 function isUnknownImageErrorType(errorType) {
   return errorType === ERROR_TYPE_UNKNOWN;
 }
-//@ chunk-mvvq2nx1.js:8374-8565 layout
+//@ chunk-nw81sbzb.js:8384-8575 layout
 function getErrorTelemetryFields(error) {
   if (!(error instanceof Error))
     return {
@@ -344,7 +351,7 @@ function getErrorTelemetryFields(error) {
     error_code: sanitizeErrnoForTelemetry(error) ?? lit(""),
   };
 }
-//@ chunk-mvvq2nx1.js:8565-8690 layout
+//@ chunk-nw81sbzb.js:8575-8700 layout
 function getImageFormatTelemetryFields(buffer) {
   let mediaType = sniffImageMediaType(buffer);
   return {
@@ -356,22 +363,22 @@ function getImageFormatTelemetryFields(buffer) {
     }),
   };
 }
-//@ chunk-mvvq2nx1.js:8690-8785 callgraph-witnessed (2.1.88 match: hashString, 1)
+//@ chunk-nw81sbzb.js:8700-8795 callgraph-witnessed (2.1.88 match: hashString, 1)
 function hashString(str) {
   let hash = 5381;
   for (let i = 0; i < str.length; i++) hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0;
   return hash >>> 0;
 }
-//@ chunk-mvvq2nx1.js:8785-8898 layout
+//@ chunk-nw81sbzb.js:8795-8908 layout
 function getRejectDimensions(limits) {
   return {
     rejectMaxWidth: limits.rejectMaxWidth ?? limits.maxWidth,
     rejectMaxHeight: limits.rejectMaxHeight ?? limits.maxHeight,
   };
 }
-//@ chunk-mvvq2nx1.js:8898-8909 layout
+//@ chunk-nw81sbzb.js:8908-8919 layout
 var MAX_PROVIDER_IMAGE_DIMENSION = 8000;
-//@ chunk-mvvq2nx1.js:8909-14013 fingerprint (2.1.88 match: maybeResizeAndDownsampleImageBuffer, 0.548)
+//@ chunk-nw81sbzb.js:8919-14024 fingerprint (2.1.88 match: maybeResizeAndDownsampleImageBuffer, 0.548)
 /**
  * 按模型图片限制缩放/重编码：非直通格式转 PNG 或 WebP；尺寸不明时校验上限；仅超字节时先试 PNG 调色板再试 JPEG 80/60/40/20；需缩放时按 token 上限算目标尺寸后 resize。
  */
@@ -683,7 +690,7 @@ async function maybeResizeAndDownsampleImageBuffer(
     );
   }
 }
-//@ chunk-mvvq2nx1.js:14013-14140 layout
+//@ chunk-nw81sbzb.js:14024-14151 layout
 async function timePngPalette(run, timings) {
   let startTime = performance.now();
   try {
@@ -692,7 +699,7 @@ async function timePngPalette(run, timings) {
     if (timings !== undefined) timings.pngPaletteMs += performance.now() - startTime;
   }
 }
-//@ chunk-mvvq2nx1.js:14140-14483 layout
+//@ chunk-nw81sbzb.js:14151-14494 layout
 /**
  * 把图片压到字节上限以内：JPEG 质量递减并逐步缩小尺寸。
  */
@@ -726,7 +733,7 @@ async function compressToJpegUnderBytes(buffer, maxBytes, mediaType) {
   }
   return accepted ?? best;
 }
-//@ chunk-mvvq2nx1.js:14483-15548 fingerprint (2.1.88 match: maybeResizeAndDownsampleImageBlock, 0.402)
+//@ chunk-nw81sbzb.js:14494-15559 fingerprint (2.1.88 match: maybeResizeAndDownsampleImageBlock, 0.4)
 /**
  * 处理 image block（base64 或 Buffer）：diskless 时只校验尺寸，否则调用缩放并返回新 block 或"无法处理"文本块。
  */
@@ -800,13 +807,19 @@ async function maybeResizeAndDownsampleImageBlock({
     dimensions: resized.dimensions,
   };
 }
-//@ chunk-mvvq2nx1.js:18060-18079 placement
+//@ chunk-nw81sbzb.js:18071-18090 placement
 var weakSet; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mvvq2nx1.js:18060", () => {
+deferInit("chunk-nw81sbzb.js:18071", () => {
   weakSet = new WeakSet();
 });
-//@ chunk-mvvq2nx1.js:18303-18875 placement
+//@ chunk-nw81sbzb.js:19052-19700 placement
 async function checkImageBlockSource(block, limits) {
+  if (weakSet_2.has(block)) {
+    logFeatureOk("bridge_attachment_model_copy_not_resized");
+    return {
+      block,
+    };
+  }
   if (!isPlainObject(block.source))
     return block.source == null
       ? degradedImageBlock("image block has no source object", "no_source")
@@ -833,7 +846,7 @@ async function checkImageBlockSource(block, limits) {
     from: weakSet.has(block) ? "built_block" : "block",
   });
 }
-//@ chunk-mvvq2nx1.js:18875-19011 placement
+//@ chunk-nw81sbzb.js:19700-19836 placement
 function degradedImageBlock(reason, cause) {
   logEvent("tengu_image_resize_degraded", {
     reason: fromEnum(cause),
@@ -845,7 +858,7 @@ function degradedImageBlock(reason, cause) {
     },
   };
 }
-//@ chunk-mvvq2nx1.js:19011-20078 fingerprint (2.1.88 match: compressImageBuffer, 0.862)
+//@ chunk-nw81sbzb.js:19836-20903 fingerprint (2.1.88 match: compressImageBuffer, 0.862)
 /**
  * 把图片压缩到指定字节内（调色板 PNG、渐进缩小、JPEG、超压缩 JPEG 依次尝试）。
  */
@@ -916,7 +929,7 @@ async function compressImageBuffer(imageBuffer, maxBytes, originalMediaType) {
     );
   }
 }
-//@ chunk-mvvq2nx1.js:20078-20169 file-local
+//@ chunk-nw81sbzb.js:20903-20994 file-local
 /**
  * 按 token 上限换算字节上限（token/0.125 为 base64 字符，再 ×0.75）后压缩。
  */
@@ -925,7 +938,7 @@ async function compressImageBufferWithTokenLimit(imageBuffer, maxTokens, origina
   let maxBytes = Math.floor(maxBase64Chars * 0.75);
   return compressImageBuffer(imageBuffer, maxBytes, originalMediaType);
 }
-//@ chunk-mvvq2nx1.js:20169-20398 fingerprint (2.1.88 match: compressImageBlock, 1)
+//@ chunk-nw81sbzb.js:20994-21223 fingerprint (2.1.88 match: compressImageBlock, 1)
 /**
  * image block 超过字节上限时压缩。
  */
@@ -943,7 +956,7 @@ async function compressImageBlock(imageBlock, maxBytes) {
     },
   };
 }
-//@ chunk-mvvq2nx1.js:20398-20515 fingerprint (2.1.88 match: createCompressedImageResult, 1)
+//@ chunk-nw81sbzb.js:21223-21340 fingerprint (2.1.88 match: createCompressedImageResult, 1)
 function createCompressedImageResult(buffer, mediaType, originalSize) {
   let normalizedMediaType = mediaType === "jpg" ? "jpeg" : mediaType;
   return {
@@ -952,7 +965,7 @@ function createCompressedImageResult(buffer, mediaType, originalSize) {
     originalSize,
   };
 }
-//@ chunk-mvvq2nx1.js:20515-20848 fingerprint (2.1.88 match: tryProgressiveResizing, 1)
+//@ chunk-nw81sbzb.js:21340-21673 fingerprint (2.1.88 match: tryProgressiveResizing, 1)
 async function tryProgressiveResizing(context, sharp) {
   let scalingFactors = [1, 0.75, 0.5, 0.25];
   for (let scalingFactor of scalingFactors) {
@@ -970,7 +983,7 @@ async function tryProgressiveResizing(context, sharp) {
   }
   return null;
 }
-//@ chunk-mvvq2nx1.js:20848-21010 fingerprint (2.1.88 match: applyFormatOptimizations, 0.926)
+//@ chunk-nw81sbzb.js:21673-21835 fingerprint (2.1.88 match: applyFormatOptimizations, 0.926)
 function applyFormatOptimizations(image, format) {
   switch (format) {
     case "png":
@@ -988,7 +1001,7 @@ function applyFormatOptimizations(image, format) {
       });
   }
 }
-//@ chunk-mvvq2nx1.js:21010-21242 fingerprint (2.1.88 match: tryPalettePNG, 1)
+//@ chunk-nw81sbzb.js:21835-22067 fingerprint (2.1.88 match: tryPalettePNG, 1)
 async function tryPalettePNG(context, sharp) {
   let palettePng = await sharp(context.imageBuffer)
     .resize(800, 800, {
@@ -1005,7 +1018,7 @@ async function tryPalettePNG(context, sharp) {
     return createCompressedImageResult(palettePng, "png", context.originalSize);
   return null;
 }
-//@ chunk-mvvq2nx1.js:21242-21448 fingerprint (2.1.88 match: tryJPEGConversion, 1)
+//@ chunk-nw81sbzb.js:22067-22273 fingerprint (2.1.88 match: tryJPEGConversion, 1)
 async function tryJPEGConversion(context, quality, sharp) {
   let jpegBuffer = await sharp(context.imageBuffer)
     .resize(600, 600, {
@@ -1020,7 +1033,7 @@ async function tryJPEGConversion(context, quality, sharp) {
     return createCompressedImageResult(jpegBuffer, "jpeg", context.originalSize);
   return null;
 }
-//@ chunk-mvvq2nx1.js:21448-21617 fingerprint (2.1.88 match: createUltraCompressedJPEG, 1)
+//@ chunk-nw81sbzb.js:22273-22442 fingerprint (2.1.88 match: createUltraCompressedJPEG, 1)
 async function createUltraCompressedJPEG(context, sharp) {
   let ultraCompressedBuffer = await sharp(context.imageBuffer)
     .resize(400, 400, {
@@ -1033,7 +1046,7 @@ async function createUltraCompressedJPEG(context, sharp) {
     .toBuffer();
   return createCompressedImageResult(ultraCompressedBuffer, "jpeg", context.originalSize);
 }
-//@ chunk-mvvq2nx1.js:21617-22018 fingerprint (2.1.88 match: createImageMetadataText, 1)
+//@ chunk-nw81sbzb.js:22442-22843 fingerprint (2.1.88 match: createImageMetadataText, 1)
 /**
  * 缩放后生成说明原尺寸/显示尺寸与坐标换算的元信息文本（作为 meta 用户消息附加）。
  */
@@ -1062,7 +1075,7 @@ function createImageMetadataText(dims, sourcePath) {
   }
   return `${IMAGE_MARKER_PREFIX}${parts.join(", ")}]`;
 }
-//@ chunk-qz53w8v8.js:1699-1837 placement (2.1.88 match: CLAUDE_OPUS_4_6_CONFIG, 0.48)
+//@ chunk-dds7xhsh.js:317-455 placement (2.1.88 match: CLAUDE_OPUS_4_6_CONFIG, 0.48)
 /**
  * 各提供商图片最大边 2000。
  */
@@ -1078,24 +1091,25 @@ var MAX_IMAGE_DIMENSION_BY_PROVIDER = {
   gateway: 2000,
 };
 export {
-  compressImageBuffer,
-  detectImageFormatFromBase64,
-  maybeResizeAndDownsampleImageBlock,
-  createImageMetadataText,
-  weakSet,
-  isImageDecodingDisabled,
-  detectImageFormatFromBuffer,
-  ImageResizeError,
-  checkImageBlockSource,
   loadImageDecoder,
   isUnknownImageErrorType,
   classifyImageErrorCode,
+  maybeResizeAndDownsampleImageBlock,
+  createImageMetadataText,
   maybeResizeAndDownsampleImageBuffer,
   compressToJpegUnderBytes,
+  detectImageFormatFromBuffer,
+  ImageResizeError,
   compressImageBufferWithTokenLimit,
-  encodePreviewJpeg,
   compressImageBlock,
-  TENGU_PARSED_EAGLE,
+  isImageDecodingDisabled,
+  fitImageDimensions,
+  checkImageBlockSource,
+  detectImageFormatFromBase64,
+  compressImageBuffer,
+  weakSet,
   MAX_IMAGE_DIMENSION_BY_PROVIDER,
   MIN_IMAGE_DIMENSION,
+  TENGU_PARSED_EAGLE,
+  encodePreviewJpeg,
 };

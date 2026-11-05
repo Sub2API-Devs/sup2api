@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：浏览器工具错误分类与设备选择
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p7xf186d.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-290tacpj.js (5)
  * attribution: placement 5
  */
 import { BROWSER_ACTION_SETTLE_MS } from "./browserToolSchemas.js";
 
-//@ chunk-p7xf186d.js:232-682 placement
+//@ chunk-290tacpj.js:232-682 placement
 function pickBrowserDevice(extensions, persistedDeviceId, localDeviceIds) {
   if (extensions.length === 0)
     return {
@@ -50,7 +50,7 @@ function pickBrowserDevice(extensions, persistedDeviceId, localDeviceIds) {
     localCount: localExtensions.length,
   };
 }
-//@ chunk-p7xf186d.js:682-921 placement
+//@ chunk-290tacpj.js:682-921 placement
 function safeCallPromise(getLocalDeviceIds) {
   let idsPromise;
   try {
@@ -73,7 +73,7 @@ function safeCallPromise(getLocalDeviceIds) {
     );
   });
 }
-//@ chunk-p7xf186d.js:1092-4508 placement
+//@ chunk-290tacpj.js:1092-4508 placement
 /**
  * 工具错误正则到错误类型的规则表（第一部分）。
  */
@@ -223,7 +223,7 @@ var ERROR_TYPE_BY_CODE = new Map([
   ["computer", CONNECTION_ERROR_RULES],
   ["get_page_text", PAGE_ERROR_RULES],
 ]);
-//@ chunk-p7xf186d.js:4508-4695 placement
+//@ chunk-290tacpj.js:4508-4695 placement
 function classifyToolError(toolName, errorText) {
   let rules = ERROR_TYPE_BY_CODE.get(toolName);
   if (rules) {
@@ -232,7 +232,7 @@ function classifyToolError(toolName, errorText) {
   for (let { pattern, errorType } of ALL_TOOL_ERROR_RULES) if (pattern.test(errorText)) return errorType;
   return "unclassified_tool_error";
 }
-//@ chunk-p7xf186d.js:4695-4870 placement
+//@ chunk-290tacpj.js:4695-4870 placement
 function firstTextContent(error) {
   let content = error?.content;
   if (typeof content === "string" && content) return content;

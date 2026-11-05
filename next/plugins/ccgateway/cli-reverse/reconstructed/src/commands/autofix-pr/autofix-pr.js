@@ -3,9 +3,9 @@
  *
  * /autofix-pr：为当前分支的 PR 启动云端自动修复会话（检测 PR、订阅、取消）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4pdevvfa.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ffhe19sr.js (19)
  * attribution: placement 19
  */
 import {
@@ -72,15 +72,15 @@ import { ErrorText } from "../../components/ErrorText.js";
 import { WorkerBadge } from "../../components/permissions/WorkerBadge.js";
 import { expandPrUrlIfTemplate } from "../../utils/ghPrStatus.js";
 
-//@ chunk-4pdevvfa.js:14846-14850 placement
+//@ chunk-ffhe19sr.js:16000-16004 placement
 init_react_production();
-//@ chunk-4pdevvfa.js:14850-15000 placement
+//@ chunk-ffhe19sr.js:16004-16154 placement
 var AUTOFIX_PHASE_LABELS = {
   checking: "Detecting open PR for current branch\u2026",
   spawning: "Spawning cloud autofix session\u2026",
   subscribing: "Turning on autofix\u2026",
 };
-//@ chunk-4pdevvfa.js:15000-15157 placement
+//@ chunk-ffhe19sr.js:16154-16311 placement
 async function runAutofixPrCommand(args, context, options) {
   let result;
   let feedback;
@@ -95,7 +95,7 @@ async function runAutofixPrCommand(args, context, options) {
   });
   return autofixPr;
 }
-//@ chunk-4pdevvfa.js:15157-20792 placement
+//@ chunk-ffhe19sr.js:16311-21943 placement
 /**
  * 启动 autofix：检测当前分支的 PR（gh）、拒绝默认分支、派生云会话（约 5.6 KB）。
  */
@@ -418,7 +418,7 @@ ${prStewardPrompt}`
     return autofixFailure(errorMessage(error), "exception");
   }
 }
-//@ chunk-4pdevvfa.js:20792-20916 placement
+//@ chunk-ffhe19sr.js:21943-22067 placement
 function supervisedPrBinder() {
   {
     let { bindSupervisedPR, isSupervisedBridgeChild } = require("../../bridge/supervisedInbox.js");
@@ -426,10 +426,10 @@ function supervisedPrBinder() {
   }
   return null;
 }
-//@ chunk-4pdevvfa.js:20916-20960 placement
+//@ chunk-ffhe19sr.js:22067-22111 placement
 var AUTOFIX_PR_PROMPT_PREFIX = "Babysit PR ";
 var AUTOFIX_PR_SESSION_SLOTS = new SessionRootSlot(() => new Map());
-//@ chunk-4pdevvfa.js:20960-21105 placement
+//@ chunk-ffhe19sr.js:22111-22256 placement
 function autofixFailure(message, code) {
   logEvent("tengu_autofix_pr_result", {
     result: lit("failed"),
@@ -441,7 +441,7 @@ function autofixFailure(message, code) {
     code,
   };
 }
-//@ chunk-4pdevvfa.js:21105-22379 placement
+//@ chunk-ffhe19sr.js:22256-23530 placement
 function logAutofixResult(prRef, labels, extra) {
   logEvent("tengu_autofix_pr_result", {
     result: lit("deferred_to_pr_steward"),
@@ -476,7 +476,7 @@ ${extra}`
       : message,
   };
 }
-//@ chunk-4pdevvfa.js:22379-22693 placement
+//@ chunk-ffhe19sr.js:23530-23844 placement
 function findRunningAutofixTask(taskRegistry, { owner, repo, prNumber }) {
   let found = Object.values(taskRegistry.all()).find(
     (task) =>
@@ -489,13 +489,13 @@ function findRunningAutofixTask(taskRegistry, { owner, repo, prNumber }) {
   );
   return found?.type === "remote_agent" ? found.sessionId : undefined;
 }
-//@ chunk-4pdevvfa.js:22693-22795 placement
+//@ chunk-ffhe19sr.js:23844-23946 placement
 async function hasAutofixCronTask(prRef) {
   return (await listAllCronTasks()).some(
     (cron) => cron.durable === false && cron.prompt.startsWith(`${AUTOFIX_PR_PROMPT_PREFIX}${prRef} `),
   );
 }
-//@ chunk-4pdevvfa.js:22795-22888 placement
+//@ chunk-ffhe19sr.js:23946-24039 placement
 function autofixCancelledResult() {
   logEvent("tengu_autofix_pr_result", {
     result: lit("cancelled"),
@@ -504,7 +504,7 @@ function autofixCancelledResult() {
     kind: "cancelled",
   };
 }
-//@ chunk-4pdevvfa.js:22888-26390 placement
+//@ chunk-ffhe19sr.js:24039-27541 placement
 /**
  * 订阅 PR 的自动修复（已在轮询时提示）。
  */
@@ -580,15 +580,15 @@ async function subscribeAutofixPr(prRef, repoRef, prNumber, skillsHint, context)
     message: lines.join(" "),
   };
 }
-//@ chunk-4pdevvfa.js:26390-26469 placement
+//@ chunk-ffhe19sr.js:27541-27620 placement
 function repoRefLabel({ owner, repo, host }) {
   return isGithubDotCom(host) ? `${owner}/${repo}` : `${host}/${owner}/${repo}`;
 }
-//@ chunk-4pdevvfa.js:26469-26525 placement
+//@ chunk-ffhe19sr.js:27620-27676 placement
 function hasSeenAutofixChatOpsNotice() {
   return !getGlobalConfig().hasSeenAutofixPrChatOpsNotice;
 }
-//@ chunk-4pdevvfa.js:26525-26621 placement
+//@ chunk-ffhe19sr.js:27676-27772 placement
 function markAutofixChatOpsNoticeSeen(config) {
   return config.hasSeenAutofixPrChatOpsNotice
     ? config
@@ -597,11 +597,11 @@ function markAutofixChatOpsNoticeSeen(config) {
         hasSeenAutofixPrChatOpsNotice: true,
       };
 }
-//@ chunk-4pdevvfa.js:26621-26671 placement
+//@ chunk-ffhe19sr.js:27772-27822 placement
 function prUrlTemplateOf(state) {
   return state.settings?.prUrlTemplate;
 }
-//@ chunk-4pdevvfa.js:26671-26733 placement
+//@ chunk-ffhe19sr.js:27822-27884 placement
 /**
  * /autofix-pr 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -611,7 +611,7 @@ var renderAutofixCancelView = async (onDone, context, args) =>
     context,
     args: args.trim(),
   });
-//@ chunk-4pdevvfa.js:26733-27992 placement
+//@ chunk-ffhe19sr.js:27884-29143 placement
 function AutofixCancelView(props) {
   let $ = useMemoCache(20);
   let { onDone, context, args } = props;
@@ -727,7 +727,7 @@ function AutofixCancelView(props) {
   } else dialog = $[19];
   return dialog;
 }
-//@ chunk-4pdevvfa.js:27992-30111 placement
+//@ chunk-ffhe19sr.js:29143-31259 placement
 /**
  * /autofix-pr 的界面：检查、启动、取消与错误显示。
  */

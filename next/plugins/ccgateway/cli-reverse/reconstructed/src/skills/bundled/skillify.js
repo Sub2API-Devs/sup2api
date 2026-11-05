@@ -3,9 +3,9 @@
  *
  * /design 内置 skill（Claude Design 子命令分派），旧版 skillify 位置。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/skillify.ts
- * pieces: chunk-hantmvxa.js (2)
+ * pieces: chunk-ne2890fx.js (2)
  * attribution: file-last-pair 1, callgraph-fingerprint 1
  */
 import { isBundledSkillGatedOff } from "../bundledSkillsGate.js";
@@ -21,7 +21,7 @@ import {
 } from "./design.js";
 import { registerBundledSkill } from "../bundledSkills.js";
 
-//@ chunk-hantmvxa.js:111106-111319 file-last-pair
+//@ chunk-ne2890fx.js:111287-111500 file-last-pair
 function extractUserMessages(messages) {
   let isGatedOff = isBundledSkillGatedOff(DESIGN);
   let syncAllowed = isDesignSyncAllowed();
@@ -34,7 +34,7 @@ function extractUserMessages(messages) {
   ]);
   return DESIGN_SUBCOMMANDS.filter((subcommand) => availableValues.has(subcommand.value));
 }
-//@ chunk-hantmvxa.js:111319-111817 callgraph-fingerprint (2.1.88 match: registerSkillifySkill, 0.199)
+//@ chunk-ne2890fx.js:111500-111998 callgraph-fingerprint (2.1.88 match: registerSkillifySkill, 0.2)
 /**
  * 注册 /design 内置 skill（Claude Design：sync/login/consent/revoke/import/export/status 子命令），survivesBundledKillSwitch，带 policyGate；只能用户调用。
  */

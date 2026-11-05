@@ -3,22 +3,22 @@
  *
  * /statusline 提示词命令：让模型配置状态栏
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/statusline.tsx
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
 import { AGENT } from "../tools/AgentTool/constants.js";
 import { isSafeMode, getSafeModeExitHint } from "../utils/envUtils.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2049127-2050093 fingerprint (2.1.88 match: statusline, 0.865)
+//@ chunk-5xgkngpb.js:2105269-2106235 fingerprint (2.1.88 match: statusline, 0.865)
 /**
  * /statusline 命令对象（prompt）；描述：Set up Claude Code's status line UI。
  */
 var statuslineCommandDefinition; // deferred: uses AGENT (../tools/AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
 var statuslineCommand;
-deferInit("chunk-e6aww6q8.js:2049127", () => {
+deferInit("chunk-5xgkngpb.js:2105269", () => {
   statuslineCommandDefinition = {
     type: "prompt",
     description: "Set up Claude Code's status line UI",

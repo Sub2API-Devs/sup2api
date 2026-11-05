@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/cost 与用量视图的计费周期计算和文案
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (9)
  * attribution: placement 9
  */
 import { HostScoped } from "../../utils/hostScoped.js";
@@ -29,7 +29,7 @@ import {
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:821035-821225 placement
+//@ chunk-5xgkngpb.js:832651-832841 placement
 /**
  * 用量周期与相关常量：daily/weekly/monthly 周期、对应的显示文案、缓存与请求超时时长，以及按会话保存的上次读取结果。
  */
@@ -38,7 +38,7 @@ var SPEND_PERIOD_LABELS;
 var GATEWAY_USAGE_CACHE_TTL_MS;
 var GATEWAY_USAGE_TIMEOUT_MS;
 var gatewayUsageState;
-deferInit("chunk-e6aww6q8.js:821035", () => {
+deferInit("chunk-5xgkngpb.js:832651", () => {
   SPEND_LIMIT_PERIODS = ["daily", "weekly", "monthly"];
   SPEND_PERIOD_LABELS = {
     daily: "today",
@@ -54,17 +54,17 @@ deferInit("chunk-e6aww6q8.js:821035", () => {
     reading: undefined,
   }));
 });
-//@ chunk-e6aww6q8.js:821225-821264 placement
+//@ chunk-5xgkngpb.js:832841-832880 placement
 function gatewayUsageStore() {
   return gatewayUsageState.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:821264-821354 placement
+//@ chunk-5xgkngpb.js:832880-832970 placement
 function gatewaySignInKey(auth) {
   if (!auth) return;
   let subject = gatewayJwtSubject(auth) ?? computeContentHash(auth.jwt).slice(0, 16);
   return `${auth.url}\x00${subject}`;
 }
-//@ chunk-e6aww6q8.js:821354-821429 placement
+//@ chunk-5xgkngpb.js:832970-833045 placement
 /**
  * 取网关用量缓存：缓存里的登录标识与当前网关认证一致时返回，否则 undefined。
  */
@@ -72,13 +72,13 @@ function cachedGatewayUsage() {
   let { last, signIn } = gatewayUsageStore();
   return last && signIn === gatewaySignInKey(getGatewayAuth()) ? last : undefined;
 }
-//@ chunk-e6aww6q8.js:821429-821503 placement
+//@ chunk-5xgkngpb.js:833045-833119 placement
 function maybeRefreshGatewayUsage(auth, credentials) {
   let { lastReadAt } = gatewayUsageStore();
   if (auth > lastReadAt && Date.now() - lastReadAt > GATEWAY_USAGE_CACHE_TTL_MS)
     refreshGatewayUsage(credentials);
 }
-//@ chunk-e6aww6q8.js:821503-821599 placement
+//@ chunk-5xgkngpb.js:833119-833215 placement
 /**
  * 主动刷新网关用量（读接口并写入按宿主缓存）。
  */
@@ -89,7 +89,7 @@ function refreshGatewayUsage(auth) {
   });
   return store.reading;
 }
-//@ chunk-e6aww6q8.js:821599-822251 placement
+//@ chunk-5xgkngpb.js:833215-833867 placement
 /**
  * 读取网关用量接口 /api/oauth/usage，用于 /cost 显示计费周期用量。
  */
@@ -136,12 +136,12 @@ async function fetchGatewayUsage(auth) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:822251-822600 placement
+//@ chunk-5xgkngpb.js:833867-834216 placement
 /**
  * 网关花费上限接口响应的 zod 结构：extra_usage（月度上限、已用额度、使用率、币种）与 limits[]（分组、重置时间、是否生效），字段解析失败时降级为 undefined。
  */
 var gatewaySpendResponseSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:822251", () => {
+deferInit("chunk-5xgkngpb.js:833867", () => {
   gatewaySpendResponseSchema = DoctorLazy(() =>
     objectSchema({
       extra_usage: objectSchema({
@@ -165,7 +165,7 @@ deferInit("chunk-e6aww6q8.js:822251", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:822600-822970 placement
+//@ chunk-5xgkngpb.js:834216-834586 placement
 /**
  * 解析网关花费响应为 {used, limit, currency, utilization, resetsAt, period}：取生效中的 limit 的重置时间与周期，币种缺省 USD。
  */

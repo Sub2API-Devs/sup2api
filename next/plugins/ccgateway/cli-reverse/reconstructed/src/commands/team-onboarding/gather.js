@@ -3,22 +3,27 @@
  *
  * 2.1.316 新增：/team-onboarding 收集本机会话记录中的工具与 MCP 使用情况
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (6)
- * attribution: placement 6
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (5)
+ * attribution: placement 5
  */
 import { readdir, stat, readFile } from "fs/promises";
 import { extname, join, basename } from "path";
 import { isFsInaccessible, isENOENT } from "../../utils/errors.js";
+import { sameOwnerAccount } from "../../utils/auth.js";
 import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
 import { getProjectDir } from "../../utils/sessionStoragePortable.js";
+import { ownStoredLoginOwner } from "../../utils/sessionStorage.js";
+import { getTelemetryOrganizationUuid } from "./api.js";
+import { originOfUrl_2 } from "../../services/mcp/mcpServerEndpoint.js";
 import { execFileNoThrowWithCwd } from "../../utils/execFileNoThrow.js";
+import { ARTIFACT_CONTENT_AUTHORED_TAG } from "../../constants/xml.js";
 import { normalizeGitRemoteUrl } from "../../utils/git.js";
 
-//@ chunk-e6aww6q8.js:1737819-1738199 placement (2.1.88 match: METADATA_TYPE_MARKERS, 0.44)
+//@ chunk-5xgkngpb.js:1813642-1814181 placement (2.1.88 match: METADATA_TYPE_MARKERS, 0.328)
 /**
  * MAX_FIRST_MESSAGE_CHARS：首条消息截断长度（200）；MAX_SESSION_DESCRIPTORS：会话描述条数上限（60）；COMMAND_NAME_RE：transcript 里的斜杠命令名（同一声明共 13 个绑定）。
  */
@@ -33,19 +38,25 @@ var TOOL_USE_TYPE_MARKER = '"type":"tool_use"';
 var CUSTOM_TITLE_TYPE_MARKER = '"type":"custom-title"';
 var PR_LINK_TYPE_MARKER = '"type":"pr-link"';
 var USER_ROLE_MARKER = '"role":"user"';
+var SESSION_OWNER_MARKER = '"type":"session-owner"';
+var HISTORY_SUPPRESSION_MARKER = '"type":"history-suppression"';
+var CREDENTIAL_ORG_MARKER = '"type":"credential_org"';
 var CUSTOM_TITLE_RE = /"customTitle":"([^"]+)"/;
 var PR_NUMBER_RE = /"prNumber":(\d+)/;
 var USER_CONTENT_RE = /"role":"user"[^}]*"content":"([^"]+)"/;
-//@ chunk-e6aww6q8.js:1738199-1739826 placement
+var ACCOUNT_UUID_RE = /"accountUuid":"([^"]*)"/;
+var ORGANIZATION_UUID_RE = /"organizationUuid":"([^"]*)"/;
+//@ chunk-5xgkngpb.js:1814181-1816185 placement
 /**
  * scanSessionUsage：扫描会话 JSONL：斜杠命令次数、MCP 调用次数、会话描述。
  */
-async function scanSessionUsage(projectDir, windowDays) {
+async function scanSessionUsage(projectDir, windowDays, now, limit) {
   let summary = {
     slashCommandCounts: new Map(),
     mcpServerCounts: new Map(),
     sessionDescriptors: [],
     sessionFileCount: 0,
+    leftOutSessionCount: 0,
   };
   let cutoffTime = Date.now() - windowDays * 24 * 60 * 60 * 1000;
   let entries;
@@ -77,19 +88,39 @@ async function scanSessionUsage(projectDir, windowDays) {
     )
   ).filter((filePath) => filePath !== null);
   for (let filePath of filtered_2) {
-    let fileText;
+    let text;
     try {
-      fileText = await readFile(filePath, "utf-8");
+      text = await readFile(filePath, "utf-8");
     } catch (error) {
       if (isFsInaccessible(error)) continue;
       throw error;
+    }
+    let lines = text.split(`
+`);
+    let any = lines.some(
+      (line) =>
+        line.includes(HISTORY_SUPPRESSION_MARKER) ||
+        (line.includes(CREDENTIAL_ORG_MARKER) &&
+          (limit === undefined || ORGANIZATION_UUID_RE.exec(line)?.[1]?.toLowerCase() !== limit)) ||
+        (line.includes(SESSION_OWNER_MARKER) &&
+          !sameOwnerAccount(
+            {
+              accountUuid: ACCOUNT_UUID_RE.exec(line)?.[1],
+              organizationUuid: ORGANIZATION_UUID_RE.exec(line)?.[1],
+            },
+            now,
+          )),
+    );
+    let hasPrompt = now !== undefined && !lines.some((line) => line.includes(SESSION_OWNER_MARKER));
+    if (any || hasPrompt) {
+      summary.leftOutSessionCount++;
+      continue;
     }
     summary.sessionFileCount++;
     let descriptor = {
       prNumbers: [],
     };
-    for (let line of fileText.split(`
-`)) {
+    for (let line of lines) {
       if (line.length < 10) continue;
       if (line.includes(COMMAND_NAME_CONTENT_MARKER) || line.includes(COMMAND_MESSAGE_CONTENT_MARKER))
         for (let match of line.matchAll(COMMAND_NAME_RE)) {
@@ -138,20 +169,12 @@ async function scanSessionUsage(projectDir, windowDays) {
   }
   return summary;
 }
-//@ chunk-e6aww6q8.js:1739826-1739837 placement
+//@ chunk-5xgkngpb.js:1816185-1816196 placement
 /**
  * TEAM_ONBOARDING_DEFAULT_WINDOW_DAYS：30。
  */
 var TEAM_ONBOARDING_DEFAULT_WINDOW_DAYS = 30;
-//@ chunk-e6aww6q8.js:1739837-1739896 placement
-function urlOriginOrUndefined(url) {
-  try {
-    return new URL(url).origin;
-  } catch {
-    return;
-  }
-}
-//@ chunk-e6aww6q8.js:1739896-1740216 placement
+//@ chunk-5xgkngpb.js:1816196-1816516 placement
 /**
  * readProjectMcpServers：读 .mcp.json 的 mcpServers。
  */
@@ -178,14 +201,19 @@ async function readProjectMcpServers(originalCwd) {
   }
   return {};
 }
-//@ chunk-e6aww6q8.js:1740216-1741001 placement
+//@ chunk-5xgkngpb.js:1816516-1817380 placement
 /**
  * collectTeamOnboardingUsage：组装 /team-onboarding 的 usageData。
  */
 async function collectTeamOnboardingUsage(windowDays) {
   let originalCwd = getOriginalCwd();
   let projectDir = getProjectDir(originalCwd);
-  let scanResult = await scanSessionUsage(projectDir, windowDays);
+  let scanResult = await scanSessionUsage(
+    projectDir,
+    windowDays,
+    ownStoredLoginOwner(),
+    getTelemetryOrganizationUuid(),
+  );
   let slashCommands = [...scanResult.slashCommandCounts.entries()]
     .sort((entryA, entryB) => entryB[1] - entryA[1])
     .map(([commandName, count]) => ({
@@ -200,7 +228,7 @@ async function collectTeamOnboardingUsage(windowDays) {
       return {
         name: serverName,
         callCount,
-        urlOrigin: typeof serverConfig?.url === "string" ? urlOriginOrUndefined(serverConfig.url) : undefined,
+        urlOrigin: typeof serverConfig?.url === "string" ? originOfUrl_2(serverConfig.url) : undefined,
       };
     });
   let trimmed = (
@@ -216,10 +244,12 @@ async function collectTeamOnboardingUsage(windowDays) {
   return {
     usageData: jsonStringify(
       {
+        sessionProvenance: ARTIFACT_CONTENT_AUTHORED_TAG,
         generatedBy: trimmed || undefined,
         currentRepo: normalizeGitRemoteUrl(trimmed_2) ?? basename(originalCwd),
         windowDays,
         sessionCount: scanResult.sessionFileCount,
+        sessionsLeftOut: scanResult.leftOutSessionCount,
         slashCommands,
         mcpServers,
         sessionDescriptors: scanResult.sessionDescriptors,

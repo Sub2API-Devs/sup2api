@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件 UI 中 Image 元素在终端里的渲染
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (9)
  * attribution: placement 9
  */
 import {
@@ -29,19 +29,19 @@ import {
   mountOnSite,
 } from "./ui/raster.js";
 import { checkImageSource } from "./ui/imageSource.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { currentSurfaceBinding } from "./surfaceBinding.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3748037-3748084 placement
+//@ chunk-5xgkngpb.js:3843785-3843832 placement
 /**
  * tmux 透传提示作为替代文字
  */
 var TMUX_IMAGE_ALT_TEXT; // deferred: uses TMUX_PASSTHROUGH_REQUIREMENT (../../ink/terminalImages.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3748037", () => {
+deferInit("chunk-5xgkngpb.js:3843785", () => {
   TMUX_IMAGE_ALT_TEXT = `the Image draws its alt here: ${TMUX_PASSTHROUGH_REQUIREMENT}`;
 });
-//@ chunk-e6aww6q8.js:3748084-3749273 placement
+//@ chunk-5xgkngpb.js:3843832-3845023 placement
 /**
  * 在终端里绘制插件 UI 的 Image 元素，终端不支持内联图片时显示替代文字。
  */
@@ -84,18 +84,18 @@ function renderPluginImage(facts) {
       ? undefined
       : `the Image draws its alt here: this terminal cannot read files on this machine (${source}); a { file } or { shm } source shows nothing, bytes still draw`;
 }
-//@ chunk-e6aww6q8.js:3749273-3749324 placement
+//@ chunk-5xgkngpb.js:3845023-3845074 placement
 /**
  * 已挂载图片表
  */
 var mountedImages; // deferred: uses getPluginRegistry (../../utils/plugins/pluginLoadState.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3749273", () => {
+deferInit("chunk-5xgkngpb.js:3845023", () => {
   mountedImages = identity_2(
     () => getPluginRegistry().mountedImages,
     (map) => map().clear(),
   );
 });
-//@ chunk-e6aww6q8.js:3749324-3749455 placement
+//@ chunk-5xgkngpb.js:3845074-3845205 placement
 /**
  * 判断同一请求、同一 key 的图片是否已被其他插件占用。
  */
@@ -105,7 +105,7 @@ function isImageKeyTakenByOther(requestId, key, plugin) {
       if (image.requestId === requestId && image.key === key && image.plugin !== plugin) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:3749455-3750257 placement
+//@ chunk-5xgkngpb.js:3845205-3846010 placement
 function IMAGE_ELEMENT_LIMITS(request, caller) {
   let { requestId, key, source } = request;
   let site = mountedImages().get(rasterKey(requestId, key, caller.plugin));
@@ -139,14 +139,14 @@ function IMAGE_ELEMENT_LIMITS(request, caller) {
         fix: mode,
       });
 }
-//@ chunk-e6aww6q8.js:3750257-3750305 placement
+//@ chunk-5xgkngpb.js:3846010-3846058 placement
 /**
  * 是否带 source
  */
 function hasImageSource(request) {
-  return "source" in request && isPlainObject_5(request.source);
+  return "source" in request && isPlainObject_6(request.source);
 }
-//@ chunk-e6aww6q8.js:3750305-3750462 placement
+//@ chunk-5xgkngpb.js:3846058-3846215 placement
 /**
  * 把插件 Image 元素挂载到按（请求, key, 插件）索引的图片站点，返回卸载函数。
  */
@@ -162,7 +162,7 @@ var mountPluginImage = (mount) =>
       blits: 0,
     }),
   });
-//@ chunk-e6aww6q8.js:3750462-3750500 placement
+//@ chunk-5xgkngpb.js:3846215-3846253 placement
 /**
  * 附 swap
  */
@@ -171,16 +171,16 @@ var withSwap = (a, b, swap) => ({
   ...b,
   swap,
 });
-//@ chunk-e6aww6q8.js:3750500-3750553 placement
+//@ chunk-5xgkngpb.js:3846253-3846306 placement
 /**
  * 读当前选区
  */
 var readSelectionPromise = () => Promise.resolve(currentSurfaceBinding()?.selection?.read());
 export {
-  mountPluginImage,
-  withSwap,
-  renderPluginImage,
   readSelectionPromise,
   hasImageSource,
   IMAGE_ELEMENT_LIMITS,
+  mountPluginImage,
+  withSwap,
+  renderPluginImage,
 };

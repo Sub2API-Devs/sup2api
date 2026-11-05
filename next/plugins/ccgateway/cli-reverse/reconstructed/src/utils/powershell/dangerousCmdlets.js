@@ -3,17 +3,17 @@
  *
  * PowerShell 危险 cmdlet 分类集合（脚本块执行、模块加载、网络、别名劫持、WMI、参数门控）与永不建议前缀名单 NEVER_SUGGEST。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/powershell/dangerousCmdlets.ts
- * pieces: chunk-fws4w04f.js (3), chunk-tr0s0d0k.js (1)
- * attribution: callgraph-fingerprint 1, file-local 1, fingerprint 2
+ * pieces: chunk-6d2p9h2d.js (1), chunk-p7vpkf52.js (3)
+ * attribution: fingerprint 2, callgraph-fingerprint 1, file-local 1
  */
 import { COMMON_ALIASES } from "./parser.js";
 import { CROSS_PLATFORM_CODE_EXEC } from "../permissions/dangerousPatterns.js";
 import { SHELL_PROGRAM_NAMES } from "../bash/ast.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fws4w04f.js:265-773 callgraph-fingerprint (2.1.88 match: DANGEROUS_SCRIPT_BLOCK_CMDLETS, 0.58)
+//@ chunk-p7vpkf52.js:265-773 callgraph-fingerprint (2.1.88 match: DANGEROUS_SCRIPT_BLOCK_CMDLETS, 0.58)
 /**
  * 危险 cmdlet 集合：按文件路径执行脚本（invoke-command/start-job…）、脚本块执行代码（含 invoke-expression、register-*event、new/enter-pssession）、加载模块（import-module/install-module…）、shell 与进程生成器（pwsh/cmd/bash/wsl/start-process/add-type/new-object）。
  */
@@ -21,7 +21,7 @@ var FILEPATH_EXECUTION_CMDLETS; // deferred: has load-time effects after a defer
 var DANGEROUS_SCRIPT_BLOCK_CMDLETS;
 var MODULE_LOADING_CMDLETS;
 var SHELLS_AND_SPAWNERS;
-deferInit("chunk-fws4w04f.js:265", () => {
+deferInit("chunk-p7vpkf52.js:265", () => {
   FILEPATH_EXECUTION_CMDLETS = new Set([
     "invoke-command",
     "start-job",
@@ -62,7 +62,7 @@ deferInit("chunk-fws4w04f.js:265", () => {
     "new-object",
   ];
 });
-//@ chunk-fws4w04f.js:773-867 file-local
+//@ chunk-p7vpkf52.js:773-867 file-local
 /**
  * 返回 COMMON_ALIASES 中指向给定 cmdlet 集合的别名列表。
  */
@@ -71,7 +71,7 @@ function aliasesOf(targets) {
     .filter(([, target]) => targets.has(target.toLowerCase()))
     .map(([alias]) => alias);
 }
-//@ chunk-fws4w04f.js:867-1509 fingerprint (2.1.88 match: ARG_GATED_CMDLETS, 0.671)
+//@ chunk-p7vpkf52.js:867-1509 fingerprint (2.1.88 match: ARG_GATED_CMDLETS, 0.671)
 /**
  * 永不作为通配前缀建议的命令名集合：上述各类危险 cmdlet + foreach-object + 跨平台代码执行器（python/node/ruby/npx…单词项）及它们的别名。
  */
@@ -80,7 +80,7 @@ var ALIAS_HIJACK_CMDLETS;
 var WMI_CIM_CMDLETS;
 var ARG_GATED_CMDLETS;
 var NEVER_SUGGEST;
-deferInit("chunk-fws4w04f.js:867", () => {
+deferInit("chunk-p7vpkf52.js:867", () => {
   NETWORK_CMDLETS = new Set(["invoke-webrequest", "invoke-restmethod"]);
   ALIAS_HIJACK_CMDLETS = new Set([
     "set-alias",
@@ -129,21 +129,21 @@ deferInit("chunk-fws4w04f.js:867", () => {
     return new Set([...core, ...aliasesOf(core)]);
   })();
 });
-//@ chunk-tr0s0d0k.js:22771-22978 fingerprint (2.1.88 match: SHELLS_AND_SPAWNERS, 0.386)
+//@ chunk-6d2p9h2d.js:23018-23225 fingerprint (2.1.88 match: SHELLS_AND_SPAWNERS, 0.386)
 /**
  * 在命令文本里查找 shell 可执行名或 git `alias.*=!` 的正则（切分归属待查）。
  */
 var SHELL_SPAWNER_PATTERN; // deferred: uses POSIX_SHELL_NAMES (../bash/ast.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tr0s0d0k.js:22771", () => {
+deferInit("chunk-6d2p9h2d.js:23018", () => {
   SHELL_SPAWNER_PATTERN = new RegExp(
     `(?:^|[\\s\\\\/'":&()|;,{}=-])(?:${[...SHELL_PROGRAM_NAMES].filter((name) => !["cmd", "powershell", "pwsh"].includes(name)).join("|")})(?:\\.exe)?(?=[\\s'"|);}&,({]|$)|alias\\.[\\w-]+[ \\t]*(?:=[ \\t]*)?['"]?!`,
     "i",
   );
 });
 export {
-  NEVER_SUGGEST,
   SHELL_SPAWNER_PATTERN,
   FILEPATH_EXECUTION_CMDLETS,
   DANGEROUS_SCRIPT_BLOCK_CMDLETS,
   MODULE_LOADING_CMDLETS,
+  NEVER_SUGGEST,
 };

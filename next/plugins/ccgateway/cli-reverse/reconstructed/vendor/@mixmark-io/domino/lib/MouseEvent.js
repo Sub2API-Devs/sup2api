@@ -1,14 +1,14 @@
 /**
  * @mixmark-io/domino/lib/MouseEvent.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @mixmark-io/domino@2.2.0
- * pieces: chunk-vwj6ccer.js (1)
+ * pieces: chunk-w04z664w.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_UIEvent } from "./UIEvent.js";
 
-//@ chunk-vwj6ccer.js:1526-2402 cjs-fingerprint
+//@ chunk-w04z664w.js:1526-2402 cjs-fingerprint
 var require_MouseEvent = __commonJS(function (cjsExports, cjsModule) {
   var UIEvent = require_UIEvent();
   cjsModule.exports = MouseEvent;

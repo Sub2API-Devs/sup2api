@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：memory 文件工具名（read/write/str_replace/append）与文件头、memory_document 前言的正则，以及 memory search 工具名。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (1)
  * attribution: placement 1
  */
 import { MEMORY_TOOL_PREFIX } from "../../memdir/memoryTool.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:84109-84365 placement (2.1.88 match: SEARCH_TOOLS, 0.344)
+//@ chunk-7jxyna5q.js:83423-83679 placement (2.1.88 match: SEARCH_TOOLS, 0.344)
 /**
  * memory 文件工具名（read/write/str_replace/append）、版本行、文件头与 memory_document 前言的正则，以及 memory search 工具名；与 MCP 折叠分类无关。
  */
@@ -20,7 +20,7 @@ var MEMORY_VERSION_TAG_RE;
 var MEMORY_DOC_SECTION_RE;
 var MEMORY_SEARCH_TOOL_NAME;
 var MEMORY_DOC_ENVELOPE_RE;
-deferInit("chunk-s61vbvea.js:84109", () => {
+deferInit("chunk-7jxyna5q.js:83423", () => {
   regExp_4 = new RegExp(`^${MEMORY_TOOL_PREFIX}(read|write|str_replace|append)$`);
   MEMORY_VERSION_TAG_RE = /^[^\n]*?\[version: ([0-9a-f]{12})\]/;
   MEMORY_DOC_SECTION_RE = /^=== (.+) ===$/gm;

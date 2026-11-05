@@ -1,15 +1,15 @@
 /**
  * jose/dist/webapi/lib/check_key_type.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-5h78gfwc.js (2)
+ * pieces: chunk-0f6azspv.js (2)
  * attribution: esm-layout 2
  */
 import { isJWK, isSecretJWK, isPrivateJWK, isPublicJWK } from "./type_checks.js";
 import { isKeyLike } from "./key.js";
 import { withAlg } from "../../node/esm/lib/invalid_key_input.js";
 
-//@ chunk-5h78gfwc.js:28225-30586 esm-layout
+//@ chunk-0f6azspv.js:28225-30586 esm-layout
 var tag_2 = (key) => key?.[Symbol.toStringTag];
 var jwkMatchesOp = (alg, key, usage) => {
   if (key.use !== undefined) {
@@ -108,7 +108,7 @@ var asymmetricTypeCheck = (alg, key, usage) => {
         );
     }
 };
-//@ chunk-5h78gfwc.js:30586-30709 esm-layout
+//@ chunk-0f6azspv.js:30586-30709 esm-layout
 function checkKeyType(alg, key, usage) {
   switch (alg.substring(0, 2)) {
     case "A1":

@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：创建 artifact 实时协作的会话状态（订阅、监督者、副本、文档监视、自动回复等）；登出或换账号时重置实时协作状态等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-enbhzjw4.js (37)
- * attribution: placement 37
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bjf8bvwf.js (38)
+ * attribution: placement 37, layout 1
  */
 import { randomUUID } from "crypto";
 import { logForDebugging } from "../../utils/debug.js";
@@ -17,20 +17,20 @@ import { errorMessage } from "../../utils/errors.js";
 import { sleep } from "../../utils/sleep.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-enbhzjw4.js:406-804 placement
+//@ chunk-bjf8bvwf.js:439-837 placement
 /**
  * 记录副本分歧条目（有上限）。
  */
 class DivergenceNotes {
   #e = new Map();
-  #t = new Set();
+  #n = new Set();
   note(slug, part, generation) {
-    if (this.#t.has(slug)) return;
+    if (this.#n.has(slug)) return;
     let parts = this.#e.get(slug);
     if (parts !== undefined) {
       if (parts.has(part)) return;
       if (parts.size >= 4) {
-        this.#n(slug);
+        this.#t(slug);
         return;
       }
       parts.set(part, generation);
@@ -39,15 +39,15 @@ class DivergenceNotes {
     if (this.#e.size >= 256) {
       let remaining = 128;
       for (let key of this.#e.keys()) {
-        this.#n(key);
+        this.#t(key);
         if (--remaining === 0) break;
       }
     }
     this.#e.set(slug, new Map([[part, generation]]));
   }
-  #n(slug) {
+  #t(slug) {
     this.#e.delete(slug);
-    this.#t.add(slug);
+    this.#n.add(slug);
   }
   take(slug, part) {
     let parts = this.#e.get(slug);
@@ -55,37 +55,37 @@ class DivergenceNotes {
     return parts?.get(part);
   }
 }
-//@ chunk-enbhzjw4.js:804-1103 placement
+//@ chunk-bjf8bvwf.js:837-1136 placement
 /**
  * 一次实时监听操作的结算票据：只结算一次；若该键仍对应同一记录，减少待处理计数，监听过或已发出取消则标为已确认，全部结束且未确认时删除记录。
  */
 class WatchSettleTicket {
   #e;
-  #t;
   #n;
+  #t;
   #r = false;
   constructor(map, slug, record) {
     this.#e = map;
-    this.#t = slug;
-    this.#n = record;
+    this.#n = slug;
+    this.#t = record;
   }
   settle(outcome) {
     if (this.#r) return;
     this.#r = true;
-    if (this.#e.get(this.#t) !== this.#n) return;
-    this.#n.pending--;
-    if (outcome.wasWatching || outcome.teardown !== "unsent") this.#n.confirmed = true;
-    if (this.#n.pending === 0 && !this.#n.confirmed) this.#e.delete(this.#t);
+    if (this.#e.get(this.#n) !== this.#t) return;
+    this.#t.pending--;
+    if (outcome.wasWatching || outcome.teardown !== "unsent") this.#t.confirmed = true;
+    if (this.#t.pending === 0 && !this.#t.confirmed) this.#e.delete(this.#n);
   }
 }
-//@ chunk-enbhzjw4.js:1103-2097 placement
+//@ chunk-bjf8bvwf.js:1136-2130 placement
 /**
  * 记录已停止的 artifact slug 与代次。
  */
 class StoppedSlugLatch {
   #e = new Map();
-  #t = 1;
-  #n = new Set();
+  #n = 1;
+  #t = new Set();
   #r = new DivergenceNotes();
   isStopped(slug) {
     return this.#e.has(slug);
@@ -97,37 +97,37 @@ class StoppedSlugLatch {
     return this.#e.get(slug)?.generation;
   }
   recordStop(slug) {
-    this.#n.delete(slug);
+    this.#t.delete(slug);
     let record = this.#e.get(slug);
     if (record === undefined) {
       record = {
         pending: 0,
         confirmed: false,
-        generation: this.#t++,
+        generation: this.#n++,
       };
       this.#e.set(slug, record);
-    } else record.generation = this.#t++;
+    } else record.generation = this.#n++;
     record.pending++;
     return new WatchSettleTicket(this.#e, slug, record);
   }
   reaffirmStop(slug) {
-    this.#n.delete(slug);
+    this.#t.delete(slug);
     let record = this.#e.get(slug);
     if (record === undefined) this.confirmStop(slug);
     else record.confirmed = true;
   }
   confirmStop(slug) {
-    this.#n.delete(slug);
+    this.#t.delete(slug);
     let record = this.#e.get(slug);
     if (record === undefined)
       this.#e.set(slug, {
         pending: 0,
         confirmed: true,
-        generation: this.#t++,
+        generation: this.#n++,
       });
     else {
       record.confirmed = true;
-      record.generation = this.#t++;
+      record.generation = this.#n++;
     }
   }
   noteRelatchAsk(askerSlug, slug) {
@@ -140,16 +140,16 @@ class StoppedSlugLatch {
     let record = this.#e.get(slug);
     if (record === undefined || record.generation !== generation) return;
     this.#e.delete(slug);
-    this.#n.add(slug);
+    this.#t.add(slug);
   }
   noteApprovedWatch(slug) {
-    if (!this.#e.has(slug)) this.#n.add(slug);
+    if (!this.#e.has(slug)) this.#t.add(slug);
   }
   wasClearedByRewatch(slug) {
-    return this.#n.has(slug) && !this.#e.has(slug);
+    return this.#t.has(slug) && !this.#e.has(slug);
   }
 }
-//@ chunk-enbhzjw4.js:2097-2639 placement
+//@ chunk-bjf8bvwf.js:2130-2672 placement
 /**
  * 带 keepalive 参数的副本时间参数。
  */
@@ -191,7 +191,7 @@ var KEEPALIVE_REPLICA_TIMING = {
   ...REPLICA_TIMING,
   keepaliveMs: 25000,
 };
-//@ chunk-enbhzjw4.js:2639-2682 placement
+//@ chunk-bjf8bvwf.js:2672-2715 placement
 /**
  * 生成副本键（代理 id + slug）。
  */
@@ -199,7 +199,7 @@ function replicaKey(key, id) {
   return `${key ?? "main"}
 ${id}`;
 }
-//@ chunk-enbhzjw4.js:2682-2881 placement
+//@ chunk-bjf8bvwf.js:2715-2914 placement
 function resetCodeliveredFollowups(state) {
   let followups = [...state.codeliveredFollowups.values()];
   state.codeliveredFollowups.clear();
@@ -208,7 +208,7 @@ function resetCodeliveredFollowups(state) {
   state.editorSettleWatch?.();
   state.editorSettleWatch = null;
 }
-//@ chunk-enbhzjw4.js:2881-3067 placement
+//@ chunk-bjf8bvwf.js:2914-3100 placement
 /**
  * 撤销指定 slug 的共同投递跟进。
  */
@@ -221,14 +221,14 @@ function revokeCodeliveredFollowups(slug, reason, options) {
       followup.revoke(reason);
     }
 }
-//@ chunk-enbhzjw4.js:3067-3091 placement
+//@ chunk-bjf8bvwf.js:3100-3124 placement
 /**
  * 拒绝发布容量窗口（3 × FT）。
  */
 var MAX_REFUSED_PUBLISHES = 64;
 var REFUSED_CAPACITY_HINT = 25;
 var REFUSED_CAPACITY_WINDOW = 3 * REFUSED_CAPACITY_HINT;
-//@ chunk-enbhzjw4.js:3091-11075 placement
+//@ chunk-bjf8bvwf.js:3124-11283 placement
 /**
  * 创建 artifact 实时协作的会话状态（订阅、监督者、副本、文档监视、自动回复等）。
  */
@@ -423,6 +423,8 @@ function createLiveState() {
     },
     builtInArtifactHiddenForMcp: false,
     mcpEntryRowNotServed: null,
+    heldCcrArtifactsEntry: false,
+    scratchpadStartedForCcrEntry: null,
     routeOnlyMcpEntryLogged: false,
     contentHostEgressDenied: new Set(),
     contentHostEgressProbed: new Map(),
@@ -447,6 +449,10 @@ function createLiveState() {
     strandedMints: new Map(),
     reservedMints: new Set(),
     mintedRoundTripPublishSignals: new WeakSet(),
+    readsMarked: {
+      toolUses: new Set(),
+      outputs: new WeakSet(),
+    },
     durable: {
       rows: new Map(),
       registrySink: null,
@@ -522,6 +528,11 @@ function createLiveState() {
     crashedPublishChecks: new Set(),
     readDeliveries: new Map(),
     pendingHandoverReads: new Map(),
+    savedArtifactCopies: {
+      copies: new Map(),
+      unwrapped: 0,
+      pending: new Map(),
+    },
     frozenWatchRail: undefined,
     frozenArtifactTypes: undefined,
     frozenAssets: undefined,
@@ -623,7 +634,7 @@ function createLiveState() {
     }),
   };
 }
-//@ chunk-enbhzjw4.js:11075-11225 placement
+//@ chunk-bjf8bvwf.js:11283-11433 placement
 /**
  * 停止副本监督者（中止、清定时器、租约）。
  */
@@ -638,29 +649,29 @@ function stopSupervisor(supervisor) {
   delete supervisor.renewable;
   delete supervisor.wake;
 }
-//@ chunk-enbhzjw4.js:11225-11248 placement
+//@ chunk-bjf8bvwf.js:11433-11456 placement
 /**
  * 当前实时协作状态容器。
  */
 class LiveStateHolder {
   current = undefined;
 }
-//@ chunk-enbhzjw4.js:11248-11272 placement
+//@ chunk-bjf8bvwf.js:11456-11480 placement
 /**
  * 按会话根保存的实时协作状态。
  */
 var liveStateSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-enbhzjw4.js:11248", () => {
+deferInit("chunk-bjf8bvwf.js:11456", () => {
   liveStateSlot = new SessionRootSlot(() => new LiveStateHolder());
 });
-//@ chunk-enbhzjw4.js:11272-11302 placement
+//@ chunk-bjf8bvwf.js:11480-11510 placement
 /**
  * 取（必要时创建）当前实时协作状态。
  */
 function getLiveStateHolder() {
   return liveStateSlot.of(getRootSession());
 }
-//@ chunk-enbhzjw4.js:11302-11359 placement
+//@ chunk-bjf8bvwf.js:11510-11567 placement
 /**
  * 取（必要时创建）当前实时协作状态。
  */
@@ -669,7 +680,13 @@ function getLiveState() {
   liveStateHolder.current ??= createLiveState();
   return liveStateHolder.current;
 }
-//@ chunk-enbhzjw4.js:11359-11482 placement
+//@ chunk-bjf8bvwf.js:11567-11660 layout
+function deleteDeferredSurface(slug) {
+  let liveState = getLiveState();
+  liveState.deferredSurface.delete(slug);
+  liveState.remoteControlSkippedSlugs.delete(slug);
+}
+//@ chunk-bjf8bvwf.js:11660-11783 placement
 /**
  * 记录某 artifact 讨论串最近一次自动回复的时间。
  */
@@ -677,7 +694,7 @@ function markAutoReplyTime(slug, threadId) {
   let artifact = getLiveStateHolder().current?.autoReact.artifacts.get(slug)?.threads.get(threadId);
   if (artifact !== undefined) artifact.lastAutoReplyAt = Date.now();
 }
-//@ chunk-enbhzjw4.js:11482-11602 placement
+//@ chunk-bjf8bvwf.js:11783-11903 placement
 /**
  * 重置文档监视的通知预算。
  */
@@ -686,7 +703,7 @@ function resetNoticeBudgets() {
   if (live === undefined) return;
   for (let noticeBudget of live.liveDocWatch.noticeBudgets.values()) noticeBudget.disclosed = false;
 }
-//@ chunk-enbhzjw4.js:11602-11693 placement
+//@ chunk-bjf8bvwf.js:11903-11994 placement
 /**
  * 清除被拒发布的正文记录。
  */
@@ -696,7 +713,7 @@ function clearRefusedPublishBodies() {
   live.refusedPublishBodies.clear();
   clearHandoverReadState();
 }
-//@ chunk-enbhzjw4.js:11693-11915 placement
+//@ chunk-bjf8bvwf.js:11994-12216 placement
 /**
  * 清空所有待交接读取的已返回/已准备/完成者/重发确认记录，以及读取投递记录。
  */
@@ -711,7 +728,7 @@ function clearHandoverReadState() {
   }
   live.readDeliveries.clear();
 }
-//@ chunk-enbhzjw4.js:11915-12193 placement
+//@ chunk-bjf8bvwf.js:12216-12494 placement
 /**
  * 按仍保留的批次集合清理被拒发布内容记录：批次已不在的删除，观察来源已不在的去掉该字段。
  */
@@ -731,21 +748,21 @@ function pruneRefusedPublishBodies(knownBatches) {
       delete entry.observedFrom;
   }
 }
-//@ chunk-enbhzjw4.js:12193-12233 placement
+//@ chunk-bjf8bvwf.js:12494-12534 placement
 /**
  * 取当前实时协作房间。
  */
 function currentRoom() {
   return getLiveStateHolder().current?.room;
 }
-//@ chunk-enbhzjw4.js:12233-12277 placement
+//@ chunk-bjf8bvwf.js:12534-12578 placement
 /**
  * 取当前 presence 状态。
  */
 function currentPresence() {
   return getLiveStateHolder().current?.presence;
 }
-//@ chunk-enbhzjw4.js:12277-12343 placement
+//@ chunk-bjf8bvwf.js:12578-12644 placement
 /**
  * 释放某 slug 的 presence。
  */
@@ -753,7 +770,7 @@ function disposePresenceSlug(slug) {
   let presence = getLiveStateHolder().current?.presence;
   presence?.disposeSlug?.(presence, slug);
 }
-//@ chunk-enbhzjw4.js:12343-12408 placement
+//@ chunk-bjf8bvwf.js:12644-12709 placement
 /**
  * 让某 slug 的 presence 退出。
  */
@@ -761,21 +778,21 @@ function retirePresenceSlug(slug) {
   let presence = getLiveStateHolder().current?.presence;
   presence?.retireSlug?.(presence, slug);
 }
-//@ chunk-enbhzjw4.js:12408-12474 placement
+//@ chunk-bjf8bvwf.js:12709-12775 placement
 /**
  * 某 slug 是否被拒绝协作。
  */
 function isPresenceDeclined(slug) {
   return getLiveStateHolder().current?.presence.declined.has(slug) === true;
 }
-//@ chunk-enbhzjw4.js:12474-12516 placement
+//@ chunk-bjf8bvwf.js:12775-12817 placement
 /**
  * 是否已有实时协作状态。
  */
 function hasLiveState() {
   return getLiveStateHolder().current !== undefined;
 }
-//@ chunk-enbhzjw4.js:12516-12566 placement
+//@ chunk-bjf8bvwf.js:12817-12867 placement
 /**
  * 通知房间“同意状态变化”。
  */
@@ -783,7 +800,7 @@ function notifyRoomConsentChanged() {
   let room = currentRoom();
   room?.consentChanged?.(room);
 }
-//@ chunk-enbhzjw4.js:12566-12619 placement
+//@ chunk-bjf8bvwf.js:12867-12920 placement
 /**
  * 通知房间“账号变化”。
  */
@@ -791,7 +808,7 @@ function notifyRoomAccountChanged(oauthAccountInfo) {
   let room = currentRoom();
   room?.accountChanged?.(room, oauthAccountInfo);
 }
-//@ chunk-enbhzjw4.js:12619-12662 placement
+//@ chunk-bjf8bvwf.js:12920-12963 placement
 /**
  * 释放实时协作资源。
  */
@@ -799,7 +816,7 @@ function disposeLiveState() {
   let room = currentRoom();
   room?.dispose?.(room);
 }
-//@ chunk-enbhzjw4.js:12662-12715 placement
+//@ chunk-bjf8bvwf.js:12963-13016 placement
 /**
  * 清空所有文档的日志状态。
  */
@@ -807,7 +824,7 @@ function clearAllJournals(live) {
   clearJournalPosition(live);
   for (let doc of live.docs.values()) bumpJournalFence(doc);
 }
-//@ chunk-enbhzjw4.js:12715-12772 placement
+//@ chunk-bjf8bvwf.js:13016-13073 placement
 /**
  * 清空某状态的日志游标。
  */
@@ -815,7 +832,7 @@ function clearJournalPosition(live) {
   live.journalPos = undefined;
   live.journalPosOrd = undefined;
 }
-//@ chunk-enbhzjw4.js:12772-12824 placement
+//@ chunk-bjf8bvwf.js:13073-13125 placement
 /**
  * 递增文档的日志代号（使旧日志失效）。
  */
@@ -823,7 +840,7 @@ function bumpJournalFence(doc) {
   doc.journalFence = undefined;
   doc.journalGen += 1;
 }
-//@ chunk-enbhzjw4.js:12824-13094 placement
+//@ chunk-bjf8bvwf.js:13125-13395 placement
 function stopReplicaJournal(replica) {
   let journal = replica.journal;
   replica.journal = undefined;
@@ -843,7 +860,7 @@ function stopReplicaJournal(replica) {
     killTask: false,
   });
 }
-//@ chunk-enbhzjw4.js:13094-13198 placement
+//@ chunk-bjf8bvwf.js:13395-13499 placement
 /**
  * 重置本会话主体令牌缓存（清空令牌、账号置空并递增纪元）。
  */
@@ -852,7 +869,7 @@ function resetOwnPrincipalTokens(replica) {
   replica.ownPrincipalTokenAccount = null;
   replica.ownPrincipalTokenEpoch++;
 }
-//@ chunk-enbhzjw4.js:13198-16084 placement
+//@ chunk-bjf8bvwf.js:13499-16385 placement
 /**
  * 登出或换账号时重置实时协作状态。
  */
@@ -975,7 +992,7 @@ function resetLiveStateOnAccountChange(artifactAccount = "signed_out", incomingI
   room.accountChanged?.(room, incomingIdentity);
   presence.accountChanged?.(presence, incomingIdentity);
 }
-//@ chunk-enbhzjw4.js:16084-16708 placement
+//@ chunk-bjf8bvwf.js:16385-17009 placement
 /**
  * 登出前推送挂起的保存并发送最终分歧报告。
  */
@@ -1008,7 +1025,7 @@ async function flushReplicasBeforeLogout(artifactAccount) {
     );
   await Promise.race([Promise.all(pending), sleep(2000)]);
 }
-//@ chunk-enbhzjw4.js:16708-17059 placement
+//@ chunk-bjf8bvwf.js:17009-17360 placement
 /**
  * 对话结束时停止文档监视并发送最终报告。
  */
@@ -1028,7 +1045,7 @@ function retireConversationReplicas() {
           ),
       );
 }
-//@ chunk-enbhzjw4.js:17059-18027 placement
+//@ chunk-bjf8bvwf.js:17360-18328 placement
 /**
  * 新对话时重置会话级集合（自有 slug、实例等）。
  */
@@ -1072,27 +1089,28 @@ function resetForNewConversation(reason) {
 export {
   getLiveState,
   hasLiveState,
+  notifyRoomConsentChanged,
   replicaKey,
+  pruneRefusedPublishBodies,
+  clearHandoverReadState,
+  resetForNewConversation,
+  clearRefusedPublishBodies,
+  resetNoticeBudgets,
   REFUSED_CAPACITY_HINT,
   REFUSED_CAPACITY_WINDOW,
-  disposeLiveState,
-  resetNoticeBudgets,
-  retireConversationReplicas,
-  clearRefusedPublishBodies,
-  resetForNewConversation,
-  notifyRoomConsentChanged,
   resetLiveStateOnAccountChange,
-  markAutoReplyTime,
-  revokeCodeliveredFollowups,
+  currentRoom,
+  disposeLiveState,
+  retireConversationReplicas,
+  deleteDeferredSurface,
+  flushReplicasBeforeLogout,
+  stopSupervisor,
+  disposePresenceSlug,
+  notifyRoomAccountChanged,
   isPresenceDeclined,
   retirePresenceSlug,
   currentPresence,
-  stopSupervisor,
-  disposePresenceSlug,
   resetOwnPrincipalTokens,
-  pruneRefusedPublishBodies,
-  clearHandoverReadState,
-  flushReplicasBeforeLogout,
-  notifyRoomAccountChanged,
-  currentRoom,
+  markAutoReplyTime,
+  revokeCodeliveredFollowups,
 };

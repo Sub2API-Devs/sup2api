@@ -1,8 +1,8 @@
 /**
  * @azure/core-client/dist/esm/pipeline.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/core-client@1.9.2..1.10.0
- * pieces: chunk-mrx6y2r5.js (1)
+ * pieces: chunk-b5df2wx1.js (1)
  * attribution: esm-fingerprint 1
  */
 import { createPipelineFromOptions } from "../../../core-rest-pipeline/dist/esm/createPipelineFromOptions.js";
@@ -10,7 +10,7 @@ import { bearerTokenAuthenticationPolicy } from "../../../core-rest-pipeline/dis
 import { serializationPolicy } from "../index.js";
 import { deserializationPolicy } from "./deserializationPolicy.js";
 
-//@ chunk-mrx6y2r5.js:76618-76933 esm-fingerprint
+//@ chunk-b5df2wx1.js:76618-76933 esm-fingerprint
 function createClientPipeline(options = {}) {
   let pipeline = createPipelineFromOptions(options !== null && options !== undefined ? options : {});
   if (options.credentialOptions)

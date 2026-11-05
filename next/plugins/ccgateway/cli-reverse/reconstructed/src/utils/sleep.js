@@ -3,15 +3,15 @@
  *
  * 可中断的 sleep 与 withTimeout
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sleep.ts
- * pieces: chunk-82kqcve8.js (1), chunk-eabawhjj.js (11), chunk-p7xf186d.js (1)
- * attribution: placement 4, facade-exports 5, layout 3, fingerprint 1
+ * pieces: chunk-290tacpj.js (1), chunk-a2q0x549.js (1), chunk-yxxb6qww.js (11)
+ * attribution: fingerprint 1, placement 4, facade-exports 5, layout 3
  */
 import { createAbortController } from "./abortController.js";
 import { deferInit, runDeferredInits } from "../../runtime/deferred-init.js";
 
-//@ chunk-eabawhjj.js:191-516 placement
+//@ chunk-yxxb6qww.js:191-516 placement
 /**
  * 计算指数退避延迟：min(cap, base × factor^(attempt−1))，再按 jitter 类型（none/full/equal 等）加随机抖动。
  */
@@ -39,7 +39,7 @@ function backoffDelayMs({
     }
   }
 }
-//@ chunk-eabawhjj.js:516-679 placement
+//@ chunk-yxxb6qww.js:516-679 placement
 /**
  * 系统时钟实现：当前时间、单调时间，以及可 unref 的 setTimeout（返回取消函数）。
  */
@@ -56,18 +56,15 @@ class SystemClock {
     return () => clearTimeout(timer);
   }
 }
-//@ chunk-eabawhjj.js:679-694 placement
+//@ chunk-yxxb6qww.js:679-694 placement
 /**
  * 系统时钟实现（sleep/超时用）。
  */
 var systemClock; // deferred: uses SystemClock of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-eabawhjj.js:679", () => {
+deferInit("chunk-yxxb6qww.js:679", () => {
   systemClock = new SystemClock();
 });
-//@ chunk-eabawhjj.js:694-1079 facade-exports (2.1.88 match: sleep, 0.91)
-/**
- * 可被 AbortSignal 中断的 sleep；可选 abort 时抛错或静默返回、unref 定时器。
- */
+//@ chunk-yxxb6qww.js:694-1079 facade-exports (2.1.88 match: sleep, 0.91)
 function sleep(ms, signal, opts) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -95,9 +92,9 @@ function sleep(ms, signal, opts) {
     });
   });
 }
-//@ chunk-eabawhjj.js:1079-1091 layout
+//@ chunk-yxxb6qww.js:1079-1091 layout
 var DEFAULT_BACKOFF_CAP_MS = 60000;
-//@ chunk-eabawhjj.js:1091-1274 facade-exports
+//@ chunk-yxxb6qww.js:1091-1274 facade-exports
 function fullJitterBackoffMs({
   baseMs,
   capMs = DEFAULT_BACKOFF_CAP_MS,
@@ -118,11 +115,11 @@ function fullJitterBackoffMs({
     }),
   );
 }
-//@ chunk-eabawhjj.js:1274-1302 layout
+//@ chunk-yxxb6qww.js:1274-1302 layout
 function rejectWithMessage(reject, message) {
   reject(Error(message));
 }
-//@ chunk-eabawhjj.js:1302-1445 facade-exports (2.1.88 match: withTimeout, 1)
+//@ chunk-yxxb6qww.js:1302-1445 facade-exports (2.1.88 match: withTimeout, 1)
 function withTimeout(promise, ms, message) {
   let timer;
   let timeoutPromise = new Promise((resolve, reject) => {
@@ -132,12 +129,12 @@ function withTimeout(promise, ms, message) {
     if (timer !== undefined) clearTimeout(timer);
   });
 }
-//@ chunk-eabawhjj.js:1445-1508 layout
+//@ chunk-yxxb6qww.js:1445-1508 layout
 var scheduleUnrefTimeout = (callback, delayMs) => {
   let timer = setTimeout(callback, delayMs);
   return () => clearTimeout(timer);
 };
-//@ chunk-eabawhjj.js:1508-1623 facade-exports (2.1.88 match: withTimeout, 1)
+//@ chunk-yxxb6qww.js:1508-1623 facade-exports (2.1.88 match: withTimeout, 1)
 function withDeadline(promise, ms, message = scheduleUnrefTimeout) {
   let timer = () => {};
   let timeoutPromise = new Promise((resolve) => {
@@ -145,7 +142,7 @@ function withDeadline(promise, ms, message = scheduleUnrefTimeout) {
   });
   return Promise.race([promise, timeoutPromise]).finally(timer);
 }
-//@ chunk-eabawhjj.js:1623-1889 facade-exports
+//@ chunk-yxxb6qww.js:1623-1889 facade-exports
 async function raceWithAbortSignal(promise, signal, makeAbortError) {
   let swallowLate = () => {
     promise.catch(() => {});
@@ -172,7 +169,7 @@ async function raceWithAbortSignal(promise, signal, makeAbortError) {
     signal.removeEventListener("abort", onAbort);
   }
 }
-//@ chunk-82kqcve8.js:187814-187944 placement (2.1.88 match: withTimeout, 1)
+//@ chunk-a2q0x549.js:185983-186113 placement (2.1.88 match: withTimeout, 1)
 /**
  * 等待 promise 或 ms 毫秒超时，二者先到为准；返回 promise 是否在超时前结束（不抛错）。
  */
@@ -190,7 +187,7 @@ async function raceWithTimeout(promise, waitCapMs) {
   ]);
   return finishedFirst;
 }
-//@ chunk-p7xf186d.js:9239-9387 fingerprint (2.1.88 match: withTimeout, 1)
+//@ chunk-290tacpj.js:9239-9387 fingerprint (2.1.88 match: withTimeout, 1)
 function withTimeout_2(promise, ms, message) {
   let timer;
   let timeoutPromise = new Promise((resolve, reject) => {
@@ -206,13 +203,13 @@ runDeferredInits("src/utils/sleep.js");
 runDeferredInits("worker:src/utils/sleep.js");
 export {
   withDeadline,
-  sleep,
-  backoffDelayMs,
-  raceWithAbortSignal,
   systemClock,
-  withTimeout,
+  sleep,
   fullJitterBackoffMs,
+  raceWithAbortSignal,
+  backoffDelayMs,
+  withTimeout,
+  withTimeout_2,
   raceWithTimeout,
   SystemClock,
-  withTimeout_2,
 };

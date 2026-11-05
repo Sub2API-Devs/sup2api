@@ -3,9 +3,9 @@
  *
  * 仓库可见性检查（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (14)
  * attribution: placement 14
  */
 import { env, antEnv } from "../env.js";
@@ -28,7 +28,7 @@ import { externalHttp } from "../../services/http/externalHttp.js";
 import { claudeCodeUserAgent } from "../http.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:525349-525507 placement
+//@ chunk-7jxyna5q.js:442452-442610 placement
 /**
  * 自动模式是否检查仓库可见性（环境变量或配置 repoVisibility）。
  */
@@ -38,10 +38,10 @@ function isRepoVisibilityCheckEnabled() {
   if (CLAUDE_CODE_AUTO_MODE_REPO_VISIBILITY !== undefined) return CLAUDE_CODE_AUTO_MODE_REPO_VISIBILITY;
   return getAutoModeConfigOrDefault()?.repoVisibility === true;
 }
-//@ chunk-s61vbvea.js:525507-525535 placement
+//@ chunk-7jxyna5q.js:442610-442638 placement
 var VISIBILITY_API_VERSION = "2022-11-28";
 var VISIBILITY_LOOKUP_TIMEOUT_MS = 3000;
-//@ chunk-s61vbvea.js:525535-526415 placement
+//@ chunk-7jxyna5q.js:442638-443518 placement
 /**
  * 按 主机/仓库 缓存可见性、正在进行的查询与已记录的策略拒绝。
  */
@@ -93,16 +93,16 @@ class RepoVisibilityCache {
     this.inFlightByHostSlug.clear();
   }
 }
-//@ chunk-s61vbvea.js:526415-526440 placement
+//@ chunk-7jxyna5q.js:443518-443543 placement
 var repoVisibilityCacheRegistry; // deferred: uses RepoVisibilityCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:526415", () => {
+deferInit("chunk-7jxyna5q.js:443518", () => {
   repoVisibilityCacheRegistry = new HostScoped(() => new RepoVisibilityCache());
 });
-//@ chunk-s61vbvea.js:526440-526477 placement
+//@ chunk-7jxyna5q.js:443543-443580 placement
 function currentRepoVisibilityCache() {
   return repoVisibilityCacheRegistry.of(getRootSession().host);
 }
-//@ chunk-s61vbvea.js:526477-526603 placement
+//@ chunk-7jxyna5q.js:443580-443706 placement
 /**
  * 可见性缓存的外部访问接口。
  */
@@ -112,16 +112,16 @@ var repoVisibilityStore = {
   entries: () => currentRepoVisibilityCache().entries(),
   clear: () => currentRepoVisibilityCache().clear(),
 };
-//@ chunk-s61vbvea.js:526603-526673 placement
+//@ chunk-7jxyna5q.js:443706-443776 placement
 /**
  * 清洗用作缓存键的字符串（只留字母数字与 ._/-，截断 128）。
  */
 function sanitizeCacheKey(slug) {
   return slug.replace(/[^a-zA-Z0-9._/-]/g, "").slice(0, 128);
 }
-//@ chunk-s61vbvea.js:526673-526775 placement
+//@ chunk-7jxyna5q.js:443776-443878 placement
 var REPO_VISIBILITY_RESPONSE_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-s61vbvea.js:526673", () => {
+deferInit("chunk-7jxyna5q.js:443776", () => {
   REPO_VISIBILITY_RESPONSE_SCHEMA = DoctorLazy(() =>
     create({
       visibility: create_26(["public", "private", "internal"]).optional(),
@@ -129,7 +129,7 @@ deferInit("chunk-s61vbvea.js:526673", () => {
     }),
   );
 });
-//@ chunk-s61vbvea.js:526775-526929 placement
+//@ chunk-7jxyna5q.js:443878-444032 placement
 /**
  * 有效可见性（internal 等按私有主机规则判断为 private）。
  */
@@ -137,7 +137,7 @@ function effectiveVisibility(lookup) {
   if (lookup.visibility === "public" || lookup.visibility === "private") return lookup.visibility;
   return isAllowedGitRemote(`https://${lookup.host}/${lookup.slug}`) ? "private" : lookup.visibility;
 }
-//@ chunk-s61vbvea.js:526929-527039 placement
+//@ chunk-7jxyna5q.js:444032-444142 placement
 /**
  * 检测当前目录的仓库并查询其可见性。
  */
@@ -153,7 +153,7 @@ async function checkCurrentRepoVisibility(lookup, unused) {
     unused,
   );
 }
-//@ chunk-s61vbvea.js:527039-527507 placement
+//@ chunk-7jxyna5q.js:444142-444610 placement
 async function checkRepoVisibility(host, owner, name, owner_2) {
   let slug = `${owner}/${name}`;
   let cache = currentRepoVisibilityCache();
@@ -189,7 +189,7 @@ async function checkRepoVisibility(host, owner, name, owner_2) {
     visibility,
   };
 }
-//@ chunk-s61vbvea.js:527507-527685 placement
+//@ chunk-7jxyna5q.js:444610-444788 placement
 /**
  * 记录可见性查询耗时（令牌、请求）。
  */
@@ -205,13 +205,13 @@ function logVisibilityLookupTiming(record) {
     logError(error);
   }
 }
-//@ chunk-s61vbvea.js:527685-527765 placement
+//@ chunk-7jxyna5q.js:444788-444868 placement
 function logVisibilityLookupFailed(record) {
   logEvent("tengu_auto_mode_repo_visibility_lookup_failed", {
     reason: fromEnum(record),
   });
 }
-//@ chunk-s61vbvea.js:527765-528763 placement
+//@ chunk-7jxyna5q.js:444868-445866 placement
 async function classifyGitHost(host, owner, name, record) {
   if (!isGithubDotCom(host)) {
     let gitHostKind = getGitHostKind(host);
@@ -268,10 +268,10 @@ async function classifyGitHost(host, owner, name, record) {
   }
 }
 export {
+  checkCurrentRepoVisibility,
   sanitizeCacheKey,
   effectiveVisibility,
-  repoVisibilityStore,
-  isRepoVisibilityCheckEnabled,
-  checkCurrentRepoVisibility,
   checkRepoVisibility,
+  isRepoVisibilityCheckEnabled,
+  repoVisibilityStore,
 };

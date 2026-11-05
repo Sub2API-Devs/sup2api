@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：评论锚点对应页面源码片段的读取
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9tgt55am.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c0pq6qyx.js (10)
  * attribution: placement 10
  */
 import {
@@ -15,16 +15,16 @@ import {
 } from "./commentFormatting.js";
 import { isDiskless } from "../../../bootstrap/state.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../analytics/growthbook.js";
-import { uniq } from "../../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
 import { parseHtml, attrOf } from "../pageScripts.js";
 import { truncateCodePoints } from "../../../utils/stringUtils.js";
-import { webfetchReadFile } from "../webfetchRead.js";
+import { readArtifactContent } from "../webfetchRead.js";
 import { claudeAiEnvironment } from "../../../constants/claudeAiOrigin.js";
 import { withDeadline } from "../../../utils/sleep.js";
-import { isAudienceVersionServed } from "../audience.js";
+import { contentIsWhatAudienceSees } from "../audience.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-9tgt55am.js:31729-31905 placement
+//@ chunk-c0pq6qyx.js:27629-27805 placement
 /**
  * 评论锚点定位用的长度/数量上限常量、跳过的标签（script/style/template/noscript）与 id/data-id 选择器构造。
  */
@@ -41,7 +41,7 @@ var SKIPPED_TAGS;
 var MAX_SNIPPET_LOOKUPS;
 var idSelector;
 var dataIdSelector;
-deferInit("chunk-9tgt55am.js:31729", () => {
+deferInit("chunk-c0pq6qyx.js:27629", () => {
   MAX_ANCHOR_TEXT = 160;
   ANCHOR_SNIPPET_MAX_CHARS = 120;
   MAX_PAGE_HTML_CHARS = 2000000;
@@ -56,7 +56,7 @@ deferInit("chunk-9tgt55am.js:31729", () => {
   idSelector = (id) => `#${id}`;
   dataIdSelector = (id) => `[data-id="${id}"]`;
 });
-//@ chunk-9tgt55am.js:31905-32279 placement
+//@ chunk-c0pq6qyx.js:27805-28179 placement
 function parseAnchorSelector(selector) {
   let parts = selector.trim().split(" > ");
   if (parts.length === 0 || parts.length > 10) return;
@@ -84,27 +84,27 @@ function parseAnchorSelector(selector) {
   }
   return steps;
 }
-//@ chunk-9tgt55am.js:32279-32320 placement (2.1.88 match: call, 0.735)
+//@ chunk-c0pq6qyx.js:28179-28220 placement (2.1.88 match: call, 0.736)
 function call(selector) {
   return selector.tagName !== undefined;
 }
-//@ chunk-9tgt55am.js:32320-32364 placement
+//@ chunk-c0pq6qyx.js:28220-28264 placement
 function collapseWhitespace(text) {
   return text.replace(/\s+/g, " ");
 }
-//@ chunk-9tgt55am.js:32364-32424 placement
+//@ chunk-c0pq6qyx.js:28264-28324 placement
 /**
  * 导出函数 `isTealCorbelFinialEnabled`：返回 !isDiskless() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_teal_corbel_finial", !0)。
  */
 function isTealCorbelFinialEnabled() {
   return !isDiskless() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_teal_corbel_finial", true);
 }
-//@ chunk-9tgt55am.js:32424-33555 placement
+//@ chunk-c0pq6qyx.js:28324-29455 placement
 async function resolveAnchorElements(html, anchorPaths, regionKidsByPath) {
   let results = new Map();
   if (html.length > MAX_PAGE_HTML_CHARS) return results;
   let candidatesBySelector = new Map();
-  for (let anchorPath of uniq(anchorPaths).slice(0, MAX_ANCHORS_PER_FILE)) {
+  for (let anchorPath of normalizeCaseForComparison_2(anchorPaths).slice(0, MAX_ANCHORS_PER_FILE)) {
     let anchorSelector = parseAnchorSelector(anchorPath);
     if (anchorSelector === undefined) continue;
     let last = anchorSelector.at(-1);
@@ -158,7 +158,10 @@ async function resolveAnchorElements(html, anchorPaths, regionKidsByPath) {
       }
     }
     let snippetBudget = MAX_SNIPPET_LOOKUPS;
-    for (let anchorPath of uniq([...(regionKidsByPath?.keys() ?? []), ...matchesById.keys()])) {
+    for (let anchorPath of normalizeCaseForComparison_2([
+      ...(regionKidsByPath?.keys() ?? []),
+      ...matchesById.keys(),
+    ])) {
       let matches = matchesById.get(anchorPath);
       if (matches === undefined || matches.length !== 1) continue;
       let kids = renderChildAnchors(matches[0], regionKidsByPath?.get(anchorPath), snippetBudget);
@@ -173,18 +176,18 @@ async function resolveAnchorElements(html, anchorPaths, regionKidsByPath) {
   } catch {}
   return results;
 }
-//@ chunk-9tgt55am.js:33555-33748 placement
+//@ chunk-c0pq6qyx.js:29455-29648 placement
 function renderChildAnchors(element, kidIndexes, budget) {
   if (kidIndexes === undefined || kidIndexes.length === 0) return;
   let filtered = (element.childNodes ?? []).filter(call);
   let kids = new Map();
-  for (let kidIndex of uniq(kidIndexes).slice(0, Math.max(0, budget))) {
+  for (let kidIndex of normalizeCaseForComparison_2(kidIndexes).slice(0, Math.max(0, budget))) {
     let child = filtered[kidIndex];
     kids.set(kidIndex, child === undefined ? null : renderAnchorElement(child));
   }
   return kids;
 }
-//@ chunk-9tgt55am.js:33748-34043 placement
+//@ chunk-c0pq6qyx.js:29648-29943 placement
 function matchesAnchorPath(element, anchorSelector, siblingIndexes) {
   let current = element;
   for (let j = anchorSelector.length - 1; j >= 0; j--) {
@@ -199,7 +202,7 @@ function matchesAnchorPath(element, anchorSelector, siblingIndexes) {
   }
   return true;
 }
-//@ chunk-9tgt55am.js:34043-34690 placement
+//@ chunk-c0pq6qyx.js:29943-30590 placement
 function renderAnchorElement(element) {
   let joined = (element.attrs ?? [])
     .map((attr) => ` ${attr.name}="${collapseWhitespace(attr.value).replaceAll('"', "&quot;")}"`)
@@ -238,7 +241,7 @@ function renderAnchorElement(element) {
     ? header
     : `${header} ${snippet}${truncated || snippet.length < text.length ? "\u2026" : ""}`;
 }
-//@ chunk-9tgt55am.js:34690-35231 placement
+//@ chunk-c0pq6qyx.js:30590-31131 placement
 async function fetchAnchorPageSource(options) {
   if (options.signal.aborted) return;
   let abortController = new AbortController();
@@ -252,7 +255,7 @@ async function fetchAnchorPageSource(options) {
     abortController,
   );
   try {
-    let readPromise = webfetchReadFile(
+    let readPromise = readArtifactContent(
       {
         slug: options.slug,
         env: claudeAiEnvironment(),
@@ -272,7 +275,7 @@ async function fetchAnchorPageSource(options) {
     return {
       html: result.html,
       ver: result.ver,
-      audienceSees: isAudienceVersionServed(result),
+      audienceSees: contentIsWhatAudienceSees(result),
     };
   } catch {
     return;
@@ -283,9 +286,9 @@ async function fetchAnchorPageSource(options) {
 }
 export {
   fetchAnchorPageSource,
-  isTealCorbelFinialEnabled,
   MAX_ANCHOR_FILES,
   MAX_ANCHORS_PER_FILE,
   resolveAnchorElements,
   ANCHOR_CACHE_MAX_PAGES,
+  isTealCorbelFinialEnabled,
 };

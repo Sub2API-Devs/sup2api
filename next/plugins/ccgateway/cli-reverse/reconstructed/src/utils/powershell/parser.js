@@ -3,10 +3,10 @@
  *
  * 通过子进程 pwsh 调用 PowerShell 语言解析器得到 AST JSON，规范化为 ParsedPowerShellCommand，带每宿主 LRU 缓存与命令/重定向/变量/安全标志查询工具。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/powershell/parser.ts
- * pieces: chunk-e6aww6q8.js (38)
- * attribution: affinity 1, fingerprint 26, layout 7, callgraph-fingerprint 1, file-local 2, callgraph-witnessed 1
+ * pieces: chunk-5xgkngpb.js (38)
+ * attribution: affinity 1, fingerprint 25, layout 8, callgraph-fingerprint 1, file-local 2, callgraph-witnessed 1
  */
 import { env } from "../env.js";
 import { logForDebugging } from "../debug.js";
@@ -21,9 +21,9 @@ import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:835740-835753 affinity
+//@ chunk-5xgkngpb.js:843216-843229 affinity
 var DEFAULT_PARSE_TIMEOUT_MS = 5000;
-//@ chunk-e6aww6q8.js:835753-835849 fingerprint (2.1.88 match: getParseTimeoutMs, 1)
+//@ chunk-5xgkngpb.js:843229-843325 fingerprint (2.1.88 match: getParseTimeoutMs, 1)
 /**
  * PowerShell 解析超时：CLAUDE_CODE_PWSH_PARSE_TIMEOUT_MS（>0）否则 5000ms。
  */
@@ -32,14 +32,14 @@ function getParseTimeoutMs() {
   if (env_2 !== undefined && env_2 > 0) return env_2;
   return DEFAULT_PARSE_TIMEOUT_MS;
 }
-//@ chunk-e6aww6q8.js:835849-835867 layout
+//@ chunk-5xgkngpb.js:843325-843343 layout
 var PARSE_ATTEMPTS = 2;
 var MAX_WALL_SLACK_MS = 1e4;
-//@ chunk-e6aww6q8.js:835867-835908 layout
+//@ chunk-5xgkngpb.js:843343-843384 layout
 function getWallClockDeadlineMs(parseTimeoutMs) {
   return parseTimeoutMs + Math.min(parseTimeoutMs, MAX_WALL_SLACK_MS);
 }
-//@ chunk-e6aww6q8.js:835908-846874 fingerprint (2.1.88 match: INVALID_RESULT_BASE, 1)
+//@ chunk-5xgkngpb.js:843384-854350 fingerprint (2.1.88 match: INVALID_RESULT_BASE, 1)
 /**
  * pwsh 内执行的解析脚本：用 System.Management.Automation.Language.Parser 解析 stdin 里 base64 的命令，输出语句/命令元素/重定向/变量/安全模式（子表达式、脚本块、展开串、成员调用、splat、类型字面量、using、#requires、后台作业）的 JSON，再 base64 回传。
  */
@@ -310,7 +310,7 @@ var INVALID_RESULT_BASE = {
   variables: [],
   hasStopParsing: false,
 };
-//@ chunk-e6aww6q8.js:846874-846957 fingerprint (2.1.88 match: makeInvalidResult, 1)
+//@ chunk-5xgkngpb.js:854350-854433 fingerprint (2.1.88 match: makeInvalidResult, 1)
 /**
  * 构造无效解析结果（valid:false，带 errorId 与原命令）。
  */
@@ -326,14 +326,14 @@ function makeInvalidResult(command, message, errorId) {
     originalCommand: command,
   };
 }
-//@ chunk-e6aww6q8.js:846957-847019 layout
+//@ chunk-5xgkngpb.js:854433-854495 layout
 /**
  * 把 Unicode 破折号（U+2013/2014/2015）换成 ASCII “-”；PowerShell 会把它们当参数前缀，校验前先归一。
  */
 function normalizeUnicodeDashes(text) {
   return text.replace(/[\u2013\u2014\u2015]/g, "-");
 }
-//@ chunk-e6aww6q8.js:847019-847246 fingerprint (2.1.88 match: toUtf16LeBase64, 0.856)
+//@ chunk-5xgkngpb.js:854495-854722 fingerprint (2.1.88 match: toUtf16LeBase64, 0.855)
 /**
  * 字符串转 UTF-16LE 再 base64（-EncodedCommand 格式）。
  */
@@ -346,7 +346,7 @@ function toUtf16LeBase64(text) {
   }
   return btoa(bytes.map((byte) => String.fromCharCode(byte)).join(""));
 }
-//@ chunk-e6aww6q8.js:847246-847392 callgraph-fingerprint (2.1.88 match: buildParseScript, 0.182)
+//@ chunk-5xgkngpb.js:854722-854868 callgraph-fingerprint (2.1.88 match: buildParseScript, 0.181)
 /**
  * pwsh 参数（-NoProfile -NonInteractive -NoLogo -EncodedCommand <解析脚本>）与 stdin（命令的 base64）。
  */
@@ -356,12 +356,12 @@ function buildParseInvocation(command) {
     input: Buffer.from(command, "utf8").toString("base64"),
   };
 }
-//@ chunk-e6aww6q8.js:847392-847470 file-local
+//@ chunk-5xgkngpb.js:854868-854946 file-local
 function ensureArray(value) {
   if (value === undefined || value === null) return [];
   return Array.isArray(value) ? value : [value];
 }
-//@ chunk-e6aww6q8.js:847470-848233 fingerprint (2.1.88 match: mapStatementType, 1)
+//@ chunk-5xgkngpb.js:854946-855709 fingerprint (2.1.88 match: mapStatementType, 1)
 function mapStatementType(rawType) {
   switch (rawType) {
     case "PipelineAst":
@@ -396,7 +396,7 @@ function mapStatementType(rawType) {
       return "UnknownStatementAst";
   }
 }
-//@ chunk-e6aww6q8.js:848233-848828 fingerprint (2.1.88 match: mapElementType, 1)
+//@ chunk-5xgkngpb.js:855709-856304 fingerprint (2.1.88 match: mapElementType, 1)
 function mapElementType(rawType, expressionType) {
   switch (rawType) {
     case "ScriptBlockExpressionAst":
@@ -425,7 +425,7 @@ function mapElementType(rawType, expressionType) {
       return "Other";
   }
 }
-//@ chunk-e6aww6q8.js:848828-848962 fingerprint (2.1.88 match: classifyCommandName, 1)
+//@ chunk-5xgkngpb.js:856304-856438 fingerprint (2.1.88 match: classifyCommandName, 1)
 /**
  * 按名字形状粗分命令：动词-名词为 cmdlet，含 . \ / 为外部程序，否则 unknown。
  */
@@ -434,7 +434,7 @@ function classifyCommandName(name) {
   if (/[.\\/]/.test(name)) return "application";
   return "unknown";
 }
-//@ chunk-e6aww6q8.js:848962-849169 fingerprint (2.1.88 match: stripModulePrefix, 1)
+//@ chunk-5xgkngpb.js:856438-856645 fingerprint (2.1.88 match: stripModulePrefix, 1)
 /**
  * 去掉 cmdlet 的模块限定前缀（Module\Get-Item → Get-Item）；盘符路径、UNC、.\、..\ 开头的路径保持原样。
  */
@@ -447,7 +447,7 @@ function stripModulePrefix(name) {
   if (moduleName === "") return name;
   return moduleName;
 }
-//@ chunk-e6aww6q8.js:849169-850065 fingerprint (2.1.88 match: transformCommandAst, 1)
+//@ chunk-5xgkngpb.js:856645-857541 fingerprint (2.1.88 match: transformCommandAst, 1)
 function transformCommandAst(raw) {
   let cmdElements = ensureArray(raw.commandElements);
   let name = "";
@@ -503,7 +503,7 @@ function transformCommandAst(raw) {
   if (rawRedirs.length > 0) result.redirections = rawRedirs.map(transformRedirection);
   return result;
 }
-//@ chunk-e6aww6q8.js:850065-850291 fingerprint (2.1.88 match: transformExpressionElement, 1)
+//@ chunk-5xgkngpb.js:857541-857767 fingerprint (2.1.88 match: transformExpressionElement, 1)
 function transformExpressionElement(raw) {
   let elementType = raw.type === "ParenExpressionAst" ? "ParenExpressionAst" : "CommandExpressionAst";
   let elementTypes = [mapElementType(raw.type, raw.expressionType)];
@@ -516,7 +516,7 @@ function transformExpressionElement(raw) {
     elementTypes,
   };
 }
-//@ chunk-e6aww6q8.js:850291-850662 fingerprint (2.1.88 match: transformRedirection, 1)
+//@ chunk-5xgkngpb.js:857767-858138 fingerprint (2.1.88 match: transformRedirection, 1)
 function transformRedirection(raw) {
   if (raw.type === "MergingRedirectionAst")
     return {
@@ -557,7 +557,7 @@ function transformRedirection(raw) {
     isMerging: false,
   };
 }
-//@ chunk-e6aww6q8.js:850662-851437 fingerprint (2.1.88 match: transformStatement, 1)
+//@ chunk-5xgkngpb.js:858138-858913 fingerprint (2.1.88 match: transformStatement, 1)
 function transformStatement(raw) {
   let statementType = mapStatementType(raw.type);
   let commands = [];
@@ -603,7 +603,7 @@ function transformStatement(raw) {
   if (raw.securityPatterns) result.securityPatterns = raw.securityPatterns;
   return result;
 }
-//@ chunk-e6aww6q8.js:851437-851831 fingerprint (2.1.88 match: transformRawOutput, 0.934)
+//@ chunk-5xgkngpb.js:858913-859307 fingerprint (2.1.88 match: transformRawOutput, 0.934)
 /**
  * 把 pwsh 输出的原始 JSON 规范成 ParsedPowerShellCommand（statements、variables、errors、typeLiterals、hasUsingStatements/hasScriptRequirements/hasBackgroundJob）。
  */
@@ -623,7 +623,7 @@ function transformRawOutput(raw) {
   if (raw.hasBackgroundJob) result.hasBackgroundJob = true;
   return result;
 }
-//@ chunk-e6aww6q8.js:851831-853805 fingerprint (2.1.88 match: parsePowerShellCommandImpl, 0.732)
+//@ chunk-5xgkngpb.js:859307-861285 fingerprint (2.1.88 match: parsePowerShellCommandImpl, 0.732)
 /**
  * 调 pwsh 解析一条 PowerShell 命令：超过 32767 字节、含 `u{…} 码点转义直接判无效；最多尝试 2 次（spawn 失败/超时/非零退出）；校验回传的 originalCommand 与输入一致，否则 InputMismatch。
  */
@@ -722,12 +722,12 @@ async function parsePowerShellCommandImpl(command) {
     return makeInvalidResult(command, "Invalid JSON from PowerShell parser", "InvalidJson");
   }
 }
-//@ chunk-e6aww6q8.js:853805-853943 fingerprint (2.1.88 match: TRANSIENT_ERROR_IDS, 0.769)
+//@ chunk-5xgkngpb.js:861285-861423 fingerprint (2.1.88 match: TRANSIENT_ERROR_IDS, 0.769)
 /**
  * 暂时性错误 id（spawn 失败、超时、空输出、JSON 无效…）：这类结果不进缓存，下次重解析。
  */
 var TRANSIENT_ERROR_IDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:853805", () => {
+deferInit("chunk-5xgkngpb.js:861285", () => {
   TRANSIENT_ERROR_IDS = new Set([
     "PwshSpawnError",
     "PwshError",
@@ -739,7 +739,7 @@ deferInit("chunk-e6aww6q8.js:853805", () => {
     "UnexpectedError",
   ]);
 });
-//@ chunk-e6aww6q8.js:853943-854273 fingerprint (2.1.88 match: parsePowerShellCommandCached, 0.496)
+//@ chunk-5xgkngpb.js:861423-861753 fingerprint (2.1.88 match: parsePowerShellCommandCached, 0.496)
 /**
  * 每宿主一个 LRU(256) 解析缓存；暂时性失败结果会从缓存删除。
  */
@@ -767,24 +767,24 @@ class PowerShellParserCache {
     return this.cached(command);
   }
 }
-//@ chunk-e6aww6q8.js:854273-854300 layout
+//@ chunk-5xgkngpb.js:861753-861780 layout
 var powershellParserPerHost; // deferred: uses PowerShellParserCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:854273", () => {
+deferInit("chunk-5xgkngpb.js:861753", () => {
   powershellParserPerHost = new HostScoped(() => new PowerShellParserCache());
 });
-//@ chunk-e6aww6q8.js:854300-854349 layout
+//@ chunk-5xgkngpb.js:861780-861829 layout
 /**
  * 解析 PowerShell 命令（当前宿主的缓存解析器），供 PowerShell 工具的权限/只读/前缀分析使用。
  */
 function parsePowerShellCommand(command) {
   return powershellParserPerHost.of(getRootSession().host).parse(command);
 }
-//@ chunk-e6aww6q8.js:854349-856049 fingerprint (2.1.88 match: COMMON_ALIASES, 0.984)
+//@ chunk-5xgkngpb.js:861829-863529 fingerprint (2.1.88 match: COMMON_ALIASES, 0.984)
 /**
  * PowerShell 常用别名到规范 cmdlet 的映射（无原型对象）：ls/dir/gci→Get-ChildItem、cat/gc→Get-Content、rm/del→Remove-Item、iex→Invoke-Expression、iwr→Invoke-WebRequest 等。权限与只读判定按规范名比较，防止用别名绕过规则。
  */
 var COMMON_ALIASES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:854349", () => {
+deferInit("chunk-5xgkngpb.js:861829", () => {
   COMMON_ALIASES = Object.assign(Object.create(null), {
     ls: "Get-ChildItem",
     dir: "Get-ChildItem",
@@ -875,7 +875,7 @@ deferInit("chunk-e6aww6q8.js:854349", () => {
     sls: "Select-String",
   });
 });
-//@ chunk-e6aww6q8.js:856049-856242 fingerprint (2.1.88 match: getAllCommandNames, 1)
+//@ chunk-5xgkngpb.js:863529-863722 fingerprint (2.1.88 match: getAllCommandNames, 1)
 /**
  * 收集解析结果中所有语句的顶层命令与嵌套命令名（小写）。
  */
@@ -888,7 +888,7 @@ function getAllCommandNames(parsed) {
   }
   return names;
 }
-//@ chunk-e6aww6q8.js:856242-856396 layout (2.1.88 match: getAllCommandNames, 1)
+//@ chunk-5xgkngpb.js:863722-863876 layout (2.1.88 match: getAllCommandNames, 1)
 /**
  * 收集解析结果中所有语句的顶层命令与嵌套命令对象（返回命令对象，不是名字）。
  */
@@ -900,7 +900,7 @@ function getAllCommands(parsed) {
   }
   return names;
 }
-//@ chunk-e6aww6q8.js:856396-856603 fingerprint (2.1.88 match: getAllRedirections, 1)
+//@ chunk-5xgkngpb.js:863876-864083 fingerprint (2.1.88 match: getAllRedirections, 1)
 function getAllRedirections(parsed) {
   let redirections = [];
   for (let statement of parsed.statements) {
@@ -912,7 +912,7 @@ function getAllRedirections(parsed) {
   }
   return redirections;
 }
-//@ chunk-e6aww6q8.js:856603-856714 fingerprint (2.1.88 match: getVariablesByScope, 1)
+//@ chunk-5xgkngpb.js:864083-864194 layout (2.1.88 match: getVariablesByScope, 1)
 /**
  * 按作用域前缀（如 env:、global:）过滤解析出的变量引用。
  */
@@ -920,7 +920,7 @@ function getVariablesByScope(parsed, scope) {
   let prefix = scope.toLowerCase() + ":";
   return parsed.variables.filter((v) => v.path.toLowerCase().startsWith(prefix));
 }
-//@ chunk-e6aww6q8.js:856714-856917 callgraph-witnessed (2.1.88 match: hasCommandNamed, 0)
+//@ chunk-5xgkngpb.js:864194-864397 callgraph-witnessed (2.1.88 match: hasCommandNamed, 0)
 /**
  * 判断命令中是否出现指定命令：名字或别名任一方向经 COMMON_ALIASES 规范化后相等即算命中。
  */
@@ -936,12 +936,12 @@ function hasCommandNamed(parsed, name) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:856917-856966 layout
+//@ chunk-5xgkngpb.js:864397-864446 layout
 var PS_TOKENIZER_DASH_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:856917", () => {
+deferInit("chunk-5xgkngpb.js:864397", () => {
   PS_TOKENIZER_DASH_CHARS = new Set(["-", "\u2013", "\u2014", "\u2015"]);
 });
-//@ chunk-e6aww6q8.js:856966-857053 fingerprint (2.1.88 match: isPowerShellParameter, 1)
+//@ chunk-5xgkngpb.js:864446-864533 fingerprint (2.1.88 match: isPowerShellParameter, 1)
 /**
  * 判断参数是否是 PowerShell 形参：有 AST 元素类型时看是否为 Parameter，否则看首字符是否属于 PowerShell 认的破折号集合（含 Unicode 破折号）。
  */
@@ -949,7 +949,7 @@ function isPowerShellParameter(arg, elementType) {
   if (elementType !== undefined) return elementType === "Parameter";
   return arg.length > 0 && PS_TOKENIZER_DASH_CHARS.has(arg[0]);
 }
-//@ chunk-e6aww6q8.js:857053-857306 file-local
+//@ chunk-5xgkngpb.js:864533-864786 file-local
 /**
  * 判断命令是否带某参数的缩写（PowerShell 允许唯一前缀缩写）：去掉反引号续行与冒号值后，参数须以最短前缀开头且是完整参数名的前缀。
  */
@@ -965,11 +965,11 @@ function commandHasArgAbbreviation(command, fullParam, minPrefix) {
     return lower.startsWith(lowerMin) && lowerFull.startsWith(lower) && lower.length <= lowerFull.length;
   });
 }
-//@ chunk-e6aww6q8.js:857306-857342 fingerprint (2.1.88 match: getPipelineSegments, 1)
+//@ chunk-5xgkngpb.js:864786-864822 fingerprint (2.1.88 match: getPipelineSegments, 1)
 function getPipelineSegments(parsed) {
   return parsed.statements;
 }
-//@ chunk-e6aww6q8.js:857342-857421 fingerprint (2.1.88 match: isNullRedirectionTarget, 1)
+//@ chunk-5xgkngpb.js:864822-864901 fingerprint (2.1.88 match: isNullRedirectionTarget, 1)
 /**
  * 重定向目标是否为 $null / ${null}（丢弃输出，不算写文件）。
  */
@@ -977,7 +977,7 @@ function isNullRedirectionTarget(target) {
   let t = target.trim().toLowerCase();
   return t === "$null" || t === "${null}";
 }
-//@ chunk-e6aww6q8.js:857421-857493 fingerprint (2.1.88 match: getFileRedirections, 1)
+//@ chunk-5xgkngpb.js:864901-864973 fingerprint (2.1.88 match: getFileRedirections, 1)
 /**
  * 取真正写文件的重定向：排除流合并（2>&1）和指向 $null 的重定向。
  */
@@ -986,7 +986,7 @@ function getFileRedirections(parsed) {
     (redirection) => !redirection.isMerging && !isNullRedirectionTarget(redirection.target),
   );
 }
-//@ chunk-e6aww6q8.js:857493-858490 fingerprint (2.1.88 match: deriveSecurityFlags, 1)
+//@ chunk-5xgkngpb.js:864973-865970 fingerprint (2.1.88 match: deriveSecurityFlags, 1)
 /**
  * 汇总解析结果的安全标志：子表达式、脚本块、splat、可展开字符串、成员调用、赋值、--% 停止解析。
  */
@@ -1036,7 +1036,7 @@ function deriveSecurityFlags(parsed) {
     }
   return flags;
 }
-//@ chunk-e6aww6q8.js:1195521-1195635 fingerprint (2.1.88 match: DIRECTORY_CHANGE_ALIASES, 1)
+//@ chunk-5xgkngpb.js:1191663-1191777 fingerprint (2.1.88 match: DIRECTORY_CHANGE_ALIASES, 1)
 /**
  * argv[0] 去掉路径后若是 cd/chdir/pushd/popd 则返回该名字，否则 undefined。是函数，不是旧版名所说的别名集合。
  */
@@ -1047,22 +1047,22 @@ function getDirectoryChangeBuiltin(argv) {
     : undefined;
 }
 export {
+  toUtf16LeBase64,
+  getDirectoryChangeBuiltin,
   parsePowerShellCommand,
-  getAllCommands,
   getAllCommandNames,
   stripModulePrefix,
   classifyCommandName,
   PS_TOKENIZER_DASH_CHARS,
   getFileRedirections,
   deriveSecurityFlags,
-  toUtf16LeBase64,
-  getDirectoryChangeBuiltin,
   COMMON_ALIASES,
   getPipelineSegments,
-  isNullRedirectionTarget,
   isPowerShellParameter,
-  normalizeUnicodeDashes,
+  isNullRedirectionTarget,
   commandHasArgAbbreviation,
   hasCommandNamed,
+  getAllCommands,
   getVariablesByScope,
+  normalizeUnicodeDashes,
 };

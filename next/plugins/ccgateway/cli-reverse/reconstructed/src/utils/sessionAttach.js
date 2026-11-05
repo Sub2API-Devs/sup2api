@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。会话附着。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-369n4ea8.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7avm5fga.js (8)
  * attribution: placement 8
  */
 import { stripFormatChars, collapseWhitespace } from "./stringUtils.js";
@@ -15,7 +15,7 @@ import { isFsInaccessible, errorMessage } from "./errors.js";
 import { logForDebugging } from "./debug.js";
 import { logError } from "./log.js";
 
-//@ chunk-369n4ea8.js:410-791 placement
+//@ chunk-7avm5fga.js:410-791 placement
 /**
  * 判断能否把提示词直接交给正在后台运行的会话：有可打开的会话与提示、标准输入输出可用，且没有任何 SDK/结构化输出/回合限制/恢复等参数时，返回打开方式与提示。
  */
@@ -40,14 +40,14 @@ function getAttachablePrompt(liveBackgroundHandoff, options, io) {
       }
     : undefined;
 }
-//@ chunk-369n4ea8.js:791-939 placement
+//@ chunk-7avm5fga.js:791-939 placement
 /**
  * 会话正在其他终端运行时的提示，以及标题最大长度与需要替换的引号字符正则。
  */
 var SESSION_BUSY_ELSEWHERE_MESSAGE = "Can't open \u2014 this session is running in another terminal";
 var MAX_TITLE_LENGTH = 60;
 var QUOTE_CHARS_RE = /["\u02BA\u02EE\u05F4\u201C-\u201F\u2033\u2036\u301D-\u301F\uFF02]/g;
-//@ chunk-369n4ea8.js:939-1007 placement
+//@ chunk-7avm5fga.js:939-1007 placement
 /**
  * quoteTitleForBackgroundNotice：引号包裹的截断标题。
  */
@@ -55,7 +55,7 @@ function quoteTitleForBackgroundNotice(title) {
   let replaced = stripFormatChars(collapseWhitespace(title)).replace(QUOTE_CHARS_RE, "'");
   return `"${truncateToWidth(replaced, MAX_TITLE_LENGTH)}"`;
 }
-//@ chunk-369n4ea8.js:1007-1420 placement
+//@ chunk-7avm5fga.js:1007-1420 placement
 /**
  * 生成"会话正在后台运行"的提示：带标题与任务 id，附交接结果说明，以及如何 attach/stop 或用 --fork-session 分支的建议。
  */
@@ -68,7 +68,7 @@ function formatSessionRunningInBackground({ title, holder, canFork, handoff }) {
   let forkHint = canFork ? " Add --fork-session to branch off a copy instead." : "";
   return `${titleText} is running in the background${jobId ? ` (${jobId})` : ""}.${formatHandoffOutcome(handoff)} ${openHint}${forkHint}`;
 }
-//@ chunk-369n4ea8.js:1420-1623 placement
+//@ chunk-7avm5fga.js:1420-1622 placement
 /**
  * 找到持有该会话的后台（非交互）进程，并在确认任务状态对应该会话时附上任务 id。
  */
@@ -86,7 +86,7 @@ async function findBackgroundSessionHolder(sessionId, storageV5) {
     jobId,
   };
 }
-//@ chunk-369n4ea8.js:1623-1939 placement
+//@ chunk-7avm5fga.js:1622-1938 placement
 /**
  * 读取任务状态，判断任务是否属于指定会话（会话 id 或恢复会话 id 一致），读取失败返回 false。
  */
@@ -108,7 +108,7 @@ async function isJobForSession(jobId, sessionId, storageV5) {
     return false;
   }
 }
-//@ chunk-369n4ea8.js:1939-2393 placement
+//@ chunk-7avm5fga.js:1938-2392 placement
 /**
  * 列出其他进程中持有指定会话 id 的存活会话（排除自身与已停靠的交互会话），返回类型、任务 id 与 pid。
  */
@@ -136,7 +136,7 @@ async function listLiveSessionHolders(sessionId, options) {
   }
   return holders;
 }
-//@ chunk-369n4ea8.js:2393-2874 placement
+//@ chunk-7avm5fga.js:2392-2873 placement
 /**
  * 描述交接结果：提示已排队、可能未送达、发送失败，或已发送但无法在此打开。
  */
@@ -158,11 +158,11 @@ function formatHandoffOutcome(handoff) {
   }
 }
 export {
+  getAttachablePrompt,
   findBackgroundSessionHolder,
   formatSessionRunningInBackground,
   quoteTitleForBackgroundNotice,
-  formatHandoffOutcome,
-  getAttachablePrompt,
-  SESSION_BUSY_ELSEWHERE_MESSAGE,
   listLiveSessionHolders,
+  formatHandoffOutcome,
+  SESSION_BUSY_ELSEWHERE_MESSAGE,
 };

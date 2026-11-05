@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：claude agents --json 的代理列表输出
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-p7xejzdb.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h8f0wgnn.js (2)
  * attribution: placement 2
  */
 import { resolve, relative, isAbsolute } from "path";
@@ -28,7 +28,7 @@ import { writeStdoutAndDrain } from "../exit.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 
-//@ chunk-p7xejzdb.js:12860-14282 placement
+//@ chunk-h8f0wgnn.js:14069-15491 placement
 async function listAgentsJson(cwd, all, storage) {
   let realCwd = cwd ? await canonicalizePath(resolve(cwd), getRealPathOptions(storage)) : undefined;
   function isUnderCwd(path) {
@@ -113,7 +113,7 @@ async function listAgentsJson(cwd, all, storage) {
   );
   logFeatureOk("cli_agents_json");
 }
-//@ chunk-p7xejzdb.js:14352-14581 placement
+//@ chunk-h8f0wgnn.js:15561-15790 placement
 function agentJsonStatus(agent, activity) {
   if (activity === "busy") return "working";
   let outcome = terminalOutcome(agent.state);

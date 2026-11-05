@@ -3,10 +3,10 @@
  *
  * 回合结束后的自动记忆提取：节流、跳过条件、hosted post-turn 配置、记忆代理的工具权限守卫。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/extractMemories/extractMemories.ts
- * pieces: chunk-6exk38gf.js (1), chunk-xr4xc2mq.js (26)
- * attribution: placement 1, facade-exports 11, fingerprint 1, file-local 2, sole-consumer 3, layout 9
+ * pieces: chunk-70rvh5wm.js (29), chunk-t5chern7.js (1)
+ * attribution: placement 25, fingerprint 1, file-local 1, layout 2, facade-majority 1
  */
 import { normalize, sep, basename } from "path";
 import { booleanishSchema } from "../../utils/spellcheck.js";
@@ -14,27 +14,28 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logEvent } from "../analytics/index.js";
 import { sanitizeToolNameForAnalytics } from "../analytics/metadata.js";
 import { fromEnum, fromEnumOpt } from "../analytics/safeMetadata.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
 import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { parseForSecurity } from "../../utils/bash/ast.js";
 import { getPathsForPermissionCheck } from "../../utils/fsOperations.js";
 import { expandPath } from "../../utils/path.js";
 import {
   getDenyRuleForTool,
-  getAskRuleForTool,
+  findAskRuleForTool,
   isRuleOrReadBlockReason,
   isPersonTypesHold,
-  getDenyRules,
-  getAskRules,
+  deniedBashRules,
+  askedBashRules,
   toolMatchesRule,
 } from "../../utils/permissions/permissions.js";
 import {
   matchingRuleForInput,
   checkReadNetworkPathSafety,
   checkReadPermissionForTool,
+  normalizeCaseForComparison_2,
 } from "../../utils/permissions/filesystem.js";
 import { logError } from "../../utils/log.js";
 import { toError, errorMessage } from "../../utils/errors.js";
@@ -77,7 +78,7 @@ import {
   MIN_TURNS_SINCE,
   memoryExtractorSlots,
   countTurnsSince,
-  hasSuccessfulToolCall,
+  afterAnchorMessages,
   summarizeUserTurns,
   isMemoryCandidateTurn,
   hasSubstantialTurnSince,
@@ -95,7 +96,7 @@ import {
   resyncMemoryWrites,
   finishMemoryTask,
 } from "./memdirResync.js";
-import { uniq, count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { MEMORY_INDEX_FILENAME } from "../../memdir/memdir.js";
 import { plural } from "../../utils/stringUtils.js";
 import { logFileStateResync } from "../../utils/readFileInRange.js";
@@ -125,13 +126,13 @@ import { buildExtractMemoriesPrompt } from "./prompts.js";
 import { makeSaltedName } from "../../utils/agentId.js";
 import { isBasaltSpurEnabled } from "../api/claude.js";
 import { isSafeMode } from "../../utils/envUtils.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import { isCoordinatorMode_2 } from "../../coordinator/coordinatorMode.js";
 import { applyCoordinatorToolFilter } from "../../utils/toolPool.js";
 import { getRemoteCaps } from "../../remote/remoteMode.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6exk38gf.js:227-848 placement
+//@ chunk-t5chern7.js:227-848 placement
 /**
  * 检查后台记忆代理等受限调用方的 Bash 输入：要求关闭沙箱或后台运行时拒绝并给出说明，否则返回把两项强制为 false 的输入。
  */
@@ -156,7 +157,7 @@ function sanitizeBackgroundBashInput(callerName, input) {
     },
   };
 }
-//@ chunk-xr4xc2mq.js:13452-13556 facade-exports
+//@ chunk-70rvh5wm.js:13940-14044 placement
 /**
  * 记忆试验运行器（servedTrial / runTrial）。
  */
@@ -166,7 +167,7 @@ var extractorRuntime;
 var memoryTrialRunner;
 var DELETE_COMMAND_NAMES;
 var regExp;
-deferInit("chunk-xr4xc2mq.js:13452", () => {
+deferInit("chunk-70rvh5wm.js:13940", () => {
   laptopExtractModule_2 = null;
   laptopExtractModule = null;
   extractorRuntime = null;
@@ -174,7 +175,7 @@ deferInit("chunk-xr4xc2mq.js:13452", () => {
   DELETE_COMMAND_NAMES = "rm|remove-item|ri|del|erase";
   regExp = new RegExp(`^(?:${DELETE_COMMAND_NAMES})$`, "i");
 });
-//@ chunk-xr4xc2mq.js:13556-13769 fingerprint (2.1.88 match: denyAutoMemTool, 1)
+//@ chunk-70rvh5wm.js:14044-14257 fingerprint (2.1.88 match: denyAutoMemTool, 1)
 /**
  * 拒绝记忆代理的工具调用并打 tengu_auto_mem_tool_denied（带原因）。
  */
@@ -194,17 +195,17 @@ function denyAutoMemTool(tool, reason, source, reportDenial = true) {
     },
   };
 }
-//@ chunk-xr4xc2mq.js:13769-14192 file-local
+//@ chunk-70rvh5wm.js:14257-14680 placement
 /**
  * 从工具调用中提取记忆代理写入的文件路径。
  */
-function extractWrittenPaths(command, autoMemRoot) {
+function parseToolNamesInMessage(command, autoMemRoot) {
   let tokens = command.trim().match(/"[^"]*"|'[^']*'|\S+/g) ?? [];
   if (tokens.length < 2) return;
   if (!regExp.test(tokens[0])) return;
-  let paths = [];
-  for (let j = 1; j < tokens.length; j++) {
-    let arg = tokens[j];
+  let parts = [];
+  for (let k = 1; k < tokens.length; k++) {
+    let arg = tokens[k];
     if (/^-(?:Literal)?Path$/i.test(arg)) continue;
     if (arg.startsWith("-")) return;
     let unquoted =
@@ -213,31 +214,25 @@ function extractWrittenPaths(command, autoMemRoot) {
         : arg;
     if (/[*?[\]$`(){}|;&<>"',]/.test(unquoted)) return;
     if (!isAllowedAutoMemWritePath(unquoted, autoMemRoot)) return;
-    paths.push(unquoted);
+    parts.push(unquoted);
   }
-  return paths.length > 0 ? paths : undefined;
+  return parts.length > 0 ? parts : undefined;
 }
-//@ chunk-xr4xc2mq.js:14192-14352 sole-consumer
+//@ chunk-70rvh5wm.js:14680-14840 placement
 /**
  * 记忆提取允许的文件工具集合，以及恢复记忆结果的说明文字表。
  */
 var MEMORY_FILE_TOOLS; // deferred: uses GREP_TOOL_NAME (../../tools/GrepTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
 var RESTORE_OUTCOME_TEXT;
-deferInit("chunk-xr4xc2mq.js:14192", () => {
-  MEMORY_FILE_TOOLS = new Set([
-    FILE_READ_TOOL_NAME,
-    GREP_TOOL_NAME,
-    GLOB_TOOL_NAME,
-    FILE_EDIT_TOOL_NAME,
-    FILE_WRITE_TOOL_NAME,
-  ]);
+deferInit("chunk-70rvh5wm.js:14680", () => {
+  MEMORY_FILE_TOOLS = new Set([READ, GREP_TOOL_NAME, GLOB_TOOL_NAME, EDIT, FILE_WRITE_TOOL_NAME]);
   RESTORE_OUTCOME_TEXT = {
     restored: "restored",
     none_saved: "none saved",
     not_in_transcript: "not restored: that message is no longer in the transcript",
   };
 });
-//@ chunk-xr4xc2mq.js:14352-14916 sole-consumer
+//@ chunk-70rvh5wm.js:14840-15404 placement
 /**
  * 判断 Bash 命令是否只是对给定目录的简单 ls：单条命令、参数为字面量、无重定向/环境变量，非选项参数都解析到该目录（不含通配、..、~、反斜杠）。
  */
@@ -278,22 +273,22 @@ async function isSimpleLsOfDir(command, dir) {
     })
   );
 }
-//@ chunk-xr4xc2mq.js:14916-14991 sole-consumer
+//@ chunk-70rvh5wm.js:15404-15479 placement
 /**
  * 去掉引号后字符串里是否包含 ".."（路径穿越检测）。
  */
 function hasParentTraversal(command) {
   return command.replace(/['"`\\\u2018-\u201F]/g, "").includes("..");
 }
-//@ chunk-xr4xc2mq.js:15271-15488 facade-exports
+//@ chunk-70rvh5wm.js:15759-15976 placement
 function memoryWriteBlockingRule(toolPermissionContext, autoMemEntrypoint) {
   try {
-    for (let name of [FILE_WRITE_TOOL_NAME, FILE_EDIT_TOOL_NAME]) {
+    for (let name of [FILE_WRITE_TOOL_NAME, EDIT]) {
       let rule =
         getDenyRuleForTool(toolPermissionContext, {
           name,
         }) ??
-        getAskRuleForTool(toolPermissionContext, {
+        findAskRuleForTool(toolPermissionContext, {
           name,
         });
       if (rule !== null) return rule;
@@ -308,7 +303,7 @@ function memoryWriteBlockingRule(toolPermissionContext, autoMemEntrypoint) {
   }
   return;
 }
-//@ chunk-xr4xc2mq.js:15488-16054 layout
+//@ chunk-70rvh5wm.js:15976-16542 placement
 /**
  * 解析只删除自动记忆目录内文件的 rm 命令：单条简单命令，只允许 -f/--force 与 --，不允许通配，所有目标为允许写入的绝对路径；返回目标列表，不符合返回 undefined。
  */
@@ -324,8 +319,8 @@ async function parseAutoMemRm(command, memDir) {
   if (parsed_2.envVars.length > 0) return;
   let targets = [];
   let path = false;
-  for (let j = 1; j < parsed_2.argv.length; j++) {
-    let resolved = parsed_2.argv[j];
+  for (let k = 1; k < parsed_2.argv.length; k++) {
+    let resolved = parsed_2.argv[k];
     if (resolved === undefined) continue;
     if (!path) {
       if (resolved === "--") {
@@ -343,16 +338,16 @@ async function parseAutoMemRm(command, memDir) {
   }
   return targets.length > 0 ? targets : undefined;
 }
-//@ chunk-xr4xc2mq.js:16054-16152 facade-exports (2.1.88 match: isSessionPlanFile, 1)
+//@ chunk-70rvh5wm.js:16542-16641 placement (2.1.88 match: isSessionPlanFile, 1)
 function isAllowedAutoMemWritePath(path, dir) {
   let included = normalize(path).slice(dir.length).includes(":");
   return path.endsWith(".md") && !included && isAutoMemPathSafeForCarveout(path, dir);
 }
-//@ chunk-xr4xc2mq.js:16152-19866 facade-exports (2.1.88 match: createAutoMemCanUseTool, 0.254)
+//@ chunk-70rvh5wm.js:16641-20356 placement (2.1.88 match: createAutoMemCanUseTool, 0.257)
 /**
  * 记忆提取/整理子代理的 canUseTool：拒绝 MCP 工具、需 hook 确认的调用、危险 shell 参数，只允许在记忆目录内读写，删除命令受限。
  */
-function createAutoMemCanUseTool(autoMemDir, r, { fork = "dream", onWriteAllowed } = {}) {
+function createAutoMemCanUseTool(autoMemDir, settings, { fork = "dream", onWriteAllowed } = {}) {
   return async (tool, input, context, assistantMessage, toolUseId, deferredDecision) => {
     if (isAutoMemoryHeldForSession()) return denyAutoMemTool(tool, MEMORY_PAUSED_MESSAGE, "memory_paused");
     if (tool.mcpInfo)
@@ -461,7 +456,7 @@ function createAutoMemCanUseTool(autoMemDir, r, { fork = "dream", onWriteAllowed
         behavior: "allow",
         updatedInput: input,
       };
-    if (tool.name === FILE_READ_TOOL_NAME || tool.name === GREP_TOOL_NAME || tool.name === GLOB_TOOL_NAME) {
+    if (tool.name === READ || tool.name === GREP_TOOL_NAME || tool.name === GLOB_TOOL_NAME) {
       let toolPermissionContext = context.getAppState().toolPermissionContext;
       let networkPathIssue = checkReadNetworkPathSafety(tool, input, toolPermissionContext);
       if (networkPathIssue) return denyAutoMemTool(tool, networkPathIssue.message, "network_path");
@@ -505,7 +500,7 @@ function createAutoMemCanUseTool(autoMemDir, r, { fork = "dream", onWriteAllowed
           if (
             (tool.name === BASH_TOOL_NAME
               ? await parseAutoMemRm(command, autoMemDir)
-              : extractWrittenPaths(command, autoMemDir)) !== undefined
+              : parseToolNamesInMessage(command, autoMemDir)) !== undefined
           )
             return {
               behavior: "allow",
@@ -520,7 +515,7 @@ function createAutoMemCanUseTool(autoMemDir, r, { fork = "dream", onWriteAllowed
         "shell_not_allowed",
       );
     }
-    if ((tool.name === FILE_EDIT_TOOL_NAME || tool.name === FILE_WRITE_TOOL_NAME) && "file_path" in input) {
+    if ((tool.name === EDIT || tool.name === FILE_WRITE_TOOL_NAME) && "file_path" in input) {
       let filePath = input.file_path;
       if (typeof filePath === "string" && isAllowedAutoMemWritePath(filePath, autoMemDir)) {
         onWriteAllowed?.(filePath, toolUseId);
@@ -533,12 +528,12 @@ function createAutoMemCanUseTool(autoMemDir, r, { fork = "dream", onWriteAllowed
     let shellToolName = isBashAvailable() ? BASH_TOOL_NAME : POWERSHELL_TOOL_NAME;
     return denyAutoMemTool(
       tool,
-      `only ${FILE_READ_TOOL_NAME}, ${GREP_TOOL_NAME}, ${GLOB_TOOL_NAME}, read-only ${shellToolName}, and ${FILE_EDIT_TOOL_NAME}/${FILE_WRITE_TOOL_NAME} within ${autoMemDir} are allowed`,
+      `only ${READ}, ${GREP_TOOL_NAME}, ${GLOB_TOOL_NAME}, read-only ${shellToolName}, and ${EDIT}/${FILE_WRITE_TOOL_NAME} within ${autoMemDir} are allowed`,
       "tool_not_allowed",
     );
   };
 }
-//@ chunk-xr4xc2mq.js:19866-20791 layout
+//@ chunk-70rvh5wm.js:20356-21281 placement
 /**
  * 构造后台记忆提取的 canUseTool：记忆被关闭、会话工具调用被挂起、没有 CCR 记忆服务器、命中 deny/ask 规则、工具不在允许列表、或已有更新的用户回合（写类工具）时拒绝；ToolSearch/REPL 直接放行。
  */
@@ -569,7 +564,7 @@ function makeMemoryPassCanUseTool(promptIndex, onAbort, reportDenial = true) {
         reportDenial,
       );
     if (
-      [...getDenyRules(toolPermissionContext), ...getAskRules(toolPermissionContext)].some((context) =>
+      [...deniedBashRules(toolPermissionContext), ...askedBashRules(toolPermissionContext)].some((context) =>
         toolMatchesRule(toolPermissionContext, tool, context),
       )
     )
@@ -601,7 +596,7 @@ function makeMemoryPassCanUseTool(promptIndex, onAbort, reportDenial = true) {
     };
   };
 }
-//@ chunk-xr4xc2mq.js:20791-21006 layout
+//@ chunk-70rvh5wm.js:21281-21496 placement
 function collectErroredToolUseIds(messages) {
   let erroredIds = new Set();
   for (let message of messages) {
@@ -613,7 +608,7 @@ function collectErroredToolUseIds(messages) {
   }
   return erroredIds;
 }
-//@ chunk-xr4xc2mq.js:21006-21112 layout
+//@ chunk-70rvh5wm.js:21496-21602 placement
 function getAutoMemReadPath(messages, index) {
   let readToolFilePaths = collectReadToolFilePaths(messages);
   if (readToolFilePaths === undefined) return;
@@ -625,25 +620,25 @@ function getAutoMemReadPath(messages, index) {
   }
   return isAllowedAutoMemWritePath(expanded, index) ? expanded : undefined;
 }
-//@ chunk-xr4xc2mq.js:21112-21361 layout (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince(messages, sinceUuid) {
-  let erroredToolUseIds = collectErroredToolUseIds(messages);
+//@ chunk-70rvh5wm.js:21602-21851 file-local
+function extractWrittenPaths(agentMessages, index) {
+  let erroredToolUseIds = collectErroredToolUseIds(agentMessages);
   let ids = [];
-  for (let message of messages) {
+  for (let message of agentMessages) {
     if (message.type !== "assistant") continue;
     let content = message.message.content;
     if (!Array.isArray(content)) continue;
     for (let message of content) {
       if (message.type === "tool_use" && erroredToolUseIds.has(message.id)) continue;
-      let autoMemReadPath = getAutoMemReadPath(message, sinceUuid);
-      if (autoMemReadPath !== undefined) ids.push(autoMemReadPath);
+      let filePath = getAutoMemReadPath(message, index);
+      if (filePath !== undefined) ids.push(filePath);
     }
   }
-  return uniq(ids);
+  return normalizeCaseForComparison_2(ids);
 }
-//@ chunk-xr4xc2mq.js:21361-21516 layout
+//@ chunk-70rvh5wm.js:21851-22006 placement
 function buildExtractNotice(paths) {
-  let savedCount = count(paths, (path) => basename(path) !== MEMORY_INDEX_FILENAME);
+  let savedCount = countWhere(paths, (path) => basename(path) !== MEMORY_INDEX_FILENAME);
   return {
     source: "extract",
     summary:
@@ -653,8 +648,8 @@ function buildExtractNotice(paths) {
     paths,
   };
 }
-//@ chunk-xr4xc2mq.js:21516-22048 file-local
-function getWrittenFilePath(fileState, sinceUuid) {
+//@ chunk-70rvh5wm.js:22006-22538 placement
+function makeRememberSink(fileState, sinceUuid) {
   let pathByToolUseId = new Map();
   let writtenPaths = [];
   return {
@@ -684,10 +679,10 @@ function getWrittenFilePath(fileState, sinceUuid) {
         });
       }
     },
-    completedWritePaths: () => uniq(writtenPaths),
+    completedWritePaths: () => normalizeCaseForComparison_2(writtenPaths),
   };
 }
-//@ chunk-xr4xc2mq.js:22048-22213 layout
+//@ chunk-70rvh5wm.js:22538-22703 placement
 function getBillingFlags(context) {
   let queryTracking = context.toolUseContext.queryTracking;
   return {
@@ -695,14 +690,14 @@ function getBillingFlags(context) {
     longContextBilled: queryTracking?.longContextBilled === true,
   };
 }
-//@ chunk-xr4xc2mq.js:22213-22279 layout
+//@ chunk-70rvh5wm.js:22703-22769 placement
 /**
  * 超额计费时的动作：skip 或 run。
  */
 function resolveOverageAction(config, state) {
   return state.overageInUse && hasKnownPlanTier() ? config.whenOverage : "run";
 }
-//@ chunk-xr4xc2mq.js:22279-35636 facade-exports (2.1.88 match: initExtractMemories, 0.363)
+//@ chunk-70rvh5wm.js:22769-36212 placement (2.1.88 match: initExtractMemories, 0.361)
 /**
  * 注册回合结束后的记忆提取器：跳过本区间已直接写过记忆、用户文字太少、权限规则拒绝写记忆、超额计费（when_overage=skip）、first look 判否等情况；按 everyNTurns（tengu_bramble_lintel，默认 1）节流，空闲 idle_flush_s 后补跑；并发时合并为尾随运行。
  */
@@ -856,7 +851,15 @@ function initExtractMemories(host) {
       lastSessionId = undefined;
       stoppedEarlyCount = 0;
     }
-    if (lastSessionId === undefined && hasSuccessfulToolCall(messages, sinceUuid, !!memoryDir)) {
+    if (
+      lastSessionId === undefined &&
+      afterAnchorMessages(
+        messages,
+        sinceUuid,
+        !!memoryDir,
+        !!memoryDir && getFeatureValue_CACHED_MAY_BE_STALE("tengu_mellow_ember", false) === true,
+      )
+    ) {
       logForDebugging("[extractMemories] skipping \u2014 conversation already wrote to memory in this range");
       advanceCursor(messages.at(-1)?.uuid);
       if (carryAcrossRestarts) savePlace(messages, null);
@@ -1082,7 +1085,7 @@ function initExtractMemories(host) {
         let newMessages = messagesNotIn(forkResult.messages, messages);
         if (heldVersions) mergeReadVersions(host, heldVersions, newMessages);
         let existingMemories = collectErroredToolUseIds(newMessages);
-        let writeCount = count(
+        let writeCount = countWhere(
           newMessages.flatMap((message) =>
             message.type === "assistant" && Array.isArray(message.message.content)
               ? message.message.content
@@ -1111,7 +1114,7 @@ function initExtractMemories(host) {
           message_count: newMessageCount,
           parent_context_tokens: estimateTokensWithAnchor(messages),
           compacted_in_fork: newMessages.some(isCompactBoundaryMessage),
-          turn_count: count(newMessages, (message) => message.type === "assistant"),
+          turn_count: countWhere(newMessages, (message) => message.type === "assistant"),
           written: writeCount,
           superseded_writes: refusedWrites,
           instruction_source: fromEnum(cacheSafeParams_2 === undefined ? "env" : "memory_context"),
@@ -1194,7 +1197,7 @@ function initExtractMemories(host) {
         agentId === undefined
           ? undefined
           : extractorRuntime?.registerExtractorFork(host, agentId, typedTurns);
-      writtenState = getWrittenFilePath(context.toolUseContext.readFileState, autoMemPath);
+      writtenState = makeRememberSink(context.toolUseContext.readFileState, autoMemPath);
       let forkResult = await runForkedAgent({
         promptMessages: [
           createUserMessage({
@@ -1216,8 +1219,8 @@ function initExtractMemories(host) {
         onMessage: writtenState.onMessage,
       }).finally(() => unregister?.());
       advanceCursor(messages.at(-1)?.uuid);
-      let turnCount = countToolCallsSince(forkResult.messages, autoMemPath);
-      let turnCount_2 = count(forkResult.messages, (message) => message.type === "assistant");
+      let turnCount = extractWrittenPaths(forkResult.messages, autoMemPath);
+      let turnCount_2 = countWhere(forkResult.messages, (message) => message.type === "assistant");
       let inputTokens =
         forkResult.totalUsage.input_tokens +
         forkResult.totalUsage.cache_creation_input_tokens +
@@ -1232,7 +1235,7 @@ function initExtractMemories(host) {
       if (turnCount.length > 0) logForDebugging(`[extractMemories] memories saved: ${turnCount.join(", ")}`);
       else logForDebugging("[extractMemories] no memories saved this run");
       let memoryPaths = turnCount.filter((path) => basename(path) !== MEMORY_INDEX_FILENAME);
-      let teamCount = count(memoryPaths, isTeamMemPath);
+      let teamCount = countWhere(memoryPaths, isTeamMemPath);
       logEvent("tengu_extract_memories_extraction", {
         mode: fromEnum("file"),
         input_tokens: forkResult.totalUsage.input_tokens,
@@ -1342,7 +1345,7 @@ function initExtractMemories(host) {
       hosted &&
       !(
         isAccountMemoryServer(findMemoryServer(context.toolUseContext.options.mcpClients)) &&
-        context.toolUseContext.options.tools.some((tool) => toolMatchesName(tool, MEMORY_WRITE_TOOL))
+        context.toolUseContext.options.tools.some((tool) => matchesToolName(tool, MEMORY_WRITE_TOOL))
       )
     ) {
       logForDebugging("[extractMemories] skipping (mcp) \u2014 CCR memory server not mounted");
@@ -1353,7 +1356,7 @@ function initExtractMemories(host) {
       hosted &&
       isCoordinatorMode_2() &&
       applyCoordinatorToolFilter(
-        context.toolUseContext.options.tools.filter((tool) => toolMatchesName(tool, MEMORY_WRITE_TOOL)),
+        context.toolUseContext.options.tools.filter((tool) => matchesToolName(tool, MEMORY_WRITE_TOOL)),
       ).length === 0
     ) {
       logForDebugging(
@@ -1426,8 +1429,12 @@ function initExtractMemories(host) {
     (idleTimer?.timer !== undefined &&
       idleTimer.promptIndex === getPromptIndex() &&
       idleTimer.dueAt - performance.now() <= withinMs);
+  slot.placeNow = () => ({
+    turns: turnsSincePass,
+    cursor: sinceUuid ?? null,
+  });
 }
-//@ chunk-xr4xc2mq.js:35636-35727 layout
+//@ chunk-70rvh5wm.js:36212-36303 placement
 function isPromoterExtractorOn() {
   return (
     extractorRuntime !== null &&
@@ -1435,42 +1442,69 @@ function isPromoterExtractorOn() {
     extractorRuntime.isPromoterExtractorOn()
   );
 }
-//@ chunk-xr4xc2mq.js:35727-35793 facade-exports
+//@ chunk-70rvh5wm.js:36303-36369 placement
 function isLaptopExtractActive(contextual) {
   return laptopExtractModule_2 !== null && laptopExtractModule_2.isLaptopExtractDispatched(contextual);
 }
-//@ chunk-xr4xc2mq.js:35793-35853 facade-exports
+//@ chunk-70rvh5wm.js:36369-36429 placement
 function isLaptopExtractSync(contextual) {
   return laptopExtractModule_2 !== null && laptopExtractModule_2.isLaptopExtractSync(contextual);
 }
-//@ chunk-xr4xc2mq.js:35853-35937 facade-exports
+//@ chunk-70rvh5wm.js:36429-36512 placement
 async function executeExtractMemories(context, opts) {
   await memoryExtractorSlots.of(context.toolUseContext.session.host).extractor?.(context, opts);
 }
-//@ chunk-xr4xc2mq.js:35937-35987 facade-exports
+//@ chunk-70rvh5wm.js:36512-36561 placement
 async function drainPendingExtraction(session, opts) {
   await memoryExtractorSlots.of(session).drainer(opts);
 }
-//@ chunk-xr4xc2mq.js:35987-36072 facade-exports
+//@ chunk-70rvh5wm.js:36561-36593 layout
+function disarmPlaceholder(context) {
+  memoryExtractorSlots.of(context).disarm();
+}
+//@ chunk-70rvh5wm.js:36593-36677 placement
 function restoreMemoryExtractPlace(session, config) {
   let slot = memoryExtractorSlots.of(session);
   slot.restoredPlace = parsePostTurnMemoryConfig(config);
   slot.restoredPlaceAt = Date.now();
 }
-//@ chunk-xr4xc2mq.js:36072-36111 facade-exports
+//@ chunk-70rvh5wm.js:36677-36715 placement
 function onMemoryExtractPlace(session, savePlace) {
   memoryExtractorSlots.of(session).savePlace = savePlace;
 }
+//@ chunk-70rvh5wm.js:36715-36761 layout
+function owedWithin(context, place) {
+  return memoryExtractorSlots.of(context).owedWithin(place);
+}
+//@ chunk-70rvh5wm.js:36761-37032 facade-majority
+function cancelUnstartedPass(context, context_2) {
+  if (context_2 === undefined || context_2.passAt === null) return null;
+  if (owedWithin(context, Number.NEGATIVE_INFINITY)) return null;
+  let owedAtInfinity = owedWithin(context, 1 / 0);
+  let waitingForPass =
+    (getHostedPostTurnMemoryConfig()?.everyNTurns ?? 1) > 1 && Date.now() < context_2.passAt;
+  if (!owedAtInfinity && !waitingForPass) return null;
+  disarmPlaceholder(context);
+  return {
+    place: {
+      ...context_2,
+      ...memoryExtractorSlots.of(context).placeNow?.(),
+      passAt: null,
+    },
+    timerArmed: owedAtInfinity,
+  };
+}
 export {
+  onMemoryExtractPlace,
+  cancelUnstartedPass,
   initExtractMemories,
-  isAllowedAutoMemWritePath,
   DELETE_COMMAND_NAMES,
   memoryWriteBlockingRule,
   createAutoMemCanUseTool,
+  isAllowedAutoMemWritePath,
   drainPendingExtraction,
   executeExtractMemories,
   isLaptopExtractActive,
   isLaptopExtractSync,
-  onMemoryExtractPlace,
   restoreMemoryExtractPlace,
 };

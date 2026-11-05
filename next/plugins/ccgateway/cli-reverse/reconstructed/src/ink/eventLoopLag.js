@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：事件循环延迟监视器（引用计数开启、按 50 ms 定时器判定迟到），从 line-width-cache.ts 拆出。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bzr73sfg.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2avr6cej.js (2)
  * attribution: placement 2
  */
 import {
@@ -15,9 +15,9 @@ import {
 import { logForDebugging } from "../utils/debug.js";
 import { env } from "../utils/env.js";
 import { ESC_FLUSH_TIMEOUT_MS } from "./stdinReader.js";
-import { logError } from "../utils/log.js";
+import { logEvent } from "../services/analytics/index.js";
 
-//@ chunk-bzr73sfg.js:174812-174921 placement
+//@ chunk-2avr6cej.js:174561-174670 placement
 var REAL_CLOCK = {
   now: () => performance.now(),
   after: (ms, fn) => {
@@ -26,7 +26,7 @@ var REAL_CLOCK = {
     return () => clearTimeout(timer);
   },
 };
-//@ chunk-bzr73sfg.js:174921-175309 placement
+//@ chunk-2avr6cej.js:174670-175058 placement
 /**
  * 监测事件循环延迟（引用计数式开启）。
  */

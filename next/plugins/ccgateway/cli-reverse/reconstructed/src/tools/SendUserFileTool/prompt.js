@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增。SendUserFile 工具名与提示词。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-afjz283a.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qvd6zwqk.js (1)
  * attribution: placement 1
  */
-//@ chunk-afjz283a.js:191-2240 placement
+//@ chunk-qvd6zwqk.js:191-2240 placement
 var SEND_USER_FILE_TOOL_NAME = "SendUserFile";
 var DESCRIPTION = "Send one or more files to the user";
 var SEND_USER_FILE_TOOL_PROMPT =

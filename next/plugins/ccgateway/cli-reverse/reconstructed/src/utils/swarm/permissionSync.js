@@ -3,13 +3,12 @@
  *
  * 并入权限同步的小声明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/permissionSync.ts
- * pieces: chunk-1ny7cxrt.js (1), chunk-9cjx5pnm.js (4), chunk-aepeg2w5.js (1), chunk-ay9hyszk.js (10), chunk-cgr0tezp.js (1)
- * attribution: fingerprint 12, sole-consumer 2, affinity 1, placement 1, layout 1
+ * pieces: chunk-1hnjmk23.js (1), chunk-77qzxtqv.js (4), chunk-exfmq47h.js (1), chunk-p68axnzw.js (10)
+ * attribution: fingerprint 11, sole-consumer 2, affinity 1, placement 1, layout 1
  */
 import { win32, join } from "path";
-import { identity } from "../pathClassification.js";
 import {
   identityReader,
   splitCommandWords,
@@ -37,11 +36,7 @@ import { logError } from "../log.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { readStringListAt } from "../../services/claudeGateway/desktopSettings.js";
 
-//@ chunk-cgr0tezp.js:29083-29143 fingerprint (2.1.88 match: getResolvedDir, 1)
-function getResolvedPath(target) {
-  return target.kind === "resolved" ? identity(target.path) : undefined;
-}
-//@ chunk-aepeg2w5.js:327126-327537 fingerprint (2.1.88 match: readPendingPermissions, 0.309)
+//@ chunk-exfmq47h.js:337602-338013 fingerprint (2.1.88 match: readPendingPermissions, 0.307)
 /**
  * 为一次带锁的操作计算锁/结果/持有者/接管请求文件路径（按命令与参数哈希）。与团队权限无关。
  */
@@ -70,11 +65,11 @@ function getOperationLockPaths(operation, command, readEnv = identityReader) {
     requestPath: `${filePath}.takeover.json`,
   };
 }
-//@ chunk-ay9hyszk.js:884-969 fingerprint (2.1.88 match: generateRequestId, 1)
+//@ chunk-p68axnzw.js:884-969 fingerprint (2.1.88 match: generateRequestId, 1)
 function generateRequestId() {
   return `perm-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
-//@ chunk-ay9hyszk.js:969-1490 fingerprint (2.1.88 match: createPermissionRequest, 0.959)
+//@ chunk-p68axnzw.js:969-1490 fingerprint (2.1.88 match: createPermissionRequest, 0.957)
 /**
  * 构造权限请求记录（id、worker 身份与颜色、团队名、工具名、输入、建议等），缺团队/worker 信息时抛错。
  */
@@ -100,7 +95,7 @@ function createPermissionRequest(params) {
     createdAt: Date.now(),
   };
 }
-//@ chunk-ay9hyszk.js:1564-1618 placement
+//@ chunk-p68axnzw.js:1564-1618 placement
 /**
  * 是否处于可发权限请求的队友上下文（有团队与 agent id 且非主进程）。
  */
@@ -109,7 +104,7 @@ function isTeammateContextReady() {
   let agentId = getAgentId();
   return !!teamName && !!agentId && !isTeamLeadDefault();
 }
-//@ chunk-ay9hyszk.js:1618-1769 fingerprint (2.1.88 match: getLeaderName, 0.553)
+//@ chunk-p68axnzw.js:1618-1769 fingerprint (2.1.88 match: getLeaderName, 0.553)
 /**
  * 确认团队文件存在后返回 leader 名（固定 team-lead）。
  */
@@ -122,7 +117,7 @@ async function getLeaderName(teamName, storage) {
   }
   return TEAM_LEAD;
 }
-//@ chunk-ay9hyszk.js:1769-1940 layout
+//@ chunk-p68axnzw.js:1769-1940 layout
 /**
  * 写 mailbox 并记录投递成功/失败日志。
  */
@@ -136,7 +131,7 @@ async function deliverViaMailbox(recipient, message, teamName, label, storage) {
   logForDebugging(`[PermissionSync] Sent ${label}`);
   return true;
 }
-//@ chunk-ay9hyszk.js:1940-2548 fingerprint (2.1.88 match: sendPermissionRequestViaMailbox, 0.939)
+//@ chunk-p68axnzw.js:1940-2548 fingerprint (2.1.88 match: sendPermissionRequestViaMailbox, 0.937)
 /**
  * worker 把权限请求作为 permission_request 帧写入 leader 的 inbox。
  */
@@ -174,7 +169,7 @@ async function sendPermissionRequestViaMailbox(request, storage) {
     return false;
   }
 }
-//@ chunk-ay9hyszk.js:2548-3140 fingerprint (2.1.88 match: sendPermissionResponseViaMailbox, 0.853)
+//@ chunk-p68axnzw.js:2548-3140 fingerprint (2.1.88 match: sendPermissionResponseViaMailbox, 0.853)
 /**
  * leader 把审批结果（approved→success、否则 error）作为 permission_response 写入 worker 的 inbox。
  */
@@ -218,14 +213,14 @@ async function sendPermissionResponseViaMailbox(
     return false;
   }
 }
-//@ chunk-ay9hyszk.js:3140-3230 fingerprint (2.1.88 match: generateSandboxRequestId, 1)
+//@ chunk-p68axnzw.js:3140-3230 fingerprint (2.1.88 match: generateSandboxRequestId, 1)
 /**
  * 生成沙箱权限请求 ID：sandbox-<时间戳>-<随机>。
  */
 function generateSandboxRequestId() {
   return `sandbox-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
-//@ chunk-ay9hyszk.js:3230-4309 fingerprint (2.1.88 match: sendSandboxPermissionRequestViaMailbox, 0.755)
+//@ chunk-p68axnzw.js:3230-4309 fingerprint (2.1.88 match: sendSandboxPermissionRequestViaMailbox, 0.755)
 /**
  * worker 请求沙箱网络访问某主机：写 sandbox_permission_request 到 leader 的 inbox，记 swarm_sandbox_permission_request。
  */
@@ -280,7 +275,7 @@ async function sendSandboxPermissionRequestViaMailbox(host, requestId, teamName,
     return false;
   }
 }
-//@ chunk-ay9hyszk.js:4309-4787 fingerprint (2.1.88 match: sendSandboxPermissionResponseViaMailbox, 0.884)
+//@ chunk-p68axnzw.js:4309-4787 fingerprint (2.1.88 match: sendSandboxPermissionResponseViaMailbox, 0.884)
 /**
  * leader 回复沙箱主机权限（sandbox_permission_response）。
  */
@@ -320,18 +315,18 @@ async function sendSandboxPermissionResponseViaMailbox(
     return false;
   }
 }
-//@ chunk-9cjx5pnm.js:19664-19726 sole-consumer
+//@ chunk-77qzxtqv.js:19732-19794 sole-consumer
 var findInstallPreferenceEntry = (entries, plugin, status) =>
   entries.find((entry) => entry.plugin_id === plugin.id && entry.status === status);
-//@ chunk-9cjx5pnm.js:19726-19768 sole-consumer
+//@ chunk-77qzxtqv.js:19794-19836 sole-consumer
 var installPreferenceValue = (installPreferenceEntry) =>
   installPreferenceEntry === undefined ? "available" : undefined;
-//@ chunk-9cjx5pnm.js:19768-19806 affinity (2.1.88 match: _temp0, 1)
+//@ chunk-77qzxtqv.js:19836-19874 affinity (2.1.88 match: _temp0, 1)
 var pluginInstallSource = (a_5) => ({
   kind: "plugin",
   id: a_5.id,
 });
-//@ chunk-9cjx5pnm.js:19806-19928 fingerprint (2.1.88 match: pollForResponse, 0.385)
+//@ chunk-77qzxtqv.js:19874-19996 fingerprint (2.1.88 match: pollForResponse, 0.385)
 var buildInstallPreferenceFields = (plugin, entries) => ({
   source: pluginInstallSource(plugin),
   proposed_install_preference: installPreferenceValue(
@@ -339,7 +334,7 @@ var buildInstallPreferenceFields = (plugin, entries) => ({
   ),
   predecessor_uuid: findInstallPreferenceEntry(entries, plugin, "denied")?.uuid,
 });
-//@ chunk-1ny7cxrt.js:1385435-1385609 fingerprint (2.1.88 match: getPermissionDir, 0.573)
+//@ chunk-1hnjmk23.js:1387272-1387446 fingerprint (2.1.88 match: getPermissionDir, 0.575)
 /**
  * 从设置的 permissions.deny 里挑出不带参数、非 MCP 的工具名，作为 disabledBuiltinTools。与团队权限同步无关。
  */
@@ -355,14 +350,13 @@ function getDisabledBuiltinToolsFromSettings(settings) {
 }
 export {
   isTeammateContextReady,
-  getOperationLockPaths,
-  generateSandboxRequestId,
-  sendSandboxPermissionRequestViaMailbox,
+  getDisabledBuiltinToolsFromSettings,
   createPermissionRequest,
   sendPermissionRequestViaMailbox,
+  getOperationLockPaths,
+  buildInstallPreferenceFields,
+  generateSandboxRequestId,
+  sendSandboxPermissionRequestViaMailbox,
   sendPermissionResponseViaMailbox,
   sendSandboxPermissionResponseViaMailbox,
-  getDisabledBuiltinToolsFromSettings,
-  buildInstallPreferenceFields,
-  getResolvedPath,
 };

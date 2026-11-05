@@ -1,15 +1,15 @@
 /**
  * human-signals/build/src/main.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: human-signals@4.3.1..8.0.1
- * pieces: chunk-m4p5zn6n.js (1)
+ * pieces: chunk-t889g22j.js (1)
  * attribution: esm-fingerprint 1
  */
 import { constants } from "os";
 import { getSignals } from "./signals.js";
 import { REALTIME_SIGNAL_MAX } from "./realtime.js";
 
-//@ chunk-m4p5zn6n.js:13975-14620 esm-fingerprint
+//@ chunk-t889g22j.js:13974-14619 esm-fingerprint
 var getSignalsByName = () => {
   let signals = getSignals();
   return Object.fromEntries(signals.map(getSignalByName));

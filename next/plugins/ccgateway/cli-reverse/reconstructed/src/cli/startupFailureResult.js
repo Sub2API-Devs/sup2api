@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。stream-json 启动失败时写出启动帧与失败结果（org_config_required_unavailable 等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3hsy16d3.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-04tkxamq.js (9)
  * attribution: placement 9
  */
 import { detectNonInteractiveLaunch, eagerParseCliFlag } from "../utils/cliArgs.js";
@@ -15,31 +15,35 @@ import { emitLoadError } from "./print.js";
 import { withDeadline } from "../utils/sleep.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-3hsy16d3.js:375-386 placement
+//@ chunk-04tkxamq.js:375-386 placement
 var FLUSH_BEFORE_RESULT_TIMEOUT_MS = 1000;
-//@ chunk-3hsy16d3.js:386-479 placement
+//@ chunk-04tkxamq.js:386-479 placement
 function isStreamJsonLaunch(argv = process.argv.slice(2)) {
   return detectNonInteractiveLaunch(argv) && eagerParseCliFlag("--output-format", argv) === "stream-json";
 }
-//@ chunk-3hsy16d3.js:479-553 placement
+//@ chunk-04tkxamq.js:479-553 placement
 function isStartupFailureResultRequested() {
   return isEnvTruthy(process.env.CLAUDE_CODE_STARTUP_FAILURE_RESULTS);
 }
-//@ chunk-3hsy16d3.js:553-625 placement
+//@ chunk-04tkxamq.js:553-647 placement
 var ORG_CONFIG_FAILURE_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3hsy16d3.js:553", () => {
-  ORG_CONFIG_FAILURE_REASONS = new Set(["org_config_required_unavailable", "org_config_refused"]);
+deferInit("chunk-04tkxamq.js:553", () => {
+  ORG_CONFIG_FAILURE_REASONS = new Set([
+    "org_config_required_unavailable",
+    "org_config_refused",
+    "config_file_invalid",
+  ]);
 });
-//@ chunk-3hsy16d3.js:625-662 placement
+//@ chunk-04tkxamq.js:647-684 placement
 function needsStartupFailureResult(reason) {
   return ORG_CONFIG_FAILURE_REASONS.has(reason) || isStartupFailureResultRequested();
 }
-//@ chunk-3hsy16d3.js:662-775 placement
+//@ chunk-04tkxamq.js:684-797 placement
 function startupResultSessionId(sessionId, argv = process.argv.slice(2)) {
   let flag = eagerParseCliFlag("--session-id", argv);
   return (eagerParseCliFlag("--sdk-url", argv) === undefined ? normalizeUuidOrNull(flag) : flag) || sessionId;
 }
-//@ chunk-3hsy16d3.js:775-931 placement
+//@ chunk-04tkxamq.js:797-953 placement
 function buildStartupFailureResult({ sessionId, message, reason, resultIndex = 0 }) {
   return {
     ...emitLoadError(sessionId, [message]),
@@ -51,7 +55,7 @@ function buildStartupFailureResult({ sessionId, message, reason, resultIndex = 0
     }),
   };
 }
-//@ chunk-3hsy16d3.js:931-1019 placement
+//@ chunk-04tkxamq.js:953-1041 placement
 async function writeStartupFailureResult(failure) {
   if (needsStartupFailureResult(failure.reason))
     await writeStartupFrames([
@@ -61,7 +65,7 @@ async function writeStartupFailureResult(failure) {
       }),
     ]);
 }
-//@ chunk-3hsy16d3.js:1019-1342 placement
+//@ chunk-04tkxamq.js:1041-1364 placement
 /**
  * stream-json 启动失败时写出启动帧与失败结果（org_config_required_unavailable 等）。
  */
@@ -92,10 +96,10 @@ async function writeStartupFrames(frames, { goesOn = false } = {}) {
   return ok;
 }
 export {
-  writeStartupFailureResult,
   buildStartupFailureResult,
   isStartupFailureResultRequested,
-  isStreamJsonLaunch,
-  writeStartupFrames,
+  writeStartupFailureResult,
   startupResultSessionId,
+  writeStartupFrames,
+  isStreamJsonLaunch,
 };

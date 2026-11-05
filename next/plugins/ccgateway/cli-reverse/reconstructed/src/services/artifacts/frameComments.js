@@ -3,25 +3,25 @@
  *
  * 2.1.316 新增：frame 评论 API 辅助
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jv307fw4.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-m0ks5273.js (10)
  * attribution: placement 10
  */
 import { scrubArtifactEnvelopeTags } from "../../tools/ArtifactTool/artifactUrls.js";
 import { neutralizeConfusableTags } from "../../utils/confusables.js";
 import { ARTIFACT_ORIGIN_NOTES } from "../../constants/xml.js";
 
-//@ chunk-jv307fw4.js:22613-22640 placement
+//@ chunk-m0ks5273.js:22630-22657 placement
 /**
  * 导出函数 `emptyText`：参数 e, n，返回 ""。
  */
 function emptyText(origin, inlineThreshold) {
   return "";
 }
-//@ chunk-jv307fw4.js:22640-22693 placement
+//@ chunk-m0ks5273.js:22657-22710 placement
 var CONTROL_CHARS_RE = /[\x00-\x08\x0b-\x1f\x7f-\x9f\u2028\u2029]+/g;
-//@ chunk-jv307fw4.js:22693-22746 placement
+//@ chunk-m0ks5273.js:22710-22763 placement
 /**
  * 导出函数 `sanitizeOriginNotes`：参数 e，返回 scrubArtifactEnvelopeTags(neutralizeConfusableTags(ARTIFACT_ORIGIN_NOTES, e.replace(Lt, " ")))。
  */
@@ -30,13 +30,13 @@ function sanitizeOriginNotes(notes) {
     neutralizeConfusableTags(ARTIFACT_ORIGIN_NOTES, notes.replace(CONTROL_CHARS_RE, " ")),
   );
 }
-//@ chunk-jv307fw4.js:22746-22773 placement
+//@ chunk-m0ks5273.js:22763-22790 placement
 /**
  * 去掉页面末尾 __frame_comments__ 脚本块时的大小上限（4 MB / 3 MB）。
  */
 var MAX_FRAME_HTML_BYTES = 4194304;
 var MAX_FRAME_HTML_MINUS_SCRIPT = 3149824;
-//@ chunk-jv307fw4.js:22773-23336 placement
+//@ chunk-m0ks5273.js:22790-23353 placement
 /**
  * 去掉页面 HTML 末尾由服务端注入的 __frame_comments__ JSON 脚本块（需是合法 JSON 且带 mac 与 payload），得到原始页面内容；不符合时原样返回。
  */
@@ -73,39 +73,39 @@ function stripFrameCommentsScript(html) {
     content = content.slice(0, -1);
   return content;
 }
-//@ chunk-jv307fw4.js:23336-23385 placement
+//@ chunk-m0ks5273.js:23353-23402 placement
 /**
  * 导出函数 `isOwnedExternally`：参数 e，返回 isNotSolelyOwned(e) || e.outsideOrg === !0。
  */
-function isOwnedExternally(artifact) {
-  return isNotSolelyOwned(artifact) || artifact.outsideOrg === true;
+function readIsForeign(artifact) {
+  return readByOthers(artifact) || artifact.outsideOrg === true;
 }
-//@ chunk-jv307fw4.js:23385-23447 placement
+//@ chunk-m0ks5273.js:23402-23464 placement
 /**
  * 导出函数 `mayHaveForeignWriters`：参数 e，返回 _Fr(e) || e.outsidersMayHaveWritten === !0。
  */
-function mayHaveForeignWriters(artifact) {
-  return isOwnedExternally(artifact) || artifact.outsidersMayHaveWritten === true;
+function readMarkedForeign(artifact) {
+  return readIsForeign(artifact) || artifact.outsidersMayHaveWritten === true;
 }
-//@ chunk-jv307fw4.js:23447-23510 placement
+//@ chunk-m0ks5273.js:23464-23527 placement
 /**
  * 导出函数 `hasOnlyOutsideWriters`：参数 e，返回 e.outsidersMayHaveWritten === !0 && !_Fr(e)。
  */
-function hasOnlyOutsideWriters(artifact) {
-  return artifact.outsidersMayHaveWritten === true && !isOwnedExternally(artifact);
+function readOutsidersOnly(artifact) {
+  return artifact.outsidersMayHaveWritten === true && !readIsForeign(artifact);
 }
-//@ chunk-jv307fw4.js:23510-23562 placement
+//@ chunk-m0ks5273.js:23527-23579 placement
 /**
  * 导出函数 `isSharedOrNotOwned`：参数 e，返回 isNotSolelyOwned(e) || e.outsideWriter === !0。
  */
-function isSharedOrNotOwned(artifact) {
-  return isNotSolelyOwned(artifact) || artifact.outsideWriter === true;
+function readKnownForeign(artifact) {
+  return readByOthers(artifact) || artifact.outsideWriter === true;
 }
-//@ chunk-jv307fw4.js:23562-23668 placement
+//@ chunk-m0ks5273.js:23579-23685 placement
 /**
  * 判断 artifact 不是由当前用户单独掌控：有他人编写、不是所有者、公开可读、协作写入或类型锁定。
  */
-function isNotSolelyOwned(artifact) {
+function readByOthers(artifact) {
   return (
     artifact.authoredByOthers === true ||
     artifact.role !== "owner" ||
@@ -115,14 +115,14 @@ function isNotSolelyOwned(artifact) {
   );
 }
 export {
-  mayHaveForeignWriters,
-  hasOnlyOutsideWriters,
-  isSharedOrNotOwned,
-  isNotSolelyOwned,
-  emptyText,
-  isOwnedExternally,
+  readOutsidersOnly,
+  readMarkedForeign,
   MAX_FRAME_HTML_BYTES,
+  sanitizeOriginNotes,
   MAX_FRAME_HTML_MINUS_SCRIPT,
   stripFrameCommentsScript,
-  sanitizeOriginNotes,
+  readKnownForeign,
+  readByOthers,
+  emptyText,
+  readIsForeign,
 };

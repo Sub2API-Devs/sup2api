@@ -3,9 +3,9 @@
  *
  * Ultrareview 配额查询（可用 CLAUDE_CODE_ULTRAREVIEW_QUOTA_FIXTURE 注入测试数据）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/ultrareviewQuota.ts
- * pieces: chunk-twvgrhqz.js (18)
+ * pieces: chunk-a2r96cyy.js (18)
  * attribution: fingerprint 1, placement 17
  */
 import { env } from "../../utils/env.js";
@@ -27,7 +27,7 @@ import { tipLifetimeShownCount, recordTipShown } from "../tips/tipIds.js";
 import { getSessionsSinceTipShown } from "../tips/tipHistory.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-twvgrhqz.js:809-1486 fingerprint (2.1.88 match: fetchUltrareviewQuota, 0.33)
+//@ chunk-a2r96cyy.js:808-1485 fingerprint (2.1.88 match: fetchUltrareviewQuota, 0.33)
 /**
  * 拉取 ultrareview 配额；fixture 环境变量优先。
  */
@@ -65,21 +65,21 @@ async function fetchUltrareviewQuota(credentials) {
     return null;
   }
 }
-//@ chunk-twvgrhqz.js:1486-1520 placement
+//@ chunk-a2r96cyy.js:1485-1519 placement
 class UltrareviewQuotaState {
   quota = undefined;
   fetch = undefined;
 }
-//@ chunk-twvgrhqz.js:1520-1543 placement
+//@ chunk-a2r96cyy.js:1519-1542 placement
 var ultrareviewQuotaSlot; // deferred: uses UltrareviewQuotaState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-twvgrhqz.js:1520", () => {
+deferInit("chunk-a2r96cyy.js:1519", () => {
   ultrareviewQuotaSlot = new HostScoped(() => new UltrareviewQuotaState());
 });
-//@ chunk-twvgrhqz.js:1543-1578 placement
+//@ chunk-a2r96cyy.js:1542-1577 placement
 function ultrareviewQuotaState() {
   return ultrareviewQuotaSlot.of(getRootSession().host);
 }
-//@ chunk-twvgrhqz.js:1578-1647 placement
+//@ chunk-a2r96cyy.js:1577-1646 placement
 /**
  * 导出函数 `refreshUltrareviewQuota`：参数 e。
  */
@@ -88,7 +88,7 @@ async function refreshUltrareviewQuota(credentials) {
   state.fetch ??= fetchUltrareviewQuota(credentials);
   state.quota = await state.fetch;
 }
-//@ chunk-twvgrhqz.js:1647-1727 placement
+//@ chunk-a2r96cyy.js:1646-1726 placement
 /**
  * 导出函数 `ultrareviewQuota`：参数 e，返回 (uPo(e), null); return r.quota。
  */
@@ -100,13 +100,13 @@ function ultrareviewQuota(credentials) {
   }
   return state.quota;
 }
-//@ chunk-twvgrhqz.js:1727-1763 placement
+//@ chunk-a2r96cyy.js:1726-1762 placement
 var TENGU_ULTRAREVIEW_AWARENESS = "tengu_ultrareview_awareness";
-//@ chunk-twvgrhqz.js:1763-1797 placement
+//@ chunk-a2r96cyy.js:1762-1796 placement
 function ultrareviewAwarenessFlags() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_ULTRAREVIEW_AWARENESS, null) ?? {};
 }
-//@ chunk-twvgrhqz.js:1797-1891 placement
+//@ chunk-a2r96cyy.js:1796-1890 placement
 /**
  * 导出函数 `isUltrareviewSurfaceOn`：参数 e，返回 !1; if (!isPolicyAllowed("allow_remote_sessions")) return !1; return U()[e] === !0。
  */
@@ -115,14 +115,14 @@ function isUltrareviewSurfaceOn(surface) {
   if (!isPolicyAllowed("allow_remote_sessions")) return false;
   return ultrareviewAwarenessFlags()[surface] === true;
 }
-//@ chunk-twvgrhqz.js:1891-1941 placement
+//@ chunk-a2r96cyy.js:1890-1940 placement
 /**
  * 导出函数 `hasRunUltrareview`：返回 getGlobalConfig().hasRunUltrareview === !0。
  */
 function hasRunUltrareview() {
   return getGlobalConfig().hasRunUltrareview === true;
 }
-//@ chunk-twvgrhqz.js:1941-2018 placement
+//@ chunk-a2r96cyy.js:1940-2017 placement
 /**
  * 导出函数 `markUltrareviewRun`：参数 e。
  */
@@ -138,20 +138,20 @@ function markUltrareviewRun(storageV5) {
     storageV5,
   );
 }
-//@ chunk-twvgrhqz.js:2018-2086 placement
+//@ chunk-a2r96cyy.js:2017-2085 placement
 function logAwarenessShown(surface) {
   logEvent("tengu_ultrareview_awareness_shown", {
     surface: fromEnum(surface),
   });
 }
-//@ chunk-twvgrhqz.js:2086-2153 placement
+//@ chunk-a2r96cyy.js:2085-2152 placement
 /**
  * 导出函数 `freeReviewsBadge`：参数 e，返回 `${e} free ${e === 1 ? "review" : "reviews"} left`。
  */
 function freeReviewsBadge(reviewsRemaining) {
   return `${reviewsRemaining} free ${reviewsRemaining === 1 ? "review" : "reviews"} left`;
 }
-//@ chunk-twvgrhqz.js:2153-2400 placement
+//@ chunk-a2r96cyy.js:2152-2399 placement
 /**
  * 斜杠菜单中 ultrareview 与 code review 的免费次数徽标文字。
  */
@@ -165,14 +165,14 @@ function ultrareviewMenuBadge(commandName) {
     ? `${reviewsRemaining} free left \xB7 `
     : `${reviewsRemaining} free /ultrareview \xB7 `;
 }
-//@ chunk-twvgrhqz.js:2400-2466 placement
+//@ chunk-a2r96cyy.js:2399-2465 placement
 /**
  * ultrareview 提示的两种 key（prose-pointer、post-commit）与同一提示最多显示 5 次。
  */
 var ULTRAREVIEW_PROSE_POINTER = "ultrareview-prose-pointer";
 var ULTRAREVIEW_POST_COMMIT = "ultrareview-post-commit";
 var MAX_TIP_SHOWS = 5;
-//@ chunk-twvgrhqz.js:2466-2696 placement
+//@ chunk-a2r96cyy.js:2465-2694 placement
 function ultrareviewTip(surface, tipKey, format, storage, credentials) {
   if (!isUltrareviewSurfaceOn(surface)) return null;
   if (hasRunUltrareview()) return null;
@@ -187,7 +187,7 @@ function ultrareviewTip(surface, tipKey, format, storage, credentials) {
       : "";
   return format(suffix);
 }
-//@ chunk-twvgrhqz.js:2696-2823 placement
+//@ chunk-a2r96cyy.js:2694-2821 placement
 /**
  * 生成 /review 提示末尾推荐 /ultrareview 的提示文字（按展示规则与次数）。
  */
@@ -200,7 +200,7 @@ function ultrareviewProseTip(storage, credentials) {
     credentials,
   );
 }
-//@ chunk-twvgrhqz.js:2823-2976 placement
+//@ chunk-a2r96cyy.js:2821-2974 placement
 /**
  * 生成提交后推荐运行 /ultrareview 的提示文字。
  */
@@ -216,12 +216,12 @@ function ultrareviewPostCommitTip(storage) {
 }
 export {
   ultrareviewMenuBadge,
+  ultrareviewPostCommitTip,
+  markUltrareviewRun,
   ultrareviewQuota,
   freeReviewsBadge,
   isUltrareviewSurfaceOn,
   hasRunUltrareview,
   refreshUltrareviewQuota,
-  ultrareviewPostCommitTip,
   ultrareviewProseTip,
-  markUltrareviewRun,
 };

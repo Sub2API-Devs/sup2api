@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：提示来源标记
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (10)
  * attribution: placement 10
  */
 import { lastUserPromptIndex, mergedTurnPosition, getPromptId, isUserPromptAt } from "../messages.js";
@@ -17,7 +17,7 @@ import { summarizedPromptUuids, isMachineOriginPrompt } from "../transcript/dese
 import { hasPollEventsAttachmentSince } from "../pollEvents.js";
 import { getMessageIdentityUuids } from "../../cli/queuedCommands.js";
 
-//@ chunk-e6aww6q8.js:4884781-4884957 placement
+//@ chunk-5xgkngpb.js:5030504-5030680 placement
 var KNOWN_ORIGIN_KINDS = {
   "auto-continuation": true,
   channel: true,
@@ -31,7 +31,7 @@ var KNOWN_ORIGIN_KINDS = {
   "task-notification": true,
   unclassified: true,
 };
-//@ chunk-e6aww6q8.js:4884957-4885064 placement
+//@ chunk-5xgkngpb.js:5030680-5030787 placement
 /**
  * 返回消息来源类型的规范标签：没有来源为 unstamped，已知类型原样返回，其他为 unclassified。
  */
@@ -40,7 +40,7 @@ function getOriginKindLabel(origin) {
   if (kind === undefined) return "unstamped";
   return Object.hasOwn(KNOWN_ORIGIN_KINDS, kind) ? kind : "unclassified";
 }
-//@ chunk-e6aww6q8.js:4885064-4885208 placement
+//@ chunk-5xgkngpb.js:5030787-5030931 placement
 /**
  * 取当前回合起点消息的来源类型（压缩摘要为 compacted）。
  */
@@ -52,7 +52,7 @@ function getTurnStartOriginKind(messages) {
   if (message.isCompactSummary) return "compacted";
   return getOriginKindLabel(message.origin);
 }
-//@ chunk-e6aww6q8.js:4885208-4885308 placement
+//@ chunk-5xgkngpb.js:5030931-5031031 placement
 /**
  * 取当前回合起点用户消息的 turnOrigin。
  */
@@ -62,7 +62,7 @@ function getTurnOrigin(messages) {
   let message = messages[index];
   return message.type === "user" ? message.turnOrigin : undefined;
 }
-//@ chunk-e6aww6q8.js:4885308-4885432 placement
+//@ chunk-5xgkngpb.js:5031031-5031155 placement
 /**
  * 取当前回合起点的回合位置信息（起点需有 promptId 或 turnOrigin）。
  */
@@ -74,7 +74,7 @@ function getTurnPosition(messages) {
     ? mergedTurnPosition(messages, index)
     : undefined;
 }
-//@ chunk-e6aww6q8.js:4885432-4885684 placement
+//@ chunk-5xgkngpb.js:5031155-5031407 placement
 /**
  * 判断当前回合是否由会话任务的任务通知触发（压缩摘要时看 turnOrigin）；出错返回 false。
  */
@@ -90,7 +90,7 @@ function isSessionTaskTurn(messages) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:4885684-4886077 placement
+//@ chunk-5xgkngpb.js:5031407-5031800 placement
 /**
  * 给消息列表中缺少的字段补上 promptId、turnOrigin、回合位置与被摘要的提示 uuid。
  */
@@ -127,7 +127,7 @@ function stampTurnFields(messages, promptId, turnOrigin, turnPosition, summarize
       : message;
   });
 }
-//@ chunk-e6aww6q8.js:4886077-4886455 placement
+//@ chunk-5xgkngpb.js:5031800-5032178 placement
 /**
  * 给压缩摘要等新消息补上当前回合的 promptId、turnOrigin、回合位置与被摘要的提示 uuid；开关开启时再附上回合起点的人类驱动信息；出错时只做最基本的处理。
  */
@@ -174,7 +174,7 @@ function stampSummaryTurnFields(messages, messages_2) {
         },
       }));
 }
-//@ chunk-e6aww6q8.js:4886455-4886747 placement
+//@ chunk-5xgkngpb.js:5032178-5032470 placement
 function getSummarizedPromptUuids(messages) {
   try {
     let max = Math.max(
@@ -199,7 +199,7 @@ function getSummarizedPromptUuids(messages) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:4886747-4886878 placement
+//@ chunk-5xgkngpb.js:5032470-5032601 placement
 function stripTurnPosition(messages) {
   if (!messages.some((message) => message.turnPosition !== undefined)) return messages;
   return messages.map((message) => {
@@ -211,10 +211,10 @@ function stripTurnPosition(messages) {
   });
 }
 export {
-  getOriginKindLabel,
   getTurnOrigin,
   getTurnPosition,
   isSessionTaskTurn,
   getTurnStartOriginKind,
+  getOriginKindLabel,
   stampSummaryTurnFields,
 };

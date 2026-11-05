@@ -3,9 +3,9 @@
  *
  * 全局快捷键处理：ctrl+o 切换 transcript、ctrl+t 任务面板、brief 视图等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useGlobalKeybindings.tsx
- * pieces: chunk-18hwfzwa.js (7)
+ * pieces: chunk-czq1j3j2.js (7)
  * attribution: placement 1, layout 5, fingerprint 1
  */
 import { getSecondRootError } from "../ink/terminal.js";
@@ -23,18 +23,18 @@ import { lit as lit_2 } from "../services/analytics/safeMetadata.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { useKeybinding } from "../keybindings/useKeybinding.js";
 
-//@ chunk-18hwfzwa.js:133882-133967 placement (2.1.88 match: useTasksV2WithCollapseEffect, 1)
+//@ chunk-czq1j3j2.js:134996-135081 placement (2.1.88 match: useTasksV2WithCollapseEffect, 1)
 function useTasksV2WithCollapseEffect(appState) {
   return {
     ...appState,
     expandedView: appState.expandedView === "tasks" ? "none" : "tasks",
   };
 }
-//@ chunk-18hwfzwa.js:133967-134006 layout
+//@ chunk-czq1j3j2.js:135081-135120 layout
 function selectIsBriefOnly(appState) {
   return appState.isBriefOnly;
 }
-//@ chunk-18hwfzwa.js:134006-134082 layout
+//@ chunk-czq1j3j2.js:135120-135196 layout
 function clearBriefOnly(appState) {
   if (!appState.isBriefOnly) {
     return appState;
@@ -44,7 +44,7 @@ function clearBriefOnly(appState) {
     isBriefOnly: false,
   };
 }
-//@ chunk-18hwfzwa.js:134082-134158 layout
+//@ chunk-czq1j3j2.js:135196-135272 layout
 function clearBriefOnlyOnToggle(appState) {
   if (!appState.isBriefOnly) {
     return appState;
@@ -54,13 +54,13 @@ function clearBriefOnlyOnToggle(appState) {
     isBriefOnly: false,
   };
 }
-//@ chunk-18hwfzwa.js:134158-134174 layout
+//@ chunk-czq1j3j2.js:135272-135288 layout
 function noop() {}
-//@ chunk-18hwfzwa.js:134174-134229 layout
+//@ chunk-czq1j3j2.js:135288-135343 layout
 function forceRedraw() {
   getSecondRootError().get(process.stdout)?.forceRedraw();
 }
-//@ chunk-18hwfzwa.js:134229-136066 fingerprint (2.1.88 match: GlobalKeybindingHandlers, 0.687)
+//@ chunk-czq1j3j2.js:135343-137180 fingerprint (2.1.88 match: GlobalKeybindingHandlers, 0.688)
 /**
  * 全局快捷键处理：ctrl+o 切换 transcript（tengu_toggle_transcript）、ctrl+t 任务/todo 面板（tengu_toggle_todos）、brief 视图切换等；只在 prompt 屏挂载。
  */

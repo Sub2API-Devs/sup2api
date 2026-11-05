@@ -3,9 +3,9 @@
  *
  * 主 Spinner：动词 + 计时 + token 计数 + 任务进度（SpinnerWithVerb），brief 模式的连接状态 Spinner，以及流式 thinking 进度。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Spinner.tsx
- * pieces: chunk-3mec1atf.js (21)
+ * pieces: chunk-hzenv5c0.js (21)
  * attribution: placement 8, sole-consumer 3, affinity 1, callgraph-witnessed 1, fingerprint 5, layout 3
  */
 import { cosineEase, getDefaultCharacters, roundToStep, spinnerFramesForTerminal } from "./Spinner/utils.js";
@@ -64,7 +64,7 @@ import { Box, Text } from "../ink/components/Text.js";
 import { SpinnerAnimationRow } from "./Spinner/SpinnerAnimationRow.js";
 import { MessageResponse } from "./MessageResponse.js";
 import { TaskListV2 } from "./TaskListV2.js";
-import { count } from "../utils/collections.js";
+import { countWhere } from "../utils/collections.js";
 import { waitForTaskCompletion } from "../tools/TaskOutputTool/TaskOutputTool.js";
 import {
   computeGlimmerIndex,
@@ -73,7 +73,7 @@ import {
 } from "../bridge/bridgeStatusUtil.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 
-//@ chunk-3mec1atf.js:7948-8037 placement
+//@ chunk-hzenv5c0.js:7955-8044 placement
 var THINKING_ESCALATION_MS = [1e4, 45000, 300000];
 var SPINNER_MIN_VISIBLE_MS = 2000;
 var SPINNER_FRAME_MS = 2000;
@@ -83,20 +83,20 @@ var STALL_HINT_MS = 1e4;
 var LONG_WAIT_MS = 20000;
 var VERY_LONG_WAIT_MS = 30000;
 var ABANDON_HINT_MS = 45000;
-//@ chunk-3mec1atf.js:8037-8106 placement
+//@ chunk-hzenv5c0.js:8044-8113 placement
 function frameIndexFor(elapsedMs) {
   let eased = cosineEase(elapsedMs, SPINNER_FRAME_MS);
   return Math.round(eased * (getDefaultCharacters().length - 1));
 }
-//@ chunk-3mec1atf.js:8106-8176 placement
+//@ chunk-hzenv5c0.js:8113-8183 placement
 function thoughtDurationText(thoughtMs) {
   return `thought for ${Math.max(1, Math.round(thoughtMs / 1000))}s`;
 }
-//@ chunk-3mec1atf.js:8176-8295 placement
+//@ chunk-hzenv5c0.js:8183-8302 placement
 function formatThoughtRecoveryLabel({ attempt, limit }) {
   return attempt > 1 ? `picking the thought back up (${attempt} of ${limit})` : "picking the thought back up";
 }
-//@ chunk-3mec1atf.js:8295-8459 placement
+//@ chunk-hzenv5c0.js:8302-8466 placement
 function thinkingDurationLabel(thinkingMs) {
   if (thinkingMs >= ABANDON_HINT_MS) return "deep in thought";
   if (thinkingMs >= VERY_LONG_WAIT_MS) return "thinking some more";
@@ -104,11 +104,11 @@ function thinkingDurationLabel(thinkingMs) {
   if (thinkingMs >= STALL_HINT_MS) return "still thinking";
   return "thinking";
 }
-//@ chunk-3mec1atf.js:8459-8516 placement
+//@ chunk-hzenv5c0.js:8466-8523 placement
 function shimmerLevel(elapsedMs) {
   return roundToStep((Math.sin((elapsedMs / 1000) * Math.PI) + 1) / 2);
 }
-//@ chunk-3mec1atf.js:8516-11576 placement
+//@ chunk-hzenv5c0.js:8523-11577 placement
 function SpinnerTimer316({
   mode,
   reducedMotion,
@@ -328,7 +328,7 @@ function SpinnerTimer316({
     glimmerMessageWidth: messageWidth,
   };
 }
-//@ chunk-3mec1atf.js:11576-12033 placement
+//@ chunk-hzenv5c0.js:11577-12034 placement
 /**
  * 跟踪 thinking 段落：进入 thinking 时返回 "thinking"，结束后至少显示 2 秒再在 2 秒后清空，返回 thinking 持续毫秒数或 null。
  */
@@ -366,26 +366,27 @@ function useThinkingStatusTimer(mode) {
   );
   return elapsedMs;
 }
-//@ chunk-3mec1atf.js:19261-19297 sole-consumer
+//@ chunk-hzenv5c0.js:19262-19298 sole-consumer
 function selectIsBriefOnly(state) {
   return state.isBriefOnly;
 }
-//@ chunk-3mec1atf.js:19297-19342 sole-consumer (2.1.88 match: _temp2, 1)
+//@ chunk-hzenv5c0.js:19298-19343 sole-consumer (2.1.88 match: _temp2, 1)
 function selectViewingAgentTaskId(s_0) {
   return s_0.viewingAgentTaskId;
 }
-//@ chunk-3mec1atf.js:19342-19396 sole-consumer
+//@ chunk-hzenv5c0.js:19343-19397 sole-consumer
 function selectPrefersReducedMotion(state) {
   return state.settings.prefersReducedMotion;
 }
-//@ chunk-3mec1atf.js:19396-19412 affinity
+//@ chunk-hzenv5c0.js:19397-19413 affinity
 var ELLIPSIS = "\u2026";
-//@ chunk-3mec1atf.js:19412-20766 callgraph-witnessed (2.1.88 match: SpinnerWithVerb, 0.269)
+//@ chunk-hzenv5c0.js:19413-20814 callgraph-witnessed (2.1.88 match: SpinnerWithVerb, 0.261)
 function SpinnerWithVerb(props) {
-  let $ = useMemoCache(24);
+  let $ = useMemoCache(25);
   let {
     mode,
     overrideMessage,
+    waitLine,
     overrideColor,
     overrideShimmerColor,
     isCompacting,
@@ -399,25 +400,26 @@ function SpinnerWithVerb(props) {
     outputLimitRecovery,
     defaultVerb,
   } = useSpinnerStatus(props.agentId);
+  let messageText = overrideMessage ?? waitLine;
   let isBriefOnly = useAppState(selectIsBriefOnly);
   let viewingAgentTaskId = useAppState(selectViewingAgentTaskId);
   let CLAUDE_CODE_BRIEF = env.CLAUDE_CODE_BRIEF;
   let buildInput;
   let inputDeps;
-  if ($[0] !== defaultVerb || $[1] !== mode || $[2] !== overrideMessage || $[3] !== props.agentId) {
+  if ($[0] !== defaultVerb || $[1] !== mode || $[2] !== messageText || $[3] !== props.agentId) {
     buildInput = () => ({
       requestId: props.agentId ?? "main",
       props: {
         word: defaultVerb,
-        message: overrideMessage,
+        message: messageText,
         suffix: ELLIPSIS,
         mode,
       },
     });
-    inputDeps = [props.agentId, defaultVerb, overrideMessage, mode];
+    inputDeps = [props.agentId, defaultVerb, messageText, mode];
     $[0] = defaultVerb;
     $[1] = mode;
-    $[2] = overrideMessage;
+    $[2] = messageText;
     $[3] = props.agentId;
     $[4] = buildInput;
     $[5] = inputDeps;
@@ -453,7 +455,8 @@ function SpinnerWithVerb(props) {
     $[19] !== retryStatus ||
     $[20] !== sentEffort ||
     $[21] !== turnEffort ||
-    $[22] !== turnModel
+    $[22] !== turnModel ||
+    $[23] !== waitLine
   ) {
     renderSpinner = (s_0) =>
       useBriefSpinner
@@ -468,7 +471,7 @@ function SpinnerWithVerb(props) {
             overrideColor,
             overrideShimmerColor,
             isCompacting,
-            isResponseHeld,
+            isResponseHeld: isResponseHeld || waitLine !== null,
             compactingHintText,
             compactingStartTime,
             turnEffort,
@@ -493,11 +496,12 @@ function SpinnerWithVerb(props) {
     $[20] = sentEffort;
     $[21] = turnEffort;
     $[22] = turnModel;
-    $[23] = renderSpinner;
-  } else renderSpinner = $[23];
+    $[23] = waitLine;
+    $[24] = renderSpinner;
+  } else renderSpinner = $[24];
   return actionKeysNamespace.useRenderHook(renderInput, renderSpinner);
 }
-//@ chunk-3mec1atf.js:20766-23768 fingerprint (2.1.88 match: SpinnerWithVerbInner, 0.639)
+//@ chunk-hzenv5c0.js:20814-23810 fingerprint (2.1.88 match: SpinnerWithVerbInner, 0.639)
 function SpinnerWithVerbInner({
   mode,
   loadingStartTimeRef,
@@ -706,12 +710,12 @@ function SpinnerWithVerbInner({
     ],
   });
 }
-//@ chunk-3mec1atf.js:23768-23793 layout
+//@ chunk-hzenv5c0.js:23810-23835 layout
 var SPINNER_COLUMN_GAP = 2;
 var SPINNER_LABEL_GAP = 3;
 var SPINNER_MAX_TEXT = 12;
 var SPINNER_MIN_COLUMNS = 1;
-//@ chunk-3mec1atf.js:23793-23961 layout
+//@ chunk-hzenv5c0.js:23835-24003 layout
 function computeSpinnerLabelBudget(columns, backgroundCount, extra) {
   let backgroundText = backgroundCount > 0 ? `${backgroundCount} in background` : "";
   let labelWidth = columns - SPINNER_COLUMN_GAP - SPINNER_LABEL_GAP;
@@ -726,7 +730,7 @@ function computeSpinnerLabelBudget(columns, backgroundCount, extra) {
     rightText: backgroundText,
   };
 }
-//@ chunk-3mec1atf.js:23961-25052 fingerprint (2.1.88 match: BriefSpinner, 0.824)
+//@ chunk-hzenv5c0.js:24003-25096 fingerprint (2.1.88 match: BriefSpinner, 0.825)
 function BriefSpinner({ mode, overrideMessage }) {
   let settingsState = useSettingsState();
   let settings = useIsScreenReaderEnabled();
@@ -743,7 +747,8 @@ function BriefSpinner({ mode, overrideMessage }) {
   let [, frameTick] = useAnimationFrame(isStaticSpinner ? null : 120);
   let runningCount = useAppState(
     (appState) =>
-      count(Object.values(appState.tasks), waitForTaskCompletion) + appState.remoteBackgroundTasks.length,
+      countWhere(Object.values(appState.tasks), waitForTaskCompletion) +
+      appState.remoteBackgroundTasks.length,
   );
   let isRemoteOffline =
     remoteConnectionStatus === "reconnecting" || remoteConnectionStatus === "disconnected";
@@ -821,11 +826,12 @@ function BriefSpinner({ mode, overrideMessage }) {
     ],
   });
 }
-//@ chunk-3mec1atf.js:25052-25685 fingerprint (2.1.88 match: BriefIdleStatus, 0.584)
+//@ chunk-hzenv5c0.js:25096-25730 fingerprint (2.1.88 match: BriefIdleStatus, 0.585)
 function BriefIdleStatus() {
   let remoteConnectionStatus = useAppState((state) => state.remoteConnectionStatus);
   let connStatus = useAppState(
-    (state) => count(Object.values(state.tasks), waitForTaskCompletion) + state.remoteBackgroundTasks.length,
+    (state) =>
+      countWhere(Object.values(state.tasks), waitForTaskCompletion) + state.remoteBackgroundTasks.length,
   );
   let { columns } = useTerminalSize();
   let showConnWarning =
@@ -877,7 +883,7 @@ function BriefIdleStatus() {
     }),
   });
 }
-//@ chunk-3mec1atf.js:25685-26284 fingerprint (2.1.88 match: Spinner, 0.535)
+//@ chunk-hzenv5c0.js:25730-26329 fingerprint (2.1.88 match: Spinner, 0.534)
 function Spinner() {
   let $ = useMemoCache(9);
   let settings = useIsScreenReaderEnabled();
@@ -940,7 +946,7 @@ function Spinner() {
   } else t2 = $[8];
   return t2;
 }
-//@ chunk-3mec1atf.js:26284-27537 layout
+//@ chunk-hzenv5c0.js:26329-27461 layout
 /**
  * 处理一个流式响应进度事件：start 新建条目（记录 ttft、基线长度），content_block_start/thinking_progress/thinking_signature 更新 thinking token 估算（约 4 字符/token），输出 token 事件写入 outputTokens；返回更新后的估算响应长度。
  */
@@ -948,9 +954,6 @@ function applyStreamTokenEvent({ entries, responseLength, event }) {
   if (event.type === "start") {
     entries.push({
       id: event.id,
-      ttftMs: event.ttftMs,
-      firstTokenTime: Date.now(),
-      lastTokenTime: Date.now(),
       responseLengthBaseline: responseLength,
       endResponseLength: responseLength,
     });
@@ -978,7 +981,6 @@ function applyStreamTokenEvent({ entries, responseLength, event }) {
   }
   if (event.type === "thinking_signature") {
     if (event.chars > 0 && entry.outputTokens == null) {
-      entry.lastTokenTime = Date.now();
       if (entry.sawEstimatedTokensThisBlock) {
         entry.thinkingTokenEstimate = Math.max(entry.thinkingTokenEstimate ?? 0, Math.ceil(event.chars / 4));
         let baseline = entry.thinkingBlockBaseline ?? entry.responseLengthBaseline;
@@ -993,12 +995,11 @@ function applyStreamTokenEvent({ entries, responseLength, event }) {
     return responseLength;
   }
   entry.outputTokens = event.outputTokens;
-  entry.lastTokenTime = Date.now();
   if (event.id == null)
     return Math.max(responseLength, entry.responseLengthBaseline + event.outputTokens * 4);
   return responseLength;
 }
-//@ chunk-3mec1atf.js:27537-27757 fingerprint (2.1.88 match: findNextPendingTask, 1)
+//@ chunk-hzenv5c0.js:27461-27681 fingerprint (2.1.88 match: findNextPendingTask, 1)
 function findNextPendingTask(tasks) {
   if (!tasks) return;
   let pendingTasks = tasks.filter((t) => t.status === "pending");

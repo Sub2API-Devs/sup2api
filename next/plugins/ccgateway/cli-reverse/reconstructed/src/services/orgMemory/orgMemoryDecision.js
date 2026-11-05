@@ -3,9 +3,9 @@
  *
  * 组织记忆读写决定（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-82kqcve8.js (58)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a2q0x549.js (58)
  * attribution: placement 58
  */
 import { env } from "../../utils/env.js";
@@ -13,7 +13,7 @@ import { getTeammateAgentId, getRootSession } from "../../bootstrap/state.js";
 import { isOnClaudeCodeSessionSurface } from "../../utils/teammate.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, stringSchema, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { isOrgMemoryPolicyOpen } from "./memoryStores.js";
@@ -28,7 +28,7 @@ import { sleep } from "../../utils/sleep.js";
 import { lit, fromEnum } from "../analytics/safeMetadata.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:12035-12118 placement
+//@ chunk-a2q0x549.js:12111-12193 placement
 /**
  * 当前会话是否可以做组织记忆决定（无队友/特定会话类型）。
  */
@@ -38,9 +38,9 @@ function isEligibleDecisionSurface() {
     !isOnClaudeCodeSessionSurface()
   );
 }
-//@ chunk-82kqcve8.js:12118-12319 placement
+//@ chunk-a2q0x549.js:12193-12394 placement
 var grantedStoreSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-82kqcve8.js:12118", () => {
+deferInit("chunk-a2q0x549.js:12193", () => {
   grantedStoreSchema = DoctorLazy(() =>
     objectSchema({
       path: stringSchema().min(1),
@@ -52,7 +52,7 @@ deferInit("chunk-82kqcve8.js:12118", () => {
     }),
   );
 });
-//@ chunk-82kqcve8.js:12319-13847 placement
+//@ chunk-a2q0x549.js:12394-13922 placement
 class OrgMemoryWriteVerdict {
   grantedStores = null;
   grantedModes = null;
@@ -112,7 +112,7 @@ class OrgMemoryWriteVerdict {
     );
     this.grantedStores = mapped;
     this.grantedModes = new Map(mapped.map((store) => [stripTrailingSlashes(store.path), store.mode]));
-    let writableCount = count([...this.grantedModes.values()], (mode) => mode === "rw");
+    let writableCount = countWhere([...this.grantedModes.values()], (mode) => mode === "rw");
     this.lastAskDowngraded =
       askedWrite &&
       writableCount === 0 &&
@@ -133,36 +133,36 @@ class OrgMemoryWriteVerdict {
       else logFeatureSad("org_memory_writes", "downgraded");
   }
 }
-//@ chunk-82kqcve8.js:13847-13872 placement
+//@ chunk-a2q0x549.js:13922-13947 placement
 /**
  * 按宿主保存的组织记忆写入判定。
  */
 var orgMemoryWriteVerdict; // deferred: uses OrgMemoryWriteVerdict of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-82kqcve8.js:13847", () => {
+deferInit("chunk-a2q0x549.js:13922", () => {
   orgMemoryWriteVerdict = new HostScoped(() => new OrgMemoryWriteVerdict());
 });
-//@ chunk-82kqcve8.js:13872-13909 placement
+//@ chunk-a2q0x549.js:13947-13984 placement
 /**
  * 取当前宿主的写入判定状态。
  */
 function getOrgMemoryWriteVerdict() {
   return orgMemoryWriteVerdict.of(getRootSession().host);
 }
-//@ chunk-82kqcve8.js:13909-13952 placement
+//@ chunk-a2q0x549.js:13984-14027 placement
 /**
  * 去掉路径结尾的斜杠。
  */
 function stripTrailingSlashes(path) {
   return path.replace(/\/+$/, "");
 }
-//@ chunk-82kqcve8.js:13952-13976 placement
+//@ chunk-a2q0x549.js:14027-14051 placement
 /**
  * 是否拦截 monorepo 写入（当前恒 false）。
  */
 function isMonorepoWriteBlocked() {
   return false;
 }
-//@ chunk-82kqcve8.js:13976-14079 placement
+//@ chunk-a2q0x549.js:14051-14154 placement
 /**
  * 组织记忆是否可写：monorepo 写入被拦时记一次日志并返回 false，需有当前账号且满足前置条件。
  */
@@ -174,7 +174,7 @@ function canWriteOrgMemory() {
   if (orgMemoryAccountKey() === null) return false;
   return isOrgMemoryPolicyOpen();
 }
-//@ chunk-82kqcve8.js:14079-14207 placement
+//@ chunk-a2q0x549.js:14154-14282 placement
 /**
  * 组织记忆写入是否已由当前账号在项目配置中选择开启。
  */
@@ -184,63 +184,63 @@ function isOrgMemoryWriteOptedIn() {
   let orgMemoryWritesAccount = currentProjectConfig.orgMemoryWritesAccount;
   return orgMemoryWritesAccount !== undefined && orgMemoryWritesAccount === orgMemoryAccountKey();
 }
-//@ chunk-82kqcve8.js:14207-14265 placement
+//@ chunk-a2q0x549.js:14282-14340 placement
 /**
  * 安装“所选存储是否私有”的探测。
  */
 function installPrivateProbe(probe) {
   getOrgMemoryWriteVerdict().installPickedSelectionPrivateProbe(probe);
 }
-//@ chunk-82kqcve8.js:14265-14340 placement
+//@ chunk-a2q0x549.js:14340-14415 placement
 /**
  * 判断所选存储是否被判定为私有。
  */
 function isSelectionPrivate(selection) {
   return selection !== null && getOrgMemoryWriteVerdict().pickedSelectionPrivateProbe?.(selection) === true;
 }
-//@ chunk-82kqcve8.js:14340-14503 placement
+//@ chunk-a2q0x549.js:14415-14578 placement
 function getOrgMemoryAccountKey() {
   if (hasMemoryApiOverride()) return "memory-dev/memory-dev";
   let oauthAccountInfo = getOauthAccountInfo();
   if (!oauthAccountInfo?.accountUuid || !oauthAccountInfo.organizationUuid) return null;
   return `${oauthAccountInfo.accountUuid}/${oauthAccountInfo.organizationUuid}`;
 }
-//@ chunk-82kqcve8.js:14503-14529 placement
+//@ chunk-a2q0x549.js:14578-14604 placement
 /**
  * 取组织记忆使用的账号键。
  */
 function orgMemoryAccountKey() {
   return getOrgMemoryAccountKey();
 }
-//@ chunk-82kqcve8.js:14529-14567 placement
+//@ chunk-a2q0x549.js:14604-14642 placement
 /**
  * 记录一次写入判定。
  */
 function recordVerdict(stores, store, verdict) {
   getOrgMemoryWriteVerdict().record(stores, store, verdict);
 }
-//@ chunk-82kqcve8.js:14567-14619 placement
+//@ chunk-a2q0x549.js:14642-14694 placement
 /**
  * 取某路径授权到的模式（rw/ro）。
  */
 function grantedModeFor(path) {
   return getOrgMemoryWriteVerdict().grantedModes?.get(stripTrailingSlashes(path));
 }
-//@ chunk-82kqcve8.js:14619-14660 placement
+//@ chunk-a2q0x549.js:14694-14735 placement
 /**
  * 是否已有镜像。
  */
 function hasMirror() {
   return getOrgMemoryWriteVerdict().mirrorPresent;
 }
-//@ chunk-82kqcve8.js:14660-14773 placement
+//@ chunk-a2q0x549.js:14735-14848 placement
 function hasRwGrantedStore() {
   let grantedModes = getOrgMemoryWriteVerdict().grantedModes;
   if (grantedModes === null) return false;
   for (let mode of grantedModes.values()) if (mode === "rw") return true;
   return false;
 }
-//@ chunk-82kqcve8.js:14773-14865 placement
+//@ chunk-a2q0x549.js:14848-14940 placement
 /**
  * 查找某名字的分组存储。
  */
@@ -250,7 +250,7 @@ function findGroupingStore(groupingName) {
       classifyStorePath(grantedStore.path) === "grouping" && isStoreBasename(grantedStore.path, groupingName),
   );
 }
-//@ chunk-82kqcve8.js:14865-14947 placement
+//@ chunk-a2q0x549.js:14940-15022 placement
 /**
  * 查找分组根存储。
  */
@@ -259,12 +259,12 @@ function findGroupingRootStore() {
     (grantedStore) => classifyStorePath(grantedStore.path) === "grouping_root",
   );
 }
-//@ chunk-82kqcve8.js:14947-14973 placement
+//@ chunk-a2q0x549.js:15022-15048 placement
 /**
  * 组织记忆库的接口路径前缀。
  */
 var MEMORY_STORE_PATH_PREFIX = "/v1/code/memory/";
-//@ chunk-82kqcve8.js:14973-15304 placement
+//@ chunk-a2q0x549.js:15048-15379 placement
 /**
  * 按记忆库路径判定类型：grouping、grouping_root、silo（cagt_ 前缀）或 unknown。
  */
@@ -279,7 +279,7 @@ function classifyStorePath(path) {
   if (parts.length === 1 && head.startsWith("cagt_")) return "silo";
   return "unknown";
 }
-//@ chunk-82kqcve8.js:15304-15413 placement
+//@ chunk-a2q0x549.js:15379-15488 placement
 /**
  * 列表中是否有非公开的分组（按 kind 或路径判断）。
  */
@@ -290,7 +290,7 @@ function hasPrivateGrouping(initialGrant) {
       grant.visibility !== "public",
   );
 }
-//@ chunk-82kqcve8.js:15413-15503 placement
+//@ chunk-a2q0x549.js:15488-15578 placement
 /**
  * 判断存储是否为 silo 型。
  */
@@ -301,7 +301,7 @@ function isSiloStore(grantedStore) {
     grantedStore.kind !== "grouping_root"
   );
 }
-//@ chunk-82kqcve8.js:15503-15604 placement
+//@ chunk-a2q0x549.js:15578-15679 placement
 function isGrantedSiloStore(path) {
   return (
     classifyStorePath(path) === "silo" &&
@@ -311,7 +311,7 @@ function isGrantedSiloStore(path) {
     ) === true
   );
 }
-//@ chunk-82kqcve8.js:15604-15902 placement
+//@ chunk-a2q0x549.js:15679-15977 placement
 function isLiftableRootOnly(storeCount, stores, groupingCount) {
   if (groupingCount > 0 || stores.length !== storeCount) return false;
   if (hasDuplicateStorePaths(stores)) return false;
@@ -327,7 +327,7 @@ function isLiftableRootOnly(storeCount, stores, groupingCount) {
   }
   return rootStore !== undefined && rootStore.mode === "rw";
 }
-//@ chunk-82kqcve8.js:15902-16003 placement
+//@ chunk-a2q0x549.js:15977-16078 placement
 function hasDuplicateStorePaths(stores) {
   let seenPaths = new Set();
   for (let store of stores) {
@@ -337,14 +337,14 @@ function hasDuplicateStorePaths(stores) {
   }
   return false;
 }
-//@ chunk-82kqcve8.js:16003-16042 placement
+//@ chunk-a2q0x549.js:16078-16117 placement
 /**
  * 根存储能否提升为可写。
  */
 function isRootLiftable() {
   return getOrgMemoryWriteVerdict().rootLiftable;
 }
-//@ chunk-82kqcve8.js:16042-16321 placement
+//@ chunk-a2q0x549.js:16117-16396 placement
 /**
  * 判定组织记忆镜像能否升级：无根、重复镜像、私有分组、根只读、校验失败、私有候选或可升级。
  */
@@ -357,21 +357,21 @@ function getMirrorVerdict(stores, groupingCount, storeCount, privateCandidate, l
   if (!isLiftableRootOnly(storeCount, stores, groupingCount)) return "verdict_failed";
   return liftable ? "private_candidate" : "liftable";
 }
-//@ chunk-82kqcve8.js:16321-16362 placement
+//@ chunk-a2q0x549.js:16396-16437 placement
 /**
  * 根不能提升的原因。
  */
 function rootLiftReason() {
   return getOrgMemoryWriteVerdict().rootLiftReason;
 }
-//@ chunk-82kqcve8.js:16362-16440 placement
+//@ chunk-a2q0x549.js:16437-16515 placement
 /**
  * 判断是否为分组根存储。
  */
 function isGroupingRootStore(store) {
   return classifyStorePath(store.path) === "grouping_root" || store.kind === "grouping_root";
 }
-//@ chunk-82kqcve8.js:16440-16504 placement
+//@ chunk-a2q0x549.js:16515-16579 placement
 /**
  * 某路径是否就是根存储。
  */
@@ -382,7 +382,7 @@ function isRootStorePath(path) {
     stripTrailingSlashes(groupingRootStore.path) === stripTrailingSlashes(path)
   );
 }
-//@ chunk-82kqcve8.js:16504-16574 placement
+//@ chunk-a2q0x549.js:16579-16649 placement
 /**
  * 判断路径的最后一段是否等于给定名字。
  */
@@ -390,14 +390,14 @@ function isStoreBasename(path, basename) {
   let normalizedPath = stripTrailingSlashes(path);
   return normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1) === basename;
 }
-//@ chunk-82kqcve8.js:16574-16692 placement
+//@ chunk-a2q0x549.js:16649-16767 placement
 function findGrantedSilo(siloName) {
   let filtered = getOrgMemoryWriteVerdict().grantedStores?.filter(isSiloStore);
   let found = filtered?.find((store) => isStoreBasename(store.path, siloName));
   if (found !== undefined) return found;
   return filtered?.[0];
 }
-//@ chunk-82kqcve8.js:16692-16885 placement
+//@ chunk-a2q0x549.js:16767-16960 placement
 function getSingleSiloId() {
   let siloStores = getOrgMemoryWriteVerdict().grantedStores?.filter(isSiloStore) ?? [];
   let store = siloStores.length === 1 ? siloStores[0] : undefined;
@@ -406,7 +406,7 @@ function getSingleSiloId() {
   let sliced = normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1);
   return sliced.startsWith("cagt_") ? sliced : null;
 }
-//@ chunk-82kqcve8.js:16885-16950 placement
+//@ chunk-a2q0x549.js:16960-17025 placement
 /**
  * 复制当前已授权的存储列表。
  */
@@ -414,14 +414,14 @@ function grantedStoresCopy() {
   let grantedStores = getOrgMemoryWriteVerdict().grantedStores;
   return grantedStores === null ? [] : [...grantedStores];
 }
-//@ chunk-82kqcve8.js:16950-16995 placement
+//@ chunk-a2q0x549.js:17025-17070 placement
 /**
  * 上一次询问是否被降级。
  */
 function isLastAskDowngraded() {
   return getOrgMemoryWriteVerdict().lastAskDowngraded;
 }
-//@ chunk-82kqcve8.js:16995-17119 placement
+//@ chunk-a2q0x549.js:17070-17194 placement
 /**
  * 项目配置中组织记忆写入是否开启且属于当前账号。
  */
@@ -433,7 +433,7 @@ function isOrgMemoryWritesEnabledForAccount() {
     currentProjectConfig.orgMemoryWritesAccount === orgMemoryAccountKey()
   );
 }
-//@ chunk-82kqcve8.js:17119-17710 placement
+//@ chunk-a2q0x549.js:17194-17785 placement
 function applyOrgMemoryDecision(enabled, storageV5) {
   if (
     enabled
@@ -465,14 +465,14 @@ function applyOrgMemoryDecision(enabled, storageV5) {
   });
   return enabled ? "granted" : "withdrawn";
 }
-//@ chunk-82kqcve8.js:17710-17762 placement
+//@ chunk-a2q0x549.js:17785-17837 placement
 /**
  * 项目配置里组织记忆读取是否被关闭。
  */
 function isProjectReadDisabled() {
   return getCurrentProjectConfig().orgMemoryRead === false || isOrgMemoryPolicyOpen();
 }
-//@ chunk-82kqcve8.js:17762-18237 placement
+//@ chunk-a2q0x549.js:17837-18312 placement
 /**
  * 设置项目的组织记忆读取开关；关闭时同时清除写入设置与凭据并记写入关闭事件；记读取设置变化事件。
  */
@@ -508,14 +508,14 @@ function setOrgMemoryRead(enabled, storageV5) {
   });
   return true;
 }
-//@ chunk-82kqcve8.js:18237-18269 placement
+//@ chunk-a2q0x549.js:18312-18344 placement
 /**
  * 清除授权记录。
  */
 function clearGrant() {
   getOrgMemoryWriteVerdict().clearGrant();
 }
-//@ chunk-82kqcve8.js:18269-18380 placement
+//@ chunk-a2q0x549.js:18344-18455 placement
 function emitDecisionSignal(emitter, eventName) {
   try {
     emitter.emit();
@@ -525,7 +525,7 @@ function emitDecisionSignal(emitter, eventName) {
     });
   }
 }
-//@ chunk-82kqcve8.js:18380-21077 placement
+//@ chunk-a2q0x549.js:18455-21152 placement
 class OrgMemoryDecision {
   decision = {
     state: "undecided",
@@ -672,76 +672,76 @@ class OrgMemoryDecision {
     return decision;
   }
 }
-//@ chunk-82kqcve8.js:21077-21102 placement
+//@ chunk-a2q0x549.js:21152-21177 placement
 /**
  * 按宿主保存的组织记忆决定状态。
  */
 var orgMemoryDecisionState; // deferred: uses OrgMemoryDecision of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-82kqcve8.js:21077", () => {
+deferInit("chunk-a2q0x549.js:21152", () => {
   orgMemoryDecisionState = new HostScoped(() => new OrgMemoryDecision());
 });
-//@ chunk-82kqcve8.js:21102-21139 placement
+//@ chunk-a2q0x549.js:21177-21214 placement
 /**
  * 取当前宿主的决定状态。
  */
 function getOrgMemoryDecisionState() {
   return orgMemoryDecisionState.of(getRootSession().host);
 }
-//@ chunk-82kqcve8.js:21139-21187 placement
+//@ chunk-a2q0x549.js:21214-21262 placement
 function onOrgMemoryDecisionShrink(listener) {
   return getOrgMemoryDecisionState().shrunk.subscribe(listener);
 }
-//@ chunk-82kqcve8.js:21187-21236 placement
+//@ chunk-a2q0x549.js:21262-21311 placement
 function onOrgMemoryDecisionSettled(listener) {
   return getOrgMemoryDecisionState().settled.subscribe(listener);
 }
-//@ chunk-82kqcve8.js:21236-21290 placement
+//@ chunk-a2q0x549.js:21311-21365 placement
 function waitForOrgMemoryDecisionSettled(timeoutMs, signal, predicate) {
   return getOrgMemoryDecisionState().waitForSettled(timeoutMs, signal, predicate);
 }
-//@ chunk-82kqcve8.js:21290-21344 placement
+//@ chunk-a2q0x549.js:21365-21419 placement
 function waitForOrgMemoryDecisionSettledOnce(predicate, options) {
   return getOrgMemoryDecisionState().waitForSettledOnce(predicate, options);
 }
-//@ chunk-82kqcve8.js:21344-21379 placement
+//@ chunk-a2q0x549.js:21419-21454 placement
 function getOrgMemoryDecision() {
   return getOrgMemoryDecisionState().decision;
 }
-//@ chunk-82kqcve8.js:21379-21418 placement
+//@ chunk-a2q0x549.js:21454-21493 placement
 function getDecisionStores() {
   return getOrgMemoryDecisionState().getStores();
 }
-//@ chunk-82kqcve8.js:21418-21460 placement
+//@ chunk-a2q0x549.js:21493-21535 placement
 function getOrgMemoryServedIdentity() {
   return getOrgMemoryDecisionState().servedIdentity;
 }
-//@ chunk-82kqcve8.js:21460-21500 placement
+//@ chunk-a2q0x549.js:21535-21575 placement
 function settleOrgMemoryDecisionOn(decision) {
   return getOrgMemoryDecisionState().settleOn(decision);
 }
-//@ chunk-82kqcve8.js:21500-21540 placement
+//@ chunk-a2q0x549.js:21575-21615 placement
 function settleOrgMemoryDecisionOff(reason) {
   return getOrgMemoryDecisionState().settleOff(reason);
 }
-//@ chunk-82kqcve8.js:21540-21569 placement
+//@ chunk-a2q0x549.js:21615-21644 placement
 function parkOrgMemoryDecision(reason) {
   getOrgMemoryDecisionState().park(reason);
 }
-//@ chunk-82kqcve8.js:21569-21613 placement
+//@ chunk-a2q0x549.js:21644-21688 placement
 function shrinkOrgMemoryDecisionWriteAsk() {
   return getOrgMemoryDecisionState().shrinkWriteAsk();
 }
-//@ chunk-82kqcve8.js:21613-21654 placement
+//@ chunk-a2q0x549.js:21688-21729 placement
 function onOrgMemoryAuthCompletion(result) {
   getOrgMemoryDecisionState().onAuthCompletion(result);
 }
-//@ chunk-82kqcve8.js:21654-21690 placement
+//@ chunk-a2q0x549.js:21729-21765 placement
 function reopenOrgMemoryDecision() {
   return getOrgMemoryDecisionState().reopen();
 }
 export {
-  isLastAskDowngraded,
   getOrgMemoryDecision,
+  isLastAskDowngraded,
   classifyStorePath,
   hasPrivateGrouping,
   stripTrailingSlashes,
@@ -752,6 +752,10 @@ export {
   isMonorepoWriteBlocked,
   applyOrgMemoryDecision,
   shrinkOrgMemoryDecisionWriteAsk,
+  waitForOrgMemoryDecisionSettledOnce,
+  waitForOrgMemoryDecisionSettled,
+  hasMirror,
+  getDecisionStores,
   getOrgMemoryAccountKey,
   isEligibleDecisionSurface,
   recordVerdict,
@@ -760,7 +764,6 @@ export {
   hasRwGrantedStore,
   clearGrant,
   findGroupingStore,
-  hasMirror,
   grantedStoresCopy,
   isSiloStore,
   findGroupingRootStore,
@@ -776,12 +779,9 @@ export {
   installPrivateProbe,
   onOrgMemoryDecisionShrink,
   onOrgMemoryDecisionSettled,
-  getDecisionStores,
   getOrgMemoryServedIdentity,
   reopenOrgMemoryDecision,
-  waitForOrgMemoryDecisionSettled,
-  waitForOrgMemoryDecisionSettledOnce,
+  onOrgMemoryAuthCompletion,
   isProjectReadDisabled,
   setOrgMemoryRead,
-  onOrgMemoryAuthCompletion,
 };

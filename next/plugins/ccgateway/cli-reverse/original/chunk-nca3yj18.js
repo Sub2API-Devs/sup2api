@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.318
+import"./chunk-ndkzc8d3.js";import"./chunk-3jnp0k38.js";import"./chunk-5ythzcas.js";import"./chunk-0993wma0.js";import"./chunk-vwtpw18x.js";import"./chunk-63094ahz.js";import"./chunk-yxxb6qww.js";import"./chunk-za46rn2f.js";import"./chunk-0qffyy27.js";import"./chunk-2k62t388.js";import"./chunk-t046xvwq.js";import"./chunk-xjnnz630.js";import"./chunk-tzbg5px3.js";import"./chunk-6hadbefe.js";import"./chunk-ajqq8a9j.js";import"./chunk-ndcj3jv5.js";import"./chunk-8824h7w7.js";import"./chunk-3gbv0jkm.js";import"./chunk-2jb250pa.js";import"./chunk-my2r02mp.js";import"./chunk-bb1a67wr.js";import"./chunk-6xfdsap5.js";import"./chunk-h88kgep4.js";import"./chunk-m399y9ae.js";import{bn}from"./chunk-n49ac0t1.js";import"./chunk-1bsktt7r.js";import"./chunk-0eqmdcgk.js";import"./chunk-r4yj9pae.js";async function a(r,t){let o=e(r.remote,r.inputPrompt);if(o===null)return bn("Error: claude -p --cloud needs a task: pass it as the prompt, as --cloud's value, or on stdin.");let{runHeadlessCloudPrint:s}=await import("./chunk-0h9p4sxp.js");return s(r,t,{prompt:o,outputFormat:r.outputFormat==="json"?"json":"text"})}function e(r,t){let o=[r??"",typeof t==="string"?t:""].filter((s)=>s.trim()!=="");return o.length===0?null:o.join(`
+`)}export{a as runHeadlessCloudPrintArm};

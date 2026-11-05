@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：把本机注册为可附着设备（远程工具执行目标）：WebSocket 心跳、连接/错误码、工具元数据
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-efc34qfz.js (38)
- * attribution: placement 38
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-msyt5t42.js (39)
+ * attribution: placement 38, layout 1
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
 import {
@@ -22,7 +22,7 @@ import { env } from "../utils/env.js";
 import { stripControlChars } from "../utils/stripControlChars.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-efc34qfz.js:417-1012 placement
+//@ chunk-msyt5t42.js:416-1011 placement
 /**
  * 设备连接的心跳、超时、重连常量。
  */
@@ -45,7 +45,7 @@ var DEVICE_TIMING_BOUNDS;
 var PONG_TIMEOUT_SLACK_MS;
 var STALENESS_PONG_MARGIN_MS;
 var DEVICE_ERROR_CODES;
-deferInit("chunk-efc34qfz.js:417", () => {
+deferInit("chunk-msyt5t42.js:416", () => {
   DEVICE_PROTOCOL_VERSION = 2;
   DEVICE_HEARTBEAT_FRAME = '{"type":"hb"}';
   HANDSHAKE_TIMEOUT_MS = 15000;
@@ -100,12 +100,12 @@ deferInit("chunk-efc34qfz.js:417", () => {
     "device_session_limit",
   ]);
 });
-//@ chunk-efc34qfz.js:1012-1103 placement
+//@ chunk-msyt5t42.js:1011-1102 placement
 function normalizeDeviceErrorCode(reason) {
   if (typeof reason !== "string" || reason.length === 0) return;
   return DEVICE_ERROR_CODES.includes(reason) ? reason : "unknown";
 }
-//@ chunk-efc34qfz.js:1103-1206 placement
+//@ chunk-msyt5t42.js:1102-1205 placement
 /**
  * 错误码为 duplicate_device_id / device_name_in_use / device_session_limit 之一时为真（不应重试的身份冲突）。
  */
@@ -116,7 +116,7 @@ function isDeviceIdentityConflict(errorCode) {
     errorCode === "device_session_limit"
   );
 }
-//@ chunk-efc34qfz.js:1206-1393 placement
+//@ chunk-msyt5t42.js:1205-1392 placement
 /**
  * 工具元数据 _meta 键名表：anthropic/searchHint、alwaysLoad、maxResultSizeChars、requiresUserInteraction。
  */
@@ -126,7 +126,7 @@ var TOOL_META_KEYS = {
   maxResultSizeChars: "anthropic/maxResultSizeChars",
   requiresUserInteraction: "anthropic/requiresUserInteraction",
 };
-//@ chunk-efc34qfz.js:1393-1669 placement
+//@ chunk-msyt5t42.js:1392-1668 placement
 function buildConnectMessage(options) {
   let hasDeviceId = options.deviceId !== undefined && options.deviceId !== "";
   return {
@@ -146,7 +146,7 @@ function buildConnectMessage(options) {
       }),
   };
 }
-//@ chunk-efc34qfz.js:1669-2043 placement
+//@ chunk-msyt5t42.js:1668-2042 placement
 /**
  * 设备通道帧解析用的常量与 schema：长度上限、帧外壳 schema（type 可选）、connected 帧（协议版本与心跳计时）和 error 帧（reason/status/error，解析失败置空）。
  */
@@ -155,7 +155,7 @@ var MAX_ERROR_DETAIL_CHARS;
 var deviceFrameEnvelopeSchema;
 var connectedFrameSchema;
 var errorFrameSchema;
-deferInit("chunk-efc34qfz.js:1669", () => {
+deferInit("chunk-msyt5t42.js:1668", () => {
   MAX_FRAME_TYPE_CHARS = 64;
   MAX_ERROR_DETAIL_CHARS = 1024;
   deviceFrameEnvelopeSchema = DoctorLazy(() =>
@@ -181,7 +181,7 @@ deferInit("chunk-efc34qfz.js:1669", () => {
     }),
   );
 });
-//@ chunk-efc34qfz.js:2043-2670 placement
+//@ chunk-msyt5t42.js:2042-2667 placement
 function parseDeviceFrame(text) {
   let parsed;
   try {
@@ -239,7 +239,7 @@ function parseDeviceFrame(text) {
       };
   }
 }
-//@ chunk-efc34qfz.js:2670-2773 placement
+//@ chunk-msyt5t42.js:2667-2770 placement
 function negotiateProtocolVersion(rtbProtocolVersion, hbSupported) {
   let reportedVersion =
     typeof rtbProtocolVersion === "number" && Number.isInteger(rtbProtocolVersion) && rtbProtocolVersion >= 0
@@ -247,7 +247,7 @@ function negotiateProtocolVersion(rtbProtocolVersion, hbSupported) {
       : 0;
   return Math.max(reportedVersion, hbSupported === true ? 1 : 0);
 }
-//@ chunk-efc34qfz.js:2773-2995 placement
+//@ chunk-msyt5t42.js:2770-2992 placement
 function parseDeviceTimings(timings) {
   let object = typeof timings === "object" && timings !== null && !Array.isArray(timings) ? timings : {};
   return {
@@ -256,14 +256,14 @@ function parseDeviceTimings(timings) {
     rpcTimeoutMs: clampDeviceTiming(object.rpc_timeout_ms, "rpcTimeoutMs"),
   };
 }
-//@ chunk-efc34qfz.js:2995-3142 placement
+//@ chunk-msyt5t42.js:2992-3139 placement
 function clampDeviceTiming(value, fieldName) {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0)
     return DEFAULT_DEVICE_TIMINGS[fieldName];
   let { min, max } = DEVICE_TIMING_BOUNDS[fieldName];
   return Math.round(Math.min(Math.max(value, min), max));
 }
-//@ chunk-efc34qfz.js:3142-3412 placement
+//@ chunk-msyt5t42.js:3139-3409 placement
 function describeDeviceError(timings) {
   let min = Math.min(
     timings.hbIntervalMs,
@@ -278,7 +278,7 @@ function describeDeviceError(timings) {
     ),
   };
 }
-//@ chunk-efc34qfz.js:3412-3562 placement
+//@ chunk-msyt5t42.js:3409-3559 placement
 /**
  * 设备注册断线重连的等待时间：已有成功连接时按次数选短/长基准加抖动；否则指数退避（1.5^n，有上限）乘 0.5–1 随机因子。
  */
@@ -300,7 +300,7 @@ function computeReconnectDelayMs(
     Math.min(RECONNECT_BACKOFF_BASE_MS * 1.5 ** attempt, RECONNECT_BACKOFF_CAP_MS) * (0.5 + random() * 0.5),
   );
 }
-//@ chunk-efc34qfz.js:3562-3677 placement
+//@ chunk-msyt5t42.js:3559-3674 placement
 /**
  * 转小写、非字母数字换成 -、去首尾 -，截到 n 个字符。
  */
@@ -312,40 +312,44 @@ function slugifyName(name, maxLength) {
     .slice(0, maxLength)
     .replace(/-+$/, "");
 }
-//@ chunk-efc34qfz.js:3677-3717 placement
+//@ chunk-msyt5t42.js:3674-3714 placement
 /**
  * 把用户给的机器名规范成 slug（截断到 48），空时回退为 "device"。
  */
 function deviceSlugOrFallback(name, maxLength = 48) {
   return slugifyName(name, maxLength) || DEVICE;
 }
-//@ chunk-efc34qfz.js:3717-3778 placement
+//@ chunk-msyt5t42.js:3714-3776 placement
 /**
  * 是否开启跨机器工具转发（CLAUDE_CODE_REMOTE_TOOLS_FORWARD 为真）。
  */
 function isRemoteToolsForwardEnabled() {
   return env.CLAUDE_CODE_REMOTE_TOOLS_FORWARD === true;
 }
-//@ chunk-efc34qfz.js:3778-3804 placement
+//@ chunk-msyt5t42.js:3776-3803 layout
+function isRemoteToolsForwardEnabled2() {
+  return isRemoteToolsForwardEnabled();
+}
+//@ chunk-msyt5t42.js:3803-3829 placement
 /**
  * 本会话能否在本机执行工具调用：与 Z2 同义的包装，供 runsOnMachine 判断。
  */
 function canRunToolsOnThisMachine() {
-  return isRemoteToolsForwardEnabled();
+  return isRemoteToolsForwardEnabled2();
 }
-//@ chunk-efc34qfz.js:3804-3853 placement
+//@ chunk-msyt5t42.js:3829-3878 placement
 /**
  * 工具输入里的机器字段名 "_host" 与随行元数据键 "_host_context"。
  */
 var HOST_TOOL_INPUT_FIELD; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var HOST_CONTEXT_META_FIELD;
 var weakMap;
-deferInit("chunk-efc34qfz.js:3804", () => {
+deferInit("chunk-msyt5t42.js:3829", () => {
   HOST_TOOL_INPUT_FIELD = "_host";
   HOST_CONTEXT_META_FIELD = "_host_context";
   weakMap = new WeakMap();
 });
-//@ chunk-efc34qfz.js:3853-3891 placement
+//@ chunk-msyt5t42.js:3878-3916 placement
 /**
  * 把 host 上下文记到 WeakMap 并原样返回输入对象，供后续 $Fe 取回。
  */
@@ -353,7 +357,7 @@ function rememberHostContext(session, context) {
   weakMap.set(session, context);
   return session;
 }
-//@ chunk-efc34qfz.js:3891-3953 placement
+//@ chunk-msyt5t42.js:3916-3978 placement
 /**
  * 取随工具调用携带的 host 上下文元数据（{_host_context: …}，没有时返回空对象）。
  */
@@ -365,7 +369,7 @@ function hostContextMeta(session) {
         [HOST_CONTEXT_META_FIELD]: context,
       };
 }
-//@ chunk-efc34qfz.js:3953-4053 placement
+//@ chunk-msyt5t42.js:3978-4078 placement
 /**
  * 机器名相关常量：保留名 container/this-machine、机器 slug 正则（1–40，小写字母数字与连字符）与名字截断长度 40。
  */
@@ -373,20 +377,20 @@ var DEVICE_2 = "device";
 var RESERVED_MACHINE_NAMES = ["container", "this-machine"];
 var MACHINE_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 var MAX_MACHINE_NAME_CHARS = 40;
-//@ chunk-efc34qfz.js:4053-4094 placement
+//@ chunk-msyt5t42.js:4078-4119 placement
 /**
  * 判断是否合法的非保留机器 slug。
  */
 function isValidMachineSlug(slug) {
   return !isReservedMachineNameExact(slug) && MACHINE_SLUG_PATTERN.test(slug);
 }
-//@ chunk-efc34qfz.js:4094-4113 placement
+//@ chunk-msyt5t42.js:4119-4138 placement
 var OFFLINE_SUFFIX = " (offline)";
-//@ chunk-efc34qfz.js:4113-4158 placement
+//@ chunk-msyt5t42.js:4138-4183 placement
 function isPrintableAscii(text) {
   return /^[\x20-\x7e]+$/.test(text);
 }
-//@ chunk-efc34qfz.js:4158-4306 placement
+//@ chunk-msyt5t42.js:4183-4331 placement
 /**
  * 把用户给的机器名规范成 slug：去掉 "(offline)" 后缀、取第一段、slugify；非法或空返回 undefined。
  */
@@ -397,7 +401,7 @@ function normalizeMachineName(name) {
   let slug = slugifyName(firstLineOf(base, "."), MAX_MACHINE_NAME_CHARS);
   return slug === "" ? undefined : slug;
 }
-//@ chunk-efc34qfz.js:4306-4484 placement
+//@ chunk-msyt5t42.js:4331-4509 placement
 /**
  * 判断工具输入里的机器名是否指向 n：完全相等为真，保留名/本机别名为假，否则比较规范化 slug。
  */
@@ -415,7 +419,7 @@ function machineNameMatches(candidate, name) {
     normalized === normalizeMachineName(name)
   );
 }
-//@ chunk-efc34qfz.js:4484-4566 placement
+//@ chunk-msyt5t42.js:4509-4591 placement
 /**
  * 判断给定机器名（或其规范化形式）是否落在保留名里。
  */
@@ -426,21 +430,21 @@ function isReservedMachineName(name) {
     (normalized !== undefined && isReservedMachineNameExact(normalized))
   );
 }
-//@ chunk-efc34qfz.js:4566-4635 placement
+//@ chunk-msyt5t42.js:4591-4660 placement
 /**
  * 当前机器在工具输入里应写的标签：容器内为 "container"，否则为 "this-machine"。
  */
 function currentMachineLabel() {
   return env.CLAUDE_CODE_REMOTE ? "container" : "this-machine";
 }
-//@ chunk-efc34qfz.js:4635-4676 placement
+//@ chunk-msyt5t42.js:4660-4701 placement
 /**
  * 精确判断机器名是否为保留名（container/this-machine）。
  */
 function isReservedMachineNameExact(name) {
   return RESERVED_MACHINE_NAMES.some((reserved) => reserved === name);
 }
-//@ chunk-efc34qfz.js:4676-5092 placement
+//@ chunk-msyt5t42.js:4701-5117 placement
 /**
  * 在工具输入模式中加入可选的"在某台附着机器上运行"字段。
  */
@@ -455,9 +459,9 @@ function attachedMachineInputField() {
       }
     : {};
 }
-//@ chunk-efc34qfz.js:5092-5101 placement
+//@ chunk-msyt5t42.js:5117-5126 placement
 var MAX_MACHINE_LABEL_CHARS = 40;
-//@ chunk-efc34qfz.js:5101-5256 placement
+//@ chunk-msyt5t42.js:5126-5280 placement
 /**
  * 从工具输入里拆出 _host 字段：返回 {requested, input}，requested 为去空白后的机器名（空或保留名为 undefined），input 为去掉该字段的输入。
  */
@@ -474,7 +478,7 @@ function splitHostField(input) {
     input: rest,
   };
 }
-//@ chunk-efc34qfz.js:5256-5369 placement
+//@ chunk-msyt5t42.js:5280-5392 placement
 /**
  * 权限对话框用：返回请求的机器名，以及（设备工具已启用且是附着机器时）实际运行的机器。
  */
@@ -488,35 +492,35 @@ function getRequestedMachineForPrompt(input) {
         : undefined,
   };
 }
-//@ chunk-efc34qfz.js:5369-5403 placement
+//@ chunk-msyt5t42.js:5392-5425 placement
 /**
  * 把机器名取首行并截断到 40 列，用于提示文案。
  */
 function machineLabelForMessage(name) {
   return truncateToLength(stripControlChars(name), MAX_MACHINE_LABEL_CHARS);
 }
-//@ chunk-efc34qfz.js:5403-5518 placement
+//@ chunk-msyt5t42.js:5425-5540 placement
 /**
  * 工具调用带了 _host 但没有转发到该机器时的报错文本。
  */
 function hostFieldNotForwardedMessage() {
   return `This call named a machine ("${HOST_TOOL_INPUT_FIELD}") but was not forwarded to it; omit the field to run here.`;
 }
-//@ chunk-efc34qfz.js:5518-5641 placement
+//@ chunk-msyt5t42.js:5540-5663 placement
 /**
  * 本会话未启用附着机器执行时的报错文本，提示去掉 _host。
  */
 function remoteToolCallsDisabledMessage() {
   return `Running tool calls on an attached machine is not enabled in this session; omit "${HOST_TOOL_INPUT_FIELD}" to run here.`;
 }
-//@ chunk-efc34qfz.js:5641-5677 placement
+//@ chunk-msyt5t42.js:5663-5699 placement
 /**
  * 判断工具输入里是否带了 _host 字段。
  */
 function hasHostField(input) {
   return readHostField(input) !== undefined;
 }
-//@ chunk-efc34qfz.js:5677-5743 placement
+//@ chunk-msyt5t42.js:5699-5765 placement
 /**
  * 取工具输入里请求的目标机器名并做有界截断；未指定时返回 undefined。
  */
@@ -524,7 +528,7 @@ function requestedMachineLabel(input) {
   let hostField = readHostField(input);
   return hostField === undefined ? undefined : machineLabelForMessage(hostField) || undefined;
 }
-//@ chunk-efc34qfz.js:5743-5896 placement
+//@ chunk-msyt5t42.js:5765-5918 placement
 function readHostField(input) {
   if (typeof input !== "object" || input === null || !(HOST_TOOL_INPUT_FIELD in input)) return;
   let value = input[HOST_TOOL_INPUT_FIELD];
@@ -537,30 +541,27 @@ export {
   HOST_TOOL_INPUT_FIELD,
   machineNameMatches,
   hasHostField,
-  machineLabelForMessage,
-  isRemoteToolsForwardEnabled,
-  getRequestedMachineForPrompt,
-  TOOL_META_KEYS,
-  isValidMachineSlug,
-  requestedMachineLabel,
-  attachedMachineInputField,
-  deviceSlugOrFallback,
+  hostContextMeta,
   canRunToolsOnThisMachine,
   hostFieldNotForwardedMessage,
-  MAX_MACHINE_NAME_CHARS,
-  hostContextMeta,
-  currentMachineLabel,
+  machineLabelForMessage,
+  isRemoteToolsForwardEnabled,
   splitHostField,
   isReservedMachineName,
   remoteToolCallsDisabledMessage,
   normalizeMachineName,
-  HOST_CONTEXT_META_FIELD,
-  rememberHostContext,
-  isReservedMachineNameExact,
+  isValidMachineSlug,
+  TOOL_META_KEYS,
+  REANNOUNCE_DELAYS_MS,
   MACHINE_SLUG_PATTERN,
+  isReservedMachineNameExact,
+  currentMachineLabel,
+  attachedMachineInputField,
+  isRemoteToolsForwardEnabled2,
+  requestedMachineLabel,
+  deviceSlugOrFallback,
   describeDeviceError,
   DEFAULT_DEVICE_TIMINGS,
-  REANNOUNCE_DELAYS_MS,
   DEVICE_STABLE_QUALIFY_MS,
   DEVICE_HEARTBEAT_FRAME,
   computeReconnectDelayMs,
@@ -571,4 +572,8 @@ export {
   isDeviceIdentityConflict,
   WS_CLOSE_CODE_SUPERSEDED,
   slugifyName,
+  MAX_MACHINE_NAME_CHARS,
+  getRequestedMachineForPrompt,
+  HOST_CONTEXT_META_FIELD,
+  rememberHostContext,
 };

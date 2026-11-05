@@ -3,35 +3,35 @@
  *
  * ui.render 树字段常量（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (10)
  * attribution: placement 10
  */
 import { identity } from "../../../utils/identity.js";
 import { createSurfaceRowLedger } from "../sites/index.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:8957-8989 placement
+//@ chunk-j8f885h1.js:9066-9098 placement
 /**
  * 界面行账本
  */
 var surfaceRowLedger; // deferred: uses createSurfaceRowLedger (../sites/index.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:8957", () => {
+deferInit("chunk-j8f885h1.js:9066", () => {
   surfaceRowLedger = identity(createSurfaceRowLedger(), (ledger) => ledger.clear());
 });
-//@ chunk-4121qate.js:8989-9000 placement
+//@ chunk-j8f885h1.js:9098-9109 placement
 var DIALOG_FRAME_COLUMNS = 40;
-//@ chunk-4121qate.js:9000-9011 placement
+//@ chunk-j8f885h1.js:9109-9120 placement
 var DIALOG_FRAME_ROWS_MAX = 12;
-//@ chunk-4121qate.js:9011-9022 placement
+//@ chunk-j8f885h1.js:9120-9131 placement
 var OWN_FRAME_ROWS_MAX = 48;
-//@ chunk-4121qate.js:9022-9069 placement
+//@ chunk-j8f885h1.js:9131-9178 placement
 var OWN_FRAME_SURFACES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4121qate.js:9022", () => {
+deferInit("chunk-j8f885h1.js:9131", () => {
   OWN_FRAME_SURFACES = new Set(["desktop", "vscode", "mobile"]);
 });
-//@ chunk-4121qate.js:9069-9158 placement
+//@ chunk-j8f885h1.js:9178-9267 placement
 function dialogFrameOf(surface) {
   let isOwnFrame = surface !== undefined && OWN_FRAME_SURFACES.has(surface);
   return {
@@ -39,14 +39,14 @@ function dialogFrameOf(surface) {
     isMarkdownDrawn: isOwnFrame,
   };
 }
-//@ chunk-4121qate.js:9158-9170 placement
+//@ chunk-j8f885h1.js:9267-9279 placement
 var MAX_TREE_TEXT_CHARS = 1e5;
-//@ chunk-4121qate.js:9170-9196 placement (2.1.88 match: ASK_USER_QUESTION_TOOL_NAME, 1)
+//@ chunk-j8f885h1.js:9279-9305 placement (2.1.88 match: ASK_USER_QUESTION_TOOL_NAME, 1)
 /**
  * AskUserQuestion 工具名常量。
  */
 var ONE_ENGINE_NODE_COMPONENT = "AskUserQuestion";
-//@ chunk-4121qate.js:9196-9430 placement
+//@ chunk-j8f885h1.js:9305-9539 placement
 /**
  * 识别要求渲染 AskUserQuestion 组件的 ui.render 事件，返回 requestId 与 surface。
  */
@@ -64,7 +64,7 @@ function parseAskUserQuestionRenderRequest(event, payload) {
       }
     : undefined;
 }
-//@ chunk-4121qate.js:9430-9532 placement
+//@ chunk-j8f885h1.js:9539-9641 placement
 /**
  * 生成 Client 元素的挂载键（请求、界面、插件与 key）。
  */
@@ -75,14 +75,14 @@ var clientMountKey = ({ requestId, surface }, client) => ({
   key: client.props.key,
 });
 export {
-  MAX_TREE_TEXT_CHARS,
-  DIALOG_FRAME_COLUMNS,
   ONE_ENGINE_NODE_COMPONENT,
-  dialogFrameOf,
   surfaceRowLedger,
-  clientMountKey,
   parseAskUserQuestionRenderRequest,
+  DIALOG_FRAME_COLUMNS,
   DIALOG_FRAME_ROWS_MAX,
+  MAX_TREE_TEXT_CHARS,
   OWN_FRAME_ROWS_MAX,
   OWN_FRAME_SURFACES,
+  dialogFrameOf,
+  clientMountKey,
 };

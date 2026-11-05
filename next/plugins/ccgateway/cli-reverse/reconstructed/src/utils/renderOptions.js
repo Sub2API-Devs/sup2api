@@ -3,9 +3,9 @@
  *
  * Ink 渲染选项：stdin 不可用时改用 /dev/tty 等 override。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/renderOptions.ts
- * pieces: chunk-rr03x1jm.js (4)
+ * pieces: chunk-ex0hdrp3.js (4)
  * attribution: fingerprint 1, layout 1, facade-exports 2
  */
 import { openSync } from "fs";
@@ -19,7 +19,7 @@ import { logForDebugging } from "./debug.js";
 import { applyRelaunchTerminalSize } from "./relaunchTerminalSize.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-rr03x1jm.js:510-1001 fingerprint (2.1.88 match: getStdinOverride, 0.316)
+//@ chunk-ex0hdrp3.js:510-1001 fingerprint (2.1.88 match: getStdinOverride, 0.315)
 function getStdinOverride() {
   if (process.stdin.isTTY)
     return {
@@ -60,7 +60,7 @@ function getStdinOverride() {
     };
   }
 }
-//@ chunk-rr03x1jm.js:1001-1075 layout
+//@ chunk-ex0hdrp3.js:1001-1075 layout
 class stdinOverrideCell {
   input = null;
   get() {
@@ -70,12 +70,12 @@ class stdinOverrideCell {
     this.input = null;
   }
 }
-//@ chunk-rr03x1jm.js:1075-1089 facade-exports
+//@ chunk-ex0hdrp3.js:1075-1089 facade-exports
 var stdinOverrideCache; // deferred: uses stdinOverrideCell of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-rr03x1jm.js:1075", () => {
+deferInit("chunk-ex0hdrp3.js:1075", () => {
   stdinOverrideCache = new stdinOverrideCell();
 });
-//@ chunk-rr03x1jm.js:1089-1225 facade-exports (2.1.88 match: getBaseRenderOptions, 0.509)
+//@ chunk-ex0hdrp3.js:1089-1225 facade-exports (2.1.88 match: getBaseRenderOptions, 0.509)
 function getBaseRenderOptions(exitOnCtrlC = false) {
   applyRelaunchTerminalSize();
   let stdin = stdinOverrideCache.get();

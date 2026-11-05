@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：预先计算压缩摘要，到阈值时直接应用并持久化
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (50)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (50)
  * attribution: placement 50
  */
 import { join, dirname, resolve as resolve_2, relative, sep, isAbsolute } from "path";
@@ -38,12 +38,13 @@ import { logError } from "../../utils/log.js";
 import {
   keptRowUuids,
   dispatchSessionCompactHooks,
-  getTokenCountFromUsage_3,
+  getTokenCountFromUsage_5,
 } from "../../plugins/functionHooks/sessionCompactHook.js";
 import {
   getCompactThresholdSnapshot,
   estimateTokensWithAnchor,
   isAtPrecomputeThreshold,
+  serverClearedTokens,
   getMainThreadCacheExpiresAt,
 } from "./autoCompact.js";
 import {
@@ -56,7 +57,6 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js"
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { getProjectsDir } from "../../utils/sessionStoragePortable.js";
 import { getCanonicalModelId } from "../../utils/modelCost.js";
-import { stripInProgressAssistantMessage } from "../../commands/btw/btw.js";
 import { agentTypeForTelemetry } from "../analytics/metadata.js";
 import { resolvePrecomputeFraction, windowSource } from "./autoCompactWindow.js";
 import { isDelegatedObservationContext } from "../../utils/agentContext.js";
@@ -68,35 +68,35 @@ import { logFeatureSad, logFeatureBad, logFeatureOk } from "../analytics/feature
 import { getModelContextInfo } from "../../utils/model/modelContextInfo.js";
 import { EMPTY_USAGE } from "../api/emptyUsage.js";
 
-//@ chunk-e6aww6q8.js:2452854-2452897 placement
+//@ chunk-5xgkngpb.js:2510098-2510141 placement
 /**
  * 预计算压缩文件的最大字节数（8MB）。
  */
-var PRECOMPACT_FORMAT_VERSION = 5;
+var PRECOMPACT_FORMAT_VERSION = 6;
 var MAX_PRECOMPACT_BYTES = 8000000;
 var PRECOMPACT_JSON = "precompact.json";
-//@ chunk-e6aww6q8.js:2452897-2452935 placement
+//@ chunk-5xgkngpb.js:2510141-2510179 placement
 /**
  * 某会话的预计算压缩文件路径（sidecar 目录下 precompact.json）。
  */
 function precompactFilePath(sessionId) {
   return join(getSessionSidecarDir(sessionId), PRECOMPACT_JSON);
 }
-//@ chunk-e6aww6q8.js:2452935-2452970 placement
+//@ chunk-5xgkngpb.js:2510179-2510214 placement
 /**
  * 旧布局的预计算压缩文件路径（sidecar 目录加后缀）。
  */
 function legacyPrecompactFilePath(sessionId) {
   return sidecarPrecompactPath(getSessionSidecarDir(sessionId));
 }
-//@ chunk-e6aww6q8.js:2452970-2453003 placement
+//@ chunk-5xgkngpb.js:2510214-2510247 placement
 /**
  * 给目录路径加上预计算文件名后缀。
  */
 function sidecarPrecompactPath(dir) {
   return dir + "." + PRECOMPACT_JSON;
 }
-//@ chunk-e6aww6q8.js:2453003-2453617 placement
+//@ chunk-5xgkngpb.js:2510247-2510861 placement
 async function writePrecomputedCompact(payload, filePath = precompactFilePath(payload.sessionId), storageV5) {
   let serialized = jsonStringify(payload);
   let bytes = Buffer.byteLength(serialized, "utf8");
@@ -154,7 +154,7 @@ async function writePrecomputedCompact(payload, filePath = precompactFilePath(pa
     };
   }
 }
-//@ chunk-e6aww6q8.js:2453617-2453742 placement
+//@ chunk-5xgkngpb.js:2510861-2510986 placement
 /**
  * 依次读取新旧位置的预计算压缩文件。
  */
@@ -168,7 +168,7 @@ function readPrecomputedFromDisk(sessionId) {
     reason: "absent",
   };
 }
-//@ chunk-e6aww6q8.js:2453742-2453962 placement
+//@ chunk-5xgkngpb.js:2510986-2511206 placement
 /**
  * 同步读取预计算压缩文件（无盘、过大或不存在时返回原因）。
  */
@@ -201,7 +201,7 @@ function readPrecomputedFile(path) {
   }
   return parsePrecomputedPayload(text);
 }
-//@ chunk-e6aww6q8.js:2453962-2454298 placement
+//@ chunk-5xgkngpb.js:2511206-2511542 placement
 /**
  * 解析预计算压缩 JSON（大小、版本、字段校验）。
  */
@@ -241,7 +241,7 @@ function parsePrecomputedPayload(text) {
         payload,
       };
 }
-//@ chunk-e6aww6q8.js:2454298-2454806 placement
+//@ chunk-5xgkngpb.js:2511542-2512050 placement
 /**
  * 以不跟随链接方式异步读取预计算压缩文件。
  */
@@ -297,7 +297,7 @@ async function readPrecomputedNoFollow(filePath) {
     await handle.close().catch(() => {});
   }
 }
-//@ chunk-e6aww6q8.js:2454806-2455245 placement
+//@ chunk-5xgkngpb.js:2512050-2512489 placement
 /**
  * 从会话存储（或磁盘）读取预计算压缩。
  */
@@ -340,7 +340,7 @@ async function readPrecomputedSidecar(sessionId, sidecarPath, storageV5) {
     reason: "absent",
   };
 }
-//@ chunk-e6aww6q8.js:2455245-2455451 placement
+//@ chunk-5xgkngpb.js:2512489-2512695 placement
 /**
  * 删除会话的预计算压缩文件/存储项。
  */
@@ -354,7 +354,7 @@ async function deletePrecomputed(sessionId, storageV5) {
   if (isDiskless()) return;
   await unlink(legacyPath).catch(() => {});
 }
-//@ chunk-e6aww6q8.js:2455451-2455750 placement
+//@ chunk-5xgkngpb.js:2512695-2512994 placement
 /**
  * 预计算载荷转为压缩结果。
  */
@@ -372,7 +372,7 @@ function toCompactionResult(payload, messagesToPreserve) {
     totalUsage: payload.totalUsage,
   };
 }
-//@ chunk-e6aww6q8.js:2455750-2455900 placement
+//@ chunk-5xgkngpb.js:2512994-2513144 placement
 /**
  * 类型守卫：字符串、带 message/uuid 的消息、有限数字。
  */
@@ -380,7 +380,7 @@ var isString_2 = (value) => typeof value === "string";
 var isMessageLike = (value) =>
   typeof value === "object" && value !== null && "message" in value && "uuid" in value;
 var isFiniteNumber_3 = (value) => typeof value === "number" && Number.isFinite(value);
-//@ chunk-e6aww6q8.js:2455900-2456533 placement
+//@ chunk-5xgkngpb.js:2513144-2513777 placement
 /**
  * 校验预计算压缩载荷的全部字段。
  */
@@ -412,7 +412,7 @@ function validatePrecomputedPayload(payload) {
     ? payload
     : null;
 }
-//@ chunk-e6aww6q8.js:2456533-2456716 placement
+//@ chunk-5xgkngpb.js:2513777-2513960 placement
 /**
  * 预计算失败的原因描述。
  */
@@ -427,12 +427,12 @@ function describePrecomputeFailure(failure, durationMs) {
     durationMs,
   };
 }
-//@ chunk-e6aww6q8.js:2456716-2456726 placement
+//@ chunk-5xgkngpb.js:2513960-2513970 placement
 /**
  * 预计算连续失败计数达到多少就记录一次（3）。
  */
 var MAX_COUNTED_FAILURES = 3;
-//@ chunk-e6aww6q8.js:2456726-2456939 placement
+//@ chunk-5xgkngpb.js:2513970-2514183 placement
 /**
  * 预计算被闸门阻止时只记录一次。
  */
@@ -447,7 +447,7 @@ function latchArmGate(precompute, agentId, reason, querySource) {
   logForDebugging(`precomputed compact: arm gated (${agentKey}, ${reason})`);
   return true;
 }
-//@ chunk-e6aww6q8.js:2456939-2457020 placement
+//@ chunk-5xgkngpb.js:2514183-2514264 placement
 /**
  * 给消息附上对应的 row uuid，失败时返回 undefined。
  */
@@ -462,7 +462,7 @@ function messagesWithRowUuids(messages, onError = logError) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:2457020-2457191 placement
+//@ chunk-5xgkngpb.js:2514264-2514435 placement
 /**
  * 检查预计算摘要是否仍覆盖当前对话。
  */
@@ -476,7 +476,7 @@ function checkPrecomputeCoverage(precomputed, { sent, received }, fact, autoComp
     fit: getCompactThresholdSnapshot(precomputed, received.messages, fact, autoCompactWindow),
   });
 }
-//@ chunk-e6aww6q8.js:2457191-2457293 placement
+//@ chunk-5xgkngpb.js:2514435-2514537 placement
 /**
  * 预计算压缩是否开启（自动压缩、远程可压缩、tengu_sepia_moth）。
  */
@@ -486,14 +486,14 @@ function isPrecomputedCompactEnabled() {
   if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_sepia_moth", false)) return false;
   return isPrecomputeCompactionEnabled();
 }
-//@ chunk-e6aww6q8.js:2457293-2457323 placement
+//@ chunk-5xgkngpb.js:2514537-2514567 placement
 /**
  * 查询来源是否为 /compact 命令。
  */
 function isCompactCommandSource(querySource) {
   return isCompactCommand(querySource);
 }
-//@ chunk-e6aww6q8.js:2457323-2457392 placement
+//@ chunk-5xgkngpb.js:2514567-2514636 placement
 /**
  * 预计算压缩当前是否可用：实验开关、设置开启、转写持久化开启、非无盘会话。
  */
@@ -505,7 +505,7 @@ function isPrecomputeUsable() {
     !isDiskless()
   );
 }
-//@ chunk-e6aww6q8.js:2457392-2458400 placement
+//@ chunk-5xgkngpb.js:2514636-2515644 placement
 /**
  * 当前 CLI 版本与预计算文件过期时间。
  */
@@ -514,10 +514,10 @@ var CLI_VERSION_2 =
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
-    VERSION: "2.1.316",
+    VERSION: "2.1.318",
     FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-    BUILD_TIME: "2026-10-30T23:28:13Z",
-    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    BUILD_TIME: "2026-11-03T18:52:53Z",
+    GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
     HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
     DD_SOURCEMAP_GROUP: "default",
   } !== "undefined"
@@ -525,16 +525,16 @@ var CLI_VERSION_2 =
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION
     : "unknown";
 var PRECOMPUTE_MAX_AGE_MS = 604800000;
-//@ chunk-e6aww6q8.js:2458400-2458826 placement
+//@ chunk-5xgkngpb.js:2515644-2516070 placement
 /**
  * 续接会话时预读预计算压缩并缓存。
  */
@@ -567,7 +567,7 @@ async function prefetchPrecomputedSidecar(sessionId, session, precompute, storag
     precompute.dropSidecarReadAhead(sessionId);
   };
 }
-//@ chunk-e6aww6q8.js:2458826-2458980 placement
+//@ chunk-5xgkngpb.js:2516070-2516224 placement
 /**
  * 续接会话时的 onSessionResolved 钩子（预读预计算压缩）。
  */
@@ -579,7 +579,7 @@ function precomputeResumeHooks(precompute, storageV5, options) {
       prefetchPrecomputedSidecar(expectedSessionId ?? session.sessionId, session, precompute, storageV5),
   };
 }
-//@ chunk-e6aww6q8.js:2458980-2459079 placement
+//@ chunk-5xgkngpb.js:2516224-2516323 placement
 /**
  * 路径是否位于项目目录之下（防止拿到项目外的转写）。
  */
@@ -587,7 +587,7 @@ function isUnderProjectsDir(transcriptPath) {
   let rel = relative(getProjectsDir(), resolve_2(transcriptPath));
   return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
 }
-//@ chunk-e6aww6q8.js:2459079-2461249 placement
+//@ chunk-5xgkngpb.js:2516323-2518496 placement
 /**
  * 读取持久化的预计算压缩，校验会话、时间戳、是否过旧或已压缩。
  */
@@ -691,7 +691,7 @@ function loadPrecomputedCompact(precompute, agentKey, querySource, messages, mai
     `precomputed compact: rehydrated (${agentKey}, age ${Math.round(max)}ms, growth ~${growthTokens} tok)`,
   );
 }
-//@ chunk-e6aww6q8.js:2461249-2461431 placement
+//@ chunk-5xgkngpb.js:2518496-2518678 placement
 /**
  * 找包含某 uuid 的最近压缩边界的保留信息。
  */
@@ -703,7 +703,7 @@ function findPreservedMetadata(messages, precomputedAtUuid) {
     ? preservedMessages
     : undefined;
 }
-//@ chunk-e6aww6q8.js:2461431-2461611 placement
+//@ chunk-5xgkngpb.js:2518678-2518858 placement
 /**
  * 拒绝恢复预计算压缩：删除文件并记录原因。
  */
@@ -715,7 +715,7 @@ function rejectRehydrate(precompute, sessionId, reason, details, storageV5) {
   });
   logForDebugging(`precomputed compact: rehydrate rejected (${reason})`);
 }
-//@ chunk-e6aww6q8.js:2461611-2462633 placement
+//@ chunk-5xgkngpb.js:2518858-2519880 placement
 /**
  * 把预先计算的压缩摘要持久化到会话存储。
  */
@@ -767,7 +767,7 @@ async function persistPrecomputedCompact({
     `precomputed compact: persisted (${writeResult.ok ? `${writeResult.bytes} bytes` : `${writeResult.reason}${writeResult.detail === undefined ? "" : `: ${writeResult.detail}`}`})`,
   );
 }
-//@ chunk-e6aww6q8.js:2462633-2462763 placement
+//@ chunk-5xgkngpb.js:2519880-2520010 placement
 /**
  * 删除本会话已就绪的预计算文件。
  */
@@ -776,7 +776,7 @@ function deleteReadySidecar(deps, ready, storageV5) {
   if (sidecarSessionId !== undefined && sidecarSessionId === getSessionId())
     deps.enqueueSidecarIo(() => deletePrecomputed(sidecarSessionId, storageV5), logError);
 }
-//@ chunk-e6aww6q8.js:2462763-2462855 placement
+//@ chunk-5xgkngpb.js:2520010-2520102 placement
 /**
  * 为预计算构造 toolUseContext（去掉压缩回调）。
  */
@@ -788,7 +788,7 @@ function contextForPrecompute(toolUseContext, abortController) {
     onRetryStatus: undefined,
   };
 }
-//@ chunk-e6aww6q8.js:2462855-2463174 placement
+//@ chunk-5xgkngpb.js:2520102-2520421 placement
 /**
  * 本回合是否应启动预计算压缩。
  */
@@ -803,10 +803,10 @@ function shouldArmPrecompute(state) {
     state.facts,
     state.autoCompactWindow,
     state.querySource,
-    state.messagesCounted ? stripInProgressAssistantMessage(state.messagesCounted) : 0,
+    state.messagesCounted ? serverClearedTokens(state.messagesCounted) : 0,
   );
 }
-//@ chunk-e6aww6q8.js:2463174-2468415 placement
+//@ chunk-5xgkngpb.js:2520421-2525665 placement
 /**
  * 在合适时机（空闲、估算超过阈值）启动预计算压缩，SDK 单提示模式下受闸门限制。
  */
@@ -957,7 +957,7 @@ function armPrecomputedCompact(input) {
         return {
           messages: [...compactOutcome.result.summaryMessages, ...compactOutcome.result.messagesToPreserve],
           tokensBefore: preCompactTokens,
-          usage: getTokenCountFromUsage_3(compactOutcome.result.totalUsage),
+          usage: getTokenCountFromUsage_5(compactOutcome.result.totalUsage),
           record: compactOutcome.result,
         };
       },
@@ -1105,7 +1105,7 @@ function armPrecomputedCompact(input) {
   precompute.put(agentKey, entry);
   return true;
 }
-//@ chunk-e6aww6q8.js:2468415-2468948 placement (2.1.88 match: manuallyExtractSessionMemory, 0.307)
+//@ chunk-5xgkngpb.js:2525665-2526198 placement (2.1.88 match: manuallyExtractSessionMemory, 0.323)
 /**
  * 手动触发会话记忆/预计算压缩：等待 precompute 结果就绪，返回压缩前 token 数，未就绪抛 PrecomputedCompactNotReadyError。
  */
@@ -1139,13 +1139,13 @@ async function manuallyExtractSessionMemory(messages, toolUseContext) {
     tokensBefore: precomputeEntry.preCompactTokens,
   };
 }
-//@ chunk-e6aww6q8.js:2468948-2469047 placement
+//@ chunk-5xgkngpb.js:2526198-2526297 placement
 class PrecomputedCompactNotReadyError extends Error {
   constructor() {
     super("precomputed compact: the summary did not settle ok");
   }
 }
-//@ chunk-e6aww6q8.js:2469047-2469246 placement
+//@ chunk-5xgkngpb.js:2526297-2526496 placement
 /**
  * 空的压缩结果（只保留消息）。
  */
@@ -1163,7 +1163,7 @@ function emptyCompactionResult(messagesToPreserve) {
     totalUsage: EMPTY_USAGE,
   };
 }
-//@ chunk-e6aww6q8.js:2469246-2469384 placement
+//@ chunk-5xgkngpb.js:2526496-2526634 placement
 /**
  * 更新仍在进行中的预计算条目（null 时删除）。
  */
@@ -1176,14 +1176,14 @@ function updatePendingEntry(precompute, agentId, abortController, update) {
   }
   precompute.put(agentId, update(existing));
 }
-//@ chunk-e6aww6q8.js:2469384-2469423 placement
+//@ chunk-5xgkngpb.js:2526634-2526673 placement
 /**
  * 从预计算状态里取某子代理的条目。
  */
 function getPrecomputeEntry(precompute, agentId) {
   return precompute.get(agentIdOrDefault(agentId));
 }
-//@ chunk-e6aww6q8.js:2469423-2469992 placement
+//@ chunk-5xgkngpb.js:2526673-2527242 placement
 /**
  * 借用进行中或已就绪的预计算结果（回合中止时放弃）。
  */
@@ -1222,7 +1222,7 @@ async function borrowPrecompute(precompute, borrowFrom, signal) {
       }
     : null;
 }
-//@ chunk-e6aww6q8.js:2469992-2470695 placement
+//@ chunk-5xgkngpb.js:2527242-2527945 placement
 async function awaitInflightPrecompute(deps, agentId, signal, storageV5) {
   let agentKey = agentIdOrDefault(agentId);
   let entry = deps.get(agentKey);
@@ -1271,7 +1271,7 @@ async function awaitInflightPrecompute(deps, agentId, signal, storageV5) {
       return null;
   }
 }
-//@ chunk-e6aww6q8.js:2470695-2473037 placement
+//@ chunk-5xgkngpb.js:2527945-2530295 placement
 /**
  * 到达阈值时应用预先计算好的压缩摘要，否则返回未就绪或提前返回的原因。
  */
@@ -1461,7 +1461,7 @@ async function applyPrecomputedCompact(input) {
     wasPending,
   );
 }
-//@ chunk-e6aww6q8.js:2473037-2473606 placement
+//@ chunk-5xgkngpb.js:2530295-2530864 placement
 /**
  * 消费预计算的压缩结果并记录遥测。
  */
@@ -1494,7 +1494,7 @@ function consumePrecomputedCompact(outcome, querySource, waitedMs, trigger) {
     }),
   });
 }
-//@ chunk-e6aww6q8.js:2473606-2473999 placement
+//@ chunk-5xgkngpb.js:2530864-2531257 placement
 /**
  * 记录手动 /compact 使用预计算结果的情况（含失败原因）。
  */
@@ -1515,7 +1515,7 @@ function logManualPrecomputeConsumed(kind, durationMs, trigger) {
       }),
   });
 }
-//@ chunk-e6aww6q8.js:2473999-2474337 placement
+//@ chunk-5xgkngpb.js:2531257-2531595 placement
 /**
  * 记录手动 /compact 应用了预计算结果。
  */
@@ -1536,7 +1536,7 @@ function logManualPrecomputeApplied(session, durationMs, trigger, sizes) {
     ...sizes,
   });
 }
-//@ chunk-e6aww6q8.js:2474337-2474461 placement
+//@ chunk-5xgkngpb.js:2531595-2531719 placement
 /**
  * 预计算后模型是否一致与 token 增长。
  */
@@ -1546,7 +1546,7 @@ function precomputeDrift(ready, { messages, mainLoopModel }) {
     growthTokens: estimateTokensWithAnchor(messages) - ready.preCompactTokens,
   };
 }
-//@ chunk-e6aww6q8.js:2474461-2474680 placement
+//@ chunk-5xgkngpb.js:2531719-2531938 placement
 var PRECOMPUTE_DISCARD_REASONS = [
   "post_compact_cleanup",
   "subagent_exit",
@@ -1560,7 +1560,7 @@ var PRECOMPUTE_DISCARD_REASONS = [
   "would_not_fit",
   "returned_early",
 ];
-//@ chunk-e6aww6q8.js:2474680-2475162 placement
+//@ chunk-5xgkngpb.js:2531938-2532420 placement
 /**
  * 记录丢弃预计算结果。
  */
@@ -1583,7 +1583,7 @@ function logPrecomputeDiscarded(precompute, reason, ageMs, trigger) {
     `precomputed compact: discarded (${reason}, age ${Math.round(performance.now() - precompute.startedAt)}ms${trigger === undefined ? "" : `, ~${trigger.postSwapTokens} tok against ${trigger.thresholdTokens}`})`,
   );
 }
-//@ chunk-e6aww6q8.js:2475162-2475490 placement
+//@ chunk-5xgkngpb.js:2532420-2532748 placement
 /**
  * 丢弃某代理的预计算：中止进行中的任务、删除侧车文件、记录原因。
  */
@@ -1599,7 +1599,7 @@ function discardPrecompute(precompute, agentId, reason, querySource, storageV5) 
     precompute.enqueueSidecarIo(() => deletePrecomputed(sessionId, storageV5), logError);
   if (reason === "subagent_exit") precompute.forgetSubagentTelemetry(agentKey);
 }
-//@ chunk-e6aww6q8.js:2475490-2475667 placement
+//@ chunk-5xgkngpb.js:2532748-2532925 placement
 /**
  * 切换模型时中止进行中的主线程预计算。
  */
@@ -1613,22 +1613,22 @@ function abortPrecomputeOnModelSwitch(precompute) {
 }
 export {
   precomputeResumeHooks,
-  loadPrecomputedCompact,
-  getPrecomputeEntry,
-  prefetchPrecomputedSidecar,
-  isPrecomputedCompactEnabled,
-  discardPrecompute,
-  manuallyExtractSessionMemory,
-  isCompactCommandSource,
-  applyPrecomputedCompact,
-  shouldArmPrecompute,
-  latchArmGate,
-  armPrecomputedCompact,
   abortPrecomputeOnModelSwitch,
+  loadPrecomputedCompact,
   awaitInflightPrecompute,
   logManualPrecomputeConsumed,
   messagesWithRowUuids,
   checkPrecomputeCoverage,
   logPrecomputeDiscarded,
   logManualPrecomputeApplied,
+  discardPrecompute,
+  getPrecomputeEntry,
+  prefetchPrecomputedSidecar,
+  isPrecomputedCompactEnabled,
+  manuallyExtractSessionMemory,
+  isCompactCommandSource,
+  applyPrecomputedCompact,
+  shouldArmPrecompute,
+  latchArmGate,
+  armPrecomputedCompact,
 };

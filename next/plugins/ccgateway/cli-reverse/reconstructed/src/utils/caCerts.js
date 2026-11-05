@@ -3,39 +3,40 @@
  *
  * CA 证书缓存的清理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/caCerts.ts
- * pieces: chunk-hq88884p.js (41)
- * attribution: placement 40, fingerprint 1
+ * pieces: chunk-355mdh7x.js (54)
+ * attribution: placement 47, layout 6, fingerprint 1
  */
 import * as tlsModule_2 from "tls";
+import { importMetaRequire } from "../../runtime/bun-runtime.js";
+import { logForDebugging } from "./debug.js";
+import { CERT_KEY_BY_SHA256, hasCaEnvOverride, TRUSTED_CERT_FINGERPRINTS } from "./anthropicHosts.js";
 import { memoizeAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { HostScoped } from "./hostScoped.js";
-import { getRootSession } from "../bootstrap/state.js";
+import { getRootSession, onProcessRootHost } from "../bootstrap/state.js";
 import { serializeCalls } from "./promiseQueue.js";
-import { hasCaEnvOverride } from "./anthropicHosts.js";
 import { env } from "./env.js";
 import { getFsImplementation } from "./fsOperations.js";
-import { logForDebugging } from "./debug.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { hasNodeOption } from "./envUtils.js";
-import { importMetaRequire } from "../../runtime/bun-runtime.js";
-import { count, uniq } from "./collections.js";
+import { countWhere } from "./collections.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "./errors.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { identity } from "./identity.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-hq88884p.js:28542-28581 placement (2.1.88 match: filterToBundledAndMcp, 0.596)
+//@ chunk-355mdh7x.js:59488-59527 placement (2.1.88 match: filterToBundledAndMcp, 0.597)
 /**
  * 一次性告警去重集合。
  */
 var DEFAULT_CA_CERT_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var warnedCaKeys;
-deferInit("chunk-hq88884p.js:28542", () => {
+deferInit("chunk-355mdh7x.js:59488", () => {
   DEFAULT_CA_CERT_SOURCES = ["bundled", "system"];
   warnedCaKeys = new Set();
 });
-//@ chunk-hq88884p.js:28581-28637 placement
+//@ chunk-355mdh7x.js:59527-59583 placement
 /**
  * 同一类 CA 证书告警只打印一次。
  */
@@ -44,7 +45,57 @@ function warnOnceCa(warningKey) {
   warnedCaKeys.add(warningKey);
   return true;
 }
-//@ chunk-hq88884p.js:28637-28890 placement
+//@ chunk-355mdh7x.js:59583-59715 layout
+var MAX_PARSED_CERT_BLOCKS = 2048;
+var PEM_CERT_BLOCK_RE_2 =
+  /^-----BEGIN CERTIFICATE-----\n((?:[A-Za-z0-9+/]{1,76}\n)*[A-Za-z0-9+/]{1,76}={0,2})\n-----END CERTIFICATE-----\n?$/;
+//@ chunk-355mdh7x.js:59715-60358 layout
+class caCertState {
+  ofBlock = new Map();
+  ofBundledRoot = new Map();
+  #e = new Map();
+  readBundledRoots() {
+    let { rootCertificates } = importMetaRequire("tls");
+    this.#t(rootCertificates);
+    return rootCertificates;
+  }
+  readSystemStore() {
+    let tlsModule = importMetaRequire("tls");
+    let caCertificates = tlsModule.getCACertificates?.("system");
+    this.#t(caCertificates ?? []);
+    return caCertificates;
+  }
+  knownRootOf(pem) {
+    return this.#e.get(pem);
+  }
+  #t(certificates) {
+    let { createHash } = importMetaRequire("crypto");
+    for (let pem of certificates) {
+      if (this.#e.has(pem)) continue;
+      this.#e.set(pem, undefined);
+      if (pem.length > 65536) continue;
+      let replaced = PEM_CERT_BLOCK_RE_2.exec(pem)?.[1]?.replaceAll(
+        `
+`,
+        "",
+      );
+      let buffer = Buffer.from(replaced ?? "", "base64");
+      if (buffer.toString("base64") !== replaced) continue;
+      let certHash = createHash("sha256").update(buffer).digest("hex");
+      let known = CERT_KEY_BY_SHA256.get(certHash);
+      if (known)
+        this.#e.set(pem, {
+          hashes: {
+            certificate: certHash,
+            key: known.key,
+            keyReadThrew: false,
+          },
+          expires: known.expires,
+        });
+    }
+  }
+}
+//@ chunk-355mdh7x.js:60358-60700 placement
 class CaCertState {
   extraCACerts = null;
   certificates = memoizeAlias((input) => refreshCaState(this, input));
@@ -56,25 +107,29 @@ class CaCertState {
   fromHost = null;
   warnedExtraCerts = new Set();
   refusesBundledFallback = false;
+  servedCertificates = [];
+  droppedCrossCertificates = [];
+  knownHashes = new caCertState();
+  keepsKnownHashes = false;
 }
-//@ chunk-hq88884p.js:28890-28915 placement
+//@ chunk-355mdh7x.js:60700-60725 placement
 /**
  * 按宿主隔离的 CA 证书状态缓存。
  */
 var caCertStateByHost; // deferred: uses CaCertState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hq88884p.js:28890", () => {
+deferInit("chunk-355mdh7x.js:60700", () => {
   caCertStateByHost = new HostScoped(() => new CaCertState());
 });
-//@ chunk-hq88884p.js:28915-28951 placement
+//@ chunk-355mdh7x.js:60725-60762 placement
 /**
  * 取出当前宿主的 CA 证书状态。
  */
 function getCaCertState() {
   return caCertStateByHost.of(getRootSession().host);
 }
-//@ chunk-hq88884p.js:28951-29505 placement
+//@ chunk-355mdh7x.js:60762-61317 placement
 var loadExtraCACerts; // deferred: uses getCaCertState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hq88884p.js:28951", () => {
+deferInit("chunk-355mdh7x.js:60762", () => {
   loadExtraCACerts = serializeCalls(async () => {
     let caCertState = getCaCertState();
     caCertState.trustOverrideSeen ||= hasCaEnvOverride();
@@ -110,7 +165,7 @@ deferInit("chunk-hq88884p.js:28951", () => {
     return true;
   });
 });
-//@ chunk-hq88884p.js:29505-30014 placement
+//@ chunk-355mdh7x.js:61317-61826 placement
 /**
  * 解析 CLAUDE_CODE_CERT_STORE（bundled/system）。
  */
@@ -136,14 +191,20 @@ function certStoreSources() {
   if (hasNodeOption("--use-system-ca") || hasNodeOption("--use-openssl-ca")) return ["system"];
   return DEFAULT_CA_CERT_SOURCES;
 }
-//@ chunk-hq88884p.js:30014-30466 placement
+//@ chunk-355mdh7x.js:61826-62348 placement
 /**
  * 去掉已过期的证书。
  */
-function dropExpiredCerts(certs, nowMs = Date.now(), parsedByPem) {
+function dropExpiredCerts(certs, nowMs = Date.now(), parsedByPem, knownRoots) {
   let { X509Certificate } = importMetaRequire("crypto");
   let expiredCount = 0;
   let filtered = certs.filter((pem) => {
+    let known = knownRoots?.knownRootOf(pem);
+    if (known) {
+      if (known.expires > nowMs) return true;
+      expiredCount++;
+      return false;
+    }
     try {
       let cert = new X509Certificate(pem);
       let time = new Date(cert.validTo).getTime();
@@ -171,12 +232,12 @@ function dropExpiredCerts(certs, nowMs = Date.now(), parsedByPem) {
   }
   return filtered;
 }
-//@ chunk-hq88884p.js:30466-30505 placement
+//@ chunk-355mdh7x.js:62348-62387 placement
 var buffer; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hq88884p.js:30466", () => {
+deferInit("chunk-355mdh7x.js:62348", () => {
   buffer = Buffer.from("0603551d0e", "hex");
 });
-//@ chunk-hq88884p.js:30505-30666 placement
+//@ chunk-355mdh7x.js:62387-62548 placement
 function extractDerField(raw, marker) {
   let index = raw.indexOf(marker);
   let index_2 = raw.indexOf(buffer, index === -1 ? 0 : index + marker.length);
@@ -185,14 +246,41 @@ function extractDerField(raw, marker) {
   let endOffset = raw[lenOffset] === 1 ? lenOffset + 3 : lenOffset;
   return raw.subarray(lenOffset, endOffset + 2 + (raw[endOffset + 1] ?? 0));
 }
-//@ chunk-hq88884p.js:30666-33141 placement
+//@ chunk-355mdh7x.js:62548-62689 layout
+function collectIssuerClosure(cert, issuersOf) {
+  let seen = new Set();
+  let stack = [...(issuersOf.get(cert) ?? [])];
+  while (stack.length > 0) {
+    let current = stack.pop();
+    if (current && !seen.has(current)) {
+      seen.add(current);
+      stack.push(...(issuersOf.get(current) ?? []));
+    }
+  }
+  return seen;
+}
+//@ chunk-355mdh7x.js:62689-62828 layout
+function isCrossSigningRoot(cross, cross_2, root) {
+  try {
+    return (
+      formatShortcut(cross.issuer ?? "") === formatShortcut(cross_2.subject) &&
+      cross.checkIssued(cross_2) &&
+      !cross.checkIssued(root) &&
+      cross.verify(cross_2.publicKey)
+    );
+  } catch {
+    return false;
+  }
+}
+//@ chunk-355mdh7x.js:62828-66408 placement
 /**
  * 选出有锚点的证书链。
  */
-function chooseAnchoredCerts(pems, parsedByPem, otherParsed) {
+function chooseAnchoredCerts(pems, parsedByPem, otherParsed, serverCerts) {
   let unchanged = {
     list: pems,
     alone: pems,
+    judged: undefined,
   };
   try {
     let singlePemCerts = new Map();
@@ -206,9 +294,9 @@ function chooseAnchoredCerts(pems, parsedByPem, otherParsed) {
       }
     }
     let now = Date.now();
-    let issuersOf = new Map();
+    let issuersByCert = new Map();
     for (let cert of singlePemCerts.values())
-      issuersOf.set(
+      issuersByCert.set(
         cert,
         (certsBySubject.get(formatShortcut(cert.issuer ?? "")) ?? []).filter(
           (candidate) =>
@@ -217,23 +305,20 @@ function chooseAnchoredCerts(pems, parsedByPem, otherParsed) {
             cert.checkIssued(candidate),
         ),
       );
-    let filtered = [...singlePemCerts.values()].filter((cert) => {
-      let visited = new Set();
-      let stack = [...(issuersOf.get(cert) ?? [])];
-      while (stack.length > 0) {
-        let issuer = stack.pop();
-        if (issuer === cert) return Boolean(cert.subject);
-        if (issuer && !visited.has(issuer)) {
-          visited.add(issuer);
-          stack.push(...(issuersOf.get(issuer) ?? []));
-        }
-      }
-      return false;
-    });
-    if (filtered.length === 0) return unchanged;
+    let filtered = [...singlePemCerts.values()].filter(
+      (cert) => Boolean(cert.subject) && collectIssuerClosure(cert, issuersByCert).has(cert),
+    );
+    if (filtered.length === 0)
+      return {
+        ...unchanged,
+        judged: {
+          looping: [],
+          dropped: [],
+        },
+      };
     let { X509Certificate } = importMetaRequire("crypto");
     let parseFailed = false;
-    let [systemCerts = [], extraCerts = []] = [
+    let [systemCerts = [], otherParsedList = []] = [
       pems.filter((pem) => !singlePemCerts.has(pem)),
       otherParsed,
     ].map((list) =>
@@ -254,8 +339,10 @@ function chooseAnchoredCerts(pems, parsedByPem, otherParsed) {
       );
       return unchanged;
     }
-    let allCerts = [...systemCerts, ...extraCerts, ...singlePemCerts.values()];
-    let loops = new Set();
+    let allCerts = [...systemCerts, ...otherParsedList, ...singlePemCerts.values()];
+    let looping = [];
+    let droppable = new Set();
+    let needed = new Set();
     for (let cert of filtered)
       try {
         let time = new Date(cert.validTo).getTime();
@@ -285,18 +372,25 @@ function chooseAnchoredCerts(pems, parsedByPem, otherParsed) {
             systemCert.verify(systemCert.publicKey)
           );
         });
-        let subjectKey = formatShortcut(cert.subject);
-        if (
-          found &&
-          !allCerts.some(
-            (other) =>
-              other !== cert &&
-              formatShortcut(other.issuer ?? "") === subjectKey &&
-              other.checkIssued(cert) &&
-              !other.checkIssued(found),
+        if (found !== undefined) {
+          looping.push({
+            cross: cert,
+            root: found,
+          });
+          let subjectKey = formatShortcut(cert.subject);
+          if (
+            !allCerts.some(
+              (other) =>
+                other !== cert &&
+                formatShortcut(other.issuer ?? "") === subjectKey &&
+                other.checkIssued(cert) &&
+                !other.checkIssued(found),
+            )
           )
-        )
-          loops.add(cert);
+            if (serverCerts.some((serverCert) => isCrossSigningRoot(serverCert, cert, found)))
+              needed.add(cert);
+            else droppable.add(cert);
+        }
       } catch (error) {
         logForDebugging(
           `CA certs: Left a cross-certificate that loops in the system store (${`${cert.subject}`.replaceAll(
@@ -309,17 +403,74 @@ function chooseAnchoredCerts(pems, parsedByPem, otherParsed) {
           },
         );
       }
-    if (loops.size === 0) return unchanged;
-    let extraFingerprints = new Set(extraCerts.map((cert) => cert.fingerprint256));
-    let droppable = new Set([...loops].filter((cert) => !extraFingerprints.has(cert.fingerprint256)));
-    if (droppable.size < loops.size)
+    let listedHashes = new Set(otherParsedList.map((cert) => cert.fingerprint256));
+    let keptCount = 0;
+    let notKeptCount = 0;
+    if (needed.size > 0) {
+      let candidates = [
+        ...[...singlePemCerts.values()].filter(
+          (cert) => !needed.has(cert) && (!droppable.has(cert) || listedHashes.has(cert.fingerprint256)),
+        ),
+        ...otherParsedList.filter((cert) => !cert.checkIssued(cert)),
+        ...needed,
+      ];
+      let issuersByCert = new Map();
+      for (let cert of candidates)
+        issuersByCert.set(
+          cert,
+          candidates.filter(
+            (other) =>
+              other !== cert &&
+              !(new Date(other.validTo).getTime() <= now) &&
+              formatShortcut(other.subject ?? "") === formatShortcut(cert.issuer ?? "") &&
+              cert.checkIssued(other),
+          ),
+        );
+      for (let cert of needed) {
+        let closure = collectIssuerClosure(cert, issuersByCert);
+        if (
+          candidates.some(
+            (other) =>
+              other !== cert && closure.has(other) && collectIssuerClosure(other, issuersByCert).has(cert),
+          )
+        ) {
+          notKeptCount++;
+          droppable.add(cert);
+        } else keptCount++;
+      }
+    }
+    if (notKeptCount > 0)
       logForDebugging(
-        `CA certs: Kept ${loops.size - droppable.size} cross-certificate(s) that certify each other in a loop in the system store: NODE_EXTRA_CA_CERTS lists them too`,
+        `CA certs: Did not keep ${notKeptCount} cross-certificate(s) for a server's certificate chain that needs them: another member of the same loop stays in the list or is also named by a server's certificate, and keeping both would bring the loop back. CLAUDE_CODE_DISABLE_LOOPED_CROSS_CERT_DROP=1 keeps them all.`,
       );
-    if (droppable.size > 0) {
+    if (keptCount > 0) {
       logForDebugging(
-        `CA certs: Dropped ${droppable.size} cross-certificate(s) from system store that certify each other in a loop beside their root: ${[
-          ...droppable,
+        `CA certs: Kept ${keptCount} cross-certificate(s) that loop in the system store: a server's certificate chain needs them (the root with the same name and key is not the issuer it names)`,
+      );
+      if (warnOnceCa("cross_loop_server_kept"))
+        logFeatureSad("ca_certs_load", "cross_loop_server_kept", {
+          kept_count: keptCount,
+        });
+    }
+    let droppable_2 = new Set([...droppable].filter((cert) => !listedHashes.has(cert.fingerprint256)));
+    let judged = {
+      looping,
+      dropped: looping.filter(({ cross }) => droppable_2.has(cross)),
+    };
+    if (droppable.size === 0)
+      return {
+        list: pems,
+        alone: pems,
+        judged,
+      };
+    if (droppable_2.size < droppable.size)
+      logForDebugging(
+        `CA certs: Kept ${droppable.size - droppable_2.size} cross-certificate(s) that certify each other in a loop in the system store: NODE_EXTRA_CA_CERTS lists them too`,
+      );
+    if (droppable_2.size > 0) {
+      logForDebugging(
+        `CA certs: Dropped ${droppable_2.size} cross-certificate(s) from system store that certify each other in a loop beside their root: ${[
+          ...droppable_2,
         ]
           .map((cert) =>
             `${cert.subject}`.replaceAll(
@@ -332,22 +483,23 @@ function chooseAnchoredCerts(pems, parsedByPem, otherParsed) {
       );
       if (warnOnceCa("cross_loop_dropped"))
         logFeatureSad("ca_certs_load", "cross_loop_dropped", {
-          dropped_count: droppable.size,
+          dropped_count: droppable_2.size,
         });
     }
     let filtered_2 = pems.filter((pem) => {
       let cert = singlePemCerts.get(pem);
-      return !cert || !loops.has(cert);
+      return !cert || !droppable.has(cert);
     });
     return {
       list:
-        droppable.size === loops.size
+        droppable_2.size === droppable.size
           ? filtered_2
           : pems.filter((pem) => {
               let cert = singlePemCerts.get(pem);
-              return !cert || !droppable.has(cert);
+              return !cert || !droppable_2.has(cert);
             }),
       alone: filtered_2,
+      judged,
     };
   } catch (error) {
     logForDebugging(`CA certs: Left the system store's certificates as they are: ${error}`, {
@@ -356,7 +508,7 @@ function chooseAnchoredCerts(pems, parsedByPem, otherParsed) {
     return unchanged;
   }
 }
-//@ chunk-hq88884p.js:33141-36691 placement
+//@ chunk-355mdh7x.js:66408-69959 placement
 /**
  * 被拒根证书与 SPKI 的索引（快速判断某证书是否在黑名单）。
  */
@@ -365,7 +517,7 @@ var BLOCKED_ROOT_SHA256;
 var BLOCKED_ROOT_SPKI_SHA256;
 var LEAKED_CA_SPKI_SHA256;
 var blockedCaIndex;
-deferInit("chunk-hq88884p.js:33141", () => {
+deferInit("chunk-355mdh7x.js:66408", () => {
   BLOCKED_ROOT_SHA256_2 = [
     {
       certificate: "86a1ecba089c4a8d3bbe2734c612ba341d813e043cf9e8a862cd5c57a36bbe6b",
@@ -461,7 +613,7 @@ deferInit("chunk-hq88884p.js:33141", () => {
     keys: BLOCKED_ROOT_SPKI_SHA256,
   };
 });
-//@ chunk-hq88884p.js:36691-36830 placement
+//@ chunk-355mdh7x.js:69959-70098 placement
 function blockedRootSet(keptKeys) {
   let filtered = BLOCKED_ROOT_SHA256_2.filter((entry) => !keptKeys.has(entry.key));
   return {
@@ -469,9 +621,9 @@ function blockedRootSet(keptKeys) {
     keys: new Set(filtered.map((entry) => entry.key)),
   };
 }
-//@ chunk-hq88884p.js:36830-36986 placement
+//@ chunk-355mdh7x.js:70098-70254 placement
 var BLOCKED_ROOTS; // deferred: uses blockedRootSet of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hq88884p.js:36830", () => {
+deferInit("chunk-355mdh7x.js:70098", () => {
   BLOCKED_ROOTS = blockedRootSet(
     new Set([
       "376a1a7082a593dccc20d561d119e9ab8d30f11cc321d0a37fa41f0df284e01c",
@@ -479,7 +631,7 @@ deferInit("chunk-hq88884p.js:36830", () => {
     ]),
   );
 });
-//@ chunk-hq88884p.js:36986-37341 placement
+//@ chunk-355mdh7x.js:70254-70609 placement
 function pemSpans(text) {
   let spans = [];
   let index = text.indexOf("-----BEGIN ");
@@ -510,26 +662,23 @@ function pemSpans(text) {
   }
   return spans;
 }
-//@ chunk-hq88884p.js:37341-37350 placement
+//@ chunk-355mdh7x.js:70609-70618 placement
 /**
  * 嵌套被拒证书块的最大层数（8）。
  */
 var MAX_NESTED_BLOCK_DEPTH = 8;
-//@ chunk-hq88884p.js:37350-37421 placement
+//@ chunk-355mdh7x.js:70618-70689 placement
 /**
  * 来源是 NODE_EXTRA_CA_CERTS 时给出“整个文件”的补充说明。
  */
 function describeSourceSuffix(source) {
   return source === "NODE_EXTRA_CA_CERTS" ? " (the whole file)" : "";
 }
-//@ chunk-hq88884p.js:37421-38924 placement
-/**
- * 提示 NODE_EXTRA_CA_CERTS 中被拒的证书块（一次）。
- */
-function warnBlockedCertBlock(kind, fingerprint, warned) {
-  let key = `${kind}:${fingerprint}`;
-  if (warned.has(key)) return;
-  warned.add(key);
+//@ chunk-355mdh7x.js:70689-73747 layout
+function warnExtraCertsProblem(kind, fingerprint, warned) {
+  let warnKey = `${kind}:${fingerprint}`;
+  if (warned.has(warnKey)) return;
+  warned.add(warnKey);
   let message = {
     block:
       "Claude Code ignored a block in the NODE_EXTRA_CA_CERTS file: the block holds a root certificate on the CLI's deny list, in a form Claude Code could not read. The other certificates in the file are still used.",
@@ -538,24 +687,42 @@ function warnBlockedCertBlock(kind, fingerprint, warned) {
       "Claude Code used only the plain certificates it could read in full from the NODE_EXTRA_CA_CERTS file: the file holds a damaged copy of a root certificate on the CLI's deny list, such as one missing its END line. Run Claude Code with --debug to write its SHA-256 fingerprint to the debug log, then remove that copy from the file.",
     nested:
       "Claude Code ignored all of the NODE_EXTRA_CA_CERTS file: it holds root certificates on the CLI's deny list nested too deeply to cut out. Remove them so the rest of the file is used.",
-    selfNamed: `Claude Code ignored the certificate with SHA-256 fingerprint ${fingerprint} in the NODE_EXTRA_CA_CERTS file: it names itself as its issuer, but Claude Code could not confirm that its own key signed it. Run Claude Code with --debug to write the cause to the debug log. If you trust that certificate, set CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP=1, which keeps every such certificate.`,
+    partlyLoaded:
+      "Claude Code used only the certificates that it could read in full from the NODE_EXTRA_CA_CERTS file: its certificates cannot be loaded together, most likely because one of them is cut off or damaged, or because a line break is missing between two of them. Each -----BEGIN CERTIFICATE----- and -----END CERTIFICATE----- marker must be alone on its line. Fix the file so that every certificate in it is used.",
+    unloadable:
+      "Claude Code ignored all of the NODE_EXTRA_CA_CERTS file: it holds no certificate that Claude Code can read. The file must hold certificates in PEM format, in which each certificate is base64 text between a -----BEGIN CERTIFICATE----- line and an -----END CERTIFICATE----- line. Claude Code does not read a binary (DER) file, UTF-16 text, base64 text without those two lines, or a certificate that is cut off or damaged. Fix or replace the file, or unset NODE_EXTRA_CA_CERTS if you do not need it.",
+    selfNamed: `Claude Code ignored the certificate with SHA-256 fingerprint ${fingerprint} in the NODE_EXTRA_CA_CERTS file: it names itself as its issuer, but Claude Code could not confirm that the certificate's own key signed it. Run Claude Code with --debug to write the certificate's subject and the cause to the debug log. If you do not know where the certificate came from, remove it from the file. If another root certificate of the same CA signed it, as when a CA renews its root with a new key, add the root that signed it to the file, if you still trust that root. If connections still fail, take that root out of the file again. Then, or if no other root signed it, set CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP=1, but only if you trust the ignored certificate, such as a self-signed root whose signature Claude Code cannot check or a server's own certificate. The variable keeps every certificate that Claude Code would ignore for this reason, whoever signed it, and can break connections that work without it.`,
   }[kind];
   console.error(message);
 }
-//@ chunk-hq88884p.js:38924-39130 placement
+//@ chunk-355mdh7x.js:73747-73953 placement
 function pemStartsWithRaw(block, cert) {
   let sliced = block.slice(block.indexOf("-----", 5) + 5, block.lastIndexOf("-----END"));
   let buffer = Buffer.from(sliced.replace(/[^A-Za-z0-9+/]/g, ""), "base64");
   let { raw } = cert;
   return buffer.length > raw.length && buffer.subarray(0, raw.length).equals(raw);
 }
-//@ chunk-hq88884p.js:39130-39484 placement (2.1.88 match: hashContent, 0.605)
+//@ chunk-355mdh7x.js:73953-74054 layout
+function validateCaBundle(pem) {
+  let tlsModule = importMetaRequire("tls");
+  try {
+    tlsModule.createSecureContext({
+      ca: [pem],
+    });
+    return;
+  } catch (error) {
+    return String(error);
+  }
+}
+//@ chunk-355mdh7x.js:74054-74554 placement
 /**
  * 解析内置根证书 PEM，按 sha256 只保留允许列表中的证书，返回 base64 原文与哈希。
  */
-function selectBundledRootCertificates(content) {
+function selectBundledRootCertificates(pems, state) {
   let { X509Certificate, createHash } = importMetaRequire("crypto");
-  return content.flatMap((pem) => {
+  return pems.flatMap((pem) => {
+    let knownHash = state?.knownRootOf(pem)?.hashes.certificate ?? state?.ofBundledRoot.get(pem);
+    if (knownHash !== undefined && !blockedCaIndex.certificates.has(knownHash)) return [];
     let raw;
     try {
       raw = new X509Certificate(pem).raw;
@@ -566,6 +733,7 @@ function selectBundledRootCertificates(content) {
       return [];
     }
     let hash = createHash("sha256").update(raw).digest("hex");
+    state?.ofBundledRoot.set(pem, hash);
     if (!blockedCaIndex.certificates.has(hash)) return [];
     return [
       {
@@ -575,15 +743,16 @@ function selectBundledRootCertificates(content) {
     ];
   });
 }
-//@ chunk-hq88884p.js:39484-42148 placement
+//@ chunk-355mdh7x.js:74554-78298 placement
 /**
  * 过滤掉拒绝名单中的证书。
  */
 function withoutBlockedCertsUnsafe(
   entries,
-  bundledRootCertificates,
+  bundledRoots,
   blockedIndex = blockedCaIndex,
   warned = new Set(),
+  state,
 ) {
   let { X509Certificate, createHash, createPublicKey } = importMetaRequire("crypto");
   let sha256Hex = (data) => createHash("sha256").update(data).digest("hex");
@@ -594,13 +763,13 @@ function withoutBlockedCertsUnsafe(
       return;
     }
   };
-  let findBundledRoot = (block, bundled = bundledRootCertificates) => {
+  let findBundledRoot = (block, bundled = bundledRoots) => {
     let replaced = block.replace(/\s+/g, "");
     return bundled.find(({ base64 }) => replaced.includes(base64));
   };
-  let blockedHashOf = (cert, caIndex) => {
-    let certHash = sha256Hex(cert.raw);
-    if (caIndex.certificates.has(certHash)) return certHash;
+  let hashesOf = (cert) => {
+    let certificate = sha256Hex(cert.raw);
+    let keyReadThrew = false;
     try {
       let publicKey = cert.publicKey;
       try {
@@ -610,18 +779,33 @@ function withoutBlockedCertsUnsafe(
           }),
           format: "jwk",
         });
-      } catch {}
-      let spkiHash = sha256Hex(
-        publicKey.export({
-          type: "spki",
-          format: "der",
-        }),
-      );
-      return caIndex.keys.has(spkiHash) || LEAKED_CA_SPKI_SHA256.has(spkiHash) ? certHash : undefined;
+      } catch {
+        keyReadThrew = true;
+      }
+      return {
+        certificate,
+        key: sha256Hex(
+          publicKey.export({
+            type: "spki",
+            format: "der",
+          }),
+        ),
+        keyReadThrew,
+      };
     } catch {
-      return;
+      return {
+        certificate,
+        key: undefined,
+        keyReadThrew: true,
+      };
     }
   };
+  let blockedHashOfHashes = ({ certificate, key }, index) =>
+    index.certificates.has(certificate) ||
+    (key !== undefined && (index.keys.has(key) || LEAKED_CA_SPKI_SHA256.has(key)))
+      ? certificate
+      : undefined;
+  let blockedHashOfCert = (cert, index) => blockedHashOfHashes(hashesOf(cert), index);
   let blockedHashOfPem = (pemText) => {
     let sliced = pemText.slice(pemText.indexOf("-----", 5) + 5, pemText.lastIndexOf("-----END"));
     let buffer = Buffer.from(sliced.replace(/[^A-Za-z0-9+/]/g, ""), "base64");
@@ -640,11 +824,12 @@ function withoutBlockedCertsUnsafe(
     } catch {
       return;
     }
-    return blockedHashOf(cert, blockedCaIndex);
+    return blockedHashOfCert(cert, blockedCaIndex);
   };
   let kept = [];
   for (let { pem, source } of entries) {
     let isExtraCerts = source === "NODE_EXTRA_CA_CERTS" && blockedIndex === blockedCaIndex;
+    let knownRoot = state?.knownRootOf(pem);
     let text = pem;
     let depth = 0;
     let droppedUnreadable = false;
@@ -656,18 +841,38 @@ function withoutBlockedCertsUnsafe(
       let cutSomething = false;
       for (let [start, end] of pemSpans(text)) {
         let sliced = text.slice(start, end);
-        let cert = parseCert(sliced);
+        let blockHash = state && sha256Hex(sliced);
+        let hashes =
+          knownRoot?.hashes ?? (blockHash === undefined ? undefined : state?.ofBlock.get(blockHash));
+        let isListedBlock = hashes !== undefined && !blockedHashOfHashes(hashes, blockedCaIndex);
+        if (
+          isListedBlock &&
+          knownRoot &&
+          state &&
+          blockHash !== undefined &&
+          state.ofBlock.size < MAX_PARSED_CERT_BLOCKS
+        )
+          state.ofBlock.set(blockHash, knownRoot.hashes);
+        let cert = isListedBlock ? undefined : parseCert(sliced);
         let note;
         if (cert) {
-          let ourHash = blockedHashOf(cert, blockedCaIndex);
-          if (ourHash && !blockedHashOf(cert, blockedIndex)) {
+          let hashes = hashesOf(cert);
+          if (
+            state &&
+            blockHash !== undefined &&
+            !hashes.keyReadThrew &&
+            state.ofBlock.size < MAX_PARSED_CERT_BLOCKS
+          )
+            state.ofBlock.set(blockHash, hashes);
+          let ourHash = blockedHashOfHashes(hashes, blockedCaIndex);
+          if (ourHash && !blockedHashOfHashes(hashes, blockedIndex)) {
             let isTrustedBlock = sliced.startsWith("-----BEGIN TRUSTED");
             if (!isTrustedBlock) reencoded.add(cert.toString());
             note = isTrustedBlock
               ? `Left certificate ${ourHash} from ${source} out of the list for hosts that aren't ours: it is in a TRUSTED CERTIFICATE block, which the runtime does not load`
               : `Re-encoded certificate ${ourHash} from ${source}: the list for hosts that aren't ours trusts it, and its original text could stop that list from loading`;
           } else if (ourHash) note = `Dropped blocked certificate ${ourHash} from ${source}`;
-        } else {
+        } else if (!isListedBlock) {
           let hash = findBundledRoot(sliced)?.hash ?? blockedHashOfPem(sliced);
           if (hash) {
             droppedUnreadable = true;
@@ -691,7 +896,7 @@ function withoutBlockedCertsUnsafe(
       logForDebugging(
         `CA certs: Ignored an entry from ${source}${describeSourceSuffix(source)}: blocked certificates are nested in it more than ${MAX_NESTED_BLOCK_DEPTH} deep`,
       );
-      if (isExtraCerts) warnBlockedCertBlock("nested", sha256Hex(pem), warned);
+      if (isExtraCerts) warnExtraCertsProblem("nested", sha256Hex(pem), warned);
       continue;
     }
     let outsideHash = findBundledRoot(text);
@@ -701,7 +906,7 @@ function withoutBlockedCertsUnsafe(
           ...(text.includes("\x00")
             ? []
             : pemSpans(text).flatMap(([start, end], index, allSpans) => {
-                let sliced = text.slice(start, end);
+                let block = text.slice(start, end);
                 let cert =
                   start >= (allSpans[index - 1]?.[1] ?? 0) &&
                   (start === 0 ||
@@ -709,62 +914,98 @@ function withoutBlockedCertsUnsafe(
                       `
 `) &&
                   /^(\r?\n|$)/.test(text.slice(end, end + 2)) &&
-                  !sliced.startsWith("-----BEGIN TRUSTED")
-                    ? parseCert(sliced)
+                  !block.startsWith("-----BEGIN TRUSTED")
+                    ? parseCert(block)
                     : undefined;
-                return cert && !pemStartsWithRaw(sliced, cert) && !blockedHashOf(cert, blockedIndex)
+                return cert && !pemStartsWithRaw(block, cert) && !blockedHashOfCert(cert, blockedIndex)
                   ? [cert.toString().trim()]
                   : [];
               })),
         ]
       : [];
-    let hasParsable = () => pemSpans(text).some(([start, end]) => parseCert(text.slice(start, end)));
+    let hasParsableBlock = () => pemSpans(text).some(([start, end]) => parseCert(text.slice(start, end)));
     let shouldKeep = outsideHash
       ? reencodedList.length > 0
-      : depth === 0 || reencoded.size > 0 || hasParsable();
+      : depth === 0 || reencoded.size > 0 || hasParsableBlock();
+    let rewritten = !shouldKeep
+      ? undefined
+      : outsideHash
+        ? reencodedList.join(`
+`)
+        : reencoded.size > 0
+          ? [...reencoded, ...(hasParsableBlock() ? [text.trim()] : [])].join(`
+`)
+          : text;
+    let loadError =
+      rewritten !== undefined && source === "NODE_EXTRA_CA_CERTS" ? validateCaBundle(rewritten) : undefined;
+    let loadableBlocks =
+      rewritten === undefined || loadError === undefined
+        ? []
+        : pemSpans(rewritten)
+            .map(([start, end]) => rewritten.slice(start, end))
+            .filter(
+              (block) =>
+                !block.startsWith("-----BEGIN TRUSTED") &&
+                parseCert(block) &&
+                validateCaBundle(block) === undefined,
+            );
+    let keptText =
+      loadError === undefined
+        ? rewritten
+        : loadableBlocks.length > 0
+          ? loadableBlocks.join(`
+`)
+          : undefined;
     if (outsideHash)
       logForDebugging(
         `CA certs: ${source}${describeSourceSuffix(source)} holds blocked certificate ${outsideHash.hash} outside any block; ${shouldKeep ? `kept only the ${reencodedList.length} certificate(s) in it that parse, re-encoded` : "ignored it"}`,
       );
     if (isExtraCerts && (outsideHash || droppedUnreadable))
-      warnBlockedCertBlock(shouldKeep ? (outsideHash ? "damaged" : "block") : "file", sha256Hex(pem), warned);
-    if (shouldKeep)
-      kept.push(
-        outsideHash
-          ? reencodedList.join(`
-`)
-          : reencoded.size > 0
-            ? [...reencoded, ...(hasParsable() ? [text.trim()] : [])].join(`
-`)
-            : text,
+      warnExtraCertsProblem(
+        keptText !== undefined ? (outsideHash ? "damaged" : "block") : "file",
+        sha256Hex(pem),
+        warned,
       );
+    if (loadError !== undefined) {
+      logForDebugging(
+        `CA certs: The runtime cannot load ${depth > 0 || outsideHash ? "what is left of the NODE_EXTRA_CA_CERTS file" : "the NODE_EXTRA_CA_CERTS file"} as one CA list entry (${loadError}); ${keptText !== undefined ? `kept only the ${loadableBlocks.length} certificate(s) in it that the runtime loads one by one` : "ignored it"}`,
+        {
+          level: "error",
+        },
+      );
+      if (isExtraCerts)
+        warnExtraCertsProblem(keptText !== undefined ? "partlyLoaded" : "unloadable", sha256Hex(pem), warned);
+    }
+    if (keptText !== undefined) kept.push(keptText);
   }
   return kept;
 }
-//@ chunk-hq88884p.js:42148-43143 placement
+//@ chunk-355mdh7x.js:78298-79314 placement
 /**
  * 组合 CA 列表（额外证书、内置证书回退）。
  */
 function buildCaList(
   entries,
-  content,
+  pems,
   blockedIndex = blockedCaIndex,
-  bundledRootCertificates = selectBundledRootCertificates(content),
+  bundledRootCertificates,
   warnedExtraCerts = new Set(),
+  state,
 ) {
-  let kept = withoutBlockedCertsUnsafe(entries, bundledRootCertificates, blockedIndex, warnedExtraCerts);
-  if (kept.length > 0) return kept;
-  let mapped = content.map((pem) => ({
+  let resolvedBundledRoots = bundledRootCertificates ?? selectBundledRootCertificates(pems, state);
+  let list = withoutBlockedCertsUnsafe(entries, resolvedBundledRoots, blockedIndex, warnedExtraCerts, state);
+  if (list.length > 0) return list;
+  let mapped = pems.map((pem) => ({
     pem,
     source: "bundled",
   }));
-  let bundledKept = withoutBlockedCertsUnsafe(mapped, bundledRootCertificates, blockedIndex);
+  let bundledKept = withoutBlockedCertsUnsafe(mapped, resolvedBundledRoots, blockedIndex, undefined, state);
   if (bundledKept.length > 0) return bundledKept;
-  if (content.length === 0 && entries.length === 0)
+  if (pems.length === 0 && entries.length === 0)
     throw Error(
       "No certificate authority to trust: no usable CA certificate was found (none could be read, every one had expired, or the claude-code-server host handed none), and this runtime has no built-in root certificates. Check the CA files this process reads (SSL_CERT_FILE, SSL_CERT_DIR) and CLAUDE_CODE_CERT_STORE; NODE_EXTRA_CA_CERTS only adds to those and does not count on its own.",
     );
-  if (content.length === 0)
+  if (pems.length === 0)
     throw Error(
       "No certificate authority to trust: every CA certificate found is on the CLI's deny list, and this runtime has no built-in root certificates. Add a certificate authority that is not on the deny list to the CA files (SSL_CERT_FILE, SSL_CERT_DIR).",
     );
@@ -772,9 +1013,10 @@ function buildCaList(
     "No root certificates are left to trust: every root built into this runtime is on the CLI's deny list. Update Claude Code.",
   );
 }
-//@ chunk-hq88884p.js:43143-43233 placement
+//@ chunk-355mdh7x.js:79314-79435 placement
 function withoutBlockedCerts(pem, source) {
   let tlsModule = importMetaRequire("tls");
+  let state = knownHashesOf(onProcessRootHost(caCertStateByHost));
   return withoutBlockedCertsUnsafe(
     [
       {
@@ -782,10 +1024,25 @@ function withoutBlockedCerts(pem, source) {
         source,
       },
     ],
-    selectBundledRootCertificates(tlsModule.rootCertificates),
+    selectBundledRootCertificates(tlsModule.rootCertificates, state),
+    undefined,
+    undefined,
+    state,
   )[0];
 }
-//@ chunk-hq88884p.js:43233-43432 placement
+//@ chunk-355mdh7x.js:79435-79554 placement (2.1.88 match: hashContent, 0.789)
+/**
+ * 判定某个证书 SHA-256 是否在本机已知哈希白名单里。
+ */
+function denyListHasReadKeyOf(content) {
+  let { createHash } = importMetaRequire("crypto");
+  return (
+    knownHashesOf(onProcessRootHost(caCertStateByHost))?.ofBlock.has(
+      createHash("sha256").update(content).digest("hex"),
+    ) ?? false
+  );
+}
+//@ chunk-355mdh7x.js:79554-79753 placement
 function withoutBlockedOrUnanchoredCerts(caCertPem, source) {
   let filtered = withoutBlockedCerts(caCertPem, source);
   if (filtered === undefined || filtered === caCertPem) return filtered;
@@ -796,15 +1053,24 @@ function withoutBlockedOrUnanchoredCerts(caCertPem, source) {
     );
   return kept[0];
 }
-//@ chunk-hq88884p.js:43432-43630 placement
+//@ chunk-355mdh7x.js:79753-79927 placement
 function getCACertificates() {
+  let state = getCaCertState();
+  if (state.fromHost) return state.fromHost.certificates;
+  let useClientCert = Boolean(env.CLAUDE_CODE_CLIENT_CERT);
+  if (!state.certificates.cache.has(useClientCert)) resetKnownHashes(state);
+  return state.certificates(useClientCert);
+}
+//@ chunk-355mdh7x.js:79927-80066 placement
+/**
+ * 取当前生效的客户端证书集合（来自主机或缓存）。
+ */
+function peekCACertificates() {
   let caCertState = getCaCertState();
   if (caCertState.fromHost) return caCertState.fromHost.certificates;
-  let useClientCert = Boolean(env.CLAUDE_CODE_CLIENT_CERT);
-  if (!caCertState.certificates.cache.has(useClientCert)) caCertState.certificates.cache.clear?.();
-  return caCertState.certificates(useClientCert);
+  return caCertState.certificates.cache.get(Boolean(env.CLAUDE_CODE_CLIENT_CERT));
 }
-//@ chunk-hq88884p.js:43630-43904 placement
+//@ chunk-355mdh7x.js:80066-80341 placement
 function caListFor(forOtherHosts) {
   let caCertificates = getCACertificates();
   let state = getCaCertState();
@@ -817,17 +1083,17 @@ function caListFor(forOtherHosts) {
   state.customerLists.set(caCertificates, list);
   return list;
 }
-//@ chunk-hq88884p.js:43904-43976 placement
+//@ chunk-355mdh7x.js:80341-80414 placement
 function isRuntimeStoreCABundle(value) {
   return Array.isArray(value) && getCaCertState().runtimeStoreBundles.has(value);
 }
-//@ chunk-hq88884p.js:43976-44055 placement
+//@ chunk-355mdh7x.js:80414-80494 placement
 function hasSeenTrustOverride() {
   let caCertState = getCaCertState();
   caCertState.trustOverrideSeen ||= hasCaEnvOverride();
   return caCertState.trustOverrideSeen;
 }
-//@ chunk-hq88884p.js:44055-44199 placement (2.1.88 match: formatShortcut, 1)
+//@ chunk-355mdh7x.js:80494-80639 placement (2.1.88 match: formatShortcut, 1)
 function formatShortcut(shortcut) {
   return shortcut
     .split(
@@ -843,7 +1109,7 @@ function formatShortcut(shortcut) {
     )
     .join("");
 }
-//@ chunk-hq88884p.js:44199-44690 placement
+//@ chunk-355mdh7x.js:80639-81130 placement
 /**
  * 证书是否自签名。
  */
@@ -878,7 +1144,7 @@ function isSelfSigned(cert) {
       ),
   );
 }
-//@ chunk-hq88884p.js:44690-44860 placement
+//@ chunk-355mdh7x.js:81130-81300 placement
 function isIssuerOf(issuer, cert) {
   let isSelfSignedCert = cert.subject === cert.issuer;
   try {
@@ -892,11 +1158,11 @@ function isIssuerOf(issuer, cert) {
     return !isSelfSignedCert;
   }
 }
-//@ chunk-hq88884p.js:44860-47131 placement
+//@ chunk-355mdh7x.js:81300-84253 placement
 /**
  * 去掉主体与签发者同名但非自签的证书。
  */
-function dropSelfNamedCerts(pems, onDrop) {
+function dropSelfNamedCerts(pems, onDrop, state) {
   let { X509Certificate } = importMetaRequire("crypto");
   let tlsModule = importMetaRequire("tls");
   let dropDisabled = Boolean(env.CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP);
@@ -907,20 +1173,23 @@ function dropSelfNamedCerts(pems, onDrop) {
         level: "warn",
       },
     );
-  let runtimeRoots = new Set(tlsModule.rootCertificates);
-  let mapped = pems.map((pem) =>
+  let runtimeRoots = new Set(
+    tlsModule.rootCertificates.map((rootCertificate) => rootCertificate.replace(/-----[A-Z ]+-----|\s/g, "")),
+  );
+  let describePem = (pem) =>
     pemSpans(pem).map(([start, end]) => {
       let block = pem.slice(start, end);
       try {
         let cert = new X509Certificate(block);
         let subject = formatShortcut(cert.subject ?? "");
         let issuer = formatShortcut(cert.issuer ?? "");
-        let trustData = pemStartsWithRaw(block, cert);
-        let isAnchored = trustData;
+        let startsWithRaw = pemStartsWithRaw(block, cert);
+        let selfNamedTrusted = subject === issuer && TRUSTED_CERT_FINGERPRINTS.has(cert.fingerprint256);
+        let isAnchored = startsWithRaw || selfNamedTrusted;
         let unconfirmed;
         if (!isAnchored && subject === issuer)
           try {
-            isAnchored = dropDisabled || runtimeRoots.has(block) || isSelfSigned(cert);
+            isAnchored = dropDisabled || runtimeRoots.has(cert.raw.toString("base64")) || isSelfSigned(cert);
             unconfirmed = isAnchored
               ? undefined
               : "its own key did not sign it, or signed it in a form that Claude Code cannot check";
@@ -938,7 +1207,7 @@ function dropSelfNamedCerts(pems, onDrop) {
             kept: isAnchored,
             unconfirmed,
           },
-          trustData,
+          trustData: startsWithRaw,
         };
       } catch {
         return {
@@ -948,9 +1217,15 @@ function dropSelfNamedCerts(pems, onDrop) {
           trustData: false,
         };
       }
-    }),
-  );
-  let flattened = mapped.flat().flatMap((entry) => entry.listed ?? []);
+    });
+  let mapped = pems.map((pem) => (state?.knownRootOf(pem) ? undefined : describePem(pem)));
+  if (!mapped.some((entries) => entries?.some((entry) => entry.listed?.anchor === false)))
+    return {
+      kept: [...pems],
+      dropped: 0,
+    };
+  let mapped_2 = mapped.map((entries, pemIndex) => entries ?? describePem(pems[pemIndex]));
+  let flattened = mapped_2.flat().flatMap((entry) => entry.listed ?? []);
   let issuersOf = new Map(
     flattened
       .filter((listed) => !listed.anchor)
@@ -964,30 +1239,30 @@ function dropSelfNamedCerts(pems, onDrop) {
         changed = true;
       }
   }
-  let droppedCount = count(flattened, (listed) => !listed.kept);
+  let droppedCount = countWhere(flattened, (listed) => !listed.kept);
   if (droppedCount === 0 || droppedCount === flattened.length)
     return {
       kept: [...pems],
       dropped: 0,
     };
   let kept = pems.flatMap((pem, pemIndex) => {
-    let entries = mapped[pemIndex];
+    let entries = mapped_2[pemIndex];
     if (entries.every((entry) => entry.listed?.kept !== false)) return [pem];
     if (!entries.some((entry) => entry.listed?.kept))
       return entries.some((entry) => entry.listed) ? [] : [pem];
-    let mapped_2 = entries.map((entry, entryIndex) =>
+    let mapped = entries.map((entry, entryIndex) =>
       pem.slice(entries[entryIndex - 1]?.end ?? 0, entry.start),
     );
     if (!(
       entries.every(
         (entry, entryIndex) =>
           entry.start >= (entries[entryIndex - 1]?.end ?? 0) &&
-          /(^|\n)$/.test(mapped_2[entryIndex]) &&
+          /(^|\n)$/.test(mapped[entryIndex]) &&
           /^(\r?\n|$)/.test(pem.slice(entry.end, entry.end + 2)),
       ) &&
       entries.every((entry) => entry.listed && !entry.trustData) &&
       !pem.includes("\x00") &&
-      [...mapped_2, pem.slice(entries.at(-1).end)].every(
+      [...mapped, pem.slice(entries.at(-1).end)].every(
         (text) => /^[\t\r\n\x20-\x7e]*$/.test(text) && !text.includes("-----"),
       )
     )) {
@@ -1001,12 +1276,12 @@ function dropSelfNamedCerts(pems, onDrop) {
 `),
     ];
   });
-  mapped.forEach((entries, pemIndex) => {
+  mapped_2.forEach((entries, pemIndex) => {
     for (let { listed } of entries)
       if (listed?.unconfirmed && !listed.kept) {
         let { fingerprint256, subject } = listed.certificate;
         logForDebugging(
-          `CA certs: Dropped the certificate with SHA-256 fingerprint ${fingerprint256} and subject ${JSON.stringify(subject ?? "")}: it names itself as its issuer, but ${listed.unconfirmed}, and no CA that chains to a root in the list signed it. CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP=1 keeps every such certificate.`,
+          `CA certs: Dropped the certificate with SHA-256 fingerprint ${fingerprint256} and subject ${JSON.stringify(subject ?? "")}: it names itself as its issuer, but ${listed.unconfirmed}, and no CA that chains to a root in the CA list signed it. If another root certificate of the same CA signed it, this one stays once this list holds that root certificate too. Only the lists for Claude Code's own connections take certificates from the NODE_EXTRA_CA_CERTS file. If you add that root and connections still fail, take it out again: while this list holds it, the variable below changes nothing. CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP=1 keeps every such certificate, whoever signed it, and can break connections that work without it.`,
           {
             level: "error",
           },
@@ -1016,10 +1291,10 @@ function dropSelfNamedCerts(pems, onDrop) {
   });
   return {
     kept,
-    dropped: count(flattened, (listed) => !listed.kept),
+    dropped: countWhere(flattened, (listed) => !listed.kept),
   };
 }
-//@ chunk-hq88884p.js:47131-49781 placement
+//@ chunk-355mdh7x.js:84253-87047 placement
 /**
  * 按证书来源加载 CA 证书（bundled/system/extra）。
  */
@@ -1031,6 +1306,8 @@ function loadCaCertificates(state, useClientCert, blockedIndex) {
   let refusesBundledFallback = !included && state.refusesBundledFallback;
   logForDebugging(`CA certs: stores=${sources.join(",")}, extraCertsPath=${NODE_EXTRA_CA_CERTS}`);
   let tlsModule = importMetaRequire("tls");
+  let caState = knownHashesOf(state);
+  let tlsModule_2 = caState?.readBundledRoots() ?? tlsModule.rootCertificates;
   let getCACertificates = tlsModule.getCACertificates;
   if (!included && included_2 && !getCACertificates) {
     logForDebugging(
@@ -1040,8 +1317,8 @@ function loadCaCertificates(state, useClientCert, blockedIndex) {
   }
   let entries = [];
   let emptyReason = "every certificate in the system CA store is expired or on the deny list";
-  let pushRoots = (source, rootCertificates) => {
-    for (let pem of rootCertificates)
+  let pushRoots = (source, tlsModule) => {
+    for (let pem of tlsModule)
       entries.push({
         pem,
         source,
@@ -1052,14 +1329,14 @@ function loadCaCertificates(state, useClientCert, blockedIndex) {
   let extraPems = [];
   let parsedByPem = new Map();
   if (included) {
-    pushRoots("bundled", tlsModule.rootCertificates);
-    logForDebugging(`CA certs: Loaded ${tlsModule.rootCertificates.length} bundled root certificates`);
+    pushRoots("bundled", tlsModule_2);
+    logForDebugging(`CA certs: Loaded ${tlsModule_2.length} bundled root certificates`);
   }
   if (included_2)
     try {
-      let systemCerts = getCACertificates?.("system");
+      let systemCerts = caState ? caState.readSystemStore() : getCACertificates?.("system");
       if (systemCerts && systemCerts.length > 0) {
-        let unexpired = dropExpiredCerts(systemCerts, Date.now(), parsedByPem);
+        let unexpired = dropExpiredCerts(systemCerts, Date.now(), parsedByPem, caState);
         pushRoots("system", unexpired);
         logForDebugging(`CA certs: Loaded ${unexpired.length} system CA certificates`);
       } else {
@@ -1067,7 +1344,7 @@ function loadCaCertificates(state, useClientCert, blockedIndex) {
         emptyReason = getCACertificates
           ? "the system CA store is empty: check that this process can read its CA files (SSL_CERT_FILE, SSL_CERT_DIR, or the system's default paths)"
           : "the runtime has no system CA store";
-        if (!included && !refusesBundledFallback) pushRoots("bundled", tlsModule.rootCertificates);
+        if (!included && !refusesBundledFallback) pushRoots("bundled", tlsModule_2);
       }
     } catch (error) {
       logForDebugging(`CA certs: Failed to load system CA certificates: ${error}`, {
@@ -1075,17 +1352,24 @@ function loadCaCertificates(state, useClientCert, blockedIndex) {
       });
       if (warnOnceCa("system_store_failed")) logFeatureSad("ca_certs_load", "system_store_failed");
       emptyReason = "reading the system CA store failed";
-      if (!included && !refusesBundledFallback) pushRoots("bundled", tlsModule.rootCertificates);
+      if (!included && !refusesBundledFallback) pushRoots("bundled", tlsModule_2);
     }
-  let bundledRootCertificates = selectBundledRootCertificates(tlsModule.rootCertificates);
+  let bundledRootCertificates = selectBundledRootCertificates(tlsModule_2, caState);
   let baseList = refusesBundledFallback
-    ? withoutBlockedCertsUnsafe(entries, bundledRootCertificates, blockedIndex, state.warnedExtraCerts)
+    ? withoutBlockedCertsUnsafe(
+        entries,
+        bundledRootCertificates,
+        blockedIndex,
+        state.warnedExtraCerts,
+        caState,
+      )
     : buildCaList(
         entries,
-        tlsModule.rootCertificates,
+        tlsModule_2,
         blockedIndex,
         bundledRootCertificates,
         state.warnedExtraCerts,
+        caState,
       );
   if (baseList.length === 0)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -1111,6 +1395,7 @@ function loadCaCertificates(state, useClientCert, blockedIndex) {
           bundledRootCertificates,
           blockedIndex,
           state.warnedExtraCerts,
+          caState,
         );
     extraPems = all ? [content] : extraBlocks;
     extraUsed = all || extraBlocks.length > 0;
@@ -1120,36 +1405,49 @@ function loadCaCertificates(state, useClientCert, blockedIndex) {
         : `CA certs: Nothing from NODE_EXTRA_CA_CERTS (${NODE_EXTRA_CA_CERTS}) is left to append`,
     );
   }
-  let chosen =
+  let now = Date.now();
+  let serverCerts = state.servedCertificates.filter(
+    (servedCertificate) =>
+      !(new Date(servedCertificate.validFrom).getTime() > now) &&
+      new Date(servedCertificate.validTo).getTime() > now,
+  );
+  let envValue =
     useClientCert || env.CLAUDE_CODE_DISABLE_LOOPED_CROSS_CERT_DROP
       ? {
           list: baseList,
           alone: baseList,
+          judged: undefined,
         }
-      : chooseAnchoredCerts(baseList, parsedByPem, extraPems);
-  let merged = uniq([...chosen.list, ...extraBlocks]);
+      : chooseAnchoredCerts(baseList, parsedByPem, extraPems, serverCerts);
+  let merged = normalizeCaseForComparison_2([...envValue.list, ...extraBlocks]);
   let selfNamedDropped = 0;
   let result = useClientCert
     ? {
         kept: merged,
         dropped: 0,
       }
-    : dropSelfNamedCerts(merged, (pem, fingerprint) => {
-        selfNamedDropped++;
-        if (extraPems.some((extraPem) => extraPem.includes(pem.trim())))
-          warnBlockedCertBlock("selfNamed", fingerprint, state.warnedExtraCerts);
-      });
+    : dropSelfNamedCerts(
+        merged,
+        (pem, fingerprint) => {
+          selfNamedDropped++;
+          if (extraPems.some((extraPem) => extraPem.includes(pem.trim())))
+            warnExtraCertsProblem("selfNamed", fingerprint, state.warnedExtraCerts);
+        },
+        caState,
+      );
   return {
     list: result.kept,
     dropped: result.dropped,
     selfNamedDropped,
-    storeCerts: chosen.alone,
+    storeCerts: envValue.alone,
     appendedExtraCerts: extraUsed,
     wantsBundled: included,
     wantsSystem: included_2,
+    judged: envValue.judged,
+    served: serverCerts,
   };
 }
-//@ chunk-hq88884p.js:49781-50750 placement
+//@ chunk-355mdh7x.js:87047-88203 placement
 /**
  * 刷新 CA 状态（读取 NODE_EXTRA_CA_CERTS）。
  */
@@ -1175,8 +1473,23 @@ function refreshCaState(state, useClientCert) {
       );
       if (warnOnceCa("read_failed")) logFeatureBad("ca_certs_load", "read_failed");
     }
-  let { list, dropped, selfNamedDropped, storeCerts, appendedExtraCerts, wantsBundled, wantsSystem } =
-    loadCaCertificates(state, useClientCert, blockedCaIndex);
+  let {
+    list,
+    dropped,
+    selfNamedDropped,
+    storeCerts,
+    appendedExtraCerts,
+    wantsBundled,
+    wantsSystem,
+    judged,
+    served,
+  } = loadCaCertificates(state, useClientCert, blockedCaIndex);
+  if (judged !== undefined) {
+    state.droppedCrossCertificates = judged.dropped;
+    state.servedCertificates = served.filter((pair) =>
+      judged.looping.some(({ cross, root }) => isCrossSigningRoot(pair, cross, root)),
+    );
+  } else state.droppedCrossCertificates = [];
   if (dropped > 0) {
     logForDebugging(`CA certs: Dropped ${dropped} certificate(s) that do not chain to a root in the CA list`);
     if (selfNamedDropped > 0 && warnOnceCa("self_named_dropped"))
@@ -1188,7 +1501,7 @@ function refreshCaState(state, useClientCert) {
         dropped_count: dropped - selfNamedDropped,
       });
   }
-  state.storeCertificates = appendedExtraCerts ? uniq(storeCerts) : list;
+  state.storeCertificates = appendedExtraCerts ? normalizeCaseForComparison_2(storeCerts) : list;
   if (!appendedExtraCerts) state.runtimeStoreBundles.add(Object.freeze(list));
   if (warnedCaKeys.size === 0 && warnOnceCa("ok"))
     logFeatureOk("ca_certs_load", {
@@ -1199,24 +1512,115 @@ function refreshCaState(state, useClientCert) {
     });
   return list;
 }
-//@ chunk-hq88884p.js:50750-50773 placement
+//@ chunk-355mdh7x.js:88203-88212 placement
+/**
+ * 服务器可直接追加的证书数量上限 8。
+ */
+var MAX_SERVED_CERTIFICATES = 8;
+//@ chunk-355mdh7x.js:88212-89134 placement
+/**
+ * 从服务器发来的证书里挑出用于选择系统交叉证书的补充项：以 8 张为限、按指纹去重，并打印忽略/记录日志。
+ */
+function noteServedCertificates(certificates) {
+  let caCertState = getCaCertState();
+  if (caCertState.fromHost) return false;
+  let servedFingerprints = new Set(
+    caCertState.servedCertificates.map((crossFingerprint) => crossFingerprint.fingerprint256),
+  );
+  let candidates = caCertState.droppedCrossCertificates.filter(
+    ({ cross, root }) =>
+      !caCertState.servedCertificates.some((servedCertificate) =>
+        isCrossSigningRoot(servedCertificate, cross, root),
+      ),
+  );
+  let now = Date.now();
+  let accepted = [];
+  let ignoredCount = 0;
+  for (let certificate of certificates) {
+    let candidateIndex = candidates.findIndex(
+      ({ cross, root }) =>
+        !servedFingerprints.has(certificate.fingerprint256) &&
+        !(new Date(certificate.validFrom).getTime() > now) &&
+        new Date(certificate.validTo).getTime() > now &&
+        isCrossSigningRoot(certificate, cross, root),
+    );
+    if (candidateIndex === -1) continue;
+    if (caCertState.servedCertificates.length + accepted.length >= MAX_SERVED_CERTIFICATES) {
+      ignoredCount++;
+      continue;
+    }
+    candidates.splice(candidateIndex, 1);
+    servedFingerprints.add(certificate.fingerprint256);
+    accepted.push(certificate);
+  }
+  if (ignoredCount > 0)
+    logForDebugging(
+      `CA certs: Ignored ${ignoredCount} more certificate(s) that a server sent: ${MAX_SERVED_CERTIFICATES} are already held to choose among the system store's cross-certificates`,
+    );
+  if (accepted.length === 0) return false;
+  caCertState.servedCertificates = [...caCertState.servedCertificates, ...accepted];
+  logForDebugging(
+    `CA certs: Noted ${accepted.length} certificate(s) that a server sent; they only choose which system cross-certificates stay and are not added to the CA list`,
+  );
+  clearCACertsCache_2(caCertState);
+  return true;
+}
+//@ chunk-355mdh7x.js:89134-89282 placement
+/**
+ * 判定是否还有未被记录的系统交叉证书待匹配。
+ */
+function hasDroppedLoopingCrossCertificates() {
+  let caCertState = getCaCertState();
+  return (
+    caCertState.fromHost === null &&
+    caCertState.droppedCrossCertificates.some(
+      ({ cross, root }) =>
+        !caCertState.servedCertificates.some((servedCertificate) =>
+          isCrossSigningRoot(servedCertificate, cross, root),
+        ),
+    )
+  );
+}
+//@ chunk-355mdh7x.js:89282-89341 placement
+/**
+ * 已丢弃交叉证书的数量。
+ */
+function cutLoopingCrossCertificateCount() {
+  return getCaCertState().droppedCrossCertificates.length;
+}
+//@ chunk-355mdh7x.js:89341-89365 placement
 /**
  * 清除 CA 证书缓存。
  */
 function clearCACertsCache() {
   clearCACertsCache_2(getCaCertState());
 }
-//@ chunk-hq88884p.js:50773-50854 fingerprint (2.1.88 match: clearCACertsCache, 0.855)
-function clearCACertsCache_2(caCertState) {
-  caCertState.certificates.cache.clear?.();
+//@ chunk-355mdh7x.js:89365-89421 fingerprint (2.1.88 match: clearCACertsCache, 0.866)
+function clearCACertsCache_2(state) {
+  resetKnownHashes(state);
   logForDebugging("Cleared CA certificates cache");
 }
-//@ chunk-hq88884p.js:54258-54304 placement
+//@ chunk-355mdh7x.js:89421-89510 placement
+/**
+ * 在 remote 或 keepsKnownHashes 时返回已知哈希表；utils/caCerts 也用它。
+ */
+function knownHashesOf(state) {
+  return env.CLAUDE_CODE_REMOTE === true || state.keepsKnownHashes ? state.knownHashes : undefined;
+}
+//@ chunk-355mdh7x.js:89510-89577 placement
+/**
+ * 清空证书缓存与已知哈希；utils/caCerts 在重载时调用。
+ */
+function resetKnownHashes(state) {
+  state.certificates.cache.clear?.();
+  state.knownHashes = new caCertState();
+}
+//@ chunk-355mdh7x.js:92981-93027 placement
 /**
  * 记录已设置的运行时默认 CA 列表，避免重复设置。
  */
 var caDefaultListState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hq88884p.js:54258", () => {
+deferInit("chunk-355mdh7x.js:92981", () => {
   caDefaultListState = identity(
     {
       list: undefined,
@@ -1226,21 +1630,21 @@ deferInit("chunk-hq88884p.js:54258", () => {
     },
   );
 });
-//@ chunk-hq88884p.js:54304-54382 placement
+//@ chunk-355mdh7x.js:93027-93105 placement
 /**
  * 把若干 PEM 文本拆成各证书块。
  */
 function splitPemBlocks(caCertificates) {
   return (caCertificates ?? []).flatMap((pem) => pemSpans(pem).map(([start, end]) => pem.slice(start, end)));
 }
-//@ chunk-hq88884p.js:54382-54413 placement
+//@ chunk-355mdh7x.js:93105-93136 placement
 /**
  * 把单个证书设为运行时默认 CA。
  */
 function setDefaultCaFor(pem) {
   return trySetDefaultCaCertificates([pem]);
 }
-//@ chunk-hq88884p.js:54413-54874 placement
+//@ chunk-355mdh7x.js:93136-93597 placement
 /**
  * 设置运行时默认 CA 证书。
  */
@@ -1267,7 +1671,7 @@ function applyDefaultCaCertificates() {
   if (certificates.length > 0 && trySetDefaultCaCertificates(certificates))
     caDefaultListState.list = caCertificates;
 }
-//@ chunk-hq88884p.js:54874-54950 placement
+//@ chunk-355mdh7x.js:93597-93673 placement
 /**
  * 设置运行时默认 CA 证书，失败返回 false。
  */
@@ -1281,18 +1685,23 @@ function trySetDefaultCaCertificates(certificates) {
 }
 export {
   getCACertificates,
-  withoutBlockedCerts,
   splitPemBlocks,
   setDefaultCaFor,
   caListFor,
   applyDefaultCaCertificates,
   withoutBlockedOrUnanchoredCerts,
+  cutLoopingCrossCertificateCount,
+  noteServedCertificates,
+  hasDroppedLoopingCrossCertificates,
+  peekCACertificates,
+  clearCACertsCache,
   loadExtraCACerts,
+  withoutBlockedCerts,
   BLOCKED_ROOT_SHA256,
   BLOCKED_ROOT_SPKI_SHA256,
   LEAKED_CA_SPKI_SHA256,
+  denyListHasReadKeyOf,
   hasSeenTrustOverride,
   isRuntimeStoreCABundle,
-  clearCACertsCache,
   pemSpans,
 };

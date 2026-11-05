@@ -3,10 +3,10 @@
  *
  * 并入已有模块：内置插件提供的技能名列表。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/managedPlugins.ts
- * pieces: chunk-bfnfj4kx.js (7), chunk-czx62zen.js (19), chunk-h6tjx705.js (2)
- * attribution: placement 27, fingerprint 1
+ * pieces: chunk-6sf70a86.js (7), chunk-gs416h43.js (2), chunk-r7hswen6.js (19)
+ * attribution: placement 27, shared-adjacent 1
  */
 import { isSkillOutsideCorePolicy } from "../../skills/bundledSkillsGate.js";
 import { getBuiltinPlugins } from "../../plugins/builtinPlugins.js";
@@ -58,21 +58,21 @@ import { isDependencyAutoInstallState } from "./dependencyResolver.js";
 import { policySettingsUnreadable } from "../hooks/hooksConfigSnapshot.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bfnfj4kx.js:77383-77435 placement
+//@ chunk-6sf70a86.js:77429-77481 placement
 /**
  * availableBuiltinSkillCommands：未被禁用的内建插件技能命令。
  */
 function availableBuiltinSkillCommands() {
   return getBuiltinPluginSkillCommands().filter((command) => !isSkillOutsideCorePolicy(command.name));
 }
-//@ chunk-bfnfj4kx.js:77435-77462 placement
+//@ chunk-6sf70a86.js:77481-77508 placement
 /**
  * builtinPluginSkillCommands：内建插件技能命令列表。
  */
 function builtinPluginSkillCommands() {
   return getBuiltinPluginSkillCommands();
 }
-//@ chunk-bfnfj4kx.js:77462-77645 placement
+//@ chunk-6sf70a86.js:77508-77691 placement
 function getBuiltinPluginSkillCommands() {
   let { enabled } = getBuiltinPlugins();
   let commands = [];
@@ -85,7 +85,7 @@ function getBuiltinPluginSkillCommands() {
   }
   return commands;
 }
-//@ chunk-bfnfj4kx.js:77645-77802 placement
+//@ chunk-6sf70a86.js:77691-77848 placement
 /**
  * 内置插件提供的技能名列表。
  */
@@ -97,7 +97,7 @@ function builtinPluginSkillNames(skipNames = new Set()) {
   }
   return names;
 }
-//@ chunk-bfnfj4kx.js:77802-77958 placement
+//@ chunk-6sf70a86.js:77848-78004 placement
 /**
  * 从高优先级设置源起找插件的 enabledPlugins 值（含别名）。
  */
@@ -111,7 +111,7 @@ function findEnabledSettingForPlugin(pluginId) {
   }
   return;
 }
-//@ chunk-bfnfj4kx.js:77958-78110 placement
+//@ chunk-6sf70a86.js:78004-78156 placement
 /**
  * 只能由策略启用的内置插件及其托管名。
  */
@@ -123,7 +123,7 @@ function getPolicyOnlyBuiltinPluginNames() {
       .map((id) => [id, getManagedPluginNames_2(id)]),
   );
 }
-//@ chunk-bfnfj4kx.js:78110-78223 fingerprint (2.1.88 match: getManagedPluginNames, 1)
+//@ chunk-6sf70a86.js:78156-78269 shared-adjacent (2.1.88 match: getManagedPluginNames, 1)
 /**
  * 插件在托管/合并设置中的启用值（托管为 false 时以托管为准）。
  */
@@ -133,14 +133,14 @@ function getManagedPluginNames_2(id) {
   );
   return vouchedValue === false && policyValue !== false ? policyValue : vouchedValue;
 }
-//@ chunk-h6tjx705.js:227-240 placement
+//@ chunk-gs416h43.js:227-240 placement
 var managedPluginsSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-h6tjx705.js:227", () => {
+deferInit("chunk-gs416h43.js:227", () => {
   managedPluginsSlot = createValueSlot();
 });
-//@ chunk-h6tjx705.js:240-262 placement
+//@ chunk-gs416h43.js:240-262 placement
 var getManagedPlugins = () => managedPluginsSlot.get();
-//@ chunk-czx62zen.js:14027-14198 placement
+//@ chunk-r7hswen6.js:14030-14201 placement
 /**
  * 策略允许的插件 id 集合，只保留内置或已担保的托管插件。
  */
@@ -153,7 +153,7 @@ function getVouchedPolicyPluginIds() {
   );
   return filtered.length > 0 ? new Set(filtered) : null;
 }
-//@ chunk-czx62zen.js:14198-14267 placement
+//@ chunk-r7hswen6.js:14201-14270 placement
 /**
  * isVouchedPolicyPluginId：是否为受信策略插件 id。
  */
@@ -161,7 +161,7 @@ function isVouchedPolicyPluginId(pluginStorageId) {
   let lowered = nfcLower(pluginStorageId);
   return [...(getVouchedPolicyPluginIds() ?? [])].some((id) => nfcLower(id) === lowered);
 }
-//@ chunk-czx62zen.js:14267-17012 placement
+//@ chunk-r7hswen6.js:14270-17015 placement
 function resolveSeatedManagedPlugins(modules) {
   let pluginAffectingSettingsSnapshot = getPluginAffectingSettingsSnapshot();
   let vouchedIds = new Set(
@@ -229,7 +229,7 @@ function resolveSeatedManagedPlugins(modules) {
     filtered.map((pluginModule) => nfcLower(pluginModule.source)).filter((id) => !unvouchedIds.has(id)),
   );
 }
-//@ chunk-czx62zen.js:17012-17280 placement
+//@ chunk-r7hswen6.js:17015-17283 placement
 function isReadInPlaceSourceVouched(pluginModule, policySettings) {
   let marketplaceName = marketplaceSuffix(pluginModule.source);
   let marketplaceSource = pluginModule.marketplaceSource;
@@ -255,10 +255,10 @@ function isReadInPlaceSourceVouched(pluginModule, policySettings) {
       : undefined,
   });
 }
-//@ chunk-czx62zen.js:17280-17457 placement
+//@ chunk-r7hswen6.js:17283-17460 placement
 var UNVOUCHED_MANAGED_SETTINGS_DESCRIPTION =
   "managed settings this session does not vouch for (such as remote managed settings the server has not confirmed this session, or a document your user account can write)";
-//@ chunk-czx62zen.js:17457-17521 placement (2.1.88 match: _temp7, 1)
+//@ chunk-r7hswen6.js:17460-17524 placement (2.1.88 match: _temp7, 1)
 /**
  * assuredPolicySettings：受信管理策略层或策略设置。
  */
@@ -268,14 +268,14 @@ function assuredPolicySettings() {
     ? vouchedAdminPolicyTier
     : getSettingsForSource("policySettings");
 }
-//@ chunk-czx62zen.js:17521-17555 placement
+//@ chunk-r7hswen6.js:17524-17558 placement
 /**
  * hasPluginDeclarations：该设置层是否声明了插件。
  */
 function hasPluginDeclarations(tier) {
   return hasAnyPluginDeclarations(tier) || hasMachinePluginKeyLoadRecords();
 }
-//@ chunk-czx62zen.js:17555-17767 placement
+//@ chunk-r7hswen6.js:17558-17770 placement
 function policyEnabledPluginIds(policyTier) {
   let managedPlugins = getManagedPlugins();
   if (managedPlugins) return new Set(managedPlugins.managedIds);
@@ -286,7 +286,7 @@ function policyEnabledPluginIds(policyTier) {
     if (value === true && key.includes("@")) ids.add(canonicalPluginId(key));
   return ids.size > 0 ? ids : null;
 }
-//@ chunk-czx62zen.js:17767-18124 placement
+//@ chunk-r7hswen6.js:17770-18127 placement
 /**
  * 读取 policySettings.enabledPlugins，生成 {name, marketplace, enabled, heldOff?} 列表；被暂缓的禁用项标 heldOff。没有返回 null。
  */
@@ -313,7 +313,7 @@ function getPolicyEnabledPluginEntries() {
   }
   return entries.length > 0 ? entries : null;
 }
-//@ chunk-czx62zen.js:18124-18547 placement
+//@ chunk-r7hswen6.js:18127-18550 placement
 /**
  * 按 NFC 小写名在策略条目中查找插件：无匹配 unmatched；有禁用条目则 locked；市场与给定市场一致（非保留名）则 admitted；否则 locked 到首个条目。
  */
@@ -356,7 +356,7 @@ function matchPolicyPluginEntry(managedEntries, name, attributedMarketplaceName)
     entry: first,
   };
 }
-//@ chunk-czx62zen.js:18547-19388 placement
+//@ chunk-r7hswen6.js:18550-19391 placement
 /**
  * 计算前置/后置插件列表：有托管插件直接用其 order；否则按策略或用户设置的 prependPlugins/appendPlugins， 叠加座席（seat）结果，去掉被其他层声明过的项，并给出来源（policy/user/none）与被遮蔽信息。
  */
@@ -419,11 +419,11 @@ function resolveManagedPluginOrder() {
     ...effectiveSeat,
   };
 }
-//@ chunk-czx62zen.js:19388-19419 placement
+//@ chunk-r7hswen6.js:19391-19422 placement
 function canonicalLowerPluginId(id) {
   return canonicalPluginId(nfcLower(id));
 }
-//@ chunk-czx62zen.js:19419-19730 placement
+//@ chunk-r7hswen6.js:19422-19733 placement
 /**
  * 去掉已被其他设置层声明或已座席的插件。
  */
@@ -443,11 +443,11 @@ function filterUnclaimedSlotPlugins({ key, slot, holder, outermost }) {
   );
   return mapped.filter((id) => !claimed.has(id) && !outermost.includes(id));
 }
-//@ chunk-czx62zen.js:19730-19767 placement
+//@ chunk-r7hswen6.js:19733-19770 placement
 function policySettings_2(tier) {
   return [tier ?? {}, ...getVouchedPolicyTierSettings()];
 }
-//@ chunk-czx62zen.js:19767-19920 placement
+//@ chunk-r7hswen6.js:19770-19923 placement
 function hasAnyPluginDeclarations(tier) {
   return tier.some(
     (tier) =>
@@ -456,7 +456,7 @@ function hasAnyPluginDeclarations(tier) {
       Object.values(tier.enabledPlugins ?? {}).some((value) => value !== false),
   );
 }
-//@ chunk-czx62zen.js:19920-20117 placement (2.1.88 match: getManagedPluginNames, 0.774)
+//@ chunk-r7hswen6.js:19923-20120 placement (2.1.88 match: getManagedPluginNames, 0.775)
 /**
  * 托管插件 ID 列表：来自 policySettings 与远程托管设置的 enabledPlugins。
  */
@@ -468,14 +468,14 @@ function getManagedPluginNames() {
     .filter(([key, value]) => isDependencyAutoInstallState(value) && key.includes("@"))
     .map(([key]) => canonicalPluginId(key));
 }
-//@ chunk-czx62zen.js:20117-20158 placement
+//@ chunk-r7hswen6.js:20120-20161 placement
 /**
  * 是否存在托管插件（远程托管或 policySettings 启用的插件）。
  */
 function hasManagedPlugins() {
   return policySettingsUnreadable() || getManagedPluginNames().length > 0;
 }
-//@ chunk-czx62zen.js:20158-20217 placement
+//@ chunk-r7hswen6.js:20161-20220 placement
 /**
  * managedPluginNameSet：托管插件名集合。
  */
@@ -483,7 +483,7 @@ function managedPluginNameSet() {
   let managedPluginNames = getManagedPluginNames();
   return managedPluginNames.length > 0 ? new Set(managedPluginNames) : null;
 }
-//@ chunk-czx62zen.js:20217-20283 placement
+//@ chunk-r7hswen6.js:20220-20286 placement
 /**
  * isManagedOrPolicyBlocked：策略不可读或该插件被托管策略点名。
  */
@@ -492,25 +492,25 @@ function isManagedOrPolicyBlocked(pluginId) {
   return policySettingsUnreadable() || getManagedPluginNames().some((id) => nfcLower(id) === lowered);
 }
 export {
-  getVouchedPolicyPluginIds,
   matchPolicyPluginEntry,
   getPolicyEnabledPluginEntries,
-  findEnabledSettingForPlugin,
-  managedPluginsSlot,
-  builtinPluginSkillCommands,
-  availableBuiltinSkillCommands,
-  isVouchedPolicyPluginId,
   isManagedOrPolicyBlocked,
-  getManagedPluginNames_2,
+  getVouchedPolicyPluginIds,
+  resolveManagedPluginOrder,
+  builtinPluginSkillNames,
+  availableBuiltinSkillCommands,
   hasManagedPlugins,
-  getManagedPlugins,
-  assuredPolicySettings,
-  policyEnabledPluginIds,
   policySettings_2,
   hasPluginDeclarations,
   resolveSeatedManagedPlugins,
-  resolveManagedPluginOrder,
   managedPluginNameSet,
-  builtinPluginSkillNames,
+  isVouchedPolicyPluginId,
+  getManagedPlugins,
+  getManagedPluginNames_2,
+  findEnabledSettingForPlugin,
   getPolicyOnlyBuiltinPluginNames,
+  builtinPluginSkillCommands,
+  managedPluginsSlot,
+  assuredPolicySettings,
+  policyEnabledPluginIds,
 };

@@ -3,9 +3,9 @@
  *
  * 子代理编辑器；本模块实际内容与云网关登录相关，疑似匹配错误。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/agents/AgentEditor.tsx
- * pieces: chunk-s5p7fp0c.js (1)
+ * pieces: chunk-mx6cbnn0.js (1)
  * attribution: callgraph-fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -22,7 +22,7 @@ import {
 } from "../../services/oauth/gatewayLogin/GatewayLogin.js";
 import { Spinner } from "../Spinner.js";
 
-//@ chunk-s5p7fp0c.js:10633-11644 callgraph-fingerprint (2.1.88 match: AgentEditor, 0.184)
+//@ chunk-mx6cbnn0.js:10714-11725 callgraph-fingerprint (2.1.88 match: AgentEditor, 0.184)
 function AgentEditor(props) {
   let $ = useMemoCache(13);
   let { userCode, verificationUri, onCancel } = props;

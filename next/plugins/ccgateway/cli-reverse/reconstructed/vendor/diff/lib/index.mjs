@@ -1,8 +1,8 @@
 /**
  * diff/lib/index.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: diff@9.0.0
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: esm-fingerprint 1
  */
 import { DoctorLazy } from "../../../src/cli/handlers/util.js";
@@ -20,7 +20,7 @@ import { attachedMachineInputField } from "../../../src/bridge/deviceRegistratio
 import { stagedWordingSchema } from "../../../src/tools/FileWriteTool/FileWriteTool.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1410040-1411318 esm-fingerprint
+//@ chunk-5xgkngpb.js:1409519-1410799 esm-fingerprint
 /**
  * Edit 的 zod schema：输入（file_path/old_string/new_string/replace_all + 可选 _host）、hunk、gitDiff、输出（filePath/oldString/newString/originalFile/structuredPatch/userModified/replaceAll/gitDiff/staged/stagedWording）。
  */
@@ -28,7 +28,7 @@ var fileEditInputSchema; // deferred: uses DoctorLazy (../../../src/cli/handlers
 var hunkSchema;
 var gitDiffSchema;
 var fileEditOutputSchema;
-deferInit("chunk-e6aww6q8.js:1410040", () => {
+deferInit("chunk-5xgkngpb.js:1409519", () => {
   fileEditInputSchema = DoctorLazy(() =>
     zodStrictObject({
       file_path: stringSchema().describe("The absolute path to the file to modify"),

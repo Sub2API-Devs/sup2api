@@ -3,9 +3,9 @@
  *
  * TaskStop 工具（别名 KillShell/KillBash）：停止后台任务/命令，支持远程主机
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TaskStopTool/TaskStopTool.ts
- * pieces: chunk-kxyd0g16.js (2)
+ * pieces: chunk-fmnbrxwy.js (2)
  * attribution: fingerprint 1, affinity 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -30,7 +30,7 @@ import { isWaitingOnChildren } from "../../tasks/LocalAgentTask/keepalive.js";
 import { isObserverAgentTask } from "../../tasks/LocalAgentTask/LocalAgentTask.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:26589-29286 fingerprint (2.1.88 match: TaskStopTool, 0.542)
+//@ chunk-fmnbrxwy.js:40510-43207 fingerprint (2.1.88 match: TaskStopTool, 0.545)
 /**
  * TaskStop 工具（别名 KillShell/KillBash，并发安全、shouldDefer）：按 task_id（兼容 shell_id、队友/命名代理名）停止后台任务；远程执行开关（tengu_violin_varnish）下可停远程主机上的后台命令。
  */
@@ -38,7 +38,7 @@ var taskStopInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.j
 var taskStopRemoteInputSchema;
 var taskStopOutputSchema;
 var TaskStopTool;
-deferInit("chunk-kxyd0g16.js:26589", () => {
+deferInit("chunk-fmnbrxwy.js:40510", () => {
   taskStopInputSchema = DoctorLazy(() =>
     zodStrictObject({
       task_id: stringSchema()
@@ -209,7 +209,7 @@ deferInit("chunk-kxyd0g16.js:26589", () => {
     },
   });
 });
-//@ chunk-kxyd0g16.js:29286-29472 affinity
+//@ chunk-fmnbrxwy.js:43207-43393 affinity
 /**
  * 远程主机上找不到该后台命令时的提示。
  */

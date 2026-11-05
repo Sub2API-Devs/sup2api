@@ -1,11 +1,11 @@
 /**
  * chalk/source/vendor/ansi-styles/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: chalk@5.6.0..5.6.2
- * pieces: chunk-4ymxyb4g.js (2)
+ * pieces: chunk-h88kgep4.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
-//@ chunk-4ymxyb4g.js:226-1241 esm-layout
+//@ chunk-h88kgep4.js:226-1241 esm-layout
 var wrapAnsi16 =
   (offset = 0) =>
   (code) =>
@@ -75,7 +75,7 @@ var modifierNames = Object.keys(styles_2.modifier);
 var foregroundColorNames = Object.keys(styles_2.color);
 var backgroundColorNames = Object.keys(styles_2.bgColor);
 var colorNames = [...foregroundColorNames, ...backgroundColorNames];
-//@ chunk-4ymxyb4g.js:1241-2723 esm-fingerprint
+//@ chunk-h88kgep4.js:1241-2723 esm-fingerprint
 function assembleStyles() {
   let codes = new Map();
   for (let [groupName, group] of Object.entries(styles_2)) {

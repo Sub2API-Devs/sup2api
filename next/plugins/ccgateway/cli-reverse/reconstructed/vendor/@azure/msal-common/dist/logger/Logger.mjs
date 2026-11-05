@@ -1,18 +1,18 @@
 /**
  * @azure/msal-common/dist/logger/Logger.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/msal-common@15.13.1
- * pieces: chunk-mrx6y2r5.js (3)
+ * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
 import { Constants } from "../../lib/index-node-DhUjlPuB.js";
 import { deferInit, runDeferredInits } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-mrx6y2r5.js:102514-102520 esm-layout
+//@ chunk-b5df2wx1.js:102514-102520 esm-layout
 var LogLevel;
-//@ chunk-mrx6y2r5.js:102520-102657 esm-fingerprint
+//@ chunk-b5df2wx1.js:102520-102657 esm-fingerprint
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-mrx6y2r5.js:102520", () => {
+deferInit("chunk-b5df2wx1.js:102520", () => {
   (function (LogLevel) {
     LogLevel[(LogLevel.Error = 0)] = "Error";
     LogLevel[(LogLevel.Warning = 1)] = "Warning";
@@ -21,7 +21,7 @@ deferInit("chunk-mrx6y2r5.js:102520", () => {
     LogLevel[(LogLevel.Trace = 4)] = "Trace";
   })(LogLevel || (LogLevel = {}));
 });
-//@ chunk-mrx6y2r5.js:102657-104712 esm-fingerprint
+//@ chunk-b5df2wx1.js:102657-104712 esm-fingerprint
 class Logger {
   constructor(loggerOptions, packageName, packageVersion) {
     this.level = LogLevel.Info;

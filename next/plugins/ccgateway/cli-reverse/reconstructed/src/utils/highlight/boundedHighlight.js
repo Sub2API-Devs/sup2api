@@ -3,13 +3,13 @@
  *
  * 有界语法高亮与语言语法表（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-n5fvvrgq.js (73)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rep15ptw.js (73)
  * attribution: placement 73
  */
 
-//@ chunk-n5fvvrgq.js:419-506 placement
+//@ chunk-rep15ptw.js:419-506 placement
 function MAX_COUNT_ITERATIONS(text) {
   let newlines = 0;
   for (
@@ -25,31 +25,31 @@ function MAX_COUNT_ITERATIONS(text) {
     newlines += 1;
   return newlines;
 }
-//@ chunk-n5fvvrgq.js:506-646 placement
+//@ chunk-rep15ptw.js:506-646 placement
 class HighlightBoundError extends Error {
   constructor() {
     super("highlighting this text takes more work than its length allows");
     this.name = "HighlightBoundError";
   }
 }
-//@ chunk-n5fvvrgq.js:646-696 placement
+//@ chunk-rep15ptw.js:646-696 placement
 function HighlightBudgetExceeded(budget, cost) {
   budget.left -= cost;
   if (budget.left < 0) throw new HighlightBoundError();
 }
-//@ chunk-n5fvvrgq.js:696-706 placement
+//@ chunk-rep15ptw.js:696-706 placement
 var MAX_TOKEN_LENGTH = 32;
-//@ chunk-n5fvvrgq.js:706-716 placement
+//@ chunk-rep15ptw.js:706-716 placement
 var MAX_NESTING_DEPTH = 64;
-//@ chunk-n5fvvrgq.js:716-727 placement
+//@ chunk-rep15ptw.js:716-727 placement
 var MAX_EMIT_BUDGET = 4096;
-//@ chunk-n5fvvrgq.js:727-736 placement
+//@ chunk-rep15ptw.js:727-736 placement
 var EMIT_COST_FACTOR = 24;
-//@ chunk-n5fvvrgq.js:736-745 placement
+//@ chunk-rep15ptw.js:736-745 placement
 var MAX_REPEAT_SPAN = 3;
-//@ chunk-n5fvvrgq.js:745-755 placement
+//@ chunk-rep15ptw.js:745-755 placement
 var MAX_MATCH_DEPTH = 16;
-//@ chunk-n5fvvrgq.js:755-1382 placement
+//@ chunk-rep15ptw.js:755-1382 placement
 /**
  * 包装 highlight.js 发射器类：按节点、文本长度、嵌套深度与子语言计入预算，超出时抛出高亮超限错误。
  */
@@ -95,24 +95,24 @@ var createBoundedEmitter = (BaseEmitter, budget) =>
       if (this.height > MAX_TOKEN_LENGTH) HighlightBudgetExceeded(budget, Number.POSITIVE_INFINITY);
     }
   };
-//@ chunk-n5fvvrgq.js:1382-1463 placement
+//@ chunk-rep15ptw.js:1382-1463 placement
 var isBoundedGrammar = (Emitter) =>
   typeof Emitter === "function" && "openNode" in Emitter.prototype && !("isBounded" in Emitter);
-//@ chunk-n5fvvrgq.js:1463-1475 placement
+//@ chunk-rep15ptw.js:1463-1475 placement
 var DEFAULT_MAX_CODE_BYTES = 50000;
-//@ chunk-n5fvvrgq.js:1475-1487 placement
+//@ chunk-rep15ptw.js:1475-1487 placement
 var MAX_ASCIIDOC_BYTES = 16000;
-//@ chunk-n5fvvrgq.js:1487-1499 placement
+//@ chunk-rep15ptw.js:1487-1499 placement
 var MAX_GCODE_BYTES = 20000;
-//@ chunk-n5fvvrgq.js:1499-1510 placement
+//@ chunk-rep15ptw.js:1499-1510 placement
 var MAX_HTTP_BYTES = 8000;
-//@ chunk-n5fvvrgq.js:1510-1521 placement
+//@ chunk-rep15ptw.js:1510-1521 placement
 var MAX_NESTEDTEXT_BYTES = 8000;
-//@ chunk-n5fvvrgq.js:1521-1533 placement
+//@ chunk-rep15ptw.js:1521-1533 placement
 var MAX_SAS_BYTES = 20000;
-//@ chunk-n5fvvrgq.js:1533-1545 placement
+//@ chunk-rep15ptw.js:1533-1545 placement
 var MAX_WREN_BYTES = 20000;
-//@ chunk-n5fvvrgq.js:1545-1638 placement
+//@ chunk-rep15ptw.js:1545-1638 placement
 var LANGUAGE_MAX_BYTES = new Map([
   ["asciidoc", MAX_ASCIIDOC_BYTES],
   ["gcode", MAX_GCODE_BYTES],
@@ -121,9 +121,9 @@ var LANGUAGE_MAX_BYTES = new Map([
   ["sas", MAX_SAS_BYTES],
   ["wren", MAX_WREN_BYTES],
 ]);
-//@ chunk-n5fvvrgq.js:1638-1670 placement
+//@ chunk-rep15ptw.js:1638-1670 placement
 var min = Math.min(DEFAULT_MAX_CODE_BYTES, ...LANGUAGE_MAX_BYTES.values());
-//@ chunk-n5fvvrgq.js:1670-2819 placement
+//@ chunk-rep15ptw.js:1670-2819 placement
 var HIGHLIGHT_LANGUAGES = new Set([
   "abnf",
   "accesslog",
@@ -251,29 +251,29 @@ var HIGHLIGHT_LANGUAGES = new Set([
   "yaml",
   "zephir",
 ]);
-//@ chunk-n5fvvrgq.js:2819-2853 placement
+//@ chunk-rep15ptw.js:2819-2853 placement
 var KNOWN_LANGUAGES = new Set([...LANGUAGE_MAX_BYTES.keys(), ...HIGHLIGHT_LANGUAGES]);
-//@ chunk-n5fvvrgq.js:2853-2865 placement
+//@ chunk-rep15ptw.js:2853-2865 placement
 /**
  * 子语言文本超过该字符数才需要做有界处理。
  */
 var MAX_SUBLANGUAGE_CHARS = 256;
-//@ chunk-n5fvvrgq.js:2865-2882 placement
+//@ chunk-rep15ptw.js:2865-2882 placement
 /**
  * 子语言高亮的字节预算。
  */
 var MAX_SUBLANGUAGE_BYTES = 16000000;
-//@ chunk-n5fvvrgq.js:2882-2896 placement
+//@ chunk-rep15ptw.js:2882-2896 placement
 /**
  * 高亮预算总量（按基础额与系数估算）。
  */
 var TOTAL_BUDGET_BYTES = MAX_EMIT_BUDGET + DEFAULT_MAX_CODE_BYTES * EMIT_COST_FACTOR;
-//@ chunk-n5fvvrgq.js:2896-2913 placement
+//@ chunk-rep15ptw.js:2896-2913 placement
 /**
  * 恒等包装：直接调用回调（无预算限制时的占位）。
  */
 var noopRun = (grammar, fn) => fn();
-//@ chunk-n5fvvrgq.js:2913-2983 placement
+//@ chunk-rep15ptw.js:2913-2983 placement
 var withBudgetReset = (spent) => (budget, fn) => {
   spent.spent = 0;
   try {
@@ -282,7 +282,7 @@ var withBudgetReset = (spent) => (budget, fn) => {
     budget.left -= spent.spent;
   }
 };
-//@ chunk-n5fvvrgq.js:2983-3198 placement
+//@ chunk-rep15ptw.js:2983-3198 placement
 var languageChildren = (hljs, mode) => [
   ...[("subLanguage" in mode ? mode.subLanguage : undefined) ?? []]
     .flat()
@@ -292,28 +292,28 @@ var languageChildren = (hljs, mode) => [
   ...("variants" in mode ? (mode.variants ?? []) : []),
   "starts" in mode ? mode.starts : undefined,
 ];
-//@ chunk-n5fvvrgq.js:3198-3331 placement
+//@ chunk-rep15ptw.js:3198-3331 placement
 class HighlightLimitError extends Error {
   constructor() {
     super("this text is too long, or its lines are, for a grammar");
     this.name = "HighlightLimitError";
   }
 }
-//@ chunk-n5fvvrgq.js:3331-3367 placement
+//@ chunk-rep15ptw.js:3331-3367 placement
 var SCRIPT_STYLE_RE = /<(?:script|style)(?=\s|>)/iu;
-//@ chunk-n5fvvrgq.js:3367-3380 placement
+//@ chunk-rep15ptw.js:3367-3380 placement
 var MARKDOWN_FENCE_CHARS = "[`~<";
-//@ chunk-n5fvvrgq.js:3380-3416 placement
+//@ chunk-rep15ptw.js:3380-3416 placement
 var MARKDOWN_TRIGGERS = new Map([["markdown", [MARKDOWN_FENCE_CHARS, SCRIPT_STYLE_RE]]]);
-//@ chunk-n5fvvrgq.js:3416-3436 placement
+//@ chunk-rep15ptw.js:3416-3436 placement
 var WHITESPACE_OR_LINE_RE = /\s+|[^\n]+/g;
-//@ chunk-n5fvvrgq.js:3436-3545 placement
+//@ chunk-rep15ptw.js:3436-3545 placement
 function countBreakChars(text, breaks) {
   let count = 0;
   for (let char of breaks === undefined ? "" : text) count += breaks?.includes(char) === true ? 1 : 0;
   return breaks === undefined ? text.length : count;
 }
-//@ chunk-n5fvvrgq.js:3545-3674 placement
+//@ chunk-rep15ptw.js:3545-3674 placement
 function longTokenCost(text, breaks) {
   let cost = 0;
   if (text.length <= MAX_SUBLANGUAGE_CHARS) return cost;
@@ -323,15 +323,15 @@ function longTokenCost(text, breaks) {
   }
   return cost;
 }
-//@ chunk-n5fvvrgq.js:3674-3715 placement
+//@ chunk-rep15ptw.js:3674-3715 placement
 var isWithinCodeBudget = (text) =>
   text.length <= min && longTokenCost(text, undefined) <= MAX_SUBLANGUAGE_BYTES;
-//@ chunk-n5fvvrgq.js:3715-3790 placement
+//@ chunk-rep15ptw.js:3715-3790 placement
 function markdownTriggerChar(text, language) {
   let trigger = MARKDOWN_TRIGGERS.get(language);
   return trigger === undefined || trigger[1].test(text) ? undefined : trigger[0];
 }
-//@ chunk-n5fvvrgq.js:3790-3852 placement
+//@ chunk-rep15ptw.js:3790-3852 placement
 /**
  * 对需要预算的语言，计算超长子语言文本的裁剪结果。
  */
@@ -340,14 +340,14 @@ function sublanguageOverflowCheck(text, language) {
     ? longTokenCost(text, markdownTriggerChar(text, language))
     : 0;
 }
-//@ chunk-n5fvvrgq.js:3852-3906 placement
+//@ chunk-rep15ptw.js:3852-3906 placement
 /**
  * 判断某语言的文本是否可在预算内高亮（长度与子语言预算）。
  */
 var languageSubLanguageMap = (text, language) =>
   text.length <= (LANGUAGE_MAX_BYTES.get(language) ?? DEFAULT_MAX_CODE_BYTES) &&
   sublanguageOverflowCheck(text, language) <= MAX_SUBLANGUAGE_BYTES;
-//@ chunk-n5fvvrgq.js:3906-4389 placement
+//@ chunk-rep15ptw.js:3906-4389 placement
 /**
  * 沿子语言图找到某语言实际依赖的受限语言名（用于套用该语言的长度上限）。
  */
@@ -376,14 +376,14 @@ function rootHighlightLanguage(hljs, language) {
   }
   return fallback;
 }
-//@ chunk-n5fvvrgq.js:4389-4487 placement
+//@ chunk-rep15ptw.js:4389-4487 placement
 var withMarkdownBudgetHooks = (hljs) => ({
   "before:highlight": ({ code, language }) => {
     if (!isWithinCodeBudget(code) && !languageSubLanguageMap(code, rootHighlightLanguage(hljs, language)))
       throw new HighlightLimitError();
   },
 });
-//@ chunk-n5fvvrgq.js:4487-4915 placement
+//@ chunk-rep15ptw.js:4487-4915 placement
 /**
  * 计算语言定义中子语言的最大扇出。
  */
@@ -410,7 +410,7 @@ function maxSubLanguageFanout(hljs, rootMode) {
   }
   return fanout;
 }
-//@ chunk-n5fvvrgq.js:4915-5150 placement
+//@ chunk-rep15ptw.js:4915-5150 placement
 function createHighlightBudget(hljs, cap) {
   let weakMap = new WeakMap();
   let knownLanguages = 0;
@@ -429,7 +429,7 @@ function createHighlightBudget(hljs, cap) {
     MAX_EMIT_BUDGET +
     codeLength * (EMIT_COST_FACTOR + MAX_REPEAT_SPAN * fanoutOf(hljs.getLanguage(languageName)));
 }
-//@ chunk-n5fvvrgq.js:5150-5362 placement
+//@ chunk-rep15ptw.js:5150-5362 placement
 var budgetHooks = (budget, highlightBudget, spentRef) => ({
   "before:highlight": (context) => {
     budget.left = highlightBudget(context.language, context.code.length);
@@ -442,7 +442,7 @@ var budgetHooks = (budget, highlightBudget, spentRef) => ({
     if (overspent) throw new HighlightBoundError();
   },
 });
-//@ chunk-n5fvvrgq.js:5362-5615 placement
+//@ chunk-rep15ptw.js:5362-5615 placement
 /**
  * 给 highlight.js 实例装上有界高亮：替换发射器并加入预算插件，返回包装高亮调用的函数。
  */
@@ -463,14 +463,14 @@ function installHighlightBounds(hljs, cap) {
   hljs.addPlugin(budgetHooks(budget, createHighlightBudget(hljs, cap), spentRef));
   return withBudgetReset(spentRef);
 }
-//@ chunk-n5fvvrgq.js:5615-5635 placement
+//@ chunk-rep15ptw.js:5615-5635 placement
 /**
  * 以最大嵌套深度包装高亮运行函数。
  */
 var withMaxDepth = (hljs) => installHighlightBounds(hljs, MAX_NESTING_DEPTH);
-//@ chunk-n5fvvrgq.js:5635-5676 placement
+//@ chunk-rep15ptw.js:5635-5676 placement
 var cloneGrammar = ["begin", "end", "match", "illegal"];
-//@ chunk-n5fvvrgq.js:5676-5793 placement
+//@ chunk-rep15ptw.js:5676-5793 placement
 var regexpRewriter = (rewrites) => (value) => {
   let rewritten = rewrites.get(typeof value === "string" ? value : value.source);
   try {
@@ -479,7 +479,7 @@ var regexpRewriter = (rewrites) => (value) => {
     return value;
   }
 };
-//@ chunk-n5fvvrgq.js:5793-5873 placement
+//@ chunk-rep15ptw.js:5793-5873 placement
 function cloneGrammarDeep(starts) {
   return typeof starts === "object" && starts !== null && Object.isFrozen(starts)
     ? {
@@ -487,7 +487,7 @@ function cloneGrammarDeep(starts) {
       }
     : starts;
 }
-//@ chunk-n5fvvrgq.js:5873-6249 placement
+//@ chunk-rep15ptw.js:5873-6249 placement
 /**
  * 遍历语言定义的模式树，把已知会回溯爆炸的正则替换为有界版本。
  */
@@ -511,23 +511,23 @@ function rewriteLanguageRegexps(grammar, rewrites) {
   }
   return grammar;
 }
-//@ chunk-n5fvvrgq.js:6249-6261 placement
+//@ chunk-rep15ptw.js:6249-6261 placement
 var MAX_CPP_REGEX_BYTES = 1000;
-//@ chunk-n5fvvrgq.js:6261-6273 placement
+//@ chunk-rep15ptw.js:6261-6273 placement
 var MAX_C_REGEX_BYTES = 1000;
-//@ chunk-n5fvvrgq.js:6273-6283 placement
+//@ chunk-rep15ptw.js:6273-6283 placement
 var CPP_TEMPLATE_SPAN = 16;
-//@ chunk-n5fvvrgq.js:6283-6295 placement
+//@ chunk-rep15ptw.js:6283-6295 placement
 var MAX_CPP_TOKEN_BYTES = 1000;
-//@ chunk-n5fvvrgq.js:6295-6305 placement
+//@ chunk-rep15ptw.js:6295-6305 placement
 var MAX_CPP_TEMPLATE_DEPTH = 12;
-//@ chunk-n5fvvrgq.js:6305-6317 placement
+//@ chunk-rep15ptw.js:6305-6317 placement
 var MAX_CPP_REGEX_ITEM_BYTES = 1500;
-//@ chunk-n5fvvrgq.js:6317-6328 placement
+//@ chunk-rep15ptw.js:6317-6328 placement
 var MAX_CPP_REGEX_REPEAT = 1e4;
-//@ chunk-n5fvvrgq.js:6328-6338 placement
+//@ chunk-rep15ptw.js:6328-6338 placement
 var CPP_TEMPLATE_MAX_PARTS = 16;
-//@ chunk-n5fvvrgq.js:6338-6749 placement
+//@ chunk-rep15ptw.js:6338-6749 placement
 /**
  * C/C++ 函数声明正则的原版与有界版本。
  */
@@ -541,9 +541,9 @@ var cppFunctionPatterns = (declSpec) => [
     String.raw`(?:<[^<>]+>)?)[\*&\s]+){1,${CPP_TEMPLATE_MAX_PARTS}}` +
     String.raw`(?:[a-zA-Z_]\w*::)?[a-zA-Z]\w*\s*\(`,
 ];
-//@ chunk-n5fvvrgq.js:6749-6764 placement
+//@ chunk-rep15ptw.js:6749-6764 placement
 var CPP_BOUNDED_PATTERNS = [cppFunctionPatterns("")];
-//@ chunk-n5fvvrgq.js:6764-7256 placement
+//@ chunk-rep15ptw.js:6764-7256 placement
 /**
  * 所有语言共用的危险正则替换（英文句子与 TODO 注释）。
  */
@@ -561,9 +561,9 @@ var SHARED_REGEX_REWRITES = [
     String.raw`(?:(?<! )[ ]+)?(?=(TODO|FIXME|NOTE|BUG|OPTIMIZE|HACK|XXX):)`,
   ],
 ];
-//@ chunk-n5fvvrgq.js:7256-7280 placement
+//@ chunk-rep15ptw.js:7256-7280 placement
 var CPP_TYPE_PATTERN = [cppFunctionPatterns("(?!struct)")];
-//@ chunk-n5fvvrgq.js:7280-7703 placement
+//@ chunk-rep15ptw.js:7280-7703 placement
 /**
  * C# 的危险正则替换。
  */
@@ -581,7 +581,7 @@ var CSHARP_REGEX_REWRITES = [
     String.raw`[a-zA-Z]\w*\s*` + String.raw`(<[^=]{1,${MAX_C_REGEX_BYTES}}?>\s*)?\(`,
   ],
 ];
-//@ chunk-n5fvvrgq.js:7703-8135 placement
+//@ chunk-rep15ptw.js:7703-8135 placement
 var mapped = [
   String.raw`(?:\.|\.\/|\/)?(?:""|"[^"]+"|''|'[^']+'|\[\]|\[[^\]]+\]|` +
     String.raw`[^\s!"#%&'()*+,.\/;<=>@\[\\\]^` +
@@ -595,7 +595,7 @@ var mapped = [
   regex,
   regex.replaceAll(String.raw`[^\]]+\]`, String.raw`[^\]]{1,${MAX_CPP_REGEX_BYTES}}\]`),
 ]);
-//@ chunk-n5fvvrgq.js:8135-8499 placement
+//@ chunk-rep15ptw.js:8135-8499 placement
 /**
  * INI 的危险正则替换。
  */
@@ -611,12 +611,12 @@ var INI_REGEX_REWRITES = [
       String.raw`(?=\s*=\s*[^#\s])`,
   ],
 ];
-//@ chunk-n5fvvrgq.js:8499-8680 placement
+//@ chunk-rep15ptw.js:8499-8680 placement
 var MARKDOWN_FENCE_REWRITES = [
   ["(`{3,})[^`](.|\\n)*?\\1`*[ ]*", "(`{3,})[^`][^\\r\\u2028\\u2029]*?\\1`*[ ]*"],
   [String.raw`(~{3,})[^~](.|\n)*?\1~*[ ]*`, String.raw`(~{3,})[^~][^\r\u2028\u2029]*?\1~*[ ]*`],
 ];
-//@ chunk-n5fvvrgq.js:8680-9122 placement
+//@ chunk-rep15ptw.js:8680-9122 placement
 /**
  * Markdown 链接的危险正则替换。
  */
@@ -632,7 +632,7 @@ var MARKDOWN_LINK_REWRITES = [
   ],
   [String.raw`\[.+?\]\([./?&#].*?\)`, String.raw`\[(?=(.+?\]\([./?&#]))\1.*?\)`],
 ];
-//@ chunk-n5fvvrgq.js:9122-9929 placement
+//@ chunk-rep15ptw.js:9122-9929 placement
 var mapped_2 = [
   String.raw`(?:s|tr|y)(!|\/|\||\?|'|"|#)(?:\\.|[^\\\/])*?\1` +
     String.raw`(?:\\.|[^\\\/])*?\1[dualxmsipngr]{0,12}`,
@@ -645,7 +645,7 @@ var mapped_2 = [
   String.raw`(?:m|qr)\[(?:\\.|[^\\\/])*?\][dualxmsipngr]{0,12}`,
   String.raw`(?:m|qr)\{(?:\\.|[^\\\/])*?\}[dualxmsipngr]{0,12}`,
 ].map((regex) => [regex, regex.replaceAll(")*?", `){0,${MAX_CPP_REGEX_ITEM_BYTES}}?`)]);
-//@ chunk-n5fvvrgq.js:9929-10429 placement
+//@ chunk-rep15ptw.js:9929-10429 placement
 /**
  * Python 数字字面量的危险正则替换。
  */
@@ -657,7 +657,7 @@ var PYTHON_REGEX_REWRITES = [
       "await|break|case|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|match|nonlocal|10|not|or|pass|raise|return|try|while|with|yield)",
   ],
 ];
-//@ chunk-n5fvvrgq.js:10429-10598 placement
+//@ chunk-rep15ptw.js:10429-10598 placement
 var RUBY_HEREDOC_REWRITES = [
   [
     String.raw`<<[-~]?'?(?=(\w+)(?=\W)[^\n]*\n(?:[^\n]*\n)*?\s*\1\b)`,
@@ -665,11 +665,11 @@ var RUBY_HEREDOC_REWRITES = [
       String.raw`{0,${MAX_CPP_TOKEN_BYTES}}?[^\S\n]*\1\b)`,
   ],
 ];
-//@ chunk-n5fvvrgq.js:10598-10688 placement
+//@ chunk-rep15ptw.js:10598-10688 placement
 var LANGUAGE_GRAMMARS = [
   [String.raw`b?r(#*)"(.|\n)*?"\1(?!#)`, String.raw`b?r(#*)"[^]{0,${MAX_CPP_REGEX_REPEAT}}?"\1(?!#)`],
 ];
-//@ chunk-n5fvvrgq.js:10688-10859 placement
+//@ chunk-rep15ptw.js:10688-10859 placement
 var LANGUAGE_REGEX_REWRITES = new Map([
   ["arduino", CPP_TYPE_PATTERN],
   ["c", CPP_BOUNDED_PATTERNS],
@@ -683,7 +683,7 @@ var LANGUAGE_REGEX_REWRITES = new Map([
   ["ruby", RUBY_HEREDOC_REWRITES],
   ["rust", LANGUAGE_GRAMMARS],
 ]);
-//@ chunk-n5fvvrgq.js:10859-10960 placement
+//@ chunk-rep15ptw.js:10859-10960 placement
 /**
  * 包装语言定义工厂：用有界正则替换已知的危险正则，失败时退回原定义。
  */
@@ -700,7 +700,6 @@ var withBoundedRegexps = (languageId, resolveGrammar) => (grammar) => {
 };
 export {
   languageSubLanguageMap,
-  TOTAL_BUDGET_BYTES,
   MAX_SUBLANGUAGE_CHARS,
   rootHighlightLanguage,
   sublanguageOverflowCheck,
@@ -708,4 +707,5 @@ export {
   noopRun,
   withMaxDepth,
   withBoundedRegexps,
+  TOTAL_BUDGET_BYTES,
 };

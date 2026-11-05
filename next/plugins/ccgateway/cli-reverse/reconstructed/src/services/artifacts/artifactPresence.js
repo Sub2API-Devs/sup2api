@@ -3,9 +3,9 @@
  *
  * Artifact 在线状态（presence）启停（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aqdf5t3e.js (35)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tsrpnscb.js (35)
  * attribution: placement 35
  */
 import { addWithLimit, MAX_CRON_OWNERSHIP_KEYS } from "../../utils/cronTasks.js";
@@ -56,14 +56,14 @@ import { sameOwnerAccount } from "../../utils/auth.js";
 import { findHumanMessagesContaining } from "./presenceTranscript.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aqdf5t3e.js:7806-7861 placement
+//@ chunk-tsrpnscb.js:7846-7901 placement
 /**
  * 导出函数 `trackDurableClaudeDocSlug`：参数 e。
  */
 function trackDurableClaudeDocSlug(slug) {
   addWithLimit(getLiveState().durable.claudeDocSlugs, slug, MAX_CRON_OWNERSHIP_KEYS);
 }
-//@ chunk-aqdf5t3e.js:7861-8240 placement
+//@ chunk-tsrpnscb.js:7901-8280 placement
 /**
  * 列出持久监听的布防状态：在途的标为 arming，已失败的标为 failed（附原因、详情、服务端消息与时间），可按 slug 过滤。
  */
@@ -96,7 +96,7 @@ function listDurableArmStates(options) {
   }
   return slugs;
 }
-//@ chunk-aqdf5t3e.js:8240-8330 placement
+//@ chunk-tsrpnscb.js:8280-8370 placement
 function canStartDurableWatch(durable, durableState, options) {
   return (
     (options === undefined || durableState === options) &&
@@ -104,7 +104,7 @@ function canStartDurableWatch(durable, durableState, options) {
     !durable.stopLatches.isStopped(durableState)
   );
 }
-//@ chunk-aqdf5t3e.js:8330-8399 placement
+//@ chunk-tsrpnscb.js:8370-8439 placement
 class PresenceStores {
   working = createStore({
     working: false,
@@ -113,12 +113,12 @@ class PresenceStores {
     waitingFor: undefined,
   });
 }
-//@ chunk-aqdf5t3e.js:8399-8425 placement
+//@ chunk-tsrpnscb.js:8439-8465 placement
 var presenceStores; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aqdf5t3e.js:8399", () => {
+deferInit("chunk-tsrpnscb.js:8439", () => {
   presenceStores = new SessionRootSlot(() => new PresenceStores());
 });
-//@ chunk-aqdf5t3e.js:8425-8503 placement
+//@ chunk-tsrpnscb.js:8465-8543 placement
 /**
  * 导出函数 `setWorking`：参数 e, n。
  */
@@ -131,14 +131,14 @@ function setWorking(connection, workingValue) {
         },
   );
 }
-//@ chunk-aqdf5t3e.js:8503-8562 placement
+//@ chunk-tsrpnscb.js:8543-8602 placement
 /**
  * 导出函数 `isWorking`：参数 e，返回 ve.of(e).working.getState().working。
  */
 function isWorking(session) {
   return presenceStores.of(session).working.getState().working;
 }
-//@ chunk-aqdf5t3e.js:18022-18178 placement
+//@ chunk-tsrpnscb.js:18062-18218 placement
 /**
  * presence 空闲参数开关 tengu_slate_lantern_hush 的 schema 与取值范围（空闲判定 600–86400 s、保活 25–600 s、默认 50 s）。
  */
@@ -147,7 +147,7 @@ var IDLE_AFTER_RANGE_S;
 var IDLE_KEEPALIVE_RANGE_S;
 var DEFAULT_IDLE_KEEPALIVE_S;
 var idleConfigSchema;
-deferInit("chunk-aqdf5t3e.js:18022", () => {
+deferInit("chunk-tsrpnscb.js:18062", () => {
   TENGU_SLATE_LANTERN_HUSH = "tengu_slate_lantern_hush";
   IDLE_AFTER_RANGE_S = [600, 86400];
   IDLE_KEEPALIVE_RANGE_S = [25, 600];
@@ -160,11 +160,11 @@ deferInit("chunk-aqdf5t3e.js:18022", () => {
     });
   });
 });
-//@ chunk-aqdf5t3e.js:18178-18244 placement
+//@ chunk-tsrpnscb.js:18218-18284 placement
 function clamp(value, [min, max]) {
   return Math.min(Math.max(Math.round(value), min), max);
 }
-//@ chunk-aqdf5t3e.js:18244-18525 placement
+//@ chunk-tsrpnscb.js:18284-18565 placement
 /**
  * 读 tengu_slate_lantern_hush 配置得出 presence 空闲参数：多久没交互算空闲（0 为关闭）与空闲时的保活间隔，均限制在上限内。
  */
@@ -187,7 +187,7 @@ function getPresenceIdleConfig() {
     idleKeepaliveMs,
   };
 }
-//@ chunk-aqdf5t3e.js:18525-18643 placement
+//@ chunk-tsrpnscb.js:18565-18684 placement
 function getIdleMs(durable, config) {
   if (isForegroundBusy()) return 0;
   let max = Math.max(
@@ -198,7 +198,7 @@ function getIdleMs(durable, config) {
   );
   return Math.max(0, config - max);
 }
-//@ chunk-aqdf5t3e.js:18643-18775 placement
+//@ chunk-tsrpnscb.js:18684-18816 placement
 /**
  * 空闲超过阈值后把 artifact 在线状态的保活间隔放宽到空闲保活值。
  */
@@ -209,7 +209,7 @@ function adjustKeepaliveForIdle(durable, keepaliveMs, nowMs = Date.now()) {
     ? Math.max(presenceIdleConfig.idleKeepaliveMs, keepaliveMs)
     : keepaliveMs;
 }
-//@ chunk-aqdf5t3e.js:18775-18994 placement
+//@ chunk-tsrpnscb.js:18816-19035 placement
 /**
  * 实时失效事件的 schema（tag/ver/replay）、三种失效标签名，以及评论已读状态（commentsEmpty/readAtMs）的 schema。
  */
@@ -218,7 +218,7 @@ var INVALIDATE_TAG_LIVE;
 var INVALIDATE_TAG_SHARED;
 var INVALIDATE_TAG_HEAD;
 var COMMENTS_READ_STATE_SCHEMA;
-deferInit("chunk-aqdf5t3e.js:18775", () => {
+deferInit("chunk-tsrpnscb.js:18816", () => {
   INVALIDATION_EVENT_SCHEMA = DoctorLazy(() =>
     objectSchema({
       tag: stringSchema(),
@@ -236,30 +236,30 @@ deferInit("chunk-aqdf5t3e.js:18775", () => {
     }),
   );
 });
-//@ chunk-aqdf5t3e.js:18994-19025 placement
+//@ chunk-tsrpnscb.js:19035-19066 placement
 function keepaliveDeadline(keepaliveMs) {
   return keepaliveMs * 3 + 5000;
 }
-//@ chunk-aqdf5t3e.js:19025-19106 placement
+//@ chunk-tsrpnscb.js:19066-19147 placement
 function isPresenceEnabled() {
   return (
     env.CLAUDE_CODE_ARTIFACT_PRESENCE ?? getFeatureValue_CACHED_MAY_BE_STALE("tengu_brass_plover", false)
   );
 }
-//@ chunk-aqdf5t3e.js:19106-19160 placement
+//@ chunk-tsrpnscb.js:19147-19201 placement
 function presenceSkipReason(session) {
   if (!isPresenceEnabled()) return "flag_off";
   return getPresenceSkipReason(session);
 }
-//@ chunk-aqdf5t3e.js:19160-19195 placement
+//@ chunk-tsrpnscb.js:19201-19236 placement
 function liveState() {
   return getLiveState().presence;
 }
-//@ chunk-aqdf5t3e.js:19195-19255 placement
+//@ chunk-tsrpnscb.js:19236-19296 placement
 function isCurrentConnection(conn) {
   return !conn.stopped && liveState().conns.get(conn.slug) === conn;
 }
-//@ chunk-aqdf5t3e.js:19255-19792 placement
+//@ chunk-tsrpnscb.js:19296-19833 placement
 function armArtifactPresence(options) {
   let { slug, url } = options;
   try {
@@ -290,7 +290,7 @@ function armArtifactPresence(options) {
     );
   }
 }
-//@ chunk-aqdf5t3e.js:19792-20305 placement
+//@ chunk-tsrpnscb.js:19833-20346 placement
 function connectArtifactPresence(host, slug, url, context) {
   let conn = {
     slug,
@@ -327,11 +327,11 @@ function connectArtifactPresence(host, slug, url, context) {
     });
   });
 }
-//@ chunk-aqdf5t3e.js:20305-20339 placement
+//@ chunk-tsrpnscb.js:20346-20380 placement
 var presenceCloseHook = {
   closeByTaskId: (taskId) => declinePresenceForTask(taskId),
 };
-//@ chunk-aqdf5t3e.js:20339-20509 placement
+//@ chunk-tsrpnscb.js:20380-20550 placement
 function declinePresenceForTask(taskId) {
   let conn = currentPresence();
   if (conn === undefined) return false;
@@ -344,7 +344,7 @@ function declinePresenceForTask(taskId) {
   }
   return false;
 }
-//@ chunk-aqdf5t3e.js:20509-21341 placement
+//@ chunk-tsrpnscb.js:20550-21382 placement
 async function closeArtifactPresence(options, reason) {
   let skipReason = presenceSkipReason(options.slug);
   if (skipReason !== null) {
@@ -396,7 +396,7 @@ async function closeArtifactPresence(options, reason) {
       return;
   }
 }
-//@ chunk-aqdf5t3e.js:21341-22478 placement
+//@ chunk-tsrpnscb.js:21382-22519 placement
 async function runArtifactPresence(options, handlers) {
   let { timing } = liveState();
   let { slug } = options;
@@ -476,7 +476,7 @@ async function runArtifactPresence(options, handlers) {
     deterministic: result,
   });
 }
-//@ chunk-aqdf5t3e.js:22478-22856 placement
+//@ chunk-tsrpnscb.js:22519-22897 placement
 /**
  * 按失败情况决定 presence 连接的下一步：放弃（吊销或多次被拒）时打点并关闭；开始停顿时打点；否则按退避时间安排重连。
  */
@@ -504,7 +504,7 @@ function schedulePresenceReconnect(connection, event) {
   }
   scheduleReconnect(connection, action.delayMs, reconnectPresence);
 }
-//@ chunk-aqdf5t3e.js:22856-23054 placement
+//@ chunk-tsrpnscb.js:22897-23095 placement
 function reconnectPresence(slug) {
   if (!isCurrentConnection(slug)) return;
   closeArtifactPresence(slug, "reconnect").catch((error) => {
@@ -517,13 +517,13 @@ function reconnectPresence(slug) {
     });
   });
 }
-//@ chunk-aqdf5t3e.js:23054-23136 placement
+//@ chunk-tsrpnscb.js:23095-23177 placement
 function closeAndForget(conn) {
   closePresence(conn);
   let live = liveState();
   if (live.conns.get(conn.slug) === conn) live.conns.delete(conn.slug);
 }
-//@ chunk-aqdf5t3e.js:23136-23884 placement
+//@ chunk-tsrpnscb.js:23177-23925 placement
 function handlePresenceFrame(conn, frame) {
   if (conn.stopped || frame.charCodeAt(0) !== 123) return;
   let event;
@@ -572,28 +572,28 @@ function handlePresenceFrame(conn, frame) {
       return;
   }
 }
-//@ chunk-aqdf5t3e.js:23884-23978 placement
+//@ chunk-tsrpnscb.js:23925-24019 placement
 function supervisorWake(slug) {
   let supervisor = getLiveState().live.supervisors.get(slug);
   return supervisor !== undefined && !supervisor.stopped ? supervisor.wake : undefined;
 }
-//@ chunk-aqdf5t3e.js:23978-24024 placement
+//@ chunk-tsrpnscb.js:24019-24065 placement
 function rearmSlug(slug, options) {
   slug.declined.delete(options);
   retireSlug(slug, options);
 }
-//@ chunk-aqdf5t3e.js:24024-24082 placement
+//@ chunk-tsrpnscb.js:24065-24123 placement
 function retireSlug(state, slug) {
   let conn = state.conns.get(slug);
   if (conn !== undefined) closeAndForget(conn);
 }
-//@ chunk-aqdf5t3e.js:24082-24172 placement
+//@ chunk-tsrpnscb.js:24123-24213 placement
 function disposeAllPresence(all) {
   all.declined.clear();
   for (let conn of [...all.conns.values()]) closePresence(conn);
   all.conns.clear();
 }
-//@ chunk-aqdf5t3e.js:24172-24307 placement
+//@ chunk-tsrpnscb.js:24213-24348 placement
 function closeForeignOwnerConnections(owner, conn) {
   for (let conn_2 of [...owner.conns.values()]) {
     if (sameOwnerAccount(conn_2.owner, conn)) continue;
@@ -601,29 +601,29 @@ function closeForeignOwnerConnections(owner, conn) {
     if (owner.conns.get(conn_2.slug) === conn_2) owner.conns.delete(conn_2.slug);
   }
 }
-//@ chunk-aqdf5t3e.js:24307-24343 placement
+//@ chunk-tsrpnscb.js:24348-24384 placement
 function hasHumanMessageContaining(messages, text) {
   return lastHumanMessageIndexContaining(messages, text) >= 0;
 }
-//@ chunk-aqdf5t3e.js:24343-24386 placement
+//@ chunk-tsrpnscb.js:24384-24427 placement
 function lastHumanMessageIndexContaining(messages, text) {
   return findHumanMessagesContaining(messages, text).at(-1) ?? -1;
 }
 export {
   setWorking,
-  isWorking,
-  listDurableArmStates,
-  hasHumanMessageContaining,
   trackDurableClaudeDocSlug,
+  isWorking,
+  presenceStores,
   INVALIDATION_EVENT_SCHEMA,
   INVALIDATE_TAG_LIVE,
   INVALIDATE_TAG_SHARED,
   INVALIDATE_TAG_HEAD,
   COMMENTS_READ_STATE_SCHEMA,
+  hasHumanMessageContaining,
   presenceSkipReason,
   adjustKeepaliveForIdle,
   keepaliveDeadline,
   armArtifactPresence,
-  presenceStores,
   lastHumanMessageIndexContaining,
+  listDurableArmStates,
 };

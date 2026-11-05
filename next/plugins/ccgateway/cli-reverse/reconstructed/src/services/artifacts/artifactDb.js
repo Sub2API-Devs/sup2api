@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Artifact 数据库（/api/frame/db/agent）：集合/文档读写、str_replace 编辑、版本冲突、批量写入与限额错误
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0zqb2m0b.js (69)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jkpnfdxp.js (69)
  * attribution: placement 69
  */
 import { randomBytes } from "crypto";
@@ -32,6 +32,7 @@ import {
   create_15,
   create_9,
 } from "../../../vendor/zod/lib/index.mjs";
+import { MARKREADS } from "./textSanitize.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { sanitizeDisplayTextOrUndefined } from "./capabilityDeclaration.js";
 import { HostScoped } from "../../utils/hostScoped.js";
@@ -57,11 +58,11 @@ import { ARTIFACT_SLUG_RE } from "../../tools/ArtifactTool/constants.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0zqb2m0b.js:959-1011 placement
+//@ chunk-jkpnfdxp.js:963-1015 placement
 function isArtifactDbEnabled() {
   return env.CLAUDE_CODE_ARTIFACT_DB ?? true;
 }
-//@ chunk-0zqb2m0b.js:1011-1112 placement
+//@ chunk-jkpnfdxp.js:1015-1116 placement
 function isArtifactDbStrReplaceEnabled() {
   return (
     isArtifactDbEnabled() &&
@@ -69,28 +70,28 @@ function isArtifactDbStrReplaceEnabled() {
       getFeatureValue_CACHED_MAY_BE_STALE("tengu_umber_stile", false)) === true
   );
 }
-//@ chunk-0zqb2m0b.js:1112-1149 placement
+//@ chunk-jkpnfdxp.js:1116-1153 placement
 var ARTIFACT_DB_API_PATH = "/api/frame/db/agent";
 var DB_REQUEST_TIMEOUT_MS = 5000;
-//@ chunk-0zqb2m0b.js:1149-1169 placement
+//@ chunk-jkpnfdxp.js:1153-1173 placement
 let DbAbortError; // deferred: uses AbortError (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0zqb2m0b.js:1149", () => {
+deferInit("chunk-jkpnfdxp.js:1153", () => {
   DbAbortError = class DbAbortError extends AbortError {};
 });
-//@ chunk-0zqb2m0b.js:1169-1293 placement
+//@ chunk-jkpnfdxp.js:1173-1301 placement
 var DB_SEGMENT_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var regExp;
 var regExp_2;
-deferInit("chunk-0zqb2m0b.js:1169", () => {
+deferInit("chunk-jkpnfdxp.js:1173", () => {
   DB_SEGMENT_PATTERN = String.raw`(?!\.\.?(?:/|$))[A-Za-z0-9_\-.~:@+]{1,200}`;
   regExp = new RegExp(`^${DB_SEGMENT_PATTERN}$`);
   regExp_2 = new RegExp(`^${DB_SEGMENT_PATTERN}(?:/${DB_SEGMENT_PATTERN}){0,14}$`);
 });
-//@ chunk-0zqb2m0b.js:1293-1335 placement
+//@ chunk-jkpnfdxp.js:1301-1343 placement
 function isCollectionPath(collection) {
   return (countCharInString(collection, "/") + 1) % 2 === 1;
 }
-//@ chunk-0zqb2m0b.js:1335-2026 placement
+//@ chunk-jkpnfdxp.js:1343-2034 placement
 function describeCollectionPathError(collection) {
   let pathPart = (part) => (part.length > 120 ? `${part.slice(0, 60)}\u2026${part.slice(-40)}` : part);
   let parts = collection.split("/");
@@ -99,7 +100,7 @@ function describeCollectionPathError(collection) {
   let leaf = pathPart(parts[count - 1]);
   return `collection '${pathPart(collection)}' has ${count} segments, which makes it a document path, not a collection: collection paths have an odd number of segments (collection/document/collection/\u2026) and the document is collection + doc_id. For that document use collection '${parent}' with doc_id '${leaf}'; for a collection inside it, add one more segment. Per-user data follows the same rule \u2014 collection 'data/users/<id>' (3 segments) holds that user's documents, so 'data/users/<id>/decks' is one document and 'data/users/<id>/decks/cards' a collection.`;
 }
-//@ chunk-0zqb2m0b.js:2026-2159 placement
+//@ chunk-jkpnfdxp.js:2034-2167 placement
 /**
  * 数据库工具的操作分类：读（get/list/query）、写（set/update/delete/str_replace）、作用域（view/interact/admin），及列表上限 1000。
  */
@@ -109,14 +110,14 @@ var WRITE_DB_OPERATIONS = ["set", "update", "delete"];
 var STR_REPLACE = "str_replace";
 var MUTATING_DB_OPERATIONS = [...WRITE_DB_OPERATIONS, STR_REPLACE];
 var DB_SCOPES = ["view", "interact", "admin"];
-//@ chunk-0zqb2m0b.js:2159-2210 placement
+//@ chunk-jkpnfdxp.js:2167-2218 placement
 /**
  * 导出函数 `randomBatchId`：返回 randomBytes(16).toString("base64url")。
  */
 function randomBatchId() {
   return randomBytes(16).toString("base64url");
 }
-//@ chunk-0zqb2m0b.js:2210-2461 placement
+//@ chunk-jkpnfdxp.js:2218-2469 placement
 /**
  * 数据库工具的大小与编辑限额：单字段 256 KB、文档 1 MB、请求体 4 MB、最多 200 处编辑、查询 1000 条、批量写 50、写入体 1 MB，及编辑错误码表。
  */
@@ -137,17 +138,17 @@ var EDIT_ERROR_CODES = [
   "edit_field_not_string",
   "version_mismatch",
 ];
-//@ chunk-0zqb2m0b.js:2461-2503 placement
+//@ chunk-jkpnfdxp.js:2469-2511 placement
 function isEditErrorCode(errorCode) {
   return EDIT_ERROR_CODES.some((known) => known === errorCode);
 }
-//@ chunk-0zqb2m0b.js:2503-3262 placement
+//@ chunk-jkpnfdxp.js:2511-3270 placement
 /**
  * 数据库错误码映射表：服务端各种错误码统一到 not_found/invalid_argument/quota_or_rate/busy/upstream_auth/store_unavailable 等，及需要用户级 OAuth 错误的文案集合。
  */
 var DB_ERROR_CODES; // deferred: uses MAX_EDITS_PER_CALL of its import cycle while loading; runs once the cycle is complete
 var USER_SCOPED_TOKEN_ERRORS;
-deferInit("chunk-0zqb2m0b.js:2503", () => {
+deferInit("chunk-jkpnfdxp.js:2511", () => {
   DB_ERROR_CODES = new Map([
     ["not_found", "not_found"],
     ["invalid_argument", "invalid_argument"],
@@ -173,7 +174,7 @@ deferInit("chunk-0zqb2m0b.js:2503", () => {
     "db verbs require a user-scoped OAuth token, not an org service key",
   ]);
 });
-//@ chunk-0zqb2m0b.js:3262-3494 placement
+//@ chunk-jkpnfdxp.js:3270-3502 placement
 function classifyCredential403(error, status) {
   if (error !== 403 || typeof status !== "string") return;
   let trimmed = status.trim();
@@ -189,7 +190,7 @@ function classifyCredential403(error, status) {
     };
   return;
 }
-//@ chunk-0zqb2m0b.js:3494-3746 placement
+//@ chunk-jkpnfdxp.js:3502-3754 placement
 function classifyDbHttpStatus(status) {
   if (status === 404 || status === 403) return "not_found";
   if (status === 400 || status === 422) return "invalid_argument";
@@ -199,7 +200,7 @@ function classifyDbHttpStatus(status) {
   if (status === 401) return "upstream_auth";
   return "store_unavailable";
 }
-//@ chunk-0zqb2m0b.js:3746-4230 placement
+//@ chunk-jkpnfdxp.js:3754-4238 placement
 /**
  * 把内部数据库错误码归并成对模型公开的错误码（invalid_argument/resource_exhausted/quota_exceeded/unavailable，编辑类与版本冲突原样保留）。
  */
@@ -229,7 +230,7 @@ function toPublicDbErrorCode(result) {
       return result;
   }
 }
-//@ chunk-0zqb2m0b.js:4230-4402 placement
+//@ chunk-jkpnfdxp.js:4238-4410 placement
 /**
  * artifact 数据库查询支持的比较运算符：英文名列表、符号写法，以及符号到英文名的映射。
  */
@@ -243,15 +244,15 @@ var SYMBOL_TO_DB_OPERATOR = {
   ">": "gt",
   ">=": "gte",
 };
-//@ chunk-0zqb2m0b.js:4402-4444 placement
+//@ chunk-jkpnfdxp.js:4410-4452 placement
 function isComparisonSymbol(op) {
   return Object.hasOwn(SYMBOL_TO_DB_OPERATOR, op);
 }
-//@ chunk-0zqb2m0b.js:4444-4480 placement
+//@ chunk-jkpnfdxp.js:4452-4488 placement
 function toDbOperator(op) {
   return isComparisonSymbol(op) ? SYMBOL_TO_DB_OPERATOR[op] : op;
 }
-//@ chunk-0zqb2m0b.js:4480-5030 placement
+//@ chunk-jkpnfdxp.js:4488-5055 placement
 /**
  * 数据库响应的 schema 集合：单文档读取、文档列表、用量（文档数/上限），以及可选布尔字段 authoredByOthers/outside_writer。
  */
@@ -260,7 +261,7 @@ var optionalBooleanSchema;
 var DB_GET_RESPONSE_SCHEMA;
 var DB_LIST_RESPONSE_SCHEMA;
 var DB_USAGE_SCHEMA;
-deferInit("chunk-0zqb2m0b.js:4480", () => {
+deferInit("chunk-jkpnfdxp.js:4488", () => {
   optionalTrueSchema = DoctorLazy(() => create_25(true).optional().catch(undefined));
   optionalBooleanSchema = DoctorLazy(() => create_6().optional().catch(undefined));
   DB_GET_RESPONSE_SCHEMA = DoctorLazy(() =>
@@ -270,6 +271,7 @@ deferInit("chunk-0zqb2m0b.js:4480", () => {
       version: create_3().int().optional(),
       updatedAt: create_2().optional(),
       authoredByOthers: optionalTrueSchema(),
+      [MARKREADS]: optionalTrueSchema(),
       outside_writer: optionalBooleanSchema(),
     }),
   );
@@ -285,6 +287,7 @@ deferInit("chunk-0zqb2m0b.js:4480", () => {
       ),
       nextCursor: create_2().optional(),
       authoredByOthers: optionalTrueSchema(),
+      [MARKREADS]: optionalTrueSchema(),
       outside_writer: optionalBooleanSchema(),
     }),
   );
@@ -297,15 +300,15 @@ deferInit("chunk-0zqb2m0b.js:4480", () => {
       .catch(undefined),
   );
 });
-//@ chunk-0zqb2m0b.js:5030-5151 placement
+//@ chunk-jkpnfdxp.js:5055-5176 placement
 function checkWriteUsageShape(usage, usage_2) {
   if (usage_2 === undefined && typeof usage === "object" && usage !== null && usage.usage !== undefined)
     logFeatureSad("artifact_db_write", "malformed_usage");
 }
-//@ chunk-0zqb2m0b.js:5151-5167 placement
+//@ chunk-jkpnfdxp.js:5176-5192 placement
 var RETRY_ATTEMPTS = 4;
 var RETRY_BASE_MS = 600;
-//@ chunk-0zqb2m0b.js:5167-5394 placement
+//@ chunk-jkpnfdxp.js:5192-5419 placement
 function getResponseWarnings(result) {
   let warnings = result !== null && typeof result === "object" ? result.warnings : undefined;
   if (!Array.isArray(warnings)) return [];
@@ -318,11 +321,11 @@ function getResponseWarnings(result) {
   }
   return warningList;
 }
-//@ chunk-0zqb2m0b.js:5394-5639 placement
+//@ chunk-jkpnfdxp.js:5419-5664 placement
 var DB_WRITE_RESPONSE_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var DB_BATCH_RESPONSE_SCHEMA;
 var DB_INVALID_ARGUMENT_SCHEMA;
-deferInit("chunk-0zqb2m0b.js:5394", () => {
+deferInit("chunk-jkpnfdxp.js:5419", () => {
   DB_WRITE_RESPONSE_SCHEMA = DoctorLazy(() =>
     create({
       version: create_3().int().optional(),
@@ -349,18 +352,18 @@ deferInit("chunk-0zqb2m0b.js:5394", () => {
     }),
   );
 });
-//@ chunk-0zqb2m0b.js:5639-5697 placement
+//@ chunk-jkpnfdxp.js:5664-5722 placement
 function isInvalidArgumentBody(status, error) {
   return status === 400 && DB_INVALID_ARGUMENT_SCHEMA().safeParse(error).success;
 }
-//@ chunk-0zqb2m0b.js:5697-5802 placement
+//@ chunk-jkpnfdxp.js:5722-5827 placement
 class RefusalCooldown {
   refusedAt = undefined;
   get unsupported() {
     return this.refusedAt !== undefined && Date.now() - this.refusedAt < ME_ID_TTL_MS;
   }
 }
-//@ chunk-0zqb2m0b.js:5802-5878 placement
+//@ chunk-jkpnfdxp.js:5827-5903 placement
 /**
  * 导出函数 `ME_ID_TTL_MS`。
  */
@@ -368,25 +371,25 @@ var ME_ID_TTL_MS; // deferred: uses RefusalCooldown of its import cycle while lo
 var meIdCooldown;
 var meAliasCooldown;
 var meRawCooldown;
-deferInit("chunk-0zqb2m0b.js:5802", () => {
+deferInit("chunk-jkpnfdxp.js:5827", () => {
   ME_ID_TTL_MS = 3600000;
   meIdCooldown = new HostScoped(() => new RefusalCooldown());
   meAliasCooldown = new HostScoped(() => new RefusalCooldown());
   meRawCooldown = new HostScoped(() => new RefusalCooldown());
 });
-//@ chunk-0zqb2m0b.js:5878-5971 placement
+//@ chunk-jkpnfdxp.js:5903-5996 placement
 function isBadJsonInvalidArgument(status, error) {
   if (!isInvalidArgumentBody(status, error)) return false;
   let { reason } = error.error;
   return reason === undefined || reason === "bad_json";
 }
-//@ chunk-0zqb2m0b.js:5971-6248 placement
+//@ chunk-jkpnfdxp.js:5996-6273 placement
 /**
  * 数据库错误响应体 schema（code/reason/kind/limit/version/index/required）与配额原因集合。
  */
 var DbErrorBodySchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var QUOTA_REASONS;
-deferInit("chunk-0zqb2m0b.js:5971", () => {
+deferInit("chunk-jkpnfdxp.js:5996", () => {
   DbErrorBodySchema = DoctorLazy(() =>
     create({
       error: create({
@@ -402,16 +405,16 @@ deferInit("chunk-0zqb2m0b.js:5971", () => {
   );
   QUOTA_REASONS = new Set(["docs_per_collection", "docs_per_database", "databases_per_org"]);
 });
-//@ chunk-0zqb2m0b.js:6248-6281 placement
+//@ chunk-jkpnfdxp.js:6273-6306 placement
 /**
  * 导出函数 `isQuotaReason`：参数 e，返回 ve.has(e)。
  */
 function isQuotaReason(reason) {
   return QUOTA_REASONS.has(reason);
 }
-//@ chunk-0zqb2m0b.js:6281-6448 placement
+//@ chunk-jkpnfdxp.js:6306-6473 placement
 var QUOTA_REASONS_BY_CODE; // deferred: uses DbErrorBodySchema of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0zqb2m0b.js:6281", () => {
+deferInit("chunk-jkpnfdxp.js:6306", () => {
   QUOTA_REASONS_BY_CODE = {
     quota_exceeded: new Set([...QUOTA_REASONS, "bytes_per_database"]),
     quota_or_rate: new Set([
@@ -423,22 +426,22 @@ deferInit("chunk-0zqb2m0b.js:6281", () => {
     ]),
   };
 });
-//@ chunk-0zqb2m0b.js:6448-6505 placement
+//@ chunk-jkpnfdxp.js:6473-6530 placement
 function hasQuotaReasonForCode(code, kind) {
   let reasons = QUOTA_REASONS_BY_CODE[code];
   return reasons !== undefined && reasons.has(kind);
 }
-//@ chunk-0zqb2m0b.js:6505-6586 placement
+//@ chunk-jkpnfdxp.js:6530-6611 placement
 function positiveIntOrUndefined(value) {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
 }
-//@ chunk-0zqb2m0b.js:6586-6668 placement
+//@ chunk-jkpnfdxp.js:6611-6693 placement
 function nonNegativeIntOrUndefined(index) {
   return typeof index === "number" && Number.isSafeInteger(index) && index >= 0 ? index : undefined;
 }
-//@ chunk-0zqb2m0b.js:6668-6698 placement
+//@ chunk-jkpnfdxp.js:6693-6723 placement
 var SAFE_COLLECTION_NAME_RE = /^[a-z][a-z_-]{0,63}$/;
-//@ chunk-0zqb2m0b.js:6698-7266 placement
+//@ chunk-jkpnfdxp.js:6723-7291 placement
 function checkVersionPrecondition(status, body) {
   let credentialKind = classifyCredential403(status, body);
   if (credentialKind !== undefined) return credentialKind;
@@ -481,13 +484,13 @@ function checkVersionPrecondition(status, body) {
     reason: httpStatus,
   };
 }
-//@ chunk-0zqb2m0b.js:7266-7577 placement
+//@ chunk-jkpnfdxp.js:7291-7602 placement
 /**
  * 版本冲突错误的提示前缀与写入/删除时“需先读最新版本”的文案。
  */
 var VERSION_MISMATCH_PREFIXES; // deferred: uses toPublicDbErrorCode of its import cycle while loading; runs once the cycle is complete
 var VERSION_MISMATCH_TEXTS;
-deferInit("chunk-0zqb2m0b.js:7266", () => {
+deferInit("chunk-jkpnfdxp.js:7291", () => {
   VERSION_MISMATCH_PREFIXES = [
     `db write failed (${toPublicDbErrorCode("version_mismatch")}): `,
     `db batch write failed (${toPublicDbErrorCode("version_mismatch")}): `,
@@ -497,7 +500,7 @@ deferInit("chunk-0zqb2m0b.js:7266", () => {
     delete: "Not deleted: Claude needs to read the latest version of this document before deleting it.",
   };
 });
-//@ chunk-0zqb2m0b.js:7577-12816 placement
+//@ chunk-jkpnfdxp.js:7602-12841 placement
 /**
  * 生成文档写入错误说明（字段、版本冲突、编辑未匹配/不唯一等，约 5 KB）。
  */
@@ -563,7 +566,7 @@ function formatDbWriteError(errorCode, operation, kind, limit, field, versionInf
         : `${headline}: the document is no longer at version ${versionInfo?.pinned ?? "?"}, the one this write was pinned to \u2014 it has changed or may have been deleted; nothing was written. Read it back: if it still exists, re-plan the write against what it holds now and pin to its version; if it is gone, ${versionInfo?.op === "delete" ? "a delete has nothing left to do" : 're-create it with a "set" and no if_version only if it should exist again'}`;
   }
 }
-//@ chunk-0zqb2m0b.js:12816-14127 placement
+//@ chunk-jkpnfdxp.js:12841-14152 placement
 function formatDbLimitError(kind, limit) {
   let docPart = limit === undefined ? "document limit" : `limit of ${limit} documents`;
   let storagePart = limit === undefined ? "storage limit" : `storage limit of ${formatBytesDecimal(limit)}`;
@@ -590,14 +593,14 @@ function formatDbLimitError(kind, limit) {
       return;
   }
 }
-//@ chunk-0zqb2m0b.js:14127-14192 placement
+//@ chunk-jkpnfdxp.js:14152-14217 placement
 /**
  * 数据库读取自身身份（data/users/me、whoami）的路径常量与 schema。
  */
 var DATA_USERS_ME; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var WHOAMI_PATH;
 var whoAmIResponseSchema;
-deferInit("chunk-0zqb2m0b.js:14127", () => {
+deferInit("chunk-jkpnfdxp.js:14152", () => {
   DATA_USERS_ME = "data/users/me";
   WHOAMI_PATH = "whoami";
   whoAmIResponseSchema = DoctorLazy(() =>
@@ -606,21 +609,21 @@ deferInit("chunk-0zqb2m0b.js:14127", () => {
     }),
   );
 });
-//@ chunk-0zqb2m0b.js:14192-14227 placement
+//@ chunk-jkpnfdxp.js:14217-14252 placement
 function meKey(accountUuid, prefix) {
   return `${accountUuid}:${prefix}`;
 }
-//@ chunk-0zqb2m0b.js:14227-14280 placement
+//@ chunk-jkpnfdxp.js:14252-14305 placement
 function isDbViaRelay() {
   return plannedRoute("POST", ARTIFACT_DB_API_PATH, "bound") === "relay";
 }
-//@ chunk-0zqb2m0b.js:14280-14378 placement
+//@ chunk-jkpnfdxp.js:14305-14403 placement
 async function meKeyFromGateway(accountUuid, credentials) {
   if (isDbViaRelay()) return null;
   let accountUuid_2 = (await getGatewayAccountInfoAsync(credentials))?.accountUuid;
   return accountUuid_2 ? meKey(accountUuid_2, accountUuid) : null;
 }
-//@ chunk-0zqb2m0b.js:14378-14477 placement
+//@ chunk-jkpnfdxp.js:14403-14502 placement
 async function isSameAccountUuid(a, b, credentials) {
   let freshOauthAccountFromDisk = await readFreshOauthAccountFromDisk(credentials);
   return (
@@ -628,12 +631,12 @@ async function isSameAccountUuid(a, b, credentials) {
     meKey(freshOauthAccountFromDisk.accountUuid, a) === b
   );
 }
-//@ chunk-0zqb2m0b.js:14477-14554 placement
+//@ chunk-jkpnfdxp.js:14502-14579 placement
 function currentAuthorizationHash() {
   let Authorization = getAuthHeaders().headers.Authorization;
   return Authorization === undefined ? null : hashCredential(Authorization);
 }
-//@ chunk-0zqb2m0b.js:14554-14650 placement
+//@ chunk-jkpnfdxp.js:14579-14675 placement
 async function refreshOAuthTwice(credentials) {
   if (!hasApiClient()) return;
   for (let k = 0; k < 2; k++)
@@ -643,7 +646,7 @@ async function refreshOAuthTwice(credentials) {
       });
     } catch {}
 }
-//@ chunk-0zqb2m0b.js:14650-14732 placement
+//@ chunk-jkpnfdxp.js:14675-14757 placement
 /**
  * 导出函数 `clearMeIdCache`：参数 e。
  */
@@ -652,7 +655,7 @@ function clearMeIdCache(host) {
   resolvedMeIds.clear();
   inFlightMeIds.clear();
 }
-//@ chunk-0zqb2m0b.js:14732-14859 placement
+//@ chunk-jkpnfdxp.js:14757-14884 placement
 function makeUsersMeRewriter(collection, docId) {
   if (collection === DATA_USERS_ME || collection.startsWith(DATA_USERS_ME + "/"))
     return (result) => ({
@@ -661,22 +664,22 @@ function makeUsersMeRewriter(collection, docId) {
     });
   return null;
 }
-//@ chunk-0zqb2m0b.js:14859-14892 placement
+//@ chunk-jkpnfdxp.js:14884-14917 placement
 var CONTESTED_ME_KEY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0zqb2m0b.js:14859", () => {
+deferInit("chunk-jkpnfdxp.js:14884", () => {
   CONTESTED_ME_KEY = Symbol("contested-me-key");
 });
-//@ chunk-0zqb2m0b.js:14892-14945 placement
+//@ chunk-jkpnfdxp.js:14917-14970 placement
 class MeIdCache {
   resolvedMeIds = new Map();
   inFlightMeIds = new Map();
 }
-//@ chunk-0zqb2m0b.js:14945-14970 placement
+//@ chunk-jkpnfdxp.js:14970-14995 placement
 var meIdCache; // deferred: uses MeIdCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0zqb2m0b.js:14945", () => {
+deferInit("chunk-jkpnfdxp.js:14970", () => {
   meIdCache = new HostScoped(() => new MeIdCache());
 });
-//@ chunk-0zqb2m0b.js:14970-15406 placement
+//@ chunk-jkpnfdxp.js:14995-15431 placement
 function resolveWhoamiKey(token, host, kind, kind_2, limit) {
   if (host === "malformed_whoami_echo")
     return `db ${kind} failed (unavailable): resolving 'me' returned an unreadable response \u2014 the artifact db service may need an update`;
@@ -687,14 +690,14 @@ function resolveWhoamiKey(token, host, kind, kind_2, limit) {
     (kind === "write" && NO_RETRY_WRITE_CODES.has(token) ? NOTHING_WRITTEN_SUFFIX : "")
   );
 }
-//@ chunk-0zqb2m0b.js:15406-15518 placement
+//@ chunk-jkpnfdxp.js:15431-15543 placement
 var NOTHING_WRITTEN_SUFFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NO_RETRY_WRITE_CODES;
-deferInit("chunk-0zqb2m0b.js:15406", () => {
+deferInit("chunk-jkpnfdxp.js:15431", () => {
   NOTHING_WRITTEN_SUFFIX = "; nothing was written";
   NO_RETRY_WRITE_CODES = new Set(["too_large", "credential_rejected", "cloud_unavailable", "network_off"]);
 });
-//@ chunk-0zqb2m0b.js:15518-16377 placement
+//@ chunk-jkpnfdxp.js:15543-16402 placement
 async function composeMeKey(host, operation, slug, scope, storageV5, credentials) {
   let cache = meIdCache.of(host);
   let { resolvedMeIds, inFlightMeIds } = cache;
@@ -759,7 +762,7 @@ async function composeMeKey(host, operation, slug, scope, storageV5, credentials
     },
   };
 }
-//@ chunk-0zqb2m0b.js:16377-17097 placement
+//@ chunk-jkpnfdxp.js:16402-17122 placement
 async function describeWhoamiFailure(cache, operation, slug, scope, cachedMeKey, storageV5, credentials) {
   let authHash = null;
   if (cachedMeKey !== null) {
@@ -823,7 +826,7 @@ async function describeWhoamiFailure(cache, operation, slug, scope, cachedMeKey,
     id: parsed.data.id,
   };
 }
-//@ chunk-0zqb2m0b.js:17097-21118 placement
+//@ chunk-jkpnfdxp.js:17122-21143 placement
 /**
  * 调用 Artifact DB 接口（读/写/批量），处理中继、作用域、错误分类（约 4 KB）。
  */
@@ -1017,17 +1020,17 @@ async function callArtifactDb(operation, slug, path, args, options, scope) {
     }),
   };
 }
-//@ chunk-0zqb2m0b.js:21118-21464 placement
+//@ chunk-jkpnfdxp.js:21143-21489 placement
 /**
  * 关闭云端网络访问时数据库读取失败的说明文案（只能读自己发布的 artifact）与读取范围头。
  */
 var X_FRAME_RELAY_READ_SCOPE_APPLIED; // deferred: uses toPublicDbErrorCode of its import cycle while loading; runs once the cycle is complete
 var READ_SCOPE_NOT_FOUND_TEXT;
-deferInit("chunk-0zqb2m0b.js:21118", () => {
+deferInit("chunk-jkpnfdxp.js:21143", () => {
   X_FRAME_RELAY_READ_SCOPE_APPLIED = "x-frame-relay-read-scope-applied";
   READ_SCOPE_NOT_FOUND_TEXT = `db read failed (${toPublicDbErrorCode("not_found")}): nothing this session can read at that address \u2014 with the organization's cloud network access turned off, this session can read the data only of artifacts it published itself (or there is no such artifact, collection, or document); do not retry the read here`;
 });
-//@ chunk-0zqb2m0b.js:21464-21711 placement
+//@ chunk-jkpnfdxp.js:21489-21736 placement
 function getAsLevel(node) {
   if (node === null || typeof node !== "object") return;
   let asLevel = Reflect.get(node, "asLevel");
@@ -1037,7 +1040,7 @@ function getAsLevel(node) {
     errorNode !== null && typeof errorNode === "object" ? Reflect.get(errorNode, "asLevel") : undefined;
   return typeof nestedAsLevel === "string" ? nestedAsLevel : undefined;
 }
-//@ chunk-0zqb2m0b.js:21711-25152 placement
+//@ chunk-jkpnfdxp.js:21736-25231 placement
 /**
  * 执行 read_db 动作：get/list/query 文档。
  */
@@ -1192,9 +1195,13 @@ async function readArtifactDb(host, operation, scope, storageV5, credentials) {
         ...(parsed.data.version !== undefined && {
           version: parsed.data.version,
         }),
-        ...(parsed.data.authoredByOthers && {
-          authoredByOthers: true,
-        }),
+        ...(parsed.data[MARKREADS]
+          ? {
+              markReads: true,
+            }
+          : parsed.data.authoredByOthers && {
+              authoredByOthers: true,
+            }),
         ...(parsed.data.outside_writer !== undefined && {
           outsideWriter: parsed.data.outside_writer,
         }),
@@ -1224,9 +1231,13 @@ async function readArtifactDb(host, operation, scope, storageV5, credentials) {
         parsed.data.nextCursor !== "" && {
           nextCursor: parsed.data.nextCursor,
         }),
-      ...(parsed.data.authoredByOthers && {
-        authoredByOthers: true,
-      }),
+      ...(parsed.data[MARKREADS]
+        ? {
+            markReads: true,
+          }
+        : parsed.data.authoredByOthers && {
+            authoredByOthers: true,
+          }),
       ...(parsed.data.outside_writer !== undefined && {
         outsideWriter: parsed.data.outside_writer,
       }),
@@ -1247,7 +1258,7 @@ async function readArtifactDb(host, operation, scope, storageV5, credentials) {
     reason: sessionScoped ? "not_found_session_scoped" : reason,
   };
 }
-//@ chunk-0zqb2m0b.js:25152-25272 placement
+//@ chunk-jkpnfdxp.js:25231-25351 placement
 function invalidDbWrite(result, message, suffix = "") {
   logFeatureBad("artifact_db_write", `${suffix}${result}`);
   return {
@@ -1257,7 +1268,7 @@ function invalidDbWrite(result, message, suffix = "") {
     reason: result,
   };
 }
-//@ chunk-0zqb2m0b.js:25272-25869 placement
+//@ chunk-jkpnfdxp.js:25351-25948 placement
 async function validateCollectionPath(path, readCollection, suffix = "") {
   let { collection, docId } = path;
   if (!regExp_2.test(collection) || !regExp.test(docId))
@@ -1295,7 +1306,7 @@ async function validateCollectionPath(path, readCollection, suffix = "") {
     path: docPath,
   };
 }
-//@ chunk-0zqb2m0b.js:25869-26198 placement
+//@ chunk-jkpnfdxp.js:25948-26277 placement
 /**
  * 把一次写操作（delete/set/update/str_replace）转成请求体：路径、数据、replace 标志、str_replace 字段与 idem，可带 ifVersion 乐观锁。
  */
@@ -1336,7 +1347,7 @@ function buildDbWriteOp(op, path, data, version, ifVersion) {
       };
   }
 }
-//@ chunk-0zqb2m0b.js:26198-26606 placement
+//@ chunk-jkpnfdxp.js:26277-26685 placement
 async function validateWriteRequest(host, request, signal, storageV5, options) {
   let { slug, op, data, edit } = request;
   if (!ARTIFACT_SLUG_RE.test(slug)) return invalidDbWrite("invalid_slug", "not a valid artifact id");
@@ -1368,7 +1379,7 @@ async function validateWriteRequest(host, request, signal, storageV5, options) {
       : undefined,
   );
 }
-//@ chunk-0zqb2m0b.js:26606-28145 placement
+//@ chunk-jkpnfdxp.js:26685-28224 placement
 /**
  * 写单个文档（set/update/delete/str_replace），支持版本要求。
  */
@@ -1492,7 +1503,7 @@ async function writeArtifactDocument(
     reason,
   };
 }
-//@ chunk-0zqb2m0b.js:28145-28407 placement
+//@ chunk-jkpnfdxp.js:28224-28486 placement
 function isRetryableDbResult(result) {
   if (result.kind !== "error") return true;
   switch (result.code) {
@@ -1509,7 +1520,7 @@ function isRetryableDbResult(result) {
       return true;
   }
 }
-//@ chunk-0zqb2m0b.js:28407-31306 placement
+//@ chunk-jkpnfdxp.js:28486-31385 placement
 /**
  * 执行 write_db 的 batch：校验、发送、按需降级为逐条写入。
  */
@@ -1715,7 +1726,7 @@ async function writeArtifactDbBatch(host, request, signal, storageV5, scope) {
     reason,
   };
 }
-//@ chunk-0zqb2m0b.js:31306-31767 placement
+//@ chunk-jkpnfdxp.js:31385-31846 placement
 function describeBatchPinnedUnsupported() {
   logFeatureSad("artifact_db_write", "batch_pinned_unsupported");
   return {
@@ -1725,7 +1736,7 @@ function describeBatchPinnedUnsupported() {
     message: `db batch write failed (${toPublicDbErrorCode("invalid_argument")}): this server does not take batch writes yet (nor, most likely, \`if_version\`), and a batch with \`if_version\` pins is never applied one write at a time \u2014 nothing was written. Resend it without the pins only if unconditional writes are acceptable here`,
   };
 }
-//@ chunk-0zqb2m0b.js:31767-34752 placement
+//@ chunk-jkpnfdxp.js:31846-34831 placement
 /**
  * 批量写入失败说明（超过 1 MiB、部分失败等）。
  */
@@ -1770,14 +1781,14 @@ function splitOversizedBatch(error, kind, limit, context) {
     ? `${formatted}; the batch is atomic, so nothing was written${hints}`
     : `${formatted}; the batch's outcome is unknown \u2014 it applies all-or-nothing and may have committed; read back before retrying`;
 }
-//@ chunk-0zqb2m0b.js:34752-34799 placement
+//@ chunk-jkpnfdxp.js:34831-34878 placement
 /**
  * 导出函数 `isRecoverableStoreError`：参数 e，返回 e !== "store_unavailable"。
  */
 function isRecoverableStoreError(error) {
   return error !== "store_unavailable";
 }
-//@ chunk-0zqb2m0b.js:34799-36393 placement
+//@ chunk-jkpnfdxp.js:34878-36472 placement
 /**
  * 批量写入不被支持时逐条顺序写入的回退。
  */
@@ -1900,10 +1911,10 @@ export {
   randomBatchId,
   validateWriteRequest,
   MAX_QUERY_RESULTS,
-  clearMeIdCache,
-  isArtifactDbEnabled,
-  DB_QUERY_OPERATORS,
-  DB_SYMBOL_OPERATORS,
   VERSION_MISMATCH_PREFIXES,
   VERSION_MISMATCH_TEXTS,
+  isArtifactDbEnabled,
+  clearMeIdCache,
+  DB_QUERY_OPERATORS,
+  DB_SYMBOL_OPERATORS,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程工作流启动。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-74vrtgsp.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8mcxfjtz.js (10)
  * attribution: placement 10
  */
 import { randomUUID } from "crypto";
@@ -38,13 +38,13 @@ import { fromEnum } from "../analytics/safeMetadata.js";
 import { evaluateAskingNoHost } from "../../utils/permissions/permissions.js";
 import { subagentWorkflowDir } from "../workflow/snapshots.js";
 
-//@ chunk-74vrtgsp.js:839-856 placement
+//@ chunk-8mcxfjtz.js:837-854 placement
 /**
  * 远程工作流结果的长度上限：序列化上限与文本截断长度。
  */
 var REMOTE_WORKFLOW_SERIALIZED_MAX_CHARS = 1e5;
 var REMOTE_WORKFLOW_TEXT_TRUNCATE_CHARS = 4000;
-//@ chunk-74vrtgsp.js:856-1041 placement
+//@ chunk-8mcxfjtz.js:854-1038 placement
 function sanitizeResultText(text) {
   let replaced = text
     .replace(/[\r\n\v\f\x1c\x1d\x1e\u0085\u2028\u2029]+/g, " ")
@@ -53,14 +53,14 @@ function sanitizeResultText(text) {
     replaced = `${truncateToLength(replaced, REMOTE_WORKFLOW_TEXT_TRUNCATE_CHARS)}\u2026[truncated]`;
   return replaced;
 }
-//@ chunk-74vrtgsp.js:1041-1105 placement
+//@ chunk-8mcxfjtz.js:1038-1102 placement
 /**
  * 生成一行 remote-workflow 错误结果（层名 + 清洗后的信息）。
  */
 function remoteWorkflowErrorLine(layer, message) {
   return `remote-workflow: error[${layer}]: ${sanitizeResultText(message)}`;
 }
-//@ chunk-74vrtgsp.js:1105-1248 placement (2.1.88 match: escapeJsLineTerminators, 0.785)
+//@ chunk-8mcxfjtz.js:1102-1245 placement (2.1.88 match: escapeJsLineTerminators, 0.785)
 /**
  * 同上，另外转义 U+0085（NEL），用于 stream-json 输出。
  */
@@ -70,7 +70,7 @@ function escapeJsLineTerminators(json) {
     ? undefined
     : jsonText.replaceAll("\x85", "\\u0085").replaceAll("\u2028", "\\u2028").replaceAll("\u2029", "\\u2029");
 }
-//@ chunk-74vrtgsp.js:1248-1392 placement
+//@ chunk-8mcxfjtz.js:1245-1389 placement
 function workflowsDisabledAtStartup() {
   let latchedPreSettingsEnvSnapshot = getLatchedPreSettingsEnvSnapshot();
   if (latchedPreSettingsEnvSnapshot === undefined) return isWorkflowsEnvDisabled();
@@ -80,7 +80,7 @@ function workflowsDisabledAtStartup() {
       isEnvTruthy(latchedPreSettingsEnvSnapshot[key]),
   );
 }
-//@ chunk-74vrtgsp.js:1392-1552 placement
+//@ chunk-8mcxfjtz.js:1389-1549 placement
 function adminDisabledWorkflows() {
   return getEveryMachineAdminTierSettings().some(
     (settings) =>
@@ -90,7 +90,7 @@ function adminDisabledWorkflows() {
       ),
   );
 }
-//@ chunk-74vrtgsp.js:1552-1958 placement
+//@ chunk-8mcxfjtz.js:1549-1955 placement
 /**
  * 代码审查因机器托管设置关闭工作流（或设置无法读取）而未运行时的提示文本。
  */
@@ -98,7 +98,7 @@ var ADMIN_DISABLED_REVIEW_TEXT =
   "Code review did not run: workflows are turned off in this machine's managed settings (`disableWorkflows`, or `CLAUDE_CODE_DISABLE_WORKFLOWS` in its `env` block). Ask this machine's administrator to allow it.";
 var ADMIN_SETTINGS_UNREADABLE_TEXT =
   "Code review did not run: this machine's managed settings could not be read, so whether its administrator turned workflows off is not known. Ask this machine's administrator to fix them.";
-//@ chunk-74vrtgsp.js:1958-2007 placement
+//@ chunk-8mcxfjtz.js:1955-2003 placement
 /**
  * 审查会话因托管设置关闭工作流或设置不可读时的说明文案。
  */
@@ -106,7 +106,7 @@ function reviewWorkflowRefusalText() {
   if (adminDisabledWorkflows()) return ADMIN_DISABLED_REVIEW_TEXT;
   return isMachineAdminDocumentUnreadable() ? ADMIN_SETTINGS_UNREADABLE_TEXT : null;
 }
-//@ chunk-74vrtgsp.js:2007-2715 placement
+//@ chunk-8mcxfjtz.js:2003-2711 placement
 /**
  * 判断工作流在本会话是否被禁止：启动时的环境变量、disableWorkflows 设置、组织策略，以及审查会话的托管设置；返回原因或 null。
  */
@@ -125,7 +125,7 @@ function workflowPolicyRefusal(opts) {
     return "dynamic workflows are disabled for this session (org policy `allow_workflows`).";
   return null;
 }
-//@ chunk-74vrtgsp.js:2715-5650 placement
+//@ chunk-8mcxfjtz.js:2711-5644 placement
 /**
  * 执行远程下发的工作流脚本：依次检查策略、脚本大小、控制字符、元数据解析、非确定性调用与编译，启动本地工作流运行并等待结束；完成时把结果序列化成一行 remote-workflow 结果（过长时逐级省略失败信息与结果），失败、被中止或状态异常时返回带层级的失败行。
  */

@@ -3,9 +3,9 @@
  *
  * 用户 ! bash 输入回显（<bash-input>，bashBorder 色）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserBashInputMessage.tsx
- * pieces: chunk-ah34pb7m.js (1)
+ * pieces: chunk-wjygkcr4.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -17,7 +17,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 
-//@ chunk-ah34pb7m.js:104523-105017 fingerprint (2.1.88 match: UserBashInputMessage, 0.791)
+//@ chunk-wjygkcr4.js:106331-106825 fingerprint (2.1.88 match: UserBashInputMessage, 0.791)
 function UserBashInputMessage(props) {
   let $ = useMemoCache(8);
   let { param, addMargin } = props;

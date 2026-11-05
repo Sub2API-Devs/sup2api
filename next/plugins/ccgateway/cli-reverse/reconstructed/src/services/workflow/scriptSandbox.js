@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工作流脚本沙箱 VM
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-41w44bgm.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kd2wbncj.js (19)
  * attribution: placement 19
  */
 import "vm";
@@ -20,7 +20,7 @@ import { logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { createSealedError } from "../../plugins/functionHooks/vm/vmRealm.js";
 import { registerSwallowedRejectionObserver } from "../../utils/shutdown/pendingWrites.js";
 
-//@ chunk-41w44bgm.js:14075-14272 placement
+//@ chunk-kd2wbncj.js:6325-6522 placement
 function slashTokenSpan({ token, tokenTypes, source, offset }) {
   let isRegexp = token.type === tokenTypes.regexp;
   let isSlashLike =
@@ -32,7 +32,7 @@ function slashTokenSpan({ token, tokenTypes, source, offset }) {
     regex: isRegexp,
   };
 }
-//@ chunk-41w44bgm.js:14272-14519 placement
+//@ chunk-kd2wbncj.js:6522-6769 placement
 /**
  * 二分查找第一个"既可读作正则又可读作除号"的斜杠 token：逐步把前 count 个斜杠替换成无歧义写法，看引擎能否解析；全部能解析返回 -1。
  */
@@ -65,7 +65,7 @@ function firstAmbiguousSlashIndex({ text, tokens, engineParses }) {
   }
   return low - 1;
 }
-//@ chunk-41w44bgm.js:14519-14762 placement
+//@ chunk-kd2wbncj.js:6769-7012 placement
 function parsesWithSlashesRewritten({ text, tokens, count, engineParses }) {
   let parts = [];
   let cursor = 0;
@@ -84,7 +84,7 @@ function parsesWithSlashesRewritten({ text, tokens, count, engineParses }) {
     return false;
   }
 }
-//@ chunk-41w44bgm.js:14762-14856 placement
+//@ chunk-kd2wbncj.js:7012-7106 placement
 /**
  * 去掉对象原型链与 constructor/prototype 后再交进 VM。
  */
@@ -94,7 +94,7 @@ function sealPrototype(fn) {
   delete fn.prototype;
   return fn;
 }
-//@ chunk-41w44bgm.js:14856-16104 placement
+//@ chunk-kd2wbncj.js:7106-8354 placement
 /**
  * 工作流脚本 VM 的确定性垫片：禁用 Date.now()/new Date()/Math.random()（会破坏恢复），Vs 为注入 VM 的垫片源码。
  */
@@ -124,19 +124,19 @@ var DETERMINISM_SHIM_SOURCE = `(() => {
       Object.freeze(RealDate);
       globalThis.Date = ShimDate;
     })()`;
-//@ chunk-41w44bgm.js:16104-16141 placement
+//@ chunk-kd2wbncj.js:8354-8391 placement
 /**
  * 在给定 VM 上下文里装入确定性垫片（禁止 Date.now/Math.random）。
  */
 function installDeterminismShim(context) {
   vmModule_2.runInContext(DETERMINISM_SHIM_SOURCE, context);
 }
-//@ chunk-41w44bgm.js:16141-16155 placement
+//@ chunk-kd2wbncj.js:8391-8405 placement
 /**
  * 工作流脚本沙箱中止的超时。
  */
 var VM_ABORT_TIMEOUT_MS = 30000;
-//@ chunk-41w44bgm.js:16155-16643 placement
+//@ chunk-kd2wbncj.js:8405-8893 placement
 /**
  * 为工作流 VM 提供 setTimeout/clearTimeout：只记录本 VM 创建的定时器，signal 中断时全部清除；回调经可替换的 VM 调用器执行。
  */
@@ -179,7 +179,7 @@ function createVmTimers(signal) {
     },
   };
 }
-//@ chunk-41w44bgm.js:16643-16741 placement
+//@ chunk-kd2wbncj.js:8893-8991 placement
 /**
  * 工作流 VM 注入代码用的全局名前缀与相关变量名。
  */
@@ -187,7 +187,7 @@ var WORKFLOW_VM_PREFIX = "__wRg$";
 var WORKFLOW_VM_WORDS = `${WORKFLOW_VM_PREFIX}words`;
 var WORKFLOW_VM_BOUND_NAMES = "{put, read, on, retract, agent, workflow}";
 var WORKFLOW_VM_RESOLVE = `${WORKFLOW_VM_PREFIX}resolve`;
-//@ chunk-41w44bgm.js:16741-16937 placement
+//@ chunk-kd2wbncj.js:8991-9187 placement
 /**
  * 在工作流 VM 全局对象上定义只读的 Promise.resolve 引用，供改写后的代码使用。
  */
@@ -200,7 +200,7 @@ function defineVmPromiseResolve(context) {
     context,
   );
 }
-//@ chunk-41w44bgm.js:16937-18735 placement
+//@ chunk-kd2wbncj.js:9187-10999 placement
 /**
  * 用 acorn 解析工作流脚本（包成 async IIFE）：可选检查正则/除号歧义；遍历 AST 拒绝保留标识符前缀、with、import()、及其他不支持的语法，并改写部分节点后返回源码。
  */
@@ -212,7 +212,7 @@ function compileWorkflowScriptBody(script) {
   let wrapped = `(async () => {'use strict';
 ${script}
 })()`;
-  let flagWithOverride = readFlagWithOverride("tengu_steady_metcalfe", {
+  let slashTokenHook = readFlagWithOverride("tengu_steady_metcalfe", {
     safe: true,
   });
   let slashSpans = [];
@@ -220,7 +220,7 @@ ${script}
     ecmaVersion: "latest",
     sourceType: "script",
     allowHashBang: true,
-    onToken: flagWithOverride
+    onToken: slashTokenHook
       ? (token) => {
           let span = slashTokenSpan({
             token,
@@ -232,7 +232,7 @@ ${script}
         }
       : undefined,
   });
-  if (flagWithOverride) assertNoAmbiguousSlash(script, slashSpans);
+  if (slashTokenHook) assertNoAmbiguousSlash(script, slashSpans);
   walk.full(ast, (node) => {
     if (node.name?.startsWith(WORKFLOW_VM_PREFIX))
       throw SyntaxError(`Identifier '${node.name}' is reserved.`);
@@ -295,19 +295,19 @@ ${script}
   for (let [offset, insert] of edits)
     rewritten = rewritten.slice(0, offset) + insert + rewritten.slice(offset);
   let sliced = rewritten.slice(28, rewritten.length - 5);
-  if (flagWithOverride)
+  if (slashTokenHook)
     assertNoAmbiguousSlash(script, slashSpans, {
       text: sliced,
       tokens: remapTokenOffsets(slashSpans, edits, 28),
     });
   return sliced;
 }
-//@ chunk-41w44bgm.js:18735-19177 placement
+//@ chunk-kd2wbncj.js:10999-11441 placement
 /**
  * 非 Bun 运行时启动工作流脚本时的错误文案：说明工作流只在原生 claude 二进制（Bun）上运行，并报告当前是 Deno 还是 Node.js。
  */
 var NOT_ON_BUN_MESSAGE = `Workflow scripts run only when Claude Code runs on Bun, the JavaScript runtime its native binary is built with. This process is not running on Bun (it reports ${process.versions.deno !== undefined ? `Deno ${process.versions.deno}` : `Node.js ${process.version}`}), so the script was not started. To use workflows, run the native \`claude\` binary (the Agent SDK launches it by default) rather than a JavaScript bundle under another runtime.`;
-//@ chunk-41w44bgm.js:19177-20973 placement
+//@ chunk-kd2wbncj.js:11441-13237 placement
 /**
  * 编译工作流脚本：非 Bun 运行时直接失败；校验语法后包装成带异步迭代辅助的工厂函数源码，可选绑定词表；返回 {ok, ...} 或 {ok:false, error}。
  */
@@ -349,7 +349,7 @@ ${body}
     };
   }
 }
-//@ chunk-41w44bgm.js:20973-21046 placement
+//@ chunk-kd2wbncj.js:13237-13310 placement
 /**
  * 用 Function 做一次纯语法检查（不执行）。
  */
@@ -358,12 +358,12 @@ function syntaxCheckScript(script) {
 ${script}
 }`);
 }
-//@ chunk-41w44bgm.js:21046-21076 placement
+//@ chunk-kd2wbncj.js:13310-13340 placement
 /**
  * 斜杠歧义时抛出的语法错误类型。
  */
 class AmbiguousSlashError extends SyntaxError {}
-//@ chunk-41w44bgm.js:21076-21573 placement
+//@ chunk-kd2wbncj.js:13340-13837 placement
 /**
  * 若脚本里有既可读作正则又可读作除号的 '/'，抛出带行列号的错误，提示用 ';' 结束前一语句或加括号。
  */
@@ -381,7 +381,7 @@ function assertNoAmbiguousSlash(script, spans, override) {
     `Line ${line}, column ${column} of the script body (counted after the meta statement, if any): this '/' could be read either as the start of a regular expression or as a division, so the script was not run. End the statement before it with ';' (or parenthesize the expression) so it reads one way.`,
   );
 }
-//@ chunk-41w44bgm.js:21573-21798 placement
+//@ chunk-kd2wbncj.js:13837-14062 placement
 function remapTokenOffsets(spans, edits, baseOffset) {
   let remapped = [];
   let reduced = edits.reduce((acc, [, insert]) => acc + insert.length, 0);
@@ -400,7 +400,7 @@ function remapTokenOffsets(spans, edits, baseOffset) {
   }
   return remapped;
 }
-//@ chunk-41w44bgm.js:21798-22301 placement
+//@ chunk-kd2wbncj.js:14062-14566 placement
 /**
  * 判断脚本源码是否使用 Date.now()、Math.random() 或无参 new Date()（解析失败返回 false）。
  */
@@ -436,7 +436,7 @@ function usesNondeterministicTime(source) {
   }
   return found;
 }
-//@ chunk-41w44bgm.js:22323-22524 placement
+//@ chunk-kd2wbncj.js:14588-14789 placement
 /**
  * 工作流吞掉未处理 Promise 拒绝时的警告（脚本留下了失败的 agent/parallel/pipeline/workflow 调用而未处理）。
  */
@@ -444,14 +444,14 @@ var SWALLOWED_REJECTION_WARNING = registerSwallowedRejectionObserver(
   "Workflow: swallowed an unhandled rejection (not exiting): a script left a promise that carries the reason of a failed agent(), parallel(), pipeline() or workflow() call without a handler",
 );
 export {
+  usesNondeterministicTime,
+  compileWorkflowScript,
   SWALLOWED_REJECTION_WARNING,
   installDeterminismShim,
   defineVmPromiseResolve,
   sealPrototype,
-  compileWorkflowScript,
   VM_ABORT_TIMEOUT_MS,
   createVmTimers,
-  usesNondeterministicTime,
   WORKFLOW_VM_WORDS,
   NOT_ON_BUN_MESSAGE,
 };

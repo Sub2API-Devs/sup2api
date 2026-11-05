@@ -3,12 +3,12 @@
  *
  * git filter 配置与 trace 变量（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8t9z960d.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c036pnbt.js (16)
  * attribution: placement 16
  */
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { printableLabel } from "../printableName.js";
 import { redactSshUserinfo } from "../redaction/urlRedaction.js";
 import { execFileNoThrowWithCwd } from "../execFileNoThrow.js";
@@ -19,9 +19,9 @@ import { getRemoteHostSessionCount } from "../../commands/insights.js";
 import { keepsRefsInReftable } from "./gitFilesystem.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-8t9z960d.js:450-510 placement
+//@ chunk-c036pnbt.js:450-510 placement
 var FILTER_DRIVER_CONFIG_KEY_RE = /^filter\.(.*)\.(?:clean|smudge|process|required)$/is;
-//@ chunk-8t9z960d.js:510-590 placement
+//@ chunk-c036pnbt.js:510-590 placement
 /**
  * 归一化用于比较的名字（NFKD 去重音、转小写）。
  */
@@ -31,19 +31,19 @@ function foldForCompare(text) {
     .replace(/\p{M}+/gu, "")
     .toLowerCase();
 }
-//@ chunk-8t9z960d.js:590-692 placement
+//@ chunk-c036pnbt.js:590-692 placement
 /**
  * 从 filter.<名>.* 键中取驱动名。
  */
 function filterDriverNames(configKeys) {
-  return uniq(
+  return normalizeCaseForComparison_2(
     Array.from(configKeys).flatMap((key) => {
       let driverName = FILTER_DRIVER_CONFIG_KEY_RE.exec(key)?.[1];
       return driverName === undefined ? [] : [driverName];
     }),
   );
 }
-//@ chunk-8t9z960d.js:692-844 placement
+//@ chunk-c036pnbt.js:692-844 placement
 function isFilterConfigKey(driverNames) {
   return driverNames.flatMap((driverName) => [
     [`filter.${driverName}.clean`, ""],
@@ -52,7 +52,7 @@ function isFilterConfigKey(driverNames) {
     [`filter.${driverName}.required`, "false"],
   ]);
 }
-//@ chunk-8t9z960d.js:844-1382 placement
+//@ chunk-c036pnbt.js:844-1382 placement
 /**
  * git trace 输出上限、超时，以及强制关闭的 GIT_TRACE* 环境变量表。
  */
@@ -60,7 +60,7 @@ var GIT_TRACE_ENV_VARS; // deferred: has load-time effects after a deferred stat
 var MAX_TRACE_OUTPUT_BYTES;
 var TRACE_ENV_VARS;
 var UNSAFE_CONFIG_HINT;
-deferInit("chunk-8t9z960d.js:844", () => {
+deferInit("chunk-c036pnbt.js:844", () => {
   GIT_TRACE_ENV_VARS = 1048576;
   MAX_TRACE_OUTPUT_BYTES = 5000;
   TRACE_ENV_VARS = Object.fromEntries(
@@ -84,7 +84,7 @@ deferInit("chunk-8t9z960d.js:844", () => {
   UNSAFE_CONFIG_HINT =
     "if that setting is yours, move it to your global git config; if you don't recognize it, remove it from the repository's config, since a tool or checkout you don't trust may have written it";
 });
-//@ chunk-8t9z960d.js:1382-1911 placement
+//@ chunk-c036pnbt.js:1382-1911 placement
 function describeGitConfigUnreadable(failure) {
   switch (failure.reason) {
     case "config_unreadable":
@@ -95,7 +95,7 @@ function describeGitConfigUnreadable(failure) {
       return `the repository's own git config sets ${failure.lfsKey === undefined ? failure.key : `${failure.key}, an entry git-lfs reads as ${failure.lfsKey}`}, which names a program git-lfs would run for any LFS path, on checkout and on status alike (${UNSAFE_CONFIG_HINT})`;
   }
 }
-//@ chunk-8t9z960d.js:1911-2054 placement (2.1.88 match: readHeadAndTail, 0.802)
+//@ chunk-c036pnbt.js:1911-2054 placement (2.1.88 match: readHeadAndTail, 0.802)
 var GIT_INCLUDEIF_PATH_PATTERN = /^includeif\..*\.path$/s;
 var INCLUDEIF_PATH_RE =
   /lfs.customtransfer..+?.path|^lfs\.(?:.*\.)?standalonetransferagent$|^lfs\.extension\./su;
@@ -103,11 +103,11 @@ var LABEL_HEAD_TAIL = {
   head: 60,
   tail: 40,
 };
-//@ chunk-8t9z960d.js:2054-2090 placement
+//@ chunk-c036pnbt.js:2054-2090 placement
 function summarizeGitConfigKeys(value) {
   return printableLabel(redactSshUserinfo(value), LABEL_HEAD_TAIL);
 }
-//@ chunk-8t9z960d.js:2090-2353 placement
+//@ chunk-c036pnbt.js:2090-2353 placement
 /**
  * 生成覆盖仓库 filter 驱动的 -c 参数。
  */
@@ -132,7 +132,7 @@ async function buildFilterNeutralizingArgs(cwd, options = {}) {
     args: isFilterConfigKey(driverNames).flatMap(([key, value]) => ["-c", `${key}=${value}`]),
   };
 }
-//@ chunk-8t9z960d.js:2353-2411 placement
+//@ chunk-c036pnbt.js:2353-2411 placement
 /**
  * 运行 git（stdin 关闭）并返回结果。
  */
@@ -142,7 +142,7 @@ function runGitQuietStdin(args, execOptions) {
     stdin: "ignore",
   });
 }
-//@ chunk-8t9z960d.js:2411-2980 placement
+//@ chunk-c036pnbt.js:2411-2980 placement
 async function listGitFilters(
   cwd,
   { repository = [], pin, envPins = {}, base, run = runGitQuietStdin } = {},
@@ -174,7 +174,7 @@ async function listGitFilters(
         ok: false,
         reason: "conditional_include",
       };
-    for (let keyCandidate of uniq([key, ...gitConfigKeysOf(entry)]))
+    for (let keyCandidate of normalizeCaseForComparison_2([key, ...gitConfigKeysOf(entry)]))
       if (INCLUDEIF_PATH_RE.test(keyCandidate) || INCLUDEIF_PATH_RE.test(foldForCompare(keyCandidate)))
         return {
           ok: false,
@@ -192,7 +192,7 @@ async function listGitFilters(
     entries,
   };
 }
-//@ chunk-8t9z960d.js:2980-3646 placement
+//@ chunk-c036pnbt.js:2980-3646 placement
 async function readGitConfigScoped(
   dir,
   keyPattern,
@@ -242,7 +242,7 @@ async function readGitConfigScoped(
   }
   return pairs;
 }
-//@ chunk-8t9z960d.js:3646-4682 placement
+//@ chunk-c036pnbt.js:3646-4682 placement
 async function listGitConfig(cwd, scope, { args, envPins, base, pin, run }) {
   let { code, stdout, stderr, maxBufferExceeded } = await run(
     [...args, ...GIT_SAFE_GLOBAL_ARGS, "config", scope, "--includes", "-z", "--list"],
@@ -296,7 +296,7 @@ async function listGitConfig(cwd, scope, { args, envPins, base, pin, run }) {
     });
   return mapped.some(([key]) => key.includes("\uFFFD")) ? null : mapped;
 }
-//@ chunk-8t9z960d.js:4682-4818 placement
+//@ chunk-c036pnbt.js:4682-4818 placement
 function gitConfigKeysOf([key, value]) {
   return (value === null ? key : `${key}=${value}`)
     .split(
@@ -308,13 +308,13 @@ function gitConfigKeysOf([key, value]) {
       return index === -1 ? [] : [line.slice(0, index).trim()];
     });
 }
-//@ chunk-8t9z960d.js:4818-4865 placement
+//@ chunk-c036pnbt.js:4818-4865 placement
 /**
  * 序列器状态文件名（CHERRY_PICK_HEAD、REVERT_HEAD）与相关计数上限。
  */
 var SEQUENCER_STATE_FILES = ["CHERRY_PICK_HEAD", "REVERT_HEAD"];
 var SEQUENCER_STATE_COUNT = 2;
-//@ chunk-8t9z960d.js:4865-5111 placement
+//@ chunk-c036pnbt.js:4865-5111 placement
 /**
  * reftable 仓库中用 show-ref --exists 检查哪些 ref 存在。
  */
@@ -329,9 +329,6 @@ async function findExistingRefs(cwd, refNames, runGit) {
   return found.size === 0 && anyFailed ? null : found;
 }
 export {
-  buildFilterNeutralizingArgs,
-  findExistingRefs,
-  SEQUENCER_STATE_FILES,
   listGitFilters,
   describeGitConfigUnreadable,
   runGitQuietStdin,
@@ -341,5 +338,8 @@ export {
   summarizeGitConfigKeys,
   UNSAFE_CONFIG_HINT,
   readGitConfigScoped,
+  findExistingRefs,
+  SEQUENCER_STATE_FILES,
+  buildFilterNeutralizingArgs,
   TRACE_ENV_VARS,
 };

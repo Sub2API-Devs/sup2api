@@ -3,9 +3,9 @@
  *
  * Spinner 文案的微光（glimmer）渲染，按模式着色（错误/警告/工具使用）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Spinner/GlimmerMessage.tsx
- * pieces: chunk-3mec1atf.js (5)
+ * pieces: chunk-hzenv5c0.js (5)
  * attribution: placement 3, layout 1, fingerprint 1
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -14,7 +14,7 @@ import { useResolvedTheme } from "../design-system/ThemeProvider.js";
 import { getGraphemeSegmenter } from "../../utils/intl.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { interpolateColor, parseRGB, roundToStep, toRGBColor } from "./utils.js";
+import { parseRGB, interpolateColor, roundToStep, toRGBColor } from "./utils.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -23,28 +23,28 @@ import {
 import { Text } from "../../ink/components/Text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3mec1atf.js:1871-1875 placement
+//@ chunk-hzenv5c0.js:1872-1876 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3mec1atf.js:1871", () => {
+deferInit("chunk-hzenv5c0.js:1872", () => {
   init_react_production();
 });
-//@ chunk-3mec1atf.js:1875-1879 placement
+//@ chunk-hzenv5c0.js:1876-1880 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3mec1atf.js:1875", () => {
+deferInit("chunk-hzenv5c0.js:1876", () => {
   init_react_production();
 });
-//@ chunk-3mec1atf.js:1879-1883 placement
+//@ chunk-hzenv5c0.js:1880-1884 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-3mec1atf.js:1879", () => {
+deferInit("chunk-hzenv5c0.js:1880", () => {
   init_react_production();
 });
-//@ chunk-3mec1atf.js:1883-1908 layout (2.1.88 match: SETTLED_GREY, 1)
+//@ chunk-hzenv5c0.js:1884-1909 layout (2.1.88 match: SETTLED_GREY, 1)
 var SETTLED_GREY = {
   r: 171,
   g: 43,
   b: 63,
 };
-//@ chunk-3mec1atf.js:1908-5903 fingerprint (2.1.88 match: GlimmerMessage, 0.805)
+//@ chunk-hzenv5c0.js:1909-5910 fingerprint (2.1.88 match: GlimmerMessage, 0.805)
 function GlimmerMessage(props) {
   let $ = useMemoCache(97);
   let {
@@ -96,10 +96,10 @@ function GlimmerMessage(props) {
     let earlyReturn;
     if ($[7] !== rgb || $[8] !== message || $[9] !== stalledIntensity_2) {
       earlyReturn = EARLY_RETURN_SENTINEL;
-      tt: {
-        let interpolated = rgb ? interpolateColor(rgb) : null;
+      F: {
+        let interpolated = rgb ? parseRGB(rgb) : null;
         if (interpolated) {
-          let interpolated_2 = parseRGB(interpolated, SETTLED_GREY, roundToStep(stalledIntensity_2));
+          let interpolated_2 = interpolateColor(interpolated, SETTLED_GREY, roundToStep(stalledIntensity_2));
           let theme = toRGBColor(interpolated_2);
           let textNode;
           if ($[11] !== theme || $[12] !== message) {
@@ -130,7 +130,7 @@ function GlimmerMessage(props) {
             $[18] = fragment;
           } else fragment = $[18];
           earlyReturn = fragment;
-          break tt;
+          break F;
         }
       }
       $[7] = rgb;
@@ -175,11 +175,11 @@ function GlimmerMessage(props) {
     let earlyReturn;
     if ($[27] !== rgb || $[28] !== message || $[29] !== resolvedTheme.warning || $[30] !== thinking) {
       earlyReturn = EARLY_RETURN_SENTINEL;
-      X: {
-        let interpolated = rgb ? interpolateColor(rgb) : null;
-        let warningRGB = interpolateColor(resolvedTheme.warning);
+      J: {
+        let interpolated = rgb ? parseRGB(rgb) : null;
+        let warningRGB = parseRGB(resolvedTheme.warning);
         if (interpolated && warningRGB) {
-          let interpolated_2 = parseRGB(interpolated, warningRGB, roundToStep(thinking));
+          let interpolated_2 = interpolateColor(interpolated, warningRGB, roundToStep(thinking));
           let color = toRGBColor(interpolated_2);
           let textNode;
           if ($[32] !== color || $[33] !== message) {
@@ -210,7 +210,7 @@ function GlimmerMessage(props) {
             $[39] = fragment;
           } else fragment = $[39];
           earlyReturn = fragment;
-          break X;
+          break J;
         }
       }
       $[27] = rgb;
@@ -263,11 +263,11 @@ function GlimmerMessage(props) {
       $[52] !== shimmerColorStr
     ) {
       earlyReturn = EARLY_RETURN_SENTINEL;
-      At: {
-        let interpolated = rgb ? interpolateColor(rgb) : null;
-        let shimmerRGB = shimmerColorStr ? interpolateColor(shimmerColorStr) : null;
+      vt: {
+        let interpolated = rgb ? parseRGB(rgb) : null;
+        let shimmerRGB = shimmerColorStr ? parseRGB(shimmerColorStr) : null;
         if (interpolated && shimmerRGB) {
-          let interpolated_2 = parseRGB(interpolated, shimmerRGB, roundToStep(flashOpacity));
+          let interpolated_2 = interpolateColor(interpolated, shimmerRGB, roundToStep(flashOpacity));
           const t5 = jsxProd_default(Text, {
             color: toRGBColor(interpolated_2),
             children: message,
@@ -291,7 +291,7 @@ function GlimmerMessage(props) {
             $[58] = t7;
           } else t7 = $[58];
           earlyReturn = t7;
-          break At;
+          break vt;
         }
       }
       $[48] = rgb;

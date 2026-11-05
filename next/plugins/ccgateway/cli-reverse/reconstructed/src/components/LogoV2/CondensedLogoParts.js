@@ -3,32 +3,32 @@
  *
  * 2.1.316 新增：精简 Logo 的 Clawd 动画与渲染器切换提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ag5x7vhf.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hnxhr3bs.js (12)
  * attribution: placement 12
  */
+import {
+  init_react_production,
+  useRef,
+  useContext,
+  useReducer,
+  useLayoutEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { CLAWD_BASE_WIDTH, AnimatedClawd } from "./AnimatedClawd.js";
-import { toRGBColor, parseRGB, interpolateColor } from "../Spinner/utils.js";
+import { toRGBColor, interpolateColor, parseRGB } from "../Spinner/utils.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { usePrefersReducedMotion } from "../Spinner/spinnerFlags.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { useResolvedTheme, useTheme } from "../design-system/ThemeProvider.js";
 import { isLightTheme } from "../../utils/theme.js";
 import { useTerminalFocusState } from "../../ink/hooks/use-terminal-focus.js";
-import {
-  useRef,
-  useContext,
-  useReducer,
-  useLayoutEffect,
-  init_react_production,
-} from "../../../vendor/react/cjs/react.production.js";
 import { TerminalSizeContext } from "../../ink/terminalModes.js";
 import { useTerminalViewport, fullRepaintInterval, useAnimationFrame } from "../../ink/components/Input.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";
 import { getTeammateAgentId } from "../../bootstrap/state.js";
 import { sequential } from "../../utils/sequential.js";
-import { chalkForChart, Clawd } from "./Clawd.js";
+import { notAppleTerminal, Clawd } from "./Clawd.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -43,7 +43,12 @@ import { StatusIcon } from "../design-system/StatusIcon.js";
 import { describeMetaKey } from "../../ink/terminal.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:57348-57827 placement
+//@ chunk-hnxhr3bs.js:56799-56803 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:56799", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:56803-57282 placement
 /**
  * 精简 Logo 魔杖/星光动画的常量：帧长、周期、光晕位置与速度、深浅两套调色板（wood/ember/gold/flare 等 RGB）、闪亮/渐变阶段帧数。
  */
@@ -137,7 +142,7 @@ var WAND_CYCLE_FRAMES = WAND_CYCLE_MS / WAND_FRAME_MS;
 var WAND_FLARE_FRAMES = 2;
 var WAND_COOLDOWN_FRAMES = 3;
 var WAND_WARMUP_FRAMES = 4;
-//@ chunk-ag5x7vhf.js:57827-57913 placement
+//@ chunk-hnxhr3bs.js:57282-57368 placement
 function plainWandColors(light) {
   let { wood, gold } = light ? WAND_PALETTE_LIGHT : WAND_PALETTE_DARK;
   return {
@@ -146,12 +151,12 @@ function plainWandColors(light) {
     isFlaring: false,
   };
 }
-//@ chunk-ag5x7vhf.js:57913-58122 placement
+//@ chunk-hnxhr3bs.js:57368-57577 placement
 /**
  * 按时间生成一个 paint(列,行) 函数：以魔杖位置为圆心向外扩散的两道光波，按距离把底色与高光色插值（量化到若干级）。
  */
 function makeWandGlowPainter(ultraColor, frameMs, light) {
-  let base = parseRGB(ultraColor, WHITE_RGB, (light ? WAND_PALETTE_LIGHT : WAND_PALETTE_DARK).crest);
+  let base = interpolateColor(ultraColor, WHITE_RGB, (light ? WAND_PALETTE_LIGHT : WAND_PALETTE_DARK).crest);
   let phase = ((frameMs % WAND_CYCLE_MS) / 1000) * GLOW_WAVE_SPEED;
   return (column, row) => {
     let distance = Math.hypot(column - WAND_GLOW_ORIGIN.column, 2 * (row - WAND_GLOW_ORIGIN.row));
@@ -159,10 +164,10 @@ function makeWandGlowPainter(ultraColor, frameMs, light) {
       glowFalloff(phase - distance),
       GLOW_ECHO.share * glowFalloff(phase - GLOW_ECHO.behind - distance),
     );
-    return toRGBColor(parseRGB(ultraColor, base, Math.round(max * GLOW_LEVELS) / GLOW_LEVELS));
+    return toRGBColor(interpolateColor(ultraColor, base, Math.round(max * GLOW_LEVELS) / GLOW_LEVELS));
   };
 }
-//@ chunk-ag5x7vhf.js:58122-58601 placement
+//@ chunk-hnxhr3bs.js:57577-58056 placement
 /**
  * 按动画时间算魔杖与火焰的颜色：周期开头闪亮、随后渐暗、周期末尾渐亮，其余时间火焰在 ember 与 gold 之间伪随机闪烁；返回 {wand, flame, isFlaring}。
  */
@@ -178,16 +183,16 @@ function getWandColors(elapsedMs, light) {
   if (floored < WAND_FLARE_FRAMES + WAND_COOLDOWN_FRAMES) {
     let cooldownT = (floored - WAND_FLARE_FRAMES + 1) / WAND_COOLDOWN_FRAMES;
     return {
-      wand: toRGBColor(parseRGB(woodLit, wood, cooldownT)),
-      flame: toRGBColor(parseRGB(bright, gold, cooldownT)),
+      wand: toRGBColor(interpolateColor(woodLit, wood, cooldownT)),
+      flame: toRGBColor(interpolateColor(bright, gold, cooldownT)),
       isFlaring: false,
     };
   }
   if (floored >= WAND_CYCLE_FRAMES - WAND_WARMUP_FRAMES) {
     let warmupT = (floored - (WAND_CYCLE_FRAMES - WAND_WARMUP_FRAMES) + 1) / WAND_WARMUP_FRAMES;
     return {
-      wand: toRGBColor(parseRGB(wood, woodLit, warmupT / 2)),
-      flame: toRGBColor(parseRGB(gold, bright, warmupT)),
+      wand: toRGBColor(interpolateColor(wood, woodLit, warmupT / 2)),
+      flame: toRGBColor(interpolateColor(gold, bright, warmupT)),
       isFlaring: false,
     };
   }
@@ -196,34 +201,34 @@ function getWandColors(elapsedMs, light) {
     Math.round((Math.abs(Math.sin(floored_2 * 12.9898) * 43758.5453) % 1) * GLOW_LEVELS) / GLOW_LEVELS;
   return {
     wand: toRGBColor(wood),
-    flame: toRGBColor(parseRGB(ember, gold, emberT)),
+    flame: toRGBColor(interpolateColor(ember, gold, emberT)),
     isFlaring: false,
   };
 }
-//@ chunk-ag5x7vhf.js:58601-58649 placement
+//@ chunk-hnxhr3bs.js:58056-58104 placement
 function glowFalloff(delta) {
   return Math.exp(delta >= 0 ? -delta / GLOW_TRAIL_WIDTH : delta / GLOW_LEAD_WIDTH);
 }
-//@ chunk-ag5x7vhf.js:58649-58677 placement
+//@ chunk-hnxhr3bs.js:58104-58132 placement
 function incrementCounter(count) {
   return count + 1;
 }
-//@ chunk-ag5x7vhf.js:58677-58724 placement
+//@ chunk-hnxhr3bs.js:58132-58179 placement
 var CLAWD_DEFAULT_POSE = {
   eyes: "open",
   arms: "one-up",
   feet: "both",
 };
-//@ chunk-ag5x7vhf.js:58724-60079 placement
+//@ chunk-hnxhr3bs.js:58179-59583 placement
 /**
  * 精简版 Logo 的 Clawd 动画（含 effort ultra 的魔杖/火焰效果、全屏入场动画）。
  */
 function AnimatedClawdLogo(props) {
   let $ = useMemoCache(21);
-  let { fullscreen, entrance, ultra } = props;
+  let { fullscreen, entrance, ultra, fadeColor } = props;
   let prefersReducedMotion = usePrefersReducedMotion();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let ultraColor = interpolateColor(useResolvedTheme().effortUltra);
+  let ultraColor = parseRGB(useResolvedTheme().effortUltra);
   let isLight = isLightTheme(useTheme()[0]);
   let terminalFocusState = useTerminalFocusState();
   let terminalFocusStateRef = useRef(terminalFocusState);
@@ -235,6 +240,7 @@ function AnimatedClawdLogo(props) {
   let [, forceFrame] = useReducer(incrementCounter, 0);
   let animating =
     ultra &&
+    fadeColor === undefined &&
     fullscreen &&
     fullRepaintInterval(WAND_FRAME_MS) === WAND_FRAME_MS &&
     terminalFocusState !== "blurred" &&
@@ -244,7 +250,7 @@ function AnimatedClawdLogo(props) {
     !isScreenReaderEnabled &&
     ultraColor !== null &&
     sequential.level >= 3 &&
-    chalkForChart();
+    notAppleTerminal();
   let [measureRef, frameMs] = useAnimationFrame(animating ? WAND_FRAME_MS : null);
   let wandActive = animating && isVisible;
   let repaintEffect;
@@ -284,10 +290,11 @@ function AnimatedClawdLogo(props) {
   if (isScreenReaderEnabled) {
     return null;
   }
-  let color = ultra ? "effortUltra" : undefined;
+  let color = fadeColor ?? (ultra ? "effortUltra" : undefined);
   let wandGlyph = jsxProd_default(WandGlyph, {
     wand: wandActive ? getWandColors(frameMs, isLight) : plainWandColors(isLight),
     usesTerminalColors: ultraColor === null,
+    fadeColor,
   });
   const BoxComponent = Box;
   let ref;
@@ -344,48 +351,51 @@ function AnimatedClawdLogo(props) {
   } else logo = $[20];
   return logo;
 }
-//@ chunk-ag5x7vhf.js:60079-60496 placement
+//@ chunk-hnxhr3bs.js:59583-60047 placement
 /**
  * 渲染魔杖"╱✦"两个字符，颜色来自 getWandColors；终端配色模式下统一用 warning 色。
  */
 function WandGlyph(props) {
-  let $ = useMemoCache(8);
-  let { wand, usesTerminalColors } = props;
-  const color = usesTerminalColors ? "warning" : wand.wand;
+  let $ = useMemoCache(9);
+  let { wand, usesTerminalColors, fadeColor } = props;
+  const color = fadeColor ?? (usesTerminalColors ? "warning" : wand.wand);
+  const bold = fadeColor === undefined;
   let wandText;
-  if ($[0] !== color) {
+  if ($[0] !== color || $[1] !== bold) {
     wandText = jsxProd_default(Text, {
       color,
-      bold: true,
+      bold,
       children: DIAGONAL,
     });
     $[0] = color;
-    $[1] = wandText;
-  } else wandText = $[1];
-  const color_2 = usesTerminalColors ? "warning" : wand.flame;
+    $[1] = bold;
+    $[2] = wandText;
+  } else wandText = $[2];
+  const color_2 = fadeColor ?? (usesTerminalColors ? "warning" : wand.flame);
+  const bold_2 = fadeColor === undefined && wand.isFlaring;
   let flameText;
-  if ($[2] !== color_2 || $[3] !== wand.isFlaring) {
+  if ($[3] !== color_2 || $[4] !== bold_2) {
     flameText = jsxProd_default(Text, {
       color: color_2,
-      bold: wand.isFlaring,
+      bold: bold_2,
       children: FOUR_POINTED_STAR,
     });
-    $[2] = color_2;
-    $[3] = wand.isFlaring;
-    $[4] = flameText;
-  } else flameText = $[4];
+    $[3] = color_2;
+    $[4] = bold_2;
+    $[5] = flameText;
+  } else flameText = $[5];
   let glyph;
-  if ($[5] !== wandText || $[6] !== flameText) {
+  if ($[6] !== wandText || $[7] !== flameText) {
     glyph = jsxProd_default_2(Text, {
       children: [wandText, flameText],
     });
-    $[5] = wandText;
-    $[6] = flameText;
-    $[7] = glyph;
-  } else glyph = $[7];
+    $[6] = wandText;
+    $[7] = flameText;
+    $[8] = glyph;
+  } else glyph = $[8];
   return glyph;
 }
-//@ chunk-ag5x7vhf.js:60496-60645 placement
+//@ chunk-hnxhr3bs.js:60047-60196 placement
 function justSwitchedRenderer() {
   switch (env.CLAUDE_CODE_TUI_JUST_SWITCHED) {
     case "fullscreen":
@@ -396,7 +406,7 @@ function justSwitchedRenderer() {
       return;
   }
 }
-//@ chunk-ag5x7vhf.js:60645-61634 placement
+//@ chunk-hnxhr3bs.js:60196-61185 placement
 /**
  * 刚切换渲染器（CLAUDE_CODE_TUI_JUST_SWITCHED）后的提示：全屏"flicker-free rendering"使用说明或回退说明。
  */
@@ -487,9 +497,4 @@ function RendererSwitchNotice() {
     }
   }
 }
-//@ chunk-ag5x7vhf.js:61634-61638 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:61634", () => {
-  init_react_production();
-});
 export { justSwitchedRenderer, AnimatedClawdLogo, RendererSwitchNotice };

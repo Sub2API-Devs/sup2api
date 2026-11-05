@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。退出时仍有后台工作的确认对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: placement 4
  */
 import { init_react_production } from "../../vendor/react/cjs/react.production.js";
@@ -25,12 +25,17 @@ import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1690353-1690357 placement
+//@ chunk-czq1j3j2.js:1713042-1713046 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1690353", () => {
+deferInit("chunk-czq1j3j2.js:1713042", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1690357-1690522 placement
+//@ chunk-czq1j3j2.js:1716032-1716036 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1716032", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1736661-1736826 placement
 function renderBackgroundWorkItem(item, key) {
   return jsxProd_default_2(
     Box,
@@ -52,7 +57,7 @@ function renderBackgroundWorkItem(item, key) {
     key,
   );
 }
-//@ chunk-18hwfzwa.js:1690522-1692920 placement
+//@ chunk-czq1j3j2.js:1736826-1739224 placement
 function ExitBackgroundWorkDialog(props) {
   let $ = useMemoCache(52);
   let { items, onExit, onCancel, onBackground } = props;
@@ -268,9 +273,4 @@ function ExitBackgroundWorkDialog(props) {
   } else dialogElement = $[51];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1693038-1693042 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1693038", () => {
-  init_react_production();
-});
 export { ExitBackgroundWorkDialog };

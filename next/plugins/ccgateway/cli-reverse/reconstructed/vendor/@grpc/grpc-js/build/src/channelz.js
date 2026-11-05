@@ -1,8 +1,8 @@
 /**
  * @grpc/grpc-js/build/src/channelz.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @grpc/grpc-js@1.14.4
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
@@ -14,7 +14,7 @@ import { require_admin } from "./admin.js";
 import { require_make_client } from "./make-client.js";
 import { require_proto_loader } from "../../../proto-loader/build/src/index.js";
 
-//@ chunk-pwh5dx3n.js:175802-185435 cjs-fingerprint
+//@ chunk-3k21nfa0.js:175802-185435 cjs-fingerprint
 var require_channelz = __commonJS(function (cjsExports) {
   var __dirname_2 =
     "/home/runner/work/claude-cli-internal/claude-cli-internal/node_modules/@grpc/grpc-js/build/src";

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自托管 runner 的耗时直方图指标
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2cbdmxy9.js (5), chunk-3nztfxrw.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a3r2kq46.js (12), chunk-h7hgs1mf.js (5)
  * attribution: placement 17
  */
 import { RUNNER_ERROR_CATEGORIES } from "../../selfHostedRunner/runnerApiErrors.js";
@@ -15,13 +15,13 @@ import {
 } from "../../../vendor/@opentelemetry/otlp-transformer/build/esm/common/internal.js";
 import { BACKOFF_SCHEDULE } from "./scmConnector.js";
 
-//@ chunk-3nztfxrw.js:17958-18005 placement
+//@ chunk-a3r2kq46.js:18032-18079 placement
 /**
  * 导出值：METRIC_NAME_RE（指标名字符集）。
  */
 var UNKNOWN = "unknown";
 var METRIC_NAME_RE = /^[A-Za-z0-9_.-]{1,64}$/;
-//@ chunk-3nztfxrw.js:18005-18112 placement
+//@ chunk-a3r2kq46.js:18079-18186 placement
 /**
  * 校验指标标签值：为空、unknown、不合法字符、以 - 开头或为 ./.. 时返回 undefined。
  */
@@ -36,7 +36,7 @@ function sanitizeMetricLabel(clientPlatform) {
     return;
   return clientPlatform;
 }
-//@ chunk-3nztfxrw.js:18112-18248 placement
+//@ chunk-a3r2kq46.js:18186-18322 placement
 /**
  * 转义指标标签值：保留字母数字与 _.-，其他字符转成 \\u{...}，最多 128 个字符。
  */
@@ -45,9 +45,9 @@ function escapeMetricValue(value) {
     .map((part) => (/[A-Za-z0-9_.-]/.test(part) ? part : `\\u{${part.codePointAt(0).toString(16)}}`))
     .join("");
 }
-//@ chunk-3nztfxrw.js:18248-18294 placement
+//@ chunk-a3r2kq46.js:18322-18368 placement
 var LATENCY_BUCKETS = [1, 2.5, 5, 10, 20, 40, 80, 160, 320, 640, 1280];
-//@ chunk-3nztfxrw.js:18294-18353 placement
+//@ chunk-a3r2kq46.js:18368-18427 placement
 /**
  * 函数 createHistogram（新建直方图）。
  */
@@ -58,7 +58,7 @@ function createHistogram() {
     sum: 0,
   };
 }
-//@ chunk-3nztfxrw.js:18353-18446 placement
+//@ chunk-a3r2kq46.js:18427-18520 placement
 /**
  * 函数 observeHistogram（记录一次观测）。
  */
@@ -68,20 +68,20 @@ function observeHistogram(sessionInitDurations, durationSec) {
   for (let i = 0; i < LATENCY_BUCKETS.length; i++)
     if (durationSec <= LATENCY_BUCKETS[i]) sessionInitDurations.buckets[i]++;
 }
-//@ chunk-3nztfxrw.js:18446-18535 placement
+//@ chunk-a3r2kq46.js:18520-18609 placement
 /**
  * 函数 escapeLabelValue（转义标签值）。
  */
 function escapeLabelValue(value) {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
 }
-//@ chunk-3nztfxrw.js:18535-18613 placement
+//@ chunk-a3r2kq46.js:18609-18687 placement
 function sanitizeMetricName(name) {
   return name.replace(/[^a-zA-Z0-9_]/g, "_").replace(/^[0-9]/, "_$&");
 }
-//@ chunk-3nztfxrw.js:18613-18653 placement
+//@ chunk-a3r2kq46.js:18687-18727 placement
 var CLAUDE_CODE_SELF_HOSTED_RUNNER = "claude_code_self_hosted_runner";
-//@ chunk-3nztfxrw.js:18653-23942 placement
+//@ chunk-a3r2kq46.js:18727-24596 placement
 /**
  * 以 Prometheus 文本格式输出自托管 runner 指标（runner_id、version、client_label）
  */
@@ -184,6 +184,15 @@ function renderRunnerMetrics(state, now = Date.now()) {
     out += `${prefix}_session_idle_seconds{session_id="${escapeLabelValue(sessionId)}",client_platform="${escapeLabelValue(platform)}"} ${idleSeconds}
 `;
   }
+  out += `# HELP ${prefix}_session_turn_state The turn state the server reports for a session whose tools this runner hosts, in the state label; the value is always 1. busy: a worker holds the session. waiting: a question is waiting for the user. rest: no worker, and the last one reported idle. lost: no worker, and the last one did not report idle, or none has started.
+`;
+  out += `# TYPE ${prefix}_session_turn_state gauge
+`;
+  for (let [sessionId, turnState] of state.sessionTurnState) {
+    let platform = state.sessionClientPlatform.get(sessionId) ?? UNKNOWN;
+    out += `${prefix}_session_turn_state{session_id="${escapeLabelValue(sessionId)}",client_platform="${escapeLabelValue(platform)}",state="${turnState}"} 1
+`;
+  }
   for (let [childId, histogram] of state.childMetrics ?? []) {
     let replaced = histogram.help.replace(/\\/g, "\\\\").replace(/\n/g, "\\n");
     out += `# HELP ${childId} ${replaced}
@@ -196,7 +205,7 @@ function renderRunnerMetrics(state, now = Date.now()) {
   }
   return out;
 }
-//@ chunk-3nztfxrw.js:23942-25109 placement
+//@ chunk-a3r2kq46.js:24596-25763 placement
 function recordRunnerCounter(state, payload) {
   let childMetrics = (state.childMetrics ??= new Map());
   let metrics = payload;
@@ -263,7 +272,7 @@ function recordRunnerCounter(state, payload) {
       }
   }
 }
-//@ chunk-3nztfxrw.js:25109-25317 placement
+//@ chunk-a3r2kq46.js:25763-25971 placement
 /**
  * 从子进程指标中删除某个会话 id 的所有数据点，删空的指标一并移除。
  */
@@ -276,7 +285,7 @@ function dropSessionMetrics(healthState, sessionId) {
     if (entry.points.size === 0) childMetrics.delete(childKey);
   }
 }
-//@ chunk-2cbdmxy9.js:19707-19765 placement
+//@ chunk-h7hgs1mf.js:20537-20595 placement
 function newDurationHistogram() {
   return {
     buckets: BACKOFF_SCHEDULE.map(() => 0),
@@ -284,16 +293,16 @@ function newDurationHistogram() {
     sum: 0,
   };
 }
-//@ chunk-2cbdmxy9.js:19765-19857 placement
+//@ chunk-h7hgs1mf.js:20595-20687 placement
 function observeDuration(spawnHookDurations, durationMs) {
   spawnHookDurations.sum += durationMs;
   spawnHookDurations.count += 1;
   for (let j = 0; j < BACKOFF_SCHEDULE.length; j++)
     if (durationMs <= BACKOFF_SCHEDULE[j]) spawnHookDurations.buckets[j]++;
 }
-//@ chunk-2cbdmxy9.js:19857-19917 placement
+//@ chunk-h7hgs1mf.js:20687-20747 placement
 var SPAWN_SECONDS_BUCKETS = [0.5, 1, 2.5, 5, 10, 20, 40, 80, 160, 320, 640, 1280, 2560, 5120];
-//@ chunk-2cbdmxy9.js:19917-19975 placement
+//@ chunk-h7hgs1mf.js:20747-20805 placement
 function newSpawnHistogram() {
   return {
     buckets: SPAWN_SECONDS_BUCKETS.map(() => 0),
@@ -301,7 +310,7 @@ function newSpawnHistogram() {
     sum: 0,
   };
 }
-//@ chunk-2cbdmxy9.js:19975-20087 placement
+//@ chunk-h7hgs1mf.js:20805-20917 placement
 function observeSpawnSeconds(sessionQueueWaits, seconds) {
   let max = Math.max(0, seconds);
   sessionQueueWaits.sum += max;
@@ -310,19 +319,19 @@ function observeSpawnSeconds(sessionQueueWaits, seconds) {
     if (max <= SPAWN_SECONDS_BUCKETS[j]) sessionQueueWaits.buckets[j]++;
 }
 export {
+  recordRunnerCounter,
+  renderRunnerMetrics,
   sanitizeMetricLabel,
   UNKNOWN,
+  createHistogram,
+  METRIC_NAME_RE,
   escapeMetricValue,
+  observeHistogram,
+  dropSessionMetrics,
   escapeLabelValue,
   SPAWN_SECONDS_BUCKETS,
   observeSpawnSeconds,
   observeDuration,
   newDurationHistogram,
   newSpawnHistogram,
-  recordRunnerCounter,
-  renderRunnerMetrics,
-  createHistogram,
-  METRIC_NAME_RE,
-  observeHistogram,
-  dropSessionMetrics,
 };

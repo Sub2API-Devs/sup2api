@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。提示中的插件提及。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hg7yd2v7.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mbz3p8vk.js (5)
  * attribution: placement 5
  */
 import { randomUUID } from "crypto";
@@ -16,18 +16,18 @@ import { logForDebugging } from "../../debug.js";
 import { errorMessage } from "../../errors.js";
 import { capAdditionalContext } from "../../../services/tools/toolHooks.js";
 
-//@ chunk-hg7yd2v7.js:3544-3553 placement
+//@ chunk-mbz3p8vk.js:3880-3889 placement
 var promptMentionNamespace = {};
-//@ chunk-hg7yd2v7.js:3553-3647 placement
+//@ chunk-mbz3p8vk.js:3889-3983 placement
 __export(promptMentionNamespace, {
   attachedNameOf: () => attachedNameOf,
   contextAttachmentOf: () => contextAttachmentOf,
   default: () => promptMentionNamespace,
   readThroughMention: () => readThroughMention,
 });
-//@ chunk-hg7yd2v7.js:3647-3691 placement
+//@ chunk-mbz3p8vk.js:3983-4027 placement
 var attachedNameOf = (block) => PDF_REFERENCE_KINDS.find((kind) => kind === block?.type) ?? null;
-//@ chunk-hg7yd2v7.js:3727-3862 placement
+//@ chunk-mbz3p8vk.js:4063-4198 placement
 var contextAttachmentOf = (content) => ({
   type: "hook_additional_context",
   content,
@@ -35,7 +35,7 @@ var contextAttachmentOf = (content) => ({
   toolUseID: `hook-${randomUUID()}`,
   hookEvent: "UserPromptSubmit",
 });
-//@ chunk-hg7yd2v7.js:3862-4728 placement
+//@ chunk-mbz3p8vk.js:4198-5064 placement
 async function readThroughMention(mentionContext) {
   if (mentionContext.isIsolated)
     return {

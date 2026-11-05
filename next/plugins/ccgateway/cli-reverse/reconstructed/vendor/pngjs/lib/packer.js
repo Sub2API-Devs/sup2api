@@ -1,8 +1,8 @@
 /**
  * pngjs/lib/packer.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: pngjs@5.0.0
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_crc } from "./crc.js";
 import { require_bitpacker } from "./bitpacker.js";
 import { require_filter_pack } from "./filter-pack.js";
 
-//@ chunk-spjgqa4y.js:40773-42993 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:40773-42993 cjs-fingerprint
 var require_packer = __commonJS(function (cjsExports, cjsModule) {
   var constants = require_constants();
   var CrcStream = require_crc();

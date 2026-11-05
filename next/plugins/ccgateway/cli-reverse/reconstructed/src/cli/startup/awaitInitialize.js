@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：--await-initialize：读取 stream-json stdin 的 initialize 行并应用插件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-151tygw9.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-405cd95w.js (18)
  * attribution: placement 18
  */
 import { resolve } from "path";
@@ -31,14 +31,14 @@ import { logError } from "../../utils/log.js";
 import { cliErrorAfterAnalyticsFlush } from "../exit.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-151tygw9.js:1207-1369 placement
+//@ chunk-405cd95w.js:1272-1434 placement
 var MAX_INITIALIZE_LINE_BYTES; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var FIRST_LINE_TOO_LONG;
 var STDIN_STASH_CHUNK;
 var initializeWait;
 var stdinPump;
 var INITIALIZE_REQUEST_SCHEMA;
-deferInit("chunk-151tygw9.js:1207", () => {
+deferInit("chunk-405cd95w.js:1272", () => {
   MAX_INITIALIZE_LINE_BYTES = 268435456;
   FIRST_LINE_TOO_LONG = Symbol("first line too long");
   STDIN_STASH_CHUNK = 65536;
@@ -52,7 +52,7 @@ deferInit("chunk-151tygw9.js:1207", () => {
     }),
   );
 });
-//@ chunk-151tygw9.js:1369-1585 placement
+//@ chunk-405cd95w.js:1434-1650 placement
 /**
  * --await-initialize：在 stdin 上等待第一个 initialize 控制请求后再继续启动。
  */
@@ -75,13 +75,13 @@ function startAwaitInitialize(createGenerator) {
     });
   initializeWait.then(() => pumpStdin(stdinPump));
 }
-//@ chunk-151tygw9.js:1585-1629 placement
+//@ chunk-405cd95w.js:1650-1694 placement
 function startStdinPump(createGenerator) {
   if (stdinPump) return;
   let stdinPump_2 = createStdinPump(createGenerator);
   pumpStdin(stdinPump_2);
 }
-//@ chunk-151tygw9.js:1629-1861 placement
+//@ chunk-405cd95w.js:1694-1926 placement
 function watchStdinLines(watcher) {
   let pump = stdinPump;
   if (!pump || !pump.pumping || pump.capped || pump.adopted || pump.watch) return;
@@ -96,11 +96,11 @@ function watchStdinLines(watcher) {
   if (pump.ended || pump.error !== undefined) watcher.ended();
   return () => endWatch(pump, watch);
 }
-//@ chunk-151tygw9.js:1861-1910 placement
+//@ chunk-405cd95w.js:1926-1975 placement
 function awaitInitializeResult() {
   return initializeWait ?? Promise.resolve(undefined);
 }
-//@ chunk-151tygw9.js:1910-2007 placement
+//@ chunk-405cd95w.js:1975-2072 placement
 function adoptStdinStream() {
   let pump = stdinPump;
   if (!pump || pump.adopted) return;
@@ -108,7 +108,7 @@ function adoptStdinStream() {
   pump.adopted = true;
   return replayStdinStash(pump);
 }
-//@ chunk-151tygw9.js:2007-2335 placement
+//@ chunk-405cd95w.js:2072-2400 placement
 function applyInitializePlugins(plugins) {
   let parsed = array(SDKLocalMessageSchema()).optional().safeParse(plugins);
   if (!parsed.success) return false;
@@ -125,7 +125,7 @@ function applyInitializePlugins(plugins) {
       : dirs.has(resolve(baseDir, plugin.path)),
   );
 }
-//@ chunk-151tygw9.js:2335-2476 placement
+//@ chunk-405cd95w.js:2400-2541 placement
 function createStdinPump(createGenerator) {
   let pump = {
     generator: createGenerator(),
@@ -141,7 +141,7 @@ function createStdinPump(createGenerator) {
   stdinPump = pump;
   return pump;
 }
-//@ chunk-151tygw9.js:2476-2787 placement
+//@ chunk-405cd95w.js:2541-2852 placement
 async function readFirstStdinLine(stdinPump) {
   let buffer = "";
   for (;;) {
@@ -168,7 +168,7 @@ async function readFirstStdinLine(stdinPump) {
     buffer += inflight.value;
   }
 }
-//@ chunk-151tygw9.js:2787-3083 placement
+//@ chunk-405cd95w.js:2852-3148 placement
 async function pumpStdin(pump) {
   pump.pumping = true;
   try {
@@ -185,7 +185,7 @@ async function pumpStdin(pump) {
   }
   if (pump.ended || pump.error !== undefined) pump.watch?.watcher.ended();
 }
-//@ chunk-151tygw9.js:3083-3539 placement
+//@ chunk-405cd95w.js:3148-3604 placement
 function routeStdinChunk(pump, chunk) {
   let watch = pump.watch;
   if (!watch) {
@@ -229,19 +229,19 @@ function routeStdinChunk(pump, chunk) {
     watch.passing = true;
   }
 }
-//@ chunk-151tygw9.js:3539-3615 placement
+//@ chunk-405cd95w.js:3604-3680 placement
 function flushHeldWatchItems(pump, watch) {
   for (let item of watch.held) pump.stash.push(item);
   watch.held = [];
   watch.heldChars = 0;
 }
-//@ chunk-151tygw9.js:3615-3675 placement
+//@ chunk-405cd95w.js:3680-3740 placement
 function endWatch(pump, watch) {
   if (pump.watch !== watch) return;
   flushHeldWatchItems(pump, watch);
   pump.watch = undefined;
 }
-//@ chunk-151tygw9.js:3675-3986 placement
+//@ chunk-405cd95w.js:3740-4051 placement
 async function* replayStdinStash(pump) {
   let pumped = false;
   try {
@@ -258,7 +258,7 @@ async function* replayStdinStash(pump) {
     if (!pumped && !pump.ended) pump.generator.return(undefined).catch(() => {});
   }
 }
-//@ chunk-151tygw9.js:3986-5326 placement
+//@ chunk-405cd95w.js:4051-5445 placement
 function parseInitializeLine(line) {
   if (line === null) {
     logForDebugging("--await-initialize: stdin ended before an initialize request arrived", {
@@ -285,6 +285,7 @@ function parseInitializeLine(line) {
     logFeatureBad("sdk_launch_initialize", "first_line_not_json");
     return {
       kind: "violation",
+      cause: "first_line",
       message:
         "Error: --await-initialize requires the initialize control request as the first stdin line, and the first line is not valid JSON.",
     };
@@ -294,6 +295,7 @@ function parseInitializeLine(line) {
     logFeatureBad("sdk_launch_initialize", "first_line_not_initialize");
     return {
       kind: "violation",
+      cause: "first_line",
       message:
         "Error: --await-initialize requires the initialize control request as the first stdin line, and the first line is a different message.",
     };
@@ -303,6 +305,7 @@ function parseInitializeLine(line) {
     logFeatureBad("sdk_launch_initialize", "plugins_malformed");
     return {
       kind: "violation",
+      cause: "plugins",
       message:
         "Error: initialize.plugins must be an array of { type: 'local', path: string, skipMcpDiscovery?: boolean } entries.",
     };
@@ -315,18 +318,18 @@ function parseInitializeLine(line) {
     pluginDirsNoMcp: entries.filter((plugin) => plugin.skipMcpDiscovery).map((plugin) => plugin.path),
   };
 }
-//@ chunk-151tygw9.js:5326-5398 placement
+//@ chunk-405cd95w.js:5445-5517 placement
 var STDIN_LIMITS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var STDIN_MESSAGES_MARKER;
-deferInit("chunk-151tygw9.js:5326", () => {
+deferInit("chunk-405cd95w.js:5445", () => {
   STDIN_LIMITS = 10485760;
   STDIN_MESSAGES_MARKER = Symbol("stream-json messages of this process's stdin");
 });
-//@ chunk-151tygw9.js:5398-5449 placement
+//@ chunk-405cd95w.js:5517-5568 placement
 function isStreamJsonStdin(stream) {
   return typeof stream !== "string" && STDIN_MESSAGES_MARKER in stream;
 }
-//@ chunk-151tygw9.js:5449-5908 placement
+//@ chunk-405cd95w.js:5568-6027 placement
 async function* readStreamJsonStdin() {
   try {
     process.stdin.setEncoding("utf8");
@@ -347,14 +350,14 @@ async function* readStreamJsonStdin() {
   }
 }
 export {
+  isStreamJsonStdin,
+  applyInitializePlugins,
   adoptStdinStream,
   readStreamJsonStdin,
   STDIN_MESSAGES_MARKER,
   STDIN_LIMITS,
   startAwaitInitialize,
   awaitInitializeResult,
-  isStreamJsonStdin,
-  applyInitializePlugins,
   startStdinPump,
   watchStdinLines,
 };

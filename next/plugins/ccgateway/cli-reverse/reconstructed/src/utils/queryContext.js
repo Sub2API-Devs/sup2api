@@ -3,9 +3,9 @@
  *
  * 获取系统提示各部分（默认提示、用户/系统上下文），构造旁路问题的回退参数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/queryContext.ts
- * pieces: chunk-dmpxe2vf.js (2)
+ * pieces: chunk-t4k9zryy.js (2)
  * attribution: facade-exports 2
  */
 import { getSystemPrompt, buildMemoryDirectorySection } from "../constants/prompts.js";
@@ -25,7 +25,7 @@ import { createTaskFramework } from "./task/framework.js";
 import { createColorAssigner } from "../tools/AgentTool/agentColorManager.js";
 import { fieldAccessor } from "../state/sliceHelpers.js";
 
-//@ chunk-dmpxe2vf.js:583-1110 facade-exports (2.1.88 match: fetchSystemPromptParts, 0.661)
+//@ chunk-t4k9zryy.js:583-1110 facade-exports (2.1.88 match: fetchSystemPromptParts, 0.661)
 /**
  * 获取系统提示的各部分（默认提示、用户上下文、系统上下文），供旁路问题等复用。
  */
@@ -73,7 +73,7 @@ async function fetchSystemPromptParts({
     systemContext,
   };
 }
-//@ chunk-dmpxe2vf.js:1110-2919 facade-exports (2.1.88 match: buildSideQuestionFallbackParams, 0.628)
+//@ chunk-t4k9zryy.js:1110-2919 facade-exports (2.1.88 match: buildSideQuestionFallbackParams, 0.622)
 async function buildSideQuestionFallbackParams({
   session,
   messageQueue,

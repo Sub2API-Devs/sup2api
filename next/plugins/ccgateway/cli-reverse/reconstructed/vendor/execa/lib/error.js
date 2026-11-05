@@ -1,14 +1,14 @@
 /**
  * execa/lib/error.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: execa@8.0.1
- * pieces: chunk-m4p5zn6n.js (1)
+ * pieces: chunk-t889g22j.js (1)
  * attribution: esm-fingerprint 1
  */
-import { default as Mr } from "process";
+import { default as Fo } from "process";
 import { signalsByName } from "../../human-signals/build/src/main.js";
 
-//@ chunk-m4p5zn6n.js:14620-15759 esm-fingerprint
+//@ chunk-t889g22j.js:14619-15758 esm-fingerprint
 var getErrorPrefix = ({ timedOut, timeout, errorCode, signal, signalDescription, exitCode, isCanceled }) => {
   if (timedOut) return `timed out after ${timeout} milliseconds`;
   if (isCanceled) return "was canceled";
@@ -30,7 +30,7 @@ var makeError = ({
   isCanceled,
   killed,
   parsed: {
-    options: { timeout, cwd = Mr.cwd() },
+    options: { timeout, cwd = Fo.cwd() },
   },
 }) => {
   exitCode = exitCode === null ? undefined : exitCode;

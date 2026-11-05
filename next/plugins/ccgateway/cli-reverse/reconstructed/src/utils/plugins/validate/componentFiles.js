@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件目录校验：组件文件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5aas12zq.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6vxyfwtv.js (16)
  * attribution: placement 14, sole-consumer 2
  */
 import * as pathModule from "path";
@@ -24,7 +24,7 @@ import { ONE_MIB } from "../schemas.js";
 import { jsonParse } from "../../slowOperations.js";
 import { isPositiveSafeInteger, isValidMcpOAuthConfig } from "../../../services/mcp/types.js";
 
-//@ chunk-5aas12zq.js:32821-34820 placement
+//@ chunk-6vxyfwtv.js:33108-35107 placement
 /**
  * 读取并校验插件的 MCP 配置（.mcp.json 与 manifest.mcpServers 引用的文件）和 hooks 文件：不可读、JSON 语法错、 结构错误、路径穿越都记发现项；同时记录是否连接远程服务（http/sse/ws MCP 或 http 钩子）。
  */
@@ -182,7 +182,7 @@ async function checkComponentFiles(rootDir, manifest, findings) {
     },
   };
 }
-//@ chunk-5aas12zq.js:34820-36340 placement
+//@ chunk-6vxyfwtv.js:35107-36627 placement
 /**
  * hooks 文件结构校验（modules、description、surface、hooks 包装）。
  */
@@ -243,7 +243,7 @@ function checkHooksFileShape(parsed) {
         rule: "HOOKS_SCHEMA_INVALID",
       };
 }
-//@ chunk-5aas12zq.js:36340-36781 placement
+//@ chunk-6vxyfwtv.js:36627-37068 placement
 /**
  * MCP/hooks 文件 JSON 无效（BOM、非 UTF-8、过深）的发现项。
  */
@@ -269,7 +269,7 @@ function jsonInvalidFinding(relPath, kind, invalid) {
     fix: relPath === HOOKS_HOOKS_JSON ? `${fix} A broken hooks.json fails the whole plugin.` : fix,
   };
 }
-//@ chunk-5aas12zq.js:36781-37110 placement
+//@ chunk-6vxyfwtv.js:37068-37397 placement
 /**
  * MCP 配置须是对象，mcpServers 须是对象。
  */
@@ -291,7 +291,7 @@ function checkMcpConfigShape(relPath, parsed) {
       )
     : undefined;
 }
-//@ chunk-5aas12zq.js:37110-38536 placement
+//@ chunk-6vxyfwtv.js:37397-38823 placement
 /**
  * MCP/hooks 文件未读（过大、链接、非普通文件）的发现项。
  */
@@ -345,26 +345,26 @@ function unreadFileFindings(relPath, kind, unread) {
     },
   ];
 }
-//@ chunk-5aas12zq.js:38536-38576 placement
+//@ chunk-6vxyfwtv.js:38823-38863 placement
 var MCP_JSON_RELATIVE_PATH = ".mcp.json";
 var HOOKS_HOOKS_JSON = "hooks/hooks.json";
-//@ chunk-5aas12zq.js:38576-38672 placement
+//@ chunk-6vxyfwtv.js:38863-38959 placement
 function normalizeRelativeComponentPath(ref) {
   let replaced = pathModule.posix.normalize(ref.slice(2)).replace(/^\/+|\/+$/g, "");
   return replaced === "" ? "." : replaced;
 }
-//@ chunk-5aas12zq.js:38672-38769 placement
+//@ chunk-6vxyfwtv.js:38959-39056 placement
 function normalizeComponentFileRef(ref) {
   if (typeof ref !== "string" || !ref.startsWith("./") || ref.includes("..")) return;
   return normalizeRelativeComponentPath(ref);
 }
-//@ chunk-5aas12zq.js:38769-38888 placement
+//@ chunk-6vxyfwtv.js:39056-39175 placement
 function normalizeJsonRefPath(ref) {
   if (typeof ref !== "string" || !ref.startsWith("./") || !ref.endsWith(".json") || ref.includes(".."))
     return;
   return normalizeRelativeComponentPath(ref);
 }
-//@ chunk-5aas12zq.js:38888-39335 placement
+//@ chunk-6vxyfwtv.js:39175-39622 placement
 /**
  * JSON 编码问题说明与最大嵌套深度。
  */
@@ -383,7 +383,7 @@ var JSON_ENCODING_PROBLEMS = {
   },
 };
 var MAX_JSON_DEPTH = 64;
-//@ chunk-5aas12zq.js:39335-39503 placement
+//@ chunk-6vxyfwtv.js:39622-39790 placement
 function detectJsonEncodingProblem(bytes) {
   let kind;
   if (bytes[0] === 239 && bytes[1] === 187 && bytes[2] === 191) kind = "bom";
@@ -396,7 +396,7 @@ function detectJsonEncodingProblem(bytes) {
         ...JSON_ENCODING_PROBLEMS[kind],
       };
 }
-//@ chunk-5aas12zq.js:39503-39716 placement
+//@ chunk-6vxyfwtv.js:39790-40003 placement
 function exceedsJsonDepth(bytes, maxDepth) {
   let depth = 0;
   let inString = false;
@@ -412,7 +412,7 @@ function exceedsJsonDepth(bytes, maxDepth) {
     } else if ((byte === 125 || byte === 93) && depth > 0) depth--;
   return false;
 }
-//@ chunk-5aas12zq.js:39716-40120 placement
+//@ chunk-6vxyfwtv.js:40003-40407 placement
 /**
  * 安全读组件 JSON 文件并解析。
  */
@@ -452,7 +452,7 @@ async function readJsonComponentFile(rootDir, relPath) {
     };
   }
 }
-//@ chunk-5aas12zq.js:40120-40319 sole-consumer
+//@ chunk-6vxyfwtv.js:40407-40606 sole-consumer
 /**
  * listValidMcpServerEntries：接受 {mcpServers:{…}} 或裸对象，按名排序，只返回通过 isValidMcpServerConfig 的 {name, config}。
  */
@@ -472,7 +472,7 @@ function listValidMcpServerEntries(parsed) {
   }
   return entries;
 }
-//@ chunk-5aas12zq.js:40319-41509 sole-consumer
+//@ chunk-6vxyfwtv.js:40606-41796 sole-consumer
 /**
  * isValidMcpServerConfig：不依赖 zod 的手写配置校验，按 type 检查 stdio/sse/http/streamable-http/ws/sse-ide/ws-ide/sdk/claudeai-proxy 必需字段与 timeout/alwaysLoad/oauth/tools/toolPermissions 形状。
  */
@@ -531,7 +531,7 @@ function isValidMcpServerConfig(config) {
       return false;
   }
 }
-//@ chunk-5aas12zq.js:41940-42139 placement
+//@ chunk-6vxyfwtv.js:42227-42426 placement
 /**
  * isValidToolPolicyEntry：{name, permission_policy?: always_allow|always_ask|always_deny}。
  */

@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：应用 SDK 传入的标志设置副作用（工作区信任、思考设置恢复、回退判定）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (21)
- * attribution: placement 21
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (22)
+ * attribution: placement 21, layout 1
  */
 import { isDeepStrictEqual } from "util";
 import { isAbsolute } from "path";
@@ -53,6 +53,8 @@ import {
 } from "../../utils/model/defaultModel.js";
 import { isModelAllowed } from "../../utils/model/modelAllowlist.js";
 import { parseUserSpecifiedModel } from "../../utils/model/modelDisplay.js";
+import { isAutoModeInUse } from "../../utils/permissions/permissionSetup.js";
+import { isAutoModeCapableModel } from "./hostSettingsClaims.js";
 import {
   REWIND_REQUEST_MAX_AGE_MS as REWIND_REQUEST_MAX_AGE_MS_2,
   rewindRequestAge,
@@ -60,12 +62,13 @@ import {
 import { parseIsoTimestamp } from "../../utils/parseIsoTimestamp.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { isReorderedRow, UUID_PREFIX_LENGTH, isModelCommandMessage } from "../../utils/messages.js";
-import { isExactReplToolName } from "../../tools/REPLTool/constants.js";
+import { isEvalToolCallName } from "../../tools/REPLTool/constants.js";
 import { isCompactBoundaryMessage } from "../../services/projects/threadRows.js";
 import { findRewindTargetIndex } from "./rewindStandIn.js";
 import { getMessageIdentityUuids } from "../queuedCommands.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:567863-568159 placement
+//@ chunk-0yw3taqg.js:454633-454929 placement
 /**
  * 校验 SDK apply_flag_settings 请求：必须是对象、嵌套深度受限、键合法。
  */
@@ -86,7 +89,7 @@ function validateApplyFlagSettings(settings) {
     settings: normalized,
   };
 }
-//@ chunk-tyg7f3ek.js:568159-568493 placement
+//@ chunk-0yw3taqg.js:454929-455263 placement
 /**
  * 合并并应用 SDK 传入的 flag 设置（规范化 null 别名、写入内联 flagSettings）。
  */
@@ -117,7 +120,7 @@ function applyFlagSettings(settings, isUnchanged) {
   }
   if ("viewMode" in settings) invalidateFocusModeSection();
 }
-//@ chunk-tyg7f3ek.js:568493-569196 placement
+//@ chunk-0yw3taqg.js:455323-456026 placement
 /**
  * 处理 flag 设置中的 effortLevel / ultracode / 模型等需要即时生效的键。
  */
@@ -167,7 +170,7 @@ function applyFlagSettingsSideEffects(settings, host) {
     );
   return "effortLevel" in settings || ultracode !== undefined;
 }
-//@ chunk-tyg7f3ek.js:569196-569377 placement
+//@ chunk-0yw3taqg.js:456026-456207 placement
 function exceedsNestingDepth(value, maxDepth) {
   let level = [value];
   for (let j = 1; level.length > 0; j++) {
@@ -180,7 +183,7 @@ function exceedsNestingDepth(value, maxDepth) {
   }
   return false;
 }
-//@ chunk-tyg7f3ek.js:569377-569877 placement
+//@ chunk-0yw3taqg.js:456207-456707 placement
 function normalizeFallbackModelsSetting(settings) {
   let value = settings[ACCESSFALLBACKMODELS];
   if (value == null || isAccessFallbackModelsData(value)) return settings;
@@ -195,7 +198,7 @@ function normalizeFallbackModelsSetting(settings) {
     [ACCESSFALLBACKMODELS]: null,
   };
 }
-//@ chunk-tyg7f3ek.js:569877-570152 placement
+//@ chunk-0yw3taqg.js:611465-611740 placement
 function readRecordedThinkingSettings(restoredWorkerState) {
   if (restoredWorkerState === null || restoredWorkerState.readFailed)
     return {
@@ -217,7 +220,7 @@ function readRecordedThinkingSettings(restoredWorkerState) {
     malformed: !tokensValid || !displayValid,
   };
 }
-//@ chunk-tyg7f3ek.js:570152-570598 placement
+//@ chunk-0yw3taqg.js:611740-612186 placement
 var THINKING_RECORD_OUTCOME_TEXT = {
   applied: "thinking budget and display in the worker record: applied",
   display_refused:
@@ -226,7 +229,7 @@ var THINKING_RECORD_OUTCOME_TEXT = {
   failed:
     "restoring thinking failed: nothing from the worker record was applied, nor a display handed over separately at start-up",
 };
-//@ chunk-tyg7f3ek.js:570598-571319 placement
+//@ chunk-0yw3taqg.js:612186-612912 placement
 /**
  * 从 worker 记录恢复思考预算与显示方式，并汇报应用结果。
  */
@@ -277,7 +280,7 @@ function restoreThinkingSettingsFromRecord({ launch, startupDisplay, recorded, r
     },
   };
 }
-//@ chunk-tyg7f3ek.js:571405-572616 placement
+//@ chunk-0yw3taqg.js:612998-614209 placement
 /**
  * 处理 SDK 的 workspaceTrust：accepted 且目录为绝对路径时记录信任。
  */
@@ -343,7 +346,7 @@ async function applyWorkspaceTrust(request, context) {
   }
   return reportOutcome(recorded ? "recorded" : "not_durable", recorded);
 }
-//@ chunk-tyg7f3ek.js:572616-572750 placement
+//@ chunk-0yw3taqg.js:614209-614343 placement
 function resolveAllowedModelPick(pick) {
   if (typeof pick !== "string") return;
   let model = pick.trim().toLowerCase() === "default" ? getDefaultMainLoopModel() : pick;
@@ -352,7 +355,7 @@ function resolveAllowedModelPick(pick) {
     ? model
     : undefined;
 }
-//@ chunk-tyg7f3ek.js:572750-572859 placement
+//@ chunk-0yw3taqg.js:614343-614452 placement
 function applyModelSetting(pick, setEngineState) {
   let allowedModelPick = resolveAllowedModelPick(pick);
   if (allowedModelPick === undefined) return;
@@ -366,7 +369,7 @@ function applyModelSetting(pick, setEngineState) {
         },
   );
 }
-//@ chunk-tyg7f3ek.js:572859-573018 placement
+//@ chunk-0yw3taqg.js:614452-614611 placement
 function modelToRestoreAfterRefusal({ refused, launch, active, restored, turnDispatched }) {
   if (turnDispatched || launch === undefined || active !== launch || !restored) return;
   let userSpecifiedModel = parseUserSpecifiedModel(launch);
@@ -375,27 +378,44 @@ function modelToRestoreAfterRefusal({ refused, launch, active, restored, turnDis
     ? resolveAllowedModelPick(restored)
     : undefined;
 }
-//@ chunk-tyg7f3ek.js:573018-573523 placement
+//@ chunk-0yw3taqg.js:614611-614759 layout
+function withAutoModeCapableDropGuard(modelControl, getAppState) {
+  let { dropUnconfirmedLaunchModel } = modelControl;
+  if (dropUnconfirmedLaunchModel === undefined) return modelControl;
+  return {
+    ...modelControl,
+    dropUnconfirmedLaunchModel: (refusedModel) =>
+      dropUnconfirmedLaunchModel(
+        refusedModel,
+        (model) => !isAutoModeInUse(getAppState()) || isAutoModeCapableModel(model),
+      ),
+  };
+}
+//@ chunk-0yw3taqg.js:614759-615264 placement
 /**
  * rewind 请求的年龄上限（沿用 turnHandoff 的 30 分钟）：超龄即拒绝，避免执行过期的 rewind 请求。
  */
-var REWIND_REFUSAL_TEXT = {
-  commands_queued: "commands queued",
-  prompt_pending: "prompt pending",
-  turn_running: "turn running",
-  target_not_found: "target not found",
-  stale_target: "stale target",
-  unseen_later_turn: "unseen later turn",
-  poll_tool_result_target: "poll tool_result target",
-  target_splits_tool_call: "target splits a tool call",
-  delivered_poll_events_in_range: "delivered poll events in range",
-  persist_failed: "failed to persist rewind anchor",
-  state_changed: "state changed",
-  usage_limited: "usage limited",
-  expired: "expired",
-};
-var REWIND_REQUEST_MAX_AGE_MS = REWIND_REQUEST_MAX_AGE_MS_2;
-//@ chunk-tyg7f3ek.js:573523-573895 placement
+var REWIND_REFUSAL_TEXT; // deferred: uses REWIND_REQUEST_MAX_AGE_MS (../remoteIO/turnHandoff.js) of its import cycle while loading; runs once the cycle is complete
+var REWIND_REQUEST_MAX_AGE_MS;
+deferInit("chunk-0yw3taqg.js:614759", () => {
+  REWIND_REFUSAL_TEXT = {
+    commands_queued: "commands queued",
+    prompt_pending: "prompt pending",
+    turn_running: "turn running",
+    target_not_found: "target not found",
+    stale_target: "stale target",
+    unseen_later_turn: "unseen later turn",
+    poll_tool_result_target: "poll tool_result target",
+    target_splits_tool_call: "target splits a tool call",
+    delivered_poll_events_in_range: "delivered poll events in range",
+    persist_failed: "failed to persist rewind anchor",
+    state_changed: "state changed",
+    usage_limited: "usage limited",
+    expired: "expired",
+  };
+  REWIND_REQUEST_MAX_AGE_MS = REWIND_REQUEST_MAX_AGE_MS_2;
+});
+//@ chunk-0yw3taqg.js:615264-615636 placement
 function checkRewindExpiry({ storedAt, serviceNow, newestFrameAt }, expiresAt) {
   let expiresAtMs = typeof expiresAt === "string" ? parseIsoTimestamp(expiresAt) : Number.NaN;
   if (Number.isNaN(expiresAtMs))
@@ -414,7 +434,7 @@ function checkRewindExpiry({ storedAt, serviceNow, newestFrameAt }, expiresAt) {
     secondsLeftWhenStored: storedAt === undefined ? undefined : Math.floor((expiresAtMs - storedAt) / 1000),
   };
 }
-//@ chunk-tyg7f3ek.js:573895-574504 placement
+//@ chunk-0yw3taqg.js:615636-616245 placement
 /**
  * 判断 rewind 请求的 expires_at 是否已过期（以服务端时间或最新帧时间为准）。
  */
@@ -449,7 +469,7 @@ function rewindExpiryVerdict(request, expiresAt, onChecked) {
     });
   return expired || check?.outcome === "refused" ? rewindRefusal("expired") : undefined;
 }
-//@ chunk-tyg7f3ek.js:574504-574641 placement
+//@ chunk-0yw3taqg.js:616245-616382 placement
 function rewindRefusal(reason, isolationLatch) {
   return {
     rewound: false,
@@ -462,7 +482,7 @@ function rewindRefusal(reason, isolationLatch) {
     }),
   };
 }
-//@ chunk-tyg7f3ek.js:574641-574720 placement
+//@ chunk-0yw3taqg.js:616382-616461 placement
 function usageLimitedRewindRefusal(targetFound, latch) {
   return {
     ...rewindRefusal("usage_limited", latch),
@@ -471,7 +491,7 @@ function usageLimitedRewindRefusal(targetFound, latch) {
     }),
   };
 }
-//@ chunk-tyg7f3ek.js:574720-574990 placement
+//@ chunk-0yw3taqg.js:616461-616731 placement
 var REWIND_REFUSAL_RETRYABLE = {
   commands_queued: true,
   prompt_pending: false,
@@ -487,7 +507,7 @@ var REWIND_REFUSAL_RETRYABLE = {
   usage_limited: false,
   expired: true,
 };
-//@ chunk-tyg7f3ek.js:574990-575226 placement
+//@ chunk-0yw3taqg.js:616731-616967 placement
 function findPersistAnchor(messages, index) {
   let persistAnchor = null;
   let precedingAssistantUuid = null;
@@ -507,16 +527,16 @@ function findPersistAnchor(messages, index) {
     precedingAssistantUuid,
   };
 }
-//@ chunk-tyg7f3ek.js:575226-575757 placement (2.1.88 match: buildTranscriptEntries, 0.77)
+//@ chunk-0yw3taqg.js:616967-617498 placement
 function isAwaitingToolResultAnchor(messages, index) {
   for (let j = index - 1; j >= 0; j--) {
     let message = messages[j];
     if (message.type === "user" || message.type === "assistant") {
       let exactReplToolUseIds = new Set();
-      for (let msg of messages)
-        if (msg.type === "assistant" && Array.isArray(msg.message.content)) {
-          for (let block of msg.message.content)
-            if (block?.type === "tool_use" && isExactReplToolName(block.name))
+      for (let message of messages)
+        if (message.type === "assistant" && Array.isArray(message.message.content)) {
+          for (let block of message.message.content)
+            if (block?.type === "tool_use" && isEvalToolCallName(block.name))
               exactReplToolUseIds.add(block.id);
         }
       return (
@@ -525,7 +545,8 @@ function isAwaitingToolResultAnchor(messages, index) {
         message.type === "user" &&
         Array.isArray(message.message.content) &&
         message.message.content.some(
-          (block) => block?.type === "tool_result" && !exactReplToolUseIds.has(block.tool_use_id),
+          (contentBlock) =>
+            contentBlock?.type === "tool_result" && !exactReplToolUseIds.has(contentBlock.tool_use_id),
         )
       );
     }
@@ -533,7 +554,7 @@ function isAwaitingToolResultAnchor(messages, index) {
   }
   return false;
 }
-//@ chunk-tyg7f3ek.js:575757-575930 placement
+//@ chunk-0yw3taqg.js:617498-617671 placement
 function isRewindTargetQueued(messages, targetUuid, lastSeenUserMessageUuid) {
   if (typeof lastSeenUserMessageUuid !== "string") return false;
   let sliced = lastSeenUserMessageUuid.slice(0, UUID_PREFIX_LENGTH);
@@ -550,6 +571,7 @@ export {
   readRecordedThinkingSettings,
   restoreThinkingSettingsFromRecord,
   modelToRestoreAfterRefusal,
+  withAutoModeCapableDropGuard,
   applyWorkspaceTrust,
   rewindExpiryVerdict,
   REWIND_REFUSAL_RETRYABLE,

@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/credential-aws-pairs.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (5)
+ * pieces: chunk-qg41pqt6.js (5)
  * attribution: esm-fingerprint 5
  */
 import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
@@ -14,11 +14,11 @@ import {
   signSigv4,
 } from "./aws-sigv4.js";
 
-//@ chunk-fq0cr76a.js:714642-714719 esm-fingerprint
+//@ chunk-qg41pqt6.js:716317-716394 esm-fingerprint
 var AWS_ACCESS_KEY_ID_VAR = "AWS_ACCESS_KEY_ID";
 var AWS_SECRET_ACCESS_KEY_VAR = "AWS_SECRET_ACCESS_KEY";
 var AWS_SESSION_TOKEN_VAR = "AWS_SESSION_TOKEN";
-//@ chunk-fq0cr76a.js:714719-714935 esm-fingerprint
+//@ chunk-qg41pqt6.js:716394-716610 esm-fingerprint
 class AwsPairRegistry {
   constructor() {
     this.bySentinel = new Map();
@@ -36,7 +36,7 @@ class AwsPairRegistry {
     this.bySentinel.clear();
   }
 }
-//@ chunk-fq0cr76a.js:714935-716340 esm-fingerprint
+//@ chunk-qg41pqt6.js:716610-718017 esm-fingerprint
 function registerAwsPairs(envVars, awsPairs, allowedDomains, setEnvVars, registry, env = process.env) {
   let specs = [...(awsPairs ?? [])];
   let explicitNames = new Set(
@@ -102,7 +102,7 @@ function registerAwsPairs(envVars, awsPairs, allowedDomains, setEnvVars, registr
     );
   }
 }
-//@ chunk-fq0cr76a.js:716340-716450 esm-fingerprint
+//@ chunk-qg41pqt6.js:718017-718127 esm-fingerprint
 function resolveSigv4Policies(config) {
   return {
     streaming: config?.streaming ?? "deny",
@@ -110,7 +110,7 @@ function resolveSigv4Policies(config) {
     sigv4a: config?.sigv4a ?? "deny",
   };
 }
-//@ chunk-fq0cr76a.js:716450-718460 esm-fingerprint
+//@ chunk-qg41pqt6.js:718127-720142 esm-fingerprint
 function createSigv4Planner(registry, config, matches) {
   let policies = resolveSigv4Policies(config);
   return (method, requestTarget, headers, destHost) => {

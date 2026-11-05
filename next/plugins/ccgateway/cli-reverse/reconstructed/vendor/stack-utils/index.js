@@ -1,14 +1,14 @@
 /**
  * stack-utils/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: stack-utils@2.0.6
- * pieces: chunk-bzr73sfg.js (1)
+ * pieces: chunk-2avr6cej.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_escape_string_regexp } from "../escape-string-regexp/index.js";
 
-//@ chunk-bzr73sfg.js:126279-129747 cjs-fingerprint
+//@ chunk-2avr6cej.js:126279-129747 cjs-fingerprint
 var require_stack_utils = __commonJS(function (cjsExports, cjsModule) {
   var escapeStringRegexp = require_escape_string_regexp();
   var cwd = typeof process === "object" && process && typeof process.cwd === "function" ? process.cwd() : ".";

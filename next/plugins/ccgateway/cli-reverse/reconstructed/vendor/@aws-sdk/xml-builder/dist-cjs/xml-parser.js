@@ -1,14 +1,14 @@
 /**
  * @aws-sdk/xml-builder/dist-cjs/xml-parser.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/xml-builder@3.921.0..3.972.5
- * pieces: chunk-edce4vxq.js (1)
+ * pieces: chunk-3p78mpxm.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_fxp } from "../../../fast-xml-parser/lib/fxp.cjs";
 
-//@ chunk-edce4vxq.js:73699-74087 cjs-fingerprint
+//@ chunk-3p78mpxm.js:73699-74087 cjs-fingerprint
 var require_xml_parser = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

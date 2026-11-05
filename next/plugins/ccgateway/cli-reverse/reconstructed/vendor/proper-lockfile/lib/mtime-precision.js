@@ -1,13 +1,13 @@
 /**
  * proper-lockfile/lib/mtime-precision.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: proper-lockfile@4.1.2
- * pieces: chunk-bmbhxpfm.js (1)
+ * pieces: chunk-3c7mkwg0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-bmbhxpfm.js:17126-17645 cjs-fingerprint
+//@ chunk-3c7mkwg0.js:17126-17645 cjs-fingerprint
 var require_mtime_precision = __commonJS(function (cjsExports, cjsModule) {
   var cacheSymbol = Symbol();
   function probe(file, fs, callback) {

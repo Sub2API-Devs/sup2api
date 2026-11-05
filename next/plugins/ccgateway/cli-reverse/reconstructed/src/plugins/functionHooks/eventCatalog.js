@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：函数钩子事件名清单（tool.call、prompt.*、session.*、ui.* 等）与链底缺失提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (19)
  * attribution: placement 19
  */
 import { AGENT_OFFER_EVENT, AGENT_SPAWN_SITE_RULES } from "./agentHooks.js";
@@ -62,7 +62,7 @@ import { teeGeneratorResult, reportStreamChainFailure } from "./dispatch/streamC
 import { renderDraws } from "./ui/renderDispatch.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:82804-83527 placement
+//@ chunk-5xgkngpb.js:85354-86077 placement
 var DESCRIBE_EVENT_NAMES = () => ({
   "agent.offer": AGENT_OFFER_EVENT.core,
   "attribution.text": ATTRIBUTION_TEXT_EVENT.core,
@@ -93,20 +93,20 @@ var DESCRIBE_EVENT_NAMES = () => ({
   "ui.scroll": UI_SCROLL_EVENT.core,
   "ui.focus": UI_FOCUS_EVENT.core,
 });
-//@ chunk-e6aww6q8.js:83527-83613 placement
+//@ chunk-5xgkngpb.js:86077-86163 placement
 /**
  * 描述类事件
  */
 var DESCRIBE_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:83527", () => {
+deferInit("chunk-5xgkngpb.js:86077", () => {
   DESCRIBE_EVENTS = new Set(["config.describe", "command.describe", "tool.describe", "agent.offer"]);
 });
-//@ chunk-e6aww6q8.js:83613-83706 placement
+//@ chunk-5xgkngpb.js:86163-86256 placement
 /**
  * 不走钩子的事件
  */
 var NON_HOOKABLE_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:83613", () => {
+deferInit("chunk-5xgkngpb.js:86163", () => {
   NON_HOOKABLE_EVENTS = new Set([
     "plugin.register",
     "telemetry.log",
@@ -115,43 +115,43 @@ deferInit("chunk-e6aww6q8.js:83613", () => {
     "ui.focus",
   ]);
 });
-//@ chunk-e6aww6q8.js:83706-83794 placement
+//@ chunk-5xgkngpb.js:86256-86344 placement
 /**
  * 可由模块监听的事件
  */
 var HOOKABLE_EVENTS; // deferred: uses TOOL_SITE_BY_EVENT (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:83706", () => {
+deferInit("chunk-5xgkngpb.js:86256", () => {
   HOOKABLE_EVENTS = new Set(
     Object.keys(TOOL_SITE_BY_EVENT)
       .filter(isHookEvent)
       .filter((key) => !NON_HOOKABLE_EVENTS.has(key) && TOOL_SITE_BY_EVENT[key] !== undefined),
   );
 });
-//@ chunk-e6aww6q8.js:5049623-5049652 placement
+//@ chunk-5xgkngpb.js:5204767-5204796 placement
 /**
  * prompt.mention 站点规则
  */
 var PROMPT_MENTION_RULES; // deferred: uses UI_ENV_SITE_RULES (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:5049623", () => {
+deferInit("chunk-5xgkngpb.js:5204767", () => {
   PROMPT_MENTION_RULES = UI_ENV_SITE_RULES["prompt.mention"];
 });
-//@ chunk-e6aww6q8.js:5049652-5049679 placement
+//@ chunk-5xgkngpb.js:5204796-5204823 placement
 /**
  * session.send 站点规则
  */
 var SESSION_SEND_RULES; // deferred: uses UI_ENV_SITE_RULES (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:5049652", () => {
+deferInit("chunk-5xgkngpb.js:5204796", () => {
   SESSION_SEND_RULES = UI_ENV_SITE_RULES["session.send"];
 });
-//@ chunk-e6aww6q8.js:5049679-5049703 placement
+//@ chunk-5xgkngpb.js:5204823-5204847 placement
 /**
  * turn.step 站点规则
  */
 var TURN_STEP_RULES; // deferred: uses UI_ENV_SITE_RULES (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:5049679", () => {
+deferInit("chunk-5xgkngpb.js:5204823", () => {
   TURN_STEP_RULES = UI_ENV_SITE_RULES["turn.step"];
 });
-//@ chunk-e6aww6q8.js:5049703-5050610 placement
+//@ chunk-5xgkngpb.js:5204847-5205754 placement
 var FUNCTION_HOOK_EVENT_NAMES = () => ({
   "tool.call": TOOL_CALL_SITE_RULES,
   "tool.check": TOOL_CHECK_RULES,
@@ -192,7 +192,7 @@ var FUNCTION_HOOK_EVENT_NAMES = () => ({
   "ui.scroll": UI_SCROLL_EVENT.site,
   "ui.focus": UI_FOCUS_EVENT.site,
 });
-//@ chunk-e6aww6q8.js:5050610-5050718 placement
+//@ chunk-5xgkngpb.js:5205754-5205862 placement
 /**
  * 把处理器插入到为引擎作答的处理器之前（没有则放在末尾）。
  */
@@ -200,7 +200,7 @@ function insertBeforeEngineAnswer(handlers, handler) {
   let index = handlers.findIndex((handler) => handler.answersForEngine === true);
   return handlers.toSpliced(index === -1 ? handlers.length : index, 0, handler);
 }
-//@ chunk-e6aww6q8.js:5050718-5051725 placement
+//@ chunk-5xgkngpb.js:5205862-5206872 placement
 /**
  * 提示文本：钩子链底没有核心处理器（调用点没有安装 core）。
  */
@@ -268,21 +268,20 @@ var NO_CORE_AT_CHAIN_BOTTOM = (event, options) => (args) => {
   });
   return DESCRIBE_EVENTS.has(event) ? runPromise.then((value) => wellFormedLeaves(value)) : runPromise;
 };
-//@ chunk-e6aww6q8.js:5051725-5051930 placement
+//@ chunk-5xgkngpb.js:5206872-5207050 placement
 function buildStreamChainArgs({ event, bottom, core, args }) {
   let members = streamMembersFor(event, bottom.origin, {
     only: bottom.only,
   });
-  let managed = core ? bottom.streamManaged?.[event] : undefined;
   return {
     e: EVENT_PAYLOAD_SHAPES[event](args),
-    handlers: withChainEnds(managed, members, core),
+    handlers: withChainEnds(undefined, members, core),
     site: FUNCTION_HOOK_EVENT_NAMES()[event],
     signal: bottom.signal,
     origin: hookOriginFromStack(bottom.origin),
   };
 }
-//@ chunk-e6aww6q8.js:5051930-5052200 placement
+//@ chunk-5xgkngpb.js:5207050-5207320 placement
 var createStreamEventCaller = (event, options) => (args) => {
   let isDispatching = hasCurrentDispatch();
   let core = isDispatching ? undefined : options.streamCore?.[event];
@@ -303,7 +302,7 @@ var createStreamEventCaller = (event, options) => (args) => {
         }),
       );
 };
-//@ chunk-e6aww6q8.js:5052200-5053438 placement
+//@ chunk-5xgkngpb.js:5207320-5208558 placement
 /**
  * 函数钩子全部事件名及其分组（tool.*、command.*、config.*、prompt.*、session.*、turn.*、ui.* 等）。
  */
@@ -370,7 +369,7 @@ var FUNCTION_HOOK_EVENTS = (options, chainOptions) => ({
     focus: NO_CORE_AT_CHAIN_BOTTOM("ui.focus", options),
   },
 });
-//@ chunk-e6aww6q8.js:5053438-5053543 placement
+//@ chunk-5xgkngpb.js:5208558-5208663 placement
 /**
  * 用给定 signal/origin 生成全部函数钩子事件的调用器表。
  */
@@ -381,39 +380,39 @@ function createEventCallers(options = {}) {
   };
   return FUNCTION_HOOK_EVENTS(options, chainOptions);
 }
-//@ chunk-e6aww6q8.js:5053543-5053563 placement
+//@ chunk-5xgkngpb.js:5208663-5208683 placement
 /**
  * 各事件调用器
  */
 var eventCallersFor = (options) => createEventCallers(options);
-//@ chunk-e6aww6q8.js:5053563-5053575 placement
+//@ chunk-5xgkngpb.js:5208683-5208695 placement
 /**
  * createEventCallers 引用
  */
 var createEventCallersRef = createEventCallers;
-//@ chunk-e6aww6q8.js:5053575-5053595 placement
+//@ chunk-5xgkngpb.js:5208695-5208715 placement
 /**
  * 包装的调用器
  */
 var eventCallersWrapper = (options) => createEventCallers(options);
-//@ chunk-e6aww6q8.js:5053595-5053615 placement
+//@ chunk-5xgkngpb.js:5208715-5208735 placement
 /**
  * 各事件调用器
  */
 var eventCallersFor2 = (options) => createEventCallers(options);
-//@ chunk-e6aww6q8.js:5053615-5053635 placement
+//@ chunk-5xgkngpb.js:5208735-5208755 placement
 /**
  * 包装的调用器
  */
 var eventCallersWrapper2 = (options) => createEventCallers(options);
 export {
-  TURN_STEP_RULES,
-  eventCallersWrapper2,
-  eventCallersFor,
   NO_CORE_AT_CHAIN_BOTTOM,
-  eventCallersWrapper,
-  insertBeforeEngineAnswer,
-  createEventCallers,
   createEventCallersRef,
   eventCallersFor2,
+  eventCallersWrapper2,
+  insertBeforeEngineAnswer,
+  createEventCallers,
+  TURN_STEP_RULES,
+  eventCallersFor,
+  eventCallersWrapper,
 };

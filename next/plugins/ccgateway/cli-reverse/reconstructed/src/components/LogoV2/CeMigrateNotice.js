@@ -3,11 +3,12 @@
  *
  * 2.1.316 新增：CE 迁移提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ag5x7vhf.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hnxhr3bs.js (9)
  * attribution: placement 9
  */
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { CC_CE_MIGRATE, CC_CE_MIGRATE_MAX_IMPRESSIONS_LIMIT } from "../../utils/subscriptionNoticeIds.js";
@@ -22,7 +23,6 @@ import { announcementState } from "../../services/announcements/announcementStat
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { useNoticeImpressionEnabled, useNoticeImpression } from "./CondensedLogo.js";
-import { useState, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -30,17 +30,22 @@ import {
 import { Link, Text, Box } from "../../ink/components/Text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:89444-89472 placement
+//@ chunk-hnxhr3bs.js:87661-87665 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:87661", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:92361-92389 placement
 function getCeMigrateCohortCached() {
   return getCeMigrateCohort(false);
 }
-//@ chunk-ag5x7vhf.js:89472-89754 placement
+//@ chunk-hnxhr3bs.js:92389-92671 placement
 var CE_MIGRATE_FLAG; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var HTTPS_CLAUDE_COM_ENTERPRISE;
 var replaced;
 var CE_MIGRATE_ROLES;
 var CE_MIGRATE_COPY;
-deferInit("chunk-ag5x7vhf.js:89472", () => {
+deferInit("chunk-hnxhr3bs.js:92389", () => {
   CE_MIGRATE_FLAG = "tengu_velvet_harbor_owl";
   HTTPS_CLAUDE_COM_ENTERPRISE = "https://claude.com/enterprise";
   replaced = HTTPS_CLAUDE_COM_ENTERPRISE.replace(/^https?:\/\//, "");
@@ -54,18 +59,18 @@ deferInit("chunk-ag5x7vhf.js:89472", () => {
     },
   };
 });
-//@ chunk-ag5x7vhf.js:89754-89826 placement
+//@ chunk-hnxhr3bs.js:92671-92743 placement
 function getCeMigrateGroup() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(CE_MIGRATE_FLAG, "off");
   return featureValue_CACHED_MAY_BE_STALE === "has_ce" || featureValue_CACHED_MAY_BE_STALE === "no_ce"
     ? featureValue_CACHED_MAY_BE_STALE
     : null;
 }
-//@ chunk-ag5x7vhf.js:89826-89885 placement
+//@ chunk-hnxhr3bs.js:92743-92802 placement
 function canShowCeMigrateNotice() {
   return (getGlobalConfig().seenNotifications?.[CC_CE_MIGRATE] ?? 0) < CC_CE_MIGRATE_MAX_IMPRESSIONS_LIMIT;
 }
-//@ chunk-ag5x7vhf.js:89885-90083 placement
+//@ chunk-hnxhr3bs.js:92802-93000 placement
 /**
  * 判断是否显示 CE 迁移提示：账号属于实验分组、组织角色在允许列表、满足显示条件，且不在后台任务或桥接重连会话里。
  */
@@ -79,7 +84,7 @@ function shouldShowCeMigrateNotice() {
     !isSessionRestored(getRootSession().host) && !isActingAsBgJob() && !env.CLAUDE_BRIDGE_REATTACH_SESSION
   );
 }
-//@ chunk-ag5x7vhf.js:90083-90259 placement
+//@ chunk-hnxhr3bs.js:93000-93176 placement
 function recordCeMigrateNoticeShown(cohort, storageV5) {
   saveGlobalConfig((config) => {
     let seenNotifications = config.seenNotifications ?? {};
@@ -95,7 +100,7 @@ function recordCeMigrateNoticeShown(cohort, storageV5) {
     cohort_group: fromEnum(cohort),
   });
 }
-//@ chunk-ag5x7vhf.js:90259-90414 placement
+//@ chunk-hnxhr3bs.js:93176-93331 placement
 function getCeMigrateCohort(enabled) {
   let state = announcementState();
   if (state.ccCeMigrateGroup !== undefined) return state.ccCeMigrateGroup;
@@ -104,7 +109,7 @@ function getCeMigrateCohort(enabled) {
     state.ccCeMigrateGroup = ceMigrateGroup;
   return ceMigrateGroup;
 }
-//@ chunk-ag5x7vhf.js:90414-91252 placement
+//@ chunk-hnxhr3bs.js:93331-94169 placement
 function CeMigrateNotice() {
   let $ = useMemoCache(17);
   let { storageV5 } = useTheme_2();
@@ -177,9 +182,4 @@ function CeMigrateNotice() {
   } else box = $[16];
   return box;
 }
-//@ chunk-ag5x7vhf.js:91252-91256 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:91252", () => {
-  init_react_production();
-});
 export { shouldShowCeMigrateNotice, CeMigrateNotice };

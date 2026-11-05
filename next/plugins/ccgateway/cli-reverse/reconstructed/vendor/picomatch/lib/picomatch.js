@@ -1,8 +1,8 @@
 /**
  * picomatch/lib/picomatch.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: picomatch@4.0.4..4.0.7
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_parse } from "./parse.js";
 import { require_utils } from "./utils.js";
 import { require_constants } from "./constants.js";
 
-//@ chunk-fq0cr76a.js:317963-320219 cjs-fingerprint
+//@ chunk-qg41pqt6.js:318530-320786 cjs-fingerprint
 var require_picomatch = __commonJS(function (cjsExports, cjsModule) {
   var scan = require_scan();
   var parse = require_parse();

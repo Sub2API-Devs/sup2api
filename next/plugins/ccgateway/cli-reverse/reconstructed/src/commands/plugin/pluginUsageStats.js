@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件/技能的用量与技能列表占用（tok/turn）展示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vrb44rx7.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wb51jffc.js (12)
  * attribution: placement 12
  */
 import { isOfficialMarketplace, parsePluginIdentifier } from "../../utils/plugins/pluginIdentifier.js";
@@ -28,28 +28,28 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrb44rx7.js:138059-138154 placement
+//@ chunk-wb51jffc.js:138258-138353 placement
 function formatDisableOrUninstall(error) {
   return `${isOfficialMarketplace(parsePluginIdentifier(error.source).marketplace) ? "disable" : "uninstall"} "${quotedPrintable(error.plugin)}"`;
 }
-//@ chunk-vrb44rx7.js:138154-138158 placement
+//@ chunk-wb51jffc.js:138353-138357 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:138154", () => {
+deferInit("chunk-wb51jffc.js:138353", () => {
   init_react_production();
 });
-//@ chunk-vrb44rx7.js:138158-138201 placement
+//@ chunk-wb51jffc.js:138357-138400 placement
 function selectPluginCommands(state) {
   return state.plugins.commands;
 }
-//@ chunk-vrb44rx7.js:138201-138240 placement
+//@ chunk-wb51jffc.js:138400-138439 placement
 function selectMcpCommands(state) {
   return state.mcp.commands;
 }
-//@ chunk-vrb44rx7.js:138240-138280 placement
+//@ chunk-wb51jffc.js:138439-138479 placement
 function selectMainLoopModel(state) {
   return state.mainLoopModel;
 }
-//@ chunk-vrb44rx7.js:138280-138478 placement
+//@ chunk-wb51jffc.js:138479-138677 placement
 function renderSkillTokenRow(row) {
   return jsxProd_default_2(
     Box,
@@ -72,11 +72,11 @@ function renderSkillTokenRow(row) {
     row.name,
   );
 }
-//@ chunk-vrb44rx7.js:138478-138510 placement
+//@ chunk-wb51jffc.js:138677-138709 placement
 function isUsed(entry) {
   return entry.count > 0;
 }
-//@ chunk-vrb44rx7.js:138510-138758 placement
+//@ chunk-wb51jffc.js:138709-138957 placement
 function renderSkillUsageRow(row) {
   return jsxProd_default_2(
     Box,
@@ -104,7 +104,7 @@ function renderSkillUsageRow(row) {
     row.name,
   );
 }
-//@ chunk-vrb44rx7.js:138758-139153 placement
+//@ chunk-wb51jffc.js:138957-139352 placement
 function formatLastPrompt(name, commands) {
   let skillUsage = getGlobalConfig().skillUsage ?? {};
   let rows = [];
@@ -126,7 +126,7 @@ function formatLastPrompt(name, commands) {
     skillCount: rows.length,
   };
 }
-//@ chunk-vrb44rx7.js:139290-140774 placement
+//@ chunk-wb51jffc.js:139489-140973 placement
 /**
  * 显示插件技能描述占系统提示词的 token（每轮）。
  */
@@ -254,7 +254,7 @@ function renderSkillListingFootprint(props) {
   } else footerBox = $[19];
   return footerBox;
 }
-//@ chunk-vrb44rx7.js:140774-141686 placement
+//@ chunk-wb51jffc.js:140973-141885 placement
 function renderSkillActivity(props) {
   let $ = useMemoCache(9);
   let { plugin, commands } = props;
@@ -336,7 +336,7 @@ function renderSkillActivity(props) {
   } else details = $[8];
   return details;
 }
-//@ chunk-vrb44rx7.js:141686-141988 placement
+//@ chunk-wb51jffc.js:141885-142187 placement
 /**
  * 技能状态图标与列宽常量：on/name-only/user-only/off 的图标与色调、安装列 6 列、标题列上下限 44/12、左右预留 20/16。
  */
@@ -347,7 +347,7 @@ var MAX_TITLE_COLUMN_WIDTH;
 var MIN_TITLE_COLUMN_WIDTH;
 var TITLE_COLUMN_RESERVED_LEFT;
 var TITLE_COLUMN_RESERVED_RIGHT;
-deferInit("chunk-vrb44rx7.js:141686", () => {
+deferInit("chunk-wb51jffc.js:141885", () => {
   HEALTH_COLORS = {
     good: "success",
     warn: "warning",
@@ -385,10 +385,10 @@ export {
   MIN_TITLE_COLUMN_WIDTH,
   TITLE_COLUMN_RESERVED_LEFT,
   TITLE_COLUMN_RESERVED_RIGHT,
-  formatLastPrompt,
-  renderSkillListingFootprint,
   formatDisableOrUninstall,
   HEALTH_COLORS,
   INSTALLED_COLUMN_WIDTH,
   SKILL_STATE_GLYPHS,
+  formatLastPrompt,
+  renderSkillListingFootprint,
 };

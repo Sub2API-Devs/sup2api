@@ -1,1078 +1,1075 @@
-{"id":"chunk-b00ssqeq.js#Cp","doc":"foldCaseBasic：大小写折叠的底层实现（ı→i、ſ→s），供 foldCaseForCompare 等使用。"}
-{"id":"chunk-b00ssqeq.js#KJr","doc":"toForwardSlashesOnWindows：仅 Windows 下把反斜杠换成正斜杠。"}
-{"id":"chunk-b00ssqeq.js#Tc","doc":"stripTrailingSeparators：去掉路径末尾的分隔符（Windows 同时认 / 与 \\），全为分隔符时原样返回。"}
-{"id":"chunk-b00ssqeq.js#P1","doc":"symlinkVerdictForPath：逐级检查路径的符号链接状态并返回 verdict。"}
-{"id":"chunk-b00ssqeq.js#vZo","doc":"isWindowsShortcutAbsent：Windows 下判断 <path>.lnk 不存在（非 Windows 恒为真）。"}
-{"id":"chunk-b00ssqeq.js#Ldr","doc":"isPathSymlinkClear：路径逐级检查结果为 clear 时返回 true。"}
-{"id":"chunk-bk27acrr.js#hm","doc":"isSubpathOf：relative() 判断 child 是否位于 parent 之下（相等时返回给定默认值）。"}
-{"id":"chunk-aat7wt0p.js#nvr","doc":"neverAllowsLocalWsl：编译期开关 stub：永远不认为本地 WSL 路径可信。"}
-{"id":"chunk-aat7wt0p.js#nLt","doc":"passThroughPath：恒等函数，用于跨平台路径预处理。"}
-{"id":"chunk-aat7wt0p.js#ovr","doc":"toWslPathNoop：WSL 路径转换的禁用版 stub，恒返回 undefined。"}
-{"id":"chunk-aat7wt0p.js#SLi","doc":"isTrustedLocalWindowsPath：路径不在可疑拼写中即视为可信本地路径（Windows 分支）。"}
-{"id":"chunk-aat7wt0p.js#ck","doc":"isUntrustedLinkPath：去掉 Win32 设备前缀后判断是否为交接点/网络/设备路径。"}
-{"id":"chunk-aat7wt0p.js#K7t","doc":"pathTraversesFromTrustedRoot：以给定根为可信起点检查剩余路径成分是否经过不可信链接。"}
-{"id":"chunk-aat7wt0p.js#eDe","doc":"traversesOrResolvesUntrustedLink：直接路径或（Windows 本地路径）resolve 后任一经过不可信链接即为真。"}
-{"id":"chunk-aat7wt0p.js#Mt","doc":"MAX_UNTRUSTED_PATH_DEPTH：路径成分遍历的深度上限（导出，供调用方复用）。"}
-{"id":"chunk-aat7wt0p.js#x","doc":"splitPathSegments：按 / 切分路径成分并丢弃空段。"}
-{"id":"chunk-aat7wt0p.js#P","doc":"isUntrustedLinkPathStrict：与 isUntrustedLinkPath 相同但可选参数为假时仍判可疑。"}
-{"id":"chunk-yr49hy5m.js#Ees","doc":"stripLeadingInvisibleChars：去掉路径开头的空白/盲文空格/控制字符等不可见字符。"}
-{"id":"chunk-yr49hy5m.js#CQr","doc":"isUnsafePathAfterDecode：解码 %XX 后判断路径是否 UNC、逃脱上级目录或含控制字符。"}
-{"id":"chunk-yr49hy5m.js#sRt","doc":"isNetworkPathAfterNormalize：posix 规范化后判断是否网络路径或跳出了上级目录。"}
-{"id":"chunk-yr49hy5m.js#ves","doc":"isUnsafeFileUrl：去掉 file:// 前缀后判断 URL 路径是否不安全。"}
-{"id":"chunk-stemcnjv.js#VUi","doc":"setPathTable：设置当前宿主的路径表（空值表示清零）。"}
-{"id":"chunk-stemcnjv.js#qUi","doc":"getEventPathNames：取事件对应的可用路径名列表。"}
-{"id":"chunk-e6aww6q8.js#ZBr","doc":"listLocalPeerSessions：关闭时返回空列表，开启时列出本机存活的其他会话。"}
-{"id":"chunk-e6aww6q8.js#wFo","doc":"cachedBridgeListingRows：跨会话消息开启时返回缓存的桥接会话行。"}
-{"id":"chunk-e6aww6q8.js#EFo","doc":"warmBridgeListingIfEnabled：开启时预热桥接会话列表。"}
-{"id":"chunk-pn6cmra7.js#Lue","doc":"MAX_PEER_FILE_BYTES：单个对端文件的传输上限（30 MiB）；MAX_PEER_SPOOL_BYTES：对端文件落到中转目录的总量上限；MAX_PEER_ATTACHMENTS：一次消息最多携带的对端文件数（同一声明共 3 个绑定）。"}
-{"id":"chunk-pn6cmra7.js#y2e","doc":"isPeerSendFileEnabled：跨会话消息开启且 tengu_send_file 打开时才允许发送文件。"}
-{"id":"chunk-qg0af0yq.js#Sds","doc":"MAX_PEER_LABEL_WIDTH：对端会话标签/首行的显示宽度上限。"}
-{"id":"chunk-qg0af0yq.js#sPn","doc":"firstLineOfPeerBody：取正文首个有意义的行并截断到显示宽度。"}
-{"id":"chunk-qg0af0yq.js#FAi","doc":"isPeerFromMode：判断字符串是否是合法的 from-mode。"}
-{"id":"chunk-qg0af0yq.js#DBe","doc":"bridgeAddressFromToken：把 bridge 访问令牌拼成 bridge: 前缀的地址。"}
-{"id":"chunk-qg0af0yq.js#u8","doc":"udsAddressFromPath：把套接字路径拼成 uds: 前缀的地址。"}
-{"id":"chunk-qg0af0yq.js#q","doc":"decodeHeaderValue：容错解码 URL 编码的消息头值。"}
-{"id":"chunk-qg0af0yq.js#Me","doc":"PEER_SESSION_ID_PATTERN：from-session 的合法字符与长度；MAX_HOP_CHAIN_LENGTH：跳链最多保留的跳数；HOP_ID_HEX_LENGTH：单跳 id 的十六进制长度（HMAC 截断长度）（同一声明共 3 个绑定）。"}
-{"id":"chunk-qg0af0yq.js#UAi","doc":"hopIdHmac：用会话密钥对跳 id 做 HMAC 并截断。"}
-{"id":"chunk-qg0af0yq.js#BAi","doc":"isValidHeaderValue：判断消息头值是否符合字符集与长度上限。"}
-{"id":"chunk-qg0af0yq.js#hIt","doc":"wrapPeerMessage：把正文包成 cross-session-message 标签并带上消息头。"}
-{"id":"chunk-qg0af0yq.js#SQ","doc":"stripPeerMessageBody：发送者与接收者相同时去掉正文，避免回显。"}
-{"id":"chunk-qg0af0yq.js#$ge","doc":"isPeerAddress：判断字符串是否是 uds:/bridge:/did: 形式的对等地址。"}
-{"id":"chunk-qg0af0yq.js#jn","doc":"UNIX_SOCKET_PATH_PATTERN：匹配以 / 结尾的 .sock 绝对路径；NAMED_PIPE_PATH_PATTERN：匹配 \\\\?\\pipe\\ 形式的 Windows 命名管道；UNIX_SOCKET_PREFIX_PATTERN：匹配 .sock 路径前缀（不要求结尾）（同一声明共 3 个绑定）。"}
-{"id":"chunk-qg0af0yq.js#vds","doc":"isUnixSocketPath：判断是否是 unix 套接字路径。"}
-{"id":"chunk-rwnj2eyf.js#snr","doc":"isCurrentBridgeIdentity：桥接列表记录是否属于当前身份。"}
-{"id":"chunk-rwnj2eyf.js#anr","doc":"bridgeListingRows：未过期且身份一致的桥接会话行。"}
-{"id":"chunk-rwnj2eyf.js#obn","doc":"livePeerSessionsExcludingKnown：排除已知会话后的存活会话列表。"}
-{"id":"chunk-rwnj2eyf.js#dVt","doc":"isTransientListingFailure：判断列表失败是否可重试（超时/取回失败）。"}
-{"id":"chunk-rwnj2eyf.js#sbn","doc":"CANNOT_RECEIVE_REASON：目标会话不接收跨会话消息时的拒绝原因文案。"}
-{"id":"chunk-82kqcve8.js#L9r","doc":"blocksReadsOutsideWorkingDirs：策略设置是否要求阻断工作目录外的读取。"}
-{"id":"chunk-82kqcve8.js#gar","doc":"isRuleRoundTripStable：规则经格式化再解析后与原值一致。"}
-{"id":"chunk-e6aww6q8.js#p1r","doc":"isActionSummaryEnabled：动作摘要总开关。"}
-{"id":"chunk-e6aww6q8.js#CGe","doc":"COMPUTER_BATCH_EXEMPT_ACTIONS：computer_batch 不需要摘要的动作；APP_BATCH_EXEMPT_ACTIONS：app_batch 不需要摘要的动作；COMPUTER_USE_ACTION_NAMES：计算机使用类工具的动作名全集（同一声明共 7 个绑定）。"}
-{"id":"chunk-qvp68pt5.js#mat","doc":"sanitizeForDisplay：逐字符清洗后的显示文本。"}
-{"id":"chunk-qvp68pt5.js#Nur","doc":"hostnameLengthAllowance：允许的主机名长度（末尾单个点加 1）。"}
-{"id":"chunk-qvp68pt5.js#pAn","doc":"truncateForDisplayText：截断到显示上限并补省略号。"}
-{"id":"chunk-qvp68pt5.js#Ons","doc":"isCombiningOrZeroWidth：组合标记或无渲染宽度。"}
-{"id":"chunk-qvp68pt5.js#P5e","doc":"renderableText：清洗后可直接显示的文本。"}
-{"id":"chunk-qvp68pt5.js#$Rt","doc":"hasNoVisibleText：字符串为空或没有可见宽度。"}
-{"id":"chunk-qvp68pt5.js#Uur","doc":"displayLabelOrUnnamedTool：标签或 “(unnamed tool)” 回退。"}
-{"id":"chunk-qvp68pt5.js#iZr","doc":"serializePayloadSafely：序列化审批载荷，超限时返回 undefined。"}
-{"id":"chunk-qvp68pt5.js#ubi","doc":"hasBrokenSequences：去掉不安全字符后是否仍有残缺序列。"}
-{"id":"chunk-e6aww6q8.js#BH","doc":"appendAutoModeDecision：往当前会话的 auto 模式决策日志追加一条。"}
-{"id":"chunk-dcmhvw5a.js#nc","doc":"isExactlyTrue：严格等于 true 的判定（限制项持有器）。"}
-{"id":"chunk-dcmhvw5a.js#nct","doc":"replacesDefaultRules：规则列表是否不含 $defaults（完全替换默认规则）。"}
-{"id":"chunk-dcmhvw5a.js#w_r","doc":"normalizeRuleSlug：规则名规范化为小写下划线。"}
-{"id":"chunk-dcmhvw5a.js#Xfs","doc":"ruleIdFromBracketPrefix：从 “[规则名]” 前缀提取规则 id。"}
-{"id":"chunk-dcmhvw5a.js#vb","doc":"EXTRA_AUTO_MODE_RULE_IDS：预留的空规则数组（供合并）；ALL_AUTO_MODE_RULE_ID_SET：auto 模式规则 id 的集合；ALL_AUTO_MODE_RULE_ID_SET_WITH_UNTRUSTED：基础规则 + 不可信内容规则集合（同一声明共 4 个绑定）。"}
-{"id":"chunk-dcmhvw5a.js#oct","doc":"hasInvisibleRuleChars：规则文本是否含不可见字符。"}
-{"id":"chunk-dcmhvw5a.js#Xr","doc":"isAcceptableRuleText：规则文本可用（非空、无控制字符、无模板注入）。"}
-{"id":"chunk-dcmhvw5a.js#Zr","doc":"isApiProviderKind：是否为已知 API 提供方类型。"}
-{"id":"chunk-dcmhvw5a.js#cn","doc":"isAnthropicProviderId：提供方类型或其 Anthropic id 形式。"}
-{"id":"chunk-dcmhvw5a.js#lps","doc":"withBoxedDiamond：给文本加双线菱形前缀。"}
-{"id":"chunk-dcmhvw5a.js#dps","doc":"VERTICAL_LEFT_BAR_GLYPH：竖条符号（▎）；FULL_BLOCK_GLYPH：实心方块符号（█）；HORIZONTAL_LINE_GLYPH：横线符号（─）（同一声明共 3 个绑定）。"}
-{"id":"chunk-dcmhvw5a.js#ups","doc":"HEAVY_VERTICAL_BAR_GLYPH：粗竖线符号（┃）；NO_BREAK_SPACE：不换行空格常量（同一声明共 2 个绑定）。"}
-{"id":"chunk-e6aww6q8.js#jjr","doc":"autoModeUnavailableNotes：按宿主保存的 auto 模式不可用说明（Map）。"}
-{"id":"chunk-e6aww6q8.js#D4t","doc":"chromeGrantAllowlistWithoutClassifier：auto 模式是否允许无分类器时的 Chrome 授权白名单。"}
-{"id":"chunk-e6aww6q8.js#_pn","doc":"isRealAutoDenyWindow：存在且不是 “非安全检查” 的自动拒绝窗口。"}
-{"id":"chunk-e6aww6q8.js#N5s","doc":"withAutoDenyDeadline：给自动拒绝窗口附加截止时间。"}
-{"id":"chunk-e6aww6q8.js#Lqe","doc":"lacksCreateIfEmpty：输入未要求 createIfEmpty（只读工具判定）。"}
-{"id":"chunk-e6aww6q8.js#B4t","doc":"lacksClear：输入未要求 clear（只读工具判定）。"}
-{"id":"chunk-s61vbvea.js#NW","doc":"hasUnresolvedCanonicalPath：记录既没有规范路径也未被跳过。"}
-{"id":"chunk-s61vbvea.js#Nf","doc":"isCanonicalUnderRoot：规范路径位于根之下。"}
-{"id":"chunk-e6aww6q8.js#ise","doc":"isBrowserHousekeepingCall：浏览器内务类工具或输入检查通过即为真。"}
-{"id":"chunk-e6aww6q8.js#Zqe","doc":"shouldClassifyBrowserWrite：开启点击分类器且有浏览器写动作。"}
-{"id":"chunk-e6aww6q8.js#Qye","doc":"isAgentSpawningTool：是否为会派生代理的工具。"}
-{"id":"chunk-e6aww6q8.js#Jye","doc":"BROWSER_ACTION_KINDS_COPY：BROWSER_ACTION_KINDS 的副本（未被使用）。"}
-{"id":"chunk-e6aww6q8.js#Wjr","doc":"isClassifiableBrowserCall：能取到浏览器动作名的调用。"}
-{"id":"chunk-e6aww6q8.js#m6t","doc":"normalizeAutoModeValue：只把 “on” 归一为 “on”。"}
-{"id":"chunk-e6aww6q8.js#t2e","doc":"shouldRouteBrowserCallToClassifier：分类器开启且动作可判定时才交给分类器。"}
-{"id":"chunk-dcmhvw5a.js#I_r","doc":"isBypassCapableMode：可以绕过权限的模式。"}
-{"id":"chunk-8ryrpd67.js#nHt","doc":"isBypassPermissionsAccepted：bypass 权限是否已被接受。"}
-{"id":"chunk-f25sswmp.js#Vli","doc":"isPinnedOrWildcardRule：规则带固定摘要或以 :* 结尾。"}
-{"id":"chunk-e6aww6q8.js#bjr","doc":"isOutputLimitStop：停止原因是否因输出上限。"}
-{"id":"chunk-e6aww6q8.js#bJe","doc":"currentAutoModeTier：当前 auto 模式等级。"}
-{"id":"chunk-e6aww6q8.js#C1e","doc":"CLASSIFIER_BASE_DEADLINE_MS：分类器第一阶段基础截止时间；CLASSIFIER_MAX_DEADLINE_MS：分类器截止时间上限；CLASSIFIER_PER_CALL_MIN_TIMEOUT_MS：单次分类器调用的最小超时（同一声明共 7 个绑定）。"}
-{"id":"chunk-e6aww6q8.js#sUt","doc":"classifierStageDeadlineMs：按转录规模计算的第一阶段截止时间。"}
-{"id":"chunk-e6aww6q8.js#M1e","doc":"HOST_CONTEXT_LINE_LIMIT：宿主上下文行数上限。"}
-{"id":"chunk-e6aww6q8.js#Jge","doc":"isLiveHostContextDisabled：是否关闭实时宿主上下文。"}
-{"id":"chunk-jns1cm6f.js#oZe","doc":"canPromptForConfirmation：可经 AskUserQuestion 向用户确认。"}
-{"id":"chunk-ged1ddrv.js#tE","doc":"currentToolPermissionContext：取当前工具权限上下文。"}
-{"id":"chunk-gda5w2fs.js#Ngs","doc":"ruleToolNameFromString：从规则串取工具名。"}
-{"id":"chunk-gda5w2fs.js#rIi","doc":"hasUnclosedRuleParen：规则括号是否未闭合。"}
-{"id":"chunk-e6aww6q8.js#aSn","doc":"EMAIL_SENDER_FLAG_BY_KIND：按发送者种类取对应的功能开关；EMAIL_GROUP_REPLY_TOOL：邮件组回复工具名；EMAIL_MCP_SERVER_PREFIX：邮件 MCP 服务器工具前缀（同一声明共 11 个绑定）。"}
-{"id":"chunk-e6aww6q8.js#e5s","doc":"emailSenderTurnDetected：远程会话里检测到邮件发件人回合。"}
-{"id":"chunk-t0gq9gyw.js#er","doc":"stripCheckoutBaseRule：去掉 PowerShell(git checkout -b *) 规则。"}
-{"id":"chunk-e5gvqyfh.js#B","doc":"VERSION_ARG_PATTERN：--version 的十进制整数值；ANT_WORD_PATTERN：命令里出现 ant（大小写不敏感）；STAGED_ID_PATTERN：staging/vrtx/bdrk 前缀的 ID（同一声明共 19 个绑定）。"}
-{"id":"chunk-e6aww6q8.js#pUt","doc":"shouldRelyOnModeFloorForBrowser：远程浏览器工具按模式地板处理。"}
-{"id":"chunk-e6aww6q8.js#B1e","doc":"isRemoteBrowserToolModeFloorActive：远程浏览器工具处于模式地板。"}
-{"id":"chunk-e6aww6q8.js#a4s","doc":"isRemoteBrowserUnderModeFloor：远程浏览器工具且模式地板开启。"}
-{"id":"chunk-e6aww6q8.js#mUt","doc":"filterRemoteBrowserAllowUpdates：去掉远程浏览器工具的 allow 更新。"}
-{"id":"chunk-s61vbvea.js#NF","doc":"vetPathSpellingsOrChain：先按拼写审查，再按解析链审查。"}
-{"id":"chunk-s61vbvea.js#tei","doc":"vetPathSpellingsOrChainAsync：异步版：网络屏幕路径异步获取。"}
-{"id":"chunk-s61vbvea.js#cH","doc":"pathVettingReason：路径审查不通过的原因。"}
-{"id":"chunk-e6aww6q8.js#iFo","doc":"MAX_ANSWER_DEPTH：权限回答输入的最大深度；MAX_ANSWER_VALUES：权限回答输入的最大值个数；MAX_ANSWER_CHARS：权限回答输入的最大字符数（同一声明共 3 个绑定）。"}
-{"id":"chunk-e6aww6q8.js#aX","doc":"ANSWER_CHANGED_INPUT_MESSAGE：回答改写了调用时的说明；ANSWER_RULES_UNAPPLIED_MESSAGE：规则未能全部应用时的说明；RULE_TABLE_NAMES：四个规则表名（同一声明共 4 个绑定）。"}
-{"id":"chunk-e6aww6q8.js#d0e","doc":"isUnchangedAnswerInput：输入为空或与原输入相同。"}
-{"id":"chunk-2xp8150w.js#PTs","doc":"isMinimalContextSerializable：序列化权限上下文可通过最小 schema。"}
-{"id":"chunk-2xp8150w.js#PV","doc":"exceedsSerializedContextLimit：序列化上下文是否超出上限。"}
-{"id":"chunk-e6aww6q8.js#lyt","doc":"updatedInputOrOriginal：拒绝时保留原输入，否则用更新后的输入。"}
-{"id":"chunk-e6aww6q8.js#U4s","doc":"PERMISSION_PROMPT_HOST_KINDS：权限提示宿主的两种取值。"}
-{"id":"chunk-e6aww6q8.js#Z_e","doc":"isNoPromptHost：宿主为 “none”。"}
-{"id":"chunk-e6aww6q8.js#i8n","doc":"effectivePermissionPromptTool：有效的权限提示工具（stdio 优先）。"}
-{"id":"chunk-e6aww6q8.js#zue","doc":"hasPermissionPromptTool：指定了非 none 的权限提示工具。"}
-{"id":"chunk-e6aww6q8.js#v8n","doc":"setPermissionPromptPerson：设置提示宿主为“人”。"}
-{"id":"chunk-e6aww6q8.js#zjt","doc":"getPermissionPromptPerson：取提示宿主的人。"}
-{"id":"chunk-e6aww6q8.js#Fet","doc":"setPermissionPromptHostProbe：登记某类宿主的探测函数。"}
-{"id":"chunk-e6aww6q8.js#VJe","doc":"notePendingPermissionAnswer：记录待定的权限回答。"}
-{"id":"chunk-e6aww6q8.js#gkn","doc":"permissionRecordModule：权限记录模块的惰性 require。"}
-{"id":"chunk-gda5w2fs.js#Qbr","doc":"WORKSPACE_BASH_TOOL：workspace 的 bash 工具名；WORKSPACE_WEB_FETCH_TOOL：workspace 的 web_fetch 工具名（同一声明共 2 个绑定）。"}
-{"id":"chunk-gda5w2fs.js#eSr","doc":"wildcardRuleRegex：把通配规则编译成正则。"}
-{"id":"chunk-gda5w2fs.js#m","doc":"escapeRuleText：转义规则文本里的反斜杠与括号。"}
-{"id":"chunk-gda5w2fs.js#eMn","doc":"isEscapableRuleChar：该字符在规则里保留转义。"}
-{"id":"chunk-gda5w2fs.js#Dgs","doc":"isWindowsAbsoluteRule：规则是否以 Windows 绝对路径开头。"}
-{"id":"chunk-gda5w2fs.js#Lgs","doc":"unescapeRuleContent：规则内容反转义。"}
-{"id":"chunk-gda5w2fs.js#Hgs","doc":"unescapeParens：去掉括号前的反斜杠。"}
-{"id":"chunk-sfy7bm1n.js#M","doc":"isRestrictedNonSessionRule：非会话来源的受限规则。"}
-{"id":"chunk-sfy7bm1n.js#Mar","doc":"filterPermissionUpdatePayload：过滤权限更新载荷中的受限 Web 工具。"}
-{"id":"chunk-sfy7bm1n.js#B2","doc":"areSkillsConvertedAsPlugins：技能是否被当作插件处理。"}
-{"id":"chunk-sfy7bm1n.js#iXr","doc":"steadyFinchEnabled：技能转插件开关。"}
-{"id":"chunk-sfy7bm1n.js#i3","doc":"isSyncedMarketplacePlugin：已同步市场里的插件 id。"}
-{"id":"chunk-sfy7bm1n.js#Dar","doc":"isSkillPluginSurfaceEnabled：技能插件表面是否生效。"}
-{"id":"chunk-sfy7bm1n.js#Lar","doc":"isTopHostSkillPluginSession：顶层宿主会话且技能转插件开启。"}
-{"id":"chunk-zfbhezv9.js#aF","doc":"permissionModeSignal：权限模式变化的惰性信号。"}
-{"id":"chunk-kswt4qha.js#j","doc":"approvalLayers：当前会话的权限层。"}
-{"id":"chunk-kswt4qha.js#lhi","doc":"bumpAutoCompactOfferEsc：记录一次 Esc 计数。"}
-{"id":"chunk-kswt4qha.js#dhi","doc":"markAutoCompactOfferResolved：标记压缩提议已解决。"}
-{"id":"chunk-kswt4qha.js#q","doc":"isAutoCompactOfferAnswered：压缩提议已回答或被跳过。"}
-{"id":"chunk-kswt4qha.js#oQr","doc":"parseEffortOrKeyword：解析 effort 值或关键字。"}
-{"id":"chunk-kswt4qha.js#VZo","doc":"carriedEffortForModel：该模型可沿用的 effort。"}
-{"id":"chunk-kswt4qha.js#re","doc":"hasCarriedRefusalEffort：回退锁存里带了 effort。"}
-{"id":"chunk-kswt4qha.js#scr","doc":"releaseCarriedEffortForEffortChange：effort 改变时释放携带值。"}
-{"id":"chunk-kswt4qha.js#yhi","doc":"releaseCarriedEffortIfModelChanged：模型不再是回退模型时释放。"}
-{"id":"chunk-kswt4qha.js#icr","doc":"isSpecialEffortKeywordDisabled：恒 false（构建时裁掉的关键字检查）。"}
-{"id":"chunk-sfy7bm1n.js#SFe","doc":"greedyShoreEnabled：tengu_greedy_shore 开关。"}
-{"id":"chunk-sfy7bm1n.js#re","doc":"mcpToolAliasSetSlot：按宿主保存的 MCP 工具别名集合。"}
-{"id":"chunk-sfy7bm1n.js#Yui","doc":"hasMcpToolAliases：是否存在 MCP 工具别名。"}
-{"id":"chunk-sfy7bm1n.js#PPe","doc":"classifyAllShellEnabled：Cowork 或全部 shell 交分类器。"}
-{"id":"chunk-e6aww6q8.js#ebe","doc":"canPromptUserForPermission：存在可交互提示通道（非交互时需显式提示工具）。"}
-{"id":"chunk-e6aww6q8.js#obe","doc":"shouldReplaceMemoryInput：Live 记忆工具的输入被替换。"}
-{"id":"chunk-e6aww6q8.js#Q0","doc":"isLiveMemoryToolName：是否为 Live 记忆工具。"}
-{"id":"chunk-e6aww6q8.js#XH","doc":"isClassifierRoutedMcpTool：该 MCP 工具交由分类器裁决。"}
-{"id":"chunk-e6aww6q8.js#P9n","doc":"isDeepDuskDeviceTool：设备工具在 deep_dusk 开关下走仲裁。"}
-{"id":"chunk-e6aww6q8.js#mBo","doc":"isBuzzingPelicanRouted：仲裁器下按 buzzing_pelican 开关放行。"}
-{"id":"chunk-e6aww6q8.js#I9n","doc":"isWebFetchOrSearch：是否为 WebFetch/WebSearch。"}
-{"id":"chunk-e6aww6q8.js#RL","doc":"isWebToolClassifierRouted：Web 工具是否交给 auto 分类器。"}
-{"id":"chunk-e6aww6q8.js#e_e","doc":"isWebSearchClassifierRouted：WebSearch 是否交给分类器。"}
-{"id":"chunk-e6aww6q8.js#_M","doc":"classifierOnlyConfig：取工具的 classifierOnly 配置。"}
-{"id":"chunk-e6aww6q8.js#i2e","doc":"isClassifierAllow：允许且原因类型为 classifier。"}
-{"id":"chunk-e6aww6q8.js#O9n","doc":"takeClassifierBlock：取出并清除分类器阻断原因。"}
-{"id":"chunk-e6aww6q8.js#pKe","doc":"isPersonTypesHold：工具被暂停到用户亲自输入。"}
-{"id":"chunk-e6aww6q8.js#dKe","doc":"sanitizeRuleCategoryOrUndefined：规则类别白名单化。"}
-{"id":"chunk-e6aww6q8.js#AL","doc":"sanitizeRuleCategory：规则类别脱敏。"}
-{"id":"chunk-e6aww6q8.js#hUo","doc":"classifierApprovalFor：取分类器批准记录。"}
-{"id":"chunk-e6aww6q8.js#Kjr","doc":"hasPersonOnlyAskFloor：钩子 ask 地板或仅人工 ask。"}
-{"id":"chunk-e6aww6q8.js#$5s","doc":"withDenialDeadline：附加自动拒绝截止时间。"}
-{"id":"chunk-e6aww6q8.js#AWt","doc":"classifyEditsEnabled：编辑是否交分类器。"}
-{"id":"chunk-e6aww6q8.js#swt","doc":"isFileMutationTool：是否文件修改工具。"}
-{"id":"chunk-e6aww6q8.js#j5s","doc":"toToolUseIdSet：构造工具调用 id 集合。"}
-{"id":"chunk-e6aww6q8.js#Vjr","doc":"handedOffIds：交接的活工具调用 id。"}
-{"id":"chunk-e6aww6q8.js#iwt","doc":"isAskOnMutationTool：修改类工具的 ask 且曾开启主动性。"}
-{"id":"chunk-e6aww6q8.js#W5s","doc":"isProactivityModeChange：ask 与非 ask 之间的模式变化。"}
-{"id":"chunk-ddkccdnb.js#cpr","doc":"copsSimilar：非官方且不相似的插件 id（占位）。"}
-{"id":"chunk-anrta56w.js#yYt","doc":"isVouchedMarketplaceRef：官方或受信策略插件的市场引用。"}
-{"id":"chunk-dcmhvw5a.js#dbr","doc":"foldProtectedDirNameLower：保护目录名折叠（区分大小写）。"}
-{"id":"chunk-dcmhvw5a.js#Yps","doc":"isProtectedDirAlwaysFalse：恒 false（占位）。"}
-{"id":"chunk-aat7wt0p.js#e9","doc":"realpathCacheEntry：realpath 缓存条目。"}
-{"id":"chunk-7wdbg1ct.js#Yii","doc":"systemGitConfigPaths：git 系统配置路径。"}
-{"id":"chunk-7wdbg1ct.js#e3o","doc":"MAX_PROTECTED_PATH_LENGTH：受保护路径长度上限。"}
-{"id":"chunk-7wdbg1ct.js#aqt","doc":"classifyPathSpelling：判定路径拼写的落点。"}
-{"id":"chunk-7wdbg1ct.js#Jii","doc":"isWritableSharedFile：多硬链接且可写。"}
-{"id":"chunk-7wdbg1ct.js#E6r","doc":"protectedSettingSourcesWithFlag：受保护设置源（含 flagSettings）。"}
-{"id":"chunk-7wdbg1ct.js#VSn","doc":"isNpmPluginSourcePath：是否为 npm 插件来源。"}
-{"id":"chunk-yf82ynbr.js#lTt","doc":"sensitivePathGateEnabled：敏感路径检查的 GrowthBook 开关。"}
-{"id":"chunk-yf82ynbr.js#gor","doc":"neverTrueAsync：恒 false 的异步占位（构建时裁掉）。"}
-{"id":"chunk-yf82ynbr.js#Uxe","doc":"neverTrue：恒 false 的占位（构建时裁掉）。"}
-{"id":"chunk-yf82ynbr.js#hor","doc":"isSensitiveWithGitConfig：把 .git 下 config 也视为敏感。"}
-{"id":"chunk-yf82ynbr.js#Eai","doc":"segmentReadingsFlat：某段的全部读法。"}
-{"id":"chunk-yf82ynbr.js#_H","doc":"isSensitiveNameOrVariant：名字或其别名变体敏感。"}
-{"id":"chunk-yf82ynbr.js#O6r","doc":"DECORATION_LEAD_CHARS：纯装饰名可能的起始字符。"}
-{"id":"chunk-yf82ynbr.js#QSn","doc":"exceedsPathVariantBudget：路径变体展开是否超出预算。"}
-{"id":"chunk-yf82ynbr.js#Ge","doc":"SENSITIVE_SERVICE_ACCOUNT_RE：服务账号密钥文件名正则；SENSITIVE_CERT_FILE_NAMES：证书/密钥类敏感文件名；SENSITIVE_CERT_FILE_RE：证书扩展名正则（同一声明共 3 个绑定）。"}
-{"id":"chunk-yf82ynbr.js#v3o","doc":"isCredentialConfigPathActive：凭证配置路径且检查生效。"}
-{"id":"chunk-yf82ynbr.js#B$e","doc":"isSensitiveBasenameWithVariants：末段读法中有敏感文件名。"}
-{"id":"chunk-yf82ynbr.js#bor","doc":"nameReadingFns：名字读法函数列表（含冒号处理）。"}
-{"id":"chunk-yf82ynbr.js#mqt","doc":"isUnderSandboxPath：路径是否在某个受保护根之下。"}
-{"id":"chunk-yf82ynbr.js#j$e","doc":"MAX_SENSITIVE_PATH_LENGTH：敏感路径长度上限。"}
-{"id":"chunk-yf82ynbr.js#Ope","doc":"isCredentialPath：是否是 Claude 自身或凭证类路径。"}
-{"id":"chunk-e6aww6q8.js#Qqt","doc":"serverClassifierOffReason：服务端分类器不启用的原因。"}
-{"id":"chunk-e6aww6q8.js#sse","doc":"isArbiterRole：角色为 arbiter 或 arbiterWithLocalFallback。"}
-{"id":"chunk-e6aww6q8.js#Zqt","doc":"isArbiterWithFallbackActive：auto 下按 arbiterWithLocalFallback 启用。"}
-{"id":"chunk-e6aww6q8.js#y4s","doc":"isServerClassifierOff：该角色下服务端分类器为 off。"}
-{"id":"chunk-e6aww6q8.js#eKt","doc":"isAutoModeClassified：auto 启用且分类器角色非 off。"}
-{"id":"chunk-e6aww6q8.js#iye","doc":"isServerArbiterActive：开关开且角色为 arbiter。"}
-{"id":"chunk-e6aww6q8.js#j3n","doc":"canAttachServerClassifierBeta：需要附加分类器 beta 头。"}
-{"id":"chunk-e6aww6q8.js#K2e","doc":"SERVER_CLASSIFIER_LABEL：服务端分类器的显示标签；SERVER_CLASSIFIER_NOTE_LIMIT：分类器说明的长度上限；SERVER_CLASSIFIER_NOTE_TAIL：分类器说明的结尾片段（同一声明共 3 个绑定）。"}
-{"id":"chunk-e6aww6q8.js#qb","doc":"noVerdictReasonFor：未判定时给出原因。"}
-{"id":"chunk-e6aww6q8.js#eze","doc":"isServerNotRequestedReason：服务端未请求或输入被改写的失败原因。"}
-{"id":"chunk-e6aww6q8.js#aKt","doc":"isInputRewrittenWithFallbackOff：输入被改写且回退关闭。"}
-{"id":"chunk-e6aww6q8.js#tze","doc":"cloneIfServerResults：有服务端结果时克隆输入。"}
-{"id":"chunk-e6aww6q8.js#nze","doc":"lacksServerResult：没有服务端结果。"}
-{"id":"chunk-e6aww6q8.js#_Kt","doc":"isShellToolClassified：shell 工具且分类器启用。"}
-{"id":"chunk-e6aww6q8.js#SKt","doc":"isShellOrFileToolForClassifier：非 MCP 的 shell/文件工具。"}
-{"id":"chunk-e6aww6q8.js#yse","doc":"alwaysTrueFlag：恒 true 的开关值。"}
-{"id":"chunk-e6aww6q8.js#W_e","doc":"jsonByteLength：JSON 字节长度。"}
-{"id":"chunk-e6aww6q8.js#Hbt","doc":"metaJsonLine：生成 {meta} 的 JSON 行。"}
-{"id":"chunk-e6aww6q8.js#JFe","doc":"recordClassifierContext：记录分类器上下文中。"}
-{"id":"chunk-e6aww6q8.js#Fbt","doc":"forgetClassifierContext：丢弃分类器上下文行。"}
-{"id":"chunk-e6aww6q8.js#c9","doc":"classifierContextLinesFor：取某请求的上下文行。"}
-{"id":"chunk-e6aww6q8.js#o3n","doc":"enqueueClassifierRequest：入队分类器请求。"}
-{"id":"chunk-e6aww6q8.js#sTt","doc":"recordClassifiedCall：记录已分类的工具调用。"}
-{"id":"chunk-e6aww6q8.js#aue","doc":"isClassifiedCall：该调用是否已分类。"}
-{"id":"chunk-e6aww6q8.js#w$o","doc":"fitsContextLimits：上下文行数与长度是否超限。"}
-{"id":"chunk-e6aww6q8.js#vTt","doc":"recordClassifierRequest：记录分类请求。"}
-{"id":"chunk-e6aww6q8.js#ETt","doc":"settleClassifierRequest：结算分类请求。"}
-{"id":"chunk-e6aww6q8.js#RTt","doc":"forgetClassifierRequest：丢弃分类请求。"}
-{"id":"chunk-e6aww6q8.js#CTt","doc":"classifierHistoryFor：取某调用的历史。"}
-{"id":"chunk-e6aww6q8.js#tQe","doc":"isSnugWallOn：开关 tengu_snug_wall。"}
-{"id":"chunk-e6aww6q8.js#qjr","doc":"takeNoServerCheckNotice：取一次性的无服务端检查说明。"}
-{"id":"chunk-e6aww6q8.js#z5s","doc":"takeServerFallbackAnnouncement：取一次性的回退公告。"}
-{"id":"chunk-e6aww6q8.js#ntt","doc":"gatewayDisplayName：网关显示名。"}
-{"id":"chunk-e6aww6q8.js#hBo","doc":"truncateGatewayHost：截断网关主机名。"}
-{"id":"chunk-e6aww6q8.js#Yjr","doc":"withGatewayHost：公告带上网关主机。"}
-{"id":"chunk-e6aww6q8.js#Xjr","doc":"sdkSupportsFallbackDialog：SDK 宿主支持回退对话框。"}
-{"id":"chunk-e6aww6q8.js#S2e","doc":"isChromeClassifierFloorCall：浏览器工具且分类器可跑。"}
-{"id":"chunk-e6aww6q8.js#K5s","doc":"isNonAutoMode：是否非 auto 模式。"}
-{"id":"chunk-e6aww6q8.js#c_e","doc":"priorAssistantContextEnabled：是否附带先前助手上下文。"}
-{"id":"chunk-e6aww6q8.js#Z6t","doc":"listsHumanReplies：是否列出人类回复（含开关来源）。"}
-{"id":"chunk-e6aww6q8.js#jGe","doc":"autoModeContextEnabled：取并缓存 auto 模式上下文开关。"}
-{"id":"chunk-e6aww6q8.js#Aqt","doc":"cachedAutoModeContextEnabled：auto 模式上下文开关（缓存）。"}
-{"id":"chunk-e6aww6q8.js#K7","doc":"isIridescentCrystalOn：开关 tengu_iridescent_crystal。"}
-{"id":"chunk-e6aww6q8.js#WGe","doc":"isQuietLanternOn：开关 tengu_quiet_lantern。"}
-{"id":"chunk-e6aww6q8.js#Zhe","doc":"isCopperTrellisOn：开关 tengu_copper_trellis。"}
-{"id":"chunk-e6aww6q8.js#xqt","doc":"isVividCrayonOn：开关 tengu_vivid_crayon。"}
-{"id":"chunk-e6aww6q8.js#m4s","doc":"isHazelPloverOn：开关 tengu_hazel_plover。"}
-{"id":"chunk-e6aww6q8.js#Pqt","doc":"isMerryPopcornOn：开关 tengu_merry_popcorn。"}
-{"id":"chunk-e6aww6q8.js#Mqt","doc":"isWiseOrigamiOn：开关 tengu_wise_origami。"}
-{"id":"chunk-e6aww6q8.js#Iqt","doc":"userServerClassifierSwitch：用户的服务端分类器开关。"}
-{"id":"chunk-e6aww6q8.js#g4s","doc":"isValiantSphinxOn：开关 tengu_valiant_sphinx（出错按开）。"}
-{"id":"chunk-e6aww6q8.js#zGe","doc":"neverTrue：恒 false 占位。"}
-{"id":"chunk-e6aww6q8.js#SMo","doc":"setTimeoutWithCancel：定时器并返回取消函数；TIMER_MARGIN_MS：定时器余量（同一声明共 2 个绑定）。"}
-{"id":"chunk-e6aww6q8.js#jz","doc":"agentIdOrMain：缺省为 main 的 agent id。"}
-{"id":"chunk-e6aww6q8.js#kMo","doc":"ENABLE_CLASSIFIER_DEFAULT：分类器默认启用标志。"}
-{"id":"chunk-e6aww6q8.js#eye","doc":"clearUnavailableStreak：有连续不可用后清零。"}
-{"id":"chunk-e6aww6q8.js#F3n","doc":"minimalUnavailableNotice：只保留最简不可用说明。"}
-{"id":"chunk-e6aww6q8.js#YGe","doc":"DANGEROUS_TOOL_USE：危险工具使用判定类型；dangerousToolUseVerdictSchema：危险工具使用判定 schema；dangerousToolUseToolListSchema：危险工具列表 schema（同一声明共 5 个绑定）。"}
-{"id":"chunk-e6aww6q8.js#Hqt","doc":"knownValueOrOther：值在已知集合中则原样，否则 other。"}
-{"id":"chunk-e6aww6q8.js#vR","doc":"asClassifierResult：转成 ClassifierResult。"}
-{"id":"chunk-e6aww6q8.js#Gqt","doc":"sentExactMcpAllowRule：是否发送过该条精确 MCP allow 规则。"}
-{"id":"chunk-e6aww6q8.js#JGe","doc":"classifierResultPayload：构造分类结果载荷。"}
-{"id":"chunk-e6aww6q8.js#Xqt","doc":"settleServerNoResult：服务端无结果时结算。"}
-{"id":"chunk-e6aww6q8.js#rye","doc":"settleServerStreamEnded：服务端流结束时结算。"}
-{"id":"chunk-4p0ppc72.js#D0s","doc":"logShellAllowRulesAtInit：启动时上报 shell 允许规则数量。"}
-{"id":"chunk-agvbmc7h.js#Nmi","doc":"modeAtRequestFor：按当前上下文构造模式的按请求快照。"}
-{"id":"chunk-agvbmc7h.js#B7o","doc":"isPlainModeAtRequest：模式快照且未启用分类器。"}
-{"id":"chunk-agvbmc7h.js#j7o","doc":"canonicalRuleString：规则的规范字符串。"}
-{"id":"chunk-e6aww6q8.js#jSt","doc":"needsGrowthBookRefresh：GrowthBook 已启用但特性数据过期。"}
-{"id":"chunk-e6aww6q8.js#Ejr","doc":"recordArtifactConsentFlag：记录并返回 Artifact 同意规则开关。"}
-{"id":"chunk-e6aww6q8.js#hSn","doc":"outcomeCodesEnabled：分类结果代码开关。"}
-{"id":"chunk-e6aww6q8.js#zM","doc":"classifierSessionState：当前宿主的分类器会话状态。"}
-{"id":"chunk-e6aww6q8.js#s5s","doc":"sessionSidecarFilePath：会话 sidecar 文件路径。"}
-{"id":"chunk-e6aww6q8.js#qSn","doc":"recordContextNavigation：记录分类器上下文导航行。"}
-{"id":"chunk-rsktsadk.js#c_i","doc":"setPersonalConfigRestriction：设置个人配置限制。"}
-{"id":"chunk-hwmsct5x.js#lD","doc":"isUsageBasedBilling：账号按用量计费。"}
-{"id":"chunk-hwmsct5x.js#oAt","doc":"idleAmberFinchOn：开关 tengu_idle_amber_finch。"}
-{"id":"chunk-hwmsct5x.js#Udi","doc":"quietSlateWrenOn：开关 tengu_quiet_slate_wren。"}
-{"id":"chunk-hwmsct5x.js#Gpe","doc":"canShowUpgradeCommand：可显示升级命令。"}
-{"id":"chunk-hwmsct5x.js#L8r","doc":"isModelBilledOrRequired：模型按额度计费或必须用额度。"}
-{"id":"chunk-hwmsct5x.js#D2","doc":"usesPayAsYouGo：非第一方/非订阅/企业按量/零额度档。"}
-{"id":"chunk-hwmsct5x.js#Cd","doc":"saffronPickerDimOn：开关 tengu_saffron_picker_dim。"}
-{"id":"chunk-hwmsct5x.js#Bdi","doc":"saffronLadderOn：开关 tengu_saffron_ladder。"}
-{"id":"chunk-hwmsct5x.js#yst","doc":"saveModelConsent：保存模型计费同意。"}
-{"id":"chunk-hwmsct5x.js#jdi","doc":"setModelFamilyConsent：按模型族保存同意。"}
-{"id":"chunk-hwmsct5x.js#Wdi","doc":"setSessionConsentKey：设置会话级同意键。"}
-{"id":"chunk-hwmsct5x.js#Gdi","doc":"clearSessionConsentKeys：清空所有会话级同意键。"}
-{"id":"chunk-hwmsct5x.js#fPe","doc":"needsConsentOrCredits：需要同意或需要额度。"}
-{"id":"chunk-hwmsct5x.js#zdi","doc":"needsConsentCreditsOrOut：需要同意、额度不足或用尽。"}
-{"id":"chunk-e6aww6q8.js#MCe","doc":"isDisklessSession：是否无盘会话。"}
-{"id":"chunk-e6aww6q8.js#CHt","doc":"hostOwnedInputFieldSet：取某工具需要剔除的宿主专属输入字段。"}
-{"id":"chunk-znrryf4y.js#XMi","doc":"primePlatform：预取平台信息。"}
-{"id":"chunk-znrryf4y.js#Iwr","doc":"linuxDistroInfo：Linux 发行版信息。"}
-{"id":"chunk-znrryf4y.js#JMi","doc":"macOSMajorVersion：macOS 主版本号。"}
-{"id":"chunk-9m6032j0.js#oDt","doc":"looksLikeWslVersion：版本串像 WSL。"}
-{"id":"chunk-9d1pf3s4.js#$c","doc":"readOnlyNoFollowFlags：只读 + 不跟随符号链接的打开标志。"}
-{"id":"chunk-9d1pf3s4.js#zq","doc":"platformNoFollowFlags：平台相关的 nofollow/nonblock 标志。"}
-{"id":"chunk-9d1pf3s4.js#q5r","doc":"MAX_PLUGIN_BINARY_BYTES：插件二进制体积上限。"}
-{"id":"chunk-4zx9mssv.js#rNt","doc":"primeWindowsPlatform：预先准备 Windows 平台的 PowerShell。"}
-{"id":"chunk-4zx9mssv.js#cOs","doc":"isWindowsOrPowerShellHost：Windows 或已有 PowerShell 路径。"}
-{"id":"chunk-sasp5j43.js#pNt","doc":"isPlainObjectPlist：普通对象判断（plist 解析）。"}
-{"id":"chunk-e6aww6q8.js#Nqs","doc":"isPluginActivityKind：是否为插件活动种类。"}
-{"id":"chunk-e6aww6q8.js#Cet","doc":"formatActivityLabel：生成活动标签。"}
-{"id":"chunk-e6aww6q8.js#$Ht","doc":"MAX_ACTIVITY_FEATURE_KEYS：活动特性键上限；MAX_RECENT_ACTIVITY：最近活动保留条数（同一声明共 2 个绑定）。"}
-{"id":"chunk-e6aww6q8.js#$qs","doc":"activityFeaturesFor：取某活动的特性列表。"}
-{"id":"chunk-e6aww6q8.js#pFo","doc":"drainRecentActivity：取出并清空最近活动。"}
-{"id":"chunk-21ppfwx8.js#t6o","doc":"headerNamesExceptUserAgent：去掉 user-agent 的 header 名。"}
-{"id":"chunk-e6aww6q8.js#mbs","doc":"orphanMarkerMove：孤儿标记的移动计划。"}
-{"id":"chunk-e6aww6q8.js#i5","doc":"PluginCachePublishError：插件缓存发布错误类。"}
-{"id":"chunk-e6aww6q8.js#vbs","doc":"MAX_CACHE_PUBLISH_ATTEMPTS：发布重试次数。"}
-{"id":"chunk-e6aww6q8.js#ic","doc":"refreshPluginCaches：刷新活动插件前清空派生缓存。"}
-{"id":"chunk-f3qhjfah.js#R1","doc":"ORPHAN_MARKER_FILE：版本目录的孤儿标记文件名；IN_USE_MARKER_FILE：使用中标记文件名；GCS_SHA_MARKER_FILE：GCS sha 标记文件名（同一声明共 4 个绑定）。"}
-{"id":"chunk-e6aww6q8.js#yqs","doc":"writeAccountMarketplacesCache：写入账号市场缓存（带解析器版本）。"}
-{"id":"chunk-e6aww6q8.js#F$o","doc":"accountMarketplacesPromiseCache：账号市场请求的键控 Promise 缓存。"}
-{"id":"chunk-e6aww6q8.js#ljt","doc":"accountMarketplaceLabel：市场名加上 “listed as …”。"}
-{"id":"chunk-e6aww6q8.js#hBr","doc":"listedAsSuffix：显示名与 CLI 名不同时的说明。"}
-{"id":"chunk-e6aww6q8.js#Qbt","doc":"noCliNameLabel：只有显示名的市场的说明。"}
-{"id":"chunk-e6aww6q8.js#B$o","doc":"removeAccountSyncedFile：账号同步根可用时删除同步桶里的文件。"}
-{"id":"chunk-e6aww6q8.js#Yyo","doc":"MAX_KNOWN_CLAUDEAI_FILE_BYTES：claude.ai 市场注册表体积上限；KNOWN_CLAUDEAI_FILE_TTL_MS：注册表缓存时长；knownClaudeAiMarketplaceSchema：claude.ai 市场注册表 schema（同一声明共 4 个绑定）。"}
-{"id":"chunk-e6aww6q8.js#X5","doc":"isClaudeAiMarketplaceSource：来源是 claudeai。"}
-{"id":"chunk-dwd7meyg.js#$Te","doc":"CLOUD_PLUGINS_FORWARDED_KEYS：云端插件转发时同步的设置在键。"}
-{"id":"chunk-21ppfwx8.js#HVt","doc":"shouldRefreshCommandPlugins：命令源插件是否需要刷新。"}
-{"id":"chunk-21ppfwx8.js#B","doc":"commandSourceRefreshEnabled：命令源刷新开关。"}
-{"id":"chunk-21ppfwx8.js#Z","doc":"TEMP_CACHE_DIR_MAX_RANDOM：临时缓存目录名随机段长度；TEMP_CACHE_LINK_SUFFIX：临时缓存目录的 link 后缀；TEMP_CACHE_CLONE_SUFFIX：临时缓存目录的 clone 后缀（同一声明共 3 个绑定）。"}
-{"id":"chunk-21ppfwx8.js#$kt","doc":"pluginRootHasMarker：目录下是否有插件根标记。"}
-{"id":"chunk-21ppfwx8.js#j5r","doc":"isPluginRootMarker：是否为插件根标记文件名。"}
-{"id":"chunk-21ppfwx8.js#yii","doc":"isPluginComponentDir：是否为插件组件目录名。"}
-{"id":"chunk-21ppfwx8.js#o1","doc":"describeCommandOutputMode：说明 link/copy 模式对输出目录的处理。"}
-{"id":"chunk-21ppfwx8.js#Bd","doc":"CommandSourceError：命令源错误类。"}
-{"id":"chunk-21ppfwx8.js#nSn","doc":"isPristineLinkFarm：链接农场是否只含缓存元数据。"}
-{"id":"chunk-21ppfwx8.js#Sii","doc":"readLinkFarmTarget：读取链接农场标记的目标。"}
-{"id":"chunk-21ppfwx8.js#wpe","doc":"commandSourceSpecOf：取出 command 来源配置。"}
-{"id":"chunk-21ppfwx8.js#Nee","doc":"isLinkModeCommandSource：命令源是否为 link 模式。"}
-{"id":"chunk-21ppfwx8.js#zW","doc":"organizationAnswerState：等待组织答复的共享状态。"}
-{"id":"chunk-21ppfwx8.js#z5r","doc":"ORGANIZATION_ANSWER_TIMEOUT_MS：等待组织答复超时。"}
-{"id":"chunk-21ppfwx8.js#K5r","doc":"ORGANIZATION_ANSWER_POLL_MS：组织答复轮询间隔。"}
-{"id":"chunk-21ppfwx8.js#Oxe","doc":"MAX_SPILL_BYTES：溢出文件体积上限；MAX_PLUGIN_ARCHIVE_BYTES：插件归档体积上限；COMMAND_SOURCE_DEFAULT_TIMEOUT_MS：命令源默认超时（同一声明共 3 个绑定）。"}
-{"id":"chunk-csq9ftr9.js#K","doc":"COMMAND_SOURCE_NETWORK_ERRORS：命令源网络/可疑链接类错误文案集合。"}
-{"id":"chunk-csq9ftr9.js#kk","doc":"commandSourceSession：当前宿主的命令源会话状态。"}
-{"id":"chunk-csq9ftr9.js#nri","doc":"setCommandSourceNameRegistration：记录命令源的名字登记方式。"}
-{"id":"chunk-csq9ftr9.js#Jtr","doc":"isOfficialNameUsableHere：官方名在当前登记方式下可用。"}
-{"id":"chunk-csq9ftr9.js#A","doc":"isBuiltinCatalogAccessAllowed：内建目录且访问允许。"}
-{"id":"chunk-csq9ftr9.js#Prt","doc":"isReviewerMarkedEntry：评审标记过的条目。"}
-{"id":"chunk-csq9ftr9.js#j","doc":"isCatalogEntryName：目录条目名且访问允许。"}
-{"id":"chunk-e6aww6q8.js#cie","doc":"qualifiedMarketplaceLabel：市场显示名。"}
-{"id":"chunk-e6aww6q8.js#Amn","doc":"truncateMarketplaceLabel：截断市场显示名。"}
-{"id":"chunk-jnt55rm1.js#DFs","doc":"ensureCatalogForOfficialDeps：依赖里有官方市场插件时加载插件目录。"}
-{"id":"chunk-jnt55rm1.js#YCo","doc":"dependencyErrorsForSource：某来源的依赖加载错误。"}
-{"id":"chunk-czx62zen.js#edr","doc":"isSameNormalizedProjectPath：Windows 项目路径规范化后相同。"}
-{"id":"chunk-czx62zen.js#Umi","doc":"isStaleInstallTarget：作用域相同但记录不同。"}
-{"id":"chunk-czx62zen.js#qP","doc":"installationAtTarget：取某作用域/项目的安装记录。"}
-{"id":"chunk-czx62zen.js#mO","doc":"isDependencyAutoInstallState：依赖自动安装标记或记录数组。"}
-{"id":"chunk-czx62zen.js#ye","doc":"SAFE_DISPLAY_NAME_RE：可安全展示的插件名；MAX_DISPLAY_NAME_LENGTH：展示名长度上限；MAX_DISPLAY_NAME_SEGMENTS：展示名段数上限（同一声明共 3 个绑定）。"}
-{"id":"chunk-e6aww6q8.js#ifn","doc":"isSameFileIdentity：两路径是否为同一文件。"}
-{"id":"chunk-ess9gkz3.js#R6r","doc":"moduleAdmissionCache：模块准入缓存。"}
-{"id":"chunk-ess9gkz3.js#x6r","doc":"moduleAdmissionCacheB：模块准入缓存（第二个）。"}
-{"id":"chunk-e6aww6q8.js#Eqs","doc":"sshCloneFallback：SSH 探测与降级提示。"}
-{"id":"chunk-e6aww6q8.js#zpe","doc":"sshNotConfiguredMessage：SSH 未配置改走 HTTPS 的说明。"}
-{"id":"chunk-e6aww6q8.js#yFt","doc":"httpsFailedRetrySshMessage：HTTPS 失败改走 SSH 的说明。"}
-{"id":"chunk-21ppfwx8.js#Eie","doc":"EntryHelperError：市场 header helper 错误类。"}
-{"id":"chunk-21ppfwx8.js#E$e","doc":"marketplaceSourceOfEntry：某市场条目的来源。"}
-{"id":"chunk-21ppfwx8.js#mE","doc":"marketplaceNameOfId：从插件 id 取市场名。"}
-{"id":"chunk-21ppfwx8.js#At","doc":"urlHostname：取 URL 主机名，失败返回空串。"}
-{"id":"chunk-7kt7c7a3.js#hqe","doc":"isForegroundBusy：前台是否忙碌。"}
-{"id":"chunk-7kt7c7a3.js#M4o","doc":"isForegroundRunning：前台是否在跑回合。"}
-{"id":"chunk-7kt7c7a3.js#tYr","doc":"runWhenTurnEnds：回合结束时执行。"}
-{"id":"chunk-7kt7c7a3.js#_ni","doc":"foregroundEdgeAt：前台状态切换时间。"}
-{"id":"chunk-7kt7c7a3.js#nYr","doc":"isBusyShorterThan：忙碌时间短于阈值。"}
-{"id":"chunk-7kt7c7a3.js#bni","doc":"isBusyAtLeast：忙碌时间达到阈值。"}
-{"id":"chunk-7kt7c7a3.js#D4o","doc":"hooksModulesGateFromPayload：开关来源为 payload 或已有新特性。"}
-{"id":"chunk-7kt7c7a3.js#rYr","doc":"hooksModulesGateSourceChanged：开关读取来源已变化。"}
-{"id":"chunk-7kt7c7a3.js#L4o","doc":"ORGANIZATION_MODS_UNLOADED_MESSAGE：组织 mods 未能加载时的说明。"}
-{"id":"chunk-7kt7c7a3.js#sYr","doc":"ORGANIZATION_POLICY_UNREADABLE_MESSAGE：组织策略无法读取时的说明。"}
-{"id":"chunk-7kt7c7a3.js#crt","doc":"pendingWithoutStart：仍待定且 GrowthBook 尚未开始。"}
-{"id":"chunk-7kt7c7a3.js#Xvt","doc":"fetchHoldForHost：某宿主的取回保持承诺。"}
-{"id":"chunk-7kt7c7a3.js#Eee","doc":"currentFetchHold：当前宿主的取回保持。"}
-{"id":"chunk-7kt7c7a3.js#YNe","doc":"isDiskSourceWithCredential：开关来源为 disk 且有凭据。"}
-{"id":"chunk-7kt7c7a3.js#R_n","doc":"isServedGateSource：开关来源为服务端下发。"}
-{"id":"chunk-7kt7c7a3.js#BF","doc":"isAutoModeGateOpen：auto 模式闸门可等。"}
-{"id":"chunk-7kt7c7a3.js#cFi","doc":"markFollowConsumed：标记已跟随。"}
-{"id":"chunk-7kt7c7a3.js#fFi","doc":"waitForRolloutUnlessServed：非服务端来源时等待 rollout 开关。"}
-{"id":"chunk-7kt7c7a3.js#U","doc":"waitForSettlement：带截止时间的结算等待。"}
-{"id":"chunk-7kt7c7a3.js#b","doc":"REREAD_INTERVAL_MS：重读间隔。"}
-{"id":"chunk-7kt7c7a3.js#x_n","doc":"REREAD_INITIAL_DELAY_MS：首次重读延迟。"}
-{"id":"chunk-7kt7c7a3.js#gFi","doc":"flagValueSourceLabel：开关值来源标签。"}
-{"id":"chunk-7kt7c7a3.js#hFi","doc":"followRolloutWithDeadline：带截止时间的重读后跟随。"}
-{"id":"chunk-7kt7c7a3.js#A_n","doc":"BUSY_EDGE_THRESHOLD_MS：前台忙碌判定阈值。"}
-{"id":"chunk-e6aww6q8.js#KP","doc":"isSymlinkOrFalse：是否为符号链接。"}
-{"id":"chunk-e6aww6q8.js#_ut","doc":"PLUGIN_CATALOG_STATS_URL：插件统计目录的下载地址；PLUGIN_CATALOG_CACHE_TTL_MS：插件目录缓存时长；MAX_PLUGIN_CATALOG_BYTES：插件目录缓存字节上限（同一声明共 8 个绑定）。"}
-{"id":"chunk-e6aww6q8.js#OWo","doc":"ESTIMATED_TOKENS_PER_COMPONENT：每组件估算 token 数；MAX_COMPONENT_ESTIMATE_COUNT：估算组件数上限（同一声明共 2 个绑定）。"}
-{"id":"chunk-e6aww6q8.js#Rmn","doc":"isOfficialFamilySameSource：官方市场族内同源插件。"}
-{"id":"chunk-e6aww6q8.js#vct","doc":"isRecordablePluginId：插件 id 符合 schema。"}
-{"id":"chunk-e6aww6q8.js#Ect","doc":"assertRecordablePluginId：id 不可记录时抛错。"}
-{"id":"chunk-e6aww6q8.js#PF","doc":"hasFailedInstalledPluginsRead：该路径曾读失败。"}
-{"id":"chunk-e6aww6q8.js#QJn","doc":"isPluginUnreadableOrShared：插件读失败或数据目录被共享。"}
-{"id":"chunk-e6aww6q8.js#Bct","doc":"readInstalledPluginsIfAny：读取安装记录，缺失返回 undefined。"}
-{"id":"chunk-e6aww6q8.js#Iv","doc":"memoizeLastValue：记录并复用同一键的上次结果。"}
-{"id":"chunk-e6aww6q8.js#twe","doc":"frontmatterDisallowedTools：从前置声明取 disallowed-tools。"}
-{"id":"chunk-e6aww6q8.js#sKe","doc":"MAX_PLUGIN_COMMAND_FILE_BYTES：插件命令文件体积上限。"}
-{"id":"chunk-pd0t5xas.js#Wq","doc":"hasTrustedOnlyBuiltinPlugin：该插件是否只能由受信设置启用。"}
-{"id":"chunk-f3qhjfah.js#f5t","doc":"normalizeMarketplaceInputPath：市场输入路径规范化为绝对可比较路径。"}
-{"id":"chunk-f3qhjfah.js#aZo","doc":"classifyMarketplacePathOrUndefined：市场路径不在可疑位置时返回绝对路径。"}
-{"id":"chunk-f3qhjfah.js#Edr","doc":"DOT_RELATIVE_RE：以点开头的相对路径片段。"}
-{"id":"chunk-f3qhjfah.js#vdr","doc":"isSuspiciousRelativeMarketplacePath：去掉前导点后仍是可疑路径。"}
-{"id":"chunk-czx62zen.js#yJr","doc":"outermostSeatCache：安全插件是否排最外层的缓存。"}
-{"id":"chunk-czx62zen.js#Fmi","doc":"SEAT_BY_DEFAULT：默认座席标志。"}
-{"id":"chunk-czx62zen.js#BPe","doc":"isVouchedPolicyPluginId：是否为受信策略插件 id。"}
-{"id":"chunk-czx62zen.js#z","doc":"assuredPolicySettings：受信管理策略层或策略设置。"}
-{"id":"chunk-czx62zen.js#ne","doc":"hasPluginDeclarations：该设置层是否声明了插件。"}
-{"id":"chunk-czx62zen.js#Xmi","doc":"managedPluginNameSet：托管插件名集合。"}
-{"id":"chunk-czx62zen.js#sdr","doc":"isManagedOrPolicyBlocked：策略不可读或该插件被托管策略点名。"}
-{"id":"chunk-bfnfj4kx.js#epr","doc":"availableBuiltinSkillCommands：未被禁用的内建插件技能命令。"}
-{"id":"chunk-bfnfj4kx.js#xSi","doc":"builtinPluginSkillCommands：内建插件技能命令列表。"}
-{"id":"chunk-e6aww6q8.js#dgn","doc":"AUTOUPDATE_SETTING_SOURCES_TEXT：autoUpdate 有效的设置源说明。"}
-{"id":"chunk-e6aww6q8.js#v9s","doc":"hasDirectoryAutoUpdate：插件目录市场是否设置了 autoUpdate。"}
-{"id":"chunk-e6aww6q8.js#bfe","doc":"MarketplaceError：市场错误类。"}
-{"id":"chunk-e6aww6q8.js#qWn","doc":"writeSparsePaths：写入稀疏路径配置。"}
-{"id":"chunk-e6aww6q8.js#lEt","doc":"isWorkspaceTrustedForMarketplace：工作区是否已持久信任。"}
-{"id":"chunk-e6aww6q8.js#Eq","doc":"isPluginDirectoryAvailable：插件目录模块是否可用。"}
-{"id":"chunk-e6aww6q8.js#FIe","doc":"settingsSourceOfMarketplace：市场记录所在的设置源。"}
-{"id":"chunk-e6aww6q8.js#HWo","doc":"reservedMarketplaceSpellingMessage：保留市场名的拒绝说明。"}
-{"id":"chunk-e6aww6q8.js#ozt","doc":"lookalikeReservedMarketplaceName：与保留名形似的市场名。"}
-{"id":"chunk-e6aww6q8.js#Dse","doc":"isImpersonatingOfficialMarketplace：是否在冒充官方市场名。"}
-{"id":"chunk-e6aww6q8.js#zIe","doc":"pluginDirectoryUnavailableKind：插件目录不可用的类别。"}
-{"id":"chunk-e6aww6q8.js#IGn","doc":"pluginDirectoryRefusalReason：插件目录策略拒绝原因。"}
-{"id":"chunk-e6aww6q8.js#DGn","doc":"awaitPluginDirectoryVerdict：等待插件目录策略裁决。"}
-{"id":"chunk-e6aww6q8.js#LGn","doc":"isRegistryOwnedByName：weakMap 里是否登记了该名字。"}
-{"id":"chunk-f3qhjfah.js#IJ","doc":"managedMarketplaceAnswerFlag：托管设置下的市场名答复开关。"}
-{"id":"chunk-f3qhjfah.js#J_","doc":"marketplaceNameAnswerState：市场名检查的答复状态。"}
-{"id":"chunk-f3qhjfah.js#cdr","doc":"impersonationCheckDisabled：恒 false（冒充检查占位）。"}
-{"id":"chunk-f3qhjfah.js#eZo","doc":"RESERVED_MARKETPLACE_RENAME_MESSAGE：保留名需改名的说明。"}
-{"id":"chunk-f3qhjfah.js#Dt","doc":"pluginAvailabilitySchema：插件可用性状态 schema。"}
-{"id":"chunk-f3qhjfah.js#EJr","doc":"parsePluginAvailability：解析插件可用性状态。"}
-{"id":"chunk-f3qhjfah.js#Mt","doc":"pluginOriginSchema：插件来源种类 schema。"}
-{"id":"chunk-f3qhjfah.js#vJr","doc":"parsePluginOriginKind：解析插件来源种类。"}
-{"id":"chunk-f3qhjfah.js#wkn","doc":"PLUGIN_FAILURE_RETRYABLE：各插件失败码是否可重试。"}
-{"id":"chunk-f3qhjfah.js#v","doc":"isSuspiciousMarketplaceUrl：可疑的市场 URL。"}
-{"id":"chunk-e6aww6q8.js#E9s","doc":"repoAuthoredMarketplaceHeaders：市场仓库自己声明的 headers。"}
-{"id":"chunk-e6aww6q8.js#Zb","doc":"ownPropertyOrUndefined：安全读取自有属性。"}
-{"id":"chunk-e6aww6q8.js#Vut","doc":"marketplaceSourceOfPlugin：插件所属市场的设置来源。"}
-{"id":"chunk-e6aww6q8.js#uGn","doc":"clearMarketplaceAdmissionVerdicts：清空市场准入判定缓存。"}
-{"id":"chunk-e6aww6q8.js#Vj","doc":"hiddenRegistryEntries：隐藏的市场条目。"}
-{"id":"chunk-e6aww6q8.js#HIe","doc":"releasedRegistryEntries：已放行的市场条目。"}
-{"id":"chunk-e6aww6q8.js#L6","doc":"hiddenRegistryEntryFor：取某存储臂下隐藏的市场条目。"}
-{"id":"chunk-e6aww6q8.js#O1n","doc":"releaseRegistryEntry：把市场条目从隐藏移到已放行。"}
-{"id":"chunk-e6aww6q8.js#uF","doc":"admissionKindsFor：某市场的准入类别表。"}
-{"id":"chunk-e6aww6q8.js#pGn","doc":"admissionCauseFor：某市场被拒的原因。"}
-{"id":"chunk-e6aww6q8.js#Xut","doc":"isOfficialMarketplaceSourced：官方市场来源可用。"}
-{"id":"chunk-e6aww6q8.js#aBr","doc":"recursiveLobsterOn：开关 tengu_recursive_lobster。"}
-{"id":"chunk-e6aww6q8.js#yft","doc":"semverCompat：npm semver 的 CommonJS 包装（包下载用）。"}
-{"id":"chunk-e6aww6q8.js#lDe","doc":"npmExecEnv：npm 子进程环境（是否继承父环境）。"}
-{"id":"chunk-e6aww6q8.js#Y_s","doc":"NPM_REGISTRY_QUERY_TIMEOUT_MS：npm registry 查询超时；UNSAFE_STORE_PREFIX：不安全的存储前缀占位；NPM_PACK_TIMEOUT_MS：npm pack 超时（同一声明共 32 个绑定）。"}
-{"id":"chunk-e6aww6q8.js#iie","doc":"isNpmVersionSpec：是否为 npm 版本规格。"}
-{"id":"chunk-e6aww6q8.js#aie","doc":"runNpm：带禁 git 参数执行 npm。"}
-{"id":"chunk-e6aww6q8.js#bT","doc":"isValidNpmPackageNameLoose：小写后是否为合法 npm 包名。"}
-{"id":"chunk-e6aww6q8.js#ZJn","doc":"npmMarketplaceEnabled：npm 市场功能开关。"}
-{"id":"chunk-a42q40ze.js#Epe","doc":"OFFICIAL_MARKETPLACE_SOURCE：官方市场的 GitHub 来源。"}
-{"id":"chunk-dcmhvw5a.js#SPi","doc":"isSameFoldedName：折叠字母数字后同名。"}
-{"id":"chunk-dcmhvw5a.js#Xps","doc":"removeMarketplaceCommand：移除市场的命令（尾点为 null）。"}
-{"id":"chunk-dcmhvw5a.js#ubr","doc":"marketplaceEntryGoneText：市场条目已消失的说明。"}
-{"id":"chunk-dcmhvw5a.js#EPi","doc":"officialMarketplaceBlockedText：官方市场被组织阻止的说明。"}
-{"id":"chunk-e6aww6q8.js#vYs","doc":"clearOrphanedGlobExclusions：清空孤儿版本 glob 排除缓存。"}
-{"id":"chunk-f3qhjfah.js#lZo","doc":"isAttributionNameValid：归属市场名格式合法。"}
-{"id":"chunk-f3qhjfah.js#un","doc":"pluginAttributionSchema：插件归属 sidecar schema。"}
-{"id":"chunk-e6aww6q8.js#Xct","doc":"shouldInstallBinaryAssets：官方市场插件且功能开启。"}
-{"id":"chunk-e6aww6q8.js#pz","doc":"isCacheSkipEntry：是否为缓存遍历跳过项。"}
-{"id":"chunk-e6aww6q8.js#yk","doc":"isPathUnder：路径是否在给定目录下。"}
-{"id":"chunk-e6aww6q8.js#K8","doc":"freshSymlinkCopyBudget：复制预算的初值。"}
-{"id":"chunk-e6aww6q8.js#I0","doc":"consumeSymlinkCopyBudget：扣减复制预算。"}
-{"id":"chunk-e6aww6q8.js#bje","doc":"pathHasNodeModulesSegment：路径里是否含 node_modules。"}
-{"id":"chunk-e6aww6q8.js#z8","doc":"resolveLinkChainFromParent：从父目录起解析链接链。"}
-{"id":"chunk-e6aww6q8.js#yz","doc":"isCacheEntryName：缓存条目名（含临时名变体）。"}
-{"id":"chunk-e6aww6q8.js#Upe","doc":"versionPathOccupantError：版本目录占位无法检查的错误。"}
-{"id":"chunk-e6aww6q8.js#l7","doc":"isTempSiblingName：是否有临时兄弟后缀。"}
-{"id":"chunk-e6aww6q8.js#fFt","doc":"stripTempSiblingSuffix：去掉临时兄弟后缀。"}
-{"id":"chunk-e6aww6q8.js#Cje","doc":"removeDirectoryTreeNoFollow：不跟随符号链接删除目录树。"}
-{"id":"chunk-aqpks6nd.js#Gan","doc":"emptyConfig：空配置对象。"}
-{"id":"chunk-aqpks6nd.js#h7e","doc":"truthyOrFalsyEnv：三态环境变量解析。"}
-{"id":"chunk-aqpks6nd.js#CHr","doc":"isTrueOrTrueString：值为 true 或字符串 \"true\"。"}
-{"id":"chunk-e6aww6q8.js#F3s","doc":"hasNodeModulesDir：是否存在 node_modules 目录。"}
-{"id":"chunk-e6aww6q8.js#Nks","doc":"npmMarketplaceDefaultOff：npm 市场默认关闭。"}
-{"id":"chunk-e6aww6q8.js#Qft","doc":"isListingUsableForMarketplace：目录列表可用于该市场。"}
-{"id":"chunk-e6aww6q8.js#jqn","doc":"isMarketplaceNamed：市场名是否匹配（官方名按族匹配）。"}
-{"id":"chunk-f3qhjfah.js#c5t","doc":"versionCacheStorageSpace：版本缓存路径对应的存储空间。"}
-{"id":"chunk-f3qhjfah.js#kkn","doc":"cacheStorageKeyOrFallback：缓存路径转存储键。"}
-{"id":"chunk-f3qhjfah.js#xJr","doc":"registryStorageSpace：插件注册表存储空间。"}
-{"id":"chunk-f3qhjfah.js#PJr","doc":"marketplaceCacheSpace：市场缓存存储空间。"}
-{"id":"chunk-e6aww6q8.js#L2e","doc":"isLocalMarketplaceEntry：本地市场来源的字符串。"}
-{"id":"chunk-e6aww6q8.js#Tet","doc":"pluginRegistrySpace：插件注册表存储空间键。"}
-{"id":"chunk-aepeg2w5.js#ac","doc":"BI_KEY_UNAVAILABLE：行为遥测键不可用的标记；bi1KeyCache：行为键缓存；BI_KEY_LENGTH：行为键长度（同一声明共 4 个绑定）。"}
-{"id":"chunk-aepeg2w5.js#AI","doc":"MAX_TIMESTAMPED_ENTRIES：带时间戳记录集保留的条目数；USAGE_SNAPSHOT_MAX_AGE_MS：用量快照的最大有效时长（7 天）；USAGE_SNAPSHOT_FUTURE_SKEW_MS：用量快照允许的未来时间偏差（同一声明共 4 个绑定）。"}
-{"id":"chunk-9qwbw2qr.js#F","doc":"PLUGIN_DIRECTORY_BINDINGS_FILE：插件目录绑定文件名；PLUGIN_DIRECTORY_BINDINGS_VERSION：绑定文件版本；MAX_BINDINGS_FILE_BYTES：绑定文件体积上限（同一声明共 4 个绑定）。"}
-{"id":"chunk-9qwbw2qr.js#VS","doc":"isOfficialPluginDirectoryId：插件 id 属于官方市场。"}
-{"id":"chunk-9qwbw2qr.js#xSe","doc":"isUnreadableBindings：该绑定表读失败过。"}
-{"id":"chunk-9qwbw2qr.js#lpe","doc":"bindingsWithReadFailure：读绑定表并记下读失败。"}
-{"id":"chunk-9qwbw2qr.js#Rrt","doc":"seedBindingsFromInstall：从安装记录补齐绑定。"}
-{"id":"chunk-9qwbw2qr.js#tVt","doc":"hasDirectoryRepositoryKey：是否带目录仓库键。"}
-{"id":"chunk-s67w32sp.js#Xe","doc":"pluginDirectoryCacheSchema：插件目录缓存 schema；pluginDirectoryCacheSchemaWithSchema：带 schema 版本的缓存 schema（同一声明共 2 个绑定）。"}
-{"id":"chunk-9qwbw2qr.js#krt","doc":"pluginGitUrlError：解析插件 git URL 的错误。"}
-{"id":"chunk-9qwbw2qr.js#ckt","doc":"isPluginGitUrlValid：插件 git URL 可解析。"}
-{"id":"chunk-9qwbw2qr.js#YX","doc":"isOfficialDirectoryPlugin：插件来自官方目录。"}
-{"id":"chunk-3a43jh83.js#jF","doc":"lanternPrismEnabled：插件 lantern prism 开关。"}
-{"id":"chunk-3a43jh83.js#QE","doc":"isPluginDirectoryModeOn：插件目录模式开启。"}
-{"id":"chunk-3a43jh83.js#Q4o","doc":"encapsulatedPebbleEnabled：插件开关（默认开）。"}
-{"id":"chunk-3a43jh83.js#J_n","doc":"shardedSnowflakeOff：插件开关（默认关时返回 true）。"}
-{"id":"chunk-dcmhvw5a.js#mJt","doc":"normalizeReservedMarketplaceCase：保留市场名小写化。"}
-{"id":"chunk-dcmhvw5a.js#Jps","doc":"pluginSettingAt：按启用插件名单查设置。"}
-{"id":"chunk-dcmhvw5a.js#vPi","doc":"isPluginEnabled：插件是否启用。"}
-{"id":"chunk-dcmhvw5a.js#mbr","doc":"isOfficialOrBuiltinMarketplace：官方市场或内置。"}
-{"id":"chunk-e6aww6q8.js#eVe","doc":"bindingKeysFor：找绑定键与其值。"}
-{"id":"chunk-e6aww6q8.js#Qj","doc":"pluginBindingValues：绑定的插件名列表。"}
-{"id":"chunk-k9mgeeff.js#v","doc":"MAX_PLUGIN_INVENTORY_FILE_BYTES：插件清单文件字节上限。"}
-{"id":"chunk-k9mgeeff.js#k","doc":"objectKeysOf：汇总对象键。"}
-{"id":"chunk-k9mgeeff.js#O","doc":"resolveComponentPath：解析组件绝对路径。"}
-{"id":"chunk-f3qhjfah.js#MFe","doc":"PLUGIN_LINK_FILE：插件链接标记文件名；pluginLinkSchema：插件链接标记 schema（同一声明共 2 个绑定）。"}
-{"id":"chunk-f3qhjfah.js#RJr","doc":"thinkbackUserConfigSpace：thinkback 用户配置存储空间。"}
-{"id":"chunk-yf5m6p65.js#Ios","doc":"emptyPluginLoadState：插件加载状态初值。"}
-{"id":"chunk-yf5m6p65.js#zSi","doc":"isRegisteredAgent：代理是否已登记。"}
-{"id":"chunk-yf5m6p65.js#ypr","doc":"isPluginLoadCacheOnly：插件仅从缓存加载。"}
-{"id":"chunk-yf5m6p65.js#oto","doc":"clearPluginSkillsCache：清除插件技能缓存。"}
-{"id":"chunk-e6aww6q8.js#rUe","doc":"truncateListItem：截断列表项并补省略号。"}
-{"id":"chunk-e6aww6q8.js#zG","doc":"quotedListItem：列表项加引号。"}
-{"id":"chunk-e6aww6q8.js#x3n","doc":"isNotDotPrefixed：不以点开头。"}
-{"id":"chunk-e6aww6q8.js#wqs","doc":"markGitUnavailable：标记 git 不可用。"}
-{"id":"chunk-e6aww6q8.js#oSo","doc":"GIT_PROBE_TIMEOUT_MS：git 探测超时。"}
-{"id":"chunk-e6aww6q8.js#h1t","doc":"isSkillCustomizationBookingAllowed：技能定制允许时返回真（占位）。"}
-{"id":"chunk-czx62zen.js#F","doc":"builtinQualifiedId：内置插件的规范 id。"}
-{"id":"chunk-czx62zen.js#af","doc":"policyEnabledPluginNameSet：策略启用的插件名集合。"}
-{"id":"chunk-cjydagjy.js#No","doc":"initBuiltinPlugins：初始化内置插件。"}
-{"id":"chunk-fj1bjh0z.js#pMr","doc":"pluginRelevanceRoots：插件相关性检查的根目录。"}
-{"id":"chunk-fj1bjh0z.js#KWn","doc":"pluginRelevanceInputs：插件相关性输入（读状态、Bash 工具与主机）。"}
-{"id":"chunk-mt0bfz4z.js#Wee","doc":"logPluginScopedError：记录托管作用域插件错误。"}
-{"id":"chunk-e6aww6q8.js#F8","doc":"settingsSourcesReversed：反向的已启用设置源。"}
-{"id":"chunk-e6aww6q8.js#djt","doc":"enabledPluginRecordsBySource：各设置源的启用插件表。"}
-{"id":"chunk-e6aww6q8.js#_Br","doc":"pluginSettingRecords：非官方插件追加 addDir 来源。"}
-{"id":"chunk-e6aww6q8.js#j$o","doc":"withAddDirPlugins：追加 addDir 启用插件。"}
-{"id":"chunk-dcmhvw5a.js#gps","doc":"SCRIPT_EXTENSIONS_TEXT：脚本后缀的列举文字。"}
-{"id":"chunk-e6aww6q8.js#K1n","doc":"enabledPluginSettings：设置里的启用插件表。"}
-{"id":"chunk-e6aww6q8.js#FGn","doc":"hasInstalledOfficialEntry：官方市场里有安装记录。"}
-{"id":"chunk-e6aww6q8.js#VGr","doc":"shortLowerPrefix：小写后的前 12 个字符。"}
-{"id":"chunk-e6aww6q8.js#Yse","doc":"pluginGitHead：插件目录对应的 git HEAD。"}
-{"id":"chunk-e6aww6q8.js#Xj","doc":"pluginVersionOrNull：取插件版本或 null。"}
-{"id":"chunk-e6aww6q8.js#pct","doc":"marketplaceCommitSha：市场仓库的提交 sha。"}
-{"id":"chunk-e6aww6q8.js#j3s","doc":"versionFlagSpec：版本范围标志串。"}
-{"id":"chunk-e6aww6q8.js#Jz","doc":"skillsChangedSignal：技能变更的惰性信号。"}
-{"id":"chunk-4q6mp9e8.js#zye","doc":"bareModePluginAllow：裸模式下的通配插件放行函数。"}
-{"id":"chunk-4q6mp9e8.js#T","doc":"pluginIdsWithSource：有 pluginSource 的插件 id。"}
-{"id":"chunk-4q6mp9e8.js#pDr","doc":"noReloadPlugins：已裁掉的插件重载（返回 0）。"}
-{"id":"chunk-k176arn3.js#oz","doc":"ATOMIC_WRITE_ERRNOS：原子写降级错误码。"}
-{"id":"chunk-s61vbvea.js#FF","doc":"isDirectoryOrFalse：目录判断（失败为假）。"}
-{"id":"chunk-s61vbvea.js#ZB","doc":"mcpAuthCacheContent：MCP 认证缓存内容。"}
-{"id":"chunk-dcmhvw5a.js#Oxi","doc":"forgetEnvWriteRestorer：返回恢复函数（忘掉写入记录）。"}
-{"id":"chunk-dcmhvw5a.js#Mxi","doc":"importEnvWrites：批量导入环境写入记录。"}
-{"id":"chunk-e6aww6q8.js#$Lt","doc":"syncTrashTempPrefix：同步回收站临时名前缀。"}
-{"id":"chunk-f3qhjfah.js#FN","doc":"MARKETPLACES_JSON_FILE：同步目录里的市场文件；MARKETPLACE_ID_RE：市场 id 格式（同一声明共 2 个绑定）。"}
-{"id":"chunk-f3qhjfah.js#$Jr","doc":"syncKeyOf：pid:procStart/路径 形式的同步键。"}
-{"id":"chunk-f3qhjfah.js#tG","doc":"SYNCED_SUBDIR：同步根下的 synced 目录名；TRASH_SUBDIR：回收站目录名；UNBOUND_BUCKET：未绑定桶的占位名（同一声明共 3 个绑定）。"}
-{"id":"chunk-f3qhjfah.js#LCt","doc":"isUuid：是否为 UUID。"}
-{"id":"chunk-f3qhjfah.js#WYe","doc":"isSyncBucketName：是否为同步桶名。"}
-{"id":"chunk-f3qhjfah.js#Tit","doc":"bucketOrg：桶名对应的组织。"}
-{"id":"chunk-f3qhjfah.js#FJr","doc":"bucketDirPath：桶目录路径。"}
-{"id":"chunk-f3qhjfah.js#DFe","doc":"stripGenerationSuffix：去掉代次后缀。"}
-{"id":"chunk-f3qhjfah.js#Sn","doc":"PRINTABLE_NAME_RE：可打印名字（无空格）；MIN_FOLDABLE_NAME_LENGTH：需要折叠的名字最短长度；MAX_FOLDABLE_NAME_LENGTH：需要折叠的名字最长长度（同一声明共 5 个绑定）。"}
-{"id":"chunk-f3qhjfah.js#MJ","doc":"isHiddenFoldName：折叠后以点开头。"}
-{"id":"chunk-f3qhjfah.js#f3","doc":"isSyncedDirName：名称为 synced 目录。"}
-{"id":"chunk-f3qhjfah.js#pZo","doc":"syncedItemPathForGeneration：带代次后缀的同步条目路径。"}
-{"id":"chunk-f3qhjfah.js#y5t","doc":"foldNameForSync：去掉不可见字符后折叠。"}
-{"id":"chunk-f3qhjfah.js#nG","doc":"SKILLS_SYNC_DIR：技能同步目录；SKILLS_TRASH_DIR：技能回收站目录；SKILLS_STAGING_DIR：技能暂存目录（同一声明共 6 个绑定）。"}
-{"id":"chunk-f3qhjfah.js#pgi","doc":"accountBucket：claude.ai 登录时的账号桶。"}
-{"id":"chunk-5aas12zq.js#H","doc":"realpathOrManual：Windows 交叉点手算，否则 realpath。"}
-{"id":"chunk-5aas12zq.js#N","doc":"appendAll：把数组内容追加到目标。"}
-{"id":"chunk-5aas12zq.js#vn","doc":"compareSeverity：按阻断与严重度排序。"}
-{"id":"chunk-5aas12zq.js#q","doc":"quotedToolInput：引号包裹的遥测工具输入。"}
-{"id":"chunk-5aas12zq.js#de","doc":"cleanDisplayName：去掉组合标记与填充符并 trim。"}
-{"id":"chunk-5aas12zq.js#se","doc":"stringField：取字符串字段并清洗。"}
-{"id":"chunk-5aas12zq.js#He","doc":"trimmedStringField：取字符串字段两端裁剪。"}
-{"id":"chunk-5aas12zq.js#Ge","doc":"README_LINE_BREAK_CHARS：README 里算换行的字符。"}
-{"id":"chunk-5aas12zq.js#De","doc":"toArray：标量转数组。"}
-{"id":"chunk-5aas12zq.js#Pe","doc":"PLUGIN_VALIDATION_ISSUES：插件目录校验的问题码表；manifestRelativePath：插件清单相对路径；README_CANDIDATES：README 候选文件名（同一声明共 38 个绑定）。"}
-{"id":"chunk-85kmkm1x.js#csn","doc":"isSameResolvedPath：解析后路径相同。"}
-{"id":"chunk-85kmkm1x.js#$Or","doc":"matchesDirEntry：目录条目按 source 或名字匹配。"}
-{"id":"chunk-85kmkm1x.js#Xn","doc":"KNOWN_MCP_SERVER_TYPES：已知 MCP 服务器类型；USER_CONFIG_PLACEHOLDER_PATTERN：user_config 占位符；MCP_URL_TEMPLATE_RE：MCP URL 里的模板占位（同一声明共 3 个绑定）。"}
-{"id":"chunk-85kmkm1x.js#ue","doc":"refusedContract：构造被拒的契约结果。"}
-{"id":"chunk-22r83hv0.js#EFe","doc":"MAX_POLL_EVENT_ENVELOPE_BYTES：轮询事件信封的字节上限（48 KiB）。"}
-{"id":"chunk-22r83hv0.js#jar","doc":"pollEventMaxEnvelopeBytes：取轮询事件信封体积上限。"}
-{"id":"chunk-22r83hv0.js#vFe","doc":"POLL_KIND_DEFAULT_TIMEOUT_MS：轮询事件默认超时；MAX_POLL_EVENT_BATCH_BYTES：单批轮询事件字节上限；MAX_POLL_EVENTS_PER_BATCH：单批轮询事件条数上限（同一声明共 4 个绑定）。"}
-{"id":"chunk-22r83hv0.js#QAt","doc":"isValidPollEventKind：轮询事件 kind 是否合法。"}
-{"id":"chunk-22r83hv0.js#kFe","doc":"mentionsReservedKind：文本里是否提到保留 kind。"}
-{"id":"chunk-22r83hv0.js#eCt","doc":"mentionsSessionNoticeKind：文本里是否提到 session notice kind。"}
-{"id":"chunk-22r83hv0.js#vYt","doc":"PEER_AUTHORITIES：对端消息 authority 取值。"}
-{"id":"chunk-22r83hv0.js#nfi","doc":"isPeerAuthority：是否为合法对端 authority。"}
-{"id":"chunk-22r83hv0.js#vYe","doc":"normalizeNewlines：统一换行并去掉控制字符。"}
-{"id":"chunk-22r83hv0.js#rfi","doc":"normalizedEventLabel：去掉变体选择符与重复组合标记的事件标签。"}
-{"id":"chunk-22r83hv0.js#wQo","doc":"containsEventTag：文本里是否出现 event 标签。"}
-{"id":"chunk-22r83hv0.js#zar","doc":"sanitizeEventAttributes：属性文本里替换引号与控制字符。"}
-{"id":"chunk-22r83hv0.js#Kv","doc":"isPollEventMode：模式为 poll-event。"}
-{"id":"chunk-22r83hv0.js#G2","doc":"isPollEventIngressActive：轮询事件入口已启用并接线。"}
-{"id":"chunk-22r83hv0.js#Hvn","doc":"isHostIngressPollEvents：入口不是 host/none。"}
-{"id":"chunk-22r83hv0.js#qar","doc":"isMainAgentPollEventMode：主代理的轮询事件回合。"}
-{"id":"chunk-22r83hv0.js#sfi","doc":"neverFalse：恒 false 占位。"}
-{"id":"chunk-22r83hv0.js#kQo","doc":"isPollEventForAgent：指定 agent 的轮询事件回合。"}
-{"id":"chunk-22r83hv0.js#oCt","doc":"eventByteLength：事件序列化后的字节数。"}
-{"id":"chunk-22r83hv0.js#CQo","doc":"envelopeLengthFor：按信封类型取长度。"}
-{"id":"chunk-22r83hv0.js#$vn","doc":"randomEventNonce：生成随机事件 nonce。"}
-{"id":"chunk-22r83hv0.js#gXr","doc":"detectEnvelopeKind：按结束标签判断信封类型。"}
-{"id":"chunk-22r83hv0.js#RQo","doc":"envelopeNonceMatches：结束标签 nonce 与开头一致。"}
-{"id":"chunk-22r83hv0.js#xQo","doc":"collectEventNonces：收集各事件信封的 nonce。"}
-{"id":"chunk-22r83hv0.js#sCt","doc":"prependAttachmentsToText：把附件前置到文本块。"}
-{"id":"chunk-22r83hv0.js#iCt","doc":"settleDeliveredEvents：标记事件已投递。"}
-{"id":"chunk-22r83hv0.js#MPe","doc":"isDisklessContext：无盘模式或进程。"}
-{"id":"chunk-e6aww6q8.js#svt","doc":"POLL_EVENTS_ANNOUNCE_LINE：轮询事件到达时的系统提示行。"}
-{"id":"chunk-e6aww6q8.js#vVs","doc":"neverDeclaresEvents：恒 false 的声明判定（占位）。"}
-{"id":"chunk-e6aww6q8.js#Xun","doc":"eventDeclarations：宿主声明的事件种类。"}
-{"id":"chunk-e6aww6q8.js#TVs","doc":"eventDeclarationFault：事件声明解析失败的原因。"}
-{"id":"chunk-e6aww6q8.js#AVs","doc":"collectFieldStrings：汇总事件字段的字符串。"}
-{"id":"chunk-e6aww6q8.js#CVs","doc":"escapedEventJsonBody：转义后的事件 JSON 正文。"}
-{"id":"chunk-axmbhcjg.js#ie","doc":"MAX_POSIX_PATH_LENGTH：POSIX 路径长度上限。"}
-{"id":"chunk-axmbhcjg.js#j","doc":"isParentOrAbsolute：是 .. 或绝对路径。"}
-{"id":"chunk-e6aww6q8.js#q1","doc":"isProactivitySettingsValid：主动性设置可解析。"}
-{"id":"chunk-e6aww6q8.js#G_t","doc":"isProactivityBlockText：文本属于主动性段落。"}
-{"id":"chunk-e6aww6q8.js#oGe","doc":"isSkillOverridesUnread：技能覆盖尚未读取。"}
-{"id":"chunk-e6aww6q8.js#rGe","doc":"skillOverrides：技能覆盖表。"}
-{"id":"chunk-kavwfxwg.js#rDr","doc":"proactivityLevelIfActive：主动性启用时返回等级。"}
-{"id":"chunk-kavwfxwg.js#jye","doc":"promptProactivityLevel：提示词中的主动性等级。"}
-{"id":"chunk-s61vbvea.js#sSe","doc":"isProactivityMode：是否为主动性模式。"}
-{"id":"chunk-s61vbvea.js#ZKo","doc":"nextProactivityMode：下一个主动性模式。"}
-{"id":"chunk-s61vbvea.js#eVo","doc":"previousProactivityMode：上一个主动性模式。"}
-{"id":"chunk-erzjxbhh.js#vjs","doc":"withProactivityBaseline：带主动性基线时原样返回。"}
-{"id":"chunk-v4n8v118.js#kI","doc":"procStatField：取 /proc/<pid>/stat 的某个字段。"}
-{"id":"chunk-v4n8v118.js#RY","doc":"isMinorFaultField：次缺页相关字段（Z/X）。"}
-{"id":"chunk-h52ct3be.js#nzn","doc":"projectRootForRelaunch：重启用的项目根目录。"}
-{"id":"chunk-xx1vmpsq.js#vn","doc":"MENTION_ATTACHMENT_TYPES：提及类附件类型。"}
-{"id":"chunk-xx1vmpsq.js#ws","doc":"needsRescreen：钩子注册变化时需要重新筛查。"}
-{"id":"chunk-xx1vmpsq.js#us","doc":"withRewriteState：附加改写状态。"}
-{"id":"chunk-3g0djq3w.js#vt","doc":"isQuillKillswitchOff：未触发 killswitch 时为真。"}
-{"id":"chunk-8fqgaf3a.js#sUt","doc":"CANCELLED_RESULT：已取消的提示提交结果。"}
-{"id":"chunk-8fqgaf3a.js#R0i","doc":"pluginsChanged：插件列表是否变化。"}
-{"id":"chunk-8fqgaf3a.js#HHr","doc":"hookStopWarningMessage：钩子停止时保留提示词的警告消息。"}
-{"id":"chunk-8fqgaf3a.js#NHr","doc":"makeMetaUserMessage：构造 meta 用户消息。"}
-{"id":"chunk-8fqgaf3a.js#_Io","doc":"hasPromptSubmitHooks：存在 UserPromptSubmit 钩子或渲染键。"}
-{"id":"chunk-8fqgaf3a.js#b7e","doc":"hooksSnapshotKey：钩子与插件快照键。"}
-{"id":"chunk-ch0vxh4c.js#lR","doc":"PROCESS_WRAPPER_ENV：进程包装器环境变量；PROCESS_WRAPPER_TIMEOUT_MS：进程包装器超时（同一声明共 2 个绑定）。"}
-{"id":"chunk-dsy6gyxv.js#h","doc":"IOS_SDK_VERSION_SOURCE：iOS SDK 版本匹配片段；IOS_SDKROOT_ASSIGNMENT_RE：Xcode 构建设置里的 iOS SDK 赋值；XCODE_PLATFORM_MARKER_RE：Xcode 工程里的 iOS 平台标记（同一声明共 9 个绑定）。"}
-{"id":"chunk-dsy6gyxv.js#Kjs","doc":"emptyProjectFactsEvidence：项目事实证据的初值。"}
-{"id":"chunk-dsy6gyxv.js#mOo","doc":"conclusiveEvidenceOf：项目证据（确定优先）。"}
-{"id":"chunk-dsy6gyxv.js#K","doc":"MAX_LOCKFILE_ENTRIES_SCAN：扫描锁文件条数上限；PACKAGE_MANAGER_LOCKFILES：锁文件与包管理器对应表；PIP_INDEX_URL_RE：pip registry/index-url 配置（同一声明共 16 个绑定）。"}
-{"id":"chunk-dsy6gyxv.js#qjs","doc":"PROJECT_FACTS_CACHE_TTL_MS：项目事实缓存时长。"}
-{"id":"chunk-e6aww6q8.js#TXs","doc":"setProjectsThreadStateSource：设置线程状态来源。"}
-{"id":"chunk-e6aww6q8.js#xM","doc":"escapeShellBangs：转义提示词里的感叹号。"}
-{"id":"chunk-e6aww6q8.js#d$o","doc":"normalizeShellCommandText：统一换行并去空白。"}
-{"id":"chunk-e6aww6q8.js#q9n","doc":"hasInvisibleCommandChars：命令含不可见字符。"}
-{"id":"chunk-e6aww6q8.js#qzo","doc":"glowingOrbitOn：开关 tengu_glowing_orbit。"}
-{"id":"chunk-e6aww6q8.js#jXs","doc":"pendingShellHandOffs：权限上下文中的待处理 shell 交接。"}
-{"id":"chunk-e6aww6q8.js#a9n","doc":"wakeupSourceForKind：由 kind 得到唤醒来源。"}
-{"id":"chunk-e6aww6q8.js#Xet","doc":"originKindForWakeup：唤醒来源对应的来源种类。"}
-{"id":"chunk-e6aww6q8.js#mQo","doc":"WAKEUP_ORIGIN_TTL_MS：唤醒来源记录的有效期。"}
-{"id":"chunk-e6aww6q8.js#h3e","doc":"wakeupDedupKey：唤醒去重键。"}
-{"id":"chunk-s61vbvea.js#yN","doc":"submittedMessages：取提交消息列表。"}
-{"id":"chunk-s61vbvea.js#_N","doc":"isBridgeOrVerifiedSlackTurn：桥接提交或已验证的 Slack 人类回合。"}
-{"id":"chunk-s61vbvea.js#Ant","doc":"isLocalStdinSubmission：本地 stdin 提交且非桥接。"}
-{"id":"chunk-s61vbvea.js#O7s","doc":"isHumanSubmittedTurn：人类来源的提交回合。"}
-{"id":"chunk-s61vbvea.js#LZn","doc":"isSessionChannelPerson：由会话频道的人提交。"}
-{"id":"chunk-s61vbvea.js#XRe","doc":"isMidTurnStreaming：是否处于回合中流式输出。"}
-{"id":"chunk-s61vbvea.js#M7s","doc":"runsBesideTurns：local-jsx 提交且在回合旁运行。"}
-{"id":"chunk-e6aww6q8.js#M1r","doc":"forceRedraw：强制重绘。"}
-{"id":"chunk-e6aww6q8.js#tUo","doc":"sanitizePromptText：按开关清洗提示词文本。"}
-{"id":"chunk-e6aww6q8.js#Owt","doc":"appendHookableFastPath：可走快路径的 session.append。"}
-{"id":"chunk-e6aww6q8.js#Ebe","doc":"orderedRowSource：登记有序行来源。"}
-{"id":"chunk-e6aww6q8.js#Mwt","doc":"runningTurnRegistry：运行中回合登记表。"}
-{"id":"chunk-0eyv3mzk.js#XWn","doc":"referencedBashToolNames：从消息里的 Bash 工具调用提取引用的工具名。"}
-{"id":"chunk-e6aww6q8.js#bJn","doc":"finishQueryProfile：结束并上报查询性能剖析。"}
-{"id":"chunk-e6aww6q8.js#H7e","doc":"queryProfileStorage：查询剖析的 AsyncLocalStorage。"}
-{"id":"chunk-e6aww6q8.js#sdn","doc":"runWithQueryProfile：在剖析上下文中执行。"}
-{"id":"chunk-e6aww6q8.js#cdn","doc":"QUERY_PROFILE_PHASES：查询剖析的阶段名。"}
-{"id":"chunk-e6aww6q8.js#w3s","doc":"beginProfile：开始一次查询剖析。"}
-{"id":"chunk-e6aww6q8.js#jS","doc":"startProfilePhase：开始某阶段。"}
-{"id":"chunk-e6aww6q8.js#WS","doc":"endProfilePhase：结束某阶段。"}
-{"id":"chunk-e6aww6q8.js#mGt","doc":"startPhaseWithin：开始嵌套阶段。"}
-{"id":"chunk-e6aww6q8.js#W7e","doc":"noteAttachmentProducer：记录附件生产者耗时。"}
-{"id":"chunk-e6aww6q8.js#mdn","doc":"noteAttachmentPass：记录一次附件处理。"}
-{"id":"chunk-e6aww6q8.js#gdn","doc":"noteChangedFilesReread：记录改动文件重读。"}
-{"id":"chunk-e6aww6q8.js#hdn","doc":"noteChangedFilesCompared：记录改动文件比较。"}
-{"id":"chunk-e6aww6q8.js#E3s","doc":"noteStoreConfirmWrite：记录存储确认写。"}
-{"id":"chunk-e6aww6q8.js#gGt","doc":"endPhaseWithin：结束嵌套阶段。"}
-{"id":"chunk-e6aww6q8.js#hmn","doc":"measurePhase：在剖析中执行并计时。"}
-{"id":"chunk-e6aww6q8.js#ydn","doc":"closeProfile：关闭剖析并返回是否已上报。"}
-{"id":"chunk-e6aww6q8.js#_dn","doc":"openProfileStream：打开剖析流。"}
-{"id":"chunk-e6aww6q8.js#ymn","doc":"noteRedrive：记录重放。"}
-{"id":"chunk-e6aww6q8.js#k3s","doc":"consumeProfile：消费剖析数据。"}
-{"id":"chunk-e6aww6q8.js#T3s","doc":"currentTurnIndex：当前回合序号。"}
-{"id":"chunk-e6aww6q8.js#A3s","doc":"endProfile：结束剖析。"}
-{"id":"chunk-18hwfzwa.js#KIe","doc":"neverSubscribed：恒 false 的订阅判定占位。"}
-{"id":"chunk-e6aww6q8.js#BWr","doc":"isWeakNotified：该消息是否在弱表里。"}
-{"id":"chunk-e6aww6q8.js#zBo","doc":"collapsedRowOf：取折叠行。"}
-{"id":"chunk-e6aww6q8.js#$Ts","doc":"collapseNotificationRunsIn：折叠连续通知。"}
-{"id":"chunk-41fxb5qj.js#lst","doc":"hmacRandomId：用密钥做 HMAC 生成 id。"}
-{"id":"chunk-wn385gmf.js#mor","doc":"defaultOutputRoots：默认输出根目录。"}
-{"id":"chunk-bwbq4xvm.js#fX","doc":"SLACK_TOKEN_PATTERN：Slack 令牌正则；AWS_KEY_PREFIXES：AWS access key 前缀列表；AWS_KEY_PREFIX_PATTERN：AWS access key 前缀的正则源码（同一声明共 5 个绑定）。"}
-{"id":"chunk-bwbq4xvm.js#pC","doc":"JWT_TOKEN_PATTERNS：JWT 令牌正则列表；GOOGLE_API_KEY_RULES：Google API key 的脱敏规则；STRIPE_KEY_RULES：Stripe 密钥的脱敏规则（同一声明共 6 个绑定）。"}
-{"id":"chunk-cgr0tezp.js#ot","doc":"sliceSpan：按区间切出文本与来源。"}
-{"id":"chunk-cgr0tezp.js#UDi","doc":"urlSpans：文本中的 URL 片段。"}
-{"id":"chunk-cgr0tezp.js#QDn","doc":"safeOriginUrlRedacted：安全来源 URL。"}
-{"id":"chunk-cgr0tezp.js#fbs","doc":"URL_AUTHORITY_ESCAPE_RE：URL 权威部分需转义的字符。"}
-{"id":"chunk-cgr0tezp.js#ZDn","doc":"COLON_RE：冒号或其编码。"}
-{"id":"chunk-cgr0tezp.js#B","doc":"stripLeadingSpaceAndNewlines：去掉前导空白与换行。"}
-{"id":"chunk-cgr0tezp.js#WDi","doc":"isPlainHttpUrl：普通 http(s) URL。"}
-{"id":"chunk-v5a4j103.js#RNs","doc":"CHANGELOG_URL：变更日志地址；HTTPS_CODE_CLAUDE_COM：文档站点地址（同一声明共 2 个绑定）。"}
-{"id":"chunk-w5sk7e3v.js#FDn","doc":"REMOTE_COWORK_SOURCE_KINDS：远程 cowork 来源种类。"}
-{"id":"chunk-4vzb3taj.js#mn","doc":"isRemoteManagedEnvironment：远程且未指定环境类型。"}
-{"id":"chunk-4vzb3taj.js#hSr","doc":"isRemoteOrFalse：远程环境（含兼容占位）。"}
-{"id":"chunk-4vzb3taj.js#op","doc":"isByocEnvironment：远程且环境类型为 byoc。"}
-{"id":"chunk-4vzb3taj.js#uC","doc":"isRemoteEnvironmentAny：远程托管或 byoc。"}
-{"id":"chunk-4vzb3taj.js#ere","doc":"hasRunnerDeclaredNestedRepoDiff：byoc 且有嵌套仓库 diff。"}
-{"id":"chunk-4vzb3taj.js#kMt","doc":"initialCwdKey：初始 cwd 的存储键。"}
-{"id":"chunk-4vzb3taj.js#rQt","doc":"isLocalAbsolutePath：绝对路径且不在外部挂载。"}
-{"id":"chunk-4vzb3taj.js#GIi","doc":"runnerDeclaredNoRepo：byoc 且未检出仓库。"}
-{"id":"chunk-4vzb3taj.js#vS","doc":"isBridgeEnvironment：环境类型为 bridge。"}
-{"id":"chunk-4vzb3taj.js#Ehe","doc":"isTopLevelBridgeSession：bridge 环境且非子会话。"}
-{"id":"chunk-4vzb3taj.js#ySr","doc":"persistsTransport：托管 worker 或 bridge 下传输持久。"}
-{"id":"chunk-82kqcve8.js#aFe","doc":"matchesContentDigest：内容与记录的大小和 sha256 一致。"}
-{"id":"chunk-82kqcve8.js#ZC","doc":"READ_FILE_STATE_CACHE_SIZE：读文件状态缓存的最大条目数；MAX_READ_FILE_CACHE_BYTES：读文件状态缓存的字节上限；MAX_INLINE_READ_CONTENT_BYTES：缓存里保留内容的字节上限（同一声明共 3 个绑定）。"}
-{"id":"chunk-82kqcve8.js#p9r","doc":"contentHashOf：用 Bun.hash 计算内容哈希。"}
-{"id":"chunk-82kqcve8.js#Gie","doc":"hasFullFileContent：读取记录含完整文件内容。"}
-{"id":"chunk-82kqcve8.js#y1","doc":"matchesContentHash：内容哈希或原文与记录一致。"}
-{"id":"chunk-82kqcve8.js#tv","doc":"stripBom：去掉文件开头的 BOM。"}
-{"id":"chunk-82kqcve8.js#__","doc":"stripBomAndCarriageReturn：去掉 BOM 与裸回车。"}
-{"id":"chunk-82kqcve8.js#Bir","doc":"matchesNormalizedContent：规范化后内容一致。"}
-{"id":"chunk-82kqcve8.js#nv","doc":"createRemoteFileState：创建远程文件读取状态。"}
-{"id":"chunk-82kqcve8.js#jir","doc":"remoteFileStateToObject：读文件状态转普通对象。"}
-{"id":"chunk-82kqcve8.js#bAt","doc":"remoteFileStateKeys：读文件状态的路径列表。"}
-{"id":"chunk-e6aww6q8.js#j6s","doc":"noRemoteSessionCommands：无云会话时的空命令表。"}
-{"id":"chunk-e6aww6q8.js#htt","doc":"remoteSessionAwaits：远程会话等待项。"}
-{"id":"chunk-e6aww6q8.js#Z6s","doc":"setRemoteSessionAwaits：设置远程会话等待项。"}
-{"id":"chunk-e6aww6q8.js#e3s","doc":"isLocalRemoteCommand：本地远程命令。"}
-{"id":"chunk-m00wdbj6.js#gHe","doc":"isRemoteFirstPartySession：远程且第一方提供方。"}
-{"id":"chunk-e6aww6q8.js#L8n","doc":"isSeparateCopyNoSync：独立副本且关闭项目同步。"}
-{"id":"chunk-e6aww6q8.js#kYs","doc":"folderSyncEngine：目录同步引擎。"}
-{"id":"chunk-e6aww6q8.js#pUo","doc":"setFolderSyncEngine：设置目录同步引擎。"}
-{"id":"chunk-e6aww6q8.js#H8n","doc":"isSyncableProject：双向或仅上传的同步项目。"}
-{"id":"chunk-e6aww6q8.js#eKe","doc":"restartNoticeFor：重启相关提示（挂起或重启）。"}
-{"id":"chunk-e6aww6q8.js#OSe","doc":"supportsRemoteExecution：工具支持远程执行。"}
-{"id":"chunk-e6aww6q8.js#jXt","doc":"shouldRouteToolToHost：该调用是否转给远程宿主。"}
-{"id":"chunk-e6aww6q8.js#zCe","doc":"remoteRoutingCandidate：远程路由候选。"}
-{"id":"chunk-18hwfzwa.js#Rkt","doc":"replayWithoutLaptopMemory：重放时去掉笔记本记忆段。"}
-{"id":"chunk-18hwfzwa.js#Pkt","doc":"laptopMemoryTipsPluginEnabled：CC 插件技巧是否可用。"}
-{"id":"chunk-18hwfzwa.js#Nqo","doc":"ZERO_UUID：全零 UUID。"}
-{"id":"chunk-e6aww6q8.js#JRn","doc":"hasWatchdogObservation：是否已观测到磁盘或内存紧张。"}
-{"id":"chunk-e6aww6q8.js#j8s","doc":"startWatchdogSafe：启动看门狗（失败只记日志）。"}
-{"id":"chunk-cgr0tezp.js#FDi","doc":"isAlreadySanitized：文本已是清洗后的形式。"}
-{"id":"chunk-cgr0tezp.js#PDi","doc":"unwrapResult：取出结果或抛错。"}
-{"id":"chunk-fq0cr76a.js#Kl","doc":"ripgrepStatus：当前宿主的 ripgrep 状态。"}
-{"id":"chunk-fq0cr76a.js#N6r","doc":"ripgrepStorageOverride：存储模式下 ripgrep 覆盖值。"}
-{"id":"chunk-s3dfv2tr.js#lor","doc":"SAFE_IDENTIFIER_RE：安全标识符格式。"}
-{"id":"chunk-s3dfv2tr.js#kN","doc":"safeIdentifierOrUndefined：安全标识符或 undefined。"}
-{"id":"chunk-czffketc.js#Hai","doc":"hostIdentityMatches：主机身份是否一致。"}
-{"id":"chunk-fq0cr76a.js#gw","doc":"celModule：CEL 模块（CommonJS 包装）。"}
-{"id":"chunk-fq0cr76a.js#yqt","doc":"bridgeSpawnDir：bridge-spawn 目录路径。"}
-{"id":"chunk-fq0cr76a.js#_qt","doc":"CEL_MAX_ITEMS：CEL 函数列表上限；CEL_MAX_STRING_ELEMENTS：CEL 字符串条数上限；CEL_MAX_PATTERNS：CEL 模式数上限（同一声明共 5 个绑定）。"}
-{"id":"chunk-18hwfzwa.js#pCt","doc":"knownHostNameOrUndefined：在已知主机列表里时返回该名。"}
-{"id":"chunk-18hwfzwa.js#fCt","doc":"describeApprovalSubject：沙箱主机名的审批显示文本。"}
-{"id":"chunk-18hwfzwa.js#gCt","doc":"hostValidationCacheKey：沙箱主机校验缓存键。"}
-{"id":"chunk-fq0cr76a.js#Tie","doc":"APPLY_SECCOMP_FD：apply-seccomp 的 fd 编号；MAX_SECCOMP_POLICY_BYTES：seccomp 策略字节上限（同一声明共 2 个绑定）。"}
-{"id":"chunk-fq0cr76a.js#xor","doc":"seccompExecPlan：构造 apply-seccomp 执行方案。"}
-{"id":"chunk-fq0cr76a.js#Por","doc":"wrapWithSeccompExec：给命令加上 seccomp 执行前缀。"}
-{"id":"chunk-fq0cr76a.js#A4","doc":"linuxSandboxProbes：Linux 沙箱依赖探测集合。"}
-{"id":"chunk-e6aww6q8.js#Twn","doc":"proxyCredentialHelpers：代理凭据 helper 列表。"}
-{"id":"chunk-0hrnrhfq.js#Aae","doc":"proxyDenialResult：构造代理拒绝结果。"}
-{"id":"chunk-0hrnrhfq.js#iG","doc":"isAllowlistBlockedResponse：403 且为白名单阻断。"}
-{"id":"chunk-0hrnrhfq.js#rat","doc":"isBlockedByProxyAllowlist：响应显示被代理白名单阻断。"}
-{"id":"chunk-0hrnrhfq.js#L_i","doc":"isClientErrorStatus：4xx 但排除 408/429。"}
-{"id":"chunk-0hrnrhfq.js#CRt","doc":"proxyErrorCode：取 x-proxy-error 码。"}
-{"id":"chunk-0hrnrhfq.js#Cae","doc":"proxyDenyReason：取 x-deny-reason。"}
-{"id":"chunk-5ghnps9r.js#wgt","doc":"SANDBOX_MAX_DEPTH：沙箱默认策略的深度上限；SANDBOX_MAX_PATH_LENGTH：沙箱默认策略的路径长度上限（同一声明共 2 个绑定）。"}
-{"id":"chunk-5ghnps9r.js#Aye","doc":"violinFholeEnabled：沙箱默认策略开关（tengu_violin_fhole）。"}
-{"id":"chunk-fq0cr76a.js#_v","doc":"sandboxErrorSignalLazy：沙箱错误的惰性信号。"}
-{"id":"chunk-fq0cr76a.js#pM","doc":"reportSandboxTelemetryError：上报沙箱遥测错误。"}
-{"id":"chunk-67q125t6.js#wZt","doc":"SANDBOX_UNAVAILABLE_MESSAGE：需要沙箱但不可用的说明。"}
-{"id":"chunk-fq0cr76a.js#uM","doc":"SHADOWED_SSH_DIR：沙箱内的 .claude/ssh 目录。"}
-{"id":"chunk-fq0cr76a.js#bqt","doc":"sandboxSettingsChain：沙箱设置的读取链。"}
-{"id":"chunk-fq0cr76a.js#Ev","doc":"policySandboxSetting：策略层沙箱设置。"}
-{"id":"chunk-nt75hmzb.js#_li","doc":"sharedSystemDirs：共享的系统目录集合。"}
-{"id":"chunk-nt75hmzb.js#q3r","doc":"uidsCollapse：当前 uid 是否折叠为溢出 uid。"}
-{"id":"chunk-nt75hmzb.js#c","doc":"daemonDirFor：取 daemon 目录。"}
-{"id":"chunk-nt75hmzb.js#q","doc":"daemonPipeKey：由配置目录派生的 daemon 管道键。"}
-{"id":"chunk-nt75hmzb.js#G","doc":"DAEMON_PIPE_KEY_RE：daemon 管道键格式。"}
-{"id":"chunk-nt75hmzb.js#K8o","doc":"daemonPipeKeyFile：daemon 管道密钥文件路径。"}
-{"id":"chunk-nt75hmzb.js#$A","doc":"redactDaemonPipeKey：错误信息里脱敏 daemon 管道键。"}
-{"id":"chunk-nt75hmzb.js#hsr","doc":"daemonControlKeyFile：daemon 控制密钥文件路径。"}
-{"id":"chunk-nt75hmzb.js#S","doc":"assertMappedNamespace：未映射命名空间时抛错。"}
-{"id":"chunk-nt75hmzb.js#q8o","doc":"isDaemonSocketGoneError：daemon 套接字已消失的错误。"}
-{"id":"chunk-nt75hmzb.js#nwe","doc":"daemonDispatchDir：取 daemon dispatch 目录。"}
-{"id":"chunk-nt75hmzb.js#Y8o","doc":"daemonRejectedDir：取 daemon 被拒任务目录。"}
-{"id":"chunk-nt75hmzb.js#Q6","doc":"daemonRosterFile：daemon roster 文件路径。"}
-{"id":"chunk-nt75hmzb.js#rwe","doc":"daemonAttachJournal：daemon 附加日志路径。"}
-{"id":"chunk-nt75hmzb.js#X3r","doc":"daemonRvDir：daemon rv 目录。"}
-{"id":"chunk-nt75hmzb.js#NTt","doc":"daemonAuthDir：daemon 认证目录。"}
-{"id":"chunk-nt75hmzb.js#$Tt","doc":"daemonAuthFile：daemon 认证文件路径。"}
-{"id":"chunk-nt75hmzb.js#jwn","doc":"hostManagedDir：宿主管辖目录。"}
-{"id":"chunk-nt75hmzb.js#ePe","doc":"hostManagedEntry：宿主管辖目录下的条目。"}
-{"id":"chunk-nt75hmzb.js#FTt","doc":"daemonTokensFile：daemon 令牌文件路径。"}
-{"id":"chunk-nt75hmzb.js#Wwn","doc":"daemonRvSocket：rv 套接字路径。"}
-{"id":"chunk-nt75hmzb.js#UTt","doc":"daemonPtyDir：daemon pty 目录。"}
-{"id":"chunk-nt75hmzb.js#FA","doc":"daemonPtySocket：pty 套接字路径。"}
-{"id":"chunk-nt75hmzb.js#Fpe","doc":"daemonSpareDir：daemon spare 目录。"}
-{"id":"chunk-nt75hmzb.js#kli","doc":"daemonSparePtySocket：spare pty 套接字路径。"}
-{"id":"chunk-nt75hmzb.js#Tli","doc":"daemonSpareClaimSocket：spare claim 套接字路径。"}
-{"id":"chunk-nt75hmzb.js#Xot","doc":"daemonPtyPidsDir：pty pid 目录。"}
-{"id":"chunk-nt75hmzb.js#owe","doc":"daemonPtyPidFile：pty pid 文件路径。"}
-{"id":"chunk-nt75hmzb.js#JC","doc":"ptyErrFile：pty 错误输出文件。"}
-{"id":"chunk-nt75hmzb.js#xN","doc":"ptyLateFile：pty 延迟输出文件。"}
-{"id":"chunk-nt75hmzb.js#Z6","doc":"daemonControlSocket：daemon 控制套接字。"}
-{"id":"chunk-fq0cr76a.js#Ww","doc":"setUserTempRoot：设置用户临时根目录。"}
-{"id":"chunk-fq0cr76a.js#Gw","doc":"neverTempRoot：恒 false 占位。"}
-{"id":"chunk-e6aww6q8.js#iCe","doc":"stripTrailingSlashIfLong：长度大于 1 时去掉末尾斜杠。"}
-{"id":"chunk-fq0cr76a.js#Oai","doc":"hasWindowsSandboxBeenOn：Windows 沙箱是否曾启用。"}
-{"id":"chunk-fq0cr76a.js#tD","doc":"rgRunner：用 Bun 直接执行脚本的启动信息。"}
-{"id":"chunk-fq0cr76a.js#Av","doc":"isSeclogonAccessDenied：seclogon 访问被拒。"}
-{"id":"chunk-fq0cr76a.js#Aor","doc":"USER_SID_RE：Windows 用户 SID 格式。"}
-{"id":"chunk-fq0cr76a.js#LM","doc":"MAX_PARENT_FOLDERS：向上查找父目录的上限；ACE_INHERIT_ONLY_MASK：仅继承 ACE 掩码；MAX_ACL_OPERATIONS：ACL 操作上限（同一声明共 15 个绑定）。"}
-{"id":"chunk-fq0cr76a.js#HM","doc":"USER_SID_PATTERN：Windows 用户 SID 正则；WINDOWS_SANDBOX_FAILURES：Windows 沙箱准备失败原因枚举；sandboxDenyState：原生 deny 状态（同一声明共 3 个绑定）。"}
-{"id":"chunk-fq0cr76a.js#Nv","doc":"hasAnyDeniedPath：是否有启用中的读/写拒绝。"}
-{"id":"chunk-fq0cr76a.js#O0","doc":"WindowsSandboxError：Windows 沙箱错误类。"}
-{"id":"chunk-62v3yavp.js#$6n","doc":"seclogonStatusMessage：seclogon 服务禁用/缺失时的提示。"}
-{"id":"chunk-cgr0tezp.js#HDi","doc":"nfkdNormalize：NFKD 规范化。"}
-{"id":"chunk-cgr0tezp.js#zt","doc":"CONTROL_CHARS_RE：控制字符与行分隔符；MAX_CLEAN_IDENTIFIER_LENGTH：干净标识符长度上限；CONTROL_CHARS_OR_ANGLE_RE：控制字符或尖括号（同一声明共 3 个绑定）。"}
-{"id":"chunk-cgr0tezp.js#mft","doc":"isAsciiIdentifier：短且仅 ASCII 标识符字符。"}
-{"id":"chunk-cgr0tezp.js#Xwr","doc":"isUnicodeIdentifier：短且仅 Unicode 标识符字符。"}
-{"id":"chunk-cgr0tezp.js#obs","doc":"isSafeRelativePath：短且为不含 .. 的相对路径。"}
-{"id":"chunk-cgr0tezp.js#tco","doc":"escapeXmlAttribute：转义后的 XML 属性值。"}
-{"id":"chunk-cgr0tezp.js#sbs","doc":"isNameWithNoJoinerFixes：名字干净且无需连接符处理。"}
-{"id":"chunk-e6aww6q8.js#oBr","doc":"countScroll：记录一次滚动。"}
-{"id":"chunk-e6aww6q8.js#sBr","doc":"countPageJump：记录一次翻页。"}
-{"id":"chunk-e6aww6q8.js#P$o","doc":"countJumpToBottom：记录一次跳到末尾。"}
-{"id":"chunk-e6aww6q8.js#m3n","doc":"markScrollbackCapReached：记录到达回滚上限。"}
-{"id":"chunk-gwwacf44.js#FOe","doc":"keychainProjectDirs：钥匙串服务名用到的项目目录。"}
-{"id":"chunk-b29hdd5e.js#eus","doc":"isPlainTextStorageAvailable：明文凭据存储是否可用。"}
-{"id":"chunk-frha7zp8.js#rns","doc":"setMainLoopActivityListener：设置主循环活动监听。"}
-{"id":"chunk-frha7zp8.js#ons","doc":"setNestedChainDropListener：设置嵌套链丢弃监听。"}
-{"id":"chunk-frha7zp8.js#K_i","doc":"notifyNestedChainDropped：通知嵌套链被丢弃。"}
-{"id":"chunk-frha7zp8.js#V_i","doc":"currentActivityState：当前活动状态。"}
-{"id":"chunk-e7z1g8a9.js#cds","doc":"authHandshakeJson：构造带尾随空格的认证握手 JSON。"}
-{"id":"chunk-e7z1g8a9.js#PAi","doc":"AUTH_HANDSHAKE_LENGTH：认证握手 JSON 的长度。"}
-{"id":"chunk-e7z1g8a9.js#V9t","doc":"stableSessionAddress：由会话 id 生成 sid: 地址。"}
-{"id":"chunk-e7z1g8a9.js#dIt","doc":"isStableSessionAddress：是否为 sid: 地址。"}
-{"id":"chunk-e7z1g8a9.js#cdt","doc":"isNotStableAddress：地址不是稳定形式。"}
-{"id":"chunk-e7z1g8a9.js#b3e","doc":"hasEnvironmentKindOtherThanBridge：环境种类非 bridge。"}
-{"id":"chunk-e7z1g8a9.js#Boo","doc":"isDisconnectedNonBridge：非 bridge 且未连接。"}
-{"id":"chunk-e7z1g8a9.js#MAi","doc":"isAddressableSlug：会话名 slug 可寻址。"}
-{"id":"chunk-e7z1g8a9.js#udt","doc":"isReservedOrInvalidName：名字无效或为保留名。"}
-{"id":"chunk-e7z1g8a9.js#cIt","doc":"isLocalTeamLead：本会话是该团队的领导。"}
-{"id":"chunk-e7z1g8a9.js#fdt","doc":"addressableTeamMembers：团队里可寻址的成员。"}
-{"id":"chunk-e7z1g8a9.js#LD","doc":"isReservedSessionName：名字是保留名（main/team-lead/user/system）。"}
-{"id":"chunk-e7z1g8a9.js#M","doc":"MIN_ADDRESS_REF_LENGTH：地址 ref 的最短长度；MAX_ADDRESS_REF_LENGTH：地址 ref 的最长长度；ADDRESS_REF_PATTERN：地址 ref 的十六进制模式（同一声明共 3 个绑定）。"}
-{"id":"chunk-e7z1g8a9.js#d8","doc":"parseNameWithRef：解析 “名字 [ref]” 形式的地址。"}
-{"id":"chunk-e7z1g8a9.js#bOe","doc":"formatNameWithRef：拼成 “名字 [ref]”。"}
-{"id":"chunk-e7z1g8a9.js#joo","doc":"describeLocationWithRemoteControl：远程位置补 “(Remote Control)”。"}
-{"id":"chunk-e7z1g8a9.js#Lhr","doc":"findSessionByName：按名字或规范名查找会话。"}
-{"id":"chunk-e7z1g8a9.js#IBe","doc":"addressableSessionTitle：可作为地址的会话标题。"}
-{"id":"chunk-e7z1g8a9.js#Zxn","doc":"plainSessionName：普通（非保留、非地址形式）会话名。"}
-{"id":"chunk-e7z1g8a9.js#q9t","doc":"looksLikeAddress：名字像地址（任一变体）。"}
-{"id":"chunk-e7z1g8a9.js#ePn","doc":"stableSessionKey：会话的稳定 id 或 id。"}
-{"id":"chunk-e7z1g8a9.js#fds","doc":"stableAddressWhenEnabled：稳定地址开启时用 sid: 形式。"}
-{"id":"chunk-e7z1g8a9.js#pds","doc":"isSessionAddressUnder：地址组里是否含该会话地址。"}
-{"id":"chunk-e7z1g8a9.js#pdt","doc":"addressRef：取地址的前缀 ref。"}
-{"id":"chunk-e7z1g8a9.js#Y9t","doc":"bridgeSessionIds：记录中出现的桥接会话 id。"}
-{"id":"chunk-369n4ea8.js#xHt","doc":"quoteTitleForBackgroundNotice：引号包裹的截断标题。"}
-{"id":"chunk-0h6s23my.js#ewo","doc":"noModelPin：不改变模型的占位结果。"}
-{"id":"chunk-0h6s23my.js#MNt","doc":"noopModelPinSubscriber：空实现的模型固定订阅者。"}
-{"id":"chunk-0h6s23my.js#two","doc":"recordModelPinSwitch：记录模型固定切换。"}
-{"id":"chunk-0h6s23my.js#aDs","doc":"switchSessionModelPin：切换会话的模型固定。"}
-{"id":"chunk-0h6s23my.js#LTe","doc":"noopModelPinReset：空实现的模型固定重置。"}
-{"id":"chunk-0h6s23my.js#nwo","doc":"modelPinStorageKind：模型固定的存储种类（file）。"}
-{"id":"chunk-e6aww6q8.js#T0o","doc":"notificationKindLabels：排队通知种类的说明文案。"}
-{"id":"chunk-pqycqpxn.js#Emi","doc":"sessionClock：根会话的时钟。"}
-{"id":"chunk-e7z1g8a9.js#iIt","doc":"neutralizePeerTags：中和文本里的对端标签。"}
-{"id":"chunk-e7z1g8a9.js#$oo","doc":"peerTagOpenerOffsets：对端标签的起始偏移。"}
-{"id":"chunk-e7z1g8a9.js#l8","doc":"neutralizeInboundTags：中和入站消息标签。"}
-{"id":"chunk-e7z1g8a9.js#TAi","doc":"inboundTagOpenerOffsets：入站标签的起始偏移。"}
-{"id":"chunk-e7z1g8a9.js#aIt","doc":"neutralizeTextForAgent：按需中和文本（JSON 单独处理）。"}
-{"id":"chunk-e7z1g8a9.js#xBe","doc":"agentMessageTag：包装成 agent-message 标签。"}
-{"id":"chunk-e7z1g8a9.js#lIt","doc":"normalizeAgentMessageBody：规范化 agent 消息正文。"}
-{"id":"chunk-e7z1g8a9.js#J","doc":"AUTH_MESSAGE_TYPE：认证消息类型名；PEER_KEY_FILE_RE：对端密钥文件名格式；PEER_KEY_TMP_FILE_RE：对端密钥临时文件名格式（同一声明共 6 个绑定）。"}
-{"id":"chunk-e7z1g8a9.js#Ohr","doc":"isWindowsPlatform：是否 Windows。"}
-{"id":"chunk-e7z1g8a9.js#AAi","doc":"createPeerTokens：生成对端与子令牌。"}
-{"id":"chunk-e7z1g8a9.js#Mhr","doc":"MAX_PEER_NOTICE_LENGTH：对端提示长度上限。"}
-{"id":"chunk-g4mgfvqt.js#lPn","doc":"saneEpochMsOrUndefined：合理时间戳否则 undefined。"}
-{"id":"chunk-08s5p3av.js#d1n","doc":"currentRestoreSource：当前来源会话的恢复来源。"}
-{"id":"chunk-cqkdzt01.js#Igt","doc":"markSessionRestored：标记会话已恢复。"}
-{"id":"chunk-cqkdzt01.js#Xj","doc":"isSessionRestored：会话是否已恢复。"}
-{"id":"chunk-6bye9wca.js#WLe","doc":"STARTUP_CWD_REALPATH：启动时解析出的 cwd。"}
-{"id":"chunk-5vn5bpwt.js#AWn","doc":"sessionScopedMapsSlot：按会话根保存的映射表。"}
-{"id":"chunk-7dqf31r1.js#p","doc":"NON_TERMINAL_ENTRYPOINTS：非终端入口点集合。"}
-{"id":"chunk-e6aww6q8.js#PGt","doc":"takePendingHookSessionTitle：取待定的钩子会话标题。"}
-{"id":"chunk-e6aww6q8.js#t8s","doc":"overtakeSessionStart：接管会话启动上下文。"}
-{"id":"chunk-achyj058.js#g9o","doc":"MAX_PENDING_ACTION_ARGS：待决动作参数最多保留几项。"}
-{"id":"chunk-achyj058.js#h9o","doc":"pendingActionRows：待决动作的展示行。"}
-{"id":"chunk-achyj058.js#i8r","doc":"SESSION_STATE_IDLE_TTL_MS：会话状态空闲有效期。"}
-{"id":"chunk-e6aww6q8.js#BVs","doc":"clearLastIngressUuid：清空按会话记录的最后入站 uuid。"}
-{"id":"chunk-e6aww6q8.js#jVs","doc":"isUnavailableStoreError：存储不可用错误（含 cause 链）。"}
-{"id":"chunk-e6aww6q8.js#sjt","doc":"isSessionFileAt：该路径是否为指定会话的转录文件。"}
-{"id":"chunk-e6aww6q8.js#sfn","doc":"storagePort：取存储端口。"}
-{"id":"chunk-e6aww6q8.js#Tpo","doc":"REMOTE_TASK_ID_PATTERN：远程任务 id 格式；REMOTE_TASK_ENTRY_SCHEMA：远程任务条目 schema（同一声明共 2 个绑定）。"}
-{"id":"chunk-e6aww6q8.js#su","doc":"currentTranscriptStore：当前转录存储。"}
-{"id":"chunk-e6aww6q8.js#Q9o","doc":"MAX_FIRST_MESSAGE_CHARS：首条消息截断长度（200）；MAX_SESSION_DESCRIPTORS：会话描述条数上限（60）；COMMAND_NAME_RE：transcript 里的斜杠命令名（同一声明共 13 个绑定）。"}
-{"id":"chunk-qzv7ezvq.js#f","doc":"listTranscriptEntries：分页列出转录条目（qzv7 备份实现）。"}
-{"id":"chunk-rds552kq.js#yH","doc":"worktreeFromProgress：进度消息里的 worktree（磁盘模式下保留）。"}
-{"id":"chunk-1gpnajts.js#a6n","doc":"isArtifactShareSession：开启了 Artifact 共享且有会话表面。"}
-{"id":"chunk-cc8c7ddd.js#aW","doc":"persistBridgeArtifactFrames：持久化 bridge 产物 frame。"}
-{"id":"chunk-d0k42hx1.js#vXr","doc":"sessionTimeZone：会话时区。"}
-{"id":"chunk-d0k42hx1.js#llr","doc":"effectiveSessionTimeZone：诊断作用域外的有效时区。"}
-{"id":"chunk-d0k42hx1.js#Gvn","doc":"sessionDateCellSlot：按会话根保存的日期单元。"}
-{"id":"chunk-d0k42hx1.js#zQo","doc":"sessionDateCell：某会话的日期单元。"}
-{"id":"chunk-d0k42hx1.js#Tfi","doc":"currentSessionDate：当前会话日期。"}
-{"id":"chunk-q6msdgx4.js#p1s","doc":"firstHumanTurn：首个用户回合。"}
-{"id":"chunk-q6msdgx4.js#Eyt","doc":"requestAndPickSessionTitle：请求并挑选会话标题。"}
-{"id":"chunk-ndmse9kj.js#A","doc":"SESSION_URL_HASH_SALT：会话 URL 哈希盐。"}
-{"id":"chunk-ndmse9kj.js#ADt","doc":"hashSessionAddress：会话地址哈希。"}
-{"id":"chunk-ndmse9kj.js#p7t","doc":"remoteSessionUrlId：远程会话的 URL id。"}
-{"id":"chunk-pc1rmcr2.js#e_o","doc":"settingsChangedSignal：设置变更信号。"}
-{"id":"chunk-5hsd6qen.js#is","doc":"commandSyncNameState：按宿主保存的斜杠命令名单状态。"}
-{"id":"chunk-5hsd6qen.js#DU","doc":"mergedCommandNames：合并后的斜杠命令名单。"}
-{"id":"chunk-5hsd6qen.js#or","doc":"invalidateCommandNames：使命令名单缓存失效。"}
-{"id":"chunk-5hsd6qen.js#RIn","doc":"pluginCommandBase：插件命令名前缀。"}
-{"id":"chunk-5hsd6qen.js#oxi","doc":"setPluginCommandBase：设置插件命令名前缀。"}
-{"id":"chunk-5hsd6qen.js#sxi","doc":"clearPluginCommandBase：清空插件命令名前缀。"}
-{"id":"chunk-5hsd6qen.js#ixi","doc":"commandKindOf：取命令来源分类（prompt 视为 skill）。"}
-{"id":"chunk-e4vyc04t.js#cte","doc":"effectiveEnvSnapshot：预设置环境与非项目环境合并后的快照。"}
-{"id":"chunk-dcmhvw5a.js#cp","doc":"matchesManagedKey_2：上者的别名。"}
-{"id":"chunk-dcmhvw5a.js#hao","doc":"markManagedKeyGroup：记录托管键分组已加载。"}
-{"id":"chunk-dcmhvw5a.js#Ebr","doc":"loadedManagedKeyGroupsList：已加载的托管键分组列表。"}
-{"id":"chunk-dcmhvw5a.js#Ap","doc":"probeWritabilityAsync：异步探测路径可写。"}
-{"id":"chunk-dcmhvw5a.js#js","doc":"probeWritabilitySync：同步探测路径可写。"}
-{"id":"chunk-dcmhvw5a.js#Lp","doc":"managedPathCache：托管路径缓存。"}
-{"id":"chunk-q8cqcff6.js#Qt","doc":"BUILTIN_PLUGIN_TIER：内置插件层级标记；PLUGIN_ORDER_KEYS：插件顺序设置键（同一声明共 2 个绑定）。"}
-{"id":"chunk-q8cqcff6.js#Ni","doc":"isPlainRecord：非 null 非数组的对象。"}
-{"id":"chunk-q8cqcff6.js#se","doc":"mdmLoader：当前宿主的 MDM 加载器。"}
-{"id":"chunk-q8cqcff6.js#t1e","doc":"ensureMdmLoaded：等待 MDM 加载完成。"}
-{"id":"chunk-q8cqcff6.js#One","doc":"mdmResult：MDM 加载结果。"}
-{"id":"chunk-q8cqcff6.js#Uyr","doc":"withAskedWhere：已询问过托管设置时保留提问位置。"}
-{"id":"chunk-q8cqcff6.js#cIn","doc":"setMdmReadOutcomes：记录 MDM 读取结果。"}
-{"id":"chunk-q8cqcff6.js#ave","doc":"hasMdmResult：是否已有 MDM 结果。"}
-{"id":"chunk-q8cqcff6.js#uIn","doc":"isMdmLoadInFlight：MDM 加载进行中。"}
-{"id":"chunk-dcmhvw5a.js#JOe","doc":"asArray：标量转数组。"}
-{"id":"chunk-dcmhvw5a.js#u1e","doc":"hasManagedOrCoworkSurface：有托管设置或 Cowork 界面。"}
-{"id":"chunk-q8cqcff6.js#Eus","doc":"forgetHostEnvWrites：忘掉某环境变量的宿主写入记录。"}
-{"id":"chunk-q8cqcff6.js#RXt","doc":"hostWrittenEnvNames：宿主写过的环境变量名。"}
-{"id":"chunk-q8cqcff6.js#MRi","doc":"withEnvTake：临时替换取值函数并恢复。"}
-{"id":"chunk-q8cqcff6.js#DRi","doc":"setManagedOverrideProvider：设置托管覆盖提供者。"}
-{"id":"chunk-q8cqcff6.js#AQ","doc":"withHostEnvRestored：在恢复宿主环境后执行。"}
-{"id":"chunk-dcmhvw5a.js#gPi","doc":"isEnvSettingOn：环境变量形式的设置是否开启。"}
-{"id":"chunk-dcmhvw5a.js#pu","doc":"envFlagTruthyOrFalsy：按真/假变量集合判断。"}
-{"id":"chunk-dcmhvw5a.js#rbr","doc":"isWslEnvironment：是否 WSL 环境。"}
-{"id":"chunk-dcmhvw5a.js#gbr","doc":"LEADING_INVISIBLE_TEXT_RE：开头的不可见字符。"}
-{"id":"chunk-dcmhvw5a.js#gu","doc":"cleanOptionalText：清洗可选文本（空白为 undefined）。"}
-{"id":"chunk-q8cqcff6.js#Mne","doc":"wslInheritsSettings：WSL 是否继承 Windows 设置。"}
-{"id":"chunk-q8cqcff6.js#GOe","doc":"replaceMdmSetting：替换 MDM 设置。"}
-{"id":"chunk-q8cqcff6.js#n1e","doc":"readMdmSnapshot：读取 MDM 设置快照。"}
-{"id":"chunk-zw3bhs13.js#dxi","doc":"resetCoworkCloudCache：重置 cowork 云缓存。"}
-{"id":"chunk-dcmhvw5a.js#_Ot","doc":"normalizeCarveOutFlag：覆盖开关归一（undefined/false 保留）。"}
-{"id":"chunk-dcmhvw5a.js#rs","doc":"permissionRuleSchema：权限规则 schema；allowPermissionRuleSchema：allow 类权限规则 schema（同一声明共 2 个绑定）。"}
-{"id":"chunk-dcmhvw5a.js#BXt","doc":"signatureHeaderValue：取 x-claude-code-signature 头值。"}
-{"id":"chunk-dcmhvw5a.js#qfs","doc":"validSignatureHeader：合法签名头值。"}
-{"id":"chunk-dcmhvw5a.js#y_r","doc":"maybePersistSignature：有改动时保存或删除签名文件。"}
-{"id":"chunk-dcmhvw5a.js#BIn","doc":"removeSignatureFiles：删除签名文件与收件时间文件。"}
-{"id":"chunk-dcmhvw5a.js#__r","doc":"clearSignatureIfStale：文件不存在且需清理时删除签名。"}
-{"id":"chunk-dcmhvw5a.js#Pxi","doc":"readSignatureAsync：异步读签名文件。"}
-{"id":"chunk-dcmhvw5a.js#yOt","doc":"cacheTrustLabel：缓存信任状态标签。"}
-{"id":"chunk-q8cqcff6.js#Mo","doc":"SECRET_SEGMENT_REGEX：形似机密的段名。"}
-{"id":"chunk-q8cqcff6.js#NRi","doc":"GITHUB_TOKEN_ENV_NAMES：GitHub 令牌环境变量；SECRET_ENV_NAME_PREFIXES：机密环境变量的前缀（同一声明共 2 个绑定）。"}
-{"id":"chunk-q8cqcff6.js#Yo","doc":"secretEnvGlobs：机密环境变量的 glob 列表。"}
-{"id":"chunk-q8cqcff6.js#ns","doc":"UNSAFE_ENV_PREFIXES：需要去除的危险环境变量前缀（同一声明共 8 个绑定）。"}
-{"id":"chunk-q8cqcff6.js#Ki","doc":"POWERSHELL_NOT_FOUND_MESSAGE：找不到 PowerShell 的说明；PS_MODULE_PATH_ENV：PowerShell 模块路径环境变量（同一声明共 2 个绑定）。"}
-{"id":"chunk-q8cqcff6.js#Dn","doc":"PACKAGE_INDEX_ENV_VARS：包索引环境变量的别名表。"}
-{"id":"chunk-q8cqcff6.js#vus","doc":"hasAnyIndexEnv：是否设置了任一索引环境变量。"}
-{"id":"chunk-q8cqcff6.js#LRi","doc":"sanitizedIndexEnvs：清洗后的索引环境变量。"}
-{"id":"chunk-q8cqcff6.js#Ne","doc":"sanitizedEnvCache：清洗后环境的缓存。"}
-{"id":"chunk-q8cqcff6.js#HRi","doc":"clearSanitizedEnvCache：清空清洗环境缓存。"}
-{"id":"chunk-q8cqcff6.js#Gdt","doc":"CREDENTIAL_SCRUB_VARS_WITH_INPUT：凭证变量及其 INPUT_ 前缀形式。"}
-{"id":"chunk-q8cqcff6.js#Ile","doc":"envVarToUpperSnake：变量名转大写下划线。"}
-{"id":"chunk-q8cqcff6.js#xr","doc":"helperPlatformFamily：helper 平台归类（win32/posix）。"}
-{"id":"chunk-q8cqcff6.js#hr","doc":"clearRemotePayloadWarnings：清空远程载荷相关警告。"}
-{"id":"chunk-q8cqcff6.js#yr","doc":"clearAllRemoteWarnings：清空全部远程警告。"}
-{"id":"chunk-q8cqcff6.js#Ht","doc":"clearHelperRefreshWarning：清空 helper 刷新失败警告。"}
-{"id":"chunk-q8cqcff6.js#Rr","doc":"NO_PLATFORM_ENTRY_TEXT：没有当前平台条目的说明。"}
-{"id":"chunk-q8cqcff6.js#jRi","doc":"hasStaticPayload：是否有静态载荷。"}
-{"id":"chunk-q8cqcff6.js#Qe","doc":"withholdUnverifiedCacheKeys：未验证缓存时扣留键。"}
-{"id":"chunk-q8cqcff6.js#wt","doc":"mergesOutputBehavior：远程输出是否参与合并。"}
-{"id":"chunk-q8cqcff6.js#hs","doc":"remoteHelperCommand：按平台选出的远程 policy helper 命令。"}
-{"id":"chunk-q8cqcff6.js#qe","doc":"RemoteHelperError：远程 helper 错误类。"}
-{"id":"chunk-q8cqcff6.js#br","doc":"managedSettingsFromRemote：远程下发的托管设置。"}
-{"id":"chunk-q8cqcff6.js#zyr","doc":"remoteClaudeMd：远程下发的 CLAUDE.md。"}
-{"id":"chunk-q8cqcff6.js#WRi","doc":"remoteAppendSystemPrompt：远程下发的追加系统提示。"}
-{"id":"chunk-q8cqcff6.js#Ole","doc":"hasRemoteHelperState：是否已有远程 helper 状态。"}
-{"id":"chunk-q8cqcff6.js#oOt","doc":"hasHelperPassInFlight：是否有 helper 轮次进行中。"}
-{"id":"chunk-q8cqcff6.js#GRi","doc":"releaseLatchWhenTickSettles：是否在 tick 结算后释放锁存。"}
-{"id":"chunk-q8cqcff6.js#zRi","doc":"subscribeHelperPassSettled：订阅 helper 轮次结算。"}
-{"id":"chunk-q8cqcff6.js#KRi","doc":"helperInitAttempted：是否尝试过初始化 helper。"}
-{"id":"chunk-q8cqcff6.js#wr","doc":"armedFromRemote：是否由远程武装。"}
-{"id":"chunk-q8cqcff6.js#Kdt","doc":"armedFromUserWritableBase：由用户可写基座武装。"}
-{"id":"chunk-q8cqcff6.js#Lr","doc":"mergesRemoteOutput：远程输出参与合并。"}
-{"id":"chunk-q8cqcff6.js#VRi","doc":"notifyOrganizationAsking：通知组织询问状态（不作答）。"}
-{"id":"chunk-q8cqcff6.js#qRi","doc":"notifyOrganizationAskingForced：通知组织询问状态（强制）。"}
-{"id":"chunk-q8cqcff6.js#et","doc":"retireReason：退役原因（停止询问或仍在询问）。"}
-{"id":"chunk-q8cqcff6.js#eio","doc":"applyRemotePolicyMidSession：会话中应用远程策略。"}
-{"id":"chunk-q8cqcff6.js#JRi","doc":"helperConfigPath：helper 配置文件路径。"}
-{"id":"chunk-q8cqcff6.js#QRi","doc":"retiredHelperPaths：已退役的 helper 路径。"}
-{"id":"chunk-q8cqcff6.js#exi","doc":"isServingDefault：正在服务 “default” helper。"}
-{"id":"chunk-q8cqcff6.js#sOt","doc":"helperSelectionWarnings：合并选择与状态的警告。"}
-{"id":"chunk-q8cqcff6.js#Os","doc":"resetRemoteHelperState：重置远程 helper 状态。"}
-{"id":"chunk-q8cqcff6.js#Mr","doc":"helperOutputOverride：helper 输出覆盖值。"}
-{"id":"chunk-q8cqcff6.js#txi","doc":"setHelperOutputOverride：设置 helper 输出覆盖值。"}
-{"id":"chunk-q8cqcff6.js#Lus","doc":"POLICY_HELPER_TAG：policyHelper 的错误标签。"}
-{"id":"chunk-q8cqcff6.js#Ee","doc":"invalidatePolicyLayer：使策略层失效。"}
-{"id":"chunk-q8cqcff6.js#R","doc":"policyHelperRunner：policyHelper 单例运行器；policyHelperRunnerAlias：运行器的应答缓存；FILE_POLICY_TIERS：文件类策略层级（同一声明共 3 个绑定）。"}
-{"id":"chunk-q8cqcff6.js#BRi","doc":"markStartsNoSession：标记本次不启动会话。"}
-{"id":"chunk-q8cqcff6.js#_r","doc":"helperFailureBlocks：按 onFailure 判断是否阻塞。"}
-{"id":"chunk-q8cqcff6.js#nt","doc":"truncateWarning：截断警告文本。"}
-{"id":"chunk-q8cqcff6.js#Ft","doc":"REMOTE_HELPER_PAYLOAD_SKIPPED_PREFIX：远程 helper 载荷被跳过的前缀。"}
-{"id":"chunk-cjydagjy.js#Zuo","doc":"armHelperGateExit：武装 helper 闸门退出定时器。"}
-{"id":"chunk-dcmhvw5a.js#Ig","doc":"explainedPolicyChange：说明策略变化。"}
-{"id":"chunk-dcmhvw5a.js#kn","doc":"trimmedPolicyTier：裁剪后的策略层。"}
-{"id":"chunk-zg1bje4s.js#Vyt","doc":"settingsSourceLabel：设置来源的展示标签。"}
-{"id":"chunk-pr8s5wf6.js#Cln","doc":"blockingLocalSettingsErrors：会阻止操作的本地设置错误。"}
-{"id":"chunk-6zvepy0r.js#Dq","doc":"stripBomAndCarriageReturns：去掉 BOM 与裸回车。"}
-{"id":"chunk-6zvepy0r.js#J","doc":"settingsSourceForPathByPriority：按优先级找路径对应的设置源。"}
-{"id":"chunk-6zvepy0r.js#P7n","doc":"settingsWriteGateText：云端未应用或已暂存的说明。"}
-{"id":"chunk-6zvepy0r.js#ee","doc":"MAX_DIFF_CONTEXT_BYTES：diff 上下文读取字节上限；MAX_SETTINGS_FILE_BYTES：设置文件体积上限；DIFF_CONTEXT_LINES_BEFORE：diff 上下文前几行（同一声明共 4 个绑定）。"}
-{"id":"chunk-q8cqcff6.js#nio","doc":"seedProjectSettings：预热项目设置读取。"}
-{"id":"chunk-dcmhvw5a.js#on","doc":"safeSet_2：safeSet 的别名。"}
-{"id":"chunk-dcmhvw5a.js#rn","doc":"safeGet_2：lodash safeGet 的别名。"}
-{"id":"chunk-dcmhvw5a.js#pd","doc":"mergeDeep_2：mergeDeep 的别名。"}
-{"id":"chunk-dcmhvw5a.js#fd","doc":"mergeKeys：eS 的别名。"}
-{"id":"chunk-dcmhvw5a.js#hio","doc":"isIterateeCall_2：lodash isIterateeCall 的别名。"}
-{"id":"chunk-dcmhvw5a.js#oS","doc":"mergeWithAssigner：自定义合并器；mergeWithAssigner_2：mergeWithAssigner 的别名（同一声明共 2 个绑定）。"}
-{"id":"chunk-dcmhvw5a.js#vio","doc":"isInteractiveSettingsHost：可交互且非后台托管会话。"}
-{"id":"chunk-dcmhvw5a.js#Sxi","doc":"registerServedSettingsReader：登记服务端设置读取器。"}
-{"id":"chunk-dcmhvw5a.js#kio","doc":"isSettingsGateAnswered：设置闸门已结算或已答复。"}
-{"id":"chunk-dcmhvw5a.js#wxi","doc":"latchSettingsGateSettled：记录设置闸门已结算。"}
-{"id":"chunk-dcmhvw5a.js#Exi","doc":"isSteadyMarshmallowOn：开关 tengu_steady_marshmallow。"}
-{"id":"chunk-dcmhvw5a.js#vxi","doc":"isValidatedCloverOn：开关 tengu_validated_clover。"}
-{"id":"chunk-dcmhvw5a.js#kxi","doc":"isTranquilCrescentOn：开关 tengu_tranquil_crescent。"}
-{"id":"chunk-dcmhvw5a.js#Txi","doc":"isSteadySunbeamOn：开关 tengu_steady_sunbeam。"}
-{"id":"chunk-dcmhvw5a.js#Axi","doc":"isHashedLarkOn：开关 tengu_hashed_lark。"}
-{"id":"chunk-dcmhvw5a.js#Cxi","doc":"isCalmEagleOn：开关 tengu_calm_eagle。"}
-{"id":"chunk-dcmhvw5a.js#Rxi","doc":"isAsyncSnowglobeOn：开关 tengu_async_snowglobe。"}
-{"id":"chunk-dcmhvw5a.js#xxi","doc":"isHumbleFlurryOn：开关 tengu_humble_flurry。"}
-{"id":"chunk-q8cqcff6.js#dY","doc":"noUncachedRoot：无缓存根（占位）。"}
-{"id":"chunk-q8cqcff6.js#GD","doc":"storageRootFor：解析路径对应的存储根。"}
-{"id":"chunk-q8cqcff6.js#eA","doc":"uncachedStorageRootFor：不缓存的存储根解析。"}
-{"id":"chunk-q8cqcff6.js#iIn","doc":"nearestNonHomeRoot：最近的非主目录根。"}
-{"id":"chunk-q8cqcff6.js#xRi","doc":"storageRootsFor：路径的所有存储根。"}
-{"id":"chunk-3wek6r2k.js#pp","doc":"AGENT_FRONTMATTER_KEYS：代理前置声明可用的键。"}
-{"id":"chunk-s61vbvea.js#m_","doc":"anyPairMatches：任一两两匹配。"}
-{"id":"chunk-dcmhvw5a.js#rJt","doc":"POLICY_HELPER_ON_FAILURE：policyHelper 失败处理取值；POLICY_HELPER_LOG_LEVELS：policyHelper 日志级别取值；policyHelperScriptRefSchema：policyHelper 脚本引用 schema（同一声明共 3 个绑定）。"}
-{"id":"chunk-dcmhvw5a.js#dPi","doc":"tipEntrySchema：提示条目 schema；skillsSettingsSchema：技能设置 schema；agentsSettingsSchema：代理设置 schema（同一声明共 11 个绑定）。"}
-{"id":"chunk-dcmhvw5a.js#Mps","doc":"looksLikeUncPath：反斜杠形式像 UNC 路径。"}
-{"id":"chunk-dcmhvw5a.js#fOn","doc":"isNetworkOrMacSpecialPath：网络路径或 macOS 特殊路径。"}
-{"id":"chunk-dcmhvw5a.js#Dps","doc":"isKernelPseudoPath：/proc、/dev/fd 等内核伪路径。"}
-{"id":"chunk-dcmhvw5a.js#Hps","doc":"POLICY_HELPER_EXECUTABLE_RE：policyHelper 可执行文件后缀。"}
-{"id":"chunk-dcmhvw5a.js#Nps","doc":"isPowerShellScript：.ps1 脚本。"}
-{"id":"chunk-dcmhvw5a.js#$ps","doc":"hasPowerShellGlobChars：.ps1 里含 glob 字符。"}
-{"id":"chunk-dcmhvw5a.js#ms","doc":"platformSpellings：平台名的等价写法（wsl 兼容 linux）。"}
-{"id":"chunk-dcmhvw5a.js#_E","doc":"skillOverridesSchema：技能覆盖 schema。"}
-{"id":"chunk-dcmhvw5a.js#Ac","doc":"configVariantSchema：配置变体 schema；configVariantUnionSchema：配置变体联合 schema（同一声明共 2 个绑定）。"}
-{"id":"chunk-dcmhvw5a.js#SE","doc":"warnedSettingsKeys：已警告过的设置键；perKeySettingsSchema：逐键惰性的设置 schema；wholeSettingsSchema：整份设置 schema（同一声明共 3 个绑定）。"}
-{"id":"chunk-dcmhvw5a.js#fPi","doc":"isWarnedSettingsKey：该键出现过警告。"}
-{"id":"chunk-dcmhvw5a.js#hs","doc":"RESTRICTIVE_TOP_LEVEL_SETTINGS：受限的顶层设置键（同一声明共 2 个绑定）。"}
-{"id":"chunk-dcmhvw5a.js#eao","doc":"UNREADABLE_SETTING_MARKER：设置不可读的占位文本。"}
-{"id":"chunk-dcmhvw5a.js#jt","doc":"RESTRICTIVE_NESTED_SETTINGS：受限的嵌套设置键；restrictiveNestedSettingsMap：受限嵌套设置映射（同一声明共 3 个绑定）。"}
-{"id":"chunk-dcmhvw5a.js#To","doc":"isRestrictiveNestedPath：路径属于受限嵌套设置。"}
-{"id":"chunk-dcmhvw5a.js#AOn","doc":"isBlockingSettingsIssue：是否阻断的设置问题。"}
-{"id":"chunk-dcmhvw5a.js#ct","doc":"SETTINGS_TIP_RULES：设置校验提示规则（同一声明共 2 个绑定）。"}
+{"id":"chunk-qaspter0.js#gm","doc":"foldCaseBasic：大小写折叠的底层实现（ı→i、ſ→s），供 foldCaseForCompare 等使用。"}
+{"id":"chunk-qaspter0.js#rco","doc":"toForwardSlashesOnWindows：仅 Windows 下把反斜杠换成正斜杠。"}
+{"id":"chunk-qaspter0.js#su","doc":"stripTrailingSeparators：去掉路径末尾的分隔符（Windows 同时认 / 与 \\），全为分隔符时原样返回。"}
+{"id":"chunk-qaspter0.js#SW","doc":"symlinkVerdictForPath：逐级检查路径的符号链接状态并返回 verdict。"}
+{"id":"chunk-qaspter0.js#vhs","doc":"isWindowsShortcutAbsent：Windows 下判断 <path>.lnk 不存在（非 Windows 恒为真）。"}
+{"id":"chunk-qaspter0.js#xSr","doc":"isPathSymlinkClear：路径逐级检查结果为 clear 时返回 true。"}
+{"id":"chunk-dce9g6nv.js#qc","doc":"isSubpathOf：relative() 判断 child 是否位于 parent 之下（相等时返回给定默认值）。"}
+{"id":"chunk-za46rn2f.js#ABt","doc":"neverAllowsLocalWsl：编译期开关 stub：永远不认为本地 WSL 路径可信。"}
+{"id":"chunk-za46rn2f.js#CBt","doc":"passThroughPath：恒等函数，用于跨平台路径预处理。"}
+{"id":"chunk-za46rn2f.js#nHr","doc":"toWslPathNoop：WSL 路径转换的禁用版 stub，恒返回 undefined。"}
+{"id":"chunk-za46rn2f.js#n9i","doc":"isTrustedLocalWindowsPath：路径不在可疑拼写中即视为可信本地路径（Windows 分支）。"}
+{"id":"chunk-za46rn2f.js#ST","doc":"isUntrustedLinkPath：去掉 Win32 设备前缀后判断是否为交接点/网络/设备路径。"}
+{"id":"chunk-za46rn2f.js#Uan","doc":"pathTraversesFromTrustedRoot：以给定根为可信起点检查剩余路径成分是否经过不可信链接。"}
+{"id":"chunk-za46rn2f.js#VNe","doc":"traversesOrResolvesUntrustedLink：直接路径或（Windows 本地路径）resolve 后任一经过不可信链接即为真。"}
+{"id":"chunk-za46rn2f.js#Mt","doc":"MAX_UNTRUSTED_PATH_DEPTH：路径成分遍历的深度上限（导出，供调用方复用）。"}
+{"id":"chunk-za46rn2f.js#x","doc":"splitPathSegments：按 / 切分路径成分并丢弃空段。"}
+{"id":"chunk-za46rn2f.js#P","doc":"isUntrustedLinkPathStrict：与 isUntrustedLinkPath 相同但可选参数为假时仍判可疑。"}
+{"id":"chunk-f86gb5sh.js#F_s","doc":"stripLeadingInvisibleChars：去掉路径开头的空白/盲文空格/控制字符等不可见字符。"}
+{"id":"chunk-f86gb5sh.js#wfo","doc":"isUnsafePathAfterDecode：解码 %XX 后判断路径是否 UNC、逃脱上级目录或含控制字符。"}
+{"id":"chunk-f86gb5sh.js#ALt","doc":"isNetworkPathAfterNormalize：posix 规范化后判断是否网络路径或跳出了上级目录。"}
+{"id":"chunk-f86gb5sh.js#U_s","doc":"isUnsafeFileUrl：去掉 file:// 前缀后判断 URL 路径是否不安全。"}
+{"id":"chunk-4f7javgj.js#Kea","doc":"setPathTable：设置当前宿主的路径表（空值表示清零）。"}
+{"id":"chunk-4f7javgj.js#Vea","doc":"getEventPathNames：取事件对应的可用路径名列表。"}
+{"id":"chunk-5xgkngpb.js#V3r","doc":"listLocalPeerSessions：关闭时返回空列表，开启时列出本机存活的其他会话。"}
+{"id":"chunk-5xgkngpb.js#Q3o","doc":"cachedBridgeListingRows：跨会话消息开启时返回缓存的桥接会话行。"}
+{"id":"chunk-5xgkngpb.js#Z3o","doc":"warmBridgeListingIfEnabled：开启时预热桥接会话列表。"}
+{"id":"chunk-vadzk8yk.js#N7","doc":"MAX_PEER_FILE_BYTES：单个对端文件的传输上限（30 MiB）；MAX_PEER_SPOOL_BYTES：对端文件落到中转目录的总量上限；MAX_PEER_ATTACHMENTS：一次消息最多携带的对端文件数（同一声明共 3 个绑定）。"}
+{"id":"chunk-vadzk8yk.js#e5e","doc":"isPeerSendFileEnabled：跨会话消息开启且 tengu_send_file 打开时才允许发送文件。"}
+{"id":"chunk-gb7aq6sf.js#xCs","doc":"MAX_PEER_LABEL_WIDTH：对端会话标签/首行的显示宽度上限。"}
+{"id":"chunk-gb7aq6sf.js#VFn","doc":"firstLineOfPeerBody：取正文首个有意义的行并截断到显示宽度。"}
+{"id":"chunk-gb7aq6sf.js#lKi","doc":"isPeerFromMode：判断字符串是否是合法的 from-mode。"}
+{"id":"chunk-gb7aq6sf.js#Xze","doc":"bridgeAddressFromToken：把 bridge 访问令牌拼成 bridge: 前缀的地址。"}
+{"id":"chunk-gb7aq6sf.js#MX","doc":"udsAddressFromPath：把套接字路径拼成 uds: 前缀的地址。"}
+{"id":"chunk-gb7aq6sf.js#Q","doc":"decodeHeaderValue：容错解码 URL 编码的消息头值。"}
+{"id":"chunk-gb7aq6sf.js#Oe","doc":"PEER_SESSION_ID_PATTERN：from-session 的合法字符与长度；MAX_HOP_CHAIN_LENGTH：跳链最多保留的跳数；HOP_ID_HEX_LENGTH：单跳 id 的十六进制长度（HMAC 截断长度）（同一声明共 3 个绑定）。"}
+{"id":"chunk-gb7aq6sf.js#dKi","doc":"hopIdHmac：用会话密钥对跳 id 做 HMAC 并截断。"}
+{"id":"chunk-gb7aq6sf.js#ICs","doc":"isValidHeaderValue：判断消息头值是否符合字符集与长度上限。"}
+{"id":"chunk-gb7aq6sf.js#FNt","doc":"wrapPeerMessage：把正文包成 cross-session-message 标签并带上消息头。"}
+{"id":"chunk-gb7aq6sf.js#fee","doc":"stripPeerMessageBody：发送者与接收者相同时去掉正文，避免回显。"}
+{"id":"chunk-gb7aq6sf.js#gbe","doc":"isPeerAddress：判断字符串是否是 uds:/bridge:/did: 形式的对等地址。"}
+{"id":"chunk-gb7aq6sf.js#Xn","doc":"UNIX_SOCKET_PATH_PATTERN：匹配以 / 结尾的 .sock 绝对路径；NAMED_PIPE_PATH_PATTERN：匹配 \\\\?\\pipe\\ 形式的 Windows 命名管道；UNIX_SOCKET_PREFIX_PATTERN：匹配 .sock 路径前缀（不要求结尾）（同一声明共 3 个绑定）。"}
+{"id":"chunk-gb7aq6sf.js#MCs","doc":"isUnixSocketPath：判断是否是 unix 套接字路径。"}
+{"id":"chunk-x7y4f088.js#Jpr","doc":"isCurrentBridgeIdentity：桥接列表记录是否属于当前身份。"}
+{"id":"chunk-x7y4f088.js#Zpr","doc":"bridgeListingRows：未过期且身份一致的桥接会话行。"}
+{"id":"chunk-x7y4f088.js#exn","doc":"livePeerSessionsExcludingKnown：排除已知会话后的存活会话列表。"}
+{"id":"chunk-x7y4f088.js#n9t","doc":"isTransientListingFailure：判断列表失败是否可重试（超时/取回失败）。"}
+{"id":"chunk-x7y4f088.js#txn","doc":"CANNOT_RECEIVE_REASON：目标会话不接收跨会话消息时的拒绝原因文案。"}
+{"id":"chunk-a2q0x549.js#wdo","doc":"blocksReadsOutsideWorkingDirs：策略设置是否要求阻断工作目录外的读取。"}
+{"id":"chunk-a2q0x549.js#Gbr","doc":"isRuleRoundTripStable：规则经格式化再解析后与原值一致。"}
+{"id":"chunk-5xgkngpb.js#s8r","doc":"isActionSummaryEnabled：动作摘要总开关。"}
+{"id":"chunk-5xgkngpb.js#u2e","doc":"COMPUTER_BATCH_EXEMPT_ACTIONS：computer_batch 不需要摘要的动作；APP_BATCH_EXEMPT_ACTIONS：app_batch 不需要摘要的动作；COMPUTER_USE_ACTION_NAMES：计算机使用类工具的动作名全集（同一声明共 7 个绑定）。"}
+{"id":"chunk-b73m1002.js#Ypt","doc":"sanitizeForDisplay：逐字符清洗后的显示文本。"}
+{"id":"chunk-b73m1002.js#hkr","doc":"hostnameLengthAllowance：允许的主机名长度（末尾单个点加 1）。"}
+{"id":"chunk-b73m1002.js#r0n","doc":"truncateForDisplayText：截断到显示上限并补省略号。"}
+{"id":"chunk-b73m1002.js#MSs","doc":"isCombiningOrZeroWidth：组合标记或无渲染宽度。"}
+{"id":"chunk-b73m1002.js#kJe","doc":"renderableText：清洗后可直接显示的文本。"}
+{"id":"chunk-b73m1002.js#cHt","doc":"hasNoVisibleText：字符串为空或没有可见宽度。"}
+{"id":"chunk-b73m1002.js#_kr","doc":"displayLabelOrUnnamedTool：标签或 “(unnamed tool)” 回退。"}
+{"id":"chunk-b73m1002.js#Xpo","doc":"serializePayloadSafely：序列化审批载荷，超限时返回 undefined。"}
+{"id":"chunk-b73m1002.js#yUi","doc":"hasBrokenSequences：去掉不安全字符后是否仍有残缺序列。"}
+{"id":"chunk-5xgkngpb.js#NU","doc":"appendAutoModeDecision：往当前会话的 auto 模式决策日志追加一条。"}
+{"id":"chunk-z20c443b.js#Fd","doc":"isExactlyTrue：严格等于 true 的判定（限制项持有器）。"}
+{"id":"chunk-1p0bwqzj.js#vyt","doc":"replacesDefaultRules：规则列表是否不含 $defaults（完全替换默认规则）。"}
+{"id":"chunk-1p0bwqzj.js#wOr","doc":"normalizeRuleSlug：规则名规范化为小写下划线。"}
+{"id":"chunk-1p0bwqzj.js#TMs","doc":"ruleIdFromBracketPrefix：从 “[规则名]” 前缀提取规则 id。"}
+{"id":"chunk-1p0bwqzj.js#k","doc":"EXTRA_AUTO_MODE_RULE_IDS：预留的空规则数组（供合并）；ALL_AUTO_MODE_RULE_ID_SET：auto 模式规则 id 的集合；ALL_AUTO_MODE_RULE_ID_SET_WITH_UNTRUSTED：基础规则 + 不可信内容规则集合（同一声明共 4 个绑定）。"}
+{"id":"chunk-1p0bwqzj.js#dZe","doc":"hasInvisibleRuleChars：规则文本是否含不可见字符。"}
+{"id":"chunk-z20c443b.js#Fr","doc":"isAcceptableRuleText：规则文本可用（非空、无控制字符、无模板注入）。"}
+{"id":"chunk-z20c443b.js#Br","doc":"isApiProviderKind：是否为已知 API 提供方类型。"}
+{"id":"chunk-z20c443b.js#an","doc":"isAnthropicProviderId：提供方类型或其 Anthropic id 形式。"}
+{"id":"chunk-z20c443b.js#wIs","doc":"withBoxedDiamond：给文本加双线菱形前缀。"}
+{"id":"chunk-z20c443b.js#EIs","doc":"VERTICAL_LEFT_BAR_GLYPH：竖条符号（▎）；FULL_BLOCK_GLYPH：实心方块符号（█）；HORIZONTAL_LINE_GLYPH：横线符号（─）（同一声明共 3 个绑定）。"}
+{"id":"chunk-z20c443b.js#kIs","doc":"HEAVY_VERTICAL_BAR_GLYPH：粗竖线符号（┃）；NO_BREAK_SPACE：不换行空格常量（同一声明共 2 个绑定）。"}
+{"id":"chunk-5xgkngpb.js#G9r","doc":"autoModeUnavailableNotes：按宿主保存的 auto 模式不可用说明（Map）。"}
+{"id":"chunk-5xgkngpb.js#L3t","doc":"chromeGrantAllowlistWithoutClassifier：auto 模式是否允许无分类器时的 Chrome 授权白名单。"}
+{"id":"chunk-5xgkngpb.js#lvn","doc":"isRealAutoDenyWindow：存在且不是 “非安全检查” 的自动拒绝窗口。"}
+{"id":"chunk-5xgkngpb.js#Aui","doc":"withAutoDenyDeadline：给自动拒绝窗口附加截止时间。"}
+{"id":"chunk-5xgkngpb.js#fYe","doc":"lacksCreateIfEmpty：输入未要求 createIfEmpty（只读工具判定）。"}
+{"id":"chunk-5xgkngpb.js#QVt","doc":"lacksClear：输入未要求 clear（只读工具判定）。"}
+{"id":"chunk-8nfjhq0y.js#rW","doc":"hasUnresolvedCanonicalPath：记录既没有规范路径也未被跳过。"}
+{"id":"chunk-7jxyna5q.js#Mu","doc":"isCanonicalUnderRoot：规范路径位于根之下。"}
+{"id":"chunk-5xgkngpb.js#sle","doc":"isBrowserHousekeepingCall：浏览器内务类工具或输入检查通过即为真。"}
+{"id":"chunk-5xgkngpb.js#_Ye","doc":"shouldClassifyBrowserWrite：开启点击分类器且有浏览器写动作。"}
+{"id":"chunk-5xgkngpb.js#PZ","doc":"isAgentSpawningTool：是否为会派生代理的工具。"}
+{"id":"chunk-5xgkngpb.js#jSe","doc":"BROWSER_ACTION_KINDS_COPY：BROWSER_ACTION_KINDS 的副本（未被使用）。"}
+{"id":"chunk-5xgkngpb.js#j9r","doc":"isClassifiableBrowserCall：能取到浏览器动作名的调用。"}
+{"id":"chunk-5xgkngpb.js#A3t","doc":"normalizeAutoModeValue：只把 “on” 归一为 “on”。"}
+{"id":"chunk-5xgkngpb.js#SYe","doc":"shouldRouteBrowserCallToClassifier：分类器开启且动作可判定时才交给分类器。"}
+{"id":"chunk-z20c443b.js#gIr","doc":"isBypassCapableMode：可以绕过权限的模式。"}
+{"id":"chunk-5pbe9zgv.js#I1t","doc":"isBypassPermissionsAccepted：bypass 权限是否已被接受。"}
+{"id":"chunk-vr5v4gzz.js#cJt","doc":"isPinnedOrWildcardRule：规则带固定摘要或以 :* 结尾。"}
+{"id":"chunk-5xgkngpb.js#b9r","doc":"isOutputLimitStop：停止原因是否因输出上限。"}
+{"id":"chunk-5xgkngpb.js#eot","doc":"currentAutoModeTier：当前 auto 模式等级。"}
+{"id":"chunk-5xgkngpb.js#Zqe","doc":"CLASSIFIER_BASE_DEADLINE_MS：分类器第一阶段基础截止时间；CLASSIFIER_MAX_DEADLINE_MS：分类器截止时间上限；CLASSIFIER_PER_CALL_MIN_TIMEOUT_MS：单次分类器调用的最小超时（同一声明共 7 个绑定）。"}
+{"id":"chunk-5xgkngpb.js#ezt","doc":"classifierStageDeadlineMs：按转录规模计算的第一阶段截止时间。"}
+{"id":"chunk-5xgkngpb.js#rKe","doc":"HOST_CONTEXT_LINE_LIMIT：宿主上下文行数上限。"}
+{"id":"chunk-5xgkngpb.js#L_e","doc":"isLiveHostContextDisabled：是否关闭实时宿主上下文。"}
+{"id":"chunk-evz6wa5s.js#Sst","doc":"canPromptForConfirmation：可经 AskUserQuestion 向用户确认。"}
+{"id":"chunk-xmjc6e38.js#Ph","doc":"currentToolPermissionContext：取当前工具权限上下文。"}
+{"id":"chunk-ap4nnw1y.js#tDs","doc":"ruleToolNameFromString：从规则串取工具名。"}
+{"id":"chunk-ap4nnw1y.js#RYi","doc":"hasUnclosedRuleParen：规则括号是否未闭合。"}
+{"id":"chunk-5xgkngpb.js#LSn","doc":"EMAIL_SENDER_FLAG_BY_KIND：按发送者种类取对应的功能开关；EMAIL_GROUP_REPLY_TOOL：邮件组回复工具名；EMAIL_MCP_SERVER_PREFIX：邮件 MCP 服务器工具前缀（同一声明共 11 个绑定）。"}
+{"id":"chunk-5xgkngpb.js#zci","doc":"emailSenderTurnDetected：远程会话里检测到邮件发件人回合。"}
+{"id":"chunk-85eyj5gy.js#er","doc":"stripCheckoutBaseRule：去掉 PowerShell(git checkout -b *) 规则。"}
+{"id":"chunk-b628tq8y.js#q","doc":"VERSION_ARG_PATTERN：--version 的十进制整数值；ANT_WORD_PATTERN：命令里出现 ant（大小写不敏感）；STAGED_ID_PATTERN：staging/vrtx/bdrk 前缀的 ID（同一声明共 19 个绑定）。"}
+{"id":"chunk-5xgkngpb.js#lzt","doc":"shouldRelyOnModeFloorForBrowser：远程浏览器工具按模式地板处理。"}
+{"id":"chunk-5xgkngpb.js#lKe","doc":"isRemoteBrowserToolModeFloorActive：远程浏览器工具处于模式地板。"}
+{"id":"chunk-5xgkngpb.js#Fli","doc":"isRemoteBrowserUnderModeFloor：远程浏览器工具且模式地板开启。"}
+{"id":"chunk-5xgkngpb.js#dzt","doc":"filterRemoteBrowserAllowUpdates：去掉远程浏览器工具的 allow 更新。"}
+{"id":"chunk-7jxyna5q.js#AB","doc":"vetPathSpellingsOrChain：先按拼写审查，再按解析链审查。"}
+{"id":"chunk-7jxyna5q.js#YSi","doc":"vetPathSpellingsOrChainAsync：异步版：网络屏幕路径异步获取。"}
+{"id":"chunk-7jxyna5q.js#OL","doc":"pathVettingReason：路径审查不通过的原因。"}
+{"id":"chunk-5xgkngpb.js#I3o","doc":"MAX_ANSWER_DEPTH：权限回答输入的最大深度；MAX_ANSWER_VALUES：权限回答输入的最大值个数；MAX_ANSWER_CHARS：权限回答输入的最大字符数（同一声明共 3 个绑定）。"}
+{"id":"chunk-5xgkngpb.js#G7","doc":"ANSWER_CHANGED_INPUT_MESSAGE：回答改写了调用时的说明；ANSWER_RULES_UNAPPLIED_MESSAGE：规则未能全部应用时的说明；RULE_TABLE_NAMES：四个规则表名（同一声明共 4 个绑定）。"}
+{"id":"chunk-5xgkngpb.js#fBe","doc":"isUnchangedAnswerInput：输入为空或与原输入相同。"}
+{"id":"chunk-nh073evr.js#wGs","doc":"isMinimalContextSerializable：序列化权限上下文可通过最小 schema。"}
+{"id":"chunk-nh073evr.js#O4","doc":"exceedsSerializedContextLimit：序列化上下文是否超出上限。"}
+{"id":"chunk-5xgkngpb.js#vwt","doc":"updatedInputOrOriginal：拒绝时保留原输入，否则用更新后的输入。"}
+{"id":"chunk-7jxyna5q.js#JSi","doc":"PERMISSION_PROMPT_HOST_KINDS：权限提示宿主的两种取值。"}
+{"id":"chunk-7jxyna5q.js#Gve","doc":"isNoPromptHost：宿主为 “none”。"}
+{"id":"chunk-7jxyna5q.js#nfr","doc":"effectivePermissionPromptTool：有效的权限提示工具（stdio 优先）。"}
+{"id":"chunk-7jxyna5q.js#L8","doc":"hasPermissionPromptTool：指定了非 none 的权限提示工具。"}
+{"id":"chunk-5xgkngpb.js#isr","doc":"setPermissionPromptPerson：设置提示宿主为“人”。"}
+{"id":"chunk-5xgkngpb.js#N4t","doc":"getPermissionPromptPerson：取提示宿主的人。"}
+{"id":"chunk-5xgkngpb.js#tat","doc":"setPermissionPromptHostProbe：登记某类宿主的探测函数。"}
+{"id":"chunk-5xgkngpb.js#Cot","doc":"notePendingPermissionAnswer：记录待定的权限回答。"}
+{"id":"chunk-5xgkngpb.js#xbn","doc":"permissionRecordModule：权限记录模块的惰性 require。"}
+{"id":"chunk-ap4nnw1y.js#WOr","doc":"WORKSPACE_BASH_TOOL：workspace 的 bash 工具名；WORKSPACE_WEB_FETCH_TOOL：workspace 的 web_fetch 工具名（同一声明共 2 个绑定）。"}
+{"id":"chunk-ap4nnw1y.js#zOr","doc":"wildcardRuleRegex：把通配规则编译成正则。"}
+{"id":"chunk-ap4nnw1y.js#b","doc":"escapeRuleText：转义规则文本里的反斜杠与括号。"}
+{"id":"chunk-ap4nnw1y.js#z1n","doc":"isEscapableRuleChar：该字符在规则里保留转义。"}
+{"id":"chunk-ap4nnw1y.js#QMs","doc":"isWindowsAbsoluteRule：规则是否以 Windows 绝对路径开头。"}
+{"id":"chunk-ap4nnw1y.js#ZMs","doc":"unescapeRuleContent：规则内容反转义。"}
+{"id":"chunk-ap4nnw1y.js#eDs","doc":"unescapeParens：去掉括号前的反斜杠。"}
+{"id":"chunk-gg17c06d.js#w","doc":"isRestrictedNonSessionRule：非会话来源的受限规则。"}
+{"id":"chunk-gg17c06d.js#fSr","doc":"filterPermissionUpdatePayload：过滤权限更新载荷中的受限 Web 工具。"}
+{"id":"chunk-gg17c06d.js#VV","doc":"areSkillsConvertedAsPlugins：技能是否被当作插件处理。"}
+{"id":"chunk-gg17c06d.js#Wdo","doc":"steadyFinchEnabled：技能转插件开关。"}
+{"id":"chunk-gg17c06d.js#k9","doc":"isSyncedMarketplacePlugin：已同步市场里的插件 id。"}
+{"id":"chunk-gg17c06d.js#pSr","doc":"isSkillPluginSurfaceEnabled：技能插件表面是否生效。"}
+{"id":"chunk-gg17c06d.js#mSr","doc":"isTopHostSkillPluginSession：顶层宿主会话且技能转插件开启。"}
+{"id":"chunk-b9gx6r6h.js#YU","doc":"permissionModeSignal：权限模式变化的惰性信号。"}
+{"id":"chunk-bc4jcw5z.js#W","doc":"approvalLayers：当前会话的权限层。"}
+{"id":"chunk-bc4jcw5z.js#aNi","doc":"bumpAutoCompactOfferEsc：记录一次 Esc 计数。"}
+{"id":"chunk-bc4jcw5z.js#lNi","doc":"markAutoCompactOfferResolved：标记压缩提议已解决。"}
+{"id":"chunk-bc4jcw5z.js#q","doc":"isAutoCompactOfferAnswered：压缩提议已回答或被跳过。"}
+{"id":"chunk-bc4jcw5z.js#Juo","doc":"parseEffortOrKeyword：解析 effort 值或关键字。"}
+{"id":"chunk-bc4jcw5z.js#Qys","doc":"carriedEffortForModel：该模型可沿用的 effort。"}
+{"id":"chunk-bc4jcw5z.js#ie","doc":"hasCarriedRefusalEffort：回退锁存里带了 effort。"}
+{"id":"chunk-bc4jcw5z.js#DEr","doc":"releaseCarriedEffortForEffortChange：effort 改变时释放携带值。"}
+{"id":"chunk-bc4jcw5z.js#gNi","doc":"releaseCarriedEffortIfModelChanged：模型不再是回退模型时释放。"}
+{"id":"chunk-bc4jcw5z.js#LEr","doc":"isSpecialEffortKeywordDisabled：恒 false（构建时裁掉的关键字检查）。"}
+{"id":"chunk-gg17c06d.js#OWe","doc":"greedyShoreEnabled：tengu_greedy_shore 开关。"}
+{"id":"chunk-gg17c06d.js#ue","doc":"mcpToolAliasSetSlot：按宿主保存的 MCP 工具别名集合。"}
+{"id":"chunk-gg17c06d.js#SDi","doc":"hasMcpToolAliases：是否存在 MCP 工具别名。"}
+{"id":"chunk-gg17c06d.js#poe","doc":"classifyAllShellEnabled：Cowork 或全部 shell 交分类器。"}
+{"id":"chunk-5xgkngpb.js#PEe","doc":"canPromptUserForPermission：存在可交互提示通道（非交互时需显式提示工具）。"}
+{"id":"chunk-5xgkngpb.js#Tne","doc":"shouldReplaceMemoryInput：Live 记忆工具的输入被替换。"}
+{"id":"chunk-5xgkngpb.js#rU","doc":"isLiveMemoryToolName：是否为 Live 记忆工具。"}
+{"id":"chunk-nt9amew5.js#wXt","doc":"isClassifierRoutedMcpTool：该 MCP 工具交由分类器裁决。"}
+{"id":"chunk-nt9amew5.js#$ds","doc":"isDeepDuskDeviceTool：设备工具在 deep_dusk 开关下走仲裁。"}
+{"id":"chunk-nt9amew5.js#Fds","doc":"isBuzzingPelicanRouted：仲裁器下按 buzzing_pelican 开关放行。"}
+{"id":"chunk-5xgkngpb.js#yir","doc":"isWebFetchOrSearch：是否为 WebFetch/WebSearch。"}
+{"id":"chunk-5xgkngpb.js#FU","doc":"isWebToolClassifierRouted：Web 工具是否交给 auto 分类器。"}
+{"id":"chunk-5xgkngpb.js#KSe","doc":"isWebSearchClassifierRouted：WebSearch 是否交给分类器。"}
+{"id":"chunk-5xgkngpb.js#rI","doc":"classifierOnlyConfig：取工具的 classifierOnly 配置。"}
+{"id":"chunk-5xgkngpb.js#AYe","doc":"isClassifierAllow：允许且原因类型为 classifier。"}
+{"id":"chunk-5xgkngpb.js#_ir","doc":"takeClassifierBlock：取出并清除分类器阻断原因。"}
+{"id":"chunk-5xgkngpb.js#X5e","doc":"isPersonTypesHold：工具被暂停到用户亲自输入。"}
+{"id":"chunk-5xgkngpb.js#z5e","doc":"sanitizeRuleCategoryOrUndefined：规则类别白名单化。"}
+{"id":"chunk-5xgkngpb.js#sI","doc":"sanitizeRuleCategory：规则类别脱敏。"}
+{"id":"chunk-5xgkngpb.js#X8o","doc":"classifierApprovalFor：取分类器批准记录。"}
+{"id":"chunk-5xgkngpb.js#V9r","doc":"hasPersonOnlyAskFloor：钩子 ask 地板或仅人工 ask。"}
+{"id":"chunk-5xgkngpb.js#Cui","doc":"withDenialDeadline：附加自动拒绝截止时间。"}
+{"id":"chunk-5xgkngpb.js#_Yt","doc":"classifyEditsEnabled：编辑是否交分类器。"}
+{"id":"chunk-5xgkngpb.js#YCt","doc":"isFileMutationTool：是否文件修改工具。"}
+{"id":"chunk-5xgkngpb.js#Iui","doc":"toToolUseIdSet：构造工具调用 id 集合。"}
+{"id":"chunk-5xgkngpb.js#q9r","doc":"handedOffIds：交接的活工具调用 id。"}
+{"id":"chunk-5xgkngpb.js#XCt","doc":"isAskOnMutationTool：修改类工具的 ask 且曾开启主动性。"}
+{"id":"chunk-5xgkngpb.js#Oui","doc":"isProactivityModeChange：ask 与非 ask 之间的模式变化。"}
+{"id":"chunk-9h7kfbb1.js#zTr","doc":"copsSimilar：非官方且不相似的插件 id（占位）。"}
+{"id":"chunk-9s2vygnp.js#H7t","doc":"isVouchedMarketplaceRef：官方或受信策略插件的市场引用。"}
+{"id":"chunk-z20c443b.js#qIr","doc":"foldProtectedDirNameLower：保护目录名折叠（区分大小写）。"}
+{"id":"chunk-z20c443b.js#dOs","doc":"isProtectedDirAlwaysFalse：恒 false（占位）。"}
+{"id":"chunk-za46rn2f.js#LG","doc":"realpathCacheEntry：realpath 缓存条目。"}
+{"id":"chunk-91xvghb6.js#MRi","doc":"systemGitConfigPaths：git 系统配置路径。"}
+{"id":"chunk-91xvghb6.js#_ds","doc":"MAX_PROTECTED_PATH_LENGTH：受保护路径长度上限。"}
+{"id":"chunk-91xvghb6.js#mXt","doc":"classifyPathSpelling：判定路径拼写的落点。"}
+{"id":"chunk-91xvghb6.js#LRi","doc":"isWritableSharedFile：多硬链接且可写。"}
+{"id":"chunk-91xvghb6.js#jso","doc":"protectedSettingSourcesWithFlag：受保护设置源（含 flagSettings）。"}
+{"id":"chunk-rvq35mve.js#dIn","doc":"isNpmPluginSourcePath：是否为 npm 插件来源。"}
+{"id":"chunk-pjb5ptr5.js#TOt","doc":"sensitivePathGateEnabled：敏感路径检查的 GrowthBook 开关。"}
+{"id":"chunk-pjb5ptr5.js#jgr","doc":"neverTrueAsync：恒 false 的异步占位（构建时裁掉）。"}
+{"id":"chunk-pjb5ptr5.js#bDe","doc":"neverTrue：恒 false 的占位（构建时裁掉）。"}
+{"id":"chunk-n1e79taz.js#EOt","doc":"isSensitiveWithGitConfig：把 .git 下 config 也视为敏感。"}
+{"id":"chunk-n1e79taz.js#AXt","doc":"segmentReadingsFlat：某段的全部读法。"}
+{"id":"chunk-n1e79taz.js#UM","doc":"isSensitiveNameOrVariant：名字或其别名变体敏感。"}
+{"id":"chunk-n1e79taz.js#cio","doc":"DECORATION_LEAD_CHARS：纯装饰名可能的起始字符。"}
+{"id":"chunk-n1e79taz.js#e9e","doc":"exceedsPathVariantBudget：路径变体展开是否超出预算。"}
+{"id":"chunk-n1e79taz.js#Ie","doc":"SENSITIVE_SERVICE_ACCOUNT_RE：服务账号密钥文件名正则；SENSITIVE_CERT_FILE_NAMES：证书/密钥类敏感文件名；SENSITIVE_CERT_FILE_RE：证书扩展名正则（同一声明共 3 个绑定）。"}
+{"id":"chunk-n1e79taz.js#ocs","doc":"isCredentialConfigPathActive：凭证配置路径且检查生效。"}
+{"id":"chunk-n1e79taz.js#Hre","doc":"isSensitiveBasenameWithVariants：末段读法中有敏感文件名。"}
+{"id":"chunk-n1e79taz.js#kOt","doc":"nameReadingFns：名字读法函数列表（含冒号处理）。"}
+{"id":"chunk-eswddw2z.js#Jje","doc":"isUnderSandboxPath：路径是否在某个受保护根之下。"}
+{"id":"chunk-n1e79taz.js#Yje","doc":"MAX_SENSITIVE_PATH_LENGTH：敏感路径长度上限。"}
+{"id":"chunk-n1e79taz.js#tye","doc":"isCredentialPath：是否是 Claude 自身或凭证类路径。"}
+{"id":"chunk-nt9amew5.js#oxi","doc":"serverClassifierOffReason：服务端分类器不启用的原因。"}
+{"id":"chunk-nt9amew5.js#Kz","doc":"isArbiterRole：角色为 arbiter 或 arbiterWithLocalFallback。"}
+{"id":"chunk-nt9amew5.js#Xso","doc":"isArbiterWithFallbackActive：auto 下按 arbiterWithLocalFallback 启用。"}
+{"id":"chunk-nt9amew5.js#sxi","doc":"isServerClassifierOff：该角色下服务端分类器为 off。"}
+{"id":"chunk-nt9amew5.js#ixi","doc":"isAutoModeClassified：auto 启用且分类器角色非 off。"}
+{"id":"chunk-nt9amew5.js#Jso","doc":"isServerArbiterActive：开关开且角色为 arbiter。"}
+{"id":"chunk-nt9amew5.js#xgr","doc":"canAttachServerClassifierBeta：需要附加分类器 beta 头。"}
+{"id":"chunk-nt9amew5.js#Wje","doc":"SERVER_CLASSIFIER_LABEL：服务端分类器的显示标签；SERVER_CLASSIFIER_NOTE_LIMIT：分类器说明的长度上限；SERVER_CLASSIFIER_NOTE_TAIL：分类器说明的结尾片段（同一声明共 3 个绑定）。"}
+{"id":"chunk-nt9amew5.js#$de","doc":"noVerdictReasonFor：未判定时给出原因。"}
+{"id":"chunk-nt9amew5.js#Lds","doc":"isServerNotRequestedReason：服务端未请求或输入被改写的失败原因。"}
+{"id":"chunk-nt9amew5.js#axi","doc":"isInputRewrittenWithFallbackOff：输入被改写且回退关闭。"}
+{"id":"chunk-nt9amew5.js#Hds","doc":"cloneIfServerResults：有服务端结果时克隆输入。"}
+{"id":"chunk-nt9amew5.js#Nds","doc":"lacksServerResult：没有服务端结果。"}
+{"id":"chunk-nt9amew5.js#uxi","doc":"isShellToolClassified：shell 工具且分类器启用。"}
+{"id":"chunk-nt9amew5.js#fxi","doc":"isShellOrFileToolForClassifier：非 MCP 的 shell/文件工具。"}
+{"id":"chunk-5xgkngpb.js#yle","doc":"alwaysTrueFlag：恒 true 的开关值。"}
+{"id":"chunk-nt9amew5.js#qge","doc":"jsonByteLength：JSON 字节长度。"}
+{"id":"chunk-5xgkngpb.js#_vt","doc":"metaJsonLine：生成 {meta} 的 JSON 行。"}
+{"id":"chunk-5xgkngpb.js#MHe","doc":"recordClassifierContext：记录分类器上下文中。"}
+{"id":"chunk-5xgkngpb.js#SAt","doc":"forgetClassifierContext：丢弃分类器上下文行。"}
+{"id":"chunk-5xgkngpb.js#jX","doc":"classifierContextLinesFor：取某请求的上下文行。"}
+{"id":"chunk-5xgkngpb.js#Vrr","doc":"enqueueClassifierRequest：入队分类器请求。"}
+{"id":"chunk-5xgkngpb.js#Tvt","doc":"recordClassifiedCall：记录已分类的工具调用。"}
+{"id":"chunk-5xgkngpb.js#ppe","doc":"isClassifiedCall：该调用是否已分类。"}
+{"id":"chunk-nt9amew5.js#Tds","doc":"fitsContextLimits：上下文行数与长度是否超限。"}
+{"id":"chunk-nt9amew5.js#BRi","doc":"recordClassifierRequest：记录分类请求。"}
+{"id":"chunk-nt9amew5.js#Ee","doc":"settleClassifierRequest：结算分类请求。"}
+{"id":"chunk-nt9amew5.js#Te","doc":"forgetClassifierRequest：丢弃分类请求。"}
+{"id":"chunk-nt9amew5.js#jRi","doc":"classifierHistoryFor：取某调用的历史。"}
+{"id":"chunk-5xgkngpb.js#Att","doc":"isSnugWallOn：开关 tengu_snug_wall。"}
+{"id":"chunk-5xgkngpb.js#Y9r","doc":"takeNoServerCheckNotice：取一次性的无服务端检查说明。"}
+{"id":"chunk-5xgkngpb.js#Dui","doc":"takeServerFallbackAnnouncement：取一次性的回退公告。"}
+{"id":"chunk-5xgkngpb.js#Sat","doc":"gatewayDisplayName：网关显示名。"}
+{"id":"chunk-5xgkngpb.js#K9o","doc":"truncateGatewayHost：截断网关主机名。"}
+{"id":"chunk-5xgkngpb.js#X9r","doc":"withGatewayHost：公告带上网关主机。"}
+{"id":"chunk-5xgkngpb.js#J9r","doc":"sdkSupportsFallbackDialog：SDK 宿主支持回退对话框。"}
+{"id":"chunk-5xgkngpb.js#UYe","doc":"isChromeClassifierFloorCall：浏览器工具且分类器可跑。"}
+{"id":"chunk-5xgkngpb.js#Lui","doc":"isNonAutoMode：是否非 auto 模式。"}
+{"id":"chunk-5xgkngpb.js#fbe","doc":"priorAssistantContextEnabled：是否附带先前助手上下文。"}
+{"id":"chunk-5xgkngpb.js#q9t","doc":"listsHumanReplies：是否列出人类回复（含开关来源）。"}
+{"id":"chunk-nt9amew5.js#te","doc":"autoModeContextEnabled：取并缓存 auto 模式上下文开关。"}
+{"id":"chunk-nt9amew5.js#Ie","doc":"cachedAutoModeContextEnabled：auto 模式上下文开关（缓存）。"}
+{"id":"chunk-nt9amew5.js#kgr","doc":"isIridescentCrystalOn：开关 tengu_iridescent_crystal。"}
+{"id":"chunk-nt9amew5.js#re","doc":"isQuietLanternOn：开关 tengu_quiet_lantern。"}
+{"id":"chunk-nt9amew5.js#Kso","doc":"isCopperTrellisOn：开关 tengu_copper_trellis。"}
+{"id":"chunk-nt9amew5.js#Le","doc":"isVividCrayonOn：开关 tengu_vivid_crayon。"}
+{"id":"chunk-nt9amew5.js#KRi","doc":"isHazelPloverOn：开关 tengu_hazel_plover。"}
+{"id":"chunk-nt9amew5.js#VRi","doc":"isMerryPopcornOn：开关 tengu_merry_popcorn。"}
+{"id":"chunk-nt9amew5.js#Ne","doc":"isWiseOrigamiOn：开关 tengu_wise_origami。"}
+{"id":"chunk-nt9amew5.js#Fe","doc":"userServerClassifierSwitch：用户的服务端分类器开关。"}
+{"id":"chunk-nt9amew5.js#qRi","doc":"isValiantSphinxOn：开关 tengu_valiant_sphinx（出错按开）。"}
+{"id":"chunk-nt9amew5.js#ie","doc":"neverTrue：恒 false 占位。"}
+{"id":"chunk-nt9amew5.js#Pt","doc":"setTimeoutWithCancel：定时器并返回取消函数；TIMER_MARGIN_MS：定时器余量（同一声明共 2 个绑定）。"}
+{"id":"chunk-nt9amew5.js#pIn","doc":"agentIdOrMain：缺省为 main 的 agent id。"}
+{"id":"chunk-nt9amew5.js#zt","doc":"ENABLE_CLASSIFIER_DEFAULT：分类器默认启用标志。"}
+{"id":"chunk-nt9amew5.js#Vso","doc":"clearUnavailableStreak：有连续不可用后清零。"}
+{"id":"chunk-nt9amew5.js#Tgr","doc":"minimalUnavailableNotice：只保留最简不可用说明。"}
+{"id":"chunk-nt9amew5.js#Ods","doc":"DANGEROUS_TOOL_USE：危险工具使用判定类型；dangerousToolUseVerdictSchema：危险工具使用判定 schema；dangerousToolUseToolListSchema：危险工具列表 schema（同一声明共 5 个绑定）。"}
+{"id":"chunk-nt9amew5.js#Be","doc":"knownValueOrOther：值在已知集合中则原样，否则 other。"}
+{"id":"chunk-nt9amew5.js#P","doc":"asClassifierResult：转成 ClassifierResult。"}
+{"id":"chunk-nt9amew5.js#exi","doc":"sentExactMcpAllowRule：是否发送过该条精确 MCP allow 规则。"}
+{"id":"chunk-nt9amew5.js#Mds","doc":"classifierResultPayload：构造分类结果载荷。"}
+{"id":"chunk-nt9amew5.js#rxi","doc":"settleServerNoResult：服务端无结果时结算。"}
+{"id":"chunk-nt9amew5.js#qso","doc":"settleServerStreamEnded：服务端流结束时结算。"}
+{"id":"chunk-1z536h0d.js#p9s","doc":"logShellAllowRulesAtInit：启动时上报 shell 允许规则数量。"}
+{"id":"chunk-8899qs36.js#s0i","doc":"modeAtRequestFor：按当前上下文构造模式的按请求快照。"}
+{"id":"chunk-8899qs36.js#sys","doc":"isPlainModeAtRequest：模式快照且未启用分类器。"}
+{"id":"chunk-8899qs36.js#iys","doc":"canonicalRuleString：规则的规范字符串。"}
+{"id":"chunk-5xgkngpb.js#K5e","doc":"needsGrowthBookRefresh：GrowthBook 已启用但特性数据过期。"}
+{"id":"chunk-5xgkngpb.js#E9r","doc":"recordArtifactConsentFlag：记录并返回 Artifact 同意规则开关。"}
+{"id":"chunk-5xgkngpb.js#WSn","doc":"outcomeCodesEnabled：分类结果代码开关。"}
+{"id":"chunk-5xgkngpb.js#PI","doc":"classifierSessionState：当前宿主的分类器会话状态。"}
+{"id":"chunk-5xgkngpb.js#Xci","doc":"sessionSidecarFilePath：会话 sidecar 文件路径。"}
+{"id":"chunk-5xgkngpb.js#gbn","doc":"recordContextNavigation：记录分类器上下文导航行。"}
+{"id":"chunk-fwzx45c8.js#m$i","doc":"setPersonalConfigRestriction：设置个人配置限制。"}
+{"id":"chunk-vn3g7zt8.js#VL","doc":"isUsageBasedBilling：账号按用量计费。"}
+{"id":"chunk-vn3g7zt8.js#vMt","doc":"idleAmberFinchOn：开关 tengu_idle_amber_finch。"}
+{"id":"chunk-vn3g7zt8.js#JIi","doc":"quietSlateWrenOn：开关 tengu_quiet_slate_wren。"}
+{"id":"chunk-vn3g7zt8.js#pye","doc":"canShowUpgradeCommand：可显示升级命令。"}
+{"id":"chunk-vn3g7zt8.js#Slo","doc":"isModelBilledOrRequired：模型按额度计费或必须用额度。"}
+{"id":"chunk-vn3g7zt8.js#jV","doc":"usesPayAsYouGo：非第一方/非订阅/企业按量/零额度档。"}
+{"id":"chunk-vn3g7zt8.js#zd","doc":"saffronPickerDimOn：开关 tengu_saffron_picker_dim。"}
+{"id":"chunk-vn3g7zt8.js#QIi","doc":"saffronLadderOn：开关 tengu_saffron_ladder。"}
+{"id":"chunk-vn3g7zt8.js#Kut","doc":"saveModelConsent：保存模型计费同意。"}
+{"id":"chunk-vn3g7zt8.js#ZIi","doc":"setModelFamilyConsent：按模型族保存同意。"}
+{"id":"chunk-vn3g7zt8.js#eOi","doc":"setSessionConsentKey：设置会话级同意键。"}
+{"id":"chunk-vn3g7zt8.js#tOi","doc":"clearSessionConsentKeys：清空所有会话级同意键。"}
+{"id":"chunk-vn3g7zt8.js#eoe","doc":"needsConsentOrCredits：需要同意或需要额度。"}
+{"id":"chunk-vn3g7zt8.js#nOi","doc":"needsConsentCreditsOrOut：需要同意、额度不足或用尽。"}
+{"id":"chunk-5xgkngpb.js#XIe","doc":"isDisklessSession：是否无盘会话。"}
+{"id":"chunk-5xgkngpb.js#w1t","doc":"hostOwnedInputFieldSet：取某工具需要剔除的宿主专属输入字段。"}
+{"id":"chunk-bb1a67wr.js#R3i","doc":"primePlatform：预取平台信息。"}
+{"id":"chunk-bb1a67wr.js#xDr","doc":"linuxDistroInfo：Linux 发行版信息。"}
+{"id":"chunk-bb1a67wr.js#x3i","doc":"macOSMajorVersion：macOS 主版本号。"}
+{"id":"chunk-j9w0w3wz.js#IUt","doc":"looksLikeWslVersion：版本串像 WSL。"}
+{"id":"chunk-wbfnm169.js#ou","doc":"readOnlyNoFollowFlags：只读 + 不跟随符号链接的打开标志。"}
+{"id":"chunk-wbfnm169.js#YY","doc":"platformNoFollowFlags：平台相关的 nofollow/nonblock 标志。"}
+{"id":"chunk-wbfnm169.js#Aso","doc":"MAX_PLUGIN_BINARY_BYTES：插件二进制体积上限。"}
+{"id":"chunk-0vrrvjm8.js#RWt","doc":"primeWindowsPlatform：预先准备 Windows 平台的 PowerShell。"}
+{"id":"chunk-0vrrvjm8.js#aqs","doc":"isWindowsOrPowerShellHost：Windows 或已有 PowerShell 路径。"}
+{"id":"chunk-0qx87na8.js#jWt","doc":"isPlainObjectPlist：普通对象判断（plist 解析）。"}
+{"id":"chunk-5xgkngpb.js#hli","doc":"isPluginActivityKind：是否为插件活动种类。"}
+{"id":"chunk-5xgkngpb.js#Wit","doc":"formatActivityLabel：生成活动标签。"}
+{"id":"chunk-5xgkngpb.js#I1t","doc":"MAX_ACTIVITY_FEATURE_KEYS：活动特性键上限；MAX_RECENT_ACTIVITY：最近活动保留条数（同一声明共 2 个绑定）。"}
+{"id":"chunk-5xgkngpb.js#gli","doc":"activityFeaturesFor：取某活动的特性列表。"}
+{"id":"chunk-5xgkngpb.js#F3o","doc":"drainRecentActivity：取出并清空最近活动。"}
+{"id":"chunk-5hddsdew.js#zas","doc":"headerNamesExceptUserAgent：去掉 user-agent 的 header 名。"}
+{"id":"chunk-5xgkngpb.js#cPs","doc":"orphanMarkerMove：孤儿标记的移动计划。"}
+{"id":"chunk-5xgkngpb.js#p3","doc":"PluginCachePublishError：插件缓存发布错误类。"}
+{"id":"chunk-5xgkngpb.js#bPs","doc":"MAX_CACHE_PUBLISH_ATTEMPTS：发布重试次数。"}
+{"id":"chunk-5xgkngpb.js#Cc","doc":"refreshPluginCaches：刷新活动插件前清空派生缓存。"}
+{"id":"chunk-5s0qaz1x.js#TW","doc":"ORPHAN_MARKER_FILE：版本目录的孤儿标记文件名；IN_USE_MARKER_FILE：使用中标记文件名；GCS_SHA_MARKER_FILE：GCS sha 标记文件名（同一声明共 4 个绑定）。"}
+{"id":"chunk-5xgkngpb.js#Jai","doc":"writeAccountMarketplacesCache：写入账号市场缓存（带解析器版本）。"}
+{"id":"chunk-5xgkngpb.js#d3o","doc":"accountMarketplacesPromiseCache：账号市场请求的键控 Promise 缓存。"}
+{"id":"chunk-5xgkngpb.js#s4t","doc":"accountMarketplaceLabel：市场名加上 “listed as …”。"}
+{"id":"chunk-5xgkngpb.js#r3r","doc":"listedAsSuffix：显示名与 CLI 名不同时的说明。"}
+{"id":"chunk-5xgkngpb.js#UAt","doc":"noCliNameLabel：只有显示名的市场的说明。"}
+{"id":"chunk-5xgkngpb.js#u3o","doc":"removeAccountSyncedFile：账号同步根可用时删除同步桶里的文件。"}
+{"id":"chunk-5xgkngpb.js#Lwo","doc":"MAX_KNOWN_CLAUDEAI_FILE_BYTES：claude.ai 市场注册表体积上限；KNOWN_CLAUDEAI_FILE_TTL_MS：注册表缓存时长；knownClaudeAiMarketplaceSchema：claude.ai 市场注册表 schema（同一声明共 4 个绑定）。"}
+{"id":"chunk-5xgkngpb.js#r8","doc":"isClaudeAiMarketplaceSource：来源是 claudeai。"}
+{"id":"chunk-8knxd0cw.js#Ite","doc":"CLOUD_PLUGINS_FORWARDED_KEYS：云端插件转发时同步的设置在键。"}
+{"id":"chunk-5hddsdew.js#L9t","doc":"shouldRefreshCommandPlugins：命令源插件是否需要刷新。"}
+{"id":"chunk-5hddsdew.js#B","doc":"commandSourceRefreshEnabled：命令源刷新开关。"}
+{"id":"chunk-5hddsdew.js#Z","doc":"TEMP_CACHE_DIR_MAX_RANDOM：临时缓存目录名随机段长度；TEMP_CACHE_LINK_SUFFIX：临时缓存目录的 link 后缀；TEMP_CACHE_CLONE_SUFFIX：临时缓存目录的 clone 后缀（同一声明共 3 个绑定）。"}
+{"id":"chunk-5hddsdew.js#zIt","doc":"pluginRootHasMarker：目录下是否有插件根标记。"}
+{"id":"chunk-5hddsdew.js#Xoo","doc":"isPluginRootMarker：是否为插件根标记文件名。"}
+{"id":"chunk-5hddsdew.js#hCi","doc":"isPluginComponentDir：是否为插件组件目录名。"}
+{"id":"chunk-5hddsdew.js#Jj","doc":"describeCommandOutputMode：说明 link/copy 模式对输出目录的处理。"}
+{"id":"chunk-5hddsdew.js#fc","doc":"CommandSourceError：命令源错误类。"}
+{"id":"chunk-5hddsdew.js#aPn","doc":"isPristineLinkFarm：链接农场是否只含缓存元数据。"}
+{"id":"chunk-5hddsdew.js#_Ci","doc":"readLinkFarmTarget：读取链接农场标记的目标。"}
+{"id":"chunk-5hddsdew.js#Uge","doc":"commandSourceSpecOf：取出 command 来源配置。"}
+{"id":"chunk-5hddsdew.js#xre","doc":"isLinkModeCommandSource：命令源是否为 link 模式。"}
+{"id":"chunk-5hddsdew.js#Bz","doc":"organizationAnswerState：等待组织答复的共享状态。"}
+{"id":"chunk-5hddsdew.js#Zoo","doc":"ORGANIZATION_ANSWER_TIMEOUT_MS：等待组织答复超时。"}
+{"id":"chunk-5hddsdew.js#eso","doc":"ORGANIZATION_ANSWER_POLL_MS：组织答复轮询间隔。"}
+{"id":"chunk-5hddsdew.js#oDe","doc":"MAX_SPILL_BYTES：溢出文件体积上限；MAX_PLUGIN_ARCHIVE_BYTES：插件归档体积上限；COMMAND_SOURCE_DEFAULT_TIMEOUT_MS：命令源默认超时（同一声明共 3 个绑定）。"}
+{"id":"chunk-n0gp41wj.js#K","doc":"COMMAND_SOURCE_NETWORK_ERRORS：命令源网络/可疑链接类错误文案集合。"}
+{"id":"chunk-n0gp41wj.js#LT","doc":"commandSourceSession：当前宿主的命令源会话状态。"}
+{"id":"chunk-n0gp41wj.js#Hvi","doc":"setCommandSourceNameRegistration：记录命令源的名字登记方式。"}
+{"id":"chunk-n0gp41wj.js#Lpr","doc":"isOfficialNameUsableHere：官方名在当前登记方式下可用。"}
+{"id":"chunk-n0gp41wj.js#A","doc":"isBuiltinCatalogAccessAllowed：内建目录且访问允许。"}
+{"id":"chunk-n0gp41wj.js#zdt","doc":"isReviewerMarkedEntry：评审标记过的条目。"}
+{"id":"chunk-n0gp41wj.js#j","doc":"isCatalogEntryName：目录条目名且访问允许。"}
+{"id":"chunk-5xgkngpb.js#Lae","doc":"qualifiedMarketplaceLabel：市场显示名。"}
+{"id":"chunk-5xgkngpb.js#_kn","doc":"truncateMarketplaceLabel：截断市场显示名。"}
+{"id":"chunk-kbra36ja.js#n7s","doc":"ensureCatalogForOfficialDeps：依赖里有官方市场插件时加载插件目录。"}
+{"id":"chunk-kbra36ja.js#$1o","doc":"dependencyErrorsForSource：某来源的依赖加载错误。"}
+{"id":"chunk-r7hswen6.js#Bwr","doc":"isSameNormalizedProjectPath：Windows 项目路径规范化后相同。"}
+{"id":"chunk-r7hswen6.js#l0i","doc":"isStaleInstallTarget：作用域相同但记录不同。"}
+{"id":"chunk-r7hswen6.js#_O","doc":"installationAtTarget：取某作用域/项目的安装记录。"}
+{"id":"chunk-r7hswen6.js#YM","doc":"isDependencyAutoInstallState：依赖自动安装标记或记录数组。"}
+{"id":"chunk-r7hswen6.js#ye","doc":"SAFE_DISPLAY_NAME_RE：可安全展示的插件名；MAX_DISPLAY_NAME_LENGTH：展示名长度上限；MAX_DISPLAY_NAME_SEGMENTS：展示名段数上限（同一声明共 3 个绑定）。"}
+{"id":"chunk-5xgkngpb.js#$wn","doc":"isSameFileIdentity：两路径是否为同一文件。"}
+{"id":"chunk-0e3nf8ec.js#hco","doc":"moduleAdmissionCache：模块准入缓存。"}
+{"id":"chunk-0e3nf8ec.js#gco","doc":"moduleAdmissionCacheB：模块准入缓存（第二个）。"}
+{"id":"chunk-5xgkngpb.js#nli","doc":"sshCloneFallback：SSH 探测与降级提示。"}
+{"id":"chunk-5xgkngpb.js#Wge","doc":"sshNotConfiguredMessage：SSH 未配置改走 HTTPS 的说明。"}
+{"id":"chunk-5xgkngpb.js#sUt","doc":"httpsFailedRetrySshMessage：HTTPS 失败改走 SSH 的说明。"}
+{"id":"chunk-5hddsdew.js#Ode","doc":"EntryHelperError：市场 header helper 错误类。"}
+{"id":"chunk-5hddsdew.js#kje","doc":"marketplaceSourceOfEntry：某市场条目的来源。"}
+{"id":"chunk-5hddsdew.js#cv","doc":"marketplaceNameOfId：从插件 id 取市场名。"}
+{"id":"chunk-5hddsdew.js#Tt","doc":"urlHostname：取 URL 主机名，失败返回空串。"}
+{"id":"chunk-v7jmb7se.js#i8e","doc":"isForegroundBusy：前台是否忙碌。"}
+{"id":"chunk-v7jmb7se.js#gss","doc":"isForegroundRunning：前台是否在跑回合。"}
+{"id":"chunk-v7jmb7se.js#rro","doc":"runWhenTurnEnds：回合结束时执行。"}
+{"id":"chunk-v7jmb7se.js#uvi","doc":"foregroundEdgeAt：前台状态切换时间。"}
+{"id":"chunk-v7jmb7se.js#oro","doc":"isBusyShorterThan：忙碌时间短于阈值。"}
+{"id":"chunk-v7jmb7se.js#fvi","doc":"isBusyAtLeast：忙碌时间达到阈值。"}
+{"id":"chunk-v7jmb7se.js#yss","doc":"hooksModulesGateFromPayload：开关来源为 payload 或已有新特性。"}
+{"id":"chunk-v7jmb7se.js#iro","doc":"hooksModulesGateSourceChanged：开关读取来源已变化。"}
+{"id":"chunk-v7jmb7se.js#_ss","doc":"ORGANIZATION_MODS_UNLOADED_MESSAGE：组织 mods 未能加载时的说明。"}
+{"id":"chunk-v7jmb7se.js#lro","doc":"ORGANIZATION_POLICY_UNREADABLE_MESSAGE：组织策略无法读取时的说明。"}
+{"id":"chunk-v7jmb7se.js#Pdt","doc":"pendingWithoutStart：仍待定且 GrowthBook 尚未开始。"}
+{"id":"chunk-v7jmb7se.js#KPt","doc":"fetchHoldForHost：某宿主的取回保持承诺。"}
+{"id":"chunk-v7jmb7se.js#fre","doc":"currentFetchHold：当前宿主的取回保持。"}
+{"id":"chunk-v7jmb7se.js#tje","doc":"isDiskSourceWithCredential：开关来源为 disk 且有凭据。"}
+{"id":"chunk-v7jmb7se.js#kRn","doc":"isServedGateSource：开关来源为服务端下发。"}
+{"id":"chunk-v7jmb7se.js#PB","doc":"isAutoModeGateOpen：auto 模式闸门可等。"}
+{"id":"chunk-v7jmb7se.js#sZi","doc":"markFollowConsumed：标记已跟随。"}
+{"id":"chunk-v7jmb7se.js#aZi","doc":"waitForRolloutUnlessServed：非服务端来源时等待 rollout 开关。"}
+{"id":"chunk-v7jmb7se.js#b","doc":"waitForSettlement：带截止时间的结算等待。"}
+{"id":"chunk-v7jmb7se.js#W","doc":"REREAD_INTERVAL_MS：重读间隔。"}
+{"id":"chunk-v7jmb7se.js#TRn","doc":"REREAD_INITIAL_DELAY_MS：首次重读延迟。"}
+{"id":"chunk-v7jmb7se.js#cZi","doc":"flagValueSourceLabel：开关值来源标签。"}
+{"id":"chunk-v7jmb7se.js#uZi","doc":"followRolloutWithDeadline：带截止时间的重读后跟随。"}
+{"id":"chunk-v7jmb7se.js#ERn","doc":"BUSY_EDGE_THRESHOLD_MS：前台忙碌判定阈值。"}
+{"id":"chunk-5xgkngpb.js#mO","doc":"isSymlinkOrFalse：是否为符号链接。"}
+{"id":"chunk-5xgkngpb.js#smt","doc":"PLUGIN_CATALOG_STATS_URL：插件统计目录的下载地址；PLUGIN_CATALOG_CACHE_TTL_MS：插件目录缓存时长；MAX_PLUGIN_CATALOG_BYTES：插件目录缓存字节上限（同一声明共 8 个绑定）。"}
+{"id":"chunk-5xgkngpb.js#aQo","doc":"ESTIMATED_TOKENS_PER_COMPONENT：每组件估算 token 数；MAX_COMPONENT_ESTIMATE_COUNT：估算组件数上限（同一声明共 2 个绑定）。"}
+{"id":"chunk-5xgkngpb.js#Skn","doc":"isOfficialFamilySameSource：官方市场族内同源插件。"}
+{"id":"chunk-5xgkngpb.js#ggt","doc":"isRecordablePluginId：插件 id 符合 schema。"}
+{"id":"chunk-5xgkngpb.js#hgt","doc":"assertRecordablePluginId：id 不可记录时抛错。"}
+{"id":"chunk-5xgkngpb.js#AL","doc":"hasFailedInstalledPluginsRead：该路径曾读失败。"}
+{"id":"chunk-5xgkngpb.js#jlr","doc":"isPluginUnreadableOrShared：插件读失败或数据目录被共享。"}
+{"id":"chunk-5xgkngpb.js#$gt","doc":"readInstalledPluginsIfAny：读取安装记录，缺失返回 undefined。"}
+{"id":"chunk-5xgkngpb.js#Gv","doc":"memoizeLastValue：记录并复用同一键的上次结果。"}
+{"id":"chunk-5xgkngpb.js#fEe","doc":"frontmatterDisallowedTools：从前置声明取 disallowed-tools。"}
+{"id":"chunk-5xgkngpb.js#fOe","doc":"MAX_PLUGIN_COMMAND_FILE_BYTES：插件命令文件体积上限。"}
+{"id":"chunk-tt36reb3.js#jY","doc":"hasTrustedOnlyBuiltinPlugin：该插件是否只能由受信设置启用。"}
+{"id":"chunk-5s0qaz1x.js#XQt","doc":"normalizeMarketplaceInputPath：市场输入路径规范化为绝对可比较路径。"}
+{"id":"chunk-5s0qaz1x.js#Tys","doc":"classifyMarketplacePathOrUndefined：市场路径不在可疑位置时返回绝对路径。"}
+{"id":"chunk-5s0qaz1x.js#dEr","doc":"DOT_RELATIVE_RE：以点开头的相对路径片段。"}
+{"id":"chunk-5s0qaz1x.js#cEr","doc":"isSuspiciousRelativeMarketplacePath：去掉前导点后仍是可疑路径。"}
+{"id":"chunk-r7hswen6.js#buo","doc":"outermostSeatCache：安全插件是否排最外层的缓存。"}
+{"id":"chunk-r7hswen6.js#a0i","doc":"SEAT_BY_DEFAULT：默认座席标志。"}
+{"id":"chunk-r7hswen6.js#ALe","doc":"isVouchedPolicyPluginId：是否为受信策略插件 id。"}
+{"id":"chunk-r7hswen6.js#z","doc":"assuredPolicySettings：受信管理策略层或策略设置。"}
+{"id":"chunk-r7hswen6.js#ne","doc":"hasPluginDeclarations：该设置层是否声明了插件。"}
+{"id":"chunk-r7hswen6.js#_0i","doc":"managedPluginNameSet：托管插件名集合。"}
+{"id":"chunk-r7hswen6.js#Kwr","doc":"isManagedOrPolicyBlocked：策略不可读或该插件被托管策略点名。"}
+{"id":"chunk-6sf70a86.js#ITr","doc":"availableBuiltinSkillCommands：未被禁用的内建插件技能命令。"}
+{"id":"chunk-6sf70a86.js#MBi","doc":"builtinPluginSkillCommands：内建插件技能命令列表。"}
+{"id":"chunk-5xgkngpb.js#tTn","doc":"AUTOUPDATE_SETTING_SOURCES_TEXT：autoUpdate 有效的设置源说明。"}
+{"id":"chunk-5xgkngpb.js#dhi","doc":"hasDirectoryAutoUpdate：插件目录市场是否设置了 autoUpdate。"}
+{"id":"chunk-5xgkngpb.js#Vhe","doc":"MarketplaceError：市场错误类。"}
+{"id":"chunk-5xgkngpb.js#ZVn","doc":"writeSparsePaths：写入稀疏路径配置。"}
+{"id":"chunk-5xgkngpb.js#rxt","doc":"isWorkspaceTrustedForMarketplace：工作区是否已持久信任。"}
+{"id":"chunk-5xgkngpb.js#TY","doc":"isPluginDirectoryAvailable：插件目录模块是否可用。"}
+{"id":"chunk-5xgkngpb.js#VNe","doc":"settingsSourceOfMarketplace：市场记录所在的设置源。"}
+{"id":"chunk-5xgkngpb.js#uQo","doc":"reservedMarketplaceSpellingMessage：保留市场名的拒绝说明。"}
+{"id":"chunk-5xgkngpb.js#e6t","doc":"lookalikeReservedMarketplaceName：与保留名形似的市场名。"}
+{"id":"chunk-5xgkngpb.js#Hle","doc":"isImpersonatingOfficialMarketplace：是否在冒充官方市场名。"}
+{"id":"chunk-5xgkngpb.js#ZNe","doc":"pluginDirectoryUnavailableKind：插件目录不可用的类别。"}
+{"id":"chunk-5xgkngpb.js#B4n","doc":"pluginDirectoryRefusalReason：插件目录策略拒绝原因。"}
+{"id":"chunk-5xgkngpb.js#U4n","doc":"awaitPluginDirectoryVerdict：等待插件目录策略裁决。"}
+{"id":"chunk-5xgkngpb.js#j4n","doc":"isRegistryOwnedByName：weakMap 里是否登记了该名字。"}
+{"id":"chunk-5s0qaz1x.js#EZ","doc":"managedMarketplaceAnswerFlag：托管设置下的市场名答复开关。"}
+{"id":"chunk-5s0qaz1x.js#Nb","doc":"marketplaceNameAnswerState：市场名检查的答复状态。"}
+{"id":"chunk-5s0qaz1x.js#Jwr","doc":"impersonationCheckDisabled：恒 false（冒充检查占位）。"}
+{"id":"chunk-5s0qaz1x.js#_ys","doc":"RESERVED_MARKETPLACE_RENAME_MESSAGE：保留名需改名的说明。"}
+{"id":"chunk-5s0qaz1x.js#Mt","doc":"pluginAvailabilitySchema：插件可用性状态 schema。"}
+{"id":"chunk-5s0qaz1x.js#kuo","doc":"parsePluginAvailability：解析插件可用性状态。"}
+{"id":"chunk-5s0qaz1x.js#$t","doc":"pluginOriginSchema：插件来源种类 schema。"}
+{"id":"chunk-5s0qaz1x.js#Tuo","doc":"parsePluginOriginKind：解析插件来源种类。"}
+{"id":"chunk-5s0qaz1x.js#bLn","doc":"PLUGIN_FAILURE_RETRYABLE：各插件失败码是否可重试。"}
+{"id":"chunk-5s0qaz1x.js#D","doc":"isSuspiciousMarketplaceUrl：可疑的市场 URL。"}
+{"id":"chunk-5xgkngpb.js#lhi","doc":"repoAuthoredMarketplaceHeaders：市场仓库自己声明的 headers。"}
+{"id":"chunk-5xgkngpb.js#VS","doc":"ownPropertyOrUndefined：安全读取自有属性。"}
+{"id":"chunk-5xgkngpb.js#Imt","doc":"marketplaceSourceOfPlugin：插件所属市场的设置来源。"}
+{"id":"chunk-5xgkngpb.js#y4n","doc":"clearMarketplaceAdmissionVerdicts：清空市场准入判定缓存。"}
+{"id":"chunk-5xgkngpb.js#l1","doc":"hiddenRegistryEntries：隐藏的市场条目。"}
+{"id":"chunk-5xgkngpb.js#YNe","doc":"releasedRegistryEntries：已放行的市场条目。"}
+{"id":"chunk-5xgkngpb.js#$5","doc":"hiddenRegistryEntryFor：取某存储臂下隐藏的市场条目。"}
+{"id":"chunk-5xgkngpb.js#HYn","doc":"releaseRegistryEntry：把市场条目从隐藏移到已放行。"}
+{"id":"chunk-5xgkngpb.js#s0","doc":"admissionKindsFor：某市场的准入类别表。"}
+{"id":"chunk-5xgkngpb.js#S4n","doc":"admissionCauseFor：某市场被拒的原因。"}
+{"id":"chunk-5xgkngpb.js#Fmt","doc":"isOfficialMarketplaceSourced：官方市场来源可用。"}
+{"id":"chunk-phjrnmh9.js#C","doc":"recursiveLobsterOn：开关 tengu_recursive_lobster。"}
+{"id":"chunk-5xgkngpb.js#Sht","doc":"semverCompat：npm semver 的 CommonJS 包装（包下载用）。"}
+{"id":"chunk-5xgkngpb.js#cFe","doc":"npmExecEnv：npm 子进程环境（是否继承父环境）。"}
+{"id":"chunk-5xgkngpb.js#lAs","doc":"NPM_REGISTRY_QUERY_TIMEOUT_MS：npm registry 查询超时；UNSAFE_STORE_PREFIX：不安全的存储前缀占位；NPM_PACK_TIMEOUT_MS：npm pack 超时（同一声明共 32 个绑定）。"}
+{"id":"chunk-5xgkngpb.js#Oae","doc":"isNpmVersionSpec：是否为 npm 版本规格。"}
+{"id":"chunk-5xgkngpb.js#Iae","doc":"runNpm：带禁 git 参数执行 npm。"}
+{"id":"chunk-5xgkngpb.js#bE","doc":"isValidNpmPackageNameLoose：小写后是否为合法 npm 包名。"}
+{"id":"chunk-5xgkngpb.js#Wlr","doc":"npmMarketplaceEnabled：npm 市场功能开关。"}
+{"id":"chunk-k2w5atpb.js#Bge","doc":"OFFICIAL_MARKETPLACE_SOURCE：官方市场的 GitHub 来源。"}
+{"id":"chunk-z20c443b.js#U4i","doc":"isSameFoldedName：折叠字母数字后同名。"}
+{"id":"chunk-z20c443b.js#cOs","doc":"removeMarketplaceCommand：移除市场的命令（尾点为 null）。"}
+{"id":"chunk-z20c443b.js#XIr","doc":"marketplaceEntryGoneText：市场条目已消失的说明。"}
+{"id":"chunk-z20c443b.js#j4i","doc":"officialMarketplaceBlockedText：官方市场被组织阻止的说明。"}
+{"id":"chunk-5xgkngpb.js#eci","doc":"clearOrphanedGlobExclusions：清空孤儿版本 glob 排除缓存。"}
+{"id":"chunk-5s0qaz1x.js#Ays","doc":"isAttributionNameValid：归属市场名格式合法。"}
+{"id":"chunk-5s0qaz1x.js#un","doc":"pluginAttributionSchema：插件归属 sidecar schema。"}
+{"id":"chunk-5xgkngpb.js#Qgt","doc":"shouldInstallBinaryAssets：官方市场插件且功能开启。"}
+{"id":"chunk-5xgkngpb.js#xq","doc":"isCacheSkipEntry：是否为缓存遍历跳过项。"}
+{"id":"chunk-5xgkngpb.js#xS","doc":"isPathUnder：路径是否在给定目录下。"}
+{"id":"chunk-5xgkngpb.js#HQ","doc":"freshSymlinkCopyBudget：复制预算的初值。"}
+{"id":"chunk-5xgkngpb.js#nB","doc":"consumeSymlinkCopyBudget：扣减复制预算。"}
+{"id":"chunk-5xgkngpb.js#WGe","doc":"pathHasNodeModulesSegment：路径里是否含 node_modules。"}
+{"id":"chunk-5xgkngpb.js#$Q","doc":"resolveLinkChainFromParent：从父目录起解析链接链。"}
+{"id":"chunk-5xgkngpb.js#Fq","doc":"isCacheEntryName：缓存条目名（含临时名变体）。"}
+{"id":"chunk-5xgkngpb.js#Fge","doc":"versionPathOccupantError：版本目录占位无法检查的错误。"}
+{"id":"chunk-5xgkngpb.js#YQ","doc":"isTempSiblingName：是否有临时兄弟后缀。"}
+{"id":"chunk-5xgkngpb.js#ZBt","doc":"stripTempSiblingSuffix：去掉临时兄弟后缀。"}
+{"id":"chunk-5xgkngpb.js#XGe","doc":"removeDirectoryTreeNoFollow：不跟随符号链接删除目录树。"}
+{"id":"chunk-04qh4hx2.js#iyn","doc":"emptyConfig：空配置对象。"}
+{"id":"chunk-04qh4hx2.js#Iot","doc":"truthyOrFalsyEnv：三态环境变量解析。"}
+{"id":"chunk-04qh4hx2.js#fVr","doc":"isTrueOrTrueString：值为 true 或字符串 \"true\"。"}
+{"id":"chunk-5xgkngpb.js#Epi","doc":"hasNodeModulesDir：是否存在 node_modules 目录。"}
+{"id":"chunk-5xgkngpb.js#Lxs","doc":"npmMarketplaceDefaultOff：npm 市场默认关闭。"}
+{"id":"chunk-5xgkngpb.js#eyt","doc":"isListingUsableForMarketplace：目录列表可用于该市场。"}
+{"id":"chunk-5xgkngpb.js#Y5n","doc":"isMarketplaceNamed：市场名是否匹配（官方名按族匹配）。"}
+{"id":"chunk-5s0qaz1x.js#qQt","doc":"versionCacheStorageSpace：版本缓存路径对应的存储空间。"}
+{"id":"chunk-5s0qaz1x.js#ELn","doc":"cacheStorageKeyOrFallback：缓存路径转存储键。"}
+{"id":"chunk-5s0qaz1x.js#Iuo","doc":"registryStorageSpace：插件注册表存储空间。"}
+{"id":"chunk-5s0qaz1x.js#Ouo","doc":"marketplaceCacheSpace：市场缓存存储空间。"}
+{"id":"chunk-5xgkngpb.js#b5e","doc":"isLocalMarketplaceEntry：本地市场来源的字符串。"}
+{"id":"chunk-5xgkngpb.js#Bit","doc":"pluginRegistrySpace：插件注册表存储空间键。"}
+{"id":"chunk-exfmq47h.js#fc","doc":"BI_KEY_UNAVAILABLE：行为遥测键不可用的标记；bi1KeyCache：行为键缓存；BI_KEY_LENGTH：行为键长度（同一声明共 4 个绑定）。"}
+{"id":"chunk-exfmq47h.js#FI","doc":"MAX_TIMESTAMPED_ENTRIES：带时间戳记录集保留的条目数；USAGE_SNAPSHOT_MAX_AGE_MS：用量快照的最大有效时长（7 天）；USAGE_SNAPSHOT_FUTURE_SKEW_MS：用量快照允许的未来时间偏差（同一声明共 4 个绑定）。"}
+{"id":"chunk-d2msvdm6.js#F","doc":"PLUGIN_DIRECTORY_BINDINGS_FILE：插件目录绑定文件名；PLUGIN_DIRECTORY_BINDINGS_VERSION：绑定文件版本；MAX_BINDINGS_FILE_BYTES：绑定文件体积上限（同一声明共 4 个绑定）。"}
+{"id":"chunk-d2msvdm6.js#jw","doc":"isOfficialPluginDirectoryId：插件 id 属于官方市场。"}
+{"id":"chunk-d2msvdm6.js#rke","doc":"isUnreadableBindings：该绑定表读失败过。"}
+{"id":"chunk-d2msvdm6.js#Tge","doc":"bindingsWithReadFailure：读绑定表并记下读失败。"}
+{"id":"chunk-d2msvdm6.js#Wdt","doc":"seedBindingsFromInstall：从安装记录补齐绑定。"}
+{"id":"chunk-d2msvdm6.js#G8t","doc":"hasDirectoryRepositoryKey：是否带目录仓库键。"}
+{"id":"chunk-036m2pwj.js#Xe","doc":"pluginDirectoryCacheSchema：插件目录缓存 schema；pluginDirectoryCacheSchemaWithSchema：带 schema 版本的缓存 schema（同一声明共 2 个绑定）。"}
+{"id":"chunk-d2msvdm6.js#Fdt","doc":"pluginGitUrlError：解析插件 git URL 的错误。"}
+{"id":"chunk-d2msvdm6.js#nIt","doc":"isPluginGitUrlValid：插件 git URL 可解析。"}
+{"id":"chunk-d2msvdm6.js#PQ","doc":"isOfficialDirectoryPlugin：插件来自官方目录。"}
+{"id":"chunk-f3ry38nm.js#IB","doc":"lanternPrismEnabled：插件 lantern prism 开关。"}
+{"id":"chunk-f3ry38nm.js#tk","doc":"isPluginDirectoryModeOn：插件目录模式开启。"}
+{"id":"chunk-f3ry38nm.js#Css","doc":"encapsulatedPebbleEnabled：插件开关（默认开）。"}
+{"id":"chunk-f3ry38nm.js#jRn","doc":"shardedSnowflakeOff：插件开关（默认关时返回 true）。"}
+{"id":"chunk-z20c443b.js#esn","doc":"normalizeReservedMarketplaceCase：保留市场名小写化。"}
+{"id":"chunk-z20c443b.js#uOs","doc":"pluginSettingAt：按启用插件名单查设置。"}
+{"id":"chunk-z20c443b.js#W4i","doc":"isPluginEnabled：插件是否启用。"}
+{"id":"chunk-z20c443b.js#eOr","doc":"isOfficialOrBuiltinMarketplace：官方市场或内置。"}
+{"id":"chunk-5xgkngpb.js#W6e","doc":"bindingKeysFor：找绑定键与其值。"}
+{"id":"chunk-5xgkngpb.js#f1","doc":"pluginBindingValues：绑定的插件名列表。"}
+{"id":"chunk-x6t8knrk.js#E","doc":"MAX_PLUGIN_INVENTORY_FILE_BYTES：插件清单文件字节上限。"}
+{"id":"chunk-x6t8knrk.js#k","doc":"objectKeysOf：汇总对象键。"}
+{"id":"chunk-x6t8knrk.js#O","doc":"resolveComponentPath：解析组件绝对路径。"}
+{"id":"chunk-5s0qaz1x.js#qWe","doc":"PLUGIN_LINK_FILE：插件链接标记文件名；pluginLinkSchema：插件链接标记 schema（同一声明共 2 个绑定）。"}
+{"id":"chunk-5s0qaz1x.js#Puo","doc":"thinkbackUserConfigSpace：thinkback 用户配置存储空间。"}
+{"id":"chunk-90nja2dk.js#MEs","doc":"emptyPluginLoadState：插件加载状态初值。"}
+{"id":"chunk-90nja2dk.js#YBi","doc":"isRegisteredAgent：代理是否已登记。"}
+{"id":"chunk-90nja2dk.js#KHt","doc":"isPluginLoadCacheOnly：插件仅从缓存加载。"}
+{"id":"chunk-90nja2dk.js#Yho","doc":"clearPluginSkillsCache：清除插件技能缓存。"}
+{"id":"chunk-5xgkngpb.js#HWe","doc":"truncateListItem：截断列表项并补省略号。"}
+{"id":"chunk-5xgkngpb.js#sq","doc":"quotedListItem：列表项加引号。"}
+{"id":"chunk-5xgkngpb.js#bor","doc":"isNotDotPrefixed：不以点开头。"}
+{"id":"chunk-5xgkngpb.js#tli","doc":"markGitUnavailable：标记 git 不可用。"}
+{"id":"chunk-5xgkngpb.js#kEo","doc":"GIT_PROBE_TIMEOUT_MS：git 探测超时。"}
+{"id":"chunk-5xgkngpb.js#fqt","doc":"isSkillCustomizationBookingAllowed：技能定制允许时返回真（占位）。"}
+{"id":"chunk-r7hswen6.js#F","doc":"builtinQualifiedId：内置插件的规范 id。"}
+{"id":"chunk-r7hswen6.js#qf","doc":"policyEnabledPluginNameSet：策略启用的插件名集合。"}
+{"id":"chunk-7zw1900d.js#K0o","doc":"initBuiltinPlugins：初始化内置插件。"}
+{"id":"chunk-kt6vd7kv.js#jGr","doc":"pluginRelevanceRoots：插件相关性检查的根目录。"}
+{"id":"chunk-kt6vd7kv.js#h8n","doc":"pluginRelevanceInputs：插件相关性输入（读状态、Bash 工具与主机）。"}
+{"id":"chunk-16wzckdk.js#Dre","doc":"logPluginScopedError：记录托管作用域插件错误。"}
+{"id":"chunk-5xgkngpb.js#xQ","doc":"settingsSourcesReversed：反向的已启用设置源。"}
+{"id":"chunk-5xgkngpb.js#i4t","doc":"enabledPluginRecordsBySource：各设置源的启用插件表。"}
+{"id":"chunk-5xgkngpb.js#s3r","doc":"pluginSettingRecords：非官方插件追加 addDir 来源。"}
+{"id":"chunk-5xgkngpb.js#f3o","doc":"withAddDirPlugins：追加 addDir 启用插件。"}
+{"id":"chunk-z20c443b.js#RIs","doc":"SCRIPT_EXTENSIONS_TEXT：脚本后缀的列举文字。"}
+{"id":"chunk-5xgkngpb.js#e4n","doc":"enabledPluginSettings：设置里的启用插件表。"}
+{"id":"chunk-5xgkngpb.js#G4n","doc":"hasInstalledOfficialEntry：官方市场里有安装记录。"}
+{"id":"chunk-5xgkngpb.js#t7r","doc":"shortLowerPrefix：小写后的前 12 个字符。"}
+{"id":"chunk-5xgkngpb.js#Rae","doc":"pluginGitHead：插件目录对应的 git HEAD。"}
+{"id":"chunk-5xgkngpb.js#c1","doc":"pluginVersionOrNull：取插件版本或 null。"}
+{"id":"chunk-5xgkngpb.js#tgt","doc":"marketplaceCommitSha：市场仓库的提交 sha。"}
+{"id":"chunk-5xgkngpb.js#Tpi","doc":"versionFlagSpec：版本范围标志串。"}
+{"id":"chunk-5xgkngpb.js#JK","doc":"skillsChangedSignal：技能变更的惰性信号。"}
+{"id":"chunk-0qaty0z2.js#kwe","doc":"bareModePluginAllow：裸模式下的通配插件放行函数。"}
+{"id":"chunk-0qaty0z2.js#N","doc":"pluginIdsWithSource：有 pluginSource 的插件 id。"}
+{"id":"chunk-0qaty0z2.js#Gzr","doc":"noReloadPlugins：已裁掉的插件重载（返回 0）。"}
+{"id":"chunk-n44f9pt7.js#hI","doc":"ATOMIC_WRITE_ERRNOS：原子写降级错误码。"}
+{"id":"chunk-3xs5443t.js#HB","doc":"isDirectoryOrFalse：目录判断（失败为假）。"}
+{"id":"chunk-3xs5443t.js#Zj","doc":"mcpAuthCacheContent：MCP 认证缓存内容。"}
+{"id":"chunk-f33rhb46.js#l5i","doc":"forgetEnvWriteRestorer：返回恢复函数（忘掉写入记录）。"}
+{"id":"chunk-f33rhb46.js#d5i","doc":"importEnvWrites：批量导入环境写入记录。"}
+{"id":"chunk-5xgkngpb.js#V0t","doc":"syncTrashTempPrefix：同步回收站临时名前缀。"}
+{"id":"chunk-5s0qaz1x.js#wF","doc":"MARKETPLACES_JSON_FILE：同步目录里的市场文件；MARKETPLACE_ID_RE：市场 id 格式（同一声明共 2 个绑定）。"}
+{"id":"chunk-5s0qaz1x.js#Uuo","doc":"syncKeyOf：pid:procStart/路径 形式的同步键。"}
+{"id":"chunk-5s0qaz1x.js#n2","doc":"SYNCED_SUBDIR：同步根下的 synced 目录名；TRASH_SUBDIR：回收站目录名；UNBOUND_BUCKET：未绑定桶的占位名（同一声明共 3 个绑定）。"}
+{"id":"chunk-5s0qaz1x.js#dLt","doc":"isUuid：是否为 UUID。"}
+{"id":"chunk-5s0qaz1x.js#GXe","doc":"isSyncBucketName：是否为同步桶名。"}
+{"id":"chunk-5s0qaz1x.js#mpt","doc":"bucketOrg：桶名对应的组织。"}
+{"id":"chunk-5s0qaz1x.js#Buo","doc":"bucketDirPath：桶目录路径。"}
+{"id":"chunk-5s0qaz1x.js#YWe","doc":"stripGenerationSuffix：去掉代次后缀。"}
+{"id":"chunk-5s0qaz1x.js#Pn","doc":"PRINTABLE_NAME_RE：可打印名字（无空格）；MIN_FOLDABLE_NAME_LENGTH：需要折叠的名字最短长度；MAX_FOLDABLE_NAME_LENGTH：需要折叠的名字最长长度（同一声明共 5 个绑定）。"}
+{"id":"chunk-5s0qaz1x.js#kZ","doc":"isHiddenFoldName：折叠后以点开头。"}
+{"id":"chunk-5s0qaz1x.js#L9","doc":"isSyncedDirName：名称为 synced 目录。"}
+{"id":"chunk-5s0qaz1x.js#Iys","doc":"syncedItemPathForGeneration：带代次后缀的同步条目路径。"}
+{"id":"chunk-5s0qaz1x.js#tZt","doc":"foldNameForSync：去掉不可见字符后折叠。"}
+{"id":"chunk-5s0qaz1x.js#Z0","doc":"SKILLS_SYNC_DIR：技能同步目录；SKILLS_TRASH_DIR：技能回收站目录；SKILLS_STAGING_DIR：技能暂存目录（同一声明共 6 个绑定）。"}
+{"id":"chunk-5s0qaz1x.js#L0i","doc":"accountBucket：claude.ai 登录时的账号桶。"}
+{"id":"chunk-6vxyfwtv.js#H","doc":"realpathOrManual：Windows 交叉点手算，否则 realpath。"}
+{"id":"chunk-6vxyfwtv.js#N","doc":"appendAll：把数组内容追加到目标。"}
+{"id":"chunk-6vxyfwtv.js#vn","doc":"compareSeverity：按阻断与严重度排序。"}
+{"id":"chunk-6vxyfwtv.js#q","doc":"quotedToolInput：引号包裹的遥测工具输入。"}
+{"id":"chunk-6vxyfwtv.js#de","doc":"cleanDisplayName：去掉组合标记与填充符并 trim。"}
+{"id":"chunk-6vxyfwtv.js#se","doc":"stringField：取字符串字段并清洗。"}
+{"id":"chunk-6vxyfwtv.js#He","doc":"trimmedStringField：取字符串字段两端裁剪。"}
+{"id":"chunk-6vxyfwtv.js#Ge","doc":"README_LINE_BREAK_CHARS：README 里算换行的字符。"}
+{"id":"chunk-6vxyfwtv.js#De","doc":"toArray：标量转数组。"}
+{"id":"chunk-6vxyfwtv.js#Pe","doc":"PLUGIN_VALIDATION_ISSUES：插件目录校验的问题码表；manifestRelativePath：插件清单相对路径；README_CANDIDATES：README 候选文件名（同一声明共 38 个绑定）。"}
+{"id":"chunk-bfqsgtvj.js#mmn","doc":"isSameResolvedPath：解析后路径相同。"}
+{"id":"chunk-bfqsgtvj.js#qWr","doc":"matchesDirEntry：目录条目按 source 或名字匹配。"}
+{"id":"chunk-bfqsgtvj.js#Qn","doc":"KNOWN_MCP_SERVER_TYPES：已知 MCP 服务器类型；USER_CONFIG_PLACEHOLDER_PATTERN：user_config 占位符；MCP_URL_TEMPLATE_RE：MCP URL 里的模板占位（同一声明共 3 个绑定）。"}
+{"id":"chunk-bfqsgtvj.js#de","doc":"refusedContract：构造被拒的契约结果。"}
+{"id":"chunk-tz1164x0.js#aGe","doc":"MAX_POLL_EVENT_ENVELOPE_BYTES：轮询事件信封的字节上限（48 KiB）。"}
+{"id":"chunk-tz1164x0.js#xLt","doc":"pollEventMaxEnvelopeBytes：取轮询事件信封体积上限。"}
+{"id":"chunk-tz1164x0.js#I","doc":"POLL_KIND_DEFAULT_TIMEOUT_MS：轮询事件默认超时；MAX_POLL_EVENT_BATCH_BYTES：单批轮询事件字节上限；MAX_POLL_EVENTS_PER_BATCH：单批轮询事件条数上限（同一声明共 4 个绑定）。"}
+{"id":"chunk-tz1164x0.js#ILt","doc":"isValidPollEventKind：轮询事件 kind 是否合法。"}
+{"id":"chunk-tz1164x0.js#dGe","doc":"mentionsReservedKind：文本里是否提到保留 kind。"}
+{"id":"chunk-tz1164x0.js#MLt","doc":"mentionsSessionNoticeKind：文本里是否提到 session notice kind。"}
+{"id":"chunk-tz1164x0.js#RZt","doc":"PEER_AUTHORITIES：对端消息 authority 取值。"}
+{"id":"chunk-tz1164x0.js#D$i","doc":"isPeerAuthority：是否为合法对端 authority。"}
+{"id":"chunk-tz1164x0.js#sJe","doc":"normalizeNewlines：统一换行并去掉控制字符。"}
+{"id":"chunk-tz1164x0.js#L$i","doc":"normalizedEventLabel：去掉变体选择符与重复组合标记的事件标签。"}
+{"id":"chunk-tz1164x0.js#V_s","doc":"containsEventTag：文本里是否出现 event 标签。"}
+{"id":"chunk-tz1164x0.js#Evr","doc":"sanitizeEventAttributes：属性文本里替换引号与控制字符。"}
+{"id":"chunk-tz1164x0.js#TS","doc":"isPollEventMode：模式为 poll-event。"}
+{"id":"chunk-tz1164x0.js#tD","doc":"isPollEventIngressActive：轮询事件入口已启用并接线。"}
+{"id":"chunk-tz1164x0.js#fHn","doc":"isHostIngressPollEvents：入口不是 host/none。"}
+{"id":"chunk-tz1164x0.js#Tvr","doc":"isMainAgentPollEventMode：主代理的轮询事件回合。"}
+{"id":"chunk-tz1164x0.js#$Le","doc":"isPollEventForAgent：指定 agent 的轮询事件回合。"}
+{"id":"chunk-tz1164x0.js#NLt","doc":"eventByteLength：事件序列化后的字节数。"}
+{"id":"chunk-tz1164x0.js#Z_s","doc":"envelopeLengthFor：按信封类型取长度。"}
+{"id":"chunk-tz1164x0.js#mHn","doc":"randomEventNonce：生成随机事件 nonce。"}
+{"id":"chunk-tz1164x0.js#Ifo","doc":"detectEnvelopeKind：按结束标签判断信封类型。"}
+{"id":"chunk-tz1164x0.js#ebs","doc":"envelopeNonceMatches：结束标签 nonce 与开头一致。"}
+{"id":"chunk-tz1164x0.js#tbs","doc":"collectEventNonces：收集各事件信封的 nonce。"}
+{"id":"chunk-tz1164x0.js#FLt","doc":"prependAttachmentsToText：把附件前置到文本块。"}
+{"id":"chunk-tz1164x0.js#ULt","doc":"settleDeliveredEvents：标记事件已投递。"}
+{"id":"chunk-8nzbdydx.js#vLe","doc":"isDisklessContext：无盘模式或进程。"}
+{"id":"chunk-5xgkngpb.js#Kvt","doc":"POLL_EVENTS_ANNOUNCE_LINE：轮询事件到达时的系统提示行。"}
+{"id":"chunk-5xgkngpb.js#Qii","doc":"neverDeclaresEvents：恒 false 的声明判定（占位）。"}
+{"id":"chunk-5xgkngpb.js#xwn","doc":"eventDeclarations：宿主声明的事件种类。"}
+{"id":"chunk-5xgkngpb.js#eai","doc":"eventDeclarationFault：事件声明解析失败的原因。"}
+{"id":"chunk-5xgkngpb.js#Yrr","doc":"collectFieldStrings：汇总事件字段的字符串。"}
+{"id":"chunk-5xgkngpb.js#EAt","doc":"escapedEventJsonBody：转义后的事件 JSON 正文。"}
+{"id":"chunk-vb7ng9fr.js#ie","doc":"MAX_POSIX_PATH_LENGTH：POSIX 路径长度上限。"}
+{"id":"chunk-vb7ng9fr.js#j","doc":"isParentOrAbsolute：是 .. 或绝对路径。"}
+{"id":"chunk-5xgkngpb.js#rz","doc":"isProactivitySettingsValid：主动性设置可解析。"}
+{"id":"chunk-5xgkngpb.js#sEt","doc":"isProactivityBlockText：文本属于主动性段落。"}
+{"id":"chunk-5xgkngpb.js#TKe","doc":"isSkillOverridesUnread：技能覆盖尚未读取。"}
+{"id":"chunk-5xgkngpb.js#CKe","doc":"skillOverrides：技能覆盖表。"}
+{"id":"chunk-sqy19v4h.js#$zr","doc":"proactivityLevelIfActive：主动性启用时返回等级。"}
+{"id":"chunk-sqy19v4h.js#Ewe","doc":"promptProactivityLevel：提示词中的主动性等级。"}
+{"id":"chunk-5xgkngpb.js#NIe","doc":"isProactivityMode：是否为主动性模式。"}
+{"id":"chunk-5xgkngpb.js#$6o","doc":"nextProactivityMode：下一个主动性模式。"}
+{"id":"chunk-5xgkngpb.js#F6o","doc":"previousProactivityMode：上一个主动性模式。"}
+{"id":"chunk-2b8xszbk.js#Zei","doc":"withProactivityBaseline：带主动性基线时原样返回。"}
+{"id":"chunk-ec6640wg.js#YO","doc":"procStatField：取 /proc/<pid>/stat 的某个字段。"}
+{"id":"chunk-ec6640wg.js#bG","doc":"isMinorFaultField：次缺页相关字段（Z/X）。"}
+{"id":"chunk-jynns2s2.js#iot","doc":"projectRootForRelaunch：重启用的项目根目录。"}
+{"id":"chunk-pwdsqzsj.js#Fn","doc":"MENTION_ATTACHMENT_TYPES：提及类附件类型。"}
+{"id":"chunk-pwdsqzsj.js#Cs","doc":"needsRescreen：钩子注册变化时需要重新筛查。"}
+{"id":"chunk-pwdsqzsj.js#us","doc":"withRewriteState：附加改写状态。"}
+{"id":"chunk-g88zyy4n.js#Et","doc":"isQuillKillswitchOff：未触发 killswitch 时为真。"}
+{"id":"chunk-y8xj45e1.js#V2t","doc":"CANCELLED_RESULT：已取消的提示提交结果。"}
+{"id":"chunk-y8xj45e1.js#hJi","doc":"pluginsChanged：插件列表是否变化。"}
+{"id":"chunk-y8xj45e1.js#wVr","doc":"hookStopWarningMessage：钩子停止时保留提示词的警告消息。"}
+{"id":"chunk-y8xj45e1.js#EVr","doc":"makeMetaUserMessage：构造 meta 用户消息。"}
+{"id":"chunk-y8xj45e1.js#bzo","doc":"hasPromptSubmitHooks：存在 UserPromptSubmit 钩子或渲染键。"}
+{"id":"chunk-y8xj45e1.js#Dot","doc":"hooksSnapshotKey：钩子与插件快照键。"}
+{"id":"chunk-wfxhhysk.js#sR","doc":"PROCESS_WRAPPER_ENV：进程包装器环境变量；PROCESS_WRAPPER_TIMEOUT_MS：进程包装器超时（同一声明共 2 个绑定）。"}
+{"id":"chunk-yx0qwrvr.js#h","doc":"IOS_SDK_VERSION_SOURCE：iOS SDK 版本匹配片段；IOS_SDKROOT_ASSIGNMENT_RE：Xcode 构建设置里的 iOS SDK 赋值；XCODE_PLATFORM_MARKER_RE：Xcode 工程里的 iOS 平台标记（同一声明共 9 个绑定）。"}
+{"id":"chunk-yx0qwrvr.js#Eti","doc":"emptyProjectFactsEvidence：项目事实证据的初值。"}
+{"id":"chunk-yx0qwrvr.js#u2o","doc":"conclusiveEvidenceOf：项目证据（确定优先）。"}
+{"id":"chunk-yx0qwrvr.js#K","doc":"MAX_LOCKFILE_ENTRIES_SCAN：扫描锁文件条数上限；PACKAGE_MANAGER_LOCKFILES：锁文件与包管理器对应表；PIP_INDEX_URL_RE：pip registry/index-url 配置（同一声明共 16 个绑定）。"}
+{"id":"chunk-yx0qwrvr.js#kti","doc":"PROJECT_FACTS_CACHE_TTL_MS：项目事实缓存时长。"}
+{"id":"chunk-5xgkngpb.js#fgi","doc":"setProjectsThreadStateSource：设置线程状态来源。"}
+{"id":"chunk-5xgkngpb.js#gL","doc":"escapeShellBangs：转义提示词里的感叹号。"}
+{"id":"chunk-5xgkngpb.js#I6o","doc":"normalizeShellCommandText：统一换行并去空白。"}
+{"id":"chunk-5xgkngpb.js#Nir","doc":"hasInvisibleCommandChars：命令含不可见字符。"}
+{"id":"chunk-5xgkngpb.js#Res","doc":"glowingOrbitOn：开关 tengu_glowing_orbit。"}
+{"id":"chunk-5xgkngpb.js#Tgi","doc":"pendingShellHandOffs：权限上下文中的待处理 shell 交接。"}
+{"id":"chunk-5xgkngpb.js#Xsr","doc":"wakeupSourceForKind：由 kind 得到唤醒来源。"}
+{"id":"chunk-5xgkngpb.js#bOe","doc":"originKindForWakeup：唤醒来源对应的来源种类。"}
+{"id":"chunk-5xgkngpb.js#F5o","doc":"WAKEUP_ORIGIN_TTL_MS：唤醒来源记录的有效期。"}
+{"id":"chunk-5xgkngpb.js#m7e","doc":"wakeupDedupKey：唤醒去重键。"}
+{"id":"chunk-7jxyna5q.js#mP","doc":"submittedMessages：取提交消息列表。"}
+{"id":"chunk-7jxyna5q.js#q$","doc":"isBridgeOrVerifiedSlackTurn：桥接提交或已验证的 Slack 人类回合。"}
+{"id":"chunk-7jxyna5q.js#Xlt","doc":"isLocalStdinSubmission：本地 stdin 提交且非桥接。"}
+{"id":"chunk-7jxyna5q.js#Hbi","doc":"isHumanSubmittedTurn：人类来源的提交回合。"}
+{"id":"chunk-7jxyna5q.js#kur","doc":"isSessionChannelPerson：由会话频道的人提交。"}
+{"id":"chunk-7jxyna5q.js#ode","doc":"isMidTurnStreaming：是否处于回合中流式输出。"}
+{"id":"chunk-7jxyna5q.js#Nbi","doc":"runsBesideTurns：local-jsx 提交且在回合旁运行。"}
+{"id":"chunk-5xgkngpb.js#C8r","doc":"forceRedraw：强制重绘。"}
+{"id":"chunk-5xgkngpb.js#R8o","doc":"sanitizePromptText：按开关清洗提示词文本。"}
+{"id":"chunk-5xgkngpb.js#vRt","doc":"appendHookableFastPath：可走快路径的 session.append。"}
+{"id":"chunk-5xgkngpb.js#QEe","doc":"orderedRowSource：登记有序行来源。"}
+{"id":"chunk-5xgkngpb.js#kRt","doc":"runningTurnRegistry：运行中回合登记表。"}
+{"id":"chunk-cwkrfaxh.js#b8n","doc":"referencedBashToolNames：从消息里的 Bash 工具调用提取引用的工具名。"}
+{"id":"chunk-5xgkngpb.js#alr","doc":"finishQueryProfile：结束并上报查询性能剖析。"}
+{"id":"chunk-2dvnfacg.js#K","doc":"queryProfileStorage：查询剖析的 AsyncLocalStorage。"}
+{"id":"chunk-2dvnfacg.js#Mgi","doc":"runWithQueryProfile：在剖析上下文中执行。"}
+{"id":"chunk-2dvnfacg.js#Re","doc":"QUERY_PROFILE_PHASES：查询剖析的阶段名。"}
+{"id":"chunk-2dvnfacg.js#Lgi","doc":"beginProfile：开始一次查询剖析。"}
+{"id":"chunk-2dvnfacg.js#YS","doc":"startProfilePhase：开始某阶段。"}
+{"id":"chunk-2dvnfacg.js#XS","doc":"endProfilePhase：结束某阶段。"}
+{"id":"chunk-2dvnfacg.js#V6t","doc":"startPhaseWithin：开始嵌套阶段。"}
+{"id":"chunk-2dvnfacg.js#Ues","doc":"noteAttachmentProducer：记录附件生产者耗时。"}
+{"id":"chunk-2dvnfacg.js#Hgi","doc":"noteAttachmentPass：记录一次附件处理。"}
+{"id":"chunk-2dvnfacg.js#Ngi","doc":"noteChangedFilesReread：记录改动文件重读。"}
+{"id":"chunk-2dvnfacg.js#$gi","doc":"noteChangedFilesCompared：记录改动文件比较。"}
+{"id":"chunk-2dvnfacg.js#jgi","doc":"noteStoreConfirmWrite：记录存储确认写。"}
+{"id":"chunk-2dvnfacg.js#q6t","doc":"endPhaseWithin：结束嵌套阶段。"}
+{"id":"chunk-2dvnfacg.js#mAn","doc":"measurePhase：在剖析中执行并计时。"}
+{"id":"chunk-2dvnfacg.js#Ggi","doc":"closeProfile：关闭剖析并返回是否已上报。"}
+{"id":"chunk-2dvnfacg.js#zgi","doc":"openProfileStream：打开剖析流。"}
+{"id":"chunk-2dvnfacg.js#Y6t","doc":"noteRedrive：记录重放。"}
+{"id":"chunk-2dvnfacg.js#Kgi","doc":"consumeProfile：消费剖析数据。"}
+{"id":"chunk-2dvnfacg.js#Vgi","doc":"currentTurnIndex：当前回合序号。"}
+{"id":"chunk-2dvnfacg.js#qgi","doc":"endProfile：结束剖析。"}
+{"id":"chunk-czq1j3j2.js#QIe","doc":"neverSubscribed：恒 false 的订阅判定占位。"}
+{"id":"chunk-5xgkngpb.js#WXr","doc":"isWeakNotified：该消息是否在弱表里。"}
+{"id":"chunk-5xgkngpb.js#bXo","doc":"collapsedRowOf：取折叠行。"}
+{"id":"chunk-5xgkngpb.js#MOs","doc":"collapseNotificationRunsIn：折叠连续通知。"}
+{"id":"chunk-jjzv90rc.js#Hut","doc":"hmacRandomId：用密钥做 HMAC 生成 id。"}
+{"id":"chunk-z68qgrbt.js#MIn","doc":"defaultOutputRoots：默认输出根目录。"}
+{"id":"chunk-7kayq7nc.js#JX","doc":"SLACK_TOKEN_PATTERN：Slack 令牌正则；AWS_KEY_PREFIXES：AWS access key 前缀列表；AWS_KEY_PREFIX_PATTERN：AWS access key 前缀的正则源码（同一声明共 5 个绑定）。"}
+{"id":"chunk-7kayq7nc.js#zz","doc":"JWT_TOKEN_PATTERNS：JWT 令牌正则列表；GOOGLE_API_KEY_RULES：Google API key 的脱敏规则；STRIPE_KEY_RULES：Stripe 密钥的脱敏规则（同一声明共 6 个绑定）。"}
+{"id":"chunk-2jb250pa.js#le","doc":"sliceSpan：按区间切出文本与来源。"}
+{"id":"chunk-2jb250pa.js#m8i","doc":"urlSpans：文本中的 URL 片段。"}
+{"id":"chunk-2jb250pa.js#jWn","doc":"safeOriginUrlRedacted：安全来源 URL。"}
+{"id":"chunk-2jb250pa.js#Q0s","doc":"URL_AUTHORITY_ESCAPE_RE：URL 权威部分需转义的字符。"}
+{"id":"chunk-2jb250pa.js#WWn","doc":"COLON_RE：冒号或其编码。"}
+{"id":"chunk-2jb250pa.js#b","doc":"stripLeadingSpaceAndNewlines：去掉前导空白与换行。"}
+{"id":"chunk-2jb250pa.js#_8i","doc":"isPlainHttpUrl：普通 http(s) URL。"}
+{"id":"chunk-d9v6k9t9.js#K9s","doc":"CHANGELOG_URL：变更日志地址；HTTPS_CODE_CLAUDE_COM：文档站点地址（同一声明共 2 个绑定）。"}
+{"id":"chunk-23wtzxhc.js#IWn","doc":"REMOTE_COWORK_SOURCE_KINDS：远程 cowork 来源种类。"}
+{"id":"chunk-wtzc5s1n.js#on","doc":"isRemoteManagedEnvironment：远程且未指定环境类型。"}
+{"id":"chunk-wtzc5s1n.js#cMr","doc":"isRemoteOrFalse：远程环境（含兼容占位）。"}
+{"id":"chunk-wtzc5s1n.js#Hp","doc":"isByocEnvironment：远程且环境类型为 byoc。"}
+{"id":"chunk-wtzc5s1n.js#yC","doc":"isRemoteEnvironmentAny：远程托管或 byoc。"}
+{"id":"chunk-wtzc5s1n.js#xfe","doc":"hasRunnerDeclaredNestedRepoDiff：byoc 且有嵌套仓库 diff。"}
+{"id":"chunk-wtzc5s1n.js#XFt","doc":"initialCwdKey：初始 cwd 的存储键。"}
+{"id":"chunk-wtzc5s1n.js#Vsn","doc":"isLocalAbsolutePath：绝对路径且不在外部挂载。"}
+{"id":"chunk-wtzc5s1n.js#E5i","doc":"runnerDeclaredNoRepo：byoc 且未检出仓库。"}
+{"id":"chunk-wtzc5s1n.js#_w","doc":"isBridgeEnvironment：环境类型为 bridge。"}
+{"id":"chunk-wtzc5s1n.js#Nee","doc":"isTopLevelBridgeSession：bridge 环境且非子会话。"}
+{"id":"chunk-wtzc5s1n.js#uMr","doc":"persistsTransport：托管 worker 或 bridge 下传输持久。"}
+{"id":"chunk-mxsrzv5n.js#CWe","doc":"matchesContentDigest：内容与记录的大小和 sha256 一致。"}
+{"id":"chunk-mxsrzv5n.js#yx","doc":"READ_FILE_STATE_CACHE_SIZE：读文件状态缓存的最大条目数；MAX_READ_FILE_CACHE_BYTES：读文件状态缓存的字节上限；MAX_INLINE_READ_CONTENT_BYTES：缓存里保留内容的字节上限（同一声明共 3 个绑定）。"}
+{"id":"chunk-mxsrzv5n.js#Ido","doc":"contentHashOf：用 Bun.hash 计算内容哈希。"}
+{"id":"chunk-mxsrzv5n.js#uce","doc":"hasFullFileContent：读取记录含完整文件内容。"}
+{"id":"chunk-mxsrzv5n.js#yW","doc":"matchesContentHash：内容哈希或原文与记录一致。"}
+{"id":"chunk-mxsrzv5n.js#qw","doc":"stripBom：去掉文件开头的 BOM。"}
+{"id":"chunk-mxsrzv5n.js#ab","doc":"stripBomAndCarriageReturn：去掉 BOM 与裸回车。"}
+{"id":"chunk-mxsrzv5n.js#Jbr","doc":"matchesNormalizedContent：规范化后内容一致。"}
+{"id":"chunk-mxsrzv5n.js#ak","doc":"createRemoteFileState：创建远程文件读取状态。"}
+{"id":"chunk-mxsrzv5n.js#Qbr","doc":"remoteFileStateToObject：读文件状态转普通对象。"}
+{"id":"chunk-mxsrzv5n.js#cDt","doc":"remoteFileStateKeys：读文件状态的路径列表。"}
+{"id":"chunk-5xgkngpb.js#Ofi","doc":"noRemoteSessionCommands：无云会话时的空命令表。"}
+{"id":"chunk-5xgkngpb.js#Dat","doc":"remoteSessionAwaits：远程会话等待项。"}
+{"id":"chunk-5xgkngpb.js#jfi","doc":"setRemoteSessionAwaits：设置远程会话等待项。"}
+{"id":"chunk-5xgkngpb.js#Wfi","doc":"isLocalRemoteCommand：本地远程命令。"}
+{"id":"chunk-r28w8ktt.js#cUe","doc":"isRemoteFirstPartySession：远程且第一方提供方。"}
+{"id":"chunk-5xgkngpb.js#Ssr","doc":"isSeparateCopyNoSync：独立副本且关闭项目同步。"}
+{"id":"chunk-5xgkngpb.js#tci","doc":"folderSyncEngine：目录同步引擎。"}
+{"id":"chunk-5xgkngpb.js#G8o","doc":"setFolderSyncEngine：设置目录同步引擎。"}
+{"id":"chunk-5xgkngpb.js#wsr","doc":"isSyncableProject：双向或仅上传的同步项目。"}
+{"id":"chunk-5xgkngpb.js#$5e","doc":"restartNoticeFor：重启相关提示（挂起或重启）。"}
+{"id":"chunk-5xgkngpb.js#cCt","doc":"supportsRemoteExecution：工具支持远程执行。"}
+{"id":"chunk-5xgkngpb.js#V7t","doc":"shouldRouteToolToHost：该调用是否转给远程宿主。"}
+{"id":"chunk-5xgkngpb.js#lOe","doc":"remoteRoutingCandidate：远程路由候选。"}
+{"id":"chunk-czq1j3j2.js#FCt","doc":"replayWithoutLaptopMemory：重放时去掉笔记本记忆段。"}
+{"id":"chunk-czq1j3j2.js#UCt","doc":"laptopMemoryTipsPluginEnabled：CC 插件技巧是否可用。"}
+{"id":"chunk-czq1j3j2.js#eGo","doc":"ZERO_UUID：全零 UUID。"}
+{"id":"chunk-5xgkngpb.js#lOn","doc":"hasWatchdogObservation：是否已观测到磁盘或内存紧张。"}
+{"id":"chunk-5xgkngpb.js#Ami","doc":"startWatchdogSafe：启动看门狗（失败只记日志）。"}
+{"id":"chunk-2jb250pa.js#p8i","doc":"isAlreadySanitized：文本已是清洗后的形式。"}
+{"id":"chunk-6hadbefe.js#l8i","doc":"unwrapResult：取出结果或抛错。"}
+{"id":"chunk-qg41pqt6.js#Zo","doc":"ripgrepStatus：当前宿主的 ripgrep 状态。"}
+{"id":"chunk-qg41pqt6.js#yio","doc":"ripgrepStorageOverride：存储模式下 ripgrep 覆盖值。"}
+{"id":"chunk-vfza76n9.js#wvr","doc":"SAFE_IDENTIFIER_RE：安全标识符格式。"}
+{"id":"chunk-vfza76n9.js#TF","doc":"safeIdentifierOrUndefined：安全标识符或 undefined。"}
+{"id":"chunk-mrcnh9sb.js#jxi","doc":"hostIdentityMatches：主机身份是否一致。"}
+{"id":"chunk-qg41pqt6.js#dw","doc":"celModule：CEL 模块（CommonJS 包装）。"}
+{"id":"chunk-qg41pqt6.js#OXt","doc":"bridgeSpawnDir：bridge-spawn 目录路径。"}
+{"id":"chunk-qg41pqt6.js#MXt","doc":"CEL_MAX_ITEMS：CEL 函数列表上限；CEL_MAX_STRING_ELEMENTS：CEL 字符串条数上限；CEL_MAX_PATTERNS：CEL 模式数上限（同一声明共 5 个绑定）。"}
+{"id":"chunk-czq1j3j2.js#CTt","doc":"knownHostNameOrUndefined：在已知主机列表里时返回该名。"}
+{"id":"chunk-czq1j3j2.js#_Tt","doc":"describeApprovalSubject：沙箱主机名的审批显示文本。"}
+{"id":"chunk-czq1j3j2.js#TTt","doc":"hostValidationCacheKey：沙箱主机校验缓存键。"}
+{"id":"chunk-qg41pqt6.js#Ude","doc":"APPLY_SECCOMP_FD：apply-seccomp 的 fd 编号；MAX_SECCOMP_POLICY_BYTES：seccomp 策略字节上限（同一声明共 2 个绑定）。"}
+{"id":"chunk-qg41pqt6.js#tyr","doc":"seccompExecPlan：构造 apply-seccomp 执行方案。"}
+{"id":"chunk-qg41pqt6.js#nyr","doc":"wrapWithSeccompExec：给命令加上 seccomp 执行前缀。"}
+{"id":"chunk-qg41pqt6.js#N4","doc":"linuxSandboxProbes：Linux 沙箱依赖探测集合。"}
+{"id":"chunk-5xgkngpb.js#YCn","doc":"proxyCredentialHelpers：代理凭据 helper 列表。"}
+{"id":"chunk-pwqspacd.js#jce","doc":"proxyDenialResult：构造代理拒绝结果。"}
+{"id":"chunk-pwqspacd.js#i2","doc":"isAllowlistBlockedResponse：403 且为白名单阻断。"}
+{"id":"chunk-pwqspacd.js#Lpt","doc":"isBlockedByProxyAllowlist：响应显示被代理白名单阻断。"}
+{"id":"chunk-pwqspacd.js#gFi","doc":"isClientErrorStatus：4xx 但排除 408/429。"}
+{"id":"chunk-pwqspacd.js#VLt","doc":"proxyErrorCode：取 x-proxy-error 码。"}
+{"id":"chunk-pwqspacd.js#Wce","doc":"proxyDenyReason：取 x-deny-reason。"}
+{"id":"chunk-azq8n2fy.js#oEt","doc":"SANDBOX_MAX_DEPTH：沙箱默认策略的深度上限；SANDBOX_MAX_PATH_LENGTH：沙箱默认策略的路径长度上限（同一声明共 2 个绑定）。"}
+{"id":"chunk-azq8n2fy.js#swe","doc":"violinFholeEnabled：沙箱默认策略开关（tengu_violin_fhole）。"}
+{"id":"chunk-qg41pqt6.js#mv","doc":"sandboxErrorSignalLazy：沙箱错误的惰性信号。"}
+{"id":"chunk-qg41pqt6.js#hM","doc":"reportSandboxTelemetryError：上报沙箱遥测错误。"}
+{"id":"chunk-1vxka8te.js#pln","doc":"SANDBOX_UNAVAILABLE_MESSAGE：需要沙箱但不可用的说明。"}
+{"id":"chunk-qg41pqt6.js#dM","doc":"SHADOWED_SSH_DIR：沙箱内的 .claude/ssh 目录。"}
+{"id":"chunk-qg41pqt6.js#DXt","doc":"sandboxSettingsChain：沙箱设置的读取链。"}
+{"id":"chunk-qg41pqt6.js#pv","doc":"policySandboxSetting：策略层沙箱设置。"}
+{"id":"chunk-715mxt6r.js#APi","doc":"sharedSystemDirs：共享的系统目录集合。"}
+{"id":"chunk-715mxt6r.js#Oao","doc":"uidsCollapse：当前 uid 是否折叠为溢出 uid。"}
+{"id":"chunk-715mxt6r.js#c","doc":"daemonDirFor：取 daemon 目录。"}
+{"id":"chunk-715mxt6r.js#q","doc":"daemonPipeKey：由配置目录派生的 daemon 管道键。"}
+{"id":"chunk-715mxt6r.js#G","doc":"DAEMON_PIPE_KEY_RE：daemon 管道键格式。"}
+{"id":"chunk-715mxt6r.js#Mus","doc":"daemonPipeKeyFile：daemon 管道密钥文件路径。"}
+{"id":"chunk-715mxt6r.js#YC","doc":"redactDaemonPipeKey：错误信息里脱敏 daemon 管道键。"}
+{"id":"chunk-715mxt6r.js#Byr","doc":"daemonControlKeyFile：daemon 控制密钥文件路径。"}
+{"id":"chunk-715mxt6r.js#S","doc":"assertMappedNamespace：未映射命名空间时抛错。"}
+{"id":"chunk-715mxt6r.js#Lus","doc":"isDaemonSocketGoneError：daemon 套接字已消失的错误。"}
+{"id":"chunk-715mxt6r.js#Uke","doc":"daemonDispatchDir：取 daemon dispatch 目录。"}
+{"id":"chunk-715mxt6r.js#Hus","doc":"daemonRejectedDir：取 daemon 被拒任务目录。"}
+{"id":"chunk-715mxt6r.js#c9","doc":"daemonRosterFile：daemon roster 文件路径。"}
+{"id":"chunk-715mxt6r.js#Bke","doc":"daemonAttachJournal：daemon 附加日志路径。"}
+{"id":"chunk-715mxt6r.js#Dao","doc":"daemonRvDir：daemon rv 目录。"}
+{"id":"chunk-715mxt6r.js#eMt","doc":"daemonAuthDir：daemon 认证目录。"}
+{"id":"chunk-715mxt6r.js#tMt","doc":"daemonAuthFile：daemon 认证文件路径。"}
+{"id":"chunk-715mxt6r.js#gOn","doc":"hostManagedDir：宿主管辖目录。"}
+{"id":"chunk-715mxt6r.js#MDe","doc":"hostManagedEntry：宿主管辖目录下的条目。"}
+{"id":"chunk-715mxt6r.js#nMt","doc":"daemonTokensFile：daemon 令牌文件路径。"}
+{"id":"chunk-715mxt6r.js#yOn","doc":"daemonRvSocket：rv 套接字路径。"}
+{"id":"chunk-715mxt6r.js#rMt","doc":"daemonPtyDir：daemon pty 目录。"}
+{"id":"chunk-715mxt6r.js#XC","doc":"daemonPtySocket：pty 套接字路径。"}
+{"id":"chunk-715mxt6r.js#cye","doc":"daemonSpareDir：daemon spare 目录。"}
+{"id":"chunk-715mxt6r.js#OPi","doc":"daemonSparePtySocket：spare pty 套接字路径。"}
+{"id":"chunk-715mxt6r.js#MPi","doc":"daemonSpareClaimSocket：spare claim 套接字路径。"}
+{"id":"chunk-715mxt6r.js#Eut","doc":"daemonPtyPidsDir：pty pid 目录。"}
+{"id":"chunk-715mxt6r.js#jke","doc":"daemonPtyPidFile：pty pid 文件路径。"}
+{"id":"chunk-715mxt6r.js#cx","doc":"ptyErrFile：pty 错误输出文件。"}
+{"id":"chunk-715mxt6r.js#lF","doc":"ptyLateFile：pty 延迟输出文件。"}
+{"id":"chunk-715mxt6r.js#Xde","doc":"daemonControlSocket：daemon 控制套接字。"}
+{"id":"chunk-qg41pqt6.js#Mw","doc":"setUserTempRoot：设置用户临时根目录。"}
+{"id":"chunk-qg41pqt6.js#$w","doc":"neverTempRoot：恒 false 占位。"}
+{"id":"chunk-5xgkngpb.js#zxe","doc":"stripTrailingSlashIfLong：长度大于 1 时去掉末尾斜杠。"}
+{"id":"chunk-qg41pqt6.js#Lxi","doc":"hasWindowsSandboxBeenOn：Windows 沙箱是否曾启用。"}
+{"id":"chunk-qg41pqt6.js#WL","doc":"rgRunner：用 Bun 直接执行脚本的启动信息。"}
+{"id":"chunk-qg41pqt6.js#bv","doc":"isSeclogonAccessDenied：seclogon 访问被拒。"}
+{"id":"chunk-qg41pqt6.js#Qgr","doc":"USER_SID_RE：Windows 用户 SID 格式。"}
+{"id":"chunk-qg41pqt6.js#BM","doc":"MAX_PARENT_FOLDERS：向上查找父目录的上限；ACE_INHERIT_ONLY_MASK：仅继承 ACE 掩码；MAX_ACL_OPERATIONS：ACL 操作上限（同一声明共 15 个绑定）。"}
+{"id":"chunk-qg41pqt6.js#KM","doc":"USER_SID_PATTERN：Windows 用户 SID 正则；WINDOWS_SANDBOX_FAILURES：Windows 沙箱准备失败原因枚举；sandboxDenyState：原生 deny 状态（同一声明共 3 个绑定）。"}
+{"id":"chunk-qg41pqt6.js#vv","doc":"hasAnyDeniedPath：是否有启用中的读/写拒绝。"}
+{"id":"chunk-qg41pqt6.js#N0","doc":"WindowsSandboxError：Windows 沙箱错误类。"}
+{"id":"chunk-kyyc5rrw.js#Trr","doc":"seclogonStatusMessage：seclogon 服务禁用/缺失时的提示。"}
+{"id":"chunk-3gbv0jkm.js#S8i","doc":"nfkdNormalize：NFKD 规范化。"}
+{"id":"chunk-2jb250pa.js#Ue","doc":"CONTROL_CHARS_RE：控制字符与行分隔符；MAX_CLEAN_IDENTIFIER_LENGTH：干净标识符长度上限；CONTROL_CHARS_OR_ANGLE_RE：控制字符或尖括号（同一声明共 3 个绑定）。"}
+{"id":"chunk-2jb250pa.js#Q_t","doc":"isAsciiIdentifier：短且仅 ASCII 标识符字符。"}
+{"id":"chunk-2jb250pa.js#YDr","doc":"isUnicodeIdentifier：短且仅 Unicode 标识符字符。"}
+{"id":"chunk-2jb250pa.js#UWn","doc":"isSafeRelativePath：短且为不含 .. 的相对路径。"}
+{"id":"chunk-2jb250pa.js#Zko","doc":"escapeXmlAttribute：转义后的 XML 属性值。"}
+{"id":"chunk-2jb250pa.js#K0s","doc":"isNameWithNoJoinerFixes：名字干净且无需连接符处理。"}
+{"id":"chunk-5xgkngpb.js#z6r","doc":"countScroll：记录一次滚动。"}
+{"id":"chunk-5xgkngpb.js#K6r","doc":"countPageJump：记录一次翻页。"}
+{"id":"chunk-5xgkngpb.js#Q6o","doc":"countJumpToBottom：记录一次跳到末尾。"}
+{"id":"chunk-5xgkngpb.js#ror","doc":"markScrollbackCapReached：记录到达回滚上限。"}
+{"id":"chunk-rfqytzvf.js#E0e","doc":"keychainProjectDirs：钥匙串服务名用到的项目目录。"}
+{"id":"chunk-5me9t3vk.js#yxs","doc":"isPlainTextStorageAvailable：明文凭据存储是否可用。"}
+{"id":"chunk-eknyxrgq.js#rSs","doc":"setMainLoopActivityListener：设置主循环活动监听。"}
+{"id":"chunk-eknyxrgq.js#oSs","doc":"setNestedChainDropListener：设置嵌套链丢弃监听。"}
+{"id":"chunk-eknyxrgq.js#XFi","doc":"notifyNestedChainDropped：通知嵌套链被丢弃。"}
+{"id":"chunk-eknyxrgq.js#ZFi","doc":"currentActivityState：当前活动状态。"}
+{"id":"chunk-p21mddyh.js#bCs","doc":"authHandshakeJson：构造带尾随空格的认证握手 JSON。"}
+{"id":"chunk-p21mddyh.js#Z2i","doc":"AUTH_HANDSHAKE_LENGTH：认证握手 JSON 的长度。"}
+{"id":"chunk-p21mddyh.js#Trn","doc":"stableSessionAddress：由会话 id 生成 sid: 地址。"}
+{"id":"chunk-p21mddyh.js#ONt","doc":"isStableSessionAddress：是否为 sid: 地址。"}
+{"id":"chunk-p21mddyh.js#Vht","doc":"isNotStableAddress：地址不是稳定形式。"}
+{"id":"chunk-p21mddyh.js#hQe","doc":"hasEnvironmentKindOtherThanBridge：环境种类非 bridge。"}
+{"id":"chunk-p21mddyh.js#Ubo","doc":"isDisconnectedNonBridge：非 bridge 且未连接。"}
+{"id":"chunk-p21mddyh.js#nKi","doc":"isAddressableSlug：会话名 slug 可寻址。"}
+{"id":"chunk-p21mddyh.js#qht","doc":"isReservedOrInvalidName：名字无效或为保留名。"}
+{"id":"chunk-p21mddyh.js#MNt","doc":"isLocalTeamLead：本会话是该团队的领导。"}
+{"id":"chunk-p21mddyh.js#Yht","doc":"addressableTeamMembers：团队里可寻址的成员。"}
+{"id":"chunk-p21mddyh.js#gH","doc":"isReservedSessionName：名字是保留名（main/team-lead/user/system）。"}
+{"id":"chunk-p21mddyh.js#N","doc":"MIN_ADDRESS_REF_LENGTH：地址 ref 的最短长度；MAX_ADDRESS_REF_LENGTH：地址 ref 的最长长度；ADDRESS_REF_PATTERN：地址 ref 的十六进制模式（同一声明共 3 个绑定）。"}
+{"id":"chunk-p21mddyh.js#PX","doc":"parseNameWithRef：解析 “名字 [ref]” 形式的地址。"}
+{"id":"chunk-p21mddyh.js#e0e","doc":"formatNameWithRef：拼成 “名字 [ref]”。"}
+{"id":"chunk-p21mddyh.js#Bbo","doc":"describeLocationWithRemoteControl：远程位置补 “(Remote Control)”。"}
+{"id":"chunk-p21mddyh.js#kxr","doc":"findSessionByName：按名字或规范名查找会话。"}
+{"id":"chunk-p21mddyh.js#qze","doc":"addressableSessionTitle：可作为地址的会话标题。"}
+{"id":"chunk-p21mddyh.js#BFn","doc":"plainSessionName：普通（非保留、非地址形式）会话名。"}
+{"id":"chunk-p21mddyh.js#Arn","doc":"looksLikeAddress：名字像地址（任一变体）。"}
+{"id":"chunk-p21mddyh.js#jFn","doc":"stableSessionKey：会话的稳定 id 或 id。"}
+{"id":"chunk-p21mddyh.js#wCs","doc":"stableAddressWhenEnabled：稳定地址开启时用 sid: 形式。"}
+{"id":"chunk-p21mddyh.js#ECs","doc":"isSessionAddressUnder：地址组里是否含该会话地址。"}
+{"id":"chunk-p21mddyh.js#Xht","doc":"addressRef：取地址的前缀 ref。"}
+{"id":"chunk-p21mddyh.js#Crn","doc":"bridgeSessionIds：记录中出现的桥接会话 id。"}
+{"id":"chunk-7avm5fga.js#fjt","doc":"quoteTitleForBackgroundNotice：引号包裹的截断标题。"}
+{"id":"chunk-h13zwtby.js#lGt","doc":"noModelPin：不改变模型的占位结果。"}
+{"id":"chunk-h13zwtby.js#dGt","doc":"noopModelPinSubscriber：空实现的模型固定订阅者。"}
+{"id":"chunk-h13zwtby.js#jfn","doc":"recordModelPinSwitch：记录模型固定切换。"}
+{"id":"chunk-h13zwtby.js#Wfn","doc":"switchSessionModelPin：切换会话的模型固定。"}
+{"id":"chunk-h13zwtby.js#_3","doc":"noopModelPinReset：空实现的模型固定重置。"}
+{"id":"chunk-5xgkngpb.js#GUo","doc":"notificationKindLabels：排队通知种类的说明文案。"}
+{"id":"chunk-0eqe9we3.js#lDi","doc":"sessionClock：根会话的时钟。"}
+{"id":"chunk-p21mddyh.js#xNt","doc":"neutralizePeerTags：中和文本里的对端标签。"}
+{"id":"chunk-p21mddyh.js#Nbo","doc":"peerTagOpenerOffsets：对端标签的起始偏移。"}
+{"id":"chunk-p21mddyh.js#xX","doc":"neutralizeInboundTags：中和入站消息标签。"}
+{"id":"chunk-p21mddyh.js#q2i","doc":"inboundTagOpenerOffsets：入站标签的起始偏移。"}
+{"id":"chunk-p21mddyh.js#PNt","doc":"neutralizeTextForAgent：按需中和文本（JSON 单独处理）。"}
+{"id":"chunk-p21mddyh.js#INt","doc":"normalizeAgentMessageBody：规范化 agent 消息正文。"}
+{"id":"chunk-p21mddyh.js#W","doc":"AUTH_MESSAGE_TYPE：认证消息类型名；PEER_KEY_FILE_RE：对端密钥文件名格式；PEER_KEY_TMP_FILE_RE：对端密钥临时文件名格式（同一声明共 6 个绑定）。"}
+{"id":"chunk-p21mddyh.js#wxr","doc":"isWindowsPlatform：是否 Windows。"}
+{"id":"chunk-p21mddyh.js#Y2i","doc":"createPeerTokens：生成对端与子令牌。"}
+{"id":"chunk-p21mddyh.js#Exr","doc":"MAX_PEER_NOTICE_LENGTH：对端提示长度上限。"}
+{"id":"chunk-y28agbhb.js#XFn","doc":"saneEpochMsOrUndefined：合理时间戳否则 undefined。"}
+{"id":"chunk-2snqx25v.js#h5n","doc":"currentRestoreSource：当前来源会话的恢复来源。"}
+{"id":"chunk-xpe0pbqz.js#pEt","doc":"markSessionRestored：标记会话已恢复。"}
+{"id":"chunk-xpe0pbqz.js#qG","doc":"isSessionRestored：会话是否已恢复。"}
+{"id":"chunk-v0jacdy4.js#LFe","doc":"STARTUP_CWD_REALPATH：启动时解析出的 cwd。"}
+{"id":"chunk-98dmqnmq.js#Y3n","doc":"sessionScopedMapsSlot：按会话根保存的映射表。"}
+{"id":"chunk-9ys74nhz.js#p","doc":"NON_TERMINAL_ENTRYPOINTS：非终端入口点集合。"}
+{"id":"chunk-5xgkngpb.js#T5t","doc":"takePendingHookSessionTitle：取待定的钩子会话标题。"}
+{"id":"chunk-5xgkngpb.js#$pi","doc":"overtakeSessionStart：接管会话启动上下文。"}
+{"id":"chunk-v7p9necf.js#c_r","doc":"MAX_PENDING_ACTION_ARGS：待决动作参数最多保留几项。"}
+{"id":"chunk-v7p9necf.js#COn","doc":"pendingActionRows：待决动作的展示行。"}
+{"id":"chunk-v7p9necf.js#zao","doc":"SESSION_STATE_IDLE_TTL_MS：会话状态空闲有效期。"}
+{"id":"chunk-5xgkngpb.js#_ai","doc":"clearLastIngressUuid：清空按会话记录的最后入站 uuid。"}
+{"id":"chunk-5xgkngpb.js#bai","doc":"isUnavailableStoreError：存储不可用错误（含 cause 链）。"}
+{"id":"chunk-5xgkngpb.js#n4t","doc":"isSessionFileAt：该路径是否为指定会话的转录文件。"}
+{"id":"chunk-5xgkngpb.js#Nwn","doc":"storagePort：取存储端口。"}
+{"id":"chunk-5xgkngpb.js#Jho","doc":"REMOTE_TASK_ID_PATTERN：远程任务 id 格式；REMOTE_TASK_ENTRY_SCHEMA：远程任务条目 schema（同一声明共 2 个绑定）。"}
+{"id":"chunk-5xgkngpb.js#_u","doc":"currentTranscriptStore：当前转录存储。"}
+{"id":"chunk-5xgkngpb.js#v4o","doc":"MAX_FIRST_MESSAGE_CHARS：首条消息截断长度（200）；MAX_SESSION_DESCRIPTORS：会话描述条数上限（60）；COMMAND_NAME_RE：transcript 里的斜杠命令名（同一声明共 13 个绑定）。"}
+{"id":"chunk-807vb177.js#f","doc":"listTranscriptEntries：分页列出转录条目（qzv7 备份实现）。"}
+{"id":"chunk-xgvz6tdn.js#F0","doc":"worktreeFromProgress：进度消息里的 worktree（磁盘模式下保留）。"}
+{"id":"chunk-h7aqxg1r.js#Knr","doc":"isArtifactShareSession：开启了 Artifact 共享且有会话表面。"}
+{"id":"chunk-yj845692.js#sz","doc":"persistBridgeArtifactFrames：持久化 bridge 产物 frame。"}
+{"id":"chunk-v4ach9rb.js#Zdo","doc":"sessionTimeZone：会话时区。"}
+{"id":"chunk-v4ach9rb.js#CSr","doc":"effectiveSessionTimeZone：诊断作用域外的有效时区。"}
+{"id":"chunk-v4ach9rb.js#wDn","doc":"sessionDateCellSlot：按会话根保存的日期单元。"}
+{"id":"chunk-v4ach9rb.js#_hs","doc":"sessionDateCell：某会话的日期单元。"}
+{"id":"chunk-v4ach9rb.js#UDi","doc":"currentSessionDate：当前会话日期。"}
+{"id":"chunk-zhnr3erp.js#jZs","doc":"firstHumanTurn：首个用户回合。"}
+{"id":"chunk-zhnr3erp.js#skt","doc":"requestAndPickSessionTitle：请求并挑选会话标题。"}
+{"id":"chunk-5ythzcas.js#A","doc":"SESSION_URL_HASH_SALT：会话 URL 哈希盐。"}
+{"id":"chunk-5ythzcas.js#JUt","doc":"hashSessionAddress：会话地址哈希。"}
+{"id":"chunk-5ythzcas.js#oan","doc":"remoteSessionUrlId：远程会话的 URL id。"}
+{"id":"chunk-01b7fqej.js#rMo","doc":"settingsChangedSignal：设置变更信号。"}
+{"id":"chunk-sq9ffh11.js#is","doc":"commandSyncNameState：按宿主保存的斜杠命令名单状态。"}
+{"id":"chunk-sq9ffh11.js#C1","doc":"mergedCommandNames：合并后的斜杠命令名单。"}
+{"id":"chunk-sq9ffh11.js#cr","doc":"invalidateCommandNames：使命令名单缓存失效。"}
+{"id":"chunk-sq9ffh11.js#wBn","doc":"pluginCommandBase：插件命令名前缀。"}
+{"id":"chunk-sq9ffh11.js#xqi","doc":"setPluginCommandBase：设置插件命令名前缀。"}
+{"id":"chunk-sq9ffh11.js#Pqi","doc":"clearPluginCommandBase：清空插件命令名前缀。"}
+{"id":"chunk-sq9ffh11.js#Iqi","doc":"commandKindOf：取命令来源分类（prompt 视为 skill）。"}
+{"id":"chunk-mdjhvrs8.js#g9","doc":"effectiveEnvSnapshot：预设置环境与非项目环境合并后的快照。"}
+{"id":"chunk-z20c443b.js#Zu","doc":"matchesManagedKey_2：上者的别名。"}
+{"id":"chunk-z20c443b.js#mEo","doc":"markManagedKeyGroup：记录托管键分组已加载。"}
+{"id":"chunk-z20c443b.js#dOr","doc":"loadedManagedKeyGroupsList：已加载的托管键分组列表。"}
+{"id":"chunk-z20c443b.js#gp","doc":"probeWritabilityAsync：异步探测路径可写。"}
+{"id":"chunk-z20c443b.js#Hs","doc":"probeWritabilitySync：同步探测路径可写。"}
+{"id":"chunk-z20c443b.js#Cp","doc":"managedPathCache：托管路径缓存。"}
+{"id":"chunk-5fn9rb8r.js#Zt","doc":"BUILTIN_PLUGIN_TIER：内置插件层级标记；PLUGIN_ORDER_KEYS：插件顺序设置键（同一声明共 2 个绑定）。"}
+{"id":"chunk-5fn9rb8r.js#Ni","doc":"isPlainRecord：非 null 非数组的对象。"}
+{"id":"chunk-5fn9rb8r.js#se","doc":"mdmLoader：当前宿主的 MDM 加载器。"}
+{"id":"chunk-5fn9rb8r.js#S2e","doc":"ensureMdmLoaded：等待 MDM 加载完成。"}
+{"id":"chunk-5fn9rb8r.js#Ise","doc":"mdmResult：MDM 加载结果。"}
+{"id":"chunk-5fn9rb8r.js#xPr","doc":"withAskedWhere：已询问过托管设置时保留提问位置。"}
+{"id":"chunk-5fn9rb8r.js#ZUn","doc":"setMdmReadOutcomes：记录 MDM 读取结果。"}
+{"id":"chunk-5fn9rb8r.js#oCe","doc":"hasMdmResult：是否已有 MDM 结果。"}
+{"id":"chunk-5fn9rb8r.js#eBn","doc":"isMdmLoadInFlight：MDM 加载进行中。"}
+{"id":"chunk-z20c443b.js#O0e","doc":"asArray：标量转数组。"}
+{"id":"chunk-z20c443b.js#I2e","doc":"hasManagedOrCoworkSurface：有托管设置或 Cowork 界面。"}
+{"id":"chunk-5fn9rb8r.js#Uxs","doc":"forgetHostEnvWrites：忘掉某环境变量的宿主写入记录。"}
+{"id":"chunk-5fn9rb8r.js#mon","doc":"hostWrittenEnvNames：宿主写过的环境变量名。"}
+{"id":"chunk-5fn9rb8r.js#tqi","doc":"withEnvTake：临时替换取值函数并恢复。"}
+{"id":"chunk-5fn9rb8r.js#nqi","doc":"setManagedOverrideProvider：设置托管覆盖提供者。"}
+{"id":"chunk-5fn9rb8r.js#bee","doc":"withHostEnvRestored：在恢复宿主环境后执行。"}
+{"id":"chunk-z20c443b.js#L4i","doc":"isEnvSettingOn：环境变量形式的设置是否开启。"}
+{"id":"chunk-z20c443b.js#Qc","doc":"envFlagTruthyOrFalsy：按真/假变量集合判断。"}
+{"id":"chunk-z20c443b.js#jIr","doc":"isWslEnvironment：是否 WSL 环境。"}
+{"id":"chunk-z20c443b.js#tOr","doc":"LEADING_INVISIBLE_TEXT_RE：开头的不可见字符。"}
+{"id":"chunk-z20c443b.js#eu","doc":"cleanOptionalText：清洗可选文本（空白为 undefined）。"}
+{"id":"chunk-5fn9rb8r.js#Ose","doc":"wslInheritsSettings：WSL 是否继承 Windows 设置。"}
+{"id":"chunk-5fn9rb8r.js#C0e","doc":"replaceMdmSetting：替换 MDM 设置。"}
+{"id":"chunk-5fn9rb8r.js#w2e","doc":"readMdmSnapshot：读取 MDM 设置快照。"}
+{"id":"chunk-4cd7tk6d.js#Rqi","doc":"resetCoworkCloudCache：重置 cowork 云缓存。"}
+{"id":"chunk-z20c443b.js#K$t","doc":"normalizeCarveOutFlag：覆盖开关归一（undefined/false 保留）。"}
+{"id":"chunk-z20c443b.js#Zr","doc":"permissionRuleSchema：权限规则 schema；allowPermissionRuleSchema：allow 类权限规则 schema（同一声明共 2 个绑定）。"}
+{"id":"chunk-z20c443b.js#Aon","doc":"signatureHeaderValue：取 x-claude-code-signature 头值。"}
+{"id":"chunk-z20c443b.js#cIs","doc":"validSignatureHeader：合法签名头值。"}
+{"id":"chunk-z20c443b.js#iIr","doc":"maybePersistSignature：有改动时保存或删除签名文件。"}
+{"id":"chunk-z20c443b.js#MBn","doc":"removeSignatureFiles：删除签名文件与收件时间文件。"}
+{"id":"chunk-z20c443b.js#aIr","doc":"clearSignatureIfStale：文件不存在且需清理时删除签名。"}
+{"id":"chunk-z20c443b.js#Zqi","doc":"readSignatureAsync：异步读签名文件。"}
+{"id":"chunk-z20c443b.js#z$t","doc":"cacheTrustLabel：缓存信任状态标签。"}
+{"id":"chunk-5fn9rb8r.js#ko","doc":"SECRET_SEGMENT_REGEX：形似机密的段名。"}
+{"id":"chunk-5fn9rb8r.js#sqi","doc":"GITHUB_TOKEN_ENV_NAMES：GitHub 令牌环境变量；SECRET_ENV_NAME_PREFIXES：机密环境变量的前缀（同一声明共 2 个绑定）。"}
+{"id":"chunk-5fn9rb8r.js#Yo","doc":"secretEnvGlobs：机密环境变量的 glob 列表。"}
+{"id":"chunk-5fn9rb8r.js#ns","doc":"UNSAFE_ENV_PREFIXES：需要去除的危险环境变量前缀（同一声明共 8 个绑定）。"}
+{"id":"chunk-5fn9rb8r.js#Wi","doc":"POWERSHELL_NOT_FOUND_MESSAGE：找不到 PowerShell 的说明；PS_MODULE_PATH_ENV：PowerShell 模块路径环境变量（同一声明共 2 个绑定）。"}
+{"id":"chunk-5fn9rb8r.js#Hn","doc":"PACKAGE_INDEX_ENV_VARS：包索引环境变量的别名表。"}
+{"id":"chunk-5fn9rb8r.js#Bxs","doc":"hasAnyIndexEnv：是否设置了任一索引环境变量。"}
+{"id":"chunk-5fn9rb8r.js#rqi","doc":"sanitizedIndexEnvs：清洗后的索引环境变量。"}
+{"id":"chunk-5fn9rb8r.js#Ce","doc":"sanitizedEnvCache：清洗后环境的缓存。"}
+{"id":"chunk-5fn9rb8r.js#oqi","doc":"clearSanitizedEnvCache：清空清洗环境缓存。"}
+{"id":"chunk-5fn9rb8r.js#Rgt","doc":"CREDENTIAL_SCRUB_VARS_WITH_INPUT：凭证变量及其 INPUT_ 前缀形式。"}
+{"id":"chunk-5fn9rb8r.js#Zue","doc":"envVarToUpperSnake：变量名转大写下划线。"}
+{"id":"chunk-5fn9rb8r.js#xr","doc":"helperPlatformFamily：helper 平台归类（win32/posix）。"}
+{"id":"chunk-5fn9rb8r.js#Er","doc":"clearRemotePayloadWarnings：清空远程载荷相关警告。"}
+{"id":"chunk-5fn9rb8r.js#hr","doc":"clearAllRemoteWarnings：清空全部远程警告。"}
+{"id":"chunk-5fn9rb8r.js#kt","doc":"clearHelperRefreshWarning：清空 helper 刷新失败警告。"}
+{"id":"chunk-5fn9rb8r.js#yr","doc":"NO_PLATFORM_ENTRY_TEXT：没有当前平台条目的说明。"}
+{"id":"chunk-5fn9rb8r.js#cqi","doc":"hasStaticPayload：是否有静态载荷。"}
+{"id":"chunk-5fn9rb8r.js#Ze","doc":"withholdUnverifiedCacheKeys：未验证缓存时扣留键。"}
+{"id":"chunk-5fn9rb8r.js#Lt","doc":"mergesOutputBehavior：远程输出是否参与合并。"}
+{"id":"chunk-5fn9rb8r.js#ys","doc":"remoteHelperCommand：按平台选出的远程 policy helper 命令。"}
+{"id":"chunk-5fn9rb8r.js#Qe","doc":"RemoteHelperError：远程 helper 错误类。"}
+{"id":"chunk-5fn9rb8r.js#Cr","doc":"managedSettingsFromRemote：远程下发的托管设置。"}
+{"id":"chunk-5fn9rb8r.js#DPr","doc":"remoteClaudeMd：远程下发的 CLAUDE.md。"}
+{"id":"chunk-5fn9rb8r.js#uqi","doc":"remoteAppendSystemPrompt：远程下发的追加系统提示。"}
+{"id":"chunk-5fn9rb8r.js#efe","doc":"hasRemoteHelperState：是否已有远程 helper 状态。"}
+{"id":"chunk-5fn9rb8r.js#P$t","doc":"hasHelperPassInFlight：是否有 helper 轮次进行中。"}
+{"id":"chunk-5fn9rb8r.js#fqi","doc":"releaseLatchWhenTickSettles：是否在 tick 结算后释放锁存。"}
+{"id":"chunk-5fn9rb8r.js#pqi","doc":"subscribeHelperPassSettled：订阅 helper 轮次结算。"}
+{"id":"chunk-5fn9rb8r.js#mqi","doc":"helperInitAttempted：是否尝试过初始化 helper。"}
+{"id":"chunk-5fn9rb8r.js#wr","doc":"armedFromRemote：是否由远程武装。"}
+{"id":"chunk-5fn9rb8r.js#Pgt","doc":"armedFromUserWritableBase：由用户可写基座武装。"}
+{"id":"chunk-5fn9rb8r.js#Lr","doc":"mergesRemoteOutput：远程输出参与合并。"}
+{"id":"chunk-5fn9rb8r.js#hqi","doc":"notifyOrganizationAsking：通知组织询问状态（不作答）。"}
+{"id":"chunk-5fn9rb8r.js#gqi","doc":"notifyOrganizationAskingForced：通知组织询问状态（强制）。"}
+{"id":"chunk-5fn9rb8r.js#qe","doc":"retireReason：退役原因（停止询问或仍在询问）。"}
+{"id":"chunk-5fn9rb8r.js#ewo","doc":"applyRemotePolicyMidSession：会话中应用远程策略。"}
+{"id":"chunk-5fn9rb8r.js#bqi","doc":"helperConfigPath：helper 配置文件路径。"}
+{"id":"chunk-5fn9rb8r.js#Sqi","doc":"retiredHelperPaths：已退役的 helper 路径。"}
+{"id":"chunk-5fn9rb8r.js#Eqi","doc":"isServingDefault：正在服务 “default” helper。"}
+{"id":"chunk-5fn9rb8r.js#I$t","doc":"helperSelectionWarnings：合并选择与状态的警告。"}
+{"id":"chunk-5fn9rb8r.js#Is","doc":"resetRemoteHelperState：重置远程 helper 状态。"}
+{"id":"chunk-5fn9rb8r.js#Mr","doc":"helperOutputOverride：helper 输出覆盖值。"}
+{"id":"chunk-5fn9rb8r.js#vqi","doc":"setHelperOutputOverride：设置 helper 输出覆盖值。"}
+{"id":"chunk-5fn9rb8r.js#Qxs","doc":"POLICY_HELPER_TAG：policyHelper 的错误标签。"}
+{"id":"chunk-5fn9rb8r.js#Ee","doc":"invalidatePolicyLayer：使策略层失效。"}
+{"id":"chunk-5fn9rb8r.js#R","doc":"policyHelperRunner：policyHelper 单例运行器；policyHelperRunnerAlias：运行器的应答缓存；FILE_POLICY_TIERS：文件类策略层级（同一声明共 3 个绑定）。"}
+{"id":"chunk-5fn9rb8r.js#dqi","doc":"markStartsNoSession：标记本次不启动会话。"}
+{"id":"chunk-5fn9rb8r.js#pr","doc":"helperFailureBlocks：按 onFailure 判断是否阻塞。"}
+{"id":"chunk-5fn9rb8r.js#rt","doc":"truncateWarning：截断警告文本。"}
+{"id":"chunk-5fn9rb8r.js#Dt","doc":"REMOTE_HELPER_PAYLOAD_SKIPPED_PREFIX：远程 helper 载荷被跳过的前缀。"}
+{"id":"chunk-h61dq9nz.js#lCo","doc":"armHelperGateExit：武装 helper 闸门退出定时器。"}
+{"id":"chunk-z20c443b.js#hg","doc":"explainedPolicyChange：说明策略变化。"}
+{"id":"chunk-z20c443b.js#Sn","doc":"trimmedPolicyTier：裁剪后的策略层。"}
+{"id":"chunk-5kksf9ax.js#Mkt","doc":"settingsSourceLabel：设置来源的展示标签。"}
+{"id":"chunk-7m8srhy8.js#Lyn","doc":"blockingLocalSettingsErrors：会阻止操作的本地设置错误。"}
+{"id":"chunk-n0hwmqka.js#HY","doc":"stripBomAndCarriageReturns：去掉 BOM 与裸回车。"}
+{"id":"chunk-n0hwmqka.js#Y","doc":"settingsSourceForPathByPriority：按优先级找路径对应的设置源。"}
+{"id":"chunk-n0hwmqka.js#bcr","doc":"settingsWriteGateText：云端未应用或已暂存的说明。"}
+{"id":"chunk-n0hwmqka.js#te","doc":"MAX_DIFF_CONTEXT_BYTES：diff 上下文读取字节上限；MAX_SETTINGS_FILE_BYTES：设置文件体积上限；DIFF_CONTEXT_LINES_BEFORE：diff 上下文前几行（同一声明共 4 个绑定）。"}
+{"id":"chunk-5fn9rb8r.js#nwo","doc":"seedProjectSettings：预热项目设置读取。"}
+{"id":"chunk-z20c443b.js#tn","doc":"safeSet_2：safeSet 的别名。"}
+{"id":"chunk-z20c443b.js#nn","doc":"safeGet_2：lodash safeGet 的别名。"}
+{"id":"chunk-z20c443b.js#rd","doc":"mergeDeep_2：mergeDeep 的别名。"}
+{"id":"chunk-z20c443b.js#gwo","doc":"mergeKeys：eS 的别名。"}
+{"id":"chunk-z20c443b.js#j$t","doc":"isIterateeCall_2：lodash isIterateeCall 的别名。"}
+{"id":"chunk-z20c443b.js#F_","doc":"mergeWithAssigner：自定义合并器；mergeWithAssigner_2：mergeWithAssigner 的别名（同一声明共 2 个绑定）。"}
+{"id":"chunk-z20c443b.js#vwo","doc":"isInteractiveSettingsHost：可交互且非后台托管会话。"}
+{"id":"chunk-z20c443b.js#Wqi","doc":"registerServedSettingsReader：登记服务端设置读取器。"}
+{"id":"chunk-z20c443b.js#kwo","doc":"isSettingsGateAnswered：设置闸门已结算或已答复。"}
+{"id":"chunk-z20c443b.js#Gqi","doc":"latchSettingsGateSettled：记录设置闸门已结算。"}
+{"id":"chunk-z20c443b.js#zqi","doc":"isSteadyMarshmallowOn：开关 tengu_steady_marshmallow。"}
+{"id":"chunk-z20c443b.js#Kqi","doc":"isValidatedCloverOn：开关 tengu_validated_clover。"}
+{"id":"chunk-z20c443b.js#Vqi","doc":"isTranquilCrescentOn：开关 tengu_tranquil_crescent。"}
+{"id":"chunk-z20c443b.js#qqi","doc":"isSteadySunbeamOn：开关 tengu_steady_sunbeam。"}
+{"id":"chunk-z20c443b.js#Yqi","doc":"isHashedLarkOn：开关 tengu_hashed_lark。"}
+{"id":"chunk-z20c443b.js#Xqi","doc":"isCalmEagleOn：开关 tengu_calm_eagle。"}
+{"id":"chunk-z20c443b.js#Jqi","doc":"isAsyncSnowglobeOn：开关 tengu_async_snowglobe。"}
+{"id":"chunk-z20c443b.js#Qqi","doc":"isHumbleFlurryOn：开关 tengu_humble_flurry。"}
+{"id":"chunk-5fn9rb8r.js#d6","doc":"noUncachedRoot：无缓存根（占位）。"}
+{"id":"chunk-5fn9rb8r.js#EH","doc":"storageRootFor：解析路径对应的存储根。"}
+{"id":"chunk-5fn9rb8r.js#dC","doc":"uncachedStorageRootFor：不缓存的存储根解析。"}
+{"id":"chunk-5fn9rb8r.js#XUn","doc":"nearestNonHomeRoot：最近的非主目录根。"}
+{"id":"chunk-5fn9rb8r.js#YVi","doc":"storageRootsFor：路径的所有存储根。"}
+{"id":"chunk-hjswk319.js#up","doc":"AGENT_FRONTMATTER_KEYS：代理前置声明可用的键。"}
+{"id":"chunk-7jxyna5q.js#rb","doc":"anyPairMatches：任一两两匹配。"}
+{"id":"chunk-z20c443b.js#Won","doc":"POLICY_HELPER_ON_FAILURE：policyHelper 失败处理取值；POLICY_HELPER_LOG_LEVELS：policyHelper 日志级别取值；policyHelperScriptRefSchema：policyHelper 脚本引用 schema（同一声明共 3 个绑定）。"}
+{"id":"chunk-z20c443b.js#C4i","doc":"tipEntrySchema：提示条目 schema；skillsSettingsSchema：技能设置 schema；agentsSettingsSchema：代理设置 schema（同一声明共 11 个绑定）。"}
+{"id":"chunk-z20c443b.js#VIs","doc":"looksLikeUncPath：反斜杠形式像 UNC 路径。"}
+{"id":"chunk-z20c443b.js#e1n","doc":"isNetworkOrMacSpecialPath：网络路径或 macOS 特殊路径。"}
+{"id":"chunk-z20c443b.js#qIs","doc":"isKernelPseudoPath：/proc、/dev/fd 等内核伪路径。"}
+{"id":"chunk-z20c443b.js#XIs","doc":"POLICY_HELPER_EXECUTABLE_RE：policyHelper 可执行文件后缀。"}
+{"id":"chunk-z20c443b.js#JIs","doc":"isPowerShellScript：.ps1 脚本。"}
+{"id":"chunk-z20c443b.js#QIs","doc":"hasPowerShellGlobChars：.ps1 里含 glob 字符。"}
+{"id":"chunk-z20c443b.js#us","doc":"platformSpellings：平台名的等价写法（wsl 兼容 linux）。"}
+{"id":"chunk-z20c443b.js#Zb","doc":"skillOverridesSchema：技能覆盖 schema。"}
+{"id":"chunk-z20c443b.js#dc","doc":"configVariantSchema：配置变体 schema；configVariantUnionSchema：配置变体联合 schema（同一声明共 2 个绑定）。"}
+{"id":"chunk-z20c443b.js#eE","doc":"warnedSettingsKeys：已警告过的设置键；perKeySettingsSchema：逐键惰性的设置 schema；wholeSettingsSchema：整份设置 schema（同一声明共 3 个绑定）。"}
+{"id":"chunk-z20c443b.js#P4i","doc":"isWarnedSettingsKey：该键出现过警告。"}
+{"id":"chunk-z20c443b.js#gs","doc":"RESTRICTIVE_TOP_LEVEL_SETTINGS：受限的顶层设置键（同一声明共 2 个绑定）。"}
+{"id":"chunk-z20c443b.js#Zwo","doc":"UNREADABLE_SETTING_MARKER：设置不可读的占位文本。"}
+{"id":"chunk-z20c443b.js#$t","doc":"RESTRICTIVE_NESTED_SETTINGS：受限的嵌套设置键；restrictiveNestedSettingsMap：受限嵌套设置映射（同一声明共 3 个绑定）。"}
+{"id":"chunk-z20c443b.js#Eo","doc":"isRestrictiveNestedPath：路径属于受限嵌套设置。"}
+{"id":"chunk-z20c443b.js#m1n","doc":"isBlockingSettingsIssue：是否阻断的设置问题。"}
+{"id":"chunk-z20c443b.js#ct","doc":"SETTINGS_TIP_RULES：设置校验提示规则（同一声明共 2 个绑定）。"}

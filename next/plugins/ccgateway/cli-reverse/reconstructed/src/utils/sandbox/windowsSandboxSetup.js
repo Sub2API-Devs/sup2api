@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Windows 沙箱配置
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4aaff5r7.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8zhpyed2.js (12)
  * attribution: placement 12
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -43,13 +43,13 @@ import { seclogonStatusMessage } from "./windowsSandboxStatus.js";
 import { plural } from "../stringUtils.js";
 import { errorMessage } from "../errors.js";
 
-//@ chunk-4aaff5r7.js:684-746 placement
+//@ chunk-8zhpyed2.js:684-746 placement
 var windowsEgressProbeSchema = DoctorLazy(() =>
   objectSchema({
     egress_probe: stringSchema().refine((value) => value !== "not-run"),
   }),
 );
-//@ chunk-4aaff5r7.js:746-1579 placement
+//@ chunk-8zhpyed2.js:746-1579 placement
 async function runSandboxSetupHelper(timeoutMs, allowLoopback) {
   let { exe, prependArgs } = rgRunner();
   let timeout = Math.floor(timeoutMs);
@@ -95,10 +95,10 @@ async function runSandboxSetupHelper(timeoutMs, allowLoopback) {
     seconds: max_2,
   };
 }
-//@ chunk-4aaff5r7.js:1579-1719 placement
+//@ chunk-8zhpyed2.js:1579-1719 placement
 var WINDOWS_SANDBOX_SETUP_NOTICE =
   "Setting up the Windows sandbox. Approve the administrator prompt if Windows shows one. After that, set-up can take a few minutes.";
-//@ chunk-4aaff5r7.js:1719-1828 placement
+//@ chunk-8zhpyed2.js:1719-1828 placement
 class SingleFlight {
   inFlight = undefined;
   run(run) {
@@ -108,13 +108,13 @@ class SingleFlight {
     return this.inFlight;
   }
 }
-//@ chunk-4aaff5r7.js:1828-1851 placement
+//@ chunk-8zhpyed2.js:1828-1851 placement
 var windowsSetupSingleFlight = new HostScoped(() => new SingleFlight());
-//@ chunk-4aaff5r7.js:1851-1913 placement
+//@ chunk-8zhpyed2.js:1851-1913 placement
 function setupWindowsSandboxOnce(host, onMessage = () => {}, deadline = 1 / 0) {
   return windowsSetupSingleFlight.of(host).run(() => setupWindowsSandbox(onMessage, deadline));
 }
-//@ chunk-4aaff5r7.js:1913-11343 placement
+//@ chunk-8zhpyed2.js:1913-11343 placement
 /**
  * 配置 Windows 沙箱：检查状态、运行管理员辅助程序、授予执行文件读取权限，汇总结果。
  */
@@ -382,10 +382,10 @@ async function setupWindowsSandbox(onMessage, deadline) {
     };
   }
 }
-//@ chunk-4aaff5r7.js:11343-11480 placement
+//@ chunk-8zhpyed2.js:11343-11480 placement
 var SHARED_SANDBOX_ACCOUNT_NOTE =
   "The sandbox account is one per machine: where other people use this machine, their sandboxed commands can read your profile too.";
-//@ chunk-4aaff5r7.js:11480-12197 placement
+//@ chunk-8zhpyed2.js:11480-12197 placement
 function profileReadableNote(profileGrant) {
   if (profileGrant === undefined) return "";
   if (!profileGrant.applied)
@@ -393,12 +393,12 @@ function profileReadableNote(profileGrant) {
   let { profile, granted, denied, notGranted } = profileGrant.result;
   return ` Sandboxed commands can now read your user profile (${profile}) except credential stores: ${granted} folders made readable, ${denied} excluded${notGranted.length > 0 ? `, ${notGranted.length} left unreadable because their permissions could not be changed` : ""}. That includes package-manager configuration that can hold feed tokens (.npmrc, pip.ini, NuGet.Config, Maven settings.xml, gradle.properties, .gitconfig). ${SHARED_SANDBOX_ACCOUNT_NOTE} ${formatProfileForgetHint()}`;
 }
-//@ chunk-4aaff5r7.js:12197-12471 placement
+//@ chunk-8zhpyed2.js:12197-12471 placement
 function sandboxSetupSummary(allowLoopback, notes) {
   let restartMode = SandboxManager.untilRestart();
   return `${notes.map((note) => ` ${note}`).join("")}${restartMode === undefined ? "" : ` This session started with local connections ${allowLoopback ? "off" : "on"} and keeps that until it ends, so its sandbox ${restartMode === "refused" ? "cannot run" : "is off"} now. ${restartMode === "refused" ? REFUSED_UNTIL_RESTART : WITHOUT_SANDBOX_UNTIL_RESTART}.`}`;
 }
-//@ chunk-4aaff5r7.js:12471-13364 placement
+//@ chunk-8zhpyed2.js:12471-13364 placement
 async function grantSandboxExecRead(user) {
   let grant = await grantExecutableReadToSandboxGroup({
     exePath: process.execPath,
@@ -437,7 +437,7 @@ async function grantSandboxExecRead(user) {
   }
   return null;
 }
-//@ chunk-4aaff5r7.js:13364-13493 placement
+//@ chunk-8zhpyed2.js:13364-13493 placement
 function getTlsRestartHint() {
   return willSandboxTlsTerminate() && SandboxManager.needsRestartForTlsTerminate()
     ? " Restart Claude Code to enable TLS inspection for this session."

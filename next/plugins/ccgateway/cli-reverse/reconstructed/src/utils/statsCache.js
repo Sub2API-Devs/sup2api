@@ -3,9 +3,9 @@
  *
  * /stats 缓存 <配置目录>/stats-cache.json 的读取、合并与原子写入。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/statsCache.ts
- * pieces: chunk-9h8dr0qb.js (9), chunk-ae5g0zb5.js (1)
+ * pieces: chunk-j6tt9nsa.js (9), chunk-mhn0amzz.js (1)
  * attribution: fingerprint 6, layout 4
  */
 import { randomBytes } from "crypto";
@@ -14,7 +14,7 @@ import { constants } from "fs";
 import { join } from "path";
 import { READ_LIMITS } from "./fsBoundRead.js";
 import { retryFsOp } from "./atomicPublishWrite.js";
-import { getClaudeConfigDir } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { STORAGE_SPACES } from "./storage/storageSpaces.js";
 import { logForDebugging } from "./debug.js";
 import { formatStorageError } from "./storage/storageErrors.js";
@@ -24,7 +24,7 @@ import { jsonParse, jsonStringify } from "./slowOperations.js";
 import { mergeCacheWithNewStats_2 } from "./stats.js";
 import { errorMessage } from "./errors.js";
 
-//@ chunk-ae5g0zb5.js:76247-76500 fingerprint (2.1.88 match: saveStatsCache, 0.461)
+//@ chunk-mhn0amzz.js:77485-77738 fingerprint (2.1.88 match: saveStatsCache, 0.461)
 async function saveStatsCache(path, content) {
   let tempPath = `${path}.${randomBytes(6).toString("hex")}.tmp`;
   try {
@@ -47,13 +47,13 @@ async function saveStatsCache(path, content) {
     throw error;
   }
 }
-//@ chunk-9h8dr0qb.js:72773-72822 fingerprint (2.1.88 match: STATS_CACHE_FILENAME, 1)
+//@ chunk-j6tt9nsa.js:72732-72781 fingerprint (2.1.88 match: STATS_CACHE_FILENAME, 1)
 var STATS_CACHE_VERSION = 5;
 var MIN_STATS_CACHE_VERSION = 1;
 var DAILY_MODEL_TOKENS_VERSION = 5;
 var STATS_CACHE_JSON = "stats-cache.json";
 var statsCacheWriteLock = null;
-//@ chunk-9h8dr0qb.js:72822-72938 layout
+//@ chunk-j6tt9nsa.js:72781-72897 layout
 async function withStatsCacheLock(fn) {
   while (statsCacheWriteLock) await statsCacheWriteLock;
   let releaseLock;
@@ -67,15 +67,15 @@ async function withStatsCacheLock(fn) {
     releaseLock?.();
   }
 }
-//@ chunk-9h8dr0qb.js:72938-72971 layout
+//@ chunk-j6tt9nsa.js:72897-72930 layout
 /**
  * stats 缓存文件路径 <配置目录>/stats-cache.json。
  */
 function getStatsCachePath() {
   return join(getClaudeConfigDir(), STATS_CACHE_JSON);
 }
-//@ chunk-9h8dr0qb.js:72971-73212 fingerprint (2.1.88 match: getEmptyCache, 0.949)
-function getEmptyCache() {
+//@ chunk-j6tt9nsa.js:72930-73171 layout (2.1.88 match: getEmptyCache, 0.949)
+function getEmptyCache_2() {
   return {
     version: STATS_CACHE_VERSION,
     lastComputedDate: null,
@@ -91,8 +91,8 @@ function getEmptyCache() {
     shotDistribution: {},
   };
 }
-//@ chunk-9h8dr0qb.js:73212-73860 layout (2.1.88 match: getEmptyCache, 0.949)
-function getEmptyCache_2(parsed) {
+//@ chunk-j6tt9nsa.js:73171-73819 fingerprint (2.1.88 match: getEmptyCache, 0.949)
+function getEmptyCache(parsed) {
   if (
     typeof parsed.version !== "number" ||
     parsed.version < MIN_STATS_CACHE_VERSION ||
@@ -121,7 +121,7 @@ function getEmptyCache_2(parsed) {
     shotDistribution: parsed.shotDistribution,
   };
 }
-//@ chunk-9h8dr0qb.js:73860-74741 fingerprint (2.1.88 match: loadStatsCache, 0.809)
+//@ chunk-j6tt9nsa.js:73819-74700 fingerprint (2.1.88 match: loadStatsCache, 0.809)
 /**
  * 读取 /stats 用的缓存 <配置目录>/stats-cache.json（或 storage state/stats-cache），版本不符时重算。
  */
@@ -132,25 +132,25 @@ async function loadStatsCache(storage) {
       let readResult = await storage.read([STORAGE_SPACES.state("stats-cache")]);
       if (!readResult.ok) {
         logForDebugging(`Failed to load stats cache: ${formatStorageError(readResult.error)}`);
-        return getEmptyCache();
+        return getEmptyCache_2();
       }
       if (!readResult.value.items[0].found) {
         logForDebugging("Failed to load stats cache: not found");
-        return getEmptyCache();
+        return getEmptyCache_2();
       }
       text = Buffer.from(readResult.value.items[0].value).toString("utf8");
     } else {
-      if (isDiskless()) return getEmptyCache();
+      if (isDiskless()) return getEmptyCache_2();
       text = await getFileReader().read(getStatsCachePath());
     }
     let parsed = jsonParse(text);
     if (parsed.version !== STATS_CACHE_VERSION) {
-      let migrated = getEmptyCache_2(parsed);
+      let migrated = getEmptyCache(parsed);
       if (!migrated) {
         logForDebugging(
           `Stats cache version ${parsed.version} not migratable (expected ${STATS_CACHE_VERSION}), returning empty cache`,
         );
-        return getEmptyCache();
+        return getEmptyCache_2();
       }
       logForDebugging(`Migrated stats cache from v${parsed.version} to v${STATS_CACHE_VERSION}`);
       let migrated_2 = mergeCacheWithNewStats_2(migrated);
@@ -164,15 +164,15 @@ async function loadStatsCache(storage) {
       typeof parsed.totalMessages !== "number"
     ) {
       logForDebugging("Stats cache has invalid structure, returning empty cache");
-      return getEmptyCache();
+      return getEmptyCache_2();
     }
     return mergeCacheWithNewStats_2(parsed);
   } catch (error) {
     logForDebugging(`Failed to load stats cache: ${errorMessage(error)}`);
-    return getEmptyCache();
+    return getEmptyCache_2();
   }
 }
-//@ chunk-9h8dr0qb.js:74741-75277 layout
+//@ chunk-j6tt9nsa.js:74700-75236 layout
 async function writeStatsCache(cache, storage) {
   try {
     let text = jsonStringify(cache, null, 2);
@@ -201,7 +201,7 @@ async function writeStatsCache(cache, storage) {
     });
   }
 }
-//@ chunk-9h8dr0qb.js:75277-77074 fingerprint (2.1.88 match: mergeCacheWithNewStats, 0.956)
+//@ chunk-j6tt9nsa.js:75236-77033 fingerprint (2.1.88 match: mergeCacheWithNewStats, 0.956)
 function mergeCacheWithNewStats(existingCache, newStats, newLastComputedDate) {
   let dailyActivityMap = new Map();
   for (let day of existingCache.dailyActivity)
@@ -289,7 +289,7 @@ function mergeCacheWithNewStats(existingCache, newStats, newLastComputedDate) {
     hourCounts,
   };
 }
-//@ chunk-9h8dr0qb.js:77074-77179 fingerprint (2.1.88 match: toDateString, 1)
+//@ chunk-j6tt9nsa.js:77033-77138 fingerprint (2.1.88 match: toDateString, 1)
 function toDateString(date) {
   let dateStr = date.toISOString().split("T")[0];
   if (!dateStr) throw Error("Invalid ISO date string");
@@ -297,7 +297,7 @@ function toDateString(date) {
 }
 export {
   toDateString,
-  getEmptyCache,
+  getEmptyCache_2,
   withStatsCacheLock,
   loadStatsCache,
   DAILY_MODEL_TOKENS_VERSION,

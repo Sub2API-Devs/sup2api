@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：不跟随链接的复制与原子写
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-k176arn3.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-n44f9pt7.js (15)
  * attribution: placement 15
  */
 import { constants, createWriteStream } from "fs";
@@ -16,7 +16,7 @@ import { getPlatform } from "../platform.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, getErrnoCode } from "../errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-k176arn3.js:879-1450 placement
+//@ chunk-n44f9pt7.js:1119-1692 placement
 /**
  * 不跟随符号链接地复制文件（O_NOFOLLOW），在 Windows 等不支持时先检查是普通文件。
  */
@@ -60,16 +60,16 @@ async function copyFileNoFollow(sourcePath, targetPath, options) {
     await handle.close();
   }
 }
-//@ chunk-k176arn3.js:1450-1624 placement
+//@ chunk-n44f9pt7.js:1692-1866 placement
 function fileSwappedError(path) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
     `Refusing to copy ${path}: it is no longer a regular file (swapped during the copy).`,
     "plugin copy source swapped for a non-regular file mid-copy",
   );
 }
-//@ chunk-k176arn3.js:1624-1720 placement
+//@ chunk-n44f9pt7.js:1866-1962 placement
 var RETRYABLE_COPY_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-k176arn3.js:1624", () => {
+deferInit("chunk-n44f9pt7.js:1866", () => {
   RETRYABLE_COPY_ERRNOS = new Set([
     "ENOENT",
     "ENOTDIR",
@@ -81,7 +81,7 @@ deferInit("chunk-k176arn3.js:1624", () => {
     "EINVAL",
   ]);
 });
-//@ chunk-k176arn3.js:1720-2277 placement
+//@ chunk-n44f9pt7.js:1962-2542 placement
 /**
  * 原子写文件：在 .cc-writes 临时目录写好再重命名，处理跨设备与瞬时错误。
  */
@@ -107,7 +107,7 @@ async function writeFileAtomically(path, maxBytes, options) {
   }
   try {
     let stats = await handle.stat();
-    if (!stats.isFile() || stats.size > maxBytes) return null;
+    if (!stats.isFile() || stats.size > maxBytes || (options?.oneName && stats.nlink > 1)) return null;
     let { buffer, bytesRead } = await handle.read(Buffer.alloc(maxBytes + 1), 0, maxBytes + 1, 0);
     if (bytesRead > maxBytes) return null;
     return buffer.subarray(0, bytesRead).toString("utf-8");
@@ -117,7 +117,7 @@ async function writeFileAtomically(path, maxBytes, options) {
     await handle.close();
   }
 }
-//@ chunk-k176arn3.js:2277-2414 placement
+//@ chunk-n44f9pt7.js:2542-2679 placement
 async function isSameFilesystem(parentDir, name) {
   let path = join(parentDir, name);
   try {
@@ -128,46 +128,46 @@ async function isSameFilesystem(parentDir, name) {
     throw error;
   }
 }
-//@ chunk-k176arn3.js:2414-2424 placement
+//@ chunk-n44f9pt7.js:2679-2689 placement
 var copyFallbackArmed = false;
-//@ chunk-k176arn3.js:2424-2445 placement
+//@ chunk-n44f9pt7.js:2689-2710 placement
 function markInPlaceWriteForced() {
   copyFallbackArmed = true;
 }
-//@ chunk-k176arn3.js:2445-2469 placement
+//@ chunk-n44f9pt7.js:2710-2734 placement
 function isCopyFallbackArmed() {
   return copyFallbackArmed;
 }
-//@ chunk-k176arn3.js:2469-2492 placement
+//@ chunk-n44f9pt7.js:2734-2757 placement
 function neverCopyFallback() {
   return false;
 }
-//@ chunk-k176arn3.js:2492-2552 placement
+//@ chunk-n44f9pt7.js:2757-2817 placement
 function shouldWriteInPlace({ served }) {
   if (!isCopyFallbackArmed()) return false;
   return served ? false : neverCopyFallback();
 }
-//@ chunk-k176arn3.js:2552-2619 placement
+//@ chunk-n44f9pt7.js:3795-3862 placement
 /**
  * ATOMIC_WRITE_ERRNOS：原子写降级错误码。
  */
 var ATOMIC_WRITE_DIRNAME; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ATOMIC_WRITE_ERRNOS;
-deferInit("chunk-k176arn3.js:2552", () => {
+deferInit("chunk-n44f9pt7.js:3795", () => {
   ATOMIC_WRITE_DIRNAME = ".cc-writes";
   ATOMIC_WRITE_ERRNOS = new Set(["EXDEV", "EPERM", "EEXIST", "EBUSY"]);
 });
-//@ chunk-k176arn3.js:2619-2658 placement
+//@ chunk-n44f9pt7.js:3862-3901 placement
 function isInPlaceWriteDefault() {
   return shouldWriteInPlace({
     served: false,
   });
 }
-//@ chunk-k176arn3.js:2658-2909 placement
+//@ chunk-n44f9pt7.js:3901-4152 placement
 function hardlinkedRefusalText(path, nlink) {
   return `Could not rewrite ${path} in place: this file has other names on disk (it is hard-linked, ${nlink} names in all), and writing it in place would change the file under every one of those names. Remove the extra links, then try again.`;
 }
-//@ chunk-k176arn3.js:2909-3054 placement
+//@ chunk-n44f9pt7.js:4152-4297 placement
 function hardlinkedRefusalError(path, nlink) {
   return Object.assign(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -180,22 +180,22 @@ function hardlinkedRefusalError(path, nlink) {
     },
   );
 }
-//@ chunk-k176arn3.js:3054-3097 placement
+//@ chunk-n44f9pt7.js:4297-4340 placement
 var TRANSIENT_FS_ERRORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-k176arn3.js:3054", () => {
+deferInit("chunk-n44f9pt7.js:4297", () => {
   TRANSIENT_FS_ERRORS = new Set(["EPERM", "EBUSY", "EACCES"]);
 });
 export {
-  ATOMIC_WRITE_DIRNAME,
+  writeFileAtomically,
   ATOMIC_WRITE_ERRNOS,
-  TRANSIENT_FS_ERRORS,
+  isInPlaceWriteDefault,
+  hardlinkedRefusalText,
   isSameFilesystem,
   fileSwappedError,
   copyFileNoFollow,
-  writeFileAtomically,
-  shouldWriteInPlace,
-  isInPlaceWriteDefault,
-  hardlinkedRefusalText,
   markInPlaceWriteForced,
+  ATOMIC_WRITE_DIRNAME,
+  TRANSIENT_FS_ERRORS,
+  shouldWriteInPlace,
   hardlinkedRefusalError,
 };

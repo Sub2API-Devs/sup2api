@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：解析 hooks 设置，返回合法 hooks、无效项与无法加载的守护；剔除无效 hook 条目；守护型事件的无效条目记为无法加载的守护等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-z20c443b.js (20)
  * attribution: placement 20
  */
 import { getPlatform } from "../utils/platform.js";
@@ -16,7 +16,7 @@ import { array } from "../../vendor/zod/v4/classic/schemas.js";
 import { mcpInfoFromString, getMcpPrefix } from "../services/mcp/mcpStringUtils.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:57897-59011 placement
+//@ chunk-z20c443b.js:57955-59069 placement
 /**
  * 检查 hook 命令只用允许的变量展开。
  */
@@ -50,11 +50,11 @@ function checkHookCommandExpansion(command) {
     return "`file` must name a script file, not a directory or an empty path";
   return;
 }
-//@ chunk-dcmhvw5a.js:59011-59084 placement
+//@ chunk-z20c443b.js:59069-59142 placement
 function knownHookTypes() {
   return new Set(HookCommandSchema().options.map((option) => option.shape.type.value));
 }
-//@ chunk-dcmhvw5a.js:59084-59640 placement
+//@ chunk-z20c443b.js:59142-59698 placement
 /**
  * 校验 hook 条目（对象、type 字段、已知类型），返回问题说明。
  */
@@ -96,13 +96,13 @@ function validateHookEntry(entry, eventName) {
     };
   return;
 }
-//@ chunk-dcmhvw5a.js:59640-59754 placement
+//@ chunk-z20c443b.js:59698-59812 placement
 function formatZodIssues(error) {
   return error.issues
     .map((issue) => (issue.path.length > 0 ? `${issue.path.join(".")}: ${issue.message}` : issue.message))
     .join("; ");
 }
-//@ chunk-dcmhvw5a.js:59754-60023 placement
+//@ chunk-z20c443b.js:59812-60081 placement
 /**
  * 值是否像 hooks 匹配项：带 matcher 或 hooks 字段（非空数组，或带 type 的对象）；把事件名当键的对象不算。
  */
@@ -113,7 +113,7 @@ function looksLikeHookMatcher(value) {
   if (Array.isArray(hooks)) return hooks.length > 0;
   return !!hooks && typeof hooks === "object" && ("matcher" in value || typeof hooks.type === "string");
 }
-//@ chunk-dcmhvw5a.js:60023-60480 placement
+//@ chunk-z20c443b.js:60081-60538 placement
 /**
  * 递归判断值里是否含 hooks 定义。
  */
@@ -144,7 +144,7 @@ function containsHooks(
       }),
   );
 }
-//@ chunk-dcmhvw5a.js:60480-60680 placement
+//@ chunk-z20c443b.js:60538-60738 placement
 /**
  * 对象除 hooks 键外是否还含 hooks 定义。
  */
@@ -163,7 +163,7 @@ function hasNestedHooks(value, skippedKeys) {
     )
   );
 }
-//@ chunk-dcmhvw5a.js:60680-60948 placement
+//@ chunk-z20c443b.js:60738-61006 placement
 /**
  * 扫描 hooks 时跳过的键集合：设置中值为映射的键、插件清单中非 hooks 的键（含 experimental），以及空集合别名。
  */
@@ -172,7 +172,7 @@ var OPAQUE_SETTING_KEYS;
 var PLUGIN_NON_HOOK_KEYS;
 var PLUGIN_SKIPPED_KEYS;
 var SETTINGS_SKIPPED_KEYS;
-deferInit("chunk-dcmhvw5a.js:60680", () => {
+deferInit("chunk-z20c443b.js:60738", () => {
   NO_SKIPPED_KEYS = new Set();
   OPAQUE_SETTING_KEYS = new Set([
     "mcpServers",
@@ -189,7 +189,7 @@ deferInit("chunk-dcmhvw5a.js:60680", () => {
   PLUGIN_SKIPPED_KEYS = new Set([...PLUGIN_NON_HOOK_KEYS, "experimental"]);
   SETTINGS_SKIPPED_KEYS = NO_SKIPPED_KEYS;
 });
-//@ chunk-dcmhvw5a.js:60948-61124 placement
+//@ chunk-z20c443b.js:61006-61182 placement
 function hasGuardHooks(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   return Object.entries(value).some(
@@ -200,7 +200,7 @@ function hasGuardHooks(value) {
       !(Array.isArray(value) && value.length === 0),
   );
 }
-//@ chunk-dcmhvw5a.js:61124-61339 placement
+//@ chunk-z20c443b.js:61182-61397 placement
 /**
  * 是否含 PreToolUse/PermissionRequest hooks。
  */
@@ -216,15 +216,15 @@ function hasGuardHooks_2(value) {
       !(Array.isArray(value) && value.length === 0),
   );
 }
-//@ chunk-dcmhvw5a.js:61339-61390 placement
+//@ chunk-z20c443b.js:61397-61448 placement
 /**
  * 守护型 hook 事件（PreToolUse、PermissionRequest）。
  */
 var GUARD_HOOK_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dcmhvw5a.js:61339", () => {
+deferInit("chunk-z20c443b.js:61397", () => {
   GUARD_HOOK_EVENTS = new Set(["PreToolUse", "PermissionRequest"]);
 });
-//@ chunk-dcmhvw5a.js:61390-62508 placement
+//@ chunk-z20c443b.js:61448-62566 placement
 /**
  * 剔除无效 hook 条目；守护型事件的无效条目记为无法加载的守护。
  */
@@ -321,18 +321,18 @@ function stripInvalidHookEntries(entries, eventName) {
         unloadableGuards,
       };
 }
-//@ chunk-dcmhvw5a.js:62508-62533 placement
+//@ chunk-z20c443b.js:62566-62591 placement
 /**
  * hook 校验错误类。
  */
 class HookValidationError extends Error {}
-//@ chunk-dcmhvw5a.js:62533-62724 placement
+//@ chunk-z20c443b.js:62591-62782 placement
 /**
  * 守护型 hook 无法加载时的说明。
  */
 var UNLOADABLE_GUARD_NOTE =
   "a PreToolUse/PermissionRequest hook that cannot be loaded may be what guards the permissions declared beside it, so nothing it sits in is applied until the entry is fixed or removed";
-//@ chunk-dcmhvw5a.js:62724-63819 placement
+//@ chunk-z20c443b.js:62782-63877 placement
 /**
  * 校验 hooks 设置，返回提示与无法加载的守护列表。
  */
@@ -399,7 +399,7 @@ function validateHooksSetting(hooks) {
     unloadableGuards: notes_2,
   };
 }
-//@ chunk-dcmhvw5a.js:63819-65299 placement
+//@ chunk-z20c443b.js:63877-65357 placement
 /**
  * 解析 hooks 设置，返回合法 hooks、无效项与无法加载的守护。
  */
@@ -487,44 +487,44 @@ function parseHooksSetting(value) {
     ),
   };
 }
-//@ chunk-dcmhvw5a.js:65299-65445 placement
+//@ chunk-z20c443b.js:65357-65503 placement
 function describeValueType(value) {
   if (value === null || value === undefined) return String(value);
   if (Array.isArray(value)) return "an array";
   let typeName = typeof value;
   return `${typeName === "object" ? "an" : "a"} ${typeName}`;
 }
-//@ chunk-dcmhvw5a.js:65445-65490 placement
+//@ chunk-z20c443b.js:65503-65548 placement
 function isUnparsableServerName(name) {
   return mcpInfoFromString(`${getMcpPrefix(name)}t`) === null;
 }
-//@ chunk-dcmhvw5a.js:65490-65541 placement
+//@ chunk-z20c443b.js:65548-65599 placement
 /**
  * 键名是否为 Object.prototype 上的名字。
  */
 function isPrototypeKey(key) {
   return key in Object.prototype && isUnparsableServerName(key);
 }
-//@ chunk-dcmhvw5a.js:65541-65746 placement
+//@ chunk-z20c443b.js:65599-65804 placement
 var SERVER_NAME_RULE_MESSAGE =
   "server names may only contain letters, numbers, hyphens and underscores, and may not be constructor, prototype, __proto__, __defineGetter__, __defineSetter__, __lookupGetter__ or __lookupSetter__";
 export {
   isPrototypeKey,
   hasNestedHooks,
-  PLUGIN_NON_HOOK_KEYS,
-  UNLOADABLE_GUARD_NOTE,
-  validateHooksSetting,
-  SERVER_NAME_RULE_MESSAGE,
   SETTINGS_SKIPPED_KEYS,
   looksLikeHookMatcher,
+  UNLOADABLE_GUARD_NOTE,
+  validateHooksSetting,
   HookValidationError,
   GUARD_HOOK_EVENTS,
   hasGuardHooks_2,
   parseHooksSetting,
-  OPAQUE_SETTING_KEYS,
+  SERVER_NAME_RULE_MESSAGE,
+  PLUGIN_SKIPPED_KEYS,
+  PLUGIN_NON_HOOK_KEYS,
   containsHooks,
+  checkHookCommandExpansion,
+  OPAQUE_SETTING_KEYS,
   stripInvalidHookEntries,
   knownHookTypes,
-  PLUGIN_SKIPPED_KEYS,
-  checkHookCommandExpansion,
 };

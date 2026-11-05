@@ -3,15 +3,15 @@
  *
  * 压缩摘要消息："Summarized conversation"，transcript 模式下可展开摘要正文。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CompactSummary.tsx
- * pieces: chunk-ah34pb7m.js (5)
- * attribution: placement 4, fingerprint 1
+ * pieces: chunk-wjygkcr4.js (5)
+ * attribution: placement 3, layout 1, fingerprint 1
  */
-import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { actionKeysNamespace } from "./pluginUi/render/actionKeys.js";
 import { rewriteToolsUsedSummaryTag } from "../utils/messages/untrustedArtifactContent.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
 import { getUserMessageText } from "../utils/messages.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import {
@@ -22,18 +22,14 @@ import { Box, Text } from "../ink/components/Text.js";
 import { BLACK_CIRCLE } from "../constants/figures.js";
 import { MessageResponse } from "./MessageResponse.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
+import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:37715-37719 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:37715", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:37719-37745 placement
+//@ chunk-wjygkcr4.js:38723-38749 placement
 function nullRender() {
   return null;
 }
-//@ chunk-ah34pb7m.js:37745-38008 placement
+//@ chunk-wjygkcr4.js:38749-39012 placement
 /**
  * 为消息（uuid/id/plugin）注册 "Placed" 渲染钩子的动作键输入。
  */
@@ -65,22 +61,37 @@ function usePlacedActionKeys(props) {
     nullRender,
   );
 }
-//@ chunk-ah34pb7m.js:38008-38044 placement
-/**
- * 处理压缩摘要文本用于显示。
- */
-function renderCompactSummaryText(text, modelOnlyText) {
+//@ chunk-wjygkcr4.js:39012-39225 layout
+function stripModelOnlySummarySuffix(text, modelOnlyText) {
   text = rewriteToolsUsedSummaryTag(text);
+  if (
+    codeModeAccepted() &&
+    modelOnlyText &&
+    require("../utils/isReplStateNote.lazy.js").isReplStateNote(modelOnlyText)
+  ) {
+    let index = text.lastIndexOf(`
+
+${modelOnlyText}`);
+    let suffixEnd = index + 2 + modelOnlyText.length;
+    if (
+      index !== -1 &&
+      (suffixEnd === text.length ||
+        text[suffixEnd] ===
+          `
+`)
+    )
+      return text.slice(0, index) + text.slice(suffixEnd);
+  }
   return text;
 }
-//@ chunk-ah34pb7m.js:38044-39964 fingerprint (2.1.88 match: CompactSummary, 0.75)
+//@ chunk-wjygkcr4.js:39225-41145 fingerprint (2.1.88 match: CompactSummary, 0.75)
 function CompactSummary(props) {
   let $ = useMemoCache(24);
   let { message, screen } = props;
   let isTranscriptMode = screen === "transcript";
   let t1;
   if ($[0] !== message) {
-    t1 = renderCompactSummaryText(getUserMessageText(message) || "", message.modelOnlyText);
+    t1 = stripModelOnlySummarySuffix(getUserMessageText(message) || "", message.modelOnlyText);
     $[0] = message;
     $[1] = t1;
   } else t1 = $[1];
@@ -258,4 +269,9 @@ function CompactSummary(props) {
   } else t6 = $[23];
   return t6;
 }
-export { renderCompactSummaryText, usePlacedActionKeys, CompactSummary };
+//@ chunk-wjygkcr4.js:44152-44156 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:44152", () => {
+  init_react_production();
+});
+export { stripModelOnlySummarySuffix, CompactSummary, usePlacedActionKeys };

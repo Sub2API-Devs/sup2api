@@ -3,9 +3,9 @@
  *
  * 跨会话 UDS 消息服务：建立并校验 sockets 目录、绑定 socket、接收 user/control 消息、判定自发消息、空闲通知接线。旧版同名文件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0kp6eg01.js (64)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-htq1j0g1.js (64)
  * attribution: placement 64
  */
 import { randomUUID, randomBytes } from "crypto";
@@ -63,7 +63,7 @@ import {
   udsAddressFromPath,
   isPeerFromMode,
 } from "./peerMessageHeaders.js";
-import { enqueueCommand, flushPeerDropReceipts } from "./messageQueueManager.js";
+import { enqueue, flushPeerDropReceipts } from "./messageQueueManager.js";
 import { noteVettedCorrespondent, getSessionNamingState } from "./sessionNameUniqueness.js";
 import { parseAddress, isTrustedSocketPath, isValidPipeOrPath } from "./peerAddress.js";
 import {
@@ -117,10 +117,10 @@ import { swarmHostState } from "./swarm/hostState.js";
 import { getPlatform } from "./platform.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-0kp6eg01.js:1869-1886 placement
+//@ chunk-htq1j0g1.js:1870-1887 placement
 var MAX_CACHED_VERDICTS = 500;
 var MAX_ANCESTOR_HOPS = 32;
-//@ chunk-0kp6eg01.js:1886-2162 placement
+//@ chunk-htq1j0g1.js:1887-2163 placement
 /**
  * 判定缓存
  */
@@ -142,13 +142,13 @@ class VerdictCache {
     this.verdicts.set(key, verdict);
   }
 }
-//@ chunk-0kp6eg01.js:2162-2557 placement
+//@ chunk-htq1j0g1.js:2163-2558 placement
 /**
  * 按宿主缓存的祖先进程判定缓存。
  */
 var ancestryVerdicts; // deferred: uses VerdictCache of its import cycle while loading; runs once the cycle is complete
 var ancestryDeps;
-deferInit("chunk-0kp6eg01.js:2162", () => {
+deferInit("chunk-htq1j0g1.js:2163", () => {
   ancestryVerdicts = new HostScoped(() => new VerdictCache());
   ancestryDeps = {
     readAncestors: async (pid) => {
@@ -167,12 +167,12 @@ deferInit("chunk-0kp6eg01.js:2162", () => {
       }),
   };
 });
-//@ chunk-0kp6eg01.js:2557-2643 placement
+//@ chunk-htq1j0g1.js:2558-2644 placement
 function ancestryIncludesPid(selfSentAncestry, pid = process.pid) {
   if (pid === 1) return false;
   return Array.isArray(selfSentAncestry) && selfSentAncestry.includes(pid);
 }
-//@ chunk-0kp6eg01.js:2643-3144 placement
+//@ chunk-htq1j0g1.js:2644-3145 placement
 /**
  * 判定是否为自身
  */
@@ -206,7 +206,7 @@ async function classifyAncestry(pid, deps = ancestryDeps) {
   verdictCache.remember(verdictKey, isSelf);
   return isSelf ? "self" : "not-self";
 }
-//@ chunk-0kp6eg01.js:3144-3495 placement
+//@ chunk-htq1j0g1.js:3145-3496 placement
 /**
  * 是否为自己发送
  */
@@ -220,48 +220,48 @@ async function isSelfSent(message) {
   let verdict = await (message.verdictOf ?? classifyAncestry)(message.verifiedPeerPid);
   return verdict === "self" || (verdict === "no-evidence" && message.childTokenPresented);
 }
-//@ chunk-0kp6eg01.js:3495-3532 placement
+//@ chunk-htq1j0g1.js:3496-3533 placement
 function udsMessagingState() {
   return messagingSocketServerSlot.of(getRootSession().host);
 }
-//@ chunk-0kp6eg01.js:3532-3580 placement
+//@ chunk-htq1j0g1.js:3533-3581 placement
 function getUdsStartFailureCause() {
   return udsMessagingState().lastStartFailureCause;
 }
-//@ chunk-0kp6eg01.js:3580-3629 placement
+//@ chunk-htq1j0g1.js:3581-3630 placement
 function getUdsStartDegradedCause() {
   return udsMessagingState().lastStartDegradedCause;
 }
-//@ chunk-0kp6eg01.js:3629-3776 placement
+//@ chunk-htq1j0g1.js:3630-3777 placement
 function recordDegradedCause(cause) {
   let state = udsMessagingState();
   if (cause === "key_publish_failed" && state.lastStartDegradedCause === "primary_dir_refused_fell_back")
     return;
   state.lastStartDegradedCause = cause;
 }
-//@ chunk-0kp6eg01.js:3776-3807 placement
+//@ chunk-htq1j0g1.js:3777-3808 placement
 function getUdsInboxUnavailableReason() {
   return messagingSocketUnavailableReason(udsMessagingState());
 }
-//@ chunk-0kp6eg01.js:3807-3922 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-htq1j0g1.js:3808-3923 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function hasStringType_2(data) {
   if (typeof data !== "object" || data === null) return false;
   if (!("type" in data)) return false;
   return typeof data.type === "string";
 }
-//@ chunk-0kp6eg01.js:3922-3953 placement
+//@ chunk-htq1j0g1.js:3923-3954 placement
 function setOnRename(onRename) {
   udsMessagingState().onRename = onRename;
 }
-//@ chunk-0kp6eg01.js:3953-3997 placement
+//@ chunk-htq1j0g1.js:3954-3998 placement
 function setOnEnableRemoteControl(onEnableRemoteControl) {
   udsMessagingState().onEnableRemoteControl = onEnableRemoteControl;
 }
-//@ chunk-0kp6eg01.js:3997-4062 placement
+//@ chunk-htq1j0g1.js:3998-4063 placement
 function describeMessageId(origMsgId) {
   return isUuid(origMsgId) ? origMsgId : origMsgId === undefined ? "(none)" : "(malformed)";
 }
-//@ chunk-0kp6eg01.js:4062-4184 placement
+//@ chunk-htq1j0g1.js:4063-4185 placement
 function pickUuids(droppedMsgIds) {
   if (!Array.isArray(droppedMsgIds)) return [];
   let ids = [];
@@ -271,15 +271,15 @@ function pickUuids(droppedMsgIds) {
   }
   return ids;
 }
-//@ chunk-0kp6eg01.js:4184-4226 placement
+//@ chunk-htq1j0g1.js:4185-4227 placement
 function setOnPeerMessageStatus(onPeerMessageStatus) {
   udsMessagingState().onPeerMessageStatus = onPeerMessageStatus;
 }
-//@ chunk-0kp6eg01.js:4226-4258 placement
+//@ chunk-htq1j0g1.js:4227-4259 placement
 function setOnEnqueue(onEnqueue) {
   udsMessagingState().onEnqueue = onEnqueue;
 }
-//@ chunk-0kp6eg01.js:4258-4480 placement
+//@ chunk-htq1j0g1.js:4259-4481 placement
 /**
  * 消息 session_id 是否匹配
  */
@@ -295,7 +295,7 @@ function sessionIdMatches(message) {
   }
   return true;
 }
-//@ chunk-0kp6eg01.js:4480-6032 placement
+//@ chunk-htq1j0g1.js:4481-6034 placement
 /**
  * 处理入站用户消息
  */
@@ -403,7 +403,7 @@ async function handleInboundUserMessage(
     skipAttachments: true,
   };
   if (gatedPolicyFor(command) !== "accept") return;
-  enqueueCommand(command);
+  enqueue(command);
   queueing.queued();
   logForDebugging(
     `[uds-messaging] Routed user message to queue (priority=${priority}): ${fragmentForLog(promptText, 80)}`,
@@ -411,7 +411,7 @@ async function handleInboundUserMessage(
   udsMessagingState().onEnqueue?.();
   notePeerReplyTarget(command);
 }
-//@ chunk-0kp6eg01.js:6032-6309 placement
+//@ chunk-htq1j0g1.js:6034-6311 placement
 /**
  * 记录对端回复目标
  */
@@ -428,7 +428,7 @@ function notePeerReplyTarget(message) {
   )
     noteVettedCorrespondent(origin.from, origin.verifiedPeerPid, origin.verifiedPeerProcStart);
 }
-//@ chunk-0kp6eg01.js:6309-6468 placement
+//@ chunk-htq1j0g1.js:6311-6470 placement
 function vettedPeerReplyTarget(from, activeSocketPath, verifiedPeerPid) {
   if (!from.startsWith("uds:") || !isPeerAddress(from)) return;
   let target = parseAddress(from).target;
@@ -440,7 +440,7 @@ function vettedPeerReplyTarget(from, activeSocketPath, verifiedPeerPid) {
     ? target
     : undefined;
 }
-//@ chunk-0kp6eg01.js:6468-11170 placement
+//@ chunk-htq1j0g1.js:6470-11172 placement
 /**
  * 处理入站消息
  */
@@ -680,7 +680,7 @@ async function handleInboundMessage(
       logForDebugging(`[uds-messaging] Unhandled control action: ${fragmentForLog(String(message.action))}`);
   } else logForDebugging(`[uds-messaging] Received unhandled message type: ${fragmentForLog(message.type)}`);
 }
-//@ chunk-0kp6eg01.js:11170-11571 placement
+//@ chunk-htq1j0g1.js:11172-11573 placement
 /**
  * 分派入站消息
  */
@@ -713,9 +713,9 @@ function routeInboundMessage(message, verifiedPeerPid, verifiedPeerProcStart, se
       });
     });
 }
-//@ chunk-0kp6eg01.js:11571-11583 placement
+//@ chunk-htq1j0g1.js:11573-11585 placement
 var IDLE_FLUSH_TIMEOUT_MS = 3000;
-//@ chunk-0kp6eg01.js:11583-11669 placement
+//@ chunk-htq1j0g1.js:11585-11671 placement
 function awaitProcessingChain(timeoutMs = 3000) {
   return Promise.race([
     udsMessagingState().processingChain,
@@ -724,7 +724,7 @@ function awaitProcessingChain(timeoutMs = 3000) {
     }),
   ]);
 }
-//@ chunk-0kp6eg01.js:11669-13953 placement
+//@ chunk-htq1j0g1.js:11671-13955 placement
 /**
  * 处理 UDS 连接
  */
@@ -910,26 +910,26 @@ function handleConnection(socket) {
     });
   });
 }
-//@ chunk-0kp6eg01.js:13953-13996 placement
+//@ chunk-htq1j0g1.js:13955-13998 placement
 function getUdsMessagingSocketPath() {
   return udsMessagingState().activeSocketPath;
 }
-//@ chunk-0kp6eg01.js:13996-14006 placement
+//@ chunk-htq1j0g1.js:13998-14008 placement
 var MAX_SOCKET_PATH_BYTES = 103;
-//@ chunk-0kp6eg01.js:14006-14144 placement
+//@ chunk-htq1j0g1.js:14008-14146 placement
 function getDefaultUdsSocketPath() {
   let base = env.XDG_RUNTIME_DIR || tmpdir();
   let path = resolve(join(base, "cc-socks", `${process.pid}.sock`));
   if (Buffer.byteLength(path) <= MAX_SOCKET_PATH_BYTES) return path;
   return getPerUidFallbackUdsSocketPath();
 }
-//@ chunk-0kp6eg01.js:14144-14293 placement
+//@ chunk-htq1j0g1.js:14146-14295 placement
 function getPerUidFallbackUdsSocketPath(uid = process.getuid?.() ?? 0) {
   let PREFIX = env.TERMUX_VERSION ? env.PREFIX : undefined;
   let path = PREFIX ? join(PREFIX, "tmp") : "/tmp";
   return join(path, `cc-socks-${uid}`, `${process.pid}.sock`);
 }
-//@ chunk-0kp6eg01.js:14293-14652 placement
+//@ chunk-htq1j0g1.js:14295-14654 placement
 /**
  * 关闭 UDS 服务
  */
@@ -956,7 +956,7 @@ async function stopUdsServer(a_2, b, c, { settleHeld = true } = {}) {
   }
   clearActiveSocket();
 }
-//@ chunk-0kp6eg01.js:14652-14888 placement
+//@ chunk-htq1j0g1.js:14654-14890 placement
 /**
  * 清除活动 socket 状态
  */
@@ -973,14 +973,14 @@ function clearActiveSocket() {
   setRegisteredInboxOfPidReader(null);
   getSessionNamingState().senderMode = null;
 }
-//@ chunk-0kp6eg01.js:14888-14946 placement
+//@ chunk-htq1j0g1.js:14890-14948 placement
 function stopAndCleanup(a, b, c, options) {
   return async () => {
     await stopUdsServer(a, b, c);
     options();
   };
 }
-//@ chunk-0kp6eg01.js:14946-15137 placement
+//@ chunk-htq1j0g1.js:14948-15139 placement
 /**
  * 探测 socket 是否存活
  */
@@ -999,7 +999,7 @@ function probeSocket(path) {
     });
   });
 }
-//@ chunk-0kp6eg01.js:15137-15306 placement
+//@ chunk-htq1j0g1.js:15139-15308 placement
 /**
  * 尝试监听
  */
@@ -1016,7 +1016,7 @@ function tryListen(server, path) {
     });
   });
 }
-//@ chunk-0kp6eg01.js:15306-15541 placement
+//@ chunk-htq1j0g1.js:15308-15543 placement
 /**
  * 生成兄弟 socket 路径
  */
@@ -1027,7 +1027,7 @@ function siblingSocketPath(path) {
   let hexLength = MAX_SOCKET_PATH_BYTES - Buffer.byteLength(join(parentDir, ".sock"));
   return join(parentDir, `${randomBytes(8).toString("hex").slice(0, Math.max(1, hexLength))}.sock`);
 }
-//@ chunk-0kp6eg01.js:15541-15863 placement
+//@ chunk-htq1j0g1.js:15543-15865 placement
 /**
  * 清理陈旧的兄弟 socket
  */
@@ -1050,7 +1050,7 @@ async function sweepStaleSiblingSockets(path) {
     } catch {}
   }
 }
-//@ chunk-0kp6eg01.js:15863-16284 placement
+//@ chunk-htq1j0g1.js:15865-16286 placement
 /**
  * 绑定自动 socket 路径
  */
@@ -1075,19 +1075,19 @@ async function bindAutoSocketPath(server, path) {
   }
   throw Error("listen EADDRINUSE on the auto socket path and its moved-aside siblings");
 }
-//@ chunk-0kp6eg01.js:16284-16386 placement
+//@ chunk-htq1j0g1.js:16286-16388 placement
 function startCrossSessionInbox(path, storageV5, options = {}) {
   return startUdsMessaging(path ?? getDefaultUdsSocketPath(), storageV5, {
     isExplicit: path !== undefined,
     profileStartup: options.profileStartup,
   });
 }
-//@ chunk-0kp6eg01.js:16386-16480 placement
+//@ chunk-htq1j0g1.js:16388-16482 placement
 function clearMessagingEnv() {
   udsEnv.unset("CLAUDE_CODE_MESSAGING_SOCKET");
   udsEnv.unset("CLAUDE_CODE_MESSAGING_TOKEN");
 }
-//@ chunk-0kp6eg01.js:16480-16616 placement
+//@ chunk-htq1j0g1.js:16482-16618 placement
 var SOCKET_DIR_VET_KINDS = [
   "directory_rule",
   "foreign_owner",
@@ -1099,7 +1099,7 @@ var SOCKET_DIR_VET_KINDS = [
   "uid_collapse",
   "internal",
 ];
-//@ chunk-0kp6eg01.js:16616-16707 placement
+//@ chunk-htq1j0g1.js:16618-16709 placement
 function socketDirRefusalError(socketsDirVetKind, error, refusedComponent) {
   return Object.assign(error, {
     socketsDirVetKind,
@@ -1108,7 +1108,7 @@ function socketDirRefusalError(socketsDirVetKind, error, refusedComponent) {
     }),
   });
 }
-//@ chunk-0kp6eg01.js:16707-17133 placement
+//@ chunk-htq1j0g1.js:16709-17135 placement
 /**
  * 取被拒的路径组件
  */
@@ -1137,7 +1137,7 @@ function refusedComponentOf(error) {
       }
     : undefined;
 }
-//@ chunk-0kp6eg01.js:17133-17235 placement
+//@ chunk-htq1j0g1.js:17135-17237 placement
 function socketDirFacts(path, stats, ownerRefused) {
   return {
     path,
@@ -1149,7 +1149,7 @@ function socketDirFacts(path, stats, ownerRefused) {
     }),
   };
 }
-//@ chunk-0kp6eg01.js:17235-18789 placement
+//@ chunk-htq1j0g1.js:17237-18791 placement
 /**
  * 描述 sockets 目录拒绝原因
  */
@@ -1198,14 +1198,14 @@ function describeSocketDirRefusal(error) {
       return;
   }
 }
-//@ chunk-0kp6eg01.js:18789-18893 placement
+//@ chunk-htq1j0g1.js:18791-18895 placement
 var SAFE_PATH_CHAR_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PERMANENT_SOCKET_ERRNOS;
-deferInit("chunk-0kp6eg01.js:18789", () => {
+deferInit("chunk-htq1j0g1.js:18791", () => {
   SAFE_PATH_CHAR_PATTERN = /^[A-Za-z0-9._\/ ~+=:@,#%-]$/;
   PERMANENT_SOCKET_ERRNOS = new Set(["EACCES", "EPERM", "EROFS", "ENOSPC", "EDQUOT", "ENOTDIR"]);
 });
-//@ chunk-0kp6eg01.js:18893-19161 placement
+//@ chunk-htq1j0g1.js:18895-19163 placement
 /**
  * 是否永久拒绝
  */
@@ -1228,13 +1228,13 @@ function isPermanentSocketRefusal(error) {
   let errnoCode = getErrnoCode(error);
   return errnoCode !== undefined && PERMANENT_SOCKET_ERRNOS.has(errnoCode);
 }
-//@ chunk-0kp6eg01.js:19161-19289 placement
+//@ chunk-htq1j0g1.js:19163-19291 placement
 function socketDirVetKind(error) {
   if (!(error instanceof Error) || !("socketsDirVetKind" in error)) return;
   let socketsDirVetKind = error.socketsDirVetKind;
   return SOCKET_DIR_VET_KINDS.find((knownKind) => knownKind === socketsDirVetKind);
 }
-//@ chunk-0kp6eg01.js:19289-19463 placement
+//@ chunk-htq1j0g1.js:19291-19465 placement
 /**
  * 悬空链接错误
  */
@@ -1246,7 +1246,7 @@ function danglingLinkError() {
     ),
   );
 }
-//@ chunk-0kp6eg01.js:19463-19984 placement
+//@ chunk-htq1j0g1.js:19465-19986 placement
 /**
  * sockets 目录被拒时的建议：把 XDG_RUNTIME_DIR 或 CLAUDE_CODE_TMPDIR 指向私有目录。
  */
@@ -1256,7 +1256,7 @@ var SOCKET_DIR_COMPONENT_REFUSAL_HINT = `A component of the sockets path is not 
 var SOCKET_DIR_LOOP_REFUSAL_HINT = `The sockets path runs through a symlink loop. ${SOCKET_DIR_HINTS}`;
 var SOCKET_DIR_USERNS_REFUSAL_HINT =
   "This process runs in a user namespace without a uid mapping (its own uid reads as the kernel overflow uid), so file ownership cannot be verified. Start it with a uid map (e.g. `unshare -Ur` / `--map-current-user`), or pass --messaging-socket-path.";
-//@ chunk-0kp6eg01.js:19984-20725 placement
+//@ chunk-htq1j0g1.js:19986-20727 placement
 /**
  * sockets 目录拒绝提示
  */
@@ -1294,7 +1294,7 @@ function socketDirRefusalHint(error) {
       return "";
   }
 }
-//@ chunk-0kp6eg01.js:20725-21058 placement
+//@ chunk-htq1j0g1.js:20727-21060 placement
 /**
  * 拒绝使用 sockets 目录
  */
@@ -1312,7 +1312,7 @@ function refuseSocketDir(path, error, hint) {
   clearMessagingEnv();
   return;
 }
-//@ chunk-0kp6eg01.js:21058-24275 placement
+//@ chunk-htq1j0g1.js:21060-24277 placement
 /**
  * 检查 sockets 目录
  */
@@ -1498,7 +1498,7 @@ async function vetSocketsDir(path) {
   assertLeafShape(leafStats);
   if ((leafStats.mode & 511) !== 448) await chmod(path, 448);
 }
-//@ chunk-0kp6eg01.js:24275-27546 placement
+//@ chunk-htq1j0g1.js:24277-27548 placement
 /**
  * 校验 --messaging-socket-path 显式指定的 UDS 路径（目录所有者、权限、符号链接），不合格时拒绝绑定。本模块整体是跨会话 UDS 消息服务：建 socket 目录、绑定、接收 user/control 消息、祖先进程判定自发消息。
  */
@@ -1635,7 +1635,7 @@ async function validateExplicitMessagingSocketPath(path) {
   assertDirectory(directoryStats);
   return replaced;
 }
-//@ chunk-0kp6eg01.js:27546-27653 placement
+//@ chunk-htq1j0g1.js:27548-27655 placement
 async function startUdsMessaging(path, storageV5, options = {}) {
   udsMessagingState().startInFlight = true;
   try {
@@ -1644,7 +1644,7 @@ async function startUdsMessaging(path, storageV5, options = {}) {
     udsMessagingState().startInFlight = false;
   }
 }
-//@ chunk-0kp6eg01.js:27653-34045 placement
+//@ chunk-htq1j0g1.js:27655-34017 placement
 /**
  * 启动 UDS 消息服务
  */
@@ -1913,15 +1913,9 @@ async function startUdsMessagingUnchecked(path, storageV5, options = {}) {
     });
     logForDebugging(
       `[uds-messaging] Inject messages (auth line ${udsMessagingState().authRequired ? "REQUIRED" : "optional"} here): { echo '{"type":"auth","token":"'"$CLAUDE_CODE_MESSAGING_TOKEN"'"}'; echo '{"type":"user","message":{"role":"user","content":"hello"}}'; } | socat - UNIX-CONNECT:${path}`,
-      {
-        level: "info",
-      },
     );
     logForDebugging(
       `[uds-messaging] Connect when the data is ready (e.g. out=$(cmd); printf '%s\\n' "$out" | ${"nc -N -U"} "$CLAUDE_CODE_MESSAGING_SOCKET" \u2014 or the socat form above): a connection that sends no complete line within ${udsMessagingState().firstLineDeadlineMs} ms is closed`,
-      {
-        level: "info",
-      },
     );
     udsMessagingState().lastStartFailureCause = undefined;
     return stopAndCleanup(server, path, storageV5, unregisterCleanup_2);
@@ -1977,7 +1971,7 @@ async function startUdsMessagingUnchecked(path, storageV5, options = {}) {
     return;
   }
 }
-//@ chunk-0kp6eg01.js:34045-34926 placement
+//@ chunk-htq1j0g1.js:34017-34898 placement
 /**
  * 暂扣结果解释
  */
@@ -1997,7 +1991,7 @@ function holdOutcomeExplanation(outcome) {
       return "The recipient's session dropped your message at its inbox (rate limit, duplicate, relay loop, or full queue); it was not delivered and will not be.";
   }
 }
-//@ chunk-0kp6eg01.js:34926-34987 placement
+//@ chunk-htq1j0g1.js:34898-34959 placement
 function senderClassFields() {
   let senderClass = currentSenderClass();
   return senderClass === undefined
@@ -2006,7 +2000,7 @@ function senderClassFields() {
         from_mode: senderClass,
       };
 }
-//@ chunk-0kp6eg01.js:34987-35155 placement
+//@ chunk-htq1j0g1.js:34959-35127 placement
 function currentSenderClass() {
   if (!isModeEmitFlagOn()) return;
   let getCurrentMode = swarmHostState().inbound.getCurrentMode;
@@ -2019,11 +2013,11 @@ function currentSenderClass() {
   let modeAtUnwire = swarmHostState().inbound.modeAtUnwire;
   return modeAtUnwire !== undefined ? modeClass(modeAtUnwire) : undefined;
 }
-//@ chunk-0kp6eg01.js:35155-35193 placement
+//@ chunk-htq1j0g1.js:35127-35165 placement
 function senderClassOf(mode) {
   return isPeerFromMode(mode) ? mode : undefined;
 }
-//@ chunk-0kp6eg01.js:35193-35326 placement
+//@ chunk-htq1j0g1.js:35165-35298 placement
 function isSelfSentMessage(verifiedPeerPid, selfSentAncestry, senderClass) {
   return isSelfSent({
     selfSentAncestry,
@@ -2033,7 +2027,7 @@ function isSelfSentMessage(verifiedPeerPid, selfSentAncestry, senderClass) {
     platform: getPlatform(),
   });
 }
-//@ chunk-0kp6eg01.js:35326-35407 placement (2.1.88 match: useCostSummary, 0.695)
+//@ chunk-htq1j0g1.js:35298-35379 placement
 /**
  * 只注册一次 process exit 监听，退出时删除 activeKeyFile。旧版名 useCostSummary 为错配。
  */
@@ -2041,7 +2035,7 @@ function registerActiveKeyFileCleanupOnExit() {
   if (!process.listeners("exit").includes(unlinkActiveKeyFileSync))
     process.on("exit", unlinkActiveKeyFileSync);
 }
-//@ chunk-0kp6eg01.js:35407-35485 placement
+//@ chunk-htq1j0g1.js:35379-35457 placement
 function unlinkActiveKeyFileSync() {
   try {
     let activeKeyFile = udsMessagingState().activeKeyFile;
@@ -2050,9 +2044,9 @@ function unlinkActiveKeyFileSync() {
   } catch {}
 }
 export {
+  setOnPeerMessageStatus,
   setOnRename,
   getUdsInboxUnavailableReason,
-  setOnPeerMessageStatus,
   currentSenderClass,
   getDefaultUdsSocketPath,
   getPerUidFallbackUdsSocketPath,

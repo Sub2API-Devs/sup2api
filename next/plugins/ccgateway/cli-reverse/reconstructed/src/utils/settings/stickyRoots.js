@@ -3,9 +3,9 @@
  *
  * 粘性根目录（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (5)
  * attribution: placement 5
  */
 import { isAbsolutePlatformPath } from "../git.js";
@@ -15,11 +15,11 @@ import {
   stripWin32DevicePrefix,
   isPathUnderForPlatform,
 } from "../hooks/hookCommandAnalysis.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { getPlatform as getPlatform_2 } from "../platform.js";
 import { SETTING_SOURCES } from "./constants.js";
 
-//@ chunk-s61vbvea.js:308461-308615 placement
+//@ chunk-7jxyna5q.js:231888-232042 placement
 /**
  * 计算粘性根目录：启动目录、同步根与额外目录（含真实路径），有非绝对路径时退化为根目录。
  */
@@ -31,16 +31,18 @@ function stickyRootsFor(roots) {
     roots.syncRootReal,
     ...(roots.extra ?? []),
   ].filter((root) => root !== undefined);
-  return filtered.some((root) => !isAbsolutePlatformPath(root)) ? [POSIX_SEP_2] : uniq(filtered);
+  return filtered.some((root) => !isAbsolutePlatformPath(root))
+    ? [POSIX_SEP_2]
+    : normalizeCaseForComparison_2(filtered);
 }
-//@ chunk-s61vbvea.js:308615-308674 placement
+//@ chunk-7jxyna5q.js:232042-232101 placement
 /**
  * anyPairMatches：任一两两匹配。
  */
 function anyPairMatches(leftPaths, rightPaths) {
   return leftPaths.some((leftPath) => rightPaths.some((rightPath) => isSameCommandPath(leftPath, rightPath)));
 }
-//@ chunk-s61vbvea.js:308674-308853 placement (2.1.88 match: setCwdState, 0.757)
+//@ chunk-7jxyna5q.js:232101-232280 placement (2.1.88 match: setCwdState, 0.757)
 function pathsOverlapForPlatform(leftPaths, rightPaths) {
   let normalizePath =
     getPlatform_2() === "windows"
@@ -56,9 +58,9 @@ function pathsOverlapForPlatform(leftPaths, rightPaths) {
     ),
   );
 }
-//@ chunk-s61vbvea.js:308853-308896 placement
+//@ chunk-7jxyna5q.js:232280-232323 placement (2.1.88 match: isApiKeyHelperFromProjectOrLocalSettings, 0.83)
 var REPO_DIR_SETTING_SOURCES = ["projectSettings", "localSettings"];
-//@ chunk-s61vbvea.js:308896-309947 placement
+//@ chunk-7jxyna5q.js:232323-233382 placement
 async function collectStickyRoots({
   stickyRoots,
   pinnedScopes,
@@ -139,4 +141,4 @@ async function collectStickyRoots({
     }
   }
 }
-export { anyPairMatches, collectStickyRoots, pathsOverlapForPlatform, stickyRootsFor };
+export { anyPairMatches, collectStickyRoots, stickyRootsFor, pathsOverlapForPlatform };

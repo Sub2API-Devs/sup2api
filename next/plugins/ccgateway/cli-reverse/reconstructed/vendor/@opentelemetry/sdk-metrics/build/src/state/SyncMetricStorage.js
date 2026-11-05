@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/sdk-metrics/build/src/state/SyncMetricStorage.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-metrics@2.7.1
- * pieces: chunk-wrv5s6k4.js (1)
+ * pieces: chunk-q87n5wsq.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_MetricStorage } from "./MetricStorage.js";
 import { require_DeltaMetricProcessor } from "./DeltaMetricProcessor.js";
 import { require_TemporalMetricProcessor } from "./TemporalMetricProcessor.js";
 
-//@ chunk-wrv5s6k4.js:49359-50125 cjs-fingerprint
+//@ chunk-q87n5wsq.js:49359-50125 cjs-fingerprint
 var require_SyncMetricStorage = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

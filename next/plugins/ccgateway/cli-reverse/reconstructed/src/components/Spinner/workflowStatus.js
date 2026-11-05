@@ -3,32 +3,37 @@
  *
  * 2.1.316 新增。工作流运行状态文本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (9)
- * attribution: placement 9
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (11)
+ * attribution: placement 9, layout 2
  */
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { parseBindings, chordToString } from "../../keybindings/parser.js";
 import { DEFAULT_BINDINGS } from "../../keybindings/defaultBindings.js";
 import { useKeybindingContext } from "../../keybindings/KeybindingContext.js";
 import { pickDisplayChord, getActionChord } from "../../keybindings/resolver.js";
 import { isTerminalTaskStatus as isTerminalTaskStatus_2 } from "../../tasks/taskStatus.js";
 import { isTaskLoopSettled } from "../../tasks/taskLoopRegistry.js";
+import { isWorkflowsAvailable, workflowAgentHint } from "../../utils/workflows/workflowGates.js";
 import { WARNING_GLYPH } from "../../constants/figures.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { workflowSizeSetting } from "../../utils/workflowSizeGuideline.js";
 import { getGlobalConfig } from "../../utils/config.js";
-import { workflowAgentHint } from "../../utils/workflows/workflowGates.js";
 import { env } from "../../utils/env.js";
-import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:433876-433892 placement
-var defaultKeybindingBindings; // deferred: uses parseBindings (../../keybindings/parser.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:433876", () => {
+//@ chunk-czq1j3j2.js:458479-458483 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:458479", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:458709-458725 placement
+var defaultKeybindingBindings; // deferred: uses platform (../../keybindings/defaultBindings.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-czq1j3j2.js:458709", () => {
   defaultKeybindingBindings = parseBindings(DEFAULT_BINDINGS);
 });
-//@ chunk-18hwfzwa.js:433892-434027 placement
+//@ chunk-czq1j3j2.js:458725-458860 placement
 function useShortcutDisplayText(action, context, fallback) {
   let keybindingContext = useKeybindingContext();
   if (!keybindingContext) return fallback;
@@ -36,7 +41,7 @@ function useShortcutDisplayText(action, context, fallback) {
   if (chord) return chordToString(chord);
   return getActionChord(action, context, keybindingContext.bindings) === null ? "" : fallback;
 }
-//@ chunk-18hwfzwa.js:434027-434252 placement
+//@ chunk-czq1j3j2.js:458860-459085 placement
 function runningWorkflowTasks(tasks) {
   let running = [];
   for (let task of Object.values(tasks)) {
@@ -50,28 +55,30 @@ function runningWorkflowTasks(tasks) {
   running.sort((a, b) => a.startTime - b.startTime);
   return running;
 }
-//@ chunk-18hwfzwa.js:434252-434415 placement
-var DEFAULT_LARGE_WORKFLOW_AGENTS; // deferred: uses DIAMOND_GLYPH (../../constants/figures.js) of its import cycle while loading; runs once the cycle is complete
-var DEFAULT_LARGE_WORKFLOW_TOKENS;
-var DEFAULT_TOKENS_PER_AGENT;
-var LARGE_WORKFLOW_STOP_HINT;
-var LARGE_WORKFLOW_STOP_HINT_PLAIN;
-var LARGE_WORKFLOW_LABEL;
-var LARGE_WORKFLOW_ICON;
-deferInit("chunk-18hwfzwa.js:434252", () => {
-  DEFAULT_LARGE_WORKFLOW_AGENTS = 25;
-  DEFAULT_LARGE_WORKFLOW_TOKENS = 1500000;
-  DEFAULT_TOKENS_PER_AGENT = 70000;
-  LARGE_WORKFLOW_STOP_HINT = `${WARNING_GLYPH} Large workflow \xB7 /workflows to stop`;
-  LARGE_WORKFLOW_STOP_HINT_PLAIN = "Large workflow \xB7 /workflows to stop";
-  LARGE_WORKFLOW_LABEL = `${WARNING_GLYPH} Large workflow`;
-  LARGE_WORKFLOW_ICON = WARNING_GLYPH;
-});
-//@ chunk-18hwfzwa.js:434415-434491 placement
+//@ chunk-czq1j3j2.js:459085-459196 layout
+function runningRemoteWorkflows(remoteWorkflowRuns) {
+  let filtered = remoteWorkflowRuns.filter((run) => run.status === "running" && run.presence !== "unlisted");
+  return filtered.length > 0 && isWorkflowsAvailable() ? filtered : [];
+}
+//@ chunk-czq1j3j2.js:459196-459339 layout
+function selectWorkflowFooterTask({ tasks, remoteWorkflowRuns, workflowFooterIndex, workflowFooterRunId }) {
+  return workflowFooterRunId === undefined
+    ? runningWorkflowTasks(tasks)[workflowFooterIndex]
+    : runningRemoteWorkflows(remoteWorkflowRuns).find((run) => run.id === workflowFooterRunId);
+}
+//@ chunk-czq1j3j2.js:459339-459502 placement
+var DEFAULT_LARGE_WORKFLOW_AGENTS = 25;
+var DEFAULT_LARGE_WORKFLOW_TOKENS = 1500000;
+var DEFAULT_TOKENS_PER_AGENT = 70000;
+var LARGE_WORKFLOW_STOP_HINT = `${WARNING_GLYPH} Large workflow \xB7 /workflows to stop`;
+var LARGE_WORKFLOW_STOP_HINT_PLAIN = "Large workflow \xB7 /workflows to stop";
+var LARGE_WORKFLOW_LABEL = `${WARNING_GLYPH} Large workflow`;
+var LARGE_WORKFLOW_ICON = WARNING_GLYPH;
+//@ chunk-czq1j3j2.js:459502-459578 placement
 function positiveFinite(value) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
 }
-//@ chunk-18hwfzwa.js:434491-435124 placement
+//@ chunk-czq1j3j2.js:459578-460211 placement
 function workflowSizeSummary({ scheduledAgents, startedAgents, totalTokens, ultracodeActive }) {
   if (ultracodeActive) return;
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_ochre_gantry", {});
@@ -103,19 +110,14 @@ function workflowSizeSummary({ scheduledAgents, startedAgents, totalTokens, ultr
     capFromGuideline: overAgents && envAgentCap === undefined && guidelineHint !== undefined,
   };
 }
-//@ chunk-18hwfzwa.js:435124-435128 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:435124", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:435128-435174 placement
+//@ chunk-czq1j3j2.js:460215-460261 placement
 function infoSegment(text) {
   return {
     text,
     isWarning: false,
   };
 }
-//@ chunk-18hwfzwa.js:435174-435231 placement
+//@ chunk-czq1j3j2.js:460261-460318 placement
 function emptyWorkflowBarSummary(segments) {
   return {
     barWidth: 0,
@@ -123,11 +125,13 @@ function emptyWorkflowBarSummary(segments) {
   };
 }
 export {
-  runningWorkflowTasks,
   emptyWorkflowBarSummary,
   LARGE_WORKFLOW_STOP_HINT,
   LARGE_WORKFLOW_LABEL,
   LARGE_WORKFLOW_ICON,
+  selectWorkflowFooterTask,
+  runningWorkflowTasks,
+  runningRemoteWorkflows,
   workflowSizeSummary,
   LARGE_WORKFLOW_STOP_HINT_PLAIN,
   useShortcutDisplayText,

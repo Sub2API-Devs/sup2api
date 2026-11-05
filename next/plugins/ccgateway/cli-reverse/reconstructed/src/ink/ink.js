@@ -3,10 +3,10 @@
  *
  * 并入已有模块：校验终端尺寸读数，异常值时回退或钳位并记录；生成恢复终端模式的转义序列（鼠标、扩展键、光标保存等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/ink.tsx
- * pieces: chunk-bzr73sfg.js (20)
- * attribution: placement 4, sole-consumer 3, fingerprint 5, layout 4, affinity 4
+ * pieces: chunk-2avr6cej.js (19)
+ * attribution: placement 4, sole-consumer 3, fingerprint 5, layout 3, affinity 4
  */
 import { writeSync, openSync, constants, closeSync, readSync } from "fs";
 import { format } from "util";
@@ -74,7 +74,6 @@ import { logForDebugging } from "../utils/debug.js";
 import { logError } from "../utils/log.js";
 import { createSignal } from "../utils/signal.js";
 import { cursorPosition as cursorPosition_2 } from "./terminal-querier.js";
-import { getGraphemeSegmenter } from "../utils/intl.js";
 import { TerminalImageManager, DECRC } from "./TerminalImageManager.js";
 import { createRef } from "../../vendor/react/cjs/react.production.js";
 import {
@@ -175,6 +174,7 @@ import {
 import { wrapAnsi } from "./wrapAnsi.js";
 import { squashSingleText } from "./layout/node.js";
 import { bunStringWidth } from "./stringWidth.js";
+import { isGraphemeBoundary } from "../utils/truncate.js";
 import { countCharInString } from "../utils/stringUtils.js";
 import { handleEPIPE } from "../utils/process.js";
 import { logEvent } from "../services/analytics/index.js";
@@ -199,14 +199,14 @@ import { TerminalWriteProvider } from "./useTerminalNotification.js";
 import { OWED_REPLY_HOLD_MS } from "./terminalProbe.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bzr73sfg.js:321779-321877 placement
+//@ chunk-2avr6cej.js:321360-321458 placement
 function shouldCompactStylePool(framesSinceCompact, stylePool, liveStyles) {
   let threshold = stylePool.isNearCapacity ? 1000 : 30000;
   return (
     framesSinceCompact > threshold && (framesSinceCompact > 300000 || stylePool.needsCompaction(liveStyles))
   );
 }
-//@ chunk-bzr73sfg.js:321877-322260 placement
+//@ chunk-2avr6cej.js:321458-321841 placement
 /**
  * 生成恢复终端模式的转义序列（鼠标、扩展键、光标保存等）。
  */
@@ -243,7 +243,7 @@ function restoreTerminalModes(modes, write) {
     else throw error;
   }
 }
-//@ chunk-bzr73sfg.js:322757-322843 sole-consumer
+//@ chunk-2avr6cej.js:322338-322424 sole-consumer
 function runSelectionTakeDown(callback) {
   try {
     callback();
@@ -252,7 +252,7 @@ function runSelectionTakeDown(callback) {
     else logError(error);
   }
 }
-//@ chunk-bzr73sfg.js:322843-322930 sole-consumer
+//@ chunk-2avr6cej.js:322424-322511 sole-consumer
 function createSelectionTakeDownSignal() {
   let signal = createSignal();
   return {
@@ -260,7 +260,7 @@ function createSelectionTakeDownSignal() {
     announce: signal.emit,
   };
 }
-//@ chunk-bzr73sfg.js:322930-323156 fingerprint (2.1.88 match: ALT_SCREEN_ANCHOR_CURSOR, 0.605)
+//@ chunk-2avr6cej.js:322511-322737 fingerprint (2.1.88 match: ALT_SCREEN_ANCHOR_CURSOR, 0.607)
 var MAX_COLUMNS; // deferred: uses cursorPosition (./terminal-querier.js) of its import cycle while loading; runs once the cycle is complete
 var FRAME_INTERVAL_MS;
 var MAX_FRAME_SKIP;
@@ -275,7 +275,7 @@ var RESIZE_SETTLE_MS;
 var QUERY_TIMEOUT_MS;
 var MAX_RESIZE_RETRIES;
 var STDIN_RESUME_GAP_MS;
-deferInit("chunk-bzr73sfg.js:322930", () => {
+deferInit("chunk-2avr6cej.js:322511", () => {
   MAX_COLUMNS = 8192;
   FRAME_INTERVAL_MS = 16;
   MAX_FRAME_SKIP = 5;
@@ -301,32 +301,23 @@ deferInit("chunk-bzr73sfg.js:322930", () => {
   MAX_RESIZE_RETRIES = 4;
   STDIN_RESUME_GAP_MS = 1000;
 });
-//@ chunk-bzr73sfg.js:323156-323285 layout
-function isGraphemeBoundary(text, index) {
-  if (index <= 0) return true;
-  for (let segment of getGraphemeSegmenter().segment(text)) {
-    if (segment.index === index) return true;
-    if (segment.index > index) return false;
-  }
-  return index >= text.length;
-}
-//@ chunk-bzr73sfg.js:323285-323354 fingerprint (2.1.88 match: CURSOR_HOME_PATCH, 1)
+//@ chunk-2avr6cej.js:322866-322935 fingerprint (2.1.88 match: CURSOR_HOME_PATCH, 1)
 function cursorToRow(row) {
   return Object.freeze({
     type: "stdout",
     content: cursorPosition(row, 1),
   });
 }
-//@ chunk-bzr73sfg.js:323354-323377 layout
+//@ chunk-2avr6cej.js:322935-322958 layout
 var MAX_TERMINAL_COLS; // deferred: uses MAX_COLUMNS of its import cycle while loading; runs once the cycle is complete
 var MAX_TERMINAL_ROWS;
 var MAX_ROWS_ALIAS;
-deferInit("chunk-bzr73sfg.js:323354", () => {
+deferInit("chunk-2avr6cej.js:322935", () => {
   MAX_TERMINAL_COLS = MAX_COLUMNS;
   MAX_TERMINAL_ROWS = 2048;
   MAX_ROWS_ALIAS = 3;
 });
-//@ chunk-bzr73sfg.js:323377-323775 placement
+//@ chunk-2avr6cej.js:322958-323356 placement
 /**
  * 校验终端尺寸读数，异常值时回退或钳位并记录。
  */
@@ -347,7 +338,7 @@ function sanitizeWinsize(value, fallback, max, overflowPolicy, log) {
   }
   return floored;
 }
-//@ chunk-bzr73sfg.js:323775-323868 placement (2.1.88 match: getTerminalSize, 0.629)
+//@ chunk-2avr6cej.js:323356-323449 placement (2.1.88 match: getTerminalSize, 0.629)
 /**
  * 读终端尺寸，缺省 80×24，列上限 8192、行上限 2048。
  */
@@ -357,7 +348,7 @@ function getTerminalSize(stream, log) {
     rows: sanitizeWinsize(stream.rows, 24, MAX_TERMINAL_ROWS, "clamp", log),
   };
 }
-//@ chunk-bzr73sfg.js:323868-377361 fingerprint (2.1.88 match: Ink, 0.459)
+//@ chunk-2avr6cej.js:323449-376945 fingerprint (2.1.88 match: Ink, 0.459)
 /**
  * Ink 渲染器主类：持有终端与布局、帧调度与节流、鼠标/点击/悬停订阅、图像管理、备用屏与暂停交接、布局失败恢复与调试上报，负责把 React 树渲染成终端帧。
  */
@@ -2985,7 +2976,7 @@ ${joined}`
     };
   }
 }
-//@ chunk-bzr73sfg.js:377361-377981 fingerprint (2.1.88 match: drainStdin, 0.771)
+//@ chunk-2avr6cej.js:376945-377565 fingerprint (2.1.88 match: drainStdin, 0.77)
 /**
  * 退出或交接前把 stdin 里残留的终端应答读干净：临时进原始模式，以非阻塞方式打开 /dev/tty 读取（最多 64 块），直到读到预期数量的 DA1 应答或超时（250ms），避免应答字节泄漏到 shell。
  */
@@ -3031,7 +3022,7 @@ function drainStdin(stdin = process.stdin, expectedDa1Replies = 0) {
   }
   return chunks.length ? Buffer.concat(chunks) : undefined;
 }
-//@ chunk-bzr73sfg.js:377981-378071 layout
+//@ chunk-2avr6cej.js:377565-377655 layout
 function readNonBlocking(fd, buffer) {
   try {
     return readSync(fd, buffer, 0, buffer.length, null);
@@ -3039,11 +3030,11 @@ function readNonBlocking(fd, buffer) {
     return getErrnoCode(error) === "EAGAIN" ? 0 : -1;
   }
 }
-//@ chunk-bzr73sfg.js:378071-378151 layout
+//@ chunk-2avr6cej.js:377655-377735 layout
 function countDa1Replies(buffer) {
   return buffer.toString("latin1").match(/\x1b\[\?[\d;]*c/g)?.length ?? 0;
 }
-//@ chunk-bzr73sfg.js:378151-378316 fingerprint (2.1.88 match: CONSOLE_STDOUT_METHODS, 0.966)
+//@ chunk-2avr6cej.js:377735-377900 fingerprint (2.1.88 match: CONSOLE_STDOUT_METHODS, 0.966)
 var CONSOLE_STDOUT_METHODS = [
   "log",
   "info",
@@ -3061,7 +3052,7 @@ var CONSOLE_STDOUT_METHODS = [
   "timeLog",
 ];
 var CONSOLE_STDERR_METHODS = ["warn", "error", "trace"];
-//@ chunk-bzr73sfg.js:378316-378410 affinity
+//@ chunk-2avr6cej.js:377900-377994 affinity
 function hasWheelHandler(node) {
   let node_2 = node;
   while (node_2) {
@@ -3070,7 +3061,7 @@ function hasWheelHandler(node) {
   }
   return false;
 }
-//@ chunk-bzr73sfg.js:378410-378479 affinity (2.1.88 match: diff, 1)
+//@ chunk-2avr6cej.js:377994-378063 affinity (2.1.88 match: diff, 1)
 function eraseMainScreenFrame(frameCursor, displayCursor) {
   return (
     (displayCursor === null
@@ -3079,7 +3070,7 @@ function eraseMainScreenFrame(frameCursor, displayCursor) {
     eraseLines(frameCursor.y + 1)
   );
 }
-//@ chunk-bzr73sfg.js:378479-378578 affinity
+//@ chunk-2avr6cej.js:378063-378162 affinity
 function tmuxPanePlacer(pane, isPlaced, columns, rows) {
   return (col, row) =>
     isPlaced && col >= 0 && row >= 0 && col < columns && row < rows
@@ -3089,12 +3080,12 @@ function tmuxPanePlacer(pane, isPlaced, columns, rows) {
         }
       : undefined;
 }
-//@ chunk-bzr73sfg.js:378578-378648 affinity
+//@ chunk-2avr6cej.js:378162-378232 affinity
 function altScreenImagePlacer(columns, rows) {
   return (col, row) =>
     col >= 0 && row >= 0 && col < columns && row < rows ? cursorPosition(row + 1, col + 1) : undefined;
 }
-//@ chunk-bzr73sfg.js:378648-378840 sole-consumer
+//@ chunk-2avr6cej.js:378232-378424 sole-consumer
 function mainScreenImagePlacer(frame, cursor, rows, scrolledOutRows) {
   let max = Math.max(frame.screen.height, frame.cursor.y + 1);
   let max_2 = Math.max(0, max - rows, scrolledOutRows);
@@ -3104,4 +3095,4 @@ function mainScreenImagePlacer(frame, cursor, rows, scrolledOutRows) {
       ? undefined
       : `${DECRC}\r${cursorMove(col, row - min)}`;
 }
-export { getTerminalSize, drainStdin, restoreTerminalModes, Ink };
+export { restoreTerminalModes, drainStdin, getTerminalSize, Ink };

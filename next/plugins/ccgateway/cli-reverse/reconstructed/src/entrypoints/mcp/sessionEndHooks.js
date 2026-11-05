@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：运行 mcp serve 会话持有的 SessionEnd hooks（可中止），上报结果；解析 MCP 调用 _meta 中携带的 SessionEnd hook 描述（超过 8 KiB 或不可读时忽略）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-877zq7yv.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tgnehdmx.js (4)
  * attribution: placement 4
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -21,10 +21,10 @@ import { safeParseJSON } from "../../utils/json.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { createAbortController } from "../../utils/abortController.js";
 import { runRemotePluginHook } from "../../services/remoteTools/runPluginHook.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 
-//@ chunk-877zq7yv.js:15269-15407 placement
+//@ chunk-tgnehdmx.js:16501-16639 placement
 var sessionEndHookMetaSchema = DoctorLazy(() =>
   objectSchema({
     jsonInput: stringSchema(),
@@ -41,7 +41,7 @@ var sessionEndHookStateByHost = new HostScoped(() => ({
   stated: EMPTY_SESSION_HOOKS_NAME,
   isRegistered: false,
 }));
-//@ chunk-877zq7yv.js:15407-15678 placement
+//@ chunk-tgnehdmx.js:16639-16910 placement
 /**
  * 记录调用方声明的 SessionEnd hook 描述（每个宿主一份）；首次解析出有效描述时注册一个内部 SessionEnd 回调，会话结束时运行这些持有的 hook。
  */
@@ -69,7 +69,7 @@ function registerHeldSessionEndHooks(meta, sessionContext) {
     ],
   });
 }
-//@ chunk-877zq7yv.js:15678-15979 placement
+//@ chunk-tgnehdmx.js:16910-17211 placement
 /**
  * 解析 MCP 调用 _meta 中携带的 SessionEnd hook 描述（超过 8 KiB 或不可读时忽略）。
  */
@@ -90,7 +90,7 @@ function parseSessionEndHookMeta(raw) {
   }
   return parsed.data.hooks.length > 0 ? parsed.data : undefined;
 }
-//@ chunk-877zq7yv.js:15979-16514 placement
+//@ chunk-tgnehdmx.js:17211-17746 placement
 /**
  * 运行 mcp serve 会话持有的 SessionEnd hooks（可中止），上报结果。
  */
@@ -119,7 +119,7 @@ async function runHeldSessionEndHooks(named, sessionContext, options) {
   );
   let summary = {
     num_named: settled.length,
-    num_run: count(
+    num_run: countWhere(
       settled,
       (result) =>
         result.status === "fulfilled" &&

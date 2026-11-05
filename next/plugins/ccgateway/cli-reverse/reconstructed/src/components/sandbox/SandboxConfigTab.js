@@ -3,9 +3,9 @@
  *
  * /sandbox 配置标签页：当前沙箱设置、排除命令、网络/文件系统规则。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/sandbox/SandboxConfigTab.tsx
- * pieces: chunk-55w3ydvj.js (3)
+ * pieces: chunk-y07105e8.js (3)
  * attribution: placement 1, file-local 1, fingerprint 1
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -18,9 +18,9 @@ import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { SandboxManager, shouldAllowManagedSandboxDomainsOnly } from "../../utils/sandbox/sandbox-adapter.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-55w3ydvj.js:14016-14020 placement
+//@ chunk-y07105e8.js:15193-15197 placement
 init_react_production();
-//@ chunk-55w3ydvj.js:14020-14076 file-local
+//@ chunk-y07105e8.js:15197-15253 file-local
 function renderDimLine(w, i) {
   return jsxProd_default(
     Text,
@@ -31,7 +31,7 @@ function renderDimLine(w, i) {
     i,
   );
 }
-//@ chunk-55w3ydvj.js:14076-16494 fingerprint (2.1.88 match: SandboxConfigTab, 0.616)
+//@ chunk-y07105e8.js:15253-17671 fingerprint (2.1.88 match: SandboxConfigTab, 0.616)
 function SandboxConfigTab() {
   let $ = useMemoCache(3);
   let isEnabled = SandboxManager.isSandboxingEnabled();

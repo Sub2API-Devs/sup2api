@@ -3,9 +3,9 @@
  *
  * 并入已有模块：GitHub Actions 工作流写入
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/install-github-app/setupGitHubActions.ts
- * pieces: chunk-4v9zy7gn.js (3)
+ * pieces: chunk-2xbvbqx2.js (3)
  * attribution: placement 1, fingerprint 2
  */
 import { execFileNoThrow } from "../../utils/execFileNoThrow.js";
@@ -23,7 +23,7 @@ import { saveGlobalConfig } from "../../utils/config.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 
-//@ chunk-4v9zy7gn.js:42521-42667 placement
+//@ chunk-2xbvbqx2.js:43566-43712 placement
 class SetupCancelledError extends Error {
   alreadyDone;
   constructor(alreadyDone) {
@@ -32,7 +32,7 @@ class SetupCancelledError extends Error {
     this.name = "SetupCancelledError";
   }
 }
-//@ chunk-4v9zy7gn.js:42667-44266 fingerprint (2.1.88 match: createWorkflowFile, 0.884)
+//@ chunk-2xbvbqx2.js:43712-45311 fingerprint (2.1.88 match: createWorkflowFile, 0.884)
 async function createWorkflowFile({
   repoName,
   branchName,
@@ -107,7 +107,7 @@ Need help? Common issues:
     throw Error(`Failed to create workflow file ${workflowPath}: ${createFileResult.stderr}${helpText}`);
   }
 }
-//@ chunk-4v9zy7gn.js:44266-47620 fingerprint (2.1.88 match: setupGitHubActions, 0.889)
+//@ chunk-2xbvbqx2.js:45311-48665 fingerprint (2.1.88 match: setupGitHubActions, 0.889)
 async function setupGitHubActions(
   repoName,
   apiKeyOrOAuthToken,

@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：Claude in Chrome 设置修改
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q3c4ejfd.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-92jtqqsv.js (2)
  * attribution: placement 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { zodStrictObject, booleanSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { saveGlobalConfigDurably } from "../config.js";
 
-//@ chunk-q3c4ejfd.js:3352-3392 placement
+//@ chunk-92jtqqsv.js:3660-3700 placement
 /**
  * Chrome 设置的输入 schema（enabledByDefault）。
  */
@@ -21,7 +21,7 @@ var chromeSettingsInputSchema = DoctorLazy(() =>
     enabledByDefault: booleanSchema(),
   }),
 );
-//@ chunk-q3c4ejfd.js:3392-3877 placement
+//@ chunk-92jtqqsv.js:3700-4185 placement
 async function applyChromeSettingsEdit(input, storageV5) {
   let parseResult = chromeSettingsInputSchema().safeParse(input);
   if (!parseResult.success) {

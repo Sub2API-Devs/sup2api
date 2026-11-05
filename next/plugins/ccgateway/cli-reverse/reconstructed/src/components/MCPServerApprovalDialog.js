@@ -3,14 +3,14 @@
  *
  * 发现项目 .mcp.json 中新 MCP 服务器时的单个批准对话框（使用/全部使用/不使用）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/MCPServerApprovalDialog.tsx
- * pieces: chunk-20skp6hd.js (1)
+ * pieces: chunk-ezx72dpn.js (1)
  * attribution: fingerprint 1
  */
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { useRef } from "../../vendor/react/cjs/react.production.js";
-import { useInputRefusalWindow, useRefusalTracker, settleKey } from "./CustomSelect/selectTypeahead.js";
+import { useRecentInputWithin, useRefusalTracker, settleKey } from "./CustomSelect/selectTypeahead.js";
 import { RECENT_INPUT_GUARD_MS } from "../hooks/useRecentInputGuard.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
@@ -27,18 +27,18 @@ import { MCPServerDialogCopy } from "./MCPServerDialogCopy.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "./CustomSelect/select.js";
 
-//@ chunk-20skp6hd.js:1427-2791 fingerprint (2.1.88 match: MCPServerApprovalDialog, 0.733)
+//@ chunk-ezx72dpn.js:1428-2792 fingerprint (2.1.88 match: MCPServerApprovalDialog, 0.733)
 /**
  * 新 MCP 服务器批准：Use this server / Use all future servers / Continue without，结果写入 localSettings 的 enabled/disabled 列表。
  */
 function MCPServerApprovalDialog({ serverName, isPluginServer = false, onDone }) {
   let { storageV5 } = useTheme_2();
   let submitGuardRef = useRef(false);
-  let inputRefusalWindow = useInputRefusalWindow(RECENT_INPUT_GUARD_MS);
+  let recentInput = useRecentInputWithin(RECENT_INPUT_GUARD_MS);
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
   let remountKey = settleKey(epoch, RECENT_INPUT_GUARD_MS);
   function shouldRefuseInput() {
-    if (inputRefusalWindow() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
+    if (recentInput() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
       noteRefused();
       return true;
     }

@@ -3,9 +3,9 @@
  *
  * 远程（http/sse/claude.ai）MCP 服务器菜单：认证（OAuth）、重连、查看工具、启用/禁用、清除认证。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/mcp/MCPRemoteServerMenu.tsx
- * pieces: chunk-vrb44rx7.js (8)
+ * pieces: chunk-wb51jffc.js (8)
  * attribution: placement 7, fingerprint 1
  */
 import {
@@ -98,30 +98,30 @@ import { FlexDirectionRow } from "../design-system/Table.js";
 import { sanitizeCallMark } from "../../services/mcp/mcpCallConstants.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 
-//@ chunk-vrb44rx7.js:6898-6921 placement
+//@ chunk-wb51jffc.js:7010-7033 placement
 function returnFalseRemoteMenu() {
   return false;
 }
-//@ chunk-vrb44rx7.js:6921-6944 placement
+//@ chunk-wb51jffc.js:7033-7056 placement
 function returnFalseRemoteMenu_2() {
   return false;
 }
-//@ chunk-vrb44rx7.js:6944-7071 placement
+//@ chunk-wb51jffc.js:7056-7183 placement
 var CANNOT_AUTH_WITHOUT_TERMINAL =
   "Can't authenticate MCP servers while no terminal is attached to this background session. Attach to it and try again.";
-//@ chunk-vrb44rx7.js:7071-7123 placement
+//@ chunk-wb51jffc.js:7183-7235 placement
 function mcpModules() {
   return require("../../services/mcp/emitTripwireEvent.lazy.js");
 }
-//@ chunk-vrb44rx7.js:7123-7165 placement
+//@ chunk-wb51jffc.js:7235-7277 placement
 function getMcpAuthModule() {
   return mcpModules().mcpAuthModule();
 }
-//@ chunk-vrb44rx7.js:7165-7209 placement
+//@ chunk-wb51jffc.js:7277-7321 placement
 function getMcpClientModule() {
   return mcpModules().mcpClientModule();
 }
-//@ chunk-vrb44rx7.js:7209-8350 placement
+//@ chunk-wb51jffc.js:7321-8462 placement
 /**
  * 渲染 MCP 服务器状态行（disabled、connected 及工具获取失败、needs-auth、配置问题等）。
  */
@@ -223,7 +223,7 @@ function renderServerStatusLine(client, toolCount, theme) {
     ],
   });
 }
-//@ chunk-vrb44rx7.js:9935-26449 fingerprint (2.1.88 match: MCPRemoteServerMenu, 0.498)
+//@ chunk-wb51jffc.js:10047-26568 fingerprint (2.1.88 match: MCPRemoteServerMenu, 0.498)
 /**
  * 远程 MCP 服务器菜单：显示状态与能力，执行 OAuth 认证（tengu_claudeai_mcp_auth_completed）、重连、清除认证、启用/禁用、查看工具。
  */

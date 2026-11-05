@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：校验请求、准备输入输出文件路径后执行 MCP 调用（Windows 不支持）；执行 CCR 暂存的 MCP 调用并上报结果。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-km6145cp.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tcnfdqpw.js (10)
  * attribution: placement 10
  */
 import { posix } from "path";
@@ -35,7 +35,7 @@ import { readFlagWithOverride } from "../analytics/flagOverrides.js";
 import { writeNewFileExclusive } from "../../utils/tempFiles.js";
 import { createAbortController } from "../../utils/abortController.js";
 
-//@ chunk-km6145cp.js:3808-3962 placement
+//@ chunk-tcnfdqpw.js:4116-4270 placement
 /**
  * 客户端取消时返回给模型的错误文本。
  */
@@ -46,7 +46,7 @@ var MIN_STAGING_TIMEOUT_MS = 1000;
 var MAX_ERROR_DETAIL_CHARS = 2000;
 var LANE_TEMPLATE_RE = /^\{\{(in|out):([A-Za-z0-9_-]{1,64})\}\}$/;
 var CANCELLED_BY_CLIENT_MESSAGE = "cancelled by client";
-//@ chunk-km6145cp.js:3962-4024 placement
+//@ chunk-tcnfdqpw.js:4270-4332 placement
 /**
  * 构造暂存调用失败的返回值（staging + telemetryCode）。
  */
@@ -56,7 +56,7 @@ function stagingErrorResult(errorCode, detail, retryable, telemetryCode) {
     telemetryCode,
   };
 }
-//@ chunk-km6145cp.js:4024-4189 placement
+//@ chunk-tcnfdqpw.js:4332-4497 placement
 function collectLanePathRefs(value, refs) {
   if (typeof value === "string") {
     if (LANE_TEMPLATE_RE.test(value)) refs.add(value);
@@ -69,7 +69,7 @@ function collectLanePathRefs(value, refs) {
   if (isPlainObject(value))
     for (let objectValue of Object.values(value)) collectLanePathRefs(objectValue, refs);
 }
-//@ chunk-km6145cp.js:4189-4359 placement
+//@ chunk-tcnfdqpw.js:4497-4667 placement
 function substituteLanePaths(value, tokens) {
   if (typeof value === "string") {
     if (LANE_TEMPLATE_RE.test(value)) return tokens.get(value) ?? value;
@@ -79,7 +79,7 @@ function substituteLanePaths(value, tokens) {
   if (isPlainObject(value)) return import_mapValues(value, (value) => substituteLanePaths(value, tokens));
   return value;
 }
-//@ chunk-km6145cp.js:4359-4427 placement
+//@ chunk-tcnfdqpw.js:4667-4735 placement
 /**
  * 取安全的文件扩展名：只接受 1–8 位字母数字，否则空串。
  */
@@ -87,7 +87,7 @@ function safeExtname(lanePath) {
   let ext = extname(lanePath);
   return /^\.[A-Za-z0-9]{1,8}$/.test(ext) ? ext : "";
 }
-//@ chunk-km6145cp.js:4427-4675 placement
+//@ chunk-tcnfdqpw.js:4735-4983 placement
 function resolveLanePath(kind, path) {
   let relPath;
   try {
@@ -113,7 +113,7 @@ function resolveLanePath(kind, path) {
     rel: relPath,
   };
 }
-//@ chunk-km6145cp.js:4675-4993 placement
+//@ chunk-tcnfdqpw.js:4983-5301 placement
 /**
  * 执行 CCR 暂存的 MCP 调用并上报结果。
  */
@@ -142,7 +142,7 @@ async function runStagedMcpCall(request, options) {
     tool,
   };
 }
-//@ chunk-km6145cp.js:4993-5120 placement
+//@ chunk-tcnfdqpw.js:5301-5428 placement
 function stagingError(errorCode, detail, retryable) {
   return {
     ok: false,
@@ -153,7 +153,7 @@ function stagingError(errorCode, detail, retryable) {
     }),
   };
 }
-//@ chunk-km6145cp.js:5120-5321 placement
+//@ chunk-tcnfdqpw.js:5428-5629 placement
 function contentToText(content) {
   if (typeof content === "string") return content;
   if (Array.isArray(content))
@@ -167,7 +167,7 @@ function contentToText(content) {
 `);
   return "";
 }
-//@ chunk-km6145cp.js:5321-10780 placement
+//@ chunk-tcnfdqpw.js:5629-11088 placement
 /**
  * 校验请求、准备输入输出文件路径后执行 MCP 调用（Windows 不支持）。
  */

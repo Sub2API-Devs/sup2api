@@ -1,6 +1,8 @@
 # 斜杠命令（commands 领域）
 
-本篇说明 Claude Code 2.1.316 的斜杠命令：命令对象的类型与字段、注册表的组成、过滤规则、解析与执行流程、全部内建命令一览、重要命令的实现要点，以及与 2.1.88 的差异。
+> 2026-11-05 升级到 2.1.318：本篇写于 2.1.316，代码引用（声明 id、路径、名字）已按 2.1.318 阅读树逐条校验，行为描述没有逐条重新核对；316 → 318 的变化见 [`research/versions/CLAUDE-CODE-2.1.318-CHANGES.md`](../../research/versions/CLAUDE-CODE-2.1.318-CHANGES.md)。
+
+本篇说明 Claude Code 2.1.318 的斜杠命令：命令对象的类型与字段、注册表的组成、过滤规则、解析与执行流程、全部内建命令一览、重要命令的实现要点，以及与 2.1.88 的差异。
 
 依据只有 `original/`。引用格式为 `chunk-xxx.js` 加压缩名，括号里是本领域给出的语义名（`naming/semantic-commands.jsonl`）或门面原名（`analysis/names/facade.jsonl`）。旧版 `references/claude-code-analysis/src/commands*` 只用来对照命名。
 
@@ -8,16 +10,16 @@
 
 | 位置 | 内容 |
 |---|---|
-| `chunk-e6aww6q8.js` 2053315–2072348 | 注册表主体（源文件 `commands.ts`）：内建命令表 `buildBuiltinCommandTable`（`chunk-e6aww6q8.js#Z3s`）、运行时门控组、`getCommands`、技能与插件合并、保留名、远程/桥接安全集合、SDK 列表转换 |
-| `chunk-e6aww6q8.js` 约 953295–961959 | 命令基础谓词：`getSkillOverrideState`（`chunk-e6aww6q8.js#LCe`）、`getCommandRequirements`（`chunk-e6aww6q8.js#JBr`）、`getThinClientDispatchMode`（`chunk-e6aww6q8.js#f4s`）、`supportsNonInteractive`（`chunk-e6aww6q8.js#aGe`）等；写作时切分在 `_unattributed/` 的 part-078/079，现为 `utils/commandPredicates.ts` |
-| `chunk-e6aww6q8.js` part-179…225 | 大部分内建命令对象（`commands/<name>/index.ts` 的内容），以及各命令的启用谓词 |
-| `chunk-s61vbvea.js` 16800–21200 | `getCommandName`（`chunk-s61vbvea.js#Zo`）、`isCommandEnabled`（`chunk-s61vbvea.js#Ud`）、`findCommand`（`chunk-s61vbvea.js#Zs`）、`getCommand`（`chunk-s61vbvea.js#t_n`）、`splitSlashCommandInput`（`chunk-s61vbvea.js#BX`）、`isImmediateCommand`（`chunk-s61vbvea.js#JRe`）、`getCommandContextMode`（`chunk-s61vbvea.js#NZn`）等 |
-| `chunk-18hwfzwa.js` | `COMMAND_DIALOG_LOADERS`（`chunk-18hwfzwa.js#nre`）：local-jsx 命令名到实现 chunk 的懒加载表；`resolveCommandDialog`（`chunk-18hwfzwa.js#_P`） |
-| `chunk-yjaa68dq.js` | `registerBundledSkill`（`chunk-yjaa68dq.js#ol`）与全部发行内建技能（code-review、commit、doctor、loop 等） |
-| `chunk-3g0djq3w.js` | 斜杠命令派发 `processSlashCommand`（bootstrap 领域，见 §5） |
+| `chunk-5xgkngpb.js` 2053315–2072348 | 注册表主体（源文件 `commands.ts`）：内建命令表 `buildBuiltinCommandTable`（`chunk-5xgkngpb.js#Hpi`）、运行时门控组、`getCommands`、技能与插件合并、保留名、远程/桥接安全集合、SDK 列表转换 |
+| `chunk-5xgkngpb.js` 约 953295–961959 | 命令基础谓词：`getSkillOverrideState`（`chunk-5xgkngpb.js#QIe`）、`getCommandRequirements`（`chunk-5xgkngpb.js#j3r`）、`getThinClientDispatchMode`（`chunk-5xgkngpb.js#Gli`）、`supportsNonInteractive`（`chunk-5xgkngpb.js#LKe`）等；写作时切分在 `_unattributed/` 的 part-078/079，现为 `utils/commandPredicates.ts` |
+| `chunk-5xgkngpb.js` part-179…225 | 大部分内建命令对象（`commands/<name>/index.ts` 的内容），以及各命令的启用谓词 |
+| `chunk-7jxyna5q.js` 16800–21200 | `getCommandName`（`chunk-7jxyna5q.js#bs`）、`isCommandEnabled`（`chunk-7jxyna5q.js#Vd`）、`findCommand`（`chunk-7jxyna5q.js#hi`）、`getCommand`（`chunk-7jxyna5q.js#YCn`）、`splitSlashCommandInput`（`chunk-1z79zgep.js#W9`）、`isImmediateCommand`（`chunk-7jxyna5q.js#EMe`）、`getCommandContextMode`（`chunk-7jxyna5q.js#Aur`）等 |
+| `chunk-czq1j3j2.js` | `COMMAND_DIALOG_LOADERS`（`chunk-czq1j3j2.js#Wre`）：local-jsx 命令名到实现 chunk 的懒加载表；`resolveCommandDialog`（`chunk-czq1j3j2.js#ZP`） |
+| `chunk-xc4g26h5.js` | `registerBundledSkill`（`chunk-xc4g26h5.js#Sl`）与全部发行内建技能（code-review、commit、doctor、loop 等） |
+| `chunk-g88zyy4n.js` | 斜杠命令派发 `processSlashCommand`（bootstrap 领域，见 §5） |
 | 各命令实现 chunk | 命令对象的 `load()` 用 `require("./chunk-xxx.js")` 或动态 import 取实现；表见 §6 |
 
-命令对象和实现分属不同 chunk。Bun 为每个被动态 import 的模块生成一个门面 chunk（例如 `chunk-whwtfsqf.js` → /login），所以一个源模块常被拆成"命令对象（在注册表 chunk 里）+ 实现（在独立 chunk 里）"两部分。
+命令对象和实现分属不同 chunk。Bun 为每个被动态 import 的模块生成一个门面 chunk（例如 `chunk-6085qsva.js` → /login），所以一个源模块常被拆成"命令对象（在注册表 chunk 里）+ 实现（在独立 chunk 里）"两部分。
 
 ## 2. 命令对象
 
@@ -26,7 +28,7 @@
 | type | 执行方式 | 返回 |
 |---|---|---|
 | `local` | `load()` 得到模块，调用 `call(args, context, invokedName)` | `type: "text"`（带 value、level?）、`type: "compact"`（…）、`type: "query"`（带 prompt）、`type: "skip"` |
-| `local-jsx` | `load()`；没有 `load` 时由 `resolveCommandDialog`（`chunk-18hwfzwa.js#_P`）按 `dialogKey ?? name` 查 `nre` 懒加载。调用 `call(onDone, context, args, invokedName)` | React 节点，挂到 `localJsx.show`；结束时组件调用 `onDone(result, options)` |
+| `local-jsx` | `load()`；没有 `load` 时由 `resolveCommandDialog`（`chunk-czq1j3j2.js#ZP`）按 `dialogKey ?? name` 查 `nre` 懒加载。调用 `call(onDone, context, args, invokedName)` | React 节点，挂到 `localJsx.show`；结束时组件调用 `onDone(result, options)` |
 | `prompt` | `getPromptForCommand(args, context)` | ContentBlock 数组，作为用户消息送给模型（可 fork 到子代理执行） |
 
 **孪生命令。** 316 的一个普遍模式是同一个命令名有两份定义：local-jsx 给交互 TUI，local 给无头模式（`-p`、SDK）。两份用 `_e()`（getIsNonInteractiveSession）互斥：
@@ -43,7 +45,7 @@
 | `type`、`name`、`aliases`、`description` | 描述常写成 getter，随状态变化（如 /model 显示当前模型、/remote-control 随连接状态） |
 | `menuDescription` | 命令菜单里的短描述 |
 | `argumentHint` | 参数提示，如 `[filename]`、`<model>` |
-| `isEnabled()` | 是否可用；与 `policyGate` 一起由 `isCommandEnabled`（`chunk-s61vbvea.js#Ud`）判定 |
+| `isEnabled()` | 是否可用；与 `policyGate` 一起由 `isCommandEnabled`（`chunk-7jxyna5q.js#Vd`）判定 |
 | `isHidden` | 不出现在菜单与补全里（常为 getter）。隐藏不等于禁用，用户仍可输入 |
 | `availability` | `claude-ai` / `console` / `console-profile` 数组，见 §4.1 |
 | `policyGate: {policy}` | 组织策略开关，例如 /insights |
@@ -90,11 +92,11 @@
 
 ### 3.1 内建命令表
 
-`buildBuiltinCommandTable`（`chunk-e6aww6q8.js#Z3s`）按固定顺序列出约 145 个条目，`filter(Boolean)` 去掉构建期为 `null` 的占位（如 `Yrn`、`vTe`、`bTe`、`promoteMemoryCommands`、`accountMemoryCommands`，以及 See/p9e/m9e 等内部命令）。结果由 `getBuiltinCommandTable`（`chunk-e6aww6q8.js#M2`）缓存在 `state.builtinCommandTable`；门面导出名是 `getBuiltinCommands`（`chunk-e6aww6q8.js#SX`）。
+`buildBuiltinCommandTable`（`chunk-5xgkngpb.js#Hpi`）按固定顺序列出约 145 个条目，`filter(Boolean)` 去掉构建期为 `null` 的占位（如 `Yrn`、`vTe`、`bTe`、`promoteMemoryCommands`、`accountMemoryCommands`，以及 See/p9e/m9e 等内部命令）。结果由 `getBuiltinCommandTable`（`chunk-5xgkngpb.js#XV`）缓存在 `state.builtinCommandTable`；门面导出名是 `getBuiltinCommands`（`chunk-5xgkngpb.js#oQ`）。
 
 **部分命令按需加载。** 注册表里用 `require("./chunk-xxx.js").default` 取的命令有 brief、remote-control、daemon、recap、goal、workflows、web-setup、list-agents、background、stop。
 
-**运行时门控组。** `getRuntimeGatedCommandGroups`（`chunk-e6aww6q8.js#nsn`）定义五组 `{open(), whenOpen, whenClosed}`，由 `getRuntimeGatedGroup`（`chunk-e6aww6q8.js#SZ`）在建表时选择：
+**运行时门控组。** `getRuntimeGatedCommandGroups`（`chunk-5xgkngpb.js#Fun`）定义五组 `{open(), whenOpen, whenClosed}`，由 `getRuntimeGatedGroup`（`chunk-5xgkngpb.js#Lte`）在建表时选择：
 
 | 组 | open 条件 | 打开时 | 关闭时 |
 |---|---|---|---|
@@ -104,25 +106,25 @@
 | skillDoctor | `jF`：tengu_lantern_prism 或 CLAUDE_CODE_LANTERN_PRISM | /skill-doctor 两版 | 无 |
 | logout | 一方 API 或已 OAuth 登录 | /logout | 无 |
 
-`getRuntimeGatedBuiltinCommands`（`chunk-e6aww6q8.js#Q3s`）返回五组的全部成员，供保留名使用。这样开关变化时，名字仍被内建占住。
+`getRuntimeGatedBuiltinCommands`（`chunk-5xgkngpb.js#Lpi`）返回五组的全部成员，供保留名使用。这样开关变化时，名字仍被内建占住。
 
 **不进入注册表的列表。**
 
-- `INTERNAL_ONLY_COMMANDS`（压缩名 wOl，`commands.ts`）：内部命令，包括 `{name:"stub", isEnabled:false}` 存根、/commit-push-pr、/version 两版。外部构建不并入 `buildBuiltinCommandTable`（`chunk-e6aww6q8.js#Z3s`）。
+- `INTERNAL_ONLY_COMMANDS`（压缩名 wOl，`commands.ts`）：内部命令，包括 `{name:"stub", isEnabled:false}` 存根、/commit-push-pr、/version 两版。外部构建不并入 `buildBuiltinCommandTable`（`chunk-5xgkngpb.js#Hpi`）。
 - `filtered`（压缩名 TOl，`commands.ts`）：全为 null。
 
 ### 3.2 其他命令来源
 
-`loadAllCommands`（`chunk-e6aww6q8.js#Zrr`）按 `commandsMemoKey`（`chunk-e6aww6q8.js#bjo`，由 cwd、存储 v5、隐藏插件组成）缓存 `loadAllCommandsUncached`（`chunk-e6aww6q8.js#esr`）的结果。`loadAllCommandsUncached` 并发加载以下来源：
+`loadAllCommands`（`chunk-5xgkngpb.js#Mur`）按 `commandsMemoKey`（`chunk-5xgkngpb.js#VJo`，由 cwd、存储 v5、隐藏插件组成）缓存 `loadAllCommandsUncached`（`chunk-5xgkngpb.js#Our`）的结果。`loadAllCommandsUncached` 并发加载以下来源：
 
-1. `getSkills`（`chunk-e6aww6q8.js#Vrr`）：
-   - 技能目录 `getSkillDirCommandsCached`（`chunk-e6aww6q8.js#pNe`）：用户、项目、附加目录、claude.ai 同步技能；
-   - 插件技能 `loadPluginSkills`（`chunk-e6aww6q8.js#iKe`）；
+1. `getSkills`（`chunk-5xgkngpb.js#Tur`）：
+   - 技能目录 `getSkillDirCommandsCached`（`chunk-5xgkngpb.js#k1e`）：用户、项目、附加目录、claude.ai 同步技能；
+   - 插件技能 `loadPluginSkills`（`chunk-5xgkngpb.js#W5e`）；
    - 发行内建技能 `ste()`（`ol` 注册，见 §6.3）；
    - 内建插件技能 `epr()`。
    任一来源失败只记日志、返回空。
 2. `dbe`：插件命令（插件 `commands/` 目录）。
-3. `warmWorkflows`（`chunk-e6aww6q8.js#Yrr`）：工作流命令（`chunk-qzez70vf.js`，`kind:"workflow"` 的 prompt）。
+3. `warmWorkflows`（`chunk-5xgkngpb.js#Eur`）：工作流命令（`chunk-dn8avk1p.js`，`kind:"workflow"` 的 prompt）。
 
 合并顺序如下：
 
@@ -133,29 +135,29 @@
 合并后依次处理：
 
 1. `wjt`（validateListableCommands）：校验名字长度（含 MCP 名）与保留名。
-2. claude.ai 同步技能经 `admitSyncedSkills`（`chunk-e6aww6q8.js#H7`）：与保留名冲突者不提供，并由 `tsr` 上报 `skill_reserved_namespace`。
-3. `dropShadowedFallbackSkills`（`chunk-e6aww6q8.js#q_e`）：`fallback:true` 的技能若被插件或 MCP 的同名 `:后缀` 技能遮蔽，就丢弃。
-4. `shedReservedAliases`（`chunk-e6aww6q8.js#isr`）：插件/同步技能的别名与内建或保留名冲突时移入 `shedAliases`；插件命名目录别名让位；无头模式下内建 help、feedback 让给同名插件技能（`HEADLESS_YIELDABLE_NAMES`（`chunk-e6aww6q8.js#rzr`））。
+2. claude.ai 同步技能经 `admitSyncedSkills`（`chunk-5xgkngpb.js#UJ`）：与保留名冲突者不提供，并由 `tsr` 上报 `skill_reserved_namespace`。
+3. `dropShadowedFallbackSkills`（`chunk-5xgkngpb.js#AEe`）：`fallback:true` 的技能若被插件或 MCP 的同名 `:后缀` 技能遮蔽，就丢弃。
+4. `shedReservedAliases`（`chunk-5xgkngpb.js#Wur`）：插件/同步技能的别名与内建或保留名冲突时移入 `shedAliases`；插件命名目录别名让位；无头模式下内建 help、feedback 让给同名插件技能（`HEADLESS_YIELDABLE_NAMES`（`chunk-5xgkngpb.js#u7r`））。
 5. 遥测 `mkt("command")` 记录命令数量与冲突。
 
-**MCP prompt。** MCP 服务器的 prompt 以 `mcp__<server>__<prompt>` 命名（别名 `<server>:<prompt>` 与 `… (MCP)`）。它们由 MCP 客户端（`chunk-8t8n4kdh.js`、`chunk-z1n5m6nf.js`）生成，经 `getMcp().commands` 进入 `getCommands`，不在 `esr` 里。
+**MCP prompt。** MCP 服务器的 prompt 以 `mcp__<server>__<prompt>` 命名（别名 `<server>:<prompt>` 与 `… (MCP)`）。它们由 MCP 客户端（`chunk-sywnjtqb.js`、`chunk-h44h5gdv.js`）生成，经 `getMcp().commands` 进入 `getCommands`，不在 `esr` 里。
 
-**动态技能。** 会话中由文件触达激活的条件技能（`paths`）和动态技能 `getDynamicSkills`（`chunk-e6aww6q8.js#Jtt`），在 `assembleCommands`（`chunk-e6aww6q8.js#nsr`）里插入到第一个内建命令之前。
+**动态技能。** 会话中由文件触达激活的条件技能（`paths`）和动态技能 `getDynamicSkills`（`chunk-5xgkngpb.js#Elt`），在 `assembleCommands`（`chunk-5xgkngpb.js#Fur`）里插入到第一个内建命令之前。
 
 ### 3.3 getCommands
 
-`getCommands`（`chunk-e6aww6q8.js#Fp`）是会话取命令列表的唯一入口。它调用 `assembleCommands`（`chunk-e6aww6q8.js#nsr`），然后：
+`getCommands`（`chunk-5xgkngpb.js#cm`）是会话取命令列表的唯一入口。它调用 `assembleCommands`（`chunk-5xgkngpb.js#Fur`），然后：
 
-- 用 `hookedCommands`（`chunk-e6aww6q8.js#Z6e`）应用插件的命令集钩子（可增删改命令）；
+- 用 `hookedCommands`（`chunk-5xgkngpb.js#xXe`）应用插件的命令集钩子（可增删改命令）；
 - 用 `hideSkillsBehindPlugins` 应用插件隐藏表（hiddenBehindPlugin 的暂扣）。
 
 `nsr` 依次做这些事：
 
-1. 取 `loadAllCommands`（`chunk-e6aww6q8.js#Zrr`）结果，按 `meetsAvailabilityRequirement`（`chunk-e6aww6q8.js#HCe`）与 `isCommandEnabled`（`chunk-s61vbvea.js#Ud`）过滤。
+1. 取 `loadAllCommands`（`chunk-5xgkngpb.js#Mur`）结果，按 `meetsAvailabilityRequirement`（`chunk-5xgkngpb.js#ZIe`）与 `isCommandEnabled`（`chunk-7jxyna5q.js#Vd`）过滤。
 2. additionalDirectories 里的项目技能与主项目同名时去重。
 3. 处理条件技能与同步技能可见性。
 4. 嵌套目录 `.claude/skills` 的技能：
-   - 用 `toScopedSkillCommand`（`chunk-e6aww6q8.js#ssr`）生成 `scope:name`，`rsr` 取作用域（相对 cwd 的项目路径）；
+   - 用 `toScopedSkillCommand`（`chunk-5xgkngpb.js#Uur`）生成 `scope:name`，`rsr` 取作用域（相对 cwd 的项目路径）；
    - 描述追加 "(from X/.claude/skills — applies when working on files under X/)"（`rsn`）；
    - 同名且无法加前缀的不提供（`osr`）。
 5. 动态技能插入到内建命令之前。
@@ -164,20 +166,20 @@
 
 | 函数 | 内容 |
 |---|---|
-| `getSkillToolCommands`（`chunk-e6aww6q8.js#YI`） | Skill 工具可调用的技能（谓词 `isSkillToolCommand`（`chunk-e6aww6q8.js#Y_e`）：prompt、非内建、模型可调用、有描述） |
-| `getSlashCommandToolSkills`（`chunk-e6aww6q8.js#G0e`） | 系统提示里的技能清单（实现 `lsr`） |
-| `toSlashCommands`（`chunk-e6aww6q8.js#qZ`）/ `toSlashCommand`（`chunk-e6aww6q8.js#iJn`） | SDK `slash_commands` 条目 |
-| `bridgeAdvertisedCommands`（`chunk-e6aww6q8.js#RGt`）/ `toBridgeSlashCommands`（`chunk-e6aww6q8.js#yjo`） | 向 Remote Control 桥接端公布的命令 |
-| `builtInCommandNames`（`chunk-e6aww6q8.js#UB`）、`shippedCommandNames`（`chunk-e6aww6q8.js#bX`） | 名字保留与遥测（`Tse` 把非发行命令名上报为 "custom"） |
+| `getSkillToolCommands`（`chunk-5xgkngpb.js#kM`） | Skill 工具可调用的技能（谓词 `isSkillToolCommand`（`chunk-5xgkngpb.js#CEe`）：prompt、非内建、模型可调用、有描述） |
+| `getSlashCommandToolSkills`（`chunk-5xgkngpb.js#XBe`） | 系统提示里的技能清单（实现 `lsr`） |
+| `toSlashCommands`（`chunk-5xgkngpb.js#jne`）/ `toSlashCommand`（`chunk-5xgkngpb.js#Yar`） | SDK `slash_commands` 条目 |
+| `bridgeAdvertisedCommands`（`chunk-5xgkngpb.js#v5t`）/ `toBridgeSlashCommands`（`chunk-5xgkngpb.js#zJo`） | 向 Remote Control 桥接端公布的命令 |
+| `builtInCommandNames`（`chunk-5xgkngpb.js#xj`）、`shippedCommandNames`（`chunk-5xgkngpb.js#rQ`） | 名字保留与遥测（`Tse` 把非发行命令名上报为 "custom"） |
 
 **缓存清理。**
 
-- `clearCommandMemoizationCaches`（`chunk-e6aww6q8.js#qI`）只清记忆化。
-- `clearCommandsCache`（`chunk-e6aww6q8.js#CF`）连技能目录、插件命令、插件技能的缓存一起清。`/reload-plugins`、`/reload-skills`、`/clear` 会调用。
+- `clearCommandMemoizationCaches`（`chunk-5xgkngpb.js#dP`）只清记忆化。
+- `clearCommandsCache`（`chunk-5xgkngpb.js#yB`）连技能目录、插件命令、插件技能的缓存一起清。`/reload-plugins`、`/reload-skills`、`/clear` 会调用。
 
 ## 4. 过滤
 
-### 4.1 availability：`meetsAvailabilityRequirement`（`chunk-e6aww6q8.js#HCe`）
+### 4.1 availability：`meetsAvailabilityRequirement`（`chunk-5xgkngpb.js#ZIe`）
 
 | 值 | 条件 |
 |---|---|
@@ -188,7 +190,7 @@
 
 宿主（例如 IDE 或桌面应用）可以通过 `getHostState().commandsOffHere?.(cmd)` 直接关掉命令。数组中任一值满足即可。
 
-### 4.2 启用：`isCommandEnabled`（`chunk-s61vbvea.js#Ud`）
+### 4.2 启用：`isCommandEnabled`（`chunk-7jxyna5q.js#Vd`）
 
 1. 有 `policyGate` 时，调用 `commandPolicyGateAllows(policyGate.policy)`。getter 抛错按不允许处理。
 2. 返回 `cmd.isEnabled?.() ?? true`。
@@ -207,19 +209,19 @@
   - `Gpe` 升级（非 DISABLE_UPGRADE_COMMAND、非企业）
   - `_G` 隐私设置；`Vvt` 语音（claude.ai 且 allow_voice_mode）
   - `ox` Chrome（allow_claude_browser_extension）；`UW` design（allow_design_sync）
-  - `isImportEnabled`（`chunk-e6aww6q8.js#N0e`）/import（tengu_import）；`isSettingsMovedToConfig`（`chunk-e6aww6q8.js#dRe`） vim/output-style 移到 /config（tengu_maple_sundial）
+  - `isImportEnabled`（`chunk-5xgkngpb.js#jBe`）/import（tengu_import）；`isSettingsMovedToConfig`（`chunk-5xgkngpb.js#OOe`） vim/output-style 移到 /config（tengu_maple_sundial）
   - `Iee` 自定义快捷键（tengu_keybinding_customization_release）
   - `Pa` /list-agents（tengu_harbor_kite / CLAUDE_CODE_HARBOR_KITE）
-  - `Sg` 工作流；`VA` artifacts；`isCloudPluginForwardingEnabledCached`（`chunk-g8d4yw80.js#YTn`）cloud-plugins（tengu_violin_wood 且 tengu_violin_amati）
+  - `Sg` 工作流；`VA` artifacts；`isCloudPluginForwardingEnabledCached`（`chunk-r1fa3fft.js#$Hn`）cloud-plugins（tengu_violin_wood 且 tengu_violin_amati）
   - `Tbe`/`kse` limit-reset（tengu_nifty_lemur / tengu_cedar_ember）
   - `Ern` 企业版提示存根（tengu_c4e_slash_upsell）
   - `Mrn` /restart（tengu_fancy_wand、TTY、macOS/Linux）
-  - `wd` 全屏渲染器；`isDesktopCommandEnabled`（`chunk-e6aww6q8.js#lRe`）/desktop（构建期恒 false）
+  - `wd` 全屏渲染器；`isDesktopCommandEnabled`（`chunk-5xgkngpb.js#IOe`）/desktop（构建期恒 false）
 - **策略（`dn(...)`）：** allow_remote_sessions、allow_quick_web_setup、allow_team_onboarding、allow_heap_dump。
 
 ### 4.3 工作区与 Ink 要求
 
-`getCommandRequirements`（`chunk-e6aww6q8.js#JBr`）在没有 `requires` 时按类型给默认值：
+`getCommandRequirements`（`chunk-5xgkngpb.js#j3r`）在没有 `requires` 时按类型给默认值：
 
 - `prompt` → `{workspace:false, ink:false}`
 - `local` → `{workspace:true, ink:false}`
@@ -227,12 +229,12 @@
 
 在没有本地工作区的瘦客户端（远程查看端）上：
 
-- `isUsableWithoutWorkspace`（`chunk-e6aww6q8.js#BUt`）要求命令不需要工作区，或声明了 `thinClientDispatch`；
-- `getThinClientDispatchMode`（`chunk-e6aww6q8.js#f4s`）决定派发方式。
+- `isUsableWithoutWorkspace`（`chunk-5xgkngpb.js#Lzt`）要求命令不需要工作区，或声明了 `thinClientDispatch`；
+- `getThinClientDispatchMode`（`chunk-5xgkngpb.js#Gli`）决定派发方式。
 
 ### 4.4 无头模式
 
-`getNonInteractiveCommands`（`chunk-e6aww6q8.js#NCe`）在 `disableSlashCommands` 时返回空。否则保留 `supportsNonInteractive`（`chunk-e6aww6q8.js#aGe`）为真的命令，即：
+`getNonInteractiveCommands`（`chunk-5xgkngpb.js#eOe`）在 `disableSlashCommands` 时返回空。否则保留 `supportsNonInteractive`（`chunk-5xgkngpb.js#LKe`）为真的命令，即：
 
 - prompt 且未 `disableNonInteractive`；或
 - local 且 `supportsNonInteractive`。
@@ -241,18 +243,18 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 
 ### 4.5 技能覆盖与远程/桥接
 
-**技能覆盖。** `getSkillOverrideState`（`chunk-e6aww6q8.js#LCe`）读取设置 `skillOverrides`（按命令名取值），返回 `on`、`off` 或 `user-invocable-only`。被插件隐藏的技能也视作 off。local 命令里只有 `OVERRIDABLE_LOCAL_COMMANDS`（`chunk-e6aww6q8.js#kxo`）集合（`auto-mode-setup`）能被覆盖。`isSkillOff`（`chunk-e6aww6q8.js#_k`）判断关闭，`isHiddenFromModel`（`chunk-e6aww6q8.js#Q5`）判断对模型隐藏。
+**技能覆盖。** `getSkillOverrideState`（`chunk-5xgkngpb.js#QIe`）读取设置 `skillOverrides`（按命令名取值），返回 `on`、`off` 或 `user-invocable-only`。被插件隐藏的技能也视作 off。local 命令里只有 `OVERRIDABLE_LOCAL_COMMANDS`（`chunk-5xgkngpb.js#dLo`）集合（`auto-mode-setup`）能被覆盖。`isSkillOff`（`chunk-5xgkngpb.js#xT`）判断关闭，`isHiddenFromModel`（`chunk-5xgkngpb.js#z7`）判断对模型隐藏。
 
-**远程模式**（`--remote` 本地端）：`filterCommandsForRemoteMode`（`chunk-e6aww6q8.js#gjo`）只保留 `REMOTE_SAFE_COMMANDS`（`chunk-e6aww6q8.js#tzr`）。
+**远程模式**（`--remote` 本地端）：`filterCommandsForRemoteMode`（`chunk-5xgkngpb.js#WJo`）只保留 `REMOTE_SAFE_COMMANDS`（`chunk-5xgkngpb.js#d7r`）。
 
 **Remote Control 桥接**（手机/网页发来的斜杠命令）：
 
-- `isBridgeSafeCommand`（`chunk-e6aww6q8.js#Gwt`）：prompt 全可，local-jsx 全不可，local 需在 `BRIDGE_SAFE_COMMANDS`（压缩名 sJn，在 `chunk-e6aww6q8.js#tzr` 语句内）。
+- `isBridgeSafeCommand`（`chunk-5xgkngpb.js#NRt`）：prompt 全可，local-jsx 全不可，local 需在 `BRIDGE_SAFE_COMMANDS`（压缩名 sJn，在 `chunk-5xgkngpb.js#d7r` 语句内）。
 - 插件注册的同名 local 命令通过 `findBridgeFallback` 找桥接安全的孪生命令代答。
 
 ## 5. 解析与执行
 
-入口是 `utils/processUserInput/processSlashCommand.tsx`（`chunk-3g0djq3w.js`，归 bootstrap 领域）。调用链：
+入口是 `utils/processUserInput/processSlashCommand.tsx`（`chunk-g88zyy4n.js`，归 bootstrap 领域）。调用链：
 
 ```
 用户输入 "/name args"
@@ -285,9 +287,9 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 
 **其他细节。**
 
-- `isImmediateCommand`（`chunk-s61vbvea.js#JRe`）为真时，模型回答中途输入的命令立即执行，不进队列。
-- `getCommandContextMode`（`chunk-s61vbvea.js#NZn`）返回 `getContext?.() ?? context ?? "inline"`。
-- `buildCommandRunInfo`（`chunk-s61vbvea.js#tpe`）生成 `{command, args, plugin}` 运行记录，敏感参数打码。
+- `isImmediateCommand`（`chunk-7jxyna5q.js#EMe`）为真时，模型回答中途输入的命令立即执行，不进队列。
+- `getCommandContextMode`（`chunk-7jxyna5q.js#Aur`）返回 `getContext?.() ?? context ?? "inline"`。
+- `buildCommandRunInfo`（`chunk-7jxyna5q.js#dde`）生成 `{command, args, plugin}` 运行记录，敏感参数打码。
 - 多个斜杠命令连写（`/a /b`）由 `po` 按 prompt 命令逐个展开。
 
 ## 6. 内建命令一览
@@ -295,7 +297,7 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 图例：
 - **类型**：J = local-jsx，L = local，P = prompt；J+L 表示有交互/无头孪生。
 - **门控**：未写即总是可用。"隐藏"表示 `isHidden` 为真（可能是条件性的）。
-- **模块**：命令对象所在的源模块（按当前切分）；写作时一部分命令对象在 `_unattributed/` 的 `chunk-e6aww6q8` part-NNN（表中曾简写为 _u/NNN），place-rest 后已改为当前正式路径（相对 `commands/`）。
+- **模块**：命令对象所在的源模块（按当前切分）；写作时一部分命令对象在 `_unattributed/` 的 `chunk-5xgkngpb` part-NNN（表中曾简写为 _u/NNN），place-rest 后已改为当前正式路径（相对 `commands/`）。
 - **实现**：`load()` 指向的 chunk。
 
 | 命令 | 别名 | 类型 | 用途 | 命令对象模块 / 实现 | 门控、隐藏 |
@@ -307,7 +309,7 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 | /autocompact | | J+L | 设置自动压缩阈值（上下文窗口占比） | autocompact/index.ts / qqj12s77、70h2e8y3 | 无头版远程工作区也可用 |
 | /autofix-pr | | J | 监控当前 PR 并自动修复问题 | autofix-pr/index.ts / 4pdevvfa | claude-ai 或 console-profile，allow_remote_sessions |
 | /auto-mode-setup | | J+L | 让 auto 模式了解环境，可选规则调整 | auto-mode-setup/index.ts / m8444q1d、4cndz99e | tengu_auto_mode_config.envOnboarding；可被 skillOverrides 关 |
-| /background | bg | J | 把会话送到后台并释放终端 | chunk-3m7t4vj8 / 7c7hjd56 | fleetBackground 组 |
+| /background | bg | J | 把会话送到后台并释放终端 | chunk-tgb8mh19 / 7c7hjd56 | fleetBackground 组 |
 | /branch | | J | 在此处分叉对话 | branch/index.ts / khj4kcw5 | |
 | /brief | | J | 切换仅摘要输出 | brief.ts（gv7qjj2t） | tengu_kairos_brief_config.enable_slash_command |
 | /btw | | J | 不打断主对话的侧问 | btw/index.ts / 583vs41k | |
@@ -322,7 +324,7 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 | /config | settings | J+L | 打开设置 / 按键设置 | config/index.ts / ak1qv1dp、8ncxevqn | |
 | /context | | J+L | 上下文用量彩色网格 / 文本表 | context/index.ts / 10q8r8ck、mszdds2y | |
 | /copy | | J | 复制最近（第 N 条）回复 | copy/index.ts / 0knprqgt | |
-| /daemon | | J | 管理后台服务与例程 | chunk-0e9ty0k2 / b7gstm5r | daemon 组（构建期关闭） |
+| /daemon | | J | 管理后台服务与例程 | chunk-2dzwk0nb / b7gstm5r | daemon 组（构建期关闭） |
 | /design-consent | | L | 授权 Claude 访问 Design 项目 | design/index.ts / c9mbsnrs | 隐藏；`UW` |
 | /design-login | | J | 用 claude.ai 账号授权 design-sync | design/index.ts / zkzpd9ky | `UW` |
 | /design-revoke | | L | 撤销 Design 访问 | design/index.ts / 6qdkmygq | 隐藏；`UW` |
@@ -336,7 +338,7 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 | /feedback | | J | 反馈或报错 | feedback/index.ts / dnxbqwmv | 无头模式可让给插件 |
 | /focus | | J+L | 专注视图（只显示提示、摘要与回复） | focus/index.ts / nre、fv21ck8e | |
 | /fork | | J | 复制对话到新后台会话 / 派生继承全文的后台子代理 | agents/index.ts / d62reftv、cc2xzzcg | 非协调者模式；两版由 fleetFork 组选择 |
-| /goal | | J+L | 设定 Claude 停止前要检查的目标 | chunk-nn4xbsmj / hgfnw8bk、s4441tej | |
+| /goal | | J+L | 设定 Claude 停止前要检查的目标 | chunk-4x1vrj7g / hgfnw8bk、s4441tej | |
 | /heapdump | | L | 写 JS 堆快照 | heapdump/index.ts / dhgx9s0b | 隐藏；allow_heap_dump |
 | /help | | J | 帮助与命令列表 | help/index.ts / yxcx2jtr | 无头模式可让给插件 |
 | /hooks | | J | 查看钩子配置 | hooks/index.ts / bajxb7bf | |
@@ -348,7 +350,7 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 | /install-slack-app | | L | 安装 Slack 应用 | install-slack-app/index.ts / xarcg2hx | claude-ai |
 | /keybindings | | L | 打开快捷键文件 | keybindings/index.ts / 1nat7wre | `Iee` |
 | /limit-reset | | J | 使用一次 5 小时额度重置 | limit-reset/index.ts / q8p98373 | 隐藏；claude.ai 且 `Tbe`/`kse` |
-| /list-agents | peers | L | 列出可发消息的子代理、队友与会话 | chunk-yxzqxbzv / kq21a1r9 | `Pa` |
+| /list-agents | peers | L | 列出可发消息的子代理、队友与会话 | chunk-ac693hrw / kq21a1r9 | `Pa` |
 | /login | | J | 登录或切换 Anthropic 账号 | login/index.ts / whwtfsqf→vrmtstb0 | 非 DISABLE_LOGIN_COMMAND；云会话可拒绝（隐藏） |
 | /logout | | J | 退出登录 | logout/index.ts / tndsj50r | logout 组；非 DISABLE_LOGOUT_COMMAND |
 | /loops | | J | 列出/创建/删除循环 | loops/index.ts / wtfk012h | 恒禁用 |
@@ -358,7 +360,7 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 | /mobile | ios、android | J | 显示移动应用下载二维码 | mobile/index.ts / 7mtn3rbz | |
 | /model | | J+L | 设置模型 | model/index.ts / mvhmq2z8、0pmcg6nh | |
 | /output-style | | L | 列出或切换输出风格（无头） | output-style/index.ts / 1ehcpf9z | 交互端已移到 /config |
-| /output-style、/vim（存根） | | J | 提示"已移到 /config" | createMovedToConfigCommand.ts | 隐藏；`isSettingsMovedToConfig`（`chunk-e6aww6q8.js#dRe`） |
+| /output-style、/vim（存根） | | J | 提示"已移到 /config" | createMovedToConfigCommand.ts | 隐藏；`isSettingsMovedToConfig`（`chunk-5xgkngpb.js#OOe`） |
 | /passes | | J | 分享免费周卡 | passes/index.ts / aa3cndeh | 无资格时隐藏 |
 | /pause-memory | memory-pause、toggle-memory | L | 暂停本会话自动记忆 | pause-memory/index.ts / 8dz40wpq | 恒禁用（构建期） |
 | /permissions | allowed-tools | J | 管理允许/拒绝规则 | permissions/index.ts / p2qwpk2k | |
@@ -369,7 +371,7 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 | /pro-trial-expired | | J | Pro 试用结束后的选项 | pro-trial-expired/index.ts / fnmk6x3n | 隐藏 |
 | /radio | | L | 播放 Claude FM | radio/index.ts / 03rvwpge | |
 | /rate-limit-options | | J | 达到限额时的选项 | rate-limit-options/index.ts / dg94x42s | 隐藏；claude.ai |
-| /recap | | L | 生成一行会话摘要 | chunk-66drwgm7 / z9nn3hxt | |
+| /recap | | L | 生成一行会话摘要 | chunk-rrmadgd5 / z9nn3hxt | |
 | /release-notes | | J | 更新日志 | release-notes/index.ts / 8k62p17d | |
 | /reload-plugins | | L | 激活待生效插件变更 | reload-plugins/index.ts / 8vqp1nqq | |
 | /reload-skills | | L | 重新读取磁盘上的技能 | reload-skills/index.ts / 9dc848ph | |
@@ -391,7 +393,7 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 | /statusline | | P | 让模型配置状态栏 | statusline.tsx | |
 | /status | | J | 版本、模型、账号、连通性等状态 | status/index.ts / gwbvvmmk | |
 | /stickers | | L | 订购贴纸 | stickers/index.ts / ekn75w8p | |
-| /stop | | J+L | 停止后台会话（保留记录与 worktree） | chunk-adzz9hc5 / t85zxbmt、zsxk930s | fleetBackground 组；仅后台会话 |
+| /stop | | J+L | 停止后台会话（保留记录与 worktree） | chunk-fbdrnep1 / t85zxbmt、zsxk930s | fleetBackground 组；仅后台会话 |
 | /subtask | | J | 带完整上下文派子代理，结果回到本会话 | agents/index.ts / 3vqj3nc0 | fleetFork 组 |
 | /tasks | bashes | J | 查看管理后台任务 | tasks/index.ts / pw933apk | |
 | /team-onboarding | | P | 根据使用情况生成团队上手指南 | team-onboarding/index.ts | tengu_flint_harbor_prompt；分享需策略 |
@@ -406,11 +408,11 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 | /usage-credits | | J+L | 配置或申请用量额度 | extra-usage/index.ts / 2gtphf4m、g49d7j62 | `Px` |
 | /version | | J+L | 显示运行中的版本 | version.ts | 恒禁用（外部构建） |
 | /voice | | L | 切换语音模式 | voice/index.ts / vrdyygyr | claude-ai；`Vvt` |
-| /web-setup | | J | 用 GitHub 账号设置云会话 | chunk-pemtjbn7 / ajkmgejw | claude-ai；需 allow_remote_sessions 与 allow_quick_web_setup |
+| /web-setup | | J | 用 GitHub 账号设置云会话 | chunk-xbatms9p / ajkmgejw | claude-ai；需 allow_remote_sessions 与 allow_quick_web_setup |
 | /wellbeing | breaks、break-reminder、downtime | J | 休息提醒与安静时段 | wellbeing/index.ts / a7sxm3q7 | 恒禁用 |
 | /workflow-launch-exec | | L | 执行服务端下发的工作流交接 | remote-workflow/index.ts / 3sew516d | 隐藏 |
-| /workflows | | J | 浏览运行中与已完成的工作流 | chunk-g8tswn69 / wnym76ss | `Sg` |
-| 企业版提示存根 | ultraplan、ultrareview、teleport、remote-control、schedule/routines、autofix-pr | L | 提示"需要 Claude for Enterprise" | c4eUpsell.ts（`createEnterpriseUpsellCommand`/`ENTERPRISE_UPSELL_COMMANDS`，`chunk-e6aww6q8.js#A2`/`chunk-e6aww6q8.js#Rrn`） | 隐藏；`isEnterpriseUpsellEnabled`（`chunk-e6aww6q8.js#Ern`） |
+| /workflows | | J | 浏览运行中与已完成的工作流 | chunk-j98wm54z / wnym76ss | `Sg` |
+| 企业版提示存根 | ultraplan、ultrareview、teleport、remote-control、schedule/routines、autofix-pr | L | 提示"需要 Claude for Enterprise" | c4eUpsell.ts（`createEnterpriseUpsellCommand`/`ENTERPRISE_UPSELL_COMMANDS`，`chunk-5xgkngpb.js#UV`/`chunk-5xgkngpb.js#sun`） | 隐藏；`isEnterpriseUpsellEnabled`（`chunk-5xgkngpb.js#run`） |
 | /commit-push-pr | | P | 提交、推送并开 PR | commit-push-pr.ts | 内部，不在注册表 |
 | /install | | J | 原生构建安装（CLI 子命令界面） | install.tsx | 不在注册表 |
 
@@ -423,7 +425,7 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 - /version 的 `call` 是同 chunk 的 `Cor`；
 - /agents 返回固定文案（`cor`）。
 
-**用同一面板的命令。** /config、/status、/usage 都打开 Settings 面板（`Settings`，`chunk-9h8dr0qb.js#rTe`），只是 `defaultTab` 不同：Config / Status / Usage；以 `stats` 调用时打开 Stats 页。
+**用同一面板的命令。** /config、/status、/usage 都打开 Settings 面板（`Settings`，`chunk-j6tt9nsa.js#mxe`），只是 `defaultTab` 不同：Config / Status / Usage；以 `stats` 调用时打开 Stats 页。
 
 ### 6.2 发行内建技能（prompt，`ol` 注册）
 
@@ -438,8 +440,8 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 
 ### /compact
 
-- 命令对象：`compactCommand`（`chunk-e6aww6q8.js#Dvo`），local，`isEnabled: !DISABLE_COMPACT`，参数是自定义摘要指令。
-- 实现：`chunk-vrrvwm85.js` 的 `se`（call）调用 `O`（compactManually）。
+- 命令对象：`compactCommand`（`chunk-5xgkngpb.js#CPo`），local，`isEnabled: !DISABLE_COMPACT`，参数是自定义摘要指令。
+- 实现：`chunk-4yapqwwv.js` 的 `se`（call）调用 `O`（compactManually）。
   1. 会话被模型结束时拒绝。
   2. 先跑 PreCompact 钩子；钩子可阻止，或追加指令。
   3. 如果后台已有预计算摘要（`A`，tryReusePrecomputedCompaction），直接复用；否则发摘要请求。
@@ -449,37 +451,37 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 
 ### /model
 
-- 交互版 `chunk-mvhmq2z8.js` 的 `zs`：
+- 交互版 `chunk-ny1a8wws.js` 的 `zs`：
   - 无参数时打开选择器；
   - 云会话通过宿主拉取模型列表，超时 15 秒；
-  - 带参数时直接设置（`SetModelFromArgs`（`chunk-mvhmq2z8.js#je`）），并提示弃用模型。
-- 无头版 `chunk-0pmcg6nh.js` 的 `b`：解析 `<model>` 并写设置。
+  - 带参数时直接设置（`chunk-ny1a8wws.js#tt`，316 时名 SetModelFromArgs），并提示弃用模型。
+- 无头版 `chunk-sg8kbk5k.js` 的 `b`：解析 `<model>` 并写设置。
 - 描述 getter 显示当前模型。
 
 ### /config
 
-- 交互版打开 Settings 面板 Config 页（`chunk-ak1qv1dp.js` 的 `_`）。
-- 无头版 `chunk-8ncxevqn.js` 的 `c` 按键设置。
-- 开启 `isSettingsMovedToConfig`（`chunk-e6aww6q8.js#dRe`）（tengu_maple_sundial）时，/vim 与交互端 /output-style 变成"已移到 /config"的隐藏存根（`createMovedToConfigCommand`（`chunk-e6aww6q8.js#ren`））。
+- 交互版打开 Settings 面板 Config 页（`chunk-avg382dy.js` 的 `_`）。
+- 无头版 `chunk-sen07jqs.js` 的 `c` 按键设置。
+- 开启 `isSettingsMovedToConfig`（`chunk-5xgkngpb.js#OOe`）（tengu_maple_sundial）时，/vim 与交互端 /output-style 变成"已移到 /config"的隐藏存根（`createMovedToConfigCommand`（`chunk-5xgkngpb.js#fsn`））。
 
 ### /resume
 
-- 别名 continue，实现 `chunk-74n7apcd.js` 的 `De`。
+- 别名 continue，实现 `chunk-47gvxd8g.js` 的 `De`。
 - 无参数时打开会话选择器；带 ID 或标题时直接恢复；找不到时报 "was not found"。
 - 远程查看端（viewerOnly、无会话 ID）隐藏。
 
 ### /mcp
 
-- 交互版 `chunk-cpqpnzp4.js` 的 `Vd`：服务器列表与待审批项。没有终端时向宿主请求设置界面。
-- 无头版 `chunk-3re05e6m.js` 的 `Le`：
+- 交互版 `chunk-h6004nzv.js` 的 `Vd`：服务器列表与待审批项。没有终端时向宿主请求设置界面。
+- 无头版 `chunk-dernsrpy.js` 的 `Le`：
   - 无参数输出各状态计数（connected / cached / connecting / not connected / not configured / disabled）；
   - 支持 `reconnect|enable|disable [<server>|all]`。
-- CLI 子命令 `claude mcp add` 与 `claude mcp xaa`（XAA IdP）在 `chunk-4vq0yytw.js`。
+- CLI 子命令 `claude mcp add` 与 `claude mcp xaa`（XAA IdP）在 `chunk-yzwxxgws.js`。
 
 ### /plugin
 
-- 实现 `chunk-qey4tpm4.js` 的 `p`，转到 `PluginCommand`（`chunk-vrb44rx7.js#Gen`），再渲染 PluginSettings。
-- 参数由 `parsePluginArgs`（`chunk-bppzggd7.js#DGe`）解析为以下子命令：
+- 实现 `chunk-3nckj9e7.js` 的 `p`，转到 `PluginCommand`（`chunk-wb51jffc.js#Ldn`），再渲染 PluginSettings。
+- 参数由 `parsePluginArgs`（`chunk-agxasdfa.js#c4e`）解析为以下子命令：
   - `help`
   - `list|ls [--enabled|--disabled]`
   - `install|i <plugin>[@marketplace]`，或直接给市场 URL/路径
@@ -498,7 +500,7 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 
 ### /permissions
 
-- 别名 allowed-tools，实现 `chunk-p2qwpk2k.js` 的 `Aw`。
+- 别名 allowed-tools，实现 `chunk-h5wy8vq5.js` 的 `Aw`。
 - 本地打开规则编辑器（中途打开时 `isMidTurn`）。
 - 远程连接时只读查看宿主规则；不可用时提示 "Permission rules aren't available over this remote connection"。
 
@@ -506,39 +508,39 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 
 - 旧版的 `/review` 提示词命令在 316 由发行内建技能 code-review 承担（别名 review），参数为强度、`--comment`、`--fix`。
 - /ultrareview 是云端审查：
-  - 交互版 `chunk-0eepcc6r.js`，无头版 `chunk-yxg7c7n7.js`；
+  - 交互版 `chunk-1nx5c9rq.js`，无头版 `chunk-nm4wy193.js`；
   - 描述含 CCR 条款链接；
   - 配额结构为 reviews_used / limit / remaining / is_overage；
   - 开关 `UF`，配置名 tengu_review_bughunter_config。
 
 ### /init
 
-- prompt 命令。`useNewInitPrompt`（`chunk-e6aww6q8.js#g9o`）在 CLAUDE_CODE_NEW_INIT 或 tengu_slate_harbor_experiment 时选新提示词 `getNewInitPrompt`（压缩名 y9o），否则选旧提示词 `getOldInitPrompt`（压缩名 h9o；两者同在声明 `chunk-e6aww6q8.js#h9o`，`commands/init.ts`）。
+- prompt 命令。`useNewInitPrompt`（`chunk-5xgkngpb.js#GYo`）在 CLAUDE_CODE_NEW_INIT 或 tengu_slate_harbor_experiment 时选新提示词 `getNewInitPrompt`（压缩名 y9o），否则选旧提示词 `getOldInitPrompt`（压缩名 h9o；两者同在声明 `chunk-5xgkngpb.js#zYo`，`commands/init.ts`）。
 - 新提示词会检查 Codex / Gemini CLI 配置，并建议用 /import 迁移。
 
 ### /memory
 
-- 实现 `chunk-c55mbvfz.js` 的 `Qi`：选择 CLAUDE.md（用户、项目、本地）或记忆文件，不存在时创建，再用 `$VISUAL` / `$EDITOR` 打开。
+- 实现 `chunk-dzt5bmy4.js` 的 `Qi`：选择 CLAUDE.md（用户、项目、本地）或记忆文件，不存在时创建，再用 `$VISUAL` / `$EDITOR` 打开。
 - 自动记忆相关的 /pause-memory 与账号记忆命令（promoteMemory、memoryAccount 等）在外部构建中关闭或为 null。
 
 ### /usage（旧 /cost、/stats）
 
 - /cost 和 /stats 在 316 是 /usage 的别名。
 - 交互版打开 Settings 面板 Usage 页，以 `stats` 调用时打开 Stats 页。
-- 无头版 `chunk-9689amr8.js` 的 `G`：会话花费、计划用量、限额贡献项，以及网关或花费上限信息（tengu_amber_lark）。
+- 无头版 `chunk-z03ry4rj.js` 的 `G`：会话花费、计划用量、限额贡献项，以及网关或花费上限信息（tengu_amber_lark）。
 
 ### /login 与 /logout
 
 - **/login**：
-  - 对象由 `_en()` 生成，实现经门面 `chunk-whwtfsqf.js` 指向 `chunk-vrmtstb0.js` 的 `call`（`chunk-vrmtstb0.js#nWi`）。
+  - 对象由 `loginCommand_2`（`chunk-5xgkngpb.js#Lsn`，316 时的 `_en`）生成，实现经门面 `chunk-6085qsva.js` 指向 `chunk-s4h0q5es.js` 的 `call`（`chunk-s4h0q5es.js#Qra`）。
   - 描述在已登录时为 "Switch Anthropic accounts"。
-  - `getLoginAvailability`（`chunk-e6aww6q8.js#$0e`）在云会话内返回 any-method / refused / claudeai-only；refused 时隐藏。
+  - `getLoginAvailability`（`chunk-5xgkngpb.js#WBe`）在云会话内返回 any-method / refused / claudeai-only；refused 时隐藏。
   - 登录后执行 runPostLoginHooks（刷新 advisor 模型、快速模式等）。
-- **/logout**：属于 logout 运行时门控组，实现 `chunk-tndsj50r.js` 的 `u`，调用 `performLogout`（`chunk-th8w37yz.js#XLe`）清凭证与 OAuth 账户字段。
+- **/logout**：属于 logout 运行时门控组，实现 `chunk-fmp5a427.js` 的 `call`（`chunk-fmp5a427.js#d`），调用 `performLogout`（`chunk-wqfxt05n.js#KFe`）清凭证与 OAuth 账户字段。
 
 ### /clear
 
-- 别名 reset、new，实现 `chunk-4mtxrwhe.js`，调用 `clearConversation`（`chunk-231n2j4w.js#iOo`）：
+- 别名 reset、new，实现 `chunk-yjtttm4r.js`（`call` = `runClear`，`chunk-yjtttm4r.js#y`），调用 `clearConversation`（`chunk-sj6t0nqg.js#r2o`）：
   1. 停止后台任务；
   2. 清空消息与各类缓存（`commands/clear/caches.ts`：读文件状态、命令缓存、teleport 缓存）；
   3. 生成新会话 ID；
@@ -624,8 +626,8 @@ local-jsx 在无头模式下被拒绝，提示 "opens an interactive panel…"�
 
 ## 11. 引用校验结果
 
-校验时间 2026-11-04 06:40（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-05 17:32（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
-- 共检查 442 处引用：路径 49/51（另 2 个只在 2.1.88 中存在），名字 243/243，声明id 94/94，字面量 54/54；占位符与含空格的说明性文字 99 处未检查。
-- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`commands/thinkback-play/index.ts`、`commands/tag/tag.tsx`
+- 共检查 449 处引用：路径 51/52（另 1 个只在 2.1.88 中存在），名字 247/247，声明id 97/97，字面量 53/53；占位符与含空格的说明性文字 98 处未检查。
+- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`commands/thinkback-play/index.ts`
 - 未通过：0 处。

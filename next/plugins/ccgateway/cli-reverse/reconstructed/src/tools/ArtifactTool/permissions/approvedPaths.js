@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Artifact 已批准路径与路径问题说明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qxvqcab6.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nfkwcnxd.js (14)
  * attribution: placement 14
  */
 import { DB_FILE_NO_IDENTITY_MESSAGE, DB_FILE_NOT_A_FILE_MESSAGE } from "../promptText.js";
@@ -17,9 +17,9 @@ import { isOwnPrincipal } from "../../../services/artifacts/comments/commentAuth
 import { truncatePathMiddle } from "../../../utils/format.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-qxvqcab6.js:9381-10244 placement
+//@ chunk-nfkwcnxd.js:9356-10219 placement
 var APPROVED_PATH_MISMATCH_TEXT; // deferred: uses TYPE_URL_UNAVAILABLE (../promptText.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-qxvqcab6.js:9381", () => {
+deferInit("chunk-nfkwcnxd.js:9356", () => {
   APPROVED_PATH_MISMATCH_TEXT = {
     changed:
       "file_path no longer names the file that was approved (it moved, was replaced, or was rewritten) \u2014 retry the write so it is checked again",
@@ -34,7 +34,7 @@ deferInit("chunk-qxvqcab6.js:9381", () => {
     size: `file_path is empty or larger than ${MAX_DOCUMENT_BYTES} bytes \u2014 write_db reads at most that much JSON, and the document must serialize to ${MAX_FIELD_VALUE_BYTES} bytes or fewer`,
   };
 });
-//@ chunk-qxvqcab6.js:10244-10348 placement
+//@ chunk-nfkwcnxd.js:10219-10323 placement
 function isReadDbAction(input) {
   return (
     typeof input === "object" &&
@@ -43,15 +43,15 @@ function isReadDbAction(input) {
     typeof input.out_dir === "string"
   );
 }
-//@ chunk-qxvqcab6.js:10348-10515 placement
+//@ chunk-nfkwcnxd.js:10323-10490 placement
 function isWriteDbWithFile(input) {
   if (typeof input !== "object" || input === null || input.action !== "write_db") return false;
   if (typeof input.file_path === "string") return true;
   return batchWrites(input).some((write) => write.filePath !== undefined);
 }
-//@ chunk-qxvqcab6.js:10515-10528 placement
+//@ chunk-nfkwcnxd.js:10490-10503 placement
 var APPROVED_PATH_CHECK_MS = 3000;
-//@ chunk-qxvqcab6.js:10528-10605 placement
+//@ chunk-nfkwcnxd.js:10503-10580 placement
 function jsonByteLength(value) {
   try {
     return Buffer.byteLength(jsonStringify(value), "utf8");
@@ -59,7 +59,7 @@ function jsonByteLength(value) {
     return null;
   }
 }
-//@ chunk-qxvqcab6.js:10605-10787 placement
+//@ chunk-nfkwcnxd.js:10580-10762 placement
 /**
  * 文件审批检查里的量值：data URI 阈值、内嵌内容下限与 base64 正则/行宽。
  */
@@ -69,7 +69,7 @@ var DATA_URI_BASE64_REGEX;
 var BASE64_LINE_REGEX;
 var BASE64_PADDED_REGEX;
 var BASE64_LINE_WIDTHS;
-deferInit("chunk-qxvqcab6.js:10605", () => {
+deferInit("chunk-nfkwcnxd.js:10580", () => {
   DATA_URI_LIMITS = 1024;
   EMBEDDED_CONTENT_MIN_CHARS = 49152;
   DATA_URI_BASE64_REGEX =
@@ -78,7 +78,7 @@ deferInit("chunk-qxvqcab6.js:10605", () => {
   BASE64_PADDED_REGEX = /^[A-Za-z0-9+/_-]+={0,2}$/;
   BASE64_LINE_WIDTHS = new Set([60, 64, 76]);
 });
-//@ chunk-qxvqcab6.js:10787-11180 placement
+//@ chunk-nfkwcnxd.js:10762-11155 placement
 function looksLikeSecretLine(text) {
   let trimmed = text.trim();
   let index = trimmed.indexOf(`
@@ -105,7 +105,7 @@ function looksLikeSecretLine(text) {
     lines.every((line) => line.length === lineWidth && BASE64_LINE_REGEX.test(line))
   );
 }
-//@ chunk-qxvqcab6.js:11180-11277 placement
+//@ chunk-nfkwcnxd.js:11155-11252 placement
 /**
  * 统计文本中大体积 data URI 的字符数（疑似密钥行则按整行计）。
  */
@@ -115,7 +115,7 @@ function largeDataUriChars(text) {
   for (let match of text.matchAll(DATA_URI_BASE64_REGEX)) total += match[0].length;
   return total;
 }
-//@ chunk-qxvqcab6.js:11277-11515 placement
+//@ chunk-nfkwcnxd.js:11252-11490 placement
 function countLargeDataUris(values) {
   let count = 0;
   let chars = 0;
@@ -136,7 +136,7 @@ function countLargeDataUris(values) {
     chars,
   };
 }
-//@ chunk-qxvqcab6.js:11515-11861 placement
+//@ chunk-nfkwcnxd.js:11490-11836 placement
 function describeCommentAuthorAccess(
   account,
   role,
@@ -162,23 +162,23 @@ function describeCommentAuthorAccess(
           : viewerLabel;
   return postedByArtifact ? `${who}, posted by the artifact` : who;
 }
-//@ chunk-qxvqcab6.js:11861-11878 placement
+//@ chunk-nfkwcnxd.js:11836-11853 placement
 /**
  * 失败说明里最多列出的原因条数。
  */
 var MAX_LISTED_FAILURES = 5;
 var MAX_LISTED_FAILURE_REASONS = 10;
-//@ chunk-qxvqcab6.js:11878-11981 placement (2.1.88 match: formatFailureDetails, 0.777)
+//@ chunk-nfkwcnxd.js:11853-11956 placement (2.1.88 match: formatFailureDetails, 0.776)
 function formatFailureDetails(failures, includeReasons) {
   let moreText = failures.length > includeReasons ? ` and ${failures.length - includeReasons} more` : "";
   return `${failures.slice(0, includeReasons).join(", ")}${moreText}`;
 }
-//@ chunk-qxvqcab6.js:11981-12023 placement
+//@ chunk-nfkwcnxd.js:11956-11998 placement
 /**
  * 判断路径问题是否属于越界类。
  */
 var isOutsidePathProblem = (problem) => problem.outsideAsk || problem.flaggedOutside;
-//@ chunk-qxvqcab6.js:12023-13435 placement
+//@ chunk-nfkwcnxd.js:11998-13410 placement
 /**
  * 把文件路径问题（经符号链接到工作区外、不在可访问目录、读规则覆盖等）组成给用户的说明。
  */

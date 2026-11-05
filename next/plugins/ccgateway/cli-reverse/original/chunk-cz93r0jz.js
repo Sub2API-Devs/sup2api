@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.318
+import{an}from"./chunk-exfmq47h.js";import{i}from"./chunk-xjnnz630.js";import{_Ut}from"./chunk-0fzr619q.js";import{ro}from"./chunk-bfve2jm9.js";import{Ge,gse}from"./chunk-fmsrw1pw.js";var iEs=25000,wBi=` To read it anyway, up to what still fits in your context, call ${Ge} again with ${gse}: true \u2014 only if you genuinely need all of it or the user asked for the whole file.`,aEs=` Even with ${gse}, this is more than fits in the context you have left this turn (other large reads in the same turn share that room).`,EBi=` ${gse} is not available where this read runs; read it in parts with offset and limit.`,lEs=128;class k_e extends Error{tokenCount;maxTokens;constructor(e,t,r=""){super(`File content (${e} tokens) exceeds maximum allowed tokens (${t}). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file.${r}`);this.tokenCount=e;this.maxTokens=t;this.name="MaxFileReadTokenExceededError"}}var n=new WeakMap;function dEs(e,t){n.set(e,t)}function ETr(e){return n.get(e)}function o(){let e=i.CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS;if(e!==void 0&&e>0)return e;return}function xF(){let e=ro();return e.defaultFileReadingLimits??={maxSizeBytes:_Ut,maxTokens:o()??iEs},e.defaultFileReadingLimits}function fmt(){return an("tengu_tab_read_sep",!1)}
+export{iEs,wBi,aEs,EBi,lEs,k_e,dEs,ETr,xF,fmt};

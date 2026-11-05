@@ -3,9 +3,9 @@
  *
  * /advisor 命令对象（让 Claude 在关键节点咨询更强模型）及其交互/无头实现入口
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/advisor.ts
- * pieces: chunk-e6aww6q8.js (1), chunk-tx2s9zpa.js (8)
+ * pieces: chunk-5xgkngpb.js (1), chunk-m1f2a43e.js (8)
  * attribution: fingerprint 2, sole-consumer 4, placement 2, layout 1
  */
 import {
@@ -40,7 +40,7 @@ import { parseUserSpecifiedModel } from "../utils/model/modelDisplay.js";
 import { validateModel } from "../utils/model/validateModel.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2035084-2035684 fingerprint (2.1.88 match: advisor, 0.505)
+//@ chunk-5xgkngpb.js:2090901-2091501 fingerprint (2.1.88 match: advisor, 0.505)
 /**
  * /advisor 命令对象（local-jsx）；描述：Let Claude consult a stronger model at key moments；isEnabled: ()=>MA()；isHidden: {return!MA()}；实现 chunk-tx2s9zpa.js 的 Ne。
  */
@@ -52,7 +52,7 @@ var advisorCommand = {
     ink: true,
   },
   thinClientDispatch: "control-request",
-  immediate: (args, presentation) => args.trim() !== "" || presentation === "fullscreen",
+  immediate: (input, surface) => input.trim() !== "" || surface === "fullscreen",
   get argumentHint() {
     return `[${[...getValidAdvisorAliases(), "off"].join("|")}]`;
   },
@@ -75,29 +75,29 @@ var advisorNonInteractiveCommand = {
   },
   load: () => import("./advisor/call.lazy.js"),
 };
-//@ chunk-tx2s9zpa.js:14076-14080 sole-consumer
+//@ chunk-m1f2a43e.js:15224-15228 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tx2s9zpa.js:14076", () => {
+deferInit("chunk-m1f2a43e.js:15224", () => {
   init_react_production();
 });
-//@ chunk-tx2s9zpa.js:14080-14119 sole-consumer (2.1.88 match: getExperimentAdvisorModels, 1)
+//@ chunk-m1f2a43e.js:15228-15267 sole-consumer (2.1.88 match: getExperimentAdvisorModels, 1)
 function getExperimentAdvisorModels(model) {
   return model.advisorModel;
 }
-//@ chunk-tx2s9zpa.js:14119-14162 sole-consumer
+//@ chunk-m1f2a43e.js:15267-15310 sole-consumer
 function advisorModelOption(model) {
   return {
     label: renderModelLabel(model),
     value: model,
   };
 }
-//@ chunk-tx2s9zpa.js:14162-14211 sole-consumer
+//@ chunk-m1f2a43e.js:15310-15359 sole-consumer
 function logAdvisorDialogShown() {
   logEvent("tengu_advisor_dialog_shown", {});
 }
-//@ chunk-tx2s9zpa.js:14211-14264 placement
+//@ chunk-m1f2a43e.js:15359-15412 placement
 var ADVISOR_BLOG_URL = "https://claude.com/blog/the-advisor-strategy";
-//@ chunk-tx2s9zpa.js:14264-16453 placement (2.1.88 match: ThinkbackMenu, 0.215)
+//@ chunk-m1f2a43e.js:15412-17601 placement (2.1.88 match: ThinkbackMenu, 0.215)
 /**
  * AdvisorPicker：旧版名 ThinkbackMenu 配错：内容是 advisor 模型选择。
  */
@@ -293,7 +293,7 @@ function AdvisorPicker(props) {
   } else saved = $[37];
   return saved;
 }
-//@ chunk-tx2s9zpa.js:16453-16878 layout
+//@ chunk-m1f2a43e.js:17601-18026 layout
 /**
  * 挂载后异步应用所选的 advisor 模型并回调结果，不渲染内容。
  */
@@ -350,7 +350,7 @@ function AdvisorChoiceApplier(props) {
   useEffect(choiceState, selected);
   return null;
 }
-//@ chunk-tx2s9zpa.js:16878-17428 fingerprint (2.1.88 match: call, 0.417)
+//@ chunk-m1f2a43e.js:18026-18576 fingerprint (2.1.88 match: call, 0.417)
 /**
  * /advisor 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

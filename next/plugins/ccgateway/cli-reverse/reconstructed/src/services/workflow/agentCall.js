@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工作流脚本中的 agent 调用（含上限与预算）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-41w44bgm.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kd2wbncj.js (11)
  * attribution: placement 11
  */
 import { availableParallelism } from "os";
@@ -40,14 +40,17 @@ import {
   isArbiterStructuredOutputReviewOn,
 } from "./journalEntries.js";
 import { readFlagWithOverride } from "../analytics/flagOverrides.js";
+import {
+  STREAM_PREFIXES,
+  containsUntrustedArtifactContent,
+  relayedWorkflowPreamble,
+  REMOTE_CONTROL_DEVICE_REPORT_ELEMENT,
+  remoteControlRelayPreamble,
+  isSillyShoreGateOn,
+} from "../../utils/messages/untrustedArtifactContent.js";
 import { readableToolName, UNREADABLE_TOOLS_USED_BEFORE_SUMMARY } from "../../bootstrap/stateSlices.js";
 import { getConversationToolsUsed, isDiskless } from "../../bootstrap/state.js";
 import { ARTIFACT_CONTENT_AUTHORED_TAG } from "../../constants/xml.js";
-import {
-  relayedWorkflowPreamble,
-  containsUntrustedArtifactContent,
-  isSillyShoreGateOn,
-} from "../../utils/messages/untrustedArtifactContent.js";
 import { truncateMiddle } from "../../memdir/memoryTool.js";
 import {
   UsageLimitWaiter,
@@ -66,7 +69,7 @@ import { getCwd, runWithCwdOverride, resolveFromCwd } from "../../utils/cwd.js";
 import { getBranch, isBranchOnOrigin } from "../../utils/git.js";
 import { formatModelRestrictedNotice } from "../../utils/model/validateModel.js";
 import { logEvent } from "../analytics/index.js";
-import { resolveContextPrimaryModel, toolMatchesName } from "../../Tool.js";
+import { resolveContextPrimaryModel, matchesToolName } from "../../Tool.js";
 import { getWorkflowSubagentModel } from "../workflows/workflowSubagentModel.js";
 import { getDefaultSubagentModel, getAgentModel, getExploreAgentModel } from "../../utils/model/agent.js";
 import { sealPrototype } from "./scriptSandbox.js";
@@ -105,11 +108,8 @@ import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   errorMessage,
 } from "../../utils/errors.js";
-import { uniq, count } from "../../utils/collections.js";
-import {
-  permissionRuleValueFromString,
-  canonicalToolName,
-} from "../../utils/permissions/permissionRuleParser.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
+import { parseRuleString, canonicalToolName } from "../../utils/permissions/permissionRuleParser.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { sleep } from "../../utils/sleep.js";
 import {
@@ -133,6 +133,7 @@ import {
   emptyWorkflowToolUseTracker,
   describeWorkflowStep,
   settleWorkflowToolUse,
+  noteWorkflowToolUse,
 } from "../workflows/harnessFraming.js";
 import {
   filterDispatchableAgents,
@@ -146,7 +147,7 @@ import {
 import { checkSchemaSatisfiable } from "../../tools/SyntheticOutputTool/schemaCheck.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { parseEffortValue } from "../../utils/effort.js";
-import { REPL_TOOL_NAME } from "../../tools/REPLTool/constants.js";
+import { REPL_TOOL_NAME, isEvalToolName } from "../../tools/REPLTool/constants.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
 import {
   waitForCoordinatorSubagentMcpServers,
@@ -169,6 +170,7 @@ import { getParentSessionId } from "../../utils/teammate.js";
 import { isBuiltInAgent } from "../../tools/AgentTool/loadAgentsDir.js";
 import { stripAnyVersatileSuffix } from "../../utils/model/modelIds.js";
 import { setMonotonicTimeout, unwrapAbortReason } from "../../utils/abortController.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { MAX_STRUCTURED_OUTPUT_RETRIES, extractToolErrorExcerpt } from "../../cli/structuredOutputRetry.js";
 import { defaultToolResultsStorage } from "../../utils/mcpOutputStorage.js";
 import { runAgent } from "../../tools/AgentTool/runAgent.js";
@@ -196,6 +198,7 @@ import { buildVerifiedHumanTurns } from "../../utils/messages/apiNormalization.j
 import { WEBFETCH } from "../../tools/WebFetchTool/prompt.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { connectionSetupFacts } from "../api/responseDiagnostics.js";
+import { countWhere } from "../../utils/collections.js";
 import { cycleAllTeammateModes } from "../../components/teams/TeamsDialog.js";
 import { teleportToRemote, awaitRemoteSessionResult } from "../../utils/teleport.js";
 import { WORKFLOW_REMOTE_AGENT } from "../../bridge/sessionOrigins.js";
@@ -208,7 +211,7 @@ import { deferInit, beginDeferredInits } from "../../../runtime/deferred-init.js
 // This module is the first evaluated of an import cycle of 2 modules closed by ./runScript.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("src/services/workflow/runScript.js");
-//@ chunk-41w44bgm.js:40004-40076 placement
+//@ chunk-kd2wbncj.js:30806-30878 placement
 /**
  * 合法的工作流运行 id 原样写入遥测，否则走兜底清洗。
  */
@@ -217,14 +220,14 @@ function sanitizeWorkflowRunId(runId) {
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(runId)
     : shortHash(runId);
 }
-//@ chunk-41w44bgm.js:40076-40127 placement
+//@ chunk-kd2wbncj.js:30878-30929 placement
 /**
  * 按 CPU 数推算默认并发（限制在 2–16）。
  */
 function defaultAgentConcurrency(parallelSlots) {
   return Math.min(16, Math.max(2, parallelSlots - 2));
 }
-//@ chunk-41w44bgm.js:40127-40436 placement
+//@ chunk-kd2wbncj.js:30929-31238 placement
 /**
  * 工作流 agent() 的并发与调用上限：默认并发按 CPU 数推算（可由 CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS 覆盖），另一并发上限 50，调用总数上限 1000 及其报错文案。
  */
@@ -232,7 +235,7 @@ var DEFAULT_MAX_CONCURRENT_AGENTS; // deferred: uses defaultAgentConcurrency of 
 var AGENT_CONCURRENCY_CEILING;
 var AGENT_CALL_CAP;
 var AGENT_CALL_CAP_MESSAGE;
-deferInit("chunk-41w44bgm.js:40127", () => {
+deferInit("chunk-kd2wbncj.js:30929", () => {
   DEFAULT_MAX_CONCURRENT_AGENTS = defaultAgentConcurrency(availableParallelism());
   AGENT_CONCURRENCY_CEILING = 50;
   AGENT_CALL_CAP = 1000;
@@ -241,14 +244,14 @@ deferInit("chunk-41w44bgm.js:40127", () => {
     "no token budget was set \u2014 remaining() returns Infinity when budget.total is null. " +
     "Add a hard iteration cap to the loop, or pass a token budget.";
 });
-//@ chunk-41w44bgm.js:40436-40518 placement
+//@ chunk-kd2wbncj.js:31238-31320 placement
 class WorkflowAgentCapError extends Error {
   constructor() {
     super(AGENT_CALL_CAP_MESSAGE);
     this.name = "WorkflowAgentCapError";
   }
 }
-//@ chunk-41w44bgm.js:40518-40795 placement
+//@ chunk-kd2wbncj.js:31320-31597 placement
 class WorkflowBudgetExceededError extends Error {
   constructor(used, total) {
     super(
@@ -257,9 +260,9 @@ class WorkflowBudgetExceededError extends Error {
     this.name = "WorkflowBudgetExceededError";
   }
 }
-//@ chunk-41w44bgm.js:40795-40806 placement
+//@ chunk-kd2wbncj.js:31597-31608 placement
 var MAX_PREVIEW_VALUE_CHARS = 400;
-//@ chunk-41w44bgm.js:40806-40933 placement
+//@ chunk-kd2wbncj.js:31608-31734 placement
 function previewAgentValue(value) {
   if (value == null) return;
   let trimmed = (typeof value === "string" ? value : jsonStringify(value)).trim();
@@ -268,7 +271,7 @@ function previewAgentValue(value) {
     ? truncateToLength(trimmed, MAX_PREVIEW_VALUE_CHARS) + "\u2026"
     : trimmed;
 }
-//@ chunk-41w44bgm.js:40933-43660 placement
+//@ chunk-kd2wbncj.js:31734-34461 placement
 /**
  * 工作流 agent() 的并发与调用上限，以及调用上限的报错文案。
  */
@@ -323,19 +326,19 @@ var WORKFLOW_STRUCTURED_SUBAGENT_DEFINITION = {
   getSystemPrompt: () => WORKFLOW_STRUCTURED_OUTPUT_SYSTEM_PROMPT,
 };
 var MAX_STALLED_AGENT_RETRIES = 5;
-//@ chunk-41w44bgm.js:43660-43848 placement
+//@ chunk-kd2wbncj.js:34461-34649 placement
 function recordStalledAgent(reasons, totals, stalled) {
   reasons.push(stalled.replyLost ? "reply lost" : (stalled.stalledReason ?? "stalled"));
   totals.maxContextTokens = Math.max(totals.maxContextTokens, stalled.tokens);
   totals.toolCalls += stalled.toolCalls;
   totals.durationMs += stalled.durationMs;
 }
-//@ chunk-41w44bgm.js:43848-43861 placement
+//@ chunk-kd2wbncj.js:34649-34662 placement
 /**
  * 卡死判定的时长上限。
  */
 var MAX_AGENT_DURATION_WATCHDOG_MS = 90000;
-//@ chunk-41w44bgm.js:43861-90673 placement
+//@ chunk-kd2wbncj.js:34662-82901 placement
 /**
  * 工作流脚本的 agent 调用运行时（生成器状态机形式的转译代码，含预算、上限与日志）。
  */
@@ -406,14 +409,23 @@ function createWorkflowAgentRuntime(
       },
     };
   }
-  let flagWithOverride = readFlagWithOverride(WORKFLOW_JOURNAL_HOST_COPY_FLAG, {
+  let hostCopyEnabled = readFlagWithOverride(WORKFLOW_JOURNAL_HOST_COPY_FLAG, {
     safe: true,
   });
   let capWarned = false;
   let budgetWarned = false;
   let limitWaitersWarned = false;
   let logLines = [];
-  let foreignArtifactSeen = false;
+  let isHookCall = context.hookCaller !== undefined || context.pluginUnnamed === true;
+  let seenMarkers = new Set();
+  let seenMarkerSet = (target) => {
+    for (let markExact of STREAM_PREFIXES)
+      if (target?.includes(markExact) === true) seenMarkers.add(markExact);
+  };
+  let onAgentResult = (record) => {
+    for (let markLoose of STREAM_PREFIXES)
+      if (containsUntrustedArtifactContent(record, markLoose)) seenMarkers.add(markLoose);
+  };
   let toolsUsedByAgent = new Map();
   let usedConversationTools = new Set();
   let recordAgentTool = (agentId, toolName) => {
@@ -429,12 +441,20 @@ function createWorkflowAgentRuntime(
       getConversationToolsUsed().has(toolName),
     );
   let remoteBlockGate;
+  let heldByCall = new Set();
+  let keyMap = new Map();
   let preambleFor = (prompt) =>
-    foreignArtifactSeen && !prompt.includes(ARTIFACT_CONTENT_AUTHORED_TAG)
+    (seenMarkers.has(ARTIFACT_CONTENT_AUTHORED_TAG) && !prompt.includes(ARTIFACT_CONTENT_AUTHORED_TAG)
       ? `
 
 ${relayedWorkflowPreamble(true).trimEnd()}`
-      : "";
+      : "") +
+    (seenMarkers.has(REMOTE_CONTROL_DEVICE_REPORT_ELEMENT) &&
+    !prompt.includes(REMOTE_CONTROL_DEVICE_REPORT_ELEMENT)
+      ? `
+
+${remoteControlRelayPreamble(true).trimEnd()}`
+      : "");
   let weakSet = new WeakSet();
   function logLine(message, { log }) {
     let truncated = truncateMiddle(message);
@@ -716,6 +736,7 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
     let agentContext_2 = context.agentContext;
     let abortSignal = maybeAbortHandlers instanceof AbortSignal ? maybeAbortHandlers : undefined;
     let secondSignal = maybeSignalB instanceof AbortSignal ? maybeSignalB : undefined;
+    let newKeys = new Set(keyMap.keys());
     let callKeyStore = callKeyStorage.getStore();
     let callKeyState = callKeyStore ?? rootCallKey;
     let suppressJournal = thirdArg instanceof WorkflowJournalStub || callKeyStore === frozenRootCallKey;
@@ -769,7 +790,8 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
             "agent() opts.disallowedTools malformed \u2014 spawn refused",
           );
         if (opts !== undefined)
-          opts.disallowedTools = disallowedTools.length === 0 ? undefined : uniq(disallowedTools).sort();
+          opts.disallowedTools =
+            disallowedTools.length === 0 ? undefined : normalizeCaseForComparison_2(disallowedTools).sort();
       }
       let bashCommandClamp = opts?.bashCommandClamp;
       if (bashCommandClamp !== undefined) {
@@ -788,9 +810,10 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
               ". Refusing the spawn rather than running it un-clamped.",
             "agent() bashCommandClamp malformed \u2014 spawn refused",
           );
-        let clampRules = bashCommandClamp.length === 0 ? undefined : uniq(bashCommandClamp).sort();
+        let clampRules =
+          bashCommandClamp.length === 0 ? undefined : normalizeCaseForComparison_2(bashCommandClamp).sort();
         for (let clampRule of clampRules ?? []) {
-          let { toolName, ruleContent } = permissionRuleValueFromString(clampRule);
+          let { toolName, ruleContent } = parseRuleString(clampRule);
           if (
             toolName !== BASH_TOOL_NAME ||
             ruleContent === undefined ||
@@ -839,7 +862,10 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
             callKey,
             typeof cachedResult.agentId === "string" ? cachedResult.agentId : "",
           );
-        if (cachedResult.foreignArtifactContent) foreignArtifactSeen = true;
+        if (cachedResult.foreignArtifactContent) seenMarkers.add(ARTIFACT_CONTENT_AUTHORED_TAG);
+        if (cachedResult.remoteControlDeviceReport !== false)
+          seenMarkers.add(REMOTE_CONTROL_DEVICE_REPORT_ELEMENT);
+        seenMarkerSet(jsonStringify(cachedResult.result));
         if (Array.isArray(cachedResult.toolsUsed)) {
           for (let toolName of cachedResult.toolsUsed)
             if (typeof toolName === "string")
@@ -921,10 +947,52 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
         );
     };
     let finishAgent = async (result) => {
-      if (result === null) await markFailed();
+      if (result === null) {
+        if (heldByCall.delete(agentIndex) && callKey) {
+          keyMap.set(callKey, agentId ?? "");
+          return result;
+        }
+        await markFailed();
+      }
+      let failedList =
+        journal && callKey && result !== null
+          ? [...keyMap].filter(([failedEntries]) => newKeys.has(failedEntries))
+          : [];
+      if (journal && failedList.length > 0) {
+        if (agentContext.abortController?.signal.aborted || secondSignal?.aborted) return result;
+        if (
+          (
+            await Promise.all(
+              failedList.map(([key, agentId]) =>
+                journal
+                  .append({
+                    type: "failed",
+                    key,
+                    agentId,
+                  })
+                  .then(
+                    () => {
+                      keyMap.delete(key);
+                      return true;
+                    },
+                    (error) => {
+                      logForDebugging(`workflow journal failed-append failed: ${error}`, {
+                        level: "warn",
+                      });
+                      return false;
+                    },
+                  ),
+              ),
+            )
+          ).includes(false)
+        ) {
+          await markFailed();
+          return result;
+        }
+      }
       if (journal && callKey && result !== null) {
         let result_2 = result;
-        if (flagWithOverride)
+        if (hostCopyEnabled)
           try {
             result_2 = hostCopy(hostCopyFn(result));
           } catch (error) {
@@ -947,9 +1015,10 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
             key: callKey,
             agentId: agentId ?? "",
             result: result_2,
-            ...(foreignArtifactSeen && {
+            ...(seenMarkers.has(ARTIFACT_CONTENT_AUTHORED_TAG) && {
               foreignArtifactContent: true,
             }),
+            remoteControlDeviceReport: seenMarkers.has(REMOTE_CONTROL_DEVICE_REPORT_ELEMENT),
             ...(toolsUsedFor(agentId).length > 0 && {
               toolsUsed: toolsUsedFor(agentId),
             }),
@@ -1061,6 +1130,7 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
       eventCallersFor,
     ).catch((error) => {
       if (evalSignal?.aborted) return;
+      isHookCall = true;
       throw error;
     });
     let aborted = agentContext.abortController?.signal.aborted === true;
@@ -1069,6 +1139,7 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
       if (aborted) throw Error("Workflow aborted");
       return null;
     }
+    isHookCall ||= spawnHookResult.deny !== undefined || spawnHookResult.isRewritten === true;
     if (spawnHookResult.deny !== undefined) {
       if (!limitWaitersWarned) {
         limitWaitersWarned = true;
@@ -1247,7 +1318,7 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
       let filtered = filterToolsByDenyRules(
         [GlobTool, GrepTool, ...enabledToolsForAliases([GrepTool.name, GlobTool.name])],
         toolPermissionContext,
-      ).filter((tool) => !deniedName.some((deniedName) => toolMatchesName(deniedName, tool.name)));
+      ).filter((tool) => !deniedName.some((deniedName) => matchesToolName(deniedName, tool.name)));
       return filtered.length > 0 ? [...deniedName, ...filtered] : deniedName;
     };
     let filteredPool = toolPool;
@@ -1255,7 +1326,7 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
       if (
         hasEmbeddedSearchTools() &&
         !deniedToolNames(filteredPool).resolvedTools.some((resolvedTool) =>
-          toolMatchesName(resolvedTool, BASH_TOOL_NAME),
+          matchesToolName(resolvedTool, BASH_TOOL_NAME),
         )
       )
         filteredPool = removeDenied(filteredPool);
@@ -1278,7 +1349,7 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
       for (let disallowedTool of disallowedTools) {
         let disallowedToolsFilter = buildDisallowedToolsFilter([disallowedTool]);
         if (filteredPool.some((tool) => disallowedToolsFilter.isToolDisallowed(tool))) continue;
-        let { toolName } = permissionRuleValueFromString(disallowedTool);
+        let { toolName } = parseRuleString(disallowedTool);
         if (toolName !== toolName.trim() || /[\s()]/.test(toolName.trim())) {
           await sleep(0);
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -1437,7 +1508,7 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
       bashCommandClamp !== undefined &&
       bashCommandClamp.length > 0 &&
       !deniedToolNames(filteredPool).resolvedTools.some((resolvedTool) =>
-        toolMatchesName(resolvedTool, BASH_TOOL_NAME),
+        matchesToolName(resolvedTool, BASH_TOOL_NAME),
       )
     ) {
       await sleep(0);
@@ -1450,7 +1521,7 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
     }
     let agentTools = filteredPool;
     let structuredOutputTool = syntheticOutput
-      ? [...agentTools.filter((tool) => !toolMatchesName(tool, STRUCTUREDOUTPUT)), syntheticOutput]
+      ? [...agentTools.filter((tool) => !matchesToolName(tool, STRUCTUREDOUTPUT)), syntheticOutput]
       : agentTools;
     let spawnResult = await spawnAgentWithHooks({
       idx,
@@ -1666,18 +1737,15 @@ You are running in an isolated git worktree at \`${flattenForFraming(ownerKey.wo
       let callKeyState = new Map();
       let journalSuppressed = false;
       let blockedAgents = isAutoMode ? [] : undefined;
-      let onAgentResult = (result) => {
-        if (result) foreignArtifactSeen = true;
-      };
-      onAgentResult(
-        signal.includes(ARTIFACT_CONTENT_AUTHORED_TAG) ||
-          (framing?.includes(ARTIFACT_CONTENT_AUTHORED_TAG) ?? false),
-      );
+      seenMarkerSet(signal);
+      seenMarkerSet(framing);
       let nextIdx;
       let agentSeq = 0;
       let toolCallsDelta = 0;
       let reportProgress = (preferredPhase, shouldEmit = true) => {
-        let isHiddenPhase = () => false;
+        let isHiddenPhase = codeModeAccepted()
+          ? require("../../utils/codeMode/toolCallTicks.js").isRunningPhase
+          : () => false;
         let entriesForPhase = (phaseTitle) => [
           ...((phaseTitle === undefined ? undefined : firstSeenAt.get(phaseTitle)?.values()) ?? []),
         ];
@@ -1812,7 +1880,7 @@ You are running in an isolated git worktree at \`${flattenForFraming(ownerKey.wo
               deliveredId = record.attachment.toolUseID;
               continue;
             }
-            if (record.type === "attachment") onAgentResult(containsUntrustedArtifactContent(record));
+            if (record.type === "attachment") onAgentResult(record);
             if (record.type === "api_metrics") {
               if (record.event.type === "start") step?.responded();
               continue;
@@ -1823,14 +1891,46 @@ You are running in an isolated git worktree at \`${flattenForFraming(ownerKey.wo
             }
             if (record.type === "set_in_progress_tool_use_ids") {
               if (record.op.action === "remove") {
-                for (let id of record.op.ids) announcedPhases.delete(id);
+                for (let id of record.op.ids) {
+                  announcedPhases.delete(id);
+                  if (codeModeAccepted()) {
+                    lastProgressAt.delete(id);
+                    firstSeenAt.delete(id);
+                  }
+                }
                 onPhase();
+              }
+              continue;
+            }
+            if (codeModeAccepted() && record.type === "progress") {
+              let progressData = record.data;
+              if (progressData.type === "repl_tool_call") {
+                if (progressData.executed) recordAgentTool(agentId, progressData.toolName);
+                for (let delegatedName of progressData.delegatedToolNames ?? [])
+                  recordAgentTool(agentId, delegatedName);
+              }
+              let parentId = firstSeenAt.get(record.parentToolUseID);
+              if (
+                progressData.type === "repl_tool_call" &&
+                parentId !== undefined &&
+                announcedPhases.has(record.parentToolUseID) &&
+                parentId.get(progressData.toolUseId)?.phase !== progressData.phase &&
+                !require("../../utils/codeMode/scriptHelperNames.js").isScriptHelperCallName(
+                  progressData.toolName,
+                )
+              ) {
+                parentId.set(progressData.toolUseId, {
+                  name: progressData.toolName,
+                  input: progressData.toolInput,
+                  phase: progressData.phase,
+                });
+                reportProgress(record.parentToolUseID);
               }
               continue;
             }
             if (record.type === "user") {
               blockedAgents?.push(record);
-              onAgentResult(containsUntrustedArtifactContent(record));
+              onAgentResult(record);
               let handbackRecords = [];
               if (Array.isArray(record.message.content))
                 for (let block of record.message.content) {
@@ -1846,6 +1946,12 @@ You are running in an isolated git worktree at \`${flattenForFraming(ownerKey.wo
                 for (let block of content)
                   if (typeof block === "object" && block?.type === "tool_result") {
                     announcedPhases.delete(block.tool_use_id);
+                    if (codeModeAccepted()) {
+                      lastProgressAt.delete(block.tool_use_id);
+                      let wasTracked = firstSeenAt.delete(block.tool_use_id);
+                      if (block.tool_use_id === progressData && (wasTracked || firstSeenAt.size > 0))
+                        reportProgress(undefined);
+                    }
                     settleWorkflowToolUse(
                       toolUseTracker,
                       block.tool_use_id,
@@ -1916,7 +2022,7 @@ You are running in an isolated git worktree at \`${flattenForFraming(ownerKey.wo
                 }
               }
               blockedAgents?.push(record);
-              onAgentResult(containsUntrustedArtifactContent(record));
+              onAgentResult(record);
               for (let block of record.message.content)
                 if (block.type === "tool_use" || block.type === "server_tool_use")
                   recordAgentTool(agentId, canonicalToolName(block.name.trim()));
@@ -1935,13 +2041,26 @@ You are running in an isolated git worktree at \`${flattenForFraming(ownerKey.wo
               let skippedToolUseCount = 0;
               for (let block of record.message.content) {
                 if (block.type !== "tool_use") continue;
-                let isSkipped = false;
+                if (codeModeAccepted() && record.scriptErrorCopy === true) continue;
+                let isSkipped =
+                  codeModeAccepted() && noteWorkflowToolUse(toolUseTracker, block, record.isVirtual === true);
+                if (codeModeAccepted() && toolUseTracker.helperCalls.has(block.id)) continue;
                 toolUseCount++;
                 if (isSkipped) skippedToolUseCount++;
                 announcedPhases.add(block.id);
-                modelOverride = block.name;
-                permissionMode = describeWorkflowStep(block.input, block.name) || undefined;
-                progressData = block.id;
+                if (codeModeAccepted() && isEvalToolName(block.name) && record.isVirtual !== true) {
+                  firstSeenAt.set(block.id, new Map());
+                  reportProgress(block.id, false);
+                } else {
+                  modelOverride = block.name;
+                  permissionMode = describeWorkflowStep(block.input, block.name) || undefined;
+                  progressData = block.id;
+                  if (codeModeAccepted() && record.isVirtual !== true)
+                    lastProgressAt.set(block.id, {
+                      name: block.name,
+                      summary: permissionMode,
+                    });
+                }
                 if (block.name === STRUCTUREDOUTPUT) {
                   structuredOutputCalls++;
                   lastStructuredOutputInput = block.input;
@@ -2427,6 +2546,7 @@ ${webFetchHarnessNote(webFetchSavedFiles)}`;
         logLine(failureLine, {
           log: true,
         });
+        if (current.apiError.kind === "rate_limit" && !slot?.aborted) heldByCall.add(idx);
         return null;
       }
       let structuredResult =
@@ -2574,9 +2694,9 @@ ${current.text}`;
             workflow_run_id: toolUseId === undefined ? undefined : sanitizeWorkflowRunId(toolUseId),
             agent_type: agentTypeForAnalyticsFromDefinition(mcpServers),
             restarts: restartCount,
-            stalled_attempts: count(stallReasons, (reason) => reason === "stalled"),
-            reply_lost_attempts: count(stallReasons, (reason) => reason === "reply lost"),
-            user_retry_attempts: count(stallReasons, (reason) => reason === "user-retry"),
+            stalled_attempts: countWhere(stallReasons, (reason) => reason === "stalled"),
+            reply_lost_attempts: countWhere(stallReasons, (reason) => reason === "reply lost"),
+            user_retry_attempts: countWhere(stallReasons, (reason) => reason === "user-retry"),
             outcome: fromEnum(finalOutcome),
             max_lost_context_tokens: lostTotals.maxContextTokens,
             lost_tool_calls: lostTotals.toolCalls,
@@ -2701,11 +2821,8 @@ ${current.text}`;
         ? classifyWorkflowRequestSource(context.messages, context.agentId)
         : null;
       let requestFraming = requestSource?.kind === "relay" ? userRequestFraming(requestSource) : null;
-      if (
-        prompt.includes(ARTIFACT_CONTENT_AUTHORED_TAG) ||
-        (requestFraming?.includes(ARTIFACT_CONTENT_AUTHORED_TAG) ?? false)
-      )
-        foreignArtifactSeen = true;
+      seenMarkerSet(prompt);
+      seenMarkerSet(requestFraming);
       let initialMessage =
         (!provenanceOn
           ? prompt
@@ -2745,7 +2862,7 @@ ${current.text}`;
       let { text, structuredOutput, resultSubtype, usage, modelUsage, toolCalls } =
         await awaitRemoteSessionResult(remoteSessionId, abortController.signal, agentContext.credentials);
       let sanitized = sanitizeSubagentOutput(text).sanitized;
-      if (text.includes(ARTIFACT_CONTENT_AUTHORED_TAG)) foreignArtifactSeen = true;
+      seenMarkerSet(text);
       for (let [key, value] of Object.entries(modelUsage ?? {}))
         addToTotalSessionCost(
           value.costUSD,
@@ -2959,10 +3076,15 @@ ${sanitized}`;
       }),
     getAgentCount: () => agentCount,
     getFailures: () => logLines,
-    getForeignArtifactContent: () => foreignArtifactSeen,
+    getForeignArtifactContent: () => seenMarkers.has(ARTIFACT_CONTENT_AUTHORED_TAG),
+    getRemoteControlDeviceReport: () => seenMarkers.has(REMOTE_CONTROL_DEVICE_REPORT_ELEMENT),
+    getPluginSteered: () => isHookCall,
     getToolsUsed: () =>
       isSillyShoreGateOn()
-        ? uniq([...[...toolsUsedByAgent.keys()].flatMap(toolsUsedFor), ...usedConversationTools])
+        ? normalizeCaseForComparison_2([
+            ...[...toolsUsedByAgent.keys()].flatMap(toolsUsedFor),
+            ...usedConversationTools,
+          ])
         : [],
     takeUsageLimitDenial: () => {
       let denial = remoteBlockGate;

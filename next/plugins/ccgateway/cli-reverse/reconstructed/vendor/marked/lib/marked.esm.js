@@ -1,12 +1,12 @@
 /**
  * marked/lib/marked.esm.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: marked@16.0.0..16.1.1
- * pieces: chunk-s61vbvea.js (39)
+ * pieces: chunk-7jxyna5q.js (39)
  * attribution: esm-fingerprint 30, esm-layout 6, affinity 3
  */
 
-//@ chunk-s61vbvea.js:378309-378451 esm-fingerprint
+//@ chunk-7jxyna5q.js:302704-302846 esm-fingerprint
 function _getDefaults() {
   return {
     async: false,
@@ -21,17 +21,17 @@ function _getDefaults() {
     walkTokens: null,
   };
 }
-//@ chunk-s61vbvea.js:378451-378463 esm-layout
+//@ chunk-7jxyna5q.js:302846-302858 esm-layout
 var _defaults = _getDefaults();
-//@ chunk-s61vbvea.js:378463-378483 esm-layout
+//@ chunk-7jxyna5q.js:302858-302878 esm-layout
 function changeDefaults(newDefaults) {
   _defaults = newDefaults;
 }
-//@ chunk-s61vbvea.js:378483-378506 esm-layout
+//@ chunk-7jxyna5q.js:302878-302901 esm-layout
 var noopTest = {
   exec: () => null,
 };
-//@ chunk-s61vbvea.js:378506-378712 esm-fingerprint
+//@ chunk-7jxyna5q.js:302901-303107 esm-fingerprint
 function edit(regex, opt = "") {
   let source = typeof regex === "string" ? regex : regex.source;
   let obj = {
@@ -45,7 +45,7 @@ function edit(regex, opt = "") {
   };
   return obj;
 }
-//@ chunk-s61vbvea.js:378712-389047 esm-fingerprint
+//@ chunk-7jxyna5q.js:303107-313442 esm-fingerprint
 var other = {
   codeRemoveIndent: /^(?: {1,4}| {0,3}\t)/gm,
   outputLinkReplace: /\\([\[\]])/g,
@@ -372,7 +372,7 @@ var escapeReplacements = {
   "'": "&#39;",
 };
 var getEscapeReplacement = (ch) => escapeReplacements[ch];
-//@ chunk-s61vbvea.js:389047-389226 esm-fingerprint
+//@ chunk-7jxyna5q.js:313442-313621 esm-fingerprint
 function escapeHtml(html, encode) {
   if (encode) {
     if (other.escapeTest.test(html)) return html.replace(other.escapeReplace, getEscapeReplacement);
@@ -380,7 +380,7 @@ function escapeHtml(html, encode) {
     return html.replace(other.escapeReplaceNoEncode, getEscapeReplacement);
   return html;
 }
-//@ chunk-s61vbvea.js:389226-389317 esm-fingerprint
+//@ chunk-7jxyna5q.js:313621-313712 esm-fingerprint
 function cleanUrl(href) {
   try {
     href = encodeURI(href).replace(other.percentDecode, "%");
@@ -389,7 +389,7 @@ function cleanUrl(href) {
   }
   return href;
 }
-//@ chunk-s61vbvea.js:389317-389680 esm-fingerprint
+//@ chunk-7jxyna5q.js:313712-314075 esm-fingerprint
 function splitCells(tableRow, count) {
   let row = tableRow.replace(other.findPipe, (match, offset, str) => {
     let escaped = false;
@@ -408,7 +408,7 @@ function splitCells(tableRow, count) {
   for (; i < cells.length; i++) cells[i] = cells[i].trim().replace(other.slashPipe, "|");
   return cells;
 }
-//@ chunk-s61vbvea.js:389680-389810 esm-fingerprint
+//@ chunk-7jxyna5q.js:314075-314205 esm-fingerprint
 function rtrim(str, c, chars) {
   let l = str.length;
   if (l === 0) return "";
@@ -418,7 +418,7 @@ function rtrim(str, c, chars) {
     else break;
   return str.slice(0, l - suffLen);
 }
-//@ chunk-s61vbvea.js:389810-389988 esm-fingerprint
+//@ chunk-7jxyna5q.js:314205-314383 esm-fingerprint
 function findClosingBracket(str, b) {
   if (str.indexOf(b[1]) === -1) return -1;
   let level = 0;
@@ -431,7 +431,7 @@ function findClosingBracket(str, b) {
     }
   return -1;
 }
-//@ chunk-s61vbvea.js:389988-390279 esm-fingerprint
+//@ chunk-7jxyna5q.js:314383-314674 esm-fingerprint
 function outputLink(cap, link, raw, lexer, rules) {
   let href = link.href;
   let title = link.title || null;
@@ -457,7 +457,7 @@ function outputLink(cap, link, raw, lexer, rules) {
     text,
   };
 }
-//@ chunk-s61vbvea.js:390279-390542 esm-fingerprint
+//@ chunk-7jxyna5q.js:314674-314937 esm-fingerprint
 function indentCodeCompensation(raw, text, rules) {
   let matchIndentToCode = raw.match(rules.other.indentCodeCompensation);
   if (matchIndentToCode === null) return text;
@@ -476,7 +476,7 @@ function indentCodeCompensation(raw, text, rules) {
     }).join(`
 `);
 }
-//@ chunk-s61vbvea.js:390542-400634 esm-fingerprint
+//@ chunk-7jxyna5q.js:314937-325032 esm-fingerprint
 class _Tokenizer {
   options;
   rules;
@@ -1142,7 +1142,7 @@ ${currentText}`
     }
   }
 }
-//@ chunk-s61vbvea.js:400634-406359 esm-fingerprint
+//@ chunk-7jxyna5q.js:325032-330757 esm-fingerprint
 class _Lexer {
   tokens;
   options;
@@ -1518,7 +1518,7 @@ class _Lexer {
     return tokens;
   }
 }
-//@ chunk-s61vbvea.js:406359-408973 esm-fingerprint
+//@ chunk-7jxyna5q.js:330757-333371 esm-fingerprint
 class _Renderer {
   options;
   parser;
@@ -1711,7 +1711,7 @@ ${text}</tr>
         : escapeHtml(token.text);
   }
 }
-//@ chunk-s61vbvea.js:408973-409197 esm-fingerprint
+//@ chunk-7jxyna5q.js:333371-333595 esm-fingerprint
 class _TextRenderer {
   strong({ text }) {
     return text;
@@ -1741,7 +1741,7 @@ class _TextRenderer {
     return "";
   }
 }
-//@ chunk-s61vbvea.js:409197-411530 esm-fingerprint
+//@ chunk-7jxyna5q.js:333595-335928 esm-fingerprint
 class _Parser {
   options;
   renderer;
@@ -1941,7 +1941,7 @@ class _Parser {
     return out;
   }
 }
-//@ chunk-s61vbvea.js:411530-411856 esm-fingerprint
+//@ chunk-7jxyna5q.js:335928-336254 esm-fingerprint
 class _Hooks {
   options;
   block;
@@ -1965,7 +1965,7 @@ class _Hooks {
     return this.block ? _Parser.parse : _Parser.parseInline;
   }
 }
-//@ chunk-s61vbvea.js:411856-416451 esm-fingerprint
+//@ chunk-7jxyna5q.js:336254-340849 esm-fingerprint
 class Marked {
   defaults = _getDefaults();
   options = this.setOptions;
@@ -2206,57 +2206,57 @@ Please report this to https://github.com/markedjs/marked.`;
     };
   }
 }
-//@ chunk-s61vbvea.js:416451-416466 esm-layout
+//@ chunk-7jxyna5q.js:340849-340864 esm-layout
 var markedInstance = new Marked();
-//@ chunk-s61vbvea.js:416466-416504 esm-layout
+//@ chunk-7jxyna5q.js:340864-340902 esm-layout
 function marked(src, opt) {
   return markedInstance.parse(src, opt);
 }
-//@ chunk-s61vbvea.js:416504-416609 esm-fingerprint
+//@ chunk-7jxyna5q.js:340902-341007 esm-fingerprint
 marked.options = marked.setOptions = function (options) {
   markedInstance.setOptions(options);
   marked.defaults = markedInstance.defaults;
   changeDefaults(marked.defaults);
   return marked;
 };
-//@ chunk-s61vbvea.js:416609-416627 esm-fingerprint
+//@ chunk-7jxyna5q.js:341007-341025 esm-fingerprint
 marked.getDefaults = _getDefaults;
-//@ chunk-s61vbvea.js:416627-416642 esm-fingerprint
+//@ chunk-7jxyna5q.js:341025-341040 esm-fingerprint
 marked.defaults = _defaults;
-//@ chunk-s61vbvea.js:416642-416728 esm-fingerprint
+//@ chunk-7jxyna5q.js:341040-341126 esm-fingerprint
 marked.use = function (...args) {
   markedInstance.use(...args);
   marked.defaults = markedInstance.defaults;
   changeDefaults(marked.defaults);
   return marked;
 };
-//@ chunk-s61vbvea.js:416728-416783 esm-fingerprint
+//@ chunk-7jxyna5q.js:341126-341181 esm-fingerprint
 marked.walkTokens = function (tokens, callback) {
   return markedInstance.walkTokens(tokens, callback);
 };
-//@ chunk-s61vbvea.js:416783-416813 esm-fingerprint
+//@ chunk-7jxyna5q.js:341181-341211 esm-fingerprint
 marked.parseInline = markedInstance.parseInline;
-//@ chunk-s61vbvea.js:416813-416826 esm-layout
+//@ chunk-7jxyna5q.js:341211-341224 esm-layout
 marked.Parser = _Parser;
-//@ chunk-s61vbvea.js:416826-416845 esm-fingerprint
+//@ chunk-7jxyna5q.js:341224-341243 esm-fingerprint
 marked.parser = _Parser.parse;
-//@ chunk-s61vbvea.js:416845-416860 esm-fingerprint
+//@ chunk-7jxyna5q.js:341243-341258 esm-fingerprint
 marked.Renderer = _Renderer;
-//@ chunk-s61vbvea.js:416860-416879 esm-fingerprint
+//@ chunk-7jxyna5q.js:341258-341277 esm-fingerprint
 marked.TextRenderer = _TextRenderer;
-//@ chunk-s61vbvea.js:416879-416891 esm-fingerprint
+//@ chunk-7jxyna5q.js:341277-341289 esm-fingerprint
 marked.Lexer = _Lexer;
-//@ chunk-s61vbvea.js:416891-416907 esm-fingerprint
+//@ chunk-7jxyna5q.js:341289-341305 esm-fingerprint
 marked.lexer = _Lexer.lex;
-//@ chunk-s61vbvea.js:416907-416924 esm-fingerprint
+//@ chunk-7jxyna5q.js:341305-341322 esm-fingerprint
 marked.Tokenizer = _Tokenizer;
-//@ chunk-s61vbvea.js:416924-416936 esm-fingerprint
+//@ chunk-7jxyna5q.js:341322-341334 esm-fingerprint
 marked.Hooks = _Hooks;
-//@ chunk-s61vbvea.js:416936-416948 affinity
+//@ chunk-7jxyna5q.js:341334-341346 affinity
 marked.parse = marked;
-//@ chunk-s61vbvea.js:416948-417022 affinity
+//@ chunk-7jxyna5q.js:341346-341415 affinity
 var { options, setOptions, use, walkTokens, parseInline } = marked;
-//@ chunk-s61vbvea.js:417022-417050 affinity
+//@ chunk-7jxyna5q.js:341415-341441 affinity
 var parser = _Parser.parse;
 var lex = _Lexer.lex;
-export { marked, _Tokenizer, _Lexer, Marked };
+export { _Tokenizer, _Lexer, marked, Marked };

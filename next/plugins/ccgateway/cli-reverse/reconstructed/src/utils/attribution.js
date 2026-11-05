@@ -3,10 +3,10 @@
  *
  * commit/PR 署名文本（Co-Authored-By、attribution 设置、includeCoAuthoredBy 兼容）与增强 PR 署名统计（提示数、记忆访问数、Claude 贡献比例）；另混入 tyg7f3ek 的转录轮次判定代码
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/attribution.ts
- * pieces: chunk-e6aww6q8.js (25), chunk-s61vbvea.js (2), chunk-tyg7f3ek.js (1)
- * attribution: placement 11, layout 9, fingerprint 6, file-local 1, callgraph-fingerprint 1
+ * pieces: chunk-0yw3taqg.js (1), chunk-5xgkngpb.js (25), chunk-7jxyna5q.js (2)
+ * attribution: fingerprint 6, placement 11, layout 10, file-local 1
  */
 import { realpath, stat } from "fs/promises";
 import { MAX_STRING_ARG_CHARS, CONTROL_CHARS_RE, GitListingError } from "./attributionFileClasses.js";
@@ -18,7 +18,7 @@ import {
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { entrypointSurfaceName } from "./entrypointKinds.js";
 import { env } from "./env.js";
-import { getInitialSettings_2, getSettingsForSource } from "./settings/settings.js";
+import { getInitialSettings, getSettingsForSource } from "./settings/settings.js";
 import { currentRemoteSessionId } from "../tools/AgentTool/agentEffort.js";
 import {
   getClientType,
@@ -33,7 +33,7 @@ import { applyAttributionTextHooks } from "../plugins/functionHooks/attributionH
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { HostScoped } from "./hostScoped.js";
-import { getPromptContent as getPromptContent_2 } from "../commands/commit.js";
+import { hasCommitOrPrArg } from "../commands/commit.js";
 import { isRecognizedModel, getCanonicalName } from "./model/canonicalModelName.js";
 import { isFirstPartyProvider, isFirstPartyAnthropicBaseUrl } from "./model/providers.js";
 import { getPublicModelDisplayName, getPublicModelName } from "./model/modelDisplay.js";
@@ -43,42 +43,38 @@ import { stripAnyVersatileSuffix, isStandardTrailer } from "./model/modelIds.js"
 import { ARTIFACT_BLOCK_TAGS } from "../constants/xml.js";
 import { cwdOrGitRoot } from "./git/builderGit/gitEnv.js";
 import { findGitRoot } from "./git.js";
-import {
-  trackFileDeletion,
-  calculateCommitAttribution,
-  isInternalModelRepo,
-  getModelFamilyForAttribution,
-} from "./commitAttribution.js";
+import { trackFileDeletion, calculateCommitAttribution, isInternalModelRepo } from "./commitAttribution.js";
 import { logForDebugging } from "./debug.js";
 import { logError } from "./log.js";
-import { FILE_READ_TOOL_NAME } from "../tools/FileReadTool/constants.js";
-import { FILE_EDIT_TOOL_NAME } from "../tools/FileEditTool/constants.js";
+import { READ } from "../tools/FileReadTool/constants.js";
+import { EDIT } from "../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../tools/FileWriteTool/prompt.js";
 import { MEMORY_READ, MEMORY_WRITE } from "../tools/MemoryTool/memoryToolNames.js";
 import { isMemoryFileAccess } from "./sessionFileAccessHooks.js";
 import { getTranscriptPath, wrapStorageSource, getTranscriptStorageKey } from "./sessionStorage.js";
 import { readTranscriptForLoad } from "./sessionStoragePortable.js";
 import { parseJSONL } from "./json.js";
-import { isPlainObject as isPlainObject_5 } from "./isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "./isPlainObject.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
+import { getModelFamilyForAttribution } from "../commands/copy/copy.js";
 import { isRealPromptAt } from "./transcript/deserialize.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:200854-200911 placement
+//@ chunk-7jxyna5q.js:206350-206407 placement
 /**
  * 判断字符串长度合法且不含控制字符。
  */
 function isBoundedCleanString(text) {
   return text.length >= 1 && text.length <= MAX_STRING_ARG_CHARS && hasNoControlChars(text);
 }
-//@ chunk-s61vbvea.js:200911-200945 placement
+//@ chunk-7jxyna5q.js:206407-206441 placement
 /**
  * 判断字符串不含控制字符。
  */
 function hasNoControlChars(text) {
   return !CONTROL_CHARS_RE.test(text);
 }
-//@ chunk-e6aww6q8.js:1469310-1469474 placement
+//@ chunk-5xgkngpb.js:1469947-1470111 placement
 /**
  * 生成 PR 页脚"🤖 Generated with Claude Code"，开关开启时附"via 入口名"。
  */
@@ -88,13 +84,13 @@ function getGeneratedWithFooter() {
   let surfaceName = entrypointSurfaceName();
   return surfaceName ? `${footer} via ${surfaceName}` : footer;
 }
-//@ chunk-e6aww6q8.js:1469474-1470058 placement
+//@ chunk-5xgkngpb.js:1470111-1470695 placement
 /**
  * 返回用于提交/PR 归属的会话链接：受环境变量与设置控制；远程会话用远程会话 id，REPL 桥接（或允许仅出站时）用桥接会话 id；id 不安全或指向本地时返回 null。
  */
 function getSessionAttribution({ includeOutboundOnly = false } = {}) {
   if (env.CLAUDE_CODE_SUPPRESS_SESSION_ATTRIBUTION) return null;
-  if (getInitialSettings_2().attribution?.sessionUrl === false) return null;
+  if (getInitialSettings().attribution?.sessionUrl === false) return null;
   let remoteSessionId = currentRemoteSessionId();
   if (getClientType() === "remote" || remoteSessionId !== undefined) {
     let sessionId = remoteSessionId ?? env.CLAUDE_CODE_REMOTE_SESSION_ID;
@@ -121,14 +117,14 @@ function getSessionAttribution({ includeOutboundOnly = false } = {}) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:1470058-1470086 placement
+//@ chunk-5xgkngpb.js:1470695-1470723 placement
 /**
  * 占位实现，恒返回 null（无会话归属信息）。
  */
 function stubAttribution(attribution) {
   return null;
 }
-//@ chunk-e6aww6q8.js:1470086-1470224 placement
+//@ chunk-5xgkngpb.js:1470723-1470861 placement
 function getSessionTrailerParts(attribution) {
   let url = attribution?.url ?? null;
   let url_2 = url !== null && isBoundedCleanString(`Claude-Session: ${url}`) ? url : null;
@@ -139,7 +135,7 @@ function getSessionTrailerParts(attribution) {
     line,
   };
 }
-//@ chunk-e6aww6q8.js:1470224-1470363 placement
+//@ chunk-5xgkngpb.js:1470861-1471000 placement
 function appendSessionTrailer(attributionTexts, url, line) {
   let trailerLine = line ?? url;
   return {
@@ -154,21 +150,21 @@ ${trailerLine}`
       : trailerLine,
   };
 }
-//@ chunk-e6aww6q8.js:1470363-1470416 placement
+//@ chunk-5xgkngpb.js:1471000-1471053 placement
 /**
  * 按当前会话归属与模型生成提交/PR 的归属文本。
  */
 async function buildSessionAttributionTexts({ model } = {}) {
   return buildAttributionTexts(getSessionAttribution(), model);
 }
-//@ chunk-e6aww6q8.js:1470416-1470454 placement
+//@ chunk-5xgkngpb.js:1471053-1471091 placement
 /**
  * 用默认归属设置（不含会话链接）生成提交/PR 的归属文本。
  */
 async function buildDefaultAttributionTexts() {
   return buildAttributionTexts(null);
 }
-//@ chunk-e6aww6q8.js:1470454-1470611 placement
+//@ chunk-5xgkngpb.js:1471091-1471248 placement (2.1.88 match: getPromptContent, 0.213)
 /**
  * 生成提交与 PR 的归属文本：基础署名加上 Claude-Session 尾注（有会话链接时），并按设置模板渲染。
  */
@@ -184,7 +180,7 @@ async function buildAttributionTexts(attribution, model) {
     pr: await applyAttributionTextHooks("pr", trailerTexts.pr),
   };
 }
-//@ chunk-e6aww6q8.js:1470611-1470793 placement
+//@ chunk-5xgkngpb.js:1471248-1471430 placement
 class DeadProbeOnce {
   firedSites = new Set();
   fire(site) {
@@ -198,25 +194,25 @@ class DeadProbeOnce {
     this.firedSites.clear();
   }
 }
-//@ chunk-e6aww6q8.js:1470793-1470820 layout
+//@ chunk-5xgkngpb.js:1471430-1471457 layout
 var attributionDisabledSignalByHost; // deferred: uses DeadProbeOnce of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1470793", () => {
+deferInit("chunk-5xgkngpb.js:1471430", () => {
   attributionDisabledSignalByHost = new HostScoped(() => new DeadProbeOnce());
 });
-//@ chunk-e6aww6q8.js:1470820-1470859 layout
+//@ chunk-5xgkngpb.js:1471457-1471496 layout
 function getAttributionDisabledSignal() {
   return attributionDisabledSignalByHost.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:1470859-1471133 fingerprint (2.1.88 match: getAttributionTexts, 0.589)
+//@ chunk-5xgkngpb.js:1471496-1471770 fingerprint (2.1.88 match: getAttributionTexts, 0.589)
 /**
  * commit/PR 署名文本：settings.attribution.commit/pr 优先；includeCoAuthoredBy=false 时为空；默认 commit 为 `Co-Authored-By: <模型名> <noreply@anthropic.com>`，PR 为默认链接文本。
  */
 function getAttributionTexts(model) {
   let model_2 = getGeneratedWithFooter();
   let defaultAttribution = `Co-Authored-By: ${getAttributionModelName(model)} <noreply@anthropic.com>`;
-  let settings = getInitialSettings_2();
+  let settings = getInitialSettings();
   let attribution = settings.attribution;
-  if (attribution !== undefined && getPromptContent_2(attribution))
+  if (attribution !== undefined && hasCommitOrPrArg(attribution))
     return {
       commit: attribution.commit ?? defaultAttribution,
       pr: attribution.pr ?? model_2,
@@ -233,7 +229,7 @@ function getAttributionTexts(model) {
     pr: model_2,
   };
 }
-//@ chunk-e6aww6q8.js:1471133-1471240 layout
+//@ chunk-5xgkngpb.js:1471770-1471877 layout
 function getPolicyAttributionOverrides() {
   let attribution = getSettingsForSource("policySettings")?.attribution;
   return {
@@ -241,7 +237,7 @@ function getPolicyAttributionOverrides() {
     pr: Boolean(attribution?.pr),
   };
 }
-//@ chunk-e6aww6q8.js:1471240-1471500 layout
+//@ chunk-5xgkngpb.js:1471877-1472137 layout
 /**
  * 署名中显示的名字：可公开的模型名（如 Claude Opus 5.5），否则 Claude 或 Claude Code。
  */
@@ -268,7 +264,7 @@ function getAttributionModelName(model) {
   if (isRecognizedModelIdForAttribution(model)) return getPublicModelName(model);
   return isRecognized ? "Claude" : "Claude Code";
 }
-//@ chunk-e6aww6q8.js:1471500-1471919 layout
+//@ chunk-5xgkngpb.js:1472137-1472556 layout
 function isRecognizedModelIdForAttribution(modelId) {
   if (getPublicModelDisplayName(modelId) === null) return false;
   let overriddenId = reverseModelOverride(modelId);
@@ -295,12 +291,12 @@ function isRecognizedModelIdForAttribution(modelId) {
   let trailer = lower.slice(index + canonicalLength);
   return (sliced === "" || /[./]$/.test(sliced)) && isStandardTrailer(trailer);
 }
-//@ chunk-e6aww6q8.js:1471919-1471994 file-local
+//@ chunk-5xgkngpb.js:1472556-1472631 file-local
 function isTerminalOutput(content) {
   for (let tag of ARTIFACT_BLOCK_TAGS) if (content.includes(`<${tag}>`)) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:1471994-1472387 fingerprint (2.1.88 match: countUserPromptsInMessages, 1)
+//@ chunk-5xgkngpb.js:1472631-1473024 fingerprint (2.1.88 match: countUserPromptsInMessages, 1)
 function countUserPromptsInMessages(messages) {
   let count = 0;
   for (let message of messages) {
@@ -324,7 +320,7 @@ function countUserPromptsInMessages(messages) {
   }
   return count;
 }
-//@ chunk-e6aww6q8.js:1472387-1472571 layout
+//@ chunk-5xgkngpb.js:1473024-1473208 layout
 function countHumanUserPrompts(entries) {
   let nonSidechain = entries.filter(
     (entry) =>
@@ -335,12 +331,12 @@ function countHumanUserPrompts(entries) {
   );
   return countUserPromptsInMessages(nonSidechain);
 }
-//@ chunk-e6aww6q8.js:1472571-1472618 layout
+//@ chunk-5xgkngpb.js:1473208-1473255 layout
 var PR_ATTRIBUTION_STATS_UNKNOWN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1472571", () => {
+deferInit("chunk-5xgkngpb.js:1473208", () => {
   PR_ATTRIBUTION_STATS_UNKNOWN = Symbol("pr-attribution-stats-unknown");
 });
-//@ chunk-e6aww6q8.js:1472618-1473054 fingerprint (2.1.88 match: getPRAttributionData, 0.624)
+//@ chunk-5xgkngpb.js:1473255-1473691 fingerprint (2.1.88 match: getPRAttributionData, 0.624)
 /**
  * 从 AppState.attribution 计算 PR 级 Claude 贡献数据，未知时返回 PR_ATTRIBUTION_STATS_UNKNOWN。
  */
@@ -367,33 +363,27 @@ async function getPRAttributionData(appState) {
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:1473054-1473088 layout
+//@ chunk-5xgkngpb.js:1473691-1473725 layout
 var MEMORY_ACCESS_TOOL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1473054", () => {
-  MEMORY_ACCESS_TOOL_NAMES = new Set([
-    FILE_READ_TOOL_NAME,
-    FILE_EDIT_TOOL_NAME,
-    FILE_WRITE_TOOL_NAME,
-    MEMORY_READ,
-    MEMORY_WRITE,
-  ]);
+deferInit("chunk-5xgkngpb.js:1473691", () => {
+  MEMORY_ACCESS_TOOL_NAMES = new Set([READ, EDIT, FILE_WRITE_TOOL_NAME, MEMORY_READ, MEMORY_WRITE]);
 });
-//@ chunk-e6aww6q8.js:1473088-1473370 callgraph-fingerprint (2.1.88 match: countMemoryFileAccessFromEntries, 0.661)
-function countMemoryFileAccessFromEntries(entries) {
-  let count = 0;
-  for (let entry of entries) {
-    if (entry.type !== "assistant") continue;
-    let content = entry.message?.content;
+//@ chunk-5xgkngpb.js:1473725-1474007 layout (2.1.88 match: extractErrorTypeFromData, 1)
+function extractErrorTypeFromData(data) {
+  let toolUseCount = 0;
+  for (let message of data) {
+    if (message.type !== "assistant") continue;
+    let content = message.message?.content;
     if (!Array.isArray(content)) continue;
-    for (let block of content) {
-      if (!block || typeof block !== "object" || !("type" in block)) continue;
-      if (block.type !== "tool_use" || !MEMORY_ACCESS_TOOL_NAMES.has(block.name)) continue;
-      if (isMemoryFileAccess(block.name, block.input)) count++;
+    for (let blockList of content) {
+      if (!blockList || typeof blockList !== "object" || !("type" in blockList)) continue;
+      if (blockList.type !== "tool_use" || !MEMORY_ACCESS_TOOL_NAMES.has(blockList.name)) continue;
+      if (isMemoryFileAccess(blockList.name, blockList.input)) toolUseCount++;
     }
   }
-  return count;
+  return toolUseCount;
 }
-//@ chunk-e6aww6q8.js:1473370-1473876 fingerprint (2.1.88 match: getTranscriptStats, 0.865)
+//@ chunk-5xgkngpb.js:1474007-1474513 fingerprint (2.1.88 match: getTranscriptStats, 0.865)
 /**
  * 从当前转录统计用户提示数与记忆文件访问数（压缩边界后重新计数）。
  */
@@ -412,14 +402,14 @@ async function getTranscriptStats(storageV5) {
       fileSize = stats.value.size;
     } else fileSize = (await stat(filePath)).size;
     let buf = (await readTranscriptForLoad(filePath, fileSize, storageSource)).postBoundaryBuf;
-    let entries = parseJSONL(buf).filter((entry) => isPlainObject_5(entry));
+    let entries = parseJSONL(buf).filter((entry) => isPlainObject_6(entry));
     let lastBoundaryIdx = entries.findLastIndex(
       (e) => e.type === "system" && "subtype" in e && e.subtype === "compact_boundary",
     );
     let postBoundary = lastBoundaryIdx >= 0 ? entries.slice(lastBoundaryIdx + 1) : entries;
     return {
       promptCount: countHumanUserPrompts(postBoundary),
-      memoryAccessCount: countMemoryFileAccessFromEntries(postBoundary),
+      memoryAccessCount: extractErrorTypeFromData(postBoundary),
     };
   } catch {
     return {
@@ -428,7 +418,7 @@ async function getTranscriptStats(storageV5) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:1473876-1474044 layout
+//@ chunk-5xgkngpb.js:1474513-1474681 layout
 async function buildPRAttributionTrailer(getAppState, storageV5) {
   let attribution = getSessionAttribution({
     includeOutboundOnly: true,
@@ -446,13 +436,13 @@ ${trailerLine}`
         : trailerLine;
   return applyAttributionTextHooks("pr", prText);
 }
-//@ chunk-e6aww6q8.js:1474044-1475050 fingerprint (2.1.88 match: getEnhancedPRAttribution, 0.815)
+//@ chunk-5xgkngpb.js:1474681-1475689 fingerprint (2.1.88 match: getEnhancedPRAttribution, 0.815)
 /**
  * 增强版 PR 署名：在默认文本基础上附加 Claude 贡献比例、提示次数、记忆访问次数等统计；attribution.pr 或 includeCoAuthoredBy=false 时直接返回对应值。
  */
 async function getEnhancedPRAttribution(getAppState, url, line, storageV5) {
   let storage = isStorageV5Enabled() ? storageV5 : undefined;
-  let settings = getInitialSettings_2();
+  let settings = getInitialSettings();
   if (settings.attribution?.pr !== undefined) return settings.attribution.pr;
   if (settings.includeCoAuthoredBy === false) {
     getAttributionDisabledSignal().fire("pr_base");
@@ -496,16 +486,16 @@ async function getEnhancedPRAttribution(getAppState, url, line, storageV5) {
   logForDebugging(`PR Attribution: returning summary: ${summary}`);
   return summary;
 }
-//@ chunk-tyg7f3ek.js:47443-47530 fingerprint (2.1.88 match: countUserPromptsFromEntries, 1)
+//@ chunk-0yw3taqg.js:66355-66442 fingerprint (2.1.88 match: countUserPromptsFromEntries, 1)
 function countUserPromptsFromEntries(entries, index) {
   let entry = entries[index];
   return !("isSidechain" in entry && entry.isSidechain === true) && isRealPromptAt(entries, index);
 }
 export {
-  buildSessionAttributionTexts,
+  countUserPromptsFromEntries,
   buildDefaultAttributionTexts,
+  buildSessionAttributionTexts,
   buildPRAttributionTrailer,
   getPolicyAttributionOverrides,
   getSessionAttribution,
-  countUserPromptsFromEntries,
 };

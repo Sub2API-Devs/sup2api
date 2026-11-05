@@ -1,8 +1,8 @@
 /**
  * gaxios/build/cjs/src/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: gaxios@7.1.4
- * pieces: chunk-na3pph4p.js (1)
+ * pieces: chunk-e8d3a8an.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_gaxios } from "./gaxios.js";
 import { require_common } from "./common.js";
 import { require_interceptor } from "./interceptor.js";
 
-//@ chunk-na3pph4p.js:17413-18271 cjs-fingerprint
+//@ chunk-e8d3a8an.js:17413-18271 cjs-fingerprint
 var require_gaxios_2 = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||

@@ -3,10 +3,10 @@
  *
  * Hook 输出 JSON 的 zod schema（同步/异步输出、permissionDecision 等）与类型判定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/types/hooks.ts
- * pieces: chunk-e6aww6q8.js (1), chunk-s61vbvea.js (3)
- * attribution: callgraph-fingerprint 1, fingerprint 1, shared-adjacent 2
+ * pieces: chunk-5xgkngpb.js (2), chunk-7jxyna5q.js (3)
+ * attribution: file-last-pair 1, callgraph-fingerprint 1, fingerprint 1, shared-adjacent 2
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
 import {
@@ -22,18 +22,20 @@ import {
   numberSchema,
 } from "../../vendor/zod/v4/classic/schemas.js";
 import { PermissionDisplaySchema } from "../entrypoints/sdk/coreSchemas.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
 import { permissionUpdateSchema } from "../utils/hooks/hookSpecificOutput.js";
+import { slowLogging, jsonParseRaw } from "../utils/slowOperations.js";
 import { getIsNonInteractiveSession, getHasStreamingInput } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:318000-324224 fingerprint (2.1.88 match: syncHookResponseSchema, 0.714)
+//@ chunk-7jxyna5q.js:242544-248801 fingerprint (2.1.88 match: syncHookResponseSchema, 0.704)
 /**
  * Hook 输出 JSON 的 schema：权限决定、同步输出（continue、decision、systemMessage、各事件的 hookSpecificOutput 等）与包含异步形式的整体输出。
  */
 var permissionDecisionSchema_2; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var syncHookJSONOutputSchema;
 var hookJSONOutputSchema;
-deferInit("chunk-s61vbvea.js:318000", () => {
+deferInit("chunk-7jxyna5q.js:242544", () => {
   permissionDecisionSchema_2 = DoctorLazy(() => _enum(["allow", "deny", "ask", "defer"]));
   syncHookJSONOutputSchema = DoctorLazy(() =>
     objectSchema({
@@ -114,7 +116,7 @@ deferInit("chunk-s61vbvea.js:318000", () => {
           classifierContext: stringSchema()
             .describe(
               "Host-asserted context shown to the auto-mode permission classifier alongside this tool call's result. In the live session the classifier may weigh a user statement relayed here as user intent (it can satisfy a consent bar a user turn would satisfy, never a hard boundary); values restored from saved session state are treated as unverified context only. Relay discipline is the host's obligation: put ONLY genuine user statements in intent-bearing positions \u2014 never tool output or model text dressed as one. Capped at 2000 UTF-16 code units, a budget shared across all hooks that contribute to one call (surrogate-pair-safe; emoji and other astral characters count as two). Honored on synchronous hook responses only: an async hook's late response arrives after the result message is frozen and this field in it is silently ignored. Security note: do not copy untrusted tool output or third-party text into it blindly \u2014 content placed here reaches the permission classifier with host-application framing. Applies only to calls the classifier transcript shows: read-only lookups the transcript omits (file reads, searches)" +
-                " and" +
+                (codeModeAccepted() ? ", inner REPL calls, and" : " and") +
                 " remote-engine shells produce no per-result line, and context attached to them is silently unused. Not a delivery channel: it is bound to a single call id and sized for a short assertion, not for relaying messages or events. Rewrite integrity: if this assertion describes output you are rewriting, return it in the SAME hook result as the rewrite \u2014 it is then dropped automatically if your rewrite is rejected or superseded by a later hook's rewrite; assertions returned without a rewrite are never invalidated by other hooks' rewrites, so a non-rewriting hook should assert only what holds regardless of other hooks' rewrites \u2014 hosts that need an assertion bound to exact output bytes should make it in the hook that produces those bytes. (Do NOT return an identity rewrite just to pair an assertion: hooks run in parallel on the ORIGINAL output, so an identity rewrite competes last-write-wins with sibling rewrites and can clobber a real redaction.)",
             )
             .optional(),
@@ -211,15 +213,34 @@ deferInit("chunk-s61vbvea.js:318000", () => {
     return union([asyncHookResponseSchema, syncHookJSONOutputSchema()]);
   });
 });
-//@ chunk-s61vbvea.js:324224-324276 shared-adjacent (2.1.88 match: isSyncHookJSONOutput, 1)
+//@ chunk-7jxyna5q.js:248801-248853 shared-adjacent (2.1.88 match: isSyncHookJSONOutput, 1)
 function isSyncHookJSONOutput(json) {
   return !("async" in json && json.async === true);
 }
-//@ chunk-s61vbvea.js:324276-324324 shared-adjacent (2.1.88 match: isSyncHookJSONOutput, 1)
+//@ chunk-7jxyna5q.js:248853-248901 shared-adjacent (2.1.88 match: isSyncHookJSONOutput, 1)
 function isSyncHookJSONOutput_2(json) {
   return "async" in json && json.async === true;
 }
-//@ chunk-e6aww6q8.js:3464093-3464175 callgraph-fingerprint (2.1.88 match: isAsyncHookJSONOutput, 0.389)
+//@ chunk-5xgkngpb.js:3543559-3543826 file-last-pair
+function isJsonLinesOutput(stdout) {
+  let filtered = stdout
+    .split(
+      `
+`,
+    )
+    .filter((line) => line.trim() !== "");
+  if (filtered.length < 2) return false;
+  using span = slowLogging`parseHookOutput: json lines (${filtered.length})`;
+  return filtered.every((line) => {
+    try {
+      let parsed = hookJSONOutputSchema().safeParse(jsonParseRaw(line.trim()));
+      return !parsed.success || Object.keys(parsed.data).length === 0;
+    } catch {
+      return false;
+    }
+  });
+}
+//@ chunk-5xgkngpb.js:3555085-3555167 callgraph-fingerprint (2.1.88 match: isAsyncHookJSONOutput, 0.391)
 function isAsyncHookJSONOutput(hook, alreadyAsync) {
   return (
     (hook.async === true ||
@@ -227,4 +248,10 @@ function isAsyncHookJSONOutput(hook, alreadyAsync) {
     alreadyAsync !== true
   );
 }
-export { isSyncHookJSONOutput, hookJSONOutputSchema, isAsyncHookJSONOutput, isSyncHookJSONOutput_2 };
+export {
+  hookJSONOutputSchema,
+  isSyncHookJSONOutput,
+  isJsonLinesOutput,
+  isAsyncHookJSONOutput,
+  isSyncHookJSONOutput_2,
+};

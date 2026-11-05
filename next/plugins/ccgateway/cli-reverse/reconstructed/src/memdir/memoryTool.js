@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：记忆工具名（memory_write/read/append/str_replace 等）与读写集合；读取 CLAUDE_CODE_POST_TURN_MEMORY_CONFIG（回合后记忆提取配置）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (28)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (28)
  * attribution: placement 28
  */
 import { randomUUID } from "crypto";
@@ -36,7 +36,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { lit } from "../services/analytics/safeMetadata.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:51611-51894 placement
+//@ chunk-exfmq47h.js:52087-52369 placement
 /**
  * 过长文本从中间截断并插入"N characters truncated"标记（合并已有标记）。
  */
@@ -54,13 +54,13 @@ function truncateMiddle(text, keepChars = TRUNCATE_MIDDLE_CHARS) {
     return formatError(truncated + markerAdjust);
   });
 }
-//@ chunk-aepeg2w5.js:51894-51918 placement
+//@ chunk-exfmq47h.js:52369-52393 placement
 /**
  * 栈帧行正则
  */
 var STACK_FRAME_RE = /^\s*at /;
 var MAX_STACK_LINE_CHARS = 500;
-//@ chunk-aepeg2w5.js:51918-52119 placement
+//@ chunk-exfmq47h.js:52393-52593 placement
 /**
  * 把错误名、消息与前几帧栈压缩成一段简短文本。
  */
@@ -83,13 +83,13 @@ function summarizeError({ name: errorName, message, stack }, frameLimit = 5) {
 `),
   );
 }
-//@ chunk-aepeg2w5.js:52119-52851 placement
+//@ chunk-exfmq47h.js:52593-53325 placement
 /**
  * 同形异义字符（西里尔等）到拉丁字母的映射，用于检测伪装文本。
  */
 var HOMOGLYPH_MAP; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var regExp;
-deferInit("chunk-aepeg2w5.js:52119", () => {
+deferInit("chunk-exfmq47h.js:52593", () => {
   HOMOGLYPH_MAP = {
     а: "a",
     т: "t",
@@ -150,13 +150,13 @@ deferInit("chunk-aepeg2w5.js:52119", () => {
   };
   regExp = new RegExp(`[${Object.keys(HOMOGLYPH_MAP).join("")}]`, "g");
 });
-//@ chunk-aepeg2w5.js:52851-53713 placement
+//@ chunk-exfmq47h.js:53325-54187 placement
 /**
  * 记忆/召回相关判断用的否定词表（no、not、never、stop、avoid、forbid、exclude 等及其屈折形式）。
  */
 var NEGATION_WORDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NEGATION_VERB_SET;
-deferInit("chunk-aepeg2w5.js:52851", () => {
+deferInit("chunk-exfmq47h.js:53325", () => {
   NEGATION_WORDS = new Set(
     "no not never dont doesnt didnt wont cant cannot shouldnt isnt arent wasnt nor without stop stops stopped stopping avoid avoids avoided avoiding mustnt couldnt wouldnt havent hasnt hadnt werent neednt aint shant mightnt oughtnt darent rarely hardly seldom barely scarcely neither none nothing nobody skip skips skipped skipping omit omits omitted omitting ban bans banned banning forbid forbids forbade forbidden forbidding exclude excludes excluded excluding prohibit prohibits prohibited prohibiting disallow disallows disallowed disallowing".split(
       " ",
@@ -169,16 +169,16 @@ deferInit("chunk-aepeg2w5.js:52851", () => {
     ),
   ]);
 });
-//@ chunk-aepeg2w5.js:53713-53859 placement
+//@ chunk-exfmq47h.js:54187-54333 placement
 var STOP_WORDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:53713", () => {
+deferInit("chunk-exfmq47h.js:54187", () => {
   STOP_WORDS = new Set(
     "a an the to of in on at by for and or but then as is be it i me my we our you your with from that this than so if do".split(
       " ",
     ),
   );
 });
-//@ chunk-aepeg2w5.js:53859-53947 placement
+//@ chunk-exfmq47h.js:54333-54421 placement
 /**
  * cited_turn/contiguous/off
  */
@@ -189,34 +189,34 @@ function normalizeTypedEvidenceMode(personFilesTypedEvidence) {
       ? "contiguous"
       : "off";
 }
-//@ chunk-aepeg2w5.js:53947-54108 placement
+//@ chunk-exfmq47h.js:54421-54582 placement
 var DEMONSTRATIVE_WORDS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var WEAK_REFERENCE_WORDS;
-deferInit("chunk-aepeg2w5.js:53947", () => {
+deferInit("chunk-exfmq47h.js:54421", () => {
   DEMONSTRATIVE_WORDS_2 = new Set(
     "these those this following any all things thing ones one either below".split(" "),
   );
   WEAK_REFERENCE_WORDS = new Set("it that this those me so in on at by".split(" "));
 });
-//@ chunk-aepeg2w5.js:54108-54175 placement
+//@ chunk-exfmq47h.js:54582-54649 placement
 /**
  * 指示代词表
  */
 var DEMONSTRATIVE_WORDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:54108", () => {
+deferInit("chunk-exfmq47h.js:54582", () => {
   DEMONSTRATIVE_WORDS = new Set("these those this following below ones".split(" "));
 });
-//@ chunk-aepeg2w5.js:54175-54193 placement
+//@ chunk-exfmq47h.js:54649-54667 placement
 /**
  * 记忆工具所属服务器名（memory）与工具名前缀。
  */
-var MEMORY; // deferred: uses MEMORY (../services/mcp/firstPartyServerIds.js) of its import cycle while loading; runs once the cycle is complete
+var MEMORY; // deferred: uses ARTIFACTS_SERVER_NAME (../services/mcp/firstPartyServerIds.js) of its import cycle while loading; runs once the cycle is complete
 var MEMORY_TOOL_PREFIX;
-deferInit("chunk-aepeg2w5.js:54175", () => {
+deferInit("chunk-exfmq47h.js:54649", () => {
   MEMORY = MEMORY_2;
   MEMORY_TOOL_PREFIX = MEMORY_TOOL_PREFIX_2;
 });
-//@ chunk-aepeg2w5.js:54193-56473 placement
+//@ chunk-exfmq47h.js:54667-56947 placement
 /**
  * 记忆 MCP 工具名集合（memory_read/write/append/str_replace/delete 与只读的 read/list/search）及各自的参数、结果 schema。
  */
@@ -240,7 +240,7 @@ var memoryDeleteArgsSchema;
 var memoryCallResultSchema;
 var memorySearchResultSchema;
 var postTurnMemoryConfigSchema;
-deferInit("chunk-aepeg2w5.js:54193", () => {
+deferInit("chunk-exfmq47h.js:54667", () => {
   MEMORY_WRITE_TOOL = `${MEMORY_TOOL_PREFIX}write`;
   MEMORY_READ_TOOL = `${MEMORY_TOOL_PREFIX}read`;
   MEMORY_APPEND_TOOL = `${MEMORY_TOOL_PREFIX}append`;
@@ -338,7 +338,7 @@ deferInit("chunk-aepeg2w5.js:54193", () => {
     }),
   );
 });
-//@ chunk-aepeg2w5.js:56473-56542 placement
+//@ chunk-exfmq47h.js:56947-57016 placement
 /**
  * 解析 CLAUDE_CODE_POST_TURN_MEMORY_CONFIG 得到 hosted 记忆提取配置，非法时返回 null。
  */
@@ -346,7 +346,7 @@ function parsePostTurnMemoryConfig(raw) {
   let parsed = postTurnMemoryConfigSchema().safeParse(raw);
   return parsed.success ? parsed.data : null;
 }
-//@ chunk-aepeg2w5.js:56542-56624 placement
+//@ chunk-exfmq47h.js:57016-57098 placement
 /**
  * CLAUDE_CODE_POST_TURN_MEMORY 打开时解析 CLAUDE_CODE_POST_TURN_MEMORY_CONFIG 得到 hosted 提取配置，否则 null。
  */
@@ -354,7 +354,7 @@ function getHostedPostTurnMemoryConfig() {
   if (!env.CLAUDE_CODE_POST_TURN_MEMORY) return null;
   return getPostTurnMemoryConfig("hosted");
 }
-//@ chunk-aepeg2w5.js:56624-58221 placement
+//@ chunk-exfmq47h.js:57098-58695 placement
 /**
  * 解析 post-turn 记忆配置 JSON：instruction、every_n_turns、max_turns、idle_flush_s、prose_gate、min_prose_words、review_window、when_overage 等；CLAUDE_CODE_POST_TURN_MEMORY_SYNC 时每轮同步执行。
  */
@@ -405,25 +405,25 @@ function getPostTurnMemoryConfig(context = "dry_run_harness") {
     personFilesCiteSinceFloor: parsed.data.cite_span === "floor",
   };
 }
-//@ chunk-aepeg2w5.js:58221-58277 placement
+//@ chunk-exfmq47h.js:58695-58751 placement
 /**
  * 判断 MCP 服务器是否是账户记忆服务器。
  */
 function isAccountMemoryServer(server) {
   return server !== undefined && isCcrMemoryMcpServer(server.name, server.config);
 }
-//@ chunk-aepeg2w5.js:58277-58443 placement
+//@ chunk-exfmq47h.js:58751-58917 placement
 var MEMORY_ANSWER_MAX_CHARS = 65536;
 var MEMORY_TRUNCATION_NOTE =
   "[Note: the file content above is incomplete \u2014 see the 'characters truncated' marker. Call memory_read on this path before rewriting the file.]";
-//@ chunk-aepeg2w5.js:58443-58483 placement
+//@ chunk-exfmq47h.js:58917-58957 placement
 /**
  * 本地 agent 会话里的动态记忆服务器
  */
 function isLocalAgentDynamicMemoryServer(server, toolName) {
   return isDynamicMemorySdkServer(server, toolName) && isLocalAgentSession();
 }
-//@ chunk-aepeg2w5.js:58483-58598 placement
+//@ chunk-exfmq47h.js:58957-59072 placement
 function isDynamicMemorySdkServer(server, toolName) {
   return (
     server?.name === MEMORY &&
@@ -433,7 +433,7 @@ function isDynamicMemorySdkServer(server, toolName) {
     MEMORY_TOOL_NAME_RE.test(toolName)
   );
 }
-//@ chunk-aepeg2w5.js:58598-58667 placement
+//@ chunk-exfmq47h.js:59072-59141 placement
 /**
  * 判断连接是否属于记忆服务器（账户记忆、内置等）。
  */
@@ -444,7 +444,7 @@ function isMemoryServerConnection(client, toolName) {
     (client?.name === MEMORY && isCliOwnedConfig(client.config))
   );
 }
-//@ chunk-aepeg2w5.js:58667-58737 placement
+//@ chunk-exfmq47h.js:59141-59211 placement
 /**
  * 该服务器是否提供记忆工具
  */
@@ -455,21 +455,21 @@ function isMemoryToolServer(server, name) {
     (server?.name === MEMORY && isCliOwnedConfig(server.config))
   );
 }
-//@ chunk-aepeg2w5.js:58737-58770 placement
+//@ chunk-exfmq47h.js:59211-59244 placement
 /**
  * 判断是否为提供记忆工具的服务器。
  */
 function isMemoryToolServer_2(server) {
   return isMemoryToolServer(server, MEMORY_READ);
 }
-//@ chunk-aepeg2w5.js:58770-58906 placement
+//@ chunk-exfmq47h.js:59244-59380 placement
 /**
  * 记忆服务器工具错误的脱敏描述：只给出长度，不记录正文（可能含用户记忆文件）。
  */
 function describeRedactedMcpError(answer) {
   return `McpToolCallError (${answer.length} chars; text not logged: memory server answers can contain the user's memory file)`;
 }
-//@ chunk-aepeg2w5.js:58906-59173 placement
+//@ chunk-exfmq47h.js:59380-59647 placement
 /**
  * 对记忆服务器的 MCP 工具错误放宽错误文本上限并附加截断提示，记录 tengu_mcp_memory_answer_cap。
  */
@@ -492,21 +492,21 @@ function raiseMemoryErrorCap(error, server, toolName) {
       });
   }
 }
-//@ chunk-aepeg2w5.js:59173-59222 placement
+//@ chunk-exfmq47h.js:59647-59696 placement
 /**
  * 从服务器列表里找 memory 服务器
  */
 function findMemoryServer(mcpClients) {
   return mcpClients?.find((client) => client.name === MEMORY);
 }
-//@ chunk-aepeg2w5.js:59222-59320 placement
+//@ chunk-exfmq47h.js:59696-59794 placement
 /**
  * 记忆调用 _meta 键（caller、pass_id、cites_event）。
  */
 var MEMORY_CALLER_META_KEY = "anthropic/memory.caller";
 var ANTHROPIC_MEMORY_PASS_ID = "anthropic/memory.pass_id";
 var ANTHROPIC_MEMORY_CITES_EVENT = "anthropic/memory.cites_event";
-//@ chunk-aepeg2w5.js:59320-59415 placement
+//@ chunk-exfmq47h.js:59794-59889 placement
 /**
  * 从调用参数里移除 caller、pass_id、cites_event 三个记忆 _meta 键。
  */
@@ -520,9 +520,9 @@ function stripMemoryCallMeta(mcpRequestMeta) {
   } = mcpRequestMeta;
   return rest;
 }
-//@ chunk-aepeg2w5.js:59415-59436 placement
+//@ chunk-exfmq47h.js:59889-59910 placement
 var MEMEXTRACT = "memextract";
-//@ chunk-aepeg2w5.js:59436-59531 placement
+//@ chunk-exfmq47h.js:59910-60005 placement
 /**
  * 构造记忆工具调用的 _meta：caller 固定为 memextract，可带 pass id 与引用事件。
  */
@@ -536,26 +536,26 @@ function buildMemoryCallMeta({ passId = randomUUID(), citesEvent } = {}) {
   };
 }
 export {
-  truncateMiddle,
   isMemoryToolServer,
   isMemoryToolServer_2,
   isMemoryServerConnection,
   isAccountMemoryServer,
   raiseMemoryErrorCap,
   describeRedactedMcpError,
-  summarizeError,
+  truncateMiddle,
+  stripMemoryCallMeta,
   MEMORY_CALLER_META_KEY,
-  getHostedPostTurnMemoryConfig,
+  MEMORY_MUTATING_TOOLS,
   findMemoryServer,
   MEMORY_BACKGROUND_ALLOWED_TOOLS,
-  MEMORY_MUTATING_TOOLS,
+  getHostedPostTurnMemoryConfig,
   buildMemoryCallMeta,
   MEMORY_WRITE_TOOL,
   parsePostTurnMemoryConfig,
-  stripMemoryCallMeta,
   MEMORY_SEARCH_TOOLS,
   isLocalAgentDynamicMemoryServer,
   MEMEXTRACT,
   MAX_INSTRUCTION_CHARS,
   MEMORY_TOOL_PREFIX,
+  summarizeError,
 };

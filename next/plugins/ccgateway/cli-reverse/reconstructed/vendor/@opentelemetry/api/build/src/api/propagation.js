@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/api/build/src/api/propagation.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/api@1.9.0
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -13,7 +13,7 @@ import { require_context_helpers } from "../baggage/context-helpers.js";
 import { require_utils_5 } from "../baggage/utils.js";
 import { require_diag } from "./diag.js";
 
-//@ chunk-bwbq4xvm.js:47752-48667 cjs-fingerprint
+//@ chunk-7kayq7nc.js:47838-48753 cjs-fingerprint
 var require_propagation = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

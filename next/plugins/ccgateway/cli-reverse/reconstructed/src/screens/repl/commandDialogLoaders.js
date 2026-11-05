@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增。命令对话框懒加载。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: placement 2
  */
 
-//@ chunk-18hwfzwa.js:37274-40586 placement
+//@ chunk-czq1j3j2.js:38835-42192 placement
 /**
  * 斜杠命令到懒加载 chunk 的映射表，命令对话框打开时按需 import。
  */
@@ -17,7 +17,7 @@ var COMMAND_DIALOG_LOADERS = {
   "add-dir": () => import("../../commands/add-dir/add-dir.js"),
   advisor: () => import("../../commands/advisor.js"),
   artifacts: () => import("../../components/artifacts/call.lazy.js"),
-  "auto-mode-setup": () => import("../../commands/auto-mode-setup/call.lazy.js"),
+  "auto-mode-setup": () => import("../../commands/auto-mode-setup/call_2.lazy.js"),
   autocompact: () => import("../../components/call.lazy.js"),
   "autofix-pr": () => import("../../commands/autofix-pr/call.lazy.js"),
   btw: () => import("../../commands/btw/btw.js"),
@@ -31,14 +31,14 @@ var COMMAND_DIALOG_LOADERS = {
   "design-login": () => import("../../components/DesignLogin.lazy.js"),
   desktop: () => import("../../commands/desktop/desktop.js"),
   diff: () => import("../../commands/diff/call.lazy.js"),
-  effort: () => import("../../commands/effort/call.lazy.js"),
+  effort: () => import("../../commands/effort/call_2.lazy.js"),
   exit: () => import("../../components/call_2.lazy.js"),
   export: () => import("../../commands/export/export.js"),
   "extra-usage": () => import("../../commands/plan/call.lazy.js"),
   fast: () => import("../../commands/fast/fast.lazy.js"),
   feedback: () => import("../../commands/feedback/feedback.js"),
-  fork: () => import("../../commands/fork/call.lazy.js"),
-  goal: () => import("../../commands/goal/call.lazy.js"),
+  fork: () => import("../../commands/fork/call_2.lazy.js"),
+  goal: () => import("../../commands/goal/call_2.lazy.js"),
   help: () => import("../../commands/help/help.js"),
   hooks: () => import("../../commands/hooks/hooks.js"),
   ide: () => import("../../commands/ide/IDECommandFlow.lazy.js"),
@@ -52,7 +52,7 @@ var COMMAND_DIALOG_LOADERS = {
   memory: () => import("../../components/memory/call.lazy.js"),
   mobile: () => import("../../commands/session/call.lazy.js"),
   model: () => import("../../commands/model/model.js"),
-  "output-style": () => import("../../commands/config/call.lazy.js"),
+  "output-style": () => import("../../commands/config/call_2.lazy.js"),
   passes: () => import("../../commands/passes/passes.js"),
   permissions: () => import("../../commands/permissions/permissions.js"),
   plan: () => import("../../commands/plan/plan.js"),
@@ -67,7 +67,7 @@ var COMMAND_DIALOG_LOADERS = {
   resume: () => import("../../commands/resume/resume.js"),
   sandbox: () => import("../../commands/sandbox-toggle/sandbox-toggle.js"),
   "scroll-speed": () => import("../../commands/scroll-speed/call.lazy.js"),
-  session: () => import("../../commands/session/session.js"),
+  session: () => import("../../commands/session/call_2.lazy.js"),
   "setup-bedrock": () => import("../../commands/setup-bedrock/call.lazy.js"),
   "setup-vertex": () => import("../../components/call_3.lazy.js"),
   "skill-doctor": () => import("../../commands/stats/call.lazy.js"),
@@ -82,7 +82,8 @@ var COMMAND_DIALOG_LOADERS = {
   upgrade: () => import("../../commands/upgrade/upgrade.js"),
   usage: () => import("../../commands/usage/usage.js"),
   "usage-credits": () => import("../../commands/usage-credits/usageCredits.js"),
-  vim: () => import("../../commands/config/call.lazy.js"),
+  "use-case": () => import("../../commands/use-case/call.lazy.js"),
+  vim: () => import("../../commands/config/call_2.lazy.js"),
   "web-setup": () => import("../../commands/remote-setup/remote-setup.js"),
   wellbeing: () => import("../../components/Settings/WRITE_DELAY_MS.lazy.js"),
   ...false,
@@ -98,6 +99,6 @@ var COMMAND_DIALOG_LOADERS = {
   workflows: () => import("../../commands/workflows/call.lazy.js"),
   ...{},
 };
-//@ chunk-18hwfzwa.js:40586-40620 placement
+//@ chunk-czq1j3j2.js:42192-42226 placement
 var COMMAND_DIALOG_NAMES = new Set(Object.keys(COMMAND_DIALOG_LOADERS));
 export { COMMAND_DIALOG_LOADERS };

@@ -3,21 +3,21 @@
  *
  * 2.1.316 新增。youShouldKnow 提示渲染。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bss4k1z9.js (89)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-775n2x67.js (89)
  * attribution: placement 89
  */
 import { CHOICE_GAP, STAR_CELLS, ABOUT_CLOSED, aboutFit, renderNoteRuns, offerHead } from "./NoteCard.js";
 import { checkLineOf } from "./telemetry.js";
 
-//@ chunk-bss4k1z9.js:20421-20452 placement
+//@ chunk-775n2x67.js:20729-20760 placement
 var DEBUG_ON_WORDS = ["1", "true", "yes", "on"];
-//@ chunk-bss4k1z9.js:20452-20512 placement
+//@ chunk-775n2x67.js:20760-20820 placement
 var isDebugOn = (value) => value !== undefined && DEBUG_ON_WORDS.includes(value.trim().toLowerCase());
-//@ chunk-bss4k1z9.js:20512-20549 placement
+//@ chunk-775n2x67.js:20820-20857 placement
 var debugFlagOf = (value) => value.then(isDebugOn).catch(() => false);
-//@ chunk-bss4k1z9.js:20549-20605 placement
+//@ chunk-775n2x67.js:20857-20913 placement
 async function thenAlways(work, cleanup) {
   try {
     await work();
@@ -25,16 +25,16 @@ async function thenAlways(work, cleanup) {
     await cleanup();
   }
 }
-//@ chunk-bss4k1z9.js:20605-20658 placement
+//@ chunk-775n2x67.js:20913-20966 placement
 var emptyCard = () => ({
   title: "",
   lead: "",
   sketch: [],
   caption: "",
 });
-//@ chunk-bss4k1z9.js:20658-20672 placement
+//@ chunk-775n2x67.js:20966-20980 placement
 var FENCE_LINE = /^```/;
-//@ chunk-bss4k1z9.js:20672-20955 placement
+//@ chunk-775n2x67.js:20980-21263 placement
 var ansiSequence = () =>
   new RegExp(
     String.raw`[\u001B\u009B][[\]()#;?]*` +
@@ -44,24 +44,24 @@ var ansiSequence = () =>
       String.raw`|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))`,
     "g",
   );
-//@ chunk-bss4k1z9.js:20955-21041 placement
+//@ chunk-775n2x67.js:21263-21349 placement
 var cleanOneLine = (text) =>
   text
     .replace(/[\x00-\x08\x0E-\x1F\x7F-\x9F]/g, "")
     .replace(/\s+/g, " ")
     .trim();
-//@ chunk-bss4k1z9.js:21041-21140 placement
+//@ chunk-775n2x67.js:21349-21448 placement
 function sliceCodePointsHead(text, maxLength) {
   if (maxLength <= 0) return "";
   return text.length <= maxLength ? text : text.slice(0, maxLength).replace(/[\uD800-\uDBFF]$/, "");
 }
-//@ chunk-bss4k1z9.js:21140-21237 placement
+//@ chunk-775n2x67.js:21448-21545 placement
 var stripControlSequences = (line) =>
   line
     .replace(/\p{Cs}/gu, "")
     .replace(ansiSequence(), "")
     .replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, "");
-//@ chunk-bss4k1z9.js:21237-21394 placement
+//@ chunk-775n2x67.js:21545-21702 placement
 function truncateAtWordBoundary(text, maxLength) {
   if (text.length <= maxLength) return text;
   let head = sliceCodePointsHead(text, maxLength - 1);
@@ -69,7 +69,7 @@ function truncateAtWordBoundary(text, maxLength) {
   let cut = lastSpace !== -1 ? head.slice(0, lastSpace).trimEnd() : "";
   return `${cut.length > maxLength / 2 ? cut : head.trimEnd()}\u2026`;
 }
-//@ chunk-bss4k1z9.js:21394-21465 placement
+//@ chunk-775n2x67.js:21702-21773 placement
 var proseOf = (text) =>
   text
     .split(
@@ -79,29 +79,29 @@ var proseOf = (text) =>
     .map((line) => cleanOneLine(line))
     .filter((line) => line !== "").join(`
 `);
-//@ chunk-bss4k1z9.js:21465-21506 placement
+//@ chunk-775n2x67.js:21773-21814 placement
 var TITLE_LINE = /^(?:\*\*([^*]+)\*\*|#+\s*(.+))$/;
-//@ chunk-bss4k1z9.js:21506-21515 placement
+//@ chunk-775n2x67.js:21814-21823 placement
 var CHECK_EVERY = 6;
-//@ chunk-bss4k1z9.js:21515-21524 placement
+//@ chunk-775n2x67.js:21823-21832 placement
 var CLEAR_AFTER_PROMPTS = 2;
-//@ chunk-bss4k1z9.js:21524-21536 placement
+//@ chunk-775n2x67.js:21832-21844 placement
 var MAX_CAPTION_LENGTH = 4000;
-//@ chunk-bss4k1z9.js:21536-21545 placement
+//@ chunk-775n2x67.js:21844-21853 placement
 var MAX_CARDS = 4;
-//@ chunk-bss4k1z9.js:21545-21555 placement
+//@ chunk-775n2x67.js:21853-21863 placement
 var MAX_SKETCH_LINES = 12;
-//@ chunk-bss4k1z9.js:21555-21566 placement
+//@ chunk-775n2x67.js:21863-21874 placement
 var MAX_SKETCH_WIDTH = 120;
-//@ chunk-bss4k1z9.js:21566-21577 placement
+//@ chunk-775n2x67.js:21874-21885 placement
 var MAX_TITLE_WIDTH = 120;
-//@ chunk-bss4k1z9.js:21577-21601 placement
+//@ chunk-775n2x67.js:21885-21909 placement
 var LEARN_LABEL = /^learn\s*:\s*/i;
-//@ chunk-bss4k1z9.js:21601-21661 placement
+//@ chunk-775n2x67.js:21909-21969 placement
 var isDeclined = (text) => text === "" || /^none\s*(?:[.!?()[\]:;,-]|$)/i.test(text);
-//@ chunk-bss4k1z9.js:21661-21694 placement
+//@ chunk-775n2x67.js:21969-22002 placement
 var withoutTrailingPeriod = (text) => text.replace(/\.+$/, "");
-//@ chunk-bss4k1z9.js:21694-21773 placement
+//@ chunk-775n2x67.js:22002-22081 placement
 var WRAPPING_QUOTES = [
   ['"', '"'],
   ["'", "'"],
@@ -109,7 +109,7 @@ var WRAPPING_QUOTES = [
   ["\u2018", "\u2019"],
   ["`", "`"],
 ];
-//@ chunk-bss4k1z9.js:21773-21930 placement
+//@ chunk-775n2x67.js:22081-22238 placement
 function unquoted(text) {
   let trimmed = withoutTrailingPeriod(text.trim());
   return trimmed.length >= 2 &&
@@ -120,21 +120,21 @@ function unquoted(text) {
     ? withoutTrailingPeriod(trimmed.slice(1, -1).trim())
     : trimmed;
 }
-//@ chunk-bss4k1z9.js:21930-21964 placement
+//@ chunk-775n2x67.js:22238-22272 placement
 var CLOSERS = WRAPPING_QUOTES.map(([, closer]) => closer).join("");
-//@ chunk-bss4k1z9.js:21964-22010 placement
+//@ chunk-775n2x67.js:22272-22318 placement
 var ENDS_A_SENTENCE = new RegExp(`[.!?\u2026][${CLOSERS})\\]]*$`);
-//@ chunk-bss4k1z9.js:22010-22044 placement
+//@ chunk-775n2x67.js:22318-22352 placement
 var ENDS_WITH_QUESTION = new RegExp(`\\?[${CLOSERS}]?$`);
-//@ chunk-bss4k1z9.js:22044-22067 placement
+//@ chunk-775n2x67.js:22352-22375 placement
 var EXPLAIN_LABEL = /^explain:\s*/i;
-//@ chunk-bss4k1z9.js:22067-22156 placement
+//@ chunk-775n2x67.js:22375-22464 placement
 var INLINE_TAG = /[.\s\u2014\u2013-]*\s\**tag\**\s*:\s*\**\s*(heads[\s-]*up|you should know)\W*$/i;
-//@ chunk-bss4k1z9.js:22156-22191 placement
+//@ chunk-775n2x67.js:22464-22499 placement
 var openingOf = (text) => unquoted(unquoted(text).replace(INLINE_TAG, ""));
-//@ chunk-bss4k1z9.js:22191-22202 placement
+//@ chunk-775n2x67.js:22499-22510 placement
 var MAX_LINE_WIDTH = 240;
-//@ chunk-bss4k1z9.js:22202-22727 placement
+//@ chunk-775n2x67.js:22510-23035 placement
 function parseExplanation(text) {
   let cards = [];
   let card = emptyCard();
@@ -174,11 +174,11 @@ ${replaced}`;
   flushCard();
   return cards.slice(0, MAX_CARDS);
 }
-//@ chunk-bss4k1z9.js:22727-22752 placement
+//@ chunk-775n2x67.js:23035-23060 placement
 var DEFAULT_TAG = "You should know";
-//@ chunk-bss4k1z9.js:22752-22784 placement
+//@ chunk-775n2x67.js:23060-23092 placement
 var HEADS_UP = /^\W*heads[\s-]*up\W*$/i;
-//@ chunk-bss4k1z9.js:22784-22958 placement
+//@ chunk-775n2x67.js:23092-23266 placement
 var TAG_LABEL = new RegExp(
   String.raw`^[\s>*_"'\u201C\u201D\u2018\u2019` +
     "`" +
@@ -187,9 +187,9 @@ var TAG_LABEL = new RegExp(
     String.raw`]*(?::\s*|[-\u2013\u2014](?:\s+|$))`,
   "i",
 );
-//@ chunk-bss4k1z9.js:22958-22994 placement
+//@ chunk-775n2x67.js:23266-23302 placement
 var tagOf = (text) => (HEADS_UP.test(text) ? "Heads up" : DEFAULT_TAG);
-//@ chunk-bss4k1z9.js:22994-23811 placement
+//@ chunk-775n2x67.js:23302-24119 placement
 function parseProposedLine(text) {
   let lines = text.split(`
 `);
@@ -242,32 +242,32 @@ function parseProposedLine(text) {
     kind: "unparsable",
   };
 }
-//@ chunk-bss4k1z9.js:23811-23821 placement
+//@ chunk-775n2x67.js:24119-24129 placement
 var SEEN_MAX = 50;
-//@ chunk-bss4k1z9.js:23821-23873 placement
+//@ chunk-775n2x67.js:24129-24181 placement
 var drawsBand = (surfaces, activeSurfaces) =>
   surfaces.some((surface) => surface === "terminal" || activeSurfaces.has(surface));
-//@ chunk-bss4k1z9.js:23873-23925 placement
+//@ chunk-775n2x67.js:24181-24233 placement
 var OWN_COMPOSER = {
   terminal: false,
   desktop: true,
   mobile: true,
   vscode: true,
 };
-//@ chunk-bss4k1z9.js:23925-23965 placement
+//@ chunk-775n2x67.js:24233-24273 placement
 var hasOwnComposer = (surface) => !Object.hasOwn(OWN_COMPOSER, surface) || OWN_COMPOSER[surface];
-//@ chunk-bss4k1z9.js:23965-24017 placement
+//@ chunk-775n2x67.js:24273-24325 placement
 var isOpenView = (view) => view?.kind === "offer" || view?.kind === "explained";
-//@ chunk-bss4k1z9.js:24017-24076 placement
+//@ chunk-775n2x67.js:24325-24384 placement
 var isSameShowing = (view, secondView) =>
   isOpenView(view) && view.kind === secondView.kind && view.shownAt === secondView.shownAt;
-//@ chunk-bss4k1z9.js:24076-24152 placement
+//@ chunk-775n2x67.js:24384-24460 placement
 function storedCount(value) {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
 }
-//@ chunk-bss4k1z9.js:24152-24218 placement
+//@ chunk-775n2x67.js:24460-24526 placement
 var stringLines = (value) => (Array.isArray(value) ? value.filter((item) => typeof item === "string") : []);
-//@ chunk-bss4k1z9.js:24218-24368 placement
+//@ chunk-775n2x67.js:24526-24676 placement
 function iterationOf(view) {
   switch (view.kind) {
     case "explained":
@@ -278,7 +278,7 @@ function iterationOf(view) {
       return;
   }
 }
-//@ chunk-bss4k1z9.js:24368-24473 placement
+//@ chunk-775n2x67.js:24676-24781 placement
 function keptPastPrompt(view, promptsSurvived) {
   return view.kind === "offer"
     ? {
@@ -291,7 +291,7 @@ function keptPastPrompt(view, promptsSurvived) {
         promptsSurvived,
       };
 }
-//@ chunk-bss4k1z9.js:24473-24526 placement
+//@ chunk-775n2x67.js:24781-24834 placement
 var ACCENT_LEAD_INK = {
   star: {
     color: "suggestion",
@@ -300,7 +300,7 @@ var ACCENT_LEAD_INK = {
     dimColor: true,
   },
 };
-//@ chunk-bss4k1z9.js:24526-24578 placement
+//@ chunk-775n2x67.js:24834-24886 placement
 var MUTED_LEAD_INK = {
   star: {
     color: "subtle",
@@ -309,22 +309,22 @@ var MUTED_LEAD_INK = {
     color: "subtle",
   },
 };
-//@ chunk-bss4k1z9.js:24578-24630 placement
+//@ chunk-775n2x67.js:24886-24938 placement
 var LEAD_INK = {
   terminal: ACCENT_LEAD_INK,
   desktop: MUTED_LEAD_INK,
   mobile: ACCENT_LEAD_INK,
   vscode: ACCENT_LEAD_INK,
 };
-//@ chunk-bss4k1z9.js:24630-24656 placement
+//@ chunk-775n2x67.js:24938-24964 placement
 var leadInkOf = (card) => card.leadInk ?? ACCENT_LEAD_INK;
-//@ chunk-bss4k1z9.js:24656-24707 placement
+//@ chunk-775n2x67.js:24964-25015 placement
 function leadInkOn(name) {
   return Object.hasOwn(LEAD_INK, name) ? LEAD_INK[name] : ACCENT_LEAD_INK;
 }
-//@ chunk-bss4k1z9.js:24707-24720 placement
+//@ chunk-775n2x67.js:25015-25028 placement
 var ASKED_MS = 20000;
-//@ chunk-bss4k1z9.js:24720-24885 placement
+//@ chunk-775n2x67.js:25028-25193 placement
 function choice(ui, { hotkey, label, onPress, isDim, role }) {
   let { Box, Button } = ui;
   return h(
@@ -345,7 +345,7 @@ function choice(ui, { hotkey, label, onPress, isDim, role }) {
     ),
   );
 }
-//@ chunk-bss4k1z9.js:24885-25012 placement
+//@ chunk-775n2x67.js:25193-25320 placement
 function lead(ui, tag) {
   let { Text } = ui;
   let ink = leadInkOf(ui);
@@ -372,7 +372,7 @@ function lead(ui, tag) {
         ),
   );
 }
-//@ chunk-bss4k1z9.js:25012-25172 placement
+//@ chunk-775n2x67.js:25320-25480 placement
 function starColumn(ui, content) {
   let { Box, Text } = ui;
   let ink = leadInkOf(ui);
@@ -399,7 +399,7 @@ function starColumn(ui, content) {
     content,
   );
 }
-//@ chunk-bss4k1z9.js:25172-25336 placement
+//@ chunk-775n2x67.js:25480-25644 placement
 function starred(ui, tag, text) {
   let { Text } = ui;
   let ink = leadInkOf(ui);
@@ -433,7 +433,7 @@ function starred(ui, tag, text) {
         text,
       );
 }
-//@ chunk-bss4k1z9.js:25336-25757 placement
+//@ chunk-775n2x67.js:25644-26065 placement
 function dismissedLine(ui, choices, onPress) {
   let { Box, Text } = ui;
   let hasStarColumn = ui.hasStarColumn ?? true;
@@ -507,7 +507,7 @@ function dismissedLine(ui, choices, onPress) {
         mapped,
       );
 }
-//@ chunk-bss4k1z9.js:25757-26068 placement
+//@ chunk-775n2x67.js:26065-26376 placement
 function askedRow(ui, actions) {
   let off = actions.off;
   let turnOffChoices =
@@ -543,7 +543,7 @@ function askedRow(ui, actions) {
     actions.dismiss,
   );
 }
-//@ chunk-bss4k1z9.js:26068-26224 placement
+//@ chunk-775n2x67.js:26376-26532 placement
 var explainedAskedRow = (ui, actions) =>
   dismissedLine(
     ui,
@@ -561,7 +561,7 @@ var explainedAskedRow = (ui, actions) =>
     ],
     actions.dismiss,
   );
-//@ chunk-bss4k1z9.js:26224-26317 placement
+//@ chunk-775n2x67.js:26532-26625 placement
 function choicesRow(ui, choices) {
   let { Box } = ui;
   return h(
@@ -573,7 +573,7 @@ function choicesRow(ui, choices) {
     choices.map((spec) => choice(ui, spec)),
   );
 }
-//@ chunk-bss4k1z9.js:26317-26542 placement
+//@ chunk-775n2x67.js:26625-26850 placement
 function debugRows(ui, checkLines, footer) {
   let { Box, Text } = ui;
   return h(
@@ -613,18 +613,18 @@ function debugRows(ui, checkLines, footer) {
     footer ?? "",
   );
 }
-//@ chunk-bss4k1z9.js:26542-26555 placement
+//@ chunk-775n2x67.js:26850-26863 placement
 var HARD_BREAK = `  
 `;
-//@ chunk-bss4k1z9.js:26555-26596 placement
+//@ chunk-775n2x67.js:26863-26904 placement
 var LIST_MARKER = /^(?:[-*+\u2022]|(\d+)([.)]))\s+/;
-//@ chunk-bss4k1z9.js:26596-26626 placement
+//@ chunk-775n2x67.js:26904-26934 placement
 var LEADING_NUMBER = /^(\d+)([.)])(?=\s|$)/;
-//@ chunk-bss4k1z9.js:26626-26707 placement
+//@ chunk-775n2x67.js:26934-27015 placement
 var MARKUP = /\*\*([^*\n]+?)\*\*|`([^`\n]+)`|[\\`*_{}[<>#+\-=|~^$&:@]|(?<=[wW]{3})\./g;
-//@ chunk-bss4k1z9.js:26707-26757 placement
+//@ chunk-775n2x67.js:27015-27065 placement
 var STRUCTURAL = /[\\`*_{}[<>#+\-=|~^$&:@]|(?<=[wW]{3})\./g;
-//@ chunk-bss4k1z9.js:26757-26919 placement
+//@ chunk-775n2x67.js:27065-27227 placement
 var literal = (text) =>
   text
     .trimStart()
@@ -635,7 +635,7 @@ var literal = (text) =>
       return hasEscape ? match : hasBold ? bold : `\\${match}`;
     })
     .replace(LEADING_NUMBER, "$1\\$2");
-//@ chunk-bss4k1z9.js:26919-27319 placement
+//@ chunk-775n2x67.js:27227-27627 placement
 function lineShape(line, ordinal) {
   let trimmed = line.trimStart();
   let match = LIST_MARKER.exec(trimmed);
@@ -668,7 +668,7 @@ function lineShape(line, ordinal) {
         canOpenInPlace: false,
       };
 }
-//@ chunk-bss4k1z9.js:27319-27517 placement
+//@ chunk-775n2x67.js:27627-27825 placement
 function drawnLine(line, prevLine) {
   let shape = lineShape(line, prevLine?.ordinal);
   let isPlain = shape.kind === "plain";
@@ -688,7 +688,7 @@ function drawnLine(line, prevLine) {
     text: `${separator}${shape.text}`,
   };
 }
-//@ chunk-bss4k1z9.js:27517-27760 placement
+//@ chunk-775n2x67.js:27825-28068 placement
 function proseMarkdown(text, title) {
   let titleLine = title === "" ? "" : `**${title.replace(STRUCTURAL, "\\$&")}**`;
   let leadLines =
@@ -716,7 +716,7 @@ function proseMarkdown(text, title) {
 
 `;
 }
-//@ chunk-bss4k1z9.js:27760-27838 placement
+//@ chunk-775n2x67.js:28068-28146 placement
 function prose(ui, lead, title) {
   let { Markdown } = ui;
   let text = proseMarkdown(lead, title);
@@ -726,7 +726,7 @@ function prose(ui, lead, title) {
         text,
       });
 }
-//@ chunk-bss4k1z9.js:27838-28423 placement
+//@ chunk-775n2x67.js:28146-28731 placement
 function explainedRow(ui, ...[line, cards, actions, tag = DEFAULT_TAG]) {
   let { Box, Code } = ui;
   return h(
@@ -786,7 +786,7 @@ function explainedRow(ui, ...[line, cards, actions, tag = DEFAULT_TAG]) {
         ]),
   );
 }
-//@ chunk-bss4k1z9.js:28423-28561 placement
+//@ chunk-775n2x67.js:28731-28869 placement
 function stillRow(ui, text) {
   let { Box, Text } = ui;
   return h(
@@ -812,9 +812,9 @@ function stillRow(ui, text) {
     ),
   );
 }
-//@ chunk-bss4k1z9.js:28561-28598 placement
+//@ chunk-775n2x67.js:28869-28906 placement
 var explainingRow = (ui) => stillRow(ui, "One moment\u2026");
-//@ chunk-bss4k1z9.js:28598-29053 placement
+//@ chunk-775n2x67.js:28906-29361 placement
 function failedRow(ui, reason, onPress) {
   let { Box, Text } = ui;
   let isPublish = reason === "publish";
@@ -858,11 +858,11 @@ function failedRow(ui, reason, onPress) {
     }),
   );
 }
-//@ chunk-bss4k1z9.js:29053-29062 placement
+//@ chunk-775n2x67.js:29361-29370 placement
 var CARD_INSET = 2;
-//@ chunk-bss4k1z9.js:29062-29072 placement
+//@ chunk-775n2x67.js:29370-29380 placement
 var FALLBACK_COLUMNS = 80;
-//@ chunk-bss4k1z9.js:29072-29235 placement
+//@ chunk-775n2x67.js:29380-29543 placement
 var NARROW_BOUNDS = {
   hangulJamo: 4352,
   punctuation: {
@@ -882,7 +882,7 @@ var NARROW_BOUNDS = {
     black: 9726,
   },
 };
-//@ chunk-bss4k1z9.js:29235-29434 placement
+//@ chunk-775n2x67.js:29543-29742 placement
 function glyphCellsAtMost(codePoint) {
   let { hangulJamo, punctuation, arrows, shapes, mediumSmallSquares } = NARROW_BOUNDS;
   return codePoint < hangulJamo ||
@@ -895,13 +895,13 @@ function glyphCellsAtMost(codePoint) {
     ? 1
     : 2;
 }
-//@ chunk-bss4k1z9.js:29434-29508 placement
+//@ chunk-775n2x67.js:29742-29816 placement
 function lineCellsAtMost(text) {
   let cells = 0;
   for (let char of text) cells += glyphCellsAtMost(char.codePointAt(0) ?? 0);
   return cells;
 }
-//@ chunk-bss4k1z9.js:29508-29626 placement
+//@ chunk-775n2x67.js:29816-29934 placement
 function fitLine(text, maxCells) {
   if (lineCellsAtMost(text) <= maxCells) return text;
   let used = 0;
@@ -913,7 +913,7 @@ function fitLine(text, maxCells) {
   }
   return out;
 }
-//@ chunk-bss4k1z9.js:29626-29785 placement
+//@ chunk-775n2x67.js:29934-30093 placement
 function fitCards(explanation, bodyColumns) {
   let columns = Number.isFinite(bodyColumns) ? bodyColumns : FALLBACK_COLUMNS;
   return explanation.map((card) => ({
@@ -922,9 +922,9 @@ function fitCards(explanation, bodyColumns) {
     sketch: card.sketch.map((sketchLine) => fitLine(sketchLine, Math.max(columns - CARD_INSET, 1))),
   }));
 }
-//@ chunk-bss4k1z9.js:29785-29872 placement
+//@ chunk-775n2x67.js:30093-30180 placement
 var makingRow = (ui) => stillRow(ui, "Making your page (a minute or two) \xB7 Claude keeps working\u2026");
-//@ chunk-bss4k1z9.js:29872-29977 placement
+//@ chunk-775n2x67.js:30180-30285 placement
 var wayOutChoices = (onDisable, isConfirming) =>
   onDisable === undefined
     ? []
@@ -936,7 +936,7 @@ var wayOutChoices = (onDisable, isConfirming) =>
           isDim: true,
         },
       ];
-//@ chunk-bss4k1z9.js:29977-30498 placement
+//@ chunk-775n2x67.js:30285-30806 placement
 function offerRow(ui, ...[line, actions, isConfirming, about = ABOUT_CLOSED, tag = DEFAULT_TAG]) {
   let { Box } = ui;
   let learnChoices = [
@@ -995,7 +995,7 @@ function offerRow(ui, ...[line, actions, isConfirming, about = ABOUT_CLOSED, tag
     choicesRow(ui, [...learnChoices, ...fit.choices, ...restChoices]),
   );
 }
-//@ chunk-bss4k1z9.js:30498-30857 placement
+//@ chunk-775n2x67.js:30806-31165 placement
 function readyRow(ui, url, actions) {
   let { Box, Text } = ui;
   return h(
@@ -1045,7 +1045,7 @@ function readyRow(ui, url, actions) {
     ]),
   );
 }
-//@ chunk-bss4k1z9.js:30857-31017 placement (2.1.88 match: registerEscHotkey, 0.311)
+//@ chunk-775n2x67.js:31165-31325 placement (2.1.88 match: registerEscHotkey, 0.311)
 /**
  * （匹配存疑）按条件去掉按钮的 hotkey/plain 属性并设置 leadInk/hasStarColumn，属于 UI 主题，不是 ESC 热键注册。
  */

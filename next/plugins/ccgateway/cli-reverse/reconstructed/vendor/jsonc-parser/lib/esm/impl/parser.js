@@ -1,21 +1,21 @@
 /**
  * jsonc-parser/lib/esm/impl/parser.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jsonc-parser@3.2.1..3.3.1
- * pieces: chunk-kndsyy4v.js (7)
+ * pieces: chunk-aj4djjd6.js (7)
  * attribution: esm-layout 1, esm-fingerprint 6
  */
 import { createScanner } from "./scanner.js";
 
-//@ chunk-kndsyy4v.js:7855-7861 esm-layout
+//@ chunk-aj4djjd6.js:7855-7861 esm-layout
 var ParseOptions;
-//@ chunk-kndsyy4v.js:7861-7921 esm-fingerprint
+//@ chunk-aj4djjd6.js:7861-7921 esm-fingerprint
 (function (ParseOptions) {
   ParseOptions.DEFAULT = {
     allowTrailingComma: false,
   };
 })(ParseOptions || (ParseOptions = {}));
-//@ chunk-kndsyy4v.js:7921-8326 esm-fingerprint
+//@ chunk-aj4djjd6.js:7921-8326 esm-fingerprint
 function parseTree(text, path = [], options = ParseOptions.DEFAULT) {
   let currentProperty = null;
   let currentParent = [];
@@ -63,7 +63,7 @@ function parseTree(text, path = [], options = ParseOptions.DEFAULT) {
   );
   return currentParent[0];
 }
-//@ chunk-kndsyy4v.js:8326-9279 esm-fingerprint
+//@ chunk-aj4djjd6.js:8326-9279 esm-fingerprint
 function parseTree_2(text, errors = [], options = ParseOptions.DEFAULT) {
   let currentParent = {
     type: "array",
@@ -160,7 +160,7 @@ function parseTree_2(text, errors = [], options = ParseOptions.DEFAULT) {
   if (result) delete result.parent;
   return result;
 }
-//@ chunk-kndsyy4v.js:9279-9682 esm-fingerprint
+//@ chunk-aj4djjd6.js:9279-9682 esm-fingerprint
 function findNodeAtLocation(root, path) {
   if (!root) return;
   let node = root;
@@ -192,7 +192,7 @@ function findNodeAtLocation(root, path) {
     }
   return node;
 }
-//@ chunk-kndsyy4v.js:9682-12205 esm-fingerprint
+//@ chunk-aj4djjd6.js:9682-12205 esm-fingerprint
 function getNodeValue(text, visitor, options = ParseOptions.DEFAULT) {
   let _scanner = createScanner(text, false);
   let _jsonPath = [];
@@ -427,7 +427,7 @@ function getNodeValue(text, visitor, options = ParseOptions.DEFAULT) {
   if (_scanner.getToken() !== 17) handleError(9, [], []);
   return true;
 }
-//@ chunk-kndsyy4v.js:12205-12432 esm-fingerprint
+//@ chunk-aj4djjd6.js:12205-12432 esm-fingerprint
 function getNodeType(value) {
   switch (typeof value) {
     case "boolean":

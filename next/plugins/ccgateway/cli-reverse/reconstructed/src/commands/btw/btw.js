@@ -3,15 +3,11 @@
  *
  * /btw 实现：不打断主对话的侧问（独立请求、重试、多轮历史上限、结果面板）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/btw/btw.tsx
- * pieces: chunk-583vs41k.js (20), chunk-e6aww6q8.js (1)
- * attribution: sole-consumer 14, callgraph-witnessed 1, affinity 3, fingerprint 3
+ * pieces: chunk-h71rb544.js (20)
+ * attribution: sole-consumer 14, callgraph-witnessed 1, affinity 3, fingerprint 2
  */
-import { isCompactBoundaryMessage as isCompactBoundaryMessage_3 } from "../../services/projects/threadRows.js";
-import { getTokenUsage } from "../../utils/tokens.js";
-import { hasNoUsage } from "../../services/compact/autoCompact.js";
-import { isToolUseStop, countClearedToolUses } from "../../utils/messages/usageAndStopReason.js";
 import {
   init_react_production,
   useRef,
@@ -65,7 +61,7 @@ import { Byline } from "../../components/design-system/Byline.js";
 import { KeyboardShortcutHint } from "../../components/design-system/KeyboardShortcutHint.js";
 import { SideQuestionAgentsPill } from "../../components/PromptInput/AgentsPill.js";
 import { wasDetachedSinceAttach } from "../../utils/attachStamp.js";
-import { removeQueuedByFilter, getCommandQueue, enqueueCommand } from "../../utils/messageQueueManager.js";
+import { removeByFilter, getCommandQueue, enqueue } from "../../utils/messageQueueManager.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { StatusIcon } from "../../components/design-system/StatusIcon.js";
@@ -80,63 +76,35 @@ import { getSystemPrompt } from "../../constants/prompts.js";
 import { getOrBuildUserContext, getCachedSystemContext } from "../../context.js";
 import { asSystemPrompt } from "../../utils/systemPromptType.js";
 import { saveGlobalConfig } from "../../utils/config.js";
-import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1536810-1537121 fingerprint (2.1.88 match: stripInProgressAssistantMessage, 0.622)
-function stripInProgressAssistantMessage(messages) {
-  for (let idx = messages.length - 1; idx >= 0; idx--) {
-    let message = messages[idx];
-    if (message && isCompactBoundaryMessage_3(message)) return 0;
-    let usage = message?.type === "assistant" ? getTokenUsage(message) : undefined;
-    if (message?.type !== "assistant" || !usage) continue;
-    if (hasNoUsage(usage)) continue;
-    if (
-      !message.message.context_management &&
-      (message.message.stop_reason === null || isToolUseStop(messages, idx))
-    )
-      continue;
-    return countClearedToolUses(message.message.context_management);
-  }
-  return 0;
-}
-//@ chunk-583vs41k.js:14325-14329 sole-consumer
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-583vs41k.js:14325", () => {
-  init_react_production();
-});
-//@ chunk-583vs41k.js:14329-14618 sole-consumer
+//@ chunk-h71rb544.js:15479-15483 sole-consumer
+init_react_production();
+//@ chunk-h71rb544.js:15483-15772 sole-consumer
 /**
  * CHROME_ROWS：同旧版。
  */
-var TRANSCRIPT_START_UNAVAILABLE; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-var CHROME_ROWS;
-var OUTER_CHROME_ROWS;
-var SCROLL_LINES;
-var MAX_BTW_TRANSCRIPT_ROWS;
-var BTW_RESPONSE_SCHEMA;
-deferInit("chunk-583vs41k.js:14329", () => {
-  TRANSCRIPT_START_UNAVAILABLE = "[The start of this agent's transcript, with its prompt, is not available.]";
-  CHROME_ROWS = 5;
-  OUTER_CHROME_ROWS = 6;
-  SCROLL_LINES = 3;
-  MAX_BTW_TRANSCRIPT_ROWS = 5;
-  BTW_RESPONSE_SCHEMA = DoctorLazy(() =>
-    objectSchema({
-      response: stringSchema().nullable(),
-      synthetic: unknown()
-        .optional()
-        .transform((value) => value === true),
-      refusal_fallback: objectSchema({
-        original_model: stringSchema(),
-        fallback_model: stringSchema(),
-        content: stringSchema(),
-      })
-        .optional()
-        .catch(undefined),
-    }),
-  );
-});
-//@ chunk-583vs41k.js:14618-22270 callgraph-witnessed (2.1.88 match: BtwSideQuestion, 0.187)
+var TRANSCRIPT_START_UNAVAILABLE =
+  "[The start of this agent's transcript, with its prompt, is not available.]";
+var CHROME_ROWS = 5;
+var OUTER_CHROME_ROWS = 6;
+var SCROLL_LINES = 3;
+var MAX_BTW_TRANSCRIPT_ROWS = 5;
+var BTW_RESPONSE_SCHEMA = DoctorLazy(() =>
+  objectSchema({
+    response: stringSchema().nullable(),
+    synthetic: unknown()
+      .optional()
+      .transform((value) => value === true),
+    refusal_fallback: objectSchema({
+      original_model: stringSchema(),
+      fallback_model: stringSchema(),
+      content: stringSchema(),
+    })
+      .optional()
+      .catch(undefined),
+  }),
+);
+//@ chunk-h71rb544.js:15772-23423 callgraph-witnessed (2.1.88 match: BtwSideQuestion, 0.187)
 function BtwSideQuestion({ question, initialResponse, initialFallbackNotice, inFlight, context, onDone }) {
   let doneRef = useRef(false);
   let finish = useCallback(
@@ -365,7 +333,7 @@ ${response}`
             finish(`Failed to fork: ${errorMessage(error)}`);
           });
       else
-        import("../branch/branchAndResume.lazy.js")
+        import("../branch/branch.js")
           .then(({ branchAndResume }) =>
             branchAndResume(context, finish, {
               customTitle: oneLineText(`btw: ${question}`, 80),
@@ -704,7 +672,7 @@ ${response}`
     ],
   });
 }
-//@ chunk-583vs41k.js:22270-22356 affinity
+//@ chunk-h71rb544.js:23423-23509 affinity
 function scheduleRetry(retryCount, entry) {
   let next = {
     ...entry,
@@ -713,7 +681,7 @@ function scheduleRetry(retryCount, entry) {
   retryCount.retry = next;
   retryCount.onRetry?.(next);
 }
-//@ chunk-583vs41k.js:22356-22478 affinity
+//@ chunk-h71rb544.js:23509-23631 affinity
 function toBtwResult(response, synthetic, content) {
   if (!response)
     return {
@@ -727,36 +695,36 @@ function toBtwResult(response, synthetic, content) {
     }),
   };
 }
-//@ chunk-583vs41k.js:22478-22538 affinity
+//@ chunk-h71rb544.js:23631-23691 affinity
 function toBtwError(error) {
   return {
     error: errorMessage(error) || "Failed to get response",
   };
 }
-//@ chunk-583vs41k.js:22538-22577 sole-consumer
+//@ chunk-h71rb544.js:23691-23730 sole-consumer
 function isUnattendedOrBgSession() {
   return isUnattendedBgSession() || (isBgSession() && wasDetachedSinceAttach());
 }
-//@ chunk-583vs41k.js:22577-22736 sole-consumer
+//@ chunk-h71rb544.js:23730-23889 sole-consumer
 function reopenSideQuestionPanel(history) {
   history.clearPendingReopen();
   for (let entry of history.pendingBesidesTop()) armSideQuestionReopen(history, entry);
   if (history.reopenNow()) {
-    removeQueuedByFilter(isBtwCommand);
+    removeByFilter(isBtwCommand);
     return;
   }
   if (getCommandQueue().some(isBtwCommand)) return;
-  enqueueCommand({
+  enqueue({
     ...BTW_QUEUED_COMMAND,
     agentId: mainAgentId(),
   });
 }
-//@ chunk-583vs41k.js:22736-22822 sole-consumer
+//@ chunk-h71rb544.js:23889-23975 sole-consumer
 function releaseBtwReopen(btwHistory, entry) {
   btwHistory.clearPendingReopen(entry);
-  if (!btwHistory.inFlight && btwHistory.exchanges.length === 0) removeQueuedByFilter(isBtwCommand);
+  if (!btwHistory.inFlight && btwHistory.exchanges.length === 0) removeByFilter(isBtwCommand);
 }
-//@ chunk-583vs41k.js:22822-22920 sole-consumer
+//@ chunk-h71rb544.js:23975-24073 sole-consumer
 var BTW_QUEUED_COMMAND = {
   value: "/btw",
   mode: "task-notification",
@@ -765,7 +733,7 @@ var BTW_QUEUED_COMMAND = {
     kind: "task-notification",
   },
 };
-//@ chunk-583vs41k.js:22920-23011 sole-consumer
+//@ chunk-h71rb544.js:24073-24164 sole-consumer
 function isBtwCommand(command) {
   return (
     command.value === BTW_QUEUED_COMMAND.value &&
@@ -773,7 +741,7 @@ function isBtwCommand(command) {
     command.origin?.kind === BTW_QUEUED_COMMAND.origin.kind
   );
 }
-//@ chunk-583vs41k.js:23011-23199 sole-consumer
+//@ chunk-h71rb544.js:24164-24352 sole-consumer
 function armSideQuestionReopen(history, entry, isUnattended = isUnattendedOrBgSession()) {
   history.armReopen(entry, () =>
     onAttacherCapsChange(() => {
@@ -790,7 +758,7 @@ function armSideQuestionReopen(history, entry, isUnattended = isUnattendedOrBgSe
   );
   if (isUnattended) history.reopenAway = true;
 }
-//@ chunk-583vs41k.js:23199-23485 sole-consumer
+//@ chunk-h71rb544.js:24352-24638 sole-consumer
 function BtwNoticeLine(props) {
   let $ = useMemoCache(3);
   let { notice } = props;
@@ -824,11 +792,11 @@ function BtwNoticeLine(props) {
   } else footer = $[2];
   return footer;
 }
-//@ chunk-583vs41k.js:23485-23544 sole-consumer
+//@ chunk-h71rb544.js:24638-24697 sole-consumer
 function oneLineText(question, entry) {
   return truncateToWidth(question.replace(/\s+/g, " ").trim(), entry);
 }
-//@ chunk-583vs41k.js:23844-24804 sole-consumer
+//@ chunk-h71rb544.js:24997-25957 sole-consumer
 /**
  * /btw 回答中的状态行：无重试时显示 spinner + "Answering…"；重试中显示错误类别、倒计时秒数与第几次/共几次。
  */
@@ -911,7 +879,7 @@ function BtwAnsweringStatus(props) {
   } else details = $[18];
   return details;
 }
-//@ chunk-583vs41k.js:24804-24966 sole-consumer
+//@ chunk-h71rb544.js:25957-26119 sole-consumer
 function describeRetryStatus(status) {
   switch (status) {
     case 429:
@@ -925,7 +893,7 @@ function describeRetryStatus(status) {
       return "API error";
   }
 }
-//@ chunk-583vs41k.js:24966-26103 fingerprint (2.1.88 match: buildCacheSafeParams, 0.457)
+//@ chunk-h71rb544.js:26119-27254 fingerprint (2.1.88 match: buildCacheSafeParams, 0.457)
 async function buildCacheSafeParams(context, transcript) {
   let messages = context.messages;
   if (transcript) {
@@ -1008,7 +976,7 @@ async function buildCacheSafeParams(context, transcript) {
     advisorModel: context.getAdvisorSetting(),
   };
 }
-//@ chunk-583vs41k.js:26103-26780 fingerprint (2.1.88 match: call, 0.574)
+//@ chunk-h71rb544.js:27254-27931 fingerprint (2.1.88 match: call, 0.574)
 /**
  * /btw 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -1025,7 +993,7 @@ async function call(onDone, context, args) {
       });
       return null;
     }
-    removeQueuedByFilter(isBtwCommand);
+    removeByFilter(isBtwCommand);
     if (inFlight)
       return jsxProd_default(BtwSideQuestion, {
         question: inFlight.question,
@@ -1062,18 +1030,18 @@ async function call(onDone, context, args) {
     return null;
   }
   let inFlight = context.session.btwHistory.inFlight;
-  if (inFlight === null || inFlight.question === question) removeQueuedByFilter(isBtwCommand);
+  if (inFlight === null || inFlight.question === question) removeByFilter(isBtwCommand);
   return jsxProd_default(BtwSideQuestion, {
     question,
     context,
     onDone,
   });
 }
-//@ chunk-583vs41k.js:26780-26819 sole-consumer
+//@ chunk-h71rb544.js:27931-27970 sole-consumer
 function shouldReopenSideQuestion() {
   return getRemoteCaps() === null && isUnattendedOrBgSession();
 }
-//@ chunk-583vs41k.js:26819-27452 sole-consumer
+//@ chunk-h71rb544.js:27970-28603 sole-consumer
 /**
  * askSideQuestion：记录 inFlight 并调用侧问 API。
  */
@@ -1117,4 +1085,4 @@ async function askSideQuestion(question, context) {
     },
   );
 }
-export { stripInProgressAssistantMessage, call };
+export { call };

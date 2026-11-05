@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：限流检查点提交
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-89f54s6c.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qznkkbq5.js (6)
  * attribution: placement 6
  */
 import { relative, isAbsolute, join } from "path";
@@ -37,11 +37,11 @@ import { isENOENT, errorMessage } from "../../utils/errors.js";
 import { isPathConfigDir } from "../../utils/envUtils.js";
 import { buildCheckpointNote, pruneOldCheckpointRefs } from "./checkpointRefs.js";
 import { assertDirChainReal } from "../../utils/fsSafety/atomicWriteStaging.js";
-import { writeFileAtomic } from "../../utils/file.js";
+import { readJsonFile_2 } from "../../utils/file.js";
 import { appendGitExclude } from "../../utils/git/gitExclude.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-89f54s6c.js:6351-6443 placement
+//@ chunk-qznkkbq5.js:6771-6863 placement
 /**
  * RESUME.md 在仓库里的相对路径，检查点把这份「续做说明」作为额外文件提交。
  */
@@ -51,7 +51,7 @@ var GIT_COMMAND_TIMEOUT_MS = 30000;
 var MAX_CHECKPOINT_FILES = 25000;
 var MAX_CHECKPOINT_BYTES = 2147483648;
 var MAX_CHECKPOINT_LINE_CHARS = 500;
-//@ chunk-89f54s6c.js:6443-6595 placement
+//@ chunk-qznkkbq5.js:6863-7014 placement
 function sanitizeCheckpointLine(line) {
   let replaced = line.replace(
     /[\x00-\x1f\x7f-\x9f\u061c\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]+/g,
@@ -61,12 +61,12 @@ function sanitizeCheckpointLine(line) {
     ? `${truncateToLength(replaced, MAX_CHECKPOINT_LINE_CHARS)}\u2026`
     : replaced;
 }
-//@ chunk-89f54s6c.js:6595-6689 placement
+//@ chunk-qznkkbq5.js:7014-7108 placement
 var TENGU_VIRTUAL_PINE = "tengu_virtual_pine";
 var TENGU_COPPER_SLUICE = "tengu_copper_sluice";
 var CLAUDE_CHECKPOINT_INDEX = "claude-checkpoint-index-";
 var CHECKPOINT_INDEX_MAX_AGE_SECONDS = 1209600;
-//@ chunk-89f54s6c.js:6689-7209 placement
+//@ chunk-qznkkbq5.js:7108-7628 placement
 /**
  * 同一时间只运行一次：无 todo 时从任务列表读取，然后提交 git 检查点；成功记 ok 与 tengu_rl_checkpoint_a1_shown，否则按跳过原因记 sad。
  */
@@ -108,7 +108,7 @@ async function commitCheckpointOnce(request) {
     });
   return result;
 }
-//@ chunk-89f54s6c.js:7209-7300 placement
+//@ chunk-qznkkbq5.js:7628-7719 placement
 /**
  * 路径包含判断：child 等于 parent 或位于 parent 之下且不是绝对路径逃逸。
  */
@@ -117,7 +117,7 @@ function isPathInside(child, parent) {
   let relativePath = relative(parent, child);
   return relativePath !== "" && !relativePath.startsWith("..") && !isAbsolute(relativePath);
 }
-//@ chunk-89f54s6c.js:7300-13743 placement
+//@ chunk-qznkkbq5.js:7719-14166 placement
 /**
  * 达到限流时把工作区提交为检查点（排除非交互/远程工作区等情况）。
  */
@@ -302,10 +302,10 @@ async function commitRateLimitCheckpoint(request) {
         input: options.input,
         timeout: GIT_COMMAND_TIMEOUT_MS,
       });
-    let flagWithOverride = readFlagWithOverride(TENGU_VIRTUAL_PINE, {
+    let note = readFlagWithOverride(TENGU_VIRTUAL_PINE, {
       safe: true,
     });
-    if (flagWithOverride) {
+    if (note) {
       tempDir = await mkdtemp(join(resolveTempDir(), `${CLAUDE_CHECKPOINT_INDEX}${process.pid}-`));
       indexFile = join(tempDir, "index");
     } else indexFile = join(commonDir, `claude-checkpoint-index.${process.pid}`);
@@ -313,8 +313,8 @@ async function commitRateLimitCheckpoint(request) {
       ...remoteHostSessionCount,
       GIT_INDEX_FILE: indexFile,
     };
-    let splitIndexArgs = flagWithOverride ? ["-c", "core.splitIndex=false"] : [];
-    let excludeArgs = flagWithOverride ? ["--exclude", `${CLAUDE_CHECKPOINT_INDEX}[0-9]*-??????/`] : [];
+    let splitIndexArgs = note ? ["-c", "core.splitIndex=false"] : [];
+    let excludeArgs = note ? ["--exclude", `${CLAUDE_CHECKPOINT_INDEX}[0-9]*-??????/`] : [];
     if (
       (
         await execFileNoThrowWithCwd(gitExe(), [...safeArgs, ...splitIndexArgs, "read-tree", trimmed], {
@@ -410,7 +410,7 @@ async function commitRateLimitCheckpoint(request) {
       await mkdir(claudeDir, {
         recursive: true,
       });
-      await writeFileAtomic(join(baseDir, ".claude", "RESUME.md"), checkpointNote, {
+      await readJsonFile_2(join(baseDir, ".claude", "RESUME.md"), checkpointNote, {
         encoding: "utf-8",
         allowSymlink: !mustCheckChain,
         checkParentDir: mustCheckChain,

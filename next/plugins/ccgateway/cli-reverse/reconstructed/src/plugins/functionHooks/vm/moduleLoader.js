@@ -3,14 +3,13 @@
  *
  * 钩子模块加载、链接与 engine.create 调用（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (43)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (43)
  * attribution: placement 43
  */
 import "vm";
 import * as vmModule_2 from "vm";
-import "vm";
 import "vm";
 import "vm";
 import "vm";
@@ -106,7 +105,7 @@ import { createVmRealm, NO_IMPORT_OPTIONS } from "./vmRealm.js";
 import { lookupPathTable } from "../../../utils/pathTable.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:303344-303523 placement
+//@ chunk-j8f885h1.js:284658-284837 placement
 function createArgumentTracker(cloneIn) {
   let weakSet = new WeakSet();
   return {
@@ -118,7 +117,7 @@ function createArgumentTracker(cloneIn) {
     isDelivered: (value) => typeof value === "object" && value !== null && weakSet.has(value),
   };
 }
-//@ chunk-4121qate.js:303523-303590 placement
+//@ chunk-j8f885h1.js:284837-284904 placement
 /**
  * 转发的流式操作
  */
@@ -127,7 +126,7 @@ var forwardedStreamOps = (request, send) =>
     next: () => send(request, "next"),
     return: () => send(request, "return"),
   });
-//@ chunk-4121qate.js:303590-303711 placement
+//@ chunk-j8f885h1.js:284904-285025 placement
 /**
  * 环境缺少宿主流式操作时，返回一个立即抛错的流式结果。
  */
@@ -137,14 +136,14 @@ var noStreamingOps = (apiName) =>
       throw new HooksError(`$.${apiName}: this environment was made without the host's streaming ops`);
     })(),
   );
-//@ chunk-4121qate.js:303711-303782 placement
+//@ chunk-j8f885h1.js:285025-285096 placement
 /**
  * 缓存的 ui.resolve 答案
  */
 function cachedResolveAnswer(weakMap, request) {
   return typeof request === "object" && request !== null ? weakMap.get(request) : undefined;
 }
-//@ chunk-4121qate.js:303782-304112 placement
+//@ chunk-j8f885h1.js:285096-285426 placement
 /**
  * 按 (surface, component) 缓存 ui.resolve 答案的 VM 副本，未命中时按 surface 构造默认值。
  */
@@ -177,7 +176,7 @@ function createSurfaceAnswerCache(build) {
     },
   };
 }
-//@ chunk-4121qate.js:304112-304264 placement
+//@ chunk-j8f885h1.js:285426-285578 placement
 var stampEnvironmentAcrossAwait =
   (stamp, current = () => stamp?.environmentId ?? 0) =>
   async (promise) => {
@@ -192,7 +191,7 @@ var stampEnvironmentAcrossAwait =
       storeStamp();
     }
   };
-//@ chunk-4121qate.js:304264-304514 placement
+//@ chunk-j8f885h1.js:285578-285828 placement
 var createSignalRelay = (pluginName, makers) => (signal) => {
   if (signal === undefined || signal === null) return;
   if (!isAbortSignalLike(signal))
@@ -211,7 +210,7 @@ var createSignalRelay = (pluginName, makers) => (signal) => {
     unlink,
   };
 };
-//@ chunk-4121qate.js:304514-304756 placement
+//@ chunk-j8f885h1.js:285828-286070 placement
 var runWithEnvironmentStamp =
   (stamp, current = () => stamp?.environmentId ?? 0) =>
   (fn) => {
@@ -231,7 +230,7 @@ var runWithEnvironmentStamp =
       );
     }
   };
-//@ chunk-4121qate.js:304756-304980 placement
+//@ chunk-j8f885h1.js:286070-286294 placement
 /**
  * 把宿主异步迭代器桥接为 VM 内的流对象（next/return/result 都经包装与克隆）。
  */
@@ -248,7 +247,7 @@ function createVmStreamBridge({ vmStream, wrapMethod, cloneIn }, unwrap = (step)
       wrapMethod(async () => cloneIn(await unwrap(getStreamResultPromise(generator)))),
     );
 }
-//@ chunk-4121qate.js:304980-305044 placement
+//@ chunk-j8f885h1.js:286294-286358 placement
 /**
  * 取参数里的 surface
  */
@@ -256,7 +255,7 @@ function surfaceOfArg(arg) {
   let surface = (isPlainObject(arg) ? arg : {}).surface;
   return isUiElementTypeName(surface) ? surface : undefined;
 }
-//@ chunk-4121qate.js:305066-305414 placement
+//@ chunk-j8f885h1.js:286380-286728 placement
 /**
  * 在 VM 中创建元素构造器表（包装宿主构造器并标记名字）。
  */
@@ -286,12 +285,12 @@ function createVmElementTable(options) {
     return built;
   };
 }
-//@ chunk-4121qate.js:305414-305428 placement
+//@ chunk-j8f885h1.js:286728-286742 placement
 /**
  * 原样返回
  */
 var keepValueFn = (fn) => fn;
-//@ chunk-4121qate.js:305428-305940 placement
+//@ chunk-j8f885h1.js:286742-287254 placement
 /**
  * 创建钩子轨迹克隆器：把轨迹条目克隆到 VM 中（缓存并冻结）。
  */
@@ -334,7 +333,7 @@ function createTraceCloner(options) {
     return Object.freeze(out);
   };
 }
-//@ chunk-4121qate.js:305940-305997 placement
+//@ chunk-j8f885h1.js:287254-287311 placement
 /**
  * 克隆失败时的文本
  */
@@ -346,7 +345,7 @@ function cloneErrorText(value) {
     return errorMessage(error);
   }
 }
-//@ chunk-4121qate.js:305997-306109 placement
+//@ chunk-j8f885h1.js:287311-287423 placement
 /**
  * 检查值能否离开 VM 边界，不能则抛 HooksError（特定拒绝标记为栈溢出类）。
  */
@@ -358,7 +357,7 @@ function checkLeavingValue(bare, value, message) {
   }
   return value;
 }
-//@ chunk-4121qate.js:306109-306691 placement
+//@ chunk-j8f885h1.js:287423-288005 placement
 /**
  * 按所有者逐项复制对象条目到 VM。
  */
@@ -401,7 +400,7 @@ function copyOwnedEntries(entries, vmClone, blamedWalk) {
   });
   return out;
 }
-//@ chunk-4121qate.js:306691-307138 placement
+//@ chunk-j8f885h1.js:288005-288452 placement
 /**
  * 逐项复制 record 条目到 VM。
  */
@@ -426,7 +425,7 @@ function copyRecordEntries(record, leavingAnswer, blamedWalk) {
   }
   return out;
 }
-//@ chunk-4121qate.js:307138-311328 placement
+//@ chunk-j8f885h1.js:288452-292646 placement
 /**
  * 加载钩子模块并调用 engine.create，装配 $ 与计时器
  */
@@ -756,7 +755,7 @@ async function createHooksEngine({ bare, args, host, bounds = {}, loaded, isInst
     ownsValue: vmOwns,
   };
 }
-//@ chunk-4121qate.js:311496-311544 placement
+//@ chunk-j8f885h1.js:292814-292862 placement
 /**
  * 文件模块引用
  */
@@ -765,7 +764,7 @@ var fileModuleRef = (path) => ({
   dir: dirname(path),
   file: path,
 });
-//@ chunk-4121qate.js:311566-311851 placement
+//@ chunk-j8f885h1.js:292884-293169 placement
 var IMPORT_REFUSAL_SOURCE = `(() => {
   const REFUSAL = new Error(
     'import() is not available: a hooks module imports its own files ' +
@@ -777,28 +776,28 @@ var IMPORT_REFUSAL_SOURCE = `(() => {
     throw REFUSAL
   }
 })()`;
-//@ chunk-4121qate.js:311851-311890 placement
+//@ chunk-j8f885h1.js:293169-293208 placement
 /**
  * 执行 import 拒绝源码
  */
 var runImportRefusal = (context) => vmModule_2.runInContext(withUseStrict(IMPORT_REFUSAL_SOURCE), context);
-//@ chunk-4121qate.js:311890-311939 placement
+//@ chunk-j8f885h1.js:293208-293257 placement
 /**
  * 长度+内容拼接
  */
 var prefixedSource = (text, prefix) => `${prefix.length}:${prefix}${text.length}:${text}`;
-//@ chunk-4121qate.js:311971-312038 placement
+//@ chunk-j8f885h1.js:293289-293356 placement
 /**
  * 导入路径 → 文件
  */
 var importFileMap = (links) =>
   new Map(links.map((link) => [prefixedSource(link.spelled, resolve(link.from)), link.file]));
-//@ chunk-4121qate.js:312038-312089 placement
+//@ chunk-j8f885h1.js:293356-293407 placement
 /**
  * 文件 → 源码
  */
 var fileSourceMap = (linked) => new Map(linked.map((file) => [file.file, file.source]));
-//@ chunk-4121qate.js:312089-314364 placement
+//@ chunk-j8f885h1.js:293407-295682 placement
 /**
  * 链接钩子模块及其导入（处理栈溢出、错误状态）
  */
@@ -953,7 +952,7 @@ function linkHooksModule(options) {
     },
   };
 }
-//@ chunk-4121qate.js:314364-314459 placement
+//@ chunk-j8f885h1.js:295682-295777 placement
 /**
  * 是否栈溢出
  */
@@ -964,32 +963,32 @@ function isStackOverflowError(error) {
     STACK_OVERFLOW_MESSAGES.some((message) => message === error.message)
   );
 }
-//@ chunk-4121qate.js:314459-314597 placement
+//@ chunk-j8f885h1.js:295777-295915 placement
 function stackExhaustedError(pluginName, pluginRoot, path, error) {
   return new HooksError(
     `${pluginName}: ${relative(pluginRoot, path)}: the engine ran out of stack loading the file (code nested too deep): ${error.message}`,
   );
 }
-//@ chunk-4121qate.js:314597-314655 placement
+//@ chunk-j8f885h1.js:295915-295973 placement
 /**
  * 链接并加载模块
  */
 var linkAndLoadModule = (options) =>
   linkHooksModule(options).load(options.args.modulePath, options.args.source);
-//@ chunk-4121qate.js:314655-314691 placement
+//@ chunk-j8f885h1.js:295973-296009 placement
 /**
  * 插件环境槽
  */
 var pluginEnvSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4121qate.js:314655", () => {
+deferInit("chunk-j8f885h1.js:295973", () => {
   pluginEnvSlot = identity(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-4121qate.js:314691-314721 placement
+//@ chunk-j8f885h1.js:296009-296039 placement
 /**
  * 取插件的环境
  */
 var envForPlugin = (pluginName) => pluginEnvSlot.get()?.get(pluginName);
-//@ chunk-4121qate.js:314721-314946 placement
+//@ chunk-j8f885h1.js:296039-296264 placement
 /**
  * 为插件 hooks 模块创建环境：优先使用登记的测试工厂，否则新建 VM 上下文并加载、链接模块后创建 engine。
  */
@@ -1012,7 +1011,7 @@ function createHooksEnvironment(host, args, bounds = {}) {
       }),
   });
 }
-//@ chunk-4121qate.js:314946-315055 placement
+//@ chunk-j8f885h1.js:296264-296373 placement
 /**
  * 执行函数并在之后恢复共享视图中的环境戳。
  */
@@ -1024,41 +1023,41 @@ function runPreservingStamp(stamp, fn) {
     if (stamp) Atomics.store(stamp, STAMP_CURRENT_CALL_SLOT, previous);
   }
 }
-//@ chunk-4121qate.js:315055-315083 placement
+//@ chunk-j8f885h1.js:296373-296401 placement
 /**
  * 是否已登记环境
  */
 var hasRegisteredEnv = (pluginName) => envForPlugin(pluginName) !== undefined;
-//@ chunk-4121qate.js:315083-315313 placement
+//@ chunk-j8f885h1.js:296401-296631 placement
 function rejectionMessage(error) {
   if (!error) return "a rejection that is not an Error";
   if (isUntrustedObject(error)) return "a rejection that is not plain data";
   let message = Object.getOwnPropertyDescriptor(error, "message")?.value;
   return typeof message === "string" ? message : rejectionMessage(Object.getPrototypeOf(error));
 }
-//@ chunk-4121qate.js:315313-315395 placement
+//@ chunk-j8f885h1.js:296631-296713 placement
 /**
  * 拒绝值转文本
  */
 function rejectionText(error) {
   return typeof error !== "object" && typeof error !== "function" ? String(error) : rejectionMessage(error);
 }
-//@ chunk-4121qate.js:315395-315438 placement
+//@ chunk-j8f885h1.js:296713-296756 placement
 var CAPABILITY_OPTIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4121qate.js:315395", () => {
+deferInit("chunk-j8f885h1.js:296713", () => {
   CAPABILITY_OPTIONS = Object.freeze({
     strings: false,
     wasm: false,
   });
 });
-//@ chunk-4121qate.js:315438-315480 placement
+//@ chunk-j8f885h1.js:296756-296798 placement
 var COMPILE_OPTIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-4121qate.js:315438", () => {
+deferInit("chunk-j8f885h1.js:296756", () => {
   COMPILE_OPTIONS = Object.freeze({
     codeGeneration: CAPABILITY_OPTIONS,
   });
 });
-//@ chunk-4121qate.js:315480-315570 placement
+//@ chunk-j8f885h1.js:296798-296887 placement
 /**
  * 新建 VM 宿主上下文
  */
@@ -1073,7 +1072,7 @@ function newVmHostContext() {
     context,
   };
 }
-//@ chunk-4121qate.js:315592-315640 placement
+//@ chunk-j8f885h1.js:296909-296957 placement
 /**
  * 带调用栈戳执行
  */
@@ -1082,7 +1081,7 @@ var runInVmWithTrace = (context, intoEnvironment) =>
     withUseStrict(VM_HOST_CALL_WRAPPER_SOURCE),
     context,
   )(nullPrototypeFunction(intoEnvironment));
-//@ chunk-4121qate.js:315640-315877 placement
+//@ chunk-j8f885h1.js:296957-297194 placement
 /**
  * 执行函数期间把调用栈戳写入共享视图，结束后恢复原值。
  */
@@ -1103,7 +1102,7 @@ function runWithStackStamps(stamp, entries, fn) {
     for (let [index, slot] of list.entries()) Atomics.store(stamp, STAMP_CALLER_STACK_START + index, slot);
   }
 }
-//@ chunk-4121qate.js:315877-316014 placement
+//@ chunk-j8f885h1.js:297194-297331 placement
 /**
  * 未被 await 的 $ 调用失败时的消息："<插件>: $.<op> (not awaited): <原因>"。
  */
@@ -1112,13 +1111,13 @@ function unawaitedOpMessage(payload) {
   let { message } = payload;
   return `${payload.plugin}: $.${payload.op} (not awaited): ${message.startsWith(prefix) ? message.slice(prefix.length) : message}`;
 }
-//@ chunk-4121qate.js:316014-316052 placement
+//@ chunk-j8f885h1.js:297331-297369 placement
 /**
  * 命中 user 子句
  */
 var matchesUserClause = (pattern, clause) =>
   clause.length <= MAX_MATCHER_CHARS && testRegExpMatcher(pattern, clause);
-//@ chunk-4121qate.js:316052-316247 placement
+//@ chunk-j8f885h1.js:297369-297564 placement
 /**
  * 判断某事件是否命中插件扫描时声明的 next.to user 子句（模式与 matcher 都匹配）。
  */
@@ -1139,23 +1138,23 @@ function isNextToUserTarget({ clauses, scan, event, raised }) {
   }
 }
 export {
-  createHooksEngine,
-  linkAndLoadModule,
-  pluginEnvSlot,
-  runPreservingStamp,
-  runWithStackStamps,
-  isNextToUserTarget,
-  createHooksEnvironment,
-  hasRegisteredEnv,
-  runImportRefusal,
-  checkLeavingValue,
-  createVmStreamBridge,
-  createSurfaceAnswerCache,
-  cachedResolveAnswer,
-  noStreamingOps,
-  unawaitedOpMessage,
   rejectionText,
   newVmHostContext,
   runInVmWithTrace,
   linkHooksModule,
+  createSurfaceAnswerCache,
+  cachedResolveAnswer,
+  noStreamingOps,
+  createHooksEnvironment,
+  unawaitedOpMessage,
+  runPreservingStamp,
+  runWithStackStamps,
+  isNextToUserTarget,
+  hasRegisteredEnv,
+  createHooksEngine,
+  linkAndLoadModule,
+  pluginEnvSlot,
+  runImportRefusal,
+  checkLeavingValue,
+  createVmStreamBridge,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：对等会话寻址
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (20)
  * attribution: placement 20
  */
 import { basename } from "path";
@@ -37,14 +37,14 @@ import { logAtMention } from "./telemetry/thirdPartyEventRecords.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3194653-3194703 placement
+//@ chunk-5xgkngpb.js:3279284-3279334 placement
 /**
  * listLocalPeerSessions：关闭时返回空列表，开启时列出本机存活的其他会话。
  */
 async function listLocalPeerSessions() {
   return (await listPeerSessionsSafe()).sessions;
 }
-//@ chunk-e6aww6q8.js:3194703-3195114 placement
+//@ chunk-5xgkngpb.js:3279334-3279745 placement
 /**
  * 跨会话消息开启时列出本机存活的其他会话；会话记录无法读取时记日志并返回空列表且标记 unavailable。
  */
@@ -80,7 +80,7 @@ async function listPeerSessionsSafe() {
     unavailable: false,
   };
 }
-//@ chunk-e6aww6q8.js:3195114-3195159 placement
+//@ chunk-5xgkngpb.js:3279745-3279790 placement
 /**
  * cachedBridgeListingRows：跨会话消息开启时返回缓存的桥接会话行。
  */
@@ -88,14 +88,14 @@ function cachedBridgeListingRows(options) {
   if (isCrossSessionMessagingEnabled()) return bridgeListingRows(options);
   return;
 }
-//@ chunk-e6aww6q8.js:3195159-3195219 placement
+//@ chunk-5xgkngpb.js:3279790-3279850 placement
 async function primeAndGetBridgeRows(options) {
   await primePeerIdentity({
     refresh: false,
   });
   return cachedBridgeListingRows(options);
 }
-//@ chunk-e6aww6q8.js:3195219-3195264 placement
+//@ chunk-5xgkngpb.js:3279850-3279895 placement
 /**
  * warmBridgeListingIfEnabled：开启时预热桥接会话列表。
  */
@@ -103,20 +103,20 @@ function warmBridgeListingIfEnabled(options) {
   if (isCrossSessionMessagingEnabled()) return warmBridgeListing(options);
   return;
 }
-//@ chunk-e6aww6q8.js:3195298-3195365 placement
-var MAX_PEER_SUGGESTIONS; // deferred: uses MIN_ADDRESS_REF_LENGTH (./sessionAddresses.js) of its import cycle while loading; runs once the cycle is complete
+//@ chunk-5xgkngpb.js:3279929-3279996 placement
+var MAX_PEER_SUGGESTIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_SAME_NAME_CANDIDATES;
-var regExp_14;
+var regExp_16;
 var MAX_QUOTED_MENTION_LENGTH;
 var MAX_MENTION_NAME_LENGTH;
-deferInit("chunk-e6aww6q8.js:3195298", () => {
+deferInit("chunk-5xgkngpb.js:3279929", () => {
   MAX_PEER_SUGGESTIONS = 20;
   MAX_SAME_NAME_CANDIDATES = 3;
-  regExp_14 = new RegExp(`\\[${ADDRESS_REF_PATTERN}\\]`, "i");
+  regExp_16 = new RegExp(`\\[${ADDRESS_REF_PATTERN}\\]`, "i");
   MAX_QUOTED_MENTION_LENGTH = 128;
   MAX_MENTION_NAME_LENGTH = MAX_SEED_NAME_CHARS;
 });
-//@ chunk-e6aww6q8.js:3195365-3196434 placement
+//@ chunk-5xgkngpb.js:3279996-3281068 placement
 /**
  * 解析对等会话的地址（主会话、队友、子代理、本机、云会话）。
  */
@@ -169,7 +169,7 @@ function resolvePeerAddress(session, address, now = Date.now()) {
     defaultNamed,
   };
 }
-//@ chunk-e6aww6q8.js:3196434-3196709 placement
+//@ chunk-5xgkngpb.js:3281068-3281343 placement
 /**
  * 判断会话名能否作为 @ 提及目标：不含引号、尖括号、换行和非法字符，不像 agent 名，且长度在上限内（纯 ASCII 与其他字符上限不同）。
  */
@@ -181,8 +181,8 @@ function isAddressablePeerName(name) {
     /[<>]/.test(name) ||
     /[<>]/.test(slug) ||
     /[\n\r\u2028\u2029]/.test(name) ||
-    regExp_14.test(name) ||
-    regExp_14.test(slug) ||
+    regExp_16.test(name) ||
+    regExp_16.test(slug) ||
     slug.startsWith("agent-") ||
     slug.endsWith("(agent)") ||
     slug.length === 0
@@ -193,13 +193,13 @@ function isAddressablePeerName(name) {
     ? nameLength <= MAX_QUOTED_MENTION_LENGTH
     : nameLength <= MAX_MENTION_NAME_LENGTH;
 }
-//@ chunk-e6aww6q8.js:3196709-3196728 placement
+//@ chunk-5xgkngpb.js:3281343-3281362 placement
 var UNQUOTED_MENTION_NAME_PATTERN = /^[\w-]+$/;
-//@ chunk-e6aww6q8.js:3196728-3196928 placement (2.1.88 match: resolveTeamName, 0.412)
+//@ chunk-5xgkngpb.js:3281362-3281562 placement
 /**
  * 汇总可寻址对象（会话列表、团队文件、云端、bridge）供 @ 补全与附件使用（切分误归 AgentTool）。
  */
-async function resolveTeamName(options, address, sourceSession) {
+async function resolvePeerAddressFromState(options, address, sourceSession) {
   let teamName = address.teamContext?.teamName;
   let [localSessions, teamFile, bridgeRows] = await Promise.all([
     listLocalPeerSessions(),
@@ -213,15 +213,15 @@ async function resolveTeamName(options, address, sourceSession) {
     bridge: bridgeRows,
   });
 }
-//@ chunk-e6aww6q8.js:3196928-3196963 placement
+//@ chunk-5xgkngpb.js:3281562-3281597 placement
 function candidateDisplayText(candidate) {
   return formatMentionName(candidate.name);
 }
-//@ chunk-e6aww6q8.js:3196963-3197016 placement
+//@ chunk-5xgkngpb.js:3281597-3281650 placement
 function formatMentionName(name) {
   return UNQUOTED_MENTION_NAME_PATTERN.test(name) ? `@${name}` : `@"${name}"`;
 }
-//@ chunk-e6aww6q8.js:3197016-3197192 placement
+//@ chunk-5xgkngpb.js:3281650-3281826 placement
 function describePeerCandidate(candidate, now) {
   let activeSuffix =
     candidate.lastActive === undefined
@@ -231,7 +231,7 @@ function describePeerCandidate(candidate, now) {
         })} ago`;
   return `message session \xB7 ${describeLocationWithRemoteControl(candidate.where)}${activeSuffix}`;
 }
-//@ chunk-e6aww6q8.js:3197192-3197487 placement
+//@ chunk-5xgkngpb.js:3281826-3282121 placement
 /**
  * 按输入前缀生成 @ 会话提及建议：跳过进程内同名、已排除和不可寻址的候选，最多若干条，附显示文本与"最近活跃"说明。
  */
@@ -256,22 +256,22 @@ function suggestPeerMentions(roster, query, now = Date.now()) {
   }
   return suggestions;
 }
-//@ chunk-e6aww6q8.js:3197487-3197665 placement
-var regExp_15; // deferred: uses MAX_PEER_SUGGESTIONS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3197487", () => {
-  regExp_15 = new RegExp(
+//@ chunk-5xgkngpb.js:3282121-3282299 placement
+var regExp_17; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xgkngpb.js:3282121", () => {
+  regExp_17 = new RegExp(
     String.raw`(?:^|${WORD_BOUNDARY_PATTERN})@(?:"([^"\n]{1,${MAX_MENTION_NAME_LENGTH}})"|([\w-]{1,${MAX_QUOTED_MENTION_LENGTH}})(?=$|[\s,;!?)\]}>'"\u201D\u2019${CJK_PUNCTUATION}]|[.:](?:$|\s)|\[${ADDRESS_REF_PATTERN}\]))(?:[ \t]*\[(${ADDRESS_REF_PATTERN})\])?`,
     "gu",
   );
 });
-//@ chunk-e6aww6q8.js:3197665-3197979 placement
+//@ chunk-5xgkngpb.js:3282299-3282613 placement
 /**
  * 从文本中提取 @会话 提及（名称与可选引用），去重；同名既有带引用又有不带引用时只保留带引用的。
  */
 function parsePeerMentions(text) {
   let mentions = [];
   let seen = new Set();
-  for (let match of text.matchAll(regExp_15)) {
+  for (let match of text.matchAll(regExp_17)) {
     let name = match[1] ?? match[2];
     if (!isAddressablePeerName(name)) continue;
     let ref = match[3];
@@ -292,7 +292,7 @@ function parsePeerMentions(text) {
     (mention) => mention.ref !== undefined || !namesWithRef.has(slugifySessionName(mention.name)),
   );
 }
-//@ chunk-e6aww6q8.js:3197979-3198574 placement
+//@ chunk-5xgkngpb.js:3282613-3283210 placement
 /**
  * 把 @会话 提及解析为目标：有引用时按引用精确匹配；唯一候选直接 resolved；多个候选返回 ask 让用户选择；并记录提及结果打点。
  */
@@ -338,20 +338,20 @@ function resolvePeerMentions(mentions, peers) {
   }
   return results;
 }
-//@ chunk-e6aww6q8.js:3198574-3198659 placement
+//@ chunk-5xgkngpb.js:3283210-3283295 placement
 function wasDefaultNamed(roster, candidate) {
   return roster.defaultNamed.has(
     `${candidate.kind}\x00${candidate.id}\x00${slugifySessionName(candidate.name)}`,
   );
 }
-//@ chunk-e6aww6q8.js:3198659-3198715 placement
+//@ chunk-5xgkngpb.js:3283295-3283351 placement
 function toMentionCandidate(refMatch) {
   return {
     token: formatNameWithRef(refMatch),
     where: describeLocationWithRemoteControl(refMatch.where),
   };
 }
-//@ chunk-e6aww6q8.js:3198715-3198953 placement
+//@ chunk-5xgkngpb.js:3283351-3283589 placement
 function logPeerMentionOutcome(outcome) {
   logEvent(`tengu_at_mention_peer_${outcome}`, {});
   logAtMention({
@@ -363,12 +363,12 @@ function logPeerMentionOutcome(outcome) {
   else logFeatureBad("input_peer_at_mention", "not_found");
 }
 export {
-  resolveTeamName,
-  suggestPeerMentions,
+  parsePeerMentions,
+  resolvePeerAddressFromState,
+  resolvePeerMentions,
   listLocalPeerSessions,
   cachedBridgeListingRows,
-  parsePeerMentions,
-  resolvePeerMentions,
+  suggestPeerMentions,
   listPeerSessionsSafe,
   warmBridgeListingIfEnabled,
 };

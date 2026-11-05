@@ -3,9 +3,9 @@
  *
  * GitHub App 安装向导：已有工作流时的更新/跳过选择
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/install-github-app/ExistingWorkflowStep.tsx
- * pieces: chunk-4v9zy7gn.js (1)
+ * pieces: chunk-2xbvbqx2.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -17,7 +17,7 @@ import {
 import { Box, Text } from "../../ink/components/Text.js";
 import { ModelSelector } from "../../components/agents/ModelSelector.js";
 
-//@ chunk-4v9zy7gn.js:31502-32810 fingerprint (2.1.88 match: ExistingWorkflowStep, 0.605)
+//@ chunk-2xbvbqx2.js:32546-33854 fingerprint (2.1.88 match: ExistingWorkflowStep, 0.605)
 function ExistingWorkflowStep(props) {
   let $ = useMemoCache(13);
   let { onSelectAction } = props;

@@ -3,33 +3,41 @@
  *
  * 插件文件安全读取（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (6)
- * attribution: placement 6
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3xs5443t.js (6), chunk-xjnnz630.js (1)
+ * attribution: placement 7
  */
 import { lstat, realpath, open } from "fs/promises";
-import "path";
-import * as pathModule_2 from "path";
+import * as pathModule from "path";
+import { getPlatform } from "../platform.js";
+import { readJunction } from "../fsJunctions.js";
 import { getErrnoCode } from "../errors.js";
 import { isSubpathOf } from "../pathPrefix.js";
 import { ONE_MIB } from "./schemas.js";
 import { readOnlyNoFollowFlags } from "../platformTargets.js";
 
-//@ chunk-s61vbvea.js:459495-459508 placement
+//@ chunk-xjnnz630.js:49676-49755 placement
+/**
+ * 路径是否为 Windows 目录联接（junction）。
+ */
+async function isJunction(path) {
+  return getPlatform() === "windows" && (await readJunction(path)).kind === "junction";
+}
+//@ chunk-3xs5443t.js:4727-4740 placement
 var MAX_SAFE_FILE_READ_BYTES = 65536;
-//@ chunk-s61vbvea.js:459508-459585 placement
+//@ chunk-3xs5443t.js:4740-4832 placement
 /**
  * isDirectoryOrFalse：目录判断（失败为假）。
  */
 async function isDirectoryOrFalse(path) {
-  return (await lstat(path).catch(() => null))?.isDirectory() === true;
+  return (await lstat(path).catch(() => null))?.isDirectory() === true && !(await isJunction(path));
 }
-//@ chunk-s61vbvea.js:459585-460009 placement
+//@ chunk-3xs5443t.js:4832-5285 placement
 async function readPluginFileSafe(root, target) {
   let current = root;
-  for (let segment of pathModule_2.relative(root, target).split(pathModule_2.sep).filter(Boolean)) {
-    current = pathModule_2.join(current, segment);
+  for (let segment of pathModule.relative(root, target).split(pathModule.sep).filter(Boolean)) {
+    current = pathModule.join(current, segment);
     let stat;
     try {
       stat = await lstat(current);
@@ -38,6 +46,7 @@ async function readPluginFileSafe(root, target) {
       return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "absent" : "refused";
     }
     if (!stat.isDirectory()) return stat.isSymbolicLink() ? "refused" : "not-a-directory";
+    if (await isJunction(current)) return "refused";
   }
   let [realRoot, realTarget] = await Promise.all([
     realpath(root).catch(() => null),
@@ -46,7 +55,7 @@ async function readPluginFileSafe(root, target) {
   if (realRoot === null || realTarget === null) return "refused";
   return isSubpathOf(realRoot, realTarget, true) ? "ok" : "refused";
 }
-//@ chunk-s61vbvea.js:460009-460086 placement
+//@ chunk-3xs5443t.js:5285-5362 placement
 /**
  * mcpAuthCacheContent：MCP 认证缓存内容。
  */
@@ -54,7 +63,7 @@ async function readSmallFileText(path) {
   let mcpAuthCache = await getMcpAuthCache(path);
   return mcpAuthCache.kind === "ok" ? mcpAuthCache.content : undefined;
 }
-//@ chunk-s61vbvea.js:460086-460202 placement (2.1.88 match: getMcpAuthCache, 0.79)
+//@ chunk-3xs5443t.js:5362-5478 placement (2.1.88 match: getMcpAuthCache, 0.792)
 async function getMcpAuthCache(path, maxBytes = ONE_MIB) {
   let regularFileUpTo = await readRegularFileUpTo(path, maxBytes);
   return regularFileUpTo.kind === "ok"
@@ -64,7 +73,7 @@ async function getMcpAuthCache(path, maxBytes = ONE_MIB) {
       }
     : regularFileUpTo;
 }
-//@ chunk-s61vbvea.js:460202-460728 placement
+//@ chunk-3xs5443t.js:5478-6004 placement
 /**
  * 读取普通文件（lstat 与打开后都确认是普通文件），分块读到上限 n；不存在返回 absent，非普通文件 refused，超限 too-large，否则 ok 与内容。
  */
@@ -115,4 +124,4 @@ async function readRegularFileUpTo(path, maxBytes) {
     });
   }
 }
-export { getMcpAuthCache, readRegularFileUpTo, isDirectoryOrFalse, readPluginFileSafe, readSmallFileText };
+export { readPluginFileSafe, getMcpAuthCache, isDirectoryOrFalse, readSmallFileText, readRegularFileUpTo };

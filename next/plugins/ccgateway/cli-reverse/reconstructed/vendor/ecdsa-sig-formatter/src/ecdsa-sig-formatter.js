@@ -1,15 +1,15 @@
 /**
  * ecdsa-sig-formatter/src/ecdsa-sig-formatter.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: ecdsa-sig-formatter@1.0.11
- * pieces: chunk-82d8c88w.js (1)
+ * pieces: chunk-ww3dkdtg.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_safe_buffer } from "../../safe-buffer/index.js";
 import { require_param_bytes_for_alg } from "./param-bytes-for-alg.js";
 
-//@ chunk-82d8c88w.js:1328-3287 cjs-fingerprint
+//@ chunk-ww3dkdtg.js:1328-3287 cjs-fingerprint
 var require_ecdsa_sig_formatter = __commonJS(function (cjsExports, cjsModule) {
   var BufferCtor = require_safe_buffer().Buffer;
   var getParamBytesForAlg = require_param_bytes_for_alg();

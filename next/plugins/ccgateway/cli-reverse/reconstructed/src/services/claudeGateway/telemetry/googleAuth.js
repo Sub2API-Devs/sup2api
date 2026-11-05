@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关遥测的 Google 认证
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (4)
  * attribution: placement 4
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
@@ -14,13 +14,13 @@ import { withTimeout } from "../../../utils/sleep.js";
 import { truncateAtWord } from "../../../utils/stringUtils.js";
 import { errorMessage } from "../../../utils/errors.js";
 
-//@ chunk-1ny7cxrt.js:1386128-1386207 placement
+//@ chunk-1hnjmk23.js:1387965-1388044 placement
 /**
  * 请求 Google 服务账号令牌时使用的 cloud-platform scope 列表。
  */
 var GOOGLE_CLOUD_PLATFORM_SCOPE = ["https://www.googleapis.com/auth/cloud-platform"];
 var GOOGLEAPIS_COM = "googleapis.com";
-//@ chunk-1ny7cxrt.js:1386207-1386859 placement
+//@ chunk-1hnjmk23.js:1388044-1388696 placement
 /**
  * 检查 auth.google 目标：必须 https、googleapis.com 主机、且不自带 Authorization 头。
  */
@@ -50,12 +50,12 @@ function validateGoogleAuthTarget(url, headers) {
     );
   return problems;
 }
-//@ chunk-1ny7cxrt.js:1386859-1386869 placement
+//@ chunk-1hnjmk23.js:1388696-1388706 placement
 /**
  * 获取 Google 令牌的超时秒数（10）。
  */
 var GOOGLE_TOKEN_TIMEOUT_SEC = 10;
-//@ chunk-1ny7cxrt.js:1386869-1387514 placement
+//@ chunk-1hnjmk23.js:1388706-1389351 placement
 /**
  * 懒加载 google-auth 库，返回获取 Authorization（及 x-goog-user-project）头的函数（带超时，失败时重置）。
  */

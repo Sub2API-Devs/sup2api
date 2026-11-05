@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Fleet 视图中会话需要关注的原因（等待权限、计划审批、云环境失败等）归类与描述
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (15)
  * attribution: placement 15
  */
 import {
@@ -25,7 +25,7 @@ import { sessionIdBody } from "../../bridge/sessionIdCompat.js";
 import { describeCloudSession } from "../../utils/telemetry/memorySummary.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1723680-1724267 placement
+//@ chunk-5xgkngpb.js:1799050-1799642 placement
 /**
  * 解析 AskUserQuestion 的输入：取问题与选项，生成 “answer: 问题 (选项…)” 摘要。
  */
@@ -65,27 +65,27 @@ function summarizePendingQuestions(block) {
     questions: validQuestions.length > 0 ? validQuestions : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:1724267-1724325 placement
+//@ chunk-5xgkngpb.js:1799642-1799700 placement
 /**
  * 函数 truncateAttentionText（压缩空白后按上限截断）。
  */
 function truncateAttentionText(text) {
   return truncateWithEllipsis_3(text.replace(/\s+/g, " ").trim(), MAX_HEADLINE_LENGTH);
 }
-//@ chunk-e6aww6q8.js:1724325-1724393 placement
+//@ chunk-5xgkngpb.js:1799700-1799768 placement
 /**
  * 函数 looksLikeApproveLine（文本是否以 "approve …" 开头）。
  */
 function looksLikeApproveLine(needs) {
   return needs !== undefined && /(?:^| \u00B7 )approve /.test(needs);
 }
-//@ chunk-e6aww6q8.js:1724393-1725885 placement
+//@ chunk-5xgkngpb.js:1799768-1801262 placement
 /**
  * Fleet 中"需要关注"种类（权限、对话框、elicitation、托管设置等）到显示文字的对照表。
  */
 var ATTENTION_KIND_LABELS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var attentionRegistryStore;
-deferInit("chunk-e6aww6q8.js:1724393", () => {
+deferInit("chunk-5xgkngpb.js:1799768", () => {
   ATTENTION_KIND_LABELS = [
     "elicitation",
     "sandbox",
@@ -218,7 +218,7 @@ deferInit("chunk-e6aww6q8.js:1724393", () => {
     };
   })();
 });
-//@ chunk-e6aww6q8.js:1725885-1726095 placement
+//@ chunk-5xgkngpb.js:1801262-1801470 placement (2.1.88 match: truncateStartToWidth, 1)
 /**
  * 清理控制字符与零宽字素，按长度上限截断并加省略号。
  */
@@ -235,21 +235,21 @@ function sanitizeAttentionText(text) {
     out += bunStringWidth(segment) === 0 ? " " : segment;
   return sanitizeDisplayText(truncated ? `${out} \u2026` : out);
 }
-//@ chunk-e6aww6q8.js:1726095-1726119 placement
+//@ chunk-5xgkngpb.js:1801470-1801494 placement
 /**
  * 函数 returnFalseAttention（恒 false）。
  */
 function returnFalseAttention() {
   return false;
 }
-//@ chunk-e6aww6q8.js:1726119-1726150 placement
+//@ chunk-5xgkngpb.js:1801494-1801525 placement
 /**
  * 函数 emptyMergedJobs（恒返回空数组）。
  */
 async function emptyMergedJobs(options) {
   return [];
 }
-//@ chunk-e6aww6q8.js:1726150-1726264 placement
+//@ chunk-5xgkngpb.js:1801525-1801639 placement
 /**
  * 云会话列表遍历中途失败，携带已获取的行。
  */
@@ -262,12 +262,12 @@ class CloudListPartialError_2 extends Error {
     this.rows = rows;
   }
 }
-//@ chunk-e6aww6q8.js:1726264-1726289 placement
+//@ chunk-5xgkngpb.js:1801639-1801664 placement
 /**
  * 类 CloudListPartialError（云会话列表中途失败，携带已取到的行）。
  */
 class CloudListPartialError extends Error {}
-//@ chunk-e6aww6q8.js:1726289-1727689 placement
+//@ chunk-5xgkngpb.js:1801664-1803067 placement
 /**
  * 为 Fleet 视图描述会话需要用户处理的事项（审批计划、批准工具、阻塞等）。
  */
@@ -346,7 +346,7 @@ function describeSessionAttention(session) {
     backend: "remote",
   };
 }
-//@ chunk-e6aww6q8.js:1727689-1727973 placement
+//@ chunk-5xgkngpb.js:1803067-1803351 placement
 /**
  * 把尚未出现在列表里的 remote-pending 会话追加进来；内容不变时返回原数组。
  */
@@ -368,7 +368,7 @@ function mergePendingRemoteJobs(previous, incoming) {
     ? previous
     : merged;
 }
-//@ chunk-e6aww6q8.js:1727973-1728205 placement
+//@ chunk-5xgkngpb.js:1803351-1803583 placement
 /**
  * 浅比较会话状态（对象值用 Bun.deepEquals）。
  */
@@ -388,11 +388,11 @@ function shallowJobStateEqual(state, state_2) {
     );
   });
 }
-//@ chunk-e6aww6q8.js:1728205-1728285 placement
+//@ chunk-5xgkngpb.js:1803583-1803663 placement
 function isPausedNeedingAction(session) {
   return session.status === "paused" && session.worker_status === "requires_action";
 }
-//@ chunk-e6aww6q8.js:1728285-1729506 placement
+//@ chunk-5xgkngpb.js:1803663-1804884 placement
 /**
  * 为 Fleet 视图描述一个会话失败的原因（如云环境启动失败）。
  */
@@ -473,21 +473,21 @@ function describeSessionFailure(session) {
     tempo: "active",
   };
 }
-//@ chunk-e6aww6q8.js:1729506-1729603 placement
+//@ chunk-5xgkngpb.js:1804884-1804981 placement
 function sanitizeStatusDetail(detail) {
   let clean = sanitizeAttentionText(detail);
   return /[\p{L}\p{N}]/u.test(clean) && !clean.startsWith("[ede_diagnostic]") ? clean : "";
 }
 export {
   attentionRegistryStore,
-  truncateAttentionText,
+  sanitizeAttentionText,
+  looksLikeApproveLine,
   returnFalseAttention,
   CloudListPartialError_2,
   CloudListPartialError,
-  sanitizeAttentionText,
   emptyMergedJobs,
   describeSessionAttention,
   mergePendingRemoteJobs,
-  looksLikeApproveLine,
+  truncateAttentionText,
   summarizePendingQuestions,
 };

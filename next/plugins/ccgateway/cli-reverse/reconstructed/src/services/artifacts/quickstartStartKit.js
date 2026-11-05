@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：快速开始套件（读取第一方类型技能与文件）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-965tj7mg.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nbf99cpy.js (17)
  * attribution: placement 17
  */
 import { startKitSwitchOn } from "./startKitSwitch.js";
@@ -34,7 +34,7 @@ import {
   isBinaryTypeFile,
   artifactOpeningPrefetchPrompt,
 } from "./artifactOpeningPrefetch.js";
-import { webfetchReadFile } from "./webfetchRead.js";
+import { readArtifactContent } from "./webfetchRead.js";
 import { scrubArtifactEnvelopeTags, sweepResultLineField } from "../../tools/ArtifactTool/artifactUrls.js";
 import { errorMessage } from "../../utils/errors.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
@@ -42,7 +42,7 @@ import { scratchpadArtifactFilePath } from "../../tools/ArtifactTool/readFilePat
 import { startKitSchema } from "../../tools/ArtifactTool/startKitSchemas.js";
 import { getLiveState } from "../liveReplica/liveReplica.js";
 
-//@ chunk-965tj7mg.js:7094-7267 placement
+//@ chunk-nbf99cpy.js:7598-7771 placement
 /**
  * 快速开始起步套件的常量：文件大小上限、参考文档路径与通用相对路径正则、路径/原因长度上限。
  */
@@ -52,28 +52,28 @@ var REFERENCE_PATH_RE = /^artifact-type\/reference\/[A-Za-z0-9][A-Za-z0-9._-]{0,
 var KIT_RELATIVE_PATH_RE = /^[A-Za-z0-9_@][A-Za-z0-9._@+-]*(?:\/[A-Za-z0-9_@][A-Za-z0-9._@+-]*)*$/;
 var MAX_KIT_PATH_LENGTH = 160;
 var MAX_SKIP_TEXT_LENGTH = 1024;
-//@ chunk-965tj7mg.js:7267-7332 placement
+//@ chunk-nbf99cpy.js:7771-7836 placement
 /**
  * 导出函数 `hasStartKitSwitchAndBash`：参数 e，返回 startKitSwitchOn() && findToolByName(e.options.tools ?? [], BASH_TOOL_NAME) !== void 0。
  */
 function hasStartKitSwitchAndBash(tools) {
   return startKitSwitchOn() && findToolByName(tools.options.tools ?? [], BASH_TOOL_NAME) !== undefined;
 }
-//@ chunk-965tj7mg.js:7332-7379 placement
+//@ chunk-nbf99cpy.js:7836-7883 placement
 /**
  * 导出函数 `hasArtifactReplTool`：参数 e，返回 artifactReplToolInPool(e.options.tools ?? [])。
  */
 function hasArtifactReplTool(tools) {
   return artifactReplToolInPool(tools.options.tools ?? []);
 }
-//@ chunk-965tj7mg.js:7379-7437 placement
+//@ chunk-nbf99cpy.js:7883-7941 placement
 /**
  * 导出函数 `hasSkillTool`：参数 e，返回 findToolByName(e.options.tools ?? [], SKILL) !== void 0。
  */
 function hasSkillTool(tools) {
   return findToolByName(tools.options.tools ?? [], SKILL) !== undefined;
 }
-//@ chunk-965tj7mg.js:7437-7501 placement
+//@ chunk-nbf99cpy.js:7941-8005 placement
 function savedFilesSummary(saved) {
   return {
     dir: saved.dir,
@@ -81,7 +81,7 @@ function savedFilesSummary(saved) {
     skipped: saved.skipped,
   };
 }
-//@ chunk-965tj7mg.js:7501-7621 placement
+//@ chunk-nbf99cpy.js:8005-8125 placement
 function kitNotSaved(url, saved, notSaved = saved, kind = "list") {
   logForDebugging(`[quickstartStartKit] ${url} not saved: ${saved}`);
   return {
@@ -91,7 +91,7 @@ function kitNotSaved(url, saved, notSaved = saved, kind = "list") {
     }),
   };
 }
-//@ chunk-965tj7mg.js:7621-8246 placement
+//@ chunk-nbf99cpy.js:8125-8750 placement
 function notSavedReason(code) {
   return code === "other_org"
     ? ["it is in another of the user's organizations, which this login cannot read", "say_so"]
@@ -109,7 +109,7 @@ function notSavedReason(code) {
                 ? ["its sharing could not be checked in time", "list"]
                 : ["reading it would ask first", "list"];
 }
-//@ chunk-965tj7mg.js:8246-8920 placement
+//@ chunk-nbf99cpy.js:8750-9424 placement
 async function readQuickstartTypeFile(type, path, signal) {
   let { url, context, pipelineRan } = type;
   let readable = await checkDesignSystemReadable(
@@ -148,7 +148,7 @@ async function readQuickstartTypeFile(type, path, signal) {
     listing: read,
   };
 }
-//@ chunk-965tj7mg.js:8920-9024 placement
+//@ chunk-nbf99cpy.js:9424-9528 placement
 function isKitReadRuled(context, parsed, path) {
   return hasDesignSystemReadRule(parsed, context.url, "read_file", context.context, {
     fields: {
@@ -157,7 +157,7 @@ function isKitReadRuled(context, parsed, path) {
     pipelineRan: context.pipelineRan,
   });
 }
-//@ chunk-965tj7mg.js:9024-9090 placement
+//@ chunk-nbf99cpy.js:9528-9594 placement
 /**
  * 导出函数 `readTypeSkillOrNull`：参数 e，返回 "notSaved" in i ? null : i。
  */
@@ -165,7 +165,7 @@ async function readTypeSkillOrNull(type) {
   let firstPartyTypeSkill = await readFirstPartyTypeSkill(type);
   return "notSaved" in firstPartyTypeSkill ? null : firstPartyTypeSkill;
 }
-//@ chunk-965tj7mg.js:9090-10391 placement
+//@ chunk-nbf99cpy.js:9594-10895 placement
 async function readFirstPartyTypeSkill(request) {
   let artifactUrl = parseArtifactUrl(request.url);
   let isFirstPartyType = () =>
@@ -190,7 +190,7 @@ async function readFirstPartyTypeSkill(request) {
     if ([TYPE_INSTRUCTIONS_FILE, ...sorted].some((path) => isKitReadRuled(request, parsed, path)))
       return kitNotSaved("the type", "a rule names one of its files");
     let read = await raceWithDeadline(
-      webfetchReadFile(
+      readArtifactContent(
         {
           ...parsed,
           file: TYPE_INSTRUCTIONS_FILE,
@@ -236,11 +236,11 @@ async function readFirstPartyTypeSkill(request) {
     combinedAbortSignal.cleanup();
   }
 }
-//@ chunk-965tj7mg.js:10391-10469 placement
+//@ chunk-nbf99cpy.js:10895-10973 placement
 function isReservedKitPath(path) {
   return path === "index.html" || path === TYPE_INSTRUCTIONS_FILE || path.startsWith("artifact-type/");
 }
-//@ chunk-965tj7mg.js:10469-10603 placement (2.1.88 match: formatFailureDetails, 0.777)
+//@ chunk-nbf99cpy.js:10973-11107 placement (2.1.88 match: formatFailureDetails, 0.776)
 function formatFailureDetails(failures) {
   let limit = failures.length - 3;
   return (
@@ -250,7 +250,7 @@ function formatFailureDetails(failures) {
       .join(", ") + (limit > 0 ? ` and ${limit} more` : "")
   );
 }
-//@ chunk-965tj7mg.js:10603-12017 placement
+//@ chunk-nbf99cpy.js:11107-12521 placement
 /**
  * Artifact quickstart 起步包：在预算内读取类型与设计系统的 SKILL.md/参考页并保存到 scratchpad。
  */
@@ -342,7 +342,7 @@ async function runQuickstartStartKit(request) {
     combinedAbortSignal_2.cleanup();
   }
 }
-//@ chunk-965tj7mg.js:12017-12253 placement
+//@ chunk-nbf99cpy.js:12521-12757 placement
 function validateSavedKit(kit, url) {
   let parsed = url === undefined ? null : parseArtifactUrl(url);
   return kit !== undefined &&
@@ -358,7 +358,7 @@ function validateSavedKit(kit, url) {
     ? kit
     : null;
 }
-//@ chunk-965tj7mg.js:12253-12666 placement
+//@ chunk-nbf99cpy.js:12757-13170 placement
 function parseStartKitResult(text, typeKey, typeKey_2) {
   let parsed = startKitSchema().safeParse(text);
   if (!parsed.success) return null;
@@ -384,7 +384,7 @@ function parseStartKitResult(text, typeKey, typeKey_2) {
     copyFrom: getLiveState().frozenCopyFrom === true,
   });
 }
-//@ chunk-965tj7mg.js:12666-12782 placement
+//@ chunk-nbf99cpy.js:13170-13286 placement
 function describeKitContents(kit) {
   return kit?.type !== undefined
     ? kit.system !== undefined

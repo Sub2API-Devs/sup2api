@@ -1,12 +1,12 @@
 /**
  * @anthropic-ai/sdk/tools/agent-toolset/memories.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-2cw52qnf.js (9), chunk-hwmsct5x.js (2)
+ * pieces: chunk-m6wtswwx.js (9), chunk-vn3g7zt8.js (2)
  * attribution: esm-layout 2, esm-fingerprint 9
  */
-import * as BRt from "crypto";
-import * as zp from "path";
+import * as pHt from "crypto";
+import * as Nm from "path";
 import { AnthropicError } from "../../core/error.mjs";
 import { __classPrivateFieldSet, __classPrivateFieldGet } from "../../internal/tslib.mjs";
 import { DEFAULT_MEMORY_SYNC_INTERVAL_MS, checkMemorySyncInterval } from "./sync-interval.mjs";
@@ -15,9 +15,9 @@ import { FileStore_default, FileStoreError, isPathLegal } from "../../internal/f
 import { isStatus } from "../../internal/utils/backoff.mjs";
 import { decodeUtf8 } from "../../internal/utils/bytes.mjs";
 
-//@ chunk-hwmsct5x.js:17254-17270 esm-layout
+//@ chunk-vn3g7zt8.js:17622-17638 esm-layout
 function sleepWithAbort(delta) {}
-//@ chunk-hwmsct5x.js:17270-17462 esm-fingerprint
+//@ chunk-vn3g7zt8.js:17638-17830 esm-fingerprint
 var sleepUnlessAborted = (ms, signal) =>
   new Promise((resolve) => {
     if (signal?.aborted) return resolve();
@@ -33,7 +33,7 @@ var sleepUnlessAborted = (ms, signal) =>
       once: true,
     });
   });
-//@ chunk-2cw52qnf.js:13458-13570 esm-layout
+//@ chunk-m6wtswwx.js:13458-13570 esm-layout
 var _SessionMemoryStores_instances;
 var _SessionMemoryStores_client;
 var _SessionMemoryStores_workdir;
@@ -61,9 +61,10 @@ var _SessionMemoryStores_deleteRemote;
 var MEMORY_FLUSH_TIMEOUT_MS = 30000;
 var MARKER_PATH = ".anthropic-memory-store";
 var MARKER_VERSION = 1;
-//@ chunk-2cw52qnf.js:13570-13668 esm-fingerprint
+//@ chunk-m6wtswwx.js:13570-13668 esm-fingerprint
 function markerSha(memoryStoreId) {
-  return BRt.createHash("sha256")
+  return pHt
+    .createHash("sha256")
     .update(
       `version ${MARKER_VERSION}
 ${memoryStoreId}`,
@@ -71,7 +72,7 @@ ${memoryStoreId}`,
     )
     .digest("hex");
 }
-//@ chunk-2cw52qnf.js:13668-13717 esm-fingerprint
+//@ chunk-m6wtswwx.js:13668-13717 esm-fingerprint
 var DELETE_CORROBORATION_MS = 30000;
 var LIST_PAGE_SIZE = 100;
 var FULL_LIST_PAGE_SIZE = 20;
@@ -79,7 +80,7 @@ var FETCH_CONCURRENCY = 16;
 var UPLOAD_CONCURRENCY = 32;
 var DELETE_CAP_FLOOR = 8;
 var DELETE_CAP_CEILING = 50;
-//@ chunk-2cw52qnf.js:13717-13821 esm-fingerprint
+//@ chunk-m6wtswwx.js:13717-13821 esm-fingerprint
 class SessionMemoryError extends AnthropicError {
   constructor(message, cause) {
     super(message);
@@ -87,7 +88,7 @@ class SessionMemoryError extends AnthropicError {
     if (cause !== undefined) this.cause = cause;
   }
 }
-//@ chunk-2cw52qnf.js:13821-14031 esm-fingerprint
+//@ chunk-m6wtswwx.js:13821-14031 esm-fingerprint
 class DeletePass {
   constructor(mode, cap, waiveWindow) {
     this.mode = mode;
@@ -106,7 +107,7 @@ class DeletePass {
     return true;
   }
 }
-//@ chunk-2cw52qnf.js:14031-16765 esm-fingerprint
+//@ chunk-m6wtswwx.js:14031-16765 esm-fingerprint
 class SessionMemoryStores {
   constructor(client, opts) {
     _SessionMemoryStores_instances.add(this);
@@ -279,7 +280,7 @@ class SessionMemoryStores {
     }
   }
 }
-//@ chunk-2cw52qnf.js:16765-26148 esm-fingerprint
+//@ chunk-m6wtswwx.js:16765-26148 esm-fingerprint
 _SessionMemoryStores_client = new WeakMap();
 _SessionMemoryStores_workdir = new WeakMap();
 _SessionMemoryStores_syncIntervalMs = new WeakMap();
@@ -297,7 +298,7 @@ _SessionMemoryStores_storeRoot = function (resource) {
       );
     return resource.mount_path;
   }
-  return zp.join(
+  return Nm.join(
     __classPrivateFieldGet(this, _SessionMemoryStores_workdir, "f"),
     "memory",
     resource.name || resource.memory_store_id,
@@ -918,11 +919,11 @@ _SessionMemoryStores_deleteRemote = async function (store, rel, remote, baseSha)
   });
   return;
 };
-//@ chunk-2cw52qnf.js:26148-26225 esm-fingerprint
+//@ chunk-m6wtswwx.js:26148-26225 esm-fingerprint
 function isErrno(e) {
   return typeof e === "object" && e !== null && typeof e.code === "string";
 }
-//@ chunk-2cw52qnf.js:26225-26431 esm-fingerprint
+//@ chunk-m6wtswwx.js:26225-26431 esm-fingerprint
 async function settledOrAborted(p, signal) {
   if (!signal) {
     await p;

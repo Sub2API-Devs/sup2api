@@ -3,11 +3,13 @@
  *
  * 2.1.316 新增。云 worker 代客户端执行调用（served call）的分发与拒绝原因。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-z4g2ta8k.js (22)
- * attribution: placement 22
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1kk50rk6.js (25)
+ * attribution: placement 22, layout 3
  */
+import { unapprovedSettingsKeys } from "./turnHandoff.js";
+import { CLOUD_PLUGINS_FORWARDED_KEY } from "../../utils/plugins/cloudPluginForwarding.js";
 import { UI_DETACH } from "./deviceAttestation.js";
 import { SENDER_BELOW_FLOOR } from "../../remote/tools/protocolSchemas.js";
 import { readCallResult } from "../../remote/tools/toolDescriptors.js";
@@ -18,11 +20,35 @@ import { isOwnOutboundRequestId, isKnownControlRequestId } from "../../bridge/at
 import { isTerminalTaskStatus } from "../../tasks/taskStatus.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-z4g2ta8k.js:36667-36696 placement
+//@ chunk-1kk50rk6.js:39195-39224 placement
 var VIA_SESSION_CHANNEL = "via_session_channel";
-//@ chunk-z4g2ta8k.js:36696-36712 placement
+//@ chunk-1kk50rk6.js:39224-39240 placement
 function noop(x) {}
-//@ chunk-z4g2ta8k.js:36712-36781 placement
+//@ chunk-1kk50rk6.js:39240-39272 layout
+var CLAUDE_CODE_EXTRA_BODY = "CLAUDE_CODE_EXTRA_BODY";
+//@ chunk-1kk50rk6.js:39272-39355 layout
+function extraBodyEnvKeys(payload) {
+  return Object.keys(asPlainObject(payload.env) ?? {}).filter(
+    (key) => key.toUpperCase() === CLAUDE_CODE_EXTRA_BODY,
+  );
+}
+//@ chunk-1kk50rk6.js:39355-39616 layout
+function stripUnattestedSettings(settings, settings_2) {
+  if (settings_2 === "list") {
+    let filtered = unapprovedSettingsKeys(settings).filter(
+      (settingKey) => settingKey !== CLOUD_PLUGINS_FORWARDED_KEY,
+    );
+    for (let removedSettings of filtered) delete settings[removedSettings];
+    return filtered;
+  }
+  let env = asPlainObject(settings.env);
+  let removedEnvKeys = extraBodyEnvKeys(settings);
+  if (env === undefined || removedEnvKeys.length === 0) return [];
+  for (let envKey of removedEnvKeys) delete env[envKey];
+  if (Object.keys(env).length === 0) delete settings.env;
+  return removedEnvKeys.map((envKey) => `env.${envKey}`);
+}
+//@ chunk-1kk50rk6.js:39616-39685 placement (2.1.88 match: useSettings, 0.658)
 function setRequestSettings(payload, settings) {
   let request = asPlainObject(payload.request) ?? {};
   payload.request = {
@@ -30,7 +56,7 @@ function setRequestSettings(payload, settings) {
     settings,
   };
 }
-//@ chunk-z4g2ta8k.js:36781-36941 placement
+//@ chunk-1kk50rk6.js:39685-39845 placement
 function rewriteAsControlRequest(payload, { requestId, subtype, eventId }) {
   for (let key of Object.keys(payload)) delete payload[key];
   payload.type = "control_request";
@@ -40,7 +66,7 @@ function rewriteAsControlRequest(payload, { requestId, subtype, eventId }) {
   };
   payload.uuid = eventId;
 }
-//@ chunk-z4g2ta8k.js:36941-37115 placement
+//@ chunk-1kk50rk6.js:39845-40019 placement
 function rewriteAsUiDetachRequest(payload, { requestId, clientId, eventId }) {
   for (let key of Object.keys(payload)) delete payload[key];
   payload.type = "control_request";
@@ -51,7 +77,7 @@ function rewriteAsUiDetachRequest(payload, { requestId, clientId, eventId }) {
   };
   payload.uuid = eventId;
 }
-//@ chunk-z4g2ta8k.js:37115-37207 placement
+//@ chunk-1kk50rk6.js:40019-40111 placement
 function markResponseBelowFloor(payload, requestId, result) {
   payload.response = {
     subtype: "success",
@@ -62,14 +88,14 @@ function markResponseBelowFloor(payload, requestId, result) {
     },
   };
 }
-//@ chunk-z4g2ta8k.js:37207-37393 placement
+//@ chunk-1kk50rk6.js:40111-40297 placement
 function unverifiedRefusalMessage(code) {
   return `reported refused \u2014 ${code} \u2014 by a sender this session could not verify; whether anything ran there is not confirmed. Check its effect before re-running it.`;
 }
-//@ chunk-z4g2ta8k.js:37393-39224 placement
+//@ chunk-1kk50rk6.js:40297-42128 placement
 var SERVED_CALL_REFUSALS; // deferred: uses unverifiedRefusalMessage of its import cycle while loading; runs once the cycle is complete
 var UNVERIFIED_SENDER;
-deferInit("chunk-z4g2ta8k.js:37393", () => {
+deferInit("chunk-1kk50rk6.js:40297", () => {
   SERVED_CALL_REFUSALS = {
     no_approval:
       "reported refused \u2014 no person's approval matching this call was found \u2014 by a sender this session could not verify; whether anything ran there is not confirmed. Ask the user to approve it again if it is still wanted.",
@@ -103,7 +129,7 @@ deferInit("chunk-z4g2ta8k.js:37393", () => {
   };
   UNVERIFIED_SENDER = "unverified-sender";
 });
-//@ chunk-z4g2ta8k.js:39224-39635 placement
+//@ chunk-1kk50rk6.js:42128-42539 placement
 /**
  * 从 control_response 里读出 served call 的结果信封，若对方报告 refused，就改写成"未验证发送方"的拒绝结果（用固定话术，保留 call_id 与 code）。
  */
@@ -137,15 +163,15 @@ function unverifiedRefusalResult(payload) {
     content: message,
   });
 }
-//@ chunk-z4g2ta8k.js:39635-39715 placement
+//@ chunk-1kk50rk6.js:42539-42619 placement
 function asPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value : undefined;
 }
-//@ chunk-z4g2ta8k.js:39715-39728 placement
+//@ chunk-1kk50rk6.js:42619-42632 placement
 var LEASE_RENEW_LEAD_MS = 60000;
-//@ chunk-z4g2ta8k.js:39728-39742 placement
+//@ chunk-1kk50rk6.js:42632-42646 placement
 var LEASE_RENEW_AT_MS = MAX_MANIFEST_STATEMENT_AGE_MS - LEASE_RENEW_LEAD_MS;
-//@ chunk-z4g2ta8k.js:39742-40104 placement
+//@ chunk-1kk50rk6.js:42646-43008 placement
 /**
  * 租约续期调度器：stated(到期时刻) 记录新租约，按到期前的提前量安排 renew，仍需要时续期一次、不需要或已续过时 lapse；stop 取消定时器。
  */
@@ -190,17 +216,17 @@ function createLeaseRenewer(deps) {
     stop,
   };
 }
-//@ chunk-z4g2ta8k.js:40104-40116 placement
+//@ chunk-1kk50rk6.js:43008-43020 placement
 var ADMITTER_RECENT_WINDOW_MS = 2000;
-//@ chunk-z4g2ta8k.js:40116-40142 placement
+//@ chunk-1kk50rk6.js:43020-43046 placement
 var REQUEST_ID_PATTERN = /^[\w.:-]{1,128}$/;
-//@ chunk-z4g2ta8k.js:40142-40152 placement
+//@ chunk-1kk50rk6.js:43046-43056 placement
 var MAX_RECENT_KEPT_FRAMES = 64;
-//@ chunk-z4g2ta8k.js:40152-40165 placement
+//@ chunk-1kk50rk6.js:43056-43069 placement
 var KEPT_FRAME_TTL_MS = 60000;
-//@ chunk-z4g2ta8k.js:40165-40175 placement
+//@ chunk-1kk50rk6.js:43069-43079 placement
 var MAX_REPEATED_FRAME_REQUESTS = 30;
-//@ chunk-z4g2ta8k.js:40175-40282 placement
+//@ chunk-1kk50rk6.js:43079-43186 placement
 /**
  * 在 Map 中设置键值并移到最新位置，超出容量时淘汰最早的条目。
  */
@@ -212,7 +238,7 @@ function setBoundedRecent(map, pair, limit) {
     map.delete(key);
   }
 }
-//@ chunk-z4g2ta8k.js:40282-41614 placement
+//@ chunk-1kk50rk6.js:43186-44518 placement
 function servedCallDispatcher(deps) {
   let recentAdmitters = new Map();
   let pendingAdmissions = new Map();
@@ -300,14 +326,14 @@ function servedCallDispatcher(deps) {
     charges,
   };
 }
-//@ chunk-z4g2ta8k.js:41614-41678 placement
+//@ chunk-1kk50rk6.js:44518-44582 placement
 /**
  * 已服务调用（served call）的最大持有时间 6 小时，超时即丢弃。
  */
 var SERVED_CALL_MAX_AGE_MS = 21600000;
 var IN_PROCESS_TEAMMATE = "in_process_teammate";
 var POST_TURN_MEMORY = "post_turn_memory";
-//@ chunk-z4g2ta8k.js:41678-42463 placement
+//@ chunk-1kk50rk6.js:44582-45367 placement
 class TaskEventMirror {
   live = new Set();
   startedAt;
@@ -360,6 +386,8 @@ export {
   SERVED_CALL_MAX_AGE_MS,
   setBoundedRecent,
   asPlainObject,
+  extraBodyEnvKeys,
+  stripUnattestedSettings,
   unverifiedRefusalResult,
   VIA_SESSION_CHANNEL,
   servedCallDispatcher,

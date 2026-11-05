@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：临时目录解析与所有权校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9mf2agcn.js (13)
- * attribution: placement 13
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-p126a53v.js (16)
+ * attribution: placement 16
  */
 import { tmpdir as tmpdir_2 } from "os";
 import { openSync, constants, lstatSync, fstatSync, fchmodSync, closeSync, mkdirSync } from "fs";
@@ -20,10 +20,11 @@ import {
 } from "./errors.js";
 import { logForDiagnosticsNoPII } from "./diagLogs.js";
 import { HostScoped } from "./hostScoped.js";
+import { isHostEntrypoint } from "./entrypointKinds.js";
 import { getRootSession, isDiskless } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-9mf2agcn.js:6169-6235 placement (2.1.88 match: getClaudeTempDir, 0.437)
+//@ chunk-p126a53v.js:6190-6256 placement (2.1.88 match: getClaudeTempDir, 0.437)
 /**
  * Claude 临时根目录：CLAUDE_CODE_TMPDIR，否则系统 tmpdir()。
  */
@@ -32,11 +33,11 @@ function tmpdir() {
   if (CLAUDE_CODE_TMPDIR) return CLAUDE_CODE_TMPDIR;
   return tmpdir_2();
 }
-//@ chunk-9mf2agcn.js:6235-6286 placement
+//@ chunk-p126a53v.js:6256-6307 placement
 var MAX_SAFE_TMPDIR_BYTES = 44;
 var PDF_SCRATCH_DIR_PREFIX = "claude-pdf-";
 var PREVIEW_COPY_DIR_PREFIX = "claude-preview-";
-//@ chunk-9mf2agcn.js:6286-7597 placement
+//@ chunk-p126a53v.js:6307-7618 placement
 function verifyTempDirOwnership(dir) {
   let uid = process.getuid?.();
   if (uid === undefined) return;
@@ -88,7 +89,7 @@ function verifyTempDirOwnership(dir) {
     closeSync(dirFd);
   }
 }
-//@ chunk-9mf2agcn.js:7597-7740 placement
+//@ chunk-p126a53v.js:7618-7761 placement
 class TempDirState {
   ensured = undefined;
   childProcessTmpDirMemo = undefined;
@@ -99,25 +100,46 @@ class TempDirState {
     this.childProcessTmpDirMemo = childProcessTmpDirMemo;
   }
 }
-//@ chunk-9mf2agcn.js:7740-7791 placement
+//@ chunk-p126a53v.js:7761-7812 placement
 var tempDirState; // deferred: uses TempDirState of its import cycle while loading; runs once the cycle is complete
 var TEMP_ROOT_VOLUME_FULL;
-deferInit("chunk-9mf2agcn.js:7740", () => {
+deferInit("chunk-p126a53v.js:7761", () => {
   tempDirState = new HostScoped(() => new TempDirState());
   TEMP_ROOT_VOLUME_FULL = "temp_root_volume_full";
 });
-//@ chunk-9mf2agcn.js:7791-7846 placement (2.1.88 match: modelMatchesVersionPrefix, 0.808)
+//@ chunk-p126a53v.js:7812-7867 placement (2.1.88 match: modelMatchesVersionPrefix, 0.808)
 /**
  * "claude-<uid>"（临时目录名等）。旧版名 modelMatchesVersionPrefix_2 为错配，与模型无关。
  */
 function claudeTempDirName() {
   return `claude-${process.getuid?.() ?? 0}`;
 }
-//@ chunk-9mf2agcn.js:7846-7885 placement
+//@ chunk-p126a53v.js:7867-7931 placement
+/**
+ * 是否用宿主给的短临时目录（CLAUDE_CODE_HOST_SHORT_TEMP_DIRS）。
+ */
+function takesShortProjectTempDirName() {
+  return env.CLAUDE_CODE_HOST_SHORT_TEMP_DIRS ?? !isHostEntrypoint();
+}
+//@ chunk-p126a53v.js:7931-7956 placement
+/**
+ * 临时目录归属校验的恒等映射（原样返回）。
+ */
+function projectTempDirName(value) {
+  return value;
+}
+//@ chunk-p126a53v.js:7956-7982 placement
+/**
+ * 把单个路径包成数组（临时目录归属校验用）。
+ */
+function projectTempDirNames(value) {
+  return [value];
+}
+//@ chunk-p126a53v.js:7982-8021 placement
 function claudeTempDir() {
   return resolveTempDir(tempDirState.of(getRootSession().host));
 }
-//@ chunk-9mf2agcn.js:7885-8647 placement
+//@ chunk-p126a53v.js:8021-8783 placement
 /**
  * 解析会话临时目录（无盘会话不可用），校验所有权与可用空间。
  */
@@ -162,10 +184,10 @@ function resolveTempDir(state) {
   }
   return dir;
 }
-//@ chunk-9mf2agcn.js:8647-8718 placement
+//@ chunk-p126a53v.js:8783-8854 placement
 var PLUGIN_TOOL_STAGING_DIRNAME = "plugin-tool-staging";
 var PLUGIN_TOOL_STAGING_GUARD_FLAG = "bot_protected_tengu_graceful_dream";
-//@ chunk-9mf2agcn.js:8718-8838 placement
+//@ chunk-p126a53v.js:8854-8974 placement
 function pluginToolStagingRoot() {
   let root = claudeTempDir();
   mkdirSync(root, {
@@ -181,7 +203,7 @@ function pluginToolStagingRoot() {
   verifyTempDirOwnership(staging);
   return staging;
 }
-//@ chunk-9mf2agcn.js:8838-9117 placement
+//@ chunk-p126a53v.js:8974-9253 placement
 function childProcessTmpDir() {
   let state = tempDirState.of(getRootSession().host);
   let tempDir = resolveTempDir(state);
@@ -206,13 +228,13 @@ function childProcessTmpDir() {
   });
   return result;
 }
-//@ chunk-9mf2agcn.js:9117-9192 placement
+//@ chunk-p126a53v.js:9253-9328 placement
 function socketSafeTmpdir() {
   let tmp = tmpdir();
   if (Buffer.byteLength(tmp) <= MAX_SAFE_TMPDIR_BYTES) return tmp;
   return tmpdir_2();
 }
-//@ chunk-9mf2agcn.js:9192-9352 placement (2.1.88 match: generateTempFilePath, 1)
+//@ chunk-p126a53v.js:9328-9488 placement (2.1.88 match: generateTempFilePath, 1)
 /**
  * 在临时目录下生成带随机后缀的临时文件路径。
  */
@@ -223,18 +245,21 @@ function generateTempFilePath(prefix = "claude-prompt", extension = ".md", optio
   return join(claudeTempDir(), `${prefix}-${id}${extension}`);
 }
 export {
+  verifyTempDirOwnership,
+  pluginToolStagingRoot,
   generateTempFilePath,
   claudeTempDir,
-  tmpdir,
-  pluginToolStagingRoot,
-  verifyTempDirOwnership,
+  projectTempDirNames,
   PDF_SCRATCH_DIR_PREFIX,
   PREVIEW_COPY_DIR_PREFIX,
+  tmpdir,
   childProcessTmpDir,
-  MAX_SAFE_TMPDIR_BYTES,
+  socketSafeTmpdir,
+  claudeTempDirName,
   PLUGIN_TOOL_STAGING_GUARD_FLAG,
   PLUGIN_TOOL_STAGING_DIRNAME,
-  claudeTempDirName,
-  socketSafeTmpdir,
   TEMP_ROOT_VOLUME_FULL,
+  projectTempDirName,
+  MAX_SAFE_TMPDIR_BYTES,
+  takesShortProjectTempDirName,
 };

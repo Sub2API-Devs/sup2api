@@ -3,12 +3,15 @@
  *
  * 2.1.316 新增。从转写中找出最后一段未关闭的计划模式段（plan_mode 附件、/plan、ExitPlanMode 的结果），供恢复会话时判断是否重新进入计划模式。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0089hrfm.js (19)
- * attribution: placement 19
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wfanetzz.js (20)
+ * attribution: placement 19, layout 1
  */
 import { getFeatureValue_SESSION_PINNED } from "../services/analytics/growthbook.js";
+import { DoctorLazy } from "../cli/handlers/util.js";
+import { objectSchema, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
+import { ARTIFACT_SLUG_RE } from "../tools/ArtifactTool/constants.js";
 import { parsePermissionMode } from "../types/permissions.js";
 import { transitionPermissionMode } from "./permissions/permissionSetup.js";
 import { ExitPlanModeV2Tool } from "../tools/ExitPlanModeTool/ExitPlanModeV2Tool.js";
@@ -22,14 +25,24 @@ import { isToolUseResultMessage, getUserMessageText } from "./messages.js";
 import { isHumanOrAutoContinuation } from "./messageProvenance.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum, fromEnumOpt } from "../services/analytics/safeMetadata.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-0089hrfm.js:632-660 placement
+//@ chunk-wfanetzz.js:773-801 placement
 var TENGU_TRANQUIL_FERN = "tengu_tranquil_fern";
-//@ chunk-0089hrfm.js:660-689 placement
+//@ chunk-wfanetzz.js:801-830 placement
 function planModeResumeEnabled() {
   return getFeatureValue_SESSION_PINNED(TENGU_TRANQUIL_FERN, true);
 }
-//@ chunk-0089hrfm.js:689-767 placement
+//@ chunk-wfanetzz.js:830-865 layout
+var planDocSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-wfanetzz.js:830", () => {
+  planDocSchema = DoctorLazy(() =>
+    objectSchema({
+      id: stringSchema().regex(ARTIFACT_SLUG_RE),
+    }),
+  );
+});
+//@ chunk-wfanetzz.js:865-943 placement
 function createPlanModeResumeOutcome() {
   return {
     source: "none",
@@ -37,7 +50,7 @@ function createPlanModeResumeOutcome() {
     recordedMode: "absent",
   };
 }
-//@ chunk-0089hrfm.js:767-918 placement
+//@ chunk-wfanetzz.js:943-1094 placement
 function planModeResumeResult(planModeResumeOutcome) {
   if (planModeResumeOutcome.source !== "none") return "restored";
   return (planModeResumeOutcome.recordedMode === "plan" || planModeResumeOutcome.transcriptOpen === true) &&
@@ -45,27 +58,27 @@ function planModeResumeResult(planModeResumeOutcome) {
     ? "declined"
     : "none";
 }
-//@ chunk-0089hrfm.js:918-1016 placement
+//@ chunk-wfanetzz.js:1094-1192 placement
 function parsePermissionModeOrState(modeState) {
   if (modeState === undefined || modeState === null) return "absent";
   return (typeof modeState === "string" && parsePermissionMode(modeState)) || "invalid";
 }
-//@ chunk-0089hrfm.js:1016-1073 placement (2.1.88 match: handlePlanModeTransition, 0.674)
-function handlePlanModeTransition(permissionContext) {
+//@ chunk-wfanetzz.js:1192-1249 placement
+function asPlanModeContext(permissionContext) {
   return {
     ...transitionPermissionMode(permissionContext.mode, "plan", permissionContext),
     mode: "plan",
   };
 }
-//@ chunk-0089hrfm.js:1073-1149 placement
+//@ chunk-wfanetzz.js:1249-1325 placement
 function withPlanModeContext(context) {
   return {
     ...context,
-    toolPermissionContext: handlePlanModeTransition(context.toolPermissionContext),
+    toolPermissionContext: asPlanModeContext(context.toolPermissionContext),
   };
 }
-//@ chunk-0089hrfm.js:1149-1218 placement
-function _(permissionContext) {
+//@ chunk-wfanetzz.js:1325-1394 placement
+function canResumeInPlanMode(permissionContext) {
   return (
     planModeResumeEnabled() &&
     permissionContext.mode !== "plan" &&
@@ -73,7 +86,7 @@ function _(permissionContext) {
     !getDenyRuleForTool(permissionContext, ExitPlanModeV2Tool)
   );
 }
-//@ chunk-0089hrfm.js:1218-1779 placement
+//@ chunk-wfanetzz.js:1394-2149 placement
 function planModeFromWorkerRecord(internal, planModeResumeOutcome, { forkSession, transcript } = {}) {
   planModeResumeOutcome.recordedMode = parsePermissionModeOrState(internal?.worker_permission_mode);
   if (planModeResumeOutcome.recordedMode === "invalid")
@@ -84,16 +97,33 @@ function planModeFromWorkerRecord(internal, planModeResumeOutcome, { forkSession
     planModeResumeOutcome.recordTranscriptState = planSegmentState(transcript);
   return (context) => {
     planModeResumeOutcome.trustedMode ??= context.toolPermissionContext.mode;
-    if (planModeResumeOutcome.recordedMode !== "plan" || forkSession || !_(context.toolPermissionContext))
-      return context;
-    planModeResumeOutcome.source = "internal";
-    logForDebugging(
-      `[planModeResume] re-entering plan mode from the prior worker's record (was ${context.toolPermissionContext.mode})`,
-    );
-    return withPlanModeContext(context);
+    if (planModeResumeOutcome.recordedMode !== "plan" || forkSession) return context;
+    let nextContext = context;
+    if (canResumeInPlanMode(context.toolPermissionContext)) {
+      planModeResumeOutcome.source = "internal";
+      logForDebugging(
+        `[planModeResume] re-entering plan mode from the prior worker's record (was ${context.toolPermissionContext.mode})`,
+      );
+      nextContext = withPlanModeContext(context);
+    }
+    let planDocParse = planDocSchema().safeParse(internal?.plan_doc);
+    return nextContext.toolPermissionContext.mode === "plan" &&
+      planDocParse.success &&
+      planModeResumeEnabled()
+      ? {
+          ...nextContext,
+          toolPermissionContext: {
+            ...nextContext.toolPermissionContext,
+            planDoc: {
+              id: planDocParse.data.id,
+              title: undefined,
+            },
+          },
+        }
+      : nextContext;
   };
 }
-//@ chunk-0089hrfm.js:1779-2021 placement
+//@ chunk-wfanetzz.js:2149-2470 placement
 function settleWorkerPermissionModeRecord(
   sessionState,
   mode,
@@ -105,9 +135,12 @@ function settleWorkerPermissionModeRecord(
   if (planModeOnResume !== undefined && hasStoredRecord)
     sessionState.notifyInternalMetadataChanged({
       worker_permission_mode: toExternalPermissionMode(mode),
+      ...((mode !== "plan" || restored?.internal?.worker_permission_mode !== "plan") && {
+        plan_doc: null,
+      }),
     });
 }
-//@ chunk-0089hrfm.js:2021-2471 placement
+//@ chunk-wfanetzz.js:2470-2920 placement
 function planModeFromTranscript(messages, planModeResumeOutcome, updateSession, transcriptAllowed) {
   let shouldReenterPlanMode =
     transcriptAllowed &&
@@ -131,7 +164,7 @@ function planModeFromTranscript(messages, planModeResumeOutcome, updateSession, 
     return withPlanModeContext(session);
   });
 }
-//@ chunk-0089hrfm.js:2471-3414 placement
+//@ chunk-wfanetzz.js:2920-3863 placement
 /**
  * 从转写中找出最后一段未关闭的计划模式段（plan_mode 附件、/plan、ExitPlanMode 的结果），供恢复会话时判断是否重新进入计划模式。2.1.316 新增，受 tengu_tranquil_fern 控制。
  */
@@ -139,7 +172,7 @@ function planSegmentState(messages) {
   let planCommandText = `<${COMMAND_NAME}>/plan</${COMMAND_NAME}>`;
   let erroredToolUseIds = new Set();
   let answeredToolUseIds = new Set();
-  let repeatedToolUseIds = countToolCallsSince(messages);
+  let repeatedToolUseIds = findRepeatedToolUseIds(messages);
   let humanTurnSeen = false;
   let openIfNoHumanTurn = () => (humanTurnSeen ? "none" : "open");
   for (let j = messages.length - 1; j >= 0; j--) {
@@ -191,8 +224,8 @@ function planSegmentState(messages) {
   }
   return "none";
 }
-//@ chunk-0089hrfm.js:3414-3654 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince(messages) {
+//@ chunk-wfanetzz.js:3863-4103 placement
+function findRepeatedToolUseIds(messages) {
   let seenToolUseIds = new Set();
   let repeatedToolUseIds = new Set();
   for (let message of messages) {
@@ -205,7 +238,7 @@ function countToolCallsSince(messages) {
   }
   return repeatedToolUseIds;
 }
-//@ chunk-0089hrfm.js:3654-3855 placement
+//@ chunk-wfanetzz.js:4103-4304 placement
 /**
  * 计划是否在等团队负责人批准
  */
@@ -219,12 +252,12 @@ function isPlanAwaitingLeader(message, content) {
     return true;
   return typeof content === "string" && content.startsWith("Your plan has been submitted to the team lead");
 }
-//@ chunk-0089hrfm.js:3855-3980 placement
+//@ chunk-wfanetzz.js:4304-4429 placement
 function isTranscriptPlanSourceAllowed({ sdkUrl, permissionModeSuppliedOnInvocation, forkSession }) {
   if (!ExitPlanModeV2Tool.isEnabled() || forkSession) return false;
   return !!sdkUrl || permissionModeSuppliedOnInvocation === false;
 }
-//@ chunk-0089hrfm.js:3980-4115 placement
+//@ chunk-wfanetzz.js:4429-4564 placement
 function restorePlanModeFromTranscriptOnly(messages, laneOptions, updateSession) {
   let planModeResumeOutcome = createPlanModeResumeOutcome();
   planModeFromTranscript(
@@ -240,7 +273,7 @@ function restorePlanModeFromTranscriptOnly(messages, laneOptions, updateSession)
   });
   return planModeResumeResult(planModeResumeOutcome);
 }
-//@ chunk-0089hrfm.js:4115-4367 placement
+//@ chunk-wfanetzz.js:4564-4816 placement
 function restorePlanModeOnResume(priorWorkerRecord, updateSession, { lane, forkSession, transcript }) {
   let planModeResumeOutcome = createPlanModeResumeOutcome();
   updateSession(
@@ -263,7 +296,7 @@ function restorePlanModeOnResume(priorWorkerRecord, updateSession, { lane, forkS
   });
   return planModeResumeResult(planModeResumeOutcome);
 }
-//@ chunk-0089hrfm.js:4367-4945 placement
+//@ chunk-wfanetzz.js:4816-5394 placement
 function planModeOnInteractiveResume(
   permissionContext,
   { storedPermissionMode, messages, forkSession, startupModePinned, lane },
@@ -271,7 +304,7 @@ function planModeOnInteractiveResume(
   let planModeResumeOutcome = createPlanModeResumeOutcome();
   planModeResumeOutcome.trustedMode = permissionContext.mode;
   planModeResumeOutcome.recordedMode = parsePermissionModeOrState(storedPermissionMode);
-  if (!startupModePinned && !forkSession && _(permissionContext)) {
+  if (!startupModePinned && !forkSession && canResumeInPlanMode(permissionContext)) {
     if (planModeResumeOutcome.recordedMode === "plan") {
       planModeResumeOutcome.recordTranscriptState = planSegmentState(messages);
       if (planModeResumeOutcome.recordTranscriptState !== "exited") planModeResumeOutcome.source = "stored";
@@ -292,9 +325,9 @@ function planModeOnInteractiveResume(
   logForDebugging(
     `[planModeResume] re-entering plan mode on resume (source: ${planModeResumeOutcome.source}, was ${permissionContext.mode})`,
   );
-  return handlePlanModeTransition(permissionContext);
+  return asPlanModeContext(permissionContext);
 }
-//@ chunk-0089hrfm.js:4945-5368 placement
+//@ chunk-wfanetzz.js:5394-5817 placement
 function logPlanModeResumeOutcome(planModeResumeOutcome, { lane, hadExternal, hadInternal }) {
   let trustedMode = planModeResumeOutcome.source === "none" ? planModeResumeOutcome.trustedMode : "plan";
   logEvent("tengu_worker_permission_mode_restore", {

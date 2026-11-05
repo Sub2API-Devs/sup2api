@@ -3,17 +3,12 @@
  *
  * 系统消息分派：turn_duration（"Worked for Xm"）、memory_saved、away_summary、agents_killed、stop_hook_summary、bridge_status、api_error、model_fallback、permission_retry 等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/SystemTextMessage.tsx
- * pieces: chunk-ah34pb7m.js (32), chunk-e4xept39.js (1), chunk-e6aww6q8.js (1)
- * attribution: affinity 1, fingerprint 12, placement 8, layout 12, file-local 1
+ * pieces: chunk-fwegbnps.js (1), chunk-wjygkcr4.js (32)
+ * attribution: placement 8, affinity 1, fingerprint 11, layout 12, file-local 1
  */
 import { normalize, basename } from "path";
-import {
-  MAX_TOOL_DURATION_ENTRIES,
-  encodeToolNameForHeader,
-  MAX_TOOL_DURATION_HEADER_CHARS,
-} from "../../services/api/compactionHeaders.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppStateSlice, useAppState, useAppStoreDirect } from "../../state/AppState.js";
 import { MEMO_CACHE_SENTINEL, EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
@@ -24,7 +19,6 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text, Link } from "../../ink/components/Text.js";
 import { REFERENCE_GLYPH, BLACK_CIRCLE, TEARDROP_ASTERISK } from "../../constants/figures.js";
-import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useFrozenValue } from "../FreezeWhenOffscreen.js";
 import {
@@ -42,7 +36,7 @@ import { isTerminalTaskStatus as isTerminalTaskStatus_2 } from "../../tasks/task
 import { isMainAgentCommand } from "../../utils/messageQueueManager.js";
 import { isCoordinatorPanelActive } from "../../utils/transcriptDiagnostics.js";
 import { shouldHideTasksFooter } from "../tasks/taskStatusUtils.js";
-import { countNonAmbientTasks } from "../../utils/tasks.js";
+import { countNonAmbientTasks } from "../tasks/BackgroundTaskStatus.js";
 import { getPillLabelWithExtra } from "../../tasks/pillLabel.js";
 import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
 import { isRefusalFallbackEnabled } from "../../services/api/refusalFallback.js";
@@ -55,6 +49,7 @@ import { hasStringUuid } from "../../bridge/inboundMessages.js";
 import { useCommandQueueOrDefault } from "../../context/QueuedMessageContext.js";
 import { resolveSetting } from "../../utils/settings/userIntentSettings.js";
 import { formatBriefTimestamp } from "../../utils/formatBriefTimestamp.js";
+import { useState, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { actionKeysNamespace } from "../pluginUi/render/actionKeys.js";
 import { formatDuration, formatNumber } from "../../utils/format.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
@@ -70,39 +65,21 @@ import { openPath } from "../../utils/browser.js";
 import { FilePathLink } from "../FilePathLink.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1538140-1538417 fingerprint (2.1.88 match: _temp, 0.705)
-/**
- * 把工具耗时列表编码为 "tool=ms;tool=ms"（数量与总长有上限），用于请求头。
- */
-function formatToolDurationsHeader(prevToolDurations) {
-  let entries = [];
-  let totalMs = 0;
-  for (let { toolName, durationMs } of prevToolDurations) {
-    if (entries.length >= MAX_TOOL_DURATION_ENTRIES) break;
-    if (!Number.isFinite(durationMs)) continue;
-    let max = Math.max(0, Math.round(durationMs));
-    let entry = `${encodeToolNameForHeader(toolName)}=${max}`;
-    let entryDurationMs = entries.length > 0 ? 1 : 0;
-    if (totalMs + entryDurationMs + entry.length > MAX_TOOL_DURATION_HEADER_CHARS) break;
-    totalMs += entryDurationMs + entry.length;
-    entries.push(entry);
-  }
-  return entries.length > 0 ? entries.join(";") : undefined;
-}
-//@ chunk-e4xept39.js:231-335 placement
+//@ chunk-fwegbnps.js:231-363 placement
 /**
  * 云会话横幅文字（创建或附着）与"在此或在…编码"的连接文字。
  */
 var CLOUD_SESSION_BANNERS = {
   create: "Cloud session active",
   attach: "Attached to cloud session",
+  moved: "Cloud session ready",
 };
 var CODE_HERE_OR_AT = " \xB7 code here or at ";
-//@ chunk-ah34pb7m.js:65544-65591 affinity
+//@ chunk-wjygkcr4.js:66162-66209 affinity
 function selectMaxProseWidth(state) {
   return state.settings.maxProseWidth;
 }
-//@ chunk-ah34pb7m.js:65591-66292 fingerprint (2.1.88 match: ThinkingMessage, 0.463)
+//@ chunk-wjygkcr4.js:66209-66910 fingerprint (2.1.88 match: ThinkingMessage, 0.463)
 function ThinkingMessage(props) {
   let $ = useMemoCache(13);
   let { content, addMargin, trailer } = props;
@@ -172,21 +149,11 @@ function ThinkingMessage(props) {
   } else rowBox = $[12];
   return rowBox;
 }
-//@ chunk-ah34pb7m.js:190237-190241 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:190237", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:190290-190294 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:190290", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:190294-190335 placement
+//@ chunk-wjygkcr4.js:197526-197567 placement
 function selectCloudSessionSync(state) {
   return state.cloudSessionSync;
 }
-//@ chunk-ah34pb7m.js:190335-191287 placement
+//@ chunk-wjygkcr4.js:197567-198519 placement
 /**
  * 系统消息：远程会话链接（仅当前远程会话 URL 匹配时显示），并附上同步状态行。
  */
@@ -279,7 +246,7 @@ function RemoteSessionLinkMessage(props) {
   } else bannerRow = $[17];
   return bannerRow;
 }
-//@ chunk-ah34pb7m.js:191287-192403 placement
+//@ chunk-wjygkcr4.js:198519-199636 placement
 /**
  * 远程会话同步状态区块：项目文件、设置、插件、本地工具各一行，以及两行附加说明。
  */
@@ -402,7 +369,7 @@ function SyncStatusRows(props) {
   } else fragmentElement = $[23];
   return fragmentElement;
 }
-//@ chunk-ah34pb7m.js:192403-193319 placement
+//@ chunk-wjygkcr4.js:199636-200552 placement
 /**
  * 同步状态行：synced 显示成功图标与备注，pending 显示加载，not_synced 显示叉号与原因。
  */
@@ -495,14 +462,14 @@ function SyncStatusRow(props) {
     }
   }
 }
-//@ chunk-ah34pb7m.js:193409-193425 fingerprint (2.1.88 match: _temp4, 1)
+//@ chunk-wjygkcr4.js:200642-200658 fingerprint (2.1.88 match: _temp4, 1)
 var WORKED = "Worked";
-//@ chunk-ah34pb7m.js:193425-193486 layout
+//@ chunk-wjygkcr4.js:200658-200719 layout
 function pickTurnCompletionVerb(uuid) {
   let verbIndex = (hashString31(uuid) >>> 0) % TURN_COMPLETION_VERBS.length;
   return TURN_COMPLETION_VERBS[verbIndex] ?? WORKED;
 }
-//@ chunk-ah34pb7m.js:193486-193589 layout
+//@ chunk-wjygkcr4.js:200719-200822 layout
 function countPendingBackgroundWork(state) {
   let { agents, workflowIds } = collectPendingBackgroundWork(state);
   return {
@@ -510,7 +477,7 @@ function countPendingBackgroundWork(state) {
     pendingWorkflows: workflowIds.size,
   };
 }
-//@ chunk-ah34pb7m.js:193589-193752 layout
+//@ chunk-wjygkcr4.js:200822-200985 layout
 function listPendingBackgroundAgents(state) {
   return [...collectPendingBackgroundWork(state).agents.values()].map((agent) => ({
     id: agent.id,
@@ -521,7 +488,7 @@ function listPendingBackgroundAgents(state) {
     }),
   }));
 }
-//@ chunk-ah34pb7m.js:193752-194144 layout
+//@ chunk-wjygkcr4.js:200985-201377 layout
 function collectPendingBackgroundWork({ tasks, queuedCommands = [] }) {
   let agentsById = new Map();
   let workflowIds = new Set();
@@ -547,7 +514,7 @@ function collectPendingBackgroundWork({ tasks, queuedCommands = [] }) {
     workflowIds,
   };
 }
-//@ chunk-ah34pb7m.js:194144-194588 layout
+//@ chunk-wjygkcr4.js:201377-201821 layout
 /**
  * 计算回合耗时信息：仍有后台代理/工作流时返回回合时长、待完成数量与后台等待起点；否则从等待起点算到现在。
  */
@@ -577,11 +544,11 @@ function computeTurnDurationInfo({
     backgroundWaitStartTime: null,
   };
 }
-//@ chunk-ah34pb7m.js:194588-194632 layout
+//@ chunk-wjygkcr4.js:201821-201867 layout
 function sumDurationMs(sum, entry) {
   return sum + (entry.durationMs ?? 0);
 }
-//@ chunk-ah34pb7m.js:194632-194811 fingerprint (2.1.88 match: _temp2, 0.851)
+//@ chunk-wjygkcr4.js:201867-202044 fingerprint (2.1.88 match: _temp2, 0.851)
 function renderStopHookCommandLine(info, idx) {
   return jsxProd_default_2(
     Text,
@@ -599,7 +566,7 @@ function renderStopHookCommandLine(info, idx) {
     `cmd-${idx}`,
   );
 }
-//@ chunk-ah34pb7m.js:194811-194993 fingerprint (2.1.88 match: _temp3, 0.718)
+//@ chunk-wjygkcr4.js:202044-202226 fingerprint (2.1.88 match: _temp3, 0.718)
 function renderStopHookCommandLineCompact(info, idx) {
   return jsxProd_default_2(
     Text,
@@ -617,7 +584,7 @@ function renderStopHookCommandLineCompact(info, idx) {
     `cmd-${idx}`,
   );
 }
-//@ chunk-ah34pb7m.js:194993-195139 layout
+//@ chunk-wjygkcr4.js:202226-202372 layout
 function renderStopHookFeedbackLine(line, index) {
   return jsxProd_default_2(
     Text,
@@ -635,35 +602,35 @@ function renderStopHookFeedbackLine(line, index) {
     `feedback-${index}`,
   );
 }
-//@ chunk-ah34pb7m.js:195139-195248 placement (2.1.88 match: _temp0, 0.683)
-function agentRef(a) {
+//@ chunk-wjygkcr4.js:202372-202481 placement
+function agentRef(agent) {
   return {
-    id: a.id,
-    agentType: a.agentType,
-    ...(a.toolUseId !== undefined && {
-      tool_use_id: a.toolUseId,
+    id: agent.id,
+    agentType: agent.agentType,
+    ...(agent.toolUseId !== undefined && {
+      tool_use_id: agent.toolUseId,
     }),
   };
 }
-//@ chunk-ah34pb7m.js:195248-195420 layout
+//@ chunk-wjygkcr4.js:202481-202660 layout
 function getBackgroundTasksPillLabel(state) {
   let isCoordinatorPanelOn = isCoordinatorPanelActive();
-  let tasks = Object.values(state.tasks).filter(
+  let filtered = Object.values(state.tasks).filter(
     (task) => shouldHideTasksFooter(task) && !(isCoordinatorPanelOn && isIdleTeammateTask(task)),
   );
-  let extraCount = countNonAmbientTasks(state.remoteBackgroundTasks);
-  return tasks.length + extraCount > 0 ? getPillLabelWithExtra(tasks, extraCount) : null;
+  let remoteTasks = countNonAmbientTasks(state.remoteBackgroundTasks);
+  return filtered.length + remoteTasks.length > 0 ? getPillLabelWithExtra(filtered, remoteTasks) : null;
 }
-//@ chunk-ah34pb7m.js:195420-195458 layout
+//@ chunk-wjygkcr4.js:202660-202698 layout
 function isLivelyAvalancheEnabled() {
   return readFlagWithOverride(TENGU_LIVELY_AVALANCHE, {
     safe: true,
   });
 }
-//@ chunk-ah34pb7m.js:195458-195478 layout
+//@ chunk-wjygkcr4.js:202698-202718 layout
 var memoryQualifierApi = null;
 var accountMemoryModule = null;
-//@ chunk-ah34pb7m.js:195478-200180 fingerprint (2.1.88 match: SystemTextMessage, 0.561)
+//@ chunk-wjygkcr4.js:202718-207420 fingerprint (2.1.88 match: SystemTextMessage, 0.561)
 /**
  * 系统消息分派：turn_duration（"Worked for …"、预算/后台 agent）、memory_saved/account_memory_saved、away_summary、agents_killed、stop_hook_summary（"Ran N hooks"）、bridge_status（"/remote-control is active"）、api_error、model_fallback/model_refusal_*、permission_denied/permission_retry、scheduled_task_fire、cloud_session_status 等；其余按 level 着色显示文本。
  */
@@ -947,13 +914,13 @@ function SystemTextMessage(props) {
       $[49] !== message.heardAtNextPrompt
     ) {
       innerElement = EARLY_RETURN_SENTINEL;
-      K: {
+      G: {
         let validStringArray = getValidStringArray(commands);
         let joined = validStringArray.join(", ");
         let contentText = typeof content === "string" ? content : "";
         if (joined.length === 0 && contentText.length === 0) {
           innerElement = null;
-          break K;
+          break G;
         }
         let hintElement;
         if ($[52] === MEMO_CACHE_SENTINEL) {
@@ -1068,7 +1035,7 @@ function SystemTextMessage(props) {
   } else t4 = $[64];
   return t4;
 }
-//@ chunk-ah34pb7m.js:200180-201377 fingerprint (2.1.88 match: StopHookSummaryMessage, 0.765)
+//@ chunk-wjygkcr4.js:207420-208618 fingerprint (2.1.88 match: StopHookSummaryMessage, 0.765)
 function StopHookSummaryMessage(props) {
   let $ = useMemoCache(2);
   let { message, addMargin, verbose, isTranscriptMode } = props;
@@ -1196,7 +1163,7 @@ function StopHookSummaryMessage(props) {
     ],
   });
 }
-//@ chunk-ah34pb7m.js:201377-202330 fingerprint (2.1.88 match: SystemTextMessageInner, 0.721)
+//@ chunk-wjygkcr4.js:208618-209571 fingerprint (2.1.88 match: SystemTextMessageInner, 0.72)
 function SystemTextMessageInner(props) {
   let $ = useMemoCache(19);
   let { content, addMargin, dot, color, dimColor, highlight } = props;
@@ -1284,7 +1251,7 @@ function SystemTextMessageInner(props) {
   } else t7 = $[18];
   return t7;
 }
-//@ chunk-ah34pb7m.js:202330-204046 layout
+//@ chunk-wjygkcr4.js:209571-211281 layout
 function TurnDurationRow(props) {
   let $ = useMemoCache(21);
   let { message, addMargin, isExpanded } = props;
@@ -1407,7 +1374,7 @@ function TurnDurationRow(props) {
   } else renderHook = $[20];
   return actionKeysNamespace.useRenderHook(renderInput, renderHook);
 }
-//@ chunk-ah34pb7m.js:204046-206407 fingerprint (2.1.88 match: TurnDurationMessage, 0.466)
+//@ chunk-wjygkcr4.js:211281-213640 fingerprint (2.1.88 match: TurnDurationMessage, 0.466)
 /**
  * 回合耗时消息："✻ <随机完成动词> for Xm Ys"，附带 token 用量、提醒（nudge）计数与仍在后台运行的 agent/工作流数。
  */
@@ -1621,9 +1588,9 @@ function TurnDurationMessage(props) {
   } else container = $[32];
   return container;
 }
-//@ chunk-ah34pb7m.js:206407-206439 layout
+//@ chunk-wjygkcr4.js:213640-213672 layout
 var TENGU_LIVELY_AVALANCHE = "tengu_lively_avalanche";
-//@ chunk-ah34pb7m.js:206439-207625 fingerprint (2.1.88 match: MemorySavedMessage, 0.642)
+//@ chunk-wjygkcr4.js:213672-214864 fingerprint (2.1.88 match: MemorySavedMessage, 0.628)
 function MemorySavedMessage(props) {
   let $ = useMemoCache(18);
   let { message, addMargin, verbose } = props;
@@ -1743,7 +1710,7 @@ function MemorySavedMessage(props) {
   } else t11 = $[17];
   return t11;
 }
-//@ chunk-ah34pb7m.js:207625-207996 file-local
+//@ chunk-wjygkcr4.js:214864-215235 file-local
 function MemoryFilePath(p) {
   let $ = useMemoCache(12);
   let { path } = p;
@@ -1790,7 +1757,7 @@ function MemoryFilePath(p) {
   } else wrapperElement = $[11];
   return wrapperElement;
 }
-//@ chunk-ah34pb7m.js:207996-208617 fingerprint (2.1.88 match: MemoryFileRow, 0.734)
+//@ chunk-wjygkcr4.js:215235-215856 fingerprint (2.1.88 match: MemoryFileRow, 0.734)
 function MemoryFileRow(props) {
   let $ = useMemoCache(16);
   let { path } = props;
@@ -1857,9 +1824,9 @@ function MemoryFileRow(props) {
   } else t8 = $[15];
   return t8;
 }
-//@ chunk-ah34pb7m.js:208617-209574 fingerprint (2.1.88 match: BridgeStatusMessage, 0.355)
+//@ chunk-wjygkcr4.js:215856-216512 fingerprint (2.1.88 match: BridgeStatusMessage, 0.358)
 function BridgeStatusMessage(props) {
-  let $ = useMemoCache(13);
+  let $ = useMemoCache(8);
   let { message, addMargin } = props;
   let selectBridgeMatch;
   if ($[0] !== message) {
@@ -1874,84 +1841,65 @@ function BridgeStatusMessage(props) {
     return null;
   }
   const marginTop = addMargin ? 1 : 0;
-  let t2;
+  let iconSpacer;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    t2 = jsxProd_default(Box, {
+    iconSpacer = jsxProd_default(Box, {
       minWidth: 2,
     });
-    $[2] = t2;
-  } else t2 = $[2];
-  let textElement;
+    $[2] = iconSpacer;
+  } else iconSpacer = $[2];
+  let isConnected;
   if ($[3] !== message.url) {
-    textElement = jsxProd_default_2(Text, {
-      children: [
-        "/remote-control is active",
-        jsxProd_default_2(Text, {
-          dimColor: true,
-          children: [
-            " \xB7 Continue here, on your phone, or at ",
-            jsxProd_default(Link, {
-              url: message.url,
-              children: message.url,
-            }),
-          ],
-        }),
-      ],
-    });
-    $[3] = message.url;
-    $[4] = textElement;
-  } else textElement = $[4];
-  let state;
-  if ($[5] !== message.upgradeNudge) {
-    state =
-      message.upgradeNudge &&
-      jsxProd_default_2(Box, {
-        flexDirection: "row",
+    isConnected = jsxProd_default(Box, {
+      flexDirection: "column",
+      children: jsxProd_default_2(Text, {
         children: [
-          jsxProd_default(Text, {
-            "aria-hidden": true,
+          "/remote-control is active",
+          jsxProd_default_2(Text, {
             dimColor: true,
-            children: "\u23BF  ",
-          }),
-          jsxProd_default(Text, {
-            dimColor: true,
-            children: message.upgradeNudge,
+            children: [
+              " \xB7 Continue here, on your phone, or at ",
+              jsxProd_default(Link, {
+                url: message.url,
+                children: message.url,
+              }),
+            ],
           }),
         ],
-      });
-    $[5] = message.upgradeNudge;
-    $[6] = state;
-  } else state = $[6];
-  let isConnected;
-  if ($[7] !== textElement || $[8] !== state) {
-    isConnected = jsxProd_default_2(Box, {
-      flexDirection: "column",
-      children: [textElement, state],
+      }),
     });
-    $[7] = textElement;
-    $[8] = state;
-    $[9] = isConnected;
-  } else isConnected = $[9];
+    $[3] = message.url;
+    $[4] = isConnected;
+  } else isConnected = $[4];
   let statusText;
-  if ($[10] !== marginTop || $[11] !== isConnected) {
+  if ($[5] !== marginTop || $[6] !== isConnected) {
     statusText = jsxProd_default_2(Box, {
       flexDirection: "row",
       marginTop,
       width: 999,
-      children: [t2, isConnected],
+      children: [iconSpacer, isConnected],
     });
-    $[10] = marginTop;
-    $[11] = isConnected;
-    $[12] = statusText;
-  } else statusText = $[12];
+    $[5] = marginTop;
+    $[6] = isConnected;
+    $[7] = statusText;
+  } else statusText = $[7];
   return statusText;
 }
+//@ chunk-wjygkcr4.js:216512-216516 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:216512", () => {
+  init_react_production();
+});
+//@ chunk-wjygkcr4.js:220642-220646 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:220642", () => {
+  init_react_production();
+});
 export {
+  SystemTextMessage,
+  CLOUD_SESSION_BANNERS,
+  CODE_HERE_OR_AT,
   countPendingBackgroundWork,
   ThinkingMessage,
   computeTurnDurationInfo,
-  formatToolDurationsHeader,
-  CLOUD_SESSION_BANNERS,
-  CODE_HERE_OR_AT,
-  SystemTextMessage,
 };

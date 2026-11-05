@@ -3,9 +3,9 @@
  *
  * direct connect（连接到远程 Claude Code 服务器）会话：连接、断开提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useDirectConnect.ts
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: callgraph-fingerprint 1
  */
 import { useMemo } from "../../vendor/react/cjs/react.production.js";
@@ -13,7 +13,7 @@ import { DirectConnectSessionManager } from "../server/directConnectManager.js";
 import { gracefulShutdown } from "../utils/gracefulShutdown.js";
 import { useRemoteTransportCore } from "../remote/useRemoteTransportCore.js";
 
-//@ chunk-18hwfzwa.js:262843-263226 callgraph-fingerprint (2.1.88 match: useDirectConnect, 0.173)
+//@ chunk-czq1j3j2.js:267882-268265 callgraph-fingerprint (2.1.88 match: useDirectConnect, 0.173)
 function useDirectConnect({ config, sink, requestDialog, toolPermissionContext, tools }) {
   let converted = useMemo(() => {
     if (!config) return;

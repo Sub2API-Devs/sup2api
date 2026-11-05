@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：守护进程设置流程与无人值守同意选择
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b7gstm5r.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-k82fyra0.js (7)
  * attribution: placement 7
  */
 import {
@@ -41,14 +41,14 @@ import { Tab, Tabs } from "../design-system/Tabs.js";
 import { DaemonServicesView } from "./DaemonServicesView.js";
 import { Dialog } from "../design-system/Dialog.js";
 
-//@ chunk-b7gstm5r.js:21984-22109 placement
+//@ chunk-k82fyra0.js:23161-23286 placement
 function consentSelectAction(unattendedServing) {
   if (unattendedServing.lockReason !== undefined) return unattendedServing.canWithdraw ? "withdraw" : "none";
   return unattendedServing.choice === "accepted" ? "withdraw" : "ask";
 }
-//@ chunk-b7gstm5r.js:22109-22170 placement
+//@ chunk-k82fyra0.js:23286-23347 placement
 var CONSENT_SAVE_FAILED_TEXT = "The answer could not be saved. Nothing was changed.";
-//@ chunk-b7gstm5r.js:22170-22567 placement
+//@ chunk-k82fyra0.js:23347-23744 placement
 async function loadDaemonOverview(storageV5, override) {
   let hasSystemdSession = await hasSystemdUserSession();
   let liveLock = readLiveServerLock(1, storageV5).catch(() => null);
@@ -88,7 +88,7 @@ async function loadDaemonOverview(storageV5, override) {
     unattendedServing: servingConsentState,
   };
 }
-//@ chunk-b7gstm5r.js:22567-22668 placement
+//@ chunk-k82fyra0.js:23744-23845 placement
 function modelSelectOptions() {
   return getEnabledModelOptions(false).map((option) => ({
     label: option.label,
@@ -96,7 +96,7 @@ function modelSelectOptions() {
     description: option.description,
   }));
 }
-//@ chunk-b7gstm5r.js:22668-22797 placement
+//@ chunk-k82fyra0.js:23845-23974 placement
 /**
  * 加载守护进程概况后渲染 DaemonSetupFlow（服务类型、无人值守同意与模型选择）。
  */
@@ -109,7 +109,7 @@ async function renderDaemonSetupFlow(onDone, context) {
     storageV5: context.storageV5,
   });
 }
-//@ chunk-b7gstm5r.js:22797-25534 placement
+//@ chunk-k82fyra0.js:23974-26711 placement
 /**
  * 后台守护进程设置流程：选择服务类型、无人值守同意与模型。
  */
@@ -351,7 +351,7 @@ function DaemonSetupFlow({ initialData, modelOptions, onDone, storageV5 }) {
     }),
   });
 }
-//@ chunk-b7gstm5r.js:25534-25608 placement
+//@ chunk-k82fyra0.js:26711-26785 placement
 var SERVICE_KIND_LABELS = {
   scheduled: "scheduled task",
   remoteControl: "remote-control server",

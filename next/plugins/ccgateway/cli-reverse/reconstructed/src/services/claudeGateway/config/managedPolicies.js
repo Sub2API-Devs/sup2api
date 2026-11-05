@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关下发的托管策略
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (21)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (21)
  * attribution: placement 21
  */
 import { readFile } from "fs/promises";
@@ -29,7 +29,7 @@ import {
 import { computeChecksum } from "../../policyLimits/index.js";
 import { readStringListField } from "./load.js";
 import { jsonStringify, jsonParse } from "../../../utils/slowOperations.js";
-import { uniq } from "../../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
 import { resolveUpstreamModel, findPricingOverride, modelCanonicalKey } from "../models.js";
 import { findModelConfigById } from "../../../utils/model/providerCaches.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
@@ -48,7 +48,7 @@ import { deferInit, beginDeferredInits } from "../../../../runtime/deferred-init
 // This module is the first evaluated of an import cycle of 3 modules closed by ./load.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("src/services/claudeGateway/config/load.js");
-//@ chunk-1ny7cxrt.js:1413940-1417430 placement
+//@ chunk-1hnjmk23.js:1415820-1419310 placement
 /**
  * 解析网关配置里的托管策略（含桌面版策略），生成下发给客户端的托管设置。
  */
@@ -240,14 +240,14 @@ async function resolveManagedPolicies(config) {
     );
   return mapped;
 }
-//@ chunk-1ny7cxrt.js:1417430-1417495 placement
+//@ chunk-1hnjmk23.js:1419310-1419375 placement
 /**
  * 判断策略的 match 是否为 catch-all（没有 groups 也没有 email_domain）。
  */
 function isCatchAllPolicyMatch(match) {
   return match.groups === undefined && match.email_domain === undefined;
 }
-//@ chunk-1ny7cxrt.js:1417495-1418006 placement
+//@ chunk-1hnjmk23.js:1419375-1419886 placement
 /**
  * 把 catch-all 策略（match: {}）合并进其他策略；catch-all 不在最后时警告。
  */
@@ -274,7 +274,7 @@ function mergeCatchAllPolicy(policies) {
     return merged;
   });
 }
-//@ chunk-1ny7cxrt.js:1418006-1418204 placement
+//@ chunk-1hnjmk23.js:1419886-1420084 placement
 /**
  * 合并两条托管策略（cli、desktop 覆盖层、serve_to_desktop）。
  */
@@ -293,7 +293,7 @@ function mergePolicy(base, override) {
     serve_to_desktop: override.serve_to_desktop ?? base.serve_to_desktop,
   };
 }
-//@ chunk-1ny7cxrt.js:1418204-1418433 placement
+//@ chunk-1hnjmk23.js:1420084-1420313 placement
 /**
  * 合并 CLI 托管设置：对象键浅合并、列表键去重并集，permissions/hooks 特殊处理。
  */
@@ -316,7 +316,7 @@ function mergeCliSettings(base, override) {
   merged.hooks = mergeListGroups(base.hooks, override.hooks);
   return dropUndefinedValues(merged);
 }
-//@ chunk-1ny7cxrt.js:1418433-1418598 placement
+//@ chunk-1hnjmk23.js:1420313-1420478 placement
 /**
  * 合并含列表的对象（指定键或全部键做去重并集）。
  */
@@ -332,7 +332,7 @@ function mergeListGroups(base, override, keys) {
     merged[key] = unionLists(baseObject?.[key], overrideObject?.[key]);
   return dropUndefinedValues(merged);
 }
-//@ chunk-1ny7cxrt.js:1418598-1418679 placement
+//@ chunk-1hnjmk23.js:1420478-1420559 placement
 /**
  * 删除对象中值为 undefined 的键。
  */
@@ -340,7 +340,7 @@ function dropUndefinedValues(obj) {
   for (let key of Object.keys(obj)) if (obj[key] === undefined) delete obj[key];
   return obj;
 }
-//@ chunk-1ny7cxrt.js:1418679-1418905 placement
+//@ chunk-1hnjmk23.js:1420559-1420785 placement
 /**
  * 托管策略合并时的键分类：对象合并、列表并集、权限列表、钩子相关键。
  */
@@ -348,7 +348,7 @@ var MERGED_OBJECT_KEYS = ["env", "modelOverrides", "skillOverrides"];
 var UNION_LIST_KEYS = ["disabledMcpjsonServers", "deniedMcpServers", "blockedMarketplaces", "deniedModels"];
 var PERMISSION_LIST_KEYS = ["deny", "ask"];
 var HOOK_SETTING_KEYS = ["disableAllHooks", "allowedHttpHookUrls", "httpHookAllowedEnvVars"];
-//@ chunk-1ny7cxrt.js:1418905-1419152 placement
+//@ chunk-1hnjmk23.js:1420785-1421032 placement
 /**
  * 两个列表按 JSON 去重求并集（都不是数组时 undefined）。
  */
@@ -368,7 +368,7 @@ function unionLists(left, right) {
   }
   return merged;
 }
-//@ chunk-1ny7cxrt.js:1419152-1420031 placement
+//@ chunk-1hnjmk23.js:1421032-1421911 placement
 /**
  * 根据 telemetry.forward_to 与 public_url 生成下发给客户端的 OTEL 环境变量。
  */
@@ -404,14 +404,14 @@ function buildOtelEnv(config) {
     }),
   };
 }
-//@ chunk-1ny7cxrt.js:1420031-1420087 placement
+//@ chunk-1hnjmk23.js:1421911-1421967 placement
 /**
  * 根据 forward_to 列表决定 OTEL_*_EXPORTER 的值："otlp" 或 "none"。
  */
 function otlpExporterSetting(forwardTo, signalKind) {
   return forwardTo.some((target) => target[signalKind]) ? "otlp" : "none";
 }
-//@ chunk-1ny7cxrt.js:1420087-1420423 placement
+//@ chunk-1hnjmk23.js:1421967-1422303 placement
 /**
  * 记录合并后发生变化的设置键。
  */
@@ -419,7 +419,9 @@ function logChangedKeys(label, after, before) {
   let normalize = (value) => {
     if (Array.isArray(value)) {
       let mapped = value.map(normalize);
-      return mapped.every((item) => typeof item === "string") ? uniq(mapped).sort() : mapped;
+      return mapped.every((item) => typeof item === "string")
+        ? normalizeCaseForComparison_2(mapped).sort()
+        : mapped;
     }
     if (isPlainObject_3(value))
       return Object.fromEntries(
@@ -434,7 +436,7 @@ function logChangedKeys(label, after, before) {
   );
   if (filtered.length > 0) gatewayLog("info", `${label} \u2014 changed keys: ${filtered.join(", ")}`);
 }
-//@ chunk-1ny7cxrt.js:1420423-1420907 placement
+//@ chunk-1hnjmk23.js:1422303-1422787 placement
 /**
  * 按组与邮箱域名匹配托管策略（支持分层策略叠加）。
  */
@@ -464,14 +466,14 @@ function matchPolicy(managedPolicies, principal) {
     policy: firstMatch.policy.layered(mapped),
   };
 }
-//@ chunk-1ny7cxrt.js:1420907-1420982 placement
+//@ chunk-1hnjmk23.js:1422787-1422862 placement
 /**
  * 托管配置里是否有策略或 settings（决定是否生成价格覆盖）。
  */
 function hasManagedPolicies(managed) {
   return managed?.policies ? managed.policies.length > 0 : Boolean(managed?.settings);
 }
-//@ chunk-1ny7cxrt.js:1420982-1421143 placement
+//@ chunk-1hnjmk23.js:1422862-1423023 placement
 /**
  * 找第一个可服务该模型且不按组限制的上游。
  */
@@ -493,7 +495,7 @@ function firstUpstreamForModel(config, modelId) {
   }
   return;
 }
-//@ chunk-1ny7cxrt.js:1421143-1421521 placement
+//@ chunk-1hnjmk23.js:1423023-1423401 placement
 /**
  * 生成下发给客户端的价格覆盖（倍率与各模型单价）。
  */
@@ -526,7 +528,7 @@ function buildPricingOverrides(config) {
     }),
   };
 }
-//@ chunk-1ny7cxrt.js:1421521-1421724 placement
+//@ chunk-1hnjmk23.js:1423401-1423604 placement
 /**
  * 需要计算价格的模型 id 列表（去重）。
  */
@@ -547,19 +549,19 @@ function pricingModelIds(config) {
   }
   return ids;
 }
-//@ chunk-1ny7cxrt.js:1421724-1421778 placement
+//@ chunk-1hnjmk23.js:1423604-1423658 placement
 /**
  * 懒加载的完整设置 schema（用于列出现有配置键）。
  */
 var wholeSettingsSchema; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1ny7cxrt.js:1421724", () => {
+deferInit("chunk-1hnjmk23.js:1423604", () => {
   wholeSettingsSchema = DoctorLazy(() =>
     buildWholeSettingsSchema(enabledSettingsFeatureGroups(), {
       strictPolicyHelperKeys: true,
     }),
   );
 });
-//@ chunk-1ny7cxrt.js:1421778-1422018 placement
+//@ chunk-1hnjmk23.js:1423658-1423898 placement
 /**
  * 规范化设置别名，报告同时设置别名与正名的问题。
  */
@@ -578,7 +580,7 @@ function applyAliasesToSettings(cli, aliasMap) {
     ),
   };
 }
-//@ chunk-1ny7cxrt.js:1422018-1423077 placement
+//@ chunk-1hnjmk23.js:1423898-1424957 placement
 /**
  * 校验托管设置文档：schema、规则、跨会话入站、插件定制、允许的提供方、未知键；有问题时抛错。
  */
@@ -617,7 +619,7 @@ function validateManagedSettings(settings, label, aliasIssues) {
 ${issues.join(`
 `)}`);
 }
-//@ chunk-1ny7cxrt.js:1423077-1423359 placement
+//@ chunk-1hnjmk23.js:1424957-1425239 placement
 /**
  * 读取托管设置 JSON 文件（不存在返回空对象，非对象报错）。
  */

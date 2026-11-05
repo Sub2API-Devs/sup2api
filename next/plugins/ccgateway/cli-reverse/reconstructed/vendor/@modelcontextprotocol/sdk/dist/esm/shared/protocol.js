@@ -1,8 +1,8 @@
 /**
  * @modelcontextprotocol/sdk/dist/esm/shared/protocol.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/sdk@1.29.0
- * pieces: chunk-zykv69v4.js (3)
+ * pieces: chunk-efaj9q04.js (3)
  * attribution: esm-fingerprint 3
  */
 import {
@@ -31,9 +31,9 @@ import { isTerminal } from "../../cjs/experimental/tasks/interfaces.js";
 import { objectFromShape } from "../server/zod-compat.js";
 import { getMethodFromSchema, parseWithCompat } from "../server/zod-json-schema-compat.js";
 
-//@ chunk-zykv69v4.js:11497-11510 esm-fingerprint
+//@ chunk-efaj9q04.js:11499-11512 esm-fingerprint
 var DEFAULT_REQUEST_TIMEOUT_MSEC = 60000;
-//@ chunk-zykv69v4.js:11510-27504 esm-fingerprint
+//@ chunk-efaj9q04.js:11512-27507 esm-fingerprint
 class Protocol {
   constructor(_options) {
     this._options = _options;
@@ -924,7 +924,7 @@ class Protocol {
     };
   }
 }
-//@ chunk-zykv69v4.js:27504-27574 esm-fingerprint
+//@ chunk-efaj9q04.js:27507-27577 esm-fingerprint
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }

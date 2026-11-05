@@ -3,14 +3,22 @@
  *
  * 2.1.316 新增：输入框拼写检查（分词正则 + 启动拼写检查进程 + 防抖批量查询 + 拼错单词高亮区间）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (15)
  * attribution: placement 15
  */
+import {
+  init_react_production,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  useCallback,
+} from "../../../vendor/react/cjs/react.production.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { isValidThemeColor } from "../../utils/theme.js";
+import { isValidThemeColor } from "../../utils/ink.js";
 import {
   SPELLCHECK_PROGRAMS,
   isValidLanguageTag,
@@ -22,21 +30,18 @@ import {
   getSecuritySensitiveSettingWithSources,
   getSettingsForSource,
 } from "../../utils/settings/settings.js";
-import {
-  useEffect,
-  useMemo,
-  useState,
-  useSyncExternalStore,
-  useCallback,
-  init_react_production,
-} from "../../../vendor/react/cjs/react.production.js";
 import { getSettingSourceDisplayNameLowercase } from "../../utils/settings/constants.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { useDebouncedCallback } from "../../ink/components/Input.js";
 import { wrapText } from "../../ink/wrap-text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:871872-872399 placement
+//@ chunk-czq1j3j2.js:891752-891756 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:891752", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:904752-905279 placement
 /**
  * 拼写检查分词与过滤用的正则：单词、代码段、首尾标点、前导引号、类代码字符/前缀、CJK 等脚本。错归（PromptInput 拼写检查）。
  */
@@ -48,7 +53,7 @@ var LEADING_QUOTE_RE;
 var CODE_LIKE_CHAR_RE;
 var CODE_LIKE_PREFIX_RE;
 var CJK_SCRIPT_RE;
-deferInit("chunk-18hwfzwa.js:871872", () => {
+deferInit("chunk-czq1j3j2.js:904752", () => {
   WORD_RE = /\p{L}[\p{L}\p{M}]*(?:['\u2019][\p{L}\p{M}]+)*/gu;
   CODE_SPAN_RE = /(``+)[\s\S]*?(?:\1|$)|`[^`\n]*(?:`|\n|$)/g;
   EDGE_PUNCT_CLASS = String.raw`[\s.,;:!?"'\u2018\u2019\u201c\u201d\u00ab\u00bb()[\]{}<>\u2014\u2013\u2026*_~-]`;
@@ -59,7 +64,7 @@ deferInit("chunk-18hwfzwa.js:871872", () => {
   CJK_SCRIPT_RE =
     /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
 });
-//@ chunk-18hwfzwa.js:872399-873043 placement (2.1.88 match: findBtwTriggerPositions, 1)
+//@ chunk-czq1j3j2.js:905279-905923 placement (2.1.88 match: findBtwTriggerPositions, 1)
 /**
  * 拼写检查：找出输入文本中可检查的单词位置（跳过代码段、CJK、类代码 token、大小写混合词）。错归（PromptInput 拼写检查），旧版名 findBtwTriggerPositions 为错配。
  */
@@ -103,7 +108,7 @@ function findSpellcheckWordPositions(text) {
   }
   return positions;
 }
-//@ chunk-18hwfzwa.js:873043-873129 placement
+//@ chunk-czq1j3j2.js:905923-906009 placement
 var SPELLCHECK_DEBOUNCE_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SPELLCHECK_HIGHLIGHT_PRIORITY;
 var ERROR;
@@ -111,7 +116,7 @@ var TRAILING_APOSTROPHE_RE;
 var EMPTY_WORD_POSITIONS;
 var EMPTY_HIGHLIGHTS;
 var spellcheckWarnedHosts;
-deferInit("chunk-18hwfzwa.js:873043", () => {
+deferInit("chunk-czq1j3j2.js:905923", () => {
   SPELLCHECK_DEBOUNCE_MS = 250;
   SPELLCHECK_HIGHLIGHT_PRIORITY = 2;
   ERROR = "error";
@@ -120,7 +125,7 @@ deferInit("chunk-18hwfzwa.js:873043", () => {
   EMPTY_HIGHLIGHTS = [];
   spellcheckWarnedHosts = new HostScoped(() => new Set());
 });
-//@ chunk-18hwfzwa.js:873129-873208 placement
+//@ chunk-czq1j3j2.js:906009-906088 placement
 function warnSpellcheckOnce(host, message) {
   let warnedHosts = spellcheckWarnedHosts.of(host);
   if (!warnedHosts.has(message)) {
@@ -128,11 +133,11 @@ function warnSpellcheckOnce(host, message) {
     logForDebugging(`[spellcheck] ${message}`);
   }
 }
-//@ chunk-18hwfzwa.js:873208-873237 placement
+//@ chunk-czq1j3j2.js:906088-906117 placement
 function isSupportedColor(color) {
   return isValidThemeColor(color);
 }
-//@ chunk-18hwfzwa.js:873237-873482 placement
+//@ chunk-czq1j3j2.js:906117-906362 placement
 function resolveSpellcheckColor(colorSetting) {
   if (colorSetting === undefined) return ERROR;
   let color = colorSetting.trim().replace(/\s+(?=[^()]*\))/g, "");
@@ -144,11 +149,11 @@ function resolveSpellcheckColor(colorSetting) {
   );
   return ERROR;
 }
-//@ chunk-18hwfzwa.js:873482-873526 placement
+//@ chunk-czq1j3j2.js:906362-906406 placement
 function isKnownSpellcheckProgram(program) {
   return SPELLCHECK_PROGRAMS.some((knownProgram) => knownProgram === program);
 }
-//@ chunk-18hwfzwa.js:873526-873705 placement
+//@ chunk-czq1j3j2.js:906406-906585 placement
 function resolveSpellcheckChecker(program) {
   if (program === undefined || program === "auto") return "auto";
   if (isKnownSpellcheckProgram(program)) return program;
@@ -157,7 +162,7 @@ function resolveSpellcheckChecker(program) {
   );
   return "auto";
 }
-//@ chunk-18hwfzwa.js:873705-873844 placement
+//@ chunk-czq1j3j2.js:906585-906724 placement
 function mergeNonOverlappingRanges(ranges, spellcheckHighlights) {
   if (spellcheckHighlights.length === 0) return ranges;
   let merged = [...ranges];
@@ -166,7 +171,7 @@ function mergeNonOverlappingRanges(ranges, spellcheckHighlights) {
       merged.push(range);
   return merged;
 }
-//@ chunk-18hwfzwa.js:873844-873907 placement
+//@ chunk-czq1j3j2.js:906724-906787 placement
 var NO_SPELLCHECK_VERDICTS = {
   isMisspelled: () => {
     return;
@@ -174,7 +179,7 @@ var NO_SPELLCHECK_VERDICTS = {
 };
 var noopUnsubscribe = () => () => {};
 var getNoVerdicts = () => NO_SPELLCHECK_VERDICTS;
-//@ chunk-18hwfzwa.js:873907-875673 placement
+//@ chunk-czq1j3j2.js:906787-908554 placement
 /**
  * 输入框拼写检查：只读用户设置里的 spellcheck（项目/本地设置里的会提示忽略），启动拼写检查进程，按防抖批量查询单词，返回拼错单词的下划线高亮区间（光标正在输入的词与占位符跳过，读屏模式关闭）。
  */
@@ -283,22 +288,17 @@ function useSpellcheckHighlights({ host, text, cursorOffset, active, placeholder
     return ranges.length > 0 ? ranges : EMPTY_HIGHLIGHTS;
   }, [wordPositions, verdicts, isBeingTyped, highlightColor]);
 }
-//@ chunk-18hwfzwa.js:875673-875782 placement
+//@ chunk-czq1j3j2.js:908554-908663 placement
 function historyPositionLabel(historyIndex, historyTotal, historyEdited) {
   if (historyIndex === 0 || historyEdited) return;
   if (historyTotal === null) return "History";
   return `History ${Math.max(1, historyTotal - historyIndex + 1)}/${historyTotal}`;
 }
-//@ chunk-18hwfzwa.js:875782-875793 placement
+//@ chunk-czq1j3j2.js:908663-908674 placement
 var PLACEHOLDER_MAX_WIDTH = 32;
-//@ chunk-18hwfzwa.js:875793-875917 placement
+//@ chunk-czq1j3j2.js:908674-908798 placement
 function formatPasteLabel(text) {
   let replaced = text.replace(/]/g, ")").replace(/[\r\n]/g, " ");
   return `[${wrapText(replaced, PLACEHOLDER_MAX_WIDTH, "truncate-middle")}] `.normalize("NFC");
 }
-//@ chunk-18hwfzwa.js:875917-875921 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:875917", () => {
-  init_react_production();
-});
 export { useSpellcheckHighlights, mergeNonOverlappingRanges, formatPasteLabel, historyPositionLabel };

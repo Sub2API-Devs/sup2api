@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：mcp serve 列出项目代理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wy9dbk5f.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xrwmcqkn.js (3)
  * attribution: placement 3
  */
 import { join } from "path";
@@ -31,7 +31,7 @@ import { isRestrictedToPluginOnly } from "../../utils/settings/pluginOnlyPolicy.
 import { isPathAbsent, getErrnoCode } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-wy9dbk5f.js:32313-32560 placement
+//@ chunk-xrwmcqkn.js:37620-37867 placement
 /**
  * 表示“无上限”的限制对象。
  */
@@ -59,7 +59,7 @@ var UNBOUNDED_LIMITS = {
   values: 1 / 0,
   levels: 1 / 0,
 };
-//@ chunk-wy9dbk5f.js:32560-33069 placement (2.1.88 match: reorderBidi, 0.534)
+//@ chunk-xrwmcqkn.js:37867-38376 placement (2.1.88 match: reorderBidi, 0.535)
 function measureJsonSize(value, level = 0, seen = new Map()) {
   if (typeof value !== "object" || value === null)
     return {
@@ -92,7 +92,7 @@ function measureJsonSize(value, level = 0, seen = new Map()) {
   seen.set(value, size);
   return size;
 }
-//@ chunk-wy9dbk5f.js:33069-34460 placement
+//@ chunk-xrwmcqkn.js:38376-39770 placement
 async function serveListProjectAgents(input, signal, context) {
   if (isCustomizationDisabled("agents"))
     return {

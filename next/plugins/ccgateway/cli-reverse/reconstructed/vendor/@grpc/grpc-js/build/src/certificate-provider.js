@@ -1,15 +1,15 @@
 /**
  * @grpc/grpc-js/build/src/certificate-provider.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @grpc/grpc-js@1.14.4
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
 import { require_logging } from "./logging.js";
 import { require_constants } from "./constants.js";
 
-//@ chunk-pwh5dx3n.js:346338-349343 cjs-fingerprint
+//@ chunk-3k21nfa0.js:346338-349343 cjs-fingerprint
 var require_certificate_provider = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

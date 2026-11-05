@@ -3,14 +3,14 @@
  *
  * AST 辅助分析：引号上下文三种视图、顶层复合结构、运算符节点、危险模式（命令/进程替换、参数展开、heredoc、注释）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/bash/treeSitterAnalysis.ts
- * pieces: chunk-8wvtd8sr.js (1), chunk-e6aww6q8.js (10)
- * attribution: fingerprint 6, file-local 4, layout 1
+ * pieces: chunk-5xgkngpb.js (10), chunk-xzmy9dn4.js (1)
+ * attribution: fingerprint 6, file-local 4, placement 1
  */
 import { typeOf, typeUrlOf } from "../../tools/ArtifactTool/permissions/dbWriteInputs.js";
 
-//@ chunk-e6aww6q8.js:1050226-1050740 fingerprint (2.1.88 match: collectQuoteSpans, 1)
+//@ chunk-5xgkngpb.js:1045432-1045946 fingerprint (2.1.88 match: collectQuoteSpans, 1)
 /**
  * 收集 AST 中单引号串、$'…'、双引号串、引号分界的 heredoc 的字节区间。
  */
@@ -43,13 +43,13 @@ function collectQuoteSpans(node, out, inDouble) {
   }
   for (let child of node.children) if (child) collectQuoteSpans(child, out, inDouble);
 }
-//@ chunk-e6aww6q8.js:1050740-1050825 file-local
+//@ chunk-5xgkngpb.js:1045946-1046031 file-local
 function buildPositionSet(spans) {
   let set = new Set();
   for (let [start, end] of spans) for (let i = start; i < end; i++) set.add(i);
   return set;
 }
-//@ chunk-e6aww6q8.js:1050825-1050935 file-local
+//@ chunk-5xgkngpb.js:1046031-1046141 file-local
 function dropContainedSpans(spans) {
   return spans.filter(
     (span, i) =>
@@ -59,7 +59,7 @@ function dropContainedSpans(spans) {
       ),
   );
 }
-//@ chunk-e6aww6q8.js:1050935-1051070 file-local
+//@ chunk-5xgkngpb.js:1046141-1046276 file-local
 function removeSpans(command, spans) {
   if (spans.length === 0) return command;
   let sorted = dropContainedSpans(spans).sort((leftSpan, rightSpan) => rightSpan[0] - leftSpan[0]);
@@ -67,7 +67,7 @@ function removeSpans(command, spans) {
   for (let [start, end] of sorted) result = result.slice(0, start) + result.slice(end);
   return result;
 }
-//@ chunk-e6aww6q8.js:1051070-1051213 file-local
+//@ chunk-5xgkngpb.js:1046276-1046419 file-local
 function replaceSpansKeepQuotes(command, spans) {
   if (spans.length === 0) return command;
   let sorted = dropContainedSpans(spans).sort((leftSpan, rightSpan) => rightSpan[0] - leftSpan[0]);
@@ -76,7 +76,7 @@ function replaceSpansKeepQuotes(command, spans) {
     result = result.slice(0, start) + open + close + result.slice(end);
   return result;
 }
-//@ chunk-e6aww6q8.js:1051213-1051802 fingerprint (2.1.88 match: extractQuoteContext, 1)
+//@ chunk-5xgkngpb.js:1046419-1047010 fingerprint (2.1.88 match: extractQuoteContext, 1)
 /**
  * 生成三种去引号视图：withDoubleQuotes（只去单引号内容与双引号定界符）、fullyUnquoted（去掉所有引号区间）、unquotedKeepQuoteChars（清空引号内容但保留引号字符）。供基于文本的危险模式检查。
  */
@@ -120,7 +120,7 @@ function extractQuoteContext(rootNode, command) {
     unquotedKeepQuoteChars,
   };
 }
-//@ chunk-e6aww6q8.js:1051802-1053276 fingerprint (2.1.88 match: extractCompoundStructure, 0.888)
+//@ chunk-5xgkngpb.js:1047010-1048515 fingerprint (2.1.88 match: extractCompoundStructure, 0.889)
 /**
  * 提取顶层复合结构：运算符序列（&& || ;）、各段文本，以及是否有管道、子 shell、命令组。
  */
@@ -217,7 +217,7 @@ function extractCompoundStructure(rootNode, command) {
     segments,
   };
 }
-//@ chunk-e6aww6q8.js:1053276-1053462 layout (2.1.88 match: hasActualOperatorNodes, 1)
+//@ chunk-5xgkngpb.js:1048515-1048701 fingerprint (2.1.88 match: hasActualOperatorNodes, 1)
 /**
  * AST 中是否有 ; && || 或 list 节点。
  */
@@ -231,7 +231,7 @@ function hasActualOperatorNodes(rootNode) {
   }
   return walk(node);
 }
-//@ chunk-e6aww6q8.js:1053462-1053850 fingerprint (2.1.88 match: extractDangerousPatterns, 1)
+//@ chunk-5xgkngpb.js:1048701-1049089 fingerprint (2.1.88 match: extractDangerousPatterns, 1)
 /**
  * 统计 AST 中是否出现命令替换、进程替换、参数展开、heredoc、注释。
  */
@@ -271,7 +271,7 @@ function extractDangerousPatterns(rootNode) {
     hasComment,
   };
 }
-//@ chunk-e6aww6q8.js:1053850-1053980 fingerprint (2.1.88 match: analyzeCommand, 1)
+//@ chunk-5xgkngpb.js:1049089-1049219 fingerprint (2.1.88 match: analyzeCommand, 1)
 /**
  * 汇总 AST 分析：quoteContext、compoundStructure、hasActualOperatorNodes、dangerousPatterns。
  */
@@ -283,7 +283,7 @@ function analyzeCommand(rootNode, command) {
     dangerousPatterns: extractDangerousPatterns(rootNode),
   };
 }
-//@ chunk-8wvtd8sr.js:106702-106809 fingerprint (2.1.88 match: hasActualOperatorNodes, 1)
+//@ chunk-xzmy9dn4.js:107042-107149 placement (2.1.88 match: hasActualOperatorNodes, 1)
 /**
  * 判断工具输入是否为带过滤条件的 action='list' 调用，某工具的 checkPermissions 据此补默认 scope。旧版名 hasActualOperatorNodes 误配，与 Bash 无关。
  */

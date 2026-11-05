@@ -3,9 +3,9 @@
  *
  * 自托管 runner checkout/post-session 生命周期钩子（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3nztfxrw.js (26)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a3r2kq46.js (26)
  * attribution: placement 26
  */
 import { join } from "path";
@@ -32,9 +32,9 @@ import { sleep } from "../utils/sleep.js";
 import { HostScoped } from "../utils/hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 
-//@ chunk-3nztfxrw.js:40006-40018 placement
+//@ chunk-a3r2kq46.js:40719-40731 placement
 var FILESYSTEM_CHECK_TIMEOUT_MS = 5000;
-//@ chunk-3nztfxrw.js:40018-40243 placement
+//@ chunk-a3r2kq46.js:40731-40956 placement
 function hookEnvironment() {
   return {
     ...process.env,
@@ -44,7 +44,7 @@ function hookEnvironment() {
     SELF_HOSTED_RUNNER_PROXY_AUTHORIZATION_FILE: undefined,
   };
 }
-//@ chunk-3nztfxrw.js:40243-41196 placement
+//@ chunk-a3r2kq46.js:40956-41909 placement
 function assertLifecycleHooksSupported(feature, platform = "linux") {
   if (platform !== "win32") return;
   switch (feature) {
@@ -58,7 +58,7 @@ function assertLifecycleHooksSupported(feature, platform = "linux") {
       );
   }
 }
-//@ chunk-3nztfxrw.js:41196-41383 placement
+//@ chunk-a3r2kq46.js:41909-42096 placement
 async function findHook(hooksDir, name) {
   if (!hooksDir) return null;
   let path = join(hooksDir, name);
@@ -71,7 +71,7 @@ async function findHook(hooksDir, name) {
     return null;
   }
 }
-//@ chunk-3nztfxrw.js:41383-41934 placement
+//@ chunk-a3r2kq46.js:42096-42647 placement
 var LIFECYCLE_HOOK_GIT_NEUTRAL_PINS = [
   ["core.fsmonitor", ""],
   ["core.askPass", ""],
@@ -95,7 +95,7 @@ var LIFECYCLE_HOOK_GIT_ENV = {
   GIT_SEQUENCE_EDITOR: ":",
   GIT_SSH_COMMAND: "ssh",
 };
-//@ chunk-3nztfxrw.js:41934-42196 placement
+//@ chunk-a3r2kq46.js:42647-42909 placement
 function withLifecycleHookGitEnv(envVars = hookEnvironment()) {
   let copy;
   for (let [key, value] of Object.entries(LIFECYCLE_HOOK_GIT_ENV)) {
@@ -116,14 +116,14 @@ function withLifecycleHookGitEnv(envVars = hookEnvironment()) {
   }
   return copy ?? envVars;
 }
-//@ chunk-3nztfxrw.js:42196-42317 placement
+//@ chunk-a3r2kq46.js:42909-43030 placement
 function lifecycleHookAskpassSource(envVars = hookEnvironment()) {
   if (envVars.GIT_ASKPASS !== undefined || envHasGitConfigKey("core.askPass", envVars)) return "own";
   return envVars.SSH_ASKPASS ? "handedOn" : "none";
 }
-//@ chunk-3nztfxrw.js:42317-42328 placement
+//@ chunk-a3r2kq46.js:43030-43041 placement
 var MAX_GIT_CONFIG_PAIRS = 256;
-//@ chunk-3nztfxrw.js:42328-42658 placement
+//@ chunk-a3r2kq46.js:43041-43371 placement
 function operatorGitConfigPairStatus(envVars = hookEnvironment()) {
   let match = /^\s*\+?(\d+)$/.exec(envVars.GIT_CONFIG_COUNT ?? "");
   let count = match ? parseInt(match[1], 10) : 0;
@@ -149,11 +149,11 @@ function operatorGitConfigPairStatus(envVars = hookEnvironment()) {
     announced: count,
   };
 }
-//@ chunk-3nztfxrw.js:42658-42693 placement
+//@ chunk-a3r2kq46.js:43371-43406 placement
 function countOperatorGitConfigPairs(envVars) {
   return operatorGitConfigPairStatus(envVars).count;
 }
-//@ chunk-3nztfxrw.js:42693-42836 placement
+//@ chunk-a3r2kq46.js:43406-43549 placement
 function envHasGitConfigKey(key, envVars = hookEnvironment()) {
   let count = countOperatorGitConfigPairs(envVars);
   let lower = key.toLowerCase();
@@ -161,7 +161,7 @@ function envHasGitConfigKey(key, envVars = hookEnvironment()) {
     if ((envVars[`GIT_CONFIG_KEY_${i}`] ?? "").toLowerCase() === lower) return true;
   return false;
 }
-//@ chunk-3nztfxrw.js:42836-42997 placement
+//@ chunk-a3r2kq46.js:43549-43710 placement
 function lifecycleHookGpgProgramPins(paths, withSsh) {
   let pairs = [
     ["gpg.program", paths.gpg],
@@ -171,7 +171,7 @@ function lifecycleHookGpgProgramPins(paths, withSsh) {
   if (withSsh) pairs.push(["gpg.ssh.program", paths.sshKeygen]);
   return pairs;
 }
-//@ chunk-3nztfxrw.js:42997-43766 placement
+//@ chunk-a3r2kq46.js:43710-44479 placement
 function gitConfigEnvArgs(envVars, pairs, legacy) {
   if (!pairs?.length) return envVars;
   let existing = countOperatorGitConfigPairs(envVars);
@@ -210,7 +210,7 @@ function gitConfigEnvArgs(envVars, pairs, legacy) {
   }
   return next;
 }
-//@ chunk-3nztfxrw.js:43766-43881 placement
+//@ chunk-a3r2kq46.js:44479-44594 placement
 function mergeCommandScopes(gitConfigPins, gitEnvironment, gitConfigLegacyParams) {
   let commandScopeEntries = gitEnvironment?.commandScopeEntries ?? [];
   let entries =
@@ -219,7 +219,7 @@ function mergeCommandScopes(gitConfigPins, gitEnvironment, gitConfigLegacyParams
       : commandScopeEntries;
   return [...(gitConfigPins ?? []), ...entries];
 }
-//@ chunk-3nztfxrw.js:43881-44131 placement
+//@ chunk-a3r2kq46.js:44594-44844 placement
 /**
  * hook 进程的生命周期常量：残留输出窗口 1 s、SIGKILL 期限 5 s、进程快照 500 ms、清理宽限等，以及残留输出的提示文案。
  */
@@ -231,15 +231,15 @@ var HOOK_OUTPUT_SETTLE_MS = PROCESS_SNAPSHOT_TIMEOUT_MS + PROCESS_COMMAND_TIMEOU
 var POST_HOOK_SLEEP_MS = 100;
 var LINGERING_OUTPUT_ADVICE =
   "a hook should `exec` or `wait` for its long-running commands, stop a command's child processes too if it stops that command early, and start a daemon with its output redirected: >/dev/null 2>&1";
-//@ chunk-3nztfxrw.js:44131-44221 placement
+//@ chunk-a3r2kq46.js:44844-44934 placement
 function exitDescription(child) {
   return child.signalCode !== null ? `signal ${child.signalCode}` : `status ${child.exitCode}`;
 }
-//@ chunk-3nztfxrw.js:44221-44430 placement
+//@ chunk-a3r2kq46.js:44934-45143 placement
 function lingeringOutputMessage(child) {
   return `hook exited (${exitDescription(child)}) but a process it started still holds its output pipes; not waiting for them to close. The runner has not stopped that process, and it may still be running (${LINGERING_OUTPUT_ADVICE})`;
 }
-//@ chunk-3nztfxrw.js:44564-44676 placement
+//@ chunk-a3r2kq46.js:45277-45389 placement
 class CheckoutHookFailedError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   exitCode;
   constructor(message, exitCode, safeMessage) {
@@ -248,14 +248,14 @@ class CheckoutHookFailedError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_
     this.exitCode = exitCode;
   }
 }
-//@ chunk-3nztfxrw.js:44676-44785 placement
+//@ chunk-a3r2kq46.js:45389-45498 placement
 class CheckoutHookTimedOutError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   constructor(safeMessage) {
     super(safeMessage, "checkout hook timed out");
     this.name = "CheckoutHookTimedOutError";
   }
 }
-//@ chunk-3nztfxrw.js:44785-51492 placement
+//@ chunk-a3r2kq46.js:45498-52205 placement
 /**
  * 自托管 runner 的 checkout 生命周期钩子：带预算运行并记录日志
  */
@@ -626,9 +626,9 @@ async function runCheckoutHook(options) {
       throw error;
     }
 }
-//@ chunk-3nztfxrw.js:51492-51504 placement
+//@ chunk-a3r2kq46.js:52205-52217 placement
 var IN_FLIGHT_COUNT_MAX = 2000;
-//@ chunk-3nztfxrw.js:51504-51581 placement (2.1.88 match: useCounter, 0.533)
+//@ chunk-a3r2kq46.js:52217-52294 placement (2.1.88 match: useCounter, 0.533)
 /**
  * 在途计数（increment/decrement）。旧版名 useCounter 为错配。
  */
@@ -641,20 +641,20 @@ class InFlightCounter {
     this.inFlight--;
   }
 }
-//@ chunk-3nztfxrw.js:51581-51606 placement
+//@ chunk-a3r2kq46.js:52294-52319 placement
 /**
  * 按 host 存放 InFlightCounter 的槽。
  */
 var inFlightCounterSlot = new HostScoped(() => new InFlightCounter());
-//@ chunk-3nztfxrw.js:51606-51643 placement
+//@ chunk-a3r2kq46.js:52319-52356 placement
 function inFlightCounter() {
   return inFlightCounterSlot.of(getRootSession().host);
 }
-//@ chunk-3nztfxrw.js:51643-51679 placement
+//@ chunk-a3r2kq46.js:52356-52392 placement
 function postSessionHooksRunning() {
   return inFlightCounter().inFlight;
 }
-//@ chunk-3nztfxrw.js:51679-54245 placement
+//@ chunk-a3r2kq46.js:52392-54958 placement
 /**
  * 会话结束后的 post-session 钩子，带时间预算
  */
@@ -800,7 +800,6 @@ async function runPostSessionHook(options) {
   return promise;
 }
 export {
-  assertLifecycleHooksSupported,
   findHook,
   runCheckoutHook,
   CheckoutHookFailedError,
@@ -808,6 +807,7 @@ export {
   runPostSessionHook,
   LIFECYCLE_HOOK_GIT_NEUTRAL_PINS,
   lifecycleHookGpgProgramPins,
+  assertLifecycleHooksSupported,
   postSessionHooksRunning,
   LIFECYCLE_HOOK_GIT_ENV,
   envHasGitConfigKey,

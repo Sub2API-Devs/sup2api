@@ -3,9 +3,9 @@
  *
  * LSP 客户端：在工具 cgroup 中启动语言服务器子进程，用 vscode-jsonrpc 建立 stdio 连接，处理崩溃/协议违规与 shutdown。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/lsp/LSPClient.ts
- * pieces: chunk-t4ksmxzx.js (9)
+ * pieces: chunk-mvgr3jmb.js (9)
  * attribution: sole-consumer 7, affinity 1, fingerprint 1
  */
 import { __toESM } from "../../../runtime/bun-runtime.js";
@@ -28,17 +28,17 @@ import { safeSpawn } from "../../utils/safeSpawn.js";
 import { registerChildMemory, markChildProcessDead } from "../../utils/telemetry/memorySummary.js";
 import { withTimeout } from "../../utils/sleep.js";
 
-//@ chunk-t4ksmxzx.js:59108-59126 sole-consumer
+//@ chunk-mvgr3jmb.js:59472-59490 sole-consumer
 /**
  * 懒加载的 vscode-jsonrpc 消息协议模块。
  */
 var messageProtocolModule = __toESM(require_vscode_jsonrpc(), 1);
-//@ chunk-t4ksmxzx.js:59126-59144 sole-consumer
+//@ chunk-mvgr3jmb.js:59490-59508 sole-consumer
 /**
  * 懒加载的 vscode-jsonrpc 协议模块（AbstractMessageReader）。
  */
 var rpcProtocolModule = __toESM(require_vscode_jsonrpc(), 1);
-//@ chunk-t4ksmxzx.js:59144-59213 sole-consumer
+//@ chunk-mvgr3jmb.js:59508-59577 sole-consumer
 /**
  * LSP 消息体允许的最大字节数（32 MiB）。
  */
@@ -48,7 +48,7 @@ var buffer = Buffer.from(`\r
 \r
 `);
 var EMPTY_BUFFER = Buffer.alloc(0);
-//@ chunk-t4ksmxzx.js:59213-61911 sole-consumer
+//@ chunk-mvgr3jmb.js:59577-62275 sole-consumer
 /**
  * LSP 基础协议的 stdio 消息读取器：分块解析 Content-Length 头与正文，头部过大或不合协议时报协议违规并停止，正文解析为 JSON 对象后回调。
  */
@@ -187,17 +187,17 @@ class LspMessageReader extends rpcProtocolModule.AbstractMessageReader {
     }
   }
 }
-//@ chunk-t4ksmxzx.js:61911-61963 sole-consumer
+//@ chunk-mvgr3jmb.js:62275-62327 sole-consumer
 /**
  * 判断值是否为非 null 对象。
  */
 function isObjectLike(value) {
   return typeof value === "object" && value !== null;
 }
-//@ chunk-t4ksmxzx.js:61963-62073 sole-consumer
+//@ chunk-mvgr3jmb.js:62327-62437 sole-consumer
 var LSP_HEADER_LINE_RE = /^([!#$%&'*+.^_`|~0-9A-Za-z-]+)[ \t]*:[ \t]*([^\r\n]*)$/;
 var ALLOWED_LSP_HEADERS = new Set(["content-length", "content-type"]);
-//@ chunk-t4ksmxzx.js:62073-62870 sole-consumer
+//@ chunk-mvgr3jmb.js:62437-63234 sole-consumer
 /**
  * 解析 LSP 头块：只允许 content-length/content-type，要求 Content-Length 为数字且不超过大小上限，否则返回描述性错误。
  */
@@ -226,7 +226,7 @@ function parseLspHeaderBlock(block) {
     return Error("LSP server declared a message larger than the size limit \u2014 refusing to buffer it");
   return length;
 }
-//@ chunk-t4ksmxzx.js:62870-63006 affinity
+//@ chunk-mvgr3jmb.js:63234-63370 affinity
 /**
  * LSP 服务器进程异常退出时抛出的错误；oomKilledInToolCgroup 标记是否被工具内存上限（CLAUDE_CODE_TOOL_MEMORY_LIMIT 的 cgroup）杀掉。
  */
@@ -238,7 +238,7 @@ class LSPServerCrashError extends Error {
     this.name = "LSPServerCrashError";
   }
 }
-//@ chunk-t4ksmxzx.js:63006-68015 fingerprint (2.1.88 match: createLSPClient, 0.708)
+//@ chunk-mvgr3jmb.js:63370-68379 fingerprint (2.1.88 match: createLSPClient, 0.709)
 /**
  * 创建一个 LSP 客户端：start() 在工具 cgroup（toolCgroupClass "lsp"）里用 stdio 管道启动语言服务器，用 vscode-jsonrpc 的 StreamMessageReader/Writer 建立连接并开 Verbose trace；initialize() 发 initialize 请求 + initialized 通知。进程崩溃、协议违规、连接错误都会置 startFailed 并回调 onCrash；连接就绪前注册的 onNotification/onRequest 会缓存后补挂。stop() 发 shutdown + exit，可带超时，最后杀进程（Windows 按 pid 强杀）。
  */

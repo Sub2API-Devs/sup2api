@@ -3,21 +3,21 @@
  *
  * /context 的优化建议：上下文将满、大工具结果、Read 结果膨胀、记忆文件过大、自动压缩被关闭。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/contextSuggestions.ts
- * pieces: chunk-10q8r8ck.js (8)
+ * pieces: chunk-qt8k81nz.js (8)
  * attribution: callgraph-witnessed 1, fingerprint 7
  */
 import { isEnvTruthy } from "./envUtils.js";
 import { formatTokens } from "./format.js";
 import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../tools/PowerShellTool/toolName.js";
-import { FILE_READ_TOOL_NAME } from "../tools/FileReadTool/constants.js";
+import { READ } from "../tools/FileReadTool/constants.js";
 import { GREP_TOOL_NAME } from "../tools/GrepTool/prompt.js";
 import { WEBFETCH } from "../tools/WebFetchTool/prompt.js";
 import { getDisplayPath } from "./file.js";
 
-//@ chunk-10q8r8ck.js:13077-13118 callgraph-witnessed (2.1.88 match: NEAR_CAPACITY_PERCENT, 0)
+//@ chunk-qt8k81nz.js:14259-14300 callgraph-witnessed (2.1.88 match: NEAR_CAPACITY_PERCENT, 0)
 /**
  * 5000
  */
@@ -27,7 +27,7 @@ var READ_BLOAT_PERCENT = 5;
 var NEAR_CAPACITY_PERCENT = 80;
 var MEMORY_BLOAT_PERCENT = 5;
 var MEMORY_BLOAT_MIN_TOKENS = 5000;
-//@ chunk-10q8r8ck.js:13118-13318 fingerprint (2.1.88 match: generateContextSuggestions, 1)
+//@ chunk-qt8k81nz.js:14300-14500 fingerprint (2.1.88 match: generateContextSuggestions, 1)
 /**
  * 依次运行各检查并按严重度、可节省 token 排序。
  */
@@ -45,7 +45,7 @@ function generateContextSuggestions(data) {
   });
   return suggestions;
 }
-//@ chunk-10q8r8ck.js:13318-13749 fingerprint (2.1.88 match: checkNearCapacity, 0.824)
+//@ chunk-qt8k81nz.js:14500-14931 fingerprint (2.1.88 match: checkNearCapacity, 0.824)
 /**
  * 上下文 ≥80% 时给出警告（视自动压缩状态给不同说明）。
  */
@@ -62,7 +62,7 @@ function checkNearCapacity(data, suggestions) {
           : "Autocompact is disabled. Use /compact to free space, or enable autocompact in /config.",
     });
 }
-//@ chunk-10q8r8ck.js:13749-13962 fingerprint (2.1.88 match: checkLargeToolResults, 1)
+//@ chunk-qt8k81nz.js:14931-15144 fingerprint (2.1.88 match: checkLargeToolResults, 1)
 /**
  * 单个工具调用+结果 ≥15% 且 ≥1 万 token 时给出建议。
  */
@@ -76,7 +76,7 @@ function checkLargeToolResults(data, suggestions) {
     if (suggestion) suggestions.push(suggestion);
   }
 }
-//@ chunk-10q8r8ck.js:13962-15404 fingerprint (2.1.88 match: getLargeToolSuggestion, 0.918)
+//@ chunk-qt8k81nz.js:15144-16586 fingerprint (2.1.88 match: getLargeToolSuggestion, 0.918)
 /**
  * 针对 Bash/PowerShell/Read/Grep/WebFetch/其他工具的具体建议文案与可节省估算。
  */
@@ -94,7 +94,7 @@ function getLargeToolSuggestion(toolName, tokens, percent) {
             : "Pipe output through head, tail, or grep to reduce result size. Avoid cat on large files \u2014 use Read with offset/limit instead.",
         savingsTokens: Math.floor(tokens * 0.5),
       };
-    case FILE_READ_TOOL_NAME:
+    case READ:
       return {
         severity: "info",
         title: `Read results using ${tokenStr} tokens (${percent.toFixed(0)}%)`,
@@ -129,13 +129,13 @@ function getLargeToolSuggestion(toolName, tokens, percent) {
       return null;
   }
 }
-//@ chunk-10q8r8ck.js:15404-15925 fingerprint (2.1.88 match: checkReadResultBloat, 1)
+//@ chunk-qt8k81nz.js:16586-17107 fingerprint (2.1.88 match: checkReadResultBloat, 1)
 /**
  * Read 结果 ≥5% 且 ≥1 万 token（且未被大工具规则覆盖）时建议引用早先读取或分段读。
  */
 function checkReadResultBloat(data, suggestions) {
   if (!data.messageBreakdown) return;
-  let readTool = data.messageBreakdown.toolCallsByType.find((t) => t.name === FILE_READ_TOOL_NAME);
+  let readTool = data.messageBreakdown.toolCallsByType.find((t) => t.name === READ);
   if (!readTool) return;
   let totalReadTokens = readTool.callTokens + readTool.resultTokens;
   let totalReadPercent = (totalReadTokens / data.rawMaxTokens) * 100;
@@ -150,7 +150,7 @@ function checkReadResultBloat(data, suggestions) {
       savingsTokens: Math.floor(readTool.resultTokens * 0.3),
     });
 }
-//@ chunk-10q8r8ck.js:15925-16344 fingerprint (2.1.88 match: checkMemoryBloat, 1)
+//@ chunk-qt8k81nz.js:17107-17526 fingerprint (2.1.88 match: checkMemoryBloat, 1)
 /**
  * 记忆文件 ≥5% 且 ≥5000 token 时列出最大的三个并建议 /memory 清理。
  */
@@ -171,7 +171,7 @@ function checkMemoryBloat(data, suggestions) {
     });
   }
 }
-//@ chunk-10q8r8ck.js:16344-16647 fingerprint (2.1.88 match: checkAutoCompactDisabled, 0.946)
+//@ chunk-qt8k81nz.js:17526-17829 fingerprint (2.1.88 match: checkAutoCompactDisabled, 0.946)
 /**
  * 自动压缩关闭且上下文 50–80% 时提示开启。
  */

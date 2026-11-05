@@ -3,23 +3,12 @@
  *
  * 远程代理任务（remote_agent：云会话、ultraplan、ultrareview、autofix-pr、remote-workflow）：注册、事件轮询、权限请求中继、完成/失败判定、元数据持久化与恢复
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tasks/RemoteAgentTask/RemoteAgentTask.tsx
- * pieces: chunk-0sfjpx19.js (1), chunk-18hwfzwa.js (1), chunk-2vae0cjf.js (1), chunk-bbtre4r8.js (2), chunk-e6aww6q8.js (30), chunk-mdb2vxrz.js (1), chunk-wyqg6m3h.js (1)
- * attribution: callgraph-fingerprint 1, fingerprint 14, affinity 1, placement 3, layout 16, file-local 2
+ * pieces: chunk-5xgkngpb.js (30), chunk-c7hntn0y.js (1), chunk-czq1j3j2.js (1), chunk-ex2q6ads.js (1), chunk-pqw3c7pj.js (1)
+ * attribution: fingerprint 13, placement 3, layout 16, file-local 2
  */
 import { createHash } from "crypto";
-import {
-  TASK_NOTIFICATION,
-  TASK_TYPE,
-  REMOTE_REVIEW,
-  REMOTE_TASK_PREFIX,
-  REMOTE_REVIEW_PROGRESS,
-  TASK_ID,
-  STATUS,
-  SUMMARY,
-  NOTE,
-} from "../../constants/xml.js";
 import { spareAuthIneligibility } from "../../entrypoints/warmSpare/claimCredentials.js";
 import {
   emitTaskNotification,
@@ -48,6 +37,7 @@ import {
   writeRemoteAgentMetadata,
   listRemoteAgentMetadata,
 } from "../../utils/sessionStorage.js";
+import { recordServerListedTool } from "../../services/compact/keptTools.js";
 import { AGENT, TASK } from "../../tools/AgentTool/constants.js";
 import {
   checkBackgroundRemoteSessionEligibility,
@@ -63,15 +53,23 @@ import {
   clientWaitMinutes,
 } from "../../commands/review/ultrareviewPreconditions.js";
 import { extractTextContent_2, extractTag, createAssistantMessage } from "../../utils/messages.js";
+import {
+  REMOTE_REVIEW,
+  REMOTE_TASK_PREFIX,
+  REMOTE_REVIEW_PROGRESS,
+  TASK_NOTIFICATION,
+  SUMMARY,
+  STATUS,
+} from "../../constants/xml.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
-import { claimTaskNotification, updateTaskState_2, getStatusText } from "../../utils/task/framework.js";
+import { claimTaskNotification, getStatusText } from "../../utils/task/framework.js";
 import { escapeXml_2 as escapeXml } from "../../utils/confusables.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { POST_POLL_MS, waitForUltrareviewPost } from "../../commands/review/ultrareviewPost.js";
 import { enqueuePendingNotification } from "../../utils/messageQueueManager.js";
 import { formatTaskNotification } from "../../utils/xmlTags.js";
-import { mainAgentId, isDiskless } from "../../bootstrap/state.js";
+import { mainAgentId } from "../../bootstrap/state.js";
 import { generateTaskId, createTaskStateBase } from "../../Task.js";
 import { sanitizeMetadataText } from "../../utils/agentMetadata.js";
 import { safeIdentifierOrUndefined } from "../../utils/safeIdentifier.js";
@@ -85,16 +83,9 @@ import { safeParseToolInput } from "../../Tool.js";
 import { sleep } from "../../utils/sleep.js";
 import { reportSignerLoadFailure } from "../../utils/telemetry/clientEventUploader.js";
 import { logError } from "../../utils/log.js";
+import { useTimer } from "../../context/stats.js";
 import { MCP_ELICITATION_DIALOG_TOOL } from "../../utils/teleport/sessionCreate.js";
 import { classifyAxiosError } from "../../utils/errors.js";
-import {
-  MAX_LISTED_ORPHANS,
-  ORPHAN_SUMMARY_AGGREGATE_PREFIX,
-  ORPHAN_SUMMARY_LIVE_PREFIX,
-  STOPPED_OR_PAUSED_NOTE,
-  unfinishedNote,
-  ORPHAN_SUMMARY_KEY,
-} from "../resumeOrphanedTasks.js";
 import { TODO_TOOL, isRecord } from "../../plugins/bundled/diffPane/constants.js";
 import { arrayOf } from "../../plugins/bundled/diffPane/hooks.js";
 import { countWhere } from "../../plugins/bundled/diffPane/diffSources.js";
@@ -104,25 +95,14 @@ import {
   queuedCommandOriginLabel,
 } from "../../components/PromptInput/PromptInputQueuedCommands.js";
 
-//@ chunk-bbtre4r8.js:8796-8823 affinity
-var ARTIFACT_ROOM_VIEW = "artifact-room-view";
-//@ chunk-bbtre4r8.js:8823-8875 fingerprint (2.1.88 match: enqueueUltraplanFailureNotification, 0.531)
-/**
- * 生成 artifact-room-view 类型 task-notification 的开头片段。
- */
-function artifactRoomViewNotificationHeader() {
-  return `<${TASK_NOTIFICATION}>
-<${TASK_TYPE}>${ARTIFACT_ROOM_VIEW}</${TASK_TYPE}>
-`;
-}
-//@ chunk-2vae0cjf.js:872-933 fingerprint (2.1.88 match: getRemoteTaskSessionUrl, 1)
+//@ chunk-ex2q6ads.js:1001-1062 fingerprint (2.1.88 match: getRemoteTaskSessionUrl, 1)
 /**
  * 是否运行在云会话环境（设置了 SESSION_INGRESS_URL）。
  */
 function isInCloudSession() {
   return process.env.SESSION_INGRESS_URL !== undefined;
 }
-//@ chunk-mdb2vxrz.js:6503-6591 fingerprint (2.1.88 match: checkRemoteAgentEligibility, 0.641)
+//@ chunk-pqw3c7pj.js:6463-6551 fingerprint (2.1.88 match: checkRemoteAgentEligibility, 0.642)
 /**
  * 远程代理是否可用：返回 {eligible} 或 {eligible:false, ineligibleReason}。
  */
@@ -137,7 +117,7 @@ function checkRemoteAgentEligibility() {
         ineligibleReason,
       };
 }
-//@ chunk-e6aww6q8.js:1766933-1767726 fingerprint (2.1.88 match: RemoteAgentTask, 0.663)
+//@ chunk-5xgkngpb.js:1844019-1844815 fingerprint (2.1.88 match: RemoteAgentTask, 0.655)
 /**
  * RemoteAgentTask 任务实现：kill 时标 killed 并发 stopped 通知，归档远程会话；ultrareview 记取消、ultraplan 记 tengu_ultraplan_stopped 并清掉会话 URL；最后回收输出、删元数据。
  */
@@ -201,12 +181,12 @@ var RemoteAgentTask = {
     logForDebugging(`RemoteAgentTask ${taskId} killed, archiving session ${sessionId ?? "unknown"}`);
   },
 };
-//@ chunk-e6aww6q8.js:1781696-1781707 placement
+//@ chunk-5xgkngpb.js:1858666-1858677 placement
 /**
  * 每个远程会话保留的事件条数上限。
  */
 var REMOTE_SESSION_LOG_LIMIT = 30;
-//@ chunk-e6aww6q8.js:1781707-1782260 placement
+//@ chunk-5xgkngpb.js:1858677-1859237 placement
 /**
  * 汇总远程会话事件：计数、工具调用与子代理派生次数、最后一次工具调用，并保留最近 30 条事件。
  */
@@ -228,6 +208,7 @@ function recordRemoteSessionEvents(taskId, newEvents) {
   for (let event of newEvents) {
     if (event.type !== "assistant") continue;
     for (let block of event.message.content) {
+      recordServerListedTool(block);
       if (block.type !== "tool_use") continue;
       log.toolCallCount++;
       log.lastToolUse = {
@@ -245,14 +226,14 @@ function recordRemoteSessionEvents(taskId, newEvents) {
           .concat(newEvents);
   log.tail = tail;
 }
-//@ chunk-e6aww6q8.js:1782260-1782313 placement
+//@ chunk-5xgkngpb.js:1859237-1859290 placement
 /**
  * 取某任务记录的远程会话日志。
  */
 function remoteSessionLogFor(id) {
   return getTaskRunState().remoteSessionLogs.get(id);
 }
-//@ chunk-e6aww6q8.js:1782313-1782966 layout
+//@ chunk-5xgkngpb.js:1859290-1859943 layout
 /**
  * 从远程 workflow 事件日志里取完成摘要：找到 workflow 任务（id 以 w 开头）的 task_notification 之后的最后一个 result，返回其前最后一条 assistant 文本，否则用通知 summary。
  */
@@ -296,16 +277,16 @@ function extractWorkflowResultFromLog(events) {
     ? (markerEvent.summary ?? "Remote dynamic workflow completed")
     : "Remote dynamic workflow completed";
 }
-//@ chunk-e6aww6q8.js:1782966-1783048 fingerprint (2.1.88 match: REMOTE_TASK_TYPES, 0.875)
+//@ chunk-5xgkngpb.js:1859943-1860025 fingerprint (2.1.88 match: REMOTE_TASK_TYPES, 0.875)
 /**
  * 远程任务子类型：remote-agent、ultraplan、ultrareview、autofix-pr、remote-workflow。
  */
 var REMOTE_TASK_TYPES = ["remote-agent", "ultraplan", "ultrareview", "autofix-pr", "remote-workflow"];
-//@ chunk-e6aww6q8.js:1783048-1783091 file-local
+//@ chunk-5xgkngpb.js:1860025-1860068 file-local
 function isRemoteTaskType(value) {
   return REMOTE_TASK_TYPES.includes(value ?? "");
 }
-//@ chunk-e6aww6q8.js:1783091-1783206 fingerprint (2.1.88 match: persistRemoteAgentMetadata, 1)
+//@ chunk-5xgkngpb.js:1860068-1860183 fingerprint (2.1.88 match: persistRemoteAgentMetadata, 1)
 /**
  * 写入远程代理任务元数据（用于 --resume 后恢复轮询），失败只记日志。
  */
@@ -316,7 +297,7 @@ async function persistRemoteAgentMetadata(metadata, storageV5) {
     logForDebugging(`persistRemoteAgentMetadata failed: ${String(e)}`);
   }
 }
-//@ chunk-e6aww6q8.js:1783206-1783408 layout
+//@ chunk-5xgkngpb.js:1860183-1860385 layout
 /**
  * 检查后台云会话前置条件（登录、git 仓库、GitHub 远端/App、策略），返回 {eligible, errors?}。
  */
@@ -336,10 +317,10 @@ async function checkRemoteSessionEligibility({ allowBundle = false, cwd, storage
     eligible: true,
   };
 }
-//@ chunk-e6aww6q8.js:1783408-1783525 layout
+//@ chunk-5xgkngpb.js:1860385-1860502 layout
 var CLOUD_SESSIONS_POLICY_DISABLED_MESSAGE =
   "Cloud sessions are disabled by your organization's policy. Contact your organization admin to enable them.";
-//@ chunk-e6aww6q8.js:1783525-1784439 fingerprint (2.1.88 match: formatPreconditionError, 0.519)
+//@ chunk-5xgkngpb.js:1860502-1861416 fingerprint (2.1.88 match: formatPreconditionError, 0.519)
 /**
  * 把前置条件错误（not_logged_in / not_in_git_repo / no_git_remote / github_app_not_installed / github_not_connected / policy_blocked / eval_confined）格式化成给用户的说明。
  */
@@ -373,7 +354,7 @@ ${GITHUB_APP_INSTALL_URL}`;
       return CLOUD_UNAVAILABLE_IN_EVAL_TEXT;
   }
 }
-//@ chunk-e6aww6q8.js:1785040-1785192 file-local
+//@ chunk-5xgkngpb.js:1862017-1862169 file-local
 /**
  * 从远程事件日志提取计划/审查文本：优先 remote-review 标签内容，否则拼接所有 assistant 文本。
  */
@@ -397,7 +378,7 @@ function extractPlanFromLog(log) {
       .trim() || null
   );
 }
-//@ chunk-e6aww6q8.js:1785192-1785715 fingerprint (2.1.88 match: extractReviewFromLog, 1)
+//@ chunk-5xgkngpb.js:1862169-1862692 fingerprint (2.1.88 match: extractReviewFromLog, 1)
 /**
  * 从远程事件日志提取 <remote-review> 标签内容：依次查 hook 输出、assistant 文本、所有 hook stdout 拼接。
  */
@@ -430,21 +411,21 @@ function extractReviewFromLog(log) {
   if (hookTagged?.trim()) return hookTagged.trim();
   return null;
 }
-//@ chunk-e6aww6q8.js:1785715-1785764 layout
+//@ chunk-5xgkngpb.js:1862692-1862741 layout
 /**
  * 特性开关 tengu_linear_brook（默认开）：远程审查启动失败时立即判失败。
  */
 function isReviewStartupFailureFastFailEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_linear_brook", true);
 }
-//@ chunk-e6aww6q8.js:1785764-1785814 layout
+//@ chunk-5xgkngpb.js:1862741-1862791 layout
 /**
  * 特性开关 tengu_breezy_diffie（默认开）：远程审查连续 404 时判 session_not_found。
  */
 function isReviewSessionNotFoundEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_breezy_diffie", true);
 }
-//@ chunk-e6aww6q8.js:1785814-1786697 layout
+//@ chunk-5xgkngpb.js:1862791-1863675 layout
 /**
  * 远程审查失败原因码 → 人类可读描述（session_error、poll_timeout、no_review_output、session_archived、session_not_found、stopped_remotely、cancelled 等）。
  */
@@ -473,7 +454,7 @@ function describeReviewFailure(reason, timeoutMinutes) {
       return "cancelled";
   }
 }
-//@ chunk-e6aww6q8.js:1786697-1786880 layout
+//@ chunk-5xgkngpb.js:1863675-1863858 layout
 /**
  * 解析审查输出是否为 JSON 错误对象 {error, reason}，返回 {error, stopped}。
  */
@@ -491,7 +472,7 @@ function parseReviewErrorPayload(text) {
   } catch {}
   return null;
 }
-//@ chunk-e6aww6q8.js:1786880-1786966 layout
+//@ chunk-5xgkngpb.js:1863858-1863944 layout
 /**
  * 审查输出若是 JSON 数组则返回发现数。
  */
@@ -503,7 +484,7 @@ function countReviewFindings(text) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:1786966-1788325 layout
+//@ chunk-5xgkngpb.js:1863944-1865306 layout
 /**
  * 远程审查成功：认领通知，发 "Cloud review completed" 通知（附发现内容，--fix 时要求本地应用，带启动时备注时提示关联）；需要发到 PR 时再追加一条发帖结果通知。
  */
@@ -579,7 +560,7 @@ This review was launched with a request to post the findings to the pull request
       },
     );
 }
-//@ chunk-e6aww6q8.js:1788325-1789535 layout
+//@ chunk-5xgkngpb.js:1865306-1866516 layout
 /**
  * 生成"审查结果发到 PR"的结果通知（posted / already posted / not-posted）。
  */
@@ -608,7 +589,7 @@ The cloud review's findings were to be posted to the pull request as a single co
       });
   }
 }
-//@ chunk-e6aww6q8.js:1789535-1790500 layout
+//@ chunk-5xgkngpb.js:1866516-1867481 layout
 /**
  * 按失败原因给模型的后续指示（告知用户、是否建议重试 /code-review ultra）。
  */
@@ -629,7 +610,7 @@ function getReviewFailureGuidance(reason) {
       return "Tell the user to retry /code-review ultra, or use plain /code-review for a local review instead.";
   }
 }
-//@ chunk-e6aww6q8.js:1790500-1791364 layout
+//@ chunk-5xgkngpb.js:1867481-1868345 layout
 /**
  * 远程审查失败：认领通知，记 task_remote_agent_review_failed，发 "Cloud review failed: 原因" 通知（附转述的错误文本并提示其为数据）。
  */
@@ -671,7 +652,7 @@ Cloud review did not produce output (${reasonText}). ${getReviewFailureGuidance(
     },
   );
 }
-//@ chunk-e6aww6q8.js:1791364-1792261 fingerprint (2.1.88 match: registerRemoteAgentTask, 0.766)
+//@ chunk-5xgkngpb.js:1868345-1869245 fingerprint (2.1.88 match: registerRemoteAgentTask, 0.757)
 /**
  * 注册远程代理任务：生成 r 前缀 ID，写任务状态与元数据，并启动会话事件轮询。返回 {taskId, sessionId, cleanup}。
  */
@@ -738,7 +719,7 @@ function registerRemoteAgentTask(options) {
     cleanup: stopPolling,
   };
 }
-//@ chunk-e6aww6q8.js:1792261-1792396 fingerprint (2.1.88 match: restoreRemoteAgentTasks, 0.667)
+//@ chunk-5xgkngpb.js:1869245-1869380 fingerprint (2.1.88 match: restoreRemoteAgentTasks, 0.667)
 /**
  * 恢复会话时重建远程代理任务（包一层计时与异常保护）。
  */
@@ -749,7 +730,7 @@ async function restoreRemoteAgentTasks(context) {
     logForDebugging(`restoreRemoteAgentTasks failed: ${String(e)}`);
   }
 }
-//@ chunk-e6aww6q8.js:1792396-1793568 fingerprint (2.1.88 match: restoreRemoteAgentTasksImpl, 0.862)
+//@ chunk-5xgkngpb.js:1869380-1870552 fingerprint (2.1.88 match: restoreRemoteAgentTasksImpl, 0.86)
 /**
  * 逐个读取保存的远程任务元数据：会话 404 删除元数据、已归档删除、其余重建 running 状态（restoredOnResume）并重新开始轮询。
  */
@@ -806,7 +787,7 @@ async function restoreRemoteAgentTasksImpl(context) {
     startRemoteSessionPolling(meta.taskId, context);
   }
 }
-//@ chunk-e6aww6q8.js:1793568-1794189 layout
+//@ chunk-5xgkngpb.js:1870552-1871175 layout
 /**
  * 中继远程会话发来的权限请求：在本地以 forRemoteExecution 调用 canUseTool，allow 时返回（去掉 _simulatedSedEdit 的）输入，deny/ask 一律回 deny。
  */
@@ -860,18 +841,18 @@ async function relayRemotePermissionRequest({ relay, request, sessionId, tool, i
       };
   }
 }
-//@ chunk-e6aww6q8.js:1794189-1794288 layout
+//@ chunk-5xgkngpb.js:1871175-1871274 layout
 /**
  * 由会话 ID 与远程 tool_use_id 派生稳定的本地 tool_use id（remote_ + sha256 前 32 位）。
  */
 function remoteToolUseId(sessionId, toolUseId) {
   return `remote_${createHash("sha256").update(`${sessionId}\x00${toolUseId}`).digest("hex").slice(0, 32)}`;
 }
-//@ chunk-e6aww6q8.js:1794288-1794360 layout
+//@ chunk-5xgkngpb.js:1871274-1871346 layout
 function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-e6aww6q8.js:1794360-1794599 layout
+//@ chunk-5xgkngpb.js:1871346-1871585 layout
 /**
  * 深比较（数组/普通对象），用于确认权限请求的输入经 schema 解析后未被改写。
  */
@@ -890,7 +871,7 @@ function deepEqual(left, right) {
     );
   return false;
 }
-//@ chunk-e6aww6q8.js:1794599-1804021 fingerprint (2.1.88 match: startRemoteSessionPolling, 0.341)
+//@ chunk-5xgkngpb.js:1871585-1881014 fingerprint (2.1.88 match: startRemoteSessionPolling, 0.338)
 /**
  * 每秒轮询远程会话事件：追加输出与 todo、处理 control_request（满足条件时本地中继权限）/control_response/control_cancel_request；
  * 判定完成（result/归档/空闲 N 次/审查超时）、失败、等待输入阻塞（tengu_coral_anchor）、remote-workflow 完成；审查任务解析进度标签与结果；出错时计 404 次数。返回停止函数。
@@ -1048,7 +1029,7 @@ function startRemoteSessionPolling(taskId, context, permissionRelay) {
   let sawHookOutput = false;
   let sawSessionStartHook = false;
   let lastResult;
-  let todoTracker = updateTaskState_2();
+  let todoTracker = useTimer();
   let cachedReviewContent = null;
   let poll = async () => {
     if (!active) return false;
@@ -1470,41 +1451,7 @@ function startRemoteSessionPolling(taskId, context, permissionRelay) {
     withdrawAllRelays();
   };
 }
-//@ chunk-0sfjpx19.js:71972-73095 callgraph-fingerprint (2.1.88 match: enqueueRemoteNotification, 0.203)
-/**
- * 恢复会话时，对上次进程中没有结束记录的后台任务发一条汇总 task-notification（标 failed 或 stopped，列出任务 id）。
- */
-function enqueueOrphanedTasksNotification(status, taskKind, taskKindLabel, taskIds, formatId, extraIds) {
-  let mapped = taskIds.slice(0, MAX_LISTED_ORPHANS).map(formatId);
-  let joined = [
-    ...mapped,
-    `${ORPHAN_SUMMARY_AGGREGATE_PREFIX}${taskKind}`,
-    ...extraIds.map((extraId) => `${ORPHAN_SUMMARY_LIVE_PREFIX}${escapeXml(extraId)}`),
-  ].map((row) => `<${TASK_ID}>${row}</${TASK_ID}>`).join(`
-`);
-  let explanation =
-    status === "failed"
-      ? `They were running when the previous Claude Code process exited and did not complete; their in-process state was lost.${isDiskless() ? "" : " Check each worktree/output for partial work before assuming a task landed."} They have been marked failed.`
-      : `They may have been ${taskKind === "workflow" ? STOPPED_OR_PAUSED_NOTE : "stopped (via the UI, Monitor timeout, or agent teardown \u2014 these leave no transcript marker)"}, or they may have been running when the previous Claude Code process exited. They have been marked stopped.`;
-  let idsSentence =
-    mapped.length === taskIds.length
-      ? `Task ids: ${mapped.join(", ")}.`
-      : `First ${MAX_LISTED_ORPHANS} task ids: ${mapped.join(", ")}.`;
-  enqueuePendingNotification({
-    value: `<${TASK_NOTIFICATION}>
-${joined}
-<${STATUS}>${status}</${STATUS}>
-<${SUMMARY}>${unfinishedNote(`${taskIds.length} background ${taskKindLabel} tasks`)}. ${idsSentence}</${SUMMARY}>
-<${NOTE}>No completion record was found for them in the previous session. ${explanation} Task ids in this notification beginning with "${ORPHAN_SUMMARY_KEY}" are internal scan markers, not tasks.</${NOTE}>
-</${TASK_NOTIFICATION}>`,
-    agentId: mainAgentId(),
-    mode: "task-notification",
-    skipAttachments: true,
-    priority: "next",
-    shouldQuery: false,
-  });
-}
-//@ chunk-wyqg6m3h.js:28543-28722 fingerprint (2.1.88 match: extractTodoListFromLog, 0.378)
+//@ chunk-c7hntn0y.js:28907-29086 fingerprint (2.1.88 match: extractTodoListFromLog, 0.436)
 /**
  * 从远程日志找最后一次 TodoWrite，返回 {done, total}。
  */
@@ -1516,7 +1463,7 @@ function todoProgressOf(log) {
     total: mapped.length,
   };
 }
-//@ chunk-18hwfzwa.js:122371-122727 fingerprint (2.1.88 match: enqueueRemoteReviewNotification, 1)
+//@ chunk-czq1j3j2.js:123372-123728 fingerprint (2.1.88 match: enqueueRemoteReviewNotification, 1)
 /**
  * 排队的 task-notification 超过上限时，把多出来的合并成一条汇总通知。
  */
@@ -1538,20 +1485,18 @@ function collapseExcessTaskNotifications(queue, dedupe) {
   return [...filtered, ...sliced, summaryRow];
 }
 export {
-  enqueueOrphanedTasksNotification,
-  checkRemoteSessionEligibility,
-  formatPreconditionError,
-  registerRemoteAgentTask,
-  collapseExcessTaskNotifications,
   restoreRemoteAgentTasks,
-  RemoteAgentTask,
-  remoteSessionLogFor,
-  isInCloudSession,
-  artifactRoomViewNotificationHeader,
   parseReviewErrorPayload,
   countReviewFindings,
   extractReviewFromLog,
   isReviewStartupFailureFastFailEnabled,
-  checkRemoteAgentEligibility,
+  checkRemoteSessionEligibility,
+  formatPreconditionError,
+  registerRemoteAgentTask,
+  RemoteAgentTask,
   todoProgressOf,
+  collapseExcessTaskNotifications,
+  remoteSessionLogFor,
+  isInCloudSession,
+  checkRemoteAgentEligibility,
 };

@@ -3,10 +3,10 @@
  *
  * 并入已有模块：消息列表诊断：渲染条目缺少 uuid 时的遥测代码、日志文本与可渲染条目类型表。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/inboundMessages.ts
- * pieces: chunk-ah34pb7m.js (8), chunk-e6aww6q8.js (1), chunk-mketzrwm.js (2)
- * attribution: placement 7, fingerprint 3, affinity 1
+ * pieces: chunk-5xgkngpb.js (1), chunk-6gyvmn2t.js (1), chunk-aexe35rn.js (2), chunk-wjygkcr4.js (7)
+ * attribution: fingerprint 3, placement 7, affinity 1
  */
 import { detectImageFormatFromBase64 } from "../utils/imageResizer.js";
 import { parseDataUri } from "../utils/task/shellOutputPersist.js";
@@ -25,7 +25,7 @@ import {
 import { init_react_production, createContext } from "../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-mketzrwm.js:8086-8322 fingerprint (2.1.88 match: normalizeImageBlocks, 1)
+//@ chunk-aexe35rn.js:8293-8529 fingerprint (2.1.88 match: normalizeImageBlocks, 1)
 /**
  * 给缺 media_type 的 base64 图片块补上（优先 mediaType 字段，否则从数据检测）。
  */
@@ -48,12 +48,12 @@ function normalizeImageBlocks(blocks) {
     };
   });
 }
-//@ chunk-mketzrwm.js:8322-8419 affinity (2.1.88 match: isMalformedBase64Image, 1)
+//@ chunk-aexe35rn.js:8529-8626 affinity (2.1.88 match: isMalformedBase64Image, 1)
 function isMalformedBase64Image(block) {
   if (block.type !== "image" || block.source?.type !== "base64") return false;
   return !block.source.media_type;
 }
-//@ chunk-e6aww6q8.js:3100334-3100560 fingerprint (2.1.88 match: isMalformedBase64Image, 1)
+//@ chunk-5xgkngpb.js:3186724-3186950 fingerprint (2.1.88 match: isMalformedBase64Image, 1)
 /**
  * 把可识别格式的 base64 图片包成 image 类型的 tool_result。
  */
@@ -77,17 +77,20 @@ function buildImageToolResult(source, toolUseId) {
     ],
   };
 }
-//@ chunk-ah34pb7m.js:7736-7778 placement
+//@ chunk-6gyvmn2t.js:531-548 placement
+var MAX_LIST_ENTRIES_WITHOUT_UUID_LOGGED = 500;
+var UUID_MISSING_LOG_INTERVAL_MS = 5000;
+//@ chunk-wjygkcr4.js:7939-7981 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:7736", () => {
+deferInit("chunk-wjygkcr4.js:7939", () => {
   __export(PLACED_SITE_MODULE_EXPORTS, {
     PlacedSite: () => usePlacedActionKeys,
     default: () => PLACED_SITE_MODULE_EXPORTS,
   });
 });
-//@ chunk-ah34pb7m.js:7788-7873 placement
+//@ chunk-wjygkcr4.js:7991-8076 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:7788", () => {
+deferInit("chunk-wjygkcr4.js:7991", () => {
   __export(INBOUND_MESSAGES_MODULE_EXPORTS, {
     CommandOutputSite: () => LocalCommandOutput,
     default: () => INBOUND_MESSAGES_MODULE_EXPORTS,
@@ -95,28 +98,20 @@ deferInit("chunk-ah34pb7m.js:7788", () => {
     printedTextOf: () => pickLocalCommandOutput,
   });
 });
-//@ chunk-ah34pb7m.js:7873-7877 placement
+//@ chunk-wjygkcr4.js:8076-8080 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:7873", () => {
+deferInit("chunk-wjygkcr4.js:8076", () => {
   init_react_production();
 });
-//@ chunk-ah34pb7m.js:7877-7894 placement
+//@ chunk-wjygkcr4.js:8080-8097 placement
 /**
  * 桥接消息列表的 React context（qt(null)），与 PlacedSite 同文件导出，供占位动作键使用。
  */
 var BRIDGE_PLACED_KEYS_CONTEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:7877", () => {
+deferInit("chunk-wjygkcr4.js:8080", () => {
   BRIDGE_PLACED_KEYS_CONTEXT = createContext(null);
 });
-//@ chunk-ah34pb7m.js:7894-7898 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:7894", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:7898-7917 placement
-var MAX_LIST_ENTRIES_WITHOUT_UUID_LOGGED = 500;
-var UUID_MISSING_LOG_INTERVAL_MS = 5000;
-//@ chunk-ah34pb7m.js:8081-9141 placement
+//@ chunk-wjygkcr4.js:8097-9157 placement
 /**
  * 消息列表诊断：渲染条目缺少 uuid 时的遥测代码、日志文本与可渲染条目类型表。
  */
@@ -126,7 +121,7 @@ var RENDERABLE_ENTRY_TYPES;
 var KNOWN_MESSAGE_ENTRY_TYPES;
 var SYSTEM_SUBTYPES;
 var ATTACHMENT_TYPES;
-deferInit("chunk-ah34pb7m.js:8081", () => {
+deferInit("chunk-wjygkcr4.js:8097", () => {
   MESSAGES_ENTRY_WITHOUT_UUID = "messages_entry_without_uuid";
   MESSAGES_ENTRY_WITHOUT_UUID_TEXT = "Messages: renderable entry without a string uuid";
   RENDERABLE_ENTRY_TYPES = {
@@ -191,7 +186,7 @@ deferInit("chunk-ah34pb7m.js:8081", () => {
     mcp_dropped_tools_delta: true,
   };
 });
-//@ chunk-ah34pb7m.js:9141-9262 fingerprint (2.1.88 match: extractInboundMessageFields, 1)
+//@ chunk-wjygkcr4.js:9157-9278 fingerprint (2.1.88 match: extractInboundMessageFields, 1)
 /**
  * 对象是否带非空字符串 uuid。
  */
@@ -200,16 +195,21 @@ function hasStringUuid(message) {
   let { uuid } = message;
   return typeof uuid === "string" && uuid !== "";
 }
+//@ chunk-wjygkcr4.js:25612-25616 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:25612", () => {
+  init_react_production();
+});
 export {
-  hasStringUuid,
-  BRIDGE_PLACED_KEYS_CONTEXT,
   buildImageToolResult,
+  hasStringUuid,
   MAX_LIST_ENTRIES_WITHOUT_UUID_LOGGED,
+  UUID_MISSING_LOG_INTERVAL_MS,
+  normalizeImageBlocks,
+  BRIDGE_PLACED_KEYS_CONTEXT,
   MESSAGES_ENTRY_WITHOUT_UUID,
   MESSAGES_ENTRY_WITHOUT_UUID_TEXT,
   KNOWN_MESSAGE_ENTRY_TYPES,
   SYSTEM_SUBTYPES,
   ATTACHMENT_TYPES,
-  UUID_MISSING_LOG_INTERVAL_MS,
-  normalizeImageBlocks,
 };

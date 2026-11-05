@@ -3,9 +3,9 @@
  *
  * NotebookEdit 权限请求（交给 FilePermissionDialog 的 notebook-edit-diff）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/NotebookEditPermissionRequest/NotebookEditPermissionRequest.tsx
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: callgraph-fingerprint 1
  */
 import {
@@ -28,7 +28,7 @@ import { logError } from "../../../utils/log.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../../utils/errors.js";
 import { Blockquote } from "../../Blockquote.js";
 
-//@ chunk-18hwfzwa.js:1379060-1380440 callgraph-fingerprint (2.1.88 match: NotebookEditPermissionRequest, 0.16)
+//@ chunk-czq1j3j2.js:1401862-1403242 callgraph-fingerprint (2.1.88 match: NotebookEditPermissionRequest, 0.161)
 function NotebookEditPermissionRequest(payload, theme, languageName, paddingX) {
   let content = payload.content;
   switch (content.kind) {

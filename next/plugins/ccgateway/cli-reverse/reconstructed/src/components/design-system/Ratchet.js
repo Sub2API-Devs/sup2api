@@ -3,9 +3,9 @@
  *
  * 高度只增不减的容器（避免内容缩短导致跳动，离屏时可放开）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/design-system/Ratchet.tsx
- * pieces: chunk-04svxz07.js (2)
+ * pieces: chunk-zca28feq.js (2)
  * attribution: placement 1, fingerprint 1
  */
 import {
@@ -23,12 +23,12 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { Box } from "../../ink/components/Text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-04svxz07.js:384-388 placement
+//@ chunk-zca28feq.js:384-388 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-04svxz07.js:384", () => {
+deferInit("chunk-zca28feq.js:384", () => {
   init_react_production();
 });
-//@ chunk-04svxz07.js:388-1067 fingerprint (2.1.88 match: Ratchet, 0.75)
+//@ chunk-zca28feq.js:388-1067 fingerprint (2.1.88 match: Ratchet, 0.75)
 function Ratchet({ children, lock = "always", restartKey }) {
   let [viewportRef, { isVisible }, restart] = useTerminalViewport();
   let { rows, columns } = useTerminalSize();

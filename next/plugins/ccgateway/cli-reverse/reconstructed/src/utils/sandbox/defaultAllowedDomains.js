@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：沙箱默认允许域名
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (6)
  * attribution: placement 6
  */
 import { GITHUB_HOST } from "../git/githubUrl.js";
 import { HostScoped } from "../hostScoped.js";
 
-//@ chunk-e6aww6q8.js:1271286-1271530 placement
+//@ chunk-5xgkngpb.js:1269147-1269391 placement
 var SANDBOX_SIZE_UNIT = 1e5;
 var SANDBOX_SIZE_LIMIT = 10 * SANDBOX_SIZE_UNIT;
 var DEFAULT_ALLOWED_DOMAINS = Object.freeze([
@@ -28,9 +28,9 @@ var DEFAULT_ALLOWED_DOMAINS = Object.freeze([
   "claude.com",
   "ant.dev",
 ]);
-//@ chunk-e6aww6q8.js:1271530-1271552 placement
+//@ chunk-5xgkngpb.js:1269391-1269413 placement
 var A_ZA_Z0_9 = "A-Za-z0-9.-";
-//@ chunk-e6aww6q8.js:1271552-1271633 placement
+//@ chunk-5xgkngpb.js:1269413-1269494 placement
 var EMPTY_DOMAIN_POLICY_CACHE = {
   regex: null,
   patterns: null,
@@ -39,14 +39,14 @@ var EMPTY_DOMAIN_POLICY_CACHE = {
   tools: null,
   models: null,
 };
-//@ chunk-e6aww6q8.js:1271633-1271716 placement
+//@ chunk-5xgkngpb.js:1269494-1269577 placement
 class DomainPolicyCache {
   cachedKey = undefined;
   cached = EMPTY_DOMAIN_POLICY_CACHE;
   warnedReasons = new Set();
   compiledDefault = undefined;
 }
-//@ chunk-e6aww6q8.js:1271716-1271743 placement
+//@ chunk-5xgkngpb.js:1269577-1269604 placement
 var domainPolicyCacheSlot = new HostScoped(() => new DomainPolicyCache());
-//@ chunk-e6aww6q8.js:1271743-1271779 placement
+//@ chunk-5xgkngpb.js:1269604-1269640 placement
 var regExp_9 = new RegExp(`[${A_ZA_Z0_9}]+`, "g");

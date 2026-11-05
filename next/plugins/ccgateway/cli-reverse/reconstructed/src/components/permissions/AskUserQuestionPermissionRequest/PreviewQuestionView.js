@@ -3,9 +3,9 @@
  *
  * 带预览的单问题视图：左右分栏显示选项与预览，支持外部编辑器与 Tab 切换。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/AskUserQuestionPermissionRequest/PreviewQuestionView.tsx
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
@@ -37,7 +37,7 @@ import { TextInput } from "../../TextInput.js";
 import { KeyboardShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
 import { Byline } from "../../design-system/Byline.js";
 
-//@ chunk-18hwfzwa.js:1278846-1287012 fingerprint (2.1.88 match: PreviewQuestionView, 0.787)
+//@ chunk-czq1j3j2.js:1304639-1312804 fingerprint (2.1.88 match: PreviewQuestionView, 0.787)
 function PreviewQuestionView(props) {
   let $ = useMemoCache(122);
   let {

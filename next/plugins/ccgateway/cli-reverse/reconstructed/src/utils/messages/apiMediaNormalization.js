@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：发往 API 前的媒体规范化
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (12)
  * attribution: placement 12
  */
 import { isPdfUnsupportedError } from "../../services/api/badRequestClassifier.js";
@@ -13,7 +13,7 @@ import { truncateToLength } from "../stringUtils.js";
 import { isObjectBlock, hasImageBlock as hasImageBlock_2 } from "../toolResultStorage.js";
 import { parseWebpHeader } from "../imageFormats.js";
 
-//@ chunk-e6aww6q8.js:125210-125892 placement
+//@ chunk-5xgkngpb.js:131961-132642 placement
 /**
  * 把模型或 API 不接受的图片与文档替换为说明文字。
  */
@@ -32,7 +32,7 @@ function replaceUnsupportedMedia(kind, errorMessage) {
   let detailSuffix = detail.length > 0 ? ` (${detail})` : "";
   return `[${label} removed: the API could not process this ${kind}${detailSuffix}. The file may be unsupported or corrupt; do not retry reading it. If you need to inspect it, use a shell command instead.]`;
 }
-//@ chunk-e6aww6q8.js:125892-126115 placement
+//@ chunk-5xgkngpb.js:132642-132865 placement
 function replaceMatchingBlock(block, matches, replacement) {
   if (!isObjectBlock(block)) return block;
   if (matches(block)) return replacement;
@@ -50,7 +50,7 @@ function replaceMatchingBlock(block, matches, replacement) {
     };
   return block;
 }
-//@ chunk-e6aww6q8.js:126115-126294 placement
+//@ chunk-5xgkngpb.js:132865-133044 placement
 function replaceNestedBlock(block, nestedContentIdx, kind, replacement) {
   if (
     block.type !== "tool_result" ||
@@ -66,7 +66,7 @@ function replaceNestedBlock(block, nestedContentIdx, kind, replacement) {
     ),
   };
 }
-//@ chunk-e6aww6q8.js:126294-126742 placement
+//@ chunk-5xgkngpb.js:133044-133492 placement
 /**
  * 把某条用户消息中指定位置（可为 tool_result 内的嵌套位置）的不支持媒体块替换成说明文字，返回新消息列表；未变化时返回原列表。
  */
@@ -97,7 +97,7 @@ function replaceUnsupportedMediaAt(messagesForAPI, location, errorMessage) {
     messageIndex === location.messageIdx ? nextMessage : message,
   );
 }
-//@ chunk-e6aww6q8.js:126742-126820 placement
+//@ chunk-5xgkngpb.js:133492-133570 placement
 var MEDIA_BLOCK_SOURCES = {
   image: {
     url: true,
@@ -110,7 +110,7 @@ var MEDIA_BLOCK_SOURCES = {
     content: true,
   },
 };
-//@ chunk-e6aww6q8.js:126820-126967 placement
+//@ chunk-5xgkngpb.js:133570-133717 placement
 function isUnsupportedMediaSource(block, kind) {
   if (block.type !== kind) return false;
   let source = "source" in block ? block.source : undefined;
@@ -120,7 +120,7 @@ function isUnsupportedMediaSource(block, kind) {
     Object.hasOwn(MEDIA_BLOCK_SOURCES[kind], source.type)
   );
 }
-//@ chunk-e6aww6q8.js:126967-127182 placement
+//@ chunk-5xgkngpb.js:133717-133932 placement
 function replaceInUserMessage(message, matches, replacement) {
   if (message.type !== "user" || !Array.isArray(message.message.content)) return message;
   let changed = false;
@@ -139,7 +139,7 @@ function replaceInUserMessage(message, matches, replacement) {
       }
     : message;
 }
-//@ chunk-e6aww6q8.js:127182-127396 placement
+//@ chunk-5xgkngpb.js:133932-134146 placement
 /**
  * 从后往前找到最后一条含该类不支持来源媒体的用户消息，替换为说明文字，返回新消息列表与该消息下标。
  */
@@ -163,10 +163,10 @@ function replaceLastUnsupportedMedia(messagesForAPI, kind, errorMessage) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:127396-127502 placement
+//@ chunk-5xgkngpb.js:134146-134252 placement
 var IMAGE_TOO_LARGE_ERROR_RE =
   /base64\.data: (At least one of the image dimensions exceed max allowed size[^:]*: (\d+) pixels)/;
-//@ chunk-e6aww6q8.js:127502-127565 placement
+//@ chunk-5xgkngpb.js:134252-134315 placement
 /**
  * 从"图片过大"错误信息中取出上限数值。
  */
@@ -174,7 +174,7 @@ function tooLargeLimitFromError(errorDetails) {
   let match = IMAGE_TOO_LARGE_ERROR_RE.exec(errorDetails);
   return match ? Number(match[2]) : undefined;
 }
-//@ chunk-e6aww6q8.js:127565-127851 placement (2.1.88 match: isBase64ImageBlock, 0.885)
+//@ chunk-5xgkngpb.js:134315-134601 placement (2.1.88 match: isBase64ImageBlock, 0.884)
 function isBase64ImageBlock(messagesForAPI, errorMessage) {
   let match = IMAGE_TOO_LARGE_ERROR_RE.exec(errorMessage);
   if (!match?.[1]) return messagesForAPI;
@@ -197,7 +197,7 @@ function isBase64ImageBlock(messagesForAPI, errorMessage) {
   );
   return mapped.some((message, index) => message !== messagesForAPI[index]) ? mapped : messagesForAPI;
 }
-//@ chunk-e6aww6q8.js:129314-129356 placement
+//@ chunk-5xgkngpb.js:136063-136105 placement
 /**
  * 判断消息是否为 fallback 类型。
  */
@@ -205,9 +205,9 @@ function isFallbackMessage(block) {
   return block.type === "fallback";
 }
 export {
-  tooLargeLimitFromError,
-  isBase64ImageBlock,
   isFallbackMessage,
+  isBase64ImageBlock,
   replaceUnsupportedMediaAt,
   replaceLastUnsupportedMedia,
+  tooLargeLimitFromError,
 };

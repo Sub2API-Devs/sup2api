@@ -3,9 +3,9 @@
  *
  * policyHelper 运行器（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q8cqcff6.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5fn9rb8r.js (24)
  * attribution: placement 24
  */
 import { DoctorLazy } from "../../../cli/handlers/util.js";
@@ -58,11 +58,11 @@ import { platformSettingsChain } from "../marketplaceSettingsAliases.js";
 import { parseHelperSetting, asciiOnly } from "../otelEndpointValidation.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-q8cqcff6.js:57614-57742 placement
+//@ chunk-5fn9rb8r.js:57874-58002 placement
 var HELPER_TIMEOUT_MS; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_HELPER_OUTPUT_BYTES;
 var HELPER_OUTPUT_SCHEMA;
-deferInit("chunk-q8cqcff6.js:57614", () => {
+deferInit("chunk-5fn9rb8r.js:57874", () => {
   HELPER_TIMEOUT_MS = 1e4;
   MAX_HELPER_OUTPUT_BYTES = 1048576;
   HELPER_OUTPUT_SCHEMA = DoctorLazy(() =>
@@ -73,19 +73,19 @@ deferInit("chunk-q8cqcff6.js:57614", () => {
     }),
   );
 });
-//@ chunk-q8cqcff6.js:57742-57787 placement
+//@ chunk-5fn9rb8r.js:58002-58047 placement
 function helperRefusal(message) {
   return {
     message,
     remote: null,
   };
 }
-//@ chunk-q8cqcff6.js:57787-57812 placement
+//@ chunk-5fn9rb8r.js:58047-58072 placement
 /**
  * POLICY_HELPER_TAG：policyHelper 的错误标签。
  */
 var POLICY_HELPER_TAG = "<policyHelper>";
-//@ chunk-q8cqcff6.js:57812-57899 placement
+//@ chunk-5fn9rb8r.js:58072-58159 placement
 /**
  * invalidatePolicyLayer：使策略层失效。
  */
@@ -94,7 +94,7 @@ function invalidatePolicyLayer() {
   if (isStorageV5Enabled() && state.primer !== undefined) state.invalidatePolicyLayer();
   else invalidateCommandNames();
 }
-//@ chunk-q8cqcff6.js:57899-62660 placement
+//@ chunk-5fn9rb8r.js:58159-62920 placement
 /**
  * policyHelper 运行器：按 OS 选择助手、刷新、失败时由静态设置载荷兜底
  */
@@ -325,7 +325,7 @@ class PolicyHelperRunner {
     this.refreshTimer.unref?.();
   }
 }
-//@ chunk-q8cqcff6.js:62660-62743 placement
+//@ chunk-5fn9rb8r.js:62920-63003 placement
 /**
  * policyHelperRunner：policyHelper 单例运行器；policyHelperRunnerAlias：运行器的应答缓存；FILE_POLICY_TIERS：文件类策略层级（同一声明共 3 个绑定）。
  */
@@ -333,7 +333,7 @@ var policyHelperRunner; // deferred: uses PolicyHelperRunner of its import cycle
 var policyHelperRunnerAlias;
 var refreshed;
 var FILE_POLICY_TIERS;
-deferInit("chunk-q8cqcff6.js:62660", () => {
+deferInit("chunk-5fn9rb8r.js:62920", () => {
   policyHelperRunner = new PolicyHelperRunner();
   policyHelperRunnerAlias = retainCacheKey({
     clear: resetRemoteHelperState,
@@ -341,7 +341,7 @@ deferInit("chunk-q8cqcff6.js:62660", () => {
   refreshed = policyHelperRunner.refreshed;
   FILE_POLICY_TIERS = new Set(["plist", "hklm", "file"]);
 });
-//@ chunk-q8cqcff6.js:62743-62988 placement
+//@ chunk-5fn9rb8r.js:63003-63248 placement
 /**
  * 运行一次 policyHelper pass：先交付尚未送达的拒绝；pass 拒绝时，远程来源且命令不启动会话则只告警放行，否则记遥测并返回拒绝信息。
  */
@@ -362,14 +362,14 @@ async function runPolicyHelperPass(settings, origin, errors) {
   }
   return decision.message;
 }
-//@ chunk-q8cqcff6.js:62988-63024 placement
+//@ chunk-5fn9rb8r.js:63248-63284 placement
 /**
  * markStartsNoSession：标记本次不启动会话。
  */
 function markStartsNoSession() {
   policyHelperRunner.startsNoSession = true;
 }
-//@ chunk-q8cqcff6.js:63024-63405 placement
+//@ chunk-5fn9rb8r.js:63284-63665 placement
 /**
  * 远程 policyHelper 要求拒绝但当前命令不启动会话时：记日志、给出状态提示并记遥测，命令继续执行。
  */
@@ -386,7 +386,7 @@ function warnRefuseNotEnforced(message, remote) {
   );
   logFeatureSad("settings_policy_helpers_per_os", "remote_refuse_not_enforced_no_session");
 }
-//@ chunk-q8cqcff6.js:63405-63550 placement
+//@ chunk-5fn9rb8r.js:63665-63810 placement
 function logRemoteRefusal(remote) {
   logFeatureBad(
     "settings_policy_helpers_per_os",
@@ -398,7 +398,7 @@ function logRemoteRefusal(remote) {
         },
   );
 }
-//@ chunk-q8cqcff6.js:63550-63679 placement
+//@ chunk-5fn9rb8r.js:63810-63939 placement
 /**
  * 找出与 policyHelpers 相关的启动致命错误。
  */
@@ -409,7 +409,7 @@ function findFatalPolicyHelperError(errors) {
       (issue.path === "" || issue.path === "policyHelpers" || issue.path.startsWith("policyHelpers.")),
   );
 }
-//@ chunk-q8cqcff6.js:63679-63866 placement
+//@ chunk-5fn9rb8r.js:63939-64126 placement
 /**
  * 判断 policyHelper 导致的退出原因：helper 失败或策略无效。
  */
@@ -421,7 +421,7 @@ function policyHelperExitReason(errors) {
       : "policy_invalid";
   return policyHelperRunner.payloadRefusalError !== null ? "policy_invalid" : "helper_failed";
 }
-//@ chunk-q8cqcff6.js:63866-64211 placement
+//@ chunk-5fn9rb8r.js:64126-64471 placement
 /**
  * 执行 policyHelper 入口解析，期间若有重启请求则退役当前 pass 并按新基础设置重跑；结束时清理残留重启请求、递减进行中计数并发出完成信号。
  */
@@ -453,7 +453,7 @@ async function runPassWithRestarts(settings, origin, errors) {
     policyHelperRunner.passSettled.emit();
   }
 }
-//@ chunk-q8cqcff6.js:64211-68750 placement
+//@ chunk-5fn9rb8r.js:64471-69013 placement
 /**
  * 解析 policyHelpers 设置项（按 OS、结构校验、审批状态）
  */
@@ -659,7 +659,7 @@ async function resolvePolicyHelperEntry(settings, origin, errors) {
   }
   return null;
 }
-//@ chunk-q8cqcff6.js:68750-68819 placement
+//@ chunk-5fn9rb8r.js:69013-69082 placement
 /**
  * helperFailureBlocks：按 onFailure 判断是否阻塞。
  */
@@ -667,7 +667,7 @@ function helperFailureBlocks(config, fromRemote) {
   let onFailure = config?.onFailure;
   return onFailure == null ? !fromRemote : onFailure !== "continue";
 }
-//@ chunk-q8cqcff6.js:68819-69144 placement
+//@ chunk-5fn9rb8r.js:69082-69407 placement
 /**
  * 构造远程托管设置要求 helper 成功（onFailure refuse）但 helper 失败时的启动拒绝信息与遥测字段。
  */
@@ -681,14 +681,14 @@ function remoteRefusalResult(error, tuple) {
     },
   };
 }
-//@ chunk-q8cqcff6.js:69144-69209 placement
+//@ chunk-5fn9rb8r.js:69407-69472 placement
 function helperSettingName(tuple) {
   return (tuple === undefined ? undefined : parseHelperSetting(tuple)) ?? "it configures";
 }
-//@ chunk-q8cqcff6.js:69209-69326 placement
+//@ chunk-5fn9rb8r.js:69472-69589 placement
 var SKIPPED_ENTRY_PREFIX = 'policyHelpers entry skipped (onFailure "continue"): ';
 var STARTED_WITHOUT_HELPER_SUFFIX = "; Claude Code started without the helper's output";
-//@ chunk-q8cqcff6.js:69326-69423 placement
+//@ chunk-5fn9rb8r.js:69589-69686 placement
 function warningWithSkippedPrefix(message) {
   let detail = truncateWarning(
     asciiOnly(message.replace(/\s+/gu, " ")),
@@ -696,18 +696,18 @@ function warningWithSkippedPrefix(message) {
   );
   addSelectionWarning(`${SKIPPED_ENTRY_PREFIX}${detail}${STARTED_WITHOUT_HELPER_SUFFIX}`);
 }
-//@ chunk-q8cqcff6.js:69423-69540 placement
+//@ chunk-5fn9rb8r.js:69686-69803 placement
 var REMOTE_ENTRY_NOT_RUN_PREFIX = "remote policyHelpers entry not run: ";
 var REMOTE_PAYLOAD_NOT_APPLIED_PREFIX = "remote policyHelpers static settings payload not applied: ";
 var MAX_WARNING_CHARS = 512;
-//@ chunk-q8cqcff6.js:69540-69606 placement
+//@ chunk-5fn9rb8r.js:69803-69869 placement
 /**
  * truncateWarning：截断警告文本。
  */
 function truncateWarning(text, maxLength = MAX_WARNING_CHARS) {
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}\u2026` : text;
 }
-//@ chunk-q8cqcff6.js:69606-69747 placement
+//@ chunk-5fn9rb8r.js:69869-70010 placement
 function warnRemoteHelperSkipped(message, tuple) {
   let detail = asciiOnly(message.replace(/\s+/gu, " "));
   let tupleText = tuple === undefined ? undefined : parseHelperSetting(tuple);
@@ -718,12 +718,12 @@ function warnRemoteHelperSkipped(message, tuple) {
   );
   addSelectionWarning(warning);
 }
-//@ chunk-q8cqcff6.js:69747-69811 placement
+//@ chunk-5fn9rb8r.js:70010-70074 placement
 /**
  * REMOTE_HELPER_PAYLOAD_SKIPPED_PREFIX：远程 helper 载荷被跳过的前缀。
  */
 var REMOTE_HELPER_PAYLOAD_SKIPPED_PREFIX = "remote policyHelpers static settings payload skipped: ";
-//@ chunk-q8cqcff6.js:69811-69996 placement
+//@ chunk-5fn9rb8r.js:70074-70259 placement
 function warnInvalidStaticPayload(field, error, verified) {
   addSelectionWarning(
     truncateWarning(
@@ -737,8 +737,6 @@ export {
   policyHelperExitReason,
   markStartsNoSession,
   refreshed,
-  POLICY_HELPER_TAG,
-  findFatalPolicyHelperError,
   HELPER_TIMEOUT_MS,
   policyHelperRunner,
   MAX_HELPER_OUTPUT_BYTES,
@@ -756,4 +754,6 @@ export {
   warnRefuseNotEnforced,
   logRemoteRefusal,
   warnRemoteHelperSkipped,
+  POLICY_HELPER_TAG,
+  findFatalPolicyHelperError,
 };

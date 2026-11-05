@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Projects 工具的登录权限范围升级与前置条件错误
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-eg496hkq.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y2k9w57g.js (5)
  * attribution: placement 5
  */
 import { policyKeyLabel, policyDeniedReason } from "../../services/policyLimits/policyEvidence.js";
@@ -13,7 +13,7 @@ import { policyUnverifiedMessage } from "../../services/policyLimits/policyMessa
 import { ensureProjectsAccessToken } from "../../services/oauth/projectsScope.js";
 import { env } from "../../utils/env.js";
 
-//@ chunk-eg496hkq.js:19652-21165 placement
+//@ chunk-y2k9w57g.js:20860-22373 placement
 function scopeUpgradeRefusalText(reason) {
   switch (reason) {
     case "custom_client":
@@ -40,10 +40,10 @@ function scopeUpgradeRefusalText(reason) {
     }
   }
 }
-//@ chunk-eg496hkq.js:21165-21353 placement
+//@ chunk-y2k9w57g.js:22373-22561 placement
 var SCOPE_UPGRADED_NOTE =
   "Upgraded your claude.ai login to include project access (user:projects:read, user:projects:write). This lets the session read and write the project's knowledge docs on claude.ai.";
-//@ chunk-eg496hkq.js:21353-21469 placement
+//@ chunk-y2k9w57g.js:22561-22677 placement
 class ProjectsPreconditionError extends Error {
   reasonCode;
   constructor(message, reasonCode) {
@@ -52,7 +52,7 @@ class ProjectsPreconditionError extends Error {
     this.name = "ProjectsPreconditionError";
   }
 }
-//@ chunk-eg496hkq.js:21469-21867 placement
+//@ chunk-y2k9w57g.js:22677-23075 placement
 async function ensureProjectsScope(credentials) {
   let projectsAccessToken = await ensureProjectsAccessToken(credentials);
   if (!projectsAccessToken.ok) {
@@ -75,7 +75,7 @@ async function ensureProjectsScope(credentials) {
     expanded: projectsAccessToken.expanded,
   };
 }
-//@ chunk-eg496hkq.js:21867-21910 placement
+//@ chunk-y2k9w57g.js:23075-23118 placement
 function getAttachedProjectUuid() {
   return env.CLAUDE_PROJECT_UUID;
 }

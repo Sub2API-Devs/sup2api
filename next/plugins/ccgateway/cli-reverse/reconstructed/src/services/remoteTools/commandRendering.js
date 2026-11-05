@@ -3,10 +3,10 @@
  *
  * 远程会话列出/渲染技能与插件命令（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9tyqgtn4.js (49)
- * attribution: placement 49
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b08ck61p.js (51)
+ * attribution: placement 49, layout 2
  */
 import { join, dirname, basename, resolve } from "path";
 import { MAX_SKILLS_PER_PLUGIN, isBuiltinPluginId } from "../../plugins/builtinPlugins.js";
@@ -36,7 +36,7 @@ import {
   zodStrictObject,
   record,
 } from "../../../vendor/zod/v4/classic/schemas.js";
-import { MAX_MARKDOWN_FILE_BYTES } from "../../utils/markdownConfigLoader.js";
+import { MAX_MARKDOWN_FILE_BYTES, CLAUDE_CONFIG_DIRECTORIES_2 } from "../../utils/markdownConfigLoader.js";
 import { getHostState } from "../../utils/hostEnvironment.js";
 import { readSmallFileChecked } from "../../utils/readSmallFile.js";
 import { getFsImplementation } from "../../utils/fsOperations.js";
@@ -76,7 +76,7 @@ import { applicableSessionRules } from "./sessionRulesRendering.js";
 import { serveModeDefaultAppState, serveModeTools } from "../../entrypoints/mcpServe/serveModeInput.js";
 import { logError } from "../../utils/log.js";
 import { toError, isAbortError, MalformedCommandError, isPathAbsent } from "../../utils/errors.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import { runWithRemoteSessionId } from "../../tools/AgentTool/agentEffort.js";
 import { initBundledSkills } from "../../skills/bundled/index.js";
 import { getBundledSkills } from "../../skills/bundledSkills.js";
@@ -111,13 +111,14 @@ import {
   PluginManifestSchema,
   CommandMetadataSchema,
 } from "../../utils/plugins/schemas.js";
-import { refreshPluginCaches } from "../../utils/plugins/cacheUtils.js";
 import {
+  MAX_PLUGIN_COMMAND_FILE_BYTES,
   getPluginCommands,
   loadPluginSkills,
   validatePluginCommandAllowedTools,
-  MAX_PLUGIN_COMMAND_FILE_BYTES,
+  pluginCommandHead,
 } from "../../utils/plugins/loadPluginCommands.js";
+import { refreshPluginCaches } from "../../utils/plugins/cacheUtils.js";
 import { isCustomizationDisabled } from "../../utils/settings/customizationDisabled.js";
 import { loadPluginAgents } from "../../utils/plugins/loadPluginAgents.js";
 import {
@@ -139,24 +140,24 @@ import { marketplaceSuffix } from "../../utils/plugins/pluginIdentifier.js";
 import { SYNCED } from "../../utils/telemetry/pluginTelemetry.js";
 import { isPluginsSyncVetoed } from "../plugins/accountSync/syncedPluginHooks.js";
 import { canonicalFingerprint } from "../api/requestFingerprint.js";
+import { countJsonMembers } from "../../utils/jsonScan.js";
 import { pluginDataDirPath } from "../../utils/plugins/pluginDirectories.js";
 import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
-import { isPrefilterableHook } from "../../utils/hooks.js";
 import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-9tyqgtn4.js:1977-2019 placement
+//@ chunk-b08ck61p.js:1981-2023 placement
 var HOST_SKILL_READ_TIMEOUT_MS; // deferred: uses MAX_SKILLS_PER_PLUGIN (../../plugins/builtinPlugins.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_CONCURRENT_SKILL_READS;
 var SKILL_READ_TIMED_OUT;
-deferInit("chunk-9tyqgtn4.js:1977", () => {
+deferInit("chunk-b08ck61p.js:1981", () => {
   HOST_SKILL_READ_TIMEOUT_MS = 1e4;
   MAX_CONCURRENT_SKILL_READS = MAX_SKILLS_PER_PLUGIN;
   SKILL_READ_TIMED_OUT = {
     reason: "timed_out",
   };
 });
-//@ chunk-9tyqgtn4.js:2019-2707 placement
+//@ chunk-b08ck61p.js:2023-2711 placement
 /**
  * 读取宿主技能目录中的某个技能文本：已有缓存直接返回；否则排队（并发上限、前序工作未完成时拒绝）串行读取并缓存，等待时间超过上限返回 timed_out。
  */
@@ -206,7 +207,7 @@ async function readHostCatalogSkill(skillName) {
     }
   );
 }
-//@ chunk-9tyqgtn4.js:2707-3051 placement
+//@ chunk-b08ck61p.js:2711-3055 placement
 /**
  * 从宿主技能目录读取一个技能条目：必要时先探测目录，读到后缓存文本，返回结果与探测信息。
  */
@@ -236,7 +237,7 @@ async function readHostCatalogEntry(catalog, skillName, probed) {
     probed: "reason" in outcome ? undefined : probeOrRoot,
   };
 }
-//@ chunk-9tyqgtn4.js:3080-3143 placement
+//@ chunk-b08ck61p.js:3084-3147 placement
 /**
  * 列出项目命令的协议常量与上限：命令名、单条正文上限、每页条数，以及由此推导的载荷/页数上限。
  */
@@ -245,12 +246,12 @@ var MAX_LISTED_COMMAND_BYTES = 8388608;
 var MAX_LISTED_COMMANDS_PER_PAGE = 2000;
 var LIST_COMMANDS_PAYLOAD_CAP_BYTES = 4 * MAX_LISTED_COMMAND_BYTES;
 var LIST_COMMANDS_PAGE_CAP = 4 * MAX_LISTED_COMMANDS_PER_PAGE;
-//@ chunk-9tyqgtn4.js:3143-3221 placement
+//@ chunk-b08ck61p.js:3147-3225 placement
 /**
  * 列出项目命令的输入 schema：分页游标 after 与 afterName。
  */
 var listProjectCommandsInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-9tyqgtn4.js:3143", () => {
+deferInit("chunk-b08ck61p.js:3147", () => {
   listProjectCommandsInputSchema = DoctorLazy(() =>
     objectSchema({
       after: numberSchema().int().min(0).optional(),
@@ -258,17 +259,17 @@ deferInit("chunk-9tyqgtn4.js:3143", () => {
     }),
   );
 });
-//@ chunk-9tyqgtn4.js:3221-3365 placement
+//@ chunk-b08ck61p.js:3225-3369 placement
 function isSettingsSkillOrCommand(command) {
   return (
     (command.source === "projectSettings" || command.source === "userSettings") &&
     (command.loadedFrom === "skills" || command.loadedFrom === "commands_DEPRECATED")
   );
 }
-//@ chunk-9tyqgtn4.js:3365-3650 placement
+//@ chunk-b08ck61p.js:3369-3654 placement
 var LISTED_COMMAND_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var LISTED_COMMANDS_PAGE_SCHEMA;
-deferInit("chunk-9tyqgtn4.js:3365", () => {
+deferInit("chunk-b08ck61p.js:3369", () => {
   LISTED_COMMAND_SCHEMA = DoctorLazy(() =>
     objectSchema({
       name: stringSchema().min(1).max(1024),
@@ -287,7 +288,7 @@ deferInit("chunk-9tyqgtn4.js:3365", () => {
     }),
   );
 });
-//@ chunk-9tyqgtn4.js:3650-3740 placement
+//@ chunk-b08ck61p.js:3654-3744 placement
 /**
  * 取宿主登记的技能文件路径；没有登记时退回 skillRoot/SKILL.md。
  */
@@ -296,7 +297,7 @@ function skillFilePathOf(command) {
     getHostState().skillFiles.get(command) ?? (command.skillRoot ? join(command.skillRoot, "SKILL.md") : "")
   );
 }
-//@ chunk-9tyqgtn4.js:3740-3846 placement
+//@ chunk-b08ck61p.js:3744-3850 placement
 async function readSkillFileText(command) {
   let path = skillFilePathOf(command);
   if (path === "") return null;
@@ -306,14 +307,14 @@ async function readSkillFileText(command) {
     return null;
   }
 }
-//@ chunk-9tyqgtn4.js:3846-3894 placement
+//@ chunk-b08ck61p.js:3850-3898 placement
 /**
  * 计算对象原始 JSON 序列化后的字节数（用于分页载荷计量）。
  */
 function byteLengthOfJson(value) {
   return Buffer.byteLength(jsonStringifyRaw(value));
 }
-//@ chunk-9tyqgtn4.js:3894-4900 placement
+//@ chunk-b08ck61p.js:3898-4904 placement
 async function listProjectCommands(input, signal, env) {
   let { after, afterName } = listProjectCommandsInputSchema().parse(input ?? {});
   let { storageV5 } = env.toolUseContext();
@@ -392,7 +393,7 @@ async function listProjectCommands(input, signal, env) {
     },
   };
 }
-//@ chunk-9tyqgtn4.js:4900-6445 placement
+//@ chunk-b08ck61p.js:4904-6449 placement
 /**
  * 读/渲染技能与内置命令的协议名与各类输入输出 schema 及上限（等待时间、参数长度、会话覆盖、交出命令等）。
  */
@@ -421,7 +422,7 @@ var renderSkillExtendedInputSchema;
 var renderSkillOutputSchema;
 var skillFailureSchema;
 var skillRenderResultSchema;
-deferInit("chunk-9tyqgtn4.js:4900", () => {
+deferInit("chunk-b08ck61p.js:4904", () => {
   SKILL_RENDER_OPS = "ReadSkill";
   RENDERSKILL = "RenderSkill";
   RENDERPINNEDSKILL = "RenderPinnedSkill";
@@ -537,7 +538,7 @@ deferInit("chunk-9tyqgtn4.js:4900", () => {
     ]),
   );
 });
-//@ chunk-9tyqgtn4.js:6445-6926 placement
+//@ chunk-b08ck61p.js:6449-6930 placement
 /**
  * 远程调用"读技能"：按名字找技能（宿主目录或本地，可等首次同步），被关闭/不可用时返回 missing，否则返回 SKILL.md 文本。
  */
@@ -577,7 +578,7 @@ async function serveReadSkill(input, signal, { toolUseContext }) {
         },
       };
 }
-//@ chunk-9tyqgtn4.js:6926-7651 placement
+//@ chunk-b08ck61p.js:6930-7655 placement
 async function readListedSkill(input, signal, { toolUseContext, launchPermissionContext }) {
   let { name, args, readOnly, waitMs, fromHostCatalog, expectSha256, sessionRules } =
     renderSkillWithSessionInputSchema().parse(input);
@@ -624,7 +625,7 @@ async function readListedSkill(input, signal, { toolUseContext, launchPermission
       }
     : rendered;
 }
-//@ chunk-9tyqgtn4.js:7651-8082 placement
+//@ chunk-b08ck61p.js:7655-8086 placement
 /**
  * 按会话规则与只读设置调整渲染上下文：读取仓库规则，计算适用的权限上下文与交接选项；无法确定时改为只读加载技能。
  */
@@ -658,7 +659,7 @@ async function renderContextWithRules(context, readOnly, sessionRules, launchPer
     }),
   };
 }
-//@ chunk-9tyqgtn4.js:8082-8420 placement
+//@ chunk-b08ck61p.js:8086-8424 placement
 /**
  * 解析列出的技能：读取 SKILL.md，哈希与预期一致时解析为提示型命令。
  */
@@ -683,7 +684,7 @@ async function parseListedSkill(command, expectedHash) {
     return;
   }
 }
-//@ chunk-9tyqgtn4.js:8420-9103 placement
+//@ chunk-b08ck61p.js:8424-9107 placement
 /**
  * 远程调用"渲染命令"：按会话规则、只读、effort、模型与可用工具构造上下文，找到命令后在临时覆盖主模型的情况下渲染其提示。
  */
@@ -716,9 +717,9 @@ async function serveRenderCommand(input, signal, { toolUseContext, launchPermiss
           ...context.options.tools,
           ...serveModeTools(false).filter(
             (tool) =>
-              AGENT_TOOL_NAMES.some((agentToolName) => toolMatchesName(tool, agentToolName)) &&
-              session.tools.some((tool_2) => toolMatchesName(tool, tool_2)) &&
-              !context.options.tools.some((tool_2) => toolMatchesName(tool_2, tool.name)),
+              AGENT_TOOL_NAMES.some((agentToolName) => matchesToolName(tool, agentToolName)) &&
+              session.tools.some((tool_2) => matchesToolName(tool, tool_2)) &&
+              !context.options.tools.some((tool_2) => matchesToolName(tool_2, tool.name)),
           ),
         ],
         isSkillPreload: session.isSkillPreload,
@@ -738,14 +739,14 @@ async function serveRenderCommand(input, signal, { toolUseContext, launchPermiss
     ),
   );
 }
-//@ chunk-9tyqgtn4.js:9103-9212 placement (2.1.88 match: getValueFromInput, 1)
+//@ chunk-b08ck61p.js:9107-9216 placement (2.1.88 match: getValueFromInput, 1)
 function getValueFromInput(input) {
   initBundledSkills();
   for (let command of [...getBundledSkills(), ...getBuiltinCommands()])
     if (command.type === "prompt" && command.name === input && passesPolicyGate(command)) return command;
   return;
 }
-//@ chunk-9tyqgtn4.js:9212-9370 placement
+//@ chunk-b08ck61p.js:9216-9374 placement
 async function withModelOverride(model, fn) {
   let run = skillReadQueue.last.then(async () => {
     let mainLoopModelOverride = getMainLoopModelOverride();
@@ -766,7 +767,7 @@ async function withModelOverride(model, fn) {
   );
   return run;
 }
-//@ chunk-9tyqgtn4.js:9370-10197 placement
+//@ chunk-b08ck61p.js:9374-10200 placement
 async function renderRemoteCommand(command, args, context, signal) {
   try {
     let promptForCommand = await command.getPromptForCommand(args, context);
@@ -816,7 +817,7 @@ async function renderRemoteCommand(command, args, context, signal) {
     };
   }
 }
-//@ chunk-9tyqgtn4.js:10197-10344 placement
+//@ chunk-b08ck61p.js:10200-10347 placement
 function missingSkillOutput(reason, fromHostCatalog) {
   return {
     outcome: "missing",
@@ -829,7 +830,7 @@ function missingSkillOutput(reason, fromHostCatalog) {
     }),
   };
 }
-//@ chunk-9tyqgtn4.js:10344-10971 placement
+//@ chunk-b08ck61p.js:10347-10996 placement
 /**
  * 查找技能：本地找不到时等待相应同步（技能名对应的同步、首次同步或限频的缺失重同步），超时后再查一次。
  */
@@ -858,7 +859,9 @@ async function findSkillWithSync(name, waitMs, signal, context, updatedAt = null
     let now = Date.now();
     if (now - state.missingSkillResyncAt >= MISSING_SKILL_RESYNC_INTERVAL_MS) {
       state.missingSkillResyncAt = now;
-      let resync = reloadSyncedSkills(context.session, context.storageV5, context.credentials).finally(() => {
+      let resync = reloadSyncedSkills(context.session, context.storageV5, context.credentials, {
+        keepLandingWaits: true,
+      }).finally(() => {
         if (state.missingSkillResync === resync) state.missingSkillResync = null;
       });
       state.missingSkillResync = resync;
@@ -871,7 +874,7 @@ async function findSkillWithSync(name, waitMs, signal, context, updatedAt = null
   resetSkillSyncState();
   return findLocalSkillCommand(name, context, updatedAt);
 }
-//@ chunk-9tyqgtn4.js:10971-11346 placement
+//@ chunk-b08ck61p.js:10996-11371 placement
 /**
  * 从宿主技能目录加载技能为命令，并记录查找遥测。
  */
@@ -914,15 +917,15 @@ async function loadHostCatalogSkill(name) {
   }
   return skill;
 }
-//@ chunk-9tyqgtn4.js:11346-11420 placement
+//@ chunk-b08ck61p.js:11371-11445 placement
 /**
  * 被判为「未及时加载」的缺失原因集合（超时、前序工作未完成、读取过多）。
  */
 var SKILL_MISS_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-9tyqgtn4.js:11346", () => {
+deferInit("chunk-b08ck61p.js:11371", () => {
   SKILL_MISS_REASONS = new Set(["timed_out", "earlier_work_outstanding", "too_many_reads"]);
 });
-//@ chunk-9tyqgtn4.js:11420-11883 placement
+//@ chunk-b08ck61p.js:11445-11908 placement
 /**
  * 记录宿主技能目录查找结果遥测：已加载、被扣留、未及时或未加载。
  */
@@ -952,7 +955,7 @@ function logHostCatalogLookup({ served, miss, threw, asked }) {
       fields,
     );
 }
-//@ chunk-9tyqgtn4.js:11883-12015 placement
+//@ chunk-b08ck61p.js:11908-12040 placement
 /**
  * 返回技能不可用的原因（账号技能关闭或其他），可用时为 undefined。
  */
@@ -963,7 +966,7 @@ function skillUnavailableReason(command) {
   if (isShadowedSkillName(command)) return "other";
   return syncedSkillRefusalReason(command) ? "other" : undefined;
 }
-//@ chunk-9tyqgtn4.js:12015-12239 placement
+//@ chunk-b08ck61p.js:12040-12264 placement
 /**
  * 在本地技能、插件技能与动态技能中查找同名提示型命令（同步技能过期时不返回）。
  */
@@ -980,7 +983,7 @@ async function findLocalSkillCommand(name, context, updatedAt) {
       return (await isSyncedSkillStale(candidate, updatedAt)) ? undefined : candidate;
   return;
 }
-//@ chunk-9tyqgtn4.js:12239-12670 placement
+//@ chunk-b08ck61p.js:12264-12695 placement
 /**
  * 判断同步的技能是否早于给定时间（或在名称冲突中落败），用于决定是否需要等待重新同步。
  */
@@ -1008,13 +1011,15 @@ async function isSyncedSkillStale(command, updatedAt) {
   }
   return collided;
 }
-//@ chunk-9tyqgtn4.js:12670-14143 placement
+//@ chunk-b08ck61p.js:12695-14323 placement
 /**
  * 列出插件命令的协议名与输入输出 schema（来源、命令、技能、代理、钩子登记等）。
  */
 var PLUGIN_COMMAND_OPS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var RENDERPLUGINCOMMAND;
 var RENDERPINNEDPLUGINCOMMAND;
+var HEAD_BUDGET_BYTES;
+var HEAD_BUDGET_MEMBERS;
 var MAX_PLUGIN_RESYNC_INTERVAL_MS;
 var pluginMarketplaceOriginSchema;
 var pluginCommandSourceSchema;
@@ -1024,10 +1029,12 @@ var pluginSourceEntrySchema;
 var listPluginCommandsResultSchema;
 var registeredHooksListSchema;
 var listPluginCommandsInputSchema;
-deferInit("chunk-9tyqgtn4.js:12670", () => {
+deferInit("chunk-b08ck61p.js:12695", () => {
   PLUGIN_COMMAND_OPS = "ListPluginCommands";
   RENDERPLUGINCOMMAND = "RenderPluginCommand";
   RENDERPINNEDPLUGINCOMMAND = "RenderPinnedPluginCommand";
+  HEAD_BUDGET_BYTES = 12582912;
+  HEAD_BUDGET_MEMBERS = 500000;
   MAX_PLUGIN_RESYNC_INTERVAL_MS = 60000;
   pluginMarketplaceOriginSchema = DoctorLazy(() =>
     union([
@@ -1091,6 +1098,7 @@ deferInit("chunk-9tyqgtn4.js:12670", () => {
     objectSchema({
       source: pluginCommandSourceSchema(),
       text: stringSchema(),
+      chars: numberSchema().int().min(0).max(MAX_PLUGIN_COMMAND_FILE_BYTES).optional().catch(undefined),
       pluginDataDir: pluginDataDirPathSchema(),
       sha256: stringSchema().regex(SHA256_HEX_RE).optional().catch(undefined),
     }),
@@ -1110,6 +1118,7 @@ deferInit("chunk-9tyqgtn4.js:12670", () => {
       syncsSessionRefs: booleanSchema().optional(),
       settingsRan: booleanSchema().optional(),
       comparesSource: booleanSchema().optional(),
+      cut: numberSchema().int().min(0).optional(),
     }),
   );
   registeredHooksListSchema = DoctorLazy(() =>
@@ -1122,10 +1131,11 @@ deferInit("chunk-9tyqgtn4.js:12670", () => {
       waitMs: numberSchema().int().positive().optional().catch(undefined),
       hashes: booleanSchema().optional().catch(undefined),
       dataDirs: booleanSchema().optional().catch(undefined),
+      headsExcept: array(stringSchema()).optional().catch(undefined),
     }),
   );
 });
-//@ chunk-9tyqgtn4.js:14143-15427 placement
+//@ chunk-b08ck61p.js:14323-15839 placement
 /**
  * 远程调用"列出插件命令"：必要时重新同步插件、等待设置安装，汇总插件命令、技能与代理（可带哈希/数据目录），过滤掉钩子与宿主登记不一致的插件代理。
  */
@@ -1182,26 +1192,37 @@ async function serveListPluginCommands(input, signal, context) {
   );
   let withHashes = parsed?.hashes === true ? withSha256 : identityEntries;
   let withDataDirs = (entry) => (parsed?.dataDirs === true ? withPluginDataDir(entry) : entry);
+  let headBudget = parsed?.headsExcept && {
+    bytes: HEAD_BUDGET_BYTES,
+    members: HEAD_BUDGET_MEMBERS,
+    cut: 0,
+  };
   let output = {
     commands: withDataDirs(
-      withHashes(
-        await readSourcesText(
-          [
-            ...pluginCommandSources(pluginCommands),
-            ...pluginCommandSources(loaded?.commands ?? [], pluginFromMarketplaceEntryCacheOnly),
-          ],
-          parsed?.hashes === true,
+      truncateEntryHeads(
+        withHashes(
+          await readSourcesText(
+            [
+              ...pluginCommandSources(pluginCommands),
+              ...pluginCommandSources(loaded?.commands ?? [], pluginFromMarketplaceEntryCacheOnly),
+            ],
+            parsed?.hashes === true,
+          ),
         ),
+        parsed?.headsExcept,
       ),
-    ),
+    ).filter((entry) => fitsHeadBudget(entry, headBudget)),
     skills: withDataDirs(
-      withHashes(
-        await readSourcesText([
-          ...pluginCommandSources(pluginSkills),
-          ...pluginCommandSources(loaded?.skills ?? [], pluginFromMarketplaceEntryCacheOnly),
-        ]),
+      truncateEntryHeads(
+        withHashes(
+          await readSourcesText([
+            ...pluginCommandSources(pluginSkills),
+            ...pluginCommandSources(loaded?.skills ?? [], pluginFromMarketplaceEntryCacheOnly),
+          ]),
+        ),
+        parsed?.headsExcept,
       ),
-    ),
+    ).filter((entry) => fitsHeadBudget(entry, headBudget)),
     agents: withDataDirs(
       sourcesText.filter(
         ({ source }) =>
@@ -1211,18 +1232,19 @@ async function serveListPluginCommands(input, signal, context) {
             registeredHooks?.[syncedPluginFolderId(source.pluginPath)],
           ),
       ),
-    ),
+    ).filter((entry) => fitsHeadBudget(entry, headBudget)),
     resynced,
     syncsSessionRefs: isSessionRefsSyncEnabled(session),
     settingsRan,
     comparesSource: true,
+    cut: headBudget?.cut,
   };
   return {
-    summary: `${output.commands.length} commands, ${output.skills.length} skills, ${output.agents.length} agents`,
+    summary: `${output.commands.length} commands, ${output.skills.length} skills, ${output.agents.length} agents${headBudget?.cut ? `, ${headBudget.cut} left out: the answer has no room for them` : ""}`,
     output,
   };
 }
-//@ chunk-9tyqgtn4.js:15427-15707 placement
+//@ chunk-b08ck61p.js:15839-16119 placement
 /**
  * 等待插件同步结果（受截止时间约束），必要时触发一次重新同步，返回是否发生了重新同步。
  */
@@ -1248,7 +1270,7 @@ async function awaitPluginSync(session, credentials, { resync, deadline }) {
       ])) && session.pluginsSync.lastRoundListed,
   };
 }
-//@ chunk-9tyqgtn4.js:15707-15868 placement
+//@ chunk-b08ck61p.js:16119-16280 placement
 /**
  * 确保设置中的插件安装已执行（合并并发请求），返回是否成功。
  */
@@ -1264,7 +1286,7 @@ function ensureSettingsInstall(session, storage, credentials) {
   );
   return settingsInstall.next;
 }
-//@ chunk-9tyqgtn4.js:15868-16331 placement
+//@ chunk-b08ck61p.js:16280-16743 placement
 /**
  * 执行设置驱动的插件安装：等待托管设置与首次同步，安装插件后加载插件命令、技能和代理并缓存。
  */
@@ -1299,13 +1321,13 @@ async function runSettingsInstall(session, storage, credentials) {
     plugins,
   };
 }
-//@ chunk-9tyqgtn4.js:16331-16779 placement
+//@ chunk-b08ck61p.js:16743-17191 placement
 /**
  * 远程渲染插件条目的输入/输出结构：名称、类型、参数、只读、会话规则、钩子与哈希；输出为渲染结果或 missing/changed/guarded。
  */
 var RENDER_PLUGIN_ENTRY_INPUT_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var RENDER_PLUGIN_ENTRY_OUTPUT_SCHEMA;
-deferInit("chunk-9tyqgtn4.js:16331", () => {
+deferInit("chunk-b08ck61p.js:16743", () => {
   RENDER_PLUGIN_ENTRY_INPUT_SCHEMA = DoctorLazy(() =>
     objectSchema({
       name: stringSchema().min(1).max(1024),
@@ -1339,8 +1361,8 @@ deferInit("chunk-9tyqgtn4.js:16331", () => {
     ]),
   );
 });
-//@ chunk-9tyqgtn4.js:16779-18419 placement
-async function renderPluginEntry(input, signal, context) {
+//@ chunk-b08ck61p.js:17191-18833 placement
+async function renderPluginEntry(input, signal, toolUseContextHolder) {
   let {
     name,
     listedAs,
@@ -1352,22 +1374,22 @@ async function renderPluginEntry(input, signal, context) {
     ownHooksSha256,
     expectSha256,
   } = RENDER_PLUGIN_ENTRY_INPUT_SCHEMA().parse(input);
-  let context_2 = context.toolUseContext();
-  let pluginEntry = await findPluginEntry(name, listedAs, context_2);
+  let context = toolUseContextHolder.toolUseContext();
+  let pluginEntry = await findPluginEntry(name, listedAs, context);
   if (pluginEntry === undefined) {
     let timeout = sleep(pluginInstallTimeoutMs(), signal, {
       unref: true,
     });
-    await resyncForMissingEntry(context, signal, async () => {
-      pluginEntry = await findPluginEntry(name, listedAs, context_2);
+    await resyncForMissingEntry(toolUseContextHolder, signal, async () => {
+      pluginEntry = await findPluginEntry(name, listedAs, context);
       return pluginEntry !== undefined;
     });
-    pluginEntry ??= await findPluginEntry(name, listedAs, context_2);
+    pluginEntry ??= await findPluginEntry(name, listedAs, context);
     if (pluginEntry === undefined) {
-      let settingsInstall = context_2.session.pluginsSync.settingsInstall;
+      let settingsInstall = context.session.pluginsSync.settingsInstall;
       await Promise.race([settingsInstall.next ?? settingsInstall.current, timeout]);
       signal.throwIfAborted();
-      pluginEntry = await findPluginEntry(name, listedAs, context_2);
+      pluginEntry = await findPluginEntry(name, listedAs, context);
     }
   }
   let command = pluginEntry?.command;
@@ -1387,10 +1409,10 @@ async function renderPluginEntry(input, signal, context) {
     command = validated?.type === "prompt" ? validated : undefined;
   }
   let contextWithRules = await renderContextWithRules(
-    context_2,
+    context,
     readOnly || hasGuardHooks_2(command?.hooks),
     sessionRules,
-    context.launchPermissionContext,
+    toolUseContextHolder.launchPermissionContext,
     input,
   );
   invalidateCommandNames();
@@ -1456,14 +1478,14 @@ async function renderPluginEntry(input, signal, context) {
     },
   };
 }
-//@ chunk-9tyqgtn4.js:18419-18451 placement
+//@ chunk-b08ck61p.js:18833-18865 placement
 /**
  * 钩子内容的指纹（对钩子对象做序列化后的内容哈希）。
  */
 function hooksFingerprint(hooks) {
   return computeContentHash(canonicalFingerprint(hooks));
 }
-//@ chunk-9tyqgtn4.js:18451-18544 placement
+//@ chunk-b08ck61p.js:18865-18958 placement
 /**
  * 计算来源条目的内容哈希：文本哈希 + 去掉服务端署名后的来源对象哈希，再取一次哈希。
  */
@@ -1477,7 +1499,7 @@ function sourceEntrySha256(source, text) {
       }),
   );
 }
-//@ chunk-9tyqgtn4.js:18544-19012 placement
+//@ chunk-b08ck61p.js:18958-19426 placement
 /**
  * 查找插件命令或技能条目，并给出用于判断插件可信度的插件集合。
  */
@@ -1518,7 +1540,7 @@ async function findPluginEntry(name, listedAs, { session, storageV5, credentials
     ],
   };
 }
-//@ chunk-9tyqgtn4.js:19284-19464 placement
+//@ chunk-b08ck61p.js:19698-19878 placement
 function findPluginPromptCommand(commands, name, pluginFromMarketplaceEntryCacheOnly) {
   for (let command of commands)
     if (
@@ -1531,7 +1553,7 @@ function findPluginPromptCommand(commands, name, pluginFromMarketplaceEntryCache
       return command;
   return;
 }
-//@ chunk-9tyqgtn4.js:19464-20076 placement
+//@ chunk-b08ck61p.js:19878-20490 placement
 /**
  * 插件条目找不到时：等待当前同步结果，再限频触发一次重同步并等待（受截止时间约束），返回是否发生了新的同步。
  */
@@ -1573,7 +1595,7 @@ async function resyncForMissingEntry(context, signal, recheck) {
   markSwept();
   return resync !== null && missingEntry.resync !== resync;
 }
-//@ chunk-9tyqgtn4.js:20329-20511 placement
+//@ chunk-b08ck61p.js:20743-20926 placement
 function pluginCommandSources(commands, pluginFromMarketplaceEntryCacheOnly) {
   return commands.flatMap((command) =>
     command.type === "prompt" &&
@@ -1585,7 +1607,7 @@ function pluginCommandSources(commands, pluginFromMarketplaceEntryCacheOnly) {
       : [],
   );
 }
-//@ chunk-9tyqgtn4.js:20511-20602 placement
+//@ chunk-b08ck61p.js:20926-21017 placement
 /**
  * 判断是跟随同步状态的技能且对模型隐藏（这类条目不作为插件来源）。
  */
@@ -1596,7 +1618,7 @@ function isSyncedSkillHiddenFromModel(command) {
     isHiddenFromModel(command)
   );
 }
-//@ chunk-9tyqgtn4.js:20602-20843 placement
+//@ chunk-b08ck61p.js:21017-21258 placement
 function pluginAgentSources(agents, plugins, registeredHooks, pluginFromMarketplaceEntryCacheOnly) {
   return agents.flatMap((agent) =>
     agent.source === "plugin" &&
@@ -1612,14 +1634,14 @@ function pluginAgentSources(agents, plugins, registeredHooks, pluginFromMarketpl
       : [],
   );
 }
-//@ chunk-9tyqgtn4.js:20843-20867 placement
+//@ chunk-b08ck61p.js:21258-21282 placement
 /**
  * 原样返回来源条目（不需要附加字段时的恒等映射）。
  */
 function identityEntries(entries) {
   return entries;
 }
-//@ chunk-9tyqgtn4.js:20867-20937 placement
+//@ chunk-b08ck61p.js:21282-21352 placement
 /**
  * 给每个来源条目附上 sha256（用于校验同步内容未变）。
  */
@@ -1629,7 +1651,35 @@ function withSha256(entries) {
     sha256: sourceEntrySha256(entry.source, entry.text),
   }));
 }
-//@ chunk-9tyqgtn4.js:20937-21018 placement
+//@ chunk-b08ck61p.js:21352-21526 layout
+function truncateEntryHeads(entries, headsExcept) {
+  if (headsExcept === undefined) return entries;
+  let exceptNames = new Set(headsExcept);
+  return entries.map((entry) =>
+    exceptNames.has(entry.source.commandName) || entry.text.length > MAX_PLUGIN_COMMAND_FILE_BYTES
+      ? entry
+      : {
+          ...entry,
+          text: pluginCommandHead(entry.text).head,
+          chars: entry.text.length,
+        },
+  );
+}
+//@ chunk-b08ck61p.js:21526-21708 layout
+function fitsHeadBudget(entry, headBudget) {
+  if (headBudget === undefined) return true;
+  let entryJson = jsonStringifyRaw(entry);
+  let entryBytes = Buffer.byteLength(entryJson);
+  let members = countJsonMembers(entryJson, headBudget.members, 0)?.members;
+  if (members === undefined || entryBytes > headBudget.bytes) {
+    headBudget.cut++;
+    return false;
+  }
+  headBudget.bytes -= entryBytes;
+  headBudget.members -= members;
+  return true;
+}
+//@ chunk-b08ck61p.js:21708-21789 placement
 /**
  * 给每个来源条目附上插件数据目录。
  */
@@ -1639,7 +1689,7 @@ function withPluginDataDir(entries) {
     pluginDataDir: pluginDataDirPath(entry.source.sourceName),
   }));
 }
-//@ chunk-9tyqgtn4.js:21018-21346 placement
+//@ chunk-b08ck61p.js:21789-22118 placement
 /**
  * 重新读取一组来源文件的文本（可使用缓存内容），读取失败的跳过。
  */
@@ -1673,7 +1723,7 @@ async function readSourcesText(sources, allowEmptyContent = false, onError) {
     )
   ).flat();
 }
-//@ chunk-9tyqgtn4.js:21346-21706 placement
+//@ chunk-b08ck61p.js:22202-22613 placement
 /**
  * 判断插件的钩子与宿主登记的不一致（含插件未启用、存在模块路径、来源路径不符或有加载错误）。
  */
@@ -1690,38 +1740,41 @@ function isPluginHooksMismatched(pluginSource, { enabled, errors }, registeredHo
     !import_sortedIndex_2(expected, registered) ||
     (expected.length > 0 &&
       (marketplaceSuffix(found.source) !== SYNCED || found.path !== pluginSource?.pluginPath)) ||
-    errors.some((error) => "plugin" in error && error.plugin === found.name)
+    errors.some(
+      (error) =>
+        "plugin" in error &&
+        error.plugin === found.name &&
+        !(error.type === "path-traversal" && CLAUDE_CONFIG_DIRECTORIES_2.has(error.component)),
+    )
   );
 }
-//@ chunk-9tyqgtn4.js:21706-21956 placement
+//@ chunk-b08ck61p.js:22613-22841 placement
 function pluginHookFingerprints(hooksConfig) {
   let fingerprints = [];
   for (let [key, value] of Object.entries(hooksConfig))
     for (let { matcher, hooks } of value ?? [])
-      for (let hook of hooks) {
-        if (!isPrefilterableHook(hook)) return;
+      for (let hook of hooks)
         fingerprints.push(
           canonicalFingerprint([
             key,
             matcher ?? "",
-            hook.type === "command" && hook.onFailure === "block"
+            "onFailure" in hook && hook.onFailure === "block"
               ? omitAlias(hook, ["cloud"])
               : omitAlias(hook, ["cloud", "onFailure"]),
           ]),
         );
-      }
   return fingerprints.sort();
 }
 export {
-  byteLengthOfJson,
-  resyncForMissingEntry,
   ensureSettingsInstall,
-  findLocalSkillCommand,
-  readHostCatalogSkill,
-  skillUnavailableReason,
   isPluginHooksMismatched,
   registeredHooksListSchema,
   awaitPluginSync,
+  byteLengthOfJson,
+  resyncForMissingEntry,
+  findLocalSkillCommand,
+  readHostCatalogSkill,
+  skillUnavailableReason,
   PLUGIN_COMMAND_OPS,
   serveListPluginCommands,
   RENDERPLUGINCOMMAND,

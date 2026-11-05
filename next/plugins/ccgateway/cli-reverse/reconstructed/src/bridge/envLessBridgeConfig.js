@@ -3,24 +3,24 @@
  *
  * env-less 桥配置（GrowthBook tengu_bridge_repl_v2_config）：重试、超时、心跳、token 刷新提前量、归档超时、最低版本
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/envLessBridgeConfig.ts
- * pieces: chunk-4cm44bmp.js (3)
+ * pieces: chunk-d0pp22ee.js (3)
  * attribution: fingerprint 3
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { objectSchema, numberSchema, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
-import { lt_2 as lt } from "../utils/semver.js";
+import { lt } from "../utils/semver.js";
 import { getFeatureValue_DEPRECATED } from "../services/analytics/growthbook.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-4cm44bmp.js:25351-26670 fingerprint (2.1.88 match: DEFAULT_ENV_LESS_BRIDGE_CONFIG, 0.894)
+//@ chunk-d0pp22ee.js:305-1622 fingerprint (2.1.88 match: DEFAULT_ENV_LESS_BRIDGE_CONFIG, 0.894)
 /**
  * 默认配置与 schema：init_retry_*、http_timeout_ms、uuid_dedup_buffer_size、heartbeat_interval_ms/jitter、token_refresh_buffer_ms、teardown_archive_timeout_ms、connect_timeout_ms、oauth_retry_*、min_version。
  */
 var DEFAULT_ENV_LESS_BRIDGE_CONFIG; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var envLessBridgeConfigSchema;
-deferInit("chunk-4cm44bmp.js:25351", () => {
+deferInit("chunk-d0pp22ee.js:305", () => {
   DEFAULT_ENV_LESS_BRIDGE_CONFIG = {
     init_retry_max_attempts: 3,
     init_retry_base_delay_ms: 500,
@@ -65,13 +65,13 @@ deferInit("chunk-4cm44bmp.js:25351", () => {
     }),
   );
 });
-//@ chunk-4cm44bmp.js:26670-26787 fingerprint (2.1.88 match: getEnvLessBridgeConfig, 1)
+//@ chunk-d0pp22ee.js:1622-1737 fingerprint (2.1.88 match: getEnvLessBridgeConfig, 1)
 async function getEnvLessBridgeConfig() {
   let raw = await getFeatureValue_DEPRECATED("tengu_bridge_repl_v2_config", DEFAULT_ENV_LESS_BRIDGE_CONFIG);
   let parsed = envLessBridgeConfigSchema().safeParse(raw);
   return parsed.success ? parsed.data : DEFAULT_ENV_LESS_BRIDGE_CONFIG;
 }
-//@ chunk-4cm44bmp.js:26787-28000 fingerprint (2.1.88 match: checkEnvLessBridgeMinVersion, 0.511)
+//@ chunk-d0pp22ee.js:1737-2951 fingerprint (2.1.88 match: checkEnvLessBridgeMinVersion, 0.511)
 /**
  * 当前版本低于配置的 min_version 时返回提示文本（要求 claude update），否则 null。
  */
@@ -84,10 +84,10 @@ async function checkEnvLessBridgeMinVersion() {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
@@ -99,10 +99,10 @@ async function checkEnvLessBridgeMinVersion() {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION

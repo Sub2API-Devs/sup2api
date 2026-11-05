@@ -1,15 +1,15 @@
 /**
  * jose/dist/webapi/util/base64url.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-5h78gfwc.js (2)
+ * pieces: chunk-0f6azspv.js (2)
  * attribution: esm-fingerprint 2
  */
 import { textDecoder, textEncoder } from "../lib/buffer_utils.js";
 import { decodeBase64, encodeBase64 } from "../lib/base64.js";
 
-//@ chunk-5h78gfwc.js:1615-1923 esm-fingerprint
-function decode_2(input) {
+//@ chunk-0f6azspv.js:1615-1923 esm-fingerprint
+function decode(input) {
   if (Uint8Array.fromBase64)
     return Uint8Array.fromBase64(typeof input === "string" ? input : textDecoder.decode(input), {
       alphabet: "base64url",
@@ -23,7 +23,7 @@ function decode_2(input) {
     throw TypeError("The input to be decoded is not correctly encoded.");
   }
 }
-//@ chunk-5h78gfwc.js:1923-2140 esm-fingerprint
+//@ chunk-0f6azspv.js:1923-2140 esm-fingerprint
 function encode_2(input) {
   let unencoded = input;
   if (typeof unencoded === "string") unencoded = textEncoder.encode(unencoded);
@@ -34,4 +34,4 @@ function encode_2(input) {
     });
   return encodeBase64(unencoded).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
-export { encode_2, decode_2 };
+export { decode, encode_2 };

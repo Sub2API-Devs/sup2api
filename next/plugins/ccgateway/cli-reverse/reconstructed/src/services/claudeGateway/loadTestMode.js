@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：网关压测模式
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (1)
  * attribution: placement 1
  */
 import { gatewayLog } from "../gateway/gatewayBanner.js";
 
-//@ chunk-1ny7cxrt.js:1363283-1363661 placement
+//@ chunk-1hnjmk23.js:1365008-1365386 placement
 /**
  * 压测模式下确认所有上游都使用模拟 fetch，否则报错。
  */

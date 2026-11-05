@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：artifact boot 数据请求（含缓存、分享密钥、中继）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jv307fw4.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-m0ks5273.js (2)
  * attribution: placement 2
  */
 import { claudeAiEnvironment } from "../../constants/claudeAiOrigin.js";
 import { PASSIVE } from "./pageScripts.js";
 import { buildFrameHeaders, getTransportErrorProps, SAFE_ERROR_CODE_RE } from "./frameApi.js";
 import {
-  ACCESS_PROBE_TIMEOUT_MS,
+  CONTROL_PLANE_REQUEST_TIMEOUT_MS,
   CROSS_ORG_SHARE_HINT,
   EMAIL_INVITE_HINT,
   isOrgMismatchBody,
@@ -39,6 +39,7 @@ import {
   foldBootCowritten,
   foldBootAuthoredByOthers,
   foldBootOutsidersMayHaveWritten,
+  foldMarkReads,
   foldBootOutsideWriter,
   foldBootKind,
   foldBootDocs,
@@ -48,6 +49,7 @@ import {
   typeSlugOf,
   getShareEntry,
 } from "./shareEntries.js";
+import { MARKREADS } from "./textSanitize.js";
 import { artifactDocsOrFiles } from "./artifactToolGates.js";
 import { getLiveState } from "../liveReplica/liveReplica.js";
 import { applyTypeAttestation } from "./typeInstances.js";
@@ -55,11 +57,11 @@ import { logFeatureSad, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { checkBehindLive } from "./liveSubscribe.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-jv307fw4.js:27247-32307 placement
+//@ chunk-m0ks5273.js:27265-32404 placement
 /**
  * 向 artifact 服务（或经会话网关/中继）请求 boot 数据：校验环境、处理 sk 分享密钥、版本、只走中继等选项。
  */
-async function fetchArtifactBoot(
+async function fetchBootUngated(
   { slug, env, sk, vanity },
   signal,
   {
@@ -73,6 +75,7 @@ async function fetchArtifactBoot(
     lean,
     pastVer,
     credentials,
+    audienceOutside,
   },
 ) {
   let envName = claudeAiEnvironment();
@@ -90,6 +93,7 @@ async function fetchArtifactBoot(
     (syncLive ? "&live=sync" : "") +
     (watchBoot || agentPeer || syncLive ? `&vn=${PASSIVE}` : "") +
     (readBack ? "&readback=1" : "") +
+    (audienceOutside ? "&audience=outside" : "") +
     (pastVer !== undefined ? `&ver=${encodeURIComponent(pastVer)}` : "");
   let skParam = sk === undefined ? "" : `&sk=${encodeURIComponent(sk)}`;
   let vanityParam = vanity === undefined ? "" : `&vanity=${encodeURIComponent(vanity)}`;
@@ -98,7 +102,7 @@ async function fetchArtifactBoot(
     refreshOAuth: true,
     credentials,
     headers: buildFrameHeaders(),
-    timeout: ACCESS_PROBE_TIMEOUT_MS,
+    timeout: CONTROL_PLANE_REQUEST_TIMEOUT_MS,
     signal,
   };
   let boot;
@@ -237,6 +241,7 @@ async function fetchArtifactBoot(
     foldBootCowritten(slug, data.cowritten);
     foldBootAuthoredByOthers(slug, data.authoredByOthers);
     foldBootOutsidersMayHaveWritten(slug, data.outsidersMayHaveWritten);
+    foldMarkReads(slug, data[MARKREADS]);
     if (data.outsideWriter === true) foldBootOutsideWriter(slug, true);
     if (ver !== pastVer)
       return {
@@ -256,6 +261,7 @@ async function fetchArtifactBoot(
   foldBootCowritten(slug, data.cowritten);
   foldBootAuthoredByOthers(slug, data.authoredByOthers);
   foldBootOutsidersMayHaveWritten(slug, data.outsidersMayHaveWritten);
+  foldMarkReads(slug, data[MARKREADS]);
   foldBootOutsideWriter(slug, data.outsideWriter);
   let leanVersion = data.lean === true;
   let external = data.mode === "external";
@@ -277,11 +283,11 @@ async function fetchArtifactBoot(
     route: boot.route,
   };
 }
-//@ chunk-jv307fw4.js:32307-34155 placement
+//@ chunk-m0ks5273.js:32404-34252 placement
 /**
  * fetchArtifactBoot 的带缓存版本：复用同一 tool use 的探测结果，处理公开读门槛与推测性请求。
  */
-async function fetchArtifactBootWithProbe(
+async function fetchBoot(
   target,
   options,
   signal,
@@ -347,7 +353,7 @@ async function fetchArtifactBootWithProbe(
   };
   let result =
     bootResult ??
-    (await fetchArtifactBoot(target, signal, {
+    (await fetchBootUngated(target, signal, {
       ...fetchOptions,
       lean: lean?.version,
     }));
@@ -361,7 +367,7 @@ async function fetchArtifactBootWithProbe(
     logForDebugging(
       `[artifact] ${options}: the answer to a lean boot request was incomplete; booting in full slug=${target.slug}`,
     );
-    result = await fetchArtifactBoot(target, signal, fetchOptions);
+    result = await fetchBootUngated(target, signal, fetchOptions);
   }
   if (result.err !== null) {
     let reason =
@@ -414,4 +420,4 @@ async function fetchArtifactBootWithProbe(
   }
   return booted;
 }
-export { fetchArtifactBootWithProbe, fetchArtifactBoot };
+export { fetchBoot, fetchBootUngated };

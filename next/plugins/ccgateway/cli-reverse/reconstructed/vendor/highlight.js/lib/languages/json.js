@@ -1,13 +1,13 @@
 /**
  * highlight.js/lib/languages/json.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: highlight.js@11.11.1
- * pieces: chunk-egr0twnb.js (3)
+ * pieces: chunk-636gp747.js (3)
  * attribution: cjs-fingerprint 2, cjs-fingerprint+context 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
-//@ chunk-egr0twnb.js:214804-215237 cjs-fingerprint
+//@ chunk-636gp747.js:214804-215237 cjs-fingerprint
 var require_json = __commonJS(function (cjsExports, cjsModule) {
   function json(hljs) {
     let ATTRIBUTE = {
@@ -45,7 +45,7 @@ var require_json = __commonJS(function (cjsExports, cjsModule) {
   }
   cjsModule.exports = json;
 });
-//@ chunk-egr0twnb.js:280042-296565 cjs-fingerprint
+//@ chunk-636gp747.js:280042-296565 cjs-fingerprint
 var require_json_2 = __commonJS(function (cjsExports, cjsModule) {
   function mel(hljs) {
     return {
@@ -73,7 +73,7 @@ var require_json_2 = __commonJS(function (cjsExports, cjsModule) {
   }
   cjsModule.exports = mel;
 });
-//@ chunk-egr0twnb.js:402801-406633 cjs-fingerprint+context
+//@ chunk-636gp747.js:402801-406633 cjs-fingerprint+context
 var require_json_3 = __commonJS(function (cjsExports, cjsModule) {
   function oracleRules(hljs) {
     return {

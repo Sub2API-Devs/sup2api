@@ -3,12 +3,17 @@
  *
  * 子代理工具解析（filterToolsForAgent/resolveAgentTools）、结果 finalize、handoff 安全审查与后台生命周期 runAsyncAgentLifecycle
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/agentToolUtils.ts
- * pieces: chunk-0h4e7gnq.js (48), chunk-e6aww6q8.js (7)
- * attribution: placement 29, affinity 1, fingerprint 6, callgraph-fingerprint 2, layout 14, file-local 1, callgraph-witnessed 1, sole-consumer 1
+ * pieces: chunk-5xgkngpb.js (8), chunk-frs14hy1.js (49)
+ * attribution: fingerprint 6, placement 29, affinity 1, layout 16, callgraph-fingerprint 1, file-local 2, callgraph-witnessed 1, sole-consumer 1
  */
-import { getAgentDepth, getHookCaller } from "../../utils/agentContext.js";
+import { randomUUID } from "crypto";
+import {
+  sessionContextValuesSchema,
+  isSessionContextAttachment,
+} from "../../utils/contextAttachments/sessionContext.js";
+import { getAgentDepth, getHookCaller, isMainConversationContext } from "../../utils/agentContext.js";
 import { isWebFetchAgentEnabled } from "./loadAgentsDir.js";
 import {
   getDenyRuleForTool,
@@ -24,14 +29,14 @@ import {
   TASK,
   FAST_BUILTIN_AGENTS,
   CONTINUE_VIA_MESSAGE_HINT,
-  AGENT_STOPPED_NOTE,
+  AGENT_STOPPED_PREFIX,
   MAX_AGENT_OUTPUT_TOKENS,
   FORK,
 } from "./constants.js";
 import { WEB_FETCH_AGENT, webFetchHarnessNote, HARNESS_NOTE_PREFIX } from "../WebFetchTool/harnessNotes.js";
-import { toolMatchesName, compareToolsByName } from "../../Tool.js";
+import { matchesToolName, compareToolsByName } from "../../Tool.js";
 import { getMaxSubagentSpawnDepth } from "./spawnDepth.js";
-import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
+import { parseRuleString } from "../../utils/permissions/permissionRuleParser.js";
 import { WebFetchTool } from "../WebFetchTool/WebFetchTool.js";
 import { isPlainKestrelOn, rebaseHookOrigin } from "../../services/tools/toolDecisionTelemetry.js";
 import { READ_ONLY, isServedAccountMemoryTool } from "../../services/accountMemory/accountMemoryServer.js";
@@ -49,10 +54,11 @@ import {
 } from "../../utils/toolPool.js";
 import { POLL } from "../PollTool/prompt.js";
 import {
-  alwaysFalseTool,
-  FILE_MUTATING_TOOL_NAMES,
-  alwaysFalseFlag,
-  READ_ONLY_TOOL_NAMES,
+  isCodeModeExperimentEnabled,
+  REPL_PRIMITIVE_TOOL_NAMES,
+  isCodeModeEnabled,
+  CODE_MODE_ONLY_TOOLS,
+  hasCodeModeBeenUsed,
 } from "../RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { isDiskless, clearInvokedSkillsForAgent } from "../../bootstrap/state.js";
 import { SENDMESSAGE } from "../SendMessageTool/constants.js";
@@ -68,11 +74,12 @@ import {
 import {
   mcpInfoFromString,
   buildMcpToolName,
-  getToolNameForPermissionCheck as getToolNameForPermissionCheck_3,
+  getToolNameForPermissionCheck as getToolNameForPermissionCheck_5,
 } from "../../services/mcp/mcpStringUtils.js";
-import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
+import { CLAUDEAI_SERVER_PREFIX } from "../../services/mcp/normalization.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import { REPL_TOOL_NAME, isEvalToolName } from "../REPLTool/constants.js";
 import { toolByAlias, aliasOfToolName } from "../../services/tools/batchTools.js";
-import { REPL_TOOL_NAME, isReplToolName } from "../REPLTool/constants.js";
 import { mcpRuleMatchesTool, mcpRuleMatchesToolName } from "../../services/mcp/serverIdentity.js";
 import { warnMcpRuleMismatch, sameEffort } from "../../utils/permissions/permissionSetup.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -98,7 +105,7 @@ import {
   unknown,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { SUBAGENT_REPORT_DISPOSITIONS, HandbackReportSchema } from "../../entrypoints/sdk/coreSchemas.js";
-import { FILE_READ_TOOL_NAME } from "../FileReadTool/constants.js";
+import { READ } from "../FileReadTool/constants.js";
 import { FILE_EDITING_TOOL_NAMES, countEditLines } from "./agentLaunch.js";
 import {
   isToolResultMessage,
@@ -108,7 +115,6 @@ import {
   extractTextContent_2,
   isSyntheticMessage,
   createApiErrorMessage,
-  API_REQUEST_ABORTED_MESSAGE,
   upsertMessageByUuid,
   createTurnDurationMessage,
 } from "../../utils/messages.js";
@@ -122,6 +128,7 @@ import {
   HANDBACK_REPORT_HEADER,
   countLines,
   agentContractPhase,
+  buildHandbackReport,
   hasHandbackFrom,
   getPendingHandbackReport,
   forgetHandback,
@@ -166,7 +173,7 @@ import {
   failAgentRun,
   enqueueAgentNotification,
   createProgressTracker,
-  createActivityDescriptionResolver,
+  makeActivityDescription,
   applyStreamTokenEvent,
   updateAgentProgressIfChanged,
   updateProgressFromMessage,
@@ -203,6 +210,8 @@ import { removeProjectHistory } from "../../utils/config.js";
 import {
   getToolPermissionContext,
   getEffortLayerOverride,
+  getPickedEffortModel,
+  getOwnEffortOffPickedModel,
 } from "../../utils/permissions/toolPermissionContext.js";
 import { buildVerifiedHumanTurns } from "../../utils/messages/apiNormalization.js";
 import { env } from "../../utils/env.js";
@@ -211,6 +220,11 @@ import { registerTaskLoop, setAgentController } from "../../tasks/taskLoopRegist
 import { clearAgentStopPending } from "../../utils/agentProcessRegistry.js";
 import { getRunId, withFailureKind } from "../../utils/task/taskNotifications.js";
 import { unwrapAbortReason, isSubagentParkAbort, setMonotonicTimeout } from "../../utils/abortController.js";
+import {
+  UnsentMediaReporter,
+  letGoOfUnsentMediaInPlace,
+  letGoOfUnsentMedia,
+} from "../../services/api/toolSchemaWire.js";
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import {
   mergeTaskProgressIntoTranscript,
@@ -218,6 +232,7 @@ import {
 } from "../../services/AgentSummary/agentSummary.js";
 import { createAgentStatusEmitter } from "../../utils/processUserInput/processSlashCommand.js";
 import { isZincHarborOn } from "../../plugins/functionHooks/inputHold.js";
+import { API_REQUEST_ABORTED_MESSAGE } from "../../services/compact/compact.js";
 import {
   pruneSettledChildWork,
   hasChildAgents,
@@ -228,6 +243,8 @@ import { retagQueuedCommandSource } from "../../query/turnHooks.js";
 import { inProgressToolUpdate } from "../../state/inProgressToolUses.js";
 import { stripAnyVersatileSuffix } from "../../utils/model/modelIds.js";
 import { buildAvailabilityFallbackChain } from "../../utils/model/modelFallback.js";
+import { isRefusalErrorMessage } from "../../query/refusalRecovery.js";
+import { formatSafeguardStop } from "./agentToolSafeguardNote.js";
 import { handbackRecipientOf } from "../../tasks/LocalAgentTask/agentHandback.js";
 import { retireAgentDumpState } from "../../services/api/dumpPrompts.js";
 import { clearReplayChain } from "../../utils/transcriptRequestBlobs.js";
@@ -235,7 +252,16 @@ import { updateAgentMetadata } from "../../utils/sessionStorage.js";
 import { describeStorageError } from "../../utils/agentMetadata.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2207751-2207902 placement
+//@ chunk-5xgkngpb.js:114441-114521 fingerprint (2.1.88 match: getLastToolUseName, 0.692)
+/**
+ * 取最后一个 session_context 附件的 context 并按 schema 解析。旧版名 getLastAssistantMessage 为错配。
+ */
+function getSessionContextAttachmentData(message) {
+  return sessionContextValuesSchema().safeParse(
+    message.findLast(isSessionContextAttachment)?.attachment.context,
+  ).data;
+}
+//@ chunk-5xgkngpb.js:2262203-2262354 placement
 function getAgentSpawnContext(toolUseContext) {
   let { activeAgents, allowedAgentTypes } = toolUseContext.options.agentDefinitions;
   return {
@@ -244,7 +270,7 @@ function getAgentSpawnContext(toolUseContext) {
     activeAgents,
   };
 }
-//@ chunk-e6aww6q8.js:2207902-2208122 placement
+//@ chunk-5xgkngpb.js:2262354-2262574 placement
 function canUseWebFetchAgent(tools, permissionContext, { depth = 0, allowedAgentTypes, activeAgents } = {}) {
   return (
     isWebFetchAgentEnabled() &&
@@ -263,10 +289,10 @@ function canUseWebFetchAgent(tools, permissionContext, { depth = 0, allowedAgent
     (allowedAgentTypes === undefined || allowedAgentTypes.includes(WEB_FETCH_AGENT))
   );
 }
-//@ chunk-e6aww6q8.js:2208122-2208245 placement
+//@ chunk-5xgkngpb.js:2262574-2262697 placement
 function canSpawnSubagents(tools, permissionContext, { depth = 0, allowedAgentTypes } = {}) {
   return (
-    tools.some((tool) => toolMatchesName(tool, AGENT)) &&
+    tools.some((tool) => matchesToolName(tool, AGENT)) &&
     !getDenyRuleForTool(permissionContext, {
       name: AGENT,
     }) &&
@@ -274,7 +300,7 @@ function canSpawnSubagents(tools, permissionContext, { depth = 0, allowedAgentTy
     allowedAgentTypes?.length !== 0
   );
 }
-//@ chunk-e6aww6q8.js:2208245-2208927 placement
+//@ chunk-5xgkngpb.js:2262697-2263379 placement
 /**
  * 当 Agent 工具要启动网页抓取子代理但工具列表缺 WebFetch 时，返回给 hook 的提示。
  */
@@ -287,7 +313,7 @@ function webFetchAgentHookHint(name, observableInput, tools, toolPermissionConte
     name !== AGENT ||
     (subagentType !== WEB_FETCH_AGENT &&
       !resolveAgentOverrides(subagentType, agentSpawnContext.activeAgents)) ||
-    tools.some((tool) => toolMatchesName(tool, WEBFETCH)) ||
+    tools.some((tool) => matchesToolName(tool, WEBFETCH)) ||
     !canUseWebFetchAgent(tools, toolPermissionContext, agentSpawnContext)
   )
     return "";
@@ -295,11 +321,11 @@ function webFetchAgentHookHint(name, observableInput, tools, toolPermissionConte
 
 Web pages can only be fetched through the ${WEB_FETCH_AGENT} agent in this session (there is no direct ${WEBFETCH} tool), so while this hook blocks it there is no other way to fetch them. If the page is required, tell the user; a hook that means to allow web fetching can exempt tool_input.subagent_type == "${WEB_FETCH_AGENT}" \u2014 a name match, which a project, user, or plugin agent defined under that same name would also pass with whatever tools it declares, so it fits only where no such agent is defined.`;
 }
-//@ chunk-e6aww6q8.js:2208927-2208988 placement
+//@ chunk-5xgkngpb.js:2263379-2263440 placement
 function hasToolRuleFor(rules, toolName) {
-  return rules?.some((rule) => permissionRuleValueFromString(rule).toolName === toolName) ?? false;
+  return rules?.some((rule) => parseRuleString(rule).toolName === toolName) ?? false;
 }
-//@ chunk-e6aww6q8.js:2208988-2209386 placement
+//@ chunk-5xgkngpb.js:2263440-2263839 placement
 /**
  * 在代理工具列表中按需插入 WebFetch 工具：当代理声明需要 WebFetch（或只能经 web-fetch 子代理获取但不可用）且权限允许时，把 WebFetchTool 按排序插入到 MCP 工具之前。
  */
@@ -329,7 +355,7 @@ function withWebFetchToolForAgent(agentDefinition, tools, toolPermissionContext,
   if (index === -1) index = tools.length;
   return tools.toSpliced(index, 0, WebFetchTool);
 }
-//@ chunk-e6aww6q8.js:3775790-3775878 placement
+//@ chunk-5xgkngpb.js:3871670-3871757 placement
 /**
  * 为代理重设钩子来源。
  */
@@ -338,7 +364,7 @@ function rebaseHookOriginForAgent(spawnOptions, isRewritten) {
   if (isRewritten && isPlainKestrelOn() && getHookCaller(toolUseContext) !== undefined)
     toolUseContext.hookOrigin = rebaseHookOrigin(toolUseContext);
 }
-//@ chunk-0h4e7gnq.js:8161-8501 placement (2.1.88 match: getTokenCountFromUsage, 1)
+//@ chunk-frs14hy1.js:11755-12095 placement (2.1.88 match: getTokenCountFromUsage, 1)
 /**
  * 把若干 usage 逐字段相加（输入/输出/缓存读/写），model 取最后一个。错归（代理轮次完成时读用量）。
  */
@@ -355,21 +381,21 @@ function sumUsages(usage) {
     };
   return total;
 }
-//@ chunk-0h4e7gnq.js:134868-135050 affinity
+//@ chunk-frs14hy1.js:145865-146047 affinity
 /**
  * Artifact 工具名与相关判定（懒加载 require），用于工具解析与统计。
  */
 var ARTIFACT_TOOL_NAME; // deferred: loads other modules while loading; runs once its import cycle is complete
 var standsInForBuiltInArtifact;
 var isPublishShapedArtifactAction;
-deferInit("chunk-0h4e7gnq.js:134868", () => {
+deferInit("chunk-frs14hy1.js:145865", () => {
   ARTIFACT_TOOL_NAME = require("../ArtifactTool/AMPERSAND_FORMS.lazy.js").ARTIFACT_TOOL_NAME;
   standsInForBuiltInArtifact =
     require("../../services/artifacts/artifactsMcpTools.js").standsInForBuiltInArtifact;
   isPublishShapedArtifactAction =
     require("../ArtifactTool/AMPERSAND_FORMS.lazy.js").isPublishShapedArtifactAction;
 });
-//@ chunk-0h4e7gnq.js:135050-135711 fingerprint (2.1.88 match: filterToolsForAgent, 0.521)
+//@ chunk-frs14hy1.js:146047-146707 fingerprint (2.1.88 match: filterToolsForAgent, 0.521)
 /**
  * 按子代理身份过滤工具池：去掉记忆受限工具与仅主线程工具，MCP 工具保留，plan 模式补 ExitPlanMode，Agent 工具只在深度未达上限时保留，异步代理只保留异步安全工具（队友可额外保留团队工具）；队友的 SendMessage 设为 alwaysLoad。
  */
@@ -386,13 +412,13 @@ function filterToolsForAgent({
   let filtered = tools.filter((tool) => {
     if (isServedAccountMemoryTool(tool, subagentMemoryMode)) return false;
     if (isMcpTool(tool)) return true;
-    if (toolMatchesName(tool, EXITPLANMODE_2) && permissionMode === "plan") return true;
+    if (matchesToolName(tool, EXITPLANMODE_2) && permissionMode === "plan") return true;
     if (toolMatchesAnyName(tool, EXTERNAL_ALWAYS_AVAILABLE_TOOLS)) return false;
-    if (toolMatchesName(tool, POLL) && (isTeammate || !alwaysFalseTool())) return false;
+    if (matchesToolName(tool, POLL) && (isTeammate || !isCodeModeExperimentEnabled())) return false;
     if (!isBuiltIn && toolMatchesAnyName(tool, EXTERNAL_ALWAYS_AVAILABLE_SET)) return false;
     if (isDiskless() && ONBOARDING_TOOL_NAMES.has(tool.name)) return false;
-    if (toolMatchesName(tool, SENDMESSAGE) && !canSubagentSend()) return false;
-    if (toolMatchesName(tool, AGENT)) return agentDepth < getMaxSubagentSpawnDepth();
+    if (matchesToolName(tool, SENDMESSAGE) && !canSubagentSend()) return false;
+    if (matchesToolName(tool, AGENT)) return agentDepth < getMaxSubagentSpawnDepth();
     if (EXTERNAL_EXTRA_TOOL_NAMES.has(tool.name)) return isCoordinatorPinnedTool(isBuiltIn, agentType);
     if (isAsync && !toolMatchesAnyName(tool, EXTERNAL_ALWAYS_AVAILABLE_TOOLS_2)) {
       if (isAgentSwarmsEnabled() && isTeammate && COORDINATOR_TASK_TOOL_NAMES.has(tool.name)) return true;
@@ -400,11 +426,11 @@ function filterToolsForAgent({
     }
     return true;
   });
-  if (permissionMode === "plan" && !filtered.some((tool) => toolMatchesName(tool, EXITPLANMODE_2)))
+  if (permissionMode === "plan" && !filtered.some((tool) => matchesToolName(tool, EXITPLANMODE_2)))
     filtered.push(ExitPlanModeV2Tool);
   if (!isTeammate) return filtered;
   return filtered.map((tool) =>
-    toolMatchesName(tool, SENDMESSAGE)
+    matchesToolName(tool, SENDMESSAGE)
       ? {
           ...tool,
           alwaysLoad: true,
@@ -415,16 +441,16 @@ function filterToolsForAgent({
       : tool,
   );
 }
-//@ chunk-0h4e7gnq.js:135711-135823 placement
+//@ chunk-frs14hy1.js:146707-146819 placement
 function getDisallowedToolNames(disallowedTools) {
   let names = new Set();
   for (let rule of disallowedTools ?? []) {
-    let { toolName } = permissionRuleValueFromString(rule);
+    let { toolName } = parseRuleString(rule);
     if (splitToolParentOf(toolName) !== undefined) names.add(toolName);
   }
   return [...names];
 }
-//@ chunk-0h4e7gnq.js:135823-135998 placement
+//@ chunk-frs14hy1.js:146819-146994 placement
 function withAgentDisallowedTools(permissionContext, agent, source = "session") {
   let disallowedToolNames = getDisallowedToolNames(agent?.disallowedTools);
   if (disallowedToolNames.length === 0) return permissionContext;
@@ -436,21 +462,21 @@ function withAgentDisallowedTools(permissionContext, agent, source = "session") 
     },
   };
 }
-//@ chunk-0h4e7gnq.js:135998-136066 placement
+//@ chunk-frs14hy1.js:146994-147062 placement
 function isToolServableDirectly(toolName, ruleContent) {
   return (
     ruleContent === undefined ||
     (builtinToolServedByMcp(toolName) === undefined && !(standsInForBuiltInArtifact?.(toolName) ?? false))
   );
 }
-//@ chunk-0h4e7gnq.js:136964-137045 placement
+//@ chunk-frs14hy1.js:147960-148041 placement
 /**
  * 把工具名列表展开成扁平列表。
  */
 function flattenToolNameList(mcpServers) {
   return (mcpServers ?? []).flatMap((server) => (typeof server === "string" ? server : Object.keys(server)));
 }
-//@ chunk-0h4e7gnq.js:137045-139308 placement
+//@ chunk-frs14hy1.js:148041-150314 placement
 function probeAgentToolPool(toolName, tools, declaredMcpServers = []) {
   let normalizedToolName = toolName;
   let caseCorrected = false;
@@ -471,10 +497,10 @@ function probeAgentToolPool(toolName, tools, declaredMcpServers = []) {
   let isServerDisallowed = (serverName) =>
     disallowedToolsFilter.isToolDisallowed(makeProbeTool(serverName, "probe_tool_one")) &&
     disallowedToolsFilter.isToolDisallowed(makeProbeTool(serverName, "probe_tool_two"));
-  let mapped = declaredMcpServers.map((server) => normalizeNameForMCP(server));
+  let mapped = declaredMcpServers.map((server) => CLAUDEAI_SERVER_PREFIX(server));
   let poolServerNames = new Set();
   for (let tool of tools) {
-    let serverName = mcpInfoFromString(getToolNameForPermissionCheck_3(tool))?.serverName;
+    let serverName = mcpInfoFromString(getToolNameForPermissionCheck_5(tool))?.serverName;
     if (serverName !== undefined) poolServerNames.add(serverName);
   }
   let matchesAnyTool = mcpInfo.toolName === undefined || mcpInfo.toolName === "*";
@@ -508,7 +534,7 @@ function probeAgentToolPool(toolName, tools, declaredMcpServers = []) {
       correctedSpelling: mcpInfo.toolName === "*" ? "mcp__*__*" : "mcp__*",
     };
   }
-  let normalizedServer = normalizeNameForMCP(mcpInfo.serverName);
+  let normalizedServer = CLAUDEAI_SERVER_PREFIX(mcpInfo.serverName);
   let lower = normalizedServer.toLowerCase();
   let found = mapped.find((declaredServer) => declaredServer === normalizedServer);
   let found_2 = mapped.find((declaredServerLoose) => declaredServerLoose.toLowerCase() === lower);
@@ -523,7 +549,8 @@ function probeAgentToolPool(toolName, tools, declaredMcpServers = []) {
     let combinedName = `${mcpInfo.serverName}__${toolName_2}`;
     if (
       !tools.some(
-        (tool) => tool.mcpInfo !== undefined && normalizeNameForMCP(tool.mcpInfo.serverName) === combinedName,
+        (tool) =>
+          tool.mcpInfo !== undefined && CLAUDEAI_SERVER_PREFIX(tool.mcpInfo.serverName) === combinedName,
       ) &&
       !mapped.includes(combinedName)
     )
@@ -605,9 +632,9 @@ function probeAgentToolPool(toolName, tools, declaredMcpServers = []) {
     }
   );
 }
-//@ chunk-0h4e7gnq.js:139308-139421 placement
+//@ chunk-frs14hy1.js:150314-150427 placement
 function resolveAgentToolNames(toolUseContext) {
-  let mapped = [...FILE_MUTATING_TOOL_NAMES].map((name) => ({
+  let mapped = [...REPL_PRIMITIVE_TOOL_NAMES].map((name) => ({
     name,
   }));
   return new Set(
@@ -616,7 +643,18 @@ function resolveAgentToolNames(toolUseContext) {
     ),
   );
 }
-//@ chunk-0h4e7gnq.js:139421-142580 fingerprint (2.1.88 match: resolveAgentTools, 0.485)
+//@ chunk-frs14hy1.js:150427-150527 layout
+function hidePollWhenRepl(tools, skipFiltering) {
+  if (
+    !codeModeAccepted() ||
+    skipFiltering ||
+    !isCodeModeExperimentEnabled() ||
+    tools.some((tool) => matchesToolName(tool, REPL_TOOL_NAME))
+  )
+    return tools;
+  return tools.filter((tool) => !matchesToolName(tool, POLL));
+}
+//@ chunk-frs14hy1.js:150527-153833 fingerprint (2.1.88 match: resolveAgentTools, 0.485)
 /**
  * resolveAgentTools：按代理定义的 tools/disallowedTools 从可用工具中解析出最终工具集，支持 "*"、Agent(type,…) 允许列表、mcp__server__* 通配、工具别名与 V1 底层名；Glob/Grep 被嵌入搜索替代时自动补回；有 TaskStop/REPL 时补 GetTask。返回 resolvedTools 与 valid/invalid/unavailable 明细。
  */
@@ -661,8 +699,8 @@ function resolveAgentTools(
     !skipFiltering &&
     agentDepth >= getMaxSubagentSpawnDepth() &&
     !disallowedToolSet.has(AGENT) &&
-    availableTools.some((availableTool) => toolMatchesName(availableTool, AGENT)) &&
-    !candidateTools.some((tool) => toolMatchesName(tool, AGENT));
+    availableTools.some((availableTool) => matchesToolName(availableTool, AGENT)) &&
+    !candidateTools.some((tool) => matchesToolName(tool, AGENT));
   let wildcardAgentTypes = parseWildcardAgentTypes(agentTools);
   if (agentTools === undefined || wildcardAgentTypes)
     return {
@@ -670,7 +708,9 @@ function resolveAgentTools(
       validTools: [],
       invalidTools: [],
       unavailableTools: [],
-      resolvedTools: allowedAvailableTools,
+      resolvedTools: codeModeAccepted()
+        ? hidePollWhenRepl(allowedAvailableTools, skipFiltering)
+        : allowedAvailableTools,
       agentToolRemovedByDepth,
       ...(wildcardAgentTypes?.allowedAgentTypes && {
         allowedAgentTypes: wildcardAgentTypes.allowedAgentTypes,
@@ -696,7 +736,7 @@ function resolveAgentTools(
   }
   let availableToolNames = new Set(availableTools.map((availableTool) => availableTool.name));
   let replTool =
-    alwaysFalseFlag() && !disallowedToolSet.has(REPL_TOOL_NAME)
+    isCodeModeEnabled() && !disallowedToolSet.has(REPL_TOOL_NAME)
       ? availableToolMap.get(REPL_TOOL_NAME)
       : undefined;
   let validTools = [];
@@ -707,7 +747,7 @@ function resolveAgentTools(
   let allowedAgentTypes;
   let declaredAgentToolWithheld = false;
   for (let toolSpec of agentTools) {
-    let ruleValue = permissionRuleValueFromString(toolSpec);
+    let ruleValue = parseRuleString(toolSpec);
     let { toolName, ruleContent } = ruleValue;
     if (toolName === AGENT) {
       if (ruleContent) {
@@ -735,7 +775,7 @@ function resolveAgentTools(
       for (let allowedAvailableTool of allowedAvailableTools) {
         if (!isToolServableDirectly(allowedAvailableTool, ruleContent)) continue;
         if (!mcpRuleMatchesTool(toolName, allowedAvailableTool)) {
-          if (mcpRuleMatchesToolName(toolName, getToolNameForPermissionCheck_3(allowedAvailableTool)))
+          if (mcpRuleMatchesToolName(toolName, getToolNameForPermissionCheck_5(allowedAvailableTool)))
             warnMcpRuleMismatch(ruleValue, allowedAvailableTool);
           continue;
         }
@@ -779,7 +819,7 @@ function resolveAgentTools(
       warnMcpRuleMismatch(ruleValue, firstWildcardMatch);
     let ruleToolName = ruleToolNameFromString(toolSpec);
     let namedTool =
-      (isReplToolName(ruleToolName) ? availableToolMap.get(ruleToolName) : undefined) ??
+      (isEvalToolName(ruleToolName) ? availableToolMap.get(ruleToolName) : undefined) ??
       availableToolMap.get(toolName);
     let servableTool =
       namedTool !== undefined && isToolServableDirectly(namedTool, ruleContent) ? namedTool : undefined;
@@ -797,7 +837,7 @@ function resolveAgentTools(
           resolvedTools.push(tool);
           resolvedToolsSet.add(tool);
         }
-    } else if (replTool && READ_ONLY_TOOL_NAMES.has(toolName)) {
+    } else if (replTool && CODE_MODE_ONLY_TOOLS.has(toolName)) {
       validTools.push(toolSpec);
       if (!resolvedToolsSet.has(replTool)) {
         resolvedTools.push(replTool);
@@ -819,10 +859,21 @@ function resolveAgentTools(
     else if (availableToolNames.has(toolName)) unavailableTools.push(toolSpec);
     else invalidTools.push(toolSpec);
   }
+  if (codeModeAccepted() && !skipFiltering && isCodeModeExperimentEnabled()) {
+    let resolvedToolList = availableToolMap.get(POLL);
+    if (
+      resolvedToolList !== undefined &&
+      !resolvedToolsSet.has(resolvedToolList) &&
+      resolvedTools.some((resolvedTool) => matchesToolName(resolvedTool, REPL_TOOL_NAME))
+    ) {
+      resolvedTools.push(resolvedToolList);
+      resolvedToolsSet.add(resolvedToolList);
+    }
+  }
   if (
     !isRemoteOnlyCheck(GREP_TOOL_NAME) &&
     hasEmbeddedSearchTools() &&
-    !resolvedTools.some((tool) => toolMatchesName(tool, BASH_TOOL_NAME))
+    !resolvedTools.some((tool) => matchesToolName(tool, BASH_TOOL_NAME))
   ) {
     let searchToolsByName = {
       [GLOB_TOOL_NAME]: GlobTool,
@@ -830,7 +881,7 @@ function resolveAgentTools(
     };
     let remainingInvalid = [];
     for (let toolSpec of invalidTools) {
-      let { toolName } = permissionRuleValueFromString(toolSpec);
+      let { toolName } = parseRuleString(toolSpec);
       let searchTool = Object.hasOwn(searchToolsByName, toolName) ? searchToolsByName[toolName] : undefined;
       if (!searchTool || disallowedToolSet.has(toolName)) {
         remainingInvalid.push(toolSpec);
@@ -858,18 +909,18 @@ function resolveAgentTools(
     validTools,
     invalidTools,
     unavailableTools,
-    resolvedTools,
+    resolvedTools: codeModeAccepted() ? hidePollWhenRepl(resolvedTools, skipFiltering) : resolvedTools,
     allowedAgentTypes,
     agentToolRemovedByDepth,
     declaredAgentToolWithheld,
   };
 }
-//@ chunk-0h4e7gnq.js:142580-144612 callgraph-fingerprint (2.1.88 match: agentToolResultSchema, 0.391)
+//@ chunk-frs14hy1.js:153833-155865 callgraph-fingerprint (2.1.88 match: agentToolResultSchema, 0.392)
 /**
  * 子代理完成结果 schema：agentId、content、totalTokens/totalToolUseCount/totalDurationMs、usage、toolStats、handback 等。
  */
 var agentToolResultSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0h4e7gnq.js:142580", () => {
+deferInit("chunk-frs14hy1.js:153833", () => {
   agentToolResultSchema = DoctorLazy(() =>
     objectSchema({
       agentId: stringSchema(),
@@ -949,20 +1000,20 @@ deferInit("chunk-0h4e7gnq.js:142580", () => {
     }),
   );
 });
-//@ chunk-0h4e7gnq.js:144612-144742 layout (2.1.88 match: countToolCallsSince, 1)
+//@ chunk-frs14hy1.js:155865-155995 file-local
 function countToolUseBlocks(messages) {
-  let toolCallCount = 0;
-  for (let message of messages)
-    if (message.type === "assistant") {
-      for (let content of message.message.content) if (content.type === "tool_use") toolCallCount++;
+  let count = 0;
+  for (let m of messages)
+    if (m.type === "assistant") {
+      for (let block of m.message.content) if (block.type === "tool_use") count++;
     }
-  return toolCallCount;
+  return count;
 }
-//@ chunk-0h4e7gnq.js:144742-145756 callgraph-fingerprint (2.1.88 match: countToolUses, 0.163)
+//@ chunk-frs14hy1.js:155995-157009 layout
 /**
  * 统计子代理消息中的工具使用：读/搜索/Bash/编辑（含增删行数）/其他，叠加嵌套结果的 toolStats。
  */
-function countToolUses(messages) {
+function finishAgentCall(agentMessages) {
   let stats = {
     readCount: 0,
     searchCount: 0,
@@ -972,12 +1023,12 @@ function countToolUses(messages) {
     linesRemoved: 0,
     otherToolCount: 0,
   };
-  for (let message of messages)
-    if (message.type === "assistant")
-      for (let block of message.message.content) {
-        if (block.type !== "tool_use") continue;
-        switch (block.name) {
-          case FILE_READ_TOOL_NAME:
+  for (let handbackRequired of agentMessages)
+    if (handbackRequired.type === "assistant")
+      for (let needsHandback of handbackRequired.message.content) {
+        if (needsHandback.type !== "tool_use") continue;
+        switch (needsHandback.name) {
+          case READ:
             stats.readCount++;
             break;
           case GREP_TOOL_NAME:
@@ -991,21 +1042,21 @@ function countToolUses(messages) {
           case TASK:
             break;
           default:
-            if (FILE_EDITING_TOOL_NAMES.has(block.name)) {
-              let { added, removed } = countEditLines(block.name, block.input);
+            if (FILE_EDITING_TOOL_NAMES.has(needsHandback.name)) {
+              let { added, removed } = countEditLines(needsHandback.name, needsHandback.input);
               stats.editFileCount++;
               stats.linesAdded += added;
               stats.linesRemoved += removed;
             } else if (
-              block.name === ARTIFACT_TOOL_NAME &&
-              isPublishShapedArtifactAction?.(block.input) === true
+              needsHandback.name === ARTIFACT_TOOL_NAME &&
+              isPublishShapedArtifactAction?.(needsHandback.input) === true
             )
               stats.frameCount = (stats.frameCount ?? 0) + 1;
             else stats.otherToolCount++;
         }
       }
-    else if (message.type === "user") {
-      let toolStats = message.toolUseResult?.toolStats;
+    else if (handbackRequired.type === "user") {
+      let toolStats = handbackRequired.toolUseResult?.toolStats;
       if (toolStats) {
         stats.readCount += toolStats.readCount;
         stats.searchCount += toolStats.searchCount;
@@ -1027,14 +1078,14 @@ function countToolUses(messages) {
     ? stats
     : undefined;
 }
-//@ chunk-0h4e7gnq.js:145756-145805 layout
+//@ chunk-frs14hy1.js:157009-157058 layout
 /**
  * modelsUsed 列表末尾不是该模型时追加。
  */
 function appendModelIfChanged(modelsUsed, model) {
   return modelsUsed.at(-1) === model ? modelsUsed : [...modelsUsed, model];
 }
-//@ chunk-0h4e7gnq.js:145805-146020 layout
+//@ chunk-frs14hy1.js:157058-157273 layout
 /**
  * 从消息尾部找到 max_turns_reached 附件时返回 maxTurns。
  */
@@ -1047,7 +1098,7 @@ function getMaxTurnsReached(messages) {
   }
   return;
 }
-//@ chunk-0h4e7gnq.js:146020-146402 layout
+//@ chunk-frs14hy1.js:157273-157655 layout
 /**
  * 检测子代理末尾是否因模型不可用而 fallback，用于在报告前加提示。
  */
@@ -1072,7 +1123,7 @@ function findTrailingModelFallback(messages) {
   }
   return;
 }
-//@ chunk-0h4e7gnq.js:146402-149674 fingerprint (2.1.88 match: finalizeAgentTool, 0.374)
+//@ chunk-frs14hy1.js:157655-160909 fingerprint (2.1.88 match: finalizeAgentTool, 0.375)
 /**
  * finalizeAgentTool：从子代理消息中提取最后的文本报告，处理 SubagentHandback（send/flagged/withheld）、max turns、模型 fallback、持久化文件说明与长度截断，记录 tengu_agent_tool_completed 与 OTel subagent_completed，返回 agentToolResult。
  */
@@ -1199,7 +1250,7 @@ function finalizeAgentTool(
       surface: "finalize",
     });
   let textBlocks_2 = [];
-  let foreignPreamble = withUntrustedPreamble(agentMessages, metadata.priorForeignArtifactContent);
+  let foreignPreamble = withUntrustedPreamble(agentMessages, metadata.priorCarriedMarkers);
   if (foreignPreamble)
     textBlocks_2.push({
       type: "text",
@@ -1217,7 +1268,7 @@ function finalizeAgentTool(
         : "It was still calling tools and had produced no report.";
     textBlocks_2.push({
       type: "text",
-      text: `${AGENT_STOPPED_NOTE}${maxTurnsReached}-turn limit before finishing. ${partialNote}${continueHint}
+      text: `${AGENT_STOPPED_PREFIX}${maxTurnsReached}-turn limit before finishing. ${partialNote}${continueHint}
 `,
     });
   }
@@ -1279,17 +1330,17 @@ function finalizeAgentTool(
     totalTokens,
     totalToolUseCount,
     usage,
-    toolStats: countToolUses(agentMessages),
+    toolStats: finishAgentCall(agentMessages),
   };
 }
-//@ chunk-0h4e7gnq.js:149674-149731 layout
+//@ chunk-frs14hy1.js:160909-160966 layout
 function sumTextLength(textBlocks) {
   return textBlocks.reduce((acc, textBlock) => acc + textBlock.text.length, 0);
 }
-//@ chunk-0h4e7gnq.js:149731-149751 layout
+//@ chunk-frs14hy1.js:160966-160986 layout
 var CLASSIFIER_REASON_RESERVE_CHARS = 1000;
 var CLASSIFIER_REASON_MAX_CHARS = 1000;
-//@ chunk-0h4e7gnq.js:149751-149903 layout
+//@ chunk-frs14hy1.js:160986-161137 layout
 /**
  * 分类器理由超过 1000 字符时截断并注明原长度。
  */
@@ -1300,9 +1351,9 @@ function truncateClassifierReason(reason) {
   }).sanitized;
   return `${escapeToolsUsedSummaryTag(sanitized)} [\u2026cut from ${reason.length} characters]`;
 }
-//@ chunk-0h4e7gnq.js:149903-149920 layout
+//@ chunk-frs14hy1.js:161137-161154 layout
 var MAX_REPORT_WITH_NOTES_CHARS = 2 * CLASSIFIER_REASON_MAX_CHARS + 1000;
-//@ chunk-0h4e7gnq.js:149920-150581 layout
+//@ chunk-frs14hy1.js:161154-161813 layout
 /**
  * 报告与"已持久化文件"说明必须一起送达：总长超过 Agent 的持久化阈值时截断报告并追加截断提示。
  */
@@ -1374,16 +1425,16 @@ function fitReportWithPersistedFilesNote(reportBlocks, persistedFiles, harnessNo
     ],
   };
 }
-//@ chunk-0h4e7gnq.js:150581-150728 fingerprint (2.1.88 match: getLastToolUseName, 1)
+//@ chunk-frs14hy1.js:161813-161960 layout
 /**
  * assistant 消息中最后一个 tool_use 的名字。
  */
-function getLastToolUseName(message) {
+function shouldForwardSubagentText(message) {
   if (message.type !== "assistant") return;
   let block = message.message.content.findLast((block) => block.type === "tool_use");
   return block?.type === "tool_use" ? block.name : undefined;
 }
-//@ chunk-0h4e7gnq.js:150728-151013 fingerprint (2.1.88 match: emitTaskProgress, 0.891)
+//@ chunk-frs14hy1.js:161960-162245 fingerprint (2.1.88 match: emitTaskProgress, 0.884)
 /**
  * 把进度跟踪器的最新统计发成任务进度事件（token、工具次数、最近活动）。
  */
@@ -1408,7 +1459,7 @@ function emitTaskProgress({
     lastToolName,
   });
 }
-//@ chunk-0h4e7gnq.js:151013-151243 layout
+//@ chunk-frs14hy1.js:162245-162475 layout
 /**
  * 工作流派发审查用常量：Agent 工具的分类器桩（toAutoClassifierInput）、按模型的严重度阈值、输出 schema 免审上限 4096 字符。
  */
@@ -1417,7 +1468,7 @@ var AGENT_TOOL_CLASSIFIER_STUB;
 var WORKFLOW_GATE_SEVERITY_DEFAULTS;
 var MAX_UNREVIEWED_SCHEMA_CHARS_2;
 var MAX_UNREVIEWED_SCHEMA_CHARS;
-deferInit("chunk-0h4e7gnq.js:151013", () => {
+deferInit("chunk-frs14hy1.js:162245", () => {
   AGENT_STALL_GRACE_MS = 2 * CLASSIFIER_MAX_DEADLINE_MS + 60000;
   AGENT_TOOL_CLASSIFIER_STUB = {
     name: AGENT,
@@ -1439,20 +1490,20 @@ deferInit("chunk-0h4e7gnq.js:151013", () => {
   MAX_UNREVIEWED_SCHEMA_CHARS_2 = 4096;
   MAX_UNREVIEWED_SCHEMA_CHARS = 4000000;
 });
-//@ chunk-0h4e7gnq.js:151243-151291 file-local
+//@ chunk-frs14hy1.js:162475-162523 file-local
 /**
  * 输出 schema JSON 超过 4096 字符（分类器不可用时不能免审放行）。
  */
 function isSchemaTooLargeToSkipReview(messages) {
   return messages !== undefined && messages.length > MAX_UNREVIEWED_SCHEMA_CHARS_2;
 }
-//@ chunk-0h4e7gnq.js:151291-151445 layout
+//@ chunk-frs14hy1.js:162523-162677 layout
 /**
  * auto 模式本地分类器关闭时工作流代理不启动的说明。
  */
 var AUTO_MODE_CLASSIFIER_OFF_MESSAGE =
   "auto mode cannot review this prompt, so this agent was not started; retrying will not help, but the user can run the workflow outside auto mode";
-//@ chunk-0h4e7gnq.js:151445-153089 layout
+//@ chunk-frs14hy1.js:162677-164321 layout
 /**
  * auto 模式下审查工作流（RunWorkflow）要派发的子代理 prompt：调用分类器（site=workflowGate），记录 tengu_auto_mode_decision，返回拒绝理由或 null。
  */
@@ -1563,7 +1614,7 @@ ${schemaJson}`
       }
     : null;
 }
-//@ chunk-0h4e7gnq.js:153089-153199 layout
+//@ chunk-frs14hy1.js:164321-164431 layout
 /**
  * handoff 分类器严重度默认值与站点配置。
  */
@@ -1582,14 +1633,14 @@ var HANDOFF_SEVERITY_SITE = {
   key: "handoff",
   defaults: HANDOFF_SEVERITY_DEFAULTS,
 };
-//@ chunk-0h4e7gnq.js:153199-153266 layout
+//@ chunk-frs14hy1.js:164431-164498 layout
 /**
  * auto 模式且报告未经 SubagentHandback 正常送达时才需要审查子代理交回。
  */
 function shouldClassifyHandoff(toolPermissionContext, handback) {
   return toolPermissionContext.mode === "auto" && handback !== "send" && handback !== "flagged";
 }
-//@ chunk-0h4e7gnq.js:153266-156224 fingerprint (2.1.88 match: classifyHandoffIfNeeded, 0.527)
+//@ chunk-frs14hy1.js:164498-167451 fingerprint (2.1.88 match: classifyHandoffIfNeeded, 0.527)
 /**
  * classifyHandoffIfNeeded：auto 模式下用分类器审查子代理的动作与最终报告；被拦截时返回 SECURITY WARNING（flagged/refused/unavailable）附加到报告前，未拦截返回 null。
  */
@@ -1737,11 +1788,11 @@ async function classifyHandoffIfNeeded({
   }
   return null;
 }
-//@ chunk-0h4e7gnq.js:156224-156580 placement
+//@ chunk-frs14hy1.js:167451-167798 placement
 /**
  * 取子代理最后一条有效 assistant 文本作为结果：跳过 API 错误消息，清洗内容并在前面附加外部 artifact 内容提示与撤回通知。
  */
-function extractAgentFinalText(agentMessages, { priorForeignArtifactContent: options = false } = {}) {
+function extractAgentFinalText(agentMessages, { priorCarriedMarkers: options = [] } = {}) {
   let { live, notice } = dropRetractedOnResume(agentMessages);
   for (let j = live.length - 1; j >= 0; j--) {
     let message = live[j];
@@ -1769,7 +1820,7 @@ ${sanitized}`
   }
   return;
 }
-//@ chunk-0h4e7gnq.js:156580-156749 placement
+//@ chunk-frs14hy1.js:167798-167967 placement
 function extractPartialResultSafe(agentMessages, taskId, options = {}) {
   try {
     return extractAgentFinalText(agentMessages, options);
@@ -1784,33 +1835,42 @@ function extractPartialResultSafe(agentMessages, taskId, options = {}) {
     return;
   }
 }
-//@ chunk-0h4e7gnq.js:156749-156806 placement
+//@ chunk-frs14hy1.js:167967-168024 placement
 /**
  * 判断消息是否是 API 错误展示文案。
  */
 function isApiErrorDisplayMessage(lastAssistantMessage) {
   return lastAssistantMessage?.isApiErrorMessage === true && !isSyntheticMessage(lastAssistantMessage);
 }
-//@ chunk-0h4e7gnq.js:156806-157058 placement
+//@ chunk-frs14hy1.js:168024-168372 placement
 let AgentApiErrorTerminationError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0h4e7gnq.js:156806", () => {
+deferInit("chunk-frs14hy1.js:168024", () => {
   AgentApiErrorTerminationError = class AgentApiErrorTerminationError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
     errorKind;
     usageLimitDenial;
-    constructor(errorText, errorKind, usageLimitDenial) {
+    callerNote;
+    shownMessage;
+    constructor(message, errorKind, usageLimitDenial, callerNote) {
+      let shownMessage = `Agent terminated early due to an API error: ${message}`;
       super(
-        `Agent terminated early due to an API error: ${errorText}`,
+        callerNote === undefined
+          ? shownMessage
+          : `${shownMessage}
+
+${callerNote}`,
         "Agent terminated early due to an API error",
       );
       this.errorKind = errorKind;
       this.usageLimitDenial = usageLimitDenial;
+      this.callerNote = callerNote;
       this.name = "AgentApiErrorTerminationError";
+      this.shownMessage = shownMessage;
     }
   };
 });
-//@ chunk-0h4e7gnq.js:157058-157393 placement
+//@ chunk-frs14hy1.js:168372-168707 placement
 /**
  * 把子代理的 API 错误消息整理成文本，附带状态码与请求 id。
  */
@@ -1829,12 +1889,12 @@ function formatAgentApiErrorText(lastAssistantMessage, lastToolName) {
   ].filter((part) => typeof part === "string");
   return filtered.length > 0 ? `${textContent} (${filtered.join(", ")})` : textContent;
 }
-//@ chunk-0h4e7gnq.js:157393-157452 placement
+//@ chunk-frs14hy1.js:168707-168766 placement
 var TRANSIENT_API_ERROR_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0h4e7gnq.js:157393", () => {
+deferInit("chunk-frs14hy1.js:168707", () => {
   TRANSIENT_API_ERROR_KINDS = new Set(["rate_limit", "overloaded", "server_error"]);
 });
-//@ chunk-0h4e7gnq.js:157452-157679 placement
+//@ chunk-frs14hy1.js:168766-168993 placement
 function partialResultPreamble(cutoffText) {
   return `${truncateClassifierReason(
     sanitizeSubagentOutput(cutoffText, {
@@ -1844,7 +1904,7 @@ function partialResultPreamble(cutoffText) {
 
 Everything below is PARTIAL output recovered from the agent before it was cut off. The agent did NOT finish its task \u2014 treat these results as incomplete.`;
 }
-//@ chunk-0h4e7gnq.js:157918-158194 placement
+//@ chunk-frs14hy1.js:169232-169508 placement
 function recoverFromSyncAgentError(error, agentMessages) {
   let recovered = removeProjectHistory(error, agentMessages);
   if (recovered) {
@@ -1861,7 +1921,7 @@ function recoverFromSyncAgentError(error, agentMessages) {
     history: agentMessages,
   };
 }
-//@ chunk-0h4e7gnq.js:158194-158480 placement
+//@ chunk-frs14hy1.js:169508-169795 placement
 function prependHarnessNote(report, toolUseContext) {
   let toolsLine = unreadableToolsLine(report.toolsUsed ?? [], toolUseContext.messages);
   if (
@@ -1887,7 +1947,7 @@ function prependHarnessNote(report, toolUseContext) {
     harnessSectionHash: hashTextSections(content),
   };
 }
-//@ chunk-0h4e7gnq.js:158480-159383 placement
+//@ chunk-frs14hy1.js:169795-170800 placement
 async function buildAgentHandback(
   report,
   { agentId, agentMessages, agentType, child, cutoffNote, tools, toolUseContext },
@@ -1923,6 +1983,12 @@ async function buildAgentHandback(
       kind: "unavailable",
     };
   });
+  if (codeModeAccepted() && hasCodeModeBeenUsed())
+    buildHandbackReport(agentId, {
+      judged: shouldClassifyHandoff(toolPermissionContext, handbackReport.handback),
+      warning: classification,
+      unfinished: toolUseContext.abortController.signal.aborted,
+    });
   handbackReport = prependHarnessNote(handbackReport, toolUseContext);
   if (classification) {
     handbackReport.content = [
@@ -1948,23 +2014,23 @@ async function buildAgentHandback(
   }
   return handbackReport;
 }
-//@ chunk-0h4e7gnq.js:159383-159404 placement
+//@ chunk-frs14hy1.js:170800-170821 placement
 var AGENT_TOOL_NAME_SET; // deferred: uses AGENT (./constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-0h4e7gnq.js:159383", () => {
+deferInit("chunk-frs14hy1.js:170800", () => {
   AGENT_TOOL_NAME_SET = new Set([AGENT]);
 });
-//@ chunk-0h4e7gnq.js:159404-159498 placement
+//@ chunk-frs14hy1.js:170821-170915 placement
 function longerTranscriptMessages(taskRegistry, taskId, agentMessages) {
   let transcript = taskRegistry.getTranscript(taskId);
   return transcript && transcript.messages.length > agentMessages.length
     ? transcript.messages
     : agentMessages;
 }
-//@ chunk-0h4e7gnq.js:159498-159536 placement
+//@ chunk-frs14hy1.js:170915-170953 placement
 var STALL_TIMEOUT_STREAM_SLACK_MS = 300000;
 var MAX_STALL_TIMEOUT_MS = 2147483647;
 var STALL_TIMEOUT_DEFAULT_MS = 600000;
-//@ chunk-0h4e7gnq.js:159536-159718 placement
+//@ chunk-frs14hy1.js:170953-171135 placement
 /**
  * 后台子代理卡死检测超时：优先 CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS；关闭流看门狗时用默认值；否则为流空闲超时加余量并取上限。
  */
@@ -1973,7 +2039,7 @@ function getAsyncAgentStallTimeoutMs() {
   if (!(env.CLAUDE_ENABLE_STREAM_WATCHDOG ?? true)) return STALL_TIMEOUT_DEFAULT_MS;
   return Math.min(getStreamIdleTimeoutMs() + STALL_TIMEOUT_STREAM_SLACK_MS, MAX_STALL_TIMEOUT_MS);
 }
-//@ chunk-0h4e7gnq.js:159718-159836 placement
+//@ chunk-frs14hy1.js:171135-171253 placement
 function adoptSubagentPublishArmsAsync(agentId, context) {
   import("../ArtifactTool/subagentPublishArms.js")
     .then((publishArmsModule) =>
@@ -1984,7 +2050,7 @@ function adoptSubagentPublishArmsAsync(agentId, context) {
     )
     .catch(logError);
 }
-//@ chunk-0h4e7gnq.js:159836-171592 callgraph-witnessed (2.1.88 match: runAsyncAgentLifecycle, 0.225)
+//@ chunk-frs14hy1.js:171253-183970 callgraph-witnessed (2.1.88 match: runAsyncAgentLifecycle, 0.207)
 /**
  * runAsyncAgentLifecycle：后台子代理的生命周期——驱动 makeStream 产生的 runAgent 流，更新任务表/转录、进度与空闲状态、看门狗卡死检测，结束时 finalize 报告、可选 handoff 审查，并入队完成/失败/被杀通知；支持 /background 转后台与 keepalive 挂起。
  */
@@ -2008,7 +2074,7 @@ async function runAsyncAgentLifecycle({
 }) {
   let unregisterLoop = registerTaskLoop(taskId, abortController);
   setAgentController(taskId, agentIdForCleanup, abortController);
-  let stream = undefined;
+  let stream = codeModeAccepted() && hasCodeModeBeenUsed() ? randomUUID() : undefined;
   let parked = false;
   let wakeTimer;
   let settledOnce = false;
@@ -2030,6 +2096,7 @@ async function runAsyncAgentLifecycle({
     return true;
   };
   let agentMessages = [];
+  let runner = new UnsentMediaReporter(agentIdForCleanup);
   let modelsUsed = appendModelIfChanged(metadata.modelsUsed ?? [], metadata.resolvedAgentModel);
   let taskEntry = taskRegistry.get(taskId);
   let ownerAgentId = isLocalAgent(taskEntry) ? taskEntry.ownerAgentId : undefined;
@@ -2047,9 +2114,20 @@ async function runAsyncAgentLifecycle({
   resolveActivity.setMode("responding");
   let effort =
     (isLocalAgent(taskEntry) ? taskEntry.effort : undefined) ??
-    getEffortLayerOverride(toolUseContext.permissionLayers) ??
-    null;
-  resolveActivity.setTurnEffort(effort, metadata.resolvedAgentModel);
+    getEffortLayerOverride(toolUseContext.permissionLayers);
+  let streamId =
+    metadata.pickedEffortModel !== undefined
+      ? metadata.pickedEffortModel
+      : isMainConversationContext(metadata.agentContext)
+        ? (toolUseContext.pickedEffortModel ?? null)
+        : getPickedEffortModel(toolUseContext);
+  let finishLoop = (params) =>
+    resolveActivity.setTurnEffort(
+      effort ??
+        (streamId === null ? null : (getOwnEffortOffPickedModel(toolUseContext, params, streamId) ?? null)),
+      params,
+    );
+  finishLoop(metadata.resolvedAgentModel);
   let turnCount = 0;
   let lastToolUseId;
   let lastToolResultId;
@@ -2096,7 +2174,7 @@ async function runAsyncAgentLifecycle({
       let entry = taskRegistry.get(taskId);
       if (!isLocalAgent(entry) || entry.status !== "running") return false;
       let filtered = longerTranscriptMessages(taskRegistry, taskId, agentMessages).filter(
-        (params) => params.type !== "assistant" || !params.isApiErrorMessage,
+        (stopAgent) => stopAgent.type !== "assistant" || !stopAgent.isApiErrorMessage,
       );
       if (!filtered.some((message) => message.type === "assistant")) return false;
       parkedAlready = true;
@@ -2224,7 +2302,7 @@ async function runAsyncAgentLifecycle({
             taskRegistry,
             toolUseId: toolUseContext.toolUseId,
             finalMessage: extractPartialResultSafe(agentMessages, taskId, {
-              priorForeignArtifactContent: metadata.priorForeignArtifactContent,
+              priorCarriedMarkers: metadata.priorCarriedMarkers,
             }),
             ownerAgentId,
           });
@@ -2256,14 +2334,30 @@ async function runAsyncAgentLifecycle({
       for (let recentActivity of tracker.recentActivities)
         if (recentActivity.toolUseId !== undefined) tracker.seenToolUseIds.add(recentActivity.toolUseId);
     }
-    let resolveActivityDescription = createActivityDescriptionResolver(toolUseContext.options.tools);
+    let resolveActivityDescription = makeActivityDescription(toolUseContext.options.tools);
     let requestStats = {
+      hasChangedModel: false,
       requestsBegun: 0,
       responsesBegun: 0,
       isAwaitingResponse: false,
       lastResponseAt: undefined,
     };
-    let summarizeParams = enableSummarization
+    let stallTimeoutMs = enableSummarization && !env.CLAUDE_CODE_DISABLE_AGENT_PROGRESS_SUMMARIES;
+    if (enableSummarization && !stallTimeoutMs) {
+      logForDebugging(
+        `[AgentSummary] No progress summaries for ${taskId}: CLAUDE_CODE_DISABLE_AGENT_PROGRESS_SUMMARIES is set`,
+      );
+      logFeatureOk("subagent_progress_summaries_off");
+      taskRegistry.update(taskId, (taskEntry) => {
+        if (taskEntry.progress?.summary === undefined) return taskEntry;
+        let { summary, ...ownerAgentId } = taskEntry.progress;
+        return {
+          ...taskEntry,
+          progress: ownerAgentId,
+        };
+      });
+    }
+    let stallTimer = stallTimeoutMs
       ? (params, summarizeParamsIn) => {
           let { stop } = startAgentSummaryTimer(
             taskId,
@@ -2272,7 +2366,7 @@ async function runAsyncAgentLifecycle({
             summarizeParamsIn,
             taskRegistry,
             {
-              priorForeignArtifactContent: metadata.priorForeignArtifactContent,
+              priorCarriedMarkers: metadata.priorCarriedMarkers,
               ownRequests: requestStats,
             },
           );
@@ -2284,7 +2378,7 @@ async function runAsyncAgentLifecycle({
       updateAgentProgressIfChanged(taskId, getProgressUpdate(tracker), taskRegistry);
     };
     armStallTimer();
-    for await (let message of makeStream(summarizeParams, onStopSignal, onEvent)) {
+    for await (let message of makeStream(stallTimer, onStopSignal, onEvent)) {
       onMessage?.(message);
       if (message.type === "spinner_mode" && message.mode === "requesting") {
         requestStats.requestsBegun++;
@@ -2302,8 +2396,9 @@ async function runAsyncAgentLifecycle({
         continue;
       }
       if (message.type === "query_model_change") {
+        requestStats.hasChangedModel = true;
         modelsUsed = appendModelIfChanged(modelsUsed, message.toModel);
-        resolveActivity.setTurnEffort(effort, message.toModel);
+        finishLoop(message.toModel);
         taskRegistry.update(taskId, (prev) =>
           prev.model === message.toModel
             ? prev
@@ -2368,6 +2463,7 @@ async function runAsyncAgentLifecycle({
       armStallTimer();
       if (message.type === "system" && message.subtype === "api_error") continue;
       if (message.type === "system" && message.subtype === "model_refusal_fallback") {
+        requestStats.hasChangedModel = true;
         taskRegistry.update(taskId, (task) =>
           task.model === message.fallbackModel
             ? task
@@ -2376,28 +2472,34 @@ async function runAsyncAgentLifecycle({
                 model: message.fallbackModel,
               },
         );
-        resolveActivity.setTurnEffort(effort, message.fallbackModel);
+        finishLoop(message.fallbackModel);
       }
       agentMessages.push(message);
-      taskRegistry.updateTranscript(taskId, (transcript) => ({
-        ...transcript,
-        messages:
-          retagQueuedCommandSource(transcript.messages, message) ??
-          upsertMessageByUuid(transcript.messages, message),
-        ...(sawResult && inProgressToolUpdate(transcript.inProgressToolUseIDs, new Set(runningTools))),
-      }));
+      let stallTimer = runner.hasNews();
+      if (stallTimer) letGoOfUnsentMediaInPlace(agentMessages, agentIdForCleanup);
+      taskRegistry.updateTranscript(taskId, (entry) => {
+        let messages = stallTimer ? letGoOfUnsentMedia(entry.messages, agentIdForCleanup) : entry.messages;
+        return {
+          ...entry,
+          messages: retagQueuedCommandSource(messages, message) ?? upsertMessageByUuid(messages, message),
+          ...(sawResult && inProgressToolUpdate(entry.inProgressToolUseIDs, new Set(runningTools))),
+        };
+      });
       refreshIdle();
       updateProgressFromMessage(tracker, message, resolveActivityDescription, toolUseContext.options.tools);
       updateAgentProgressIfChanged(taskId, getProgressUpdate(tracker), taskRegistry);
-      let lastToolUseName = getLastToolUseName(message);
-      if (lastToolUseName)
+      let collectedMessages = shouldForwardSubagentText(message);
+      if (collectedMessages)
         emitTaskProgress({
           tracker,
           taskId,
           toolUseId: toolUseContext.toolUseId,
           description,
           startTime: metadata.startTime,
-          lastToolName: lastToolUseName,
+          lastToolName:
+            codeModeAccepted() && (isEvalToolName(collectedMessages) || collectedMessages === POLL)
+              ? undefined
+              : collectedMessages,
           subagentType: metadata.agentType,
         });
     }
@@ -2426,9 +2528,16 @@ async function runAsyncAgentLifecycle({
           model: lastToolName,
           limits: lastAssistantMessage.quotaLimits,
         },
+        isRefusalErrorMessage(lastAssistantMessage)
+          ? formatSafeguardStop(
+              lastAssistantMessage,
+              toolUseContext.options.tools.some((tool) => matchesToolName(tool, AGENT)),
+            )
+          : undefined,
       );
     }
-    let toolPermissionContext = undefined;
+    let toolPermissionContext =
+      codeModeAccepted() && hasCodeModeBeenUsed() ? getToolPermissionContext(toolUseContext) : undefined;
     parked = toolPermissionContext?.mode === "auto";
     finished = true;
     stopAgent?.();
@@ -2555,14 +2664,22 @@ async function runAsyncAgentLifecycle({
       });
     if (!canNotifyOwner()) {
       if (reviewInlineHandoff) {
-        let summary = await summarize();
-        if (summary)
+        let partial = await summarize();
+        if (codeModeAccepted() && hasCodeModeBeenUsed()) {
+          buildHandbackReport(taskId, {
+            judged: wakeTimer === true,
+            warning: partial,
+            unfinished: abortController.signal.aborted,
+          });
+          settledOnce = true;
+        }
+        if (partial)
           taskRegistry.update(taskId, (task) => {
             if (!task.result) return task;
             let resultContent = [
               {
                 type: "text",
-                text: summary.warning,
+                text: partial.warning,
               },
               ...task.result.content,
             ];
@@ -2581,6 +2698,14 @@ async function runAsyncAgentLifecycle({
       return;
     }
     let summary = await summarize();
+    if (codeModeAccepted() && hasCodeModeBeenUsed()) {
+      buildHandbackReport(taskId, {
+        judged: wakeTimer === true,
+        warning: summary,
+        unfinished: abortController.signal.aborted,
+      });
+      settledOnce = true;
+    }
     if (summary)
       textContent = `${summary.warning}
 
@@ -2618,6 +2743,12 @@ ${textContent}`;
   } catch (error) {
     clearStallTimer();
     if (finished) {
+      if (codeModeAccepted() && hasCodeModeBeenUsed() && !settledOnce)
+        buildHandbackReport(taskId, {
+          judged: wakeTimer ?? parked,
+          warning: null,
+          unfinished: true,
+        });
       let error_2 = truncateMiddle(errorMessage(error));
       logForDebugging(`[AsyncAgent ${taskId}] completion sequence threw after finalize: ${error_2}`, {
         level: "error",
@@ -2650,7 +2781,7 @@ ${textContent}`;
           toolUseId: toolUseContext.toolUseId,
           ownerAgentId,
           finalMessage: extractPartialResultSafe(agentMessages, taskId, {
-            priorForeignArtifactContent: metadata.priorForeignArtifactContent,
+            priorCarriedMarkers: metadata.priorCarriedMarkers,
           }),
           maxTurnsReached,
           callerCanContinueAgents: metadata.callerCanContinueAgents,
@@ -2704,14 +2835,16 @@ ${textContent}`;
         taskRegistry,
         toolUseId: toolUseContext.toolUseId,
         finalMessage: extractPartialResultSafe(agentMessages, taskId, {
-          priorForeignArtifactContent: metadata.priorForeignArtifactContent,
+          priorCarriedMarkers: metadata.priorCarriedMarkers,
         }),
         ownerAgentId,
         ...worktreeResult,
       });
       return;
     }
-    let partialResult = truncateMiddle(errorMessage(error));
+    let partialResult = truncateMiddle(
+      error instanceof AgentApiErrorTerminationError ? error.shownMessage : errorMessage(error),
+    );
     logCompletion("error", {
       errorKind: error instanceof Error ? `${error.name}:${truncateToLength(partialResult, 80)}` : "unknown",
     });
@@ -2747,11 +2880,12 @@ ${textContent}`;
       status: "failed",
       error: partialResult,
       usageLimitDenial: error instanceof AgentApiErrorTerminationError ? error.usageLimitDenial : undefined,
+      callerNote: error instanceof AgentApiErrorTerminationError ? error.callerNote : undefined,
       callerCanContinueAgents: metadata.callerCanContinueAgents,
       taskRegistry,
       toolUseId: toolUseContext.toolUseId,
       finalMessage: extractPartialResultSafe(agentMessages, taskId, {
-        priorForeignArtifactContent: metadata.priorForeignArtifactContent,
+        priorCarriedMarkers: metadata.priorCarriedMarkers,
       }),
       ownerAgentId,
       ...worktreeResult,
@@ -2766,7 +2900,7 @@ ${textContent}`;
     clearReplayChain(agentIdForCleanup);
   }
 }
-//@ chunk-0h4e7gnq.js:171592-171848 sole-consumer
+//@ chunk-frs14hy1.js:183970-184226 sole-consumer
 function recordAgentFinishOnStop(taskId, taskRegistry, storageV5, onStopping) {
   let wasRunning = taskRegistry.get(taskId)?.status === "running";
   onStopping();
@@ -2795,26 +2929,32 @@ function recordAgentFinishOnStop(taskId, taskRegistry, storageV5, onStopping) {
 export {
   ARTIFACT_TOOL_NAME,
   standsInForBuiltInArtifact,
-  runAsyncAgentLifecycle,
-  sumUsages,
-  flattenToolNameList,
-  withAgentDisallowedTools,
   resolveAgentTools,
   withWebFetchToolForAgent,
   resolveAgentToolNames,
-  AgentApiErrorTerminationError,
-  TRANSIENT_API_ERROR_KINDS,
-  extractAgentFinalText,
-  partialResultPreamble,
+  AGENT_STALL_GRACE_MS,
+  hasToolRuleFor,
+  isApiErrorDisplayMessage,
+  adoptSubagentPublishArmsAsync,
+  canUseWebFetchAgent,
+  canSpawnSubagents,
+  getAgentSpawnContext,
+  webFetchAgentHookHint,
   agentToolResultSchema,
   rebaseHookOriginForAgent,
+  runAsyncAgentLifecycle,
   appendModelIfChanged,
   recoverFromSyncAgentError,
   buildAgentHandback,
   finalizeAgentTool,
-  prependHarnessNote,
-  isApiErrorDisplayMessage,
-  adoptSubagentPublishArmsAsync,
+  withAgentDisallowedTools,
+  AgentApiErrorTerminationError,
+  TRANSIENT_API_ERROR_KINDS,
+  extractAgentFinalText,
+  partialResultPreamble,
+  sumUsages,
+  flattenToolNameList,
+  getSessionContextAttachmentData,
   MAX_UNREVIEWED_SCHEMA_CHARS,
   isSchemaTooLargeToSkipReview,
   MAX_UNREVIEWED_SCHEMA_CHARS_2,
@@ -2824,10 +2964,5 @@ export {
   probeAgentToolPool,
   truncateClassifierReason,
   classifyHandoffIfNeeded,
-  canUseWebFetchAgent,
-  canSpawnSubagents,
-  getAgentSpawnContext,
-  webFetchAgentHookHint,
-  hasToolRuleFor,
-  AGENT_STALL_GRACE_MS,
+  prependHarnessNote,
 };

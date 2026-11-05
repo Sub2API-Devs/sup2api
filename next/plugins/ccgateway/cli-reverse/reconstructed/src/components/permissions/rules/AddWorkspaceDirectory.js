@@ -3,42 +3,246 @@
  *
  * 添加工作目录：输入路径、选择"本会话"或"记住"。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/rules/AddWorkspaceDirectory.tsx
- * pieces: chunk-j1c0t4gs.js (7)
- * attribution: placement 1, layout 2, fingerprint 4
+ * pieces: chunk-0tbq6c3s.js (7), chunk-czq1j3j2.js (1)
+ * attribution: placement 1, layout 2, fingerprint 4, callgraph-witnessed 1
  */
-import { init_react_production, useState, useEffect } from "../../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
+import { logEvent } from "../../../services/analytics/index.js";
+import { fromEnum } from "../../../services/analytics/safeMetadata.js";
+import { useOnFirstReveal } from "../PermissionRequestTitle.js";
+import { useGlobalExitKeybindings, useKeybinding } from "../../../keybindings/useKeybinding.js";
+import { useIsScreenReaderEnabled } from "../../../ink/components/ErrorBoundary.js";
+import { useRefusableAnswer } from "../../../hooks/useRefusableAnswer.js";
+import { useInputClock, useDebouncedCallback } from "../../../ink/components/Input.js";
+import { useMountTime, useRefusalTracker } from "../../CustomSelect/selectTypeahead.js";
+import { isWithinRecentInput } from "../../../hooks/useRecentInputGuard.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
+import { stableEmptyObject } from "../../../utils/stableEmptyObject.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { Text, Box } from "../../../ink/components/Text.js";
+import { Box, Text } from "../../../ink/components/Text.js";
+import { permissionModeIndicator } from "../../../utils/permissions/PermissionMode.js";
+import { ModelSelector } from "../../agents/ModelSelector.js";
+import { Byline } from "../../design-system/Byline.js";
+import { KeyboardShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
+import { ConfigurableShortcutHint } from "../../ConfigurableShortcutHint.js";
+import { PermissionDialog_2 } from "../PermissionDialog.js";
+import { init_react_production, useState, useEffect } from "../../../../vendor/react/cjs/react.production.js";
 import { TextInput } from "../../TextInput.js";
 import { figures_default } from "../../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { PromptInputFooterSuggestions } from "../../PromptInput/PromptInputFooterSuggestions.js";
 import { ErrorText } from "../../ErrorText.js";
 import { useSession } from "../../../context/session.js";
 import { getDirectoryCompletions } from "../../../utils/suggestions/directoryCompletion.js";
-import { useDebouncedCallback } from "../../../ink/components/Input.js";
 import { validateDirectoryForWorkspace, addDirHelpMessage } from "../../../commands/add-dir/validation.js";
-import { useKeybinding } from "../../../keybindings/useKeybinding.js";
-import { Byline } from "../../design-system/Byline.js";
-import { KeyboardShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
-import { ConfigurableShortcutHint } from "../../ConfigurableShortcutHint.js";
-import { ModelSelector } from "../../agents/ModelSelector.js";
 import { Dialog } from "../../design-system/Dialog.js";
 import { FocusColumn } from "../../design-system/FocusColumn.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-j1c0t4gs.js:889-893 placement
-init_react_production();
-//@ chunk-j1c0t4gs.js:893-939 layout
+//@ chunk-czq1j3j2.js:1132361-1134643 callgraph-witnessed (2.1.88 match: _temp2, 0.155)
+/**
+ * 询问是否把 auto 模式设为默认权限模式的对话框；上报 tengu_auto_default_nudge_shown，带输入防抖拒绝。
+ */
+function AutoModeDefaultNudgeDialog(exitState) {
+  let $ = useMemoCache(32);
+  let { currentMode, onDone } = exitState;
+  let logImpression;
+  if ($[0] !== currentMode) {
+    logImpression = () => {
+      logEvent("tengu_auto_default_nudge_shown", {
+        current_mode: fromEnum(currentMode),
+      });
+    };
+    $[0] = currentMode;
+    $[1] = logImpression;
+  } else logImpression = $[1];
+  useOnFirstReveal("impression", logImpression);
+  let globalExitKeybindings = useGlobalExitKeybindings();
+  let isScreenReaderEnabled = useIsScreenReaderEnabled();
+  let refusableAnswer = useRefusableAnswer(onDone);
+  let inputClock = useInputClock();
+  let mountTime = useMountTime();
+  let { refusedWithin, noteRefused } = useRefusalTracker();
+  let shouldRefuse;
+  if ($[2] !== inputClock || $[3] !== noteRefused || $[4] !== mountTime || $[5] !== refusedWithin) {
+    shouldRefuse = () => {
+      if (isWithinRecentInput(inputClock, mountTime()) || refusedWithin()) {
+        noteRefused();
+        return true;
+      }
+      return false;
+    };
+    $[2] = inputClock;
+    $[3] = noteRefused;
+    $[4] = mountTime;
+    $[5] = refusedWithin;
+    $[6] = shouldRefuse;
+  } else shouldRefuse = $[6];
+  let shouldRefuse_2 = shouldRefuse;
+  let handleAnswer;
+  if ($[7] !== shouldRefuse_2 || $[8] !== refusableAnswer) {
+    handleAnswer = function handleAnswer(value) {
+      if (shouldRefuse_2()) {
+        refusableAnswer.refuse(value);
+        return;
+      }
+      refusableAnswer.answer(value);
+    };
+    $[7] = shouldRefuse_2;
+    $[8] = refusableAnswer;
+    $[9] = handleAnswer;
+  } else handleAnswer = $[9];
+  let choose = handleAnswer;
+  let emptyHintProps;
+  if ($[10] === MEMO_CACHE_SENTINEL) {
+    emptyHintProps = stableEmptyObject(false);
+    $[10] = emptyHintProps;
+  } else emptyHintProps = $[10];
+  let emptyHintProps_2 = emptyHintProps;
+  let explainerBox;
+  if ($[11] === MEMO_CACHE_SENTINEL) {
+    explainerBox = jsxProd_default(Box, {
+      marginBottom: 1,
+      flexDirection: "column",
+      children: jsxProd_default(Text, {
+        children:
+          "Auto mode lets Claude handle permission prompts automatically. Claude checks each tool call for risky actions and prompt injection before executing, runs the ones it assesses as lower-risk, and blocks the rest.",
+      }),
+    });
+    $[11] = explainerBox;
+  } else explainerBox = $[11];
+  const attempts = refusableAnswer.attempts;
+  const defaultFocusValue = refusableAnswer.refused ?? undefined;
+  let acceptOption;
+  if ($[12] === MEMO_CACHE_SENTINEL) {
+    acceptOption = {
+      label: "Yes, set auto mode as my default permission mode",
+      value: "accept",
+    };
+    $[12] = acceptOption;
+  } else acceptOption = $[12];
+  let modeLabel;
+  if ($[13] !== currentMode) {
+    modeLabel = permissionModeIndicator(currentMode);
+    $[13] = currentMode;
+    $[14] = modeLabel;
+  } else modeLabel = $[14];
+  const label = `No, keep ${modeLabel}`;
+  let options;
+  if ($[15] !== label) {
+    options = [
+      acceptOption,
+      {
+        label,
+        value: "decline",
+      },
+    ];
+    $[15] = label;
+    $[16] = options;
+  } else options = $[16];
+  let onCancel;
+  if ($[17] !== choose) {
+    onCancel = () => choose("decline");
+    $[17] = choose;
+    $[18] = onCancel;
+  } else onCancel = $[18];
+  let selectorBox;
+  if (
+    $[19] !== choose ||
+    $[20] !== shouldRefuse_2 ||
+    $[21] !== refusableAnswer.attempts ||
+    $[22] !== options ||
+    $[23] !== onCancel ||
+    $[24] !== defaultFocusValue
+  ) {
+    selectorBox = jsxProd_default(Box, {
+      children: jsxProd_default(
+        ModelSelector,
+        {
+          defaultFocusValue,
+          hideIndexes: true,
+          refuseInput: shouldRefuse_2,
+          options,
+          onChange: choose,
+          onCancel,
+        },
+        attempts,
+      ),
+    });
+    $[19] = choose;
+    $[20] = shouldRefuse_2;
+    $[21] = refusableAnswer.attempts;
+    $[22] = options;
+    $[23] = onCancel;
+    $[24] = defaultFocusValue;
+    $[25] = selectorBox;
+  } else selectorBox = $[25];
+  let exitHint;
+  if ($[26] !== globalExitKeybindings || $[27] !== isScreenReaderEnabled) {
+    exitHint =
+      false &&
+      (!isScreenReaderEnabled || globalExitKeybindings.pending) &&
+      jsxProd_default(Box, {
+        marginTop: 1,
+        children: jsxProd_default(Text, {
+          dimColor: true,
+          italic: true,
+          children: globalExitKeybindings.pending
+            ? `Press ${globalExitKeybindings.keyName} again to exit`
+            : jsxProd_default_2(Byline, {
+                children: [
+                  jsxProd_default(KeyboardShortcutHint, {
+                    chord: "enter",
+                    action: "confirm",
+                    ...emptyHintProps_2,
+                  }),
+                  jsxProd_default(ConfigurableShortcutHint, {
+                    action: "select:cancel",
+                    context: "Select",
+                    fallback: "Esc",
+                    description: "cancel",
+                    ...emptyHintProps_2,
+                  }),
+                ],
+              }),
+        }),
+      });
+    $[26] = globalExitKeybindings;
+    $[27] = isScreenReaderEnabled;
+    $[28] = exitHint;
+  } else exitHint = $[28];
+  let dialog;
+  if ($[29] !== selectorBox || $[30] !== exitHint) {
+    dialog = jsxProd_default(PermissionDialog_2, {
+      title: "Make auto mode your default permission mode?",
+      children: jsxProd_default_2(Box, {
+        flexDirection: "column",
+        paddingX: false ? 0 : 2,
+        paddingTop: 1,
+        paddingBottom: false ? 0 : 1,
+        children: [explainerBox, selectorBox, exitHint],
+      }),
+    });
+    $[29] = selectorBox;
+    $[30] = exitHint;
+    $[31] = dialog;
+  } else dialog = $[31];
+  return dialog;
+}
+//@ chunk-0tbq6c3s.js:889-893 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0tbq6c3s.js:889", () => {
+  init_react_production();
+});
+//@ chunk-0tbq6c3s.js:893-939 layout
 function stripLineBreaks(text) {
   return text.replace(/[\r\n]/g, "");
 }
-//@ chunk-j1c0t4gs.js:939-1087 fingerprint (2.1.88 match: REMEMBER_DIRECTORY_OPTIONS, 1)
+//@ chunk-0tbq6c3s.js:939-1087 fingerprint (2.1.88 match: REMEMBER_DIRECTORY_OPTIONS, 1)
 var REMEMBER_DIRECTORY_OPTIONS = [
   {
     value: "yes-session",
@@ -53,7 +257,7 @@ var REMEMBER_DIRECTORY_OPTIONS = [
     label: "No",
   },
 ];
-//@ chunk-j1c0t4gs.js:1087-1287 layout
+//@ chunk-0tbq6c3s.js:1087-1287 layout
 function WorkspaceDirectoryHint() {
   let $ = useMemoCache(1);
   let t0;
@@ -67,7 +271,7 @@ function WorkspaceDirectoryHint() {
   } else t0 = $[0];
   return t0;
 }
-//@ chunk-j1c0t4gs.js:1287-1555 fingerprint (2.1.88 match: DirectoryDisplay, 0.521)
+//@ chunk-0tbq6c3s.js:1287-1555 fingerprint (2.1.88 match: DirectoryDisplay, 0.522)
 function DirectoryDisplay(props) {
   let $ = useMemoCache(5);
   let { path } = props;
@@ -97,7 +301,7 @@ function DirectoryDisplay(props) {
   } else t3 = $[4];
   return t3;
 }
-//@ chunk-j1c0t4gs.js:1555-2553 fingerprint (2.1.88 match: DirectoryInput, 0.739)
+//@ chunk-0tbq6c3s.js:1555-2553 fingerprint (2.1.88 match: DirectoryInput, 0.739)
 function DirectoryInput(props) {
   let $ = useMemoCache(16);
   let {
@@ -188,7 +392,7 @@ function DirectoryInput(props) {
   } else t5 = $[15];
   return t5;
 }
-//@ chunk-j1c0t4gs.js:2553-5100 fingerprint (2.1.88 match: AddWorkspaceDirectory, 0.726)
+//@ chunk-0tbq6c3s.js:2553-5100 fingerprint (2.1.88 match: AddWorkspaceDirectory, 0.727)
 function AddWorkspaceDirectory(props) {
   let $ = useMemoCache(38);
   let { onAddDirectory, onAlreadyAccessible, onCancel, permissionContext, directoryPath } = props;
@@ -435,4 +639,4 @@ function AddWorkspaceDirectory(props) {
   } else t13 = $[37];
   return t13;
 }
-export { AddWorkspaceDirectory };
+export { AddWorkspaceDirectory, AutoModeDefaultNudgeDialog };

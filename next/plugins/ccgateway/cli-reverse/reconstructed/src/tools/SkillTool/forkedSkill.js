@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。context=fork 的 skill 以子代理运行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0fs3a553.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-n3ybm6q3.js (8)
  * attribution: placement 8
  */
 import { resolve, dirname } from "path";
@@ -39,7 +39,7 @@ import {
 import { isSyscallError, AbortError } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import { SKILL } from "./skillToolNames.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { createUserMessage, wrapInSystemReminder } from "../../utils/messages.js";
@@ -79,12 +79,12 @@ import { registerTaskLoop } from "../../tasks/taskLoopRegistry.js";
 import { evictTaskOutput } from "../../utils/task/diskOutput.js";
 import { emitTaskNotification } from "../../utils/task/taskNotifications.js";
 
-//@ chunk-0fs3a553.js:1506-1516 placement
+//@ chunk-n3ybm6q3.js:1538-1548 placement
 /**
  * 已登记技能变体的上限（100）。
  */
 var MAX_REGISTERED_SKILL_VARIANTS = 100;
-//@ chunk-0fs3a553.js:1516-2092 placement
+//@ chunk-n3ybm6q3.js:1548-2124 placement
 async function nestedSkillsForChangedFiles(changedPath) {
   if (
     isCustomizationDisabled("skills") ||
@@ -132,7 +132,7 @@ async function nestedSkillsForChangedFiles(changedPath) {
   }
   return [...dirs.values()];
 }
-//@ chunk-0fs3a553.js:2092-2228 placement
+//@ chunk-n3ybm6q3.js:2124-2260 placement
 /**
  * 找出与给定未限定名匹配、可由 Skill 工具调用的技能变体（排除正在派生自身的 fork 技能）。
  */
@@ -150,7 +150,7 @@ function matchingSkillVariants(commands, bareName, spawnedBySkill) {
       ),
   );
 }
-//@ chunk-0fs3a553.js:2228-3438 placement
+//@ chunk-n3ybm6q3.js:2260-3470 placement
 async function scopedSkillVariantNote(command, projectRoot, toolContext) {
   if (command.type !== "prompt" || command.unqualifiedName != null) return null;
   if (projectRoot !== null && toolContext.session !== undefined && slashTestPattern(command.name) !== null)
@@ -171,7 +171,7 @@ async function scopedSkillVariantNote(command, projectRoot, toolContext) {
       else logError(error);
     }
   if (getDynamicSkills().length === 0 && getAdditionalDirectoriesForClaudeMd().length === 0) return null;
-  if (!toolContext.options.tools.some((tool) => toolMatchesName(tool, SKILL))) return null;
+  if (!toolContext.options.tools.some((tool) => matchesToolName(tool, SKILL))) return null;
   let variants = matchingSkillVariants(
     await getCommands(projectRoot, toolContext.storageV5),
     command.name,
@@ -197,7 +197,7 @@ async function scopedSkillVariantNote(command, projectRoot, toolContext) {
     isMeta: true,
   });
 }
-//@ chunk-0fs3a553.js:3438-3543 placement
+//@ chunk-n3ybm6q3.js:3470-3575 placement
 /**
  * 判断 fork 技能是否在后台运行：非交互、工作流内或已指定前台时为否，否则按技能的 background 设置（默认是）。
  */
@@ -211,7 +211,7 @@ function shouldBackgroundForkedSkill(input, toolContext, forceForeground) {
     return false;
   return input.background ?? true;
 }
-//@ chunk-0fs3a553.js:3543-6441 placement (2.1.88 match: updateMagicDoc, 0.152)
+//@ chunk-n3ybm6q3.js:3575-6472 placement (2.1.88 match: updateMagicDoc, 0.155)
 async function runForkedAgent({
   agentId,
   agentDefinition,
@@ -396,11 +396,11 @@ async function runForkedAgent({
     name: displayName,
   };
 }
-//@ chunk-0fs3a553.js:6441-6511 placement
+//@ chunk-n3ybm6q3.js:6472-6542 placement
 function spawnForkedSkill(error) {
   logForDebugging(`Failed to write forked-skill scoping sidecar: ${error}`);
 }
-//@ chunk-0fs3a553.js:6511-7103 placement
+//@ chunk-n3ybm6q3.js:6542-7134 placement
 /**
  * context=fork 的技能作为后台任务登记：创建可分离的中止控制器与任务循环，注册代理任务状态；返回的 remove 会解绑并发出任务通知（被中止时为 stopped）。
  */

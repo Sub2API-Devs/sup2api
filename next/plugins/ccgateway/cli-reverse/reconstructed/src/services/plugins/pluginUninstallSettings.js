@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：卸载插件时扫描各设置源中的启用项与数据目录，决定能改什么
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (30)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (30)
  * attribution: placement 30
  */
 import { join, dirname, basename } from "path";
@@ -43,11 +43,11 @@ import { REPO_DIR_SETTING_SOURCES } from "../../utils/settings/constants.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { readFileChecked } from "../../utils/fileRead.js";
 import { safeParseJSON } from "../../utils/json.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { pathPresence } from "../../utils/fsSafety/atomicWriteStaging.js";
 import { invalidateCommandNames } from "../../utils/settings/commandSyncNames.js";
 import { findPluginName, pluginNamesEqual } from "../../utils/plugins/pluginIdentifier.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import {
   findBindingKeysFor,
   isOfficialPluginDirectoryId,
@@ -63,12 +63,12 @@ import {
 import { findPluginDataDirs, isMarketplaceGone } from "../../utils/plugins/marketplaceNames.js";
 import { removeDirectoryTreeNoFollow as removeDirectoryTreeNoFollow_2 } from "../../utils/fsRemove.js";
 
-//@ chunk-e6aww6q8.js:4206869-4206919 placement
+//@ chunk-5xgkngpb.js:4313274-4313324 placement
 /**
  * 设置回读状态的严重程度顺序。
  */
 var READBACK_LEVELS = ["off", "not-read-here", "unreadable", "on"];
-//@ chunk-e6aww6q8.js:4206919-4206991 placement
+//@ chunk-5xgkngpb.js:4313324-4313396 placement
 /**
  * 判断路径是否像可疑的符号链接（父目录链异常）。
  */
@@ -77,12 +77,12 @@ function isSuspectLink(filePath) {
   let parent = dirname(normalized);
   return pathTraversesFromTrustedRoot(dirname(parent), join(basename(parent), basename(normalized)));
 }
-//@ chunk-e6aww6q8.js:4206991-4207101 placement
+//@ chunk-5xgkngpb.js:4313396-4313506 placement
 function vetRefusalKind(error) {
   let reason = repoSettingsRefusalReason(error);
   return reason === "network" ? "vet-network" : reason === "unexamined" ? "vet-unexamined" : "vet-other";
 }
-//@ chunk-e6aww6q8.js:4207101-4208563 placement
+//@ chunk-5xgkngpb.js:4313506-4314970 placement
 /**
  * 安全读取仓库内设置文件的字节：先审查路径（链接、跨越、特殊文件），按审查结果做绑定读取；文件不存在返回 absent（区分是否位于指向空处的链接下），不能安全读取时返回 refused 及原因，成功返回 bytes 与实际路径。
  */
@@ -218,14 +218,14 @@ async function readRepoSettingsBytes(filePath) {
         }),
       };
 }
-//@ chunk-e6aww6q8.js:4208563-4208602 placement
+//@ chunk-5xgkngpb.js:4314970-4315009 placement
 /**
  * 该设置来源是否受工作区限制。
  */
 function isWorkspaceRestrictedSource(source) {
   return isWorkspaceRestricted() && REPO_DIR_SETTING_SOURCES.has(source);
 }
-//@ chunk-e6aww6q8.js:4208602-4208670 placement
+//@ chunk-5xgkngpb.js:4315009-4315077 placement
 /**
  * 仓库设置里是否有可疑符号链接。
  */
@@ -236,7 +236,7 @@ function hasSuspectSettingsLink(source) {
     settingsPathsForSource(source).some((path) => isSuspectLink(path))
   );
 }
-//@ chunk-e6aww6q8.js:4208670-4208757 placement (2.1.88 match: _temp8, 1)
+//@ chunk-5xgkngpb.js:4315077-4315164 placement (2.1.88 match: _temp8, 1)
 /**
  * 某设置来源对应的设置文件路径列表。
  */
@@ -246,7 +246,7 @@ function settingsPathsForSource(a_3) {
     ...(a_3 === "localSettings" ? [getLegacyLocalSettingsFilePath()] : []),
   ].filter((path) => path !== undefined);
 }
-//@ chunk-e6aww6q8.js:4208757-4208961 placement (2.1.88 match: isRealPathWithinTeamDir, 0.785)
+//@ chunk-5xgkngpb.js:4315164-4315368 placement (2.1.88 match: isRealPathWithinTeamDir, 0.785)
 async function isRealPathWithinTeamDir_3(realCandidate) {
   for (let dir = dirname(realCandidate); ; dir = dirname(dir))
     try {
@@ -260,7 +260,7 @@ async function isRealPathWithinTeamDir_3(realCandidate) {
       if (dirname(dir) === dir) return false;
     }
 }
-//@ chunk-e6aww6q8.js:4208961-4209347 placement
+//@ chunk-5xgkngpb.js:4315368-4315754 placement
 /**
  * 读取用户设置文件里某插件的启用状态：缓存解析失败时安全地重新读取文件，返回 on/off/unreadable。
  */
@@ -288,10 +288,10 @@ async function userSettingsEnablement(filePath, pluginId, exclude) {
       return missingFileEnablement(readablePath, error);
     }
   }
-  if (!isPlainObject_5(settings)) return "unreadable";
+  if (!isPlainObject_6(settings)) return "unreadable";
   return enabledPluginsState(settings.enabledPlugins, pluginId, exclude);
 }
-//@ chunk-e6aww6q8.js:4209347-4209482 placement
+//@ chunk-5xgkngpb.js:4315754-4315889 placement
 async function settingsFileEnablement(source, filePath, notReadHere, pluginId, exclude) {
   if (notReadHere)
     return {
@@ -303,7 +303,7 @@ async function settingsFileEnablement(source, filePath, notReadHere, pluginId, e
       }
     : repoSettingsEnablement(filePath, pluginId, exclude);
 }
-//@ chunk-e6aww6q8.js:4209482-4209613 placement
+//@ chunk-5xgkngpb.js:4315889-4316020 placement
 async function missingFileEnablement(realCandidate, error) {
   if (isENOENT(error) || getErrnoCode(error) === "ENOTDIR")
     return (await pathPresence(realCandidate)) === "gone" && !(await isRealPathWithinTeamDir_3(realCandidate))
@@ -311,7 +311,7 @@ async function missingFileEnablement(realCandidate, error) {
       : "unreadable";
   return "unreadable";
 }
-//@ chunk-e6aww6q8.js:4209613-4210046 placement
+//@ chunk-5xgkngpb.js:4316020-4316453 placement
 /**
  * 读取仓库内设置文件里某插件的启用状态：路径审查不通过返回 notRead 原因，文件不存在视为 off，并附带实际读取路径。
  */
@@ -339,7 +339,7 @@ async function repoSettingsEnablement(filePath, pluginId, exclude) {
   }
   let settings = parseSettingsContent(content, filePath).settings ?? safeParseJSON(content, false);
   return {
-    readsBack: !isPlainObject_5(settings)
+    readsBack: !isPlainObject_6(settings)
       ? "unreadable"
       : enabledPluginsState(settings.enabledPlugins, pluginId, exclude),
     ...(route !== undefined && {
@@ -347,10 +347,10 @@ async function repoSettingsEnablement(filePath, pluginId, exclude) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:4210046-4210198 placement
+//@ chunk-5xgkngpb.js:4316453-4316605 placement
 function enabledPluginsState(enabledPlugins, pluginId, exclude) {
   if (enabledPlugins === undefined) return "off";
-  if (!isPlainObject_5(enabledPlugins)) return "unreadable";
+  if (!isPlainObject_6(enabledPlugins)) return "unreadable";
   return enabledPluginKeys(enabledPlugins, pluginId, exclude).some(
     (key) =>
       enabledPlugins[key] !== undefined && enabledPlugins[key] !== null && enabledPlugins[key] !== false,
@@ -358,19 +358,19 @@ function enabledPluginsState(enabledPlugins, pluginId, exclude) {
     ? "on"
     : "off";
 }
-//@ chunk-e6aww6q8.js:4210198-4210257 placement
+//@ chunk-5xgkngpb.js:4316605-4316664 placement
 /**
  * 取更严重的回读状态。
  */
 function maxReadback(left, right) {
   return READBACK_LEVELS.indexOf(right) > READBACK_LEVELS.indexOf(left) ? right : left;
 }
-//@ chunk-e6aww6q8.js:4210257-4210520 placement
+//@ chunk-5xgkngpb.js:4316664-4316927 placement
 function flagSettingsEnablement(pluginId, exclude, filePath) {
   let flagSettingsExpectedContent = getFlagSettingsExpectedContent();
   let flagSettingsFilePinnedContent = getFlagSettingsFilePinnedContent();
   let stateOf = (content) =>
-    isPlainObject_5(content) ? enabledPluginsState(content.enabledPlugins, pluginId, exclude) : "unreadable";
+    isPlainObject_6(content) ? enabledPluginsState(content.enabledPlugins, pluginId, exclude) : "unreadable";
   let expectedContent = flagSettingsExpectedContent ?? flagSettingsFilePinnedContent;
   let fileState =
     expectedContent === undefined ||
@@ -385,7 +385,7 @@ function flagSettingsEnablement(pluginId, exclude, filePath) {
     isJson: flagSettingsExpectedContent !== undefined,
   };
 }
-//@ chunk-e6aww6q8.js:4210520-4210813 placement
+//@ chunk-5xgkngpb.js:4316927-4317220 placement
 /**
  * 在某设置来源的所有文件中找出启用该插件的状态最"强"的文件；有文件未能读取时返回未读文件列表与原因。
  */
@@ -422,31 +422,31 @@ async function findEnablingSettingsFile(source, pluginId, exclude = []) {
       }
     : worst;
 }
-//@ chunk-e6aww6q8.js:4210813-4210957 placement
+//@ chunk-5xgkngpb.js:4317220-4317364 placement
 /**
  * 找出 enabledPlugins 中与插件 id 对应的所有键（含大小写/别名变体），排除属于其他已安装插件的键。
  */
 function enabledPluginKeys(enabledPlugins, pluginId, exclude = []) {
   let keys = Object.keys(enabledPlugins ?? {});
   let pluginName = findPluginName(keys, pluginId);
-  return uniq([
+  return normalizeCaseForComparison_2([
     ...findBindingKeysFor(keys, pluginId),
     ...(pluginName === undefined ? [] : [pluginName]),
   ]).filter((key) => key === pluginId || !exclude.some((excludedId) => pluginNamesEqual(excludedId, key)));
 }
-//@ chunk-e6aww6q8.js:4210957-4211007 placement
+//@ chunk-5xgkngpb.js:4317364-4317414 placement
 /**
  * 判断路径是否已不存在。
  */
 async function isPathGone(path) {
   return (await pathPresence(path)) === "gone";
 }
-//@ chunk-e6aww6q8.js:4211007-4211066 placement
+//@ chunk-5xgkngpb.js:4317414-4317473 placement (2.1.88 match: supportsPersistence, 1)
 /**
  * 卸载时会检查的设置来源。
  */
 var UNINSTALL_SETTING_SOURCES = ["userSettings", "localSettings", "projectSettings"];
-//@ chunk-e6aww6q8.js:4211066-4212586 placement
+//@ chunk-5xgkngpb.js:4317473-4318993 placement
 /**
  * 描述无法写入的设置来源（托管设置、--settings 传入等）及原因。
  */
@@ -480,7 +480,7 @@ function describeUnwritableSettingsSource({
                     ? "the settings given to this session with --settings or by the application that started it (uninstalling cannot change them: switch it off where they are given and, if they were given at start-up, start Claude Code again; or start it without them)"
                     : file;
 }
-//@ chunk-e6aww6q8.js:4212586-4213599 placement
+//@ chunk-5xgkngpb.js:4318993-4320006 placement
 /**
  * 部分设置文件因位于网络路径而未能读取时，生成补救提示：路径在检查期间变化可以重试；若是指向其他机器的链接，建议换成真实文件或从真实位置启动 Claude Code。
  */
@@ -506,7 +506,7 @@ function networkPathRetryHint(entries, action) {
       : "use the real location instead of the link when you start Claude Code or add a directory (for example with --add-dir)"
   }. Then ${step}${linkEntries.length < networkEntries.length ? ". If you see this again with no such link, a path cannot be checked, and trying again will not help" : ""}`;
 }
-//@ chunk-e6aww6q8.js:4213599-4213777 placement
+//@ chunk-5xgkngpb.js:4320006-4320184 placement
 function isBlockingPolicyLoadError(loadError) {
   if (loadError.file === PARENT_MANAGED_SETTINGS_SOURCE_LABEL) return false;
   return (
@@ -516,14 +516,14 @@ function isBlockingPolicyLoadError(loadError) {
       (loadError.path === "enabledPlugins" || loadError.path.startsWith("enabledPlugins.")))
   );
 }
-//@ chunk-e6aww6q8.js:4213777-4213910 placement
+//@ chunk-5xgkngpb.js:4320184-4320317 placement
 function projectSettingsIdentity(filePath) {
   if (basename(dirname(filePath)) !== ".claude") return;
   let projectDir = dirname(dirname(filePath));
   let resolved = safeResolvePath(getFsImplementation(), projectDir);
   return `${resolved.isCanonical ? resolved.resolvedPath : projectDir}\x00${basename(filePath)}`;
 }
-//@ chunk-e6aww6q8.js:4213910-4214383 placement
+//@ chunk-5xgkngpb.js:4320317-4320790 placement
 /**
  * 计算某设置来源对插件的启用状态条目：合并内存中的设置、flag 设置与磁盘内容，策略设置加载出错时视为不可读；未启用返回 undefined。
  */
@@ -563,7 +563,7 @@ async function sourceEnablementEntry(source, pluginId, exclude = []) {
           }),
       };
 }
-//@ chunk-e6aww6q8.js:4214383-4215921 placement
+//@ chunk-5xgkngpb.js:4320790-4322331 placement
 /**
  * 列出卸载时需要检查的设置文件（settings.json、settings.local.json、附加目录）。
  */
@@ -665,15 +665,18 @@ async function listUninstallSettingsFiles(pluginId, exclude = [], otherFolders =
   }
   return entries;
 }
-//@ chunk-e6aww6q8.js:4215921-4218439 placement
+//@ chunk-5xgkngpb.js:4322331-4324856 placement
 /**
  * 卸载插件时扫描各设置源（本地、项目、用户、附加目录）中对该插件的启用项。
  */
 async function scanSettingsForPluginUninstall(pluginId, exclude, folders, walk) {
   let sessionFolder = walk.theSessions === undefined ? undefined : join(walk.theSessions);
   let walkFolder = join(walk.byAFreshWalk);
-  let launchFolders = uniq([...(sessionFolder === undefined ? [] : [sessionFolder]), walkFolder]);
-  let candidateFolders = uniq([
+  let launchFolders = normalizeCaseForComparison_2([
+    ...(sessionFolder === undefined ? [] : [sessionFolder]),
+    walkFolder,
+  ]);
+  let candidateFolders = normalizeCaseForComparison_2([
     ...folders,
     ...launchFolders.map((launchFolder) => join(launchFolder, "..", "..")),
   ]);
@@ -822,7 +825,7 @@ async function scanSettingsForPluginUninstall(pluginId, exclude, folders, walk) 
     )?.file,
   };
 }
-//@ chunk-e6aww6q8.js:4218439-4219767 placement
+//@ chunk-5xgkngpb.js:4324856-4326191 placement
 /**
  * 决定卸载时对插件数据目录与选项的处理方式。
  */
@@ -892,7 +895,7 @@ async function decideUninstallDataAction(
       if (key !== pluginId) optionsGone = (await deleteOptions(key)) && optionsGone;
     let pluginDataDirs = await findPluginDataDirs(pluginId);
     let dataDir = pluginDataDirPath(pluginId);
-    for (let dir of deleteDataDir ? uniq([dataDir, ...(pluginDataDirs ?? [])]) : [])
+    for (let dir of deleteDataDir ? normalizeCaseForComparison_2([dataDir, ...(pluginDataDirs ?? [])]) : [])
       await removeDirectoryTreeNoFollow_2(dir).catch((error) => {
         logForDebugging(`Failed to delete plugin data dir ${dir}: ${errorMessage(error)}`, {
           level: "warn",
@@ -914,7 +917,7 @@ async function decideUninstallDataAction(
     plan,
   };
 }
-//@ chunk-e6aww6q8.js:4219767-4219859 placement
+//@ chunk-5xgkngpb.js:4326191-4326283 placement
 /**
  * 按允许列表过滤（unknown 表示不过滤）。
  */
@@ -923,7 +926,7 @@ function filterByList(installedOthers, ids) {
   let idSet = new Set(ids);
   return installedOthers.filter((id) => idSet.has(id));
 }
-//@ chunk-e6aww6q8.js:4219859-4220320 placement
+//@ chunk-5xgkngpb.js:4326283-4326744 placement
 /**
  * 规划卸载后的清理：列出仍启用该插件的设置文件与目录名绑定状态，决定选项/数据目录的删除计划，并在需要时释放目录绑定。
  */
@@ -961,7 +964,7 @@ async function planUninstallCleanup(
     entry: entry_2,
   };
 }
-//@ chunk-e6aww6q8.js:4220320-4220767 placement
+//@ chunk-5xgkngpb.js:4326744-4327191 placement
 /**
  * 根据插件安装状态决定卸载时可删除的范围：仅选项与目录、什么都不删（仍启用、安装记录未知或重新出现）、只删自己的选项，或删除该名下的全部内容。
  */
@@ -995,17 +998,17 @@ function decideDirectoryReleasePlan(input) {
   };
 }
 export {
-  isWorkspaceRestrictedSource,
-  isSuspectLink,
-  hasSuspectSettingsLink,
-  enabledPluginKeys,
-  describeUnwritableSettingsSource,
-  scanSettingsForPluginUninstall,
-  findEnablingSettingsFile,
   readRepoSettingsBytes,
-  planUninstallCleanup,
-  listUninstallSettingsFiles,
-  networkPathRetryHint,
   isBlockingPolicyLoadError,
   sourceEnablementEntry,
+  planUninstallCleanup,
+  enabledPluginKeys,
+  describeUnwritableSettingsSource,
+  hasSuspectSettingsLink,
+  scanSettingsForPluginUninstall,
+  isWorkspaceRestrictedSource,
+  findEnablingSettingsFile,
+  listUninstallSettingsFiles,
+  networkPathRetryHint,
+  isSuspectLink,
 };

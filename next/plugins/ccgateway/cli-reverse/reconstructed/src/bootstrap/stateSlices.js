@@ -3,10 +3,10 @@
  *
  * 全局状态切片类：配置目录归属、强制登录键、用量计数、工具摘要标记等（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ndmse9kj.js (76)
- * attribution: placement 76
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5ythzcas.js (79)
+ * attribution: placement 76, layout 3
  */
 import { dirname, basename, resolve } from "path";
 import { createSignal } from "../utils/signal.js";
@@ -15,33 +15,33 @@ import { HostScoped } from "../utils/hostScoped.js";
 import {
   currentSession,
   getAgentContext,
+  getHookHolder,
   defaultRootSession,
   agentContextGetter,
-  getHookHolder,
 } from "./state.js";
 import { mergeProjectDirs } from "./sessionSlices.js";
 import { SESSION_URL_HASH_SALT } from "../utils/sessionUrl.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ndmse9kj.js:1260-1313 placement
+//@ chunk-5ythzcas.js:1565-1618 placement
 /**
  * typeof 为 object 且非 null，用于结构比较前的快速判断。
  */
 function isObjectLike(value) {
   return typeof value === "object" && value !== null;
 }
-//@ chunk-ndmse9kj.js:1313-1351 placement
+//@ chunk-5ythzcas.js:1618-1656 placement
 /**
  * 结构相等判断（忽略值为 undefined 的键，不允许多次配对同一节点）：设置/文档比较用。
  */
 function deepEqualIgnoringUndefined(left, right) {
   return structurallyEqualGraphs(left, right, definedEntries, false);
 }
-//@ chunk-ndmse9kj.js:1351-1400 placement
+//@ chunk-5ythzcas.js:1656-1705 placement
 function deepEqualWithCycles(left, right) {
   return structurallyEqualGraphs(left, right, Object.entries, true);
 }
-//@ chunk-ndmse9kj.js:1400-1768 placement
+//@ chunk-5ythzcas.js:1705-2073 placement
 /**
  * 用显式栈比较两棵（可能有环的）对象图：o 枚举子项，r 为真时允许同一对节点重复配对（容忍环）。叶子按 === 比较，容器先比外形（ft）再逐键下钻。
  */
@@ -71,22 +71,22 @@ function structurallyEqualGraphs(left, right, childEntries, allowCycles) {
   }
   return true;
 }
-//@ chunk-ndmse9kj.js:1768-1835 placement
+//@ chunk-5ythzcas.js:2073-2140 placement
 function definedEntries(value) {
   return Object.entries(value).filter(([, value]) => value !== undefined);
 }
-//@ chunk-ndmse9kj.js:1835-1973 placement
+//@ chunk-5ythzcas.js:2140-2278 placement
 function haveSameContainerKind(left, right) {
   if (Array.isArray(left) || Array.isArray(right))
     return Array.isArray(left) && Array.isArray(right) && left.length === right.length;
   return isPlainObject(left) && isPlainObject(right);
 }
-//@ chunk-ndmse9kj.js:1973-2057 placement
+//@ chunk-5ythzcas.js:2278-2362 placement
 function isPlainObject(value) {
   let prototypeOf = Object.getPrototypeOf(value);
   return prototypeOf === Object.prototype || prototypeOf === null;
 }
-//@ chunk-ndmse9kj.js:2057-2397 placement
+//@ chunk-5ythzcas.js:2362-2702 placement
 /**
  * 托管设置文件的软链接遍历记录：walked 记每个路径的链接目标，folderIsLink 记目录是否为链接，managedMcp 为托管 MCP 文件；all() 列出全部链接目标。
  */
@@ -111,7 +111,7 @@ class ManagedDocumentLinks {
     return [...this.walked.values(), this.managedMcp].filter((link) => link !== null);
   }
 }
-//@ chunk-ndmse9kj.js:2397-2509 placement
+//@ chunk-5ythzcas.js:2702-2814 placement
 var CONFIG_DIR_UNSAFE_REASONS = [
   "not_admin_owned",
   "other_writable",
@@ -121,7 +121,7 @@ var CONFIG_DIR_UNSAFE_REASONS = [
   "not_evaluated",
   "protected",
 ];
-//@ chunk-ndmse9kj.js:2509-2817 placement
+//@ chunk-5ythzcas.js:2814-3122 placement
 /**
  * 判定配置目录是否管理员所有、是否组/他人可写或为符号链接
  */
@@ -134,7 +134,7 @@ function classifyConfigDirOwnership({ file, folder, linked, posix }) {
   if ((modeBits & 16) !== 0) return "group_writable";
   return linked ? "symlinked" : "protected";
 }
-//@ chunk-ndmse9kj.js:2817-3158 placement
+//@ chunk-5ythzcas.js:3122-3463 placement
 /**
  * 判断文件/目录是否可被当前有效用户改写：root 直接可写；属主为 euid 或其他人可写（mode&2）为真；组可写（mode&16）时看 euid 是否在该组；信息不全返回 undefined。非 POSIX 或无 euid 时返回 undefined。
  */
@@ -150,7 +150,7 @@ function isWritableByCurrentUser({ file, folder, euid, groups, posix }) {
   if (mapped.includes(true)) return true;
   return filtered.length < 2 || mapped.includes(undefined) ? undefined : false;
 }
-//@ chunk-ndmse9kj.js:3158-3413 placement
+//@ chunk-5ythzcas.js:3463-3718 placement
 /**
  * 托管设置文件的保护记录：documents（路径→保护判定）、folderOwners、siblingRecords，以及是否设置了组织锁定（setsOrgPin）。
  */
@@ -172,7 +172,7 @@ class ManagedFileProtections {
     return [...this.documents];
   }
 }
-//@ chunk-ndmse9kj.js:3413-3574 placement
+//@ chunk-5ythzcas.js:3718-3879 placement
 function createHookedMergeState() {
   return {
     answers: null,
@@ -186,7 +186,7 @@ function createHookedMergeState() {
     unsettled: new Set(),
   };
 }
-//@ chunk-ndmse9kj.js:3574-4826 placement
+//@ chunk-5ythzcas.js:3879-5131 placement
 /**
  * 仓库级设置层的冻结器：engage() 时取一份层快照并引用计数，release/abandon 释放；持有期间 tier() 返回冻结值，linger 可在无人持有时保留一份延迟快照；baseline 用于 differingTiers 计算与基线不同的层。
  */
@@ -290,14 +290,14 @@ class RepoTierFreeze {
     return this.holders > 0;
   }
 }
-//@ chunk-ndmse9kj.js:4826-4892 placement
+//@ chunk-5ythzcas.js:5131-5197 placement
 /**
  * 空对象归一为 null：设置读取时把 {} 视为"没有值"。
  */
 function nullIfEmptyObject(value) {
   return value !== null && Object.keys(value).length === 0 ? null : value;
 }
-//@ chunk-ndmse9kj.js:4892-5019 placement
+//@ chunk-5ythzcas.js:5197-5324 placement
 function normalizeTierForCompare(tier) {
   return {
     ...tier,
@@ -308,7 +308,7 @@ function normalizeTierForCompare(tier) {
     }),
   };
 }
-//@ chunk-ndmse9kj.js:5019-5165 placement
+//@ chunk-5ythzcas.js:5324-5470 placement
 function diffTierKeys(baseline, other) {
   return [...baseline.keys(), ...[...other.keys()].filter((key) => !baseline.has(key))].filter((key) => {
     let baselineTier = baseline.get(key);
@@ -319,9 +319,9 @@ function diffTierKeys(baseline, other) {
     );
   });
 }
-//@ chunk-ndmse9kj.js:5165-5237 placement
+//@ chunk-5ythzcas.js:5470-5542 placement
 var FORCE_LOGIN_SETTING_KEYS = ["forceLoginOrgUUID", "forceLoginMethod", "forceLoginGatewayUrl"];
-//@ chunk-ndmse9kj.js:5237-9662 placement
+//@ chunk-5ythzcas.js:5542-10585 placement
 /**
  * 设置读取的全局缓存：合并结果、各来源结果、已解析文件、目录列表、托管文件链接/保护、策略层遍历计数、插件基础层与保留层（storage v5）。invalidateAll 递增 epoch 清空缓存（可保留用户层），seed*\/unseed* 按 epoch 写入预读结果，*InstallVerdict 判定预读结果能否安装（install/raced/deferred）。
  */
@@ -329,6 +329,9 @@ class SettingsCacheStore {
   mergedSettings = null;
   perSource = new Map();
   parsedFiles = new Map();
+  firstReads = new Map();
+  ownWritesBeforeFirstCheck = new Map();
+  firstReadsChecked = false;
   managedDocumentLinks = new ManagedDocumentLinks();
   managedFileProtections = new ManagedFileProtections();
   folderListings = new Map();
@@ -340,6 +343,7 @@ class SettingsCacheStore {
   lastPolicyEnvComposition = null;
   isLoadingFromDisk = false;
   autoModeUntrustedSourceWarned = false;
+  parentLeftOutReason = null;
   changed = createSignal();
   internalWrites = new Map();
   enabledSources;
@@ -359,6 +363,23 @@ class SettingsCacheStore {
   localStoreProbes = new LocalStoreProbes();
   retained = new Map();
   retainedListings = new Map();
+  noteFirstRead(path, listing) {
+    if (!this.firstReadsChecked && !this.firstReads.has(path)) this.firstReads.set(path, listing);
+  }
+  noteOwnWrite(path) {
+    if (!this.firstReadsChecked)
+      this.ownWritesBeforeFirstCheck.set(path, (this.ownWritesBeforeFirstCheck.get(path) ?? 0) + 1);
+  }
+  withdrawOwnWrite(path) {
+    let left = (this.ownWritesBeforeFirstCheck.get(path) ?? 0) - 1;
+    if (left > 0) this.ownWritesBeforeFirstCheck.set(path, left);
+    else this.ownWritesBeforeFirstCheck.delete(path);
+  }
+  forgetFirstReads({ checkAgain = false } = {}) {
+    this.firstReads.clear();
+    this.ownWritesBeforeFirstCheck.clear();
+    if (checkAgain) this.firstReadsChecked = false;
+  }
   setPluginBase(pluginBase) {
     this.pluginBase = pluginBase;
     this.pluginBaseLoaded = true;
@@ -530,7 +551,7 @@ class SettingsCacheStore {
     };
   }
 }
-//@ chunk-ndmse9kj.js:9662-10211 placement
+//@ chunk-5ythzcas.js:10585-11134 placement
 /**
  * 本地存储探测缓存：按根目录缓存属主 uid 列表，以及规范化后的真实家目录。
  */
@@ -563,15 +584,15 @@ class LocalStoreProbes {
     this.realHomeDir = undefined;
   }
 }
-//@ chunk-ndmse9kj.js:10211-10238 placement
+//@ chunk-5ythzcas.js:11134-11161 placement
 /**
  * 按会话宿主缓存的 SettingsCacheStore（设置缓存与派生缓存的容器）。
  */
 var SETTINGS_CACHE_STORE_SLOT; // deferred: uses SettingsCacheStore of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ndmse9kj.js:10211", () => {
+deferInit("chunk-5ythzcas.js:11134", () => {
   SETTINGS_CACHE_STORE_SLOT = new HostScoped(() => new SettingsCacheStore());
 });
-//@ chunk-ndmse9kj.js:10238-10312 placement
+//@ chunk-5ythzcas.js:11161-11235 placement
 function settingsEqualIgnoringOwner(left, right) {
   return deepEqualWithCycles(
     {
@@ -584,7 +605,7 @@ function settingsEqualIgnoringOwner(left, right) {
     },
   );
 }
-//@ chunk-ndmse9kj.js:10312-10808 placement
+//@ chunk-5ythzcas.js:11235-11731 placement
 /**
  * 新建一份"粘性 beta 头"会话状态：已发送/被拒绝的 beta、声明的工具集、只发名字的工具公告、内联工具被拒记录、wire 形状种子、媒体数量上限、被拒工具 schema 等。
  */
@@ -616,7 +637,7 @@ function createStickyBetaLatches() {
     },
   };
 }
-//@ chunk-ndmse9kj.js:10808-11572 placement
+//@ chunk-5ythzcas.js:11731-12495 placement
 /**
  * 为子代理/侧查询复制粘性 beta 状态：已发送、被拒、公告等集合深拷贝，但 declaredTools/noChannelTools/turnDeniedTools 重置为未决定。
  */
@@ -647,7 +668,7 @@ function forkStickyBetaLatches(parent) {
     },
   };
 }
-//@ chunk-ndmse9kj.js:11572-12387 placement
+//@ chunk-5ythzcas.js:12495-13310 placement
 /**
  * 完整复制粘性 beta 状态（含声明的工具集与决定标记），用于需要与父对话完全一致的分叉代理。
  */
@@ -678,7 +699,7 @@ function cloneStickyBetaLatches(latches) {
     },
   };
 }
-//@ chunk-ndmse9kj.js:12387-12504 placement
+//@ chunk-5ythzcas.js:13310-13427 placement
 /**
  * 清除会话（/clear）时调用：先重置部分粘性记录，再清空 nameOnlyEntries 的 held/refused/reported。
  */
@@ -688,7 +709,7 @@ function resetStickyBetaNameOnlyEntries(stickyBetas) {
   stickyBetas.nameOnlyEntries.refused = false;
   stickyBetas.nameOnlyEntries.reported = undefined;
 }
-//@ chunk-ndmse9kj.js:12504-12593 placement
+//@ chunk-5ythzcas.js:13427-13516 placement
 /**
  * 清空 declaredTools/noChannelTools 并把 declaredToolsDecided 置 false（粘性 beta 状态重置的一步）。
  */
@@ -697,7 +718,7 @@ function resetDeclaredTools(conversation) {
   conversation.noChannelTools = undefined;
   conversation.declaredToolsDecided = false;
 }
-//@ chunk-ndmse9kj.js:12593-12792 placement
+//@ chunk-5ythzcas.js:13516-13715 placement
 /**
  * 清空 systemMessagesAcceptedBy，并把 wireShapeSeed 带来的 sent/rejected beta 从集合里撤回，然后丢弃种子。
  */
@@ -709,7 +730,7 @@ function dropWireShapeSeed(stickyBetas) {
   for (let beta of wireShapeSeed.rejected) stickyBetas.rejected.delete(beta);
   stickyBetas.wireShapeSeed = undefined;
 }
-//@ chunk-ndmse9kj.js:12792-12888 placement
+//@ chunk-5ythzcas.js:13715-13811 placement
 /**
  * 把上一份粘性 beta 状态的 sent/rejected 集合并回新状态，并挂上 wireShapeSeed，供后续撤销。
  */
@@ -718,14 +739,23 @@ function applyWireShapeSeed(stickyBetas, seed) {
   for (let beta of seed.rejected) markBetaRejected(stickyBetas, beta);
   stickyBetas.wireShapeSeed = seed;
 }
-//@ chunk-ndmse9kj.js:12888-12925 placement
+//@ chunk-5ythzcas.js:13811-13939 layout
+function conversation(conversation, beta) {
+  let wireShapeSeed = conversation.wireShapeSeed;
+  conversation.wireShapeSeed = {
+    record: wireShapeSeed?.record ?? {},
+    sent: wireShapeSeed?.sent ?? [],
+    rejected: [...(wireShapeSeed?.rejected ?? []), beta],
+  };
+}
+//@ chunk-5ythzcas.js:13939-13976 placement
 /**
  * 清掉 advisorHeld 标记（撤销此前暂扣的 advisor 头）。
  */
 function clearAdvisorHeld(stickyBetas) {
   stickyBetas.advisorHeld = undefined;
 }
-//@ chunk-ndmse9kj.js:12925-13143 placement
+//@ chunk-5ythzcas.js:13976-14194 placement
 /**
  * 撤销"内联工具被拒"记录：从 rejected 删除被拒的头，从 nameOnlyAnnouncements 删除按名字公告的工具并清空该集合。
  */
@@ -738,7 +768,7 @@ function clearInlineToolsRefusal(stickyBetas) {
   for (let name of announcementsByName) stickyBetas.nameOnlyAnnouncements.delete(name);
   announcementsByName.clear();
 }
-//@ chunk-ndmse9kj.js:13143-13189 placement
+//@ chunk-5ythzcas.js:14194-14240 placement
 /**
  * 清掉 advisorHeld 后返回同一对象，便于链式构造解锁状态。
  */
@@ -746,14 +776,14 @@ function clearAdvisorHeldAndReturn(stickyBetas) {
   stickyBetas.advisorHeld = undefined;
   return stickyBetas;
 }
-//@ chunk-ndmse9kj.js:13189-13231 placement
+//@ chunk-5ythzcas.js:14240-14282 placement
 /**
  * 把 declaredToolsDecided 置 true：声明的工具集已经确定，不再追加。
  */
 function markDeclaredToolsDecided(stickyBetas) {
   stickyBetas.declaredToolsDecided = true;
 }
-//@ chunk-ndmse9kj.js:13231-13846 placement
+//@ chunk-5ythzcas.js:14282-14897 placement
 /**
  * 生成一份解锁后的粘性 beta 状态：新建空状态，只保留声明工具集、advisor、wire 种子、内联拒绝、web search 历史拒绝、媒体上限、被拒 schema 与 nameOnlyEntries 的拒绝/上报标记。
  */
@@ -775,7 +805,7 @@ function unlatchStickyBetaLatches(previous) {
   stickyBetas.nameOnlyEntries.reported = previous.nameOnlyEntries.reported;
   return stickyBetas;
 }
-//@ chunk-ndmse9kj.js:13846-13910 placement
+//@ chunk-5ythzcas.js:14897-14961 placement
 /**
  * 把某个头记入拒绝集合并写入 inlineToolsRefusal.rejectedHeader（内联工具被拒）。
  */
@@ -783,7 +813,7 @@ function rejectInlineToolsHeader(stickyBetas, headerName) {
   markBetaRejected(stickyBetas, headerName);
   stickyBetas.inlineToolsRefusal.rejectedHeader = headerName;
 }
-//@ chunk-ndmse9kj.js:13910-14022 placement
+//@ chunk-5ythzcas.js:14961-15073 placement
 /**
  * 把一组工具名同时记入内联拒绝的按名公告集合和 nameOnlyAnnouncements。
  */
@@ -793,7 +823,7 @@ function addNameOnlyAnnouncements(stickyBetas, names) {
     stickyBetas.nameOnlyAnnouncements.add(name);
   }
 }
-//@ chunk-ndmse9kj.js:14022-14093 placement
+//@ chunk-5ythzcas.js:15073-15144 placement
 /**
  * 首次设置 declaredTools 并标记为已决定。
  */
@@ -801,7 +831,7 @@ function setDeclaredTools(stickyBetas, declaredTools) {
   if (stickyBetas.declaredTools === undefined) stickyBetas.declaredTools = declaredTools;
   markDeclaredToolsDecided(stickyBetas);
 }
-//@ chunk-ndmse9kj.js:14093-14210 placement
+//@ chunk-5ythzcas.js:15144-15261 placement
 /**
  * 返回已在 wire 上露出的工具名集合；有按值定义的工具时与 definedByValue 合并。
  */
@@ -810,21 +840,21 @@ function getSurfacedToolNames(stickyBetas) {
     ? stickyBetas.surfacedOnWire
     : new Set([...stickyBetas.surfacedOnWire, ...stickyBetas.definedByValue]);
 }
-//@ chunk-ndmse9kj.js:14210-14263 placement
+//@ chunk-5ythzcas.js:15261-15314 placement
 /**
  * 标记某个 beta 头已发送（未被拒绝时才记入 sent）。
  */
 function markBetaSent(betaState, beta) {
   if (!betaState.rejected.has(beta)) betaState.sent.add(beta);
 }
-//@ chunk-ndmse9kj.js:14263-14321 placement
+//@ chunk-5ythzcas.js:15314-15372 placement
 /**
  * 判断某个 beta 头已发送且未被拒绝。
  */
 function isBetaSent(stickyBetas, beta) {
   return stickyBetas.sent.has(beta) && !stickyBetas.rejected.has(beta);
 }
-//@ chunk-ndmse9kj.js:14321-14373 placement
+//@ chunk-5ythzcas.js:15372-15424 placement
 /**
  * 标记某个 beta 头被拒：从 sent 删除并加入 rejected。另附同名 inlineToolsRefusal 记录。
  */
@@ -832,14 +862,14 @@ function markBetaRejected(conversation, beta) {
   conversation.sent.delete(beta);
   conversation.rejected.add(beta);
 }
-//@ chunk-ndmse9kj.js:14373-14415 placement
+//@ chunk-5ythzcas.js:15424-15466 placement
 /**
  * 判断某个 beta 头是否被拒绝。
  */
 function isBetaRejected(betaState, beta) {
   return betaState.rejected.has(beta);
 }
-//@ chunk-ndmse9kj.js:14415-14471 placement
+//@ chunk-5ythzcas.js:15466-15522 placement
 /**
  * 忘记某个 beta 头：sent 与 rejected 两边都删除。
  */
@@ -847,85 +877,87 @@ function forgetBeta(stickyBetas, beta) {
   stickyBetas.sent.delete(beta);
   stickyBetas.rejected.delete(beta);
 }
-//@ chunk-ndmse9kj.js:14471-14517 placement
+//@ chunk-5ythzcas.js:15522-15568 placement
 /**
  * 标记 web search 历史相关 beta 已被拒绝，后续不再发送。
  */
 function markWebSearchHistoryRejected(conversation) {
   conversation.webSearchHistoryRejected = true;
 }
-//@ chunk-ndmse9kj.js:14517-14563 placement
+//@ chunk-5ythzcas.js:15568-15614 placement
 /**
  * 清除 web search 历史被拒标记。
  */
 function clearWebSearchHistoryRejected(stickyBetas) {
   stickyBetas.webSearchHistoryRejected = false;
 }
-//@ chunk-ndmse9kj.js:14563-14636 placement
+//@ chunk-5ythzcas.js:15614-15687 placement
 /**
  * 按模型取媒体条目上限缓存：模型不匹配时返回 undefined。
  */
 function mediaItemCapForModel(conversation, effectiveModel) {
   return conversation.mediaItemCap?.model === effectiveModel ? conversation.mediaItemCap : undefined;
 }
-//@ chunk-ndmse9kj.js:14636-14671 placement
+//@ chunk-5ythzcas.js:15687-15722 placement
 /**
  * 记录某模型下的媒体条目上限。
  */
 function setMediaItemCap(conversation, mediaItemCap) {
   conversation.mediaItemCap = mediaItemCap;
 }
-//@ chunk-ndmse9kj.js:14671-14709 placement
+//@ chunk-5ythzcas.js:15722-15760 placement
 /**
  * 清除媒体条目上限缓存。
  */
 function clearMediaItemCap(stickyBetas) {
   stickyBetas.mediaItemCap = undefined;
 }
-//@ chunk-ndmse9kj.js:14709-14754 placement
+//@ chunk-5ythzcas.js:15760-15805 placement
 /**
  * 清空被拒绝的工具 schema 缓存。
  */
 function clearRefusedToolSchemas(stickyBetas) {
   stickyBetas.refusedToolSchemas.clear();
 }
-//@ chunk-ndmse9kj.js:14754-14835 placement
+//@ chunk-5ythzcas.js:15805-15886 placement
 class SessionObservers {
   spawner = undefined;
   pairings = new Map();
   mainEnsureInFlight = false;
   mainSlotBlocked = false;
 }
-//@ chunk-ndmse9kj.js:14835-14913 placement
+//@ chunk-5ythzcas.js:15886-15963 placement
 /**
  * 可安全出现在工具名单里的名字字符集（1–256 个 [A-Za-z0-9_.:-]）；不合规的名字在摘要中替换为固定占位。
  */
 var TOOL_NAME_PATTERN = /^[A-Za-z0-9_.:-]{1,256}$/;
 var UNREADABLE_TOOLS_USED_BEFORE_SUMMARY = "unreadable-tools-used-before-summary";
-//@ chunk-ndmse9kj.js:14913-14989 placement
+//@ chunk-5ythzcas.js:15963-16039 placement
 /**
  * 把工具名规范成可出现在 <tools-used-before-summary> 的文本：不合规时返回固定占位 UNREADABLE_TOOLS_USED_BEFORE_SUMMARY。
  */
 function readableToolName(toolName) {
   return TOOL_NAME_PATTERN.test(toolName) ? toolName : "unreadable-tools-used-before-summary";
 }
-//@ chunk-ndmse9kj.js:14989-15024 placement
+//@ chunk-5ythzcas.js:16039-16074 placement
 var TOOLS_USED_BEFORE_SUMMARY_TAG = "tools-used-before-summary";
-//@ chunk-ndmse9kj.js:15024-15088 placement
+//@ chunk-5ythzcas.js:16074-16138 placement
 /**
  * 生成 <tools-used-before-summary>…</tools-used-before-summary> 标签文本，逐个名字先按 xre 规范化。
  */
 function formatToolsUsedBeforeSummary(toolNames) {
   return `<${TOOLS_USED_BEFORE_SUMMARY_TAG}>${toolNames.map(readableToolName).join(", ")}</${TOOLS_USED_BEFORE_SUMMARY_TAG}>`;
 }
-//@ chunk-ndmse9kj.js:15088-15157 placement
+//@ chunk-5ythzcas.js:16138-16207 placement
 /**
  * 判断工具名是否为 Gmail 附件下载工具（以 download_gmail_attachment 结尾）。
  */
 function isGmailAttachmentTool(toolName) {
   return /(?:^|__|:)download_gmail_attachment$/.test(toolName);
 }
-//@ chunk-ndmse9kj.js:15157-15715 placement
+//@ chunk-5ythzcas.js:16207-16218 layout
+var MAX_DELIVERED = 256;
+//@ chunk-5ythzcas.js:16218-17342 placement
 /**
  * 会话里"已使用工具"名单：record 规范化后去重记入并递增代数，built() 按代数缓存派生值，reportTruncationOnce 只报一次截断。
  */
@@ -933,12 +965,16 @@ class ToolsUsedSet {
   #e = new Set();
   #t = 0;
   #n = false;
+  #s;
   #o;
+  #i = new Set();
+  #r = new Map();
   record(toolNames) {
     let added = false;
     for (let toolName of toolNames) {
       if (typeof toolName !== "string" || toolName === "") continue;
       let readableName = readableToolName(toolName);
+      for (let listenerLog of this.#i) listenerLog.push(readableName);
       if (!this.#e.has(readableName)) {
         this.#e.add(readableName);
         added = true;
@@ -949,6 +985,19 @@ class ToolsUsedSet {
   }
   has(name) {
     return this.#e.has(name);
+  }
+  noteDelivered(key, value) {
+    this.#r.delete(key);
+    this.#r.set(key, value);
+    for (let key of this.#r.keys()) {
+      if (this.#r.size <= MAX_DELIVERED) break;
+      this.#r.delete(key);
+    }
+  }
+  takeDelivered(key) {
+    let value = this.#r.get(key);
+    this.#r.delete(key);
+    return value;
   }
   names() {
     return [...this.#e];
@@ -967,10 +1016,34 @@ class ToolsUsedSet {
       };
     return this.#o.value;
   }
+  raiseHeaderSizeSteps(step) {
+    let previous = this.#s;
+    if (
+      previous &&
+      step.count <= previous.count &&
+      step.bytes <= previous.bytes &&
+      (previous.capped || !step.capped)
+    )
+      return false;
+    this.#s = {
+      count: Math.max(step.count, previous?.count ?? 0),
+      bytes: Math.max(step.bytes, previous?.bytes ?? 0),
+      capped: step.capped || previous?.capped === true,
+    };
+    return true;
+  }
   reportTruncationOnce() {
     if (this.#n) return false;
     this.#n = true;
     return true;
+  }
+  captureRecords() {
+    let records = [];
+    this.#i.add(records);
+    return records;
+  }
+  endCapture(unused) {
+    this.#i.delete(unused);
   }
   replace(toolNames) {
     this.clear();
@@ -982,7 +1055,7 @@ class ToolsUsedSet {
     this.#n = false;
   }
 }
-//@ chunk-ndmse9kj.js:15715-15989 placement
+//@ chunk-5ythzcas.js:17342-17616 placement
 /**
  * 会话锁存切片：粘性 beta 状态（stickyBetas/unlatchStickyBetas）、ATIS 锁存值与监听、已用工具集合。
  */
@@ -1013,7 +1086,7 @@ class ConversationLatches {
     this.toolsUsed.clear();
   }
 }
-//@ chunk-ndmse9kj.js:15989-16078 placement
+//@ chunk-5ythzcas.js:17616-17705 placement
 /**
  * 四类 token 用量（输入/输出/缓存读/缓存写）全零的初值对象，用作费用账本的初始值。
  */
@@ -1023,12 +1096,12 @@ var ZERO_TOKEN_USAGE = {
   cacheReadInputTokens: 0,
   cacheCreationInputTokens: 0,
 };
-//@ chunk-ndmse9kj.js:16078-16144 placement
+//@ chunk-5ythzcas.js:17705-17771 placement
 function nullProtoCopy(modelUsage) {
   let copy = Object.create(null);
   return Object.assign(copy, modelUsage);
 }
-//@ chunk-ndmse9kj.js:16144-16223 placement
+//@ chunk-5ythzcas.js:17771-17850 placement
 function cloneModelUsage(modelUsage) {
   let copy = nullProtoCopy();
   for (let [key, value] of Object.entries(modelUsage))
@@ -1037,7 +1110,7 @@ function cloneModelUsage(modelUsage) {
     };
   return copy;
 }
-//@ chunk-ndmse9kj.js:16223-20132 placement
+//@ chunk-5ythzcas.js:17850-21759 placement
 /**
  * 会话费用账本：总费用、API/工具耗时、增删行数、各模型用量、侧查询费用、安全停止次数、已花 token；支持 restore/snapshot 与按会话认领（claim/scopeTo/belongsTo），记账时触发 spendRecorded 信号。
  */
@@ -1045,22 +1118,22 @@ class CostLedger {
   #e = 0;
   #t = 0;
   #n = 0;
-  #o = 0;
-  #r = Date.now();
-  #s = undefined;
-  #i = 0;
+  #s = 0;
+  #o = Date.now();
+  #i = undefined;
+  #r = 0;
   #d = 0;
   #u = 0;
   #c = ZERO_TOKEN_USAGE;
   #l = 0;
-  #p = ZERO_TOKEN_USAGE;
-  #h = false;
+  #h = ZERO_TOKEN_USAGE;
+  #p = false;
   #a = 0;
-  #g = nullProtoCopy();
-  #S = undefined;
+  #f = nullProtoCopy();
+  #v = undefined;
+  #S = null;
   #y = null;
-  #v = null;
-  #f = null;
+  #g = null;
   spendRecorded = createSignal();
   totalCostUSD() {
     return this.#e;
@@ -1081,41 +1154,41 @@ class CostLedger {
     return this.#n;
   }
   totalToolDuration() {
-    return this.#o;
+    return this.#s;
   }
   totalDuration() {
-    return Math.max(0, Date.now() - this.#r);
+    return Math.max(0, Date.now() - this.#o);
   }
   sessionStartTime() {
-    return this.#s ?? this.#r;
+    return this.#i ?? this.#o;
   }
   totalLinesAdded() {
-    return this.#i;
+    return this.#r;
   }
   totalLinesRemoved() {
     return this.#d;
   }
   hasUnknownModelCost() {
-    return this.#h;
+    return this.#p;
   }
   safetyStops() {
     return this.#a;
   }
   modelUsage() {
-    return this.#g;
+    return this.#f;
   }
   usageForModel(model) {
-    return this.#g[model];
+    return this.#f[model];
   }
   trackUsageSinceLastResult() {
-    this.#S ??= nullProtoCopy();
+    this.#v ??= nullProtoCopy();
   }
   usageSinceLastResult() {
-    return this.#S;
+    return this.#v;
   }
   takeUsageSinceLastResult() {
-    let usage = this.#S;
-    if (usage !== undefined) this.#S = nullProtoCopy();
+    let usage = this.#v;
+    if (usage !== undefined) this.#v = nullProtoCopy();
     return usage;
   }
   totalInputTokens() {
@@ -1135,7 +1208,7 @@ class CostLedger {
   }
   #m(field) {
     let total = 0;
-    for (let usage of Object.values(this.#g)) total += usage[field];
+    for (let usage of Object.values(this.#f)) total += usage[field];
     return total;
   }
   recordApiDuration(durationMs, durationWithoutRetriesMs) {
@@ -1143,11 +1216,11 @@ class CostLedger {
     this.#n += durationWithoutRetriesMs;
   }
   spentTokens() {
-    return this.#p;
+    return this.#h;
   }
   recordSpentTokens(tokens) {
-    let previous = this.#p;
-    this.#p = {
+    let previous = this.#h;
+    this.#h = {
       inputTokens: previous.inputTokens + tokens.inputTokens,
       outputTokens: previous.outputTokens + tokens.outputTokens,
       cacheReadInputTokens: previous.cacheReadInputTokens + tokens.cacheReadInputTokens,
@@ -1156,7 +1229,7 @@ class CostLedger {
     this.spendRecorded.emit();
   }
   recordCost(costUsd, usage, model) {
-    this.#g[model] = usage;
+    this.#f[model] = usage;
     this.#e += costUsd;
     this.spendRecorded.emit();
   }
@@ -1167,14 +1240,14 @@ class CostLedger {
     }
   }
   recordToolDuration(durationMs) {
-    this.#o += durationMs;
+    this.#s += durationMs;
   }
   recordLinesChanged(added, removed) {
-    this.#i += added;
+    this.#r += added;
     this.#d += removed;
   }
   markUnknownModelCost() {
-    this.#h = true;
+    this.#p = true;
   }
   recordSafetyStop() {
     this.#a += 1;
@@ -1186,11 +1259,11 @@ class CostLedger {
     this.#u = 0;
   }
   restartClock() {
-    this.#r = Date.now();
+    this.#o = Date.now();
     this.anchorLogicalStart(undefined);
   }
   anchorLogicalStart(startTime) {
-    this.#s = startTime === undefined ? undefined : Math.min(startTime, this.#r);
+    this.#i = startTime === undefined ? undefined : Math.min(startTime, this.#o);
   }
   restore(
     {
@@ -1207,101 +1280,101 @@ class CostLedger {
     },
     ownerSessionId,
   ) {
-    this.#f = ownerSessionId;
+    this.#g = ownerSessionId;
     this.#e = totalCostUSD;
     this.#u = totalCostUSD;
     this.#t = totalAPIDuration;
     this.#n = totalAPIDurationWithoutRetries;
-    this.#o = totalToolDuration;
-    this.#i = totalLinesAdded;
+    this.#s = totalToolDuration;
+    this.#r = totalLinesAdded;
     this.#d = totalLinesRemoved;
-    this.#h = hasUnknownModelCost ?? false;
-    if (modelUsage) this.#g = nullProtoCopy(modelUsage);
+    this.#p = hasUnknownModelCost ?? false;
+    if (modelUsage) this.#f = nullProtoCopy(modelUsage);
     this.#c = {
       inputTokens: this.totalInputTokens(),
       outputTokens: this.totalOutputTokens(),
       cacheReadInputTokens: this.totalCacheReadInputTokens(),
       cacheCreationInputTokens: this.totalCacheCreationInputTokens(),
     };
-    if (lastDuration !== undefined) this.#r = Date.now() - lastDuration;
+    if (lastDuration !== undefined) this.#o = Date.now() - lastDuration;
     this.anchorLogicalStart(startTime);
   }
   registerSaver(saver) {
-    this.#y = saver;
+    this.#S = saver;
   }
   runSaver(payload, fallback) {
-    (this.#y ?? (fallback ? fallback.#y : null))?.(payload);
+    (this.#S ?? (fallback ? fallback.#S : null))?.(payload);
   }
   registerTranscriptRecorder(recorder) {
-    this.#v = recorder;
+    this.#y = recorder;
   }
   runTranscriptRecorder(recorder, options, fallback) {
-    (this.#v ?? (fallback ? fallback.#v : null))?.(recorder, options);
+    (this.#y ?? (fallback ? fallback.#y : null))?.(recorder, options);
   }
   snapshot() {
     return {
-      ownerSessionId: this.#f,
+      ownerSessionId: this.#g,
       totalCostUSD: this.#e,
       totalAPIDuration: this.#t,
       totalAPIDurationWithoutRetries: this.#n,
-      totalToolDuration: this.#o,
-      startTime: this.#r,
-      sessionLogicalStartTime: this.#s,
-      totalLinesAdded: this.#i,
+      totalToolDuration: this.#s,
+      startTime: this.#o,
+      sessionLogicalStartTime: this.#i,
+      totalLinesAdded: this.#r,
       totalLinesRemoved: this.#d,
       restoredCostUSD: this.#u,
       restoredTokens: this.#c,
-      hasUnknownModelCost: this.#h,
+      hasUnknownModelCost: this.#p,
       safetyStops: this.#a,
-      modelUsage: cloneModelUsage(this.#g),
+      modelUsage: cloneModelUsage(this.#f),
     };
   }
   restoreSnapshot(snapshot) {
-    this.#f = snapshot.ownerSessionId;
+    this.#g = snapshot.ownerSessionId;
     this.#e = snapshot.totalCostUSD;
     this.#t = snapshot.totalAPIDuration;
     this.#n = snapshot.totalAPIDurationWithoutRetries;
-    this.#o = snapshot.totalToolDuration;
-    this.#r = snapshot.startTime;
-    this.#s = snapshot.sessionLogicalStartTime;
-    this.#i = snapshot.totalLinesAdded;
+    this.#s = snapshot.totalToolDuration;
+    this.#o = snapshot.startTime;
+    this.#i = snapshot.sessionLogicalStartTime;
+    this.#r = snapshot.totalLinesAdded;
     this.#d = snapshot.totalLinesRemoved;
     this.#u = snapshot.restoredCostUSD;
     this.#c = snapshot.restoredTokens;
-    this.#h = snapshot.hasUnknownModelCost;
+    this.#p = snapshot.hasUnknownModelCost;
     this.#a = snapshot.safetyStops;
-    this.#g = cloneModelUsage(snapshot.modelUsage);
+    this.#f = cloneModelUsage(snapshot.modelUsage);
   }
   claim(sessionId) {
-    this.#f ??= sessionId;
+    this.#g ??= sessionId;
   }
   scopeTo(sessionId) {
-    this.#f = sessionId;
+    this.#g = sessionId;
   }
   ownerSessionId() {
-    return this.#f;
+    return this.#g;
   }
   belongsTo(sessionId) {
-    return this.#f === sessionId;
+    return this.#g === sessionId;
   }
   reset(sessionId) {
-    this.#f = sessionId;
+    this.#g = sessionId;
     this.#e = 0;
     this.#u = 0;
     this.#c = ZERO_TOKEN_USAGE;
     this.#t = 0;
     this.#n = 0;
-    this.#o = 0;
-    this.#r = Date.now();
+    this.#s = 0;
+    this.#o = Date.now();
     this.anchorLogicalStart(undefined);
-    this.#i = 0;
+    this.#r = 0;
     this.#d = 0;
-    this.#h = false;
+    this.#p = false;
     this.#a = 0;
-    this.#g = nullProtoCopy();
+    this.#f = nullProtoCopy();
   }
 }
-//@ chunk-ndmse9kj.js:20132-20460 placement
+//@ chunk-5ythzcas.js:21759-22087 placement
 /**
  * 仅用量额度模型的同意记录：按会话的回退同意集合与会话同意键表。
  */
@@ -1327,7 +1400,7 @@ class UsageCreditsConsentSlots {
     this.#t.clear();
   }
 }
-//@ chunk-ndmse9kj.js:20460-20764 placement
+//@ chunk-5ythzcas.js:22087-22391 placement
 /**
  * 钩子注册切片：registeredHooks 持有者、主线程代理类型与主线程代理钩子。
  */
@@ -1360,7 +1433,7 @@ class HookRegistry {
     this.#n = undefined;
   }
 }
-//@ chunk-ndmse9kj.js:20764-20949 placement
+//@ chunk-5ythzcas.js:22391-22576 placement
 /**
  * 本会话已调用技能表：按名字记录/查询/遗忘。
  */
@@ -1385,7 +1458,7 @@ class InvokedSkills {
     this.#e = new Map();
   }
 }
-//@ chunk-ndmse9kj.js:20949-21794 placement
+//@ chunk-5ythzcas.js:22576-23518 placement
 /**
  * MCP 会话接线切片：已批准的服务器（按工作区）、客户端访问器、已连接客户端接线、工具替换器与连接表；acquire* 系列只允许一个持有者并返回释放函数。
  */
@@ -1393,8 +1466,9 @@ class McpSessionWiring {
   #e = [];
   #t;
   #n;
+  #s;
   #o;
-  #r;
+  #i;
   approvedServers() {
     return this.#e;
   }
@@ -1419,11 +1493,17 @@ class McpSessionWiring {
   clientsFromAccessor() {
     return this.#t?.();
   }
-  registerConnectedClientWiring(wiring) {
-    this.#n = wiring;
+  registerTenantClients(getTenantClients) {
+    this.#n = getTenantClients;
+  }
+  clientsFromAccessorOrTenant() {
+    return (this.#t ?? this.#n)?.();
+  }
+  registerConnectedClientWiring(a) {
+    this.#s = a;
   }
   connectedClientWiring() {
-    return this.#n;
+    return this.#s;
   }
   registerToolsSwapper(swapper) {
     this.#o = swapper;
@@ -1440,24 +1520,24 @@ class McpSessionWiring {
     return this.#o(serverName, config, options);
   }
   registerConnections(connections) {
-    this.#r = connections;
+    this.#i = connections;
   }
   acquireConnections(connections) {
-    if (this.#r) return () => {};
-    this.#r = connections;
+    if (this.#i) return () => {};
+    this.#i = connections;
     return () => {
-      if (this.#r === connections) this.#r = undefined;
+      if (this.#i === connections) this.#i = undefined;
     };
   }
   connections() {
-    return this.#r;
+    return this.#i;
   }
   reset() {
     this.#e = [];
     this.#t = undefined;
   }
 }
-//@ chunk-ndmse9kj.js:21794-23391 placement
+//@ chunk-5ythzcas.js:23518-25115 placement
 /**
  * 模型选择切片：主循环模型覆盖、effort 状态、初始模型及其设置层、组织默认、环境默认模型；拒绝回退（refusal fallback）发生/头锁存/静默通道标记与回退模型锁存、可用性回退链。
  */
@@ -1465,16 +1545,16 @@ class ModelSelectionSlice {
   #e = undefined;
   #t = undefined;
   #n = undefined;
-  #o = undefined;
-  #r = undefined;
   #s = undefined;
-  #i = false;
+  #o = undefined;
+  #i = undefined;
+  #r = false;
   #d = false;
   #u = undefined;
   #c = false;
   #l = undefined;
-  #p = undefined;
   #h = undefined;
+  #p = undefined;
   mainLoopModelOverride() {
     return this.#e;
   }
@@ -1494,28 +1574,28 @@ class ModelSelectionSlice {
     this.#n = model;
   }
   initialModelSettingLayer() {
-    return this.#o;
-  }
-  replaceInitialModelSettingLayer(layer) {
-    this.#o = layer;
-  }
-  resolvedOrgDefault() {
-    return this.#r;
-  }
-  replaceResolvedOrgDefault(orgDefault) {
-    this.#r = orgDefault;
-  }
-  initialEnvDefaultModel() {
     return this.#s;
   }
-  replaceInitialEnvDefaultModel(model) {
-    this.#s = model;
+  replaceInitialModelSettingLayer(layer) {
+    this.#s = layer;
   }
-  refusalFallbackOccurred() {
+  resolvedOrgDefault() {
+    return this.#o;
+  }
+  replaceResolvedOrgDefault(orgDefault) {
+    this.#o = orgDefault;
+  }
+  initialEnvDefaultModel() {
     return this.#i;
   }
+  replaceInitialEnvDefaultModel(model) {
+    this.#i = model;
+  }
+  refusalFallbackOccurred() {
+    return this.#r;
+  }
   markRefusalFallbackOccurred(requestId) {
-    this.#i = true;
+    this.#r = true;
     this.#u ??= requestId;
   }
   refusalFallbackHeaderArmed() {
@@ -1535,7 +1615,7 @@ class ModelSelectionSlice {
     this.#c = true;
   }
   forgetRefusalFallbackOccurred() {
-    this.#i = false;
+    this.#r = false;
     this.#d = false;
     this.#c = false;
     this.#u = undefined;
@@ -1544,40 +1624,40 @@ class ModelSelectionSlice {
     return this.#l;
   }
   replaceRefusalFallbackModelLatch(latch, reason = "superseded") {
-    if (this.#l?.carriedEffort !== undefined && latch?.carriedEffort === undefined) this.#p = reason;
+    if (this.#l?.carriedEffort !== undefined && latch?.carriedEffort === undefined) this.#h = reason;
     this.#l = latch;
   }
   unlatchRefusalFallbackModel(reason) {
     this.replaceRefusalFallbackModelLatch(undefined, reason);
   }
   takeCarriedEffortEnd() {
-    let carriedEffortEnd = this.#p;
-    this.#p = undefined;
+    let carriedEffortEnd = this.#h;
+    this.#h = undefined;
     return carriedEffortEnd;
   }
   availabilityFallbackChain() {
-    return this.#h;
+    return this.#p;
   }
   replaceAvailabilityFallbackChain(chain) {
-    this.#h = chain;
+    this.#p = chain;
   }
   reset() {
     this.#e = undefined;
     this.#t = undefined;
     this.#n = undefined;
-    this.#o = undefined;
-    this.#r = undefined;
     this.#s = undefined;
-    this.#i = false;
+    this.#o = undefined;
+    this.#i = undefined;
+    this.#r = false;
     this.#d = false;
     this.#c = false;
     this.#u = undefined;
     this.#l = undefined;
-    this.#p = undefined;
     this.#h = undefined;
+    this.#p = undefined;
   }
 }
-//@ chunk-ndmse9kj.js:23391-23660 placement
+//@ chunk-5ythzcas.js:25115-25384 placement
 /**
  * 系统提示词分段缓存：sections 记录各段，noteInvalidation 递增 epoch 并记原因。
  */
@@ -1608,7 +1688,7 @@ class PromptAssemblySlice {
     this.#e = new Map();
   }
 }
-//@ chunk-ndmse9kj.js:23660-26250 placement
+//@ chunk-5ythzcas.js:25384-28002 placement
 /**
  * 请求日志切片：最近一次 API 请求/消息/分类器请求、promptId 与序号、最近人工提示、主线程请求 id 与响应、主线程缓存 TTL 与续期时间、上下文 token、恢复种子、最近完成时间、压缩后待处理标记。
  */
@@ -1616,22 +1696,22 @@ class RequestJournal {
   #e = null;
   #t = null;
   #n = null;
+  #s = null;
   #o = null;
+  #i = 0;
   #r = null;
-  #s = 0;
-  #i = null;
   #d = undefined;
   #u = 0;
   #c = undefined;
   #l = null;
-  #p = null;
   #h = null;
+  #p = null;
   #a = null;
-  #g = null;
-  #S = false;
+  #f = null;
+  #v = false;
+  #S = null;
   #y = null;
-  #v = null;
-  #f = false;
+  #g = false;
   lastAPIRequest() {
     return this.#e;
   }
@@ -1651,32 +1731,32 @@ class RequestJournal {
     this.#n = messages;
   }
   lastClassifierRequests() {
-    return this.#o;
+    return this.#s;
   }
   replaceLastClassifierRequests(requests) {
-    this.#o = requests;
+    this.#s = requests;
   }
   promptId() {
-    return this.#r;
+    return this.#o;
   }
   replacePromptId(promptId) {
-    this.#r = promptId;
+    this.#o = promptId;
   }
   promptIndex() {
-    return this.#s;
-  }
-  replacePromptIndex(index) {
-    this.#s = index;
-  }
-  incrementPromptIndex() {
-    this.#s++;
-    return this.#s;
-  }
-  lastPersonPrompt() {
     return this.#i;
   }
+  replacePromptIndex(index) {
+    this.#i = index;
+  }
+  incrementPromptIndex() {
+    this.#i++;
+    return this.#i;
+  }
+  lastPersonPrompt() {
+    return this.#r;
+  }
   replaceLastPersonPrompt(prompt) {
-    this.#i = prompt;
+    this.#r = prompt;
   }
   lastMainRequestId() {
     return this.#d;
@@ -1698,17 +1778,17 @@ class RequestJournal {
   replaceLastMainThreadCacheTtlMs(ttlMs, model, isRenewal = false) {
     this.#l = ttlMs;
     this.#a = Date.now();
-    this.#h = {
+    this.#p = {
       ttlMs,
       model,
       requestAt: this.#a,
-      askedAt: isRenewal ? (this.#h?.askedAt ?? this.#a) : this.#a,
+      askedAt: isRenewal ? (this.#p?.askedAt ?? this.#a) : this.#a,
     };
-    this.#g = this.#a;
-    this.#S = true;
+    this.#f = this.#a;
+    this.#v = true;
   }
   isLastMainThreadAskLive(ttlMs, model) {
-    let clientPlatform = this.#h;
+    let clientPlatform = this.#p;
     return (
       clientPlatform !== null &&
       clientPlatform.requestAt === this.#a &&
@@ -1722,36 +1802,36 @@ class RequestJournal {
   }
   recordLastMainThreadCacheRenewal(at) {
     if (this.#a !== null)
-      this.#p = {
+      this.#h = {
         requestAt: this.#a,
         at: Math.max(at, this.lastMainThreadCacheRenewedAt() ?? -1 / 0),
       };
   }
   lastMainThreadCacheRenewedAt() {
-    let renewal = this.#p;
+    let renewal = this.#h;
     return renewal !== null && renewal.requestAt === this.#a ? renewal.at : null;
   }
   lastLiveMainThreadRequestAt() {
-    return this.#g;
+    return this.#f;
   }
   lastMainThreadRequestAt() {
     return this.#a;
   }
   mainThreadRequestedInProcess() {
-    return this.#S;
+    return this.#v;
   }
   recordMainThreadTurnStart() {
-    this.#S = true;
+    this.#v = true;
   }
   replaceLastMainThreadRequest(requestAt, ttlMs) {
     this.#a = requestAt;
     this.#l = ttlMs;
   }
   lastMainThreadContextTokens() {
-    return this.#y;
+    return this.#S;
   }
   replaceLastMainThreadContextTokens(tokens) {
-    this.#y = tokens;
+    this.#S = tokens;
   }
   stageResumeSeed(seed) {
     this.#m = seed;
@@ -1760,7 +1840,8 @@ class RequestJournal {
     this.#m = null;
     this.#l = seed.ttlMs;
     this.#a = seed.requestAt;
-    this.#y = seed.contextTokens;
+    this.#p = buildLiveAskFromSeed(seed);
+    this.#S = seed.contextTokens;
   }
   #m = null;
   clearLastMainThreadRequest(sessionId) {
@@ -1768,44 +1849,55 @@ class RequestJournal {
     this.#m = null;
     this.#l = seed?.ttlMs ?? null;
     this.#a = seed?.requestAt ?? null;
-    this.#y = seed?.contextTokens ?? null;
-    this.#g = null;
-    this.#S = false;
+    this.#p = buildLiveAskFromSeed(seed);
+    this.#S = seed?.contextTokens ?? null;
+    this.#f = null;
+    this.#v = false;
   }
   lastApiCompletionTimestamp() {
-    return this.#v;
+    return this.#y;
   }
   replaceLastApiCompletionTimestamp(timestamp) {
-    this.#v = timestamp;
+    this.#y = timestamp;
   }
   pendingPostCompaction() {
-    return this.#f;
+    return this.#g;
   }
   replacePendingPostCompaction(pending) {
-    this.#f = pending;
+    this.#g = pending;
   }
   reset() {
     this.#e = null;
     this.#t = null;
     this.#n = null;
+    this.#s = null;
     this.#o = null;
+    this.#i = 0;
     this.#r = null;
-    this.#s = 0;
-    this.#i = null;
     this.#d = undefined;
     this.#c = undefined;
     this.#u += 1;
     this.#l = null;
     this.#a = null;
-    this.#g = null;
-    this.#S = false;
-    this.#y = null;
+    this.#f = null;
+    this.#v = false;
+    this.#S = null;
     this.#m = null;
-    this.#v = null;
-    this.#f = false;
+    this.#y = null;
+    this.#g = false;
   }
 }
-//@ chunk-ndmse9kj.js:26250-27000 placement
+//@ chunk-5ythzcas.js:28002-28143 layout
+function buildLiveAskFromSeed(seed) {
+  return seed?.ask !== undefined && seed.requestAt !== null && seed.requestAt <= Date.now()
+    ? {
+        ...seed.ask,
+        requestAt: seed.requestAt,
+        askedAt: seed.requestAt,
+      }
+    : null;
+}
+//@ chunk-5ythzcas.js:28143-28893 placement
 /**
  * 会话定时任务切片：任务列表、各链开始时间、tick 中的提示与插件、连续 keepalive 次数、结束标记与唤醒次数；changed/pendingLoopWakeup 两个信号。
  */
@@ -1813,10 +1905,10 @@ class SessionCron {
   #e = [];
   #t = Object.create(null);
   #n = null;
-  #o = undefined;
+  #s = undefined;
+  #o = 0;
+  #i = false;
   #r = 0;
-  #s = false;
-  #i = 0;
   changed = createSignal();
   pendingLoopWakeup = createSignal();
   tasks() {
@@ -1841,44 +1933,44 @@ class SessionCron {
     return this.#n;
   }
   tickInFlightPlugin() {
-    return this.#o;
+    return this.#s;
   }
   replaceTickInFlightPrompt(prompt, plugin) {
     this.#n = prompt;
-    this.#o = prompt === null ? undefined : plugin;
+    this.#s = prompt === null ? undefined : plugin;
   }
   consecutiveKeepalives() {
-    return this.#r;
+    return this.#o;
   }
   replaceConsecutiveKeepalives(count) {
-    this.#r = count;
+    this.#o = count;
   }
   ended() {
-    return this.#s;
-  }
-  replaceEnded(ended) {
-    this.#s = ended;
-  }
-  wakeFires() {
     return this.#i;
   }
+  replaceEnded(ended) {
+    this.#i = ended;
+  }
+  wakeFires() {
+    return this.#r;
+  }
   recordWakeFire() {
-    this.#i++;
+    this.#r++;
   }
   resetWakeFires() {
-    this.#i = 0;
+    this.#r = 0;
   }
   reset() {
     this.#e = [];
     this.#t = Object.create(null);
     this.#n = null;
-    this.#o = undefined;
+    this.#s = undefined;
+    this.#o = 0;
+    this.#i = false;
     this.#r = 0;
-    this.#s = false;
-    this.#i = 0;
   }
 }
-//@ chunk-ndmse9kj.js:27000-30506 placement
+//@ chunk-5ythzcas.js:28893-32399 placement
 /**
  * 会话标志切片：引导/LSP 推荐是否已显示、信任对话框、计划/自动模式退出附件、记忆开关与暂停、账号记忆模式、各种 rollout 闸门锁存、技能/插件同步开关与否决、待处理的上下文压缩通知、例程、继承的团队名、teleport 会话信息、CLAUDE.md 缓存等。
  */
@@ -1886,34 +1978,34 @@ class SessionFlags {
   #e = false;
   #t = false;
   #n = false;
-  #o = false;
-  #r = false;
   #s = false;
+  #o = false;
   #i = false;
+  #r = false;
   #d = false;
   #u = false;
   #c = false;
   #l = false;
-  #p = undefined;
-  #h = false;
+  #h = undefined;
+  #p = false;
   #a = undefined;
-  #g = false;
-  #S = false;
+  #f = false;
+  #v = false;
+  #S = null;
   #y = null;
-  #v = null;
-  #f = null;
+  #g = null;
   #m = false;
   #b = null;
-  #k = false;
-  #R = false;
-  #x = false;
   #C = false;
-  #P = false;
+  #x = false;
+  #R = false;
+  #w = false;
+  #k = false;
+  #P = undefined;
+  #M = undefined;
   #T = undefined;
-  #w = undefined;
   #A = undefined;
-  #L = undefined;
-  #M = null;
+  #L = null;
   #O = null;
   onboardingShownThisSession() {
     return this.#e;
@@ -1934,28 +2026,28 @@ class SessionFlags {
     this.#n = accepted;
   }
   homeTrustDialogAccepted() {
-    return this.#o;
-  }
-  replaceHomeTrustDialogAccepted(accepted) {
-    this.#o = accepted;
-  }
-  hasExitedPlanMode() {
-    return this.#r;
-  }
-  replaceHasExitedPlanMode(hasExited) {
-    this.#r = hasExited;
-  }
-  needsPlanModeExitAttachment() {
     return this.#s;
   }
-  replaceNeedsPlanModeExitAttachment(needsAttachment) {
-    this.#s = needsAttachment;
+  replaceHomeTrustDialogAccepted(accepted) {
+    this.#s = accepted;
   }
-  needsAutoModeExitAttachment() {
+  hasExitedPlanMode() {
+    return this.#o;
+  }
+  replaceHasExitedPlanMode(hasExited) {
+    this.#o = hasExited;
+  }
+  needsPlanModeExitAttachment() {
     return this.#i;
   }
-  replaceNeedsAutoModeExitAttachment(needsAttachment) {
+  replaceNeedsPlanModeExitAttachment(needsAttachment) {
     this.#i = needsAttachment;
+  }
+  needsAutoModeExitAttachment() {
+    return this.#r;
+  }
+  replaceNeedsAutoModeExitAttachment(needsAttachment) {
+    this.#r = needsAttachment;
   }
   memoryToggledOff() {
     return this.#d;
@@ -1976,14 +2068,14 @@ class SessionFlags {
     this.#l = isPaused;
   }
   accountMemorySessionMode() {
-    return this.#p;
+    return this.#h;
   }
   replaceAccountMemorySessionMode(mode, isRestored = false) {
-    this.#p = mode;
-    this.#h = isRestored && mode !== undefined;
+    this.#h = mode;
+    this.#p = isRestored && mode !== undefined;
   }
   accountMemorySessionModeRestored() {
-    return this.#h;
+    return this.#p;
   }
   accountMemoryLaunchMode() {
     return this.#a;
@@ -1992,10 +2084,10 @@ class SessionFlags {
     this.#a = mode;
   }
   restoredMemoryPause() {
-    return this.#g;
+    return this.#f;
   }
   replaceRestoredMemoryPause(isPaused) {
-    this.#g = isPaused;
+    this.#f = isPaused;
   }
   restoredAutoMemoryOff() {
     return this.#c;
@@ -2010,28 +2102,28 @@ class SessionFlags {
     this.#m = requested;
   }
   backgroundAutoModeSetupInFlight() {
-    return this.#S;
-  }
-  replaceBackgroundAutoModeSetupInFlight(inFlight) {
-    this.#S = inFlight;
-  }
-  deferredToolStubGateLatch() {
-    return this.#y;
-  }
-  replaceDeferredToolStubGateLatch(latch) {
-    this.#y = latch;
-  }
-  verifySkillRolloutGateLatch() {
     return this.#v;
   }
+  replaceBackgroundAutoModeSetupInFlight(inFlight) {
+    this.#v = inFlight;
+  }
+  deferredToolStubGateLatch() {
+    return this.#S;
+  }
+  replaceDeferredToolStubGateLatch(latch) {
+    this.#S = latch;
+  }
+  verifySkillRolloutGateLatch() {
+    return this.#y;
+  }
   replaceVerifySkillRolloutGateLatch(latch) {
-    this.#v = latch;
+    this.#y = latch;
   }
   commitSkillRolloutGateLatch() {
-    return this.#f;
+    return this.#g;
   }
   replaceCommitSkillRolloutGateLatch(latch) {
-    this.#f = latch;
+    this.#g = latch;
   }
   memoryToolsShapeLatch() {
     return this.#b;
@@ -2040,31 +2132,31 @@ class SessionFlags {
     this.#b = latch;
   }
   proposeGoalAvailabilityLogged() {
-    return this.#k;
+    return this.#C;
   }
   markProposeGoalAvailabilityLogged() {
-    this.#k = true;
+    this.#C = true;
   }
   activeRoutine() {
-    return this.#A;
+    return this.#T;
   }
   replaceActiveRoutine(routine) {
-    this.#A = routine;
+    this.#T = routine;
   }
   inheritedTeamName() {
-    return this.#L;
+    return this.#A;
   }
   replaceInheritedTeamName(teamName) {
-    this.#L = teamName;
+    this.#A = teamName;
   }
   teleportedSessionInfo() {
-    return this.#M;
+    return this.#L;
   }
   replaceTeleportedSessionInfo(info) {
-    this.#M = info;
+    this.#L = info;
   }
   markFirstTeleportMessageLogged() {
-    if (this.#M) this.#M.hasLoggedFirstMessage = true;
+    if (this.#L) this.#L.hasLoggedFirstMessage = true;
   }
   cachedClaudeMdContent() {
     return this.#O;
@@ -2073,84 +2165,84 @@ class SessionFlags {
     this.#O = content;
   }
   accountSkillsSyncEnabled() {
-    return this.#R;
-  }
-  replaceAccountSkillsSyncEnabled(enabled) {
-    this.#R = enabled;
-  }
-  skillsSyncVetoed() {
     return this.#x;
   }
+  replaceAccountSkillsSyncEnabled(enabled) {
+    this.#x = enabled;
+  }
+  skillsSyncVetoed() {
+    return this.#R;
+  }
   replaceSkillsSyncVetoed(vetoed) {
-    this.#x = vetoed;
+    this.#R = vetoed;
   }
   accountPluginsSyncEnabled() {
-    return this.#C;
+    return this.#w;
   }
   replaceAccountPluginsSyncEnabled(enabled) {
-    this.#C = enabled;
+    this.#w = enabled;
   }
   pluginsSyncVetoed() {
-    return this.#P;
+    return this.#k;
   }
   replacePluginsSyncVetoed(vetoed) {
-    this.#P = vetoed;
+    this.#k = vetoed;
   }
   armPendingContextCompacted(info, response) {
-    this.#T = info;
-    this.#w = response;
+    this.#P = info;
+    this.#M = response;
   }
   consumePendingContextCompacted() {
-    let info = this.#T;
-    this.#T = undefined;
+    let info = this.#P;
+    this.#P = undefined;
     return info;
   }
   forgetPendingContextCompacted() {
-    this.#T = undefined;
-    this.#w = undefined;
+    this.#P = undefined;
+    this.#M = undefined;
   }
   responseBeforeCompaction() {
-    return this.#w;
+    return this.#M;
   }
   forgetResponseBeforeCompaction() {
-    this.#w = undefined;
+    this.#M = undefined;
   }
   reset() {
-    this.#R = false;
     this.#x = false;
-    this.#C = false;
-    this.#P = false;
+    this.#R = false;
+    this.#w = false;
+    this.#k = false;
     this.#e = false;
     this.#t = false;
     this.#n = false;
-    this.#o = false;
-    this.#r = false;
     this.#s = false;
+    this.#o = false;
     this.#i = false;
+    this.#r = false;
     this.#d = false;
     this.#u = false;
     this.#l = false;
-    this.#p = undefined;
-    this.#h = false;
+    this.#h = undefined;
+    this.#p = false;
     this.#a = undefined;
-    this.#g = false;
+    this.#f = false;
     this.#c = false;
     this.#m = false;
-    this.#S = false;
+    this.#v = false;
+    this.#S = null;
     this.#y = null;
-    this.#v = null;
-    this.#f = null;
+    this.#g = null;
     this.#b = null;
-    this.#k = false;
-    this.#A = undefined;
-    this.#L = undefined;
-    this.#M = null;
-    this.#O = null;
+    this.#C = false;
     this.#T = undefined;
-    this.#w = undefined;
+    this.#A = undefined;
+    this.#L = null;
+    this.#O = null;
+    this.#P = undefined;
+    this.#M = undefined;
   }
 }
-//@ chunk-ndmse9kj.js:30506-30729 placement
+//@ chunk-5ythzcas.js:32399-32622 placement
 function createArrivingInboundFiles() {
   return {
     messagesArriving: 0,
@@ -2164,7 +2256,7 @@ function createArrivingInboundFiles() {
     pathsArriving: new Map(),
   };
 }
-//@ chunk-ndmse9kj.js:30729-33066 placement
+//@ chunk-5ythzcas.js:32622-34959 placement
 /**
  * 会话暂存切片：计划 slug 缓存、待关联分支/PR、vim 共享状态、代理颜色、本会话建的团队与窗格、已提示过的失败、入站附件下载与到达队列、Chrome 可用性日志、目标空闲提醒/重新提示定时器、worker 签到；reset 会清掉所有定时器并中止下载。
  */
@@ -2172,32 +2264,32 @@ class SessionScratch {
   #e = new Map();
   #t = new Map();
   #n = null;
-  #o = new Map();
-  #r = new Set();
-  #s = new Set();
+  #s = new Map();
+  #o = new Set();
   #i = new Set();
+  #r = new Set();
   #d = new Set();
   #u = new Set();
   #c = new Set();
   #l = new Set();
-  #p = new Set();
   #h = new Set();
+  #p = new Set();
   #a = new Set();
-  #g = new Map();
+  #f = new Map();
+  #v = new Map();
   #S = new Map();
-  #y = new Map();
-  #v;
-  #f = {
+  #y;
+  #g = {
     byFileUuid: new Map(),
     recentPrefetchStarts: [],
   };
   #m = createArrivingInboundFiles();
   #b = new Set();
-  #k = undefined;
-  #R = undefined;
-  #x = undefined;
   #C = undefined;
-  #P = undefined;
+  #x = undefined;
+  #R = undefined;
+  #w = undefined;
+  #k = undefined;
   planSlugCache() {
     return this.#e;
   }
@@ -2217,16 +2309,16 @@ class SessionScratch {
     this.#n = state;
   }
   agentColorMap() {
-    return this.#o;
-  }
-  sessionCreatedTeams() {
-    return this.#r;
-  }
-  sessionSpawnedTeammatePanes() {
     return this.#s;
   }
-  surfacedHookSpawnFailures() {
+  sessionCreatedTeams() {
+    return this.#o;
+  }
+  sessionSpawnedTeammatePanes() {
     return this.#i;
+  }
+  surfacedHookSpawnFailures() {
+    return this.#r;
   }
   bareMcpServerMatchersWarned() {
     return this.#d;
@@ -2241,31 +2333,31 @@ class SessionScratch {
     return this.#l;
   }
   unsupportedThreadKeys() {
-    return this.#p;
+    return this.#h;
   }
   pendingPrLinks() {
-    return this.#h;
+    return this.#p;
   }
   policyPredicateTelemetryEmitted() {
     return this.#a;
   }
   humanAttachmentDigests() {
-    return this.#g;
+    return this.#f;
   }
   inboundAttachmentFiles() {
-    return this.#S;
-  }
-  filesPlacedByName() {
-    return this.#y;
-  }
-  filesPlacedByNameRead() {
     return this.#v;
   }
+  filesPlacedByName() {
+    return this.#S;
+  }
+  filesPlacedByNameRead() {
+    return this.#y;
+  }
   setFilesPlacedByNameRead(reader) {
-    this.#v = reader;
+    this.#y = reader;
   }
   inboundAttachmentDownloads() {
-    return this.#f;
+    return this.#g;
   }
   arrivingInboundFiles() {
     return this.#m;
@@ -2275,75 +2367,75 @@ class SessionScratch {
   }
   replaceChromeAvailabilityStagesLogged(stages) {
     this.#b = new Set();
-    if (stages) this.#k = Date.now();
+    if (stages) this.#C = Date.now();
   }
   chromeAvailabilityAnchorMs() {
-    return this.#k;
-  }
-  pendingGoalIdleCheckin() {
-    return this.#R;
-  }
-  replacePendingGoalIdleCheckin(timer) {
-    this.#R = timer;
-  }
-  pendingGoalReprompt() {
-    return this.#x;
-  }
-  replacePendingGoalReprompt(timer) {
-    this.#x = timer;
-  }
-  goalInterruptionStreak() {
     return this.#C;
   }
+  pendingGoalIdleCheckin() {
+    return this.#x;
+  }
+  replacePendingGoalIdleCheckin(timer) {
+    this.#x = timer;
+  }
+  pendingGoalReprompt() {
+    return this.#R;
+  }
+  replacePendingGoalReprompt(timer) {
+    this.#R = timer;
+  }
+  goalInterruptionStreak() {
+    return this.#w;
+  }
   replaceGoalInterruptionStreak(streak) {
-    this.#C = streak;
+    this.#w = streak;
   }
   workerCheckin() {
-    return this.#P;
+    return this.#k;
   }
   replaceWorkerCheckin(checkin) {
-    this.#P = checkin;
+    this.#k = checkin;
   }
   reset() {
     this.#e = new Map();
     this.#t = new Map();
     this.#n = null;
-    this.#o = new Map();
-    this.#r = new Set();
-    this.#s = new Set();
+    this.#s = new Map();
+    this.#o = new Set();
     this.#i = new Set();
+    this.#r = new Set();
     this.#d = new Set();
     this.#u = new Set();
     this.#c = new Set();
     this.#l = new Set();
-    this.#p = new Set();
     this.#h = new Set();
+    this.#p = new Set();
     this.#a = new Set();
-    this.#g = new Map();
+    this.#f = new Map();
+    this.#v = new Map();
     this.#S = new Map();
-    this.#y = new Map();
-    this.#v = undefined;
-    for (let entry of this.#f.byFileUuid.values()) {
+    this.#y = undefined;
+    for (let entry of this.#g.byFileUuid.values()) {
       clearTimeout(entry.expiry);
       entry.abort.abort();
     }
-    this.#f = {
+    this.#g = {
       byFileUuid: new Map(),
       recentPrefetchStarts: [],
     };
     this.#m = createArrivingInboundFiles();
     this.#b = new Set();
-    this.#k = undefined;
-    clearTimeout(this.#R);
-    this.#R = undefined;
+    this.#C = undefined;
     clearTimeout(this.#x);
     this.#x = undefined;
-    this.#C = undefined;
-    clearInterval(this.#P?.timer);
-    this.#P = undefined;
+    clearTimeout(this.#R);
+    this.#R = undefined;
+    this.#w = undefined;
+    clearInterval(this.#k?.timer);
+    this.#k = undefined;
   }
 }
-//@ chunk-ndmse9kj.js:33066-33167 placement
+//@ chunk-5ythzcas.js:34959-35060 placement
 var DEFAULT_SURFACE_CAPS = {
   renderTarget: "ink",
   workspace: "local",
@@ -2351,7 +2443,7 @@ var DEFAULT_SURFACE_CAPS = {
   transcriptSource: "local-jsonl",
   remote: null,
 };
-//@ chunk-ndmse9kj.js:33167-35020 placement
+//@ chunk-5ythzcas.js:35060-36913 placement
 /**
  * 宿主界面能力切片：SDK 宿主是否接管对话框及支持的对话框种类、按任务停止、快速追问抢占、嵌套子代理工具转发、Chrome 设置提示；附着方能力、RV supervisor 连接、SDK betas、界面能力（本地/远程）、云端 cwd、REPL bridge 与主循环状态。
  */
@@ -2359,16 +2451,16 @@ class SurfaceCapabilities {
   #e = false;
   #t = undefined;
   #n = undefined;
-  #o = undefined;
-  #r = undefined;
   #s = undefined;
+  #o = undefined;
   #i = undefined;
+  #r = undefined;
   #d = null;
   #u = false;
   #c = undefined;
   #l = DEFAULT_SURFACE_CAPS;
-  #p = false;
-  #h = "idle";
+  #h = false;
+  #p = "idle";
   #a = null;
   attacherCapsChanged = createSignal();
   rvSupervisorLinkChanged = createSignal();
@@ -2390,28 +2482,28 @@ class SurfaceCapabilities {
     this.#n = kinds === undefined ? undefined : source;
   }
   sdkPerTaskStopAffordance() {
-    return this.#o;
-  }
-  declarePerTaskStopAffordance(affordance) {
-    this.#o = affordance;
-  }
-  sdkRapidFollowupPreempt() {
-    return this.#r;
-  }
-  declareRapidFollowupPreempt(preempt) {
-    this.#r = preempt;
-  }
-  sdkForwardNestedSubagentToolCalls() {
     return this.#s;
   }
-  declareForwardNestedSubagentToolCalls(forward) {
-    this.#s = forward;
+  declarePerTaskStopAffordance(affordance) {
+    this.#s = affordance;
   }
-  hostRendersChromeSetupOffer() {
+  sdkRapidFollowupPreempt() {
+    return this.#o;
+  }
+  declareRapidFollowupPreempt(preempt) {
+    this.#o = preempt;
+  }
+  sdkForwardNestedSubagentToolCalls() {
     return this.#i;
   }
+  declareForwardNestedSubagentToolCalls(forward) {
+    this.#i = forward;
+  }
+  hostRendersChromeSetupOffer() {
+    return this.#r;
+  }
   declareHostRendersChromeSetupOffer(renders) {
-    this.#i = renders;
+    this.#r = renders;
   }
   attacherCaps() {
     return this.#d;
@@ -2454,34 +2546,34 @@ class SurfaceCapabilities {
     this.cloudCwdChanged.emit();
   }
   replBridgeActive() {
-    return this.#p;
+    return this.#h;
   }
   replaceReplBridgeActive(isActive) {
-    if (this.#p === isActive) return;
-    this.#p = isActive;
+    if (this.#h === isActive) return;
+    this.#h = isActive;
   }
   mainLoopBusy() {
-    return this.#h !== "idle";
+    return this.#p !== "idle";
   }
   mainQueryRunning() {
-    return this.#h === "running";
+    return this.#p === "running";
   }
   replaceMainLoopStatus(status) {
-    this.#h = status;
+    this.#p = status;
   }
   reset() {
     this.#e = false;
     this.#t = undefined;
     this.#n = undefined;
-    this.#o = undefined;
-    this.#r = undefined;
     this.#s = undefined;
+    this.#o = undefined;
     this.#i = undefined;
+    this.#r = undefined;
     this.#d = null;
     this.#c = undefined;
     this.#l = DEFAULT_SURFACE_CAPS;
-    this.#p = false;
-    this.#h = "idle";
+    this.#h = false;
+    this.#p = "idle";
     this.#u = false;
     this.#a = null;
     this.attacherCapsChanged.clear();
@@ -2489,9 +2581,9 @@ class SurfaceCapabilities {
     this.cloudCwdChanged.clear();
   }
 }
-//@ chunk-ndmse9kj.js:35020-35031 placement
+//@ chunk-5ythzcas.js:36913-36924 placement
 var SCROLL_IDLE_DEBOUNCE_MS = 150;
-//@ chunk-ndmse9kj.js:35031-35988 placement
+//@ chunk-5ythzcas.js:36924-37881 placement
 /**
  * 用户在场切片：最近交互/提交/人工输入时间、终端焦点、滚动中标记（150ms 去抖）与 waitForScrollIdle；交互与焦点变化触发信号。
  */
@@ -2499,12 +2591,12 @@ class UserPresence {
   #e = Date.now();
   #t = false;
   #n = 0;
-  #o = -1 / 0;
+  #s = -1 / 0;
   interactionFired = createSignal();
-  #r = undefined;
+  #o = undefined;
   terminalFocusFired = createSignal();
-  #s = false;
-  #i;
+  #i = false;
+  #r;
   lastInteractionTime() {
     return this.#e;
   }
@@ -2515,10 +2607,10 @@ class UserPresence {
     this.#n = Date.now();
   }
   personWroteAt() {
-    return this.#o;
+    return this.#s;
   }
   notePersonWrote() {
-    this.#o = performance.now();
+    this.#s = performance.now();
   }
   recordInteraction(isImmediate) {
     if (isImmediate) this.#d();
@@ -2537,79 +2629,70 @@ class UserPresence {
     this.#t = false;
   }
   terminalFocus() {
-    return this.#r;
+    return this.#o;
   }
   updateTerminalFocus(focus) {
-    this.#r = focus;
+    this.#o = focus;
     this.terminalFocusFired.emit();
   }
   scrollDraining() {
-    return this.#s;
+    return this.#i;
   }
   markScrollActivity() {
-    this.#s = true;
-    if (this.#i) clearTimeout(this.#i);
-    this.#i = setTimeout(() => {
-      this.#s = false;
-      this.#i = undefined;
+    this.#i = true;
+    if (this.#r) clearTimeout(this.#r);
+    this.#r = setTimeout(() => {
+      this.#i = false;
+      this.#r = undefined;
     }, SCROLL_IDLE_DEBOUNCE_MS);
-    this.#i.unref?.();
+    this.#r.unref?.();
   }
   async waitForScrollIdle() {
-    while (this.#s) await new Promise((resolve) => setTimeout(resolve, SCROLL_IDLE_DEBOUNCE_MS));
+    while (this.#i) await new Promise((resolve) => setTimeout(resolve, SCROLL_IDLE_DEBOUNCE_MS));
   }
   reset() {
     this.#e = Date.now();
     this.#n = 0;
-    this.#o = -1 / 0;
-    this.#r = undefined;
+    this.#s = -1 / 0;
+    this.#o = undefined;
     this.interactionFired.clear();
     this.terminalFocusFired.clear();
   }
 }
 export {
-  TOOLS_USED_BEFORE_SUMMARY_TAG,
-  readableToolName,
-  cloneStickyBetaLatches,
-  clearAdvisorHeldAndReturn,
-  forkStickyBetaLatches,
-  createStickyBetaLatches,
-  ZERO_TOKEN_USAGE,
-  resetStickyBetaNameOnlyEntries,
-  clearAdvisorHeld,
-  clearInlineToolsRefusal,
-  dropWireShapeSeed,
-  clearWebSearchHistoryRejected,
-  clearMediaItemCap,
-  clearRefusedToolSchemas,
-  forgetBeta,
   isBetaRejected,
+  markBetaSent,
+  isBetaSent,
   markBetaRejected,
+  conversation,
   markDeclaredToolsDecided,
   setDeclaredTools,
   mediaItemCapForModel,
-  markBetaSent,
-  isBetaSent,
+  forgetBeta,
   resetDeclaredTools,
   markWebSearchHistoryRejected,
   setMediaItemCap,
+  clearMediaItemCap,
   addNameOnlyAnnouncements,
-  isGmailAttachmentTool,
-  UNREADABLE_TOOLS_USED_BEFORE_SUMMARY,
+  forkStickyBetaLatches,
+  rejectInlineToolsHeader,
   deepEqualIgnoringUndefined,
+  TOOLS_USED_BEFORE_SUMMARY_TAG,
+  readableToolName,
+  getSurfacedToolNames,
+  formatToolsUsedBeforeSummary,
+  UNREADABLE_TOOLS_USED_BEFORE_SUMMARY,
+  TOOL_NAME_PATTERN,
+  createStickyBetaLatches,
+  isGmailAttachmentTool,
   SettingsCacheStore,
   nullIfEmptyObject,
   CONFIG_DIR_UNSAFE_REASONS,
-  SETTINGS_CACHE_STORE_SLOT,
-  rejectInlineToolsHeader,
-  formatToolsUsedBeforeSummary,
-  TOOL_NAME_PATTERN,
-  getSurfacedToolNames,
-  isWritableByCurrentUser,
-  FORCE_LOGIN_SETTING_KEYS,
-  classifyConfigDirOwnership,
-  isObjectLike,
+  dropWireShapeSeed,
   applyWireShapeSeed,
+  isObjectLike,
+  cloneStickyBetaLatches,
+  clearAdvisorHeld,
   SessionObservers,
   ConversationLatches,
   CostLedger,
@@ -2627,10 +2710,20 @@ export {
   UserPresence,
   deepEqualWithCycles,
   nullProtoCopy,
-  ManagedDocumentLinks,
   unlatchStickyBetaLatches,
+  ManagedDocumentLinks,
   ManagedFileProtections,
   RepoTierFreeze,
   settingsEqualIgnoringOwner,
   ToolsUsedSet,
+  SETTINGS_CACHE_STORE_SLOT,
+  resetStickyBetaNameOnlyEntries,
+  clearInlineToolsRefusal,
+  clearWebSearchHistoryRejected,
+  clearRefusedToolSchemas,
+  clearAdvisorHeldAndReturn,
+  ZERO_TOKEN_USAGE,
+  isWritableByCurrentUser,
+  FORCE_LOGIN_SETTING_KEYS,
+  classifyConfigDirOwnership,
 };

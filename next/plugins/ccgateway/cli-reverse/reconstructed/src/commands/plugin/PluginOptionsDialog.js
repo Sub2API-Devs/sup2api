@@ -3,9 +3,9 @@
  *
  * 插件选项配置对话框
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/PluginOptionsDialog.tsx
- * pieces: chunk-ca06bv0t.js (3)
+ * pieces: chunk-s4mtq5zk.js (3)
  * attribution: affinity 1, fingerprint 1, callgraph-fingerprint 1
  */
 import {
@@ -20,14 +20,14 @@ import { useState } from "../../../vendor/react/cjs/react.production.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { AgentsList } from "../../components/agents/AgentsList.js";
 
-//@ chunk-ca06bv0t.js:3186-3228 affinity
+//@ chunk-s4mtq5zk.js:3189-3231 affinity
 function valueOption(value) {
   return {
     label: value,
     value,
   };
 }
-//@ chunk-ca06bv0t.js:3228-3596 fingerprint (2.1.88 match: buildFinalValues, 0.825)
+//@ chunk-s4mtq5zk.js:3231-3599 fingerprint (2.1.88 match: buildFinalValues, 0.825)
 function buildFinalValues(fields, collected, configSchema, initialValues) {
   let finalValues = {};
   for (let fieldKey of fields) {
@@ -48,7 +48,7 @@ function buildFinalValues(fields, collected, configSchema, initialValues) {
   }
   return finalValues;
 }
-//@ chunk-ca06bv0t.js:3596-4870 callgraph-fingerprint (2.1.88 match: PluginOptionsDialog, 0.261)
+//@ chunk-s4mtq5zk.js:3599-4873 callgraph-fingerprint (2.1.88 match: PluginOptionsDialog, 0.261)
 function PluginOptionsDialog(props) {
   let $ = useMemoCache(22);
   let { title, subtitle, configSchema, initialValues, onSave, onCancel } = props;
@@ -160,4 +160,4 @@ function PluginOptionsDialog(props) {
   } else content = $[21];
   return content;
 }
-export { PluginOptionsDialog, buildFinalValues };
+export { buildFinalValues, PluginOptionsDialog };

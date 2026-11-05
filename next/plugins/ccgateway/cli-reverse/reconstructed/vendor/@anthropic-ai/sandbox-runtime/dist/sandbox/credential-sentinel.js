@@ -1,16 +1,16 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/credential-sentinel.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (3)
+ * pieces: chunk-qg41pqt6.js (3)
  * attribution: esm-fingerprint 3
  */
 import { randomUUID, randomBytes } from "crypto";
 
-//@ chunk-fq0cr76a.js:705621-705686 esm-fingerprint
+//@ chunk-qg41pqt6.js:707278-707343 esm-fingerprint
 var SENTINEL_PREFIX = "fake_value_";
 var SENTINEL_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789_-";
-//@ chunk-fq0cr76a.js:705686-705819 esm-fingerprint
+//@ chunk-qg41pqt6.js:707343-707476 esm-fingerprint
 function mintSentinel(realValue) {
   let base = SENTINEL_PREFIX + randomUUID();
   let pad = Buffer.byteLength(realValue) - base.length;
@@ -19,7 +19,7 @@ function mintSentinel(realValue) {
   for (let b of randomBytes(pad)) out += SENTINEL_ALPHABET[b % SENTINEL_ALPHABET.length];
   return out;
 }
-//@ chunk-fq0cr76a.js:705819-707338 esm-fingerprint
+//@ chunk-qg41pqt6.js:707476-708995 esm-fingerprint
 class SentinelRegistry {
   constructor() {
     this.byName = new Map();

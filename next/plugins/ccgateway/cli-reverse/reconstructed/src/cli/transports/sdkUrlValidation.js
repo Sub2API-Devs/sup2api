@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：--sdk-url 的解析与校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1wpnxx5r.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hfc4cfnt.js (3)
  * attribution: placement 3
  */
 import { jsonStringify, ALLOWED_API_HOSTS } from "../../utils/model/providers.js";
 import { getCcrSessionUrl } from "../../bootstrap/state.js";
 import { eagerParseCliFlagAll } from "../../utils/cliArgs.js";
 
-//@ chunk-1wpnxx5r.js:952-1395 placement
+//@ chunk-hfc4cfnt.js:958-1401 placement
 function validateSdkUrlFlag(sdkUrl) {
   let sdkUrl_2 = resolveSdkUrl();
   if (!sdkUrl) {
@@ -39,7 +39,7 @@ function validateSdkUrlFlag(sdkUrl) {
     };
   return null;
 }
-//@ chunk-1wpnxx5r.js:1395-1831 placement
+//@ chunk-hfc4cfnt.js:1401-1837 placement
 function checkSdkUrl(url) {
   let parsed;
   try {
@@ -63,7 +63,7 @@ function checkSdkUrl(url) {
     reason: `host ${jsonStringify(parsed.hostname)} is not an approved Anthropic endpoint`,
   };
 }
-//@ chunk-1wpnxx5r.js:1831-2162 placement
+//@ chunk-hfc4cfnt.js:1837-2168 placement
 function resolveSdkUrl() {
   let ccrSessionUrl = getCcrSessionUrl();
   if (ccrSessionUrl !== undefined)
@@ -94,4 +94,4 @@ function resolveSdkUrl() {
     url: last,
   };
 }
-export { resolveSdkUrl, validateSdkUrlFlag, checkSdkUrl };
+export { resolveSdkUrl, checkSdkUrl, validateSdkUrlFlag };

@@ -3,10 +3,10 @@
  *
  * 工具调用权限判定主流程（hasPermissionsToUseTool、PermissionRequest 钩子、dontAsk/headless 转换、auto 分类器调用与拒绝超限回退）及 allow/deny/ask 规则的查找与匹配。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/permissions.ts
- * pieces: chunk-0e8j1zzj.js (1), chunk-0h4e7gnq.js (1), chunk-0wdgqhcf.js (1), chunk-18hwfzwa.js (1), chunk-38x90rmj.js (1), chunk-8wvtd8sr.js (3), chunk-dyjqn2aj.js (1), chunk-e6aww6q8.js (203), chunk-pc1rmcr2.js (1), chunk-sfy7bm1n.js (41), chunk-xde1fhwg.js (1), chunk-xr4xc2mq.js (1)
- * attribution: fingerprint 15, callgraph-witnessed 2, placement 207, shared-adjacent 1, layout 30, file-local 1
+ * pieces: chunk-01b7fqej.js (1), chunk-1dbza2qv.js (1), chunk-5xgkngpb.js (207), chunk-70rvh5wm.js (1), chunk-7p76mrq7.js (2), chunk-9m8gfd36.js (1), chunk-bhrstd6k.js (1), chunk-czq1j3j2.js (1), chunk-frs14hy1.js (1), chunk-gg17c06d.js (45), chunk-nt9amew5.js (14), chunk-xzmy9dn4.js (1)
+ * attribution: fingerprint 14, placement 208, layout 49, callgraph-witnessed 2, affinity 1, facade-majority 1, file-local 1
  */
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
@@ -15,12 +15,13 @@ import {
   isDangerousClassifierPermission,
   warnMcpRuleMismatch,
   getAutoModeConfigOrDefault,
+  getMcpPrefix as getMcpPrefix_5,
   requiresClassifierForHookAllow,
 } from "./permissionSetup.js";
 import { isChromeToolName, isBrowserPreviewToolName } from "../claudeInChrome/chromeToolNames.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../../tools/NotebookEditTool/constants.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import {
   HEARTH_WRITE_TOOL_NAMES as HEARTH_WRITE_TOOL_NAMES_2,
   HEARTHBOT,
@@ -46,19 +47,13 @@ import {
   noteRefusedMcpSkip,
 } from "./autoModeState.js";
 import { env, antEnv } from "../env.js";
-import {
-  permissionRuleValueFromString,
-  toolNameVariants,
-  hasWildcard,
-  wildcardRuleRegex,
-  aliasesFor,
-  matchWildcard,
-} from "./permissionRuleParser.js";
+import { normalizeRuleString } from "./legacyWildcardRules.js";
 import {
   isRestrictedNonSessionRule,
   isSkillPluginSurfaceEnabled,
   isWebToolRestrictedInRelay,
 } from "./permissionRulePayload.js";
+import { liftedAsksInAcceptEdits, unGrantedNotice } from "./mcpPolicyAsks.js";
 import {
   standardKeyRuleRow,
   ruleWithinServerPrefix,
@@ -69,28 +64,77 @@ import {
   toInternalToolName,
   mcpRuleMatchesToolAlias,
 } from "../../services/mcp/serverIdentity.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import {
+  toolNameVariants,
+  hasWildcard,
+  wildcardRuleRegex,
+  aliasesFor,
+  matchWildcard,
+  parseRuleString,
+  permissionRuleValueFromString as permissionRuleValueFromString_2,
+} from "./permissionRuleParser.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
 import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
 import { LISTMCPRESOURCESTOOL } from "../../tools/ListMcpResourcesTool/prompt.js";
 import { READ_MCP_RESOURCE_DIR_TOOL_NAME } from "../../tools/ReadMcpResourceDirTool/prompt.js";
 import { READMCPRESOURCETOOL } from "../../tools/ReadMcpResourceTool/prompt.js";
-import { REFRESH_MCP_TOOLS_TOOL_NAME } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import {
+  REFRESH_MCP_TOOLS_TOOL_NAME,
+  hasBuiltInEvalTool,
+} from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { DEVICE_2, HOST_TOOL_INPUT_FIELD, machineNameMatches } from "../../bridge/deviceRegistration.js";
-import { normalizeNameForMCP, CLAUDE_AI_NAME_PREFIX, CLAUDE_AI } from "../../services/mcp/normalization.js";
+import {
+  CLAUDEAI_SERVER_PREFIX,
+  CLAUDE_AI_NAME_PREFIX,
+  CLAUDE_AI,
+} from "../../services/mcp/normalization.js";
 import { trimEndChars, plural } from "../stringUtils.js";
 import { SKILL } from "../../tools/SkillTool/skillToolNames.js";
 import { toSyncedSkillAlias } from "../../skills/syncedSkills.js";
 import { isTopHostSession } from "../sessionShape.js";
-import { AGENT } from "../../tools/AgentTool/constants.js";
+import { permissionRuleValueFromString, SandboxManager } from "../sandbox/sandbox-adapter.js";
 import {
+  DEVICE_BASH_TOOL,
+  DEVICE_COMMIT_FILES_TOOL,
+  IDE_EXECUTE_CODE_TOOL,
+} from "../../services/mcp/firstPartyServerIds.js";
+import {
+  isAutoAllowedInMode,
+  getMcpPermissionModeOverride,
+  isBypassAllowedInMode,
+  isSandboxAutoAllowOff,
+} from "./browserToolNames.js";
+import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
+import {
+  getAutoModeClassifierRole,
+  SERVER_CLASSIFIER_LABEL,
+  isClassifierTargetToolUse,
+  getPermissionModeAtRequestForArbiter,
+  awaitServerVerdict,
+  alwaysTrueFlag,
+  isArbiterRole,
+  serverClassifierOffReason,
+  isServerClassifierActive,
+  shouldFallBackToLocal,
+  noVerdictReasonFor,
+  isServerNotRequestedReason,
+  classifyServerVerdict,
+  isInputRewrittenWithFallbackOff,
+  mentionsToolUseId,
+  getRewriteLostVerdictNote,
+  SERVER_CALL_UNAVAILABLE_INPUT_TOO_LONG,
+  summarizeServerVerdict,
+} from "./serverClassifier/arbiter.js";
+import {
+  isCcsTenant,
   getAllowedChannels,
   getIsNonInteractiveSession,
   getPermissionPromptToolName,
   getSessionId,
   isSdkDialogHostActive,
   getServerClassifierFallbackChoice,
-  isCcsTenant,
   isDiskless,
   isThirdPartyServerClassifierRefused,
   markThirdPartyServerClassifierRefused,
@@ -100,7 +144,11 @@ import {
   getTotalOutputTokens,
   getTotalCacheReadInputTokens,
   getTotalCacheCreationInputTokens,
+  isCcrSessionLimited,
 } from "../../bootstrap/state.js";
+import { isCcsCoworkSurface, isCoworkAny } from "../entrypointKinds.js";
+import { getToolPermissionContext, getMainLoopModel as getMainLoopModel_2 } from "./toolPermissionContext.js";
+import { AGENT } from "../../tools/AgentTool/constants.js";
 import { hasPermissionPromptTool, getPermissionPromptPerson } from "./permissionPromptHost.js";
 import {
   isSameAnswerInput,
@@ -111,39 +159,11 @@ import {
   applyPermissionAnswerChanges,
 } from "./permissionAnswer.js";
 import { isLiveMemoryTool } from "../../services/mcp/memoryServerVerification.js";
+import { hasCertifiedPrefix } from "../../tools/BashTool/certifiedCommands.js";
+import { parseBashPermissionRule } from "../../tools/BashTool/bashPermissions.js";
 import { ruleReasons } from "./gitCommandRules.js";
-import { formatPermissionRule, ruleToolNameFromString } from "./disallowedToolsFlag.js";
-import { DEVICE_BASH_TOOL, DEVICE_COMMIT_FILES_TOOL } from "../../services/mcp/firstPartyServerIds.js";
-import {
-  isAutoAllowedInMode,
-  getMcpPermissionModeOverride,
-  isSandboxAutoAllowOff,
-} from "./browserToolNames.js";
-import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
-import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import {
-  getAutoModeClassifierRole,
-  SERVER_CLASSIFIER_LABEL,
-  isClassifierTargetToolUse,
-  getPermissionModeAtRequestForArbiter,
-  alwaysTrueFlag,
-  isArbiterRole,
-  serverClassifierOffReason,
-  isServerClassifierActive,
-  awaitServerVerdict,
-  shouldFallBackToLocal,
-  noVerdictReasonFor,
-  isServerNotRequestedReason,
-  classifyServerVerdict,
-  isInputRewrittenWithFallbackOff,
-  countToolCallsSince_6,
-  getRewriteLostVerdictNote,
-  SERVER_CALL_UNAVAILABLE_INPUT_TOO_LONG,
-} from "./serverClassifier/arbiter.js";
 import { WEBFETCH, ALLOW_WEB_FETCH } from "../../tools/WebFetchTool/prompt.js";
 import { WEBSEARCH } from "../../tools/WebSearchTool/prompt.js";
-import { isCoworkAny } from "../entrypointKinds.js";
-import { getToolPermissionContext, getMainLoopModel as getMainLoopModel_2 } from "./toolPermissionContext.js";
 import { import_reject, import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   isClassifierRoutedCircuitBreaker,
@@ -178,6 +198,7 @@ import {
 } from "../../types/permissions.js";
 import {
   getDangerousRmTimeoutConfig,
+  isUnansweredWindowExpired,
   getUnansweredSafetyCheckCount,
 } from "../../tools/BashTool/bashPermissionFlags.js";
 import {
@@ -227,10 +248,9 @@ import {
   isAdminPolicyOrigin,
 } from "../settings/settings.js";
 import { logForDebugging } from "../debug.js";
-import { SandboxManager } from "../sandbox/sandbox-adapter.js";
 import { mainModelOverrideKeys } from "../model/canonicalModelName.js";
 import { wasProactivityEverOn } from "../../Tool.js";
-import { cycleAllTeammateModes, cycleTeammateMode } from "../../components/teams/TeamsDialog.js";
+import { cycleAllTeammateModes } from "../../components/teams/TeamsDialog.js";
 import {
   loadAllPermissionRulesFromDisk,
   settingsGrantsConfined,
@@ -250,14 +270,17 @@ import {
   takeNoServerCheckNotice,
   isChromeClassifierFloorCall,
   isChromeClassifierFloorTool,
-  isMcpReviewedOutsideAuto,
   enqueuePermissionCheckStatus,
+  isMcpReviewedOutsideAuto,
   startClassifierKeepalive,
   gatewayDisplayName,
   NO_CHECK_FOR_SESSION_TITLE,
   NO_CHECK_FOR_ACTION_TITLE,
   UNREVIEWED_ACTION_NOTICE,
 } from "./serverClassifier/fallbackNotice.js";
+import { parseCommandRaw, PARSE_ABORTED } from "../bash/parser.js";
+import { parseForSecurityFromAst } from "../bash/ast.js";
+import { contextKeyAccepted, isStateOn } from "../codeMode/accepted.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { getAPIProviderForAnalytics } from "../model/providers.js";
 import { turnAbortControllerOf } from "../abortController.js";
@@ -284,6 +307,8 @@ import {
 } from "../../tools/BashTool/destructiveTargets.js";
 import { getPowerShellDestructiveCategory } from "../../tools/PowerShellTool/destructiveCommandWarning.js";
 import { getCwdOrNull } from "../cwd.js";
+import { builtinToolServedByMcp, sanitizeToolNameForAnalytics } from "../../services/analytics/metadata.js";
+import { classifyBashCommand } from "../../tools/BashTool/commandClassification.js";
 import {
   isReadOnlyBrowserCall,
   normalizeAutoModeValue,
@@ -294,8 +319,8 @@ import {
   hasBrowserWriteAction,
   isAgentSpawningTool,
   getToolNameForPermissionCheck,
-  getClassifiableBrowserAction,
   buildDesktopActionReviewAsk,
+  getClassifiableBrowserAction,
 } from "./browserComputerUseTools.js";
 import { isRemoteBrowserToolModeFloorActive, shouldRelyOnModeFloorForBrowser } from "./mcpRuleMatching.js";
 import {
@@ -317,11 +342,17 @@ import {
   buildNoPromptAvailableDenial,
   AUTO_REJECT_MESSAGE,
   DONT_ASK_REJECT_MESSAGE,
+  rewrittenAfterHookMessage,
+  escapeRefusedMessage,
+  sendMessageRefusedMessage,
+  agentSpawnRefusedMessage,
   REJECT_MESSAGE,
   quoteToolInputForClassifierMessage,
   buildClassifierRefusedOrTransientGuidance,
   buildYoloRejectionMessage,
+  codeModeNotRunReasonText,
   buildDangerousRemovalDenial,
+  weakSet_5,
 } from "../messages.js";
 import { extractOutputRedirections } from "../bash/commands.js";
 import { permissionModeTitle } from "./PermissionMode.js";
@@ -332,7 +363,6 @@ import {
   supportsPersistence as supportsPersistence_2,
   applyPermissionUpdates,
   persistPermissionUpdates,
-  addAdditionalWorkingDirectories,
   isRemovalWaiverActive,
   applyValidatedPermissionUpdate,
   clearRemovalWaiverIfPathScoped,
@@ -371,7 +401,6 @@ import {
 } from "./serverClassifier/results.js";
 import { settingsProblemDenial } from "../settings/settingsProblems.js";
 import { denyReservedArtifactKeys } from "../../tools/ArtifactTool/reservedKeys.js";
-import { sanitizeToolNameForAnalytics, builtinToolServedByMcp } from "../../services/analytics/metadata.js";
 import { sanitizeMarkName } from "../startupMarks.js";
 import { mcpToolLogFields } from "../../hooks/toolPermission/permissionLogging.js";
 import {
@@ -384,6 +413,7 @@ import {
 import {
   rememberCommandNetworkLists,
   areCommandNetworkListsOffered_2,
+  askClassifierForAllowedDomains,
 } from "../../tools/BashTool/sandboxNetwork.js";
 import { appendAutoModeDecision } from "./autoModeDecisionLog.js";
 import { isEvalBuild } from "../envUtils.js";
@@ -391,10 +421,10 @@ import { ASKUSERQUESTION } from "../../tools/AskUserQuestionTool/prompt.js";
 import {
   logStrictTierUnavailable,
   recordContextNavigation,
-  prependInheritedVerifiedTurns,
-  formatActionForClassifier,
-  classifyYoloAction,
   collectToolUseIdSet,
+  formatActionForClassifier,
+  prependInheritedVerifiedTurns,
+  classifyYoloAction,
 } from "./yoloClassifier.js";
 import {
   isLocalClassifierSwitchedOff,
@@ -407,11 +437,17 @@ import {
   isCopperTrellisOn,
   TIMER_MARGIN_MS,
 } from "./serverClassifier/flags.js";
-import { isLinkedWorktreeFastPathEnabled, verifiedLinkedWorktreeDirectories } from "./filesystem.js";
+import {
+  addAdditionalWorkingDirectories,
+  isLinkedWorktreeFastPathEnabled,
+  verifiedLinkedWorktreeDirectories,
+  normalizeCaseForComparison_2,
+} from "./filesystem.js";
 import { APIUserAbortError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { REMOTE_BROWSER_SERVER_NAME } from "../../services/mcp/remoteBrowserServer.js";
 import { keepResolvedHostPin } from "../../commands/mobile/mobile.js";
-import { isRemoteBrowserToolUnderModeFloor } from "./remoteBrowser.js";
+import { REPL_TOOL_NAME, isEvalToolName } from "../../tools/REPLTool/constants.js";
+import { SENDMESSAGE } from "../../tools/SendMessageTool/constants.js";
 import { CommitTurnSlot, enqueueClassifierRequest } from "./serverClassifier/context.js";
 import { pinSessionId } from "../sessionStorage.js";
 import {
@@ -423,71 +459,63 @@ import { fallbackUsageDelta } from "../../services/api/withRetry.js";
 import { SAFETY_MONITOR_BLOCKED } from "../../services/api/errors.js";
 import { telemetrySafeModelName } from "../model/telemetryModelName.js";
 import { calculateCostFromTokenCounts } from "../modelCost.js";
+import { isClassifiableForAutoAllow } from "./editPermissionRules.js";
+import { needsDocsConnectorFixup } from "../../services/mcp/claudeDocsLinks.js";
 import { EXITPLANMODE_2 } from "../../tools/ExitPlanModeTool/constants.js";
 import { mergeClients as mergeClients_3 } from "../hostScoped.js";
 import { STRUCTUREDOUTPUT } from "../../tools/SyntheticOutputTool/SyntheticOutputTool.js";
 import { HOOK_AGENT_ID_PREFIX } from "../agentId.js";
-import { powershellToolCheckExactMatchPermission } from "../../tools/PowerShellTool/powershellPermissions.js";
-import { askClassifierForAllowedDomains } from "../../tools/BashTool/bashSecurity.js";
+import { isRemoteBrowserToolUnderModeFloor } from "./remoteBrowser.js";
 import { jsonStringify } from "../slowOperations.js";
 import { dispatchClassicEvent } from "../../plugins/functionHooks/modAdmission.js";
 import { registerAgent } from "../telemetry/perfettoTracing.js";
 import { getSessionFeatureValues } from "../../bootstrap/sessionFeatureValues.js";
-import { uniq } from "../collections.js";
-import { isReplToolName } from "../../tools/REPLTool/constants.js";
+import { ruleToolNameFromString } from "./disallowedToolsFlag.js";
 import { toolsRunningCodeAsBash } from "./filterToolsByDenyRules.js";
 import { toolMatchesAnyName } from "../../services/tools/permissionCheckGuard.js";
 import { ARTIFACT_TOOL_NAME, standsInForBuiltInArtifact } from "../../tools/AgentTool/agentToolUtils.js";
 import { dbRowKey } from "../../tools/ArtifactTool/permissions/dbWriteInputs.js";
-import {
-  parseTypePrefixedValue,
-  getUrlRulesForTool,
-  matchesWildcardPattern,
-} from "../../tools/ArtifactTool/permissions/urlRules.js";
-import { typeNameWithoutQuotes } from "../../services/artifacts/artifactTypes.js";
 import { FileEditTool } from "../../tools/FileEditTool/FileEditTool.js";
 import { editAskClassifierRoutable } from "../../tools/ArtifactTool/publishEdits.js";
 import { hasMintedReentry } from "../../tools/SendMessageTool/isolationDispatchGate.js";
 import { CLAUDE_IN_CHROME_DOMAIN_RULE_TOOL } from "../claudeInChrome/common.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-sfy7bm1n.js:10287-10409 placement
+//@ chunk-gg17c06d.js:12362-12483 placement
 /**
  * 进入 auto 模式时把工具名映射为允许规则使用的名字：Bash/PowerShell 视开关保留、Chrome 与危险工具返回 undefined、写文件类映射为编辑工具。
  */
-function toAllowRuleToolName(toolNameForPermissionCheck) {
-  if (toolNameForPermissionCheck === BASH_TOOL_NAME || toolNameForPermissionCheck === POWERSHELL_TOOL_NAME)
-    return classifyAllShellEnabled() ? undefined : toolNameForPermissionCheck;
+function toAllowRuleToolName(toolName) {
+  if (toolName === BASH_TOOL_NAME || toolName === POWERSHELL_TOOL_NAME)
+    return classifyAllShellEnabled() ? undefined : toolName;
   if (
-    isChromeToolName(toolNameForPermissionCheck) ||
-    isDangerousClassifierPermission(toolNameForPermissionCheck, undefined) ||
-    isAllowRuleIgnoredInAutoMode(toolNameForPermissionCheck)
+    isChromeToolName(toolName) ||
+    isDangerousClassifierPermission(toolName, undefined) ||
+    isAllowRuleIgnoredInAutoMode(toolName)
   )
     return;
-  return toolNameForPermissionCheck === FILE_WRITE_TOOL_NAME ||
-    toolNameForPermissionCheck === NOTEBOOK_EDIT_TOOL_NAME
-    ? FILE_EDIT_TOOL_NAME
-    : toolNameForPermissionCheck;
+  return toolName === FILE_WRITE_TOOL_NAME || toolName === NOTEBOOK_EDIT_TOOL_NAME ? EDIT : toolName;
 }
-//@ chunk-sfy7bm1n.js:10409-10455 placement
+//@ chunk-gg17c06d.js:12483-12529 placement
 var HEARTH_WRITE_TOOL_NAMES; // deferred: uses buildMcpToolName (../../services/mcp/mcpStringUtils.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-sfy7bm1n.js:10409", () => {
+deferInit("chunk-gg17c06d.js:12483", () => {
   HEARTH_WRITE_TOOL_NAMES = new Set(
     Array.from(HEARTH_WRITE_TOOL_NAMES_2, (toolName) => buildMcpToolName(HEARTHBOT, toolName)),
   );
 });
-//@ chunk-sfy7bm1n.js:10455-10488 placement
+//@ chunk-gg17c06d.js:12529-12562 placement
 function isAllowRuleIgnoredInAutoMode(toolName) {
   return HEARTH_WRITE_TOOL_NAMES.has(toolName);
 }
-//@ chunk-sfy7bm1n.js:10488-10701 placement
+//@ chunk-gg17c06d.js:12562-12965 placement
 /**
  * 规则来源按顺序：userSettings、projectSettings、localSettings、flagSettings、policySettings、cliArg、command、session、mcpMount、toolsNarrowing、mcpServerPolicy、hostCredential。
  */
 var PERMISSION_RULE_SOURCES; // deferred: loads other modules while loading; runs once its import cycle is complete
 var NARROWING_RULE_SOURCES;
+var RULE_SOURCE_IS_SESSION_LIKE;
 var CONVERSATION_END_TOOLS;
-deferInit("chunk-sfy7bm1n.js:10488", () => {
+deferInit("chunk-gg17c06d.js:12562", () => {
   PERMISSION_RULE_SOURCES = [
     ...SETTING_SOURCES,
     "cliArg",
@@ -499,63 +527,79 @@ deferInit("chunk-sfy7bm1n.js:10488", () => {
     "hostCredential",
   ];
   NARROWING_RULE_SOURCES = ["toolsNarrowing", "command"];
+  RULE_SOURCE_IS_SESSION_LIKE = {
+    userSettings: true,
+    projectSettings: true,
+    localSettings: true,
+    flagSettings: true,
+    policySettings: true,
+    cliArg: true,
+    session: true,
+    command: false,
+    toolsNarrowing: false,
+    mcpServerPolicy: false,
+    hostCredential: false,
+    mcpMount: false,
+  };
   CONVERSATION_END_TOOLS = new Set([
     require("../../tools/EndConversationTool/constants.js").END_CONVERSATION_TOOL_NAME,
   ]);
 });
-//@ chunk-sfy7bm1n.js:10701-10749 placement
+//@ chunk-gg17c06d.js:12965-13013 placement
 function isConversationEndTool(tool) {
   return !tool.mcpInfo && CONVERSATION_END_TOOLS.has(tool.name);
 }
-//@ chunk-sfy7bm1n.js:10749-11364 fingerprint (2.1.88 match: getAllowRules, 0.577)
-/**
- * 收集 allow 规则；auto 模式下跳过危险规则（sme）与特定工具；CLAUDE_CODE_EVAL_CONFINED 时只用 cliArg；M() 判为被托管限制的来源之后的规则被截断。
- */
-function getAllowRules(context) {
+//@ chunk-gg17c06d.js:13013-13748 fingerprint (2.1.88 match: getAllowRules, 0.514)
+function getAllowRules(context, context2) {
   if (isAutoClassifierActive(context.mode, context.servedCall === true)) {
-    let ruleTables = env.CLAUDE_CODE_EVAL_CONFINED
+    let allowRuleTables = env.CLAUDE_CODE_EVAL_CONFINED
       ? {
           cliArg: context.alwaysAllowRules.cliArg,
         }
       : context.alwaysAllowRules;
-    let rules = [];
+    let ruleTables = [];
     for (let source of PERMISSION_RULE_SOURCES) {
-      let rawRules = ruleTables[source];
+      let rawRules = allowRuleTables[source];
       if (rawRules === undefined) continue;
       for (let rawRule of rawRules) {
-        let ruleValue = permissionRuleValueFromString(rawRule);
+        let ruleValue = normalizeRuleString(rawRule, "allow");
         if (isDangerousClassifierPermission(ruleValue.toolName, ruleValue.ruleContent)) continue;
         if (isAllowRuleIgnoredInAutoMode(ruleValue.toolName)) continue;
         if (isRestrictedNonSessionRule(source, ruleValue.toolName)) continue;
-        rules.push({
+        ruleTables.push({
           source,
           ruleBehavior: "allow",
           ruleValue,
         });
       }
     }
-    return rules;
+    return ruleTables;
   }
   if (env.CLAUDE_CODE_EVAL_CONFINED)
-    return collectRulesFromSettings(
+    return hasBashPermission(
       {
         cliArg: context.alwaysAllowRules.cliArg,
       },
       "allow",
     );
-  let rulesFromSettings = collectRulesFromSettings(context.alwaysAllowRules, "allow");
+  let policyKeys = liftedAsksInAcceptEdits(context, context2);
+  let rules = hasBashPermission(
+    policyKeys.size === 0
+      ? context.alwaysAllowRules
+      : {
+          ...context.alwaysAllowRules,
+          mcpServerPolicy: [...(context.alwaysAllowRules.mcpServerPolicy ?? []), ...policyKeys],
+        },
+    "allow",
+  );
   let filtered;
-  for (let [index, rule] of rulesFromSettings.entries())
-    if (isRestrictedNonSessionRule(rule.source, rule.ruleValue.toolName))
-      filtered ??= rulesFromSettings.slice(0, index);
+  for (let [index, rule] of rules.entries())
+    if (isRestrictedNonSessionRule(rule.source, rule.ruleValue.toolName)) filtered ??= rules.slice(0, index);
     else filtered?.push(rule);
-  return filtered ?? rulesFromSettings;
+  return filtered ?? rules;
 }
-//@ chunk-sfy7bm1n.js:11364-11517 layout (2.1.88 match: hasBashPermission, 1)
-/**
- * 把某行为（allow/deny/ask）的各来源规则字符串展开成规则对象列表 {source, ruleBehavior, ruleValue}。
- */
-function collectRulesFromSettings(ruleTables, ruleBehavior) {
+//@ chunk-gg17c06d.js:13748-13903 layout (2.1.88 match: hasBashPermission, 1)
+function hasBashPermission(ruleTables, behavior) {
   let rules = [];
   for (let source of PERMISSION_RULE_SOURCES) {
     let rawRules = ruleTables[source];
@@ -563,21 +607,30 @@ function collectRulesFromSettings(ruleTables, ruleBehavior) {
     for (let rawRule of rawRules)
       rules.push({
         source,
-        ruleBehavior,
-        ruleValue: permissionRuleValueFromString(rawRule),
+        ruleBehavior: behavior,
+        ruleValue: normalizeRuleString(rawRule, behavior),
       });
   }
   return rules;
 }
-//@ chunk-sfy7bm1n.js:11517-11569 layout
-function getDenyRules(context) {
-  return collectRulesFromSettings(context.alwaysDenyRules, "deny");
+//@ chunk-gg17c06d.js:13903-13955 layout
+function deniedBashRules(context) {
+  return hasBashPermission(context.alwaysDenyRules, "deny");
 }
-//@ chunk-sfy7bm1n.js:11569-11619 layout
-function getAskRules(context) {
-  return collectRulesFromSettings(context.alwaysAskRules, "ask");
+//@ chunk-gg17c06d.js:13955-14128 layout
+function askedBashRules(context, context2) {
+  let policyKeys = liftedAsksInAcceptEdits(context, context2);
+  return hasBashPermission(
+    policyKeys.size === 0
+      ? context.alwaysAskRules
+      : {
+          ...context.alwaysAskRules,
+          mcpServerPolicy: context.alwaysAskRules.mcpServerPolicy?.filter((rules) => !policyKeys.has(rules)),
+        },
+    "ask",
+  );
 }
-//@ chunk-sfy7bm1n.js:11619-11703 layout (2.1.88 match: getDenyRuleForAgent, 1)
+//@ chunk-gg17c06d.js:14128-14212 layout (2.1.88 match: getDenyRuleForAgent, 1)
 /**
  * 工具是否命中整工具规则（规则无内容时按工具名匹配）。
  */
@@ -585,7 +638,22 @@ function toolMatchesWholeToolRule(context, agentToolName, agentType = {}) {
   if (agentToolName.ruleValue.ruleContent !== undefined) return false;
   return toolMatchesRuleName(context, agentToolName, agentType);
 }
-//@ chunk-sfy7bm1n.js:11703-12599 layout
+//@ chunk-gg17c06d.js:14212-14421 layout
+function ruleMatcherForRules(rules) {
+  let mapped = rules
+    .filter((rule) => rule.ruleValue.ruleContent === undefined)
+    .map((rule) => ({
+      rule,
+      ruleName: getRuleNameMatchers(rule),
+    }));
+  return (tool) => {
+    let toolMatchInfo = getToolMatchInfo(tool, undefined);
+    return mapped
+      .filter(({ rule, ruleName }) => toolMatchesRuleName(tool, rule, {}, ruleName, toolMatchInfo))
+      .map(({ rule }) => rule);
+  };
+}
+//@ chunk-gg17c06d.js:14421-15318 layout
 /**
  * 规则工具名是否匹配工具：同名、家族父工具、别名展开、glob 名、MCP 服务器级规则（mcp__server / mcp__server__*）。
  */
@@ -659,11 +727,11 @@ function toolMatchesRuleName(
     (isUserMcpServerRule(rule) && matchInfo.mcpServerRuleNames().includes(rule.ruleValue.toolName))
   );
 }
-//@ chunk-sfy7bm1n.js:12599-12690 layout
+//@ chunk-gg17c06d.js:15318-15410 layout
 function isUserMcpServerRule({ source, ruleValue }) {
   return source !== "mcpServerPolicy" && ruleValue.toolName.startsWith(MCP_TOOL_PREFIX);
 }
-//@ chunk-sfy7bm1n.js:12690-12824 layout
+//@ chunk-gg17c06d.js:15410-15544 layout
 function getRuleNameMatchers({ ruleValue: { toolName } }) {
   let regex;
   let mcpMatcher;
@@ -674,7 +742,7 @@ function getRuleNameMatchers({ ruleValue: { toolName } }) {
     coversMcpTool: (mcpInfo) => (mcpMatcher ??= compileMcpRuleMatcher(toolName))(mcpInfo),
   };
 }
-//@ chunk-sfy7bm1n.js:12824-13030 layout
+//@ chunk-gg17c06d.js:15544-15750 layout
 /**
  * 构造工具匹配信息（惰性计算）：工具名、MCP 信息、别名来源、MCP 服务器规则名、其他 deny/ask 读取名。
  */
@@ -703,18 +771,25 @@ function getToolMatchInfo(tool, toolAliases) {
       )),
   };
 }
-//@ chunk-sfy7bm1n.js:13030-13086 file-local
-function toolAlwaysAllowedRule(context, tool) {
-  return getAllowRules(context).find((rule) => toolMatchesWholeToolRule(tool, rule)) || null;
+//@ chunk-gg17c06d.js:15750-15817 layout
+function toolCheckPermissions(tool) {
+  return tool.mcpInfo === undefined ? undefined : tool.checkPermissions;
 }
-//@ chunk-sfy7bm1n.js:13086-13158 layout
+//@ chunk-gg17c06d.js:15817-15879 file-local
+function toolAlwaysAllowedRule(context, tool) {
+  return (
+    getAllowRules(context, toolCheckPermissions(tool)).find((rule) => toolMatchesWholeToolRule(tool, rule)) ||
+    null
+  );
+}
+//@ chunk-gg17c06d.js:15879-15951 layout
 /**
  * 该规则是否允许别名展开：cliArg 与 toolsNarrowing 来源不展开。
  */
 function allowsAliasExpansion(rule) {
   return rule.source !== "cliArg" && rule.source !== "toolsNarrowing";
 }
-//@ chunk-sfy7bm1n.js:13158-13562 layout
+//@ chunk-gg17c06d.js:15951-16355 layout
 /**
  * 规则是否命中工具：按名字（含别名、glob）匹配，再检查 aliasSkillToolNames 与打包别名 skill 名。
  */
@@ -763,7 +838,7 @@ function toolMatchesRule(
     ),
   );
 }
-//@ chunk-sfy7bm1n.js:13562-13688 layout
+//@ chunk-gg17c06d.js:16355-16481 layout
 /**
  * 找命中该工具的 deny 规则（会话结束类工具除外），返回规则或 null。
  */
@@ -771,7 +846,7 @@ function getDenyRuleForTool(toolPermissionContext, tool, denyRules, includePacka
   if (isConversationEndTool(tool)) return null;
   let matchInfo;
   return (
-    (denyRules ?? getDenyRules(toolPermissionContext)).find((rule) =>
+    (denyRules ?? deniedBashRules(toolPermissionContext)).find((rule) =>
       toolMatchesRuleWithAliases(
         tool,
         rule,
@@ -783,33 +858,33 @@ function getDenyRuleForTool(toolPermissionContext, tool, denyRules, includePacka
     ) || null
   );
 }
-//@ chunk-sfy7bm1n.js:13688-13729 layout
+//@ chunk-gg17c06d.js:16481-16522 layout
 function isWildcardOnlyContent(ruleContent) {
   return /^[\s*]+$/.test(ruleContent);
 }
-//@ chunk-sfy7bm1n.js:13729-13834 layout
+//@ chunk-gg17c06d.js:16522-16627 layout
 function isRootWildcardPathContent(ruleContent) {
   return (
     ruleContent.startsWith("//") && /^\/(?:\*\*\/)?\*+(?:\/\*\*)?$/.test(ruleContent.replace(/\/{2,}/g, "/"))
   );
 }
-//@ chunk-sfy7bm1n.js:13834-13929 layout
+//@ chunk-gg17c06d.js:16627-16722 layout
 var EDIT_FAMILY_TOOLS; // deferred: uses GREP_TOOL_NAME (../../tools/GrepTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
 var READ_FAMILY_TOOLS;
 var BROAD_PATH_RULE_COVERAGE;
-deferInit("chunk-sfy7bm1n.js:13834", () => {
-  EDIT_FAMILY_TOOLS = [FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME];
-  READ_FAMILY_TOOLS = [FILE_READ_TOOL_NAME, GREP_TOOL_NAME, GLOB_TOOL_NAME];
+deferInit("chunk-gg17c06d.js:16627", () => {
+  EDIT_FAMILY_TOOLS = [EDIT, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME];
+  READ_FAMILY_TOOLS = [READ, GREP_TOOL_NAME, GLOB_TOOL_NAME];
   BROAD_PATH_RULE_COVERAGE = new Map([
     [
-      FILE_READ_TOOL_NAME,
+      READ,
       {
-        deny: [...READ_FAMILY_TOOLS, FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME],
+        deny: [...READ_FAMILY_TOOLS, EDIT, FILE_WRITE_TOOL_NAME],
         ask: READ_FAMILY_TOOLS,
       },
     ],
     [
-      FILE_EDIT_TOOL_NAME,
+      EDIT,
       {
         deny: EDIT_FAMILY_TOOLS,
         ask: EDIT_FAMILY_TOOLS,
@@ -817,7 +892,7 @@ deferInit("chunk-sfy7bm1n.js:13834", () => {
     ],
   ]);
 });
-//@ chunk-sfy7bm1n.js:13929-14102 layout (2.1.88 match: getRuleByContentsForToolName, 1)
+//@ chunk-gg17c06d.js:16722-16895 layout (2.1.88 match: getRuleByContentsForToolName, 1)
 function ruleCoversToolViaBroadContent({ ruleBehavior, ruleValue: { toolName, ruleContent } }, aliasName) {
   if (ruleContent === undefined || ruleBehavior === "allow") return false;
   return toolName === BASH_TOOL_NAME
@@ -825,7 +900,7 @@ function ruleCoversToolViaBroadContent({ ruleBehavior, ruleValue: { toolName, ru
     : isRootWildcardPathContent(ruleContent) &&
         (BROAD_PATH_RULE_COVERAGE.get(toolName)?.[ruleBehavior] ?? []).includes(aliasName);
 }
-//@ chunk-sfy7bm1n.js:14102-14330 layout
+//@ chunk-gg17c06d.js:16895-17123 layout
 /**
  * 带别名的规则匹配：无内容规则走 toolMatchesRule；有内容规则检查别名来源上的宽泛内容是否覆盖该工具。
  */
@@ -857,7 +932,7 @@ function toolMatchesRuleWithAliases(
         (isDirectMatch && ruleCoversToolViaBroadContent(withRuleToolName(aliasName, tool), aliasName))),
   );
 }
-//@ chunk-sfy7bm1n.js:14330-14397 layout
+//@ chunk-gg17c06d.js:17123-17190 layout
 function withRuleToolName(toolName, rule) {
   return {
     ...rule,
@@ -867,7 +942,7 @@ function withRuleToolName(toolName, rule) {
     },
   };
 }
-//@ chunk-sfy7bm1n.js:14397-14480 layout
+//@ chunk-gg17c06d.js:17190-17273 layout
 /**
  * 规则名是否为模式名（glob 名或只到 MCP 服务器一级的名字）。
  */
@@ -876,7 +951,7 @@ function isPatternRuleName(toolName) {
   let mcpInfo = mcpInfoFromString(toolName);
   return mcpInfo !== null && mcpInfo.toolName === undefined;
 }
-//@ chunk-sfy7bm1n.js:14480-14932 layout
+//@ chunk-gg17c06d.js:17273-17726 layout
 /**
  * 为一组 deny 规则建索引：整名集合、模式规则、MCP 服务器名、带内容但经别名覆盖的规则等，供批量过滤工具池。
  */
@@ -921,15 +996,15 @@ function buildDenyRuleIndex(toolPermissionContext, rules) {
     withContent,
   };
 }
-//@ chunk-sfy7bm1n.js:14932-14991 layout
+//@ chunk-gg17c06d.js:17726-17785 layout
 function getDenyRuleIndex(toolPermissionContext) {
-  let rules = getDenyRules(toolPermissionContext);
+  let rules = deniedBashRules(toolPermissionContext);
   return {
     rules,
     index: buildDenyRuleIndex(toolPermissionContext, rules),
   };
 }
-//@ chunk-sfy7bm1n.js:14991-15938 layout
+//@ chunk-gg17c06d.js:17785-18732 layout
 /**
  * 用 deny 规则索引判断工具是否被拒绝：名字、其他读名、父工具名、别名 skill 名、MCP 服务器名、模式规则、带内容的覆盖规则依次检查。
  */
@@ -988,7 +1063,7 @@ function isToolDeniedByIndex(toolPermissionContext, index, tool) {
       ))
   );
 }
-//@ chunk-sfy7bm1n.js:15938-16133 layout
+//@ chunk-gg17c06d.js:18732-18927 layout
 /**
  * 会话结束类工具是否被整工具 deny 拒绝（存在同名 allow 规则时不算）。
  */
@@ -996,7 +1071,7 @@ function isConversationEndToolDenied(toolPermissionContext, tool) {
   if (!isConversationEndTool(tool)) return false;
   if (getAllowRules(toolPermissionContext).some((allowRule) => allowRule.ruleValue.toolName === tool.name))
     return false;
-  return getDenyRules(toolPermissionContext).some((denyRule) =>
+  return deniedBashRules(toolPermissionContext).some((denyRule) =>
     toolMatchesWholeToolRule(tool, denyRule, {
       proxyExpansion: allowsAliasExpansion(denyRule),
       globMatching: true,
@@ -1004,62 +1079,62 @@ function isConversationEndToolDenied(toolPermissionContext, tool) {
     }),
   );
 }
-//@ chunk-sfy7bm1n.js:16133-16236 layout (2.1.88 match: getDenyRuleForAgent, 1)
+//@ chunk-gg17c06d.js:18927-19030 layout (2.1.88 match: getDenyRuleForAgent, 1)
 /**
  * 找 toolName 与 ruleContent 精确相等的 deny 规则（例如 Agent(type)）。
  */
 function findDenyRuleWithContent(context, agentToolName, agentType) {
   return (
-    getDenyRules(context).find(
+    deniedBashRules(context).find(
       (rule) => rule.ruleValue.toolName === agentToolName && rule.ruleValue.ruleContent === agentType,
     ) || null
   );
 }
-//@ chunk-sfy7bm1n.js:16236-16340 layout (2.1.88 match: getDenyRuleForAgent, 1)
+//@ chunk-gg17c06d.js:19030-19134 layout (2.1.88 match: getDenyRuleForAgent, 1)
 /**
  * 找 toolName 与 ruleContent 精确相等的 ask 规则。
  */
 function findAskRuleWithContent(context, agentToolName, agentType) {
   return (
-    getAskRules(context).find(
+    askedBashRules(context).find(
       (rule) => rule.ruleValue.toolName === agentToolName && rule.ruleValue.ruleContent === agentType,
     ) || null
   );
 }
-//@ chunk-sfy7bm1n.js:16340-16528 fingerprint (2.1.88 match: filterDeniedAgents, 1)
+//@ chunk-gg17c06d.js:19134-19322 fingerprint (2.1.88 match: filterDeniedAgents, 1)
 /**
  * 按 Agent(type) deny 规则过滤代理列表。
  */
 function filterDeniedAgents(agents, context, agentToolName) {
   let deniedAgentTypes = new Set();
-  for (let rule of getDenyRules(context))
+  for (let rule of deniedBashRules(context))
     if (rule.ruleValue.toolName === agentToolName && rule.ruleValue.ruleContent !== undefined)
       deniedAgentTypes.add(rule.ruleValue.ruleContent);
   return agents.filter((agent) => !deniedAgentTypes.has(agent.agentType));
 }
-//@ chunk-sfy7bm1n.js:16528-16647 placement
-function getAskRuleForTool(toolPermissionContext, tool, askRules) {
+//@ chunk-gg17c06d.js:19322-19447 layout
+function findAskRuleForTool(context, tool, askRules) {
   if (isConversationEndTool(tool)) return null;
   let matchInfo;
   return (
-    (askRules ?? getAskRules(toolPermissionContext)).find((rule) =>
+    (askRules ?? askedBashRules(context, toolCheckPermissions(tool))).find((rule) =>
       toolMatchesRuleWithAliases(
         tool,
         rule,
-        toolPermissionContext,
+        context,
         undefined,
-        (matchInfo ??= getToolMatchInfo(tool, toolPermissionContext.toolAliases)),
+        (matchInfo ??= getToolMatchInfo(tool, context.toolAliases)),
       ),
     ) || null
   );
 }
-//@ chunk-sfy7bm1n.js:16647-16750 placement
+//@ chunk-gg17c06d.js:19447-19550 placement
 function stringifyScalar(value) {
   if (value === undefined || value === null) return null;
   if (typeof value !== "object") return String(value);
   return null;
 }
-//@ chunk-sfy7bm1n.js:16750-16901 placement
+//@ chunk-gg17c06d.js:19550-19701 placement
 function parseFieldRuleContent(content) {
   let index = content.indexOf(":");
   if (index <= 0) return null;
@@ -1072,13 +1147,21 @@ function parseFieldRuleContent(content) {
         expected: trimmed_2,
       };
 }
-//@ chunk-sfy7bm1n.js:16901-16999 placement
+//@ chunk-gg17c06d.js:19701-19799 placement
 function formatRuleDeniedMessage(name, rule) {
   return `Permission to use ${name} with ${rule.ruleValue.ruleContent} has been denied.`;
 }
-//@ chunk-sfy7bm1n.js:16999-17029 placement
+//@ chunk-gg17c06d.js:19799-19941 layout
+function sanitizeExpectedPattern(expected) {
+  let replaced = expected.replace(/[^a-zA-Z0-9_*-]/g, "_");
+  return {
+    pattern: replaced,
+    collapsed: replaced.replace(/_+/g, "_").replace(/_$/, "").replace(/_?\*/g, "*"),
+  };
+}
+//@ chunk-gg17c06d.js:19941-19971 placement
 var MCP_RESOURCE_TOOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-sfy7bm1n.js:16999", () => {
+deferInit("chunk-gg17c06d.js:19941", () => {
   MCP_RESOURCE_TOOLS = new Set([
     LISTMCPRESOURCESTOOL,
     READ_MCP_RESOURCE_DIR_TOOL_NAME,
@@ -1086,7 +1169,7 @@ deferInit("chunk-sfy7bm1n.js:16999", () => {
     REFRESH_MCP_TOOLS_TOOL_NAME,
   ]);
 });
-//@ chunk-sfy7bm1n.js:17029-18589 placement
+//@ chunk-gg17c06d.js:19971-21462 placement
 /**
  * 匹配 "key: expected" 形式的字段规则：对工具（及其别名、家族、MCP 服务器）的同行为规则，取输入字段值做通配比较；MCP 资源工具的 server 字段与 skill 名特判。
  */
@@ -1100,7 +1183,7 @@ function matchToolRule(context, tool, input, behavior) {
     [toolNameForPermissionCheck, false],
     ...getMcpToolAliasNames(tool).map((aliasName) => [aliasName, false]),
     ...(tool.mcpInfo !== undefined && isServerIdentityActive()
-      ? (behavior === "deny" ? getDenyRules(context) : getAskRules(context))
+      ? (behavior === "deny" ? deniedBashRules(context) : askedBashRules(context))
           .map((rule) => rule.ruleValue.toolName)
           .filter((ruleToolName) => {
             let row = standardKeyRuleRow(ruleToolName, toolNameForPermissionCheck);
@@ -1131,23 +1214,22 @@ function matchToolRule(context, tool, input, behavior) {
       if (fieldValue === null) continue;
       if (matchWildcard(expected, fieldValue.trim())) return rule;
       if (inputField === "server" && MCP_RESOURCE_TOOLS.has(candidateName)) {
-        let replaced = expected.replace(/[^a-zA-Z0-9_*-]/g, "_");
-        let replaced_2 = replaced.replace(/_+/g, "_").replace(/_$/, "").replace(/_?\*/g, "*");
+        let { pattern, collapsed } = sanitizeExpectedPattern(expected);
         if (
           [fieldValue.trim(), fieldValue]
-            .map(normalizeNameForMCP)
+            .map(CLAUDEAI_SERVER_PREFIX)
             .flatMap((normalizedName) => [
               normalizedName,
               trimEndChars(normalizedName, "_").replace(/^_+/, ""),
             ])
             .some((candidateValue) =>
               expected.startsWith(CLAUDE_AI_NAME_PREFIX)
-                ? matchWildcard(replaced_2, candidateValue)
-                : matchWildcard(replaced, candidateValue) ||
+                ? matchWildcard(collapsed, candidateValue)
+                : matchWildcard(pattern, candidateValue) ||
                   (expected.includes("*") &&
-                    !replaced.startsWith("_") &&
+                    !pattern.startsWith("_") &&
                     `${candidateValue}_`.startsWith(CLAUDE_AI) &&
-                    matchWildcard(replaced_2, candidateValue)),
+                    matchWildcard(collapsed, candidateValue)),
             )
         )
           return rule;
@@ -1186,18 +1268,24 @@ function matchToolRule(context, tool, input, behavior) {
     );
   return null;
 }
-//@ chunk-sfy7bm1n.js:18589-18630 placement
+//@ chunk-gg17c06d.js:21462-21503 placement
 function getContentRulesMapForTool(context, tool, behavior) {
   return getContentRulesMapForToolName(context, getToolNameForPermissionCheck_2(tool), behavior);
 }
-//@ chunk-sfy7bm1n.js:18630-18765 placement (2.1.88 match: getDenyRuleForAgent, 1)
+//@ chunk-gg17c06d.js:21503-21638 placement (2.1.88 match: getDenyRuleForAgent, 1)
 function getContentRulesMapForToolName(context, agentToolName, agentType) {
   let rulesByContent = new Map();
   for (let rule of getContentRulesForToolName(context, agentToolName, agentType))
     if (rule.ruleValue.ruleContent !== undefined) rulesByContent.set(rule.ruleValue.ruleContent, rule);
   return rulesByContent;
 }
-//@ chunk-sfy7bm1n.js:18765-19004 placement (2.1.88 match: getRuleByContentsForToolName, 1)
+//@ chunk-gg17c06d.js:21638-21706 layout
+function context(context, tool, behavior) {
+  return getContentRulesForToolName(context, getToolNameForPermissionCheck_2(tool), behavior).filter(
+    (rule) => RULE_SOURCE_IS_SESSION_LIKE[rule.source],
+  );
+}
+//@ chunk-gg17c06d.js:21706-21978 placement (2.1.88 match: getRuleByContentsForToolName, 1)
 function getContentRulesForToolName(context, toolName, behavior) {
   let allRules = [];
   switch (behavior) {
@@ -1205,10 +1293,10 @@ function getContentRulesForToolName(context, toolName, behavior) {
       allRules = getAllowRules(context);
       break;
     case "deny":
-      allRules = getDenyRules(context);
+      allRules = deniedBashRules(context);
       break;
     case "ask":
-      allRules = getAskRules(context);
+      allRules = askedBashRules(context);
       break;
   }
   let rules = [];
@@ -1216,16 +1304,138 @@ function getContentRulesForToolName(context, toolName, behavior) {
     if (
       rule.ruleValue.toolName === toolName &&
       rule.ruleValue.ruleContent !== undefined &&
-      rule.ruleBehavior === behavior
+      rule.ruleBehavior === behavior &&
+      !(behavior === "allow" && permissionRuleValueFromString(rule.ruleValue))
     )
       rules.push(rule);
   return rules;
 }
-//@ chunk-e6aww6q8.js:49322-49345 placement
+//@ chunk-nt9amew5.js:35384-35458 placement
+var TENGU_BUZZING_PELICAN; // deferred: uses DEVICE_BASH_TOOL (../../services/mcp/firstPartyServerIds.js) of its import cycle while loading; runs once the cycle is complete
+var DEVICE_TOOLS_WITH_CLASSIFIER_ROLE;
+var TENGU_DEEP_DUSK;
+deferInit("chunk-nt9amew5.js:35384", () => {
+  TENGU_BUZZING_PELICAN = "tengu_buzzing_pelican";
+  DEVICE_TOOLS_WITH_CLASSIFIER_ROLE = new Set([DEVICE_BASH_TOOL, DEVICE_COMMIT_FILES_TOOL]);
+  TENGU_DEEP_DUSK = "tengu_deep_dusk";
+});
+//@ chunk-nt9amew5.js:35458-35553 placement
+/**
+ * isClassifierRoutedMcpTool：该 MCP 工具交由分类器裁决。
+ */
+function isClassifierRoutedMcpTool(tool, toolPermissionContext) {
+  if (tool.mcpInfo === undefined) return false;
+  let effectiveMode = isAutoAllowedInMode(tool, toolPermissionContext);
+  return (
+    isDeepDuskDeviceTool(getToolNameForPermissionCheck_2(tool), effectiveMode, toolPermissionContext) ||
+    isBuzzingPelicanRouted(effectiveMode, toolPermissionContext)
+  );
+}
+//@ chunk-nt9amew5.js:35553-35617 placement
+/**
+ * isDeepDuskDeviceTool：设备工具在 deep_dusk 开关下走仲裁。
+ */
+function isDeepDuskDeviceTool(toolName, mode, toolPermissionContext) {
+  return (
+    DEVICE_TOOLS_WITH_CLASSIFIER_ROLE.has(toolName) &&
+    isRemoteArbiterMode(mode, toolPermissionContext) &&
+    readFlagWithOverride(TENGU_DEEP_DUSK, {
+      safe: true,
+    })
+  );
+}
+//@ chunk-nt9amew5.js:35617-35660 placement
+/**
+ * isBuzzingPelicanRouted：仲裁器下按 buzzing_pelican 开关放行。
+ */
+function isBuzzingPelicanRouted(mode, toolPermissionContext) {
+  return (
+    isRemoteArbiterMode(mode, toolPermissionContext) &&
+    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_BUZZING_PELICAN, false)
+  );
+}
+//@ chunk-nt9amew5.js:35660-35754 placement
+function isRemoteArbiterMode(mode, toolPermissionContext) {
+  return (
+    env.CLAUDE_CODE_REMOTE &&
+    isAutoClassifierActive(mode, toolPermissionContext.servedCall === true) &&
+    getAutoModeClassifierRole(toolPermissionContext.mode) === "arbiter"
+  );
+}
+//@ chunk-nt9amew5.js:35754-35784 placement
+var TENGU_DAPPER_TRUFFLE = "tengu_dapper_truffle";
+//@ chunk-nt9amew5.js:35784-35908 placement
+function shouldClassifyDestructiveMcpWrite(tool, input, mode, servedCall) {
+  return (
+    isAutoClassifierActive(mode, servedCall) &&
+    (tool.isDestructive?.(input) ?? false) &&
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_cowork_auto_mode_include_allowed_write_mcp", isCcsTenant())
+  );
+}
+//@ chunk-nt9amew5.js:35908-35987 layout
+function isCoworkAllowedWriteMcpIncluded() {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_cowork_auto_mode_include_allowed_write_mcp", false);
+}
+//@ chunk-nt9amew5.js:35987-36085 placement
+function shouldClassifyRemoteMcpWrite(tool, input, mode, toolPermissionContext) {
+  return (
+    tool.mcpInfo !== undefined &&
+    env.CLAUDE_CODE_REMOTE &&
+    shouldClassifyDestructiveMcpWrite(tool, input, mode, toolPermissionContext.servedCall === true)
+  );
+}
+//@ chunk-nt9amew5.js:36085-36166 placement
+function hasMcpServerPolicyAllow(tool, toolPermissionContext) {
+  return getAllowRules(toolPermissionContext).some(
+    (rule) => rule.source === "mcpServerPolicy" && toolMatchesWholeToolRule(tool, rule),
+  );
+}
+//@ chunk-nt9amew5.js:36166-36296 placement
+function getClassifierOverridableRuleSource(rule, tool, mode, servedCall, toolPermissionContext) {
+  let { source } = rule;
+  return (source === "cliArg" || source === "command" || source === "session" || source === "mcpMount") &&
+    shouldClassifyRemoteMcpWritePolicy(tool, mode, servedCall, toolPermissionContext)
+    ? source
+    : undefined;
+}
+//@ chunk-nt9amew5.js:36296-36347 placement
+function shouldClassifyRemoteMcpWritePolicy(tool, mode, servedCall, toolPermissionContext) {
+  return (
+    shouldClassifyRemoteMcpWrite(tool, mode, servedCall, toolPermissionContext) &&
+    hasMcpServerPolicyAllow(tool, toolPermissionContext)
+  );
+}
+//@ chunk-nt9amew5.js:36347-36523 placement
+function isShadowedServerPolicyRule(rule, tool, mode, servedCall, toolPermissionContext, getRole) {
+  return (
+    (rule.source === "cliArg" || rule.source === "session" || rule.source === "mcpMount") &&
+    shouldClassifyRemoteMcpWrite(tool, mode, servedCall, toolPermissionContext) &&
+    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_DAPPER_TRUFFLE, isCcsCoworkSurface() ? "server" : "off") ===
+      "server" &&
+    getRole() === "arbiter" &&
+    hasMcpServerPolicyAllow(tool, toolPermissionContext)
+  );
+}
+//@ chunk-nt9amew5.js:36523-36763 placement
+/**
+ * 判断一条规则命中的 MCP 调用该走哪条分类器路径：serverPolicy、remoteSession 或 shadowedServerPolicy；不适用返回 undefined。
+ */
+function getMcpRuleClassifierRoute(rule, tool, mode, servedCall, toolUseContext, getRole) {
+  if (rule === null) return;
+  if (rule.source === "mcpServerPolicy" && shouldClassifyDestructiveMcpWrite(tool, mode, servedCall, false))
+    return "serverPolicy";
+  if (tool.mcpInfo === undefined) return;
+  let toolPermissionContext = getToolPermissionContext(toolUseContext);
+  if (isClassifierRoutedMcpTool(tool, toolPermissionContext)) return "remoteSession";
+  return isShadowedServerPolicyRule(rule, tool, mode, servedCall, toolPermissionContext, getRole)
+    ? "shadowedServerPolicy"
+    : undefined;
+}
+//@ chunk-5xgkngpb.js:51739-51762 placement
 function isChainOnAllowActive() {
   return false;
 }
-//@ chunk-e6aww6q8.js:996568-996843 placement
+//@ chunk-5xgkngpb.js:1010334-1010609 placement
 /**
  * tools 列表含 "*" 时，从 Agent(type1,type2) 形式的条目收集 allowedAgentTypes；未定义返回 {}，不含 "*" 或出现非 Agent 条目返回 null。
  */
@@ -1235,7 +1445,7 @@ function parseWildcardAgentTypes(tools) {
   let agentTypes;
   for (let tool of tools) {
     if (tool === "*") continue;
-    let { toolName, ruleContent } = permissionRuleValueFromString(tool);
+    let { toolName, ruleContent } = parseRuleString(tool);
     if (toolName !== AGENT || !ruleContent) return null;
     agentTypes ??= [];
     agentTypes.push(
@@ -1251,7 +1461,7 @@ function parseWildcardAgentTypes(tools) {
       }
     : {};
 }
-//@ chunk-e6aww6q8.js:996843-996928 placement
+//@ chunk-5xgkngpb.js:1010609-1010693 placement
 /**
  * canPromptUserForPermission：存在可交互提示通道（非交互时需显式提示工具）。
  */
@@ -1260,30 +1470,39 @@ function canPromptUserForPermission() {
   if (getIsNonInteractiveSession() && !hasPermissionPromptTool(getPermissionPromptToolName())) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:996928-997021 placement
+//@ chunk-5xgkngpb.js:1010693-1010786 placement
 /**
  * shouldReplaceMemoryInput：Live 记忆工具的输入被替换。
  */
-function shouldReplaceMemoryInput(tool, originalInput, updatedInput, allowEmpty = false) {
+function shouldReplaceMemoryInput(tool, originalInput, replacementInput, allowEmpty = false) {
   return (
     isLiveMemoryToolName(tool) &&
-    updatedInput !== undefined &&
-    !(allowEmpty && Object.keys(updatedInput).length === 0) &&
-    !isSameAnswerInput(updatedInput, originalInput)
+    replacementInput !== undefined &&
+    !(allowEmpty && Object.keys(replacementInput).length === 0) &&
+    !isSameAnswerInput(replacementInput, originalInput)
   );
 }
-//@ chunk-e6aww6q8.js:997021-997050 placement
+//@ chunk-5xgkngpb.js:1010786-1010815 placement
 /**
  * isLiveMemoryToolName：是否为 Live 记忆工具。
  */
 function isLiveMemoryToolName(tool) {
   return isLiveMemoryTool(tool);
 }
-//@ chunk-e6aww6q8.js:1270876-1270900 placement
+//@ chunk-5xgkngpb.js:1170822-1170917 fingerprint (2.1.88 match: getDenyRuleForAgent, 1)
+function getDenyRuleForAgent(predicate, rules) {
+  return rules.find(
+    ({ ruleValue: { ruleContent } }) =>
+      ruleContent !== undefined &&
+      !hasCertifiedPrefix(ruleContent) &&
+      predicate(parseBashPermissionRule(ruleContent)),
+  );
+}
+//@ chunk-5xgkngpb.js:1268737-1268761 placement
 function EMPTY_RULE_ANNOTATIONS() {
   return {};
 }
-//@ chunk-e6aww6q8.js:1270900-1271167 placement
+//@ chunk-5xgkngpb.js:1268761-1269028 placement
 /**
  * 按决策原因里的规则（子命令结果递归）查注释表，命中返回带前导空格的说明后缀，否则空串。
  */
@@ -1294,7 +1513,7 @@ function getRuleAnnotationSuffix(
 ) {
   if (decisionReason?.type === "rule") {
     let { rule } = decisionReason;
-    let ruleText = formatPermissionRule(rule.ruleValue);
+    let ruleText = permissionRuleValueFromString_2(rule.ruleValue);
     let annotation =
       annotations[ruleText] ?? (rule.source === "command" ? commandAnnotations[ruleText] : undefined);
     return annotation ? ` ${annotation}` : "";
@@ -1310,7 +1529,7 @@ function getRuleAnnotationSuffix(
     }
   return "";
 }
-//@ chunk-e6aww6q8.js:1271167-1271286 placement
+//@ chunk-5xgkngpb.js:1269028-1269147 placement
 function appendRuleAnnotation(decision) {
   let ruleAnnotationSuffix = getRuleAnnotationSuffix(decision.decisionReason);
   if (ruleAnnotationSuffix === "" || decision.message.endsWith(ruleAnnotationSuffix)) return decision;
@@ -1319,69 +1538,17 @@ function appendRuleAnnotation(decision) {
     message: decision.message + ruleAnnotationSuffix,
   };
 }
-//@ chunk-e6aww6q8.js:1285727-1285804 placement
-var TENGU_BUZZING_PELICAN; // deferred: uses DEVICE_BASH_TOOL (../../services/mcp/firstPartyServerIds.js) of its import cycle while loading; runs once the cycle is complete
-var DEVICE_TOOLS_WITH_CLASSIFIER_ROLE;
-var TENGU_DEEP_DUSK;
-deferInit("chunk-e6aww6q8.js:1285727", () => {
-  TENGU_BUZZING_PELICAN = "tengu_buzzing_pelican";
-  DEVICE_TOOLS_WITH_CLASSIFIER_ROLE = new Set([DEVICE_BASH_TOOL, DEVICE_COMMIT_FILES_TOOL]);
-  TENGU_DEEP_DUSK = "tengu_deep_dusk";
-});
-//@ chunk-e6aww6q8.js:1285804-1285898 placement
-/**
- * isClassifierRoutedMcpTool：该 MCP 工具交由分类器裁决。
- */
-function isClassifierRoutedMcpTool(tool, toolPermissionContext) {
-  if (tool.mcpInfo === undefined) return false;
-  let effectiveMode = isAutoAllowedInMode(tool, toolPermissionContext);
-  return (
-    isDeepDuskDeviceTool(getToolNameForPermissionCheck_2(tool), effectiveMode, toolPermissionContext) ||
-    isBuzzingPelicanRouted(effectiveMode, toolPermissionContext)
-  );
-}
-//@ chunk-e6aww6q8.js:1285898-1285965 placement
-/**
- * isDeepDuskDeviceTool：设备工具在 deep_dusk 开关下走仲裁。
- */
-function isDeepDuskDeviceTool(toolName, mode, toolPermissionContext) {
-  return (
-    DEVICE_TOOLS_WITH_CLASSIFIER_ROLE.has(toolName) &&
-    isRemoteArbiterMode(mode, toolPermissionContext) &&
-    readFlagWithOverride(TENGU_DEEP_DUSK, {
-      safe: true,
-    })
-  );
-}
-//@ chunk-e6aww6q8.js:1285965-1286010 placement
-/**
- * isBuzzingPelicanRouted：仲裁器下按 buzzing_pelican 开关放行。
- */
-function isBuzzingPelicanRouted(mode, toolPermissionContext) {
-  return (
-    isRemoteArbiterMode(mode, toolPermissionContext) &&
-    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_BUZZING_PELICAN, false)
-  );
-}
-//@ chunk-e6aww6q8.js:1286010-1286105 placement
-function isRemoteArbiterMode(mode, toolPermissionContext) {
-  return (
-    env.CLAUDE_CODE_REMOTE &&
-    isAutoClassifierActive(mode, toolPermissionContext.servedCall === true) &&
-    getAutoModeClassifierRole(toolPermissionContext.mode) === "arbiter"
-  );
-}
-//@ chunk-e6aww6q8.js:1286105-1286163 placement
+//@ chunk-5xgkngpb.js:1285731-1285789 placement
 var TENGU_JAUNTY_UMBRELLA = "tengu_jaunty_umbrella";
 var TENGU_TOASTY_FIDDLE = "tengu_toasty_fiddle";
-//@ chunk-e6aww6q8.js:1286163-1286201 placement
+//@ chunk-5xgkngpb.js:1285789-1285827 placement
 /**
  * isWebFetchOrSearch：是否为 WebFetch/WebSearch。
  */
 function isWebFetchOrSearch(toolName) {
   return toolName === WEBFETCH || toolName === WEBSEARCH;
 }
-//@ chunk-e6aww6q8.js:1286201-1286280 placement
+//@ chunk-5xgkngpb.js:1285827-1285906 placement
 /**
  * isWebToolClassifierRouted：Web 工具是否交给 auto 分类器。
  */
@@ -1396,7 +1563,7 @@ function isWebToolClassifierRouted(tool, toolPermissionContext) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:1286280-1286566 placement
+//@ chunk-5xgkngpb.js:1285906-1286200 placement
 /**
  * 判断 WebFetch/WebSearch 是否交给 auto 分类器处理：调用方已声明、Cowork 且分类器启用时按分类器角色（arbiter 读 tengu_jaunty_umbrella，off/shadow 读 tengu_toasty_fiddle 列表）决定。
  */
@@ -1406,7 +1573,9 @@ function isWebToolClassifierRouted_2(toolName, mode, toolPermissionContext) {
     return false;
   switch (getAutoModeClassifierRole(toolPermissionContext.mode)) {
     case "arbiter":
-      return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_JAUNTY_UMBRELLA, false);
+      return readFlagWithOverride(TENGU_JAUNTY_UMBRELLA, {
+        safe: true,
+      });
     case "off":
     case "shadow": {
       let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_TOASTY_FIDDLE, []);
@@ -1418,7 +1587,7 @@ function isWebToolClassifierRouted_2(toolName, mode, toolPermissionContext) {
       return false;
   }
 }
-//@ chunk-e6aww6q8.js:1286566-1286691 placement
+//@ chunk-5xgkngpb.js:1286200-1286409 placement
 /**
  * 复制权限上下文并切换模式，同时记录由分类器裁决的 Web 工具（callerClassifiesWebCalls）。
  */
@@ -1429,98 +1598,40 @@ function withClassifiedWebCalls(toolPermissionContext, mode) {
   return {
     ...toolPermissionContext,
     mode,
+    mcpPolicyAsksLiftedInAcceptEdits: undefined,
+    mcpPolicyFileAsksLiftedInAcceptEdits: undefined,
     ...(filtered.length > 0 && {
       callerClassifiesWebCalls: filtered,
     }),
   };
 }
-//@ chunk-e6aww6q8.js:1286691-1286737 placement
+//@ chunk-5xgkngpb.js:1286409-1286455 placement
 /**
  * isWebSearchClassifierRouted：WebSearch 是否交给分类器。
  */
 function isWebSearchClassifierRouted(tool, toolPermissionContext) {
   return tool.name === WEBSEARCH && isWebToolClassifierRouted(tool, toolPermissionContext);
 }
-//@ chunk-e6aww6q8.js:1286737-1286768 placement
-var TENGU_DAPPER_TRUFFLE = "tengu_dapper_truffle";
-//@ chunk-e6aww6q8.js:1286768-1286891 placement
-function shouldClassifyDestructiveMcpWrite(tool, input, mode, servedCall) {
-  return (
-    isAutoClassifierActive(mode, servedCall) &&
-    (tool.isDestructive?.(input) ?? false) &&
-    getFeatureValue_CACHED_MAY_BE_STALE("tengu_cowork_auto_mode_include_allowed_write_mcp", false)
-  );
-}
-//@ chunk-e6aww6q8.js:1286891-1286991 placement
-function shouldClassifyRemoteMcpWrite(tool, input, mode, toolPermissionContext) {
-  return (
-    tool.mcpInfo !== undefined &&
-    env.CLAUDE_CODE_REMOTE &&
-    shouldClassifyDestructiveMcpWrite(tool, input, mode, toolPermissionContext.servedCall === true)
-  );
-}
-//@ chunk-e6aww6q8.js:1286991-1287072 placement
-function hasMcpServerPolicyAllow(tool, toolPermissionContext) {
-  return getAllowRules(toolPermissionContext).some(
-    (rule) => rule.source === "mcpServerPolicy" && toolMatchesWholeToolRule(tool, rule),
-  );
-}
-//@ chunk-e6aww6q8.js:1287072-1287202 placement
-function getClassifierOverridableRuleSource(rule, tool, mode, servedCall, toolPermissionContext) {
-  let { source } = rule;
-  return (source === "cliArg" || source === "command" || source === "session" || source === "mcpMount") &&
-    shouldClassifyRemoteMcpWritePolicy(tool, mode, servedCall, toolPermissionContext)
-    ? source
-    : undefined;
-}
-//@ chunk-e6aww6q8.js:1287202-1287254 placement
-function shouldClassifyRemoteMcpWritePolicy(tool, mode, servedCall, toolPermissionContext) {
-  return (
-    shouldClassifyRemoteMcpWrite(tool, mode, servedCall, toolPermissionContext) &&
-    hasMcpServerPolicyAllow(tool, toolPermissionContext)
-  );
-}
-//@ chunk-e6aww6q8.js:1287254-1287419 placement
-function isShadowedServerPolicyRule(rule, tool, mode, servedCall, toolPermissionContext, getRole) {
-  return (
-    (rule.source === "cliArg" || rule.source === "session" || rule.source === "mcpMount") &&
-    shouldClassifyRemoteMcpWrite(tool, mode, servedCall, toolPermissionContext) &&
-    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_DAPPER_TRUFFLE, "off") === "server" &&
-    getRole() === "arbiter" &&
-    hasMcpServerPolicyAllow(tool, toolPermissionContext)
-  );
-}
-//@ chunk-e6aww6q8.js:1287419-1287660 placement
-/**
- * 判断一条规则命中的 MCP 调用该走哪条分类器路径：serverPolicy、remoteSession 或 shadowedServerPolicy；不适用返回 undefined。
- */
-function getMcpRuleClassifierRoute(rule, tool, mode, servedCall, toolUseContext, getRole) {
-  if (rule === null) return;
-  if (rule.source === "mcpServerPolicy" && shouldClassifyDestructiveMcpWrite(tool, mode, servedCall, false))
-    return "serverPolicy";
-  if (tool.mcpInfo === undefined) return;
-  let toolPermissionContext = getToolPermissionContext(toolUseContext);
-  if (isClassifierRoutedMcpTool(tool, toolPermissionContext)) return "remoteSession";
-  return isShadowedServerPolicyRule(rule, tool, mode, servedCall, toolPermissionContext, getRole)
-    ? "shadowedServerPolicy"
-    : undefined;
-}
-//@ chunk-e6aww6q8.js:1287660-1287703 placement
+//@ chunk-5xgkngpb.js:1286455-1286498 placement
 /**
  * classifierOnlyConfig：取工具的 classifierOnly 配置。
  */
 function classifierOnlyConfig(tool) {
   return tool.classifierOnly?.();
 }
-//@ chunk-e6aww6q8.js:1287703-1287781 placement
+//@ chunk-5xgkngpb.js:1286498-1286576 placement
 var CLASSIFIER_DENY_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1287703", () => {
+deferInit("chunk-5xgkngpb.js:1286498", () => {
   CLASSIFIER_DENY_SOURCES = new Set(["userSettings", "projectSettings", "localSettings", "session"]);
 });
-//@ chunk-e6aww6q8.js:1287781-1287974 placement
-function isClassifierOnlyToolUnblocked(tool, input, toolUseContext) {
+//@ chunk-5xgkngpb.js:1286576-1286777 placement
+function isClassifierOnlyToolUnblocked(tool, input, toolUseContext, force = false) {
   let toolPermissionContext = getToolPermissionContext(toolUseContext);
-  if (classifierOnlyConfig(tool)?.onBlock !== "flag" || !isAutoModePermissionSurface(toolPermissionContext))
+  if (
+    force ||
+    classifierOnlyConfig(tool)?.onBlock !== "flag" ||
+    !isAutoModePermissionSurface(toolPermissionContext)
+  )
     return false;
   let contextWithoutClassifierDenies = {
     ...toolPermissionContext,
@@ -1533,7 +1644,7 @@ function isClassifierOnlyToolUnblocked(tool, input, toolUseContext) {
     matchToolRule(contextWithoutClassifierDenies, tool, input, "deny") === null
   );
 }
-//@ chunk-e6aww6q8.js:1287974-1288141 placement
+//@ chunk-5xgkngpb.js:1286777-1286944 placement
 function buildClassifierOnlyDenial(tool, reason) {
   return {
     behavior: "deny",
@@ -1544,7 +1655,7 @@ function buildClassifierOnlyDenial(tool, reason) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1288141-1288404 placement
+//@ chunk-5xgkngpb.js:1286944-1287207 placement
 function isUnclassifiableAskReason(decisionReason) {
   switch (decisionReason?.type) {
     case "safetyCheck":
@@ -1563,7 +1674,7 @@ function isUnclassifiableAskReason(decisionReason) {
       return false;
   }
 }
-//@ chunk-e6aww6q8.js:1288404-1289119 placement
+//@ chunk-5xgkngpb.js:1287207-1287922 placement
 function requireAutoModeClassifierReview(tool, input, toolUseContext, decision) {
   if (classifierOnlyConfig(tool) === undefined || decision?.behavior === "deny") return;
   if (!isAutoModePermissionSurface(getToolPermissionContext(toolUseContext)))
@@ -1592,23 +1703,28 @@ function requireAutoModeClassifierReview(tool, input, toolUseContext, decision) 
     },
   };
 }
-//@ chunk-e6aww6q8.js:1289119-1289307 placement
+//@ chunk-5xgkngpb.js:1287922-1288110 placement
 function describeNonClassifierAllow(decision) {
   let reasonType = decision.decisionReason?.type;
   return reasonType === undefined
     ? "an allow with no recorded source is not the classifier's verdict"
     : `an allow of type '${reasonType}' is not the classifier's verdict`;
 }
-//@ chunk-e6aww6q8.js:1289307-1289390 placement
+//@ chunk-5xgkngpb.js:1288110-1288193 placement (2.1.88 match: awaitClassifierAutoApproval, 0.351)
 /**
  * isClassifierAllow：允许且原因类型为 classifier。
  */
 function isClassifierAllow(decision) {
   return decision.behavior === "allow" && decision.decisionReason?.type === "classifier";
 }
-//@ chunk-e6aww6q8.js:1289390-1289639 placement
-function enforceClassifierOnlyDecision(tool, decision) {
-  if (classifierOnlyConfig(tool) === undefined || decision.behavior === "deny" || isClassifierAllow(decision))
+//@ chunk-5xgkngpb.js:1288193-1288472 placement
+function enforceClassifierOnlyDecision(tool, decision, allowCounts = false) {
+  if (
+    classifierOnlyConfig(tool) === undefined ||
+    decision.behavior === "deny" ||
+    isClassifierAllow(decision) ||
+    (allowCounts && decision.behavior === "allow")
+  )
     return decision;
   return buildClassifierOnlyDenial(
     tool,
@@ -1617,16 +1733,16 @@ function enforceClassifierOnlyDecision(tool, decision) {
       : describeNonClassifierAllow(decision),
   );
 }
-//@ chunk-e6aww6q8.js:1289639-1289655 placement
+//@ chunk-5xgkngpb.js:1288472-1288488 placement
 var classifierBlockReasons; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1289639", () => {
+deferInit("chunk-5xgkngpb.js:1288472", () => {
   classifierBlockReasons = new Map();
 });
-//@ chunk-e6aww6q8.js:1289655-1289686 placement
+//@ chunk-5xgkngpb.js:1288488-1288519 placement
 function rememberClassifierBlock(toolUseID, reason) {
   classifierBlockReasons.set(toolUseID, reason);
 }
-//@ chunk-e6aww6q8.js:1289686-1289763 placement
+//@ chunk-5xgkngpb.js:1288519-1288596 placement
 /**
  * takeClassifierBlock：取出并清除分类器阻断原因。
  */
@@ -1636,7 +1752,7 @@ function takeClassifierBlock(toolUseId) {
   classifierBlockReasons.delete(toolUseId);
   return reason;
 }
-//@ chunk-e6aww6q8.js:1289763-1290149 placement
+//@ chunk-5xgkngpb.js:1288596-1288982 placement
 /**
  * 把分类器结果映射为阻断类型：安全护栏拒绝或分类器被关闭为 refused；不可用、转录过长、无法解析、出错为 unavailable（带模型、HTTP 状态、错误类型）。
  */
@@ -1669,31 +1785,31 @@ function getClassifierBlockOutcome(result) {
     };
   return;
 }
-//@ chunk-e6aww6q8.js:1290149-1290191 placement
+//@ chunk-5xgkngpb.js:1288982-1289024 placement
 var TOOLS_HELD_UNTIL_A_PERSON_TYPES = "tools_held_until_a_person_types";
-//@ chunk-e6aww6q8.js:1290191-1290249 placement
+//@ chunk-5xgkngpb.js:1289024-1289082 placement
 /**
  * isPersonTypesHold：工具被暂停到用户亲自输入。
  */
 function isPersonTypesHold(toolPermissionContext) {
   return toolPermissionContext?.toolsHeldUntilAPersonTypes === true;
 }
-//@ chunk-e6aww6q8.js:1290249-1290576 placement
+//@ chunk-5xgkngpb.js:1289082-1289409 placement
 /**
  * 生成"工具调用已暂停，需用户亲自发新消息才能继续"的拒绝文本。
  */
 function buildToolsPausedMessage(name) {
   return `${name} was not run. Tool calls are paused in this session until the user sends a new message themselves; a message that an app or an automation sends does not count. Do not retry or look for another way. Say where things stand, what you would do next, and that a new message from them will let you go on.`;
 }
-//@ chunk-e6aww6q8.js:1290576-1290609 placement
+//@ chunk-5xgkngpb.js:1289409-1289442 placement
 var CLASSIFIER_ONLY_RULE_IDS; // deferred: uses EXTRA_AUTO_MODE_RULE_IDS (./autoModeRulesPrompt.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1290576", () => {
+deferInit("chunk-5xgkngpb.js:1289409", () => {
   CLASSIFIER_ONLY_RULE_IDS = new Set([
     ...ALL_AUTO_MODE_RULE_ID_SET_WITH_COWORK,
     ...UNTRUSTED_CONTENT_RULE_IDS,
   ]);
 });
-//@ chunk-e6aww6q8.js:1290609-1290668 placement
+//@ chunk-5xgkngpb.js:1289442-1289501 placement
 /**
  * sanitizeRuleCategoryOrUndefined：规则类别白名单化。
  */
@@ -1702,12 +1818,12 @@ function sanitizeRuleCategoryOrUndefined(category) {
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(category)
     : undefined;
 }
-//@ chunk-e6aww6q8.js:1290668-1290708 placement
+//@ chunk-5xgkngpb.js:1289501-1289541 placement
 var SANITIZABLE_RULE_IDS; // deferred: uses AUTO_MODE_RULE_IDS (./autoModeRulesPrompt.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1290668", () => {
+deferInit("chunk-5xgkngpb.js:1289501", () => {
   SANITIZABLE_RULE_IDS = new Set([...AUTO_MODE_RULE_IDS, ...COWORK_RULE_IDS, ...UNTRUSTED_CONTENT_RULE_IDS]);
 });
-//@ chunk-e6aww6q8.js:1290708-1290766 placement
+//@ chunk-5xgkngpb.js:1289541-1289599 placement
 /**
  * sanitizeRuleCategory：规则类别脱敏。
  */
@@ -1716,7 +1832,7 @@ function sanitizeRuleCategory(category) {
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(category)
     : undefined;
 }
-//@ chunk-e6aww6q8.js:1290766-1290907 placement
+//@ chunk-5xgkngpb.js:1289599-1289740 placement
 /**
  * 把 setAppState 包装成只更新 classifierApprovals 子状态的 setter，值未变时不触发更新。
  */
@@ -1731,7 +1847,7 @@ function makeClassifierApprovalsSetter(setAppState) {
       };
     });
 }
-//@ chunk-e6aww6q8.js:1290907-1291049 placement
+//@ chunk-5xgkngpb.js:1289740-1289882 placement
 /**
  * 在分类器审批状态里写入某个 toolUseId 的审批结果，值相同不更新。
  */
@@ -1747,14 +1863,14 @@ function setClassifierApproval(permissionUpdater, toolUseID, reason) {
     };
   });
 }
-//@ chunk-e6aww6q8.js:1291049-1291113 placement
+//@ chunk-5xgkngpb.js:1289882-1289946 placement
 /**
  * classifierApprovalFor：取分类器批准记录。
  */
 function classifierApprovalFor(state, toolUseID) {
   return state.classifierApprovals.approvals.get(toolUseID);
 }
-//@ chunk-e6aww6q8.js:1291113-1291244 placement
+//@ chunk-5xgkngpb.js:1289946-1290077 placement
 function markClassifierChecking(setAppState, toolUseId) {
   if (!setAppState) return;
   setAppState((state) => {
@@ -1767,7 +1883,7 @@ function markClassifierChecking(setAppState, toolUseId) {
     };
   });
 }
-//@ chunk-e6aww6q8.js:1291244-1291379 placement
+//@ chunk-5xgkngpb.js:1290077-1290212 placement
 /**
  * 从分类器审批状态的 checking 集合中移除 toolUseId。
  */
@@ -1783,7 +1899,7 @@ function clearClassifierChecking(setClassifierApprovals, toolUseID) {
     };
   });
 }
-//@ chunk-e6aww6q8.js:1291379-1291517 placement
+//@ chunk-5xgkngpb.js:1290212-1290350 placement
 /**
  * 删除某个 toolUseId 的分类器审批结果。
  */
@@ -1799,7 +1915,7 @@ function deleteClassifierApproval(classifierApprovalsSetter, toolUseID) {
     };
   });
 }
-//@ chunk-e6aww6q8.js:1291517-1291653 placement
+//@ chunk-5xgkngpb.js:1290350-1290486 placement
 function resetClassifierApprovals(setAppState) {
   if (!setAppState) return;
   setAppState((state) => {
@@ -1810,7 +1926,7 @@ function resetClassifierApprovals(setAppState) {
     };
   });
 }
-//@ chunk-e6aww6q8.js:1291919-1292184 placement
+//@ chunk-5xgkngpb.js:1290752-1291017 placement
 function arePermissionHooksUnsettled() {
   try {
     let pluginRegistry = getPluginRegistry();
@@ -1832,27 +1948,30 @@ function arePermissionHooksUnsettled() {
     return true;
   }
 }
-//@ chunk-e6aww6q8.js:1292184-1292250 placement
+//@ chunk-5xgkngpb.js:1291017-1291110 placement
 /**
  * hasPersonOnlyAskFloor：钩子 ask 地板或仅人工 ask。
  */
 function hasPersonOnlyAskFloor(alreadyPersonOnly, decision) {
-  return alreadyPersonOnly || (decision.behavior === "ask" && decision.personOnly === true);
+  return (
+    alreadyPersonOnly ||
+    (decision.behavior === "ask" && decision.personOnly === true && decision.classifierMayAllow !== true)
+  );
 }
-//@ chunk-e6aww6q8.js:1292250-1292278 placement
+//@ chunk-5xgkngpb.js:1291110-1291138 placement
 var compactionRequestsSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1292250", () => {
+deferInit("chunk-5xgkngpb.js:1291110", () => {
   compactionRequestsSlot = new SessionRootSlot(() => new Map());
 });
-//@ chunk-e6aww6q8.js:1292278-1292311 placement
+//@ chunk-5xgkngpb.js:1291138-1291171 placement
 function agentKeyOrMain(agentId) {
   return agentId ?? "main";
 }
-//@ chunk-e6aww6q8.js:1292311-1292345 placement
+//@ chunk-5xgkngpb.js:1291171-1291205 placement
 function firstMessageUuid(messages) {
   return messages[0]?.uuid;
 }
-//@ chunk-e6aww6q8.js:1292345-1292730 placement
+//@ chunk-5xgkngpb.js:1291205-1291590 placement
 /**
  * 按（会话, agent）记录一次待处理的压缩请求：当前允许压缩且本 epoch 未用过时，新建或并入 pending（拒绝时追加工具名），返回 requested/joined。
  */
@@ -1881,7 +2000,7 @@ function requestDenialCompact(permissionContext, messages, request) {
   });
   return pending ? "joined" : "requested";
 }
-//@ chunk-e6aww6q8.js:1292730-1293008 placement
+//@ chunk-5xgkngpb.js:1291590-1291868 placement
 function syncCompactEligibility(permissionContext, messages, mode, canCompact) {
   let slots = compactionRequestsSlot.of(permissionContext.session);
   let agentKey = agentKeyOrMain(permissionContext.agentId);
@@ -1906,7 +2025,7 @@ function syncCompactEligibility(permissionContext, messages, mode, canCompact) {
     pending,
   };
 }
-//@ chunk-e6aww6q8.js:1293008-1293124 placement
+//@ chunk-5xgkngpb.js:1291868-1291984 placement
 function markCompactRequestSpent(permissionContext, pending) {
   let slots = compactionRequestsSlot.of(permissionContext.session);
   let agentKey = agentKeyOrMain(permissionContext.agentId);
@@ -1916,16 +2035,16 @@ function markCompactRequestSpent(permissionContext, pending) {
     spentEpoch: pending.epoch,
   });
 }
-//@ chunk-e6aww6q8.js:1293124-1293158 placement
+//@ chunk-5xgkngpb.js:1291984-1292018 placement
 var seenToolCalls; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1293124", () => {
+deferInit("chunk-5xgkngpb.js:1291984", () => {
   seenToolCalls = identity_2(new Map(), (map) => map.clear());
 });
-//@ chunk-e6aww6q8.js:1293158-1293202 placement
+//@ chunk-5xgkngpb.js:1292018-1292062 placement
 function sessionAgentKey(agentId) {
   return `${getSessionId()}:${agentId ?? "main"}`;
 }
-//@ chunk-e6aww6q8.js:1293202-1293397 placement
+//@ chunk-5xgkngpb.js:1292062-1292257 placement
 function recordPromptedToolCall({ agentId, tool, input, message }) {
   let inputJson;
   try {
@@ -1943,7 +2062,7 @@ function recordPromptedToolCall({ agentId, tool, input, message }) {
   });
   seenToolCalls.set(agentKey, entries);
 }
-//@ chunk-e6aww6q8.js:1293397-1293939 placement
+//@ chunk-5xgkngpb.js:1292257-1292807 placement
 /**
  * 在该 agent 记下的工具调用里查同一工具、同一输入、来自更早助手消息的记录并消费掉；同时清理已失效的记录。返回是否命中。
  */
@@ -1981,12 +2100,12 @@ function consumeRepeatedToolCall({ agentId, tool, input, message, messages }) {
   else seenToolCalls.delete(agentKey);
   return index !== -1;
 }
-//@ chunk-e6aww6q8.js:1293939-1293977 placement
+//@ chunk-5xgkngpb.js:1292807-1292845 placement
 var DENIAL_LIMIT_FALLBACK_SYMBOL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1293939", () => {
+deferInit("chunk-5xgkngpb.js:1292807", () => {
   DENIAL_LIMIT_FALLBACK_SYMBOL = Symbol("DenialLimitFallback");
 });
-//@ chunk-e6aww6q8.js:1293977-1294108 placement
+//@ chunk-5xgkngpb.js:1292845-1292976 placement
 function withPermissionDisclosure(disclosure, deadline) {
   return {
     [DENIAL_LIMIT_FALLBACK_SYMBOL]: true,
@@ -1997,7 +2116,7 @@ function withPermissionDisclosure(disclosure, deadline) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:1294108-1294157 placement
+//@ chunk-5xgkngpb.js:1292976-1293025 placement
 /**
  * withDenialDeadline：附加自动拒绝截止时间。
  */
@@ -2007,7 +2126,7 @@ function withDenialDeadline(denialLimitFallback, deadlineEpochMs) {
     deadlineEpochMs,
   };
 }
-//@ chunk-e6aww6q8.js:1294157-1294268 placement
+//@ chunk-5xgkngpb.js:1293025-1293136 placement
 /**
  * 去掉权限请求里的截止时间与自动拒绝字段，保留披露标记。
  */
@@ -2018,12 +2137,12 @@ function stripAutoDenyFields(denialLimitFallback) {
     [DENIAL_LIMIT_FALLBACK_SYMBOL]: denialLimitFallback[DENIAL_LIMIT_FALLBACK_SYMBOL],
   };
 }
-//@ chunk-e6aww6q8.js:1294268-1294296 placement
+//@ chunk-5xgkngpb.js:1293136-1293164 placement
 var READ_TOOLS_WITH_EXTERNAL_NOTE; // deferred: uses GREP_TOOL_NAME (../../tools/GrepTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1294268", () => {
-  READ_TOOLS_WITH_EXTERNAL_NOTE = new Set([FILE_READ_TOOL_NAME, GREP_TOOL_NAME, GLOB_TOOL_NAME]);
+deferInit("chunk-5xgkngpb.js:1293136", () => {
+  READ_TOOLS_WITH_EXTERNAL_NOTE = new Set([READ, GREP_TOOL_NAME, GLOB_TOOL_NAME]);
 });
-//@ chunk-e6aww6q8.js:1294296-1294866 placement
+//@ chunk-5xgkngpb.js:1293164-1293734 placement
 /**
  * 判断工作目录外读取的 ask 是否应改为展示一次性的 auto 模式外部读取提示：auto 分类器启用、可交互、非后台/远程、未见过该提示等条件。
  */
@@ -2053,7 +2172,7 @@ function shouldShowOutsideReadPrompt(tool, input, decision, context) {
     !getGlobalConfig().hasSeenAutoModeOutsideReadPrompt
   );
 }
-//@ chunk-e6aww6q8.js:1294866-1294983 placement
+//@ chunk-5xgkngpb.js:1293734-1293851 placement
 /**
  * 在全局配置中记下已看过 auto 模式外部读取提示。
  */
@@ -2069,7 +2188,7 @@ function markOutsideReadPromptSeen(toolUseContext) {
     toolUseContext.storageV5,
   );
 }
-//@ chunk-e6aww6q8.js:1294983-1295927 placement
+//@ chunk-5xgkngpb.js:1293851-1294795 placement
 async function persistBlockReadsOutsideWorkspace(toolUseContext) {
   toolUseContext.setSessionToolPermissionContext((context) => ({
     ...context,
@@ -2128,14 +2247,14 @@ async function persistBlockReadsOutsideWorkspace(toolUseContext) {
     sandboxRefreshed: true,
   };
 }
-//@ chunk-e6aww6q8.js:1295927-1295963 placement
+//@ chunk-5xgkngpb.js:1294795-1294831 placement
 /**
  * classifyEditsEnabled：编辑是否交分类器。
  */
 function classifyEditsEnabled(mainLoopModel) {
   return resolveClassifyEditsFlag(mainLoopModel).value;
 }
-//@ chunk-e6aww6q8.js:1295963-1296079 placement
+//@ chunk-5xgkngpb.js:1294831-1294947 placement
 function resolveClassifyEditsFlag(currentModel) {
   let CLAUDE_CODE_AUTO_MODE_CLASSIFY_EDITS = antEnv.CLAUDE_CODE_AUTO_MODE_CLASSIFY_EDITS;
   if (CLAUDE_CODE_AUTO_MODE_CLASSIFY_EDITS !== undefined)
@@ -2145,7 +2264,7 @@ function resolveClassifyEditsFlag(currentModel) {
     };
   return classifyEditsByModelList(currentModel);
 }
-//@ chunk-e6aww6q8.js:1296079-1296179 placement
+//@ chunk-5xgkngpb.js:1294947-1295047 placement
 /**
  * auto 模式下文件编辑是否也交给分类器：环境变量 CLAUDE_CODE_AUTO_MODE_CLASSIFY_EDITS 为 true，或当前主模型在配置的 classifyEditsModels 列表中。
  */
@@ -2157,11 +2276,11 @@ function shouldClassifyEdits(currentModel) {
     }).value
   );
 }
-//@ chunk-e6aww6q8.js:1296179-1296233 placement
+//@ chunk-5xgkngpb.js:1295047-1295101 placement
 function runLoneHandedOverEditEnabled() {
   return getAutoModeConfigOrDefault().runLoneHandedOverEdit === true;
 }
-//@ chunk-e6aww6q8.js:1296233-1296462 placement
+//@ chunk-5xgkngpb.js:1295101-1295330 placement
 function classifyEditsByModelList(skillModel, currentModel) {
   let classifyEditsModels = getAutoModeConfigOrDefault()?.classifyEditsModels;
   let allowedModels = new Set(Array.isArray(classifyEditsModels) ? classifyEditsModels : []);
@@ -2178,19 +2297,19 @@ function classifyEditsByModelList(skillModel, currentModel) {
     src: "gb",
   };
 }
-//@ chunk-e6aww6q8.js:1296462-1296490 placement
+//@ chunk-5xgkngpb.js:1295330-1295358 placement
 var FILE_MUTATION_TOOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1296462", () => {
-  FILE_MUTATION_TOOLS = new Set([FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME]);
+deferInit("chunk-5xgkngpb.js:1295330", () => {
+  FILE_MUTATION_TOOLS = new Set([EDIT, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME]);
 });
-//@ chunk-e6aww6q8.js:1296490-1296524 placement
+//@ chunk-5xgkngpb.js:1295358-1295392 placement
 /**
  * isFileMutationTool：是否文件修改工具。
  */
 function isFileMutationTool(name) {
   return FILE_MUTATION_TOOLS.has(name);
 }
-//@ chunk-e6aww6q8.js:1296524-1296625 placement
+//@ chunk-5xgkngpb.js:1295392-1295493 placement
 class ToolUseIdSet {
   #e;
   constructor(ids) {
@@ -2203,35 +2322,35 @@ class ToolUseIdSet {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:1296625-1296659 placement
+//@ chunk-5xgkngpb.js:1295493-1295527 placement
 /**
  * toToolUseIdSet：构造工具调用 id 集合。
  */
 function toToolUseIdSet(toolUseIds) {
   return new ToolUseIdSet(toolUseIds);
 }
-//@ chunk-e6aww6q8.js:1296659-1296721 placement
+//@ chunk-5xgkngpb.js:1295527-1295589 placement
 /**
  * handedOffIds：交接的活工具调用 id。
  */
 function handedOffIds(handedOffLive) {
   return handedOffLive instanceof ToolUseIdSet ? handedOffLive.toolUseIDs() : undefined;
 }
-//@ chunk-e6aww6q8.js:1296721-1296770 placement
+//@ chunk-5xgkngpb.js:1295589-1295639 placement
 /**
  * isAskOnMutationTool：修改类工具的 ask 且曾开启主动性。
  */
 function isAskOnMutationTool(name, proactivityLevel) {
   return proactivityLevel === "ask" && isFileMutationTool(name) && wasProactivityEverOn();
 }
-//@ chunk-e6aww6q8.js:1296770-1296816 placement
+//@ chunk-5xgkngpb.js:1295639-1295685 placement
 /**
  * isProactivityModeChange：ask 与非 ask 之间的模式变化。
  */
 function isProactivityModeChange(from, to) {
   return from === "ask" && to !== "ask";
 }
-//@ chunk-e6aww6q8.js:1297111-1297265 placement
+//@ chunk-5xgkngpb.js:1295983-1296137 placement
 /**
  * 启动模式由主动性等级决定，且当前模式（plan 取进入前的模式）已不同于基线模式。
  */
@@ -2245,7 +2364,7 @@ function hasLeftProactivityBaseline(toolPermissionContext) {
     toolPermissionContext.proactivityBaseline?.mode !== effectiveMode
   );
 }
-//@ chunk-e6aww6q8.js:1297265-1297367 placement
+//@ chunk-5xgkngpb.js:1296137-1296241 placement
 /**
  * 按当前模式、主动性等级和是否偏离基线，算出 Shift+Tab 的模式循环。
  */
@@ -2256,7 +2375,11 @@ function getPermissionModeCycle(appState) {
     hasLeftProactivityBaseline(appState.toolPermissionContext),
   );
 }
-//@ chunk-e6aww6q8.js:1329439-1330061 fingerprint (2.1.88 match: getDenyRules, 0.493)
+//@ chunk-5xgkngpb.js:1297500-1297550 placement
+function hasUnicodeEscape(text) {
+  return /\\u[0-9a-fA-F]{4}/.test(text);
+}
+//@ chunk-5xgkngpb.js:1328591-1329213 fingerprint (2.1.88 match: getDenyRules, 0.492)
 /**
  * 把磁盘上（严格信任）各来源新出现的 deny 规则并入上下文（y$ 匹配的排前面），并按需开启 blockReadsOutsideWorkingDirectories。
  */
@@ -2266,7 +2389,7 @@ var mergePersistedDenyRules = (context) => {
     strictPersistedTrust: true,
   })) {
     if (ruleBehavior !== "deny") continue;
-    let ruleText = formatPermissionRule(ruleValue);
+    let ruleText = permissionRuleValueFromString_2(ruleValue);
     let entry = gainedBySource.get(source) ?? {
       holds: new Set(context.alwaysDenyRules[source]),
       gained: [],
@@ -2305,19 +2428,109 @@ var mergePersistedDenyRules = (context) => {
     }),
   };
 };
-//@ chunk-e6aww6q8.js:2952237-2952273 placement
+//@ chunk-5xgkngpb.js:3021844-3021884 placement
 function isAutoModeConsentFlowEnabled(agentId) {
-  return !isModelDrivenSession(agentId) && priorAssistantContextEnabled();
+  return !isModelDrivenSession(agentId) && priorAssistantContextEnabled() && true;
 }
-//@ chunk-e6aww6q8.js:2952273-2952296 placement
+//@ chunk-5xgkngpb.js:3021884-3021907 placement
 function autoModeBlockedHelp(agentId) {
   return;
 }
-//@ chunk-e6aww6q8.js:2952296-2952321 placement
-function alwaysFullClassifierRole(permissionContext) {
+//@ chunk-5xgkngpb.js:3021907-3022267 layout
+function isClassifierOnlyMiss(decisionReason) {
+  if (decisionReason?.type === "other") return decisionReason.bashMissKind === "no-rule-match";
+  if (decisionReason?.type !== "subcommandResults" || decisionReason.reasons.size === 0) return false;
+  for (let reason of decisionReason.reasons.values()) {
+    if (reason.behavior === "allow") continue;
+    if (
+      reason.behavior === "deny" ||
+      reason.blockedPath !== undefined ||
+      (reason.behavior === "ask" && reason.decisionReason?.type !== "subcommandResults") ||
+      !isClassifierOnlyMiss(reason.decisionReason)
+    )
+      return false;
+  }
+  return true;
+}
+//@ chunk-5xgkngpb.js:3022267-3022506 layout
+async function isCommandSafeToAutoAllow(command) {
+  if (typeof command !== "string") return true;
+  let node = await parseCommandRaw(command);
+  if (node === null || node === PARSE_ABORTED || node.type === "ERROR") return true;
+  let parsed = parseForSecurityFromAst(command, node);
+  if (
+    parsed.kind !== "simple" ||
+    parsed.laterLoopPassesDiffer === true ||
+    parsed.declarationPrefixes !== undefined
+  )
+    return true;
+  return hasUnsafeNode(node);
+}
+//@ chunk-5xgkngpb.js:3022506-3022605 layout
+var NON_SAFE_REDIRECT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xgkngpb.js:3022506", () => {
+  NON_SAFE_REDIRECT_TYPES = new Set([
+    "file_redirect",
+    "heredoc_redirect",
+    "herestring_redirect",
+    "process_substitution",
+  ]);
+});
+//@ chunk-5xgkngpb.js:3022605-3022742 layout
+function isStderrToStdoutRedirect(child) {
+  let [fdNode, operatorNode, targetNode, ...rest] = child.children;
+  return (
+    rest.length === 0 &&
+    fdNode?.type === "file_descriptor" &&
+    fdNode.text === "2" &&
+    operatorNode?.type === ">&" &&
+    targetNode?.text === "1"
+  );
+}
+//@ chunk-5xgkngpb.js:3022742-3023014 layout
+function hasUnsafeNode(node) {
+  for (let child of node.children) {
+    if (!child) continue;
+    if (child.type === "ERROR") return true;
+    if (child.type === "&") {
+      if (node.type !== "binary_expression") return true;
+      continue;
+    }
+    if (NON_SAFE_REDIRECT_TYPES.has(child.type) && !isStderrToStdoutRedirect(child)) return true;
+    if (child.type === "command_name" && child.text === "coproc") return true;
+    if (hasUnsafeNode(child)) return true;
+  }
   return false;
 }
-//@ chunk-e6aww6q8.js:2952321-2952398 placement
+//@ chunk-5xgkngpb.js:3023014-3023335 layout
+async function isCheaplyAutoAllowableInScript(tool, input, decisionReason, permissionContext) {
+  if (tool.mcpInfo !== undefined)
+    return (
+      tool.isReadOnly(input) &&
+      tool.openWorldHint === false &&
+      !(tool.isDestructive?.(input) ?? false) &&
+      tool.name !== IDE_EXECUTE_CODE_TOOL &&
+      !getMcpPrefix_5(getToolNameForPermissionCheck_2(tool))
+    );
+  if (tool.name === BASH_TOOL_NAME)
+    return (
+      permissionContext.replScriptSpelledOutCommand !== undefined &&
+      permissionContext.replScriptSpelledOutCommand === input.command &&
+      isClassifierOnlyMiss(decisionReason) &&
+      input.run_in_background !== true &&
+      !(await isCommandSafeToAutoAllow(input.command))
+    );
+  return false;
+}
+//@ chunk-5xgkngpb.js:3023335-3023386 layout
+function isReplScriptCall(permissionContext) {
+  return contextKeyAccepted() && permissionContext.replScriptCall === true;
+}
+//@ chunk-5xgkngpb.js:3023386-3023437 placement
+function alwaysFullClassifierRole(permissionContext) {
+  return contextKeyAccepted() && !hasBuiltInEvalTool(permissionContext.options.tools);
+}
+//@ chunk-5xgkngpb.js:3023437-3023522 placement
 /**
  * 服务端分类器角色的按调用修正：本次 tool_use 是客户端指定的 clientRequestedToolUseId 时返回 "off"（不交服务端分类器），否则原样返回角色。
  */
@@ -2327,19 +2540,19 @@ function resolveServerClassifierRoleForCall(
   toolUseId,
   toolUseContext,
 ) {
-  if (toolUseContext.clientRequestedToolUseId === toolUseId) return "off";
+  if (toolUseContext.clientRequestedToolUseId === toolUseId || isReplScriptCall(toolUseContext)) return "off";
   return autoModeClassifierRole;
 }
-//@ chunk-e6aww6q8.js:2952398-2952534 placement
+//@ chunk-5xgkngpb.js:3023522-3023658 placement
 function isTicklishWhisperEnabled() {
   if (antEnv.CLAUDE_CODE_TICKLISH_WHISPER !== undefined) return antEnv.CLAUDE_CODE_TICKLISH_WHISPER;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ticklish_whisper", false);
 }
-//@ chunk-e6aww6q8.js:2952534-2952572 placement
+//@ chunk-5xgkngpb.js:3023658-3023696 placement
 function canShowServerFallbackNotice(hasFallback) {
   return isTicklishWhisperEnabled() && hasFallback && !isSdkDialogHostActive();
 }
-//@ chunk-e6aww6q8.js:2952572-2953294 placement
+//@ chunk-5xgkngpb.js:3023696-3024418 placement
 /**
  * auto 模式退回按量计费的分类器请求时的提示：已中止返回 interrupt；有缓存的选择直接用；无 Opus 权限或没有对话框表面时记日志并 continue；否则弹一次计费提示对话框（上报 tengu_auto_mode_server_fallback_notice），返回用户的选择。
  */
@@ -2376,7 +2589,7 @@ function awaitClassifierBillingFallbackNotice(permissionContext) {
   });
   return raceChoiceWithAbort(choice_2, permissionContext.abortController.signal);
 }
-//@ chunk-e6aww6q8.js:2953294-2953600 placement
+//@ chunk-5xgkngpb.js:3024418-3024724 placement
 /**
  * 分类器的两种固定拦截结果：YJe 为用户在计费提示处取消（"Cancelled at the classifier billing notice"），XJe 为本会话不运行分类器；rkn 是子代理报告未经审查时附加的警告文字。
  */
@@ -2395,14 +2608,14 @@ var NO_CLASSIFIER_FOR_SESSION_RESULT = {
   reason: "No classifier runs for this session",
 };
 var UNREVIEWED_SUBAGENT_REPORT_WARNING = "Delivered with a warning: nothing reviewed the subagent's report";
-//@ chunk-e6aww6q8.js:2953600-2953670 placement
+//@ chunk-5xgkngpb.js:3024724-3024794 placement
 /**
  * 超限回退时“限时自动拒绝”窗口长度：env CLAUDE_CODE_TICKLISH_WHISPER_TIMEOUT_MS，缺省用 TIMED_FALLBACK_AUTO_DENY_MS。
  */
-function getTimedFallbackAutoDenyMs() {
+function denialDialogAutoDenyMs() {
   return antEnv.CLAUDE_CODE_TICKLISH_WHISPER_TIMEOUT_MS ?? TIMED_FALLBACK_AUTO_DENY_MS;
 }
-//@ chunk-e6aww6q8.js:2953670-2953960 placement
+//@ chunk-5xgkngpb.js:3024794-3025084 placement
 /**
  * 判断脚本是否“请求在沙箱外运行”：dangerouslyDisableSandbox 为 true，且该命令带此标志时不走沙箱、不带时会走沙箱（即标志确实改变了沙箱决定）。PowerShell 工具按 powershell shellType 判断。
  */
@@ -2424,7 +2637,7 @@ function scriptAsksToRunUnsandboxed(tool, input) {
     })
   );
 }
-//@ chunk-e6aww6q8.js:2953960-2954253 placement (2.1.88 match: persistDenialState, 0.894)
+//@ chunk-5xgkngpb.js:3025084-3025377 placement (2.1.88 match: persistDenialState, 0.894)
 /**
  * 用更新函数修改拒绝跟踪状态：子代理写本地 localDenialTracking，主线程写 AppState.denialTracking；返回新状态。
  */
@@ -2445,22 +2658,22 @@ function updateDenialTrackingState(context, update) {
   });
   return result ?? update(context.getAppState().denialTracking ?? createDenialTrackingState());
 }
-//@ chunk-e6aww6q8.js:2954253-2954278 placement
+//@ chunk-5xgkngpb.js:3025377-3025402 placement
 function resetDenialStreakAfterUserApproval(toolUseContext) {
   updateDenialTrackingState(toolUseContext, resetConsecutiveDenials);
 }
-//@ chunk-e6aww6q8.js:2954278-2954392 placement
+//@ chunk-5xgkngpb.js:3025402-3025516 placement
 var ORG_REQUIRES_APPROVAL_MESSAGE = "Your organization requires approval for this tool";
 var CLI_ALWAYS_ASKS_MESSAGE = "Claude Code asks before every use of this tool.";
-//@ chunk-e6aww6q8.js:2954392-2954448 placement
+//@ chunk-5xgkngpb.js:3025516-3025572 placement
 function askCeilingReason(tool) {
   return tool.mcpInfo?.cliOwned === true ? CLI_ALWAYS_ASKS_MESSAGE : ORG_REQUIRES_APPROVAL_MESSAGE;
 }
-//@ chunk-e6aww6q8.js:2954448-2954477 placement
+//@ chunk-5xgkngpb.js:3025572-3025601 placement
 function permissionRuleSourceDisplayString(source) {
   return getSettingSourceDisplayNameLowercase(source);
 }
-//@ chunk-e6aww6q8.js:2954477-2954880 placement
+//@ chunk-5xgkngpb.js:3025601-3026004 placement
 /**
  * Bash/Monitor/PowerShell 的 allow 若来自沙箱自动放行或只读判定，返回 "sandbox"/"readOnly"（用于交给服务端分类器复核）。
  */
@@ -2488,7 +2701,7 @@ function serverHeldShellAllowSource(tool, result) {
   };
   return sourceForReason(result.decisionReason);
 }
-//@ chunk-e6aww6q8.js:2954880-2955190 placement
+//@ chunk-5xgkngpb.js:3026004-3026314 placement
 /**
  * 为 Bash/PowerShell 调用生成破坏性命令分析字段（destructive_category、destructive_target_scope、git_destructive_target），用于权限决定的遥测；其他工具返回 undefined。
  */
@@ -2513,7 +2726,24 @@ function getDestructiveCommandAnalytics(name, input) {
     git_destructive_target: fromEnum(classifyGitDestructiveTarget(input.command, category)),
   };
 }
-//@ chunk-e6aww6q8.js:2955190-2955549 placement
+//@ chunk-5xgkngpb.js:3026314-3026646 layout
+function bashProgramsField(tool, input) {
+  if ((builtinToolServedByMcp(tool) ?? tool.name) !== BASH_TOOL_NAME || typeof input.command !== "string")
+    return;
+  try {
+    return {
+      bash_programs: classifyBashCommand(input.command).bash_programs,
+    };
+  } catch {
+    logError(
+      Error(
+        "Auto-mode telemetry: could not list the programs in a blocked Bash command, so its tengu_auto_mode_decision event has no bash_programs field. The command was still blocked.",
+      ),
+    );
+    return;
+  }
+}
+//@ chunk-5xgkngpb.js:3026646-3027005 placement
 /**
  * 模式切换后，之前的放行是否仍成立：auto 恒真；plan 下仅在 auto 激活且工具输入只读（或属于 plan 允许的只读类）时成立；其余模式返回调用方给定的原结果。
  */
@@ -2543,7 +2773,7 @@ function isStillAllowedAfterModeChange(fromMode, wasAllowed, tool, input, permis
     }
   }
 }
-//@ chunk-e6aww6q8.js:2955549-2955625 placement
+//@ chunk-5xgkngpb.js:3027005-3027081 placement
 /**
  * Cowork 云会话的 Web 工具放行覆盖：存在授权且工具是 Cowork Web 工具时，按 RL（Cowork Web 判定）返回是否覆盖。
  */
@@ -2551,7 +2781,7 @@ function isCoworkWebAllowOverride(rule, tool, toolInput, toolUseContext) {
   if (rule === null || !isWebFetchOrSearch(tool.name)) return false;
   return isWebToolClassifierRouted(tool, getToolPermissionContext(toolUseContext));
 }
-//@ chunk-e6aww6q8.js:2955625-2955872 placement
+//@ chunk-5xgkngpb.js:3027081-3027328 placement
 /**
  * MCP 工具在 auto 模式下被“破坏性 MCP allow 规则”直接放行（跳过分类器复核）时上报 tengu_auto_mode_destructive_mcp_rule_allow，带规则来源与服务端分类器角色。
  */
@@ -2578,7 +2808,7 @@ function countMcpPolicyRecheckSkipped(ruleSource, tool, mode, toolUseContext, as
     ),
   });
 }
-//@ chunk-e6aww6q8.js:2955872-2956091 placement
+//@ chunk-5xgkngpb.js:3027328-3027548 placement
 /**
  * MCP 的 ask 是否否决已有的整工具授权：远程会话 MCP、Cowork Web、或开启服务端策略且该 MCP 工具受策略 ask 约束并命中会话级 allow 时为真；为真时 hasPermissionsToUseTool 给结果加 suppressAlwaysAllowRule。
  */
@@ -2612,26 +2842,46 @@ function mcpAskVetoesStandingGrant(tool, mode, toolUseContext, assistantMessage,
       ) !== undefined)
   );
 }
-//@ chunk-e6aww6q8.js:2956091-2956176 placement
+//@ chunk-5xgkngpb.js:3027548-3027673 placement
 /**
  * 破坏性 MCP 调用在 auto/分类器模式下是否应改为 ask：有授权、模式走分类器、工具 isDestructive(input) 为真，且远程破坏性 MCP 开关或 tengu_modular_mochi 打开。
  */
-function isDestructiveMcpAskOverride(isAsk, tool, input, mode, permissionContext) {
+async function isDestructiveMcpAskOverride(
+  isAsk,
+  decisionReason,
+  tool,
+  input,
+  effectiveMode,
+  permissionContext,
+  assistantMessage,
+  toolUseID,
+  awaitVerdict,
+) {
   return (
     isAsk &&
-    isAutoClassifierActive(mode) &&
+    isAutoClassifierActive(effectiveMode) &&
     (tool.isDestructive?.(input) ?? false) &&
-    (includesRemoteDestructiveMcp() || isModularMochiEnabled(permissionContext))
+    (includesRemoteDestructiveMcp() ||
+      isModularMochiEnabled(permissionContext) ||
+      (await awaitClassifierVerdict(
+        decisionReason,
+        tool,
+        input,
+        permissionContext,
+        assistantMessage,
+        toolUseID,
+        awaitVerdict,
+      )))
   );
 }
-//@ chunk-e6aww6q8.js:2956176-2956259 placement
+//@ chunk-5xgkngpb.js:3027673-3027756 placement
 function includesRemoteDestructiveMcp() {
   return (
     isCoworkAny() &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_remote_auto_mode_include_destructive_mcp", false)
   );
 }
-//@ chunk-e6aww6q8.js:2956259-2956361 placement
+//@ chunk-5xgkngpb.js:3027756-3027858 placement
 /**
  * Computer Use 检查开关：GrowthBook tengu_quirky_shore 为 on 或设置 computerUseChecks 打开时返回 "on"。
  */
@@ -2641,18 +2891,30 @@ function getComputerUseChecksSetting() {
     ? "on"
     : undefined;
 }
-//@ chunk-e6aww6q8.js:2956361-2956450 placement
+//@ chunk-5xgkngpb.js:3027858-3027947 placement
 function isModularMochiEnabled(permissionContext) {
   return (
     hasRelaySourceForClients(isDiskless() ? permissionContext.options.mcpClients : undefined) &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_modular_mochi", false)
   );
 }
-//@ chunk-e6aww6q8.js:2956450-2956478 placement
+//@ chunk-5xgkngpb.js:3027947-3027990 layout
+async function awaitClassifierVerdict(
+  decisionReason,
+  tool,
+  input,
+  permissionContext,
+  assistantMessage,
+  toolUseID,
+  awaitVerdict,
+) {
+  return false;
+}
+//@ chunk-5xgkngpb.js:3027990-3028018 placement
 function hasAutoModeClassifierDenyRules() {
   return hasAutoModeDenyLists();
 }
-//@ chunk-e6aww6q8.js:2956478-2956548 placement
+//@ chunk-5xgkngpb.js:3028018-3028088 placement
 /**
  * settings.autoMode 是否配置了自定义 soft_deny 或 hard_deny 规则。
  */
@@ -2660,7 +2922,7 @@ function hasCustomAutoModeDenyRules() {
   let autoModeConfig = getAutoModeConfig();
   return replacesDefaultRules(autoModeConfig?.soft_deny) || replacesDefaultRules(autoModeConfig?.hard_deny);
 }
-//@ chunk-e6aww6q8.js:2956548-2956707 placement
+//@ chunk-5xgkngpb.js:3028088-3028247 placement
 /**
  * 向会话追加 auto 模式警告系统消息（非 SDK、有 appendSystemMessage，且子代理只在显式要求时追加）。
  */
@@ -2674,7 +2936,7 @@ function appendAutoModeWarning(permissionContext, asks, heldByDenyRules) {
   let notice = takeNoServerCheckNotice(asks, heldByDenyRules);
   if (notice !== undefined) permissionContext.appendSystemMessage(createSystemMessage(notice, "warning"));
 }
-//@ chunk-e6aww6q8.js:2956707-2958079 placement (2.1.88 match: createPermissionRequestMessage, 1)
+//@ chunk-5xgkngpb.js:3028247-3029550 placement (2.1.88 match: createPermissionRequestMessage, 0.971)
 /**
  * 按 decisionReason 生成请求确认的说明文字（classifier/hook/rule/subcommandResults/permissionPromptTool/sandboxOverride/workingDir/safetyCheck/mode/asyncAgent），默认 "Claude requested permissions to use X…"。
  */
@@ -2688,7 +2950,7 @@ function createPermissionRequestMessage(toolName, decisionReason) {
           ? `Hook '${decisionReason.hookName}' blocked this action: ${decisionReason.reason}`
           : `Hook '${decisionReason.hookName}' requires approval for this ${toolName} command`;
       case "rule": {
-        let ruleString = formatPermissionRule(decisionReason.rule.ruleValue);
+        let ruleString = permissionRuleValueFromString_2(decisionReason.rule.ruleValue);
         let sourceString = permissionRuleSourceDisplayString(decisionReason.rule.source);
         return `Permission rule '${ruleString}' from ${sourceString} requires approval for this ${toolName} command`;
       }
@@ -2722,21 +2984,21 @@ function createPermissionRequestMessage(toolName, decisionReason) {
         return decisionReason.reason;
     }
   }
-  return `Claude requested permissions to use ${toolName}, but you haven't granted it yet.`;
+  return unGrantedNotice(toolName);
 }
-//@ chunk-e6aww6q8.js:2958079-2958214 placement
+//@ chunk-5xgkngpb.js:3029550-3029693 placement
 function hasAllowRuleInSource(toolPermissionContext, rule, source) {
-  let ruleText = formatPermissionRule(rule);
+  let ruleText = permissionRuleValueFromString_2(rule);
   let sourceHasRule = (rulesBySource) =>
     (rulesBySource?.[source] ?? []).some(
-      (rawRule) => formatPermissionRule(permissionRuleValueFromString(rawRule)) === ruleText,
+      (rawRule) => permissionRuleValueFromString_2(normalizeRuleString(rawRule, "allow")) === ruleText,
     );
   return (
     sourceHasRule(toolPermissionContext.alwaysAllowRules) ||
     sourceHasRule(toolPermissionContext.strippedDangerousRules)
   );
 }
-//@ chunk-e6aww6q8.js:2958214-2958535 placement
+//@ chunk-5xgkngpb.js:3029693-3030014 placement
 /**
  * 从 addRules/replaceRules 的 allow 更新中剔除“加载 MCP skill 形式”的新规则（除非来源允许），用于 MCP skill 加载 ask 的回答。
  */
@@ -2745,7 +3007,7 @@ function withoutNewRulesOfMcpSkillLoadForm(toolNameWithAliases, updates, toolPer
     if ((update.type !== "addRules" && update.type !== "replaceRules") || update.behavior !== "allow")
       return [update];
     let filtered = update.rules.filter((rule) => {
-      let ruleValue = permissionRuleValueFromString(formatPermissionRule(rule));
+      let ruleValue = parseRuleString(permissionRuleValueFromString_2(rule));
       return (
         !toolNameWithAliases.has(ruleValue.toolName) ||
         !isPinnedOrWildcardRule(ruleValue.ruleContent ?? "") ||
@@ -2763,7 +3025,7 @@ function withoutNewRulesOfMcpSkillLoadForm(toolNameWithAliases, updates, toolPer
       : [];
   });
 }
-//@ chunk-e6aww6q8.js:2958535-2958619 placement
+//@ chunk-5xgkngpb.js:3030014-3030098 placement
 function isWholeToolAllowRule(tool, ruleValue) {
   return toolMatchesWholeToolRule(tool, {
     source: "session",
@@ -2771,7 +3033,7 @@ function isWholeToolAllowRule(tool, ruleValue) {
     ruleValue,
   });
 }
-//@ chunk-e6aww6q8.js:2958619-2958819 placement
+//@ chunk-5xgkngpb.js:3030098-3030298 placement
 /**
  * 选择要展示的决定原因：结果里有带熔断器的 safetyCheck，或结果标记 localDisplayOnly 时用结果自己的原因，否则用调用方给的原因。
  */
@@ -2788,7 +3050,7 @@ function pickDisplayedDecisionReason(checkResult, fallback) {
     ? checkResult.decisionReason
     : fallback;
 }
-//@ chunk-e6aww6q8.js:2958819-2958893 placement
+//@ chunk-5xgkngpb.js:3030298-3030372 placement
 /**
  * 为 ask 去掉整工具授权：在工具名及其别名集合上移除整工具 allow 规则（按来源过滤），返回新的权限上下文。
  */
@@ -2800,7 +3062,7 @@ function stripWholeToolGrantsForAsk(updates, tool, toolPermissionContext) {
     (ruleValue) => isWholeToolAllowRule(tool, ruleValue),
   );
 }
-//@ chunk-e6aww6q8.js:2958893-2959133 placement (2.1.88 match: permissionUpdateSchema, 0.725)
+//@ chunk-5xgkngpb.js:3030372-3030612 placement (2.1.88 match: permissionUpdateSchema, 0.726)
 /**
  * 只保留“收紧”方向的权限更新：非 allow 的 addRules、移除 allow 的 removeRules、removeDirectories；replaceRules/setMode/addDirectories 一律丢弃。
  */
@@ -2820,7 +3082,7 @@ function withoutGrantsForRemoteScope(updates) {
     }
   });
 }
-//@ chunk-e6aww6q8.js:2959133-2959282 placement
+//@ chunk-5xgkngpb.js:3030612-3030761 placement
 /**
  * 由一组 PermissionUpdate 推出授权范围：去掉远程作用域不允许的授权后，若有持久化目的地返回 "always"，有其他更新返回 "session"，否则 "once"。
  */
@@ -2830,7 +3092,7 @@ function permissionGrantScope(updates) {
   if (filtered.some((update) => supportsPersistence_2(update.destination))) return "always";
   return filtered.length > 0 ? "session" : "once";
 }
-//@ chunk-e6aww6q8.js:2959282-2959596 placement (2.1.88 match: buildPermissionUpdates, 0.851)
+//@ chunk-5xgkngpb.js:3030761-3031075 placement (2.1.88 match: buildPermissionUpdates, 0.85)
 /**
  * 回答 MCP skill 加载 ask 时可应用的更新：普通更新经远程作用域过滤；allow addRules 只保留与本次 skill 规则完全一致、目的地为 session 或允许目的地的那条。
  */
@@ -2858,7 +3120,7 @@ function answerUpdatesForMcpSkillAsk(mode, allowedPrompts) {
       : [];
   });
 }
-//@ chunk-e6aww6q8.js:2959596-2959849 placement (2.1.88 match: _temp1, 1)
+//@ chunk-5xgkngpb.js:3031075-3031328 placement (2.1.88 match: _temp1, 1)
 function filterBuiltInAgentsByDeniedTools(agents, toolPermissionContext) {
   let denyIndex;
   return agents.filter((agent) => {
@@ -2871,7 +3133,7 @@ function filterBuiltInAgentsByDeniedTools(agents, toolPermissionContext) {
       return true;
     return agent.tools.some((tool) => {
       if (tool === "*") return false;
-      let toolName = permissionRuleValueFromString(tool).toolName;
+      let toolName = parseRuleString(tool).toolName;
       denyIndex ??= getDenyRuleIndex(toolPermissionContext);
       return (
         !isToolDeniedByIndex(toolPermissionContext, denyIndex.index, {
@@ -2881,22 +3143,22 @@ function filterBuiltInAgentsByDeniedTools(agents, toolPermissionContext) {
     });
   });
 }
-//@ chunk-e6aww6q8.js:2959849-2959896 placement
+//@ chunk-5xgkngpb.js:3031328-3031375 placement
 function isAgentToolPoolDenied(agent, toolPermissionContext) {
   return filterBuiltInAgentsByDeniedTools([agent], toolPermissionContext).length === 0;
 }
-//@ chunk-e6aww6q8.js:2959896-2960029 placement
+//@ chunk-5xgkngpb.js:3031375-3031508 placement
 /**
  * 代理类型因其所有可用工具都被权限设置拒绝而不可用时的提示文字。
  */
 function agentToolPoolDeniedMessage(agentType) {
   return `Agent type '${agentType}' is unavailable because every tool it may use is denied by the current permission settings.`;
 }
-//@ chunk-e6aww6q8.js:2960029-2960102 placement
+//@ chunk-5xgkngpb.js:3031508-3031581 placement
 function isWebFetchPolicyAllowed(toolName) {
   return toolName !== WEBFETCH || (!env.CLAUDE_CODE_DISABLE_WEB_FETCH && isPolicyAllowed_3(ALLOW_WEB_FETCH));
 }
-//@ chunk-e6aww6q8.js:2960102-2960191 placement
+//@ chunk-5xgkngpb.js:3031581-3031670 placement
 /**
  * 过滤可派发的代理：去掉 isEnabled 为假的、被 Agent(type) deny 规则拒绝的、工具池全被拒绝的代理。
  */
@@ -2913,7 +3175,7 @@ function filterDispatchableAgents(agents, toolPermissionContext, agentToolName, 
     toolUseContext,
   );
 }
-//@ chunk-e6aww6q8.js:2960191-2960275 placement
+//@ chunk-5xgkngpb.js:3031670-3031754 placement
 /**
  * 取可派发代理列表：先按允许的 agentType 名单筛选，再走 filterDispatchableAgents。
  */
@@ -2927,7 +3189,7 @@ function getDispatchableAgents(activeAgents, allowedAgentTypes, toolPermissionCo
     toolUseContext,
   );
 }
-//@ chunk-e6aww6q8.js:2960275-2960466 placement
+//@ chunk-5xgkngpb.js:3031754-3031945 placement
 /**
  * PermissionRequest 钩子带 updatedInput 放行时的守卫：如果对改写后输入的规则检查结果是 deny/ask，记日志并返回该结果（规则优先于钩子）；否则返回 null。
  */
@@ -2940,7 +3202,7 @@ function guardHookUpdatedInput(permissionResult, name) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:2960466-2962059 placement
+//@ chunk-5xgkngpb.js:3031945-3033552 placement
 /**
  * PermissionRequest 钩子返回 allow 后的落地：strict 模式下校验输入未被改写、对需要用户交互的工具复核规则、应用权限更新（丢失收紧则拒绝）；其他模式下校验改写后的输入、再走规则复核，launcher 模式持久化权限更新，最后返回 allow。
  */
@@ -3075,7 +3337,7 @@ async function applyHookPermissionAllow(
     },
   };
 }
-//@ chunk-e6aww6q8.js:2962059-2962890 fingerprint (2.1.88 match: runPermissionRequestHooksForHeadlessAgent, 0.704)
+//@ chunk-5xgkngpb.js:3033552-3034388 fingerprint (2.1.88 match: runPermissionRequestHooksForHeadlessAgent, 0.683)
 /**
  * 运行 PermissionRequest 钩子：allow（仅在允许由钩子放行时）经 Lkn 生效；deny 直接拒绝（interrupt 时中止）；远程执行跳过；异常记日志返回 null。
  */
@@ -3147,7 +3409,7 @@ async function runPermissionRequestHooks(
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:2962890-2963285 placement
+//@ chunk-5xgkngpb.js:3034388-3034783 placement
 /**
  * 无法弹窗的 ask 交给 PermissionRequest 钩子裁决：远程执行、宿主显示的 ask、仅限人工且属 MCP skill 或工具宿主的 ask 不咨询钩子（返回 null）；否则运行钩子，带建议与“总是允许”抑制标志。
  */
@@ -3186,7 +3448,7 @@ async function consultPermissionRequestHooksForUnpromptableAsk(
     onAllowIgnored,
   );
 }
-//@ chunk-e6aww6q8.js:2963285-2964256 placement
+//@ chunk-5xgkngpb.js:3034783-3035754 placement
 /**
  * ask 结果且 hooksMayRefuse 时先跑 PermissionRequest 钩子：deny 立即拒绝；allow 只在 hooksMayAllow 且改写后输入合法时经 Lkn 采用。
  */
@@ -3258,7 +3520,7 @@ async function personAskAfterHooks(result, { tool, input, context, toolUseID, an
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:2964256-2965014 placement
+//@ chunk-5xgkngpb.js:3035754-3036512 placement
 /**
  * 无法弹窗（shouldAvoidPermissionPrompts）或带 refusal 时，用 PermissionRequest 钩子代替人工；钩子无结论则拒绝（asyncAgent："Permission prompts are not available in this context"）。
  */
@@ -3322,7 +3584,7 @@ async function resolveAskWithoutPrompt(answers, tool, input, result, toolUseID, 
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:2965014-2965229 placement
+//@ chunk-5xgkngpb.js:3036512-3036727 placement
 /**
  * 无法弹窗时的拒绝结果：decisionReason.type 为 asyncAgent，原因“需要交互批准但当前上下文没有权限提示”，附原 ask 的摘要（refusedAskOf）。
  */
@@ -3337,7 +3599,7 @@ function denyPromptUnavailable(checkResult, message = buildNoPromptAvailableDeni
     },
   };
 }
-//@ chunk-e6aww6q8.js:2965229-2965771 placement
+//@ chunk-5xgkngpb.js:3036727-3037269 placement
 /**
  * 插件评测（plugin eval）授权检查：把上下文改成 dontAsk 并把 cliArg allow 规则（含被剥离的危险规则）加回，用 checkDeclarativePermission 经插件裁决层判定是否 allow。
  */
@@ -3389,11 +3651,11 @@ async function isAllowedByEvalGrants(tool, input, permissionContext, toolUseID, 
     ).behavior === "allow"
   );
 }
-//@ chunk-e6aww6q8.js:2965771-2965819 placement
+//@ chunk-5xgkngpb.js:3037269-3037317 placement
 function isServerContextStaleCheckEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_humble_wand", true);
 }
-//@ chunk-e6aww6q8.js:2965819-2965934 placement
+//@ chunk-5xgkngpb.js:3037317-3037432 placement
 /**
  * 请求时模式是否为 auto：上下文带 permissionModeAtRequest 且去掉它后的有效模式为 auto。
  */
@@ -3406,11 +3668,11 @@ function isRequestedModeAuto(context) {
     }).mode === "auto"
   );
 }
-//@ chunk-e6aww6q8.js:2965934-2965986 placement
+//@ chunk-5xgkngpb.js:3037432-3037484 placement
 function getStaleContextErrorKind(result) {
   return result.errorKind === SERVER_CONTEXT_STALE ? SERVER_CONTEXT_STALE : undefined;
 }
-//@ chunk-e6aww6q8.js:2965986-2966061 placement
+//@ chunk-5xgkngpb.js:3037484-3037559 placement
 /**
  * 对外的权限检查入口（canUseTool 的核心）：已给定结果时直接返回，否则走 resolveToolPermission。
  */
@@ -3426,7 +3688,7 @@ var hasPermissionsToUseTool = async (tool, input, context, assistantMessage, too
     undefined,
   );
 };
-//@ chunk-e6aww6q8.js:2966061-2966131 placement
+//@ chunk-5xgkngpb.js:3037559-3037629 placement
 /**
  * 以 asksNoHost 标志调用 hasPermissionsToUseTool，用于没有宿主可询问的评估。
  */
@@ -3441,7 +3703,7 @@ function evaluateAskingNoHost(...[tool, input, context, ...rest]) {
     ...rest,
   );
 }
-//@ chunk-e6aww6q8.js:2966131-2966576 placement
+//@ chunk-5xgkngpb.js:3037629-3038094 placement
 /**
  * 完整判定：hasPermissionsToUseTool → refusal 时无提示解决 → PermissionRequest 钩子预处理 → 安全检查结果抑制“总是允许” → 放行后撤销重写拒绝计数 → 记录决定。
  */
@@ -3469,6 +3731,7 @@ var hasPermissionsToUseToolWithSink = async (
         toolSuggestions,
         classifierApprovalsSetter,
       )),
+    getHookCaller(context) !== undefined,
   );
   let result =
     decision.behavior === "ask" && decision.refusal !== undefined
@@ -3497,7 +3760,7 @@ var hasPermissionsToUseToolWithSink = async (
   recordPipelineResult(context, toolUseID, input, finalDecision, tool.name);
   return finalDecision;
 };
-//@ chunk-e6aww6q8.js:2966576-2966786 placement
+//@ chunk-5xgkngpb.js:3038094-3038304 placement
 function suppressAlwaysAllowForSafetyCheck(decision) {
   if (
     decision.behavior === "ask" &&
@@ -3511,7 +3774,7 @@ function suppressAlwaysAllowForSafetyCheck(decision) {
     };
   return decision;
 }
-//@ chunk-e6aww6q8.js:2966786-2967060 placement
+//@ chunk-5xgkngpb.js:3038304-3038578 placement
 /**
  * 找到能放行该工具的整工具 allow 规则（排除忽略整工具规则的工具、Chrome 地板、MCP 限制、computer-use 例外等）。
  */
@@ -3541,7 +3804,7 @@ function findApplicableAllowRule(tool, input, context, mode, getMode) {
     return allowRule;
   return null;
 }
-//@ chunk-e6aww6q8.js:2967060-3008254 callgraph-witnessed (2.1.88 match: hasPermissionsToUseTool, 0.269)
+//@ chunk-5xgkngpb.js:3038578-3082470 callgraph-witnessed (2.1.88 match: hasPermissionsToUseTool, 0.256)
 /**
  * 主判定：先跑规则/工具检查（abn，经插件 tool.check 裁决 aWr）；allow 直接返回（清零连续拒绝）；ask 时按模式处理——dontAsk 转拒绝；auto 依次走安全检查/ask 规则回退、acceptEdits 模拟快路径、安全白名单、插件/合成调用跳过、分类器（本地或服务端），拦截时计拒绝并在超限时回退人工；bypassPermissions 对安全检查弹窗限时处理；最后无法弹窗时用钩子或拒绝。
  */
@@ -3732,7 +3995,7 @@ var hasPermissionsToUseToolInner = async (
       let finishClassifierAllow = (allowedByClassifier) => {
         if (allowedByClassifier.decisionReason.type === "classifier" && commandNetworkListsOffered)
           rememberCommandNetworkLists(toolUseID, tool, input);
-        let { classifierRan, ...restDecision } = allowedByClassifier;
+        let { classifierRan, serverCleared, ...restDecision } = allowedByClassifier;
         let withClassifierFlag =
           restDecision.decisionReason.type === "classifier" &&
           restDecision.decisionReason.noVerdict !== true &&
@@ -3742,6 +4005,9 @@ var hasPermissionsToUseToolInner = async (
                 decisionReason: {
                   ...restDecision.decisionReason,
                   classifierAllowed: true,
+                  ...(serverCleared === true && {
+                    serverCleared,
+                  }),
                 },
               }
             : restDecision;
@@ -3790,38 +4056,97 @@ var hasPermissionsToUseToolInner = async (
           return denyPromptUnavailable(checkResult);
         return checkResult;
       };
-      let safetyCheckReason = findSafetyCheckReason(
-        checkResult.decisionReason,
-        (safetyReason) =>
-          !safetyReason.classifierApprovable &&
-          !(
-            isClassifierRoutedCircuitBreaker(safetyReason) &&
-            !carriesPersonsAsk(safetyReason) &&
-            isAutoModePermissionSurface(toolPermissionContext)
-          ),
-      );
+      let safetyCheckReason =
+        checkResult.behavior === "ask" && checkResult.classifierMayAllow === true && effectiveMode === "auto"
+          ? undefined
+          : findSafetyCheckReason(
+              checkResult.decisionReason,
+              (safetyReason) =>
+                !safetyReason.classifierApprovable &&
+                !(
+                  isClassifierRoutedCircuitBreaker(safetyReason) &&
+                  !carriesPersonsAsk(safetyReason) &&
+                  isAutoModePermissionSurface(toolPermissionContext)
+                ),
+            );
       let projectionOnly =
         findSafetyCheckReason(checkResult.decisionReason, isLocalProjectionOnlyCircuitBreaker) !== undefined;
+      let classifierMayAllowAsk = checkResult.behavior === "ask" && checkResult.classifierMayAllow === true;
       let isSandboxOverride = checkResult.decisionReason?.type === "sandboxOverride";
       let sandboxOverrideUnderReadBlock = isSandboxOverrideUnderReadBlock(
         checkResult.decisionReason,
         toolPermissionContext,
       );
       let carriesAskIntent = carriesAskRuleIntent(checkResult);
-      let isServerPolicyAsk =
+      let isAsk =
         isServerPolicyAskReason(checkResult.decisionReason) ||
         checkResult.matchedAskRule?.source === "mcpServerPolicy";
-      let destructiveAskOverride = isDestructiveMcpAskOverride(
-        isServerPolicyAsk,
-        tool,
-        input,
-        effectiveMode,
-        permissionContext,
-      );
+      let serverVerdictPromise;
+      let keptVerdictWithClassification =
+        assistantMessage.serverClassifierInputRewrite?.keptVerdict === true &&
+        (involvesSafetyCheck(checkResult.decisionReason) ||
+          (isFileMutationTool(tool.name) &&
+            (classifyEditsEnabled(getMainLoopModel_2(permissionContext)) ||
+              shouldClassifyEdits(getMainLoopModel_2(permissionContext)) ||
+              shouldClassifyEdits(assistantMessage.message.model))));
+      let checkStatus = new enqueuePermissionCheckStatus(toolUseID, permissionContext.agentId);
+      let serverWaitMs;
+      let serverVerdict;
+      let startServerVerdict = () => {
+        if (serverVerdictPromise === undefined) {
+          let now = Date.now();
+          serverVerdictPromise = awaitServerVerdict(
+            assistantMessage,
+            toolUseID,
+            !keptVerdictWithClassification,
+          ).then((verdict) => {
+            serverWaitMs = Date.now() - now;
+            serverVerdict = verdict;
+            return verdict;
+          });
+        }
+        return serverVerdictPromise;
+      };
+      let awaitVerdictHolding = () => {
+        let verdictPromise = startServerVerdict();
+        if (serverWaitMs === undefined) {
+          let releaseHold = checkStatus.hold();
+          verdictPromise.then(releaseHold, releaseHold);
+        }
+        return verdictPromise;
+      };
+      let destructiveAskOverride =
+        (await isDestructiveMcpAskOverride(
+          isAsk,
+          checkResult.decisionReason,
+          tool,
+          input,
+          effectiveMode,
+          permissionContext,
+          assistantMessage,
+          toolUseID,
+          awaitVerdictHolding,
+        )) &&
+        isAutoAllowedInMode(tool, getToolPermissionContext(permissionContext)) === modeSnapshot.mode &&
+        isAutoModeActive() === modeSnapshot.autoActive &&
+        (serverVerdictPromise === undefined || resolveRole(toolPermissionContext.mode) === "arbiter");
+      if (
+        serverVerdictPromise !== undefined &&
+        !chromeRuleRouted &&
+        isAutoAllowedInMode(tool, getToolPermissionContext(permissionContext)) === "dontAsk"
+      )
+        return {
+          behavior: "deny",
+          decisionReason: {
+            type: "mode",
+            mode: "dontAsk",
+          },
+          message: DONT_ASK_REJECT_MESSAGE(tool.name),
+        };
       let isAskRuleFloor =
         carriesAskIntent &&
         !chainOnAllow &&
-        !(isServerPolicyAsk && (!(tool.isDestructive?.(input) ?? false) || destructiveAskOverride));
+        !(isAsk && (!(tool.isDestructive?.(input) ?? false) || destructiveAskOverride));
       let askCeiling = tool.mcpInfo?.effectiveMaxPermission === "ask";
       let isPlanOrPolicyFloor =
         (isPlanModeFloorReason(checkResult.decisionReason) &&
@@ -4015,38 +4340,6 @@ var hasPermissionsToUseToolInner = async (
         checkResult.decisionReason.reason === TOOL_HOST_ALLOW_IS_CLASSIFIED_REASON;
       let reroutedFrom = decisionReason?.reroutedFrom;
       let commandNetworkListsOffered = areCommandNetworkListsOffered_2();
-      let serverVerdictPromise;
-      let keepLocalVerdict =
-        assistantMessage.serverClassifierInputRewrite?.keptVerdict === true &&
-        (involvesSafetyCheck(checkResult.decisionReason) ||
-          (isFileMutationTool(tool.name) &&
-            (classifyEditsEnabled(getMainLoopModel_2(permissionContext)) ||
-              shouldClassifyEdits(getMainLoopModel_2(permissionContext)) ||
-              shouldClassifyEdits(assistantMessage.message.model))));
-      let checkStatus = new enqueuePermissionCheckStatus(toolUseID, permissionContext.agentId);
-      let serverWaitMs;
-      let serverVerdict;
-      let awaitServerVerdictCached = () => {
-        if (serverVerdictPromise === undefined) {
-          let now = Date.now();
-          serverVerdictPromise = awaitServerVerdict(assistantMessage, toolUseID, !keepLocalVerdict).then(
-            (verdict) => {
-              serverWaitMs = Date.now() - now;
-              serverVerdict = verdict;
-              return verdict;
-            },
-          );
-        }
-        return serverVerdictPromise;
-      };
-      let awaitVerdictHolding = () => {
-        let verdictPromise = awaitServerVerdictCached();
-        if (serverWaitMs === undefined) {
-          let releaseHold = checkStatus.hold();
-          verdictPromise.then(releaseHold, releaseHold);
-        }
-        return verdictPromise;
-      };
       let shouldFallBack = (verdict) => {
         let fallBack = shouldFallBackToLocal(serverClassifierRoleForCall, verdict, toolUseID, {
           outsideAutoMode: mcpHeldOutsideAuto,
@@ -4082,7 +4375,11 @@ var hasPermissionsToUseToolInner = async (
       };
       let editClassificationGated =
         !callRole &&
-        true &&
+        !(
+          isReplScriptCall(permissionContext) &&
+          permissionContext.replScriptInner === true &&
+          isArbiterRole(autoModeClassifierRole)
+        ) &&
         isFileMutationTool(tool.name) &&
         classifyEditsEnabled(getMainLoopModel_2(permissionContext));
       let serverWouldAllow = async () => {
@@ -4194,7 +4491,7 @@ var hasPermissionsToUseToolInner = async (
         try {
           let parsedInput = tool.inputSchema.parse(input);
           let schemaInput = (ruleString) => {
-            let ruleValue = permissionRuleValueFromString(ruleString);
+            let ruleValue = parseRuleString(ruleString);
             return !isDangerousClassifierPermission(ruleValue.toolName, ruleValue.ruleContent);
           };
           let alwaysAllowRules = import_mapValues(toolPermissionContext.alwaysAllowRules, (ruleList) =>
@@ -4454,20 +4751,26 @@ var hasPermissionsToUseToolInner = async (
         tool.requiresUserInteraction?.() !== true &&
         classifierOnly === undefined &&
         !projectionOnly &&
-        !getToolNameForPermissionCheck(tool, input);
-      let unusedA = false;
-      let unusedB = false;
+        !getToolNameForPermissionCheck(tool, input) &&
+        safetyCheckReason_2 === undefined;
+      let unusedA = isStateOn() && permissionContext.replScriptInner === true;
+      let unusedB =
+        unusedA && contextKeyAccepted() && getToolPermissionContext(permissionContext).mode === "auto"
+          ? await isCheaplyAutoAllowableInScript(tool, input, checkResult.decisionReason, permissionContext)
+          : false;
       if (
-        permissionContext.desktopForwardToolUseId !== undefined &&
-        permissionContext.desktopForwardToolUseId === toolUseID &&
+        (unusedA ||
+          (permissionContext.desktopForwardToolUseId !== undefined &&
+            permissionContext.desktopForwardToolUseId === toolUseID)) &&
         desktopForwardEligible() &&
-        findSafetyCheckReason(checkResult.decisionReason) === undefined &&
-        !isSandboxOverride &&
-        !scriptAsksToRunUnsandboxed(tool, input) &&
-        checkResult.decisionReason?.type !== "workingDir" &&
-        !(checkResult.blockedPath !== undefined && checkResult.bashAllowRuleOverridable !== true) &&
-        !isAgentSpawningTool(tool.name) &&
-        true
+        ((unusedA && !contextKeyAccepted()) ||
+          (findSafetyCheckReason(checkResult.decisionReason) === undefined &&
+            !isSandboxOverride &&
+            !scriptAsksToRunUnsandboxed(tool, input) &&
+            checkResult.decisionReason?.type !== "workingDir" &&
+            !(checkResult.blockedPath !== undefined && checkResult.bashAllowRuleOverridable !== true) &&
+            !isAgentSpawningTool(tool.name) &&
+            (unusedA ? unusedB : true)))
       ) {
         let askFallback = fallBackToAsk("ask_level_during_accept_edits_sim");
         if (askFallback) return askFallback;
@@ -4495,9 +4798,11 @@ var hasPermissionsToUseToolInner = async (
         }
         if (!canShowServerFallbackNotice(permissionContext.requestDialog !== undefined))
           updateDenialTrackingState(permissionContext, resetConsecutiveDenials);
-        let fastPath = "desktop_forward";
+        let fastPath = unusedA ? "repl_inner" : "desktop_forward";
         logForDebugging(
-          `Skipping auto mode classifier for ${tool.name}: this is SendMessage's forward to Claude Desktop, and the classifier already allowed that SendMessage`,
+          unusedA
+            ? `Skipping auto mode classifier for ${tool.name}: inner call of a classified REPL script`
+            : `Skipping auto mode classifier for ${tool.name}: this is SendMessage's forward to Claude Desktop, and the classifier already allowed that SendMessage`,
         );
         appendAutoModeDecision(permissionContext.session, {
           tool: tool.name,
@@ -4577,21 +4882,7 @@ var hasPermissionsToUseToolInner = async (
         });
       };
       let newDenialState = getHookCaller(permissionContext);
-      if (
-        newDenialState !== undefined &&
-        isAutoClassifierActive(toolPermissionContext.mode) &&
-        isAutoClassifierActive(effectiveMode) &&
-        classifierOnly === undefined &&
-        navigation === undefined &&
-        !hasAutoModeClassifierDenyRules() &&
-        findSafetyCheckReason(checkResult.decisionReason, isClassifierRoutedCircuitBreaker) === undefined &&
-        !projectionOnly &&
-        !getToolNameForPermissionCheck(tool, input) &&
-        !isWebToolRestrictedInRelay(tool.name) &&
-        !isWebToolClassifierRouted(tool, toolPermissionContext) &&
-        !isRemoteBrowserToolUnderModeFloor(tool) &&
-        !isDeepDuskDeviceTool(toolName, effectiveMode, toolPermissionContext)
-      ) {
+      if (newDenialState !== undefined) {
         logForDebugging(`Skipping auto mode classifier for ${tool.name}: called by plugin ${newDenialState}`);
         if (askUserQuestionClassifiable) return checkResult;
         if (commandNetworkListsOffered) rememberCommandNetworkLists(toolUseID, tool, input);
@@ -4615,6 +4906,86 @@ var hasPermissionsToUseToolInner = async (
           `harness-synthesized: ${permissionContext.synthesizedBy}`,
         );
       }
+      if (
+        contextKeyAccepted() &&
+        tool.name === REPL_TOOL_NAME &&
+        !tool.mcpInfo &&
+        (permissionContext.inputChangedByHook === true ||
+          assistantMessage.serverClassifierInputRewritten === true)
+      ) {
+        logEvent("tengu_repl_script_rewrite_refused", {
+          replToolUseID: sanitizeMarkName(toolUseID),
+          isSubagent: permissionContext.agentId !== undefined,
+          serverClassifierRole: fromEnum(serverClassifierRoleForCall),
+        });
+        return {
+          behavior: "deny",
+          message: rewrittenAfterHookMessage(),
+          decisionReason: {
+            type: "other",
+            reason:
+              "Auto mode does not run code after a hook changed it, or changed an earlier tool call in the same response. Turn the hook off, or leave auto mode, where you are asked about each of the code's tool calls that needs approval.",
+          },
+        };
+      }
+      if (
+        contextKeyAccepted() &&
+        callRole &&
+        tool.name === REPL_TOOL_NAME &&
+        !tool.mcpInfo &&
+        [input.code, checkResult.updatedInput?.code].some(
+          (codeText) => typeof codeText === "string" && hasUnicodeEscape(codeText),
+        )
+      ) {
+        logEvent("tengu_repl_script_escape_refused", {
+          replToolUseID: sanitizeMarkName(toolUseID),
+          isSubagent: permissionContext.agentId !== undefined,
+        });
+        return {
+          behavior: "deny",
+          message: escapeRefusedMessage(),
+          decisionReason: {
+            type: "other",
+            reason: "Auto mode cannot check code that contains a \\uXXXX escape",
+          },
+        };
+      }
+      if (
+        isReplScriptCall(permissionContext) &&
+        isArbiterRole(autoModeClassifierRole) &&
+        (tool.name === AGENT || tool.name === SENDMESSAGE) &&
+        !tool.mcpInfo
+      ) {
+        let isSendMessage = tool.name === SENDMESSAGE;
+        if (permissionContext.permissionRound !== undefined)
+          logEvent("tengu_repl_script_spawn_refused", {
+            ...permissionContext.replScriptCallLabels,
+            toolName: fromEnum(isSendMessage ? SENDMESSAGE : AGENT),
+            isSubagent: permissionContext.agentId !== undefined,
+          });
+        return {
+          behavior: "deny",
+          message: isSendMessage ? sendMessageRefusedMessage() : agentSpawnRefusedMessage(),
+          decisionReason: {
+            type: "other",
+            reason: isSendMessage
+              ? "Claude's code cannot send messages to agents in auto mode in this session"
+              : "Claude's code cannot start sub-agents in auto mode in this session",
+          },
+        };
+      }
+      if (
+        isReplScriptCall(permissionContext) &&
+        isArbiterRole(autoModeClassifierRole) &&
+        (classifierOnly !== undefined ||
+          collectToolUseIdSet(
+            formatActionForClassifier(tool.name, input, toolUseID),
+            permissionContext.options.tools,
+          ) === undefined)
+      ) {
+        if (askUserQuestionClassifiable) return checkResult;
+        return decideWithoutClassifier(checkResult, tool, permissionContext, classifierOnly !== undefined);
+      }
       let sameTurnToolUses = permissionContext.sameTurnToolUses ?? [];
       let newDenialState_2 = isModelDrivenSession(permissionContext.agentId);
       let { messages, inheritedPrefix } = prependInheritedVerifiedTurns(
@@ -4622,7 +4993,7 @@ var hasPermissionsToUseToolInner = async (
         permissionContext.inheritedVerifiedHumanTurns,
         newDenialState_2,
       );
-      let messages_2 = formatActionForClassifier(tool.name, input, toolUseID);
+      let classifierAction = formatActionForClassifier(tool.name, input, toolUseID);
       markClassifierChecking(classifierApprovalsSetter, toolUseID);
       let classifierVerdict;
       let leftToLocal = false;
@@ -4640,7 +5011,7 @@ var hasPermissionsToUseToolInner = async (
         let runLocalClassifier = (queueProgress) =>
           classifyYoloAction(
             classifierMessages,
-            messages_2,
+            classifierAction,
             permissionContext.options.tools,
             getToolPermissionContext(permissionContext),
             permissionContext.abortController.signal,
@@ -4662,7 +5033,7 @@ var hasPermissionsToUseToolInner = async (
           );
         let runServerClassifier = async () => {
           let serverResult = classifyServerVerdict(await awaitVerdictHolding(), toolUseID, () =>
-            collectToolUseIdSet(messages_2, permissionContext.options.tools),
+            collectToolUseIdSet(classifierAction, permissionContext.options.tools),
           );
           if (!serverResult.shouldBlock && isServerContextStaleCheckEnabled()) {
             let staleInfo = tool.staleServerClassifierContext?.(
@@ -4702,9 +5073,21 @@ var hasPermissionsToUseToolInner = async (
         let withLocalFallback = async (queueProgress) => {
           let serverVerdict = await runServerClassifier();
           if (
+            contextKeyAccepted() &&
+            tool.name === REPL_TOOL_NAME &&
+            !tool.mcpInfo &&
+            serverVerdict.shouldBlock &&
+            serverVerdict.errorKind === "server_input_rewritten"
+          )
+            return {
+              ...serverVerdict,
+              shouldBlock: true,
+              unavailable: true,
+            };
+          if (
             serverVerdict.shouldBlock &&
             isInputRewrittenWithFallbackOff(serverVerdict.errorKind) &&
-            countToolCallsSince_6(assistantMessage, toolUseID)
+            mentionsToolUseId(assistantMessage, toolUseID)
           ) {
             inputRewritten = true;
             logForDebugging(
@@ -4754,8 +5137,12 @@ var hasPermissionsToUseToolInner = async (
         let runClassifierByRole = callRole
           ? async (queueProgress) => {
               let serverVerdict = await awaitVerdictHolding();
-              let unused = false;
-              if (shouldFallBack(serverVerdict)) {
+              let unused =
+                contextKeyAccepted() &&
+                tool.name === REPL_TOOL_NAME &&
+                !tool.mcpInfo &&
+                noVerdictReasonFor(serverVerdict, toolUseID) === "server_input_rewritten";
+              if (shouldFallBack(serverVerdict) && !unused) {
                 leftToLocal = true;
                 logForDebugging(
                   `[server-classifier] ${tool.name}: no server verdict for this call (${noVerdictReasonFor(serverVerdict, toolUseID)}); the local classifier decides it`,
@@ -4776,7 +5163,7 @@ var hasPermissionsToUseToolInner = async (
           if (serverVerdict !== undefined && !shouldFallBack(serverVerdict))
             return withLocalFallback(queueProgress);
           return (
-            collectToolUseIdSet(messages_2, permissionContext.options.tools) ??
+            collectToolUseIdSet(classifierAction, permissionContext.options.tools) ??
             NO_CLASSIFIER_FOR_SESSION_RESULT
           );
         };
@@ -4910,7 +5297,10 @@ var hasPermissionsToUseToolInner = async (
             },
             message: DONT_ASK_REJECT_MESSAGE(tool.name),
           };
-        if (askUserQuestionClassifiable) {
+        if (
+          askUserQuestionClassifiable ||
+          (classifierMayAllowAsk && !toolPermissionContext.shouldAvoidPermissionPrompts)
+        ) {
           logEvent("tengu_auto_mode_fallback_to_ask", {
             reason: lit_2("requires_user_interaction"),
             toolName: sanitizeToolNameForAnalytics(tool.name),
@@ -5054,7 +5444,7 @@ var hasPermissionsToUseToolInner = async (
       let inputRewriteFallback =
         classifierVerdict.unavailable === true &&
         classifierVerdict.errorKind === "server_input_rewritten" &&
-        countToolCallsSince_6(assistantMessage, toolUseID) &&
+        mentionsToolUseId(assistantMessage, toolUseID) &&
         getServerClassifierFallbackMode() !== "off";
       let quotedInput =
         inputRewriteFallback &&
@@ -5209,6 +5599,7 @@ var hasPermissionsToUseToolInner = async (
         ...computerUseFields,
         mcpServerAskOverride: destructiveAskOverride,
         ...getDestructiveCommandAnalytics(tool.name, input),
+        ...(decisionOutcome === "blocked" && bashProgramsField(tool, input)),
         stripAllBashFlag: classifyAllShellEnabled(),
         originalDecisionReasonType: fromEnumOpt(checkResult.decisionReason?.type),
         circuitBreaker: fromEnumOpt(
@@ -5258,7 +5649,11 @@ var hasPermissionsToUseToolInner = async (
           quotedInput === undefined || quotedInput.kind === "quoted" ? undefined : fromEnum(quotedInput.kind),
         classifierTotalWaitMs: totalWaitMs,
         classifierModel: telemetrySafeModelName(classifierVerdict.model),
-        classifierCategory: sanitizeRuleCategoryOrUndefined(classifierVerdict.category),
+        classifierCategory: (isDiskless() ? sanitizeRuleCategory : sanitizeRuleCategoryOrUndefined)(
+          decisionOutcome === "blocked"
+            ? classifierReasonLabel(classifierVerdict)
+            : classifierVerdict.category,
+        ),
         classifierStage1Severity: classifierVerdict.stage1Severity,
         classifierStage2Severity: classifierVerdict.stage2Severity,
         ...(classifierVerdict.remoteBrowserRule !== undefined && {
@@ -5364,7 +5759,7 @@ var hasPermissionsToUseToolInner = async (
             !serverInputTooLong &&
             !hasPersonOnlyFloor &&
             !tool.mcpInfo &&
-            ((tool.name === AGENT && true) || false);
+            ((tool.name === AGENT && !isReplScriptCall(permissionContext)) || false);
           let tooLongArm = classifierOnlyDeny
             ? "classifier_only_deny"
             : agentMayProceed
@@ -5409,6 +5804,9 @@ var hasPermissionsToUseToolInner = async (
                   reason: CLASSIFIER_TRANSCRIPT_TOO_LONG_REASON,
                   noVerdict: true,
                 },
+                ...(hasCompactRequest && {
+                  selfMending: true,
+                }),
                 message: hasCompactRequest
                   ? `${tool.name} was not reviewed and did not run: the conversation is too long for auto mode's classifier, and no permission prompt is raised for this tool. This is not a judgment that the action is unsafe. Claude Code will try to compact the conversation before the next request; if this action is still needed after that, issue it again.`
                   : `${tool.name} was not reviewed: the auto mode classifier transcript exceeded its context window, and no permission prompt is raised for this tool. This is not a judgment that the action is unsafe; the same call will hit the same limit until the conversation is shorter.`,
@@ -5454,6 +5852,7 @@ var hasPermissionsToUseToolInner = async (
                   reason: CLASSIFIER_TOO_LONG_COMPACTING_REASON,
                   noVerdict: true,
                 },
+                selfMending: true,
                 message: `${tool.name} was not reviewed and did not run: the conversation is too long for auto mode's classifier. Claude Code will try to compact the conversation before the next request; if this action is still needed after that, issue it again and it will be reviewed normally.`,
               };
             }
@@ -5495,13 +5894,15 @@ var hasPermissionsToUseToolInner = async (
         let safetyMonitorBlocked =
           classifierVerdict.errorKind === SAFETY_MONITOR_BLOCKED && !classifierVerdict.refusedBySafeguard;
         if (classifierVerdict.unavailable || safetyMonitorBlocked) {
-          if (askUserQuestionClassifiable && !safetyMonitorBlocked) {
-            logForDebugging(
-              "Auto mode classifier unavailable for AskUserQuestion, falling back to the question dialog",
-              {
-                level: "warn",
-              },
-            );
+          if (
+            (askUserQuestionClassifiable ||
+              (classifierMayAllowAsk && !toolPermissionContext.shouldAvoidPermissionPrompts)) &&
+            !safetyMonitorBlocked
+          ) {
+            if (skippedOnExactMcpRule) noteRefusedMcpSkip(tool.name);
+            logForDebugging("Auto mode classifier unavailable, falling back to the question dialog", {
+              level: "warn",
+            });
             logEvent("tengu_auto_mode_fallback_to_ask", {
               reason: lit_2("requires_user_interaction"),
               toolName: sanitizeToolNameForAnalytics(tool.name),
@@ -5519,6 +5920,9 @@ var hasPermissionsToUseToolInner = async (
                 classifier: "auto-mode",
                 reason: CLASSIFIER_UNAVAILABLE_REASON,
               },
+              ...(!countTotal && {
+                selfMending: true,
+              }),
               message: buildClassifierUnavailableMessage(
                 tool.name,
                 classifierVerdict.model,
@@ -5682,6 +6086,11 @@ var hasPermissionsToUseToolInner = async (
             },
           );
           if (skippedOnExactMcpRule) noteRefusedMcpSkip(tool.name);
+          let selfMending =
+            classifierVerdict.errorKind === "server_results_not_held" ||
+            classifierVerdict.errorKind === "server_call_unavailable_truncated" ||
+            classifierVerdict.errorKind === SERVER_CONTEXT_STALE ||
+            skippedOnExactMcpRule;
           return {
             behavior: "deny",
             decisionReason: {
@@ -5690,6 +6099,9 @@ var hasPermissionsToUseToolInner = async (
               reason: CLASSIFIER_UNAVAILABLE_REASON,
               ...false,
             },
+            ...(selfMending && {
+              selfMending: true,
+            }),
             message: buildClassifierUnavailableMessage(
               tool.name,
               classifierVerdict.model,
@@ -5812,6 +6224,11 @@ var hasPermissionsToUseToolInner = async (
         }
         return classifierDenyResult;
       }
+      let serverSummary =
+        classifierSource === "server" && assistantMessage.handedOff !== true
+          ? summarizeServerVerdict(await startServerVerdict(), toolUseID)
+          : undefined;
+      let serverCleared = serverSummary?.kind === "verdict" && serverSummary.outcome === "not_flagged";
       if (
         (!askUserQuestionClassifiable && !shellAllowHeld && !toolHostAllowClassified && !chromeClickRouted) ||
         !canShowServerFallbackNotice(permissionContext.requestDialog !== undefined)
@@ -5835,6 +6252,7 @@ var hasPermissionsToUseToolInner = async (
           reason: classifierVerdict.reason,
         },
         classifierRan: classifierVerdict.classifierRan,
+        serverCleared,
       });
     }
     let canAskHostCard =
@@ -5881,14 +6299,14 @@ var hasPermissionsToUseToolInner = async (
   }
   return checkResult;
 };
-//@ chunk-e6aww6q8.js:3008254-3008352 placement
+//@ chunk-5xgkngpb.js:3082470-3082568 placement
 /**
  * 分类器拦截是否计入拒绝次数：shouldBlock 且不是不可用、转录过长或被安全拦截。
  */
 function isCountedClassifierBlock(result) {
   return result.shouldBlock && !result.unavailable && !result.transcriptTooLong && !result.refusedBySafeguard;
 }
-//@ chunk-e6aww6q8.js:3008352-3008503 placement
+//@ chunk-5xgkngpb.js:3082568-3082719 placement
 /**
  * 分类器结论是否可用：分类器确实运行、非不可用/转录过长/被安全拦截，且没有 failureMode 与 errorKind。
  */
@@ -5902,7 +6320,7 @@ function isClassifierVerdictUsable(result) {
     result.errorKind === undefined
   );
 }
-//@ chunk-e6aww6q8.js:3008503-3008876 placement
+//@ chunk-5xgkngpb.js:3082719-3083092 placement
 /**
  * Chrome 地板拦截后是否改为弹窗：站点授权路由、模式为 default/acceptEdits 且未变、SDK stdio 宿主、无链式 allow、可弹窗、分类器结论可用且类别命中 Chrome 地板集合，并且不是远程会话、chromeFloorBlockPrompts 未关闭。
  */
@@ -5933,13 +6351,13 @@ function shouldPromptAfterChromeFloorBlock({
     getAutoModeConfigOrDefault().chromeFloorBlockPrompts !== false
   );
 }
-//@ chunk-e6aww6q8.js:3008876-3008928 placement
+//@ chunk-5xgkngpb.js:3083092-3083144 placement
 function recordAutoModeDenial(toolUseContext) {
   let state = incrementDenialCounts(getDenialTrackingState(toolUseContext));
   persistDenialState(toolUseContext, state);
   return state;
 }
-//@ chunk-e6aww6q8.js:3008928-3009537 placement
+//@ chunk-5xgkngpb.js:3083144-3083753 placement
 /**
  * auto 拒绝超限处理：未超限返回 false；超限上报 tengu_auto_mode_denial_limit_exceeded；headless 直接抛 AbortError；累计超限时清零计数；返回 true 表示回退人工。
  */
@@ -5971,7 +6389,7 @@ function enforceAutoModeDenialLimits(toolUseContext, state, tool, messageId, too
     });
   return true;
 }
-//@ chunk-e6aww6q8.js:3009537-3009605 placement (2.1.88 match: recordSuccess, 1)
+//@ chunk-5xgkngpb.js:3083753-3083821 placement (2.1.88 match: recordSuccess, 1)
 /**
  * 工具调用放行后，若有连续拒绝则在上下文/AppState 中清零。
  */
@@ -5979,11 +6397,11 @@ function recordAutoModeSuccess(context) {
   let state = getDenialTrackingState(context);
   if (state.consecutiveDenials > 0) persistDenialState(context, resetConsecutiveDenials(state));
 }
-//@ chunk-e6aww6q8.js:3009605-3009689 placement (2.1.88 match: persistDenialState, 0.756)
+//@ chunk-5xgkngpb.js:3083821-3083905 placement (2.1.88 match: persistDenialState, 0.755)
 function getDenialTrackingState(context) {
   return context.localDenialTracking ?? context.getAppState().denialTracking ?? createDenialTrackingState();
 }
-//@ chunk-e6aww6q8.js:3009689-3009861 fingerprint (2.1.88 match: persistDenialState, 1)
+//@ chunk-5xgkngpb.js:3083905-3084077 fingerprint (2.1.88 match: persistDenialState, 1)
 /**
  * 写入拒绝跟踪状态（子代理写 localDenialTracking，否则写 AppState）。
  */
@@ -5998,36 +6416,31 @@ function persistDenialState(context, newState) {
       };
     });
 }
-//@ chunk-e6aww6q8.js:3009861-3010723 layout
-function buildClassifierDenyResult(classifierResult, permissionContext, tool, input, checkResult) {
+//@ chunk-5xgkngpb.js:3084077-3084163 layout
+function classifierReasonLabel(classifierResult) {
+  return classifierResult.model === SERVER_CLASSIFIER_LABEL && classifierResult.failureMode === undefined
+    ? ruleIdFromBracketPrefix(classifierResult.reason)
+    : classifierResult.category;
+}
+//@ chunk-5xgkngpb.js:3084163-3084810 layout
+function buildClassifierDenyResult(classifierResult, permissionContext, tool, roleContext, checkResult) {
   let hasNoVerdict = classifierResult.failureMode !== undefined;
-  let category = sanitizeRuleCategory(
-    classifierResult.model === SERVER_CLASSIFIER_LABEL && !hasNoVerdict
-      ? ruleIdFromBracketPrefix(classifierResult.reason)
-      : classifierResult.category,
-  );
+  let category = sanitizeRuleCategory(classifierReasonLabel(classifierResult));
   let allowRuleEligible =
     checkResult !== undefined &&
     !carriesAskRuleIntent(checkResult) &&
     checkResult.decisionReason?.type !== "hook" &&
     checkResult.decisionReason?.type !== "sandboxOverride" &&
     findSafetyCheckReason(checkResult.decisionReason) === undefined &&
-    tool.requiresUserInteraction?.() !== true &&
     checkResult.suppressAlwaysAllowRule !== true &&
-    tool.suppressesAlwaysAllowRule?.(input) !== true &&
-    tool.suppressesAllPermissionUpdates?.(input) !== true &&
     permissionContext.forRemoteExecution !== true &&
     !isHookOrPluginSteered(permissionContext) &&
-    !isWebToolRestrictedInRelay(tool.name) &&
     !isWebToolClassifierRouted(tool, getToolPermissionContext(permissionContext)) &&
-    !isRemoteBrowserToolUnderModeFloor(tool) &&
-    tool.ignoresWholeToolAllowRule?.(input) !== true &&
-    getClassifiableBrowserAction(
+    isClassifiableForAutoAllow(
       tool,
-      input,
+      roleContext,
       isAutoAllowedInMode(tool, getToolPermissionContext(permissionContext)),
-    ) === undefined &&
-    !isAgentSpawningTool(tool.name);
+    );
   return {
     behavior: "deny",
     decisionReason: {
@@ -6049,13 +6462,14 @@ function buildClassifierDenyResult(classifierResult, permissionContext, tool, in
       : buildYoloRejectionMessage(classifierResult.reason, {
           autoModeConsentFlow: isAutoModeConsentFlowEnabled(permissionContext.agentId),
           blockedHelp: autoModeBlockedHelp(permissionContext.agentId),
+          ccrSessionLimited: isCcrSessionLimited(),
           allowRuleToolName: allowRuleEligible
             ? toAllowRuleToolName(getToolNameForPermissionCheck_2(tool))
             : undefined,
         }),
   };
 }
-//@ chunk-e6aww6q8.js:3010723-3010815 layout
+//@ chunk-5xgkngpb.js:3084810-3084902 layout
 function canShowPermissionDialog(permissionContext) {
   return (
     permissionContext.requestDialog !== undefined &&
@@ -6063,11 +6477,65 @@ function canShowPermissionDialog(permissionContext) {
     !getToolPermissionContext(permissionContext).shouldAvoidPermissionPrompts
   );
 }
-//@ chunk-e6aww6q8.js:3010815-3010854 layout
+//@ chunk-5xgkngpb.js:3084902-3084941 layout
 function canShowSafetyCheckDialog(toolUseContext) {
   return canShowPermissionDialog(toolUseContext) && !isUnattendedAgentContext(toolUseContext);
 }
-//@ chunk-e6aww6q8.js:3010854-3011046 placement
+//@ chunk-5xgkngpb.js:3084941-3086104 layout
+function decideWithoutClassifier(checkResult, tool, permissionContext, classifierOnly) {
+  {
+    let why = classifierOnly
+      ? "classifier_only"
+      : permissionContext.replScriptBuiltCommand === true &&
+          getToolPermissionContext(permissionContext).mode === "auto"
+        ? "built_as_it_ran"
+        : !canShowPermissionDialog(permissionContext)
+          ? "no_dialog"
+          : isUnansweredWindowExpired()
+            ? "not_shown"
+            : "asked";
+    let detail = permissionContext.replScriptInner === true;
+    if (permissionContext.permissionRound !== undefined)
+      logEvent("tengu_repl_script_call_without_classifier", {
+        ...permissionContext.replScriptCallLabels,
+        outcome: fromEnum(why),
+        scriptVerdictStands: detail,
+        lane: fromEnum(permissionContext.replAsyncAsk === true ? "async" : "classic"),
+      });
+    let name = (reason) => ({
+      behavior: "deny",
+      message: codeModeNotRunReasonText(tool.name, reason, detail),
+      decisionReason: {
+        type: "other",
+        reason:
+          reason === "unanswered"
+            ? "No one answered the permission prompt for this call, so it was refused"
+            : reason === "not_shown"
+              ? "Refused without asking, because an earlier permission prompt for Claude's code went unanswered"
+              : reason === "built_as_it_ran"
+                ? "Refused: Claude's code put this command together as it ran, so auto mode's check didn't read it. Claude can send it again written out in full"
+                : "Refused: auto mode's check of Claude's code doesn't cover this call",
+      },
+      decideLocation: "pre-ask",
+    });
+    if (why !== "asked") return name(why);
+    return {
+      ...checkResult,
+      suggestions: undefined,
+      suppressAlwaysAllowRule: true,
+      oneTimeAnswersOnly: true,
+      ...(hasAccessToIDEExtensionDiffFeature_3(currentMcpClients(permissionContext)) === undefined && {
+        autoDenyWindow: buildAutoDenyMarker({
+          autoDenyAfterMs: denialDialogAutoDenyMs(),
+          resolution: name("unanswered"),
+          notASafetyCheck: true,
+        }),
+      }),
+    };
+  }
+  return checkResult;
+}
+//@ chunk-5xgkngpb.js:3086104-3086296 placement
 /**
  * 从 subcommandResults 中取出原因与给定原因相同的那个子命令 ask 的消息，否则用结果自身消息。
  */
@@ -6078,7 +6546,7 @@ function flaggedPartMessage(result, safetyReason) {
   }
   return result.message;
 }
-//@ chunk-e6aww6q8.js:3011046-3011546 layout
+//@ chunk-5xgkngpb.js:3086296-3086796 layout
 function applySafetyCheckDialogPolicy(result, safetyReason, toolUseContext, dialogPolicy) {
   let deny = (unansweredCount) => ({
     behavior: "deny",
@@ -6107,7 +6575,7 @@ function applySafetyCheckDialogPolicy(result, safetyReason, toolUseContext, dial
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3011546-3012163 layout
+//@ chunk-5xgkngpb.js:3086796-3087414 layout
 async function waitForServerClassifierRetry(
   toolUseId,
   permissionContext,
@@ -6148,7 +6616,7 @@ async function waitForServerClassifierRetry(
     clearClassifierChecking(setClassifierApprovals, toolUseId_2);
   }
 }
-//@ chunk-e6aww6q8.js:3012163-3012579 layout
+//@ chunk-5xgkngpb.js:3087414-3087831 layout
 function stopTurnForMissingVerdict(tool, permissionContext, recorded, reason) {
   if (recorded) {
     let isSubagent = permissionContext.agentId !== undefined;
@@ -6176,7 +6644,7 @@ function stopTurnForMissingVerdict(tool, permissionContext, recorded, reason) {
     endsTurn: true,
   };
 }
-//@ chunk-e6aww6q8.js:3012579-3014177 fingerprint (2.1.88 match: handleDenialLimitExceeded, 0.771)
+//@ chunk-5xgkngpb.js:3087831-3089456 fingerprint (2.1.88 match: handleDenialLimitExceeded, 0.763)
 /**
  * 拒绝超限（连续 3/累计 20）：headless 直接抛 AbortError；否则记日志，累计超限时清零计数，返回带 denialLimitFallback（可限时自动拒绝）的 ask 结果让人工审阅。
  */
@@ -6205,7 +6673,7 @@ function handleDenialLimitExceeded(
     !isUnattendedAgentContext(context) &&
     hasAccessToIDEExtensionDiffFeature_3(currentMcpClients(context)) === undefined &&
     consecutiveDenials >= DENIAL_LIMITS.maxConsecutive &&
-    (state.timedFallbackShown !== true || false);
+    (state.timedFallbackShown !== true || (isStateOn() && context.replAsyncAsk === true));
   let warning = hitTotalLimit
     ? `${totalDenials} actions were blocked this session. Please review the transcript before continuing.`
     : `${consecutiveDenials} consecutive actions were blocked. Please review the transcript before continuing.`;
@@ -6267,7 +6735,7 @@ Latest blocked action: ${latestReason}`,
           disclosure,
           useTimedFallback
             ? {
-                autoDenyAfterMs: getTimedFallbackAutoDenyMs(),
+                autoDenyAfterMs: denialDialogAutoDenyMs(),
                 resolution: classifierResult,
               }
             : undefined,
@@ -6276,7 +6744,7 @@ Latest blocked action: ${latestReason}`,
     decisionReason,
   };
 }
-//@ chunk-e6aww6q8.js:3014177-3014380 placement
+//@ chunk-5xgkngpb.js:3089456-3089659 placement
 /**
  * 决定原因是否由 ask 规则驱动（rule 且 ruleBehavior 为 ask，或 subcommandResults 里任一 ask 子项如此）。
  */
@@ -6288,14 +6756,14 @@ function isAskRuleDrivenReason(decisionReason) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:3014380-3014464 placement
+//@ chunk-5xgkngpb.js:3089659-3089743 placement
 /**
  * 结果是否带 ask 规则意图：原因由 ask 规则驱动，或 matchedAskRule 为 ask。auto 下这类 ask 回退人工而不交分类器。
  */
 function carriesAskRuleIntent(result) {
   return isAskRuleDrivenReason(result.decisionReason) || result.matchedAskRule?.ruleBehavior === "ask";
 }
-//@ chunk-e6aww6q8.js:3014464-3014568 placement
+//@ chunk-5xgkngpb.js:3089743-3089847 placement
 /**
  * 原因是否为 mcpServerPolicy 来源的 ask 规则。
  */
@@ -6306,7 +6774,7 @@ function isServerPolicyAskReason(decisionReason) {
     decisionReason.rule.source === "mcpServerPolicy"
   );
 }
-//@ chunk-e6aww6q8.js:3014568-3014690 placement
+//@ chunk-5xgkngpb.js:3089847-3089969 placement
 /**
  * 沙箱/只读放行是否改标为 sandboxOverride 交复核：无 ask 规则意图、无安全检查原因、尚非 sandboxOverride，且 tengu_curried_squirrel 打开。
  */
@@ -6319,7 +6787,7 @@ function shouldRetagAskAsSandboxOverride(result) {
     return false;
   return sandboxOverrideAskGuardsOn();
 }
-//@ chunk-e6aww6q8.js:3014690-3014751 placement
+//@ chunk-5xgkngpb.js:3089969-3090030 placement
 /**
  * 沙箱覆盖 ask 守卫开关（GrowthBook tengu_curried_squirrel，安全默认）。
  */
@@ -6328,11 +6796,22 @@ function sandboxOverrideAskGuardsOn() {
     safe: true,
   });
 }
-//@ chunk-e6aww6q8.js:3014751-3014808 placement
+//@ chunk-5xgkngpb.js:3090030-3090087 placement
 function isPlanModeFloorReason(decisionReason) {
   return decisionReason?.type === "mode" && decisionReason.mode === "plan";
 }
-//@ chunk-e6aww6q8.js:3014916-3015069 placement
+//@ chunk-5xgkngpb.js:3090087-3090195 layout
+function isBypassAllowableHere(toolPermissionContext, settings, toolPermissionContext_2, suggestedRules) {
+  return (
+    isBypassAllowedInMode(
+      toolPermissionContext,
+      suggestedRules,
+      toolPermissionContext_2.isBypassPermissionsModeAvailable,
+      settings.forRemoteExecution,
+    ) && !isWebToolRestrictedInRelay(toolPermissionContext.name)
+  );
+}
+//@ chunk-5xgkngpb.js:3090195-3090348 placement
 function usesToolCheckRunner(tool, context) {
   if (tool.mcpInfo) return true;
   if (getCheckRunner(context.session, tool.name) === undefined) return false;
@@ -6341,30 +6820,32 @@ function usesToolCheckRunner(tool, context) {
     isAutoClassifierActive("plan", getToolPermissionContext(context).servedCall === true)
   );
 }
-//@ chunk-e6aww6q8.js:3015069-3015160 placement
+//@ chunk-5xgkngpb.js:3090348-3090452 placement
 function isPlanModeWriteCall(tool, parsedInput, context) {
   return (
     getToolPermissionContext(context).mode === "plan" &&
     usesToolCheckRunner(tool, context) &&
     !tool.isReadOnly(parsedInput, context) &&
-    !isReadOnlyBrowserCall(getToolNameForPermissionCheck_2(tool), parsedInput)
+    !isReadOnlyBrowserCall(getToolNameForPermissionCheck_2(tool), parsedInput) &&
+    !needsDocsConnectorFixup(tool, parsedInput, context)
   );
 }
-//@ chunk-e6aww6q8.js:3015160-3015319 placement
+//@ chunk-5xgkngpb.js:3090452-3090624 placement
 function isPlanModeBlockedWrite(tool, input, context) {
   if (getToolPermissionContext(context).mode !== "plan") return false;
   try {
     let { parsedInput } = parseToolInputForPermission(tool, input, context);
     return (
       !tool.isReadOnly(parsedInput, context) &&
-      !isReadOnlyBrowserCall(getToolNameForPermissionCheck_2(tool), parsedInput)
+      !isReadOnlyBrowserCall(getToolNameForPermissionCheck_2(tool), parsedInput) &&
+      !needsDocsConnectorFixup(tool, parsedInput, context)
     );
   } catch (error) {
     if (!isAbortError(error)) logError(error);
     return true;
   }
 }
-//@ chunk-e6aww6q8.js:3015319-3015451 placement
+//@ chunk-5xgkngpb.js:3090624-3090756 placement
 function buildPlanModeAsk(tool) {
   return {
     behavior: "ask",
@@ -6375,7 +6856,7 @@ function buildPlanModeAsk(tool) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:3015451-3015533 placement
+//@ chunk-5xgkngpb.js:3090756-3090838 placement
 function defaultToNoFields(decision) {
   return decision.behavior === "ask" && decision.defaultToNo === true
     ? {
@@ -6383,7 +6864,7 @@ function defaultToNoFields(decision) {
       }
     : {};
 }
-//@ chunk-e6aww6q8.js:3015533-3015707 placement
+//@ chunk-5xgkngpb.js:3090838-3091012 placement
 function isPersonOnlySafetyAsk(decision) {
   return (
     decision?.behavior === "ask" &&
@@ -6393,7 +6874,7 @@ function isPersonOnlySafetyAsk(decision) {
     !decision.decisionReason.classifierApprovable
   );
 }
-//@ chunk-e6aww6q8.js:3015707-3015835 placement
+//@ chunk-5xgkngpb.js:3091012-3091140 placement
 /**
  * mcpServerPolicy 的 ask 是否落在 plan 写地板之下：解析输入后判断该调用在 plan 下是否属于需要阻挡的写；解析失败时以当前是否 plan 模式为准。
  */
@@ -6406,18 +6887,18 @@ function isServerPolicyAskUnderPlanFloor(decisionReason, tool, input, context) {
     return getToolPermissionContext(context).mode === "plan";
   }
 }
-//@ chunk-e6aww6q8.js:3015835-3015860 placement
+//@ chunk-5xgkngpb.js:3091140-3091165 placement
 var FORCED_INTERACTION_TOOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3015835", () => {
+deferInit("chunk-5xgkngpb.js:3091140", () => {
   FORCED_INTERACTION_TOOLS = new Set([EXITPLANMODE_2, ASKUSERQUESTION]);
 });
-//@ chunk-e6aww6q8.js:3015860-3015933 placement
+//@ chunk-5xgkngpb.js:3091165-3091238 placement
 function isExemptFromUserInteraction(tool, hookUpdatedInput) {
   return (
     hookUpdatedInput !== undefined && tool.mcpInfo === undefined && FORCED_INTERACTION_TOOLS.has(tool.name)
   );
 }
-//@ chunk-e6aww6q8.js:3015933-3016015 placement
+//@ chunk-5xgkngpb.js:3091238-3091320 placement
 /**
  * 是否仍欠一次人工交互：工具属于强制人工类，或 requiresUserInteraction 为真且未被豁免。
  */
@@ -6427,7 +6908,7 @@ function isInteractionStillOwed(tool, hookUpdatedInput) {
     (Boolean(tool.requiresUserInteraction?.()) && !isExemptFromUserInteraction(tool, hookUpdatedInput))
   );
 }
-//@ chunk-e6aww6q8.js:3016015-3016265 placement
+//@ chunk-5xgkngpb.js:3091320-3091570 placement
 /**
  * 解析工具输入：先严格 parse；失败且仅因未知键、tengu_tidy_eclipse 打开、且未知键无需询问时，去掉这些键重试，并返回 keysSetAside:true。
  */
@@ -6451,14 +6932,14 @@ function parseToolInputForPermission(tool, input, toolUseContext) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:3016265-3016346 placement
+//@ chunk-5xgkngpb.js:3091570-3091651 placement
 /**
  * 结果是否“已确定”：有结果且不是 checkIncomplete 的 ask。
  */
 function isSettledPermissionResult(result) {
   return result !== undefined && !(result.behavior === "ask" && result.checkIncomplete === true);
 }
-//@ chunk-e6aww6q8.js:3016346-3016738 placement
+//@ chunk-5xgkngpb.js:3091651-3092043 placement
 /**
  * 工具声明了 permissionCheckFailureDecision 时调用它决定权限检查失败的处理；该函数本身抛错时记日志并直接拒绝。
  */
@@ -6478,7 +6959,7 @@ function runFailClosedDecision(tool, input, toolUseContext) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:3016738-3017371 placement
+//@ chunk-5xgkngpb.js:3092043-3092676 placement
 function describePermissionCheckFault(error, tool, input, toolUseContext) {
   if (error instanceof AbortError_2 || error instanceof APIUserAbortError) throw error;
   if (isAbortError(error) && toolUseContext.abortController.signal.aborted) throw new AbortError_2();
@@ -6503,13 +6984,64 @@ function describePermissionCheckFault(error, tool, input, toolUseContext) {
     };
   return runFailClosedDecision(tool, input, toolUseContext);
 }
-//@ chunk-e6aww6q8.js:3017889-3017923 placement
+//@ chunk-5xgkngpb.js:3092696-3093386 affinity
+/**
+ * 命中 ask 规则时仍运行工具自己的 checkPermissions：deny 优先，ask 时带上 matchedAskRule；检查崩溃时按 crashIsObjection 决定是否以"检查崩溃"询问。
+ */
+async function askByRule(tool, input, callOptions, rule, settings) {
+  let decisionReason = {
+    type: "rule",
+    rule,
+  };
+  let askFromRule = {
+    behavior: "ask",
+    decisionReason,
+    message: createPermissionRequestMessage(tool.name),
+  };
+  try {
+    let { parsedInput } = parseToolInputForPermission(tool, input, callOptions);
+    let result = await tool.checkPermissions(parsedInput, callOptions);
+    recordCheckedResult(callOptions, parsedInput, result, tool.name);
+    if (result?.behavior === "deny") return result;
+    if (settings?.inItsPlace?.behavior === "deny") return settings.inItsPlace;
+    if (result?.behavior === "ask") {
+      let { suggestions, ...resultWithoutSuggestions } = result;
+      return {
+        ...resultWithoutSuggestions,
+        matchedAskRule: rule,
+      };
+    }
+    weakSet_5.add(decisionReason);
+  } catch (error) {
+    let faultDecision = describePermissionCheckFault(error, tool, input, callOptions);
+    if (faultDecision !== undefined && faultDecision.behavior === "deny") return faultDecision;
+    if (!isSettledPermissionResult(faultDecision) && settings?.crashIsObjection === true) {
+      let crashReason = {
+        type: "other",
+        reason: PERMISSION_CHECK_CRASHED_REASON,
+      };
+      return {
+        behavior: "ask",
+        message: createPermissionRequestMessage(tool.name, crashReason),
+        decisionReason: crashReason,
+      };
+    }
+  }
+  let inItsPlace = settings?.inItsPlace;
+  return inItsPlace?.behavior === "ask" && inItsPlace.decisionReason?.type !== "rule"
+    ? {
+        ...inItsPlace,
+        matchedAskRule: rule,
+      }
+    : (inItsPlace ?? askFromRule);
+}
+//@ chunk-5xgkngpb.js:3093386-3093420 placement
 var PERMISSION_CHECK_CRASHED_REASON = "permission_check_crashed";
-//@ chunk-e6aww6q8.js:3017923-3018318 placement
+//@ chunk-5xgkngpb.js:3093420-3093822 placement
 /**
  * 规则检查前的早期拒绝：会话处于"工具暂停待用户"状态时拒绝（结束工具和钩子代理的 StructuredOutput 除外）；否则查整工具 deny 规则，classifierOnly 工具可绕过。
  */
-function getEarlyDenial(tool, input, toolUseContext) {
+function getEarlyDenial(tool, input, toolUseContext, fromHook = false) {
   let toolPermissionContext = getToolPermissionContext(toolUseContext);
   if (
     isPersonTypesHold(toolPermissionContext) &&
@@ -6530,7 +7062,7 @@ function getEarlyDenial(tool, input, toolUseContext) {
     };
   let denyRuleForTool = getDenyRuleForTool(toolPermissionContext, tool);
   return denyRuleForTool === null ||
-    ("classifierOnly" in tool && isClassifierOnlyToolUnblocked(tool, input, toolUseContext))
+    ("classifierOnly" in tool && isClassifierOnlyToolUnblocked(tool, input, toolUseContext, fromHook))
     ? undefined
     : {
         behavior: "deny",
@@ -6541,16 +7073,33 @@ function getEarlyDenial(tool, input, toolUseContext) {
         message: `Permission to use ${tool.name} has been denied.`,
       };
 }
-//@ chunk-e6aww6q8.js:3018318-3020395 placement (2.1.88 match: PermissionDecisionDebugInfo, 0.162)
+//@ chunk-5xgkngpb.js:3093822-3093957 layout
+function findAskRuleForTool_2(toolPermissionContext, tool, input, toolUseContext) {
+  let askRule = findAskRuleForTool(toolPermissionContext, tool);
+  return askRule !== null
+    ? {
+        rule: askRule,
+      }
+    : isDiskless()
+      ? require("../../services/mcp/applyArtifactFileCard.lazy.js").askBackWhereLiftedByName(
+          toolPermissionContext,
+          tool,
+          input,
+          toolUseContext,
+        )
+      : null;
+}
+//@ chunk-5xgkngpb.js:3093957-3096440 placement (2.1.88 match: PermissionDecisionDebugInfo, 0.157)
 /**
  * 只查规则与工具自检的权限检查（给 PreToolUse 钩子 allow/ask 后复核用）：提前裁决、deny 规则、整工具 ask 规则（沙箱自动放行例外）、tool.checkPermissions；hook allow 时施加 plan 写地板；检查崩溃且 crashIsObjection 时返回 ask；只返回 deny/ask，放行时返回 null。
  */
 async function checkRuleBasedPermissions(tool, input, toolUseContext, options) {
   let toolPermissionContext = getToolPermissionContext(toolUseContext);
-  let earlyDenial = getEarlyDenial(tool, input, toolUseContext);
+  let fromHook = getHookCaller(toolUseContext) !== undefined;
+  let earlyDenial = getEarlyDenial(tool, input, toolUseContext, fromHook);
   if (earlyDenial !== undefined) return earlyDenial;
   let denyRule = matchToolRule(toolPermissionContext, tool, input, "deny");
-  if (denyRule && !isClassifierOnlyToolUnblocked(tool, input, toolUseContext))
+  if (denyRule && !isClassifierOnlyToolUnblocked(tool, input, toolUseContext, fromHook))
     return {
       behavior: "deny",
       decisionReason: {
@@ -6559,8 +7108,9 @@ async function checkRuleBasedPermissions(tool, input, toolUseContext, options) {
       },
       message: formatRuleDeniedMessage(tool.name, denyRule),
     };
-  let askRuleForTool = getAskRuleForTool(toolPermissionContext, tool);
-  if (askRuleForTool) {
+  let askMatch = findAskRuleForTool_2(toolPermissionContext, tool, input, toolUseContext);
+  let rule = askMatch?.rule;
+  if (rule) {
     let sandboxCoversAsk =
       tool.name === BASH_TOOL_NAME &&
       toolUseContext.forRemoteExecution !== true &&
@@ -6569,9 +7119,21 @@ async function checkRuleBasedPermissions(tool, input, toolUseContext, options) {
       SandboxManager.isAutoAllowBashIfSandboxedEnabled() &&
       shouldUseSandbox(input) &&
       !(typeof input.command === "string" && antDisabledListMatchesCommandText(input.command));
-    let sandboxAutoAllowOff = sandboxCoversAsk && isSandboxAutoAllowOff(toolPermissionContext);
+    let sandboxAutoAllowOff =
+      sandboxCoversAsk &&
+      isSandboxAutoAllowOff(
+        isStateOn() && toolUseContext.replScriptInner === true
+          ? {
+              ...toolPermissionContext,
+              sandboxAutoAllowSuspended: undefined,
+            }
+          : toolPermissionContext,
+      );
     if (!(sandboxCoversAsk && !sandboxAutoAllowOff))
-      return powershellToolCheckExactMatchPermission(tool, input, toolUseContext, askRuleForTool, options);
+      return askByRule(tool, input, toolUseContext, rule, {
+        ...options,
+        inItsPlace: askMatch.inItsPlace,
+      });
   }
   let decision = {
     behavior: "passthrough",
@@ -6657,21 +7219,31 @@ async function checkRuleBasedPermissions(tool, input, toolUseContext, options) {
       ...defaultToNoFields(decision),
     };
   }
-  let suggestedRules = getToolPermissionContext(toolUseContext);
+  let toolPermissionContext_2 = getToolPermissionContext(toolUseContext);
   if (
     decision?.behavior === "ask" &&
     (findSafetyCheckReason(decision.decisionReason) ||
       decision.decisionReason?.type === "sandboxOverride" ||
       (options?.planModeWriteFloor === true &&
         isPlanModeFloorReason(decision.decisionReason) &&
-        !cycleTeammateMode(tool, toolUseContext, suggestedRules, isAutoAllowedInMode(tool, suggestedRules))))
+        !isBypassAllowableHere(
+          tool,
+          toolUseContext,
+          toolPermissionContext_2,
+          isAutoAllowedInMode(tool, toolPermissionContext_2),
+        )))
   )
     return decision;
   if (
     options?.planModeWriteFloor === true &&
     getRegisteredCheck(toolUseContext.session, tool.name) === undefined &&
     !tool.requiresUserInteraction?.() &&
-    !cycleTeammateMode(tool, toolUseContext, suggestedRules, isAutoAllowedInMode(tool, suggestedRules)) &&
+    !isBypassAllowableHere(
+      tool,
+      toolUseContext,
+      toolPermissionContext_2,
+      isAutoAllowedInMode(tool, toolPermissionContext_2),
+    ) &&
     isPlanModeBlockedWrite(tool, input, toolUseContext)
   )
     return decision?.behavior === "ask"
@@ -6680,9 +7252,34 @@ async function checkRuleBasedPermissions(tool, input, toolUseContext, options) {
           behavior: "ask",
           message: createPermissionRequestMessage(tool.name),
         };
+  if (
+    tool.mcpInfo !== undefined &&
+    liftedAsksInAcceptEdits(toolPermissionContext, tool.checkPermissions).has(
+      getToolNameForPermissionCheck_2(tool),
+    )
+  ) {
+    let all = findAskRuleForTool(getToolPermissionContext(toolUseContext), tool);
+    if (all) {
+      if (decision.behavior === "ask") {
+        let { suggestions, ...resultWithoutSuggestions } = decision;
+        return {
+          ...resultWithoutSuggestions,
+          matchedAskRule: all,
+        };
+      }
+      return {
+        behavior: "ask",
+        decisionReason: {
+          type: "rule",
+          rule: all,
+        },
+        message: createPermissionRequestMessage(tool.name),
+      };
+    }
+  }
   return null;
 }
-//@ chunk-e6aww6q8.js:3020395-3020896 placement
+//@ chunk-5xgkngpb.js:3096440-3096941 placement
 /**
  * 工具宿主（ToolHost）上的规则检查：会话为该工具注册了宿主裁决时调用它；返回 deny，或带 ask 规则意图/安全检查/仅限人工的 ask，否则 null。
  */
@@ -6723,7 +7320,7 @@ async function checkRuleBasedPermissionsOnToolHost(tool, mode, context, assistan
     ? decision
     : null;
 }
-//@ chunk-e6aww6q8.js:3020896-3021043 placement
+//@ chunk-5xgkngpb.js:3096941-3097087 placement
 /**
  * 调用工具宿主的裁决函数，传入服务端分类器是否裁决（serverClassifierDecides）与本地评估回调 evaluateHere。
  */
@@ -6752,11 +7349,11 @@ function invokeToolHostAdjudicator(
     evaluateHere,
   });
 }
-//@ chunk-e6aww6q8.js:3021043-3021095 placement
+//@ chunk-5xgkngpb.js:3097087-3097139 placement
 function checkDeclarativePermission(tool, input, context, options) {
   return checkToolAndRulePermissions(tool, input, context, undefined, getAutoModeClassifierRole, options);
 }
-//@ chunk-e6aww6q8.js:3021095-3021385 placement
+//@ chunk-5xgkngpb.js:3097139-3097429 placement
 /**
  * checkDeclarativePermission 的变体：去掉 mcpServerPolicy 来源的 ask 规则后再检查，检查崩溃视为异议。
  */
@@ -6785,13 +7382,13 @@ function checkDeclarativePermissionLessServerPolicyAsks(tool, effectiveInput, to
     },
   );
 }
-//@ chunk-e6aww6q8.js:3021385-3021416 placement
+//@ chunk-5xgkngpb.js:3097429-3097460 placement
 var VERDICT_RANK = {
   deny: 0,
   ask: 1,
   allow: 2,
 };
-//@ chunk-e6aww6q8.js:3021416-3023557 placement
+//@ chunk-5xgkngpb.js:3097460-3099619 placement
 /**
  * 插件 tool.check 裁决层：先运行插件检查（resolveToolCheck）包住 evaluate；deny 或与本地评估一致且无 refusal/hooksMayAllow 时直接返回；否则按一系列闸门（远程 MCP、Cowork Web、auto 下钩子 allow 不能放行的工具、云浏览器、需人工交互、等待人写入、MCP skill ask、plan 写地板）限制插件只能收紧不能放宽。
  */
@@ -6900,7 +7497,7 @@ async function decideWithToolCheckHooks(request, id) {
   });
   return coreVerdict;
 }
-//@ chunk-e6aww6q8.js:3023557-3027359 placement
+//@ chunk-5xgkngpb.js:3099619-3103627 placement
 /**
  * 规则与工具自检阶段：已中止则抛错；deny 规则命中即拒绝；整工具 ask 规则返回 ask（Bash 在沙箱自动放行且启用 autoAllowBashIfSandboxed 时例外，mcpServerPolicy 在远程 bypass 下可豁免）；随后调用 tool.checkPermissions、安全修正、字段级 ask 规则、requiresUserInteraction、bypassPermissions 放行、allow 规则，最后把 passthrough 转为 ask。
  */
@@ -6914,10 +7511,11 @@ async function checkToolAndRulePermissions(
 ) {
   if (permissionContext.abortController.signal.aborted) throw new AbortError_2();
   let toolPermissionContext = getToolPermissionContext(permissionContext);
-  let earlyDenial = getEarlyDenial(tool, input, permissionContext);
+  let fromHook = getHookCaller(permissionContext) !== undefined;
+  let earlyDenial = getEarlyDenial(tool, input, permissionContext, fromHook);
   if (earlyDenial !== undefined) return earlyDenial;
   let denyRule = matchToolRule(toolPermissionContext, tool, input, "deny");
-  if (denyRule && !isClassifierOnlyToolUnblocked(tool, input, permissionContext))
+  if (denyRule && !isClassifierOnlyToolUnblocked(tool, input, permissionContext, fromHook))
     return {
       behavior: "deny",
       decisionReason: {
@@ -6926,8 +7524,9 @@ async function checkToolAndRulePermissions(
       },
       message: formatRuleDeniedMessage(tool.name, denyRule),
     };
-  let askRuleForTool = getAskRuleForTool(toolPermissionContext, tool);
-  if (askRuleForTool) {
+  let askMatch = findAskRuleForTool_2(toolPermissionContext, tool, input, permissionContext);
+  let rule = askMatch?.rule;
+  if (rule) {
     let sandboxCouldCover =
       tool.name === BASH_TOOL_NAME &&
       permissionContext.forRemoteExecution !== true &&
@@ -6936,21 +7535,27 @@ async function checkToolAndRulePermissions(
       SandboxManager.isAutoAllowBashIfSandboxedEnabled() &&
       shouldUseSandbox(input) &&
       !(typeof input.command === "string" && antDisabledListMatchesCommandText(input.command));
-    let sandboxAllowOff = sandboxCouldCover && isSandboxAutoAllowOff(toolPermissionContext);
+    let sandboxAllowOff =
+      sandboxCouldCover &&
+      isSandboxAutoAllowOff(
+        isStateOn() && permissionContext.replScriptInner === true
+          ? {
+              ...toolPermissionContext,
+              sandboxAutoAllowSuspended: undefined,
+            }
+          : toolPermissionContext,
+      );
     let sandboxCoversAsk = sandboxCouldCover && !sandboxAllowOff;
     let policyBypassExempt =
-      askRuleForTool.source === "mcpServerPolicy" &&
+      rule.source === "mcpServerPolicy" &&
       env.CLAUDE_CODE_REMOTE &&
       isAutoAllowedInMode(tool, toolPermissionContext) === "bypassPermissions" &&
       getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_server_policy_bypass_exempt", true);
     if (!sandboxCoversAsk && !policyBypassExempt)
-      return powershellToolCheckExactMatchPermission(
-        tool,
-        input,
-        permissionContext,
-        askRuleForTool,
-        hookOptions,
-      );
+      return askByRule(tool, input, permissionContext, rule, {
+        ...hookOptions,
+        inItsPlace: askMatch.inItsPlace,
+      });
   }
   let result = {
     behavior: "passthrough",
@@ -7073,7 +7678,7 @@ async function checkToolAndRulePermissions(
   }
   let context = getToolPermissionContext(permissionContext);
   let effectiveMode = isAutoAllowedInMode(tool, context);
-  let isBypassMode = cycleTeammateMode(tool, permissionContext, context, effectiveMode);
+  let isBypassMode = isBypassAllowableHere(tool, permissionContext, context, effectiveMode);
   holdRemovalWaiverOnAskAdjudicator(permissionContext);
   let waiverEligible =
     isBypassMode &&
@@ -7185,12 +7790,16 @@ async function checkToolAndRulePermissions(
     );
   return resolvedResult;
 }
-//@ chunk-e6aww6q8.js:3027359-3027830 placement (2.1.88 match: deletePermissionRule, 1)
+//@ chunk-5xgkngpb.js:3103627-3103706 facade-majority (2.1.88 match: getEnabledSettingSources, 0.807)
+function isReadOnlyPermissionRuleSource(source) {
+  return source === "policySettings" || source === "flagSettings" || source === "command";
+}
+//@ chunk-5xgkngpb.js:3103706-3104114 placement (2.1.88 match: deletePermissionRule, 0.9)
 /**
  * 删除一条规则：policySettings/flagSettings/command 只读；可编辑层同时改文件；cliArg/session 只改内存。
  */
 async function deletePermissionRule({ rule, initialContext, setToolPermissionContext, storageV5 }) {
-  if (rule.source === "policySettings" || rule.source === "flagSettings" || rule.source === "command")
+  if (isReadOnlyPermissionRuleSource(rule.source))
     throw Error("Cannot delete permission rules from read-only settings");
   let updatedContext = applyValidatedPermissionUpdate(initialContext, {
     type: "removeRules",
@@ -7211,7 +7820,7 @@ async function deletePermissionRule({ rule, initialContext, setToolPermissionCon
   }
   setToolPermissionContext(updatedContext);
 }
-//@ chunk-e6aww6q8.js:3027830-3028076 fingerprint (2.1.88 match: convertRulesToUpdates, 1)
+//@ chunk-5xgkngpb.js:3104114-3104360 fingerprint (2.1.88 match: convertRulesToUpdates, 1)
 /**
  * 把规则列表按 来源:行为 分组，转换成 PermissionUpdate 列表（type 由调用方给定，destination 即来源）。
  */
@@ -7234,7 +7843,7 @@ function convertRulesToUpdates(rules, updateType) {
   }
   return updates;
 }
-//@ chunk-e6aww6q8.js:3028076-3028136 placement (2.1.88 match: applyPermissionRulesToPermissionContext, 1)
+//@ chunk-5xgkngpb.js:3104360-3104420 placement (2.1.88 match: applyPermissionRulesToPermissionContext, 1)
 /**
  * 把规则列表作为 addRules 更新应用到上下文。
  */
@@ -7242,7 +7851,7 @@ function applyPermissionRulesToPermissionContext(context, rules, updates) {
   let updates_2 = convertRulesToUpdates(rules, "addRules");
   return applyPermissionUpdates(context, updates_2, updates);
 }
-//@ chunk-e6aww6q8.js:3028136-3028623 placement (2.1.88 match: syncPermissionRulesFromDisk, 0.68)
+//@ chunk-5xgkngpb.js:3104420-3104907 placement (2.1.88 match: syncPermissionRulesFromDisk, 0.681)
 /**
  * 从磁盘重载规则：先清空各 settings 层（托管独占时还清空 cliArg/session 与 mcpMount allow），再按 replaceRules 写入。
  */
@@ -7283,7 +7892,7 @@ function syncPermissionRulesFromDisk(toolPermissionContext, rules) {
   holdRemovalWaiverOnAskAdjudicator(undefined);
   return nextContext;
 }
-//@ chunk-e6aww6q8.js:3028623-3028902 placement
+//@ chunk-5xgkngpb.js:3104907-3105185 placement
 /**
  * 设置 CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS 且存在 PermissionRequest 钩子（SDK、托管层或设置中）时，把 removalWaiverRulesClear 置为 false，即危险删除豁免交给钩子裁决。
  */
@@ -7303,14 +7912,14 @@ function holdRemovalWaiverOnAskAdjudicator(toolUseContext) {
   )
     getSessionFeatureValues().removalWaiverRulesClear = false;
 }
-//@ chunk-e6aww6q8.js:3028902-3028972 fingerprint (2.1.88 match: getUpdatedInputOrFallback, 1)
+//@ chunk-5xgkngpb.js:3105185-3105255 fingerprint (2.1.88 match: getUpdatedInputOrFallback, 1)
 /**
  * 取结果中的 updatedInput，没有则用回退输入。
  */
 function getUpdatedInputOrFallback(permissionResult, fallback) {
   return ("updatedInput" in permissionResult ? permissionResult.updatedInput : undefined) ?? fallback;
 }
-//@ chunk-e6aww6q8.js:3028972-3029171 placement
+//@ chunk-5xgkngpb.js:3105255-3105454 placement
 /**
  * 在决定原因（含 subcommandResults 递归）中找第一个满足谓词的 safetyCheck 原因。
  */
@@ -7324,7 +7933,7 @@ function findSafetyCheckReason(decisionReason, predicate = () => true) {
     }
   return;
 }
-//@ chunk-e6aww6q8.js:3029171-3029403 placement
+//@ chunk-5xgkngpb.js:3105454-3105686 placement
 function involvesSafetyCheck(decisionReason) {
   switch (decisionReason?.type) {
     case undefined:
@@ -7340,7 +7949,7 @@ function involvesSafetyCheck(decisionReason) {
       return true;
   }
 }
-//@ chunk-xr4xc2mq.js:14991-15271 fingerprint (2.1.88 match: checkRuleBasedPermissions, 0.395)
+//@ chunk-70rvh5wm.js:15479-15759 fingerprint (2.1.88 match: checkRuleBasedPermissions, 0.362)
 /**
  * 原因（含子命令递归）是否为非 allow 的规则原因，或读阻挡相关原因；第二参数选择检查哪一类。
  */
@@ -7354,27 +7963,29 @@ function isRuleOrReadBlockReason(decisionReason, kind) {
     : (decisionReason?.type === "safetyCheck" && decisionReason.circuitBreaker === "outsideReadsBlocked") ||
         (decisionReason?.type === "other" && decisionReason.reason === OUTSIDE_READS_BLOCKED_DENY_REASON);
 }
-//@ chunk-pc1rmcr2.js:3877-3941 fingerprint (2.1.88 match: PERMISSION_RULE_SOURCES, 1)
+//@ chunk-01b7fqej.js:3920-3984 fingerprint (2.1.88 match: PERMISSION_RULE_SOURCES, 1)
 /**
  * 规则来源是否为会话级（cliArg、command、session）。
  */
 function isSessionScopedRuleSource(source) {
   return source === "cliArg" || source === "command" || source === "session";
 }
-//@ chunk-0h4e7gnq.js:136066-136964 callgraph-witnessed (2.1.88 match: toolMatchesRule, 0.205)
+//@ chunk-frs14hy1.js:147062-147960 callgraph-witnessed (2.1.88 match: toolMatchesRule, 0.204)
 /**
  * 由 disallowedTools 规则串构建过滤器：工具名集合、裸名集合、MCP 服务器级禁用，isToolDisallowed(tool) 综合判断（Bash 被禁时一并禁用 Monitor 等等价工具）。
  */
 function buildDisallowedToolsFilter(disallowedTools) {
-  let flattened = disallowedTools?.flatMap((entry) => uniq([entry, toInternalToolName(entry)]));
+  let flattened = disallowedTools?.flatMap((entry) =>
+    normalizeCaseForComparison_2([entry, toInternalToolName(entry)]),
+  );
   let disallowedToolSet = new Set();
   let bareDisallowedToolSet = new Set();
   let disallowedServerNames = new Set();
   let allServersDisallowed = false;
   for (let entry of flattened ?? []) {
-    let { toolName, ruleContent } = permissionRuleValueFromString(entry);
+    let { toolName, ruleContent } = parseRuleString(entry);
     let nameForRuleMatch = ruleToolNameFromString(entry);
-    for (let name of new Set(isReplToolName(nameForRuleMatch) ? [toolName, nameForRuleMatch] : [toolName])) {
+    for (let name of new Set(isEvalToolName(nameForRuleMatch) ? [toolName, nameForRuleMatch] : [toolName])) {
       disallowedToolSet.add(name);
       if (!ruleContent) bareDisallowedToolSet.add(name);
     }
@@ -7423,7 +8034,7 @@ function buildDisallowedToolsFilter(disallowedTools) {
     },
   };
 }
-//@ chunk-0wdgqhcf.js:53327-53451 fingerprint (2.1.88 match: getAskRules, 0.546)
+//@ chunk-1dbza2qv.js:55182-55306 fingerprint (2.1.88 match: getAskRules, 0.545)
 /**
  * 按键集合从 alwaysAskRules 中删除 ask 规则。
  */
@@ -7433,36 +8044,16 @@ function removeAskRulesByKey(toolPermissionContext, keys) {
     : {
         ...toolPermissionContext,
         alwaysAskRules: import_mapValues(toolPermissionContext.alwaysAskRules, (rulesBySource, source) =>
-          rulesBySource?.filter(
-            (source_2) => !keys.has(dbRowKey(source, permissionRuleValueFromString(source_2))),
-          ),
+          rulesBySource?.filter((source_2) => !keys.has(dbRowKey(source, parseRuleString(source_2)))),
         ),
       };
 }
-//@ chunk-8wvtd8sr.js:94302-94434 fingerprint (2.1.88 match: getDenyRuleForAgent, 1)
-/**
- * URL 类规则的精确域名：解析带类型前缀的规则内容，取出不含通配的域名；属于 WebFetch/浏览器类工具的规则族，误归入本模块。
- */
-function getRuleExactDomain(askTypeRule) {
-  let typePrefixedValue = parseTypePrefixedValue(askTypeRule.ruleValue.ruleContent ?? "");
-  let domain = typePrefixedValue === undefined ? undefined : typeNameWithoutQuotes(typePrefixedValue);
-  return domain === undefined || domain === "" || domain.includes("*") ? undefined : domain;
-}
-//@ chunk-8wvtd8sr.js:94434-94519 shared-adjacent (2.1.88 match: getDenyRuleForAgent, 1)
-/**
- * 取该工具的 URL 规则中与给定 URL 匹配的那些；属于 WebFetch/浏览器类工具的规则族。
- */
-function filterRulesMatchingUrls(context, agentToolName, agentType, agentType_2) {
-  return getUrlRulesForTool(context, agentToolName, agentType_2).filter((rule) =>
-    matchesWildcardPattern(rule.ruleValue.ruleContent ?? "", agentType),
-  );
-}
-//@ chunk-8wvtd8sr.js:354927-355436 fingerprint (2.1.88 match: hasPermissionsToUseToolInner, 0.45)
+//@ chunk-xzmy9dn4.js:357199-357708 fingerprint (2.1.88 match: hasPermissionsToUseToolInner, 0.438)
 /**
  * 文件编辑权限结论（供编辑类 UI/预检用）：Edit 级 ask 规则或规则原因 → ask；mode 原因在 plan 下为带 plan 地板的 ask；allow 或 bypass/有 allow 规则且非安全检查 → allow；特定情况为 unseen。
  */
 function getFileEditPermissionOutcome(tool, input, context) {
-  let denyRule = getAskRuleForTool(input, FileEditTool);
+  let denyRule = findAskRuleForTool(input, FileEditTool);
   if (denyRule !== null)
     return {
       kind: "ask",
@@ -7507,7 +8098,7 @@ function getFileEditPermissionOutcome(tool, input, context) {
         kind: "ask",
       };
 }
-//@ chunk-dyjqn2aj.js:191-476 placement
+//@ chunk-9m8gfd36.js:191-476 placement
 /**
  * 有命中的 ask 规则时把决策改为 ask（已是 ask 则补 matchedAskRule），保留改写过的输入；deny 不变。
  */
@@ -7531,7 +8122,28 @@ async function applyAskRuleOverride(decision, askRule, getAskMessage) {
           }),
       };
 }
-//@ chunk-xde1fhwg.js:300-463 placement
+//@ chunk-7p76mrq7.js:338-588 placement
+/**
+ * 判定一条权限判定是否由 suppressesAlwaysAllowRule 抑制（开关 tengu_valiant_crayon 关闭时不抑制）。
+ */
+function shouldSuppressAlwaysAllow(tool, input, toolUseContext, suppressAlwaysAllowRule, suggestions) {
+  return (
+    suppressAlwaysAllowRule ||
+    isHookOrPluginSteered(toolUseContext) ||
+    (tool.suppressesAlwaysAllowRule?.(
+      input,
+      !getFeatureValue_CACHED_MAY_BE_STALE("tengu_valiant_crayon", false),
+    ) === true &&
+      !(suggestions ?? []).some(
+        (suggestion) =>
+          (suggestion.type === "addRules" || suggestion.type === "replaceRules") &&
+          suggestion.behavior === "allow" &&
+          suggestion.rules.some((rule) => rule.ruleContent !== undefined),
+      )) ||
+    undefined
+  );
+}
+//@ chunk-7p76mrq7.js:588-751 placement
 /**
  * 决策不能被绕过模式放行：含绕过免疫的安全检查或已签发重入、工具要求用户交互、调用方强制或仅限本人。
  */
@@ -7544,19 +8156,14 @@ function isBypassImmuneDecision(decision, tool, toolUseContext) {
   if (tool.requiresUserInteraction?.()) return true;
   return decision.forcedByCaller === true || decision.personOnly === true;
 }
-//@ chunk-0e8j1zzj.js:44090-44119 fingerprint (2.1.88 match: applyPermissionRulesToPermissionContext, 1)
-var RULE_ADDING_UPDATE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0e8j1zzj.js:44090", () => {
-  RULE_ADDING_UPDATE_TYPES = new Set(["addRules"]);
-});
-//@ chunk-18hwfzwa.js:63873-63939 placement (2.1.88 match: createGetAppStateWithAllowedTools, 1)
+//@ chunk-czq1j3j2.js:64417-64483 placement (2.1.88 match: createGetAppStateWithAllowedTools, 1)
 /**
  * 取权限上下文里的 alwaysAllowRules。
  */
 function getAlwaysAllowRules(appState) {
   return appState.toolPermissionContext.alwaysAllowRules;
 }
-//@ chunk-38x90rmj.js:8730-8822 fingerprint (2.1.88 match: getRuleByContentsForToolName, 1)
+//@ chunk-bhrstd6k.js:8883-8975 fingerprint (2.1.88 match: getRuleByContentsForToolName, 1)
 /**
  * 构造 Chrome 工具的域名 allow 规则对象。
  */
@@ -7571,117 +8178,88 @@ function createChromeDomainAllowRule(ruleContent, source) {
   };
 }
 export {
-  getDenyRuleForTool,
-  createPermissionRequestMessage,
-  RULE_ADDING_UPDATE_TYPES,
-  findSafetyCheckReason,
-  withoutGrantsForRemoteScope,
-  stripWholeToolGrantsForAsk,
-  withoutNewRulesOfMcpSkillLoadForm,
-  findDenyRuleWithContent,
-  parseWildcardAgentTypes,
-  buildDisallowedToolsFilter,
-  sanitizeRuleCategoryOrUndefined,
-  isPersonTypesHold,
-  isConversationEndTool,
-  buildToolsPausedMessage,
-  TOOLS_HELD_UNTIL_A_PERSON_TYPES,
-  withClassifiedWebCalls,
-  takeClassifierBlock,
-  isAgentToolPoolDenied,
-  agentToolPoolDeniedMessage,
-  isConversationEndToolDenied,
-  checkRuleBasedPermissions,
-  hasAutoModeClassifierDenyRules,
-  isChainOnAllowActive,
-  isWebToolClassifierRouted_2,
-  getDispatchableAgents,
-  hasLeftProactivityBaseline,
-  getAskRuleForTool,
-  getAskRules,
-  toolMatchesRule,
-  removeAskRulesByKey,
   syncPermissionRulesFromDisk,
-  getContentRulesForToolName,
-  getDenyRules,
-  NARROWING_RULE_SOURCES,
+  isSessionScopedRuleSource,
+  getDenyRuleIndex,
+  deniedBashRules,
+  buildDenyRuleIndex,
+  isConversationEndTool,
+  isToolDeniedByIndex,
+  getDenyRuleForTool,
+  askedBashRules,
+  isWildcardOnlyContent,
   getPermissionModeCycle,
-  getAlwaysAllowRules,
-  PERMISSION_RULE_SOURCES,
   hasPermissionsToUseTool,
   consultPermissionRequestHooksForUnpromptableAsk,
-  isAskRuleDrivenReason,
-  makeClassifierApprovalsSetter,
-  hasPermissionsToUseToolWithSink,
-  setClassifierApproval,
-  clearClassifierChecking,
-  getAllowRules,
-  permissionRuleSourceDisplayString,
-  createChromeDomainAllowRule,
-  evaluateAskingNoHost,
-  holdRemovalWaiverOnAskAdjudicator,
-  mergePersistedDenyRules,
-  filterDispatchableAgents,
-  collectRulesFromSettings,
-  applyPermissionRulesToPermissionContext,
-  shouldRetagAskAsSandboxOverride,
-  getContentRulesMapForTool,
-  carriesAskRuleIntent,
-  sandboxOverrideAskGuardsOn,
-  scriptAsksToRunUnsandboxed,
-  isRuleOrReadBlockReason,
+  findAskRuleForTool,
+  toolAlwaysAllowedRule,
   answerUpdatesForMcpSkillAsk,
+  withoutGrantsForRemoteScope,
+  stripWholeToolGrantsForAsk,
   matchToolRule,
   permissionGrantScope,
   isBypassImmuneDecision,
   isServerPolicyAskReason,
   isServerPolicyAskUnderPlanFloor,
   checkDeclarativePermissionLessServerPolicyAsks,
+  hasPermissionsToUseToolWithSink,
+  findSafetyCheckReason,
   askCeilingReason,
+  shouldSuppressAlwaysAllow,
   shouldReplaceMemoryInput,
   guardHookUpdatedInput,
+  checkRuleBasedPermissions,
   isInteractionStillOwed,
+  createPermissionRequestMessage,
+  findDenyRuleWithContent,
+  findAskRuleWithContent,
+  evaluateAskingNoHost,
+  toolMatchesRule,
+  removeAskRulesByKey,
+  toToolUseIdSet,
+  getContentRulesForToolName,
+  NARROWING_RULE_SOURCES,
+  hasBashPermission,
+  applyPermissionRulesToPermissionContext,
+  getAllowRules,
+  isAutoModeConsentFlowEnabled,
+  getDispatchableAgents,
+  mergePersistedDenyRules,
+  hasPersonOnlyAskFloor,
+  isChainOnAllowActive,
+  hasLeftProactivityBaseline,
+  resetDenialStreakAfterUserApproval,
+  markOutsideReadPromptSeen,
+  persistBlockReadsOutsideWorkspace,
+  withDenialDeadline,
+  stripAutoDenyFields,
+  makeClassifierApprovalsSetter,
   getContentRulesMapForToolName,
   applyAskRuleOverride,
-  toolAlwaysAllowedRule,
-  filterRulesMatchingUrls,
-  getRuleExactDomain,
-  canPromptUserForPermission,
-  getFileEditPermissionOutcome,
-  classifyEditsEnabled,
-  shouldClassifyEdits,
-  hasPersonOnlyAskFloor,
+  TOOLS_HELD_UNTIL_A_PERSON_TYPES,
+  checkDeclarativePermission,
+  parseWildcardAgentTypes,
+  buildDisallowedToolsFilter,
+  sanitizeRuleCategoryOrUndefined,
+  sanitizeRuleCategory,
+  toolMatchesWholeToolRule,
+  carriesAskRuleIntent,
+  sandboxOverrideAskGuardsOn,
+  getContentRulesMapForTool,
+  scriptAsksToRunUnsandboxed,
+  shouldRetagAskAsSandboxOverride,
+  context,
+  getDenyRuleForAgent,
+  toAllowRuleToolName,
   syncCompactEligibility,
   markCompactRequestSpent,
-  PERMISSION_CHECK_CRASHED_REASON,
+  canPromptUserForPermission,
+  resetClassifierApprovals,
   handedOffIds,
-  getDenyRuleIndex,
-  buildDenyRuleIndex,
-  isToolDeniedByIndex,
-  isWildcardOnlyContent,
-  classifierApprovalFor,
-  deleteClassifierApproval,
-  sanitizeRuleCategory,
+  withoutNewRulesOfMcpSkillLoadForm,
+  withClassifiedWebCalls,
   consumeRepeatedToolCall,
   arePermissionHooksUnsettled,
-  isAutoModeConsentFlowEnabled,
-  parseToolInputForPermission,
-  describePermissionCheckFault,
-  isSettledPermissionResult,
-  formatRuleDeniedMessage,
-  parseFieldRuleContent,
-  isAskOnMutationTool,
-  isCountedClassifierBlock,
-  recordAutoModeSuccess,
-  enforceAutoModeDenialLimits,
-  recordAutoModeDenial,
-  autoModeBlockedHelp,
-  isPlanModeFloorReason,
-  checkDeclarativePermission,
-  serverHeldShellAllowSource,
-  flaggedPartMessage,
-  toolMatchesWholeToolRule,
-  resetClassifierApprovals,
   isLiveMemoryToolName,
   classifierOnlyConfig,
   isClassifierAllow,
@@ -7697,22 +8275,54 @@ export {
   enforceClassifierOnlyDecision,
   mcpAskVetoesStandingGrant,
   isWebSearchClassifierRouted,
+  isAgentToolPoolDenied,
+  agentToolPoolDeniedMessage,
+  isAllowRuleIgnoredInAutoMode,
+  PERMISSION_CHECK_CRASHED_REASON,
+  isFileMutationTool,
+  shouldClassifyEdits,
+  isConversationEndToolDenied,
+  isCoworkAllowedWriteMcpIncluded,
+  hasMcpServerPolicyAllow,
+  getMcpRuleClassifierRoute,
+  classifierApprovalFor,
+  deleteClassifierApproval,
+  isRuleOrReadBlockReason,
+  isPersonTypesHold,
+  flaggedPartMessage,
   isProactivityModeChange,
+  isPlanModeFloorReason,
+  createChromeDomainAllowRule,
+  hasAutoModeClassifierDenyRules,
+  getAlwaysAllowRules,
+  PERMISSION_RULE_SOURCES,
+  denialDialogAutoDenyMs,
+  isAskRuleDrivenReason,
+  setClassifierApproval,
+  clearClassifierChecking,
+  serverHeldShellAllowSource,
+  buildToolsPausedMessage,
+  permissionRuleSourceDisplayString,
+  isReadOnlyPermissionRuleSource,
+  deletePermissionRule,
+  holdRemovalWaiverOnAskAdjudicator,
+  takeClassifierBlock,
+  filterDispatchableAgents,
+  getFileEditPermissionOutcome,
+  classifyEditsEnabled,
+  isWebToolClassifierRouted_2,
   allowsAliasExpansion,
   isBuzzingPelicanRouted,
   isPatternRuleName,
-  getMcpRuleClassifierRoute,
+  ruleMatcherForRules,
   isDeepDuskDeviceTool,
   isWebFetchOrSearch,
-  findAskRuleWithContent,
-  deletePermissionRule,
-  isSessionScopedRuleSource,
-  resetDenialStreakAfterUserApproval,
-  markOutsideReadPromptSeen,
-  persistBlockReadsOutsideWorkspace,
-  withDenialDeadline,
-  stripAutoDenyFields,
-  isAllowRuleIgnoredInAutoMode,
-  isFileMutationTool,
-  toToolUseIdSet,
+  formatRuleDeniedMessage,
+  parseFieldRuleContent,
+  isAskOnMutationTool,
+  isCountedClassifierBlock,
+  recordAutoModeSuccess,
+  enforceAutoModeDenialLimits,
+  recordAutoModeDenial,
+  autoModeBlockedHelp,
 };

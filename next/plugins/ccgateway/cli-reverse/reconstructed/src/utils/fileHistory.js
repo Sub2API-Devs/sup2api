@@ -3,16 +3,15 @@
  *
  * 文件检查点（rewind）：编辑前备份、按消息快照、回退、差异统计、resume 时迁移备份
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/fileHistory.ts
- * pieces: chunk-23fm9f0d.js (1), chunk-e6aww6q8.js (53)
- * attribution: fingerprint 7, facade-exports 12, layout 22, file-local 3, callgraph-fingerprint 2, affinity 1, sole-consumer 6, callgraph-witnessed 1
+ * pieces: chunk-5xgkngpb.js (51)
+ * attribution: facade-exports 12, layout 26, fingerprint 7, file-local 2, callgraph-fingerprint 2, sole-consumer 1, callgraph-witnessed 1
  */
 import { unlink, stat, lstat, copyFile, mkdir, chmod, realpath, open, readlink, link } from "fs/promises";
 import { createHash } from "crypto";
 import { join, dirname, relative, basename, isAbsolute } from "path";
 import { constants } from "fs";
-import { inspect } from "util";
 import { getOwn, defineOwnProperty } from "./objectSafety.js";
 import { recordFileHistoryDelta, recordFileHistorySnapshot } from "./sessionStorage.js";
 import { logError } from "./log.js";
@@ -45,7 +44,7 @@ import { yieldToEventLoop } from "../native-ts/file-index/index.js";
 import { diffLines } from "../../vendor/diff/libesm/diff/line.js";
 import { resetPlanFileCacheToUnknown } from "./plans.js";
 import { isSafeIdSegment_2 } from "./agentId.js";
-import { getClaudeConfigDir } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { STORAGE_SPACES } from "./storage/storageSpaces.js";
 import { readFlagWithOverride } from "../services/analytics/flagOverrides.js";
 import { getPlatform } from "./platform.js";
@@ -53,14 +52,14 @@ import { O_NOFOLLOW_ANY, READ_LIMITS } from "./fsBoundRead.js";
 import { retryFsOp, makeTempSiblingPath, assertPathSafeAsync, retryTransient } from "./atomicPublishWrite.js";
 import { TRANSIENT_FS_ERRORS as TRANSIENT_FS_ERRORS_2 } from "./plugins/safeCopy.js";
 import { sleep } from "./sleep.js";
-import { count, uniq } from "./collections.js";
+import { countWhere } from "./collections.js";
 import { concatSafe, lit as lit_2, fromNumber, joinSafe } from "../services/analytics/safeMetadata.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { pMap } from "../../vendor/p-map/index.js";
 import { lintMemoryWrite } from "../memdir/memoryWriteLint.js";
-import { cleanupOldFilesInDirectory } from "./cleanup.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1372980-1374895 facade-exports (2.1.88 match: fileHistoryMakeSnapshot, 0.556)
+//@ chunk-5xgkngpb.js:1372457-1374369 facade-exports (2.1.88 match: fileHistoryMakeSnapshot, 0.556)
 /**
  * fileHistory 状态归约：track（把首个备份记入最近快照并记 delta）、snapshot（追加快照，超过上限淘汰旧快照并删除不再引用的备份、记录到会话日志、通知 VS Code）、touch（只增序号）。
  */
@@ -86,7 +85,7 @@ function reduceFileHistoryState(fileHistory, action, storageV5) {
             [action.trackingPath]: action.backup,
           },
         };
-        let state = {
+        let updatedHistory = {
           ...fileHistory,
           snapshots: (() => {
             let copy = fileHistory.snapshots.slice();
@@ -96,7 +95,6 @@ function reduceFileHistoryState(fileHistory, action, storageV5) {
           trackedFiles,
           trackSequence,
         };
-        maybeDumpStateForDebug(state);
         recordFileHistoryDelta(
           action.messageId,
           mostRecentSnapshot.messageId,
@@ -111,7 +109,7 @@ function reduceFileHistoryState(fileHistory, action, storageV5) {
           version: action.backup.version,
         });
         logForDebugging(`FileHistory: Tracked file modification for ${action.filePath}`);
-        return state;
+        return updatedHistory;
       } catch (error) {
         logError(error);
         logEvent("tengu_file_history_track_edit_failed", {});
@@ -162,7 +160,6 @@ function reduceFileHistoryState(fileHistory, action, storageV5) {
           snapshots: allSnapshots_2,
           snapshotSequence: (fileHistory.snapshotSequence ?? 0) + 1,
         };
-        maybeDumpStateForDebug(updatedState);
         notifyVscodeSnapshotFilesUpdated(fileHistory, updatedState).catch(logError);
         recordFileHistorySnapshot(action.messageId, snapshot, false, storageV5).catch((error) => {
           logError(Error(`FileHistory: Failed to record snapshot: ${error}`));
@@ -187,7 +184,7 @@ function reduceFileHistoryState(fileHistory, action, storageV5) {
       };
   }
 }
-//@ chunk-e6aww6q8.js:1374895-1375526 layout
+//@ chunk-5xgkngpb.js:1374369-1375001 layout
 /**
  * 删除被淘汰快照中不再被保留快照引用的备份文件（v1 首备份不删）。
  */
@@ -215,7 +212,7 @@ async function deleteEvictedBackups(firstList, secondList, storageV5) {
           logForDebugging(`FileHistory: failed to delete evicted backup ${key}: ${deleteResult.error.code}`, {
             level: "error",
           });
-      } else await unlink(resolveBackupPath_2(key, sessionId));
+      } else await unlink(resolveBackupPath(key, sessionId));
     } catch (error) {
       if (!isENOENT(error))
         logForDebugging(`FileHistory: failed to delete evicted backup ${key}: ${error}`, {
@@ -223,7 +220,7 @@ async function deleteEvictedBackups(firstList, secondList, storageV5) {
         });
     }
 }
-//@ chunk-e6aww6q8.js:1375526-1375684 facade-exports (2.1.88 match: fileHistoryEnabled, 0.415)
+//@ chunk-5xgkngpb.js:1375001-1375159 facade-exports (2.1.88 match: fileHistoryEnabled, 0.415)
 /**
  * 是否启用文件检查点：非云端/非 diskless；非交互会话需 CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING；交互会话看设置 fileCheckpointingEnabled（默认 true）且未设 CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING。
  */
@@ -235,14 +232,14 @@ function fileHistoryEnabled() {
     resolveSetting("fileCheckpointingEnabled", true).value && !env.CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING
   );
 }
-//@ chunk-e6aww6q8.js:1375684-1375793 fingerprint (2.1.88 match: fileHistoryEnabledSdk, 1)
+//@ chunk-5xgkngpb.js:1375159-1375268 fingerprint (2.1.88 match: fileHistoryEnabledSdk, 1)
 /**
  * SDK 模式是否启用文件检查点（ENABLE_SDK_FILE_CHECKPOINTING 且未 DISABLE）。
  */
 function fileHistoryEnabledSdk() {
   return env.CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING && !env.CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING;
 }
-//@ chunk-e6aww6q8.js:1375793-1376525 facade-exports (2.1.88 match: fileHistoryTrackEdit, 0.43)
+//@ chunk-5xgkngpb.js:1375268-1376000 facade-exports (2.1.88 match: fileHistoryTrackEdit, 0.43)
 /**
  * 编辑前跟踪文件：未启用或已跟踪时只 touch；否则为文件创建 v1 备份（新文件 backupFileName 为 null）并派发 track 操作。Edit/Write/NotebookEdit 在写入前调用。
  */
@@ -311,7 +308,7 @@ async function fileHistoryTrackEdit(getFileHistoryState, applyFileHistoryOp, fil
     isAddingFile,
   });
 }
-//@ chunk-e6aww6q8.js:1376525-1377957 facade-exports
+//@ chunk-5xgkngpb.js:1376000-1377439 facade-exports
 /**
  * 为一条消息生成快照：对每个已跟踪文件，未变则复用上个备份，删除则记 null，否则创建新版本备份；最后派发 snapshot 操作（支持 preCheckpoint）。
  */
@@ -411,17 +408,17 @@ async function fileHistoryMakeSnapshot(getState, sessionId, messageId, options) 
     }),
   });
 }
-//@ chunk-e6aww6q8.js:1377957-1377978 facade-exports
+//@ chunk-5xgkngpb.js:1377439-1377460 facade-exports
 /**
  * rewind 时所有有差异的文件都恢复失败抛出的错误类型。
  */
 let RewindNoFilesRestoredError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (./errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1377957", () => {
+deferInit("chunk-5xgkngpb.js:1377439", () => {
   RewindNoFilesRestoredError = class RewindNoFilesRestoredError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {};
 });
-//@ chunk-e6aww6q8.js:1377978-1379208 facade-exports (2.1.88 match: fileHistoryRewind, 0.674)
+//@ chunk-5xgkngpb.js:1377460-1378690 facade-exports (2.1.88 match: fileHistoryRewind, 0.674)
 /**
  * 回退到某消息的快照：applySnapshot 恢复所有已跟踪文件；全部失败时抛 NoFilesRestoredError；返回跳过的链接数。
  */
@@ -479,7 +476,7 @@ async function fileHistoryRewind(updateFileHistoryState, messageId) {
     skippedLinks: counts,
   };
 }
-//@ chunk-e6aww6q8.js:1379208-1379290 facade-exports (2.1.88 match: fileHistoryCanRestore, 1)
+//@ chunk-5xgkngpb.js:1378690-1378772 facade-exports (2.1.88 match: fileHistoryCanRestore, 1)
 /**
  * 是否存在该消息的快照（可回退）。
  */
@@ -487,7 +484,7 @@ function fileHistoryCanRestore(state, messageId) {
   if (!fileHistoryEnabled()) return false;
   return state.snapshots.some((snapshot) => snapshot.messageId === messageId);
 }
-//@ chunk-e6aww6q8.js:1379290-1380120 facade-exports (2.1.88 match: fileHistoryGetDiffStats, 1)
+//@ chunk-5xgkngpb.js:1378772-1379608 facade-exports (2.1.88 match: fileHistoryGetDiffStats, 1)
 /**
  * 计算回退到某快照会改动哪些文件及增删行数（dry run）。
  */
@@ -551,7 +548,7 @@ async function fileHistoryGetDiffStats(state, messageId) {
     deletions,
   };
 }
-//@ chunk-e6aww6q8.js:1380120-1380162 facade-exports
+//@ chunk-5xgkngpb.js:1379608-1379650 facade-exports
 /**
  * fileHistory 常量：差异统计读文件上限 1MB、行 diff maxEditLength 500、消息选择器统计时限 1000ms、mtime 近期窗口 2000ms。
  */
@@ -559,7 +556,7 @@ var TURN_DIFF_MAX_BYTES = 1048576;
 var DIFF_MAX_EDIT_LENGTH = 500;
 var TURN_DIFF_COUNTING_MS = 1000;
 var RECENT_MTIME_WINDOW_MS = 2000;
-//@ chunk-e6aww6q8.js:1380162-1381968 facade-exports (2.1.88 match: fileHistoryHasAnyChanges, 0.345)
+//@ chunk-5xgkngpb.js:1379650-1381472 facade-exports (2.1.88 match: fileHistoryHasAnyChanges, 0.345)
 /**
  * 统计两个快照之间（或快照到当前磁盘）每个文件的增删行，用于消息选择器显示每轮改动。
  */
@@ -680,13 +677,13 @@ async function fileHistoryGetTurnDiffStats(fileHistory, uuid, previousMessageId,
         deletions: 0,
       };
 }
-//@ chunk-e6aww6q8.js:1381968-1382110 layout
+//@ chunk-5xgkngpb.js:1381472-1381614 layout
 async function readBackupForDiff(backupKey, maxBytes) {
   if (backupKey === null)
     return {
       stats: null,
     };
-  let originState = await checkOriginFileChanged(resolveBackupPath_2(backupKey), {
+  let originState = await checkOriginFileChanged(resolveBackupPath(backupKey), {
     noFollow: true,
     maxBytes,
   });
@@ -696,11 +693,11 @@ async function readBackupForDiff(backupKey, maxBytes) {
       }
     : originState;
 }
-//@ chunk-e6aww6q8.js:1382110-1382165 layout
+//@ chunk-5xgkngpb.js:1381614-1381669 layout
 function hasTextOrAbsent(backupForDiff) {
   return backupForDiff.text !== undefined || backupForDiff.stats === null;
 }
-//@ chunk-e6aww6q8.js:1382165-1382637 layout
+//@ chunk-5xgkngpb.js:1381669-1382146 layout
 function countLineChanges(text, text_2) {
   if (text === text_2) return;
   let beforeText = text ?? "";
@@ -739,14 +736,14 @@ function countLineChanges(text, text_2) {
     deletions: beforeLines.length - (afterLines.length - insertions),
   };
 }
-//@ chunk-e6aww6q8.js:1382637-1382706 layout
+//@ chunk-5xgkngpb.js:1382146-1382215 layout
 function splitLinesDroppingTrailing(text) {
   let lines = text.split(`
 `);
   if (lines.at(-1) === "") lines.pop();
   return lines;
 }
-//@ chunk-e6aww6q8.js:1382706-1384588 fingerprint (2.1.88 match: applySnapshot, 0.515)
+//@ chunk-5xgkngpb.js:1382215-1384105 fingerprint (2.1.88 match: applySnapshot, 0.516)
 /**
  * 把所有已跟踪文件恢复到目标快照的版本：备份为 null 则删除文件，否则校验目标安全后从备份恢复；返回改动/失败列表与跳过的链接数。
  */
@@ -869,9 +866,9 @@ async function applySnapshot(state, targetSnapshot) {
     skippedLinks,
   };
 }
-//@ chunk-e6aww6q8.js:1384588-1384870 layout
+//@ chunk-5xgkngpb.js:1384105-1384387 layout
 async function hasFileChangedSinceBackup(originalFile, backupFileName, originalStatsHint) {
-  let backupPath = resolveBackupPath_2(backupFileName);
+  let backupPath = resolveBackupPath(backupFileName);
   let originalStats = originalStatsHint ?? null;
   if (!originalStats)
     try {
@@ -896,7 +893,7 @@ async function hasFileChangedSinceBackup(originalFile, backupFileName, originalS
     return originalContent !== backupContent;
   });
 }
-//@ chunk-e6aww6q8.js:1384870-1385080 file-local
+//@ chunk-5xgkngpb.js:1384387-1384597 file-local
 function compareStatsAndContent(originalStats, backupStats, compareContent) {
   if ((originalStats === null) !== (backupStats === null)) return true;
   if (originalStats === null || backupStats === null) return false;
@@ -905,13 +902,13 @@ function compareStatsAndContent(originalStats, backupStats, compareContent) {
   if (originalStats.mtimeMs < backupStats.mtimeMs) return false;
   return compareContent();
 }
-//@ chunk-e6aww6q8.js:1385080-1385486 fingerprint (2.1.88 match: computeDiffStatsForFile, 0.941)
+//@ chunk-5xgkngpb.js:1384597-1385003 fingerprint (2.1.88 match: computeDiffStatsForFile, 0.936)
 async function computeDiffStatsForFile(originalFile, backupFileName) {
   let filesChanged = [];
   let insertions = 0;
   let deletions = 0;
   try {
-    let backupPath = backupFileName ? resolveBackupPath_2(backupFileName) : undefined;
+    let backupPath = backupFileName ? resolveBackupPath(backupFileName) : undefined;
     let [originalContent, backupContent] = await Promise.all([
       readFileTextNoFollow(originalFile),
       backupPath
@@ -940,57 +937,57 @@ async function computeDiffStatsForFile(originalFile, backupFileName) {
     deletions,
   };
 }
-//@ chunk-e6aww6q8.js:1385486-1385571 callgraph-fingerprint (2.1.88 match: getBackupFileName, 1)
+//@ chunk-5xgkngpb.js:1385003-1385088 callgraph-fingerprint (2.1.88 match: getBackupFileName, 1)
 /**
  * 备份文件名：路径哈希前 16 位 + "@v" + 版本。
  */
 function getBackupFileName(filePath, version) {
   return `${createHash("sha256").update(filePath).digest("hex").slice(0, 16)}@v${version}`;
 }
-//@ chunk-e6aww6q8.js:1385571-1385601 affinity
+//@ chunk-5xgkngpb.js:1385088-1385118 layout
 var BACKUP_FILE_NAME_RE = /^[0-9a-f]{16}@v\d+$/;
-//@ chunk-e6aww6q8.js:1385601-1385675 sole-consumer
+//@ chunk-5xgkngpb.js:1385118-1385192 layout
 function isPositiveSafeInteger(value) {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
 }
-//@ chunk-e6aww6q8.js:1385675-1385715 sole-consumer
+//@ chunk-5xgkngpb.js:1385192-1385232 layout
 function isUsableBackupVersion(version) {
   return isPositiveSafeInteger(version) && isPositiveSafeInteger(version + 1);
 }
-//@ chunk-e6aww6q8.js:1385715-1385846 sole-consumer
+//@ chunk-5xgkngpb.js:1385232-1385363 layout
 function parseBackupVersion(backupFileName) {
   if (typeof backupFileName !== "string") return;
   let match = backupFileName.match(/@v(\d+)$/);
   let version = match ? Number(match[1]) : undefined;
   return version !== undefined && isUsableBackupVersion(version) ? version : undefined;
 }
-//@ chunk-e6aww6q8.js:1385846-1386014 sole-consumer
+//@ chunk-5xgkngpb.js:1385363-1385531 layout
 function assertValidBackupFileNameAndSession(backupFileName, sessionId) {
   if (typeof backupFileName !== "string" || !BACKUP_FILE_NAME_PATTERN_WITH_LEGACY.test(backupFileName))
     throw Error("FileHistory: invalid backup file name");
   if (sessionId && !isSafeIdSegment_2(sessionId)) throw Error("FileHistory: invalid session id");
 }
-//@ chunk-e6aww6q8.js:1386014-1386088 sole-consumer (2.1.88 match: resolveBackupPath, 1)
+//@ chunk-5xgkngpb.js:1385531-1385605 fingerprint (2.1.88 match: resolveBackupPath, 1)
 /**
  * 备份文件的绝对路径（配置目录/file-history/<sessionId>/<name>），先校验名字与会话 id。
  */
-function resolveBackupPath_2(backupFileName, sessionId) {
+function resolveBackupPath(backupFileName, sessionId) {
   assertValidBackupFileNameAndSession(backupFileName, sessionId);
   let configDir = getClaudeConfigDir();
   return join(configDir, "file-history", sessionId || getSessionId(), backupFileName);
 }
-//@ chunk-e6aww6q8.js:1386088-1386147 sole-consumer
+//@ chunk-5xgkngpb.js:1385605-1385664 sole-consumer
 function resolveBackupStorageKey(backupName, sessionId) {
   assertValidBackupFileNameAndSession(backupName, sessionId);
   return STORAGE_SPACES.fileHistory(sessionId || getSessionId(), backupName);
 }
-//@ chunk-e6aww6q8.js:1386405-1386976 fingerprint (2.1.88 match: createBackup, 0.778)
+//@ chunk-5xgkngpb.js:1385922-1386494 fingerprint (2.1.88 match: createBackup, 0.778)
 /**
  * 为文件创建指定版本的备份（file-history/<session>/<hash>@v<n>）；文件不存在时返回 backupFileName null。
  */
 async function createBackup(filePath, version) {
   let backupFileName = getBackupFileName(filePath, version);
-  let backupPath = resolveBackupPath_2(backupFileName);
+  let backupPath = resolveBackupPath(backupFileName);
   let srcStats;
   try {
     srcStats = await stat(filePath);
@@ -1030,7 +1027,7 @@ async function createBackup(filePath, version) {
     realParentDir,
   };
 }
-//@ chunk-e6aww6q8.js:1386976-1388046 layout
+//@ chunk-5xgkngpb.js:1386494-1387564 layout
 async function checkRestoreDestination(filePath, realParentDir) {
   let refuse = (detail) => ({
     verdict: "refused",
@@ -1096,7 +1093,7 @@ async function checkRestoreDestination(filePath, realParentDir) {
     verdict: "safe",
   };
 }
-//@ chunk-e6aww6q8.js:1388046-1388676 layout
+//@ chunk-5xgkngpb.js:1387564-1388195 layout
 async function checkRestoreParentDir(filePath, realParentDir) {
   if (
     realParentDir === undefined ||
@@ -1150,7 +1147,7 @@ async function checkRestoreParentDir(filePath, realParentDir) {
     verdict: "unbound",
   };
 }
-//@ chunk-e6aww6q8.js:1388676-1388901 layout
+//@ chunk-5xgkngpb.js:1388195-1388420 layout
 function parentDirOpenErrorVerdict(error) {
   let errnoCode = getErrnoCode(error);
   if (errnoCode === "ENOENT")
@@ -1164,12 +1161,12 @@ function parentDirOpenErrorVerdict(error) {
     };
   throw error;
 }
-//@ chunk-e6aww6q8.js:1388901-1391864 callgraph-witnessed (2.1.88 match: restoreBackup, 0.14)
+//@ chunk-5xgkngpb.js:1388420-1391385 callgraph-witnessed (2.1.88 match: restoreBackup, 0.14)
 /**
  * 从备份文件恢复单个文件（检查目标不是符号链接/硬链接、父目录未被替换，写临时文件后 rename）。
  */
 async function restoreBackup(filePath, backupFileName, realParentDir) {
-  let backupPath = resolveBackupPath_2(backupFileName);
+  let backupPath = resolveBackupPath(backupFileName);
   let refuse = (detail) => {
     logEvent("tengu_file_history_rewind_restore_file_failed", {
       dryRun: false,
@@ -1327,7 +1324,7 @@ async function restoreBackup(filePath, backupFileName, realParentDir) {
   }
   return "restored";
 }
-//@ chunk-e6aww6q8.js:1391864-1391986 fingerprint (2.1.88 match: getBackupFileNameFirstVersion, 0.799)
+//@ chunk-5xgkngpb.js:1391385-1391507 fingerprint (2.1.88 match: getBackupFileNameFirstVersion, 0.799)
 /**
  * 取某文件在所有快照中的第一个备份。
  */
@@ -1338,7 +1335,7 @@ function getBackupFileNameFirstVersion(trackingPath, state) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:1391986-1392077 file-local
+//@ chunk-5xgkngpb.js:1391507-1391598 file-local
 /**
  * cwd 内的路径存为相对路径（trackingPath），其余保持绝对。
  */
@@ -1348,12 +1345,12 @@ function maybeShortenFilePath(filePath) {
   if (filePath.startsWith(cwd)) return relative(cwd, filePath);
   return filePath;
 }
-//@ chunk-e6aww6q8.js:1392077-1392129 layout
+//@ chunk-5xgkngpb.js:1391598-1391651 layout
 function expandTrackingPath(trackingPath) {
   if (isAbsolute(trackingPath)) return trackingPath;
   return join(getOriginalCwd(), trackingPath);
 }
-//@ chunk-e6aww6q8.js:1392129-1392391 facade-exports (2.1.88 match: fileHistoryRestoreStateFromLog, 1)
+//@ chunk-5xgkngpb.js:1391651-1391913 facade-exports (2.1.88 match: fileHistoryRestoreStateFromLog, 1)
 /**
  * 从会话日志里的 fileHistorySnapshots 重建 fileHistory 状态（resume 用）。
  */
@@ -1379,9 +1376,9 @@ function fileHistoryRestoreStateFromLog(fileHistorySnapshots, onUpdateState) {
     snapshotSequence: snapshots.length,
   });
 }
-//@ chunk-e6aww6q8.js:1392391-1392417 layout
+//@ chunk-5xgkngpb.js:1391913-1391939 layout
 var RENAME_RETRY_DELAYS_MS = [100, 200, 400, 800];
-//@ chunk-e6aww6q8.js:1392417-1392571 layout
+//@ chunk-5xgkngpb.js:1391939-1392093 layout
 async function renameWithRetry(fromPath, toPath, delays = RENAME_RETRY_DELAYS_MS) {
   try {
     await retryFsOp(fromPath, toPath);
@@ -1394,17 +1391,17 @@ async function renameWithRetry(fromPath, toPath, delays = RENAME_RETRY_DELAYS_MS
     return renameWithRetry(fromPath, toPath, restDelays);
   }
 }
-//@ chunk-e6aww6q8.js:1392571-1392582 layout
+//@ chunk-5xgkngpb.js:1392093-1392104 layout
 var BACKUP_MIGRATION_CONCURRENCY = 16;
-//@ chunk-e6aww6q8.js:1392582-1392639 layout
+//@ chunk-5xgkngpb.js:1392104-1392161 layout
 class IncompleteBackupCopyError extends Error {
   name = "IncompleteBackupCopyError";
 }
-//@ chunk-e6aww6q8.js:1392639-1394533 layout
+//@ chunk-5xgkngpb.js:1392161-1394061 layout
 async function migrateBackupForResume(backupName, previousSessionId, newBackupDir, newSessionId) {
   let sourcePath;
   try {
-    sourcePath = resolveBackupPath_2(backupName, previousSessionId);
+    sourcePath = resolveBackupPath(backupName, previousSessionId);
   } catch (error) {
     return {
       outcome: "failed",
@@ -1518,7 +1515,7 @@ async function migrateBackupForResume(backupName, previousSessionId, newBackupDi
     outcome: "migrated",
   };
 }
-//@ chunk-e6aww6q8.js:1394533-1395790 layout
+//@ chunk-5xgkngpb.js:1394061-1395318 layout
 function summarizeBackupMigrationFailures(failures, totalBackups) {
   let flattened = failures.flatMap((failure) =>
     failure.stage === "copy" || failure.stage === "rename" ? [failure] : [],
@@ -1533,7 +1530,7 @@ function summarizeBackupMigrationFailures(failures, totalBackups) {
         !isEnvFsErrno(error) &&
         !TRANSIENT_FS_ERRORS_2.has(getErrnoCode(error) ?? "")),
   );
-  let refusedCount = count(failures, ({ stage }) => stage === "refused");
+  let refusedCount = countWhere(failures, ({ stage }) => stage === "refused");
   let parts = [
     ...(refusedCount > 0 ? [concatSafe(lit_2("refused as unsafe: "), fromNumber(refusedCount))] : []),
     ...formatGroupedCounts(
@@ -1584,13 +1581,13 @@ function summarizeBackupMigrationFailures(failures, totalBackups) {
     renameErrno: mostCommon(filtered_2.map(({ error }) => sanitizedErrnoLowerForTelemetry(error))),
   };
 }
-//@ chunk-e6aww6q8.js:1395790-1395891 layout
+//@ chunk-5xgkngpb.js:1395318-1395419 layout
 function classifyErrnoForTelemetry(error) {
   return getErrnoCode(error)?.startsWith("Unknown system error")
     ? lit_2("UNKNOWN")
     : (sanitizedErrCodeForTelemetry(error) ?? lit_2("unclassified"));
 }
-//@ chunk-e6aww6q8.js:1395891-1395995 layout
+//@ chunk-5xgkngpb.js:1395419-1395523 layout
 function formatGroupedCounts(values, items) {
   return items.length === 0
     ? []
@@ -1606,17 +1603,17 @@ function formatGroupedCounts(values, items) {
         ),
       ];
 }
-//@ chunk-e6aww6q8.js:1395995-1396033 layout
+//@ chunk-5xgkngpb.js:1395523-1395561 layout
 function mostCommon(items) {
   return countOccurrencesSorted(items)[0]?.[0];
 }
-//@ chunk-e6aww6q8.js:1396033-1396146 layout
+//@ chunk-5xgkngpb.js:1395561-1395674 layout
 function countOccurrencesSorted(items) {
   return [...Map.groupBy(items, (item) => item)]
     .map(([value, group]) => [value, group.length])
     .sort(([valueA, countA], [valueB, countB]) => countB - countA || (valueA < valueB ? -1 : 1));
 }
-//@ chunk-e6aww6q8.js:1396146-1398175 facade-exports (2.1.88 match: copyFileHistoryForResume, 0.453)
+//@ chunk-5xgkngpb.js:1395674-1397706 facade-exports (2.1.88 match: copyFileHistoryForResume, 0.454)
 /**
  * resume 时把旧会话的备份迁移到新会话目录（硬链接，失败则复制再 rename，并发 16），汇总失败原因记日志。
  */
@@ -1664,7 +1661,9 @@ async function copyFileHistoryForResume(log, newSessionId, storageV5) {
           .map((trackedFileBackup) => trackedFileBackup.backupFileName)
           .filter((entry) => entry !== null),
       }));
-    let backupFileNames = uniq(mapped.flatMap(({ backupFileNames }) => backupFileNames));
+    let backupFileNames = normalizeCaseForComparison_2(
+      mapped.flatMap(({ backupFileNames }) => backupFileNames),
+    );
     let byName = new Map(
       await pMap(
         backupFileNames,
@@ -1737,7 +1736,7 @@ async function copyFileHistoryForResume(log, newSessionId, storageV5) {
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:1398175-1398816 fingerprint (2.1.88 match: notifyVscodeSnapshotFilesUpdated, 0.586)
+//@ chunk-5xgkngpb.js:1397706-1398348 fingerprint (2.1.88 match: notifyVscodeSnapshotFilesUpdated, 0.586)
 /**
  * 快照文件集合变化时通知 VS Code 扩展。
  */
@@ -1757,14 +1756,14 @@ async function notifyVscodeSnapshotFilesUpdated(oldState, newState) {
         continue;
       let oldContent = null;
       if (oldBackup?.backupFileName) {
-        let backupPath = resolveBackupPath_2(oldBackup.backupFileName);
+        let backupPath = resolveBackupPath(oldBackup.backupFileName);
         oldContent = await readFileTextNoFollow(backupPath, {
           noFollow: true,
         });
       }
       let newContent = null;
       if (newBackup?.backupFileName) {
-        let backupPath = resolveBackupPath_2(newBackup.backupFileName);
+        let backupPath = resolveBackupPath(newBackup.backupFileName);
         newContent = await readFileTextNoFollow(backupPath, {
           noFollow: true,
         });
@@ -1778,11 +1777,11 @@ async function notifyVscodeSnapshotFilesUpdated(oldState, newState) {
       else logError(error);
     }
 }
-//@ chunk-e6aww6q8.js:1398816-1398873 layout
+//@ chunk-5xgkngpb.js:1398348-1398405 layout
 async function readFileTextNoFollow(filePath, options) {
   return (await checkOriginFileChanged(filePath, options)).text ?? null;
 }
-//@ chunk-e6aww6q8.js:1398873-1399423 callgraph-fingerprint (2.1.88 match: checkOriginFileChanged, 0.222)
+//@ chunk-5xgkngpb.js:1398405-1398955 callgraph-fingerprint (2.1.88 match: checkOriginFileChanged, 0.223)
 /**
  * 以 O_NONBLOCK（可选 O_NOFOLLOW）打开并读取文件文本与 stats，可限制最大字节；用于比较备份与当前文件。
  */
@@ -1828,31 +1827,17 @@ async function checkOriginFileChanged(filePath, options) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:1399423-1399434 layout
-var DEBUG_STATE_DUMP = false;
-//@ chunk-e6aww6q8.js:1399434-1399484 file-local
-function maybeDumpStateForDebug(state) {
-  if (DEBUG_STATE_DUMP) console.error(inspect(state, false, 5));
-}
-//@ chunk-23fm9f0d.js:22892-22931 fingerprint (2.1.88 match: resolveBackupPath, 1)
-/**
- * 取会话的 file-history 目录（误配名 resolveBackupPath）。
- */
-function resolveBackupPath() {
-  return cleanupOldFilesInDirectory("file-history");
-}
 export {
-  fileHistoryRestoreStateFromLog,
-  copyFileHistoryForResume,
-  TURN_DIFF_COUNTING_MS,
   fileHistoryEnabled,
-  fileHistoryGetDiffStats,
-  RewindNoFilesRestoredError,
   fileHistoryCanRestore,
-  fileHistoryGetTurnDiffStats,
+  fileHistoryGetDiffStats,
   fileHistoryRewind,
   reduceFileHistoryState,
   fileHistoryMakeSnapshot,
-  resolveBackupPath,
+  copyFileHistoryForResume,
+  fileHistoryRestoreStateFromLog,
   fileHistoryTrackEdit,
+  TURN_DIFF_COUNTING_MS,
+  RewindNoFilesRestoredError,
+  fileHistoryGetTurnDiffStats,
 };

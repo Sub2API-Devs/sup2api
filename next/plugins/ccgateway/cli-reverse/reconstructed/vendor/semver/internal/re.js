@@ -1,15 +1,15 @@
 /**
  * semver/internal/re.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: semver@7.7.3..7.7.4
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_constants } from "./constants.js";
 import { require_debug } from "./debug.js";
 
-//@ chunk-bwbq4xvm.js:1947-5373 cjs-fingerprint
+//@ chunk-7kayq7nc.js:2021-5447 cjs-fingerprint
 var require_re = __commonJS(function (cjsExports, cjsModule) {
   var { MAX_SAFE_COMPONENT_LENGTH, MAX_SAFE_BUILD_LENGTH, MAX_LENGTH } = require_constants();
   var debug = require_debug();

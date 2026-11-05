@@ -1,15 +1,15 @@
 /**
  * lodash-es/_baseKeysIn.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: lodash-es@4.17.22..4.18.1
- * pieces: chunk-3a1caa6f.js (1)
+ * pieces: chunk-j7eg9eb6.js (1)
  * attribution: placement 1
  */
 import { isObjectAlias } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { keysInOf, hasOwnProperty_2 } from "../../src/utils/git/gitSafeEnv.js";
 import { isPrototype_default } from "./_isPrototype.js";
 
-//@ chunk-3a1caa6f.js:892-1022 placement
+//@ chunk-j7eg9eb6.js:704-834 placement
 function baseKeysIn(object) {
   if (!isObjectAlias(object)) return keysInOf(object);
   var isProto = isPrototype_default(object);

@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/client-bedrock-runtime/dist-cjs/runtimeConfig.shared.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/client-bedrock-runtime@3.936.0..3.938.0
- * pieces: chunk-3cddmtk7.js (1)
+ * pieces: chunk-ayc8mk37.js (1)
  * attribution: esm-fingerprint 1
  */
 import {
@@ -17,7 +17,7 @@ import {
 import { defaultEndpointResolver } from "./endpoint/endpointResolver.js";
 import { defaultBedrockRuntimeHttpAuthSchemeProvider } from "./auth/httpAuthSchemeProvider.js";
 
-//@ chunk-3cddmtk7.js:23411-24302 esm-fingerprint
+//@ chunk-ayc8mk37.js:23411-24302 esm-fingerprint
 var getRuntimeConfig = (config) => ({
   apiVersion: "2023-09-30",
   base64Decoder: config?.base64Decoder ?? base64Module.fromBase64,

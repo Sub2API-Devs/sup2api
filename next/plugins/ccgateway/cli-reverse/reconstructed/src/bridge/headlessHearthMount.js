@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。无头会话为项目线程回复挂载 MCP 服务，随绑定变化收敛。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-n501v0b7.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4zbhy05s.js (5)
  * attribution: placement 5
  */
 import { setSliceField } from "../state/sliceHelpers.js";
@@ -16,7 +16,7 @@ import { HEARTHBOT, hearthMcpServerConfig } from "../services/mcp/ccrMetaMcp.js"
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { registerCliOwnedConfig } from "../services/mcp/cliOwnedClients.js";
 import { setMcpClientInAppState } from "../services/mcp/mcpClientState.js";
-import { formatPermissionRule } from "../utils/permissions/disallowedToolsFlag.js";
+import { permissionRuleValueFromString } from "../utils/permissions/permissionRuleParser.js";
 import { buildMcpToolName, getMcpPrefix, isToolFromMcpServer } from "../services/mcp/mcpStringUtils.js";
 import { identityEpoch } from "../services/mcp/identityChange.js";
 import { applyMcpReconnect } from "../services/mcp/mcpReconnect.js";
@@ -28,13 +28,13 @@ import {
   replaceMcpMountRules,
 } from "../utils/permissions/mcpMountRules.js";
 
-//@ chunk-n501v0b7.js:755-824 placement
+//@ chunk-4zbhy05s.js:756-825 placement
 function mcpClientModule() {
   return require("../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
-//@ chunk-n501v0b7.js:824-858 placement
+//@ chunk-4zbhy05s.js:825-859 placement
 var MOUNT_RETRY_BACKOFF_MS = [500, 1500, 4000, 15000, 60000];
-//@ chunk-n501v0b7.js:858-5889 placement
+//@ chunk-4zbhy05s.js:859-5891 placement
 /**
  * 无头会话为项目线程回复挂载 MCP 服务，随绑定变化收敛。
  */
@@ -185,7 +185,7 @@ function createHeadlessHearthMount(host) {
     if (!allowsSuspended)
       entry.allowRules = grantAllows(
         binding.autoAllowTools.map((autoAllowTool) =>
-          formatPermissionRule({
+          permissionRuleValueFromString({
             toolName: buildMcpToolName(HEARTHBOT, autoAllowTool),
           }),
         ),
@@ -316,7 +316,7 @@ function createHeadlessHearthMount(host) {
   function reconcileAllows(entry, binding) {
     if (allowsSuspended) return;
     let mapped = binding.autoAllowTools.map((autoAllowTool) =>
-      formatPermissionRule({
+      permissionRuleValueFromString({
         toolName: buildMcpToolName(HEARTHBOT, autoAllowTool),
       }),
     );
@@ -388,11 +388,11 @@ function createHeadlessHearthMount(host) {
         : null,
   };
 }
-//@ chunk-n501v0b7.js:5889-5953 placement
+//@ chunk-4zbhy05s.js:5891-5955 placement
 function isRetryableMountFailure(client) {
   return client.type === "failed" && !NON_RETRYABLE_MOUNT_CODES.has(client.errorCode ?? "");
 }
-//@ chunk-n501v0b7.js:5953-6081 placement
+//@ chunk-4zbhy05s.js:5955-6083 placement
 /**
  * 挂载失败中不应重试的错误码集合（凭证被拒、策略阻止、需审批、禁用、身份变化、正在关闭）。
  */

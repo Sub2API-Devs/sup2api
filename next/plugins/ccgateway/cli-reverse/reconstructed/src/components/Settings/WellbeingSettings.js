@@ -3,20 +3,20 @@
  *
  * 2.1.316 新增：健康使用（wellbeing）设置界面与 /wellbeing 命令
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-a7sxm3q7.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jqzj18s4.js (8)
  * attribution: placement 8
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 
-//@ chunk-a7sxm3q7.js:5714-5718 placement
+//@ chunk-jqzj18s4.js:6078-6082 placement
 init_react_production();
-//@ chunk-a7sxm3q7.js:5718-5749 placement
+//@ chunk-jqzj18s4.js:6082-6113 placement
 function diffDesc(a, b) {
   return a - b;
 }
-//@ chunk-a7sxm3q7.js:5749-5921 placement
+//@ chunk-jqzj18s4.js:6113-6285 placement
 function toIntervalOption(minutes) {
   return {
     value: String(minutes),
@@ -27,11 +27,11 @@ function toIntervalOption(minutes) {
         : `Every ${spanOf(minutes)}`,
   };
 }
-//@ chunk-a7sxm3q7.js:5921-5952 placement
+//@ chunk-jqzj18s4.js:6285-6316 placement
 function diffAsc(a, b) {
   return a - b;
 }
-//@ chunk-a7sxm3q7.js:5952-6107 placement
+//@ chunk-jqzj18s4.js:6316-6471 placement
 function toThresholdOption(minutes) {
   return {
     value: String(minutes),
@@ -42,7 +42,7 @@ function toThresholdOption(minutes) {
         : `${minutes} minutes`,
   };
 }
-//@ chunk-a7sxm3q7.js:6107-6865 placement
+//@ chunk-jqzj18s4.js:6471-7229 placement
 function WellbeingSettings() {
   let breakReminder = i("breakReminder", {
     enabled: false,
@@ -93,12 +93,12 @@ function WellbeingSettings() {
     ],
   };
 }
-//@ chunk-a7sxm3q7.js:6865-6875 placement
+//@ chunk-jqzj18s4.js:7229-7239 placement
 /**
  * 导出值：WELLBEING_ROW_HEIGHT（200）。
  */
 var WELLBEING_ROW_HEIGHT = 200;
-//@ chunk-a7sxm3q7.js:6875-6954 placement
+//@ chunk-jqzj18s4.js:7239-7318 placement
 /**
  * /wellbeing 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

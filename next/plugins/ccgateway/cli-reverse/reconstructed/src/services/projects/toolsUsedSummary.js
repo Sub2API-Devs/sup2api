@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：已用工具摘要
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dz3q485w.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jndyh8cy.js (28), chunk-qfmb95nn.js (1)
  * attribution: placement 29
  */
 import { randomBytes } from "crypto";
@@ -17,16 +17,15 @@ import {
 } from "./disclosure.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { toContentBlocks } from "../../commands/insights.js";
-import { mcpInfoFromString } from "../mcp/mcpStringUtils.js";
+import { mcpInfoFromString, getPrefixServerKey } from "../mcp/mcpStringUtils.js";
 import { isClaudeAiProxyServer } from "../../components/mcp/MCPListPanel.js";
 import { factLabel } from "./contextFile.js";
 import { stripPrefix, plural, truncateToLength } from "../../utils/stringUtils.js";
-import { getPrefixServerKey } from "../../components/agents/ToolSelector.js";
 import { isClaudeAiServerName } from "../mcp/normalization.js";
 import { isNetworkPath } from "../../utils/fsSafety/networkPathCheck.js";
 import { WORD_BOUNDARY_PATTERN } from "../../utils/attachments/atMentions.js";
 
-//@ chunk-dz3q485w.js:19887-20046 placement
+//@ chunk-qfmb95nn.js:606-762 placement
 function isMarkerShapedLine(line) {
   let replaced = line.normalize("NFKC").replace(/[\p{Cf}\p{Mn}]+/gu, "");
   return (
@@ -36,7 +35,7 @@ function isMarkerShapedLine(line) {
     FENCE_MARKER_WORDS_REGEX.test(replaced.replace(/[^\p{L}\p{N}]+/gu, " "))
   );
 }
-//@ chunk-dz3q485w.js:20046-20140 placement
+//@ chunk-jndyh8cy.js:19793-19887 placement
 /**
  * 简报里「本次会话用过的工具」小节标题，以及配套的条数/长度上限与会话级缓存。
  */
@@ -48,7 +47,7 @@ var toolsUsedSessionSlot = new SessionRootSlot(() => ({
   current: null,
   read: null,
 }));
-//@ chunk-dz3q485w.js:20140-20190 placement
+//@ chunk-jndyh8cy.js:19887-19937 placement
 /**
  * MCP 调用计数的空累加器（按服务器计数 + 已计 tool_use id 集合）。
  */
@@ -58,7 +57,7 @@ function emptyCallCounts() {
     seen: new Set(),
   };
 }
-//@ chunk-dz3q485w.js:20190-20619 placement
+//@ chunk-jndyh8cy.js:19937-20366 placement
 /**
  * 统计消息中按 MCP 服务器分组的工具调用次数（按 tool_use id 去重）。
  */
@@ -85,28 +84,28 @@ function countMcpCallsByServer(messages, acc = emptyCallCounts()) {
   }
   return counts;
 }
-//@ chunk-dz3q485w.js:20619-20654 placement
+//@ chunk-jndyh8cy.js:20366-20402 placement
 function isClaudeAiConnectorClient(client) {
   return isClaudeAiProxyServer(client.config);
 }
-//@ chunk-dz3q485w.js:20654-20716 placement
+//@ chunk-jndyh8cy.js:20402-20464 placement
 function isConnectedOrCachedClient(client) {
   return client.type === "connected" || client.type === "cached";
 }
-//@ chunk-dz3q485w.js:20716-20766 placement (2.1.88 match: findCurrentIDE, 0.867)
+//@ chunk-jndyh8cy.js:20464-20514 placement (2.1.88 match: findCurrentIDE, 0.867)
 function findCurrentIDE(type) {
   return type === "sse-ide" || type === "ws-ide";
 }
-//@ chunk-dz3q485w.js:20766-20814 placement
+//@ chunk-jndyh8cy.js:20514-20563 placement
 function connectorLabel(name) {
   return factLabel(stripPrefix(name, "claude.ai "), MAX_SERVER_NAME_CHARS);
 }
-//@ chunk-dz3q485w.js:20814-20841 placement
+//@ chunk-jndyh8cy.js:20563-20590 placement
 /**
  * 标记「这个服务器名对应多个客户端」，汇总时视为无法匹配。
  */
 var AMBIGUOUS_CLIENT = Symbol("ambiguous");
-//@ chunk-dz3q485w.js:20841-21942 placement
+//@ chunk-jndyh8cy.js:20590-21694 placement
 /**
  * 汇总 MCP 工具使用情况：把各服务器调用次数与当前 MCP 客户端匹配，区分 claude.ai 连接器、本机服务器与未匹配服务器（IDE 除外），按调用次数排序，并列出已连接但未使用的 claude.ai 连接器。
  */
@@ -181,7 +180,7 @@ function summarizeToolsUsed(input) {
     includesCurrentConversation: input.includesCurrentConversation,
   };
 }
-//@ chunk-dz3q485w.js:21942-22085 placement
+//@ chunk-jndyh8cy.js:21694-21837 placement
 /**
  * 只保留已匹配到配置的服务器，去掉未知服务器与其他连接器信息。
  */
@@ -196,7 +195,7 @@ function knownServersOnly(summary) {
         moreConnectors: 0,
       };
 }
-//@ chunk-dz3q485w.js:22085-22466 placement
+//@ chunk-jndyh8cy.js:21837-22218 placement
 /**
  * 描述一个 MCP 服务器的位置：claude.ai 连接器（是否连接）、本机服务器或未匹配。
  */
@@ -214,11 +213,11 @@ function serverWhereText(config, machineLabel) {
       return "not matched to one server configured in this session";
   }
 }
-//@ chunk-dz3q485w.js:22466-22541 placement (2.1.88 match: isLocalMcpServer, 0.883)
+//@ chunk-jndyh8cy.js:22218-22293 placement (2.1.88 match: isLocalMcpServer, 0.882)
 function isLocalMcpServer(config) {
   return (config.transport ?? "stdio") === "stdio" || config.transport === "sdk";
 }
-//@ chunk-dz3q485w.js:22541-22629 placement
+//@ chunk-jndyh8cy.js:22293-22381 placement
 /**
  * 取前 MAX_SERVERS_SHOWN 个服务器并给出剩余数，用于列表与短语两种输出。
  */
@@ -228,7 +227,7 @@ function limitServersShown(summary) {
     more: Math.max(0, summary.servers.length - MAX_SERVERS_SHOWN),
   };
 }
-//@ chunk-dz3q485w.js:22629-22802 placement
+//@ chunk-jndyh8cy.js:22381-22554 placement
 function toolsUsedLines(summary, machineLabel) {
   let { shown, more } = limitServersShown(summary);
   let mapped = shown.map(
@@ -238,7 +237,7 @@ function toolsUsedLines(summary, machineLabel) {
   if (more > 0) mapped.push(`- +${more} more ${plural(more, "server")}`);
   return mapped;
 }
-//@ chunk-dz3q485w.js:22802-23162 placement
+//@ chunk-jndyh8cy.js:22554-22914 placement
 /**
  * 生成工具使用情况的简短短语：claude.ai 连接器与本机服务器名称及数量。
  */
@@ -257,17 +256,17 @@ function toolsUsedPhrase(summary, machineLabel) {
   if (filtered.length === 0) return null;
   return [...filtered, ...(more > 0 ? [`+${more} more`] : [])].join("; ");
 }
-//@ chunk-dz3q485w.js:23162-23361 placement
+//@ chunk-jndyh8cy.js:22914-23113 placement
 function unusedConnectorsLine(tools) {
   return tools.otherConnectors.length > 0
     ? `Connected on claude.ai but not used in these sessions: ${tools.otherConnectors.join(", ")}${tools.moreConnectors > 0 ? ` (+${tools.moreConnectors} more)` : ""}.`
     : null;
 }
-//@ chunk-dz3q485w.js:23361-23450 placement
+//@ chunk-jndyh8cy.js:23113-23202 placement
 function joinWithAnd(parts) {
   return parts.length <= 1 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
 }
-//@ chunk-dz3q485w.js:23450-24185 placement
+//@ chunk-jndyh8cy.js:23202-23937 placement
 /**
  * 生成发送对话框里的 MCP 使用说明：用到的 claude.ai 连接器与本机服务器（说明本机服务器不会带到项目）。
  */
@@ -299,7 +298,7 @@ function toolsUsedDialogLine(summary, machine) {
   let moreText = more > 0 ? `${more} more not listed` : "";
   return `${[connectors, localText, moreText].filter((part) => part !== "").join("; ")}.`;
 }
-//@ chunk-dz3q485w.js:24185-24276 placement
+//@ chunk-jndyh8cy.js:23937-24028 placement
 var MAX_SESSIONS_SCANNED = 3;
 var SESSION_HEAD_CHARS = 3000;
 var SESSION_TAIL_CHARS = 9000;
@@ -312,7 +311,7 @@ var MAX_DOC_EXCERPTS = 4;
 var MAX_DIR_ENTRIES = 30;
 var MAX_BRIEF_CHARS = 46000;
 var MAX_DOC_FILE_BYTES = 1048576;
-//@ chunk-dz3q485w.js:24716-24809 placement
+//@ chunk-jndyh8cy.js:24468-24561 placement
 /**
  * 统一换行符，并把每一行按网络路径规范化（去掉行尾空白）。
  */
@@ -330,14 +329,14 @@ function normalizeNewlinesAndPaths(text) {
     .map((line) => isNetworkPath(line).trimEnd()).join(`
 `);
 }
-//@ chunk-dz3q485w.js:24809-24934 placement
+//@ chunk-jndyh8cy.js:24561-24686 placement
 function makeQuoteFence(label, nonce = randomBytes(4).toString("hex")) {
   return {
     begin: `-----BEGIN ${label} ${nonce} (quoted data)-----`,
     end: `-----END ${label} ${nonce}-----`,
   };
 }
-//@ chunk-dz3q485w.js:24934-25044 placement
+//@ chunk-jndyh8cy.js:24686-24797 placement
 function fenceQuotedText(quoteFence, text) {
   let joined = text
     .trim()
@@ -351,17 +350,17 @@ function fenceQuotedText(quoteFence, text) {
 ${joined}
 ${quoteFence.end}`;
 }
-//@ chunk-dz3q485w.js:25044-25100 placement
+//@ chunk-jndyh8cy.js:24797-24853 placement
 var LOCAL_HISTORY_FENCE_LABEL = "LOCAL HISTORY";
 var regExp = new RegExp(`(^|${WORD_BOUNDARY_PATTERN})@`, "gu");
-//@ chunk-dz3q485w.js:25100-25148 placement
+//@ chunk-jndyh8cy.js:24853-24901 placement
 /**
  * 把 @ 提及标记替换成全角＠（复制进引用块前的中和）。
  */
 function neutralizeAtMentions(text) {
   return text.replace(regExp, "$1\uFF20");
 }
-//@ chunk-dz3q485w.js:25148-25229 placement
+//@ chunk-jndyh8cy.js:24901-24982 placement
 /**
  * 把本地历史文本 @ 中和后包成带随机码的引用块。
  */
@@ -372,15 +371,15 @@ function quoteLocalHistory(text) {
     text: fenceQuotedText(quoteFence, text.replace(regExp, "$1\uFF20")),
   };
 }
-//@ chunk-dz3q485w.js:25229-25336 placement
+//@ chunk-jndyh8cy.js:24982-25089 placement
 function defangMarkerLine(line) {
   return Array.from(line, (char) =>
     /[A-Za-z]/.test(char) ? char.toLowerCase() : /[0-9]/.test(char) ? char : "~",
   ).join("");
 }
-//@ chunk-dz3q485w.js:25336-25346 placement
+//@ chunk-jndyh8cy.js:25089-25099 placement
 var MAX_SUMMARY_LINE_CHARS = 46;
-//@ chunk-dz3q485w.js:25346-25436 placement
+//@ chunk-jndyh8cy.js:25099-25188 placement
 /**
  * 生成一行摘要：压空白、按网络路径处理、截断到上限。
  */
@@ -393,10 +392,10 @@ function oneLineSummary(projectName) {
 export {
   oneLineSummary,
   toolsUsedSessionSlot,
-  toolsUsedDialogLine,
   knownServersOnly,
   quoteLocalHistory,
   neutralizeAtMentions,
+  toolsUsedDialogLine,
   GIT_LOG_COMMIT_COUNT,
   DOC_NAME_CHARS,
   MAX_DOC_EXCERPTS,
@@ -416,8 +415,8 @@ export {
   MAX_SESSIONS_SCANNED,
   USER_TEXT_CHARS_PER_TURN,
   ASSISTANT_TEXT_CHARS_PER_TURN,
-  isMarkerShapedLine,
   makeQuoteFence,
   fenceQuotedText,
   toolsUsedPhrase,
+  isMarkerShapedLine,
 };

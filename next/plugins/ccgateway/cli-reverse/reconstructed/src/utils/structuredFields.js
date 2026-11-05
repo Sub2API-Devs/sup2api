@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：结构化字段
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hwmsct5x.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vn3g7zt8.js (18)
  * attribution: placement 18
  */
 import { HostScoped } from "./hostScoped.js";
 
-//@ chunk-hwmsct5x.js:252468-252665 placement
+//@ chunk-vn3g7zt8.js:257562-257759 placement
 class ExternalBuildMembership {
   deps;
   loggedDowngrade = false;
@@ -32,18 +32,18 @@ class ExternalBuildMembership {
     };
   }
 }
-//@ chunk-hwmsct5x.js:252665-252677 placement
+//@ chunk-vn3g7zt8.js:257759-257771 placement
 var externalBuildModelConfig = null;
-//@ chunk-hwmsct5x.js:252677-252710 placement
+//@ chunk-vn3g7zt8.js:257771-257804 placement
 var externalBuildMembership = new HostScoped(
   () => new ExternalBuildMembership(() => externalBuildModelConfig),
 );
-//@ chunk-hwmsct5x.js:252710-252796 placement
+//@ chunk-vn3g7zt8.js:257804-257890 placement
 function modelKeysOverriddenExternally(patterns, config) {
   if (!Array.isArray(patterns)) return false;
   return matchesModelKeyPattern(patterns, config.mainModelOverrideKeys());
 }
-//@ chunk-hwmsct5x.js:252796-253043 placement
+//@ chunk-vn3g7zt8.js:257890-258137 placement
 function matchesModelKeyPattern(patterns, keys) {
   let exactKeys = new Set();
   let prefixes = [];
@@ -55,7 +55,7 @@ function matchesModelKeyPattern(patterns, keys) {
   if (exactKeys.size === 0 && prefixes.length === 0) return false;
   return keys.some((key) => exactKeys.has(key) || prefixes.some((prefix) => key.startsWith(prefix)));
 }
-//@ chunk-hwmsct5x.js:253043-253321 placement
+//@ chunk-vn3g7zt8.js:258137-258415 placement
 function readModelOverrideConfig(config) {
   if (!config || typeof config !== "object") return {};
   let record = config;
@@ -69,59 +69,59 @@ function readModelOverrideConfig(config) {
     severity: severity !== null && typeof severity === "object" ? severity : undefined,
   };
 }
-//@ chunk-hwmsct5x.js:253321-253365 placement
+//@ chunk-vn3g7zt8.js:258415-258459 placement
 function sfToken(value) {
   return {
     type: "token",
     value,
   };
 }
-//@ chunk-hwmsct5x.js:253365-253410 placement
+//@ chunk-vn3g7zt8.js:258459-258504 placement
 function sfString(value) {
   return {
     type: "string",
     value,
   };
 }
-//@ chunk-hwmsct5x.js:253410-253456 placement (2.1.88 match: isTextField, 1)
+//@ chunk-vn3g7zt8.js:258504-258550 placement (2.1.88 match: isTextField, 1)
 function isTextField(s) {
   return {
     type: "integer",
     value: s,
   };
 }
-//@ chunk-hwmsct5x.js:253456-253502 placement
+//@ chunk-vn3g7zt8.js:258550-258596 placement
 function sfBoolean(value) {
   return {
     type: "boolean",
     value,
   };
 }
-//@ chunk-hwmsct5x.js:253502-253550 placement
+//@ chunk-vn3g7zt8.js:258596-258644 placement
 function sfInnerList(items) {
   return {
     type: "innerList",
     items,
   };
 }
-//@ chunk-hwmsct5x.js:253550-253667 placement
+//@ chunk-vn3g7zt8.js:258644-258761 placement
 var SF_KEY_RE = /^[a-z*][a-z0-9_\-.*]*$/;
 var SF_TOKEN_RE = /^[A-Za-z*][A-Za-z0-9!#$%&'*+\-.^_`|~:/]*$/;
 var NON_PRINTABLE_RE = /[^\x20-\x7E]/g;
 var SF_MAX_INTEGER = 999999999999999;
-//@ chunk-hwmsct5x.js:253667-253700 placement
+//@ chunk-vn3g7zt8.js:258761-258794 placement
 function isSfToken(value) {
   return SF_TOKEN_RE.test(value);
 }
-//@ chunk-hwmsct5x.js:253700-253733 placement
+//@ chunk-vn3g7zt8.js:258794-258827 placement
 function isSfKey(key) {
   return SF_KEY_RE.test(key);
 }
-//@ chunk-hwmsct5x.js:253733-253811 placement
+//@ chunk-vn3g7zt8.js:258827-258905 placement
 function quoteSfString(value) {
   return `"${value.replace(NON_PRINTABLE_RE, "?").replace(/[\\"]/g, (char) => `\\${char}`)}"`;
 }
-//@ chunk-hwmsct5x.js:253811-254052 placement
+//@ chunk-vn3g7zt8.js:258905-259146 placement
 function serializeSfItem(item) {
   switch (item.type) {
     case "token":
@@ -136,7 +136,7 @@ function serializeSfItem(item) {
       return item.value ? "?1" : "?0";
   }
 }
-//@ chunk-hwmsct5x.js:254052-254203 placement
+//@ chunk-vn3g7zt8.js:259146-259297 placement
 function serializeSfMember(member) {
   if (member.type !== "innerList") return serializeSfItem(member);
   let parts = [];
@@ -147,7 +147,7 @@ function serializeSfMember(member) {
   }
   return `(${parts.join(" ")})`;
 }
-//@ chunk-hwmsct5x.js:254203-254646 placement
+//@ chunk-vn3g7zt8.js:259297-259740 placement
 /**
  * 按 RFC 8941 结构化字段把 {key, value} 列表序列化为字典头值（key=value, …）：跳过非法键、过长键/值、无法序列化的值与超出成员上限者，并通过 onDrop 回调报告原因。
  */

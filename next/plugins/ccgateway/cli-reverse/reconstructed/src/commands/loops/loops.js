@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/loops 界面：列出与管理会话的定时 cron 与 Stop 钩子循环
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wtfk012h.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-143xysab.js (7)
  * attribution: placement 7
  */
 import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
@@ -32,13 +32,13 @@ import { getSessionId, setScheduledTasksEnabled } from "../../bootstrap/state.js
 import { withCronCarryAttachment } from "../../services/daemon/sessionCron.js";
 import { runWithWorkload } from "../../utils/workloadContext.js";
 
-//@ chunk-wtfk012h.js:13782-13786 placement
+//@ chunk-143xysab.js:14958-14962 placement
 init_react_production();
-//@ chunk-wtfk012h.js:13786-13843 placement
+//@ chunk-143xysab.js:14962-15019 placement
 function toggleLoopMode(loopId) {
   return loopId === "interval" ? "text" : "interval";
 }
-//@ chunk-wtfk012h.js:13843-14043 placement
+//@ chunk-143xysab.js:15019-15219 placement
 function renderLoopItem(loop) {
   switch (loop.kind) {
     case "cron": {
@@ -66,7 +66,7 @@ function renderLoopItem(loop) {
     }
   }
 }
-//@ chunk-wtfk012h.js:14043-19477 placement
+//@ chunk-143xysab.js:15219-20653 placement
 /**
  * /loops 界面：列出会话的定时 cron 与 Stop 钩子循环，支持新建（every 间隔/until 条件）和删除。
  */
@@ -526,9 +526,9 @@ function LoopsManager(props) {
   } else panelFooter = $[87];
   return panelFooter;
 }
-//@ chunk-wtfk012h.js:19477-19503 placement
+//@ chunk-143xysab.js:20653-20679 placement
 var LOOP_INTERVAL_PATTERN = /^(\d+)([smhd])$/i;
-//@ chunk-wtfk012h.js:19503-19906 placement
+//@ chunk-143xysab.js:20679-21082 placement
 function intervalToCron(interval) {
   let match = interval.match(LOOP_INTERVAL_PATTERN);
   if (!match) return null;
@@ -555,7 +555,7 @@ function intervalToCron(interval) {
   }
   return parseCronExpression(unit) ? unit : null;
 }
-//@ chunk-wtfk012h.js:19906-20969 placement
+//@ chunk-143xysab.js:21082-22145 placement
 /**
  * /loops 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

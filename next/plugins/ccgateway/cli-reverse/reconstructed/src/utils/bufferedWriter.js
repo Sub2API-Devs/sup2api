@@ -3,13 +3,13 @@
  *
  * 批量写入器：按条数、字节或时间间隔把缓冲的条目批量写出
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/bufferedWriter.ts
- * pieces: chunk-cgr0tezp.js (2)
+ * pieces: chunk-6hadbefe.js (2)
  * attribution: fingerprint 1, affinity 1
  */
 
-//@ chunk-cgr0tezp.js:14556-15113 fingerprint (2.1.88 match: createBufferedWriter, 0.778)
+//@ chunk-6hadbefe.js:2093-2650 fingerprint (2.1.88 match: createBufferedWriter, 0.776)
 /**
  * 批量写入器：缓冲条目，达到条数/字节上限或定时（默认 1 秒）时调用 writeBatch；immediateMode 时每条立即写。
  */
@@ -86,7 +86,7 @@ function createBufferedWriter({
     },
   };
 }
-//@ chunk-cgr0tezp.js:15113-15337 affinity (2.1.88 match: createBufferedWriter, 0.761)
+//@ chunk-6hadbefe.js:2650-2874 affinity (2.1.88 match: createBufferedWriter, 0.76)
 function createBufferedWriter_2({ writeFn, flushIntervalMs, maxBufferSize, maxBufferBytes, immediateMode }) {
   return createBufferedWriter({
     writeBatch: (items) => writeFn(items.join("")),

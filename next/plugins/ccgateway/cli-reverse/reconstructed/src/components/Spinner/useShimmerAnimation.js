@@ -3,14 +3,14 @@
  *
  * Spinner 微光动画 hook。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Spinner/useShimmerAnimation.ts
- * pieces: chunk-tbfde207.js (1)
+ * pieces: chunk-ct61sn5h.js (1)
  * attribution: fingerprint 1
  */
 import { isBridgeStateFramesEnabled } from "../../bridge/bridgeGates.js";
 
-//@ chunk-tbfde207.js:1482-1529 fingerprint (2.1.88 match: useShimmerAnimation, 1)
+//@ chunk-ct61sn5h.js:1522-1569 fingerprint (2.1.88 match: useShimmerAnimation, 1)
 function useShimmerAnimation(status) {
   return status !== "requesting" && isBridgeStateFramesEnabled();
 }

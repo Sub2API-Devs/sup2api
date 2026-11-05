@@ -1,16 +1,16 @@
 /**
  * lodash-es/_unicodeWords.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: lodash-es@4.17.22..4.18.1
- * pieces: chunk-8nhse09v.js (7)
+ * pieces: chunk-47b8txen.js (7)
  * attribution: esm-layout 5, esm-fingerprint 2
  */
 import { hasUnicodeWord, asciiWords_default } from "./_hasUnicodeWord.js";
 import { toStringExport } from "./toString.js";
 
-//@ chunk-8nhse09v.js:3312-3321 esm-layout
+//@ chunk-47b8txen.js:3312-3321 esm-layout
 var hasUnicode = hasUnicodeWord;
-//@ chunk-8nhse09v.js:3321-4539 esm-fingerprint
+//@ chunk-47b8txen.js:3321-4539 esm-fingerprint
 var rsAstralRange = "\\ud800-\\udfff";
 var rsComboMarksRange = "\\u0300-\\u036f";
 var reComboHalfMarksRange = "\\ufe20-\\ufe2f";
@@ -66,13 +66,13 @@ var unicodeWordsRe = RegExp(
   ].join("|"),
   "g",
 );
-//@ chunk-8nhse09v.js:4539-4577 esm-layout
+//@ chunk-47b8txen.js:4539-4577 esm-layout
 function unicodeWords(string) {
   return string.match(unicodeWordsRe) || [];
 }
-//@ chunk-8nhse09v.js:4577-4586 esm-layout
+//@ chunk-47b8txen.js:4577-4586 esm-layout
 var unicodeWords_default = unicodeWords;
-//@ chunk-8nhse09v.js:4586-4685 esm-layout
+//@ chunk-47b8txen.js:4586-4685 esm-layout
 function words(string, pattern, guard) {
   string = toStringExport(string);
   pattern = guard ? undefined : pattern;
@@ -80,9 +80,9 @@ function words(string, pattern, guard) {
     return hasUnicode(string) ? unicodeWords_default(string) : asciiWords_default(string);
   return string.match(pattern) || [];
 }
-//@ chunk-8nhse09v.js:4685-4694 esm-layout
+//@ chunk-47b8txen.js:4685-4694 esm-layout
 var import_words = words;
-//@ chunk-8nhse09v.js:4694-4731 esm-fingerprint
+//@ chunk-47b8txen.js:4694-4731 esm-fingerprint
 var reApos = "['\u2019]";
 var reAposGlobal = RegExp(reApos, "g");
 export { import_words, reAposGlobal };

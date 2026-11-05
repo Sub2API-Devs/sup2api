@@ -3,10 +3,10 @@
  *
  * teammate 文件信箱：inbox 路径与锁、读/写/标记已读/清空、消息校验与修剪、各类结构化协议帧（权限、沙箱、计划审批、关机、空闲通知等）的构造与识别
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/teammateMailbox.ts
- * pieces: chunk-nw7jbebs.js (101)
- * attribution: callgraph-witnessed 1, layout 29, facade-exports 69, fingerprint 2
+ * pieces: chunk-3xs5443t.js (104)
+ * attribution: callgraph-witnessed 1, layout 31, facade-exports 70, fingerprint 2
  */
 import { join } from "path";
 import { logError } from "./log.js";
@@ -46,8 +46,9 @@ import {
   splitRepairedMessage,
 } from "./swarm/teammateMessageRepair.js";
 import { formatStorageError } from "./storage/storageErrors.js";
+import { SESSION_TEAM_NAME_PREFIX } from "./swarm/sessionTaskList.js";
 import { createMessageEnvelope } from "./udsMessaging/messageEnvelope.js";
-import { count } from "./collections.js";
+import { countWhere } from "./collections.js";
 import { isAgentColorName } from "../tools/AgentTool/agentColorManager.js";
 import { escapeXmlAttr } from "./xml.js";
 import { neutralizeTextForAgent, MAIN } from "./sessionPeers.js";
@@ -61,13 +62,13 @@ import { externalPermissionModeSchema } from "./permissions/browserToolNames.js"
 import { TEAM_LEAD } from "./swarm/constants.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-nw7jbebs.js:20333-20574 callgraph-witnessed (2.1.88 match: LOCK_OPTIONS, 0.648)
+//@ chunk-3xs5443t.js:22630-22871 callgraph-witnessed (2.1.88 match: LOCK_OPTIONS, 0.648)
 /**
  * inbox 文件锁参数，以及 inbox 消息 schema（from、text、timestamp 必填；type、read、color、summary、from_plugin 可选）。
  */
 var LOCK_OPTIONS; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var mailboxMessageSchema;
-deferInit("chunk-nw7jbebs.js:20333", () => {
+deferInit("chunk-3xs5443t.js:22630", () => {
   LOCK_OPTIONS = {
     retries: {
       retries: 10,
@@ -89,7 +90,7 @@ deferInit("chunk-nw7jbebs.js:20333", () => {
     }),
   );
 });
-//@ chunk-nw7jbebs.js:20574-20899 layout
+//@ chunk-3xs5443t.js:22871-23196 layout
 /**
  * 描述 schema 校验失败的字段（字段:错误码:实际类型）。
  */
@@ -113,10 +114,10 @@ function describeSchemaIssues(entry, issues) {
     })
     .join(", ");
 }
-//@ chunk-nw7jbebs.js:20899-20918 layout
+//@ chunk-3xs5443t.js:23196-23215 layout
 var MAX_REPORTED_DROPS = 100;
 var DROP_REPORT_SAMPLE_CHARS = 2048;
-//@ chunk-nw7jbebs.js:20918-21035 layout
+//@ chunk-3xs5443t.js:23215-23332 layout
 function dropReportKey(reason, entry) {
   try {
     let json = jsonStringify(entry);
@@ -125,7 +126,7 @@ function dropReportKey(reason, entry) {
     return `${reason}\x00(unserializable)`;
   }
 }
-//@ chunk-nw7jbebs.js:21035-21735 layout
+//@ chunk-3xs5443t.js:23332-24032 layout
 /**
  * 首次见到某条无效 inbox 条目时上报一次（按原因分类）。
  */
@@ -176,7 +177,7 @@ function reportDroppedEntry(reason, entry, error) {
     );
   return true;
 }
-//@ chunk-nw7jbebs.js:21735-22021 layout
+//@ chunk-3xs5443t.js:24032-24318 layout
 function reportNonArrayInbox(inboxPath, parsed) {
   let reportedDroppedEntries = swarmHostState().mailbox.reportedDroppedEntries;
   if (reportedDroppedEntries.size >= MAX_REPORTED_DROPS) return;
@@ -190,7 +191,7 @@ function reportNonArrayInbox(inboxPath, parsed) {
     ),
   );
 }
-//@ chunk-nw7jbebs.js:22021-22338 layout
+//@ chunk-3xs5443t.js:24318-24635 layout
 /**
  * 校验 inbox 内容：非数组整体丢弃；逐条 schema 校验，返回 {valid, droppedCount}。
  */
@@ -221,11 +222,11 @@ function validateInboxEntries(parsed, inboxPath) {
     droppedCount,
   };
 }
-//@ chunk-nw7jbebs.js:22338-22426 facade-exports
+//@ chunk-3xs5443t.js:24635-24723 facade-exports
 async function flushPendingMailboxPrunes() {
   await Promise.all(Array.from(swarmHostState().mailbox.pendingPrunes.values()));
 }
-//@ chunk-nw7jbebs.js:22426-22552 layout
+//@ chunk-3xs5443t.js:24723-24849 layout
 function schedulePruneInvalidEntries(inboxPath, store, storeKey) {
   let pendingPrunes = swarmHostState().mailbox.pendingPrunes;
   if (pendingPrunes.has(inboxPath)) return;
@@ -234,7 +235,7 @@ function schedulePruneInvalidEntries(inboxPath, store, storeKey) {
   });
   pendingPrunes.set(inboxPath, prune);
 }
-//@ chunk-nw7jbebs.js:22552-22838 layout
+//@ chunk-3xs5443t.js:24849-25135 layout
 /**
  * 无盘会话且没有可用存储时，记录"什么都没读写"并返回 true。
  */
@@ -245,7 +246,7 @@ function isMailboxUnavailable(storeKey, operation, agentName) {
   );
   return true;
 }
-//@ chunk-nw7jbebs.js:22838-23596 facade-exports
+//@ chunk-3xs5443t.js:25135-25893 facade-exports
 /**
  * 加锁重写 inbox，去掉无效条目。
  */
@@ -302,7 +303,7 @@ async function pruneInvalidMailboxEntries(inboxPath, store, storeKey) {
     await releaseLockQuietly(result, "[TeammateMailbox] pruneInvalidMailboxEntries");
   }
 }
-//@ chunk-nw7jbebs.js:23596-23781 facade-exports (2.1.88 match: getInboxPath, 1)
+//@ chunk-3xs5443t.js:25893-26078 facade-exports (2.1.88 match: getInboxPath, 1)
 /**
  * inbox 路径：<teams 目录>/<团队>/inboxes/<代理名>.json（团队缺省为当前团队或 default）。
  */
@@ -315,7 +316,7 @@ function getInboxPath(agentName, teamName) {
   logForDebugging(`[TeammateMailbox] getInboxPath: agent=${agentName}, team=${team}, fullPath=${fullPath}`);
   return fullPath;
 }
-//@ chunk-nw7jbebs.js:23781-23932 fingerprint (2.1.88 match: ensureInboxDir, 0.868)
+//@ chunk-3xs5443t.js:26078-26229 fingerprint (2.1.88 match: ensureInboxDir, 0.868)
 async function ensureInboxDir(teamName) {
   let team = teamName || getTeamName() || "default";
   let safeTeam = sanitizePathComponent(team);
@@ -323,7 +324,7 @@ async function ensureInboxDir(teamName) {
   await getFileReader().mkdir(inboxDir);
   logForDebugging(`[TeammateMailbox] Ensured inbox directory: ${inboxDir}`);
 }
-//@ chunk-nw7jbebs.js:23932-24029 layout
+//@ chunk-3xs5443t.js:26229-26326 layout
 /**
  * inbox 在存储 v5 中的键（团队名与代理名合法时）。
  */
@@ -334,11 +335,11 @@ function mailboxStoreKey(agentName, teamName) {
     ? STORAGE_SPACES.mailbox(team, agent)
     : undefined;
 }
-//@ chunk-nw7jbebs.js:24029-24073 layout
+//@ chunk-3xs5443t.js:26326-26370 layout
 function getMailboxLedgerKey(inboxPath, recipientName, teamName) {
   return isDiskless() ? internMailboxKey(inboxPath) : getInboxPath(recipientName, teamName);
 }
-//@ chunk-nw7jbebs.js:24073-24300 layout
+//@ chunk-3xs5443t.js:26370-26597 layout
 /**
  * 解析 inbox 文本为消息列表（可选补 type=message），解析失败标 corrupt。
  */
@@ -363,7 +364,7 @@ function parseInboxText(text, inboxPath, fillType) {
     corrupt: false,
   };
 }
-//@ chunk-nw7jbebs.js:24300-24879 layout
+//@ chunk-3xs5443t.js:26597-27176 layout
 /**
  * 在存储 v5 上原子更新 inbox（读-改-写回调），并更新消息 ID 台账。
  */
@@ -411,7 +412,7 @@ async function updateInboxInStore(store, storeKey, inboxPath, mutate, fillType =
   if (result !== undefined) reconcileMessageLedger(inboxPath, result.read, result.remaining);
   return state.value.result;
 }
-//@ chunk-nw7jbebs.js:24879-25087 layout
+//@ chunk-3xs5443t.js:27176-27384 layout
 /**
  * 根据读前/写后的消息更新 msg_id 台账（保留仍在 inbox 中的 ID）。
  */
@@ -426,7 +427,7 @@ function reconcileMessageLedger(inboxPath, before, after) {
       afterMsgIds.add(message_2.msg_id);
   mailboxLedger().retain(inboxPath, afterMsgIds);
 }
-//@ chunk-nw7jbebs.js:25087-26110 facade-exports (2.1.88 match: readMailbox, 0.528)
+//@ chunk-3xs5443t.js:27384-28407 facade-exports (2.1.88 match: readMailbox, 0.531)
 /**
  * 读 inbox（存储 v5 或文件），校验并补 type=message；文件不存在/不可解析返回空数组；有无效条目时安排修剪。
  */
@@ -475,7 +476,7 @@ async function readMailbox(agentName, teamName, store, options) {
     return [];
   }
 }
-//@ chunk-nw7jbebs.js:26110-26282 facade-exports (2.1.88 match: readUnreadMessages, 1)
+//@ chunk-3xs5443t.js:28407-28579 facade-exports (2.1.88 match: readUnreadMessages, 1)
 /**
  * 读 inbox 中未读的消息。
  */
@@ -488,11 +489,45 @@ async function readUnreadMessages(agentName, teamName, store) {
   scanRepairs(unread);
   return unread;
 }
-//@ chunk-nw7jbebs.js:26282-28319 facade-exports (2.1.88 match: writeToMailbox, 0.608)
+//@ chunk-3xs5443t.js:28579-28775 layout (2.1.88 match: getTeamFilePath, 0.868)
+async function getTeamFilePath(teamName) {
+  let name = teamName || getTeamName() || "";
+  if (!name.startsWith(`${SESSION_TEAM_NAME_PREFIX}-`) || !/^[a-z0-9-]+$/.test(name) || isDiskless())
+    return false;
+  try {
+    await getFileReader().stat(join(getTeamsDir(), name, "config.json"));
+    return false;
+  } catch (error) {
+    return getErrnoCode(error) === "ENOENT";
+  }
+}
+//@ chunk-3xs5443t.js:28775-29074 layout
+async function dropInboxIfTeamGone(recipientName, teamName, msgId) {
+  if (!(await getTeamFilePath(teamName))) return msgId;
+  let inboxPath = getInboxPath(recipientName, teamName);
+  logForDebugging(
+    `[TeammateMailbox] writeToMailbox: removing ${inboxPath}: its team was deleted during this write`,
+  );
+  mailboxLedger().forget(inboxPath);
+  await getFileReader()
+    .delete(inboxPath)
+    .catch((error) => {
+      if (getErrnoCode(error) !== "ENOENT")
+        logForDebugging(`[TeammateMailbox] writeToMailbox: could not remove ${inboxPath}: ${error}`);
+    });
+  return;
+}
+//@ chunk-3xs5443t.js:29074-31284 facade-exports (2.1.88 match: writeToMailbox, 0.555)
 /**
  * 写一条消息到收件人 inbox：先做 schema 校验；补 msg_id、type=message、read=false；文件型 inbox 先确保目录和文件存在，再加锁追加并原子写入。返回 msg_id。
  */
 async function writeToMailbox(recipientName, message, teamName, store) {
+  if (await getTeamFilePath(teamName)) {
+    logForDebugging(
+      `[TeammateMailbox] writeToMailbox: nothing written to "${recipientName}": team "${teamName || getTeamName()}" was deleted (its config.json is gone)`,
+    );
+    return;
+  }
   let parsed = mailboxMessageSchema().safeParse(message);
   if (!parsed.success) {
     let inboxPath = describeSchemaIssues(message, parsed.error.issues);
@@ -534,7 +569,7 @@ async function writeToMailbox(recipientName, message, teamName, store) {
         };
       });
       logForDebugging(`[TeammateMailbox] Wrote message to ${recipientName}'s inbox from ${message.from}`);
-      return readResult.msg_id;
+      return await dropInboxIfTeamGone(recipientName, teamName, readResult.msg_id);
     } catch (error) {
       logForDebugging(`Failed to write to inbox for ${recipientName}: ${error}`, {
         level: "error",
@@ -599,7 +634,7 @@ async function writeToMailbox(recipientName, message, teamName, store) {
       throw error;
     }
     logForDebugging(`[TeammateMailbox] Wrote message to ${recipientName}'s inbox from ${message.from}`);
-    return messages_2.msg_id;
+    return await dropInboxIfTeamGone(recipientName, teamName, messages_2.msg_id);
   } catch (error) {
     logForDebugging(`Failed to write to inbox for ${recipientName}: ${error}`, {
       level: "error",
@@ -610,7 +645,7 @@ async function writeToMailbox(recipientName, message, teamName, store) {
     await releaseLockQuietly(release, `[TeammateMailbox] writeToMailbox(${recipientName})`);
   }
 }
-//@ chunk-nw7jbebs.js:28319-28508 layout
+//@ chunk-3xs5443t.js:31284-31473 layout
 /**
  * 从消息列表删除第一条与目标匹配的未读消息，并去掉所有已读消息。
  */
@@ -627,7 +662,7 @@ function removeMatchingMessage(messages, target) {
     found: index !== -1,
   };
 }
-//@ chunk-nw7jbebs.js:28508-29877 facade-exports (2.1.88 match: markMessageAsReadByIndex, 0.275)
+//@ chunk-3xs5443t.js:31473-32842 facade-exports (2.1.88 match: markMessageAsReadByIndex, 0.275)
 /**
  * 把一条消息标为已处理：从 inbox 中删除该条（以及已读的），加锁执行。
  */
@@ -699,19 +734,19 @@ async function markSingleMessageAsRead(agentName, teamName, targetMessage, store
     await releaseLockQuietly(release, "[TeammateMailbox] markSingleMessageAsRead");
   }
 }
-//@ chunk-nw7jbebs.js:29877-29887 facade-exports
+//@ chunk-3xs5443t.js:32842-32852 facade-exports
 /**
  * 标记已读连续失败多少次后不再等待、直接投递（5）。
  */
 var MARK_READ_FAILURE_CAP = 5;
-//@ chunk-nw7jbebs.js:29887-29945 facade-exports
+//@ chunk-3xs5443t.js:32852-32910 facade-exports
 /**
  * 消息去重键：from|timestamp|text。
  */
 function messageIdentityKey(message) {
   return `${message.from}|${message.timestamp}|${message.text}`;
 }
-//@ chunk-nw7jbebs.js:29945-31782 facade-exports (2.1.88 match: markMessagesAsRead, 0.756)
+//@ chunk-3xs5443t.js:32910-34747 facade-exports (2.1.88 match: markMessagesAsRead, 0.756)
 /**
  * 把已投递的消息从 inbox 删除：给定消息列表时删除这些和所有已读消息，未给定时清空全部；加锁执行（存储 v5 走原子更新）。
  */
@@ -773,7 +808,7 @@ async function markMessagesAsRead(agentName, teamName, deliveredMessages, store)
       logForDebugging("[TeammateMailbox] markMessagesAsRead: no messages to mark");
       return true;
     }
-    let unreadCount = count(mailbox, (m) => !m.read);
+    let unreadCount = countWhere(mailbox, (m) => !m.read);
     logForDebugging(`[TeammateMailbox] markMessagesAsRead: ${unreadCount} unread of ${mailbox.length} total`);
     let updated = deliveredMessages === undefined ? null : new Set(deliveredMessages.map(messageIdentityKey));
     let filtered = mailbox.filter(
@@ -798,7 +833,7 @@ async function markMessagesAsRead(agentName, teamName, deliveredMessages, store)
     await releaseLockQuietly(release, "[TeammateMailbox] markMessagesAsRead");
   }
 }
-//@ chunk-nw7jbebs.js:31782-32416 facade-exports (2.1.88 match: clearMailbox, 0.42)
+//@ chunk-3xs5443t.js:34747-35381 facade-exports (2.1.88 match: clearMailbox, 0.42)
 /**
  * 清空 inbox（写入 []）。
  */
@@ -850,7 +885,7 @@ async function clearMailbox(agentName, teamName, store) {
     await releaseLockQuietly(cleared, "[TeammateMailbox] clearMailbox");
   }
 }
-//@ chunk-nw7jbebs.js:32416-32748 facade-exports (2.1.88 match: formatTeammateMessages, 0.755)
+//@ chunk-3xs5443t.js:35381-35713 facade-exports (2.1.88 match: formatTeammateMessages, 0.755)
 /**
  * 把一条 teammate 消息格式化为 <teammate-message teammate_id=… color=… summary=…> XML，伪造来源标 verified="false"，并清洗控制字符。
  */
@@ -871,7 +906,7 @@ function formatTeammateMessage(messages) {
 ${sanitizedText}
 </${TEAMMATE_MESSAGE}>`;
 }
-//@ chunk-nw7jbebs.js:32748-32928 facade-exports
+//@ chunk-3xs5443t.js:35713-35893 facade-exports
 function formatTeammateMessages(messages, options) {
   let joined = applyAggregateIdleResultBudget(messages).map((message) =>
     formatTeammateMessage(
@@ -891,11 +926,11 @@ function formatTeammateMessages(messages, options) {
       })
     : joined;
 }
-//@ chunk-nw7jbebs.js:32928-33244 facade-exports
+//@ chunk-3xs5443t.js:35893-36209 facade-exports
 var IdleNotificationMessageSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var FAILURE_REASON_MAX_LENGTH;
 var SUMMARY_DISPLAY_MAX_LENGTH;
-deferInit("chunk-nw7jbebs.js:32928", () => {
+deferInit("chunk-3xs5443t.js:35893", () => {
   IdleNotificationMessageSchema = DoctorLazy(() =>
     objectSchema({
       type: literal("idle_notification"),
@@ -912,19 +947,19 @@ deferInit("chunk-nw7jbebs.js:32928", () => {
   FAILURE_REASON_MAX_LENGTH = 200;
   SUMMARY_DISPLAY_MAX_LENGTH = 200;
 });
-//@ chunk-nw7jbebs.js:33244-33302 facade-exports
+//@ chunk-3xs5443t.js:36209-36267 facade-exports
 function capFrameFieldForDisplay(text) {
   let firstLine = text ? getFirstLine(text).trim() : "";
   return capStrippedFrameField(firstLine, SUMMARY_DISPLAY_MAX_LENGTH);
 }
-//@ chunk-nw7jbebs.js:33302-33363 facade-exports
+//@ chunk-3xs5443t.js:36267-36327 facade-exports
 function capFailureReasonForDisplay(failureReason) {
   let firstLine = failureReason ? getFirstLine(failureReason).trim() : "";
   return stripFrameControlChars(truncateToLength(firstLine, FAILURE_REASON_MAX_LENGTH));
 }
-//@ chunk-nw7jbebs.js:33363-33377 facade-exports
+//@ chunk-3xs5443t.js:36327-36341 facade-exports
 var PLAN_CONTENT_DISPLAY_BOUND = 40000;
-//@ chunk-nw7jbebs.js:33377-33503 facade-exports
+//@ chunk-3xs5443t.js:36341-36466 facade-exports
 function capFrameBodyForDisplay(text, maxLength) {
   if (!text) return "";
   let stripped = stripFrameControlChars(text);
@@ -933,10 +968,10 @@ function capFrameBodyForDisplay(text, maxLength) {
   return `${stripFrameControlChars(truncated)}
 [truncated for display]`;
 }
-//@ chunk-nw7jbebs.js:33503-33525 facade-exports
+//@ chunk-3xs5443t.js:36466-36488 facade-exports
 var IDLE_RESULT_MAX_LENGTH = 4000;
 var IDLE_RESULT_TOTAL_BUDGET = 16000;
-//@ chunk-nw7jbebs.js:33525-33741 facade-exports
+//@ chunk-3xs5443t.js:36488-36703 facade-exports
 function capIdleResult(text, allowTail = true) {
   let normalized = text ? normalizeResultText(text) : "";
   if (!normalized) return "";
@@ -949,14 +984,14 @@ function capIdleResult(text, allowTail = true) {
     : `${result}
 [result truncated]`;
 }
-//@ chunk-nw7jbebs.js:33741-33810 facade-exports
+//@ chunk-3xs5443t.js:36703-36772 facade-exports
 var IDLE_RESULT_TAIL_RESERVE_CHARS; // deferred: uses IdleNotificationMessageSchema of its import cycle while loading; runs once the cycle is complete
 var IDLE_SUMMARY_RECEIVE_BOUND;
 var IDLE_ID_FIELD_RECEIVE_BOUND;
 var MAX_FRAME_FIELD_CHARS;
 var MAX_FRAME_DEPTH;
 var IDLE_FRAME_TOTAL_RECEIVE_BOUND;
-deferInit("chunk-nw7jbebs.js:33741", () => {
+deferInit("chunk-3xs5443t.js:36703", () => {
   IDLE_RESULT_TAIL_RESERVE_CHARS = 200;
   IDLE_SUMMARY_RECEIVE_BOUND = SUMMARY_DISPLAY_MAX_LENGTH * 2 + 16;
   IDLE_ID_FIELD_RECEIVE_BOUND = 256;
@@ -970,7 +1005,7 @@ deferInit("chunk-nw7jbebs.js:33741", () => {
     3 * IDLE_ID_FIELD_RECEIVE_BOUND +
     1024;
 });
-//@ chunk-nw7jbebs.js:33810-34079 layout
+//@ chunk-3xs5443t.js:36772-37041 layout
 function capFrameValue(value, depth) {
   if (typeof value === "string") return capStrippedFrameField(value, MAX_FRAME_FIELD_CHARS);
   if (value === null || typeof value !== "object") return value;
@@ -981,7 +1016,7 @@ function capFrameValue(value, depth) {
     entry.push([capStrippedFrameField(key, MAX_FRAME_FIELD_CHARS), capFrameValue(value_2, depth - 1)]);
   return Object.fromEntries(entry);
 }
-//@ chunk-nw7jbebs.js:34079-34274 facade-exports
+//@ chunk-3xs5443t.js:37041-37234 facade-exports
 function capReceivedIdleResult(text, allowTail) {
   let stripped = stripFrameControlChars(text);
   if (
@@ -996,7 +1031,7 @@ function capReceivedIdleResult(text, allowTail) {
     : `${truncated}
 [result truncated]`;
 }
-//@ chunk-nw7jbebs.js:34274-34606 facade-exports
+//@ chunk-3xs5443t.js:37234-37566 facade-exports
 /**
  * 队友信箱帧校验常量：时间戳格式、无效标记、权限/关机/计划审批请求 id 格式与长度上限。
  */
@@ -1009,7 +1044,7 @@ var PERMISSION_REQUEST_ID_PATTERN = /^perm-[0-9]{1,20}-[0-9a-z]{1,12}$/;
 var SHUTDOWN_OR_PLAN_REQUEST_ID_PATTERN =
   /^(?:shutdown|plan_approval)-[0-9]{1,20}@[^@\n]{1,300}(?:@[^@\n]{1,300})?$/u;
 var MAX_REQUEST_ID_LENGTH = 320;
-//@ chunk-nw7jbebs.js:34606-34725 layout
+//@ chunk-3xs5443t.js:37566-37685 layout
 function sanitizeRequestId(requestId) {
   return !requestId.includes(`
 `) &&
@@ -1020,24 +1055,24 @@ function sanitizeRequestId(requestId) {
     ? requestId
     : INVALID_ID_MARKER;
 }
-//@ chunk-nw7jbebs.js:34725-34827 layout
+//@ chunk-3xs5443t.js:37685-37787 layout
 var PANE_ID_PATTERN =
   /^(%[0-9]{1,10}|[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})$/;
-//@ chunk-nw7jbebs.js:34827-34866 layout
+//@ chunk-3xs5443t.js:37787-37826 layout
 function sanitizePaneId(paneId) {
   return PANE_ID_PATTERN.test(paneId) ? paneId : INVALID_ID_MARKER;
 }
-//@ chunk-nw7jbebs.js:34866-34909 layout
+//@ chunk-3xs5443t.js:37826-37869 layout
 var PANE_BACKENDS = {
   tmux: true,
   iterm2: true,
   "in-process": true,
 };
-//@ chunk-nw7jbebs.js:34909-34957 layout
+//@ chunk-3xs5443t.js:37869-37917 layout
 function sanitizePaneBackend(backend) {
   return Object.hasOwn(PANE_BACKENDS, backend) ? backend : INVALID_ID_MARKER;
 }
-//@ chunk-nw7jbebs.js:34957-36390 layout
+//@ chunk-3xs5443t.js:37917-39349 layout
 /**
  * 清洗收到的空闲通知帧以便显示：截断结果、摘要、失败原因与各 id 字段，发送者以信封为准，时间戳不合法则标记；未知字段截断；整体超长时反复对最长文本字段减半，结果被截断时追加说明。
  */
@@ -1155,7 +1190,7 @@ function sanitizeIdleNotificationFrame(text, idle, from) {
         idle: idle_2,
       };
 }
-//@ chunk-nw7jbebs.js:36390-36489 layout
+//@ chunk-3xs5443t.js:39349-39447 layout
 function capDisplayText(text, maxLength) {
   let stripped = stripFrameControlChars(text);
   let truncated = truncateToLength(stripped, maxLength);
@@ -1163,14 +1198,14 @@ function capDisplayText(text, maxLength) {
   return `${stripFrameControlChars(truncated)}
 [truncated]`;
 }
-//@ chunk-nw7jbebs.js:36489-37964 facade-exports
+//@ chunk-3xs5443t.js:39447-40922 facade-exports
 /**
  * teammate 协议帧字段规范表（每种帧的字段类型与长度上限），用于把帧改写成安全的可读形式。与 bridge 无关，属于 utils/teammateMailbox.ts。
  */
 var MAX_UNKNOWN_FIELD_CHARS; // deferred: uses IDLE_RESULT_TAIL_RESERVE_CHARS of its import cycle while loading; runs once the cycle is complete
 var MAX_EXTRA_FIELDS_CHARS;
 var STRUCTURED_FRAME_RECEIVE_SPECS;
-deferInit("chunk-nw7jbebs.js:36489", () => {
+deferInit("chunk-3xs5443t.js:39447", () => {
   MAX_UNKNOWN_FIELD_CHARS = 1024;
   MAX_EXTRA_FIELDS_CHARS = 2048;
   STRUCTURED_FRAME_RECEIVE_SPECS = new Map([
@@ -1352,7 +1387,7 @@ deferInit("chunk-nw7jbebs.js:36489", () => {
     ],
   ]);
 });
-//@ chunk-nw7jbebs.js:37964-38475 facade-exports (2.1.88 match: extractErrorTypeFromData, 0.779)
+//@ chunk-3xs5443t.js:40922-41433 facade-exports (2.1.88 match: extractErrorTypeFromData, 0.778)
 /**
  * 规范化一条 teammate 协议帧 JSON：按字段规范截断/清洗已知字段、限制未知字段总量；无变化返回 null。
  */
@@ -1392,7 +1427,7 @@ function sanitizeReceivedStructuredFrame(text, from) {
   let rebuiltText = jsonStringify(Object.fromEntries(keptEntries));
   return rebuiltText === text ? null : rebuiltText;
 }
-//@ chunk-nw7jbebs.js:38475-39217 layout
+//@ chunk-3xs5443t.js:41433-42175 layout
 /**
  * 按字段种类清洗收到的结构化帧字段：通用值截断、id/请求 id/窗格 id/后端类型校验格式、以信封发送者为准的 id、时间戳校验、单行与正文按上限截断；类型不对时给出无效标记。
  */
@@ -1454,12 +1489,12 @@ function sanitizeFrameField(fieldSpec, value, envelopeSender) {
       return capDisplayText(value, fieldSpec.bound);
   }
 }
-//@ chunk-nw7jbebs.js:39217-39327 facade-exports
+//@ chunk-3xs5443t.js:42175-42285 facade-exports
 function idleFrameRecency(idle, now) {
   let timestamp = Date.parse(idle.timestamp);
   return Number.isNaN(timestamp) ? Number.NEGATIVE_INFINITY : Math.min(timestamp, now);
 }
-//@ chunk-nw7jbebs.js:39327-40557 facade-exports
+//@ chunk-3xs5443t.js:42285-43515 facade-exports
 function applyAggregateIdleResultBudget(messages) {
   if (weakSet_2.has(messages)) return messages;
   let sliced = messages.slice();
@@ -1543,14 +1578,14 @@ function applyAggregateIdleResultBudget(messages) {
   weakSet_2.add(sliced);
   return sliced;
 }
-//@ chunk-nw7jbebs.js:40557-40591 layout
+//@ chunk-3xs5443t.js:43515-43549 layout
 var weakSet; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var weakSet_2;
-deferInit("chunk-nw7jbebs.js:40557", () => {
+deferInit("chunk-3xs5443t.js:43515", () => {
   weakSet = new WeakSet();
   weakSet_2 = new WeakSet();
 });
-//@ chunk-nw7jbebs.js:40591-40973 facade-exports (2.1.88 match: createIdleNotification, 0.929)
+//@ chunk-3xs5443t.js:43549-43931 facade-exports (2.1.88 match: createIdleNotification, 0.929)
 /**
  * 构造 idle_notification：idleReason（available/interrupted/failed）、摘要、完成的任务 ID 与状态、失败原因、结果（截断清洗）。
  */
@@ -1572,7 +1607,7 @@ function createIdleNotification(agentId, options) {
     result,
   };
 }
-//@ chunk-nw7jbebs.js:40973-41218 facade-exports
+//@ chunk-3xs5443t.js:43931-44176 facade-exports
 /**
  * 记 swarm_idle_result_delivery：结果写入失败、完整送达或被截断。
  */
@@ -1583,7 +1618,7 @@ function logIdleResultDeliveryOutcome(notification, fullResult, msgId) {
     logFeatureOk("swarm_idle_result_delivery");
   else logFeatureSad("swarm_idle_result_delivery", "per_frame_truncated");
 }
-//@ chunk-nw7jbebs.js:41218-41478 layout
+//@ chunk-3xs5443t.js:44176-44436 layout
 /**
  * 文本清洗用正则与上限：控制/格式字符、变体选择符等的保留个数。
  */
@@ -1594,7 +1629,7 @@ var MIN_SELECTORS_PER_LINE;
 var SELECTOR_LINE_DIVISOR;
 var MIN_SELECTORS_TOTAL;
 var SELECTOR_TOTAL_DIVISOR;
-deferInit("chunk-nw7jbebs.js:41218", () => {
+deferInit("chunk-3xs5443t.js:44176", () => {
   UNSAFE_CHAR_PATTERN =
     /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u2028\u2029]|(?![\u200C\u200D\uFE00-\uFE0F\u{E0100}-\u{E01EF}])[\p{Cf}\p{Default_Ignorable_Code_Point}]/u;
   regExp_2 = new RegExp(UNSAFE_CHAR_PATTERN.source, "gu");
@@ -1604,7 +1639,7 @@ deferInit("chunk-nw7jbebs.js:41218", () => {
   MIN_SELECTORS_TOTAL = 16;
   SELECTOR_TOTAL_DIVISOR = 4;
 });
-//@ chunk-nw7jbebs.js:41478-41742 layout
+//@ chunk-3xs5443t.js:44436-44700 layout
 function limitVariationSelectors(text) {
   let selectorCount = (text.match(VARIATION_SELECTOR_PATTERN) ?? []).length;
   let charCount = [...text].length - selectorCount;
@@ -1627,14 +1662,14 @@ function limitVariationSelectors(text) {
     }).join(`
 `);
 }
-//@ chunk-nw7jbebs.js:41742-41789 facade-exports
+//@ chunk-3xs5443t.js:44700-44747 facade-exports
 /**
  * 清洗文本：规范化后去掉控制/不可见字符并限制变体选择符。
  */
 function stripFrameControlChars(text) {
   return limitVariationSelectors(toWellFormedString(text).replace(regExp_2, ""));
 }
-//@ chunk-nw7jbebs.js:41789-41863 facade-exports
+//@ chunk-3xs5443t.js:44747-44820 facade-exports
 /**
  * 清洗后截断到指定长度（截断后再清洗一次）。
  */
@@ -1643,16 +1678,16 @@ function capStrippedFrameField(text, maxLength) {
   let truncated = truncateToLength(messages, maxLength);
   return truncated.length >= messages.length ? truncated : stripFrameControlChars(truncated);
 }
-//@ chunk-nw7jbebs.js:41863-41923 facade-exports
+//@ chunk-3xs5443t.js:44820-44880 facade-exports
 /**
  * 清洗、截断并压成单行。
  */
 function capIdFrameField(text, maxLength) {
   return capStrippedFrameField(text, maxLength).replace(/\s+/g, " ").trim();
 }
-//@ chunk-nw7jbebs.js:41923-41939 layout
+//@ chunk-3xs5443t.js:44880-44896 layout
 var JSON_OBJECT_START = /^\s*\{/;
-//@ chunk-nw7jbebs.js:41939-42032 facade-exports
+//@ chunk-3xs5443t.js:44896-44989 facade-exports
 /**
  * 把消息正文中的协议帧（idle_notification 等）改写成可读文本。
  */
@@ -1661,11 +1696,11 @@ function capRawFrameTextForDisplay(text, from) {
   if (idle) return sanitizeIdleNotificationFrame(text, idle, from).text;
   return sanitizeReceivedStructuredFrame(text, from) ?? text;
 }
-//@ chunk-nw7jbebs.js:42032-42067 layout
+//@ chunk-3xs5443t.js:44989-45024 layout
 function normalizeResultText(text) {
   return stripFrameControlChars(text.trim());
 }
-//@ chunk-nw7jbebs.js:42067-42164 facade-exports
+//@ chunk-3xs5443t.js:45024-45121 facade-exports
 /**
  * 解析消息正文是否为 idle_notification 帧（schema 校验），返回帧或 null。
  */
@@ -1676,13 +1711,13 @@ function isIdleNotification(messageText) {
   } catch {}
   return null;
 }
-//@ chunk-nw7jbebs.js:42164-42645 facade-exports
+//@ chunk-3xs5443t.js:45121-45602 facade-exports
 /**
  * permission_response 帧 schema：success（updated_input、permission_updates）或 error（error），可带 approved_request {tool_use_id, tool_name, input_digest}。
  */
 var ApprovedPermissionRequestSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var PermissionResponseMessageSchema;
-deferInit("chunk-nw7jbebs.js:42164", () => {
+deferInit("chunk-3xs5443t.js:45121", () => {
   ApprovedPermissionRequestSchema = DoctorLazy(() =>
     objectSchema({
       tool_use_id: stringSchema(),
@@ -1714,7 +1749,7 @@ deferInit("chunk-nw7jbebs.js:42164", () => {
     ]),
   );
 });
-//@ chunk-nw7jbebs.js:42645-42879 facade-exports (2.1.88 match: createPermissionRequestMessage, 1)
+//@ chunk-3xs5443t.js:45602-45836 facade-exports (2.1.88 match: createPermissionRequestMessage, 1)
 /**
  * 构造 permission_request 帧（request_id、agent_id、tool_name、tool_use_id、description、input、permission_suggestions）。
  */
@@ -1730,7 +1765,7 @@ function createPermissionRequestMessage(params) {
     permission_suggestions: params.permission_suggestions || [],
   };
 }
-//@ chunk-nw7jbebs.js:42879-43310 facade-exports (2.1.88 match: createPermissionResponseMessage, 0.939)
+//@ chunk-3xs5443t.js:45836-46267 facade-exports (2.1.88 match: createPermissionResponseMessage, 0.939)
 /**
  * 构造 permission_response 帧：error（缺省 "Permission denied"）或 success（updated_input、permission_updates），可带 approved_request。
  */
@@ -1756,7 +1791,7 @@ function createPermissionResponseMessage(params) {
     },
   };
 }
-//@ chunk-nw7jbebs.js:43310-43406 facade-exports (2.1.88 match: isPermissionRequest, 1)
+//@ chunk-3xs5443t.js:46267-46363 facade-exports (2.1.88 match: isPermissionRequest, 1)
 /**
  * 解析 permission_request 帧（不做 schema 校验）。
  */
@@ -1767,7 +1802,7 @@ function isPermissionRequest(messageText) {
   } catch {}
   return null;
 }
-//@ chunk-nw7jbebs.js:43406-43773 facade-exports (2.1.88 match: isPermissionResponse, 0.485)
+//@ chunk-3xs5443t.js:46363-46730 facade-exports (2.1.88 match: isPermissionResponse, 0.486)
 /**
  * 解析并校验 permission_response 帧，格式不对时记日志返回 null。
  */
@@ -1795,7 +1830,7 @@ function isPermissionResponse(messageText) {
   );
   return null;
 }
-//@ chunk-nw7jbebs.js:43773-43970 facade-exports (2.1.88 match: createSandboxPermissionRequestMessage, 1)
+//@ chunk-3xs5443t.js:46730-46927 facade-exports (2.1.88 match: createSandboxPermissionRequestMessage, 1)
 /**
  * 构造 sandbox_permission_request 帧（requestId、worker 身份、hostPattern.host、createdAt）。
  */
@@ -1812,7 +1847,7 @@ function createSandboxPermissionRequestMessage(params) {
     createdAt: Date.now(),
   };
 }
-//@ chunk-nw7jbebs.js:43970-44112 facade-exports (2.1.88 match: createSandboxPermissionResponseMessage, 1)
+//@ chunk-3xs5443t.js:46927-47069 facade-exports (2.1.88 match: createSandboxPermissionResponseMessage, 1)
 /**
  * 构造 sandbox_permission_response 帧（requestId、host、allow、timestamp）。
  */
@@ -1825,7 +1860,7 @@ function createSandboxPermissionResponseMessage(params) {
     timestamp: new Date().toISOString(),
   };
 }
-//@ chunk-nw7jbebs.js:44112-44216 facade-exports (2.1.88 match: isSandboxPermissionRequest, 1)
+//@ chunk-3xs5443t.js:47069-47173 facade-exports (2.1.88 match: isSandboxPermissionRequest, 1)
 /**
  * 解析 sandbox_permission_request 帧。
  */
@@ -1836,7 +1871,7 @@ function isSandboxPermissionRequest(messageText) {
   } catch {}
   return null;
 }
-//@ chunk-nw7jbebs.js:44216-44321 facade-exports (2.1.88 match: isSandboxPermissionResponse, 1)
+//@ chunk-3xs5443t.js:47173-47278 facade-exports (2.1.88 match: isSandboxPermissionResponse, 1)
 /**
  * 解析 sandbox_permission_response 帧。
  */
@@ -1847,16 +1882,14 @@ function isSandboxPermissionResponse(messageText) {
   } catch {}
   return null;
 }
-//@ chunk-nw7jbebs.js:44321-44913 facade-exports
+//@ chunk-3xs5443t.js:47278-47648 facade-exports (2.1.88 match: PlanApprovalRequestMessageSchema, 0.551)
 /**
  * 计划审批与关机帧的 schema：plan_approval_request、plan_approval_response、shutdown_request、shutdown_approved、shutdown_rejected。
  */
 var PlanApprovalRequestMessageSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var PlanApprovalResponseMessageSchema;
 var ShutdownRequestMessageSchema;
-var ShutdownApprovedMessageSchema;
-var ShutdownRejectedMessageSchema;
-deferInit("chunk-nw7jbebs.js:44321", () => {
+deferInit("chunk-3xs5443t.js:47278", () => {
   PlanApprovalRequestMessageSchema = DoctorLazy(() =>
     objectSchema({
       type: literal("plan_approval_request"),
@@ -1886,6 +1919,11 @@ deferInit("chunk-nw7jbebs.js:44321", () => {
       timestamp: stringSchema(),
     }),
   );
+});
+//@ chunk-3xs5443t.js:47648-47874 facade-exports (2.1.88 match: createShutdownApprovedMessage, 0.8)
+var ShutdownApprovedMessageSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var ShutdownRejectedMessageSchema;
+deferInit("chunk-3xs5443t.js:47648", () => {
   ShutdownApprovedMessageSchema = DoctorLazy(() =>
     objectSchema({
       type: literal("shutdown_approved"),
@@ -1906,7 +1944,7 @@ deferInit("chunk-nw7jbebs.js:44321", () => {
     }),
   );
 });
-//@ chunk-nw7jbebs.js:44913-45046 facade-exports (2.1.88 match: createShutdownRequestMessage, 1)
+//@ chunk-3xs5443t.js:47874-48007 facade-exports (2.1.88 match: createShutdownRequestMessage, 1)
 /**
  * 构造 shutdown_request 帧（requestId、from、reason、timestamp）。
  */
@@ -1919,7 +1957,7 @@ function createShutdownRequestMessage(params) {
     timestamp: new Date().toISOString(),
   };
 }
-//@ chunk-nw7jbebs.js:45046-45206 facade-exports (2.1.88 match: createShutdownApprovedMessage, 1)
+//@ chunk-3xs5443t.js:48007-48167 facade-exports (2.1.88 match: createShutdownApprovedMessage, 1)
 /**
  * 构造 shutdown_approved 帧（可带 paneId、backendType 供 leader 清理 pane）。
  */
@@ -1933,7 +1971,7 @@ function createShutdownApprovedMessage(params) {
     backendType: params.backendType,
   };
 }
-//@ chunk-nw7jbebs.js:45206-45340 facade-exports (2.1.88 match: createShutdownRejectedMessage, 1)
+//@ chunk-3xs5443t.js:48167-48301 facade-exports (2.1.88 match: createShutdownRejectedMessage, 1)
 /**
  * 构造 shutdown_rejected 帧（附拒绝原因）。
  */
@@ -1946,7 +1984,7 @@ function createShutdownRejectedMessage(params) {
     timestamp: new Date().toISOString(),
   };
 }
-//@ chunk-nw7jbebs.js:45340-45435 facade-exports
+//@ chunk-3xs5443t.js:48301-48396 facade-exports
 /**
  * 解析 shutdown_request 帧（用 shutdownRequestSchema）。
  */
@@ -1957,7 +1995,7 @@ function isShutdownRequest(messageText) {
   } catch {}
   return null;
 }
-//@ chunk-nw7jbebs.js:45435-45530 facade-exports
+//@ chunk-3xs5443t.js:48396-48491 facade-exports
 /**
  * 解析 plan_approval_request 帧。
  */
@@ -1968,7 +2006,7 @@ function isPlanApprovalRequest(messageText) {
   } catch {}
   return null;
 }
-//@ chunk-nw7jbebs.js:45530-45625 facade-exports
+//@ chunk-3xs5443t.js:48491-48586 facade-exports
 /**
  * 解析 shutdown_approved 帧。
  */
@@ -1979,9 +2017,9 @@ function isShutdownApproved(messageText) {
   } catch {}
   return null;
 }
-//@ chunk-nw7jbebs.js:45625-45636 facade-exports
+//@ chunk-3xs5443t.js:48586-48597 facade-exports
 var UNBOUND_PLAN_VERDICT_HONOURED = true;
-//@ chunk-nw7jbebs.js:45636-45783 facade-exports
+//@ chunk-3xs5443t.js:48597-48744 facade-exports
 /**
  * 判断 leader 的计划审批回复与当前等待中的请求关系：unbound / already_answered / bound / mismatch。
  */
@@ -1990,7 +2028,7 @@ function planVerdictBinding(pendingApproval, response) {
   if (pendingApproval.answered) return "already_answered";
   return pendingApproval.requestId === response.requestId ? "bound" : "mismatch";
 }
-//@ chunk-nw7jbebs.js:45783-46025 facade-exports (2.1.88 match: PlanApprovalResponseMessageSchema, 0.611)
+//@ chunk-3xs5443t.js:48744-48986 facade-exports (2.1.88 match: PlanApprovalResponseMessageSchema, 0.611)
 /**
  * 回复与等待中的请求不匹配时，构造一个"拒绝并要求重新提交"的 plan_approval_response。
  */
@@ -2004,7 +2042,7 @@ function planVerdictMismatchRejection(rejection) {
     timestamp: rejection.timestamp,
   };
 }
-//@ chunk-nw7jbebs.js:46025-46120 facade-exports
+//@ chunk-3xs5443t.js:48986-49081 facade-exports
 /**
  * 解析 plan_approval_response 帧。
  */
@@ -2015,12 +2053,12 @@ function isPlanApprovalResponse(messageText) {
   } catch {}
   return null;
 }
-//@ chunk-nw7jbebs.js:46120-46233 fingerprint (2.1.88 match: isTaskAssignment, 0.558)
+//@ chunk-3xs5443t.js:49081-49194 fingerprint (2.1.88 match: isTaskAssignment, 0.559)
 /**
  * task_assignment 帧 schema（taskId、subject、description、assignedBy、timestamp）。
  */
 var taskAssignmentSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-nw7jbebs.js:46120", () => {
+deferInit("chunk-3xs5443t.js:49081", () => {
   taskAssignmentSchema = DoctorLazy(() =>
     objectSchema({
       type: literal("task_assignment"),
@@ -2032,14 +2070,14 @@ deferInit("chunk-nw7jbebs.js:46120", () => {
     }),
   );
 });
-//@ chunk-nw7jbebs.js:46233-46267 facade-exports
+//@ chunk-3xs5443t.js:49194-49228 facade-exports
 function isTaskAssignment(content) {
   return parseFrameForDisplay(taskAssignmentSchema(), content);
 }
-//@ chunk-nw7jbebs.js:46267-46453 facade-exports (2.1.88 match: UserTeammateMessage, 0.485)
+//@ chunk-3xs5443t.js:49228-49414 facade-exports (2.1.88 match: UserTeammateMessage, 0.485)
 var TaskCompletedMessageSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var TeammateTerminatedMessageSchema;
-deferInit("chunk-nw7jbebs.js:46267", () => {
+deferInit("chunk-3xs5443t.js:49228", () => {
   TaskCompletedMessageSchema = DoctorLazy(() =>
     objectSchema({
       type: literal("task_completed"),
@@ -2056,7 +2094,7 @@ deferInit("chunk-nw7jbebs.js:46267", () => {
     }),
   );
 });
-//@ chunk-nw7jbebs.js:46453-46554 facade-exports
+//@ chunk-3xs5443t.js:49414-49515 facade-exports
 function parseFrameForDisplay(schema, text) {
   try {
     let parsed = schema.strict().safeParse(jsonParse(text));
@@ -2064,7 +2102,7 @@ function parseFrameForDisplay(schema, text) {
   } catch {}
   return null;
 }
-//@ chunk-nw7jbebs.js:46554-46804 facade-exports
+//@ chunk-3xs5443t.js:49515-49765 facade-exports
 function visibleTeammateMailboxMessages(messages) {
   return messages.filter((message) => {
     let msg = message;
@@ -2076,7 +2114,7 @@ function visibleTeammateMailboxMessages(messages) {
     return !parseFrameForDisplay(ShutdownApprovedMessageSchema(), msg.text);
   });
 }
-//@ chunk-nw7jbebs.js:46804-46897 facade-exports (2.1.88 match: isTeamPermissionUpdate, 1)
+//@ chunk-3xs5443t.js:49765-49858 facade-exports (2.1.88 match: isTeamPermissionUpdate, 1)
 /**
  * 正文是否为 team_permission_update 帧。
  */
@@ -2088,7 +2126,7 @@ function isTeamPermissionUpdate(messageText) {
     return false;
   }
 }
-//@ chunk-nw7jbebs.js:46897-46984 facade-exports (2.1.88 match: createModeSetRequestMessage, 1)
+//@ chunk-3xs5443t.js:49858-49945 facade-exports (2.1.88 match: createModeSetRequestMessage, 1)
 /**
  * 正文是否是 mode_set_request 帧。
  */
@@ -2100,13 +2138,13 @@ function isModeSetRequest(messageText) {
     return false;
   }
 }
-//@ chunk-nw7jbebs.js:46984-47120 facade-exports
+//@ chunk-3xs5443t.js:49945-50081 facade-exports
 /**
  * 拒绝把协议帧当作 teammate 初始提示词时的错误文字。
  */
 var PROTOCOL_FRAME_PROMPT_ERROR =
   "Teammate prompt must not be a mailbox protocol frame (permission/mode/plan/shutdown JSON) \u2014 pass plain-text instructions";
-//@ chunk-nw7jbebs.js:47120-47546 facade-exports (2.1.88 match: isStructuredProtocolMessage, 0.956)
+//@ chunk-3xs5443t.js:50081-50507 facade-exports (2.1.88 match: isStructuredProtocolMessage, 0.956)
 /**
  * 正文是否是任一结构化协议帧（权限/沙箱/关机/团队权限/模式/计划审批）。
  */
@@ -2132,7 +2170,7 @@ function isStructuredProtocolMessage(messageText) {
     return false;
   }
 }
-//@ chunk-nw7jbebs.js:47546-47760 facade-exports (2.1.88 match: getPlanApprovalSummary, 0.882)
+//@ chunk-3xs5443t.js:50507-50721 facade-exports (2.1.88 match: getPlanApprovalSummary, 0.882)
 function planApprovalResumeText(content) {
   let feedback = content.feedback ? capDisplayText(content.feedback, IDLE_RESULT_MAX_LENGTH) : "";
   if (content.approved)
@@ -2141,10 +2179,10 @@ function planApprovalResumeText(content) {
       : "[Plan Approved] You can now proceed with implementation";
   return `[Plan Rejected] ${feedback || "Please revise your plan"}`;
 }
-//@ chunk-nw7jbebs.js:47760-47846 layout
+//@ chunk-3xs5443t.js:50721-50807 layout
 var SHUTDOWN_REQUEST_ID_RE = /^shutdown-[0-9]{1,20}@[\w.-]{1,64}$/;
 var SHUTDOWN_REQUEST_ID_PLACEHOLDER = "<requestId of the shutdown request>";
-//@ chunk-nw7jbebs.js:47846-48339 facade-exports
+//@ chunk-3xs5443t.js:50807-51300 facade-exports
 function shutdownRequestReplyInstructions(requestId) {
   let matches = SHUTDOWN_REQUEST_ID_RE.test(requestId);
   let reply = jsonStringify({
@@ -2157,7 +2195,7 @@ function shutdownRequestReplyInstructions(requestId) {
   });
   return `To approve it, call ${SENDMESSAGE} with exactly this input, where "message" is a JSON object rather than a string${matches ? "" : " and request_id is the request's requestId value, copied verbatim"}: ${reply}. Approving ends your process; a plain-text acknowledgment does not shut you down. To decline, for example because you're mid-task, send the same input with "approve": false and a "reason".`;
 }
-//@ chunk-nw7jbebs.js:48339-48491 facade-exports
+//@ chunk-3xs5443t.js:51300-51452 facade-exports
 function withShutdownReplyInstructions(text, from) {
   if (from !== TEAM_LEAD || !text.includes('"shutdown_request"')) return text;
   let request = isShutdownRequest(text);
@@ -2167,7 +2205,7 @@ function withShutdownReplyInstructions(text, from) {
 This is a shutdown request. ${shutdownRequestReplyInstructions(request.requestId)}`
     : text;
 }
-//@ chunk-nw7jbebs.js:48491-48565 facade-exports
+//@ chunk-3xs5443t.js:51452-51526 facade-exports
 /**
  * 消息是否应作为普通文本展示给模型：非协议帧，或是 shutdown_approved / shutdown_request / plan_approval_request 帧（按 schema 实际解析的类型）。
  */
@@ -2179,7 +2217,7 @@ function isHeadlessLeadDisplayableMessage(messageText) {
     isPlanApprovalRequest(messageText) !== null
   );
 }
-//@ chunk-nw7jbebs.js:48565-49290 facade-exports
+//@ chunk-3xs5443t.js:51526-52251 facade-exports
 /**
  * 按谓词删除 inbox 中的消息（同时去掉已读的），加锁执行。
  */
@@ -2235,7 +2273,7 @@ async function markMessagesAsReadByPredicate(agentName, predicate, teamName, sto
     await releaseLockQuietly(readResult, "[TeammateMailbox] markMessagesAsReadByPredicate");
   }
 }
-//@ chunk-nw7jbebs.js:49290-49459 facade-exports
+//@ chunk-3xs5443t.js:52251-52420 facade-exports
 /**
  * 是否是真实用户输入（非 meta、非 tool_result）。
  */
@@ -2248,7 +2286,7 @@ function isTeammateWakeupPrompt(message) {
       !message.message.content.some((block) => block.type === "tool_result"))
   );
 }
-//@ chunk-nw7jbebs.js:49459-50127 facade-exports (2.1.88 match: getLastPeerDmSummary, 1)
+//@ chunk-3xs5443t.js:52420-53087 facade-exports (2.1.88 match: getLastPeerDmSummary, 1)
 /**
  * 自最近一次用户输入以来，最后一条发给具体 peer（非广播、非 team-lead、非 main）的 SendMessage 摘要："[to 名字] 摘要"。
  */
@@ -2285,74 +2323,74 @@ function getLastPeerDmSummary(messages) {
   return;
 }
 export {
-  writeToMailbox,
-  parseFrameForDisplay,
-  IdleNotificationMessageSchema,
-  capRawFrameTextForDisplay,
-  IDLE_FRAME_TOTAL_RECEIVE_BOUND,
-  FRAME_SANITIZED_FOR_DISPLAY_MARKER,
-  capStrippedFrameField,
-  stripFrameControlChars,
-  capFrameBodyForDisplay,
-  PLAN_CONTENT_DISPLAY_BOUND,
-  createIdleNotification,
-  logIdleResultDeliveryOutcome,
-  markMessagesAsReadByPredicate,
-  isStructuredProtocolMessage,
-  createShutdownRequestMessage,
-  createShutdownApprovedMessage,
-  createShutdownRejectedMessage,
-  getInboxPath,
-  isPlanApprovalResponse,
-  planVerdictBinding,
-  planVerdictMismatchRejection,
-  messageIdentityKey,
-  isPermissionRequest,
-  isPermissionResponse,
-  isSandboxPermissionRequest,
-  isSandboxPermissionResponse,
-  isShutdownRequest,
-  isShutdownApproved,
-  isModeSetRequest,
-  isPlanApprovalRequest,
-  isTeamPermissionUpdate,
-  planApprovalResumeText,
-  formatTeammateMessages,
+  isIdleNotification,
   readUnreadMessages,
+  MARK_READ_FAILURE_CAP,
+  getInboxPath,
   markMessagesAsRead,
+  isShutdownApproved,
+  isHeadlessLeadDisplayableMessage,
+  isStructuredProtocolMessage,
+  formatTeammateMessages,
+  writeToMailbox,
   createPermissionRequestMessage,
   createPermissionResponseMessage,
   createSandboxPermissionRequestMessage,
   createSandboxPermissionResponseMessage,
-  isIdleNotification,
+  messageIdentityKey,
+  markMessagesAsReadByPredicate,
   readMailbox,
+  isPermissionResponse,
   markSingleMessageAsRead,
-  MARK_READ_FAILURE_CAP,
+  createIdleNotification,
+  logIdleResultDeliveryOutcome,
+  isShutdownRequest,
+  isPlanApprovalResponse,
+  planApprovalResumeText,
+  isModeSetRequest,
   formatTeammateMessage,
   UNKNOWN_SENDER,
   withShutdownReplyInstructions,
   sanitizeReceivedStructuredFrame,
+  clearMailbox,
+  PROTOCOL_FRAME_PROMPT_ERROR,
+  createShutdownRequestMessage,
+  createShutdownApprovedMessage,
+  createShutdownRejectedMessage,
   visibleTeammateMailboxMessages,
-  capIdFrameField,
-  IDLE_ID_FIELD_RECEIVE_BOUND,
-  capFrameFieldForDisplay,
-  TaskCompletedMessageSchema,
+  capFrameBodyForDisplay,
   IDLE_SUMMARY_RECEIVE_BOUND,
+  parseFrameForDisplay,
   ShutdownRequestMessageSchema,
+  capRawFrameTextForDisplay,
   ShutdownApprovedMessageSchema,
   ShutdownRejectedMessageSchema,
+  IdleNotificationMessageSchema,
+  IDLE_FRAME_TOTAL_RECEIVE_BOUND,
+  FRAME_SANITIZED_FOR_DISPLAY_MARKER,
+  capStrippedFrameField,
+  stripFrameControlChars,
+  PLAN_CONTENT_DISPLAY_BOUND,
+  planVerdictBinding,
+  planVerdictMismatchRejection,
+  isPermissionRequest,
+  isSandboxPermissionRequest,
+  isSandboxPermissionResponse,
+  isPlanApprovalRequest,
+  isTeamPermissionUpdate,
+  getLastPeerDmSummary,
+  isTeammateWakeupPrompt,
+  capIdFrameField,
+  IDLE_ID_FIELD_RECEIVE_BOUND,
   IDLE_RESULT_MAX_LENGTH,
   isTaskAssignment,
   TeammateTerminatedMessageSchema,
+  capFrameFieldForDisplay,
+  TaskCompletedMessageSchema,
   PlanApprovalRequestMessageSchema,
   PlanApprovalResponseMessageSchema,
   capFailureReasonForDisplay,
   capReceivedIdleResult,
-  clearMailbox,
-  PROTOCOL_FRAME_PROMPT_ERROR,
-  getLastPeerDmSummary,
-  isTeammateWakeupPrompt,
-  isHeadlessLeadDisplayableMessage,
   ApprovedPermissionRequestSchema,
   FAILURE_REASON_MAX_LENGTH,
   IDLE_RESULT_TOTAL_BUDGET,

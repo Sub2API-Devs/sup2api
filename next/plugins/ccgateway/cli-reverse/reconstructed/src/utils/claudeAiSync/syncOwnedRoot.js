@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：同步所属根目录的安全检查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (33)
- * attribution: placement 33
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (34)
+ * attribution: placement 31, layout 3
  */
 import { sep, relative, isAbsolute, join, dirname, basename } from "path";
 import { lstat, stat, mkdir, mkdtemp, rename, rmdir, writeFile } from "fs/promises";
@@ -23,7 +23,7 @@ import { logForDiagnosticsNoPII } from "../diagLogs.js";
 import { syncTrashTempPrefix, queueSyncTrashTrim } from "../plugins/syncTrash.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:629796-629860 placement
+//@ chunk-5xgkngpb.js:639925-639989 placement
 /**
  * 记录一次同步错误（ENOENT 忽略），保存 errno 码。
  */
@@ -33,7 +33,7 @@ function recordSyncError(stats, error) {
     stats.failure = getErrnoCode(error) ?? "unknown";
   }
 }
-//@ chunk-e6aww6q8.js:630096-630204 placement
+//@ chunk-5xgkngpb.js:640225-640333 placement
 /**
  * 把路径转成 POSIX 形式的显示标签（统一斜杠，逐段替换为可读名称）。
  */
@@ -46,7 +46,7 @@ function toPosixLabelPath(parts) {
     .map((part) => syncBucketShape(part) ?? part)
     .join("/");
 }
-//@ chunk-e6aww6q8.js:630204-630377 placement
+//@ chunk-5xgkngpb.js:640333-640506 placement
 class SyncOwnedRootRefusedError extends Error {
   reason;
   code;
@@ -59,15 +59,15 @@ class SyncOwnedRootRefusedError extends Error {
     this.code = options?.code;
   }
 }
-//@ chunk-e6aww6q8.js:630377-630416 placement
+//@ chunk-5xgkngpb.js:640506-640545 placement
 /**
  * 同步目录名到存储命名空间的映射。
  */
 var SYNC_DIR_NAMESPACES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:630377", () => {
+deferInit("chunk-5xgkngpb.js:640506", () => {
   SYNC_DIR_NAMESPACES = new Map([["skills", "skills"]]);
 });
-//@ chunk-e6aww6q8.js:630416-630821 placement
+//@ chunk-5xgkngpb.js:640545-640950 placement
 /**
  * 存储 v5 启用时把配置目录下的路径映射为 userConfigDir 命名空间的作用域链（逐级），并给出管线目录；不在已知子目录下返回 undefined。
  */
@@ -97,7 +97,7 @@ function getStorageChainForPath(path, configHome, storageV5) {
     pipelineFolder: join(configHome, dirName),
   };
 }
-//@ chunk-e6aww6q8.js:630821-630919 placement
+//@ chunk-5xgkngpb.js:640950-641048 placement
 /**
  * 取作用域链的最后一环（最具体的作用域）。
  */
@@ -106,14 +106,14 @@ function lastScopeChainEntry(chain) {
   if (last === undefined) throw Error("empty sync-owned scope chain");
   return last;
 }
-//@ chunk-e6aww6q8.js:630919-631054 placement
+//@ chunk-5xgkngpb.js:641048-641183 placement
 function unexpectedProbeAnswer(answer) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
     `sync-owned path probe: unexpected answer ${String(answer?.kind)}`,
     "sync-owned path probe: unexpected answer",
   );
 }
-//@ chunk-e6aww6q8.js:631054-631206 placement
+//@ chunk-5xgkngpb.js:641183-641335 placement
 function probeFailedError(error) {
   let code = storageErrorCode(error);
   return Object.assign(
@@ -128,7 +128,7 @@ function probeFailedError(error) {
       : {},
   );
 }
-//@ chunk-e6aww6q8.js:631206-632076 placement
+//@ chunk-5xgkngpb.js:641335-642205 placement
 /**
  * 逐级检查同步根路径：存储 v5 下按作用域链检查（第一层允许解析到目录的链接），否则逐段 lstat；返回 real、absent、redirected 或 not_a_directory。
  */
@@ -191,7 +191,7 @@ async function probeSyncRootPath(path, configHome, storageV5) {
   }
   return "real";
 }
-//@ chunk-e6aww6q8.js:632076-632220 placement
+//@ chunk-5xgkngpb.js:642205-642349 placement
 async function statDirectoryKind(path) {
   let stats;
   try {
@@ -202,7 +202,7 @@ async function statDirectoryKind(path) {
   }
   return stats.isDirectory() ? "directory" : "not_a_directory";
 }
-//@ chunk-e6aww6q8.js:632220-632316 placement
+//@ chunk-5xgkngpb.js:642349-642445 placement
 /**
  * 同步落位使用的 staging 目录与按 pid 区分的子目录。
  */
@@ -213,7 +213,7 @@ function syncStagingPaths(root) {
     [join(trashDir, String(process.pid)), "staging_pid"],
   ];
 }
-//@ chunk-e6aww6q8.js:632316-632772 placement
+//@ chunk-5xgkngpb.js:642445-642901 placement
 /**
  * 探测路径叶子的类型（absent、directory、redirected 或 not_a_directory），可走存储 v5 的作用域查询，否则用 lstat。
  */
@@ -246,7 +246,7 @@ async function probeLeafKind(path, configHome, storageV5) {
   if (stats.isSymbolicLink()) return "redirected";
   return stats.isDirectory() ? "directory" : "not_a_directory";
 }
-//@ chunk-e6aww6q8.js:632772-633369 placement
+//@ chunk-5xgkngpb.js:642901-643498 placement
 /**
  * 校验同步根：探测根路径（可选再检查暂存叶子各级），被拒或无法验证时记诊断并返回 {refused}；正常返回 real 或 absent。
  */
@@ -297,14 +297,14 @@ async function verifySyncRoot(root, claudeConfigDir, labels, { checkStagingLeaf 
       };
   }
 }
-//@ chunk-e6aww6q8.js:633369-633421 placement
+//@ chunk-5xgkngpb.js:643498-643550 placement
 /**
  * 来源无法校验时使用的固定原因码。
  */
 function unverifiableSourceKind(sourceKind) {
   return "source_unverifiable_unknown";
 }
-//@ chunk-e6aww6q8.js:633421-633581 placement
+//@ chunk-5xgkngpb.js:643550-643710 placement
 async function describeVanishedSource(path) {
   try {
     return (await statDirectoryKind(path)) === "not_a_directory" ? "source_unverifiable_ENOTDIR" : "gone";
@@ -312,7 +312,7 @@ async function describeVanishedSource(path) {
     return `source_unverifiable_${getErrnoCode(error) ?? "unknown"}`;
   }
 }
-//@ chunk-e6aww6q8.js:633581-634281 placement
+//@ chunk-5xgkngpb.js:643710-644410 placement
 /**
  * 批处理目录消失后在存储中逐级向上判断原因：仍存在为 batch_dir_vanished，父级存在为 gone，遇到非目录、链接或错误则给出 source_unverifiable_*。
  */
@@ -353,25 +353,34 @@ async function diagnoseVanishedBatchDir(batch) {
   }
   return "gone";
 }
-//@ chunk-e6aww6q8.js:634281-635209 placement
-async function checkSyncRoots({ dir, trashRoot, configHome, failureEvent, storageV5 }) {
-  let tempDir;
+//@ chunk-5xgkngpb.js:644410-645477 layout
+async function moveRootToTrash({ dir, trashRoot, configHome, failureEvent, storageV5 }) {
+  let batchDir;
   try {
-    let parentKind = await probeSyncRootPath(dirname(dir), configHome, storageV5);
-    if (parentKind === "redirected" || parentKind === "not_a_directory") {
+    let sourceProbe = await probeSyncRootPath(dirname(dir), configHome, storageV5);
+    if (sourceProbe === "redirected" || sourceProbe === "not_a_directory") {
+      let code = `source_root_${sourceProbe}`;
       logForDiagnosticsNoPII("warn", failureEvent, {
-        code: `source_root_${parentKind}`,
+        code,
       });
-      return false;
+      return {
+        moved: false,
+        code,
+      };
     }
-    let trashKind = await probeSyncRootPath(trashRoot, configHome, storageV5);
-    switch (trashKind) {
+    let trashProbe = await probeSyncRootPath(trashRoot, configHome, storageV5);
+    switch (trashProbe) {
       case "redirected":
-      case "not_a_directory":
+      case "not_a_directory": {
+        let code = `trash_root_${trashProbe}`;
         logForDiagnosticsNoPII("warn", failureEvent, {
-          code: `trash_root_${trashKind}`,
+          code,
         });
-        return false;
+        return {
+          moved: false,
+          code,
+        };
+      }
       case "absent": {
         let storageChainForPath = getStorageChainForPath(trashRoot, configHome, storageV5);
         if (storageChainForPath !== undefined) {
@@ -388,38 +397,61 @@ async function checkSyncRoots({ dir, trashRoot, configHome, failureEvent, storag
       case "real":
         break;
     }
-    tempDir = await mkdtemp(join(trashRoot, syncTrashTempPrefix(relative(configHome, dir))));
-    await rename(dir, join(tempDir, basename(dir)));
-    queueSyncTrashTrim(trashRoot, basename(tempDir));
-    return true;
+    batchDir = await mkdtemp(join(trashRoot, syncTrashTempPrefix(relative(configHome, dir))));
+    let movedTo = join(batchDir, basename(dir));
+    await rename(dir, movedTo);
+    queueSyncTrashTrim(trashRoot, basename(batchDir));
+    return {
+      moved: true,
+      to: movedTo,
+    };
   } catch (error) {
-    if (tempDir !== undefined) await rmdir(tempDir).catch(() => {});
-    if (tempDir !== undefined && isENOENT(error)) {
+    if (batchDir !== undefined) await rmdir(batchDir).catch(() => {});
+    if (batchDir !== undefined && isENOENT(error)) {
       let failureCode = "batch_dir_vanished";
       let batch = getStorageChainForPath(dir, configHome, storageV5);
       if (batch !== undefined) {
         let diagnosis = await diagnoseVanishedBatchDir(batch);
-        if (diagnosis === "gone") return true;
+        if (diagnosis === "gone")
+          return {
+            moved: true,
+            to: null,
+          };
         failureCode = diagnosis;
       } else
         try {
           await lstat(dir);
         } catch (error) {
-          if (isENOENT(error)) return true;
+          if (isENOENT(error))
+            return {
+              moved: true,
+              to: null,
+            };
           failureCode = `source_unverifiable_${getErrnoCode(error) ?? "unknown"}`;
         }
       logForDiagnosticsNoPII("warn", failureEvent, {
         code: failureCode,
       });
-      return false;
+      return {
+        moved: false,
+        code: failureCode,
+      };
     }
+    let code = getErrnoCode(error) ?? "unknown";
     logForDiagnosticsNoPII("warn", failureEvent, {
-      code: getErrnoCode(error) ?? "unknown",
+      code,
     });
-    return false;
+    return {
+      moved: false,
+      code,
+    };
   }
 }
-//@ chunk-e6aww6q8.js:635209-636345 placement
+//@ chunk-5xgkngpb.js:645477-645526 layout
+async function moveRootToTrashOk(params) {
+  return (await moveRootToTrash(params)).moved;
+}
+//@ chunk-5xgkngpb.js:645526-646662 placement
 /**
  * 检查同步根目录未被重定向、不是符号链接、父目录正常。
  */
@@ -491,7 +523,7 @@ async function checkSyncOwnedRoot({ root, trashRoot, configHome, events, storage
     });
   }
 }
-//@ chunk-e6aww6q8.js:636345-636752 placement
+//@ chunk-5xgkngpb.js:646662-647069 placement
 /**
  * 创建同步根守卫：verify 在落地前校验根（只要被拒过就一直拒绝），记录拒绝原因。
  */
@@ -532,14 +564,14 @@ function createSyncRootGuard({ root, rootLabel, configHome, event, storageV5 }) 
     },
   };
 }
-//@ chunk-e6aww6q8.js:636752-636798 placement
+//@ chunk-5xgkngpb.js:647069-647115 placement
 /**
  * 同步根未通过校验时抛出的错误。
  */
 function rootRefusedError(reason) {
   return new SyncOwnedRootRefusedError(`landing_${reason}`);
 }
-//@ chunk-e6aww6q8.js:636798-636865 placement
+//@ chunk-5xgkngpb.js:647115-647182 placement
 /**
  * 同步根的初始校验状态（未读清单、新建守卫）。
  */
@@ -550,7 +582,7 @@ function freshRootState(state) {
     root: state.root(),
   };
 }
-//@ chunk-e6aww6q8.js:636865-636972 placement
+//@ chunk-5xgkngpb.js:647182-647289 placement
 /**
  * 同步落位成功结果，以及同步根在本轮中不再通过校验时的失败结果。
  */
@@ -562,18 +594,19 @@ var ROOT_REFUSED_RESULT = {
   cause: "root_refused",
   reason: "sync root no longer verifies (changed mid-round)",
 };
-//@ chunk-e6aww6q8.js:636972-637027 placement
+//@ chunk-5xgkngpb.js:647289-647353 placement
 /**
  * 构造解压失败的结果。
  */
-function extractFailure(reason) {
+function extractFailure(reason, step) {
   return {
     ok: false,
     cause: "extract",
     reason,
+    step,
   };
 }
-//@ chunk-e6aww6q8.js:637027-637083 placement
+//@ chunk-5xgkngpb.js:647353-647409 placement
 /**
  * 构造下载失败的结果。
  */
@@ -584,7 +617,7 @@ function downloadFailure(reason) {
     reason,
   };
 }
-//@ chunk-e6aww6q8.js:637083-637162 placement
+//@ chunk-5xgkngpb.js:647409-647488 placement
 /**
  * 另一进程正在落位同一项时的延迟结果。
  */
@@ -593,7 +626,7 @@ var DEFERRED_PLACEMENT = {
   cause: "deferred",
   reason: "another process is landing this item",
 };
-//@ chunk-e6aww6q8.js:637162-637257 placement
+//@ chunk-5xgkngpb.js:647488-647583 placement
 /**
  * 判断 errno 是否属于目录冲突类（ENOTEMPTY/EEXIST 等）。
  */
@@ -606,7 +639,7 @@ function isDirConflictErrno(errnoCode) {
     errnoCode === "EACCES"
   );
 }
-//@ chunk-e6aww6q8.js:637257-637355 placement
+//@ chunk-5xgkngpb.js:647583-647699 placement
 /**
  * 目标目录无法腾挪时的本地失败结果。
  */
@@ -614,19 +647,19 @@ var LOCAL_PLACEMENT_FAILURE = {
   ok: false,
   cause: "local",
   reason: "an existing directory at the target could not be displaced",
+  step: "move_aside",
 };
-//@ chunk-e6aww6q8.js:637355-637482 placement
-/**
- * 构造下载副本无法移入位置时的本地失败结果。
- */
-function buildLocalPlacementFailure(errnoCode) {
+//@ chunk-5xgkngpb.js:647699-647848 layout
+function moveInFailure(errorCode) {
   return {
     ok: false,
     cause: "local",
-    reason: `the downloaded copy could not be moved into place (${errnoCode ?? "unknown error"})`,
+    reason: `the downloaded copy could not be moved into place (${errorCode ?? "unknown error"})`,
+    step: "move_in",
+    code: errorCode,
   };
 }
-//@ chunk-e6aww6q8.js:637482-637685 placement
+//@ chunk-5xgkngpb.js:647848-648051 placement
 /**
  * 把同步失败原因映射为遥测事件名（下载、根被拒、解压、本地），deferred 不上报。
  */
@@ -644,7 +677,7 @@ function getSyncFailureEvent(cause) {
       return null;
   }
 }
-//@ chunk-e6aww6q8.js:637685-638059 placement
+//@ chunk-5xgkngpb.js:648051-648425 placement
 /**
  * 把同步失败原因映射为给用户看的说明文字。
  */
@@ -662,14 +695,14 @@ function describeSyncFailure(cause) {
       return "a local filesystem error kept it from being placed on disk";
   }
 }
-//@ chunk-e6aww6q8.js:638059-638116 placement
+//@ chunk-5xgkngpb.js:648425-648482 placement
 /**
  * 判断同步标记文件是否存在（存在返回真）。
  */
 async function hasSyncMarker(configHome, bucket) {
   return (await readSyncMarker(configHome, bucket)) === "marked";
 }
-//@ chunk-e6aww6q8.js:638116-638263 placement
+//@ chunk-5xgkngpb.js:648482-648629 placement
 /**
  * 读取同步标记文件是否存在：存在为 marked，不存在为 unmarked，其他错误返回不可读代码。
  */
@@ -684,7 +717,7 @@ async function readSyncMarker(root, bucketName) {
         };
   }
 }
-//@ chunk-e6aww6q8.js:638263-638363 placement (2.1.88 match: tryCreateExclusive, 1)
+//@ chunk-5xgkngpb.js:648629-648729 placement (2.1.88 match: tryCreateExclusive, 1)
 /**
  * （误归 computerUse）以 wx 模式创建空文件，已存在则忽略。
  */
@@ -700,7 +733,7 @@ async function touchExclusive(path, content) {
 export {
   verifySyncRoot,
   readSyncMarker,
-  checkSyncRoots,
+  moveRootToTrashOk,
   recordSyncError,
   checkSyncOwnedRoot,
   toPosixLabelPath,
@@ -712,10 +745,11 @@ export {
   downloadFailure,
   extractFailure,
   isDirConflictErrno,
-  buildLocalPlacementFailure,
+  moveInFailure,
   LOCAL_PLACEMENT_FAILURE,
   hasSyncMarker,
   DEFERRED_PLACEMENT,
+  moveRootToTrash,
   SYNC_OK,
   getSyncFailureEvent,
   describeSyncFailure,

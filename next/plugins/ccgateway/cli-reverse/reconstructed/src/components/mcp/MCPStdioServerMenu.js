@@ -3,9 +3,9 @@
  *
  * stdio MCP 服务器菜单：重连、启用/禁用、查看工具。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/mcp/MCPStdioServerMenu.tsx
- * pieces: chunk-vrb44rx7.js (3)
+ * pieces: chunk-wb51jffc.js (3)
  * attribution: sole-consumer 2, fingerprint 1
  */
 import { init_react_production, useCallback, useState } from "../../../vendor/react/cjs/react.production.js";
@@ -45,12 +45,12 @@ import { CapabilitiesSection } from "./CapabilitiesSection.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrb44rx7.js:26810-26814 sole-consumer
+//@ chunk-wb51jffc.js:26929-26933 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrb44rx7.js:26810", () => {
+deferInit("chunk-wb51jffc.js:26929", () => {
   init_react_production();
 });
-//@ chunk-vrb44rx7.js:26814-27437 sole-consumer
+//@ chunk-wb51jffc.js:26933-27556 sole-consumer
 /**
  * stdio 服务器状态文字：disabled / connected（工具获取失败、无工具）/ connecting / failed。
  */
@@ -110,7 +110,7 @@ function renderStdioServerStatus(client, serverToolsCount, theme) {
     ],
   });
 }
-//@ chunk-vrb44rx7.js:27437-30172 fingerprint (2.1.88 match: MCPStdioServerMenu, 0.58)
+//@ chunk-wb51jffc.js:27556-30295 fingerprint (2.1.88 match: MCPStdioServerMenu, 0.581)
 function MCPStdioServerMenu({
   server,
   serverToolsCount,

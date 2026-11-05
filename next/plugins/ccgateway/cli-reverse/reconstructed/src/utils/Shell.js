@@ -3,10 +3,10 @@
  *
  * Shell 命令执行入口 exec：选择 bash/PowerShell 提供者、校验并恢复工作目录、按需套沙箱、spawn 子进程并跟踪 cwd 变化；另含可用 shell 探测。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/Shell.ts
- * pieces: chunk-e6aww6q8.js (41), chunk-s61vbvea.js (6)
- * attribution: placement 43, fingerprint 4
+ * pieces: chunk-5d1nwe9e.js (6), chunk-5xgkngpb.js (40)
+ * attribution: fingerprint 4, placement 42
  */
 import { accessSync, constants, closeSync } from "fs";
 import { isAbsolute, join, resolve as resolve_2, dirname, delimiter } from "path";
@@ -71,6 +71,7 @@ import {
   scrubSandboxConfig,
 } from "./subprocessEnv.js";
 import { listSecretEnvNames, prefixedSanitizableEnv } from "./settings/policyHelper/helperEnv.js";
+import { generateTaskId } from "../Task.js";
 import {
   proxyCredentialHelpers,
   applyFsPolicyOverrides,
@@ -78,6 +79,11 @@ import {
   materializeDenyDirectories,
   needsNetworkScreen,
 } from "./sandbox/perCommandDeny.js";
+import {
+  unboundTaskOutputPath,
+  openTaskOutputForAppend,
+  releaseConvergentTaskOutputBinding,
+} from "./task/diskOutput.js";
 import {
   callFrameCwd,
   currentOrGlobalCwd,
@@ -100,6 +106,7 @@ import { createFailedCommand, createAbortedCommand, wrapSpawn } from "./ShellCom
 import { getOriginalCwd, getSessionId } from "../bootstrap/state.js";
 import { isTurnLevelAbort } from "./abortReasons.js";
 import { isAgentStopPending, registerAgentProcess } from "./agentProcessRegistry.js";
+import { withSturdyLanternOff } from "./bash/bashReadingFlags.js";
 import { parseForSecurity } from "./bash/ast.js";
 import { ensureDeviceSandboxPosture } from "../remote/tools/deviceSandboxPosture.js";
 import { stripTrailingSlashIfLong, prepareSandboxGitGlobalConfig } from "./sandbox/windowsGitIdentity.js";
@@ -110,14 +117,12 @@ import { sanitizeEnvCredentials } from "./settings/policyHelper/helperExec.js";
 import { buildEnvArgv } from "./shell/shellEnvironment.js";
 import { isSettingsSourcedEnvValue, isProjectScopeBlockedEnvVar } from "./managedEnvApply.js";
 import { findReadableNugetPackagesDir } from "./sandbox/windowsNugetPackages.js";
-import { generateTaskId } from "../Task.js";
 import { TaskOutput } from "./task/TaskOutput.js";
 import {
   resolveUsableWindowsLauncher,
   DETACHED_LAUNCHER_SPAWN_OPTIONS,
   resolveShellPidFromLauncher,
 } from "./shell/windowsShellLauncher.js";
-import { openTaskOutputForAppend, releaseConvergentTaskOutputBinding } from "./task/diskOutput.js";
 import { isTerminalShutdown, heldUntilExit } from "./terminalShutdown.js";
 import { cgroupSpawnOptions, isToolCgroupPending, parkPendingPid } from "./toolCgroup.js";
 import { openCpuWindow, isBackgroundJobCommand, closeCpuWindow } from "./shell/processCpuTime.js";
@@ -132,6 +137,7 @@ import {
 import { getCompoundCommandPrefixesStatic_2 } from "./bash/prefix.js";
 import { posixPathToWindowsPath } from "./path.js";
 import { onCwdChanged } from "./hooks/fileChangedWatcher.js";
+import { regExp_15, shellTooOldReason } from "./shell/bashVersionRefusal.js";
 import { checkArgvLimits } from "./shell/argvLimits.js";
 import { claudeSubprocessEnv } from "./claudeSubprocessEnv.js";
 import { DISK_FULL_ADVICE } from "./shell/diskSpaceWarning.js";
@@ -141,7 +147,7 @@ import { getPluginPathEnv } from "./bash/ShellSnapshot.js";
 import { setBunOptions } from "./permissions/protectedSettingsPaths.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:52893-53070 fingerprint (2.1.88 match: isExecutable, 0.639)
+//@ chunk-5d1nwe9e.js:754-927 fingerprint (2.1.88 match: isExecutable, 0.639)
 /**
  * 判断 shell 路径可执行：先 access X_OK，失败时（非 Windows 绝对路径的特定错误直接 false）再跑 `--version` 看退出码。
  */
@@ -158,7 +164,7 @@ async function isExecutable(shellPath) {
     return code === 0;
   }
 }
-//@ chunk-s61vbvea.js:53070-53411 fingerprint (2.1.88 match: findSuitableShell, 0.774)
+//@ chunk-5d1nwe9e.js:927-1267 fingerprint (2.1.88 match: findSuitableShell, 0.774)
 /**
  * 生成候选 shell 列表：CLAUDE_CODE_SHELL、SHELL（含 bash/zsh 的）、which 结果，以及 /bin、/usr/bin、/usr/local/bin、/opt/homebrew/bin 下的 bash/zsh；SHELL 含 bash 时 bash 优先。
  */
@@ -177,7 +183,7 @@ function getShellCandidates(zshPath, bashPath) {
     secondPath,
   ].filter((shell) => shell !== null);
 }
-//@ chunk-s61vbvea.js:53411-53902 placement
+//@ chunk-5d1nwe9e.js:1267-1755 placement
 /**
  * 依次探测候选 shell 取第一个可执行的；CLAUDE_CODE_SHELL 无效时记日志回退；都没有则抛 "No suitable shell found"。
  */
@@ -206,7 +212,7 @@ async function findSuitableShell() {
   }
   return foundShell;
 }
-//@ chunk-s61vbvea.js:53902-54029 placement
+//@ chunk-5d1nwe9e.js:1755-1881 placement
 /**
  * PATH 上可用的 zsh/bash。
  */
@@ -220,7 +226,7 @@ function findShellOnPath() {
     }
   });
 }
-//@ chunk-s61vbvea.js:54029-54073 placement
+//@ chunk-5d1nwe9e.js:1881-1925 placement
 /**
  * 确保磁盘会话可用后返回本机缓存解析出的 Bash 工具 shell 路径。
  */
@@ -228,7 +234,7 @@ async function resolveBashToolShellWithHost() {
   assertProgramLaunchAllowed();
   return resolveBashToolShell(shellPaths());
 }
-//@ chunk-s61vbvea.js:54073-54228 placement
+//@ chunk-5d1nwe9e.js:1925-2079 placement
 /**
  * 解析并缓存 Bash 工具使用的 shell。
  */
@@ -245,7 +251,7 @@ function resolveBashToolShell(hostState) {
   );
   return hostState.bashToolShellPath;
 }
-//@ chunk-e6aww6q8.js:3034093-3034288 placement
+//@ chunk-5xgkngpb.js:3110380-3110575 placement
 function buildShellSessionLabel(attributionMessageId, sandboxAttributionId) {
   if (!alwaysFalseHintGate()) return;
   let replaced = sandboxAttributionId?.replaceAll(":", "-");
@@ -257,20 +263,20 @@ function buildShellSessionLabel(attributionMessageId, sandboxAttributionId) {
   ].filter((part) => part !== undefined);
   return filtered.length > 0 ? filtered.join("-") : undefined;
 }
-//@ chunk-e6aww6q8.js:3034288-3034349 placement
+//@ chunk-5xgkngpb.js:3110575-3110636 placement
 function safeSessionIdForSnapshot(sessionId) {
   if (!alwaysFalseHintGate()) return;
   return SAFE_ID_TOKEN_RE.test(sessionId) ? sessionId : undefined;
 }
-//@ chunk-e6aww6q8.js:3040979-3041006 placement
+//@ chunk-5xgkngpb.js:3125070-3125097 placement
 /**
  * 按宿主缓存的 Fig 命令 spec 注册表，供命令前缀推断使用。
  */
 var figSpecRegistryByHost; // deferred: uses FigSpecRegistry (./bash/registry.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3040979", () => {
+deferInit("chunk-5xgkngpb.js:3125070", () => {
   figSpecRegistryByHost = new HostScoped(() => new FigSpecRegistry());
 });
-//@ chunk-e6aww6q8.js:3072690-3073816 placement
+//@ chunk-5xgkngpb.js:3158627-3159753 placement
 /**
  * 校验 shell 读回的当前目录：拒绝含 ./..、NT 设备路径、网络路径的结果。
  */
@@ -347,11 +353,11 @@ async function validateShellCwdReadback(newCwd, reportedCwd, cwd) {
   }
   return reportedCwd;
 }
-//@ chunk-e6aww6q8.js:3075996-3076036 placement
+//@ chunk-5xgkngpb.js:3161933-3161973 placement
 var DEFAULT_SHELL_TIMEOUT_MS = 1800000;
 var POSIX_SHELL_PATH = "/bin/sh";
 var CWD_FILE_READ_BYTES = 65536;
-//@ chunk-e6aww6q8.js:3076036-3076160 placement
+//@ chunk-5xgkngpb.js:3161973-3162097 placement
 async function createBashProvider(hostState, options) {
   let shellPath = await resolveBashToolShell(hostState);
   let pluginBinPaths = await pluginBinPathsSafe(options);
@@ -362,7 +368,7 @@ async function createBashProvider(hostState, options) {
     pluginBinPaths,
   };
 }
-//@ chunk-e6aww6q8.js:3076160-3076301 placement
+//@ chunk-5xgkngpb.js:3162097-3162238 placement
 async function pluginBinPathsSafe(options) {
   try {
     return await getEnabledPluginBinPaths(options);
@@ -374,12 +380,12 @@ async function pluginBinPathsSafe(options) {
     return [];
   }
 }
-//@ chunk-e6aww6q8.js:3076301-3076348 placement
+//@ chunk-5xgkngpb.js:3162238-3162285 placement
 async function getShellConfig(options) {
   assertProgramLaunchAllowed();
   return getOrCreateShellConfig(shellPaths(), options);
 }
-//@ chunk-e6aww6q8.js:3076348-3076412 placement
+//@ chunk-5xgkngpb.js:3162285-3162349 placement
 /**
  * 惰性创建并缓存 shell 配置（选择 shell 提供者与快照的 Promise）。
  */
@@ -387,24 +393,24 @@ function getOrCreateShellConfig(hostState, options) {
   hostState.shellConfig ??= createBashProvider(hostState, options);
   return hostState.shellConfig;
 }
-//@ chunk-e6aww6q8.js:3076412-3076513 placement
+//@ chunk-5xgkngpb.js:3162349-3162452 placement
 /**
  * 取当前执行用 shell 的分析标签（按 shellPath 归类），失败返回 none。
  */
-async function getExecutorShellForAnalytics() {
+async function getExecutorShellForAnalytics(storageV5) {
   try {
-    let { provider } = await getShellConfig();
+    let { provider } = await getShellConfig(storageV5);
     return normalizeShellNameForAnalytics(provider.shellPath);
   } catch {
     return lit_2("none");
   }
 }
-//@ chunk-e6aww6q8.js:3076513-3076552 placement
+//@ chunk-5xgkngpb.js:3162452-3162491 placement
 var SHELL_CONFIG_PENDING; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3076513", () => {
+deferInit("chunk-5xgkngpb.js:3162452", () => {
   SHELL_CONFIG_PENDING = Symbol("shell config pending");
 });
-//@ chunk-e6aww6q8.js:3076552-3077252 placement
+//@ chunk-5xgkngpb.js:3162491-3163191 placement
 /**
  * 插件刷新后决定是否丢弃 shell 快照：配置仍在构建、快照不可用或插件 bin/ PATH 变了就清掉缓存的 shellConfig（下次 Bash 重建），否则保留；返回是否丢弃。
  */
@@ -434,21 +440,14 @@ async function invalidateShellSnapshotIfPluginBinsChanged(options) {
   logForDebugging(`Shell snapshot dropped on plugin refresh (${dropReason}); the next Bash exec rebuilds it`);
   return true;
 }
-//@ chunk-e6aww6q8.js:3077252-3077323 placement
+//@ chunk-5xgkngpb.js:3163191-3163262 placement
 function arraysEqual(pluginBinPaths, enabledPluginBinPaths) {
   return (
     pluginBinPaths.length === enabledPluginBinPaths.length &&
     pluginBinPaths.every((path, index) => path === enabledPluginBinPaths[index])
   );
 }
-//@ chunk-e6aww6q8.js:3077323-3077356 placement
-/**
- * 取当前宿主状态上的 PowerShell 提供者（getPsProvider(pre())）。
- */
-function getPsProvider() {
-  return getPsProviderForHostState(shellPaths());
-}
-//@ chunk-e6aww6q8.js:3077356-3077504 fingerprint (2.1.88 match: getPsProvider, 0.784)
+//@ chunk-5xgkngpb.js:3163262-3163410 fingerprint (2.1.88 match: getPsProvider, 0.784)
 /**
  * 惰性创建并缓存（存于宿主状态 powerShellProvider）PowerShell 提供者：先 getCachedPowerShellPath 找 pwsh/powershell，找不到抛 "PowerShell is not available"。
  */
@@ -459,7 +458,7 @@ function getPsProviderForHostState(hostState) {
   });
   return hostState.powerShellProvider;
 }
-//@ chunk-e6aww6q8.js:3077504-3077572 fingerprint (2.1.88 match: resolveProvider, 1)
+//@ chunk-5xgkngpb.js:3163410-3163478 fingerprint (2.1.88 match: resolveProvider, 1)
 /**
  * shellType → 提供者获取函数表：bash 走 getBashProviderForHost(RTn) 取 .provider，powershell 走 getPsProvider。
  */
@@ -467,7 +466,7 @@ var resolveProvider = {
   bash: async (hostState, options) => (await getOrCreateShellConfig(hostState, options)).provider,
   powershell: getPsProviderForHostState,
 };
-//@ chunk-e6aww6q8.js:3077572-3093643 placement (2.1.88 match: exec, 0.197)
+//@ chunk-5xgkngpb.js:3163478-3180005 placement (2.1.88 match: exec, 0.194)
 /**
  * Shell 工具的统一执行入口 exec(command, abortSignal, shellType, options)。顺序：diskless 会话直接拒绝 → 取 bash/powershell 提供者 → 生成执行 id 与 TMPDIR → provider.buildExecCommand 拼出命令串（快照 source、cwd 落盘文件等）→ 校验 cwd（被删/被换链接/与权限检查时不一致都拒绝，必要时回退到项目根/家目录/临时目录）、worktree 隔离防逃逸 → 若 shouldUseSandbox：合并逐命令 denyRead/denyWrite、scrub 沙箱配置，调用 SandboxManager.wrapWithSandbox（POSIX，得到包装后的命令串）或 wrapWithSandboxArgv（Windows，得到 argv/env），strict 模式下无隔离则拒绝 → spawn（cgroup、env 覆盖、Windows PowerShell 启动器）→ 包成 ShellCommandImpl；结束后读 cwd 文件更新会话 cwd、清理沙箱、改写 Windows 沙箱错误码说明。失败一律返回 createFailedCommand（E2BIG、磁盘满单独提示）。
  */
@@ -491,6 +490,7 @@ async function exec(command, abortSignal, shellType, options) {
     attributionMessageId,
     callTiming,
     shouldAutoBackground,
+    tailInput,
     onStdout,
     sessionEnvVars,
     effortLevel,
@@ -560,11 +560,14 @@ async function exec(command, abortSignal, shellType, options) {
     }
     bunOptions = bunOptionsFor(envForBun);
   }
+  let filePath = generateTaskId("local_bash");
   let {
     commandString: builtCommand,
     cwdFilePath,
     cpuAccountJoin,
     carriedCommandText,
+    takesTailInput,
+    refusedBeforeBash,
   } = await provider.buildExecCommand(command, {
     id: execId,
     sandboxTmpDir,
@@ -576,6 +579,13 @@ async function exec(command, abortSignal, shellType, options) {
     sandboxMaskedEnv: scrubCredentialEnv && shouldUseSandbox ? sandboxCredentialEnvVars().masked : undefined,
     storageV5,
     bunOptions,
+    tailInput:
+      tailInput === undefined || shouldUseSandbox || getPlatform() === "windows"
+        ? undefined
+        : {
+            path: tailInput.path,
+            outputPath: unboundTaskOutputPath(filePath),
+          },
     shellToolCommand: toolCgroupClass === "shell" && useToolMemoryCgroup,
   });
   let commandString = builtCommand;
@@ -731,13 +741,15 @@ async function exec(command, abortSignal, shellType, options) {
     }
     let guardRefusal =
       shellType === "bash"
-        ? (
-            await import("../tools/BashTool/bgWorktreeGuard/bgWorktreeCommandGuard.js")
-          ).checkBgWorktreeCommandGuard(
-            (parsedCommand = await parseForSecurity(command)),
-            command,
-            cwd,
-            isolationRoot_2,
+        ? await withSturdyLanternOff(async () =>
+            (
+              await import("../tools/BashTool/bgWorktreeGuard/bgWorktreeCommandGuard.js")
+            ).checkBgWorktreeCommandGuard(
+              (parsedCommand = await parseForSecurity(command)),
+              command,
+              cwd,
+              isolationRoot_2,
+            ),
           )
         : null;
     if (guardRefusal) {
@@ -757,7 +769,7 @@ async function exec(command, abortSignal, shellType, options) {
   let useUnixSandbox = (shouldUseSandbox ?? false) && !isWindowsSandbox;
   let sandboxInnerShell = useUnixSandbox && shellType === "powershell" ? POSIX_SHELL_PATH : binShell;
   if (isScrubEnabled()) {
-    let parsedForCaps = parsedCommand ?? (await parseForSecurity(command));
+    let parsedForCaps = parsedCommand ?? (await withSturdyLanternOff(() => parseForSecurity(command)));
     enforceScriptCaps(
       parsedForCaps.kind === "simple"
         ? parsedForCaps.commands.map((command) => command.text).join(`
@@ -1007,8 +1019,7 @@ async function exec(command, abortSignal, shellType, options) {
       `[sandbox] Windows: these variables from settings or /env are not passed to the sandboxed command: the sandbox or Claude Code sets them itself, sandbox.credentials lists them, they are names that never reach a Windows sandbox, or their name or value cannot stand on a command line: ${windowsEnvPlan.leftOut.join(", ")}`,
     );
   let usePipeMode = !!onStdout;
-  let taskId = generateTaskId("local_bash");
-  let taskOutput = new TaskOutput(taskId, onProgress ?? null, !usePipeMode);
+  let taskOutput = new TaskOutput(filePath, onProgress ?? null, !usePipeMode);
   let windowsLauncher =
     shellType === "powershell" && !shouldUseSandbox && !usePipeMode && getPlatform() === "windows"
       ? await resolveUsableWindowsLauncher(
@@ -1126,7 +1137,13 @@ async function exec(command, abortSignal, shellType, options) {
       cwd,
       stdio: windowsLauncher
         ? DETACHED_LAUNCHER_SPAWN_OPTIONS.stdio
-        : checkPathExists(provider.stdin, usePipeMode, outputFileHandle?.fd, stdinFd),
+        : checkPathExists(
+            provider.stdin,
+            usePipeMode,
+            outputFileHandle?.fd,
+            stdinFd,
+            takesTailInput ? tailInput?.fd : undefined,
+          ),
       windowsVerbatimArguments: windowsLauncher && DETACHED_LAUNCHER_SPAWN_OPTIONS.windowsVerbatimArguments,
       detached: provider.detached,
       windowsHide: true,
@@ -1283,6 +1300,20 @@ ${result.stdout}`,
           stderr: result.stderr.replace(COMMAND_TEXT_REF_RE, COMMAND_TEXT_MISSING_MESSAGE),
         };
       }
+      if (refusedBeforeBash !== undefined && result.code === 126) {
+        let [, bashVersion, major, minor] =
+          regExp_15.exec(`${result.stderr}
+${result.stdout}`) ?? [];
+        if (bashVersion !== undefined && Number(major) < refusedBeforeBash) {
+          logFeatureBad("shell_old_bash_refusal", `bash_${major}_${minor}`);
+          let message = shellTooOldReason(bashVersion);
+          return {
+            ...result,
+            stdout: result.stdout.replace(regExp_15, () => message),
+            stderr: result.stderr.replace(regExp_15, () => message),
+          };
+        }
+      }
       if (carriedCommandText !== undefined) logFeatureOk("shell_command_text_carrier");
       return cwdChangeRefused
         ? {
@@ -1344,14 +1375,14 @@ ${result.stdout}`,
     return createFailedCommand(errorMessage(error));
   }
 }
-//@ chunk-e6aww6q8.js:3093643-3093682 placement
+//@ chunk-5xgkngpb.js:3180005-3180044 placement
 /**
  * 把 cwd 参数解析成绝对真实路径（只取 path 字段）。
  */
 function resolvePhysicalCwd(path, baseCwd) {
   return resolveCwd(path, baseCwd).path;
 }
-//@ chunk-e6aww6q8.js:3093682-3093839 placement
+//@ chunk-5xgkngpb.js:3180044-3180201 placement
 /**
  * 相对路径基于给定目录或当前 cwd 解析，再 realpath；目录不存在抛 MissingWorkingDirectoryError，其他错误返回 {path, verified:false}。
  */
@@ -1370,7 +1401,7 @@ function resolveCwd(path, baseCwd) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:3093839-3093968 placement (2.1.88 match: setCwd, 0.53)
+//@ chunk-5xgkngpb.js:3180201-3180330 placement (2.1.88 match: setCwd, 0.53)
 /**
  * 工作目录不存在时抛出的错误类，带 path 字段。
  */
@@ -1382,31 +1413,31 @@ class MissingWorkingDirectoryError extends Error {
     this.path = path;
   }
 }
-//@ chunk-e6aww6q8.js:3093968-3094030 placement
+//@ chunk-5xgkngpb.js:3180330-3180392 placement
 /**
  * 按会话根保存 {pinned} 状态（工作目录缺失时的钉住标记）；被钉住的会话 cwd 消失时 exec 不回退到别的目录。
  */
 var missingWorkingDirectoryPins; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
 var permissionCheckedCwds;
-deferInit("chunk-e6aww6q8.js:3093968", () => {
+deferInit("chunk-5xgkngpb.js:3180330", () => {
   missingWorkingDirectoryPins = new SessionRootSlot(() => ({
     pinned: false,
   }));
   permissionCheckedCwds = new SessionRootSlot(() => new WeakMap());
 });
-//@ chunk-e6aww6q8.js:3094030-3094087 placement
+//@ chunk-5xgkngpb.js:3180392-3180449 placement
 /**
  * 取该会话在权限检查时记录的 cwd（按会话根的 WeakMap）；exec 在 spawn 前后比对，目录被替换/删除则拒绝执行。
  */
 function permissionCheckedCwdOf(session) {
   return session?.root && permissionCheckedCwds.peek(session.root)?.get(session);
 }
-//@ chunk-e6aww6q8.js:3094087-3094147 placement
+//@ chunk-5xgkngpb.js:3180449-3180509 placement
 function pathAncestors(path) {
   let parent = dirname(path);
   return parent === path ? [path] : [...pathAncestors(parent), path];
 }
-//@ chunk-e6aww6q8.js:3094147-3094521 placement
+//@ chunk-5xgkngpb.js:3180509-3180883 placement
 /**
  * 工作目录是否仍存在（same/lost/unknown）。
  */
@@ -1427,7 +1458,7 @@ async function checkCwdStillValid(path) {
   );
   return ["lost", "unknown"].find((outcome) => results.includes(outcome)) ?? "same";
 }
-//@ chunk-e6aww6q8.js:3094521-3094742 placement
+//@ chunk-5xgkngpb.js:3180883-3181104 placement
 async function resolvePhysicalCwdV5(path, context, baseCwd) {
   let absolutePath = isAbsolute(path) ? path : resolve_2(baseCwd || getFsImplementation().cwd(), path);
   let realPathResult = await context.hostFiles.realPath(PathSpace.workspace(absolutePath));
@@ -1442,11 +1473,11 @@ async function resolvePhysicalCwdV5(path, context, baseCwd) {
     verified: true,
   };
 }
-//@ chunk-e6aww6q8.js:3094742-3094777 placement
+//@ chunk-5xgkngpb.js:3181104-3181139 placement
 function setCwd(path, session, baseCwd) {
   applyNewCwd(resolveCwd(path, baseCwd), session);
 }
-//@ chunk-e6aww6q8.js:3094777-3094982 placement
+//@ chunk-5xgkngpb.js:3181139-3181344 placement
 /**
  * chdir 后调用 setCwd；setCwd 拒绝时尝试切回原目录再抛出错误。
  */
@@ -1468,11 +1499,11 @@ function chdirAndSetCwd(path) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:3094982-3095034 placement
+//@ chunk-5xgkngpb.js:3181344-3181396 placement
 async function setCwdV5(path, session, context, baseCwd) {
   applyNewCwd(await resolvePhysicalCwdV5(path, context, baseCwd), session);
 }
-//@ chunk-e6aww6q8.js:3095034-3095227 placement
+//@ chunk-5xgkngpb.js:3181396-3181589 placement
 function applyNewCwd(resolved, session) {
   session?.setCwd(resolved.path);
   setCwdForCallChain(resolved.path);
@@ -1487,15 +1518,15 @@ function applyNewCwd(resolved, session) {
     });
   } catch (error) {}
 }
-//@ chunk-e6aww6q8.js:3095227-3095254 placement
+//@ chunk-5xgkngpb.js:3181589-3181616 placement
 function registerSandboxWriteDirectory(worktreePath, session) {
   addSandboxAllowWriteDirectory(worktreePath, session);
 }
-//@ chunk-e6aww6q8.js:3095254-3095277 placement
+//@ chunk-5xgkngpb.js:3181616-3181639 placement
 function unregisterSandboxWriteDirectory(worktreePath) {
   removeSandboxAllowWriteDirectory(worktreePath);
 }
-//@ chunk-e6aww6q8.js:3095277-3095399 placement
+//@ chunk-5xgkngpb.js:3181639-3181761 placement
 async function retryWithoutSignalOnAbort(wrap, abortSignal, isAbortedNow) {
   try {
     return await wrap(abortSignal);
@@ -1504,7 +1535,7 @@ async function retryWithoutSignalOnAbort(wrap, abortSignal, isAbortedNow) {
     return isAbortedNow() ? undefined : wrap(undefined);
   }
 }
-//@ chunk-e6aww6q8.js:3095399-3095484 placement
+//@ chunk-5xgkngpb.js:3181761-3181846 placement
 async function closeOutputAndStdinHandles(outputFileHandle, stdinFd) {
   try {
     await outputFileHandle?.close();
@@ -1514,7 +1545,7 @@ async function closeOutputAndStdinHandles(outputFileHandle, stdinFd) {
       closeSync(stdinFd);
     } catch {}
 }
-//@ chunk-e6aww6q8.js:3095484-3095605 placement
+//@ chunk-5xgkngpb.js:3181846-3181967 placement
 function sandboxCleanupSafe(scrubPaths, symlinkDenyPaths) {
   try {
     SandboxManager.cleanupAfterCommand(scrubPaths, symlinkDenyPaths);
@@ -1524,7 +1555,7 @@ function sandboxCleanupSafe(scrubPaths, symlinkDenyPaths) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:3095605-3095716 placement
+//@ chunk-5xgkngpb.js:3181967-3182078 placement
 function sandboxScrubSafe() {
   try {
     SandboxManager.scrubAfterCommand();
@@ -1534,7 +1565,7 @@ function sandboxScrubSafe() {
     });
   }
 }
-//@ chunk-e6aww6q8.js:3095716-3096062 placement
+//@ chunk-5xgkngpb.js:3182078-3182424 placement
 /**
  * 子进程退出后再做沙箱清理（先擦除，快照扫描路径）。
  */
@@ -1566,7 +1597,7 @@ function scheduleSandboxCleanup(child) {
     });
   }
 }
-//@ chunk-e6aww6q8.js:3096062-3096198 placement
+//@ chunk-5xgkngpb.js:3182424-3182560 placement
 async function removeCwdTrackingFile(path) {
   try {
     await getFsImplementation().unlink(path);
@@ -1577,13 +1608,13 @@ async function removeCwdTrackingFile(path) {
       });
   }
 }
-//@ chunk-e6aww6q8.js:3096198-3096269 placement
+//@ chunk-5xgkngpb.js:3182560-3182631 placement
 function shellExportsForSpawn(shellType, shouldUseSandbox, scrubCredentialEnv) {
   return shellType === "bash" && !shouldUseSandbox && !scrubCredentialEnv
     ? shellEnvSnapshot().shellExports
     : undefined;
 }
-//@ chunk-e6aww6q8.js:3096269-3096725 placement
+//@ chunk-5xgkngpb.js:3182631-3183089 placement
 /**
  * 构造 shell 子进程环境：默认值、SHELL（bash 时）、GIT_EDITOR=true、覆盖项、沙箱 env、会话/effort 标识；删除沙箱要求移除的变量，把插件 bin 目录拼进 PATH，带上 BUN_OPTIONS 与命令文本承载变量。
  */
@@ -1620,7 +1651,7 @@ function buildShellSpawnEnv({
   if (carriedCommandText !== undefined) env[COMMAND_TEXT_VAR] = carriedCommandText;
   return env;
 }
-//@ chunk-e6aww6q8.js:3096813-3096993 placement
+//@ chunk-5xgkngpb.js:3183202-3183382 placement
 function sandboxCredentialEnvVars() {
   let envVars = SandboxManager.getConfig()?.credentials?.envVars ?? [];
   return {
@@ -1628,31 +1659,30 @@ function sandboxCredentialEnvVars() {
     masked: envVars.filter((envVar) => envVar.mode !== "deny").map((envVar) => envVar.name),
   };
 }
-//@ chunk-e6aww6q8.js:3096993-3097020 placement
+//@ chunk-5xgkngpb.js:3183382-3183409 placement
 var perCommandDenyUnenforcedSaid; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3096993", () => {
+deferInit("chunk-5xgkngpb.js:3183382", () => {
   perCommandDenyUnenforcedSaid = new HostScoped(() => new Set());
 });
 export {
   findShellOnPath,
-  setCwd,
-  registerSandboxWriteDirectory,
-  unregisterSandboxWriteDirectory,
-  exec,
   resolvePhysicalCwd,
-  figSpecRegistryByHost,
+  invalidateShellSnapshotIfPluginBinsChanged,
+  resolveBashToolShellWithHost,
+  setCwd,
   setCwdV5,
   MissingWorkingDirectoryError,
   missingWorkingDirectoryPins,
-  permissionCheckedCwds,
-  chdirAndSetCwd,
-  invalidateShellSnapshotIfPluginBinsChanged,
-  resolveBashToolShellWithHost,
   getExecutorShellForAnalytics,
+  exec,
   perCommandDenyUnenforcedSaid,
   safeSessionIdForSnapshot,
   buildShellSpawnEnv,
-  getPsProvider,
+  chdirAndSetCwd,
+  figSpecRegistryByHost,
+  permissionCheckedCwds,
+  registerSandboxWriteDirectory,
+  unregisterSandboxWriteDirectory,
   getShellConfig,
   permissionCheckedCwdOf,
   resolvePhysicalCwdV5,

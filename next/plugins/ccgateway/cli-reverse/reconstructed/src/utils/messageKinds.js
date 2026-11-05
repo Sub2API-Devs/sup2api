@@ -3,24 +3,24 @@
  *
  * 2.1.316 新增：是否为不进入转录的临时消息；消息内部标记符号与流事件类型表等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (7)
  * attribution: placement 7
  */
 
-//@ chunk-aepeg2w5.js:600042-600097 placement
+//@ chunk-exfmq47h.js:612526-612581 placement
 var TRANSIENT_MESSAGE_TYPES = ["compact_progress", "sdk_status", "stream_mode"];
-//@ chunk-aepeg2w5.js:600097-600116 placement
+//@ chunk-exfmq47h.js:612581-612600 placement
 var transientMessageTypeSet = new Set(TRANSIENT_MESSAGE_TYPES);
-//@ chunk-aepeg2w5.js:600116-600154 placement
+//@ chunk-exfmq47h.js:612600-612638 placement
 /**
  * 判断消息是否为不进入转录的临时类型。
  */
 function isTransientMessage(streamEvent) {
   return transientMessageTypeSet.has(streamEvent.type);
 }
-//@ chunk-aepeg2w5.js:600154-600394 placement
+//@ chunk-exfmq47h.js:612638-612907 placement
 /**
  * 消息内部标记符号与流事件类型表。
  */
@@ -28,6 +28,7 @@ var MESSAGE_MARK_SYMBOLS_2 = Symbol("apiErrorOrigin");
 var MESSAGE_MARK_SYMBOLS = Symbol("seenHere");
 var restoredTaskMarkSymbol = Symbol("restoredTaskMark");
 var storedFormSymbol = Symbol("storedForm");
+var BUILT_IN_TOOL_RUN_SYMBOL = Symbol("builtInToolRun");
 var replacedTurnStartSymbol = Symbol("replacedTurnStart");
 var inputAsWrittenSymbol = Symbol("inputAsWritten");
 var STREAM_EVENT_TYPES = [
@@ -36,16 +37,16 @@ var STREAM_EVENT_TYPES = [
   "response_length",
   ...TRANSIENT_MESSAGE_TYPES,
 ];
-//@ chunk-aepeg2w5.js:600394-600413 placement
+//@ chunk-exfmq47h.js:612907-612926 placement
 var streamEventTypeSet = new Set(STREAM_EVENT_TYPES);
-//@ chunk-aepeg2w5.js:600413-600451 placement
+//@ chunk-exfmq47h.js:612926-612964 placement
 /**
  * 是否为流事件类型。
  */
 function isStreamEvent(message) {
   return streamEventTypeSet.has(message.type);
 }
-//@ chunk-aepeg2w5.js:600451-600991 placement
+//@ chunk-exfmq47h.js:612964-613504 placement
 /**
  * 是否为不进入转录的临时消息。
  */
@@ -82,13 +83,14 @@ function isTransientMessage_2(message) {
   }
 }
 export {
+  inputAsWrittenSymbol,
+  restoredTaskMarkSymbol,
   isStreamEvent,
   isTransientMessage,
-  inputAsWrittenSymbol,
-  MESSAGE_MARK_SYMBOLS_2,
-  restoredTaskMarkSymbol,
-  MESSAGE_MARK_SYMBOLS,
   storedFormSymbol,
-  replacedTurnStartSymbol,
+  MESSAGE_MARK_SYMBOLS,
+  MESSAGE_MARK_SYMBOLS_2,
   isTransientMessage_2,
+  BUILT_IN_TOOL_RUN_SYMBOL,
+  replacedTurnStartSymbol,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：创建 PR 的内置技能：允许/禁止工具清单、只读 git/gh 命令模式、提示词与注册（开关满足才启用）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hantmvxa.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ne2890fx.js (6)
  * attribution: placement 6
  */
 import {
@@ -52,15 +52,15 @@ import { getProjectRoot } from "../../bootstrap/state.js";
 import { buildPRAttributionTrailer } from "../../utils/attribution.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hantmvxa.js:183579-183843 placement
+//@ chunk-ne2890fx.js:183760-184024 placement
 /**
  * 创建 PR skill 的工具清单：基础工具名 PR_SKILL_BASE_TOOLS、只读 git/gh 命令模式 PR_SKILL_BASH_PATTERNS；toBashPermissionRules 把命令包成 Bash(...) 规则，合成 PR_SKILL_ALLOWED_TOOLS。
  */
-var PR_SKILL_BASE_TOOLS; // deferred: uses CERTIFIED_GIT_STATUS (../../tools/BashTool/certifiedCommands.js) of its import cycle while loading; runs once the cycle is complete
+var PR_SKILL_BASE_TOOLS; // deferred: uses toPowerShellRules (../../utils/git.js) of its import cycle while loading; runs once the cycle is complete
 var PR_SKILL_BASH_PATTERNS;
 var toBashPermissionRules;
 var PR_SKILL_ALLOWED_TOOLS;
-deferInit("chunk-hantmvxa.js:183579", () => {
+deferInit("chunk-ne2890fx.js:183760", () => {
   PR_SKILL_BASE_TOOLS = [
     CERTIFIED_GIT_STATUS,
     CERTIFIED_GIT_LOG,
@@ -85,7 +85,7 @@ deferInit("chunk-hantmvxa.js:183579", () => {
     ...toPowerShellRules(PR_SKILL_BASH_PATTERNS),
   ];
 });
-//@ chunk-hantmvxa.js:183843-183970 placement
+//@ chunk-ne2890fx.js:184024-184151 placement
 /**
  * 异步计算创建 PR skill 的允许工具：固定工具 + 运行时探测到的额外 Bash 规则。
  */
@@ -97,9 +97,9 @@ async function getPrSkillAllowedTools() {
     ...toPowerShellRules([...PR_SKILL_BASH_PATTERNS, ...gitPushShellPatternsForRemotes(gitPushRemotes)]),
   ];
 }
-//@ chunk-hantmvxa.js:183970-184037 placement
+//@ chunk-ne2890fx.js:184151-184219 placement
 var PR_SKILL_DISALLOWED_TOOLS; // deferred: uses toPowerShellRules (../../utils/git.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hantmvxa.js:183970", () => {
+deferInit("chunk-ne2890fx.js:184151", () => {
   PR_SKILL_DISALLOWED_TOOLS = [
     ...bashAndPowerShellRules([
       ...GIT_OUTPUT_RESTRICTED_RULES,
@@ -111,7 +111,7 @@ deferInit("chunk-hantmvxa.js:183970", () => {
     ...emptyList(),
   ];
 });
-//@ chunk-hantmvxa.js:184037-186209 placement
+//@ chunk-ne2890fx.js:184219-186391 placement
 /**
  * 生成创建 PR skill 的提示词：用 !`git …` 注入当前状态、分支、提交与 diff，附用户指导、Git 安全协议和 gh pr create HEREDOC 模板。
  */
@@ -201,7 +201,7 @@ The closing \`'@\` MUST be at column 0 with no leading whitespace.`
 
 You have the capability to call multiple tools in a single response. Branch, push, and create the PR using a single message. Do not run additional commands to read or explore code beyond the git context above, and do not use any non-git tools for this task.`;
 }
-//@ chunk-hantmvxa.js:186209-187055 placement
+//@ chunk-ne2890fx.js:186391-187237 placement
 /**
  * 注册"Create a pull request"bundled skill：限定允许/禁止的工具集，开关满足才启用，参数作为 PR 指导。
  */
@@ -256,7 +256,7 @@ function registerCreatePrSkill() {
     },
   });
 }
-//@ chunk-hantmvxa.js:187055-187076 placement
+//@ chunk-ne2890fx.js:187237-187258 placement
 function noopSimplifySkillStub() {
   return;
 }

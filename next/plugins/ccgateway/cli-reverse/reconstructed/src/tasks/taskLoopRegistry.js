@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：进程内任务循环登记。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6vnxsn99.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-01kgd7xg.js (15)
  * attribution: placement 15
  */
 import { HostScoped } from "../utils/hostScoped.js";
@@ -13,7 +13,7 @@ import { onProcessRootHost } from "../bootstrap/state.js";
 import { logError } from "../utils/log.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-6vnxsn99.js:3428-3922 placement
+//@ chunk-01kgd7xg.js:3685-4179 placement
 /**
  * 进程内任务循环登记：存活进程、待停止代理、曾注册过的任务、每个任务的循环（kill 控制器、子代理 AbortController、settle 回调）。
  */
@@ -35,23 +35,23 @@ class TaskLoopRegistryState {
     this.stopPendingAgentIds.clear();
   }
 }
-//@ chunk-6vnxsn99.js:3922-3947 placement
+//@ chunk-01kgd7xg.js:4179-4204 placement
 /**
  * 按 host 保存的任务循环注册表。
  */
 var taskLoopRegistrySlots; // deferred: uses TaskLoopRegistryState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-6vnxsn99.js:3922", () => {
+deferInit("chunk-01kgd7xg.js:4179", () => {
   taskLoopRegistrySlots = new HostScoped(() => new TaskLoopRegistryState());
 });
-//@ chunk-6vnxsn99.js:3947-3975 placement
+//@ chunk-01kgd7xg.js:4204-4232 placement
 function getTaskLoopRegistry() {
   return onProcessRootHost(taskLoopRegistrySlots);
 }
-//@ chunk-6vnxsn99.js:3975-4032 placement
+//@ chunk-01kgd7xg.js:4232-4289 placement
 function wasTaskEverRegistered(taskId) {
   return getTaskLoopRegistry().everRegisteredTaskIds.has(taskId);
 }
-//@ chunk-6vnxsn99.js:4032-4494 placement
+//@ chunk-01kgd7xg.js:4289-4751 placement
 function registerTaskLoop(taskId, killController, options = {}) {
   let { everRegisteredTaskIds, loopsByTaskId } = getTaskLoopRegistry();
   everRegisteredTaskIds.add(taskId);
@@ -76,7 +76,7 @@ function registerTaskLoop(taskId, killController, options = {}) {
     runSettleCallbacks(loop);
   };
 }
-//@ chunk-6vnxsn99.js:4494-4563 placement
+//@ chunk-01kgd7xg.js:4751-4820 placement
 /**
  * 依次执行注册的结算回调，异常只记录。
  */
@@ -88,15 +88,15 @@ function runSettleCallbacks(loop) {
       logError(error);
     }
 }
-//@ chunk-6vnxsn99.js:4563-4611 placement
+//@ chunk-01kgd7xg.js:4820-4868 placement
 function isTaskLoopSettled(taskId) {
   return !getTaskLoopRegistry().loopsByTaskId.has(taskId);
 }
-//@ chunk-6vnxsn99.js:4611-4660 placement
+//@ chunk-01kgd7xg.js:4868-4917 placement
 function getTaskLoop(taskId) {
   return getTaskLoopRegistry().loopsByTaskId.get(taskId);
 }
-//@ chunk-6vnxsn99.js:4660-4772 placement
+//@ chunk-01kgd7xg.js:4917-5029 placement
 function onTaskLoopSettled(taskId, callback) {
   let loop = getTaskLoopRegistry().loopsByTaskId.get(taskId);
   if (!loop) {
@@ -109,15 +109,15 @@ function onTaskLoopSettled(taskId, callback) {
   }
   loop.settleCallbacks.push(callback);
 }
-//@ chunk-6vnxsn99.js:4772-4837 placement
+//@ chunk-01kgd7xg.js:5029-5094 placement
 function getTaskKillController(taskId) {
   return getTaskLoopRegistry().loopsByTaskId.get(taskId)?.killController;
 }
-//@ chunk-6vnxsn99.js:4837-4919 placement
+//@ chunk-01kgd7xg.js:5094-5176 placement
 function setAgentController(taskId, agentId, controller) {
   getTaskLoopRegistry().loopsByTaskId.get(taskId)?.agentControllersByAgentId.set(agentId, controller);
 }
-//@ chunk-6vnxsn99.js:4919-5139 placement
+//@ chunk-01kgd7xg.js:5176-5396 placement
 function removeAgentController(taskId, agentId) {
   let { loopsByTaskId } = getTaskLoopRegistry();
   let loop = loopsByTaskId.get(taskId);
@@ -132,12 +132,12 @@ function removeAgentController(taskId, agentId) {
     runSettleCallbacks(loop);
   }
 }
-//@ chunk-6vnxsn99.js:5139-5239 placement
+//@ chunk-01kgd7xg.js:5396-5496 placement
 function taskAgentIds(taskId) {
   let loop = getTaskLoopRegistry().loopsByTaskId.get(taskId);
   return loop ? [...loop.agentControllersByAgentId.keys()] : [];
 }
-//@ chunk-6vnxsn99.js:5239-5404 placement
+//@ chunk-01kgd7xg.js:5496-5661 placement
 function liveAgentControllers(taskId) {
   let loop = getTaskLoopRegistry().loopsByTaskId.get(taskId);
   if (!loop) return [];
@@ -146,7 +146,7 @@ function liveAgentControllers(taskId) {
     if (controller && !controller.signal.aborted) controllers.push(controller);
   return controllers;
 }
-//@ chunk-6vnxsn99.js:5404-5777 placement
+//@ chunk-01kgd7xg.js:5661-6080 placement
 /**
  * 永不限流的限流器实现（始终允许、无需等待）。
  */
@@ -159,6 +159,9 @@ var UNLIMITED_RATE_LIMITER_2 = {
   },
   refillsPerHour() {
     return 0;
+  },
+  async acquireDirectSearchSlot() {
+    return () => {};
   },
 };
 var UNLIMITED_RATE_LIMITER = {
@@ -189,16 +192,16 @@ var UNLIMITED_RATE_LIMITER = {
   },
 };
 export {
-  registerTaskLoop,
-  setAgentController,
   isTaskLoopSettled,
-  getTaskKillController,
-  liveAgentControllers,
-  taskAgentIds,
-  UNLIMITED_RATE_LIMITER,
   wasTaskEverRegistered,
   onTaskLoopSettled,
-  removeAgentController,
+  UNLIMITED_RATE_LIMITER,
+  registerTaskLoop,
+  setAgentController,
   getTaskLoopRegistry,
   getTaskLoop,
+  taskAgentIds,
+  liveAgentControllers,
+  getTaskKillController,
+  removeAgentController,
 };

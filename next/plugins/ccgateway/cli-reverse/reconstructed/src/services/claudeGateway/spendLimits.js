@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：网关花费限额与共享预算
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (54)
- * attribution: placement 54
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (58)
+ * attribution: placement 54, layout 4
  */
-import { timingSafeEqual } from "crypto";
+import { createHash, timingSafeEqual } from "crypto";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   create,
@@ -20,6 +20,9 @@ import {
   create_26,
   create_6,
 } from "../../../vendor/zod/lib/index.mjs";
+import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
+import { pgErrorCode } from "./store/postgres.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { gatewayLog, gatewayJsonLog } from "../gateway/gatewayBanner.js";
 import { errorMessage } from "../../utils/errors.js";
 import {
@@ -37,7 +40,7 @@ import { hasKnownModelCost } from "../../utils/modelCost.js";
 import { findPricingOverride, requestCostCents } from "./models.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1ny7cxrt.js:1423402-1423544 placement
+//@ chunk-1hnjmk23.js:1425282-1425467 placement
 /**
  * 管理 API 响应头与 HTTP 状态到错误类型的映射。
  */
@@ -49,8 +52,10 @@ var ADMIN_ERROR_TYPE_BY_STATUS = {
   401: "authentication_error",
   403: "permission_error",
   404: "not_found_error",
+  429: "rate_limit_error",
+  504: "timeout_error",
 };
-//@ chunk-1ny7cxrt.js:1423544-1423654 placement
+//@ chunk-1hnjmk23.js:1425467-1425577 placement
 /**
  * 管理 API 错误响应（Anthropic 错误格式）。
  */
@@ -69,7 +74,7 @@ function adminErrorResponse(status, message, requestId) {
     },
   );
 }
-//@ chunk-1ny7cxrt.js:1423654-1423761 placement
+//@ chunk-1hnjmk23.js:1425577-1425684 placement
 /**
  * 解析 limit 参数（1–1000），非法返回 null。
  */
@@ -78,12 +83,12 @@ function parsePageLimit(searchParams, defaultValue) {
   if (!Number.isInteger(limit) || limit < 1 || limit > 1000) return null;
   return limit;
 }
-//@ chunk-1ny7cxrt.js:1423761-1423797 placement
+//@ chunk-1hnjmk23.js:1437810-1437846 placement
 /**
  * 花费统计的三个周期（daily、weekly、monthly）。
  */
 var SPEND_PERIODS = ["daily", "weekly", "monthly"];
-//@ chunk-1ny7cxrt.js:1423797-1424192 placement
+//@ chunk-1hnjmk23.js:1437846-1438241 placement
 /**
  * 周期桶键：monthly 为 YYYY-MM，daily 为 YYYY-MM-DD，weekly 为 ISO 周 YYYY-Www。
  */
@@ -98,7 +103,7 @@ function periodBucket(period = "monthly", date = new Date()) {
   let week = Math.ceil(((date_2.getTime() - jan1) / 86400000 + 1) / 7);
   return `${utcFullYear}-W${String(week).padStart(2, "0")}`;
 }
-//@ chunk-1ny7cxrt.js:1424192-1424442 placement
+//@ chunk-1hnjmk23.js:1438241-1438491 placement
 /**
  * 当前周期的重置时间（下月 1 日、次日或下周一，UTC）。
  */
@@ -111,14 +116,314 @@ function periodResetsAt(period, date = new Date()) {
   let daysUntilMonday = 8 - (date.getUTCDay() || 7);
   return new Date(Date.UTC(utcFullYear, utcMonth, utcDate + daysUntilMonday));
 }
-//@ chunk-1ny7cxrt.js:1424442-1424498 placement
+//@ chunk-1hnjmk23.js:1438491-1439059 layout
+var DAY_MS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var SETTLED_DAY_MS;
+var MAX_REPORT_DAYS;
+var REPORT_PARAMS;
+var DAILY_ONLY_NOTE;
+var REPORT_LOCK_KEY;
+var RFC3339_RE;
+var RFC3339_HINT;
+var PageTokenSchema;
+deferInit("chunk-1hnjmk23.js:1438491", () => {
+  DAY_MS = 86400000;
+  SETTLED_DAY_MS = 300000;
+  MAX_REPORT_DAYS = 31;
+  REPORT_PARAMS = [
+    "starting_at",
+    "ending_at",
+    "time_bucket_width",
+    "group_by[]",
+    "actor_ids[]",
+    "actor_types[]",
+    "rbac_group_ids[]",
+    "exclude_deleted_users",
+    "order_by",
+    "order",
+    "limit",
+    "page",
+  ];
+  DAILY_ONLY_NOTE = "the gateway records spend per user per day only";
+  REPORT_LOCK_KEY = 6775157;
+  RFC3339_RE = /^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$/;
+  RFC3339_HINT =
+    "must be an RFC 3339 timestamp with a time zone offset (Z or \xB1HH:MM), such as 2026-08-01T00:00:00Z";
+  PageTokenSchema = DoctorLazy(() =>
+    create({
+      c: create_2().regex(/^-?\d{1,24}(\.\d{1,6})?$/),
+      p: create_2(),
+      g: create_2(),
+      d: create_2().regex(/^\d{4}-\d{2}-\d{2}$/),
+      q: create_2(),
+    }),
+  );
+});
+//@ chunk-1hnjmk23.js:1439059-1446056 placement
+/**
+ * GET 列表：按作用域类型筛选、after_id/before_id 分页。
+ */
+async function handleListSpendLimits({ url, sql, requestId }) {
+  let searchParams = url.searchParams;
+  for (let key of searchParams.keys())
+    if (!REPORT_PARAMS.includes(key) && key !== "beta")
+      return adminErrorResponse(
+        400,
+        `${key}: not a parameter of the gateway's cost report, which takes ${REPORT_PARAMS.join(", ")}`,
+        requestId,
+      );
+  let startingAt = searchParams.get("starting_at");
+  if (startingAt === null) return adminErrorResponse(400, "starting_at: required", requestId);
+  let startMs = parseTimestamp(startingAt);
+  if (startMs === null) return adminErrorResponse(400, `starting_at: ${RFC3339_HINT}`, requestId);
+  let endingAt = searchParams.get("ending_at");
+  let endMs = endingAt === null ? null : parseTimestamp(endingAt);
+  if (endingAt !== null && endMs === null)
+    return adminErrorResponse(400, `ending_at: ${RFC3339_HINT}`, requestId);
+  let bucketWidth = searchParams.get("time_bucket_width");
+  if (bucketWidth !== null && bucketWidth !== "1d")
+    return adminErrorResponse(400, `time_bucket_width: must be 1d; ${DAILY_ONLY_NOTE}`, requestId);
+  if (bucketWidth !== null && endMs === null)
+    return adminErrorResponse(400, "ending_at: required when time_bucket_width is set", requestId);
+  let now = Date.now();
+  let endMsOrDefault = endMs ?? Math.min(now, startMs + MAX_REPORT_DAYS * DAY_MS);
+  if (startMs >= endMsOrDefault)
+    return adminErrorResponse(400, "starting_at: must be before ending_at, which defaults to now", requestId);
+  if (endMsOrDefault - startMs > MAX_REPORT_DAYS * DAY_MS)
+    return adminErrorResponse(
+      400,
+      `ending_at: the range may span at most ${MAX_REPORT_DAYS} days`,
+      requestId,
+    );
+  let all = searchParams.getAll("group_by[]");
+  if (all.some((dimension) => dimension !== "actor" && dimension !== "rbac_group_id"))
+    return adminErrorResponse(
+      400,
+      `group_by[]: must be actor or rbac_group_id; ${DAILY_ONLY_NOTE}`,
+      requestId,
+    );
+  let included = all.includes("actor");
+  let included_2 = all.includes("rbac_group_id");
+  let all_2 = searchParams.getAll("actor_ids[]");
+  if (all_2.length > 100)
+    return adminErrorResponse(400, "actor_ids[]: at most 100 entries per request", requestId);
+  let all_3 = searchParams.getAll("rbac_group_ids[]");
+  if (all_3.length > 100)
+    return adminErrorResponse(400, "rbac_group_ids[]: at most 100 entries per request", requestId);
+  if (searchParams.getAll("actor_types[]").some((actorType) => actorType !== "user_actor"))
+    return adminErrorResponse(
+      400,
+      "actor_types[]: must be user_actor, the only kind of actor a gateway has",
+      requestId,
+    );
+  let pageLimit = parsePageLimit(searchParams, 20);
+  if (pageLimit === null) return adminErrorResponse(400, "limit: must be between 1 and 1000", requestId);
+  let order = searchParams.get("order") ?? "desc";
+  if (order !== "asc" && order !== "desc")
+    return adminErrorResponse(400, "order: must be asc or desc", requestId);
+  let orderBy = searchParams.get("order_by") ?? "amount";
+  if (orderBy !== "amount" && orderBy !== "list_amount" && orderBy !== "time")
+    return adminErrorResponse(400, "order_by: must be amount, list_amount or time", requestId);
+  let excludeDeleted = searchParams.get("exclude_deleted_users")?.toLowerCase() ?? "false";
+  if (excludeDeleted !== "true" && excludeDeleted !== "false")
+    return adminErrorResponse(400, "exclude_deleted_users: must be true or false", requestId);
+  if (excludeDeleted === "true" && !included)
+    return adminErrorResponse(400, "exclude_deleted_users: requires group_by[]=actor", requestId);
+  let bucketed = bucketWidth !== null;
+  let startBucket = periodBucket("daily", new Date(startMs + 1000));
+  let endBucket = periodBucket(
+    "daily",
+    new Date(endMs === null && endMsOrDefault === now ? now + DAY_MS : endMsOrDefault + 1000),
+  );
+  let settledBucket = periodBucket("daily", new Date(now - SETTLED_DAY_MS));
+  let includesToday = endBucket > settledBucket;
+  let fingerprint = createHash("sha256")
+    .update(
+      jsonStringify([
+        ...[...searchParams].filter(([paramName]) => !["page", "limit", "beta"].includes(paramName)).sort(),
+        includesToday,
+      ]),
+    )
+    .digest("base64url");
+  let page;
+  let pageToken = searchParams.get("page");
+  if (pageToken !== null) {
+    try {
+      page = PageTokenSchema().parse(jsonParse(Buffer.from(pageToken, "base64url").toString()));
+    } catch {}
+    if (page?.q !== fingerprint)
+      return adminErrorResponse(
+        400,
+        "page: invalid page token, one from a request with other parameters, or one made before the range's last day was over; start again without page",
+        requestId,
+      );
+  }
+  if (page !== undefined && includesToday)
+    return adminErrorResponse(
+      400,
+      `page: a range that includes today (UTC), or a day that ended less than 5 minutes ago, can't be read in pages, because its amounts are still changing and rows could be skipped or repeated. ${startBucket < settledBucket ? `Start again with ending_at at ${settledBucket}T00:00:00Z or earlier, or read` : "Read"} the range in one page (limit up to 1000; if it has more rows, split the developers across calls with actor_ids[], up to 100 a call)`,
+      requestId,
+    );
+  let direction = order === "desc" ? -1 : 1;
+  let orderedByTime = bucketed && orderBy === "time";
+  let timeOrder = orderedByTime ? direction : 0;
+  let amountOrder = orderedByTime ? -1 : direction;
+  let actorIds = all_2.length > 0 ? sql.array(all_2, "TEXT") : null;
+  let groupIds = all_3.length > 0 ? sql.array(all_3, "TEXT") : null;
+  let cursorAmount = page?.c ?? null;
+  let cursorPrincipal = page?.p ?? null;
+  let cursorGroup = page?.g ?? null;
+  let cursorDay = page?.d ?? null;
+  let rows;
+  try {
+    rows = await sql.begin(async (tx) => {
+      await tx`SET LOCAL statement_timeout = '10s'`;
+      let [lockRow] = await tx`SELECT pg_try_advisory_xact_lock(${REPORT_LOCK_KEY}) AS free`;
+      if (!lockRow?.free) return null;
+      return tx`
+    WITH per AS (
+      SELECT CASE WHEN ${included}::boolean THEN s.principal ELSE '' END AS principal,
+             coalesce(member.rbac_group, '') AS rbac_group,
+             CASE WHEN ${bucketed}::boolean THEN s.period ELSE ${startBucket} END AS day,
+             round(sum(s.cents::numeric), 6) AS amount
+      FROM spend s
+      -- The groups held on the UTC day of the spend, as on 1P. The day before
+      -- stands in for a request checked before midnight and metered after. The
+      -- CASE keeps monthly and weekly keys from ever reaching the date cast.
+      LEFT JOIN LATERAL (
+        SELECT g.groups FROM principal_groups g
+        WHERE (${included_2}::boolean OR ${groupIds}::text[] IS NOT NULL)
+          AND g.principal = s.principal
+          AND g.day IN (s.period, to_char(
+            CASE WHEN length(s.period) = 10 THEN s.period::date - 1 END,
+            'YYYY-MM-DD'))
+        ORDER BY g.day DESC LIMIT 1
+      ) held ON true
+      -- Also as on 1P: counted in full in each group when grouping, once when only
+      -- filtering, and '' (null on the wire) where no group is recorded.
+      LEFT JOIN LATERAL jsonb_array_elements_text(held.groups) AS member(rbac_group)
+        ON ${included_2}::boolean
+        AND (${groupIds}::text[] IS NULL OR member.rbac_group = ANY(${groupIds}::text[]))
+      WHERE s.period >= ${startBucket} AND s.period < ${endBucket}
+        AND length(s.period) = 10
+        AND (${actorIds}::text[] IS NULL OR s.principal = ANY(${actorIds}::text[]))
+        AND (${groupIds}::text[] IS NULL OR held.groups ?| ${groupIds}::text[])
+      GROUP BY 1, 2, 3
+    )
+    SELECT per.principal, per.rbac_group, per.day, per.amount::text AS amount,
+           e.email, e.name
+    FROM per
+    LEFT JOIN principal_emails e ON e.principal = per.principal
+    WHERE ${cursorAmount}::numeric IS NULL
+       OR (${timeOrder}::int * replace(per.day, '-', '')::int,
+           ${amountOrder}::int * per.amount, per.principal, per.rbac_group, per.day)
+        > (${timeOrder}::int * replace(${cursorDay}::text, '-', '')::int,
+           ${amountOrder}::int * ${cursorAmount}::numeric, ${cursorPrincipal}::text,
+           ${cursorGroup}::text, ${cursorDay}::text)
+    ORDER BY ${timeOrder}::int * replace(per.day, '-', '')::int,
+             ${amountOrder}::int * per.amount, per.principal, per.rbac_group, per.day
+    LIMIT ${pageLimit + 1}
+  `;
+    });
+  } catch (error) {
+    if (pgErrorCode(error) !== "57014") throw error;
+    let timeoutResponse = adminErrorResponse(
+      504,
+      "the report took more than 10 seconds; ask for a shorter range, fewer group_by[] dimensions, no time_bucket_width, or only some actor_ids[] (up to 100 a call)",
+      requestId,
+    );
+    timeoutResponse.headers.set("x-should-retry", "false");
+    return timeoutResponse;
+  }
+  if (rows === null) {
+    let busyResponse = adminErrorResponse(
+      429,
+      "another cost report is running, and they run one at a time; try again in a few seconds",
+      requestId,
+    );
+    busyResponse.headers.set("x-should-retry", "true");
+    busyResponse.headers.set("retry-after", "1");
+    return busyResponse;
+  }
+  let hasMore = rows.length > pageLimit;
+  let sliced = rows.slice(0, pageLimit);
+  let last = sliced.at(-1);
+  return Response.json(
+    {
+      data: sliced.map((row) => ({
+        starting_at: `${row.day}T00:00:00Z`,
+        ending_at: `${bucketed ? periodBucket("daily", new Date(Date.parse(row.day) + DAY_MS)) : endBucket}T00:00:00Z`,
+        group: {
+          product: null,
+          model: null,
+          context_window: null,
+          inference_geo: null,
+          speed: null,
+          slack_channel_id: null,
+          claude_tag_category: null,
+          claude_tag_user_id: null,
+          rbac_group_id: row.rbac_group || null,
+          workspace_id: null,
+          service_tier: null,
+          user_profile_id: null,
+          agent_id: null,
+          environment_id: null,
+          deployment_id: null,
+          session_id: null,
+          actor: included
+            ? {
+                type: "user_actor",
+                user_id: row.principal,
+                email_address: row.email ?? null,
+                name: row.name ?? null,
+                deleted: false,
+              }
+            : null,
+          actor_type: null,
+          api_key_id: null,
+          cost_type: null,
+          token_type: null,
+        },
+        cost: {
+          currency: "USD",
+          amount: row.amount,
+          list_amount: row.amount,
+          requests: null,
+        },
+      })),
+      has_more: hasMore,
+      next_page:
+        hasMore && last !== undefined
+          ? Buffer.from(
+              jsonStringify({
+                c: last.amount,
+                p: last.principal,
+                g: last.rbac_group,
+                d: last.day,
+                q: fingerprint,
+              }),
+            ).toString("base64url")
+          : null,
+      data_refreshed_at: new Date(now).toISOString(),
+    },
+    {
+      headers: NO_STORE_HEADERS_2,
+    },
+  );
+}
+//@ chunk-1hnjmk23.js:1446056-1446137 layout
+function parseTimestamp(value) {
+  let ms = RFC3339_RE.test(value) ? Date.parse(value) : NaN;
+  return Number.isNaN(ms) ? null : ms;
+}
+//@ chunk-1hnjmk23.js:1446137-1446193 placement
 /**
  * 把“分”数值格式化成最多三位小数并去掉尾部零。
  */
 function formatCents(cents) {
   return cents.toFixed(3).replace(/\.?0+$/, "");
 }
-//@ chunk-1ny7cxrt.js:1424498-1424657 placement
+//@ chunk-1hnjmk23.js:1446193-1446352 placement
 /**
  * 作用域类型与 id 转为 scope 对象（user/rbac_group/organization）。
  */
@@ -137,7 +442,7 @@ function toSpendScope(scopeType, scopeId) {
     type: "organization",
   };
 }
-//@ chunk-1ny7cxrt.js:1424657-1425255 placement
+//@ chunk-1hnjmk23.js:1446352-1446950 placement
 /**
  * SQL：各周期的上限（caps_by_period）与该主体当前花费。
  */
@@ -159,7 +464,7 @@ function queryCapsWithSpend(sql, principals, groupLimitMode, scopeTypes, date = 
     ORDER BY pb.ord
   `;
 }
-//@ chunk-1ny7cxrt.js:1425255-1425708 placement
+//@ chunk-1hnjmk23.js:1446950-1447403 placement
 /**
  * SQL：用户所在组启用的月度共享预算与已用额度。
  */
@@ -176,7 +481,7 @@ function queryPooledBudgets(sql, groupIds, now) {
       AND l.pooled_limit_enabled
   `;
 }
-//@ chunk-1ny7cxrt.js:1425708-1426207 placement
+//@ chunk-1hnjmk23.js:1447403-1447902 placement
 /**
  * 在一个短超时事务中读取个人上限与组共享预算。
  */
@@ -203,7 +508,7 @@ async function readSpendCaps(sql, sub, groups, scopeTypes, now, signal, groupIds
     Promise.resolve(client.release()).catch(() => {});
   }
 }
-//@ chunk-1ny7cxrt.js:1426207-1426727 placement
+//@ chunk-1hnjmk23.js:1447902-1448422 placement
 /**
  * 按各周期桶累加主体花费（语句超时时重试一次）。
  */
@@ -232,7 +537,7 @@ async function recordSpend(sql, entries, options) {
     throw error;
   }
 }
-//@ chunk-1ny7cxrt.js:1426727-1427155 placement
+//@ chunk-1hnjmk23.js:1448422-1448850 placement
 /**
  * 累加各组本月共享预算花费。
  */
@@ -249,7 +554,7 @@ async function recordPooledSpend(sql, centsByGroup) {
       SET cents = pooled_spend.cents + EXCLUDED.cents, updated_at = now()
   `;
 }
-//@ chunk-1ny7cxrt.js:1427155-1427601 placement
+//@ chunk-1hnjmk23.js:1448850-1449296 placement
 /**
  * 记录主体的邮箱、姓名与所属组。
  */
@@ -274,7 +579,25 @@ async function upsertPrincipalIdentity(sql, identity) {
     `;
   });
 }
-//@ chunk-1ny7cxrt.js:1427601-1427775 placement
+//@ chunk-1hnjmk23.js:1449296-1449729 layout
+async function upsertPrincipalGroups(db, principal, groups, day) {
+  await db.begin(async (tx) => {
+    await tx`SET LOCAL statement_timeout = '2s'`;
+    await tx`
+      INSERT INTO principal_groups ${db({
+        day,
+        principal,
+        groups: normalizeCaseForComparison_2(groups),
+      })}
+      ON CONFLICT (day, principal) DO UPDATE SET groups = (
+        SELECT jsonb_agg(DISTINCT g)
+        FROM jsonb_array_elements(principal_groups.groups || EXCLUDED.groups) AS g
+      )
+      WHERE NOT principal_groups.groups @> EXCLUDED.groups
+    `;
+  });
+}
+//@ chunk-1hnjmk23.js:1449729-1449903 placement
 /**
  * 写一条管理审计记录。
  */
@@ -288,7 +611,7 @@ async function insertAdminAudit(sql, event) {
     reason: event.reason ?? null,
   })}`;
 }
-//@ chunk-1ny7cxrt.js:1427775-1427999 placement
+//@ chunk-1hnjmk23.js:1449903-1450127 placement
 /**
  * SQL 片段：周期与当前桶的列表。
  */
@@ -300,7 +623,7 @@ function periodBucketsSql(sql, periods = SPEND_PERIODS, now = new Date()) {
       WITH ORDINALITY AS t(period, bucket)
   `;
 }
-//@ chunk-1ny7cxrt.js:1427999-1428996 placement
+//@ chunk-1hnjmk23.js:1450127-1451124 placement
 /**
  * GET …/effective：按用户（或分页列出）返回各周期的生效上限、来源与已用额度，支持搜索与按花费排序。
  */
@@ -356,7 +679,7 @@ async function handleEffectiveLimits({ url, sql, requestId }, scopeTypes) {
     },
   );
 }
-//@ chunk-1ny7cxrt.js:1428996-1429183 placement
+//@ chunk-1hnjmk23.js:1451124-1451311 placement
 /**
  * 解析 period[] 参数（默认全部，非法返回 null）。
  */
@@ -370,13 +693,13 @@ function parsePeriods(searchParams) {
   }
   return periods;
 }
-//@ chunk-1ny7cxrt.js:1429183-1429270 placement
+//@ chunk-1hnjmk23.js:1451311-1451398 placement
 /**
  * 带累计数的页令牌 schema（主体 + 数 + 已结束标记）。
  */
 var spendPageTokenSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var spendPageTokenWithCountSchema;
-deferInit("chunk-1ny7cxrt.js:1429183", () => {
+deferInit("chunk-1hnjmk23.js:1451311", () => {
   spendPageTokenSchema = DoctorLazy(() =>
     create({
       p: create_2(),
@@ -391,14 +714,14 @@ deferInit("chunk-1ny7cxrt.js:1429183", () => {
     }),
   );
 });
-//@ chunk-1ny7cxrt.js:1429270-1429345 placement
+//@ chunk-1hnjmk23.js:1451398-1451473 placement
 /**
  * 把分页令牌编码成 base64url JSON。
  */
 function encodePageToken(token) {
   return Buffer.from(JSON.stringify(token)).toString("base64url");
 }
-//@ chunk-1ny7cxrt.js:1429345-1429467 placement
+//@ chunk-1hnjmk23.js:1451473-1451595 placement
 /**
  * 解码分页令牌（base64url JSON）。
  */
@@ -410,7 +733,7 @@ function decodePageToken(token, withCount) {
     return;
   }
 }
-//@ chunk-1ny7cxrt.js:1429467-1430102 placement
+//@ chunk-1hnjmk23.js:1451595-1452230 placement
 /**
  * 按花费降序分页列出主体（游标）。
  */
@@ -443,7 +766,7 @@ async function listPrincipalsBySpend(sql, groupLimitMode, query, scopeTypes, pag
         : null,
   };
 }
-//@ chunk-1ny7cxrt.js:1430102-1430598 placement
+//@ chunk-1hnjmk23.js:1452230-1452726 placement
 /**
  * 按主体名分页列出（可搜索）。
  */
@@ -470,14 +793,14 @@ async function listPrincipals(sql, query, pageLimit, pageLimit_2) {
         : null,
   };
 }
-//@ chunk-1ny7cxrt.js:1430598-1430656 placement
+//@ chunk-1hnjmk23.js:1452726-1452784 placement
 /**
  * 转义 SQL LIKE 里的 \ % _。
  */
 function escapeLikePattern(pattern) {
   return pattern.replace(/[\\%_]/g, (char) => `\\${char}`);
 }
-//@ chunk-1ny7cxrt.js:1430656-1431483 placement
+//@ chunk-1hnjmk23.js:1452784-1453611 placement
 /**
  * 查询一批主体在各周期的生效上限与花费。
  */
@@ -507,7 +830,7 @@ async function queryEffectiveLimits(sql, principals, periods, scopeTypes) {
   `
   ).map((row) => toEffectiveLimit(row));
 }
-//@ chunk-1ny7cxrt.js:1431483-1431850 placement
+//@ chunk-1hnjmk23.js:1453611-1453978 placement
 /**
  * 查询行转为生效上限 API 对象。
  */
@@ -534,19 +857,24 @@ function toEffectiveLimit(row) {
     period_to_date_spend: formatCents(row.cents),
   };
 }
-//@ chunk-1ny7cxrt.js:1431850-1431890 placement
+//@ chunk-1hnjmk23.js:1453978-1454056 placement
 /**
  * 花费限额管理 API 的路径前缀 /v1/organizations/spend_limits。
  */
 var SPEND_LIMITS_PATH = "/v1/organizations/spend_limits";
-//@ chunk-1ny7cxrt.js:1431890-1431943 placement
+var COST_REPORT_PATH = "/v1/organizations/analytics/cost";
+//@ chunk-1hnjmk23.js:1454056-1454117 placement
 /**
  * 判断路径是否属于花费限额 API。
  */
 function isSpendLimitsPath(pathname) {
-  return pathname === SPEND_LIMITS_PATH || pathname.startsWith(`${SPEND_LIMITS_PATH}/`);
+  return (
+    pathname === SPEND_LIMITS_PATH ||
+    pathname.startsWith(`${SPEND_LIMITS_PATH}/`) ||
+    pathname === COST_REPORT_PATH
+  );
 }
-//@ chunk-1ny7cxrt.js:1431943-1432263 placement
+//@ chunk-1hnjmk23.js:1454117-1454437 placement
 /**
  * 处理花费限额管理 API 请求（分配 request-id、记录日志）；路径不匹配返回 null。
  */
@@ -567,7 +895,7 @@ async function handleSpendLimitAdmin(req, url, sql, keys, oidcAdmin, clientIp, g
   gatewayLog("info", `admin ${req.method} ${url.pathname} -> ${response.status} (${requestId})`);
   return response;
 }
-//@ chunk-1ny7cxrt.js:1432263-1433100 placement
+//@ chunk-1hnjmk23.js:1454437-1455308 placement
 /**
  * 管理 API 路由：认证（admin key 或 OIDC 管理员）后分发 effective/audit/列表/创建/查询/删除。
  */
@@ -599,7 +927,8 @@ async function routeSpendLimitAdmin({ req, url, sql, keys, requestId, oidcAdmin,
   if (pathname === `${SPEND_LIMITS_PATH}/effective` && method === "GET")
     return handleEffectiveLimits(ctx, groupLimitMode);
   if (pathname === `${SPEND_LIMITS_PATH}/audit` && method === "GET") return handleAuditList(ctx);
-  if (pathname === SPEND_LIMITS_PATH && method === "GET") return handleListSpendLimits(ctx);
+  if (pathname === COST_REPORT_PATH && method === "GET") return handleListSpendLimits(ctx);
+  if (pathname === SPEND_LIMITS_PATH && method === "GET") return listSpendLimitsHandler(ctx);
   if (pathname === SPEND_LIMITS_PATH && method === "POST") return handleUpsertSpendLimit(ctx);
   if (pathname.startsWith(`${SPEND_LIMITS_PATH}/`)) {
     let id;
@@ -614,7 +943,7 @@ async function routeSpendLimitAdmin({ req, url, sql, keys, requestId, oidcAdmin,
   }
   return adminErrorResponse(404, "not found", requestId);
 }
-//@ chunk-1ny7cxrt.js:1433100-1433345 placement
+//@ chunk-1hnjmk23.js:1455308-1455553 placement
 /**
  * 用 x-api-key（读/写密钥）或 OIDC 管理员身份认证，返回 {canWrite, actor}。
  */
@@ -640,7 +969,7 @@ function authenticateAdmin(apiKey, keys, oidcAdmin) {
     };
   return null;
 }
-//@ chunk-1ny7cxrt.js:1433345-1433475 placement
+//@ chunk-1hnjmk23.js:1455553-1455683 placement
 /**
  * 常数时间比较 API key，返回匹配的密钥 id。
  */
@@ -653,7 +982,7 @@ function matchAdminKey(presented, keys) {
   }
   return matchedId;
 }
-//@ chunk-1ny7cxrt.js:1433475-1434197 placement
+//@ chunk-1hnjmk23.js:1455683-1456405 placement
 /**
  * GET …/audit：分页列出审计事件。
  */
@@ -690,11 +1019,8 @@ async function handleAuditList({ url, sql, requestId }) {
     },
   );
 }
-//@ chunk-1ny7cxrt.js:1434197-1435599 placement
-/**
- * GET 列表：按作用域类型筛选、after_id/before_id 分页。
- */
-async function handleListSpendLimits({ url, sql, requestId }) {
+//@ chunk-1hnjmk23.js:1456405-1458067 layout
+async function listSpendLimitsHandler({ url, sql, requestId }) {
   let searchParams = url.searchParams;
   let pageLimit = parsePageLimit(searchParams, 20);
   if (pageLimit === null) return adminErrorResponse(400, "limit: must be between 1 and 1000", requestId);
@@ -725,29 +1051,31 @@ async function handleListSpendLimits({ url, sql, requestId }) {
   }
   let fetchLimit = pageLimit + 1;
   let hasMore;
-  let rows;
+  let limits;
   if (beforeId !== null && cursorRow) {
-    let batch = await sql`
-      SELECT * FROM spend_limits
+    let rows = await sql`
+      SELECT id, scope_type, scope_id, amount, period, currency, pooled_limit_enabled, pooled_monthly_credit_limit, created_at, updated_at
+      FROM spend_limits
       WHERE (created_at, id) < (${cursorRow.created_at}::timestamptz, ${cursorRow.id})
         AND (${scopeType}::text IS NULL OR scope_type = ${scopeType})
       ORDER BY created_at DESC, id DESC LIMIT ${fetchLimit}
     `;
-    hasMore = batch.length > pageLimit;
-    rows = batch.slice(0, pageLimit).reverse().map(toSpendLimit);
+    hasMore = rows.length > pageLimit;
+    limits = rows.slice(0, pageLimit).reverse().map(toSpendLimit);
   } else {
     let createdAt = cursorRow?.created_at ?? null;
-    let batch = await sql`
-      SELECT * FROM spend_limits
+    let rows = await sql`
+      SELECT id, scope_type, scope_id, amount, period, currency, pooled_limit_enabled, pooled_monthly_credit_limit, created_at, updated_at
+      FROM spend_limits
       WHERE (${createdAt}::timestamptz IS NULL
              OR (created_at, id) > (${createdAt}::timestamptz, ${cursorRow?.id ?? null}))
         AND (${scopeType}::text IS NULL OR scope_type = ${scopeType})
       ORDER BY created_at, id LIMIT ${fetchLimit}
     `;
-    hasMore = batch.length > pageLimit;
-    rows = batch.slice(0, pageLimit).map(toSpendLimit);
+    hasMore = rows.length > pageLimit;
+    limits = rows.slice(0, pageLimit).map(toSpendLimit);
   }
-  let data = await withPooledSpend(sql, rows);
+  let data = await withPooledSpend(sql, limits);
   return Response.json(
     {
       data,
@@ -760,7 +1088,7 @@ async function handleListSpendLimits({ url, sql, requestId }) {
     },
   );
 }
-//@ chunk-1ny7cxrt.js:1435599-1438096 placement
+//@ chunk-1hnjmk23.js:1458067-1460818 placement
 /**
  * POST：创建或更新花费限额（含组共享预算校验），加锁事务内写入并审计。
  */
@@ -798,7 +1126,8 @@ async function handleUpsertSpendLimit({ req, sql, requestId, auth }) {
   let txResult = await sql.begin(async (tx) => {
     await tx`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
     let [existingRow] = await tx`
-      SELECT * FROM spend_limits
+      SELECT id, scope_type, scope_id, amount, period, currency, pooled_limit_enabled, pooled_monthly_credit_limit, created_at, updated_at
+      FROM spend_limits
       WHERE scope_type = ${scope.type} AND scope_id = ${scopeId} AND period = ${period}
       FOR UPDATE
     `;
@@ -831,7 +1160,7 @@ async function handleUpsertSpendLimit({ req, sql, requestId, auth }) {
             pooled_limit_enabled = ${pooledFields.pooled_limit_enabled},
             pooled_monthly_credit_limit = ${pooledFields.pooled_monthly_credit_limit},
             updated_at = now()
-      RETURNING *
+      RETURNING id, scope_type, scope_id, amount, period, currency, pooled_limit_enabled, pooled_monthly_credit_limit, created_at, updated_at
     `;
     let spendLimit = toSpendLimit(insertedRow);
     await insertAdminAudit(tx, {
@@ -868,7 +1197,7 @@ async function handleUpsertSpendLimit({ req, sql, requestId, auth }) {
   });
   return Response.json(json);
 }
-//@ chunk-1ny7cxrt.js:1438096-1438429 placement
+//@ chunk-1hnjmk23.js:1460818-1461151 placement
 /**
  * GET 单个花费限额。
  */
@@ -884,7 +1213,7 @@ async function handleGetSpendLimit({ sql, requestId }, id) {
       })
     : adminErrorResponse(404, "spend limit not found", requestId);
 }
-//@ chunk-1ny7cxrt.js:1438429-1439096 placement
+//@ chunk-1hnjmk23.js:1461151-1461818 placement
 /**
  * DELETE 花费限额并审计。
  */
@@ -920,13 +1249,13 @@ async function handleDeleteSpendLimit({ sql, requestId, auth }, id) {
   }
   return adminErrorResponse(404, "spend limit not found", requestId);
 }
-//@ chunk-1ny7cxrt.js:1439096-1439575 placement
+//@ chunk-1hnjmk23.js:1461818-1462297 placement
 /**
  * 金额（分）字符串 schema 与创建请求体 schema。
  */
 var CENTS_STRING_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var UPSERT_SPEND_LIMIT_SCHEMA;
-deferInit("chunk-1ny7cxrt.js:1439096", () => {
+deferInit("chunk-1hnjmk23.js:1461818", () => {
   CENTS_STRING_SCHEMA = DoctorLazy(() =>
     create_2()
       .regex(/^\d{1,18}$/, "must be a whole-number decimal string of cents")
@@ -958,7 +1287,7 @@ deferInit("chunk-1ny7cxrt.js:1439096", () => {
     }),
   );
 });
-//@ chunk-1ny7cxrt.js:1439575-1439707 placement
+//@ chunk-1hnjmk23.js:1462297-1462429 placement
 /**
  * 把第一个校验错误格式化为 “路径: 信息”。
  */
@@ -968,7 +1297,7 @@ function formatZodIssue(error) {
   let joined = issue.path.join(".");
   return joined ? `${joined}: ${issue.message}` : issue.message;
 }
-//@ chunk-1ny7cxrt.js:1439707-1439873 placement
+//@ chunk-1hnjmk23.js:1462429-1462595 placement
 /**
  * 解析并校验请求体，失败返回错误响应。
  */
@@ -982,7 +1311,7 @@ async function parseUpsertBody(req, requestId) {
   let parsed = UPSERT_SPEND_LIMIT_SCHEMA().safeParse(body);
   return parsed.success ? parsed.data : adminErrorResponse(400, formatZodIssue(parsed.error), requestId);
 }
-//@ chunk-1ny7cxrt.js:1439873-1440000 placement
+//@ chunk-1hnjmk23.js:1462595-1462722 placement
 /**
  * 作用域 id（用户 id、组 id 或空串）。
  */
@@ -996,7 +1325,7 @@ function scopeId_2(scope) {
       return "";
   }
 }
-//@ chunk-1ny7cxrt.js:1440000-1440375 placement
+//@ chunk-1hnjmk23.js:1462722-1463097 placement
 /**
  * 数据库行转为花费限额对象（组月度限额带共享预算）。
  */
@@ -1021,7 +1350,7 @@ function toSpendLimit(row) {
     updated_at: row.updated_at.toISOString(),
   };
 }
-//@ chunk-1ny7cxrt.js:1440375-1441013 placement
+//@ chunk-1hnjmk23.js:1463097-1463735 placement
 /**
  * 为花费限额 API 对象补上共享预算本月已用额度。
  */
@@ -1054,7 +1383,7 @@ async function withPooledSpend(sql, limits) {
     }),
   }));
 }
-//@ chunk-1ny7cxrt.js:1441013-1441192 placement
+//@ chunk-1hnjmk23.js:1463735-1463914 placement
 /**
  * 从用户所在组的共享预算中选出仍有余额的那个（按上限从大到小），否则返回全部已用尽。
  */
@@ -1073,12 +1402,12 @@ function pickPayingPool(pools) {
         usedUp: candidates,
       };
 }
-//@ chunk-1ny7cxrt.js:1441192-1441206 placement
+//@ chunk-1hnjmk23.js:1463914-1463928 placement
 /**
  * 花费慢写的提醒间隔（30 秒）。
  */
 var SLOW_SPEND_WRITE_MS = 30000;
-//@ chunk-1ny7cxrt.js:1441206-1441429 placement
+//@ chunk-1hnjmk23.js:1463928-1464151 placement
 /**
  * 合并累加花费并串行写入；写入耗时过长时回调提醒。
  */
@@ -1106,7 +1435,7 @@ function createSpendFlusher(sql, options, now = () => performance.now()) {
     }
   };
 }
-//@ chunk-1ny7cxrt.js:1441429-1441549 placement
+//@ chunk-1hnjmk23.js:1464151-1464271 placement
 var MONTH_NAMES = [
   "January",
   "February",
@@ -1121,14 +1450,14 @@ var MONTH_NAMES = [
   "November",
   "December",
 ];
-//@ chunk-1ny7cxrt.js:1441549-1441772 placement
+//@ chunk-1hnjmk23.js:1464271-1464494 placement
 /**
  * 组预算超限的提示（含重置日期）。
  */
 function groupBudgetExceededMessage(resetsAt) {
   return `This request exceeds your group's budget. Ask your organization's admins to raise it, or try again after it resets on ${MONTH_NAMES[resetsAt.getUTCMonth()]} ${resetsAt.getUTCDate()} at ${resetsAt.toISOString().slice(11, 16)} UTC.`;
 }
-//@ chunk-1ny7cxrt.js:1441772-1442381 placement
+//@ chunk-1hnjmk23.js:1464494-1465103 placement
 /**
  * 包装上游响应流：边转发边解析用量，流结束/出错/取消时计算花费并记录。
  */
@@ -1182,12 +1511,12 @@ function meterResponseUsage(
     headers: response.headers,
   });
 }
-//@ chunk-1ny7cxrt.js:1442381-1442396 placement
+//@ chunk-1hnjmk23.js:1465103-1465118 placement
 /**
  * SSE 用量解析缓冲区的上限（8 MiB），超出丢弃。
  */
 var MAX_SSE_BUFFER_BYTES = 8388608;
-//@ chunk-1ny7cxrt.js:1442396-1442912 placement
+//@ chunk-1hnjmk23.js:1465118-1465634 placement
 /**
  * 用量累加器：SSE 按事件解析，非流式解析 JSON；无用量时按输出字节估算。
  */
@@ -1243,7 +1572,7 @@ function createUsageAccumulator(isSse, inputTokenEstimator, speed) {
     },
   };
 }
-//@ chunk-1ny7cxrt.js:1446994-1450809 placement
+//@ chunk-1hnjmk23.js:1469716-1473737 placement
 function createSpendLimitAdmin(sql, gatewayConfig, spendFault) {
   if (!gatewayConfig.admin) return null;
   let admin = gatewayConfig.admin;
@@ -1456,6 +1785,15 @@ function createSpendLimitAdmin(sql, gatewayConfig, spendFault) {
           gatewayLog("warn", `identity record failed: ${errorMessage(error)}`),
         ),
       );
+      trackWrite(
+        upsertPrincipalGroups(sql, principal.sub, principal.groups ?? [], periodBucket("daily")).catch(
+          (error) =>
+            gatewayLog(
+              "warn",
+              `could not save a developer's IdP groups for today, so the cost report may show their spend today under yesterday's groups or none: ${errorMessage(error)}`,
+            ),
+        ),
+      );
     }
   }
   function meter(
@@ -1512,7 +1850,7 @@ function createSpendLimitAdmin(sql, gatewayConfig, spendFault) {
     flush,
   };
 }
-//@ chunk-1ny7cxrt.js:1451226-1451674 placement
+//@ chunk-1hnjmk23.js:1474154-1474602 placement
 /**
  * 花费状态转为客户端额度显示（extra_usage 与各周期 limits、严重程度）。
  */
@@ -1544,7 +1882,7 @@ function toSpendRateLimits(limits, date = new Date()) {
     })),
   };
 }
-//@ chunk-1ny7cxrt.js:1451674-1451847 placement
+//@ chunk-1hnjmk23.js:1474602-1474775 placement
 /**
  * 两个限额中取更严重的（超限优先，其次重置更晚或使用率更高）。
  */

@@ -1,21 +1,21 @@
 /**
  * @anthropic-ai/bedrock-sdk/core/auth.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/bedrock-sdk@0.33.7..0.34.3
- * pieces: chunk-h87x8cg3.js (1)
+ * pieces: chunk-b8zxeazh.js (1)
  * attribution: esm-fingerprint 1
  */
 import assert from "assert";
 import {
   import_fetch_http_handler,
-  castToError,
+  castToError_2,
   import_signature_v4,
   import_protocol_http,
 } from "../internal/errors.mjs";
 import { APIConnectionError } from "../../sdk/core/error.mjs";
 import { Sha256 } from "../../../@aws-crypto/sha256-js/build/module/jsSha256.js";
 
-//@ chunk-h87x8cg3.js:1564-3110 esm-fingerprint
+//@ chunk-b8zxeazh.js:1564-3110 esm-fingerprint
 var DEFAULT_PROVIDER_CHAIN_RESOLVER = (logger) =>
   import("../../../@aws-sdk/credential-providers/dist-cjs/createCredentialChain.lazy.js")
     .then(({ createCredentialChain, fromEnv, fromNodeProviderChain }) =>
@@ -73,7 +73,7 @@ var getAuthHeaders = async (req, props) => {
     } catch (err) {
       throw new APIConnectionError({
         message: "Failed to resolve AWS credentials from the credential provider chain.",
-        cause: castToError(err),
+        cause: castToError_2(err),
       });
     }
   }

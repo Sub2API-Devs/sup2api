@@ -1,8 +1,8 @@
 /**
  * jose/dist/browser/runtime/decrypt.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (4)
+ * pieces: chunk-pd6th42n.js (4)
  * attribution: esm-fingerprint 3
  */
 import { keyMustBeTypeError, noop } from "../../node/esm/lib/invalid_key_input.js";
@@ -13,7 +13,7 @@ import {
   JWEDecryptionFailed,
   checkIvLengthInit,
   checkCekLengthInit,
-  JOSENotSupported,
+  JOSENotSupported_3,
   init_content_encryption_5,
   init_timing_safe_equal,
   init_content_encryption_2,
@@ -23,7 +23,7 @@ import { keyObjectTypes, noopInit, init_is_key_like } from "./is_key_like.js";
 import { __esm } from "../../../../../runtime/bun-runtime.js";
 import { init_base64url } from "./base64url.js";
 
-//@ chunk-2tyrgda4.js:7510-8066 esm-fingerprint
+//@ chunk-pd6th42n.js:7510-8066 esm-fingerprint
 async function cbcDecrypt(enc, cek, ciphertext, iv, tag, aad) {
   if (!(cek instanceof Uint8Array)) throw TypeError(keyMustBeTypeError(cek, "Uint8Array"));
   let keySize = parseInt(enc.slice(1, 4), 10);
@@ -65,7 +65,7 @@ async function cbcDecrypt(enc, cek, ciphertext, iv, tag, aad) {
   if (!plaintext) throw new JWEDecryptionFailed();
   return plaintext;
 }
-//@ chunk-2tyrgda4.js:8066-8353 esm-fingerprint
+//@ chunk-pd6th42n.js:8066-8353 esm-fingerprint
 async function gcmDecrypt(enc, cek, ciphertext, iv, tag, aad) {
   let encKey;
   if (cek instanceof Uint8Array)
@@ -91,7 +91,7 @@ async function gcmDecrypt(enc, cek, ciphertext, iv, tag, aad) {
     throw new JWEDecryptionFailed();
   }
 }
-//@ chunk-2tyrgda4.js:8353-8812 esm-fingerprint
+//@ chunk-pd6th42n.js:8353-8812 esm-fingerprint
 var decrypt = async (enc, cek, ciphertext, iv, tag, aad) => {
   if (!isCryptoKey(cek) && !(cek instanceof Uint8Array))
     throw TypeError(keyMustBeTypeError(cek, ...keyObjectTypes, "Uint8Array"));
@@ -107,11 +107,11 @@ var decrypt = async (enc, cek, ciphertext, iv, tag, aad) => {
       if (cek instanceof Uint8Array) checkCekLengthInit(cek, parseInt(enc.slice(1, 4), 10));
       return gcmDecrypt(enc, cek, ciphertext, iv, tag, aad);
     default:
-      throw new JOSENotSupported("Unsupported JWE Content Encryption Algorithm");
+      throw new JOSENotSupported_3("Unsupported JWE Content Encryption Algorithm");
   }
 };
 var decrypt_default;
-//@ chunk-2tyrgda4.js:8812-8874 esm-layout (moved: shares a binding it assigns)
+//@ chunk-pd6th42n.js:8812-8874 esm-layout (moved: shares a binding it assigns)
 var init_zlib = __esm(() => {
   init_base64url();
   init_content_encryption_5();

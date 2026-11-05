@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。桥接（Remote Control/中继）传来的斜杠命令：判断是否可用、是否对中继参与者隐藏，并构造分发请求。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ccc7emag.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a0n35r6g.js (8)
  * attribution: placement 8
  */
 import {
@@ -32,7 +32,7 @@ import { logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { createUserMessage, createCommandInputMessage } from "../utils/messages.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ccc7emag.js:610-1308 placement
+//@ chunk-a0n35r6g.js:610-1308 placement
 /**
  * 桥接（Remote Control/中继）传来的斜杠命令：判断是否可用、是否对中继参与者隐藏，并构造分发请求。
  */
@@ -88,14 +88,14 @@ function resolveBridgeSlashOverride(input) {
     }),
   };
 }
-//@ chunk-ccc7emag.js:1308-1383 placement
+//@ chunk-a0n35r6g.js:1308-1383 placement
 var PROMPT_COMMANDS_HIDDEN_FROM_RELAY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var BOT_PROTECTED_TENGU_IRIDESCENT_CLOVER;
-deferInit("chunk-ccc7emag.js:1308", () => {
+deferInit("chunk-a0n35r6g.js:1308", () => {
   PROMPT_COMMANDS_HIDDEN_FROM_RELAY = new Set([DESIGN, DESIGN_SYNC, LOOP, SCHEDULE]);
   BOT_PROTECTED_TENGU_IRIDESCENT_CLOVER = "bot_protected_tengu_iridescent_clover";
 });
-//@ chunk-ccc7emag.js:1383-1797 placement
+//@ chunk-a0n35r6g.js:1383-1797 placement
 /**
  * 按入站来源/中继作者判断内置提示命令能否在桥接上执行
  */
@@ -124,7 +124,7 @@ function isSlashCommandAllowedOverBridge(cmd, author) {
   if (cmd === author.bridgeRewrite) return true;
   return (fromOwnerRelay && !author.bridgeCarried) || isBridgeDispatchable(cmd);
 }
-//@ chunk-ccc7emag.js:1797-2130 placement
+//@ chunk-a0n35r6g.js:1797-2130 placement
 function resolveRelaySlashRefusal(input) {
   let { inputString, context, uuid, origin, inboundOrigin } = input;
   let bridgeSlashTarget = resolveBridgeSlashTarget(inputString, context.options.commands, true);
@@ -152,7 +152,7 @@ function resolveRelaySlashRefusal(input) {
     }),
   };
 }
-//@ chunk-ccc7emag.js:2130-2428 placement
+//@ chunk-a0n35r6g.js:2130-2428 placement
 function relayDispatchRefusal(request) {
   let { cmd, commandName, args, inputString, uuid, author } = request;
   if (isSlashCommandAllowedOverBridge(cmd, author)) return;
@@ -174,7 +174,7 @@ function relayDispatchRefusal(request) {
     surface: author.bridgeCarried ? "bridge" : "relay",
   });
 }
-//@ chunk-ccc7emag.js:2428-3381 placement
+//@ chunk-a0n35r6g.js:2428-3381 placement
 /**
  * 组装桥接斜杠命令的分发记录与遥测字段
  */
@@ -227,7 +227,7 @@ function buildBridgeSlashDispatch({
     resultText: unavailableMessage,
   };
 }
-//@ chunk-ccc7emag.js:3381-3867 placement
+//@ chunk-a0n35r6g.js:3381-3867 placement
 /**
  * 解析斜杠命令行，含 命令:子命令 折叠查找
  */
@@ -272,7 +272,7 @@ function resolveBridgeSlashTarget(inputString, commands, foldColonSuffix) {
     effectiveCmd: folded ? folded.command : command,
   };
 }
-//@ chunk-ccc7emag.js:3867-3979 placement
+//@ chunk-a0n35r6g.js:3867-3979 placement
 function bridgeSlashLineBuildsRequest(inputString, commands) {
   let bridgeSlashTarget = resolveBridgeSlashTarget(inputString, commands, false);
   if (bridgeSlashTarget === undefined) return true;

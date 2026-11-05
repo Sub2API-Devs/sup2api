@@ -1,13 +1,13 @@
 /**
  * @smithy/core/dist-cjs/submodules/retry/index.browser.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @smithy/core@3.30.0
- * pieces: chunk-edce4vxq.js (2)
+ * pieces: chunk-3p78mpxm.js (2)
  * attribution: cjs-fingerprint+context 1, cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 
-//@ chunk-edce4vxq.js:120842-122470 cjs-fingerprint+context
+//@ chunk-3p78mpxm.js:120842-122470 cjs-fingerprint+context
 var require_index_browser_2 = __commonJS(function (cjsExports) {
   var CLOCK_SKEW_ERROR_CODES = [
     "AuthFailure",
@@ -80,7 +80,7 @@ var require_index_browser_2 = __commonJS(function (cjsExports) {
   cjsExports.isThrottlingError = isThrottlingError;
   cjsExports.isTransientError = isTransientError;
 });
-//@ chunk-edce4vxq.js:122470-128258 cjs-fingerprint
+//@ chunk-3p78mpxm.js:122470-128258 cjs-fingerprint
 var require_index_browser = __commonJS(function (cjsExports) {
   var retryableErrorCodes = require_index_browser_2();
   cjsExports.RETRY_MODES = undefined;

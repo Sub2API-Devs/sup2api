@@ -3,33 +3,33 @@
  *
  * 并入已有模块：是否为托管桌面远程会话；是否为 computer use MCP 服务器。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/computerUse/toolRendering.tsx
- * pieces: chunk-ah34pb7m.js (2), chunk-dcmhvw5a.js (3)
+ * pieces: chunk-wjygkcr4.js (2), chunk-z20c443b.js (3)
  * attribution: fingerprint 2, placement 3
  */
-import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
+import { CLAUDEAI_SERVER_PREFIX } from "../../services/mcp/normalization.js";
 import { COMPUTER_USE_MCP_SERVER_NAME } from "./common.js";
 import { env } from "../env.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { Text } from "../../ink/components/Text.js";
 
-//@ chunk-dcmhvw5a.js:205215-205249 placement
+//@ chunk-z20c443b.js:199341-199375 placement
 /**
  * 是否为 computer use MCP 服务器。
  */
 function isComputerUseServer(serverName) {
-  return normalizeNameForMCP(serverName) === COMPUTER_USE_MCP_SERVER_NAME;
+  return CLAUDEAI_SERVER_PREFIX(serverName) === COMPUTER_USE_MCP_SERVER_NAME;
 }
-//@ chunk-dcmhvw5a.js:205249-205322 placement
+//@ chunk-z20c443b.js:199375-199448 placement
 /**
  * 是否为托管桌面远程会话。
  */
 function isHostedDesktopSession() {
   return env.CLAUDE_CODE_REMOTE && env.CLAUDE_CODE_HOSTED_DESKTOP;
 }
-//@ chunk-dcmhvw5a.js:205322-206103 fingerprint (2.1.88 match: getComputerUseMCPRenderingOverrides, 0.588)
+//@ chunk-z20c443b.js:199448-200229 fingerprint (2.1.88 match: getComputerUseMCPRenderingOverrides, 0.588)
 /**
  * region/duration 两个参数键（只读截图/缩放时允许的输入）。
  */
@@ -80,7 +80,7 @@ var CU_TOOL_NAMES = [
   "release_full_control",
   "request_full_control",
 ];
-//@ chunk-ah34pb7m.js:14137-14444 fingerprint (2.1.88 match: RESULT_SUMMARY, 1)
+//@ chunk-wjygkcr4.js:14420-14727 fingerprint (2.1.88 match: RESULT_SUMMARY, 1)
 /**
  * computer-use 工具结果的简短摘要（Captured/Clicked/Typed…）。
  */
@@ -100,7 +100,7 @@ var RESULT_SUMMARY = {
   left_click_drag: "Dragged",
   open_application: "Opened",
 };
-//@ chunk-ah34pb7m.js:14444-14627 placement (2.1.88 match: renderToolResultMessage, 1)
+//@ chunk-wjygkcr4.js:14727-14910 placement (2.1.88 match: renderToolResultMessage, 1)
 /**
  * 生成"非 verbose 时显示一行固定摘要"的结果渲染函数（摘要表 RESULT_SUMMARY 按 key 查）。
  */
@@ -119,11 +119,11 @@ function renderToolResultMessage_2(toolName) {
   };
 }
 export {
-  isHostedDesktopSession,
   isComputerUseServer,
   READ_ONLY_CU_ACTIONS,
+  HOSTED_DESKTOP_ONLY_MESSAGE,
+  isHostedDesktopSession,
+  REGION_DURATION_ARG_KEYS,
   CU_TOOL_NAMES,
   renderToolResultMessage_2,
-  HOSTED_DESKTOP_ONLY_MESSAGE,
-  REGION_DURATION_ARG_KEYS,
 };

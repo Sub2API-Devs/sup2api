@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：子代理启动参数整理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0m7em5b4.js (20), chunk-e6aww6q8.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (13), chunk-yz2nt7xx.js (20)
  * attribution: placement 33
  */
 import { getAutoModeUnavailableReason } from "../../utils/permissions/permissionSetup.js";
@@ -24,7 +24,7 @@ import { hasWorktreeCreateHook } from "../../utils/hooks/worktreeHooks.js";
 import { findCanonicalGitRoot, getBranch, isBranchOnOrigin } from "../../utils/git.js";
 import { getCwd } from "../../utils/cwd.js";
 import { isBypassCapableMode, narrowerMode } from "../../utils/permissions/browserToolNames.js";
-import { FILE_EDIT_TOOL_NAME } from "../FileEditTool/constants.js";
+import { EDIT } from "../FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../FileWriteTool/prompt.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../NotebookEditTool/constants.js";
 import { countCharInString } from "../../utils/stringUtils.js";
@@ -35,7 +35,7 @@ import {
   observerReportTool,
   launchAgentsWithHooks,
 } from "../ObserverReportTool/ObserverReportTool.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import { identity } from "../../utils/identity.js";
 import { AGENT, TASK } from "./constants.js";
 import { isWebFetchAgent_2 } from "../WebFetchTool/harnessNotes.js";
@@ -49,7 +49,7 @@ import { AbortError, getErrnoCode, storageCauseErrnoCode } from "../../utils/err
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3262427-3262685 placement
+//@ chunk-5xgkngpb.js:3348741-3348999 placement
 function fallbackFromUnavailableAutoMode(declaredMode, parentMode, model) {
   if (declaredMode !== "auto") return declaredMode;
   let autoModeUnavailableReason = getAutoModeUnavailableReason(model);
@@ -62,7 +62,7 @@ function fallbackFromUnavailableAutoMode(declaredMode, parentMode, model) {
   );
   return parentMode;
 }
-//@ chunk-e6aww6q8.js:3262685-3262959 placement
+//@ chunk-5xgkngpb.js:3348999-3349273 placement
 function isRemoteAgentIsolationAvailable() {
   if (env.CLAUDE_CODE_EVAL_CONFINED) return false;
   if (isDiskless()) return false;
@@ -73,7 +73,7 @@ function isRemoteAgentIsolationAvailable() {
     return false;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_neapolitan", false);
 }
-//@ chunk-e6aww6q8.js:3262959-3263041 placement
+//@ chunk-5xgkngpb.js:3349273-3349355 placement
 /**
  * 判断能否给子代理建 worktree 隔离（非受限评估、非无盘且有 git 根或 worktree 钩子）。
  */
@@ -84,7 +84,7 @@ function canRunAgentInWorktree() {
     (hasWorktreeCreateHook() || findCanonicalGitRoot(getCwd()) !== null)
   );
 }
-//@ chunk-e6aww6q8.js:3263041-3263269 placement
+//@ chunk-5xgkngpb.js:3349355-3349583 placement
 async function getPushedBranchForRemoteAgent() {
   let cwd = getCwd();
   let branch = await getBranch(cwd);
@@ -95,7 +95,7 @@ async function getPushedBranchForRemoteAgent() {
   );
   return;
 }
-//@ chunk-e6aww6q8.js:3263269-3263357 placement
+//@ chunk-5xgkngpb.js:3349583-3349671 placement
 /**
  * 把父代理的权限模式转换成子代理可用的模式（bubble 不透传、bypassPermissions 降为 auto）。
  */
@@ -104,7 +104,7 @@ function subagentPermissionMode(mode) {
   if (mode === "bypassPermissions") return "auto";
   return mode;
 }
-//@ chunk-e6aww6q8.js:3263357-3263593 placement
+//@ chunk-5xgkngpb.js:3349671-3349907 placement
 /**
  * 计算子代理的权限模式：未声明、或父模式受限且声明模式不比父模式更窄（或父为 auto 而声明非 plan）时沿用父模式；声明为 auto 但子代理不能用 auto 时退回父模式。
  */
@@ -126,15 +126,15 @@ function resolveSubagentPermissionMode({
   if (resolvedMode !== "auto") return resolvedMode;
   return subagentPermissionMode(fallbackFromUnavailableAutoMode("auto", parentModeToHand, model));
 }
-//@ chunk-e6aww6q8.js:3263593-3263621 placement
+//@ chunk-5xgkngpb.js:3349907-3349935 placement
 /**
  * 会写文件的工具名集合（Edit/Write/NotebookEdit）。
  */
 var FILE_EDITING_TOOL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3263593", () => {
-  FILE_EDITING_TOOL_NAMES = new Set([FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME]);
+deferInit("chunk-5xgkngpb.js:3349907", () => {
+  FILE_EDITING_TOOL_NAMES = new Set([EDIT, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME]);
 });
-//@ chunk-e6aww6q8.js:3263621-3263689 placement
+//@ chunk-5xgkngpb.js:3349935-3350003 placement
 /**
  * 统计字符串行数（空或非字符串为 0），用于估算编辑行数。
  */
@@ -147,7 +147,7 @@ function countLines(text) {
       ) + 1
     : 0;
 }
-//@ chunk-e6aww6q8.js:3263689-3264134 placement
+//@ chunk-5xgkngpb.js:3350003-3350448 placement
 /**
  * 根据工具输入估算编辑的增加/删除行数：Edit（含多段 edits）按 new_string/old_string，Write 按 content，NotebookEdit 按 new_source。
  */
@@ -158,7 +158,7 @@ function countEditLines(toolName, input) {
       removed: 0,
     };
   let record = input;
-  if (toolName === FILE_EDIT_TOOL_NAME) {
+  if (toolName === EDIT) {
     if (Array.isArray(record.edits)) {
       let added = 0;
       let removed = 0;
@@ -193,18 +193,18 @@ function countEditLines(toolName, input) {
     removed: 0,
   };
 }
-//@ chunk-e6aww6q8.js:3264134-3264678 placement
+//@ chunk-5xgkngpb.js:3350448-3350992 placement
 /**
  * 多个代理并发写同一文件时的警告文案。
  */
 var warnConcurrentWriteAgents = `Note: another write-capable agent is already running in this same working directory, and parallel agents sharing a checkout can overwrite each other's work. For parallel code-writing agents, dispatch each with isolation: "worktree".`;
 var CONCURRENT_WRITE_AGENT_WARNING =
   "Note: another write-capable agent is already running in this same working directory, and parallel agents sharing a checkout can overwrite each other's work. Edit only the files your task requires, re-read a file right before changing it, and do not revert or overwrite changes you did not make.";
-//@ chunk-e6aww6q8.js:3264678-3264731 placement
+//@ chunk-5xgkngpb.js:3350992-3351045 placement
 function isTwinklingBooleOn() {
   return getFeatureValue_SESSION_PINNED("tengu_twinkling_boole", false);
 }
-//@ chunk-e6aww6q8.js:3264731-3264875 placement
+//@ chunk-5xgkngpb.js:3351045-3351189 placement
 function agentCanEditFiles(selectedAgent) {
   let hasWildcardTools = parseWildcardAgentTypes(selectedAgent.tools) !== null;
   for (let toolName of FILE_EDITING_TOOL_NAMES)
@@ -215,7 +215,7 @@ function agentCanEditFiles(selectedAgent) {
       return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:3264875-3265270 placement
+//@ chunk-5xgkngpb.js:3351189-3351584 placement
 /**
  * 判断同一工作目录下是否已有正在编辑的并发子代理（未隔离时）。
  */
@@ -241,60 +241,60 @@ function hasConcurrentEditingAgentInCwd({
       agentCanEditFiles(task.selectedAgent),
   );
 }
-//@ chunk-0m7em5b4.js:10958-11027 placement
+//@ chunk-yz2nt7xx.js:11147-11216 placement
 function observerToolset(resolvedTools) {
   return [
     ...resolvedTools.filter((tool) =>
-      OBSERVER_EXCLUDED_TOOLS.every((excludedToolName) => !toolMatchesName(tool, excludedToolName)),
+      OBSERVER_EXCLUDED_TOOLS.every((excludedToolName) => !matchesToolName(tool, excludedToolName)),
     ),
     observerReportTool,
   ];
 }
-//@ chunk-0m7em5b4.js:11027-11061 placement
+//@ chunk-yz2nt7xx.js:11216-11250 placement
 /**
  * 本次恢复中「已停止」的代理 id 集合（可重置）。
  */
 var stoppedAgentIds; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0m7em5b4.js:11027", () => {
+deferInit("chunk-yz2nt7xx.js:11216", () => {
   stoppedAgentIds = identity(new Set(), (stoppedAgentIds) => stoppedAgentIds.clear());
 });
-//@ chunk-0m7em5b4.js:11061-11102 placement
+//@ chunk-yz2nt7xx.js:11250-11291 placement
 /**
  * 把一批代理 id 记为已停止。
  */
 function rememberStoppedAgents(agentIds) {
   for (let agentId of agentIds) stoppedAgentIds.add(agentId);
 }
-//@ chunk-0m7em5b4.js:11102-11134 placement
+//@ chunk-yz2nt7xx.js:11291-11323 placement
 /**
  * 判断某代理 id 是否被记为已停止。
  */
 function isStoppedAgent(agentId) {
   return stoppedAgentIds.has(agentId);
 }
-//@ chunk-0m7em5b4.js:11134-11168 placement
+//@ chunk-yz2nt7xx.js:11323-11357 placement
 /**
  * 「可恢复」的代理 id 集合（可重置）。
  */
 var resumableAgentIds; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0m7em5b4.js:11134", () => {
+deferInit("chunk-yz2nt7xx.js:11323", () => {
   resumableAgentIds = identity(new Set(), (resumableAgentIds) => resumableAgentIds.clear());
 });
-//@ chunk-0m7em5b4.js:11168-11209 placement
+//@ chunk-yz2nt7xx.js:11357-11398 placement
 /**
  * 把一批代理 id 记为可恢复。
  */
 function rememberResumableAgents(agentIds) {
   for (let agentId of agentIds) resumableAgentIds.add(agentId);
 }
-//@ chunk-0m7em5b4.js:11209-11241 placement
+//@ chunk-yz2nt7xx.js:11398-11430 placement
 /**
  * 判断某代理 id 是否被记为可恢复。
  */
 function isResumableAgent(agentId) {
   return resumableAgentIds.has(agentId);
 }
-//@ chunk-0m7em5b4.js:11241-11388 placement
+//@ chunk-yz2nt7xx.js:11430-11577 placement
 function isAgentLaunchToolUse(toolUse) {
   return (
     (toolUse.name === AGENT || toolUse.name === TASK) &&
@@ -304,7 +304,7 @@ function isAgentLaunchToolUse(toolUse) {
     isWebFetchAgent_2(toolUse.input.subagent_type)
   );
 }
-//@ chunk-0m7em5b4.js:11388-11821 placement
+//@ chunk-yz2nt7xx.js:11577-12010 placement
 function findAgentLaunchResults(messages, agentId) {
   let launchToolUseIds = new Set();
   for (let message of messages)
@@ -329,27 +329,31 @@ function findAgentLaunchResults(messages, agentId) {
     }
   return false;
 }
-//@ chunk-0m7em5b4.js:11821-11865 placement
+//@ chunk-yz2nt7xx.js:12010-12054 placement
 /**
  * 前台代理自动转后台的等待时间：未指定时沿用传入值，否则看是否禁止了前台转后台。
  */
 function autoBackgroundMsForLaunch(backgroundLaunchGate, backgroundTasksAvailable) {
   return backgroundLaunchGate === undefined ? backgroundTasksAvailable : isForegroundAgentMoveDisabled();
 }
-//@ chunk-0m7em5b4.js:11865-11988 placement
+//@ chunk-yz2nt7xx.js:12054-12206 placement
 function autoBackgroundOptions(backgroundLaunchGate, autoBackgroundMs) {
   return {
-    autoBackgroundMs: autoBackgroundMs || !env.CLAUDE_AUTO_BACKGROUND_TASKS ? undefined : 120000,
+    autoBackgroundMs:
+      !autoBackgroundMs &&
+      (env.CLAUDE_AUTO_BACKGROUND_TASKS || backgroundLaunchGate?.armsMoveTimer?.() === true)
+        ? 120000
+        : undefined,
     waitsOnRuleMove: backgroundLaunchGate !== undefined && !autoBackgroundMs,
   };
 }
-//@ chunk-0m7em5b4.js:11988-12098 placement
+//@ chunk-yz2nt7xx.js:12206-12316 placement
 function raceAgentLaunch(launchPromise, backgroundSignal, alreadyBackgrounded) {
   return alreadyBackgrounded
     ? launchPromise.then(() => "done")
     : Promise.race([launchPromise.then(() => "done"), backgroundSignal.then(() => "backgrounded")]);
 }
-//@ chunk-0m7em5b4.js:12098-12583 placement
+//@ chunk-yz2nt7xx.js:12316-12801 placement
 function settleBackgroundedAgent({
   outcome,
   registration,
@@ -378,7 +382,7 @@ function settleBackgroundedAgent({
   if (!getIsNonInteractiveSession()) addAgentKeepaliveReason(ownerAgentId, `agent:${taskId}`, taskRegistry);
   return true;
 }
-//@ chunk-0m7em5b4.js:12583-12847 placement
+//@ chunk-yz2nt7xx.js:12801-13065 placement
 async function runResumeStartHooks(agentId, { origin, ...launchOptions }) {
   let hookOrigin = spawnProvenanceOf(agentId)?.hookOrigin;
   let launchResult = await launchAgentsWithHooks({
@@ -398,11 +402,11 @@ async function runResumeStartHooks(agentId, { origin, ...launchOptions }) {
   }
   return launchResult;
 }
-//@ chunk-0m7em5b4.js:12847-12906 placement
+//@ chunk-yz2nt7xx.js:13065-13124 placement
 function pluginDeclinedResumeMessage(deny) {
   return `a plugin declined the resume: ${deny}`;
 }
-//@ chunk-0m7em5b4.js:12906-13191 placement
+//@ chunk-yz2nt7xx.js:13124-13409 placement
 function isTranscriptChainIntact(messages, preservedUuids) {
   let filtered = messages.filter(isPlainObject);
   let parentUuidByUuid = new Map(
@@ -421,52 +425,52 @@ function isTranscriptChainIntact(messages, preservedUuids) {
     )
   );
 }
-//@ chunk-0m7em5b4.js:13191-13234 placement
+//@ chunk-yz2nt7xx.js:13409-13452 placement
 /**
  * 值为 undefined 或 null（用于判断消息链是否完整）。
  */
 function isNil(value) {
   return value === undefined || value === null;
 }
-//@ chunk-0m7em5b4.js:13234-13352 placement
+//@ chunk-yz2nt7xx.js:13452-13570 placement
 function getPreservedMessageUuids({ compactMetadata }) {
   let preservedMessages = isPlainObject(compactMetadata) ? compactMetadata.preservedMessages : undefined;
   return isPlainObject(preservedMessages) && Array.isArray(preservedMessages.uuids)
     ? preservedMessages.uuids
     : [];
 }
-//@ chunk-0m7em5b4.js:13352-13364 placement
+//@ chunk-yz2nt7xx.js:13570-13582 placement
 var SETTLE_AGENT_BACKGROUND_MS = 2000;
-//@ chunk-0m7em5b4.js:13364-13597 placement
+//@ chunk-yz2nt7xx.js:13582-13815 placement
 function unreadableStateMessage(error, canRetry) {
   return `its saved state cannot be read (${getErrnoCode(error) ?? storageCauseErrnoCode(error) ?? "storage error"}), so it cannot be told whether the user stopped it. ${canRetry ? "Send the message again in a moment, or the user" : "The user"} can resume it themselves.`;
 }
 export {
+  rememberResumableAgents,
+  rememberStoppedAgents,
   FILE_EDITING_TOOL_NAMES,
   countEditLines,
+  isRemoteAgentIsolationAvailable,
+  isTwinklingBooleOn,
+  canRunAgentInWorktree,
+  runResumeStartHooks,
+  pluginDeclinedResumeMessage,
+  autoBackgroundMsForLaunch,
+  resolveSubagentPermissionMode,
+  getPushedBranchForRemoteAgent,
+  hasConcurrentEditingAgentInCwd,
+  CONCURRENT_WRITE_AGENT_WARNING,
+  autoBackgroundOptions,
+  raceAgentLaunch,
+  settleBackgroundedAgent,
+  observerToolset,
   fallbackFromUnavailableAutoMode,
+  isAgentLaunchToolUse,
+  warnConcurrentWriteAgents,
   unreadableStateMessage,
   SETTLE_AGENT_BACKGROUND_MS,
   isTranscriptChainIntact,
   findAgentLaunchResults,
   isStoppedAgent,
   isResumableAgent,
-  runResumeStartHooks,
-  pluginDeclinedResumeMessage,
-  observerToolset,
-  autoBackgroundMsForLaunch,
-  autoBackgroundOptions,
-  settleBackgroundedAgent,
-  raceAgentLaunch,
-  isAgentLaunchToolUse,
-  canRunAgentInWorktree,
-  isRemoteAgentIsolationAvailable,
-  resolveSubagentPermissionMode,
-  getPushedBranchForRemoteAgent,
-  hasConcurrentEditingAgentInCwd,
-  CONCURRENT_WRITE_AGENT_WARNING,
-  warnConcurrentWriteAgents,
-  isTwinklingBooleOn,
-  rememberResumableAgents,
-  rememberStoppedAgents,
 };

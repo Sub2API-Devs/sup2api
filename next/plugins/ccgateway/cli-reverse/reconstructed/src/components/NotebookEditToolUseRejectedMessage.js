@@ -3,9 +3,9 @@
  *
  * NotebookEdit 被拒绝时的显示（替换/插入/删除 cell）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/NotebookEditToolUseRejectedMessage.tsx
- * pieces: chunk-q466qetm.js (1)
+ * pieces: chunk-wrav3w1r.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -24,7 +24,7 @@ import {
 import { HighlightedCode } from "./HighlightedCode.js";
 import { MessageResponse } from "./MessageResponse.js";
 
-//@ chunk-q466qetm.js:7512-8643 fingerprint (2.1.88 match: NotebookEditToolUseRejectedMessage, 0.909)
+//@ chunk-wrav3w1r.js:8156-9287 fingerprint (2.1.88 match: NotebookEditToolUseRejectedMessage, 0.909)
 function NotebookEditToolUseRejectedMessage(props) {
   let $ = useMemoCache(23);
   let { notebook_path, cell_id, new_source, cell_type, edit_mode: editMode, verbose } = props;

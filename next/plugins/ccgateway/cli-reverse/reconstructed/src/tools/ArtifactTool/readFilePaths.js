@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。Artifact 读取文件路径校验。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-zad29gky.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1k5m5eth.js (12)
  * attribution: placement 12
  */
 import { sep, join, normalize } from "path";
@@ -30,23 +30,23 @@ import { getErrnoCode } from "../../utils/errors.js";
 import { ATOMIC_WRITE_ERRNOS } from "../../utils/plugins/safeCopy.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-zad29gky.js:693-1114 placement
+//@ chunk-1k5m5eth.js:693-1114 placement
 /**
  * 检查路径在 Windows 上是否不能作文件名（保留设备名、结尾点或空格、< > " | *），以及 Windows/WSL 上的 8.3 短名别名（NAME~1）。
  */
 function windowsPathProblem(key) {
   let parts = key.split("/");
-  let platform = getPlatform();
+  let pathList = getPlatform();
   if (
-    platform === "windows" &&
+    pathList === "windows" &&
     parts.some((segment) => /[<>"|*]/.test(segment) || isReservedDeviceName(segment) || /[. ]$/.test(segment))
   )
     return `path ${safeJsonQuote(key)} cannot be a file name on Windows (reserved device name, trailing dot or space, or one of < > " | *)`;
-  if ((platform === "windows" || platform === "wsl") && parts.some((segment) => /~\d/.test(segment)))
+  if ((pathList === "windows" || pathList === "wsl") && parts.some((segment) => /~\d/.test(segment)))
     return `path ${safeJsonQuote(key)} carries a NAME~1 short-name alias, which a Windows filesystem resolves to a differently named entry`;
   return;
 }
-//@ chunk-zad29gky.js:1114-1323 placement
+//@ chunk-1k5m5eth.js:1114-1324 placement
 /**
  * 读取 read_file 输入中的 path、paths（只保留字符串）与 out_dir。
  */
@@ -69,7 +69,7 @@ function readFilePathArgs(input) {
     outDir: readField("out_dir"),
   };
 }
-//@ chunk-zad29gky.js:1323-2368 placement
+//@ chunk-1k5m5eth.js:1324-2370 placement
 function resolveReadFileOutput(input, { outDirJudged: options = false } = {}) {
   let { path, outDir } = readFilePathArgs(input);
   if (path === undefined)
@@ -129,12 +129,12 @@ function resolveReadFileOutput(input, { outDirJudged: options = false } = {}) {
     }),
   };
 }
-//@ chunk-zad29gky.js:2368-2386 placement
+//@ chunk-1k5m5eth.js:2370-2388 placement
 var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-zad29gky.js:2368", () => {
+deferInit("chunk-1k5m5eth.js:2370", () => {
   weakMap = new WeakMap();
 });
-//@ chunk-zad29gky.js:2386-2739 placement
+//@ chunk-1k5m5eth.js:2388-2741 placement
 /**
  * 带缓存的 read_file 路径校验：以 paths 对象为键，url、out_dir、是否已判定、cwd 与草稿目录组成的串一致时复用上次结果。
  */
@@ -159,7 +159,7 @@ function validateReadFilePathsCached(input, options = {}) {
     });
   return cached;
 }
-//@ chunk-zad29gky.js:2739-3552 placement
+//@ chunk-1k5m5eth.js:2741-3555 placement
 function validateReadFilePaths(input, options) {
   let { paths } = readFilePathArgs(input);
   if (paths === undefined || paths.length === 0)
@@ -216,9 +216,9 @@ function validateReadFilePaths(input, options) {
     files,
   };
 }
-//@ chunk-zad29gky.js:3552-3577 placement
+//@ chunk-1k5m5eth.js:3555-3580 placement
 var ARTIFACT_FILES = "artifact-files";
-//@ chunk-zad29gky.js:3577-3645 placement
+//@ chunk-1k5m5eth.js:3580-3648 placement
 /**
  * 拼出 scratchpad 中制品相关文件的路径（未启用时为 null）。
  */
@@ -226,7 +226,7 @@ function scratchpadArtifactFilePath(slug) {
   let scratchpadDir = isScratchpadEnabled() ? getScratchpadDir() : null;
   return scratchpadDir === null ? null : join(scratchpadDir, ARTIFACT_FILES, slug);
 }
-//@ chunk-zad29gky.js:3645-3726 placement
+//@ chunk-1k5m5eth.js:3648-3729 placement
 /**
  * 判断路径组非空且全部位于 scratchpad 内。
  */
@@ -239,7 +239,7 @@ function isAllScratchpadPaths(spellings) {
     )
   );
 }
-//@ chunk-zad29gky.js:3726-3809 placement
+//@ chunk-1k5m5eth.js:3729-3812 placement
 /**
  * 判断路径是否位于 scratchpad 目录下（忽略大小写）。
  */
@@ -250,7 +250,7 @@ function isWithinScratchpad(path) {
     normalizeCaseForComparison(normalize(path)).startsWith(normalizeCaseForComparison(scratchpadDir) + sep)
   );
 }
-//@ chunk-zad29gky.js:3809-4028 placement
+//@ chunk-1k5m5eth.js:3812-4030 placement
 class PartialKeptError extends Error {
   partial;
   renameError;
@@ -263,7 +263,7 @@ class PartialKeptError extends Error {
     this.name = "PartialKeptError";
   }
 }
-//@ chunk-zad29gky.js:4028-4252 placement
+//@ chunk-1k5m5eth.js:4030-4253 placement
 /**
  * 重命名文件，目标已存在导致失败时先删除目标再重试；第二次失败抛出"已部分保留"错误。
  */
@@ -288,12 +288,12 @@ async function renameReplacing(tempSiblingPath, targetPath, rename) {
 }
 export {
   isAllScratchpadPaths,
+  resolveReadFileOutput,
   renameReplacing,
   PartialKeptError,
-  resolveReadFileOutput,
-  scratchpadArtifactFilePath,
   isWithinScratchpad,
   readFilePathArgs,
   validateReadFilePathsCached,
+  scratchpadArtifactFilePath,
   ARTIFACT_FILES,
 };

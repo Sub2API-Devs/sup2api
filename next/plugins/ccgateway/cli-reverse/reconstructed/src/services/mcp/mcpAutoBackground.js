@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 工具调用超时自动转后台
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tn4j580p.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b9vpay08.js (9)
  * attribution: placement 9
  */
 import {
@@ -34,18 +34,18 @@ import { TASKSTOP } from "../../tools/TaskStopTool/prompt.js";
 import { getTaskRunState } from "../../utils/task/taskNotifications.js";
 import { emitTaskProgress } from "../../utils/task/sdkProgress.js";
 
-//@ chunk-tn4j580p.js:11991-12065 placement
+//@ chunk-b9vpay08.js:13139-13213 placement
 function _() {
   return require("./emitTripwireEvent.lazy.js").mcpTaskWatcherModule();
 }
-//@ chunk-tn4j580p.js:12065-12119 placement (2.1.88 match: findCurrentIDE, 0.867)
+//@ chunk-b9vpay08.js:13213-13267 placement (2.1.88 match: findCurrentIDE, 0.867)
 /**
  * 不参与自动转后台的 IDE 传输类型。
  */
 var AUTO_BACKGROUND_MS = 120000;
 var MIN_BACKGROUND_CHECK_MS = 1000;
 var IDE_TRANSPORTS = new Set(["sse-ide", "ws-ide"]);
-//@ chunk-tn4j580p.js:12119-12459 placement
+//@ chunk-b9vpay08.js:13267-13607 placement
 function mcpAutoBackgroundDelayMs(config, { isNonInteractiveSession = false } = {}) {
   if (IDE_TRANSPORTS.has(config?.type ?? "")) return 0;
   if (config?.type === "sdk" && config.disableAutoBackground === true) return 0;
@@ -56,7 +56,7 @@ function mcpAutoBackgroundDelayMs(config, { isNonInteractiveSession = false } = 
     return Math.min(Math.max(0, CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS), MAX_TIMER_DELAY_MS);
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_auto_background", true) ? AUTO_BACKGROUND_MS : 0;
 }
-//@ chunk-tn4j580p.js:12459-12605 placement
+//@ chunk-b9vpay08.js:13607-13753 placement
 /**
  * 判断 MCP 调用是否可在不计时的情况下转为后台（非交互会话、非内部调用、未设自动后台环境变量且有延迟配置）。
  */
@@ -70,7 +70,7 @@ function isMcpCallMovableWithoutTimer(config, { isNonInteractiveSession, isInner
     }) > 0
   );
 }
-//@ chunk-tn4j580p.js:12605-16522 placement
+//@ chunk-b9vpay08.js:13753-17670 placement
 /**
  * 执行 MCP 工具调用，超过阈值时自动转入后台任务，并把进度写入任务注册表。
  */
@@ -291,7 +291,7 @@ async function runMcpToolWithAutoBackground({
     ],
   };
 }
-//@ chunk-tn4j580p.js:16522-16591 placement
+//@ chunk-b9vpay08.js:17670-17739 placement
 /**
  * 报告 MCP 调用进度（出错忽略）。
  */
@@ -302,7 +302,7 @@ function reportCallProgress(signal, progress) {
     logError(error);
   }
 }
-//@ chunk-tn4j580p.js:16591-16869 placement
+//@ chunk-b9vpay08.js:17739-18017 placement
 function createBackgroundShare({ signal, taskRegistry, taskId, share }) {
   let share_2 = {
     signal,
@@ -321,7 +321,7 @@ function createBackgroundShare({ signal, taskRegistry, taskId, share }) {
   });
   return share_2;
 }
-//@ chunk-tn4j580p.js:16869-17062 placement
+//@ chunk-b9vpay08.js:18017-18210 placement
 function scheduleBackgroundProgressWrite(share, latest) {
   if (share.share?.becameTask) return;
   share.latest = latest;
@@ -334,7 +334,7 @@ function scheduleBackgroundProgressWrite(share, latest) {
   share.timer = setTimeout(flushBackgroundProgress, min, share);
   share.timer.unref();
 }
-//@ chunk-tn4j580p.js:17062-17770 placement
+//@ chunk-b9vpay08.js:18210-18918 placement
 function flushBackgroundProgress(share) {
   share.timer = undefined;
   share.lastWriteAt = Date.now();

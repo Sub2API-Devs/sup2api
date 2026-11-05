@@ -3,9 +3,9 @@
  *
  * LSP 工具：九种代码智能操作，有 LSP 服务器连接过才启用，结果过滤 gitignore
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/LSPTool/LSPTool.ts
- * pieces: chunk-kxyd0g16.js (13)
+ * pieces: chunk-fmnbrxwy.js (13)
  * attribution: fingerprint 7, placement 1, file-local 2, callgraph-fingerprint 1, layout 2
  */
 import * as pathModule from "path";
@@ -37,7 +37,10 @@ import {
 } from "../../utils/fsOperations.js";
 import { isENOENT, toError } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { checkReadPermissionForTool } from "../../utils/permissions/filesystem.js";
+import {
+  checkReadPermissionForTool,
+  normalizeCaseForComparison_2,
+} from "../../utils/permissions/filesystem.js";
 import { consumeReadPermission } from "../../utils/fsSafety/atomicWriteStaging.js";
 import { getCwd } from "../../utils/cwd.js";
 import { logError } from "../../utils/log.js";
@@ -46,7 +49,6 @@ import { recordPluginUsage, buildPluginEventFieldsFromId } from "../../utils/tel
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { policyEnabledPluginNameSet } from "../../utils/plugins/pluginPolicy.js";
-import { uniq } from "../../utils/collections.js";
 import { execFileNoThrowWithCwd } from "../../utils/execFileNoThrow.js";
 import { buildGitConfigScopedEnv } from "../../utils/git/gitConfigEnv.js";
 import {
@@ -61,7 +63,7 @@ import {
 } from "./formatters.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:94254-94337 fingerprint (2.1.88 match: toLocation, 1)
+//@ chunk-fmnbrxwy.js:108968-109051 fingerprint (2.1.88 match: toLocation, 1)
 /**
  * LocationLink 转 Location（targetUri + targetSelectionRange/targetRange）。
  */
@@ -71,14 +73,14 @@ function toLocation(item) {
     range: item.targetSelectionRange || item.targetRange,
   };
 }
-//@ chunk-kxyd0g16.js:94337-94374 fingerprint (2.1.88 match: isLocationLink, 1)
+//@ chunk-fmnbrxwy.js:109051-109088 fingerprint (2.1.88 match: isLocationLink, 1)
 /**
  * 是否为 LSP LocationLink（含 targetUri）。
  */
 function isLocationLink(item) {
   return "targetUri" in item;
 }
-//@ chunk-kxyd0g16.js:103223-103289 placement
+//@ chunk-fmnbrxwy.js:117937-118003 placement
 /**
  * 判断路径（或其对照写法）是否为 UNC/网络路径。
  */
@@ -91,11 +93,11 @@ function hasUncOrNetworkPath(filePath, resolvedPath) {
     isNetworkOrSpecialPath(resolvedPath)
   );
 }
-//@ chunk-kxyd0g16.js:103920-105186 fingerprint (2.1.88 match: outputSchema, 0.801)
+//@ chunk-fmnbrxwy.js:118634-119900 fingerprint (2.1.88 match: outputSchema, 0.801)
 var MAX_LSP_FILE_SIZE_BYTES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var lspInputSchema;
 var lspOutputSchema;
-deferInit("chunk-kxyd0g16.js:103920", () => {
+deferInit("chunk-fmnbrxwy.js:118634", () => {
   MAX_LSP_FILE_SIZE_BYTES = 1e7;
   lspInputSchema = DoctorLazy(() =>
     zodStrictObject({
@@ -147,12 +149,12 @@ deferInit("chunk-kxyd0g16.js:103920", () => {
     }),
   );
 });
-//@ chunk-kxyd0g16.js:105853-109919 fingerprint (2.1.88 match: LSPTool, 0.883)
+//@ chunk-fmnbrxwy.js:120567-124633 fingerprint (2.1.88 match: LSPTool, 0.886)
 /**
  * LSP 工具定义（name "LSP"）。shouldDefer，只在有 LSP 服务器曾连接（hasEverConnected）时启用；只读、可并发；九种操作；文件需存在且不超过 10MB；结果过滤 gitignore 位置后格式化。
  */
 var LSPTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-kxyd0g16.js:105853", () => {
+deferInit("chunk-fmnbrxwy.js:120567", () => {
   LSPTool = buildTool({
     name: LSP_TOOL_NAME,
     searchHint: "code intelligence (definitions, references, symbols, hover)",
@@ -422,7 +424,7 @@ deferInit("chunk-kxyd0g16.js:105853", () => {
     },
   });
 });
-//@ chunk-kxyd0g16.js:109919-110976 fingerprint (2.1.88 match: getMethodAndParams, 1)
+//@ chunk-fmnbrxwy.js:124633-125690 fingerprint (2.1.88 match: getMethodAndParams, 1)
 /**
  * 把工具输入转换为 LSP 方法与参数（1 基行列转 0 基，文件转 file:// URI）。
  */
@@ -524,18 +526,18 @@ function getMethodAndParams(input, absolutePath) {
       };
   }
 }
-//@ chunk-kxyd0g16.js:110976-111083 file-local
+//@ chunk-fmnbrxwy.js:125690-125797 file-local
 function countSymbols(symbols) {
   let count = symbols.length;
   for (let symbol of symbols)
     if (symbol.children && symbol.children.length > 0) count += countSymbols(symbol.children);
   return count;
 }
-//@ chunk-kxyd0g16.js:111083-111137 callgraph-fingerprint (2.1.88 match: countUniqueFilesFromCallItems, 1)
+//@ chunk-fmnbrxwy.js:125797-125851 callgraph-fingerprint (2.1.88 match: countUniqueFilesFromCallItems, 1)
 function countUniqueFilesFromCallItems(items) {
   return new Set(items.map((item) => item.uri)).size;
 }
-//@ chunk-kxyd0g16.js:111137-111268 file-local
+//@ chunk-fmnbrxwy.js:125851-125982 file-local
 function uriToFilePath(uri) {
   let filePath = uri.replace(/^file:\/\//, "");
   if (/^\/[A-Za-z]:/.test(filePath)) filePath = filePath.slice(1);
@@ -544,7 +546,7 @@ function uriToFilePath(uri) {
   } catch {}
   return filePath;
 }
-//@ chunk-kxyd0g16.js:111268-111776 fingerprint (2.1.88 match: filterGitIgnoredLocations, 1)
+//@ chunk-fmnbrxwy.js:125982-126490 fingerprint (2.1.88 match: filterGitIgnoredLocations, 1)
 /**
  * 用 git check-ignore 批量过滤 LSP 返回位置中被 gitignore 的文件。
  */
@@ -553,7 +555,7 @@ async function filterGitIgnoredLocations(locations, cwd) {
   let uriToPath = new Map();
   for (let loc of locations)
     if (loc.uri && !uriToPath.has(loc.uri)) uriToPath.set(loc.uri, uriToFilePath(loc.uri));
-  let uniquePaths = uniq(uriToPath.values());
+  let uniquePaths = normalizeCaseForComparison_2(uriToPath.values());
   if (uniquePaths.length === 0) return locations;
   let ignoredPaths = new Set();
   let BATCH_SIZE = 50;
@@ -578,11 +580,11 @@ async function filterGitIgnoredLocations(locations, cwd) {
     return !filePath || !ignoredPaths.has(filePath);
   });
 }
-//@ chunk-kxyd0g16.js:111776-111813 layout (2.1.88 match: isLocationLink, 1)
+//@ chunk-fmnbrxwy.js:126490-126527 layout (2.1.88 match: isLocationLink, 1)
 function isLocationLink_2(item) {
   return "targetUri" in item;
 }
-//@ chunk-kxyd0g16.js:111813-111914 layout (2.1.88 match: toLocation, 1)
+//@ chunk-fmnbrxwy.js:126527-126628 layout (2.1.88 match: toLocation, 1)
 function toLocation_2(item) {
   if (isLocationLink_2(item))
     return {
@@ -591,7 +593,7 @@ function toLocation_2(item) {
     };
   return item;
 }
-//@ chunk-kxyd0g16.js:111914-114110 fingerprint (2.1.88 match: formatResult, 0.96)
+//@ chunk-fmnbrxwy.js:126628-128824 fingerprint (2.1.88 match: formatResult, 0.96)
 /**
  * 按操作类型格式化 LSP 结果，返回 {formatted, resultCount, fileCount}。
  */

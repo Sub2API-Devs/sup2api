@@ -3,14 +3,14 @@
  *
  * 把连续的搜索/读取类工具调用折叠成一行摘要（Searched N, read M, recalled memories…）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/collapseReadSearch.ts
- * pieces: chunk-e6aww6q8.js (56)
- * attribution: placement 11, layout 25, fingerprint 14, file-local 2, callgraph-fingerprint 1, sole-consumer 3
+ * pieces: chunk-5xgkngpb.js (60)
+ * attribution: placement 23, layout 23, fingerprint 13, file-local 1
  */
 import { isTeamMemoryPath } from "../memdir/teamMemPrompts.js";
 import { FILE_WRITE_TOOL_NAME } from "../tools/FileWriteTool/prompt.js";
-import { FILE_EDIT_TOOL_NAME } from "../tools/FileEditTool/constants.js";
+import { EDIT } from "../tools/FileEditTool/constants.js";
 import { REMOTE_DEVICES, alnumLower } from "../services/mcp/firstPartyServerIds.js";
 import { HEARTHBOT } from "../services/mcp/ccrMetaMcp.js";
 import { INJECTED_MCP_SERVER_NAMES } from "../services/analytics/metadata.js";
@@ -21,28 +21,38 @@ import {
   isShellCommandTargetingMemory,
 } from "./memoryFileDetection.js";
 import { truncateToLength, collapseWhitespace as collapseWhitespace_2 } from "./stringUtils.js";
+import { getDisplayPath } from "./file.js";
+import { isFullscreenEnvEnabled } from "./fullscreen.js";
+import { getEffectiveCwd } from "./cwd.js";
+import { SHELL_TOOL_NAMES as SHELL_TOOL_NAMES_2 } from "./shell/shellToolUtils.js";
 import { findToolByName } from "../Tool.js";
 import { getFileAndShellTools } from "../tools.js";
-import { isExactReplToolName } from "../tools/REPLTool/constants.js";
+import { isEvalToolCallName, REPL_TOOL_NAME, isEvalToolName } from "../tools/REPLTool/constants.js";
+import { codeModeAccepted } from "./codeMode/accepted.js";
+import { POLL } from "../tools/PollTool/prompt.js";
+import { isCodeModeExperimentEnabled } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { TODO_TOOL_NAMES } from "./model/legacyModelNames.js";
-import { isFullscreenEnvEnabled } from "./fullscreen.js";
 import { TOOL_SEARCH_TOOL_NAME } from "../tools/ToolSearchTool/prompt.js";
 import { moduleStore } from "../services/mcp/mcpClientCapabilities.js";
 import { MCP_CLAUDE_TEST_WRITE } from "../plugins/bundled/claudeTest/constants.js";
 import { deviceToolDisplayInfo, remoteMachineRefForDisplay, bashCommentTitle } from "./toolUseDisplay.js";
 import { normalizeUuidOrNull } from "./agentId.js";
-import { SHELL_TOOL_NAMES as SHELL_TOOL_NAMES_3 } from "./shell/shellToolUtils.js";
 import { isUntrustedObject as isUntrustedObject_2 } from "./untrustedValues.js";
 import { normalizeServerPath } from "../services/accountMemory/accountMemoryServer.js";
+import {
+  toolCallOf,
+  toolCallOf_3,
+  toolResultText,
+  skipVirtualCallRun,
+  toolNameForResult,
+} from "../components/messageActions.js";
 import { countEditLines } from "../tools/AgentTool/agentLaunch.js";
-import { toolCallOf_3, toolResultText } from "../components/messageActions.js";
 import { hasNarrationThinking } from "./messages/apiNormalization.js";
-import { NO_CONTENT_MESSAGE, NO_RESPONSE_REQUESTED } from "../constants/messages.js";
+import { NO_CONTENT_MESSAGE } from "../constants/messages.js";
+import { NO_RESPONSE_REQUESTED } from "./messages.js";
 import { detectGitOperation } from "../tools/shared/gitOperationTracking.js";
 import { logForDebugging } from "./debug.js";
 import { stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
-import { getEffectiveCwd } from "./cwd.js";
-import { getDisplayPath } from "./file.js";
 import { normalizeHookSummary } from "./collapseHookSummaries.js";
 import { stripAnsiPerLine } from "./stripAnsi.js";
 import { isHumanOrAutoContinuation, isPeerOrObserver } from "./messageProvenance.js";
@@ -50,7 +60,7 @@ import { visibleTeammateMailboxMessages } from "./teammateMailbox.js";
 import { appendTeamMemorySummaryParts } from "./teamMemoryOps.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4677066-4677123 placement
+//@ chunk-5xgkngpb.js:4785672-4785729 placement
 /**
  * 判断工具输入路径是否指向团队记忆目录。
  */
@@ -58,13 +68,13 @@ function isTeamMemoryPathInput(input) {
   if (input.path && isTeamMemoryPath(input.path)) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:4677123-4677220 placement
+//@ chunk-5xgkngpb.js:4785729-4785826 placement
 function getFilePathFromToolInput(toolInput, toolInput_2) {
-  if (toolInput !== FILE_WRITE_TOOL_NAME && toolInput !== FILE_EDIT_TOOL_NAME) return false;
+  if (toolInput !== FILE_WRITE_TOOL_NAME && toolInput !== EDIT) return false;
   let filePath = toolInput_2.file_path ?? toolInput_2.path;
   return filePath !== undefined && isTeamMemoryPath(filePath);
 }
-//@ chunk-e6aww6q8.js:4679035-4679333 placement (2.1.88 match: getSessionFileTypeFromInput, 0.767)
+//@ chunk-5xgkngpb.js:4787644-4787942 placement (2.1.88 match: getSessionFileTypeFromInput, 0.767)
 function getSessionFileTypeFromInput_2(input) {
   if (typeof input !== "object" || input === null) return {};
   let { file_path: filePath, path, pattern, glob, command, query, content } = input;
@@ -92,19 +102,19 @@ function getSessionFileTypeFromInput_2(input) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:4679333-4679396 placement
+//@ chunk-5xgkngpb.js:4787942-4788005 placement
 /**
  * 判断字符串输入安全（无 NUL 字符）。
  */
 function isSafeInputString(value) {
   return typeof value === "string" && !value.includes("\x00");
 }
-//@ chunk-e6aww6q8.js:4679396-4679409 layout
+//@ chunk-5xgkngpb.js:4788005-4788018 layout
 /**
  * 记忆保存相关的可选钩子（运行期注入）。
  */
 var memorySaveHooks = null;
-//@ chunk-e6aww6q8.js:4679409-4679634 layout
+//@ chunk-5xgkngpb.js:4788018-4788243 layout
 /**
  * 由注入钩子判断某内容是否像发布 artifact 的动作。
  */
@@ -112,21 +122,21 @@ var ARTIFACT_TOOL_NAME; // deferred: loads other modules while loading; runs onc
 var mapped_5;
 var isPublishShapedArtifactAction;
 var isPublishShapedArtifact;
-deferInit("chunk-e6aww6q8.js:4679409", () => {
+deferInit("chunk-5xgkngpb.js:4788018", () => {
   ARTIFACT_TOOL_NAME = require("../tools/ArtifactTool/AMPERSAND_FORMS.lazy.js").ARTIFACT_TOOL_NAME;
   mapped_5 = [REMOTE_DEVICES, HEARTHBOT, "webagent", ...INJECTED_MCP_SERVER_NAMES].map(alnumLower);
   isPublishShapedArtifactAction =
     require("../tools/ArtifactTool/AMPERSAND_FORMS.lazy.js").isPublishShapedArtifactAction;
-  isPublishShapedArtifact = () => require("./permissions/filesystem.js").isScratchpadDisplayPath;
+  isPublishShapedArtifact = () => require("./permissions/filesystem.lazy.js").isScratchpadDisplayPath;
 });
-//@ chunk-e6aww6q8.js:4679634-4679677 layout
+//@ chunk-5xgkngpb.js:4788243-4788286 layout
 /**
  * 取工具输入里的文件路径（file_path 优先，其次 path）。
  */
 function inputFilePath(toolInput) {
   return toolInput.file_path ?? toolInput.path;
 }
-//@ chunk-e6aww6q8.js:4679677-4679819 fingerprint (2.1.88 match: isMemorySearch, 1)
+//@ chunk-5xgkngpb.js:4788286-4788428 fingerprint (2.1.88 match: isMemorySearch, 1)
 function isMemorySearch(input) {
   if (input.path) {
     if (isMemoryOrSessionFile(input.path) || isMemoryDirectory(input.path)) return true;
@@ -135,35 +145,35 @@ function isMemorySearch(input) {
   if (input.command && isShellCommandTargetingMemory(input.command)) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:4679819-4679902 layout
+//@ chunk-5xgkngpb.js:4788428-4788511 layout
 function isArtifactReadOrWrite(toolName, toolInput) {
-  if (toolName !== FILE_WRITE_TOOL_NAME && toolName !== FILE_EDIT_TOOL_NAME) return false;
+  if (toolName !== FILE_WRITE_TOOL_NAME && toolName !== EDIT) return false;
   let filePath = inputFilePath(toolInput);
   return filePath !== undefined && isMemoryOrSessionFile(filePath);
 }
-//@ chunk-e6aww6q8.js:4679902-4679988 layout
+//@ chunk-5xgkngpb.js:4788511-4788597 layout
 function isScratchpadReadOrWrite(toolName, toolInput) {
-  if (toolName !== FILE_WRITE_TOOL_NAME && toolName !== FILE_EDIT_TOOL_NAME) return false;
+  if (toolName !== FILE_WRITE_TOOL_NAME && toolName !== EDIT) return false;
   let filePath = inputFilePath(toolInput);
   return filePath !== undefined && isPublishShapedArtifact()(filePath);
 }
-//@ chunk-e6aww6q8.js:4679988-4680011 layout
+//@ chunk-5xgkngpb.js:4788597-4788620 layout
 /**
  * 记录思考时长的上限（10 分钟）。
  */
 var MAX_COLLAPSED_LABEL_CHARS = 300;
 var MAX_LOGGED_THOUGHT_MS = 600000;
-//@ chunk-e6aww6q8.js:4680011-4680070 layout
+//@ chunk-5xgkngpb.js:4788620-4788678 layout
 function truncateCollapsedLabel(label) {
   return label.length > MAX_COLLAPSED_LABEL_CHARS
     ? truncateToLength(label, MAX_COLLAPSED_LABEL_CHARS - 1) + "\u2026"
     : label;
 }
-//@ chunk-e6aww6q8.js:4680070-4680104 layout
+//@ chunk-5xgkngpb.js:4788678-4788712 layout
 function formatCollapsedLabel(label) {
   return truncateCollapsedLabel(collapseWhitespace_2(label));
 }
-//@ chunk-e6aww6q8.js:4680104-4680204 file-local
+//@ chunk-5xgkngpb.js:4788712-4788811 file-local
 function commandAsHint(command) {
   let cleaned =
     "$ " +
@@ -177,16 +187,102 @@ function commandAsHint(command) {
 `);
   return truncateCollapsedLabel(cleaned);
 }
-//@ chunk-e6aww6q8.js:4680204-4680250 layout
+//@ chunk-5xgkngpb.js:4788811-4788856 layout
+function pathHint(filePath) {
+  return (filePath && formatCollapsedLabel(getDisplayPath(filePath))) || undefined;
+}
+//@ chunk-5xgkngpb.js:4788856-4788915 layout
+function quotedLabel(value) {
+  let label = value ? formatCollapsedLabel(value) : "";
+  return label ? `"${label}"` : undefined;
+}
+//@ chunk-5xgkngpb.js:4788915-4788935 layout
+var weakMap_22; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xgkngpb.js:4788915", () => {
+  weakMap_22 = new WeakMap();
+});
+//@ chunk-5xgkngpb.js:4788935-4789219 layout
+function toolName(toolName, toolInput, tools) {
+  let inputObject = typeof toolInput === "object" && toolInput !== null ? toolInput : undefined;
+  let fullscreen = isFullscreenEnvEnabled();
+  let effectiveCwd = getEffectiveCwd();
+  let cached = inputObject === undefined ? undefined : weakMap_22.get(inputObject);
+  if (
+    cached?.toolName === toolName &&
+    cached.tools === tools &&
+    cached.fullscreen === fullscreen &&
+    cached.cwd === effectiveCwd
+  )
+    return cached.hint;
+  let hint = collapseName(toolName, toolInput, tools);
+  if (inputObject !== undefined)
+    weakMap_22.set(inputObject, {
+      toolName,
+      tools,
+      fullscreen,
+      cwd: effectiveCwd,
+      hint,
+    });
+  return hint;
+}
+//@ chunk-5xgkngpb.js:4789219-4789821 layout
+function collapseName(toolName, toolInput, tools) {
+  let toolSearchOrReadInfo = getToolSearchOrReadInfo(toolName, toolInput, tools);
+  let toolInput_2 = getSessionFileTypeFromInput_2(toolInput);
+  let { command, query, pattern, file_path: filePath } = toolInput_2;
+  if (!toolSearchOrReadInfo.isCollapsible) {
+    if (command && SHELL_TOOL_NAMES_2.includes(toolName))
+      return {
+        kind: "hint",
+        text: commandAsHint(command),
+      };
+    let toolByNameWithFallback = findToolByNameWithFallback(tools, toolName);
+    return toolByNameWithFallback
+      ? {
+          kind: "ownRow",
+          tool: toolByNameWithFallback,
+        }
+      : {
+          kind: "keep",
+        };
+  }
+  let hintText;
+  if (
+    toolSearchOrReadInfo.isMemoryWrite ||
+    toolSearchOrReadInfo.isAbsorbedSilently ||
+    toolSearchOrReadInfo.accountMemory ||
+    toolSearchOrReadInfo.memorySave !== undefined
+  )
+    hintText = undefined;
+  else if (toolSearchOrReadInfo.isScratchpadWrite) hintText = pathHint(inputFilePath(toolInput_2));
+  else if (toolSearchOrReadInfo.mcpCallLabel) hintText = quotedLabel(query);
+  else if (toolSearchOrReadInfo.isBash || toolSearchOrReadInfo.isList)
+    hintText = command ? commandAsHint(command) : undefined;
+  else if (toolSearchOrReadInfo.isSearch)
+    hintText =
+      isTeamMemoryPathInput(toolInput_2) || isMemorySearch(toolInput_2) ? undefined : quotedLabel(pattern);
+  else if (filePath)
+    hintText = isTeamMemoryPath(filePath) || isMemoryOrSessionFile(filePath) ? undefined : pathHint(filePath);
+  else hintText = command ? commandAsHint(command) : undefined;
+  return hintText === undefined
+    ? {
+        kind: "keep",
+      }
+    : {
+        kind: "hint",
+        text: hintText,
+      };
+}
+//@ chunk-5xgkngpb.js:4789821-4789867 layout
 function findToolByNameWithFallback(tools, name) {
   return findToolByName(tools, name) ?? findToolByName(getFileAndShellTools(), name);
 }
-//@ chunk-e6aww6q8.js:4680250-4682131 fingerprint (2.1.88 match: getToolSearchOrReadInfo, 0.669)
+//@ chunk-5xgkngpb.js:4789867-4791903 fingerprint (2.1.88 match: getToolSearchOrReadInfo, 0.666)
 /**
  * 判断一个工具调用是否属于可折叠的搜索或读取，并返回其描述信息。
  */
 function getToolSearchOrReadInfo(toolName, toolInput, tools) {
-  if (isExactReplToolName(toolName))
+  if (isEvalToolCallName(toolName))
     return {
       isCollapsible: true,
       isSearch: false,
@@ -197,10 +293,19 @@ function getToolSearchOrReadInfo(toolName, toolInput, tools) {
       isScratchpadWrite: false,
       isAbsorbedSilently: true,
     };
+  if (codeModeAccepted() && toolName === POLL && isCodeModeExperimentEnabled())
+    return {
+      isCollapsible: true,
+      isSearch: false,
+      isRead: false,
+      isList: false,
+      isREPL: false,
+      isMemoryWrite: false,
+      isScratchpadWrite: false,
+      isAbsorbedSilently: true,
+    };
   let toolInput_2 =
-    toolName === FILE_WRITE_TOOL_NAME || toolName === FILE_EDIT_TOOL_NAME
-      ? getSessionFileTypeFromInput_2(toolInput)
-      : {};
+    toolName === FILE_WRITE_TOOL_NAME || toolName === EDIT ? getSessionFileTypeFromInput_2(toolInput) : {};
   if (isArtifactReadOrWrite(toolName, toolInput_2))
     return {
       isCollapsible: true,
@@ -305,7 +410,7 @@ function getToolSearchOrReadInfo(toolName, toolInput, tools) {
   let result = toolName_2.isSearchOrReadCommand(toolInput ?? {});
   let isList = result.isList ?? false;
   let isCollapsible = result.isSearch || result.isRead || isList;
-  let included_2 = SHELL_TOOL_NAMES_3.includes(toolName);
+  let included_2 = SHELL_TOOL_NAMES_2.includes(toolName);
   return {
     isCollapsible: isCollapsible || (isFullscreenEnvEnabled() ? included_2 : false),
     isSearch: result.isSearch,
@@ -318,7 +423,7 @@ function getToolSearchOrReadInfo(toolName, toolInput, tools) {
     isBash: isFullscreenEnvEnabled() ? !isCollapsible && included_2 : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:4682131-4682565 fingerprint (2.1.88 match: getSearchOrReadFromContent, 0.749)
+//@ chunk-5xgkngpb.js:4791903-4792337 fingerprint (2.1.88 match: getSearchOrReadFromContent, 0.724)
 function getSearchOrReadFromContent(content, tools) {
   if (content?.type === "tool_use" && content.name) {
     let info = getToolSearchOrReadInfo(content.name, content.input, tools);
@@ -340,12 +445,12 @@ function getSearchOrReadFromContent(content, tools) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:4682565-4682576 layout
+//@ chunk-5xgkngpb.js:4792337-4792348 placement
 /**
  * 从输入里取路径的最大数量（20）。
  */
 var MAX_INPUT_PATHS = 20;
-//@ chunk-e6aww6q8.js:4682576-4683047 layout
+//@ chunk-5xgkngpb.js:4792348-4792819 placement
 /**
  * 安全地从工具输入中取出 path 字段（字符串或字符串数组，只读自有数据属性、限数量），规范化后返回。
  */
@@ -371,26 +476,17 @@ function toolInputPaths(input) {
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:4683047-4683067 layout
-var weakMap_17; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4683047", () => {
-  weakMap_17 = new WeakMap();
+//@ chunk-5xgkngpb.js:4792819-4792839 placement
+var weakMap_23; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xgkngpb.js:4792819", () => {
+  weakMap_23 = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:4683067-4683236 layout (2.1.88 match: toolCallOf, 1)
-function toolCallOf(msg) {
-  if (msg.type === "assistant") {
-    let firstBlock = msg.message.content[0];
-    return firstBlock?.type === "tool_use" ? firstBlock.name : null;
-  }
-  if (msg.type === "grouped_tool_use") return msg.toolName;
-  return null;
-}
-//@ chunk-e6aww6q8.js:4683236-4683457 layout
+//@ chunk-5xgkngpb.js:4793008-4793229 placement
 /**
  * 按工具调用缓存折叠信息（工具表不变时复用）。
  */
 function getToolCollapseInfoCached(msg, tools) {
-  let cached = weakMap_17.get(msg);
+  let cached = weakMap_23.get(msg);
   if (cached?.tools === tools) return cached.info;
   let toolName = toolCallOf(msg);
   let tool = toolName === null ? undefined : findToolByNameWithFallback(tools, toolName);
@@ -398,44 +494,46 @@ function getToolCollapseInfoCached(msg, tools) {
     cached.tools = tools;
     return cached.info;
   }
-  let collapsibleToolInfo = getCollapsibleToolInfo(msg, tools);
-  weakMap_17.set(msg, {
+  let info = message(msg, tools);
+  weakMap_23.set(msg, {
     tools,
     resolvedTool: tool,
-    info: collapsibleToolInfo,
+    info,
   });
-  return collapsibleToolInfo;
+  return info;
 }
-//@ chunk-e6aww6q8.js:4683457-4685204 callgraph-fingerprint (2.1.88 match: getCollapsibleToolInfo, 0.157)
-function getCollapsibleToolInfo(msg, tools) {
+//@ chunk-5xgkngpb.js:4793229-4794976 placement
+function message(msg, tools) {
   let currentTool = null;
   if (msg.type === "assistant") {
     let content = msg.message.content[0];
-    let info = getSearchOrReadFromContent(content, tools);
-    if (info && content?.type === "tool_use")
+    let searchOrReadFromContent = getSearchOrReadFromContent(content, tools);
+    if (searchOrReadFromContent && content?.type === "tool_use")
       currentTool = {
         name: content.name,
         input: getSessionFileTypeFromInput_2(content.input),
-        ...info,
-        memorySave: msg.cloudMemoryToolUseIds?.includes(content.id) ? info.memorySave : undefined,
+        ...searchOrReadFromContent,
+        memorySave: msg.cloudMemoryToolUseIds?.includes(content.id)
+          ? searchOrReadFromContent.memorySave
+          : undefined,
       };
   } else if (msg.type === "grouped_tool_use") {
-    let firstContent = msg.messages[0]?.message.content[0];
-    let info = getSearchOrReadFromContent(
-      firstContent
+    let content = msg.messages[0]?.message.content[0];
+    let searchOrReadFromContent = getSearchOrReadFromContent(
+      content
         ? {
             type: "tool_use",
             name: msg.toolName,
-            input: firstContent.input,
+            input: content.input,
           }
         : undefined,
       tools,
     );
-    if (info && firstContent?.type === "tool_use")
+    if (searchOrReadFromContent && content?.type === "tool_use")
       currentTool = {
         name: msg.toolName,
-        input: getSessionFileTypeFromInput_2(firstContent.input),
-        ...info,
+        input: getSessionFileTypeFromInput_2(content.input),
+        ...searchOrReadFromContent,
         memorySave: undefined,
       };
   }
@@ -507,7 +605,7 @@ function getCollapsibleToolInfo(msg, tools) {
   return {
     ...currentTool,
     toolUseIds: toolCallOf_3(msg),
-    toolUseCount: countToolUses(msg),
+    toolUseCount: toolCallOf_4(msg),
     readPaths,
     accountMemoryPaths: entries,
     editLines,
@@ -516,7 +614,7 @@ function getCollapsibleToolInfo(msg, tools) {
     searchTarget: pendingCommand,
   };
 }
-//@ chunk-e6aww6q8.js:4685204-4685367 file-local
+//@ chunk-5xgkngpb.js:4794976-4795139 placement
 function isTextBreaker(msg) {
   if (msg.type === "assistant") {
     let content = msg.message.content[0];
@@ -530,7 +628,7 @@ function isTextBreaker(msg) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:4685367-4685449 layout
+//@ chunk-5xgkngpb.js:4795139-4795221 placement
 /**
  * 判断消息是否为以带签名思考块开头的 assistant 消息。
  */
@@ -538,7 +636,7 @@ function isSignedThinkingMessage(message) {
   if (message.type !== "assistant") return false;
   return isSignedThinkingBlock(message.message.content[0]);
 }
-//@ chunk-e6aww6q8.js:4685449-4685584 layout
+//@ chunk-5xgkngpb.js:4795221-4795356 placement
 function isSignedThinkingBlock(block) {
   if (block === undefined) return false;
   return (
@@ -548,21 +646,21 @@ function isSignedThinkingBlock(block) {
     hasNarrationThinking(block)
   );
 }
-//@ chunk-e6aww6q8.js:4685584-4685629 layout
+//@ chunk-5xgkngpb.js:4795356-4795401 placement
 function isPlaceholderAssistantText(text) {
   return text.trim() === NO_CONTENT_MESSAGE || text === NO_RESPONSE_REQUESTED;
 }
-//@ chunk-e6aww6q8.js:4685629-4685742 layout
-function isPlaceholderAssistantMessage(msg) {
-  if (msg.type !== "assistant") return false;
-  let content = msg.message.content[0];
+//@ chunk-5xgkngpb.js:4795401-4795514 layout
+function isPlaceholderAssistantMessage(message) {
+  if (message.type !== "assistant") return false;
+  let content = message.message.content[0];
   return content?.type === "text" && isPlaceholderAssistantText(content.text);
 }
-//@ chunk-e6aww6q8.js:4685742-4685844 fingerprint (2.1.88 match: isPreToolHookSummary, 1)
+//@ chunk-5xgkngpb.js:4795514-4795616 fingerprint (2.1.88 match: isPreToolHookSummary, 1)
 function isPreToolHookSummary(msg) {
   return msg.type === "system" && msg.subtype === "stop_hook_summary" && msg.hookLabel === "PreToolUse";
 }
-//@ chunk-e6aww6q8.js:4685844-4686054 fingerprint (2.1.88 match: shouldSkipMessage, 1)
+//@ chunk-5xgkngpb.js:4795616-4795826 fingerprint (2.1.88 match: shouldSkipMessage, 1)
 /**
  * 折叠搜索/读取组时可跳过的消息：思考块、附件、系统消息。
  */
@@ -576,25 +674,25 @@ function shouldSkipMessage(msg) {
   if (msg.type === "system") return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:4686054-4686074 sole-consumer
-var weakMap_18; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4686054", () => {
-  weakMap_18 = new WeakMap();
+//@ chunk-5xgkngpb.js:4795826-4795846 placement
+var weakMap_24; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xgkngpb.js:4795826", () => {
+  weakMap_24 = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:4686074-4686358 sole-consumer
+//@ chunk-5xgkngpb.js:4795846-4796130 placement
 function visibleThinkingOf(message) {
   if (message.type !== "assistant") return;
   let firstBlock = message.message.content[0];
   if (firstBlock?.type !== "thinking" || !firstBlock.thinking) return;
   let thinking = firstBlock.thinking;
-  let cached = weakMap_18.get(message);
+  let cached = weakMap_24.get(message);
   if (cached === undefined || cached.thinking !== thinking) {
     cached = {
       thinking,
       blank: thinking.trim() === "",
       summary: undefined,
     };
-    weakMap_18.set(message, cached);
+    weakMap_24.set(message, cached);
   }
   if (cached.blank) return;
   return {
@@ -602,24 +700,24 @@ function visibleThinkingOf(message) {
     memo: cached,
   };
 }
-//@ chunk-e6aww6q8.js:4686358-4686545 sole-consumer (2.1.88 match: toolCallOf, 1)
+//@ chunk-5xgkngpb.js:4796130-4796317 placement (2.1.88 match: toolCallOf, 1)
 function toolCallOf_2(msg) {
   if (msg.type === "assistant") return msg.message.content[0]?.type === "tool_use";
   if (msg.type === "grouped_tool_use") return msg.messages[0]?.message.content[0]?.type === "tool_use";
   return false;
 }
-//@ chunk-e6aww6q8.js:4687096-4687199 fingerprint (2.1.88 match: getDisplayMessageFromCollapsed, 1)
+//@ chunk-5xgkngpb.js:4797534-4797637 fingerprint (2.1.88 match: getDisplayMessageFromCollapsed, 1)
 function getDisplayMessageFromCollapsed(message) {
   let firstMsg = message.displayMessage;
   if (firstMsg.type === "grouped_tool_use") return firstMsg.displayMessage;
   return firstMsg;
 }
-//@ chunk-e6aww6q8.js:4687199-4687280 fingerprint (2.1.88 match: countToolUses, 1)
-function countToolUses(msg) {
+//@ chunk-5xgkngpb.js:4797637-4797718 layout (2.1.88 match: toolCallOf, 1)
+function toolCallOf_4(msg) {
   if (msg.type === "grouped_tool_use") return msg.messages.length;
   return 1;
 }
-//@ chunk-e6aww6q8.js:4687280-4687594 fingerprint (2.1.88 match: getFilePathsFromReadMessage, 1)
+//@ chunk-5xgkngpb.js:4797718-4798032 fingerprint (2.1.88 match: getFilePathsFromReadMessage, 1)
 function getFilePathsFromReadMessage(msg) {
   let paths = [];
   if (msg.type === "assistant") {
@@ -638,7 +736,7 @@ function getFilePathsFromReadMessage(msg) {
     }
   return paths;
 }
-//@ chunk-e6aww6q8.js:4687594-4688048 fingerprint (2.1.88 match: scanBashResultForGitOps, 1)
+//@ chunk-5xgkngpb.js:4798032-4798486 fingerprint (2.1.88 match: scanBashResultForGitOps, 1)
 function scanBashResultForGitOps(msg, group) {
   if (msg.type !== "user") return;
   let out = msg.toolUseResult;
@@ -660,7 +758,7 @@ function scanBashResultForGitOps(msg, group) {
     if (commit || push || branch || pr) group.gitOpBashCount = (group.gitOpBashCount ?? 0) + 1;
   }
 }
-//@ chunk-e6aww6q8.js:4688048-4688611 fingerprint (2.1.88 match: createEmptyGroup, 0.92)
+//@ chunk-5xgkngpb.js:4798486-4799049 fingerprint (2.1.88 match: createEmptyGroup, 0.919)
 function createEmptyGroup(currentGroup) {
   let group = {
     messages: [],
@@ -696,7 +794,7 @@ function createEmptyGroup(currentGroup) {
   }
   return group;
 }
-//@ chunk-e6aww6q8.js:4688611-4690684 fingerprint (2.1.88 match: createCollapsedGroup, 0.849)
+//@ chunk-5xgkngpb.js:4799049-4801200 fingerprint (2.1.88 match: createCollapsedGroup, 0.837)
 function createCollapsedGroup(group, currentGroup) {
   let firstMsg = group.messages[0];
   let totalReadCount = group.readFilePaths.size > 0 ? group.readFilePaths.size : group.readOperationCount;
@@ -763,14 +861,15 @@ function createCollapsedGroup(group, currentGroup) {
     result.relevantMemories = group.relevantMemories;
   if (group.thoughtForMs > 0) result.thoughtForMs = group.thoughtForMs;
   if (group.latestThinkingSummary !== undefined) result.latestThinkingSummary = group.latestThinkingSummary;
+  if (codeModeAccepted() && group.stopShownAfter === true) result.stopShownAfter = true;
   return result;
 }
-//@ chunk-e6aww6q8.js:4690684-4690695 layout
+//@ chunk-5xgkngpb.js:4801200-4801211 layout
 /**
  * 折叠结果的空数组常量。
  */
 var EMPTY_COLLAPSED_RESULT = [];
-//@ chunk-e6aww6q8.js:4690695-4691105 layout
+//@ chunk-5xgkngpb.js:4801211-4801621 layout
 function getMemorySaveEntries(message, group) {
   if (memorySaveHooks === null || message.type !== "user" || !group.memorySaves?.size)
     return EMPTY_COLLAPSED_RESULT;
@@ -787,7 +886,7 @@ function getMemorySaveEntries(message, group) {
   }
   return toolUseIds;
 }
-//@ chunk-e6aww6q8.js:4691105-4691481 layout
+//@ chunk-5xgkngpb.js:4801621-4801997 layout
 function hasBashEditDiff(message) {
   if (message.type !== "user") return false;
   let toolUseResult = message.toolUseResult;
@@ -811,12 +910,12 @@ function hasBashEditDiff(message) {
       bashEditDiff.moreFiles === 0)
   );
 }
-//@ chunk-e6aww6q8.js:4691481-4691492 layout
+//@ chunk-5xgkngpb.js:4801997-4802008 layout
 /**
  * 合并思考块时允许的索引间隔（32）。
  */
 var MAX_INDEX_GAP = 32;
-//@ chunk-e6aww6q8.js:4691492-4692234 layout
+//@ chunk-5xgkngpb.js:4802008-4802750 layout
 class IncrementalCollapser {
   #e = [];
   #t = [];
@@ -870,7 +969,7 @@ class IncrementalCollapser {
     this.lastFolded = 0;
   }
 }
-//@ chunk-e6aww6q8.js:4692234-4698662 fingerprint (2.1.88 match: collapseReadSearchGroups, 0.515)
+//@ chunk-5xgkngpb.js:4802750-4809446 fingerprint (2.1.88 match: collapseReadSearchGroups, 0.49)
 function collapseReadSearchGroups(
   messages,
   tools,
@@ -935,8 +1034,13 @@ function collapseReadSearchGroups(
     result.push(...dedupeHookPermissionDecisions(pendingRows));
     pendingRows = [];
   }
-  function flushGroup_2() {
+  function flushRows() {
     if (group.messages.length === 0) return;
+    if (codeModeAccepted() && group.holdsStoppedScript === true) {
+      let stoppedScript = skipVirtualCallRun(messages, start);
+      start_2 = Math.max(start_2, stoppedScript.end + 1);
+      if (stoppedScript.interrupted) group.stopShownAfter = true;
+    }
     result.push(createCollapsedGroup(group, currentGroup));
     flushGroup();
     group = createEmptyGroup(currentGroup);
@@ -1077,14 +1181,14 @@ function collapseReadSearchGroups(
           group.memorySaves?.delete(msg);
         }
         if (group.messages.length > 0) {
-          flushGroup_2();
+          flushRows();
           result.push(last);
         } else {
           result.push(last);
           flushGroup();
           group = createEmptyGroup(currentGroup);
         }
-      } else flushGroup_2();
+      } else flushRows();
       result.push(message);
     } else if (toolResultText(message, group.toolUseIds) && hasBashEditDiff(message)) {
       let msg = group.messages.at(-1);
@@ -1109,7 +1213,7 @@ function collapseReadSearchGroups(
       ) {
         group.messages.pop();
         let toolInfo = getToolCollapseInfoCached(msg, tools);
-        let toolUseCount = toolInfo?.toolUseCount ?? countToolUses(msg);
+        let toolUseCount = toolInfo?.toolUseCount ?? toolCallOf_4(msg);
         if (isFullscreenEnvEnabled() && toolInfo?.isBash)
           group.bashCount = Math.max(0, (group.bashCount ?? 0) - toolUseCount);
         else if (toolInfo?.isList) group.listCount = Math.max(0, group.listCount - toolUseCount);
@@ -1121,17 +1225,27 @@ function collapseReadSearchGroups(
           group.bashCommands?.delete(filePath);
         }
         if (group.messages.length > 0) {
-          flushGroup_2();
+          flushRows();
           result.push(msg);
         } else {
           result.push(msg);
           flushGroup();
           group = createEmptyGroup(currentGroup);
         }
-      } else flushGroup_2();
+      } else flushRows();
       result.push(message);
     } else if (toolResultText(message, group.toolUseIds)) {
       group.messages.push(message);
+      if (
+        codeModeAccepted() &&
+        message.type === "user" &&
+        require("../tools/REPLTool/stopReport.js").drawsInterruptedRow(
+          REPL_TOOL_NAME,
+          message.toolUseResult,
+        ) &&
+        isEvalToolName(toolNameForResult(message, group.messages))
+      )
+        group.holdsStoppedScript = true;
       if (currentGroup && group.bashCommands?.size) scanBashResultForGitOps(message, group);
     } else if (group.messages.length > 0 && isPreToolHookSummary(message)) {
       let { hookCount, hookInfos, totalDurationMs } = normalizeHookSummary(message);
@@ -1182,7 +1296,7 @@ function collapseReadSearchGroups(
       isMessageBreakPoint(message) ||
       (thinking !== undefined && isSignedThinkingMessage(thinking.message))
     ) {
-      flushGroup_2();
+      flushRows();
       result.push(message);
     } else if (thinking !== undefined) {
       let summary = (thinking.memo.summary ??= collapseWhitespace_2(
@@ -1198,16 +1312,16 @@ function collapseReadSearchGroups(
       if (group.messages.length > 0) pendingRows.push(message);
       else result.push(message);
     } else {
-      flushGroup_2();
+      flushRows();
       result.push(message);
     }
     if ("timestamp" in message && typeof message.timestamp === "string") prevTimestamp = message.timestamp;
   }
   start = messages.length;
-  flushGroup_2();
+  flushRows();
   return result;
 }
-//@ chunk-e6aww6q8.js:4698662-4698895 layout
+//@ chunk-5xgkngpb.js:4809446-4809679 layout
 /**
  * 去重 hook 权限决定附件：同一 decision 与 hookEvent 只保留第一条。
  */
@@ -1224,7 +1338,7 @@ function dedupeHookPermissionDecisions(decisions) {
   }
   return kept;
 }
-//@ chunk-e6aww6q8.js:4698895-4699177 layout
+//@ chunk-5xgkngpb.js:4809679-4809961 layout
 function isUserPromptAttachment(attachment) {
   if (attachment.type !== "attachment") return false;
   let attachment_2 = attachment.attachment;
@@ -1236,7 +1350,7 @@ function isUserPromptAttachment(attachment) {
   if (origin?.kind === "slack-ping") return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:4699177-4699308 placement (2.1.88 match: computeStickyPromptText, 0.865)
+//@ chunk-5xgkngpb.js:4809961-4810092 placement (2.1.88 match: computeStickyPromptText, 0.864)
 function isTaskNotificationAttachment(msg) {
   return (
     msg.type === "attachment" &&
@@ -1244,13 +1358,13 @@ function isTaskNotificationAttachment(msg) {
     msg.attachment.commandMode === "task-notification"
   );
 }
-//@ chunk-e6aww6q8.js:4699308-4699460 placement
+//@ chunk-5xgkngpb.js:4810092-4810244 placement
 function isPeerQueuedCommand(message) {
   if (message.type !== "attachment" || message.attachment.type !== "queued_command") return false;
   let origin = message.attachment.origin;
   return isPeerOrObserver(origin) || origin?.kind === "coordinator";
 }
-//@ chunk-e6aww6q8.js:4699460-4699620 placement
+//@ chunk-5xgkngpb.js:4810244-4810404 placement
 function hasVisibleMailbox(message) {
   return (
     message.type === "attachment" &&
@@ -1259,7 +1373,7 @@ function hasVisibleMailbox(message) {
     visibleTeammateMailboxMessages(message.attachment.messages).length > 0
   );
 }
-//@ chunk-e6aww6q8.js:4699620-4699754 placement
+//@ chunk-5xgkngpb.js:4810404-4810538 placement
 function isMemoryContextAttachment(attachment) {
   return (
     attachment?.type === "attachment" &&
@@ -1267,7 +1381,7 @@ function isMemoryContextAttachment(attachment) {
       attachment.attachment.type === "cowork_memory_context")
   );
 }
-//@ chunk-e6aww6q8.js:4699754-4699968 placement
+//@ chunk-5xgkngpb.js:4810538-4810752 placement
 function isFollowedByMemoryRecall(messages, start) {
   for (let idx = start + 1; idx < messages.length; idx++) {
     let message = messages[idx];
@@ -1277,7 +1391,7 @@ function isFollowedByMemoryRecall(messages, start) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:4699968-4700022 placement
+//@ chunk-5xgkngpb.js:4810752-4810806 placement
 /**
  * 判断该附件是否构成消息断点（用户提示、任务通知、队友排队命令或有可见邮箱）。
  */
@@ -1289,12 +1403,12 @@ function isMessageBreakPoint(message) {
     hasVisibleMailbox(message)
   );
 }
-//@ chunk-e6aww6q8.js:4700022-4700121 placement
+//@ chunk-5xgkngpb.js:4810806-4810905 placement
 function isCollapsibleToolResult(message) {
   if (message.type === "user") return message.message.content[0]?.type !== "tool_result";
   return isUserPromptAttachment(message);
 }
-//@ chunk-e6aww6q8.js:4708167-4709111 fingerprint (2.1.88 match: getSearchReadSummaryText, 0.974)
+//@ chunk-5xgkngpb.js:4819011-4819955 fingerprint (2.1.88 match: getSearchReadSummaryText, 0.975)
 /**
  * 生成搜索/读取折叠摘要文本（进行时或过去时），包含记忆检索/读取/写入次数。
  */
@@ -1367,7 +1481,7 @@ function getSearchReadSummaryText(searchCount, readCount, isActive, memoryCounts
   let text = parts.join(", ");
   return isActive ? `${text}\u2026` : text;
 }
-//@ chunk-e6aww6q8.js:4709111-4709381 fingerprint (2.1.88 match: summarizeRecentActivities, 1)
+//@ chunk-5xgkngpb.js:4819955-4820225 fingerprint (2.1.88 match: summarizeRecentActivities, 1)
 /**
  * 最近活动摘要：末尾连续的搜索/读取工具调用 ≥2 次时生成“Searched N, read M”类文本，否则取最后一条活动描述。
  */
@@ -1387,6 +1501,8 @@ function summarizeRecentActivities(activities) {
   return;
 }
 export {
+  getToolSearchOrReadInfo,
+  findToolByNameWithFallback,
   isUserPromptAttachment,
   isCollapsibleToolResult,
   shouldSkipMessage,
@@ -1399,12 +1515,12 @@ export {
   IncrementalCollapser,
   isSignedThinkingBlock,
   collapseReadSearchGroups,
-  getSearchOrReadFromContent,
-  getSearchReadSummaryText,
-  getToolSearchOrReadInfo,
-  findToolByNameWithFallback,
   summarizeRecentActivities,
   isMessageBreakPoint,
   getDisplayMessageFromCollapsed,
+  getSearchOrReadFromContent,
+  getSearchReadSummaryText,
+  formatCollapsedLabel,
+  toolName,
   MAX_LOGGED_THOUGHT_MS,
 };

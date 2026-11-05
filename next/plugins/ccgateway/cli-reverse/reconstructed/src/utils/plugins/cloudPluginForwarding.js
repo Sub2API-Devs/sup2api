@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：云插件转发键
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dwd7meyg.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8knxd0cw.js (1)
  * attribution: placement 1
  */
-//@ chunk-dwd7meyg.js:191-304 placement
+//@ chunk-8knxd0cw.js:191-304 placement
 /**
  * CLOUD_PLUGINS_FORWARDED_KEYS：云端插件转发时同步的设置在键。
  */

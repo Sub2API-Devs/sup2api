@@ -1,0 +1,160 @@
+{"id":"chunk-0fzs0p0w.js#F","doc":"列出上一会话由脚本（REPL 脚本）启动、且本次恢复时仍未结束的子代理：先从助手消息里收集 fork/代理工具的 tool_use id，再按批读 sidecar 元数据，返回仍可续跑的代理。仅供 ae()（REPL 模式）启用。"}
+{"id":"chunk-0fzs0p0w.js#_","doc":"code mode 下任务通知的补充说明：提示用户用 SendMessage 的脚本形式按 id 给代理发消息，并提醒上一会话的 context handle 已失效。区分「只有一个代理」与「多个代理」两种措辞。"}
+{"id":"chunk-0fzs0p0w.js#g","doc":"读单个 sidecar 元数据文件（.jsonl 换成 .meta.json），筛出符合恢复条件的脚本启动代理：enclosingToolUseId 在集合里、无 parentAgentId、不是前台请求、未被用户停止，返回 agentId 与描述。"}
+{"id":"chunk-0fzs0p0w.js#p","doc":"读取 sidecar 文件（上限 64 KiB）并解析成对象；失败时记 resume 日志并返回 null。"}
+{"id":"chunk-5xgkngpb.js#Cwn","doc":"判断一个 view 标识是否可用：等于内置的 ENTRY_THREAD 常量，或匹配合法 view id 的正则。"}
+{"id":"chunk-5xgkngpb.js#Grr","doc":"把 view id 去掉空白后的简写（内部直接调用 trim 工具函数）。"}
+{"id":"chunk-5xgkngpb.js#Rwn","doc":"生成 view 状态表的去重键：tool_name 与 view（无 view 时为空）用 NUL 连接。"}
+{"id":"chunk-5xgkngpb.js#Gii","doc":"解析控制消息里的 tool_states：超 256 条或超 1 MiB 时整体丢弃并标记 overBounds，逐条校验后去重，返回状态与丢弃数。"}
+{"id":"chunk-5xgkngpb.js#zii","doc":"把 tool_name 规整成安全的符号名（去掉非 [\\w.-] 字符）并截断到 64 字符。"}
+{"id":"chunk-5xgkngpb.js#bHe","doc":"生成用户消息旁的 MCP App view 提醒文本：列出可展示的 view id、剩余的未命名数量，并说明如何用 ReadWidgetContext 读取。"}
+{"id":"chunk-5xgkngpb.js#bAt","doc":"ReadWidgetContext 工具的名称与提示词（导出名 READWIDGETCONTEXT 等），说明 view 状态由应用写入、要当数据看待。"}
+{"id":"chunk-5xgkngpb.js#vAt","doc":"列出可续跑的代理 id：在开关打开时合并代理列表与派生名，排除已停用/已上报的，排序返回。2.1.316 里对应 agentListing 的函数，316 标记 conflict。"}
+{"id":"chunk-5xgkngpb.js#j6r","doc":"收集会话里已保存的图片文件 uuid（按文件名到 uuid 的多值映射），归一化成小写集合，供媒体去重使用。"}
+{"id":"chunk-5xgkngpb.js#UZo","doc":"把重启提示用的启动参数写进 ShutdownCoordinator。"}
+{"id":"chunk-5xgkngpb.js#BTn","doc":"取重启提示用的启动参数（关闭时用于拼「再次启动」命令）。"}
+{"id":"chunk-5xgkngpb.js#HOt","doc":"把工具结果里「unsent:」开头的图片块换成 [media removed: request limit] 文本占位，便于写入转录。"}
+{"id":"chunk-5xgkngpb.js#Jpe","doc":"去掉正文里的 cite 标签（antml:cite、<cite …>、</cite>），保留引用的内容。"}
+{"id":"chunk-5xgkngpb.js#vEn","doc":"判断 SendMessage 的「立即发送」路径是否可用：需要 send-now 键开关与 tengu_mellow_minsky 同时打开。"}
+{"id":"chunk-5xgkngpb.js#w3o","doc":"宿主级一次性槽位：SessionStart 钩子在这里登记「已提前启动」，供后续判决是否允许等待启动。"}
+{"id":"chunk-5xgkngpb.js#vye","doc":"拒绝在 classic.SessionStart 钩子里等待会话启动（宿主提前启动时会自锁），返回给用户的原因文本并记日志。"}
+{"id":"chunk-5xgkngpb.js#zit","doc":"SDK 钩子回调失败的错误类型，消息形如 Hook callback <名> failed: <原因>。"}
+{"id":"chunk-5xgkngpb.js#j3o","doc":"把钩子回调失败包装成 informational 系统消息发给界面，tag 为 hook_callback_failed。"}
+{"id":"chunk-5xgkngpb.js#Qwn","doc":"组装钩子回调失败的提示文字（含 onFailure=block 时计为阻断的说明）并调用 j3o 发出。"}
+{"id":"chunk-5xgkngpb.js#zli","doc":"常量：能力名 read_widget_context_v1 与决定是否保留 view 状态的实验开关 tengu_amber_trellis。"}
+{"id":"chunk-5xgkngpb.js#Oor","doc":"判断当前是否是无头云 worker（CLAUDE_CODE_REMOTE 且是云会话、非本机）。"}
+{"id":"chunk-5xgkngpb.js#G3r","doc":"判断是否要丢掉 view 状态：常见来源下 tengu_amber_trellis 不是 true 即丢，被固定时按固定值取反。"}
+{"id":"chunk-5xgkngpb.js#Kli","doc":"给视图表打标记：是否命名了视图，以及是否要保留 tool_states（需开启且消息带 tool_states）。"}
+{"id":"chunk-5xgkngpb.js#Vli","doc":"开启实验开关且已存过 view 状态时，把该会话的状态清空。"}
+{"id":"chunk-5xgkngpb.js#nCt","doc":"判断当前是否需要下发 view 状态（云 worker 且开关打开）。"}
+{"id":"chunk-5xgkngpb.js#qli","doc":"把 SDK 消息的 isSynthetic/client_composed/parent_tool_use_id 摊平后调用 view 归属判断。"}
+{"id":"chunk-5xgkngpb.js#Mor","doc":"按会话保存 view 状态与变更序号的槽位工厂。"}
+{"id":"chunk-5xgkngpb.js#X3o","doc":"用新状态替换会话里的 view 状态，内容未变的条目沿用旧变更序号，变更的取新序号。"}
+{"id":"chunk-5xgkngpb.js#z3r","doc":"取会话中保存的 view 状态（只输出 view 字段），无状态时返回 undefined。"}
+{"id":"chunk-5xgkngpb.js#J3o","doc":"判断工具表里是否有 ReadWidgetContext 工具。"}
+{"id":"chunk-5xgkngpb.js#K3r","doc":"在 ReadWidgetContext 在工具集里且本次有 query 时，生成 view 清单摘要。"}
+{"id":"chunk-5xgkngpb.js#P0o","doc":"含转义空白的命令在 PowerShell 权限里的判定：无 AST 结果时返回 true，否则按 AST 的 simple/too-complex 与节点类型判定，栈溢出记日志并返回 false。"}
+{"id":"chunk-5xgkngpb.js#OVe","doc":"解析失败（ERROR 节点）时的 rm 危险删除询问决定，说明 shell 可能按不同方式理解该命令，需显式批准。"}
+{"id":"chunk-5xgkngpb.js#G9o","doc":"沙箱排除判断的包装：第三个参数固定传 true（允许运行本程序）。"}
+{"id":"chunk-5xgkngpb.js#avn","doc":"判断工具能否整体允许（不按调用内容细分）：排除需要用户交互、压制规则、浏览器/代理受限、及需按内容分类的工具。"}
+{"id":"chunk-5xgkngpb.js#lqo","doc":"缓存预热的最短年龄（1500 ms），小于它算 warm_too_young。"}
+{"id":"chunk-5xgkngpb.js#JZt","doc":"结算上一次预热中的请求：取 cacheWarm 状态并转给 dqo，异常只记日志。"}
+{"id":"chunk-5xgkngpb.js#dqo","doc":"给预热请求打结束原因（回合停止、换模型、禁hold、太年轻、等结果），非正常结束时中止请求，并记录年龄与持续时长。"}
+{"id":"chunk-5xgkngpb.js#uqo","doc":"等预热请求 settle，带 holdCapMs 超时与调用方 abort 监听，返回结束原因。"}
+{"id":"chunk-5xgkngpb.js#l9r","doc":"REPL 模式下的工具 schema 规整入口（远程工具转发），非 REPL 返回 undefined。"}
+{"id":"chunk-5xgkngpb.js#d9r","doc":"把工具 schema 压成一行紧凑签名（必填项优先、超 300 字符截断），用于提示词里的工具清单。"}
+{"id":"chunk-5xgkngpb.js#c9r","doc":"把非标识符的工具名写成 tools[\"…\"] 形式。"}
+{"id":"chunk-5xgkngpb.js#trn","doc":"按 tengu_measured_shelf 比例从剩余 token 预算里挑选可预加载的延迟工具，超预算的标为 tooLarge/overRoom。"}
+{"id":"chunk-5xgkngpb.js#wYo","doc":"/project 命令注册：设置本次会话用量上报所属的 claude.ai Project（tengu_gentle_cupcake 开关）。"}
+{"id":"chunk-5xgkngpb.js#AJr","doc":"取本次会话的组织 uuid：本地 OAuth 令牌时用环境里的组织 id，否则用当前登录账号；未启用时返回 undefined。"}
+{"id":"chunk-5xgkngpb.js#Lat","doc":"宿主级空对象槽位（tip 状态等按宿主存放的杂项）。"}
+{"id":"chunk-5xgkngpb.js#OQe","doc":"/skill-doctor 的 local-jsx 与 thin-client 两个命令对象：列出未使用却占上下文的技能。"}
+{"id":"chunk-5xgkngpb.js#vbr","doc":"MCP server 来源判定的常量表：内置连接器 id 到上报地址、云会话通道名到 MCP 路径、服务器 id 与 URL 上限。"}
+{"id":"chunk-5xgkngpb.js#idi","doc":"云会话启动时把 MCP server 的 url 记进 ccrLaunchMcpUrls，供之后判断来源。"}
+{"id":"chunk-5xgkngpb.js#qv","doc":"把连接器 MCP server 规整成 {serverProvenance, serverUrl}：只有 https、非重定向主机、无凭据且长度合规才带 url。"}
+{"id":"chunk-5xgkngpb.js#I5e","doc":"按 MCP server 配置类型（claudeai-proxy/sdk/http/sse/ws）推导来源与可上报的 url，是 server_url 归属信息的主入口。"}
+{"id":"chunk-5xgkngpb.js#$br","doc":"工具名反推归属：按 mcp__ 前缀找匹配的 server 并合并其来源信息，不一致就统一给 {verified:false, owner:'mcp'}。"}
+{"id":"chunk-5xgkngpb.js#Ftt","doc":"给工具定义逐个补 ownership_metadata，并按 serverUrls 开关决定是否带 server_url。"}
+{"id":"chunk-5xgkngpb.js#Btt","doc":"给消息里的工具结果块补同一套 ownership_metadata，字符串 content 原样保留。"}
+{"id":"chunk-5xgkngpb.js#lMr","doc":"bash 命令的 heredoc/引号/注释逐字节词法器：产出各片段区间，遇到看不懂的结构返回 null。"}
+{"id":"chunk-5xgkngpb.js#rCn","doc":"遍历 tree-sitter AST，记录引号、注释、heredoc 与替换的区间，记录不了的位置把 whole 置 false。"}
+{"id":"chunk-5xgkngpb.js#sCn","doc":"命令是否需要特殊读取：比较 tree-sitter 与词法器结果是否一致，返回 4/5 分级，简单命令返回 null。"}
+{"id":"chunk-5xgkngpb.js#aCn","doc":"bash 版本过旧时的完整拒绝文本：要求改写命令，并说明可用 CLAUDE_CODE_SHELL 换 shell。"}
+{"id":"chunk-5xgkngpb.js#G7r","doc":"判断是否禁用附件（CLAUDE_CODE_DISABLE_ATTACHMENTS 或 CLAUDE_CODE_SIMPLE）。"}
+{"id":"chunk-5xgkngpb.js#z7r","doc":"从钩子配置里取 disableReplyCheck（只有当托管设置才能关掉回复检查）。"}
+{"id":"chunk-5xgkngpb.js#blr","doc":"执行 mcp_tool 钩子：先等对应 MCP server 连上（受超时与 abort 约束），再取 body 调钩子，返回 ok/body/error。"}
+{"id":"chunk-5xgkngpb.js#wXn","doc":"后台 shell 因限制被停后再次启动时，上报 background_limit_restart 诊断（限时档位、此前停止次数、上次负载类型）。"}
+{"id":"chunk-5xgkngpb.js#EXn","doc":"后台 shell 因限制被停时记录 background_limit_stop 并更新该命令的停止登记。"}
+{"id":"chunk-5xgkngpb.js#GFe","doc":"后台负载统计常量表：限时档位、命令种类到归类的映射、已知种类集合。"}
+{"id":"chunk-5xgkngpb.js#w_t","doc":"重载停止结案：清定时器、按 CPU 归因汇总 after_heavy_stop 并写诊断。"}
+{"id":"chunk-5xgkngpb.js#RXn","doc":"一次重载停止开始时建登记并在限时后自动结案或随进程结束结案。"}
+{"id":"chunk-5xgkngpb.js#zFe","doc":"把仍在运行的子进程 CPU 归到被停命令对应的负载类别与时间窗。"}
+{"id":"chunk-5xgkngpb.js#t8n","doc":"rm 掉同步记忆文件后，先探测文件、再把删除结果回报，避免把未删除的条目当作已删。"}
+{"id":"chunk-5xgkngpb.js#SLs","doc":"「离开仍在运行的进程族」观测量常量与小工具：开关名、上限、命令种类表、浏览器进程名表、配置 schema。"}
+{"id":"chunk-5xgkngpb.js#z_t","doc":"观测量槽位与 cgroup 成员/stat 读取接口。"}
+{"id":"chunk-5xgkngpb.js#zLs","doc":"比较前后两次 stat 快照，算出被计入的 CPU 与还欠的 CPU。"}
+{"id":"chunk-5xgkngpb.js#o8n","doc":"上报 left_running_family：附年龄档、速率档、浏览器/ffmpeg 是否出现等细分字段。"}
+{"id":"chunk-5xgkngpb.js#qLs","doc":"一次观察：读 cgroup 成员与 stat，按 origin 归类进程族，判定哪些仍在跑却没被认领。"}
+{"id":"chunk-5xgkngpb.js#u8n","doc":"串行排队执行一次观察，带两级超时（超时即关闭观察）。"}
+{"id":"chunk-5xgkngpb.js#c8n","doc":"按当前命令更新各进程族的「是否被触碰」与静默计数。"}
+{"id":"chunk-5xgkngpb.js#f8n","doc":"命令启动时登记调用（pid/命令/cwd），按节奏触发观察。"}
+{"id":"chunk-5xgkngpb.js#wgi","doc":"创建离开仍运行进程族的观察器：只在 hosted_worker 且有诊断文件时启用。"}
+{"id":"chunk-6fpa18d8.js#W","doc":"校验工具的 anthropic/notPublicWhen 元数据：结构不合法返回 mark_unreadable，参数名与元数据不一致返回 respelled，参数值不在允许列表返回 audience。"}
+{"id":"chunk-6fpa18d8.js#H","doc":"判断工具入参里的 local 路径是否位于工作目录（或 product/attach 目录）之外。"}
+{"id":"chunk-6fpa18d8.js#X","doc":"判断本回合是否还有别的工具会读到会话文件（未回传过的 by_mark 结果、无法回读的工具）。"}
+{"id":"chunk-6fpa18d8.js#T","doc":"判断附件消息是否值得单独提示（MCP 资源、钩子错误、有内容的钩子附加上下文等）。"}
+{"id":"chunk-6fpa18d8.js#Z","doc":"判断会话里是否有任何钩子/技能/插件钩子/命令钩子登记，用于文件卡片是否要提示。"}
+{"id":"chunk-6fpa18d8.js#F","doc":"判断工具调用与当前消息的位置关系（joined/joined_ahead/joined_call/joined_page/joined_report），决定是否必须询问。"}
+{"id":"chunk-6fpa18d8.js#te","doc":"决定是否要给这次 MCP 文件工具调用弹卡片及原因（respelled/audience/contract/file/source_folder 等）。"}
+{"id":"chunk-6fpa18d8.js#de","doc":"passthrough 结果下判定是否要升级为询问：非文件交付、非本机文件卡片开关、非 claudeai 服务器都直接放行。"}
+{"id":"chunk-6fpa18d8.js#ce","doc":"文件卡片的最终判定：合并自有检查与卡片原因，产生 ask 决定（suppressAlwaysAllowRule、defaultToNo）或原样放行。"}
+{"id":"chunk-6fpa18d8.js#L","doc":"生成「可能在工作目录外」的说明文本，带上路径与更多文件数量。"}
+{"id":"chunk-6fpa18d8.js#C","doc":"构造文件卡片的 ask 决定：拼接提示文案与原因，标记 safetyCheck、不可由分类器批准。"}
+{"id":"chunk-6fpa18d8.js#Xe","doc":"未询问回合里的文件工具判定：给出规则名与替代决定，或在无原因时返回 null。"}
+{"id":"chunk-6fpa18d8.js#qe","doc":"给 MCP 文件工具装上权限包装：改写 checkPermissions、失败决定、ask 输入准备与 call（捕获 put_expired）。"}
+{"id":"chunk-7kayq7nc.js#qzi","doc":"判断能否发第一方 beta：必须第一方、允许 beta，且（本机非 unix socket 或指定租户），未模拟代理用量。"}
+{"id":"chunk-7kayq7nc.js#_D","doc":"program use case 选择开关当前是否打开。"}
+{"id":"chunk-7kayq7nc.js#kAs","doc":"开关键 tengu_federated_possum 与本地缓存的选择门值。"}
+{"id":"chunk-7kayq7nc.js#TAs","doc":"设置 program use case 选择门值。"}
+{"id":"chunk-7kayq7nc.js#AAs","doc":"标记键 tengu_greedy_mountain 与本地缓存的打标门值。"}
+{"id":"chunk-7kayq7nc.js#CAs","doc":"设置 program use case 打标门值。"}
+{"id":"chunk-7kayq7nc.js#iQe","doc":"取宿主给的 program use case id：需为合法格式、开关打开且宿主未被拒。"}
+{"id":"chunk-7kayq7nc.js#Pue","doc":"决定这次请求要发的 program use case id（跟随/固定/未打标等分支），不发时返回 null。"}
+{"id":"chunk-7kayq7nc.js#RAs","doc":"按开关与拒绝状态决定是否下发 program_use_case_stamps_v1 能力。"}
+{"id":"chunk-7kayq7nc.js#XHe","doc":"判断 use case 是否回合内固定（已打标或已拒绝）。"}
+{"id":"chunk-7kayq7nc.js#Oht","doc":"生成请求体里的 program_use_case_id 字段（不可发时返回空对象）。"}
+{"id":"chunk-7kayq7nc.js#yFn","doc":"未持有时的重取下限（5 分钟）与按宿主的 use case 状态槽位。"}
+{"id":"chunk-7kayq7nc.js#_Fn","doc":"订阅选择变更事件。"}
+{"id":"chunk-7kayq7nc.js#bFn","doc":"广播选择变更事件。"}
+{"id":"chunk-7kayq7nc.js#xAs","doc":"记录 bootstrap 已回答并广播。"}
+{"id":"chunk-7kayq7nc.js#cbo","doc":"bootstrap 是否已回答。"}
+{"id":"chunk-7kayq7nc.js#ubo","doc":"解除宿主的 use case 拒绝标记。"}
+{"id":"chunk-7kayq7nc.js#PAs","doc":"登记重取 bootstrap 的回调。"}
+{"id":"chunk-7kayq7nc.js#$Rr","doc":"宿主拒绝本次 use case 时收尾：标记拒绝、清缓存、按需安排重取并通知。"}
+{"id":"chunk-7kayq7nc.js#vfa","doc":"采用宿主令牌后按退避重取 bootstrap。"}
+{"id":"chunk-7kayq7nc.js#IAs","doc":"bootstrap 答案作废时重取。"}
+{"id":"chunk-8nzbdydx.js#zDn","doc":"返回 REPL 会话里脚本可见的全局变量名（code mode 只对脚本内可见）。"}
+{"id":"chunk-8nzbdydx.js#ygs","doc":"新的 REPL 上下文提示：之前脚本定义的变量与定时器都不存在。"}
+{"id":"chunk-8nzbdydx.js#ZSr","doc":"判断是否是 thin client（REPL 会话存在且非 thin 能力）。"}
+{"id":"chunk-8nzbdydx.js#_gs","doc":"引擎检查是否允许 code mode；检查跑晚了会记日志。"}
+{"id":"chunk-8nzbdydx.js#bgs","doc":"启动时先跑一次引擎检查并把结果记下来（prime）。"}
+{"id":"chunk-8nzbdydx.js#OXe","doc":"判断 REPL 脚本是否允许运行（thin client 用另一套判定）。"}
+{"id":"chunk-8nzbdydx.js#_Z","doc":"code mode 下是否对 API 隐藏工具名。"}
+{"id":"chunk-8nzbdydx.js#KDn","doc":"code mode 关闭时的 toast 文案（含 Chrome/computer use 失效的情况）。"}
+{"id":"chunk-8nzbdydx.js#Sgs","doc":"code mode 关闭时的常驻 notice 文案。"}
+{"id":"chunk-8nzbdydx.js#_Te","doc":"给模型的 code mode 关闭说明：Chrome 与 computer use 在退出前不可用。"}
+{"id":"chunk-8nzbdydx.js#wgs","doc":"模型侧「工具还没列出」的提示（复用关闭说明）。"}
+{"id":"chunk-8nzbdydx.js#Egs","doc":"模型侧「工具已过时」的提示（复用关闭说明）。"}
+{"id":"chunk-8nzbdydx.js#vgs","doc":"标记 REPL 上下文已建立。"}
+{"id":"chunk-8nzbdydx.js#kgs","doc":"REPL 上下文是否已建立。"}
+{"id":"chunk-8nzbdydx.js#qDn","doc":"设置「会话已恢复」标志（当前为空实现）。"}
+{"id":"chunk-8nzbdydx.js#YDn","doc":"沙箱宿主是否提供命令网络列表（已提供过才允许 code mode）。"}
+{"id":"chunk-8nzbdydx.js#Tgs","doc":"判断 code mode 是否被沙箱条件挡下。"}
+{"id":"chunk-8nzbdydx.js#Ags","doc":"固定（pin）code mode 状态并记录原状态。"}
+{"id":"chunk-8nzbdydx.js#XDn","doc":"取消固定并恢复原状态。"}
+{"id":"chunk-8nzbdydx.js#Cgs","doc":"取固定前的模型状态。"}
+{"id":"chunk-8nzbdydx.js#XZi","doc":"REPL 标志是否被手工设置（当前为空实现）。"}
+{"id":"chunk-8nzbdydx.js#mca","doc":"员工开关名（当前为空字符串）。"}
+{"id":"chunk-8nzbdydx.js#hca","doc":"员工开关是否设成指定值（当前恒 false）。"}
+{"id":"chunk-8nzbdydx.js#gca","doc":"code mode 是否被本机覆盖关掉（当前恒 false）。"}
+{"id":"chunk-8nzbdydx.js#yca","doc":"code mode 是否被云分组关掉（当前恒 false）。"}
+{"id":"chunk-8nzbdydx.js#JDn","doc":"判断工具是否因 code mode 而只对脚本可见。"}
+{"id":"chunk-8nzbdydx.js#QDn","doc":"REPL 同步运行时长上限（50 s）。"}
+{"id":"chunk-8nzbdydx.js#Pgs","doc":"REPL 时钟心跳间隔（1000 ms）。"}
+{"id":"chunk-8nzbdydx.js#twr","doc":"REPL 定时器宽限与迟到常量。"}
+{"id":"chunk-8nzbdydx.js#UDt","doc":"REPL settle 窗口（30 s）。"}
+{"id":"chunk-8nzbdydx.js#rwr","doc":"无输出后多久脱离（30 s）。"}
+{"id":"chunk-8nzbdydx.js#Yft","doc":"取 REPL 单次输出的分片上限（REPL 能力开时才有）。"}
+{"id":"chunk-8nzbdydx.js#ZDn","doc":"REPL 分片上限 30000 与工具调用上限 50000 常量。"}
+{"id":"chunk-8nzbdydx.js#Igs","doc":"REPL 工具调用次数上限。"}
+{"id":"chunk-8nzbdydx.js#Bco","doc":"超限后最多再拒绝的次数。"}
+{"id":"chunk-ee72ms70.js#t6s","doc":"code mode 选择的开关键与超时状态槽位（上次检查、已复核、被拒原因、登录身份、重启标记）。"}
+{"id":"chunk-ee72ms70.js#Spn","doc":"判断模型是否可评估（走模型名规整后比对）。"}
+{"id":"chunk-ee72ms70.js#hsa","doc":"判断工具选项是否把 REPL 排除在外（受限、禁用工具、空工具集、deny 规则）。"}
+{"id":"chunk-ee72ms70.js#gsa","doc":"启动时结算 code mode 选择：按重启标记、托管/本机设置、环境前提决定是否询问、拒绝或直接开启。"}
+{"id":"chunk-ee72ms70.js#ysa","doc":"预判拒绝原因（托管设置、本机设置、环境、模型），可用于提前提示。"}
+{"id":"chunk-ee72ms70.js#q","doc":"并行检查各前提（凭据、合规、遥测、提供商、模型、开关、门值），返回第一个拒绝原因。"}
+{"id":"chunk-ee72ms70.js#_sa","doc":"setup 流程里的 code mode 复核：已开启时看是否要重启关闭，未开启时决定询问还是直接重启开启。"}
+{"id":"chunk-ee72ms70.js#yjr","doc":"用户回答 code mode 对话框：拒绝则记录，接受则保存两个警告确认标记并请求重启。"}
+{"id":"chunk-ee72ms70.js#bsa","doc":"setup 结束后按当前状态与登录身份再次判定，需要时写入重启标记。"}
+{"id":"chunk-ee72ms70.js#Ssa","doc":"判断当前登录身份与记录的身份是否一致（用于发现换号）。"}

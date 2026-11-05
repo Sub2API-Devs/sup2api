@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。云 worker 的 CCR 认证刷新与会话认证头等待。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-z4g2ta8k.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1kk50rk6.js (20)
  * attribution: placement 20
  */
 import { publishFileStoreVerdict } from "./fileStoreVerdicts.js";
@@ -38,19 +38,19 @@ import {
   TOOL_RESULT_NOT_IN_COPY,
   APPROVAL_EXPIRED_MESSAGE,
   APPROVAL_UNANSWERED_MESSAGE,
-  isSyntheticApiErrorMessage,
+  isNoResponseRequestedMessage,
 } from "../../utils/messages.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-z4g2ta8k.js:42671-42747 placement
+//@ chunk-1kk50rk6.js:45575-45651 placement
 /**
  * 允许启动 git 凭据引擎的入口点集合（remote / remote_projects / remote_desktop / sdk-cli / 空）。
  */
 var GIT_CREDENTIAL_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-z4g2ta8k.js:42671", () => {
+deferInit("chunk-1kk50rk6.js:45575", () => {
   GIT_CREDENTIAL_ENTRYPOINTS = new Set(["remote", "remote_projects", "remote_desktop", "sdk-cli", ""]);
 });
-//@ chunk-z4g2ta8k.js:42747-42898 placement
+//@ chunk-1kk50rk6.js:45651-45802 placement
 /**
  * 判断 worker 是否启动 git 凭据引擎：入口不在允许集合时拒绝，否则按 git 开关启用。
  */
@@ -68,12 +68,12 @@ function gitCredentialEngineAdmission(options) {
     },
   };
 }
-//@ chunk-z4g2ta8k.js:42898-42909 placement
+//@ chunk-1kk50rk6.js:45802-45813 placement
 var GIT_CREDENTIAL_ENTRYPOINTS_ALIAS; // deferred: uses GIT_CREDENTIAL_ENTRYPOINTS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-z4g2ta8k.js:42898", () => {
+deferInit("chunk-1kk50rk6.js:45802", () => {
   GIT_CREDENTIAL_ENTRYPOINTS_ALIAS = GIT_CREDENTIAL_ENTRYPOINTS;
 });
-//@ chunk-z4g2ta8k.js:42909-43252 placement
+//@ chunk-1kk50rk6.js:45813-46156 placement
 /**
  * 判断托管云 worker 是否启用某项认证能力：需要 sdkUrl 与远程会话、入口在允许集合内、未禁用、非密闭环境。
  */
@@ -102,7 +102,7 @@ function ccrAuthRefreshAdmission(options) {
     admitted: true,
   };
 }
-//@ chunk-z4g2ta8k.js:43252-43596 placement
+//@ chunk-1kk50rk6.js:46156-46500 placement
 /**
  * 与 jPr 同形的准入判断，只是入口白名单不同（WNt）。
  */
@@ -131,7 +131,7 @@ function sessionAuthAdmission(options) {
     admitted: true,
   };
 }
-//@ chunk-z4g2ta8k.js:43596-44019 placement
+//@ chunk-1kk50rk6.js:46500-46923 placement
 /**
  * 下发文件存储写入裁决并记诊断：监听器抛错时记 file_store_verdict_listener_threw，乱序时记 file_store_verdict_out_of_order。
  */
@@ -164,21 +164,21 @@ function reportFileStoreVerdict(verdict) {
       return;
   }
 }
-//@ chunk-z4g2ta8k.js:44019-44043 placement
+//@ chunk-1kk50rk6.js:46923-46947 placement
 /**
  * 恒返回 false 的构建期开关：设置同步到云没有被强制关闭。
  */
 function isSettingsToCloudForcedOff() {
   return false;
 }
-//@ chunk-z4g2ta8k.js:44043-44089 placement
+//@ chunk-1kk50rk6.js:46947-46993 placement
 /**
  * 设置同步到云是否可用（GPr 或 isSettingsToCloudEnabled）。
  */
 async function isSettingsToCloudAvailable() {
   return isSettingsToCloudForcedOff() || (await isSettingsToCloudEnabled());
 }
-//@ chunk-z4g2ta8k.js:44089-44188 placement
+//@ chunk-1kk50rk6.js:46993-47092 placement
 /**
  * 设置同步到云的能力：完全可用、仅公告、不可用三态。
  */
@@ -186,7 +186,7 @@ async function settingsToCloudCapability(isLaterEpoch) {
   if (!isSettingsToCloudForcedOff()) return isSettingsToCloudEnabled();
   return isLaterEpoch && (await isSettingsToCloudEnabled().catch(() => false)) ? true : "announced_only";
 }
-//@ chunk-z4g2ta8k.js:44188-44264 placement
+//@ chunk-1kk50rk6.js:47092-47168 placement
 /**
  * 可用时打开设置同步闸门并返回是否可用（读取时顺手放行）。
  */
@@ -195,12 +195,12 @@ async function openSettingsToCloudGateIfAvailable() {
   if (available) backgroundOutputGateSlots.of(getRootSession()).openGate();
   return available;
 }
-//@ chunk-z4g2ta8k.js:44264-44319 placement
+//@ chunk-1kk50rk6.js:47168-47224 placement
 var CCR_TOKEN_FILE_PATHS = {
   sessionIngressTokenPath: CCR_SESSION_INGRESS_TOKEN_PATH,
   oauthTokenPath: CCR_OAUTH_TOKEN_PATH,
 };
-//@ chunk-z4g2ta8k.js:44319-44637 placement
+//@ chunk-1kk50rk6.js:47224-47542 placement
 /**
  * 并行读取会话入口令牌文件与 OAuth 令牌文件；任一缺失或为空时告警并返回 null，保持当前凭证。
  */
@@ -225,16 +225,16 @@ async function readCcrTokenFiles(paths = CCR_TOKEN_FILE_PATHS) {
     oauthToken,
   };
 }
-//@ chunk-z4g2ta8k.js:44637-44697 placement
+//@ chunk-1kk50rk6.js:47542-47602 placement
 var CLOCK_SKEW_TOLERANCE_SEC = 300;
 var SECRET_PLACEHOLDER_PATTERN = /^ANTHROPIC_SECRET_PLACEHOLDER_[0-9a-f]{32}$/;
-//@ chunk-z4g2ta8k.js:44697-44730 placement
+//@ chunk-1kk50rk6.js:47602-47635 placement
 function isSecretPlaceholder(value) {
   return SECRET_PLACEHOLDER_PATTERN.test(value);
 }
-//@ chunk-z4g2ta8k.js:44730-44754 placement
+//@ chunk-1kk50rk6.js:47635-47659 placement
 var BEARER_TOKEN_PATTERN = /^[\w.~+/-]+=*$/;
-//@ chunk-z4g2ta8k.js:44754-46879 placement
+//@ chunk-1kk50rk6.js:47659-49784 placement
 async function refreshCcrAuthFromFiles(ttl, paths = CCR_TOKEN_FILE_PATHS) {
   if (!env.CLAUDE_CODE_REMOTE)
     return {
@@ -350,11 +350,11 @@ async function refreshCcrAuthFromFiles(ttl, paths = CCR_TOKEN_FILE_PATHS) {
     adopted: true,
   };
 }
-//@ chunk-z4g2ta8k.js:46879-46920 placement
+//@ chunk-1kk50rk6.js:49784-49825 placement
 function ccrAuthRefresherFor(config) {
   return config === null ? refreshCcrAuthFromFiles : undefined;
 }
-//@ chunk-z4g2ta8k.js:46920-47794 placement
+//@ chunk-1kk50rk6.js:49825-50699 placement
 async function waitForSessionAuthHeaders({
   getAuthHeaders,
   rereadMiss,
@@ -405,11 +405,11 @@ async function waitForSessionAuthHeaders({
   });
   return false;
 }
-//@ chunk-z4g2ta8k.js:47794-47893 placement
+//@ chunk-1kk50rk6.js:50699-50798 placement
 var AUTH_REFRESH_DEBOUNCE_MS; // deferred: uses INTERRUPT_MESSAGE (../../utils/messages.js) of its import cycle while loading; runs once the cycle is complete
 var TRANSCRIPT_COPY_LIMITS;
 var SYNTHETIC_TOOL_RESULT_TEXTS;
-deferInit("chunk-z4g2ta8k.js:47794", () => {
+deferInit("chunk-1kk50rk6.js:50699", () => {
   AUTH_REFRESH_DEBOUNCE_MS = 15000;
   TRANSCRIPT_COPY_LIMITS = {
     maxEvents: 2000,
@@ -423,10 +423,10 @@ deferInit("chunk-z4g2ta8k.js:47794", () => {
     APPROVAL_UNANSWERED_MESSAGE,
   ]);
 });
-//@ chunk-z4g2ta8k.js:47893-48124 placement
+//@ chunk-1kk50rk6.js:50798-51029 placement
 function isHiddenFromCatchUp(row) {
   return (
-    isSyntheticApiErrorMessage(row) ||
+    isNoResponseRequestedMessage(row) ||
     ((row.type === "assistant" || row.type === "user") &&
       (row.isVirtual === true || row.handedOff === true)) ||
     (row.type === "user" &&
@@ -440,15 +440,15 @@ export {
   gitCredentialEngineAdmission,
   sessionAuthAdmission,
   ccrAuthRefreshAdmission,
-  openSettingsToCloudGateIfAvailable,
-  reportFileStoreVerdict,
-  isSettingsToCloudForcedOff,
-  settingsToCloudCapability,
-  isSettingsToCloudAvailable,
   GIT_CREDENTIAL_ENTRYPOINTS,
+  settingsToCloudCapability,
   isHiddenFromCatchUp,
   AUTH_REFRESH_DEBOUNCE_MS,
   TRANSCRIPT_COPY_LIMITS,
   waitForSessionAuthHeaders,
   ccrAuthRefresherFor,
+  isSettingsToCloudAvailable,
+  openSettingsToCloudGateIfAvailable,
+  reportFileStoreVerdict,
+  isSettingsToCloudForcedOff,
 };

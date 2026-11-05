@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：自动压缩窗口大小的解析（实验、模型默认、用户设置）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (46)
- * attribution: placement 46
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (47)
+ * attribution: placement 46, layout 1
  */
 import { parseIntLoose } from "../../utils/envUtils.js";
 import { TRANSPORT_LABELS, GLOBAL_CONFIG_FIELD_KINDS } from "../../utils/config.js";
@@ -18,7 +18,7 @@ import { getEffortSettingsSources, getModelSettingsKey } from "../../utils/effor
 import { getRootSession, getIsNonInteractiveSession, getSdkBetas } from "../../bootstrap/state.js";
 import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { pickByHelper } from "../../utils/git/gitSafeEnv.js";
-import { isPlainObject as isPlainObject_4 } from "../../utils/objectUtils.js";
+import { isPlainObject as isPlainObject_5 } from "../../utils/objectUtils.js";
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
 import { isAutoCompactEnabled, isSideQuerySource, canCompactInRemote } from "./compactSettings.js";
@@ -41,7 +41,7 @@ import { fromEnum } from "../analytics/safeMetadata.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1543002-1543413 placement
+//@ chunk-5xgkngpb.js:1608449-1608860 placement
 /**
  * 解析窗口大小（支持 k/m 后缀，可把 100–1000 视为千），返回 in_range/below_minimum/above_maximum/unusable。
  */
@@ -71,7 +71,7 @@ function parseWindowSize(raw, { bareThousands }) {
     suffixed: multiplier !== undefined,
   };
 }
-//@ chunk-e6aww6q8.js:1543413-1543592 placement
+//@ chunk-5xgkngpb.js:1608860-1609039 placement
 /**
  * CLAUDE_CODE_AUTO_COMPACT_WINDOW 的有效值（越界时夹到上下限）。
  */
@@ -89,7 +89,7 @@ function envWindowTokens(raw) {
       return;
   }
 }
-//@ chunk-e6aww6q8.js:1543592-1543688 placement
+//@ chunk-5xgkngpb.js:1609039-1609135 placement
 /**
  * 校验自动压缩窗口的环境变量取值，非法时返回说明。
  */
@@ -100,7 +100,7 @@ function reportInvalidWindowEnv(raw) {
     ? null
     : describeAutoCompactWindowEnvError(raw, windowSizeStrict);
 }
-//@ chunk-e6aww6q8.js:1543688-1544178 placement
+//@ chunk-5xgkngpb.js:1609135-1609625 placement
 /**
  * 校验并记录环境变量窗口设置，无效时警告（无头模式输出）。
  */
@@ -139,7 +139,7 @@ function reportEnvWindow(raw, mode) {
   }
   mode.headless(detail);
 }
-//@ chunk-e6aww6q8.js:1544178-1544227 placement
+//@ chunk-5xgkngpb.js:1609625-1609674 placement
 /**
  * 严格解析窗口大小（不允许裸千位数写法）。
  */
@@ -148,12 +148,12 @@ function parseWindowSizeStrict(raw) {
     bareThousands: false,
   });
 }
-//@ chunk-e6aww6q8.js:1544227-1544238 placement
+//@ chunk-5xgkngpb.js:1609674-1609685 placement
 /**
  * 报错时回显环境变量值的最大字符数（32）。
  */
 var MAX_ECHOED_ENV_CHARS = 32;
-//@ chunk-e6aww6q8.js:1544238-1544828 placement
+//@ chunk-5xgkngpb.js:1609685-1610274 placement
 /**
  * CLAUDE_CODE_AUTO_COMPACT_WINDOW 取值无效时的说明。
  */
@@ -171,25 +171,25 @@ function describeAutoCompactWindowEnvError(rawValue, windowSizeStrict) {
       return `${echoed} isn't a usable size, so Claude Code ignores it. ${hint}`;
   }
 }
-//@ chunk-e6aww6q8.js:1544828-1544842 placement
+//@ chunk-5xgkngpb.js:1610274-1610288 placement
 /**
  * 自动压缩窗口的最小 token 数（13000）。
  */
 var MIN_WINDOW_TOKENS = 13000;
-//@ chunk-e6aww6q8.js:1544842-1544863 placement
+//@ chunk-5xgkngpb.js:1610288-1610309 placement
 /**
  * 预计算压缩触发点默认比例（0.2）。
  */
 var MAX_WINDOW_TOKENS = 3000;
 var DEFAULT_PRECOMPUTE_FRACTION = 0.2;
-//@ chunk-e6aww6q8.js:1544863-1544944 placement
+//@ chunk-5xgkngpb.js:1610309-1610390 placement
 /**
  * 把值转成 0≤x<1 的比例，否则 null。
  */
 function ratioOrNull(value) {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 1 ? value : null;
 }
-//@ chunk-e6aww6q8.js:1544944-1545086 placement
+//@ chunk-5xgkngpb.js:1610390-1610532 placement
 /**
  * 解析 {repl, sdk} 比例对。
  */
@@ -205,7 +205,7 @@ function parseFractionPair(value) {
         sdk: sdkRatio,
       };
 }
-//@ chunk-e6aww6q8.js:1545086-1545444 placement
+//@ chunk-5xgkngpb.js:1610532-1610890 placement
 /**
  * 解析预计算比例表（按窗口大小与 default）。
  */
@@ -238,7 +238,7 @@ function parsePrecomputeTable(featureValue_CACHED_MAY_BE_STALE) {
     defaultEntry,
   };
 }
-//@ chunk-e6aww6q8.js:1545444-1545621 placement
+//@ chunk-5xgkngpb.js:1610890-1611067 placement
 /**
  * 在比例表中按窗口精确匹配或取默认项。
  */
@@ -256,7 +256,7 @@ function lookupPrecomputeEntry(precomputeTable, windowSize) {
         entry: precomputeTable.defaultEntry,
       };
 }
-//@ chunk-e6aww6q8.js:1545621-1545760 placement
+//@ chunk-5xgkngpb.js:1611067-1611207 placement
 /**
  * 自动压缩阈值：窗口减 13000（测试百分比覆盖时取更小值）。
  */
@@ -272,7 +272,7 @@ function autocompactThreshold(contextWindow, config) {
     return Math.min(Math.floor(contextWindow * (testPctOverride / 100)), margin);
   return margin;
 }
-//@ chunk-e6aww6q8.js:1545760-1545846 placement
+//@ chunk-5xgkngpb.js:1611207-1611294 placement
 /**
  * 预计算压缩的触发阈值（窗口减缓冲，且不超过自动压缩阈值）。
  */
@@ -282,7 +282,7 @@ function precomputeTriggerThreshold(contextWindow, autoCompactThresholdConfig) {
     autocompactThreshold(contextWindow, autoCompactThresholdConfig),
   );
 }
-//@ chunk-e6aww6q8.js:1545846-1546169 placement
+//@ chunk-5xgkngpb.js:1611294-1611618 placement
 /**
  * 按 token 数计算警告等级：blocked / compact / warn / ok 与剩余百分比。
  */
@@ -321,25 +321,25 @@ function computeTokenWarning(
     level: "ok",
   };
 }
-//@ chunk-e6aww6q8.js:1546169-1546227 placement
+//@ chunk-5xgkngpb.js:1611618-1611676 placement
 /**
  * 判断窗口对象是否带 ceiling 字段。
  */
 function isWindowWithCeiling(value) {
   return typeof value === "object" && "ceiling" in value;
 }
-//@ chunk-e6aww6q8.js:1546227-1546274 placement
+//@ chunk-5xgkngpb.js:1611676-1611723 placement
 /**
  * 按会话根保存的自动压缩窗口状态（各模型窗口 + sink）。
  */
 var sessionWindowState; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1546227", () => {
+deferInit("chunk-5xgkngpb.js:1611676", () => {
   sessionWindowState = new SessionRootSlot(() => ({
     windows: {},
     sink: undefined,
   }));
 });
-//@ chunk-e6aww6q8.js:1546274-1546488 placement
+//@ chunk-5xgkngpb.js:1611723-1611937 placement
 /**
  * 设置来源列表，插入会话下发的按模型窗口。
  */
@@ -356,7 +356,7 @@ function windowSettingSources() {
     },
   });
 }
-//@ chunk-e6aww6q8.js:1546488-1546854 placement
+//@ chunk-5xgkngpb.js:1611937-1612303 placement
 /**
  * 合并各来源的 autoCompactWindow（默认值与按模型）。
  */
@@ -390,15 +390,15 @@ function readAutoCompactWindowSetting() {
   }
   return settings;
 }
-//@ chunk-e6aww6q8.js:1546854-1546924 placement
+//@ chunk-5xgkngpb.js:1612303-1612373 placement (2.1.88 match: parseDimension, 1)
 /**
  * 解析窗口参数：undefined 用设置，auto 用默认。
  */
-function resolveWindowArg(autocompact) {
-  if (autocompact === undefined) return readAutoCompactWindowSetting();
-  return autocompact === "auto" ? undefined : autocompact;
+function resolveWindowArg(v) {
+  if (v === undefined) return readAutoCompactWindowSetting();
+  return v === "auto" ? undefined : v;
 }
-//@ chunk-e6aww6q8.js:1546924-1547283 placement
+//@ chunk-5xgkngpb.js:1612373-1612732 placement
 /**
  * 找某模型生效的窗口设置及其来源、是否按模型。
  */
@@ -429,7 +429,7 @@ function findWindowSettingForModel(settingsKey) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:1547283-1547689 placement
+//@ chunk-5xgkngpb.js:1612732-1613138 placement
 /**
  * 采用会话内部元数据中的 auto_compact_windows。
  */
@@ -440,7 +440,7 @@ function adoptInternalWindows(session, restoredWorkerState, sink, updateSettings
     windowState.sink = sink;
     let autoCompactWindows = restoredWorkerState.internal?.auto_compact_windows;
     windowState.windows = pickByHelper(
-      isPlainObject_4(autoCompactWindows) ? autoCompactWindows : {},
+      isPlainObject_5(autoCompactWindows) ? autoCompactWindows : {},
       (value, key) =>
         !Object.hasOwn(Object.prototype, key) &&
         (value === "auto" ||
@@ -462,7 +462,7 @@ function adoptInternalWindows(session, restoredWorkerState, sink, updateSettings
     logError(toError(error));
   }
 }
-//@ chunk-e6aww6q8.js:1547689-1547913 placement
+//@ chunk-5xgkngpb.js:1613138-1613362 placement
 /**
  * 把某模型的窗口设置写回会话内部元数据。
  */
@@ -481,12 +481,12 @@ function persistSessionWindow(settingsKey, windowTokens) {
     logError(toError(error));
   }
 }
-//@ chunk-e6aww6q8.js:1547913-1547927 placement
+//@ chunk-5xgkngpb.js:1613362-1613376 placement
 /**
  * 输出 token 预算的上限（20000）。
  */
 var MAX_OUTPUT_TOKENS_CAP = 20000;
-//@ chunk-e6aww6q8.js:1547927-1548066 placement
+//@ chunk-5xgkngpb.js:1613376-1613515 placement
 /**
  * 解析窗口参数（auto 或 token 数）。
  */
@@ -497,7 +497,7 @@ function parseWindowArgument(raw) {
   });
   return windowSize.kind === "in_range" ? windowSize.tokens : undefined;
 }
-//@ chunk-e6aww6q8.js:1548066-1548205 placement
+//@ chunk-5xgkngpb.js:1613515-1613654 placement
 /**
  * 特定模型在交互会话中的窗口覆盖值。
  */
@@ -510,18 +510,18 @@ function desktopOpusWindowOverride(canonical) {
   let windowArgument = parseWindowArgument(raw);
   return typeof windowArgument === "number" ? windowArgument : undefined;
 }
-//@ chunk-e6aww6q8.js:1548205-1548256 placement
+//@ chunk-5xgkngpb.js:1613654-1613705 placement
 /**
  * Claude Desktop 入口参数到窗口大小的映射（600k/500k）。
  */
 var DESKTOP_WINDOW_BY_ARG; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1548205", () => {
+deferInit("chunk-5xgkngpb.js:1613654", () => {
   DESKTOP_WINDOW_BY_ARG = new Map([
     ["600k", 600000],
     ["500k", 500000],
   ]);
 });
-//@ chunk-e6aww6q8.js:1548256-1548431 placement
+//@ chunk-5xgkngpb.js:1613705-1613880 placement
 /**
  * Claude Desktop 入口按界面取默认窗口。
  */
@@ -532,14 +532,14 @@ function desktopSurfaceWindow(facts) {
     return;
   return DESKTOP_WINDOW_BY_ARG.get(getAutoCompactDisabledByEnvModel());
 }
-//@ chunk-e6aww6q8.js:1548431-1548479 placement
+//@ chunk-5xgkngpb.js:1613880-1613928 placement
 /**
  * 按模型与界面解析默认窗口（先看桌面版 Opus 覆盖）。
  */
 function resolveDesktopWindow(modelInfo) {
   return desktopOpusWindowOverride(modelInfo.canonical) ?? desktopSurfaceWindow(modelInfo);
 }
-//@ chunk-e6aww6q8.js:1548479-1548602 placement
+//@ chunk-5xgkngpb.js:1613928-1614051 placement
 /**
  * 1M token 常量与按模型/界面的默认窗口表。
  */
@@ -557,7 +557,7 @@ var SURFACE_WINDOW_DEFAULTS = {
     default: ONE_MILLION_TOKENS,
   },
 };
-//@ chunk-e6aww6q8.js:1548602-1548685 placement
+//@ chunk-5xgkngpb.js:1614051-1614134 placement
 /**
  * 按界面取默认窗口（仅当自动压缩开启）。
  */
@@ -566,7 +566,7 @@ function defaultSurfaceWindow(canonical) {
   if (!Object.hasOwn(SURFACE_WINDOW_DEFAULTS, canonical)) return;
   return resolveSurfaceWindow(SURFACE_WINDOW_DEFAULTS[canonical]);
 }
-//@ chunk-e6aww6q8.js:1549181-1550223 placement
+//@ chunk-5xgkngpb.js:1614630-1615672 placement
 /**
  * 解析自动压缩窗口大小，来源依次为客户端数据、实验、模型默认与用户设置。
  */
@@ -645,7 +645,7 @@ function resolveAutoCompactWindow(modelInfo, betas = getSdkBetas()) {
     source: "auto",
   };
 }
-//@ chunk-e6aww6q8.js:1550223-1550371 placement
+//@ chunk-5xgkngpb.js:1615672-1615820 placement
 /**
  * 模型未被识别（无 1M 授权、服务器声明窗口与本地不一致）时为真。
  */
@@ -657,14 +657,14 @@ function isUnrecognizedModelWindow(info) {
     !info.recognized
   );
 }
-//@ chunk-e6aww6q8.js:1550615-1550664 placement
+//@ chunk-5xgkngpb.js:1616064-1616113 placement
 /**
  * 窗口来源是否为 env 或 settings（即用户显式设置）。
  */
 function isEnvOrSettingsSource(source) {
   return source === "env" || source === "settings";
 }
-//@ chunk-e6aww6q8.js:1550664-1550919 placement
+//@ chunk-5xgkngpb.js:1616113-1616368 placement
 /**
  * 自动压缩窗口是否使用了长上下文（实验或超过未开通窗口）。
  */
@@ -680,21 +680,21 @@ function usesLongContextWindow(querySource, modelInfo, autoCompactWindow) {
           Math.max(modelInfo.longContextWindowWithoutOptIn, modelInfo.apiContextWindowWithoutOptIn)))
   );
 }
-//@ chunk-e6aww6q8.js:1550919-1550968 placement
+//@ chunk-5xgkngpb.js:1616368-1616417 placement (2.1.88 match: parseDimension, 1)
 /**
  * 该模型是否使用了显式窗口（来源不是 auto）。
  */
 function hasExplicitWindow(modelInfo, autoCompactWindow) {
   return getAutoCompactWindow(modelInfo, autoCompactWindow).source !== "auto";
 }
-//@ chunk-e6aww6q8.js:1550968-1551008 placement
+//@ chunk-5xgkngpb.js:1616417-1616457 placement
 /**
  * 返回窗口来源（auto/env/settings/experiment 等）。
  */
 function windowSource(modelInfo, autoCompactWindow) {
   return getAutoCompactWindow(modelInfo, autoCompactWindow).source;
 }
-//@ chunk-e6aww6q8.js:1551008-1551139 placement
+//@ chunk-5xgkngpb.js:1616457-1616588 placement
 /**
  * 窗口来源到遥测 origin 的映射。
  */
@@ -706,7 +706,14 @@ var WINDOW_SOURCE_ORIGINS = {
   "unknown-model": "default",
   auto: "default",
 };
-//@ chunk-e6aww6q8.js:1551139-1551499 placement
+//@ chunk-5xgkngpb.js:1616588-1616658 layout
+function windowFloor(modelContextInfo, autoCompactWindow) {
+  return (
+    Math.floor(getAutoCompactWindow(modelContextInfo, autoCompactWindow).window / 2) *
+    modelContextInfo.bytesPerToken
+  );
+}
+//@ chunk-5xgkngpb.js:1616658-1617018 placement
 /**
  * 窗口大小及其来源（设置区分会话覆盖、agent 定义、按模型或顶层）。
  */
@@ -738,7 +745,7 @@ function resolveWindowOrigin(modelInfo, autoCompactWindow) {
       : "settings_top_level",
   };
 }
-//@ chunk-e6aww6q8.js:1551499-1551807 placement
+//@ chunk-5xgkngpb.js:1617018-1617326 placement
 /**
  * 生效窗口变化时记 tengu_auto_compact_window_in_force。
  */
@@ -761,7 +768,7 @@ function logWindowInForce(session, modelInfo, autoCompactWindow) {
     threshold_source: fromEnum(source),
   });
 }
-//@ chunk-e6aww6q8.js:1551807-1551908 placement
+//@ chunk-5xgkngpb.js:1617326-1617428 placement
 /**
  * 有效上下文窗口：自动压缩窗口减去输出预留。
  */
@@ -771,9 +778,9 @@ function effectiveContextWindow(modelInfo, autoCompactWindow) {
   let { window: contextWindow } = getAutoCompactWindow(modelInfo, windowSetting);
   return contextWindow - min;
 }
-//@ chunk-e6aww6q8.js:1551987-1552018 placement
+//@ chunk-5xgkngpb.js:1617507-1617538 placement
 var TENGU_AMBER_MOLESKIN = "tengu_amber_moleskin";
-//@ chunk-e6aww6q8.js:1552018-1552148 placement
+//@ chunk-5xgkngpb.js:1617538-1617668 placement
 /**
  * 预计算比例表格式错误时记录一次。
  */
@@ -783,7 +790,7 @@ function reportMalformedPrecomputeTable(payloadType) {
     payloadType,
   });
 }
-//@ chunk-e6aww6q8.js:1552148-1552263 placement
+//@ chunk-5xgkngpb.js:1617668-1617783 placement
 /**
  * 预计算缓冲比例（tengu_amber_rokovoko，0–1）。
  */
@@ -799,7 +806,7 @@ function defaultPrecomputeFraction() {
     ? featureValue_CACHED_MAY_BE_STALE
     : DEFAULT_PRECOMPUTE_FRACTION;
 }
-//@ chunk-e6aww6q8.js:1552263-1552755 placement
+//@ chunk-5xgkngpb.js:1617783-1618275 placement
 /**
  * 按窗口与界面从比例表取预计算缓冲比例。
  */
@@ -844,32 +851,33 @@ function resolvePrecomputeFraction(modelInfo, autoCompactWindow, surface) {
       };
 }
 export {
+  adoptInternalWindows,
   MAX_OUTPUT_TOKENS_CAP,
   parseWindowArgument,
-  hasExplicitWindow,
   effectiveContextWindow,
-  adoptInternalWindows,
-  isWindowWithCeiling,
-  findWindowSettingForModel,
-  resolveWindowArg,
-  reportEnvWindow,
-  usesLongContextWindow,
-  windowSource,
-  envWindowTokens,
+  reportInvalidWindowEnv,
+  isEnvOrSettingsSource,
   resolveAutoCompactWindow,
+  resolveWindowOrigin,
+  persistSessionWindow,
+  readAutoCompactWindowSetting,
+  windowSource,
+  isWindowWithCeiling,
+  envWindowTokens,
   resolvePrecomputeFraction,
   autocompactThreshold,
   computeTokenWarning,
   DEFAULT_PRECOMPUTE_FRACTION,
+  hasExplicitWindow,
   precomputeTriggerThreshold,
+  usesLongContextWindow,
   logWindowInForce,
-  resolveWindowOrigin,
   resolveDesktopWindow,
   isUnrecognizedModelWindow,
-  reportInvalidWindowEnv,
-  readAutoCompactWindowSetting,
   MIN_WINDOW_TOKENS,
   MAX_WINDOW_TOKENS,
-  isEnvOrSettingsSource,
-  persistSessionWindow,
+  findWindowSettingForModel,
+  resolveWindowArg,
+  reportEnvWindow,
+  windowFloor,
 };

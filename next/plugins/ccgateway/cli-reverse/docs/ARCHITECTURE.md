@@ -1,4 +1,6 @@
-# Claude Code 2.1.316 架构总览
+# Claude Code 2.1.318 架构总览
+
+> 2026-11-05 升级到 2.1.318：本篇写于 2.1.316，代码引用（声明 id、路径、名字）已按 2.1.318 阅读树逐条校验，行为描述没有逐条重新核对；316 → 318 的变化见 [`research/versions/CLAUDE-CODE-2.1.318-CHANGES.md`](../research/versions/CLAUDE-CODE-2.1.318-CHANGES.md)。
 
 > 读者：第一次接触这份重建代码的人和 AI。本文给出整体分层、一次请求从输入到结束的完整路径、子系统一览、构建事实和读代码的约定。细节在 `docs/handbook/` 的 10 本子系统手册里，本文每一节都给出对应手册章节。
 >
@@ -21,7 +23,7 @@
 
 ## 1. 这是什么
 
-官方 Claude Code CLI **2.1.316**（linux-x64 单文件可执行，Bun 1.4.4 打包）经 AST 分析还原出的可读源码树：
+官方 Claude Code CLI **2.1.318**（linux-x64 单文件可执行，Bun 1.4.4 打包）经 AST 分析还原出的可读源码树：
 
 | 部分 | 内容 | 规模（`analysis/segments/summary.json`） |
 |---|---|---|
@@ -100,16 +102,16 @@
 
 | 步骤 | 文件 | 函数（声明 id） | 作用 |
 |---|---|---|---|
-| 1 | `reconstructed/src/entrypoints/cli.js` | `cliMain`（`cli.js#qe`） | 设置几个进程级环境变量，依次检查约 18 条快速路径，命中就直接处理返回；否则开始捕获早期输入，`import()` 主模块 |
-| 2 | `reconstructed/src/main.js` | `main`（`chunk-shkzs7rp.js#Gu`）→ `run`（`#fi`） | 早期设置（clientType、`--settings` 早读），建命令树并 `parseAsync` |
-| 3 | `reconstructed/src/main.js` | `buildCliProgram`（`chunk-cjydagjy.js#Lks`） | commander 树：133 个根选项；`mcp`、`plugin`、`auth`、`auto-mode`、`doctor`、`update`、`install`、`gateway` 等子命令 |
-| 4 | `reconstructed/src/entrypoints/init.js` | `init`（`chunk-vbtpanx5.js#GEo`，memoize）→ `initImpl`（`#Q`） | 配置读取、存储后端选择、远程托管设置预热、CA/mTLS/代理、`setupGracefulShutdown`、1P 事件日志、API 预连接；`CLAUDE_CODE_REMOTE` 时启动上游代理 |
-| 5 | `reconstructed/src/main.js` | `runMigrations`（`chunk-cjydagjy.js#$t`） | 配置迁移（版本 11 → 14） |
-| 6 | `reconstructed/src/cli/startup/prepareSession.js` | `prepareSession`（`chunk-3wek6r2k.js#KSo`） | 调 `setup`，准备工具/命令/代理/MCP 配置、权限上下文、模型；返回 `prepared-headless` 或 `prepared-interactive` |
-| 7 | `reconstructed/src/setup.js` | `setup`（`chunk-fhdzwff4.js#Nt`） | Node ≥ 22 检查、`--session-id`、UDS 消息套接字、chdir、钩子配置快照、`--worktree`、版本锁、`tengu_started` |
-| 8a | `reconstructed/src/main.js` | `runInteractiveSession`（`chunk-shkzs7rp.js#_i`）→ `runOnboardingAndSetupScreens`（`#Si`） | 引导/信任屏，处理 `--continue/--resume/--teleport/--from-pr`，然后 `launchRepl` |
-| 8a' | `reconstructed/src/replLauncher.js` | `launchRepl`（`chunk-19arrzdw.js#MLi`） | 渲染 `App` + `REPL` |
-| 8b | `reconstructed/src/main.js` | `runPreparedHeadless`（`chunk-cjydagjy.js#ro`） | → `reconstructed/src/cli/print.js` · `runHeadless`（`chunk-tyg7f3ek.js#e8e`）→ `_runHeadlessStreamingForTesting`（即 runHeadlessStreaming，`#$z`） |
+| 1 | `reconstructed/src/entrypoints/cli.js` | `cliMain`（`cli.js#Xe`） | 设置几个进程级环境变量，依次检查约 18 条快速路径，命中就直接处理返回；否则开始捕获早期输入，`import()` 主模块 |
+| 2 | `reconstructed/src/main.js` | `main`（`chunk-nhaxap13.js#um`）→ `run`（`#Rr`） | 早期设置（clientType、`--settings` 早读），建命令树并 `parseAsync` |
+| 3 | `reconstructed/src/main.js` | `buildCliProgram`（`chunk-h61dq9nz.js#F1s`） | commander 树：133 个根选项；`mcp`、`plugin`、`auth`、`auto-mode`、`doctor`、`update`、`install`、`gateway` 等子命令 |
+| 4 | `reconstructed/src/entrypoints/init.js` | `init`（`chunk-fxk1e28j.js#dNo`，memoize）→ `initImpl`（`#Q`） | 配置读取、存储后端选择、远程托管设置预热、CA/mTLS/代理、`setupGracefulShutdown`、1P 事件日志、API 预连接；`CLAUDE_CODE_REMOTE` 时启动上游代理 |
+| 5 | `reconstructed/src/main.js` | `runMigrations`（`chunk-h61dq9nz.js#Jt`） | 配置迁移（版本 11 → 14） |
+| 6 | `reconstructed/src/cli/startup/prepareSession.js` | `prepareSession`（`chunk-hjswk319.js#QLo`） | 调 `setup`，准备工具/命令/代理/MCP 配置、权限上下文、模型；返回 `prepared-headless` 或 `prepared-interactive` |
+| 7 | `reconstructed/src/setup.js` | `setup`（`chunk-ag1kt2k5.js#Lt`） | Node ≥ 22 检查、`--session-id`、UDS 消息套接字、chdir、钩子配置快照、`--worktree`、版本锁、`tengu_started` |
+| 8a | `reconstructed/src/main.js` | `runInteractiveSession`（`chunk-nhaxap13.js#br`）→ `runOnboardingAndSetupScreens`（`#Dr`） | 引导/信任屏，处理 `--continue/--resume/--teleport/--from-pr`，然后 `launchRepl` |
+| 8a' | `reconstructed/src/replLauncher.js` | `launchRepl`（`chunk-pfe3pddp.js#h9i`） | 渲染 `App` + `REPL` |
+| 8b | `reconstructed/src/main.js` | `runPreparedHeadless`（`chunk-h61dq9nz.js#ao`） | → `reconstructed/src/cli/print.js` · `runHeadless`（`chunk-0yw3taqg.js#bot`）→ `_runHeadlessStreamingForTesting`（即 runHeadlessStreaming，`#$Y`） |
 
 `prepareSession` 判定 headless 的条件：有 `-p/--print`、stdin 不是 TTY、或 `--output-format`/`--input-format` 为 stream-json 等。headless 下输入输出走 `reconstructed/src/cli/structuredIO.js` · `StructuredIO`（本地 stdio NDJSON）或 `reconstructed/src/cli/remoteIO.js` · `RemoteIO`（云 worker），协议是 stream-json 消息 + `control_request/control_response`（316 有约 98 种请求子类型，见 `docs/handbook/agents.md` 第 5 节）。
 
@@ -150,23 +152,23 @@
 
 | 环节 | 文件 | 函数（声明 id） | 说明 |
 |---|---|---|---|
-| 输入框 | `reconstructed/src/components/PromptInput/PromptInput.js` | `PromptInput`（`chunk-18hwfzwa.js#d9e`） | 按键经 `usePasteHandler` → `useTextInput`/`useVimInput` → `useTypeahead`；草稿存在 `PromptDraft` store 而非组件 state |
+| 输入框 | `reconstructed/src/components/PromptInput/PromptInput.js` | `PromptInput`（`chunk-czq1j3j2.js#F7e`） | 按键经 `usePasteHandler` → `useTextInput`/`useVimInput` → `useTypeahead`；草稿存在 `PromptDraft` store 而非组件 state |
 | 草稿 | `reconstructed/src/screens/repl/PromptDraft.js` | `PromptDraft` | value、cursorOffset、mode（prompt/bash）、pastedContents（`[Image #N]`、`[Pasted text #N]` 引用） |
-| 提交控制器 | `reconstructed/src/screens/repl/PromptSubmitController.js` | `PromptSubmitController`（`chunk-18hwfzwa.js#yte`） | 分流：bash 模式、`/exit` 等本地命令、`local-jsx` 命令（打开对话框）、普通提示词；回合进行中再提交进入消息队列 |
-| 提交处理 | `reconstructed/src/utils/handlePromptSubmit.js` | `handlePromptSubmit`（`chunk-18hwfzwa.js#DV`）→ `executeUserInput`（`#Ekt`） | 展开粘贴引用后调用 `processUserInput` |
-| 回合控制器 | `reconstructed/src/screens/repl/TurnController.js` | `TurnController`（`chunk-18hwfzwa.js#ste`） | 一个回合的生命周期：建 ToolUseContext（`runQuery: query`）、跟踪进行中回合、中断与收尾 |
-| REPL 侧引擎 | `reconstructed/src/screens/repl/ReplSessionScope.js` | `runWithQueryParams`（`chunk-18hwfzwa.js#Mie`） | 用 `createQueryEngine({run: query, …})` 建 REPL 的查询引擎 |
+| 提交控制器 | `reconstructed/src/screens/repl/PromptSubmitController.js` | `PromptSubmitController`（`chunk-czq1j3j2.js#ste`） | 分流：bash 模式、`/exit` 等本地命令、`local-jsx` 命令（打开对话框）、普通提示词；回合进行中再提交进入消息队列 |
+| 提交处理 | `reconstructed/src/utils/handlePromptSubmit.js` | `handlePromptSubmit`（`chunk-czq1j3j2.js#SV`）→ `executeUserInput`（`#VCt`） | 展开粘贴引用后调用 `processUserInput` |
+| 回合控制器 | `reconstructed/src/screens/repl/TurnController.js` | `TurnController`（`chunk-czq1j3j2.js#Xee`） | 一个回合的生命周期：建 ToolUseContext（`runQuery: query`）、跟踪进行中回合、中断与收尾 |
+| REPL 侧引擎 | `reconstructed/src/screens/repl/ReplSessionScope.js` | `runWithQueryParams`（`chunk-czq1j3j2.js#Jie`） | 用 `createQueryEngine({run: query, …})` 建 REPL 的查询引擎 |
 
-**`-p` 的不同**：`reconstructed/src/cli/print.js` · `_runHeadlessStreamingForTesting`（即 runHeadlessStreaming）读 stdin/参数里的消息与 `control_request`，调 `reconstructed/src/QueryEngine.js` · `ask`（`chunk-tyg7f3ek.js#hm`）。`ask` 解析惰性配置、按权限模式定主循环模型与 thinking，用 `createHeadlessToolUseContext`（`#Mp`）建上下文，交给 headless 引擎 `QueryEngine`（`#nI`，旧版的 QueryEngine 类在 316 被拆散）的 `submitMessage`。
+**`-p` 的不同**：`reconstructed/src/cli/print.js` · `_runHeadlessStreamingForTesting`（即 runHeadlessStreaming）读 stdin/参数里的消息与 `control_request`，调 `reconstructed/src/QueryEngine.js` · `ask`（`chunk-0yw3taqg.js#Af`）。`ask` 解析惰性配置、按权限模式定主循环模型与 thinking，用 `createHeadlessToolUseContext`（`#qg`）建上下文，交给 headless 引擎 `QueryEngine`（`#oD`，旧版的 QueryEngine 类在 316 被拆散）的 `submitMessage`。
 
 ### 4.3 第 2 步：处理用户输入
 
 | 环节 | 文件 | 函数（声明 id） | 说明 |
 |---|---|---|---|
-| 共用引擎 | `reconstructed/src/engine/queryEngine.js` | `createQueryEngine`（`chunk-xx1vmpsq.js#vpt`） | 2.1.316 新增：REPL/print/SDK 共用，产出 `system/init`、`stream_event`、`result` 等 SDK 消息，处理中断与命令生命周期，内部调用传入的 `run`（即 `query`） |
-| 输入分发 | `reconstructed/src/utils/processUserInput/processUserInput.js` | `processUserInput`（`chunk-xx1vmpsq.js#jLt`） | 斜杠命令、bash 模式、普通提示词、@提及附件、图片；`UserPromptSubmit` 钩子（`reconstructed/src/utils/hooks.js` · `executeUserPromptSubmitHooks`）；返回要追加的消息与 `shouldQuery` |
-| 斜杠命令 | `reconstructed/src/utils/processUserInput/processSlashCommand.js` | `processSlashCommand`（`chunk-3g0djq3w.js#Ezi`）→ `getMessagesForSlashCommand`（`#co`） | 查找命令（`reconstructed/src/commands.js` · `findCommand`、`getCommands`），按类型执行：`local`（产出 `<local-command-stdout>`）、`local-jsx`（打开对话框）、`prompt`（展开成用户消息，`getMessagesForPromptSlashCommand`；`context:"fork"` 走 `executeForkedSlashCommand`） |
-| 消息构造 | `reconstructed/src/utils/messages.js` | `createUserMessage`（`chunk-e6aww6q8.js#De`） | 内部消息模型：user / assistant / attachment / system / progress |
+| 共用引擎 | `reconstructed/src/engine/queryEngine.js` | `createQueryEngine`（`chunk-pwdsqzsj.js#oSt`） | 2.1.88 之后新增：REPL/print/SDK 共用，产出 `system/init`、`stream_event`、`result` 等 SDK 消息，处理中断与命令生命周期，内部调用传入的 `run`（即 `query`） |
+| 输入分发 | `reconstructed/src/utils/processUserInput/processUserInput.js` | `processUserInput`（`chunk-pwdsqzsj.js#p1t`） | 斜杠命令、bash 模式、普通提示词、@提及附件、图片；`UserPromptSubmit` 钩子（`reconstructed/src/utils/hooks.js` · `executeUserPromptSubmitHooks`）；返回要追加的消息与 `shouldQuery` |
+| 斜杠命令 | `reconstructed/src/utils/processUserInput/processSlashCommand.js` | `processSlashCommand`（`chunk-g88zyy4n.js#Dia`）→ `getMessagesForSlashCommand`（`#po`） | 查找命令（`reconstructed/src/commands.js` · `findCommand`、`getCommands`），按类型执行：`local`（产出 `<local-command-stdout>`）、`local-jsx`（打开对话框）、`prompt`（展开成用户消息，`getMessagesForPromptSlashCommand`；`context:"fork"` 走 `executeForkedSlashCommand`） |
+| 消息构造 | `reconstructed/src/utils/messages.js` | `createUserMessage`（`chunk-5xgkngpb.js#Me`） | 内部消息模型：user / assistant / attachment / system / progress |
 
 `shouldQuery` 为假（例如纯本地命令）时到此结束；否则进入查询循环。
 
@@ -174,10 +176,10 @@
 
 | 环节 | 文件 | 函数（声明 id） | 说明 |
 |---|---|---|---|
-| 入口 | `reconstructed/src/query.js` | `query`（`chunk-ha3km179.js#J$`） | 确保工具初始化、建转录 tap；主线程挂代理观察者时走 `queryWithObserverTap`（`#iy`）；结束时为本轮吸收的命令发 `command_lifecycle` |
-| 主循环 | `reconstructed/src/query.js` | `queryLoop`（`chunk-ha3km179.js#xc`，约 75 KB） | `while(true){ r = yield* runIterationRecordingErrors(); if (r !== NEXT_ROUND) return r }`；2.1.88 是每轮递归调用 `query()`，316 改成哨兵 `NEXT_ROUND`（`#Oo`） |
-| 依赖 | `reconstructed/src/query/deps.js` | `productionDeps`（`chunk-ha3km179.js#qu`） | `callModel = queryModelWithStreaming`、`autocompact = runAutoCompactIfNeeded`、`uuid`、`now` |
-| 配置 | `reconstructed/src/query/config.js` | `buildQueryConfig`（`chunk-ha3km179.js#Lu`） | 工具使用摘要、fast mode 开关 |
+| 入口 | `reconstructed/src/query.js` | `query`（`chunk-w3ch4xq2.js#$U`） | 确保工具初始化、建转录 tap；主线程挂代理观察者时走 `queryWithObserverTap`（`#Py`）；结束时为本轮吸收的命令发 `command_lifecycle` |
+| 主循环 | `reconstructed/src/query.js` | `queryLoop`（`chunk-w3ch4xq2.js#Zc`，约 75 KB） | `while(true){ r = yield* runIterationRecordingErrors(); if (r !== NEXT_ROUND) return r }`；2.1.88 是每轮递归调用 `query()`，316 改成哨兵 `NEXT_ROUND`（`#bo`） |
+| 依赖 | `reconstructed/src/query/deps.js` | `productionDeps`（`chunk-w3ch4xq2.js#cc`） | `callModel = queryModelWithStreaming`、`autocompact = runAutoCompactIfNeeded`、`uuid`、`now` |
+| 配置 | `reconstructed/src/query/config.js` | `buildQueryConfig`（`chunk-w3ch4xq2.js#lc`） | 工具使用摘要、fast mode 开关 |
 
 ### 4.5 第 4 步：每轮开头（压缩、模型、上下文）
 
@@ -186,16 +188,16 @@
 | 环节 | 文件 | 函数（声明 id） | 说明 |
 |---|---|---|---|
 | 轮首折叠 | `reconstructed/src/query.js` | `absorbQueuedPollEvents`（`#Rc`）、`createFoldCommandFilter`（`#wc`）、`isCommandFoldable`（`#dy`） | 把队列里可折叠的 poll 事件、排队命令吸收进本轮；等相关记忆召回预取（最多 2 秒） |
-| 工具结果预算 | `reconstructed/src/utils/toolResultStorage.js` | `applyToolResultBudget`（`chunk-jcnpfn31.js#eii`） | 大工具结果落盘，消息里换成预览 |
+| 工具结果预算 | `reconstructed/src/utils/toolResultStorage.js` | `applyToolResultBudget`（`chunk-03m9p8vx.js#QAi`） | 大工具结果落盘，消息里换成预览 |
 | 模型决定 | `reconstructed/src/query/modelSelection.js`、`reconstructed/src/query/refusalRecovery.js` | — | 实时切换、拒答回退链、用量额度模型同意对话框（详见 query 手册 4.2 第 5、9 步） |
-| 自动压缩 | `reconstructed/src/services/compact/autoCompact.js` | `runAutoCompactIfNeeded`（`chunk-e6aww6q8.js#yzr`） | 结果：`compacted` / `failed` / `not_needed` / 快速回填熔断；压缩成功后用 `reconstructed/src/services/compact/compact.js` · `buildPostCompactMessages` 替换消息 |
-| 预计算压缩 | `reconstructed/src/services/compact/precomputedCompact.js` | `armPrecomputedCompact`（`chunk-e6aww6q8.js#bzr`） | 提前生成摘要，到阈值或超限时直接换用 |
+| 自动压缩 | `reconstructed/src/services/compact/autoCompact.js` | `runAutoCompactIfNeeded`（`chunk-5xgkngpb.js#T7r`） | 结果：`compacted` / `failed` / `not_needed` / 快速回填熔断；压缩成功后用 `reconstructed/src/services/compact/compact.js` · `buildPostCompactMessages` 替换消息 |
+| 预计算压缩 | `reconstructed/src/services/compact/precomputedCompact.js` | `armPrecomputedCompact`（`chunk-5xgkngpb.js#C7r`） | 提前生成摘要，到阈值或超限时直接换用 |
 | 阻断上限 | `reconstructed/src/query.js` | （`runIteration` 内） | 估算 token 达到 blocked 级且不能反应式压缩时返回 `blocking_limit` |
-| 系统提示词 | `reconstructed/src/query/promptSnapshot.js` | `recordPromptSnapshot`（`chunk-ha3km179.js#xu`） | 会话级回放：工具描述、wire 形状、提醒折叠沿用上次记录，保证提示词缓存稳定；再经 `reconstructed/src/utils/api.js` · `appendSystemContextToPrompt` 与 `reconstructed/src/utils/systemPromptType.js` · `asSystemPrompt` 得到本轮 system |
+| 系统提示词 | `reconstructed/src/query/promptSnapshot.js` | `recordPromptSnapshot`（`chunk-w3ch4xq2.js#ec`） | 会话级回放：工具描述、wire 形状、提醒折叠沿用上次记录，保证提示词缓存稳定；再经 `reconstructed/src/utils/api.js` · `appendSystemContextToPrompt` 与 `reconstructed/src/utils/systemPromptType.js` · `asSystemPrompt` 得到本轮 system |
 
 **system 提示词从哪里来**（`docs/handbook/query.md` 第 9 节）：
 
-- 回合开始前由调用方准备：REPL 的 `TurnController` 调 `reconstructed/src/constants/prompts.js` · `getSystemPrompt`（`chunk-e6aww6q8.js#KI`）；headless 走 `reconstructed/src/utils/queryContext.js` · `fetchSystemPromptParts`；再由 `reconstructed/src/utils/systemPrompt.js` · `buildEffectiveSystemPrompt` 按 override → coordinator → `--agent` → `--system-prompt` → 默认 的优先级决定，最后追加 `--append-system-prompt`。
+- 回合开始前由调用方准备：REPL 的 `TurnController` 调 `reconstructed/src/constants/prompts.js` · `getSystemPrompt`（`chunk-5xgkngpb.js#EM`）；headless 走 `reconstructed/src/utils/queryContext.js` · `fetchSystemPromptParts`；再由 `reconstructed/src/utils/systemPrompt.js` · `buildEffectiveSystemPrompt` 按 override → coordinator → `--agent` → `--system-prompt` → 默认 的优先级决定，最后追加 `--append-system-prompt`。
 - `getSystemPrompt` 是 316 的"提示词组合器"：事实（模型、工具、输出风格、traits）→ `composeSessionSystemPrompt` / `decideSystemPromptSections`（每段决策在会话内记录并回放）→ 渲染成分段；shared 段在前，全局缓存可用时插入动态分界标记 `__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__`，再放 session 段。
 - 用户上下文（CLAUDE.md、日期、邮箱、附加项目）由 `reconstructed/src/context.js` · `getUserContext` / `getOrBuildUserContext` 生成；系统上下文 `getSystemContext` 在 316 只剩 Perforce 说明，git 状态改由主循环按需通告（`getGitStatus`）。默认模式下这些内容以附件/通告进入请求，部分成为 role 为 system 的中途消息。
 - 输出风格、语言、环境块（`getEnvironmentSection`）、模型身份行（`buildModelEnvInfoAttachment`）在 316 都改成附件文本，而不是系统提示词分段。
@@ -204,15 +206,15 @@
 
 | 环节 | 文件 | 函数（声明 id） | 说明 |
 |---|---|---|---|
-| 主循环调用 | `reconstructed/src/services/api/claude.js` | `queryModelWithStreaming`（`chunk-e6aww6q8.js#LGt`） | `deps.callModel`；把 `FallbackTriggeredError` 转成 `model_fallback_triggered` 事件 |
+| 主循环调用 | `reconstructed/src/services/api/claude.js` | `queryModelWithStreaming`（`chunk-5xgkngpb.js#I5t`） | `deps.callModel`；把 `FallbackTriggeredError` 转成 `model_fallback_triggered` 事件 |
 | 工具搜索自愈 | `reconstructed/src/services/api/claude.js` | `queryModelWithToolSearchRecovery`（`#__n`） | 捕获 `ToolSearchRefusedError` 后内联全部延迟工具重跑 |
-| 一次请求 | `reconstructed/src/services/api/claude.js` | `queryModel`（`chunk-e6aww6q8.js#e_n`，约 129 KB） | off-switch 与模型封锁 → beta 列表与模型事实 → 工具 schema 与延迟判定（`reconstructed/src/utils/toolSearch.js` · `isToolSearchEnabled`）→ 消息规整 → system 块 → 缓存 TTL → 参数 → 发送 → SSE |
+| 一次请求 | `reconstructed/src/services/api/claude.js` | `queryModel`（`chunk-5xgkngpb.js#Z_n`，约 129 KB） | off-switch 与模型封锁 → beta 列表与模型事实 → 工具 schema 与延迟判定（`reconstructed/src/utils/toolSearch.js` · `isToolSearchEnabled`）→ 消息规整 → system 块 → 缓存 TTL → 参数 → 发送 → SSE |
 | 消息规整 | `reconstructed/src/services/api/claude.js`、`reconstructed/src/utils/messages.js` | `normalizeMessagesForRequest`（`#Qyn`）→ `normalizeMessagesForAPI`（`#AT`） | tool_use/tool_result 配对（`ensureToolResultPairing`）、媒体上限（`stripExcessMediaItems`）、附件渲染、中途 system 消息折叠为 `role:"system"` |
 | system 块 | `reconstructed/src/services/api/claude.js` | `buildSystemPromptBlocks`（`#ZSr`） | 先由 `reconstructed/src/utils/api.js` · `splitSysPromptPrefix` 切出计费头（`reconstructed/src/constants/system.js` · `getAttributionHeader`）、身份行（`getCLISyspromptPrefix`）、静态/动态段，再加 `cache_control`（`getCacheControl`、`should1hCacheTTL`） |
 | 请求参数 | `reconstructed/src/services/api/claude.js` | `queryModel` 内的 buildRequestParams（每次重试重建） | `max_tokens`、`thinking`（adaptive / enabled / disabled）、`output_config`（effort、task_budget、结构化输出）、`context_management`（`reconstructed/src/services/compact/apiMicrocompact.js` · `getAPIContextManagement`）、`metadata`（`getAPIMetadata`）、`CLAUDE_CODE_EXTRA_BODY`（`getExtraBodyParams`） |
 | 缓存断点 | `reconstructed/src/services/api/claude.js` | `addCacheBreakpoints`（`#YSr`） | 实测断点在"最后一条消息的最后一块" |
-| 重试 | `reconstructed/src/services/api/withRetry.js` | `withRetry`（`chunk-e6aww6q8.js#DEe`） | 异步生成器；`onError` 识别约 40 种可自愈错误（去 beta、去 thinking.display、去媒体、降 effort…），打 `retry:<原因>` 标签后重建参数重试；529 等触发 fallback 模型 |
-| 客户端 | `reconstructed/src/services/api/client.js` | `getAnthropicClient`（`chunk-hwmsct5x.js#MN`） | 8 种提供商分支（firstParty、bedrock、vertex、foundry、gateway、mantle、anthropicAws、anthropicGoogleCloud）；默认头 x-app、User-Agent 等；底层是 vendor `@anthropic-ai/sdk` 0.128.0 |
+| 重试 | `reconstructed/src/services/api/withRetry.js` | `withRetry`（`chunk-5xgkngpb.js#pxe`） | 异步生成器；`onError` 识别约 40 种可自愈错误（去 beta、去 thinking.display、去媒体、降 effort…），打 `retry:<原因>` 标签后重建参数重试；529 等触发 fallback 模型 |
+| 客户端 | `reconstructed/src/services/api/client.js` | `getAnthropicClient`（`chunk-vn3g7zt8.js#uF`） | 8 种提供商分支（firstParty、bedrock、vertex、foundry、gateway、mantle、anthropicAws、anthropicGoogleCloud）；默认头 x-app、User-Agent 等；底层是 vendor `@anthropic-ai/sdk` 0.128.0 |
 | 请求头 | `reconstructed/src/services/api/claude.js` | `buildRequestTraceHeaders`（`#i_n`） | x-client-request-id、traceparent、压缩/上轮工具耗时等头 |
 | 发送 | — | `anthropic.beta.messages.create({...params, stream:true})` | 慢首字节告警（`CLAUDE_SLOW_FIRST_BYTE_MS`）、流看门狗 |
 
@@ -234,10 +236,10 @@
 
 | 环节 | 文件 | 函数（声明 id） | 说明 |
 |---|---|---|---|
-| 流式执行器 | `reconstructed/src/services/tools/StreamingToolExecutor.js` | `StreamingToolExecutor`（`chunk-ha3km179.js#oi`） | `addTool` 时判定并发安全并排队；`processQueue` 保证"并发安全的可并行、不安全的独占且保序"；进度即时产出；中断时生成合成 tool_result |
-| 非流式编排 | `reconstructed/src/services/tools/toolOrchestration.js` | `runTools`（`chunk-0h4e7gnq.js#Gn`）、`partitionToolCalls`、`runToolsConcurrently` | 按并发安全分批，默认并发 10（`getMaxToolUseConcurrency`） |
-| 单次入口 | `reconstructed/src/services/tools/toolExecution.js` | `runToolUse`（`chunk-e6aww6q8.js#$B`）→ `streamedCheckPermissionsAndCallTool`（`#g3r`） | 按名字/别名查工具（`reconstructed/src/Tool.js` · `findToolByName`），MCP 未连上时等待；判定运行位置（本机 / 远程宿主） |
-| 调用生命周期 | `reconstructed/src/services/tools/toolExecution.js` | `checkPermissionsAndCallTool`（`chunk-e6aww6q8.js#w3r`） | 见下方 6 步 |
+| 流式执行器 | `reconstructed/src/services/tools/StreamingToolExecutor.js` | `StreamingToolExecutor`（`chunk-w3ch4xq2.js#Ei`） | `addTool` 时判定并发安全并排队；`processQueue` 保证"并发安全的可并行、不安全的独占且保序"；进度即时产出；中断时生成合成 tool_result |
+| 非流式编排 | `reconstructed/src/services/tools/toolOrchestration.js` | `runTools`（`chunk-frs14hy1.js#is`）、`partitionToolCalls`、`runToolsConcurrently` | 按并发安全分批，默认并发 10（`getMaxToolUseConcurrency`） |
+| 单次入口 | `reconstructed/src/services/tools/toolExecution.js` | `runToolUse`（`chunk-5xgkngpb.js#Cj`）→ `streamedCheckPermissionsAndCallTool`（`#K4r`） | 按名字/别名查工具（`reconstructed/src/Tool.js` · `findToolByName`），MCP 未连上时等待；判定运行位置（本机 / 远程宿主） |
+| 调用生命周期 | `reconstructed/src/services/tools/toolExecution.js` | `checkPermissionsAndCallTool`（`chunk-5xgkngpb.js#t6r`） | 见下方 6 步 |
 
 `checkPermissionsAndCallTool` 的步骤（`docs/handbook/tools.md` 5.3 节）：
 
@@ -245,7 +247,7 @@
 2. **`validateInput`**：工具自检，失败返回 `<tool_use_error>`。
 3. **PreToolUse 钩子**：`reconstructed/src/services/tools/toolHooks.js` · `runPreToolUseHooks`，可改写输入、给权限结论、阻止继续。
 4. **权限**：`reconstructed/src/services/tools/toolHooks.js` · `resolveHookPermissionDecision` → `runPermissionPipeline`。钩子 allow 仍要过 deny/ask 规则（`reconstructed/src/utils/permissions/permissions.js` · `checkRuleBasedPermissions`）；无结论时调 `canUseTool`：
-   - REPL 的 `canUseTool` 来自 `reconstructed/src/hooks/useCanUseTool.js` · `useCanUseTool`，核心是 `reconstructed/src/utils/permissions/permissions.js` · `hasPermissionsToUseTool`（`chunk-e6aww6q8.js#GE`）→ `hasPermissionsToUseToolWithSink` → `hasPermissionsToUseToolInner`（插件 `tool.check` 裁决层 `decideWithToolCheckHooks` → `checkToolAndRulePermissions`：deny/ask/allow 规则、`tool.checkPermissions`、安全检查、模式）。
+   - REPL 的 `canUseTool` 来自 `reconstructed/src/hooks/useCanUseTool.js` · `useCanUseTool`，核心是 `reconstructed/src/utils/permissions/permissions.js` · `hasPermissionsToUseTool`（`chunk-5xgkngpb.js#Hw`）→ `hasPermissionsToUseToolWithSink` → `hasPermissionsToUseToolInner`（插件 `tool.check` 裁决层 `decideWithToolCheckHooks` → `checkToolAndRulePermissions`：deny/ask/allow 规则、`tool.checkPermissions`、安全检查、模式）。
    - 结果为 ask：按模式处理——`dontAsk` 拒绝；`auto` 交自动模式分类器（`reconstructed/src/utils/permissions/yoloClassifier.js` · `classifyYoloAction`）；交互模式经 `reconstructed/src/hooks/toolPermission/handlers/interactiveHandler.js` · `handleInteractivePermission` 弹对话框（对话框存储 + kind 注册表），同时向 Remote Control、channel、PermissionRequest 钩子发请求，谁先答复谁生效；用户选"总是允许"时产生 PermissionUpdate 写回设置。
    - headless 下 `canUseTool` 是 SDK 回调（`--permission-prompt-tool` 或 control_request `can_use_tool`）。
    - Bash 工具自身的 `checkPermissions` 用纯 TS bash 解析器（`reconstructed/src/utils/bash/ast.js` · `parseForSecurityFromAst`、`checkSemantics`）做安全分析，并决定是否进沙箱（`reconstructed/src/tools/BashTool/shouldUseSandbox.js` · `shouldUseSandbox`，`reconstructed/src/utils/sandbox/sandbox-adapter.js` · `SandboxManager`）。
@@ -266,13 +268,13 @@
 6. **畸形 tool_use** 重试一次；**仅思考无文本**提示一次。
 7. API 错误 → `api_error`。
 8. **没有工具调用** → `queryLoop` 内的 `runStopHooksAndFinish`：Stop 钩子（`reconstructed/src/query/postTurnSummary.js` · `runStopHooks`，底层 `reconstructed/src/utils/hooks.js` · `executeStopHooks`）阻断时把错误作为消息进入下一轮（`stop_hook_blocking`，连续上限默认 8），否则返回 `completed`。
-9. **有工具调用** → `getRemainingResults` 收齐结果；可选工具使用摘要（`reconstructed/src/services/toolUseSummary/toolUseSummaryGenerator.js` · `generateToolUseSummary`）；PostToolBatch 钩子；生成本轮附件 `reconstructed/src/utils/attachments.js` · `getAttachments`（`chunk-e6aww6q8.js#Bxr`：LSP 诊断、文件变化、记忆、延迟工具增量 `getDeferredToolsDelta`、任务状态等约 60 种新类型）；工具或 MCP `_meta` 要求结束本轮时走 `endTurnFromToolResult`；到 `maxTurns` 返回 `max_turns`；否则 `state.messages = [...请求消息, ...assistant, ...toolResults]`，返回 `NEXT_ROUND`，进入下一轮。
+9. **有工具调用** → `getRemainingResults` 收齐结果；可选工具使用摘要（`reconstructed/src/services/toolUseSummary/toolUseSummaryGenerator.js` · `generateToolUseSummary`）；PostToolBatch 钩子；生成本轮附件 `reconstructed/src/utils/attachments.js` · `getAttachments`（`chunk-5xgkngpb.js#x$r`：LSP 诊断、文件变化、记忆、延迟工具增量 `getDeferredToolsDelta`、任务状态等约 60 种新类型）；工具或 MCP `_meta` 要求结束本轮时走 `endTurnFromToolResult`；到 `maxTurns` 返回 `max_turns`；否则 `state.messages = [...请求消息, ...assistant, ...toolResults]`，返回 `NEXT_ROUND`，进入下一轮。
 
 终止原因全集：`completed`、`max_turns`、`hook_stopped`、`stop_hook_prevented`、`aborted_streaming`、`aborted_tools`、`tool_deferred`、`background_requested`、`blocking_limit`、`rapid_refill_breaker`、`model_error`、`image_error`、`api_error`、`malformed_tool_use_exhausted`。
 
 ### 4.10 第 9 步：压缩
 
-- **自动压缩**（每轮开头）：`runAutoCompactIfNeeded` 判断阈值（窗口来源有 settings、clientdata、实验、模型默认表等 7 种），需要时调 `reconstructed/src/services/compact/compact.js` · `compactConversation`（`chunk-e6aww6q8.js#mzr`）：PreCompact 钩子 → 选摘要提示词变体（8 个 A/B arm）→ `streamCompactSummary` 用 fork 共享缓存前缀生成摘要 → 压缩边界消息（`createCompactBoundaryMessage`）+ 摘要 + 压缩后附件（`buildPostCompactAttachments`：最近文件、计划、后台 shell、目标等）。
+- **自动压缩**（每轮开头）：`runAutoCompactIfNeeded` 判断阈值（窗口来源有 settings、clientdata、实验、模型默认表等 7 种），需要时调 `reconstructed/src/services/compact/compact.js` · `compactConversation`（`chunk-5xgkngpb.js#E7r`）：PreCompact 钩子 → 选摘要提示词变体（8 个 A/B arm）→ `streamCompactSummary` 用 fork 共享缓存前缀生成摘要 → 压缩边界消息（`createCompactBoundaryMessage`）+ 摘要 + 压缩后附件（`buildPostCompactAttachments`：最近文件、计划、后台 shell、目标等）。
 - **预计算压缩**：`isAtPrecomputeThreshold` 时提前生成并持久化摘要；**反应式压缩**：请求被拒（prompt-too-long）时按组摘要后重试。
 - **microcompact**：服务端 `context_management`（`clear_tool_uses_20250919` 等），空闲回来时追加。
 - 316 没有 session memory 压缩（2.1.88 的 `tengu_sm_compact*` 已消失）。
@@ -291,7 +293,7 @@
 
 ### 5.1 工具与权限
 
-- **工具定义**：每个工具是定义对象 + `create(ctx)` 工厂（`buildTool`，`chunk-g54kbxqw.js#on`），提供 name/aliases、输入输出 schema、提示词、只读/并发/延迟属性、`validateInput/checkPermissions/call` 与一组渲染函数。316 新增约 35 个工具字段（`backgrounding`、`remoteExecution`、`coerceInput`…）。
+- **工具定义**：每个工具是定义对象 + `create(ctx)` 工厂（`buildTool`，`chunk-2c3jp4kn.js#ln`），提供 name/aliases、输入输出 schema、提示词、只读/并发/延迟属性、`validateInput/checkPermissions/call` 与一组渲染函数。316 新增约 35 个工具字段（`backgrounding`、`remoteExecution`、`coerceInput`…）。
 - **工具池**：`reconstructed/src/tools.js` · `getAllBaseTools`（约 80 个内建工具）→ `getTools`（按权限上下文、`isEnabled` 过滤；`CLAUDE_CODE_SIMPLE` 只给 Bash/Read/Edit）→ `assembleToolPool`（并入 MCP 工具）。Glob/Grep 默认不注册（嵌入式搜索为构建常量）；MCP 工具和部分内建工具"延迟加载"，只宣告名字，模型用 ToolSearch 取 schema。
 - **权限**：模式（default/"Manual"、acceptEdits、plan、auto、dontAsk、bypassPermissions）、规则（`Tool(content)`；12 种来源：settings 五层、`cliArg`、`command`、`session`，以及 316 新增的 `mcpMount`、`toolsNarrowing`、`mcpServerPolicy`、`hostCredential`；判定顺序固定 deny → ask → allow；加载见 `reconstructed/src/utils/permissions/permissionsLoader.js` · `loadAllPermissionRulesFromDisk`）、文件路径权限（`reconstructed/src/utils/permissions/filesystem.js` · `checkReadPermissionForTool`/`checkWritePermissionForTool`）、自动模式分类器、沙箱（vendor `@anthropic-ai/sandbox-runtime` 0.0.81）。
 - 手册：`docs/handbook/tools.md`、`docs/handbook/permissions.md`。
@@ -384,16 +386,16 @@
 
 | 项 | 值 | 依据 |
 |---|---|---|
-| 官方二进制 | linux-x64 ELF，sha256 `fd13c700…d824` | `original/reconstruction.json`、`README.md` |
-| 打包器 | Bun **1.4.4**，修订 `71c9bf0ca`（Anthropic 内部版），内嵌 Node 版本串 v26.12.1；单文件可执行 + bytecode | `original/reconstruction.json`、`docs/process/verify.md` 第 2 节 |
+| 官方二进制 | linux-x64 ELF，sha256 `708c77b2…bf0bd`（2.1.316 是 fd13c700…d824） | `original/reconstruction.json`、`README.md` |
+| 打包器 | Bun **1.4.4**，修订 `424a542a9`（Anthropic 内部版；2.1.316 是 71c9bf0ca），内嵌 Node 版本串 v26.12.1；单文件可执行 + bytecode | `original/reconstruction.json`、`docs/process/verify.md` 第 2 节 |
 | 构建时间 | BUILD_TIME 2026-10-30T23:28:13Z，GIT_SHA `cd7ceb459c…` | `docs/handbook/bootstrap.md` 开头 |
-| 模块表 | 2,880 项：2,648 个 JS（入口 `cli.js` + 2,644 个 `original/chunk-*.js` + 3 个带 BOM 的资源脚本）、232 个资源（提示词、Skill 文档、字体、2 个 `.node` 原生模块、127 个 zstd 压缩资源） | `docs/PLAN.md` 第 1 节、`original/` |
-| 代码量 | JS 约 50 MB，81,667 个顶层声明（按声明符拆开是 102,120 个单元） | `analysis/segments/summary.json`、`docs/process/vendor.md` 4.1 |
+| 模块表 | 3,100 项：2,857 个 JS（入口 `cli.js` + 2,853 个 `original/chunk-*.js` + 3 个带 BOM 的资源脚本）、243 个资源（提示词、Skill 文档、字体、2 个 `.node` 原生模块、127 个 zstd 压缩资源） | `docs/PLAN.md` 第 1 节、`original/` |
+| 代码量 | JS 约 51 MB，84,503 个顶层声明（按声明符拆开是 105,993 个单元） | `analysis/segments/summary.json`、`docs/process/vendor.md` 4.1 |
 | chunk 结构 | ESM；全部提升到顶层（scope hoisting）；**一个 chunk 内顺序拼接多个源模块**；Bun 像 esbuild 一样**按顶层语句拆 chunk**，同一源文件可散在多个 chunk（2.1.88 能对上的 1,711 个文件中 728 个跨 chunk），但在一个 chunk 内保持连续 | `docs/process/lead.md` 第 4 节 |
 | CommonJS | 依赖以 `var X=x(function(exports,module){…})` 包裹，一个包裹 = 一个 npm 文件（1,580 个包裹） | `docs/process/vendor.md` 4.4 |
-| 运行时 chunk | `chunk-rshven70.js`（938 字节）：`x`=__commonJS、`Re`=__toESM、`Ar`=__export、`Be`=`import.meta.require`、`Xa`=__esm，另有 React Compiler 哨兵 `Symbol.for("react.memo_cache_sentinel")`；阅读树中为 `reconstructed/runtime/bun-runtime.js` | `docs/process/vendor.md` 4.2 |
+| 运行时 chunk | `chunk-gehzbwn8.js`（938 字节）：`x`=__commonJS、`Re`=__toESM、`Ar`=__export、`Be`=`import.meta.require`、`Xa`=__esm，另有 React Compiler 哨兵 `Symbol.for("react.memo_cache_sentinel")`；阅读树中为 `reconstructed/runtime/bun-runtime.js` | `docs/process/vendor.md` 4.2 |
 | 门面 chunk | 只有 `import` + `export{局部 as 原名}` 的 chunk，Bun 为每个被动态 `import()` 的源模块生成一个；共 **513** 个，给出 **7,692** 个源码原始导出名（命名来源 `facade`，可信度最高）；同一门面的声明属于同一源文件 | `analysis/facades/facades.json`、`docs/WORKLOG.md` 06:05 条 |
-| 最大的 chunk | `chunk-e6aww6q8.js`（5.07 MB，主体逻辑：queryModel、工具执行、权限、hooks…）、`chunk-18hwfzwa.js`（1.88 MB，REPL 控制器与组件）、`chunk-1ny7cxrt.js`（1.56 MB，含 openid-client/jose/zod 等第三方与云网关）、`chunk-fq0cr76a.js`（1.07 MB，沙箱运行时与 protobuf）、`chunk-aepeg2w5.js`（0.92 MB）、`chunk-tyg7f3ek.js`（0.89 MB，print/headless） | `original/` 文件大小 |
+| 最大的 chunk | `chunk-5xgkngpb.js`（5.07 MB，主体逻辑：queryModel、工具执行、权限、hooks…）、`chunk-czq1j3j2.js`（1.88 MB，REPL 控制器与组件）、`chunk-1hnjmk23.js`（1.56 MB，含 openid-client/jose/zod 等第三方与云网关）、`chunk-qg41pqt6.js`（1.07 MB，沙箱运行时与 protobuf）、`chunk-exfmq47h.js`（0.92 MB）、`chunk-0yw3taqg.js`（0.89 MB，print/headless） | `original/` 文件大小 |
 | 外部依赖 | `ws`（Bun 原生）、`undici`（`import.meta.require`，Bun 内置）、`node-fetch`（动态 import）未打包 | `analysis/vendor/packages.json` `externals` |
 | 私有原生 API | `Bun.ant.*` 共 12 个，其中 `Bun.ant.CellSegmenter`（Ink 写屏）没有回退，公版 Bun 跑交互界面需要垫片 `tools/verify/bun-ant-shim.js` | `docs/process/verify.md` 第 12 节、`docs/handbook/ink.md` 3.5 |
 
@@ -449,25 +451,25 @@
  *
  * 查询主循环：……                              ← 模块说明（naming/modules-*.json）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * 2.1.88 counterpart: references/claude-code-analysis/src/query.ts    ← 或 "new in 2.1.316 (2.1.88 has no file at this path)"
- * pieces: chunk-ha3km179.js (27)              ← 来自哪些 chunk，各多少个声明
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * 2.1.88 counterpart: references/claude-code-analysis/src/query.ts    ← 或 "new in 2.1.318 (2.1.88 has no file at this path)"
+ * pieces: chunk-w3ch4xq2.js (27)              ← 来自哪些 chunk，各多少个声明
  * attribution: sole-consumer 11, fingerprint 2, layout 13, …   ← 归属方法统计
  */
 ```
 
-截至本快照，约 1,660 个文件有 2.1.88 对应文件，约 3,360 个文件标为 "new in 2.1.316"——316 的一方代码大约三分之二是旧版没有的。
+截至本快照，约 1,658 个文件有 2.1.88 对应文件，约 3,474 个文件标为 "new in 2.1.318"——一方代码大约三分之二是旧版没有的。
 
 ### 8.2 `//@` 出处行
 
 每个顶层声明前有一行出处：
 
 ```
-//@ chunk-ha3km179.js:159198-234645 callgraph-witnessed = queryLoop (0.294)
+//@ chunk-w3ch4xq2.js:168504-247763 callgraph-witnessed = queryLoop (0.294)
 async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, transcriptTap) {
 ```
 
-- `chunk-ha3km179.js:159198-234645`：在 `original/chunk-ha3km179.js` 中的字节区间（可直接对照原文）。
+- `chunk-w3ch4xq2.js:168504-247763`：在 `original/chunk-w3ch4xq2.js` 中的字节区间（可直接对照原文）。
 - `callgraph-witnessed`：这个声明怎样被归到当前文件（归属方法）。
 - `= queryLoop (0.294)`：匹配到的 2.1.88 旧版名与匹配分（只有经旧版匹配的声明才有）。
 
@@ -530,7 +532,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
 
 ## 9. 已知限制
 
-1. **归属已完成，但有推断出的位置**：place-rest 之后 81,667 个声明全部落位（`analysis/segments/summary.json` 已无 unattributed 类别），_unattributed/、_misplaced/ 与顶层 _new/ 都已清空；不过各目录下 `_new/` 子目录与 `*.helpers-xxxx.js` 文件（130 个）是按"唯一使用者"推出的位置，文件名不是源码原名。lead 可能继续重新生成 `reconstructed/`，少数路径会变化，以声明 id 为准。
+1. **归属已完成，但有推断出的位置**：place-rest 之后（2.1.318 由 pl318 批次续做）84,503 个声明全部落位（`analysis/segments/summary.json` 已无 unattributed 类别），_unattributed/、_misplaced/ 与顶层 _new/ 都已清空；不过各目录下 `_new/` 子目录与 `*.helpers-xxxx.js` 文件（130 个）是按"唯一使用者"推出的位置，文件名不是源码原名。lead 可能继续重新生成 `reconstructed/`，少数路径会变化，以声明 id 为准。
 2. **旧版名错配**：`reference` 来源的名字和"2.1.88 counterpart"有错配。手册写作时列出的典型例子：旧版 buddy/ 名下（316 已删除伴侣精灵，名下声明全是匹配误差）、commands/thinkback-play、commands/tag、commands/files（被按旧名匹配到不相干代码）——这几处在后续重切中已从阅读树移走；`reconstructed/src/components/agents/new-agent-creation/` 等处的内容与模块名不符（实为 Bedrock/Vertex/云网关设置向导等）、awaySummary 被 Artifact 评论确认占用等仍需留意（`docs/handbook/agents.md` 9.6、`docs/handbook/ui.md` 第 12 节、`docs/handbook/commands.md` 第 9 节、`docs/handbook/query.md` 12.12）。
 3. **`reconstructed/symbols.jsonl` 里约一半条目仍是压缩名**（`source: minified`），多是低引用常量和多声明符语句里的附属绑定。
 4. **原生层不可见**：计费头里的 `cch` 由原生层在发送前改写，JS 看不到；`Bun.ant.CellSegmenter` 的实现不可见（`docs/handbook/query.md` 第 9 节、`docs/handbook/ink.md` 第 13 节）。
@@ -543,8 +545,8 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
 
 ## 10. 引用校验结果
 
-校验时间 2026-11-04 06:40（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-05 17:32（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
-- 共检查 1032 处引用：路径 419/419，路径·函数 81/81，名字 382/382，声明id 62/62，字面量 87/88（另 1 个只在 2.1.88 中存在）；占位符与含空格的说明性文字 63 处未检查。
-- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`tengu_sm_compact*`
+- 共检查 1041 处引用：路径 421/421，路径·函数 82/82，名字 387/388（另 1 个只在 2.1.88 中存在），声明id 62/62，字面量 87/88（另 1 个只在 2.1.88 中存在）；占位符与含空格的说明性文字 63 处未检查。
+- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`contextModifier`、`tengu_sm_compact*`
 - 未通过：0 处。

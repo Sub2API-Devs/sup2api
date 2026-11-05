@@ -3,9 +3,9 @@
  *
  * "<键> to <动作>" 快捷键提示文本（被 169 处使用）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/design-system/KeyboardShortcutHint.tsx
- * pieces: chunk-v6kts6xw.js (4)
+ * pieces: chunk-820m5cev.js (4)
  * attribution: fingerprint 1, placement 3
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -19,7 +19,7 @@ import { getShortcutDisplayPlatform } from "../../utils/keyboardShortcuts.js";
 import { formatKeyChords } from "../../keybindings/shortcutFormat.js";
 import { parseChord } from "../../keybindings/parser.js";
 
-//@ chunk-v6kts6xw.js:3401-4048 fingerprint (2.1.88 match: KeyboardShortcutHint, 0.357)
+//@ chunk-820m5cev.js:3401-4048 fingerprint (2.1.88 match: KeyboardShortcutHint, 0.359)
 function KeyboardShortcutHint(props) {
   let $ = useMemoCache(15);
   let { chord, action, format, parens, bold, terse } = props;
@@ -82,7 +82,7 @@ function KeyboardShortcutHint(props) {
   } else t4 = $[14];
   return t4;
 }
-//@ chunk-v6kts6xw.js:4048-4196 placement
+//@ chunk-820m5cev.js:4048-4196 placement
 /**
  * 生成快捷键提示的纯文本 "<键> to <动作>"（terse 时省略 to，parens 时加括号）；按键无法格式化时返回空串。
  */
@@ -92,11 +92,11 @@ function formatShortcutHint({ chord, action, format, parens = false, terse = fal
   let hintText = `${formattedChord}${terse ? " " : " to "}${action}`;
   return parens ? `(${hintText})` : hintText;
 }
-//@ chunk-v6kts6xw.js:4196-4247 placement (2.1.88 match: getReservedShortcuts, 1)
+//@ chunk-820m5cev.js:4196-4247 placement (2.1.88 match: getReservedShortcuts, 1)
 function getShortcutPlatform() {
   return getShortcutDisplayPlatform() === "macos" ? "macos" : "other";
 }
-//@ chunk-v6kts6xw.js:4247-4373 placement
+//@ chunk-820m5cev.js:4247-4373 placement
 function formatChordForPlatform(chord, format, platform) {
   let filtered = (typeof chord === "string" ? [chord] : chord).filter((keyName) => keyName !== "");
   return formatKeyChords(filtered.map(parseChord), {

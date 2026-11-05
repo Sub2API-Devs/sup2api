@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/credential-providers/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/credential-providers@3.1153.0..3.1161.0
- * pieces: chunk-thwbpw6e.js (7)
+ * pieces: chunk-dbe4s9wk.js (7)
  * attribution: esm-layout 6, esm-fingerprint 1
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
@@ -14,7 +14,7 @@ import { require_index_native } from "../../../@smithy/core/dist-cjs/submodules/
 import { require_node_config_provider } from "../../../@smithy/node-config-provider/dist-cjs/index.js";
 import { require_core } from "../../../@smithy/core/dist-cjs/index.js";
 
-//@ chunk-thwbpw6e.js:561-1125 esm-layout
+//@ chunk-dbe4s9wk.js:561-1125 esm-layout
 var ProviderError = __toESM(require_property_provider());
 var withMemoizedProvider = (...credentialProviders) => {
   let expireAfter = -1;
@@ -56,22 +56,22 @@ var propertyProviderChain =
       }
     throw lastProviderError;
   };
-//@ chunk-thwbpw6e.js:1125-1143 esm-layout
+//@ chunk-dbe4s9wk.js:1125-1143 esm-layout
 var chain = (init) => fromEnv_2(init);
-//@ chunk-thwbpw6e.js:1143-1169 esm-layout
+//@ chunk-dbe4s9wk.js:1143-1169 esm-layout
 var fromEnv = (options = {}) =>
   fromIni({
     ...options,
   });
-//@ chunk-thwbpw6e.js:1169-1195 esm-layout
+//@ chunk-dbe4s9wk.js:1169-1195 esm-layout
 var fromNodeProviderChain = (init = {}) =>
   defaultProvider({
     ...init,
   });
-//@ chunk-thwbpw6e.js:1195-1221 esm-layout
+//@ chunk-dbe4s9wk.js:1195-1221 esm-layout
 var NODE_REGION_CONFIG_FILE_OPTIONS = __toESM(require_index_native());
 var loadConfig = __toESM(require_node_config_provider());
-//@ chunk-thwbpw6e.js:1221-3607 esm-layout
+//@ chunk-dbe4s9wk.js:1221-3607 esm-layout
 var normalizeProvider = __toESM(require_core());
 var CredentialsProviderError = __toESM(require_property_provider());
 var ASSUME_ROLE_DEFAULT_REGION = "us-east-1";
@@ -172,7 +172,7 @@ var filterRequestHandler = (requestHandler) =>
 var coalesce = (args) => {
   for (let item of args) if (item !== undefined) return item;
 };
-//@ chunk-thwbpw6e.js:3607-3836 esm-fingerprint
+//@ chunk-dbe4s9wk.js:3607-3836 esm-fingerprint
 var fromTemporaryCredentials = (options) =>
   fromTemporaryCredentials$1(options, fromNodeProviderChain, async ({ profile = process.env.AWS_PROFILE }) =>
     loadConfig.loadConfig(

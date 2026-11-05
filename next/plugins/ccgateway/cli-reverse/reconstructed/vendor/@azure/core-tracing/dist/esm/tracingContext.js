@@ -1,34 +1,34 @@
 /**
  * @azure/core-tracing/dist/esm/tracingContext.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/core-tracing@1.2.0..1.3.1
- * pieces: chunk-mrx6y2r5.js (5)
+ * pieces: chunk-b5df2wx1.js (5)
  * attribution: esm-layout 2, esm-fingerprint 3
  */
 import { agentPolicy } from "../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";
 import { tlsPolicy } from "../../../core-rest-pipeline/dist/esm/policies/tlsPolicy.js";
 
-//@ chunk-mrx6y2r5.js:57552-57580 esm-layout
+//@ chunk-b5df2wx1.js:57552-57580 esm-layout
 function setSpanContext(agent) {
   return agentPolicy(agent);
 }
-//@ chunk-mrx6y2r5.js:57580-57608 esm-layout
+//@ chunk-b5df2wx1.js:57580-57608 esm-layout
 function getSpanContext(tlsSettings) {
   return tlsPolicy(tlsSettings);
 }
-//@ chunk-mrx6y2r5.js:57608-57715 esm-fingerprint
+//@ chunk-b5df2wx1.js:57608-57715 esm-fingerprint
 var AZURE_TRACING_SYMBOLS = {
   span: Symbol.for("@azure/core-tracing span"),
   namespace: Symbol.for("@azure/core-tracing namespace"),
 };
-//@ chunk-mrx6y2r5.js:57715-57865 esm-fingerprint
+//@ chunk-b5df2wx1.js:57715-57865 esm-fingerprint
 function createTracingContext(options = {}) {
   let context = new AzureTracingContext(options.parentContext);
   if (options.span) context = context.setValue(AZURE_TRACING_SYMBOLS.span, options.span);
   if (options.namespace) context = context.setValue(AZURE_TRACING_SYMBOLS.namespace, options.namespace);
   return context;
 }
-//@ chunk-mrx6y2r5.js:57865-58129 esm-fingerprint
+//@ chunk-b5df2wx1.js:57865-58129 esm-fingerprint
 class AzureTracingContext {
   constructor(initialContext) {
     this._contextMap =

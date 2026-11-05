@@ -3,15 +3,16 @@
  *
  * 2.1.316 新增：唤醒路由（结果唤醒、待处理动作对账、权限卡片询问）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (29)
- * attribution: placement 29
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (33)
+ * attribution: placement 29, layout 4
  */
 import {
   processQueuedCommands,
-  isActiveMainAgentCommand,
-  isRefillableInput,
+  isDrainableMainThreadCommand,
+  isQueuedUserTurnCommand,
+  isQueuedCommandEditable,
   isMainAgentCommand,
 } from "../../utils/messageQueueManager.js";
 import {
@@ -23,6 +24,7 @@ import {
 import { isTerminalTaskStatus } from "../../tasks/taskStatus.js";
 import {
   extractTag,
+  SYNTHETIC_MODEL,
   isToolUseResultMessage,
   isContextAppendMessage,
   isHarnessMetaMessage,
@@ -48,11 +50,10 @@ import {
 import { userAbortReason } from "../../utils/abortController.js";
 import { runSafely } from "./followUpPreempt.js";
 import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
-import { dropTextInBriefTurns } from "../../components/Messages.js";
+import { unansweredToolBriefs } from "../../components/Messages.js";
 import { isClaudeAiChatRemote } from "../../utils/entrypointKinds.js";
 import { isUnownedRunningShell } from "./backgroundWindDown.js";
 import { isLocalShellTask } from "../../tasks/LocalShellTask/guards.js";
-import { canBatchWith } from "../print.js";
 import { isHumanOrigin } from "../../utils/turnOrigin.js";
 import { looksLikeSlashInput } from "../../commands.js";
 import { getLastCacheSafeParams } from "../../utils/forkedAgent.js";
@@ -84,19 +85,22 @@ import { requestIdOf, MAX_PENDING_ACTION_ARGS } from "../../utils/sessionState.j
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum, lit } from "../../services/analytics/safeMetadata.js";
 import { WEBFETCH } from "../../tools/WebFetchTool/prompt.js";
+import { isCompactBoundaryMessage } from "../../services/projects/threadRows.js";
+import { readDisallowedToolsMetadata } from "../print.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { AGENT, TASK } from "../../tools/AgentTool/constants.js";
 import { SKILL, SKILL_2 } from "../../tools/SkillTool/skillToolNames.js";
-import { REPL_TOOL_NAME, REPL_TOOL_NAME_ALIAS } from "../../tools/REPLTool/constants.js";
+import { REPL_TOOL_NAME, EVAL_TOOL_NAME } from "../../tools/REPLTool/constants.js";
 import { CONFIRM } from "../../utils/permissions/confirmWithUser.js";
 import { isPendingActionForTool } from "./parkedPrompts.js";
-import { SYNTHETIC_MODEL } from "../../constants/messages.js";
 import { findToolByName } from "../../Tool.js";
 import { isSubagentToolRequest } from "../../remote/wireFrameShape.js";
 import { isPlainObject } from "../../utils/objectUtils.js";
 import { measureAnswerBounds } from "../../utils/permissions/permissionAnswer.js";
+import { askedInDirectoryOf } from "../../utils/sessionStateCwd.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:309636-309766 placement
+//@ chunk-0yw3taqg.js:339705-339835 placement
 function installWakeRouterKick({ messageQueue, drain, routeWakes, kick }) {
   let unsubscribe = messageQueue.subscribe(() => {
     routeWakes();
@@ -106,9 +110,9 @@ function installWakeRouterKick({ messageQueue, drain, routeWakes, kick }) {
   if (shouldKickForQueuedWake(messageQueue, drain)) kick();
   return unsubscribe;
 }
-//@ chunk-tyg7f3ek.js:309766-309776 placement
+//@ chunk-0yw3taqg.js:339835-339845 placement
 var MAX_PUBLISHED_QUEUE_WAKES = 32;
-//@ chunk-tyg7f3ek.js:309776-310442 placement
+//@ chunk-0yw3taqg.js:339845-340511 placement
 function publishQueuedWakeStatus({ messageQueue, getTasks, publish }) {
   let published = new Map();
   return messageQueue.subscribe(() => {
@@ -152,11 +156,13 @@ function publishQueuedWakeStatus({ messageQueue, getTasks, publish }) {
     }
   });
 }
-//@ chunk-tyg7f3ek.js:310442-310513 placement
+//@ chunk-0yw3taqg.js:340511-340582 placement
 function shouldKickForQueuedWake(messageQueue, drain) {
-  return !drain.running && !drain.inputClosed && messageQueue.peek(isActiveMainAgentCommand) !== undefined;
+  return (
+    !drain.running && !drain.inputClosed && messageQueue.peek(isDrainableMainThreadCommand) !== undefined
+  );
 }
-//@ chunk-tyg7f3ek.js:310513-314001 placement
+//@ chunk-0yw3taqg.js:340582-344069 placement
 /**
  * 唤醒路由：把任务通知、子代理结果等唤醒路由给主线程或对应子代理，处理已停止与轮次状态。
  */
@@ -235,7 +241,7 @@ class WakeRouter {
         !this.enabled()
       )
         return;
-      if (this.messageQueue.getCommandQueueSnapshot().some(isActiveMainAgentCommand)) {
+      if (this.messageQueue.getCommandQueueSnapshot().some(isDrainableMainThreadCommand)) {
         this.delivery.moveHolders();
         this.movedFor.add(command.uuid);
         return;
@@ -259,7 +265,7 @@ class WakeRouter {
     });
   }
   canDeliverOverTurn() {
-    return this.turn.isCompacting || dropTextInBriefTurns(this.transcript.getSnapshot()).size > 0;
+    return this.turn.isCompacting || unansweredToolBriefs(this.transcript.getSnapshot()).size > 0;
   }
   giveBackStop(uuid) {
     if (this.messageQueue.getCommandQueueSnapshot().some((queued) => queued.uuid === uuid)) {
@@ -271,7 +277,7 @@ class WakeRouter {
   pressWaiting() {
     let sent = false;
     runSafely(() => {
-      let filtered = this.messageQueue.getCommandQueueSnapshot().filter(isActiveMainAgentCommand);
+      let filtered = this.messageQueue.getCommandQueueSnapshot().filter(isDrainableMainThreadCommand);
       if (
         filtered.length === 0 ||
         !this.turn.isRunning ||
@@ -345,22 +351,22 @@ class WakeRouter {
     this.turnChanged.clear();
   }
 }
-//@ chunk-tyg7f3ek.js:314001-314105 placement
+//@ chunk-0yw3taqg.js:344069-344173 placement
 function isPlainHumanInput(command) {
   return (
-    canBatchWith(command) &&
+    isQueuedUserTurnCommand(command) &&
     isHumanOrigin(command.origin) &&
-    isRefillableInput(command) &&
+    isQueuedCommandEditable(command) &&
     command.verifiedSlackHumanTurn !== true &&
     !command.wait &&
     !looksLikeSlashInput(command.value)
   );
 }
-//@ chunk-tyg7f3ek.js:314105-314133 placement
+//@ chunk-0yw3taqg.js:344173-344201 placement
 function noop(x) {
   return () => {};
 }
-//@ chunk-tyg7f3ek.js:314133-317934 placement
+//@ chunk-0yw3taqg.js:344201-348004 placement
 /**
  * 把后台 agent 的结果唤醒转交给等待它的调用方；失败重试、拒绝、滞留时回滚。
  */
@@ -581,7 +587,7 @@ class ResultWakeRouter {
     );
   }
 }
-//@ chunk-tyg7f3ek.js:317934-318053 placement
+//@ chunk-0yw3taqg.js:348004-348123 placement
 function isPassiveCommand(command) {
   return (
     (command.shouldQuery === false && command.queryHeldForNextTurn !== true) ||
@@ -590,7 +596,7 @@ function isPassiveCommand(command) {
     command.passive === true
   );
 }
-//@ chunk-tyg7f3ek.js:318053-318259 placement
+//@ chunk-0yw3taqg.js:348123-348329 placement
 function sweepQueueAtTeardown({ messageQueue, io }) {
   let removed = messageQueue.dequeueAllMatching(isMainAgentCommand);
   discardPollEvent(removed.filter(isPollEventMode), "session teardown");
@@ -598,7 +604,7 @@ function sweepQueueAtTeardown({ messageQueue, io }) {
   for (let command of removed)
     if (command.uuid !== undefined) io.onCommandLifecycle?.(command.uuid, "discarded");
 }
-//@ chunk-tyg7f3ek.js:318259-318875 placement
+//@ chunk-0yw3taqg.js:348329-348945 placement
 function createTeardownStatusReporter({
   io,
   details,
@@ -643,15 +649,15 @@ function createTeardownStatusReporter({
     return false;
   };
 }
-//@ chunk-tyg7f3ek.js:318912-318943 placement
+//@ chunk-0yw3taqg.js:348982-349013 placement
 var TENGU_QUIZZICAL_KNUTH = "tengu_quizzical_knuth";
-//@ chunk-tyg7f3ek.js:318943-318981 placement
+//@ chunk-0yw3taqg.js:349013-349051 placement
 function isPermissionCardHoldEnabled() {
   return readFlagWithOverride(TENGU_QUIZZICAL_KNUTH, {
     safe: true,
   });
 }
-//@ chunk-tyg7f3ek.js:318981-321266 placement
+//@ chunk-0yw3taqg.js:349051-351879 placement
 /**
  * 一次权限卡片询问的生命周期（open/taken/answered），带超时与停止计数。
  */
@@ -713,6 +719,21 @@ class PermissionCardAsk {
       });
     return true;
   }
+  takeDeny(message) {
+    let response = message.response.subtype === "success" ? message.response.response : undefined;
+    this.endCard({
+      state: "answered",
+      result: {
+        behavior: "deny",
+        message: typeof response?.message === "string" ? response.message : "",
+        toolUseID: this.host.card.tool_use_id,
+        ...(typeof response?.interrupt === "boolean" && {
+          interrupt: response.interrupt,
+        }),
+      },
+      readAtMs: Date.now(),
+    });
+  }
   endCard(state) {
     let state_2 = this.state;
     if (state_2.state !== "open") return;
@@ -752,6 +773,16 @@ class PermissionCardAsk {
       this.timer.unref?.();
     }
   }
+  async waitEnd() {
+    let state = this.state;
+    if (state.state === "open") await state.ended.promise;
+    let state_2 = this.state;
+    if (state_2.state === "answered") return "answered";
+    return state_2.state === "closed" &&
+      (state_2.why === "stopped" || state_2.why === "rewound" || state_2.why === "shutdown")
+      ? "stopped"
+      : "unanswered";
+  }
   async answerFor(ask) {
     if (this.state.state === "open" && (await this.host.answerOff()) === "on") this.close("switched_off");
     let state = this.state;
@@ -789,7 +820,7 @@ class PermissionCardAsk {
     };
   }
 }
-//@ chunk-tyg7f3ek.js:321303-322989 placement
+//@ chunk-0yw3taqg.js:351916-353602 placement
 /**
  * 把 worker 记录中的 pending_action(s) 与本进程待答的权限/对话请求对齐。
  */
@@ -871,16 +902,90 @@ function reconcilePendingActions(io, restored, options) {
   }
   return toolUseIds;
 }
-//@ chunk-tyg7f3ek.js:322989-323023 placement
+//@ chunk-0yw3taqg.js:353602-353618 layout
+var DISALLOWED_TOOLS_VERSION_AHEAD_MS = 86400000;
+//@ chunk-0yw3taqg.js:353618-353820 layout
+function applyDisallowedTools(rows, denyLists) {
+  for (let row of rows)
+    try {
+      let denyLists_2 = {
+        ...denyLists,
+        turn: [...denyLists.turn],
+        client: [...denyLists.client],
+      };
+      if (isCompactBoundaryMessage(row)) row.compactMetadata.denyLists = denyLists_2;
+      else if (row.type === "user" || row.type === "attachment") row.denyLists = denyLists_2;
+    } catch (error) {
+      logError(error);
+    }
+}
+//@ chunk-0yw3taqg.js:353820-354609 layout
+function disallowedToolsFromMessages(rows) {
+  let newest;
+  let loose = [];
+  let logged = false;
+  for (let row of rows)
+    try {
+      let denyLists = isCompactBoundaryMessage(row)
+        ? Object(row.compactMetadata).denyLists
+        : Object(row).denyLists;
+      if (denyLists === undefined || Object(row).isSidechain === true) continue;
+      let lists = Object(denyLists);
+      let version = lists.version;
+      let disallowedToolsMetadata = readDisallowedToolsMetadata({
+        disallowed_tools: lists.turn,
+      });
+      let disallowedToolsMetadata_2 = readDisallowedToolsMetadata({
+        disallowed_tools: lists.client,
+      });
+      if (
+        disallowedToolsMetadata === undefined ||
+        disallowedToolsMetadata_2 === undefined ||
+        typeof version !== "number" ||
+        !Number.isSafeInteger(version) ||
+        version < 0 ||
+        version > Date.now() + DISALLOWED_TOOLS_VERSION_AHEAD_MS
+      )
+        loose.push({
+          turn: disallowedToolsMetadata ?? [],
+          client: disallowedToolsMetadata_2 ?? [],
+          version,
+        });
+      else if (version >= (newest?.version ?? 0))
+        newest = {
+          turn: disallowedToolsMetadata,
+          client: disallowedToolsMetadata_2,
+          version,
+        };
+    } catch (error) {
+      if (!logged) {
+        logError(error);
+        logFeatureSad("headless_turn_deny", "stored_list_threw");
+      }
+      logged = true;
+    }
+  let filtered = loose.filter(
+    ({ version }) => newest === undefined || typeof version !== "number" || !(version < newest.version),
+  );
+  let flattened = filtered.flatMap((entry) => entry.turn);
+  let flattened_2 = filtered.flatMap((entry) => entry.client);
+  if (flattened.length + flattened_2.length === 0) return newest;
+  return {
+    turn: normalizeCaseForComparison_2([...(newest?.turn ?? []), ...flattened]),
+    client: normalizeCaseForComparison_2([...(newest?.client ?? []), ...flattened_2]),
+    version: newest?.version ?? 0,
+  };
+}
+//@ chunk-0yw3taqg.js:354609-354642 placement
 var DIALOG_TOOL_NAMES; // deferred: uses AGENT (../../tools/AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-tyg7f3ek.js:322989", () => {
-  DIALOG_TOOL_NAMES = new Set([AGENT, TASK, SKILL, REPL_TOOL_NAME, REPL_TOOL_NAME_ALIAS]);
+deferInit("chunk-0yw3taqg.js:354609", () => {
+  DIALOG_TOOL_NAMES = new Set([AGENT, TASK, SKILL, REPL_TOOL_NAME, EVAL_TOOL_NAME]);
 });
-//@ chunk-tyg7f3ek.js:323023-323096 placement
+//@ chunk-0yw3taqg.js:354642-354715 placement
 function isDialogToolName(name) {
   return typeof name === "string" && (DIALOG_TOOL_NAMES.has(name) || name.startsWith(SKILL_2));
 }
-//@ chunk-tyg7f3ek.js:323096-323801 placement
+//@ chunk-0yw3taqg.js:354715-355420 placement
 function classifyPendingAction(restored, supersededIds, supersededToolNames, keepRequestIds) {
   let pendingAction = restored?.external?.pending_action;
   let requestId = requestIdOf(pendingAction);
@@ -912,7 +1017,7 @@ function classifyPendingAction(restored, supersededIds, supersededToolNames, kee
     return "underivable_excluded";
   return "underivable_adoptable";
 }
-//@ chunk-tyg7f3ek.js:323801-324443 placement
+//@ chunk-0yw3taqg.js:355420-356062 placement
 async function reattachInterruptedPrompt(
   state,
   turnInterruptionState,
@@ -961,7 +1066,7 @@ async function reattachInterruptedPrompt(
     reattached: true,
   };
 }
-//@ chunk-tyg7f3ek.js:324443-324681 placement
+//@ chunk-0yw3taqg.js:356062-356300 placement
 function hasRowsAfterTime(chain, time, exclude) {
   return chain.some((row) => {
     if (row.type !== "user" && row.type !== "assistant") return false;
@@ -971,7 +1076,7 @@ function hasRowsAfterTime(chain, time, exclude) {
     return !exclude(row) && !isToolUseResultMessage(row) && !isContextAppendMessage(row);
   });
 }
-//@ chunk-tyg7f3ek.js:324681-325269 placement
+//@ chunk-0yw3taqg.js:356300-356888 placement
 function listPendingActions(restored, superseded, tools) {
   let actions = [];
   let pendingActions = restored?.external?.pending_actions;
@@ -996,11 +1101,11 @@ function listPendingActions(restored, superseded, tools) {
   }
   return actions;
 }
-//@ chunk-tyg7f3ek.js:325269-325336 placement
+//@ chunk-0yw3taqg.js:356888-356955 placement
 function pendingActionRequestIds(restored, superseded, tools) {
   return new Set(listPendingActions(restored, superseded, tools).map((action) => action.requestId));
 }
-//@ chunk-tyg7f3ek.js:325336-325427 placement
+//@ chunk-0yw3taqg.js:356955-357046 placement
 function pendingActionToolUseIds(restored, tools) {
   return new Set(
     listPendingActions(restored, undefined, tools).flatMap((action) =>
@@ -1008,7 +1113,7 @@ function pendingActionToolUseIds(restored, tools) {
     ),
   );
 }
-//@ chunk-tyg7f3ek.js:325427-325595 placement
+//@ chunk-0yw3taqg.js:357046-357214 placement
 function hasPendingActions(state) {
   if (state?.readFailed === true) return true;
   let pendingActions = state?.external?.pending_actions;
@@ -1016,7 +1121,7 @@ function hasPendingActions(state) {
     (action) => requestIdOf(action) !== undefined,
   );
 }
-//@ chunk-tyg7f3ek.js:325595-325821 placement
+//@ chunk-0yw3taqg.js:357214-357440 placement
 function pendingActionsAmbiguous(restoredWorkerState) {
   if (restoredWorkerState?.readFailed === true) return true;
   let pendingAction = restoredWorkerState?.external?.pending_action;
@@ -1025,7 +1130,16 @@ function pendingActionsAmbiguous(restoredWorkerState) {
   if ((pendingAction != null && list.length === 0) || list.length >= MAX_PENDING_ACTION_ARGS) return true;
   return [pendingAction, ...list].some((action) => action != null && !isSubagentToolRequest(action));
 }
-//@ chunk-tyg7f3ek.js:325821-326027 placement
+//@ chunk-0yw3taqg.js:357440-357585 layout
+function unambiguousPendingAgentId(restoredWorkerState) {
+  let pendingAction = restoredWorkerState?.external?.pending_action;
+  return typeof pendingAction?.agent_id === "string" &&
+    typeof pendingAction.tool_use_id === "string" &&
+    !pendingActionsAmbiguous(restoredWorkerState)
+    ? pendingAction.agent_id
+    : undefined;
+}
+//@ chunk-0yw3taqg.js:357585-357791 placement
 function singlePendingAction(state) {
   let pendingAction = state?.external?.pending_action;
   if (
@@ -1038,7 +1152,7 @@ function singlePendingAction(state) {
     return;
   return pendingAction.tool_use_id;
 }
-//@ chunk-tyg7f3ek.js:326027-326414 placement
+//@ chunk-0yw3taqg.js:357791-358257 placement
 function pendingActionResumeHint(restored, interruption, ids, lane) {
   if (!lane.resumeInterruptedTurn) return;
   if (!interruption || interruption.kind === "none") return;
@@ -1055,14 +1169,17 @@ function pendingActionResumeHint(restored, interruption, ids, lane) {
       measureAnswerBounds(pendingAction.input).within && {
         recordedInput: pendingAction.input,
       }),
+    ...(pendingAction.asked_in_directory !== undefined && {
+      askedInDirectory: askedInDirectoryOf(pendingAction.asked_in_directory),
+    }),
   };
 }
-//@ chunk-tyg7f3ek.js:326414-326552 placement
+//@ chunk-0yw3taqg.js:358257-358395 placement
 function interruptedPromptUuid(state) {
   if (state?.kind !== "interrupted_prompt") return;
   return state.interruptedTurnUserMessageUuid ?? (state.message.isMeta ? undefined : state.message.uuid);
 }
-//@ chunk-tyg7f3ek.js:326552-326687 placement (2.1.88 match: countUserPromptsFromEntries, 1)
+//@ chunk-0yw3taqg.js:358395-358530 placement (2.1.88 match: countUserPromptsFromEntries, 1)
 function countUserPromptsFromEntries_5(entries) {
   if ("isSidechain" in entries && entries.isSidechain === true) return false;
   return entries.type === "assistant"
@@ -1071,11 +1188,12 @@ function countUserPromptsFromEntries_5(entries) {
         (isInterruptionOnlyMessage(entries) && !isToolUseResultMessage(entries));
 }
 export {
-  interruptedPromptUuid,
-  countUserPromptsFromEntries_5,
   isPermissionCardHoldEnabled,
   pendingActionsAmbiguous,
+  unambiguousPendingAgentId,
+  interruptedPromptUuid,
   createTeardownStatusReporter,
+  disallowedToolsFromMessages,
   isPassiveCommand,
   WakeRouter,
   publishQueuedWakeStatus,
@@ -1084,13 +1202,15 @@ export {
   pendingActionToolUseIds,
   singlePendingAction,
   hasPendingActions,
-  sweepQueueAtTeardown,
+  hasRowsAfterTime,
   PermissionCardAsk,
+  applyDisallowedTools,
+  countUserPromptsFromEntries_5,
   reattachInterruptedPrompt,
   pendingActionRequestIds,
   classifyPendingAction,
   pendingActionResumeHint,
   isDialogToolName,
   reconcilePendingActions,
-  hasRowsAfterTime,
+  sweepQueueAtTeardown,
 };

@@ -3,10 +3,10 @@
  *
  * 已有模块；g2 补充 2.1.316 的远程会话管理类与送达失败提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/remote/RemoteSessionManager.ts
- * pieces: chunk-08945j39.js (37), chunk-fp6aqx1j.js (1)
- * attribution: placement 37, fingerprint 1
+ * pieces: chunk-h29vk4wn.js (39), chunk-qyz2x025.js (1)
+ * attribution: placement 36, layout 3, fingerprint 1
  */
 import { isDeepStrictEqual } from "util";
 import { randomUUID } from "crypto";
@@ -37,6 +37,7 @@ import {
   defaultHoldBudgetMs,
   HOLD_MAX_MS,
 } from "../services/homeSeed/firstSend.js";
+import { isTerminalWithoutStep } from "../services/cloudSessions/setupProgress.js";
 import { supportsBackgroundTasksMovesBash } from "./backgroundTaskEvents.js";
 import {
   controlResponseError,
@@ -46,7 +47,7 @@ import {
 } from "./controlRequestErrors.js";
 import { MODEL_SET_STDOUT_PREFIX } from "../utils/messages.js";
 import { isSubagentToolRequest, UNSUPPORTED_CONTROL_SUBTYPE_TEXT } from "./wireFrameShape.js";
-import { count } from "../utils/collections.js";
+import { countWhere } from "../utils/collections.js";
 import { parseControlRequest } from "../entrypoints/sdk/controlSchemas.js";
 import {
   unexpectedValueFingerprint,
@@ -55,6 +56,7 @@ import {
 } from "./tools/protocolConstants.js";
 import {
   sendEventToRemoteSession,
+  sendHandoffToRemoteSession,
   sendBashCommandToRemoteSession,
   buildControlResponse,
   prepareApiRequest,
@@ -70,6 +72,7 @@ import {
   servedAnswerLimitBytes,
   servedAnswerTooLargeText,
 } from "../services/remoteTools/servedAnswerSize.js";
+import { normalizeCaseForComparison_2 } from "../utils/permissions/filesystem.js";
 import { parseDeviceHookId } from "../utils/hooks/deviceHookId.js";
 import { REMOTE_TOOLS_LOG_EVENTS } from "../services/remoteTools/remoteToolsDebug.js";
 import { getOauthConfig } from "../constants/oauth.js";
@@ -78,7 +81,7 @@ import { isTrustedDeviceGateEnabled } from "../bridge/trustedDevice.js";
 import { classifyElevatedAuthError } from "../bridge/codeSessionApi.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-fp6aqx1j.js:16781-16916 fingerprint (2.1.88 match: isSDKMessage, 0.72)
+//@ chunk-qyz2x025.js:17245-17380 fingerprint (2.1.88 match: isSDKMessage, 0.721)
 /**
  * 是否是可中继的控制帧：control_request（subtype 在允许集合内）或 control_response。
  */
@@ -88,23 +91,26 @@ function isRelayableControlFrame(frame) {
     ? isPlainObject(frame.request) && SETTINGS_CONTROL_SUBTYPES.has(frame.request.subtype)
     : frame.type === "control_response";
 }
-//@ chunk-08945j39.js:35221-35287 placement
+//@ chunk-h29vk4wn.js:36894-36960 placement
 function isTimeoutError(error) {
   return error instanceof Error && error.name === "TimeoutError";
 }
-//@ chunk-08945j39.js:35287-35312 placement
+//@ chunk-h29vk4wn.js:36960-37263 placement
 /**
  * 远程会话跟踪容量常量：Set 型跟踪表（已应答请求 id、可恢复对话框 id 等）上限 1000、每请求记录的成功工具名上限 8、权限请求缓存上限 200。
  */
-var MAX_TRACKED_REQUEST_IDS = 1000;
-var MAX_TOOL_NAMES_PER_REQUEST = 8;
-var MAX_CACHED_PERMISSION_REQUESTS = 200;
-//@ chunk-08945j39.js:35312-35581 placement
-/**
- * 远程会话中控制请求的 schema 表（can_use_tool、request_user_dialog）。
- */
-var CONTROL_REQUEST_SCHEMAS; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-08945j39.js:35312", () => {
+var MAX_TRACKED_REQUEST_IDS; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_TOOL_NAMES_PER_REQUEST;
+var MAX_CACHED_PERMISSION_REQUESTS;
+var MAX_NAMED_UUIDS;
+var MAX_UUID_LENGTH;
+var CONTROL_REQUEST_SCHEMAS;
+deferInit("chunk-h29vk4wn.js:36960", () => {
+  MAX_TRACKED_REQUEST_IDS = 1000;
+  MAX_TOOL_NAMES_PER_REQUEST = 8;
+  MAX_CACHED_PERMISSION_REQUESTS = 200;
+  MAX_NAMED_UUIDS = 64;
+  MAX_UUID_LENGTH = 128;
   CONTROL_REQUEST_SCHEMAS = {
     can_use_tool: DoctorLazy(() =>
       objectSchema({
@@ -129,9 +135,9 @@ deferInit("chunk-08945j39.js:35312", () => {
     ),
   };
 });
-//@ chunk-08945j39.js:35735-35802 placement
+//@ chunk-h29vk4wn.js:37417-37484 placement
 var controlResponseSuccessSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-08945j39.js:35735", () => {
+deferInit("chunk-h29vk4wn.js:37417", () => {
   controlResponseSuccessSchema = DoctorLazy(() =>
     objectSchema({
       subtype: literal("success"),
@@ -141,18 +147,18 @@ deferInit("chunk-08945j39.js:35735", () => {
     }),
   );
 });
-//@ chunk-08945j39.js:35802-35866 placement
+//@ chunk-h29vk4wn.js:37484-37548 placement
 function getControlResponseToolName(response) {
   return controlResponseSuccessSchema().safeParse(response).data?.response.toolName;
 }
-//@ chunk-08945j39.js:35866-35925 placement
+//@ chunk-h29vk4wn.js:37548-37607 placement
 /**
  * 导出函数 `isToolNameDifferent`：参数 e, n，返回 typeof n === "string" && isDifferentString(tt(e), n)。
  */
 function isToolNameDifferent(response, toolName) {
   return typeof toolName === "string" && isDifferentString(getControlResponseToolName(response), toolName);
 }
-//@ chunk-08945j39.js:35925-35977 placement
+//@ chunk-h29vk4wn.js:37607-37659 placement
 function isDeepEqualSafe(left, request) {
   try {
     return isDeepStrictEqual(left, request);
@@ -160,7 +166,7 @@ function isDeepEqualSafe(left, request) {
     return false;
   }
 }
-//@ chunk-08945j39.js:35977-36073 placement
+//@ chunk-h29vk4wn.js:37659-37755 placement
 function addCappedToSet(set, requestId) {
   set.add(requestId);
   if (set.size > MAX_TRACKED_REQUEST_IDS) {
@@ -168,7 +174,7 @@ function addCappedToSet(set, requestId) {
     if (oldest !== undefined) set.delete(oldest);
   }
 }
-//@ chunk-08945j39.js:36073-36177 placement
+//@ chunk-h29vk4wn.js:37755-37859 placement
 function setCapped(map, requestId, value, maxEntries = MAX_CACHED_PERMISSION_REQUESTS) {
   map.set(requestId, value);
   if (map.size > maxEntries) {
@@ -176,14 +182,14 @@ function setCapped(map, requestId, value, maxEntries = MAX_CACHED_PERMISSION_REQ
     if (oldestKey !== undefined) map.delete(oldestKey);
   }
 }
-//@ chunk-08945j39.js:36177-36239 placement
+//@ chunk-h29vk4wn.js:37859-37921 placement
 /**
  * 需要转给本机处理的对话框类控制请求子类型：can_use_tool 与 request_user_dialog。
  */
 var DIALOG_REQUEST_SUBTYPES = ["can_use_tool", "request_user_dialog"];
 var REPLAYED_REFUSAL_MAX_AGE_MS = 30000;
 var MAX_REPLAYED_REFUSALS = 16;
-//@ chunk-08945j39.js:36239-36375 placement
+//@ chunk-h29vk4wn.js:37921-38057 placement
 /**
  * 把字符串转为可打印 ASCII 摘要（超过 80 字符截断并标出剩余长度）。
  */
@@ -192,7 +198,7 @@ function printableExcerpt(requestId) {
     ? `${requestId.slice(0, 80).replace(/[^\x20-\x7e]/g, "?")}\u2026(+${requestId.length - 80})`
     : requestId.replace(/[^\x20-\x7e]/g, "?");
 }
-//@ chunk-08945j39.js:36375-36407 placement
+//@ chunk-h29vk4wn.js:38057-38089 placement
 /**
  * 远程控制请求的长度与重试常量：id 上限 256 字符、withheld 首条消息重发最多 3 次、退避 750 ms、重试窗口 35 秒。
  */
@@ -200,23 +206,23 @@ var MAX_CONTROL_ID_LENGTH = 256;
 var MAX_WITHHELD_PROMPT_ATTEMPTS = 3;
 var WITHHELD_PROMPT_BACKOFF_MS = 750;
 var WITHHELD_PROMPT_RETRY_WINDOW_MS = 35000;
-//@ chunk-08945j39.js:36407-36552 placement
+//@ chunk-h29vk4wn.js:38089-38234 placement
 function sendFailureKind(failure) {
   if (failure.withheld) return "withheld";
   if (failure.status === 429) return "http_429";
   if (failure.status !== undefined) return "http_4xx";
   return failure.cause ?? "unknown";
 }
-//@ chunk-08945j39.js:36552-36633 placement
+//@ chunk-h29vk4wn.js:38234-38315 placement
 function isRetriableSendFailure(kind) {
   return kind === "http_429" || kind === "server" || kind === "timeout" || kind === "network";
 }
-//@ chunk-08945j39.js:36633-36720 placement
+//@ chunk-h29vk4wn.js:38315-38402 placement
 var SEND_FAILURE_MESSAGES = {
   timeout: "the service took too long to answer",
   network: "the connection failed",
 };
-//@ chunk-08945j39.js:36720-36797 placement
+//@ chunk-h29vk4wn.js:38402-38479 placement
 /**
  * 导出函数 `sendFailureMessage`：参数 e，返回 n === "timeout" || n === "network" ? nt[n] : void 0。
  */
@@ -224,7 +230,7 @@ function sendFailureMessage(failure) {
   let kind = sendFailureKind(failure);
   return kind === "timeout" || kind === "network" ? SEND_FAILURE_MESSAGES[kind] : undefined;
 }
-//@ chunk-08945j39.js:36797-36928 placement
+//@ chunk-h29vk4wn.js:38479-38610 placement
 /**
  * 未决应答的投递常量：取消/撤回文案、已关闭的投递结果、释放等待 1500 ms、重发退避 [1s,5s,15s,45s] 及次数上限、工具类控制请求超时 120 s。
  */
@@ -238,7 +244,7 @@ var HELD_SENDS_RELEASE_TIMEOUT_MS = 1500;
 var RESPONSE_RESEND_DELAYS_MS = [1000, 5000, 15000, 45000];
 var RESPONSE_RESEND_MAX_ATTEMPTS = RESPONSE_RESEND_DELAYS_MS.length;
 var TOOL_CONTROL_REQUEST_TIMEOUT_MS = 120000;
-//@ chunk-08945j39.js:36928-38165 placement
+//@ chunk-h29vk4wn.js:38610-39847 placement
 function formatUndeliveredAnswerNotice(kind, giveUpReason) {
   switch (kind) {
     case "permission":
@@ -255,7 +261,7 @@ function formatUndeliveredAnswerNotice(kind, giveUpReason) {
         : "The result of work this machine did for the cloud session (such as a command it ran) could not be delivered; the session waits for it until its deadline and then carries on without it.";
   }
 }
-//@ chunk-08945j39.js:38165-75642 placement
+//@ chunk-h29vk4wn.js:39847-78764 placement
 /**
  * 远程会话管理：连接云会话、转发权限请求与对话框回答、处理未送达
  */
@@ -292,6 +298,9 @@ class RemoteSessionManager {
   lifetime = new AbortController();
   serving = false;
   firstSendReleased = false;
+  moveFirstTurn = "not_seen";
+  moveSends = new Set();
+  sentBeforeStop = new Set();
   exitFlushRequested = false;
   withheldPromptInFlight = null;
   sentAMessage = false;
@@ -441,7 +450,8 @@ class RemoteSessionManager {
   }
   handleMessage(message, meta = {}) {
     noopGuard("in", message, meta);
-    if (meta.source === "worker" && meta.replayed !== true) this.noteWorkerLive();
+    if (meta.source === "worker" && meta.replayed !== true && isTerminalWithoutStep(message))
+      this.noteWorkerLive();
     if (meta.source === "worker" && message.type === "system" && message.subtype === "init") {
       this.sendsNow = supportsSendNow(message);
       this.movesBash = supportsBackgroundTasksMovesBash(message);
@@ -620,6 +630,13 @@ class RemoteSessionManager {
       logForDebugging("[RemoteSessionManager] Dropped own set_model breadcrumb echo");
       return;
     }
+    if (meta.source === "worker")
+      this.noteMoveFrame(message, {
+        isInit: message.type === "system" && message.subtype === "init",
+        isLive: meta.replayed !== true,
+      });
+    let uuid = this.config.withheldInitialPrompt?.handoff?.uuid;
+    if (message.type === "result" && uuid !== undefined && namedUuidsOf(message)?.join() === uuid) return;
     if (message.type === "result") {
       if (
         this.sentAMessage ||
@@ -641,7 +658,7 @@ class RemoteSessionManager {
         setCapped(this.reinstatablePermissionRequests, requestId, request);
       }
       if (permissionEntries.length > 0 && meta.replayed !== true) {
-        let subagentCount = count(permissionEntries, ([, request]) => isSubagentToolRequest(request));
+        let subagentCount = countWhere(permissionEntries, ([, request]) => isSubagentToolRequest(request));
         logEvent("tengu_remote_turn_ended_with_open_permission_requests", {
           from_main_thread: permissionEntries.length - subagentCount,
           from_subagents: subagentCount,
@@ -962,6 +979,8 @@ class RemoteSessionManager {
       content,
       opts,
     });
+    if (opts?.uuid !== undefined && handoffUuidOf(this.config) !== undefined && this.moveFirstTurn !== "seen")
+      addCappedToSet(this.moveSends, opts.uuid);
     let gates = this.currentSendGates();
     let canSendDirectly = !via && gates.length === 0 && this.chainedSends === 0;
     let unusedFlag = null;
@@ -1044,10 +1063,32 @@ class RemoteSessionManager {
     let withheldPromptBackoffMs = this.config.withheldPromptBackoffMs ?? WITHHELD_PROMPT_BACKOFF_MS;
     let attempts = 0;
     let firstAttemptAt;
+    let { handoff } = prompt;
+    let hasPendingHandoff = handoff !== undefined;
+    let sendWithHandoff = async (content, opts) => {
+      if (hasPendingHandoff && handoff !== undefined) {
+        let handoffResult = await sendHandoffToRemoteSession(
+          this.config.sessionId,
+          handoff.text,
+          this.signedOpts({
+            uuid: handoff.uuid,
+          }),
+        );
+        if (!handoffResult.ok) return handoffResult;
+        hasPendingHandoff = false;
+        if (this.firstSendReleased)
+          return {
+            ok: false,
+            withheld: true,
+            reason: CANCELLED,
+          };
+      }
+      return sendEventToRemoteSession(this.config.sessionId, content, this.signedOpts(opts));
+    };
     let sendOnce = async (content, opts) => {
       attempts += 1;
       firstAttemptAt ??= Date.now();
-      let result = await sendEventToRemoteSession(this.config.sessionId, content, this.signedOpts(opts));
+      let result = await sendWithHandoff(content, opts);
       if (
         result.ok ||
         attempts >= MAX_WITHHELD_PROMPT_ATTEMPTS ||
@@ -1060,7 +1101,7 @@ class RemoteSessionManager {
       await sleep(withheldPromptBackoffMs * attempts, this.lifetime.signal);
       if (this.exitFlushRequested && !this.firstSendReleased) {
         attempts += 1;
-        return sendEventToRemoteSession(this.config.sessionId, content, this.signedOpts(opts));
+        return sendWithHandoff(content, opts);
       }
       return this.lifetime.signal.aborted || this.firstSendReleased ? result : sendOnce(content, opts);
     };
@@ -1068,6 +1109,7 @@ class RemoteSessionManager {
       prompt.content,
       {
         uuid: prompt.uuid,
+        fileAttachments: prompt.fileAttachments,
       },
       sendOnce,
       true,
@@ -1090,13 +1132,15 @@ class RemoteSessionManager {
     logEvent("tengu_home_seed_prompt_resequenced", {
       success: result.ok,
       withheld_for: fromEnum(
-        prompt.followsPermissionMode
-          ? "signed_send"
-          : prompt.heldOnlyForToolsCheck
-            ? "tools_check"
-            : this.config.homeSeed !== undefined
-              ? "home_seed"
-              : "other",
+        handoff !== undefined
+          ? "move"
+          : prompt.followsPermissionMode
+            ? "signed_send"
+            : prompt.heldOnlyForToolsCheck
+              ? "tools_check"
+              : this.config.homeSeed !== undefined
+                ? "home_seed"
+                : "other",
       ),
       attempts,
       reason: fromEnum(result.ok ? "ok" : aborted ? "aborted" : sendFailureKind(result)),
@@ -1132,9 +1176,10 @@ class RemoteSessionManager {
         explanation = result.advice ?? "";
         break;
     }
-    if (this.callbacks.onWithheldPromptFailed)
-      this.callbacks.onWithheldPromptFailed(explanation, mayHaveArrived);
-    else {
+    if (this.callbacks.onWithheldPromptFailed) {
+      if (hasPendingHandoff) this.callbacks.onWithheldPromptFailed(explanation, mayHaveArrived, true);
+      else this.callbacks.onWithheldPromptFailed(explanation, mayHaveArrived);
+    } else {
       let detail = explanation === "" ? "" : `: ${explanation.replace(/\.+$/, "")}`;
       this.config.homeSeed?.status.publish(
         mayHaveArrived
@@ -1368,10 +1413,10 @@ class RemoteSessionManager {
       }
     });
     return {
-      unsent: count(mapped, (outcome) => outcome.kind === "unsent"),
+      unsent: countWhere(mapped, (outcome) => outcome.kind === "unsent"),
       refused: mapped.flatMap((outcome) => (outcome.kind === "refused" ? [outcome.reason] : [])),
-      unconfirmed: count(mapped, (outcome) => outcome.kind === "unconfirmed"),
-      stillHeld: count(mapped, (outcome) => outcome.kind === "waiting"),
+      unconfirmed: countWhere(mapped, (outcome) => outcome.kind === "unconfirmed"),
+      stillHeld: countWhere(mapped, (outcome) => outcome.kind === "waiting"),
     };
   }
   async sendBashCommand(command, opts) {
@@ -1767,7 +1812,10 @@ class RemoteSessionManager {
     this.pendingServedRequests.delete(requestId);
   }
   countServedToolCallsInHand() {
-    return count([...this.pendingServedRequests.values()], ({ subtype }) => subtype === "remote_tool_call");
+    return countWhere(
+      [...this.pendingServedRequests.values()],
+      ({ subtype }) => subtype === "remote_tool_call",
+    );
   }
   retireServedRequest(requestId, cause) {
     let pending = this.pendingServedRequests.get(requestId);
@@ -1808,28 +1856,57 @@ class RemoteSessionManager {
   cancelSession() {
     logForDebugging("[RemoteSessionManager] Sending interrupt signal");
     this.firstSendReleased = true;
+    if (handoffUuidOf(this.config) !== undefined && this.moveFirstTurn !== "seen") {
+      this.moveFirstTurn = "stop_owed";
+      this.sentBeforeStop = new Set(this.moveSends);
+    }
     this.reviveStreamForUserSend();
-    let sendInterrupt = () => {
-      noopGuard("out", {
-        kind: "control_request",
-        subtype: "interrupt",
-      });
-      this.client?.sendControlRequest({
-        subtype: "interrupt",
-      });
-    };
     if (this.heldSends.size === 0) {
-      sendInterrupt();
+      this.postInterrupt();
       return;
     }
-    let afterRelease = () => {
-      if (this.pendingInterrupt === afterRelease) {
+    let finishInterrupt = () => {
+      if (this.pendingInterrupt === finishInterrupt) {
         this.pendingInterrupt = null;
-        sendInterrupt();
+        this.postInterrupt();
       }
     };
-    this.pendingInterrupt = afterRelease;
-    this.releaseHeldSends().then(afterRelease, afterRelease);
+    this.pendingInterrupt = finishInterrupt;
+    this.releaseHeldSends().then(finishInterrupt, finishInterrupt);
+  }
+  postInterrupt(resendUuids) {
+    noopGuard("out", {
+      kind: "control_request",
+      subtype: "interrupt",
+      ...(resendUuids !== undefined && {
+        sent_again: true,
+      }),
+    });
+    this.client?.sendControlRequest({
+      subtype: "interrupt",
+      ...(resendUuids !== undefined && {
+        for_user_message_uuids: resendUuids,
+      }),
+    });
+  }
+  noteMoveFrame(frame, moveInfo) {
+    let firstUuid = handoffUuidOf(this.config);
+    if (firstUuid === undefined || this.moveFirstTurn === "seen") return;
+    let namedUuids = namedUuidsOf(frame);
+    if (namedUuids === undefined) return;
+    let { state, stop } = advanceMoveState(this.moveFirstTurn, {
+      ...moveInfo,
+      first: firstUuid,
+      named: namedUuids,
+      sentBeforeStop: this.sentBeforeStop,
+    });
+    this.moveFirstTurn = state;
+    if (stop === "send_again") {
+      logForDebugging("[RemoteSessionManager] Sending an early Esc again");
+      logFeatureOk("cloud_move_early_esc");
+      this.postInterrupt(normalizeCaseForComparison_2([firstUuid, ...namedUuids.slice(-1)]));
+    } else if (stop === "merged") logFeatureSad("cloud_move_early_esc", stop);
+    else if (stop !== undefined) logFeatureBad("cloud_move_early_esc", stop);
   }
   sendControlRequest(request, options) {
     return this.postControlRequest(request, options).response;
@@ -2040,7 +2117,53 @@ class RemoteSessionManager {
     this.client?.reconnectAfterSuspend();
   }
 }
-//@ chunk-08945j39.js:75642-75789 placement
+//@ chunk-h29vk4wn.js:78764-79040 layout
+function namedUuidsOf(frame) {
+  let userMessageUuids = "user_message_uuids" in frame ? frame.user_message_uuids : undefined;
+  let isAcceptableUuid = (userMessageUuid) =>
+    typeof userMessageUuid === "string" &&
+    userMessageUuid.length > 0 &&
+    userMessageUuid.length <= MAX_UUID_LENGTH;
+  let namedUuids = Array.isArray(userMessageUuids)
+    ? userMessageUuids.filter(isAcceptableUuid).slice(0, MAX_NAMED_UUIDS)
+    : [];
+  if (namedUuids.length > 0) return namedUuids;
+  let userMessageUuid = "user_message_uuid" in frame ? frame.user_message_uuid : undefined;
+  return isAcceptableUuid(userMessageUuid) ? [userMessageUuid] : undefined;
+}
+//@ chunk-h29vk4wn.js:79040-79126 layout
+function handoffUuidOf(config) {
+  let withheldInitialPrompt = config.withheldInitialPrompt;
+  return withheldInitialPrompt?.handoff === undefined ? undefined : withheldInitialPrompt.uuid;
+}
+//@ chunk-h29vk4wn.js:79126-79430 layout
+function advanceMoveState(moveFirstTurn, info) {
+  if (!info.named.includes(info.first))
+    return {
+      state: moveFirstTurn,
+    };
+  if (moveFirstTurn === "not_seen")
+    return {
+      state: "seen",
+    };
+  if (!info.isInit)
+    return {
+      state: "seen",
+      stop: "ended",
+    };
+  if (!info.isLive)
+    return {
+      state: "seen",
+      stop: "replayed",
+    };
+  return {
+    state: "seen",
+    stop: info.named.every((uuid) => uuid === info.first || info.sentBeforeStop.has(uuid))
+      ? "send_again"
+      : "merged",
+  };
+}
+//@ chunk-h29vk4wn.js:79430-79577 placement
 function isDeviceHookRequest(request) {
   return (
     typeof request.callback_id === "string" &&
@@ -2049,11 +2172,11 @@ function isDeviceHookRequest(request) {
       parseDeviceHookId(request.callback_id) !== null)
   );
 }
-//@ chunk-08945j39.js:75789-75835 placement
+//@ chunk-h29vk4wn.js:79577-79623 placement
 function isServedChannelRequest(request) {
   return REMOTE_TOOLS_LOG_EVENTS.includes(request.subtype);
 }
-//@ chunk-08945j39.js:75835-75886 placement
+//@ chunk-h29vk4wn.js:79623-79674 placement
 function timeoutOptionsForKind(kind) {
   return kind === "tool"
     ? {
@@ -2061,7 +2184,7 @@ function timeoutOptionsForKind(kind) {
       }
     : {};
 }
-//@ chunk-08945j39.js:75886-76097 placement
+//@ chunk-h29vk4wn.js:79674-79885 placement
 function capToolResultSize(result) {
   let bytes = Buffer.byteLength(jsonStringify(result), "utf8");
   let limitBytes = servedAnswerLimitBytes();
@@ -2078,7 +2201,7 @@ function capToolResultSize(result) {
     },
   };
 }
-//@ chunk-08945j39.js:76097-76307 placement
+//@ chunk-h29vk4wn.js:79885-80095 placement
 function runSendGate(gate, input) {
   let onError = (error) => {
     logForDebugging(`[RemoteSessionManager] send gate failed, message goes anyway: ${errorMessage(error)}`, {
@@ -2092,7 +2215,7 @@ function runSendGate(gate, input) {
     return Promise.resolve(onError(error));
   }
 }
-//@ chunk-08945j39.js:76307-76398 placement
+//@ chunk-h29vk4wn.js:80095-80186 placement
 function isStoppedSendResult(sendResult) {
   return (
     typeof sendResult === "object" &&
@@ -2101,11 +2224,11 @@ function isStoppedSendResult(sendResult) {
     typeof sendResult.reason === "string"
   );
 }
-//@ chunk-08945j39.js:76398-76444 placement
+//@ chunk-h29vk4wn.js:80186-80232 placement
 function findFirstDefined(values) {
   return values.find((value) => value !== undefined);
 }
-//@ chunk-08945j39.js:76444-76501 placement
+//@ chunk-h29vk4wn.js:80232-80289 placement
 function withheldSendResult(result) {
   return {
     ok: false,
@@ -2113,7 +2236,7 @@ function withheldSendResult(result) {
     withheld: true,
   };
 }
-//@ chunk-08945j39.js:76501-76834 placement
+//@ chunk-h29vk4wn.js:80289-80622 placement
 /**
  * 把发送结果映射为投递结果：sent、unsent、refused 或 unconfirmed。
  */
@@ -2148,7 +2271,7 @@ function deliveryOutcome(result) {
       };
   }
 }
-//@ chunk-08945j39.js:76834-76884 placement
+//@ chunk-h29vk4wn.js:80622-80672 placement
 function withdrawnSendResult(shouldWithdraw) {
   return shouldWithdraw
     ? {
@@ -2157,7 +2280,7 @@ function withdrawnSendResult(shouldWithdraw) {
       }
     : undefined;
 }
-//@ chunk-08945j39.js:76884-77006 placement
+//@ chunk-h29vk4wn.js:80672-80794 placement
 function withholdOnRelease(hooks, allowAwaitExit) {
   return [...hooks].some(
     ({ onRelease, onExit }) => onRelease === "withhold" && !(allowAwaitExit && onExit === "await"),
@@ -2168,13 +2291,13 @@ function withholdOnRelease(hooks, allowAwaitExit) {
       }
     : undefined;
 }
-//@ chunk-08945j39.js:77006-77026 placement
+//@ chunk-h29vk4wn.js:80794-80814 placement
 /**
  * 远程历史事件分页条数：fetchLatestEvents/fetchOlderEvents 默认 100 条，historyPrefetch 首页用 500 条，服务端 400 时回落到 100。
  */
 var DEFAULT_EVENT_PAGE_SIZE = 100;
 var PREFETCH_EVENT_PAGE_SIZE = 500;
-//@ chunk-08945j39.js:77026-77154 placement
+//@ chunk-h29vk4wn.js:80814-80942 placement
 /**
  * 解析事件的 sequence_num 为整数（缺失或无效时为 undefined）。
  */
@@ -2182,14 +2305,14 @@ function parseSequenceNum(frame) {
   let sequenceNum = frame?.sequence_num === undefined ? undefined : parseInt(String(frame.sequence_num), 10);
   return sequenceNum !== undefined && !isNaN(sequenceNum) ? sequenceNum : undefined;
 }
-//@ chunk-08945j39.js:77154-77179 placement
+//@ chunk-h29vk4wn.js:80942-80967 placement
 /**
  * 导出类 `UntrustedDeviceTokenError`：继承 `Error`。
  */
 class UntrustedDeviceTokenError extends Error {}
-//@ chunk-08945j39.js:77179-77211 placement
+//@ chunk-h29vk4wn.js:80967-80999 placement
 var X_TRUSTED_DEVICE_TOKEN = "X-Trusted-Device-Token";
-//@ chunk-08945j39.js:77211-77499 placement
+//@ chunk-h29vk4wn.js:80999-81287 placement
 /**
  * 构造远程会话 API 请求配置：会话 URL 与请求头；需要时附带以续期设备令牌重建请求头的函数。
  */
@@ -2208,7 +2331,7 @@ async function getSessionRequestConfig(sessionId, oauthProfile, { recoverDeviceP
     }),
   };
 }
-//@ chunk-08945j39.js:77499-77645 placement
+//@ chunk-h29vk4wn.js:81287-81433 placement
 function fetchSessionEvents(sessionUrl, headers, params, maxContentLength) {
   return axios_default
     .get(`${sessionUrl}/events`, {
@@ -2220,7 +2343,7 @@ function fetchSessionEvents(sessionUrl, headers, params, maxContentLength) {
     })
     .catch(() => null);
 }
-//@ chunk-08945j39.js:77645-78703 placement
+//@ chunk-h29vk4wn.js:81433-82491 placement
 async function renewDeviceTokenAndRetry(ctx, params, label, maxContentLength) {
   let sessionEvents = await fetchSessionEvents(ctx.sessionUrl, ctx.headers, params, maxContentLength);
   let headersForRenewedDeviceToken = ctx.headersForRenewedDeviceToken;
@@ -2288,22 +2411,22 @@ async function renewDeviceTokenAndRetry(ctx, params, label, maxContentLength) {
   };
 }
 export {
-  isTimeoutError,
   CONTROL_REQUEST_SCHEMAS,
-  DEFAULT_EVENT_PAGE_SIZE,
-  renewDeviceTokenAndRetry,
-  getSessionRequestConfig,
   RemoteSessionManager,
-  CANCELLED,
-  formatUndeliveredAnswerNotice,
-  sendFailureMessage,
-  isRelayableControlFrame,
-  WITHDRAWN,
+  getSessionRequestConfig,
   UntrustedDeviceTokenError,
   printableExcerpt,
   PREFETCH_EVENT_PAGE_SIZE,
+  DEFAULT_EVENT_PAGE_SIZE,
   parseSequenceNum,
   isToolNameDifferent,
   DIALOG_REQUEST_SUBTYPES,
   MAX_CACHED_PERMISSION_REQUESTS,
+  WITHDRAWN,
+  CANCELLED,
+  formatUndeliveredAnswerNotice,
+  sendFailureMessage,
+  isTimeoutError,
+  renewDeviceTokenAndRetry,
+  isRelayableControlFrame,
 };

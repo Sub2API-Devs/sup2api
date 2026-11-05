@@ -1,8 +1,8 @@
 /**
  * @azure/identity/dist/esm/credentials/managedIdentityCredential/imdsMsi.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/identity@4.10.1
- * pieces: chunk-mrx6y2r5.js (3)
+ * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-fingerprint 3
  */
 import { credentialLogger } from "../../util/logging.js";
@@ -14,12 +14,12 @@ import {
 import { tracingClient } from "../../util/tracing.js";
 import { createFileBody } from "../../../../../core-rest-pipeline/dist/esm/util/file.js";
 
-//@ chunk-mrx6y2r5.js:289108-289224 esm-fingerprint
+//@ chunk-b5df2wx1.js:289108-289224 esm-fingerprint
 var msiName = "ManagedIdentityCredential - IMDS";
 var logger_5 = credentialLogger(msiName);
 var imdsHost = "http://169.254.169.254";
 var imdsEndpointPath = "/metadata/identity/oauth2/token";
-//@ chunk-mrx6y2r5.js:289224-289480 esm-fingerprint
+//@ chunk-b5df2wx1.js:289224-289480 esm-fingerprint
 function prepareInvalidRequestOptions(scopes) {
   var _a;
   if (!mapScopesToResource(scopes)) throw Error(`${msiName}: Multiple scopes are not supported.`);
@@ -36,7 +36,7 @@ function prepareInvalidRequestOptions(scopes) {
     headers: isCustomRetryPolicy(rawHeaders),
   };
 }
-//@ chunk-mrx6y2r5.js:289480-290526 esm-fingerprint
+//@ chunk-b5df2wx1.js:289480-290526 esm-fingerprint
 var imdsMsi = {
   name: "imdsMsi",
   async isAvailable(options) {

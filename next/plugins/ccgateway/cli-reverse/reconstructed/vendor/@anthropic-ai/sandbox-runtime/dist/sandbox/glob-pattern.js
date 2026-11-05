@@ -1,15 +1,15 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/glob-pattern.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-r0ads4ty.js (8)
+ * pieces: chunk-getdj2mr.js (8)
  * attribution: esm-layout 2, esm-fingerprint 6
  */
 import { logForDebugging } from "../utils/debug.js";
 
-//@ chunk-r0ads4ty.js:1985-1991 esm-layout
+//@ chunk-getdj2mr.js:1985-1991 esm-layout
 var GlobTokenKind;
-//@ chunk-r0ads4ty.js:1991-2155 esm-fingerprint
+//@ chunk-getdj2mr.js:1991-2155 esm-fingerprint
 (function (GlobTokenKind) {
   GlobTokenKind.Text = "text";
   GlobTokenKind.Separator = "separator";
@@ -19,7 +19,7 @@ var GlobTokenKind;
   GlobTokenKind.GlobstarSlash = "globstarSlash";
   GlobTokenKind.Set = "set";
 })(GlobTokenKind || (GlobTokenKind = {}));
-//@ chunk-r0ads4ty.js:2155-2344 esm-fingerprint
+//@ chunk-getdj2mr.js:2155-2344 esm-fingerprint
 function setRanges(members) {
   if (members === "") return;
   let ranges = [];
@@ -33,9 +33,9 @@ function setRanges(members) {
   }
   return ranges;
 }
-//@ chunk-r0ads4ty.js:2344-2354 esm-layout
+//@ chunk-getdj2mr.js:2344-2354 esm-layout
 var SEPARATOR = 47;
-//@ chunk-r0ads4ty.js:2354-3419 esm-fingerprint
+//@ chunk-getdj2mr.js:2354-3419 esm-fingerprint
 function parseGlob(pattern) {
   let tokens = [];
   let textStart = 0;
@@ -136,11 +136,11 @@ function parseGlob(pattern) {
     );
   return tokens;
 }
-//@ chunk-r0ads4ty.js:3419-3482 esm-fingerprint
+//@ chunk-getdj2mr.js:3419-3482 esm-fingerprint
 function escapeRegexLiteral(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-//@ chunk-r0ads4ty.js:3482-3754 esm-fingerprint
+//@ chunk-getdj2mr.js:3482-3754 esm-fingerprint
 function globTokenToRegex(token) {
   switch (token.kind) {
     case GlobTokenKind.Text:
@@ -159,8 +159,8 @@ function globTokenToRegex(token) {
       return `[${token.members.replace(/[.^$+{}()|\\]/g, "\\$&")}]`;
   }
 }
-//@ chunk-r0ads4ty.js:3754-3804 esm-fingerprint
+//@ chunk-getdj2mr.js:3754-3804 esm-fingerprint
 function globToRegex(globPattern) {
   return `^${parseGlob(globPattern).map(globTokenToRegex).join("")}$`;
 }
-export { escapeRegexLiteral, globToRegex, globTokenToRegex, GlobTokenKind, parseGlob };
+export { globToRegex, globTokenToRegex, GlobTokenKind, parseGlob, escapeRegexLiteral };

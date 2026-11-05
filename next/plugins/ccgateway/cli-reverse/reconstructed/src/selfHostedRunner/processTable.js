@@ -3,9 +3,9 @@
  *
  * 读取进程表（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3nztfxrw.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a3r2kq46.js (16)
  * attribution: placement 16
  */
 import { readFile } from "fs/promises";
@@ -16,13 +16,13 @@ import { provenSameProcessAsync } from "../utils/processIdentity.js";
 import { withDeadline } from "../utils/sleep.js";
 import { execFileNoThrowWithCwd } from "../utils/execFileNoThrow.js";
 
-//@ chunk-3nztfxrw.js:36305-36323 placement
+//@ chunk-a3r2kq46.js:36959-36977 placement
 /**
  * 进程表限额：最多 4096 个进程、每次并发 64 个、ps/命令超时 3 s。
  */
 var MAX_PROCESS_TABLE_ENTRIES = 4096;
 var PROCESS_BATCH_SIZE = 64;
-//@ chunk-3nztfxrw.js:36323-36589 placement
+//@ chunk-a3r2kq46.js:36977-37243 placement
 /**
  * 读进程表（Linux 读 /proc，其他平台用 ps）并计算以 pid 为根的进程树。
  */
@@ -41,9 +41,9 @@ function snapshotProcessTree(rootProcess, timeout) {
     },
   );
 }
-//@ chunk-3nztfxrw.js:36589-36601 placement
+//@ chunk-a3r2kq46.js:37243-37255 placement
 var PROCESS_COMMAND_TIMEOUT_MS = 3000;
-//@ chunk-3nztfxrw.js:36601-37190 placement
+//@ chunk-a3r2kq46.js:37255-37843 placement
 async function readProcessTable(target, timeout) {
   let pinned = [...target.pinned];
   let proven = new Map();
@@ -90,7 +90,7 @@ async function readProcessTable(target, timeout) {
     incomplete: incomplete || finished !== true,
   };
 }
-//@ chunk-3nztfxrw.js:37190-37367 placement
+//@ chunk-a3r2kq46.js:37843-38020 placement
 /**
  * 用启动时间令牌核对进程仍是原来那个，返回已证实的 pid 与本进程组。
  */
@@ -107,7 +107,7 @@ function proveProcesses(psForPids, pid, pinned) {
     ownPgrp: own.pgrp,
   };
 }
-//@ chunk-3nztfxrw.js:37367-37468 placement
+//@ chunk-a3r2kq46.js:38020-38121 placement
 /**
  * 统计树中仍存活且已证实的进程数。
  */
@@ -118,13 +118,13 @@ async function countLiveProcesses(target, timeout = PROCESS_COMMAND_TIMEOUT_MS) 
     incomplete,
   };
 }
-//@ chunk-3nztfxrw.js:37468-37836 placement
+//@ chunk-a3r2kq46.js:38121-38550 placement
 /**
  * 向已证实的进程组与进程发送信号（跳过本进程与根进程）。
  */
 async function killProcessTree(target, signal, timeout = PROCESS_COMMAND_TIMEOUT_MS) {
   let { proven, ownPgrp, incomplete } = await readProcessTable(target, timeout);
-  let killed = 0;
+  let killedGroups = new Set();
   if (ownPgrp !== undefined) {
     let pgrps = new Set();
     for (let pgrp of proven.values())
@@ -139,23 +139,25 @@ async function killProcessTree(target, signal, timeout = PROCESS_COMMAND_TIMEOUT
     for (let pgrp of pgrps)
       try {
         process.kill(-pgrp, signal);
-        killed++;
+        killedGroups.add(pgrp);
       } catch {}
   }
-  let killed_2 = 0;
-  for (let key of proven.keys())
+  let killed = 0;
+  for (let [pid, pgrp] of proven) {
+    if (signal !== "SIGKILL" && pgrp !== undefined && killedGroups.has(pgrp)) continue;
     try {
-      process.kill(key, signal);
-      killed_2++;
+      process.kill(pid, signal);
+      killed++;
     } catch {}
+  }
   return {
     proven: proven.size,
-    pids: killed_2,
-    groups: killed,
+    pids: killed,
+    groups: killedGroups.size,
     incomplete,
   };
 }
-//@ chunk-3nztfxrw.js:37836-38468 placement
+//@ chunk-a3r2kq46.js:38550-39182 placement
 /**
  * 从进程表按父子关系遍历进程树，记录带令牌的 pid（超上限截断，根进程被复用时停止）。
  */
@@ -198,7 +200,7 @@ function walkProcessTree(root, table) {
   }
   return tree;
 }
-//@ chunk-3nztfxrw.js:38468-38784 placement
+//@ chunk-a3r2kq46.js:39182-39497 placement
 /**
  * 读取 /proc 下各进程的 ppid、pgrp 与启动时间令牌。
  */
@@ -230,7 +232,7 @@ function readProcFs() {
     degraded: false,
   };
 }
-//@ chunk-3nztfxrw.js:38784-38857 placement
+//@ chunk-a3r2kq46.js:39497-39570 placement
 function ownProcessGroup() {
   try {
     return statPgrp(readFileSync("/proc/self/stat", "utf8"));
@@ -238,7 +240,7 @@ function ownProcessGroup() {
     return;
   }
 }
-//@ chunk-3nztfxrw.js:38857-38942 placement
+//@ chunk-a3r2kq46.js:39570-39655 placement
 function MINIMAL_PS_ENV() {
   return {
     USER_TYPE: "external",
@@ -247,7 +249,7 @@ function MINIMAL_PS_ENV() {
     TZ: "UTC",
   };
 }
-//@ chunk-3nztfxrw.js:38942-39178 placement
+//@ chunk-a3r2kq46.js:39655-39891 placement
 /**
  * 用 ps -A 读取进程表。
  */
@@ -270,7 +272,7 @@ async function readPsTable(timeout) {
         degraded: psResult.code !== 0,
       };
 }
-//@ chunk-3nztfxrw.js:39178-39456 placement
+//@ chunk-a3r2kq46.js:39891-40169 placement
 /**
  * 解析 ps 输出（跳过僵尸进程）。
  */
@@ -295,7 +297,7 @@ function parsePsTable(stdout) {
   }
   return rows;
 }
-//@ chunk-3nztfxrw.js:39456-39642 placement
+//@ chunk-a3r2kq46.js:40169-40355 placement
 /**
  * 用 ps -p 读取指定进程的 pgid 与启动时间。
  */
@@ -312,7 +314,7 @@ async function readPsForPids(pids, timeout) {
   );
   return parsePsPids(psResult.stdout);
 }
-//@ chunk-3nztfxrw.js:39642-39912 placement
+//@ chunk-a3r2kq46.js:40355-40625 placement
 /**
  * 解析 ps -p 输出为 pid → {pgrp, token}。
  */
@@ -336,7 +338,7 @@ function parsePsPids(stdout) {
   }
   return map;
 }
-//@ chunk-3nztfxrw.js:39912-40006 placement
+//@ chunk-a3r2kq46.js:40625-40719 placement
 async function runInBatches(items, run) {
   for (let index = 0; index < items.length; index += PROCESS_BATCH_SIZE)
     await Promise.all(items.slice(index, index + PROCESS_BATCH_SIZE).map(run));

@@ -3,9 +3,9 @@
  *
  * 接收 Claude in Chrome 扩展发来的提示（含图片）并提交，可切换权限模式。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/usePromptsFromClaudeInChrome.tsx
- * pieces: chunk-18hwfzwa.js (7)
+ * pieces: chunk-czq1j3j2.js (7)
  * attribution: placement 4, fingerprint 3
  */
 import { logFeatureOk, logFeatureSad } from "../services/analytics/featureTelemetry.js";
@@ -27,22 +27,22 @@ import { getSessionBypassPermissionsMode } from "../bootstrap/state.js";
 import { CLAUDE_IN_CHROME_MCP_SERVER_NAME } from "../utils/claudeInChrome/common.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:216890-216906 placement
+//@ chunk-czq1j3j2.js:221928-221944 placement
 function noopChromeEffect() {}
-//@ chunk-18hwfzwa.js:216906-216956 placement
+//@ chunk-czq1j3j2.js:221944-221994 placement
 function logChromePermissionSyncOk() {
   return logFeatureOk("chrome_permission_sync");
 }
-//@ chunk-18hwfzwa.js:216956-217102 placement
+//@ chunk-czq1j3j2.js:221994-222140 placement
 function syncChromePermissionMode(error) {
   logFeatureSad("chrome_permission_sync", "set_mode_failed");
   logForDebugging(`claude-in-chrome set_permission_mode failed: ${toError(error).message}`, {
     level: "error",
   });
 }
-//@ chunk-18hwfzwa.js:217102-217314 fingerprint (2.1.88 match: ClaudeInChromePromptNotificationSchema, 0.878)
+//@ chunk-czq1j3j2.js:222140-222352 fingerprint (2.1.88 match: ClaudeInChromePromptNotificationSchema, 0.877)
 var ClaudeInChromePromptNotificationSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:217102", () => {
+deferInit("chunk-czq1j3j2.js:222140", () => {
   ClaudeInChromePromptNotificationSchema = DoctorLazy(() =>
     objectSchema({
       method: literal("notifications/message"),
@@ -58,7 +58,7 @@ deferInit("chunk-18hwfzwa.js:217102", () => {
     }),
   );
 });
-//@ chunk-18hwfzwa.js:217314-217953 fingerprint (2.1.88 match: usePromptsFromClaudeInChrome, 0.707)
+//@ chunk-czq1j3j2.js:222352-222991 fingerprint (2.1.88 match: usePromptsFromClaudeInChrome, 0.707)
 /**
  * 订阅 Claude in Chrome 的 notifications/message：把带图片的提示提交到会话，必要时切换权限模式（set_permission_mode）。
  */
@@ -121,14 +121,14 @@ function usePromptsFromClaudeInChrome(mcpClients, toolPermissionMode) {
   }
   useEffect(syncPermissionMode, syncDeps);
 }
-//@ chunk-18hwfzwa.js:217953-218015 placement (2.1.88 match: PERMISSION_MODES, 0.642)
+//@ chunk-czq1j3j2.js:222991-223053 placement (2.1.88 match: PERMISSION_MODES, 0.642)
 /**
  * （误归此处）当前会话的 Chrome 权限模式：会话处于 bypass 时为 skip_all_permission_checks，否则 ask。
  */
 function getChromePermissionMode() {
   return getSessionBypassPermissionsMode() ? "skip_all_permission_checks" : "ask";
 }
-//@ chunk-18hwfzwa.js:218015-218085 fingerprint (2.1.88 match: findChromeClient, 1)
+//@ chunk-czq1j3j2.js:223053-223123 fingerprint (2.1.88 match: findChromeClient, 1)
 function findChromeClient(clients) {
   return clients.find(
     (client) => client.type === "connected" && client.name === CLAUDE_IN_CHROME_MCP_SERVER_NAME,

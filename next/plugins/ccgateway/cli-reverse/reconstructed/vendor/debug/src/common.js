@@ -1,14 +1,14 @@
 /**
  * debug/src/common.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: debug@4.4.0
- * pieces: chunk-h6b7mazd.js (1)
+ * pieces: chunk-ww9agm6g.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_ms } from "../../ms/index.js";
 
-//@ chunk-h6b7mazd.js:28648-30759 cjs-fingerprint
+//@ chunk-ww9agm6g.js:28648-30759 cjs-fingerprint
 var require_common = __commonJS(function (cjsExports, cjsModule) {
   function setup(env) {
     createDebug.debug = createDebug;

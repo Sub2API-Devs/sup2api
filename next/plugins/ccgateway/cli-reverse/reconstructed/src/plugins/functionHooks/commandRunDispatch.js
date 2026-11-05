@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：斜杠命令经 command.run 钩子链分发执行，并处理中断、出队等结果
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (19)
  * attribution: placement 19
  */
 import {
@@ -28,13 +28,13 @@ import { unwrapAbortReason, isSilentAbortReason } from "../../utils/abortControl
 import { HostScoped } from "../../utils/hostScoped.js";
 import { HooksError } from "./hooksErrors.js";
 import { onProcessRootHost, getRootSession } from "../../bootstrap/state.js";
-import { commandsDiscardedSignal, commandsConsumedSignal } from "../../utils/messageQueueManager.js";
+import { commandsDiscarded, commandsConsumed } from "../../utils/messageQueueManager.js";
 import { identity as identity_2 } from "../../utils/identity.js";
 import { createValueSlot } from "../../utils/valueSlot.js";
 import { createSignal, createLazySignal } from "../../utils/signal.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:5045155-5046561 placement
+//@ chunk-5xgkngpb.js:5200280-5201702 placement
 /**
  * 斜杠命令经 command.run 钩子链执行：钩子可改写或代答，链底运行真正的命令，并记录被丢弃的答复。
  */
@@ -126,15 +126,15 @@ async function dispatchCommandRunHooks({ input, engine, queued, ahead, signal })
     exitCode,
   );
 }
-//@ chunk-e6aww6q8.js:5046561-5046587 placement
+//@ chunk-5xgkngpb.js:5201702-5201728 placement
 /**
  * command.run 的站点规则
  */
 var COMMAND_RUN_SITE_RULES; // deferred: uses UI_ENV_SITE_RULES (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:5046561", () => {
+deferInit("chunk-5xgkngpb.js:5201702", () => {
   COMMAND_RUN_SITE_RULES = UI_ENV_SITE_RULES["command.run"];
 });
-//@ chunk-e6aww6q8.js:5046587-5046674 placement
+//@ chunk-5xgkngpb.js:5201728-5201815 placement
 /**
  * 构造 command.run 事件
  */
@@ -146,12 +146,12 @@ var commandRunEvent = (command, args, presentation) => ({
   },
   presentation: viewportInfo(presentation),
 });
-//@ chunk-e6aww6q8.js:5046674-5046732 placement
+//@ chunk-5xgkngpb.js:5201815-5201873 placement
 /**
  * 命令运行前被打断
  */
 var TURN_INTERRUPTED_TEXT = "the turn was interrupted before the command ran";
-//@ chunk-e6aww6q8.js:5046732-5046890 placement
+//@ chunk-5xgkngpb.js:5201873-5202032 placement
 /**
  * 命令被中断时的处理结果：插件排队或关闭时不留消息，静默中止只留输入，否则加中断标记；不查询模型。
  */
@@ -164,20 +164,20 @@ function interruptedCommandResult({ signal, typed, marker, isQueuedByPlugin }) {
     shouldQuery: false,
   };
 }
-//@ chunk-e6aww6q8.js:5046890-5047022 placement
+//@ chunk-5xgkngpb.js:5202032-5202164 placement
 var COMMAND_DID_NOT_RUN_MESSAGE =
   "the command did not go through command.run (no command of that name was enabled by then, or it was refused before it ran)";
-//@ chunk-e6aww6q8.js:5047022-5047057 placement
+//@ chunk-5xgkngpb.js:5202164-5202199 placement
 /**
  * 命令监视状态
  */
 var commandWatchState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:5047022", () => {
+deferInit("chunk-5xgkngpb.js:5202164", () => {
   commandWatchState = new HostScoped(() => ({
     watching: false,
   }));
 });
-//@ chunk-e6aww6q8.js:5047057-5047470 placement
+//@ chunk-5xgkngpb.js:5202199-5202612 placement
 /**
  * 排队命令的等待者表：按 uuid 登记，命令丢弃时以错误结算。
  */
@@ -197,10 +197,10 @@ function createQueuedCommandWaiters() {
       let watchState = onProcessRootHost(commandWatchState);
       if (!watchState.watching) {
         watchState.watching = true;
-        commandsDiscardedSignal.subscribe((commands) =>
+        commandsDiscarded.subscribe((commands) =>
           failAll(commands, "the command was removed from the queue before it ran"),
         );
-        commandsConsumedSignal.subscribe((commands) =>
+        commandsConsumed.subscribe((commands) =>
           failAll(commands, "the command left the queue as text for the model; it did not run"),
         );
       }
@@ -209,15 +209,15 @@ function createQueuedCommandWaiters() {
     take,
   };
 }
-//@ chunk-e6aww6q8.js:5047470-5047484 placement
+//@ chunk-5xgkngpb.js:5202612-5202626 placement
 /**
  * 排队命令的等待者
  */
 var queuedCommandWaiters; // deferred: uses createQueuedCommandWaiters of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:5047470", () => {
+deferInit("chunk-5xgkngpb.js:5202612", () => {
   queuedCommandWaiters = createQueuedCommandWaiters();
 });
-//@ chunk-e6aww6q8.js:5047484-5047815 placement
+//@ chunk-5xgkngpb.js:5202626-5202957 placement
 /**
  * 取出排队命令对应的等待者，提供 settle/fail/handOn；释放时未结算则以"未经 command.run"失败。
  */
@@ -256,15 +256,15 @@ function takeQueuedCommandWaiter(uuid) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:5047815-5047850 placement
+//@ chunk-5xgkngpb.js:5202957-5202992 placement
 /**
  * 同参命令分发表
  */
 var inflightCommandRuns; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:5047815", () => {
+deferInit("chunk-5xgkngpb.js:5202957", () => {
   inflightCommandRuns = identity_2(new Map(), (map) => map.clear());
 });
-//@ chunk-e6aww6q8.js:5047850-5047906 placement
+//@ chunk-5xgkngpb.js:5202992-5203048 placement
 /**
  * 取出进行中的同参分发
  */
@@ -273,7 +273,7 @@ function takeInflightRun(command) {
   inflightCommandRuns.delete(command);
   return run;
 }
-//@ chunk-e6aww6q8.js:5047906-5048261 placement
+//@ chunk-5xgkngpb.js:5203048-5203403 placement
 /**
  * 若当前有同名同参的 command.run 分发在等，返回它以加入；释放时未加入则停止该分发。
  */
@@ -297,7 +297,7 @@ function joinCommandRunDispatch(key) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:5048261-5048339 placement
+//@ chunk-5xgkngpb.js:5203403-5203481 placement
 /**
  * 等待命令结算
  */
@@ -309,56 +309,56 @@ var waitForCommandSettle = (uuid, origin) =>
       fail: reject,
     });
   });
-//@ chunk-e6aww6q8.js:5048339-5048374 placement
+//@ chunk-5xgkngpb.js:5203481-5203517 placement
 /**
  * 命令集合信号 A
  */
 var commandSetSignalA; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:5048339", () => {
+deferInit("chunk-5xgkngpb.js:5203481", () => {
   commandSetSignalA = identity_2(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-e6aww6q8.js:5048374-5048410 placement
+//@ chunk-5xgkngpb.js:5203517-5203553 placement
 /**
  * 命令集合信号 B
  */
 var commandSetSignalB; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:5048374", () => {
+deferInit("chunk-5xgkngpb.js:5203517", () => {
   commandSetSignalB = identity_2(createValueSlot(), (slot) => slot.set(undefined));
 });
-//@ chunk-e6aww6q8.js:5048410-5048434 placement
+//@ chunk-5xgkngpb.js:5203553-5203577 placement
 /**
  * 命令运行信号槽
  */
 var commandRunSignalSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:5048410", () => {
+deferInit("chunk-5xgkngpb.js:5203553", () => {
   commandRunSignalSlot = new HostScoped(() => createSignal());
 });
-//@ chunk-e6aww6q8.js:5048434-5048473 placement
+//@ chunk-5xgkngpb.js:5203577-5203616 placement
 /**
  * 取命令运行信号
  */
 function commandRunSignal() {
   return commandRunSignalSlot.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:5048473-5048489 placement
+//@ chunk-5xgkngpb.js:5203616-5203632 placement
 /**
  * 惰性信号
  */
 var lazyCommandRunSignal; // deferred: uses commandRunSignal of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:5048473", () => {
+deferInit("chunk-5xgkngpb.js:5203616", () => {
   lazyCommandRunSignal = createLazySignal(commandRunSignal);
 });
 export {
+  inflightCommandRuns,
+  takeInflightRun,
+  dispatchCommandRunHooks,
+  commandRunEvent,
+  COMMAND_RUN_SITE_RULES,
+  waitForCommandSettle,
+  lazyCommandRunSignal,
   commandSetSignalA,
   commandSetSignalB,
-  commandRunEvent,
-  dispatchCommandRunHooks,
-  lazyCommandRunSignal,
   takeQueuedCommandWaiter,
   joinCommandRunDispatch,
   interruptedCommandResult,
-  inflightCommandRuns,
-  COMMAND_RUN_SITE_RULES,
-  waitForCommandSettle,
-  takeInflightRun,
 };

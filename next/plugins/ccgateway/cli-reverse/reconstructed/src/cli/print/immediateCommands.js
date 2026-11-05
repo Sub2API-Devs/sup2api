@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：立即执行的斜杠命令规划与生命周期（含未见面板 mod 输入暂存）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (10)
  * attribution: placement 10
  */
 import { isImmediateCommandsEnabled, runCommandInGate, WATCHED_IMMEDIATE_IOS } from "./inboundMessages.js";
@@ -21,7 +21,7 @@ import {
 import { logError } from "../../utils/log.js";
 import { withTelemetryMessage, toError } from "../../utils/errors.js";
 import { originKindForWakeup } from "../../utils/promptSource.js";
-import { isSlashCommand_2, isActiveMainAgentCommand } from "../../utils/messageQueueManager.js";
+import { isSlashCommand, isDrainableMainThreadCommand } from "../../utils/messageQueueManager.js";
 import { lastTextBlockText } from "../../utils/historyFile.js";
 import { parseSlashCommand } from "../../utils/slashCommandParsing.js";
 import { isPluginLocalCommand_2 } from "../../plugins/functionHooks/commandHooks.js";
@@ -38,7 +38,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { MAX_CONTROL_RESPONSE_BYTES } from "../../bridge/controlRequests.js";
 import { sleep } from "../../utils/sleep.js";
 
-//@ chunk-tyg7f3ek.js:78432-78743 placement
+//@ chunk-0yw3taqg.js:101210-101521 placement
 /**
  * 轮次进行中收到本地 stdin 的即时斜杠命令时立即执行（不等当前轮结束），并上报 tengu_immediate_command_executed。
  */
@@ -59,7 +59,7 @@ function runImmediateSlashCommand(command, host) {
     logError(withTelemetryMessage(toError(error), "headless immediate command failed to start"));
   }
 }
-//@ chunk-tyg7f3ek.js:78743-79296 placement
+//@ chunk-0yw3taqg.js:101521-102074 placement
 function planImmediateCommand(command, host) {
   if (
     command.mode !== "prompt" ||
@@ -67,7 +67,7 @@ function planImmediateCommand(command, host) {
     command.bridgeOrigin === true ||
     command.shouldQuery === false ||
     originKindForWakeup(command.hostInitiator) !== undefined ||
-    !isSlashCommand_2(command)
+    !isSlashCommand(command)
   )
     return;
   let text = lastTextBlockText(command.value);
@@ -97,7 +97,7 @@ function planImmediateCommand(command, host) {
     presentation: viewportInfo(undefined),
   };
 }
-//@ chunk-tyg7f3ek.js:79296-79504 placement
+//@ chunk-0yw3taqg.js:102074-102282 placement
 async function reportImmediateCommandRanAhead(uuid, host) {
   try {
     await inflightCommandRuns.get(uuid)?.answer;
@@ -110,7 +110,7 @@ async function reportImmediateCommandRanAhead(uuid, host) {
     logError(withTelemetryMessage(toError(error), "headless immediate command could not be reported as run"));
   }
 }
-//@ chunk-tyg7f3ek.js:79504-79734 placement
+//@ chunk-0yw3taqg.js:102282-102512 placement
 function watchImmediateCommandLifecycle(io) {
   if (WATCHED_IMMEDIATE_IOS.has(io)) return;
   WATCHED_IMMEDIATE_IOS.add(io);
@@ -127,7 +127,7 @@ function watchImmediateCommandLifecycle(io) {
     }
   });
 }
-//@ chunk-tyg7f3ek.js:79734-80592 placement
+//@ chunk-0yw3taqg.js:102512-103370 placement
 class UnseenPanelModInputHold {
   messageQueue;
   isShown;
@@ -179,15 +179,17 @@ class UnseenPanelModInputHold {
     submitMarks.putBack();
   }
 }
-//@ chunk-tyg7f3ek.js:80592-80661 placement (2.1.88 match: _temp0, 1)
+//@ chunk-0yw3taqg.js:103370-103439 placement (2.1.88 match: _temp0, 1)
 function isUnseenPluginPrompt(a_5) {
-  return isActiveMainAgentCommand(a_5) && a_5.origin?.kind === "plugin" && !isGoalIdleCheckinPaused(a_5.uuid);
+  return (
+    isDrainableMainThreadCommand(a_5) && a_5.origin?.kind === "plugin" && !isGoalIdleCheckinPaused(a_5.uuid)
+  );
 }
-//@ chunk-tyg7f3ek.js:80661-80705 placement
+//@ chunk-0yw3taqg.js:103439-103483 placement
 var INITIALIZE_REPLY_WAIT_DEFAULT = true;
 var isInitializeReplyWaitEnabled = () =>
   getFeatureValue_CACHED_MAY_BE_STALE("tengu_steady_panda", INITIALIZE_REPLY_WAIT_DEFAULT);
-//@ chunk-tyg7f3ek.js:80705-80874 placement
+//@ chunk-0yw3taqg.js:103483-103652 placement
 function waitBeforeInitializeReply(host) {
   try {
     let queue = getActiveMessageQueue() ?? host.rescan();
@@ -202,7 +204,7 @@ function waitBeforeInitializeReply(host) {
     return;
   }
 }
-//@ chunk-tyg7f3ek.js:80874-81381 placement
+//@ chunk-0yw3taqg.js:103652-104159 placement
 async function waitForStartupSettled(
   queue,
   { rescan, isReaderOwed, lookAgainOn, limitMs = MAX_CONTROL_RESPONSE_BYTES },
@@ -235,7 +237,7 @@ async function waitForStartupSettled(
     );
   }
 }
-//@ chunk-tyg7f3ek.js:81381-81434 placement
+//@ chunk-0yw3taqg.js:104159-104212 placement
 async function drainPromiseChain(queue, rescan) {
   let step = queue;
   while (step) {

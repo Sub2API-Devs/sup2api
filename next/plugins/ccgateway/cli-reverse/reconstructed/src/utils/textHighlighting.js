@@ -3,9 +3,9 @@
  *
  * 按高亮区间切分文本并保留 ANSI 样式的分段器。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/textHighlighting.ts
- * pieces: chunk-e6aww6q8.js (3)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: callgraph-witnessed 1, file-last-pair 1, fingerprint 1
  */
 import { tokenize } from "../../vendor/@alcalzone/ansi-tokenize/build/tokenize.js";
@@ -13,7 +13,7 @@ import { activeAnsiCodes } from "../components/PromptInput/inputDecorations.js";
 import { ansiCodesToString } from "../../vendor/@alcalzone/ansi-tokenize/build/ansiCodes.js";
 import { undoAnsiCodes } from "../../vendor/@alcalzone/ansi-tokenize/build/undo.js";
 
-//@ chunk-e6aww6q8.js:64385-64477 callgraph-witnessed (2.1.88 match: segmentTextByHighlights, 0.706)
+//@ chunk-5xgkngpb.js:66918-67010 callgraph-witnessed (2.1.88 match: segmentTextByHighlights, 0.706)
 function segmentTextByHighlights(text, highlights) {
   if (highlights.length === 0)
     return [
@@ -24,7 +24,7 @@ function segmentTextByHighlights(text, highlights) {
     ];
   return new HighlightSegmenter(text).segment(reduceCodes(highlights));
 }
-//@ chunk-e6aww6q8.js:64477-64702 file-last-pair
+//@ chunk-5xgkngpb.js:67010-67235 file-last-pair
 function reduceCodes(codes) {
   let sortedHighlights = [...codes].sort((left, right) => {
     if (left.start !== right.start) return left.start - right.start;
@@ -41,7 +41,7 @@ function reduceCodes(codes) {
   }
   return kept;
 }
-//@ chunk-e6aww6q8.js:64702-65856 fingerprint (2.1.88 match: HighlightSegmenter, 1)
+//@ chunk-5xgkngpb.js:67235-68393 fingerprint (2.1.88 match: HighlightSegmenter, 1)
 class HighlightSegmenter {
   text;
   tokens;

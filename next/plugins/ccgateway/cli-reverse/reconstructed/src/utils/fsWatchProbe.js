@@ -3,13 +3,13 @@
  *
  * fs.watch 可用性探测（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-82kqcve8.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a2q0x549.js (16)
  * attribution: placement 16
  */
 import { mkdtemp, open, rm as rm_2 } from "fs/promises";
-import { join } from "path";
+import { join as join_2 } from "path";
 import { watch as watch_2, constants } from "fs";
 import { claudeTempDir } from "./tempDir.js";
 import { logForDebugging } from "./debug.js";
@@ -20,30 +20,30 @@ import { isDiskless } from "../bootstrap/state.js";
 import { isRemoteSessionAvailable } from "../remote/remoteMode.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:22866-22938 placement
+//@ chunk-a2q0x549.js:22941-23013 placement
 var PROBE_BUDGET_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PROBE_REWRITE_EVERY_MS;
 var PROBE_FILE_MODE;
 var PROBE_CLOSE_DELAY_FACTOR;
 var WATCHER_RESOURCE_ERRNOS;
-deferInit("chunk-82kqcve8.js:22866", () => {
+deferInit("chunk-a2q0x549.js:22941", () => {
   PROBE_BUDGET_MS = 1500;
   PROBE_REWRITE_EVERY_MS = 100;
   PROBE_FILE_MODE = 384;
   PROBE_CLOSE_DELAY_FACTOR = 2;
   WATCHER_RESOURCE_ERRNOS = new Set(["EMFILE", "ENFILE", "ENOSPC"]);
 });
-//@ chunk-82kqcve8.js:22938-23224 placement
+//@ chunk-a2q0x549.js:23013-23299 placement
 async function probeFsWatch(options = {}) {
   let dirPath;
   try {
-    dirPath = await mkdtemp(join(options.directory ?? claudeTempDir(), "fswatch-probe-"));
+    dirPath = await mkdtemp(join_2(options.directory ?? claudeTempDir(), "fswatch-probe-"));
   } catch (error) {
     logForDebugging(`[fs.watch probe] no probe dir: ${errorMessage(error)}`);
     return "unprobed";
   }
   try {
-    return await probeWatchOnFile(join(dirPath, "probe"), options);
+    return await probeWatchOnFile(join_2(dirPath, "probe"), options);
   } catch (error) {
     logForDebugging(`[fs.watch probe] no probe file: ${errorMessage(error)}`);
     return "unprobed";
@@ -51,7 +51,7 @@ async function probeFsWatch(options = {}) {
     await removeRecursiveQuietly(dirPath);
   }
 }
-//@ chunk-82kqcve8.js:23224-23616 placement
+//@ chunk-a2q0x549.js:23299-23691 placement
 /**
  * 在探测文件上建立 fs.watch 并反复写入，判断事件是否触发：fired、refused 或 unprobed。
  */
@@ -84,7 +84,7 @@ async function probeWatchOnFile(filePath, options) {
   logForDebugging(`[fs.watch probe] verdict: ${verdict}`);
   return verdict;
 }
-//@ chunk-82kqcve8.js:23616-23783 placement (2.1.88 match: getFileIdentity, 0.867)
+//@ chunk-a2q0x549.js:23691-23858 placement (2.1.88 match: getFileIdentity, 0.867)
 async function getFileIdentity(filePath) {
   let handle = await open(filePath, "wx", PROBE_FILE_MODE);
   try {
@@ -101,7 +101,7 @@ async function getFileIdentity(filePath) {
     await handle.close();
   }
 }
-//@ chunk-82kqcve8.js:23783-24041 placement
+//@ chunk-a2q0x549.js:23858-24116 placement
 async function writeProbeFile(identity, writeCount) {
   let handle = await open(identity.path, constants.O_WRONLY | NOFOLLOW_NONBLOCK_FLAGS);
   try {
@@ -115,21 +115,21 @@ async function writeProbeFile(identity, writeCount) {
     await handle.close();
   }
 }
-//@ chunk-82kqcve8.js:24041-24096 placement
+//@ chunk-a2q0x549.js:24116-24171 placement
 function isWatcherResourceError(error) {
   let errnoCode = getErrnoCode(error);
   return errnoCode !== undefined && WATCHER_RESOURCE_ERRNOS.has(errnoCode);
 }
-//@ chunk-82kqcve8.js:24096-24147 placement
+//@ chunk-a2q0x549.js:24171-24222 placement
 async function closeProbeFileLater(watcher, options) {
   await sleep(probeRewriteInterval(options) * PROBE_CLOSE_DELAY_FACTOR);
   watcher.close();
 }
-//@ chunk-82kqcve8.js:24147-24190 placement
+//@ chunk-a2q0x549.js:24222-24265 placement
 function probeRewriteInterval(options) {
   return options.rewriteEveryMs ?? PROBE_REWRITE_EVERY_MS;
 }
-//@ chunk-82kqcve8.js:24190-24334 placement
+//@ chunk-a2q0x549.js:24265-24409 placement
 async function pokeUntilFired(identity, probeState, options) {
   let budgetMs = options.budgetMs ?? PROBE_BUDGET_MS;
   let intervalMs = probeRewriteInterval(options);
@@ -141,15 +141,15 @@ async function pokeUntilFired(identity, probeState, options) {
     await sleep(intervalMs);
   }
 }
-//@ chunk-82kqcve8.js:24334-24381 placement
+//@ chunk-a2q0x549.js:24409-24456 placement
 function probeSettled(probeState) {
   return probeState.hasFired || probeState.wasRefused;
 }
-//@ chunk-82kqcve8.js:24381-24457 placement
+//@ chunk-a2q0x549.js:24456-24532 placement
 function probeOutcomeLabel(probeState) {
   return probeState.hasFired ? "delivers" : probeState.wasRefused ? "refused" : "silent";
 }
-//@ chunk-82kqcve8.js:24457-24532 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
+//@ chunk-a2q0x549.js:24532-24607 placement (2.1.88 match: convertDirectoryToZipInPlace, 1)
 async function removeRecursiveQuietly(dirPath) {
   try {
     await rm_2(dirPath, {
@@ -160,7 +160,7 @@ async function removeRecursiveQuietly(dirPath) {
     return;
   }
 }
-//@ chunk-82kqcve8.js:24532-24609 placement
+//@ chunk-a2q0x549.js:24607-24684 placement
 /**
  * 求两个集合的差集。
  */
@@ -169,7 +169,7 @@ function setDifference(allDirs, pendingDirs) {
   for (let dir of allDirs) if (!pendingDirs.has(dir)) missing.add(dir);
   return missing;
 }
-//@ chunk-82kqcve8.js:24609-24673 placement
+//@ chunk-a2q0x549.js:24684-24748 placement
 /**
  * 判断集合 e 是否全部包含在 n 中。
  */
@@ -177,7 +177,7 @@ function isSubsetOf(candidates, allowed) {
   for (let dir of candidates) if (!allowed.has(dir)) return false;
   return true;
 }
-//@ chunk-82kqcve8.js:24673-24740 placement
+//@ chunk-a2q0x549.js:24748-24815 placement
 /**
  * 设置文件监听的稳定性阈值、轮询间隔、MDM 轮询间隔与删除宽限等常量。
  */
@@ -188,7 +188,7 @@ var SETTINGS_DELETION_GRACE_MS = SETTINGS_STABILITY_THRESHOLD_MS + SETTINGS_POLL
 var SETTINGS_OBSERVATION_LAG_MS = 2000;
 var SETTINGS_WATCH_POLL_INTERVAL_MS = 2000;
 var SETTINGS_WATCH_LAG_MS = 2000;
-//@ chunk-82kqcve8.js:24740-24807 placement
+//@ chunk-a2q0x549.js:24815-24882 placement
 /**
  * 判断是否使用原生文件监听（非无盘，或其他机器托管会话）。
  */

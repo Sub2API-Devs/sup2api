@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。内置插件 modsGuide 的 Clawd 动画/引导界面。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sc72x544.js (59)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y4bgqkdt.js (59)
  * attribution: placement 59
  */
 import { __export } from "../../../../runtime/bun-runtime.js";
@@ -13,9 +13,9 @@ import { register } from "./index.js";
 import { isScreenReaderMode } from "../../../utils/accessibility/screenReader.js";
 import { getFeatureValue_SESSION_PINNED } from "../../../services/analytics/growthbook.js";
 
-//@ chunk-sc72x544.js:3848-3857 placement
+//@ chunk-y4bgqkdt.js:4156-4165 placement
 var clawdCookingNamespace = {};
-//@ chunk-sc72x544.js:3857-4802 placement
+//@ chunk-y4bgqkdt.js:4165-5110 placement
 __export(clawdCookingNamespace, {
   BLINK_FRAME: () => BLINK_FRAME,
   BUBBLES: () => BUBBLES,
@@ -72,21 +72,21 @@ __export(clawdCookingNamespace, {
   stamp: () => stamp,
   terminalGuide: () => terminalGuide,
 });
-//@ chunk-sc72x544.js:4802-4832 placement
+//@ chunk-y4bgqkdt.js:5110-5140 placement
 var availabilityFlag = () => "tengu_linen_acorn";
-//@ chunk-sc72x544.js:4832-4841 placement
+//@ chunk-y4bgqkdt.js:5140-5149 placement
 var isOnByDefault = false;
-//@ chunk-sc72x544.js:4841-4868 placement
+//@ chunk-y4bgqkdt.js:5149-5176 placement
 var isAvailable = () =>
   !isScreenReaderMode() && getFeatureValue_SESSION_PINNED(availabilityFlag(), isOnByDefault);
-//@ chunk-sc72x544.js:4868-5018 placement
+//@ chunk-y4bgqkdt.js:5176-5326 placement
 var PLUGIN_DESCRIPTION =
   "How mods work: asked how hot reloading works, the question card gets a small panel over it with Clawd cooking, gone once the card is answered";
-//@ chunk-sc72x544.js:5018-5047 placement
+//@ chunk-y4bgqkdt.js:5326-5355 placement
 var PLUGIN_NAME = "cc-plugin-mods-guide";
-//@ chunk-sc72x544.js:5047-5065 placement
+//@ chunk-y4bgqkdt.js:5355-5373 placement
 var ENGINE_ASK_ID = /^confirm_/;
-//@ chunk-sc72x544.js:5065-5251 placement
+//@ chunk-y4bgqkdt.js:5373-5559 placement
 function isExplained(questions) {
   let [first] = questions;
   let question = typeof first === "object" && first !== null ? Reflect.get(first, "question") : undefined;
@@ -103,23 +103,23 @@ function isExplained(questions) {
     .trim().includes(`
 `);
 }
-//@ chunk-sc72x544.js:5251-5259 placement
+//@ chunk-y4bgqkdt.js:5559-5567 placement
 var MISSED_FRAMES_MAX = 6;
-//@ chunk-sc72x544.js:5259-5269 placement
+//@ chunk-y4bgqkdt.js:5567-5577 placement
 var PLAY_FRAMES = 256;
-//@ chunk-sc72x544.js:5269-5281 placement
+//@ chunk-y4bgqkdt.js:5577-5589 placement
 var RUN_MS_MAX = 45000;
-//@ chunk-sc72x544.js:5281-5289 placement
+//@ chunk-y4bgqkdt.js:5589-5597 placement
 var CELL_WORDS = 3;
-//@ chunk-sc72x544.js:5289-5300 placement
+//@ chunk-y4bgqkdt.js:5597-5608 placement
 var LOWER_HALF = 9604;
-//@ chunk-sc72x544.js:5300-5309 placement
+//@ chunk-y4bgqkdt.js:5608-5617 placement
 var SPACE = 32;
-//@ chunk-sc72x544.js:5309-5324 placement
+//@ chunk-y4bgqkdt.js:5617-5632 placement
 var TERMINAL_DEFAULT = 16777216;
-//@ chunk-sc72x544.js:5324-5336 placement
+//@ chunk-y4bgqkdt.js:5632-5644 placement
 var UPPER_HALF = 9600;
-//@ chunk-sc72x544.js:5336-5471 placement
+//@ chunk-y4bgqkdt.js:5644-5779 placement
 var PALETTE = {
   C: 14120791,
   E: 1315860,
@@ -134,23 +134,23 @@ var PALETTE = {
   y: 16638023,
   G: 7041664,
 };
-//@ chunk-sc72x544.js:5471-5480 placement
+//@ chunk-y4bgqkdt.js:5779-5788 placement
 var FRAME_COUNT = 16;
-//@ chunk-sc72x544.js:5480-5491 placement
+//@ chunk-y4bgqkdt.js:5788-5799 placement
 var FRAME_MS = 160;
-//@ chunk-sc72x544.js:5491-5501 placement
+//@ chunk-y4bgqkdt.js:5799-5809 placement
 var PIXEL_ROWS = 18;
-//@ chunk-sc72x544.js:5501-5510 placement
+//@ chunk-y4bgqkdt.js:5809-5818 placement
 var SCENE_COLUMNS = 44;
-//@ chunk-sc72x544.js:5510-5518 placement
+//@ chunk-y4bgqkdt.js:5818-5826 placement
 var SCENE_ROWS = 9;
-//@ chunk-sc72x544.js:5518-5802 placement
+//@ chunk-y4bgqkdt.js:5826-6110 placement
 function cellsOf(scene) {
   let uint32Array = new Uint32Array(SCENE_COLUMNS * SCENE_ROWS * CELL_WORDS);
-  for (let k = 0; k < SCENE_ROWS; k++)
-    for (let k_2 = 0; k_2 < SCENE_COLUMNS; k_2++) {
-      let top = PALETTE[scene[k + k]?.[k_2] ?? "."];
-      let bottom = PALETTE[scene[k + k + 1]?.[k_2] ?? "."];
+  for (let idx = 0; idx < SCENE_ROWS; idx++)
+    for (let idx_2 = 0; idx_2 < SCENE_COLUMNS; idx_2++) {
+      let top = PALETTE[scene[idx + idx]?.[idx_2] ?? "."];
+      let bottom = PALETTE[scene[idx + idx + 1]?.[idx_2] ?? "."];
       let bothBlank = top === undefined && bottom === undefined;
       let onlyBottom = top === undefined && bottom !== undefined;
       uint32Array.set(
@@ -159,12 +159,12 @@ function cellsOf(scene) {
           (onlyBottom ? bottom : top) ?? TERMINAL_DEFAULT,
           (onlyBottom ? undefined : bottom) ?? TERMINAL_DEFAULT,
         ],
-        (k * SCENE_COLUMNS + k_2) * CELL_WORDS,
+        (idx * SCENE_COLUMNS + idx_2) * CELL_WORDS,
       );
     }
   return new Uint8Array(uint32Array.buffer).toBase64();
 }
-//@ chunk-sc72x544.js:5802-5874 placement
+//@ chunk-y4bgqkdt.js:6110-6182 placement
 var blankGrid = (columns, rows) =>
   Array.from(
     {
@@ -178,13 +178,13 @@ var blankGrid = (columns, rows) =>
         () => ".",
       ),
   );
-//@ chunk-sc72x544.js:5874-5949 placement
+//@ chunk-y4bgqkdt.js:6182-6257 placement
 function put(grid, point, letter) {
   let [x, y] = point;
   let row = grid[y];
   if (row !== undefined && x >= 0 && x < row.length) row[x] = letter;
 }
-//@ chunk-sc72x544.js:5949-6154 placement
+//@ chunk-y4bgqkdt.js:6257-6462 placement
 function plot(grid, line) {
   let [endX, endY] = line.end;
   let [startX, startY] = line.start;
@@ -207,24 +207,24 @@ function plot(grid, line) {
     }
   }
 }
-//@ chunk-sc72x544.js:6154-6269 placement
+//@ chunk-y4bgqkdt.js:6462-6577 placement
 function stamp(grid, sprite, at) {
   let [originX, originY] = at;
   for (let [rowOffset, row] of sprite.entries())
     for (let [column, char] of [...row].entries())
       if (char !== ".") put(grid, [originX + column, originY + rowOffset], char);
 }
-//@ chunk-sc72x544.js:6269-6283 placement
+//@ chunk-y4bgqkdt.js:6577-6591 placement
 var BUBBLES_AT = [23, 8];
-//@ chunk-sc72x544.js:6283-6296 placement
+//@ chunk-y4bgqkdt.js:6591-6604 placement
 var CLAWD_AT = [1, 3];
-//@ chunk-sc72x544.js:6296-6310 placement
+//@ chunk-y4bgqkdt.js:6604-6618 placement
 var COUNTER_AT = [0, 17];
-//@ chunk-sc72x544.js:6310-6325 placement
+//@ chunk-y4bgqkdt.js:6618-6633 placement
 var FLAMES_AT = [26, 15];
-//@ chunk-sc72x544.js:6325-6338 placement
+//@ chunk-y4bgqkdt.js:6633-6646 placement
 var POT_AT = [23, 9];
-//@ chunk-sc72x544.js:6338-7079 placement
+//@ chunk-y4bgqkdt.js:6646-7387 placement
 var CLAWD_POSES = [
   [
     ".......................",
@@ -259,9 +259,9 @@ var CLAWD_POSES = [
     "...C.C.......C.C.......",
   ],
 ];
-//@ chunk-sc72x544.js:7079-7135 placement
+//@ chunk-y4bgqkdt.js:7387-7443 placement
 var COUNTER = ["GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"];
-//@ chunk-sc72x544.js:7135-7270 placement
+//@ chunk-y4bgqkdt.js:7443-7578 placement
 var POT = [
   "RRSSSSSSSSSSSSSSRR",
   ".RPPPPPPPPPPPPPPH.",
@@ -270,11 +270,11 @@ var POT = [
   ".RPPPPPPPPPPPPPPH.",
   "..PPPPPPPPPPPPPH..",
 ];
-//@ chunk-sc72x544.js:7270-7347 placement
+//@ chunk-y4bgqkdt.js:7578-7655 placement
 var PUFFS = [[".ss.", "ssss", ".ss."], [".ss.", "ssss"], ["sss.", ".ss."], ["ss"], ["s"]];
-//@ chunk-sc72x544.js:7347-7356 placement
+//@ chunk-y4bgqkdt.js:7655-7664 placement
 var BLINK_FRAME = 9;
-//@ chunk-sc72x544.js:7356-7701 placement
+//@ chunk-y4bgqkdt.js:7664-8009 placement
 var BUBBLES = [
   "....S.............",
   "....S.............",
@@ -293,7 +293,7 @@ var BUBBLES = [
   ".............S....",
   ".............S....",
 ];
-//@ chunk-sc72x544.js:7701-8222 placement
+//@ chunk-y4bgqkdt.js:8009-8530 placement
 var FLAMES = [
   ["..F.y..y.F..", "FfFfFfFfFfFf"],
   ["y..y.F..F.F.", "fFfFfFfFfFfF"],
@@ -312,16 +312,16 @@ var FLAMES = [
   [".F.F..F.y..y", "FfFfFfFfFfFf"],
   ["..F.y..y.F..", "fFfFfFfFfFfF"],
 ];
-//@ chunk-sc72x544.js:8222-8263 placement
+//@ chunk-y4bgqkdt.js:8530-8571 placement
 var POSES = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0];
-//@ chunk-sc72x544.js:8263-8301 placement
+//@ chunk-y4bgqkdt.js:8571-8609 placement
 var PUFF_STARTS = [
   [26, 0],
   [30, 4],
   [34, 8],
   [37, 12],
 ];
-//@ chunk-sc72x544.js:8301-8425 placement
+//@ chunk-y4bgqkdt.js:8609-8733 placement
 var PUFF_TRACK = [
   [0, 0, 0],
   [0, 0, 0],
@@ -338,7 +338,7 @@ var PUFF_TRACK = [
   [0, 9, 4],
   [0, 9, 4],
 ];
-//@ chunk-sc72x544.js:8425-8689 placement
+//@ chunk-y4bgqkdt.js:8733-8997 placement
 var SPOON = [
   [
     [19, 3],
@@ -405,19 +405,19 @@ var SPOON = [
     [35, 9],
   ],
 ];
-//@ chunk-sc72x544.js:8689-9051 placement
+//@ chunk-y4bgqkdt.js:8997-9359 placement
 function frameOf(frameIndex) {
   let frame = frameIndex % FRAME_COUNT;
   let grid = blankGrid(SCENE_COLUMNS, PIXEL_ROWS);
   let [, potY] = POT_AT;
   stamp(grid, COUNTER, COUNTER_AT);
   stamp(grid, FLAMES[frame] ?? [], FLAMES_AT);
-  for (let [x, offset] of PUFF_STARTS) {
+  for (let [x_2, offset] of PUFF_STARTS) {
     let puff = PUFF_TRACK[(frame + offset) % FRAME_COUNT];
     if (puff !== undefined) {
       let [dx, rise, puffIndex] = puff;
       let sprite = PUFFS[puffIndex] ?? [];
-      stamp(grid, sprite, [x + dx, potY - rise - sprite.length]);
+      stamp(grid, sprite, [x_2 + dx, potY - rise - sprite.length]);
     }
   }
   let [from, to] = SPOON[frame] ?? SPOON[0];
@@ -433,7 +433,7 @@ function frameOf(frameIndex) {
   stamp(grid, poseForFrame, CLAWD_AT);
   return grid.map((line) => line.join(""));
 }
-//@ chunk-sc72x544.js:9051-9206 placement
+//@ chunk-y4bgqkdt.js:9359-9514 placement
 function playScene(screen, every) {
   let frameCount = 0;
   let missed = 0;
@@ -447,24 +447,24 @@ function playScene(screen, every) {
     }
   }
 }
-//@ chunk-sc72x544.js:9206-9290 placement
+//@ chunk-y4bgqkdt.js:9514-9598 placement
 var isPlainTerminal = (env) =>
   (env.noColor !== undefined && env.noColor !== "") || env.forceColor === "0" || env.term === "dumb";
-//@ chunk-sc72x544.js:9290-12648 placement
+//@ chunk-y4bgqkdt.js:9598-12956 placement
 var CLAWD_COOKING_STILL_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 352 144" width="352" height="144" shape-rendering="crispEdges" role="img"><title>Clawd stirs a steaming pot</title><rect x="0" y="136" width="352" height="8" fill="#6b7280"/><g><rect x="208" y="128" width="8" height="8" fill="#f59e0b"/><rect x="224" y="128" width="8" height="8" fill="#f59e0b"/><rect x="240" y="128" width="8" height="8" fill="#f59e0b"/><rect x="256" y="128" width="8" height="8" fill="#f59e0b"/><rect x="272" y="128" width="8" height="8" fill="#f59e0b"/><rect x="288" y="128" width="8" height="8" fill="#f59e0b"/><rect x="216" y="128" width="8" height="8" fill="#ef4444"/><rect x="232" y="128" width="8" height="8" fill="#ef4444"/><rect x="248" y="128" width="8" height="8" fill="#ef4444"/><rect x="264" y="128" width="8" height="8" fill="#ef4444"/><rect x="280" y="128" width="8" height="8" fill="#ef4444"/><rect x="296" y="128" width="8" height="8" fill="#ef4444"/></g><g><rect x="224" y="120" width="8" height="8" fill="#fde047"/><rect x="256" y="120" width="8" height="8" fill="#fde047"/><rect x="280" y="120" width="8" height="8" fill="#fde047"/></g><g opacity="0.85" transform="translate(0 0)"><g transform="translate(208 48)"><path fill="#9aa3ad" d="M8 0h16v8h-16zM0 8h32v8h-32zM8 16h16v8h-16z"/></g></g><g opacity="0.6" transform="translate(-8 -36)"><g transform="translate(240 48)"><path fill="#9aa3ad" d="M8 0h16v8h-16zM0 8h32v8h-32zM8 16h16v8h-16z"/></g></g><g opacity="0.3" transform="translate(-10 -76)"><g transform="translate(272 48)"><path fill="#9aa3ad" d="M8 0h16v8h-16zM0 8h32v8h-32zM8 16h16v8h-16z"/></g></g><g><g><path fill="none" stroke="#be8e5c" stroke-width="8" stroke-linecap="square" d="M161.0 24.8L273.9 91.2"/></g></g><path fill="#94a0b0" d="M184 72h16v8h-16zM312 72h16v8h-16zM192 80h8v8h-8zM184 88h16v8h-16zM320 88h8v8h-8zM192 96h8v8h-8zM192 104h8v8h-8z"/><path fill="#e9b44c" d="M200 72h112v8h-112z"/><path fill="#5f6b7a" d="M200 80h112v8h-112zM200 88h112v8h-112zM200 96h112v8h-112zM200 104h112v8h-112zM200 112h104v8h-104z"/><path fill="#465160" d="M312 80h8v8h-8zM312 88h8v8h-8zM312 96h8v8h-8zM312 104h8v8h-8zM304 112h8v8h-8z"/><rect x="256" y="64" width="8" height="8" fill="#e9b44c"></rect><g><path fill="#d77757" d="M32 56h104v8h-104zM32 64h104v8h-104zM32 72h104v8h-104zM32 80h104v8h-104zM16 88h120v8h-120zM16 96h120v8h-120zM32 104h104v8h-104zM32 112h104v8h-104zM32 120h8v8h-8zM48 120h8v8h-8zM112 120h8v8h-8zM128 120h8v8h-8zM32 128h8v8h-8zM48 128h8v8h-8zM112 128h8v8h-8zM128 128h8v8h-8z"/><rect x="56" y="72" width="8" height="16" fill="#141414"></rect><rect x="120" y="72" width="8" height="16" fill="#141414"></rect><g><rect x="136" y="80" width="16" height="8" fill="#d77757"/><rect x="136" y="72" width="16" height="8" fill="#d77757"/><rect x="144" y="72" width="16" height="8" fill="#d77757"/><rect x="144" y="64" width="16" height="8" fill="#d77757"/><rect x="152" y="64" width="16" height="8" fill="#d77757"/><rect x="152" y="56" width="16" height="8" fill="#d77757"/><rect x="160" y="56" width="16" height="8" fill="#d77757"/><rect x="160" y="48" width="16" height="8" fill="#d77757"/><rect x="168" y="48" width="16" height="8" fill="#d77757"/><rect x="168" y="40" width="16" height="8" fill="#d77757"/><rect x="176" y="40" width="16" height="8" fill="#d77757"/><rect x="176" y="32" width="16" height="8" fill="#d77757"/></g></g></svg>';
-//@ chunk-sc72x544.js:12648-19286 placement
+//@ chunk-y4bgqkdt.js:12956-19594 placement
 var CLAWD_COOKING_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 352 144" width="352" height="144" shape-rendering="crispEdges" role="img"><title>Clawd stirs a steaming pot</title><rect x="0" y="136" width="352" height="8" fill="#6b7280"/><g><rect x="208" y="128" width="8" height="8" fill="#f59e0b"/><rect x="224" y="128" width="8" height="8" fill="#f59e0b"/><rect x="240" y="128" width="8" height="8" fill="#f59e0b"/><rect x="256" y="128" width="8" height="8" fill="#f59e0b"/><rect x="272" y="128" width="8" height="8" fill="#f59e0b"/><rect x="288" y="128" width="8" height="8" fill="#f59e0b"/><rect x="216" y="128" width="8" height="8" fill="#ef4444"/><rect x="232" y="128" width="8" height="8" fill="#ef4444"/><rect x="248" y="128" width="8" height="8" fill="#ef4444"/><rect x="264" y="128" width="8" height="8" fill="#ef4444"/><rect x="280" y="128" width="8" height="8" fill="#ef4444"/><rect x="296" y="128" width="8" height="8" fill="#ef4444"/></g><g><rect x="224" y="120" width="8" height="8" fill="#fde047"/><rect x="256" y="120" width="8" height="8" fill="#fde047"/><rect x="280" y="120" width="8" height="8" fill="#fde047"/><animate attributeName="opacity" values="1;0;1" dur=".5s" repeatCount="indefinite"/></g><g opacity="0"><rect x="216" y="120" width="8" height="8" fill="#f59e0b"/><rect x="240" y="120" width="8" height="8" fill="#f59e0b"/><rect x="272" y="120" width="8" height="8" fill="#f59e0b"/><rect x="288" y="120" width="8" height="8" fill="#f59e0b"/><animate attributeName="opacity" values="0;1;0" dur=".5s" repeatCount="indefinite"/></g><g opacity="0"><g transform="translate(208 48)"><path fill="#9aa3ad" d="M8 0h16v8h-16zM0 8h32v8h-32zM8 16h16v8h-16z"/></g><animateTransform attributeName="transform" type="translate" values="0 0;6 -36;-6 -76" dur="2.6s" begin="-0.00s" repeatCount="indefinite" calcMode="spline" keySplines=".3 0 .7 1;.3 0 .7 1"/><animate attributeName="opacity" values="0;.85;.6;0" keyTimes="0;.2;.6;1" dur="2.6s" begin="-0.00s" repeatCount="indefinite"/></g><g opacity="0"><g transform="translate(240 48)"><path fill="#9aa3ad" d="M8 0h16v8h-16zM0 8h32v8h-32zM8 16h16v8h-16z"/></g><animateTransform attributeName="transform" type="translate" values="0 0;-8 -36;8 -76" dur="2.6s" begin="-0.65s" repeatCount="indefinite" calcMode="spline" keySplines=".3 0 .7 1;.3 0 .7 1"/><animate attributeName="opacity" values="0;.85;.6;0" keyTimes="0;.2;.6;1" dur="2.6s" begin="-0.65s" repeatCount="indefinite"/></g><g opacity="0"><g transform="translate(272 48)"><path fill="#9aa3ad" d="M8 0h16v8h-16zM0 8h32v8h-32zM8 16h16v8h-16z"/></g><animateTransform attributeName="transform" type="translate" values="0 0;10 -36;-10 -76" dur="2.6s" begin="-1.30s" repeatCount="indefinite" calcMode="spline" keySplines=".3 0 .7 1;.3 0 .7 1"/><animate attributeName="opacity" values="0;.85;.6;0" keyTimes="0;.2;.6;1" dur="2.6s" begin="-1.30s" repeatCount="indefinite"/></g><g opacity="0"><g transform="translate(296 48)"><path fill="#9aa3ad" d="M8 0h16v8h-16zM0 8h32v8h-32zM8 16h16v8h-16z"/></g><animateTransform attributeName="transform" type="translate" values="0 0;-6 -36;6 -76" dur="2.6s" begin="-1.95s" repeatCount="indefinite" calcMode="spline" keySplines=".3 0 .7 1;.3 0 .7 1"/><animate attributeName="opacity" values="0;.85;.6;0" keyTimes="0;.2;.6;1" dur="2.6s" begin="-1.95s" repeatCount="indefinite"/></g><g><g><path fill="none" stroke="#be8e5c" stroke-width="8" stroke-linecap="square" d="M161.0 24.8L273.9 91.2"/><animateTransform attributeName="transform" type="rotate" values="12 180 36;-13 180 36;12 180 36" dur="2.6s" repeatCount="indefinite" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1"/></g><animateTransform attributeName="transform" type="translate" values="0 0;0 2;0 0;0 2;0 0" dur="2.6s" repeatCount="indefinite" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1;.45 0 .55 1;.45 0 .55 1"/></g><path fill="#94a0b0" d="M184 72h16v8h-16zM312 72h16v8h-16zM192 80h8v8h-8zM184 88h16v8h-16zM320 88h8v8h-8zM192 96h8v8h-8zM192 104h8v8h-8z"/><path fill="#e9b44c" d="M200 72h112v8h-112z"/><path fill="#5f6b7a" d="M200 80h112v8h-112zM200 88h112v8h-112zM200 96h112v8h-112zM200 104h112v8h-112zM200 112h104v8h-104z"/><path fill="#465160" d="M312 80h8v8h-8zM312 88h8v8h-8zM312 96h8v8h-8zM312 104h8v8h-8zM304 112h8v8h-8z"/><rect x="216" y="64" width="8" height="8" fill="#e9b44c" opacity="0"><animate attributeName="opacity" values="0;0;1;0" keyTimes="0;.6;.8;1" dur="1.3s" begin="-0.00s" repeatCount="indefinite"/></rect><rect x="256" y="64" width="8" height="8" fill="#e9b44c" opacity="0"><animate attributeName="opacity" values="0;0;1;0" keyTimes="0;.6;.8;1" dur="1.3s" begin="-0.45s" repeatCount="indefinite"/></rect><rect x="288" y="64" width="8" height="8" fill="#e9b44c" opacity="0"><animate attributeName="opacity" values="0;0;1;0" keyTimes="0;.6;.8;1" dur="1.3s" begin="-0.90s" repeatCount="indefinite"/></rect><g><path fill="#d77757" d="M32 56h104v8h-104zM32 64h104v8h-104zM32 72h104v8h-104zM32 80h104v8h-104zM16 88h120v8h-120zM16 96h120v8h-120zM32 104h104v8h-104zM32 112h104v8h-104zM32 120h8v8h-8zM48 120h8v8h-8zM112 120h8v8h-8zM128 120h8v8h-8zM32 128h8v8h-8zM48 128h8v8h-8zM112 128h8v8h-8zM128 128h8v8h-8z"/><rect x="56" y="72" width="8" height="16" fill="#141414"><animate attributeName="height" values="16;16;0;16;16" keyTimes="0;.55;.58;.62;1" dur="2.6s" repeatCount="indefinite"/></rect><rect x="120" y="72" width="8" height="16" fill="#141414"><animate attributeName="height" values="16;16;0;16;16" keyTimes="0;.55;.58;.62;1" dur="2.6s" repeatCount="indefinite"/></rect><g><rect x="136" y="80" width="16" height="8" fill="#d77757"/><rect x="136" y="72" width="16" height="8" fill="#d77757"/><rect x="144" y="72" width="16" height="8" fill="#d77757"/><rect x="144" y="64" width="16" height="8" fill="#d77757"/><rect x="152" y="64" width="16" height="8" fill="#d77757"/><rect x="152" y="56" width="16" height="8" fill="#d77757"/><rect x="160" y="56" width="16" height="8" fill="#d77757"/><rect x="160" y="48" width="16" height="8" fill="#d77757"/><rect x="168" y="48" width="16" height="8" fill="#d77757"/><rect x="168" y="40" width="16" height="8" fill="#d77757"/><rect x="176" y="40" width="16" height="8" fill="#d77757"/><rect x="176" y="32" width="16" height="8" fill="#d77757"/><animateTransform attributeName="transform" type="rotate" values="2 136 88;-2 136 88;2 136 88" dur="2.6s" repeatCount="indefinite" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1"/></g><animateTransform attributeName="transform" type="translate" values="0 0;0 2;0 0;0 2;0 0" dur="2.6s" repeatCount="indefinite" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1;.45 0 .55 1;.45 0 .55 1"/></g></svg>';
-//@ chunk-sc72x544.js:19286-19308 placement
+//@ chunk-y4bgqkdt.js:19594-19616 placement
 var HEADING = "How mods work";
-//@ chunk-sc72x544.js:19308-19344 placement
+//@ chunk-y4bgqkdt.js:19616-19652 placement
 var SCENE_ALT = "Clawd stirs a steaming pot";
-//@ chunk-sc72x544.js:19344-19366 placement
+//@ chunk-y4bgqkdt.js:19652-19674 placement
 var SCENE_KEY = "clawd-cooking";
-//@ chunk-sc72x544.js:19366-19377 placement
+//@ chunk-y4bgqkdt.js:19674-19685 placement
 var SVG_WIDTH = 440;
-//@ chunk-sc72x544.js:19377-19578 placement
+//@ chunk-y4bgqkdt.js:19685-19886 placement
 function remoteGuide(ui, content, isStill) {
   let { Box, Svg, Text } = ui;
   return h(
@@ -495,7 +495,7 @@ function remoteGuide(ui, content, isStill) {
     content,
   );
 }
-//@ chunk-sc72x544.js:19578-19765 placement
+//@ chunk-y4bgqkdt.js:19886-20073 placement
 function terminalGuide(ui, content, cells) {
   let { Box, Raster, Text } = ui;
   return h(
@@ -526,13 +526,13 @@ function terminalGuide(ui, content, cells) {
     content,
   );
 }
-//@ chunk-sc72x544.js:19765-19774 placement
+//@ chunk-y4bgqkdt.js:20073-20082 placement
 var CARD_INSET = 2;
-//@ chunk-sc72x544.js:19774-19784 placement
+//@ chunk-y4bgqkdt.js:20082-20092 placement
 var MOVING_COLUMNS_MIN = 60;
-//@ chunk-sc72x544.js:19784-19793 placement
+//@ chunk-y4bgqkdt.js:20092-20101 placement
 var PANEL_ROWS_MIN = 36;
-//@ chunk-sc72x544.js:19793-19803 placement
+//@ chunk-y4bgqkdt.js:20101-20111 placement
 var UNMEASURED_COLUMNS = 80;
 export {
   PLUGIN_DESCRIPTION,

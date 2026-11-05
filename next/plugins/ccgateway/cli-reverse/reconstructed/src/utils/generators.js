@@ -3,33 +3,20 @@
  *
  * 异步生成器工具（all 并发合并、转发 return 值、结果 promise）；另混入极简 plist XML 解析器与 ReadableStream 适配
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/generators.ts
- * pieces: chunk-0sxtya66.js (1), chunk-e6aww6q8.js (5)
- * attribution: fingerprint 2, placement 4
+ * pieces: chunk-5xgkngpb.js (5)
+ * attribution: placement 4, fingerprint 1
  */
-import {
-  indexOfBytes,
-  readJsonStringField,
-  ID_FIELD_MARKER,
-} from "../services/usageInsights/transcriptScan.js";
-import {
-  TOOL_USE_TYPE_MARKER,
-  TOOL_NAME_FIELD_MARKER,
-  sanitizeToolLabel,
-  EMPTY_TOOL_LABEL,
-  extractToolEvidenceLabel,
-  MAX_EVIDENCE_FIELD_CHARS,
-} from "../services/usageInsights/recommendations.js";
 
-//@ chunk-e6aww6q8.js:922105-922183 placement (2.1.88 match: returnValue, 1)
-async function returnValue_2(as) {
+//@ chunk-5xgkngpb.js:932606-932684 placement (2.1.88 match: returnValue, 1)
+async function returnValue(as) {
   let e;
   do e = await as.next();
   while (!e.done);
   return e.value;
 }
-//@ chunk-e6aww6q8.js:922183-922573 fingerprint (2.1.88 match: all, 1)
+//@ chunk-5xgkngpb.js:932684-933074 fingerprint (2.1.88 match: all, 1)
 /**
  * 并发合并多个异步生成器（最多 n 个同时运行），按产出先后交错 yield 各生成器的值。
  */
@@ -61,20 +48,20 @@ async function* all(generators, concurrencyCap = 1 / 0) {
     }
   }
 }
-//@ chunk-e6aww6q8.js:922573-922644 placement
+//@ chunk-5xgkngpb.js:933074-933145 placement
 async function toArray_2(generator) {
   let result = [];
   for await (let item of generator) result.push(item);
   return result;
 }
-//@ chunk-e6aww6q8.js:922644-922689 placement
+//@ chunk-5xgkngpb.js:933145-933190 placement
 /**
  * 把同步可迭代对象重新包装为异步生成器（逐项 yield）。
  */
 async function* replayAsyncIterable(iterable) {
   for (let item of iterable) yield item;
 }
-//@ chunk-e6aww6q8.js:922689-923051 placement
+//@ chunk-5xgkngpb.js:933190-933552 placement
 /**
  * 包装异步迭代器：结束或出错后释放对原迭代器的引用，之后 next/return 直接完成；支持 await using 释放。
  */
@@ -107,30 +94,4 @@ function releasingAsyncIterator(inner) {
   };
   return wrapper;
 }
-//@ chunk-0sxtya66.js:3695-3948 fingerprint (2.1.88 match: returnValue, 1)
-function returnValue(buffer, end, evidenceByTool) {
-  let fieldStart = indexOfBytes(buffer, TOOL_USE_TYPE_MARKER, 0, end);
-  while (fieldStart >= 0) {
-    let nextRecord = indexOfBytes(
-      buffer,
-      TOOL_USE_TYPE_MARKER,
-      fieldStart + TOOL_USE_TYPE_MARKER.length,
-      end,
-    );
-    let recordEnd = nextRecord < 0 ? end : nextRecord;
-    let jsonStringField = readJsonStringField(buffer, ID_FIELD_MARKER, fieldStart, recordEnd);
-    let label = readJsonStringField(buffer, TOOL_NAME_FIELD_MARKER, fieldStart, recordEnd);
-    if (jsonStringField && label && !evidenceByTool.has(jsonStringField)) {
-      let toolLabel = sanitizeToolLabel(label) ?? EMPTY_TOOL_LABEL;
-      evidenceByTool.set(jsonStringField, {
-        tool: toolLabel,
-        detail: extractToolEvidenceLabel(toolLabel, buffer, fieldStart, recordEnd),
-      });
-      let oldestEntry = evidenceByTool.keys().next();
-      if (evidenceByTool.size > MAX_EVIDENCE_FIELD_CHARS && !oldestEntry.done)
-        evidenceByTool.delete(oldestEntry.value);
-    }
-    fieldStart = nextRecord;
-  }
-}
-export { all, returnValue, replayAsyncIterable, returnValue_2, releasingAsyncIterator, toArray_2 };
+export { returnValue, replayAsyncIterable, all, toArray_2, releasingAsyncIterator };

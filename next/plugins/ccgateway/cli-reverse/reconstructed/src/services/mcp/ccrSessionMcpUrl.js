@@ -3,23 +3,23 @@
  *
  * 2.1.316 新增：改写本会话 CCR MCP 地址的会话前缀。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cjydagjy.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h61dq9nz.js (2)
  * attribution: placement 2
  */
 import { ccrSessionIdFromMcpUrl } from "./ccrMcpUrls.js";
 import { sessionIdBody } from "../../bridge/sessionIdCompat.js";
 import { startupCcrEnv } from "../../tasks/RemoteAgentTask/remoteAgentKinds.js";
 import { derivedServerId } from "./firstPartyServerIds.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 
-//@ chunk-cjydagjy.js:20128-20155 placement
+//@ chunk-h61dq9nz.js:20317-20344 placement (2.1.88 match: toCompatSessionId, 1)
 /**
  * 会话 id 的两种前缀（cse_、session_）。
  */
 var CCR_SESSION_ID_PREFIXES = ["cse_", "session_"];
-//@ chunk-cjydagjy.js:20155-20897 placement
+//@ chunk-h61dq9nz.js:20344-21086 placement
 /**
  * 改写本会话 CCR MCP 地址的会话前缀。
  */
@@ -43,7 +43,7 @@ function rewriteCcrSessionMcpUrl(serverName, serverConfig) {
     baseUrl === undefined ||
     extraParts.length > 0 ||
     !baseUrl.endsWith(expectedPath) ||
-    count(queryParts, (part) => part === serverIdParam) !== 1
+    countWhere(queryParts, (part) => part === serverIdParam) !== 1
   )
     return;
   let rewrittenUrl = `${baseUrl.slice(0, -expectedPath.length)}/v2/ccr-sessions/${flippedSegment}/mcp?${queryParts.map((part) => (part === serverIdParam ? `mcp_server_id=${flippedServerId}` : part)).join("&")}`;

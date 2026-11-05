@@ -3,9 +3,9 @@
  *
  * 按文件扩展名推荐提供 LSP 服务器的市场插件，记录忽略/永不推荐。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/lspRecommendation.ts
- * pieces: chunk-18hwfzwa.js (9)
+ * pieces: chunk-czq1j3j2.js (9)
  * attribution: affinity 1, fingerprint 7, file-local 1
  */
 import { extname } from "path";
@@ -18,9 +18,9 @@ import { isPluginInstalled } from "./installedPluginsManager.js";
 import { isBinaryInstalled } from "../binaryCheck.js";
 import { getPluginDisplayName } from "../../components/ManagedSettingsSecurityDialog/utils.js";
 
-//@ chunk-18hwfzwa.js:1798239-1798249 affinity
+//@ chunk-czq1j3j2.js:1846218-1846228 affinity
 var MAX_LSP_RECOMMENDATIONS = 5;
-//@ chunk-18hwfzwa.js:1798249-1798529 fingerprint (2.1.88 match: extractLspInfoFromManifest, 1)
+//@ chunk-czq1j3j2.js:1846228-1846508 fingerprint (2.1.88 match: extractLspInfoFromManifest, 1)
 function extractLspInfoFromManifest(lspServers) {
   if (!lspServers) return null;
   if (typeof lspServers === "string") {
@@ -37,11 +37,11 @@ function extractLspInfoFromManifest(lspServers) {
   }
   return extractFromServerConfigRecord(lspServers);
 }
-//@ chunk-18hwfzwa.js:1798529-1798582 file-local
+//@ chunk-czq1j3j2.js:1846508-1846561 file-local
 function isRecord(value) {
   return typeof value === "object" && value !== null;
 }
-//@ chunk-18hwfzwa.js:1798582-1798880 fingerprint (2.1.88 match: extractFromServerConfigRecord, 1)
+//@ chunk-czq1j3j2.js:1846561-1846859 fingerprint (2.1.88 match: extractFromServerConfigRecord, 1)
 function extractFromServerConfigRecord(serverConfigs) {
   let extensions = new Set();
   let command = null;
@@ -57,7 +57,7 @@ function extractFromServerConfigRecord(serverConfigs) {
     command,
   };
 }
-//@ chunk-18hwfzwa.js:1798880-1799413 fingerprint (2.1.88 match: getLspPluginsFromMarketplaces, 1)
+//@ chunk-czq1j3j2.js:1846859-1847392 fingerprint (2.1.88 match: getLspPluginsFromMarketplaces, 1)
 async function getLspPluginsFromMarketplaces(storageV5) {
   let result = new Map();
   try {
@@ -89,7 +89,7 @@ async function getLspPluginsFromMarketplaces(storageV5) {
   }
   return result;
 }
-//@ chunk-18hwfzwa.js:1799413-1800597 fingerprint (2.1.88 match: getMatchingLspPlugins, 1)
+//@ chunk-czq1j3j2.js:1847392-1848576 fingerprint (2.1.88 match: getMatchingLspPlugins, 1)
 /**
  * 按文件扩展名在市场中找提供对应 LSP 服务器的插件（排除已安装和用户拒绝过的），用于“安装 LSP 插件？”提示。
  */
@@ -146,7 +146,7 @@ async function getMatchingLspPlugins(session, filePath, storageV5) {
     command: info.command,
   }));
 }
-//@ chunk-18hwfzwa.js:1800597-1800801 fingerprint (2.1.88 match: addToNeverSuggest, 1)
+//@ chunk-czq1j3j2.js:1848576-1848780 fingerprint (2.1.88 match: addToNeverSuggest, 1)
 /**
  * 把插件加入 LSP 推荐“永不推荐”列表（全局 lspRecommendationNeverPlugins）。
  */
@@ -161,7 +161,7 @@ function addToNeverSuggest(pluginId, storageV5) {
   }, storageV5);
   logForDebugging(`[lspRecommendation] Added ${pluginId} to never suggest`);
 }
-//@ chunk-18hwfzwa.js:1800801-1800971 fingerprint (2.1.88 match: incrementIgnoredCount, 1)
+//@ chunk-czq1j3j2.js:1848780-1848950 fingerprint (2.1.88 match: incrementIgnoredCount, 1)
 /**
  * LSP 推荐被忽略次数 +1（多次忽略后自动关闭）。
  */
@@ -175,7 +175,7 @@ function incrementIgnoredCount(storageV5) {
   }, storageV5);
   logForDebugging("[lspRecommendation] Incremented ignored count");
 }
-//@ chunk-18hwfzwa.js:1800971-1801080 fingerprint (2.1.88 match: isLspRecommendationsDisabled, 1)
+//@ chunk-czq1j3j2.js:1848950-1849059 fingerprint (2.1.88 match: isLspRecommendationsDisabled, 1)
 function isLspRecommendationsDisabled() {
   let config = getGlobalConfig();
   return (

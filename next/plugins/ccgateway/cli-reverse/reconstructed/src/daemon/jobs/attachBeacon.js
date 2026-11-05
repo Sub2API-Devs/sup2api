@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：上报附加结果 tengu_bg_attach_outcome；从存储后端列出信标等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vrr64ez0.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bjxz9pt3.js (25)
  * attribution: placement 25
  */
 import { join } from "path";
@@ -30,39 +30,39 @@ import { normalizeDaemonSessionState } from "../../services/daemon/sessionStatus
 import { boundedMarkCountOrUndefined } from "../../services/daemon/leaseProtocol.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vrr64ez0.js:2591-2617 placement
+//@ chunk-bjxz9pt3.js:2626-2652 placement
 var ATTACH_BEACON_STALE_MS = 900000;
 var ATTACH_BEACON_MAX_AGE_MS = 86400000;
-//@ chunk-vrr64ez0.js:2617-2660 placement
+//@ chunk-bjxz9pt3.js:2652-2695 placement
 function isBeaconStale(mtimeMs, nowMs) {
   return nowMs - mtimeMs >= ATTACH_BEACON_MAX_AGE_MS || mtimeMs > nowMs + 60000;
 }
-//@ chunk-vrr64ez0.js:2660-2690 placement
+//@ chunk-bjxz9pt3.js:2695-2725 placement
 var SESSION_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
-//@ chunk-vrr64ez0.js:2690-2734 placement
+//@ chunk-bjxz9pt3.js:2725-2769 placement
 function beaconPath(jobId) {
   return join(daemonAttachJournal(), `${jobId}.json`);
 }
-//@ chunk-vrr64ez0.js:2734-2746 placement
+//@ chunk-bjxz9pt3.js:2769-2781 placement
 var MAX_BEACON_BYTES = 8192;
-//@ chunk-vrr64ez0.js:2746-2787 placement
+//@ chunk-bjxz9pt3.js:2781-2822 placement
 function daemonPath(file) {
   return STORAGE_SPACES.daemon([ATTACH_JOURNAL, file]);
 }
-//@ chunk-vrr64ez0.js:2787-2825 placement
+//@ chunk-bjxz9pt3.js:2822-2860 placement
 function beaconFilePath(gestureId) {
   return daemonPath(`${gestureId}.json`);
 }
-//@ chunk-vrr64ez0.js:2825-2837 placement
+//@ chunk-bjxz9pt3.js:2860-2872 placement
 var beaconLock; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vrr64ez0.js:2825", () => {
+deferInit("chunk-bjxz9pt3.js:2860", () => {
   beaconLock = createKeyedQueue();
 });
-//@ chunk-vrr64ez0.js:2837-2892 placement
+//@ chunk-bjxz9pt3.js:2872-2927 placement
 function withBeaconLock(gestureId, fn) {
   return beaconLock.run("g:" + gestureId, fn).catch(() => {});
 }
-//@ chunk-vrr64ez0.js:2892-3330 placement
+//@ chunk-bjxz9pt3.js:2927-3365 placement
 /**
  * 记录附加手势信标（surface、尝试次数、进程信息）。
  */
@@ -96,14 +96,14 @@ async function startAttachBeacon(gestureId, surface, storageV5) {
   });
   await reconcileBeacons(storageV5);
 }
-//@ chunk-vrr64ez0.js:3330-3452 placement
+//@ chunk-bjxz9pt3.js:3365-3487 placement
 async function writeOwnedBeaconToStorage(storage, gestureId, beacon, allowTransient = false) {
   if (!(await isBeaconDirPresent(allowTransient))) return false;
   if (getSpawnLauncherState().ownedBeacons.get(gestureId) === beacon)
     await storage.write(beaconFilePath(gestureId), jsonStringify(beacon));
   return true;
 }
-//@ chunk-vrr64ez0.js:3452-3725 placement
+//@ chunk-bjxz9pt3.js:3487-3760 placement
 /**
  * 记录一次附着尝试编号（单调递增），异步写回信标（存储后端或本地原子写）。
  */
@@ -122,7 +122,7 @@ function recordAttachAttempt(gestureId, attempt, storage) {
     await writeFileAtomic(beaconPath(gestureId), jsonStringify(beacon), 384);
   });
 }
-//@ chunk-vrr64ez0.js:3725-4540 placement
+//@ chunk-bjxz9pt3.js:3760-4575 placement
 /**
  * 更新附加信标的标记（期待标记、daemon 已启动、交互已达）。
  */
@@ -153,7 +153,7 @@ function updateAttachBeacon(gestureId, update, storageV5) {
     await writeFileAtomic(beaconPath(gestureId), jsonStringify(beacon), 384);
   });
 }
-//@ chunk-vrr64ez0.js:4540-5174 placement
+//@ chunk-bjxz9pt3.js:4575-5209 placement
 /**
  * 删除附加信标。
  */
@@ -203,10 +203,10 @@ async function clearAttachBeacon(gestureId, storageV5) {
     await rename(beaconFile, `${beaconFile}.${process.pid}.cleared`).catch(() => {});
   });
 }
-//@ chunk-vrr64ez0.js:5174-5189 placement
+//@ chunk-bjxz9pt3.js:5209-5224 placement
 var BEACON_RETRY_COUNT = 4;
 var BEACON_RETENTION_LIMIT = 50;
-//@ chunk-vrr64ez0.js:5189-5291 placement
+//@ chunk-bjxz9pt3.js:5224-5326 placement
 async function isBeaconDirPresent(allowMissing = false) {
   try {
     return (await lstat(daemonAttachJournal())).isDirectory();
@@ -214,7 +214,7 @@ async function isBeaconDirPresent(allowMissing = false) {
     return allowMissing && getErrnoCode(error) === "ENOENT";
   }
 }
-//@ chunk-vrr64ez0.js:5291-5403 placement
+//@ chunk-bjxz9pt3.js:5326-5438 placement
 async function readBeaconFile(fileName) {
   try {
     let text = await readSmallFileOrNull(join(daemonAttachJournal(), fileName), MAX_BEACON_BYTES);
@@ -224,7 +224,7 @@ async function readBeaconFile(fileName) {
     return null;
   }
 }
-//@ chunk-vrr64ez0.js:5403-5722 placement
+//@ chunk-bjxz9pt3.js:5438-5757 placement
 /**
  * 读取一个信标记录。
  */
@@ -245,7 +245,7 @@ async function readBeacon(storageV5, file) {
         mtimeMs: fileEntry.mtimeMs,
       };
 }
-//@ chunk-vrr64ez0.js:5722-5954 placement
+//@ chunk-bjxz9pt3.js:5757-5989 placement
 function parseBeacon(text) {
   try {
     let parsed = jsonParse(text);
@@ -261,7 +261,7 @@ function parseBeacon(text) {
     return null;
   }
 }
-//@ chunk-vrr64ez0.js:5954-6160 placement
+//@ chunk-bjxz9pt3.js:5989-6195 placement
 async function isBeaconOwnerGone(beacon) {
   if (typeof beacon.pid !== "number" || !Number.isInteger(beacon.pid) || beacon.pid <= 0) return false;
   if (!isProcessRunning(beacon.pid)) return true;
@@ -269,7 +269,7 @@ async function isBeaconOwnerGone(beacon) {
   let processStartTime = await getProcessStartTimeAsync(beacon.pid);
   return processStartTime !== undefined && processStartTime !== beacon.procStart;
 }
-//@ chunk-vrr64ez0.js:6160-6254 placement
+//@ chunk-bjxz9pt3.js:6195-6289 placement
 async function isBeaconFileStale(fileName, nowMs) {
   try {
     let stats = await lstat(join(daemonAttachJournal(), fileName));
@@ -278,11 +278,11 @@ async function isBeaconFileStale(fileName, nowMs) {
     return false;
   }
 }
-//@ chunk-vrr64ez0.js:6254-6306 placement
+//@ chunk-bjxz9pt3.js:6289-6341 placement
 function reconcileBeacons(storageV5) {
   return beaconLock.run("reconcile", () => listBeacons(storageV5));
 }
-//@ chunk-vrr64ez0.js:6306-6989 placement
+//@ chunk-bjxz9pt3.js:6341-7024 placement
 /**
  * 列出现存信标（清理过期的）。
  */
@@ -335,7 +335,7 @@ async function listBeacons(storageV5) {
   }
   return beacons;
 }
-//@ chunk-vrr64ez0.js:6989-8047 placement
+//@ chunk-bjxz9pt3.js:7024-8082 placement
 /**
  * 上报附加结果 tengu_bg_attach_outcome。
  */
@@ -386,7 +386,7 @@ function reportAttachOutcome(beacon) {
       : undefined,
   });
 }
-//@ chunk-vrr64ez0.js:8047-9021 placement
+//@ chunk-bjxz9pt3.js:8082-9056 placement
 /**
  * 从存储后端列出信标。
  */
@@ -461,4 +461,4 @@ async function listBeaconsFromStorage(storageV5) {
   }
   return beacons;
 }
-export { clearAttachBeacon, startAttachBeacon, updateAttachBeacon, recordAttachAttempt };
+export { clearAttachBeacon, startAttachBeacon, recordAttachAttempt, updateAttachBeacon };

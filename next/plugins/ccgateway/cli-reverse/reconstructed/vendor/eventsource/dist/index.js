@@ -1,13 +1,13 @@
 /**
  * eventsource/dist/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: eventsource@3.0.5..4.1.1
- * pieces: chunk-z6af8z56.js (8)
+ * pieces: chunk-1rh66vj0.js (8)
  * attribution: esm-fingerprint 7, esm-layout 1
  */
 import { createParser } from "../../eventsource-parser/dist/index.js";
 
-//@ chunk-z6af8z56.js:228-523 esm-fingerprint
+//@ chunk-1rh66vj0.js:228-523 esm-fingerprint
 class ErrorEvent extends Event {
   constructor(type, errorEventInitDict) {
     var _a;
@@ -25,12 +25,12 @@ class ErrorEvent extends Event {
     return inspect(inspectableError(this), options);
   }
 }
-//@ chunk-z6af8z56.js:523-633 esm-fingerprint
+//@ chunk-1rh66vj0.js:523-633 esm-fingerprint
 function syntaxError(message) {
   let DomException = globalThis.DOMException;
   return typeof DomException == "function" ? new DomException(message, "SyntaxError") : SyntaxError(message);
 }
-//@ chunk-z6af8z56.js:633-817 esm-fingerprint
+//@ chunk-1rh66vj0.js:633-817 esm-fingerprint
 function flattenError(err) {
   return err instanceof Error
     ? "errors" in err && Array.isArray(err.errors)
@@ -40,7 +40,7 @@ function flattenError(err) {
         : err.message
     : `${err}`;
 }
-//@ chunk-z6af8z56.js:817-963 esm-fingerprint
+//@ chunk-1rh66vj0.js:817-963 esm-fingerprint
 function inspectableError(err) {
   return {
     type: err.type,
@@ -51,7 +51,7 @@ function inspectableError(err) {
     timeStamp: err.timeStamp,
   };
 }
-//@ chunk-z6af8z56.js:963-1366 esm-layout
+//@ chunk-1rh66vj0.js:963-1366 esm-layout
 var __typeError = (msg) => {
   throw TypeError(msg);
 };
@@ -98,7 +98,7 @@ var _onRetryChange;
 var failConnection_fn;
 var scheduleReconnect_fn;
 var _reconnect;
-//@ chunk-z6af8z56.js:1366-4021 esm-fingerprint
+//@ chunk-1rh66vj0.js:1366-4021 esm-fingerprint
 class EventSource extends EventTarget {
   constructor(url, eventSourceInitDict) {
     var _a;
@@ -287,7 +287,7 @@ class EventSource extends EventTarget {
     }
   }
 }
-//@ chunk-z6af8z56.js:4021-5161 esm-fingerprint
+//@ chunk-1rh66vj0.js:4021-5161 esm-fingerprint
 _readyState = new WeakMap();
 _url = new WeakMap();
 _redirectUrl = new WeakMap();
@@ -365,7 +365,7 @@ _reconnect = new WeakMap();
 EventSource.CONNECTING = 0;
 EventSource.OPEN = 1;
 EventSource.CLOSED = 2;
-//@ chunk-z6af8z56.js:5161-5320 esm-fingerprint
+//@ chunk-1rh66vj0.js:5161-5320 esm-fingerprint
 function getBaseURL() {
   let doc = "document" in globalThis ? globalThis.document : undefined;
   return doc && typeof doc == "object" && "baseURI" in doc && typeof doc.baseURI == "string"

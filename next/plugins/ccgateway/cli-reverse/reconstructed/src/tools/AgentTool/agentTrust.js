@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：子代理信任判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (8)
  * attribution: placement 8
  */
 import { isSourceAdminTrusted } from "../../utils/settings/pluginOnlyPolicy.js";
@@ -30,14 +30,14 @@ import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2315215-2315374 placement
+//@ chunk-5xgkngpb.js:2370606-2370765 placement
 function isAgentDefinitionTrusted(agentDefinition) {
   if (isSourceAdminTrusted(agentDefinition.source)) return true;
   if (agentDefinition.source === "userSettings" || agentDefinition.source === "flagSettings") return true;
   if (!agentDefinition.baseDir) return isWorkspacePersistedTrusted();
   return isTrustKeyPersistedTrusted(getAgentFolderTrustKey(agentDefinition.baseDir));
 }
-//@ chunk-e6aww6q8.js:2315374-2315433 placement
+//@ chunk-5xgkngpb.js:2370765-2370824 placement
 /**
  * 取代理定义所在目录的信任键。
  */
@@ -45,12 +45,12 @@ function agentBaseDirTrustKey(agentDefinition) {
   if (!agentDefinition.baseDir) return;
   return getAgentFolderTrustKey(agentDefinition.baseDir);
 }
-//@ chunk-e6aww6q8.js:2315433-2315460 placement
+//@ chunk-5xgkngpb.js:2370824-2370851 placement
 var agentFolderTrustKeySlots; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:2315433", () => {
+deferInit("chunk-5xgkngpb.js:2370824", () => {
   agentFolderTrustKeySlots = new HostScoped(() => new Map());
 });
-//@ chunk-e6aww6q8.js:2315460-2315571 placement
+//@ chunk-5xgkngpb.js:2370851-2370962 placement
 function getAgentFolderTrustKey(absPath) {
   let cache = agentFolderTrustKeySlots.of(getRootSession().host);
   let cachedKey = cache.get(absPath);
@@ -59,14 +59,14 @@ function getAgentFolderTrustKey(absPath) {
   cache.set(absPath, persistedTrustKeyForPath);
   return persistedTrustKeyForPath;
 }
-//@ chunk-e6aww6q8.js:2315664-2315697 placement
+//@ chunk-5xgkngpb.js:2371055-2371088 placement
 /**
  * JSON 字符串化并转义不可见字符。
  */
 function escapedJsonStringify(value) {
   return escapeInvisibleChars(jsonStringify(value));
 }
-//@ chunk-e6aww6q8.js:2315697-2315778 placement
+//@ chunk-5xgkngpb.js:2371088-2371169 placement
 /**
  * 判断代理定义是否含对象形式 mcpServers 且未被信任。
  */
@@ -76,7 +76,7 @@ function hasUntrustedMcpServerEntries(agentDefinition) {
     !isAgentDefinitionTrusted(agentDefinition)
   );
 }
-//@ chunk-e6aww6q8.js:2315778-2316209 placement
+//@ chunk-5xgkngpb.js:2371169-2371599 placement
 /**
  * 生成项目代理定义所在文件夹未被信任时的提示文字。
  */
@@ -91,7 +91,7 @@ function agentFolderTrustHint(agentDefinition) {
     return "This session has no working directory and the definition has no folder of its own, so there is no folder to trust.";
   return `Run Claude Code in that folder once and accept the trust dialog, or set projects[${escapedJsonStringify(trustKey)}].hasTrustDialogAccepted: true in ${describeGlobalConfigFile()}.`;
 }
-//@ chunk-e6aww6q8.js:2316209-2316796 placement
+//@ chunk-5xgkngpb.js:2371599-2372186 placement
 function checkAgentOriginTrust(agentDefinition, surface, what = "hooks") {
   if (
     what === "mcpServers" &&
@@ -122,8 +122,8 @@ function checkAgentOriginTrust(agentDefinition, surface, what = "hooks") {
 export {
   isAgentDefinitionTrusted,
   checkAgentOriginTrust,
-  hasUntrustedMcpServerEntries,
-  agentFolderTrustHint,
-  escapedJsonStringify,
   agentBaseDirTrustKey,
+  agentFolderTrustHint,
+  hasUntrustedMcpServerEntries,
+  escapedJsonStringify,
 };

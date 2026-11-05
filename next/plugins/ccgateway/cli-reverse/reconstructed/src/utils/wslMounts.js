@@ -3,16 +3,16 @@
  *
  * WSL 挂载表解析（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-82kqcve8.js (47)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a2q0x549.js (42), chunk-n44f9pt7.js (5)
  * attribution: placement 47
  */
 import { posix } from "path";
 import { firstLineOf } from "./stringUtils.js";
 import { identity as identity_2 } from "./identity.js";
 import { getPlatform } from "./platform.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { getFsImplementation } from "./fsOperations.js";
 import {
   getErrnoCode,
@@ -26,13 +26,13 @@ import { logError } from "./log.js";
 import { profileRelativeRemainders } from "./windowsProfileFolders.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-82kqcve8.js:163867-164285 placement
+//@ chunk-n44f9pt7.js:2900-3318 placement
 /**
  * WSL 里的 Windows 网络文件系统类型集合。
  */
 var NETWORK_FS_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var LOCAL_FS_TYPES;
-deferInit("chunk-82kqcve8.js:163867", () => {
+deferInit("chunk-n44f9pt7.js:2900", () => {
   NETWORK_FS_TYPES = new Set(
     "drvfs 9p virtiofs cifs smb3 smbfs nfs nfs4 ntfs ntfs3 fuseblk vfat exfat msdos".split(" "),
   );
@@ -44,7 +44,7 @@ deferInit("chunk-82kqcve8.js:163867", () => {
     ].flatMap((group) => group.split(" ")),
   );
 });
-//@ chunk-82kqcve8.js:164285-164519 placement
+//@ chunk-n44f9pt7.js:3318-3552 placement
 /**
  * 挂载是否网络/FUSE/非本地文件系统，或来源为 Windows 盘符、UNC、URL、drvfs。
  */
@@ -62,28 +62,28 @@ function isNetworkOrForeignMount(mount) {
     /(^|,)aname=drvfs/.test(mount.options ?? "")
   );
 }
-//@ chunk-82kqcve8.js:164519-164604 placement
+//@ chunk-n44f9pt7.js:3552-3637 placement
 /**
  * 是否是 drvfs（或 aname=drvfs 的 9p）挂载。
  */
 function isDrvfsMount(fstype, options) {
   return fstype === "drvfs" || (fstype === "9p" && /(^|,)aname=drvfs(?=[,;]|$)/.test(options));
 }
-//@ chunk-82kqcve8.js:164604-164696 placement
+//@ chunk-n44f9pt7.js:3637-3729 placement
 /**
  * 还原 mountinfo 里的八进制转义。
  */
 function unescapeMountField(field) {
   return field.replace(/\\([0-7]{3})/g, (match, octal) => String.fromCharCode(parseInt(octal, 8)));
 }
-//@ chunk-82kqcve8.js:164696-164762 placement
+//@ chunk-n44f9pt7.js:3729-3795 placement
 /**
  * 路径是否等于或位于挂载点之下。
  */
 function isAtOrUnderPath(path, parent) {
   return path === parent || path.startsWith(parent === "/" ? "/" : `${parent}/`);
 }
-//@ chunk-82kqcve8.js:164762-165686 placement
+//@ chunk-a2q0x549.js:161956-162880 placement
 /**
  * WSL mountinfo 解析用的正则与常量组（盘符、UNC、drvfs 选项、缓存时长等）。
  */
@@ -103,7 +103,7 @@ var DRVFS_SOURCE_RE;
 var WSL_MOUNT_OPTION_RE;
 var MOUNT_TABLE_TTL_MS;
 var mountTableCache;
-deferInit("chunk-82kqcve8.js:164762", () => {
+deferInit("chunk-a2q0x549.js:161956", () => {
   UNREAD = "unread";
   SERVED_MOUNT_TABLE_UNREADABLE = "served-mount-table-unreadable";
   MNT_DRIVE_RE = /^\/mnt\/([a-z])(?=\/|$)/i;
@@ -135,7 +135,7 @@ deferInit("chunk-82kqcve8.js:164762", () => {
     },
   );
 });
-//@ chunk-82kqcve8.js:165686-165782 placement
+//@ chunk-a2q0x549.js:162880-162976 placement
 /**
  * WSL 的第二根挂载列表。
  */
@@ -144,16 +144,16 @@ function secondRootMounts() {
   let wslMounts = readWslMountsCached();
   return wslMounts === "unreadable" ? [] : wslMounts.secondRootMounts;
 }
-//@ chunk-82kqcve8.js:165782-165808 placement
+//@ chunk-a2q0x549.js:162976-163002 placement
 var WSLG_DISTRO_ROOT = "/mnt/wslg/distro";
-//@ chunk-82kqcve8.js:165808-165921 placement
+//@ chunk-a2q0x549.js:163002-163115 placement
 function rootAliasMountPoints() {
   let mapped = secondRootMounts().map((mount) => mount.mountPoint);
-  return (isWslMountInfoUnreadable() ? uniq([...mapped, WSLG_DISTRO_ROOT]) : mapped).toSorted(
-    (left, right) => right.length - left.length,
-  );
+  return (
+    isWslMountInfoUnreadable() ? normalizeCaseForComparison_2([...mapped, WSLG_DISTRO_ROOT]) : mapped
+  ).toSorted((left, right) => right.length - left.length);
 }
-//@ chunk-82kqcve8.js:165921-166051 placement
+//@ chunk-a2q0x549.js:163115-163245 placement
 function pathBelowRootAlias(path) {
   let aliases = rootAliasMountPoints();
   if (aliases.length === 0) return;
@@ -161,7 +161,7 @@ function pathBelowRootAlias(path) {
   let found = aliases.find((alias) => isAtOrUnderPath(normalized, alias));
   return found && (normalized.slice(found.length) || "/");
 }
-//@ chunk-82kqcve8.js:166051-166157 placement
+//@ chunk-a2q0x549.js:163245-163351 placement
 /**
  * WSL 挂载信息不可读或含格式错误的行。
  */
@@ -170,7 +170,7 @@ function isWslMountInfoUnreadable() {
   let wslMounts = readWslMountsCached();
   return wslMounts === "unreadable" || wslMounts.malformedLineNumber !== undefined;
 }
-//@ chunk-82kqcve8.js:166157-166966 placement
+//@ chunk-a2q0x549.js:163351-164160 placement
 /**
  * 解析 mountinfo：盘符挂载、其他 Windows 挂载及其原始行、Windows 卷与首个异常行。
  */
@@ -220,7 +220,7 @@ function parseMountInfo(file) {
     malformedLineNumber: malformedIndex === -1 ? undefined : malformedIndex + 1,
   };
 }
-//@ chunk-82kqcve8.js:166966-167256 placement
+//@ chunk-a2q0x549.js:164160-164450 placement
 function sameFsTypeMounts(mounts) {
   let rootFsTypes = new Set(mounts.filter((mount) => mount.mountPoint === "/").map((mount) => mount.fstype));
   return [
@@ -238,7 +238,7 @@ function sameFsTypeMounts(mounts) {
     readOnly,
   }));
 }
-//@ chunk-82kqcve8.js:167256-167583 placement
+//@ chunk-a2q0x549.js:164450-164777 placement
 /**
  * 只保留与 / 同 dev/inode 的挂载点（看不到时当作第二根盘）。
  */
@@ -260,7 +260,7 @@ function filterSameInodeAsRoot(secondRootMountCandidates) {
     }
   });
 }
-//@ chunk-82kqcve8.js:167583-167804 placement
+//@ chunk-a2q0x549.js:164777-164998 placement
 function parseMountInfoLine(line) {
   let match = WSL_MOUNT_OPTION_RE.exec(line);
   if (match === null) return;
@@ -274,7 +274,7 @@ function parseMountInfoLine(line) {
     options,
   };
 }
-//@ chunk-82kqcve8.js:167804-167990 placement
+//@ chunk-a2q0x549.js:164998-165184 placement
 function isMalformed9pMount({ fstype, source, options }) {
   return (
     fstype === "9p" &&
@@ -284,13 +284,13 @@ function isMalformed9pMount({ fstype, source, options }) {
       (DRIVE_PATH_RE.test(source) && ANAME_DRVFS_RE.test(options) && !DRVFS_ANAME_PATH_RE.test(options)))
   );
 }
-//@ chunk-82kqcve8.js:167990-168054 placement
+//@ chunk-a2q0x549.js:165184-165248 placement
 var EMPTY_WINDOWS_MOUNT_CLASSIFICATION = {
   drives: [],
   otherWindowsMounts: [],
   otherWindowsVolumes: [],
 };
-//@ chunk-82kqcve8.js:168054-168910 placement
+//@ chunk-a2q0x549.js:165248-166113 placement
 /**
  * 把一个挂载分类为盘符挂载、其他 Windows 挂载与 Windows 卷。
  */
@@ -302,7 +302,7 @@ function classifyWindowsMount({ root, mountPoint, fstype, source, options }) {
   if ((match ?? match_2) === null) {
     if (!isWindowsForeignMount(fstype, source, options)) return EMPTY_WINDOWS_MOUNT_CLASSIFICATION;
     let optionVariants = /\\[0-7]{3}/.test(options) ? [options, unescapeMountField(options)] : [options];
-    let sourcePaths = uniq(
+    let sourcePaths = normalizeCaseForComparison_2(
       optionVariants.flatMap((optionVariant) => {
         let normalizedSource = normalizeUncSource(DRVFS_SOURCE_RE.exec(optionVariant)?.[1] ?? source);
         let volumeGuid = VOLUME_GUID_RE.exec(optionVariant)?.[1];
@@ -337,7 +337,7 @@ function classifyWindowsMount({ root, mountPoint, fstype, source, options }) {
         : []),
     ].flatMap(([letter, sourcePath]) => {
       let sourceSegments = pathSegments(sourcePath);
-      return uniq(
+      return normalizeCaseForComparison_2(
         appendRemainingSegments(rootSegments, sourceSegments).flatMap((combined) => [
           combined.join("/"),
           ...pathSpellings(combined),
@@ -352,21 +352,21 @@ function classifyWindowsMount({ root, mountPoint, fstype, source, options }) {
     otherWindowsVolumes: [],
   };
 }
-//@ chunk-82kqcve8.js:168910-169009 placement
+//@ chunk-a2q0x549.js:166113-166212 placement
 function stripCommonPrefixSegments(segments, prefix) {
   return prefix.length > 0 &&
     prefix.every((segment, index) => foldCaseBasic(segment) === foldCaseBasic(segments[index] ?? ""))
     ? [segments, segments.slice(prefix.length)]
     : [segments];
 }
-//@ chunk-82kqcve8.js:169009-169063 placement
+//@ chunk-a2q0x549.js:166212-166266 placement
 function appendRemainingSegments(rootSegments, sourceSegments) {
   return stripCommonPrefixSegments(rootSegments, sourceSegments).map((remainder) => [
     ...sourceSegments,
     ...remainder,
   ]);
 }
-//@ chunk-82kqcve8.js:169063-169169 placement
+//@ chunk-a2q0x549.js:166266-166372 placement
 function windowsMountSubpaths(sourcePath, rootSegments) {
   let sourceSegments = pathSegments(DEVICE_ESCAPED_PATH_RE.exec(sourcePath)?.[3] ?? "");
   return [
@@ -375,7 +375,7 @@ function windowsMountSubpaths(sourcePath, rootSegments) {
     [],
   ].flatMap(pathSpellings);
 }
-//@ chunk-82kqcve8.js:169169-169528 placement
+//@ chunk-a2q0x549.js:166372-166731 placement
 /**
  * 由 9p 来源推出 Windows 卷（UNC、盘符或未读）。
  */
@@ -402,7 +402,7 @@ function windowsVolumeCandidates(sourcePath, rootSegments) {
                 },
               ]),
         ];
-  return uniq(
+  return normalizeCaseForComparison_2(
     [
       ...appendRemainingSegments(rootSegments, pathSegments(restPath ?? "")),
       ...(volumes.some(({ volume }) => volume === UNREAD) ? [[]] : []),
@@ -414,22 +414,24 @@ function windowsVolumeCandidates(sourcePath, rootSegments) {
     })),
   );
 }
-//@ chunk-82kqcve8.js:169528-169590 placement
+//@ chunk-a2q0x549.js:166731-166793 placement
 function normalizeUncSource(source) {
   return source.replace(UNC_DEVICE_PREFIX_RE, (match, uncPrefix) => (uncPrefix === undefined ? "" : "//"));
 }
-//@ chunk-82kqcve8.js:169590-169638 placement
+//@ chunk-a2q0x549.js:166793-166841 placement
 function driveVolumeId(letter) {
   return `drive:${letter.toLowerCase()}`;
 }
-//@ chunk-82kqcve8.js:169638-169772 placement
+//@ chunk-a2q0x549.js:166841-166975 placement
 function pathSpellings(segments) {
   let filtered = segments
     .map((segment) => stripTrailingDotsSpaces(firstLineOf(segment, ":")))
     .filter((trimmed) => trimmed !== "");
-  return uniq([segments, filtered].map((variant) => posix.normalize(`/${variant.join("/")}`).slice(1)));
+  return normalizeCaseForComparison_2(
+    [segments, filtered].map((variant) => posix.normalize(`/${variant.join("/")}`).slice(1)),
+  );
 }
-//@ chunk-82kqcve8.js:169772-169858 placement
+//@ chunk-a2q0x549.js:166975-167061 placement
 function isWindowsForeignMount(fstype, source, options) {
   return (
     WINDOWS_FS_TYPES.has(fstype) ||
@@ -438,7 +440,7 @@ function isWindowsForeignMount(fstype, source, options) {
     DEVICE_PATH_OPTION_RE.test(source)
   );
 }
-//@ chunk-82kqcve8.js:169858-170094 placement
+//@ chunk-a2q0x549.js:167061-167297 placement
 /**
  * 路径所在的 Windows 盘符挂载（含 /mnt/<盘符> 形式）。
  */
@@ -464,7 +466,7 @@ function driveMountsForPath(path) {
     beneath: relativeBeneathMount(mount, segments),
   }));
 }
-//@ chunk-82kqcve8.js:170094-170247 placement
+//@ chunk-a2q0x549.js:167297-167450 placement
 /**
  * 某目录之下的盘符挂载。
  */
@@ -473,7 +475,7 @@ function driveMountsUnder(dir) {
   let prefix = foldCaseBasic(dir === "/" ? "/" : `${dir.replace(/\/+$/, "")}/`);
   return driveMounts().filter((mount) => foldCaseBasic(mount.mountPoint).startsWith(prefix));
 }
-//@ chunk-82kqcve8.js:170247-170461 placement
+//@ chunk-a2q0x549.js:167450-167664 placement
 /**
  * 路径所在的其他 Windows 挂载。
  */
@@ -490,7 +492,7 @@ function otherWindowsMountsForPath(path) {
       beneath: relativeBeneathMount(otherWindowsMount, segments),
     }));
 }
-//@ chunk-82kqcve8.js:170461-170836 placement
+//@ chunk-a2q0x549.js:167664-168039 placement
 /**
  * 路径对应的全部 Windows 卷（盘符、挂载、9p 卷）及其下相对路径。
  */
@@ -522,7 +524,7 @@ function windowsVolumesForPath(path) {
       })),
   ];
 }
-//@ chunk-82kqcve8.js:170836-171387 placement
+//@ chunk-a2q0x549.js:168039-168590 placement
 function listWslDrvfsMounts(path, mode) {
   let mounts = getPlatform() === "wsl" ? readWslMountsCached() : "unreadable";
   if (mounts === "unreadable") return false;
@@ -560,7 +562,7 @@ function listWslDrvfsMounts(path, mode) {
       );
     });
 }
-//@ chunk-82kqcve8.js:171387-171527 placement
+//@ chunk-a2q0x549.js:168590-168730 placement
 /**
  * 路径涉及 Windows 卷且存在未读出卷名的挂载。
  */
@@ -572,19 +574,19 @@ function touchesVolumeBesideUnreadMount(path) {
     windowsVolumesForPath(path).length > 0
   );
 }
-//@ chunk-82kqcve8.js:171527-171562 placement
+//@ chunk-a2q0x549.js:168730-168765 placement
 function mountPointVolumeId(mountPoint) {
   return `at:${foldCaseBasic(mountPoint)}`;
 }
-//@ chunk-82kqcve8.js:171562-171599 placement
+//@ chunk-a2q0x549.js:168765-168802 placement
 function isMountUnderPath(mountPoint, path) {
   return isAtOrUnderPath(path, foldCaseBasic(mountPoint));
 }
-//@ chunk-82kqcve8.js:171599-171686 placement
+//@ chunk-a2q0x549.js:168802-168889 placement
 function relativeBeneathMount(mount, segments) {
   return [...pathSegments(mount.within), ...segments.slice(pathSegments(mount.mountPoint).length)].join("/");
 }
-//@ chunk-82kqcve8.js:171686-171798 placement
+//@ chunk-a2q0x549.js:168889-169001 placement
 /**
  * 某挂载点对应的原始 mountinfo 行。
  */
@@ -593,7 +595,7 @@ function getOtherWindowsMountLines(mountPoint) {
   let wslMounts = readWslMountsCached();
   return wslMounts === "unreadable" ? undefined : wslMounts.otherWindowsMountLines.get(mountPoint);
 }
-//@ chunk-82kqcve8.js:171798-172007 placement
+//@ chunk-a2q0x549.js:169001-169210 placement
 /**
  * 某目录之下的其他 Windows 挂载。
  */
@@ -606,13 +608,13 @@ function otherWindowsMountsUnder(dir) {
     foldCaseBasic(otherWindowsMount.mountPoint).startsWith(prefix),
   );
 }
-//@ chunk-82kqcve8.js:172007-172097 placement
+//@ chunk-a2q0x549.js:169210-169300 placement
 function driveMounts() {
   if (getPlatform() !== "wsl") return [];
   let wslMounts = readWslMountsCached();
   return wslMounts === "unreadable" ? [] : wslMounts.driveMounts;
 }
-//@ chunk-82kqcve8.js:172097-172257 placement
+//@ chunk-a2q0x549.js:169300-169460 placement
 function readWslMountsCached() {
   if (mountTableCache.read === undefined || Date.now() - mountTableCache.readAt > MOUNT_TABLE_TTL_MS) {
     let wslMountInfo = parseWslMountInfo();
@@ -624,7 +626,7 @@ function readWslMountsCached() {
   }
   return mountTableCache.read;
 }
-//@ chunk-82kqcve8.js:172257-174058 placement
+//@ chunk-a2q0x549.js:169460-171261 placement
 function parseWslMountInfo() {
   try {
     let {
@@ -689,7 +691,7 @@ function parseWslMountInfo() {
     return "unreadable";
   }
 }
-//@ chunk-82kqcve8.js:174058-174205 placement
+//@ chunk-a2q0x549.js:171261-171408 placement
 function dedupeDriveMounts(mounts) {
   let seen = new Set();
   return mounts.filter((mount) => {
@@ -699,22 +701,22 @@ function dedupeDriveMounts(mounts) {
     return true;
   });
 }
-//@ chunk-82kqcve8.js:174205-174261 placement
+//@ chunk-a2q0x549.js:171408-171464 placement
 function pathSegments(path) {
   return path.split(/[\\/]+/).filter(Boolean);
 }
-//@ chunk-82kqcve8.js:174261-174327 placement
+//@ chunk-a2q0x549.js:171464-171530 placement
 function trimTrailingSlash(value) {
   return value.length > 1 && value.endsWith("/") ? value.slice(0, -1) : value;
 }
-//@ chunk-82kqcve8.js:174357-174408 placement
+//@ chunk-a2q0x549.js:171560-171611 placement
 /**
  * 路径涉及的 Windows 卷路径（重叠卷）。
  */
 function normalizedVolumePaths(path, otherPath) {
   return overlappingVolumePaths(windowsVolumesForPath(posix.normalize(path)), otherPath);
 }
-//@ chunk-82kqcve8.js:174408-174530 placement (2.1.88 match: execTmux, 0.805)
+//@ chunk-a2q0x549.js:171611-171733 placement (2.1.88 match: execTmux, 0.805)
 function isOnSameWslMount(args, opts) {
   if (getPlatform() !== "wsl") return false;
   let volumes = windowsVolumesForPath(posix.normalize(args));
@@ -723,18 +725,18 @@ function isOnSameWslMount(args, opts) {
     pathWithMountAliases(opts).some((alias) => overlappingVolumePaths(volumes, alias).length > 0)
   );
 }
-//@ chunk-82kqcve8.js:174530-174630 placement
+//@ chunk-a2q0x549.js:171733-171833 placement
 /**
  * 路径及其下所有挂载点。
  */
 function pathWithMountAliases(path) {
   let dir = posix.normalize(path);
-  return uniq([
+  return normalizeCaseForComparison_2([
     path,
     ...[...driveMountsUnder(dir), ...otherWindowsMountsUnder(dir)].map((mount) => mount.mountPoint),
   ]);
 }
-//@ chunk-82kqcve8.js:174630-174786 placement
+//@ chunk-a2q0x549.js:171833-171989 placement
 function overlappingVolumePaths(otherVolumes, path) {
   return windowsVolumesForPath(posix.normalize(path)).flatMap((volume) =>
     otherVolumes.flatMap((other) =>
@@ -745,20 +747,20 @@ function overlappingVolumePaths(otherVolumes, path) {
   );
 }
 export {
-  SERVED_MOUNT_TABLE_UNREADABLE,
   rootAliasMountPoints,
   pathBelowRootAlias,
   isWslMountInfoUnreadable,
-  driveMountsForPath,
-  normalizedVolumePaths,
   pathWithMountAliases,
   listWslDrvfsMounts,
   touchesVolumeBesideUnreadMount,
   isOnSameWslMount,
+  normalizedVolumePaths,
+  driveMountsForPath,
   otherWindowsMountsForPath,
   driveMountsUnder,
   otherWindowsMountsUnder,
   getOtherWindowsMountLines,
+  SERVED_MOUNT_TABLE_UNREADABLE,
   secondRootMounts,
   unescapeMountField,
   isNetworkOrForeignMount,

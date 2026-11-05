@@ -3,22 +3,22 @@
  *
  * 2.1.316 新增：远程工具的目录同步状态与屏障。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qmsrnapp.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5vfqv7sk.js (11)
  * attribution: placement 11
  */
 import { logEvent } from "../analytics/index.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
-import { logForDebugging } from "../../utils/debug.js";
 import { createPerHostEpochStore, createPeerFrameStore, parseSyncAnswer } from "./shellForwarding.js";
+import { logForDebugging } from "../../utils/debug.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { rowStagedSignal } from "../../cli/remoteIO/fileStoreVerdicts.js";
 import { setFolderSyncEngine } from "../../utils/remoteTools/folderSync.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-qmsrnapp.js:50871-51232 placement
+//@ chunk-5vfqv7sk.js:29000-29361 placement
 function dirSyncAgreement(state) {
   if (state.deliveredGeneration === null)
     return {
@@ -44,7 +44,7 @@ function dirSyncAgreement(state) {
     agreed: state.peer.appliedGeneration === state.deliveredGeneration,
   };
 }
-//@ chunk-qmsrnapp.js:51232-51748 placement
+//@ chunk-5vfqv7sk.js:29361-29877 placement
 function logDirSyncBarrier(barrier) {
   try {
     let agreement = dirSyncAgreement(barrier);
@@ -78,13 +78,13 @@ function logDirSyncBarrier(barrier) {
       });
   } catch {}
 }
-//@ chunk-qmsrnapp.js:51748-51768 placement
+//@ chunk-5vfqv7sk.js:29877-29897 placement
 var SYNC_FILES = "sync_files";
-//@ chunk-qmsrnapp.js:51768-52391 placement
+//@ chunk-5vfqv7sk.js:29897-30520 placement
 class DirSyncState {
   #e = undefined;
-  #t = createPerHostEpochStore();
   #n = createPerHostEpochStore();
+  #t = createPerHostEpochStore();
   #o = createPerHostEpochStore();
   ledger = createPeerFrameStore();
   inFlight = undefined;
@@ -92,8 +92,8 @@ class DirSyncState {
   offered = new Set();
   register(enginePromise) {
     this.#e = enginePromise;
-    this.#t = createPerHostEpochStore();
     this.#n = createPerHostEpochStore();
+    this.#t = createPerHostEpochStore();
     this.#o = createPerHostEpochStore();
     this.ledger.invalidateAll();
     this.offered.clear();
@@ -102,13 +102,13 @@ class DirSyncState {
     return this.#e ?? Promise.resolve(null);
   }
   caughtUp(hostName) {
-    return this.#t.of(hostName) ?? 0;
+    return this.#n.of(hostName) ?? 0;
   }
   hasStaleFiles(hostName) {
-    return this.#n.of(hostName) ?? false;
+    return this.#t.of(hostName) ?? false;
   }
   markStaleFiles(hostName) {
-    this.#n.file(hostName, () => true);
+    this.#t.file(hostName, () => true);
   }
   hasAskBroughtNoUpload(hostName, generation) {
     return this.#o.of(hostName) === generation;
@@ -117,27 +117,27 @@ class DirSyncState {
     this.#o.file(hostName, () => generation);
   }
   taken(hostName, generation, hasStale) {
-    this.#n.file(hostName, () => hasStale);
-    this.#t.file(hostName, (previous) => Math.max(previous ?? 0, generation));
+    this.#t.file(hostName, () => hasStale);
+    this.#n.file(hostName, (previous) => Math.max(previous ?? 0, generation));
     this.#e?.then(
       (engine) => engine?.deviceAppliedUpload?.(generation),
       () => {},
     );
   }
 }
-//@ chunk-qmsrnapp.js:52391-52417 placement
+//@ chunk-5vfqv7sk.js:30520-30546 placement
 /**
  * 按会话隔离的目录同步状态容器（同步屏障与进度）。
  */
 var dirSyncStateSlots; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-qmsrnapp.js:52391", () => {
+deferInit("chunk-5vfqv7sk.js:30520", () => {
   dirSyncStateSlots = new SessionRootSlot(() => new DirSyncState());
 });
-//@ chunk-qmsrnapp.js:52417-52449 placement
+//@ chunk-5vfqv7sk.js:30546-30578 placement
 function getDirSyncState() {
   return dirSyncStateSlots.of(getRootSession());
 }
-//@ chunk-qmsrnapp.js:52449-52625 placement
+//@ chunk-5vfqv7sk.js:30578-30754 placement
 function registerWorkerDirSyncForMidTurn(enginePromise, subscribe = rowStagedSignal.subscribe) {
   let dirSyncState = getDirSyncState();
   dirSyncState.register(enginePromise);
@@ -151,17 +151,17 @@ function registerWorkerDirSyncForMidTurn(enginePromise, subscribe = rowStagedSig
     () => {},
   );
 }
-//@ chunk-qmsrnapp.js:52625-52721 placement
+//@ chunk-5vfqv7sk.js:30754-30850 placement
 function heardSyncAnswer(hostName, dirSync, nowMs = Date.now()) {
   let syncAnswer = parseSyncAnswer(dirSync);
   if (syncAnswer !== null) getDirSyncState().ledger.heard(hostName, syncAnswer.frame, nowMs);
   return syncAnswer;
 }
-//@ chunk-qmsrnapp.js:52721-52809 placement
+//@ chunk-5vfqv7sk.js:30850-30938 placement
 function hostSyncsMidTurn(host) {
   return host.plumbingTools?.has(SYNC_FILES) === true && host.transport.callPlumbing !== undefined;
 }
-//@ chunk-qmsrnapp.js:52809-53235 placement
+//@ chunk-5vfqv7sk.js:30938-31364 placement
 async function clearForwardToDevice({ host, readOnly, runsBesideOthers, signal, onStatus }) {
   let dirSyncState = getDirSyncState();
   if (!hostSyncsMidTurn(host)) {
@@ -192,12 +192,12 @@ async function clearForwardToDevice({ host, readOnly, runsBesideOthers, signal, 
     kind: "go",
   };
 }
-//@ chunk-qmsrnapp.js:53235-53258 placement
+//@ chunk-5vfqv7sk.js:31364-31387 placement
 async function countAfterDeviceCommand(dirSync) {}
 export {
+  hostSyncsMidTurn,
   countAfterDeviceCommand,
   clearForwardToDevice,
   heardSyncAnswer,
-  hostSyncsMidTurn,
   registerWorkerDirSyncForMidTurn,
 };

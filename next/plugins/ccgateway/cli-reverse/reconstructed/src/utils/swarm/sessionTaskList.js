@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。/clear 后记录会话任务列表。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-v5nznc39.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3xs5443t.js (4)
  * attribution: placement 4
  */
 import { dirname, join } from "path";
@@ -21,18 +21,18 @@ import { readPluginFileSafe } from "../plugins/safeFileRead.js";
 import { logForDebugging } from "../debug.js";
 import { writeFileAtomic } from "../atomicPublishWrite.js";
 
-//@ chunk-v5nznc39.js:630-675 placement
+//@ chunk-3xs5443t.js:21294-21339 placement
 var SESSION_TEAM_NAME_PREFIX = "session";
 var SESSION_LIST_NOTE_FILE = ".session-list";
 var SESSION_LIST_NOTE_MAX_BYTES = 64;
-//@ chunk-v5nznc39.js:675-745 placement
+//@ chunk-3xs5443t.js:21339-21409 placement
 function sessionTeamName(sessionId) {
   let shortId = normalizeUuidOrNull(sessionId)
     ? sessionId.slice(0, 8)
     : (decodeTaggedUuid(sessionId) ?? sessionId);
   return `${SESSION_TEAM_NAME_PREFIX}-${shortId}`;
 }
-//@ chunk-v5nznc39.js:745-872 placement
+//@ chunk-3xs5443t.js:21409-21536 placement
 function isSessionListId(listId) {
   let prefix = `${SESSION_TEAM_NAME_PREFIX}-`;
   let suffix = listId.startsWith(prefix) ? listId.slice(prefix.length) : undefined;
@@ -42,7 +42,7 @@ function isSessionListId(listId) {
     /^[0-9a-f]{8}$/i.test(suffix ?? "")
   );
 }
-//@ chunk-v5nznc39.js:872-1350 placement
+//@ chunk-3xs5443t.js:21536-22018 placement
 /**
  * /clear 后记录会话任务列表。
  */
@@ -78,8 +78,8 @@ async function noteSessionTaskListAfterClear() {
   }
 }
 export {
-  sessionTeamName,
   SESSION_TEAM_NAME_PREFIX,
+  sessionTeamName,
   SESSION_LIST_NOTE_FILE,
   SESSION_LIST_NOTE_MAX_BYTES,
   isSessionListId,

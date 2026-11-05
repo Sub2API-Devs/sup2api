@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 启动子 claude 会话：参数（stream-json、max-turns）、设置与网关头
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (4)
  * attribution: placement 4
  */
 import path from "path";
@@ -54,13 +54,13 @@ import {
 } from "./runToolRules.js";
 import { readMockCallLog } from "./mocks/mockRelayProtocol.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../utils/errors.js";
-import { uniq } from "../../utils/collections.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
 import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
 import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 
-//@ chunk-qchp9vrd.js:122550-123081 placement
+//@ chunk-af1hzzme.js:123903-124434 placement
 async function readRunTraceHistory(input) {
   let {
     case_,
@@ -105,7 +105,7 @@ async function readRunTraceHistory(input) {
     await credentialHelper?.cleanup();
   }
 }
-//@ chunk-qchp9vrd.js:123081-123170 placement
+//@ chunk-af1hzzme.js:124434-124523 placement
 /**
  * 读取历史文件里的累计花费（失败为 0）。
  */
@@ -116,7 +116,7 @@ async function readHistoryCost(transcriptPath) {
     return 0;
   }
 }
-//@ chunk-qchp9vrd.js:123170-127919 placement
+//@ chunk-af1hzzme.js:124523-129280 placement
 /**
  * 准备子会话的配置目录：网关 ANTHROPIC_CUSTOM_HEADERS、git 配置、settings。
  */
@@ -429,7 +429,7 @@ async function prepareRunChildConfig(
     });
   });
 }
-//@ chunk-qchp9vrd.js:127919-129357 placement
+//@ chunk-af1hzzme.js:129280-130718 placement
 /**
  * 生成子会话命令行（--output-format stream-json --verbose --max-turns 等）。
  */
@@ -452,10 +452,12 @@ async function buildRunChildArgs(
   let model = modelOverride ?? case_.execution.model;
   if (model) args.push(`--model=${model}`);
   for (let pluginDir of case_.pluginDirs) args.push("--plugin-dir", pluginDir);
-  let pluginDirs = await withPathDirectories(uniq([...case_.pluginDirsUnderTest, case_.caseDir]));
+  let pluginDirs = await withPathDirectories(
+    normalizeCaseForComparison_2([...case_.pluginDirsUnderTest, case_.caseDir]),
+  );
   for (let dir of [sandbox.root, ...pluginDirs, ...addDirs])
     checkPathSegmentWhitespace(dir, dir === sandbox.root ? "sandbox" : "plugin/case/add_dirs");
-  let allowedRules = uniq([
+  let allowedRules = normalizeCaseForComparison_2([
     ...scopeWriteToolRules(
       scopeReadToolRules(
         anchorRelativeRules(allowedTools, sandbox.cwd),
@@ -465,28 +467,28 @@ async function buildRunChildArgs(
       [sandbox.cwd, sandbox.tmpDir],
     ),
     ...addDirs.flatMap((addDir) =>
-      [FILE_READ_TOOL_NAME, GLOB_TOOL_NAME, GREP_TOOL_NAME].map(
+      [READ, GLOB_TOOL_NAME, GREP_TOOL_NAME].map(
         (toolName) => `${toolName}(${toSandboxRulePath(addDir)}/**)`,
       ),
     ),
   ]);
   if (allowedRules.length > 0) args.push(`--allowed-tools=${allowedRules.join(",")}`);
   let disallowedRules = [
-    `${FILE_READ_TOOL_NAME}(${toSandboxRulePath(sandbox.configDir)}/**)`,
-    `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(sandbox.configDir)}/**)`,
-    `${FILE_READ_TOOL_NAME}(${toSandboxRulePath(sandbox.outDir)}/**)`,
-    `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(sandbox.outDir)}/**)`,
-    ...pluginDirs.map((pluginDir) => `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(pluginDir)}/**)`),
+    `${READ}(${toSandboxRulePath(sandbox.configDir)}/**)`,
+    `${EDIT}(${toSandboxRulePath(sandbox.configDir)}/**)`,
+    `${READ}(${toSandboxRulePath(sandbox.outDir)}/**)`,
+    `${EDIT}(${toSandboxRulePath(sandbox.outDir)}/**)`,
+    ...pluginDirs.map((pluginDir) => `${EDIT}(${toSandboxRulePath(pluginDir)}/**)`),
     ...GIT_TOP_ENTRIES.flatMap((entry) => [
-      `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(path.join(sandbox.cwd, entry))})`,
-      `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(path.join(sandbox.cwd, entry))}/**)`,
+      `${EDIT}(${toSandboxRulePath(path.join(sandbox.cwd, entry))})`,
+      `${EDIT}(${toSandboxRulePath(path.join(sandbox.cwd, entry))}/**)`,
     ]),
-    `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(path.join(sandbox.cwd, EVAL_ARTIFACTS_DIR))})`,
-    `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(path.join(sandbox.cwd, EVAL_ARTIFACTS_DIR))}/**)`,
+    `${EDIT}(${toSandboxRulePath(path.join(sandbox.cwd, EVAL_ARTIFACTS_DIR))})`,
+    `${EDIT}(${toSandboxRulePath(path.join(sandbox.cwd, EVAL_ARTIFACTS_DIR))}/**)`,
     ...evalFence.denies,
     ...evalFence.denyPaths.flatMap((denyPath) => [
-      `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(denyPath)})`,
-      `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(denyPath)}/**)`,
+      `${EDIT}(${toSandboxRulePath(denyPath)})`,
+      `${EDIT}(${toSandboxRulePath(denyPath)}/**)`,
     ]),
   ];
   if (getPlatform() !== "windows") disallowedRules.push(PROC_READ_RULE);

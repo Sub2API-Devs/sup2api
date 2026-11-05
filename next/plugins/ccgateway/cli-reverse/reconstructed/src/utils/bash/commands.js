@@ -3,10 +3,10 @@
  *
  * 命令级工具：提取输出重定向并判断危险、扫描参数中的变量/通配、子命令判定结果组装；（另含被误归的随机名生成器）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/bash/commands.ts
- * pieces: chunk-38axkkfw.js (34), chunk-e6aww6q8.js (2), chunk-r01896cg.js (1)
- * attribution: placement 34, fingerprint 3
+ * pieces: chunk-5xgkngpb.js (2), chunk-9jzjcqxe.js (36), chunk-nzz6y5xm.js (1)
+ * attribution: fingerprint 3, placement 36
  */
 import {
   BACKSLASH_ESCAPED_SPACE_RE,
@@ -16,10 +16,10 @@ import {
   ZSH_TILDE_BRACKET_RE,
   ZSH_EQUALS_EXPANSION_RE,
   ZSH_NUMERIC_GLOB_RE,
+  WORD_LEAF_EXPANSION_RE,
   scanSameLineStatementSplits,
   stripQuotedRegions,
   REDIRECT_OPERATOR_TOKENS,
-  WORD_LEAF_EXPANSION_RE,
   WORD_LEAF_QUOTE_RE,
 } from "./ast.js";
 import { getParserModule } from "./bashParser.js";
@@ -35,7 +35,7 @@ import {
 import { dedupeMapKeys } from "../../tools/BashTool/bashCommandHelpers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-r01896cg.js:23179-23263 fingerprint (2.1.88 match: isCommandList, 0.464)
+//@ chunk-nzz6y5xm.js:25853-25937 fingerprint (2.1.88 match: isCommandList, 0.463)
 /**
  * 递归判断语法树中是否含 comment 节点。
  */
@@ -44,11 +44,11 @@ function hasCommentNode(command) {
     (varName) => varName !== undefined && (varName.type === "comment" || hasCommentNode(varName)),
   );
 }
-//@ chunk-38axkkfw.js:312-355 placement
+//@ chunk-9jzjcqxe.js:312-355 placement
 function hasParserLexingDifferential(str) {
   return BACKSLASH_ESCAPED_SPACE_RE.test(str) || hasStatementLexingDifferential(str);
 }
-//@ chunk-38axkkfw.js:355-455 placement
+//@ chunk-9jzjcqxe.js:355-455 placement
 /**
  * 用一组正则粗查命令文本是否有语句级的词法分歧形态（bash 与 zsh 断句不同），命中即不信任按语句拆分的结果。
  */
@@ -62,14 +62,14 @@ function hasStatementLexingDifferential(text) {
     ZSH_NUMERIC_GLOB_RE.test(text)
   );
 }
-//@ chunk-38axkkfw.js:455-517 placement (2.1.88 match: nodeTypeId, 1)
+//@ chunk-9jzjcqxe.js:455-517 placement (2.1.88 match: nodeTypeId, 1)
 /**
  * AST 中是否有 ERROR 节点。
  */
 function parseHasErrorNode(nodeType) {
   return nodeType.type === "ERROR" || nodeType.children.some(parseHasErrorNode);
 }
-//@ chunk-38axkkfw.js:517-626 placement (2.1.88 match: STRUCTURAL_TYPES, 0.852)
+//@ chunk-9jzjcqxe.js:517-626 placement (2.1.88 match: STRUCTURAL_TYPES, 0.852)
 /**
  * 拆分子命令时的字符上限（65536）。
  */
@@ -78,7 +78,7 @@ var SEPARATOR_TYPES;
 var SPLIT_MAX_LEN;
 var MAX_SPLIT_CHARS;
 var MAX_SPLIT_DEPTH;
-deferInit("chunk-38axkkfw.js:517", () => {
+deferInit("chunk-9jzjcqxe.js:517", () => {
   COMPOUND_TYPES = new Set(["program", "list", "pipeline"]);
   SEPARATOR_TYPES = new Set([
     "&&",
@@ -94,7 +94,7 @@ deferInit("chunk-38axkkfw.js:517", () => {
   MAX_SPLIT_CHARS = 65536;
   MAX_SPLIT_DEPTH = 16;
 });
-//@ chunk-38axkkfw.js:626-1031 placement
+//@ chunk-9jzjcqxe.js:626-1031 placement
 /**
  * 把复合命令拆成子命令文本：超长则整体返回，解析失败返回原文；递归 program、list、pipeline，跳过分隔符、注释和重定向，叶子命令按原文收集。
  */
@@ -119,7 +119,50 @@ function splitCommand(command) {
   walk(root.type === "ERROR" && root.children[0]?.type === "program" ? root.children[0] : root);
   return texts;
 }
-//@ chunk-38axkkfw.js:1031-1385 placement
+//@ chunk-9jzjcqxe.js:1031-1616 placement
+/**
+ * 判定 bash AST 节点是否含输出重定向等无法静态展开的成分（heredoc、命令替换、正则等）。
+ */
+function hasUnsupportedExpansion(node) {
+  switch (node.type) {
+    case "ERROR":
+      return true;
+    case "heredoc_redirect":
+      if (
+        !node.children.some((child) => child.type === "heredoc_body") ||
+        (hasUnquotedHeredoc(node) && /(?:^|[^\\])(?:\\\\)*`/.test(node.text))
+      )
+        return true;
+      break;
+    case "heredoc_start":
+      if (node.text.includes("$")) return true;
+      break;
+    case "subscript":
+      if (/\$\((?!\([^()]*\)\))|`|\$\{[ \t\n|]|\[.*\[/s.test(node.text)) return true;
+      return node.children.some((child) => child.type !== "word" && hasUnsupportedExpansion(child));
+    case "word":
+      if (WORD_LEAF_EXPANSION_RE.test(node.text)) return true;
+      break;
+    case "regex":
+    case "extglob_pattern":
+      if (/(?:^|[^\\])(?:\\\\)*(?:`|\$\((?!\([^()]*\)\))|\$\{[ \t\n|]|[<>]\()/.test(node.text)) return true;
+      break;
+  }
+  return node.children.some(hasUnsupportedExpansion);
+}
+//@ chunk-9jzjcqxe.js:1616-1685 placement
+/**
+ * 节点是否既含上述成分又无法按 unparsedBodyOverruns 解析。
+ */
+function treeSpansAreIncomplete(node) {
+  return (
+    hasUnsupportedExpansion(node) ||
+    nestedCommandSpansOrOverrun(node, {
+      unparsedBodyOverruns: true,
+    }) === null
+  );
+}
+//@ chunk-9jzjcqxe.js:1685-2039 placement
 /**
  * 判断最后一个子命令是否以 && 接在前一条之后（会因前一条失败而不执行）；超长或解析失败时保守返回 true。
  */
@@ -138,7 +181,7 @@ function lastCommandIsAndGated(command) {
   }
   return false;
 }
-//@ chunk-38axkkfw.js:1385-1468 placement
+//@ chunk-9jzjcqxe.js:2039-2122 placement
 /**
  * 解析命令并返回其中所有嵌套 command 节点的文本，超长或解析失败返回空数组。
  */
@@ -147,11 +190,11 @@ function nestedCommandSpans(command) {
   let root = getParserModule().parse(command);
   return root ? nestedCommandSpansFromAst(root) : [];
 }
-//@ chunk-38axkkfw.js:1468-1502 placement
+//@ chunk-9jzjcqxe.js:2122-2156 placement
 function nestedCommandSpansFromAst(root) {
   return nestedCommandSpansOrOverrun(root) ?? [];
 }
-//@ chunk-38axkkfw.js:1502-1829 placement
+//@ chunk-9jzjcqxe.js:2156-2483 placement
 /**
  * 收集语法树里所有 command 节点文本，并展开 ${ …; } 函数替换体再解析；累计长度或嵌套层数超出预算（或严格模式下函数体无法解析）时返回 null。
  */
@@ -186,7 +229,7 @@ function nestedCommandSpansOrOverrun(node, { unparsedBodyOverruns = false } = {}
   walk(node);
   return overrun ? null : spans;
 }
-//@ chunk-38axkkfw.js:1829-2063 placement
+//@ chunk-9jzjcqxe.js:2483-2717 placement
 /**
  * 从 expansion/ERROR 节点中取出 ${ …} 或 ${| …} 函数替换（funsub）的命令体，去掉前导 | 与尾部分号；不是函数替换返回 null。
  */
@@ -197,7 +240,7 @@ function funsubBodyFromNode(node) {
   let bodyEnd = text.endsWith("}") ? text.length - 1 : text.length;
   return text.slice(2, bodyEnd).trim().replace(/^\|/, "").replace(/;$/, "").trim();
 }
-//@ chunk-38axkkfw.js:2063-2160 placement
+//@ chunk-9jzjcqxe.js:2717-2814 placement
 /**
  * 严格拆分：超长或解析失败返回 null，否则返回结构化的子命令列表。
  */
@@ -207,7 +250,7 @@ function splitCommandStrict(command) {
   if (!root) return null;
   return collectStatementTexts(root);
 }
-//@ chunk-38axkkfw.js:2160-2392 placement
+//@ chunk-9jzjcqxe.js:2814-3046 placement
 /**
  * 为排除命令匹配做拆分：解析有错误节点、同行语句粘连、含命令替换或其他危险结构、zsh 括号展开、反引号时返回 null；任一子命令不满足条件也返回 null。
  */
@@ -228,7 +271,7 @@ function splitCommandForExemptionMatch(target) {
   if (statementTexts === null) return null;
   return statementTexts.some(isUnsafeRedirectTarget) ? null : statementTexts;
 }
-//@ chunk-38axkkfw.js:2392-2476 placement
+//@ chunk-9jzjcqxe.js:3046-3130 placement
 /**
  * 匹配花括号字面量或 $' / $" 引号起点。
  */
@@ -236,7 +279,7 @@ var BRACE_OR_DOLLAR_QUOTE_RE = /(?<!\$)\{|(?<=[$\\]\$)\{|\$'|\$"/;
 var SHELL_SEPARATOR_CHARS_RE = /[;&|<>\n]/;
 var LEADING_DASH_OR_SLASH_RE = /(?:^|[ \t])[-/]/;
 var PAREN_CHARS_RE = /[()]/;
-//@ chunk-38axkkfw.js:2476-2574 placement
+//@ chunk-9jzjcqxe.js:3130-3228 placement
 /**
  * 判断花括号之后是否紧跟引号或反斜杠。
  */
@@ -244,7 +287,7 @@ function braceFollowedByQuote(text) {
   let braceIndex = text.search(/(?<!\$)\{|(?<=[$\\]\$)\{/);
   return braceIndex === -1 || /['"\\]/.test(text.slice(braceIndex));
 }
-//@ chunk-38axkkfw.js:2574-2741 placement
+//@ chunk-9jzjcqxe.js:3228-3395 placement
 function isUnsafeRedirectTarget(target) {
   if (BRACE_OR_DOLLAR_QUOTE_RE.test(target) && hasShellExpansion(target)) return true;
   let unquoted = stripQuotedRegions(target);
@@ -258,12 +301,12 @@ function isUnsafeRedirectTarget(target) {
     return true;
   return SUBSTITUTION_OR_PROCESS_SUB_RE.test(target) || isSimpleTarget(target);
 }
-//@ chunk-38axkkfw.js:2741-2782 placement
+//@ chunk-9jzjcqxe.js:3395-3436 placement
 /**
  * 匹配命令替换、进程替换与参数展开起点。
  */
 var SUBSTITUTION_OR_PROCESS_SUB_RE = /\$\(|`|<\(|>\(|\$\[|\$\{[ \t\n|]/;
-//@ chunk-38axkkfw.js:2782-3016 placement
+//@ chunk-9jzjcqxe.js:3436-3670 placement
 function isSimpleTarget(target) {
   let quote;
   for (let i = 0; i < target.length; i++) {
@@ -285,15 +328,15 @@ function isSimpleTarget(target) {
   }
   return false;
 }
-//@ chunk-38axkkfw.js:3016-3070 placement
+//@ chunk-9jzjcqxe.js:3670-3724 placement
 /**
  * 简单文件描述符重定向的节点类型（file_descriptor、number、>&、<&）。
  */
 var SIMPLE_FD_REDIRECT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-38axkkfw.js:3016", () => {
+deferInit("chunk-9jzjcqxe.js:3670", () => {
   SIMPLE_FD_REDIRECT_TYPES = new Set(["file_descriptor", "number", ">&", "<&"]);
 });
-//@ chunk-38axkkfw.js:3070-3161 placement
+//@ chunk-9jzjcqxe.js:3724-3815 placement
 /**
  * 判断重定向节点是否结构复杂（递归检查子节点）。
  */
@@ -303,7 +346,7 @@ function hasComplexRedirect(node) {
   }
   return node.children.some(hasComplexRedirect);
 }
-//@ chunk-38axkkfw.js:3161-3462 placement
+//@ chunk-9jzjcqxe.js:3815-4116 placement
 /**
  * 判断重定向节点是否只由简单的文件描述符/数字/单词组成（2 或 3 个子节点、无嵌套）。
  */
@@ -319,7 +362,7 @@ function isSimpleFdRedirect(node) {
     return child.type === "number" || child.type === "file_descriptor" ? /^\d+$/.test(child.text) : true;
   });
 }
-//@ chunk-38axkkfw.js:3462-3953 placement
+//@ chunk-9jzjcqxe.js:4116-4607 placement
 /**
  * 遍历语法树收集各简单命令/赋值的文本（穿过复合语句、否定、重定向语句）；遇到子 shell 或无法识别的节点返回 null。
  */
@@ -363,7 +406,7 @@ function collectStatementTexts(root) {
   walk(root);
   return ok ? texts : null;
 }
-//@ chunk-38axkkfw.js:3953-4110 placement
+//@ chunk-9jzjcqxe.js:4607-4764 placement
 function containsCommandSubshell(child) {
   let isCommandLike = child.type === "command" || child.type === "variable_assignment";
   for (let child_2 of child.children) {
@@ -372,7 +415,7 @@ function containsCommandSubshell(child) {
   }
   return false;
 }
-//@ chunk-38axkkfw.js:4110-4333 placement
+//@ chunk-9jzjcqxe.js:4764-4987 placement
 /**
  * 是否有带 ( 的 expansion 节点（zsh 会在花括号展开里执行括号内容）；超长或解析失败保守返回 true。
  */
@@ -393,7 +436,7 @@ function hasZshExecutableParenInBraceExpansion(command) {
   walk(root);
   return found;
 }
-//@ chunk-38axkkfw.js:4333-4458 placement (2.1.88 match: tryParseShellCommand, 0)
+//@ chunk-9jzjcqxe.js:4987-5112 placement (2.1.88 match: tryParseShellCommand, 0)
 /**
  * shell-quote 风格回退：解析命令并返回第一条命令的去引号参数列表；超长或失败返回空数组。
  */
@@ -405,9 +448,9 @@ function getCommandArgv(command) {
   if (!commandNode) return [];
   return extractCommandArguments(commandNode);
 }
-//@ chunk-38axkkfw.js:4458-4575 placement
+//@ chunk-9jzjcqxe.js:5112-5229 placement
 var EXPANSION_NODE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-38axkkfw.js:4458", () => {
+deferInit("chunk-9jzjcqxe.js:5112", () => {
   EXPANSION_NODE_TYPES = new Set([
     "command_substitution",
     "process_substitution",
@@ -416,12 +459,12 @@ deferInit("chunk-38axkkfw.js:4458", () => {
     "arithmetic_expansion",
   ]);
 });
-//@ chunk-38axkkfw.js:4575-4641 placement
+//@ chunk-9jzjcqxe.js:5229-5295 placement
 function filterControlOperators(commandsAndOperators) {
   if (EXPANSION_NODE_TYPES.has(commandsAndOperators.type)) return true;
   return commandsAndOperators.children.some(filterControlOperators);
 }
-//@ chunk-38axkkfw.js:5089-5417 placement
+//@ chunk-9jzjcqxe.js:5743-6071 placement
 /**
  * 子树中是否有重定向节点在运算符后跟了多于一个词（多余的词会变成命令的隐藏参数）。
  */
@@ -438,7 +481,7 @@ function hasRedirectWithExtraWords(node) {
   }
   return node.children.some(hasRedirectWithExtraWords);
 }
-//@ chunk-38axkkfw.js:5417-5671 placement
+//@ chunk-9jzjcqxe.js:6071-6325 placement
 function hasUnquotedHeredoc(node) {
   if (node.type === "heredoc_redirect") {
     let text = node.children.find((child) => child.type === "heredoc_start")?.text ?? "";
@@ -453,7 +496,7 @@ function hasUnquotedHeredoc(node) {
   }
   return node.children.some(hasUnquotedHeredoc);
 }
-//@ chunk-38axkkfw.js:5671-6680 placement
+//@ chunk-9jzjcqxe.js:6325-7334 placement
 /**
  * 判断命令的重定向目标是否要到运行时才能确定（含变量、展开、额外单词、= 开头的词等）；只检查调用方判定为相关的命令；超长、存在词法分歧或解析出错时返回 true。
  */
@@ -509,7 +552,7 @@ function commandRedirectsAreRuntimeDetermined(command, classify) {
   };
   return visit(root);
 }
-//@ chunk-38axkkfw.js:6795-7180 placement
+//@ chunk-9jzjcqxe.js:7449-7834 placement
 /**
  * 判断参数节点是否为静态文本：拼接节点逐个检查；word 不含展开、未转义操作符、结尾反斜杠（可选不含引号）；字符串引号完整。
  */
@@ -528,7 +571,7 @@ function isStaticWordNode(child, rejectQuotes = false) {
   }
   return ARGUMENT_TYPES_2.has(child.type);
 }
-//@ chunk-38axkkfw.js:7180-7927 placement
+//@ chunk-9jzjcqxe.js:7834-8581 placement
 /**
  * 逐字符扫描命令文本，判断是否含变量/命令替换、ANSI-C 字符串、通配符、=( 或大括号展开等会被 shell 展开的内容；引号未闭合也视为有。
  */
@@ -588,7 +631,7 @@ function hasShellExpansion(text) {
   }
   return quote !== null;
 }
-//@ chunk-38axkkfw.js:7927-8478 placement
+//@ chunk-9jzjcqxe.js:8581-9132 placement
 /**
  * 判断单条命令的 argv 是否要到运行时才能确定：必须恰好一条简单命令、无替换、展开和异常重定向，且所有参数都是静态字面量，否则返回 true。
  */
@@ -624,7 +667,7 @@ function commandArgvIsRuntimeDetermined(text) {
   }
   return false;
 }
-//@ chunk-38axkkfw.js:8478-8726 placement
+//@ chunk-9jzjcqxe.js:9132-9380 placement
 function unquoteNodeText(node) {
   switch (node.type) {
     case "raw_string":
@@ -649,7 +692,7 @@ function unquoteNodeText(node) {
       return node.text;
   }
 }
-//@ chunk-38axkkfw.js:8726-11128 placement (2.1.88 match: extractOutputRedirections, 0.149)
+//@ chunk-9jzjcqxe.js:9380-11781 placement (2.1.88 match: extractOutputRedirections, 0.148)
 /**
  * 从命令中提取输出重定向（> >> &> >| >&）：返回 {commandWithoutRedirections, redirections:[{target, operator}], hasDangerousRedirection, dangerousRedirectionReason}；目标含 ~ 通配 ! = 或变量、多目标、<& 异常、/dev/tcp|udp 等标为危险（shell_expansion / network_device）。
  */
@@ -790,7 +833,7 @@ function extractOutputRedirections(cmd) {
     dangerousRedirectionReason: dangerReason,
   };
 }
-//@ chunk-e6aww6q8.js:1149287-1150001 fingerprint (2.1.88 match: hasDangerousExpansion, 0.641)
+//@ chunk-5xgkngpb.js:1144624-1145338 fingerprint (2.1.88 match: hasDangerousExpansion, 0.64)
 /**
  * 扫描字符串（用于 test 等命令参数）：未在单引号内的 $var 返回 'variable'，未加引号的 * ? [..] 返回 'glob'，否则 false；处理转义、反引号、注释与双引号。
  */
@@ -891,7 +934,7 @@ function classifyDangerousExpansion(target) {
   }
   return sawGlob ? "glob" : false;
 }
-//@ chunk-e6aww6q8.js:1231407-1231663 fingerprint (2.1.88 match: handleRedirection, 0.395)
+//@ chunk-5xgkngpb.js:1229163-1229419 fingerprint (2.1.88 match: handleRedirection, 0.396)
 /**
  * 把子命令判定结果组装成 Map（子命令文本→判定）；同一子命令文本出现多次时把它的重定向拼进键名以区分。
  */
@@ -917,23 +960,24 @@ function labelSubcommandResults(subcommands, astCommands, decisions) {
   );
 }
 export {
-  SPLIT_MAX_LEN,
   extractOutputRedirections,
-  hasCommentNode,
   splitCommand,
   getCommandArgv,
-  splitCommandStrict,
-  hasZshExecutableParenInBraceExpansion,
-  nestedCommandSpansFromAst,
-  funsubBodyFromNode,
-  nestedCommandSpansOrOverrun,
-  nestedCommandSpans,
-  labelSubcommandResults,
   commandArgvIsRuntimeDetermined,
+  SPLIT_MAX_LEN,
   hasParserLexingDifferential,
   parseHasErrorNode,
   commandRedirectsAreRuntimeDetermined,
   classifyDangerousExpansion,
+  hasCommentNode,
+  splitCommandStrict,
+  hasZshExecutableParenInBraceExpansion,
+  funsubBodyFromNode,
+  nestedCommandSpansOrOverrun,
+  nestedCommandSpans,
+  labelSubcommandResults,
+  treeSpansAreIncomplete,
+  nestedCommandSpansFromAst,
   hasStatementLexingDifferential,
   splitCommandForExemptionMatch,
   lastCommandIsAndGated,

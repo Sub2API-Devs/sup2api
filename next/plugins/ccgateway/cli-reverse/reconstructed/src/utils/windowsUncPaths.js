@@ -3,9 +3,9 @@
  *
  * Windows UNC 长路径（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aat7wt0p.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-za46rn2f.js (11)
  * attribution: placement 11
  */
 import { realpathSync, realpath } from "fs";
@@ -13,7 +13,7 @@ import { hasWin32DevicePrefixSpelling, normalizeWin32Path } from "./fsJunctions.
 import { isUncOrDevicePath, hasDotSegment } from "./pathClassification.js";
 import { isWslUncPath } from "./networkPaths.js";
 
-//@ chunk-aat7wt0p.js:11254-11391 placement
+//@ chunk-za46rn2f.js:11254-11391 placement
 /**
  * 返回路径中第一个通配字符（*、?、成对的 [）的位置，没有则为 -1。
  */
@@ -25,13 +25,13 @@ function firstGlobCharIndex(text) {
   }
   return -1;
 }
-//@ chunk-aat7wt0p.js:11391-11541 placement
+//@ chunk-za46rn2f.js:11391-11541 placement
 function toUncLongPath(path) {
   if (path.startsWith("\\\\?\\UNC\\")) return "\\\\" + path.slice(8);
   if (path.startsWith("\\\\?\\") && path.length >= 7 && path[5] === ":") return path.slice(4);
   return path;
 }
-//@ chunk-aat7wt0p.js:11541-11834 placement
+//@ chunk-za46rn2f.js:11541-11834 placement
 /**
  * 对 Windows 设备/长路径形式反复去掉 \\?\ 等前缀并合并开头的重复分隔符，得到普通路径。
  */
@@ -55,13 +55,13 @@ function stripLongPathPrefixes(path) {
   }
   return path;
 }
-//@ chunk-aat7wt0p.js:11834-11843 placement
+//@ chunk-za46rn2f.js:11834-11843 placement
 var MAX_PREFIX_STRIPS = 4;
-//@ chunk-aat7wt0p.js:11843-11883 placement
+//@ chunk-za46rn2f.js:11843-11883 placement
 function isPathSeparator(char) {
   return char === "\\" || char === "/";
 }
-//@ chunk-aat7wt0p.js:11883-12019 placement
+//@ chunk-za46rn2f.js:11883-12019 placement
 /**
  * 判断路径是否为 Windows 设备命名空间形式（卷 GUID、\\?\ 或 \\.\ 前缀等）。
  */
@@ -72,11 +72,11 @@ function isWindowsDevicePath(path) {
   if (path_2 !== path && containsDotSegmentOrSlash(path_2)) return true;
   return isUncOrDevicePath(path_2) && !isWslUncPath(path_2);
 }
-//@ chunk-aat7wt0p.js:12019-12064 placement
+//@ chunk-za46rn2f.js:12019-12064 placement
 function containsDotSegmentOrSlash(path) {
   return hasDotSegment(path) || path.includes("/");
 }
-//@ chunk-aat7wt0p.js:12064-12125 placement
+//@ chunk-za46rn2f.js:12064-12125 placement
 /**
  * 原生 realpath 转长路径形式，失败返回 null。
  */
@@ -87,7 +87,7 @@ function nativeRealpathLong(path) {
     return null;
   }
 }
-//@ chunk-aat7wt0p.js:12125-12231 placement
+//@ chunk-za46rn2f.js:12125-12231 placement
 /**
  * 异步取原生 realpath 并转为长路径形式，失败返回 null。
  */
@@ -102,7 +102,7 @@ async function realpathNativeAsync(path) {
     }
   });
 }
-//@ chunk-aat7wt0p.js:12231-12282 placement
+//@ chunk-za46rn2f.js:12231-12282 placement
 /**
  * 原生 realpath，失败返回 null。
  */
@@ -113,19 +113,19 @@ function nativeRealpathOrNull(path) {
     return null;
   }
 }
-//@ chunk-aat7wt0p.js:12282-12312 placement
+//@ chunk-za46rn2f.js:12282-12312 placement
 var MAX_SYMLINK_HOPS = 4;
 var MAX_REALPATH_DEPTH = 50;
 var MAX_REALPATH_WORK = MAX_REALPATH_DEPTH * (MAX_SYMLINK_HOPS - 1);
 var realpathCacheSlot;
 export {
-  nativeRealpathLong,
   toUncLongPath,
-  realpathNativeAsync,
-  isWindowsDevicePath,
   firstGlobCharIndex,
-  stripLongPathPrefixes,
-  MAX_REALPATH_DEPTH,
-  nativeRealpathOrNull,
+  realpathNativeAsync,
+  nativeRealpathLong,
   MAX_REALPATH_WORK,
+  isWindowsDevicePath,
+  stripLongPathPrefixes,
+  nativeRealpathOrNull,
+  MAX_REALPATH_DEPTH,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：子代理名称登记
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1jczmbs0.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-tz3jw2na.js (5)
  * attribution: placement 5
  */
 import { isInProcessTeammateTask } from "../tasks/InProcessTeammateTask/types.js";
@@ -15,14 +15,14 @@ import { isReservedSessionName } from "./sessionAddresses.js";
 import { logForDebugging } from "./debug.js";
 import { import_sortedIndex_2 } from "../../vendor/lodash-es/_inlinedHelpers.js";
 
-//@ chunk-1jczmbs0.js:409-533 placement
+//@ chunk-tz3jw2na.js:409-533 placement
 function findAgentRecord(agentRecords, agentId) {
   if (Object.hasOwn(agentRecords, agentId)) return agentRecords[agentId];
   return Object.values(agentRecords).find(
     (task) => isInProcessTeammateTask(task) && task.identity.resumableAgentId === agentId,
   );
 }
-//@ chunk-1jczmbs0.js:533-763 placement
+//@ chunk-tz3jw2na.js:533-763 placement
 function liveAgentNames(agentNameRegistry, tasks) {
   return new Map(
     [...agentNameRegistry].filter(([, agentId]) => {
@@ -38,9 +38,8 @@ function liveAgentNames(agentNameRegistry, tasks) {
     }),
   );
 }
-//@ chunk-1jczmbs0.js:763-906 placement
+//@ chunk-tz3jw2na.js:763-886 placement
 var NOOP_AGENT_NAME_REGISTRY = {
-  markTypeInvoked() {},
   registerName() {},
   allocateName(name) {
     return name;
@@ -52,22 +51,12 @@ var NOOP_AGENT_NAME_REGISTRY = {
   setTeammate() {},
   setSendMessagePin() {},
 };
-//@ chunk-1jczmbs0.js:906-2338 placement
+//@ chunk-tz3jw2na.js:886-2167 placement
 /**
  * 子代理名称登记：分配不冲突的名称、记录已调用的代理类型。
  */
 function createAgentNameRegistry(getAppState, setAppState) {
   return {
-    markTypeInvoked(agentType) {
-      setAppState((prevState) =>
-        prevState.agentTypesInvokedThisSession.has(agentType)
-          ? prevState
-          : {
-              ...prevState,
-              agentTypesInvokedThisSession: new Set(prevState.agentTypesInvokedThisSession).add(agentType),
-            },
-      );
-    },
     registerName(name, agentId) {
       if (isReservedSessionName(name)) {
         logForDebugging(`[registerName] refused reserved or agent-id-shaped name "${name}" for ${agentId}`);
@@ -165,7 +154,7 @@ function createAgentNameRegistry(getAppState, setAppState) {
     },
   };
 }
-//@ chunk-1jczmbs0.js:2338-2450 placement
+//@ chunk-tz3jw2na.js:2167-2279 placement
 function sanitizeAgentName(rawName) {
   let sliced = rawName
     .replace(/[^A-Za-z0-9_-]+/g, "-")
@@ -173,4 +162,4 @@ function sanitizeAgentName(rawName) {
     .slice(0, 64);
   return sliced.length > 0 ? sliced : "agent";
 }
-export { liveAgentNames, NOOP_AGENT_NAME_REGISTRY, createAgentNameRegistry };
+export { NOOP_AGENT_NAME_REGISTRY, liveAgentNames, createAgentNameRegistry };

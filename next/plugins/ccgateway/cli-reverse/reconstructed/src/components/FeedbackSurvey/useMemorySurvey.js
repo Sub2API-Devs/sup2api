@@ -3,9 +3,9 @@
  *
  * 记忆召回调查：读取过记忆文件后询问召回质量。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FeedbackSurvey/useMemorySurvey.tsx
- * pieces: chunk-18hwfzwa.js (25)
+ * pieces: chunk-czq1j3j2.js (25)
  * attribution: placement 9, sole-consumer 2, affinity 3, layout 9, fingerprint 2
  */
 import { relative, sep, join, isAbsolute, normalize, basename } from "path";
@@ -31,7 +31,7 @@ import { parseMemoryFile } from "../../memdir/memoryTypes.js";
 import { isInBundledMode } from "../../utils/bundledMode.js";
 import { projectKeyFromMemoryDir, isTeamMemoryDirAbsent } from "../../memdir/teamMemPrompts.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
-import { count, uniq } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromNumber, fromEnum, fromEnumOpt, lit as lit_2 } from "../../services/analytics/safeMetadata.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
@@ -50,15 +50,16 @@ import { collectTranscriptShareWithPolicy } from "./submitTranscriptShare.js";
 import { useSurveyState } from "./useSurveyState.js";
 import { getLastAssistantMessage } from "../../utils/messages.js";
 import { isFeedbackSurveyAllowed } from "../../services/policyLimits/index.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 
-//@ chunk-18hwfzwa.js:993940-994017 placement
+//@ chunk-czq1j3j2.js:1027974-1028051 placement
 var MEMORY_SURVEY_HEADER = "Claude recalled a memory:";
 var MEMORY_SURVEY_QUESTION = "How was Claude's recollection?";
 var MEMORY_SURVEY_MAX_LINES = 4;
-//@ chunk-18hwfzwa.js:1039472-1039502 placement
+//@ chunk-czq1j3j2.js:1073501-1073531 placement
 var MAX_MEMORY_FILES_PER_SURVEY = 16;
 var SURVEYRATING = "surveyRating";
-//@ chunk-18hwfzwa.js:1039502-1039867 placement
+//@ chunk-czq1j3j2.js:1073531-1073896 placement
 /**
  * 校验记忆文件 frontmatter 里的 surveyRating（count/mean/total）；total 不合理时按 mean×count 估算并夹在 [count, 3count]。
  */
@@ -77,7 +78,7 @@ function parseSurveyRating(value) {
     total: total_2,
   };
 }
-//@ chunk-18hwfzwa.js:1039867-1040025 placement
+//@ chunk-czq1j3j2.js:1073896-1074054 placement
 function accumulateSurveyRating(previous, rating) {
   let surveyRating = parseSurveyRating(previous);
   if (surveyRating === null)
@@ -94,17 +95,17 @@ function accumulateSurveyRating(previous, rating) {
     total,
   };
 }
-//@ chunk-18hwfzwa.js:1040025-1040058 placement
+//@ chunk-czq1j3j2.js:1074054-1074087 placement
 var MAX_MEMORY_SCAN_FILES = 1e4;
 var MAX_MEMORY_SCAN_LEAVES = 4 * MAX_MEMORY_SCAN_FILES;
 var MAX_MEMORY_FILE_BYTES = 262144;
-//@ chunk-18hwfzwa.js:1040058-1040163 placement
+//@ chunk-czq1j3j2.js:1074087-1074192 placement
 function isExcludedMemoryPath(root, path) {
   let relativePath = relative(root, path);
   if (relativePath === "" || relativePath.startsWith("..")) return true;
   return isExcludedMemoryKey(relativePath.split(sep).join("/"));
 }
-//@ chunk-18hwfzwa.js:1040163-1040940 placement
+//@ chunk-czq1j3j2.js:1074192-1074969 placement
 async function listMemoryFilesForSurvey(options) {
   let files = [];
   let fileCount = 0;
@@ -157,7 +158,7 @@ async function listMemoryFilesForSurvey(options) {
     truncated: isTruncated,
   };
 }
-//@ chunk-18hwfzwa.js:1040940-1041350 placement (2.1.88 match: replaceFromSnapshot, 0.683)
+//@ chunk-czq1j3j2.js:1074969-1075379 placement (2.1.88 match: replaceFromSnapshot, 0.683)
 /**
  * 递归列出目录中的 .md 文件（跳过符号链接与忽略路径，超过上限标记 truncated）。
  */
@@ -194,7 +195,7 @@ async function listMarkdownFilesRecursive(rootDir) {
     truncated: false,
   };
 }
-//@ chunk-18hwfzwa.js:1041350-1041736 sole-consumer (2.1.88 match: isSessionPlanFile, 0.801)
+//@ chunk-czq1j3j2.js:1075379-1075765 sole-consumer (2.1.88 match: isSessionPlanFile, 0.802)
 async function resolveMemoryFileReference(fileRef, baseDir, listFiles) {
   if (!fileRef.endsWith(".md")) return null;
   let isAllowedPath = (candidatePath) =>
@@ -216,7 +217,7 @@ async function resolveMemoryFileReference(fileRef, baseDir, listFiles) {
   let normalizedPath = normalize(join(baseDir, filtered[0]));
   return isAllowedPath(normalizedPath) ? normalizedPath : null;
 }
-//@ chunk-18hwfzwa.js:1041965-1043331 affinity
+//@ chunk-czq1j3j2.js:1075994-1077360 affinity
 /**
  * 在 frontmatter 文本里写入或替换 surveyRating 块：已有则替换该缩进块，有 metadata: 则插在其下，否则在结尾 --- 前新建 metadata；保留原换行风格，结构异常返回 null。
  */
@@ -301,7 +302,7 @@ function writeSurveyRatingIntoFrontmatter(content, frontmatterBlock, rating) {
 `) + content.slice(frontmatterLength)
   );
 }
-//@ chunk-18hwfzwa.js:1043331-1043439 placement (2.1.88 match: isSessionPlanFile, 1)
+//@ chunk-czq1j3j2.js:1077360-1077468 placement (2.1.88 match: isSessionPlanFile, 1)
 /**
  * 判断路径是否是记忆目录下的 .md 文件（排除指定子目录和若干特殊文件）。旧版名 isSessionPlanFile 误配，应归 memdir。
  */
@@ -314,7 +315,7 @@ function isMemoryDirMarkdownFile(path, memoryDir, excludedDir) {
     !isExcludedMemoryPath(memoryDir + sep, path)
   );
 }
-//@ chunk-18hwfzwa.js:1043439-1044334 layout
+//@ chunk-czq1j3j2.js:1077468-1078363 layout
 /**
  * 把评分写回一个记忆文件：确认是自动记忆目录下的 .md 且不超大，storage v5 时通过后端 updateText 写入，否则读改写本地文件，最后恢复原 atime/mtime。
  */
@@ -388,7 +389,7 @@ async function writeBackMemoryRating(context, realPath, rating, memoryOptions) {
     return true;
   });
 }
-//@ chunk-18hwfzwa.js:1044334-1045063 layout
+//@ chunk-czq1j3j2.js:1078363-1079092 layout
 /**
  * 生成带新评分的记忆文件内容：校验 frontmatter 能被宽松与严格两种正则解析且一致，写入后确认正文与其他字段不变，否则返回 null。
  */
@@ -430,7 +431,7 @@ function applySurveyRatingToMemory(content, filePath, rating) {
     return null;
   return updatedContent;
 }
-//@ chunk-18hwfzwa.js:1045063-1045844 layout
+//@ chunk-czq1j3j2.js:1079092-1079873 layout
 /**
  * 记忆调查回答后，把评分（1–3）写回被引用的记忆文件：解析最多 16 个引用、去重真实路径、并行写回，记录 tengu_memory_rating_writeback。
  */
@@ -473,7 +474,10 @@ async function writeBackMemorySurveyRatings(context, filenames, rating, storageV
         return false;
       }),
     );
-    let writtenCount = count(settled, (settled) => settled.status === "fulfilled" && settled.value === true);
+    let writtenCount = countWhere(
+      settled,
+      (settled) => settled.status === "fulfilled" && settled.value === true,
+    );
     logEvent("tengu_memory_rating_writeback", {
       cited_count: fromNumber(filenames.length),
       resolved_count: fromNumber(resolvedFiles.size),
@@ -483,11 +487,11 @@ async function writeBackMemorySurveyRatings(context, filenames, rating, storageV
     logForDebugging(`memorySurveyRating: write-back failed: ${String(error)}`);
   }
 }
-//@ chunk-18hwfzwa.js:1045844-1045868 layout
+//@ chunk-czq1j3j2.js:1079873-1079897 layout
 function shouldShowTranscriptPrompt() {
   return false;
 }
-//@ chunk-18hwfzwa.js:1045868-1046041 layout
+//@ chunk-czq1j3j2.js:1079897-1080070 layout
 function logMemorySurveyEvent(eventType, appearanceId, response) {
   logEvent(TENGU_MEMORY_SURVEY_EVENT, {
     event_type: fromEnum(eventType),
@@ -501,7 +505,7 @@ function logMemorySurveyEvent(eventType, appearanceId, response) {
     survey_type: "memory",
   });
 }
-//@ chunk-18hwfzwa.js:1046041-1046277 layout
+//@ chunk-czq1j3j2.js:1080070-1080306 layout
 function logMemoryTranscriptPromptShown(appearanceId, response) {
   logEvent(TENGU_MEMORY_SURVEY_EVENT, {
     event_type: lit_2("transcript_prompt_appeared"),
@@ -516,14 +520,14 @@ function logMemoryTranscriptPromptShown(appearanceId, response) {
     response,
   });
 }
-//@ chunk-18hwfzwa.js:1046277-1046336 layout
+//@ chunk-czq1j3j2.js:1080306-1080365 layout
 function markTranscriptShareDismissed(state) {
   return {
     ...state,
     transcriptShareDismissed: true,
   };
 }
-//@ chunk-18hwfzwa.js:1046336-1046433 layout
+//@ chunk-czq1j3j2.js:1080365-1080462 layout
 function isMemoryCitationEligible(ref) {
   return (
     !ref.incomplete &&
@@ -531,11 +535,11 @@ function isMemoryCitationEligible(ref) {
     truncateToLines(ref.sentence, MEMORY_SURVEY_MAX_LINES) === ref.sentence
   );
 }
-//@ chunk-18hwfzwa.js:1046433-1046479 layout
+//@ chunk-czq1j3j2.js:1080462-1080508 layout
 function isMemoryCitationTooLong(ref) {
   return ref.sentence.length > MAX_CITATION_LENGTH;
 }
-//@ chunk-18hwfzwa.js:1046479-1046634 fingerprint (2.1.88 match: MEMORY_SURVEY_GATE, 0.312)
+//@ chunk-czq1j3j2.js:1080508-1080663 fingerprint (2.1.88 match: MEMORY_SURVEY_GATE, 0.312)
 var MEMORY_SURVEY_DELAY_MS = 5000;
 var MEMORY_SURVEY_TIMEOUT_MS = 60000;
 var TENGU_DUNWICH_BELL = "tengu_dunwich_bell";
@@ -548,15 +552,15 @@ var MEMORY_SURVEY_SCORES = {
   fine: 2,
   good: 3,
 };
-//@ chunk-18hwfzwa.js:1046634-1046667 affinity
+//@ chunk-czq1j3j2.js:1080663-1080696 affinity
 function getMemorySurveyProbability() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VELVET_MOTH, 0.2);
 }
-//@ chunk-18hwfzwa.js:1046667-1046691 affinity
+//@ chunk-czq1j3j2.js:1080696-1080720 affinity
 function isMemorySurveyForced() {
   return false;
 }
-//@ chunk-18hwfzwa.js:1046806-1046971 sole-consumer
+//@ chunk-czq1j3j2.js:1080835-1081000 sole-consumer
 function extractCitedMemoryRefs(message) {
   let content = message.message.content;
   if (!Array.isArray(content)) return [];
@@ -564,7 +568,7 @@ function extractCitedMemoryRefs(message) {
     .filter((block) => typeof block === "object" && block !== null && block.type === "text")
     .flatMap((block) => extractMemoryCitations(block.text));
 }
-//@ chunk-18hwfzwa.js:1046971-1050360 fingerprint (2.1.88 match: useMemorySurvey, 0.602)
+//@ chunk-czq1j3j2.js:1081000-1084389 fingerprint (2.1.88 match: useMemorySurvey, 0.602)
 function useMemorySurvey(messages, isLoading, hasActivePrompt, options) {
   let $ = useMemoCache(43);
   let hasActivePromptFlag = hasActivePrompt === undefined ? false : hasActivePrompt;
@@ -759,7 +763,7 @@ function useMemorySurvey(messages, isLoading, hasActivePrompt, options) {
         logEvent(TENGU_MEMORY_SURVEY_EVENT, {
           event_type: lit_2("citation_ineligible"),
           dropped_citation_count: droppedCount,
-          dropped_too_long_count: count(citedMemoryRefs, isMemoryCitationTooLong),
+          dropped_too_long_count: countWhere(citedMemoryRefs, isMemoryCitationTooLong),
           eligible_citation_count: filtered.length,
         });
       let [firstCitation] = filtered;
@@ -771,7 +775,7 @@ function useMemorySurvey(messages, isLoading, hasActivePrompt, options) {
       }
       let pendingCitation = {
         sentence: firstCitation.sentence,
-        filenames: uniq(firstCitation.filenames),
+        filenames: normalizeCaseForComparison_2(firstCitation.filenames),
       };
       citationRef.current = pendingCitation;
       setCitation(pendingCitation);
@@ -836,9 +840,9 @@ function useMemorySurvey(messages, isLoading, hasActivePrompt, options) {
   return surveyState;
 }
 export {
+  TENGU_DUNWICH_BELL,
   useMemorySurvey,
   MEMORY_SURVEY_MAX_LINES,
   MEMORY_SURVEY_HEADER,
   MEMORY_SURVEY_QUESTION,
-  TENGU_DUNWICH_BELL,
 };

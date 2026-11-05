@@ -1,8 +1,8 @@
 /**
  * get-proto/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: get-proto@1.0.1
- * pieces: chunk-h6b7mazd.js (1)
+ * pieces: chunk-ww9agm6g.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
@@ -12,7 +12,7 @@ import {
 } from "./Reflect.getPrototypeOf.js";
 import { require_get } from "../dunder-proto/get.js";
 
-//@ chunk-h6b7mazd.js:11796-12047 cjs-fingerprint
+//@ chunk-ww9agm6g.js:11796-12047 cjs-fingerprint
 var require_get_proto = __commonJS(function (cjsExports, cjsModule) {
   var reflectGetProto = require_Reflect_getPrototypeOf();
   var originalGetProto = require_Reflect_getPrototypeOf_2();

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。MCP 文件引用上传。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-amf531m0.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-aaprp84e.js (7)
  * attribution: placement 7
  */
 import { DoctorLazy } from "../../../cli/handlers/util.js";
@@ -31,7 +31,7 @@ import { PROJECT_FILES_LINK } from "../../../utils/stageFileRoots.js";
 import { createUploadScreen } from "../../fileInputs/uploadPut.js";
 import { attachableFileAt } from "../../taskFiles/taskFileUpload.js";
 
-//@ chunk-amf531m0.js:12593-13086 placement
+//@ chunk-aaprp84e.js:13770-14263 placement
 /**
  * 文件上传接口的 schema：路径、哈希请求、上传请求（路径、sha256、URL、请求头）、单文件拒绝、哈希应答与上传应答。
  */
@@ -95,7 +95,7 @@ var putAnswerSchema = DoctorLazy(() =>
     ).max(MAX_FILES_PER_INPUT),
   }),
 );
-//@ chunk-amf531m0.js:13086-13220 placement
+//@ chunk-aaprp84e.js:14263-14397 placement
 /**
  * 处理计算文件哈希的请求：校验路径列表后计算（或返回不可用原因），附带摘要。
  */
@@ -111,7 +111,7 @@ async function hashFiles(request, signal, uploadContext) {
     },
   };
 }
-//@ chunk-amf531m0.js:13220-13365 placement
+//@ chunk-aaprp84e.js:14397-14542 placement
 /**
  * 处理上传文件的请求：校验文件列表后上传到给定地址（或返回不可用原因），附带摘要。
  */
@@ -127,7 +127,7 @@ async function putFiles(request, signal, uploadContext) {
     },
   };
 }
-//@ chunk-amf531m0.js:13365-13526 placement
+//@ chunk-aaprp84e.js:14542-14704 placement
 function uploadsUnavailable(path, { launchRules }) {
   let reason = isPolicyLimitsCacheMissing()
     ? "policy_pending"
@@ -145,7 +145,7 @@ function uploadsUnavailable(path, { launchRules }) {
         },
       ];
 }
-//@ chunk-amf531m0.js:13526-13646 placement
+//@ chunk-aaprp84e.js:14704-14824 placement
 function uploadPathPrefixFor(url) {
   return (
     FIRST_PARTY_UPLOAD_SERVERS.map((server) => server.uploadPathPrefix).find(
@@ -153,7 +153,7 @@ function uploadPathPrefixFor(url) {
     ) ?? ""
   );
 }
-//@ chunk-amf531m0.js:13646-13893 placement
+//@ chunk-aaprp84e.js:14824-15071 placement
 function uploadScreenFor({ session, paths, launchRules, heldAtLaunch }, uploadPathPrefix) {
   let refusalHints = heldAtLaunch ? [PROJECT_FILES_LINK] : [];
   return createUploadScreen({
@@ -173,7 +173,7 @@ function uploadScreenFor({ session, paths, launchRules, heldAtLaunch }, uploadPa
     uploadPathPrefix,
   });
 }
-//@ chunk-amf531m0.js:13893-14003 placement
+//@ chunk-aaprp84e.js:15071-15181 placement
 function uploadSummary(verb, results) {
   let found = results.find((result) => result.code !== undefined);
   return found === undefined ? `${results.length} ${verb}` : `not ${verb}: ${found.code}`;

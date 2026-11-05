@@ -1,8 +1,8 @@
 /**
  * commander/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: commander@12.0.0
- * pieces: chunk-b7dyevzy.js (2)
+ * pieces: chunk-ardnz7sf.js (2)
  * attribution: cjs-fingerprint 2
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
@@ -12,7 +12,7 @@ import { require_error } from "./lib/error.js";
 import { require_help } from "./lib/help.js";
 import { require_option } from "./lib/option.js";
 
-//@ chunk-b7dyevzy.js:34778-35160 cjs-fingerprint
+//@ chunk-ardnz7sf.js:34778-35160 cjs-fingerprint
 var require_commander = __commonJS(function (cjsExports) {
   var { Argument } = require_argument();
   var { Command } = require_command();
@@ -31,7 +31,7 @@ var require_commander = __commonJS(function (cjsExports) {
   cjsExports.InvalidArgumentError = InvalidArgumentError;
   cjsExports.InvalidOptionArgumentError = InvalidArgumentError;
 });
-//@ chunk-b7dyevzy.js:35160-35561 cjs-fingerprint
+//@ chunk-ardnz7sf.js:35160-35561 cjs-fingerprint
 var require_commander_2 = __commonJS(function (cjsExports, cjsModule) {
   var commanderModule = require_commander();
   cjsExports = cjsModule.exports = {};

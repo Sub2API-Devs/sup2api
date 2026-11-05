@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：检查 Mantle 提供商下默认模型是否可访问（生成警告）；用 AnthropicBedrockMantle 客户端发送探测请求等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-paetrb4a.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-v3dezsp0.js (6)
  * attribution: placement 6
  */
 import { catalogEntriesByFirstPartyId } from "./modelCatalog.js";
 import { DEFAULT_MANTLE_OPUS_KEY, toProviderWireModelId, getMarketingNameForModel } from "./model.js";
 import { getAPIProvider } from "./providers.js";
 import { env } from "../env.js";
-import { getInitialSettings_2 } from "../settings/settings.js";
+import { getInitialSettings } from "../settings/settings.js";
 import { getUserSpecifiedModelSetting } from "./smallFastModel.js";
 import { userConfiguredDefault } from "./thirdPartyModelDefaults.js";
 import { logEvent } from "../../services/analytics/index.js";
@@ -43,18 +43,18 @@ import {
 } from "../auth.js";
 import { sendStartupModelCheck } from "./modelAccessCheck.js";
 
-//@ chunk-paetrb4a.js:3655-3710 placement
+//@ chunk-v3dezsp0.js:3991-4046 placement
 var filtered = Object.keys(catalogEntriesByFirstPartyId).filter(
   (key) => catalogEntriesByFirstPartyId[key].mantle !== null,
 );
-//@ chunk-paetrb4a.js:3710-5514 placement
+//@ chunk-v3dezsp0.js:4046-5850 placement
 /**
  * 检查 Mantle 提供商下默认模型是否可访问（生成警告）。
  */
 async function checkMantleDefaults(defaultKey = DEFAULT_MANTLE_OPUS_KEY, options) {
   if (getAPIProvider() !== "mantle") return [];
   if (env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST) return [];
-  let modelOverrides = getInitialSettings_2().modelOverrides;
+  let modelOverrides = getInitialSettings().modelOverrides;
   if (modelOverrides?.[catalogEntriesByFirstPartyId[defaultKey].firstParty]) return [];
   let userPinned = options?.userPinned ?? getUserSpecifiedModelSetting() != null;
   let ANTHROPIC_DEFAULT_OPUS_MODEL = env.ANTHROPIC_DEFAULT_OPUS_MODEL;
@@ -174,7 +174,7 @@ async function checkMantleDefaults(defaultKey = DEFAULT_MANTLE_OPUS_KEY, options
     },
   ];
 }
-//@ chunk-paetrb4a.js:5514-5871 placement
+//@ chunk-v3dezsp0.js:5850-6207 placement
 /**
  * 带缓存地探测 Mantle 模型访问。
  */
@@ -194,7 +194,7 @@ async function mantleCheckCacheKey(modelId) {
   if (verdict === "accessible" && cacheKey !== undefined) recordAccessVerdict(cacheKey, modelId, "ok");
   return verdict;
 }
-//@ chunk-paetrb4a.js:5871-6735 placement
+//@ chunk-v3dezsp0.js:6207-7071 placement
 /**
  * 探测 Mantle 模型可访问性（429 视为可访问）。
  */
@@ -213,10 +213,10 @@ async function probeMantleModel(modelId) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION
@@ -229,12 +229,12 @@ async function probeMantleModel(modelId) {
     return "unknown";
   }
 }
-//@ chunk-paetrb4a.js:6735-6812 placement
+//@ chunk-v3dezsp0.js:7071-7148 placement
 async function isMantleModelAccessible(modelId) {
   let verdict = await mantleCheckCacheKey(modelId);
   return verdict === "accessible" || verdict === "outdated";
 }
-//@ chunk-paetrb4a.js:6812-7944 placement
+//@ chunk-v3dezsp0.js:7148-8280 placement
 /**
  * 用 AnthropicBedrockMantle 客户端发送探测请求。
  */

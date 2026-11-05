@@ -3,14 +3,14 @@
  *
  * 并入已有模块：统计可见任务数（排除进程内队友）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/claudeInChrome/toolRendering.tsx
- * pieces: chunk-3k33hyyp.js (2), chunk-ah34pb7m.js (5)
+ * pieces: chunk-vnst8cd9.js (2), chunk-wjygkcr4.js (5)
  * attribution: fingerprint 5, placement 2
  */
-import { count } from "../collections.js";
+import { countWhere } from "../collections.js";
 import { shouldHideTasksFooter } from "../../components/tasks/taskStatusUtils.js";
-import { countNonAmbientTasks } from "../tasks.js";
+import { countOf } from "../../components/tasks/remoteTaskStatus.js";
 import { supportsHyperlinks } from "../../ink/supports-hyperlinks.js";
 import {
   jsxProd_default_2,
@@ -23,19 +23,19 @@ import { trackClaudeInChromeTabId } from "./common.js";
 import { truncateToWidth } from "../format.js";
 import { getClaudeInChromePermissionOverrides } from "./permissionOverrides.js";
 
-//@ chunk-ah34pb7m.js:12578-12634 placement
+//@ chunk-wjygkcr4.js:12594-12654 placement
 /**
  * 统计可见任务数（排除进程内队友）。
  */
-function countVisibleTasks(tasks, options) {
-  return count(Object.values(tasks), shouldHideTasksFooter) + countNonAmbientTasks(options);
+function countVisibleTasks(tasks, taskList, context) {
+  return countWhere(Object.values(tasks), shouldHideTasksFooter) + countOf(taskList, context);
 }
-//@ chunk-ah34pb7m.js:12714-12751 fingerprint (2.1.88 match: CHROME_EXTENSION_FOCUS_TAB_URL_BASE, 1)
+//@ chunk-wjygkcr4.js:12997-13034 fingerprint (2.1.88 match: CHROME_EXTENSION_FOCUS_TAB_URL_BASE, 1)
 /**
  * 扩展聚焦标签页链接前缀 https://clau.de/chrome/tab/。
  */
 var CHROME_EXTENSION_FOCUS_TAB_URL_BASE = "https://clau.de/chrome/tab/";
-//@ chunk-ah34pb7m.js:12751-13077 fingerprint (2.1.88 match: renderChromeViewTabLink, 0.801)
+//@ chunk-wjygkcr4.js:13034-13360 fingerprint (2.1.88 match: renderChromeViewTabLink, 0.801)
 /**
  * 终端支持超链接时，在工具行后显示 "[View Tab]" 链接（按输入里的 tabId）。
  */
@@ -63,7 +63,7 @@ function renderChromeViewTabLink(input) {
     ],
   });
 }
-//@ chunk-ah34pb7m.js:13077-14033 fingerprint (2.1.88 match: renderChromeToolResultMessage, 1)
+//@ chunk-wjygkcr4.js:13360-14316 fingerprint (2.1.88 match: renderChromeToolResultMessage, 1)
 /**
  * Chrome 工具结果的简短摘要（Navigation completed、Tab created、Page read…），verbose 时显示完整结果。
  */
@@ -136,7 +136,7 @@ function renderChromeToolResultMessage(output, toolName, verbose) {
     });
   return null;
 }
-//@ chunk-ah34pb7m.js:14033-14137 placement
+//@ chunk-wjygkcr4.js:14316-14420 placement
 /**
  * 返回一个渲染函数：结果是对象时按给定格式渲染（verbose 透传），否则返回 null。
  */
@@ -146,7 +146,7 @@ function createObjectResultRenderer(toolName) {
     return renderChromeToolResultMessage(output, toolName, verbose);
   };
 }
-//@ chunk-3k33hyyp.js:12061-13845 fingerprint (2.1.88 match: renderChromeToolUseMessage, 1)
+//@ chunk-vnst8cd9.js:13237-15021 fingerprint (2.1.88 match: renderChromeToolUseMessage, 1)
 /**
  * Chrome 工具调用行的副标题：navigate 显示主机名、computer 显示动作与坐标/ref、find 显示 pattern 等；同时记录 tabId。
  */
@@ -225,7 +225,7 @@ function renderChromeToolUseMessage(input, toolName, verbose) {
   }
   return secondaryInfo.join(", ") || null;
 }
-//@ chunk-3k33hyyp.js:13845-14000 fingerprint (2.1.88 match: getClaudeInChromeMCPToolOverrides, 0.784)
+//@ chunk-vnst8cd9.js:15021-15176 fingerprint (2.1.88 match: getClaudeInChromeMCPToolOverrides, 0.784)
 /**
  * 给 claude-in-chrome 的 MCP 工具覆盖显示名 "Claude in Chrome[tool]" 与渲染函数。
  */

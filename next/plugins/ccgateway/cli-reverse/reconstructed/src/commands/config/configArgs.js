@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/config set 参数形式的处理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8ncxevqn.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sen07jqs.js (1)
  * attribution: placement 1
  */
 import { COMMON_HELP_ARGS, COMMON_INFO_ARGS_ALIAS } from "../../constants/xml.js";
@@ -18,7 +18,7 @@ import {
 import { sanitizeTelemetryString } from "../../utils/sanitization.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 
-//@ chunk-8ncxevqn.js:12839-13225 placement
+//@ chunk-sen07jqs.js:13988-14375 placement
 /**
  * /config 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */

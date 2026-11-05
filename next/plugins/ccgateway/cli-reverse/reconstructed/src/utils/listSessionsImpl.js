@@ -3,9 +3,9 @@
  *
  * SDK listSessions：扫描项目目录下会话 jsonl 并读取头尾摘要。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/listSessionsImpl.ts
- * pieces: chunk-19fynvg9.js (4), chunk-1bmxdqa0.js (1), chunk-6zvphrsz.js (1)
+ * pieces: chunk-csvcrjg7.js (4), chunk-wzyv38y8.js (1), chunk-xmpe3wef.js (1)
  * attribution: sole-consumer 1, fingerprint 3, layout 1, callgraph-fingerprint 1
  */
 import { readdir, stat } from "fs/promises";
@@ -24,7 +24,7 @@ import { validateUuid, readSessionLite } from "./sessionStoragePortable.js";
 import { findContinuedInSessionId } from "./backgroundSessionResume.js";
 import { stripBomAndCarriageReturn } from "./remoteFileState.js";
 
-//@ chunk-6zvphrsz.js:19666-19861 fingerprint (2.1.88 match: gatherAllCandidates, 1)
+//@ chunk-wzyv38y8.js:19732-19927 fingerprint (2.1.88 match: gatherAllCandidates, 1)
 async function gatherAllCandidates() {
   return (
     await Promise.all(
@@ -42,14 +42,14 @@ async function gatherAllCandidates() {
     )
   ).flat();
 }
-//@ chunk-19fynvg9.js:545-605 sole-consumer
+//@ chunk-csvcrjg7.js:545-605 sole-consumer
 function getProjectKeyIfValid(projectPath) {
   let projectKeyIfRepresentable = getProjectKeyIfRepresentable(projectPath);
   return projectKeyIfRepresentable !== undefined && isValidKeySegment(projectKeyIfRepresentable)
     ? projectKeyIfRepresentable
     : undefined;
 }
-//@ chunk-19fynvg9.js:605-1662 fingerprint (2.1.88 match: listCandidates, 0.444)
+//@ chunk-csvcrjg7.js:605-1662 fingerprint (2.1.88 match: listCandidates, 0.444)
 /**
  * 列出某项目目录（或全部）下的 .jsonl 会话候选及 mtime。
  */
@@ -145,9 +145,9 @@ async function listCandidates(projectsDir, includeMtime, projectPath, storage, b
     )
   ).filter((candidate) => candidate !== null);
 }
-//@ chunk-19fynvg9.js:1662-1671 layout
+//@ chunk-csvcrjg7.js:1662-1671 layout
 var CANDIDATE_READ_CONCURRENCY = 32;
-//@ chunk-19fynvg9.js:1671-2014 callgraph-fingerprint (2.1.88 match: readCandidate, 0.239)
+//@ chunk-csvcrjg7.js:1671-2014 callgraph-fingerprint (2.1.88 match: readCandidate, 0.24)
 /**
  * 读取候选会话文件头尾，提取摘要信息（标题、首条提示、cwd、分支）。
  */
@@ -179,7 +179,7 @@ async function readCandidate(projectsDir, sessionId, storage) {
   }
   return;
 }
-//@ chunk-1bmxdqa0.js:16776-16861 fingerprint (2.1.88 match: listSessionsImpl, 0.817)
+//@ chunk-xmpe3wef.js:17962-18047 fingerprint (2.1.88 match: listSessionsImpl, 0.816)
 /**
  * SDK listSessions 实现：扫描项目目录候选会话文件并读取 lite 信息。
  */
@@ -191,4 +191,4 @@ function listSessionsImpl(entry, timestamp) {
     limit: undefined,
   };
 }
-export { listSessionsImpl, gatherAllCandidates, readCandidate, listCandidates };
+export { gatherAllCandidates, listCandidates, readCandidate, listSessionsImpl };

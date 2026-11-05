@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Artifact 类型目录：列出类型与实例、读取类型文件、描述类型、经中继拉取与错误文案。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-w08rdxhd.js (64)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-95pbtx8d.js (64)
  * attribution: placement 64
  */
 import { env } from "../../utils/env.js";
@@ -57,20 +57,21 @@ import {
   scrubServerLine,
 } from "../../tools/ArtifactTool/artifactUrls.js";
 import { decodeBase58Uuid } from "../../utils/messages.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { isSafeDisplayName } from "./artifactTypeRelease.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { CAPABILITY_NAME_REGEX } from "./capabilityDeclaration.js";
 import { validateReadPath } from "./publishPaths.js";
-import { countCharInString, truncateCodePoints } from "../../utils/stringUtils.js";
+import { countCharInString, countCodePoints, truncateCodePoints } from "../../utils/stringUtils.js";
 import { parseToolOutputSchema } from "../mcp/schemaParse.js";
 import { isMeaningfulFlag } from "./textSanitize.js";
 import { getAttestationKind } from "./attestation.js";
 import { ARTIFACT_LIST_RELS } from "./listArtifacts.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
-import { webfetchReadFile, getFetchErrorText } from "./webfetchRead.js";
+import { countWhere } from "../../utils/collections.js";
+import { readArtifactContent, modelFacingReadErr } from "./webfetchRead.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { extractPageText, stripControlChars } from "./audience.js";
+import { scrubThirdPartyText, stripInlineControlBytes } from "./audience.js";
 import {
   ARTIFACT_CONTENT_AUTHORED_TAG,
   ARTIFACT_INSTRUCTIONS_BELOW_PUBLISHER,
@@ -83,20 +84,20 @@ import { getLiveState } from "../liveReplica/liveReplica.js";
 import { createCombinedAbortSignal } from "../../utils/combinedAbortSignal.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-w08rdxhd.js:28307-28375 placement
+//@ chunk-95pbtx8d.js:28344-28412 placement
 function isArtifactTypeCatalogEnabled() {
   return (
     env.CLAUDE_CODE_ARTIFACT_TYPE_CATALOG ??
     getFeatureValue_CACHED_MAY_BE_STALE(TENGU_COBALT_PLINTH_LARCH, true)
   );
 }
-//@ chunk-w08rdxhd.js:28375-28435 placement
+//@ chunk-95pbtx8d.js:28412-28472 placement
 function isArtifactQuickstartEnabled() {
   return env.CLAUDE_CODE_ARTIFACT_QUICKSTART ?? true;
 }
-//@ chunk-w08rdxhd.js:28435-28454 placement
+//@ chunk-95pbtx8d.js:28472-28491 placement
 var ANTHROPIC = "anthropic";
-//@ chunk-w08rdxhd.js:28454-28636 placement
+//@ chunk-95pbtx8d.js:28491-28673 placement
 function getTypesListPath(query, typeQuery = false) {
   let parts = [
     ...(typeQuery ? [`scopes=${ANTHROPIC}`] : []),
@@ -104,22 +105,22 @@ function getTypesListPath(query, typeQuery = false) {
   ];
   return parts.length === 0 ? "/api/frame/types" : `/api/frame/types?${parts.join("&")}`;
 }
-//@ chunk-w08rdxhd.js:28636-28701 placement
+//@ chunk-95pbtx8d.js:28673-28738 placement
 function typeApiPath(slug) {
   return `/api/frame/types/${encodeURIComponent(slug)}`;
 }
-//@ chunk-w08rdxhd.js:28701-28816 placement
+//@ chunk-95pbtx8d.js:28738-28853 placement
 function getTypeInstancesPath(slug, scope) {
   return `/api/frame/types/${encodeURIComponent(slug)}/instances?limit=${TYPE_INSTANCES_LIMIT}${scope === "all" ? "" : `&rel=${scope}`}`;
 }
-//@ chunk-w08rdxhd.js:28816-28947 placement
+//@ chunk-95pbtx8d.js:28853-28984 placement
 function getTypeFilePath(slug, path) {
   return `/api/frame/types/${encodeURIComponent(slug)}/files/${path
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/")}`;
 }
-//@ chunk-w08rdxhd.js:28947-29057 placement
+//@ chunk-95pbtx8d.js:28984-29094 placement
 /**
  * 类型目录的大小/数量上限常量与列表等级顺序（core、solution、community）。
  */
@@ -132,11 +133,11 @@ var DETAIL_DESCRIPTION_MAX_RUNES = 1200;
 var CAPABILITY_NAMES_MAX = 16;
 var MAX_TYPE_FILE_ENTRIES = 4096;
 var TYPE_TIER_ORDER = ["core", "solution", "community"];
-//@ chunk-w08rdxhd.js:29057-29100 placement
+//@ chunk-95pbtx8d.js:29094-29137 placement
 function isKnownTier(tier) {
   return TYPE_TIER_ORDER.some((tierName) => tierName === tier);
 }
-//@ chunk-w08rdxhd.js:29100-29991 placement
+//@ chunk-95pbtx8d.js:29137-30028 placement
 /**
  * 类型目录接口的响应 schema：类型列表、类型条目的 listing（scope/tier）、类型摘要、类型详情（文件、能力、可创建）、类型文件条目与文件内容；以及描述不可用的提示与类型说明文件名 SKILL.md。
  */
@@ -148,7 +149,7 @@ var TYPE_FILE_ENTRY_SCHEMA;
 var TYPE_FILE_TEXT_SCHEMA;
 var TYPE_DESCRIBE_UNAVAILABLE_MESSAGE;
 var TYPE_INSTRUCTIONS_FILE;
-deferInit("chunk-w08rdxhd.js:29100", () => {
+deferInit("chunk-95pbtx8d.js:29137", () => {
   TYPES_LIST_SCHEMA = DoctorLazy(() =>
     objectSchema({
       types: array(unknown()).nullable(),
@@ -199,13 +200,13 @@ deferInit("chunk-w08rdxhd.js:29100", () => {
   TYPE_DESCRIBE_UNAVAILABLE_MESSAGE = "describing an Artifact type is not available in this session";
   TYPE_INSTRUCTIONS_FILE = "SKILL.md";
 });
-//@ chunk-w08rdxhd.js:29991-30050 placement
+//@ chunk-95pbtx8d.js:30028-30087 placement
 function singleLineOrUndefined(description, descriptionValue) {
   return description === undefined
     ? undefined
     : (truncateSingleLine(description, descriptionValue) ?? undefined);
 }
-//@ chunk-w08rdxhd.js:30050-30266 placement
+//@ chunk-95pbtx8d.js:30087-30303 placement
 function getBestAnthropicTier(listings) {
   let out;
   for (let listing of listings ?? []) {
@@ -216,19 +217,19 @@ function getBestAnthropicTier(listings) {
   }
   return out === undefined ? undefined : TYPE_TIER_ORDER[out];
 }
-//@ chunk-w08rdxhd.js:30266-30368 placement
+//@ chunk-95pbtx8d.js:30303-30405 placement
 function isAnthropicListed(listings) {
   return (listings ?? []).some((listing) => {
     let parsed = TYPE_LISTING_SCHEMA().safeParse(listing);
     return parsed.success && parsed.data.scope === ANTHROPIC;
   });
 }
-//@ chunk-w08rdxhd.js:30368-30459 placement
+//@ chunk-95pbtx8d.js:30405-30496 placement
 function updateFirstPartyAttestation(slug, listings, listingRows) {
   if (isAnthropicListed(listings)) markAttestation(slug, "first_party_type", listingRows);
   else revokeAttestations(slug, ["first_party_type"], listingRows);
 }
-//@ chunk-w08rdxhd.js:30459-30726 placement
+//@ chunk-95pbtx8d.js:30496-30763 placement
 function toTypeSummaryRow(row, url) {
   let bestAnthropicTier = getBestAnthropicTier(row.listings);
   let description = singleLineOrUndefined(row.description, url);
@@ -252,7 +253,7 @@ function toTypeSummaryRow(row, url) {
       }),
   };
 }
-//@ chunk-w08rdxhd.js:30726-30815 placement
+//@ chunk-95pbtx8d.js:30763-30852 placement
 function isFrameNotFound(frameWithRetry) {
   return (
     frameWithRetry.ok &&
@@ -261,7 +262,7 @@ function isFrameNotFound(frameWithRetry) {
     (frameWithRetry.route === "relay" || isFrameNotFoundBody(frameWithRetry.data))
   );
 }
-//@ chunk-w08rdxhd.js:30815-31709 placement
+//@ chunk-95pbtx8d.js:30852-31746 placement
 /**
  * 经中继 GET 类型目录接口：首次网络错误、5xx、带 retry-after 的 429/503 或中继不可用时等待后重试一次；响应超过大小上限时打点并返回 oversize。
  */
@@ -330,12 +331,12 @@ async function fetchFrameWithRetry(path, options) {
     return response;
   }
 }
-//@ chunk-w08rdxhd.js:31709-31774 placement
+//@ chunk-95pbtx8d.js:31746-31811 placement
 var TYPE_CATALOG_FEATURES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-w08rdxhd.js:31709", () => {
+deferInit("chunk-95pbtx8d.js:31746", () => {
   TYPE_CATALOG_FEATURES = new Set(["artifact_type_list", "artifact_type_instances"]);
 });
-//@ chunk-w08rdxhd.js:31774-32601 placement
+//@ chunk-95pbtx8d.js:31811-32638 placement
 /**
  * 把类型目录请求的失败（未认证、中继错误、403 被策略拒绝、429、503、其他 HTTP 错误）转成给模型的错误文字并打点，返回 {err, reason}。
  */
@@ -382,7 +383,7 @@ function describeFrameReadFailure(response, feature, what) {
     `${what} could not be read (HTTP ${response.status}: ${errBody(response.data)})`,
   );
 }
-//@ chunk-w08rdxhd.js:32601-34592 placement
+//@ chunk-95pbtx8d.js:32638-34629 placement
 async function listArtifactTypes(request) {
   let firstParty = request.firstParty === true;
   let now = Date.now();
@@ -507,17 +508,17 @@ async function listArtifactTypes(request) {
     unavailable: false,
   };
 }
-//@ chunk-w08rdxhd.js:34592-34695 placement
+//@ chunk-95pbtx8d.js:34629-34732 placement
 /**
  * 弯引号与各种短横线的替换正则，用于清洗类型目录文本。
  */
 var regExp; // deferred: uses INVISIBLE_CHAR_CLASSES (../../utils/confusables.js) of its import cycle while loading; runs once the cycle is complete
 var DASH_VARIANT_RE;
-deferInit("chunk-w08rdxhd.js:34592", () => {
+deferInit("chunk-95pbtx8d.js:34629", () => {
   regExp = new RegExp(`[${TAG_BRACKET_CLASSES.open}${TAG_BRACKET_CLASSES.close}]`, "gu");
   DASH_VARIANT_RE = /[\u2012-\u2015\u2E3A\u2E3B\uFE31\uFE32\uFE58]/gu;
 });
-//@ chunk-w08rdxhd.js:34695-34877 placement
+//@ chunk-95pbtx8d.js:34732-34914 placement
 function typeRowTitle(row) {
   return scrubArtifactLinks(
     normalizeQuotes(row.replaceAll('"', "'"))
@@ -530,7 +531,7 @@ function typeRowTitle(row) {
     .replace(/\s+/g, " ")
     .trim();
 }
-//@ chunk-w08rdxhd.js:34877-34983 placement
+//@ chunk-95pbtx8d.js:34914-35020 placement
 function confusableWordPattern(word) {
   return [...word]
     .map((char) =>
@@ -540,13 +541,13 @@ function confusableWordPattern(word) {
     )
     .join("");
 }
-//@ chunk-w08rdxhd.js:34983-35046 placement
+//@ chunk-95pbtx8d.js:35020-35083 placement
 /**
  * “type url”标签匹配用的分隔符字符集与惰性正则。
  */
 var TYPE_URL_SEPARATORS = ".\\u00B7\\u2027\\uFF0E\\u2024\\u30FB\\u2219\\u22C5";
 var typeUrlLabelRegex;
-//@ chunk-w08rdxhd.js:35046-35365 placement
+//@ chunk-95pbtx8d.js:35083-35402 placement
 /**
  * 惰性构造匹配"type url"标签（中间可夹杂分隔符、格式字符或组合符号）的正则，用于识别伪造的类型链接标签。
  */
@@ -560,12 +561,12 @@ function getTypeUrlLabelRegex() {
   }
   return typeUrlLabelRegex;
 }
-//@ chunk-w08rdxhd.js:35365-35372 placement
+//@ chunk-95pbtx8d.js:35402-35409 placement
 /**
  * 清洗链接的易混字符/UUID/路径片段模式集合（惰性构造）。
  */
 var linkScrubPatterns;
-//@ chunk-w08rdxhd.js:35372-35766 placement
+//@ chunk-95pbtx8d.js:35409-35803 placement
 /**
  * 惰性构造清洗链接用的模式集合：拉丁字母易混字符、UUID 状片段、artifact/code 路径片段等。
  */
@@ -587,10 +588,10 @@ function getLinkScrubPatterns() {
     };
   return linkScrubPatterns;
 }
-//@ chunk-w08rdxhd.js:35766-35817 placement
+//@ chunk-95pbtx8d.js:35803-35854 placement
 var BASE58_CHAR_RE = /^[1-9A-HJ-NP-Za-km-z]$/;
 var ALNUM_CHAR_RE = /^[0-9A-Za-z]$/;
-//@ chunk-w08rdxhd.js:35817-36759 placement
+//@ chunk-95pbtx8d.js:35854-36796 placement
 /**
  * 在文字里找出伪装的 artifact 链接或 ID（同形字母、UUID 形状、base58 UUID、/artifact/ 路径），把包含它们的整个词替换成 "(link removed)"。
  */
@@ -659,7 +660,7 @@ function scrubArtifactLinks(text) {
   });
   return out + (wordMarked ? "(link removed)" : currentWord);
 }
-//@ chunk-w08rdxhd.js:36759-36925 placement
+//@ chunk-95pbtx8d.js:36796-36962 placement
 function typeRowDescription(row) {
   return scrubArtifactLinks(
     normalizeQuotes(row.replaceAll('"', "'"))
@@ -671,7 +672,7 @@ function typeRowDescription(row) {
     .replace(/\s+/g, " ")
     .trim();
 }
-//@ chunk-w08rdxhd.js:36925-37047 placement
+//@ chunk-95pbtx8d.js:36962-37084 placement
 function typeNameKey(name) {
   return typeRowTitle(name)
     .normalize("NFKC")
@@ -679,30 +680,30 @@ function typeNameKey(name) {
     .replace(/[\s\p{Z}\p{Cc}\p{Cf}\p{Pd}_\u2212]+/gu, " ")
     .trim();
 }
-//@ chunk-w08rdxhd.js:37047-37131 placement
+//@ chunk-95pbtx8d.js:37084-37168 placement
 var QUOTE_HOMOGLYPH_CLASS; // deferred: uses QUOTE_HOMOGLYPHS (../../tools/ArtifactTool/artifactUrls.js) of its import cycle while loading; runs once the cycle is complete
 var QUOTED_TEXT_RE;
-deferInit("chunk-w08rdxhd.js:37047", () => {
+deferInit("chunk-95pbtx8d.js:37084", () => {
   QUOTE_HOMOGLYPH_CLASS = `"${QUOTE_HOMOGLYPHS.source.slice(1, -1)}`;
   QUOTED_TEXT_RE = new RegExp(`^[${QUOTE_HOMOGLYPH_CLASS}]([\\s\\S]*)[${QUOTE_HOMOGLYPH_CLASS}]$`, "u");
 });
-//@ chunk-w08rdxhd.js:37131-37180 placement
+//@ chunk-95pbtx8d.js:37168-37217 placement
 function typeNameWithoutQuotes(name) {
   return name.trim().replace(QUOTED_TEXT_RE, "$1");
 }
-//@ chunk-w08rdxhd.js:37180-37243 placement
+//@ chunk-95pbtx8d.js:37217-37280 placement
 var MIN_TYPE_NAME_CHARS = 3;
 var isLongEnoughName = (name) => [...name].length >= MIN_TYPE_NAME_CHARS;
 var normalizeSpaces = (text) => text.replaceAll(" ", "");
-//@ chunk-w08rdxhd.js:37243-37281 placement
+//@ chunk-95pbtx8d.js:37280-37318 placement
 function typeNameMatchKey(name) {
   return normalizeSpaces(typeNameKey(typeNameWithoutQuotes(name)));
 }
-//@ chunk-w08rdxhd.js:37281-37326 placement
+//@ chunk-95pbtx8d.js:37318-37363 placement
 function typeTitleMatchKeys(title) {
-  return uniq([normalizeSpaces(typeNameKey(title)), typeNameMatchKey(title)]);
+  return normalizeCaseForComparison_2([normalizeSpaces(typeNameKey(title)), typeNameMatchKey(title)]);
 }
-//@ chunk-w08rdxhd.js:37326-37891 placement
+//@ chunk-95pbtx8d.js:37363-37928 placement
 function typesNamed(rows, query) {
   let queryKey = typeNameKey(typeNameWithoutQuotes(query));
   if (queryKey === "")
@@ -751,7 +752,7 @@ function typesNamed(rows, query) {
     exact: false,
   };
 }
-//@ chunk-w08rdxhd.js:37891-38365 placement
+//@ chunk-95pbtx8d.js:37928-38402 placement
 async function findArtifactTypeByName(name, options) {
   let listing = await listArtifactTypes({
     ...options,
@@ -784,10 +785,10 @@ async function findArtifactTypeByName(name, options) {
         partial: hasGaps,
       };
 }
-//@ chunk-w08rdxhd.js:38365-38638 placement
+//@ chunk-95pbtx8d.js:38402-38675 placement
 var TYPE_NOT_FOUND_MESSAGE_2 =
   "Artifact type not found in this account's catalog \u2014 check the link (use a `type_url` from action \"list_types\"); a type that exists but isn't listed for this account, a single-file page, or the catalog not being available to this account all answer this way";
-//@ chunk-w08rdxhd.js:38638-40526 placement
+//@ chunk-95pbtx8d.js:38675-40563 placement
 async function describeArtifactType(slug, options) {
   if (!ARTIFACT_SLUG_RE.test(slug)) {
     logFeatureBad("artifact_type_describe", "invalid_slug");
@@ -895,9 +896,9 @@ async function describeArtifactType(slug, options) {
     },
   };
 }
-//@ chunk-w08rdxhd.js:40526-40535 placement
+//@ chunk-95pbtx8d.js:40563-40572 placement
 var MAX_PATH_SEGMENTS = 5;
-//@ chunk-w08rdxhd.js:40535-42679 placement
+//@ chunk-95pbtx8d.js:40572-42716 placement
 async function readArtifactTypeFile(slug, path, options) {
   if (!ARTIFACT_SLUG_RE.test(slug)) {
     logFeatureBad("artifact_type_file_read", "invalid_slug");
@@ -1026,7 +1027,7 @@ async function readArtifactTypeFile(slug, path, options) {
     clipped,
   };
 }
-//@ chunk-w08rdxhd.js:42679-43120 placement
+//@ chunk-95pbtx8d.js:42716-43157 placement
 function catalogErrorMessage(reason) {
   switch (reason) {
     case "rate_limited":
@@ -1044,7 +1045,7 @@ function catalogErrorMessage(reason) {
       return "the catalog refused the request \u2014 nothing to retry";
   }
 }
-//@ chunk-w08rdxhd.js:43120-43735 placement
+//@ chunk-95pbtx8d.js:43157-43772 placement
 async function readTypeOwnInstructions(artifact, signal, readSignal, files, fileList) {
   let filesArg = files !== undefined && files.length > 0 ? files : undefined;
   if (filesArg !== undefined && !filesArg.includes(TYPE_INSTRUCTIONS_FILE))
@@ -1091,19 +1092,19 @@ async function readTypeOwnInstructions(artifact, signal, readSignal, files, file
           };
   }
 }
-//@ chunk-w08rdxhd.js:43735-43801 placement
+//@ chunk-95pbtx8d.js:43772-43838 placement
 var LIST_SCOPES = ["org", "user"];
 var AUDIENCE_KINDS = ["owner", "users", "org", "public", "other"];
-//@ chunk-w08rdxhd.js:43801-43838 placement
+//@ chunk-95pbtx8d.js:43838-43875 placement
 function isAudienceKind(kind) {
   return AUDIENCE_KINDS.includes(kind);
 }
-//@ chunk-w08rdxhd.js:43838-43871 placement
+//@ chunk-95pbtx8d.js:43875-43908 placement
 var PUBLIC_AUDIENCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-w08rdxhd.js:43838", () => {
+deferInit("chunk-95pbtx8d.js:43875", () => {
   PUBLIC_AUDIENCES = new Set(["org", "public"]);
 });
-//@ chunk-w08rdxhd.js:43871-43962 placement
+//@ chunk-95pbtx8d.js:43908-43999 placement
 function isSharedWithUser(artifact) {
   return (
     artifact.rel === "shared" &&
@@ -1111,7 +1112,7 @@ function isSharedWithUser(artifact) {
     !PUBLIC_AUDIENCES.has(artifact.audience)
   );
 }
-//@ chunk-w08rdxhd.js:43962-44774 placement
+//@ chunk-95pbtx8d.js:43999-44811 placement
 /**
  * 类型实例接口的 schema：实例行（slug、标题、描述、创建时间、关系、受众、是否默认/置顶/外部写过、所有者类型）、实例列表、默认实例，以及不可用时的空结果。
  */
@@ -1120,7 +1121,7 @@ var SERVICE_ACCOUNT;
 var TYPE_INSTANCES_SCHEMA;
 var DEFAULT_INSTANCE_SCHEMA;
 var UNAVAILABLE_INSTANCES;
-deferInit("chunk-w08rdxhd.js:43962", () => {
+deferInit("chunk-95pbtx8d.js:43999", () => {
   TYPE_INSTANCE_SCHEMA = DoctorLazy(() =>
     objectSchema({
       slug: stringSchema().regex(ARTIFACT_SLUG_RE),
@@ -1171,11 +1172,11 @@ deferInit("chunk-w08rdxhd.js:43962", () => {
     unavailable: true,
   };
 });
-//@ chunk-w08rdxhd.js:44774-44845 placement
+//@ chunk-95pbtx8d.js:44811-44882 placement
 function artifactListOrder(entry) {
   return entry.default !== undefined ? 0 : entry.rel === "mine" ? 1 : isSharedWithUser(entry) ? 2 : 3;
 }
-//@ chunk-w08rdxhd.js:44845-45127 placement
+//@ chunk-95pbtx8d.js:44882-45164 placement
 function recordInstanceKind(ref, kind, scope, scopeArg, out) {
   let kindValue =
     ref.pinned === true
@@ -1193,7 +1194,7 @@ function recordInstanceKind(ref, kind, scope, scopeArg, out) {
   let any = ARTIFACT_LIST_RELS.some((entry) => entry === ref.rel && (scope === "all" || entry === scope));
   if (kindValue !== undefined && any) markAttestation(ref.slug, kindValue, out);
 }
-//@ chunk-w08rdxhd.js:45127-48011 placement
+//@ chunk-95pbtx8d.js:45164-48048 placement
 async function listTypeInstances(typeSlug, options) {
   if (!ARTIFACT_SLUG_RE.test(typeSlug)) {
     logFeatureBad("artifact_type_instances", "invalid_slug");
@@ -1347,7 +1348,7 @@ async function listTypeInstances(typeSlug, options) {
       scope: fromEnum(options.scope),
       curated: hasDefault,
       has_default: defaults.some((instance) => instance.default !== undefined),
-      n_shared_with_user: count(defaults, isSharedWithUser),
+      n_shared_with_user: countWhere(defaults, isSharedWithUser),
       overflow,
       wire,
     });
@@ -1359,14 +1360,14 @@ async function listTypeInstances(typeSlug, options) {
     unavailable: false,
   };
 }
-//@ chunk-w08rdxhd.js:48011-48039 placement
+//@ chunk-95pbtx8d.js:48048-48076 placement
 /**
  * 类型说明文本的内联上限 20000 字符、服务端行 300 字符与待读时长。
  */
-var MAX_INLINE_TYPE_TEXT_CHARS = 20000;
+var MAX_TYPE_INSTRUCTIONS_CHARS = 40000;
 var MAX_SERVER_LINE_CHARS = 300;
 var TYPE_INSTRUCTIONS_READ_MS = 1e4;
-//@ chunk-w08rdxhd.js:48039-48339 placement
+//@ chunk-95pbtx8d.js:48076-48376 placement
 function instructionsWhy(instructions) {
   if (
     instructions.deterministic === "egress-blocked" ||
@@ -1380,14 +1381,14 @@ function instructionsWhy(instructions) {
       .replace(/[.\s]+$/u, ""),
   );
 }
-//@ chunk-w08rdxhd.js:48339-48898 placement
+//@ chunk-95pbtx8d.js:48376-48935 placement
 async function readTypeInstructions(artifact, signal, readSignal, files) {
   let filesArg = files !== undefined && files.length > 0 ? files : undefined;
   if (filesArg !== undefined && !filesArg.includes(TYPE_INSTRUCTIONS_FILE))
     return {
       kind: "none",
     };
-  let read = await webfetchReadFile(
+  let read = await readArtifactContent(
     {
       ...artifact,
       file: TYPE_INSTRUCTIONS_FILE,
@@ -1401,8 +1402,8 @@ async function readTypeInstructions(artifact, signal, readSignal, files) {
       return {
         kind: "none",
       };
-    let fetchErrorText = getFetchErrorText(read);
-    if (fetchErrorText !== read.err) logForDebugging(`[artifact] type instructions read failed: ${read.err}`);
+    let modelFacingErr = modelFacingReadErr(read);
+    if (modelFacingErr !== read.err) logForDebugging(`[artifact] type instructions read failed: ${read.err}`);
     return {
       kind: "unavailable",
       why:
@@ -1410,7 +1411,7 @@ async function readTypeInstructions(artifact, signal, readSignal, files) {
           ? "the file is not on the version of the Artifact that was read"
           : instructionsWhy({
               ...read,
-              err: fetchErrorText,
+              err: modelFacingErr,
             }),
       known: filesArg !== undefined,
     };
@@ -1421,21 +1422,21 @@ async function readTypeInstructions(artifact, signal, readSignal, files) {
     };
   return instructionsFromText(read.html, filesArg !== undefined);
 }
-//@ chunk-w08rdxhd.js:48898-49034 placement
-function instructionsFromText(text, fromType) {
-  let pageText = extractPageText(stripControlChars(text));
-  let length = Array.from(pageText).length;
-  let tooLong = length > MAX_INLINE_TYPE_TEXT_CHARS;
+//@ chunk-95pbtx8d.js:48935-49059 placement
+function instructionsFromText(text, fromType, maxChars = MAX_TYPE_INSTRUCTIONS_CHARS) {
+  let text_2 = scrubThirdPartyText(stripInlineControlBytes(text));
+  let length = countCodePoints(text_2);
+  let tooLong = length > maxChars;
   return {
     kind: "read",
-    text: tooLong ? extractPageText(truncateCodePoints(pageText, MAX_INLINE_TYPE_TEXT_CHARS)) : pageText,
+    text: tooLong ? scrubThirdPartyText(truncateCodePoints(text_2, maxChars)) : text_2,
     chars: length,
     clipped: tooLong,
     fromType,
   };
 }
-//@ chunk-w08rdxhd.js:49034-49644 placement
-function renderTypeInstructions(read, includesFile) {
+//@ chunk-95pbtx8d.js:49059-49749 placement
+function renderTypeInstructions(read, includesFile, instructionsMaxChars = MAX_TYPE_INSTRUCTIONS_CHARS) {
   switch (read.kind) {
     case "none":
       return "";
@@ -1447,26 +1448,32 @@ function renderTypeInstructions(read, includesFile) {
         : `
 
 [Could not check whether this Artifact carries its type's instructions file (${TYPE_INSTRUCTIONS_FILE}): ${read.why}.]`;
-    case "read":
+    case "read": {
+      let capped =
+        instructionsMaxChars < MAX_TYPE_INSTRUCTIONS_CHARS
+          ? instructionsFromText(read.text, read.fromType, instructionsMaxChars)
+          : read;
+      let min = Math.min(countCodePoints(capped.text), instructionsMaxChars);
       return `
 
 ${ARTIFACT_CONTENT_AUTHORED_TAG}
 ${buildSpellingNoteForText(read.text)}${includesFile ?? (read.fromType ? ARTIFACT_INSTRUCTIONS_BELOW_PUBLISHER : ARTIFACT_INSTRUCTIONS_BELOW_FOUND)}
 <${ARTIFACT_TYPE_INSTRUCTIONS}>
-${read.text}${
-        read.clipped
+${capped.text}${
+        read.clipped || capped.clipped
           ? `
-[\u2026clipped at ${MAX_INLINE_TYPE_TEXT_CHARS} of ${read.chars} characters]`
+[\u2026clipped at ${min} of ${read.chars} characters]`
           : ""
       }
 </${ARTIFACT_TYPE_INSTRUCTIONS}>
 
 ${ARTIFACT_INSTRUCTIONS_ABOVE_THIRD_PARTY}${replRouteSection(read.text)}`;
+    }
   }
 }
-//@ chunk-w08rdxhd.js:49644-49656 placement
+//@ chunk-95pbtx8d.js:49749-49761 placement
 var MAX_FRONTMATTER_CHARS = 2048;
-//@ chunk-w08rdxhd.js:49656-49827 placement
+//@ chunk-95pbtx8d.js:49761-49932 placement
 function instructionsTypeKey(text) {
   let match = /^\s*---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(
     truncateCodePoints(text, MAX_FRONTMATTER_CHARS),
@@ -1474,7 +1481,7 @@ function instructionsTypeKey(text) {
   if (match === null) return;
   return /^name:[ \t]*["']?([A-Za-z0-9_-]+)["']?[ \t]*$/m.exec(match[1])?.[1];
 }
-//@ chunk-w08rdxhd.js:49827-50069 placement
+//@ chunk-95pbtx8d.js:49932-50174 placement
 function replRouteSection(text) {
   {
     let { artifactReplToolPresent } = require("../../tools/ArtifactTool/promptText.js");
@@ -1492,7 +1499,7 @@ ${route}`;
   }
   return "";
 }
-//@ chunk-w08rdxhd.js:50069-50308 placement
+//@ chunk-95pbtx8d.js:50174-50413 placement
 function replRouteTwoSteps(text) {
   {
     let { artifactReplToolPresent } = require("../../tools/ArtifactTool/promptText.js");
@@ -1506,21 +1513,21 @@ function replRouteTwoSteps(text) {
   }
   return null;
 }
-//@ chunk-w08rdxhd.js:50308-50407 placement
+//@ chunk-95pbtx8d.js:50413-50512 placement
 function typeCatalogOnForSession() {
   let frozenArtifactTypes = getLiveState().frozenArtifactTypes;
   return frozenArtifactTypes !== undefined
     ? frozenArtifactTypes.typeCatalogOn
     : artifactTypesEnabled() && isFrameMultiFileEnabled() && isArtifactTypeCatalogEnabled();
 }
-//@ chunk-w08rdxhd.js:50407-50511 placement
+//@ chunk-95pbtx8d.js:50512-50616 placement
 function quickstartOnForSession() {
   let frozenArtifactTypes = getLiveState().frozenArtifactTypes;
   return frozenArtifactTypes !== undefined
     ? frozenArtifactTypes.quickstartOn === true
     : typeCatalogOnForSession() && canCreateFromType() && isArtifactQuickstartEnabled();
 }
-//@ chunk-w08rdxhd.js:50511-50785 placement
+//@ chunk-95pbtx8d.js:50616-50890 placement
 async function typeInstructionsForRead(artifact, signal, readSignal) {
   if (!typeCatalogOnForSession()) return null;
   let combinedAbortSignal = createCombinedAbortSignal(signal, {
@@ -1542,36 +1549,36 @@ async function typeInstructionsForRead(artifact, signal, readSignal) {
 }
 export {
   describeArtifactType,
-  typeNameWithoutQuotes,
-  readTypeInstructions,
-  listArtifactTypes,
-  typeCatalogOnForSession,
   renderTypeInstructions,
+  instructionsTypeKey,
+  listArtifactTypes,
+  TYPE_DESCRIBE_UNAVAILABLE_MESSAGE,
+  readTypeOwnInstructions,
+  CAPABILITY_NAMES_MAX,
+  DETAIL_DESCRIPTION_MAX_RUNES,
+  isKnownTier,
+  TYPE_INSTRUCTIONS_FILE,
+  instructionsWhy,
+  instructionsFromText,
+  TYPE_INSTRUCTIONS_READ_MS,
+  readTypeInstructions,
+  typeNameKey,
+  listTypeInstances,
+  typeCatalogOnForSession,
+  isArtifactTypeCatalogEnabled,
+  isArtifactQuickstartEnabled,
   replRouteTwoSteps,
   replRouteSection,
-  TYPE_INSTRUCTIONS_FILE,
-  instructionsTypeKey,
   typeInstructionsForRead,
-  listTypeInstances,
+  typeNameWithoutQuotes,
   typeNameMatchKey,
   isSharedWithUser,
   LIST_DESCRIPTION_MAX_RUNES,
   typesNamed,
-  TYPE_INSTRUCTIONS_READ_MS,
-  isKnownTier,
   typeRowTitle,
   typeRowDescription,
-  typeNameKey,
   findArtifactTypeByName,
   typeTitleMatchKeys,
-  readTypeOwnInstructions,
   readArtifactTypeFile,
-  TYPE_DESCRIBE_UNAVAILABLE_MESSAGE,
-  CAPABILITY_NAMES_MAX,
-  DETAIL_DESCRIPTION_MAX_RUNES,
-  instructionsWhy,
-  instructionsFromText,
-  isArtifactTypeCatalogEnabled,
-  isArtifactQuickstartEnabled,
   quickstartOnForSession,
 };

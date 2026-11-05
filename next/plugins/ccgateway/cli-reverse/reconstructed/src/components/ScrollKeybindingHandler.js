@@ -3,10 +3,10 @@
  *
  * 全屏滚动按键与滚轮：PageUp/Down、行滚动、鼠标拖拽滚动、滚轮加速、模态分页器动作与选区清除规则。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ScrollKeybindingHandler.tsx
- * pieces: chunk-18hwfzwa.js (22), chunk-24t3dkzb.js (2), chunk-tzghj6zv.js (6)
- * attribution: affinity 1, fingerprint 12, layout 6, callgraph-fingerprint 1, sole-consumer 4, placement 6
+ * pieces: chunk-18rrbwq1.js (6), chunk-czq1j3j2.js (22), chunk-xd1cb3xs.js (2)
+ * attribution: fingerprint 12, placement 6, affinity 1, layout 6, callgraph-fingerprint 1, sole-consumer 4
  */
 import { env } from "../utils/env.js";
 import { clearKeptClawdPose } from "./LogoV2/Clawd.js";
@@ -18,7 +18,7 @@ import {
   useEffect,
 } from "../../vendor/react/cjs/react.production.js";
 import { getClipboardPath, getOsc52Utf8Warning } from "../ink/termio/osc.js";
-import { countGraphemes } from "../ink/output.js";
+import { countGraphemes } from "../utils/intl.js";
 import {
   hasUnknownSequencePrintingBug,
   describeMetaKey,
@@ -52,11 +52,11 @@ import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { logEvent } from "../services/analytics/index.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-24t3dkzb.js:1978-2023 placement
+//@ chunk-xd1cb3xs.js:1978-2023 placement
 function scrollStepLines(isSelecting, isPaging, isFast) {
   return !isPaging && (isSelecting || false || isFast) ? 3 : 1;
 }
-//@ chunk-24t3dkzb.js:2023-2169 fingerprint (2.1.88 match: readScrollSpeedBase, 1)
+//@ chunk-xd1cb3xs.js:2023-2169 fingerprint (2.1.88 match: readScrollSpeedBase, 1)
 function readScrollSpeedBase(isSelecting, isPaging, isFast) {
   let baseLines = scrollStepLines(isSelecting, isPaging, isFast);
   let raw = env.CLAUDE_CODE_SCROLL_SPEED;
@@ -64,7 +64,7 @@ function readScrollSpeedBase(isSelecting, isPaging, isFast) {
   let n = parseFloat(raw);
   return Number.isNaN(n) || n <= 0 ? baseLines : Math.min(n, 20);
 }
-//@ chunk-tzghj6zv.js:2704-2950 fingerprint (2.1.88 match: shouldClearSelectionOnKey, 0.934)
+//@ chunk-18rrbwq1.js:2813-3059 fingerprint (2.1.88 match: shouldClearSelectionOnKey, 0.934)
 function shouldClearSelectionOnKey(key) {
   if (key.wheelUp || key.wheelDown || key.escape) return false;
   if (key.pageUp || key.pageDown) return false;
@@ -76,7 +76,7 @@ function shouldClearSelectionOnKey(key) {
     return false;
   return true;
 }
-//@ chunk-tzghj6zv.js:2950-3242 placement
+//@ chunk-18rrbwq1.js:3059-3351 placement
 function isPagerPassthroughKey(key) {
   if (key.name === "escape" || key.name === "pageup" || key.name === "pagedown") return false;
   if ((key.name === "home" || key.name === "end") && key.ctrl) return false;
@@ -92,7 +92,7 @@ function isPagerPassthroughKey(key) {
     return false;
   return true;
 }
-//@ chunk-tzghj6zv.js:3242-3502 placement
+//@ chunk-18rrbwq1.js:3351-3611 placement
 function modalPagerAction(selection, copyOnSelect, onCopied) {
   return (event) => {
     if (!selection.hasSelection()) return;
@@ -109,7 +109,7 @@ function modalPagerAction(selection, copyOnSelect, onCopied) {
     if (isPagerPassthroughKey(event)) selection.clearSelection();
   };
 }
-//@ chunk-tzghj6zv.js:3502-3638 placement
+//@ chunk-18rrbwq1.js:3611-3747 placement
 /**
  * 在 Scroll 上下文注册 selection:clear：有选区时清除选区。
  */
@@ -128,12 +128,12 @@ function useSelectionClearKeybinding(selection, isActive = true) {
     },
   );
 }
-//@ chunk-tzghj6zv.js:3638-3642 placement
+//@ chunk-18rrbwq1.js:3747-3751 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tzghj6zv.js:3638", () => {
+deferInit("chunk-18rrbwq1.js:3747", () => {
   init_react_production();
 });
-//@ chunk-tzghj6zv.js:3642-4400 placement
+//@ chunk-18rrbwq1.js:3751-4509 placement
 /**
  * 选中文字复制后的通知：按复制通道（系统剪贴板、tmux buffer、OSC 52）给出文案与时长，OSC 52 含非 UTF-8 风险时加警告。
  */
@@ -177,11 +177,11 @@ function buildCopiedNotification(text) {
         }),
   };
 }
-//@ chunk-18hwfzwa.js:108851-108876 affinity
+//@ chunk-czq1j3j2.js:109852-109877 affinity
 var DRAG_SCROLL_STEP_ROWS = 2;
 var DRAG_SCROLL_TICK_MS = 50;
 var MAX_DRAG_TICKS = 200;
-//@ chunk-18hwfzwa.js:108876-110291 fingerprint (2.1.88 match: useDragToScroll, 0.788)
+//@ chunk-czq1j3j2.js:109877-111292 fingerprint (2.1.88 match: useDragToScroll, 0.792)
 function useDragToScroll(scrollRef, selection, isActive, onScroll, options) {
   let clock = useClock();
   let timerRef = useRef(null);
@@ -276,12 +276,12 @@ function useDragToScroll(scrollRef, selection, isActive, onScroll, options) {
     };
   }, [clock, isActive, requireScope, scrollRef, selection]);
 }
-//@ chunk-18hwfzwa.js:110291-110363 layout
+//@ chunk-czq1j3j2.js:111292-111364 layout
 function isSameScrollScope(event, scope) {
   let node = event?.scope?.node;
   return !node || node === scope?.getDomElement();
 }
-//@ chunk-18hwfzwa.js:110363-110555 fingerprint (2.1.88 match: dragScrollDirection, 1)
+//@ chunk-czq1j3j2.js:111364-111556 fingerprint (2.1.88 match: dragScrollDirection, 1)
 function dragScrollDirection(sel, top, bottom, alreadyScrollingDir = 0) {
   if (!sel?.isDragging || !sel.anchor || !sel.focus) return 0;
   let row = sel.focus.row;
@@ -290,7 +290,7 @@ function dragScrollDirection(sel, top, bottom, alreadyScrollingDir = 0) {
   if (sel.anchor.row < top || sel.anchor.row > bottom) return 0;
   return want;
 }
-//@ chunk-18hwfzwa.js:110555-110671 layout
+//@ chunk-czq1j3j2.js:111556-111672 layout
 var WHEEL_ACCEL_WINDOW_MS = 40;
 var WHEEL_ACCEL_STEP = 0.3;
 var WHEEL_ACCEL_CAP_FACTOR = 6;
@@ -307,19 +307,19 @@ var WHEEL_DECAY_CAP_AFTER_MS = 80;
 var WHEEL_DECAY_CAP_LOW = 3;
 var WHEEL_DECAY_CAP_HIGH = 36;
 var WHEEL_RESET_WINDOW_MS = 500;
-//@ chunk-18hwfzwa.js:110671-110830 callgraph-fingerprint (2.1.88 match: selectionFocusMoveForKey, 0.247)
+//@ chunk-czq1j3j2.js:111672-111831 callgraph-fingerprint (2.1.88 match: selectionFocusMoveForKey, 0.247)
 function selectionFocusMoveForKey(input, key) {
   if (key.upArrow || key.downArrow || key.home || key.end) return true;
   if (input.length !== 1) return false;
   if (key.ctrl) return "udbfnp".includes(input);
   return "jkgGb {}".includes(input);
 }
-//@ chunk-18hwfzwa.js:110830-110867 layout
+//@ chunk-czq1j3j2.js:111831-111868 layout
 var WHEEL_FRACTION_STEP = 0.35;
 var WHEEL_ACCEL_BASE_STEP = 0.008;
 var WHEEL_ACCEL_PER_TICK = 0.4;
 var WHEEL_ACCEL_MAX = 4;
-//@ chunk-18hwfzwa.js:110867-112542 fingerprint (2.1.88 match: computeWheelStep, 0.674)
+//@ chunk-czq1j3j2.js:111868-113543 fingerprint (2.1.88 match: computeWheelStep, 0.674)
 function computeWheelStep(state, dir, now) {
   if (state.jediTerm.trackpadGesture) {
     let gapMs = now - state.time;
@@ -421,7 +421,7 @@ function computeWheelStep(state, dir, now) {
   state.frac = total - rows;
   return rows;
 }
-//@ chunk-18hwfzwa.js:112542-112735 fingerprint (2.1.88 match: initWheelAccel, 0.683)
+//@ chunk-czq1j3j2.js:113543-113736 fingerprint (2.1.88 match: initWheelAccel, 0.683)
 function initWheelAccel(
   useDecayCurve = false,
   base = 1,
@@ -445,7 +445,7 @@ function initWheelAccel(
     accelEnabled,
   };
 }
-//@ chunk-18hwfzwa.js:112735-113142 fingerprint (2.1.88 match: initAndLogWheelAccel, 0.434)
+//@ chunk-czq1j3j2.js:113736-114143 fingerprint (2.1.88 match: initAndLogWheelAccel, 0.434)
 function initAndLogWheelAccel(jediTermInput) {
   let xtermJs = hasCursorUpViewportYankBug();
   let accelEnabled = resolveSetting("wheelScrollAccelerationEnabled", true).value;
@@ -454,7 +454,7 @@ function initAndLogWheelAccel(jediTermInput) {
   );
   return initWheelAccel(xtermJs.useDecayCurve, xtermJs.base, xtermJs.wheelFlood, accelEnabled, jediTermInput);
 }
-//@ chunk-18hwfzwa.js:113142-113375 layout
+//@ chunk-czq1j3j2.js:114143-114376 layout
 /**
  * 返回滚轮步长计算函数：按终端（含 JediTerm）初始化滚轮加速状态并缓存，滚动速度基准变化时重建。
  */
@@ -476,11 +476,11 @@ function useWheelScrollStep() {
     };
   };
 }
-//@ chunk-18hwfzwa.js:113375-113420 layout
+//@ chunk-czq1j3j2.js:114376-114421 layout
 var AUTO_COPY_CONFIG_HINT = "auto-copy-config-hint";
 var AUTO_COPY_HINT_SESSION_LIMIT = 10;
 var AUTO_COPY_HINT_SKIP_SESSIONS = 5;
-//@ chunk-18hwfzwa.js:113420-117547 fingerprint (2.1.88 match: ScrollKeybindingHandler, 0.573)
+//@ chunk-czq1j3j2.js:114421-118548 fingerprint (2.1.88 match: ScrollKeybindingHandler, 0.573)
 function ScrollKeybindingHandler({
   scrollViewport,
   isActive,
@@ -720,13 +720,13 @@ function ScrollKeybindingHandler({
   useSelectionBgColor(selection);
   return null;
 }
-//@ chunk-18hwfzwa.js:117547-117698 layout
+//@ chunk-czq1j3j2.js:118548-118699 layout
 function scrollToBottomRespectingAutoScroll(scrollHandle) {
   if (resolveSetting("autoScrollEnabled", true).value) scrollHandle.scrollToBottom();
   else scrollHandle.scrollTo(Math.max(0, scrollHandle.getScrollHeight() - scrollHandle.getViewportHeight()));
   return true;
 }
-//@ chunk-18hwfzwa.js:117698-117913 fingerprint (2.1.88 match: jumpBy, 0.903)
+//@ chunk-czq1j3j2.js:118699-118914 fingerprint (2.1.88 match: jumpBy, 0.903)
 function jumpBy(handle, delta, markCap = true) {
   let max = Math.max(0, handle.getScrollHeight() - handle.getViewportHeight());
   let target = Math.min(handle.getScrollTop(), max) + handle.getPendingDelta() + delta;
@@ -735,14 +735,14 @@ function jumpBy(handle, delta, markCap = true) {
   handle.scrollTo(Math.max(0, target));
   return false;
 }
-//@ chunk-18hwfzwa.js:117913-118074 fingerprint (2.1.88 match: scrollDown, 0.903)
+//@ chunk-czq1j3j2.js:118914-119075 fingerprint (2.1.88 match: scrollDown, 0.903)
 function scrollDown(s, amount) {
   let max = Math.max(0, s.getScrollHeight() - s.getViewportHeight());
   if (s.getScrollTop() + s.getPendingDelta() + amount >= max) return scrollToBottomRespectingAutoScroll(s);
   s.scrollBy(amount);
   return false;
 }
-//@ chunk-18hwfzwa.js:118074-118190 fingerprint (2.1.88 match: scrollUp, 1)
+//@ chunk-czq1j3j2.js:119075-119191 fingerprint (2.1.88 match: scrollUp, 1)
 function scrollUp(handle, amount, markCap = true) {
   if (handle.getScrollTop() + handle.getPendingDelta() - amount <= 0) {
     if (markCap) markScrollbackCapReached();
@@ -751,7 +751,7 @@ function scrollUp(handle, amount, markCap = true) {
   }
   handle.scrollBy(-amount);
 }
-//@ chunk-18hwfzwa.js:118190-118634 fingerprint (2.1.88 match: applyModalPagerAction, 0.928)
+//@ chunk-czq1j3j2.js:119191-119635 fingerprint (2.1.88 match: applyModalPagerAction, 0.927)
 function applyModalPagerAction(s, act, onBeforeJump = true) {
   switch (act) {
     case null:
@@ -777,7 +777,7 @@ function applyModalPagerAction(s, act, onBeforeJump = true) {
       return true;
   }
 }
-//@ chunk-18hwfzwa.js:118634-119573 sole-consumer
+//@ chunk-czq1j3j2.js:119635-120574 sole-consumer
 /**
  * 监听"滚轮发送方向键"和 JetBrains 2025.2 终端滚动缺陷事件，记录遥测并弹出提示。
  */
@@ -841,30 +841,30 @@ function useScrollAnomalyNotices(addNotification) {
   }
   useEffect(startRef, directionRef);
 }
-//@ chunk-18hwfzwa.js:119573-119577 sole-consumer
+//@ chunk-czq1j3j2.js:120574-120578 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:119573", () => {
+deferInit("chunk-czq1j3j2.js:120574", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:119577-119581 sole-consumer
+//@ chunk-czq1j3j2.js:120578-120582 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:119577", () => {
+deferInit("chunk-czq1j3j2.js:120578", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:119581-119585 sole-consumer
+//@ chunk-czq1j3j2.js:120582-120586 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:119581", () => {
+deferInit("chunk-czq1j3j2.js:120582", () => {
   init_react_production();
 });
 export {
+  scrollStepLines,
+  readScrollSpeedBase,
+  useSelectionClearKeybinding,
+  shouldClearSelectionOnKey,
+  buildCopiedNotification,
+  modalPagerAction,
   useDragToScroll,
   ScrollKeybindingHandler,
   useWheelScrollStep,
-  useSelectionClearKeybinding,
-  shouldClearSelectionOnKey,
-  readScrollSpeedBase,
-  buildCopiedNotification,
-  modalPagerAction,
   jumpBy,
-  scrollStepLines,
 };

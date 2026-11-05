@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：创建权限询问函数（launcher/strict 模式、推送、远程）；询问权限并同时推送，取先到的答复等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6j594vm1.js (27)
- * attribution: placement 27
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0fqk5atw.js (30)
+ * attribution: placement 27, layout 3
  */
 import { isDeepStrictEqual } from "util";
 import { randomUUID } from "crypto";
@@ -20,6 +20,7 @@ import {
   hasPermissionsToUseToolWithSink,
   findSafetyCheckReason,
   askCeilingReason,
+  shouldSuppressAlwaysAllow,
 } from "../../utils/permissions/permissions.js";
 import {
   serializeDecisionReason,
@@ -52,14 +53,19 @@ import { CONNECTGITHUB } from "../../components/ConnectGitHub/constants.js";
 import { truncate } from "../../utils/format.js";
 import { redactSecretsInText } from "../teamMemorySync/secretScanner.js";
 import { stripIgnorables } from "../../utils/sanitization.js";
-import { OFFER_CHROME_SETUP_TOOL_NAME } from "../../tools/ReadNotificationsTool/ReadNotificationsTool.js";
+import { OFFERCHROMESETUP } from "../../tools/ReadNotificationsTool/ReadNotificationsTool.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
 import { isHostOnlyNativeTool } from "../api/deferredToolsState.js";
 import { hasHostField } from "../../bridge/deviceRegistration.js";
 import { MAX_DESCRIPTION_CHARS } from "../../constants/outputLimits.js";
-import { isChromeToolName } from "../../utils/claudeInChrome/chromeToolNames.js";
+import { CLAUDE_CODE_REMOTE } from "../mcp/ccrMetaMcp.js";
+import { COWORK, VISUALIZE, MEMORY, CLAUDE_ARTIFACTS } from "../mcp/firstPartyServerIds.js";
 import { getToolNameForPermissionCheck } from "../mcp/mcpStringUtils.js";
+import { isBuiltinMcpServerName } from "../mcp/builtinServerNames.js";
+import { RESERVED_SERVER_IDS_WITH_DOCS } from "../mcp/remoteBrowserServer.js";
+import { isCoworkCardMode } from "../../utils/permissions/connectorCardAllows.js";
+import { isChromeToolName } from "../../utils/claudeInChrome/chromeToolNames.js";
 import { isRemoteBrowserToolUnderModeFloor } from "../../utils/permissions/remoteBrowser.js";
 import {
   getToolPermissionContext,
@@ -80,30 +86,30 @@ import { matcherTestTarget } from "../../utils/hooks/matcherGrammar.js";
 import { managedTierHooks, hasSettingsHookForEvent } from "../../utils/hooks.js";
 import { dispatchClassicEvent } from "../../plugins/functionHooks/modAdmission.js";
 import { registerAgent } from "../../utils/telemetry/perfettoTracing.js";
+import { requiresConnectorGrant_2 } from "../mcp/claudeai.js";
+import { logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { env } from "../../utils/env.js";
 import { isUserDrivenHere, isUserDrivenTurn } from "../../utils/turnOrigin.js";
 import { isAgentSdkEntrypoint } from "../../utils/entrypointKinds.js";
+import { isCcsTenant } from "../../bootstrap/state.js";
 import { isHumanOriginLoosely, isTriggerFireOrigin } from "../../bridge/inboundMessageOrigin.js";
 import { classifyMessageSource_2 } from "../../utils/messages/messageSource.js";
 import { isTerminalShutdown, heldUntilExit } from "../../utils/terminalShutdown.js";
-import { requiresConnectorGrant_2 } from "../mcp/claudeai.js";
 import {
   permissionPromptToolResultToPermissionDecision,
   schedulePermissionNotify,
   alwaysAllowRulesFor,
   PERMISSION_PROMPT_RESULT_FORMAT_HINT,
 } from "../../utils/permissions/PermissionPromptToolResultSchema.js";
+import { dropPermissionRecord } from "../../utils/permissions/permissionRecord.js";
 import { suggestionForExactCommand } from "../../tools/BashTool/bashPermissions.js";
-import {
-  getForegroundSubagentId,
-  getBackgroundAgentId,
-  getHookCallerOf,
-  isHookOrPluginSteered,
-} from "../../utils/agentContext.js";
+import { getForegroundSubagentId, getBackgroundAgentId, context } from "../../utils/agentContext.js";
 import { executePermissionRequestHooksForSDK } from "../../cli/structuredIO.js";
+import { isPlainObject } from "../../utils/isPlainObject.js";
+import { isUsableChromeSiteWithPort } from "../../utils/claudeInChrome/chromePermissions.js";
+import { relativeToCallFrame, askerDirIfNotWorktree } from "../../utils/sessionStateCwd.js";
 import { stripNonPrintable } from "../../utils/truncateGraphemes.js";
 import { stripAnsi } from "../../utils/stripAnsi.js";
-import { logFeatureOk } from "../analytics/featureTelemetry.js";
 import { mcpServerIdentityForHooks } from "../mcp/fileReference/fileReferencePolicy.js";
 import {
   classicPreToolUseHookId_2,
@@ -115,7 +121,6 @@ import {
   logPermissionDecision,
 } from "../../hooks/toolPermission/permissionLogging.js";
 import { turnAbortControllerOf, isAskWithdrawnByAsker } from "../../utils/abortController.js";
-import { dropPermissionRecord } from "../../utils/permissions/permissionRecord.js";
 import { returnFalsePermissionHook, recordHostAttestedCall } from "../../components/permissions/hooks.js";
 import { recordMcpApprovalTicket_2 } from "../../bridge/mcpApprovalTickets.js";
 import { logEvent } from "../analytics/index.js";
@@ -126,7 +131,7 @@ import { dropStaleHostDisplay } from "../../utils/hooks/hookMessages.js";
 import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6j594vm1.js:5574-5676 placement
+//@ chunk-0fqk5atw.js:6122-6224 placement
 function getGrantScopeField(hostPolicy, updates) {
   let scope = permissionGrantScope(updates);
   return scope === "once" || (scope === "session" && hostPolicy.kind === "launcher")
@@ -135,7 +140,7 @@ function getGrantScopeField(hostPolicy, updates) {
       }
     : {};
 }
-//@ chunk-6j594vm1.js:5676-5887 placement
+//@ chunk-0fqk5atw.js:6224-6435 placement
 /**
  * 构建"没有可批准界面"时的拒绝结果，消息附带决定原因。
  */
@@ -155,7 +160,7 @@ function buildNoApprovalSurfaceDenial(request) {
     decideLocation: "ask-path",
   };
 }
-//@ chunk-6j594vm1.js:5887-6016 placement
+//@ chunk-0fqk5atw.js:6435-6564 placement
 function buildNoPromptSurfaceDenial(request, reason) {
   return {
     behavior: "deny",
@@ -168,7 +173,7 @@ function buildNoPromptSurfaceDenial(request, reason) {
     decideLocation: "ask-path",
   };
 }
-//@ chunk-6j594vm1.js:6016-6071 placement
+//@ chunk-0fqk5atw.js:6564-6619 placement
 /**
  * 没有可弹提示的界面且状态未定时给出拒绝。
  */
@@ -177,7 +182,7 @@ function noPromptSurfaceDenialIfUnsettled(tool, request, reason, reason_2) {
     ? buildNoPromptSurfaceDenial(request, reason_2)
     : undefined;
 }
-//@ chunk-6j594vm1.js:6071-6134 placement
+//@ chunk-0fqk5atw.js:6619-6682 placement
 /**
  * 没有弹窗界面且只允许本人时给出拒绝。
  */
@@ -186,16 +191,16 @@ function noPromptSurfaceDenialIfPersonOnly(tool, request, signal, toolUseContext
     ? buildNoPromptSurfaceDenial(request, NO_PROMPT_SURFACE_REASON)
     : undefined;
 }
-//@ chunk-6j594vm1.js:6134-6162 placement
+//@ chunk-0fqk5atw.js:6682-6710 placement
 var TENGU_CINDER_SWIFT = "tengu_cinder_swift";
-//@ chunk-6j594vm1.js:6162-6210 placement
+//@ chunk-0fqk5atw.js:6710-6758 placement
 /**
  * 是否启用打断模式的推送授权。
  */
 function isInterruptModeOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_CINDER_SWIFT, "off") === "interrupt";
 }
-//@ chunk-6j594vm1.js:6210-6375 placement
+//@ chunk-0fqk5atw.js:6758-6923 placement
 function describeToolUseForPush(tool, toolUse) {
   try {
     return tool.getToolUseSummary?.(toolUse) ?? tool.getActivityDescription?.(toolUse) ?? "";
@@ -206,11 +211,11 @@ function describeToolUseForPush(tool, toolUse) {
     return "";
   }
 }
-//@ chunk-6j594vm1.js:6375-6413 placement
+//@ chunk-0fqk5atw.js:6923-6961 placement
 function pushCardForToolUse(tool, updatedInput) {
   return describeToolUseForPush_2(tool, updatedInput)?.card;
 }
-//@ chunk-6j594vm1.js:6413-7303 placement
+//@ chunk-0fqk5atw.js:6961-7850 placement
 /**
  * 为推送通知描述工具调用（问题、计划等）。
  */
@@ -237,7 +242,7 @@ function describeToolUseForPush_2(tool, input) {
         label: humanizeToolName(tool.name),
         body: "",
       };
-    case OFFER_CHROME_SETUP_TOOL_NAME: {
+    case OFFERCHROMESETUP: {
       let reasonText =
         typeof input?.reason === "string"
           ? truncate(redactSecretsInText(stripIgnorables(input.reason)), 200).replace(/[\s.!?]+$/u, "")
@@ -261,7 +266,7 @@ function describeToolUseForPush_2(tool, input) {
       };
   }
 }
-//@ chunk-6j594vm1.js:7303-8156 placement
+//@ chunk-0fqk5atw.js:7850-8832 placement
 /**
  * 生成权限请求推送内容与遥测字段。
  */
@@ -275,8 +280,16 @@ function permissionPushPayload(tool, toolUse, toolUseId, requestId, context) {
       decision_reason_code: reasonCode,
     }),
   };
-  let agentFields = context?.askerAgentId !== undefined && {
-    agent_id: context.askerAgentId,
+  let agentFields = {
+    ...(context?.askerAgentId !== undefined && {
+      agent_id: context.askerAgentId,
+    }),
+    ...(context?.chromeSite !== undefined && {
+      chrome_site: context.chromeSite,
+    }),
+    ...(context?.askedInDirectory !== undefined && {
+      asked_in_directory: context.askedInDirectory,
+    }),
   };
   let display = context?.hostDisplay
     ? {
@@ -330,9 +343,32 @@ function permissionPushPayload(tool, toolUse, toolUseId, requestId, context) {
     ...agentFields,
   };
 }
-//@ chunk-6j594vm1.js:8240-8249 placement
+//@ chunk-0fqk5atw.js:8832-8858 layout
+var CARD_EXEMPT_SERVER_NAMES; // deferred: uses ARTIFACTS_SERVER_NAME (../mcp/firstPartyServerIds.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0fqk5atw.js:8832", () => {
+  CARD_EXEMPT_SERVER_NAMES = [CLAUDE_CODE_REMOTE, COWORK, VISUALIZE, MEMORY, CLAUDE_ARTIFACTS];
+});
+//@ chunk-0fqk5atw.js:8858-9188 layout
+function canUseConnectorCard(tool, effectiveInput, toolPermissionContext) {
+  let mcpInfo = tool.mcpInfo;
+  let toolNameForPermissionCheck = getToolNameForPermissionCheck(tool);
+  return (
+    mcpInfo !== undefined &&
+    mcpInfo.source === "dynamic" &&
+    toolPermissionContext.connectorCardAllows?.has(toolNameForPermissionCheck) === true &&
+    toolPermissionContext.alwaysAllowRules.session?.includes(toolNameForPermissionCheck) === true &&
+    !(tool.isDestructive?.(effectiveInput) ?? false) &&
+    !isBuiltinMcpServerName(mcpInfo.serverName) &&
+    !CARD_EXEMPT_SERVER_NAMES.includes(mcpInfo.serverName) &&
+    mcpInfo.serverInfoName !== CLAUDE_CODE_REMOTE &&
+    mcpInfo.docsConnector !== true &&
+    !RESERVED_SERVER_IDS_WITH_DOCS.includes(mcpInfo.serverIdStamp ?? "") &&
+    isCoworkCardMode()
+  );
+}
+//@ chunk-0fqk5atw.js:9272-9281 placement
 var MAX_PUSH_ASK_ATTEMPTS = 3;
-//@ chunk-6j594vm1.js:8249-9077 placement
+//@ chunk-0fqk5atw.js:9281-10109 placement
 /**
  * 需要权限时向手机推送请求（tengu_drifting_dream）。
  */
@@ -405,7 +441,7 @@ function pushPermissionRequest(request) {
     stop: unsubscribe,
   };
 }
-//@ chunk-6j594vm1.js:9077-9465 placement
+//@ chunk-0fqk5atw.js:10109-10497 placement
 /**
  * 决策原因是否适合推送。
  */
@@ -437,7 +473,7 @@ function isPushableDecisionReason(decisionReason) {
       return false;
   }
 }
-//@ chunk-6j594vm1.js:9465-9636 placement
+//@ chunk-0fqk5atw.js:10497-10668 placement
 function checkServerPolicyAskPushable(askContext) {
   let decisionReason = askContext.ask.decisionReason;
   if (decisionReason === undefined ? askContext.tool.mcpInfo === undefined : decisionReason.type !== "rule")
@@ -450,7 +486,7 @@ function checkServerPolicyAskPushable(askContext) {
   }
   return recheckPushable(askContext);
 }
-//@ chunk-6j594vm1.js:9636-9725 placement
+//@ chunk-0fqk5atw.js:10668-10757 placement
 /**
  * 去掉服务端策略里的「只询问」部分。
  */
@@ -462,7 +498,7 @@ function stripServerPolicyAskOnly(request) {
       }
     : request;
 }
-//@ chunk-6j594vm1.js:9725-9858 placement
+//@ chunk-0fqk5atw.js:10757-10890 placement
 function mustAskWithoutPush(askContext) {
   let decisionReason = askContext.ask.decisionReason;
   return (
@@ -472,7 +508,7 @@ function mustAskWithoutPush(askContext) {
     mustAskLocally(askContext)
   );
 }
-//@ chunk-6j594vm1.js:9858-10319 placement
+//@ chunk-0fqk5atw.js:10890-11351 placement
 /**
  * 是否必须在本地询问（强制决定、远程执行等）。
  */
@@ -497,7 +533,7 @@ function mustAskLocally({ tool, effectiveInput, ask, toolUseContext, forceDecisi
     hasPermissionRequestHooks(tool, toolUseContext)
   );
 }
-//@ chunk-6j594vm1.js:10319-10462 placement
+//@ chunk-0fqk5atw.js:11351-11494 placement
 async function recheckPushable(askContext) {
   try {
     let permissionContext = storedToolPermissionContext(askContext.toolUseContext);
@@ -511,7 +547,7 @@ async function recheckPushable(askContext) {
     return false;
   }
 }
-//@ chunk-6j594vm1.js:10462-10737 placement
+//@ chunk-0fqk5atw.js:11494-11769 placement
 async function isPushableWithoutServerAsk({ tool, effectiveInput, toolUseContext }) {
   let sawAsk = false;
   let decision = await checkDeclarativePermissionLessServerPolicyAsks(
@@ -533,16 +569,16 @@ async function isPushableWithoutServerAsk({ tool, effectiveInput, toolUseContext
       : decision.behavior === "ask" && isAllowedUpdate(decision, []))
   );
 }
-//@ chunk-6j594vm1.js:10737-10781 placement
+//@ chunk-0fqk5atw.js:11769-11813 placement
 var ALLOWED_UPDATE_KEYS = ["behavior", "message", "suggestions"];
-//@ chunk-6j594vm1.js:10781-10880 placement
+//@ chunk-0fqk5atw.js:11813-11912 placement
 function isAllowedUpdate(update, extraAllowedKeys) {
   return Object.entries(update).every(
     ([key, value]) =>
       value === undefined || ALLOWED_UPDATE_KEYS.includes(key) || extraAllowedKeys.includes(key),
   );
 }
-//@ chunk-6j594vm1.js:10880-11141 placement
+//@ chunk-0fqk5atw.js:11912-12173 placement
 function hasPermissionRequestHooks(tool, toolUseContext) {
   return (
     getPluginRegistry().hooksRespawns.size > 0 ||
@@ -563,7 +599,7 @@ function hasPermissionRequestHooks(tool, toolUseContext) {
     )
   );
 }
-//@ chunk-6j594vm1.js:11141-11207 placement
+//@ chunk-0fqk5atw.js:12173-12239 placement
 function isAutoClassifierActiveForCall(tool, toolUseContext) {
   let toolPermissionContext = getToolPermissionContext(toolUseContext);
   return isAutoClassifierActive(
@@ -571,7 +607,27 @@ function isAutoClassifierActiveForCall(tool, toolUseContext) {
     toolPermissionContext.servedCall === true,
   );
 }
-//@ chunk-6j594vm1.js:11207-18451 placement
+//@ chunk-0fqk5atw.js:12239-12478 layout
+function isStoredAnswerStillUsable(askContext) {
+  try {
+    return (
+      isAllowedUpdate(askContext.ask, [
+        "decisionReason",
+        "updatedInput",
+        "blockedPath",
+        "metadata",
+        "bashAllowRuleOverridable",
+        "suppressAlwaysAllowRule",
+      ]) &&
+      !requiresConnectorGrant_2(askContext.tool) &&
+      !mustAskLocally(askContext)
+    );
+  } catch {
+    logFeatureBad("ccr_subagent_ask_hold", "stored_answer_test_threw");
+    return false;
+  }
+}
+//@ chunk-0fqk5atw.js:12478-19986 placement
 /**
  * 创建权限询问函数（launcher/strict 模式、推送、远程）。
  */
@@ -615,7 +671,7 @@ function createPermissionAsker(answers, host) {
     if (
       personOnlyDenial !== undefined &&
       !isUserDrivenHere(toolUseContext.messages) &&
-      (isAgentSdkEntrypoint() ||
+      ((isAgentSdkEntrypoint() && !isCcsTenant()) ||
         (messageInboundOrigin
           ? !isHumanOriginLoosely(messageInboundOrigin) &&
             (isTriggerFireOrigin(messageInboundOrigin) || !isUserDrivenTurn(toolUseContext.messages))
@@ -640,17 +696,8 @@ function createPermissionAsker(answers, host) {
     if (keptAsk !== undefined) {
       let keptAnswer = await keptAsk.answerFor({
         usable: () =>
-          isAllowedUpdate(decision, [
-            "decisionReason",
-            "updatedInput",
-            "blockedPath",
-            "metadata",
-            "bashAllowRuleOverridable",
-            "suppressAlwaysAllowRule",
-          ]) &&
-          !requiresConnectorGrant_2(tool) &&
-          isDeepStrictEqual(storedToolPermissionContext(toolUseContext), askedUnderContext) &&
-          !mustAskLocally(askContext),
+          isStoredAnswerStillUsable(askContext) &&
+          isDeepStrictEqual(storedToolPermissionContext(toolUseContext), askedUnderContext),
         toolName: tool.name,
         input: decision.updatedInput ?? input,
         planMode: () => getToolPermissionContext(toolUseContext).mode === "plan",
@@ -678,6 +725,28 @@ function createPermissionAsker(answers, host) {
         decideLocation: "ask-path",
       };
     if (isTerminalShutdown()) return heldUntilExit();
+    if (
+      serverPolicyPushable === true &&
+      isServerPolicyAskReason(decision.decisionReason) &&
+      !requiresConnectorGrant_2(tool) &&
+      !mustBeLeftToAPerson(decision, tool, input, toolUseContext, toolUseId) &&
+      canUseConnectorCard(tool, askContext.effectiveInput, getToolPermissionContext(toolUseContext))
+    ) {
+      dropPermissionRecord(toolUseContext, toolUseId);
+      logFeatureOk("permission_connector_card_allow", {
+        ...(tool.readOnlyHint !== undefined && {
+          readOnlyHint: tool.readOnlyHint,
+        }),
+      });
+      return {
+        behavior: "allow",
+        updatedInput: askContext.effectiveInput,
+        decisionReason: {
+          type: "other",
+          reason: "A person allowed this connector tool for the rest of the turn",
+        },
+      };
+    }
     if (
       tool.askInputPreparer !== undefined &&
       !weakSet.has(decision) &&
@@ -752,6 +821,7 @@ function createPermissionAsker(answers, host) {
       let needsConnectorGrant = requiresConnectorGrant_2(tool);
       let personOnly = mustBeLeftToAPerson(decision, tool, input, toolUseContext, toolUseId);
       if (host.promptShown) {
+        let chrome = decision.metadata?.command?.chrome;
         let pushPayload = permissionPushPayload(tool, updatedInput, toolUseId, requestId, {
           tapToOpenOnly:
             localDisplayOnly ||
@@ -761,6 +831,15 @@ function createPermissionAsker(answers, host) {
           hostDisplay: decision.hostDisplay,
           decisionReason,
           askerAgentId: toolUseContext.agentId,
+          chromeSite:
+            isPlainObject(chrome) && isUsableChromeSiteWithPort(chrome.host) ? chrome.host : undefined,
+          askedInDirectory:
+            answers.kind === "launcher" &&
+            tool.name === BASH_TOOL_NAME &&
+            toolUseContext.agentId === undefined &&
+            !hasHostField(updatedInput)
+              ? relativeToCallFrame(askerDirIfNotWorktree(toolUseContext.session.project?.projectRoot))
+              : undefined,
         });
         shownSubagentId = foregroundSubagentId;
         host.promptShown(
@@ -768,6 +847,9 @@ function createPermissionAsker(answers, host) {
           pushPayload,
           foregroundSubagentId,
           getBackgroundAgentId(toolUseContext.agentContext),
+          toolUseContext.agentId !== undefined &&
+            pushPayload.request_id === requestId &&
+            isStoredAnswerStillUsable(askContext),
         );
       }
       let safetyCheckReason = findSafetyCheckReason(decisionReason);
@@ -870,21 +952,14 @@ ${localReasonText}`
               }),
             tool_use_id: toolUseId,
             agent_id: toolUseContext.agentId,
-            plugin:
-              getHookCallerOf(toolUseContext) ?? (isHookOrPluginSteered(toolUseContext) ? "" : undefined),
-            suppress_always_allow_rule:
-              decision.suppressAlwaysAllowRule ||
-              (tool.suppressesAlwaysAllowRule?.(
-                updatedInput,
-                !getFeatureValue_CACHED_MAY_BE_STALE("tengu_valiant_crayon", false),
-              ) === true &&
-                !(suggestions ?? []).some(
-                  (suggestion) =>
-                    (suggestion.type === "addRules" || suggestion.type === "replaceRules") &&
-                    suggestion.behavior === "allow" &&
-                    suggestion.rules.some((rule) => rule.ruleContent !== undefined),
-                )) ||
-              undefined,
+            plugin: context(toolUseContext),
+            suppress_always_allow_rule: shouldSuppressAlwaysAllow(
+              tool,
+              updatedInput,
+              toolUseContext,
+              decision.suppressAlwaysAllowRule,
+              suggestions,
+            ),
             default_to_no: decision.defaultToNo || undefined,
             provenance_prompt_line: decision.provenancePromptLine,
             requires_user_interaction:
@@ -1093,14 +1168,14 @@ ${localReasonText}`
   };
   return setPermissionPromptHostProbe("callback", askPermission, () => true);
 }
-//@ chunk-6j594vm1.js:18451-18485 placement
+//@ chunk-0fqk5atw.js:19986-20020 placement
 var weakSet; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var weakMap;
-deferInit("chunk-6j594vm1.js:18451", () => {
+deferInit("chunk-0fqk5atw.js:19986", () => {
   weakSet = new WeakSet();
   weakMap = new WeakMap();
 });
-//@ chunk-6j594vm1.js:18485-19866 placement
+//@ chunk-0fqk5atw.js:20020-21401 placement
 /**
  * 询问权限并同时推送，取先到的答复。
  */

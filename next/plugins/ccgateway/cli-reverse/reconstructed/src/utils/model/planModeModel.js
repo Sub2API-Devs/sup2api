@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：强制的默认模型列表；计划模式模型设置与来源等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (27)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (27)
  * attribution: placement 27
  */
 import { env } from "../env.js";
@@ -86,37 +86,37 @@ import {
 import { getToolSearchBetaHeader } from "../betas.js";
 import { has1mSuffix } from "./contextWindow1m.js";
 import { MODEL_KEY_BY_FIRST_PARTY_ID } from "./configs.js";
-import { getUltraplanModel } from "../../commands/ultraplan.js";
+import { isBelowFamilyDefault } from "../../commands/ultraplan.js";
 
-//@ chunk-aepeg2w5.js:438266-438374 placement (2.1.88 match: isExcludedModel, 0.763)
+//@ chunk-exfmq47h.js:449657-449765 placement (2.1.88 match: isExcludedModel, 0.762)
 function getDefaultHaikuModel() {
   let ANTHROPIC_DEFAULT_HAIKU_MODEL = env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
   if (ANTHROPIC_DEFAULT_HAIKU_MODEL !== undefined)
     return identityModelId(strip1mTagWhereBuiltIn(ANTHROPIC_DEFAULT_HAIKU_MODEL));
   return tierOverrideModel("haiku") ?? defaultHaikuModel();
 }
-//@ chunk-aepeg2w5.js:438374-438426 placement
+//@ chunk-exfmq47h.js:449765-449817 placement
 /**
  * 取默认 Haiku 模型（目录档位或内置默认）。
  */
 function defaultHaikuModel(modelStrings = getModelStrings()) {
   return catalogFamilyDefaultKey("haiku", modelStrings) ?? modelStrings.haiku45;
 }
-//@ chunk-aepeg2w5.js:438426-438476 placement
+//@ chunk-exfmq47h.js:449817-449867 placement
 function isModeDependentModelSetting(setting) {
   return setting === "opusplan" || setting === "haiku";
 }
-//@ chunk-aepeg2w5.js:438476-438585 placement
+//@ chunk-exfmq47h.js:449867-449976 placement
 function planModeConstituentFamily(modelSetting) {
   if (modelSetting === "opusplan" || modelSetting === "opusplan[1m]") return "opus";
   if (modelSetting === "haiku") return "sonnet";
   return null;
 }
-//@ chunk-aepeg2w5.js:438585-438610 placement
+//@ chunk-exfmq47h.js:449976-450001 placement
 function isOpusFableAdvisorSetting(setting) {
   return false;
 }
-//@ chunk-aepeg2w5.js:438610-438923 placement
+//@ chunk-exfmq47h.js:450001-450314 placement
 function stepDownRestrictedFamilyAliasPick(spec) {
   let lower = spec.trim().toLowerCase();
   let trimmed = strip1mSuffix(lower).trim();
@@ -144,7 +144,7 @@ function stepDownRestrictedFamilyAliasPick(spec) {
     ? strip1mTagWhereBuiltIn(`${newest}[1m]`)
     : newest;
 }
-//@ chunk-aepeg2w5.js:438923-439285 placement
+//@ chunk-exfmq47h.js:450314-450676 placement
 function planModeConstituentModel(setting) {
   let family = planModeConstituentFamily(setting);
   if (family === null || setting === undefined || setting === null) return null;
@@ -178,7 +178,7 @@ function planModeConstituentModel(setting) {
     clamp: "resting",
   };
 }
-//@ chunk-aepeg2w5.js:439285-439402 placement
+//@ chunk-exfmq47h.js:450676-450793 placement
 function getRuntimeMainLoopModel(input) {
   let { model, clampWarning } = resolveRuntimeMainLoopModel(input);
   if (clampWarning !== null && !warnedEnforcementMessages().has(clampWarning)) {
@@ -189,7 +189,7 @@ function getRuntimeMainLoopModel(input) {
   }
   return model;
 }
-//@ chunk-aepeg2w5.js:439402-440260 placement
+//@ chunk-exfmq47h.js:450793-451651 placement
 function resolveRuntimeMainLoopModel(input) {
   let { permissionMode, mainLoopModel, exceeds200kTokens = false } = input;
   if (permissionMode !== "plan")
@@ -225,14 +225,14 @@ function resolveRuntimeMainLoopModel(input) {
     clampWarning,
   };
 }
-//@ chunk-aepeg2w5.js:440260-440317 placement (2.1.88 match: resolveSkillModelOverride, 1)
+//@ chunk-exfmq47h.js:451651-451708 placement (2.1.88 match: resolveSkillModelOverride, 1)
 /**
  * 去掉结尾所有 [1m] 再加一个 [1m]。旧版名 resolveSkillModelOverride_3 为错配。
  */
 function append1mSuffixIfMissing(model) {
   return model.replace(/(\[1m\])+$/i, "") + "[1m]";
 }
-//@ chunk-aepeg2w5.js:440317-440564 placement
+//@ chunk-exfmq47h.js:451708-451955 placement
 function getResolvedOrgDefaultModel() {
   let orgModelDefault = getOrgModelDefault();
   if (!orgModelDefault) return null;
@@ -248,7 +248,7 @@ function getResolvedOrgDefaultModel() {
   }
   return availableFamilyDefault(orgModelDefault.name);
 }
-//@ chunk-aepeg2w5.js:440564-440726 placement
+//@ chunk-exfmq47h.js:451955-452117 placement
 function getBootstrapOrgDefaultEffect() {
   let orgModelDefault = getOrgModelDefault();
   if (!orgModelDefault) return null;
@@ -266,11 +266,11 @@ function getBootstrapOrgDefaultEffect() {
     kind: "standard",
   };
 }
-//@ chunk-aepeg2w5.js:440726-440785 placement
+//@ chunk-exfmq47h.js:452117-452176 placement
 function isRecognizedOrgDefaultName(name) {
   return isModelKeyAlias(name.toLowerCase()) || isRecognizedModel(name) || isDeploymentVouchedModel(name);
 }
-//@ chunk-aepeg2w5.js:440785-441086 placement
+//@ chunk-exfmq47h.js:452176-452477 placement
 function isDeploymentVouchedModel(modelId) {
   return (
     (env.ANTHROPIC_CUSTOM_MODEL_OPTION !== undefined &&
@@ -289,7 +289,7 @@ function isDeploymentVouchedModel(modelId) {
       false)
   );
 }
-//@ chunk-aepeg2w5.js:441086-441154 placement
+//@ chunk-exfmq47h.js:452477-452545 placement
 /**
  * 判断模型当前是否不可用（忽略覆盖后仍无）。
  */
@@ -301,20 +301,20 @@ function isUnavailableModel(model) {
     }) !== null
   );
 }
-//@ chunk-aepeg2w5.js:441154-441220 placement
+//@ chunk-exfmq47h.js:452545-452611 placement
 function availableFamilyDefault(model) {
   let resolved = resolveAvailableModels(model, null) ?? model;
   let familyDefault = familyDefaultFor(resolved) ?? resolved;
   return isUnavailableModel(familyDefault) ? null : familyDefault;
 }
-//@ chunk-aepeg2w5.js:441220-441255 placement (2.1.88 match: renderToolUseMessage, 1)
+//@ chunk-exfmq47h.js:452611-452646 placement (2.1.88 match: renderToolUseMessage, 1)
 /**
  * 返回 tne() 中的 setting 字段（被 fastMode 等多处使用）；旧版名 renderToolUseMessage 为误配。
  */
 function getDefaultMainLoopModelSetting() {
   return resolveDefaultMainLoopModelSetting().setting;
 }
-//@ chunk-aepeg2w5.js:441255-441497 placement
+//@ chunk-exfmq47h.js:452646-452888 placement
 function defaultModelAttributionSuffix(attribution) {
   switch (attribution) {
     case "org":
@@ -330,7 +330,7 @@ function defaultModelAttributionSuffix(attribution) {
       return "";
   }
 }
-//@ chunk-aepeg2w5.js:441497-441778 placement
+//@ chunk-exfmq47h.js:452888-453169 placement
 function resolveDefaultMainLoopModelSetting() {
   let enforced = enforcedDefaultModels();
   if (enforced !== null && enforced.enforced)
@@ -354,7 +354,7 @@ function resolveDefaultMainLoopModelSetting() {
     };
   return resolvePlanModeModel(enforced);
 }
-//@ chunk-aepeg2w5.js:441778-442245 placement
+//@ chunk-exfmq47h.js:453169-453636 placement
 /**
  * 计划模式模型设置与来源。
  */
@@ -396,7 +396,7 @@ function resolvePlanModeModel(enforced) {
     attribution: trustEnforced ? enforced.attribution : "tier",
   };
 }
-//@ chunk-aepeg2w5.js:442245-442810 placement
+//@ chunk-exfmq47h.js:453636-454201 placement
 /**
  * 强制的默认模型列表。
  */
@@ -436,7 +436,7 @@ function enforcedDefaultModels() {
   }
   return null;
 }
-//@ chunk-aepeg2w5.js:442810-443013 placement
+//@ chunk-exfmq47h.js:454201-454404 placement
 function getDefaultModelOverrides(model) {
   let defaultOverrides = activeProviderModelOverrides("default");
   let served = model === undefined ? undefined : findServedModel(model);
@@ -447,7 +447,7 @@ function getDefaultModelOverrides(model) {
       : undefined;
   return [defaultOverrides.perProvider, perProvider, defaultOverrides.everywhere];
 }
-//@ chunk-aepeg2w5.js:443013-443433 placement
+//@ chunk-exfmq47h.js:454404-454824 placement
 function cloudDocumentDefaultCandidates() {
   if (getAPIProvider() === "firstParty" || !supportsFamilyOverride()) return [];
   let { perProvider, everywhere } = activeProviderModelOverrides("default");
@@ -482,7 +482,7 @@ function cloudDocumentDefaultCandidates() {
   }
   return candidates;
 }
-//@ chunk-aepeg2w5.js:443433-443639 placement
+//@ chunk-exfmq47h.js:454824-455030 placement
 function documentNamesCloudDefault() {
   let catalog = activeServedCatalog();
   if (catalog === null || getAPIProvider() === "firstParty" || !supportsFamilyOverride()) return false;
@@ -494,7 +494,7 @@ function documentNamesCloudDefault() {
   );
   return providerAliasTargets.perProvider !== undefined || providerAliasTargets.everywhere !== undefined;
 }
-//@ chunk-aepeg2w5.js:443639-444068 placement
+//@ chunk-exfmq47h.js:455030-455459 placement
 /**
  * 目录模型的警告（未发布、提供商不支持）。
  */
@@ -511,7 +511,7 @@ function catalogModelWarning(setting) {
     servedModel !== undefined &&
     (isModelFamily(family) || family === "fable") &&
     entryModelKey(servedModel.id) === undefined &&
-    getUltraplanModel(family, servedModel.id)
+    isBelowFamilyDefault(family, servedModel.id)
   )
     return;
   let specs = new Set([setting, parseUserSpecifiedModel(setting)]);
@@ -528,7 +528,7 @@ function catalogModelWarning(setting) {
       return;
   return providerModelId;
 }
-//@ chunk-aepeg2w5.js:444068-444215 placement
+//@ chunk-exfmq47h.js:455459-455606 placement
 function getOrgLockedDefaultModel() {
   if (isServedCatalogActive()) {
     let enforced = enforcedDefaultModels();
@@ -541,32 +541,32 @@ function getOrgLockedDefaultModel() {
   }
   return getOrgModelDefault()?.override_user_selection ? getBootstrapOrgDefaultEffect() : null;
 }
-//@ chunk-aepeg2w5.js:444215-444296 placement
+//@ chunk-exfmq47h.js:455606-455687 placement
 function adminSteeringFor(envFamily) {
   if (envFamily === null) return false;
   let adminSteering = getAdminSteering();
   return envFamily === "opus" ? adminSteering.opus : adminSteering.sonnet;
 }
 export {
-  isModeDependentModelSetting,
-  append1mSuffixIfMissing,
   getDefaultHaikuModel,
-  getRuntimeMainLoopModel,
-  isDeploymentVouchedModel,
   stepDownRestrictedFamilyAliasPick,
-  planModeConstituentFamily,
-  isOpusFableAdvisorSetting,
+  getRuntimeMainLoopModel,
   getDefaultMainLoopModelSetting,
-  resolveRuntimeMainLoopModel,
-  isRecognizedOrgDefaultName,
-  getResolvedOrgDefaultModel,
-  resolveDefaultMainLoopModelSetting,
   getOrgLockedDefaultModel,
   getBootstrapOrgDefaultEffect,
-  documentNamesCloudDefault,
+  isModeDependentModelSetting,
+  append1mSuffixIfMissing,
+  planModeConstituentModel,
+  cloudDocumentDefaultCandidates,
+  resolveRuntimeMainLoopModel,
+  isDeploymentVouchedModel,
+  planModeConstituentFamily,
+  isOpusFableAdvisorSetting,
+  resolveDefaultMainLoopModelSetting,
   defaultModelAttributionSuffix,
   isUnavailableModel,
   defaultHaikuModel,
-  planModeConstituentModel,
-  cloudDocumentDefaultCandidates,
+  isRecognizedOrgDefaultName,
+  getResolvedOrgDefaultModel,
+  documentNamesCloudDefault,
 };

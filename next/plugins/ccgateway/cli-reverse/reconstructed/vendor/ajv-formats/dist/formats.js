@@ -1,8 +1,8 @@
 /**
  * ajv-formats/dist/formats.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: ajv-formats@3.0.1
- * pieces: chunk-r1g76qsy.js (1), chunk-zykv69v4.js (1)
+ * pieces: chunk-efaj9q04.js (1), chunk-qq5knpkd.js (1)
  * attribution: cjs-fingerprint 2
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -24,8 +24,8 @@ import {
   require_validation_error,
 } from "../../ajv/dist/core.js";
 
-//@ chunk-zykv69v4.js:416-8167 cjs-fingerprint
-var require_formats_2 = __commonJS(function (cjsExports) {
+//@ chunk-efaj9q04.js:416-8167 cjs-fingerprint
+var require_formats = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -216,7 +216,7 @@ var require_formats_2 = __commonJS(function (cjsExports) {
     }
   }
 });
-//@ chunk-r1g76qsy.js:197840-255842 cjs-fingerprint
+//@ chunk-qq5knpkd.js:202245-260247 cjs-fingerprint
 var require_id = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
@@ -3265,7 +3265,7 @@ var require_2020 = initModule((cjsExports, cjsModule) => {
     },
   });
 });
-var require_formats = initModule((cjsExports) => {
+var require_formats_2 = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -3550,7 +3550,7 @@ var require_ajv_formats = initModule((cjsExports, cjsModule) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
-  let formats_1 = require_formats();
+  let formats_1 = require_formats_2();
   let limit_1 = require_limit();
   let codegen_1 = require_codegen();
   let fullName = new codegen_1.Name("fullFormats");
@@ -3597,4 +3597,4 @@ var DRAFT_2020_12_URIS = new Set([
   "http://json-schema.org/draft/2020-12/schema",
 ]);
 var formatsPlugin = import_ajv_formats.default;
-export { Ajv2020, formatsPlugin, DRAFT_2020_12_URIS, ajvModule, require_formats_2 };
+export { require_formats, Ajv2020, formatsPlugin, DRAFT_2020_12_URIS, ajvModule };

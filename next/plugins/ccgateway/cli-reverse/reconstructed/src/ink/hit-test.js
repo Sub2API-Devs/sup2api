@@ -3,9 +3,9 @@
  *
  * 并入已有模块：按坐标在 Ink DOM 树中做命中测试（考虑 overflow 裁剪与绝对定位后代，限制深度）；按坐标找文本选择的作用域节点与边界等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/hit-test.ts
- * pieces: chunk-bzr73sfg.js (13)
+ * pieces: chunk-2avr6cej.js (13)
  * attribution: placement 10, fingerprint 3
  */
 import { claimOnce } from "../services/api/verificationRequired.js";
@@ -16,9 +16,9 @@ import { SoftWrapKind } from "./screen.js";
 import { dropSubtreeCache } from "./render-node-to-output.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bzr73sfg.js:253776-253787 placement
+//@ chunk-2avr6cej.js:253452-253463 placement
 var MAX_TREE_DEPTH = 256;
-//@ chunk-bzr73sfg.js:253787-254033 placement
+//@ chunk-2avr6cej.js:253463-253709 placement
 function reportTreeDepthExceeded(walker, nodeName) {
   if (!claimOnce().claim(`ink_tree_depth_cap:${walker}`)) return;
   logError(
@@ -28,7 +28,7 @@ function reportTreeDepthExceeded(walker, nodeName) {
     ),
   );
 }
-//@ chunk-bzr73sfg.js:254033-254826 placement
+//@ chunk-2avr6cej.js:253709-254502 placement
 /**
  * 按坐标在 Ink DOM 树中做命中测试（考虑 overflow 裁剪与绝对定位后代，限制深度）。
  */
@@ -81,7 +81,7 @@ function hitTest(node, col, row, depth = 0) {
   }
   return best ?? (inside ? node : null);
 }
-//@ chunk-bzr73sfg.js:254826-255304 placement
+//@ chunk-2avr6cej.js:254502-254980 placement
 /**
  * 按坐标找文本选择的作用域节点与边界。
  */
@@ -116,7 +116,7 @@ function findSelectionScope(root, col, row) {
   }
   return scope && scope.x2 > scope.x1 ? scope : undefined;
 }
-//@ chunk-bzr73sfg.js:255304-255785 fingerprint (2.1.88 match: dispatchClick, 0.76)
+//@ chunk-2avr6cej.js:254980-255461 fingerprint (2.1.88 match: dispatchClick, 0.76)
 /**
  * 派发点击：命中测试找目标；不是窗口激活点击时，最近的有 tabIndex 的祖先获得焦点；然后沿父链调用 onClick（填好 localCol/localRow），立即停止传播则结束；返回是否有处理器没调 allowDefault()（即点击被消费）。
  */
@@ -152,7 +152,7 @@ function dispatchClick(root, event) {
   }
   return handled;
 }
-//@ chunk-bzr73sfg.js:255785-256096 fingerprint (2.1.88 match: dispatchHover, 1)
+//@ chunk-2avr6cej.js:255461-255772 fingerprint (2.1.88 match: dispatchHover, 1)
 /**
  * 悬停派发：命中节点及其祖先中有 onMouseEnter/Leave 的组成新集合，与旧集合比较后分别调用 onMouseLeave/onMouseEnter（不冒泡）。
  */
@@ -177,7 +177,7 @@ function dispatchHover(root, col, row, hovered, pointerMode = false) {
       n._eventHandlers?.onMouseEnter?.();
     }
 }
-//@ chunk-bzr73sfg.js:256096-256529 placement (2.1.88 match: dispatchHover, 0.794)
+//@ chunk-2avr6cej.js:255772-256205 placement (2.1.88 match: dispatchHover, 0.795)
 /**
  * 重绘后重新判定悬停：只针对带 hoverFollowsPaint 属性的节点（内容移动到鼠标下方或移走时触发 enter/leave），返回是否有变化。
  */
@@ -209,7 +209,7 @@ function dispatchHoverFollowsPaint(root, col, row, hovered, pointerMode = false)
   }
   return changed;
 }
-//@ chunk-bzr73sfg.js:258061-258255 placement
+//@ chunk-2avr6cej.js:257737-257931 placement
 /**
  * 从命中节点向上找第一个有 onPointer 的节点；先遇到 onClick 或可聚焦节点则返回 null（让普通点击处理）。
  */
@@ -223,22 +223,22 @@ function findPointerTarget(root, col, row) {
   }
   return null;
 }
-//@ chunk-bzr73sfg.js:314361-314383 placement
+//@ chunk-2avr6cej.js:313942-313964 placement
 var HARD_BREAK_ONLY; // deferred: uses SoftWrapKind (./screen.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-bzr73sfg.js:314361", () => {
+deferInit("chunk-2avr6cej.js:313942", () => {
   HARD_BREAK_ONLY = [SoftWrapKind.HardBreak];
 });
-//@ chunk-bzr73sfg.js:314383-314443 placement
+//@ chunk-2avr6cej.js:313964-314024 placement
 function pushOrCreate(list, item) {
   if (list === undefined) return [item];
   list.push(item);
   return list;
 }
-//@ chunk-bzr73sfg.js:314443-314486 placement
+//@ chunk-2avr6cej.js:314024-314067 placement
 function clearShiftedFlags(nodes) {
   if (nodes) for (let node of nodes) shiftCachedLayouts(node, 0);
 }
-//@ chunk-bzr73sfg.js:314486-314874 placement
+//@ chunk-2avr6cej.js:314067-314455 placement
 /**
  * 把子树的缓存布局整体平移若干行。
  */
@@ -265,7 +265,7 @@ function shiftCachedLayouts(node, dy) {
     }
   }
 }
-//@ chunk-bzr73sfg.js:314874-315335 fingerprint (2.1.88 match: hitTest, 0.489)
+//@ chunk-2avr6cej.js:314455-314916 fingerprint (2.1.88 match: hitTest, 0.489)
 /**
  * 零高度节点的子树不绘制，但仍按 yoga 布局写入 cachedLayout（标 unpainted），使点击命中测试与焦点几何可用。
  */
@@ -305,7 +305,6 @@ function setUnpaintedLayout(node, offsetX, offsetY) {
   }
 }
 export {
-  hitTest,
   MAX_TREE_DEPTH,
   reportTreeDepthExceeded,
   setUnpaintedLayout,
@@ -313,6 +312,7 @@ export {
   pushOrCreate,
   HARD_BREAK_ONLY,
   clearShiftedFlags,
+  hitTest,
   dispatchClick,
   dispatchHover,
   dispatchHoverFollowsPaint,

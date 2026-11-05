@@ -3,9 +3,9 @@
  *
  * Fast 模式通知：冷却开始/结束、组织变更、超额被拒、过载、可用提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/notifs/useFastModeNotification.tsx
- * pieces: chunk-18hwfzwa.js (9)
+ * pieces: chunk-czq1j3j2.js (9)
  * attribution: callgraph-fingerprint 1, file-local 2, fingerprint 3, layout 2, file-last-pair 1
  */
 import { getIsRemoteMode } from "../../bootstrap/state.js";
@@ -22,7 +22,7 @@ import {
 import { renderModelName } from "../../utils/model/modelDisplay.js";
 import { formatDuration } from "../../utils/format.js";
 
-//@ chunk-18hwfzwa.js:1759555-1759822 callgraph-fingerprint (2.1.88 match: ORG_CHANGED_KEY, 0.268)
+//@ chunk-czq1j3j2.js:1806816-1807083 callgraph-fingerprint (2.1.88 match: ORG_CHANGED_KEY, 0.268)
 var FAST_MODE_COOLDOWN_STARTED = "fast-mode-cooldown-started";
 var FAST_MODE_COOLDOWN_EXPIRED = "fast-mode-cooldown-expired";
 var FAST_MODE_ORG_CHANGED = "fast-mode-org-changed";
@@ -33,7 +33,7 @@ var fastModeOrgChangedNoticeSpec = {
   deps: (noticeState) => [noticeState.addNotification, noticeState.fastMode, noticeState.store],
   setup: () => onOrgFastModeChangeNotice,
 };
-//@ chunk-18hwfzwa.js:1759822-1760212 file-local
+//@ chunk-czq1j3j2.js:1807083-1807473 file-local
 /**
  * 监听组织 fast mode 开关变化：变为可用时提示，变为不可用且当前开启时关闭 fast mode 并提示原因。
  */
@@ -66,13 +66,13 @@ function onOrgFastModeChangeNotice({ addNotification, fastMode, store }) {
     }
   });
 }
-//@ chunk-18hwfzwa.js:1760212-1760306 fingerprint (2.1.88 match: OVERAGE_REJECTED_KEY, 0.581)
+//@ chunk-czq1j3j2.js:1807473-1807567 fingerprint (2.1.88 match: OVERAGE_REJECTED_KEY, 0.581)
 var OVERAGE_REJECTED_KEY = {
   id: "fast-mode-overage-rejected",
   deps: (noticeState) => [noticeState.addNotification, noticeState.store],
   setup: () => onFastModeOverageRejectedNotice,
 };
-//@ chunk-18hwfzwa.js:1760306-1760507 file-local
+//@ chunk-czq1j3j2.js:1807567-1807768 file-local
 function onFastModeOverageRejectedNotice({ addNotification, store }) {
   if (getIsRemoteMode()) return;
   if (!isFastModeEnabled()) return;
@@ -90,13 +90,13 @@ function onFastModeOverageRejectedNotice({ addNotification, store }) {
     });
   });
 }
-//@ chunk-18hwfzwa.js:1760507-1760600 layout
+//@ chunk-czq1j3j2.js:1807768-1807861 layout
 var fastModeFallbackRejectedNoticeSpec = {
   id: "fast-mode-fallback-model-rejected",
   deps: (noticeState) => [noticeState.addNotification],
   setup: () => onFallbackFastRejectedNotice,
 };
-//@ chunk-18hwfzwa.js:1760600-1760821 file-last-pair
+//@ chunk-czq1j3j2.js:1807861-1808082 file-last-pair
 function onFallbackFastRejectedNotice({ addNotification }) {
   if (getIsRemoteMode()) return;
   if (!isFastModeEnabled()) return;
@@ -110,13 +110,13 @@ function onFallbackFastRejectedNotice({ addNotification }) {
     });
   });
 }
-//@ chunk-18hwfzwa.js:1760821-1760910 layout
+//@ chunk-czq1j3j2.js:1808082-1808171 layout
 var fastModeCooldownNoticeSpec = {
   id: "fast-mode-cooldown",
   deps: (noticeState) => [noticeState.addNotification, noticeState.fastMode],
   setup: () => useFastModeNotification,
 };
-//@ chunk-18hwfzwa.js:1760910-1761307 fingerprint (2.1.88 match: useFastModeNotification, 0.722)
+//@ chunk-czq1j3j2.js:1808171-1808568 fingerprint (2.1.88 match: useFastModeNotification, 0.722)
 function useFastModeNotification({ addNotification, fastMode }) {
   if (getIsRemoteMode()) return;
   if (!fastMode) return;
@@ -148,7 +148,7 @@ function useFastModeNotification({ addNotification, fastMode }) {
     unsubExpired();
   };
 }
-//@ chunk-18hwfzwa.js:1761307-1761522 fingerprint (2.1.88 match: getCooldownMessage, 1)
+//@ chunk-czq1j3j2.js:1808568-1808783 fingerprint (2.1.88 match: getCooldownMessage, 1)
 function getCooldownMessage(reason, resetIn) {
   switch (reason) {
     case "overloaded":

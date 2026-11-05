@@ -3,12 +3,14 @@
  *
  * 2.1.316 新增：同伴消息路由、回合交接与回合结束打印
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (21)
- * attribution: placement 21
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (28)
+ * attribution: placement 21, layout 7
  */
 import { randomUUID } from "crypto";
+import { open } from "fs/promises";
+import { readSync } from "fs";
 import { bridgeMessageUuid } from "./hostTelemetryProxy.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { normalizeForDisplay } from "../../utils/resultError.js";
@@ -60,13 +62,21 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/gr
 import { logError } from "../../utils/log.js";
 import { logFeatureBad, logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { writeToStdout } from "../../utils/process.js";
-import { mcpInfoFromString } from "../../services/mcp/mcpStringUtils.js";
-import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
-import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
+import { mcpInfoFromString, getPrefixServerKey } from "../../services/mcp/mcpStringUtils.js";
+import { parseRuleString } from "../../utils/permissions/permissionRuleParser.js";
+import { CLAUDEAI_SERVER_PREFIX } from "../../services/mcp/normalization.js";
 import { getNonDeferrableBuiltins } from "../../utils/toolSearch.js";
 import { getMcpServersReferencedByHooks } from "../../utils/hooks/sessionHooks.js";
-import { getPrefixServerKey } from "../../components/agents/ToolSelector.js";
 import { sanitizeTelemetryString } from "../../utils/sanitization.js";
+import { runAsyncWithTurnId } from "../../services/mcp/ccrTurnId.js";
+import {
+  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+  errorMessage,
+} from "../../utils/errors.js";
+import { SKIP_PRECOMPACT_THRESHOLD } from "../../utils/sessionStoragePortable.js";
+import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
+import { noteResumeReadAhead } from "../../utils/startupTiming.js";
+import { withDeadline } from "../../utils/sleep.js";
 import { MODEL_SWITCH_STATE, cancelQueuedAutoInputs } from "./setModelControl.js";
 import { applyTurnHandoff, isCarriedWritesEnabled } from "../remoteIO/turnHandoff.js";
 import { getCwd } from "../../utils/cwd.js";
@@ -74,21 +84,21 @@ import { getHomeFilesRoot } from "../../utils/stageFileRoots.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { userAbortReason } from "../../utils/abortController.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { attributionKeyOrUndefined } from "../../utils/turnAttributionKey.js";
 import { isHumanOrigin } from "../../utils/turnOrigin.js";
 import { controlHandlerError } from "./dispatchControlRequest.js";
 
-//@ chunk-tyg7f3ek.js:540125-540247 placement
+//@ chunk-0yw3taqg.js:580443-580565 placement
 function reportPeerLifecycle(io, lanes, message) {
   let lane = lanes.laneOf(message);
   if (lane === undefined) return;
   let uuid = bridgeMessageUuid(message.uuid, lane);
   if (uuid !== undefined) io.onCommandLifecycle?.(uuid, refusedLifecycleState());
 }
-//@ chunk-tyg7f3ek.js:540247-540258 placement
+//@ chunk-0yw3taqg.js:580565-580576 placement
 var PEER_NAME_MAX = 200;
-//@ chunk-tyg7f3ek.js:540258-540857 placement
+//@ chunk-0yw3taqg.js:580576-581174 placement
 function formatPeerMessage(output, hostIngressLanes, remoteTransport, message, state) {
   let origin = message.origin?.kind === "peer" ? message.origin : undefined;
   let lane = hostIngressLanes.laneOf(message) ?? "socket";
@@ -133,25 +143,34 @@ function formatPeerMessage(output, hostIngressLanes, remoteTransport, message, s
   };
   output.enqueue(event);
 }
-//@ chunk-tyg7f3ek.js:540857-540935 placement
+//@ chunk-0yw3taqg.js:581174-581252 placement
 function reportCommandRefused(io, uuid, lane) {
   let bridgeUuid = bridgeMessageUuid(uuid, lane);
   if (bridgeUuid !== undefined) io.onCommandLifecycle?.(bridgeUuid, refusedLifecycleState());
 }
-//@ chunk-tyg7f3ek.js:540935-540984 placement
+//@ chunk-0yw3taqg.js:581252-581301 placement
 function refusedLifecycleState() {
   return isInboundShuttingDown() ? "discarded" : "refused";
 }
-//@ chunk-tyg7f3ek.js:540984-541301 placement
-function dropBeforeAttachments({ io, uuid, peerFrom, hostInjectedPeer, ingressOrigin }) {
-  let refuseCause = peerFrom
-    ? hostInjectedPeer
-      ? getInboundRefuseCause({
-          kind: "peer",
-          hostInjected: true,
-        })
-      : inboundRefuseCause()
-    : getInboundRefuseCause(ingressOrigin);
+//@ chunk-0yw3taqg.js:581301-581669 placement
+function dropBeforeAttachments({
+  io,
+  uuid,
+  peerFrom,
+  hostInjectedPeer,
+  ingressOrigin,
+  declaredPeerDenyList,
+}) {
+  let refuseCause = declaredPeerDenyList
+    ? "declared-peer-deny-list"
+    : peerFrom
+      ? hostInjectedPeer
+        ? getInboundRefuseCause({
+            kind: "peer",
+            hostInjected: true,
+          })
+        : inboundRefuseCause()
+      : getInboundRefuseCause(ingressOrigin);
   if (refuseCause === undefined) return false;
   logInboundRefused(
     hostInjectedPeer
@@ -162,7 +181,7 @@ function dropBeforeAttachments({ io, uuid, peerFrom, hostInjectedPeer, ingressOr
   reportCommandRefused(io, uuid, "stdin");
   return true;
 }
-//@ chunk-tyg7f3ek.js:541301-541507 placement
+//@ chunk-0yw3taqg.js:581669-581875 placement
 function acceptStdinPeerMessage({
   io,
   hostIngressLanes,
@@ -181,7 +200,7 @@ function acceptStdinPeerMessage({
   if (decision === "refused") reportCommandRefused(io, uuid, "stdin");
   return decision === "accept";
 }
-//@ chunk-tyg7f3ek.js:541507-542913 placement
+//@ chunk-0yw3taqg.js:581875-583284 placement
 /**
  * 跨会话（peer）消息路由：区分 stdin/socket/bridge 来源，按权限模式接收、暂存或过期丢弃。
  */
@@ -297,7 +316,7 @@ function createPeerMessageRouter({
     setInboundAvailabilityPublisher(null);
   };
 }
-//@ chunk-tyg7f3ek.js:542913-543610 placement
+//@ chunk-0yw3taqg.js:583284-583981 placement
 function resolveTurnAgent(agent, agents) {
   if (agent != null && typeof agent !== "string")
     return {
@@ -358,7 +377,7 @@ function resolveTurnAgent(agent, agents) {
     laterOverride,
   };
 }
-//@ chunk-tyg7f3ek.js:543610-544552 placement
+//@ chunk-0yw3taqg.js:583981-584923 placement
 function applyRequestedAgent({ requestedAgent, agents, systemPrompt, preAgentSystemPrompt }) {
   if (requestedAgent != null && typeof requestedAgent !== "string")
     return {
@@ -424,7 +443,27 @@ function applyRequestedAgent({ requestedAgent, agents, systemPrompt, preAgentSys
     preAgentSystemPrompt,
   };
 }
-//@ chunk-tyg7f3ek.js:544552-544649 placement
+//@ chunk-0yw3taqg.js:584923-585434 layout
+var TRIAL_ENV_KEYS = [
+  "CLAUDE_CODE_CCR_ONE_PLUGIN_LOAD_PER_RELOAD",
+  "CLAUDE_CODE_CCR_OWN_CONNECTION_POOL",
+  "CLAUDE_CODE_CCR_SLOW_SKILLS_WATCH",
+  "CLAUDE_CODE_CHROME_LATE_MCP_SERVER",
+  "CLAUDE_CODE_DEBUG_LOG_LEVEL",
+  "CLAUDE_CODE_INCREMENTAL_REQUEST_BODY",
+  "CLAUDE_CODE_JIT_POLICY_AFTER_STARTUP",
+  "CLAUDE_CODE_PLAIN_DELTA_DIRECT_WRITE",
+  "CLAUDE_CODE_PLAIN_DELTA_FAST_PATH",
+  "CLAUDE_CODE_PLAIN_DELTA_TAKE_AT_SOURCE",
+  "CLAUDE_CODE_REMOTE_STALL_CHECK_INTERVAL_MS",
+  "CLAUDE_CODE_SKIP_MCP_DEBUG_LOG_FILES",
+  "CLAUDE_CODE_UNWATCHED_REPLY_HOLD_MS",
+];
+//@ chunk-0yw3taqg.js:585434-585495 layout
+function collectTrialEnvKeys() {
+  return TRIAL_ENV_KEYS.filter((envVarName) => process.env[envVarName] !== undefined);
+}
+//@ chunk-0yw3taqg.js:585495-585592 placement
 function createAssistantTextTracker() {
   return {
     lastAssistantText: undefined,
@@ -432,9 +471,9 @@ function createAssistantTextTracker() {
     partialForResult: undefined,
   };
 }
-//@ chunk-tyg7f3ek.js:544649-544696 placement
+//@ chunk-0yw3taqg.js:585592-585639 placement
 var INCOMPLETE_RESPONSE_NOTE = "The response above may be incomplete.";
-//@ chunk-tyg7f3ek.js:544696-545199 placement
+//@ chunk-0yw3taqg.js:585639-586142 placement
 function trackAssistantText(tracker, frame) {
   if (frame.type === "system" && frame.subtype === "compact_boundary") {
     resetAssistantText(tracker);
@@ -465,12 +504,12 @@ function trackAssistantText(tracker, frame) {
       : undefined;
   resetAssistantText(tracker);
 }
-//@ chunk-tyg7f3ek.js:545199-545269 placement
+//@ chunk-0yw3taqg.js:586142-586212 placement
 function resetAssistantText(tracker) {
   tracker.lastAssistantText = undefined;
   tracker.priorAssistantText = undefined;
 }
-//@ chunk-tyg7f3ek.js:545269-546457 placement
+//@ chunk-0yw3taqg.js:586212-587400 placement
 class TurnEndPrinter {
   limits;
   lastPrinted = undefined;
@@ -551,18 +590,18 @@ ${result.result}`;
 `);
   }
 }
-//@ chunk-tyg7f3ek.js:546457-546537 placement (2.1.88 match: getRiskColor, 1)
+//@ chunk-0yw3taqg.js:587400-587480 placement (2.1.88 match: getRiskColor, 1)
 function isEmptySuccessResult(result, prefix) {
   return result.subtype === "success" && prefix === undefined && result.result.trim() === "";
 }
-//@ chunk-tyg7f3ek.js:546537-546601 placement
+//@ chunk-0yw3taqg.js:587480-587544 placement
 var ALLOW_RULE_SOURCES_FOR_MCP = ["cliArg", "flagSettings", "session", "mcpMount", "command"];
-//@ chunk-tyg7f3ek.js:546601-546672 placement
+//@ chunk-0yw3taqg.js:587544-587615 placement (2.1.88 match: getMcpServerBuckets, 0.618)
 function addMcpServerFromRule(servers, rule) {
-  let mcpInfo = mcpInfoFromString(permissionRuleValueFromString(rule).toolName);
-  if (mcpInfo) servers.add(normalizeNameForMCP(mcpInfo.serverName));
+  let mcpInfo = mcpInfoFromString(parseRuleString(rule).toolName);
+  if (mcpInfo) servers.add(CLAUDEAI_SERVER_PREFIX(mcpInfo.serverName));
 }
-//@ chunk-tyg7f3ek.js:546672-546831 placement
+//@ chunk-0yw3taqg.js:587615-587774 placement
 function mcpServersNamedByRules(toolPermissionContext) {
   let servers = new Set();
   for (let source of ALLOW_RULE_SOURCES_FOR_MCP)
@@ -572,13 +611,126 @@ function mcpServersNamedByRules(toolPermissionContext) {
   for (let serverName of getMcpServersReferencedByHooks()) servers.add(getPrefixServerKey(serverName));
   return servers;
 }
-//@ chunk-tyg7f3ek.js:546831-547249 placement
+//@ chunk-0yw3taqg.js:587774-588192 placement
 function mcpConnectionClosedMessage({ serverName, error, namesMcpCall, detail }) {
   let safeName = sanitizeTelemetryString(serverName);
   let callHint = namesMcpCall ? " mcp_call" : "";
   return `${error.mayHaveRun ? `MCP connection to ${safeName} closed during the call \u2014 send mcp_reconnect, and check whether the tool ran before retrying${callHint}` : `MCP ${error.expiryKind === "connection_closed_call_not_run" ? "connection closed before the call ran on" : "session expired for"} ${safeName} \u2014 send mcp_reconnect and retry${callHint}`}: ${sanitizeTelemetryString(detail)}`;
 }
-//@ chunk-tyg7f3ek.js:547249-550209 placement
+//@ chunk-0yw3taqg.js:588192-588395 layout
+var DROPPED_ID_REASONS = {
+  another_id: "dropped_another_id",
+  no_id: "dropped_no_id",
+  cross_sender_content: "dropped_cross_sender_content",
+  turn_start_resume: "dropped_turn_start_resume",
+  cause_not_given: "dropped_cause_not_given",
+};
+//@ chunk-0yw3taqg.js:588395-588918 layout
+async function runWithTurnIdReport(id, run, programUseCaseId) {
+  let report = {};
+  try {
+    await runAsyncWithTurnId(
+      id,
+      run,
+      (droppedItsIdBy) => {
+        report.droppedItsIdBy = droppedItsIdBy;
+      },
+      programUseCaseId,
+    );
+  } finally {
+    try {
+      if (id === undefined) logFeatureSad("ccr_cloud_browser_turn_id_kept", "mixed_batch");
+      else if (report.droppedItsIdBy !== undefined)
+        logFeatureSad(
+          "ccr_cloud_browser_turn_id_kept",
+          Object.hasOwn(DROPPED_ID_REASONS, report.droppedItsIdBy)
+            ? DROPPED_ID_REASONS[report.droppedItsIdBy]
+            : DROPPED_ID_REASONS.cause_not_given,
+        );
+      else logFeatureOk("ccr_cloud_browser_turn_id_kept");
+    } catch (error) {
+      logError(
+        new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+          `logging ccr_cloud_browser_turn_id_kept failed; the turn was not affected: ${errorMessage(error)}`,
+          "logging ccr_cloud_browser_turn_id_kept failed; the turn was not affected",
+        ),
+      );
+    }
+  }
+}
+//@ chunk-0yw3taqg.js:588985-589014 layout
+var READ_AHEAD_CHUNK_BYTES = 1048576;
+var READ_AHEAD_STREAMS = 2;
+var LOGIN_VERIFY_TIMEOUT_MS = 30000;
+//@ chunk-0yw3taqg.js:589014-589664 layout
+async function prewarmTranscriptReadAhead(transcriptPathForSession, isShuttingDown, abortSignal) {
+  let startTime = performance.now();
+  let handle = await open(transcriptPathForSession, "r").catch(() => null);
+  if (handle === null) return;
+  let fileBytes = await handle.stat().then(
+    (stat) => stat.size,
+    () => 0,
+  );
+  let readState = {
+    nextPosition: 0,
+    bytesRead: 0,
+    hungAt: undefined,
+  };
+  if (fileBytes > SKIP_PRECOMPACT_THRESHOLD)
+    await Promise.allSettled(
+      Array.from(
+        {
+          length: READ_AHEAD_STREAMS,
+        },
+        () => readAheadChunk(handle, fileBytes, readState, isShuttingDown, abortSignal),
+      ),
+    );
+  let didHang = readState.hungAt !== undefined;
+  if (readState.bytesRead > 0 || didHang)
+    logForDiagnosticsNoPII(
+      didHang ? "warn" : "info",
+      "resume_transcript_read_ahead",
+      {
+        bytes_read: readState.bytesRead,
+        file_bytes: fileBytes,
+        duration_ms: Math.round(performance.now() - startTime),
+        hung: didHang,
+      },
+      didHang ? "now" : "queued",
+    );
+  if (readState.hungAt !== undefined && !isShuttingDown())
+    try {
+      readSync(handle.fd, Buffer.allocUnsafe(READ_AHEAD_CHUNK_BYTES), {
+        position: readState.hungAt,
+      });
+    } catch {}
+  if (readState.bytesRead > 0 || didHang) noteResumeReadAhead(performance.now() - startTime, startTime);
+  let closePromise = handle.close().catch(() => {});
+  if (!didHang) await closePromise;
+}
+//@ chunk-0yw3taqg.js:589664-589921 layout
+async function readAheadChunk(handle, fileBytes, readState, isShuttingDown, abortSignal) {
+  let buffer = Buffer.allocUnsafe(READ_AHEAD_CHUNK_BYTES);
+  while (readState.nextPosition < fileBytes && !isShuttingDown()) {
+    let nextPosition = readState.nextPosition;
+    readState.nextPosition += READ_AHEAD_CHUNK_BYTES;
+    let readResult = await withDeadline(
+      handle.read({
+        buffer,
+        position: nextPosition,
+      }),
+      LOGIN_VERIFY_TIMEOUT_MS,
+      abortSignal,
+    );
+    if (readResult === undefined) {
+      readState.hungAt ??= nextPosition;
+      readState.nextPosition = fileBytes;
+      return;
+    }
+    readState.bytesRead += readResult.bytesRead;
+  }
+}
+//@ chunk-0yw3taqg.js:589921-593011 placement
 /**
  * 处理 turn_handoff：在准入允许时把当前轮次交给新 worker，回报结果。
  */
@@ -637,6 +789,13 @@ function handleTurnHandoff(
       appliedRewind: host.appliedRewind(),
       linesWaitingAhead: host.linesWaitingAhead(),
     });
+    if (
+      request.stopped &&
+      (applied.kind === "accepted" ||
+        applied.kind === "converted" ||
+        (applied.kind === "duplicate" && applied.stopRunning))
+    )
+      host.handedOffTurnStopped?.(request);
     let annotation = (handedOffTurn, taken) => ({
       ...handedOffTurn,
       ...(requestedAtMs !== undefined && {
@@ -692,7 +851,10 @@ function handleTurnHandoff(
         };
       case "converted":
         queued.handedOffTurn = annotation(applied.handedOffTurn, applied.taken);
-        queued.disallowedTools = uniq([...(queued.disallowedTools ?? []), ...disallowedToolsMetadata]);
+        queued.disallowedTools = normalizeCaseForComparison_2([
+          ...(queued.disallowedTools ?? []),
+          ...disallowedToolsMetadata,
+        ]);
         queued.turnAttributionKey = undefined;
         queued.handedOffTurnUserMessageUuids = undefined;
         reply({
@@ -761,6 +923,8 @@ export {
   trackAssistantText,
   createPeerMessageRouter,
   mcpServersNamedByRules,
+  runWithTurnIdReport,
+  collectTrialEnvKeys,
   mcpConnectionClosedMessage,
   resolveTurnAgent,
   applyRequestedAgent,
@@ -768,4 +932,5 @@ export {
   handleTurnHandoff,
   dropBeforeAttachments,
   acceptStdinPeerMessage,
+  prewarmTranscriptReadAhead,
 };

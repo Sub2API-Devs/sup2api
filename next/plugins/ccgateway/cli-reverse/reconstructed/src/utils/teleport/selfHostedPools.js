@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：拉取自托管池列表。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f25sswmp.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vr5v4gzz.js (1)
  * attribution: placement 1
  */
 import { getAPIProvider } from "../model/providers.js";
@@ -24,7 +24,7 @@ import { toError, isExpectedApiError } from "../errors.js";
 import { isCloudSessionAccessError } from "./environments.js";
 import { logError } from "../log.js";
 
-//@ chunk-f25sswmp.js:19007-19944 placement
+//@ chunk-vr5v4gzz.js:19654-20591 placement
 async function fetchSelfHostedPools(options, credentials) {
   if (getAPIProvider() !== "firstParty") return [];
   let isConsoleProfile = isConsoleProfileSessionsCredential();

@@ -1,12 +1,12 @@
 /**
  * @azure/msal-node/dist/cache/serializer/Serializer.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/msal-node@3.8.1
- * pieces: chunk-mrx6y2r5.js (1)
+ * pieces: chunk-b5df2wx1.js (1)
  * attribution: esm-fingerprint 1
  */
 
-//@ chunk-mrx6y2r5.js:88382-90381 esm-fingerprint
+//@ chunk-b5df2wx1.js:88382-90381 esm-fingerprint
 class Serializer {
   static serializeJSONBlob(data) {
     return JSON.stringify(data);

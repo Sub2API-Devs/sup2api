@@ -3,13 +3,12 @@
  *
  * Edit 工具的终端渲染：调用/结果/拒绝 diff/错误消息、用户可见名与摘要
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileEditTool/UI.tsx
- * pieces: chunk-e6aww6q8.js (2), chunk-smaqkhx4.js (8)
- * attribution: fingerprint 8, placement 1, layout 1
+ * pieces: chunk-0e2nybak.js (8), chunk-5xgkngpb.js (2)
+ * attribution: placement 1, fingerprint 8, callgraph-fingerprint 1
  */
-import { lintBackgroundMemoryWrite, rememberLintedWrite } from "../../memdir/memoryWriteLint.js";
-import { expandPath } from "../../utils/path.js";
+import { getDisplayPath, FILE_NOT_FOUND_CWD_NOTE } from "../../utils/file.js";
 import { getPlansDirectory } from "../../utils/plans.js";
 import {
   init_react_production,
@@ -19,7 +18,6 @@ import {
 } from "../../../vendor/react/cjs/react.production.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { FilePathLink } from "../../components/FilePathLink.js";
-import { getDisplayPath, FILE_NOT_FOUND_CWD_NOTE } from "../../utils/file.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { Text } from "../../ink/components/Text.js";
 import { settingsWriteGateText, readRejectionContext } from "../../utils/settings/settingsReview.js";
@@ -37,20 +35,15 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1364294-1364414 fingerprint (2.1.88 match: getToolUseSummary, 0.701)
+//@ chunk-5xgkngpb.js:1411981-1412049 callgraph-fingerprint (2.1.88 match: getToolUseSummary, 1)
 /**
- * 对 Edit/Write 输入的某个字段做记忆目录写入清洗（XQ），有变化时记录并返回替换后的输入（checkPermissions 用它产出 updatedInput）。
+ * Write 工具使用摘要：显示路径。
  */
-function getToolUseSummary_2(input, textField, memorySource, summaryContext) {
-  let lintedText = lintBackgroundMemoryWrite(expandPath(input.file_path), input[textField], memorySource);
-  if (lintedText === input[textField]) return input;
-  rememberLintedWrite(summaryContext.host, summaryContext.toolUseId);
-  return {
-    ...input,
-    [textField]: lintedText,
-  };
+function getToolUseSummary_2(input) {
+  if (!input?.file_path) return null;
+  return getDisplayPath(input.file_path);
 }
-//@ chunk-e6aww6q8.js:4648659-4648833 fingerprint (2.1.88 match: userFacingName, 1)
+//@ chunk-5xgkngpb.js:4757244-4757418 fingerprint (2.1.88 match: userFacingName, 1)
 /**
  * Edit 的用户可见名：计划文件显示 "Updated plan"，old_string 为空显示 "Create"，其余 "Update"。
  */
@@ -61,12 +54,12 @@ function userFacingName_2(input) {
   if (input.old_string === "") return "Create";
   return "Update";
 }
-//@ chunk-smaqkhx4.js:7811-7815 placement
+//@ chunk-0e2nybak.js:8455-8459 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-smaqkhx4.js:7811", () => {
+deferInit("chunk-0e2nybak.js:8455", () => {
   init_react_production();
 });
-//@ chunk-smaqkhx4.js:7815-7948 layout (2.1.88 match: renderToolUseMessage, 1)
+//@ chunk-0e2nybak.js:8459-8592 fingerprint (2.1.88 match: renderToolUseMessage, 1)
 function renderToolUseMessage({ file_path }, { verbose }) {
   if (!file_path) return null;
   if (file_path.startsWith(getPlansDirectory())) return "";
@@ -75,7 +68,7 @@ function renderToolUseMessage({ file_path }, { verbose }) {
     children: verbose ? file_path : getDisplayPath(file_path),
   });
 }
-//@ chunk-smaqkhx4.js:7948-8333 fingerprint (2.1.88 match: renderToolResultMessage, 0.865)
+//@ chunk-0e2nybak.js:8592-8977 fingerprint (2.1.88 match: renderToolResultMessage, 0.865)
 function renderToolResultMessage(
   { filePath = "", structuredPatch, originalFile, staged, stagedWording },
   _progressMessagesForMessage,
@@ -101,7 +94,7 @@ function renderToolResultMessage(
     collapsed: !isPlanFile && isScratchpadDisplayPath(filePath),
   });
 }
-//@ chunk-smaqkhx4.js:8333-8721 fingerprint (2.1.88 match: renderToolUseRejectedMessage, 1)
+//@ chunk-0e2nybak.js:8977-9365 fingerprint (2.1.88 match: renderToolUseRejectedMessage, 1)
 function renderToolUseRejectedMessage(input, options) {
   let { style, verbose } = options;
   let filePath = input.file_path;
@@ -132,7 +125,7 @@ function renderToolUseRejectedMessage(input, options) {
     verbose,
   });
 }
-//@ chunk-smaqkhx4.js:8721-9198 fingerprint (2.1.88 match: renderToolUseErrorMessage, 0.511)
+//@ chunk-0e2nybak.js:9365-9842 fingerprint (2.1.88 match: renderToolUseErrorMessage, 0.511)
 function renderToolUseErrorMessage(result, options) {
   let { verbose, toolDenialKind } = options;
   if (
@@ -168,7 +161,7 @@ function renderToolUseErrorMessage(result, options) {
     verbose,
   });
 }
-//@ chunk-smaqkhx4.js:9198-9795 fingerprint (2.1.88 match: EditRejectionDiff, 1)
+//@ chunk-0e2nybak.js:9842-10439 fingerprint (2.1.88 match: EditRejectionDiff, 1)
 function EditRejectionDiff(props) {
   let $ = useMemoCache(16);
   let { filePath, oldString, newString, replaceAll, style, verbose } = props;
@@ -220,7 +213,7 @@ function EditRejectionDiff(props) {
   } else t4 = $[15];
   return t4;
 }
-//@ chunk-smaqkhx4.js:9795-10133 fingerprint (2.1.88 match: EditRejectionBody, 1)
+//@ chunk-0e2nybak.js:10439-10777 fingerprint (2.1.88 match: EditRejectionBody, 1)
 function EditRejectionBody(props) {
   let $ = useMemoCache(7);
   let { promise, filePath, style, verbose } = props;
@@ -253,7 +246,7 @@ function EditRejectionBody(props) {
   } else t1 = $[6];
   return t1;
 }
-//@ chunk-smaqkhx4.js:10133-10735 fingerprint (2.1.88 match: loadRejectionDiff, 0.882)
+//@ chunk-0e2nybak.js:10777-11379 fingerprint (2.1.88 match: loadRejectionDiff, 0.881)
 async function loadRejectionDiff(filePath, oldString, newString, replaceAll) {
   try {
     let ctx = await readRejectionContext(filePath, oldString, DIFF_CONTEXT_LINES);

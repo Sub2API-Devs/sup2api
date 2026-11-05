@@ -1,9 +1,9 @@
 /**
  * @aws-sdk/client-sts/dist-cjs/auth/httpAuthSchemeProvider.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/client-sts@3.936.0..3.939.0
- * pieces: chunk-a8ee6x44.js (1), chunk-heg39xxp.js (6)
- * attribution: cjs-require-graph 1, esm-layout 2, esm-fingerprint 4
+ * pieces: chunk-539esr4f.js (6), chunk-brqnbz3r.js (1)
+ * attribution: esm-layout 2, esm-fingerprint 4, cjs-require-graph 1
  */
 import { __toESM, __commonJS } from "../../../../../runtime/bun-runtime.js";
 import {
@@ -25,7 +25,7 @@ import { CognitoIdentityClient } from "../../../nested-clients/dist-cjs/submodul
 import { require_STSClient } from "../../../nested-clients/dist-cjs/submodules/sts/STSClient.js";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-heg39xxp.js:747-884 esm-layout
+//@ chunk-539esr4f.js:747-884 esm-layout
 var import_middleware_host_header = __toESM(require_middleware_host_header());
 var import_middleware_logger = __toESM(require_middleware_logger());
 var import_middleware_recursion_detection = __toESM(require_middleware_recursion_detection());
@@ -37,10 +37,10 @@ var import_middleware_host_header_2 = __toESM(require_middleware_host_header_2()
 var import_middleware_endpoint = __toESM(require_middleware_endpoint());
 var import_retry_2 = __toESM(require_retry());
 var import_client = __toESM(require_client());
-//@ chunk-heg39xxp.js:884-910 esm-layout
+//@ chunk-539esr4f.js:884-910 esm-layout
 var import_core_2 = __toESM(require_core_2());
 var import_util_middleware = __toESM(require_util_middleware());
-//@ chunk-heg39xxp.js:910-1103 esm-fingerprint
+//@ chunk-539esr4f.js:910-1103 esm-fingerprint
 var defaultSTSHttpAuthSchemeParametersProvider = async (config, context, input) => ({
   operation: import_util_middleware.getSmithyContext(context).operation,
   region:
@@ -49,7 +49,7 @@ var defaultSTSHttpAuthSchemeParametersProvider = async (config, context, input) 
       throw Error("expected `region` to be configured for `aws.auth#sigv4`");
     })(),
 });
-//@ chunk-heg39xxp.js:1103-1269 esm-fingerprint
+//@ chunk-539esr4f.js:1103-1269 esm-fingerprint
 function createAwsAuthSigv4HttpAuthOption(authParameters) {
   return {
     schemeId: "aws.auth#sigv4",
@@ -65,13 +65,13 @@ function createAwsAuthSigv4HttpAuthOption(authParameters) {
     }),
   };
 }
-//@ chunk-heg39xxp.js:1269-1320 esm-fingerprint
+//@ chunk-539esr4f.js:1269-1320 esm-fingerprint
 function createSmithyApiNoAuthHttpAuthOption(authParameters) {
   return {
     schemeId: "smithy.api#noAuth",
   };
 }
-//@ chunk-heg39xxp.js:1320-1681 esm-fingerprint
+//@ chunk-539esr4f.js:1320-1681 esm-fingerprint
 var defaultSTSHttpAuthSchemeProvider = (authParameters) => {
   let options = [];
   switch (authParameters.operation) {
@@ -99,9 +99,9 @@ var resolveHttpAuthSchemeConfig = (config) => {
     authSchemePreference: import_util_middleware.normalizeProvider(config.authSchemePreference ?? []),
   });
 };
-//@ chunk-a8ee6x44.js:763-1925 cjs-require-graph
+//@ chunk-brqnbz3r.js:763-1925 cjs-require-graph
 var require_httpAuthSchemeProvider; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-a8ee6x44.js:763", () => {
+deferInit("chunk-brqnbz3r.js:763", () => {
   require_httpAuthSchemeProvider = __commonJS(function (cjsExports) {
     Object.defineProperty(cjsExports, "__esModule", {
       value: true,

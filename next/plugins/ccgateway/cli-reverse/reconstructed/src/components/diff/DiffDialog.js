@@ -3,9 +3,9 @@
  *
  * /diff 对话框：当前工作区 diff 与每回合 diff（turn）切换，文件列表与详情两级视图。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/diff/DiffDialog.tsx
- * pieces: chunk-mtx4csef.js (7)
+ * pieces: chunk-r1fypyw9.js (7)
  * attribution: placement 4, fingerprint 3
  */
 import {
@@ -37,9 +37,9 @@ import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
 import { Tab, Tabs } from "../design-system/Tabs.js";
 import { Dialog } from "../design-system/Dialog.js";
 
-//@ chunk-mtx4csef.js:17021-17036 placement
+//@ chunk-r1fypyw9.js:18197-18212 placement
 function noop() {}
-//@ chunk-mtx4csef.js:17036-17102 placement
+//@ chunk-r1fypyw9.js:18212-18278 placement
 function renderFileItem(file) {
   return jsxProd_default(
     merged.Item,
@@ -51,9 +51,9 @@ function renderFileItem(file) {
     file.path,
   );
 }
-//@ chunk-mtx4csef.js:17102-17111 placement
+//@ chunk-r1fypyw9.js:18278-18287 placement
 var DIFF_LIST_VISIBLE_COUNT = 7;
-//@ chunk-mtx4csef.js:17111-17588 placement
+//@ chunk-r1fypyw9.js:18287-18764 placement
 /**
  * /diff 对话框的变更文件列表；没有文件时显示 “No changed files”。
  */
@@ -102,14 +102,14 @@ function DiffFileList(props) {
   } else list = $[8];
   return list;
 }
-//@ chunk-mtx4csef.js:19087-19131 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-r1fypyw9.js:20263-20307 fingerprint (2.1.88 match: _temp, 1)
 function turnDiffEntry(turn) {
   return {
     type: "turn",
     turn,
   };
 }
-//@ chunk-mtx4csef.js:19131-19619 fingerprint (2.1.88 match: turnDiffToDiffData, 0.851)
+//@ chunk-r1fypyw9.js:20307-20795 fingerprint (2.1.88 match: turnDiffToDiffData, 0.851)
 function turnDiffToDiffData(turn) {
   let files = Array.from(turn.files.values())
     .map((file) => ({
@@ -139,7 +139,7 @@ function turnDiffToDiffData(turn) {
     baseMode: "auto",
   };
 }
-//@ chunk-mtx4csef.js:19619-25927 fingerprint (2.1.88 match: DiffDialog, 0.557)
+//@ chunk-r1fypyw9.js:20795-27103 fingerprint (2.1.88 match: DiffDialog, 0.557)
 function DiffDialog(props) {
   let $ = useMemoCache(83);
   let { messages, onDone } = props;

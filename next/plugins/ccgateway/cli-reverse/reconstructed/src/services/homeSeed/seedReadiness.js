@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：等待云会话读取已推送设置
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mxpjbr4y.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s1cmamfh.js (10)
  * attribution: placement 10
  */
 import { LANE_REQUEST_TIMEOUT_MS, canUseSyncedFileLane } from "./syncedFileLane.js";
@@ -22,7 +22,7 @@ import { extractRestrictivePermissions } from "../../utils/permissions/permissio
 import { HOME_SEED_PARTIAL_REASONS } from "./notices.js";
 import { capitalize } from "../../utils/stringUtils.js";
 
-//@ chunk-mxpjbr4y.js:10234-11346 placement
+//@ chunk-s1cmamfh.js:10413-11525 placement
 /**
  * 等待云端会话确认已读取推送的设置（ready 状态），超时后给出说明。
  */
@@ -110,7 +110,7 @@ async function awaitSeedReadiness({
     signal?.removeEventListener("abort", onAbort);
   }
 }
-//@ chunk-mxpjbr4y.js:11346-12169 placement
+//@ chunk-s1cmamfh.js:11525-12348 placement
 async function pollSeedStatus({ client, pack, generation, uploaded, signal, onRead }) {
   let seedStatus = parseSeedStatus(await client.getStoreRow(joined_6, signal));
   switch (seedStatus.kind) {
@@ -176,7 +176,7 @@ async function pollSeedStatus({ client, pack, generation, uploaded, signal, onRe
     }
   }
 }
-//@ chunk-mxpjbr4y.js:12169-12472 placement
+//@ chunk-s1cmamfh.js:12348-12651 placement
 function parseSeedStatus(storeRow) {
   switch (storeRow.kind) {
     case "ok": {
@@ -208,7 +208,7 @@ function parseSeedStatus(storeRow) {
       };
   }
 }
-//@ chunk-mxpjbr4y.js:12472-12536 placement
+//@ chunk-s1cmamfh.js:12651-12715 placement
 /**
  * 解出的包里是否带 settings。
  */
@@ -216,7 +216,7 @@ function packHasSettings(pack) {
   let decoded = decodeHomePack(pack);
   return decoded.ok && decoded.pack.settings !== null;
 }
-//@ chunk-mxpjbr4y.js:12536-12705 placement
+//@ chunk-s1cmamfh.js:12715-12884 placement
 function isPartialWithRestrictiveRules(ready, generation, pack) {
   if (ready?.generation !== generation || ready.outcome !== "partial" || ready.settingsWritten) return false;
   let readyGeneration = decodeHomePack(pack);
@@ -226,14 +226,14 @@ function isPartialWithRestrictiveRules(ready, generation, pack) {
     extractRestrictivePermissions(readyGeneration.pack.settings) !== null
   );
 }
-//@ chunk-mxpjbr4y.js:12705-12789 placement
+//@ chunk-s1cmamfh.js:12884-12968 placement
 /**
  * 判断应用是否“部分成功但没有应用任何内容”。
  */
 function isApplyWithoutEffect(ready) {
   return ready.outcome === "partial" && ready.filesApplied === 0 && !ready.settingsWritten;
 }
-//@ chunk-mxpjbr4y.js:12789-13021 placement
+//@ chunk-s1cmamfh.js:12968-13200 placement
 function isSendOutcomeSettled(outcome) {
   switch (outcome) {
     case "sent":
@@ -251,7 +251,7 @@ function isSendOutcomeSettled(outcome) {
       return false;
   }
 }
-//@ chunk-mxpjbr4y.js:13021-13162 placement
+//@ chunk-s1cmamfh.js:13200-13341 placement
 function getPartialApplyKind(ready, generation, readyState) {
   if (ready === null || ready.outcome !== "partial") return null;
   return !readyState && ready.filesRefused > 0
@@ -260,7 +260,7 @@ function getPartialApplyKind(ready, generation, readyState) {
       ? "settings"
       : "part";
 }
-//@ chunk-mxpjbr4y.js:13162-14382 placement
+//@ chunk-s1cmamfh.js:13341-14561 placement
 function seedReadinessNotice(verdict, outcome, partialKind, onlyRest, rulesMissing) {
   let subject = onlyRest ? "the rest of your settings" : "your settings";
   let reasonSuffix = partialKind === null ? "" : ` (${HOME_SEED_PARTIAL_REASONS[partialKind]})`;
@@ -308,7 +308,7 @@ function seedReadinessNotice(verdict, outcome, partialKind, onlyRest, rulesMissi
       };
   }
 }
-//@ chunk-mxpjbr4y.js:14382-14404 placement
+//@ chunk-s1cmamfh.js:14561-14583 placement
 /**
  * 等待 seed 就绪的超时（30 秒）。
  */

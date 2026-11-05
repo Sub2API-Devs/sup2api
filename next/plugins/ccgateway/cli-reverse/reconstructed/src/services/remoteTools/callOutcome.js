@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程调用结果解析：信封（result/answer/refused）、迟到结果、调用账本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qmsrnapp.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5vfqv7sk.js (15)
  * attribution: placement 15
  */
 import { logForDebugging } from "../../utils/debug.js";
@@ -18,18 +18,18 @@ import { toError } from "../../utils/errors.js";
 import { isRanOutcome } from "../../remote/tools/protocolConstants.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-qmsrnapp.js:9616-9739 placement
+//@ chunk-5vfqv7sk.js:9835-9958 placement
 function isRefusedDrop(outcome) {
   if (outcome.kind !== "dropped") return false;
   let envelope = outcome.reported?.envelope;
   return envelope?.outcome === "refused" && envelope.code === "unbound";
 }
-//@ chunk-qmsrnapp.js:9739-9811 placement
+//@ chunk-5vfqv7sk.js:9958-10030 placement
 var NON_RETRYABLE_REFUSALS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-qmsrnapp.js:9739", () => {
+deferInit("chunk-5vfqv7sk.js:9958", () => {
   NON_RETRYABLE_REFUSALS = new Set(["invalid_request", "unsupported_protocol", "not_served"]);
 });
-//@ chunk-qmsrnapp.js:9811-10606 placement
+//@ chunk-5vfqv7sk.js:10030-10825 placement
 /**
  * 解析远程调用信封（envelope）：result/answer/refused/in_progress/unknown_call 等，转为统一结局。
  */
@@ -101,13 +101,13 @@ function interpretCallOutcome(transported, dispatchEpoch) {
       };
   }
 }
-//@ chunk-qmsrnapp.js:10606-10697 placement
+//@ chunk-5vfqv7sk.js:10825-10916 placement
 function hostEpochOf(envelope) {
   return envelope.outcome === "refused" || envelope.outcome === "in_progress"
     ? envelope.host_epoch
     : undefined;
 }
-//@ chunk-qmsrnapp.js:10697-10932 placement
+//@ chunk-5vfqv7sk.js:10916-11151 placement
 function isTransportFailure(outcome) {
   switch (outcome.kind) {
     case "dropped":
@@ -124,7 +124,7 @@ function isTransportFailure(outcome) {
       return false;
   }
 }
-//@ chunk-qmsrnapp.js:10932-11018 placement
+//@ chunk-5vfqv7sk.js:11151-11237 placement
 /**
  * 远程调用账本的保留上限常量（条目数、待发更正数、每轮追问数、放弃保留时长、子代理更正前缀等）。
  */
@@ -135,23 +135,23 @@ var GIVEN_UP_RETENTION_MS = 600000;
 var STILL_RUNNING_GRACE_MS = 30000;
 var SUBAGENT_CORRECTION_STALE_MS = 300000;
 var SUBAGENT_EARLIER_WORK_PREFIX = "In a subagent's earlier work: ";
-//@ chunk-qmsrnapp.js:11018-14792 placement
+//@ chunk-5vfqv7sk.js:11237-15011 placement
 /**
  * 每个会话的远程调用账本：记录已放弃/未确认的调用，以便之后对端回来时追问结局并补发更正说明。
  */
 class RemoteCallLedger {
   now;
   #e = new Map();
-  #t = [];
-  #n = createSignal();
+  #n = [];
+  #t = createSignal();
   constructor(now = Date.now) {
     this.now = now;
   }
   onLastWordQueued(listener) {
-    return this.#n.subscribe(listener);
+    return this.#t.subscribe(listener);
   }
   lastWordWaitsForMain() {
-    return this.#t.some((line) => line.agentId === undefined && line.toldAs === undefined);
+    return this.#n.some((line) => line.agentId === undefined && line.toldAs === undefined);
   }
   mainCallOpenOn(hostName) {
     for (let entry of this.#e.values())
@@ -225,7 +225,7 @@ class RemoteCallLedger {
   }
   forget(callId) {
     this.#e.delete(callId);
-    this.#t = this.#t.filter((line) => line.callId !== callId);
+    this.#n = this.#n.filter((line) => line.callId !== callId);
   }
   dueForQuery(cutoff, stillWanted, wanted) {
     this.#s();
@@ -309,7 +309,7 @@ class RemoteCallLedger {
             : askedOutcomeMessage(entry, verdict);
         let finalAnswer = verdict.kind !== "still_running" && message !== undefined;
         let alreadyTold =
-          !finalAnswer && this.#t.some((line) => line.callId === callId && line.toldAs === "still_running");
+          !finalAnswer && this.#n.some((line) => line.callId === callId && line.toldAs === "still_running");
         if (message !== undefined && !alreadyTold)
           this.#r(entry, message, "record", finalAnswer ? undefined : "still_running");
         if (finalAnswer) {
@@ -342,8 +342,8 @@ class RemoteCallLedger {
       line.agentId !== undefined &&
       now - line.at > SUBAGENT_CORRECTION_STALE_MS;
     let belongs = (line) => line.agentId === agentId || isStaleSubagentLine(line);
-    let filtered = this.#t.filter(belongs);
-    this.#t = this.#t.filter((line) => !belongs(line));
+    let filtered = this.#n.filter(belongs);
+    this.#n = this.#n.filter((line) => !belongs(line));
     for (let line of filtered) this.#o(line);
     return filtered.map((line) =>
       isStaleSubagentLine(line) ? `${SUBAGENT_EARLIER_WORK_PREFIX}${line.line}` : line.line,
@@ -358,12 +358,12 @@ class RemoteCallLedger {
       });
   }
   #r(entry, line, source, toldAs) {
-    this.#t = this.#t.filter((line) => line.callId !== entry.callId);
-    if (this.#t.length >= MAX_PENDING_CORRECTIONS) {
-      let dropped = this.#t.shift();
+    this.#n = this.#n.filter((line) => line.callId !== entry.callId);
+    if (this.#n.length >= MAX_PENDING_CORRECTIONS) {
+      let dropped = this.#n.shift();
       if (dropped !== undefined) this.#o(dropped);
     }
-    this.#t.push({
+    this.#n.push({
       callId: entry.callId,
       agentId: entry.agentId,
       line,
@@ -377,7 +377,7 @@ class RemoteCallLedger {
     });
     if (toldAs === undefined)
       try {
-        this.#n.emit(entry.agentId);
+        this.#t.emit(entry.agentId);
       } catch (error) {
         logError(toError(error));
       }
@@ -394,7 +394,7 @@ class RemoteCallLedger {
       }
   }
 }
-//@ chunk-qmsrnapp.js:14792-14895 placement
+//@ chunk-5vfqv7sk.js:15011-15114 placement
 function evictOldest(map, maxSize) {
   while (map.size >= maxSize) {
     let oldestKey = map.keys().next().value;
@@ -403,7 +403,7 @@ function evictOldest(map, maxSize) {
   }
   return map;
 }
-//@ chunk-qmsrnapp.js:14895-15565 placement
+//@ chunk-5vfqv7sk.js:15114-15784 placement
 function givenUpCallPreamble(givenUp) {
   let reasonText = {
     host_unresponsive:
@@ -417,7 +417,7 @@ function givenUpCallPreamble(givenUp) {
   }[givenUp.toldAs];
   return `Correction: the earlier ${givenUp.toolName} call on ${givenUp.hostName} \u2014 ${givenUp.spelled} \u2014 ${reasonText}.`;
 }
-//@ chunk-qmsrnapp.js:15565-16743 placement
+//@ chunk-5vfqv7sk.js:15784-16962 placement
 /**
  * 远程调用「无法完成」的原因短语表：拒绝类（hook 拦下、规则拒绝、用户拒绝等）与不可服务类（协议不符、未提供工具、会话失效等）。
  */
@@ -447,11 +447,11 @@ var CANNOT_FULFILL_PHRASES = {
   rate_limited: "this session was sending it calls too fast",
   withdrawn: "its pending approval request was withdrawn",
 };
-//@ chunk-qmsrnapp.js:16743-16870 placement
+//@ chunk-5vfqv7sk.js:16962-17089 placement
 function checkEffectsAdvice(call) {
   return `Check its effects on ${call.hostName} with a read-only command there before relying on it or repeating it.`;
 }
-//@ chunk-qmsrnapp.js:16870-17185 placement
+//@ chunk-5vfqv7sk.js:17089-17404 placement
 /**
  * 迟到的远程调用结果说明：可能已部分执行的提示，以及取消、超时、工具错误、内部错误的原因文字。
  */
@@ -463,7 +463,7 @@ var LATE_OUTCOME_REASONS = {
   internal_error: "it failed there",
   unrecognized: "it failed there",
 };
-//@ chunk-qmsrnapp.js:17185-18144 placement
+//@ chunk-5vfqv7sk.js:17404-18363 placement
 function lateOutcomeMessage(givenUp, transported) {
   if (transported.kind !== "result" || transported.envelope === undefined) return;
   let { envelope } = transported;
@@ -495,7 +495,7 @@ function lateOutcomeMessage(givenUp, transported) {
       return;
   }
 }
-//@ chunk-qmsrnapp.js:18144-18262 placement
+//@ chunk-5vfqv7sk.js:18363-18481 placement
 function isDuplicateCompleted(transported) {
   return (
     transported.kind === "result" &&
@@ -503,7 +503,7 @@ function isDuplicateCompleted(transported) {
     transported.envelope.disposition === "duplicate_call"
   );
 }
-//@ chunk-qmsrnapp.js:18262-19087 placement
+//@ chunk-5vfqv7sk.js:18481-19306 placement
 function askedOutcomeMessage(givenUp, outcome) {
   let preamble = givenUpCallPreamble(givenUp);
   switch (outcome.kind) {
@@ -526,4 +526,4 @@ function askedOutcomeMessage(givenUp, outcome) {
       return;
   }
 }
-export { interpretCallOutcome, RemoteCallLedger, isTransportFailure, hostEpochOf, isRefusedDrop };
+export { RemoteCallLedger, isTransportFailure, interpretCallOutcome, hostEpochOf, isRefusedDrop };

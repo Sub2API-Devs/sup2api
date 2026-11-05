@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：判断路径为本地、网络或无法检查；网络路径拒绝说明等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-t0gq9gyw.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-85eyj5gy.js (8)
  * attribution: placement 8
  */
 import { isAbsolute, parse, normalize, dirname, sep } from "path";
@@ -16,20 +16,20 @@ import { isUncOrNetworkSpelling, classifyHomeMount } from "../networkPaths.js";
 import { hasDotDotSegment } from "../pathClassification.js";
 import { getErrnoCode } from "../errors.js";
 
-//@ chunk-t0gq9gyw.js:5782-5822 placement
+//@ chunk-85eyj5gy.js:5852-5892 placement
 /**
  * 路径是否为网络路径。
  */
 function isNetworkPath(value) {
   return sanitizeDisplayChars(stripVariationSelectors(stripCombiningRepeated(value)), false);
 }
-//@ chunk-t0gq9gyw.js:5961-5971 placement
+//@ chunk-85eyj5gy.js:6031-6041 placement
 var MAX_SYMLINK_HOPS = 40;
-//@ chunk-t0gq9gyw.js:5971-6020 placement (2.1.88 match: getUnameSR, 0.793)
+//@ chunk-85eyj5gy.js:6041-6090 placement (2.1.88 match: getUnameSR, 0.793)
 function getUnameSR(platform) {
   return platform === "win32" ? /[\\/]+/ : /\/+/;
 }
-//@ chunk-t0gq9gyw.js:6020-6360 placement
+//@ chunk-85eyj5gy.js:6090-6430 placement
 /**
  * 网络路径拒绝说明。
  */
@@ -40,11 +40,11 @@ var NETWORK_LINK_MESSAGE =
 var DRIVE_RELATIVE_PATTERN = /^[a-zA-Z]:(?![\\/])/;
 var UNVETTABLE_LINK_MESSAGE =
   "has a link chain that could not be fully checked for network targets; pass the real path of a local file";
-//@ chunk-t0gq9gyw.js:6360-6409 placement (2.1.88 match: chordToDisplayString, 1)
+//@ chunk-85eyj5gy.js:6430-6479 placement (2.1.88 match: chordToDisplayString, 1)
 function isNetworkPath_2(chord, platform = "linux") {
   return isUncOrNetworkSpelling(chord) || classifyHomeMount(chord, platform);
 }
-//@ chunk-t0gq9gyw.js:6409-6641 placement
+//@ chunk-85eyj5gy.js:6479-6711 placement
 async function checkNetworkPath(filePath, platform = "linux") {
   if (!isAbsolute(filePath)) return UNVETTABLE_LINK_MESSAGE;
   if (isNetworkPath_2(filePath, platform)) return NETWORK_PATH_MESSAGE;
@@ -62,9 +62,9 @@ async function checkNetworkPath(filePath, platform = "linux") {
       return;
   }
 }
-//@ chunk-t0gq9gyw.js:6641-6702 placement
+//@ chunk-85eyj5gy.js:6711-6772 placement
 var WIN32_DRIVE_FROM_DEVICE_RE = /^(?:[\\/]{2}[?.]|[\\/]\?\?)[\\/]([A-Za-z]:[\\/].*)$/;
-//@ chunk-t0gq9gyw.js:6702-7930 placement
+//@ chunk-85eyj5gy.js:6772-8000 placement
 /**
  * 判断路径为本地、网络或无法检查。
  */

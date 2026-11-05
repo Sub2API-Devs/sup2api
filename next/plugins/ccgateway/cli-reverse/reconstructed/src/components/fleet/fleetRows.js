@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：会话名单存储：轮询本地/远程会话、待创建项、状态与 PR，提供订阅快照；附加/新建会话控制器（附加中、提升、新会话尝试）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-93kwxas0.js (78)
- * attribution: placement 78
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-avy0g5d4.js (79)
+ * attribution: placement 78, layout 1
  */
 import { writeSync } from "fs";
 import { stat, open } from "fs/promises";
@@ -17,7 +17,7 @@ import { stripControlChars } from "../../utils/settings/writeQueues.js";
 import { errorMessage, classifyAxiosError, isPathAbsent } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
 import { cliError } from "../../cli/exit.js";
-import { getInitialSettings_2, hasSkipDangerousModePermissionPrompt } from "../../utils/settings/settings.js";
+import { getInitialSettings, hasSkipDangerousModePermissionPrompt } from "../../utils/settings/settings.js";
 import {
   permissionModeFromString,
   permissionModeSymbol,
@@ -86,11 +86,12 @@ import {
 } from "../../utils/ghPrStatus.js";
 import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
 import { stripAnsiPerLine } from "../../utils/stripAnsi.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { getProjectDir } from "../../utils/sessionStoragePortable.js";
 import { rankJobNameMatch } from "../../cli/bg/bgDispatch.js";
 import { findCanonicalGitRoot } from "../../utils/git.js";
 import { tildify } from "../../utils/path.js";
+import { countWhere } from "../../utils/collections.js";
 import { requestNudgeOnce } from "./FleetNudgeStore.js";
 import { listAliveDaemonJobs } from "../../daemon/jobs/killJob.js";
 import { listAllLiveSessions } from "../../utils/udsMessaging/udsClient.js";
@@ -103,21 +104,21 @@ import { createSignal } from "../../utils/signal.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { env } from "../../utils/env.js";
 import { logFeatureBad, logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
-import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useState, useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import { getPlatform } from "../../utils/platform.js";
+import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { defaultSetTimeout } from "../../ink/components/ClockContext.js";
-import { getRootSession, getLastInteractionTime } from "../../bootstrap/state.js";
 import { sleep } from "../../utils/sleep.js";
+import { getRootSession, getLastInteractionTime } from "../../bootstrap/state.js";
 import { startClockInterval } from "../../ink/components/Input.js";
 import { isCrossSessionMessagingEnabled } from "../../utils/crossSessionMessagingGate.js";
 import { getTerminalFocused } from "../../ink/terminal-focus-state.js";
 import { takeSpareHandle, markSpareReady } from "../../cli/bg/bgSpare.js";
+import { getPlatform } from "../../utils/platform.js";
 import { clamp } from "../../ink/screen.js";
 import { parsePastedRefs } from "../../history.js";
 
-//@ chunk-93kwxas0.js:8052-8122 placement
+//@ chunk-avy0g5d4.js:8120-8190 placement
 function prepareFatalExit() {
   try {
     claudeTempDir();
@@ -131,7 +132,7 @@ function prepareFatalExit() {
     };
   }
 }
-//@ chunk-93kwxas0.js:8122-8447 placement
+//@ chunk-avy0g5d4.js:8190-8515 placement
 /**
  * Agents 视图致命错误：清理终端模式、打印错误、刷新日志后退出。
  */
@@ -159,12 +160,12 @@ async function reportFatalAndExit(error) {
     suppressResumeHint: true,
   });
 }
-//@ chunk-93kwxas0.js:8447-8908 placement
+//@ chunk-avy0g5d4.js:8515-8976 placement
 /**
  * 计算派发会话的权限模式（继承、bypass 可用性）。
  */
 function resolveDispatchPermissionMode(dispatchDefaults) {
-  let agent = dispatchDefaults?.agent ?? getInitialSettings_2().agent;
+  let agent = dispatchDefaults?.agent ?? getInitialSettings().agent;
   if (!dispatchDefaults && !agent) return;
   let requestedMode = dispatchDefaults?.permissionMode
     ? permissionModeFromString(dispatchDefaults.permissionMode)
@@ -191,7 +192,7 @@ function resolveDispatchPermissionMode(dispatchDefaults) {
     allowBypass,
   };
 }
-//@ chunk-93kwxas0.js:8908-9037 placement
+//@ chunk-avy0g5d4.js:8976-9105 placement
 /**
  * 派发默认值里是否有非默认项（权限模式、模型、effort、agent、bypass）。
  */
@@ -206,7 +207,7 @@ function hasNonDefaultDispatchSettings(defaults) {
     !!defaults.allowBypass
   );
 }
-//@ chunk-93kwxas0.js:9037-9951 placement
+//@ chunk-avy0g5d4.js:9105-10019 placement
 /**
  * 显示派发默认值（权限模式、模型、effort、agent）。
  */
@@ -302,7 +303,7 @@ function DispatchDefaultsLine(props) {
   } else line = $[19];
   return line;
 }
-//@ chunk-93kwxas0.js:9951-10052 placement
+//@ chunk-avy0g5d4.js:10019-10120 placement
 /**
  * 继承来的 bypassPermissions 模式在当前不可用。
  */
@@ -313,17 +314,17 @@ function isInheritedBypassUnavailable(defaults) {
     !isBypassPermissionsAccepted()
   );
 }
-//@ chunk-93kwxas0.js:10052-10099 placement
+//@ chunk-avy0g5d4.js:10120-10167 placement
 function isOtherLocalDaemonJob(job, originJobId) {
   return isLocalDaemonAgent(job.state) && job.id !== originJobId;
 }
-//@ chunk-93kwxas0.js:10099-10175 placement
+//@ chunk-avy0g5d4.js:10167-10243 placement
 function markJobFinished(resultSeen, entryChannel) {
   let channel = entryChannel ?? "unknown";
   resultSeen.entryChannel = fromEnum(channel);
   resultSeen.openFinished = null;
 }
-//@ chunk-93kwxas0.js:10175-10730 placement
+//@ chunk-avy0g5d4.js:10243-10798 placement
 /**
  * 为新完成的会话发出一次性事件。
  */
@@ -348,13 +349,13 @@ function emitFinishedJobs(resultSeen, snapshot, emitEvent = logEvent) {
     });
   }
 }
-//@ chunk-93kwxas0.js:10730-10813 placement
+//@ chunk-avy0g5d4.js:10798-10881 placement
 function parseDateMs(value) {
   if (!value) return null;
   let timestamp = Date.parse(value);
   return Number.isNaN(timestamp) ? null : timestamp;
 }
-//@ chunk-93kwxas0.js:10813-11066 placement
+//@ chunk-avy0g5d4.js:10881-11134 placement
 /**
  * 该会话的运行区间与其他会话重叠。
  */
@@ -370,7 +371,7 @@ function overlapsAnotherJob(job, allCandidates, nowMs) {
     return dateMs < otherTerminalMs && dateMs_2 < terminalMs;
   });
 }
-//@ chunk-93kwxas0.js:11066-11616 placement
+//@ chunk-avy0g5d4.js:11134-11684 placement
 /**
  * 把对等会话记录转换为 job 状态。
  */
@@ -400,7 +401,7 @@ function peerToJobState(peer) {
     pid: peer.pid,
   };
 }
-//@ chunk-93kwxas0.js:11616-11794 placement
+//@ chunk-avy0g5d4.js:11684-11862 placement
 /**
  * 名单轮询间隔：按是否活跃与距上次变化的时间分档。
  */
@@ -415,7 +416,7 @@ function rosterPollInterval(terminalFocused, idleMs) {
   if (idleMs < 3600000) return 900000;
   return 1800000;
 }
-//@ chunk-93kwxas0.js:11830-12217 placement
+//@ chunk-avy0g5d4.js:11898-12285 placement
 /**
  * 查询会话转录文件的存在与修改时间。
  */
@@ -448,7 +449,7 @@ async function statTranscript(filePath, sessionId) {
     mtimeMs: (await stat(filePath)).mtimeMs,
   };
 }
-//@ chunk-93kwxas0.js:12217-12616 placement
+//@ chunk-avy0g5d4.js:12285-12684 placement
 /**
  * 读取会话转录末尾若干字节。
  */
@@ -475,20 +476,20 @@ async function readTranscriptTail(filePath, maxBytes, sessionId) {
   }
   return tailFile(filePath, maxBytes);
 }
-//@ chunk-93kwxas0.js:12652-12742 placement
+//@ chunk-avy0g5d4.js:12720-12810 placement
 var MAX_TAIL_ENTRIES = 7;
 var MAX_SCAN_BYTES = 1048576;
 var TAIL_OVERLAP_BYTES = 16;
 var SCHEDULED_FIRE_MARKER = '"subtype":"scheduled_task_fire"';
 var TIMESTAMP_RE = /"timestamp":"([^"]+)"/;
-//@ chunk-93kwxas0.js:12742-12805 placement
+//@ chunk-avy0g5d4.js:12810-12873 placement
 function emptyScanState() {
   return {
     scanStates: new Map(),
     inFlightScans: new Set(),
   };
 }
-//@ chunk-93kwxas0.js:12805-14321 placement
+//@ chunk-avy0g5d4.js:12873-14389 placement
 /**
  * 增量扫描转录文件尾部（按 inode/偏移缓存）。
  */
@@ -596,13 +597,13 @@ async function scanTranscriptTail(tracker, filePath) {
     inFlightScans.delete(filePath);
   }
 }
-//@ chunk-93kwxas0.js:14321-14407 placement
+//@ chunk-avy0g5d4.js:14389-14475 placement
 function pruneScanStates(tracker, liveKeys) {
   for (let key of tracker.scanStates.keys()) if (!liveKeys.has(key)) tracker.scanStates.delete(key);
 }
-//@ chunk-93kwxas0.js:14407-14416 placement
+//@ chunk-avy0g5d4.js:14475-14484 placement
 var CLOUD_LIST_ATTEMPTS = 2;
-//@ chunk-93kwxas0.js:14416-14714 placement
+//@ chunk-avy0g5d4.js:14484-14782 placement
 /**
  * 云会话列表失败原因：exhausted / no_sign_in / status / no_answer / unknown。
  */
@@ -626,7 +627,7 @@ function classifyCloudListFailure(error) {
         cause: kind === "other" ? "unknown" : "no_answer",
       };
 }
-//@ chunk-93kwxas0.js:14714-14854 placement
+//@ chunk-avy0g5d4.js:14782-14922 placement
 /**
  * 两个列表失败原因是否相同。
  */
@@ -637,7 +638,7 @@ function sameCloudListFailure(previous, next) {
     (previous.cause !== "status" || next.cause !== "status" || previous.status === next.status)
   );
 }
-//@ chunk-93kwxas0.js:14854-15045 placement
+//@ chunk-avy0g5d4.js:14922-15113 placement
 /**
  * 云会话列表失败提示（本构建中恒为 null）。
  */
@@ -652,13 +653,13 @@ function CloudListFailureNotice({ onCloudTab, remoteJobs, remoteListLoaded, remo
     }
   return null;
 }
-//@ chunk-93kwxas0.js:15045-15074 placement
+//@ chunk-avy0g5d4.js:15113-15142 placement
 var REMOTE_ROW_ID_RE = /^remote-[\w-]{1,8}$/;
-//@ chunk-93kwxas0.js:15074-15107 placement
+//@ chunk-avy0g5d4.js:15142-15175 placement
 function isRemoteRowId(id) {
   return REMOTE_ROW_ID_RE.test(id);
 }
-//@ chunk-93kwxas0.js:15107-15211 placement
+//@ chunk-avy0g5d4.js:15175-15279 placement
 /**
  * 会话对应的远程行 id。
  */
@@ -666,7 +667,7 @@ function remoteRowIdOf(fleetRow) {
   if (isRemoteRowId(fleetRow.id)) return fleetRow.id;
   return CCR_SESSION_ID_RE.test(fleetRow.state.sessionId) ? remoteRowId(fleetRow.state.sessionId) : undefined;
 }
-//@ chunk-93kwxas0.js:15211-15319 placement
+//@ chunk-avy0g5d4.js:15279-15387 placement
 /**
  * 会话分组/置顶偏好的 schema（字符串键 → {group, pinned}）。
  */
@@ -679,10 +680,14 @@ var JOB_PREFS_SCHEMA = DoctorLazy(() =>
     }).catch({}),
   ),
 );
-//@ chunk-93kwxas0.js:15319-15365 placement
+//@ chunk-avy0g5d4.js:15387-15417 layout
+function deleteMethodName(backend) {
+  return "delete";
+}
+//@ chunk-avy0g5d4.js:15417-15463 placement
 var PROJECT_SESSION = "project_session";
 var PROJECT_UNKNOWN = "project_unknown";
-//@ chunk-93kwxas0.js:15365-15449 placement
+//@ chunk-avy0g5d4.js:15463-15547 placement
 class ArchiveRejectedError extends Error {
   burst;
   constructor(burst) {
@@ -690,19 +695,19 @@ class ArchiveRejectedError extends Error {
     this.burst = burst;
   }
 }
-//@ chunk-93kwxas0.js:15478-15575 placement
+//@ chunk-avy0g5d4.js:15576-15673 placement
 function withoutMissingKeys(previous, keepKeys) {
   let pruned;
   for (let key of previous.keys()) if (!keepKeys.has(key)) (pruned ??= new Map(previous)).delete(key);
   return pruned ?? previous;
 }
-//@ chunk-93kwxas0.js:15575-15634 placement
+//@ chunk-avy0g5d4.js:15673-15732 placement
 function validChildren(children) {
   return children?.filter((child) => !ANY_CONTROL_CHAR_RE.test(child.href)) ?? [];
 }
-//@ chunk-93kwxas0.js:15634-15648 placement
+//@ chunk-avy0g5d4.js:15732-15746 placement
 var STUCK_AFTER_MS = 180000;
-//@ chunk-93kwxas0.js:15648-16052 placement
+//@ chunk-avy0g5d4.js:15746-16150 placement
 /**
  * 判断会话结果（成功/失败）。
  */
@@ -724,7 +729,7 @@ function jobOutcome(job, prStatuses) {
   if (idleMs < stuckFactor * 15 * 60000) return "slowing";
   return "stuck";
 }
-//@ chunk-93kwxas0.js:16052-16229 placement
+//@ chunk-avy0g5d4.js:16150-16327 placement
 /**
  * 会话 tempo：active/completed/blocked。
  */
@@ -735,7 +740,7 @@ function jobTempo(state, status) {
   if (state.tempo === "blocked" || status === "waiting") return "blocked";
   return "active";
 }
-//@ chunk-93kwxas0.js:16229-16607 placement
+//@ chunk-avy0g5d4.js:16327-16705 placement
 /**
  * Agents 视图分区（review/blocked/working/done）及标题与说明。
  */
@@ -752,11 +757,11 @@ var FLEET_BUCKET_HINTS = {
   working: "Sessions Claude is actively working on \u2014 they keep running even if you close the terminal",
   done: "Finished sessions wait here for you to review",
 };
-//@ chunk-93kwxas0.js:16607-16690 placement
+//@ chunk-avy0g5d4.js:16705-16788 placement
 function terminalTitle(awaitingCount) {
   return awaitingCount > 0 ? `${awaitingCount} awaiting input \xB7 claude agents` : "claude agents";
 }
-//@ chunk-93kwxas0.js:16690-17137 placement
+//@ chunk-avy0g5d4.js:16788-17235 placement
 /**
  * 计算会话所属分区。
  */
@@ -779,24 +784,24 @@ function jobBucket(job, prStatuses, status) {
   if (job.state.tempo === "blocked") return "blocked";
   return "working";
 }
-//@ chunk-93kwxas0.js:17137-17161 placement
+//@ chunk-avy0g5d4.js:17235-17259 placement
 function returnFalse_2(state) {
   return false;
 }
-//@ chunk-93kwxas0.js:17161-17246 placement
+//@ chunk-avy0g5d4.js:17259-17344 placement
 function isFailedSettledJob(state) {
   let outcome = terminalOutcome(state.state);
   return (outcome === "failure" || outcome === "stopped") && isSettled(state) && !isExecLaunch(state);
 }
-//@ chunk-93kwxas0.js:17246-17278 placement
+//@ chunk-avy0g5d4.js:17344-17376 placement
 function jobStatusKey(jobId) {
   return `job:${jobId}`;
 }
-//@ chunk-93kwxas0.js:17278-17369 placement
+//@ chunk-avy0g5d4.js:17376-17467 placement
 function statusForJob(statuses, job) {
   return statuses.get(job.state.resumeSessionId ?? job.state.sessionId) ?? statuses.get(jobStatusKey(job.id));
 }
-//@ chunk-93kwxas0.js:17369-17904 placement
+//@ chunk-avy0g5d4.js:17467-18002 placement
 /**
  * 从转录行提取可预览的文本。
  */
@@ -837,15 +842,15 @@ function transcriptLinePreview(line) {
   } catch {}
   return null;
 }
-//@ chunk-93kwxas0.js:17904-18000 placement
+//@ chunk-avy0g5d4.js:18002-18098 placement
 function stripSystemTags(text) {
   return text.replace(/<(system-reminder|task-notification)>[\s\S]*?(<\/\1>|$)/g, " ");
 }
-//@ chunk-93kwxas0.js:18000-18039 placement
+//@ chunk-avy0g5d4.js:18098-18137 placement
 function isTerminalDetail(detail) {
   return detail === SEED_DETAIL || detail === IDLE_DETAIL;
 }
-//@ chunk-93kwxas0.js:18039-18141 placement
+//@ chunk-avy0g5d4.js:18137-18239 placement
 /**
  * 预览文本去掉标签、特殊字符并压缩空白。
  */
@@ -856,20 +861,20 @@ function stripJobPreviewText(previewText) {
     .replace(/\s+/g, " ")
     .trim();
 }
-//@ chunk-93kwxas0.js:18141-18183 placement
+//@ chunk-avy0g5d4.js:18239-18281 placement
 function jobPreviewText(state, text) {
   return returnFalse_2(state) ? sanitizeAttentionText(text) : stripJobPreviewText(text);
 }
-//@ chunk-93kwxas0.js:18183-18328 placement
+//@ chunk-avy0g5d4.js:18281-18426 placement
 /**
  * 会话可能的 transcript 路径（cwd 与 worktree 各一个）。
  */
 function jobTranscriptPaths(state) {
   let transcriptName = `${state.resumeSessionId ?? state.sessionId}.jsonl`;
   let cwdCandidates = state.worktreePath ? [state.cwd, state.worktreePath] : [state.cwd];
-  return uniq(cwdCandidates.map((cwd) => join(getProjectDir(cwd), transcriptName)));
+  return normalizeCaseForComparison_2(cwdCandidates.map((cwd) => join(getProjectDir(cwd), transcriptName)));
 }
-//@ chunk-93kwxas0.js:18328-18530 placement
+//@ chunk-avy0g5d4.js:18426-18628 placement
 /**
  * 读会话 transcript 尾部，返回最后一行预览文本。
  */
@@ -890,7 +895,7 @@ async function readJobLastLine(job, sessionId) {
     } catch {}
   return "";
 }
-//@ chunk-93kwxas0.js:18530-20650 placement
+//@ chunk-avy0g5d4.js:18628-20701 placement
 /**
  * 按分区/分组布局行（空分区提示、完成折叠）。
  */
@@ -966,7 +971,6 @@ function layoutRows(jobs, groupOf, options) {
       rows,
       doneCount,
       doneFoldHidden: max,
-      foldGroup: "done",
     };
   }
   let needsLauncherHeader =
@@ -1077,7 +1081,6 @@ function layoutRows(jobs, groupOf, options) {
       rows,
       doneCount: pendingEarlier.length,
       doneFoldHidden: hiddenEarlier,
-      foldGroup: EARLIER,
     };
   }
   let hiddenDone = doneCount > doneFoldAt ? doneCount - doneFoldAt : 0;
@@ -1092,10 +1095,9 @@ function layoutRows(jobs, groupOf, options) {
     rows,
     doneCount,
     doneFoldHidden: hiddenDone,
-    foldGroup: "done",
   };
 }
-//@ chunk-93kwxas0.js:20650-20933 placement
+//@ chunk-avy0g5d4.js:20701-20984 placement
 /**
  * 初始焦点行：首个远程会话，或来源会话、earlier 行。
  */
@@ -1108,7 +1110,7 @@ function initialFocusIndex(rows, launcherCwd) {
   let index_2 = rows.findIndex((row) => row.kind === "earlier");
   return index_2 !== -1 && !rows.some((row) => row.kind === "job") ? index_2 : 0;
 }
-//@ chunk-93kwxas0.js:20933-21137 placement
+//@ chunk-avy0g5d4.js:20984-21188 placement
 /**
  * 按搜索得分找最匹配的行。
  */
@@ -1135,14 +1137,14 @@ function bestSearchMatchIndex(rows, query) {
   }
   return bestIndex;
 }
-//@ chunk-93kwxas0.js:21137-21175 placement
+//@ chunk-avy0g5d4.js:21188-21226 placement
 var DONE_CAP_MIN = 3;
 var DONE_CAP_SLACK = 3;
 var DONE_MERGE_WINDOW_MS = 60000;
 var DONE_CAP_RESERVED = 8;
 var DONE_CAP_TITLE_ROWS = 4;
 var DONE_CAP_COMPACT_TITLE_ROWS = 2;
-//@ chunk-93kwxas0.js:21175-21315 placement
+//@ chunk-avy0g5d4.js:21226-21366 placement
 /**
  * 按剩余高度计算已完成分区可显示的行数，不够时用紧凑标题。
  */
@@ -1159,21 +1161,21 @@ function computeDoneCap(termRows, nonDoneRows) {
     compactHeader: true,
   };
 }
-//@ chunk-93kwxas0.js:21315-21397 placement
+//@ chunk-avy0g5d4.js:21366-21448 placement
 function canonicalRepoRoot(state) {
   if (state.backend === "remote") return spawnOrigin(state);
   let origin = spawnOrigin(state);
   return findCanonicalGitRoot(origin) ?? origin;
 }
-//@ chunk-93kwxas0.js:21397-21425 placement
+//@ chunk-avy0g5d4.js:21448-21476 placement
 function shortenPath(group) {
   return tildify(group);
 }
-//@ chunk-93kwxas0.js:21425-21484 placement
+//@ chunk-avy0g5d4.js:21476-21535 placement
 function jobSortKey(state) {
   return state.sortOrder ?? Date.parse(state.createdAt);
 }
-//@ chunk-93kwxas0.js:21484-21610 placement
+//@ chunk-avy0g5d4.js:21535-21661 placement
 /**
  * 排序键：stateSortOrder 或（done 用终止时间，其余用更新时间）。
  */
@@ -1185,7 +1187,7 @@ function jobSortKey_2(state, group) {
     )
   );
 }
-//@ chunk-93kwxas0.js:21610-21764 placement
+//@ chunk-avy0g5d4.js:21661-21815 placement
 /**
  * 会话最近的有效时间戳（终止/首次终止/更新/创建）。
  */
@@ -1197,7 +1199,7 @@ function latestJobTimestamp(state) {
     }
   return 0;
 }
-//@ chunk-93kwxas0.js:21764-22260 placement
+//@ chunk-avy0g5d4.js:21815-22311 placement
 /**
  * 计算已完成会话折叠的位置。
  */
@@ -1215,7 +1217,8 @@ function doneFoldIndex({ done: doneJobs, earlier, doneCap, initialJobId, linkMat
     let time = entry.modified.getTime();
     return mapped.findIndex((jobTime) => time > jobTime);
   });
-  let earlierBefore = (doneIndex) => count(mapped_2, (insertAt) => insertAt !== -1 && insertAt <= doneIndex);
+  let earlierBefore = (doneIndex) =>
+    countWhere(mapped_2, (insertAt) => insertAt !== -1 && insertAt <= doneIndex);
   let max = Math.max(min, doneCap);
   let max_2 = Math.max(
     doneJobs.findIndex((job) => job.id === initialJobId),
@@ -1225,20 +1228,20 @@ function doneFoldIndex({ done: doneJobs, earlier, doneCap, initialJobId, linkMat
   if (totalDone - max < DONE_CAP_SLACK || protectedIndex >= max) return 1 / 0;
   return max;
 }
-//@ chunk-93kwxas0.js:22260-22325 placement
+//@ chunk-avy0g5d4.js:22311-22376 placement
 function sortJobs(jobs) {
   return [...jobs].sort((jobA, jobB) => jobSortKey(jobA.state) - jobSortKey(jobB.state));
 }
-//@ chunk-93kwxas0.js:22325-22339 placement
+//@ chunk-avy0g5d4.js:22376-22390 placement
 var REMOTE_STOP_TTL_MS = 120000;
-//@ chunk-93kwxas0.js:22339-22367 placement
+//@ chunk-avy0g5d4.js:22390-22418 placement
 var POLL_INTERVAL_MS = 2000;
 var STATUS_POLL_MS = 500;
 var LOAD_TIMEOUT_MS = 30000;
-//@ chunk-93kwxas0.js:22367-22386 placement
+//@ chunk-avy0g5d4.js:22418-22437 placement
 var SESSION_IDLE_TTL_MS = 30000;
 var MAX_LIST_FAILURES = 15;
-//@ chunk-93kwxas0.js:22386-23193 placement
+//@ chunk-avy0g5d4.js:22437-23244 placement
 /**
  * 组装 Agents 视图的后端操作（列出 job、存活 daemon 会话、远程会话、中断等）。
  */
@@ -1274,10 +1277,10 @@ function createFleetBackend() {
     watchJobDirOnce: (dir, options) => watchJobDirOnce(dir, options),
   };
 }
-//@ chunk-93kwxas0.js:23193-23214 placement
+//@ chunk-avy0g5d4.js:23244-23265 placement
 var EMPTY_ROW_MARK = {};
 var EMPTY_MARKS_MAP = new Map();
-//@ chunk-93kwxas0.js:23214-23488 placement
+//@ chunk-avy0g5d4.js:23265-23539 placement
 /**
  * 名单存储的初始快照。
  */
@@ -1299,7 +1302,7 @@ function createEmptyRosterSnapshot() {
     overlaidLoadLanded: false,
   };
 }
-//@ chunk-93kwxas0.js:23488-37835 placement
+//@ chunk-avy0g5d4.js:23539-37888 placement
 /**
  * 会话名单存储：轮询本地/远程会话、待创建项、状态与 PR，提供订阅快照。
  */
@@ -1310,13 +1313,13 @@ class FleetRoster {
   #t = createEmptyRosterSnapshot();
   #r = null;
   #i = 0;
-  #c = false;
+  #u = false;
   #s = [];
   #a = null;
   #o = 0;
   #m = 0;
   #g = 0;
-  #u = new Set();
+  #c = new Set();
   #d = new Map();
   #S = new Set();
   #k = new Set();
@@ -1372,8 +1375,8 @@ class FleetRoster {
     };
   }
   setRemoteWanted(wanted) {
-    if (wanted === this.#c) return;
-    this.#c = wanted;
+    if (wanted === this.#u) return;
+    this.#u = wanted;
     if (this.#i === 0) return;
     if (wanted) this.#L();
     else {
@@ -1396,12 +1399,12 @@ class FleetRoster {
       startClockInterval(
         view,
         () => {
-          this.#c;
+          this.#u;
         },
         POLL_INTERVAL_MS,
       ),
     );
-    if (this.#c) this.#L();
+    if (this.#u) this.#L();
   }
   #L() {
     if (!this.#r) return;
@@ -1461,7 +1464,7 @@ class FleetRoster {
     return this.#t.jobs;
   }
   isDeleting(jobId) {
-    return this.#u.has(jobId);
+    return this.#c.has(jobId);
   }
   deleteRefusalOf = (jobId) => this.#t.deleteRefusals.get(jobId);
   isDeletingSession(sessionId) {
@@ -1514,7 +1517,7 @@ class FleetRoster {
   optimistic = (update, deletingJobId, holdJobId) => {
     this.#m = ++this.#o;
     if (deletingJobId) {
-      this.#u.add(deletingJobId);
+      this.#c.add(deletingJobId);
       let found = this.#t.jobs?.find((job) => job.id === deletingJobId);
       if (found) {
         let filtered = [found.state.sessionId, found.state.resumeSessionId].filter((sessionId) =>
@@ -1530,7 +1533,7 @@ class FleetRoster {
       ? () => {
           if (deletingJobId) {
             this.#m = ++this.#o;
-            this.#u.delete(deletingJobId);
+            this.#c.delete(deletingJobId);
             for (let sessionId of this.#d.get(deletingJobId) ?? []) this.#S.delete(sessionId);
             this.#d.delete(deletingJobId);
           }
@@ -1578,7 +1581,7 @@ class FleetRoster {
   seedJobs(jobs) {
     this.updateJobs((previous) => {
       let mapped = jobs
-        .filter((job) => !this.#u.has(job.id))
+        .filter((job) => !this.#c.has(job.id))
         .map((job) => ({
           ...job,
           activity: jobOutcome(job.state),
@@ -1648,7 +1651,7 @@ class FleetRoster {
       await this.#e.adoptRosterOrphans(listed ?? [], daemonListing.records, this.#n),
       daemonListing.shorts,
     )
-      .filter((job) => !this.#u.has(job.id))
+      .filter((job) => !this.#c.has(job.id))
       .map((job) => ({
         ...job,
         activity: jobOutcome(job.state, this.#t.prStatuses),
@@ -1743,7 +1746,7 @@ class FleetRoster {
         });
       }
     }
-    let childUrls = uniq(
+    let childUrls = normalizeCaseForComparison_2(
       mapped.flatMap((job) =>
         validChildren(job.state.children)
           .filter((child) => child.kind !== "frame")
@@ -1810,7 +1813,7 @@ class FleetRoster {
       this.#F((cache) => withoutMissingKeys(cache, liveUrls));
       if (mapped.length > 0) {
         let deleteRefusals = this.#t.deleteRefusals;
-        let activeDeleting = new Set(this.#u);
+        let activeDeleting = new Set(this.#c);
         for (let job of mapped) {
           if (!deleteRefusals.has(job.id)) continue;
           if (isSettled(job.state)) {
@@ -2152,7 +2155,7 @@ class FleetRoster {
     this.updateRemoteJobs((jobs) => jobs.filter((row) => row.id !== job.id));
     let burst = (this.#_ ??= {
       left: 0,
-      deleted: 0,
+      archived: 0,
       failed: new Map(),
       pausedRoutines: 0,
       mayStillRun: false,
@@ -2174,7 +2177,7 @@ class FleetRoster {
         source: lit("fleet"),
         jobSessionId: sanitizeMarkName(sessionId),
       });
-      burst.deleted++;
+      burst.archived++;
       burst.failed.delete(job.id);
     } catch (error) {
       burst.failed.set(job.id, failureCode);
@@ -2203,13 +2206,13 @@ class FleetRoster {
     return {
       ...rest,
       failed: failed.size,
-      ofProject: count(failureCodes, (code) => code === PROJECT_SESSION),
-      maybeOfProject: count(failureCodes, (code) => code === PROJECT_UNKNOWN),
+      ofProject: countWhere(failureCodes, (code) => code === PROJECT_SESSION),
+      maybeOfProject: countWhere(failureCodes, (code) => code === PROJECT_UNKNOWN),
     };
   }
   async renameRemote(job, sessionId, title) {}
 }
-//@ chunk-93kwxas0.js:37835-38080 placement
+//@ chunk-avy0g5d4.js:37888-38133 placement
 /**
  * 取或创建这次访问的 FleetRoster；storageV5 不同时报错并保留原实例。
  */
@@ -2227,10 +2230,10 @@ function ensureFleetRoster(visit, storageV5) {
     storageV5,
   }));
 }
-//@ chunk-93kwxas0.js:38080-38102 placement
+//@ chunk-avy0g5d4.js:38133-38155 placement
 var HOVER_POLL_MS = 100;
 var EMPTY_SET = new Set();
-//@ chunk-93kwxas0.js:38102-38215 placement
+//@ chunk-avy0g5d4.js:38155-38268 placement
 /**
  * 选择状态初始值（焦点、折叠、完成上限等）。
  */
@@ -2244,7 +2247,7 @@ function createInitialSelectionState(collapsed) {
     followOrigin: null,
   };
 }
-//@ chunk-93kwxas0.js:38215-38363 placement
+//@ chunk-avy0g5d4.js:38268-38416 placement
 /**
  * 旧格式的折叠键补上 state:/directory: 前缀。
  */
@@ -2258,7 +2261,7 @@ function normalizeCollapsedKeys(collapsed) {
     ),
   );
 }
-//@ chunk-93kwxas0.js:38363-43414 placement
+//@ chunk-avy0g5d4.js:38416-43467 placement
 /**
  * 附加/新建会话控制器（附加中、提升、新会话尝试）。
  */
@@ -2269,13 +2272,13 @@ class FleetAttachController {
   #t;
   #r = 0;
   #i = null;
-  #c = null;
+  #u = null;
   #s = null;
   #a = [];
   #o = false;
   #m = new Map();
   #g = new Map();
-  #u = null;
+  #c = null;
   #d = [];
   #S = 0;
   #k = null;
@@ -2318,7 +2321,7 @@ class FleetAttachController {
   attachView(view) {
     this.#r++;
     this.#i = view.clock;
-    this.#c = view.onError;
+    this.#u = view.onError;
     let detached = false;
     return () => {
       if (detached) return;
@@ -2328,15 +2331,15 @@ class FleetAttachController {
     };
   }
   #x() {
-    this.#u?.();
-    this.#u = null;
+    this.#c?.();
+    this.#c = null;
     let pendingReleases = this.#d;
     this.#d = [];
     this.#I().finally(() => {
       for (let release of pendingReleases) release();
     });
     this.#i = null;
-    this.#c = null;
+    this.#u = null;
     this.followId = null;
     this.followOrigin = null;
     this.#a = [];
@@ -2525,10 +2528,10 @@ class FleetAttachController {
       target.set(jobId, order);
       this.#d.push(this.#n.holdJob(jobId));
     }
-    this.#u?.();
+    this.#c?.();
     let setTimeoutFn = this.#i?.setTimeout ?? defaultSetTimeout;
-    this.#u = setTimeoutFn(() => {
-      this.#u = null;
+    this.#c = setTimeoutFn(() => {
+      this.#c = null;
       this.#n.bumpGen();
       let releases = this.#d;
       this.#d = [];
@@ -2556,7 +2559,7 @@ class FleetAttachController {
       })
       .catch((error) => {
         logError(error);
-        this.#c?.(`Couldn't save order \u2014 ${errorMessage(error)}`);
+        this.#u?.(`Couldn't save order \u2014 ${errorMessage(error)}`);
         logFeatureBad("fleet_view_reorder_job", "write_sort_order_failed");
       });
   }
@@ -2628,7 +2631,7 @@ class FleetAttachController {
     return true;
   }
 }
-//@ chunk-93kwxas0.js:43414-43499 placement
+//@ chunk-avy0g5d4.js:43467-43552 placement
 function ensureFleetSelection(visit, roster, storageV5, collapsed) {
   return (visit.selection ??= new FleetAttachController({
     roster,
@@ -2636,9 +2639,9 @@ function ensureFleetSelection(visit, roster, storageV5, collapsed) {
     collapsed,
   }));
 }
-//@ chunk-93kwxas0.js:43499-43514 placement
+//@ chunk-avy0g5d4.js:43552-43567 placement
 var EMPTY_WARMING_SET = new Set();
-//@ chunk-93kwxas0.js:43514-43591 placement
+//@ chunk-avy0g5d4.js:43567-43644 placement
 function initialLiveStatus() {
   return {
     attachingJobId: null,
@@ -2646,7 +2649,7 @@ function initialLiveStatus() {
     autoOpened: false,
   };
 }
-//@ chunk-93kwxas0.js:43591-45557 placement
+//@ chunk-avy0g5d4.js:43644-45610 placement
 /**
  * 会话实时状态存储（预热中的 job 等）。
  */
@@ -2660,13 +2663,13 @@ class FleetLiveStatusStore {
   #t = new Map();
   #r = null;
   #i = 0;
-  #c = 0;
+  #u = 0;
   #s = null;
   #a = null;
   #o = null;
   #m = 0;
   #g = null;
-  #u = new Set();
+  #c = new Set();
   getSnapshot = () => this.#e;
   subscribe = (listener) => this.#n.subscribe(listener);
   #d(patch) {
@@ -2695,12 +2698,12 @@ class FleetLiveStatusStore {
       if (this.#l === 0) {
         this.#r = null;
         this.#i++;
-        this.#c++;
+        this.#u++;
         this.#s = null;
         this.#a = null;
         this.#o = null;
         this.#g = null;
-        this.#u.clear();
+        this.#c.clear();
         this.#e = {
           ...this.#e,
           ...initialLiveStatus(),
@@ -2781,25 +2784,25 @@ class FleetLiveStatusStore {
     this.#g = jobId;
   }
   isPromoting(jobId) {
-    return this.#u.has(jobId);
+    return this.#c.has(jobId);
   }
   beginPromote(jobId) {
-    this.#u.add(jobId);
+    this.#c.add(jobId);
   }
   endPromote(jobId) {
-    this.#u.delete(jobId);
+    this.#c.delete(jobId);
   }
   releasePromoted(jobIds) {
-    for (let jobId of this.#u) if (jobIds.has(jobId)) this.#u.delete(jobId);
+    for (let jobId of this.#c) if (jobIds.has(jobId)) this.#c.delete(jobId);
   }
   beginNewSession() {
     this.#d({
       newSessionOpening: true,
     });
-    return ++this.#c;
+    return ++this.#u;
   }
   isCurrentNewSessionAttempt(attempt) {
-    return this.#c === attempt;
+    return this.#u === attempt;
   }
   endNewSession() {
     this.#d({
@@ -2807,7 +2810,7 @@ class FleetLiveStatusStore {
     });
   }
   abandonNewSession() {
-    this.#c++;
+    this.#u++;
     this.#d({
       newSessionOpening: false,
     });
@@ -2818,11 +2821,11 @@ class FleetLiveStatusStore {
     });
   }
 }
-//@ chunk-93kwxas0.js:45557-45597 placement
+//@ chunk-avy0g5d4.js:45610-45650 placement
 function ensureFleetLiveStatus(visit) {
   return (visit.attach ??= new FleetLiveStatusStore());
 }
-//@ chunk-93kwxas0.js:45597-45837 placement
+//@ chunk-avy0g5d4.js:45650-45890 placement
 /**
  * 删除不再被任何消息引用的粘贴内容（默认只删图片）。
  */
@@ -2877,6 +2880,7 @@ export {
   isFailedSettledJob,
   statTranscript,
   stripJobPreviewText,
+  deleteMethodName,
   shortenPath,
   FLEET_BUCKET_HINTS,
   hasNonDefaultDispatchSettings,

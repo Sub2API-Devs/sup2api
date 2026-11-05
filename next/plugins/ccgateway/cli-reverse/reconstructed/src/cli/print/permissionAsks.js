@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：未答复权限请求的等待、拒绝与丢失调用说明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (7)
  * attribution: placement 7
  */
 import { isUnicodeIdentifier } from "../../utils/sanitization.js";
@@ -14,13 +14,13 @@ import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { createAttachmentMessage_2 as createAttachmentMessage } from "../../utils/debug.js";
 import { findUnresolvedToolUsesInTranscript } from "../../utils/sessionStorage.js";
 import { logError } from "../../utils/log.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { TOOLU_PLUGIN } from "../../plugins/functionHooks/toolCallHooks.js";
 import { isTerminalShutdown } from "../../utils/terminalShutdown.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { safeCallback } from "./proactivityControl.js";
 
-//@ chunk-tyg7f3ek.js:83041-84169 placement
+//@ chunk-0yw3taqg.js:106450-107578 placement
 function describeUnsentServedCalls(
   { supersededToolNames, servedCallsNeverSent },
   isKnown,
@@ -50,7 +50,7 @@ function describeUnsentServedCalls(
   if (reduced_2 === 0) return;
   return `${restarted ? `Besides the tool calls answered above, your previous turn had also issued ${reduced_2 === 1 ? "a call that is no longer shown above and that has" : "calls that are no longer shown above and that have"} no result` : `This session restarted during your previous turn. Besides the tool calls answered above, that turn had also issued ${reduced_2 === 1 ? "a call whose result was" : "calls whose results were"} lost to the restart`}: ${mapped.join(", ")} \u2014 ${reduced_2 === 1 ? "it" : "they"} may not have run, or not completely. Check before issuing ${reduced_2 === 1 ? "it" : "them"} again, and decide whether ${reduced_2 === 1 ? "it is" : "they are"} still needed.`;
 }
-//@ chunk-tyg7f3ek.js:84169-84520 placement
+//@ chunk-0yw3taqg.js:107578-107929 placement
 function ccrLostCallsNote(names, holders, handled) {
   let unhandledCallIds = new Set(
     holders
@@ -73,11 +73,11 @@ function ccrLostCallsNote(names, holders, handled) {
       }
     : undefined;
 }
-//@ chunk-tyg7f3ek.js:84520-84833 placement
+//@ chunk-0yw3taqg.js:107929-108242 placement
 var UNANSWERED_PERMISSION_DENIAL =
   "Nobody answered this permission request; the person may be away, so other requests for approval are likely to go unanswered too. Until the person writes again, do not retry the call and do not make other calls that may need approval. Finish what needs no approval, then say what you needed approval for.";
-//@ chunk-tyg7f3ek.js:84833-85119 placement
-function staleCanUseToolRequests(io, mainTranscript, isKnownPending = () => false) {
+//@ chunk-0yw3taqg.js:108242-108459 placement
+function staleCanUseToolRequests(io, mainTranscript) {
   try {
     let pendingPermissionRequests = io.getPendingPermissionRequests();
     let toolUseIds = ({ request }) => (request.subtype === "can_use_tool" ? [request.tool_use_id] : []);
@@ -86,18 +86,16 @@ function staleCanUseToolRequests(io, mainTranscript, isKnownPending = () => fals
       pendingPermissionRequests.flatMap(toolUseIds),
     );
     return pendingPermissionRequests.filter(
-      (request) =>
-        !toolUseIds(request).some((id) => unresolvedToolUsesInTranscript.has(id)) ||
-        (request.request.subtype === "can_use_tool" && isKnownPending(request.request.tool_name)),
+      (request) => !toolUseIds(request).some((id) => unresolvedToolUsesInTranscript.has(id)),
     );
   } catch (error) {
     logError(error);
     return;
   }
 }
-//@ chunk-tyg7f3ek.js:85119-85301 placement
+//@ chunk-0yw3taqg.js:108459-108641 placement
 function denyPermissionRequests(io, requests, message = UNANSWERED_PERMISSION_DENIAL) {
-  return count(requests, ({ request_id: requestId }) =>
+  return countWhere(requests, ({ request_id: requestId }) =>
     io.injectControlResponse({
       type: "control_response",
       response: {
@@ -111,7 +109,7 @@ function denyPermissionRequests(io, requests, message = UNANSWERED_PERMISSION_DE
     }),
   );
 }
-//@ chunk-tyg7f3ek.js:85301-85453 placement
+//@ chunk-0yw3taqg.js:108641-108793 placement
 var PERMISSION_WITHDRAWN_MESSAGE =
   "Permission request withdrawn unanswered: the person pressed Stop, or the session is ending. Do not ask again.";
 var PERMISSION_ANSWER_BACKOFF = {
@@ -119,7 +117,7 @@ var PERMISSION_ANSWER_BACKOFF = {
   most: 2000,
 };
 var PENDING_PERMISSION_ANSWER_GRACE_MS = 5000;
-//@ chunk-tyg7f3ek.js:85453-86501 placement
+//@ chunk-0yw3taqg.js:108793-109843 placement
 /**
  * 轮次结束时等待未答复的 can_use_tool 请求（宽限期），超时则代为拒绝。
  */
@@ -216,7 +214,7 @@ export {
   ccrLostCallsNote,
   awaitPendingPermissionAnswers,
   PENDING_PERMISSION_ANSWER_GRACE_MS,
+  describeUnsentServedCalls,
   staleCanUseToolRequests,
   denyPermissionRequests,
-  describeUnsentServedCalls,
 };

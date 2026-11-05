@@ -3,25 +3,25 @@
  *
  * 2.1.316 新增：shell 环境
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (10)
  * attribution: placement 10
  */
 import { memoizeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { generateProxyEnvVars } from "../../../vendor/@anthropic-ai/sandbox-runtime/dist/sandbox/sandbox-utils.js";
 import { GIT_ENV_VARS_TO_CLEAR } from "../git/gitSafeEnv.js";
 import { DANGEROUS_ENV_NAME_LIST } from "../git/builderGit/gitEnv.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3042318-3042362 placement
+//@ chunk-5xgkngpb.js:3126412-3126456 placement
 var INJECTABLE_ENV_SOURCES = ["settings", "session", "claudeCode"];
-//@ chunk-e6aww6q8.js:3042362-3042421 placement
+//@ chunk-5xgkngpb.js:3126456-3126515 placement
 function envNameBeforeEquals(entry) {
   return entry.split("=", 1).join().toUpperCase();
 }
-//@ chunk-e6aww6q8.js:3042421-3043194 placement
+//@ chunk-5xgkngpb.js:3126515-3127288 placement
 /**
  * 可注入子 shell 的环境变量白名单：Windows 档案变量、语言/locale、PATH 一类，再并上代理 CA/token 变量（NO_PROXY 除外）。
  */
@@ -34,7 +34,7 @@ var RESTOREADDITIONALPROJECTFALLBACKFOLDERS;
 var ENV_FLAG;
 var ARGV_TERMINATOR;
 var MAX_ENV_ARGV_CHARS;
-deferInit("chunk-e6aww6q8.js:3042421", () => {
+deferInit("chunk-5xgkngpb.js:3126515", () => {
   INJECTABLE_ENV_VARS = memoizeAlias(
     () =>
       new Set([
@@ -88,7 +88,7 @@ deferInit("chunk-e6aww6q8.js:3042421", () => {
   ARGV_TERMINATOR = "--";
   MAX_ENV_ARGV_CHARS = 30000;
 });
-//@ chunk-e6aww6q8.js:3043194-3043351 placement
+//@ chunk-5xgkngpb.js:3127288-3127445 placement
 function parseExistingEnvArgs(argv) {
   let sliced = argv.slice(0, Math.max(argv.indexOf(ARGV_TERMINATOR), 0));
   return new Map(
@@ -97,7 +97,7 @@ function parseExistingEnvArgs(argv) {
       .map((entry) => [envNameBeforeEquals(entry), entry.split("=").slice(1).join("=")]),
   );
 }
-//@ chunk-e6aww6q8.js:3043351-3043741 placement
+//@ chunk-5xgkngpb.js:3127445-3127835 placement
 /**
  * 过滤可注入命令行的环境变量：来源合法、名字与值格式安全、未被排除或已存在、不是 Windows 配置变量或敏感模式；按来源优先级去重（大小写不敏感）。
  */
@@ -123,7 +123,7 @@ function filterInjectableEnvVars(envEntries, excludedNames) {
     ).values(),
   ];
 }
-//@ chunk-e6aww6q8.js:3043741-3043892 placement
+//@ chunk-5xgkngpb.js:3127835-3127986 placement
 function getClaudeCodeEnvVars(gitConfigGlobal) {
   return [
     {
@@ -142,9 +142,9 @@ function getClaudeCodeEnvVars(gitConfigGlobal) {
         ]),
   ];
 }
-//@ chunk-e6aww6q8.js:3043892-3044181 placement
+//@ chunk-5xgkngpb.js:3127986-3128275 placement
 function getLocalProxyNoProxy(existing) {
-  let hosts = uniq(
+  let hosts = normalizeCaseForComparison_2(
     ["HTTP_PROXY", "HTTPS_PROXY"].flatMap((varName) => {
       let parsed = URL.parse(existing.get(varName) ?? "");
       return parsed?.port && ["localhost", "127.0.0.1"].includes(parsed.hostname) ? [parsed.host] : [];
@@ -160,7 +160,7 @@ function getLocalProxyNoProxy(existing) {
       ]
     : [];
 }
-//@ chunk-e6aww6q8.js:3044181-3044434 placement
+//@ chunk-5xgkngpb.js:3128275-3128528 placement
 function collectSettingsAndSessionVars({ scrubbed, subprocessEnv, isFromSettings, sessionEnvVars }) {
   return scrubbed
     ? []
@@ -183,7 +183,7 @@ function collectSettingsAndSessionVars({ scrubbed, subprocessEnv, isFromSettings
         })),
       ];
 }
-//@ chunk-e6aww6q8.js:3044434-3044637 placement
+//@ chunk-5xgkngpb.js:3128528-3128731 placement
 function insertEnvArgs(argv, envEntries) {
   let index = argv.indexOf(ARGV_TERMINATOR);
   if (index === -1 || envEntries.length === 0) return argv;
@@ -194,7 +194,7 @@ function insertEnvArgs(argv, envEntries) {
   ];
   return newArgv.reduce((acc, arg) => acc + arg.length + 3, 0) > MAX_ENV_ARGV_CHARS ? undefined : newArgv;
 }
-//@ chunk-e6aww6q8.js:3044637-3045287 placement
+//@ chunk-5xgkngpb.js:3128731-3129384 placement
 /**
  * 把设置/会话/Claude Code 自身的环境变量插入启动 argv（排除已有、被拒绝或遮盖的变量，本地代理时补 no_proxy）；超出长度上限时报告是命令还是变量过长，否则返回新 argv 与被略去的变量名。
  */
@@ -238,7 +238,7 @@ function buildEnvArgv(
   let acceptedNames = new Set(accepted.map(([name]) => name.toUpperCase()));
   return {
     argv: newArgv,
-    leftOut: uniq(
+    leftOut: normalizeCaseForComparison_2(
       candidates.map(({ name }) => name).filter((name) => !acceptedNames.has(name.toUpperCase())),
     ),
   };

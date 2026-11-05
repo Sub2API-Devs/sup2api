@@ -1,15 +1,15 @@
 /**
  * isexe/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: isexe@2.0.0
- * pieces: chunk-m4p5zn6n.js (1)
+ * pieces: chunk-t889g22j.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_windows } from "./windows.js";
 import { require_mode } from "./mode.js";
 
-//@ chunk-m4p5zn6n.js:1714-2251 cjs-fingerprint
+//@ chunk-t889g22j.js:1714-2251 cjs-fingerprint
 var require_isexe = __commonJS(function (cjsExports, cjsModule) {
   var fs = importMetaRequire("fs");
   var core;

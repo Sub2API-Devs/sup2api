@@ -3,23 +3,23 @@
  *
  * 2.1.316 新增：旁白（narration）分类器调用
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (9)
- * attribution: placement 9
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (15)
+ * attribution: affinity 1, placement 9, layout 5
  */
 import { claimOnce } from "./verificationRequired.js";
 import { logError } from "../../utils/log.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2538286-2538334 placement
+//@ chunk-5xgkngpb.js:2589329-2589377 affinity
 var textDecoder; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:2538286", () => {
+deferInit("chunk-5xgkngpb.js:2589329", () => {
   textDecoder = new TextDecoder("utf-8", {
     ignoreBOM: true,
   });
 });
-//@ chunk-e6aww6q8.js:2538334-2538496 placement
+//@ chunk-5xgkngpb.js:2589377-2589539 placement
 function readVarint(bytes, offset) {
   let value = 0;
   let shift = 1;
@@ -37,7 +37,7 @@ function readVarint(bytes, offset) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:2538496-2538965 placement
+//@ chunk-5xgkngpb.js:2589539-2590008 placement
 /**
  * 极简 protobuf 解析器：逐字段读 tag，varint 与 length-delimited 字段回调 visitor，跳过 64/32 位定长字段；格式错误返回 false。
  */
@@ -77,10 +77,10 @@ function walkProtobufFields(bytes, visitor) {
   }
   return true;
 }
-//@ chunk-e6aww6q8.js:2538965-2539041 placement
-function nestedBytesField(bytes, field) {
+//@ chunk-5xgkngpb.js:2590008-2590084 placement
+function nestedBytesField(envelope, field) {
   let out;
-  return walkProtobufFields(bytes, {
+  return walkProtobufFields(envelope, {
     onBytes(result, bytes) {
       if (result === field) out = bytes;
     },
@@ -88,12 +88,46 @@ function nestedBytesField(bytes, field) {
     ? out
     : undefined;
 }
-//@ chunk-e6aww6q8.js:2539041-2539113 placement
+//@ chunk-5xgkngpb.js:2590084-2590149 placement
 function nestedTextField(envelope, field) {
   let bytes = nestedBytesField(envelope, field);
-  return bytes === undefined ? undefined : textDecoder.decode(bytes);
+  return bytes === undefined ? undefined : decodeBytes(bytes);
 }
-//@ chunk-e6aww6q8.js:2539113-2539151 placement
+//@ chunk-5xgkngpb.js:2590149-2590186 placement
+function decodeBytes(bytes) {
+  return textDecoder.decode(bytes);
+}
+//@ chunk-5xgkngpb.js:2590186-2590233 layout
+function varintField(field, value) {
+  return value === 0 ? [] : [encodeVarintField(field, 0, value)];
+}
+//@ chunk-5xgkngpb.js:2590233-2590296 layout
+function bytesField(field, bytes) {
+  return bytes.length === 0 ? [] : [encodeVarintField(field, 2, bytes.length), bytes];
+}
+//@ chunk-5xgkngpb.js:2590296-2590350 layout
+function stringField(field, text) {
+  return bytesField(field, Buffer.from(text, "utf8"));
+}
+//@ chunk-5xgkngpb.js:2590350-2590427 layout
+function repeatedBytesField(field, chunks) {
+  let totalLength = 0;
+  for (let chunk of chunks) totalLength += chunk.length;
+  return [encodeVarintField(field, 2, totalLength), ...chunks];
+}
+//@ chunk-5xgkngpb.js:2590427-2590565 layout
+function encodeVarintField(field, wireType, value) {
+  let out = [];
+  for (let part of [field * 8 + wireType, value]) {
+    while (part > 127) {
+      out.push((part % 128) | 128);
+      part = Math.floor(part / 128);
+    }
+    out.push(part);
+  }
+  return Uint8Array.from(out);
+}
+//@ chunk-5xgkngpb.js:2590565-2590603 placement
 /**
  * narration 的 protobuf 字段号：外层 2、内层 1、文本 8，以及 "narration" 标记。
  */
@@ -101,7 +135,7 @@ var NARRATION_ENVELOPE_FIELD = 2;
 var NARRATION_PAYLOAD_FIELD = 1;
 var NARRATION_TEXT_FIELD = 8;
 var NARRATION = "narration";
-//@ chunk-e6aww6q8.js:2539169-2539391 placement
+//@ chunk-5xgkngpb.js:2590621-2590843 placement
 function decodeSignatureKind(signature) {
   let text;
   try {
@@ -117,20 +151,20 @@ function decodeSignatureKind(signature) {
   if (payload === undefined) return;
   return nestedTextField(payload, NARRATION_TEXT_FIELD);
 }
-//@ chunk-e6aww6q8.js:2539391-2539411 placement
-var weakMap_10; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:2539391", () => {
-  weakMap_10 = new WeakMap();
+//@ chunk-5xgkngpb.js:2590843-2590863 placement
+var weakMap_12; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xgkngpb.js:2590843", () => {
+  weakMap_12 = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:2539411-2539630 placement
+//@ chunk-5xgkngpb.js:2590863-2591082 placement
 function isNarrationThinking(block) {
   try {
     if (block.type !== "thinking" || !block.signature) return false;
     let value;
-    if (weakMap_10.has(block)) value = weakMap_10.get(block);
+    if (weakMap_12.has(block)) value = weakMap_12.get(block);
     else {
       value = decodeSignatureKind(block.signature);
-      weakMap_10.set(block, value);
+      weakMap_12.set(block, value);
     }
     return value === NARRATION;
   } catch (error) {
@@ -138,4 +172,13 @@ function isNarrationThinking(block) {
     return false;
   }
 }
-export { walkProtobufFields, isNarrationThinking };
+export {
+  walkProtobufFields,
+  decodeBytes,
+  repeatedBytesField,
+  stringField,
+  varintField,
+  bytesField,
+  nestedTextField,
+  isNarrationThinking,
+};

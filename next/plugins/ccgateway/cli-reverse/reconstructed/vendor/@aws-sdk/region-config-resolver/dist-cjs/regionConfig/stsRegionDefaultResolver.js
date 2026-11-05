@@ -1,15 +1,15 @@
 /**
  * @aws-sdk/region-config-resolver/dist-cjs/regionConfig/stsRegionDefaultResolver.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/region-config-resolver@3.936.0
- * pieces: chunk-edce4vxq.js (1)
+ * pieces: chunk-3p78mpxm.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_index_native } from "../../../../@smithy/core/dist-cjs/submodules/config/index.native.js";
 import { require_node_config_provider } from "../../../../@smithy/node-config-provider/dist-cjs/index.js";
 
-//@ chunk-edce4vxq.js:168080-168567 cjs-fingerprint
+//@ chunk-3p78mpxm.js:168080-168567 cjs-fingerprint
 var require_stsRegionDefaultResolver = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

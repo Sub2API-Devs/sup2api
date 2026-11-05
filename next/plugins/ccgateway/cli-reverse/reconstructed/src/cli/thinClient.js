@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：thin-client 回复的模式校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-d28cbsz3.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q4eg3h09.js (1)
  * attribution: placement 1
  */
 import { logForDebugging } from "../utils/debug.js";
 
-//@ chunk-d28cbsz3.js:226-504 placement
+//@ chunk-q4eg3h09.js:226-504 placement
 /**
  * 按 schema 校验 thin-client 回复（不符记 warn 返回 null）。
  */

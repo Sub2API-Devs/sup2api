@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增。MCP 结果中的 Anthropic 元数据。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9jdk0nys.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qe8wxvmd.js (3)
  * attribution: placement 3
  */
 
-//@ chunk-9jdk0nys.js:191-216 placement
+//@ chunk-qe8wxvmd.js:191-216 placement
 var COM_ANTHROPIC = "com.anthropic/";
-//@ chunk-9jdk0nys.js:216-923 placement
+//@ chunk-qe8wxvmd.js:216-923 placement
 function anthropicResourceLinks(content) {
   if (!Array.isArray(content)) return;
   let links = [];
@@ -42,7 +42,7 @@ function anthropicResourceLinks(content) {
   }
   return links.length > 0 ? links : undefined;
 }
-//@ chunk-9jdk0nys.js:923-1101 placement
+//@ chunk-qe8wxvmd.js:923-1101 placement
 /**
  * 去掉 _meta 中 com.anthropic/ 前缀的键，结果为空时返回 undefined。
  */

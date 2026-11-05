@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：按访问类别生成询问用户的问题（删除、公开修改等）；artifact 询问文案常量等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-m79qv8gp.js (57)
- * attribution: placement 57
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xhqbjcqf.js (58)
+ * attribution: placement 57, layout 1
  */
 import { getShareEntry, probeAnswered } from "../../services/artifacts/shareEntries.js";
 import {
@@ -65,11 +65,11 @@ import {
   repliesAskAnsweredByOther,
   consentWasHumanEarned,
   consentAskReachedUser,
+  ASSET_TARGET_PIN_TAG,
   CONSENT_ASK_TAG,
   ARTIFACT_ASK_TAG,
   repliesAskAnsweredByHuman,
 } from "./permissions/consentStamps.js";
-import { isClassifierDecision } from "../BashTool/bashPermissions.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { artifactCardTitle } from "./artifactUrls.js";
 import { setBounded, hashOfIfPossible } from "./artifactAskMessages.js";
@@ -81,7 +81,7 @@ import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js"
 import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-m79qv8gp.js:5235-5384 placement
+//@ chunk-xhqbjcqf.js:5235-5407 placement
 function shareFacts(slug, context) {
   let shareEntry = getShareEntry(slug);
   return probeAnswered(shareEntry, context.toolUseId)
@@ -90,17 +90,20 @@ function shareFacts(slug, context) {
         owned: undefined,
         public: undefined,
         outsideOrg: outsideOrgRead(shareEntry) || publicReadFlagOrUndefined(),
+        outsideAudience: undefined,
         invitedByOtherOrg: shareEntry?.external === true,
       };
 }
-//@ chunk-m79qv8gp.js:5384-5839 placement
+//@ chunk-xhqbjcqf.js:5407-5942 placement
 function factsFromEntry(shareEntry) {
   let invitedByOtherOrg = shareEntry?.external === true;
+  let outsideAudience = shareEntry?.outsideAudience;
   if (shareEntry === undefined || shareEntry.probeFailed === true)
     return {
       owned: undefined,
       public: undefined,
       outsideOrg: outsideOrgRead(shareEntry) || publicReadFlagOrUndefined(),
+      outsideAudience: undefined,
       invitedByOtherOrg,
     };
   let isPublic = shareEntry.mode === "unknown" ? undefined : shareEntry.mode === "public";
@@ -110,26 +113,28 @@ function factsFromEntry(shareEntry) {
       owned: isPublic === true ? false : undefined,
       public: isPublic,
       outsideOrg,
+      outsideAudience,
       invitedByOtherOrg,
     };
   return {
     owned: shareEntry.role === "unknown" ? undefined : shareEntry.role === "owner",
     public: isPublic,
     outsideOrg,
+    outsideAudience,
     invitedByOtherOrg,
     ...((shareEntry.role === "owner" || shareEntry.role === "writer") && {
       canWrite: true,
     }),
   };
 }
-//@ chunk-m79qv8gp.js:5839-5874 placement
+//@ chunk-xhqbjcqf.js:5942-5977 placement
 /**
  * 公开读取开关关闭时返回 false，否则 undefined。
  */
 function publicReadFlagOrUndefined() {
   return isFramePublicReadEnabled() ? undefined : false;
 }
-//@ chunk-m79qv8gp.js:5874-6129 placement
+//@ chunk-xhqbjcqf.js:5977-6266 placement
 function classFactsFor(operation, target, context) {
   let facts = shareFacts(target.slug, context);
   return {
@@ -138,6 +143,7 @@ function classFactsFor(operation, target, context) {
     owned: facts.owned,
     public: facts.public,
     outsideOrg: facts.outsideOrg,
+    outsideAudience: facts.outsideAudience,
     invitedByOtherOrg: facts.invitedByOtherOrg,
     networkOff: sessionNetworkOff(target),
     turnStartedByHuman: isStrictHumanTurn(context.messages),
@@ -146,15 +152,15 @@ function classFactsFor(operation, target, context) {
     }),
   };
 }
-//@ chunk-m79qv8gp.js:6129-6187 placement
+//@ chunk-xhqbjcqf.js:6266-6324 placement
 /**
  * 定时触发允许的原因取值。
  */
 var SCHEDULED_TRIGGER_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-m79qv8gp.js:6129", () => {
+deferInit("chunk-xhqbjcqf.js:6266", () => {
   SCHEDULED_TRIGGER_REASONS = new Set(["scheduled", "retry", "catch_up", "manual"]);
 });
-//@ chunk-m79qv8gp.js:6187-6316 placement
+//@ chunk-xhqbjcqf.js:6324-6453 placement
 function isScheduledTriggerFire(origin) {
   return (
     origin?.kind === "task-notification" &&
@@ -163,7 +169,7 @@ function isScheduledTriggerFire(origin) {
     SCHEDULED_TRIGGER_REASONS.has(origin.fireReason)
   );
 }
-//@ chunk-m79qv8gp.js:6316-6520 placement
+//@ chunk-xhqbjcqf.js:6453-6657 placement
 function routineRunNobodyJudges(context) {
   if (classifierJudges(context)) return false;
   if (!isScheduledTriggerFire(analyzeTurnTail(context.messages).decider?.origin)) return false;
@@ -178,7 +184,7 @@ function routineRunNobodyJudges(context) {
     liveState.routineRunTainted = true;
   return !liveState.routineRunTainted;
 }
-//@ chunk-m79qv8gp.js:6520-6649 placement
+//@ chunk-xhqbjcqf.js:6657-6786 placement
 function newArtifactIsPersonsPrivate() {
   if (getFrameHostOverride() !== undefined) return false;
   if (isRemoteManagedEnvironment())
@@ -190,35 +196,35 @@ function newArtifactIsPersonsPrivate() {
     getClaudeAIOAuthTokenOrigin() === "env"
   );
 }
-//@ chunk-m79qv8gp.js:6649-6708 placement
+//@ chunk-xhqbjcqf.js:6786-6845 placement
 /**
  * 直接部署接口对应的中继族（用于判断中继是否承载）。
  */
 function directDeployRelayFamily() {
   return relayFamily("POST", "/api/frame/deploy/direct");
 }
-//@ chunk-m79qv8gp.js:6708-6767 placement
+//@ chunk-xhqbjcqf.js:6845-6904 placement
 /**
  * 该中继族已服务到的时刻。
  */
 function relayServedUntil(family) {
   return getLiveState().frameRelay.servedUntil.get(family) ?? 0;
 }
-//@ chunk-m79qv8gp.js:6767-6889 placement
+//@ chunk-xhqbjcqf.js:6904-7026 placement
 function routineRelayCarried() {
   let family = directDeployRelayFamily();
   if (family === null || relayDeclined(family)) return false;
   let routineRelayNotCarried = getLiveState().routineRelayNotCarried;
   return routineRelayNotCarried === null || relayServedUntil(family) > routineRelayNotCarried.servedUntil;
 }
-//@ chunk-m79qv8gp.js:6889-6972 placement
+//@ chunk-xhqbjcqf.js:7026-7109 placement
 function noteRoutineRelayNotCarried() {
   let family = directDeployRelayFamily();
   getLiveState().routineRelayNotCarried = {
     servedUntil: family === null ? 0 : relayServedUntil(family),
   };
 }
-//@ chunk-m79qv8gp.js:6972-7058 placement
+//@ chunk-xhqbjcqf.js:7109-7195 placement
 function classifierJudges(context) {
   let { mode, modeBeforeRewrite } = getToolPermissionContext(context);
   return (
@@ -226,7 +232,7 @@ function classifierJudges(context) {
     (modeBeforeRewrite !== undefined && isAutoClassifierActive(modeBeforeRewrite))
   );
 }
-//@ chunk-m79qv8gp.js:7058-7490 placement
+//@ chunk-xhqbjcqf.js:7195-7626 placement
 function commentTurnNobodyJudges(context, slug) {
   if (classifierJudges(context)) return false;
   let { messages } = context;
@@ -261,7 +267,7 @@ function commentTurnNobodyJudges(context, slug) {
     ) && hasArtifactCallSinceUserTurn(messages_2, slug)
   );
 }
-//@ chunk-m79qv8gp.js:7490-7883 placement
+//@ chunk-xhqbjcqf.js:7626-8019 placement
 /**
  * 用户回合后是否已有 artifact 调用。
  */
@@ -283,7 +289,7 @@ function hasArtifactCallSinceUserTurn(messages, slug) {
   }
   return found;
 }
-//@ chunk-m79qv8gp.js:7883-8021 placement
+//@ chunk-xhqbjcqf.js:8019-8157 placement
 function isCommentsAction(name, input) {
   let artifactInput =
     name === ARTIFACT_COMMENTS_TOOL_NAME
@@ -298,22 +304,22 @@ function isCommentsAction(name, input) {
     artifactInput.action === "comments"
   );
 }
-//@ chunk-m79qv8gp.js:8021-8032 placement
+//@ chunk-xhqbjcqf.js:8157-8168 placement
 var PLAN_MODE_KEEPS_FLAG_OFF_WRITE_ASKS = true;
-//@ chunk-m79qv8gp.js:8032-8112 placement
+//@ chunk-xhqbjcqf.js:8168-8248 placement
 function writeKeepsFlagOffAsk(ruling, context) {
   return (
     (ruling.ask && ruling.basis === "unattended") ||
     (PLAN_MODE_KEEPS_FLAG_OFF_WRITE_ASKS && getToolPermissionContext(context).mode === "plan")
   );
 }
-//@ chunk-m79qv8gp.js:8112-8123 placement
+//@ chunk-xhqbjcqf.js:8248-8259 placement
 var PLAN_MODE_KEEPS_FLAG_OFF_READ_ASKS = true;
-//@ chunk-m79qv8gp.js:8123-8170 placement
+//@ chunk-xhqbjcqf.js:8259-8306 placement
 function readKeepsFlagOffAsk(context) {
   return PLAN_MODE_KEEPS_FLAG_OFF_READ_ASKS && getToolPermissionContext(context).mode === "plan";
 }
-//@ chunk-m79qv8gp.js:8170-8246 placement (2.1.88 match: isFileReadDenied, 1)
+//@ chunk-xhqbjcqf.js:8306-8382 placement (2.1.88 match: isFileReadDenied, 1)
 function readClassRuling(
   context,
   target,
@@ -323,14 +329,14 @@ function readClassRuling(
 ) {
   return !basis && allowWhenFlagOff && !readKeepsFlagOffAsk(context) ? computeRuling() : null;
 }
-//@ chunk-m79qv8gp.js:8246-8279 placement
+//@ chunk-xhqbjcqf.js:8382-8415 placement
 /**
  * 是否处于 Cowork 发布会话且同意必须拒绝。
  */
 function isCoworkPublishDenySession(context) {
   return isCoworkFramePublishSession() && consentMustDeny(context);
 }
-//@ chunk-m79qv8gp.js:8279-9111 placement
+//@ chunk-xhqbjcqf.js:8415-9247 placement
 function noticeAskFloorDeny(context, outcome, whatNeedsYes) {
   let coworkNoAnswerer = isCoworkPublishDenySession(context) && !isStrictHumanTurn(context.messages);
   if (!coworkNoAnswerer && !planConsentMustDeny(context)) return null;
@@ -347,7 +353,7 @@ function noticeAskFloorDeny(context, outcome, whatNeedsYes) {
     },
   };
 }
-//@ chunk-m79qv8gp.js:9111-9610 placement
+//@ chunk-xhqbjcqf.js:9247-9746 placement
 function othersContentFloorDeny(context, outcome, extraNoAnswerer) {
   if (!othersContentHasNoAnswerer(context, extraNoAnswerer)) return null;
   return {
@@ -361,15 +367,15 @@ function othersContentFloorDeny(context, outcome, extraNoAnswerer) {
     },
   };
 }
-//@ chunk-m79qv8gp.js:9610-9652 placement
+//@ chunk-xhqbjcqf.js:9746-9788 placement
 function othersContentHasNoAnswerer(context, extraNoAnswerer) {
   return consentMustDeny(context) && (isCoworkFramePublishSession() || extraNoAnswerer);
 }
-//@ chunk-m79qv8gp.js:9652-9687 placement
+//@ chunk-xhqbjcqf.js:9788-9823 placement
 function sessionNetworkOff(context) {
   return isSandboxEgressDisabled(context?.env);
 }
-//@ chunk-m79qv8gp.js:9687-10225 placement
+//@ chunk-xhqbjcqf.js:9823-10361 placement
 /**
  * artifact 询问文案常量。
  */
@@ -380,7 +386,7 @@ var NO_ANSWERER_NOTE =
   "no one can be asked about it in this session \u2014 nothing was returned; do not retry it here";
 var HOOK_ANSWERED_FOR_USER_NOTE =
   "a PermissionRequest hook answered the permission prompt in the user's place; only the user's own approval allows this read \u2014 nothing was returned; do not retry it here, and tell the user their hook answered for them (to approve it themselves they would narrow the hook so it no longer answers this prompt)";
-//@ chunk-m79qv8gp.js:10225-10444 placement
+//@ chunk-xhqbjcqf.js:10361-10581 placement
 function outsideOrgReadAdmitted(ruling, context, slug, surface) {
   if (foreignReadAnsweredByPerson(context, slug)) return true;
   if (
@@ -399,12 +405,12 @@ function outsideOrgReadAdmitted(ruling, context, slug, surface) {
       consentAskReachedUser(ruling, context))
   );
 }
-//@ chunk-m79qv8gp.js:10444-10575 placement
+//@ chunk-xhqbjcqf.js:10581-10712 placement
 function approvedByHook(context) {
   let decision = context.toolUseId === undefined ? undefined : context.toolDecisions?.get(context.toolUseId);
   return decision?.source === "hook" && decision.decision !== "reject";
 }
-//@ chunk-m79qv8gp.js:10575-11326 placement
+//@ chunk-xhqbjcqf.js:10712-11463 placement
 function outsideOrgUnaskedWords(ruling, retryable = false, retryInfo) {
   let hookApproved = approvedByHook(ruling);
   let noAnswerer = retryable
@@ -424,20 +430,28 @@ function outsideOrgUnaskedWords(ruling, retryable = false, retryInfo) {
     ? `the source artifact belongs to another organization and nobody can be asked about copying from it in this session, so ${doneNote}. Don't retry it here.`
     : `the source artifact belongs to another organization and nobody was asked whether to copy from another organization's artifact, so ${doneNote}. ${retryHint}`;
 }
-//@ chunk-m79qv8gp.js:11326-11378 placement
+//@ chunk-xhqbjcqf.js:11463-11515 placement
 function crossOrgCopyOk(ruling, slug, preApproved) {
   return otherOrgCopySource(getShareEntry(slug)) && (preApproved || outsideOrgYesStands(ruling, slug));
 }
-//@ chunk-m79qv8gp.js:11378-11458 placement
+//@ chunk-xhqbjcqf.js:11515-11595 placement
 function outsideOrgYesStands(ruling, slug) {
   return (
     hasOutsideOrgConsent(slug) ||
     hasSharedReadConsentClasses(artifactFilesConsentSlugs(ruling), "artifactOutsideOrgConsentSlugs", slug)
   );
 }
-//@ chunk-m79qv8gp.js:11568-11631 placement
+//@ chunk-xhqbjcqf.js:11595-11705 layout
+/**
+ * 判断对象上是否带有 classifier:true 的决策标记。
+ */
+function isClassifierDecision(decision) {
+  let metadata = Reflect.get(decision, ASSET_TARGET_PIN_TAG);
+  return typeof metadata === "object" && metadata !== null && Reflect.get(metadata, "classifier") === true;
+}
+//@ chunk-xhqbjcqf.js:11705-11768 placement
 var OUTSIDE_ORG_READ_NOTE = "This artifact was created outside your organization.";
-//@ chunk-m79qv8gp.js:11631-12023 placement
+//@ chunk-xhqbjcqf.js:11768-12160 placement
 function readAskSentence(about, title, extraAction) {
   let cardTitle = artifactCardTitle(title);
   let titleText = cardTitle ? `"${cardTitle}"` : ARTIFACT_ASK_TEXT;
@@ -454,27 +468,29 @@ function readAskSentence(about, title, extraAction) {
       return `${subject} was made from someone else's artifact type. ${question}`;
   }
 }
-//@ chunk-m79qv8gp.js:12023-12158 placement
+//@ chunk-xhqbjcqf.js:12160-12295 placement
 function readCoverageSentence(withCopy) {
   return `Approving covers its files${withCopy ? ", and copying them into other artifacts," : ""} for the rest of the conversation.`;
 }
-//@ chunk-m79qv8gp.js:12158-12316 placement
+//@ chunk-xhqbjcqf.js:12295-12453 placement
 function askQuestionWithScope(ruling, title, fallbackUrl) {
   let question = artifactAskQuestion(ruling, title, fallbackUrl);
   if (ruling.remember !== "artifact") return question;
   let scopeWord = isCoworkHostSession() ? "task" : "conversation";
   return question.replace(/\?$/, ` for the rest of this ${scopeWord}?`);
 }
-//@ chunk-m79qv8gp.js:12316-12435 placement
+//@ chunk-xhqbjcqf.js:12453-12633 placement
 function isPersonPublicChange(ruling) {
   return (
     ruling.class === "public_change" &&
     ruling.basis !== "unattended" &&
     ruling.about !== "someone_else" &&
-    ruling.missing !== "public"
+    ruling.about !== "outside_audience" &&
+    ruling.missing !== "public" &&
+    ruling.missing !== "outsideAudience"
   );
 }
-//@ chunk-m79qv8gp.js:12435-13227 placement
+//@ chunk-xhqbjcqf.js:12633-13536 placement
 /**
  * 按访问类别生成询问用户的问题（删除、公开修改等）。
  */
@@ -488,6 +504,8 @@ function artifactAskQuestion(ruling, title, fallbackUrl) {
     case "public_change":
       if (isPersonPublicChange(ruling)) return `${subject} is public. Allow Claude to change it?`;
       if (ruling.basis === "unattended") return `Allow Claude to change ${titleText}?`;
+      if (ruling.about === "outside_audience")
+        return `${subject} can be seen outside your organization. Allow Claude to change it?`;
       if (ruling.about === "someone_else")
         return ruling.missing === "owned"
           ? `Claude couldn't check who made ${titleText}. Allow Claude to change it?`
@@ -501,18 +519,18 @@ function artifactAskQuestion(ruling, title, fallbackUrl) {
       return readAskSentence(ruling.missing === "owned" ? "unknown" : "someone_else", title);
   }
 }
-//@ chunk-m79qv8gp.js:13227-13284 placement
+//@ chunk-xhqbjcqf.js:13536-13593 placement
 /**
  * 组织外读取时返回对应说明。
  */
 function outsideOrgNote(ruling) {
   return ruling.about === "outside_org" ? OUTSIDE_ORG_READ_NOTE : undefined;
 }
-//@ chunk-m79qv8gp.js:13284-13333 placement
+//@ chunk-xhqbjcqf.js:13593-13642 placement
 function decideByClass(entry) {
   return decideByClasses(entry.input, entry.context, [entry]);
 }
-//@ chunk-m79qv8gp.js:13333-15856 placement
+//@ chunk-xhqbjcqf.js:13642-16165 placement
 function decideByClasses(input, context, entries) {
   if (context.toolUseId !== undefined) {
     getLiveState().askClassPending.delete(context.toolUseId);
@@ -648,7 +666,7 @@ function decideByClasses(input, context, entries) {
     },
   };
 }
-//@ chunk-m79qv8gp.js:15856-16545 placement
+//@ chunk-xhqbjcqf.js:16165-16854 placement
 function noteApprovedClassAsk(context) {
   if (context.toolUseId === undefined) return;
   let liveState = getLiveState();
@@ -686,11 +704,11 @@ function noteApprovedClassAsk(context) {
         rememberOutsideOrgConsent(entry.slug);
     }
 }
-//@ chunk-m79qv8gp.js:16545-16582 placement
+//@ chunk-xhqbjcqf.js:16854-16891 placement
 function classAskStands(context, classKey, slug) {
   return rememberedClassTaken(context, classKey, slug);
 }
-//@ chunk-m79qv8gp.js:16582-16760 placement
+//@ chunk-xhqbjcqf.js:16891-17069 placement
 function rememberedClassTaken(context, classKey, slug) {
   let taken =
     context.toolUseId === undefined ? undefined : getLiveState().askClassTaken.get(context.toolUseId);
@@ -702,7 +720,7 @@ function rememberedClassTaken(context, classKey, slug) {
     hasClassConsent(classKey, slug)
   );
 }
-//@ chunk-m79qv8gp.js:16760-16982 placement
+//@ chunk-xhqbjcqf.js:17069-17291 placement
 function foreignReadAnsweredByPerson(context, slug) {
   let liveState = getLiveState();
   return (
@@ -716,7 +734,7 @@ function foreignReadAnsweredByPerson(context, slug) {
     hasClassPersonConsent("foreign_read", slug)
   );
 }
-//@ chunk-m79qv8gp.js:16982-17210 placement
+//@ chunk-xhqbjcqf.js:17291-17519 placement
 function notePersonOnlyReadAskPending(context, slug, url) {
   if (context.toolUseId === undefined) return;
   let liveState = getLiveState();
@@ -732,35 +750,35 @@ function notePersonOnlyReadAskPending(context, slug, url) {
   ]);
   setBounded(liveState.askClassPersonAsked, context.toolUseId, true);
 }
-//@ chunk-m79qv8gp.js:17210-17301 placement
+//@ chunk-xhqbjcqf.js:17519-17610 placement
 function recordUnaskedRoutineWrite(action, slug) {
   logEvent("tengu_artifact_routine_write_unasked", {
     db_op: fromEnum(action),
     artifact_id: sanitizeMarkName(slug),
   });
 }
-//@ chunk-m79qv8gp.js:17301-17392 placement
+//@ chunk-xhqbjcqf.js:17610-17701 placement
 function recordUnaskedCommentWrite(action, slug) {
   logEvent("tengu_artifact_comment_write_unasked", {
     db_op: fromEnum(action),
     artifact_id: sanitizeMarkName(slug),
   });
 }
-//@ chunk-m79qv8gp.js:17392-17472 placement
+//@ chunk-xhqbjcqf.js:17701-17781 placement
 function recordUnaskedCommentPublish(slug) {
   logEvent("tengu_artifact_comment_publish_unasked", {
     artifact_id: sanitizeMarkName(slug),
   });
 }
-//@ chunk-m79qv8gp.js:17472-17524 placement
+//@ chunk-xhqbjcqf.js:17781-17833 placement
 function noteCommentRepublishedPath(path) {
   getLiveState().commentRepublishedPaths.add(path);
 }
-//@ chunk-m79qv8gp.js:17524-17576 placement
+//@ chunk-xhqbjcqf.js:17833-17885 placement
 function noteRoutineRepublishedPath(path) {
   getLiveState().routineRepublishedPaths.add(path);
 }
-//@ chunk-m79qv8gp.js:17576-17772 placement
+//@ chunk-xhqbjcqf.js:17885-18081 placement
 function forgetClassAsk(toolUseId) {
   if (toolUseId === undefined) return;
   let liveState = getLiveState();
@@ -770,19 +788,19 @@ function forgetClassAsk(toolUseId) {
   liveState.askClassNoClassifier.delete(toolUseId);
   liveState.askNamedOtherOrg.delete(toolUseId);
 }
-//@ chunk-m79qv8gp.js:17772-17852 placement
+//@ chunk-xhqbjcqf.js:18081-18161 placement
 function recordUnaskedRoutineRepublish(slug) {
   logEvent("tengu_artifact_routine_publish_unasked", {
     artifact_id: sanitizeMarkName(slug),
   });
 }
-//@ chunk-m79qv8gp.js:17852-17908 placement
+//@ chunk-xhqbjcqf.js:18161-18217 placement
 function quietCapsSwitchOn() {
   return readFlagWithOverride("tengu_proud_honey", {
     safe: false,
   });
 }
-//@ chunk-m79qv8gp.js:17908-18149 placement
+//@ chunk-xhqbjcqf.js:18217-18458 placement
 function recordUnaskedQuietCapsPublish(slug, mode) {
   let mode_2 = fromEnum(mode ?? "absent");
   logEvent("tengu_artifact_quiet_caps_publish_unasked", {
@@ -795,7 +813,7 @@ function recordUnaskedQuietCapsPublish(slug, mode) {
   });
   getLiveState().quietCapsCardKept = true;
 }
-//@ chunk-m79qv8gp.js:18149-18553 placement
+//@ chunk-xhqbjcqf.js:18458-18862 placement
 function recordUnaskedRoutineFirstPublish(slug, mode, details) {
   let mode_2 = fromEnum(mode ?? "absent");
   logEvent("tengu_artifact_routine_first_publish_unasked", {
@@ -817,7 +835,7 @@ function recordUnaskedRoutineFirstPublish(slug, mode, details) {
     });
   getLiveState().routineRunTainted = true;
 }
-//@ chunk-m79qv8gp.js:18553-18708 placement
+//@ chunk-xhqbjcqf.js:18862-19017 placement
 function recordUnaskedForeignRead(action, slug, ownerAccountId, attested) {
   logEvent("tengu_artifact_foreign_read_unasked", {
     action: fromEnum(action),
@@ -845,17 +863,12 @@ export {
   readKeepsFlagOffAsk,
   recordUnaskedForeignRead,
   factsFromEntry,
-  sessionNetworkOff,
-  outsideOrgUnaskedWords,
-  newArtifactIsPersonsPrivate,
-  recordUnaskedRoutineFirstPublish,
-  PLAN_MODE_KEEPS_FLAG_OFF_WRITE_ASKS,
-  crossOrgCopyOk,
-  classAskStands,
   OUTSIDE_ORG_READ_NOTE,
+  PLAN_MODE_KEEPS_FLAG_OFF_WRITE_ASKS,
   readAskSentence,
   othersContentHasNoAnswerer,
   readCoverageSentence,
+  newArtifactIsPersonsPrivate,
   forgetClassAsk,
   classifierJudges,
   quietCapsSwitchOn,
@@ -866,9 +879,14 @@ export {
   noteCommentRepublishedPath,
   noteApprovedClassAsk,
   outsideOrgReadAdmitted,
+  crossOrgCopyOk,
+  recordUnaskedRoutineFirstPublish,
   noteRoutineRelayNotCarried,
   recordUnaskedQuietCapsPublish,
   PLAN_MODE_KEEPS_FLAG_OFF_READ_ASKS,
+  sessionNetworkOff,
   outsideOrgYesStands,
+  outsideOrgUnaskedWords,
+  classAskStands,
   notePersonOnlyReadAskPending,
 };

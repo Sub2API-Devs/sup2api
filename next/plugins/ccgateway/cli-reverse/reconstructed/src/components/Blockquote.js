@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Markdown 引用块组件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-w1b4bxwt.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qsq1e36c.js (1)
  * attribution: placement 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -13,7 +13,7 @@ import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box } from "../ink/components/Text.js";
 
-//@ chunk-w1b4bxwt.js:299-659 placement
+//@ chunk-qsq1e36c.js:299-659 placement
 function Blockquote(props) {
   let $ = useMemoCache(4);
   let { multiline, children } = props;

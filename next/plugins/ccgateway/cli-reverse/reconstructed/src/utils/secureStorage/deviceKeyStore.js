@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设备密钥存储后端
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-x58vpmpd.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-dk1d903v.js (10)
  * attribution: placement 10
  */
 import { dirname, join } from "path";
@@ -26,10 +26,10 @@ import { getUsername } from "./macOsKeychainHelpers.js";
 import { safeExecFile } from "../safeSpawn.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-x58vpmpd.js:1198-1294 placement
+//@ chunk-dk1d903v.js:1197-1293 placement
 var devicePrivateKeySchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var deviceKeyRecordSchema;
-deferInit("chunk-x58vpmpd.js:1198", () => {
+deferInit("chunk-dk1d903v.js:1197", () => {
   devicePrivateKeySchema = DoctorLazy(() =>
     looseObject({
       privateKeyPkcs8B64: stringSchema(),
@@ -42,23 +42,23 @@ deferInit("chunk-x58vpmpd.js:1198", () => {
     }),
   );
 });
-//@ chunk-x58vpmpd.js:1294-1402 placement
+//@ chunk-dk1d903v.js:1293-1401 placement
 function deviceKeyEntry(record, keyId) {
   let value = record?.keys[keyId];
   if (value === undefined) return;
   let parsed = devicePrivateKeySchema().safeParse(value);
   return parsed.success ? parsed.data : undefined;
 }
-//@ chunk-x58vpmpd.js:1402-1445 placement
+//@ chunk-dk1d903v.js:1401-1444 placement
 var NO_KEYCHAIN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x58vpmpd.js:1402", () => {
+deferInit("chunk-dk1d903v.js:1401", () => {
   NO_KEYCHAIN = Symbol("deviceKeyStore.NO_KEYCHAIN");
 });
-//@ chunk-x58vpmpd.js:1445-1480 placement
+//@ chunk-dk1d903v.js:1444-1479 placement
 function isStorageUnavailable(value) {
   return value === READ_FAILED || value === NO_KEYCHAIN;
 }
-//@ chunk-x58vpmpd.js:1480-1552 placement
+//@ chunk-dk1d903v.js:1479-1552 placement
 /**
  * 设备密钥存储的常量组：b 是钥匙串服务名 "Claude Code-device-keys"；T 是 security 命令超时 2000 ms；U 是改用 -i 传参数的命令行长度上限 4032；ee 是“项不存在”的退出码 44；re 是无钥匙串的退出码集合 {37,50}。
  */
@@ -67,14 +67,14 @@ var KEYCHAIN_TIMEOUT_MS;
 var KEYCHAIN_PASSWORD_ARG_LIMIT;
 var KEYCHAIN_ITEM_NOT_FOUND_EXIT;
 var KEYCHAIN_NO_CERT_EXIT_CODES;
-deferInit("chunk-x58vpmpd.js:1480", () => {
+deferInit("chunk-dk1d903v.js:1479", () => {
   DEVICE_KEY_SERVICE = "Claude Code-device-keys";
   KEYCHAIN_TIMEOUT_MS = 2000;
   KEYCHAIN_PASSWORD_ARG_LIMIT = 4032;
   KEYCHAIN_ITEM_NOT_FOUND_EXIT = 44;
   KEYCHAIN_NO_CERT_EXIT_CODES = new Set([37, 50]);
 });
-//@ chunk-x58vpmpd.js:1552-1642 placement
+//@ chunk-dk1d903v.js:1552-1642 placement
 function parseDeviceKeyFile(text) {
   try {
     let parsed = deviceKeyRecordSchema().safeParse(jsonParse(text));
@@ -83,12 +83,12 @@ function parseDeviceKeyFile(text) {
     return;
   }
 }
-//@ chunk-x58vpmpd.js:1642-1666 placement
+//@ chunk-dk1d903v.js:1642-1666 placement
 var resolved; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x58vpmpd.js:1642", () => {
+deferInit("chunk-dk1d903v.js:1642", () => {
   resolved = Promise.resolve();
 });
-//@ chunk-x58vpmpd.js:1666-2074 placement
+//@ chunk-dk1d903v.js:1666-2074 placement
 async function withDeviceKeyLock(getPath, fn) {
   let previous = resolved;
   let deferred = Promise.withResolvers();
@@ -119,7 +119,7 @@ async function withDeviceKeyLock(getPath, fn) {
     deferred.resolve();
   }
 }
-//@ chunk-x58vpmpd.js:2074-3004 placement
+//@ chunk-dk1d903v.js:2074-3004 placement
 /**
  * 设备密钥的文件后端：读取、写入（带锁）与删除。
  */
@@ -184,7 +184,7 @@ function fileDeviceKeyBackend(getPath) {
     },
   };
 }
-//@ chunk-x58vpmpd.js:3004-4016 placement (2.1.88 match: macOsKeychainStorage, 0.647)
+//@ chunk-dk1d903v.js:3004-4017 placement (2.1.88 match: macOsKeychainStorage, 0.647)
 /**
  * 设备密钥的 macOS 钥匙串后端：read 用 security 读出并解析设备密钥文档（无登录钥匙串、读失败、格式不对分别处理），write 以十六进制写入（短命令走 security -i），带写锁。属于 deviceKeyStore，不是 macOsKeychainStorage。
  */

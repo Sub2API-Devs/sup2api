@@ -1,13 +1,13 @@
 /**
  * acorn/dist/acorn.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: acorn@8.15.0
- * pieces: chunk-ejvzjw0g.js (1)
+ * pieces: chunk-1b1ey37s.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-ejvzjw0g.js:226-122122 cjs-fingerprint
+//@ chunk-1b1ey37s.js:226-122122 cjs-fingerprint
 var require_acorn = __commonJS(function (cjsExports, cjsModule) {
   (function (root, factory) {
     if (typeof cjsExports === "object" && typeof cjsModule !== "undefined") factory(cjsExports);

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：元数据字段校验器（布尔、日期、正则、枚举、组合）；按校验器表过滤对象字段（未知字符串替换为占位）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (3)
  * attribution: placement 3
  */
 import { decodeTaggedUuid } from "../mcp/serverIdentity.js";
@@ -24,7 +24,7 @@ import {
 } from "./authOutcomeTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:740083-745386 placement
+//@ chunk-exfmq47h.js:755352-760655 placement
 /**
  * 元数据字段校验器（布尔、日期、正则、枚举、组合）。
  */
@@ -73,7 +73,7 @@ var FEATURE_CODE_FIELDS;
 var STORED_COPY_FIELDS;
 var EVENT_FIELD_VALIDATORS;
 var HIPAA_REDACTED;
-deferInit("chunk-aepeg2w5.js:740083", () => {
+deferInit("chunk-exfmq47h.js:755352", () => {
   isBoolean = (value) => typeof value === "boolean";
   isDateValidator = (value) => value instanceof Date && !Number.isNaN(value.getTime());
   regexValidator = (pattern) => (value) => typeof value === "string" && pattern.test(value);
@@ -383,7 +383,7 @@ deferInit("chunk-aepeg2w5.js:740083", () => {
   };
   HIPAA_REDACTED = "hipaa_redacted";
 });
-//@ chunk-aepeg2w5.js:745386-745712 placement
+//@ chunk-exfmq47h.js:760655-760981 placement
 /**
  * 按校验器表过滤对象字段（未知字符串替换为占位）。
  */
@@ -402,7 +402,7 @@ function sanitizeFields(fields, validators) {
   }
   return result;
 }
-//@ chunk-aepeg2w5.js:745712-745825 placement
+//@ chunk-exfmq47h.js:760981-761094 placement
 /**
  * 按校验器表清洗事件元数据（顶层、env、auth）。
  */

@@ -3,9 +3,9 @@
  *
  * Write 工具：整文件创建/覆盖（先读、只读过开头时拒绝、子代理禁写报告 md、暂存审阅）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileWriteTool/FileWriteTool.ts
- * pieces: chunk-e6aww6q8.js (7)
+ * pieces: chunk-5xgkngpb.js (7)
  * attribution: placement 2, fingerprint 2, layout 3
  */
 import { basename, isAbsolute, sep } from "path";
@@ -65,7 +65,8 @@ import {
 } from "../../utils/file.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { FILE_WRITE_TOOL_NAME, getWriteToolDescription } from "./prompt.js";
-import { userFacingName, getToolUseSummary_3 } from "./UI.js";
+import { userFacingName, renderToolUseMessage_2 } from "./UI.js";
+import { getToolUseSummary_2 } from "../FileEditTool/UI.js";
 import { logFileChanged, getPatchFromContents, countLinesChanged } from "../../utils/diff.js";
 import { normalizeWriteInputAliases } from "./inputAliases.js";
 import { remoteRoutingCandidate } from "../../utils/remoteTools/toolHostRouting.js";
@@ -89,9 +90,8 @@ import {
   writeBlockRefusal,
 } from "../../utils/permissions/filesystem.js";
 import { buildUnfinishedCheckDecision } from "../../utils/permissions/unfinishedWriteCheck.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { walkPermissionCheckPaths, getFsImplementation } from "../../utils/fsOperations.js";
-import { getToolUseSummary_2 } from "../FileEditTool/UI.js";
 import { checkWorktreeIsolation_2 } from "../../utils/worktreeIsolation.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { secretWarning } from "../../services/memoryStore/memoryKeys.js";
@@ -100,9 +100,12 @@ import { encodeControlChars } from "../../utils/sanitization.js";
 import { isPerforceReadOnlyFile, PERFORCE_READ_ONLY_MESSAGE } from "../FileEditTool/perforce.js";
 import { isENOENT, TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../utils/errors.js";
 import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
-import { toTelemetryModelSlug } from "../../utils/model/telemetryModelName.js";
 import { isLegacyPromptModelOrOverride } from "../../utils/model/promptBundles.js";
 import { compareWithDisk } from "../FileEditTool/fileStaleness.js";
+import {
+  telemetryBucketForModelPair,
+  telemetryBucketForCallerModel,
+} from "../../utils/model/telemetryModelName.js";
 import { lit as lit_2, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { detectTextEncoding, preserveBomPrefix } from "../../utils/fileRead.js";
 import {
@@ -138,13 +141,13 @@ import { shouldSendToolDiff, fetchSingleFileGitDiff, isPatchWithinSizeLimit } fr
 import { logFileOperation } from "../../utils/fileOperationAnalytics.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1367698-1367917 placement
+//@ chunk-5xgkngpb.js:1367204-1367423 placement
 /**
  * Write 输出 schema 的扩展部分：同步技能结果（syncedSkillNext）。
  */
 var stagedWordingSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var fileWriteOutputSchemaExtension;
-deferInit("chunk-e6aww6q8.js:1367698", () => {
+deferInit("chunk-5xgkngpb.js:1367204", () => {
   stagedWordingSchema = DoctorLazy(() =>
     objectKeysArray(SKILL_SAVE_SURFACES)
       .optional()
@@ -157,14 +160,14 @@ deferInit("chunk-e6aww6q8.js:1367698", () => {
     syncedSkillNext: objectKeysArray(SKILL_SAVE_OUTCOMES).optional().catch(undefined),
   }));
 });
-//@ chunk-e6aww6q8.js:1412568-1413761 fingerprint (2.1.88 match: outputSchema, 0.542)
+//@ chunk-5xgkngpb.js:1412049-1413243 fingerprint (2.1.88 match: outputSchema, 0.542)
 /**
  * Write 的 zod schema：输入 file_path/content；输出 type(create|update)/filePath/content/structuredPatch/originalFile/gitDiff/userModified/staged；跨进程版附 memdirStamped。
  */
 var fileWriteInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var fileWriteOutputSchema;
 var fileWriteOutputSchemaAcrossProcesses;
-deferInit("chunk-e6aww6q8.js:1412568", () => {
+deferInit("chunk-5xgkngpb.js:1412049", () => {
   fileWriteInputSchema = DoctorLazy(() =>
     zodStrictObject({
       file_path: stringSchema().describe(
@@ -208,21 +211,21 @@ deferInit("chunk-e6aww6q8.js:1412568", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:1413761-1413812 layout
+//@ chunk-5xgkngpb.js:1413243-1413294 layout
 /**
  * GrowthBook tengu_noble_mountain（默认 true）：是否允许 Write 的 coerceInput 修正输入。
  */
 function isWriteInputCoercionEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_noble_mountain", true);
 }
-//@ chunk-e6aww6q8.js:1413812-1413862 layout
+//@ chunk-5xgkngpb.js:1413294-1413344 layout
 /**
  * 去掉结尾点和空格后是否为 .ipynb。
  */
 function isNotebookPathIgnoringTrailingDots(filePath) {
   return isNotebookPath(filePath.replace(/[. ]+$/, ""));
 }
-//@ chunk-e6aww6q8.js:1413862-1414204 layout
+//@ chunk-5xgkngpb.js:1413344-1413686 layout
 /**
  * 写入前（锁内）再次校验读状态：未读或只读了部分时报未读错误（除非无预读守卫且自动允许，此时比对 readBaseline）；mtime 新于读取时间且内容不同时报文件已变。
  */
@@ -253,12 +256,12 @@ async function assertWriteReadStateFresh({
   if (isFullFileView(lastRead) && matchesContentHash(lastRead, stripBom_2(diskContent))) return;
   throw new FileStateError(FILE_UNEXPECTEDLY_MODIFIED_ERROR);
 }
-//@ chunk-e6aww6q8.js:1414204-1419759 fingerprint (2.1.88 match: FileWriteTool, 0.425)
+//@ chunk-5xgkngpb.js:1413686-1419241 fingerprint (2.1.88 match: FileWriteTool, 0.426)
 /**
  * Write 工具定义（name "Write"）。validateInput：空字节、不稳定路径、用户电脑路径、工作树隔离、子代理禁止写 REPORT/SUMMARY/FINDINGS/ANALYSIS*.md、记忆目录 lint、deny/Read deny、目录/非普通文件、Perforce 只读、只读过开头、必须先读且未被修改。
  */
 var FileWriteTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1414204", () => {
+deferInit("chunk-5xgkngpb.js:1413686", () => {
   FileWriteTool = buildTool({
     name: FILE_WRITE_TOOL_NAME,
     ruleContentField: "file_path",
@@ -274,9 +277,9 @@ deferInit("chunk-e6aww6q8.js:1414204", () => {
       return "Write a file to the local filesystem.";
     },
     userFacingName,
-    getToolUseSummary: getToolUseSummary_3,
+    getToolUseSummary: getToolUseSummary_2,
     getActivityDescription(input) {
-      let toolUseSummary = getToolUseSummary_3(input);
+      let toolUseSummary = getToolUseSummary_2(input);
       return toolUseSummary ? `Writing ${toolUseSummary}` : "Writing file";
     },
     async prompt({ model, leanPrompt }) {
@@ -368,7 +371,7 @@ deferInit("chunk-e6aww6q8.js:1414204", () => {
         permissionCheckFailureDecision(input) {
           return buildUnfinishedCheckDecision(
             FILE_WRITE_TOOL_NAME,
-            isPlainObject_5(input) ? input.file_path : undefined,
+            isPlainObject_6(input) ? input.file_path : undefined,
             toolContext.permissions(),
           );
         },
@@ -395,15 +398,15 @@ deferInit("chunk-e6aww6q8.js:1414204", () => {
             (permissionResult.updatedInput !== undefined && permissionResult.updatedInput !== input)
           )
             return permissionResult;
-          let toolUseSummary = getToolUseSummary_2(input, "content", memoryWriteSource(toolContext), {
+          let updated = renderToolUseMessage_2(input, "content", memoryWriteSource(toolContext), {
             host: toolContext.session.host,
             toolUseId: callOptions.toolUseId,
           });
-          return toolUseSummary === input
+          return updated === input
             ? permissionResult
             : {
                 ...permissionResult,
-                updatedInput: toolUseSummary,
+                updatedInput: updated,
               };
         },
         async validateInput(input, callOptions) {
@@ -519,8 +522,8 @@ deferInit("chunk-e6aww6q8.js:1414204", () => {
             };
           let readState = callContext.readFileState.get(absolutePath);
           if (!readState || readState.isPartialView) {
-            let canonicalName = getCanonicalName(callContext.model());
-            let modelBucket = toTelemetryModelSlug(canonicalName);
+            let modelName = callContext.model();
+            let canonicalName = getCanonicalName(modelName);
             let guardSkipped =
               !readState &&
               !isNotebookPathIgnoringTrailingDots(absolutePath) &&
@@ -531,7 +534,7 @@ deferInit("chunk-e6aww6q8.js:1414204", () => {
                 callContext,
                 callContext.permissions(),
               );
-            let readBaseline = guardSkipped ? callContext.remoteCall?.readBaseline : undefined;
+            let readBaseline = guardSkipped ? callContext.readBaseline : undefined;
             let baselineState =
               readBaseline === undefined
                 ? "absent"
@@ -543,6 +546,7 @@ deferInit("chunk-e6aww6q8.js:1414204", () => {
                       callContext.permissions(),
                     ),
                   );
+            let modelBucket = telemetryBucketForModelPair(canonicalName, modelName);
             logEvent("tengu_write_tool_not_read_hypothetical", {
               wouldHaveResult:
                 readState && Math.floor(fileMtimeMs) > readState.timestamp
@@ -554,7 +558,7 @@ deferInit("chunk-e6aww6q8.js:1414204", () => {
               modelBucket,
               servedCall: callContext.remoteCall !== undefined,
               ...(callContext.remoteCall?.model !== undefined && {
-                callerModelBucket: toTelemetryModelSlug(callContext.remoteCall.model),
+                callerModelBucket: telemetryBucketForCallerModel(callContext.remoteCall.model),
               }),
               readBaseline: fromEnum(baselineState),
             });
@@ -632,7 +636,7 @@ deferInit("chunk-e6aww6q8.js:1414204", () => {
     },
   });
 });
-//@ chunk-e6aww6q8.js:1419759-1423789 placement
+//@ chunk-5xgkngpb.js:1419241-1423262 placement
 /**
  * Write 工具的执行：权限与写入阻止检查、读状态新鲜度校验、记忆文件处理、写入或暂存审阅，之后通知 LSP、计算 diff 并返回 create/update 结果。
  */
@@ -689,7 +693,7 @@ async function callFileWrite({ file_path: filePath, content }, toolContextView, 
             getCanonicalName(toolContextView.model()),
             toolContextView.remoteCall,
           ),
-          readBaseline: toolContextView.remoteCall?.readBaseline,
+          readBaseline: toolContextView.readBaseline,
           servedOn: toolContextView.remoteCall?.origin.hostName,
           readNotAutoAllowed: () =>
             !readAutoAllowedForMutation(

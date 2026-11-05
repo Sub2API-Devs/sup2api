@@ -3,9 +3,9 @@
  *
  * 自动压缩状态（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4x54g1ez.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gf1bbvvf.js (3)
  * attribution: placement 3
  */
 import { isAutoCompactEnabled, canCompactInRemote } from "./compactSettings.js";
@@ -13,7 +13,7 @@ import { getModelContextInfo } from "../../utils/model/modelContextInfo.js";
 import { effectiveContextWindow, hasExplicitWindow, windowSource } from "./autoCompactWindow.js";
 import { getAutoCompactThresholdTokens } from "./autoCompact.js";
 
-//@ chunk-4x54g1ez.js:280-431 placement
+//@ chunk-gf1bbvvf.js:281-433 placement
 /**
  * 自动压缩状态快照（开关、有效窗口、阈值、是否执行、来源）。
  */
@@ -31,7 +31,7 @@ function computeAutocompactState(model, autoCompactWindow) {
     source: windowSource(modelContextInfo, autoCompactWindow),
   };
 }
-//@ chunk-4x54g1ez.js:431-545 placement
+//@ chunk-gf1bbvvf.js:433-547 placement
 /**
  * 状态变化时才通知的自动压缩状态上报器。
  */
@@ -49,7 +49,7 @@ function createAutocompactStateReporter(onChange) {
     },
   };
 }
-//@ chunk-4x54g1ez.js:545-704 placement
+//@ chunk-gf1bbvvf.js:547-706 placement
 /**
  * 两个状态快照是否相同。
  */

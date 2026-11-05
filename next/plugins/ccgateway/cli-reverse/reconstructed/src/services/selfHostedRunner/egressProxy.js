@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自托管 runner 的出口代理：本地监听、注入 Proxy-Authorization（命令或文件取得）、处理 CONNECT 与 407。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-88g43zt5.js (35)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-80gbjtkg.js (35)
  * attribution: placement 35
  */
 import { open } from "fs/promises";
@@ -27,7 +27,7 @@ import { getUsableProxyUrl, parseProxyUrl, configureGlobalAgents } from "../../u
 import { getMTLSConfig } from "../../utils/mtls.js";
 import { getCACertificates } from "../../utils/caCerts.js";
 
-//@ chunk-88g43zt5.js:1000-1197 placement
+//@ chunk-80gbjtkg.js:999-1196 placement
 /**
  * 自托管 runner 出口代理相关常量：代理环境变量名、授权命令/文件环境变量与 runner 标识。
  */
@@ -35,14 +35,14 @@ var PROXY_ENV_VARS = ["https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY"];
 var PROXY_AUTHORIZATION_COMMAND_ENV_VAR = "SELF_HOSTED_RUNNER_PROXY_AUTHORIZATION_COMMAND";
 var RUNNER_PROXY_AUTHORIZATION_FILE_ENV = "SELF_HOSTED_RUNNER_PROXY_AUTHORIZATION_FILE";
 var CLAUDE_SELF_HOSTED_RUNNER = "claude-self-hosted-runner";
-//@ chunk-88g43zt5.js:1197-1284 placement
+//@ chunk-80gbjtkg.js:1196-1283 placement
 class ProxyAuthorizationMintError extends Error {
   constructor(message) {
     super(message);
     this.name = "ProxyAuthorizationMintError";
   }
 }
-//@ chunk-88g43zt5.js:1284-1457 placement
+//@ chunk-80gbjtkg.js:1283-1456 placement
 var HEAD_TIMEOUT_MS = 30000;
 var MAX_HEAD_BYTES = 16384;
 var CONNECT_TIMEOUT_MS = 30000;
@@ -57,20 +57,20 @@ var MAX_BUFFERED_BYTES = 65536;
 var CONTROL_CHAR_PATTERN = /[\x00-\x08\x0a-\x1f\x7f-\x9f]/;
 var MAX_AUTHORIZATION_BYTES = 4096;
 var HEADER_LINE_PATTERN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+:/;
-//@ chunk-88g43zt5.js:1457-1523 placement
+//@ chunk-80gbjtkg.js:1456-1521 placement
 /**
  * 清洗日志文本：去掉控制字符（含代理）并截断到给定长度。
  */
 function sanitizeLogText(text, maxLength = 200) {
   return truncateToLength(text.replace(/[\p{Cc}\p{Cs}]/gu, ""), maxLength);
 }
-//@ chunk-88g43zt5.js:1523-1637 placement
+//@ chunk-80gbjtkg.js:1521-1635 placement
 function sanitizeAuthorization(headerValue) {
   if (headerValue === undefined || headerValue === "") return;
   if (Buffer.byteLength(headerValue, "latin1") > MAX_AUTHORIZATION_BYTES) return;
   return CONTROL_CHAR_PATTERN.test(headerValue) ? undefined : headerValue;
 }
-//@ chunk-88g43zt5.js:1637-1971 placement
+//@ chunk-80gbjtkg.js:1635-1969 placement
 function validateProxyAuthorization(rawValue) {
   let trimmed = rawValue.trim();
   if (!trimmed) throw new ProxyAuthorizationMintError("proxy authorization source returned an empty value");
@@ -82,7 +82,7 @@ function validateProxyAuthorization(rawValue) {
     );
   return trimmed;
 }
-//@ chunk-88g43zt5.js:1971-3329 placement
+//@ chunk-80gbjtkg.js:1969-3326 placement
 /**
  * 从 --proxy-authorization-command（执行命令）或 --proxy-authorization-file（读文件）取得代理认证值，带超时与大小限制。
  */
@@ -176,7 +176,7 @@ function mintProxyAuthorization(options) {
     },
   };
 }
-//@ chunk-88g43zt5.js:3329-3484 placement
+//@ chunk-80gbjtkg.js:3326-3481 placement
 function getHeaderValue(headerLines, headerName) {
   let lower = headerName.toLowerCase();
   for (let headerLine of headerLines) {
@@ -186,7 +186,7 @@ function getHeaderValue(headerLines, headerName) {
   }
   return;
 }
-//@ chunk-88g43zt5.js:3484-3642 placement
+//@ chunk-80gbjtkg.js:3481-3639 placement
 function pickHeaders(headerLines, headerNames) {
   let wantedNames = new Set(headerNames.map((headerName) => headerName.toLowerCase()));
   return headerLines.filter((headerLine) => {
@@ -194,7 +194,7 @@ function pickHeaders(headerLines, headerNames) {
     return index > 0 && wantedNames.has(headerLine.slice(0, index).trim().toLowerCase());
   });
 }
-//@ chunk-88g43zt5.js:3642-3801 placement
+//@ chunk-80gbjtkg.js:3639-3798 placement
 function omitHeaders(headerLines, headerNames) {
   let omittedNames = new Set(headerNames.map((headerName) => headerName.toLowerCase()));
   return headerLines.filter((headerLine) => {
@@ -202,9 +202,9 @@ function omitHeaders(headerLines, headerNames) {
     return !(index > 0 && omittedNames.has(headerLine.slice(0, index).trim().toLowerCase()));
   });
 }
-//@ chunk-88g43zt5.js:3801-3811 placement
+//@ chunk-80gbjtkg.js:3798-3808 placement
 var MIN_TRIM_LINE_CHARS = 16;
-//@ chunk-88g43zt5.js:3811-4034 placement
+//@ chunk-80gbjtkg.js:3808-4031 placement
 function headContainsSecret(head, secretValue) {
   let str = Buffer.from(secretValue, "utf8").toString("latin1");
   let needleVariants = [str];
@@ -217,9 +217,9 @@ function headContainsSecret(head, secretValue) {
     needleVariants.some((needle) => headLine.includes(needle)),
   );
 }
-//@ chunk-88g43zt5.js:4034-4091 placement
+//@ chunk-80gbjtkg.js:4031-4088 placement
 var PROXY_AUTH_HEADER_NAMES = ["proxy-authenticate", "proxy-authentication-info"];
-//@ chunk-88g43zt5.js:4091-4408 placement
+//@ chunk-80gbjtkg.js:4088-4405 placement
 /**
  * 把一个流的数据转发到另一个流，最多转发指定字节数（超出时回调一次），处理背压。
  */
@@ -247,7 +247,7 @@ function pipeLimited(source, destination, bodyLength, firstChunk, onOverflow) {
     source.removeListener("data", onData);
   };
 }
-//@ chunk-88g43zt5.js:4408-5258 placement
+//@ chunk-80gbjtkg.js:4405-5256 placement
 /**
  * 从 socket 读取 HTTP 请求/响应头直到空行：超时、超过大小上限或连接提前关闭时报错；返回起始行、头部行与剩余字节。
  */
@@ -302,18 +302,18 @@ function readHttpHead(socket, maxBytes, timeoutMs, prefix = Buffer.alloc(0)) {
     if (!settled) socket.resume();
   });
 }
-//@ chunk-88g43zt5.js:5258-5372 placement
+//@ chunk-80gbjtkg.js:5256-5370 placement
 function endSocket(socket, body) {
   if (socket.destroyed) return;
   socket.resume();
   if (socket.writable) socket.end(body);
   setTimeout((pendingSocket) => pendingSocket.destroy(), DESTROY_GRACE_MS, socket).unref();
 }
-//@ chunk-88g43zt5.js:5372-5417 placement
+//@ chunk-80gbjtkg.js:5370-5415 placement
 function latin1Buffer(text) {
   return Buffer.from(text, "latin1");
 }
-//@ chunk-88g43zt5.js:5417-5570 placement
+//@ chunk-80gbjtkg.js:5415-5568 placement
 function proxyAuthRequiredResponse() {
   return `HTTP/1.1 407 Proxy Authentication Required\r
 Proxy-Authenticate: Basic realm="${CLAUDE_SELF_HOSTED_RUNNER}"\r
@@ -322,7 +322,7 @@ Connection: close\r
 \r
 `;
 }
-//@ chunk-88g43zt5.js:5570-5712 placement
+//@ chunk-80gbjtkg.js:5568-5710 placement
 function plainHttpResponse(status, statusText, body) {
   return (
     `HTTP/1.1 ${status} ${statusText}\r
@@ -333,7 +333,7 @@ Connection: close\r
 ` + body
   );
 }
-//@ chunk-88g43zt5.js:5712-6305 placement
+//@ chunk-80gbjtkg.js:5710-6303 placement
 /**
  * 解析出口代理收到的绝对形式 HTTP 请求（http://host/...），去掉代理相关头并补 Host，得到目标与改写后的请求头。
  */
@@ -369,14 +369,14 @@ function parseAbsoluteFormRequest(head) {
     ),
   };
 }
-//@ chunk-88g43zt5.js:6305-6434 placement
+//@ chunk-80gbjtkg.js:6303-6432 placement
 class ClientGoneError extends Error {
   constructor() {
     super("client closed before the upstream connection was ready");
     this.name = "ClientGoneError";
   }
 }
-//@ chunk-88g43zt5.js:6434-6746 placement
+//@ chunk-80gbjtkg.js:6432-6744 placement
 /**
  * 暂时缓冲 socket 的数据（超量时暂停），返回是否已关闭与取出缓冲的方法。
  */
@@ -407,7 +407,7 @@ function bufferSocket(socket, prefix) {
     },
   };
 }
-//@ chunk-88g43zt5.js:6746-16132 placement
+//@ chunk-80gbjtkg.js:6744-16134 placement
 /**
  * 自托管 runner 的出口代理（runner:egress-proxy）：本地监听并转发到上游 HTTP(S) 代理，注入 Proxy-Authorization，处理 CONNECT 与 407。
  */
@@ -1121,11 +1121,11 @@ Connection: close\r
       }),
   };
 }
-//@ chunk-88g43zt5.js:16132-16189 placement
+//@ chunk-80gbjtkg.js:16134-16191 placement
 function isIpLiteralHost(host) {
   return /^[\d.]+$/.test(host) || host.includes(":");
 }
-//@ chunk-88g43zt5.js:16189-16212 placement
+//@ chunk-80gbjtkg.js:16191-16214 placement
 /**
  * 单个 host 的出口代理状态：当前活动连接与句柄。
  */
@@ -1133,20 +1133,20 @@ class EgressProxyState {
   active;
   handle;
 }
-//@ chunk-88g43zt5.js:16212-16237 placement
+//@ chunk-80gbjtkg.js:16214-16239 placement
 var egressProxySlots = new HostScoped(() => new EgressProxyState());
-//@ chunk-88g43zt5.js:16237-16274 placement
+//@ chunk-80gbjtkg.js:16239-16276 placement
 /**
  * 取当前 host 的出口代理状态。
  */
 function currentEgressProxy() {
   return egressProxySlots.of(getRootSession().host);
 }
-//@ chunk-88g43zt5.js:16274-16308 placement
+//@ chunk-80gbjtkg.js:16276-16310 placement
 function isEgressProxyActive() {
   return currentEgressProxy().active;
 }
-//@ chunk-88g43zt5.js:16308-16461 placement
+//@ chunk-80gbjtkg.js:16310-16463 placement
 function rewriteProxyEnv(url, env) {
   let mapped = PROXY_ENV_VARS.map((proxyEnvName) => [proxyEnvName, env[proxyEnvName]]);
   let originalEnv = {};
@@ -1164,7 +1164,7 @@ function rewriteProxyEnv(url, env) {
     original: originalEnv,
   };
 }
-//@ chunk-88g43zt5.js:16461-16601 placement
+//@ chunk-80gbjtkg.js:16463-16603 placement
 function originalProxyEnv(sourceEnv = process.env) {
   let active = currentEgressProxy().active;
   if (!active)
@@ -1178,7 +1178,7 @@ function originalProxyEnv(sourceEnv = process.env) {
     if (proxyEnvName in active.original) restoredEnv[proxyEnvName] = active.original[proxyEnvName];
   return restoredEnv;
 }
-//@ chunk-88g43zt5.js:16601-16881 placement
+//@ chunk-80gbjtkg.js:16603-16883 placement
 function egressProxyChildEnv(sourceEnv = process.env) {
   let active = currentEgressProxy().active;
   if (!active) return {};
@@ -1195,7 +1195,7 @@ function egressProxyChildEnv(sourceEnv = process.env) {
     childEnv[proxyEnvName] = active.rewritten.includes(proxyEnvName) ? active.url : undefined;
   return childEnv;
 }
-//@ chunk-88g43zt5.js:16881-17471 placement
+//@ chunk-80gbjtkg.js:16883-17473 placement
 /**
  * 确定 Proxy-Authorization 的来源：命令或文件（参数或环境变量），两者都设置时报错。
  */
@@ -1226,7 +1226,7 @@ function resolveProxyAuthSource(options, env = process.env) {
     };
   return;
 }
-//@ chunk-88g43zt5.js:17471-18045 placement
+//@ chunk-80gbjtkg.js:17473-18047 placement
 /**
  * 生成出口代理授权配置：确认已设置 HTTP(S)_PROXY 且为 http/https，返回来源与上游代理地址。
  */
@@ -1248,7 +1248,7 @@ function proxyAuthorizationConfig(options, env = process.env) {
     upstreamProxyUrl: proxyUrl,
   };
 }
-//@ chunk-88g43zt5.js:18045-19510 placement
+//@ chunk-80gbjtkg.js:18047-19512 placement
 async function startRunnerEgressProxy(options, hooks) {
   let proxyState = currentEgressProxy();
   let mtlsConfig = getMTLSConfig();
@@ -1302,7 +1302,7 @@ async function startRunnerEgressProxy(options, hooks) {
   };
   return proxyState.handle;
 }
-//@ chunk-88g43zt5.js:19510-19972 placement
+//@ chunk-80gbjtkg.js:19512-19974 placement
 /**
  * 编排器子命令不支持 Proxy-Authorization 参数，传入时报错。
  */
@@ -1321,7 +1321,6 @@ function rejectOrchestratorProxyAuth(argv, envVars = process.env) {
     );
 }
 export {
-  rejectOrchestratorProxyAuth,
   startEgressProxy,
   ProxyAuthorizationMintError,
   isEgressProxyActive,
@@ -1330,4 +1329,5 @@ export {
   RUNNER_PROXY_AUTHORIZATION_FILE_ENV,
   proxyAuthorizationConfig,
   startRunnerEgressProxy,
+  rejectOrchestratorProxyAuth,
 };

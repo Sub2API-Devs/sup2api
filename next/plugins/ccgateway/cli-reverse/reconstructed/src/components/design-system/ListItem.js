@@ -3,9 +3,9 @@
  *
  * 列表项：聚焦指针、选中/禁用/成功等状态色、描述。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/design-system/ListItem.tsx
- * pieces: chunk-ey2qag4x.js (3)
+ * pieces: chunk-p1yqn9ds.js (3)
  * attribution: fingerprint 1, sole-consumer 2
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -25,7 +25,7 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ey2qag4x.js:19808-22111 fingerprint (2.1.88 match: ListItem, 0.589)
+//@ chunk-p1yqn9ds.js:19767-22050 fingerprint (2.1.88 match: ListItem, 0.589)
 function ListItem(props) {
   let $ = useMemoCache(47);
   let {
@@ -246,7 +246,7 @@ function ListItem(props) {
   } else rowElement = $[46];
   return rowElement;
 }
-//@ chunk-ey2qag4x.js:22111-23007 sole-consumer
+//@ chunk-p1yqn9ds.js:22050-22946 sole-consumer
 /**
  * 列表项左侧指示符：禁用、焦点、悬停、可向上/向下滚动时显示不同符号。
  */
@@ -334,9 +334,9 @@ function ListItemIndicator(props) {
   } else blankPlaceholder = $[11];
   return blankPlaceholder;
 }
-//@ chunk-ey2qag4x.js:23007-23011 sole-consumer
+//@ chunk-p1yqn9ds.js:22946-22950 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ey2qag4x.js:23007", () => {
+deferInit("chunk-p1yqn9ds.js:22946", () => {
   init_react_production();
 });
 export { ListItem };

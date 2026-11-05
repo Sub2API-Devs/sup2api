@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/core/pagination.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (4)
+ * pieces: chunk-vn3g7zt8.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
  */
 import { __classPrivateFieldSet, __classPrivateFieldGet } from "../internal/tslib.mjs";
@@ -11,7 +11,7 @@ import { APIPromise } from "./api-promise.mjs";
 import { defaultParseResponse } from "../internal/parse.mjs";
 import { maybeObj } from "../internal/utils/values.mjs";
 
-//@ chunk-hwmsct5x.js:37300-38193 esm-layout
+//@ chunk-vn3g7zt8.js:37671-38564 esm-layout
 var _AbstractPage_client;
 var AbstractPage = (() => {
   class AbstractPage {
@@ -68,7 +68,7 @@ var PagePromise = (() => {
   }
   return PagePromise;
 })();
-//@ chunk-hwmsct5x.js:38193-38746 esm-fingerprint
+//@ chunk-vn3g7zt8.js:38564-39117 esm-fingerprint
 class Page extends AbstractPage {
   constructor(client, response, body, options) {
     super(client, response, body, options);
@@ -107,7 +107,7 @@ class Page extends AbstractPage {
     };
   }
 }
-//@ chunk-hwmsct5x.js:38746-39027 esm-fingerprint
+//@ chunk-vn3g7zt8.js:39117-39398 esm-fingerprint
 class TokenPage extends AbstractPage {
   constructor(client, response, body, options) {
     super(client, response, body, options);
@@ -129,7 +129,7 @@ class TokenPage extends AbstractPage {
     };
   }
 }
-//@ chunk-hwmsct5x.js:39027-39341 esm-fingerprint
+//@ chunk-vn3g7zt8.js:39398-39712 esm-fingerprint
 class BidirectionalPageCursor extends AbstractPage {
   constructor(client, response, body, options) {
     super(client, response, body, options);

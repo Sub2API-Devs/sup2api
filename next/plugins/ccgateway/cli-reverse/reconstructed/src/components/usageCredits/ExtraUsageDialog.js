@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。额外用量对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (6)
  * attribution: placement 6
  */
 import { stripVTControlCharacters } from "util";
@@ -81,7 +81,7 @@ import { Byline } from "../design-system/Byline.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { Dialog } from "../design-system/Dialog.js";
 import {
-  useInputRefusalWindow,
+  useRecentInputWithin,
   useRefusalTracker,
   useMountTime,
   settleKey,
@@ -90,7 +90,7 @@ import { EXTRA_USAGE_HELP_URL } from "../../services/claudeAiLimits.js";
 import { ConfirmSelect } from "../design-system/ConfirmSelect.js";
 import { replaceControlChars } from "../../utils/resultError.js";
 
-//@ chunk-18hwfzwa.js:1134082-1134549 placement
+//@ chunk-czq1j3j2.js:1164864-1165331 placement
 function ExtraUsageDialogEntry(props) {
   let $ = useMemoCache(8);
   let { onDone, initialStep, entryReason, onBeforePurchase, onPurchaseSuccess } = props;
@@ -132,7 +132,7 @@ function ExtraUsageDialogEntry(props) {
   } else dialogElement = $[7];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1134549-1143182 placement
+//@ chunk-czq1j3j2.js:1165331-1173964 placement
 /**
  * /extra-usage 内联对话框：加载账户余额与支付方式，支持购买预设/自定义额度、设置月上限、自动充值、无卡时回退浏览器（tengu_extra_usage_inline_dialog_fallback_browser）。
  */
@@ -719,7 +719,7 @@ function ExtraUsageDialog({
       });
   }
 }
-//@ chunk-18hwfzwa.js:1143182-1143814 placement
+//@ chunk-czq1j3j2.js:1173964-1174596 placement
 /**
  * 额度错误对话框：显示错误并提示回车打开用量设置页。
  */
@@ -789,26 +789,26 @@ function UsageCreditsErrorDialog(props) {
   } else dialogElement = $[8];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1143814-1143887 placement
+//@ chunk-czq1j3j2.js:1174596-1174669 placement
 function formatCardOnFile(paymentMethod) {
   return `${paymentMethod.brand ?? paymentMethod.type} \xB7\xB7\xB7\xB7${paymentMethod.last4 ?? ""}`;
 }
-//@ chunk-18hwfzwa.js:1143887-1146495 placement
+//@ chunk-czq1j3j2.js:1174669-1177277 placement
 function TurnOnUsageCreditsStep(props) {
   let $ = useMemoCache(64);
   let { pm, onConfirm, onCancel } = props;
-  let inputRefusalWindow = useInputRefusalWindow();
+  let isRecentInput = useRecentInputWithin();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
   let isInputRefused;
-  if ($[0] !== inputRefusalWindow || $[1] !== noteRefused || $[2] !== refusedWithin) {
+  if ($[0] !== isRecentInput || $[1] !== noteRefused || $[2] !== refusedWithin) {
     isInputRefused = function isInputRefused_() {
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (isRecentInput() || refusedWithin()) {
         noteRefused();
         return true;
       }
       return false;
     };
-    $[0] = inputRefusalWindow;
+    $[0] = isRecentInput;
     $[1] = noteRefused;
     $[2] = refusedWithin;
     $[3] = isInputRefused;
@@ -838,7 +838,7 @@ function TurnOnUsageCreditsStep(props) {
   let focus;
   let onConfirm_2;
   if (
-    $[4] !== inputRefusalWindow ||
+    $[4] !== isRecentInput ||
     $[5] !== remount.remountKey ||
     $[6] !== noteRefused ||
     $[7] !== onCancel ||
@@ -853,7 +853,7 @@ function TurnOnUsageCreditsStep(props) {
         if (hasAnsweredRef.current) {
           return;
         }
-        if (inputRefusalWindow() || refusedWithin()) {
+        if (isRecentInput() || refusedWithin()) {
           noteRefused();
           return;
         }
@@ -912,7 +912,7 @@ function TurnOnUsageCreditsStep(props) {
     focus = "cancel";
     onConfirm_2 = answerOnce(onConfirm);
     onCancel_2 = answerOnce(onCancel);
-    $[4] = inputRefusalWindow;
+    $[4] = isRecentInput;
     $[5] = remount.remountKey;
     $[6] = noteRefused;
     $[7] = onCancel;
@@ -1049,8 +1049,8 @@ function TurnOnUsageCreditsStep(props) {
   } else dialogElement = $[63];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1146495-1146536 placement
+//@ chunk-czq1j3j2.js:1177277-1177318 placement
 function sanitizeUserText(name) {
   return replaceControlChars(stripVTControlCharacters(name)).trim();
 }
-export { sanitizeUserText, formatCardOnFile, ExtraUsageDialogEntry };
+export { formatCardOnFile, sanitizeUserText, ExtraUsageDialogEntry };

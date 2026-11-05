@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：收集各目录的 git origin 与推送目标状态，生成分类器用的 repoVisibility 元数据（无法解析时追加 unknown 项）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (8)
  * attribution: sole-consumer 1, placement 7
  */
 import { isAbsolute, resolve } from "path";
@@ -40,7 +40,7 @@ import { getCwd } from "../cwd.js";
 import { gitPull } from "../plugins/marketplaceManager.js";
 import { sleep } from "../sleep.js";
 
-//@ chunk-s61vbvea.js:531881-532001 sole-consumer
+//@ chunk-7jxyna5q.js:448984-449104 sole-consumer
 /**
  * 已有目录状态缓存时直接取 branch，否则 git rev-parse --abbrev-ref HEAD。
  */
@@ -48,7 +48,7 @@ async function getGitBranchForDir(gitState, directory, gitOptions) {
   if (gitState.hasDir(directory)) return gitState.dirState(directory)?.branch;
   return execGitNoThrow(directory, ["rev-parse", "--abbrev-ref", "HEAD"], gitOptions);
 }
-//@ chunk-s61vbvea.js:532001-532138 placement
+//@ chunk-7jxyna5q.js:449104-449241 placement
 async function getDirRemoteState(gitState, dir) {
   if (gitState.hasDir(dir)) {
     let state = gitState.dirState(dir);
@@ -62,14 +62,14 @@ async function getDirRemoteState(gitState, dir) {
   }
   return checkCurrentRepoVisibility(dir);
 }
-//@ chunk-s61vbvea.js:532376-532583 placement
+//@ chunk-7jxyna5q.js:449479-449686 placement
 async function getRemoteUrlForPush(gitState, dir, remote, gitOptions) {
   if (gitState.hasDir(dir)) return gitState.namedRemoteUrl(dir, remote);
   let pushUrl = await execGitNoThrow(dir, ["config", "--get", `remote.${remote}.pushurl`], gitOptions);
   if (pushUrl !== undefined) return pushUrl;
   return execGitNoThrow(dir, ["config", "--get", `remote.${remote}.url`], gitOptions);
 }
-//@ chunk-s61vbvea.js:532583-533196 placement
+//@ chunk-7jxyna5q.js:449686-450299 placement
 /**
  * 把收集到的 origin 状态与推送目标去重排序，生成分类器 repoVisibility 元数据列表；有无法解析或（超时后）仍在等待的目标时追加 remote 为空、visibility 为 unknown 的一项。
  */
@@ -113,17 +113,17 @@ function buildRepoVisibilityMeta(collected, timedOut) {
     });
   return entries;
 }
-//@ chunk-s61vbvea.js:533196-533258 placement
+//@ chunk-7jxyna5q.js:450299-450361 placement
 function looksLikeGitRemoteUrl(remoteUrl) {
   return remoteUrl.includes("://") || remoteUrl.startsWith("git@");
 }
-//@ chunk-s61vbvea.js:533258-533360 placement
+//@ chunk-7jxyna5q.js:450361-450463 placement
 async function resolveRemoteVisibility(remoteUrl) {
   let parsed = looksLikeGitRemoteUrl(remoteUrl) ? parseGitRemote(remoteUrl) : null;
   if (!parsed) return "unresolved";
   return checkRepoVisibility(parsed.host, parsed.owner, parsed.name);
 }
-//@ chunk-s61vbvea.js:533360-533523 placement
+//@ chunk-7jxyna5q.js:450463-450626 placement
 async function resolveNamedRemoteVisibility(gitState, dir, remote, origin, gitOptions) {
   if (remote === "origin") {
     await origin.stateP;
@@ -133,7 +133,7 @@ async function resolveNamedRemoteVisibility(gitState, dir, remote, origin, gitOp
   if (remoteUrl === undefined) return "unresolved";
   return resolveRemoteVisibility(remoteUrl);
 }
-//@ chunk-s61vbvea.js:533523-535191 placement
+//@ chunk-7jxyna5q.js:450626-452297 placement
 /**
  * 对 Bash/PowerShell 中会把数据推到外部的 git/gh 命令（push、remote set-url、gh pr/repo/release 等），解析目标仓库并查询可见性，在时限内返回 repoVisibility 元数据（超时返回已得部分）；任何异常返回 null。
  */

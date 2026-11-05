@@ -3,20 +3,20 @@
  *
  * 2.1.316 新增：终端设置命令（键位与终端集成）的命令对象
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/terminalSetup/index.ts
- * pieces: chunk-e6aww6q8.js (5)
+ * pieces: chunk-5xgkngpb.js (5)
  * attribution: placement 5
  */
 import { env } from "../../utils/env.js";
 
-//@ chunk-e6aww6q8.js:1762601-1762652 placement (2.1.88 match: default, 1)
+//@ chunk-5xgkngpb.js:1839672-1839723 placement (2.1.88 match: default, 1)
 var stubTerminalSetupCommand = {
   isEnabled: () => false,
   isHidden: true,
   name: "stub",
 };
-//@ chunk-e6aww6q8.js:1762652-1763391 placement
+//@ chunk-5xgkngpb.js:1839723-1840462 placement
 /**
  * NATIVE_SHIFT_ENTER_TERMINALS：ghostty/kitty/Warp/WezTerm/Windows Terminal。
  */
@@ -49,8 +49,8 @@ var terminalSetupCommandDefinition = {
     ink: true,
   },
 };
-var terminalSetupCommand = terminalSetupCommandDefinition;
-//@ chunk-e6aww6q8.js:1763428-1763678 placement
+var terminalSetupCommandAlias = terminalSetupCommandDefinition;
+//@ chunk-5xgkngpb.js:1840499-1840749 placement
 function waitForStoreValue(store, value, signal) {
   if (store.getSnapshot() === value || signal?.aborted) return Promise.resolve();
   return new Promise((resolve) => {
@@ -67,18 +67,18 @@ function waitForStoreValue(store, value, signal) {
     });
   });
 }
-//@ chunk-e6aww6q8.js:1763678-1763715 placement
+//@ chunk-5xgkngpb.js:1840749-1840786 placement
 /**
  * 等待 store 值变为 false。
  */
 function waitForFalse(store, signal) {
   return waitForStoreValue(store, false, signal);
 }
-//@ chunk-e6aww6q8.js:1763715-1763752 placement
+//@ chunk-5xgkngpb.js:1840786-1840823 placement
 /**
  * 等待 store 值变为 true。
  */
 function waitForTrue(store, signal) {
   return waitForStoreValue(store, true, signal);
 }
-export { waitForFalse, waitForTrue, stubTerminalSetupCommand, terminalSetupCommand };
+export { terminalSetupCommandAlias, stubTerminalSetupCommand, waitForFalse, waitForTrue };

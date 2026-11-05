@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。跨会话消息被对方暂扣/拒绝/过期时给发送方的回执通知。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-eeckpj27.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cw98t810.js (14)
  * attribution: placement 14
  */
 import { createSystemMessage } from "./messages.js";
@@ -13,16 +13,16 @@ import { mainAgentId } from "../bootstrap/state.js";
 import { setOnPeerMessageStatus } from "./udsMessaging.js";
 import { isPeerAddress } from "./peerMessageHeaders.js";
 import { countByAlias } from "../../vendor/lodash-es/countBy.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { plural } from "./stringUtils.js";
 
-//@ chunk-eeckpj27.js:411-427 placement
+//@ chunk-cw98t810.js:411-427 placement
 /**
  * 回执通知的停留时长（500 毫秒）。
  */
 var HOLD_RECEIPT_LINGER_MS = 500;
 var MAX_LISTED_RECEIPTS = 200;
-//@ chunk-eeckpj27.js:427-1592 placement
+//@ chunk-cw98t810.js:427-1592 placement
 /**
  * 跨会话消息被对方暂扣/拒绝/过期时给发送方的回执通知。
  */
@@ -105,7 +105,7 @@ function startCrossSessionHoldReceipt({
   }
   return () => {};
 }
-//@ chunk-eeckpj27.js:1592-1677 placement
+//@ chunk-cw98t810.js:1592-1677 placement
 /**
  * 回执计数的初始结构（held/denied/expired/delivered/refused/dropped 各为空数组）。
  */
@@ -119,14 +119,14 @@ function emptyHoldReceiptCounts() {
     dropped: [],
   };
 }
-//@ chunk-eeckpj27.js:1677-1716 placement
+//@ chunk-cw98t810.js:1677-1716 placement
 /**
  * 取消息的收件人地址（不是有效会话地址时返回空串）。
  */
 function recipientAddress(recipient) {
   return isPeerAddress(recipient.to) ? recipient.to : "";
 }
-//@ chunk-eeckpj27.js:1716-1994 placement
+//@ chunk-cw98t810.js:1716-1994 placement
 /**
  * 收件人列表
  */
@@ -147,7 +147,7 @@ function describeRecipients(recipients) {
   );
   return label === "" ? "" : ` (${label})`;
 }
-//@ chunk-eeckpj27.js:1994-2094 placement
+//@ chunk-cw98t810.js:1994-2094 placement
 function holdReceiptSuffix(receipts) {
   let targets = recipientsLabel(receipts.map(recipientAddress));
   return ` (${targets === "" ? "" : `${targets}; `}msg_id: ${joinLimited(
@@ -155,19 +155,19 @@ function holdReceiptSuffix(receipts) {
     5,
   )})`;
 }
-//@ chunk-eeckpj27.js:2094-2202 placement
+//@ chunk-cw98t810.js:2094-2202 placement
 function recipientsLabel(targets) {
-  let names = uniq(targets.filter((target) => target !== ""));
+  let names = normalizeCaseForComparison_2(targets.filter((target) => target !== ""));
   return names.length === 0 ? "" : `${plural(names.length, "recipient")}: ${joinLimited(names, 3)}`;
 }
-//@ chunk-eeckpj27.js:2202-2280 placement
+//@ chunk-cw98t810.js:2202-2280 placement
 /**
  * 用逗号连接列表，超出条数时追加 “, …”。
  */
 function joinLimited(items, limit) {
   return `${items.slice(0, limit).join(", ")}${items.length > limit ? ", \u2026" : ""}`;
 }
-//@ chunk-eeckpj27.js:2280-2507 placement
+//@ chunk-cw98t810.js:2280-2507 placement
 /**
  * 暂扣结果标签
  */
@@ -185,7 +185,7 @@ function holdOutcomeLabel(outcome) {
       return "refused";
   }
 }
-//@ chunk-eeckpj27.js:2507-3375 placement
+//@ chunk-cw98t810.js:2507-3375 placement
 /**
  * 暂扣原因解释
  */
@@ -203,7 +203,7 @@ function holdReasonExplanation(reason) {
       return "That session is not accepting cross-session messages (the feature is off there, or a setting or policy there refuses them); it was not delivered.";
   }
 }
-//@ chunk-eeckpj27.js:3375-5212 placement
+//@ chunk-cw98t810.js:3375-5212 placement
 /**
  * 跨会话投递回执通知
  */
@@ -224,12 +224,12 @@ function holdReceiptNotice(receipts, count, outcome) {
       return `[Cross-session delivery notice] ${verb} ${wasVerb} refused${outcome}: that session is not accepting cross-session messages (the feature is off there, or a setting or policy there refuses them). Not delivered to that session's Claude. Do not wait for a reply and do not resend; tell the user, or choose another approach.`;
   }
 }
-//@ chunk-eeckpj27.js:5212-5592 placement
+//@ chunk-cw98t810.js:5212-5592 placement
 /**
  * 丢弃原因说明
  */
 function describeDropReasons(drops) {
-  return uniq(
+  return normalizeCaseForComparison_2(
     drops.map((drop) => {
       switch (drop) {
         case "rate-limited":
@@ -249,14 +249,14 @@ function describeDropReasons(drops) {
     .filter((part) => part !== "")
     .join("; ");
 }
-//@ chunk-eeckpj27.js:5592-5986 placement
+//@ chunk-cw98t810.js:5592-5986 placement
 /**
  * 消息被丢弃的通知
  */
 function droppedNotice(drops, count, recipients) {
   return `[Cross-session delivery notice] Do not resend now: ${drops === 1 ? "one of your messages to another session was" : `${drops} of your messages to another session were`} dropped at that session's inbox${count} and NOT delivered${recipients ? ` (${recipients})` : ""}. Treat them as unsent. If the content still matters, fold it into ONE later message after you have finished other work; never retry in a loop.`;
 }
-//@ chunk-eeckpj27.js:5986-6068 placement
+//@ chunk-cw98t810.js:5986-6068 placement
 /**
  * 构造通知的投递选项（非主动通知则标为 passive 且优先）。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：创建由 work secret 驱动的 headless 会话：接管权限上下文、动态 MCP 状态与配置应用队列，返回会话控制对象；附加到 headless 会话时拉取会话配置（auto mode 环境等）并在仍需要时应用等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-h3xe040t.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-68kp927q.js (11)
  * attribution: placement 11
  */
 import { getJwtSessionId } from "./jwtUtils.js";
@@ -21,14 +21,14 @@ import {
 } from "./bridgeServerConfig.js";
 import { lit, fromEnum } from "../services/analytics/safeMetadata.js";
 import { getBridgeBaseUrl } from "./bridgeConfig.js";
-import { count, stringArray, arraysEqual } from "../utils/collections.js";
+import { countWhere, stringArray, arraysEqual } from "../utils/collections.js";
 import { logForDebugging } from "../utils/debug.js";
 import { logEvent } from "../services/analytics/index.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { DEFAULTS_PLACEHOLDER } from "../utils/permissions/autoModeRulesPrompt.js";
 import { getFlagSettingsInline, setFlagSettingsInline } from "../bootstrap/state.js";
 import { isPlainObject } from "../utils/isPlainObject.js";
-import { getAutoModeConfig, getSettingsForSource, getInitialSettings_2 } from "../utils/settings/settings.js";
+import { getAutoModeConfig, getSettingsForSource, getInitialSettings } from "../utils/settings/settings.js";
 import { invalidateCommandNames } from "../utils/settings/commandSyncNames.js";
 import { getClaudeAIOAuthTokenOrigin, sameOwnerAccount } from "../utils/auth.js";
 import { normalizeUuidOrNull } from "../utils/agentId.js";
@@ -47,8 +47,7 @@ import { onGrowthBookRefresh } from "../services/analytics/growthbook.js";
 import { isArtifactSdkDefaultOff } from "../services/artifacts/artifactToolGates.js";
 import { useLocalProjectsEntrypoint, clearLocalProjectsEntrypoint } from "../constants/system.js";
 import { setSliceField } from "../state/sliceHelpers.js";
-import { formatPermissionRule } from "../utils/permissions/disallowedToolsFlag.js";
-import { permissionRuleValueFromString } from "../utils/permissions/permissionRuleParser.js";
+import { permissionRuleValueFromString, parseRuleString } from "../utils/permissions/permissionRuleParser.js";
 import { applyValidatedPermissionUpdate } from "../utils/permissions/PermissionUpdate.js";
 import { CLAUDE_CODE_REMOTE, ccrMetaMcpServerConfig } from "../services/mcp/ccrMetaMcp.js";
 import { registerCliOwnedConfig } from "../services/mcp/cliOwnedClients.js";
@@ -68,14 +67,14 @@ import { createHeadlessHearthMount } from "./headlessHearthMount.js";
 import { CCRClient } from "../cli/transports/ccrClient.js";
 import { configureApiKeyHeaders } from "../services/api/client.js";
 
-//@ chunk-h3xe040t.js:13316-13399 placement
+//@ chunk-68kp927q.js:14465-14548 placement
 function pickSessionIdFromWorkSecret(secret, fallbackSessionId) {
   let jwtSessionId = getJwtSessionId(secret.session_ingress_token);
   return jwtSessionId !== undefined && sameSessionId(jwtSessionId, fallbackSessionId)
     ? jwtSessionId
     : fallbackSessionId;
 }
-//@ chunk-h3xe040t.js:13399-13470 placement
+//@ chunk-68kp927q.js:14548-14619 placement
 function resolveBridgeSessionId(secret, fallbackSessionId) {
   try {
     let sessionId = pickSessionIdFromWorkSecret(decodeWorkSecret(secret), fallbackSessionId);
@@ -84,7 +83,7 @@ function resolveBridgeSessionId(secret, fallbackSessionId) {
     return fallbackSessionId;
   }
 }
-//@ chunk-h3xe040t.js:13470-15324 placement
+//@ chunk-68kp927q.js:14619-16473 placement
 /**
  * 解析 work secret 里的 claude_code_args/mcp_config，为 sdk_host 通道生成会话配置（模型、权限、拒绝规则、元 MCP）。
  */
@@ -138,7 +137,7 @@ ${config.appendSystemPrompt}`
       ...carriedConfigFlags(decodedSecret),
       append_prompt: promptAppended,
       deny_rules: denyRuleCount,
-      extra_args_ignored: count(
+      extra_args_ignored: countWhere(
         config.extraArgs,
         (arg) =>
           arg.startsWith("--") &&
@@ -174,7 +173,7 @@ ${config.appendSystemPrompt}`
     if (gateEnabled) logFeatureBad("bridge_server_session_config", verdict);
   }
 }
-//@ chunk-h3xe040t.js:15324-15611 placement
+//@ chunk-68kp927q.js:16473-16760 placement
 function subtractEnvironmentEntries(wanted, merged) {
   let extraCounts = new Map();
   for (let entry of merged)
@@ -197,7 +196,7 @@ function subtractEnvironmentEntries(wanted, merged) {
   }
   return remaining.reverse();
 }
-//@ chunk-h3xe040t.js:15611-16072 placement
+//@ chunk-68kp927q.js:16760-17221 placement
 /**
  * 把服务端下发的 auto mode environment 与本地设置合并，返回合并结果与差异标记。
  */
@@ -244,7 +243,7 @@ function mergeAutoModeEnvironment(hostEntries, mergedEntries, reportFacts) {
   reportFacts(hostEnv);
   invalidateCommandNames();
 }
-//@ chunk-h3xe040t.js:16072-16280 placement
+//@ chunk-68kp927q.js:17221-17429 placement
 function getEnvOAuthAccountIdentity() {
   switch (getClaudeAIOAuthTokenOrigin()) {
     case "env":
@@ -262,7 +261,7 @@ function getEnvOAuthAccountIdentity() {
       return;
   }
 }
-//@ chunk-h3xe040t.js:16280-16513 placement
+//@ chunk-68kp927q.js:17429-17662 placement
 function isSameOwnerCaseInsensitive(attachedAs, candidateOwner) {
   if (!attachedAs || !candidateOwner) return false;
   return sameOwnerAccount(
@@ -276,7 +275,7 @@ function isSameOwnerCaseInsensitive(attachedAs, candidateOwner) {
     },
   );
 }
-//@ chunk-h3xe040t.js:16513-16614 placement
+//@ chunk-68kp927q.js:17662-17763 placement
 var NOOP_SESSION_CONFIG_APPLY = {
   undo: () => null,
   granted: {
@@ -287,7 +286,7 @@ var NOOP_SESSION_CONFIG_APPLY = {
     projectsEntrypoint: false,
   },
 };
-//@ chunk-h3xe040t.js:16614-19156 placement
+//@ chunk-68kp927q.js:17763-20305 placement
 /**
  * 附加到 headless 会话时拉取会话配置（auto mode 环境等）并在仍需要时应用。
  */
@@ -318,7 +317,7 @@ async function fetchAttachSessionConfig(host) {
   let bridgeChildFeatures = resolveBridgeChildFeatures({
     roles,
     modePinned,
-    settings: getInitialSettings_2,
+    settings: getInitialSettings,
   });
   if (grantsEnabled && roles.rcChild && modePinned)
     logFeatureSad("bridge_rc_child_grants", "auto_policy_pinned");
@@ -445,11 +444,11 @@ async function fetchAttachSessionConfig(host) {
     },
   };
 }
-//@ chunk-h3xe040t.js:19156-19225 placement
+//@ chunk-68kp927q.js:20305-20374 placement
 function mcpClientModule_2() {
   return require("../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
-//@ chunk-h3xe040t.js:19225-25833 placement
+//@ chunk-68kp927q.js:20374-26983 placement
 /**
  * 创建由 work secret 驱动的 headless 会话：接管权限上下文、动态 MCP 状态与配置应用队列，返回会话控制对象。
  */
@@ -478,13 +477,13 @@ function createHeadlessWorkSecretSession(host) {
     },
   };
   function countRule(rule) {
-    return count(
+    return countWhere(
       getAppState().toolPermissionContext.alwaysDenyRules.session ?? [],
       (existing) => existing === rule,
     );
   }
   function addDenyRules(rules) {
-    let ruleSet = new Set(rules.map((rule) => formatPermissionRule(permissionRuleValueFromString(rule))));
+    let ruleSet = new Set(rules.map((rule) => permissionRuleValueFromString(parseRuleString(rule))));
     let filtered = [...ruleSet].filter((rule) => countRule(rule) === 0);
     if (filtered.length > 0)
       updatePermissionSlice((slice) =>
@@ -492,10 +491,10 @@ function createHeadlessWorkSecretSession(host) {
           type: "addRules",
           destination: "session",
           behavior: "deny",
-          rules: filtered.map(permissionRuleValueFromString),
+          rules: filtered.map(parseRuleString),
         }),
       );
-    return count([...ruleSet], (rule) => countRule(rule) > 0);
+    return countWhere([...ruleSet], (rule) => countRule(rule) > 0);
   }
   function mountMeta(state, sessionId, url, autoAllowTools, getWorkerBearerToken) {
     if (!getWorkerBearerToken) {

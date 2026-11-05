@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：基于会话事件的调用传输（发送、等待答复、存活探测、期限处理）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-25sm7c4g.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sjeyntvz.js (29)
  * attribution: placement 29
  */
 import { callPlumbingOverSession, BridgeSessionRecovery, mcpClientModule } from "./callPlumbing.js";
@@ -31,7 +31,7 @@ import { currentMcpClients } from "../../services/compact/idleToolResultClearing
 import { serverCacheKey } from "../../services/mcp/client.js";
 import { syncRemoteToolTargets, refreshDeviceBridgeTargets } from "./remoteToolTargets.js";
 
-//@ chunk-25sm7c4g.js:10503-10578 placement
+//@ chunk-sjeyntvz.js:10591-10666 placement
 /**
  * 导出常量或表 `SESSION_TRANSPORT_LIMITS`：值为 { maxRequestBytes: 4128768, defaultDeadlineMs: 58000 }, he = 60000, PROBE_DEADLINE_MS = 1e4。
  */
@@ -41,7 +41,7 @@ var SESSION_TRANSPORT_LIMITS = {
 };
 var HOST_SILENCE_MS = 60000;
 var PROBE_DEADLINE_MS = 1e4;
-//@ chunk-25sm7c4g.js:10578-12284 placement
+//@ chunk-sjeyntvz.js:10666-12372 placement
 function createSessionEventTransport(options) {
   let state = {
     stale: false,
@@ -141,7 +141,7 @@ function createSessionEventTransport(options) {
     },
   };
 }
-//@ chunk-25sm7c4g.js:12284-12751 placement
+//@ chunk-sjeyntvz.js:12372-12839 placement
 function unreachableOutcome(channel) {
   let live = channel.live();
   return live?.asleepSince !== undefined
@@ -165,12 +165,12 @@ function unreachableOutcome(channel) {
           }),
       };
 }
-//@ chunk-25sm7c4g.js:12751-12829 placement
+//@ chunk-sjeyntvz.js:12839-12917 placement
 function isHostAsleep(channel, at) {
   let asleepSince = channel.live()?.asleepSince;
   return asleepSince !== undefined && at >= asleepSince && at - asleepSince < SLEEPING_GRACE_MS;
 }
-//@ chunk-25sm7c4g.js:12829-16676 placement
+//@ chunk-sjeyntvz.js:12917-16820 placement
 /**
  * 经会话事件流把调用发给附着机器：检查在线/睡眠、发送、等待回复或截止、活性探测。
  */
@@ -207,7 +207,9 @@ async function callOverSessionChannel(channel, state, limits, name, input, callM
     if (probeResult === "unsent")
       return {
         kind: "unreachable",
-        detail: "this session's event stream is not accepting requests; nothing was sent",
+        detail:
+          channel.sender.whyNotSending?.() ??
+          "this session's event stream is not accepting requests; nothing was sent",
       };
     if (probeResult === "stalled" || probeResult === "taken_back")
       return {
@@ -348,7 +350,7 @@ async function callOverSessionChannel(channel, state, limits, name, input, callM
   if (!sent.sent)
     return {
       kind: "unreachable",
-      detail: "this session's event stream is closed; nothing was sent",
+      detail: channel.sender.whyNotSending?.() ?? "this session's event stream is closed; nothing was sent",
     };
   logRemoteTools(callMeta.call_id, "sent", {
     leg,
@@ -429,7 +431,7 @@ async function callOverSessionChannel(channel, state, limits, name, input, callM
     });
   return settle(settled);
 }
-//@ chunk-25sm7c4g.js:16676-18944 placement
+//@ chunk-sjeyntvz.js:16820-19088 placement
 function resolveCallAtDeadline(
   entry,
   {
@@ -573,7 +575,7 @@ function resolveCallAtDeadline(
       };
   }
 }
-//@ chunk-25sm7c4g.js:18944-19807 placement
+//@ chunk-sjeyntvz.js:19088-19951 placement
 async function awaitCallReply(call, state, signal, { holdAtDeadline, withdrawable }) {
   let answerPromise = call.reply.then(
     (payload) => ({
@@ -657,17 +659,17 @@ async function awaitCallReply(call, state, signal, { holdAtDeadline, withdrawabl
     late: undefined,
   };
 }
-//@ chunk-25sm7c4g.js:19807-19912 placement
+//@ chunk-sjeyntvz.js:19951-20056 placement
 function isRefusalReply(reply) {
   return (
     reply.kind === "approval_unverified" || (reply.kind === "result" && reply.envelope?.outcome === "refused")
   );
 }
-//@ chunk-25sm7c4g.js:19912-19960 placement
+//@ chunk-sjeyntvz.js:20056-20104 placement
 function isFreshReply(reply) {
   return !isRefusalReply(reply) && reply.kind !== "dropped";
 }
-//@ chunk-25sm7c4g.js:19960-20092 placement
+//@ chunk-sjeyntvz.js:20104-20236 placement
 function isReplyForCallSafe(reply, callId) {
   try {
     return isReplyForCall(reply, callId);
@@ -676,7 +678,7 @@ function isReplyForCallSafe(reply, callId) {
     return false;
   }
 }
-//@ chunk-25sm7c4g.js:20092-20279 placement
+//@ chunk-sjeyntvz.js:20236-20423 placement
 function isReplyForCall(reply, callId) {
   let result = isPlainObject(reply) ? reply.result : undefined;
   let callResult = readCallResult(result);
@@ -689,7 +691,7 @@ function isReplyForCall(reply, callId) {
       return false;
   }
 }
-//@ chunk-25sm7c4g.js:20279-20389 placement
+//@ chunk-sjeyntvz.js:20423-20533 placement
 function readMalformedReplyCallId(reply) {
   if (!isPlainObject(reply)) return;
   return [reply.structuredContent, reply._meta]
@@ -697,7 +699,7 @@ function readMalformedReplyCallId(reply) {
     .map((meta) => meta[ANTHROPIC_REMOTETOOLEXECUTION])
     .find(isPlainObject)?.call_id;
 }
-//@ chunk-25sm7c4g.js:20389-21466 placement
+//@ chunk-sjeyntvz.js:20533-21610 placement
 function readCallReply(reply, callId) {
   if (isRemoteToolCallMeta(reply)) {
     let { [SENDER_BELOW_FLOOR]: belowFloor, ...rest } = reply;
@@ -767,7 +769,7 @@ function readCallReply(reply, callId) {
     ...{},
   };
 }
-//@ chunk-25sm7c4g.js:21466-21787 placement
+//@ chunk-sjeyntvz.js:21610-21931 placement
 async function probeMachine(channel, state, entry, signal) {
   let startedAt = (channel.now ?? Date.now)();
   let probeResult = await sendLivenessProbe(channel, entry, signal);
@@ -784,7 +786,7 @@ async function probeMachine(channel, state, entry, signal) {
     return "there";
   return probeResult === "missed" && !instanceChanged ? "missed" : "unknown";
 }
-//@ chunk-25sm7c4g.js:21787-22092 placement
+//@ chunk-sjeyntvz.js:21931-22236 placement
 async function holdForLiveness(channel, state, entry, signal, budgetMs) {
   if (state.hold === undefined) {
     let abortController = new AbortController();
@@ -808,7 +810,7 @@ async function holdForLiveness(channel, state, entry, signal, budgetMs) {
     if (hold.waiting === 0) hold.stop.abort();
   }
 }
-//@ chunk-25sm7c4g.js:22092-22236 placement
+//@ chunk-sjeyntvz.js:22236-22380 placement
 async function probeUntilAnswered(channel, state, entry, signal, budgetMs) {
   let probeDeadlineMs = channel.probeDeadlineMs ?? PROBE_DEADLINE_MS;
   for (let remainingMs = budgetMs; remainingMs > 0; remainingMs -= probeDeadlineMs) {
@@ -817,7 +819,7 @@ async function probeUntilAnswered(channel, state, entry, signal, budgetMs) {
   }
   return "missed";
 }
-//@ chunk-25sm7c4g.js:22236-22380 placement
+//@ chunk-sjeyntvz.js:22380-22524 placement
 function currentQuietMisses(channel, state) {
   let miss = state.quietMisses[0];
   let live = channel.host()?.live();
@@ -825,11 +827,11 @@ function currentQuietMisses(channel, state) {
     state.quietMisses = [];
   return state.quietMisses;
 }
-//@ chunk-25sm7c4g.js:22380-22469 placement
+//@ chunk-sjeyntvz.js:22524-22613 placement
 function wasHeardAfter(live, at) {
   return live.lastHeardAt > at || (live.lastStillHereAt !== undefined && live.lastStillHereAt > at);
 }
-//@ chunk-25sm7c4g.js:22469-23201 placement
+//@ chunk-sjeyntvz.js:22613-23345 placement
 function quietProbe(channel, state, deadlineMs) {
   if (state.quietProbe !== undefined) return state.quietProbe;
   let host = channel.host();
@@ -872,7 +874,7 @@ function quietProbe(channel, state, deadlineMs) {
   state.quietProbe = probe;
   return probe;
 }
-//@ chunk-25sm7c4g.js:23201-24195 placement
+//@ chunk-sjeyntvz.js:23345-24339 placement
 async function sendLivenessProbe(channel, entry, signal, opts) {
   let now = channel.now ?? Date.now;
   let deadlineMs = opts?.deadlineMs ?? channel.probeDeadlineMs ?? PROBE_DEADLINE_MS;
@@ -933,12 +935,12 @@ async function sendLivenessProbe(channel, entry, signal, opts) {
       return "stream_lost";
   }
 }
-//@ chunk-25sm7c4g.js:24195-24272 placement
+//@ chunk-sjeyntvz.js:24339-24416 placement
 function acceptsAnnounceResult(reply) {
   let result = isPlainObject(reply) ? reply.result : undefined;
   return isPlainObject(result) && parseAnnounce(result.epoch) !== undefined;
 }
-//@ chunk-25sm7c4g.js:24272-24320 placement
+//@ chunk-sjeyntvz.js:24416-24464 placement
 function leftForOutcome(leftFor) {
   return leftFor === undefined
     ? {}
@@ -946,11 +948,11 @@ function leftForOutcome(leftFor) {
         leftFor,
       };
 }
-//@ chunk-25sm7c4g.js:24320-24390 placement
+//@ chunk-sjeyntvz.js:24464-24534 placement
 function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-25sm7c4g.js:24390-24485 placement
+//@ chunk-sjeyntvz.js:24534-24629 placement
 function remoteToolsContext(context) {
   return {
     toolState: context.toolState,
@@ -958,7 +960,7 @@ function remoteToolsContext(context) {
     mcpClients: () => currentMcpClients(context),
   };
 }
-//@ chunk-25sm7c4g.js:24485-24537 placement
+//@ chunk-sjeyntvz.js:24629-24681 placement
 /**
  * 远程工具目标的列表节奏：首次探测 8 s 截止、分页上限 5000、失败清单 30 s 内不重试、失效记录仅当失败超过 2 s 才记，重新列举最短 5 s / 最长 30 s，临时目标 60 s 内视为新鲜。
  */
@@ -968,7 +970,7 @@ var FAILED_LIST_RETRY_MS = 30000;
 var FAILED_LIST_WINDOW_MS = 2000;
 var MIN_RELIST_INTERVAL_MS = 5000;
 var PROVISIONAL_FRESH_MS = 60000;
-//@ chunk-25sm7c4g.js:24537-24796 placement
+//@ chunk-sjeyntvz.js:24681-24940 placement
 class RemoteToolTargetsState {
   recovery = new BridgeSessionRecovery();
   connection = undefined;
@@ -985,7 +987,7 @@ class RemoteToolTargetsState {
   failedAt = undefined;
   inFlight = undefined;
 }
-//@ chunk-25sm7c4g.js:24796-25197 placement
+//@ chunk-sjeyntvz.js:24940-25341 placement
 function nextListingInterval(context) {
   let state = context.toolState.get(RemoteToolTargetsState);
   let now = Date.now();
@@ -1007,15 +1009,19 @@ function nextListingInterval(context) {
   state.listingMemo = undefined;
   return true;
 }
-//@ chunk-25sm7c4g.js:25197-25210 placement
+//@ chunk-sjeyntvz.js:25341-25354 placement
 var MAX_RELIST_INTERVAL_MS = 30000;
-//@ chunk-25sm7c4g.js:25210-25274 placement
+//@ chunk-sjeyntvz.js:25354-25418 placement
 async function refreshRemoteToolTargets(context, hosts, trigger) {
   syncRemoteToolTargets(context, hosts, trigger);
   await refreshDeviceBridgeTargets(context, hosts, trigger);
   syncRemoteToolTargets(context, hosts, trigger);
 }
 export {
+  remoteToolsContext,
+  refreshRemoteToolTargets,
+  nextListingInterval,
+  PROBE_DEADLINE_MS,
   RemoteToolTargetsState,
   FAILED_LIST_RETRY_MS,
   REMOTE_TARGET_TIMINGS,
@@ -1024,9 +1030,5 @@ export {
   SESSION_TRANSPORT_LIMITS,
   MIN_RELIST_INTERVAL_MS,
   PROVISIONAL_FRESH_MS,
-  refreshRemoteToolTargets,
-  remoteToolsContext,
-  nextListingInterval,
-  PROBE_DEADLINE_MS,
   createSessionEventTransport,
 };

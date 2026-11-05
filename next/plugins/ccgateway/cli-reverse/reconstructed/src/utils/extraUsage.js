@@ -3,9 +3,9 @@
  *
  * 判断订阅用户的请求是否按额外用量（extra usage）计费。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/extraUsage.ts
- * pieces: chunk-d1cgs5na.js (1)
+ * pieces: chunk-wefvmrb3.js (1)
  * attribution: fingerprint 1
  */
 import { isClaudeAISubscriber } from "./auth.js";
@@ -15,7 +15,7 @@ import { supportsFastMode } from "./fastMode.js";
 import { usageCreditsBillingState } from "./planTiers.js";
 import { has1mSuffix_2 } from "./model/contextWindow1m.js";
 
-//@ chunk-d1cgs5na.js:1188-1502 fingerprint (2.1.88 match: isBilledAsExtraUsage, 0.61)
+//@ chunk-wefvmrb3.js:1255-1569 fingerprint (2.1.88 match: isBilledAsExtraUsage, 0.61)
 /**
  * 订阅用户某次请求是否按额外用量（extra usage）计费：fast 模式、模型不在计划内，或 Opus/Sonnet 4.6 长上下文等情况。
  */

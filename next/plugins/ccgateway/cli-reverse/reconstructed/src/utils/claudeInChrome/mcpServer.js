@@ -3,9 +3,9 @@
  *
  * 内置 Chrome MCP 服务器（--claude-in-chrome-mcp）：组织策略检查与 bearer 门控、浏览器桥/原生宿主上下文、遥测白名单。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/claudeInChrome/mcpServer.ts
- * pieces: chunk-ztt2k9pv.js (15)
+ * pieces: chunk-drr3hy76.js (15)
  * attribution: fingerprint 6, callgraph-fingerprint 1, file-local 1, layout 7
  */
 import { format } from "util";
@@ -61,7 +61,7 @@ import { isStorageV5Enabled } from "../hoverRest.js";
 import { shutdown1PEventLogging } from "../../services/analytics/firstPartyEventLogger.js";
 import { shutdownDatadog } from "../../services/analytics/datadog.js";
 
-//@ chunk-ztt2k9pv.js:12830-13177 fingerprint (2.1.88 match: SAFE_BRIDGE_STRING_KEYS, 0.455)
+//@ chunk-drr3hy76.js:13978-14325 fingerprint (2.1.88 match: SAFE_BRIDGE_STRING_KEYS, 0.456)
 /**
  * Chrome 桥遥测字段白名单：bridge_status/error_type/tool_name/tool_use_id/transport 只允许已知取值，其余归为 other 或丢弃。
  */
@@ -83,7 +83,7 @@ function SAFE_BRIDGE_STRING_KEYS(safeKey, value) {
       return;
   }
 }
-//@ chunk-ztt2k9pv.js:13177-13972 callgraph-fingerprint (2.1.88 match: BUG_REPORT_URL, 0.418)
+//@ chunk-drr3hy76.js:14325-15120 callgraph-fingerprint (2.1.88 match: BUG_REPORT_URL, 0.418)
 /**
  * Chrome MCP 服务器常量：bug 反馈链接、权限模式 ask/skip_all_permission_checks/follow_a_plan、配对设备 ID 格式、browser_batch 90s 超时、断连提示文案片段。
  */
@@ -95,14 +95,14 @@ var ALTERNATIVES_HINT =
 var BROWSER_BATCH_TIMEOUT_MS = 90000;
 var MULTI_ORG_HINT =
   " If the user belongs to more than one organization, the extension must also be signed in to the same organization as this conversation. To change the extension's organization, the user logs out in the extension's settings, then logs in and selects this conversation's organization. Logging out erases the shortcuts and scheduled tasks saved in the extension, so suggest it only if the other checks did not help and the user is in more than one organization, and tell the user about that loss first.";
-//@ chunk-ztt2k9pv.js:13972-14012 file-local
+//@ chunk-drr3hy76.js:15120-15160 file-local
 /**
  * 判断字符串是否是合法的 Chrome 权限模式（ask/skip_all_permission_checks/follow_a_plan）。
  */
 function isPermissionMode(raw) {
   return PERMISSION_MODES.some((m) => m === raw);
 }
-//@ chunk-ztt2k9pv.js:14012-14207 fingerprint (2.1.88 match: getChromeBridgeUrl, 0.875)
+//@ chunk-drr3hy76.js:15160-15355 fingerprint (2.1.88 match: getChromeBridgeUrl, 0.875)
 /**
  * 浏览器桥 WebSocket 地址：USE_LOCAL_OAUTH/LOCAL_BRIDGE → ws://localhost:8765，USE_STAGING_OAUTH → staging，否则 wss://bridge.claudeusercontent.com。
  */
@@ -111,14 +111,14 @@ function getChromeBridgeUrl() {
   if (env.USE_STAGING_OAUTH) return "wss://bridge-staging.claudeusercontent.com";
   return "wss://bridge.claudeusercontent.com";
 }
-//@ chunk-ztt2k9pv.js:14207-14261 fingerprint (2.1.88 match: isLocalBridge, 1)
+//@ chunk-drr3hy76.js:15355-15409 fingerprint (2.1.88 match: isLocalBridge, 1)
 /**
  * 是否连本地浏览器桥（USE_LOCAL_OAUTH 或 LOCAL_BRIDGE）。
  */
 function isLocalBridge() {
   return env.USE_LOCAL_OAUTH || env.LOCAL_BRIDGE;
 }
-//@ chunk-ztt2k9pv.js:14261-19744 fingerprint (2.1.88 match: createChromeContext, 0.606)
+//@ chunk-drr3hy76.js:15409-20892 fingerprint (2.1.88 match: createChromeContext, 0.606)
 /**
  * 构造 Chrome MCP 服务器上下文：日志器、socket 路径（本地原生宿主）、bridgeConfig（云端桥 URL、按 OAuth 令牌解析账户 UUID 并检测与持久化登录不一致、取 OAuth 令牌前经 bearerGate 校验组织策略、代理/TLS 选项）、CLAUDE_CHROME_PERMISSION_MODE/CLAUDE_CHROME_PAIRED_DEVICE_ID/CLAUDE_CHROME_TAB_GROUP_KEY 解析、断连时给模型的详细提示、配对成功写入全局配置 chromeExtension、遥测事件过滤。
  */
@@ -312,12 +312,12 @@ function createChromeContext(env_2, options) {
     },
   };
 }
-//@ chunk-ztt2k9pv.js:19744-19755 layout
+//@ chunk-drr3hy76.js:20892-20903 layout
 /**
  * 启动时读取组织 Chrome 策略的超时（3s）。
  */
 var ORG_POLICY_TIMEOUT_MS = 3000;
-//@ chunk-ztt2k9pv.js:19755-19934 layout
+//@ chunk-drr3hy76.js:20903-21082 layout
 /**
  * 启动前读组织策略 allow_claude_browser_extension：先看短路条件，再刷新 OAuth 并用令牌查询。
  */
@@ -334,7 +334,7 @@ async function checkChromeOrgPolicy(options) {
     };
   return checkPolicyForToken(accessToken, options);
 }
-//@ chunk-ztt2k9pv.js:19934-20224 layout
+//@ chunk-drr3hy76.js:21082-21372 layout
 /**
  * 策略短路：CLAUDE_CODE_CHROME_MCP_ORG_DENIED 直接拒绝；第三方提供商或自定义 base URL 时不读策略（unverified）。
  */
@@ -358,7 +358,7 @@ function getPolicyShortCircuit() {
     };
   return null;
 }
-//@ chunk-ztt2k9pv.js:20224-20513 layout
+//@ chunk-drr3hy76.js:21372-21661 layout
 /**
  * 用指定 bearer 拉取 policy limits，判断是否允许 allow_claude_browser_extension；拉取失败为 policy_unverified。
  */
@@ -387,7 +387,7 @@ async function checkPolicyForToken(bearer, { timeoutMs } = {}) {
         cause: "org_policy",
       };
 }
-//@ chunk-ztt2k9pv.js:20513-20833 layout
+//@ chunk-drr3hy76.js:21661-21981 layout
 /**
  * 生成 bearerGate：已验证令牌直接放行，被拒令牌记黑名单不交给桥，新令牌各查一次策略。
  */
@@ -413,12 +413,12 @@ function createBearerGate(verified) {
     return true;
   };
 }
-//@ chunk-ztt2k9pv.js:20833-20899 layout
+//@ chunk-drr3hy76.js:21981-22047 layout
 /**
  * 组织策略禁用 Claude in Chrome 时的提示文案。
  */
 var ORG_DENIED_MESSAGE = "Claude in Chrome is disabled by your organization policy.";
-//@ chunk-ztt2k9pv.js:20899-21450 layout
+//@ chunk-drr3hy76.js:22047-22598 layout
 /**
  * 策略未能验证的原因 → 警告文案（扩展侧仍会执行组织设置）。
  */
@@ -433,7 +433,7 @@ function describeUnverifiedPolicy(unverified) {
       return "Couldn't read your organization's Claude in Chrome policy (network or server error). Continuing; the extension enforces the org setting.";
   }
 }
-//@ chunk-ztt2k9pv.js:21450-22678 fingerprint (2.1.88 match: runClaudeInChromeMcpServer, 0.46)
+//@ chunk-drr3hy76.js:22598-23826 fingerprint (2.1.88 match: runClaudeInChromeMcpServer, 0.458)
 /**
  * `claude --claude-in-chrome-mcp` 入口：加载存储与凭证、配置全局代理，检查组织策略（拒绝则退出 1），用 createChromeContext 构造上下文，经 @ant/claude-for-chrome-mcp 的 createClaudeForChromeMcpServer 创建服务器并接到 StdioServerTransport；stdin 结束时清理退出。
  */
@@ -505,7 +505,7 @@ async function runClaudeInChromeMcpServer(options) {
     logForDebugging("[Claude in Chrome] MCP server started");
   });
 }
-//@ chunk-ztt2k9pv.js:22678-22898 fingerprint (2.1.88 match: DebugLogger, 1)
+//@ chunk-drr3hy76.js:23826-24046 fingerprint (2.1.88 match: DebugLogger, 1)
 /**
  * 把 Chrome MCP 库的日志接到 Claude Code 调试日志（silly/debug→debug）。
  */

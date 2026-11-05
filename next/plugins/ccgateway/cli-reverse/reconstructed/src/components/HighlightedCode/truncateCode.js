@@ -3,20 +3,20 @@
  *
  * 2.1.316 新增：高亮代码的截断辅助
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cwwxybjc.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-td0w5pj1.js (4)
  * attribution: placement 4
  */
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { highlightCore } from "../../utils/cliHighlightLanguages.js";
 
-//@ chunk-cwwxybjc.js:692-705 placement
+//@ chunk-td0w5pj1.js:691-704 placement
 /**
  * 导出值：MAX_CODE_CHARS（2000：代码字符上限）。
  */
 var MAX_CODE_CHARS = 2000;
-//@ chunk-cwwxybjc.js:705-872 placement
+//@ chunk-td0w5pj1.js:704-870 placement
 /**
  * 截断过长代码并返回截掉字符数。
  */
@@ -33,14 +33,14 @@ function truncateCode(code, offset = 0) {
     truncatedChars: code.length - offset - truncated.length,
   };
 }
-//@ chunk-cwwxybjc.js:872-918 placement
+//@ chunk-td0w5pj1.js:870-916 placement
 /**
  * 函数 truncatedCharsSuffix（" … [+N chars]"）。
  */
 function truncatedCharsSuffix(truncatedChars) {
   return ` \u2026 [+${truncatedChars} chars]`;
 }
-//@ chunk-cwwxybjc.js:965-991 placement
+//@ chunk-td0w5pj1.js:963-989 placement
 function getMaxCodeChars() {
   return highlightCore();
 }

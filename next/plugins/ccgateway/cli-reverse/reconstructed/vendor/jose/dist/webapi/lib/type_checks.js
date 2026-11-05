@@ -1,14 +1,14 @@
 /**
  * jose/dist/webapi/lib/type_checks.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-5h78gfwc.js (4)
+ * pieces: chunk-0f6azspv.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
  */
 
-//@ chunk-5h78gfwc.js:11400-11442 esm-layout
+//@ chunk-0f6azspv.js:11400-11442 esm-layout
 var isObjectLike = (value) => typeof value === "object" && value !== null;
-//@ chunk-5h78gfwc.js:11442-11683 esm-fingerprint
+//@ chunk-0f6azspv.js:11442-11683 esm-fingerprint
 function isObject(input) {
   if (!isObjectLike(input) || Object.prototype.toString.call(input) !== "[object Object]") return false;
   if (Object.getPrototypeOf(input) === null) return true;
@@ -16,7 +16,7 @@ function isObject(input) {
   while (Object.getPrototypeOf(proto) !== null) proto = Object.getPrototypeOf(proto);
   return Object.getPrototypeOf(input) === proto;
 }
-//@ chunk-5h78gfwc.js:11683-11903 esm-fingerprint
+//@ chunk-0f6azspv.js:11683-11903 esm-fingerprint
 function isDisjoint(...headers) {
   let sources = headers.filter(Boolean);
   if (sources.length === 0 || sources.length === 1) return true;
@@ -34,7 +34,7 @@ function isDisjoint(...headers) {
   }
   return true;
 }
-//@ chunk-5h78gfwc.js:11903-12131 esm-fingerprint
+//@ chunk-0f6azspv.js:11903-12131 esm-fingerprint
 var isJWK = (key) => isObject(key) && typeof key.kty === "string";
 var isPrivateJWK = (key) =>
   key.kty !== "oct" && ((key.kty === "AKP" && typeof key.priv === "string") || typeof key.d === "string");

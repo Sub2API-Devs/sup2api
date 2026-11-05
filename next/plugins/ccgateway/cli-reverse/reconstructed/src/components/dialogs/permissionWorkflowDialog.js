@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：permission_workflow 对话框请求定义
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vhnfh0m3.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cgby61x9.js (1)
  * attribution: placement 1
  */
 import { withHideWhile } from "./dialogRequests.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { deepFreezeToolName } from "../../utils/deepFreezePlainData.js";
 
-//@ chunk-vhnfh0m3.js:298-572 placement
+//@ chunk-cgby61x9.js:298-572 placement
 /**
  * 权限工作流对话框的定义（载荷含请求、工具、权限结果与脚本，默认结果为取消）。
  */

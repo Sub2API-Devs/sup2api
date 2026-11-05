@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：plugin eval 对插件/用例目录的属主与可写性检查（非本人、组/他人可写、符号链接时拒绝）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (21)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (21)
  * attribution: placement 21
  */
 import { userInfo } from "os";
@@ -16,15 +16,15 @@ import { isDockerenvPresent, env } from "../../utils/env.js";
 import { getPlatform } from "../../utils/platform.js";
 import { getErrnoCode } from "../../utils/errors.js";
 import { execFileNoThrowWithCwd } from "../../utils/execFileNoThrow.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { formatGuardValueJson } from "../../cli/handlers/pluginEval/mockGuards.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { escapeNonAscii } from "../../utils/resultError.js";
 
-//@ chunk-qchp9vrd.js:68707-68824 placement
+//@ chunk-af1hzzme.js:70047-70164 placement
 var UNTRUSTED_FOLDER_REASON =
   "is not owned by you, is writable by other users, is a symlink, or could not be fully examined (see --debug)";
-//@ chunk-qchp9vrd.js:68824-69137 placement
+//@ chunk-af1hzzme.js:70164-70477 placement
 function checkTreeTrust(options) {
   return {
     treeMaxEntries: Math.min(options?.treeMaxEntries ?? MAX_WALK_DIRECTORIES, MAX_WALK_DIRECTORIES),
@@ -39,7 +39,7 @@ function checkTreeTrust(options) {
     rootRealpaths: new Map(),
   };
 }
-//@ chunk-qchp9vrd.js:69137-69208 placement
+//@ chunk-af1hzzme.js:70477-70548 placement
 /**
  * 判断路径是否在已同意的根目录内。
  */
@@ -47,14 +47,14 @@ function isInsideConsentRoot(path, candidate) {
   let consentRoot = path.consentRoot;
   return consentRoot !== null && (candidate === consentRoot || toEvalPathError(consentRoot, candidate));
 }
-//@ chunk-qchp9vrd.js:69208-69263 placement
+//@ chunk-af1hzzme.js:70548-70603 placement
 /**
  * 是否处于容器或 root 环境（用户库不再可靠）。
  */
 function isContainerOrRoot(evidence) {
   return isDockerenvPresent() || evidence?.containerEvidence === true;
 }
-//@ chunk-qchp9vrd.js:69263-69467 placement
+//@ chunk-af1hzzme.js:70603-70807 placement
 function isOwnedByUser(uid, ctx) {
   if (typeof process.getuid !== "function") return true;
   let currentUid = process.getuid();
@@ -63,7 +63,7 @@ function isOwnedByUser(uid, ctx) {
   if (verifiedSudoUser !== null) return uid === 0 || uid === verifiedSudoUser.uid;
   return uid === 0 || (isContainerOrRoot(ctx) && ctx?.localUids?.has(uid) === false);
 }
-//@ chunk-qchp9vrd.js:69467-69706 placement
+//@ chunk-af1hzzme.js:70807-71046 placement
 function getVerifiedSudoUser(about) {
   if (typeof process.getuid !== "function" || process.getuid() !== 0) return null;
   let SUDO_UID = env.SUDO_UID;
@@ -80,7 +80,7 @@ function getVerifiedSudoUser(about) {
       }
     : null;
 }
-//@ chunk-qchp9vrd.js:69706-69802 placement
+//@ chunk-af1hzzme.js:71046-71142 placement
 /**
  * 计算应当匹配的 gid（root 下取目标用户的 gid）。
  */
@@ -88,7 +88,7 @@ function expectedGid(about) {
   if (typeof process.getgid !== "function") return;
   return getVerifiedSudoUser(about)?.gid ?? process.getgid();
 }
-//@ chunk-qchp9vrd.js:69802-70127 placement
+//@ chunk-af1hzzme.js:71142-71467 placement
 /**
  * 判断文件属组是否为当前用户组：无 getgid 视为是，macOS 视为否，root 时按目标用户的 gid 判断。
  */
@@ -106,7 +106,7 @@ function isOwnedByUserGroup(gid, ctx) {
   }
   return gid === process.getgid() && isPrivateUserGroup(ctx, gid, process.getuid(), getCachedUsername(ctx));
 }
-//@ chunk-qchp9vrd.js:70127-70305 placement
+//@ chunk-af1hzzme.js:71467-71645 placement
 function isPrivateUserGroup(ctx, gid, uid, username) {
   if (gid !== uid || username === undefined || username === "") return false;
   let groupInfo = ctx?.groups?.get(gid);
@@ -117,7 +117,7 @@ function isPrivateUserGroup(ctx, gid, uid, username) {
     groupInfo.primaryMembers.every((primaryMember) => primaryMember === username)
   );
 }
-//@ chunk-qchp9vrd.js:70305-70453 placement
+//@ chunk-af1hzzme.js:71645-71793 placement
 function getCachedUsername(ctx) {
   if (ctx?.username !== undefined) return ctx.username ?? undefined;
   let username;
@@ -129,7 +129,7 @@ function getCachedUsername(ctx) {
   if (ctx !== undefined) ctx.username = username ?? null;
   return username;
 }
-//@ chunk-qchp9vrd.js:70453-70691 placement
+//@ chunk-af1hzzme.js:71793-72031 placement
 /**
  * systemd userdb 的内置提供者名（不算自定义）。
  */
@@ -147,7 +147,7 @@ var SYSTEMD_USERDB_VENDORS = new Set([
   "io.systemd.DynamicUser",
   "io.systemd.DropIn",
 ]);
-//@ chunk-qchp9vrd.js:70691-70976 placement
+//@ chunk-af1hzzme.js:72031-72316 placement
 async function readUserdbMembership() {
   try {
     if ((await readdir(SYSTEMD_USERDB_DIR)).some((entryName) => !SYSTEMD_USERDB_VENDORS.has(entryName)))
@@ -165,7 +165,7 @@ async function readUserdbMembership() {
     }
   return false;
 }
-//@ chunk-qchp9vrd.js:70976-71054 placement
+//@ chunk-af1hzzme.js:72316-72394 placement
 /**
  * 读取组信息并检测容器用户命名空间。
  */
@@ -173,7 +173,7 @@ function groupNamespaceInfo(info) {
   info.groupsLoading ??= getGroupMembers(info).then(() => detectContainerUserNamespace(info));
   return info.groupsLoading;
 }
-//@ chunk-qchp9vrd.js:71054-71823 placement
+//@ chunk-af1hzzme.js:72394-73163 placement
 async function getGroupMembers(ctx) {
   if (
     typeof process.getuid !== "function" ||
@@ -225,7 +225,7 @@ async function getGroupMembers(ctx) {
       .split(/\s+/)
       .some((gid) => Number(gid) === env.SUDO_GID);
 }
-//@ chunk-qchp9vrd.js:71823-72110 placement
+//@ chunk-af1hzzme.js:73163-73450 placement
 async function runIdCommand(args) {
   for (let idPath of ["/usr/bin/id", "/bin/id"]) {
     let result = await execFileNoThrowWithCwd(idPath, args, {
@@ -246,7 +246,7 @@ async function runIdCommand(args) {
     stdout: "",
   };
 }
-//@ chunk-qchp9vrd.js:72110-72201 placement
+//@ chunk-af1hzzme.js:73450-73541 placement
 /**
  * 读取 /etc/passwd 文本（失败为 null）。
  */
@@ -254,7 +254,7 @@ function passwdText(info) {
   info.passwdText ??= readFile("/etc/passwd", "utf8").catch(() => null);
   return info.passwdText;
 }
-//@ chunk-qchp9vrd.js:72201-74312 placement
+//@ chunk-af1hzzme.js:73541-75652 placement
 function detectContainerUserNamespace(ctx) {
   if (getPlatform() !== "linux" && getPlatform() !== "wsl") return Promise.resolve();
   return Promise.all([
@@ -308,12 +308,12 @@ function detectContainerUserNamespace(ctx) {
       let groupSources = [...readNssSources("group"), ...readNssSources("initgroups")];
       if (groupSources.length > 0) {
         ctx.groups = new Map();
-        ctx.groupsUnverifiableWhy = `nsswitch group sources: ${uniq(groupSources).join(" ")}`;
+        ctx.groupsUnverifiableWhy = `nsswitch group sources: ${normalizeCaseForComparison_2(groupSources).join(" ")}`;
         return;
       }
       let passwdSources = readNssSources("passwd");
       if (passwdSources.length > 0)
-        ctx.groupsUnverifiableWhy = `nsswitch passwd sources: ${uniq(passwdSources).join(" ")}`;
+        ctx.groupsUnverifiableWhy = `nsswitch passwd sources: ${normalizeCaseForComparison_2(passwdSources).join(" ")}`;
       let localPasswdText = passwdSources.length > 0 ? null : passwdText_2;
       if (passwdText_2 === null && ctx.groupsUnverifiableWhy === undefined)
         ctx.groupsUnverifiableWhy = "/etc/passwd could not be read";
@@ -367,7 +367,7 @@ function detectContainerUserNamespace(ctx) {
       return;
     });
 }
-//@ chunk-qchp9vrd.js:74312-74598 placement
+//@ chunk-af1hzzme.js:75652-75938 placement
 function describeForeignOwner(ctx, defaultMessage = "is not owned by you") {
   return typeof process.getuid === "function" &&
     process.getuid() === 0 &&
@@ -377,7 +377,7 @@ function describeForeignOwner(ctx, defaultMessage = "is not owned by you") {
     ? `is not owned by root, and the sudo invoker ${formatGuardValueJson(env.SUDO_USER)} could not be confirmed on this system (run it as yourself, without sudo)`
     : defaultMessage;
 }
-//@ chunk-qchp9vrd.js:74598-75170 placement
+//@ chunk-af1hzzme.js:75938-76510 placement
 function checkEntryOwnership(stats, ctx) {
   if (stats.isSymbolicLink())
     return {
@@ -407,14 +407,14 @@ function checkEntryOwnership(stats, ctx) {
         };
   return;
 }
-//@ chunk-qchp9vrd.js:75170-75215 placement
+//@ chunk-af1hzzme.js:76510-76555 placement
 /**
  * 取某条目的不可信原因。
  */
 function reasonFor(folderPath, trust) {
   return trust.reasons.get(folderPath) ?? UNTRUSTED_FOLDER_REASON;
 }
-//@ chunk-qchp9vrd.js:75215-75370 placement
+//@ chunk-af1hzzme.js:76555-76710 placement
 function logManifestNotConsulted(folderPath, trust, reason) {
   if (!trust.reasons.has(folderPath)) trust.reasons.set(folderPath, reason);
   logForDebugging(

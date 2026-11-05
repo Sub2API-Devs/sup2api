@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。自动压缩提议判定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (20), chunk-kswt4qha.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-8prszgkd.js (1), chunk-bc4jcw5z.js (7), chunk-czq1j3j2.js (19)
  * attribution: placement 27
  */
 import { createHash } from "crypto";
@@ -43,7 +43,7 @@ import { applyAutoCompactWindow } from "../../commands/autocompact/autocompact.j
 import { renderModelName } from "../../utils/model/modelDisplay.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kswt4qha.js:1448-1872 placement
+//@ chunk-bc4jcw5z.js:1544-1968 placement
 /**
  * 读取自动压缩提议记录。
  */
@@ -70,7 +70,7 @@ function readAutoCompactOffer(config, accountUuid, modelKey) {
       }),
   };
 }
-//@ chunk-kswt4qha.js:1872-2056 placement
+//@ chunk-bc4jcw5z.js:1968-2152 placement
 /**
  * 在自动压缩提议状态里记下某（会话, 键）的 eligibleLoggedAt；已有记录时不改。
  */
@@ -91,7 +91,7 @@ function markAutoCompactOfferEligibleLogged(config, accountUuid, modelKey, eligi
     },
   };
 }
-//@ chunk-kswt4qha.js:2056-2139 placement
+//@ chunk-bc4jcw5z.js:2152-2235 placement
 /**
  * bumpAutoCompactOfferEsc：记录一次 Esc 计数。
  */
@@ -101,7 +101,7 @@ function bumpAutoCompactOfferEsc(config, accountUuid, modelKey) {
     escCount: (autoCompactOffer?.escCount ?? 0) + 1,
   });
 }
-//@ chunk-kswt4qha.js:2139-2190 placement
+//@ chunk-bc4jcw5z.js:2235-2286 placement
 /**
  * markAutoCompactOfferResolved：标记压缩提议已解决。
  */
@@ -110,7 +110,7 @@ function markAutoCompactOfferResolved(config, accountUuid, modelKey, resolved) {
     resolved,
   });
 }
-//@ chunk-kswt4qha.js:2190-2384 placement
+//@ chunk-bc4jcw5z.js:2286-2480 placement
 function updateAutoCompactOffer(config, accountUuid, modelKey, patch) {
   let accountOffers = ownPropertyValue(config.autoCompactOffer, accountUuid);
   let rawEntry = ownPropertyValue(accountOffers, modelKey);
@@ -130,13 +130,13 @@ function updateAutoCompactOffer(config, accountUuid, modelKey, patch) {
     },
   };
 }
-//@ chunk-kswt4qha.js:2384-2469 placement
+//@ chunk-bc4jcw5z.js:2480-2565 placement
 function ownPropertyValue(object, key) {
   return typeof object === "object" && object !== null && Object.hasOwn(object, key)
     ? object[key]
     : undefined;
 }
-//@ chunk-kswt4qha.js:2469-2557 placement
+//@ chunk-bc4jcw5z.js:2565-2653 placement
 /**
  * isAutoCompactOfferAnswered：压缩提议已回答或被跳过。
  */
@@ -146,12 +146,24 @@ function isAutoCompactOfferAnswered(globalConfig, accountUuid, modelKey) {
     autoCompactOffer !== undefined && (autoCompactOffer.isAnswered || (autoCompactOffer.escCount ?? 0) > 0)
   );
 }
-//@ chunk-18hwfzwa.js:1109652-1109656 placement
+//@ chunk-8prszgkd.js:16318-16338 placement
+/**
+ * 自动压缩提议对话框正文的最小列数（20）。
+ */
+var MIN_BODY_ROWS = 2;
+var DIALOG_HORIZONTAL_CHROME = 6;
+var MIN_BODY_COLUMNS = 20;
+//@ chunk-czq1j3j2.js:1128859-1128863 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1109652", () => {
+deferInit("chunk-czq1j3j2.js:1128859", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1109694-1109812 placement
+//@ chunk-czq1j3j2.js:1132308-1132312 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1132308", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1146173-1146291 placement
 /**
  * 最多询问几次（2）。
  */
@@ -161,7 +173,7 @@ var MAX_OFFER_WINDOW_TOKENS = 1e6;
 var DEFAULT_OFFER_TOKENS = 400000;
 var OFFER_WINDOW_SIZE_LADDER = [300000, 400000, 500000, 600000, 700000, 800000, 900000];
 var MAX_OFFER_ASKS = 2;
-//@ chunk-18hwfzwa.js:1109812-1109862 placement
+//@ chunk-czq1j3j2.js:1146291-1146341 placement
 /**
  * 提议候选 token 数的 schema（≥Kx 且 < R8）。
  */
@@ -171,12 +183,12 @@ function offerTokensSchema() {
     .min(TRANSPORT_LABELS)
     .max(MAX_OFFER_WINDOW_TOKENS - 1);
 }
-//@ chunk-18hwfzwa.js:1109862-1110298 placement
+//@ chunk-czq1j3j2.js:1146341-1146777 placement
 /**
  * 自动压缩窗口提议实验配置 schema（arm、触发阈值、候选大小、顺序、最多询问次数）。
  */
 var AUTOCOMPACT_OFFER_CONFIG_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:1109862", () => {
+deferInit("chunk-czq1j3j2.js:1146341", () => {
   AUTOCOMPACT_OFFER_CONFIG_SCHEMA = DoctorLazy(() =>
     zodStrictObject({
       arm: _enum(["control", "offer"]),
@@ -200,7 +212,7 @@ deferInit("chunk-18hwfzwa.js:1109862", () => {
     ),
   );
 });
-//@ chunk-18hwfzwa.js:1110298-1110488 placement
+//@ chunk-czq1j3j2.js:1146777-1146967 placement
 function autocompactOfferConfig(featureValue_CACHED_MAY_BE_STALE) {
   if (
     typeof featureValue_CACHED_MAY_BE_STALE !== "object" ||
@@ -215,7 +227,7 @@ function autocompactOfferConfig(featureValue_CACHED_MAY_BE_STALE) {
   }
   return parsed.data;
 }
-//@ chunk-18hwfzwa.js:1110488-1110960 placement
+//@ chunk-czq1j3j2.js:1146967-1147439 placement
 function autocompactOfferEligibility({ model, configuredWindow }) {
   let accountUuid = getOauthAccountInfo()?.accountUuid;
   if (
@@ -250,7 +262,7 @@ function autocompactOfferEligibility({ model, configuredWindow }) {
         : setting.block,
   };
 }
-//@ chunk-18hwfzwa.js:1110960-1111567 placement
+//@ chunk-czq1j3j2.js:1147439-1148046 placement
 function autocompactWindowSetting(source, settingsKey, configuredWindow) {
   if (source === "env" || source === "experiment")
     return {
@@ -290,7 +302,7 @@ function autocompactWindowSetting(source, settingsKey, configuredWindow) {
     block: current === "other_settings_file" ? current : undefined,
   };
 }
-//@ chunk-18hwfzwa.js:1111567-1111654 placement
+//@ chunk-czq1j3j2.js:1148046-1148133 placement
 /**
  * 给出不能提议的原因（已阻断，或窗口不高于默认）。
  */
@@ -299,9 +311,9 @@ function describeOfferSkip(eligibility, defaultTokens) {
     eligibility.block ?? (eligibility.windowTokens > defaultTokens ? undefined : "window_not_above_default")
   );
 }
-//@ chunk-18hwfzwa.js:1111654-1111689 placement
+//@ chunk-czq1j3j2.js:1148133-1148168 placement
 var AUTOCOMPACT_OFFER_ORDER = "autocompact-offer-order:";
-//@ chunk-18hwfzwa.js:1111689-1111820 placement
+//@ chunk-czq1j3j2.js:1148168-1148299 placement
 /**
  * random 顺序时按账号哈希确定 lower_first 或 keep_first。
  */
@@ -312,14 +324,14 @@ function resolveOfferOrder(order, accountUuid) {
     .digest();
   return byte % 2 === 0 ? "lower_first" : "keep_first";
 }
-//@ chunk-18hwfzwa.js:1111820-1112406 placement
+//@ chunk-czq1j3j2.js:1148299-1148885 placement
 /**
  * 自动压缩提议对话框要求的最小终端行数（12），不足时记为 terminal_too_short。
  */
 var AUTOCOMPACT_OFFER_PAYLOAD_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MIN_OFFER_DIALOG_ROWS;
 var AUTOCOMPACT_OFFER_DIALOG;
-deferInit("chunk-18hwfzwa.js:1111820", () => {
+deferInit("chunk-czq1j3j2.js:1148299", () => {
   AUTOCOMPACT_OFFER_PAYLOAD_SCHEMA = DoctorLazy(() =>
     objectSchema({
       order: _enum(["lower_first", "keep_first"]),
@@ -360,7 +372,7 @@ deferInit("chunk-18hwfzwa.js:1111820", () => {
     hideWhile: ["panel", "draft"],
   });
 });
-//@ chunk-18hwfzwa.js:1112406-1112535 placement
+//@ chunk-czq1j3j2.js:1148885-1149014 placement
 /**
  * 当前窗口设置描述（auto 时注明默认）。
  */
@@ -369,7 +381,7 @@ function describeCurrentWindow({ windowTokens, currentSetting }) {
     ? `${formatTokens(windowTokens)} tokens (default via auto setting)`
     : `${formatTokens(windowTokens)} tokens`;
 }
-//@ chunk-18hwfzwa.js:1112535-1112643 placement
+//@ chunk-czq1j3j2.js:1149014-1149122 placement
 /**
  * 当前窗口设置短标签。
  */
@@ -378,7 +390,7 @@ function currentWindowLabel({ windowTokens, currentSetting }) {
     ? `auto (${formatTokens(windowTokens)} tokens)`
     : `${formatTokens(windowTokens)} tokens`;
 }
-//@ chunk-18hwfzwa.js:1112643-1112941 placement
+//@ chunk-czq1j3j2.js:1149122-1149420 placement
 /**
  * 提议对话框的遥测字段。
  */
@@ -395,7 +407,7 @@ function offerTelemetryFields(payload, { preselected, isScreenReader }) {
     ask_number: payload.askNumber,
   };
 }
-//@ chunk-18hwfzwa.js:1112941-1113195 placement
+//@ chunk-czq1j3j2.js:1149420-1149674 placement
 /**
  * 显示提议对话框并记录结果，返回选择或 cancelled/withdrawn。
  */
@@ -417,7 +429,7 @@ async function showAutocompactOffer(requestDialog, payload, options) {
     ? "cancelled"
     : result.choice;
 }
-//@ chunk-18hwfzwa.js:1113195-1114148 placement
+//@ chunk-czq1j3j2.js:1149674-1150627 placement
 async function recordAutocompactOfferOutcome(answer, payload, msToAnswer, options) {
   let { accountUuid, modelKey } = payload;
   let { outcome, text, level } = await applyAutocompactOfferChoice(answer, payload, options);
@@ -457,7 +469,7 @@ async function recordAutocompactOfferOutcome(answer, payload, msToAnswer, option
   options.appendSystemLine(text, level);
   return outcome;
 }
-//@ chunk-18hwfzwa.js:1114148-1115324 placement
+//@ chunk-czq1j3j2.js:1150627-1151803 placement
 async function applyAutocompactOfferChoice(selection, offer, context) {
   if (
     !makeAutocompactOfferPayload(offer, context) ||
@@ -519,7 +531,7 @@ async function applyAutocompactOfferChoice(selection, offer, context) {
     level: "notice",
   };
 }
-//@ chunk-18hwfzwa.js:1115324-1115666 placement
+//@ chunk-czq1j3j2.js:1151803-1152145 placement
 function makeAutocompactOfferPayload(payload, source) {
   let eligibility = autocompactOfferEligibility({
     model: source.getLiveModel(),
@@ -536,18 +548,6 @@ function makeAutocompactOfferPayload(payload, source) {
     source.getLiveContextTokens() >= payload.triggerTokens
   );
 }
-//@ chunk-18hwfzwa.js:1115666-1115670 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1115666", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1115670-1115692 placement
-/**
- * 自动压缩提议对话框正文的最小列数（20）。
- */
-var MIN_BODY_ROWS = 2;
-var DIALOG_HORIZONTAL_CHROME = 6;
-var MIN_BODY_COLUMNS = 20;
 export {
   isAutoCompactOfferAnswered,
   MIN_BODY_ROWS,

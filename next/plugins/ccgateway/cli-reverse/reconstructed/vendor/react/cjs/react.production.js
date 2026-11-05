@@ -1,38 +1,38 @@
 /**
  * react/cjs/react.production.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: react@19.3.0..19.3.1
- * pieces: chunk-p86mcgbc.js (15)
+ * pieces: chunk-zsz062c7.js (15)
  * attribution: esm-fingerprint 10, esm-layout 5
  */
 import { __esm } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-p86mcgbc.js:227-349 esm-fingerprint
+//@ chunk-zsz062c7.js:227-349 esm-fingerprint
 function getIteratorFn(maybeIterable) {
   if (maybeIterable === null || typeof maybeIterable !== "object") return null;
   maybeIterable =
     (MAYBE_ITERATOR_SYMBOL && maybeIterable[MAYBE_ITERATOR_SYMBOL]) || maybeIterable["@@iterator"];
   return typeof maybeIterable === "function" ? maybeIterable : null;
 }
-//@ chunk-p86mcgbc.js:349-425 esm-fingerprint
+//@ chunk-zsz062c7.js:349-425 esm-fingerprint
 function Component(props, context, updater) {
   this.props = props;
   this.context = context;
   this.refs = emptyObject;
   this.updater = updater || ReactNoopUpdateQueue;
 }
-//@ chunk-p86mcgbc.js:425-439 esm-layout
+//@ chunk-zsz062c7.js:425-439 esm-layout
 function ComponentDummy() {}
-//@ chunk-p86mcgbc.js:439-515 esm-fingerprint
+//@ chunk-zsz062c7.js:439-515 esm-fingerprint
 function PureComponent(props, context, updater) {
   this.props = props;
   this.context = context;
   this.refs = emptyObject;
   this.updater = updater || ReactNoopUpdateQueue;
 }
-//@ chunk-p86mcgbc.js:515-529 esm-layout
+//@ chunk-zsz062c7.js:515-529 esm-layout
 function noop() {}
-//@ chunk-p86mcgbc.js:529-621 esm-fingerprint
+//@ chunk-zsz062c7.js:529-621 esm-fingerprint
 function ReactElement(type, key, props) {
   var refProp = props.ref;
   return {
@@ -43,15 +43,15 @@ function ReactElement(type, key, props) {
     props,
   };
 }
-//@ chunk-p86mcgbc.js:621-664 esm-fingerprint
+//@ chunk-zsz062c7.js:621-664 esm-fingerprint
 function cloneAndReplaceKey(oldElement, newKey) {
   return ReactElement(oldElement.type, newKey, oldElement.props);
 }
-//@ chunk-p86mcgbc.js:664-731 esm-fingerprint
+//@ chunk-zsz062c7.js:664-731 esm-fingerprint
 function isValidElement(object) {
   return typeof object === "object" && object !== null && object.$$typeof === REACT_ELEMENT_TYPE;
 }
-//@ chunk-p86mcgbc.js:731-825 esm-fingerprint
+//@ chunk-zsz062c7.js:731-825 esm-fingerprint
 function escapeUserProvidedKey(key) {
   var escaperLookup = {
     "=": "=0",
@@ -64,13 +64,13 @@ function escapeUserProvidedKey(key) {
     })
   );
 }
-//@ chunk-p86mcgbc.js:825-918 esm-fingerprint
+//@ chunk-zsz062c7.js:825-918 esm-fingerprint
 function getElementKey(element, index) {
   return typeof element === "object" && element !== null && element.key != null
     ? escapeUserProvidedKey("" + element.key)
     : index.toString(36);
 }
-//@ chunk-p86mcgbc.js:918-1309 esm-fingerprint
+//@ chunk-zsz062c7.js:918-1309 esm-fingerprint
 function resolveThenable(thenable) {
   switch (thenable.status) {
     case "fulfilled":
@@ -106,7 +106,7 @@ function resolveThenable(thenable) {
   }
   throw thenable;
 }
-//@ chunk-p86mcgbc.js:1309-2341 esm-fingerprint
+//@ chunk-zsz062c7.js:1309-2341 esm-fingerprint
 function mapIntoArray(children, array, escapedPrefix, nameSoFar, callback) {
   var type = typeof children;
   if (type === "undefined" || type === "boolean") children = null;
@@ -185,7 +185,7 @@ function mapIntoArray(children, array, escapedPrefix, nameSoFar, callback) {
   }
   return invokeCallback;
 }
-//@ chunk-p86mcgbc.js:2341-2450 esm-layout
+//@ chunk-zsz062c7.js:2341-2450 esm-layout
 function mapChildren(children, func, context) {
   if (children == null) return children;
   var result = [];
@@ -195,7 +195,7 @@ function mapChildren(children, func, context) {
   });
   return result;
 }
-//@ chunk-p86mcgbc.js:2450-4107 esm-layout
+//@ chunk-zsz062c7.js:2450-4107 esm-layout
 var REACT_ELEMENT_TYPE;
 var REACT_PORTAL_TYPE;
 var REACT_FRAGMENT_TYPE;
@@ -343,7 +343,7 @@ var useSyncExternalStore = function (subscribe, getSnapshot, getServerSnapshot) 
 var useTransition = function () {
   return ReactSharedInternals.H.useTransition();
 };
-//@ chunk-p86mcgbc.js:4107-5964 esm-layout
+//@ chunk-zsz062c7.js:4107-5964 esm-layout
 var init_react_production = __esm(() => {
   REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element");
   REACT_PORTAL_TYPE = Symbol.for("react.portal");
@@ -452,34 +452,34 @@ var init_react_production = __esm(() => {
   isValidElement_default = isValidElement;
 });
 export {
-  createContext,
-  useContext,
-  childrenExport,
-  isValidElement_default,
-  init_react_production,
-  useState,
   useRef,
-  useImperativeHandle,
-  useLayoutEffect,
   useEffect,
+  init_react_production,
   useMemo,
-  useCallback,
   useSyncExternalStore,
-  memo,
-  suspenseTypeExport,
-  useEffectEvent,
-  fragmentTypeExport,
+  createContext,
+  useState,
+  useContext,
+  useLayoutEffect,
   useReducer,
-  createElement,
-  useDeferredValue,
+  useCallback,
+  suspenseTypeExport,
   use,
-  startTransition,
-  useInsertionEffect,
-  activityTypeExport,
-  useTransition,
-  REACT_PROFILER_TYPE,
+  fragmentTypeExport,
+  memo,
+  useEffectEvent,
+  createElement,
   addTransitionType,
   PureComponent_default,
   createRef,
+  childrenExport,
+  isValidElement_default,
+  useDeferredValue,
+  startTransition,
+  useInsertionEffect,
+  useImperativeHandle,
+  activityTypeExport,
+  useTransition,
+  REACT_PROFILER_TYPE,
   useId,
 };

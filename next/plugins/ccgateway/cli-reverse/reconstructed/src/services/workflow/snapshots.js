@@ -3,9 +3,9 @@
  *
  * 工作流快照读写（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3w426tt0.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-92qkh4yk.js (9)
  * attribution: placement 9
  */
 import { join, dirname, basename } from "path";
@@ -17,14 +17,14 @@ import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-3w426tt0.js:512-552 placement
+//@ chunk-92qkh4yk.js:512-552 placement
 /**
  * 工作流快照文件路径。
  */
 function workflowSnapshotPath(workflowRunId) {
   return join(sessionWorkflowsDir(), `${workflowRunId}.json`);
 }
-//@ chunk-3w426tt0.js:552-604 placement
+//@ chunk-92qkh4yk.js:552-604 placement
 /**
  * 会话工作流目录。
  */
@@ -32,7 +32,7 @@ function sessionWorkflowsDir() {
   let sessionProjectDir = resolveSessionProjectDir();
   return join(sessionProjectDir, getSessionId(), "workflows");
 }
-//@ chunk-3w426tt0.js:604-672 placement
+//@ chunk-92qkh4yk.js:604-672 placement
 /**
  * 子代理工作流目录。
  */
@@ -40,7 +40,7 @@ function subagentWorkflowDir(runId) {
   let sessionProjectDir = resolveSessionProjectDir();
   return join(sessionProjectDir, getSessionId(), "subagents", "workflows", runId);
 }
-//@ chunk-3w426tt0.js:672-729 placement
+//@ chunk-92qkh4yk.js:672-729 placement
 /**
  * 会话目录名（不在项目目录下时返回 undefined）。
  */
@@ -48,14 +48,14 @@ function sessionProjectKey() {
   let sessionProjectDir = resolveSessionProjectDir();
   return dirname(sessionProjectDir) === getProjectsDir() ? basename(sessionProjectDir) : undefined;
 }
-//@ chunk-3w426tt0.js:729-796 placement
+//@ chunk-92qkh4yk.js:729-796 placement
 /**
  * 工作流快照的存储键。
  */
 function workflowSidecarKey(projectKey, sessionId, runId) {
   return STORAGE_SPACES.sidecar(projectKey, sessionId, ["workflows", `${runId}.json`]);
 }
-//@ chunk-3w426tt0.js:796-1278 placement
+//@ chunk-92qkh4yk.js:796-1278 placement
 async function writeWorkflowSnapshot(workflowRunId, fields, storageV5) {
   try {
     let snapshot = {
@@ -98,7 +98,7 @@ async function writeWorkflowSnapshot(workflowRunId, fields, storageV5) {
     );
   }
 }
-//@ chunk-3w426tt0.js:1278-1938 placement
+//@ chunk-92qkh4yk.js:1278-1938 placement
 /**
  * 把读到的工作流快照记录补齐默认值：runId 缺省用文件名推出的 id，taskId 缺省同 runId，时间戳、脚本、agent 数、日志等缺省为空值。
  */
@@ -128,7 +128,7 @@ function normalizeWorkflowSnapshot(record, fallbackRunId) {
     totalToolCalls: record.totalToolCalls ?? 0,
   };
 }
-//@ chunk-3w426tt0.js:1938-2383 placement
+//@ chunk-92qkh4yk.js:1938-2383 placement
 async function readWorkflowSnapshot(storage) {
   let projectKey = storage ? sessionProjectKey() : undefined;
   if (storage && projectKey !== undefined) return listWorkflowSnapshots(storage, projectKey);
@@ -160,7 +160,7 @@ async function readWorkflowSnapshot(storage) {
   filtered.sort((left, right) => right.startTime - left.startTime);
   return filtered;
 }
-//@ chunk-3w426tt0.js:2383-3367 placement
+//@ chunk-92qkh4yk.js:2383-3367 placement
 async function listWorkflowSnapshots(storage, projectKey) {
   let scope = {
     namespace: "sidecar",
@@ -218,4 +218,4 @@ async function listWorkflowSnapshots(storage, projectKey) {
   filtered.sort((left, right) => right.startTime - left.startTime);
   return filtered;
 }
-export { subagentWorkflowDir, sessionProjectKey, writeWorkflowSnapshot, readWorkflowSnapshot };
+export { readWorkflowSnapshot, subagentWorkflowDir, sessionProjectKey, writeWorkflowSnapshot };

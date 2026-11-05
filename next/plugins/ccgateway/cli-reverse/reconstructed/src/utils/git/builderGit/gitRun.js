@@ -3,9 +3,9 @@
  *
  * builderGit：运行 git 与错误识别（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fepf8jp6.js (16)
  * attribution: placement 16
  */
 import { constants } from "fs";
@@ -24,19 +24,19 @@ import { pickByHelper } from "../gitSafeEnv.js";
 import { getEnvCaseInsensitive } from "../../plugins/securityDefaultPlugin.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:214361-214438 placement
+//@ chunk-fepf8jp6.js:8946-9023 placement
 /**
  * stderr 被隐去时展示给用户的说明文字。
  */
 var WITHHELD_STDERR_NOTICE = "git's own message is not shown, because it can quote private files";
-//@ chunk-s61vbvea.js:214438-214492 placement
+//@ chunk-fepf8jp6.js:9023-9077 placement
 /**
  * 取 git 输出的 stderr（可能带隐去标注）。
  */
 function seenStderr(result) {
   return result.withheldStderr?.() ?? result.stderr;
 }
-//@ chunk-s61vbvea.js:214492-214642 placement
+//@ chunk-fepf8jp6.js:9077-9227 placement
 function withholdGitStderr(result) {
   let stderr = result.stderr;
   return stderr === ""
@@ -47,7 +47,7 @@ function withholdGitStderr(result) {
         withheldStderr: () => stderr,
       };
 }
-//@ chunk-s61vbvea.js:214790-214898 placement
+//@ chunk-fepf8jp6.js:9375-9483 placement
 /**
  * 让 git 把路径参数当字面量的环境变量。
  */
@@ -57,16 +57,16 @@ var LITERAL_PATHSPEC_ENV = {
   GIT_NOGLOB_PATHSPECS: "0",
   GIT_ICASE_PATHSPECS: "0",
 };
-//@ chunk-s61vbvea.js:214898-214960 placement
+//@ chunk-fepf8jp6.js:9483-9545 placement
 /**
  * 把路径用双引号包裹并转义引号/反斜杠。
  */
 function annotateStderr(borrowedObjects) {
   return `"${borrowedObjects.replace(/["\\]/g, (char) => `\\${char}`)}"`;
 }
-//@ chunk-s61vbvea.js:214960-214973 placement
+//@ chunk-fepf8jp6.js:9545-9558 placement
 var MAX_ARG_SLICE_BYTES = 16384;
-//@ chunk-s61vbvea.js:214973-215233 placement
+//@ chunk-fepf8jp6.js:9558-9818 placement
 /**
  * 按字节上限把参数分批。
  */
@@ -94,7 +94,7 @@ function chunkArgsByBytes(args) {
     },
   ).slices;
 }
-//@ chunk-s61vbvea.js:215233-215387 placement
+//@ chunk-fepf8jp6.js:9818-9972 placement
 /**
  * 按 1 MiB 分块读取文件并回调。
  */
@@ -107,24 +107,20 @@ async function readFileChunks(handle, onChunk) {
     offset += bytesRead;
   }
 }
-//@ chunk-s61vbvea.js:215387-215432 placement
+//@ chunk-fepf8jp6.js:9972-10017 placement
 /**
  * 判断索引条目是否为 stage 0 且唯一。
  */
 function splitArgsIntoSlices(entry) {
   return entry.stage === "0" && entry.sole;
 }
-//@ chunk-s61vbvea.js:215432-215514 placement
+//@ chunk-fepf8jp6.js:10017-10099 placement
 /**
  * git 输出捕获用文件打开 flags（读写/只写，含 O_EXCL 与边界读取标志）。
  */
-var GIT_STDOUT_CAPTURE_FLAGS; // deferred: uses READ_LIMITS (../../fsBoundRead.js) of its import cycle while loading; runs once the cycle is complete
-var GIT_STDERR_CAPTURE_FLAGS;
-deferInit("chunk-s61vbvea.js:215432", () => {
-  GIT_STDOUT_CAPTURE_FLAGS = constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | READ_LIMITS;
-  GIT_STDERR_CAPTURE_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | READ_LIMITS;
-});
-//@ chunk-s61vbvea.js:215514-216287 placement
+var GIT_STDOUT_CAPTURE_FLAGS = constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | READ_LIMITS;
+var GIT_STDERR_CAPTURE_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | READ_LIMITS;
+//@ chunk-fepf8jp6.js:10099-10872 placement
 async function listIndexEntriesNamed(runGit, indexFile, paths, dir) {
   let listFilePath = join(dir, `named-${randomBytes(6).toString("hex")}.ls`);
   let handle = await open(listFilePath, GIT_STDOUT_CAPTURE_FLAGS, 384);
@@ -175,14 +171,14 @@ async function listIndexEntriesNamed(runGit, indexFile, paths, dir) {
     await unlink(listFilePath).catch(() => {});
   }
 }
-//@ chunk-s61vbvea.js:216287-216599 placement
+//@ chunk-fepf8jp6.js:10872-11184 placement
 /**
  * 影响 git 配置位置的变量与需保留的变量集合。
  */
 var GIT_LOCATION_ENV_VARS; // deferred: uses PROTECTED_ENV_VARS (../../permissions/protectedEnvAndGitPaths.js) of its import cycle while loading; runs once the cycle is complete
 var PRESERVED_ENV_VARS;
 var ACTION_INPUT_RE;
-deferInit("chunk-s61vbvea.js:216287", () => {
+deferInit("chunk-fepf8jp6.js:10872", () => {
   GIT_LOCATION_ENV_VARS = [
     "GIT_CONFIG_GLOBAL",
     "GIT_CONFIG_SYSTEM",
@@ -209,7 +205,7 @@ deferInit("chunk-s61vbvea.js:216287", () => {
   );
   ACTION_INPUT_RE = /^INPUT_|-/i;
 });
-//@ chunk-s61vbvea.js:216599-216828 placement
+//@ chunk-fepf8jp6.js:11184-11412 placement
 /**
  * 只保留受保护或与子进程环境不同的变量。
  */
@@ -228,14 +224,14 @@ function pickPreservedEnv(preSettingsEnv) {
       (!ACTION_INPUT_RE.test(key) && getEnvCaseInsensitive(env_2, key) === value),
   );
 }
-//@ chunk-s61vbvea.js:216828-216853 placement
+//@ chunk-fepf8jp6.js:11412-11436 placement
 /**
  * 原样返回（失败分类器的默认实现）。
  */
 function GIT_FAILURE_CLASSIFIERS(preSettingsEnv) {
   return preSettingsEnv;
 }
-//@ chunk-s61vbvea.js:216853-217451 placement
+//@ chunk-fepf8jp6.js:11436-12034 placement
 var GIT_REFUSAL_PATTERNS = [
   ["fatal: detected dubious ownership in repository at ", "git_refused_dubious_ownership"],
   ["fatal: unsafe repository (", "git_refused_dubious_ownership"],
@@ -247,7 +243,7 @@ var GIT_REFUSAL_PATTERNS = [
   ["fatal: unknown repository extension", "git_refused_unknown_extension"],
   ["fatal: Expected git repo version ", "git_refused_unknown_extension"],
 ];
-//@ chunk-s61vbvea.js:217451-217511 placement
+//@ chunk-fepf8jp6.js:12034-12094 placement
 /**
  * 按前缀匹配给出首条 git 失败分类。
  */
@@ -257,16 +253,16 @@ function firstGitFailureClass(stderr) {
 export {
   LITERAL_PATHSPEC_ENV,
   GIT_FAILURE_CLASSIFIERS,
-  pickPreservedEnv,
   seenStderr,
+  annotateStderr,
+  withholdGitStderr,
+  firstGitFailureClass,
+  pickPreservedEnv,
   listIndexEntriesNamed,
   splitArgsIntoSlices,
   chunkArgsByBytes,
   readFileChunks,
   GIT_STDOUT_CAPTURE_FLAGS,
   GIT_STDERR_CAPTURE_FLAGS,
-  firstGitFailureClass,
   WITHHELD_STDERR_NOTICE,
-  annotateStderr,
-  withholdGitStderr,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：mcp serve 模式下 Chrome 文件上传
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-d2swv9w7.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-d4n7mgs8.js (3)
  * attribution: placement 3
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -38,7 +38,7 @@ import { getSessionProject } from "../../bootstrap/sessionSlices.js";
 import { FILE_UPLOAD_UNAVAILABLE } from "../../utils/claudeInChrome/common.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 
-//@ chunk-d2swv9w7.js:12231-12574 placement
+//@ chunk-d4n7mgs8.js:13379-13722 placement
 var CHROME_UPLOAD_SCHEMAS = 4000000;
 var ChromeReadUploadRequestSchema = DoctorLazy(() =>
   zodStrictObject({
@@ -75,7 +75,7 @@ var ChromeUploadFileListSchema = DoctorLazy(() =>
     }),
   ),
 );
-//@ chunk-d2swv9w7.js:12574-12887 placement
+//@ chunk-d4n7mgs8.js:13722-14035 placement
 async function vetChromeUploadFile(requestedPath, origin) {
   let validated = await validateUploadPath(requestedPath, origin);
   assertPathNotBlocked(requestedPath, validated, origin);
@@ -89,7 +89,7 @@ async function vetChromeUploadFile(requestedPath, origin) {
     );
   return validated;
 }
-//@ chunk-d2swv9w7.js:12887-13664 placement
+//@ chunk-d4n7mgs8.js:14035-14812 placement
 /**
  * mcp serve 下 Chrome 扩展 file_upload：校验路径（拒绝 Claude 自身文件与双向文本名）、按偏移/总字节上限读取多个文件返回 base64。
  */

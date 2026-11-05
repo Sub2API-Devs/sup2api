@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：会话团队（session team）：内部团队名、移动团队到当前会话、领导进程存活判断
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6cc2zqkz.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4ht4pcp0.js (7)
  * attribution: placement 7
  */
 import { mkdir, rmdir } from "fs/promises";
@@ -42,9 +42,9 @@ import {
 } from "../processIdentity.js";
 import { countConcurrentSessions_2 } from "../concurrentSessions.js";
 
-//@ chunk-6cc2zqkz.js:3102-3113 placement
+//@ chunk-4ht4pcp0.js:3289-3300 placement
 var LEAD_PROCESS_CLAIM_SLACK_MS = 2000;
-//@ chunk-6cc2zqkz.js:3113-3286 placement
+//@ chunk-4ht4pcp0.js:3300-3473 placement
 function getAssistantTeamName() {
   if (getInheritedTeamName() === undefined) {
     let CLAUDE_INTERNAL_ASSISTANT_TEAM_NAME = process.env.CLAUDE_INTERNAL_ASSISTANT_TEAM_NAME || null;
@@ -53,14 +53,14 @@ function getAssistantTeamName() {
   }
   return getInheritedTeamName() ?? null;
 }
-//@ chunk-6cc2zqkz.js:4232-4277 placement
+//@ chunk-4ht4pcp0.js:4419-4464 placement
 /**
  * 未继承团队名时把会话团队移到当前。
  */
 async function moveSessionTeamUnlessInherited(options) {
   return getInheritedTeamName() ? undefined : moveSessionTeamToCurrent(options);
 }
-//@ chunk-6cc2zqkz.js:4277-4319 placement
+//@ chunk-4ht4pcp0.js:4464-4506 placement
 /**
  * 清掉继承的团队名再移动会话团队。
  */
@@ -68,7 +68,7 @@ async function resetAndMoveSessionTeam(options) {
   setInheritedTeamName(null);
   return moveSessionTeamToCurrent(options);
 }
-//@ chunk-6cc2zqkz.js:4319-5143 placement
+//@ chunk-4ht4pcp0.js:4506-5330 placement
 async function moveSessionTeamToCurrent(options) {
   let { leaderTeamName, sessionListId } = swarmHostState().taskList;
   let sessionId = getSessionId();
@@ -128,7 +128,7 @@ async function moveSessionTeamToCurrent(options) {
     return;
   }
 }
-//@ chunk-6cc2zqkz.js:5143-5352 placement
+//@ chunk-4ht4pcp0.js:5330-5539 placement
 async function resolveSessionListId(sessionId, storageV5) {
   let listName = sessionTeamName(sessionId);
   if ((await listTasks(listName, storageV5)).length > 0) return;
@@ -140,7 +140,7 @@ async function resolveSessionListId(sessionId, storageV5) {
   if (note !== null && isSessionListId(note)) return note;
   return (await listTasks(sessionId, storageV5)).length > 0 ? sessionId : undefined;
 }
-//@ chunk-6cc2zqkz.js:5496-5891 placement
+//@ chunk-4ht4pcp0.js:5684-6080 placement
 /**
  * 回收已退出的团队负责人进程记录（同一 pid 空间且进程确已结束）。
  */

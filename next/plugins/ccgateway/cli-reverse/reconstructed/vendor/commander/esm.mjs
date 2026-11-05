@@ -1,14 +1,14 @@
 /**
  * commander/esm.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: commander@12.0.0
- * pieces: chunk-b7dyevzy.js (1)
+ * pieces: chunk-ardnz7sf.js (1)
  * attribution: esm-layout 1
  */
 import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_commander_2 } from "./index.js";
 
-//@ chunk-b7dyevzy.js:35561-35767 esm-layout
+//@ chunk-ardnz7sf.js:35561-35767 esm-layout
 var program = __toESM(require_commander_2(), 1);
 var {
   program: program_2,

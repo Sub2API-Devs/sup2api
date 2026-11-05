@@ -3,16 +3,16 @@
  *
  * 启动后的后台维护：初始化记忆提取与 autoDream、更新插件市场、注册 deep link 协议、定期清理旧消息文件与旧版本
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/backgroundHousekeeping.ts
- * pieces: chunk-0nv5pv9r.js (3)
+ * pieces: chunk-ads6w2ye.js (3)
  * attribution: facade-majority 3
  */
 import { stat, writeFile } from "fs/promises";
 import { join } from "path";
 import { isStorageV5Enabled } from "./hoverRest.js";
 import { STORAGE_SPACES } from "./storage/storageSpaces.js";
-import { getClaudeConfigDir } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { isDiskless, getIsInteractive, getLastInteractionTime } from "../bootstrap/state.js";
 import { initExtractMemories } from "../services/extractMemories/extractMemories.js";
 import { initAutoDream } from "../services/autoDream/autoDream.js";
@@ -30,7 +30,7 @@ import { isSyscallError } from "./errors.js";
 import { logError } from "./log.js";
 import { cleanupOldVersions } from "./nativeInstaller/installer.js";
 
-//@ chunk-0nv5pv9r.js:11937-11984 facade-majority
+//@ chunk-ads6w2ye.js:11937-11984 facade-majority
 /**
  * 判定过期清理的时间阈值（24 小时）。
  */
@@ -38,7 +38,7 @@ var STALE_CLEANUP_AGE_MS = 86400000;
 var DELAY_VERY_SLOW_OPERATIONS_THAT_HAPPEN_EVERY_SESSION = 600000;
 var STALE_CLEANUP_CATCHUP_DELAY_MS = 5000;
 var TRANSCRIPT_HEARTBEAT_INTERVAL_MS = 3600000;
-//@ chunk-0nv5pv9r.js:11984-12206 facade-majority
+//@ chunk-ads6w2ye.js:11984-12206 facade-majority
 async function isLastCleanupSentinelFresh(storageV5) {
   if (isStorageV5Enabled() && storageV5 !== undefined) {
     let statResult = await storageV5.statMeta(STORAGE_SPACES.state("last-cleanup"));
@@ -51,7 +51,7 @@ async function isLastCleanupSentinelFresh(storageV5) {
     return false;
   }
 }
-//@ chunk-0nv5pv9r.js:12206-13290 facade-majority (2.1.88 match: startBackgroundHousekeeping, 0.047)
+//@ chunk-ads6w2ye.js:12206-13268 facade-majority (2.1.88 match: startBackgroundHousekeeping, 0.051)
 /**
  * 后台维护（每宿主一次）：初始化 extractMemories/autoDream、后台更新插件；交互式时注册 deep link；延迟执行慢操作（用户 1 分钟内有操作则推迟）：清理旧消息文件、写 .last-cleanup、清理旧版本。
  */
@@ -81,8 +81,7 @@ async function startBackgroundHousekeeping(host, storageV5) {
         }
       }
       cleanupPhase = "done";
-      let cleanupFinished =
-        (await cleanupOldMessageFilesInBackground(storageV5)) !== "remote_settings_unknowable";
+      let cleanupFinished = (await cleanupOldMessageFilesInBackground(storageV5)) === undefined;
       if (isStorageV5Enabled() && storageV5 !== undefined)
         await reapStaleHousekeepingStagingFiles(getClaudeConfigDir(), host.backgroundHousekeeping);
       if (cleanupFinished && isStorageV5Enabled() && storageV5 !== undefined) {

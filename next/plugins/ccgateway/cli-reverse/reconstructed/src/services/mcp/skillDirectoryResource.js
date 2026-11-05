@@ -3,11 +3,14 @@
  *
  * 2.1.316 新增：MCP 技能目录资源
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9ycd12hk.js (6)
- * attribution: placement 6
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-zmp9ej5f.js (7)
+ * attribution: placement 7
  */
+import { isAutoClassifierActive } from "../../utils/permissions/autoModeState.js";
+import { hasAutoModeDenyLists } from "../../plugins/functionHooks/toolCheckHooks.js";
+import { isChainOnAllowActive } from "../../utils/permissions/permissions.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, stringSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { INODE_DIRECTORY } from "./mcpCallConstants.js";
@@ -20,14 +23,15 @@ import {
 } from "../../tools/ReadMcpResourceDirTool/prompt.js";
 import {
   alwaysFalse,
-  noopSkillFetch,
+  fetchMcpSkillsForClient,
   countUniqueFiles,
+  noopSkillFetch,
   MAX_RESOURCE_URI_BYTES,
   loadedSkillNote,
-  isUrlUnderPrefix,
-  isParsableUri,
   skillDirectoryEntries,
 } from "./mcpSkills.js";
+import { findServersByName } from "./normalization.js";
+import { jsonStringify } from "../../utils/slowOperations.js";
 import { ensureConnectedClient_2, mapInTurns } from "./client.js";
 import { throwIfWithheldResources } from "./withheldResources.js";
 import { recordPluginUsage } from "../../utils/telemetry/pluginTelemetry.js";
@@ -42,39 +46,47 @@ import {
   stripIgnorables,
 } from "../../utils/sanitization.js";
 import { plural } from "../../utils/stringUtils.js";
-import { jsonStringify } from "../../utils/slowOperations.js";
 import { escapeXmlAttribute } from "../../utils/permissions/checkRegistry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-9ycd12hk.js:3769-3820 placement
+//@ chunk-zmp9ej5f.js:3869-3988 placement
+function autoModeAutoAllows({ mode, modeBeforeRewrite, servedCall }) {
+  let a = servedCall === true;
+  return (
+    (isAutoClassifierActive(mode, a) ||
+      (modeBeforeRewrite !== undefined && isAutoClassifierActive(modeBeforeRewrite, a))) &&
+    (hasAutoModeDenyLists() || isChainOnAllowActive())
+  );
+}
+//@ chunk-zmp9ej5f.js:3988-4039 placement
 /**
  * 懒加载 MCP 相关模块集合。
  */
 function mcpModules() {
   return require("./emitTripwireEvent.lazy.js");
 }
-//@ chunk-9ycd12hk.js:3820-3878 placement
+//@ chunk-zmp9ej5f.js:4039-4097 placement
 /**
  * 取 MCP SDK 错误分类模块。
  */
 function mcpErrorClassificationModule() {
   return mcpModules().mcpSdkErrorClassificationModule();
 }
-//@ chunk-9ycd12hk.js:3878-3920 placement
+//@ chunk-zmp9ej5f.js:4097-4139 placement
 /**
  * 取 MCP 客户端模块。
  */
 function mcpClientModule() {
   return mcpModules().mcpClientModule();
 }
-//@ chunk-9ycd12hk.js:3920-3969 placement
+//@ chunk-zmp9ej5f.js:4139-4188 placement
 /**
  * 取 MCP 目录读取模块。
  */
 function mcpDirectoryReadModule() {
   return mcpModules().mcpDirectoryReadModule();
 }
-//@ chunk-9ycd12hk.js:3969-7229 placement
+//@ chunk-zmp9ej5f.js:4188-7744 placement
 /**
  * 列出目录资源的工具定义。
  */
@@ -82,7 +94,7 @@ var listDirectoryResourceInputSchema; // deferred: uses DoctorLazy (../../cli/ha
 var directoryListingResultSchema;
 var DIRECTORY_LISTING_DISABLED_TEXT;
 var listDirectoryResourceTool;
-deferInit("chunk-9ycd12hk.js:3969", () => {
+deferInit("chunk-zmp9ej5f.js:4188", () => {
   listDirectoryResourceInputSchema = DoctorLazy(() =>
     objectSchema({
       server: stringSchema().describe("The MCP server name"),
@@ -139,11 +151,11 @@ deferInit("chunk-9ycd12hk.js:3969", () => {
     },
     create(context) {
       return {
-        async checkPermissions(updatedInput) {
+        async checkPermissions(input) {
           if (!greedyShoreEnabled())
             return {
               behavior: "allow",
-              updatedInput,
+              updatedInput: input,
             };
           if (!alwaysFalse())
             return {
@@ -154,6 +166,27 @@ deferInit("chunk-9ycd12hk.js:3969", () => {
                 reason: "directory listing off",
               },
             };
+          let [client] = findServersByName(context.turnMcpClients, input.server);
+          if (client !== undefined) {
+            let listed = listSkillDirectory(
+              input.uri,
+              await fetchMcpSkillsForClient(client, context.messages(), context.inheritedMcpSkillMessages()),
+            );
+            let other = listSkillDirectory(
+              input.uri,
+              countUniqueFiles(client.name, context.messages(), context.inheritedMcpSkillMessages()),
+            );
+            if (
+              listed !== undefined &&
+              listed.error === undefined &&
+              jsonStringify(listed) === jsonStringify(other) &&
+              !autoModeAutoAllows(context.permissions())
+            )
+              return {
+                behavior: "allow",
+                updatedInput: input,
+              };
+          }
           return {
             behavior: "passthrough",
             message: `${READ_MCP_RESOURCE_DIR_TOOL_NAME} requires permission.`,
@@ -298,30 +331,22 @@ ${jsonStringify(output)}`,
     },
   });
 });
-//@ chunk-9ycd12hk.js:7229-8592 placement
+//@ chunk-zmp9ej5f.js:7744-9203 placement
 /**
  * 列出已加载 MCP 技能目录下的条目：地址过长、写法与技能根不同、不是合法 URL、或不属于任何技能目录时给出说明性错误；否则返回子文件/子目录资源列表（目录标为 inode/directory）。
  */
 function listSkillDirectory(uri, skills) {
-  if (skills.length > 0 && Buffer.byteLength(uri) > MAX_RESOURCE_URI_BYTES)
+  if (skills.length === 0) return;
+  if (Buffer.byteLength(uri) > MAX_RESOURCE_URI_BYTES)
     return {
       resources: [],
       error: `An address of ${Buffer.byteLength(uri)} bytes: This directory was not read, because its address is longer than ${MAX_RESOURCE_URI_BYTES} bytes. While a skill from this server is loaded, this app reads a directory only at an address of ${MAX_RESOURCE_URI_BYTES} bytes or less.${skills.map((skill) => loadedSkillNote(skill.skillName)).join("")}`,
     };
-  if (!skills.some((skill) => uri === skill.root || uri.startsWith(`${skill.root}/`))) {
-    let filtered = skills.filter((skill) => isUrlUnderPrefix(`${uri}/`, skill.root));
-    if (filtered.length > 0)
-      return {
-        resources: [],
-        error: `${escapeXmlAttribute(uri)}: This directory was not read, because its address begins with another spelling of the address of a loaded skill. Write that part exactly as the skill writes it.${filtered.map((skill) => loadedSkillNote(skill.skillName)).join("")}`,
-      };
-    return skills.length > 0 && !isParsableUri(uri)
-      ? {
-          resources: [],
-          error: `${escapeXmlAttribute(uri)}: This directory was not read, because its address is not a valid URL. While a skill from this server is loaded, this app reads a directory only at a valid URL. Write the address as the server or the skill gives it.${skills.map((skill) => loadedSkillNote(skill.skillName)).join("")}`,
-        }
-      : undefined;
-  }
+  if (!skills.some((skill) => uri === skill.root || uri.startsWith(`${skill.root}/`)))
+    return {
+      resources: [],
+      error: `${escapeXmlAttribute(uri)}: This directory was not read, because its address, as written, is outside the directories of the loaded skills of this server. While a skill from this server is loaded, this tool reads, for this server, only the directories of its loaded skills. For a directory of a loaded skill, copy the address after "at" in that skill's first sentence, character for character, without the full stop. Add "/" and a path only for a subdirectory. If this conversation does not hold that sentence, load that skill here: its first sentence then gives the address. To read a directory of another skill of this server, load that skill first.${skills.map((skill) => loadedSkillNote(skill.skillName)).join("")}`,
+    };
   let entries = skillDirectoryEntries(uri, skills);
   if (entries === undefined)
     return {
@@ -338,4 +363,4 @@ function listSkillDirectory(uri, skills) {
     })),
   };
 }
-export { listDirectoryResourceTool };
+export { listDirectoryResourceTool, autoModeAutoAllows };

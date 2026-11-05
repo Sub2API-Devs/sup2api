@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增。模型拒答后暂停、选择回退模型的对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: placement 4
  */
 import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import {
-  formatRefusalDetails,
+  formatErrorDetails,
   GENERIC_SAFEGUARD_MESSAGE,
   getSafeguardLead,
   safeguardRecoveryLine,
@@ -32,14 +32,14 @@ import { ModelSelector } from "./agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "./CustomSelect/select.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1403401-1403405 placement
+//@ chunk-czq1j3j2.js:1434160-1434164 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1403401", () => {
+deferInit("chunk-czq1j3j2.js:1434160", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1403405-1403643 placement
+//@ chunk-czq1j3j2.js:1442482-1442720 placement
 function buildRefusalPausedMessage(model, refusal, fallbackModel) {
-  let refusalDetails = formatRefusalDetails(refusal);
+  let refusalDetails = formatErrorDetails(refusal);
   let modelLabel = renderModelName(model);
   if (!hasVisibleText(modelLabel))
     return `${GENERIC_SAFEGUARD_MESSAGE} ${buildSafeguardsLearnMore(model)}${refusalDetails}`;
@@ -59,7 +59,7 @@ function buildRefusalPausedMessage(model, refusal, fallbackModel) {
     : undefined;
   return `${safeguardLead} ${recoveryLine === undefined ? "" : `${recoveryLine} `}${buildSafeguardsLearnMore(model)}${refusalDetails}`;
 }
-//@ chunk-18hwfzwa.js:1403643-1403844 placement
+//@ chunk-czq1j3j2.js:1442720-1442921 placement
 function refusalPausedOptionLabels(originalModel, fallbackModel) {
   let fallbackLabel = renderModelName(fallbackModel);
   let originalLabel = renderModelName(originalModel);
@@ -72,7 +72,7 @@ function refusalPausedOptionLabels(originalModel, fallbackModel) {
       : "Edit prompt and retry",
   };
 }
-//@ chunk-18hwfzwa.js:1403844-1406026 placement
+//@ chunk-czq1j3j2.js:1442921-1445103 placement
 function ModelRefusalPausedDialog(props) {
   let $ = useMemoCache(48);
   let { payload, answer } = props;

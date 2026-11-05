@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。应用自动压缩窗口设置（/autocompact）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-z3fsn6g8.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3r3ajxh1.js (6)
  * attribution: placement 6
  */
 import { getModelContextInfo } from "../../utils/model/modelContextInfo.js";
@@ -29,7 +29,7 @@ import { logEvent } from "../../services/analytics/index.js";
 import { lit, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { telemetrySafeModelName } from "../../utils/model/telemetryModelName.js";
 
-//@ chunk-z3fsn6g8.js:553-722 placement
+//@ chunk-3r3ajxh1.js:553-722 placement
 /**
  * 窗口来源标签
  */
@@ -39,7 +39,7 @@ var AUTO_COMPACT_WINDOW_SOURCE_LABELS = {
   "model-default": "default for this model",
   settings: "from settings",
 };
-//@ chunk-z3fsn6g8.js:722-1611 placement
+//@ chunk-3r3ajxh1.js:722-1611 placement
 /**
  * 生成自动压缩窗口的当前值说明
  */
@@ -69,15 +69,15 @@ function describeAutoCompactWindow(mainLoopModel, autoCompactWindow) {
   return lines.join(`
 `);
 }
-//@ chunk-z3fsn6g8.js:1611-1641 placement
+//@ chunk-3r3ajxh1.js:1611-1641 placement
 function advisesStayingOnAuto(accountId) {
   return !userEffortForAccount(accountId);
 }
-//@ chunk-z3fsn6g8.js:1641-1708 placement
+//@ chunk-3r3ajxh1.js:1641-1708 placement
 function isAboveAutoWindow(modelInfo, limit) {
   return Math.min(modelInfo.contextWindow, limit) > resolveAutoCompactWindow(modelInfo).window;
 }
-//@ chunk-z3fsn6g8.js:1708-3094 placement
+//@ chunk-3r3ajxh1.js:1708-3094 placement
 /**
  * 应用自动压缩窗口设置（/autocompact）。
  */
@@ -141,7 +141,7 @@ async function applyAutoCompactWindow(args, session, storageV5) {
   else if (currentWindow < parsed) envNote = ` (capped to model limit of ${formatTokens(currentWindow)})`;
   return `${header} set to ${formatTokens(parsed)} tokens${envNote}`;
 }
-//@ chunk-z3fsn6g8.js:3094-3276 placement
+//@ chunk-3r3ajxh1.js:3094-3276 placement
 var call = async (args, context) => {
   let trimmed = args.trim();
   if (!trimmed)

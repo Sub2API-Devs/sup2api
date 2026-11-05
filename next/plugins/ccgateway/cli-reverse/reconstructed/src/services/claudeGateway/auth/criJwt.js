@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关 CRI JWT 校验
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (4)
  * attribution: placement 4
  */
 import { decodeProtectedHeader } from "../../../../vendor/jose/dist/node/esm/util/decode_protected_header.js";
@@ -17,14 +17,14 @@ import { importJWK } from "../../../../vendor/jose/dist/webapi/key/import.js";
 import { jwtVerify } from "../../../../vendor/jose/dist/node/esm/jwt/verify.js";
 import { JWTClaimValidationFailed } from "../../../../vendor/jose/dist/node/esm/util/errors.js";
 
-//@ chunk-1ny7cxrt.js:1320472-1320556 placement
+//@ chunk-1hnjmk23.js:1321435-1321519 placement
 /**
  * CRI JWT 的 JOSE typ 值 "cri+jwt"。
  */
 var HTTPS_API_ANTHROPIC_COM_API_OAUTH_CRI = "https://api.anthropic.com/api/oauth/cri";
 var OAUTH_CRI_JWKS_URL = `${HTTPS_API_ANTHROPIC_COM_API_OAUTH_CRI}/jwks.json`;
 var CRI_JWT_TYP = "cri+jwt";
-//@ chunk-1ny7cxrt.js:1320556-1320614 placement
+//@ chunk-1hnjmk23.js:1321519-1321577 placement
 /**
  * 不解签地判断 JWT 头的 typ 是否为 cri+jwt（解析失败视为否）。
  */
@@ -35,7 +35,7 @@ function isCriJwtTyp(token) {
     return false;
   }
 }
-//@ chunk-1ny7cxrt.js:1320614-1320673 placement
+//@ chunk-1hnjmk23.js:1321577-1321636 placement
 /**
  * JWKS 拉取失败后的负缓存时长（1 分钟）。
  */
@@ -45,7 +45,7 @@ var JWKS_FETCH_TIMEOUT_MS = 1e4;
 var JWKS_MAX_CACHE_MS = 21600000;
 var JWKS_DEFAULT_TTL_MS = 600000;
 var JWKS_NEGATIVE_CACHE_MS = 60000;
-//@ chunk-1ny7cxrt.js:1320673-1325035 placement
+//@ chunk-1hnjmk23.js:1321636-1325998 placement
 /**
  * 网关 CRI JWT 校验器：组织白名单、audience、issuer、JWKS 地址校验与缓存。
  */

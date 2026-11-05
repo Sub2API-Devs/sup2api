@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：创建 JSON 文件存储（默认值、权限、缩进、schema 校验）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-5rq13jpv.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0x6ff7kn.js (2)
  * attribution: placement 2
  */
 import { readFile, mkdir } from "fs/promises";
@@ -15,7 +15,7 @@ import { jsonParse, jsonStringify } from "./slowOperations.js";
 import { logForDebugging } from "./debug.js";
 import { writeFileAtomic } from "./atomicPublishWrite.js";
 
-//@ chunk-5rq13jpv.js:383-1160 placement
+//@ chunk-0x6ff7kn.js:383-1160 placement
 /**
  * 创建 JSON 文件存储（默认值、权限、缩进、schema 校验）。
  */
@@ -90,7 +90,7 @@ function createJsonStore(filePath, schemaFactory, options) {
     update,
   };
 }
-//@ chunk-5rq13jpv.js:1160-1203 placement
+//@ chunk-0x6ff7kn.js:1160-1203 placement
 function isFunction(defaultValue) {
   return typeof defaultValue === "function";
 }

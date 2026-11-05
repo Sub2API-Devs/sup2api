@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：REPL Remote Control 桥的 control_request 总分发（initialize/interrupt/set_model/apply_flag_settings 等）与合成 result 消息
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1qpz7qcd.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ck4jrdtf.js (15)
  * attribution: placement 15
  */
 import { randomUUID } from "crypto";
@@ -47,9 +47,9 @@ import { isBackgroundTasksOff } from "../tools/AgentTool/backgroundGates.js";
 import { printableName } from "../utils/printableName.js";
 import { isAbortedTerminalReason } from "../entrypoints/sdk/coreSchemas.js";
 import { EMPTY_USAGE } from "../services/api/emptyUsage.js";
-import { SYNTHETIC_MODEL } from "../constants/messages.js";
+import { SYNTHETIC_MODEL } from "../utils/messages.js";
 
-//@ chunk-1qpz7qcd.js:7648-7857 placement
+//@ chunk-ck4jrdtf.js:8133-8342 placement
 /**
  * mcp_reconnect 结果不是 connected 时抛错
  */
@@ -64,7 +64,7 @@ function assertMcpReconnected(client) {
   }
   throw new WireSafeControlError(`Server status: ${client.type}`);
 }
-//@ chunk-1qpz7qcd.js:7857-7936 placement (2.1.88 match: getRiskColor, 0.785)
+//@ chunk-ck4jrdtf.js:8342-8421 placement (2.1.88 match: getRiskColor, 0.786)
 function getRiskColor(request, writeFrame, sessionId, responsePromise) {
   sendControlResponseWhenSettled(
     request,
@@ -76,7 +76,7 @@ function getRiskColor(request, writeFrame, sessionId, responsePromise) {
     })),
   );
 }
-//@ chunk-1qpz7qcd.js:7936-8103 placement
+//@ chunk-ck4jrdtf.js:8421-8588 placement
 /**
  * 该控制请求是否要"实时回复"（mcp_status 的 liveReply，或带回调的 mcp_authenticate）。
  */
@@ -89,7 +89,7 @@ function wantsLiveReply(request, response) {
     response?.callbackExpected === true
   );
 }
-//@ chunk-1qpz7qcd.js:8506-8703 placement
+//@ chunk-ck4jrdtf.js:8991-9188 placement
 /**
  * 生成 control_response：结果 ok=false 时为 error（错误文本脱敏），否则 success。
  */
@@ -111,7 +111,7 @@ function buildControlResponse(requestId, result) {
     },
   };
 }
-//@ chunk-1qpz7qcd.js:8703-22053 placement
+//@ chunk-ck4jrdtf.js:9188-22556 placement
 /**
  * REPL Remote Control 桥的 control_request 总分发器：initialize、interrupt、set_model、set_permission_mode、background_tasks、get_context_usage、read_file、rename_session 等，逐个调用回调并回 control_response。
  */
@@ -660,7 +660,8 @@ function handleReplBridgeControlRequest(request, options) {
       let { subtype, serverName } = request_2;
       let handler =
         request_2.subtype === "mcp_authenticate"
-          ? onMcpAuthenticate && ((serverName) => onMcpAuthenticate(serverName, request_2.redirectUri))
+          ? onMcpAuthenticate &&
+            ((serverName) => onMcpAuthenticate(serverName, request_2.redirectUri, request_2.redirectUriOnly))
           : request_2.subtype === "mcp_oauth_callback_url"
             ? onMcpOauthCallbackUrl &&
               ((serverName) => onMcpOauthCallbackUrl(serverName, request_2.callbackUrl))
@@ -1045,13 +1046,13 @@ function handleReplBridgeControlRequest(request, options) {
     `[bridge:repl] Sent control_response for ${request.request.subtype} request_id=${request.request_id} result=${response.response.subtype}`,
   );
 }
-//@ chunk-1qpz7qcd.js:22053-22124 placement
+//@ chunk-ck4jrdtf.js:22556-22627 placement
 function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-1qpz7qcd.js:22124-22155 placement
+//@ chunk-ck4jrdtf.js:22627-22658 placement
 var SERVERS_NOT_ADOPTED_KEY = "(servers not adopted)";
-//@ chunk-1qpz7qcd.js:22155-22302 placement
+//@ chunk-ck4jrdtf.js:22658-22805 placement
 /**
  * 有未接管的 MCP 服务器时在结果里附加说明（Remote Control 桥只认注入的 Project 服务器）。
  */
@@ -1062,7 +1063,7 @@ function annotateUnadoptedMcpServers(errors, unknownServerCount) {
     [SERVERS_NOT_ADOPTED_KEY]: `${unknownServerCount} server(s) not adopted: a Remote Control bridge only honors the injected Project servers`,
   };
 }
-//@ chunk-1qpz7qcd.js:22302-23435 placement
+//@ chunk-ck4jrdtf.js:22805-23938 placement
 /**
  * 校验并应用远端 apply_flag_settings 的设置对象（只允许白名单键），记录遥测。
  */
@@ -1122,11 +1123,11 @@ function applyBridgeFlagSettings(settings) {
     settings: acceptedSettings,
   };
 }
-//@ chunk-1qpz7qcd.js:23435-23479 placement
+//@ chunk-ck4jrdtf.js:23938-23982 placement
 function isNotAbortedTerminalReason(outcome) {
   return !isAbortedTerminalReason(outcome.terminal_reason);
 }
-//@ chunk-1qpz7qcd.js:23479-23839 placement
+//@ chunk-ck4jrdtf.js:23982-24342 placement
 function resolveTurnTerminalReason({ userMessageUuid, outcome, aborted }) {
   let terminalReason = outcome?.terminal_reason;
   let guessedReason = isAbortedTerminalReason(terminalReason) ? terminalReason : aborted?.guess;
@@ -1157,7 +1158,7 @@ function resolveTurnTerminalReason({ userMessageUuid, outcome, aborted }) {
       return;
   }
 }
-//@ chunk-1qpz7qcd.js:23839-24800 placement
+//@ chunk-ck4jrdtf.js:24342-25303 placement
 /**
  * 为桥会话合成一条 type=result 的结束消息（用量为空，带 terminal_reason）。
  */
@@ -1225,7 +1226,7 @@ function buildBridgeResultMessage(sessionId, turn) {
     errors: [],
   };
 }
-//@ chunk-1qpz7qcd.js:24800-24902 placement
+//@ chunk-ck4jrdtf.js:25303-25405 placement
 function buildWorkerShuttingDownMessage(sessionId, reason) {
   return {
     type: "system",
@@ -1235,9 +1236,9 @@ function buildWorkerShuttingDownMessage(sessionId, reason) {
     uuid: randomUUID(),
   };
 }
-//@ chunk-1qpz7qcd.js:24902-24928 placement
+//@ chunk-ck4jrdtf.js:25405-25431 placement
 var PUSHNOTIFICATION = "PushNotification";
-//@ chunk-1qpz7qcd.js:24928-25296 placement
+//@ chunk-ck4jrdtf.js:25431-25799 placement
 function buildSyntheticPushNotificationToolUse(message, sessionId) {
   return {
     type: "assistant",
@@ -1275,10 +1276,10 @@ function buildSyntheticPushNotificationToolUse(message, sessionId) {
 }
 export {
   resolveTurnTerminalReason,
-  buildSyntheticPushNotificationToolUse,
-  assertMcpReconnected,
-  wantsLiveReply,
   buildWorkerShuttingDownMessage,
   handleReplBridgeControlRequest,
   buildBridgeResultMessage,
+  buildSyntheticPushNotificationToolUse,
+  assertMcpReconnected,
+  wantsLiveReply,
 };

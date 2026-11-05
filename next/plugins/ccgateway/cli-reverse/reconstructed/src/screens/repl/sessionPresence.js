@@ -3,14 +3,11 @@
  *
  * 2.1.316 新增。会话在线状态。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (42)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (42)
  * attribution: placement 42
  */
-import { redactSecrets } from "../../services/teamMemorySync/secretScanner.js";
-import { listActiveAgentTaskEntries } from "../../tasks/LocalAgentTask/LocalAgentTask.js";
-import { formatTabStatus, programStatusClearById, PROGRAM_STATUS_CLEAR } from "../../ink/terminal.js";
 import {
   init_react_production,
   useEffect,
@@ -20,10 +17,17 @@ import {
   useRef,
   useCallback,
 } from "../../../vendor/react/cjs/react.production.js";
+import { redactSecrets } from "../../services/teamMemorySync/secretScanner.js";
+import { listActiveAgentTaskEntries } from "../../tasks/LocalAgentTask/LocalAgentTask.js";
+import { formatTabStatus, programStatusClearById, PROGRAM_STATUS_CLEAR } from "../../ink/terminal.js";
 import { isBgSession, updateSessionActivity } from "../../utils/concurrentSessions.js";
 import { managedSettingsSecurityDialogDef } from "./StartupNudges.js";
 import { sandboxNetworkAccessDialogDef } from "./SandboxNetworkPrompts.js";
-import { DIALOG_KIND_META, parseLocalJsxDialogPayload } from "../../components/dialogs/dialogKinds.js";
+import {
+  DIALOG_KIND_META,
+  parseLocalJsxDialogPayload,
+  SESSION_OWNER,
+} from "../../components/dialogs/dialogKinds.js";
 import { attentionRegistryStore, truncateAttentionText } from "../../components/fleet/sessionAttention.js";
 import {
   useDialogStore,
@@ -69,7 +73,7 @@ import { currentToolPermissionContext } from "../../utils/permissions/currentPer
 import { useCommandQueueOrDefault } from "../../context/QueuedMessageContext.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { getGlobalConfig } from "../../utils/config.js";
-import { useTabStatus } from "../../ink/hooks/useTerminalHooks.js";
+import { IDLE_SPECULATION_STATE } from "../../ink/hooks/useTerminalHooks.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -78,16 +82,26 @@ import {
 import { AnimatedTerminalTitle } from "../REPL.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1429877-1429934 placement
+//@ chunk-czq1j3j2.js:1466575-1466579 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1466575", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1468527-1468531 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1468527", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1470066-1470123 placement
 function completeLabelOrUndefined(description) {
   return description.includes("\u2026") ? undefined : redactSecrets(description);
 }
-//@ chunk-18hwfzwa.js:1429934-1430004 placement
+//@ chunk-czq1j3j2.js:1470123-1470193 placement
 function describePresenceEntries(appState) {
   return listActiveAgentTaskEntries(appState).map((task) => `${task.id}	${formatTabStatus(task)}`).join(`
 `);
 }
-//@ chunk-18hwfzwa.js:1430004-1430132 placement
+//@ chunk-czq1j3j2.js:1470193-1470321 placement
 /**
  * 每行 “键\t值” 解析为 Map。
  */
@@ -100,12 +114,12 @@ function parseTabSeparatedMap(text) {
   }
   return map;
 }
-//@ chunk-18hwfzwa.js:1430132-1430136 placement
+//@ chunk-czq1j3j2.js:1470321-1470325 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1430132", () => {
+deferInit("chunk-czq1j3j2.js:1470321", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:1430136-1430812 placement
+//@ chunk-czq1j3j2.js:1470325-1471001 placement
 /**
  * 后台会话中把权限、沙箱网络、MCP 输入、托管设置等等待状态发布出去。
  */
@@ -165,19 +179,19 @@ function useBackgroundAskEmitter() {
     );
   }, [isBackground, peerApprovalAsk, needs]);
 }
-//@ chunk-18hwfzwa.js:1430812-1430889 placement
+//@ chunk-czq1j3j2.js:1471001-1471078 placement
 function selectTopAskOrder() {
   let dialogStore = useDialogStore();
   let read = () => topAskOrder(dialogStore.getState());
   return useSyncExternalStore(dialogStore.subscribe, read, read);
 }
-//@ chunk-18hwfzwa.js:1430889-1430971 placement
+//@ chunk-czq1j3j2.js:1471078-1471160 placement
 function selectTopBlockingDialogKind() {
   let dialogStore = useDialogStore();
   let read = () => topBlockingDialog(dialogStore.getState())?.kind;
   return useSyncExternalStore(dialogStore.subscribe, read, read);
 }
-//@ chunk-18hwfzwa.js:1430971-1431356 placement
+//@ chunk-czq1j3j2.js:1471160-1471545 placement
 /**
  * 来自其他会话的消息审批对话框的提示文本。
  */
@@ -200,7 +214,7 @@ function usePeerApprovalAsk() {
   };
   return useSyncExternalStore(dialogStore.subscribe, read, read);
 }
-//@ chunk-18hwfzwa.js:1431356-1431580 placement
+//@ chunk-czq1j3j2.js:1471545-1471769 placement
 /**
  * 当前沙箱网络访问对话框请求的主机。
  */
@@ -216,7 +230,7 @@ function useSandboxNetworkHost() {
   };
   return useSyncExternalStore(dialogStore.subscribe, read, read);
 }
-//@ chunk-18hwfzwa.js:1431580-1431813 placement (2.1.88 match: isToolFromMcpServer, 0.657)
+//@ chunk-czq1j3j2.js:1471769-1472004 placement (2.1.88 match: isToolFromMcpServer, 0.657)
 /**
  * getDialogMcpServerName：从对话框栈条目 payload 取服务器名。
  */
@@ -231,13 +245,13 @@ function getDialogMcpServerName(dialog) {
   }
   return;
 }
-//@ chunk-18hwfzwa.js:1431813-1431893 placement
+//@ chunk-czq1j3j2.js:1472004-1472084 placement
 function useTopDialogMcpServerName() {
   let dialogStore = useDialogStore();
   let read = () => getDialogMcpServerName(topAutoDialog(dialogStore.getState()));
   return useSyncExternalStore(dialogStore.subscribe, read, read);
 }
-//@ chunk-18hwfzwa.js:1431893-1432047 placement
+//@ chunk-czq1j3j2.js:1472084-1472239 placement
 function usePreviousDialogMcpServerName() {
   let dialogStore = useDialogStore();
   let read = () => {
@@ -250,14 +264,9 @@ function usePreviousDialogMcpServerName() {
   };
   return useSyncExternalStore(dialogStore.subscribe, read, read);
 }
-//@ chunk-18hwfzwa.js:1432047-1432051 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1432047", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1432051-1432062 placement
+//@ chunk-czq1j3j2.js:1472243-1472254 placement
 var LOCAL_TERM_NAME = "";
-//@ chunk-18hwfzwa.js:1432062-1432170 placement
+//@ chunk-czq1j3j2.js:1472254-1472362 placement
 /**
  * 终端是否支持程序状态（异步结果）。
  */
@@ -266,7 +275,7 @@ function useProgramStatusSupport() {
   useEffect(() => getTerminalCapabilities().onSettle("programStatus", setSupported), []);
   return supported;
 }
-//@ chunk-18hwfzwa.js:1432170-1432692 placement
+//@ chunk-czq1j3j2.js:1472362-1472884 placement
 /**
  * 把会话状态写入终端程序状态序列（只写变化的项，卸载时清除）。
  */
@@ -313,12 +322,7 @@ function useTerminalProgramStatus(status, blockedOn, queued) {
     [write],
   );
 }
-//@ chunk-18hwfzwa.js:1432692-1432696 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1432692", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1432696-1432938 placement
+//@ chunk-czq1j3j2.js:1472888-1473130 placement
 /**
  * 回合开始/结束时写 OSC 133 语义提示标记。
  */
@@ -338,7 +342,7 @@ function useSemanticPromptMarks() {
     markTurnDone,
   };
 }
-//@ chunk-18hwfzwa.js:1432938-1433029 placement
+//@ chunk-czq1j3j2.js:1473130-1473221 placement
 /**
  * 屏幕阅读器/全屏/WezTerm 下是否启用程序状态（会话在线状态行）。
  */
@@ -353,35 +357,35 @@ function usesProgramStatus() {
     env.terminal !== "WezTerm"
   );
 }
-//@ chunk-18hwfzwa.js:1433029-1433068 placement
+//@ chunk-czq1j3j2.js:1473221-1473260 placement
 function selectLastTurnEnd(state) {
   return state.lastTurnEnd;
 }
-//@ chunk-18hwfzwa.js:1433068-1433107 placement
+//@ chunk-czq1j3j2.js:1473260-1473299 placement
 function selectTaskSummary(state) {
   return state.taskSummary;
 }
-//@ chunk-18hwfzwa.js:1433107-1433165 placement
+//@ chunk-czq1j3j2.js:1473299-1473357 placement
 function selectTurnStatusDetail(state) {
   return state.postTurnSummary?.status_detail;
 }
-//@ chunk-18hwfzwa.js:1433165-1433198 placement
+//@ chunk-czq1j3j2.js:1473357-1473390 placement
 function selectTasks4(state) {
   return state.tasks;
 }
-//@ chunk-18hwfzwa.js:1433198-1433237 placement
+//@ chunk-czq1j3j2.js:1473390-1473429 placement
 function selectPromptMarks(state) {
   return state.promptMarks;
 }
-//@ chunk-18hwfzwa.js:1433237-1433278 placement
+//@ chunk-czq1j3j2.js:1473429-1473470 placement
 function currentSpinnerText() {
   return attentionRegistryStore.current()?.text;
 }
-//@ chunk-18hwfzwa.js:1433278-1433333 placement
+//@ chunk-czq1j3j2.js:1473470-1473525 placement
 function selectSandboxRequestHost(state) {
   return state.pendingSandboxRequest?.host;
 }
-//@ chunk-18hwfzwa.js:1433333-1433485 placement
+//@ chunk-czq1j3j2.js:1473525-1473677 placement
 /**
  * 待审批 worker 请求的提示文本。
  */
@@ -392,7 +396,7 @@ function workerRequestText(state) {
         `approve ${state.pendingWorkerRequest.toolName}: ${state.pendingWorkerRequest.description}`,
       );
 }
-//@ chunk-18hwfzwa.js:1433485-1434137 placement
+//@ chunk-czq1j3j2.js:1473677-1474330 placement
 /**
  * 汇总回合、等待、任务等状态并写入终端程序状态。
  */
@@ -452,7 +456,7 @@ function SessionPresenceReporter(props) {
   );
   return null;
 }
-//@ chunk-18hwfzwa.js:1434137-1434524 placement
+//@ chunk-czq1j3j2.js:1474330-1474717 placement
 /**
  * 按阻塞原因生成提示文本。
  */
@@ -486,60 +490,61 @@ function useBlockedText(blockedOn) {
     }
   }
 }
-//@ chunk-18hwfzwa.js:1434524-1434579 placement (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:1474717-1474772 placement (2.1.88 match: _temp, 1)
 function hasPendingWorkerRequest(state) {
   return state.pendingWorkerRequest !== null;
 }
-//@ chunk-18hwfzwa.js:1434579-1434635 placement
+//@ chunk-czq1j3j2.js:1474772-1474828 placement
 function hasPendingSandboxRequest(state) {
   return state.pendingSandboxRequest !== null;
 }
-//@ chunk-18hwfzwa.js:1434635-1434693 placement
+//@ chunk-czq1j3j2.js:1474828-1474886 placement
 function selectTurnStatusDetailB(state) {
   return state.postTurnSummary?.status_detail;
 }
-//@ chunk-18hwfzwa.js:1434693-1434730 placement
+//@ chunk-czq1j3j2.js:1474886-1474923 placement
 function selectIsLoading4(state) {
   return state.isLoading;
 }
-//@ chunk-18hwfzwa.js:1434730-1434771 placement
+//@ chunk-czq1j3j2.js:1474923-1474964 placement
 function selectIsQueryActive(state) {
   return state.isQueryActive;
 }
-//@ chunk-18hwfzwa.js:1434771-1434807 placement
+//@ chunk-czq1j3j2.js:1474964-1475000 placement
 function selectDisabled(state) {
   return state.disabled;
 }
-//@ chunk-18hwfzwa.js:1434807-1434844 placement
+//@ chunk-czq1j3j2.js:1475000-1475037 placement
 function selectHasActiveAgentTasks(state) {
   return hasActiveAgentTasks(state.tasks);
 }
-//@ chunk-18hwfzwa.js:1434844-1434882 placement
+//@ chunk-czq1j3j2.js:1475037-1475075 placement
 function selectHasRunningShellTasks(state) {
   return hasRunningShellTasks(state.tasks);
 }
-//@ chunk-18hwfzwa.js:1434882-1434910 placement
+//@ chunk-czq1j3j2.js:1475075-1475103 placement
 function readTerminalSize() {
   return releaseSleepPreventer();
 }
-//@ chunk-18hwfzwa.js:1434910-1434994 placement
+//@ chunk-czq1j3j2.js:1475103-1475218 placement
 function isAutoreactCommandDialog(dialog) {
-  return (
-    dialog.kind === LOCAL_JSX_DIALOG.kind &&
-    RATE_LIMIT_OPTIONS_COMMANDS.has(parseLocalJsxDialogPayload(dialog.payload)?.commandName ?? "")
-  );
+  if (dialog.kind !== LOCAL_JSX_DIALOG.kind) {
+    return false;
+  }
+  let commandName = parseLocalJsxDialogPayload(dialog.payload)?.commandName ?? "";
+  return RATE_LIMIT_OPTIONS_COMMANDS.has(commandName) || commandName === SESSION_OWNER;
 }
-//@ chunk-18hwfzwa.js:1434994-1435051 placement
+//@ chunk-czq1j3j2.js:1475218-1475275 placement
 function hasBlockingDialogOrCommand(state) {
   return topAutoDialog(state) !== null || state.open.some(isAutoreactCommandDialog);
 }
-//@ chunk-18hwfzwa.js:1435051-1435146 placement
+//@ chunk-czq1j3j2.js:1475275-1475370 placement
 function logPresenceWriteFailure(error) {
   logForDebugging(`session presence: PID-file status write failed: ${errorMessage(error)}`, {
     level: "error",
   });
 }
-//@ chunk-18hwfzwa.js:1435146-1438068 placement
+//@ chunk-czq1j3j2.js:1475370-1478295 placement
 /**
  * useSessionPresence：会话在线状态（同伴、远程客户端）hook。
  */
@@ -747,7 +752,7 @@ function useSessionPresence(props) {
     $[45] = showTabStatus;
   } else showTabStatus = $[45];
   let showTabStatus_2 = showTabStatus;
-  useTabStatus(storeSelector_2 || !showTabStatus_2 ? null : status, idleText);
+  IDLE_SPECULATION_STATE(storeSelector_2 || !showTabStatus_2 ? null : status, idleText);
   let programStatusSupport = useProgramStatusSupport();
   const blockedOn = staleDialogWait ? undefined : waitingFor;
   let presenceReporter;
@@ -789,4 +794,4 @@ function useSessionPresence(props) {
   } else presenceFragment = $[57];
   return presenceFragment;
 }
-export { useBackgroundAskEmitter, useSemanticPromptMarks, completeLabelOrUndefined, useSessionPresence };
+export { completeLabelOrUndefined, useBackgroundAskEmitter, useSemanticPromptMarks, useSessionPresence };

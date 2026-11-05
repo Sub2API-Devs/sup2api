@@ -3,9 +3,9 @@
  *
  * 助手文本：Markdown 渲染；特殊错误文本（余额不足、API 超时、过载、prompt too long 等）映射为友好提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/AssistantTextMessage.tsx
- * pieces: chunk-ah34pb7m.js (12)
+ * pieces: chunk-wjygkcr4.js (12)
  * attribution: placement 11, fingerprint 1
  */
 import {
@@ -41,14 +41,14 @@ import { isEnvTruthy } from "../../utils/envUtils.js";
 import { useAppState } from "../../state/AppState.js";
 import { useMessageResponseValue, MessageResponse } from "../MessageResponse.js";
 import { isAutoCompactTurnedOffByUser } from "../../services/compact/compactSettings.js";
-import { stripPromptXMLTags, isEmptyMessageText, API_REQUEST_ABORTED_MESSAGE } from "../../utils/messages.js";
+import { stripPromptXMLTags, isEmptyMessageText, NO_RESPONSE_REQUESTED } from "../../utils/messages.js";
 import { actionKeysNamespace } from "../pluginUi/render/actionKeys.js";
 import { shouldShowNotice } from "../SlashCommandLink.js";
+import { API_REQUEST_ABORTED_MESSAGE } from "../../services/compact/compact.js";
 import { interruptedRow, buildApiErrorRow } from "./CompactBoundaryMessage.js";
 import { NoticeRowMessage } from "./teamMemSaved.js";
 import { isRateLimitText } from "../../services/api/usage.js";
 import { RateLimitMessage } from "./RateLimitMessage.js";
-import { NO_RESPONSE_REQUESTED } from "../../constants/messages.js";
 import { env } from "../../utils/env.js";
 import { renderModelName, renderUsageCreditsOnlyModelName } from "../../utils/model/modelDisplay.js";
 import { getDefaultSonnetModel, isFableFamilyOrPinnedModel } from "../../utils/model/model.js";
@@ -68,13 +68,13 @@ import { renderWithForceUpdate } from "../../hooks/useForceRender.js";
 import { SUMMARY_TAG } from "../../constants/xml.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:54747-54803 placement
+//@ chunk-wjygkcr4.js:55363-55419 placement
 function hasRemoteAutocompactState(state) {
   return state.remoteAutocompactState !== undefined;
 }
-//@ chunk-ah34pb7m.js:54803-54841 placement
+//@ chunk-wjygkcr4.js:55419-55457 placement
 var API_ERROR_NOTICE_TEXTS; // deferred: uses AUTH_REQUIRED_MESSAGE (../../services/api/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ah34pb7m.js:54803", () => {
+deferInit("chunk-wjygkcr4.js:55419", () => {
   API_ERROR_NOTICE_TEXTS = new Set([
     INVALID_API_KEY_MESSAGE,
     DISABLED_ORG_API_KEY_MESSAGE,
@@ -83,7 +83,7 @@ deferInit("chunk-ah34pb7m.js:54803", () => {
     TOKEN_REVOKED_MESSAGE,
   ]);
 });
-//@ chunk-ah34pb7m.js:54841-55026 placement
+//@ chunk-wjygkcr4.js:55457-55642 placement
 function KeychainUnlockHint() {
   let $ = useMemoCache(1);
   if (!use(isPlainTextStorageAvailable())) {
@@ -99,7 +99,7 @@ function KeychainUnlockHint() {
   } else fallbackText = $[0];
   return fallbackText;
 }
-//@ chunk-ah34pb7m.js:55026-55539 placement
+//@ chunk-wjygkcr4.js:55642-56155 placement
 /**
  * 上下文用尽提示（/compact 或 /clear，自动压缩关闭时提示开启）。
  */
@@ -147,7 +147,7 @@ function ContextLimitHint() {
   } else responseElement = $[5];
   return responseElement;
 }
-//@ chunk-ah34pb7m.js:55539-55781 placement
+//@ chunk-wjygkcr4.js:56155-56397 placement
 function InvalidApiKeyMessage() {
   let $ = useMemoCache(2);
   let errorText;
@@ -176,7 +176,7 @@ function InvalidApiKeyMessage() {
   } else messageElement = $[1];
   return messageElement;
 }
-//@ chunk-ah34pb7m.js:55781-56282 placement
+//@ chunk-wjygkcr4.js:56397-56898 placement
 /**
  * 助手文本块（带首条回复圆点），并向无障碍层报告内容。
  */
@@ -226,7 +226,7 @@ function AssistantTextBlock(props) {
   } else renderHook = $[7];
   return actionKeysNamespace.useRenderHook(renderInputHandle, renderHook);
 }
-//@ chunk-ah34pb7m.js:56282-60026 fingerprint (2.1.88 match: AssistantTextMessage, 0.412)
+//@ chunk-wjygkcr4.js:56898-60643 fingerprint (2.1.88 match: AssistantTextMessage, 0.412)
 /**
  * 助手文本：空文本/占位不渲染；识别 API 错误文本（余额不足、API_TIMEOUT_MS 超时、Opus 高需求、prompt too long、未登录等）显示为错误提示；否则 Markdown 渲染，前面加 ● 圆点（shouldShowDot）。
  */
@@ -603,7 +603,7 @@ function AssistantTextMessage(props) {
     }
   }
 }
-//@ chunk-ah34pb7m.js:60026-60515 placement
+//@ chunk-wjygkcr4.js:60643-61132 placement
 /**
  * 某模型（如 Fable）高负载时的提示，建议 /model 切换。
  */
@@ -653,11 +653,11 @@ function HighDemandNotice() {
   } else noticeElement = $[6];
   return noticeElement;
 }
-//@ chunk-ah34pb7m.js:60515-60536 placement
+//@ chunk-wjygkcr4.js:61132-61153 placement
 function noopLinkHref() {
   return;
 }
-//@ chunk-ah34pb7m.js:60536-61780 placement
+//@ chunk-wjygkcr4.js:61153-62401 placement
 /**
  * 助手错误文本（API 错误、请稍后重试），可折叠显示。
  */
@@ -773,7 +773,7 @@ function AssistantErrorText(props) {
   } else outerElement = $[25];
   return outerElement;
 }
-//@ chunk-ah34pb7m.js:61780-62408 placement
+//@ chunk-wjygkcr4.js:62401-63029 placement
 /**
  * 思考内容块的显示。
  */
@@ -828,7 +828,7 @@ function AssistantThinkingBlock(props) {
   } else renderHook = $[11];
   return actionKeysNamespace.useRenderHook(renderInputHandle, renderHook);
 }
-//@ chunk-ah34pb7m.js:62408-63074 placement
+//@ chunk-wjygkcr4.js:63029-63695 placement
 /**
  * 带模型标识的助手文本显示（空文本不渲染）。
  */

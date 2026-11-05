@@ -3,9 +3,9 @@
  *
  * Fast 模式图标组件与按主题取色的字符串版本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FastIcon.tsx
- * pieces: chunk-18hwfzwa.js (4), chunk-1n1kvmcz.js (1)
+ * pieces: chunk-czq1j3j2.js (4), chunk-n7hfhatx.js (1)
  * attribution: placement 3, fingerprint 2
  */
 import { LIGHTNING } from "../constants/figures.js";
@@ -20,29 +20,29 @@ import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.re
 import { Text } from "../ink/components/Text.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-1n1kvmcz.js:1102-1254 fingerprint (2.1.88 match: getFastIconString, 0.69)
+//@ chunk-n7hfhatx.js:1103-1255 fingerprint (2.1.88 match: getFastIconString, 0.691)
 function getFastIconString(applyColor = true, cooldown = false) {
   if (!applyColor) return LIGHTNING;
   let themeName = getThemeWithOverrides(resolveSetting("theme", "dark").value);
   if (cooldown) return sequential.dim(color("promptBorder", themeName)(LIGHTNING));
   return color("fastMode", themeName)(LIGHTNING);
 }
-//@ chunk-18hwfzwa.js:514523-514527 placement
+//@ chunk-czq1j3j2.js:538333-538337 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:514523", () => {
+deferInit("chunk-czq1j3j2.js:538333", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:514527-514531 placement
+//@ chunk-czq1j3j2.js:540026-540030 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:514527", () => {
+deferInit("chunk-czq1j3j2.js:540026", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:514531-514535 placement
+//@ chunk-czq1j3j2.js:540336-540340 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:514531", () => {
+deferInit("chunk-czq1j3j2.js:540336", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:514535-514768 fingerprint (2.1.88 match: FastIcon, 0.772)
+//@ chunk-czq1j3j2.js:541013-541246 fingerprint (2.1.88 match: FastIcon, 0.772)
 function FastIcon(props) {
   let $ = useMemoCache(2);
   let { cooldown } = props;

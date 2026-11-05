@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自托管环境管理工具集（内部）：查看环境聚合与队列、列出 runner/会话/密钥、本地 runner 健康与指标、重排卡住会话、试运行本地 runner、读日志
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3yy90gv7.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yp0ry8bx.js (19)
  * attribution: placement 19
  */
 import { resolve, dirname } from "path";
@@ -61,7 +61,7 @@ import { withLaunchValuesOfHybridConnection } from "../../utils/managedEnvApply.
 import { moveKeeperPid } from "../../utils/toolCgroup.js";
 import { isAllPrintable } from "../../utils/truncateGraphemes.js";
 
-//@ chunk-3yy90gv7.js:4937-5748 placement
+//@ chunk-yp0ry8bx.js:5078-5889 placement
 /**
  * 带标签 id 不可读（含控制/不可见字符）时的说明文本。
  */
@@ -70,21 +70,21 @@ var TAGGED_ID_UNREADABLE_RULE =
 var TAGGED_ID_RULE_TEXT =
   'an id holds only the letters A to Z and a to z, digits, "_" and "-", between 1 and 256 of them. Pass the id alone, as the server or the operator gave it, without quotes, spaces or other text around it';
 var TAGGED_ID_READABLE_RE = /^[a-zA-Z0-9_-]{1,256}$/;
-//@ chunk-3yy90gv7.js:5748-5795 placement
+//@ chunk-yp0ry8bx.js:5889-5936 placement
 /**
  * 不含控制字符的路径或字符串 schema（状态过滤、日志路径等）。
  */
 function pathLikeStringSchema() {
   return stringSchema().refine((value) => !hasUnsafePathGlyphsOrSurrogate(value), TAGGED_ID_UNREADABLE_RULE);
 }
-//@ chunk-3yy90gv7.js:5795-5844 placement
+//@ chunk-yp0ry8bx.js:5936-5985 placement
 /**
  * 带标签 id（ccpool_…）的字符串 schema。
  */
 function taggedIdSchema() {
   return stringSchema().refine((value) => TAGGED_ID_READABLE_RE.test(value), TAGGED_ID_RULE_TEXT);
 }
-//@ chunk-3yy90gv7.js:5844-6728 placement
+//@ chunk-yp0ry8bx.js:5985-6870 placement
 /**
  * 环境聚合结果的 schema（pool 与等价说明）。
  */
@@ -154,7 +154,7 @@ var EnvironmentSummaryTool = buildTool({
     return describeArgs(input);
   },
 });
-//@ chunk-3yy90gv7.js:6728-7805 placement
+//@ chunk-yp0ry8bx.js:6870-7948 placement
 /**
  * 环境会话列表结果的 schema。
  */
@@ -230,7 +230,7 @@ var ListEnvironmentSessionsTool = buildTool({
     return describeArgs(input);
   },
 });
-//@ chunk-3yy90gv7.js:7805-8722 placement
+//@ chunk-yp0ry8bx.js:7948-8866 placement
 /**
  * runner 列表结果的 schema。
  */
@@ -302,7 +302,7 @@ var ListRunnersTool = buildTool({
     return describeArgs(input);
   },
 });
-//@ chunk-3yy90gv7.js:8722-9649 placement
+//@ chunk-yp0ry8bx.js:8866-9794 placement
 /**
  * 环境密钥列表结果的 schema。
  */
@@ -374,7 +374,7 @@ var ListEnvironmentSecretsTool = buildTool({
     return describeArgs(input);
   },
 });
-//@ chunk-3yy90gv7.js:9649-10529 placement
+//@ chunk-yp0ry8bx.js:9794-10675 placement
 /**
  * runner 健康探测结果的 schema。
  */
@@ -456,7 +456,7 @@ var ProbeRunnerHealthTool = buildTool({
     return describeArgs(input);
   },
 });
-//@ chunk-3yy90gv7.js:10529-10810 placement
+//@ chunk-yp0ry8bx.js:10675-10956 placement
 /**
  * 读取 runner 指标的输入 schema。
  */
@@ -478,7 +478,7 @@ var runnerMetricsOutputSchema = DoctorLazy(() =>
     error: stringSchema().optional(),
   }),
 );
-//@ chunk-3yy90gv7.js:10810-11283 placement
+//@ chunk-yp0ry8bx.js:10956-11455 placement
 function parseRunnerMetrics(metricsText) {
   let gauges = {};
   for (let line of metricsText.split(`
@@ -487,7 +487,12 @@ function parseRunnerMetrics(metricsText) {
     let match = line.match(/^(\S+?)(\{[^}]*\})?\s+(\S+)\s*$/);
     if (!match) continue;
     let sliced = match[1].slice(RUNNER_METRIC_PREFIX.length);
-    if (sliced.endsWith("_bucket") || sliced === "session_idle_seconds" || sliced === "poll_errors_total")
+    if (
+      sliced.endsWith("_bucket") ||
+      sliced === "session_idle_seconds" ||
+      sliced === "session_turn_state" ||
+      sliced === "poll_errors_total"
+    )
       continue;
     let labelText = match[2] ?? "";
     let metricValue = Number(match[3]);
@@ -502,7 +507,7 @@ function parseRunnerMetrics(metricsText) {
   }
   return gauges;
 }
-//@ chunk-3yy90gv7.js:11283-12009 placement
+//@ chunk-yp0ry8bx.js:11455-12182 placement
 var READ_RUNNER_METRICS_TOOL = buildTool({
   name: SELF_HOSTED_RUNNER_READ_METRICS,
   searchHint: "read self-hosted runner Prometheus gauges from /metrics",
@@ -567,7 +572,7 @@ var READ_RUNNER_METRICS_TOOL = buildTool({
     return describeArgs(input);
   },
 });
-//@ chunk-3yy90gv7.js:12009-13830 placement
+//@ chunk-yp0ry8bx.js:12182-14004 placement
 /**
  * 重新排队会话的结果 schema。
  */
@@ -661,7 +666,7 @@ var RequeueSessionTool = buildTool({
     return describeArgs(input);
   },
 });
-//@ chunk-3yy90gv7.js:13965-14819 placement
+//@ chunk-yp0ry8bx.js:14139-14993 placement
 /**
  * 本地 runner 的默认日志路径。
  */
@@ -701,7 +706,7 @@ var spawnLocalRunnerOutputSchema = DoctorLazy(() =>
     command: stringSchema(),
   }),
 );
-//@ chunk-3yy90gv7.js:14819-15046 placement
+//@ chunk-yp0ry8bx.js:14993-15220 placement
 function buildRunnerSpawnArgs(input) {
   return [
     "self-hosted-runner",
@@ -719,14 +724,14 @@ function buildRunnerSpawnArgs(input) {
     input.log_path,
   ];
 }
-//@ chunk-3yy90gv7.js:15046-15126 placement (2.1.88 match: shellQuote, 1)
+//@ chunk-yp0ry8bx.js:15220-15300 placement (2.1.88 match: shellQuote, 1)
 /**
  * （误归 deepLink）POSIX shell 单引号转义（安全字符不加引号）。
  */
 function shellQuote(s) {
   return /^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, "'\\''")}'`;
 }
-//@ chunk-3yy90gv7.js:15126-16976 placement
+//@ chunk-yp0ry8bx.js:15300-17151 placement
 /**
  * 启动本地 runner 试运行（需分类器审核）。
  */
@@ -845,14 +850,14 @@ var SPAWN_LOCAL_RUNNER_TOOL = buildTool({
     return describeArgs(input);
   },
 });
-//@ chunk-3yy90gv7.js:16976-17034 placement
+//@ chunk-yp0ry8bx.js:17151-17209 placement
 /**
  * 判断值可打印且不含制表符与换行（路径字段校验）。
  */
 function isPrintablePathLike(value) {
   return isAllPrintable(value) && !/[\t\n\u2028\u2029]/.test(value);
 }
-//@ chunk-3yy90gv7.js:17070-18192 placement
+//@ chunk-yp0ry8bx.js:17245-18367 placement
 /**
  * 读取 runner 日志的输入 schema（日志路径与字节数）。
  */
@@ -947,7 +952,7 @@ ${result.lines}`,
     return describeArgs(input);
   },
 });
-//@ chunk-3yy90gv7.js:18192-18219 placement
+//@ chunk-yp0ry8bx.js:18367-18394 placement
 /**
  * 自托管 runner 相关的全部工具列表。
  */

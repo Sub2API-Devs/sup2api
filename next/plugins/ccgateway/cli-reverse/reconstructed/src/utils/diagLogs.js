@@ -3,10 +3,10 @@
  *
  * 无 PII 诊断日志：CLAUDE_CODE_DIAGNOSTICS_FILE 指定文件追加 JSON 行，withDiagnosticsTiming 计时。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/diagLogs.ts
- * pieces: chunk-e6aww6q8.js (1), chunk-nsfjm4vg.js (18)
- * attribution: fingerprint 2, placement 9, layout 7, callgraph-witnessed 1
+ * pieces: chunk-23ta5myf.js (18)
+ * attribution: placement 9, layout 6, callgraph-witnessed 1, fingerprint 2
  */
 import { AsyncLocalStorage } from "async_hooks";
 import { dirname } from "path";
@@ -18,7 +18,7 @@ import { jsonStringify } from "./slowOperations.js";
 import { env } from "./env.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-nsfjm4vg.js:422-572 placement (2.1.88 match: propagateAbort, 1)
+//@ chunk-23ta5myf.js:422-572 placement (2.1.88 match: propagateAbort, 1)
 function propagateAbort(parents, weakChild) {
   let aborted = false;
   for (let parent of parents) {
@@ -30,7 +30,7 @@ function propagateAbort(parents, weakChild) {
   parents.add(new WeakRef(weakChild));
   return true;
 }
-//@ chunk-nsfjm4vg.js:572-679 placement (2.1.88 match: propagateAbort, 1)
+//@ chunk-23ta5myf.js:572-679 placement (2.1.88 match: propagateAbort, 1)
 /**
  * 取出仍存活的弱引用并清理已回收的。
  */
@@ -43,51 +43,51 @@ function liveWeakRefs(refs) {
   }
   return live;
 }
-//@ chunk-nsfjm4vg.js:679-696 placement
+//@ chunk-23ta5myf.js:679-696 placement
 /**
  * 标记“处于诊断作用域”的 AsyncLocalStorage。
  */
 var diagScopeStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var diagLoggingStarted;
-deferInit("chunk-nsfjm4vg.js:679", () => {
+deferInit("chunk-23ta5myf.js:679", () => {
   diagScopeStorage = new AsyncLocalStorage();
   diagLoggingStarted = false;
 });
-//@ chunk-nsfjm4vg.js:696-720 placement
+//@ chunk-23ta5myf.js:696-719 placement
 /**
  * 是否开启诊断日志。
  */
 function isDiagLogging() {
   return diagLoggingStarted;
 }
-//@ chunk-nsfjm4vg.js:720-764 placement (2.1.88 match: getAgentContext, 1)
+//@ chunk-23ta5myf.js:719-763 placement
 /**
  * 当前是否在诊断异步作用域内。
  */
 function isInDiagScope() {
   return diagScopeStorage.getStore() !== undefined;
 }
-//@ chunk-nsfjm4vg.js:764-789 placement
+//@ chunk-23ta5myf.js:763-788 placement
 /**
  * 按进程根登记的诊断日志活引用集合。
  */
 var diagLogLiveRefs; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-nsfjm4vg.js:764", () => {
+deferInit("chunk-23ta5myf.js:763", () => {
   diagLogLiveRefs = new HostScoped(() => new Set());
 });
-//@ chunk-nsfjm4vg.js:789-815 placement
+//@ chunk-23ta5myf.js:788-814 placement
 /**
  * 取出诊断日志的活引用集合。
  */
 function getDiagLiveRefs() {
   return onProcessRootHost(diagLogLiveRefs);
 }
-//@ chunk-nsfjm4vg.js:1006-1020 placement
+//@ chunk-23ta5myf.js:1005-1019 placement
 /**
  * 吞掉错误的空回调（用于写入队列的 catch）。
  */
 function noopErrback() {}
-//@ chunk-nsfjm4vg.js:1020-1660 placement
+//@ chunk-23ta5myf.js:1019-1659 placement
 /**
  * 诊断日志写入队列。
  */
@@ -127,21 +127,18 @@ class DiagLogWriter {
     return this.pendingWrite;
   }
 }
-//@ chunk-nsfjm4vg.js:1660-1683 layout
+//@ chunk-23ta5myf.js:1659-1682 layout
 var diagnosticWriterByHost; // deferred: uses DiagLogWriter of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-nsfjm4vg.js:1660", () => {
+deferInit("chunk-23ta5myf.js:1659", () => {
   diagnosticWriterByHost = new HostScoped(() => new DiagLogWriter());
 });
-//@ chunk-nsfjm4vg.js:1683-1709 layout
+//@ chunk-23ta5myf.js:1682-1708 layout
 function getDiagnosticWriter() {
   return onProcessRootHost(diagnosticWriterByHost);
 }
-//@ chunk-nsfjm4vg.js:1709-1902 callgraph-witnessed (2.1.88 match: logForDiagnosticsNoPII, 0.237)
-/**
- * 无 PII 的诊断日志：设置 CLAUDE_CODE_DIAGNOSTICS_FILE 时向该文件追加 JSON 行（timestamp/level/event/data），默认排队写。
- */
+//@ chunk-23ta5myf.js:1708-1901 callgraph-witnessed (2.1.88 match: logForDiagnosticsNoPII, 0.237)
 function logForDiagnosticsNoPII(level, event, data, lastLineWhen = "queued") {
-  let logFile = getDiagnosticLogFile_2();
+  let logFile = getDiagnosticLogFile();
   if (!logFile) return;
   let line;
   try {
@@ -157,7 +154,7 @@ function logForDiagnosticsNoPII(level, event, data, lastLineWhen = "queued") {
     } catch {}
   else getDiagnosticWriter().append(logFile, line);
 }
-//@ chunk-nsfjm4vg.js:1902-2005 layout
+//@ chunk-23ta5myf.js:1901-2004 layout
 function sanitizeDiagnosticData(data) {
   try {
     return (typeof data === "function" ? data() : data) ?? {};
@@ -167,7 +164,7 @@ function sanitizeDiagnosticData(data) {
     };
   }
 }
-//@ chunk-nsfjm4vg.js:2005-3102 layout
+//@ chunk-23ta5myf.js:2004-3101 layout
 /**
  * 格式化诊断日志行 {timestamp, level, event, data, version…}。
  */
@@ -182,10 +179,10 @@ function formatDiagnosticLine(level, event, data) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       } !== "undefined"
@@ -193,10 +190,10 @@ function formatDiagnosticLine(level, event, data) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION
@@ -208,19 +205,19 @@ function formatDiagnosticLine(level, event, data) {
 `
   );
 }
-//@ chunk-nsfjm4vg.js:3102-3136 layout
+//@ chunk-23ta5myf.js:3101-3135 layout
 function flushDiagnosticLogs() {
   return getDiagnosticWriter().flush();
 }
-//@ chunk-nsfjm4vg.js:3136-3198 layout (2.1.88 match: getDiagnosticLogFile, 1)
-function getDiagnosticLogFile_2() {
+//@ chunk-23ta5myf.js:3135-3197 fingerprint (2.1.88 match: getDiagnosticLogFile, 1)
+function getDiagnosticLogFile() {
   return isDisklessForDiagnostics() ? undefined : env.CLAUDE_CODE_DIAGNOSTICS_FILE;
 }
-//@ chunk-nsfjm4vg.js:3198-3233 layout
+//@ chunk-23ta5myf.js:3197-3232 layout
 function isDisklessForDiagnostics() {
   return isInDiagScope() ? isDiskless() : isDisklessProcess();
 }
-//@ chunk-nsfjm4vg.js:3233-3471 fingerprint (2.1.88 match: withDiagnosticsTiming, 1)
+//@ chunk-23ta5myf.js:3232-3470 fingerprint (2.1.88 match: withDiagnosticsTiming, 1)
 async function withDiagnosticsTiming(event, fn, getData) {
   let startTime = Date.now();
   logForDiagnosticsNoPII("info", `${event}_started`);
@@ -239,18 +236,13 @@ async function withDiagnosticsTiming(event, fn, getData) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:313160-313222 fingerprint (2.1.88 match: getDiagnosticLogFile, 1)
-function getDiagnosticLogFile() {
-  return Boolean(env.CLAUDE_CODE_DIAGNOSTICS_FILE);
-}
 export {
   logForDiagnosticsNoPII,
   isDiagLogging,
   isInDiagScope,
   withDiagnosticsTiming,
   flushDiagnosticLogs,
-  getDiagnosticLogFile,
-  propagateAbort,
   liveWeakRefs,
+  propagateAbort,
   getDiagLiveRefs,
 };

@@ -3,13 +3,13 @@
  *
  * 设置提示（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pr8s5wf6.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7m8srhy8.js (5)
  * attribution: placement 5
  */
 import {
-  getSettingsWithErrors_2,
+  getSettingsWithErrors,
   projectSettingsAliasesUserSettings,
   getSettingsForSource,
   getSettingsFilePathForSource,
@@ -27,9 +27,9 @@ import { getEnabledSettingSources } from "./constants.js";
 import { getEnvAboveProjectSettings } from "../managedEnvApply.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-pr8s5wf6.js:524-1095 placement
+//@ chunk-7m8srhy8.js:523-1093 placement
 function formatInvalidSettingNotice() {
-  let settingsWithErrors = getSettingsWithErrors_2();
+  let settingsWithErrors = getSettingsWithErrors();
   let flattened = MCP_SETTINGS_SCOPES.flatMap((scope) =>
     getMcpConfigsByScope(scope).errors.map((error) =>
       error.file
@@ -67,12 +67,12 @@ function formatInvalidSettingNotice() {
     ],
   };
 }
-//@ chunk-pr8s5wf6.js:1095-1114 placement
+//@ chunk-7m8srhy8.js:1093-1112 placement
 var OTEL_ENV_VAR_SET; // deferred: uses OTEL_ENV_VARS (../managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-pr8s5wf6.js:1095", () => {
+deferInit("chunk-7m8srhy8.js:1093", () => {
   OTEL_ENV_VAR_SET = new Set(OTEL_ENV_VARS);
 });
-//@ chunk-pr8s5wf6.js:1114-2503 placement
+//@ chunk-7m8srhy8.js:1112-2501 placement
 function formatIgnoredTelemetryEnvNotice() {
   let ignored = [];
   let turnedOff = [];
@@ -118,14 +118,14 @@ function formatIgnoredTelemetryEnvNotice() {
     turnedOff,
   };
 }
-//@ chunk-pr8s5wf6.js:2503-2563 placement
+//@ chunk-7m8srhy8.js:2501-2561 placement
 /**
  * blockingLocalSettingsErrors：会阻止操作的本地设置错误。
  */
 function blockingLocalSettingsErrors() {
   return getLocalSettingsValidationErrors().filter((errorEntry) => !errorEntry.preserveOnWrite);
 }
-//@ chunk-pr8s5wf6.js:2563-2706 placement
+//@ chunk-7m8srhy8.js:2561-2704 placement
 /**
  * 列出会阻止操作的设置错误（排除 MCP 相关、警告与本地设置文件），并附上其他检查结果。
  */
@@ -140,8 +140,8 @@ function blockingSettingsErrors() {
   ];
 }
 export {
+  blockingSettingsErrors,
   formatInvalidSettingNotice,
   formatIgnoredTelemetryEnvNotice,
-  blockingSettingsErrors,
   blockingLocalSettingsErrors,
 };

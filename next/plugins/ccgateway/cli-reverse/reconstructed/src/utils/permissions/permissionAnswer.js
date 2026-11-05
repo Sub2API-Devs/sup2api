@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：权限回答应用
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (29)
- * attribution: placement 29
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (30)
+ * attribution: placement 29, sole-consumer 1
  */
 import { isDeepStrictEqual } from "util";
 import { hostOwnedInputFieldSet } from "../plans.js";
@@ -18,16 +18,20 @@ import { permissionUpdateSchema } from "../hooks/hookSpecificOutput.js";
 import { jsonParse, jsonStringify } from "../slowOperations.js";
 import { isObjectLike as isObjectLike_5 } from "../../bootstrap/stateSlices.js";
 import { TOOL_PERMISSION_REQUEST_FAILED } from "../../cli/toolPermissionStream.js";
-import { formatPermissionRule } from "./disallowedToolsFlag.js";
-import { permissionRuleValueFromString } from "./permissionRuleParser.js";
+import {
+  permissionRuleValueFromString as permissionRuleValueFromString_2,
+  parseRuleString,
+} from "./permissionRuleParser.js";
 import { applyPermissionUpdates } from "./PermissionUpdate.js";
 import { syncRemoteBrowserCardAnswers } from "./toolPermissionContext.js";
 import { PATH_RULE_CARVE_OUT_RE } from "../settings/permissionRuleCarveOut.js";
 import { quotedPrintable } from "../printableName.js";
-import { count } from "../collections.js";
+import { countWhere } from "../collections.js";
+import { logError } from "../log.js";
+import { toError } from "../errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:861172-861345 placement
+//@ chunk-5xgkngpb.js:868652-868825 placement
 /**
  * 从对象型工具输入中去掉宿主专属的键（CHt 给出的集合）；不是对象或无此类键时原样返回。
  */
@@ -37,7 +41,7 @@ function stripHostOwnedInputKeys(toolName, input) {
   if (!ownedFields || !Object.keys(input).some((key) => ownedFields.has(key))) return input;
   return import_reject(input, (value, key) => ownedFields.has(key));
 }
-//@ chunk-e6aww6q8.js:861345-861608 placement
+//@ chunk-5xgkngpb.js:868825-869088 placement
 function stripUnchangedHostOwnedKeys(toolName, updatedInput, observableInput) {
   if (
     typeof updatedInput !== "object" ||
@@ -55,7 +59,7 @@ function stripUnchangedHostOwnedKeys(toolName, updatedInput, observableInput) {
   if (!Object.keys(updatedInput).some(isUnchangedOwned)) return updatedInput;
   return import_reject(updatedInput, (value, key) => isUnchangedOwned(key));
 }
-//@ chunk-e6aww6q8.js:861608-861802 placement
+//@ chunk-5xgkngpb.js:869088-869282 placement
 /**
  * 权限回答的更新条目上限、"未读规则"会话级拒绝更新，以及超过上限时的说明文字。
  */
@@ -71,7 +75,7 @@ var UNREAD_RULES_DENY_UPDATE = {
   destination: "session",
 };
 var PERMISSION_UPDATES_LIMIT_MESSAGE = `updatedPermissions may hold at most ${MAX_PERMISSION_ANSWER_UPDATES} updates, rules and directories in all.`;
-//@ chunk-e6aww6q8.js:861802-862457 placement
+//@ chunk-5xgkngpb.js:869282-869937 placement
 /**
  * 按总数上限（更新、规则、目录合计 4096）截断权限更新列表：cut 模式截断最后一条的规则/目录（replaceRules 不截），refused 模式超限返回 undefined。
  */
@@ -124,7 +128,7 @@ function capPermissionUpdates(updates, overflowMode) {
   }
   return updates;
 }
-//@ chunk-e6aww6q8.js:862457-862818 placement
+//@ chunk-5xgkngpb.js:869937-870298 placement
 /**
  * 权限更新里是否含收紧项：非法条目、deny/ask 规则的 add/replace、或 deny/ask 的目录更新；removeRules 与空规则不算。
  */
@@ -141,7 +145,7 @@ function hasTighteningUpdate(updates) {
       : behavior === "deny" || behavior === "ask";
   });
 }
-//@ chunk-e6aww6q8.js:862818-863355 placement
+//@ chunk-5xgkngpb.js:870298-870835 placement
 function capPermissionUpdates_2(overflowMode, sourceLabel) {
   return preprocess(
     (updates, ctx) => {
@@ -178,14 +182,14 @@ function capPermissionUpdates_2(overflowMode, sourceLabel) {
       }),
   );
 }
-//@ chunk-e6aww6q8.js:863398-863431 placement
+//@ chunk-5xgkngpb.js:870878-870911 placement
 /**
  * MAX_ANSWER_DEPTH：权限回答输入的最大深度；MAX_ANSWER_VALUES：权限回答输入的最大值个数；MAX_ANSWER_CHARS：权限回答输入的最大字符数（同一声明共 3 个绑定）。
  */
 var MAX_ANSWER_DEPTH = 64;
 var MAX_ANSWER_VALUES = 20000;
 var MAX_ANSWER_CHARS = 1048576;
-//@ chunk-e6aww6q8.js:863431-863679 placement
+//@ chunk-5xgkngpb.js:870911-871159 placement
 /**
  * 比较权限回答的输入与原输入是否深度相等（经 JSON 往返）；输入超出回答大小限制时记警告并返回 false。
  */
@@ -202,7 +206,7 @@ function isSameAnswerInput(left, right) {
   }
   return isDeepStrictEqual(jsonParse(jsonStringify(left)), jsonParse(jsonStringify(right)));
 }
-//@ chunk-e6aww6q8.js:863679-863988 placement
+//@ chunk-5xgkngpb.js:871159-871468 placement
 /**
  * 迭代遍历值，统计值数、深度与字符数，判断是否在权限回答的大小限制内。
  */
@@ -232,7 +236,7 @@ function measureAnswerBounds(value) {
     ...totals,
   };
 }
-//@ chunk-e6aww6q8.js:863988-864184 placement
+//@ chunk-5xgkngpb.js:871468-871664 placement
 function countAnswerValue(value, keyLength, level, totals, stack) {
   totals.values++;
   totals.chars += keyLength + (typeof value === "string" ? value.length : 0);
@@ -247,7 +251,7 @@ function countAnswerValue(value, keyLength, level, totals, stack) {
     totals.values <= MAX_ANSWER_VALUES && totals.depth <= MAX_ANSWER_DEPTH && totals.chars <= MAX_ANSWER_CHARS
   );
 }
-//@ chunk-e6aww6q8.js:864184-864816 placement
+//@ chunk-5xgkngpb.js:871664-872296 placement
 /**
  * ANSWER_CHANGED_INPUT_MESSAGE：回答改写了调用时的说明；ANSWER_RULES_UNAPPLIED_MESSAGE：规则未能全部应用时的说明；RULE_TABLE_NAMES：四个规则表名（同一声明共 4 个绑定）。
  */
@@ -256,7 +260,7 @@ var ANSWER_CHANGED_INPUT_MESSAGE;
 var ANSWER_RULES_UNAPPLIED_MESSAGE;
 var RULE_TABLE_NAMES;
 var RULE_TABLE_KEYS;
-deferInit("chunk-e6aww6q8.js:864184", () => {
+deferInit("chunk-5xgkngpb.js:871664", () => {
   applyPermissionAnswerChanges = Object.freeze({
     kind: "launcher",
   });
@@ -267,7 +271,7 @@ deferInit("chunk-e6aww6q8.js:864184", () => {
   RULE_TABLE_NAMES = ["session", "localSettings", "projectSettings", "userSettings"];
   RULE_TABLE_KEYS = ["alwaysDenyRules", "alwaysAskRules", "alwaysAllowRules"];
 });
-//@ chunk-e6aww6q8.js:864816-864869 placement
+//@ chunk-5xgkngpb.js:872296-872349 placement
 /**
  * isUnchangedAnswerInput：输入为空或与原输入相同。
  */
@@ -277,8 +281,8 @@ function isUnchangedAnswerInput(updatedInput, observableInput) {
     (updatedInput !== undefined && isSameAnswerInput(updatedInput, observableInput))
   );
 }
-//@ chunk-e6aww6q8.js:864869-865459 placement
-function admitCardAnswer(updatedInput, observableInput, tool) {
+//@ chunk-5xgkngpb.js:872349-873020 placement
+function admitCardAnswer(updatedInput, observableInput, tool, setter) {
   if (isUnchangedAnswerInput(updatedInput, observableInput))
     return isAbsentOrEmptyObject(updatedInput)
       ? stripHostOwnedInputKeys(tool.name, observableInput)
@@ -291,6 +295,7 @@ function admitCardAnswer(updatedInput, observableInput, tool) {
     logForDebugging(`${tool.name}'s card-answer admitter threw: the answer is refused`, {
       level: "warn",
     });
+    setAnswerNotAdmitted(setter, tool.name, "threw");
     return;
   }
   switch (verdict.kind) {
@@ -298,6 +303,7 @@ function admitCardAnswer(updatedInput, observableInput, tool) {
       logForDebugging(`a permission answer for ${tool.name} broke its card-answer rules: ${verdict.rule}`, {
         level: "warn",
       });
+      setAnswerNotAdmitted(setter, tool.name, verdict.rule);
       return;
     case "admitted": {
       let { input } = verdict;
@@ -312,15 +318,16 @@ function admitCardAnswer(updatedInput, observableInput, tool) {
             level: "warn",
           },
         );
+        setAnswerNotAdmitted(setter, tool.name, "changed_by_admitter");
         return;
       }
       return input;
     }
   }
 }
-//@ chunk-e6aww6q8.js:865459-865469 placement
+//@ chunk-5xgkngpb.js:873020-873030 placement
 var MAX_CARD_FORMS = 3;
-//@ chunk-e6aww6q8.js:865469-866024 placement
+//@ chunk-5xgkngpb.js:873030-873585 placement
 /**
  * 宿主提供卡片表单时，校验 MCP 工具权限回答的输入恰好是某个表单：超限、无表单或不匹配时通过 onRefused 计数并拒绝；宿主回调抛错时记日志。
  */
@@ -365,7 +372,7 @@ function matchCardFormAnswer(host, answerInput, context, tool) {
     onRefused: reportRefused,
   };
 }
-//@ chunk-e6aww6q8.js:866024-866298 placement
+//@ chunk-5xgkngpb.js:873585-873859 placement
 /**
  * 权限回答改动了调用输入时生成拒绝决定并记警告。
  */
@@ -386,7 +393,7 @@ function denyChangedAnswerInput(name, toolUseId) {
     decideLocation: "ask-path",
   };
 }
-//@ chunk-e6aww6q8.js:866298-866652 placement
+//@ chunk-5xgkngpb.js:873859-874213 placement
 /**
  * 权限回答加入（或可能加入）的 deny/ask 规则没能进入会话规则时生成拒绝决定并记警告。
  */
@@ -410,7 +417,7 @@ function denyLostTightening(name, toolUseId) {
     decideLocation: "ask-path",
   };
 }
-//@ chunk-e6aww6q8.js:866652-866810 placement
+//@ chunk-5xgkngpb.js:874213-874371 placement
 /**
  * 按权限请求方式格式化请求失败信息：launcher 模式带上原因，strict 模式记录日志后只返回固定文字。
  */
@@ -425,7 +432,7 @@ function formatPermissionRequestFailure(mode, error, name) {
       return TOOL_PERMISSION_REQUEST_FAILED;
   }
 }
-//@ chunk-e6aww6q8.js:866810-867988 placement
+//@ chunk-5xgkngpb.js:874371-875563 placement
 /**
  * 应用权限回答中的规则更新（添加、替换），处理收紧与放宽。
  */
@@ -449,7 +456,7 @@ function applyPermissionAnswer(updates, limits) {
         continue;
       declared[bucket] += update.rules.length;
       let sliced = update.rules
-        .filter((rule) => formatPermissionRule(rule).length <= limits.ruleLength)
+        .filter((rule) => permissionRuleValueFromString_2(rule).length <= limits.ruleLength)
         .slice(0, perAnswer);
       perAnswer -= sliced.length;
       kept[bucket] += sliced.length;
@@ -507,7 +514,7 @@ function applyPermissionAnswer(updates, limits) {
     );
   return flattened;
 }
-//@ chunk-e6aww6q8.js:867988-868287 placement
+//@ chunk-5xgkngpb.js:875563-875862 placement
 /**
  * 应用权限回答里的更新：被否决时不做；先按限制裁剪、再经 strip 过滤，然后写入会话上下文并统计丢失的收紧规则数。
  */
@@ -538,11 +545,11 @@ function applyAnswerPermissionUpdates(answerPolicy, updates, options) {
     lostTightenings,
   };
 }
-//@ chunk-e6aww6q8.js:868287-868378 placement
+//@ chunk-5xgkngpb.js:875862-875953 placement
 function tightensRules(update) {
   return (update.type === "addRules" || update.type === "replaceRules") && update.behavior !== "allow";
 }
-//@ chunk-e6aww6q8.js:868378-868591 placement
+//@ chunk-5xgkngpb.js:875953-876166 placement
 /**
  * 列出权限回答里 deny/ask 规则对应的 [规则表名, 规则串]，过长规则用 unread-rules 占位。
  */
@@ -553,12 +560,12 @@ function listAnswerTighteningRules(updates, ruleLength) {
           update.behavior === "deny" ? "alwaysDenyRules" : "alwaysAskRules",
           rule.toolName.length + (rule.ruleContent?.length ?? 0) > ruleLength
             ? UNREAD_RULES_DENY_UPDATE.rules[0].toolName
-            : formatPermissionRule(permissionRuleValueFromString(formatPermissionRule(rule))),
+            : permissionRuleValueFromString_2(parseRuleString(permissionRuleValueFromString_2(rule))),
         ])
       : [],
   );
 }
-//@ chunk-e6aww6q8.js:868591-869008 placement
+//@ chunk-5xgkngpb.js:876166-876585 placement
 /**
  * 把权限更新应用到会话上下文：经托管规则过滤（记录被收窄的部分），模式变化且无丢失时另外切换模式；返回丢失的收紧规则数。
  */
@@ -600,7 +607,7 @@ function applyUpdatesToSessionContext(
   if (modeToSet !== undefined) answerPolicy.setMode(modeToSet);
   return lost;
 }
-//@ chunk-e6aww6q8.js:869008-870865 placement
+//@ chunk-5xgkngpb.js:876585-878445 placement
 /**
  * 过滤托管设置中的 always deny/ask 规则，忽略无效规则。
  */
@@ -638,7 +645,7 @@ function filterManagedPermissionRules(
         );
         return false;
       }
-      let ruleValue = permissionRuleValueFromString(ruleString);
+      let ruleValue = parseRuleString(ruleString);
       return (
         (ruleValue.toolName === toolName || isAllowedTool?.(ruleValue) === true) &&
         answerPolicy.mayAddAllowRule(ruleValue)
@@ -657,7 +664,7 @@ function filterManagedPermissionRules(
       lostCount =
         ruleTables === undefined
           ? 0
-          : count(
+          : countWhere(
               newRules,
               ([ruleField, ruleString]) =>
                 ruleString === UNREAD_RULES_DENY_UPDATE.rules[0].toolName ||
@@ -716,11 +723,11 @@ function filterManagedPermissionRules(
     lost: lostCount,
   };
 }
-//@ chunk-e6aww6q8.js:870865-870924 placement
+//@ chunk-5xgkngpb.js:878445-878504 placement
 function collectRuleTables(permissionTable) {
   return new Set(RULE_TABLE_NAMES.flatMap((tableName) => permissionTable[tableName] ?? []));
 }
-//@ chunk-e6aww6q8.js:870924-871039 placement
+//@ chunk-5xgkngpb.js:878504-878619 placement
 function findRulesMissingFromContext(context, previousContext) {
   let ruleTables = collectRuleTables(context);
   let missing = new Set();
@@ -729,7 +736,7 @@ function findRulesMissingFromContext(context, previousContext) {
       if (!ruleTables.has(ruleString)) missing.add(ruleString);
   return [...missing];
 }
-//@ chunk-e6aww6q8.js:871039-871118 placement
+//@ chunk-5xgkngpb.js:878619-878698 placement
 function appendSessionRules(rulesBySource, rules) {
   return rules.length === 0
     ? rulesBySource
@@ -738,11 +745,11 @@ function appendSessionRules(rulesBySource, rules) {
         session: [...(rulesBySource.session ?? []), ...rules],
       };
 }
-//@ chunk-e6aww6q8.js:871118-871179 placement
+//@ chunk-5xgkngpb.js:878698-878759 placement
 function isAbsentOrEmptyObject(input) {
   return input === undefined || Object.keys(input).length === 0;
 }
-//@ chunk-e6aww6q8.js:871179-871497 placement
+//@ chunk-5xgkngpb.js:878759-879077 placement
 /**
  * 比较两份权限上下文，列出发生变化的规则表（allow/deny/ask 规则、附加目录）。
  */
@@ -757,6 +764,14 @@ function listChangedRuleTables(context, nextContext) {
     isDeepStrictEqual(before, after) ? [] : [key],
   );
 }
+//@ chunk-5xgkngpb.js:879077-879126 sole-consumer
+function setAnswerNotAdmitted(setter, name, value) {
+  try {
+    setter(name, value);
+  } catch (error) {
+    logError(toError(error));
+  }
+}
 export {
   isSameAnswerInput,
   isUnchangedAnswerInput,
@@ -764,18 +779,18 @@ export {
   applyAnswerPermissionUpdates,
   denyLostTightening,
   applyPermissionAnswerChanges,
+  stripHostOwnedInputKeys,
   capPermissionUpdates_2,
   PERMISSION_UPDATES_LIMIT_MESSAGE,
-  MAX_ANSWER_VALUES,
-  MAX_ANSWER_DEPTH,
-  MAX_ANSWER_CHARS,
-  measureAnswerBounds,
-  stripHostOwnedInputKeys,
   admitCardAnswer,
   matchCardFormAnswer,
   formatPermissionRequestFailure,
   applyUpdatesToSessionContext,
   applyPermissionAnswer,
   listAnswerTighteningRules,
+  measureAnswerBounds,
   stripUnchangedHostOwnedKeys,
+  MAX_ANSWER_VALUES,
+  MAX_ANSWER_DEPTH,
+  MAX_ANSWER_CHARS,
 };

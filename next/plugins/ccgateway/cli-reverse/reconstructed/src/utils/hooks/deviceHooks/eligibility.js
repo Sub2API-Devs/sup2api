@@ -3,9 +3,9 @@
  *
  * 设备钩子策略资格（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-s61vbvea.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7jxyna5q.js (7)
  * attribution: placement 7
  */
 import { resolve } from "path";
@@ -35,7 +35,7 @@ import { isRestrictedToPluginOnly } from "../../settings/pluginOnlyPolicy.js";
 import { isCustomizationDisabled } from "../../settings/customizationDisabled.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:339130-339224 placement
+//@ chunk-7jxyna5q.js:263770-263864 placement
 /**
  * 空的设备钩子资格状态（重钉、曾可达、已答复、已撤回）。
  */
@@ -47,7 +47,7 @@ function emptyEligibilityState() {
     withdrawn: new Set(),
   };
 }
-//@ chunk-s61vbvea.js:339291-339349 placement
+//@ chunk-7jxyna5q.js:263931-263989 placement
 function realpathOrSelf(deps, path) {
   try {
     return deps.realpath(path);
@@ -55,10 +55,10 @@ function realpathOrSelf(deps, path) {
     return path;
   }
 }
-//@ chunk-s61vbvea.js:339349-339453 placement
+//@ chunk-7jxyna5q.js:263989-264093 placement
 var DEVICE_HOOK_SETTING_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DEVICE_HOOK_SCOPES;
-deferInit("chunk-s61vbvea.js:339349", () => {
+deferInit("chunk-7jxyna5q.js:263989", () => {
   DEVICE_HOOK_SETTING_SOURCES = [
     ["userSettings", "user"],
     ["localSettings", "local"],
@@ -66,18 +66,18 @@ deferInit("chunk-s61vbvea.js:339349", () => {
   ];
   DEVICE_HOOK_SCOPES = DEVICE_HOOK_SETTING_SOURCES.map(([, pair]) => pair);
 });
-//@ chunk-s61vbvea.js:339453-339510 placement
+//@ chunk-7jxyna5q.js:264093-264150 placement
 function isHooksDisabledForSource(source) {
   return isSettingSourceEnabled(source) && getSettingsForSource(source)?.disableAllHooks === true;
 }
-//@ chunk-s61vbvea.js:339510-339589 placement
+//@ chunk-7jxyna5q.js:264150-264229 placement
 /**
  * 判断钩子配置对象中是否至少有一个非空事件列表。
  */
 function hasAnyHookEntries(hooks) {
   return Object.values(hooks).some((list) => Array.isArray(list) && list.length > 0);
 }
-//@ chunk-s61vbvea.js:339589-341136 placement
+//@ chunk-7jxyna5q.js:264229-265776 placement
 function deviceHooksPolicyEligibility(deps) {
   if (deps.policyUnreadable())
     return {
@@ -177,7 +177,7 @@ function deviceHooksPolicyEligibility(deps) {
     }),
   };
 }
-//@ chunk-s61vbvea.js:341136-341975 placement
+//@ chunk-7jxyna5q.js:265776-266615 placement
 function collectDeviceHookSources() {
   return {
     getSettingsForSource: (source) =>

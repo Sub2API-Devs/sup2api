@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。把错误日志排队发往 Datadog 错误跟踪，受合规判定和每进程上限约束。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f5bay0pe.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1h30f78s.js (10)
  * attribution: placement 10
  */
 import { randomUUID } from "crypto";
@@ -21,7 +21,7 @@ import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-f5bay0pe.js:554-640 placement
+//@ chunk-1h30f78s.js:554-640 placement
 /**
  * 单进程最多上报多少条错误（100）。
  */
@@ -30,14 +30,14 @@ var DEFAULT_FLUSH_INTERVAL_MS = 30000;
 var MAX_BATCH_SIZE = 25;
 var POST_TIMEOUT_MS = 1e4;
 var PER_PROCESS_CAP = 100;
-//@ chunk-f5bay0pe.js:640-713 placement
+//@ chunk-1h30f78s.js:640-713 placement
 /**
  * 取错误批次刷新间隔（环境变量可覆盖）。
  */
 function getFlushIntervalMs() {
   return env.CLAUDE_CODE_DD_ERROR_TRACKING_FLUSH_INTERVAL_MS || DEFAULT_FLUSH_INTERVAL_MS;
 }
-//@ chunk-f5bay0pe.js:713-1771 placement
+//@ chunk-1h30f78s.js:713-1771 placement
 /**
  * 把错误批次发到 Datadog 日志入口
  */
@@ -60,10 +60,10 @@ async function sendErrorBatch(batch) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -90,7 +90,7 @@ async function sendErrorBatch(batch) {
       });
   }
 }
-//@ chunk-f5bay0pe.js:1771-1897 placement
+//@ chunk-1h30f78s.js:1771-1897 placement
 class DatadogErrorSinkState {
   reportsEnqueued = 0;
   capSentinelSent = false;
@@ -101,23 +101,23 @@ class DatadogErrorSinkState {
     post: sendErrorBatch,
   });
 }
-//@ chunk-f5bay0pe.js:1897-1920 placement
+//@ chunk-1h30f78s.js:1897-1920 placement
 /**
  * 按宿主保存的 Datadog 错误收集状态。
  */
 var datadogSinkState; // deferred: uses DatadogErrorSinkState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-f5bay0pe.js:1897", () => {
+deferInit("chunk-1h30f78s.js:1897", () => {
   datadogSinkState = new HostScoped(() => new DatadogErrorSinkState());
 });
-//@ chunk-f5bay0pe.js:1920-1957 placement
+//@ chunk-1h30f78s.js:1920-1957 placement
 function errorTrackingClient() {
   return datadogSinkState.of(getRootSession().host);
 }
-//@ chunk-f5bay0pe.js:1957-2004 placement
+//@ chunk-1h30f78s.js:1957-2004 placement
 function isErrorTrackingCapReached() {
   return errorTrackingClient().reportsEnqueued >= PER_PROCESS_CAP;
 }
-//@ chunk-f5bay0pe.js:2004-2365 placement
+//@ chunk-1h30f78s.js:2004-2365 placement
 /**
  * 达到每进程上限时的最后一条记录
  */
@@ -136,7 +136,7 @@ function capReachedEntry(entry) {
     error_frames: undefined,
   };
 }
-//@ chunk-f5bay0pe.js:2365-2661 placement
+//@ chunk-1h30f78s.js:2365-2661 placement
 /**
  * 把错误日志排队发往 Datadog 错误跟踪，受合规判定和每进程上限约束。
  */
@@ -155,7 +155,7 @@ function enqueueErrorLog(entry) {
     client.sender.enqueue(capReachedEntry(entry));
   } else client.sender.enqueue(entry);
 }
-//@ chunk-f5bay0pe.js:2661-2712 placement
+//@ chunk-1h30f78s.js:2661-2712 placement
 async function shutdownErrorTracking() {
   await errorTrackingClient().sender.shutdown();
 }

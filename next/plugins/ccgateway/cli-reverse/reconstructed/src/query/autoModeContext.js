@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：为 auto mode 分类器组装上下文：各来源的权限规则、MCP 挂载、用户设置、环境与 git 状态；刷新 auto mode 上下文的 git 状态（超出上限时上报 tengu_auto_mode_context_over_ceiling）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ha3km179.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-w3ch4xq2.js (18)
  * attribution: placement 18
  */
 import { homedir } from "os";
@@ -16,29 +16,35 @@ import {
 import {
   toPosixPath,
   compiledPathRulePattern,
-  getResolvedWorkingDirPaths,
+  getCountedWorkingDirPaths,
   rootPathForSource,
+  normalizeCaseForComparison_2,
 } from "../utils/permissions/filesystem.js";
 import { isDiskless, getSessionId, getOriginalCwdOrNull } from "../bootstrap/state.js";
-import { formatPermissionRule } from "../utils/permissions/disallowedToolsFlag.js";
-import { matchLegacyRule, wireName, toInternalToolName } from "../services/mcp/serverIdentity.js";
-import { FILE_READ_TOOL_NAME } from "../tools/FileReadTool/constants.js";
-import { FILE_EDIT_TOOL_NAME } from "../tools/FileEditTool/constants.js";
-import { isHazelPloverOn, isValiantSphinxOn } from "../utils/permissions/serverClassifier/flags.js";
 import {
   permissionRuleValueFromString,
+  parseRuleString,
   hasWildcard,
   matchWildcard,
 } from "../utils/permissions/permissionRuleParser.js";
+import {
+  matchLegacyRule,
+  wireName,
+  legacyRuleMatcher,
+  toInternalToolName,
+} from "../services/mcp/serverIdentity.js";
+import { READ } from "../tools/FileReadTool/constants.js";
+import { EDIT } from "../tools/FileEditTool/constants.js";
+import { isHazelPloverOn, isValiantSphinxOn } from "../utils/permissions/serverClassifier/flags.js";
 import {
   allowsAliasExpansion,
   isBuzzingPelicanRouted,
   getAllowRules,
   isPatternRuleName,
-  getAskRules,
+  ruleMatcherForRules,
+  askedBashRules,
   buildDenyRuleIndex,
   isToolDeniedByIndex,
-  toolMatchesWholeToolRule,
   getMcpRuleClassifierRoute,
   isDeepDuskDeviceTool,
   isWebFetchOrSearch,
@@ -64,6 +70,7 @@ import {
   collectGitState,
   TENGU_VELVET_MARBLE,
 } from "./autoModeGitState.js";
+import { permissionRuleValueFromString as permissionRuleValueFromString_2 } from "../utils/sandbox/sandbox-adapter.js";
 import { getPluginRegistry } from "../utils/plugins/pluginLoadState.js";
 import {
   getLoadedModulesForSite,
@@ -97,7 +104,7 @@ import { sessionKeyOrHostKey } from "../utils/hostSuppliedKey.js";
 import { formatOriginForClassifier } from "../utils/permissions/classifierHostContext.js";
 import { getCwdOrNull } from "../utils/cwd.js";
 import { getPlatform } from "../utils/platform.js";
-import { uniq } from "../utils/collections.js";
+import { expandToolScopedRules } from "../components/permissions/PermissionDecisionDebugInfo.js";
 import { recordArtifactConsentFlag } from "../utils/permissions/yoloClassifier.js";
 import { classifyAllShellEnabled } from "../utils/permissions/permissionSetup.js";
 import { getClassifierUserTag } from "../utils/permissions/classifierCacheBreak.js";
@@ -124,17 +131,17 @@ import {
 import { createAttachmentMessage_2 } from "../utils/debug.js";
 import { lastRemoteSessionAttachment } from "../utils/contextAttachments/remoteSession.js";
 import { getSdkHostedBridgeHandle, getRemoteControlSessionCompatId } from "../bridge/replBridgeHandle.js";
-import { toolMatchesName } from "../Tool.js";
+import { matchesToolName } from "../Tool.js";
 import { SEND_USER_FILE_TOOL_NAME } from "../tools/SendUserFileTool/prompt.js";
 import { isAttributionAnnouncementEnabled } from "../bridge/bridgeEnabled.js";
 import { shouldIncludeGitInstructions } from "../utils/gitSettings.js";
 import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
-import { alwaysFalseStream } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { hasBuiltInEvalTool } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { runInRemoteCallFrameMain } from "../remote/remoteMode.js";
 import { latestPromptSnapshot } from "../utils/contextAttachments/promptSnapshot.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-ha3km179.js:120069-125379 placement
+//@ chunk-w3ch4xq2.js:128992-134430 placement
 /**
  * 为 auto mode 分类器组装上下文：各来源的权限规则、MCP 挂载、用户设置、环境与 git 状态。
  */
@@ -145,7 +152,7 @@ async function buildAutoModeContext(toolPermissionContext, toolUseContext, judge
   let isVolatileRuleSource = (source) => source === "mcpMount" || (diskless && source === "userSettings");
   let mapRules = (behavior, rules) =>
     rules.map((rule) => {
-      let formattedRule = formatPermissionRule(rule.ruleValue);
+      let formattedRule = permissionRuleValueFromString(rule.ruleValue);
       let mappedRule = {
         rule: matchLegacyRule(rule.stored ?? formattedRule, behavior),
         source: rule.source,
@@ -155,11 +162,7 @@ async function buildAutoModeContext(toolPermissionContext, toolUseContext, judge
           }),
       };
       let { toolName, ruleContent } = rule.ruleValue;
-      if (
-        ruleContent === undefined ||
-        cwdInfo === null ||
-        (toolName !== FILE_READ_TOOL_NAME && toolName !== FILE_EDIT_TOOL_NAME)
-      )
+      if (ruleContent === undefined || cwdInfo === null || (toolName !== READ && toolName !== EDIT))
         return mappedRule;
       if (
         (diskless && ruleContent.startsWith("~/")) ||
@@ -186,7 +189,7 @@ async function buildAutoModeContext(toolPermissionContext, toolUseContext, judge
         (value ?? []).map((ruleString) => ({
           source: key,
           ruleBehavior,
-          ruleValue: permissionRuleValueFromString(ruleString),
+          ruleValue: parseRuleString(ruleString),
           stored: ruleString,
         })),
       )
@@ -203,6 +206,8 @@ async function buildAutoModeContext(toolPermissionContext, toolUseContext, judge
       );
   let { mcpServerPolicy, ...askRulesWithoutPolicy } = toolPermissionContext.alwaysAskRules;
   let baseAskRules = rulesUnread ? {} : askRulesWithoutPolicy;
+  let rules = collectRulesBySource(toolPermissionContext.alwaysDenyRules, "deny");
+  let rules_2 = collectRulesBySource(baseAskRules, "ask");
   let configuredMaxRules = rulesUnread
     ? DEFAULT_MAX_SAVED_RULES
     : getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VELVET_MARBLE_2, DEFAULT_MAX_SAVED_RULES);
@@ -214,7 +219,11 @@ async function buildAutoModeContext(toolPermissionContext, toolUseContext, judge
       : DEFAULT_MAX_SAVED_RULES;
   let classifierRouted =
     !rulesUnread && isBuzzingPelicanRouted(toolPermissionContext.mode, toolPermissionContext);
-  let allowRules = rulesUnread ? [] : getAllowRules(toolPermissionContext);
+  let allowRules = rulesUnread
+    ? []
+    : getAllowRules(toolPermissionContext).filter(
+        ({ ruleValue }) => !permissionRuleValueFromString_2(ruleValue),
+      );
   let pluginRegistry = getPluginRegistry();
   let exactMcpToolNames;
   if (
@@ -234,14 +243,15 @@ async function buildAutoModeContext(toolPermissionContext, toolUseContext, judge
         ),
         (rule) => isPatternRuleName(rule.ruleValue.toolName),
       );
-      let rulesByToolName = Map.groupBy(patternRules, (rule) => rule.ruleValue.toolName);
-      let askRules = getAskRules(toolPermissionContext);
+      let rulesByToolName = ruleMatcherForRules(wholeToolRules);
+      let patternRulesByTool = Map.groupBy(patternRules, (rule) => rule.ruleValue.toolName);
+      let declaredRules = askedBashRules(toolPermissionContext);
       let denyRuleIndex = buildDenyRuleIndex(toolPermissionContext, [
-        ...askRules,
-        ...askRules.map((askRule) => ({
-          ...askRule,
+        ...declaredRules,
+        ...declaredRules.map((rule) => ({
+          ...rule,
           ruleValue: {
-            toolName: askRule.ruleValue.toolName,
+            toolName: rule.ruleValue.toolName,
           },
         })),
       ]);
@@ -249,7 +259,8 @@ async function buildAutoModeContext(toolPermissionContext, toolUseContext, judge
         toolUseContext.options.tools
           .filter((tool) => {
             let { name: toolName, mcpInfo } = tool;
-            let toolRules = rulesByToolName.get(toolName);
+            let isAutoAllowed;
+            let toolRules = patternRulesByTool.get(toolName);
             if (
               toolRules === undefined ||
               mcpInfo === undefined ||
@@ -275,16 +286,13 @@ async function buildAutoModeContext(toolPermissionContext, toolUseContext, judge
                 loadedModulesForSite,
               ) &&
               !isToolDeniedByIndex(toolPermissionContext, denyRuleIndex, tool) &&
-              [
-                ...toolRules.toReversed(),
-                ...wholeToolRules.filter((rule) => toolMatchesWholeToolRule(tool, rule)),
-              ].every(
+              [...toolRules.toReversed(), ...rulesByToolName(tool)].every(
                 (rule) =>
                   getMcpRuleClassifierRoute(
                     rule,
                     tool,
                     {},
-                    isAutoAllowedInMode(tool, toolPermissionContext),
+                    (isAutoAllowed ??= isAutoAllowedInMode(tool, toolPermissionContext)),
                     toolUseContext,
                     () => getAutoModeClassifierRole(toolPermissionContext.mode),
                   ) === undefined,
@@ -301,8 +309,11 @@ async function buildAutoModeContext(toolPermissionContext, toolUseContext, judge
         ),
       );
     }
+  let isKnownToolName = legacyRuleMatcher();
   let filtered = allowRules.filter(
-    ({ ruleValue }) =>
+    ({ ruleValue, source }) =>
+      !isKnownToolName(ruleValue.toolName) &&
+      !isKnownToolName(matchLegacyRule(ruleValue.toolName, "allow")) &&
       toInternalToolName(ruleValue.toolName) === ruleValue.toolName &&
       !(classifierRouted && mcpInfoFromString(ruleValue.toolName) !== null) &&
       !isDeepDuskDeviceTool(ruleValue.toolName, toolPermissionContext.mode, toolPermissionContext) &&
@@ -321,7 +332,7 @@ async function buildAutoModeContext(toolPermissionContext, toolUseContext, judge
   );
   let distinctRules = uniqByExport(
     filtered,
-    (rule) => `${rule.source} ${formatPermissionRule(rule.ruleValue)}`,
+    (rule) => `${rule.source} ${permissionRuleValueFromString(rule.ruleValue)}`,
   );
   let classifierAllowRules = maxAllowRules > DEFAULT_MAX_SAVED_RULES ? distinctRules : filtered;
   let autoModeConfig = getAutoModeConfig();
@@ -364,7 +375,7 @@ async function buildAutoModeContext(toolPermissionContext, toolUseContext, judge
       ? []
       : diskless
         ? [toPosix(dirPath)]
-        : getResolvedWorkingDirPaths(dirPath).map(toPosix),
+        : getCountedWorkingDirPaths(dirPath).map(toPosix),
   });
   let cwdOrNull = getCwdOrNull();
   let originalCwdOrNull = getOriginalCwdOrNull();
@@ -405,7 +416,7 @@ async function buildAutoModeContext(toolPermissionContext, toolUseContext, judge
           })),
       network: rulesUnread
         ? []
-        : uniq(
+        : normalizeCaseForComparison_2(
             Array.from(
               toolPermissionContext.trustedNetworkDirectories?.entries() ?? [],
               ([host, networkEntries]) => [host, ...networkEntries],
@@ -418,8 +429,8 @@ async function buildAutoModeContext(toolPermissionContext, toolUseContext, judge
     },
     rules: {
       allow: mapRules("allow", classifierAllowRules),
-      deny: mapRules("deny", collectRulesBySource(toolPermissionContext.alwaysDenyRules, "deny")),
-      ask: mapRules("ask", collectRulesBySource(baseAskRules, "ask")),
+      deny: expandToolScopedRules(mapRules("deny", rules), rules),
+      ask: expandToolScopedRules(mapRules("ask", rules_2), rules_2),
     },
     case_insensitive_paths: getPlatform() === "windows",
     auto_mode: {
@@ -467,7 +478,9 @@ async function buildAutoModeContext(toolPermissionContext, toolUseContext, judge
       dropped_ask: capReport.dropped.ask ?? 0,
       allow_rules: filtered.length,
       allow_rules_repeated: filtered.length - distinctRules.length,
-      allow_rules_distinct: uniq(filtered.map((rule) => formatPermissionRule(rule.ruleValue))).length,
+      allow_rules_distinct: normalizeCaseForComparison_2(
+        filtered.map((rule) => permissionRuleValueFromString(rule.ruleValue)),
+      ).length,
       allow_rules_cap: maxAllowRules,
       deny_rules: capReport.denyRules,
       ask_rules: capReport.askRules,
@@ -478,7 +491,7 @@ async function buildAutoModeContext(toolPermissionContext, toolUseContext, judge
     });
   });
 }
-//@ chunk-ha3km179.js:125379-126239 placement
+//@ chunk-w3ch4xq2.js:134430-135290 placement
 /**
  * 判断本回合是否请求 auto mode（beta 被拒、未开启等原因上报）。
  */
@@ -546,7 +559,7 @@ function checkAutoModeRequested(toolUseContext, options) {
     return;
   }
 }
-//@ chunk-ha3km179.js:126239-126303 placement
+//@ chunk-w3ch4xq2.js:135290-135354 placement
 /**
  * 取模式的分类器角色
  */
@@ -558,7 +571,7 @@ function classifierRoleFor(toolUseContext) {
     return;
   }
 }
-//@ chunk-ha3km179.js:126303-126377 placement
+//@ chunk-w3ch4xq2.js:135354-135428 placement
 /**
  * 分类器角色非 off
  */
@@ -570,7 +583,7 @@ function isClassifierRoleOn(toolUseContext) {
     return false;
   }
 }
-//@ chunk-ha3km179.js:126377-126471 placement
+//@ chunk-w3ch4xq2.js:135428-135522 placement
 /**
  * 刷新 auto mode 的 git 状态
  */
@@ -583,7 +596,7 @@ async function refreshGitStateSafe(autoModeContext, timerUtils = timerUtils_2) {
     return;
   }
 }
-//@ chunk-ha3km179.js:126471-127611 placement
+//@ chunk-w3ch4xq2.js:135522-136662 placement
 /**
  * 刷新 auto mode 上下文的 git 状态（超出上限时上报 tengu_auto_mode_context_over_ceiling）。
  */
@@ -660,7 +673,7 @@ async function refreshAutoModeGitState(autoModeContext, timerUtils) {
     }),
   };
 }
-//@ chunk-ha3km179.js:127611-127743 placement
+//@ chunk-w3ch4xq2.js:136662-136794 placement
 /**
  * 调用 computerAttached（失败时视为已连接）。
  */
@@ -673,7 +686,7 @@ async function isComputerAttachedSafe(host) {
     return true;
   }
 }
-//@ chunk-ha3km179.js:127743-127893 placement
+//@ chunk-w3ch4xq2.js:136794-136944 placement
 /**
  * 动态加载并检查是否连接了 computer use，失败视为已连接。
  */
@@ -687,12 +700,12 @@ async function checkComputerAttached(toolState) {
     return true;
   }
 }
-//@ chunk-ha3km179.js:127893-127935 placement
+//@ chunk-w3ch4xq2.js:136944-136986 placement
 /**
  * 可见性查询缓存状态
  */
 var visibilityQueryState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ha3km179.js:127893", () => {
+deferInit("chunk-w3ch4xq2.js:136944", () => {
   visibilityQueryState = identity(
     {
       logged: false,
@@ -702,7 +715,7 @@ deferInit("chunk-ha3km179.js:127893", () => {
     },
   );
 });
-//@ chunk-ha3km179.js:127935-128166 placement
+//@ chunk-w3ch4xq2.js:136986-137217 placement
 /**
  * 仓库可见性查询的来源（缓存命中、加入进行中、自行查询、未到达）。
  */
@@ -719,7 +732,7 @@ function visibilityLookupKind(autoModeContext, gitState) {
       return visibility !== undefined && gitState.error === "pending" ? "not_reached" : "none";
   }
 }
-//@ chunk-ha3km179.js:128166-128243 placement
+//@ chunk-w3ch4xq2.js:137217-137294 placement
 /**
  * setTimeout 包装
  */
@@ -729,7 +742,7 @@ var timerUtils_2 = {
     return () => clearTimeout(timer);
   },
 };
-//@ chunk-ha3km179.js:128243-128401 placement
+//@ chunk-w3ch4xq2.js:137294-137452 placement
 /**
  * 等待 Promise，超时或失败时返回默认值。
  */
@@ -760,7 +773,7 @@ function withTimeoutDefault_2(promise, timers, timeoutMs, defaultValue) {
     );
   });
 }
-//@ chunk-ha3km179.js:128401-128761 placement
+//@ chunk-w3ch4xq2.js:137452-137812 placement
 /**
  * 生成 auto mode 回合附件（辅助查询与恢复中不生成）。
  */
@@ -789,18 +802,18 @@ async function autoModeTurnAttachments(
     return [];
   }
 }
-//@ chunk-ha3km179.js:128761-129466 placement
+//@ chunk-w3ch4xq2.js:137812-138517 placement
 /**
  * 远程会话/桥接变更时生成提示附件。
  */
-async function remoteSessionChangeAttachments(messages, unusedArg, model) {
+async function remoteSessionChangeAttachments(messages, tools, model) {
   let lastChange = lastRemoteSessionAttachment(messages);
   let url = getSessionAttribution()?.url ?? null;
   let sdkHostedBridgeHandle = getSdkHostedBridgeHandle();
   let sendUserFileHint =
     (getRemoteControlSessionCompatId() !== undefined ||
       (sdkHostedBridgeHandle !== null && !sdkHostedBridgeHandle.outboundOnly)) &&
-    unusedArg.some((tool) => toolMatchesName(tool, SEND_USER_FILE_TOOL_NAME));
+    tools.some((tool) => matchesToolName(tool, SEND_USER_FILE_TOOL_NAME));
   let attributionEnabled = isAttributionAnnouncementEnabled();
   let model_2 = attributionEnabled ? model : undefined;
   if (lastChange === undefined) {
@@ -810,7 +823,7 @@ async function remoteSessionChangeAttachments(messages, unusedArg, model) {
       !(
         attributionEnabled &&
         shouldIncludeGitInstructions() &&
-        (unusedArg.some((tool) => toolMatchesName(tool, BASH_TOOL_NAME)) || alwaysFalseStream(unusedArg))
+        (tools.some((tool) => matchesToolName(tool, BASH_TOOL_NAME)) || hasBuiltInEvalTool(tools))
       )
     )
       return;
@@ -848,7 +861,7 @@ async function remoteSessionChangeAttachments(messages, unusedArg, model) {
     managedPr: policyAttributionOverrides.pr,
   };
 }
-//@ chunk-ha3km179.js:129466-129548 placement
+//@ chunk-w3ch4xq2.js:138517-138599 placement
 /**
  * 取提交与 PR
  */
@@ -864,7 +877,7 @@ function repoCommitAndPr(model) {
         }),
       );
 }
-//@ chunk-ha3km179.js:129548-129637 placement
+//@ chunk-w3ch4xq2.js:138599-138688 placement
 /**
  * 记录消息与回合起点
  */
@@ -879,7 +892,7 @@ function snapshotMessagesAndStart(messages) {
     return;
   }
 }
-//@ chunk-ha3km179.js:129637-129747 placement
+//@ chunk-w3ch4xq2.js:138688-138798 placement
 /**
  * 更新查询状态的消息与回合起点（失败时保持原状态）。
  */
@@ -896,7 +909,7 @@ function withTurnMessages(toolUseContext, messages, isHumanTurn) {
     return toolUseContext;
   }
 }
-//@ chunk-ha3km179.js:129747-129854 placement
+//@ chunk-w3ch4xq2.js:138798-138905 placement
 /**
  * 去掉被放回队列的消息（必要时先结算已取出的）。
  */

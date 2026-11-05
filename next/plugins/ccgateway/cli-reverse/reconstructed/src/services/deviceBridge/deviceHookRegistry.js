@@ -3,21 +3,21 @@
  *
  * 2.1.316 新增：设备钩子注册表。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-phgcpy6c.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bgt3cm0p.js (3)
  * attribution: placement 3
  */
 import { logForDebugging } from "../../utils/debug.js";
 import { toError } from "../../utils/errors.js";
 import { MAX_TIMER_DELAY_MS } from "../../utils/timerDelayClamp.js";
 
-//@ chunk-phgcpy6c.js:661-669 placement
+//@ chunk-bgt3cm0p.js:745-753 placement
 /**
  * 记录设备 hook 名样本时的次数上限（2）。
  */
 var MAX_NAME_SAMPLES = 2;
-//@ chunk-phgcpy6c.js:669-1818 placement
+//@ chunk-bgt3cm0p.js:753-1902 placement
 function createDeviceHookRegistry(options) {
   let owner = null;
   let leaseTimer = null;
@@ -123,7 +123,7 @@ function createDeviceHookRegistry(options) {
     },
   };
 }
-//@ chunk-phgcpy6c.js:1818-1901 placement
+//@ chunk-bgt3cm0p.js:1902-1985 placement
 function productionRegistryTimer(fn, delayMs) {
   let timer = setTimeout(fn, delayMs);
   timer.unref();

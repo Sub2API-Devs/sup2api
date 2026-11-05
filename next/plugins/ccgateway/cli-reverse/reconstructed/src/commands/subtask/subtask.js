@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/subtask 命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3vqj3nc0.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ag8kwx12.js (2)
  * attribution: placement 2
  */
 import { spawnForkFromDirective } from "../../tools/AgentTool/forkDirective.js";
@@ -13,7 +13,7 @@ import { evaluateAskingNoHost } from "../../utils/permissions/permissions.js";
 import { isCoordinatorMode_2 } from "../../coordinator/coordinatorMode.js";
 import { CIRCLE_MARK_GLYPH } from "../../constants/figures.js";
 
-//@ chunk-3vqj3nc0.js:12628-12720 placement
+//@ chunk-ag8kwx12.js:13776-13868 placement
 /**
  * /subtask 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -23,7 +23,7 @@ var subtaskCommandCall = async (onDone, context, args) => {
   });
   return null;
 };
-//@ chunk-3vqj3nc0.js:12720-13022 placement
+//@ chunk-ag8kwx12.js:13868-14170 placement
 /**
  * 启动一个子任务：参数为空返回 null，协调者会话中不可用时返回提示文字。
  */

@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增。未绑定设备创建会话的记录读写依赖。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8rjqe6hb.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q3thwjpn.js (8)
  * attribution: placement 8
  */
 import { join, dirname } from "path";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { objectSchema, literal, array, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
-import { getClaudeConfigDir } from "../utils/envUtils.js";
+import { getClaudeConfigDir } from "../utils/markdownConfigLoader.js";
 import { jsonParse, jsonStringify } from "../utils/slowOperations.js";
 import { sessionIdBody } from "./sessionIdCompat.js";
 import { logForDebugging } from "../utils/debug.js";
@@ -21,11 +21,11 @@ import { STORAGE_SPACES } from "../utils/storage/storageSpaces.js";
 import { getFileReader } from "../utils/fileStore.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-8rjqe6hb.js:564-669 placement
+//@ chunk-q3thwjpn.js:564-669 placement
 var MAX_UNBOUND_CREATES; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var unboundCreatesFileSchema;
 var DEVICE_UNBOUND_CREATES;
-deferInit("chunk-8rjqe6hb.js:564", () => {
+deferInit("chunk-q3thwjpn.js:564", () => {
   MAX_UNBOUND_CREATES = 50;
   unboundCreatesFileSchema = DoctorLazy(() =>
     objectSchema({
@@ -41,11 +41,11 @@ deferInit("chunk-8rjqe6hb.js:564", () => {
   );
   DEVICE_UNBOUND_CREATES = "device-unbound-creates";
 });
-//@ chunk-8rjqe6hb.js:669-717 placement
+//@ chunk-q3thwjpn.js:669-717 placement
 function unboundCreatesFilePath() {
   return join(getClaudeConfigDir(), "state", `${DEVICE_UNBOUND_CREATES}.json`);
 }
-//@ chunk-8rjqe6hb.js:717-923 placement
+//@ chunk-q3thwjpn.js:717-923 placement
 /**
  * 读未绑定创建记录并按保留期过滤
  */
@@ -59,7 +59,7 @@ async function readUnboundCreates(store) {
     ? unboundCreatesFile.data.sessions
     : unboundCreatesFile.data.sessions.filter((session) => !isOlderThanCutoff(session.at, cutoff));
 }
-//@ chunk-8rjqe6hb.js:923-995 placement
+//@ chunk-q3thwjpn.js:923-995 placement
 function parseUnboundCreatesFile(text) {
   try {
     return unboundCreatesFileSchema().safeParse(jsonParse(text));
@@ -69,12 +69,12 @@ function parseUnboundCreatesFile(text) {
     };
   }
 }
-//@ chunk-8rjqe6hb.js:995-1069 placement
+//@ chunk-q3thwjpn.js:995-1069 placement
 function isOlderThanCutoff(isoTimestamp, cutoffDate) {
   let timestamp = Date.parse(isoTimestamp);
   return Number.isNaN(timestamp) || timestamp < cutoffDate.getTime();
 }
-//@ chunk-8rjqe6hb.js:1069-1330 placement
+//@ chunk-q3thwjpn.js:1069-1330 placement
 async function rememberUnboundCreate(sessionId, reason, store) {
   try {
     let body = sessionIdBody(sessionId);
@@ -102,7 +102,7 @@ async function rememberUnboundCreate(sessionId, reason, store) {
     logForDebugging(`[deviceBind] unbound create not recorded (${errorMessage(error)})`);
   }
 }
-//@ chunk-8rjqe6hb.js:1330-1536 placement
+//@ chunk-q3thwjpn.js:1330-1536 placement
 async function unboundCreateReason(sessionId, isKnownDeviceBindingRefusal, store) {
   try {
     let body = sessionIdBody(sessionId);
@@ -113,7 +113,7 @@ async function unboundCreateReason(sessionId, isKnownDeviceBindingRefusal, store
     return;
   }
 }
-//@ chunk-8rjqe6hb.js:1536-2182 placement
+//@ chunk-q3thwjpn.js:1536-2182 placement
 /**
  * 未绑定设备创建会话的记录读写依赖。
  */

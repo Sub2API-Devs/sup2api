@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：系统主题查询
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xfhnxaa2.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-qrsadt02.js (2)
  * attribution: placement 2
  */
 import { env } from "./env.js";
@@ -20,9 +20,9 @@ import { getSecondRootError } from "../ink/terminal.js";
 import { onTerminalFocusChanged, getTerminalFocus } from "../ink/terminal-focus-state.js";
 import { waitForAttachSettle } from "./attachStamp.js";
 
-//@ chunk-xfhnxaa2.js:3843-3854 placement
+//@ chunk-qrsadt02.js:4179-4190 placement
 var DEFAULT_THEME_QUERY_TIMEOUT_MS = 2000;
-//@ chunk-xfhnxaa2.js:3854-5008 placement
+//@ chunk-qrsadt02.js:4190-5344 placement
 /**
  * 用 OSC 11 查询终端背景色推断系统主题（tmux/screen 下包装转发），在主题变化推送或获得焦点时重查；返回取消函数。
  */

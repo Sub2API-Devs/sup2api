@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：后台守护进程主管（bg-pty 宿主、会话生命周期）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-89ebz077.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-v6a0t823.js (9)
  * attribution: placement 9
  */
 import { randomBytes } from "crypto";
@@ -176,7 +176,7 @@ import { isLowMemory } from "../../daemon/lowMemory.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { isMinorFaultField } from "../../utils/procStat.js";
 
-//@ chunk-89ebz077.js:16458-17100 placement
+//@ chunk-v6a0t823.js:16605-17294 placement
 /**
  * 启动后台会话时要清掉的环境变量列表，以及 Windows 下环境变量键名大小写规范化表。
  */
@@ -188,6 +188,7 @@ var BG_STRIPPED_ENV_VARS = [
   "CLAUDE_CODE_ATTRIBUTION_PROJECT",
   "CLAUDE_CODE_SKIP_PLUGIN_LOCAL_MCP_SERVERS",
   "CLAUDE_CODE_SKIP_PLUGIN_MCP_BUNDLES",
+  "CLAUDE_CODE_DISABLE_AGENT_PROGRESS_SUMMARIES",
   ...PROVIDER_SELECTION_ENV_VARS,
   "CLAUDE_CODE_EXTRA_BODY",
   "CLAUDE_CODE_AUTO_MODE_MODEL",
@@ -212,7 +213,7 @@ var BG_ENV_KEY_CASE_MAP = new Map(
     ...HOST_ONLY_ENV_VARS,
   ].map((env) => [env.toUpperCase(), env]),
 );
-//@ chunk-89ebz077.js:17100-17336 placement
+//@ chunk-v6a0t823.js:17294-17530 placement
 /**
  * Windows 下把环境变量键名规范为已知大小写（已有同名规范键时不覆盖）。
  */
@@ -227,7 +228,7 @@ function normalizeEnvKeyCase(env, names = []) {
     delete env[key];
   }
 }
-//@ chunk-89ebz077.js:17336-17463 placement
+//@ chunk-v6a0t823.js:17530-17657 placement
 function usesCustomEndpoint(env, varSpec) {
   return (
     !!env[varSpec.endpoint] &&
@@ -237,7 +238,7 @@ function usesCustomEndpoint(env, varSpec) {
       ))
   );
 }
-//@ chunk-89ebz077.js:17463-17758 placement
+//@ chunk-v6a0t823.js:17657-17952 placement
 /**
  * 作业是否仍有在途工作：有排队、非可排空的任务未完成（结束后只剩允许类型的除外）或有会话定时任务。
  */
@@ -256,7 +257,7 @@ function hasPendingInFlightWork(jobState) {
     filtered.includes("session_cron")
   );
 }
-//@ chunk-89ebz077.js:17758-17891 placement
+//@ chunk-v6a0t823.js:17952-18085 placement
 function getJobActivityState(jobState) {
   if (!jobState) return null;
   if (isSettled(jobState)) return "settled";
@@ -264,14 +265,14 @@ function getJobActivityState(jobState) {
   if (hasPendingInFlightWork(jobState)) return "inflight";
   return null;
 }
-//@ chunk-89ebz077.js:17891-18002 placement
+//@ chunk-v6a0t823.js:18085-18196 placement
 function getAdoptActivityState(jobState, source) {
   let jobActivityState = getJobActivityState(jobState);
   if (jobActivityState === "settled" && source !== "missing-at-adopt")
     return jobState && hasPendingInFlightWork(jobState) ? "inflight" : null;
   return jobActivityState;
 }
-//@ chunk-89ebz077.js:18002-18116 placement
+//@ chunk-v6a0t823.js:18196-18310 placement
 function formatSupervisorState(state) {
   return state.kind === "retiring"
     ? `retiring:${state.reason}`
@@ -279,7 +280,7 @@ function formatSupervisorState(state) {
       ? `retired:${state.outcome}`
       : state.kind;
 }
-//@ chunk-89ebz077.js:18116-18373 placement
+//@ chunk-v6a0t823.js:18310-18567 placement
 function isValidStateTransition(phase, next) {
   if (phase.kind === "retired") return false;
   switch (next.kind) {
@@ -295,7 +296,7 @@ function isValidStateTransition(phase, next) {
       return true;
   }
 }
-//@ chunk-89ebz077.js:18373-64813 placement
+//@ chunk-v6a0t823.js:18567-65009 placement
 /**
  * 后台守护进程主管：管理 bg-pty 会话进程、附着者、状态流、认证快照与重启。
  */
@@ -400,10 +401,10 @@ class DaemonSupervisor {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -429,10 +430,10 @@ class DaemonSupervisor {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION
@@ -525,10 +526,10 @@ class DaemonSupervisor {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -547,10 +548,10 @@ class DaemonSupervisor {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -662,10 +663,10 @@ class DaemonSupervisor {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -828,10 +829,10 @@ class DaemonSupervisor {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION,
@@ -843,10 +844,10 @@ class DaemonSupervisor {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -882,10 +883,10 @@ class DaemonSupervisor {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -1081,10 +1082,10 @@ class DaemonSupervisor {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
@@ -1129,10 +1130,10 @@ class DaemonSupervisor {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -1277,10 +1278,10 @@ class DaemonSupervisor {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION,
@@ -1292,10 +1293,10 @@ class DaemonSupervisor {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -1965,10 +1966,10 @@ class DaemonSupervisor {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
@@ -2653,10 +2654,10 @@ class DaemonSupervisor {
   }
 }
 export {
-  normalizeEnvKeyCase,
-  BG_STRIPPED_ENV_VARS,
   isProviderManagedByHost,
-  usesCustomEndpoint,
   DaemonSupervisor,
   shouldCarryAuth,
+  normalizeEnvKeyCase,
+  BG_STRIPPED_ENV_VARS,
+  usesCustomEndpoint,
 };

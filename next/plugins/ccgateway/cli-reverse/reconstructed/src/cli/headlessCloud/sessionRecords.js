@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：无头云会话的本地会话记录与事件序号。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fe6rs39h.js (5), chunk-v38s9gp2.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-24qbherd.js (3), chunk-keyy05re.js (5)
  * attribution: placement 8
  */
 import { isViolinWoodEnabledCached } from "../../services/analytics/violinGates.js";
@@ -23,14 +23,14 @@ import { sleep } from "../../utils/sleep.js";
 import { untrustedDeviceHint } from "../../bridge/trustedDevice.js";
 import { fetchLatestEvents } from "../../assistant/sessionHistory.js";
 
-//@ chunk-v38s9gp2.js:334-368 placement
+//@ chunk-24qbherd.js:334-368 placement
 /**
  * 判断是否启用会话记录位置查询（violinWood 特性开或某开关为真）。
  */
 function isSessionRecordLookupEnabled() {
   return isViolinWoodEnabledCached() || neverTrue();
 }
-//@ chunk-v38s9gp2.js:368-564 placement
+//@ chunk-24qbherd.js:368-564 placement
 /**
  * 把会话记录的位置描述映射为状态值（elsewhere、here_only、nowhere、not_looked、unknown）。
  */
@@ -44,7 +44,7 @@ function describeSessionRecordWhere(lookup) {
       return lookup.why === "not_looked" ? "not_looked" : "unknown";
   }
 }
-//@ chunk-v38s9gp2.js:564-653 placement
+//@ chunk-24qbherd.js:564-653 placement
 /**
  * 记录 tengu_remote_attach_record_lookup 事件：查询结果与入口点。
  */
@@ -54,7 +54,7 @@ function logAttachRecordLookup(lookup, entryPoint) {
     entry_point: fromEnum(entryPoint),
   });
 }
-//@ chunk-fe6rs39h.js:160409-160659 placement
+//@ chunk-keyy05re.js:160297-160547 placement
 async function readRetentionCutoff() {
   try {
     let { getCutoffDate } = await import("../../utils/cleanup.js");
@@ -76,7 +76,7 @@ async function readRetentionCutoff() {
     };
   }
 }
-//@ chunk-fe6rs39h.js:160659-161214 placement
+//@ chunk-keyy05re.js:160547-161102 placement
 async function findLocalSessionRecord(sessionId, a, b, c, root, deviceId, credentials, storage) {
   if (deviceId === undefined || !isSessionRecordLookupEnabled())
     return {
@@ -119,7 +119,7 @@ async function findLocalSessionRecord(sessionId, a, b, c, root, deviceId, creden
     };
   }
 }
-//@ chunk-fe6rs39h.js:161214-161609 placement
+//@ chunk-keyy05re.js:161102-161497 placement
 async function latestStreamPosition(sessionRecordId, credentials, options, recoverProof) {
   let latestSequenceNum = options.latestSequenceNum;
   let readPosition =
@@ -149,7 +149,7 @@ async function latestStreamPosition(sessionRecordId, credentials, options, recov
         : error;
     });
 }
-//@ chunk-fe6rs39h.js:161609-161924 placement
+//@ chunk-keyy05re.js:161497-161812 placement
 async function readNewestEventSequence(sessionRequestConfig) {
   let latestEvents = await fetchLatestEvents(sessionRequestConfig, 1, {
     reportFeatureHealth: false,
@@ -161,13 +161,13 @@ async function readNewestEventSequence(sessionRequestConfig) {
     throw Error("the newest event could not be read");
   return 0;
 }
-//@ chunk-fe6rs39h.js:161924-161935 placement
+//@ chunk-keyy05re.js:161812-161823 placement
 var SESSION_POSITION_RETRY_MS = 500;
 export {
-  isSessionRecordLookupEnabled,
-  describeSessionRecordWhere,
-  logAttachRecordLookup,
   latestStreamPosition,
   findLocalSessionRecord,
   readRetentionCutoff,
+  logAttachRecordLookup,
+  isSessionRecordLookupEnabled,
+  describeSessionRecordWhere,
 };

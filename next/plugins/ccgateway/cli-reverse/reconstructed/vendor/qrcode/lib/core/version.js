@@ -1,8 +1,8 @@
 /**
  * qrcode/lib/core/version.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: qrcode@1.5.4
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -12,7 +12,7 @@ import { require_error_correction_level } from "./error-correction-level.js";
 import { require_mode } from "./mode.js";
 import { require_version_check } from "./version-check.js";
 
-//@ chunk-spjgqa4y.js:9968-11234 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:9968-11234 cjs-fingerprint
 var require_version = __commonJS(function (cjsExports) {
   var Utils = require_utils();
   var ECCode = require_error_correction_code();

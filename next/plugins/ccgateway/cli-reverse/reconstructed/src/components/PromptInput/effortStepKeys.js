@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。调整 effort 的按键处理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: placement 2
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -16,15 +16,10 @@ import { useNotifications } from "../../context/notifications.js";
 import { useKeybindingContext } from "../../keybindings/KeybindingContext.js";
 import { useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useQueuedMessageText } from "../../context/QueuedMessageContext.js";
-import {
-  getEffortLevelOrHigh,
-  resolveEffortLevel,
-  shouldShowEffortHint,
-  findAdjacentEffortLevel,
-  isOnlyMaxAboveEffort,
-} from "../../utils/effort.js";
+import { getEffortLevelOrHigh, resolveEffortLevel, shouldShowEffortHint } from "../../utils/effort.js";
 import { applyEffortCommand } from "../../commands/effort/effort.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
+import { findAdjacentEffortLevel, isOnlyMaxAboveEffort } from "../../services/api/errors.js";
 import { UP_ARROW } from "../../constants/figures.js";
 import { EFFORT_LEVEL_KEY } from "../EffortIndicator.js";
 import { shouldShowEffortNotice } from "./promptInputState.js";
@@ -35,9 +30,9 @@ import { Box } from "../../ink/components/Text.js";
 import { ModelEffortSwitchConfirm } from "../ModelEffortSwitchConfirm.js";
 import { useFooterAwareMessageActions } from "../CoordinatorAgentStatus.js";
 
-//@ chunk-18hwfzwa.js:925874-925910 placement
+//@ chunk-czq1j3j2.js:958825-958861 placement
 var EFFORT_STEP_MAX_VIA_EFFORT = "effort-step-max-via-effort";
-//@ chunk-18hwfzwa.js:925910-927945 placement
+//@ chunk-czq1j3j2.js:958861-960897 placement
 function useEffortStepKeys(transcript, deps) {
   let $ = useMemoCache(32);
   let appStoreDirect = useAppStoreDirect();

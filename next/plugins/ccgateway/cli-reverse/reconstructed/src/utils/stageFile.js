@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。stage_file：把 filestore 文件暂存到 /uploads 或 /outputs。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-rqpqwy1q.js (43)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6m4wm5e2.js (43)
  * attribution: placement 43
  */
 import { lstat, readdir, stat, unlink, mkdir, realpath, chmod, rename } from "fs/promises";
@@ -48,13 +48,14 @@ import {
 import { fromEnumOpt } from "../services/analytics/safeMetadata.js";
 import { sleep } from "./sleep.js";
 import { httpsOrigin, invalidHttpsUrlReason, apiClient } from "../services/routines/routinesApi.js";
+import { isPlainObject } from "./isPlainObject.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { objectSchema, array, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 
-//@ chunk-rqpqwy1q.js:1299-1340 placement
+//@ chunk-6m4wm5e2.js:1302-1343 placement
 var MAX_TRACKED_STAGED_WRITES = 4096;
 var stagedWriteState = identity(new Map(), (state) => state.clear());
-//@ chunk-rqpqwy1q.js:1340-1482 placement
+//@ chunk-6m4wm5e2.js:1343-1485 placement
 function recordStagedWrite(dest, written, renameTick) {
   stagedWriteState.delete(dest);
   stagedWriteState.set(dest, {
@@ -66,7 +67,7 @@ function recordStagedWrite(dest, written, renameTick) {
     if (oldestDest !== undefined) stagedWriteState.delete(oldestDest);
   }
 }
-//@ chunk-rqpqwy1q.js:1482-1698 placement
+//@ chunk-6m4wm5e2.js:1485-1701 placement
 /**
  * 已暂存文件的状态码
  */
@@ -78,9 +79,9 @@ function stagedFileState(dest, stats) {
   if (written.size !== stats.size || written.mtimeNs !== stats.mtimeNs) return 4;
   return stats.ctimeNs <= record.renamedByNs ? 1 : 2;
 }
-//@ chunk-rqpqwy1q.js:1698-1713 placement
+//@ chunk-6m4wm5e2.js:1701-1716 placement
 var MAX_COMPARE_BYTES = 1048576;
-//@ chunk-rqpqwy1q.js:1713-2379 placement
+//@ chunk-6m4wm5e2.js:1716-2382 placement
 /**
  * 描述已存在的文件
  */
@@ -132,7 +133,7 @@ async function describeExistingFile(dest, sourcePath, bytes) {
         };
   }
 }
-//@ chunk-rqpqwy1q.js:2379-2570 placement
+//@ chunk-6m4wm5e2.js:2382-2573 placement
 /**
  * 读取小文件
  */
@@ -147,7 +148,7 @@ async function readSmallFile(path) {
     await regularFileForRead.close().catch(() => {});
   }
 }
-//@ chunk-rqpqwy1q.js:2570-2849 placement
+//@ chunk-6m4wm5e2.js:2573-2853 placement
 var { basename, dirname, isAbsolute, join, normalize, relative, sep: posixSep } = posix;
 var stageFileRoot = getStageFileRoot();
 var outputsRoot = getOutputsRoot();
@@ -170,11 +171,11 @@ var PERMANENT_ERRNOS = new Set([
   "ENOTEMPTY",
   STAGE_PARENT_ESCAPE,
 ]);
-//@ chunk-rqpqwy1q.js:2849-2894 placement
+//@ chunk-6m4wm5e2.js:2853-2899 placement
 function isPermanentHttpStatus(status) {
   return status < 500 && status !== 408 && status !== 429;
 }
-//@ chunk-rqpqwy1q.js:2894-3004 placement
+//@ chunk-6m4wm5e2.js:2899-3009 placement
 function stageFileWireResult(result) {
   return {
     ok: true,
@@ -186,7 +187,7 @@ function stageFileWireResult(result) {
     }),
   };
 }
-//@ chunk-rqpqwy1q.js:3004-3109 placement
+//@ chunk-6m4wm5e2.js:3009-3114 placement
 function getContainedRelativePath(root, target) {
   let relativePath = relative(root, target);
   if (
@@ -198,7 +199,7 @@ function getContainedRelativePath(root, target) {
     return null;
   return relativePath;
 }
-//@ chunk-rqpqwy1q.js:3109-4095 placement
+//@ chunk-6m4wm5e2.js:3114-4100 placement
 /**
  * 校验 mount_path
  */
@@ -256,7 +257,7 @@ function parseMountPath(mountPath, vouched = false) {
   }
   throw Error("mount_path must be under /uploads/ or /outputs/");
 }
-//@ chunk-rqpqwy1q.js:4095-4235 placement
+//@ chunk-6m4wm5e2.js:4100-4240 placement
 class HomeWriteRefusedError extends Error {
   refusal;
   constructor(refusal) {
@@ -264,7 +265,7 @@ class HomeWriteRefusedError extends Error {
     this.refusal = refusal;
   }
 }
-//@ chunk-rqpqwy1q.js:4235-4540 placement
+//@ chunk-6m4wm5e2.js:4240-4545 placement
 function addDirectoryDestFromMountPath(mountPath) {
   let parsed;
   try {
@@ -278,26 +279,26 @@ function addDirectoryDestFromMountPath(mountPath) {
     throw Error("add_directory mount_path must be under /uploads/ and not under /uploads/.home/");
   return parsed.dest;
 }
-//@ chunk-rqpqwy1q.js:4540-4613 placement
+//@ chunk-6m4wm5e2.js:4545-4618 placement
 function assertDestUnderRoot(dest, root) {
   if (!isAtOrUnderRoot(dest, root)) throw stageParentEscapeError("dest parent escaped stage root");
 }
-//@ chunk-rqpqwy1q.js:4613-4717 placement
+//@ chunk-6m4wm5e2.js:4618-4722 placement
 function assertNoBackslashDirs(root, dest) {
   if (hasBackslash(root) || hasBackslash(dirname(dest)))
     throw stageParentEscapeError("a folder on the way to dest has a backslash in its name");
 }
-//@ chunk-rqpqwy1q.js:4717-4766 placement
+//@ chunk-6m4wm5e2.js:4722-4771 placement
 function stageParentEscapeError(message) {
   let error = Error(message);
   error.code = STAGE_PARENT_ESCAPE;
   return error;
 }
-//@ chunk-rqpqwy1q.js:4766-4821 placement
+//@ chunk-6m4wm5e2.js:4771-4826 placement
 function stageTmpStem(filePath) {
   return `${STAGE_TMP_PREFIX}${computeContentHash(basename(filePath)).slice(0, 16)}.`;
 }
-//@ chunk-rqpqwy1q.js:4821-5028 placement
+//@ chunk-6m4wm5e2.js:4826-5033 placement
 async function sweepStaleStageTmps(dir, stem) {
   let staleBefore = Date.now() - 2 * READ_STALL_TIMEOUT_MS;
   let names;
@@ -317,15 +318,15 @@ async function sweepStaleStageTmps(dir, stem) {
       }),
   );
 }
-//@ chunk-rqpqwy1q.js:5028-5103 placement
+//@ chunk-6m4wm5e2.js:5033-5108 placement
 function isFreshFile(stats, cutoffMs) {
   return stats !== null && stats.isFile() && (stats.mtimeMs >= cutoffMs || stats.ctimeMs >= cutoffMs);
 }
-//@ chunk-rqpqwy1q.js:5103-5173 placement
+//@ chunk-6m4wm5e2.js:5108-5178 placement
 function isReadOnlyFsError(error) {
   return typeof error === "object" && error !== null && error.code === "EROFS";
 }
-//@ chunk-rqpqwy1q.js:5173-5331 placement
+//@ chunk-6m4wm5e2.js:5178-5337 placement
 /**
  * 请求失败描述
  */
@@ -342,7 +343,7 @@ function requestFailure(label, error) {
       }),
   };
 }
-//@ chunk-rqpqwy1q.js:5331-7276 placement
+//@ chunk-6m4wm5e2.js:5337-7282 placement
 /**
  * stage_file：把 filestore 中的文件暂存到 /uploads 或 /outputs，比较已有文件。
  */
@@ -475,9 +476,9 @@ async function stageFile(
     request.force === true ? storeCheckMode : "off",
   );
 }
-//@ chunk-rqpqwy1q.js:7276-7310 placement
+//@ chunk-6m4wm5e2.js:7282-7316 placement
 var stageLimitersByRoot = identity(new Map(), (limiters) => limiters.clear());
-//@ chunk-rqpqwy1q.js:7310-7421 placement
+//@ chunk-6m4wm5e2.js:7316-7427 placement
 function runStageForRoot(mountPath, parsed, queuedAt, remoteSessionId, inPlaceRequestId, storeCheckMode) {
   let limiter = stageLimitersByRoot.get(parsed.root);
   if (limiter === undefined) {
@@ -486,12 +487,12 @@ function runStageForRoot(mountPath, parsed, queuedAt, remoteSessionId, inPlaceRe
   }
   return limiter(mountPath, parsed, queuedAt, remoteSessionId, inPlaceRequestId, storeCheckMode);
 }
-//@ chunk-rqpqwy1q.js:7421-7497 placement
+//@ chunk-6m4wm5e2.js:7427-7503 placement
 function stageOne(...args) {
   let [path, parsed, queuedAt, remoteSessionId] = args;
   return parsed.neverReplace ? stageToHome(path, parsed, queuedAt, remoteSessionId) : stageToRoot(...args);
 }
-//@ chunk-rqpqwy1q.js:7497-8769 placement
+//@ chunk-6m4wm5e2.js:7503-8775 placement
 /**
  * 与存储副本比较
  */
@@ -571,7 +572,7 @@ async function compareWithStore(path, stats, path_2) {
     },
   };
 }
-//@ chunk-rqpqwy1q.js:8769-12750 placement
+//@ chunk-6m4wm5e2.js:8775-12756 placement
 /**
  * 暂存到挂载根
  */
@@ -859,7 +860,7 @@ async function stageToRoot(
         }),
   };
 }
-//@ chunk-rqpqwy1q.js:12750-13187 placement
+//@ chunk-6m4wm5e2.js:12756-13193 placement
 /**
  * 记录 home 暂存结果
  */
@@ -885,7 +886,7 @@ function logHomeStage(outcome, extraFields) {
   else if (outcome === "placed" || outcome === "already_present") logFeatureOk("ccr_stage_file_home");
   else logFeatureSad("ccr_stage_file_home", outcome);
 }
-//@ chunk-rqpqwy1q.js:13187-13455 placement
+//@ chunk-6m4wm5e2.js:13193-13461 placement
 /**
  * home 暂存结果
  */
@@ -915,7 +916,7 @@ function homeStageResult(outcomeResult, outputPath, extraFields) {
       };
   }
 }
-//@ chunk-rqpqwy1q.js:13455-14264 placement
+//@ chunk-6m4wm5e2.js:13461-14270 placement
 /**
  * 暂存到 home 根
  */
@@ -978,9 +979,9 @@ async function stageToHome(path, { dest, root }, queuedAt, remoteSessionId) {
     await unlink(tempPath).catch(() => {});
   }
 }
-//@ chunk-rqpqwy1q.js:14264-14305 placement
+//@ chunk-6m4wm5e2.js:14270-14311 placement
 var CREDENTIAL_EXPIRED_TEXT = "read failed: credential expired";
-//@ chunk-rqpqwy1q.js:14305-14393 placement
+//@ chunk-6m4wm5e2.js:14311-14399 placement
 function oneShotCredentialFetcher(credentialJson) {
   let used = false;
   return async () => {
@@ -993,7 +994,7 @@ function oneShotCredentialFetcher(credentialJson) {
     return parseFilestoreCredential(credentialJson);
   };
 }
-//@ chunk-rqpqwy1q.js:14393-14720 placement
+//@ chunk-6m4wm5e2.js:14399-14726 placement
 /**
  * 解析 filestore 凭据
  */
@@ -1019,22 +1020,22 @@ function parseFilestoreCredential(response) {
     },
   };
 }
-//@ chunk-rqpqwy1q.js:14720-14788 placement
+//@ chunk-6m4wm5e2.js:14726-14794 placement
 async function fetchAndParseCredential(signal, timeoutMs) {
   let listed = await listFilestoreCredential(signal, timeoutMs);
   return listed.ok ? parseFilestoreCredential(listed.data) : listed;
 }
-//@ chunk-rqpqwy1q.js:14788-14882 placement
+//@ chunk-6m4wm5e2.js:14794-14888 placement
 var FILESTORE_FILES_PATH = "/worker/files";
 var STAGE_REQUEST_ID = "stage_request_id";
 var IN_PLACE_REQUEST_ID_RE = /^stage-file-inplace-req_[0-9A-Za-z_]{1,72}$/;
-//@ chunk-rqpqwy1q.js:14882-14964 placement
+//@ chunk-6m4wm5e2.js:14888-14970 placement
 function inPlaceRequestId(request, requestId) {
   return request.in_place === true && typeof requestId === "string" && IN_PLACE_REQUEST_ID_RE.test(requestId)
     ? requestId
     : undefined;
 }
-//@ chunk-rqpqwy1q.js:14964-15894 placement
+//@ chunk-6m4wm5e2.js:14970-15901 placement
 /**
  * 拉取 filestore 凭据
  */
@@ -1111,7 +1112,7 @@ async function listFilestoreCredential(signal, timeoutMs) {
     };
   }
 }
-//@ chunk-rqpqwy1q.js:15894-18121 placement
+//@ chunk-6m4wm5e2.js:15901-18129 placement
 /**
  * 带凭据刷新的 filestore 调用
  */
@@ -1125,7 +1126,7 @@ async function withFilestoreCredential(path, tempPath, credentialJson, timeoutMs
   let mintedResult = minted ?? (await fetchCredential());
   if (!mintedResult.ok) return mintedResult;
   let cred = mintedResult.cred;
-  for (let idx = 0; idx <= 1; idx++) {
+  for (let j = 0; j <= 1; j++) {
     let abortController = new AbortController();
     let stallTimer;
     let resetStallTimer = () => {
@@ -1170,7 +1171,7 @@ async function withFilestoreCredential(path, tempPath, credentialJson, timeoutMs
           gated: true,
         };
       }
-      if (response.status === 401 && idx === 0) {
+      if (response.status === 401 && j === 0) {
         clearTimeout(stallTimer);
         if (response.data instanceof Readable) response.data.destroy();
         logForDiagnosticsNoPII("info", "stage_file_read_remint_jwt", {
@@ -1272,13 +1273,13 @@ async function withFilestoreCredential(path, tempPath, credentialJson, timeoutMs
   }
   throw Error("unreachable: fetchFilestoreToFile retry loop fell through");
 }
-//@ chunk-rqpqwy1q.js:18121-18136 placement
+//@ chunk-6m4wm5e2.js:18129-18144 placement
 var MAX_CLIENT_CONTENT_LENGTH = 1048576;
-//@ chunk-rqpqwy1q.js:18136-20148 placement
+//@ chunk-6m4wm5e2.js:18144-20672 placement
 /**
  * 创建 filestore 客户端
  */
-async function createFilestoreClient(signal) {
+async function openFilestoreReader(signal) {
   let credential = await fetchAndParseCredential(signal);
   if (!credential.ok) return credential;
   let { filestoreJwt, filesystemId, filestoreUrl } = credential.cred;
@@ -1358,7 +1359,7 @@ async function createFilestoreClient(signal) {
       };
     }
   }
-  async function listDirectory(path, { limit, signal }) {
+  async function listDirectory(path, { limit, recursive, signal }) {
     let startTime = performance.now();
     try {
       let response = await apiClient.post(
@@ -1367,6 +1368,7 @@ async function createFilestoreClient(signal) {
           filesystem_id: filesystemId,
           path,
           limit,
+          recursive,
         },
         {
           ...requestDefaults,
@@ -1423,15 +1425,48 @@ async function createFilestoreClient(signal) {
       };
     }
   }
+  async function holdsAt(path, { signal }) {
+    try {
+      let response = await apiClient.post(
+        "/v1/filestore/fs/readFileMetadata",
+        {
+          filesystem_id: filesystemId,
+          path,
+        },
+        {
+          ...requestDefaults,
+          maxContentLength: 65536,
+          signal,
+          validateStatus: () => true,
+          maxRedirects: 0,
+        },
+      );
+      if (!response.ok) return "no_answer";
+      if (response.status >= 200 && response.status < 300) return "a_file";
+      return response.status === 404 &&
+        isPlainObject(response.data) &&
+        response.data.code === "not_found" &&
+        (response.data.details === undefined ||
+          (Array.isArray(response.data.details) && response.data.details.length === 0))
+        ? "nothing"
+        : "no_answer";
+    } catch {
+      return "no_answer";
+    }
+  }
   return {
     ok: true,
     reader: {
       readBytes,
       listDirectory,
     },
+    facts: {
+      holdsAt,
+      filesystemId,
+    },
   };
 }
-//@ chunk-rqpqwy1q.js:20148-20283 placement
+//@ chunk-6m4wm5e2.js:20672-20807 placement
 function logStageDirectoryFailure(kind, status, startTime) {
   logForDiagnosticsNoPII(status === 404 ? "info" : "warn", "stage_file_directory_failed", {
     kind,
@@ -1439,7 +1474,7 @@ function logStageDirectoryFailure(kind, status, startTime) {
     duration_ms: Math.round(performance.now() - startTime),
   });
 }
-//@ chunk-rqpqwy1q.js:20283-20416 placement
+//@ chunk-6m4wm5e2.js:20807-20940 placement
 var DIRECTORY_LISTING_SCHEMA = DoctorLazy(() =>
   objectSchema({
     entries: array(
@@ -1455,16 +1490,17 @@ var DIRECTORY_LISTING_SCHEMA = DoctorLazy(() =>
     cursor: stringSchema().optional(),
   }),
 );
-//@ chunk-rqpqwy1q.js:20416-20506 placement
+//@ chunk-6m4wm5e2.js:20940-21031 placement
 async function fetchFilestoreBytes(path, options = {}) {
-  let filestoreClient = await createFilestoreClient(options.signal);
-  return filestoreClient.ok ? filestoreClient.reader.readBytes(path, options) : filestoreClient;
+  let filestoreReader = await openFilestoreReader(options.signal);
+  return filestoreReader.ok ? filestoreReader.reader.readBytes(path, options) : filestoreReader;
 }
 export {
-  sweepStaleStageTmps,
   stageTmpStem,
+  sweepStaleStageTmps,
   addDirectoryDestFromMountPath,
   fetchFilestoreBytes,
+  openFilestoreReader,
   stageFile,
   stageFileWireResult,
 };

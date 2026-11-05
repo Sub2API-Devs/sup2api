@@ -3,18 +3,18 @@
  *
  * 2.1.316 新增：状态栏宽度状态
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 2
  */
-//@ chunk-e6aww6q8.js:85537-85601 placement
+//@ chunk-5xgkngpb.js:88087-88151 placement
 /**
  * 状态行宽度可选档位（w25…unlimited）。
  */
 var STATUS_LINE_WIDTH_STEPS = ["w25", "w50", "w100", "w200", "unlimited"];
 var UNLIMITED = "unlimited";
-//@ chunk-e6aww6q8.js:85601-85695 placement
+//@ chunk-5xgkngpb.js:88151-88245 placement
 /**
  * 在档位表中前后移动 n 档并返回结果。
  */

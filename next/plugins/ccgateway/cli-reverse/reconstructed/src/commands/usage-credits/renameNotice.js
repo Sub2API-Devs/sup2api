@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增。/extra-usage 改名为 /usage-credits 的提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pjtx3j3k.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bbs0hzyc.js (1)
  * attribution: placement 1
  */
-//@ chunk-pjtx3j3k.js:191-390 placement
+//@ chunk-bbs0hzyc.js:191-390 placement
 /**
  * /extra-usage 改名为 /usage-credits 的提示。
  */

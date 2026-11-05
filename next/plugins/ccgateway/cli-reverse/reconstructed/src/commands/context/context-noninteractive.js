@@ -3,10 +3,10 @@
  *
  * /context 非交互输出：上下文用量收集与超限提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/context/context-noninteractive.ts
- * pieces: chunk-6a3xjg89.js (6), chunk-7jbxc8kr.js (1)
- * attribution: placement 5, fingerprint 2
+ * pieces: chunk-8gk80pm3.js (1), chunk-j7k80xbr.js (6)
+ * attribution: fingerprint 2, placement 5
  */
 import { formatTokens, formatTokenEstimate } from "../../utils/format.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
@@ -17,7 +17,7 @@ import { isHostedWorker, isBridgeOrTransport } from "../../cli/transportState.js
 import { getSystemPrompt } from "../../constants/prompts.js";
 import { effectiveSystemPromptText } from "../../utils/systemPrompt.js";
 
-//@ chunk-6a3xjg89.js:416-865 placement
+//@ chunk-j7k80xbr.js:416-865 placement
 /**
  * 上下文超出上限的提示。
  */
@@ -33,12 +33,12 @@ function contextOverflowNotice(usage) {
   let compactCommand = isEnvTruthy(process.env.DISABLE_COMPACT) ? "/clear" : "/compact";
   return `Context is ${overBy} tokens past the ${maxTokens}-token compaction window \u2014 run ${compactCommand} to reduce usage.`;
 }
-//@ chunk-6a3xjg89.js:865-993 placement
+//@ chunk-j7k80xbr.js:865-993 placement
 function contextOverflowKind(usage) {
   if (usage.totalTokens <= usage.rawMaxTokens) return null;
   return usage.autocompactSource === "auto" ? "hard_limit" : "compaction_window";
 }
-//@ chunk-6a3xjg89.js:993-3125 fingerprint (2.1.88 match: formatContextAsMarkdownTable, 0.861)
+//@ chunk-j7k80xbr.js:993-3125 fingerprint (2.1.88 match: formatContextAsMarkdownTable, 0.861)
 function formatContextAsMarkdownTable(data) {
   let {
     categories,
@@ -189,7 +189,7 @@ function formatContextAsMarkdownTable(data) {
   }
   return output;
 }
-//@ chunk-6a3xjg89.js:3125-3849 placement
+//@ chunk-j7k80xbr.js:3125-3849 placement
 async function collectContextData(context) {
   let {
     session,
@@ -247,7 +247,7 @@ async function collectContextData(context) {
       }
     : analysis;
 }
-//@ chunk-6a3xjg89.js:3849-4031 placement
+//@ chunk-j7k80xbr.js:3849-4031 placement
 async function call(args, context) {
   let contextData = await collectContextData(context);
   let usage = isBridgeOrTransport(context.session)
@@ -269,7 +269,7 @@ async function call(args, context) {
     contextUsage: buildContextUsage(usage),
   };
 }
-//@ chunk-6a3xjg89.js:4031-4764 placement
+//@ chunk-j7k80xbr.js:4031-4764 placement
 function buildContextUsage(usage) {
   let kind = contextOverflowKind(usage);
   return {
@@ -316,7 +316,7 @@ function buildContextUsage(usage) {
       }),
   };
 }
-//@ chunk-7jbxc8kr.js:3444-3796 fingerprint (2.1.88 match: collectContextData, 0.588)
+//@ chunk-8gk80pm3.js:3499-3851 fingerprint (2.1.88 match: collectContextData, 0.588)
 async function collectContextData_2(context) {
   let appState = context.getAppState();
   let mainThreadAgentDefinition = appState.agent
@@ -332,10 +332,10 @@ async function collectContextData_2(context) {
   });
 }
 export {
-  contextOverflowNotice,
-  formatContextAsMarkdownTable,
   collectContextData,
+  contextOverflowNotice,
   collectContextData_2,
+  formatContextAsMarkdownTable,
   buildContextUsage,
   call,
 };

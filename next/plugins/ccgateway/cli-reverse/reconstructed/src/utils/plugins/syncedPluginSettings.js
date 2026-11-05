@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：已同步插件设置
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (11)
  * attribution: placement 11
  */
 import { basename, dirname, join } from "path";
@@ -35,7 +35,7 @@ import { env } from "../env.js";
 import { logForDebugging } from "../debug.js";
 import { errorMessage } from "../errors.js";
 import { isWorkspacePersistedTrusted, isLocalSettingsGitTracked } from "../config.js";
-import { isPlainObject as isPlainObject_5 } from "../isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../isPlainObject.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { getPluginRegistry } from "./pluginLoadState.js";
 import { jsonParse, jsonStringify } from "../slowOperations.js";
@@ -45,7 +45,7 @@ import { SKILLS_SYNC_DIR_2, stripInvisibleChars as stripInvisibleChars_3 } from 
 import { hasSyncMarker } from "../claudeAiSync/syncOwnedRoot.js";
 import { readSyncedSkillIds, readDirNameSet } from "../../skills/loadSkillsDir.js";
 
-//@ chunk-e6aww6q8.js:4492219-4492387 placement
+//@ chunk-5xgkngpb.js:4599047-4599215 placement
 function collectSyncedSkillOverrides(input) {
   if (!areSkillsConvertedAsPlugins()) return null;
   let mergedSet = new Set(input.merged);
@@ -53,7 +53,7 @@ function collectSyncedSkillOverrides(input) {
   let overrides = syncedPlugins.length === 0 ? new Map() : collectSkillOffOverrides();
   return overrides.size === 0 ? null : collectSyncedPluginSettings(input, syncedPlugins, overrides);
 }
-//@ chunk-e6aww6q8.js:4492387-4493632 placement
+//@ chunk-5xgkngpb.js:4599215-4600465 placement
 /**
  * 收集各设置源中已同步插件的启用状态。
  */
@@ -136,7 +136,7 @@ async function collectSyncedPluginSettings(input, syncedPlugins, overrides) {
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:4493632-4493735 placement
+//@ chunk-5xgkngpb.js:4600465-4600568 placement
 function isSyncedSkillTurnedOff(name) {
   return SOURCES.some(
     (source) =>
@@ -146,7 +146,7 @@ function isSyncedSkillTurnedOff(name) {
       ),
   );
 }
-//@ chunk-e6aww6q8.js:4493735-4493977 placement
+//@ chunk-5xgkngpb.js:4600568-4600810 placement
 async function resolveSyncedPluginEnabled(plugin, overrides) {
   let enabled;
   for (let skill of await listPluginSkillCommands(plugin))
@@ -161,7 +161,7 @@ async function resolveSyncedPluginEnabled(plugin, overrides) {
     }
   return enabled;
 }
-//@ chunk-e6aww6q8.js:4493977-4494296 placement
+//@ chunk-5xgkngpb.js:4600810-4601129 placement
 /**
  * 把需关闭的同步插件写到本地设置（失败记 warn）。
  */
@@ -179,7 +179,7 @@ function persistSyncedPluginsOff(toWrite, managedStamp) {
     ),
   );
 }
-//@ chunk-e6aww6q8.js:4494296-4495395 placement
+//@ chunk-5xgkngpb.js:4601129-4602230 placement
 /**
  * 本地设置可写（受信、未入库）时，把尚未记录的同步插件写成 false；设置有不可保留的校验错误或由副本回答时跳过。 失败只记 warn（每次加载时仍会被挡住）。
  */
@@ -198,7 +198,7 @@ async function writeSyncedPluginsOffToLocalSettings(pluginIds, managedStamp) {
     writeError = (
       await updateSettingsForSourceWithTransform("localSettings", (settings) => {
         let enabledPlugins = settings?.enabledPlugins;
-        let indexed = isPlainObject_5(enabledPlugins) ? [groupEnabledPlugins(enabledPlugins)] : [];
+        let indexed = isPlainObject_6(enabledPlugins) ? [groupEnabledPlugins(enabledPlugins)] : [];
         let filtered = pluginIds.filter((id) => findPluginSetting(id, indexed) === undefined);
         let isRepoTierAnswered = isRepoTierAnsweredByACopy("localSettings");
         hasValidationWarnings ??= getLocalSettingsValidationErrors().some((error) => !error.preserveOnWrite);
@@ -242,7 +242,7 @@ async function writeSyncedPluginsOffToLocalSettings(pluginIds, managedStamp) {
     if (newStamp !== undefined) await remarkPluginLoadsForSettings(remarked, newStamp);
   }
 }
-//@ chunk-e6aww6q8.js:4495395-4495794 placement
+//@ chunk-5xgkngpb.js:4602230-4602629 placement
 /**
  * 设置变化不影响已加载结果时更新其读取标记。
  */
@@ -269,11 +269,11 @@ async function remarkPluginLoadsForSettings(pluginIds, stamp) {
     pluginRegistry.pluginLoadMarks.set(load, newStamp);
   }
 }
-//@ chunk-e6aww6q8.js:4495794-4495977 placement
+//@ chunk-5xgkngpb.js:4602629-4602812 placement
 function settingsWithPluginsOff(text, pluginIds) {
   try {
     let settings = jsonParse(text);
-    if (!isPlainObject_5(settings) || !isPlainObject_5(settings.enabledPlugins)) return;
+    if (!isPlainObject_6(settings) || !isPlainObject_6(settings.enabledPlugins)) return;
     settings.enabledPlugins = sortedEntries({
       ...settings.enabledPlugins,
       ...Object.fromEntries(pluginIds.map((id) => [id, false])),
@@ -283,7 +283,7 @@ function settingsWithPluginsOff(text, pluginIds) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:4495977-4496078 placement
+//@ chunk-5xgkngpb.js:4602812-4602913 placement
 function canWriteLocalSettings() {
   return (
     isSettingSourceEnabled("localSettings") &&
@@ -293,7 +293,7 @@ function canWriteLocalSettings() {
     })
   );
 }
-//@ chunk-e6aww6q8.js:4496078-4496634 placement
+//@ chunk-5xgkngpb.js:4602913-4603469 placement
 /**
  * 各设置源中把技能设为 off/user-invocable-only 的覆盖。
  */
@@ -335,7 +335,7 @@ function collectSkillOffOverrides() {
   }
   return offOverrides;
 }
-//@ chunk-e6aww6q8.js:4496634-4496936 placement
+//@ chunk-5xgkngpb.js:4603469-4603771 placement
 /**
  * 技能覆盖映射到同步插件 id。
  */

@@ -3,9 +3,9 @@
  *
  * 插件推荐公共逻辑：从 marketplace 安装插件并通知结果。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/usePluginRecommendationBase.tsx
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { labelOr } from "../utils/permissions/approvalPayloadSerialization.js";
@@ -23,7 +23,7 @@ import { classifyCommandSourceError } from "../utils/plugins/headersHelper.js";
 import { PluginFolderHeldError } from "../utils/plugins/crossMarketplaceInstall.js";
 import { findPluginNameCollision } from "../utils/plugins/pluginNameCollision.js";
 
-//@ chunk-18hwfzwa.js:1801339-1802617 fingerprint (2.1.88 match: installPluginAndNotify, 0.441)
+//@ chunk-czq1j3j2.js:1849318-1850596 fingerprint (2.1.88 match: installPluginAndNotify, 0.441)
 async function installPluginAndNotify(
   pluginId,
   pluginName,

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件发布
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wm1cd8qt.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kd2hyn36.js (25)
  * attribution: placement 25
  */
 import { join, dirname, posix, resolve } from "path";
@@ -55,23 +55,23 @@ import { sessionScopedMapsSlot } from "../../utils/sessionScopedMaps.js";
 import { getAuthUnavailableReason } from "../../utils/auth/authUnavailableReason.js";
 import { logFeatureBadAsync, logFeatureOkAsync } from "../analytics/featureTelemetry.js";
 
-//@ chunk-wm1cd8qt.js:13254-13263 placement
+//@ chunk-kd2hyn36.js:14402-14411 placement
 /**
  * 模块命名空间对象占位（导出集合）。
  */
 var pluginPublishNamespace = {};
-//@ chunk-wm1cd8qt.js:13263-13296 placement
+//@ chunk-kd2hyn36.js:14411-14444 placement
 __export(pluginPublishNamespace, {
   default: () => pluginPublishNamespace,
   run: () => runPluginPublish,
 });
-//@ chunk-wm1cd8qt.js:13296-13341 placement
+//@ chunk-kd2hyn36.js:14444-14489 placement
 /**
  * 判断发布请求是否与给定摘要匹配。
  */
 var isPlanForDigest = (candidate, approval) =>
   "plan" in candidate && publishRequestHash(candidate) === approval.digest;
-//@ chunk-wm1cd8qt.js:13433-13591 placement
+//@ chunk-kd2hyn36.js:14581-14739 placement
 async function writeDraftManifestFs(publishFolder) {
   let manifestPath = join(publishFolder.root, PLUGIN_MANIFEST_PATH);
   await mkdir(dirname(manifestPath), {
@@ -88,12 +88,12 @@ async function writeDraftManifestFs(publishFolder) {
       )
     : false;
 }
-//@ chunk-wm1cd8qt.js:13620-13630 placement
+//@ chunk-kd2hyn36.js:14768-14778 placement
 /**
  * 发布草稿文件的权限位 0o644（420）：文件由发布流程写出，只允许属主写。
  */
 var FILE_MODE_READONLY = 420;
-//@ chunk-wm1cd8qt.js:13630-13789 placement
+//@ chunk-kd2hyn36.js:14778-14937 placement
 async function writeDraftManifestAnchored(treeAnchor, publishFolder) {
   let manifestPath = identityPath_2(PLUGIN_MANIFEST_PATH);
   try {
@@ -106,7 +106,7 @@ async function writeDraftManifestAnchored(treeAnchor, publishFolder) {
     await treeAnchor.close();
   }
 }
-//@ chunk-wm1cd8qt.js:13789-14005 placement
+//@ chunk-kd2hyn36.js:14937-15153 placement
 async function writeDraftManifest(publishFolder) {
   let { openTreeAnchor } = await import("../../utils/fsAnchor/treeAnchor.js");
   let treeAnchor = await openTreeAnchor(await lazyDeviceTreeHost(), {
@@ -120,7 +120,7 @@ async function writeDraftManifest(publishFolder) {
     ? writeDraftManifestAnchored(treeAnchor, publishFolder)
     : writeDraftManifestFs(publishFolder);
 }
-//@ chunk-wm1cd8qt.js:14005-14302 placement
+//@ chunk-kd2hyn36.js:15153-15450 placement
 async function preparePublishPlan(input, approval) {
   let publishFolder = await resolvePublishFolder(input.folder, input.description);
   let candidate = await preparePublishFolder(input, approval.organization);
@@ -133,7 +133,7 @@ async function preparePublishPlan(input, approval) {
     ? finalFolder
     : refusalResult("changed");
 }
-//@ chunk-wm1cd8qt.js:14302-14385 placement
+//@ chunk-kd2hyn36.js:15450-15533 placement
 /**
  * 读取文件并校验内容哈希。
  */
@@ -143,16 +143,16 @@ async function readVerifiedFile(root, filePath, expectedHash) {
     ? publishFile
     : undefined;
 }
-//@ chunk-wm1cd8qt.js:14385-14397 placement
+//@ chunk-kd2hyn36.js:15533-15545 placement
 var ZIP_ATTR_MASK = 65535;
-//@ chunk-wm1cd8qt.js:14397-14406 placement
+//@ chunk-kd2hyn36.js:15545-15554 placement
 /**
  * 外部属性的移位（16）。
  */
 var ZIP_ATTR_SHIFT = 16;
-//@ chunk-wm1cd8qt.js:14406-14414 placement
+//@ chunk-kd2hyn36.js:15554-15562 placement
 var ZIP_OS_ID = 3;
-//@ chunk-wm1cd8qt.js:14414-14449 placement
+//@ chunk-kd2hyn36.js:15562-15597 placement
 /**
  * 把文件模式转成 zip 外部属性。
  */
@@ -160,7 +160,7 @@ var zipAttributes = (mode) => ({
   os: ZIP_OS_ID,
   attrs: (mode & ZIP_ATTR_MASK) << ZIP_ATTR_SHIFT,
 });
-//@ chunk-wm1cd8qt.js:14449-14524 placement
+//@ chunk-kd2hyn36.js:15597-15672 placement
 /**
  * 生成 zip 条目键值对。
  */
@@ -169,17 +169,17 @@ function zipEntryPair(indexFile, content) {
     ? [[indexFile.path, [content, zipAttributes(indexFile.mode)]]]
     : [];
 }
-//@ chunk-wm1cd8qt.js:14524-14533 placement
+//@ chunk-kd2hyn36.js:15672-15681 placement
 /**
  * zip 压缩级别（6）。
  */
 var ZIP_COMPRESSION_LEVEL = 6;
-//@ chunk-wm1cd8qt.js:14533-14562 placement
+//@ chunk-kd2hyn36.js:15681-15710 placement
 /**
  * zip 条目的固定修改时间（避免时间戳差异）。
  */
 var ZIP_FIXED_MTIME = "1980-01-01T00:00:00";
-//@ chunk-wm1cd8qt.js:14562-14766 placement
+//@ chunk-kd2hyn36.js:15710-15914 placement
 async function buildPublishArchive(plan) {
   let { zipSync } = await import("../../../vendor/fflate/esm/index.mjs");
   let allListed = await readAllListed(
@@ -194,7 +194,7 @@ async function buildPublishArchive(plan) {
         mtime: ZIP_FIXED_MTIME,
       });
 }
-//@ chunk-wm1cd8qt.js:14766-15004 placement
+//@ chunk-kd2hyn36.js:15914-16152 placement
 async function submitPublishArchive(request) {
   let mySubmissions = await fetchMySubmissions(request);
   if (!Array.isArray(mySubmissions)) return stoppedOrResult(request, mySubmissions, "nothing");
@@ -205,7 +205,7 @@ async function submitPublishArchive(request) {
     ? stoppedOrResult(request, upload, "uploading")
     : setPluginInstallPreference(request, await waitForContentScan(request, upload), mySubmissions);
 }
-//@ chunk-wm1cd8qt.js:15004-15186 placement
+//@ chunk-kd2hyn36.js:16152-16334 placement
 async function uploadPublishArchive(plan, approval) {
   let archive = await unreadableOnError(buildPublishArchive(plan));
   if ("kind" in archive) return archive;
@@ -216,7 +216,7 @@ async function uploadPublishArchive(plan, approval) {
         refusalResult("failed", [errorMessage(error)]),
       );
 }
-//@ chunk-wm1cd8qt.js:15186-15311 placement
+//@ chunk-kd2hyn36.js:16334-16459 placement
 async function runPublishPlan(input, approval, signal) {
   let publishPlan = await preparePublishPlan(input, approval);
   return "kind" in publishPlan
@@ -227,7 +227,7 @@ async function runPublishPlan(input, approval, signal) {
         signal,
       });
 }
-//@ chunk-wm1cd8qt.js:15311-15532 placement
+//@ chunk-kd2hyn36.js:16459-16680 placement
 async function publishWithOrganization(input, context) {
   let { refusal, organization, shown } = context;
   if (refusal !== undefined) return refusalResult(refusal);
@@ -244,13 +244,13 @@ async function publishWithOrganization(input, context) {
       )
     : refusalResult("nobody-to-ask");
 }
-//@ chunk-wm1cd8qt.js:15532-15700 placement
+//@ chunk-kd2hyn36.js:16680-16848 placement
 function questionChangedRefusal(previous, next) {
   let questionChanged = next.question !== undefined && hashPublishInput(next.question) !== previous?.question;
   let linesChanged = next.shown !== undefined && hashCanonical(next.shown) !== previous?.lines;
   return previous !== undefined && (questionChanged || linesChanged) ? "other-question" : undefined;
 }
-//@ chunk-wm1cd8qt.js:15700-15894 placement
+//@ chunk-kd2hyn36.js:16848-17042 placement
 function showPublishStoppedMessage(result, ui) {
   if (!(result.kind === "refused" && result.refusal.kind === "stopped")) return;
   logForDebugging(`plugin publish: stopped: ${result.refusal.details.join(" ")}`);
@@ -262,14 +262,14 @@ function showPublishStoppedMessage(result, ui) {
     ),
   );
 }
-//@ chunk-wm1cd8qt.js:15966-16081 placement
+//@ chunk-kd2hyn36.js:17114-17229 placement
 async function publishWriteDenied(input, checkRules, ui) {
   let absPath = resolve(getCwd(), input.path);
   return checkRules && hasPublishDenyRule([absPath, await realpath(absPath).catch(() => absPath)], ui)
     ? "write-denied"
     : undefined;
 }
-//@ chunk-wm1cd8qt.js:16081-16511 placement
+//@ chunk-kd2hyn36.js:17229-17659 placement
 /**
  * 插件发布入口：取出该工具调用之前展示给用户的摘要，依次检查开关、认证、问题是否变化、读规则与写拒绝规则，确定组织后执行发布；被停止时向会话追加提示，并记录 plugin_publish 特性状态。
  */

@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：多选列表组件（提交按钮、默认值、输入拒绝）；通用单选列表组件（标题、标签、禁用、默认值、输入拒绝）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ey2qag4x.js (71)
- * attribution: placement 71
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-p1yqn9ds.js (71)
+ * attribution: placement 70, layout 1
  */
 import {
   init_react_production,
-  useRef,
   useCallback,
   useState,
+  useRef,
   fragmentTypeExport,
   useEffect,
   isValidElement_default,
@@ -20,7 +20,11 @@ import {
   childrenExport,
   useContext,
 } from "../../../vendor/react/cjs/react.production.js";
-import { RECENT_INPUT_GUARD_MS_2, isWithinRecentInput } from "../../hooks/useRecentInputGuard.js";
+import {
+  RECENT_INPUT_GUARD_MS_2,
+  isWithinRecentInput,
+  useRecentInputStamp,
+} from "../../hooks/useRecentInputGuard.js";
 import { useInputClock } from "../../ink/components/Input.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -44,36 +48,35 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { sequential } from "../../utils/sequential.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ey2qag4x.js:1685-1689 placement
+//@ chunk-p1yqn9ds.js:1690-1694 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ey2qag4x.js:1685", () => {
+deferInit("chunk-p1yqn9ds.js:1690", () => {
   init_react_production();
 });
-//@ chunk-ey2qag4x.js:1689-1693 placement
+//@ chunk-p1yqn9ds.js:1694-1698 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ey2qag4x.js:1689", () => {
+deferInit("chunk-p1yqn9ds.js:1694", () => {
   init_react_production();
 });
-//@ chunk-ey2qag4x.js:1693-1777 placement
-/**
- * 打开后一段时间内拒绝输入的判断（防止误触）。
- */
-function useInputRefusalWindow(windowMs = RECENT_INPUT_GUARD_MS_2) {
+//@ chunk-p1yqn9ds.js:1698-1769 layout
+function useRecentInputWithin(windowMs = RECENT_INPUT_GUARD_MS_2) {
   let inputClock = useInputClock();
-  let openedAtRef = useRef(Date.now());
+  let mountTime = useMountTime();
   return useCallback(
-    () => isWithinRecentInput(inputClock, openedAtRef.current, windowMs),
-    [inputClock, windowMs],
+    () => isWithinRecentInput(inputClock, mountTime(), windowMs),
+    [inputClock, mountTime, windowMs],
   );
 }
-//@ chunk-ey2qag4x.js:1777-1820 placement
+//@ chunk-p1yqn9ds.js:1769-1836 placement
 /**
  * 组件挂载时间。
  */
 function useMountTime() {
-  return useRef(Date.now()).current;
+  let [now] = useState(Date.now);
+  let withinRecent = useRecentInputStamp(now);
+  return useCallback(() => withinRecent(now), [withinRecent, now]);
 }
-//@ chunk-ey2qag4x.js:1820-1902 placement
+//@ chunk-p1yqn9ds.js:1836-1918 placement
 /**
  * 根据是否已过冷静期返回 remountKey（settled/held）。
  */
@@ -84,7 +87,7 @@ function settleKey(epoch, windowMs = RECENT_INPUT_GUARD_MS_2) {
     settled: timeout,
   };
 }
-//@ chunk-ey2qag4x.js:1902-1986 placement
+//@ chunk-p1yqn9ds.js:1918-2002 placement
 /**
  * typeahead 的 epoch 追踪器：返回 {epoch, noteAttempt}，值变化时用它重置内部状态。
  */
@@ -96,7 +99,7 @@ function typeaheadEpochTracker() {
     noteAttempt,
   };
 }
-//@ chunk-ey2qag4x.js:1986-2192 placement
+//@ chunk-p1yqn9ds.js:2002-2208 placement
 /**
  * 记录最近一次被拒输入并判断是否仍在拒绝窗口内。
  */
@@ -119,187 +122,187 @@ function useRefusalTracker() {
     epoch,
   };
 }
-//@ chunk-ey2qag4x.js:2192-2232 placement
+//@ chunk-p1yqn9ds.js:2208-2248 placement
 function optionValueString(option) {
   return String(option.value);
 }
-//@ chunk-ey2qag4x.js:2232-2258 placement
+//@ chunk-p1yqn9ds.js:2248-2274 placement
 function nullPlaceholder1() {
   return null;
 }
-//@ chunk-ey2qag4x.js:2258-2281 placement
+//@ chunk-p1yqn9ds.js:2274-2297 placement
 function emptyPlaceholder1() {
   return "";
 }
-//@ chunk-ey2qag4x.js:2281-2307 placement
+//@ chunk-p1yqn9ds.js:2297-2323 placement
 function nullPlaceholder2() {
   return null;
 }
-//@ chunk-ey2qag4x.js:2307-2330 placement
+//@ chunk-p1yqn9ds.js:2323-2346 placement
 function emptyPlaceholder2() {
   return "";
 }
-//@ chunk-ey2qag4x.js:2330-2353 placement
+//@ chunk-p1yqn9ds.js:2346-2369 placement
 function emptyPlaceholder3() {
   return "";
 }
-//@ chunk-ey2qag4x.js:2353-2379 placement
+//@ chunk-p1yqn9ds.js:2369-2395 placement
 function nullPlaceholder3() {
   return null;
 }
-//@ chunk-ey2qag4x.js:2379-2402 placement
+//@ chunk-p1yqn9ds.js:2395-2418 placement
 function emptyPlaceholder4() {
   return "";
 }
-//@ chunk-ey2qag4x.js:2402-2425 placement
+//@ chunk-p1yqn9ds.js:2418-2441 placement
 function emptyPlaceholder5() {
   return "";
 }
-//@ chunk-ey2qag4x.js:2425-2451 placement
+//@ chunk-p1yqn9ds.js:2441-2467 placement
 function nullPlaceholder4() {
   return null;
 }
-//@ chunk-ey2qag4x.js:2451-2474 placement
+//@ chunk-p1yqn9ds.js:2467-2490 placement
 function emptyPlaceholder6() {
   return "";
 }
-//@ chunk-ey2qag4x.js:2474-2500 placement
+//@ chunk-p1yqn9ds.js:2490-2516 placement
 function nullPlaceholder5() {
   return null;
 }
-//@ chunk-ey2qag4x.js:2500-2526 placement
+//@ chunk-p1yqn9ds.js:2516-2542 placement
 function nullPlaceholder6() {
   return null;
 }
-//@ chunk-ey2qag4x.js:2526-2549 placement
+//@ chunk-p1yqn9ds.js:2542-2565 placement
 function emptyPlaceholder7() {
   return "";
 }
-//@ chunk-ey2qag4x.js:2549-2590 placement (2.1.88 match: _temp7, 1)
+//@ chunk-p1yqn9ds.js:2565-2606 placement (2.1.88 match: _temp7, 1)
 function isNotInputOption(opt) {
   return opt.type !== "input";
 }
-//@ chunk-ey2qag4x.js:2590-2613 placement
+//@ chunk-p1yqn9ds.js:2606-2629 placement
 function emptyPlaceholder8() {
   return "";
 }
-//@ chunk-ey2qag4x.js:2613-2639 placement
+//@ chunk-p1yqn9ds.js:2629-2655 placement
 function nullPlaceholder8() {
   return null;
 }
-//@ chunk-ey2qag4x.js:2639-2679 placement
+//@ chunk-p1yqn9ds.js:2655-2695 placement
 function optionValueString_2(option) {
   return String(option.value);
 }
-//@ chunk-ey2qag4x.js:2679-2705 placement
+//@ chunk-p1yqn9ds.js:2695-2721 placement
 function nullPlaceholder9() {
   return null;
 }
-//@ chunk-ey2qag4x.js:2705-2731 placement
+//@ chunk-p1yqn9ds.js:2721-2747 placement
 function nullPlaceholder10() {
   return null;
 }
-//@ chunk-ey2qag4x.js:2731-2754 placement
+//@ chunk-p1yqn9ds.js:2747-2770 placement
 function emptyPlaceholder9() {
   return "";
 }
-//@ chunk-ey2qag4x.js:2754-2780 placement
+//@ chunk-p1yqn9ds.js:2770-2796 placement
 function nullPlaceholder7() {
   return null;
 }
-//@ chunk-ey2qag4x.js:2780-2803 placement
+//@ chunk-p1yqn9ds.js:2796-2819 placement
 function emptyPlaceholder10() {
   return "";
 }
-//@ chunk-ey2qag4x.js:2803-2826 placement
+//@ chunk-p1yqn9ds.js:2819-2842 placement
 function emptyPlaceholder11() {
   return "";
 }
-//@ chunk-ey2qag4x.js:2826-2852 placement
+//@ chunk-p1yqn9ds.js:2842-2868 placement
 function nullPlaceholder11() {
   return null;
 }
-//@ chunk-ey2qag4x.js:2852-2878 placement
+//@ chunk-p1yqn9ds.js:2868-2894 placement
 function nullPlaceholder12() {
   return null;
 }
-//@ chunk-ey2qag4x.js:2878-2904 placement
+//@ chunk-p1yqn9ds.js:2894-2920 placement
 function nullPlaceholder13() {
   return null;
 }
-//@ chunk-ey2qag4x.js:2904-2927 placement
+//@ chunk-p1yqn9ds.js:2920-2943 placement
 function emptyPlaceholder12() {
   return "";
 }
-//@ chunk-ey2qag4x.js:2927-2950 placement
+//@ chunk-p1yqn9ds.js:2943-2966 placement
 function emptyPlaceholder13() {
   return "";
 }
-//@ chunk-ey2qag4x.js:2950-2973 placement
+//@ chunk-p1yqn9ds.js:2966-2989 placement
 function emptyPlaceholder14() {
   return "";
 }
-//@ chunk-ey2qag4x.js:2973-2996 placement
+//@ chunk-p1yqn9ds.js:2989-3012 placement
 function emptyPlaceholder15() {
   return "";
 }
-//@ chunk-ey2qag4x.js:2996-3022 placement
+//@ chunk-p1yqn9ds.js:3012-3038 placement
 function nullPlaceholder14() {
   return null;
 }
-//@ chunk-ey2qag4x.js:3022-3048 placement
+//@ chunk-p1yqn9ds.js:3038-3064 placement
 function nullPlaceholder15() {
   return null;
 }
-//@ chunk-ey2qag4x.js:3048-3074 placement
+//@ chunk-p1yqn9ds.js:3064-3090 placement
 function nullPlaceholder19() {
   return null;
 }
-//@ chunk-ey2qag4x.js:3074-3115 placement (2.1.88 match: _temp7, 1)
+//@ chunk-p1yqn9ds.js:3090-3131 placement (2.1.88 match: _temp7, 1)
 function isNotInputOption_2(opt) {
   return opt.type !== "input";
 }
-//@ chunk-ey2qag4x.js:3115-3138 placement
+//@ chunk-p1yqn9ds.js:3131-3154 placement
 function emptyPlaceholder16() {
   return "";
 }
-//@ chunk-ey2qag4x.js:3138-3170 placement
+//@ chunk-p1yqn9ds.js:3154-3186 placement
 function subtract(left, right) {
   return left - right;
 }
-//@ chunk-ey2qag4x.js:3170-3206 placement
+//@ chunk-p1yqn9ds.js:3186-3222 placement
 function nextIndexString(index) {
   return String(index + 1);
 }
-//@ chunk-ey2qag4x.js:3206-3232 placement
+//@ chunk-p1yqn9ds.js:3222-3248 placement
 function nullPlaceholder16() {
   return null;
 }
-//@ chunk-ey2qag4x.js:3232-3255 placement
+//@ chunk-p1yqn9ds.js:3248-3271 placement
 function emptyPlaceholder17() {
   return "";
 }
-//@ chunk-ey2qag4x.js:3255-3281 placement
+//@ chunk-p1yqn9ds.js:3271-3297 placement
 function nullPlaceholder17() {
   return null;
 }
-//@ chunk-ey2qag4x.js:3281-3307 placement
+//@ chunk-p1yqn9ds.js:3297-3323 placement
 function nullPlaceholder18() {
   return null;
 }
-//@ chunk-ey2qag4x.js:3307-3330 placement
+//@ chunk-p1yqn9ds.js:3323-3346 placement
 function emptyPlaceholder18() {
   return "";
 }
-//@ chunk-ey2qag4x.js:3330-3353 placement
+//@ chunk-p1yqn9ds.js:3346-3369 placement
 function emptyPlaceholder19() {
   return "";
 }
-//@ chunk-ey2qag4x.js:3353-3391 placement
+//@ chunk-p1yqn9ds.js:3369-3407 placement
 function dropLastChar(text) {
   return text.slice(0, -1);
 }
-//@ chunk-ey2qag4x.js:3391-3580 placement
+//@ chunk-p1yqn9ds.js:3407-3596 placement
 function useStateWithRef(initial) {
   let $ = useMemoCache(3);
   let [value, setValue] = useState(initial);
@@ -321,23 +324,23 @@ function useStateWithRef(initial) {
   } else tuple = $[2];
   return tuple;
 }
-//@ chunk-ey2qag4x.js:3580-3608 placement
+//@ chunk-p1yqn9ds.js:3596-3624 placement
 function useStringStateWithRef() {
   return useStateWithRef("");
 }
-//@ chunk-ey2qag4x.js:3608-3749 placement
+//@ chunk-p1yqn9ds.js:3624-3765 placement
 function formatOrList(items) {
   if (items.length <= 1) return items[0] ?? "";
   if (items.length === 2) return `${items[0]} or ${items[1]}`;
   return `${items.slice(0, -1).join(", ")}, or ${items.at(-1)}`;
 }
-//@ chunk-ey2qag4x.js:3749-3760 placement
+//@ chunk-p1yqn9ds.js:3765-3776 placement
 var MAX_OPTION_LABEL_CHARS = 300;
-//@ chunk-ey2qag4x.js:3760-3813 placement
+//@ chunk-p1yqn9ds.js:3776-3829 placement
 function moreCharactersSuffix(remaining) {
   return ` \u2026 +${remaining} more characters`;
 }
-//@ chunk-ey2qag4x.js:3813-3924 placement
+//@ chunk-p1yqn9ds.js:3829-3940 placement
 function truncateOptionLabel(text) {
   if (text.length <= MAX_OPTION_LABEL_CHARS) return text;
   let truncated = truncateCodePoints(text, MAX_OPTION_LABEL_CHARS);
@@ -345,7 +348,7 @@ function truncateOptionLabel(text) {
   let droppedChars = [...text].length - MAX_OPTION_LABEL_CHARS;
   return truncated + moreCharactersSuffix(droppedChars);
 }
-//@ chunk-ey2qag4x.js:3924-4554 placement
+//@ chunk-p1yqn9ds.js:3940-4572 placement
 /**
  * 组合打开时间与拒绝记录，给出 refuse/refuseCharacter 判断。
  */
@@ -353,16 +356,14 @@ function useRefuseInput(openedAt, windowMs) {
   let $ = useMemoCache(18);
   let windowMs_ = windowMs === undefined ? RECENT_INPUT_GUARD_MS_2 : windowMs;
   let inputClock = useInputClock();
-  let inputRefusalWindow = useInputRefusalWindow(windowMs_);
+  let recentlyInput = useRecentInputWithin(windowMs_);
   let refuseBase;
-  if ($[0] !== openedAt || $[1] !== inputClock || $[2] !== inputRefusalWindow || $[3] !== windowMs_) {
+  if ($[0] !== openedAt || $[1] !== inputClock || $[2] !== recentlyInput || $[3] !== windowMs_) {
     refuseBase =
-      openedAt === undefined
-        ? inputRefusalWindow
-        : () => isWithinRecentInput(inputClock, openedAt, windowMs_);
+      openedAt === undefined ? recentlyInput : () => isWithinRecentInput(inputClock, openedAt(), windowMs_);
     $[0] = openedAt;
     $[1] = inputClock;
-    $[2] = inputRefusalWindow;
+    $[2] = recentlyInput;
     $[3] = windowMs_;
     $[4] = refuseBase;
   } else refuseBase = $[4];
@@ -412,7 +413,7 @@ function useRefuseInput(openedAt, windowMs) {
   } else result = $[17];
   return result;
 }
-//@ chunk-ey2qag4x.js:4554-9171 placement
+//@ chunk-p1yqn9ds.js:4572-9161 placement
 /**
  * 通用单选列表组件（标题、标签、禁用、默认值、输入拒绝）。
  */
@@ -836,7 +837,7 @@ function Select(props) {
   } else selectElement = $[72];
   return selectElement;
 }
-//@ chunk-ey2qag4x.js:9171-15553 placement
+//@ chunk-p1yqn9ds.js:9161-15516 placement
 /**
  * 多选列表组件（提交按钮、默认值、输入拒绝）。
  */
@@ -1406,7 +1407,7 @@ function MultiSelect(props) {
   } else multiSelectElement = $[90];
   return multiSelectElement;
 }
-//@ chunk-ey2qag4x.js:15553-16760 placement
+//@ chunk-p1yqn9ds.js:15516-16723 placement
 /**
  * 选项标签渲染（选中/焦点标记）。
  */
@@ -1510,7 +1511,7 @@ function SelectOptionLabel(props) {
   } else row = $[25];
   return row;
 }
-//@ chunk-ey2qag4x.js:16760-18909 placement
+//@ chunk-p1yqn9ds.js:16723-18868 placement
 /**
  * 确认/取消按钮对，带打开后输入拒绝窗口。
  */
@@ -1710,38 +1711,38 @@ function ConfirmButtons(props) {
   } else buttonsElement = $[42];
   return buttonsElement;
 }
-//@ chunk-ey2qag4x.js:18909-18913 placement
+//@ chunk-p1yqn9ds.js:18868-18872 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ey2qag4x.js:18909", () => {
+deferInit("chunk-p1yqn9ds.js:18868", () => {
   init_react_production();
 });
-//@ chunk-ey2qag4x.js:18913-18917 placement
+//@ chunk-p1yqn9ds.js:18872-18876 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ey2qag4x.js:18913", () => {
+deferInit("chunk-p1yqn9ds.js:18872", () => {
   init_react_production();
 });
-//@ chunk-ey2qag4x.js:18917-18954 placement
+//@ chunk-p1yqn9ds.js:18876-18913 placement
 function elementKeyOrEmpty(child) {
   return isValidElement_default(child) ? child.key : "";
 }
-//@ chunk-ey2qag4x.js:18954-18985 placement
+//@ chunk-p1yqn9ds.js:18913-18944 placement
 /**
  * 用户消息背景色主题键。
  */
 var USER_MESSAGE_BACKGROUND = "userMessageBackground";
-//@ chunk-ey2qag4x.js:18985-19040 placement
+//@ chunk-p1yqn9ds.js:18944-18999 placement
 /**
  * 用户消息背景色模式：无色（level 0）时用 inverse，否则用传入值。
  */
 function userMessageBackgroundMode(defaultMode = "tint") {
   return sequential.level === 0 ? "inverse" : defaultMode;
 }
-//@ chunk-ey2qag4x.js:19040-19054 placement
+//@ chunk-p1yqn9ds.js:18999-19013 placement
 var WINDOWED_TEXT_CONTEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ey2qag4x.js:19040", () => {
+deferInit("chunk-p1yqn9ds.js:18999", () => {
   WINDOWED_TEXT_CONTEXT = createContext("");
 });
-//@ chunk-ey2qag4x.js:19054-19582 placement
+//@ chunk-p1yqn9ds.js:19013-19541 placement
 /**
  * 按窗口起点切片渲染子元素文本。
  */
@@ -1800,7 +1801,7 @@ function WindowedText(props) {
   } else windowedElement = $[13];
   return windowedElement;
 }
-//@ chunk-ey2qag4x.js:19582-19808 placement
+//@ chunk-p1yqn9ds.js:19541-19767 placement
 /**
  * 行悬停高亮：返回 [是否高亮, 设置悬停]，同一上下文里只有一行处于悬停态。
  */
@@ -1826,16 +1827,16 @@ function useHoverHighlight(enabled) {
   return result;
 }
 export {
-  useInputRefusalWindow,
+  useRecentInputWithin,
   useRefusalTracker,
   useMountTime,
   settleKey,
+  ConfirmButtons,
+  Select,
   USER_MESSAGE_BACKGROUND,
   typeaheadEpochTracker,
-  Select,
   WindowedText,
   useHoverHighlight,
   userMessageBackgroundMode,
   MultiSelect,
-  ConfirmButtons,
 };

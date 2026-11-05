@@ -3,9 +3,9 @@
  *
  * 文件系统类工具权限：从 tool_use 输入提取路径。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/FilesystemPermissionRequest/FilesystemPermissionRequest.tsx
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
 import {
@@ -17,7 +17,7 @@ import {
 import { consumeReadPermission } from "../../../utils/fsSafety/atomicWriteStaging.js";
 import { resolveRipgrepTarget } from "../../../utils/ripgrep.js";
 
-//@ chunk-e6aww6q8.js:1452836-1453023 fingerprint (2.1.88 match: pathFromToolUse, 0.43)
+//@ chunk-5xgkngpb.js:1453158-1453345 fingerprint (2.1.88 match: pathFromToolUse, 0.429)
 async function pathFromToolUse(toolUse, context) {
   let toolPermissionContext = GrepTool.getPath(toolUse);
   let consumed = consumeReadPermission(context, toolPermissionContext);

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：收集 git 相关受保护路径（GIT_DIR、hooks、config 等）；路径是否落在受保护位置等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7wdbg1ct.js (52)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-91xvghb6.js (52)
  * attribution: placement 52
  */
 import { sep, join, resolve, isAbsolute, dirname, basename, win32, posix, parse, relative } from "path";
@@ -14,7 +14,7 @@ import { realpath, lstat, stat, readlink, access } from "fs/promises";
 import { constants } from "fs";
 import { getEnvCaseInsensitive } from "../plugins/securityDefaultPlugin.js";
 import { getPlatform } from "../platform.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "./filesystem.js";
 import { claudeTempDir, childProcessTmpDir } from "../tempDir.js";
 import {
   getDefaultWritePaths,
@@ -48,7 +48,7 @@ import {
 } from "../networkPaths.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-7wdbg1ct.js:933-1347 placement
+//@ chunk-91xvghb6.js:880-1294 placement
 /**
  * 受保护的环境变量（GIT_EXEC_PATH、LD_PRELOAD 等）。
  */
@@ -75,7 +75,7 @@ var PROTECTED_ENV_VARS = [
   "OPENSSL_MODULES",
   "OPENSSL_ENGINES",
 ];
-//@ chunk-7wdbg1ct.js:1652-1909 placement
+//@ chunk-91xvghb6.js:1599-1856 placement
 /**
  * 列出会影响 git 的配置文件路径：额外路径、系统配置、GIT_CONFIG_GLOBAL、各主目录下的 XDG 与 ~/.gitconfig，按 cwd 解析为绝对路径。
  */
@@ -92,7 +92,7 @@ function getGitConfigPaths(configFileCandidates, baseDir, systemRoot, gitEnv = p
     ]),
   ].map((path) => resolveRelative(baseDir, path));
 }
-//@ chunk-7wdbg1ct.js:1909-1994 placement
+//@ chunk-91xvghb6.js:1856-1941 placement
 /**
  * systemGitConfigPaths：git 系统配置路径。
  */
@@ -102,7 +102,7 @@ function systemGitConfigPaths(configFileCandidates, baseDir, systemRoot, gitEnv)
     ...getSystemGitConfigPaths(systemRoot, gitEnv),
   ].map((path) => resolveRelative(baseDir, path));
 }
-//@ chunk-7wdbg1ct.js:1994-2256 placement
+//@ chunk-91xvghb6.js:1941-2203 placement
 function getSystemGitConfigPaths(systemRoot, gitEnv) {
   if (parseGitBoolEnv(getEnvCaseInsensitive(gitEnv, "GIT_CONFIG_NOSYSTEM"))) return [];
   let envCaseInsensitive = getEnvCaseInsensitive(gitEnv, "GIT_CONFIG_SYSTEM");
@@ -115,7 +115,7 @@ function getSystemGitConfigPaths(systemRoot, gitEnv) {
     ...(isWindows && envCaseInsensitive_2 ? [`${envCaseInsensitive_2}${sep}Git${sep}config`] : []),
   ];
 }
-//@ chunk-7wdbg1ct.js:2256-2448 placement
+//@ chunk-91xvghb6.js:2203-2395 placement
 /**
  * 按 git 的布尔解析规则解析环境变量值（true/yes/on 或非零整数为真）。
  */
@@ -125,9 +125,9 @@ function parseGitBoolEnv(envCaseInsensitive) {
   if (["true", "yes", "on"].includes(lower)) return true;
   return /^[-+]?\d+$/.test(lower) && Number(lower) !== 0;
 }
-//@ chunk-7wdbg1ct.js:2448-2552 placement
+//@ chunk-91xvghb6.js:2395-2499 placement
 function getProtectedTempDirs() {
-  return uniq([
+  return normalizeCaseForComparison_2([
     claudeTempDir(),
     childProcessTmpDir(),
     ...getDefaultWritePaths().map((writePath) =>
@@ -135,7 +135,7 @@ function getProtectedTempDirs() {
     ),
   ]);
 }
-//@ chunk-7wdbg1ct.js:2552-2637 placement
+//@ chunk-91xvghb6.js:2499-2584 placement
 function foreignSpellingInside(spelling, targetSpelling, foreignSpellings) {
   return foreignSpellings.find(
     (foreignPath) =>
@@ -144,7 +144,7 @@ function foreignSpellingInside(spelling, targetSpelling, foreignSpellings) {
       isPathInside(foreignPath, spelling),
   );
 }
-//@ chunk-7wdbg1ct.js:2637-2788 placement
+//@ chunk-91xvghb6.js:2584-2735 placement
 /**
  * 外部路径拼写尝试解析为本地落点。
  */
@@ -155,7 +155,7 @@ function resolveForeignSpelling(result, baseDir, foreignSpellings, { pattern = f
     ? result
     : classifySpellingWithJunction(result.spelling, insideSpelling, getPlatform() === "windows", pattern);
 }
-//@ chunk-7wdbg1ct.js:2788-2926 placement
+//@ chunk-91xvghb6.js:2735-2873 placement
 /**
  * 异步解析外部路径拼写。
  */
@@ -166,7 +166,7 @@ async function resolveForeignSpellingAsync(result, baseDir, foreignSpellings) {
     ? result
     : classifySpellingWithJunctionAsync(result.spelling, insideSpelling, getPlatform() === "windows");
 }
-//@ chunk-7wdbg1ct.js:2926-3095 placement
+//@ chunk-91xvghb6.js:2873-3042 placement
 /**
  * 主目录候选：HOME、Windows 的 HOMEDRIVE+HOMEPATH、os.homedir()，去重。
  */
@@ -174,7 +174,7 @@ function getHomeDirCandidates(gitEnv = process.env) {
   let envCaseInsensitive = getEnvCaseInsensitive(gitEnv, "HOME");
   let envCaseInsensitive_2 = getEnvCaseInsensitive(gitEnv, "HOMEDRIVE");
   let envCaseInsensitive_3 = getEnvCaseInsensitive(gitEnv, "HOMEPATH");
-  return uniq(
+  return normalizeCaseForComparison_2(
     [
       envCaseInsensitive,
       getPlatform() === "windows" && envCaseInsensitive_2 && envCaseInsensitive_3
@@ -184,7 +184,7 @@ function getHomeDirCandidates(gitEnv = process.env) {
     ].filter((candidate) => Boolean(candidate)),
   );
 }
-//@ chunk-7wdbg1ct.js:3095-5111 placement
+//@ chunk-91xvghb6.js:3042-5058 placement
 /**
  * 收集 git 相关受保护路径（GIT_DIR、hooks、config 等）。
  */
@@ -203,7 +203,7 @@ async function collectGitProtectedPaths(workTree, gitEnv, baseDir, paths = [], f
   );
   if (results.some((group) => group.includes(null))) return null;
   let [treePathSet, gitDirSet, commonDirSet] = results.map((group) =>
-    uniq(group.filter((value) => value !== null)),
+    normalizeCaseForComparison_2(group.filter((value) => value !== null)),
   );
   let classifySpelling = async (spelling) => {
     if (isDevFdPath(spelling))
@@ -258,12 +258,19 @@ async function collectGitProtectedPaths(workTree, gitEnv, baseDir, paths = [], f
   let filtered_2 = results_2
     .flatMap((result) => ("derived" in result ? result.derived : []))
     .filter((derived) => isAbsolute(derived));
-  let extraSpellings = uniq([...paths, ...filtered, ...filtered_2]);
-  let roots = uniq([...treePathSet, ...gitDirSet, ...commonDirSet, ...extraSpellings]);
+  let extraSpellings = normalizeCaseForComparison_2([...paths, ...filtered, ...filtered_2]);
+  let roots = normalizeCaseForComparison_2([
+    ...treePathSet,
+    ...gitDirSet,
+    ...commonDirSet,
+    ...extraSpellings,
+  ]);
   let resolvedRoots =
     getPlatform() === "windows"
       ? []
-      : await Promise.all(uniq([...treePathSet, ...gitDirSet, ...commonDirSet]).map(resolveIfPresent));
+      : await Promise.all(
+          normalizeCaseForComparison_2([...treePathSet, ...gitDirSet, ...commonDirSet]).map(resolveIfPresent),
+        );
   if (resolvedRoots.includes(null)) return null;
   let statPathIdentity = (inputPath, isRoot) =>
     stat(inputPath, {
@@ -287,12 +294,12 @@ async function collectGitProtectedPaths(workTree, gitEnv, baseDir, paths = [], f
       },
     );
   let results_3 = await Promise.all([
-    ...uniq(resolvedRoots.filter((root) => root !== null)).map((rootPath) =>
+    ...normalizeCaseForComparison_2(resolvedRoots.filter((root) => root !== null)).map((rootPath) =>
       statPathIdentity(rootPath, true),
     ),
     ...(getPlatform() === "windows"
       ? []
-      : uniq(filtered).map((inputPath) => statPathIdentity(inputPath, false))),
+      : normalizeCaseForComparison_2(filtered).map((inputPath) => statPathIdentity(inputPath, false))),
   ]);
   if (results_3.includes(null)) return null;
   let found_2 = results_3.find((unexamined) => unexamined !== null && !Array.isArray(unexamined));
@@ -301,7 +308,7 @@ async function collectGitProtectedPaths(workTree, gitEnv, baseDir, paths = [], f
     ids: new Map(results_3.filter((identityPairs) => Array.isArray(identityPairs)).flat()),
     roots,
     trees: treePathSet,
-    fixed: uniq([
+    fixed: normalizeCaseForComparison_2([
       ...gitDirSet.flatMap((gitDirPath) => [
         gitDirPath,
         join(gitDirPath, "config"),
@@ -316,7 +323,7 @@ async function collectGitProtectedPaths(workTree, gitEnv, baseDir, paths = [], f
     ]),
   };
 }
-//@ chunk-7wdbg1ct.js:5111-5247 placement
+//@ chunk-91xvghb6.js:5058-5194 placement
 async function deriveRealpathSpellings(inputPath, baseDir) {
   let resolved = await realpathOrAncestor(inputPath, baseDir);
   return resolved === null
@@ -328,9 +335,9 @@ async function deriveRealpathSpellings(inputPath, baseDir) {
         derived: [inputPath, resolved],
       };
 }
-//@ chunk-7wdbg1ct.js:5247-5256 placement
+//@ chunk-91xvghb6.js:5194-5203 placement
 var MAX_REALPATH_ANCESTOR_DEPTH = 8;
-//@ chunk-7wdbg1ct.js:5256-5616 placement
+//@ chunk-91xvghb6.js:5203-5563 placement
 /**
  * 解析真实路径，失败时按祖先回退（深度限制）。
  */
@@ -349,49 +356,51 @@ async function realpathOrAncestor(targetPath, baseDir, linkBudget = MAX_REALPATH
   let resolvedParent = await realpathOrAncestor(parentDir, baseDir, linkBudget, depth + 1);
   return resolvedParent === null ? null : join(resolvedParent, basename(targetPath));
 }
-//@ chunk-7wdbg1ct.js:5616-5628 placement
+//@ chunk-91xvghb6.js:5563-5575 placement
 /**
  * MAX_PROTECTED_PATH_LENGTH：受保护路径长度上限。
  */
 var MAX_PROTECTED_PATH_LENGTH = 256;
-//@ chunk-7wdbg1ct.js:5628-5675 placement
+//@ chunk-91xvghb6.js:5575-5622 placement
 /**
  * 路径是否过深或过长。
  */
 function isPathTooDeep(targetPath, depth) {
   return depth > MAX_PROTECTED_PATH_LENGTH || targetPath.length > 32767;
 }
-//@ chunk-7wdbg1ct.js:5675-5728 placement
+//@ chunk-91xvghb6.js:5622-5675 placement
 function isDevFdPath(inputPath) {
   return getPlatform() === "macos" && isPathInside("/dev/fd", inputPath);
 }
-//@ chunk-7wdbg1ct.js:5728-5968 placement
+//@ chunk-91xvghb6.js:5675-5915 placement
 /**
  * 并行检查候选路径是否可达受保护路径：返回第一个可达的路径；有无法判断的返回 null；都不可达返回 undefined。
  */
 async function findReachableProtectedPath(gitPaths, candidates) {
   let results = await Promise.all(
-    uniq(candidates.filter((candidate) => candidate !== null)).map(async (candidatePath) => ({
-      path: candidatePath,
-      reachable: await isProtectedPath(candidatePath, gitPaths),
-    })),
+    normalizeCaseForComparison_2(candidates.filter((candidate) => candidate !== null)).map(
+      async (candidatePath) => ({
+        path: candidatePath,
+        reachable: await isProtectedPath(candidatePath, gitPaths),
+      }),
+    ),
   );
   let found = results.find(({ reachable }) => reachable === true);
   if (found !== undefined) return found.path;
   return results.some(({ reachable }) => reachable === null) ? null : undefined;
 }
-//@ chunk-7wdbg1ct.js:5968-6021 placement
+//@ chunk-91xvghb6.js:5915-5968 placement
 function isWindowsDrivePath(inputPath) {
   return /^[A-Za-z]:[\\/][^:]*$/.test(inputPath);
 }
-//@ chunk-7wdbg1ct.js:6021-6068 placement
+//@ chunk-91xvghb6.js:5968-6015 placement
 /**
  * Windows 上非盘符路径。
  */
 function isWindowsNonDrivePath(inputPath) {
   return getPlatform() === "windows" && !isWindowsDrivePath(inputPath);
 }
-//@ chunk-7wdbg1ct.js:6068-6150 placement
+//@ chunk-91xvghb6.js:6015-6097 placement
 /**
  * classifyPathSpelling：判定路径拼写的落点。
  */
@@ -404,13 +413,13 @@ function classifyPathSpelling(inputPath, baseDir, { pattern = false } = {}) {
     pattern,
   );
 }
-//@ chunk-7wdbg1ct.js:6150-6224 placement
+//@ chunk-91xvghb6.js:6097-6171 placement
 function canonicalizePathSpelling(inputPath, isWindows) {
   return isWindows
     ? expandTilde(collapseDeviceNamespace(stripExtendedPathPrefix(expandWindowsEnvRefs(inputPath))))
     : expandTilde(inputPath).replace(/^\/\/+/, "/");
 }
-//@ chunk-7wdbg1ct.js:6224-6388 placement
+//@ chunk-91xvghb6.js:6171-6335 placement
 /**
  * 同步判定路径拼写的落点：不透明链接文本为 opaque；否则规范为绝对路径后检查中间 UNC 联接点。
  */
@@ -429,7 +438,7 @@ function classifyPathSpellingSync(inputPath, baseDir, foreignSpellings) {
     isWindows,
   );
 }
-//@ chunk-7wdbg1ct.js:6388-6558 placement
+//@ chunk-91xvghb6.js:6335-6505 placement
 async function classifyPathSpelling_2(inputPath, baseDir, foreignSpellings) {
   let isWindows = getPlatform() === "windows";
   if (isOpaqueLinkText(inputPath, isWindows))
@@ -445,7 +454,7 @@ async function classifyPathSpelling_2(inputPath, baseDir, foreignSpellings) {
     isWindows,
   );
 }
-//@ chunk-7wdbg1ct.js:6558-6676 placement
+//@ chunk-91xvghb6.js:6505-6623 placement
 async function classifySpellingWithJunctionAsync(spelling, foreignSpellings, isWindows) {
   let syncResult = classifySpellingSync(spelling, foreignSpellings, isWindows);
   return "verdict" in syncResult
@@ -459,7 +468,7 @@ async function classifySpellingWithJunctionAsync(spelling, foreignSpellings, isW
         foreignSpellings,
       );
 }
-//@ chunk-7wdbg1ct.js:6676-6788 placement
+//@ chunk-91xvghb6.js:6623-6735 placement
 function classifySpellingWithJunction(spelling, baseDir, isWindows, pattern = false) {
   let syncResult = classifySpellingSync(spelling, baseDir, isWindows, pattern);
   return "verdict" in syncResult
@@ -473,7 +482,7 @@ function classifySpellingWithJunction(spelling, baseDir, isWindows, pattern = fa
         baseDir,
       );
 }
-//@ chunk-7wdbg1ct.js:6788-6929 placement
+//@ chunk-91xvghb6.js:6735-6876 placement
 /**
  * 判断路径拼写的落点与裁定。
  */
@@ -491,12 +500,12 @@ async function classifyPathSpelling_3(inputPath, baseDir) {
         baseDir,
       );
 }
-//@ chunk-7wdbg1ct.js:6929-6994 placement
+//@ chunk-91xvghb6.js:6876-6941 placement
 var SPELLING_VERDICT_LABELS = {
   unreadableAncestry: "unverified",
   literalLinkText: "opaque",
 };
-//@ chunk-7wdbg1ct.js:6994-7450 placement
+//@ chunk-91xvghb6.js:6941-7397 placement
 /**
  * 同步判断路径拼写（设备命名空间、UNC 等）。
  */
@@ -537,7 +546,7 @@ function classifySpellingSync(spelling, baseDir, isWindows, pattern = false) {
         spelling: resolved,
       };
 }
-//@ chunk-7wdbg1ct.js:7450-7650 placement
+//@ chunk-91xvghb6.js:7397-7597 placement
 /**
  * 判断路径拼写是否指向锚点之外的"外部"位置（Windows 走 UNC 判定；POSIX 检查双斜杠、挂载点差异、互不包含等）。
  */
@@ -555,7 +564,7 @@ function isForeignSpelling(spelling, baseDir, browse = false) {
     isOtherHomeMount(inputPath, baseDir)
   );
 }
-//@ chunk-7wdbg1ct.js:7650-7946 placement
+//@ chunk-91xvghb6.js:7597-7893 placement
 function spellingVerdict(spelling, intermediateUncJunction, baseDir) {
   if (intermediateUncJunction === undefined)
     return {
@@ -588,14 +597,14 @@ function spellingVerdict(spelling, intermediateUncJunction, baseDir) {
     via: intermediateUncJunction,
   };
 }
-//@ chunk-7wdbg1ct.js:7946-8110 placement
+//@ chunk-91xvghb6.js:7893-8057 placement
 /**
  * 需要检查的路径拼写集合。
  */
 function spellingsToCheck({ spelling, verdict, via }, baseDir) {
   if (verdict === "foreign") return [spelling];
   return getPlatform() === "windows"
-    ? uniq([
+    ? normalizeCaseForComparison_2([
         ...list,
         ...[spelling, baseDir, via ?? ""]
           .filter(isUncOrDevicePath)
@@ -603,20 +612,20 @@ function spellingsToCheck({ spelling, verdict, via }, baseDir) {
       ])
     : ["/"];
 }
-//@ chunk-7wdbg1ct.js:8110-8191 placement
+//@ chunk-91xvghb6.js:8057-8138 placement
 function isNetworkBrowsePath(inputPath) {
   return isNetDir(inputPath) || /^\/network(?:\/servers)?$/i.test(posix.resolve("/", inputPath));
 }
-//@ chunk-7wdbg1ct.js:8191-8227 placement
+//@ chunk-91xvghb6.js:8138-8174 placement
 function isUnmappedNetworkPath(inputPath) {
   return isNetworkRelatedPath(inputPath) && !isNetworkMountRoot(inputPath);
 }
-//@ chunk-7wdbg1ct.js:8227-8290 placement
+//@ chunk-91xvghb6.js:8174-8237 placement
 var list; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-7wdbg1ct.js:8227", () => {
+deferInit("chunk-91xvghb6.js:8174", () => {
   list = Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZ", (letter) => `${letter}:\\`);
 });
-//@ chunk-7wdbg1ct.js:8290-8653 placement
+//@ chunk-91xvghb6.js:8237-8600 placement
 /**
  * 规范化 \\.\ 设备命名空间路径。
  */
@@ -633,18 +642,18 @@ function collapseDeviceNamespace(devicePath) {
   if (head.toUpperCase() === "UNC" && rest.length >= 2) return `\\\\${rest.join("\\")}`;
   return `\\\\.\\${reduced.join("\\")}`;
 }
-//@ chunk-7wdbg1ct.js:8653-8721 placement
+//@ chunk-91xvghb6.js:8600-8668 placement
 function isOwnUid(uid) {
   return process.getuid === undefined || uid === process.getuid();
 }
-//@ chunk-7wdbg1ct.js:8721-8828 placement
+//@ chunk-91xvghb6.js:8668-8775 placement
 async function isPossiblyWritable(filePath) {
   return access(filePath, constants.W_OK).then(
     () => true,
     (error) => !["EACCES", "EROFS", "EPERM"].includes(getErrnoCode(error) ?? ""),
   );
 }
-//@ chunk-7wdbg1ct.js:8828-8912 placement
+//@ chunk-91xvghb6.js:8775-8859 placement
 /**
  * isWritableSharedFile：多硬链接且可写。
  */
@@ -653,13 +662,13 @@ async function isWritableSharedFile(filePath, stats) {
     !stats.isDirectory() && stats.nlink > 1 && (isOwnUid(stats.uid) || (await isPossiblyWritable(filePath)))
   );
 }
-//@ chunk-7wdbg1ct.js:8912-8989 placement (2.1.88 match: getFileIdentity, 0.794)
+//@ chunk-91xvghb6.js:8859-8936 placement (2.1.88 match: getFileIdentity, 0.795)
 function getFileIdentity(filePath) {
   return filePath.isDirectory() && filePath.ino !== 0n ? `${filePath.dev}:${filePath.ino}` : undefined;
 }
-//@ chunk-7wdbg1ct.js:8989-8999 placement
+//@ chunk-91xvghb6.js:8936-8946 placement
 var MAX_PROTECTED_ENTRY_CHECKS = 40;
-//@ chunk-7wdbg1ct.js:8999-9850 placement
+//@ chunk-91xvghb6.js:8946-9797 placement
 /**
  * 路径是否落在受保护位置。
  */
@@ -722,14 +731,14 @@ async function isProtectedPath(
   }
   return lands(current);
 }
-//@ chunk-7wdbg1ct.js:9850-9951 placement
+//@ chunk-91xvghb6.js:9797-9898 placement
 function relativeSegments(inputPath, root) {
   return inputPath
     .slice(root.length)
     .split(sep === "/" ? /\/+/ : /[\\/]+/)
     .filter((segment) => segment !== "" && segment !== ".");
 }
-//@ chunk-7wdbg1ct.js:9951-10276 placement
+//@ chunk-91xvghb6.js:9898-10223 placement
 /**
  * 受保护根的匹配器（内部、相等、固定）。
  */
@@ -750,7 +759,7 @@ function protectedRootMatchers(gitPaths) {
     asksForAnotherHost: (candidate) => gitPaths.roots.every((root) => isForeignSpelling(candidate, root)),
   };
 }
-//@ chunk-7wdbg1ct.js:10276-10368 placement
+//@ chunk-91xvghb6.js:10223-10315 placement
 function isSuspiciousProtectedPath(inputPath, gitPaths) {
   return (
     !isAbsolute(inputPath) ||
@@ -759,7 +768,7 @@ function isSuspiciousProtectedPath(inputPath, gitPaths) {
     inputPath.includes("\uFFFD")
   );
 }
-//@ chunk-7wdbg1ct.js:10368-10765 placement
+//@ chunk-91xvghb6.js:10315-10712 placement
 /**
  * 读取受保护条目状态与身份。
  */
@@ -794,7 +803,7 @@ async function statProtectedEntry(inputPath, gitPaths, secondNames) {
     alias,
   };
 }
-//@ chunk-7wdbg1ct.js:10765-10981 placement
+//@ chunk-91xvghb6.js:10712-10928 placement
 function normalizeGitdirPointer(pointerPath, linkText) {
   let isWindows = getPlatform() === "windows";
   let drivePrefix = isWindows ? /^[A-Za-z]:/.exec(pointerPath)?.[0] : undefined;
@@ -803,7 +812,7 @@ function normalizeGitdirPointer(pointerPath, linkText) {
     drivePrefix !== undefined && /^[\\/](?![\\/])/.test(linkText) ? `${drivePrefix}${linkText}` : linkText;
   return target.includes("\uFFFD") ? null : target;
 }
-//@ chunk-7wdbg1ct.js:10981-11064 placement
+//@ chunk-91xvghb6.js:10928-11011 placement
 /**
  * 解析 .git 文件中的 gitdir 指针。
  */
@@ -811,7 +820,7 @@ function readGitdirPointer(content) {
   let line = cleanSingleLine(content);
   return line === null ? undefined : /^gitdir: (.+)$/s.exec(line)?.[1];
 }
-//@ chunk-7wdbg1ct.js:11064-11184 placement
+//@ chunk-91xvghb6.js:11011-11131 placement
 /**
  * 去掉末尾换行并拒绝含控制字符的值。
  */
@@ -820,14 +829,14 @@ function cleanSingleLine(text) {
   let replaced = text.replace(/[\r\n]+$/, "");
   return replaced === "" || /[\r\n\0\uFFFD]/.test(replaced) ? null : replaced;
 }
-//@ chunk-7wdbg1ct.js:11184-11231 placement
+//@ chunk-91xvghb6.js:11131-11178 placement
 /**
  * 相对路径基于目录解析。
  */
 function resolveRelative(baseDir, path) {
   return isAbsolute(path) ? path : `${baseDir}${sep}${path}`;
 }
-//@ chunk-7wdbg1ct.js:11231-11446 placement
+//@ chunk-91xvghb6.js:11178-11393 placement
 /**
  * 路径是否在目录内（大小写不敏感平台归一）。
  */
@@ -841,13 +850,13 @@ function isPathInside(parentPath, childPath) {
     relativePath === ".." || relativePath.startsWith(`..${sep}`) || relativePath.startsWith("../");
   return relativePath === "" || (!escapesParent && !isAbsolute(relativePath));
 }
-//@ chunk-7wdbg1ct.js:11446-11743 placement
+//@ chunk-91xvghb6.js:11393-11690 placement
 var PROJECT_SETTING_SOURCES; // deferred: uses PROTECTED_ENV_VARS of its import cycle while loading; runs once the cycle is complete
 var TMPDIR_ENV_VARS;
 var HOME_ENV_VARS;
 var GIT_CONFIG_ENV_VARS;
 var PROTECTED_ENV_VARS_2;
-deferInit("chunk-7wdbg1ct.js:11446", () => {
+deferInit("chunk-91xvghb6.js:11393", () => {
   PROJECT_SETTING_SOURCES = ["projectSettings", "localSettings"];
   TMPDIR_ENV_VARS = ["CLAUDE_CODE_TMPDIR", "TMPDIR", "TEMP", "TMP"];
   HOME_ENV_VARS = [
@@ -869,25 +878,23 @@ deferInit("chunk-7wdbg1ct.js:11446", () => {
   ];
 });
 export {
+  resolveForeignSpellingAsync,
+  classifyPathSpelling_3,
+  spellingsToCheck,
+  PROTECTED_ENV_VARS,
+  GIT_CONFIG_ENV_VARS,
+  parseGitBoolEnv,
   PROJECT_SETTING_SOURCES,
   HOME_ENV_VARS,
   getProtectedTempDirs,
   classifyPathSpelling,
-  isPathInside,
-  readGitdirPointer,
-  PROTECTED_ENV_VARS_2,
-  resolveForeignSpellingAsync,
-  classifyPathSpelling_3,
-  spellingsToCheck,
   resolveForeignSpelling,
   isPathTooDeep,
+  isPathInside,
   MAX_PROTECTED_PATH_LENGTH,
   classifyPathSpellingSync,
   isForeignSpelling,
   isWindowsNonDrivePath,
-  PROTECTED_ENV_VARS,
-  GIT_CONFIG_ENV_VARS,
-  parseGitBoolEnv,
   collectGitProtectedPaths,
   getGitConfigPaths,
   systemGitConfigPaths,
@@ -896,4 +903,6 @@ export {
   resolveRelative,
   cleanSingleLine,
   isWritableSharedFile,
+  readGitdirPointer,
+  PROTECTED_ENV_VARS_2,
 };

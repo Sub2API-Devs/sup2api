@@ -3,9 +3,9 @@
  *
  * IDE 诊断信息（附件）显示：按文件分组列出 [Line N] 问题。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/DiagnosticsDisplay.tsx
- * pieces: chunk-ah34pb7m.js (4)
+ * pieces: chunk-wjygkcr4.js (4)
  * attribution: fingerprint 4
  */
 import {
@@ -21,11 +21,11 @@ import { firstLineOf } from "../utils/stringUtils.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { EARLY_RETURN_SENTINEL } from "../../runtime/bun-runtime.js";
 
-//@ chunk-ah34pb7m.js:80593-80640 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-wjygkcr4.js:82397-82444 fingerprint (2.1.88 match: _temp, 1)
 function sumDiagnostics(sum, file) {
   return sum + file.diagnostics.length;
 }
-//@ chunk-ah34pb7m.js:80640-80876 fingerprint (2.1.88 match: _temp2, 1)
+//@ chunk-wjygkcr4.js:82444-82680 fingerprint (2.1.88 match: _temp2, 1)
 function renderDiagnosticLine(diagnostic, diagIndex) {
   return jsxProd_default(
     MessageResponse,
@@ -50,7 +50,7 @@ function renderDiagnosticLine(diagnostic, diagIndex) {
     diagIndex,
   );
 }
-//@ chunk-ah34pb7m.js:80876-81246 fingerprint (2.1.88 match: _temp3, 1)
+//@ chunk-wjygkcr4.js:82680-83050 fingerprint (2.1.88 match: _temp3, 1)
 /**
  * 渲染单个文件的诊断列表：文件名及其下各条诊断。
  */
@@ -89,18 +89,18 @@ function renderDiagnosticFile(file, fileIndex) {
     fileIndex,
   );
 }
-//@ chunk-ah34pb7m.js:81246-81968 fingerprint (2.1.88 match: DiagnosticsDisplay, 0.627)
+//@ chunk-wjygkcr4.js:83050-83772 fingerprint (2.1.88 match: DiagnosticsDisplay, 0.627)
 function DiagnosticsDisplay(props) {
   let $ = useMemoCache(11);
   let { attachment, verbose, isTranscriptMode } = props;
   let resultElement;
   if ($[0] !== attachment.files || $[1] !== isTranscriptMode || $[2] !== verbose) {
     resultElement = EARLY_RETURN_SENTINEL;
-    T: {
+    b: {
       let files = sanitizeDiagnosticsAttachment(attachment.files);
       if (files.length === 0) {
         resultElement = null;
-        break T;
+        break b;
       }
       let totalIssues = files.reduce(sumDiagnostics, 0);
       let fileCount = files.length;
@@ -109,7 +109,7 @@ function DiagnosticsDisplay(props) {
           flexDirection: "column",
           children: files.map(renderDiagnosticFile),
         });
-        break T;
+        break b;
       } else {
         let countElement;
         if ($[4] !== totalIssues) {
@@ -149,7 +149,7 @@ function DiagnosticsDisplay(props) {
           $[10] = summaryElement;
         } else summaryElement = $[10];
         resultElement = summaryElement;
-        break T;
+        break b;
       }
     }
     $[0] = attachment.files;

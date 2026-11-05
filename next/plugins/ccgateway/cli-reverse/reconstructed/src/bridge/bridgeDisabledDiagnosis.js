@@ -3,14 +3,14 @@
  *
  * 诊断远程控制因遥测/非必要流量开关而关闭的原因（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bbtre4r8.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-my2r02mp.js (1)
  * attribution: placement 1
  */
 import { isEnvTruthy } from "../utils/envUtils.js";
 
-//@ chunk-bbtre4r8.js:14503-14747 placement
+//@ chunk-my2r02mp.js:14653-14897 placement
 /**
  * 识别因 DISABLE_TELEMETRY / DO_NOT_TRACK / 非必要流量开关而关闭远程控制的原因
  */

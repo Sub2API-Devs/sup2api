@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/macos-sandbox-utils.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (40)
+ * pieces: chunk-qg41pqt6.js (40)
  * attribution: esm-fingerprint 32, esm-layout 8
  */
 import * as pathModule_2 from "path";
@@ -36,7 +36,7 @@ import { quote } from "../utils/shell-quote.js";
 import { shouldIgnoreViolation } from "./sandbox-violation-store.js";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-fq0cr76a.js:758526-758857 esm-fingerprint
+//@ chunk-qg41pqt6.js:760228-760559 esm-fingerprint
 function macGetMandatoryDenyEntries(allowGitConfig = false) {
   let cwd = normalizePathForSandbox(process.cwd(), {
     literal: true,
@@ -60,53 +60,53 @@ function macGetMandatoryDenyEntries(allowGitConfig = false) {
   }
   return entries;
 }
-//@ chunk-fq0cr76a.js:758857-758913 esm-fingerprint
+//@ chunk-qg41pqt6.js:760559-760615 esm-fingerprint
 var sessionSuffix; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fq0cr76a.js:758857", () => {
+deferInit("chunk-qg41pqt6.js:760559", () => {
   sessionSuffix = `_${Math.random().toString(36).slice(2, 11)}_SBX`;
 });
-//@ chunk-fq0cr76a.js:758913-758962 esm-fingerprint
+//@ chunk-qg41pqt6.js:760615-760664 esm-fingerprint
 function generateLogTag(attributionCommand) {
   return `CMD64_${encodeSandboxedCommand(attributionCommand)}_END_${sessionSuffix}`;
 }
-//@ chunk-fq0cr76a.js:758962-759040 esm-fingerprint
+//@ chunk-qg41pqt6.js:760664-760742 esm-fingerprint
 function pathFilter(entry) {
   return entry.glob ? `(regex ${escapePath(globRegex(entry))})` : `(subpath ${escapePath(entry.path)})`;
 }
-//@ chunk-fq0cr76a.js:759040-759173 esm-fingerprint
+//@ chunk-qg41pqt6.js:760742-760875 esm-fingerprint
 function anchorRegex(entry, compile) {
   if (entry.anchor === undefined) return compile(entry.path);
   let pattern = entry.path.slice(entry.anchor.length);
   return `^${escapeRegexLiteral(entry.anchor)}${compile(pattern).slice(1)}`;
 }
-//@ chunk-fq0cr76a.js:759173-759205 esm-layout
+//@ chunk-qg41pqt6.js:760875-760907 esm-layout
 function globRegex(entry) {
   return anchorRegex(entry, globToRegex);
 }
-//@ chunk-fq0cr76a.js:759205-759237 esm-layout
+//@ chunk-qg41pqt6.js:760907-760939 esm-layout
 function denyGlobEntryRegex(entry) {
   return anchorRegex(entry, denyGlobRegex);
 }
-//@ chunk-fq0cr76a.js:759237-759315 esm-fingerprint
+//@ chunk-qg41pqt6.js:760939-761017 esm-fingerprint
 function denyPathFilter(entry) {
   return entry.glob
     ? `(regex ${escapePath(denyGlobEntryRegex(entry))})`
     : `(subpath ${escapePath(entry.path)})`;
 }
-//@ chunk-fq0cr76a.js:759315-759439 esm-fingerprint
+//@ chunk-qg41pqt6.js:761017-761141 esm-fingerprint
 function entrySamplePath(entry) {
   if (!entry.glob) return entry.path;
   let anchor = entry.anchor ?? "";
   return anchor + entry.path.slice(anchor.length).replace(/\[[^\]]*\]|[*?]+/g, "x");
 }
-//@ chunk-fq0cr76a.js:759439-759584 esm-fingerprint
+//@ chunk-qg41pqt6.js:761141-761286 esm-fingerprint
 function carveFilter(filter, carveOuts) {
   let unique = [...new Set(carveOuts)];
   if (unique.length === 0) return filter;
   let nots = unique.map((c) => `(require-not ${c})`).join(" ");
   return `(require-all ${filter} ${nots})`;
 }
-//@ chunk-fq0cr76a.js:759584-759644 esm-fingerprint
+//@ chunk-qg41pqt6.js:761286-761346 esm-fingerprint
 function anchoredGlobEntry(anchor, pattern) {
   return {
     glob: true,
@@ -114,7 +114,7 @@ function anchoredGlobEntry(anchor, pattern) {
     anchor,
   };
 }
-//@ chunk-fq0cr76a.js:759644-759727 esm-fingerprint
+//@ chunk-qg41pqt6.js:761346-761429 esm-fingerprint
 function toPathEntry(pathPattern) {
   return containsGlobChars(pathPattern)
     ? {
@@ -128,7 +128,7 @@ function toPathEntry(pathPattern) {
         }),
       };
 }
-//@ chunk-fq0cr76a.js:759727-759782 esm-fingerprint
+//@ chunk-qg41pqt6.js:761429-761484 esm-fingerprint
 function toLiteralPathEntry(literalPath) {
   return {
     path: normalizePathForSandbox(literalPath, {
@@ -137,11 +137,11 @@ function toLiteralPathEntry(literalPath) {
     glob: false,
   };
 }
-//@ chunk-fq0cr76a.js:759782-759835 esm-fingerprint
+//@ chunk-qg41pqt6.js:761484-761537 esm-fingerprint
 function alsoReadAs(spellings, kind) {
   return (spellings ?? []).flatMap((spelling) => literalReadings(spelling, kind));
 }
-//@ chunk-fq0cr76a.js:759835-759911 esm-layout
+//@ chunk-qg41pqt6.js:761537-761613 esm-layout
 function callerEntries(kind, spellings, literalPaths) {
   return [
     ...(spellings ?? []).map(toPathEntry),
@@ -149,15 +149,15 @@ function callerEntries(kind, spellings, literalPaths) {
     ...(literalPaths ?? []).map(toLiteralPathEntry),
   ];
 }
-//@ chunk-fq0cr76a.js:759911-759949 esm-layout
+//@ chunk-qg41pqt6.js:761613-761651 esm-layout
 function denyGlobCovers(denyRegex, entry) {
   return denyRegex.test(entrySamplePath(entry));
 }
-//@ chunk-fq0cr76a.js:759949-759986 esm-layout
+//@ chunk-qg41pqt6.js:761651-761688 esm-layout
 function isStrictlyUnder(entry, dir) {
   return coversChildPath(entrySamplePath(entry), dir);
 }
-//@ chunk-fq0cr76a.js:759986-760195 esm-fingerprint
+//@ chunk-qg41pqt6.js:761688-761897 esm-fingerprint
 function inBothSpellings(kind, entry) {
   let resolved = (p) => pathSpellingVariants(p)[1] ?? p;
   let base = entryBaseDir(entry);
@@ -177,7 +177,7 @@ function inBothSpellings(kind, entry) {
         },
   ];
 }
-//@ chunk-fq0cr76a.js:760195-760645 esm-fingerprint
+//@ chunk-qg41pqt6.js:761897-762347 esm-fingerprint
 function resolveReadConfig(config, writeRoots, libraryDenies) {
   let credentialDenies = [
     ...callerEntries("deny", config.credentialDenyOnly, undefined),
@@ -202,7 +202,7 @@ function resolveReadConfig(config, writeRoots, libraryDenies) {
     writeRoots: [...writeRoots],
   };
 }
-//@ chunk-fq0cr76a.js:760645-761096 esm-fingerprint
+//@ chunk-qg41pqt6.js:762347-762798 esm-fingerprint
 function lateReadDenyFilters(resolved) {
   let filters = [];
   let coversRoot = false;
@@ -230,18 +230,18 @@ function lateReadDenyFilters(resolved) {
     coversRoot,
   };
 }
-//@ chunk-fq0cr76a.js:761096-761215 esm-fingerprint
+//@ chunk-qg41pqt6.js:762798-762917 esm-fingerprint
 function globBaseDir(normalizedGlob) {
   let staticPrefix = normalizedGlob.split(/[*?[\]]/)[0];
   if (!staticPrefix || staticPrefix === "/") return "/";
   return staticPrefix.endsWith("/") ? staticPrefix.slice(0, -1) : pathModule_2.dirname(staticPrefix);
 }
-//@ chunk-fq0cr76a.js:761215-761283 esm-fingerprint
+//@ chunk-qg41pqt6.js:762917-762985 esm-fingerprint
 function entryBaseDir(entry) {
   if (!entry.glob) return entry.path;
   return entry.anchor ?? globBaseDir(entry.path);
 }
-//@ chunk-fq0cr76a.js:761283-762077 esm-fingerprint
+//@ chunk-qg41pqt6.js:762985-763789 esm-fingerprint
 function generateReadDenyUnlinkRules(resolved, logTag) {
   let { denies, credentialDenies, writeRoots } = resolved;
   if (writeRoots.length === 0) return [];
@@ -303,7 +303,7 @@ function generateReadDenyUnlinkRules(resolved, logTag) {
   }
   return renderRule("deny", ["file-write-unlink"], filters, logTag);
 }
-//@ chunk-fq0cr76a.js:762077-762208 esm-fingerprint
+//@ chunk-qg41pqt6.js:763789-763920 esm-fingerprint
 function renderRule(action, operations, filters, logTag) {
   if (filters.size === 0) return [];
   return [
@@ -312,7 +312,7 @@ function renderRule(action, operations, filters, logTag) {
     `  (with message "${logTag}"))`,
   ];
 }
-//@ chunk-fq0cr76a.js:762208-762330 esm-fingerprint
+//@ chunk-qg41pqt6.js:763920-764042 esm-fingerprint
 function getAncestorDirectories(pathStr) {
   let ancestors = [];
   let currentPath = pathModule_2.dirname(pathStr);
@@ -324,10 +324,10 @@ function getAncestorDirectories(pathStr) {
   }
   return ancestors;
 }
-//@ chunk-fq0cr76a.js:762330-762346 esm-layout
+//@ chunk-qg41pqt6.js:764042-764058 esm-layout
 var SBPL_STRING_MAX_BYTES = 900;
 var MIN_DENY_GROUP_SIZE = 4;
-//@ chunk-fq0cr76a.js:762346-763045 esm-fingerprint
+//@ chunk-qg41pqt6.js:764058-764757 esm-fingerprint
 function groupLiteralDenyPaths(entries) {
   let byDir = new Map();
   for (let entry of entries) {
@@ -383,19 +383,19 @@ function groupLiteralDenyPaths(entries) {
     rest: entries.filter((e) => !grouped.has(e.path)),
   };
 }
-//@ chunk-fq0cr76a.js:763045-763094 esm-layout
+//@ chunk-qg41pqt6.js:764757-764806 esm-layout
 function regexLength(fragment) {
   return Buffer.byteLength(escapePath(fragment)) - 2;
 }
-//@ chunk-fq0cr76a.js:763094-763134 esm-fingerprint
+//@ chunk-qg41pqt6.js:764806-764846 esm-fingerprint
 function groupRegexPrefix(group) {
   return `^${escapeRegexLiteral(group.dir)}/(`;
 }
-//@ chunk-fq0cr76a.js:763134-763199 esm-fingerprint
+//@ chunk-qg41pqt6.js:764846-764911 esm-fingerprint
 function groupDenyTail(group) {
   return `)/(${group.leaves.map(escapeRegexLiteral).join("|")})(/.*)?$`;
 }
-//@ chunk-fq0cr76a.js:763199-763539 esm-fingerprint
+//@ chunk-qg41pqt6.js:764911-765251 esm-fingerprint
 function literalDenyGroupFilters(group) {
   let prefix = groupRegexPrefix(group);
   let denyTail = groupDenyTail(group);
@@ -421,11 +421,11 @@ function literalDenyGroupFilters(group) {
     pins: alternations.map((names) => `(regex ${escapePath(prefix + names + ")$")})`),
   };
 }
-//@ chunk-fq0cr76a.js:763539-763624 esm-fingerprint
+//@ chunk-qg41pqt6.js:765251-765336 esm-fingerprint
 function generateMoveBlockingRules(entries, logTag) {
   return renderRule("deny", ["file-write-unlink", "file-write-create"], moveBlockingFilters(entries), logTag);
 }
-//@ chunk-fq0cr76a.js:763624-763809 esm-fingerprint
+//@ chunk-qg41pqt6.js:765336-765521 esm-fingerprint
 function moveBlockingFilters(entries) {
   let filters = new Set();
   for (let entry of entries) {
@@ -440,7 +440,7 @@ function moveBlockingFilters(entries) {
   }
   return filters;
 }
-//@ chunk-fq0cr76a.js:763809-764446 esm-fingerprint
+//@ chunk-qg41pqt6.js:765521-766158 esm-fingerprint
 function generateReadRules(resolved, logTag) {
   if (!resolved) return ["(allow file-read*)"];
   let rules = [];
@@ -459,11 +459,11 @@ function generateReadRules(resolved, logTag) {
   rules.push(...renderRule("allow", ["file-write-unlink", "file-write-create"], writeAllowFilters, logTag));
   return rules;
 }
-//@ chunk-fq0cr76a.js:764446-764513 esm-fingerprint
+//@ chunk-qg41pqt6.js:766158-766225 esm-fingerprint
 function writeRootEntries(config) {
   return callerEntries("allow", config?.allowOnly, config?.literalAllowOnly);
 }
-//@ chunk-fq0cr76a.js:764513-765190 esm-fingerprint
+//@ chunk-qg41pqt6.js:766225-766906 esm-fingerprint
 function generateWriteRules(config, logTag, allowGitConfig, writeRoots) {
   if (!config) return ["(allow file-write*)"];
   let rules = [];
@@ -492,7 +492,7 @@ function generateWriteRules(config, logTag, allowGitConfig, writeRoots) {
   rules.push(...renderRule("deny", ["file-write-unlink", "file-write-create"], moveFilters, logTag));
   return rules;
 }
-//@ chunk-fq0cr76a.js:765190-772859 esm-fingerprint
+//@ chunk-qg41pqt6.js:766906-774582 esm-fingerprint
 function generateSandboxProfile({
   readConfig,
   libraryDenyEntries,
@@ -767,11 +767,11 @@ function generateSandboxProfile({
   return profile.join(`
 `);
 }
-//@ chunk-fq0cr76a.js:772859-772899 esm-layout
+//@ chunk-qg41pqt6.js:774582-774622 esm-layout
 function escapePath(pathStr) {
   return JSON.stringify(pathStr);
 }
-//@ chunk-fq0cr76a.js:772899-774892 esm-fingerprint
+//@ chunk-qg41pqt6.js:774622-776622 esm-fingerprint
 function wrapCommandWithSandboxMacOS(params) {
   let {
     command,
@@ -887,7 +887,7 @@ function wrapCommandWithSandboxMacOS(params) {
   );
   return wrappedCommand;
 }
-//@ chunk-fq0cr76a.js:774892-775857 esm-fingerprint
+//@ chunk-qg41pqt6.js:776622-777587 esm-fingerprint
 function startMacOSSandboxLogMonitor(callback, ignoreViolations, resolveCommandText) {
   let cmdExtractRegex = /CMD64_(.+?)_END/;
   let sandboxExtractRegex = /Sandbox:\s+(.+)$/;

@@ -3,15 +3,15 @@
  *
  * 检测 gh CLI 是否安装与登录。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/github/ghAuthStatus.ts
- * pieces: chunk-1jrvb43n.js (1)
+ * pieces: chunk-d2fyvtn7.js (1)
  * attribution: fingerprint 1
  */
 import { whichAsync } from "../which.js";
 import { safeExecFile } from "../safeSpawn.js";
 
-//@ chunk-1jrvb43n.js:263-1481 fingerprint (2.1.88 match: getGhAuthStatus, 0.561)
+//@ chunk-d2fyvtn7.js:263-1481 fingerprint (2.1.88 match: getGhAuthStatus, 0.561)
 /**
  * 检测 gh CLI 登录状态：not_installed / 未登录 / 已登录（读 token），老版本 gh 可选网络回退。
  */

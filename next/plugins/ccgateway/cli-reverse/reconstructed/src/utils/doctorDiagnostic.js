@@ -3,10 +3,10 @@
  *
  * 已有模块；g2 补充放置声明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/doctorDiagnostic.ts
- * pieces: chunk-hntsfzas.js (29)
- * attribution: placement 11, fingerprint 7, layout 11
+ * pieces: chunk-tfmhpnyx.js (30)
+ * attribution: placement 11, fingerprint 7, layout 12
  */
 import { win32, posix, join, delimiter } from "path";
 import { realpath, lstat } from "fs/promises";
@@ -15,7 +15,7 @@ import { osReleaseClientPerHost } from "./nativeInstaller/packageManagers.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { getPlatform } from "./platform.js";
 import { isStandaloneExecutable } from "./slowOperations.js";
-import { getClaudeConfigDir, isEnvTruthy } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { isRunningFromLocalInstallation, localInstallationExists, getShellType } from "./localInstaller.js";
 import { safeExecShell } from "./safeSpawn.js";
 import { HostScoped } from "./hostScoped.js";
@@ -31,95 +31,95 @@ import { env } from "./env.js";
 import { getUserBinDir } from "./xdg.js";
 import { isInstallLinkOrMissing, isNpmSymlink } from "./nativeInstaller/installer.js";
 import { getShellConfigPaths, findClaudeAlias, findValidClaudeAlias } from "./shellConfig.js";
+import { isEnvTruthy } from "./envUtils.js";
 import { SandboxManager, isScrubOnlySandboxMode } from "./sandbox/sandbox-adapter.js";
 import { summarizeList, describeDeniesOnAnotherHost } from "./sandbox/deniesOnAnotherHost.js";
 import { isWindowsSandboxEnabled } from "./sandbox/windowsSandbox.js";
 import { getWindowsSandboxUserStatus } from "./sandbox/windowsSandboxStatus.js";
 import { getBuildRefSuffix } from "../cli/earlyArgs.js";
-import { getTeammateCommand } from "../tools/shared/spawnMultiAgent.js";
 import { checkGlobalInstallPermissions } from "./autoUpdater.js";
-import { getRipgrepStatus_2 } from "./ripgrep.js";
+import { getRipgrepStatus } from "./ripgrep.js";
 import { readUpdateResult } from "./nativeInstaller/updateResult.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-hntsfzas.js:4993-5029 placement
+//@ chunk-tfmhpnyx.js:5026-5062 placement
 /**
  * 取当前宿主的发行版探测对象。
  */
 function osReleaseProbe() {
   return osReleaseClientPerHost.of(getRootSession().host);
 }
-//@ chunk-hntsfzas.js:5029-5068 placement
+//@ chunk-tfmhpnyx.js:5062-5101 placement
 /**
  * 判断是否由 pacman 安装。
  */
 function detectPacman() {
   return osReleaseProbe().detectPacman();
 }
-//@ chunk-hntsfzas.js:5068-5104 placement
+//@ chunk-tfmhpnyx.js:5101-5137 placement
 /**
  * 判断是否由 deb 包安装。
  */
 function detectDeb() {
   return osReleaseProbe().detectDeb();
 }
-//@ chunk-hntsfzas.js:5104-5140 placement
+//@ chunk-tfmhpnyx.js:5137-5173 placement
 /**
  * 判断是否由 rpm 包安装。
  */
 function detectRpm() {
   return osReleaseProbe().detectRpm();
 }
-//@ chunk-hntsfzas.js:5140-5176 placement
+//@ chunk-tfmhpnyx.js:5173-5209 placement
 /**
  * 判断是否由 apk 包安装。
  */
 function detectApk() {
   return osReleaseProbe().detectApk();
 }
-//@ chunk-hntsfzas.js:5176-5219 placement
+//@ chunk-tfmhpnyx.js:5209-5252 placement
 /**
  * 判断是否由 Homebrew 安装。
  */
 function detectHomebrew() {
   return osReleaseProbe().detectHomebrew();
 }
-//@ chunk-hntsfzas.js:5219-5267 placement
+//@ chunk-tfmhpnyx.js:5252-5300 placement
 /**
  * 取 Homebrew cask 的名称。
  */
 function getHomebrewCaskName() {
   return osReleaseProbe().getHomebrewCaskName();
 }
-//@ chunk-hntsfzas.js:5267-5306 placement
+//@ chunk-tfmhpnyx.js:5300-5339 placement
 /**
  * 判断是否由 winget 安装。
  */
 function detectWinget() {
   return osReleaseProbe().detectWinget();
 }
-//@ chunk-hntsfzas.js:5306-5343 placement
+//@ chunk-tfmhpnyx.js:5339-5376 placement
 /**
  * 判断是否由 mise 管理。
  */
 function detectMise() {
   return osReleaseProbe().detectMise();
 }
-//@ chunk-hntsfzas.js:5343-5380 placement
+//@ chunk-tfmhpnyx.js:5376-5413 placement
 /**
  * 判断是否由 asdf 管理。
  */
 function detectAsdf() {
   return osReleaseProbe().detectAsdf();
 }
-//@ chunk-hntsfzas.js:5380-5426 placement
+//@ chunk-tfmhpnyx.js:5413-5459 placement
 /**
  * 返回探测到的包管理器名称。
  */
 function getPackageManager() {
   return osReleaseProbe().getPackageManager();
 }
-//@ chunk-hntsfzas.js:5426-5595 fingerprint (2.1.88 match: getNormalizedPaths, 1)
+//@ chunk-tfmhpnyx.js:5459-5628 fingerprint (2.1.88 match: getNormalizedPaths, 1)
 function getNormalizedPaths() {
   let invokedPath = process.argv[1] || "";
   let execPath = process.execPath || process.argv[0] || "";
@@ -129,7 +129,7 @@ function getNormalizedPaths() {
   }
   return [invokedPath, execPath];
 }
-//@ chunk-hntsfzas.js:5595-6352 fingerprint (2.1.88 match: getCurrentInstallationType, 0.877)
+//@ chunk-tfmhpnyx.js:5628-6385 fingerprint (2.1.88 match: getCurrentInstallationType, 0.877)
 /**
  * 判断当前安装类型：npm-local/npm-global/native/package-manager/development/unknown。
  */
@@ -173,23 +173,23 @@ async function getCurrentInstallationType() {
   if (globalPrefix && invokedPath.startsWith(globalPrefix)) return "npm-global";
   return "unknown";
 }
-//@ chunk-hntsfzas.js:6352-6373 layout
+//@ chunk-tfmhpnyx.js:6385-6406 layout
 class InstallTypeProbeState {
   attempted = false;
 }
-//@ chunk-hntsfzas.js:6373-6396 layout
+//@ chunk-tfmhpnyx.js:6406-6429 layout
 var installTypeProbeSlot; // deferred: uses InstallTypeProbeState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hntsfzas.js:6373", () => {
+deferInit("chunk-tfmhpnyx.js:6406", () => {
   installTypeProbeSlot = new HostScoped(() => new InstallTypeProbeState());
 });
-//@ chunk-hntsfzas.js:6396-6443 layout
+//@ chunk-tfmhpnyx.js:6429-6476 layout
 /**
  * 本进程是否已探测过安装类型。
  */
 function wasInstallTypeProbed() {
   return installTypeProbeSlot.of(getRootSession().host).attempted;
 }
-//@ chunk-hntsfzas.js:6443-6510 layout
+//@ chunk-tfmhpnyx.js:6476-6543 layout
 /**
  * 探测并记住安装类型（getCurrentInstallationType 的记录版）。
  */
@@ -197,7 +197,7 @@ async function getCurrentInstallationTypeProbed() {
   installTypeProbeSlot.of(getRootSession().host).attempted = true;
   return await getCurrentInstallationType();
 }
-//@ chunk-hntsfzas.js:6510-6798 fingerprint (2.1.88 match: getInstallationPath, 0.831)
+//@ chunk-tfmhpnyx.js:6543-6831 fingerprint (2.1.88 match: getInstallationPath, 0.831)
 async function getInstallationPath() {
   if (isStandaloneExecutable()) {
     try {
@@ -219,7 +219,19 @@ async function getInstallationPath() {
     return "unknown";
   }
 }
-//@ chunk-hntsfzas.js:6916-9456 fingerprint (2.1.88 match: detectMultipleInstallations, 0.812)
+//@ chunk-tfmhpnyx.js:6831-6949 layout (2.1.88 match: getTeammateCommand, 1)
+/**
+ * 队友启动命令：编译版用 execPath，否则 argv[1]。
+ */
+function getTeammateCommand() {
+  try {
+    if (isStandaloneExecutable()) return process.execPath || "unknown";
+    return process.argv[1] || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+//@ chunk-tfmhpnyx.js:6949-9489 fingerprint (2.1.88 match: detectMultipleInstallations, 0.812)
 async function detectMultipleInstallations() {
   let fs = getFsImplementation();
   let installations = [];
@@ -235,10 +247,10 @@ async function detectMultipleInstallations() {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.PACKAGE_URL &&
@@ -246,10 +258,10 @@ async function detectMultipleInstallations() {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.PACKAGE_URL !== "@anthropic-ai/claude-code"
@@ -259,10 +271,10 @@ async function detectMultipleInstallations() {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.PACKAGE_URL,
@@ -338,7 +350,7 @@ async function detectMultipleInstallations() {
   }
   return installations;
 }
-//@ chunk-hntsfzas.js:9456-9735 layout
+//@ chunk-tfmhpnyx.js:9489-9768 layout
 function isPathInList(pathDirectories, localBinPath) {
   let isWindows = getPlatform() === "windows";
   let normalizedBin = localBinPath;
@@ -353,7 +365,7 @@ function isPathInList(pathDirectories, localBinPath) {
     );
   });
 }
-//@ chunk-hntsfzas.js:9735-12337 fingerprint (2.1.88 match: detectConfigurationIssues, 0.792)
+//@ chunk-tfmhpnyx.js:9768-12370 fingerprint (2.1.88 match: detectConfigurationIssues, 0.792)
 /**
  * 检测配置问题：otelHeadersHelper 失败、PATH 缺 ~/.local/bin、沙箱设置等，返回 {issue,fix}。
  */
@@ -431,11 +443,11 @@ async function detectConfigurationIssues(type) {
   }
   return warnings;
 }
-//@ chunk-hntsfzas.js:12337-12369 layout
+//@ chunk-tfmhpnyx.js:12370-12402 layout
 async function noopNull() {
   return null;
 }
-//@ chunk-hntsfzas.js:12369-13789 layout
+//@ chunk-tfmhpnyx.js:12402-13822 layout
 function getMaskCredentialWarnings() {
   if (!SandboxManager.isSandboxingEnabled()) return [];
   if (SandboxManager.canMaskCredentialWarningFire()) SandboxManager.checkDependencies();
@@ -460,7 +472,7 @@ function getMaskCredentialWarnings() {
     };
   });
 }
-//@ chunk-hntsfzas.js:13789-14105 fingerprint (2.1.88 match: detectLinuxGlobPatternWarnings, 0.937)
+//@ chunk-tfmhpnyx.js:13822-14138 fingerprint (2.1.88 match: detectLinuxGlobPatternWarnings, 0.937)
 function detectLinuxGlobPatternWarnings() {
   if (getPlatform() !== "linux") return [];
   let warnings = [];
@@ -474,7 +486,7 @@ function detectLinuxGlobPatternWarnings() {
   }
   return warnings;
 }
-//@ chunk-hntsfzas.js:14105-14968 layout
+//@ chunk-tfmhpnyx.js:14138-15001 layout
 async function findLeftoverSandboxMasks() {
   let platform = getPlatform();
   if (platform !== "linux" && platform !== "wsl") return [];
@@ -501,7 +513,7 @@ async function findLeftoverSandboxMasks() {
     },
   ];
 }
-//@ chunk-hntsfzas.js:14968-15751 layout
+//@ chunk-tfmhpnyx.js:15001-15784 layout
 function getUnbracketedIpv6DomainIssues() {
   let unbracketedIpv6DomainWarnings = SandboxManager.getUnbracketedIpv6DomainWarnings();
   if (unbracketedIpv6DomainWarnings.length === 0) return [];
@@ -512,7 +524,7 @@ function getUnbracketedIpv6DomainIssues() {
     },
   ];
 }
-//@ chunk-hntsfzas.js:15751-16242 layout
+//@ chunk-tfmhpnyx.js:15784-16275 layout
 function getUnbracketedIpv6InjectHostIssues() {
   let unbracketedIpv6InjectHostWarnings = SandboxManager.getUnbracketedIpv6InjectHostWarnings();
   if (unbracketedIpv6InjectHostWarnings.length === 0) return [];
@@ -523,7 +535,7 @@ function getUnbracketedIpv6InjectHostIssues() {
     },
   ];
 }
-//@ chunk-hntsfzas.js:16242-16491 layout
+//@ chunk-tfmhpnyx.js:16275-16524 layout
 async function getWindowsSandboxStartupIssue() {
   if (
     !isWindowsSandboxEnabled() ||
@@ -541,7 +553,7 @@ async function getWindowsSandboxStartupIssue() {
         },
       ];
 }
-//@ chunk-hntsfzas.js:16491-21476 fingerprint (2.1.88 match: getDoctorDiagnostic, 0.78)
+//@ chunk-tfmhpnyx.js:16524-21509 fingerprint (2.1.88 match: getDoctorDiagnostic, 0.78)
 /**
  * getDoctorDiagnostic：安装类型、版本、路径、多重安装、自动更新状态、包管理器、ripgrep 状态与各类配置警告（claude doctor 的数据源）。
  */
@@ -552,10 +564,10 @@ async function getDoctorDiagnostic({ probeKeychain = false, storageV5 } = {}) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     } !== "undefined" &&
@@ -563,10 +575,10 @@ async function getDoctorDiagnostic({ probeKeychain = false, storageV5 } = {}) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION
@@ -575,10 +587,10 @@ async function getDoctorDiagnostic({ probeKeychain = false, storageV5 } = {}) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION
@@ -621,10 +633,10 @@ async function getDoctorDiagnostic({ probeKeychain = false, storageV5 } = {}) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.PACKAGE_URL &&
@@ -632,10 +644,10 @@ async function getDoctorDiagnostic({ probeKeychain = false, storageV5 } = {}) {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.PACKAGE_URL !== "@anthropic-ai/claude-code"
@@ -645,10 +657,10 @@ async function getDoctorDiagnostic({ probeKeychain = false, storageV5 } = {}) {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
               README_URL: "https://code.claude.com/docs/en/overview",
-              VERSION: "2.1.316",
+              VERSION: "2.1.318",
               FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-              BUILD_TIME: "2026-10-30T23:28:13Z",
-              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              BUILD_TIME: "2026-11-03T18:52:53Z",
+              GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
               HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
               DD_SOURCEMAP_GROUP: "default",
             }.PACKAGE_URL
@@ -678,7 +690,7 @@ async function getDoctorDiagnostic({ probeKeychain = false, storageV5 } = {}) {
         fix: "Run `claude install` to switch to the native installer (no sudo)\nOr reinstall with a sudo-free npm (e.g. via nvm)\nOr `npm config set prefix ~/.npm-global`, add ~/.npm-global/bin to PATH, then reinstall",
       });
   }
-  let ripgrepStatusRaw = getRipgrepStatus_2();
+  let ripgrepStatusRaw = getRipgrepStatus();
   let ripgrepStatus = {
     working: ripgrepStatusRaw.working ?? true,
     mode: ripgrepStatusRaw.mode,
@@ -705,10 +717,10 @@ async function getDoctorDiagnostic({ probeKeychain = false, storageV5 } = {}) {
   };
 }
 export {
-  getDoctorDiagnostic,
   getCurrentInstallationTypeProbed,
-  getHomebrewCaskName,
-  detectHomebrew,
   getPackageManager,
+  getHomebrewCaskName,
   wasInstallTypeProbed,
+  getDoctorDiagnostic,
+  detectHomebrew,
 };

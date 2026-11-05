@@ -1,15 +1,15 @@
 /**
  * @typespec/ts-http-runtime/dist/esm/util/helpers.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
- * pieces: chunk-mrx6y2r5.js (3)
+ * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-fingerprint 3
  */
 import { AbortError_2 } from "../restError.js";
 
-//@ chunk-mrx6y2r5.js:43325-43361 esm-fingerprint
+//@ chunk-b5df2wx1.js:43325-43361 esm-fingerprint
 var StandardAbortMessage = "The operation was aborted.";
-//@ chunk-mrx6y2r5.js:43361-43887 esm-fingerprint
+//@ chunk-b5df2wx1.js:43361-43887 esm-fingerprint
 function delay_2(delayInMs, value, options) {
   return new Promise((resolve, reject) => {
     let timer = undefined;
@@ -46,7 +46,7 @@ function delay_2(delayInMs, value, options) {
       options.abortSignal.addEventListener("abort", onAborted);
   });
 }
-//@ chunk-mrx6y2r5.js:43887-43991 esm-fingerprint
+//@ chunk-b5df2wx1.js:43887-43991 esm-fingerprint
 function parseHeaderValueAsNumber(response, headerName) {
   let value = response.headers.get(headerName);
   if (!value) return;

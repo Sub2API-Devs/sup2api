@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：附件 PUT 上传与上传筛查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0c614h9c.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hvmd1zqg.js (7)
  * attribution: placement 7
  */
 import { sep, join, basename } from "path";
@@ -35,34 +35,46 @@ import { sessionUploadsDir } from "../../utils/uploadsDir.js";
 import { uploadDisplayName, readValidatedFileWithin } from "../../utils/claudeInChrome/fileUpload.js";
 import { BIDI_CONTROL_PATTERN } from "./screenPath.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0c614h9c.js:887-1151 placement
+//@ chunk-hvmd1zqg.js:887-1151 placement
 /**
  * 重试等待上限（10 秒）。
  */
-var UPLOAD_PUT_CONSTANTS = new Set(["x-upload-token", "content-type"]);
-var MAX_TOKEN_HEADER_CHARS = 4096;
-var PUT_TIMEOUT_MS = 120000;
-var MAX_CONTENT_LENGTH = 4096;
-var putResultSchema = DoctorLazy(() =>
-  objectSchema({
-    sha256: stringSchema(),
-    size: numberSchema(),
-  }),
-);
-var PUT_STATUS_REASONS = {
-  400: "put_hash_mismatch",
-  403: "put_refused",
-  409: "put_already_used",
-  410: "put_expired",
-  413: "put_size_mismatch",
-  429: "put_busy",
-  503: "put_busy",
-};
-var MAX_BUSY_RETRIES = 2;
-var DEFAULT_RETRY_DELAY_MS = 2000;
-var MAX_RETRY_DELAY_MS = 1e4;
-//@ chunk-0c614h9c.js:1151-2402 placement
+var UPLOAD_PUT_CONSTANTS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_TOKEN_HEADER_CHARS;
+var PUT_TIMEOUT_MS;
+var MAX_CONTENT_LENGTH;
+var putResultSchema;
+var PUT_STATUS_REASONS;
+var MAX_BUSY_RETRIES;
+var DEFAULT_RETRY_DELAY_MS;
+var MAX_RETRY_DELAY_MS;
+deferInit("chunk-hvmd1zqg.js:887", () => {
+  UPLOAD_PUT_CONSTANTS = new Set(["x-upload-token", "content-type"]);
+  MAX_TOKEN_HEADER_CHARS = 4096;
+  PUT_TIMEOUT_MS = 120000;
+  MAX_CONTENT_LENGTH = 4096;
+  putResultSchema = DoctorLazy(() =>
+    objectSchema({
+      sha256: stringSchema(),
+      size: numberSchema(),
+    }),
+  );
+  PUT_STATUS_REASONS = {
+    400: "put_hash_mismatch",
+    403: "put_refused",
+    409: "put_already_used",
+    410: "put_expired",
+    413: "put_size_mismatch",
+    429: "put_busy",
+    503: "put_busy",
+  };
+  MAX_BUSY_RETRIES = 2;
+  DEFAULT_RETRY_DELAY_MS = 2000;
+  MAX_RETRY_DELAY_MS = 1e4;
+});
+//@ chunk-hvmd1zqg.js:1151-2402 placement
 /**
  * 把文件以 PUT 上传到预签名地址，校验主机、响应哈希与大小。
  */
@@ -131,13 +143,14 @@ async function putUploadFile(target, buf, sha256, uploadPathPrefix, signal) {
     return getErrnoCode(error) === "ERR_BAD_RESPONSE" ? "put_bad_answer" : "put_network";
   }
 }
-//@ chunk-0c614h9c.js:2402-3294 placement
+//@ chunk-hvmd1zqg.js:2402-3367 placement
 function createUploadScreen({
   screen,
   maxFileBytes,
   maxTotalBytes,
   uploadPathPrefix,
   namesResolvedPaths = false,
+  onRejectedPastScreen,
 }) {
   return {
     async hash(paths, signal) {
@@ -152,7 +165,9 @@ function createUploadScreen({
               code: "canceled",
             },
           ];
-        let candidate = await statUploadCandidate(path, screen, maxFileBytes);
+        let candidate = await statUploadCandidate(path, screen, maxFileBytes, {
+          onRejectedPastScreen,
+        });
         if ("code" in candidate)
           return [
             ...results,
@@ -193,7 +208,9 @@ function createUploadScreen({
               code: "canceled",
             },
           ];
-        let candidate = await statUploadCandidate(path, screen, maxFileBytes);
+        let candidate = await statUploadCandidate(path, screen, maxFileBytes, {
+          onRejectedPastScreen,
+        });
         if ("code" in candidate)
           return [
             ...results,
@@ -248,7 +265,7 @@ function createUploadScreen({
     },
   };
 }
-//@ chunk-0c614h9c.js:3294-3512 placement
+//@ chunk-hvmd1zqg.js:3367-3585 placement
 function isOutsideUploadRoot(path, path_2) {
   let expanded = expandPathOrNull(path);
   if (expanded === null) return true;
@@ -269,13 +286,13 @@ function isOutsideUploadRoot(path, path_2) {
     )
   );
 }
-//@ chunk-0c614h9c.js:3512-3624 placement
+//@ chunk-hvmd1zqg.js:3585-3697 placement
 function normalizeUploadPath(path) {
   return normalizeTrustedSymlink(
     identity(path.length > 1 && path.endsWith(sep) ? path.slice(0, -1) : path),
   ).replace(/^[a-z]:/, (driveLetter) => driveLetter.toUpperCase());
 }
-//@ chunk-0c614h9c.js:3624-3726 placement
+//@ chunk-hvmd1zqg.js:3697-3799 placement
 async function isUploadAllowedPath(path, realPath, { fromChat = false } = {}) {
   return (
     (await isCredentialPath(path, realPath)) ||
@@ -286,8 +303,13 @@ async function isUploadAllowedPath(path, realPath, { fromChat = false } = {}) {
       ))
   );
 }
-//@ chunk-0c614h9c.js:3726-4443 placement
-async function statUploadCandidate(path, screen, maxFileBytes, { followsLinks = false } = {}) {
+//@ chunk-hvmd1zqg.js:3799-4600 placement
+async function statUploadCandidate(
+  path,
+  screen,
+  maxFileBytes,
+  { followsLinks = false, onRejectedPastScreen } = {},
+) {
   let screened = await screen(path);
   if (screened === undefined)
     return {
@@ -299,6 +321,7 @@ async function statUploadCandidate(path, screen, maxFileBytes, { followsLinks = 
     (await isUploadAllowedPath(path, screened.realPath, screened))
   ) {
     logForDebugging("[file inputs] a path was rejected: a credential, or Claude's own");
+    onRejectedPastScreen?.(path, "credential_or_own_file");
     return {
       path,
       code: "path_rejected",
@@ -317,8 +340,8 @@ async function statUploadCandidate(path, screen, maxFileBytes, { followsLinks = 
       code: "resolves_elsewhere",
       resolved: screened.realPath,
     };
-  let _ = await uploadDisplayName(screened.realPath);
-  if (BIDI_CONTROL_PATTERN.test(_))
+  let mime = await uploadDisplayName(screened.realPath);
+  if (BIDI_CONTROL_PATTERN.test(mime))
     return {
       path,
       code: "name_direction",
@@ -330,15 +353,17 @@ async function statUploadCandidate(path, screen, maxFileBytes, { followsLinks = 
       code: validatedFileWithin.refusal,
     };
   let contentHash = computeContentHash(validatedFileWithin.buf);
-  if (screened.requiredDigest !== undefined && contentHash !== screened.requiredDigest)
+  if (screened.requiredDigest !== undefined && contentHash !== screened.requiredDigest) {
+    onRejectedPastScreen?.(path, "attachment_changed");
     return {
       path,
       code: "path_rejected",
     };
+  }
   return {
     buf: validatedFileWithin.buf,
-    name: _,
+    name: mime,
     sha256: contentHash,
   };
 }
-export { isUploadAllowedPath, statUploadCandidate, createUploadScreen };
+export { createUploadScreen, isUploadAllowedPath, statUploadCandidate };

@@ -3,9 +3,9 @@
  *
  * 恢复云端任务（teleport）列表；本模块混入 Bedrock API key 测试代码（误归）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ResumeTask.tsx
- * pieces: chunk-0bntfk7p.js (4), chunk-sx9xc5ee.js (1)
+ * pieces: chunk-1c4mt1y2.js (4), chunk-3msz77wt.js (1)
  * attribution: fingerprint 4, sole-consumer 1
  */
 import { probeModelAccess } from "./ModelPinWizard.js";
@@ -35,7 +35,7 @@ import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-sx9xc5ee.js:9790-9902 fingerprint (2.1.88 match: renderErrorSpecificGuidance, 0.564)
+//@ chunk-3msz77wt.js:9790-9902 fingerprint (2.1.88 match: renderErrorSpecificGuidance, 0.564)
 async function renderErrorSpecificGuidance(wizardData, modelId) {
   return probeModelAccess(
     () => testBedrockRequest(wizardData),
@@ -46,20 +46,20 @@ async function renderErrorSpecificGuidance(wizardData, modelId) {
         : "auth",
   );
 }
-//@ chunk-0bntfk7p.js:1975-2064 fingerprint (2.1.88 match: UPDATED_STRING, 0.486)
+//@ chunk-1c4mt1y2.js:1906-1995 fingerprint (2.1.88 match: UPDATED_STRING, 0.486)
 var UPDATED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ORIGIN;
 var REMOTE_CONTROL_LABEL;
 var max;
 var SPACE;
-deferInit("chunk-0bntfk7p.js:1975", () => {
+deferInit("chunk-1c4mt1y2.js:1906", () => {
   UPDATED = "Updated";
   ORIGIN = "Origin";
   REMOTE_CONTROL_LABEL = "Remote Control";
   max = Math.max(ORIGIN.length, REMOTE_CONTROL_LABEL.length);
   SPACE = "  ";
 });
-//@ chunk-0bntfk7p.js:2064-5609 fingerprint (2.1.88 match: ResumeTask, 0.71)
+//@ chunk-1c4mt1y2.js:1995-5529 fingerprint (2.1.88 match: ResumeTask, 0.71)
 function ResumeTask({ onSelect, onCancel, isEmbedded = false, onSettingsReload }) {
   let { rows, columns } = useScrollViewportSize(useTerminalSize());
   let [sessions, setSessions] = useState([]);
@@ -127,7 +127,6 @@ function ResumeTask({ onSelect, onCancel, isEmbedded = false, onSettingsReload }
     if (loadErrorType !== null && event.key === "return") {
       event.preventDefault();
       onCancel();
-      return;
     }
   }
   let handleErrorComplete = useCallback(() => {
@@ -348,7 +347,7 @@ function ResumeTask({ onSelect, onCancel, isEmbedded = false, onSettingsReload }
     ],
   });
 }
-//@ chunk-0bntfk7p.js:5609-6050 fingerprint (2.1.88 match: determineErrorType, 1)
+//@ chunk-1c4mt1y2.js:5529-5970 fingerprint (2.1.88 match: determineErrorType, 1)
 function determineErrorType(errorMessage) {
   let message = errorMessage.toLowerCase();
   if (message.includes("fetch") || message.includes("network") || message.includes("timeout"))
@@ -373,7 +372,7 @@ function determineErrorType(errorMessage) {
     return "api";
   return "other";
 }
-//@ chunk-0bntfk7p.js:6050-6828 sole-consumer
+//@ chunk-1c4mt1y2.js:5970-6748 sole-consumer
 /**
  * 按失败类型（refused/network/auth/api/other）渲染加载远程会话失败的提示；auth 时提示 /login 选择订阅账号。
  */

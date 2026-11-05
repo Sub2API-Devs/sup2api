@@ -3,9 +3,9 @@
  *
  * 派生（fork）子代理的基础设施：缓存安全参数、隔离的子代理 ToolUseContext、fork skill 的上下文准备、runForkedAgent 查询循环与遥测
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/forkedAgent.ts
- * pieces: chunk-e6aww6q8.js (29)
+ * pieces: chunk-5xgkngpb.js (29)
  * attribution: placement 8, layout 8, facade-exports 11, fingerprint 2
  */
 import { randomUUID } from "crypto";
@@ -47,6 +47,7 @@ import { getCwdOrNull } from "./cwd.js";
 import {
   withCommandRuleOverrides,
   getToolPermissionContext,
+  getPickedEffortModel,
   getMainLoopModel as getMainLoopModel_2,
 } from "./permissions/toolPermissionContext.js";
 import { logForDebugging } from "./debug.js";
@@ -55,7 +56,7 @@ import { isSkillShownToModel } from "../skills/skillSources.js";
 import { toArray_2 } from "./generators.js";
 import { withWebFetchToolForAgent, hasToolRuleFor } from "../tools/AgentTool/agentToolUtils.js";
 import { WEBFETCH } from "../tools/WebFetchTool/prompt.js";
-import { getAgentDepth, isDelegatedObservationContext } from "./agentContext.js";
+import { getAgentDepth, isDelegatedObservationContext, isMainConversationContext } from "./agentContext.js";
 import { parseWildcardAgentTypes } from "./permissions/permissions.js";
 import { createChildAbortController } from "./abortController.js";
 import { cloneFileStateCache } from "./fileStateCache.js";
@@ -77,6 +78,7 @@ import {
   addUsage_2,
 } from "../../vendor/@anthropic-ai/sdk/lib/internal/tracing/response.mjs";
 import { applyPreservedMessages } from "../services/compact/compact.js";
+import { codeModeAccepted } from "./codeMode/accepted.js";
 import { killShellTasksForAgent } from "../tasks/LocalShellTask/killShellTasks.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
@@ -84,7 +86,7 @@ import { agentTypeForTelemetry } from "../services/analytics/metadata.js";
 import { sanitizeMarkName } from "./startupMarks.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2209627-2209863 placement
+//@ chunk-5xgkngpb.js:2264080-2264316 placement
 function createForkCacheSlot() {
   let cachedValue;
   let cachedKey;
@@ -113,26 +115,27 @@ function createForkCacheSlot() {
     },
   };
 }
-//@ chunk-e6aww6q8.js:2209863-2209876 placement
+//@ chunk-5xgkngpb.js:2264316-2264329 placement
 /**
  * 保存 fork 缓存安全参数的槽位。
  */
 var forkCacheSafeParamsSlot; // deferred: uses createForkCacheSlot of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2209863", () => {
+deferInit("chunk-5xgkngpb.js:2264316", () => {
   forkCacheSafeParamsSlot = createForkCacheSlot();
 });
-//@ chunk-e6aww6q8.js:2209876-2209903 placement
+//@ chunk-5xgkngpb.js:2264329-2264356 placement
 /**
  * 清空 fork 缓存安全参数。
  */
 var clearForkCacheSafeParams = () => forkCacheSafeParamsSlot.set(undefined);
-//@ chunk-e6aww6q8.js:2209903-2209952 placement
+//@ chunk-5xgkngpb.js:2264356-2264405 placement
 var DEFAULT_FORK_MAX_TURNS = 50;
 var NEVER_CONSULT_ADVISOR_TEXT = "Never consult the advisor tool.";
-//@ chunk-e6aww6q8.js:2209952-2210127 placement
+//@ chunk-5xgkngpb.js:2264405-2264605 placement
 function buildAdvisorForkHint({ forkLabel, forkContextMessages, advisorModel }) {
   return forkLabel !== "compact" &&
     forkLabel !== "reactive-compact" &&
+    forkLabel !== "resume_cache_warm" &&
     forkContextMessages.length > 0 &&
     isAdvisorToolEnabled() &&
     advisorModel !== undefined
@@ -142,11 +145,11 @@ function buildAdvisorForkHint({ forkLabel, forkContextMessages, advisorModel }) 
       })
     : undefined;
 }
-//@ chunk-e6aww6q8.js:2210127-2210191 placement
+//@ chunk-5xgkngpb.js:2264605-2264669 placement
 function isAdvisorHintMessage(message) {
   return message.type === "user" && message.message.content === NEVER_CONSULT_ADVISOR_TEXT;
 }
-//@ chunk-e6aww6q8.js:2210191-2210307 placement
+//@ chunk-5xgkngpb.js:2264669-2264785 placement
 class LastForkParams {
   params = null;
   savedAt = null;
@@ -155,7 +158,7 @@ class LastForkParams {
   sessionId = null;
   promptForSessionModel = false;
 }
-//@ chunk-e6aww6q8.js:2210307-2210372 placement
+//@ chunk-5xgkngpb.js:2264785-2264850 placement
 function hasModeDependentUserModel() {
   let userSpecifiedModelSetting = getUserSpecifiedModelSetting();
   return (
@@ -164,12 +167,12 @@ function hasModeDependentUserModel() {
     isModeDependentModelSetting(strip1mSuffix(userSpecifiedModelSetting))
   );
 }
-//@ chunk-e6aww6q8.js:2210372-2210400 layout
+//@ chunk-5xgkngpb.js:2264850-2264878 layout
 var lastForkParamsSlot; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2210372", () => {
+deferInit("chunk-5xgkngpb.js:2264850", () => {
   lastForkParamsSlot = new SessionRootSlot(() => new LastForkParams());
 });
-//@ chunk-e6aww6q8.js:2210400-2210466 layout
+//@ chunk-5xgkngpb.js:2264878-2264944 layout
 function getLastForkParams() {
   let rootSession = getRootSession();
   return {
@@ -178,7 +181,7 @@ function getLastForkParams() {
     root: rootSession,
   };
 }
-//@ chunk-e6aww6q8.js:2210466-2210796 facade-exports
+//@ chunk-5xgkngpb.js:2264944-2265274 facade-exports
 function saveCacheSafeParams(cacheSafeParams) {
   let { last, rootId, root } = getLastForkParams();
   last.params = cacheSafeParams;
@@ -194,11 +197,11 @@ function saveCacheSafeParams(cacheSafeParams) {
     : false;
   if (last.savedAt !== null) idleCompactionSlot.of(root).arm(last.savedAt, lastCacheSafeParamsForSameModel);
 }
-//@ chunk-e6aww6q8.js:2210796-2210835 layout
+//@ chunk-5xgkngpb.js:2265274-2265313 layout
 function lastCacheSafeParamsForSameModel() {
   return canReuseLastForkParams() ? getLastCacheSafeParamsForSameModel() : null;
 }
-//@ chunk-e6aww6q8.js:2210835-2210999 facade-exports
+//@ chunk-5xgkngpb.js:2265313-2265477 facade-exports
 function setLastCacheSafeForkMessages(postCompactMessages) {
   let { last, rootId } = getLastForkParams();
   if (!last.params || last.sessionId !== rootId) return;
@@ -212,7 +215,7 @@ function setLastCacheSafeForkMessages(postCompactMessages) {
     forkContextMessages: postCompactMessages,
   };
 }
-//@ chunk-e6aww6q8.js:2210999-2211143 facade-exports
+//@ chunk-5xgkngpb.js:2265477-2265621 facade-exports
 function getLastCacheSafeParamsForSameModel() {
   let { last, rootId } = getLastForkParams();
   return last.params &&
@@ -223,7 +226,7 @@ function getLastCacheSafeParamsForSameModel() {
     ? last.params
     : null;
 }
-//@ chunk-e6aww6q8.js:2211143-2211399 facade-exports
+//@ chunk-5xgkngpb.js:2265621-2265877 facade-exports
 function getLastCacheSafeParams() {
   let { last, rootId } = getLastForkParams();
   if (!last.params || last.sessionId !== rootId) return null;
@@ -240,7 +243,7 @@ function getLastCacheSafeParams() {
     },
   };
 }
-//@ chunk-e6aww6q8.js:2211399-2211567 facade-exports
+//@ chunk-5xgkngpb.js:2265877-2266045 facade-exports
 function isMainThreadCacheWarm(nowMs = Date.now()) {
   let { last } = getLastForkParams();
   if (last.savedAt === null || !canReuseLastForkParams()) return false;
@@ -249,7 +252,7 @@ function isMainThreadCacheWarm(nowMs = Date.now()) {
   let max = Math.max(last.savedAt, getLastMainThreadCacheRenewedAt() ?? -1 / 0);
   return nowMs - max < lastMainThreadCacheTtlMs * 0.9;
 }
-//@ chunk-e6aww6q8.js:2211567-2211768 layout
+//@ chunk-5xgkngpb.js:2266045-2266246 layout
 /**
  * 判断上次保存的 fork 参数能否复用：属于当前根会话、主循环模型未变，且 advisor 解析结果一致。
  */
@@ -262,7 +265,7 @@ function canReuseLastForkParams() {
     last.resolvedAdvisor
   );
 }
-//@ chunk-e6aww6q8.js:2211768-2211923 layout
+//@ chunk-5xgkngpb.js:2266246-2266401 layout
 /**
  * 两个工具对象除 call 外所有属性都相同（工具调用路由只允许替换 call）。
  */
@@ -272,7 +275,7 @@ function differsOnlyInCall(toolA, toolB) {
     if (key !== "call" && Reflect.get(toolA, key) !== Reflect.get(toolB, key)) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:2211923-2212169 facade-exports (2.1.88 match: createCacheSafeParams, 0.755)
+//@ chunk-5xgkngpb.js:2266401-2266647 facade-exports (2.1.88 match: createCacheSafeParams, 0.755)
 /**
  * 从当前查询上下文提取"缓存安全参数"：系统提示词、user/system context、toolUseContext、父消息（forkContextMessages）、advisor 模型、sticky betas。fork 复用这些以命中父请求的提示缓存。
  */
@@ -287,7 +290,7 @@ function createCacheSafeParams(context) {
     stickyBetas: context.stickyBetas,
   };
 }
-//@ chunk-e6aww6q8.js:2212169-2215228 facade-exports (2.1.88 match: prepareForkedCommandContext, 0.287)
+//@ chunk-5xgkngpb.js:2266647-2269711 facade-exports (2.1.88 match: prepareForkedCommandContext, 0.289)
 /**
  * 为 context: fork 的 skill 准备运行上下文：校验 skill 可用（同步否决、组织策略、同步插件），选基础代理（skill.agent 或 general-purpose），展开 skill 提示词，
  * 按 allowed/disallowed tools 生成权限层与 getAppState，克隆 readFileState、按需提取附件，返回 promptMessages、baseAgent、availableTools 等。
@@ -482,7 +485,7 @@ async function prepareForkedCommandContext(command, args, toolUseContext, agentC
     frozenCommandDenies,
   };
 }
-//@ chunk-e6aww6q8.js:2215228-2215555 layout
+//@ chunk-5xgkngpb.js:2269711-2270038 layout
 /**
  * 当前代理（子代理或主线程指定的代理类型）的工具集是否禁止 WebFetch；决定 fork skill 是否重新放行 WebFetch。
  */
@@ -504,7 +507,7 @@ function agentDisallowsWebFetch(toolUseContext) {
     (parseWildcardAgentTypes(tools) === null && !hasToolRuleFor(tools, WEBFETCH))
   );
 }
-//@ chunk-e6aww6q8.js:2215555-2215658 facade-exports (2.1.88 match: extractResultText, 1)
+//@ chunk-5xgkngpb.js:2270038-2270141 facade-exports (2.1.88 match: extractResultText, 1)
 /**
  * 取代理最后一条 assistant 消息的文本，没有则返回默认文本。
  */
@@ -519,12 +522,12 @@ function extractResultText(agentMessages, defaultText = "Execution completed") {
     ) || defaultText
   );
 }
-//@ chunk-e6aww6q8.js:2215658-2215680 layout
+//@ chunk-5xgkngpb.js:2270141-2270163 layout
 /**
  * 子代理 setAppState 可以回写父状态的字段白名单（只有 frameUrls）。
  */
 var SUBAGENT_WRITABLE_APP_STATE_KEYS = ["frameUrls"];
-//@ chunk-e6aww6q8.js:2215680-2220261 facade-exports (2.1.88 match: createSubagentContext, 0.344)
+//@ chunk-5xgkngpb.js:2270163-2274744 facade-exports (2.1.88 match: createSubagentContext, 0.336)
 /**
  * 创建隔离的子代理 ToolUseContext：abortController 默认为父的子控制器；getAppState 默认强制 shouldAvoidPermissionPrompts（加 avoid_prompts 权限层）；
  * readFileState 克隆、文件历史/denial tracking/setAppState 默认隔离（setAppState 只回写 frameUrls）；messageQueue、taskRegistry、凭证等共享；生成新 agentId 与 queryTracking 深度。
@@ -590,10 +593,6 @@ function createSubagentContext(parentContext, overrides) {
     readFileState: cloneFileStateCache(overrides?.readFileState ?? parentContext.readFileState, {
       stripSeededFromContext: true,
     }),
-    dedupUnchangedReads:
-      parentContext.innerCall === true && (overrides?.readFileState ?? parentContext.readFileState).size === 0
-        ? undefined
-        : parentContext.dedupUnchangedReads,
     nestedMemoryAttachmentTriggers: [],
     pendingNestedMemoryTriggers: parentContext.pendingNestedMemoryTriggers,
     sessionEnvVars: parentContext.sessionEnvVars,
@@ -687,6 +686,13 @@ function createSubagentContext(parentContext, overrides) {
     modelCallNames: overrides?.modelCallNames,
     agentType: overrides?.agentType,
     agentContext,
+    pickedEffortModel:
+      overrides?.pickedEffortModel === null
+        ? undefined
+        : (overrides?.pickedEffortModel ??
+          (isMainConversationContext(agentContext)
+            ? parentContext.pickedEffortModel
+            : getPickedEffortModel(parentContext))),
     agentWorktree: parentContext.agentWorktree,
     spawnedByWorkflowRunId: overrides?.spawnedByWorkflowRunId ?? parentContext.spawnedByWorkflowRunId,
     primitiveToolGrant: overrides?.primitiveToolGrant ?? parentContext.primitiveToolGrant,
@@ -710,7 +716,7 @@ function createSubagentContext(parentContext, overrides) {
     onPermissionDenial: parentContext.onPermissionDenial,
   };
 }
-//@ chunk-e6aww6q8.js:2220261-2220442 facade-exports
+//@ chunk-5xgkngpb.js:2274744-2274925 facade-exports
 /**
  * 父消息里 fork 点的 uuid：末尾若是同一响应拆成的多条 assistant，取第一条。
  */
@@ -727,12 +733,12 @@ function forkPointUuidOf(messages) {
   }
   return messages[index]?.uuid;
 }
-//@ chunk-e6aww6q8.js:2220442-2220452 layout
+//@ chunk-5xgkngpb.js:2274925-2274935 layout
 /**
  * 正在运行的 fork 代理计数。
  */
 var activeForkCount = 0;
-//@ chunk-e6aww6q8.js:2220452-2220518 facade-exports
+//@ chunk-5xgkngpb.js:2274935-2275001 facade-exports
 /**
  * runForkedAgent（门面原名）：维护活动 fork 计数后调用内层实现 runForkedAgentImpl。
  */
@@ -744,7 +750,7 @@ async function runForkedAgent(params) {
     activeForkCount--;
   }
 }
-//@ chunk-e6aww6q8.js:2220518-2224904 fingerprint (2.1.88 match: runForkedAgent, 0.62)
+//@ chunk-5xgkngpb.js:2275001-2279622 fingerprint (2.1.88 match: runForkedAgent, 0.592)
 /**
  * 运行一个 fork 代理：用 createSubagentContext 建隔离上下文（默认后台、memoryCaller=worker、requireCanUseTool），继承父消息前缀与 sticky betas 以复用缓存；
  * 不声明 ownPrefix 时不许改工具集；循环 runQuery 收集消息与 usage、写 sidechain transcript；结束时清理该代理的 shell 任务与排队消息，并记 tengu_fork_agent_query。
@@ -759,6 +765,7 @@ async function runForkedAgentImpl({
   overrides,
   maxOutputTokens,
   maxTurns,
+  pinnedEffort,
   onMessage,
   onRequestUsage,
   onStreamDelta,
@@ -767,7 +774,7 @@ async function runForkedAgentImpl({
   skipMessageCacheMarkers,
   fallbackModel,
   compactionRequestKind,
-  toolChoice,
+  noServerToolCalls,
   apiAttemptsLeft,
   thinkingStripPlan,
   advisorStripPlan,
@@ -897,11 +904,12 @@ async function runForkedAgentImpl({
       fallbackModel,
       maxOutputTokensOverride: maxOutputTokens,
       maxTurns: turnLimit,
+      pinnedEffort,
       skipCacheWrite,
       skipMessageCacheMarkers,
       relayFork,
       compactionRequestKind,
-      toolChoice,
+      noServerToolCalls,
       apiAttemptsLeft,
       forkPointUuid,
       divergesAtMessageId,
@@ -959,7 +967,17 @@ async function runForkedAgentImpl({
     }
   } finally {
     if (compactState) outputMessages.push(...compactState.preserved);
-    if (isolatedToolUseContext.agentId)
+    if (isolatedToolUseContext.agentId) {
+      if (codeModeAccepted())
+        try {
+          require("./codeMode/replSessionEnd.js").endSubagentRepl(
+            isolatedToolUseContext.toolState,
+            isolatedToolUseContext.messageQueue,
+            isolatedToolUseContext.agentId,
+          );
+        } catch (error) {
+          logForDebugging(`[runForkedAgent] REPL session end failed (continuing teardown): ${error}`);
+        }
       try {
         let agentId = isolatedToolUseContext.agentId;
         killShellTasksForAgent(agentId, isolatedToolUseContext.taskRegistry);
@@ -967,6 +985,7 @@ async function runForkedAgentImpl({
       } catch (error) {
         logForDebugging(`[runForkedAgent] shell-task reap failed (continuing teardown): ${error}`);
       }
+    }
     isolatedToolUseContext.readFileState.clear();
     initialMessages.length = 0;
   }
@@ -994,7 +1013,7 @@ async function runForkedAgentImpl({
     totalUsage,
   };
 }
-//@ chunk-e6aww6q8.js:2224904-2225644 fingerprint (2.1.88 match: logForkAgentQueryEvent, 0.977)
+//@ chunk-5xgkngpb.js:2279622-2280362 fingerprint (2.1.88 match: logForkAgentQueryEvent, 0.977)
 /**
  * 记 tengu_fork_agent_query：耗时、消息数、token 与缓存命中率、查询链深度。
  */
@@ -1031,17 +1050,17 @@ function logForkAgentQueryEvent({
   });
 }
 export {
-  forkPointUuidOf,
-  createSubagentContext,
-  runForkedAgent,
-  clearForkCacheSafeParams,
-  setLastCacheSafeForkMessages,
   getLastCacheSafeParams,
+  clearForkCacheSafeParams,
+  isMainThreadCacheWarm,
+  runForkedAgent,
+  setLastCacheSafeForkMessages,
+  getLastCacheSafeParamsForSameModel,
   prepareForkedCommandContext,
   extractResultText,
-  createCacheSafeParams,
   forkCacheSafeParamsSlot,
+  createCacheSafeParams,
+  forkPointUuidOf,
+  createSubagentContext,
   saveCacheSafeParams,
-  getLastCacheSafeParamsForSameModel,
-  isMainThreadCacheWarm,
 };

@@ -3,15 +3,16 @@
  *
  * 识别包管理器安装（Homebrew、winget、apt/dnf、mise/asdf 等）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/nativeInstaller/packageManagers.ts
- * pieces: chunk-hntsfzas.js (3), chunk-x4gcvpxy.js (4)
- * attribution: fingerprint 4, placement 3
+ * pieces: chunk-gvr4gxa7.js (4), chunk-tfmhpnyx.js (3)
+ * attribution: placement 3, fingerprint 4
  */
 import { open, stat, mkdir, writeFile, link, unlink, readFile } from "fs/promises";
 import { join } from "path";
 import { getXDGDataHome } from "../xdg.js";
 import { isRunningFromVersionsDir } from "../deepLink/registerProtocol.js";
+import { bundleVersionOfPath } from "./bundlePaths.js";
 import { makeTempSiblingPath, retryFsOp } from "../atomicPublishWrite.js";
 import { getPlatform } from "../platform.js";
 import { env } from "../env.js";
@@ -22,12 +23,12 @@ import { HostScoped } from "../hostScoped.js";
 import { execFileNoThrow } from "../execFileNoThrow.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-x4gcvpxy.js:565-574 placement
+//@ chunk-gvr4gxa7.js:602-611 placement
 /**
  * Mach-O load command LC_SEGMENT_64（25）。
  */
 var LC_SEGMENT_64 = 25;
-//@ chunk-x4gcvpxy.js:574-1111 placement
+//@ chunk-gvr4gxa7.js:611-1148 placement
 /**
  * 解析 Mach-O 头，从 __info_plist 节读出可执行文件内嵌的 Info.plist。
  */
@@ -58,13 +59,14 @@ async function readEmbeddedInfoPlist(execPath) {
     await fd.close();
   }
 }
-//@ chunk-x4gcvpxy.js:1111-1560 placement (2.1.88 match: MACOS_SYMLINK_PATH, 0.623)
+//@ chunk-gvr4gxa7.js:1148-1643 placement (2.1.88 match: MACOS_SYMLINK_PATH, 0.619)
 /**
  * （误归 deepLink）在 XDG data 下建 ClaudeCode.app：写内嵌 Info.plist、把当前可执行文件硬链接为 Contents/MacOS/claude，返回路径；失败返回 null。
  */
 async function ensureMacAppBundleLink() {
   let appDir = join(getXDGDataHome(), "claude");
   if (!isRunningFromVersionsDir()) return null;
+  if (bundleVersionOfPath(process.execPath) !== undefined) return null;
   let macosDir = join(appDir, "ClaudeCode.app", "Contents", "MacOS");
   let appBinaryPath = join(macosDir, "claude");
   try {
@@ -90,7 +92,7 @@ async function ensureMacAppBundleLink() {
     return null;
   }
 }
-//@ chunk-x4gcvpxy.js:1560-2021 fingerprint (2.1.88 match: detectHomebrew, 0.303)
+//@ chunk-gvr4gxa7.js:1643-2104 fingerprint (2.1.88 match: detectHomebrew, 0.302)
 /**
  * macOS 上为后台进程准备稳定路径/TCC 相关处理（切分可疑：旧版名 detectHomebrew 不符）。
  */
@@ -117,11 +119,11 @@ async function detectHomebrew() {
     });
   } catch {}
 }
-//@ chunk-hntsfzas.js:2480-2555 fingerprint (2.1.88 match: isDistroFamily, 1)
+//@ chunk-tfmhpnyx.js:2513-2588 fingerprint (2.1.88 match: isDistroFamily, 1)
 function isDistroFamily(osRelease, families) {
   return families.includes(osRelease.id) || osRelease.idLike.some((like) => families.includes(like));
 }
-//@ chunk-hntsfzas.js:2555-4839 fingerprint (2.1.88 match: getPackageManager, 0.31)
+//@ chunk-tfmhpnyx.js:2588-4872 fingerprint (2.1.88 match: getPackageManager, 0.308)
 class getPackageManager_2 {
   sources;
   osRelease;
@@ -227,9 +229,9 @@ class getPackageManager_2 {
     return "unknown";
   }
 }
-//@ chunk-hntsfzas.js:4839-4993 fingerprint (2.1.88 match: getOsRelease, 0.424)
+//@ chunk-tfmhpnyx.js:4872-5026 fingerprint (2.1.88 match: getOsRelease, 0.424)
 var osReleaseClientPerHost; // deferred: uses getPackageManager_2 of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hntsfzas.js:4839", () => {
+deferInit("chunk-tfmhpnyx.js:4872", () => {
   osReleaseClientPerHost = new HostScoped(
     () =>
       new getPackageManager_2({
@@ -240,4 +242,4 @@ deferInit("chunk-hntsfzas.js:4839", () => {
       }),
   );
 });
-export { osReleaseClientPerHost, detectHomebrew };
+export { detectHomebrew, osReleaseClientPerHost };

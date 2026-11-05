@@ -3,9 +3,9 @@
  *
  * 误归代码：表格数据列类型摘要生成器与一行圆点文本渲染，与 EnterPlanMode 无关
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/EnterPlanModeTool/UI.tsx
- * pieces: chunk-ah34pb7m.js (2)
+ * pieces: chunk-wjygkcr4.js (2)
  * attribution: placement 2
  */
 import {
@@ -16,7 +16,7 @@ import { Box, Text } from "../../ink/components/Text.js";
 import { themeColorOf } from "../../utils/spellcheck.js";
 import { BLACK_CIRCLE } from "../../constants/figures.js";
 
-//@ chunk-ah34pb7m.js:30138-30454 placement
+//@ chunk-wjygkcr4.js:31102-31418 placement
 /**
  * 进入计划模式的结果显示。
  */
@@ -47,7 +47,7 @@ function EnterPlanModeResult(props, unused, unusedOther) {
     ],
   });
 }
-//@ chunk-ah34pb7m.js:30454-30616 placement
+//@ chunk-wjygkcr4.js:31418-31580 placement
 /**
  * “User declined to enter plan mode” 消息。
  */

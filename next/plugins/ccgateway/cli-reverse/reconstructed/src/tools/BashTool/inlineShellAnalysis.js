@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：内联 shell（bash -c、eval 等）分析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (25)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (25)
  * attribution: placement 25
  */
 import { homedir } from "os";
@@ -24,7 +24,7 @@ import {
 } from "../../utils/bash/parser.js";
 import { env } from "../../utils/env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import { count, uniq } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import {
   POSIX_SHELL_NAMES,
   parseForSecurity,
@@ -47,9 +47,10 @@ import { logDangerousRmShape, runWithoutTelemetry, isDangerousRmEnabled } from "
 import { stripWrappersFromArgvForPaths } from "./pathValidation.js";
 import { runWithDivergentShapes } from "./readOnlyValidation.js";
 import { runInRemoteCallFrameMain } from "../../remote/remoteMode.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1204114-1204550 placement
+//@ chunk-5xgkngpb.js:1201366-1201802 placement
 /**
  * 合并声明前缀不同读法的检查结果：任一 deny 即 deny；取最严重者；读法不穷尽且结果非 ask 时要求确认（too-complex）。
  */
@@ -73,12 +74,12 @@ function combineDeclarationReadings(result, readingResults, exhaustive, isExhaus
     suggestions: [],
   };
 }
-//@ chunk-e6aww6q8.js:1204550-1204695 placement
+//@ chunk-5xgkngpb.js:1201802-1201947 placement
 var MAX_INLINE_SCRIPT_LENGTH; // deferred: uses QUOTE_MARKER (./expansionAnalysis.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_INLINE_STATEMENTS;
 var INLINE_SHELL_VALUE_PLACEHOLDER;
 var INLINE_PREFIX_WORDS;
-deferInit("chunk-e6aww6q8.js:1204550", () => {
+deferInit("chunk-5xgkngpb.js:1201802", () => {
   MAX_INLINE_SCRIPT_LENGTH = 2000;
   MAX_INLINE_STATEMENTS = 8;
   INLINE_SHELL_VALUE_PLACEHOLDER = "__INLINE_SHELL_VALUE__";
@@ -88,7 +89,7 @@ deferInit("chunk-e6aww6q8.js:1204550", () => {
     ..."builtin noglob toybox trap watch flock chroot script".split(" "),
   ]);
 });
-//@ chunk-e6aww6q8.js:1204695-1205183 placement
+//@ chunk-5xgkngpb.js:1201947-1202435 placement
 /**
  * 粗略地把脚本文本拆成语句与单词：引号内元字符置为分隔外字符，去掉重定向与前导赋值，按 ;&|()`{} 等切分。
  */
@@ -114,7 +115,7 @@ function splitInlineStatements(text, stripQuotes = true) {
       );
     });
 }
-//@ chunk-e6aww6q8.js:1205183-1205260 placement
+//@ chunk-5xgkngpb.js:1202435-1202512 placement
 /**
  * 取可执行名并归一（小写、去掉 -1.2.3 版本号），用于识别 busybox/toybox 这类多重调用程序。
  */
@@ -123,7 +124,7 @@ function normalizeProgramBasename(program) {
     .toLowerCase()
     .replace(/-\d+(?:\.\d+)*$/, "");
 }
-//@ chunk-e6aww6q8.js:1205260-1205700 placement
+//@ chunk-5xgkngpb.js:1202512-1202952 placement
 /**
  * 判断脚本是否可能间接运行 rm/rmdir：与 xargs/find -exec/sh -c 等组合、以变量作命令名、赋值为 rm，或大括号展开成 rm。
  */
@@ -154,7 +155,7 @@ function mayRunRmIndirectly(text) {
     ) || splitShellWords(text).some(braceExpandsToRm)
   );
 }
-//@ chunk-e6aww6q8.js:1205700-1206270 placement
+//@ chunk-5xgkngpb.js:1202952-1203522 placement
 /**
  * 宽松判断脚本文本是否可能提到 rm/rmdir：去掉转义、引号、变量与默认值展开等多种变体后匹配，并检查大括号展开。
  */
@@ -184,19 +185,19 @@ function mentionsRm(text) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:1206270-1206308 placement
+//@ chunk-5xgkngpb.js:1203522-1203560 placement
 /**
  * 匹配 $'…' 里带 C 风格转义（\x \u \U \c \0-7）的字符串，这类脚本无法静态判定。
  */
 var C_STYLE_ESCAPE_RE = /\$'(?:\\'|[^'])*\\[xuUc0-7]/;
-//@ chunk-e6aww6q8.js:1206308-1206422 placement
+//@ chunk-5xgkngpb.js:1203560-1203674 placement
 function hasInlineShellC(text) {
   return [text, text.replace(/\\\n/g, "")].some(
     (variant) =>
       C_STYLE_ESCAPE_RE.test(variant) || C_STYLE_ESCAPE_RE.test(variant.replace(/'(?:\\'|"'")'/g, "'")),
   );
 }
-//@ chunk-e6aww6q8.js:1206422-1206516 placement
+//@ chunk-5xgkngpb.js:1203674-1203768 placement
 /**
  * 内联 shell 脚本是否必须检查危险删除：未设 CLAUDE_CODE_STRICT_INLINE_SHELL_RM_PROMPT 且 tengu_pale_kestrel 开启时为真。
  */
@@ -206,7 +207,7 @@ function isStrictInlineShellRmPromptEnabled() {
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_pale_kestrel", true)
   );
 }
-//@ chunk-e6aww6q8.js:1206516-1206577 placement
+//@ chunk-5xgkngpb.js:1203768-1203829 placement
 /**
  * 当内联检查开启时，判断词语里是否提到 rm 或含 sh -c 这类内联执行。
  */
@@ -215,7 +216,7 @@ function needsInlineShellRmCheck(...texts) {
     !isStrictInlineShellRmPromptEnabled() || texts.some((text) => mentionsRm(text) || hasInlineShellC(text))
   );
 }
-//@ chunk-e6aww6q8.js:1206577-1206771 placement
+//@ chunk-5xgkngpb.js:1203829-1204023 placement
 function mayHideRm(text) {
   let replaced = text.replace(/\$(?=['"])|['"\\]/g, "");
   return (
@@ -224,7 +225,7 @@ function mayHideRm(text) {
     /(?:^|[;&|(){}\n`!])\s*(?:\w+\+?=\S*\s+)*\$/.test(replaced)
   );
 }
-//@ chunk-e6aww6q8.js:1206771-1207209 placement
+//@ chunk-5xgkngpb.js:1204023-1204461 placement
 /**
  * 判断脚本是否使用了静态分析无法建模的 shell 特性：函数/别名、IFS、位置参数赋值、shift/source/eval/trap、以变量作命令、set 改变位置参数等。
  */
@@ -254,14 +255,14 @@ function hasUnmodeledShellFeatures(text) {
     )
   );
 }
-//@ chunk-e6aww6q8.js:1207209-1207298 placement
+//@ chunk-5xgkngpb.js:1204461-1204550 placement
 /**
  * 按 shell 词法切分（处理单双引号与反斜杠转义），得到单词列表。
  */
 function splitShellWords(text) {
   return text.match(/(?:[^\s'"\\]|\\[\s\S]|'[^']*'|"(?:[^"\\]|\\.)*")+/g) ?? [];
 }
-//@ chunk-e6aww6q8.js:1207298-1207478 placement
+//@ chunk-5xgkngpb.js:1204550-1204730 placement
 function braceExpandsToRm(word) {
   let match = /^([^{]*)\{([^{}]*)\}(.*)$/s.exec(word.replace(/["'\\]/g, ""));
   return (
@@ -271,13 +272,13 @@ function braceExpandsToRm(word) {
       .some((alternative) => /(?:^|\/)rm(?:dir)?$/i.test(`${match[1]}${alternative}${match[3]}`))
   );
 }
-//@ chunk-e6aww6q8.js:1207478-1207919 placement
+//@ chunk-5xgkngpb.js:1204730-1205171 placement
 /**
  * 判断单词中的大括号展开是否有风险：多层或不规则、前后缀含路径或特殊字符、展开项含路径/通配/rm 或可能为空。
  */
 function hasRiskyBraceExpansion(text) {
   let replaced = text.replace(/\$\{[^{}]*\}/g, "$X");
-  let braceCount = count([...replaced], (char) => char === "{");
+  let braceCount = countWhere([...replaced], (char) => char === "{");
   if (braceCount === 0 || !/,|\.\./.test(replaced)) return false;
   let match = /^([^{]*)\{([^{}]*)\}(.*)$/s.exec(replaced);
   if (braceCount > 1 || match === null) return true;
@@ -297,7 +298,7 @@ function hasRiskyBraceExpansion(text) {
       )
   );
 }
-//@ chunk-e6aww6q8.js:1207919-1210963 placement
+//@ chunk-5xgkngpb.js:1205171-1208219 placement
 /**
  * 分析内联 shell（busybox、zsh、bash -c 等）中的命令，必要时加上防护变量。
  */
@@ -472,7 +473,7 @@ function analyzeInlineShell(argv) {
   );
   return result(isSafe && !hasUnmodeledShellFeatures(text) ? text : undefined);
 }
-//@ chunk-e6aww6q8.js:1210963-1211518 placement
+//@ chunk-5xgkngpb.js:1208219-1208774 placement
 /**
  * 描述前置语句：纯赋值返回变量名；cd 标记 cd；export/unset/declare 等返回涉及的变量名及是否导出；其他返回 undefined。
  */
@@ -509,7 +510,7 @@ function describeAssignmentStatement(text, commands) {
     exports: commandName === "export" || commandName === "unset" || args.some((arg) => /^-\w*x/.test(arg)),
   };
 }
-//@ chunk-e6aww6q8.js:1211518-1212066 placement
+//@ chunk-5xgkngpb.js:1208774-1209322 placement
 /**
  * 解析命令并列出顶层语句分隔符（&&、||、|、;、&、换行）及其位于第几条语句之后；解析失败返回 null。
  */
@@ -545,7 +546,7 @@ async function listStatementSeparators(command, expectedCount) {
   visit(node);
   return statementCount === expectedCount ? separators : null;
 }
-//@ chunk-e6aww6q8.js:1212066-1212508 placement (2.1.88 match: parseForSecurity, 0.837)
+//@ chunk-5xgkngpb.js:1209322-1209764 placement (2.1.88 match: parseForSecurity, 0.837)
 /**
  * shell -c 递归检查辅助：脚本前只有一个 cd 且其余以 && 连接时，解析 cd 目标并调用 Vze 计算新 cwd；远程执行或带 -C/-D/--chdir/su 等时放弃。
  */
@@ -577,7 +578,7 @@ async function resolveSingleCdTarget(command, command_2, prefixWords, context) {
     ? (resolveSimpleCdTarget(root.commands[0], getCwd(), getToolPermissionContext(context)) ?? undefined)
     : undefined;
 }
-//@ chunk-e6aww6q8.js:1212508-1213154 placement
+//@ chunk-5xgkngpb.js:1209764-1210410 placement
 /**
  * 把内联 shell 脚本中危险 rm 的询问改写为更明确的说明（目标来自运行时才知道的变量或命令输出，可能为空而删到根或家目录），提示使用字面路径或 ${NAME:?}。
  */
@@ -598,14 +599,14 @@ function rewordInlineRemovalAsk(result) {
         },
       };
 }
-//@ chunk-e6aww6q8.js:1213154-1213222 placement
+//@ chunk-5xgkngpb.js:1210410-1210478 placement
 /**
  * 三个常量：权限规则里的通配名 “*”、上报命令名上限 8、以及内联脚本中代表 “cd 到某处” 的占位伪命令。
  */
 var WILDCARD_ANY_NAME; // deferred: uses MAX_INLINE_SCRIPT_LENGTH of its import cycle while loading; runs once the cycle is complete
 var MAX_INLINE_REPORTED_NAMES;
 var INLINE_CD_PLACEHOLDER;
-deferInit("chunk-e6aww6q8.js:1213154", () => {
+deferInit("chunk-5xgkngpb.js:1210410", () => {
   WILDCARD_ANY_NAME = "*";
   MAX_INLINE_REPORTED_NAMES = 8;
   INLINE_CD_PLACEHOLDER = {
@@ -615,7 +616,7 @@ deferInit("chunk-e6aww6q8.js:1213154", () => {
     exports: false,
   };
 });
-//@ chunk-e6aww6q8.js:1213222-1213890 placement
+//@ chunk-5xgkngpb.js:1210478-1211146 placement
 /**
  * 生成内联 shell 脚本无法检查危险删除时的询问结果：区分脚本内命令被权限规则拒绝与脚本含 rm 但无法检查两种说明，不可由分类器批准。
  */
@@ -637,7 +638,7 @@ function inlineShellUncheckedAsk(deniedInside, depth) {
     suggestions: [],
   };
 }
-//@ chunk-e6aww6q8.js:1213890-1217476 placement
+//@ chunk-5xgkngpb.js:1211146-1214747 placement
 /**
  * 改写 shell -c 中的命令（export、cd、exec、env 等）以便逐个检查。
  */
@@ -747,7 +748,7 @@ async function rewriteInlineShellCommand(astCommand, assignments, recursionCtx, 
     filtered_2.some((assignment) => assignment.unread) ||
     depth >= MAX_INLINE_DEPTH ||
     inlineShell.judged.length > MAX_INLINE_SCRIPT_LENGTH ||
-    count(splitInlineStatements(inlineShell.judged).flat(), (word) =>
+    countWhere(splitInlineStatements(inlineShell.judged).flat(), (word) =>
       /^(?:cd|pushd|popd|chdir)$/.test(stripPathAndExe(word)),
     ) > MAX_INLINE_STATEMENTS;
   let sawDeny = false;
@@ -885,7 +886,7 @@ ${replaced}`;
     ? inlineShellUncheckedAsk(sawDeny && !isUnchecked, depth)
     : null;
 }
-//@ chunk-e6aww6q8.js:1217476-1217892 placement
+//@ chunk-5xgkngpb.js:1214747-1215163 placement
 /**
  * 检查内联 shell 脚本（bash -c、eval 等）中的危险 rm，结果按深度/形状/声明前缀/cwd/前置语句/脚本文本缓存；可由 CLAUDE_CODE_DISABLE_INLINE_SHELL_RM_PROMPT 关闭。
  */
@@ -907,7 +908,7 @@ ${command}`;
   recursionCtx.budget.asked.set(cacheKey, result);
   return result;
 }
-//@ chunk-e6aww6q8.js:1217892-1222420 placement
+//@ chunk-5xgkngpb.js:1215163-1219696 placement
 /**
  * 解析内联赋值（VAR=值），识别命令替换与 ANSI-C 字符串。
  */
@@ -971,7 +972,9 @@ async function parseInlineAssignments(
           text.replace(/["'\\]/g, ""),
         )
           ? [WILDCARD_ANY_NAME]
-          : uniq(text.replace(/\$\{?[A-Za-z_]\w*/g, " ").match(/[A-Za-z_]\w*/g) ?? []),
+          : normalizeCaseForComparison_2(
+              text.replace(/\$\{?[A-Za-z_]\w*/g, " ").match(/[A-Za-z_]\w*/g) ?? [],
+            ),
       exports: false,
       unread: true,
     });

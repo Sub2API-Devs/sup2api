@@ -3,9 +3,9 @@
  *
  * 订阅限额的面向用户文案：被拒/预警/正在用 overage 时的提示文本、按订阅类型的升级或换模型建议。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/rateLimitMessages.ts
- * pieces: chunk-89vj35pq.js (6), chunk-dcmhvw5a.js (3), chunk-w5ndchqs.js (15)
+ * pieces: chunk-77cpes3s.js (6), chunk-7pwjpdkw.js (15), chunk-z20c443b.js (3)
  * attribution: placement 9, fingerprint 6, callgraph-fingerprint 3, layout 6
  */
 import { formatResetTimeWithLocale, utilizationPercent, planWindowPercent } from "../utils/format.js";
@@ -64,7 +64,7 @@ import { createUserMessage, createSystemMessage } from "../utils/messages.js";
 import { getIsNonInteractiveSession, getSessionId } from "../bootstrap/state.js";
 import { logError } from "../utils/log.js";
 
-//@ chunk-dcmhvw5a.js:49677-50242 placement
+//@ chunk-z20c443b.js:49714-50279 placement
 /**
  * 用量上限消息的开头文本集合。
  */
@@ -85,14 +85,14 @@ var LIMIT_MESSAGE_PREFIXES = [
 var LIMIT_MESSAGE_PREFIX_PATTERNS = [
   /^(?:Fable|Haiku|Mythos|Opus|Sonnet)(?: [^\u00B7\n]{1,40})? requires usage credits\./,
 ];
-//@ chunk-dcmhvw5a.js:50242-50322 placement
+//@ chunk-z20c443b.js:50279-50359 placement
 function isRateLimitErrorMessage(text) {
   return (
     LIMIT_MESSAGE_PREFIXES.some((prefix) => text.startsWith(prefix)) ||
     LIMIT_MESSAGE_PREFIX_PATTERNS.some((pattern) => pattern.test(text))
   );
 }
-//@ chunk-dcmhvw5a.js:50322-50625 fingerprint (2.1.88 match: RATE_LIMIT_ERROR_PREFIXES, 0.403)
+//@ chunk-z20c443b.js:50359-50662 fingerprint (2.1.88 match: RATE_LIMIT_ERROR_PREFIXES, 0.403)
 /**
  * 限额文案前缀表：错误类、预警类（"You've used"/"You're close to"）、overage 类（"Now using usage credits" 等），用于识别限额消息。
  */
@@ -107,7 +107,7 @@ var OVERAGE_NOTICE_PREFIXES = [
   "You're now using extra usage",
   "Now using extra usage",
 ];
-//@ chunk-w5ndchqs.js:20352-20707 placement
+//@ chunk-7pwjpdkw.js:20506-20861 placement
 function rateLimitWindowLabel(limits) {
   let resetTime = limits.resetsAt ? formatResetTimeWithLocale(limits.resetsAt, true) : undefined;
   if (!resetTime) return null;
@@ -132,7 +132,7 @@ function rateLimitWindowLabel(limits) {
       return null;
   }
 }
-//@ chunk-w5ndchqs.js:20707-21273 fingerprint (2.1.88 match: getRateLimitMessage, 0.621)
+//@ chunk-7pwjpdkw.js:20861-21427 fingerprint (2.1.88 match: getRateLimitMessage, 0.621)
 /**
  * 由额度状态得到 {message, severity}：overage 预警、被拒（错误）、allowed_warning（团队/企业已开 extra usage 时不提示）。
  */
@@ -170,7 +170,7 @@ function getRateLimitMessage(limits, model, threshold) {
   }
   return null;
 }
-//@ chunk-w5ndchqs.js:21273-21361 callgraph-fingerprint (2.1.88 match: getRateLimitErrorMessage, 1)
+//@ chunk-7pwjpdkw.js:21427-21515 callgraph-fingerprint (2.1.88 match: getRateLimitErrorMessage, 1)
 /**
  * 只取错误级文案。
  */
@@ -179,7 +179,7 @@ function getRateLimitErrorMessage(limits, model) {
   if (message && message.severity === "error") return message.message;
   return null;
 }
-//@ chunk-w5ndchqs.js:21361-21455 callgraph-fingerprint (2.1.88 match: getRateLimitWarning, 1)
+//@ chunk-7pwjpdkw.js:21515-21609 callgraph-fingerprint (2.1.88 match: getRateLimitWarning, 1)
 /**
  * 只取警告级文案。
  */
@@ -188,7 +188,7 @@ function getRateLimitWarning(limits, model, threshold) {
   if (message && message.severity === "warning") return message.message;
   return null;
 }
-//@ chunk-w5ndchqs.js:24419-24734 callgraph-fingerprint (2.1.88 match: getLimitReachedText, 0.332)
+//@ chunk-7pwjpdkw.js:24576-24893 callgraph-fingerprint (2.1.88 match: getLimitReachedText, 0.332)
 /**
  * 被拒时的"You've hit your <限额>"文案（按限额类型）。
  */
@@ -210,7 +210,7 @@ function getLimitReachedText(limits, model, options) {
       return null;
   }
 }
-//@ chunk-w5ndchqs.js:24734-24857 layout
+//@ chunk-7pwjpdkw.js:24893-25016 layout
 /**
  * 利用率转 1–99 的整数百分比。
  */
@@ -218,7 +218,7 @@ function toUtilizationPercent(fraction) {
   if (fraction === undefined || !Number.isFinite(fraction) || fraction <= 0 || fraction >= 1) return;
   return Math.min(99, Math.floor(Math.round(fraction * 1e4) / 100));
 }
-//@ chunk-w5ndchqs.js:24857-25556 fingerprint (2.1.88 match: getEarlyWarningText, 0.526)
+//@ chunk-7pwjpdkw.js:25016-25715 fingerprint (2.1.88 match: getEarlyWarningText, 0.526)
 /**
  * 预警文案："You've used N% of your <限额>" 等。
  */
@@ -263,7 +263,7 @@ function getEarlyWarningText(limits) {
     .filter(Boolean)
     .join(" \xB7 ");
 }
-//@ chunk-w5ndchqs.js:25556-26197 fingerprint (2.1.88 match: getWarningUpsellText, 0.61)
+//@ chunk-7pwjpdkw.js:25715-26356 fingerprint (2.1.88 match: getWarningUpsellText, 0.61)
 /**
  * 按订阅类型的升级/购买提示。
  */
@@ -298,7 +298,7 @@ function getWarningUpsellText(rateLimitType) {
     return "/upgrade to keep using Claude Code";
   return null;
 }
-//@ chunk-w5ndchqs.js:26197-26420 layout
+//@ chunk-7pwjpdkw.js:26356-26579 layout
 /**
  * 需要用量信用的模型受限时提示购买或换模型。
  */
@@ -308,7 +308,7 @@ function getModelSwitchUpsell(model) {
   if (!isConsumerPlan()) return "Switch models to keep working.";
   return `Buy more to keep using ${renderUsageCreditsOnlyModelName(parseUserSpecifiedModel(model))}, or switch models to keep working.`;
 }
-//@ chunk-w5ndchqs.js:26420-26497 layout
+//@ chunk-7pwjpdkw.js:26579-26656 layout
 /**
  * 模型受"仅用量信用"限制（可用、需信用、未豁免）。
  */
@@ -317,7 +317,7 @@ function isCreditsOnlyModelLimit(model) {
   let modelId = parseUserSpecifiedModel(model);
   return isUsageCreditsOnlyModel(modelId) && isModelBilledOrRequired(modelId) && !usesPayAsYouGo();
 }
-//@ chunk-w5ndchqs.js:26497-26898 layout
+//@ chunk-7pwjpdkw.js:26656-27057 layout
 /**
  * Pro 用户周限额预警时的换模型建议（如 /model opus 更多余量）。
  */
@@ -343,7 +343,7 @@ function getProRunwayTip(claudeAiLimits, mainLoopModel, effortValue) {
     };
   return null;
 }
-//@ chunk-w5ndchqs.js:26898-27538 fingerprint (2.1.88 match: getUsingOverageText, 0.407)
+//@ chunk-7pwjpdkw.js:27057-27697 fingerprint (2.1.88 match: getUsingOverageText, 0.407)
 /**
  * 正在使用 overage 时的提示文案。
  */
@@ -382,7 +382,7 @@ function getUsingOverageText(limits, mainLoopModel) {
   let resetMessage = resetTime && !subscriptionType ? ` \xB7 Your ${limitName} resets ${resetTime}` : "";
   return `You're now using ${allocationText}${resetMessage}`;
 }
-//@ chunk-w5ndchqs.js:27538-27634 layout
+//@ chunk-7pwjpdkw.js:27697-27793 layout
 /**
  * Pro/企业显示 weekly limit，否则 Sonnet limit。
  */
@@ -392,7 +392,7 @@ function getWeeklyModelLimitName() {
     ? RATE_LIMIT_DISPLAY_NAMES.seven_day
     : RATE_LIMIT_DISPLAY_NAMES.seven_day_sonnet;
 }
-//@ chunk-w5ndchqs.js:27634-27765 layout
+//@ chunk-7pwjpdkw.js:27793-27924 layout
 /**
  * " · run <命令> to ask your admin for a higher limit"。
  */
@@ -402,7 +402,7 @@ function getAskAdminSuffix() {
     ? ` \xB7 run ${usageCreditsCommand} to ask your admin for a higher limit`
     : " \xB7 ask your admin for a higher limit";
 }
-//@ chunk-w5ndchqs.js:27765-27877 fingerprint (2.1.88 match: formatLimitReachedText, 0.403)
+//@ chunk-7pwjpdkw.js:27924-28036 fingerprint (2.1.88 match: formatLimitReachedText, 0.403)
 /**
  * "You've hit your <限额><重置时间>[ · progress saved]"。
  */
@@ -410,18 +410,18 @@ function formatLimitReachedText(limitName, suffix, resetText, options) {
   let savedSuffix = options?.progressSavedSuffix ? " \xB7 progress saved" : "";
   return `You've hit your ${limitName}${suffix}${savedSuffix}`;
 }
-//@ chunk-89vj35pq.js:520-732 placement
+//@ chunk-77cpes3s.js:520-732 placement
 var TENGU_LANTERN_WICK_RELEASE = "tengu_lantern_wick_release";
 var TENGU_LANTERN_WICK_BRAID = "tengu_lantern_wick_braid";
 var TENGU_LANTERN_WICK_BRAID_TEXT = "tengu_lantern_wick_braid_text";
 var TENGU_LANTERN_WICK_BRAID_RELEASE = "tengu_lantern_wick_braid_release";
 var TENGU_LANTERN_WICK_TEXT_BY_MODEL = "tengu_lantern_wick_text_by_model";
 var TENGU_LANTERN_WICK_RELEASE_BY_MODEL = "tengu_lantern_wick_release_by_model";
-//@ chunk-89vj35pq.js:732-775 placement
+//@ chunk-77cpes3s.js:732-775 placement
 function servedTextOrFlag(byModelFlag, fallbackFlag, model) {
   return servedTextForModel(byModelFlag, model) ?? getFeatureValue_CACHED_MAY_BE_STALE(fallbackFlag, "");
 }
-//@ chunk-89vj35pq.js:775-927 placement
+//@ chunk-77cpes3s.js:775-927 placement
 /**
  * 从开关配置中按模型名、规范名或 default 取服务端下发的文字。
  */
@@ -434,7 +434,7 @@ function servedTextForModel(byModelFlag, model) {
     .map((key) => byModel[key])
     .find((text) => typeof text === "string");
 }
-//@ chunk-89vj35pq.js:927-1240 placement
+//@ chunk-77cpes3s.js:927-1240 placement
 /**
  * 把服务端下发的文字清洗后加方括号，清洗失败或被改动时记遥测。
  */
@@ -453,7 +453,7 @@ function bracketServedText(text) {
   let trimmed = typeof text === "string" ? text.trim() : "";
   return trimmed ? `[${trimmed}]` : "";
 }
-//@ chunk-89vj35pq.js:1240-1374 placement
+//@ chunk-77cpes3s.js:1240-1374 placement
 function lastUsageLimitNote(messages) {
   for (let i = messages.length - 1; i >= 0; i--) {
     let message = messages[i];
@@ -461,10 +461,20 @@ function lastUsageLimitNote(messages) {
   }
   return;
 }
-//@ chunk-89vj35pq.js:1374-3036 placement
+//@ chunk-77cpes3s.js:1374-3067 placement
 function* usageLimitNotices(
   messages,
-  { resumeActive, isMainLoop, querySource, depth, model, toolUseContext, now, uuid },
+  {
+    resumeActive,
+    isMainLoop,
+    querySource,
+    depth,
+    continuesInterruptedWork,
+    model,
+    toolUseContext,
+    now,
+    uuid,
+  },
 ) {
   let { agentContext } = toolUseContext;
   let isAgentCall =
@@ -528,7 +538,8 @@ function* usageLimitNotices(
     let shouldRelease;
     if (isMainLoop) {
       let lastNote = depth === 0 ? lastUsageLimitNote(messages) : undefined;
-      shouldRelease = !hasExtraUsage && (lastNote === "wrap_up" || lastNote === "near_limit");
+      shouldRelease =
+        !hasExtraUsage && !continuesInterruptedWork && (lastNote === "wrap_up" || lastNote === "near_limit");
     } else
       shouldRelease =
         !hasExtraUsage &&
@@ -600,19 +611,19 @@ export {
   rateLimitWindowLabel,
   formatLimitReachedText,
   getAskAdminSuffix,
-  getWarningUpsellText,
-  getUsingOverageText,
-  getRateLimitWarning,
-  getProRunwayTip,
-  getModelSwitchUpsell,
+  getRateLimitErrorMessage,
+  isRateLimitErrorMessage,
   LIMIT_MESSAGE_PREFIXES,
   RATE_LIMIT_WARNING_PREFIXES,
   OVERAGE_NOTICE_PREFIXES,
   RATE_LIMIT_ERROR_PREFIXES,
   LIMIT_MESSAGE_PREFIX_PATTERNS,
-  usageLimitNotices,
+  getWarningUpsellText,
+  getUsingOverageText,
+  getRateLimitWarning,
+  getProRunwayTip,
+  getModelSwitchUpsell,
   servedTextForModel,
-  getRateLimitErrorMessage,
-  isRateLimitErrorMessage,
+  usageLimitNotices,
   getWeeklyModelLimitName,
 };

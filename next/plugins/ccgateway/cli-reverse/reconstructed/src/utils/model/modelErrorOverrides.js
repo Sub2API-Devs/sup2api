@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：模型错误覆盖
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hwmsct5x.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vn3g7zt8.js (11)
  * attribution: placement 11
  */
 import { isPlainObject } from "../isPlainObject.js";
@@ -18,20 +18,20 @@ import { MODEL_FAMILY_NAMES, catalogModels, isOverflowRow, getRowFamily } from "
 import { modelIdentityKey } from "./modelCatalog/servedCatalog.js";
 import { normalizeModelId } from "./modelCatalog/catalogEntries.js";
 
-//@ chunk-hwmsct5x.js:198401-198444 placement
+//@ chunk-vn3g7zt8.js:198791-198834 placement
 var TENGU_MODEL_ERROR_OVERRIDES = "tengu-model-error-overrides";
 var EMPTY_OVERRIDES = {};
-//@ chunk-hwmsct5x.js:198444-198476 placement
+//@ chunk-vn3g7zt8.js:198834-198866 placement
 function plainObjectOrEmpty(value) {
   return isPlainObject(value) ? value : EMPTY_OVERRIDES;
 }
-//@ chunk-hwmsct5x.js:198476-198592 placement
+//@ chunk-vn3g7zt8.js:198866-198982 placement
 function getModelErrorOverride(overrides, modelKey) {
   if (typeof modelKey !== "string" || modelKey === "") return;
   let override = plainObjectOrEmpty(overrides)[modelKey];
   return typeof override === "object" && override !== null ? override : undefined;
 }
-//@ chunk-hwmsct5x.js:198592-198655 placement
+//@ chunk-vn3g7zt8.js:198982-199045 placement
 /**
  * 异步取动态配置中该模型的阻断说明文本。
  */
@@ -39,11 +39,11 @@ async function blockedOverrideText(modelKey) {
   let overrides = await getDynamicConfig_BLOCKS_ON_INIT(TENGU_MODEL_ERROR_OVERRIDES, EMPTY_OVERRIDES);
   return blockTextFromOverride(getModelErrorOverride(overrides, modelKey));
 }
-//@ chunk-hwmsct5x.js:198655-198690 placement
+//@ chunk-vn3g7zt8.js:199045-199080 placement
 function blockTextFromOverride(modelErrorOverride) {
   return trimmedNonEmptyOrNull(modelErrorOverride?.block);
 }
-//@ chunk-hwmsct5x.js:198690-198787 placement
+//@ chunk-vn3g7zt8.js:199080-199177 placement
 /**
  * 取该模型的错误覆盖：pickerHint 优先，其次 block；都没有返回 null。
  */
@@ -56,13 +56,13 @@ function pickerHintFromOverride(modelKey) {
   if (blockText === null) return null;
   return trimmedNonEmptyOrNull(modelErrorOverride?.pickerHint) ?? blockText;
 }
-//@ chunk-hwmsct5x.js:198787-198873 placement
+//@ chunk-vn3g7zt8.js:199177-199263 placement
 function trimmedNonEmptyOrNull(value) {
   if (typeof value !== "string") return null;
   let trimmed = value.trim();
   return trimmed === "" ? null : trimmed;
 }
-//@ chunk-hwmsct5x.js:198873-199295 placement
+//@ chunk-vn3g7zt8.js:199263-199685 placement
 /**
  * 把目录中的模型整理为去重的行（served 来源时可用行在前），每行带来源、规范 key、是否可选、族名与别名族。
  */
@@ -99,14 +99,14 @@ function buildCatalogRows({ catalog, provenance }) {
   }
   return rows;
 }
-//@ chunk-hwmsct5x.js:199295-199365 placement
+//@ chunk-vn3g7zt8.js:199685-199755 placement
 /**
  * 列出可选的目录行 id。
  */
 function selectableRowIds(registry) {
   return buildCatalogRows(registry).flatMap((entry) => (entry.selectable ? [entry.row.id] : []));
 }
-//@ chunk-hwmsct5x.js:199365-199448 placement
+//@ chunk-vn3g7zt8.js:199755-199838 placement
 /**
  * 列出可选且非 overflow 分区的行 id。
  */
@@ -115,7 +115,7 @@ function selectableNonOverflowRowIds(registry) {
     entry.selectable && !isOverflowRow(entry.row) ? [entry.row.id] : [],
   );
 }
-//@ chunk-hwmsct5x.js:199448-199615 placement
+//@ chunk-vn3g7zt8.js:199838-200005 placement
 /**
  * 见同句首个绑定的说明。
  */

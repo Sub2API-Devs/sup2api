@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：原生工具在别处运行时的错误与权限检查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-g54kbxqw.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2c3jp4kn.js (5), chunk-wrq65rh8.js (1)
  * attribution: placement 6
  */
 import { isRemoteOnlyCheck, escapeXmlInline } from "../../utils/permissions/checkRegistry.js";
@@ -14,7 +14,7 @@ import { isAbortError, errorMessage } from "../../utils/errors.js";
 import { clipText } from "./protocolSchemas.js";
 import { SEND_USER_FILE_TOOL_NAME } from "../../tools/SendUserFileTool/prompt.js";
 
-//@ chunk-g54kbxqw.js:36033-36297 placement
+//@ chunk-2c3jp4kn.js:4926-5188 placement
 function assertNativeToolRunsHere(name, session) {
   if (!isRemoteOnlyCheck(name)) return;
   logFeatureBad("native_tool_never_runs_here", name, {
@@ -24,11 +24,11 @@ function assertNativeToolRunsHere(name, session) {
     `${name} is unavailable: this session runs file and shell tools only in its cloud environment, and this call could not be sent there. Retrying will not help.`,
   );
 }
-//@ chunk-g54kbxqw.js:36297-36316 placement
+//@ chunk-2c3jp4kn.js:5188-5206 placement
 var NATIVE_TOOL_OK = {
   result: true,
 };
-//@ chunk-g54kbxqw.js:36316-36420 placement
+//@ chunk-2c3jp4kn.js:5206-5309 placement
 class NativeToolElsewhereError extends Error {
   code;
   constructor(message, code) {
@@ -37,14 +37,14 @@ class NativeToolElsewhereError extends Error {
     this.name = "NativeToolElsewhereError";
   }
 }
-//@ chunk-g54kbxqw.js:36420-36508 placement
+//@ chunk-2c3jp4kn.js:5309-5396 placement
 class NeverRunsInThisProcessError extends Error {
   constructor(message) {
     super(message);
     this.name = "NeverRunsInThisProcessError";
   }
 }
-//@ chunk-g54kbxqw.js:36508-37428 placement
+//@ chunk-2c3jp4kn.js:5396-6309 placement
 async function runPermissionCheck(toolDef, checkRunner, input, signal, toolUseContext, opts, model) {
   let checkResult;
   try {
@@ -94,7 +94,7 @@ async function runPermissionCheck(toolDef, checkRunner, input, signal, toolUseCo
     }),
   };
 }
-//@ chunk-g54kbxqw.js:37428-37963 placement
+//@ chunk-wrq65rh8.js:1055-1590 placement
 /**
  * GetTask 工具不可用时的三段说明：为什么不能调用 GetTask、tool_use_error 包装文案与重复调用的应答。
  */
@@ -106,11 +106,11 @@ var GET_TASK_TOOL_ERROR_TEXT =
 var GET_TASK_REPEAT_TEXT = "Repeated GetTask call; not answered again.";
 export {
   GET_TASK_TOOL_TEXT,
-  GET_TASK_REPEAT_TEXT,
-  GET_TASK_TOOL_ERROR_TEXT,
-  GET_TASK_NOT_A_TOOL_TEXT,
   assertNativeToolRunsHere,
   NativeToolElsewhereError,
   runPermissionCheck,
   NATIVE_TOOL_OK,
+  GET_TASK_REPEAT_TEXT,
+  GET_TASK_NOT_A_TOOL_TEXT,
+  GET_TASK_TOOL_ERROR_TEXT,
 };

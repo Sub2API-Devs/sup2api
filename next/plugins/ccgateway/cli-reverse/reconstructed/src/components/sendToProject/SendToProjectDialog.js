@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：“发送到项目”权限对话框
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6d9n2xk3.js (28)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-e98td4c6.js (28)
  * attribution: placement 28
  */
 import {
@@ -70,7 +70,7 @@ import {
 import { Text, Box } from "../../ink/components/Text.js";
 import { useInputClock } from "../../ink/components/Input.js";
 import {
-  useInputRefusalWindow,
+  useRecentInputWithin,
   useRefusalTracker,
   useMountTime,
   settleKey,
@@ -88,15 +88,15 @@ import { isAnthropicRepoText } from "../../utils/github/anthropicRepos.js";
 import { scanFolderContext } from "../../services/projects/sessionScan.js";
 import { NOTHING_ELSE_SENT_NOTICE, notSentLine } from "../../services/projects/disclosure.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { isWithinRecentInput } from "../../hooks/useRecentInputGuard.js";
+import { useRecentInputStamp, isWithinRecentInput } from "../../hooks/useRecentInputGuard.js";
 import { PermissionDialog_2 } from "../permissions/PermissionDialog.js";
 import { ConfirmSelect } from "../design-system/ConfirmSelect.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "../CustomSelect/select.js";
 
-//@ chunk-6d9n2xk3.js:14339-14343 placement
+//@ chunk-e98td4c6.js:15523-15527 placement
 init_react_production();
-//@ chunk-6d9n2xk3.js:14343-15669 placement
+//@ chunk-e98td4c6.js:15527-16853 placement
 var SEND_TO_PROJECT_TEXT = " \xB7 ";
 var CHOICE_INDENT = 4;
 var HEADER_RESERVED_ROWS = 3;
@@ -129,7 +129,7 @@ var TAILSCALE_KIND_LABELS = {
   byoc: "self-hosted",
   self_hosted_pool: "self-hosted",
 };
-//@ chunk-6d9n2xk3.js:15669-18263 placement
+//@ chunk-e98td4c6.js:16853-19447 placement
 function projectSummaryLines(args) {
   let { width, existing } = args;
   let project = existing === null ? undefined : existing.project;
@@ -308,17 +308,17 @@ function projectSummaryLines(args) {
       mapped.reduce((acc, spec) => acc + Math.max(spec.rows.length, spec.rowsAtMost), 0),
   };
 }
-//@ chunk-6d9n2xk3.js:18263-18297 placement
+//@ chunk-e98td4c6.js:19447-19481 placement
 var filtered = Object.keys(LOOKUP_ERROR_TEXT).filter(isKnownErrorCode);
-//@ chunk-6d9n2xk3.js:18297-18339 placement
+//@ chunk-e98td4c6.js:19481-19523 placement
 function isKnownErrorCode(code) {
   return Object.hasOwn(LOOKUP_ERROR_TEXT, code);
 }
-//@ chunk-6d9n2xk3.js:18339-18378 placement
+//@ chunk-e98td4c6.js:19523-19562 placement
 function replaceControlChars(text) {
   return text.replace(regExp_2, BLANK_GLYPH);
 }
-//@ chunk-6d9n2xk3.js:18378-18648 placement
+//@ chunk-e98td4c6.js:19562-19832 placement
 function wrapGraphemes(text, width, maxWidth = width) {
   let lines = [];
   let currentLine = "";
@@ -340,7 +340,7 @@ function wrapGraphemes(text, width, maxWidth = width) {
   }
   return [...lines, currentLine];
 }
-//@ chunk-6d9n2xk3.js:18648-18900 placement
+//@ chunk-e98td4c6.js:19832-20084 placement
 function labeledLine(label, value, width, maxLines) {
   let prefix = `${SEND_TO_PROJECT_TEXT}${label}: `;
   let prefixFits = bunStringWidth(prefix) <= width / 2;
@@ -360,7 +360,7 @@ function labeledLine(label, value, width, maxLines) {
     mapped[mapped.length - 1] = truncateToWidth(`${last}\u2026`, Math.max(1, width));
   return mapped;
 }
-//@ chunk-6d9n2xk3.js:18900-19674 placement
+//@ chunk-e98td4c6.js:20084-20858 placement
 function labeledWrappedLines(label, text, value, width, maxRows, underBullet = false) {
   let max = Math.max(2, width);
   let inlineLabel = `${SEND_TO_PROJECT_TEXT}${label}: `;
@@ -412,7 +412,7 @@ function labeledWrappedLines(label, text, value, width, maxRows, underBullet = f
     sliced[sliced.length - 1] = truncateToWidth(`${last}\u2026`, max);
   return sliced;
 }
-//@ chunk-6d9n2xk3.js:19674-19822 placement
+//@ chunk-e98td4c6.js:20858-21006 placement
 function wrapToMaxLines(text, width) {
   let lines = wrapTextToWidth(text, Math.max(1, width));
   let sliced = lines.slice(0, HEADER_RESERVED_ROWS);
@@ -421,7 +421,7 @@ function wrapToMaxLines(text, width) {
     sliced[sliced.length - 1] = truncateToWidth(`${last}\u2026`, Math.max(1, width));
   return sliced;
 }
-//@ chunk-6d9n2xk3.js:19822-20307 placement
+//@ chunk-e98td4c6.js:21006-21491 placement
 function quotedPreviewLines(leadText, name, tailText, width, maxLines = 1) {
   let sanitizedName = replaceControlChars(sanitizeDialogText(name));
   let quotedName = `\u201C${sanitizedName}\u201D`;
@@ -462,7 +462,7 @@ function quotedPreviewLines(leadText, name, tailText, width, maxLines = 1) {
     };
   });
 }
-//@ chunk-6d9n2xk3.js:20307-20856 placement
+//@ chunk-e98td4c6.js:21491-22040 placement
 function environmentStatusText(state) {
   let { environment } = state;
   if (environment === undefined) return "looking it up\u2026";
@@ -480,7 +480,7 @@ function environmentStatusText(state) {
       : "If the server refuses it, your organization\u2019s default is used.";
   return `${sanitizeDialogText(environment.name)} ${kindLabel}. ${statusText}`;
 }
-//@ chunk-6d9n2xk3.js:20856-21412 placement
+//@ chunk-e98td4c6.js:22040-22596 placement
 function detectionStatusText(state) {
   let { detection } = state;
   if (detection === null)
@@ -500,11 +500,11 @@ function detectionStatusText(state) {
       return "none. This folder is not a git repository.";
   }
 }
-//@ chunk-6d9n2xk3.js:21412-21475 placement
+//@ chunk-e98td4c6.js:22596-22659 placement
 function sanitizeDialogText(name) {
   return stripNonPrintable(name.replace(regExp, BLANK_GLYPH).replaceAll("\t", BLANK_GLYPH));
 }
-//@ chunk-6d9n2xk3.js:21475-22133 placement
+//@ chunk-e98td4c6.js:22659-23317 placement
 var DIALOG_LAYOUT = 2;
 var CHOICE_GAP = 2;
 var LABEL_GAP = 2;
@@ -529,7 +529,7 @@ var DIALOG_HELP_LINES = [
   "Select with numbers [1-2] or up / down arrow keys. Then Enter to submit or Escape to cancel: 12",
   'Invalid selection "12". Enter a number between 1 and 2.',
 ];
-//@ chunk-6d9n2xk3.js:22133-22708 placement
+//@ chunk-e98td4c6.js:23317-23891 placement
 function dialogRowBudget(layout) {
   let fixedRows =
     layout.titleRows +
@@ -564,7 +564,7 @@ function dialogRowBudget(layout) {
       (layout.screenReader && baseRows + layout.widgetRows + CHOICE_MIN_HEIGHT > layout.terminalRows),
   };
 }
-//@ chunk-6d9n2xk3.js:22708-23166 placement
+//@ chunk-e98td4c6.js:23891-24349 placement
 function requesterLabel(source) {
   switch (source?.type) {
     case "workflow-agent": {
@@ -587,7 +587,7 @@ function requesterLabel(source) {
       return null;
   }
 }
-//@ chunk-6d9n2xk3.js:23166-23513 placement
+//@ chunk-e98td4c6.js:24349-24696 placement
 function dialogTitleLine(title, source, columns, wrapWidth, isScreenReaderEnabled, askPositionLabel) {
   let displayTitle = isScreenReaderEnabled ? `Permission Required: ${title}` : title;
   let max = Math.max(1, isScreenReaderEnabled ? columns : columns - 2);
@@ -617,7 +617,7 @@ function dialogTitleLine(title, source, columns, wrapWidth, isScreenReaderEnable
     sourceRows: requesterRows,
   };
 }
-//@ chunk-6d9n2xk3.js:23513-23875 placement
+//@ chunk-e98td4c6.js:24696-25058 placement
 function parseSendToProjectInput(input) {
   let {
     project_name: projectName,
@@ -641,7 +641,7 @@ function parseSendToProjectInput(input) {
     messageFrom: drawnMessageFrom(input[MESSAGE_KEY], parsedProposal.data),
   };
 }
-//@ chunk-6d9n2xk3.js:23875-24196 placement
+//@ chunk-e98td4c6.js:25058-25379 placement
 function sendToProjectAnswer(choice, payload, session, originKey, environmentKey, toolsUsed, extra) {
   let input = withEditedMessage(payload.input, originKey, environmentKey);
   switch (choice) {
@@ -675,7 +675,7 @@ function sendToProjectAnswer(choice, payload, session, originKey, environmentKey
     }
   }
 }
-//@ chunk-6d9n2xk3.js:24196-24272 placement
+//@ chunk-e98td4c6.js:25379-25455 placement
 function withEditedMessage(input, originKey, environmentKey) {
   return {
     ...input,
@@ -686,11 +686,11 @@ function withEditedMessage(input, originKey, environmentKey) {
     }),
   };
 }
-//@ chunk-6d9n2xk3.js:24272-24322 placement
+//@ chunk-e98td4c6.js:25455-25505 placement
 function repoLabel(repo, repoText) {
   return repo === null ? "" : repoSlugOrEmpty(repo.repo, repoText);
 }
-//@ chunk-6d9n2xk3.js:24322-24632 placement
+//@ chunk-e98td4c6.js:25505-25815 placement
 function sendToProjectOptions(projectId, canSend, initialValue, onChange, messageText) {
   return [
     ...(canSend
@@ -730,9 +730,9 @@ function sendToProjectOptions(projectId, canSend, initialValue, onChange, messag
       : []),
   ];
 }
-//@ chunk-6d9n2xk3.js:24632-24658 placement
+//@ chunk-e98td4c6.js:25815-25841 placement
 var EDIT_MESSAGE_ACTION = "Edit the message";
-//@ chunk-6d9n2xk3.js:24658-24783 placement
+//@ chunk-e98td4c6.js:25841-25966 placement
 function sendConfirmLabel(projectId, isExisting) {
   return isExisting
     ? projectId !== null
@@ -742,11 +742,11 @@ function sendConfirmLabel(projectId, isExisting) {
       ? "Yes, send it to the project"
       : "Yes, create the project";
 }
-//@ chunk-6d9n2xk3.js:24783-24805 placement
+//@ chunk-e98td4c6.js:25966-25988 placement
 var MAX_LIST_ROWS = 20;
 var LIST_OVERHEAD_ROWS = 8;
 var CHOICE_TIMEOUT_MS = 500;
-//@ chunk-6d9n2xk3.js:24805-25261 placement
+//@ chunk-e98td4c6.js:25988-26444 placement
 function PreviewRow(props) {
   let $ = useMemoCache(8);
   let { row } = props;
@@ -782,16 +782,16 @@ function PreviewRow(props) {
   } else rowElement = $[7];
   return rowElement;
 }
-//@ chunk-6d9n2xk3.js:25261-31759 placement
+//@ chunk-e98td4c6.js:26444-33017 placement
 /**
  * “发送到项目”权限对话框：显示项目、环境检测、预览与选项，带误触保护。
  */
 function SendToProjectDialog({ payload, answer, wouldTakeAnswer }) {
   let inputClock = useInputClock();
-  let inputRefusalWindow = useInputRefusalWindow();
+  let isRecentInput = useRecentInputWithin();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
   function refuseInput() {
-    if (inputRefusalWindow() || refusedWithin()) {
+    if (isRecentInput() || refusedWithin()) {
       noteRefused();
       return true;
     }
@@ -1073,18 +1073,24 @@ function SendToProjectDialog({ payload, answer, wouldTakeAnswer }) {
       options,
     });
   let lastFocused = useRef("yes");
-  let yesPressedAt = useRef(null);
+  let [yesPressedAt, setYesPressedAt] = useState(() => ({
+    ready: isReady,
+    at: isReady ? Date.now() : 0,
+  }));
+  if (yesPressedAt.ready !== isReady)
+    setYesPressedAt({
+      ready: isReady,
+      at: isReady ? Date.now() : yesPressedAt.at,
+    });
+  let isWithinChoiceTimeout = useRecentInputStamp(yesPressedAt.at);
   let [needsPreparing, setNeedsPreparing] = useState(false);
   let [showNotice, setShowNotice] = useState(false);
   useEffect(() => {
-    if (isReady) {
-      yesPressedAt.current = Date.now();
-      setNeedsPreparing(false);
-    }
+    if (isReady) setNeedsPreparing(false);
   }, [isReady]);
   let onChoice = useCallback(
     (choice, typedMessage) => {
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (isRecentInput() || refusedWithin()) {
         noteRefused();
         return false;
       }
@@ -1100,8 +1106,8 @@ function SendToProjectDialog({ payload, answer, wouldTakeAnswer }) {
       }
       if (
         choice === "yes" &&
-        (yesPressedAt.current === null ||
-          isWithinRecentInput(inputClock, yesPressedAt.current, CHOICE_TIMEOUT_MS))
+        (yesPressedAt.at === 0 ||
+          isWithinRecentInput(inputClock, isWithinChoiceTimeout(yesPressedAt.at), CHOICE_TIMEOUT_MS))
       ) {
         setShowNotice(true);
         noteRefused();
@@ -1139,10 +1145,12 @@ function SendToProjectDialog({ payload, answer, wouldTakeAnswer }) {
       envLookupFailed,
       tools,
       toolsLines_2.length,
-      inputRefusalWindow,
+      isRecentInput,
       refusedWithin,
       noteRefused,
       inputClock,
+      yesPressedAt.at,
+      isWithinChoiceTimeout,
     ],
   );
   if (parsedInput === null)

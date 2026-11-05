@@ -3,27 +3,34 @@
  *
  * 2.1.316 新增：遥测请求的凭据头只发往其所属主机，否则扣下并报 misrouted_credential；获取并缓存 Bedrock 推理配置等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (10)
- * attribution: placement 10
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (11)
+ * attribution: placement 10, layout 1
  */
-import { getSettingsSyncEndpoint } from "../settingsSync/index.js";
+import { getOauthConfig, ALLOWED_OAUTH_BASE_URLS } from "../../constants/oauth.js";
 import { isGatewayUrlForBaseAndSync, currentBaseUrl } from "../gateway/constants.js";
 import { isAnthropicApiKey } from "../../utils/anthropicHosts.js";
 import { isFirstPartyAnthropicHost } from "../../utils/model/providers.js";
-import { ALLOWED_OAUTH_BASE_URLS } from "../../constants/oauth.js";
 import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_node_http_handler } from "../../../vendor/@smithy/node-http-handler/dist-cjs/index.js";
 import { getProviderState } from "../../utils/model/providerCaches.js";
 import { getBedrockInferenceProfiles_2 } from "../../utils/model/bedrock.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:129758-129791 placement
+//@ chunk-exfmq47h.js:139267-139300 placement
 function settingsSyncEndpointWithAuth(endpoint) {
-  return credentialForEndpointHost(getSettingsSyncEndpoint(), endpoint);
+  return credentialForEndpointHost(baseApiHost(), endpoint);
 }
-//@ chunk-aepeg2w5.js:129852-130094 placement
+//@ chunk-exfmq47h.js:139300-139361 layout
+function baseApiHost() {
+  try {
+    return hostOfUrl(getOauthConfig().BASE_API_URL);
+  } catch {
+    return;
+  }
+}
+//@ chunk-exfmq47h.js:139361-139603 placement
 /**
  * 遥测请求的凭据头只发往其所属主机，否则扣下并报 misrouted_credential。
  */
@@ -39,7 +46,7 @@ function guardTelemetryCredentials(authHeaders, endpoint) {
     reasonCode: "misrouted_credential",
   };
 }
-//@ chunk-aepeg2w5.js:130094-130169 placement
+//@ chunk-exfmq47h.js:139603-139678 placement
 /**
  * 对非 Anthropic 主机不发送 API key。
  */
@@ -48,12 +55,12 @@ function apiKeyForHost(apiKey) {
   let notOurs = baseUrl === undefined || !getCurrentRepoHttpsUrl(baseUrl);
   return !apiKey || (notOurs && !isAnthropicApiKey(apiKey)) ? null : apiKey;
 }
-//@ chunk-aepeg2w5.js:130169-130243 placement
+//@ chunk-exfmq47h.js:139678-139752 placement
 function credentialForEndpointHost(host, endpoint) {
   let endpointHost = isHttpsUrl(endpoint) ? hostOfUrl(endpoint) : undefined;
   return host !== undefined && host === endpointHost && getCurrentRepoHttpsUrl(endpointHost);
 }
-//@ chunk-aepeg2w5.js:130243-130316 placement
+//@ chunk-exfmq47h.js:139752-139825 placement
 function isHttpsUrl(url) {
   try {
     return new URL(url).protocol === "https:";
@@ -61,7 +68,7 @@ function isHttpsUrl(url) {
     return false;
   }
 }
-//@ chunk-aepeg2w5.js:130316-130385 placement
+//@ chunk-exfmq47h.js:139825-139894 placement
 function hostOfUrl(url) {
   if (!url) return;
   try {
@@ -70,19 +77,19 @@ function hostOfUrl(url) {
     return;
   }
 }
-//@ chunk-aepeg2w5.js:130385-130452 placement (2.1.88 match: getCurrentRepoHttpsUrl, 0.803)
+//@ chunk-exfmq47h.js:139894-139961 placement (2.1.88 match: getCurrentRepoHttpsUrl, 0.805)
 function getCurrentRepoHttpsUrl(host) {
   return (
     isFirstPartyAnthropicHost(`https://${host}`) ||
     ALLOWED_OAUTH_BASE_URLS.some((url) => hostOfUrl(url) === host)
   );
 }
-//@ chunk-aepeg2w5.js:130452-130470 placement
+//@ chunk-exfmq47h.js:139961-139979 placement
 var apiKeyForHostGuard; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:130452", () => {
+deferInit("chunk-exfmq47h.js:139961", () => {
   apiKeyForHostGuard = __toESM(require_node_http_handler(), 1);
 });
-//@ chunk-aepeg2w5.js:130470-130666 placement
+//@ chunk-exfmq47h.js:139979-140175 placement
 /**
  * 获取并缓存 Bedrock 推理配置。
  */
@@ -97,7 +104,7 @@ function getBedrockInferenceProfiles() {
     );
   return providerCache.bedrockInferenceProfiles;
 }
-//@ chunk-aepeg2w5.js:130666-130738 placement
+//@ chunk-exfmq47h.js:140175-140247 placement
 function getBedrockInferenceProfilesGuard() {
   return getProviderState().providerCache.settledBedrockInferenceProfiles;
 }
@@ -105,6 +112,7 @@ export {
   guardTelemetryCredentials,
   apiKeyForHost,
   credentialForEndpointHost,
+  baseApiHost,
   hostOfUrl,
   apiKeyForHostGuard,
   getBedrockInferenceProfiles,

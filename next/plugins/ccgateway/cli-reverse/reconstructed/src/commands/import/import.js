@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：导入预览/确认界面：列出扫描到的可导入项及警告，支持 dry-run 与自动确认；/import 命令：解析 --dry-run/--yes/来源，扫描后展示 ImportReview。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cdgppz20.js (14), chunk-he8wyk3b.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-grj4dgn9.js (14), chunk-z7tp34gt.js (4)
  * attribution: placement 18
  */
 import { createHash } from "crypto";
@@ -22,7 +22,7 @@ import {
   compareImportItems,
 } from "../../services/agentImport/importItemOrder.js";
 import { IMPORT_OFFER_PROMPT } from "./index.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { errorMessage } from "../../utils/errors.js";
 import { logEvent } from "../../services/analytics/index.js";
 import {
@@ -44,7 +44,7 @@ import { KeyboardShortcutHint } from "../../components/design-system/KeyboardSho
 import { SelectMultiAccessible } from "../../components/CustomSelect/SelectMulti.js";
 import { Dialog } from "../../components/design-system/Dialog.js";
 
-//@ chunk-he8wyk3b.js:11972-12564 placement
+//@ chunk-z7tp34gt.js:13120-13712 placement
 /**
  * 对扫描到的可导入项与不可映射项按稳定顺序做 sha256 摘要（取前 32 个十六进制字符），用作 /import --yes=<digest> 的确认凭据，保证确认的就是预览时的内容。
  */
@@ -75,7 +75,7 @@ function computeImportScanDigest(scans) {
   }
   return hash.digest("hex").slice(0, 32);
 }
-//@ chunk-he8wyk3b.js:12564-13596 placement
+//@ chunk-z7tp34gt.js:13712-14744 placement
 /**
  * /import 命令入口：解析 --dry-run、--yes=<digest> 与来源，扫描可导入的 agent 配置；带 --yes 时校验摘要后直接导入，否则展示预览界面。
  */
@@ -119,7 +119,7 @@ var callImport = async (args, context) => {
   }
   return runImportCommand(scans, from, importScanDigest, warnings ?? []);
 };
-//@ chunk-he8wyk3b.js:13596-15811 placement
+//@ chunk-z7tp34gt.js:14744-16959 placement
 /**
  * /import 命令主流程：汇总找到的条目并按项目导入
  */
@@ -192,13 +192,13 @@ function runImportCommand(scans, from, importScanDigest, options) {
 `),
   };
 }
-//@ chunk-he8wyk3b.js:15811-17107 placement
+//@ chunk-z7tp34gt.js:16959-18255 placement
 async function importProjectItems(scans, dryRun, warnings, storageV5) {
   let flattened = scans.flatMap((scan) => scan.result.items);
   let flattened_2 = scans.flatMap((scan) => scan.result.unmappable);
   let filtered = flattened.filter(isPlainUserImportItem);
-  let projectCount = count(flattened, (item) => importItemGroup(item) === "project");
-  let warnedCount = count(flattened, (item) => importItemGroup(item) === "warned");
+  let projectCount = countWhere(flattened, (item) => importItemGroup(item) === "project");
+  let warnedCount = countWhere(flattened, (item) => importItemGroup(item) === "warned");
   let lines = [];
   let appliedCount = 0;
   for (let item of filtered)
@@ -260,32 +260,32 @@ async function importProjectItems(scans, dryRun, warnings, storageV5) {
   return [dryRunFlag, ...lines, ...output].join(`
 `);
 }
-//@ chunk-cdgppz20.js:13829-13833 placement
+//@ chunk-grj4dgn9.js:14978-14982 placement
 init_react_production();
-//@ chunk-cdgppz20.js:13833-13917 placement
+//@ chunk-grj4dgn9.js:14982-15066 placement
 function toImportEntry(scan) {
   return scan.result.items.map((item) => ({
     item,
     source: scan.displayName,
   }));
 }
-//@ chunk-cdgppz20.js:13917-13964 placement
+//@ chunk-grj4dgn9.js:15066-15113 placement
 function compareImportEntries(a, b) {
   return compareImportItems(a.item, b.item);
 }
-//@ chunk-cdgppz20.js:13964-14008 placement
+//@ chunk-grj4dgn9.js:15113-15157 placement
 function unmappableOfScan(scan) {
   return scan.result.unmappable;
 }
-//@ chunk-cdgppz20.js:14008-14044 placement
+//@ chunk-grj4dgn9.js:15157-15193 placement
 function isSelectableImportItem(item) {
   return isPlainUserImportItem(item.item);
 }
-//@ chunk-cdgppz20.js:14044-14078 placement
+//@ chunk-grj4dgn9.js:15193-15227 placement
 function importItemId(item) {
   return item.item.id;
 }
-//@ chunk-cdgppz20.js:14078-14182 placement
+//@ chunk-grj4dgn9.js:15227-15331 placement
 function toUnmappableSummary(entry) {
   return {
     sourceId: entry.sourceId,
@@ -293,19 +293,19 @@ function toUnmappableSummary(entry) {
     unmappable: entry.result.unmappable,
   };
 }
-//@ chunk-cdgppz20.js:14182-14229 placement
+//@ chunk-grj4dgn9.js:15331-15378 placement
 function isWarnedImportItem(item) {
   return importItemGroup(item.item) === "warned";
 }
-//@ chunk-cdgppz20.js:14229-14277 placement
+//@ chunk-grj4dgn9.js:15378-15426 placement
 function isProjectImportItem(item) {
   return importItemGroup(item.item) === "project";
 }
-//@ chunk-cdgppz20.js:14277-14315 placement
+//@ chunk-grj4dgn9.js:15426-15464 placement
 function scanDisplayName(scan) {
   return scan.displayName;
 }
-//@ chunk-cdgppz20.js:14315-14397 placement
+//@ chunk-grj4dgn9.js:15464-15546 placement
 function renderUnmappableLine(path, reason) {
   return jsxProd_default_2(
     Text,
@@ -316,10 +316,10 @@ function renderUnmappableLine(path, reason) {
     reason,
   );
 }
-//@ chunk-cdgppz20.js:14397-14437 placement
+//@ chunk-grj4dgn9.js:15546-15586 placement
 var IMPORT_FALLBACK_SKILL = "import:fallback-skill";
 var noopHandler = () => {};
-//@ chunk-cdgppz20.js:14437-19606 placement
+//@ chunk-grj4dgn9.js:15586-20747 placement
 /**
  * 导入预览/确认界面：列出扫描到的可导入项及警告，支持 dry-run 与自动确认。
  */
@@ -464,8 +464,8 @@ function ImportReview(props) {
           `${unmappable.length} unmapped ${plural(unmappable.length, "item")} were skipped (re-run /import to generate the helper skill).`,
         );
       if (auto) {
-        let warnedCount = count(entries, isWarnedImportItem);
-        let projectCount = count(entries, isProjectImportItem);
+        let warnedCount = countWhere(entries, isWarnedImportItem);
+        let projectCount = countWhere(entries, isProjectImportItem);
         if (warnedCount > 0)
           noteLines.push(
             `  \u26A0 ${warnedCount} warning-flagged ${plural(warnedCount, "item")} held back \u2014 re-run without --yes to review.`,
@@ -726,7 +726,7 @@ function ImportReview(props) {
   } else itemsDialog = $[66];
   return itemsDialog;
 }
-//@ chunk-cdgppz20.js:19606-20464 placement
+//@ chunk-grj4dgn9.js:20747-21605 placement
 /**
  * /import 命令：解析 --dry-run/--yes/来源，扫描后展示 ImportReview。
  */
@@ -778,4 +778,4 @@ async function call(onDone, context, args) {
       }),
   });
 }
-export { call, callImport, computeImportScanDigest };
+export { callImport, computeImportScanDigest, call };

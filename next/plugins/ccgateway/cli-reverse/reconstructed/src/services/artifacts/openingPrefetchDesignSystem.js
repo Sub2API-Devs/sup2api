@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：打开时预取设计系统
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-87yw66gx.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-703mwkgv.js (7)
  * attribution: placement 7
  */
 import { parseArtifactUrl, ARTIFACT_TOOL_NAME } from "../../tools/ArtifactTool/constants.js";
@@ -38,7 +38,7 @@ import { artifactReadRule } from "../../tools/ArtifactTool/permissions/readRules
 import { typeSlugOf, getShareEntry } from "./shareEntries.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-87yw66gx.js:6784-7241 placement
+//@ chunk-703mwkgv.js:7316-7773 placement
 /**
  * 识别打开 artifact 时注入的"使用设计系统"提醒文本的正则（单个系统、多个系统、用户不使用设计系统）与最多处理的系统数。
  */
@@ -49,7 +49,7 @@ var DESIGN_SYSTEM_MULTI_RE =
 var NO_DESIGN_SYSTEM_RE =
   /^The user chose not to use a design system for this session \(they unchecked every design system offered /;
 var MAX_DESIGN_SYSTEMS = 4;
-//@ chunk-87yw66gx.js:7241-7533 placement
+//@ chunk-703mwkgv.js:7773-8065 placement
 /**
  * 从提醒文本里解析出用户为本会话选中的设计系统（slug/env，最多若干个）；遇到"不使用设计系统"的提醒则清空。以最后一条为准。
  */
@@ -76,9 +76,9 @@ function parseChosenDesignSystems(chosen) {
   }
   return chosenSystems;
 }
-//@ chunk-87yw66gx.js:7533-7543 placement
+//@ chunk-703mwkgv.js:8065-8075 placement
 var MAX_DESIGN_NOTES = 128;
-//@ chunk-87yw66gx.js:7543-9655 placement
+//@ chunk-703mwkgv.js:8075-10187 placement
 /**
  * 生成告诉模型如何使用设计系统的文字：没有文件索引时让其读取 README.md 与 tokens.json；有已保存文件时给出读取/打印指引；否则列出系统文件与读取顺序。
  */
@@ -112,10 +112,10 @@ function describeDesignSystemFiles(systems, spelling) {
 
 `);
 }
-//@ chunk-87yw66gx.js:9655-9671 placement
+//@ chunk-703mwkgv.js:10187-10203 placement
 var MAX_DESIGN_FILES = 32;
 var DESIGN_PREFETCH_TIMEOUT_MS = 4000;
-//@ chunk-87yw66gx.js:9671-10449 placement
+//@ chunk-703mwkgv.js:10203-10981 placement
 /**
  * 打开空白 artifact 时，按提醒里选中的设计系统预取文件索引（单个系统时还预取保存的文件），在超时内生成设计系统使用说明；不适用时返回 null。
  */
@@ -185,7 +185,7 @@ async function prefetchDesignSystemNotes(
     signal.cleanup();
   }
 }
-//@ chunk-87yw66gx.js:10449-11585 placement
+//@ chunk-703mwkgv.js:10981-12117 placement
 /**
  * 为一个设计系统建立文件索引：确认 Artifact 读取与类型目录可用、工具未被扣留且没有 deny/ask 规则命中，预热共享条目与类型实例，已有读取同意时列出文件；任一条件不满足返回 null 并记调试日志。
  */

@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：plugin eval 授予 shell 时找出本机各类凭据存储（Anthropic profile、AWS、kube、ssh、krb5、JVM、Ansible、Azure、git 等）以从沙箱中排除
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qchp9vrd.js (45)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-af1hzzme.js (45)
  * attribution: placement 45
  */
 import { readdir, stat, open, lstat, rm as rm_2 } from "fs/promises";
 import { default as path_2 } from "path";
 import { constants } from "fs";
-import os_2 from "os";
+import os from "os";
 import {
   getErrnoCode,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -48,9 +48,9 @@ import {
   isScalarPropertyValue,
 } from "../../utils/settings/policyHelper/helperEnv.js";
 import { withTimeout } from "../../utils/sleep.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 
-//@ chunk-qchp9vrd.js:201749-202064 placement
+//@ chunk-af1hzzme.js:203159-203474 placement
 /**
  * 列出目录下的子目录（不跟随链接）；目录不存在返回空，无法分类的条目抛出隔离探测失败错误。
  */
@@ -75,7 +75,7 @@ async function listSubdirectories(dir, label) {
   }
   return dirs;
 }
-//@ chunk-qchp9vrd.js:202064-202173 placement
+//@ chunk-af1hzzme.js:203474-203583 placement
 /**
  * 把环境变量对象的键转为大写（同名保留先出现的值）。
  */
@@ -87,7 +87,7 @@ function upperCaseEnvKeys(env) {
   }
   return upperEnv;
 }
-//@ chunk-qchp9vrd.js:202173-203943 placement
+//@ chunk-af1hzzme.js:203583-205353 placement
 /**
  * 读取 ANTHROPIC_CONFIG_DIR 下的 profile 配置以排除其凭据文件。
  */
@@ -168,7 +168,7 @@ async function readAnthropicProfileConfigs(configDir, profileNameHint) {
   }
   return credentialPaths;
 }
-//@ chunk-qchp9vrd.js:203943-204271 placement
+//@ chunk-af1hzzme.js:205353-205681 placement
 /**
  * 凭据排除用常量：配置文件递归深度上限、认证配置文件 schema、读取大小上限。
  */
@@ -191,14 +191,14 @@ var anthropicProfileAuthSchema = DoctorLazy(() =>
   }),
 );
 var MAX_CREDENTIAL_FILE_BYTES = 1048576;
-//@ chunk-qchp9vrd.js:204271-204330 placement
+//@ chunk-af1hzzme.js:205681-205740 placement
 /**
  * 探测并解析凭据存储路径（含目录存在性）。
  */
 async function probeCredentialPath(filePath) {
   return probePathDirectories(resolveCredentialPath(filePath), "a credential store");
 }
-//@ chunk-qchp9vrd.js:204330-205120 placement
+//@ chunk-af1hzzme.js:205740-206530 placement
 async function resolveCredentialPath(filePath) {
   let handle;
   try {
@@ -247,14 +247,14 @@ async function resolveCredentialPath(filePath) {
     await handle.close();
   }
 }
-//@ chunk-qchp9vrd.js:205120-205522 placement
+//@ chunk-af1hzzme.js:206530-206932 placement
 function describeUnreadableCredentialsPointer(detail) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
     `a credentials file in this environment (the AWS config / shared credentials file, the GCP application-default credentials, a kubeconfig, or an Anthropic profile config) could not be followed (${detail}), so the Bash sandbox cannot exclude the files it points at \u2014 a Bash-granting evaluation cannot run here`,
     "eval shell grant refused: credentials pointer file unreadable",
   );
 }
-//@ chunk-qchp9vrd.js:205522-205966 placement
+//@ chunk-af1hzzme.js:206932-207376 placement
 /**
  * kubeconfig 中 users 段的宽松 schema：用于提取客户端证书/密钥、token 文件、exec 参数与环境、auth-provider 配置中的凭据路径。
  */
@@ -289,7 +289,7 @@ var kubeconfigUsersSchema = DoctorLazy(() => {
     ).nullish(),
   }).passthrough();
 });
-//@ chunk-qchp9vrd.js:205966-207152 placement
+//@ chunk-af1hzzme.js:207376-208562 placement
 async function parseKubeconfigCredentials(kubeconfigPath) {
   let kubeconfigText = await probeCredentialPath(kubeconfigPath);
   if (kubeconfigText === null)
@@ -356,7 +356,7 @@ async function parseKubeconfigCredentials(kubeconfigPath) {
     execFiles,
   };
 }
-//@ chunk-qchp9vrd.js:207152-207500 placement
+//@ chunk-af1hzzme.js:208562-208910 placement
 /**
  * 把 shell 通配模式（*、?、[...] 与 [!...]）转换为锚定的正则，其他字符转义。
  */
@@ -378,12 +378,12 @@ function globToRegExp(glob) {
   }
   return new RegExp(`^${pattern}$`);
 }
-//@ chunk-qchp9vrd.js:207500-207507 placement
+//@ chunk-af1hzzme.js:208910-208917 placement
 /**
  * 缓存中的账号名 promise。
  */
 var accountNamePromise;
-//@ chunk-qchp9vrd.js:207507-207573 placement
+//@ chunk-af1hzzme.js:208917-208983 placement
 /**
  * 取账号名（用于路径模板替换）。
  */
@@ -394,7 +394,7 @@ function getAccountNameForTemplate() {
   });
   return accountNamePromise;
 }
-//@ chunk-qchp9vrd.js:207573-207757 placement
+//@ chunk-af1hzzme.js:208983-209167 placement
 async function getAccountName() {
   let { stdout, code } = await execFileNoThrow("id", ["-un"], {
     preserveOutputOnError: false,
@@ -404,7 +404,7 @@ async function getAccountName() {
     throw describeUnreadableCredentialsPointer("the account name for %u could not be determined");
   return trimmed;
 }
-//@ chunk-qchp9vrd.js:207757-209172 placement
+//@ chunk-af1hzzme.js:209167-210582 placement
 /**
  * 解析 ssh_config（Include、ProxyCommand、IdentityFile）找出密钥文件。
  */
@@ -481,7 +481,7 @@ async function parseSshConfigIdentities(
   }
   return identities;
 }
-//@ chunk-qchp9vrd.js:209172-210996 placement
+//@ chunk-af1hzzme.js:210582-212406 placement
 function parseJvmBuildToolCredentials(readEnv) {
   let credentialPaths = [];
   let requireAbsolute = (filePath) => {
@@ -524,8 +524,8 @@ function parseJvmBuildToolCredentials(readEnv) {
         );
       return [token, ...normalizeDefineArgs(nestedWords.map(stripJavaLauncherPrefix))];
     });
-    for (let idx = 0; idx < flattened.length; idx++) {
-      let argument = flattened[idx];
+    for (let j = 0; j < flattened.length; j++) {
+      let argument = flattened[j];
       if (argument.startsWith("@"))
         throw describeUnreadableCredentialsPointer(`${envName} names an @argument file`);
       if (
@@ -538,7 +538,7 @@ function parseJvmBuildToolCredentials(readEnv) {
         );
       let sbtDirFlag = parseSbtDirFlag(argument);
       if (sbtDirFlag !== null) {
-        let sbtDirPath = sbtDirFlag || flattened[idx + 1];
+        let sbtDirPath = sbtDirFlag || flattened[j + 1];
         if (sbtDirPath && !/^-{1,2}sbt-boot/.test(argument)) {
           let sbtDir = requireAbsolute(sbtDirPath);
           credentialPaths.push(
@@ -572,7 +572,7 @@ function parseJvmBuildToolCredentials(readEnv) {
   }
   return credentialPaths;
 }
-//@ chunk-qchp9vrd.js:210996-212315 placement
+//@ chunk-af1hzzme.js:212406-213725 placement
 async function parseKrb5Config(configEnv) {
   let filtered = (configEnv?.trim() || "/etc/krb5.conf")
     .split(path_2.delimiter)
@@ -634,7 +634,7 @@ async function parseKrb5Config(configEnv) {
   for (let configFile of filtered) await scanConfig(configFile, 0);
   return credentialPaths;
 }
-//@ chunk-qchp9vrd.js:212315-212667 placement
+//@ chunk-af1hzzme.js:213725-214077 placement
 function parseKerberosCacheName(cacheName) {
   let trimmed = cacheName?.trim();
   if (!trimmed) return [];
@@ -653,7 +653,7 @@ function parseKerberosCacheName(cacheName) {
     );
   return dirKind ? [path, path_2.dirname(path)] : [path];
 }
-//@ chunk-qchp9vrd.js:212667-213652 placement
+//@ chunk-af1hzzme.js:214077-215062 placement
 async function parseGoAuth(goauthValue, homeDir, searchDirs) {
   if (!goauthValue?.trim())
     return {
@@ -705,7 +705,7 @@ async function parseGoAuth(goauthValue, homeDir, searchDirs) {
     programs,
   };
 }
-//@ chunk-qchp9vrd.js:213652-213955 placement
+//@ chunk-af1hzzme.js:215062-215365 placement
 /**
  * 按空白拆分 shell 单词（支持单/双引号）；引号未闭合返回 null。
  */
@@ -739,7 +739,7 @@ function splitShellWords_2(text) {
   }
   return words;
 }
-//@ chunk-qchp9vrd.js:213955-215682 placement
+//@ chunk-af1hzzme.js:215365-217092 placement
 async function parseGitconfigIncludes(configPath, homeDir, depth = 0, configTextHint) {
   let configText = configTextHint ?? (configPath === null ? null : await probeCredentialPath(configPath));
   if (configText === null || configText === "") return [];
@@ -748,11 +748,11 @@ async function parseGitconfigIncludes(configPath, homeDir, depth = 0, configText
   let parseValue = (rawValue) => {
     let parsed = "";
     let inQuotes = false;
-    for (let idx = 0; idx < rawValue.length; idx++) {
-      let character = rawValue[idx];
+    for (let j = 0; j < rawValue.length; j++) {
+      let character = rawValue[j];
       if (character === '"') inQuotes = !inQuotes;
-      else if (character === "\\" && idx + 1 < rawValue.length) {
-        let escapedChar = rawValue[++idx];
+      else if (character === "\\" && j + 1 < rawValue.length) {
+        let escapedChar = rawValue[++j];
         parsed +=
           escapedChar === "n"
             ? `
@@ -809,8 +809,8 @@ async function parseGitconfigIncludes(configPath, homeDir, depth = 0, configText
           (quoteMatch, doubleQuoted, singleQuoted, escaped) => doubleQuoted ?? singleQuoted ?? escaped,
         ),
     );
-    for (let idx = 0; idx < mapped.length; idx++) {
-      let word = mapped[idx];
+    for (let j = 0; j < mapped.length; j++) {
+      let word = mapped[j];
       let inlineValue = /^--?[A-Za-z][\w-]*=(.*)$/s.exec(word)?.[1];
       let expandedWord = expandHome(inlineValue ?? word);
       if (path_2.isAbsolute(expandedWord)) {
@@ -819,24 +819,24 @@ async function parseGitconfigIncludes(configPath, homeDir, depth = 0, configText
       }
       let matches = /^(?:--file|-f)$/.test(word);
       if (matches || /^--file=/.test(word)) {
-        let fileValue = matches ? expandHome(mapped[idx + 1] ?? "") : expandedWord;
+        let fileValue = matches ? expandHome(mapped[j + 1] ?? "") : expandedWord;
         if (!path_2.isAbsolute(fileValue))
           throw describeUnreadableCredentialsPointer(
             "a gitconfig credential helper names its file by a relative path",
           );
         paths.push(fileValue);
-        if (matches) idx++;
+        if (matches) j++;
       }
     }
   }
   return paths;
 }
-//@ chunk-qchp9vrd.js:215682-216259 placement
+//@ chunk-af1hzzme.js:217092-217669 placement
 /**
  * 展开 ssh 配置里密钥路径的 % 令牌（%d、%u、%i、%l、%L、%%）与开头的 ~；连接期令牌、${ENV} 或他人 ~ 无法静态解析时抛出。
  */
 async function expandSshPathTokens(template, home) {
-  let hostname = os_2.hostname();
+  let hostname = os.hostname();
   let result = "";
   for (let j = 0; j < template.length; j++) {
     let char = template[j];
@@ -862,7 +862,7 @@ async function expandSshPathTokens(template, home) {
     );
   return result.replace(/^~(?=\/|$)/, home);
 }
-//@ chunk-qchp9vrd.js:216259-217157 placement
+//@ chunk-af1hzzme.js:217669-218567 placement
 async function parseSshCommandIdentities(command, home, depth = 0) {
   let words = splitShellWords(command, home);
   let identities = [];
@@ -889,10 +889,10 @@ async function parseSshCommandIdentities(command, home, depth = 0) {
     let word = words[wordIndex];
     if (word === "--") break;
     if (!word.startsWith("-") || word.startsWith("--")) continue;
-    for (let idx = 1; idx < word.length; idx++) {
-      let letter = word[idx];
+    for (let j = 1; j < word.length; j++) {
+      let letter = word[j];
       if (!SSH_OPTION_LETTERS.has(letter)) continue;
-      let optionValue = idx + 1 < word.length ? word.slice(idx + 1) : words[++wordIndex];
+      let optionValue = j + 1 < word.length ? word.slice(j + 1) : words[++wordIndex];
       if (letter === "i") await addIdentity(optionValue);
       else if (letter === "F") {
         let configPath = await requireAbsolute(optionValue);
@@ -913,24 +913,24 @@ async function parseSshCommandIdentities(command, home, depth = 0) {
     identities.push(...(await parseSshConfigIdentities(configPath, home, depth + 1)));
   return identities;
 }
-//@ chunk-qchp9vrd.js:217157-217193 placement
+//@ chunk-af1hzzme.js:218567-218603 placement
 /**
  * 匹配 ssh 可执行文件名的正则。
  */
 var SSH_COMMAND_RE = /(?:^|[\\/])ssh(?:\.exe)?$/i;
-//@ chunk-qchp9vrd.js:217193-217360 placement
+//@ chunk-af1hzzme.js:218603-218770 placement
 function findSshDestinationIndex(words) {
   if (words.length > 0 && SSH_COMMAND_RE.test(words[0])) return 0;
   let index = words.indexOf("--");
   if (index !== -1 && index + 1 < words.length && SSH_COMMAND_RE.test(words[index + 1])) return index + 1;
   return words.findLastIndex((word) => SSH_COMMAND_RE.test(word));
 }
-//@ chunk-qchp9vrd.js:217360-217401 placement
+//@ chunk-af1hzzme.js:218770-218811 placement
 /**
  * ssh 中带参数的选项字母集合。
  */
 var SSH_OPTION_LETTERS = new Set("BbcDEeFIiJLlmOoPpQRSWw");
-//@ chunk-qchp9vrd.js:217401-218417 placement
+//@ chunk-af1hzzme.js:218811-219827 placement
 function splitShellWords(command, homeDir) {
   let fail = (problem) => {
     throw describeUnreadableCredentialsPointer(`an ssh command ${problem}`);
@@ -1013,7 +1013,7 @@ function splitShellWords(command, homeDir) {
   if (hasCurrent) words.push(current);
   return words;
 }
-//@ chunk-qchp9vrd.js:218417-219644 placement
+//@ chunk-af1hzzme.js:219827-221054 placement
 async function parseAnsibleVaultSources(readEnv, homeDir, originalCwd) {
   let sources = [];
   let addSource = (rawSource) => {
@@ -1077,12 +1077,12 @@ ${line.trim()}`;
   }
   return sources;
 }
-//@ chunk-qchp9vrd.js:219644-219656 placement
+//@ chunk-af1hzzme.js:221054-221066 placement
 /**
  * PATH 探测的超时（5000 毫秒）。
  */
 var PATH_PROBE_TIMEOUT_MS = 5000;
-//@ chunk-qchp9vrd.js:219656-221311 placement
+//@ chunk-af1hzzme.js:221066-222721 placement
 /**
  * 检查 PATH 中的目录（超时视为不可达挂载）以排除凭据助手。
  */
@@ -1110,10 +1110,10 @@ async function probePathDirectories(promise, label = "a PATH entry") {
     throw error;
   }
 }
-//@ chunk-qchp9vrd.js:221311-221896 placement
+//@ chunk-af1hzzme.js:222721-223306 placement
 async function probeMacKeychain(pathDirs) {
   let helpers = ["/usr/bin/security"];
-  for (let dir of uniq([...pathDirs, ...GIT_EXEC_PATH_DIRS])) {
+  for (let dir of normalizeCaseForComparison_2([...pathDirs, ...GIT_EXEC_PATH_DIRS])) {
     let entries;
     try {
       entries = await readdir(dir);
@@ -1136,7 +1136,7 @@ async function probeMacKeychain(pathDirs) {
   }
   return helpers;
 }
-//@ chunk-qchp9vrd.js:221896-222241 placement
+//@ chunk-af1hzzme.js:223306-223651 placement
 /**
  * 常见的 git exec-path 目录（git-core、gcm-core、Homebrew、Xcode 等），用于凭据排除。
  */
@@ -1151,7 +1151,7 @@ var GIT_EXEC_PATH_DIRS = [
   "/Library/Developer/CommandLineTools/usr/libexec/git-core",
   "/Applications/Xcode.app/Contents/Developer/usr/libexec/git-core",
 ];
-//@ chunk-qchp9vrd.js:222241-222534 placement
+//@ chunk-af1hzzme.js:223651-223944 placement
 async function parsePgServiceConf(files) {
   let paths = [];
   for (let filePath of files) {
@@ -1166,7 +1166,7 @@ async function parsePgServiceConf(files) {
   }
   return paths;
 }
-//@ chunk-qchp9vrd.js:222534-222945 placement
+//@ chunk-af1hzzme.js:223944-224355 placement
 async function describeAwsCredentialProcess(filePath) {
   let text = await probeCredentialPath(filePath);
   if (text === null) return [];
@@ -1182,7 +1182,7 @@ async function describeAwsCredentialProcess(filePath) {
     .filter((token) => !!token)
     .map(absoluteTokenPath);
 }
-//@ chunk-qchp9vrd.js:222945-223642 placement
+//@ chunk-af1hzzme.js:224355-225052 placement
 async function parseAwsSourceCredentials(filePath) {
   let text = await probeCredentialPath(filePath);
   if (text === null) return [];
@@ -1214,7 +1214,7 @@ async function parseAwsSourceCredentials(filePath) {
   }
   return files;
 }
-//@ chunk-qchp9vrd.js:223642-224052 placement
+//@ chunk-af1hzzme.js:225052-225462 placement
 async function parseAzureServicePrincipals(configDir) {
   let text = await probeCredentialPath(path_2.join(configDir, "service_principal_entries.json"));
   if (text === null) return [];
@@ -1232,7 +1232,7 @@ async function parseAzureServicePrincipals(configDir) {
     .filter((value) => typeof value === "string" && value !== "")
     .map(absoluteTokenPath);
 }
-//@ chunk-qchp9vrd.js:224052-224370 placement
+//@ chunk-af1hzzme.js:225462-225780 placement
 /**
  * Azure CLI 服务主体文件的 schema：client_id、tenant、client_secret、证书等字段。
  */
@@ -1252,7 +1252,7 @@ var azureServicePrincipalsSchema = DoctorLazy(() =>
     }),
   ),
 );
-//@ chunk-qchp9vrd.js:224370-225062 placement
+//@ chunk-af1hzzme.js:225780-226472 placement
 async function listGcloudConfigurations(configDir, activeConfig) {
   let configurationNames;
   try {
@@ -1291,9 +1291,9 @@ async function listGcloudConfigurations(configDir, activeConfig) {
     tokenFiles,
   };
 }
-//@ chunk-qchp9vrd.js:225062-225110 placement
+//@ chunk-af1hzzme.js:226472-226520 placement
 var NULL_DEVICE = getPlatform() === "windows" ? "\\\\.\\nul" : "/dev/null";
-//@ chunk-qchp9vrd.js:225110-225234 placement
+//@ chunk-af1hzzme.js:226520-226644 placement
 async function isNullDevice(stats) {
   if (!stats.isCharacterDevice()) return false;
   nullDeviceRdevPromise ??= stat(NULL_DEVICE).then(
@@ -1304,13 +1304,13 @@ async function isNullDevice(stats) {
   );
   return stats.rdev === (await nullDeviceRdevPromise);
 }
-//@ chunk-qchp9vrd.js:225234-225370 placement
+//@ chunk-af1hzzme.js:226644-226780 placement
 var nullDeviceRdevPromise;
 var DEFAULT_TRUSTSTORE_PASSWORD_RE = /^-D[\w.-]*trust-?store-?password=changeit$/i;
 var JVM_OPTIONS_ENV_SET = new Set(JVM_OPTIONS_ENV_NAMES);
 var MAVEN_ARGS_ENV_NAMES = new Set(["MAVEN_ARGS", "MAVEN_CONFIG"]);
 var UNTERMINATED_MARKER = "\x00unterminated";
-//@ chunk-qchp9vrd.js:225370-225984 placement
+//@ chunk-af1hzzme.js:226780-227394 placement
 function parseMavenArgs(env) {
   let secretKeys = [];
   for (let [key, value] of Object.entries(env)) {
@@ -1358,7 +1358,7 @@ function parseMavenArgs(env) {
   }
   return secretKeys;
 }
-//@ chunk-qchp9vrd.js:225984-226235 placement
+//@ chunk-af1hzzme.js:227394-227645 placement
 var SYSTEM_GITCONFIG_PATHS = [
   "/etc/gitconfig",
   "/opt/homebrew/etc/gitconfig",
@@ -1367,7 +1367,7 @@ var SYSTEM_GITCONFIG_PATHS = [
   "/Library/Developer/CommandLineTools/usr/share/git-core/gitconfig",
   "/Applications/Xcode.app/Contents/Developer/usr/share/git-core/gitconfig",
 ];
-//@ chunk-qchp9vrd.js:226235-226332 placement
+//@ chunk-af1hzzme.js:227645-227742 placement
 /**
  * 校验 token 文件路径必须是绝对路径。
  */
@@ -1376,7 +1376,7 @@ function absoluteTokenPath(path) {
     throw describeUnreadableCredentialsPointer("it names a token file by a relative path");
   return path;
 }
-//@ chunk-qchp9vrd.js:226332-226524 placement
+//@ chunk-af1hzzme.js:227742-227934 placement
 var MAX_AWS_SOURCE_DEPTH = 8;
 var awsCredentialSourceSchema = DoctorLazy(() =>
   create({
@@ -1389,14 +1389,14 @@ var awsCredentialSourceSchema = DoctorLazy(() =>
     source_credentials: create_12().optional(),
   }),
 );
-//@ chunk-qchp9vrd.js:226524-226805 placement
+//@ chunk-af1hzzme.js:227934-228215 placement
 /**
  * 清理临时目录中过期的评测认证目录。
  */
 async function cleanupStaleEvalAuthDirs() {
   let entries;
   try {
-    entries = await readdir(os_2.tmpdir());
+    entries = await readdir(os.tmpdir());
   } catch {
     return;
   }
@@ -1405,7 +1405,7 @@ async function cleanupStaleEvalAuthDirs() {
     entries
       .filter((name) => name.startsWith(CLAUDE_EVAL_AUTH))
       .map(async (name) => {
-        let joined = path_2.join(os_2.tmpdir(), name);
+        let joined = path_2.join(os.tmpdir(), name);
         try {
           let stats = await lstat(joined);
           if (stats.isDirectory() && stats.mtimeMs < cutoff)

@@ -3,9 +3,9 @@
  *
  * 并入已有模块：/resume 命令的导出占位。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/resume/resume.tsx
- * pieces: chunk-74n7apcd.js (5)
+ * pieces: chunk-47gvxd8g.js (5)
  * attribution: placement 1, fingerprint 4
  */
 import {
@@ -28,7 +28,6 @@ import {
   isLiteLog,
   loadFullLog,
   loadSameRepoMessageLogs,
-  isCustomTitleEnabled,
   searchSessionsByCustomTitle,
 } from "../../utils/sessionStorage.js";
 import { getSessionId, getOriginalCwd } from "../../bootstrap/state.js";
@@ -63,9 +62,9 @@ import { getLastSessionLog } from "../../utils/conversationRecovery.js";
 import { win32EbadfHelp } from "../../utils/transcript/transcriptFiles.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-74n7apcd.js:18584-18588 placement
+//@ chunk-47gvxd8g.js:19951-19955 placement
 init_react_production();
-//@ chunk-74n7apcd.js:18588-18826 fingerprint (2.1.88 match: resumeHelpMessage, 1)
+//@ chunk-47gvxd8g.js:19955-20193 fingerprint (2.1.88 match: resumeHelpMessage, 1)
 function resumeHelpMessage(result) {
   switch (result.resultType) {
     case "sessionNotFound":
@@ -74,7 +73,7 @@ function resumeHelpMessage(result) {
       return `Found ${result.count} sessions matching ${sequential.bold(result.arg)}. Please use /resume to pick a specific session.`;
   }
 }
-//@ chunk-74n7apcd.js:19188-21375 fingerprint (2.1.88 match: ResumeCommand, 0.67)
+//@ chunk-47gvxd8g.js:20555-22743 fingerprint (2.1.88 match: ResumeCommand, 0.67)
 function ResumeCommand({ onDone, onResume }) {
   let [logs, setLogs] = useState([]);
   let [worktreePaths, setWorktreePaths] = useState([]);
@@ -243,11 +242,11 @@ function ResumeCommand({ onDone, onResume }) {
     onToggleAllProjects,
   });
 }
-//@ chunk-74n7apcd.js:21375-21439 fingerprint (2.1.88 match: filterResumableSessions, 1)
+//@ chunk-47gvxd8g.js:22743-22807 fingerprint (2.1.88 match: filterResumableSessions, 1)
 function filterResumableSessions(logs, currentSessionId) {
   return logs.filter((log) => !log.isSidechain && getSessionIdFromLog(log) !== currentSessionId);
 }
-//@ chunk-74n7apcd.js:21439-23794 fingerprint (2.1.88 match: call, 0.595)
+//@ chunk-47gvxd8g.js:22807-25150 fingerprint (2.1.88 match: call, 0.588)
 /**
  * /resume 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -378,39 +377,37 @@ var call = async (onDone, context, args) => {
       return null;
     }
   }
-  if (isCustomTitleEnabled()) {
-    let titleMatches = await searchSessionsByCustomTitle(
+  let titleMatches = await searchSessionsByCustomTitle(
+    arg,
+    {
+      exact: true,
+    },
+    context.storageV5,
+  );
+  if (titleMatches.length === 1) {
+    let log = titleMatches[0];
+    let sessionId = normalizeUuidOrNull(getSessionIdFromLog(log));
+    if (sessionId) {
+      let fullLog = isLiteLog(log)
+        ? await loadFullLog(log, {
+            storageV5: context.storageV5,
+          })
+        : log;
+      onResume(sessionId, fullLog, "slash_command_title");
+      return null;
+    }
+  }
+  if (titleMatches.length > 1) {
+    let message = resumeHelpMessage({
+      resultType: "multipleMatches",
       arg,
-      {
-        exact: true,
-      },
-      context.storageV5,
-    );
-    if (titleMatches.length === 1) {
-      let log = titleMatches[0];
-      let sessionId = normalizeUuidOrNull(getSessionIdFromLog(log));
-      if (sessionId) {
-        let fullLog = isLiteLog(log)
-          ? await loadFullLog(log, {
-              storageV5: context.storageV5,
-            })
-          : log;
-        onResume(sessionId, fullLog, "slash_command_title");
-        return null;
-      }
-    }
-    if (titleMatches.length > 1) {
-      let message = resumeHelpMessage({
-        resultType: "multipleMatches",
-        arg,
-        count: titleMatches.length,
-      });
-      return jsxProd_default(AddDirError, {
-        message,
-        args: arg,
-        onDone: () => onDone(message),
-      });
-    }
+      count: titleMatches.length,
+    });
+    return jsxProd_default(AddDirError, {
+      message,
+      args: arg,
+      onDone: () => onDone(message),
+    });
   }
   let message = resumeHelpMessage({
     resultType: "sessionNotFound",

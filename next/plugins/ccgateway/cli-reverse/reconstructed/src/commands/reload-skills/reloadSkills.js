@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/reload-skills：重新加载技能
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9dc848ph.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a4dpx0z8.js (2)
  * attribution: placement 2
  */
 import { getProjectRoot } from "../../bootstrap/state.js";
@@ -13,11 +13,11 @@ import { filterMcpPromptCommands, dropSyncedNameClashes } from "../../utils/comm
 import { getSkillToolCommands, clearCommandsCache } from "../../commands.js";
 import { refreshSkillsSyncVeto } from "../../utils/claudeAiSync/skillsSync.js";
 import { skillsChangedSignal } from "../../utils/plugins/pluginsChangedSignal.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { isSafeMode } from "../../utils/envUtils.js";
 import { plural } from "../../utils/stringUtils.js";
 
-//@ chunk-9dc848ph.js:11866-11997 placement
+//@ chunk-a4dpx0z8.js:13014-13145 placement
 function formatSkillChangeCounts(addedCount, removedCount) {
   let parts = [
     ...(addedCount > 0 ? [`${addedCount} added`] : []),
@@ -25,7 +25,7 @@ function formatSkillChangeCounts(addedCount, removedCount) {
   ];
   return parts.length > 0 ? parts.join(", ") : "none added or removed";
 }
-//@ chunk-9dc848ph.js:11997-12428 placement
+//@ chunk-a4dpx0z8.js:13145-13576 placement
 /**
  * /reload-skills 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -41,8 +41,8 @@ var runReloadSkillsCommand = async (args, context) => {
   let afterNames = new Set(afterSkills.map((skill) => skill.name));
   skillsChangedSignal.emit();
   let countsText = formatSkillChangeCounts(
-    count(afterSkills, (skill) => !beforeNames.has(skill.name)),
-    count(beforeSkills, (skill) => !afterNames.has(skill.name)),
+    countWhere(afterSkills, (skill) => !beforeNames.has(skill.name)),
+    countWhere(beforeSkills, (skill) => !afterNames.has(skill.name)),
   );
   let safeModeNote = isSafeMode() ? "; custom skills are disabled in safe mode" : "";
   return {

@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：设备桥 MCP 直通：把本机 MCP 服务器工具提供给云会话调用，含重名处理、schema 改写与策略拒绝。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-weh04swb.js (44)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rpcghvjh.js (44)
  * attribution: placement 44
  */
 import { createDialFailureLatch, boundDial } from "../mcp/dialFailureLatch.js";
 import { createSignal } from "../../utils/signal.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { partitionAlias, import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { pMap } from "../../../vendor/p-map/index.js";
 import { logError } from "../../utils/log.js";
@@ -34,7 +34,7 @@ import { awaitPolicyColdStartWaiter } from "../policyLimits/coldStartWaiter.js";
 import { ensureMdmLoaded } from "../../utils/settings/mdm/mdmLoader.js";
 import { invalidateCommandNames } from "../../utils/settings/commandSyncNames.js";
 import { isMcpServerAllowedByPolicy } from "../mcp/config.js";
-import { isToolFromMcpServer, buildMcpToolName } from "../mcp/mcpStringUtils.js";
+import { isToolFromMcpServer, getPrefixServerKey, buildMcpToolName } from "../mcp/mcpStringUtils.js";
 import { BASE_CALLER_FIELDS, CALLER_FIELDS, withinDepth } from "../../remote/tools/protocolSchemas.js";
 import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { imageLimitsForModel } from "../../utils/attachmentMedia.js";
@@ -48,7 +48,6 @@ import {
 } from "../../remote/tools/toolDescriptors.js";
 import { isAdminScope } from "./deviceMcpConsent.js";
 import { normalizedKey, isClaudeAiServerName, isOrgConnectorName } from "../mcp/normalization.js";
-import { getPrefixServerKey } from "../../components/agents/ToolSelector.js";
 import {
   isServiceReservedToolName,
   mayBePassthroughTool,
@@ -66,14 +65,14 @@ import { beginDeferredInits } from "../../../runtime/deferred-init.js";
 // This module is the first evaluated of an import cycle of 2 modules closed by ./deviceMcpConsent.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("src/services/deviceBridge/deviceMcpConsent.js");
-//@ chunk-weh04swb.js:1665-1690 placement
+//@ chunk-rpcghvjh.js:1730-1755 placement
 /**
  * 策略重新读取的最小间隔（60 秒）。
  */
 var DEFAULT_SETTLE_TIMEOUT_MS = 1e4;
 var MAX_CONSECUTIVE_DIAL_FAILURES = 3;
 var POLICY_REFRESH_INTERVAL_MS = 60000;
-//@ chunk-weh04swb.js:1690-1812 placement
+//@ chunk-rpcghvjh.js:1755-1877 placement
 class PassthroughMcpUnavailableError extends Error {
   unavailable;
   name = "PassthroughMcpUnavailableError";
@@ -82,7 +81,7 @@ class PassthroughMcpUnavailableError extends Error {
     this.unavailable = unavailable;
   }
 }
-//@ chunk-weh04swb.js:1812-9043 placement
+//@ chunk-rpcghvjh.js:1877-9108 placement
 /**
  * 设备桥：把本机 MCP 服务器的工具"直通"给云会话调用：列出/刷新服务器、重名与保留名检查、托管策略拒绝、调用转发与错误包装。
  */
@@ -112,7 +111,7 @@ function createPassthroughMcpBridge(options) {
       settleTimer = undefined;
     }
     let statuses = [...statusByName.values()];
-    let countStatus = (status) => count(statuses, (entryStatus) => entryStatus === status);
+    let countStatus = (status) => countWhere(statuses, (entryStatus) => entryStatus === status);
     settleResolve({
       configured: keys.length,
       connected: countStatus("connected"),
@@ -556,7 +555,7 @@ function createPassthroughMcpBridge(options) {
     },
   };
 }
-//@ chunk-weh04swb.js:9043-9961 placement
+//@ chunk-rpcghvjh.js:9108-10026 placement
 /**
  * 构造设备桥接透传 MCP 的依赖对象：策略就绪、发现工具、确保连接、监听工具列表变化、刷新工具、调用工具、清理/释放连接、策略判定、是否需要本地提示、按本地/远程决定拨号并发、工具超时。
  */
@@ -602,14 +601,14 @@ function createPassthroughMcpDeps() {
     toolTimeoutMs: (server) => mcpClient.getMcpToolTimeoutMs(server),
   };
 }
-//@ chunk-weh04swb.js:9961-10011 placement
+//@ chunk-rpcghvjh.js:10026-10076 placement
 /**
  * 取工具对外发布的工具名（mcpInfo.toolName 优先）。
  */
 function toolNameOf(tool) {
   return tool.mcpInfo?.toolName ?? tool.name;
 }
-//@ chunk-weh04swb.js:10011-10133 placement
+//@ chunk-rpcghvjh.js:10076-10198 placement
 function isMcpAuthError(error) {
   return (
     error instanceof McpAuthError ||
@@ -619,7 +618,7 @@ function isMcpAuthError(error) {
       error.mcpErrorSource === "user_auth")
   );
 }
-//@ chunk-weh04swb.js:10133-10231 placement
+//@ chunk-rpcghvjh.js:10198-10296 placement
 /**
  * 把 MCP 认证错误包装成“本机需要认证”的透传不可用错误。
  */
@@ -628,20 +627,20 @@ function needsAuthError(cause) {
     cause,
   });
 }
-//@ chunk-weh04swb.js:10231-10298 placement
+//@ chunk-rpcghvjh.js:10296-10363 placement
 /**
  * 取某服务器提供的全部 MCP 工具。
  */
 function serverTools(serverName, tools) {
   return tools.filter((tool) => tool.mcpInfo !== undefined && isToolFromMcpServer(tool, serverName));
 }
-//@ chunk-weh04swb.js:10298-10315 placement
+//@ chunk-rpcghvjh.js:10363-10380 placement
 /**
  * 默认的服务器列表引用。
  */
 var defaultListHandler = BASE_CALLER_FIELDS;
 var defaultList = CALLER_FIELDS;
-//@ chunk-weh04swb.js:10315-10427 placement
+//@ chunk-rpcghvjh.js:10380-10492 placement
 class PassthroughCallError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   verdict;
   constructor(verdict, message, telemetry) {
@@ -650,7 +649,7 @@ class PassthroughCallError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_COD
     this.name = "PassthroughCallError";
   }
 }
-//@ chunk-weh04swb.js:10427-10559 placement
+//@ chunk-rpcghvjh.js:10492-10624 placement
 /**
  * 透传工具未提供时的校验失败结果，并通知工具判定回调。
  */
@@ -668,7 +667,7 @@ function refuseNotServedValidation(remoteCall, refusal) {
     errorCode: 1,
   };
 }
-//@ chunk-weh04swb.js:10559-10679 placement
+//@ chunk-rpcghvjh.js:10624-10744 placement
 /**
  * 抛出"工具未提供"的透传调用错误，并通知工具判定回调。
  */
@@ -684,7 +683,7 @@ function throwNotServed(remoteCall, message, telemetry) {
   remoteCall?.onToolVerdict?.(error.verdict, error.message);
   throw error;
 }
-//@ chunk-weh04swb.js:10679-11311 placement
+//@ chunk-rpcghvjh.js:10744-11376 placement
 /**
  * 生成透传 MCP 工具的 call 函数：只接受远程调用，去掉保留参数后调用本机 MCP 服务器（带超时与图片限制），把错误转成透传错误并回报判定；返回内容与 _meta/structuredContent。
  */
@@ -740,12 +739,12 @@ function makePassthroughCall(deps, serverName, toolName, argRenames) {
     };
   };
 }
-//@ chunk-weh04swb.js:11311-11396 placement
+//@ chunk-rpcghvjh.js:11376-11461 placement
 /**
  * 非远端调用时透传工具拒绝执行的说明。
  */
 var NO_REMOTE_CALL_MESSAGE = "MCP passthrough tools run only for a remote tool call; the call did not run";
-//@ chunk-weh04swb.js:11396-12367 placement
+//@ chunk-rpcghvjh.js:11461-12432 placement
 /**
  * 把透传 MCP 调用的失败转成给远端的错误：工具自身返回错误（可能已有副作用）、需要浏览器同意（-32042）、服务器不可用、其他（超时/断连/协议错误，可能已执行）。
  */
@@ -785,20 +784,20 @@ function toPassthroughError(error, serverName) {
     "MCP tool call failed on this machine",
   );
 }
-//@ chunk-weh04swb.js:12367-12381 placement
+//@ chunk-rpcghvjh.js:12432-12446 placement
 var URL_ELICITATION_REQUIRED_CODE = -32042;
-//@ chunk-weh04swb.js:12381-12458 placement (2.1.88 match: isConnectionError, 1)
+//@ chunk-rpcghvjh.js:12446-12523 placement (2.1.88 match: isConnectionError, 1)
 function isJsonRpcErrorCode32042(err) {
   return (
     err !== null && typeof err === "object" && "code" in err && err.code === URL_ELICITATION_REQUIRED_CODE
   );
 }
-//@ chunk-weh04swb.js:12458-12469 placement
+//@ chunk-rpcghvjh.js:12523-12534 placement
 /**
  * 提交给远端的工具名长度上限。
  */
 var MAX_TOOL_NAME_CHARS = MAX_PREFIXED_TOOL_NAME_CHARS;
-//@ chunk-weh04swb.js:12469-12636 placement
+//@ chunk-rpcghvjh.js:12534-12701 placement
 /**
  * 透传 MCP 工具公告的限制：总字节预算、工具数、单个定义大小、标题与搜索提示长度，以及作用域优先级与管理员作用域集合。
  */
@@ -818,7 +817,7 @@ var SCOPE_RANK = {
   agent: 7,
 };
 var ADMIN_SCOPES = new Set(["enterprise", "managed"]);
-//@ chunk-weh04swb.js:12636-13041 placement
+//@ chunk-rpcghvjh.js:12701-13106 placement
 /**
  * 为设备桥接构造透传工具公告：按作用域排序服务器，描述每个工具，检测名称冲突（服务器/工具层面、管理员优先），过滤权限上限、deny 规则与各种限制，返回可公告工具、丢弃原因与按服务器分组的定义。
  */
@@ -856,7 +855,7 @@ async function buildPassthroughAnnouncement(servers, options) {
     byServer,
   };
 }
-//@ chunk-weh04swb.js:13041-13810 placement
+//@ chunk-rpcghvjh.js:13106-13875 placement
 /**
  * 构造服务器名与工具名的冲突判定：与保留名/内置名冲突、与管理员服务器前缀重叠、规范化后同名（无管理员时为 alias_collision）。
  */
@@ -924,7 +923,7 @@ function buildCollisionChecker(servers, toolGroups, extraServers) {
             ),
   };
 }
-//@ chunk-weh04swb.js:13810-14022 placement
+//@ chunk-rpcghvjh.js:13875-14087 placement
 function resolveAliasGroup(group, name, isSelf) {
   let winner = group.find((candidate) => candidate.admin) ?? (group.length === 1 ? group[0] : undefined);
   if (winner === undefined)
@@ -938,7 +937,7 @@ function resolveAliasGroup(group, name, isSelf) {
         reason: "collision",
       };
 }
-//@ chunk-weh04swb.js:14022-14158 placement
+//@ chunk-rpcghvjh.js:14087-14223 placement
 function groupByAlias(pairs) {
   return pairs.reduce((acc, [key, entry]) => {
     let group = acc.get(key) ?? [];
@@ -946,7 +945,7 @@ function groupByAlias(pairs) {
     return acc;
   }, new Map());
 }
-//@ chunk-weh04swb.js:14158-14647 placement
+//@ chunk-rpcghvjh.js:14223-14712 placement
 /**
  * 决定是否把一个设备 MCP 工具透传给会话：权限上限阻止、命中拒绝规则或描述失败时记入丢弃列表；否则累加大小并加入工具列表和按服务器分组。
  */
@@ -988,7 +987,7 @@ function admitTool(acc, tool, serverRejection, collisionChecker, { isDenied, ser
   serverTools.push(rejection.definition);
   return acc;
 }
-//@ chunk-weh04swb.js:14647-15175 placement
+//@ chunk-rpcghvjh.js:14712-15240 placement
 /**
  * 检查一个透传工具能否公告：保留参数、名称过长、重名、定义缺失、定义过大、schema 嵌套过深、总字节预算或数量上限；通过则返回定义与字节数。
  */
@@ -1032,7 +1031,7 @@ function checkToolLimits({ name: candidate, definition, wireArguments }, { annou
     wireArguments,
   };
 }
-//@ chunk-weh04swb.js:15175-15312 placement
+//@ chunk-rpcghvjh.js:15240-15377 placement
 function sortServersByScope(servers) {
   return servers
     .map((server, index) => ({
@@ -1043,14 +1042,14 @@ function sortServersByScope(servers) {
     .sort((left, right) => left.rank - right.rank || left.index - right.index)
     .map((entry) => entry.server);
 }
-//@ chunk-weh04swb.js:15312-15365 placement
+//@ chunk-rpcghvjh.js:15377-15430 placement
 /**
  * 作用域优先级序号（未知排最后）。
  */
 function scopeRank(scope) {
   return SCOPE_RANK[scope] ?? Number.MAX_SAFE_INTEGER;
 }
-//@ chunk-weh04swb.js:15365-15756 placement
+//@ chunk-rpcghvjh.js:15430-15821 placement
 /**
  * 生成透传工具的描述：名称、原始名、定义与参数改写信息；定义生成失败时记日志并返回空定义。
  */
@@ -1082,21 +1081,21 @@ async function describePassthroughTool(serverName, tool, serverInfo) {
     };
   }
 }
-//@ chunk-weh04swb.js:15756-15797 placement
+//@ chunk-rpcghvjh.js:15821-15862 placement
 /**
  * 去掉 mcp__ 前缀的工具名。
  */
 function strippedMcpToolName(serverName, toolName) {
   return buildMcpToolName(serverName, toolName).slice(5);
 }
-//@ chunk-weh04swb.js:15797-15829 placement
+//@ chunk-rpcghvjh.js:15862-15894 placement
 /**
  * 参数冲突检查用的键名（<名字>_arg）。
  */
 function argKey(key) {
   return `${key}_arg`;
 }
-//@ chunk-weh04swb.js:15829-16146 placement
+//@ chunk-rpcghvjh.js:15894-16211 placement
 /**
  * 透传工具 JSON Schema 中允许保留的关键字集合。
  */
@@ -1126,7 +1125,7 @@ var REF_SCHEMA_KEYS = new Set([
   "$recursiveAnchor",
   "$id",
 ]);
-//@ chunk-weh04swb.js:16146-16758 placement
+//@ chunk-rpcghvjh.js:16211-16823 placement
 /**
  * 检查工具输入 schema 是否用到保留参数名：无法安全改名时返回 reserved_argument，没有冲突时返回空映射，否则返回 改后名 → 原名 的映射。
  */
@@ -1161,7 +1160,7 @@ function planArgumentRenames(schema) {
   let renames = new Map(conflicting.map((name) => [argKey(name), name]));
   return [...renames.keys()].some((key) => defaultNames.includes(key)) ? "reserved_argument" : renames;
 }
-//@ chunk-weh04swb.js:16758-16971 placement
+//@ chunk-rpcghvjh.js:16823-17036 placement
 function hasRefKeywords(node) {
   let containsRef = (node, depth) => {
     if (depth > MAX_INPUT_SCHEMA_DEPTH) return true;
@@ -1173,7 +1172,7 @@ function hasRefKeywords(node) {
   };
   return containsRef(node, 0);
 }
-//@ chunk-weh04swb.js:16971-17250 placement
+//@ chunk-rpcghvjh.js:17036-17315 placement
 async function buildToolDefinition(name, tool, serverInfo, renamePlan) {
   let description = await tool.description(
     {},
@@ -1201,19 +1200,19 @@ async function buildToolDefinition(name, tool, serverInfo, renamePlan) {
     _meta: buildToolMeta(tool, serverInfo),
   };
 }
-//@ chunk-weh04swb.js:17250-17278 placement
+//@ chunk-rpcghvjh.js:17315-17343 placement
 /**
  * 描述被截断时追加的后缀。
  */
 var TRUNCATION_SUFFIX = "\u2026 [truncated]";
-//@ chunk-weh04swb.js:17278-17325 placement
+//@ chunk-rpcghvjh.js:17343-17389 placement
 /**
  * 超长则截断并加截断后缀。
  */
 function truncateSuffix(text, maxLen) {
   return text.length > maxLen ? truncateToLength(text, maxLen) + TRUNCATION_SUFFIX : text;
 }
-//@ chunk-weh04swb.js:17325-17584 placement
+//@ chunk-rpcghvjh.js:17389-17648 placement
 function buildInputSchema(tool, renames) {
   let inputJSONSchema = tool.inputJSONSchema;
   if (inputJSONSchema === undefined || !isObjectSchemaType(inputJSONSchema.type))
@@ -1236,7 +1235,7 @@ function buildInputSchema(tool, renames) {
     renames,
   );
 }
-//@ chunk-weh04swb.js:17584-17892 placement
+//@ chunk-rpcghvjh.js:17648-17956 placement
 /**
  * 在 schema 中应用参数重命名：改写属性名与 required，并在描述中注明原参数名。
  */
@@ -1266,20 +1265,20 @@ function applyArgumentRenames(schema, renames) {
     }),
   };
 }
-//@ chunk-weh04swb.js:17892-18056 placement
+//@ chunk-rpcghvjh.js:17956-18120 placement
 function describeRenamedParam(originalName, schema) {
   let description = Reflect.get(schema, "description");
   let note = `(The tool's own "${originalName}" parameter, passed under this name.)`;
   return typeof description === "string" && description !== "" ? `${description} ${note}` : note;
 }
-//@ chunk-weh04swb.js:18056-18143 placement
+//@ chunk-rpcghvjh.js:18120-18207 placement
 /**
  * 判断 JSON Schema 的 type 是否表示对象。
  */
 function isObjectSchemaType(type) {
   return type === undefined || type === "object" || (Array.isArray(type) && type.includes("object"));
 }
-//@ chunk-weh04swb.js:18143-18248 placement
+//@ chunk-rpcghvjh.js:18207-18312 placement
 function keepValidProperties(properties) {
   return Object.fromEntries(
     Object.entries(properties).flatMap(([key, value]) =>
@@ -1287,14 +1286,14 @@ function keepValidProperties(properties) {
     ),
   );
 }
-//@ chunk-weh04swb.js:18248-18327 placement
+//@ chunk-rpcghvjh.js:18312-18391 placement
 /**
  * 判断属性 schema 是否为对象（true 或普通对象）。
  */
 function isPropertySchemaObject(value) {
   return value === true || (typeof value === "object" && value !== null && !Array.isArray(value));
 }
-//@ chunk-weh04swb.js:18327-18598 placement
+//@ chunk-rpcghvjh.js:18391-18662 placement
 function buildToolAnnotations(tool) {
   let title = tool.mcpInfo?.title;
   let picked = {
@@ -1313,7 +1312,7 @@ function buildToolAnnotations(tool) {
   };
   return Object.keys(picked).length > 0 ? picked : undefined;
 }
-//@ chunk-weh04swb.js:18598-18955 placement
+//@ chunk-rpcghvjh.js:18662-19019 placement
 /**
  * 构造透传工具的 _meta：透传标记（版本、工具名、目标），以及搜索提示、始终加载、结果大小上限与需要用户交互等元信息。
  */
@@ -1341,10 +1340,10 @@ function buildToolMeta(tool, serverInfo) {
   };
 }
 export {
-  ADMIN_SCOPES,
   createPassthroughMcpBridge,
   buildPassthroughAnnouncement,
   makePassthroughCall,
   refuseNotServedValidation,
   throwNotServed,
+  ADMIN_SCOPES,
 };

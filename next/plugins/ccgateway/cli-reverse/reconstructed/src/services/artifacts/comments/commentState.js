@@ -3,18 +3,18 @@
  *
  * 2.1.316 新增：Artifact 评论的本地状态：记录本会话发出的回复 ID（有上限）、已见评论与回复跟踪。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b0a246e7.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-78ymyfsy.js (12)
  * attribution: placement 12
  */
 import { getLiveState } from "../../liveReplica/liveReplica.js";
 import { isOwnPrincipal } from "./commentAuthorship.js";
 import { extractMentions } from "./commentMentions.js";
 
-//@ chunk-b0a246e7.js:3569-3580 placement
+//@ chunk-78ymyfsy.js:3602-3613 placement
 var MAX_TRACKED_REPLY_IDS = 256;
-//@ chunk-b0a246e7.js:3580-3701 placement
+//@ chunk-78ymyfsy.js:3613-3734 placement
 /**
  * 记录由本会话发出的 Artifact 评论回复 ID（有上限）。
  */
@@ -26,14 +26,14 @@ function rememberPostedReplyId(replyId) {
     if (replyId !== undefined) postedReplyIds.delete(replyId);
   }
 }
-//@ chunk-b0a246e7.js:3701-3759 placement
+//@ chunk-78ymyfsy.js:3734-3792 placement
 /**
  * 是否是本会话发出的评论回复。
  */
 function isOwnPostedReply(replyId) {
   return replyId !== "" && getLiveState().postedReplyIds.has(replyId);
 }
-//@ chunk-b0a246e7.js:3759-3898 placement
+//@ chunk-78ymyfsy.js:3792-3931 placement
 /**
  * 把本会话发出的回复标为"干净"（未被改写）。
  */
@@ -46,21 +46,21 @@ function markReplyClean(replyId) {
     if (replyId !== undefined) cleanReplyIds.delete(replyId);
   }
 }
-//@ chunk-b0a246e7.js:3898-3947 placement
+//@ chunk-78ymyfsy.js:3931-3980 placement
 /**
  * 本会话是否发过 Artifact 评论回复。
  */
 function hasPostedReplies() {
   return getLiveState().postedReplyIds.size > 0;
 }
-//@ chunk-b0a246e7.js:3947-4022 placement
+//@ chunk-78ymyfsy.js:3980-4055 placement
 /**
  * 只接受 owner / editor / commenter 三种访问级别。
  */
 function normalizeCommentAccess(role) {
   return role === "owner" || role === "editor" || role === "commenter" ? role : undefined;
 }
-//@ chunk-b0a246e7.js:4022-4128 placement
+//@ chunk-78ymyfsy.js:4055-4161 placement
 /**
  * 评论作者类别：degraded → unknown，无角色 → human，有角色 → agent。
  */
@@ -68,7 +68,7 @@ function getCommentAuthorKind(comment) {
   if (comment.role === "degraded") return "unknown";
   return comment.role === undefined || comment.role === "" ? "human" : "agent";
 }
-//@ chunk-b0a246e7.js:4128-4305 placement
+//@ chunk-78ymyfsy.js:4161-4338 placement
 /**
  * 评论是否可信：代理评论须是本会话发出的干净回复，人类评论须来自指定账户且提及的账户也都匹配。
  */
@@ -83,7 +83,7 @@ function isTrustedComment(comment, account) {
     extractMentions(comment.text).every((mention) => isOwnPrincipal(mention, account))
   );
 }
-//@ chunk-b0a246e7.js:4305-4399 placement
+//@ chunk-78ymyfsy.js:4338-4432 placement
 /**
  * 解析 ISO 时间字符串为毫秒，失败返回 null。
  */
@@ -92,7 +92,7 @@ function parseTimestamp(value) {
   let timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : null;
 }
-//@ chunk-b0a246e7.js:4399-4526 placement (2.1.88 match: findMissedTasks, 0.461)
+//@ chunk-78ymyfsy.js:4432-4559 placement (2.1.88 match: findMissedTasks, 0.461)
 /**
  * 是否有任一项的 toClaudeAt 晚于参照项的 createdAt。与 cron 无关（Artifact 评论）。
  */
@@ -104,7 +104,7 @@ function hasCommentSentAfter(comments, reference) {
     return next !== null && next > timestamp;
   });
 }
-//@ chunk-b0a246e7.js:4526-4944 placement
+//@ chunk-78ymyfsy.js:4559-4977 placement
 /**
  * 线程中等待 Claude 回复的人类评论（在最后一条代理回复之后发给 Claude、且未被标记解决）。
  */
@@ -135,7 +135,7 @@ function getCommentsAwaitingReply(thread) {
       (resolvedComment === undefined || hasCommentSentAfter([comment], resolvedComment)),
   );
 }
-//@ chunk-b0a246e7.js:4944-6506 placement
+//@ chunk-78ymyfsy.js:4977-6539 placement
 /**
  * 把评论线程序列化为给模型的结构（锚点、评论、awaiting_reply 等字段）。
  */
@@ -243,15 +243,15 @@ function serializeCommentThreads(threads) {
   });
 }
 export {
-  isTrustedComment,
   getCommentAuthorKind,
-  normalizeCommentAccess,
   parseTimestamp,
+  hasCommentSentAfter,
+  isOwnPostedReply,
+  normalizeCommentAccess,
+  rememberPostedReplyId,
+  getCommentsAwaitingReply,
+  markReplyClean,
+  isTrustedComment,
   serializeCommentThreads,
   hasPostedReplies,
-  markReplyClean,
-  getCommentsAwaitingReply,
-  isOwnPostedReply,
-  hasCommentSentAfter,
-  rememberPostedReplyId,
 };

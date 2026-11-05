@@ -3,9 +3,9 @@
  *
  * 用量额度（usage credits）核心逻辑：团队/企业查询 extra_usage 状态，个人打开购买或请求管理员
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/extra-usage/extra-usage-core.ts
- * pieces: chunk-vbks4x4e.js (2)
+ * pieces: chunk-ph8hmbrf.js (2)
  * attribution: placement 1, fingerprint 1
  */
 import { isBgSession } from "../../utils/concurrentSessions.js";
@@ -20,7 +20,7 @@ import { getAdminRequestEligibility, listMyAdminRequests } from "../../services/
 import { HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE, USAGE_SETTINGS_URL } from "../../services/claudeAiLimits.js";
 import { openValidatedUrlSucceeded } from "../../utils/browser.js";
 
-//@ chunk-vbks4x4e.js:4758-4901 placement (2.1.88 match: hasRequiredSubscription, 0.53)
+//@ chunk-ph8hmbrf.js:4758-4901 placement (2.1.88 match: hasRequiredSubscription, 0.529)
 /**
  * （误归 computerUse/gates）是否可购买额外用量：GrowthBook tengu_ember_latch 或已有覆盖，并且允许额外用量且是 pro/max 订阅。
  */
@@ -34,7 +34,7 @@ function canPurchaseExtraUsage() {
     (hasOverride || ((tier === "pro" || tier === "max") && !isEssentialTrafficOnly()));
   return gateOn && allowed;
 }
-//@ chunk-vbks4x4e.js:4901-6713 fingerprint (2.1.88 match: runExtraUsage, 0.345)
+//@ chunk-ph8hmbrf.js:4901-6713 fingerprint (2.1.88 match: runExtraUsage, 0.344)
 async function runExtraUsage(context, credentials) {
   let subscriptionType = getSubscriptionType();
   let isTeamOrEnterprise = subscriptionType === "team" || subscriptionType === "enterprise";

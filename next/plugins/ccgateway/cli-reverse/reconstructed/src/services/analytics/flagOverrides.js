@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：读取特性开关（支持安全默认值与覆盖来源）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dwdfj3nt.js (2), chunk-z7nt3zpj.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b2c956ye.js (2), chunk-v4rf2fph.js (2)
  * attribution: placement 4
  */
 import {
@@ -17,9 +17,9 @@ import { resolveEnvRead } from "../../utils/gitSafeExec.js";
 import { env } from "../../utils/env.js";
 import { envEntryProblem } from "../../utils/envValidation.js";
 
-//@ chunk-z7nt3zpj.js:267-396 placement
+//@ chunk-b2c956ye.js:267-396 placement
 /**
- * 读取特性开关（支持安全默认值与覆盖来源）。
+ * 按安全默认值读一个特性开关值并归一（安全模式等），读取失败返回安全值；全树 140 多处用。
  */
 function readFlagWithOverride(key, { safe }) {
   try {
@@ -37,7 +37,7 @@ function readFlagWithOverride(key, { safe }) {
     return safe;
   }
 }
-//@ chunk-z7nt3zpj.js:396-545 placement
+//@ chunk-b2c956ye.js:396-545 placement
 /**
  * 读取枚举型开关：值在候选内且来自正常下发时才采用，否则用安全默认值。
  */
@@ -50,10 +50,10 @@ function readEnumFlag(key, { safe, others }) {
     return safe;
   }
 }
-//@ chunk-dwdfj3nt.js:339-397 placement
+//@ chunk-v4rf2fph.js:339-397 placement
 var TENGU_AMBER_QUILLWORT = "tengu_amber_quillwort";
 var TENGU_VELVET_HARROW = "tengu_velvet_harrow";
-//@ chunk-dwdfj3nt.js:397-565 placement
+//@ chunk-v4rf2fph.js:397-565 placement
 /**
  * 开关开启，或内部覆盖变量允许时读 GrowthBook 值。
  */
@@ -74,8 +74,8 @@ function isFlagOnWithInternalOverride(flag) {
 }
 export {
   readFlagWithOverride,
+  readEnumFlag,
   isFlagOnWithInternalOverride,
   TENGU_AMBER_QUILLWORT,
   TENGU_VELVET_HARROW,
-  readEnumFlag,
 };

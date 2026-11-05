@@ -3,9 +3,9 @@
  *
  * 本轮结束时运行 Stop/SubagentStop 钩子（handleStopHooks）：保存缓存安全参数、记忆提取、computer use 清理，钩子错误汇总为通知。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/query/stopHooks.ts
- * pieces: chunk-ha3km179.js (4)
+ * pieces: chunk-w3ch4xq2.js (4)
  * attribution: placement 3, fingerprint 1
  */
 import { postSamplingHookRegistry } from "../utils/hooks/postSamplingHooks.js";
@@ -17,7 +17,7 @@ import {
 } from "../utils/forkedAgent.js";
 import { logError } from "../utils/log.js";
 import { isMainAgent } from "../utils/agentContext.js";
-import { replyGatePolicy } from "./turnEndReasons.js";
+import { replyGatePolicy, policyContext } from "./turnEndReasons.js";
 import { getQueuedPeerMessageCount } from "../utils/messageQueueManager.js";
 import { runBookkeepingSafe, logReplyGatePolicy, REPLY_GATE_SILENT_REASONS } from "./toolDrain.js";
 import { logFeatureOk, logFeatureSad } from "../services/analytics/featureTelemetry.js";
@@ -34,14 +34,14 @@ import { logEvent } from "../services/analytics/index.js";
 import { sanitizeMarkName } from "../utils/startupMarks.js";
 import { createSystemMessage } from "../utils/messages.js";
 
-//@ chunk-ha3km179.js:79605-79692 placement
+//@ chunk-w3ch4xq2.js:88858-88945 placement
 /**
  * 钩子阻断错误附件
  */
 function isHookBlockingErrorAttachment(message) {
   return message.type === "attachment" && message.attachment.type === "hook_blocking_error";
 }
-//@ chunk-ha3km179.js:79692-79799 placement (2.1.88 match: call, 0.504)
+//@ chunk-w3ch4xq2.js:88945-89052 placement (2.1.88 match: call, 0.504)
 function call(deps) {
   try {
     if (postSamplingHookRegistry.of(deps.toolUseContext.session.host).hooks.includes(rememberTurnParams))
@@ -50,7 +50,7 @@ function call(deps) {
     logError(error);
   }
 }
-//@ chunk-ha3km179.js:79799-79958 placement (2.1.88 match: updateMagicDocs, 0.636)
+//@ chunk-w3ch4xq2.js:89052-89211 placement (2.1.88 match: updateMagicDocs, 0.638)
 function maybeStartPrecomputeAfterTurn(context) {
   try {
     if (
@@ -64,7 +64,7 @@ function maybeStartPrecomputeAfterTurn(context) {
     logError(error);
   }
 }
-//@ chunk-ha3km179.js:79958-82467 fingerprint (2.1.88 match: handleStopHooks, 0.499)
+//@ chunk-w3ch4xq2.js:89211-91758 fingerprint (2.1.88 match: handleStopHooks, 0.497)
 /**
  * handleStopHooks（工具/MCP 结束本轮、循环定时唤醒时调用）：主线程保存 cacheSafeParams；跑 Stop 钩子（阻断在此路径下被丢弃只记日志）；收集钩子错误发通知；有 endTurnSource 时执行收尾反应；中止时补偿。
  */
@@ -84,7 +84,7 @@ async function* handleStopHooks(
 ) {
   let endTurnFromTool = endTurnSource === "tool";
   let messages = [...messagesForQuery, ...assistantMessages, ...toolResults];
-  let replyGatePolicyValue = replyGatePolicy();
+  let { policy: replyGatePolicyValue, launchPolicyLabel } = replyGatePolicy();
   if (
     getQueuedPeerMessageCount &&
     endTurnSource === "mcp_meta" &&
@@ -97,14 +97,12 @@ async function* handleStopHooks(
       let gateDecision = getQueuedPeerMessageCount.evaluateProjectsReplyGate(
         messagesForQuery,
         [...assistantMessages, ...toolResults],
-        {
-          kind: "policy",
-          policy: replyGatePolicyValue,
-        },
+        policyContext(replyGatePolicyValue, toolUseContext),
       );
       switch (gateDecision.kind) {
         case "answered":
           logFeatureOk("projects_reply_gate_policy", {
+            ...launchPolicyLabel,
             person_opened_turn: gateDecision.personOpened,
             no_reply_only: gateDecision.noReplyOnly,
             source: lit("mcp_meta"),
@@ -113,6 +111,7 @@ async function* handleStopHooks(
         case "still_silent":
         case "bounce":
           logReplyGatePolicy(REPLY_GATE_SILENT_REASONS[gateDecision.reason], {
+            ...launchPolicyLabel,
             person_opened_turn: gateDecision.personOpened,
           });
           break;

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：claude mcp serve 子命令（stdio/http 传输、端口、隧道、工作区根）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4x781459.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6ywqythx.js (1)
  * attribution: placement 1
  */
 import { cwd } from "process";
@@ -26,7 +26,7 @@ import { applyConfigEnvironmentVariables } from "../../utils/managedEnvApply.js"
 import { logError } from "../../utils/log.js";
 import { removeCredentialFile } from "../../utils/authFileDescriptor.js";
 
-//@ chunk-4x781459.js:3775-7783 placement
+//@ chunk-6ywqythx.js:4111-8119 placement
 /**
  * claude mcp serve：校验 --transport/--port/--tunnel、启动 MCP 服务器（约 4 KB）。
  */

@@ -1,14 +1,14 @@
 /**
  * @modelcontextprotocol/sdk/dist/esm/server/streamableHttp.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/sdk@1.29.0
- * pieces: chunk-k26nnqnx.js (1)
+ * pieces: chunk-cacgqezg.js (1)
  * attribution: esm-fingerprint 1
  */
 import { WebStandardStreamableHTTPServerTransport } from "./webStandardStreamableHttp.js";
 import { getRequestListener } from "../../../../../@hono/node-server/dist/index.mjs";
 
-//@ chunk-k26nnqnx.js:24883-26047 esm-fingerprint
+//@ chunk-cacgqezg.js:26208-27372 esm-fingerprint
 class StreamableHTTPServerTransport {
   constructor(options = {}) {
     this._requestContext = new WeakMap();

@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/middleware-user-agent/dist-cjs/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/middleware-user-agent@3.936.0..3.972.18
- * pieces: chunk-edce4vxq.js (1)
+ * pieces: chunk-3p78mpxm.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_util_endpoints } from "../../util-endpoints/dist-cjs/index.js";
 import { require_protocol_http as require_protocol_http_3 } from "../../../@smithy/protocol-http/dist-cjs/index.js";
 import { require_core_2 } from "../../core/dist-cjs/index.js";
 
-//@ chunk-edce4vxq.js:111841-115054 cjs-fingerprint
+//@ chunk-3p78mpxm.js:111841-115054 cjs-fingerprint
 var require_middleware_user_agent = __commonJS(function (cjsExports) {
   var core = require_core_3();
   var utilEndpoints = require_util_endpoints();

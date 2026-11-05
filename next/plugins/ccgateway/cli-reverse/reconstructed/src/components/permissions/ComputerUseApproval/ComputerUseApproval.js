@@ -3,12 +3,13 @@
  *
  * Computer Use 授权：macOS 辅助功能/屏幕录制权限面板，或应用列表与剪贴板/系统按键等能力授权。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/ComputerUseApproval/ComputerUseApproval.tsx
- * pieces: chunk-18hwfzwa.js (16)
- * attribution: placement 4, layout 5, fingerprint 6, file-local 1
+ * pieces: chunk-czq1j3j2.js (18)
+ * attribution: placement 4, sole-consumer 2, affinity 1, fingerprint 6, layout 4, file-local 1
  */
 import { init_react_production, useState } from "../../../../vendor/react/cjs/react.production.js";
+import { currentToolPermissionContext } from "../../../utils/permissions/currentPermissionContext.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -16,7 +17,7 @@ import {
 import { Text, Box } from "../../../ink/components/Text.js";
 import { EMPTY_SANDBOX_FLAGS } from "../../dialogs/dialogKinds.js";
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
-import { useInputRefusalWindow, useRefusalTracker, settleKey } from "../../CustomSelect/selectTypeahead.js";
+import { useRecentInputWithin, useRefusalTracker, settleKey } from "../../CustomSelect/selectTypeahead.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { requireComputerUseSwift } from "../../../utils/computerUse/swiftLoader.js";
 import { execFileNoThrow } from "../../../utils/execFileNoThrow.js";
@@ -30,11 +31,16 @@ import { DiffFileList } from "../../diff/DiffFileList.js";
 import { labelOrEmpty as labelOrEmpty_2 } from "../../../utils/permissions/approvalPayloadSerialization.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1237471-1237535 placement
+//@ chunk-czq1j3j2.js:1212219-1212223 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1212219", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1262586-1262650 placement
 function pathBasename(path) {
   return path.toLowerCase().split(/[\\/]/).pop() ?? "";
 }
-//@ chunk-18hwfzwa.js:1237535-1238502 placement
+//@ chunk-czq1j3j2.js:1262650-1263617 placement
 var KNOWN_TERMINAL_BUNDLE_IDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var FINDER_BUNDLE_IDS;
 var SYSTEM_SETTINGS_BUNDLE_IDS;
@@ -44,7 +50,7 @@ var SHELL_HOST_EXECUTABLES;
 var SYSTEM_SETTINGS_EXECUTABLES;
 var WINDOWS_SETTINGS_PREFIXES;
 var KNOWN_RISK_BUNDLE_IDS;
-deferInit("chunk-18hwfzwa.js:1237535", () => {
+deferInit("chunk-czq1j3j2.js:1262650", () => {
   KNOWN_TERMINAL_BUNDLE_IDS = new Set([
     "com.apple.Terminal",
     "com.googlecode.iterm2",
@@ -101,7 +107,7 @@ deferInit("chunk-18hwfzwa.js:1237535", () => {
     ...SYSTEM_SETTINGS_BUNDLE_IDS,
   ]);
 });
-//@ chunk-18hwfzwa.js:1238502-1238846 placement
+//@ chunk-czq1j3j2.js:1263617-1263961 placement
 function computerUseRiskCategory(bundleId) {
   if (KNOWN_TERMINAL_BUNDLE_IDS.has(bundleId)) return "shell";
   if (FINDER_BUNDLE_IDS.has(bundleId)) return "filesystem";
@@ -114,28 +120,31 @@ function computerUseRiskCategory(bundleId) {
   if (SYSTEM_SETTINGS_EXECUTABLES.has(executableName)) return "system_settings";
   return null;
 }
-//@ chunk-18hwfzwa.js:1238846-1238850 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1238846", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:1238850-1238883 layout
+//@ chunk-czq1j3j2.js:1263965-1263996 sole-consumer
+function useDialogPadding() {
+  return currentToolPermissionContext() ? 0 : 1;
+}
+//@ chunk-czq1j3j2.js:1263996-1264029 sole-consumer
 function sumValues(a, b) {
   return a + b;
 }
-//@ chunk-18hwfzwa.js:1238883-1238913 layout
+//@ chunk-czq1j3j2.js:1264029-1264059 affinity
 function selectSortValue(accumulator, item) {
   return item;
 }
-//@ chunk-18hwfzwa.js:1238913-1238995 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:1264059-1264141 fingerprint (2.1.88 match: _temp, 1)
 function grantBundleIds(a) {
   return a.resolved && !a.alreadyGranted ? [a.resolved.bundleId] : [];
 }
-//@ chunk-18hwfzwa.js:1238995-1239026 layout
+//@ chunk-czq1j3j2.js:1264141-1264172 layout
 function toFlagPair(bundleId) {
   return [bundleId, true];
 }
-//@ chunk-18hwfzwa.js:1239026-1239099 file-local
+//@ chunk-czq1j3j2.js:1264172-1264203 layout
+function getDialogPadding() {
+  return currentToolPermissionContext() ? 0 : 1;
+}
+//@ chunk-czq1j3j2.js:1264203-1264276 file-local
 function renderRequestedFlag(flag) {
   return jsxProd_default_2(
     Text,
@@ -146,7 +155,7 @@ function renderRequestedFlag(flag) {
     flag,
   );
 }
-//@ chunk-18hwfzwa.js:1239099-1239149 fingerprint (2.1.88 match: DENY_ALL_RESPONSE, 1)
+//@ chunk-czq1j3j2.js:1264276-1264326 fingerprint (2.1.88 match: DENY_ALL_RESPONSE, 1)
 var DENY_ALL_RESPONSE = {
   granted: [],
   denied: [],
@@ -154,7 +163,7 @@ var DENY_ALL_RESPONSE = {
 };
 var MIN_APP_LIST_ROWS = 8;
 var MAX_APP_LIST_ROWS = 8;
-//@ chunk-18hwfzwa.js:1239902-1240190 fingerprint (2.1.88 match: ComputerUseApproval, 0.846)
+//@ chunk-czq1j3j2.js:1265079-1265367 fingerprint (2.1.88 match: ComputerUseApproval, 0.847)
 function ComputerUseApproval(props) {
   let $ = useMemoCache(4);
   let { request, onDone, wouldTakeAnswer } = props;
@@ -178,37 +187,37 @@ function ComputerUseApproval(props) {
   } else t1 = $[3];
   return t1;
 }
-//@ chunk-18hwfzwa.js:1240190-1243037 fingerprint (2.1.88 match: ComputerUseTccPanel, 0.79)
+//@ chunk-czq1j3j2.js:1265367-1268251 fingerprint (2.1.88 match: ComputerUseTccPanel, 0.79)
 function ComputerUseTccPanel(props) {
-  let $ = useMemoCache(39);
+  let $ = useMemoCache(40);
   let { tccState, onDone, wouldTakeAnswer } = props;
-  let inputRefusalWindow = useInputRefusalWindow();
+  let isRecentInput = useRecentInputWithin();
   let { refusedWithin, noteRefused } = useRefusalTracker();
   let refuseInput;
-  if ($[0] !== inputRefusalWindow || $[1] !== noteRefused || $[2] !== refusedWithin) {
+  if ($[0] !== isRecentInput || $[1] !== noteRefused || $[2] !== refusedWithin) {
     refuseInput = function shouldRefuseInput() {
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (isRecentInput() || refusedWithin()) {
         noteRefused();
         return true;
       }
       return false;
     };
-    $[0] = inputRefusalWindow;
+    $[0] = isRecentInput;
     $[1] = noteRefused;
     $[2] = refusedWithin;
     $[3] = refuseInput;
   } else refuseInput = $[3];
   let refuseInput_2 = refuseInput;
   let handleCancel;
-  if ($[4] !== inputRefusalWindow || $[5] !== noteRefused || $[6] !== onDone || $[7] !== refusedWithin) {
+  if ($[4] !== isRecentInput || $[5] !== noteRefused || $[6] !== onDone || $[7] !== refusedWithin) {
     handleCancel = function onCancel() {
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (isRecentInput() || refusedWithin()) {
         noteRefused();
         return;
       }
       onDone();
     };
-    $[4] = inputRefusalWindow;
+    $[4] = isRecentInput;
     $[5] = noteRefused;
     $[6] = onDone;
     $[7] = refusedWithin;
@@ -253,14 +262,14 @@ function ComputerUseTccPanel(props) {
   let options = missingPermissionOptions;
   let t1;
   if (
-    $[14] !== inputRefusalWindow ||
+    $[14] !== isRecentInput ||
     $[15] !== noteRefused ||
     $[16] !== onDone ||
     $[17] !== refusedWithin ||
     $[18] !== wouldTakeAnswer
   ) {
     t1 = function onChange(value) {
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (isRecentInput() || refusedWithin()) {
         noteRefused();
         return;
       }
@@ -297,7 +306,7 @@ function ComputerUseTccPanel(props) {
         }
       }
     };
-    $[14] = inputRefusalWindow;
+    $[14] = isRecentInput;
     $[15] = noteRefused;
     $[16] = onDone;
     $[17] = refusedWithin;
@@ -305,6 +314,7 @@ function ComputerUseTccPanel(props) {
     $[19] = t1;
   } else t1 = $[19];
   let onChange = t1;
+  let [padding] = useState(useDialogPadding);
   const t2 = tccState.accessibility
     ? `${figures_default.tick} granted`
     : `${figures_default.cross} not granted`;
@@ -363,38 +373,39 @@ function ComputerUseTccPanel(props) {
     $[32] = modelSelector;
   } else modelSelector = $[32];
   let children;
-  if ($[33] !== modelSelector || $[34] !== tccStatusColumn) {
+  if ($[33] !== padding || $[34] !== modelSelector || $[35] !== tccStatusColumn) {
     children = jsxProd_default_2(Box, {
       flexDirection: "column",
-      paddingX: 1,
-      paddingY: 1,
+      paddingX: padding,
+      paddingY: padding,
       gap: 1,
       children: [tccStatusColumn, t7, modelSelector],
     });
-    $[33] = modelSelector;
-    $[34] = tccStatusColumn;
-    $[35] = children;
-  } else children = $[35];
+    $[33] = padding;
+    $[34] = modelSelector;
+    $[35] = tccStatusColumn;
+    $[36] = children;
+  } else children = $[36];
   let t10;
-  if ($[36] !== onCancel || $[37] !== children) {
+  if ($[37] !== onCancel || $[38] !== children) {
     t10 = jsxProd_default(Dialog, {
       title: "Computer Use needs macOS permissions",
       onCancel,
       children,
     });
-    $[36] = onCancel;
-    $[37] = children;
-    $[38] = t10;
-  } else t10 = $[38];
+    $[37] = onCancel;
+    $[38] = children;
+    $[39] = t10;
+  } else t10 = $[39];
   return t10;
 }
-//@ chunk-18hwfzwa.js:1243037-1243164 fingerprint (2.1.88 match: SENTINEL_WARNING, 1)
+//@ chunk-czq1j3j2.js:1268251-1268378 fingerprint (2.1.88 match: SENTINEL_WARNING, 1)
 var SENTINEL_WARNING = {
   shell: "equivalent to shell access",
   filesystem: "can read/write any file",
   system_settings: "can change system settings",
 };
-//@ chunk-18hwfzwa.js:1243164-1243429 layout (2.1.88 match: _temp, 0.838)
+//@ chunk-czq1j3j2.js:1268378-1268643 layout (2.1.88 match: _temp, 0.838)
 function dedupeComputerUseApps(a) {
   function score(app) {
     if (!app.resolved) return 0;
@@ -409,13 +420,13 @@ function dedupeComputerUseApps(a) {
   }
   return [...bestByKey.values()];
 }
-//@ chunk-18hwfzwa.js:1243429-1243511 layout (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:1268643-1268725 layout (2.1.88 match: _temp, 1)
 function riskSortRank(a) {
   return a.resolved && !a.alreadyGranted && computerUseRiskCategory(a.resolved.bundleId) ? 2 : 1;
 }
-//@ chunk-18hwfzwa.js:1243511-1248685 fingerprint (2.1.88 match: ComputerUseAppListPanel, 0.669)
+//@ chunk-czq1j3j2.js:1268725-1273932 fingerprint (2.1.88 match: ComputerUseAppListPanel, 0.669)
 function ComputerUseAppListPanel(props) {
-  let $ = useMemoCache(79);
+  let $ = useMemoCache(80);
   let { request, onDone } = props;
   let apps;
   if ($[0] !== request.apps) {
@@ -425,7 +436,7 @@ function ComputerUseAppListPanel(props) {
   } else apps = $[1];
   let apps_2 = apps;
   let visResult;
-  ze: {
+  Ve: {
     let ranks;
     let rankSum;
     if ($[2] !== apps_2) {
@@ -449,7 +460,7 @@ function ComputerUseAppListPanel(props) {
         $[6] = allVisible;
       } else allVisible = $[6];
       visResult = allVisible;
-      break ze;
+      break Ve;
     }
     let visibleIndexes;
     if ($[7] !== apps_2 || $[8] !== ranks) {
@@ -521,18 +532,18 @@ function ComputerUseAppListPanel(props) {
     $[24] = requestedFlags;
   } else requestedFlags = $[24];
   let requestedFlags_2 = requestedFlags;
-  let inputRefusalWindow = useInputRefusalWindow();
+  let appsList = useRecentInputWithin();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
   let refuseInput;
-  if ($[25] !== inputRefusalWindow || $[26] !== noteRefused || $[27] !== refusedWithin) {
+  if ($[25] !== appsList || $[26] !== noteRefused || $[27] !== refusedWithin) {
     refuseInput = function shouldRefuseInput() {
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (appsList() || refusedWithin()) {
         noteRefused();
         return true;
       }
       return false;
     };
-    $[25] = inputRefusalWindow;
+    $[25] = appsList;
     $[26] = noteRefused;
     $[27] = refusedWithin;
     $[28] = refuseInput;
@@ -580,7 +591,7 @@ function ComputerUseAppListPanel(props) {
   if (
     $[34] !== apps_2 ||
     $[35] !== checked ||
-    $[36] !== inputRefusalWindow ||
+    $[36] !== appsList ||
     $[37] !== noteRefused ||
     $[38] !== onDone ||
     $[39] !== refusedWithin ||
@@ -588,7 +599,7 @@ function ComputerUseAppListPanel(props) {
     $[41] !== visibleApps
   ) {
     respond = function respond(allow) {
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (appsList() || refusedWithin()) {
         noteRefused();
         return;
       }
@@ -640,7 +651,7 @@ function ComputerUseAppListPanel(props) {
     };
     $[34] = apps_2;
     $[35] = checked;
-    $[36] = inputRefusalWindow;
+    $[36] = appsList;
     $[37] = noteRefused;
     $[38] = onDone;
     $[39] = refusedWithin;
@@ -649,6 +660,7 @@ function ComputerUseAppListPanel(props) {
     $[42] = respond;
   } else respond = $[42];
   let respond_2 = respond;
+  let [extraFlags] = useState(getDialogPadding);
   let onCancel;
   if ($[43] !== respond_2) {
     onCancel = () => respond_2(false);
@@ -852,32 +864,40 @@ function ComputerUseAppListPanel(props) {
     $[69] = t19;
   } else t19 = $[69];
   let children;
-  if ($[70] !== t12 || $[71] !== t14 || $[72] !== t15 || $[73] !== t16 || $[74] !== t19) {
+  if (
+    $[70] !== extraFlags ||
+    $[71] !== t12 ||
+    $[72] !== t14 ||
+    $[73] !== t15 ||
+    $[74] !== t16 ||
+    $[75] !== t19
+  ) {
     children = jsxProd_default_2(Box, {
       flexDirection: "column",
-      paddingX: 1,
-      paddingY: 1,
+      paddingX: extraFlags,
+      paddingY: extraFlags,
       gap: 1,
       children: [t12, t14, t15, t16, t19],
     });
-    $[70] = t12;
-    $[71] = t14;
-    $[72] = t15;
-    $[73] = t16;
-    $[74] = t19;
-    $[75] = children;
-  } else children = $[75];
+    $[70] = extraFlags;
+    $[71] = t12;
+    $[72] = t14;
+    $[73] = t15;
+    $[74] = t16;
+    $[75] = t19;
+    $[76] = children;
+  } else children = $[76];
   let t21;
-  if ($[76] !== onCancel || $[77] !== children) {
+  if ($[77] !== onCancel || $[78] !== children) {
     t21 = jsxProd_default(Dialog, {
       title: "Computer Use wants to control these apps",
       onCancel,
       children,
     });
-    $[76] = onCancel;
-    $[77] = children;
-    $[78] = t21;
-  } else t21 = $[78];
+    $[77] = onCancel;
+    $[78] = children;
+    $[79] = t21;
+  } else t21 = $[79];
   return t21;
 }
 export { MAX_APP_LIST_ROWS, MIN_APP_LIST_ROWS, ComputerUseApproval };

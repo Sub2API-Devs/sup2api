@@ -1,14 +1,14 @@
 /**
  * qrcode/lib/core/byte-data.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: qrcode@1.5.4
- * pieces: chunk-spjgqa4y.js (1)
+ * pieces: chunk-s2h2kd6t.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_mode } from "./mode.js";
 
-//@ chunk-spjgqa4y.js:12654-13100 cjs-fingerprint
+//@ chunk-s2h2kd6t.js:12654-13100 cjs-fingerprint
 var require_byte_data = __commonJS(function (cjsExports, cjsModule) {
   var Mode = require_mode();
   function ByteData(data) {

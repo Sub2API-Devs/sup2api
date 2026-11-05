@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：通配符映射查找
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-czffketc.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mrcnh9sb.js (4)
  * attribution: placement 3, layout 1
  */
 import { pathListSignature } from "../hooks/fileSuggestions.js";
 import { matchRuleSegments } from "./permissions/permissionRuleParser.js";
 
-//@ chunk-czffketc.js:228-396 placement
+//@ chunk-mrcnh9sb.js:228-396 placement
 /**
  * 精确或通配匹配域名规则。
  */
@@ -29,7 +29,7 @@ function lookupDomainRule(rules, key) {
   }
   return wildcardMatch;
 }
-//@ chunk-czffketc.js:396-530 layout
+//@ chunk-mrcnh9sb.js:396-530 layout
 function normalizeDomainKey(key) {
   if (!key.startsWith("domain:")) return key;
   return `domain:${key
@@ -37,9 +37,9 @@ function normalizeDomainKey(key) {
     .toLowerCase()
     .replace(/(?<=[^*.])\.+(?=(:\d+)?$)/, "")}`;
 }
-//@ chunk-czffketc.js:530-541 placement
+//@ chunk-mrcnh9sb.js:530-541 placement
 var DOMAIN_SEPARATORS = ".:";
-//@ chunk-czffketc.js:541-960 placement
+//@ chunk-mrcnh9sb.js:541-960 placement
 /**
  * domain: 规则匹配
  */
@@ -66,4 +66,4 @@ function domainRuleMatches(ruleKey, domainKey) {
     matchRuleSegments(pattern, targetDomain.slice(cutIndex + 1), DOMAIN_SEPARATORS)
   );
 }
-export { normalizeDomainKey, domainRuleMatches, lookupDomainRule };
+export { lookupDomainRule, normalizeDomainKey, domainRuleMatches };

@@ -1,8 +1,8 @@
 /**
  * @grpc/grpc-js/build/src/resolver-dns.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @grpc/grpc-js@1.14.4
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
@@ -16,7 +16,7 @@ import { require_uri_parser } from "./uri-parser.js";
 import { require_backoff_timeout } from "./backoff-timeout.js";
 import { require_environment } from "./environment.js";
 
-//@ chunk-pwh5dx3n.js:205375-211555 cjs-fingerprint
+//@ chunk-3k21nfa0.js:205375-211555 cjs-fingerprint
 var require_resolver_dns = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

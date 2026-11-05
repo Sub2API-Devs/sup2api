@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。把分类器结果转成回合后摘要；按界面（desktop/mobile/projects 等）决定是否显示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-j71j5cv7.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pdfwd8ps.js (15)
  * attribution: placement 15
  */
 import { isBgSession, isBeingWatched, getBgTakeover, isBeingWatchedV5 } from "../utils/concurrentSessions.js";
@@ -23,17 +23,17 @@ import { hasRelaySourceForClients, hasUpdateStatusToolOnly } from "./projects/th
 import { truncateContent } from "../utils/telemetry/betaSessionTracing.js";
 import { mcpInfoFromString } from "./mcp/mcpStringUtils.js";
 import { REMOTE_DEVICES } from "./mcp/firstPartyServerIds.js";
-import { identity } from "../tools/REPLTool/constants.js";
+import { shownToolName } from "../tools/REPLTool/constants.js";
 import { mcpServerLabel } from "../utils/permissions/approvalPayloadSerialization.js";
 import { publishPostTurnSummary } from "../bridge/replBridgeHandle.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-j71j5cv7.js:793-886 placement
+//@ chunk-pdfwd8ps.js:826-919 placement
 /**
  * 远程/云端入口点集合（remote、remote_cowork、remote_desktop、remote_mobile、remote_projects）。
  */
 var REMOTE_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-j71j5cv7.js:793", () => {
+deferInit("chunk-pdfwd8ps.js:826", () => {
   REMOTE_ENTRYPOINTS = new Set([
     "remote",
     "remote_cowork",
@@ -42,7 +42,7 @@ deferInit("chunk-j71j5cv7.js:793", () => {
     "remote_projects",
   ]);
 });
-//@ chunk-j71j5cv7.js:886-1214 placement
+//@ chunk-pdfwd8ps.js:919-1247 placement
 function detectSurfaces(isWatching) {
   if (isBgSession()) return new Set(["bg"]);
   let surfaces = new Set();
@@ -56,7 +56,7 @@ function detectSurfaces(isWatching) {
   if (!getIsNonInteractiveSession() && isFullscreenEnvEnabled()) surfaces.add("repl");
   return surfaces;
 }
-//@ chunk-j71j5cv7.js:1214-1417 placement
+//@ chunk-pdfwd8ps.js:1247-1450 placement
 function hasCcrSurface() {
   if (hasRemoteCap("fanout")) return true;
   if (env.CLAUDE_CODE_ENVIRONMENT_KIND === "byoc") return true;
@@ -64,11 +64,11 @@ function hasCcrSurface() {
     return REMOTE_ENTRYPOINTS.has(env.CLAUDE_CODE_ENTRYPOINT ?? "") && !process.env.BUGHUNTER_FLEET_SIZE;
   return false;
 }
-//@ chunk-j71j5cv7.js:1417-1476 placement
+//@ chunk-pdfwd8ps.js:1450-1509 placement
 async function watchedForSurfaces(storage) {
   return isStorageV5Enabled() && storage !== undefined ? isBeingWatchedV5(storage) : undefined;
 }
-//@ chunk-j71j5cv7.js:1476-1604 placement
+//@ chunk-pdfwd8ps.js:1509-1637 placement
 var SURFACE_SINKS = {
   bg: ["state"],
   watched: ["state"],
@@ -78,7 +78,7 @@ var SURFACE_SINKS = {
   cli: ["summary"],
   repl: ["headline"],
 };
-//@ chunk-j71j5cv7.js:1604-1811 placement
+//@ chunk-pdfwd8ps.js:1637-1844 placement
 function sinksFor(surfaces) {
   let sinks = new Set();
   let disabledSurfaces = disabledClassifierSurfaces();
@@ -90,11 +90,11 @@ function sinksFor(surfaces) {
   if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_classifier_summary_kill", false)) sinks.delete("summary");
   return sinks;
 }
-//@ chunk-j71j5cv7.js:1811-1879 placement
+//@ chunk-pdfwd8ps.js:1844-1912 placement
 function disabledClassifierSurfaces() {
   return parseDisabledSurfaces(getFeatureValue_CACHED_MAY_BE_STALE("tengu_classifier_disabled_surfaces", ""));
 }
-//@ chunk-j71j5cv7.js:1879-2157 placement
+//@ chunk-pdfwd8ps.js:1912-2190 placement
 /**
  * 解析禁用的分类器摘要界面列表
  */
@@ -113,7 +113,7 @@ function parseDisabledSurfaces(featureValue_CACHED_MAY_BE_STALE) {
   }
   return surfaces;
 }
-//@ chunk-j71j5cv7.js:2157-2435 placement
+//@ chunk-pdfwd8ps.js:2190-2468 placement
 function engineFor(sinks) {
   if (sinks.size === 0) return null;
   let engine = sinks.has("state")
@@ -129,7 +129,7 @@ function engineFor(sinks) {
     ? "heuristic"
     : engine;
 }
-//@ chunk-j71j5cv7.js:2435-2523 placement
+//@ chunk-pdfwd8ps.js:2468-2556 placement
 /**
  * 分类器摘要的生成方式：开关 tengu_classifier_summary_llm_emit 打开为 "llm"，否则 "heuristic"。
  */
@@ -137,11 +137,11 @@ function getClassifierSummaryMode() {
   if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_classifier_summary_llm_emit", false)) return "llm";
   return "heuristic";
 }
-//@ chunk-j71j5cv7.js:2523-2547 placement
+//@ chunk-pdfwd8ps.js:2556-2580 placement
 function isPostTurnSummaryVisibleInCli() {
   return false;
 }
-//@ chunk-j71j5cv7.js:2547-2621 placement
+//@ chunk-pdfwd8ps.js:2580-2654 placement
 function projectsRecapEnabled(config) {
   return (
     hasRelaySourceForClients() &&
@@ -149,16 +149,16 @@ function projectsRecapEnabled(config) {
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_projects_thread_recap", false)
   );
 }
-//@ chunk-j71j5cv7.js:2621-2708 placement
+//@ chunk-pdfwd8ps.js:2654-2741 placement
 var SUMMARY_STATE_TO_CATEGORY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-j71j5cv7.js:2621", () => {
+deferInit("chunk-pdfwd8ps.js:2654", () => {
   SUMMARY_STATE_TO_CATEGORY = new Map([
     ["blocked", "blocked"],
     ["done", "completed"],
     ["working", "review_ready"],
   ]);
 });
-//@ chunk-j71j5cv7.js:2708-3195 placement (2.1.88 match: SDKPostTurnSummaryMessageSchema, 0.414)
+//@ chunk-pdfwd8ps.js:2741-3228 placement (2.1.88 match: SDKPostTurnSummaryMessageSchema, 0.414)
 /**
  * 把分类器结果转成回合后摘要；按界面（desktop/mobile/projects 等）决定是否显示。
  */
@@ -183,14 +183,14 @@ function classifiedToPostTurnSummary(input, opts) {
     }),
   };
 }
-//@ chunk-j71j5cv7.js:3195-3655 placement
+//@ chunk-pdfwd8ps.js:3228-3688 placement
 function runClassifierSummaryForBlocked(event, config) {
   let sinks = sinksFor(detectSurfaces(false));
   if (!sinks.has("summary") || engineFor(sinks) === null) return;
   let mcpInfo = mcpInfoFromString(event.tool_name);
   let label =
     !mcpInfo?.toolName || mcpInfo.serverName === REMOTE_DEVICES
-      ? identity(event.tool_name)
+      ? shownToolName(event.tool_name)
       : mcpServerLabel({
           serverName: mcpInfo.serverName,
           toolName: mcpInfo.toolName,

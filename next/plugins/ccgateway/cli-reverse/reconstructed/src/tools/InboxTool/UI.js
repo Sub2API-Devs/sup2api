@@ -3,9 +3,9 @@
  *
  * 收件箱工具界面（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-w3kk5zb6.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1k8fxw6h.js (1)
  * attribution: placement 1
  */
 import {
@@ -17,7 +17,7 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { stripControlChars, stripControlChars_2 } from "../../utils/stripControlChars.js";
 import { foldSenderDisplayBrackets, inboxSenderProvenanceCaption } from "../../bridge/sessionInbox.js";
 
-//@ chunk-w3kk5zb6.js:4750-5746 placement
+//@ chunk-1k8fxw6h.js:5086-6082 placement
 function InboxReadResult(result) {
   if (!result.ok)
     return jsxProd_default(MessageResponse, {

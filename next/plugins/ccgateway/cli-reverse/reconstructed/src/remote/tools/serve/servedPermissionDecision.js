@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：服务端调用的权限决定（询问升级、自动模式白名单、会话规则）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tr0s0d0k.js (43)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6d2p9h2d.js (43)
  * attribution: placement 43
  */
 import { isDeepStrictEqual } from "util";
@@ -30,14 +30,14 @@ import {
 } from "../../../utils/permissions/permissionsLoader.js";
 import { getLaunchPermissions, launchDenyRules } from "../../../utils/teleport/dirSync.js";
 import { isAutoModeActive } from "../../../utils/permissions/autoModeState.js";
-import { permissionRuleValueFromString } from "../../../utils/permissions/permissionRuleParser.js";
+import { normalizeRuleString } from "../../../utils/permissions/legacyWildcardRules.js";
 import { getEnabledSettingSources } from "../../../utils/settings/constants.js";
 import {
   overlyBroadShellAllowsStrippedByEverySession,
   isDangerousClassifierPermission,
   getHostCredentialDenyRule,
 } from "../../../utils/permissions/permissionSetup.js";
-import { formatPermissionRule } from "../../../utils/permissions/disallowedToolsFlag.js";
+import { permissionRuleValueFromString } from "../../../utils/permissions/permissionRuleParser.js";
 import {
   applyPermissionRulesToPermissionContext,
   isAllowRuleIgnoredInAutoMode,
@@ -128,7 +128,7 @@ import { checkServedShellSettingsWrite } from "./servedSettingsFileCheck.js";
 import { logEvent } from "../../../services/analytics/index.js";
 import { settingsFileCertainty } from "../../../utils/permissions/filesystem.js";
 import { getPathsForPermissionCheck } from "../../../utils/fsOperations.js";
-import { FILE_EDIT_TOOL_NAME } from "../../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../../tools/FileWriteTool/prompt.js";
 import { isDestructiveCommand } from "../../../utils/hooks/servedHooks/destructiveCommands.js";
 import {
@@ -147,7 +147,7 @@ import {
 } from "../../../types/permissions.js";
 import { ASK_ENDED_REASON } from "./pendingAsks.js";
 
-//@ chunk-tr0s0d0k.js:51445-51756 placement
+//@ chunk-6d2p9h2d.js:51824-52135 placement
 /**
  * 远程工具权限判定原因常量：会话答复、破坏性询问、分类器询问、本机设置写入/编辑、无法确认的 shell 写入等，以及每条最多保留 16 条。
  */
@@ -161,15 +161,15 @@ var REMOTE_CALL_HOST_SETTINGS_EDIT = "remote_call_host_settings_edit";
 var REMOTE_CALL_UNRESOLVED_SHELL_WRITE_ASK = "remote_call_unresolved_shell_write_ask";
 var REMOTE_CALL_SETTINGS_FILE_NAMED_ASK = "remote_call_settings_file_named_ask";
 var FORCE_NOT_REMOTELY_EXECUTABLE = false;
-//@ chunk-tr0s0d0k.js:51756-51809 placement
+//@ chunk-6d2p9h2d.js:52135-52188 placement
 function isNotRemotelyExecutable(tool) {
   return tool.isMcp === true || !getToolRemoteExecution(tool).supported;
 }
-//@ chunk-tr0s0d0k.js:51809-51945 placement
+//@ chunk-6d2p9h2d.js:52188-52324 placement
 function destructiveCommandAskMessage(targetName) {
   return `This command is flagged as destructive. ${targetName} asks before running destructive commands sent from a cloud session.`;
 }
-//@ chunk-tr0s0d0k.js:51945-52439 placement
+//@ chunk-6d2p9h2d.js:52324-52818 placement
 /**
  * 远程调用的拒绝模板：确认失败、回答前被停止，以及允许直接执行的权限模式集合（default/plan/dontAsk/acceptEdits）。
  */
@@ -194,7 +194,7 @@ var STOPPED_BEFORE_ANSWER_DECISION = {
 };
 var REMOTE_CALL_NOT_RUN_HERE = "remote_call_not_run_here";
 var MODES_THAT_ALLOW_SERVED_CALLS = new Set(["default", "plan", "dontAsk", "acceptEdits"]);
-//@ chunk-tr0s0d0k.js:52439-52938 placement
+//@ chunk-6d2p9h2d.js:52818-53317 placement
 function effectiveServedMode(params) {
   if (params.stance.mode !== "session")
     return {
@@ -222,7 +222,7 @@ function effectiveServedMode(params) {
     autoRefusedHere,
   };
 }
-//@ chunk-tr0s0d0k.js:52938-53263 placement
+//@ chunk-6d2p9h2d.js:53317-53642 placement
 function servedModeRelation(params) {
   if (params.stance.mode !== "session") return "fixed_stance";
   if (params.sessionMode === undefined) return "mode_absent";
@@ -231,7 +231,7 @@ function servedModeRelation(params) {
     return params.evaluatedMode === "acceptEdits" ? "auto_fast_path" : "auto_refused_here";
   return "mode_unknown";
 }
-//@ chunk-tr0s0d0k.js:53263-53448 placement
+//@ chunk-6d2p9h2d.js:53642-53827 placement
 function servedModeTelemetry(params) {
   let relation = servedModeRelation(params);
   let session = params.sessionMode ?? "absent";
@@ -247,7 +247,7 @@ function servedModeTelemetry(params) {
         why: relation,
       };
 }
-//@ chunk-tr0s0d0k.js:53448-53912 placement
+//@ chunk-6d2p9h2d.js:53827-54291 placement
 function servedModeNote(relation, reason = "none") {
   switch (relation) {
     case "fixed_stance":
@@ -263,9 +263,9 @@ function servedModeNote(relation, reason = "none") {
       return `This computer could not tell which mode the session is in, so it checked this in ${permissionModeTitle("default").toLowerCase()} mode.`;
   }
 }
-//@ chunk-tr0s0d0k.js:53912-53953 placement
+//@ chunk-6d2p9h2d.js:54291-54332 placement
 var REMOTE_CALL_AUTO_MODE_ALLOWLIST = "remote_call_auto_mode_allowlist";
-//@ chunk-tr0s0d0k.js:53953-54157 placement
+//@ chunk-6d2p9h2d.js:54332-54536 placement
 function isUnattendedAutoAllowed(stance, sessionMode, call) {
   if (sessionMode !== "auto" && sessionMode !== "bypassPermissions") return false;
   switch (stance.unattended) {
@@ -279,7 +279,7 @@ function isUnattendedAutoAllowed(stance, sessionMode, call) {
     }
   }
 }
-//@ chunk-tr0s0d0k.js:54157-54265 placement
+//@ chunk-6d2p9h2d.js:54536-54644 placement
 function isUnattendedOwnRecord(stanceValue) {
   switch (stanceValue) {
     case "own_record":
@@ -292,24 +292,24 @@ function isUnattendedOwnRecord(stanceValue) {
     }
   }
 }
-//@ chunk-tr0s0d0k.js:54265-54330 placement
+//@ chunk-6d2p9h2d.js:54644-54709 placement
 function isPlanFloor(sessionMode, unattended = "own_record") {
   return sessionMode === "plan" && planModeUnattendedRefusal(unattended) === undefined;
 }
-//@ chunk-tr0s0d0k.js:54330-54443 placement
+//@ chunk-6d2p9h2d.js:54709-54822 placement
 function planModeUnattendedRefusal(stanceValue) {
   if (!isUnattendedOwnRecord(stanceValue)) return "answers_refused";
   return getUseAutoModeDuringPlan() && !isServedSettingRefused("plan_asks_a_person")
     ? undefined
     : "plan_setting";
 }
-//@ chunk-tr0s0d0k.js:54443-54467 placement
+//@ chunk-6d2p9h2d.js:54822-54846 placement
 function isNeverDestructiveTool(name) {
   return false;
 }
-//@ chunk-tr0s0d0k.js:54467-54529 placement
+//@ chunk-6d2p9h2d.js:54846-54908 placement
 var SESSION_RULE_SOURCES = new Set(["projectSettings", "localSettings", "session"]);
-//@ chunk-tr0s0d0k.js:54529-56752 placement
+//@ chunk-6d2p9h2d.js:54908-57139 placement
 /**
  * 为远程调用构造本机权限上下文：按服务立场（session/fixed）合并会话模式、规则来源与 CLI 允许规则。
  */
@@ -337,7 +337,7 @@ function servedPermissionContext(params) {
           : launchPermissions.allowRules.map((allowRule) => ({
               source: "cliArg",
               ruleBehavior: "allow",
-              ruleValue: permissionRuleValueFromString(allowRule),
+              ruleValue: normalizeRuleString(allowRule, "allow"),
             }))),
         ...launchDenyRules(launchPermissions),
       ]
@@ -356,7 +356,9 @@ function servedPermissionContext(params) {
         ...launchDenyRules(launchPermissions),
       ].filter((rule) => !SESSION_RULE_SOURCES.has(rule.source) && rule.ruleBehavior === "deny");
   let broadAllowKeySet = new Set(
-    overlyBroadShellAllowsStrippedByEverySession(rules).map((rule) => formatPermissionRule(rule.ruleValue)),
+    overlyBroadShellAllowsStrippedByEverySession(rules).map((rule) =>
+      permissionRuleValueFromString(rule.ruleValue),
+    ),
   );
   let filtered = rules.filter(
     (rule) =>
@@ -364,7 +366,8 @@ function servedPermissionContext(params) {
         rule.ruleBehavior,
         rule.ruleValue,
         autoAllowed || (rule.source === "cliArg" && launchedAuto),
-      ) && !(rule.ruleBehavior === "allow" && broadAllowKeySet.has(formatPermissionRule(rule.ruleValue))),
+      ) &&
+      !(rule.ruleBehavior === "allow" && broadAllowKeySet.has(permissionRuleValueFromString(rule.ruleValue))),
   );
   let context = applyPermissionRulesToPermissionContext(getEmptyToolPermissionContext(), filtered, {
     announce: false,
@@ -450,13 +453,13 @@ function servedPermissionContext(params) {
       }
     : servedContext;
 }
-//@ chunk-tr0s0d0k.js:56752-56786 placement
+//@ chunk-6d2p9h2d.js:57139-57173 placement
 function notLaunchedFromHome(entry) {
   return !launchedFromHome(entry.path);
 }
-//@ chunk-tr0s0d0k.js:56786-56801 placement
+//@ chunk-6d2p9h2d.js:57173-57188 placement
 var LOGGED_DROPPED_RULE_SETS = new Set();
-//@ chunk-tr0s0d0k.js:56801-57055 placement
+//@ chunk-6d2p9h2d.js:57188-57442 placement
 function logDroppedServedRules(fields) {
   if (fields.cliarg_allows === fields.cliarg_allows_kept && fields.startup_dirs === fields.startup_dirs_kept)
     return;
@@ -467,15 +470,15 @@ function logDroppedServedRules(fields) {
   LOGGED_DROPPED_RULE_SETS.add(joined);
   logForDebugging(`[remote-tools] served-context screens dropped rules ${joined}`);
 }
-//@ chunk-tr0s0d0k.js:57055-57109 placement
+//@ chunk-6d2p9h2d.js:57442-57496 placement
 function withHostCredentialDenyRules(alwaysDenyRules, extra) {
   return {
     ...alwaysDenyRules,
     ...extra,
-    [HOST_CREDENTIAL_RULE_SOURCE]: hostCredentialDenyRules().map(formatPermissionRule),
+    [HOST_CREDENTIAL_RULE_SOURCE]: hostCredentialDenyRules().map(permissionRuleValueFromString),
   };
 }
-//@ chunk-tr0s0d0k.js:57109-57200 placement
+//@ chunk-6d2p9h2d.js:57496-57586 placement
 function isDangerousAllowRule(behavior, rule, treatAsAuto) {
   return (
     behavior === "allow" &&
@@ -484,7 +487,7 @@ function isDangerousAllowRule(behavior, rule, treatAsAuto) {
       isAllowRuleIgnoredInAutoMode(rule.toolName))
   );
 }
-//@ chunk-tr0s0d0k.js:57200-57265 placement
+//@ chunk-6d2p9h2d.js:57586-57651 placement
 function classifyToolErrorSafely(error) {
   try {
     return classifyToolError(error);
@@ -492,7 +495,7 @@ function classifyToolErrorSafely(error) {
     return lit("UnknownError");
   }
 }
-//@ chunk-tr0s0d0k.js:57265-63626 placement
+//@ chunk-6d2p9h2d.js:57651-64136 placement
 /**
  * 为远程调用包装 canUseTool：本机钩子、分类器二次检查、破坏性命令询问、设置文件写入判定。
  */
@@ -702,6 +705,13 @@ function createServedCallPermissionCheck(params) {
               : !isViolinTailgutEnabled() ||
                 touchesProtectedPath(effectiveInput, "file_or_folder") ||
                 (parsedInput !== undefined && touchesProtectedPath(parsedInput, "file_or_folder"))));
+      let unreadableMarkAlone =
+        params.stance.unattended === "conveyed" &&
+        !writesSettingGate &&
+        unresolvedShellWrite &&
+        !touchesProtected &&
+        !touchesProtectedPath(effectiveInput, "file_or_folder") &&
+        (parsedInput === undefined || !touchesProtectedPath(parsedInput, "file_or_folder"));
       let settingsCause = touchesProtected
         ? (combinedWriteCheck?.file ?? "error")
         : uncertainUnderGate
@@ -737,11 +747,7 @@ function createServedCallPermissionCheck(params) {
       ) {
         logEvent("tengu_served_settings_edit_refused", {
           tool: fromEnum(
-            tool.name === FILE_EDIT_TOOL_NAME
-              ? "edit"
-              : tool.name === FILE_WRITE_TOOL_NAME
-                ? "write"
-                : "other",
+            tool.name === EDIT ? "edit" : tool.name === FILE_WRITE_TOOL_NAME ? "write" : "other",
           ),
           engine: fromEnum(finalDecision.behavior),
         });
@@ -931,6 +937,7 @@ function createServedCallPermissionCheck(params) {
         forcedByHook,
         callId,
         unresolvedShellWrite,
+        unreadableMarkAlone,
         networkPath,
         serverAskUnderPlanFloor,
         fastPathEdit,
@@ -980,7 +987,7 @@ function createServedCallPermissionCheck(params) {
     () => true,
   );
 }
-//@ chunk-tr0s0d0k.js:63626-64287 placement
+//@ chunk-6d2p9h2d.js:64136-64797 placement
 function tryAutoModeAllowlist(params) {
   try {
     if (
@@ -1027,11 +1034,11 @@ function tryAutoModeAllowlist(params) {
     return;
   }
 }
-//@ chunk-tr0s0d0k.js:64287-64331 placement
+//@ chunk-6d2p9h2d.js:64797-64841 placement
 function logUnlessStopped(error, signal) {
   if (!signal.aborted && !isAbortError(error)) logError(error);
 }
-//@ chunk-tr0s0d0k.js:64331-64475 placement
+//@ chunk-6d2p9h2d.js:64841-64985 placement
 function normalizeForwardedInput(tool, forwardedInput, cwd) {
   let parsed = safeParseToolInput(tool, forwardedInput);
   if (!parsed.success) return forwardedInput;
@@ -1042,7 +1049,7 @@ function normalizeForwardedInput(tool, forwardedInput, cwd) {
   tool.backfillObservableInput?.(copy);
   return copy;
 }
-//@ chunk-tr0s0d0k.js:64475-64626 placement
+//@ chunk-6d2p9h2d.js:64985-65136 placement
 function isSameDefinedFields(left, right) {
   let definedKeys = (object) => Object.keys(object).filter((key) => object[key] !== undefined);
   let leftKeys = definedKeys(left);
@@ -1051,7 +1058,7 @@ function isSameDefinedFields(left, right) {
     leftKeys.every((key) => right[key] !== undefined && isDeepStrictEqual(left[key], right[key]))
   );
 }
-//@ chunk-tr0s0d0k.js:64626-66050 placement
+//@ chunk-6d2p9h2d.js:65136-66560 placement
 function escalateToAsk(decision, targetName, cause = "destructive") {
   if (decision.behavior !== "allow") return decision;
   let messages = {
@@ -1086,7 +1093,7 @@ function escalateToAsk(decision, targetName, cause = "destructive") {
     },
   };
 }
-//@ chunk-tr0s0d0k.js:66050-68726 placement
+//@ chunk-6d2p9h2d.js:66560-69292 placement
 async function resolveServedAsk(decision, params, input, toolUseContext, extras) {
   if (decision.behavior !== "ask") return decision;
   let askedInput =
@@ -1145,15 +1152,15 @@ async function resolveServedAsk(decision, params, input, toolUseContext, extras)
   let promise = new Promise((resolve, reject) => {
     try {
       let forcedByHook = extras.forcedByHook || toolUseContext.hookAskFloor === true;
-      let priorAnswerOk =
+      let offersRule =
         !extras.raisedToAsk &&
         !vetoed &&
-        !extras.unresolvedShellWrite &&
         !isServedMcpAsk(decision, extras.tool) &&
         !inputRewritten &&
         !extras.networkPath &&
         isEscalatableAsk(decision, extras.tool, forcedByHook, askedInput);
-      let offersRule = !inputRewritten && !extras.raisedWhateverAllows && offersAlwaysAllowRule(decision);
+      let priorAnswerOk = offersRule && !extras.unresolvedShellWrite;
+      let isAlwaysAllow = !inputRewritten && !extras.raisedWhateverAllows && offersAlwaysAllowRule(decision);
       let modeNote =
         !classifierEligible &&
         !extras.raisedToAsk &&
@@ -1220,8 +1227,9 @@ async function resolveServedAsk(decision, params, input, toolUseContext, extras)
         askClass,
         mcpPathWhy: extras.mcpPathWhy,
         priorAnswerOk,
-        standingRowOffered: offersRule,
-        suggestions: offersRule ? getSuggestedRuleStrings(decision) : [],
+        unreadableLineOnly: offersRule && extras.unreadableMarkAlone,
+        standingRowOffered: isAlwaysAllow,
+        suggestions: isAlwaysAllow ? getSuggestedRuleStrings(decision) : [],
         answer: resolve,
       });
     } catch (error) {
@@ -1237,7 +1245,7 @@ async function resolveServedAsk(decision, params, input, toolUseContext, extras)
   if (answer === undefined || params.stopSignal.aborted) return STOPPED_BEFORE_ANSWER_DECISION;
   return answer;
 }
-//@ chunk-tr0s0d0k.js:68726-69341 placement
+//@ chunk-6d2p9h2d.js:69292-69907 placement
 async function runServedClassifier(params) {
   let eligibility = params.mayAnswer();
   let ahead = eligibility.may ? params.checkAhead?.() : undefined;
@@ -1276,7 +1284,7 @@ async function runServedClassifier(params) {
     }),
   };
 }
-//@ chunk-tr0s0d0k.js:69341-69557 placement
+//@ chunk-6d2p9h2d.js:69907-70123 placement
 function notifyAllowLanded(params, tool, decision, input) {
   if (decision.behavior !== "allow" || params.onAllowLanded === undefined || params.stopSignal.aborted)
     return;
@@ -1289,7 +1297,7 @@ function notifyAllowLanded(params, tool, decision, input) {
     return;
   }
 }
-//@ chunk-tr0s0d0k.js:69557-69972 placement
+//@ chunk-6d2p9h2d.js:70123-70538 placement
 function classifierRewriteVerdict(decision, toolUseContext, extras, rewriteKind, sessionMode, unattended) {
   if (rewriteKind !== "none" && !(rewriteKind === "own_hooks_alone" && isServedNeckEnabled()))
     return mayNotAnswer(rewriteKind === "own_hooks_alone" ? "rewrite_own_hooks" : "rewrite_unvouched");
@@ -1309,7 +1317,7 @@ function classifierRewriteVerdict(decision, toolUseContext, extras, rewriteKind,
     extras.fastPathEdit,
   );
 }
-//@ chunk-tr0s0d0k.js:69972-70181 placement
+//@ chunk-6d2p9h2d.js:70538-70747 placement
 function decideServedAskAnswerability(
   decision,
   tool,
@@ -1342,7 +1350,7 @@ function decideServedAskAnswerability(
     serverAskUnderPlanFloor,
   );
 }
-//@ chunk-tr0s0d0k.js:70181-70968 placement
+//@ chunk-6d2p9h2d.js:70747-71534 placement
 function mayAnswerServedAsk(
   decision,
   tool,
@@ -1383,14 +1391,14 @@ function mayAnswerServedAsk(
   if (safetyCheckReason !== undefined) return mayNotAnswer(safetyCheckKind(safetyCheckReason));
   return networkPath ? mayNotAnswer("network_path") : MAY_ANSWER;
 }
-//@ chunk-tr0s0d0k.js:70968-71049 placement
+//@ chunk-6d2p9h2d.js:71534-71615 placement
 function isEscalatableAsk(decision, tool, forcedByHook, input = {}) {
   return (
     isAskEscalatable(decision, tool, forcedByHook, input) &&
     findSafetyCheckReason(decision.decisionReason, () => true) === undefined
   );
 }
-//@ chunk-tr0s0d0k.js:71049-71290 placement
+//@ chunk-6d2p9h2d.js:71615-71856 placement
 function isAskEscalatable(decision, tool, forcedByHook, input) {
   if (decision.behavior !== "ask" || forcedByHook) return false;
   if (input.dangerouslyDisableSandbox === true) return false;
@@ -1398,7 +1406,7 @@ function isAskEscalatable(decision, tool, forcedByHook, input) {
   if (decision.decisionReason?.type === "hook") return false;
   return decision.decisionReason?.type !== "sandboxOverride";
 }
-//@ chunk-tr0s0d0k.js:71290-71389 placement
+//@ chunk-6d2p9h2d.js:71856-71955 placement
 function isServedMcpAsk(decision, tool) {
   return (
     (FORCE_NOT_REMOTELY_EXECUTABLE && isNotRemotelyExecutable(tool)) ||
@@ -1406,7 +1414,7 @@ function isServedMcpAsk(decision, tool) {
       decision.decisionReason.reason === REMOTE_CALL_SERVED_MCP_ASK)
   );
 }
-//@ chunk-tr0s0d0k.js:71389-71598 placement
+//@ chunk-6d2p9h2d.js:71955-72164 placement
 function offersAlwaysAllowRule(decision) {
   return (
     shouldShowAlwaysAllowOptions() &&
@@ -1417,16 +1425,16 @@ function offersAlwaysAllowRule(decision) {
     findSafetyCheckReason(decision.decisionReason, (reason) => !reason.classifierApprovable) === undefined
   );
 }
-//@ chunk-tr0s0d0k.js:71598-71762 placement (2.1.88 match: extractRules, 0.851)
+//@ chunk-6d2p9h2d.js:72164-72328 placement (2.1.88 match: extractRules, 0.851)
 function getSuggestedRuleStrings(result) {
   if (result.behavior !== "ask" || result.suggestions === undefined) return [];
   return result.suggestions
     .flatMap((update) =>
-      update.type === "addRules" ? update.rules.map((rule) => formatPermissionRule(rule)) : [],
+      update.type === "addRules" ? update.rules.map((rule) => permissionRuleValueFromString(rule)) : [],
     )
     .slice(0, SERVED_DECISION_REASONS);
 }
-//@ chunk-tr0s0d0k.js:71762-71953 placement
+//@ chunk-6d2p9h2d.js:72328-72519 placement
 function raceWithAbort(promise, stopSignal) {
   return new Promise((resolve) => {
     if (stopSignal.aborted) {
@@ -1440,7 +1448,7 @@ function raceWithAbort(promise, stopSignal) {
     promise.then(resolve).finally(() => stopSignal.removeEventListener("abort", onAbort));
   });
 }
-//@ chunk-tr0s0d0k.js:71953-72151 placement
+//@ chunk-6d2p9h2d.js:72519-72717 placement
 function findDenyRuleSource(decisionReason) {
   if (decisionReason?.type === "rule") return decisionReason.rule.source;
   if (decisionReason?.type === "subcommandResults")
@@ -1450,7 +1458,7 @@ function findDenyRuleSource(decisionReason) {
     }
   return;
 }
-//@ chunk-tr0s0d0k.js:72151-72317 placement
+//@ chunk-6d2p9h2d.js:72717-72883 placement
 function refusalAsAllowLandsDecision(params) {
   let message = params.refusalAsAllowLands?.();
   return message === undefined
@@ -1465,7 +1473,7 @@ function refusalAsAllowLandsDecision(params) {
         decideLocation: "ask-path",
       };
 }
-//@ chunk-tr0s0d0k.js:72317-72684 placement
+//@ chunk-6d2p9h2d.js:72883-73250 placement
 function servedDecisionOutcome(answer, asked) {
   let reason =
     answer.behavior === "deny" && answer.decisionReason.type === "other"
@@ -1478,9 +1486,9 @@ function servedDecisionOutcome(answer, asked) {
   return reason === ASK_ENDED_REASON ? "stopped" : "denied_by_session";
 }
 export {
+  servedPermissionContext,
   REMOTE_CALL_SESSION_ANSWER,
   isPlanFloor,
-  servedPermissionContext,
   servedModeTelemetry,
   tryAutoModeAllowlist,
   effectiveServedMode,

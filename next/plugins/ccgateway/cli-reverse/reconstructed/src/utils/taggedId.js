@@ -3,20 +3,20 @@
  *
  * 带前缀的 ID 编码（UUID 转大整数等）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/taggedId.ts
- * pieces: chunk-6mwt0myy.js (8)
+ * pieces: chunk-evj8g37g.js (8)
  * attribution: placement 7, fingerprint 1
  */
 import { truncateCodePoints } from "./stringUtils.js";
 
-//@ chunk-6mwt0myy.js:635-655 placement
+//@ chunk-evj8g37g.js:630-650 placement
 /**
  * 工具名最大字符数（200）。
  */
 var MAX_WIRE_TOOL_NAME_CHARS = 200;
 var MAX_WIRE_TOOL_NAME_BYTES = 128;
-//@ chunk-6mwt0myy.js:655-751 placement
+//@ chunk-evj8g37g.js:650-746 placement
 /**
  * 工具名是否超过长度上限（按码点计）。
  */
@@ -29,7 +29,7 @@ function isOverlongToolName(toolName) {
   }
   return false;
 }
-//@ chunk-6mwt0myy.js:751-819 placement
+//@ chunk-evj8g37g.js:746-814 placement
 /**
  * 超长工具名截断，否则返回 undefined。
  */
@@ -38,8 +38,8 @@ function clippedToolName(name) {
     ? truncateCodePoints(name, MAX_WIRE_TOOL_NAME_CHARS)
     : undefined;
 }
-//@ chunk-6mwt0myy.js:819-1022 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince(content) {
+//@ chunk-evj8g37g.js:814-1017 placement
+function clipOverlongToolNames(content) {
   if (!Array.isArray(content)) return content;
   let copy;
   content.forEach((item, index) => {
@@ -54,16 +54,16 @@ function countToolCallsSince(content) {
   });
   return copy === undefined ? content : copy;
 }
-//@ chunk-6mwt0myy.js:1022-1073 placement
+//@ chunk-evj8g37g.js:1017-1068 placement
 function isObjectNonNull(value) {
   return typeof value === "object" && value !== null;
 }
-//@ chunk-6mwt0myy.js:1073-1110 placement
+//@ chunk-evj8g37g.js:1068-1105 placement
 /**
  * 记忆 id 格式。
  */
 var MEMORY_ID_PATTERN = /^mem_[A-Za-z0-9_-]{1,120}$/;
-//@ chunk-6mwt0myy.js:1110-1299 placement
+//@ chunk-evj8g37g.js:1105-1294 placement
 function base58Encode(n_2) {
   let base = BigInt(58);
   let result = Array(22).fill("1");
@@ -77,7 +77,7 @@ function base58Encode(n_2) {
   }
   return result.join("");
 }
-//@ chunk-6mwt0myy.js:1299-1431 fingerprint (2.1.88 match: uuidToBigInt, 1)
+//@ chunk-evj8g37g.js:1294-1426 fingerprint (2.1.88 match: uuidToBigInt, 1)
 function uuidToBigInt(uuid) {
   let hex = uuid.replaceAll("-", "");
   if (hex.length !== 32) throw Error(`Invalid UUID hex length: ${hex.length}`);
@@ -87,9 +87,9 @@ export {
   MAX_WIRE_TOOL_NAME_BYTES,
   clippedToolName,
   MAX_WIRE_TOOL_NAME_CHARS,
-  countToolCallsSince,
   uuidToBigInt,
   base58Encode,
-  MEMORY_ID_PATTERN,
   isOverlongToolName,
+  clipOverlongToolNames,
+  MEMORY_ID_PATTERN,
 };

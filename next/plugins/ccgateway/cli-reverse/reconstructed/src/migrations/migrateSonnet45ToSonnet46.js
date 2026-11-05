@@ -3,9 +3,9 @@
  *
  * 迁移：Sonnet 4.5 模型设置改为 Sonnet 4.6
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/migrations/migrateSonnet45ToSonnet46.ts
- * pieces: chunk-cjydagjy.js (1)
+ * pieces: chunk-h61dq9nz.js (1)
  * attribution: fingerprint 1
  */
 import { getAPIProvider } from "../utils/model/providers.js";
@@ -17,7 +17,7 @@ import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 
-//@ chunk-cjydagjy.js:11557-12267 fingerprint (2.1.88 match: migrateSonnet45ToSonnet46, 0.869)
+//@ chunk-h61dq9nz.js:11734-12444 fingerprint (2.1.88 match: migrateSonnet45ToSonnet46, 0.869)
 /**
  * 迁移（仅 firstParty）：Sonnet 4.5 全名 → sonnet 别名（Sonnet 4.6 起）。
  */

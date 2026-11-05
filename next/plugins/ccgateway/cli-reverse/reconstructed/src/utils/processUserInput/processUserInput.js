@@ -3,19 +3,20 @@
  *
  * 并入已有模块：处理用户输入（斜杠命令、bash、提示词、附件）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/processUserInput/processUserInput.ts
- * pieces: chunk-3g0djq3w.js (1), chunk-jv307fw4.js (1), chunk-xx1vmpsq.js (33)
+ * pieces: chunk-g88zyy4n.js (1), chunk-m0ks5273.js (1), chunk-pwdsqzsj.js (33)
  * attribution: fingerprint 3, placement 29, layout 2, callgraph-fingerprint 1
  */
 import { randomUUID } from "crypto";
-import { describeSettingsProblem } from "../settings/settingsProblems.js";
+import { personalHooksProblem, personalSettingsProblem } from "../settings/settingsProblems.js";
 import { authWarmNoticeStateSlot, maybeWarmApiAuth } from "../../services/api/apiAuthWarm.js";
 import { isPersonalConfigRestricted } from "../personalConfigRestriction.js";
 import { logFeatureOk, logFeatureBad, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import {
   makeMetaUserMessage,
   hookStopWarningMessage,
+  createHookContextAttachment,
   createQueuedSettler,
   screensChanged,
   pluginsChanged,
@@ -23,7 +24,6 @@ import {
   runUserPromptSubmitHooks,
   CANCELLED_RESULT as CANCELLED_RESULT_2,
   hasThirdPartyPromptHooks,
-  createHookContextAttachment,
   hooksSnapshotKey,
 } from "./userPromptSubmitHooks.js";
 import { createAttachmentMessage_2 as createAttachmentMessage, logForDebugging } from "../debug.js";
@@ -46,7 +46,6 @@ import {
   hasToolResultBlock,
   createSystemMessage,
   createUserMessage,
-  HOOK_STOPPED_MESSAGE,
 } from "../messages.js";
 import { takeSubmitWaiter } from "../../plugins/functionHooks/promptSubmit.js";
 import { notePromptOrigin } from "./promptOrigin.js";
@@ -80,6 +79,7 @@ import {
   interruptedInputResult,
   settleScreeningResult,
 } from "./promptScreening.js";
+import { readerStatesFromHookMessage } from "../widgetContext.js";
 import { isHumanOrigin, isHumanTurn } from "../turnOrigin.js";
 import { notePersonPrompt, setPromptId, getMainThreadAgentType } from "../../bootstrap/state.js";
 import { markCronWakeupMessages } from "../cronFireTexts.js";
@@ -109,7 +109,7 @@ import {
 } from "../imageResizer.js";
 import { isNonEmptyImageAttachment } from "../messages/messagePredicates.js";
 import { setSliceField } from "../../state/sliceHelpers.js";
-import { count } from "../collections.js";
+import { countWhere } from "../collections.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { IMAGE_SOURCE_MARKER_PREFIX } from "../imageErrors.js";
 import { findCommand, isSkillOff, isCommandEnabled } from "../../commands.js";
@@ -132,9 +132,10 @@ import { getOwnJobShortId } from "../../services/daemon/jobState.js";
 import { isAbortError, errorMessage, StreamClosedAbortError } from "../errors.js";
 import { hasActiveAgentTasks } from "../../tasks/taskStatus.js";
 import { withTimeout } from "../sleep.js";
+import { HOOK_STOPPED_MESSAGE } from "../../services/compact/compact.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-jv307fw4.js:22476-22613 fingerprint (2.1.88 match: applyTruncation, 0.586)
+//@ chunk-m0ks5273.js:22493-22630 fingerprint (2.1.88 match: applyTruncation, 0.586)
 function applyTruncation(text, maxLength, label) {
   let trimmed = text.trim();
   let list = Array.from(trimmed);
@@ -143,12 +144,12 @@ function applyTruncation(text, maxLength, label) {
     : `${list.slice(0, maxLength).join("")}
 [${label} truncated after ${maxLength} characters]`;
 }
-//@ chunk-xx1vmpsq.js:34727-35466 placement
+//@ chunk-pwdsqzsj.js:35335-36307 placement
 /**
  * 按个人设置加载检查结果处理输入：stop 时停止查询并给出说明，notice 时附加一次系统消息。
  */
 function applyPersonalSettingsCheck(result, session) {
-  let problem = describeSettingsProblem();
+  let problem = personalHooksProblem();
   let noticeState = authWarmNoticeStateSlot.of(session);
   if (problem.kind === "clear" && isPersonalConfigRestricted() && !noticeState.countedClear) {
     noticeState.countedClear = true;
@@ -161,6 +162,10 @@ function applyPersonalSettingsCheck(result, session) {
   if (problem.kind === "notice" && !noticeState.countedNotice) {
     noticeState.countedNotice = true;
     logFeatureSad("hooks_personal_load_check", "notice");
+  }
+  if (problem.kind === "host_off" && !noticeState.countedHostOff) {
+    noticeState.countedHostOff = true;
+    logFeatureSad("hooks_personal_load_check", "host_off");
   }
   if (problem.kind === "stop") {
     result.messages = [
@@ -176,32 +181,39 @@ function applyPersonalSettingsCheck(result, session) {
     result.allowedTools = undefined;
     return true;
   }
-  if (problem.kind === "notice" && !noticeState.noticed) {
+  if ((problem.kind === "notice" || problem.kind === "host_off") && !noticeState.noticed) {
     noticeState.noticed = true;
-    result.messages = [
-      ...result.messages,
-      createAttachmentMessage({
-        type: "hook_system_message",
-        content: problem.text,
-        hookName: "Claude Code",
-        toolUseID: `personal-hooks-${session.id}`,
-        hookEvent: "UserPromptSubmit",
-      }),
-    ];
+    let noticeMessages =
+      problem.text === undefined
+        ? []
+        : [
+            createAttachmentMessage({
+              type: "hook_system_message",
+              content: problem.text,
+              hookName: "Claude Code",
+              toolUseID: `personal-hooks-${session.id}`,
+              hookEvent: "UserPromptSubmit",
+            }),
+          ];
+    let contextMessages =
+      problem.kind === "host_off" && problem.forClaude !== undefined
+        ? [createHookContextAttachment([problem.forClaude])]
+        : [];
+    result.messages = [...result.messages, ...noticeMessages, ...contextMessages];
   }
   return false;
 }
-//@ chunk-xx1vmpsq.js:35466-35488 placement
+//@ chunk-pwdsqzsj.js:36307-36329 placement
 var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-xx1vmpsq.js:35466", () => {
+deferInit("chunk-pwdsqzsj.js:36307", () => {
   regExp = new RegExp(WORD_BOUNDARY_PATTERN);
 });
-//@ chunk-xx1vmpsq.js:35488-35553 placement
+//@ chunk-pwdsqzsj.js:36329-36394 placement
 function findRegexMatch(regExp, text, lastIndex) {
   regExp.lastIndex = lastIndex;
   return regExp.test(text) ? regExp.lastIndex : -1;
 }
-//@ chunk-xx1vmpsq.js:35553-36101 placement
+//@ chunk-pwdsqzsj.js:36394-36942 placement
 /**
  * 提取文本中的 @ 提及（支持引号路径与带空格的路径段落）。
  */
@@ -249,44 +261,44 @@ function extractAtMentions(text) {
   }
   return mentions;
 }
-//@ chunk-xx1vmpsq.js:36101-36184 placement
+//@ chunk-pwdsqzsj.js:36942-37025 placement
 function overlappingMentions(text, originalText) {
   let originalMentions = new Set(extractAtMentions(originalText));
   return extractAtMentions(text)
     .filter((mention) => originalMentions.has(mention))
     .join(" ");
 }
-//@ chunk-xx1vmpsq.js:37461-37557 placement
+//@ chunk-pwdsqzsj.js:38352-38448 placement
 var BLANK_PROMPT_MESSAGE =
   "Blank prompt \u2014 the message was only whitespace, so nothing was sent to the model.";
-//@ chunk-xx1vmpsq.js:37557-37600 placement
+//@ chunk-pwdsqzsj.js:38448-38491 placement
 function startInputPhase(threshold) {
   startPhaseWithin("process_user_input", threshold);
 }
-//@ chunk-xx1vmpsq.js:37600-37643 placement
+//@ chunk-pwdsqzsj.js:38491-38534 placement
 function endInputPhase(label) {
   endPhaseWithin("process_user_input", label);
 }
-//@ chunk-xx1vmpsq.js:37643-37723 placement
+//@ chunk-pwdsqzsj.js:38534-38614 placement
 var promptUtilsModule = () => require("../../services/agentStatus/LINK_SCAN_MAX_BYTES.lazy.js");
 var attachmentsModule = () => require("../../services/classifierSummary.js");
-//@ chunk-xx1vmpsq.js:37723-37745 placement
+//@ chunk-pwdsqzsj.js:38614-38636 placement
 class PromptState {
   state = undefined;
 }
-//@ chunk-xx1vmpsq.js:37745-37770 placement
+//@ chunk-pwdsqzsj.js:38636-38661 placement
 var promptStateSlot; // deferred: uses PromptState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-xx1vmpsq.js:37745", () => {
+deferInit("chunk-pwdsqzsj.js:38636", () => {
   promptStateSlot = new HostScoped(() => new PromptState());
 });
-//@ chunk-xx1vmpsq.js:37770-37897 placement
+//@ chunk-pwdsqzsj.js:38661-38788 placement
 function classifierJobState(context) {
   let state = promptStateSlot.of(context.session.host);
   if (state.state === undefined)
     state.state = promptUtilsModule?.().createClassifierJobState(context) ?? null;
   return state.state;
 }
-//@ chunk-xx1vmpsq.js:37897-38300 placement
+//@ chunk-pwdsqzsj.js:38788-39191 placement
 /**
  * 处理用户输入（斜杠命令、bash、提示词、附件），返回要追加的消息与是否发起查询；记录 process_user_input 计时。
  */
@@ -333,7 +345,7 @@ async function processUserInput(input) {
   if (result.noVerdict && unscreened) result.wasUnscreenedAtDispatch = true;
   return result;
 }
-//@ chunk-xx1vmpsq.js:38300-47765 placement
+//@ chunk-pwdsqzsj.js:39191-48910 placement
 async function processUserInputBase({
   input,
   preExpansionInput,
@@ -355,6 +367,7 @@ async function processUserInputBase({
   clientBashCommandCwd,
   localStdinOrigin,
   sessionChannelPersonTyped,
+  ultrathinkTyped,
   ownWordUuids,
   composerEnter,
   hostInitiator,
@@ -384,6 +397,7 @@ async function processUserInputBase({
   noPersonArrived,
   inlinedImagePaths,
   stampThreadState,
+  widgetViews,
   promptSubmitted,
   onScreened,
   wait = false,
@@ -524,7 +538,7 @@ async function processUserInputBase({
             messages: [],
             shouldQuery: true,
           };
-          if (describeSettingsProblem().kind === "stop")
+          if (personalSettingsProblem().kind === "stop")
             return {
               ran: command,
               rows,
@@ -652,6 +666,7 @@ async function processUserInputBase({
     clientBashCommand === true,
     clientBashCommandCwd,
     toolsUsed,
+    ultrathinkTyped === true,
   ).catch((error) => {
     deferred.resolve({
       messages: [],
@@ -671,6 +686,20 @@ async function processUserInputBase({
   let rewrittenSlashLine = slashLineAfterRewrite(contentText, ranCommand);
   let ambientOwed = result.ambientAttachmentsOwed === true;
   delete result.ambientAttachmentsOwed;
+  let viewsInfo = readerStatesFromHookMessage(widgetViews, {
+    queries: result.shouldQuery && shouldQuery !== false,
+    tools: context.options.tools,
+  });
+  if (viewsInfo !== undefined)
+    result.messages.push(
+      createAttachmentMessage({
+        type: "widget_context_hint",
+        views: viewsInfo.views,
+        ...(viewsInfo.more > 0 && {
+          moreViews: viewsInfo.more,
+        }),
+      }),
+    );
   if (isHumanOrigin(origin) && !isMeta && verifiedSlackHumanTurn !== true) {
     let last = result.messages.findLast(
       (message) => message.type === "user" && !message.isMeta && isHumanTurn(message),
@@ -1013,7 +1042,7 @@ async function processUserInputBase({
   await appendWorkflowAuthoringMessages(result, messages, context.options.tools);
   return result;
 }
-//@ chunk-xx1vmpsq.js:47765-47885 placement (2.1.88 match: isNullRenderingAttachment, 1)
+//@ chunk-pwdsqzsj.js:48910-49030 placement (2.1.88 match: isNullRenderingAttachment, 1)
 function isNullRenderingAttachment(msg) {
   return (
     msg.type === "attachment" &&
@@ -1022,7 +1051,7 @@ function isNullRenderingAttachment(msg) {
     !isPromptSubmitHookAttachment(msg.attachment)
   );
 }
-//@ chunk-xx1vmpsq.js:47885-47988 placement
+//@ chunk-pwdsqzsj.js:49030-49133 placement
 function isPromptSubmitHookAttachment(attachment) {
   return (
     "hookEvent" in attachment &&
@@ -1030,18 +1059,18 @@ function isPromptSubmitHookAttachment(attachment) {
     attachment.type !== "async_hook_response"
   );
 }
-//@ chunk-xx1vmpsq.js:47988-48102 placement (2.1.88 match: isNullRenderingAttachment, 0.815)
+//@ chunk-pwdsqzsj.js:49133-49247 placement (2.1.88 match: isNullRenderingAttachment, 0.813)
 function isNullRenderingAttachment_2(messages, { readFileState }) {
   for (let message of messages)
     if (message.type === "attachment") forgetReadState(message.attachment, readFileState);
   return messages.filter(isNullRenderingAttachment);
 }
-//@ chunk-xx1vmpsq.js:48102-48204 placement
+//@ chunk-pwdsqzsj.js:49247-49349 placement
 function forgetReadState(attachment, readFileState) {
   if (attachment.type === "file") readFileState.delete(attachment.filename);
   if (attachment.type === "nested_memory") readFileState.delete(attachment.path);
 }
-//@ chunk-xx1vmpsq.js:48204-48392 placement
+//@ chunk-pwdsqzsj.js:49349-49537 placement
 async function appendWorkflowAuthoringMessages(result, messages, tools) {
   if (!result.shouldQuery) return;
   try {
@@ -1051,7 +1080,7 @@ async function appendWorkflowAuthoringMessages(result, messages, tools) {
     logError(error);
   }
 }
-//@ chunk-xx1vmpsq.js:48392-48496 placement
+//@ chunk-pwdsqzsj.js:49537-49641 placement
 function frameContent(message, origin, content) {
   let wrapped = {
     ...message,
@@ -1063,7 +1092,7 @@ function frameContent(message, origin, content) {
   wrapNonUserMessage(wrapped, origin);
   return wrapped.message.content;
 }
-//@ chunk-xx1vmpsq.js:48496-49116 placement
+//@ chunk-pwdsqzsj.js:49641-50261 placement
 /**
  * 重新包装提交的消息（插件来源加框，保留非文本块）。
  */
@@ -1105,7 +1134,7 @@ function reframeSubmittedMessage(promptRow, expandedInput, newText) {
     filtered.length === 0 ? replaced : [...(typeof replaced === "string" ? [] : replaced), ...filtered];
   return message;
 }
-//@ chunk-xx1vmpsq.js:49116-49244 placement
+//@ chunk-pwdsqzsj.js:50261-50389 placement
 function readPromptScreens(context) {
   try {
     return hooksSnapshotKey(context);
@@ -1116,14 +1145,14 @@ function readPromptScreens(context) {
     return;
   }
 }
-//@ chunk-xx1vmpsq.js:49244-49423 placement
+//@ chunk-pwdsqzsj.js:50389-50568 placement
 function slashLineAfterRewrite(line, commandRun) {
   if (commandRun === undefined || commandRun.argsRanWith === commandRun.args) return;
   return commandRun.args !== "" && line.endsWith(commandRun.args)
     ? line.slice(0, line.length - commandRun.args.length) + commandRun.argsRanWith
     : `/${commandRun.name} ${commandRun.argsRanWith}`;
 }
-//@ chunk-xx1vmpsq.js:49423-49712 placement
+//@ chunk-pwdsqzsj.js:50568-50857 placement
 function slashLineChangedNotice(messages) {
   let notice = `prompt.submit: ${promptSubmitHookLabel()} changed a slash command's typed line. That change is never applied: its arguments are changed at command.run, a skill body at skill.prompt.`;
   return messages.some(
@@ -1133,7 +1162,7 @@ function slashLineChangedNotice(messages) {
     ? []
     : [createSystemMessage(notice, "warning")];
 }
-//@ chunk-xx1vmpsq.js:49712-49920 placement
+//@ chunk-pwdsqzsj.js:50857-51065 placement
 function promptSubmitHookLabel() {
   let pluginRenderHooks = findPluginRenderHooks("prompt.submit");
   let filtered = pluginRenderHooks.filter((pluginRenderHook) => pluginRenderHook.tier !== "builtin");
@@ -1142,13 +1171,13 @@ function promptSubmitHookLabel() {
   );
   return labels.size > 0 ? `a mod hooked on prompt.submit (${[...labels].join(", ")})` : "a hook";
 }
-//@ chunk-xx1vmpsq.js:49920-50307 placement
+//@ chunk-pwdsqzsj.js:51065-51474 placement
 /**
  * MENTION_ATTACHMENT_TYPES：提及类附件类型。
  */
 var MENTION_ATTACHMENT_TYPES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MENTION_ATTACHMENT_TYPES;
-deferInit("chunk-xx1vmpsq.js:49920", () => {
+deferInit("chunk-pwdsqzsj.js:51065", () => {
   MENTION_ATTACHMENT_TYPES_2 = new Set([
     "file",
     "already_read_file",
@@ -1171,9 +1200,10 @@ deferInit("chunk-xx1vmpsq.js:49920", () => {
     "opened_file_in_ide",
     "inlined_image_paths",
     "thread_state",
+    "widget_context_hint",
   ]);
 });
-//@ chunk-xx1vmpsq.js:50307-50643 placement
+//@ chunk-pwdsqzsj.js:51474-51810 placement
 async function collectInputAttachments({ result, context, history, querySource }) {
   startInputPhase("input_attachments");
   let array = await toArray_2(
@@ -1199,7 +1229,7 @@ async function collectInputAttachments({ result, context, history, querySource }
   );
   result.messages.splice(index === -1 ? 1 : index + 1, 0, ...array);
 }
-//@ chunk-xx1vmpsq.js:50643-50972 placement
+//@ chunk-pwdsqzsj.js:51810-52139 placement
 /**
  * 去掉提及类附件，返回保留的消息与是否有 peer 提及。
  */
@@ -1225,7 +1255,7 @@ function dropMentionAttachments(messages, readFileState) {
     peerMinted,
   };
 }
-//@ chunk-xx1vmpsq.js:50972-51483 placement
+//@ chunk-pwdsqzsj.js:52139-52650 placement
 /**
  * 提示被改写后重新收集提及附件并插在提示之后。
  */
@@ -1268,7 +1298,7 @@ async function recollectMentionAttachments({
   kept.splice(kept.indexOf(prompt) + 1, 0, ...array);
   return kept;
 }
-//@ chunk-xx1vmpsq.js:51483-59588 fingerprint (2.1.88 match: processUserInputBase, 0.493)
+//@ chunk-pwdsqzsj.js:52650-60747 fingerprint (2.1.88 match: processUserInputBase, 0.495)
 /**
  * processUserInputBase：处理一次用户输入：图片、粘贴、! bash 模式、/ 斜杠命令、普通提示，产出要加入会话的消息与 shouldQuery。
  */
@@ -1314,6 +1344,7 @@ async function processUserInputBase_2(
   markOutputAsPasted = false,
   sentForDirectory,
   toolsUsed,
+  ultrathinkTyped = false,
 ) {
   let promptId = randomUUID();
   if (!hasToolResultBlock(input)) {
@@ -1399,7 +1430,7 @@ async function processUserInputBase_2(
     if (imageMetadataText) imageMetadataTexts.push(imageMetadataText);
   }
   if (values.length > 0) {
-    let unstoredCount = count(values, (img) => !storedPaths.has(img.id));
+    let unstoredCount = countWhere(values, (img) => !storedPaths.has(img.id));
     if (unstoredCount === 0)
       logFeatureOk("input_image_block", {
         images: values.length,
@@ -1429,9 +1460,9 @@ async function processUserInputBase_2(
       };
     }),
   );
-  let imageContentBlocks = [];
+  let processedBlocks = [];
   for (let { id, resized, originalDimensions, sourcePath } of imageProcessingResults) {
-    imageContentBlocks.push(resized.block);
+    processedBlocks.push(resized.block);
     if (resized.block.type !== "image") continue;
     imagePasteIds.push(id);
     if (resized.dimensions) {
@@ -1584,7 +1615,7 @@ async function processUserInputBase_2(
     let ultraplanResult = await processSlashCommand(
       `/ultraplan ${rewritten}`,
       precedingInputBlocks,
-      imageContentBlocks,
+      processedBlocks,
       [],
       {
         ...context,
@@ -1700,7 +1731,7 @@ async function processUserInputBase_2(
     let slashResult = await processSlashCommand(
       effectiveInput,
       precedingInputBlocks,
-      imageContentBlocks,
+      processedBlocks,
       attachmentMessages,
       {
         ...effectiveContext,
@@ -1851,13 +1882,14 @@ ${content_2}`;
   }
   let ultrathinkEffort =
     isHumanTyped &&
-    hasUltrathinkKeyword({
-      composerEnter,
-      preExpansion: preExpansionInput,
-      localStdinOrigin,
-      input,
-    }) &&
-    shouldUltrathinkRaiseEffort(context.options.mainLoopModel, getEffortValue(context))
+    (ultrathinkTyped ||
+      hasUltrathinkKeyword({
+        composerEnter,
+        preExpansion: preExpansionInput,
+        localStdinOrigin,
+        input,
+      })) &&
+    shouldUltrathinkRaiseEffort(context.options.mainLoopModel, getEffortValue(context), ultrathinkTyped)
       ? "xhigh"
       : undefined;
   if (ultrathinkEffort) logFeatureOk("ultrathink_boost");
@@ -1865,7 +1897,7 @@ ${content_2}`;
     {
       ...processTextPrompt(
         expandedContent ?? content,
-        imageContentBlocks,
+        processedBlocks,
         imagePasteIds,
         attachmentMessages,
         promptId,
@@ -1902,11 +1934,11 @@ ${content_2}`;
   if (skipSlash) markSkipSlashCommands(result.messages);
   return result;
 }
-//@ chunk-xx1vmpsq.js:59588-59665 layout
+//@ chunk-pwdsqzsj.js:60747-60824 layout
 function markSkipSlashCommands(messages) {
   for (let message of messages) if (message.type === "user") message.queueSkipSlashCommands = true;
 }
-//@ chunk-xx1vmpsq.js:59665-60550 layout
+//@ chunk-pwdsqzsj.js:60824-61709 layout
 function createClassifierTurnHooks({ querySource, context }) {
   if (promptUtilsModule) {
     let shouldClassify = () =>
@@ -1979,7 +2011,7 @@ function createClassifierTurnHooks({ querySource, context }) {
   }
   return;
 }
-//@ chunk-xx1vmpsq.js:60550-60683 callgraph-fingerprint (2.1.88 match: addImageMetadataMessage, 0.573)
+//@ chunk-pwdsqzsj.js:61709-61842 callgraph-fingerprint (2.1.88 match: addImageMetadataMessage, 0.58)
 function addImageMetadataMessage(result, imageMetadataTexts) {
   if (imageMetadataTexts.length > 0)
     result.messages.push(
@@ -1994,7 +2026,7 @@ function addImageMetadataMessage(result, imageMetadataTexts) {
     );
   return result;
 }
-//@ chunk-3g0djq3w.js:44243-45446 fingerprint (2.1.88 match: processUserInput, 0.41)
+//@ chunk-g88zyy4n.js:44756-45959 fingerprint (2.1.88 match: processUserInput, 0.408)
 async function processUserInput_2(command, commandArgs, context) {
   let hookMessages = [];
   let prompt = commandArgs ? `/${command.name} ${commandArgs}` : `/${command.name}`;

@@ -3,15 +3,29 @@
  *
  * 提示建议的后处理与若干错归声明：去掉建议外层标签、取首个候选；另有 speculation 目录清理、安全只读工具表、重复空 Poll 调用检测等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/PromptSuggestion/speculation.ts
- * pieces: chunk-3sjj4q4c.js (2)
- * attribution: affinity 1, fingerprint 1
+ * pieces: chunk-5xgkngpb.js (1), chunk-n51jggtb.js (1), chunk-rypxzpmd.js (2)
+ * attribution: callgraph-fingerprint 1, fingerprint 2, affinity 1
  */
+import { CANCEL_MESSAGE } from "../../utils/messages.js";
 import { generateSuggestion, SUGGESTION_PROMPT } from "./promptSuggestion.js";
 import { logFeatureOk } from "../analytics/featureTelemetry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3sjj4q4c.js:7215-7745 affinity
+//@ chunk-5xgkngpb.js:5035750-5035830 callgraph-fingerprint (2.1.88 match: prepareMessagesForInjection, 0.254)
+/**
+ * is_error 的 tool_result，内容为“用户现在不想执行”的取消文案。旧版名 getToolResultIDs 为错配。
+ */
+function createCancelledToolResultBlock(messages) {
+  return {
+    type: "tool_result",
+    content: CANCEL_MESSAGE,
+    is_error: true,
+    tool_use_id: messages,
+  };
+}
+//@ chunk-rypxzpmd.js:7215-7745 affinity
 /**
  * 去掉建议外层的 suggestion/response 等标签与 "Suggestion:" 类前缀。
  */
@@ -31,7 +45,7 @@ function stripSuggestionWrapper(candidate) {
     )
     .trim();
 }
-//@ chunk-3sjj4q4c.js:7745-8009 fingerprint (2.1.88 match: generatePipelinedSuggestion, 0.351)
+//@ chunk-rypxzpmd.js:7745-8009 fingerprint (2.1.88 match: generatePipelinedSuggestion, 0.352)
 /**
  * 生成建议并取第一个非空候选。
  */
@@ -57,4 +71,22 @@ async function generatePipelinedSuggestion(promptId, cacheSafeParams) {
     generationRequestId,
   };
 }
-export { generatePipelinedSuggestion };
+//@ chunk-n51jggtb.js:70866-71005 fingerprint (2.1.88 match: SAFE_READ_ONLY_TOOLS, 0.522)
+var SAFE_READ_ONLY_TOOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-n51jggtb.js:70866", () => {
+  SAFE_READ_ONLY_TOOLS = new Set([
+    "Read",
+    "Write",
+    "Edit",
+    "Glob",
+    "Grep",
+    "NotebookEdit",
+    "TodoWrite",
+    "TaskCreate",
+    "TaskGet",
+    "TaskList",
+    "TaskStop",
+    "TaskUpdate",
+  ]);
+});
+export { createCancelledToolResultBlock, SAFE_READ_ONLY_TOOLS, generatePipelinedSuggestion };

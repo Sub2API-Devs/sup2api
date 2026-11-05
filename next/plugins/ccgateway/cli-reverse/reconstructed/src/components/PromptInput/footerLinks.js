@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增。页脚链接项（PR、远程会话等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (22)
- * attribution: placement 21, sole-consumer 1
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (23)
+ * attribution: placement 21, sole-consumer 2
  */
 import { MAX_REPO_URL_CHARS } from "../../utils/detectRepository.js";
 import { getRootSession } from "../../bootstrap/state.js";
@@ -21,19 +21,24 @@ import { ALLOWED_BROWSER_PROTOCOLS } from "../../utils/browser.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getSecuritySensitiveSetting } from "../../utils/settings/settings.js";
 import { logError } from "../../utils/log.js";
-import { normalizeMessages, isToolResultMessage, isInterruptMessage } from "../../utils/messages.js";
+import {
+  normalizeMessages,
+  isToolResultMessage,
+  INTERRUPT_MESSAGE,
+  INTERRUPT_MESSAGE_FOR_TOOL_USE,
+} from "../../utils/messages.js";
 import { messageSnippet } from "../../screens/repl/sessionRehydration.js";
 import { isMidTurnInterjectionMessage } from "../../utils/messagePredicates.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:334726-334777 placement
+//@ chunk-czq1j3j2.js:372447-372498 placement
 var MAX_UNKEYED_FOOTER_LINKS; // deferred: uses REPO_NAME_PATTERN (../../utils/detectRepository.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_SCANNED_LINKS;
 var MAX_PATTERN_MATCHES;
 var MAX_FOOTER_LABEL_WIDTH;
 var MAX_FOOTER_URL_LENGTH;
 var SLOW_PATTERN_WARN_MS;
-deferInit("chunk-18hwfzwa.js:334726", () => {
+deferInit("chunk-czq1j3j2.js:372447", () => {
   MAX_UNKEYED_FOOTER_LINKS = 5;
   MAX_SCANNED_LINKS = MAX_UNKEYED_FOOTER_LINKS * 4;
   MAX_PATTERN_MATCHES = MAX_SCANNED_LINKS * 10;
@@ -41,7 +46,7 @@ deferInit("chunk-18hwfzwa.js:334726", () => {
   MAX_FOOTER_URL_LENGTH = MAX_REPO_URL_CHARS;
   SLOW_PATTERN_WARN_MS = 50;
 });
-//@ chunk-18hwfzwa.js:334777-335072 placement
+//@ chunk-czq1j3j2.js:372498-372793 placement
 function setKeyedFooterLink(footerLinks, key, link) {
   let found = footerLinks.find((state) => state.key === key);
   if (link === null) return found ? footerLinks.filter((state) => state.key !== key) : footerLinks;
@@ -64,7 +69,7 @@ function setKeyedFooterLink(footerLinks, key, link) {
     ),
   ];
 }
-//@ chunk-18hwfzwa.js:335072-336957 placement
+//@ chunk-czq1j3j2.js:372793-374678 placement
 function scanFooterLinks(links, text) {
   if (!links || links.length === 0 || !text) return [];
   let matcher = footerLinkMatcher.of(getRootSession().host);
@@ -175,11 +180,11 @@ function scanFooterLinks(links, text) {
   }
   return results.sort((left, right) => left.index - right.index).map((entry) => entry.match);
 }
-//@ chunk-18hwfzwa.js:336957-337032 placement
+//@ chunk-czq1j3j2.js:374678-374753 placement
 var TEMPLATE_PLACEHOLDER_RE = /\{([^{}]+)\}/g;
 var NAMED_GROUP_RE = /\(\?<([^>=!][^>]*)>/g;
 var DOT_SEGMENT_RE = /^(?:\.|%2e){1,2}$/i;
-//@ chunk-18hwfzwa.js:337032-337232 placement
+//@ chunk-czq1j3j2.js:374753-374953 placement
 function fillFooterLinkTemplate(url, groups) {
   let replaced = url.replace(TEMPLATE_PLACEHOLDER_RE, (placeholder, name) =>
     encodeURIComponent(normalizeFullWidthSpace(Object.hasOwn(groups, name) ? (groups[name] ?? "") : "")),
@@ -191,23 +196,23 @@ function fillFooterLinkTemplate(url, groups) {
     ? null
     : replaced;
 }
-//@ chunk-18hwfzwa.js:337232-337259 placement
+//@ chunk-czq1j3j2.js:374953-374980 placement
 var CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
-//@ chunk-18hwfzwa.js:337259-337304 placement
+//@ chunk-czq1j3j2.js:374980-375025 placement
 function stripControlChars(label) {
   return stripAnsi(label).replace(CONTROL_CHAR_RE, "");
 }
-//@ chunk-18hwfzwa.js:337304-337381 placement
+//@ chunk-czq1j3j2.js:375025-375102 placement
 function fillTemplatePlaceholders(label, groups) {
   return label.replace(TEMPLATE_PLACEHOLDER_RE, (match, name) =>
     Object.hasOwn(groups, name) ? (groups[name] ?? "") : "",
   );
 }
-//@ chunk-18hwfzwa.js:337381-337458 placement
+//@ chunk-czq1j3j2.js:375102-375179 placement
 function urlOrigin(url) {
   return url.origin !== "null" ? url.origin : `${url.protocol}//${url.host}`;
 }
-//@ chunk-18hwfzwa.js:337458-337515 placement
+//@ chunk-czq1j3j2.js:375179-375236 placement
 function tryParseUrl(url) {
   try {
     return new URL(url);
@@ -215,7 +220,7 @@ function tryParseUrl(url) {
     return null;
   }
 }
-//@ chunk-18hwfzwa.js:337515-338025 placement
+//@ chunk-czq1j3j2.js:375236-375746 placement
 /**
  * 把从对话中扫描到的链接合入页脚链接：保留带 key 的固定项，新链接去重后放前面，未带 key 的项限制数量；内容没变时返回原数组。
  */
@@ -254,7 +259,7 @@ function mergeScannedFooterLinks(links, scanned) {
     return links;
   return merged;
 }
-//@ chunk-18hwfzwa.js:338025-338149 placement
+//@ chunk-czq1j3j2.js:375746-375870 placement
 function isSameFooterLink(link, other) {
   return (
     link.url === other.url ||
@@ -263,7 +268,7 @@ function isSameFooterLink(link, other) {
     (link.dedupUrl !== undefined && link.dedupUrl === other.dedupUrl)
   );
 }
-//@ chunk-18hwfzwa.js:338149-339651 placement
+//@ chunk-czq1j3j2.js:375870-377372 placement
 class FooterLinkMatcher {
   warnedUnreadableShapes = new Set();
   warnedPlaceholderConfigs = new Set();
@@ -329,21 +334,21 @@ ${labelTemplate ?? ""}`;
     return regex;
   }
 }
-//@ chunk-18hwfzwa.js:339651-339678 placement
+//@ chunk-czq1j3j2.js:377372-377399 placement
 var footerLinkMatcher; // deferred: uses FooterLinkMatcher of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:339651", () => {
+deferInit("chunk-czq1j3j2.js:377372", () => {
   footerLinkMatcher = new HostScoped(() => new FooterLinkMatcher());
 });
-//@ chunk-18hwfzwa.js:339678-339709 placement
+//@ chunk-czq1j3j2.js:377399-377430 placement
 var MAX_SESSION_TEXT_CHARS = 8192;
 var LINK_SCAN_TEXT_LIMIT = 65536;
 var LINK_SCAN_MESSAGE_LIMIT = 256;
-//@ chunk-18hwfzwa.js:339709-339789 placement
+//@ chunk-czq1j3j2.js:377430-377510 placement
 function getFooterLinksRegexes() {
   let regexes = getSecuritySensitiveSetting("footerLinksRegexes").flat();
   return regexes.length > 0 ? regexes : undefined;
 }
-//@ chunk-18hwfzwa.js:339789-340112 placement
+//@ chunk-czq1j3j2.js:377510-377833 placement
 /**
  * 会话恢复时重新计算页脚链接：按当前正则过滤，与原列表完全相同时返回 null。
  */
@@ -372,7 +377,7 @@ function rehydrateFooterLinks(messages, footerLinks) {
     return null;
   return rehydrated;
 }
-//@ chunk-18hwfzwa.js:340112-340411 placement
+//@ chunk-czq1j3j2.js:377833-378132 placement
 function updateFooterLinks(messages, setAppState) {
   try {
     let links = getFooterLinksRegexes();
@@ -395,14 +400,14 @@ function updateFooterLinks(messages, setAppState) {
     logFeatureBad("repl_footer_links", "scan_failed");
   }
 }
-//@ chunk-18hwfzwa.js:340411-340524 placement
+//@ chunk-czq1j3j2.js:378132-378245 placement
 function rescanFooterLinks(messages, links, links_2 = []) {
   if (!links || links.length === 0) return links_2;
   let recentText = recentTextForLinkScan(messages);
   if (!recentText) return links_2;
   return mergeScannedFooterLinks(links_2, scanFooterLinks(links, recentText).reverse());
 }
-//@ chunk-18hwfzwa.js:340524-340801 placement
+//@ chunk-czq1j3j2.js:378245-378522 placement
 function recentTextForLinkScan(inputText) {
   let text = "";
   let messageCount = 0;
@@ -432,7 +437,7 @@ function recentTextForLinkScan(inputText) {
   }
   return text.length > LINK_SCAN_TEXT_LIMIT ? text.slice(-LINK_SCAN_TEXT_LIMIT) : text;
 }
-//@ chunk-18hwfzwa.js:340801-341166 placement
+//@ chunk-czq1j3j2.js:378522-378887 placement
 function messageTextForLinkScan(inputText) {
   if (inputText.type === "assistant")
     return (
@@ -450,7 +455,7 @@ function messageTextForLinkScan(inputText) {
   }
   return false;
 }
-//@ chunk-18hwfzwa.js:341166-341317 sole-consumer
+//@ chunk-czq1j3j2.js:378887-379038 sole-consumer
 /**
  * 从末尾找最后一条真实用户输入（非 meta、非 tool_result、非中断文本、非插话前缀），返回其后的消息。旧版名 getAutoModeFullInstructions 为错配。
  */
@@ -468,10 +473,22 @@ function getMessagesAfterLastRealUserPrompt(messages) {
   }
   return messages.slice();
 }
+//@ chunk-czq1j3j2.js:379038-379196 sole-consumer
+/**
+ * user 消息首块文本是两条中断文案之一（[Request interrupted by user] / ...for tool use）。旧版名 getUserMessageText 为错配。
+ */
+function isInterruptMessage(message) {
+  if (message.type !== "user" || !Array.isArray(message.message.content)) return false;
+  let block = message.message.content[0];
+  return (
+    block?.type === "text" &&
+    (block.text === INTERRUPT_MESSAGE || block.text === INTERRUPT_MESSAGE_FOR_TOOL_USE)
+  );
+}
 export {
-  MAX_SESSION_TEXT_CHARS,
-  rehydrateFooterLinks,
   setKeyedFooterLink,
   MAX_UNKEYED_FOOTER_LINKS,
+  MAX_SESSION_TEXT_CHARS,
+  rehydrateFooterLinks,
   updateFooterLinks,
 };

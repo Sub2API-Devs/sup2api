@@ -1,19 +1,19 @@
 /**
  * @azure/core-client/dist/esm/deserializationPolicy.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/core-client@1.9.2..1.10.0
- * pieces: chunk-mrx6y2r5.js (8)
+ * pieces: chunk-b5df2wx1.js (8)
  * attribution: esm-fingerprint 8
  */
 import { SEP_SPECIAL, MapperTypeNames } from "../index.js";
 import { getOperationRequestInfo } from "./operationHelpers.js";
 import { RestError_default } from "../../../core-rest-pipeline/dist/esm/policies/tracingPolicy.js";
 
-//@ chunk-mrx6y2r5.js:69687-69800 esm-fingerprint
+//@ chunk-b5df2wx1.js:69687-69800 esm-fingerprint
 var defaultJsonContentTypes = ["application/json", "text/json"];
 var defaultXmlContentTypes = ["application/xml", "application/atom+xml"];
 var deserializationPolicyName = "deserializationPolicy";
-//@ chunk-mrx6y2r5.js:69800-70392 esm-fingerprint
+//@ chunk-b5df2wx1.js:69800-70392 esm-fingerprint
 function deserializationPolicy(options = {}) {
   var _a;
   var _b;
@@ -66,7 +66,7 @@ function deserializationPolicy(options = {}) {
     },
   };
 }
-//@ chunk-mrx6y2r5.js:70392-70643 esm-fingerprint
+//@ chunk-b5df2wx1.js:70392-70643 esm-fingerprint
 function getOperationResponseMap(parsedResponse) {
   let result;
   let request = parsedResponse.request;
@@ -87,7 +87,7 @@ function getOperationResponseMap(parsedResponse) {
           : operationInfo.operationResponseGetter(operationSpec, parsedResponse);
   return result;
 }
-//@ chunk-mrx6y2r5.js:70643-70807 esm-fingerprint
+//@ chunk-b5df2wx1.js:70643-70807 esm-fingerprint
 function shouldDeserializeResponse(parsedResponse) {
   let request = parsedResponse.request;
   let operationInfo = getOperationRequestInfo(request);
@@ -99,7 +99,7 @@ function shouldDeserializeResponse(parsedResponse) {
   else result = shouldDeserialize(parsedResponse);
   return result;
 }
-//@ chunk-mrx6y2r5.js:70807-71688 esm-fingerprint
+//@ chunk-b5df2wx1.js:70807-71688 esm-fingerprint
 async function deserializeResponseBody(jsonContentTypes, xmlContentTypes, response, options, parseXML) {
   let parsedResponse = await parse(jsonContentTypes, xmlContentTypes, response, options, parseXML);
   if (!shouldDeserializeResponse(parsedResponse)) return parsedResponse;
@@ -156,7 +156,7 @@ async function deserializeResponseBody(jsonContentTypes, xmlContentTypes, respon
   }
   return parsedResponse;
 }
-//@ chunk-mrx6y2r5.js:71688-71786 esm-fingerprint
+//@ chunk-b5df2wx1.js:71688-71786 esm-fingerprint
 function isOperationSpecEmpty(operationSpec) {
   let expectedStatusCodes = Object.keys(operationSpec.responses);
   return (
@@ -164,7 +164,7 @@ function isOperationSpecEmpty(operationSpec) {
     (expectedStatusCodes.length === 1 && expectedStatusCodes[0] === "default")
   );
 }
-//@ chunk-mrx6y2r5.js:71786-73127 esm-fingerprint
+//@ chunk-b5df2wx1.js:71786-73127 esm-fingerprint
 function handleErrorResponse(parsedResponse, operationSpec, responseSpec, options) {
   var _a;
   var _b;
@@ -255,7 +255,7 @@ function handleErrorResponse(parsedResponse, operationSpec, responseSpec, option
     shouldReturnResponse: false,
   };
 }
-//@ chunk-mrx6y2r5.js:73127-73790 esm-fingerprint
+//@ chunk-b5df2wx1.js:73127-73790 esm-fingerprint
 async function parse(jsonContentTypes, xmlContentTypes, operationResponse, opts, parseXML) {
   var _a;
   if (

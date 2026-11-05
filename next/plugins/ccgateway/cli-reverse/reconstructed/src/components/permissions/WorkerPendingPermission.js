@@ -3,9 +3,9 @@
  *
  * 队友等待领导批准权限时的占位显示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/WorkerPendingPermission.tsx
- * pieces: chunk-18hwfzwa.js (2), chunk-cckztz9w.js (1)
+ * pieces: chunk-czq1j3j2.js (2), chunk-qq0rce8p.js (1)
  * attribution: placement 2, fingerprint 1
  */
 import { taskDescriptionSuffix } from "../../tasks/endedByModel.js";
@@ -22,7 +22,7 @@ import { getTeamName, getAgentName, getTeammateColor } from "../../utils/teammat
 import { Spinner } from "../Spinner.js";
 import { ShutdownRequestDisplay } from "../messages/ShutdownMessage.js";
 
-//@ chunk-cckztz9w.js:4446-4688 fingerprint (2.1.88 match: WorkerPendingPermission, 0.586)
+//@ chunk-qq0rce8p.js:4782-5024 fingerprint (2.1.88 match: WorkerPendingPermission, 0.588)
 function WorkerPendingPermission_2(t0) {
   if (!t0.ended) return null;
   let taskSuffix = taskDescriptionSuffix();
@@ -45,7 +45,7 @@ function WorkerPendingPermission_2(t0) {
     ],
   });
 }
-//@ chunk-18hwfzwa.js:431571-431972 placement
+//@ chunk-czq1j3j2.js:456403-456804 placement
 function LabeledRow(props) {
   let $ = useMemoCache(8);
   let { name, color } = props;
@@ -84,7 +84,7 @@ function LabeledRow(props) {
   } else badgeElement = $[7];
   return badgeElement;
 }
-//@ chunk-18hwfzwa.js:431972-433138 placement
+//@ chunk-czq1j3j2.js:456804-457970 placement
 function WorkerPendingPermission(props) {
   let $ = useMemoCache(15);
   let { toolName, description } = props;

@@ -1,8 +1,8 @@
 /**
  * is-wsl/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: is-wsl@3.1.1
- * pieces: chunk-20ppca50.js (1)
+ * pieces: chunk-j8hasev3.js (1)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { default as E } from "process";
@@ -10,7 +10,7 @@ import os from "os";
 import fs from "fs";
 import { isInsideContainer } from "../is-inside-container/index.js";
 
-//@ chunk-20ppca50.js:920-1182 esm-fingerprint
+//@ chunk-j8hasev3.js:920-1182 esm-fingerprint
 var isWsl = () => {
   if (E.platform !== "linux") return false;
   if (os.release().toLowerCase().includes("microsoft")) {

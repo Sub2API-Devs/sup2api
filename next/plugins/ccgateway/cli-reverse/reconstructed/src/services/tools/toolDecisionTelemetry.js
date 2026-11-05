@@ -3,20 +3,22 @@
  *
  * 2.1.316 新增：工具权限决策原因的遥测
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (34)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (34)
  * attribution: placement 34
  */
 import { isDeepStrictEqual } from "util";
 import { SUBCOMMANDS } from "../../components/permissions/PermissionDecisionDebugInfo.js";
 import { TOOL_CHECK } from "../../plugins/functionHooks/toolCheckHooks.js";
 import { fromSanitizer_SANITIZER_OUTPUT_ONLY, fromEnum, fromEnumOpt } from "../analytics/safeMetadata.js";
-import { toolMatchesName } from "../../Tool.js";
+import { matchesToolName } from "../../Tool.js";
 import { getShadowedSearchToolNames } from "../../utils/embeddedTools.js";
 import { SKILL_2 } from "../../tools/SkillTool/skillToolNames.js";
 import { ASKUSERQUESTION } from "../../tools/AskUserQuestionTool/prompt.js";
 import { EXITPLANMODE_2 } from "../../tools/ExitPlanModeTool/constants.js";
+import { isDiskless } from "../../bootstrap/state.js";
+import { CIRCUIT_BREAKER_TRAITS } from "../../types/permissions.js";
 import {
   sanitizeRuleCategoryOrUndefined,
   sanitizeRuleCategory,
@@ -34,8 +36,8 @@ import { SandboxManager } from "../../utils/sandbox/sandbox-adapter.js";
 import { logEvent } from "../analytics/index.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { logOTelEvent } from "../../utils/telemetry/events.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../../tools/NotebookEditTool/constants.js";
 import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
@@ -62,24 +64,24 @@ import { clone } from "../../utils/slowOperations.js";
 import { getHookCaller } from "../../utils/agentContext.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3767655-3767731 placement
+//@ chunk-5xgkngpb.js:3863447-3863523 placement
 /**
  * 把「子命令+」形式的决策原因拆成列表。
  */
 function splitSubcommandReason(reasonCode) {
   return reasonCode.startsWith(SUBCOMMANDS) ? reasonCode.slice(SUBCOMMANDS.length).split("+") : [reasonCode];
 }
-//@ chunk-e6aww6q8.js:3767731-3767799 placement
+//@ chunk-5xgkngpb.js:3863523-3863591 placement
 /**
  * 决策原因的正则与额外允许的特殊原因。
  */
 var DECISION_REASON_REGEX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SPECIAL_DECISION_REASONS;
-deferInit("chunk-e6aww6q8.js:3767731", () => {
+deferInit("chunk-5xgkngpb.js:3863523", () => {
   DECISION_REASON_REGEX = /^[A-Za-z][A-Za-z+:-]{0,199}$/;
   SPECIAL_DECISION_REASONS = new Set([`hook:${TOOL_CHECK}`]);
 });
-//@ chunk-e6aww6q8.js:3767799-3767873 placement
+//@ chunk-5xgkngpb.js:3863591-3863665 placement
 /**
  * 决策原因合规（匹配正则或属于特殊原因）才返回，否则 undefined。
  */
@@ -89,14 +91,14 @@ function sanitizeDecisionReason(reasonCode) {
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(reasonCode)
     : undefined;
 }
-//@ chunk-e6aww6q8.js:3767873-3767922 placement
+//@ chunk-5xgkngpb.js:3863665-3863714 placement
 /**
  * 列表里有该原因就用它，否则归为 other。
  */
 function pickReasonFromList(candidates, value) {
   return candidates.includes(value) ? value : "other";
 }
-//@ chunk-e6aww6q8.js:3767922-3768058 placement
+//@ chunk-5xgkngpb.js:3863714-3863850 placement
 function toDecisionRecord(permissionDecision) {
   return {
     behavior: permissionDecision.behavior,
@@ -104,7 +106,7 @@ function toDecisionRecord(permissionDecision) {
     matchedAskRule: "matchedAskRule" in permissionDecision ? permissionDecision.matchedAskRule : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:3768058-3768222 placement
+//@ chunk-5xgkngpb.js:3863850-3864014 placement
 function logToolDecision({
   toolName,
   isMcp,
@@ -119,22 +121,22 @@ function logToolDecision({
 }) {
   return;
 }
-//@ chunk-e6aww6q8.js:3768222-3768299 placement
+//@ chunk-5xgkngpb.js:3864014-3864091 placement
 /**
  * 按名字找工具；找不到时若是被遮蔽的搜索工具名也返回该名。
  */
 function toolNameForTelemetry(tools, toolName) {
   return (
-    tools.find((tool) => toolMatchesName(tool, toolName))?.name ??
+    tools.find((tool) => matchesToolName(tool, toolName))?.name ??
     (getShadowedSearchToolNames().has(toolName) ? toolName : undefined)
   );
 }
-//@ chunk-e6aww6q8.js:3768299-3768361 placement
+//@ chunk-5xgkngpb.js:3864091-3864153 placement
 /**
  * 工具名到类别（读/写/执行等）的映射。
  */
 var TOOL_NAME_KINDS = ["mcp_tool", "skill_tool", "dynamic_tool", "other_tool"];
-//@ chunk-e6aww6q8.js:3768361-3768510 placement
+//@ chunk-5xgkngpb.js:3864153-3864302 placement
 /**
  * 按工具名分类：mcp 工具、技能工具、动态工具（含 __）或其他。
  */
@@ -143,7 +145,7 @@ function classifyToolNameKind(name) {
   if (name.startsWith(SKILL_2)) return "skill_tool";
   return name.includes("__") ? "dynamic_tool" : "other_tool";
 }
-//@ chunk-e6aww6q8.js:3768510-3769669 placement
+//@ chunk-5xgkngpb.js:3864302-3865461 placement
 /**
  * 工具权限决策原因的遥测枚举（过于复杂、静态分析、多个 cd 等）。
  */
@@ -154,7 +156,7 @@ var reasonCategoryMap;
 var STATIC_ANALYSIS_REASONS;
 var SAFETY_EVENT_CATEGORIES;
 var HOOK_PUSHBACK_SOURCES;
-deferInit("chunk-e6aww6q8.js:3768510", () => {
+deferInit("chunk-5xgkngpb.js:3864302", () => {
   TOOL_DECISION_REASONS = "tengu_snoopy_creek";
   ASK_DECISION_TOOLS = new Set([ASKUSERQUESTION, EXITPLANMODE_2]);
   REASON_CATEGORY_MAP = {
@@ -208,7 +210,7 @@ deferInit("chunk-e6aww6q8.js:3768510", () => {
     "user_abort",
   ];
 });
-//@ chunk-e6aww6q8.js:3769669-3770174 placement
+//@ chunk-5xgkngpb.js:3865461-3865966 placement
 /**
  * 按决策记录推导安全事件类别：原因码映射（策略规则单独归类）、异步代理归为权限模式、用户拒绝/中止；无原因码时按沙箱违规（网络或其他）。
  */
@@ -229,7 +231,7 @@ function getSafetyEventCategory(decision, sandboxViolations) {
     ? "sandbox_network"
     : "sandbox_other";
 }
-//@ chunk-e6aww6q8.js:3770174-3770915 placement
+//@ chunk-5xgkngpb.js:3865966-3866796 placement
 /**
  * 对被拒/被问的工具调用记 tengu_safety_event（类别、决策、来源、原因、规则来源、熔断、分类器类别、PreToolUse 钩子、工具类别与名称、权限模式）；不适用或出错时返回 false。
  */
@@ -262,7 +264,13 @@ function logToolSafetyEvent({
         reason_code: sanitizeDecisionReason(record.reasonCode),
         rule_source: fromEnumOpt(record.ruleSource),
         grant_scope: fromEnumOpt(record.grantScope),
-        circuit_breaker: fromEnumOpt(record.circuitBreaker),
+        circuit_breaker: fromEnumOpt(
+          isDiskless() &&
+            record.circuitBreaker !== undefined &&
+            CIRCUIT_BREAKER_TRAITS[record.circuitBreaker]?.tenantTelemetryHidden === true
+            ? undefined
+            : record.circuitBreaker,
+        ),
         classifier_category: sanitizeRuleCategoryOrUndefined(record.classifierCategory),
         hook_event: fromEnumOpt(
           category === "hook" &&
@@ -286,7 +294,7 @@ function logToolSafetyEvent({
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:3770915-3771330 placement
+//@ chunk-5xgkngpb.js:3866796-3867211 placement
 /**
  * 记录 PostToolUse(Failure) 钩子把结果打回（hook_review / sent_back）的安全事件。
  */
@@ -322,7 +330,7 @@ function logHookPushbackEvent({ pushback, permissionMode, agentContext }) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:3771330-3771828 placement
+//@ chunk-5xgkngpb.js:3867211-3867709 placement
 /**
  * 在钩子产出的消息中找本次调用的 hook_blocking_error，若来自 PostToolUse 或其失败钩子则记打回事件。
  */
@@ -354,14 +362,14 @@ function logHookPushbacks({ updates, tool, toolUseId, getPermissionMode, agentCo
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:3771828-3771860 placement
+//@ chunk-5xgkngpb.js:3867709-3867741 placement
 /**
  * 工具决策遥测开关（tengu_snoopy_creek）。
  */
 function isToolDecisionTelemetryOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TOOL_DECISION_REASONS, false);
 }
-//@ chunk-e6aww6q8.js:3771860-3772047 placement
+//@ chunk-5xgkngpb.js:3867741-3867928 placement
 function getToolTelemetryFields(tool, toolClass, toolCatalog) {
   let telemetryToolName;
   if (toolClass === "mcp") telemetryToolName = sanitizeToolNameWithMcpFlag(tool.name, true);
@@ -378,7 +386,7 @@ function getToolTelemetryFields(tool, toolClass, toolCatalog) {
     ...toolSourceMetadata(tool.mcpInfo),
   };
 }
-//@ chunk-e6aww6q8.js:3772047-3772491 placement
+//@ chunk-5xgkngpb.js:3867928-3868372 placement
 /**
  * 同时发出 tengu_safety_event 与 OTel safety_event（附沙箱开关、违规数；OTel 中特定工具名归为 other_tool，分类器类别只在开启工具详情日志时带上）。
  */
@@ -409,7 +417,7 @@ function emitSafetyEvent(fields, { toolUseId, sandboxViolationCount }, agentCont
     agentContext,
   );
 }
-//@ chunk-e6aww6q8.js:3772491-3773224 placement
+//@ chunk-5xgkngpb.js:3868372-3869105 placement
 /**
  * 把权限原因码（bashMiss、subcommands、rule、mode、hook、classifier、safetyCheck 等）映射为安全事件类别；subcommands 取各子原因中优先级最高的。
  */
@@ -449,15 +457,15 @@ function categorizeReasonCode(reasonCode) {
       return;
   }
 }
-//@ chunk-e6aww6q8.js:3773224-3773296 placement
-var EXTRA_READ_LIKE_TOOLS; // deferred: uses GREP_TOOL_NAME (../../tools/GrepTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
+//@ chunk-5xgkngpb.js:3869105-3869177 placement
+var EXTRA_READ_LIKE_TOOLS; // deferred: uses GLOB_TOOL_NAME (../../tools/GlobTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
 var FILE_LIKE_TOOL_NAMES;
 var SHELL_LIKE_TOOL_NAMES;
-deferInit("chunk-e6aww6q8.js:3773224", () => {
+deferInit("chunk-5xgkngpb.js:3869105", () => {
   EXTRA_READ_LIKE_TOOLS = [];
   FILE_LIKE_TOOL_NAMES = new Set([
-    FILE_READ_TOOL_NAME,
-    FILE_EDIT_TOOL_NAME,
+    READ,
+    EDIT,
     FILE_WRITE_TOOL_NAME,
     NOTEBOOK_EDIT_TOOL_NAME,
     GLOB_TOOL_NAME,
@@ -466,7 +474,7 @@ deferInit("chunk-e6aww6q8.js:3773224", () => {
   ]);
   SHELL_LIKE_TOOL_NAMES = new Set([BASH_TOOL_NAME, MONITOR]);
 });
-//@ chunk-e6aww6q8.js:3773296-3773512 placement
+//@ chunk-5xgkngpb.js:3869177-3869393 placement
 function getToolClass(tool) {
   if (tool.mcpInfo !== undefined || tool.isMcp === true) return "mcp";
   if (SHELL_LIKE_TOOL_NAMES.has(tool.name)) return "bash";
@@ -475,7 +483,7 @@ function getToolClass(tool) {
   if (tool.name === WEBFETCH || tool.name === WEBSEARCH) return "web";
   return "other";
 }
-//@ chunk-e6aww6q8.js:3773512-3773840 placement
+//@ chunk-5xgkngpb.js:3869393-3869721 placement
 /**
  * 递归去掉值为 undefined 且原对象中没有的键（数组保持索引）。
  */
@@ -497,13 +505,13 @@ function stripUndefinedFields(value, previous) {
       )
     : stripped;
 }
-//@ chunk-e6aww6q8.js:3773840-3773943 placement
+//@ chunk-5xgkngpb.js:3869721-3869824 placement
 function getHookOriginChain(hookInfo) {
   let { hookOrigin, hookCaller } = hookInfo;
   let callerChain = hookCaller === undefined ? [] : [hookCaller];
   return hookOrigin !== undefined && hookOrigin.length > 0 ? hookOrigin : callerChain;
 }
-//@ chunk-e6aww6q8.js:3773943-3774114 placement
+//@ chunk-5xgkngpb.js:3869824-3869995 placement
 function callerHasCatch(hookInfo) {
   let bottomOrigin = getHookOriginChain(hookInfo).at(-1) ?? "";
   let origin = isRewrittenOrigin(bottomOrigin) ? bottomOrigin.of : bottomOrigin;
@@ -512,7 +520,7 @@ function callerHasCatch(hookInfo) {
   );
   return typeof origin === "string" || found === undefined || found.hasCatch(origin.registration);
 }
-//@ chunk-e6aww6q8.js:3774157-3774374 placement
+//@ chunk-5xgkngpb.js:3870038-3870255 placement
 function isInputUnchanged(call, hookUpdatedInput, stripUndefinedFields = (input) => input) {
   try {
     return isDeepStrictEqual(hookUpdatedInput, stripUndefinedFields(call.input, hookUpdatedInput));
@@ -526,21 +534,21 @@ function isInputUnchanged(call, hookUpdatedInput, stripUndefinedFields = (input)
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:3774374-3774412 placement
+//@ chunk-5xgkngpb.js:3870255-3870293 placement
 /**
  * 判断两组工具输入是否未变（忽略 undefined 字段再比一次）。
  */
 var inputsUnchanged = (call, hookUpdatedInput) =>
   isInputUnchanged(call, hookUpdatedInput) || isInputUnchanged(call, hookUpdatedInput, stripUndefinedFields);
-//@ chunk-e6aww6q8.js:3774412-3774423 placement
+//@ chunk-5xgkngpb.js:3870293-3870304 placement
 var PLAIN_KESTREL_DEFAULT = true;
-//@ chunk-e6aww6q8.js:3774423-3774468 placement
+//@ chunk-5xgkngpb.js:3870304-3870349 placement
 /**
  * 是否启用 tengu_plain_kestrel（默认开）。
  */
 var isPlainKestrelOn = () =>
   getFeatureValue_CACHED_MAY_BE_STALE("tengu_plain_kestrel", PLAIN_KESTREL_DEFAULT) !== false;
-//@ chunk-e6aww6q8.js:3774468-3774715 placement
+//@ chunk-5xgkngpb.js:3870349-3870596 placement
 function propagateLentModules(hookOrigin, nextChain) {
   let previousLent = hookOrigin === undefined ? hookOrigin : lentModulesByChain().get(hookOrigin);
   let lentByOrigin = new Map(hookOrigin?.map((origin, index) => [origin, previousLent?.[index]]));
@@ -563,7 +571,7 @@ function propagateLentModules(hookOrigin, nextChain) {
       ),
     );
 }
-//@ chunk-e6aww6q8.js:3774715-3774990 placement
+//@ chunk-5xgkngpb.js:3870596-3870871 placement
 /**
  * 插件自身发起的调用到达底层时调用帧已变：重写钩子来源链并同步借出模块信息，记调试日志。
  */
@@ -579,7 +587,7 @@ function rebaseHookOrigin(hookInfo) {
   );
   return rebasedChain;
 }
-//@ chunk-e6aww6q8.js:3774990-3775071 placement
+//@ chunk-5xgkngpb.js:3870871-3870952 placement
 /**
  * 输入变化时重设 hook 来源，否则原样返回。
  */
@@ -591,7 +599,7 @@ function rebaseOriginIfInputChanged(call, pluginCall, hookUpdatedInput) {
         hookOrigin: rebaseHookOrigin(call),
       };
 }
-//@ chunk-e6aww6q8.js:3775071-3775232 placement
+//@ chunk-5xgkngpb.js:3870952-3871113 placement
 function cloneCallInput(input) {
   try {
     return {
@@ -607,7 +615,7 @@ function cloneCallInput(input) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:3775232-3775353 placement
+//@ chunk-5xgkngpb.js:3871113-3871234 placement
 function rebaseBatchHookOrigins(calls, pluginCall, hookUpdatedInput) {
   let [firstCall] = calls;
   if (
@@ -620,7 +628,7 @@ function rebaseBatchHookOrigins(calls, pluginCall, hookUpdatedInput) {
   let hookOrigin = rebaseHookOrigin(firstCall);
   for (let call of calls) call.hookOrigin = hookOrigin;
 }
-//@ chunk-e6aww6q8.js:3775353-3775711 placement
+//@ chunk-5xgkngpb.js:3871234-3871592 placement
 /**
  * 插件调用的输入无法复制时：调用方有 .catch 则放行；否则上报插件问题（只报一次）。
  */
@@ -648,7 +656,7 @@ function checkUncopyableCall(toolUseContext, hookCaller) {
     };
   }
 }
-//@ chunk-e6aww6q8.js:3775711-3775790 placement
+//@ chunk-5xgkngpb.js:3871592-3871670 placement
 /**
  * 有 hook 调用方且开关打开时克隆输入，克隆失败走备选处理。
  */
@@ -659,12 +667,10 @@ function clonedHookInput(toolUseContext, input) {
     : undefined;
 }
 export {
-  isPlainKestrelOn,
-  rebaseHookOrigin,
   pickReasonFromList,
   splitSubcommandReason,
-  classifyToolNameKind,
-  TOOL_NAME_KINDS,
+  isPlainKestrelOn,
+  rebaseHookOrigin,
   toolNameForTelemetry,
   clonedHookInput,
   rebaseOriginIfInputChanged,
@@ -673,6 +679,8 @@ export {
   rebaseBatchHookOrigins,
   logToolDecision,
   toDecisionRecord,
+  classifyToolNameKind,
+  TOOL_NAME_KINDS,
   logHookPushbackEvent,
   inputsUnchanged,
 };

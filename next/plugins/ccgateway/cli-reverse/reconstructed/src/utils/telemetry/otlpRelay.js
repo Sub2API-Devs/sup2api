@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：云会话中把 OTLP 导出转经 session ingress（/worker/otlp/）的端点改写
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ry7mqags.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g7y7q04y.js (14)
  * attribution: placement 14
  */
 import { env } from "../env.js";
@@ -15,23 +15,23 @@ import { isDiskless } from "../../bootstrap/state.js";
 import { maskModelIdForTelemetry } from "../model/modelCatalog/catalogEntries.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ry7mqags.js:370-456 placement
+//@ chunk-g7y7q04y.js:370-456 placement
 var RELAY_PATH_RE = /^\/v1\/code\/sessions\/[A-Za-z0-9_-]+\/worker\/otlp\/((?:customer\/)?[a-z]+)$/;
-//@ chunk-ry7mqags.js:456-514 placement
+//@ chunk-g7y7q04y.js:456-514 placement
 function matchesRelayPath(requestPath, signal) {
   let match = RELAY_PATH_RE.exec(requestPath);
   return match !== null && match[1] === signal;
 }
-//@ chunk-ry7mqags.js:514-628 placement
+//@ chunk-g7y7q04y.js:514-628 placement
 function isLoopbackHost(hostname) {
   let lower = hostname.toLowerCase();
   return lower === "localhost" || lower === "::1" || lower === "[::1]" || /^127(\.\d{1,3}){3}$/.test(lower);
 }
-//@ chunk-ry7mqags.js:628-701 placement
+//@ chunk-g7y7q04y.js:628-701 placement
 function isRelayCarrier() {
   return env.CLAUDE_CODE_REMOTE === true && startupCcrEnv.bridgeCarrier === undefined;
 }
-//@ chunk-ry7mqags.js:701-757 placement
+//@ chunk-g7y7q04y.js:701-757 placement
 /**
  * OTLP 信号名到环境变量段的映射。
  */
@@ -40,11 +40,11 @@ var SIGNAL_ENV_SUFFIX = {
   logs: "LOGS",
   traces: "TRACES",
 };
-//@ chunk-ry7mqags.js:757-853 placement
+//@ chunk-g7y7q04y.js:757-853 placement
 function hasOtlpHeadersEnv(signal) {
   return !!env.OTEL_EXPORTER_OTLP_HEADERS || !!env[`OTEL_EXPORTER_OTLP_${SIGNAL_ENV_SUFFIX[signal]}_HEADERS`];
 }
-//@ chunk-ry7mqags.js:853-1369 placement
+//@ chunk-g7y7q04y.js:853-1369 placement
 function getRemoteOtlpEndpoint(signal) {
   if (signal === "traces") return null;
   if (!isRelayCarrier()) return null;
@@ -70,18 +70,18 @@ function getRemoteOtlpEndpoint(signal) {
     return null;
   }
 }
-//@ chunk-ry7mqags.js:1369-1415 placement (2.1.88 match: buildAssistantDailyLogPrompt, 0.59)
+//@ chunk-g7y7q04y.js:1369-1415 placement (2.1.88 match: buildAssistantDailyLogPrompt, 0.59)
 function hasRemoteOtelLogsEndpoint() {
   return isDiskless() && getRemoteOtlpEndpoint("logs") !== null;
 }
-//@ chunk-ry7mqags.js:1415-1453 placement
+//@ chunk-g7y7q04y.js:1415-1453 placement
 /**
  * 走中继时对模型名做脱敏。
  */
 function maskModelIdIfRelayed(modelId) {
   return hasRemoteOtelLogsEndpoint() ? maskModelIdForTelemetry(modelId) : modelId;
 }
-//@ chunk-ry7mqags.js:1453-1781 placement
+//@ chunk-g7y7q04y.js:1453-1781 placement
 /**
  * 合法的 CCR traces 中继端点。
  */
@@ -107,7 +107,7 @@ function ccrTracesRelayUrl() {
     return null;
   return url.href;
 }
-//@ chunk-ry7mqags.js:1781-1933 placement
+//@ chunk-g7y7q04y.js:1781-1933 placement
 /**
  * OTLP traces 端点是否 CCR 同源中继。
  */
@@ -121,7 +121,7 @@ function isCcrTracesEndpoint() {
     return false;
   }
 }
-//@ chunk-ry7mqags.js:1933-2135 placement
+//@ chunk-g7y7q04y.js:1933-2135 placement
 class ArmLatch {
   armed = false;
   frozen = undefined;
@@ -140,20 +140,19 @@ class ArmLatch {
     this.frozen = undefined;
   }
 }
-//@ chunk-ry7mqags.js:2135-2149 placement
+//@ chunk-g7y7q04y.js:2135-2149 placement
 /**
  * traces 是否走中继的闩锁。
  */
 var tracesRelayedLatch; // deferred: uses ArmLatch of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ry7mqags.js:2135", () => {
+deferInit("chunk-g7y7q04y.js:2135", () => {
   tracesRelayedLatch = new ArmLatch();
 });
-//@ chunk-ry7mqags.js:2149-2201 placement
+//@ chunk-g7y7q04y.js:2149-2201 placement
 function isTracesRelayed() {
   return tracesRelayedLatch.resolve(() => ccrTracesRelayUrl() !== null);
 }
 export {
-  maskModelIdIfRelayed,
   hasRemoteOtelLogsEndpoint,
   isTracesRelayed,
   SIGNAL_ENV_SUFFIX,
@@ -161,4 +160,5 @@ export {
   isCcrTracesEndpoint,
   tracesRelayedLatch,
   getRemoteOtlpEndpoint,
+  maskModelIdIfRelayed,
 };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。内置 gh api 命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fy5kn7m3.js (39)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ntm2y5qw.js (39)
  * attribution: placement 39
  */
 import { open } from "fs/promises";
@@ -40,9 +40,9 @@ import { getErrnoCode } from "../errors.js";
 import { getCwd } from "../cwd.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-fy5kn7m3.js:4054-4065 placement
+//@ chunk-ntm2y5qw.js:4389-4400 placement
 var MAX_LABEL_CHARS = 200;
-//@ chunk-fy5kn7m3.js:4065-4139 placement
+//@ chunk-ntm2y5qw.js:4400-4473 placement
 /**
  * 截断过长的标签文本并在截断处加省略号。
  */
@@ -50,37 +50,31 @@ function truncateLabel(text) {
   let truncated = truncateToLength(text, MAX_LABEL_CHARS);
   return escapeControlCharsForDisplay(truncated) + (truncated.length < text.length ? "\u2026" : "");
 }
-//@ chunk-fy5kn7m3.js:4139-4400 placement
+//@ chunk-ntm2y5qw.js:4473-4734 placement
 /**
  * 主机名长度上限、DNS 名正则、GitHub 自有域名列表。
  */
-var MAX_HOSTNAME_LENGTH; // deferred: uses GITHUB_HOST (../git/githubUrl.js) of its import cycle while loading; runs once the cycle is complete
-var DNS_NAME_RE;
-var GITHUB_OWNED_DOMAINS;
-var API;
-deferInit("chunk-fy5kn7m3.js:4139", () => {
-  MAX_HOSTNAME_LENGTH = 255;
-  DNS_NAME_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{1,63}|xn--[a-z0-9-]{1,59})$/;
-  GITHUB_OWNED_DOMAINS = [
-    GITHUB_HOST,
-    "githubusercontent.com",
-    "ghcr.io",
-    "github.dev",
-    "githubpreview.dev",
-    "github.io",
-    "github.app",
-    "githubapp.com",
-    "githubassets.com",
-    "githubcopilot.com",
-  ];
-  API = "api";
-});
-//@ chunk-fy5kn7m3.js:4400-4483 placement
+var MAX_HOSTNAME_LENGTH = 255;
+var DNS_NAME_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{1,63}|xn--[a-z0-9-]{1,59})$/;
+var GITHUB_OWNED_DOMAINS = [
+  GITHUB_HOST,
+  "githubusercontent.com",
+  "ghcr.io",
+  "github.dev",
+  "githubpreview.dev",
+  "github.io",
+  "github.app",
+  "githubapp.com",
+  "githubassets.com",
+  "githubcopilot.com",
+];
+var API = "api";
+//@ chunk-ntm2y5qw.js:4734-4817 placement
 function normalizeEnterpriseHost(host) {
   let lower = host.toLowerCase();
   return lower.length <= MAX_HOSTNAME_LENGTH && HOST_LABEL_RE.test(lower) ? lower : "that host";
 }
-//@ chunk-fy5kn7m3.js:4483-5181 placement
+//@ chunk-ntm2y5qw.js:4817-5515 placement
 /**
  * 校验 GitHub Enterprise 主机名并得到 API 基址（拒绝 IP、github.com 自有域名、Anthropic 主机；ghe.com 子域用 api. 前缀）。
  */
@@ -130,7 +124,7 @@ function resolveEnterpriseHost(host) {
   }
   return URL.parse(resolved.apiBase)?.hostname === apiHostname ? resolved : dnsRefusal;
 }
-//@ chunk-fy5kn7m3.js:5181-10500 placement
+//@ chunk-ntm2y5qw.js:5515-11403 placement
 /**
  * 内置 gh api 的帮助文本。
  */
@@ -142,12 +136,13 @@ var HELP_NO_TOKEN_NOTES;
 var HELP_SEARCH_REFUSED_NOTE;
 var HELP_PULLS_FOR_BRANCH_EXAMPLE;
 var HELP_CLONE_EXAMPLE;
+var HELP_API_LINE;
 var HELP_PR_SUBCOMMAND_EXAMPLES;
 var GH_SUBCOMMAND_ALIASES;
 var REPO_FLAG_RE;
 var REPO_URL_RE;
 var REPO_SLUG_ARG_RE;
-deferInit("chunk-fy5kn7m3.js:5181", () => {
+deferInit("chunk-ntm2y5qw.js:5515", () => {
   GH_API_HELP = "repos/{owner}/{repo}";
   HELP_ISSUE_COMMENT_EXAMPLE = `gh api ${GH_API_HELP}/issues/<number>/comments -f body='<text>'`;
   HELP_ADD_LABEL_EXAMPLE = `gh api ${GH_API_HELP}/issues/<number>/labels -f 'labels[]=<label>'  # add a label`;
@@ -160,6 +155,8 @@ deferInit("chunk-fy5kn7m3.js:5181", () => {
   HELP_SEARCH_REFUSED_NOTE = "where this session's GitHub proxy refuses search/";
   HELP_PULLS_FOR_BRANCH_EXAMPLE = `gh api '${GH_API_HELP}/pulls?head={owner}:{branch}&state=all'  # <number> of the current branch's pull request (a fork's: its owner in place of {owner} before the colon)`;
   HELP_CLONE_EXAMPLE = "git clone https://github.com/<owner>/<repo>.git";
+  HELP_API_LINE =
+    "This session's GitHub proxy creates private repositories only: keep -F private=true (--public and --internal have no form). For this call it takes plain values only, not 'key[sub]=<value>' or 'key[]=<value>'.";
   HELP_PR_SUBCOMMAND_EXAMPLES = new Map([
     [
       "pr create",
@@ -329,6 +326,14 @@ deferInit("chunk-fy5kn7m3.js:5181", () => {
     ],
     ["repo view", [`gh api ${GH_API_HELP}`]],
     ["repo clone", ["No `gh api` form: use git.", HELP_CLONE_EXAMPLE]],
+    [
+      "repo create",
+      [
+        "gh api user/repos -f name=<name> -F private=true  # in the account behind the credential (gh api user names it); this session's GitHub proxy may refuse creating a repository",
+        "gh api orgs/<org>/repos -f name=<name> -F private=true  # in an organization: an OWNER the command named is <org>, unless it is the login gh api user names",
+        HELP_API_LINE,
+      ],
+    ],
     ["label list", [`gh api ${GH_API_HELP}/labels`]],
     [
       "search issues",
@@ -364,7 +369,7 @@ deferInit("chunk-fy5kn7m3.js:5181", () => {
   REPO_URL_RE = /^https?:\/\/[^/]+\/[^/]+\/[^/]+/;
   REPO_SLUG_ARG_RE = /^[^-/][^/]*(\/[^/]+){1,2}$/;
 });
-//@ chunk-fy5kn7m3.js:10500-11186 placement
+//@ chunk-ntm2y5qw.js:11403-12198 placement
 /**
  * 对不支持的 gh 子命令给出用 gh api 或 git 的替代写法（必要时提示替换 {owner}/{repo} 与 --hostname）。
  */
@@ -380,7 +385,9 @@ function ghSubcommandAlternative(ghArgs, ghesHosts) {
       ? examples.map((example) =>
           example === HELP_CLONE_EXAMPLE
             ? `git clone https://<host>/<owner>/<repo>.git  # <host>: github.com or ${hostList}`
-            : example,
+            : example === HELP_API_LINE
+              ? `${example} On github.com only: there is no form for a GitHub Enterprise host, with --hostname or without.`
+              : example,
         )
       : examples;
   let sliced = ghArgs.slice(2);
@@ -403,7 +410,7 @@ ${adjustedExamples.map((example) => `  ${example}`).join(`
       : "")
   );
 }
-//@ chunk-fy5kn7m3.js:11186-11687 placement
+//@ chunk-ntm2y5qw.js:12198-12699 placement
 /**
  * 内置 gh 的说明文案（GraphQL 不可用、内置客户端、本机没有 gh）。
  */
@@ -411,7 +418,7 @@ var GRAPHQL_UNAVAILABLE_TEXT =
   "GitHub GraphQL is not available through this session's GitHub proxy; use the REST API (gh api repos/{owner}/{repo}/...). For review threads, auto-merge and draft or ready, the proxy serves repos/{owner}/{repo}/pulls/<number>/ccr/review_threads, .../ccr/comments/<comment-id>/resolve, .../ccr/auto_merge, .../ccr/ready_for_review and .../ccr/convert_to_draft.";
 var BUILTIN_GH_LABEL = "Claude Code's built-in GitHub client, not the GitHub CLI";
 var NO_GH_CLI_TEXT = "no GitHub CLI was found on this machine when this session started";
-//@ chunk-fy5kn7m3.js:11687-14216 placement
+//@ chunk-ntm2y5qw.js:12699-15228 placement
 function ghApiUsageText(ghesHosts) {
   let isAny = ghesHosts === ANY;
   let mentionsHosts = isAny || ghesHosts.length > 0;
@@ -467,12 +474,9 @@ with --hostname. A request to another host says so in one line on standard error
 Example: gh api repos/{owner}/{repo}/pulls -f title='Fix' -f head='my-branch' -f base='main'
 `;
 }
-//@ chunk-fy5kn7m3.js:14216-14309 placement
-var GH_HOST_NOTE; // deferred: uses GITHUB_HOST (../git/githubUrl.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fy5kn7m3.js:14216", () => {
-  GH_HOST_NOTE = ` The host came from GH_HOST: \`--hostname ${GITHUB_HOST}\` names github.com for one command.`;
-});
-//@ chunk-fy5kn7m3.js:14309-14632 placement
+//@ chunk-ntm2y5qw.js:15228-15321 placement
+var GH_HOST_NOTE = ` The host came from GH_HOST: \`--hostname ${GITHUB_HOST}\` names github.com for one command.`;
+//@ chunk-ntm2y5qw.js:15321-15644 placement
 /**
  * GH_HOST/GH_REPO 指向其他主机时的拒绝说明。
  */
@@ -484,7 +488,7 @@ function hostEnvVarRefusal(varName) {
       : "set GH_REPO=OWNER/REPO and pass --hostname <host> on the command instead.")
   );
 }
-//@ chunk-fy5kn7m3.js:14632-14914 placement
+//@ chunk-ntm2y5qw.js:15644-15926 placement
 /**
  * 主机不在本会话 GitHub 代理范围内的说明。
  */
@@ -494,14 +498,14 @@ function hostNotServedText(host, ghesHosts, viaEnv = false) {
     (viaEnv ? `.${GH_HOST_NOTE}` : ".")
   );
 }
-//@ chunk-fy5kn7m3.js:14914-15489 placement
+//@ chunk-ntm2y5qw.js:15926-16501 placement
 /**
  * gh api 带值参数、开关参数与不支持参数表。
  */
 var GH_API_VALUE_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var GH_API_BOOLEAN_FLAGS;
 var GH_API_UNSUPPORTED_FLAGS;
-deferInit("chunk-fy5kn7m3.js:14914", () => {
+deferInit("chunk-ntm2y5qw.js:15926", () => {
   GH_API_VALUE_FLAGS = {
     "-X": "--method",
     "-f": "--raw-field",
@@ -533,7 +537,7 @@ deferInit("chunk-fy5kn7m3.js:14914", () => {
   };
   GH_API_UNSUPPORTED_FLAGS = new Set(["--template", "--preview", "--slurp", "--verbose"]);
 });
-//@ chunk-fy5kn7m3.js:15489-18121 placement
+//@ chunk-ntm2y5qw.js:16501-19133 placement
 function parseGhApiArgs(ghArgs, ghHost, ghesHosts, version) {
   if (ghArgs[0] !== "api")
     return {
@@ -704,12 +708,12 @@ ${ghApiUsageText(ghesHosts)}`,
     options: parsed,
   };
 }
-//@ chunk-fy5kn7m3.js:18121-18144 placement
+//@ chunk-ntm2y5qw.js:19133-19156 placement
 /**
  * -f/-F 字段解析失败时抛出的错误类型。
  */
 class FieldParseError extends Error {}
-//@ chunk-fy5kn7m3.js:18144-18334 placement
+//@ chunk-ntm2y5qw.js:19156-19346 placement
 /**
  * 把 -f/-F 字段解析为嵌套参数表（-F 值经回调转换，如读文件）。
  */
@@ -725,14 +729,14 @@ async function buildFieldParams(rawFields, typedFields, coerceTypedValue) {
   }
   return params;
 }
-//@ chunk-fy5kn7m3.js:18334-18407 placement
+//@ chunk-ntm2y5qw.js:19346-19419 placement
 /**
  * 把 Map 形式的参数表递归转成普通对象。
  */
 function mapToPlainObject(params) {
   return Object.fromEntries([...params].map(([key, value]) => [key, plainParamValue(value)]));
 }
-//@ chunk-fy5kn7m3.js:18407-18466 placement
+//@ chunk-ntm2y5qw.js:19419-19479 placement
 /**
  * 把嵌套参数表展开为 key[sub]、key[] 形式的键值对列表。
  */
@@ -741,12 +745,12 @@ function flattenParamEntries(params) {
   for (let [key, value] of params) flattenParams(entries, key, value);
   return entries;
 }
-//@ chunk-fy5kn7m3.js:18466-18550 placement
+//@ chunk-ntm2y5qw.js:19479-19563 placement
 function plainParamValue(value) {
   if (value instanceof Map) return mapToPlainObject(value);
   return Array.isArray(value) ? value.map(plainParamValue) : value;
 }
-//@ chunk-fy5kn7m3.js:18550-18720 placement
+//@ chunk-ntm2y5qw.js:19563-19736 placement
 /**
  * 把嵌套参数表展开为 key[sub]、key[] 形式的键值对。
  */
@@ -756,7 +760,7 @@ function flattenParams(entries, key, value) {
   else if (Array.isArray(value)) for (let element of value) flattenParams(entries, `${key}[]`, element);
   else entries.push([key, value === null ? "" : String(value)]);
 }
-//@ chunk-fy5kn7m3.js:18720-19187 placement
+//@ chunk-ntm2y5qw.js:19736-20203 placement
 /**
  * 解析字段 “a[b][]=v” 为键路径、键名与值。
  */
@@ -791,7 +795,7 @@ function parseFieldKey(text) {
     value: text.slice(valueStart),
   };
 }
-//@ chunk-fy5kn7m3.js:19187-19633 placement
+//@ chunk-ntm2y5qw.js:20203-20649 placement
 /**
  * 按键路径把值写入参数表（[] 为数组追加，重复键报错）。
  */
@@ -825,7 +829,7 @@ function setNestedField(params, keys, key, value) {
     throw new FieldParseError(`expected array type under "${truncateLabel(pendingKey)}"`);
   cursor.set(pendingKey, value === undefined ? (existing ?? []) : [...(existing ?? []), value]);
 }
-//@ chunk-fy5kn7m3.js:19633-19975 placement
+//@ chunk-ntm2y5qw.js:20649-20991 placement
 /**
  * 取得或创建下一级 map（数组元素时按需新建）。
  */
@@ -845,7 +849,7 @@ function nestedContainer(params, key, arrayKey) {
   params.set(key, [...(existing ?? []), created]);
   return created;
 }
-//@ chunk-fy5kn7m3.js:19975-20132 placement
+//@ chunk-ntm2y5qw.js:20991-21148 placement
 /**
  * 仓库上下文常量：占位符正则、优先远程名、远程配置键正则、owner/repo 形状。
  */
@@ -854,19 +858,19 @@ var REPO_PLACEHOLDER_RE = /\{(owner|repo|branch)\}|:(owner|repo|branch)\b/g;
 var PREFERRED_REMOTES = ["upstream", "github", "origin"];
 var REMOTE_CONFIG_KEY_PATTERN = "^remote\\..+\\.(url|gh-resolved)$";
 var OWNER_REPO_RE = /^[^/]+\/[^/]+$/;
-//@ chunk-fy5kn7m3.js:20132-20155 placement
+//@ chunk-ntm2y5qw.js:21148-21171 placement
 /**
  * gh api 用法错误（参数或路径不合法）。
  */
 class GhApiUsageError extends Error {}
-//@ chunk-fy5kn7m3.js:20155-20195 placement
+//@ chunk-ntm2y5qw.js:21171-21211 placement
 /**
  * 判断端点里是否含 {owner}/{repo} 之类的仓库占位符。
  */
 function hasRepoPlaceholder(text) {
   return text.search(REPO_PLACEHOLDER_RE) !== -1;
 }
-//@ chunk-fy5kn7m3.js:20195-23187 placement
+//@ chunk-ntm2y5qw.js:21211-24203 placement
 /**
  * 内置 gh api 的仓库上下文（owner/repo/branch 推断与占位符填充）。
  */
@@ -1021,7 +1025,7 @@ class GhRepoContext {
     return result.code === 0 && result.stdout.trim() !== "" ? result.stdout.trim() : undefined;
   }
 }
-//@ chunk-fy5kn7m3.js:23187-23276 placement
+//@ chunk-ntm2y5qw.js:24203-24292 placement
 function remoteOnHost(remote, hosts) {
   let normalizedHost = isGithubDotCom(remote.host) ? GITHUB_HOST : normalizeHost(remote.host);
   return hosts.includes(normalizedHost)
@@ -1031,11 +1035,11 @@ function remoteOnHost(remote, hosts) {
       }
     : undefined;
 }
-//@ chunk-fy5kn7m3.js:23276-23329 placement
+//@ chunk-ntm2y5qw.js:24292-24345 placement
 function preferredRemoteRepository(listing, hosts) {
   return pickPreferredRemote(listing, (repository) => remoteOnHost(repository, hosts))?.repository;
 }
-//@ chunk-fy5kn7m3.js:23329-23632 placement
+//@ chunk-ntm2y5qw.js:24345-24648 placement
 /**
  * 按 gh-resolved 标记与 upstream/github/origin 顺序选出远程及其仓库。
  */
@@ -1062,7 +1066,7 @@ function pickPreferredRemote(listing, matchesHost) {
     }
   );
 }
-//@ chunk-fy5kn7m3.js:23632-23762 placement
+//@ chunk-ntm2y5qw.js:24648-24778 placement
 /**
  * “this checkout's remote X” 文本（名字不合法时用泛称）。
  */
@@ -1071,7 +1075,7 @@ function remoteDescription(remoteName) {
     ? `this checkout's remote ${remoteName}`
     : "one of this checkout's remotes";
 }
-//@ chunk-fy5kn7m3.js:23762-24152 placement
+//@ chunk-ntm2y5qw.js:24778-25168 placement
 /**
  * 解析 git config -z 的 remote.*.url/gh-resolved 输出为远程列表。
  */
@@ -1106,14 +1110,14 @@ function parseRemoteConfig(listing) {
       : [];
   });
 }
-//@ chunk-fy5kn7m3.js:24152-24196 placement
+//@ chunk-ntm2y5qw.js:25168-25212 placement
 var MAX_PERCENT_DECODE_ROUNDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ENTERPRISE_API_PATH_SEGMENTS;
-deferInit("chunk-fy5kn7m3.js:24152", () => {
+deferInit("chunk-ntm2y5qw.js:25168", () => {
   MAX_PERCENT_DECODE_ROUNDS = 4;
   ENTERPRISE_API_PATH_SEGMENTS = new Set(["api", "v3", "uploads"]);
 });
-//@ chunk-fy5kn7m3.js:24196-24825 placement
+//@ chunk-ntm2y5qw.js:25212-25841 placement
 /**
  * 检查路径（反复百分号解码后）：拒绝 .. 段、GraphQL、控制字符。
  */
@@ -1141,7 +1145,7 @@ function checkEndpointPath(pathname, rejectsDotSegments) {
   }
   return /[\0-\x1f\x7f]/.test(decodedPath) ? "the path contains an encoded control character" : undefined;
 }
-//@ chunk-fy5kn7m3.js:24825-25604 placement
+//@ chunk-ntm2y5qw.js:25841-26620 placement
 /**
  * 内置 gh api 的默认值常量组（体积上限、超时、重定向状态码、API 版本、允许的头名等）与错误响应 schema。
  */
@@ -1165,7 +1169,7 @@ var HEADER_VALUE_SPACE_CODES;
 var ALLOWED_HEADER_NAMES;
 var ghApiErrorSchema;
 var ghApiMessageSchema;
-deferInit("chunk-fy5kn7m3.js:24825", () => {
+deferInit("chunk-ntm2y5qw.js:25841", () => {
   GH_API_DEFAULTS_2 = 26214400;
   GH_API_DEFAULTS = 104857600;
   MAX_RESPONSE_BYTES = 8388608;
@@ -1208,17 +1212,17 @@ deferInit("chunk-fy5kn7m3.js:24825", () => {
     }),
   );
 });
-//@ chunk-fy5kn7m3.js:25604-25627 placement
+//@ chunk-ntm2y5qw.js:26620-26643 placement
 /**
  * gh api 请求本身失败（网络、代理）时抛出的错误。
  */
 class GhApiRequestError extends Error {}
-//@ chunk-fy5kn7m3.js:25627-25651 placement
+//@ chunk-ntm2y5qw.js:26643-26667 placement
 /**
  * gh api 返回错误响应时抛出的错误。
  */
 class GhApiResponseError extends Error {}
-//@ chunk-fy5kn7m3.js:25651-26566 placement
+//@ chunk-ntm2y5qw.js:26667-27582 placement
 async function ghApiVersionInfo(ghArgs, context) {
   let servedHosts =
     context.ghesHosts === ANY
@@ -1235,10 +1239,10 @@ async function ghApiVersionInfo(ghArgs, context) {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -1268,7 +1272,7 @@ async function ghApiVersionInfo(ghArgs, context) {
     return 1;
   }
 }
-//@ chunk-fy5kn7m3.js:26566-27151 placement
+//@ chunk-ntm2y5qw.js:27582-28167 placement
 /**
  * 内置 gh 入口：确定代理地址、读 CA 文件、执行 gh api 并按结果退出。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：跨会话消息的防护：跳数/环路/重复/限流丢弃（peer-guard）、对端 uid/pid 校验、消息大小与速率错误
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-66jn0ssz.js (49)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gh96j5t0.js (49)
  * attribution: placement 49
  */
 import { swarmHostState } from "../swarm/hostState.js";
@@ -32,16 +32,16 @@ import { MAX_SEED_NAME_CHARS } from "../swarm/teammateIds.js";
 import { env } from "../env.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-66jn0ssz.js:1145-1219 placement
+//@ chunk-gh96j5t0.js:1144-1218 placement
 function refillTokens(tokens, lastRefillAt, now, bucketCapacity, refillPerSecond) {
   let elapsedSeconds = Math.max(0, now - lastRefillAt) / 1000;
   return Math.min(bucketCapacity, tokens + elapsedSeconds * refillPerSecond);
 }
-//@ chunk-66jn0ssz.js:1219-1245 placement
+//@ chunk-gh96j5t0.js:1218-1244 placement
 function hasToken(tokens) {
   return tokens >= 1;
 }
-//@ chunk-66jn0ssz.js:1245-1494 placement
+//@ chunk-gh96j5t0.js:1244-1493 placement
 function lruGetOrCreate(map, key, maxTrackedSenders, createEntry, isEvictable = () => true) {
   let existing = map.get(key);
   if (existing !== undefined) {
@@ -64,7 +64,7 @@ function lruGetOrCreate(map, key, maxTrackedSenders, createEntry, isEvictable = 
   map.set(key, entry);
   return entry;
 }
-//@ chunk-66jn0ssz.js:1494-1617 placement
+//@ chunk-gh96j5t0.js:1493-1616 placement
 /**
  * 跨会话防护默认限额。
  */
@@ -76,14 +76,14 @@ var DEFAULT_PEER_GUARD_LIMITS_2 = {
   maxChainLength: 28,
   maxTrackedSenders: 256,
 };
-//@ chunk-66jn0ssz.js:1617-1709 placement
+//@ chunk-gh96j5t0.js:1616-1708 placement
 function countSelfHops(tokens, seen) {
   if (!tokens || seen.size === 0) return 0;
   let count = 0;
   for (let token of tokens) if (seen.has(token)) count++;
   return count;
 }
-//@ chunk-66jn0ssz.js:1709-2598 placement
+//@ chunk-gh96j5t0.js:1708-2597 placement
 /**
  * 检测消息转发跳数失控、环路与重复，返回丢弃原因。
  */
@@ -164,7 +164,7 @@ function createHopGuard(options = {}, getPeerGuardLimits) {
     trackedSenderCount: () => senderStates.size,
   };
 }
-//@ chunk-66jn0ssz.js:2598-2685 placement
+//@ chunk-gh96j5t0.js:2597-2684 placement
 var PEER_DROP_REASONS = {
   "rate-limited": true,
   duplicate: true,
@@ -172,18 +172,18 @@ var PEER_DROP_REASONS = {
   "hop-runaway": true,
   "queue-full": true,
 };
-//@ chunk-66jn0ssz.js:2685-2748 placement
+//@ chunk-gh96j5t0.js:2684-2747 placement
 function peerDropReasonOf(reason) {
   return typeof reason === "string" && Object.hasOwn(PEER_DROP_REASONS, reason);
 }
-//@ chunk-66jn0ssz.js:2748-2786 placement
+//@ chunk-gh96j5t0.js:2747-2785 placement
 /**
  * 规范化丢弃原因，未知返回 undefined。
  */
 function normalizePeerDropReason(reason) {
   return peerDropReasonOf(reason) ? reason : undefined;
 }
-//@ chunk-66jn0ssz.js:2786-2819 placement
+//@ chunk-gh96j5t0.js:2785-2818 placement
 /**
  * 对等方丢弃日志的上限常量组（待决 id、间隔、条目、抑制数）。
  */
@@ -191,21 +191,21 @@ var MAX_PENDING_DROP_IDS = 256;
 var DROP_LOG_INTERVAL_MS = 60000;
 var MAX_DROP_LOG_ENTRIES = 256;
 var MAX_SUPPRESSED_DROPS = 20;
-//@ chunk-66jn0ssz.js:2819-2888 placement
+//@ chunk-gh96j5t0.js:2818-2887 placement
 /**
  * 设置本会话的 UDS 跳数令牌。
  */
 function setOwnUdsHopToken(token) {
   swarmHostState().ingress.ownUdsHopToken = token === undefined ? undefined : hmacRandomId(token);
 }
-//@ chunk-66jn0ssz.js:2888-2948 placement
+//@ chunk-gh96j5t0.js:2887-2947 placement
 /**
  * 设置桥接对等地址解析器。
  */
 function setOwnBridgePeerResolver(ownBridgePeerAddressResolver) {
   swarmHostState().ingress.ownBridgePeerAddressResolver = ownBridgePeerAddressResolver;
 }
-//@ chunk-66jn0ssz.js:2948-3129 placement
+//@ chunk-gh96j5t0.js:2947-3128 placement
 /**
  * 本会话自己的跳数令牌集合。
  */
@@ -219,7 +219,7 @@ function ownHopTokens() {
   if (remoteSessionId) tokens.add(hmacRandomId(bridgeAddressFromToken(remoteSessionId)));
   return tokens;
 }
-//@ chunk-66jn0ssz.js:3129-3487 placement
+//@ chunk-gh96j5t0.js:3128-3486 placement
 /**
  * 对等会话消息被丢弃的原因说明表：超速、重复、转发环路、转发链过长、待投递队列已满。
  */
@@ -230,11 +230,11 @@ var PEER_MESSAGE_DROP_REASONS = {
   "hop-runaway": "peer relay chain is too long (runaway forwarding)",
   "queue-full": "this session has too many undelivered peer messages queued",
 };
-//@ chunk-66jn0ssz.js:3810-3835 placement
+//@ chunk-gh96j5t0.js:3809-3834 placement
 var MAX_DROP_TRAIL = 500;
 var DEFAULT_DROP_TRAIL_MS = 5000;
 var MAX_IMMEDIATE_DROP_LOGS = 40;
-//@ chunk-66jn0ssz.js:3835-4028 placement
+//@ chunk-gh96j5t0.js:3834-4027 placement
 function flushDropLog(state, canLog) {
   if (state.timer !== undefined) {
     clearTimeout(state.timer);
@@ -246,7 +246,7 @@ function flushDropLog(state, canLog) {
   state.pendingSend = undefined;
   if (pending > 0 && pendingSend && canLog()) return pendingSend(pendingIds);
 }
-//@ chunk-66jn0ssz.js:4028-5756 placement
+//@ chunk-gh96j5t0.js:4027-5755 placement
 /**
  * 汇总并节流 [peer-guard] 丢弃日志。
  */
@@ -372,7 +372,7 @@ function createPeerDropLogger({ trailMs = DEFAULT_DROP_TRAIL_MS } = {}) {
     dispose,
   };
 }
-//@ chunk-66jn0ssz.js:5756-6298 placement
+//@ chunk-gh96j5t0.js:5755-6297 placement
 /**
  * 对等方消息丢弃日志上限与默认守卫限制、限制校验 schema 与刷新间隔。
  */
@@ -381,7 +381,7 @@ var DEFAULT_PEER_GUARD_LIMITS;
 var peerGuardLimitsFallback;
 var peerGuardLimitsSchema;
 var PEER_GUARD_LIMITS_REFRESH_MS;
-deferInit("chunk-66jn0ssz.js:5756", () => {
+deferInit("chunk-gh96j5t0.js:5755", () => {
   PEER_DROP_LOG_LIMIT = 50;
   DEFAULT_PEER_GUARD_LIMITS = {
     ...DEFAULT_PEER_GUARD_LIMITS_2,
@@ -417,7 +417,7 @@ deferInit("chunk-66jn0ssz.js:5756", () => {
   );
   PEER_GUARD_LIMITS_REFRESH_MS = 300000;
 });
-//@ chunk-66jn0ssz.js:6298-6503 placement
+//@ chunk-gh96j5t0.js:6297-6502 placement
 /**
  * tengu_harbor_kite_limits 防护限额（格式错误用默认）。
  */
@@ -436,13 +436,13 @@ function getPeerGuardLimits() {
   }
   return featureValue.data;
 }
-//@ chunk-66jn0ssz.js:6503-6528 placement
+//@ chunk-gh96j5t0.js:6502-6527 placement
 var LONG_HEX_RE = /[0-9a-f]{32,}/gi;
-//@ chunk-66jn0ssz.js:6528-6586 placement
+//@ chunk-gh96j5t0.js:6527-6585 placement
 function redactLongHex(text) {
   return text.replace(LONG_HEX_RE, (hex) => `<hex:${shortHash(hex)}>`);
 }
-//@ chunk-66jn0ssz.js:6586-6665 placement
+//@ chunk-gh96j5t0.js:6585-6664 placement
 /**
  * 日志用片段：含 token 时整体扣留，否则脱敏截断。
  */
@@ -450,7 +450,7 @@ function fragmentForLog(text, max = 120) {
   if (/token/i.test(text)) return "(withheld)";
   return truncateCodePoints(redactLongHex(text), max);
 }
-//@ chunk-66jn0ssz.js:6665-6774 placement
+//@ chunk-gh96j5t0.js:6664-6773 placement
 /**
  * 日志用片段（含 token 时脱敏，截断 200）。
  */
@@ -458,7 +458,7 @@ function redactFragmentForLog(text) {
   if (/token/i.test(text)) return "(redacted: fragment may carry an auth token)";
   return truncateCodePoints(redactLongHex(text), 200);
 }
-//@ chunk-66jn0ssz.js:6774-7002 placement
+//@ chunk-gh96j5t0.js:6773-7001 placement
 /**
  * 套接字对端 uid（Windows 或失败时 null）。
  */
@@ -478,7 +478,7 @@ function getPeerUid(socket) {
     return null;
   }
 }
-//@ chunk-66jn0ssz.js:7002-7312 placement
+//@ chunk-gh96j5t0.js:7001-7311 placement
 function describeUidMismatch(socket, getPeerUid_2 = getPeerUid) {
   let uid = process.getuid?.();
   if (uid == null) return null;
@@ -491,7 +491,7 @@ function describeUidMismatch(socket, getPeerUid_2 = getPeerUid) {
   });
   return reason;
 }
-//@ chunk-66jn0ssz.js:7312-7628 placement
+//@ chunk-gh96j5t0.js:7311-7627 placement
 function getPeerPid(socket) {
   if (getPlatform() === "windows") return;
   let fd = socketFdOf(socket);
@@ -512,17 +512,17 @@ function getPeerPid(socket) {
     return;
   }
 }
-//@ chunk-66jn0ssz.js:7628-7698 placement
+//@ chunk-gh96j5t0.js:7627-7697 placement
 function socketFdOf(socket) {
   let _handle = socket._handle;
   return typeof _handle?.fd === "number" ? _handle.fd : -1;
 }
-//@ chunk-66jn0ssz.js:7862-7878 placement
+//@ chunk-gh96j5t0.js:7861-7877 placement
 /**
  * 单条对等消息大小上限（1 MiB）。
  */
 var MAX_PEER_MESSAGE_BYTES = 1048576;
-//@ chunk-66jn0ssz.js:7878-8790 placement
+//@ chunk-gh96j5t0.js:7877-8789 placement
 /**
  * 按目标收件箱的令牌桶限速。
  */
@@ -595,11 +595,11 @@ function createInboxRateLimiter(getPeerGuardLimits, now = Date.now) {
     debit,
   };
 }
-//@ chunk-66jn0ssz.js:8790-8850 placement
+//@ chunk-gh96j5t0.js:8789-8849 placement
 var NO_LIVE_INBOX = "no_live_inbox";
 var ENOINBOX = "ENOINBOX";
 var MESSAGE_TOO_LARGE = "message_too_large";
-//@ chunk-66jn0ssz.js:8850-9241 placement
+//@ chunk-gh96j5t0.js:8849-9240 placement
 function describeMessageTooLarge(a, b) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
     `Message too large for cross-session delivery: the serialized message is ${a.toLocaleString("en-US")} characters and the limit is ${b.toLocaleString("en-US")}. Shorten the message text \u2014 put bulk content in a file the recipient can read rather than in the message \u2014 or split it into smaller messages.`,
@@ -607,7 +607,7 @@ function describeMessageTooLarge(a, b) {
     MESSAGE_TOO_LARGE,
   );
 }
-//@ chunk-66jn0ssz.js:9241-9298 placement
+//@ chunk-gh96j5t0.js:9240-9297 placement
 /**
  * 是否是消息过大错误。
  */
@@ -617,9 +617,9 @@ function isMessageTooLargeError(error) {
     error.errorClass === MESSAGE_TOO_LARGE
   );
 }
-//@ chunk-66jn0ssz.js:9298-9320 placement
+//@ chunk-gh96j5t0.js:9297-9319 placement
 var SENDER_PACED = "sender_paced";
-//@ chunk-66jn0ssz.js:9320-9634 placement
+//@ chunk-gh96j5t0.js:9319-9633 placement
 function describeSenderPaced(sentInBurst) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
     `Too many messages to this session just now: ${sentInBurst} were sent recently and more would be dropped by its rate limit, so this one was not sent. Batch what remains into one message, or wait a little before sending more.`,
@@ -627,7 +627,7 @@ function describeSenderPaced(sentInBurst) {
     SENDER_PACED,
   );
 }
-//@ chunk-66jn0ssz.js:9634-9691 placement
+//@ chunk-gh96j5t0.js:9633-9690 placement
 /**
  * 是否是发送方限速错误。
  */
@@ -637,7 +637,7 @@ function isSenderPacedError(error) {
     error.errorClass === SENDER_PACED
   );
 }
-//@ chunk-66jn0ssz.js:9691-9793 placement
+//@ chunk-gh96j5t0.js:9690-9792 placement
 /**
  * 收件箱已不存在（ENOENT/ECONNREFUSED/无存活收件箱）。
  */
@@ -650,9 +650,9 @@ function isInboxGoneError(error) {
       error.errorClass === NO_LIVE_INBOX)
   );
 }
-//@ chunk-66jn0ssz.js:9793-9934 placement
+//@ chunk-gh96j5t0.js:9792-9933 placement
 let NoLiveInboxError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-66jn0ssz.js:9793", () => {
+deferInit("chunk-gh96j5t0.js:9792", () => {
   NoLiveInboxError = class NoLiveInboxError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -664,14 +664,14 @@ deferInit("chunk-66jn0ssz.js:9793", () => {
     }
   };
 });
-//@ chunk-66jn0ssz.js:9934-9993 placement
+//@ chunk-gh96j5t0.js:9933-9992 placement
 /**
  * 是否是「收件箱不可用」错误。
  */
 function isUnusableInboxError(error) {
   return error instanceof NoLiveInboxError && error.kind === "unusable";
 }
-//@ chunk-66jn0ssz.js:9993-10114 placement
+//@ chunk-gh96j5t0.js:9992-10113 placement
 /**
  * 发送失败归类 busy/gone/other。
  */
@@ -681,14 +681,14 @@ function classifyPeerSendError(error) {
   let errnoCode = getErrnoCode(error);
   return errnoCode === "EBUSY" || errnoCode === "EAGAIN" ? "busy" : "other";
 }
-//@ chunk-66jn0ssz.js:10114-10251 placement
+//@ chunk-gh96j5t0.js:10113-10250 placement
 /**
  * 套接字路径过期的提示。
  */
 function staleSocketHint(text) {
   return ` \u2014 the peer process may have restarted, so this socket path is stale. Call ${text} to get the current address.`;
 }
-//@ chunk-66jn0ssz.js:10251-10488 placement
+//@ chunk-gh96j5t0.js:10250-10487 placement
 /**
  * 管道忙与注册表暂不可读的提示。
  */
@@ -696,14 +696,14 @@ var PIPE_BUSY_HINT =
   " \u2014 the peer is alive but its pipe is momentarily busy. Retry the same address shortly.";
 var REGISTRY_UNREADABLE_HINT =
   " \u2014 this machine's session registry could not be read just now (a transient local condition). Retry the same address shortly.";
-//@ chunk-66jn0ssz.js:10488-10525 placement
+//@ chunk-gh96j5t0.js:10487-10524 placement
 /**
  * 收件箱失败时的提示文案。
  */
 function inboxFailureHint(error) {
   return isUnusableInboxError(error) ? REGISTRY_UNREADABLE_HINT : PIPE_BUSY_HINT;
 }
-//@ chunk-66jn0ssz.js:10525-10631 placement
+//@ chunk-gh96j5t0.js:10524-10630 placement
 class UdsSendRefusedError extends Error {
   refusal;
   constructor(refusal, message) {
@@ -712,7 +712,7 @@ class UdsSendRefusedError extends Error {
     this.refusal = refusal;
   }
 }
-//@ chunk-66jn0ssz.js:10631-10757 placement
+//@ chunk-gh96j5t0.js:10630-10756 placement
 /**
  * 预期内的发送错误（拒绝、已离开、忙、无权限等）。
  */
@@ -727,7 +727,7 @@ function isExpectedSendError(error) {
   let errnoCode = getErrnoCode(error);
   return errnoCode === "EBUSY" || errnoCode === "EAGAIN" || errnoCode === "EACCES";
 }
-//@ chunk-66jn0ssz.js:10757-10918 placement
+//@ chunk-gh96j5t0.js:10756-10917 placement
 function isFormerNameEntry(entry) {
   if (typeof entry !== "object" || entry === null) return false;
   let { name, until, sessionId } = entry;
@@ -737,7 +737,7 @@ function isFormerNameEntry(entry) {
     (sessionId === undefined || typeof sessionId === "string")
   );
 }
-//@ chunk-66jn0ssz.js:10918-11095 placement
+//@ chunk-gh96j5t0.js:10917-11092 placement
 function sanitizeFormerNames(formerNames) {
   if (!Array.isArray(formerNames)) return [];
   return formerNames
@@ -751,35 +751,29 @@ function sanitizeFormerNames(formerNames) {
       }),
     }));
 }
-//@ chunk-66jn0ssz.js:11095-11146 placement
+//@ chunk-gh96j5t0.js:11092-11143 placement
 function outboundPacer() {
   return (swarmHostState().outbound.pacer ??= createInboxRateLimiter(getPeerGuardLimits));
 }
-//@ chunk-66jn0ssz.js:11146-11175 placement
+//@ chunk-gh96j5t0.js:11143-11172 placement
 var PACER_PASSED = {
   ok: true,
   refund: () => {},
 };
-//@ chunk-66jn0ssz.js:11175-11282 placement
+//@ chunk-gh96j5t0.js:11172-11279 placement
 function isPacingEnabled() {
   if (env.CLAUDE_CODE_HARBOR_KITE_PACING_OFF) return false;
   return !getFeatureValue_CACHED_MAY_BE_STALE("tengu_harbor_kite_pacing_off", false);
 }
 export {
-  PEER_MESSAGE_DROP_REASONS,
-  MAX_PENDING_DROP_IDS,
+  setOwnBridgePeerResolver,
   fragmentForLog,
-  redactFragmentForLog,
-  normalizePeerDropReason,
-  getPeerPid,
-  MAX_PEER_MESSAGE_BYTES,
-  setOwnUdsHopToken,
   createHopGuard,
   getPeerGuardLimits,
   createPeerDropLogger,
   ownHopTokens,
+  redactFragmentForLog,
   isExpectedSendError,
-  setOwnBridgePeerResolver,
   DEFAULT_PEER_GUARD_LIMITS_2,
   classifyPeerSendError,
   isMessageTooLargeError,
@@ -788,16 +782,22 @@ export {
   staleSocketHint,
   inboxFailureHint,
   isUnusableInboxError,
+  PEER_MESSAGE_DROP_REASONS,
+  isInboxGoneError,
+  PIPE_BUSY_HINT,
   isPacingEnabled,
   outboundPacer,
   PACER_PASSED,
   describeSenderPaced,
+  MAX_PEER_MESSAGE_BYTES,
   describeMessageTooLarge,
   NoLiveInboxError,
   ENOINBOX,
+  getPeerPid,
   getPeerUid,
   sanitizeFormerNames,
-  isInboxGoneError,
-  PIPE_BUSY_HINT,
+  MAX_PENDING_DROP_IDS,
+  normalizePeerDropReason,
+  setOwnUdsHopToken,
   describeUidMismatch,
 };

@@ -1,17 +1,17 @@
 /**
  * @anthropic-ai/sdk/resources/beta/webhooks.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (2)
+ * pieces: chunk-vn3g7zt8.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { __toESM } from "../../../../../runtime/bun-runtime.js";
 import { require_standardwebhooks } from "../../../../standardwebhooks/dist/index.js";
 import { APIResource } from "../../core/resource.mjs";
 
-//@ chunk-hwmsct5x.js:53298-53316 esm-layout
+//@ chunk-vn3g7zt8.js:53669-53687 esm-layout
 var import_standardwebhooks = __toESM(require_standardwebhooks(), 1);
-//@ chunk-hwmsct5x.js:53316-53673 esm-fingerprint
+//@ chunk-vn3g7zt8.js:53687-54044 esm-fingerprint
 class Webhooks extends APIResource {
   parseUnverified(body) {
     return JSON.parse(body);

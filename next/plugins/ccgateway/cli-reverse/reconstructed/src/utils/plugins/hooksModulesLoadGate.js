@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。等待组织 hooks 模块加载。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7kt7c7a3.js (27)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-v7jmb7se.js (27)
  * attribution: placement 27
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
@@ -50,7 +50,7 @@ import {
 import { sleep, withDeadline } from "../sleep.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-7kt7c7a3.js:7799-7914 placement
+//@ chunk-v7jmb7se.js:7832-7947 placement
 class ForegroundTurnState {
   busy = false;
   running = null;
@@ -61,16 +61,16 @@ class ForegroundTurnState {
   endWaiters = new Set();
   valveTimer = null;
 }
-//@ chunk-7kt7c7a3.js:7914-7940 placement
+//@ chunk-v7jmb7se.js:7947-7973 placement
 var foregroundTurnSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-7kt7c7a3.js:7914", () => {
+deferInit("chunk-v7jmb7se.js:7947", () => {
   foregroundTurnSlot = new SessionRootSlot(() => new ForegroundTurnState());
 });
-//@ chunk-7kt7c7a3.js:7940-7971 placement
+//@ chunk-v7jmb7se.js:7973-8004 placement
 function foregroundTurnState() {
   return foregroundTurnSlot.of(getRootSession());
 }
-//@ chunk-7kt7c7a3.js:7971-8107 placement
+//@ chunk-v7jmb7se.js:8004-8140 placement
 function releaseIdleWaiters(state) {
   if (state.valveTimer !== null) {
     clearTimeout(state.valveTimer);
@@ -80,11 +80,11 @@ function releaseIdleWaiters(state) {
   state.idleWaiters.clear();
   scheduleMicrotasks(waiters);
 }
-//@ chunk-7kt7c7a3.js:8107-8155 placement
+//@ chunk-v7jmb7se.js:8140-8188 placement
 function scheduleMicrotasks(waiters) {
   for (let waiter of waiters) queueMicrotask(waiter);
 }
-//@ chunk-7kt7c7a3.js:8155-8424 placement
+//@ chunk-v7jmb7se.js:8188-8457 placement
 /**
  * 标记前台回合开始或结束：key 不匹配或状态未变时忽略；从忙变闲时唤醒空闲与结束等待者，并记录 running/key/busySince/edgeAt。
  */
@@ -103,21 +103,21 @@ function setForegroundTurnBusy(busy, key = null) {
   state.busySince = busy ? performance.now() : 0;
   state.edgeAt = Date.now();
 }
-//@ chunk-7kt7c7a3.js:8424-8455 placement
+//@ chunk-v7jmb7se.js:8457-8488 placement
 /**
  * isForegroundBusy：前台是否忙碌。
  */
 function isForegroundBusy() {
   return foregroundTurnState().busy;
 }
-//@ chunk-7kt7c7a3.js:8455-8489 placement
+//@ chunk-v7jmb7se.js:8488-8522 placement
 /**
  * isForegroundRunning：前台是否在跑回合。
  */
 function isForegroundRunning() {
   return foregroundTurnState().running;
 }
-//@ chunk-7kt7c7a3.js:8489-8568 placement
+//@ chunk-v7jmb7se.js:8522-8601 placement
 /**
  * runWhenTurnEnds：回合结束时执行。
  */
@@ -126,14 +126,14 @@ function runWhenTurnEnds(callback) {
   if (state.busy) state.endWaiters.add(callback);
   else queueMicrotask(callback);
 }
-//@ chunk-7kt7c7a3.js:8568-8601 placement
+//@ chunk-v7jmb7se.js:8601-8634 placement
 /**
  * foregroundEdgeAt：前台状态切换时间。
  */
 function foregroundEdgeAt() {
   return foregroundTurnState().edgeAt;
 }
-//@ chunk-7kt7c7a3.js:8601-8682 placement
+//@ chunk-v7jmb7se.js:8634-8715 placement
 /**
  * isBusyShorterThan：忙碌时间短于阈值。
  */
@@ -141,7 +141,7 @@ function isBusyShorterThan(now = performance.now(), autoReactRateLimit = BUSY_ED
   let state = foregroundTurnState();
   return state.busy && now - state.busySince < autoReactRateLimit;
 }
-//@ chunk-7kt7c7a3.js:8682-8764 placement
+//@ chunk-v7jmb7se.js:8715-8797 placement
 /**
  * isBusyAtLeast：忙碌时间达到阈值。
  */
@@ -149,7 +149,7 @@ function isBusyAtLeast(now = performance.now(), autoReactRateLimit = BUSY_EDGE_T
   let state = foregroundTurnState();
   return state.busy && now - state.busySince >= autoReactRateLimit;
 }
-//@ chunk-7kt7c7a3.js:8764-9217 placement
+//@ chunk-v7jmb7se.js:8797-9250 placement
 /**
  * 前台空闲或忙碌超过阀门时长时立刻（微任务）执行 o；否则登记为空闲等待者并启动阀门定时器。返回取消函数，abort 时自动取消。
  */
@@ -181,7 +181,7 @@ function runWhenForegroundIdle(callback, signal, autoReactRateLimit = BUSY_EDGE_
   }
   return cancel;
 }
-//@ chunk-7kt7c7a3.js:9217-9410 placement
+//@ chunk-v7jmb7se.js:9250-9443 placement
 /**
  * GrowthBook 刷新后开关变化时（等前台空闲）触发重载。
  */
@@ -205,7 +205,7 @@ function watchRolloutSwitchChanges(onChange) {
     unsubscribe();
   };
 }
-//@ chunk-7kt7c7a3.js:9410-9826 placement
+//@ chunk-v7jmb7se.js:9443-9859 placement
 /**
  * 唤醒边界为 ahead、已读开关且无进行中的跟随时：等待组织设置与 rollout 标志后跟随 rollout 或结算唤醒；结果 Promise 共享，结束清空。
  */
@@ -237,7 +237,7 @@ function followRolloutSwitchOnce(follow, standDown, standDown_2) {
   pluginRegistry.hooksModulesSwitchFollowing = followPass;
   return followPass;
 }
-//@ chunk-7kt7c7a3.js:9826-9903 placement
+//@ chunk-v7jmb7se.js:9859-9936 placement
 /**
  * hooksModulesGateFromPayload：开关来源为 payload 或已有新特性。
  */
@@ -252,14 +252,14 @@ function hooksModulesGateFromPayload() {
     return false;
   }
 }
-//@ chunk-7kt7c7a3.js:9903-9932 placement
+//@ chunk-v7jmb7se.js:9936-9965 placement
 /**
  * hooksModulesGateSourceChanged：开关读取来源已变化。
  */
 var hooksModulesGateSourceChanged = () =>
   resolveHooksModulesValue() !==
   getFeatureValue_CACHED_MAY_BE_STALE(PLUGIN_HOOKS_MODULES_GATE, HOOKS_MODULES_DEFAULT);
-//@ chunk-7kt7c7a3.js:9932-10418 placement
+//@ chunk-v7jmb7se.js:9965-10451 placement
 /**
  * 仅在 isManagedPending 时处理：集合未知、加载有错或有未满足插件时记日志保持欠载；否则按 isDecided 更新或清除开关读取状态。
  */
@@ -280,13 +280,13 @@ function settleManagedModulesLoad(outcome) {
     : undefined;
   return true;
 }
-//@ chunk-7kt7c7a3.js:10418-10500 placement
+//@ chunk-v7jmb7se.js:10451-10533 placement
 /**
  * ORGANIZATION_MODS_UNLOADED_MESSAGE：组织 mods 未能加载时的说明。
  */
 var ORGANIZATION_MODS_UNLOADED_MESSAGE =
   "Your organization's mods could not be loaded, so this turn was not run.";
-//@ chunk-7kt7c7a3.js:10500-11539 placement
+//@ chunk-v7jmb7se.js:10533-11572 placement
 async function waitForOrganizationMods(evaluate, endSignal, timeoutMs, isDeadEnd) {
   let pluginRegistry = getPluginRegistry();
   let sessionState = {
@@ -362,11 +362,11 @@ async function waitForOrganizationMods(evaluate, endSignal, timeoutMs, isDeadEnd
     unsubscribeStatus();
   }
 }
-//@ chunk-7kt7c7a3.js:11539-11553 placement
+//@ chunk-v7jmb7se.js:11572-11586 placement
 var ORGANIZATION_POLICY_LOAD_TIMEOUT_MS = 300000;
-//@ chunk-7kt7c7a3.js:11553-11608 placement
+//@ chunk-v7jmb7se.js:11586-11641 placement
 var ORGANIZATION_MODS_WAITING_MESSAGE = "Waiting for your organization's mods to load.";
-//@ chunk-7kt7c7a3.js:11608-11942 placement
+//@ chunk-v7jmb7se.js:11641-11975 placement
 /**
  * 按加载状态去重执行组织状态加载。
  */
@@ -388,13 +388,13 @@ function runOrganizationStatusLoadOnce(reload, force) {
   pass.then(clearIfCurrent, clearIfCurrent);
   return pass;
 }
-//@ chunk-7kt7c7a3.js:11942-12033 placement
+//@ chunk-v7jmb7se.js:11975-12066 placement
 /**
  * ORGANIZATION_POLICY_UNREADABLE_MESSAGE：组织策略无法读取时的说明。
  */
 var ORGANIZATION_POLICY_UNREADABLE_MESSAGE =
   "Your organization's policy could not be read, so this session cannot run a turn.";
-//@ chunk-7kt7c7a3.js:12033-12549 placement
+//@ chunk-v7jmb7se.js:12066-12582 placement
 /**
  * 组织模块仍待加载时：先提示，再等待组织 mods（必要时重读开关），超时则按截止时间重载； 返回 {kind:"start"}（已不再等待）、{kind:"ended"}（回合已结束）或 {kind:"failed", message}。
  */
@@ -459,7 +459,7 @@ function waitForOrganizationModsOnClaim(reload, tell, standDown, endSignal, isDe
           };
     });
 }
-//@ chunk-7kt7c7a3.js:12549-12713 placement
+//@ chunk-v7jmb7se.js:12582-12746 placement
 /**
  * 启动时初始化开关读取状态为待加载。
  */
@@ -474,7 +474,7 @@ function initManagedModulesPending() {
       isPersonsOut: false,
     };
 }
-//@ chunk-7kt7c7a3.js:12713-12774 placement
+//@ chunk-v7jmb7se.js:12746-12807 placement
 function canRunTurnWithHooksModules() {
   try {
     return hooksModulesRefusalReason() === undefined && isAutoModeGateOpen();
@@ -483,22 +483,22 @@ function canRunTurnWithHooksModules() {
   }
 }
 export {
-  hooksModulesGateSourceChanged,
-  setForegroundTurnBusy,
-  isForegroundBusy,
-  runWhenForegroundIdle,
-  isBusyShorterThan,
-  isBusyAtLeast,
-  foregroundEdgeAt,
   hooksModulesGateFromPayload,
-  settleManagedModulesLoad,
-  watchRolloutSwitchChanges,
-  followRolloutSwitchOnce,
-  isForegroundRunning,
-  runWhenTurnEnds,
-  initManagedModulesPending,
   runOrganizationStatusLoadOnce,
   ORGANIZATION_POLICY_UNREADABLE_MESSAGE,
   ORGANIZATION_MODS_UNLOADED_MESSAGE,
   waitForOrganizationModsOnClaim,
+  setForegroundTurnBusy,
+  settleManagedModulesLoad,
+  watchRolloutSwitchChanges,
+  followRolloutSwitchOnce,
+  isForegroundBusy,
+  initManagedModulesPending,
+  runWhenForegroundIdle,
+  isBusyShorterThan,
+  isBusyAtLeast,
+  hooksModulesGateSourceChanged,
+  isForegroundRunning,
+  runWhenTurnEnds,
+  foregroundEdgeAt,
 };

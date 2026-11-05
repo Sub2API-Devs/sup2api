@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：工具状态标签。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ncs6vc5k.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ayzmbaz1.js (2)
  * attribution: placement 2
  */
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { MessageResponse } from "./MessageResponse.js";
 import { Text } from "../ink/components/Text.js";
 
-//@ chunk-ncs6vc5k.js:297-389 placement
+//@ chunk-ayzmbaz1.js:297-389 placement
 /**
  * 函数 WaitingLabel（"Waiting…"）。
  */
@@ -25,7 +25,7 @@ function WaitingLabel() {
     }),
   });
 }
-//@ chunk-ncs6vc5k.js:389-481 placement
+//@ chunk-ayzmbaz1.js:389-481 placement
 /**
  * 函数 RunningLabel（"Running…"）。
  */
@@ -38,4 +38,4 @@ function RunningLabel() {
     }),
   });
 }
-export { RunningLabel, WaitingLabel };
+export { WaitingLabel, RunningLabel };

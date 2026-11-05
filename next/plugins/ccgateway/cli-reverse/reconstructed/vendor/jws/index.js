@@ -1,15 +1,15 @@
 /**
  * jws/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jws@3.2.3..4.0.1
- * pieces: chunk-82d8c88w.js (1)
+ * pieces: chunk-ww3dkdtg.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_sign_stream } from "./lib/sign-stream.js";
 import { require_verify_stream } from "./lib/verify-stream.js";
 
-//@ chunk-82d8c88w.js:10995-11321 cjs-fingerprint
+//@ chunk-ww3dkdtg.js:10995-11321 cjs-fingerprint
 var require_jws = __commonJS(function (cjsExports) {
   var SignStream = require_sign_stream();
   var VerifyStream = require_verify_stream();

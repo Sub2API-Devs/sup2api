@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程工具路由：决定调用在本机还是远程机器执行、主机在线状态与设备桥通告
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dtv8x2hx.js (27)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-3tymqgex.js (16), chunk-yvhjwwtt.js (11)
  * attribution: placement 27
  */
 import { BridgeToolProvider } from "../../bridge/bridgePermissionResponse.js";
@@ -51,7 +51,7 @@ import {
   notContactedMessage,
 } from "./targetMessages.js";
 import { ToolHostRegistry } from "../../remote/tools/toolHostRegistry.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { waitingToReconnectStatus, waitedToReconnectNote } from "./transportMessages.js";
 import {
@@ -107,7 +107,7 @@ import { getToolCallOutcomeCode } from "../../utils/permissions/yoloClassifier.j
 import { buildNoPromptAvailableDenial } from "../../utils/messages.js";
 import { logError } from "../../utils/log.js";
 
-//@ chunk-dtv8x2hx.js:68603-68891 placement
+//@ chunk-3tymqgex.js:876-1162 placement
 async function routeRemoteToolCall(tool, input, toolUseContext, options) {
   if (getToolNameForPermissionCheck(tool)) return routeToolUse(tool, input, toolUseContext, options);
   let machineName = toolUseContext.toolState.get(BridgeToolProvider).machineFor(tool);
@@ -126,7 +126,7 @@ async function routeRemoteToolCall(tool, input, toolUseContext, options) {
       }
     : routeToolCall(tool, requested, input_2, toolUseContext, options);
 }
-//@ chunk-dtv8x2hx.js:68891-70012 placement
+//@ chunk-3tymqgex.js:1162-2277 placement
 async function resolveHostForCall(tool, input, machineName, toolUseContext, options) {
   if (!(await isRemoteToolForwardingEnabled()))
     return {
@@ -222,9 +222,9 @@ async function resolveHostForCall(tool, input, machineName, toolUseContext, opti
       return result;
   }
 }
-//@ chunk-dtv8x2hx.js:70012-70188 placement
+//@ chunk-3tymqgex.js:2277-2452 placement
 function describeHostState(toolUseContext, name) {
-  return uniq(
+  return normalizeCaseForComparison_2(
     toolUseContext.toolState
       .get(ToolHostRegistry)
       .hosts()
@@ -238,7 +238,7 @@ function describeHostState(toolUseContext, name) {
       ),
   );
 }
-//@ chunk-dtv8x2hx.js:70188-70426 placement
+//@ chunk-3tymqgex.js:2452-2689 placement
 function formatHostLabel(toolUseContext, name, excludeName) {
   let flattened = toolUseContext.toolState
     .get(ToolHostRegistry)
@@ -250,7 +250,7 @@ function formatHostLabel(toolUseContext, name, excludeName) {
     host.status === "offline" ? `${host.name} (offline)` : host.name,
   );
 }
-//@ chunk-dtv8x2hx.js:70426-72924 placement
+//@ chunk-3tymqgex.js:2689-5177 placement
 /**
  * 按工具状态与主机可用性决定 local/remote/error（unknown_host、gate_off 等）。
  */
@@ -427,11 +427,11 @@ async function routeToolCall(tool, requestedName, input, toolUseContext, options
     }
   }
 }
-//@ chunk-dtv8x2hx.js:72924-72973 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
+//@ chunk-3tymqgex.js:5177-5227 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function getToolNameForPermissionCheck(tool) {
   return tool.mcpInfo?.serverName === REMOTE_DEVICES;
 }
-//@ chunk-dtv8x2hx.js:72973-73209 placement
+//@ chunk-3tymqgex.js:5227-5462 placement
 function isSessionOrBridgeHost(registry, machineName, tool) {
   let toolName = tool.mcpInfo?.toolName;
   if (toolName === undefined) return;
@@ -439,7 +439,7 @@ function isSessionOrBridgeHost(registry, machineName, tool) {
   let matches = (host) => host.name === machineName && host.passthroughTools?.has(toolName) === true;
   return registry.sourceHosts("session").find(matches) ?? registry.sourceHosts("bridge").find(matches);
 }
-//@ chunk-dtv8x2hx.js:73209-75600 placement
+//@ chunk-3tymqgex.js:5462-7846 placement
 /**
  * 为一次工具调用选择执行机器（已有远程调用直接本地；机器未服务时报 not_served）。
  */
@@ -623,20 +623,20 @@ async function routeToolUse(tool, input, toolUseContext, options) {
         }),
       };
 }
-//@ chunk-dtv8x2hx.js:75600-75688 placement
+//@ chunk-3tymqgex.js:7846-7933 placement
 function hostToolOffline(toolState, name) {
   return toolState
     .get(RemoteBackgroundCommands)
     .entries()
     .some((entry) => entry.name === name && entry.status === "offline");
 }
-//@ chunk-dtv8x2hx.js:75688-75794 placement
+//@ chunk-3tymqgex.js:7933-8038 placement
 function findBridgeOrSessionHost(registry) {
   return registry
     .hosts()
     .find((host) => host.kind === "remote" && (host.source === "bridge" || host.source === "session"));
 }
-//@ chunk-dtv8x2hx.js:75794-75876 placement
+//@ chunk-3tymqgex.js:8038-8119 placement
 /**
  * 规范化调用输入：去掉目标字段，若目标名是字符串则原样放回。
  */
@@ -650,7 +650,7 @@ function restoreTargetField(input) {
       }
     : rest;
 }
-//@ chunk-dtv8x2hx.js:75876-75974 placement
+//@ chunk-3tymqgex.js:8119-8216 placement
 /**
  * 列表暂时不可用且无远程主机时，是否仍需等待机器通告。
  */
@@ -661,7 +661,7 @@ function shouldAwaitAnnounce(provisional, registry, requestedName) {
     !registry.hosts().some((host) => host.kind === "remote")
   );
 }
-//@ chunk-dtv8x2hx.js:75974-76341 placement
+//@ chunk-3tymqgex.js:8216-8582 placement
 function describeHostAnnounced(wait) {
   switch (wait.kind) {
     case "announced":
@@ -676,7 +676,7 @@ function describeHostAnnounced(wait) {
       return "the turn was aborted while waiting";
   }
 }
-//@ chunk-dtv8x2hx.js:76341-76835 placement
+//@ chunk-3tymqgex.js:8582-9074 placement
 function waitForHostAnnouncement(
   provisional,
   registry,
@@ -714,7 +714,7 @@ function waitForHostAnnouncement(
     message: describeHostConnection(state, requestedName, wait, bridgeReached),
   };
 }
-//@ chunk-dtv8x2hx.js:76835-77114 placement
+//@ chunk-3tymqgex.js:9074-9352 placement
 function describeHostConnection(state, requestedName, wait, bridgeReached) {
   switch (state) {
     case "connecting":
@@ -735,17 +735,17 @@ function describeHostConnection(state, requestedName, wait, bridgeReached) {
           );
   }
 }
-//@ chunk-dtv8x2hx.js:77114-77219 placement
+//@ chunk-3tymqgex.js:9352-9456 placement
 async function refreshTargets(options, signal, registry) {
   await raceWithAbortSignal(options.refresh(registry), signal, () => new AbortError()).catch((error) => {
     if (!(error instanceof AbortError)) throw error;
   });
 }
-//@ chunk-dtv8x2hx.js:77219-77262 placement
+//@ chunk-yvhjwwtt.js:69840-69883 placement
 var STATUS_NOTIFICATION_TIMEOUT_MS = 9000;
 var NOTICE_NOTIFICATION_TIMEOUT_MS = 30000;
 var REMOTE_TOOL_HOST = "remote-tool-host";
-//@ chunk-dtv8x2hx.js:77262-77790 placement
+//@ chunk-yvhjwwtt.js:69883-70411 placement
 function buildHostAllowRules(tool, request) {
   let command = request.input.command;
   if (
@@ -785,7 +785,7 @@ function buildHostAllowRules(tool, request) {
         ],
       };
 }
-//@ chunk-dtv8x2hx.js:77790-77913 placement
+//@ chunk-yvhjwwtt.js:70411-70534 placement
 function withdrawnAskDecision(request) {
   return {
     decision: "unanswerable",
@@ -795,7 +795,7 @@ function withdrawnAskDecision(request) {
     }),
   };
 }
-//@ chunk-dtv8x2hx.js:77913-78106 placement
+//@ chunk-yvhjwwtt.js:70534-70729 placement
 /**
  * 创建远程工具提供器：判断工具能否远程执行，并提供路由、执行、取消、机器附件与纠正附件等入口。
  */
@@ -817,7 +817,7 @@ function createRemoteToolsProvider() {
     correctionAttachment: remoteToolTargetsAttachment,
   };
 }
-//@ chunk-dtv8x2hx.js:78106-78654 placement
+//@ chunk-yvhjwwtt.js:70729-71277 placement
 function resolveAfterReannounce(toolsContext, appState, onStatus) {
   let registry = toolsContext.toolState.get(ToolHostRegistry);
   let reason = "resolve";
@@ -851,7 +851,7 @@ function resolveAfterReannounce(toolsContext, appState, onStatus) {
     machineOffer: () => sessionChannelOffer(toolsContext),
   };
 }
-//@ chunk-dtv8x2hx.js:78654-78797 placement
+//@ chunk-yvhjwwtt.js:71277-71420 placement
 /**
  * 远程调用无结果结束时抛出。
  */
@@ -863,7 +863,7 @@ class RemoteToolCallEnded extends Error {
     this.name = "RemoteToolCallEnded";
   }
 }
-//@ chunk-dtv8x2hx.js:78797-80050 placement
+//@ chunk-yvhjwwtt.js:71420-72673 placement
 async function handleRemoteBackgroundCommand(
   tool,
   route,
@@ -962,7 +962,7 @@ async function handleRemoteBackgroundCommand(
           },
   };
 }
-//@ chunk-dtv8x2hx.js:80050-80397 placement
+//@ chunk-yvhjwwtt.js:72673-73021 placement
 function extractAllowedTools(tool, toolUseContext) {
   if (
     !getToolNameForPermissionCheck(tool) ||
@@ -989,7 +989,7 @@ function extractAllowedTools(tool, toolUseContext) {
     ],
   };
 }
-//@ chunk-dtv8x2hx.js:80397-80636 placement
+//@ chunk-yvhjwwtt.js:73021-73260 placement
 async function logRejectedInSession(
   tool,
   host,
@@ -1026,7 +1026,7 @@ async function logRejectedInSession(
     }
   );
 }
-//@ chunk-dtv8x2hx.js:80636-81335 placement
+//@ chunk-yvhjwwtt.js:73260-73959 placement
 async function formatPermissionDenied(tool, input, toolUseContext, canUseTool, assistantMessage, toolUseId) {
   let deniedText = `Permission to use ${tool.name} has been denied`;
   try {
@@ -1070,7 +1070,7 @@ async function formatPermissionDenied(tool, input, toolUseContext, canUseTool, a
     };
   }
 }
-//@ chunk-dtv8x2hx.js:81335-81407 placement
+//@ chunk-yvhjwwtt.js:73959-74031 placement
 /**
  * 用于「未联系到机器」提示的措辞：保证句子以标点结尾。
  */
@@ -1079,9 +1079,9 @@ function ensureSentenceEnd(words) {
   return /[.!?\u2026]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 }
 export {
+  getToolNameForPermissionCheck,
   withdrawnAskDecision,
   buildHostAllowRules,
-  getToolNameForPermissionCheck,
   REMOTE_TOOL_HOST,
   handleRemoteBackgroundCommand,
   STATUS_NOTIFICATION_TIMEOUT_MS,

@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增。tengu_violin_tip 开关（缓存值）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xdxvr4je.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0cm0xwwe.js (1)
  * attribution: placement 1
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "./growthbook.js";
 
-//@ chunk-xdxvr4je.js:226-298 placement
+//@ chunk-0cm0xwwe.js:226-298 placement
 /**
  * tengu_violin_tip 开关（缓存值）。
  */

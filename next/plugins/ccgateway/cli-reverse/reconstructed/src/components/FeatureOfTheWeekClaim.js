@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。“本周功能”赠送额度领取界面。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: placement 2
  */
 import { useAppState, useSetAppState } from "../state/AppState.js";
@@ -15,12 +15,12 @@ import { refreshPromoEligibility } from "../services/api/featureOfTheWeek.js";
 import { useTimeout } from "../ink/hooks/useTerminalHooks.js";
 import { formatCurrency } from "../services/api/referral.js";
 
-//@ chunk-18hwfzwa.js:1624816-1624895 placement
+//@ chunk-czq1j3j2.js:1668982-1669061 placement
 var FOTW_CLAIM_CLEAR_DELAY_MS = 30000;
 var FOTW_NOTIFICATION_TIMEOUT_MS = 60000;
 var HTTPS_CLAUDE_AI_SETTINGS_USAGE = "https://claude.ai/settings/usage";
 var FOTW_CLAIM = "fotw-claim";
-//@ chunk-18hwfzwa.js:1624895-1626009 placement
+//@ chunk-czq1j3j2.js:1669061-1670175 placement
 function FeatureOfTheWeekClaim(addNotification, removeNotification) {
   let claim = useAppState((state) => state.fotwClaim);
   let setAppState = useSetAppState();

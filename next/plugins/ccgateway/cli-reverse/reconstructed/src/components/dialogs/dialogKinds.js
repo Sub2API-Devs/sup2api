@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增。对话框种类定义（kind/payload/result/default）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (25)
- * attribution: placement 25
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (27)
+ * attribution: placement 24, layout 3
  */
 import { withHideWhile } from "./dialogRequests.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -26,6 +26,7 @@ import {
   NEWER_MODEL_OFFER as NEWER_MODEL_OFFER_2,
   AUTO_DEFAULT_NUDGE,
   EFFORT_MEDIUM_NUDGE,
+  PROGRAM_USE_CASE_QUESTION,
 } from "../nudges/nudgeIds.js";
 import { saveGlobalConfig } from "../../utils/config.js";
 import { logEvent } from "../../services/analytics/index.js";
@@ -72,22 +73,31 @@ import {
   CHROME_INSTALL_UPSELL_DIALOG,
   CHROME_INSTALL_SETUP_DIALOG,
 } from "../../utils/claudeInChrome/installUpsell.js";
+import {
+  DIALOG_KINDS_PLACEHOLDER,
+  workflowDialogKindsModule,
+  dialogKindsModuleA,
+  dialogKindsModuleB,
+  artifactsMcpEntryModule,
+  bridgeCoordinatorModule,
+  workflowPermissionDialog,
+} from "../../screens/repl/SessionController.js";
+import { init_react_production, useLayoutEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useDialogSelector } from "../../state/dialogQueue.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { selectIsEmpty } from "../../screens/repl/PromptDraft.js";
-import { useLayoutEffect, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { isVirtualPancakeEnabled } from "../../utils/permissions/permissionSetup.js";
 import { addPastedEntry } from "../../history.js";
 import { wrapUserTurnContent, escapePastedContentTag } from "../../utils/userTurnTags.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:529449-529890 placement
+//@ chunk-czq1j3j2.js:353377-353818 placement
 /**
  * auto-mode-setup flagged 对话框 spec：kind 为 auto_mode_setup_review 的变体，带通知文案。
  */
 var autoModeSetupReviewDialogDef; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var AUTO_MODE_SETUP_FLAGGED_DIALOG;
-deferInit("chunk-18hwfzwa.js:529449", () => {
+deferInit("chunk-czq1j3j2.js:353377", () => {
   autoModeSetupReviewDialogDef = withHideWhile({
     kind: "auto_mode_setup_review",
     payload: DoctorLazy(() =>
@@ -123,15 +133,15 @@ deferInit("chunk-18hwfzwa.js:529449", () => {
     default: "cancelled",
   });
 });
-//@ chunk-18hwfzwa.js:529890-529953 placement
+//@ chunk-czq1j3j2.js:353818-353881 placement
 var EMPTY_SANDBOX_FLAGS = {
   clipboardRead: false,
   clipboardWrite: false,
   systemKeyCombos: false,
 };
-//@ chunk-18hwfzwa.js:529953-530142 placement
+//@ chunk-czq1j3j2.js:353881-354070 placement
 var computerUseApprovalDialogDef; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:529953", () => {
+deferInit("chunk-czq1j3j2.js:353881", () => {
   computerUseApprovalDialogDef = withHideWhile({
     kind: "computer_use_approval",
     payload: DoctorLazy(() => custom((payload) => typeof payload === "object" && payload !== null)),
@@ -143,9 +153,9 @@ deferInit("chunk-18hwfzwa.js:529953", () => {
     },
   });
 });
-//@ chunk-18hwfzwa.js:530142-530251 placement
+//@ chunk-czq1j3j2.js:354070-354179 placement
 var costThresholdDialogDef; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:530142", () => {
+deferInit("chunk-czq1j3j2.js:354070", () => {
   costThresholdDialogDef = withHideWhile({
     kind: COST_THRESHOLD,
     payload: DoctorLazy(() => objectSchema({})),
@@ -153,7 +163,7 @@ deferInit("chunk-18hwfzwa.js:530142", () => {
     default: "cancelled",
   });
 });
-//@ chunk-18hwfzwa.js:530251-530408 placement
+//@ chunk-czq1j3j2.js:354179-354336 placement
 async function acknowledgeCostThreshold(requestDialog, storageV5) {
   if ((await requestDialog(costThresholdDialogDef, {})) === "cancelled") return;
   saveGlobalConfig(
@@ -165,32 +175,21 @@ async function acknowledgeCostThreshold(requestDialog, storageV5) {
   );
   logEvent("tengu_cost_threshold_acknowledged", {});
 }
-//@ chunk-18hwfzwa.js:530408-530585 placement
-var DIALOG_KINDS_PLACEHOLDER; // deferred: loads other modules while loading; runs once its import cycle is complete
-var workflowPermissionDialog;
-var workflowDialogKindsModule;
-var dialogKindsModuleA;
-var dialogKindsModuleB;
-deferInit("chunk-18hwfzwa.js:530408", () => {
-  DIALOG_KINDS_PLACEHOLDER = null;
-  workflowPermissionDialog = require("./workflowPermissionDialog.lazy.js").workflowPermissionDialog;
-  workflowDialogKindsModule = require("../../tools/ContinueInProjectsTool/CONTINUE_NOTIFICATION.lazy.js");
-  dialogKindsModuleA = require("../projects/continueInProjectsTargetRequest.js");
-  dialogKindsModuleB = require("../projects/messageRevealConfirm.js");
-});
-//@ chunk-18hwfzwa.js:530585-530596 placement
+//@ chunk-czq1j3j2.js:356195-356206 placement
 var OPTIONAL_WORKFLOW_DIALOG_KINDS_1 = {};
-//@ chunk-18hwfzwa.js:530596-530614 placement
+//@ chunk-czq1j3j2.js:356206-356217 placement
 var OPTIONAL_WORKFLOW_DIALOG_KINDS_2 = {};
+//@ chunk-czq1j3j2.js:356217-356235 placement
 var OPTIONAL_WORKFLOW_DIALOG_META_2 = {};
-//@ chunk-18hwfzwa.js:530614-530632 placement
 var OPTIONAL_WORKFLOW_DIALOG_KINDS_3 = {};
+//@ chunk-czq1j3j2.js:356235-356253 layout
 var OPTIONAL_WORKFLOW_DIALOG_META_3 = {};
-//@ chunk-18hwfzwa.js:530632-530722 placement
+var OPTIONAL_WORKFLOW_DIALOG_META_5 = {};
+//@ chunk-czq1j3j2.js:356253-356350 placement
 var OPTIONAL_WORKFLOW_DIALOG_META_4; // deferred: uses MCP_ELICITATION_DIALOG (../../services/mcp/elicitationDialogs.js) of its import cycle while loading; runs once the cycle is complete
 var PERMISSION_NEEDED_NOTIFICATION;
 var ELICITATION_DIALOG_KINDS;
-deferInit("chunk-18hwfzwa.js:530632", () => {
+deferInit("chunk-czq1j3j2.js:356253", () => {
   OPTIONAL_WORKFLOW_DIALOG_META_4 = {};
   PERMISSION_NEEDED_NOTIFICATION = {
     text: "Claude needs your permission",
@@ -200,15 +199,16 @@ deferInit("chunk-18hwfzwa.js:530632", () => {
     MCP_ELICITATION_WAITING_DIALOG.kind,
     MCP_URL_ELICITATION_DIALOG.kind,
     ...[],
+    ...[],
   ];
 });
-//@ chunk-18hwfzwa.js:530722-530782 placement
+//@ chunk-czq1j3j2.js:356350-356410 placement
 function isElicitationDialogKind(blockingDialogKind) {
   return typeof blockingDialogKind === "string" && ELICITATION_DIALOG_KINDS.includes(blockingDialogKind);
 }
-//@ chunk-18hwfzwa.js:530782-530890 placement
+//@ chunk-czq1j3j2.js:356410-356518 placement
 var PERMISSION_CARD_KINDS; // deferred: uses ASK_USER_QUESTION_PERMISSION_CARD (../permissions/permissionCardKinds.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:530782", () => {
+deferInit("chunk-czq1j3j2.js:356410", () => {
   PERMISSION_CARD_KINDS = [
     ASK_USER_QUESTION_PERMISSION_CARD.kind,
     PERMISSION_PROMPT_DIALOG.kind,
@@ -223,18 +223,28 @@ deferInit("chunk-18hwfzwa.js:530782", () => {
     EXIT_PLAN_MODE_V2_PERMISSION_CARD.kind,
   ];
 });
-//@ chunk-18hwfzwa.js:530890-530966 placement
+//@ chunk-czq1j3j2.js:356518-356594 placement
 function parseLocalJsxDialogPayload(payload) {
   let parsed = LOCAL_JSX_DIALOG.payload().safeParse(payload);
   return parsed.success ? parsed.data : null;
 }
-//@ chunk-18hwfzwa.js:530966-534705 placement
+//@ chunk-czq1j3j2.js:356594-356617 layout
+var SESSION_OWNER = "session-owner";
+//@ chunk-czq1j3j2.js:356617-356708 layout
+function isSessionOwnerDialogOpen(state) {
+  return state.open.some(
+    (entry) =>
+      entry.kind === LOCAL_JSX_DIALOG.kind &&
+      parseLocalJsxDialogPayload(entry.payload)?.commandName === SESSION_OWNER,
+  );
+}
+//@ chunk-czq1j3j2.js:356708-360756 placement
 /**
  * 对话框 kind → 元数据表：layout(fullscreen/modal/bottom/inline)、waitingFor 文案、终端通知（"Claude needs your permission" 等）、是否立即显示。
  */
 var DIALOG_KIND_META; // deferred: uses LOCAL_JSX_DIALOG (../../commands/rate-limit-options/index.js) of its import cycle while loading; runs once the cycle is complete
 var NEEDS_INPUT_NOTIFICATION;
-deferInit("chunk-18hwfzwa.js:530966", () => {
+deferInit("chunk-czq1j3j2.js:356708", () => {
   DIALOG_KIND_META = {
     [LOCAL_JSX_DIALOG.kind]: {
       layout: (payload, renderMode) =>
@@ -322,6 +332,9 @@ deferInit("chunk-18hwfzwa.js:530966", () => {
     [EFFORT_MEDIUM_NUDGE]: {
       waitingFor: "dialog open",
     },
+    [PROGRAM_USE_CASE_QUESTION]: {
+      waitingFor: "dialog open",
+    },
     [FULLSCREEN_UPSELL_DIALOG.kind]: {
       waitingFor: "dialog open",
     },
@@ -331,6 +344,7 @@ deferInit("chunk-18hwfzwa.js:530966", () => {
     ...OPTIONAL_WORKFLOW_DIALOG_META_2,
     ...OPTIONAL_WORKFLOW_DIALOG_KINDS_3,
     ...OPTIONAL_WORKFLOW_DIALOG_META_3,
+    ...OPTIONAL_WORKFLOW_DIALOG_META_5,
     [MCP_ELICITATION_DIALOG.kind]: {
       waitingFor: "input needed",
       notification: (spec) => ({
@@ -473,6 +487,22 @@ deferInit("chunk-18hwfzwa.js:530966", () => {
           },
         }
       : {}),
+    ...(artifactsMcpEntryModule
+      ? {
+          [artifactsMcpEntryModule.continueInProjectsComposeDialog.kind]: {
+            waitingFor: "dialog open",
+            needs: "type: the message sent to the project",
+          },
+        }
+      : {}),
+    ...(bridgeCoordinatorModule
+      ? {
+          [bridgeCoordinatorModule.continueInProjectsRemoteControlDialog.kind]: {
+            waitingFor: "dialog open",
+            needs: "confirm: turning Remote Control on to send",
+          },
+        }
+      : {}),
     ...{},
     ...{},
     [workflowPermissionDialog.kind]: {
@@ -492,49 +522,52 @@ deferInit("chunk-18hwfzwa.js:530966", () => {
   };
   NEEDS_INPUT_NOTIFICATION = "Claude Code needs your input";
 });
-//@ chunk-18hwfzwa.js:534705-534798 placement
+//@ chunk-czq1j3j2.js:360756-360850 placement
 function isUrlElicitationDialog(payload) {
   let parsed = MCP_ELICITATION_DIALOG.payload().safeParse(payload);
   return parsed.success && parsed.data.params.mode === "url";
 }
-//@ chunk-18hwfzwa.js:534798-534894 placement
+//@ chunk-czq1j3j2.js:360850-360946 placement
 function isWaitingElicitationDialog(payload) {
   let parsed = MCP_ELICITATION_WAITING_DIALOG.payload().safeParse(payload);
   return parsed.success && parsed.data.waitingState === undefined;
 }
-//@ chunk-18hwfzwa.js:534894-534985 placement
+//@ chunk-czq1j3j2.js:360946-361037 placement
 function dialogNotification(meta, request) {
   let notification = meta[request.kind]?.notification;
   return typeof notification === "function" ? notification(request.payload) : notification;
 }
-//@ chunk-18hwfzwa.js:534985-535103 placement
+//@ chunk-czq1j3j2.js:361037-361155 placement
 function dialogLayout(meta, request, renderMode) {
   let layout = meta[request.kind]?.layout;
   if (layout === undefined) return "inline";
   return typeof layout === "function" ? layout(request.payload, renderMode) : layout;
 }
-//@ chunk-18hwfzwa.js:535103-535166 placement
+//@ chunk-czq1j3j2.js:361155-361218 placement
 function dialogCueBehindDraft(meta, request) {
   return meta[request.kind]?.cueBehindDraft?.(request.payload);
 }
-//@ chunk-18hwfzwa.js:535166-535246 placement
+//@ chunk-czq1j3j2.js:361218-361298 placement
 function dialogWaitingForLabel(kind) {
   return kind === undefined ? undefined : (DIALOG_KIND_META[kind]?.waitingFor ?? "permission prompt");
 }
-//@ chunk-18hwfzwa.js:535246-535322 placement
+//@ chunk-czq1j3j2.js:541001-541005 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:541001", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:555966-556042 placement
 function hasDraftHiddenCueDialog(state) {
   return state.open.some((request) => DIALOG_KIND_META[request.kind]?.draftHiddenCue !== undefined);
 }
-//@ chunk-18hwfzwa.js:535322-535419 placement
+//@ chunk-czq1j3j2.js:556042-556126 placement
 function hasSecretEligibleDialog(state) {
   return (
     hasDraftHiddenCueDialog(state) ||
-    state.open.some(
-      (request) => DIALOG_KIND_META[request.kind]?.mayBeHandedASecret?.(request.payload) === true,
-    )
+    state.open.some((request) => DIALOG_KIND_META[request.kind]?.mayBeHandedASecret === true)
   );
 }
-//@ chunk-18hwfzwa.js:535419-535507 placement
+//@ chunk-czq1j3j2.js:556126-556214 placement
 function useHasSecretEligibleDialog(draft) {
   let dialogSelector = useDialogSelector(hasSecretEligibleDialog);
   let storeSelector = useStoreSelector(draft, selectIsEmpty);
@@ -542,7 +575,7 @@ function useHasSecretEligibleDialog(draft) {
     if (dialogSelector && !storeSelector) draft.markMaybeSecret();
   }, [draft, dialogSelector, storeSelector]);
 }
-//@ chunk-18hwfzwa.js:535507-535577 placement
+//@ chunk-czq1j3j2.js:556214-556284 placement
 function requestDialogWrapper(content, tag) {
   let wrapEnabled = isVirtualPancakeEnabled();
   return addPastedEntry(
@@ -552,16 +585,14 @@ function requestDialogWrapper(content, tag) {
     wrapEnabled ? escapePastedContentTag : undefined,
   );
 }
-//@ chunk-18hwfzwa.js:535577-535581 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:535577", () => {
-  init_react_production();
-});
 export {
+  autoModeSetupReviewDialogDef,
+  AUTO_MODE_SETUP_FLAGGED_DIALOG,
   useHasSecretEligibleDialog,
   hasDraftHiddenCueDialog,
   requestDialogWrapper,
   isElicitationDialogKind,
+  SESSION_OWNER,
   EMPTY_SANDBOX_FLAGS,
   parseLocalJsxDialogPayload,
   dialogCueBehindDraft,
@@ -570,9 +601,8 @@ export {
   dialogLayout,
   computerUseApprovalDialogDef,
   costThresholdDialogDef,
-  autoModeSetupReviewDialogDef,
-  AUTO_MODE_SETUP_FLAGGED_DIALOG,
   dialogNotification,
   PERMISSION_CARD_KINDS,
+  isSessionOwnerDialogOpen,
   acknowledgeCostThreshold,
 };

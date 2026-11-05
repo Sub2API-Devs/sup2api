@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 握手追踪：包装 fetch 记录握手响应与 discover 判定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8t8n4kdh.js (30)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sywnjtqb.js (30)
  * attribution: placement 30
  */
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
@@ -21,9 +21,8 @@ import {
   retainValidDiscoverVerdicts,
 } from "./discoverVerdicts.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
-import { isSameOriginAsCcr, CCR_SESSION_MCP_PATH } from "./ccrMcpUrls.js";
+import { isSameOriginAsCcr, isKnownProxyEndpointUrl, CCR_SESSION_MCP_PATH } from "./ccrMcpUrls.js";
 import { hasUniqueQueryParams } from "../analytics/metadata.js";
-import { isKnownProxyEndpointUrl } from "../../tools/WebFetchTool/utils.js";
 import { headerValues, X_MCP_SERVER_ORIGIN } from "./fileReference/fileReferencePolicy.js";
 import { RESERVED_SERVER_IDS_WITH_DOCS } from "./remoteBrowserServer.js";
 import { MCP_PROTOCOL_NEXT } from "./mcpCallConstants.js";
@@ -35,13 +34,13 @@ import { getCliOwnedState } from "./cliOwnedClients.js";
 import { logError } from "../../utils/log.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-8t8n4kdh.js:30726-30795 placement
+//@ chunk-sywnjtqb.js:32463-32532 placement
 /**
  * 允许的发现来源（directory、custom）。
  */
 var CCR_UNIQUE_QUERY_KEYS = ["toolbox_mcp_server_id", "mcp_url"];
 var DIRECTORY_SOURCES = ["directory", "custom"];
-//@ chunk-8t8n4kdh.js:30795-31351 placement
+//@ chunk-sywnjtqb.js:32532-33088 placement
 /**
  * getDiscoverVerdictKey：判定键：claudeai-proxy 用连接器 id；stdio 用 hash(command,args,排序 env,项目根) 前缀 stdio:；CCR toolbox http URL 用 hash(server_id, mcp_url) 前缀 ccr:；其他返回 undefined（不记）。
  */
@@ -77,7 +76,7 @@ function getDiscoverVerdictKey(config) {
   let ccrKeyMaterial = jsonStringify([lower, url.searchParams.get("mcp_url")]);
   return `${CCR_VERDICT_PREFIX}${computeContentHash(ccrKeyMaterial).slice(0, 32)}`;
 }
-//@ chunk-8t8n4kdh.js:31351-31483 placement
+//@ chunk-sywnjtqb.js:33088-33220 placement
 /**
  * isRememberedLegacyPeer：判定表中有未过期且记录时 modern 版本等于当前（2026-07-28）的条目。
  */
@@ -87,7 +86,7 @@ async function isRememberedLegacyPeer(config, storageV5, now = Date.now()) {
   let discoverVerdict = readDiscoverVerdict(await getDiscoverVerdicts(storageV5), discoverVerdictKey);
   return discoverVerdict !== undefined && isModernVerdictValid(discoverVerdictKey, discoverVerdict, now);
 }
-//@ chunk-8t8n4kdh.js:31483-31707 placement
+//@ chunk-sywnjtqb.js:33220-33444 placement
 /**
  * rememberLegacyPeer：记录 {observedAt, modernProtocolVersion}，表示该服务器对 server/discover 回 -32601 或没回应，下次直接走 legacy initialize。
  */
@@ -107,7 +106,7 @@ function rememberLegacyPeer(config, storageV5, now = Date.now()) {
     return kept;
   });
 }
-//@ chunk-8t8n4kdh.js:31707-31873 placement
+//@ chunk-sywnjtqb.js:33444-33610 placement
 /**
  * forgetDiscoverVerdict：删除判定（服务器后来以 modern 协议应答、或基于判定的连接被拒）。
  */
@@ -121,7 +120,7 @@ function forgetDiscoverVerdict(config, storageV5, now = Date.now()) {
     return kept;
   });
 }
-//@ chunk-8t8n4kdh.js:31873-32005 placement
+//@ chunk-sywnjtqb.js:33610-33742 placement
 /**
  * JSON-RPC 错误响应的 schema。
  */
@@ -129,7 +128,7 @@ var DISCOVER_SNIFF_MAX_BYTES; // deferred: uses DoctorLazy (../../cli/handlers/u
 var discoverRequestSchema;
 var methodNotFoundSchema;
 var jsonRpcErrorSchema;
-deferInit("chunk-8t8n4kdh.js:31873", () => {
+deferInit("chunk-sywnjtqb.js:33610", () => {
   DISCOVER_SNIFF_MAX_BYTES = 16384;
   discoverRequestSchema = DoctorLazy(() =>
     objectSchema({
@@ -151,7 +150,7 @@ deferInit("chunk-8t8n4kdh.js:31873", () => {
     }),
   );
 });
-//@ chunk-8t8n4kdh.js:32005-32202 placement
+//@ chunk-sywnjtqb.js:33742-33939 placement
 /**
  * wrapFetchDetectDiscoverMethodNotFound：包装 fetch，POST 体是 server/discover 时异步读响应前 16 KiB，若是 JSON-RPC -32601 错误就回调（标记 discoverMethodNotFound）。
  */
@@ -172,7 +171,7 @@ function wrapFetchDetectDiscoverMethodNotFound(fetchFn, onMethodNotFound) {
     return response;
   };
 }
-//@ chunk-8t8n4kdh.js:32202-32248 placement
+//@ chunk-sywnjtqb.js:33939-33985 placement
 /**
  * 尝试解析 JSON，失败返回 undefined。
  */
@@ -183,11 +182,11 @@ function tryJsonParse(text) {
     return;
   }
 }
-//@ chunk-8t8n4kdh.js:32248-32331 placement
+//@ chunk-sywnjtqb.js:33985-34068 placement
 function isDiscoverRequestBody(text) {
   return text.includes("server/discover") && discoverRequestSchema().safeParse(tryJsonParse(text)).success;
 }
-//@ chunk-8t8n4kdh.js:32331-32513 placement
+//@ chunk-sywnjtqb.js:34068-34250 placement
 function parseJsonRpcFromBody(body) {
   let chunks = body.trimStart().startsWith("{")
     ? [body]
@@ -204,7 +203,7 @@ function parseJsonRpcFromBody(body) {
   }
   return;
 }
-//@ chunk-8t8n4kdh.js:32513-32610 placement
+//@ chunk-sywnjtqb.js:34250-34347 placement
 /**
  * 从响应体里取 JSON-RPC 错误码。
  */
@@ -214,7 +213,7 @@ function discoverErrorCode(text) {
   );
   return parseResult.success ? parseResult.data.error.code : undefined;
 }
-//@ chunk-8t8n4kdh.js:32610-32891 placement
+//@ chunk-sywnjtqb.js:34347-34628 placement
 async function isMethodNotFoundResponse(response) {
   let reader = response.body?.getReader();
   if (!reader) return false;
@@ -234,7 +233,7 @@ async function isMethodNotFoundResponse(response) {
   reader.cancel().catch(() => {});
   return methodNotFoundSchema().safeParse(parsed).success;
 }
-//@ chunk-8t8n4kdh.js:32891-33112 placement
+//@ chunk-sywnjtqb.js:34628-34849 placement
 /**
  * 在请求体里定位方法的标记字符串。
  */
@@ -248,7 +247,7 @@ var MAX_HANDSHAKE_SENDS = 8;
 var MAX_TRACE_MS = 600000;
 var SLOW_ANSWER_MS = 30000;
 var METHOD_MARKER = '"method":"';
-//@ chunk-8t8n4kdh.js:33112-33395 placement
+//@ chunk-sywnjtqb.js:34849-35132 placement
 /**
  * createHandshakeTrace：握手跟踪状态（mcpHref、keepAliveDisabled、getAnsweredLocally、statelessGated、各阶段耗时与响应类型）。
  */
@@ -265,7 +264,7 @@ function createHandshakeTrace({ mcpUrl, keepAliveDisabled, getAnsweredLocally, s
     messageStreamGetOutcome: "not_sent",
   };
 }
-//@ chunk-8t8n4kdh.js:33395-33772 placement
+//@ chunk-sywnjtqb.js:35132-35509 placement
 /**
  * 重建传输时重置握手追踪的计时与状态字段。
  */
@@ -283,14 +282,14 @@ function resetHandshakeTrace(handshakeTrace) {
   handshakeTrace.initializeResponseKind = undefined;
   handshakeTrace.messageStreamGetOutcome = "not_sent";
 }
-//@ chunk-8t8n4kdh.js:33772-33819 placement
+//@ chunk-sywnjtqb.js:35509-35556 placement
 /**
  * 标记连接已结束。
  */
 function markConnectEnded(handshakeTrace) {
   if (handshakeTrace !== undefined) handshakeTrace.connectEnded = true;
 }
-//@ chunk-8t8n4kdh.js:33819-34961 placement
+//@ chunk-sywnjtqb.js:35556-36698 placement
 /**
  * wrapFetchWithHandshakeTrace：记录 server/discover、initialize、notifications/initialized 的请求耗时与响应类型，以及 GET 通知流的结果（opened/405/401…）。
  */
@@ -361,7 +360,7 @@ function wrapFetchWithHandshakeTrace(fetchFn, handshakeTrace) {
     return responsePromise;
   };
 }
-//@ chunk-8t8n4kdh.js:34961-35440 placement
+//@ chunk-sywnjtqb.js:36698-37177 placement
 /**
  * handshakeTraceTelemetry：把握手跟踪整理成遥测字段（discoverRequestMs、initializeRequestMs、statelessGated、keepAliveDisabled 等）。
  */
@@ -385,7 +384,7 @@ function handshakeTraceTelemetry(handshakeTrace) {
     keepAliveDisabled: handshakeTrace.keepAliveDisabled,
   };
 }
-//@ chunk-8t8n4kdh.js:35440-35530 placement
+//@ chunk-sywnjtqb.js:37177-37267 placement
 /**
  * 登记首次工具列表请求的上报信息。
  */
@@ -395,7 +394,7 @@ function armFirstToolsListReport(client, report) {
     armedAtMs: performance.now(),
   });
 }
-//@ chunk-8t8n4kdh.js:35530-35854 placement
+//@ chunk-sywnjtqb.js:37267-37591 placement
 /**
  * 首次工具列表请求结束后上报耗时与工具数（仅在登记后的有效期内）。
  */
@@ -428,7 +427,7 @@ function reportFirstToolsList(client, listingPromise, sentAtMs) {
   );
   return listingPromise;
 }
-//@ chunk-8t8n4kdh.js:35854-36089 placement
+//@ chunk-sywnjtqb.js:37591-37826 placement
 function emitToolsListReport(
   report,
   startTime,
@@ -451,7 +450,7 @@ function emitToolsListReport(
   };
   setImmediate((reportFn, reportFields) => safeRun(() => reportFn(reportFields)), report, fields);
 }
-//@ chunk-8t8n4kdh.js:36089-36176 placement
+//@ chunk-sywnjtqb.js:37826-37913 placement
 /**
  * 判断请求头里是否带 last-event-id。
  */
@@ -462,14 +461,14 @@ function hasLastEventId(init) {
     return false;
   }
 }
-//@ chunk-8t8n4kdh.js:36176-36226 placement
+//@ chunk-sywnjtqb.js:37913-37963 placement
 /**
  * 判断请求地址是否与跟踪的地址一致。
  */
 function sameMcpHref(input, handshakeTrace) {
   return normalizedHref(String(input)) === handshakeTrace.mcpHref;
 }
-//@ chunk-8t8n4kdh.js:36226-36284 placement
+//@ chunk-sywnjtqb.js:37963-38021 placement
 /**
  * 规范化 URL 的 href（无效时原样）。
  */
@@ -480,7 +479,7 @@ function normalizedHref(mcpUrl) {
     return mcpUrl;
   }
 }
-//@ chunk-8t8n4kdh.js:36284-36460 placement
+//@ chunk-sywnjtqb.js:38021-38197 placement
 function listenStreamOutcome(response) {
   if (response.ok) return "opened";
   switch (response.status) {
@@ -494,7 +493,7 @@ function listenStreamOutcome(response) {
       return "http_error";
   }
 }
-//@ chunk-8t8n4kdh.js:36460-37037 placement
+//@ chunk-sywnjtqb.js:38197-38774 placement
 function recordHandshakeResponse(handshakeTrace, method, transportBuilds, startTime, response) {
   let elapsedMs = clampTraceMs(performance.now() - startTime);
   if (method === "server/discover") handshakeTrace.discoverRequestMs = elapsedMs;
@@ -516,7 +515,7 @@ function recordHandshakeResponse(handshakeTrace, method, transportBuilds, startT
       return;
   }
 }
-//@ chunk-8t8n4kdh.js:37037-37244 placement
+//@ chunk-sywnjtqb.js:38774-38981 placement
 function responseContentKind(response) {
   let [mediaType = ""] = (response.headers.get("content-type") ?? "").split(";");
   switch (mediaType.trim().toLowerCase()) {
@@ -528,7 +527,7 @@ function responseContentKind(response) {
       return "other";
   }
 }
-//@ chunk-8t8n4kdh.js:37244-37427 placement
+//@ chunk-sywnjtqb.js:38981-39164 placement
 function handshakeMethodOf(body) {
   let index = body.indexOf(METHOD_MARKER);
   if (index === -1) return;
@@ -541,14 +540,14 @@ function handshakeMethodOf(body) {
     return;
   }
 }
-//@ chunk-8t8n4kdh.js:37427-37488 placement
+//@ chunk-sywnjtqb.js:39164-39225 placement
 /**
  * 把耗时夹到 [0, $a] 并取整。
  */
 function clampTraceMs(ms) {
   return Math.min(Math.max(Math.round(ms), 0), MAX_TRACE_MS);
 }
-//@ chunk-8t8n4kdh.js:37488-37526 placement
+//@ chunk-sywnjtqb.js:39225-39263 placement
 /**
  * 安全执行回调（出错只记日志）。
  */

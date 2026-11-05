@@ -3,19 +3,19 @@
  *
  * 2.1.316 新增：系统错误码列表（用于识别错误消息）；主机名错误消息模式等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (64)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (64)
  * attribution: placement 64
  */
 import { homedir } from "os";
 import { countCharInString, urlPatternToRegex } from "./stringUtils.js";
 import { GENERIC_SECRET_RULES, TOKEN_AND_JWT_RULES, SHORT_PREFIX_TOKEN_RULES } from "./redactSecrets.js";
 import { redactUnknownBlockType } from "../services/api/requestHeaders.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:384217-384644 placement
+//@ chunk-exfmq47h.js:395605-396032 placement
 /**
  * 遮盖错误信息中的用户目录、驱动器、UNC 路径。
  */
@@ -39,7 +39,7 @@ function redactPaths(text) {
     .replace(/\\\\[^\\]+\\[^\\\s'",:()]+/g, "<unc>");
   return current;
 }
-//@ chunk-aepeg2w5.js:384644-385682 placement
+//@ chunk-exfmq47h.js:396032-397070 placement
 /**
  * 错误遮盖用的密钥键名正则。
  */
@@ -54,7 +54,7 @@ var REDACTION_MARKER_RE;
 var COLON_SEPARATOR_RE;
 var keepPathSeparatorShape;
 var trailingErrnoNameRe;
-deferInit("chunk-aepeg2w5.js:384644", () => {
+deferInit("chunk-exfmq47h.js:396032", () => {
   SECRET_KEY_PATTERN = String.raw`(?:aws[-_]?)?(?:secret[-_]?(?:access[-_]?)?key|session[-_]?token|security[-_]?token|bearer[-_]?token[-_]?bedrock)(?![A-Za-z0-9_-])`;
   SECRET_KEY_WITH_SEP_PATTERN = String.raw`(?:${SECRET_KEY_PATTERN}(?:\\{0,7}["'\`])?[ \t]*[:=][ \t]*(?:\\{0,7}["'\`])?|<${SECRET_KEY_PATTERN}>)`;
   SECRET_VALUE_NEGATIVE_LOOKAHEAD = String.raw`(?![{[(=]|arn:|~[\\/]|[a-z]:[\\/]|\\\\|(?:\.{1,2})?\/[^\s"':/]+\/[^\s"':]|[a-z][a-z0-9+.-]*:(?:[a-z][a-z0-9+.-]*:)?(?:\/\/|\\\/\\\/)|E[A-Z0-9]{1,15}: )`;
@@ -90,7 +90,7 @@ deferInit("chunk-aepeg2w5.js:384644", () => {
   };
   trailingErrnoNameRe = /[^A-Za-z0-9](E[A-Z0-9_]{2,15})$/;
 });
-//@ chunk-aepeg2w5.js:385682-385975 placement
+//@ chunk-exfmq47h.js:397070-397363 placement
 /**
  * 遮盖 "secret_key=… / session_token: …" 一类密钥键后的值为 <token>（保留 errno 名尾巴与路径分隔形状），跳过 null/true/bearer 等占位值和盘符路径。
  */
@@ -108,28 +108,28 @@ function redactSecretValues(text) {
     return `${keyName}<token>${keepPathSeparatorShape(valueText, originalPath)}${errnoSuffix}`;
   });
 }
-//@ chunk-aepeg2w5.js:385975-386054 placement
+//@ chunk-exfmq47h.js:397363-397442 placement
 var EMAIL_RE = /[\w.+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){0,7}\.[A-Za-z][\w-]{0,62}/g;
-//@ chunk-aepeg2w5.js:386054-386100 placement
+//@ chunk-exfmq47h.js:397442-397488 placement
 function redactEmails(text) {
   return text.replace(EMAIL_RE, "<email>");
 }
-//@ chunk-aepeg2w5.js:386100-386229 placement
+//@ chunk-exfmq47h.js:397488-397617 placement
 var IPV4_RE = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
 var IPV6_RE = /\b(?:[A-Fa-f0-9]{1,4}:){2,7}(?::?[A-Fa-f0-9]{1,4}){1,7}\b/g;
 var TIME_OF_DAY_RE = /^\d{1,2}:\d{2}:\d{2}$/;
-//@ chunk-aepeg2w5.js:386229-386309 placement
+//@ chunk-exfmq47h.js:397617-397697 placement
 function redactIpAddresses(text) {
   return text
     .replace(IPV4_RE, "<ip>")
     .replace(IPV6_RE, (candidate) => (TIME_OF_DAY_RE.test(candidate) ? candidate : "<ip>"));
 }
-//@ chunk-aepeg2w5.js:386309-386507 placement
+//@ chunk-exfmq47h.js:397697-397895 placement
 var PHONE_NUMBER_RE =
   /(^|[^\w/.-])((?:\+\d{1,3}[ \t.-]?)?\(?\d{2,4}\)?[ \t.-]\d{2,4}[ \t.-]\d{2,4}(?:[ \t.-]\d{2,4}(?![ \t.-]\d))?)(?!\w)/g;
 var DATE_LIKE_RE = /^\s*\d{4}[-.]\d{2}[-.]\d{2}(?:[ T]\d{1,2})?\s*$/;
 var E164_PHONE_RE = /\+\d{7,15}\b/g;
-//@ chunk-aepeg2w5.js:386507-386642 placement
+//@ chunk-exfmq47h.js:397895-398030 placement
 function redactPhoneNumbers(text) {
   return text
     .replace(PHONE_NUMBER_RE, (matchText, countryCode, number) =>
@@ -139,18 +139,18 @@ function redactPhoneNumbers(text) {
     )
     .replace(E164_PHONE_RE, "<phone>");
 }
-//@ chunk-aepeg2w5.js:386642-386655 placement
+//@ chunk-exfmq47h.js:398030-398043 placement
 var DIGIT_RE = /\d/g;
-//@ chunk-aepeg2w5.js:386655-386797 placement
+//@ chunk-exfmq47h.js:398043-398185 placement
 function redactArn(prefix, region, accountPart, resourcePart) {
   let parts = [region, accountPart, resourcePart];
   return parts.reduce((acc, part) => acc + (part.match(DIGIT_RE)?.length ?? 0), 0) >= 5
     ? `${prefix}:<redacted>`
     : `${prefix}:${parts.join(":")}:<redacted>`;
 }
-//@ chunk-aepeg2w5.js:386797-386996 placement
+//@ chunk-exfmq47h.js:398185-398384 placement
 var TOKEN_REDACTION_RULES; // deferred: uses JWT_TOKEN_PATTERNS_2 (./redactSecrets.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:386797", () => {
+deferInit("chunk-exfmq47h.js:398185", () => {
   TOKEN_REDACTION_RULES = [
     ...GENERIC_SECRET_RULES,
     [
@@ -161,7 +161,7 @@ deferInit("chunk-aepeg2w5.js:386797", () => {
     [/(?<![A-Za-z0-9+_-])(?!mcp__)(?=[a-z_]*[A-Z0-9+-])[A-Za-z0-9+_-]{40,}={0,2}\b/g, "<blob>"],
   ];
 });
-//@ chunk-aepeg2w5.js:386996-387098 placement
+//@ chunk-exfmq47h.js:398384-398486 placement
 function applyTokenRedactionRules(text) {
   let current = text;
   for (let [pattern, replacement] of TOKEN_REDACTION_RULES)
@@ -171,17 +171,17 @@ function applyTokenRedactionRules(text) {
         : current.replace(pattern, replacement);
   return current;
 }
-//@ chunk-aepeg2w5.js:387098-387206 placement
+//@ chunk-exfmq47h.js:398486-398594 placement
 var JWT_LIKE_RE =
   /(?:<blob>|eyJ[A-Za-z0-9_-]{10,256})\.(?:<blob>|[A-Za-z0-9_-]{10,})\.(?:<blob>|[A-Za-z0-9_-]{10,})/g;
-//@ chunk-aepeg2w5.js:387206-387288 placement
+//@ chunk-exfmq47h.js:398594-398676 placement
 function redactJwtLike(text) {
   return SHORT_PREFIX_TOKEN_RULES.reduce(
     (acc, [pattern, replacement]) => acc.replace(pattern, replacement),
     text,
   ).replace(JWT_LIKE_RE, "<jwt>");
 }
-//@ chunk-aepeg2w5.js:387288-387541 placement
+//@ chunk-exfmq47h.js:398676-398929 placement
 function redactUrls(text) {
   return text
     .replace(/https?:\/\/\S+/gi, "<url>")
@@ -191,7 +191,7 @@ function redactUrls(text) {
     )
     .replace(/\b[\w.-]+\.(?:ant\.dev|anthropic\.com)\b[^\s"')\]]*/gi, "<url>");
 }
-//@ chunk-aepeg2w5.js:387541-388039 placement
+//@ chunk-exfmq47h.js:398929-399427 placement
 /**
  * 路径遮盖正则。
  */
@@ -205,7 +205,7 @@ var regExp_9;
 var regExp_10;
 var ERRNO_QUOTED_NAME_PATTERN;
 var regExp_11;
-deferInit("chunk-aepeg2w5.js:387541", () => {
+deferInit("chunk-exfmq47h.js:398929", () => {
   PATH_PATTERNS = /[^"'\n]*(?:['"](?=[^\s"',;:)\]}])[^"'\n]*)*/.source;
   regExp_4 = new RegExp(String.raw`~[\\/]` + PATH_PATTERNS, "g");
   regExp_5 = new RegExp(String.raw`<drv>:\\` + PATH_PATTERNS, "g");
@@ -217,7 +217,7 @@ deferInit("chunk-aepeg2w5.js:387541", () => {
   ERRNO_QUOTED_NAME_PATTERN = String.raw`E[A-Z0-9]+: [^,'\n]{1,80}, [a-z]\w{0,31} '`;
   regExp_11 = new RegExp(String.raw`\b(${ERRNO_QUOTED_NAME_PATTERN})[^]*`, "g");
 });
-//@ chunk-aepeg2w5.js:388039-388236 placement
+//@ chunk-exfmq47h.js:399427-399624 placement
 function redactPathShapes(text) {
   return text
     .replace(regExp_11, "$1<path>'")
@@ -229,27 +229,27 @@ function redactPathShapes(text) {
     .replace(regExp_9, "<path>")
     .replace(regExp_10, "<path>");
 }
-//@ chunk-aepeg2w5.js:388236-388401 placement
+//@ chunk-exfmq47h.js:399624-399789 placement
 var API_ERROR_JSON_START; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var regExp_12;
-deferInit("chunk-aepeg2w5.js:388236", () => {
+deferInit("chunk-exfmq47h.js:399624", () => {
   API_ERROR_JSON_START = String.raw`\{\s*\\?["'](?:type\\?["']\s*:\s*\\?["']error|request_id\\?["']\s*:\s*\\?["']req_|error\\?["']\s*:\s*\{)`;
   regExp_12 = new RegExp(String.raw`${API_ERROR_JSON_START}[^]*`, "g");
 });
-//@ chunk-aepeg2w5.js:388401-388456 placement
+//@ chunk-exfmq47h.js:399789-399844 placement
 function redactApiErrorBody(text) {
   return text.replace(regExp_12, "<api-error-body>");
 }
-//@ chunk-aepeg2w5.js:388456-388668 placement
+//@ chunk-exfmq47h.js:399844-400056 placement
 function redactMcpServerNames(text) {
   return text
     .replace(/\bmcp__[A-Za-z0-9_-]+__([A-Za-z0-9_-]+)/g, "mcp__<server>__$1")
     .replace(/\bmcp__[A-Za-z0-9_-]+/g, "mcp__<server>")
     .replace(/\bplugin:[^\s:"')\],]+:[^\s"')\],]*/g, "plugin:<server>");
 }
-//@ chunk-aepeg2w5.js:388668-388731 placement
+//@ chunk-exfmq47h.js:400056-400119 placement
 var HTTP_POST_ERROR_RE = /(Error POSTing to endpoint(?: \(HTTP \d+\))?:\s*)[^]*/;
-//@ chunk-aepeg2w5.js:388731-388833 placement
+//@ chunk-exfmq47h.js:400119-400221 placement
 function redactHttpBodies(text) {
   try {
     return text.replace(
@@ -260,18 +260,18 @@ function redactHttpBodies(text) {
     return text;
   }
 }
-//@ chunk-aepeg2w5.js:388833-389000 placement
+//@ chunk-exfmq47h.js:400221-400388 placement
 var INVALID_HEADER_VALUE_RE = /(Header '[A-Za-z0-9!#$%&'*+.^_`|~-]+' has invalid value: )[^]*/;
 var INVALID_HEADER_RE =
   /(Headers\.(?:append|set): )\\?"(?:[^]*\\?"( is an invalid header (?:name|value)\.)$|[^]*)/;
-//@ chunk-aepeg2w5.js:389000-389080 placement
+//@ chunk-exfmq47h.js:400388-400468 placement
 /**
  * 把无效的 HTTP 头值（非法头名或控制字符）替换为 <redacted>，保留前缀。
  */
 function redactInvalidHeaderValues(text) {
   return text.replace(INVALID_HEADER_VALUE_RE, "$1<redacted>").replace(INVALID_HEADER_RE, "$1<redacted>$2");
 }
-//@ chunk-aepeg2w5.js:389080-389570 placement
+//@ chunk-exfmq47h.js:400468-400958 placement
 /**
  * 遮盖占位符名与标识符格式。
  */
@@ -287,7 +287,7 @@ var BEFORE_INIT_SUFFIX;
 var UNDEFINED_VARIABLE_PREFIXES;
 var TRAILING_PUNCTUATION_RE;
 var TRAILER_SCAN_LENGTH;
-deferInit("chunk-aepeg2w5.js:389080", () => {
+deferInit("chunk-exfmq47h.js:400468", () => {
   REDACTION_TOKENS = 120;
   PLACEHOLDER_TOKEN_RE = /^#?[A-Za-z_$][\w$]*$/;
   ALLOWED_PLACEHOLDER_NAMES = [
@@ -320,24 +320,24 @@ deferInit("chunk-aepeg2w5.js:389080", () => {
   TRAILING_PUNCTUATION_RE = /[)\]}'"`.,; \t\r\n]*$/;
   TRAILER_SCAN_LENGTH = 8;
 });
-//@ chunk-aepeg2w5.js:389570-389615 placement
+//@ chunk-exfmq47h.js:400958-401003 placement
 function nonIdentifierPlaceholder(segment) {
   return `<non-identifier.${segment}>`;
 }
-//@ chunk-aepeg2w5.js:389615-389703 placement
+//@ chunk-exfmq47h.js:401003-401091 placement
 function sanitizeIdentifierSegment(segment) {
   return (segment.length <= REDACTION_TOKENS && PLACEHOLDER_TOKEN_RE.test(segment)) ||
     (segment.length <= MAX_PLACEHOLDER_LENGTH && regExp_13.test(segment))
     ? segment
     : nonIdentifierPlaceholder(segment.length);
 }
-//@ chunk-aepeg2w5.js:389703-389809 placement
+//@ chunk-exfmq47h.js:401091-401197 placement
 function findTrailerStart(text, tail) {
   let sliced = text.slice(-TRAILER_SCAN_LENGTH);
   let trailerStart = text.length - sliced.length + sliced.search(TRAILING_PUNCTUATION_RE);
   return text.endsWith(tail, trailerStart) ? trailerStart - tail.length : -1;
 }
-//@ chunk-aepeg2w5.js:389809-389903 placement
+//@ chunk-exfmq47h.js:401197-401291 placement
 function redactUndefinedVariable(text) {
   let segment = findTrailerStart(text, NOT_DEFINED_SUFFIX);
   if (segment < 0) return text;
@@ -347,7 +347,7 @@ function redactUndefinedVariable(text) {
       : nonIdentifierPlaceholder(segment)) + text.slice(segment)
   );
 }
-//@ chunk-aepeg2w5.js:389903-390081 placement
+//@ chunk-exfmq47h.js:401291-401469 placement
 function truncateAfterMarkers(text) {
   let index = text.indexOf(CANNOT_ACCESS_PREFIX);
   let afterPrefix = index + CANNOT_ACCESS_PREFIX.length;
@@ -361,16 +361,16 @@ function truncateAfterMarkers(text) {
     return index < 0 ? acc : replaceSpanWithSanitized(acc, index + prefix.length, acc.length);
   }, lineEnd);
 }
-//@ chunk-aepeg2w5.js:390081-390148 placement
+//@ chunk-exfmq47h.js:401469-401536 placement
 function replaceSpanWithSanitized(text, segment, sanitizer) {
   return (
     text.slice(0, segment) + sanitizeIdentifierSegment(text.slice(segment, sanitizer)) + text.slice(sanitizer)
   );
 }
-//@ chunk-aepeg2w5.js:390148-390332 placement
+//@ chunk-exfmq47h.js:401536-401720 placement
 var UA_BLOCKED_DOMAINS_RE =
   /(domains are not accessible to our user agent)(?!:? ?(?:<domains\.\d+>\. Read more: |<redacted>$))(:? ?)(?:\[('[a-z0-9._-]+'(?:, '[a-z0-9._-]+')*)\](?=\. Read more: )|[^]*)/gi;
-//@ chunk-aepeg2w5.js:390332-390460 placement
+//@ chunk-exfmq47h.js:401720-401848 placement
 function redactBlockedDomains(text) {
   return text.replace(
     UA_BLOCKED_DOMAINS_RE,
@@ -378,7 +378,7 @@ function redactBlockedDomains(text) {
       `${scheme}${offset || ": "}${fullText === undefined ? "<redacted>" : `<domains.${fullText.split("', '").length}>`}`,
   );
 }
-//@ chunk-aepeg2w5.js:390460-392131 placement
+//@ chunk-exfmq47h.js:401848-403519 placement
 /**
  * 主机名错误消息模式。
  */
@@ -393,7 +393,7 @@ var INVALID_DOMAIN_FORMAT_RE;
 var INVALID_DOMAIN_VALUE_RE;
 var UNSUPPORTED_ENTRIES_RE;
 var ORG_BLOCKED_CONFLICT_RE;
-deferInit("chunk-aepeg2w5.js:390460", () => {
+deferInit("chunk-exfmq47h.js:401848", () => {
   HOSTNAME_ERROR_PATTERNS = [
     String.raw`Hostname is too long\. Public domain names are required\.`,
     String.raw`Hostname contains non-ASCII characters that do not form a valid internationalized domain name\. Public domain names are required\.`,
@@ -419,15 +419,15 @@ deferInit("chunk-aepeg2w5.js:390460", () => {
   ORG_BLOCKED_CONFLICT_RE =
     /(entries conflict with domains blocked by your organization: )(?:[^]*(\. Remove them from `allowed_domains`, or ask an organization admin to unblock them\.)[^]*|[^]*)/g;
 });
-//@ chunk-aepeg2w5.js:392131-392192 placement
+//@ chunk-exfmq47h.js:403519-403580 placement
 function hasDomainFieldError(text) {
   return DOMAIN_FIELD_NAMES.some((fieldName) => text.includes(` in ${fieldName}: `));
 }
-//@ chunk-aepeg2w5.js:392192-392254 placement
+//@ chunk-exfmq47h.js:403580-403642 placement
 function redactDomainErrorValue(text) {
   return hasDomainFieldError(text) ? text.replace(regExp_15, "$1<redacted>'$2") : text;
 }
-//@ chunk-aepeg2w5.js:392254-392562 placement
+//@ chunk-exfmq47h.js:403642-403950 placement
 /**
  * 遮盖引号中的值。
  */
@@ -448,22 +448,22 @@ function redactQuotedValues(text) {
     .replace(UNSUPPORTED_ENTRIES_RE, "$1<redacted>")
     .replace(ORG_BLOCKED_CONFLICT_RE, (matchText, prefix, rest) => `${prefix}<redacted>${rest ?? ""}`);
 }
-//@ chunk-aepeg2w5.js:392562-392633 placement
+//@ chunk-exfmq47h.js:403950-404021 placement
 var ARN_RE = /(arn):(aws[\w*?-]*|\*):([\w*?-]*):([\w*?-]*):[\d*?]*:[^\n]*/gi;
-//@ chunk-aepeg2w5.js:392633-392694 placement
+//@ chunk-exfmq47h.js:404021-404082 placement
 function redactArnValues(text) {
   return text.replace(ARN_RE, (matchText, partition, service, region, accountId) =>
     redactArn(partition, service, region, accountId),
   );
 }
-//@ chunk-aepeg2w5.js:392694-393097 placement
+//@ chunk-exfmq47h.js:404082-404485 placement
 /**
  * 各种引号的正则与证书主机名错误模式。
  */
 var QUOTE_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var regExp_17;
 var regExp_18;
-deferInit("chunk-aepeg2w5.js:392694", () => {
+deferInit("chunk-exfmq47h.js:404082", () => {
   QUOTE_PATTERN = String.raw`(?:'|\\'|\\u0027|&#0*39;|&#[xX]0*27;|&apos;|\u2019|&#0*8217;|&#[xX]0*2019;|&rsquo;)`;
   regExp_17 = new RegExp(
     String.raw`(Hostname(?:\/|\\\/|\\u002[Ff])IP does(?: not|n${QUOTE_PATTERN}t) match certificate)[^]*`,
@@ -472,7 +472,7 @@ deferInit("chunk-aepeg2w5.js:392694", () => {
     String.raw`\b(Host: )\S*?(\. is not (?:in the cert${QUOTE_PATTERN}s altnames|cert${QUOTE_PATTERN}s CN): )[^]*|\b(IP: )\S+( is not in the cert${QUOTE_PATTERN}s list: )[^]*|\b(Cert does not contain a DNS name)[^]+`,
   );
 });
-//@ chunk-aepeg2w5.js:393097-393374 placement
+//@ chunk-exfmq47h.js:404485-404762 placement
 function redactTlsAltnames(text) {
   let replaced = text.replace(regExp_17, "$1's altnames: <redacted>");
   let match = regExp_18.exec(replaced);
@@ -483,20 +483,20 @@ function redactTlsAltnames(text) {
   if (ipGroup !== undefined) return `${sliced}${ipGroup}<ip>${ipRest}<redacted>`;
   return `${sliced}${fallbackGroup === undefined ? "" : `${fallbackGroup} `}<redacted>`;
 }
-//@ chunk-aepeg2w5.js:393374-393635 placement
+//@ chunk-exfmq47h.js:404762-405023 placement
 var COMMAND_PREFIX_BOUNDARY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var regExp_19;
-deferInit("chunk-aepeg2w5.js:393374", () => {
+deferInit("chunk-exfmq47h.js:404762", () => {
   COMMAND_PREFIX_BOUNDARY = String.raw`(?:\b|\\[nrt]|\x1b\[[0-9;?]{0,20}[A-Za-z]|\\u001[bB]\[[0-9;?]{0,20}[A-Za-z]|_)`;
   regExp_19 = new RegExp(
     String.raw`(${COMMAND_PREFIX_BOUNDARY}Command (?:(?:failed with|timed out after|was killed with) [^:\n]{0,200}|was (?:gracefully )?canceled[^:\n]{0,200}|failed): )[^]*`,
   );
 });
-//@ chunk-aepeg2w5.js:393635-393686 placement
+//@ chunk-exfmq47h.js:405023-405074 placement
 function redactCommandOutput(text) {
   return text.replace(regExp_19, "$1<redacted>");
 }
-//@ chunk-aepeg2w5.js:393686-395843 placement
+//@ chunk-exfmq47h.js:405074-407231 placement
 /**
  * 系统错误码列表（用于识别错误消息）。
  */
@@ -511,7 +511,7 @@ var regExp_20;
 var regExp_21;
 var EXECUTABLE_NOT_FOUND_RE;
 var regExp_22;
-deferInit("chunk-aepeg2w5.js:393686", () => {
+deferInit("chunk-exfmq47h.js:405074", () => {
   ERRNO_NAMES = `
   E2BIG EACCES EADDRINUSE EADDRNOTAVAIL EADV EAFNOSUPPORT EAGAIN
   EAI_ADDRFAMILY EAI_AGAIN EAI_BADFLAGS EAI_BADHINTS EAI_CANCELED EAI_FAIL
@@ -553,21 +553,21 @@ deferInit("chunk-aepeg2w5.js:393686", () => {
   EXECUTABLE_NOT_FOUND_RE = /(Executable not found in \$PATH: )(?!<redacted>$)[^]*/;
   regExp_22 = new RegExp(String.raw` (?:${ERRNO_NAME_PATTERN})`);
 });
-//@ chunk-aepeg2w5.js:395843-395939 placement
+//@ chunk-exfmq47h.js:407231-407327 placement
 function redactSpawnCommandLine(text) {
   return (regExp_22.test(text) ? text.replace(regExp_20, "$1<redacted>$2") : text).replace(
     regExp_21,
     "$1<redacted>$2",
   );
 }
-//@ chunk-aepeg2w5.js:395939-396072 placement
+//@ chunk-exfmq47h.js:407327-407460 placement
 function redactSpawnPaths(text) {
   let current = text.includes("spawn") ? redactSpawnCommandLine(text) : text;
   return current.includes("Executable not found in $PATH: ")
     ? current.replace(EXECUTABLE_NOT_FOUND_RE, "$1<redacted>")
     : current;
 }
-//@ chunk-aepeg2w5.js:396072-396627 placement
+//@ chunk-exfmq47h.js:407460-408015 placement
 /**
  * 模块加载错误消息模式。
  */
@@ -576,7 +576,7 @@ var MODULE_ERROR_PREFIXES;
 var regExp_23;
 var BUILD_ERROR_PREFIXES;
 var regExp_24;
-deferInit("chunk-aepeg2w5.js:396072", () => {
+deferInit("chunk-exfmq47h.js:407460", () => {
   MODULE_ERROR_PATTERNS = String.raw`[A-Z][A-Za-z0-9_]{1,63}`;
   MODULE_ERROR_PREFIXES = [
     String.raw`${MODULE_ERROR_PATTERNS} (?:reading|parsing data url|decoding data|(?:while )?resolving(?: package| preload)?)`,
@@ -596,15 +596,15 @@ deferInit("chunk-aepeg2w5.js:396072", () => {
     String.raw`(${COMMAND_PREFIX_BOUNDARY}(?:${BUILD_ERROR_PREFIXES.join("|")}) )(?!<redacted>$)[^]*`,
   );
 });
-//@ chunk-aepeg2w5.js:396627-396705 placement
+//@ chunk-exfmq47h.js:408015-408093 placement
 function redactModuleLoadErrors(text) {
   return text.replace(regExp_23, "$1<redacted>").replace(regExp_24, "$1<redacted>");
 }
-//@ chunk-aepeg2w5.js:396705-396927 placement
+//@ chunk-exfmq47h.js:408093-408315 placement
 var INPUT_TAG_MISMATCH_RE =
   /(Input tag ')(?:([^]*)' found using 'type' does not match any of the expected tags: ('[\w.-]{1,64}'(?:, '[\w.-]{1,64}')*|<tags\.\d{1,4}>)$|[^]*)/;
 var INPUT_TAG_MISMATCH_MIDDLE = "' found using 'type' does not match any of the expected tags: ";
-//@ chunk-aepeg2w5.js:396927-397100 placement
+//@ chunk-exfmq47h.js:408315-408488 placement
 function redactInputTagMismatch(text) {
   let replaced = text.replace(INPUT_TAG_MISMATCH_RE, (matchText, prefix, unknownType, tagList) =>
     unknownType === undefined || tagList === undefined
@@ -615,15 +615,15 @@ function redactInputTagMismatch(text) {
     ? replaced.replace(INPUT_TAG_MISMATCH_RE, (matchText, prefix) => `${prefix}<redacted>`)
     : replaced;
 }
-//@ chunk-aepeg2w5.js:397100-397194 placement
+//@ chunk-exfmq47h.js:408488-408582 placement
 function tagListPlaceholder(tagList) {
   return tagList.startsWith("<tags.") ? tagList : `<tags.${tagList.slice(1, -1).split("', '").length}>`;
 }
-//@ chunk-aepeg2w5.js:397194-398158 placement
+//@ chunk-exfmq47h.js:408582-409546 placement
 /**
  * DNS 错误消息模式。
  */
-var DNS_ERROR_PATTERNS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DNS_ERROR_PATTERNS; // deferred: uses normalizeCaseForComparison_2 (./permissions/filesystem.js) of its import cycle while loading; runs once the cycle is complete
 var DNS_CALL_PATTERN;
 var DNS_ERRNO_PREFIX;
 var HOSTNAME_BREAK_CHARS;
@@ -646,7 +646,7 @@ var HOME_TILDE_RE;
 var DRIVE_PATH_RE;
 var TRAILING_ROOT_RE;
 var MULTI_SEGMENT_PATH_RE;
-deferInit("chunk-aepeg2w5.js:397194", () => {
+deferInit("chunk-exfmq47h.js:408582", () => {
   DNS_ERROR_PATTERNS = [
     "getaddrinfo",
     "getnameinfo",
@@ -660,7 +660,10 @@ deferInit("chunk-aepeg2w5.js:397194", () => {
   HOSTNAME_QUOTE_PATTERN = String.raw`(?:"{1,2}|[,;'\`(){}]+)`;
   NOT_DNS_OR_ERRNO = String.raw`(?!\b(?:${DNS_ERRNO_PREFIX}|${ERRNO_QUOTED_NAME_PATTERN}))`;
   NOT_API_ERROR_JSON = String.raw`(?![,;'\`(){}]*${API_ERROR_JSON_START})`;
-  joined = uniq([...DNS_ERROR_PATTERNS.map((pattern) => pattern.charAt(0)), "E"]).join("");
+  joined = normalizeCaseForComparison_2([
+    ...DNS_ERROR_PATTERNS.map((pattern) => pattern.charAt(0)),
+    "E",
+  ]).join("");
   HOST_SEGMENT_CHARS = String.raw`[^${HOSTNAME_BREAK_CHARS}${joined}]*`;
   HOST_SEGMENT_PATTERN = String.raw`${HOST_SEGMENT_CHARS}(?:(?:${NOT_DNS_OR_ERRNO}[${joined}]+|${NOT_API_ERROR_JSON}${HOSTNAME_QUOTE_PATTERN}${NOT_DNS_OR_ERRNO}[^${HOSTNAME_BREAK_CHARS}])${HOST_SEGMENT_CHARS})*`;
   HOST_FIRST_SEGMENT = String.raw`${NOT_DNS_OR_ERRNO}(?![A-Za-z]:[\\/]|\.{1,2}[\\/])[^${HOSTNAME_BREAK_CHARS}/~]${HOST_SEGMENT_PATTERN}`;
@@ -680,7 +683,7 @@ deferInit("chunk-aepeg2w5.js:397194", () => {
   TRAILING_ROOT_RE = /(?:~|[A-Za-z]:)$/;
   MULTI_SEGMENT_PATH_RE = /(?:\/[^\s"':]+){2}/;
 });
-//@ chunk-aepeg2w5.js:398158-398412 placement
+//@ chunk-exfmq47h.js:409546-409800 placement
 function redactHostPrefix(text) {
   let splitAt = text.search(HOSTNAME_TRAILING_PUNCT_RE) + 1;
   if (splitAt === 0) return text;
@@ -693,7 +696,7 @@ function redactHostPrefix(text) {
   if (UNDEFINED_PLACEHOLDER_RE.test(sliced)) return text;
   return `<host>${PORT_SUFFIX_RE.exec(sliced)?.[0] ?? ""}${sliced_2}`;
 }
-//@ chunk-aepeg2w5.js:398412-398606 placement (2.1.88 match: ghIsDangerousCallback, 0.806)
+//@ chunk-exfmq47h.js:409800-409994 placement (2.1.88 match: ghIsDangerousCallback, 0.805)
 function ghIsDangerousCallback(_rawCommand, args) {
   if (_rawCommand.includes("://")) return -1;
   let homeMatchIndex = _rawCommand.search(HOME_TILDE_RE);
@@ -705,7 +708,7 @@ function ghIsDangerousCallback(_rawCommand, args) {
   let multiSegmentIndex = _rawCommand.search(MULTI_SEGMENT_PATH_RE);
   return multiSegmentIndex > 0 ? multiSegmentIndex : -1;
 }
-//@ chunk-aepeg2w5.js:398606-398790 placement
+//@ chunk-exfmq47h.js:409994-410178 placement
 function redactHostSegment(segment, isAfterHost) {
   if (SHORT_NUMBER_RE.test(segment)) return segment;
   let cutIndex = ghIsDangerousCallback(segment, isAfterHost);
@@ -717,21 +720,21 @@ function redactHostSegment(segment, isAfterHost) {
   }
   return redactHostPrefix(segment);
 }
-//@ chunk-aepeg2w5.js:398790-398842 placement
+//@ chunk-exfmq47h.js:410178-410230 placement
 var regExp_26; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var HOST_SCAN_WINDOW;
-deferInit("chunk-aepeg2w5.js:398790", () => {
+deferInit("chunk-exfmq47h.js:410178", () => {
   regExp_26 = new RegExp(String.raw`\b${ERRNO_QUOTED_NAME_PATTERN}|${API_ERROR_JSON_START}`);
   HOST_SCAN_WINDOW = 160;
 });
-//@ chunk-aepeg2w5.js:398842-398963 placement
+//@ chunk-exfmq47h.js:410230-410351 placement
 function redactHostBeforePort(hostSegment, fullText, isAfterHost) {
   let match = regExp_26.exec(fullText);
   return match !== null && match.index < hostSegment.length
     ? redactHostSegment(hostSegment.slice(0, match.index), false) + hostSegment.slice(match.index)
     : redactHostSegment(hostSegment, isAfterHost);
 }
-//@ chunk-aepeg2w5.js:398963-399150 placement
+//@ chunk-exfmq47h.js:410351-410538 placement
 function redactHostnames(text) {
   return text.replace(
     regExp_25,
@@ -749,9 +752,9 @@ function redactHostnames(text) {
     },
   );
 }
-//@ chunk-aepeg2w5.js:399150-399312 placement
+//@ chunk-exfmq47h.js:410538-410700 placement
 var regExp_27; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-aepeg2w5.js:399150", () => {
+deferInit("chunk-exfmq47h.js:410538", () => {
   regExp_27 = new RegExp(
     String.raw`(<host>(?::\d{1,5})?[.,;:!?~\`(){}'"]*)[\\\[\]<>\u2026]` +
       String.raw`(?:[^\s"'/]|['"](?=[^\s"',;:)\]}])){0,255}(?:\/|<path>)` +
@@ -759,11 +762,11 @@ deferInit("chunk-aepeg2w5.js:399150", () => {
     "g",
   );
 });
-//@ chunk-aepeg2w5.js:399312-399359 placement
+//@ chunk-exfmq47h.js:410700-410747 placement
 function redactPathAfterHost(text) {
   return text.replace(regExp_27, "$1<path>");
 }
-//@ chunk-aepeg2w5.js:399359-399528 placement
+//@ chunk-exfmq47h.js:410747-410916 placement
 /**
  * 把错误消息中出现的 path/dest 路径替换为 <path>（长路径优先）。
  */
@@ -774,9 +777,9 @@ function redactErrorPaths(errnoLike, text) {
     .sort((leftPath, rightPath) => rightPath.length - leftPath.length)
     .reduce((acc, pathValue) => acc.split(pathValue).join("<path>"), text);
 }
-//@ chunk-aepeg2w5.js:399528-399540 placement
+//@ chunk-exfmq47h.js:410916-410928 placement
 var MAX_REDACTED_LENGTH = 4000;
-//@ chunk-aepeg2w5.js:399540-399969 placement
+//@ chunk-exfmq47h.js:410928-411357 placement
 /**
  * 对错误消息依次遮盖路径、密钥、邮箱、IP、URL 等后截断。
  */
@@ -814,4 +817,4 @@ function redactErrorMessage(message) {
     ),
   ).replace(REDACTION_MARKER_RE, "");
 }
-export { redactInvalidHeaderValues, redactErrorMessage, redactErrorPaths, ERRNO_NAMES_COPY };
+export { ERRNO_NAMES_COPY, redactInvalidHeaderValues, redactErrorMessage, redactErrorPaths };

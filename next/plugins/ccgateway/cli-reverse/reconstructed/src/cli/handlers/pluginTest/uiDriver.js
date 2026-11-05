@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。插件测试中驱动 ui.render 绘制结果（act/find/press）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1tz177x8.js (34)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-f284hj51.js (34)
  * attribution: placement 34
  */
 import { setTimeout as Jn } from "timers/promises";
@@ -75,7 +75,7 @@ import { pluginDirSlot } from "../../../plugins/functionHooks/hooksWorkerClient.
 import { marketplaceSource } from "../../../utils/plugins/pluginOptionsStorage.js";
 import { createTestHooksEngine } from "./runner.js";
 import { setUiLogSink } from "../../../plugins/functionHooks/uiApi.js";
-import { resetPluginState } from "../../../plugins/functionHooks/api/state.js";
+import { clearStateSession } from "../../../plugins/functionHooks/api/state.js";
 import { logForDebugging } from "../../../utils/debug.js";
 import { teeGeneratorResult } from "../../../plugins/functionHooks/dispatch/streamChain.js";
 import { deferInit, beginDeferredInits } from "../../../../runtime/deferred-init.js";
@@ -83,7 +83,7 @@ import { deferInit, beginDeferredInits } from "../../../../runtime/deferred-init
 // This module is the first evaluated of an import cycle of 5 modules closed by ../../../components/Onboarding.js;
 // the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
 beginDeferredInits("src/components/Onboarding.js");
-//@ chunk-1tz177x8.js:22923-23886 placement
+//@ chunk-f284hj51.js:24076-25039 placement
 var UI_DRIVER_ACTIONS_SCHEMA = DoctorLazy(() => {
   let scopeIn = stringSchema().optional();
   let query = objectSchema({
@@ -180,9 +180,9 @@ var UI_DRIVER_ACTIONS_SCHEMA = DoctorLazy(() => {
     }),
   ]);
 });
-//@ chunk-1tz177x8.js:23886-24163 placement
+//@ chunk-f284hj51.js:25039-25316 placement
 var RENDER_ACTION_SCHEMA; // deferred: uses isRenderSiteName (./engineShim.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-1tz177x8.js:23886", () => {
+deferInit("chunk-f284hj51.js:25039", () => {
   RENDER_ACTION_SCHEMA = DoctorLazy(() =>
     objectSchema({
       plugin: stringSchema(),
@@ -198,7 +198,7 @@ deferInit("chunk-1tz177x8.js:23886", () => {
     }),
   );
 });
-//@ chunk-1tz177x8.js:24163-24564 placement
+//@ chunk-f284hj51.js:25316-25717 placement
 /**
  * 插件 UI 测试各动作对应的目标元素类型与触达的回调说明。
  */
@@ -232,7 +232,7 @@ var UI_ACTION_TARGETS = {
     reaches: "a Client's region",
   },
 };
-//@ chunk-1tz177x8.js:24564-24914 placement
+//@ chunk-f284hj51.js:25717-26067 placement
 /**
  * 从渲染树中收集 Client 元素（插件、键、模块、属性）。
  */
@@ -263,13 +263,13 @@ function collectClientElements(root) {
   visit(root);
   return found;
 }
-//@ chunk-1tz177x8.js:24914-24992 placement
+//@ chunk-f284hj51.js:26067-26145 placement
 var renderHandleInfo = (handle) => ({
   component: handle.component,
   requestId: handle.requestId,
   surface: handle.surface,
 });
-//@ chunk-1tz177x8.js:24992-25419 placement
+//@ chunk-f284hj51.js:26145-26572 placement
 /**
  * 取渲染元素的可见文本（按钮、链接、Markdown、代码、输入框等）。
  */
@@ -299,10 +299,10 @@ function elementText(node) {
                 : "") + (Array.isArray(node.children) ? node.children : []).map(elementText).join("")
   );
 }
-//@ chunk-1tz177x8.js:25419-25477 placement
+//@ chunk-f284hj51.js:26572-26630 placement
 var matchesExpectedText = (text, expected) =>
   typeof expected === "string" ? text.includes(expected) : expected.test(text);
-//@ chunk-1tz177x8.js:25477-25929 placement
+//@ chunk-f284hj51.js:26630-27082 placement
 /**
  * 在渲染树中按类型、key 与文本查找元素。
  */
@@ -339,9 +339,9 @@ function findElements(tree, query) {
   visit(tree);
   return matches;
 }
-//@ chunk-1tz177x8.js:25929-25940 placement
+//@ chunk-f284hj51.js:27082-27093 placement
 var MAX_TIMER_TICKS_PER_ADVANCE = 1e4;
-//@ chunk-1tz177x8.js:25940-26473 placement
+//@ chunk-f284hj51.js:27093-27626 placement
 /**
  * 测试用的虚拟帧时钟：every 登记周期任务，advance(ms) 按到期顺序触发，单次推进超过 Lo 次触发时报错。
  */
@@ -387,7 +387,7 @@ function createFakeFrameClock() {
     advance,
   };
 }
-//@ chunk-1tz177x8.js:26606-26760 placement
+//@ chunk-f284hj51.js:27759-27913 placement
 var mountRequest = (request, index) => ({
   surface: request.surface,
   component: request.component,
@@ -397,9 +397,9 @@ var mountRequest = (request, index) => ({
   }),
   props: request.props,
 });
-//@ chunk-1tz177x8.js:26760-26772 placement
+//@ chunk-f284hj51.js:27913-27925 placement
 var RENDER_SETTLE_MS = 2000;
-//@ chunk-1tz177x8.js:26818-26987 placement
+//@ chunk-f284hj51.js:27971-28140 placement
 var createDriveState = ({ plugin, input, port }) => ({
   plugin,
   input,
@@ -417,7 +417,7 @@ var createDriveState = ({ plugin, input, port }) => ({
   },
   isStale: false,
 });
-//@ chunk-1tz177x8.js:26987-27097 placement
+//@ chunk-f284hj51.js:28140-28250 placement
 function releaseDrawings(handle) {
   let info = renderHandleInfo(handle);
   for (let holder of moveToCloudTrash.holdersOf(info)) {
@@ -425,7 +425,7 @@ function releaseDrawings(handle) {
     releasePresses(holder, released, info);
   }
 }
-//@ chunk-1tz177x8.js:27097-32912 placement
+//@ chunk-f284hj51.js:28250-34065 placement
 /**
  * 插件测试中驱动 ui.render 的结果：提供 act/drawn/find/findAll/press 等操作，模拟用户与插件界面交互。
  */
@@ -785,17 +785,17 @@ function driveRenderedUi(port) {
     },
   };
 }
-//@ chunk-1tz177x8.js:32912-32985 placement
+//@ chunk-f284hj51.js:34065-34138 placement
 async function reloadHooksModulesWithFile(plugins, dir) {
   await loadHooksModules(plugins.filter((plugin) => plugin.path === dir));
   await loadHooksModules(plugins);
 }
-//@ chunk-1tz177x8.js:33091-33133 placement
+//@ chunk-f284hj51.js:34244-34286 placement
 var POLICY_LAYER_NAMES = {
   prepend: "policy",
   append: "policy",
 };
-//@ chunk-1tz177x8.js:33133-33203 placement
+//@ chunk-f284hj51.js:34286-34356 placement
 var buildHookOrder = (prepend, append) => ({
   prepend,
   append,
@@ -803,7 +803,7 @@ var buildHookOrder = (prepend, append) => ({
   shadowed: [],
   outermost: [],
 });
-//@ chunk-1tz177x8.js:33203-33394 placement
+//@ chunk-f284hj51.js:34356-34547 placement
 function managementFromTiers(entries, plugins) {
   let sourcesOfTier = (tier) =>
     entries.filter((entry, index) => plugins[index]?.tier === tier).map((entry) => entry.source);
@@ -812,9 +812,9 @@ function managementFromTiers(entries, plugins) {
     order: buildHookOrder(sourcesOfTier("prepend").map(nfcLower), sourcesOfTier("append").map(nfcLower)),
   };
 }
-//@ chunk-1tz177x8.js:33394-33404 placement
+//@ chunk-f284hj51.js:34547-34557 placement
 var PLUGIN_TEST_TRUSTED = true;
-//@ chunk-1tz177x8.js:33502-34264 placement
+//@ chunk-f284hj51.js:34655-35417 placement
 async function loadTestPlugins(dir, tier) {
   let name = basename(dir);
   let { plugin, errors } = await createPluginFromPath(
@@ -856,7 +856,7 @@ async function loadTestPlugins(dir, tier) {
       }
     : plugin;
 }
-//@ chunk-1tz177x8.js:34264-34534 placement
+//@ chunk-f284hj51.js:35417-35687 placement
 async function loadTestPluginSet({ plugins }) {
   let results = await Promise.all(plugins.map((plugin) => loadTestPlugins(plugin.dir, plugin.tier)));
   let seenNames = new Set();
@@ -870,7 +870,7 @@ async function loadTestPluginSet({ plugins }) {
     management,
   };
 }
-//@ chunk-1tz177x8.js:34534-34760 placement
+//@ chunk-f284hj51.js:35687-35913 placement
 function pressTestButton({ plugin, key, requestId, surface, link }) {
   let hostedElement = findHostedElement({
     act: "press",
@@ -887,7 +887,7 @@ function pressTestButton({ plugin, key, requestId, surface, link }) {
     link,
   });
 }
-//@ chunk-1tz177x8.js:34760-35058 placement
+//@ chunk-f284hj51.js:35913-36211 placement
 function assertPluginsLoaded(names) {
   let pluginRegistry = getPluginRegistry();
   let loadedNames = new Set(pluginRegistry.loadedModules.map((loadedModule) => loadedModule.name));
@@ -904,7 +904,7 @@ function assertPluginsLoaded(names) {
 `),
   );
 }
-//@ chunk-1tz177x8.js:35058-35340 placement
+//@ chunk-f284hj51.js:36211-36493 placement
 var createTestHookLogger = (report, isEnded, onSkipped) => ({
   log(message, isWarning) {
     if (isWarning && !/^hooks? (chain )?failed: /.test(message)) report(message);
@@ -917,7 +917,7 @@ var createTestHookLogger = (report, isEnded, onSkipped) => ({
     if (skipped !== undefined) onSkipped(skipped);
   },
 });
-//@ chunk-1tz177x8.js:35340-35567 placement
+//@ chunk-f284hj51.js:36493-36720 placement
 function seatBuiltinTestPlugins(plugins) {
   let flattened = plugins.flatMap((plugin) =>
     isBuiltinPluginId(plugin.source) && getBuiltinPlugin(plugin.name) === undefined ? [plugin.name] : [],
@@ -931,7 +931,7 @@ function seatBuiltinTestPlugins(plugins) {
     for (let name of flattened) getHostState().builtinPlugins.delete(name);
   };
 }
-//@ chunk-1tz177x8.js:35567-35813 placement
+//@ chunk-f284hj51.js:36720-36966 placement
 function selectTestOption({ plugin, key, value, requestId, surface }) {
   let hostedElement = findHostedElement({
     act: "select",
@@ -950,17 +950,17 @@ function selectTestOption({ plugin, key, value, requestId, surface }) {
     value,
   });
 }
-//@ chunk-1tz177x8.js:35813-35836 placement
+//@ chunk-f284hj51.js:36966-36989 placement
 var setManagedPluginsSlot = (management) => managedPluginsSlot.set(management);
-//@ chunk-1tz177x8.js:35836-35859 placement
+//@ chunk-f284hj51.js:36989-37012 placement
 var setHooksEngineRegistry = (registry) => pluginEnvSlot.set(registry);
-//@ chunk-1tz177x8.js:35859-35882 placement
+//@ chunk-f284hj51.js:37012-37035 placement
 var setPluginOptionsSlot = (loaded) => loadedPluginOptions.set(loaded);
-//@ chunk-1tz177x8.js:35882-35905 placement
+//@ chunk-f284hj51.js:37035-37058 placement
 var setTestPluginStateSlot = (handleTestHostCall) => currentDispatchSlot.set(handleTestHostCall);
-//@ chunk-1tz177x8.js:35905-35914 placement
+//@ chunk-f284hj51.js:37058-37067 placement
 var RM_MAX_RETRIES = 3;
-//@ chunk-1tz177x8.js:35914-37670 placement
+//@ chunk-f284hj51.js:37067-38823 placement
 function createPluginTestEngine({ root, bare, spec, isEnded }) {
   let abortController = new AbortController();
   let pluginRegistry = getPluginRegistry();
@@ -1046,7 +1046,7 @@ function createPluginTestEngine({ root, bare, spec, isEnded }) {
     } finally {
       unseatBuiltins?.();
       setHooksEngineRegistry(undefined);
-      resetPluginState();
+      clearStateSession();
       setManagedPluginsSlot(undefined);
       setPluginOptionsSlot(undefined);
       setMatcherLog(originalLog);
@@ -1111,9 +1111,9 @@ ${told.map((line) => `  ${line}`).join(`
     close,
   };
 }
-//@ chunk-1tz177x8.js:37670-37817 placement
+//@ chunk-f284hj51.js:38823-38970 placement
 var PRESS_ACTION_SCHEMA; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1tz177x8.js:37670", () => {
+deferInit("chunk-f284hj51.js:38823", () => {
   PRESS_ACTION_SCHEMA = DoctorLazy(() =>
     objectSchema({
       plugin: stringSchema(),

@@ -3,11 +3,12 @@
  *
  * 函数钩子 $ 接口：prompt.fill/submit、session.*、state、telemetry（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (26)
- * attribution: placement 26
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (27)
+ * attribution: sole-consumer 1, placement 26
  */
+import { pickAlias } from "../../../../vendor/lodash-es/_inlinedHelpers.js";
 import { isPlainObject } from "../../../utils/isPlainObject.js";
 import { everyIndex } from "../sites/promptContextSites.js";
 import { HooksError } from "../hooksErrors.js";
@@ -15,13 +16,22 @@ import { checkDecorations, checkCursorInteger } from "../sites/promptSites.js";
 import { isPromptSectionMode, PROMPT_SECTION_MODES } from "../hookApiSurface.js";
 import { checkedListLength } from "../dispatch/valueSizing.js";
 import { freezeApiObject } from "../dispatch/chain.js";
-import { toSlimTranscriptMessage } from "../../../utils/toolSearch.js";
 import { errorMessage } from "../../../utils/errors.js";
 
-//@ chunk-4121qate.js:282438-282572 placement
+//@ chunk-j8f885h1.js:263520-263630 sole-consumer (2.1.88 match: isToolResultBlockWithContent, 1)
+function toSlimTranscriptMessage(obj) {
+  let { message, agentId } = obj;
+  return {
+    message: pickAlias(message, ["type", "content"]),
+    ...(agentId !== undefined && {
+      agentId,
+    }),
+  };
+}
+//@ chunk-j8f885h1.js:263630-263764 placement
 var SESSION_APPEND_USAGE =
   'takes { message: { type: "user" | "system", content } } (content an array of text blocks) and an optional agentId (a string)';
-//@ chunk-4121qate.js:282572-282800 placement
+//@ chunk-j8f885h1.js:263764-263992 placement
 /**
  * 校验 $.session.append 参数：message.type 为 user/system 且 content 为对象数组，agentId 可选非空；不合法返回用法说明。
  */
@@ -37,26 +47,26 @@ function checkSessionAppendArgs(args) {
     (args.agentId === undefined || (typeof args.agentId === "string" && args.agentId !== ""));
   return hasValidMessage && hasValidAgentId ? undefined : SESSION_APPEND_USAGE;
 }
-//@ chunk-4121qate.js:282800-282916 placement
+//@ chunk-j8f885h1.js:263992-264108 placement
 var withArgCheck = (spec) => (args) => {
   let problem = spec.problemOf(args);
   return problem !== undefined || !isPlainObject(args)
     ? Promise.reject(new HooksError(`${spec.name} ${problem}`))
     : spec.host(args);
 };
-//@ chunk-4121qate.js:282916-282944 placement
+//@ chunk-j8f885h1.js:264108-264136 placement
 /**
  * 装饰段合法（光标整数）
  */
 var hasValidDecorations = (decorations) => checkDecorations(decorations) === undefined;
-//@ chunk-4121qate.js:282944-283099 placement
+//@ chunk-j8f885h1.js:264136-264291 placement
 function requireTextArg(args, pluginName, method) {
   let text = isPlainObject(args) ? args.text : undefined;
   return typeof text === "string"
     ? Promise.resolve(text)
     : Promise.reject(new HooksError(`${pluginName}: $.${method} takes { text } (a string)`));
 }
-//@ chunk-4121qate.js:283099-283507 placement
+//@ chunk-j8f885h1.js:264291-264699 placement
 var PROMPT_FILL_OP = (args, pluginName) =>
   requireTextArg(args, pluginName, "prompt.fill").then((text) => {
     let mode = isPlainObject(args) ? args.mode : undefined;
@@ -85,7 +95,7 @@ var PROMPT_FILL_OP = (args, pluginName) =>
           ),
         );
   });
-//@ chunk-4121qate.js:283507-283632 placement
+//@ chunk-j8f885h1.js:264699-264824 placement
 function pickTranscriptReadOptions(args) {
   let options = isPlainObject(args) ? args : {};
   let { agentId } = options;
@@ -100,7 +110,7 @@ function pickTranscriptReadOptions(args) {
     }),
   };
 }
-//@ chunk-4121qate.js:283632-284070 placement
+//@ chunk-j8f885h1.js:264824-265262 placement
 /**
  * 校验读取会话记录的参数：只允许 agentId 与 as 两个键（或不传）。
  */
@@ -116,7 +126,7 @@ function checkTranscriptReadArgs(args) {
   if (!validAgentId) return `takes agentId, a non-empty string (got ${String(agentId)})`;
   return validAs ? undefined : `takes as "api" or none (got ${String(as)})`;
 }
-//@ chunk-4121qate.js:284070-284295 placement
+//@ chunk-j8f885h1.js:265262-265487 placement
 /**
  * 校验 $.prompt.paint 的 decorations：必须为数组，且有 text（或无文本时为空数组）后再检查各 run。
  */
@@ -126,7 +136,7 @@ function checkDecorationsArgs(text, decorations) {
     ? checkDecorations(decorations)
     : "takes { text } (a string, the draft the runs were computed for)";
 }
-//@ chunk-4121qate.js:284295-284518 placement
+//@ chunk-j8f885h1.js:265487-265710 placement
 async function normalizePaintArgs(args, pluginName) {
   let text = isPlainObject(args) ? args.text : undefined;
   let decorations = isPlainObject(args) ? args.decorations : undefined;
@@ -143,7 +153,7 @@ async function normalizePaintArgs(args, pluginName) {
     decorations,
   };
 }
-//@ chunk-4121qate.js:284518-285298 placement
+//@ chunk-j8f885h1.js:265710-266490 placement
 var PROMPT_SUBMIT_OP = (pluginName, host) =>
   freezeApiObject({
     submit: (args) =>
@@ -190,7 +200,7 @@ var PROMPT_SUBMIT_OP = (pluginName, host) =>
             ),
           ),
   });
-//@ chunk-4121qate.js:285298-285453 placement
+//@ chunk-j8f885h1.js:266490-266645 placement
 function normalizeSendArgs(args) {
   let { to, text } = args;
   if (typeof to === "string")
@@ -210,16 +220,16 @@ function normalizeSendArgs(args) {
     text,
   };
 }
-//@ chunk-4121qate.js:285453-285569 placement
+//@ chunk-j8f885h1.js:266645-266761 placement
 function pickSendTargetId(args) {
   return isPlainObject(args) && Object.hasOwn(args, "sessionId") !== Object.hasOwn(args, "agentId")
     ? (args.sessionId ?? args.agentId)
     : undefined;
 }
-//@ chunk-4121qate.js:285569-285711 placement
+//@ chunk-j8f885h1.js:266761-266903 placement
 var SESSION_SEND_USAGE =
   "takes { to, text }: to a name, an agent id or an address (a non-empty string), { sessionId } or { agentId }; text a non-empty string";
-//@ chunk-4121qate.js:285711-285891 placement
+//@ chunk-j8f885h1.js:266903-267083 placement
 /**
  * 校验 $.session.send 参数：to 为非空字符串或 {sessionId}/{agentId} 之一，text 非空。
  */
@@ -231,7 +241,7 @@ function checkSessionSendArgs(args) {
   let hasTarget = typeof target === "string" && target.trim() !== "";
   return hasText && hasTarget ? undefined : SESSION_SEND_USAGE;
 }
-//@ chunk-4121qate.js:285891-285999 placement
+//@ chunk-j8f885h1.js:267083-267191 placement
 function pickUsageOptions(args) {
   let { breakdown, columns } = args;
   return {
@@ -243,7 +253,7 @@ function pickUsageOptions(args) {
     }),
   };
 }
-//@ chunk-4121qate.js:285999-286224 placement
+//@ chunk-j8f885h1.js:267191-267416 placement
 function checkUsageArgs(args) {
   if (args === undefined) return;
   let extraKeys = isPlainObject(args)
@@ -254,7 +264,7 @@ function checkUsageArgs(args) {
     : "takes { breakdown, columns } or nothing" +
         (extraKeys.length > 0 ? ` (not ${extraKeys.join(", ")})` : "");
 }
-//@ chunk-4121qate.js:286224-287313 placement
+//@ chunk-j8f885h1.js:267416-268505 placement
 var SESSION_OPS = (pluginName, host) =>
   freezeApiObject({
     messages: (args) => {
@@ -307,7 +317,7 @@ var SESSION_OPS = (pluginName, host) =>
           );
     },
   });
-//@ chunk-4121qate.js:287313-287678 placement
+//@ chunk-j8f885h1.js:268505-268870 placement
 /**
  * $.settings 命名空间：read（可按 source 或 key 读取设置）。
  */
@@ -339,12 +349,12 @@ var SETTINGS_OPS = (pluginName, host) =>
           );
     },
   });
-//@ chunk-4121qate.js:287678-287694 placement
+//@ chunk-j8f885h1.js:268870-268886 placement
 /**
  * 接口调用返回值的字符上限 4194304，超出的值按错误拒绝。
  */
 var MAX_CALL_VALUE_CHARS = 4194304;
-//@ chunk-4121qate.js:287694-288073 placement
+//@ chunk-j8f885h1.js:268886-269265 placement
 /**
  * 把值序列化为 JSON 再解析回来，确保是 JSON 数据且不超过 4M 字符，否则抛 HooksError。
  */
@@ -365,7 +375,7 @@ function toStoredJson(value, pluginName, method = "store.set") {
     );
   return JSON.parse(json);
 }
-//@ chunk-4121qate.js:288073-288430 placement
+//@ chunk-j8f885h1.js:269265-269622 placement
 /**
  * $.store 命名空间：get/set/delete/keys，键为非空字符串，值须为 JSON 数据。
  */
@@ -394,7 +404,7 @@ function STORE_OPS(pluginName, host) {
     keys: () => host("store.keys", {}),
   });
 }
-//@ chunk-4121qate.js:288430-288946 placement
+//@ chunk-j8f885h1.js:269622-270138 placement
 function STATE_OPS(pluginName, host) {
   function ref(args, method) {
     let plugin = isPlainObject(args) ? args.plugin : undefined;
@@ -431,7 +441,7 @@ function STATE_OPS(pluginName, host) {
       }),
   });
 }
-//@ chunk-4121qate.js:288946-289029 placement
+//@ chunk-j8f885h1.js:270138-270221 placement
 /**
  * 只取存在的字段
  */
@@ -443,7 +453,7 @@ function pickFields(source, keys) {
   }
   return picked;
 }
-//@ chunk-4121qate.js:289029-289430 placement
+//@ chunk-j8f885h1.js:270221-270622 placement
 var TELEMETRY_OPS = (pluginName, host) =>
   freezeApiObject({
     log: (args) =>
@@ -463,7 +473,7 @@ var TELEMETRY_OPS = (pluginName, host) =>
             ),
           ),
   });
-//@ chunk-4121qate.js:289430-289509 placement
+//@ chunk-j8f885h1.js:270622-270701 placement
 /**
  * 取参数里的 agentId
  */
@@ -472,6 +482,10 @@ function agentIdFromArg(result) {
   return typeof agentId === "string" ? agentId : undefined;
 }
 export {
+  checkSessionSendArgs,
+  checkSessionAppendArgs,
+  checkDecorationsArgs,
+  MAX_CALL_VALUE_CHARS,
   agentIdFromArg,
   SESSION_OPS,
   PROMPT_SUBMIT_OP,
@@ -479,8 +493,4 @@ export {
   STORE_OPS,
   STATE_OPS,
   SETTINGS_OPS,
-  checkSessionSendArgs,
-  checkSessionAppendArgs,
-  checkDecorationsArgs,
-  MAX_CALL_VALUE_CHARS,
 };

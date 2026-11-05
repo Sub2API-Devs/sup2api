@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：用户提示附带文件的获取、重取与缺失说明，部分流撤回
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (26)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (26)
  * attribution: placement 26
  */
 import { join } from "path";
@@ -38,7 +38,7 @@ import {
   runBesideArrivingFiles,
 } from "../../bridge/attachmentFilesWait.js";
 import { isFilePersistenceEnabled } from "../../utils/filePersistence/filePersistence.js";
-import { AGENT_VERB } from "../../components/tasks/RemoteSessionDetailDialog.js";
+import { agentId } from "../../components/tasks/RemoteSessionDetailDialog.js";
 import { logError } from "../../utils/log.js";
 import {
   getDisableFileMentions,
@@ -77,7 +77,7 @@ import { fromEnumOpt, fromEnum, lit } from "../../services/analytics/safeMetadat
 import { streamMessageDelta, usageForStream, streamMessageStop } from "./sdkMessageStream.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:230577-232009 placement
+//@ chunk-0yw3taqg.js:258172-259607 placement
 /**
  * 处理用户消息附带的文件（远程上传）：按 id 拉取、保存到上传目录，失败时告知模型哪些文件缺失。
  */
@@ -142,8 +142,7 @@ function fetchUserPromptFiles({
     let resolving =
       unhinted.length > 0 && isFilePersistenceEnabled()
         ? resolved.then(async (res) => {
-            if (AGENT_VERB(unhinted))
-              await enqueueArrivingFileMessage(() => refreshFilesPlacedByName(unhinted));
+            if (agentId(unhinted)) await enqueueArrivingFileMessage(() => refreshFilesPlacedByName(unhinted));
             return res;
           })
         : resolved;
@@ -162,7 +161,7 @@ function fetchUserPromptFiles({
   let deferred = Promise.withResolvers();
   enqueueArrivingFileMessage(async () => {
     let result = await prependIngressFiles(first, second, third, fourth, fifth, dir, aheadArg, namedByIdHash);
-    if (AGENT_VERB(unhinted)) await refreshFilesPlacedByName(unhinted);
+    if (agentId(unhinted)) await refreshFilesPlacedByName(unhinted);
     return result;
   }, planned.paths)
     .then(
@@ -193,7 +192,7 @@ function fetchUserPromptFiles({
     frameAdmission: deferred.resolve,
   };
 }
-//@ chunk-tyg7f3ek.js:232009-232216 placement
+//@ chunk-0yw3taqg.js:259607-259814 placement
 function allFilesUnfetchable(attachments, aheadOfFiles) {
   if (getDisableFileMentions())
     return attachments.every(
@@ -210,7 +209,7 @@ function allFilesUnfetchable(attachments, aheadOfFiles) {
     ] === 1
   );
 }
-//@ chunk-tyg7f3ek.js:232216-232425 placement
+//@ chunk-0yw3taqg.js:259814-260023 placement
 function hasPromptSubmitHooks(sessionHooks) {
   try {
     let filtered = getPluginRegistry().loadedModules.filter((loadedModule) => !hasLink(loadedModule));
@@ -225,11 +224,11 @@ function hasPromptSubmitHooks(sessionHooks) {
     return true;
   }
 }
-//@ chunk-tyg7f3ek.js:232425-232499 placement
+//@ chunk-0yw3taqg.js:260023-260097 placement
 function reportMissingBridgeAttachments({ isRemoteIO, uuid, attachments }, missingFiles) {
   if (isRemoteIO) logBridgeAttachmentsMissing(uuid, attachments.length, missingFiles);
 }
-//@ chunk-tyg7f3ek.js:232499-232650 placement
+//@ chunk-0yw3taqg.js:260097-260248 placement
 function missingFileRefs(missing, refs, attachments, missingFiles) {
   return attachments.flatMap((attachment, index) =>
     missing.includes(refs[index])
@@ -242,7 +241,7 @@ function missingFileRefs(missing, refs, attachments, missingFiles) {
       : [],
   );
 }
-//@ chunk-tyg7f3ek.js:232650-233618 placement
+//@ chunk-0yw3taqg.js:260248-261220 placement
 function describeMissingFiles(
   refs,
   { content, missingFiles, asideOutcomes = [], noSpace },
@@ -298,7 +297,7 @@ function describeMissingFiles(
     })
     .catch(logError);
 }
-//@ chunk-tyg7f3ek.js:233618-234608 placement
+//@ chunk-0yw3taqg.js:261220-262210 placement
 function filesNotSavedNote(
   sentCount,
   lost,
@@ -354,7 +353,7 @@ ${mapped.join(`
     passive: true,
   });
 }
-//@ chunk-tyg7f3ek.js:234608-235279 placement
+//@ chunk-0yw3taqg.js:262210-262881 placement
 function createFetchHoldRegistry({ stopping }) {
   let bySession = new Map();
   let dropTimer;
@@ -409,7 +408,7 @@ function createFetchHoldRegistry({ stopping }) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:235373-235576 placement
+//@ chunk-0yw3taqg.js:262975-263178 placement
 var FILE_FETCH_OUTCOME_CODES = {
   all_there: 1,
   fetched: 2,
@@ -428,12 +427,12 @@ var PARTIAL_STREAM_RETRACT_CODES = {
   cut_off_prompt: 1,
   skipped_and_left_open: 2,
 };
-//@ chunk-tyg7f3ek.js:235576-235668 placement
+//@ chunk-0yw3taqg.js:263178-263270 placement
 function filesRefetchMode() {
   if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_mossy_anchor", false) === true) return "on";
   return isGrowthBookEnabled() && !hasFreshGrowthBookFeatures() ? "cold" : "off";
 }
-//@ chunk-tyg7f3ek.js:235668-235815 placement
+//@ chunk-0yw3taqg.js:263270-263417 placement
 function unfetchableFilesPlan(message, shouldQuery) {
   if (!shouldQuery || shouldQueryInboundAttachment(message) === false) return;
   let inboundAttachments = extractInboundAttachments(message);
@@ -444,7 +443,7 @@ function unfetchableFilesPlan(message, shouldQuery) {
       }
     : undefined;
 }
-//@ chunk-tyg7f3ek.js:235815-236235 placement
+//@ chunk-0yw3taqg.js:263417-263837 placement
 function plannedFilePrompt(message, shouldQuery, origin, chosenAs) {
   let plan;
   if (chosenAs === "cut_off_prompt") plan = unfetchableFilesPlan(message, shouldQuery);
@@ -479,9 +478,9 @@ function plannedFilePrompt(message, shouldQuery, origin, chosenAs) {
       }
     : undefined;
 }
-//@ chunk-tyg7f3ek.js:236235-236248 placement
+//@ chunk-0yw3taqg.js:263837-263850 placement
 var FETCH_USER_FILES_MAX_MS = 60000;
-//@ chunk-tyg7f3ek.js:236248-236489 placement
+//@ chunk-0yw3taqg.js:263850-264091 placement
 function holdForFilesRefetch(chosenAs) {
   let { promise, resolve } = Promise.withResolvers();
   runBesideArrivingFiles(() => promise);
@@ -503,14 +502,14 @@ function holdForFilesRefetch(chosenAs) {
     resolve();
   };
 }
-//@ chunk-tyg7f3ek.js:236489-236547 placement
+//@ chunk-0yw3taqg.js:264091-264149 placement
 var USER_FILE_FAILURE_CODES = {
   uploads_elsewhere: 1,
   unfit_id: 2,
   refused: 3,
   threw: 4,
 };
-//@ chunk-tyg7f3ek.js:236547-236662 placement
+//@ chunk-0yw3taqg.js:264149-264264 placement
 function logNoFileMark(cause) {
   try {
     logForDiagnosticsNoPII("warn", "user_message_files_no_mark", {
@@ -522,11 +521,11 @@ function logNoFileMark(cause) {
   }
   return "no_mark";
 }
-//@ chunk-tyg7f3ek.js:236662-236710 placement
+//@ chunk-0yw3taqg.js:264264-264312 placement
 var FILES_REFETCH_HOLD_MS = 90000;
 var FILES_FETCHED_AGAIN_HOLD = "files-fetched-again-hold";
 var FILES_REFETCH_MAX_ATTEMPTS = 2;
-//@ chunk-tyg7f3ek.js:236710-237348 placement
+//@ chunk-0yw3taqg.js:264312-264950 placement
 async function refetchSessionUploads(uuid, storageV5) {
   let refused = false;
   try {
@@ -573,7 +572,7 @@ async function refetchSessionUploads(uuid, storageV5) {
   }
   return refused ? logNoFileMark("refused") : "tries_spent";
 }
-//@ chunk-tyg7f3ek.js:237348-238288 placement
+//@ chunk-0yw3taqg.js:264950-265890 placement
 function reportFilesRefetch(
   { sentCount, fileCount, startedAt, coldRead, chosenAs },
   outcome,
@@ -629,7 +628,7 @@ function reportFilesRefetch(
     logError(error);
   }
 }
-//@ chunk-tyg7f3ek.js:238288-238422 placement
+//@ chunk-0yw3taqg.js:265890-266024 placement
 function reportMissingFiles({ uuid, sentCount, files, refs, lost, listed }) {
   try {
     filesNotSavedNote(sentCount, lost, true);
@@ -640,7 +639,7 @@ function reportMissingFiles({ uuid, sentCount, files, refs, lost, listed }) {
     return 0;
   }
 }
-//@ chunk-tyg7f3ek.js:238422-238556 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-0yw3taqg.js:266024-266158 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 async function isRegularFileOrUnknown(realCandidate) {
   if (getSessionUploadsDirOverride() !== null) return false;
   try {
@@ -650,7 +649,7 @@ async function isRegularFileOrUnknown(realCandidate) {
     return code !== "ENOENT" && code !== "ENOTDIR";
   }
 }
-//@ chunk-tyg7f3ek.js:238556-240853 placement
+//@ chunk-0yw3taqg.js:266158-268460 placement
 /**
  * 重新拉取用户消息中缺失的附件文件（.fetched-again 标记），并替换存储的提示。
  */
@@ -862,10 +861,10 @@ async function refetchUserMessageFiles({
     releasePlaceInLine?.();
   }
 }
-//@ chunk-tyg7f3ek.js:240890-241076 placement
+//@ chunk-0yw3taqg.js:268497-268683 placement
 var TOOL_USE_BLOCK_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NOOP_STREAM_HANDLERS;
-deferInit("chunk-tyg7f3ek.js:240890", () => {
+deferInit("chunk-0yw3taqg.js:268497", () => {
   TOOL_USE_BLOCK_TYPES = new Set(["tool_use", "server_tool_use", "mcp_tool_use"]);
   NOOP_STREAM_HANDLERS = {
     onStreamEvent: () => [],
@@ -875,7 +874,7 @@ deferInit("chunk-tyg7f3ek.js:240890", () => {
     closeAtTurnEnd: () => [],
   };
 });
-//@ chunk-tyg7f3ek.js:241076-243554 placement
+//@ chunk-0yw3taqg.js:268683-271163 placement
 function createPartialStreamRetraction(includePartialMessages) {
   if (!includePartialMessages) return NOOP_STREAM_HANDLERS;
   let apiMessageId = null;
@@ -1059,7 +1058,7 @@ function createPartialStreamRetraction(includePartialMessages) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:243554-243609 placement
+//@ chunk-0yw3taqg.js:271163-271218 placement
 function safeCallOrEmptyArray(fn) {
   try {
     return fn();
@@ -1068,7 +1067,7 @@ function safeCallOrEmptyArray(fn) {
     return [];
   }
 }
-//@ chunk-tyg7f3ek.js:243609-244088 placement
+//@ chunk-0yw3taqg.js:271218-271697 placement
 function toStreamEventMessage(frame, message) {
   return {
     type: "stream_event",

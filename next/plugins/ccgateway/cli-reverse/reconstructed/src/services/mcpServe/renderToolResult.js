@@ -3,25 +3,25 @@
  *
  * 2.1.316 新增：mcp serve 工具结果渲染。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-nyz8dmpm.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-dd5r2fqd.js (4)
  * attribution: placement 4
  */
 import { randomBytes } from "crypto";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { processToolResultBlock, getOriginalCwd } from "../../utils/toolResultStorage.js";
+import { persistLargeToolResult, getOriginalCwd } from "../../utils/toolResultStorage.js";
 import { getCachedReadingLimit } from "../../tools/FileReadTool/limits.js";
 import { normalizeAttachmentOrEmpty } from "../../utils/messages.js";
 import { formatFileSize } from "../../utils/format.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-nyz8dmpm.js:11900-11915 placement
+//@ chunk-dd5r2fqd.js:13048-13063 placement
 /**
  * 工具结果转内容块的字节上限（15728640）。
  */
 var MAX_TOOL_RESULT_BYTES = 15728640;
-//@ chunk-nyz8dmpm.js:11915-12535 placement
+//@ chunk-dd5r2fqd.js:13063-13683 placement
 /**
  * 把工具结果内容转为 MCP 内容块：文本、base64 图片、文档转为 resource（tool-result:attachment/N），其余 JSON 字符串化。
  */
@@ -69,7 +69,7 @@ function appendToolResultContent(blocks, content) {
         text: jsonStringify(item),
       });
 }
-//@ chunk-nyz8dmpm.js:12535-13237 placement
+//@ chunk-dd5r2fqd.js:13683-14385 placement
 async function renderToolResultForMCP(tool, result, context) {
   let toolUseId = `toolu_serve_${randomBytes(12).toString("hex")}`;
   let blockParam = tool.mapToolResultToToolResultBlockParam(result.data, toolUseId);
@@ -83,7 +83,7 @@ ${jsonStringify(result.data)}`,
         },
       ],
     };
-  let processed = await processToolResultBlock(
+  let processed = await persistLargeToolResult(
     blockParam,
     tool,
     getOriginalCwd(context.session),
@@ -115,7 +115,7 @@ ${jsonStringify(result.data)}`,
     }),
   };
 }
-//@ chunk-nyz8dmpm.js:13237-13592 placement
+//@ chunk-dd5r2fqd.js:14385-14740 placement
 function withinAnswerLimit(tool, answer) {
   let byteLength = Buffer.byteLength(jsonStringify(answer), "utf8");
   if (byteLength <= MAX_TOOL_RESULT_BYTES)

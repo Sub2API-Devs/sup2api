@@ -1,7 +1,0 @@
-
-// @bun @bytecode
-// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
-
-// Version: 2.1.316
-import{Vi,qj}from"./chunk-x6v6jz2y.js";import{ta}from"./chunk-pq6d88wp.js";import{l}from"./chunk-bbtre4r8.js";import{w}from"./chunk-s89ma3n1.js";import{ST}from"./chunk-rr03x1jm.js";import{hb}from"./chunk-xe7zq1p4.js";import{hWe}from"./chunk-7sw8gya5.js";import{e}from"./chunk-nn4p932b.js";var RDe=(g,s,u)=>new Promise((a,c)=>{let n=!1,o=null;function i(t){return o!==null&&!ta(t,o)}(async()=>{let{rerender:t,unmount:p,waitUntilExit:f}=await qj(e(hb,{children:e(d,{settings:g,baseline:u,onAccept:(r)=>{if(!i(r))return!1;if(n=!0,a("approved"),t(null),!s)p()},onReject:(r)=>{if(!i(r))return!1;if(n=!0,a("rejected"),t(null),!s)p()}})},"managed-settings-security"),ST(!1));if(o=Date.now(),await f(),!n){let r=Error("Managed-settings consent dialog exited without an answer");l(r),c(r)}})().catch((t)=>{l(t),c(t)})});function d(g){let o=w(11),{settings:s,baseline:u,onAccept:a,onReject:c}=g,n=Vi(),i;if(o[0]!==n||o[1]!==a)i=()=>a(n),o[0]=n,o[1]=a,o[2]=i;else i=o[2];let t;if(o[3]!==n||o[4]!==c)t=()=>c(n),o[3]=n,o[4]=c,o[5]=t;else t=o[5];let p;if(o[6]!==u||o[7]!==s||o[8]!==i||o[9]!==t)p=e(hWe,{settings:s,baseline:u,reveal:"default",onAccept:i,onReject:t}),o[6]=u,o[7]=s,o[8]=i,o[9]=t,o[10]=p;else p=o[10];return p}
-export{RDe};

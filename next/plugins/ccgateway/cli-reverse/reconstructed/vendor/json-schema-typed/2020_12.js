@@ -1,18 +1,18 @@
 /**
  * json-schema-typed/2020_12.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: json-schema-typed@9.0.0
- * pieces: chunk-1dth5azr.js (2)
+ * pieces: chunk-n6f7qd6s.js (2)
  * attribution: affinity 1, esm-fingerprint 2
  */
 import { isPlainObject } from "../../src/utils/isPlainObject.js";
 
-//@ chunk-1dth5azr.js:2665-2796 affinity
+//@ chunk-n6f7qd6s.js:2666-2797 affinity
 var MAX_SCHEMA_DEPTH = 32;
 var JSON_SCHEMA_TYPES = new Set(["array", "boolean", "integer", "null", "number", "object", "string"]);
 var JSON_POINTER_RE = /^[A-Za-z_][-A-Za-z0-9._]*$/u;
 var ANY_URI_RE = /^[^#]*#?$/u;
-//@ chunk-1dth5azr.js:2796-4740 esm-fingerprint
+//@ chunk-n6f7qd6s.js:2797-4741 esm-fingerprint
 function isValidSchemaShape(schema, depth = 0) {
   if (typeof schema === "boolean") return true;
   if (!isPlainObject(schema) || depth > MAX_SCHEMA_DEPTH) return false;

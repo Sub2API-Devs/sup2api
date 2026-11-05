@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：本地目录实现的记忆存储（list/read/write/delete，排除规则）；逐段解析记忆键路径（拒绝越界与链接）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-a477qqne.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b3a6nm9h.js (13)
  * attribution: placement 13
  */
 import { constants } from "fs";
@@ -41,7 +41,7 @@ import { isProtectedDirPath } from "../../utils/permissions/protectedDirNames.js
 import { DANGEROUS_FILES_LOWER } from "../../utils/permissions/filesystem.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-a477qqne.js:16887-17087 placement
+//@ chunk-b3a6nm9h.js:16920-17120 placement
 /**
  * 基于本地目录的记忆存储实现类。
  */
@@ -52,7 +52,7 @@ var SAFE_OPEN_FLAGS;
 var MISSING_PATH_ERRORS;
 var PERMISSION_ERRORS;
 var MAX_MEMORY_FILE_BYTES;
-deferInit("chunk-a477qqne.js:16887", () => {
+deferInit("chunk-b3a6nm9h.js:16920", () => {
   MEMORY_KEY_PREFIX = "mem_";
   HEX_NAME_RE = /^(?:[0-9a-f]{2})+$/;
   FILE_CONCURRENCY = 32;
@@ -61,7 +61,7 @@ deferInit("chunk-a477qqne.js:16887", () => {
   PERMISSION_ERRORS = new Set(["EACCES", "EPERM", "EBUSY"]);
   MAX_MEMORY_FILE_BYTES = 4 * MAX_CONTENT_BYTES;
 });
-//@ chunk-a477qqne.js:17087-20453 placement
+//@ chunk-b3a6nm9h.js:17120-20489 placement
 /**
  * 本地目录实现的记忆存储（list/read/write/delete，排除规则）。
  */
@@ -266,7 +266,7 @@ class LocalMemoryStore {
     return documents;
   }
 }
-//@ chunk-a477qqne.js:20453-21007 placement
+//@ chunk-b3a6nm9h.js:20489-21043 placement
 /**
  * 逐段解析记忆键路径（拒绝越界与链接）。
  */
@@ -296,7 +296,7 @@ async function resolveMemoryKeyPath(rootDir, key) {
   }
   return targetPath;
 }
-//@ chunk-a477qqne.js:21007-21170 placement (2.1.88 match: normalizeSource, 0.883)
+//@ chunk-b3a6nm9h.js:21043-21206 placement (2.1.88 match: normalizeSource, 0.883)
 /**
  * 对目录项做 stat 分类（名字配错）。
  */
@@ -307,14 +307,14 @@ async function normalizeSource(source, projectRoot) {
       : await lstat(projectRoot).catch(missingOrPermissionAsNull);
   return stats?.isDirectory() ? "directory" : stats?.isFile() ? "file" : "other";
 }
-//@ chunk-a477qqne.js:21170-21211 placement
+//@ chunk-b3a6nm9h.js:21206-21247 placement
 /**
  * 若 signal 已中止则抛 AbortError。
  */
 function throwIfAborted(signal) {
   if (signal?.aborted) throw new AbortError();
 }
-//@ chunk-a477qqne.js:21211-21325 placement
+//@ chunk-b3a6nm9h.js:21247-21361 placement
 function isSafeMemoryKey(key) {
   return key
     .split("/")
@@ -327,14 +327,14 @@ function isSafeMemoryKey(key) {
         !isReservedDeviceName(segment),
     );
 }
-//@ chunk-a477qqne.js:21325-21361 placement
+//@ chunk-b3a6nm9h.js:21361-21397 placement
 /**
  * 判断路径是否为合法的记忆文档路径。
  */
 function isMemoryDocumentPath(key) {
   return isSafeMemoryKey(key) && isMemoryDocumentKey_2(key);
 }
-//@ chunk-a477qqne.js:21361-21416 placement
+//@ chunk-b3a6nm9h.js:21397-21452 placement
 /**
  * 同上但吞掉异常。
  */
@@ -346,24 +346,24 @@ function tryIsMemoryDocumentPath(key) {
     return false;
   }
 }
-//@ chunk-a477qqne.js:21416-21525 placement
+//@ chunk-b3a6nm9h.js:21452-21561 placement
 function assertNotProtectedPath(key) {
   if (isProtectedDirPath(key.split("/").join(sep), "", DANGEROUS_FILES_LOWER))
     throw new MemoryPermanentError("invalid_path", `unsafe path segment: /${key}`);
 }
-//@ chunk-a477qqne.js:21525-21632 placement
+//@ chunk-b3a6nm9h.js:21561-21668 placement
 function assertDocumentSize(content) {
   if (Buffer.byteLength(content, "utf8") > MAX_CONTENT_BYTES)
     throw new MemoryPermanentError("http_413", "document exceeds the size cap");
 }
-//@ chunk-a477qqne.js:21632-21695 placement (2.1.88 match: generatePlaceholders, 1)
+//@ chunk-b3a6nm9h.js:21668-21731 placement (2.1.88 match: generatePlaceholders, 1)
 /**
  * 把名字编码为固定前缀加 UTF-8 十六进制串。旧版名 generatePlaceholders 误配，与 Bash 无关。
  */
 function encodeHexName(key) {
   return MEMORY_KEY_PREFIX + Buffer.from(key, "utf8").toString("hex");
 }
-//@ chunk-a477qqne.js:21695-21857 placement (2.1.88 match: generatePlaceholders, 1)
+//@ chunk-b3a6nm9h.js:21731-21893 placement (2.1.88 match: generatePlaceholders, 1)
 /**
  * 解码固定前缀加十六进制的名字，校验能往返编码且名字合法，否则返回 null。与 Bash 无关。
  */
@@ -373,7 +373,7 @@ function decodeHexName(id) {
   let str = Buffer.from(hexPart, "hex").toString("utf8");
   return encodeHexName(str) === id && isMemoryDocumentPath(str) ? str : null;
 }
-//@ chunk-a477qqne.js:21857-22307 placement
+//@ chunk-b3a6nm9h.js:21893-22344 placement
 /**
  * 安全读取记忆文件（大小上限、inode 一致）。
  */

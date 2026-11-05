@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/nested-clients/dist-cjs/submodules/cognito-identity/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-heg39xxp.js (4)
+ * pieces: chunk-539esr4f.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
  */
 import { __toESM } from "../../../../../../runtime/bun-runtime.js";
@@ -28,11 +28,11 @@ import { getRuntimeConfig_2 } from "../sts/runtimeConfig.js";
 import { resolveClientEndpointParameters } from "../../../../client-sts/dist-cjs/index.js";
 import { deferInit } from "../../../../../../runtime/deferred-init.js";
 
-//@ chunk-heg39xxp.js:13020-13058 esm-layout
+//@ chunk-539esr4f.js:13020-13058 esm-layout
 var import_region_config_resolver = __toESM(require_region_config_resolver());
 var import_protocol_http = __toESM(require_protocol_http());
 var import_client_5 = __toESM(require_client());
-//@ chunk-heg39xxp.js:13058-13525 esm-fingerprint
+//@ chunk-539esr4f.js:13058-13525 esm-fingerprint
 var getHttpAuthExtensionConfiguration = (config) => {
   let {
     httpAuthSchemes: _httpAuthSchemes,
@@ -67,7 +67,7 @@ var resolveHttpAuthRuntimeConfig = (config) => ({
   httpAuthSchemeProvider: config.httpAuthSchemeProvider(),
   credentials: config.credentials(),
 });
-//@ chunk-heg39xxp.js:13525-13863 esm-fingerprint
+//@ chunk-539esr4f.js:13525-13863 esm-fingerprint
 var resolveRuntimeExtensions = (runtimeConfig, extensions) => {
   let extensionConfiguration = Object.assign(
     import_region_config_resolver.getAwsRegionExtensionConfiguration(runtimeConfig),
@@ -84,9 +84,9 @@ var resolveRuntimeExtensions = (runtimeConfig, extensions) => {
     resolveHttpAuthRuntimeConfig(extensionConfiguration),
   );
 };
-//@ chunk-heg39xxp.js:13863-14920 esm-fingerprint
+//@ chunk-539esr4f.js:13863-14920 esm-fingerprint
 let CognitoIdentityClient; // deferred: uses import_middleware_host_header (../../../../client-sts/dist-cjs/auth/httpAuthSchemeProvider.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-heg39xxp.js:13863", () => {
+deferInit("chunk-539esr4f.js:13863", () => {
   CognitoIdentityClient = class CognitoIdentityClient extends import_client.Client {
     config;
     constructor(...[configuration]) {

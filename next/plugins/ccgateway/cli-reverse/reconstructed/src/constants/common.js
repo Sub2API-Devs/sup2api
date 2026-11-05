@@ -3,13 +3,13 @@
  *
  * 通用小常量与日期辅助（本地"月份 年"字符串）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/constants/common.ts
- * pieces: chunk-d0k42hx1.js (1)
+ * pieces: chunk-v4ach9rb.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-d0k42hx1.js:1326-1413 fingerprint (2.1.88 match: getLocalMonthYear, 0.92)
+//@ chunk-v4ach9rb.js:1357-1444 fingerprint (2.1.88 match: getLocalMonthYear, 0.919)
 /**
  * 当前本地日期的 "Month YYYY"（en-US）。
  */

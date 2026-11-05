@@ -3,18 +3,18 @@
  *
  * 2.1.316 新增。tengu_violin_fret 开关：无人值守服务同意闸门。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4qkxr5m3.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rcb41a26.js (3)
  * attribution: placement 3
  */
 import { checkGate_CACHED_OR_BLOCKING } from "./growthbook.js";
 import { isViolinWillowEnabledCached } from "./violinWillowGate.js";
 import { isViolinWoodEnabled } from "./violinGates.js";
 
-//@ chunk-4qkxr5m3.js:300-326 placement
+//@ chunk-rcb41a26.js:300-326 placement
 var TENGU_VIOLIN_FRET = "tengu_violin_fret";
-//@ chunk-4qkxr5m3.js:326-386 placement
+//@ chunk-rcb41a26.js:326-386 placement
 /**
  * tengu_violin_fret 开关：无人值守服务同意闸门。
  */
@@ -25,7 +25,7 @@ async function isViolinFretEnabled() {
     return false;
   }
 }
-//@ chunk-4qkxr5m3.js:386-445 placement
+//@ chunk-rcb41a26.js:386-445 placement
 async function isUnattendedServingConsentGateOn() {
   return isViolinWillowEnabledCached() && (await isViolinWoodEnabled()) && (await isViolinFretEnabled());
 }

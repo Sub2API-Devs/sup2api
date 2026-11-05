@@ -3,10 +3,10 @@
  *
  * 并入旧版已有路径：交互模式启动辅助。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/interactiveHelpers.tsx
- * pieces: chunk-20skp6hd.js (6), chunk-7fw14qgv.js (27), chunk-d4eg9at2.js (1)
- * attribution: placement 6, sole-consumer 3, affinity 2, facade-exports 13, layout 9, fingerprint 1
+ * pieces: chunk-0b83n7d5.js (1), chunk-ezx72dpn.js (6), chunk-yq5f910z.js (27)
+ * attribution: fingerprint 1, placement 6, sole-consumer 3, affinity 2, facade-exports 13, layout 9
  */
 import { homedir } from "os";
 import { openSync, writeSync } from "fs";
@@ -50,7 +50,7 @@ import {
 } from "./utils/config.js";
 import { primePlanSlugCollisions } from "./utils/plans.js";
 import { blockingSettingsErrors } from "./utils/settings/settingsNotices.js";
-import { uniq } from "./utils/collections.js";
+import { normalizeCaseForComparison_2 } from "./utils/permissions/filesystem.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "./services/analytics/featureTelemetry.js";
 import { logError } from "./utils/log.js";
 import { toError, errorMessage } from "./utils/errors.js";
@@ -93,6 +93,7 @@ import { getExternalClaudeMdIncludes, getMemoryFilesCached } from "./utils/claud
 import { updateGithubRepoPathMapping } from "./utils/githubRepoPathMapping.js";
 import { updateDeepLinkTerminalPreference } from "./utils/deepLink/terminalPreference.js";
 import { registerCleanup } from "./utils/cleanupRegistry.js";
+import { isCodeModeAllowed } from "./utils/foresightStatus.js";
 import { isQualifiedForGrove, wasGroveRecentlyConfirmed } from "./services/api/grove.js";
 import { logEvent } from "./services/analytics/index.js";
 import { getProTrialStatus } from "./services/api/proTrial.js";
@@ -114,21 +115,19 @@ import { FpsTracker } from "./utils/fpsTracker.js";
 import { createStatsStore } from "./context/stats.js";
 import { isSynchronizedOutputSupported } from "./ink/terminal.js";
 import { RenderOnceAndExit } from "./utils/staticRender.js";
-import { formatMessageLines } from "./cli/handlers/plugins.js";
-import { exitAfterAnalyticsFlush } from "./cli/exit.js";
 import { deferInit } from "../runtime/deferred-init.js";
 
-//@ chunk-20skp6hd.js:1140-1144 placement
+//@ chunk-ezx72dpn.js:1141-1145 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-20skp6hd.js:1140", () => {
+deferInit("chunk-ezx72dpn.js:1141", () => {
   init_react_production();
 });
-//@ chunk-20skp6hd.js:2791-2795 placement
+//@ chunk-ezx72dpn.js:2792-2796 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-20skp6hd.js:2791", () => {
+deferInit("chunk-ezx72dpn.js:2792", () => {
   init_react_production();
 });
-//@ chunk-20skp6hd.js:4353-4564 placement
+//@ chunk-ezx72dpn.js:4355-4566 placement
 /**
  * 列出待批准的项目 MCP 服务器（严格 MCP 配置时为空），并给出其中来自插件的服务器名。
  */
@@ -146,7 +145,7 @@ async function getPendingProjectMcpServers(root) {
     pluginServerNames,
   };
 }
-//@ chunk-20skp6hd.js:4885-5222 placement
+//@ chunk-ezx72dpn.js:4887-5224 placement
 /**
  * 有待批准的项目 MCP 服务器时显示批准对话框（单个或多选），并在后台任务中标记等待批准。
  */
@@ -177,7 +176,7 @@ async function projectMcpApprovalDialog({ pendingServers, pluginServerNames }, o
         onDone: onDone_2,
       });
 }
-//@ chunk-20skp6hd.js:5222-5691 placement
+//@ chunk-ezx72dpn.js:5224-5693 placement
 /**
  * 后台任务中把作业状态标记为"等待批准新的项目 MCP 服务器"，返回原状态以便之后恢复。
  */
@@ -216,7 +215,7 @@ async function markJobBlockedOnMcpApproval(serverLabels, storageV5) {
   }
   return;
 }
-//@ chunk-20skp6hd.js:5691-5919 placement
+//@ chunk-ezx72dpn.js:5693-5921 placement
 async function restoreJobStateAfterApproval(restoreState, storageV5) {
   {
     if (!restoreState || !isBgSession()) return;
@@ -240,21 +239,21 @@ async function restoreJobStateAfterApproval(restoreState, storageV5) {
     }
   }
 }
-//@ chunk-7fw14qgv.js:2904-2934 sole-consumer
+//@ chunk-yq5f910z.js:2941-2971 sole-consumer
 /**
  * 把回调以 false 调用
  */
 function setFlagFalse(setFlag) {
   return setFlag(false);
 }
-//@ chunk-7fw14qgv.js:2934-2975 sole-consumer
+//@ chunk-yq5f910z.js:2971-3012 sole-consumer
 /**
  * 执行重新启动
  */
 function execRelaunch(relauncher) {
   return relauncher.execRelaunch();
 }
-//@ chunk-7fw14qgv.js:2975-3035 sole-consumer
+//@ chunk-yq5f910z.js:3012-3072 sole-consumer
 /**
  * 先清理再重新启动
  */
@@ -262,7 +261,7 @@ function prepareAndRelaunch(cleanup) {
   cleanup();
   import("./utils/relaunch.js").then(execRelaunch);
 }
-//@ chunk-7fw14qgv.js:3035-3085 affinity
+//@ chunk-yq5f910z.js:3072-3122 affinity
 /**
  * 状态置为 save-failed
  */
@@ -272,13 +271,13 @@ function markSaveFailed(state) {
     phase: "save-failed",
   };
 }
-//@ chunk-7fw14qgv.js:3085-3142 facade-exports
+//@ chunk-yq5f910z.js:3122-3179 facade-exports
 function adoptPersistedWorkspaceTrust(projectRoot) {
   if (env.CLAUBBIT || !checkHasTrustDialogAccepted()) return;
   setSessionTrustAccepted(true);
   primePlanSlugCollisions(projectRoot);
 }
-//@ chunk-7fw14qgv.js:3142-3713 facade-exports
+//@ chunk-yq5f910z.js:3179-3750 facade-exports
 function completeOnboarding(storageV5) {
   saveGlobalConfig(
     (current) => ({
@@ -288,10 +287,10 @@ function completeOnboarding(storageV5) {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
@@ -299,14 +298,14 @@ function completeOnboarding(storageV5) {
     storageV5,
   );
 }
-//@ chunk-7fw14qgv.js:3713-4336 facade-exports
+//@ chunk-yq5f910z.js:3750-4373 facade-exports
 function projectMcpApprovalStep(storageV5, notify) {
   return async (finish) => {
     let pendingProjectMcpServers = await getPendingProjectMcpServers(storageV5);
     let settingsErrors = blockingSettingsErrors();
     if (pendingProjectMcpServers.pendingServers.length === 0) return null;
     if (settingsErrors.length > 0) {
-      let joined = uniq(
+      let joined = normalizeCaseForComparison_2(
         settingsErrors.flatMap((error) => (error.file ? [cleanForDisplay(error.file)] : [])),
       ).join(", ");
       logFeatureSad("mcp_project_approval_dialog", "mcp_project_approval_skipped_settings_errors");
@@ -337,7 +336,7 @@ function projectMcpApprovalStep(storageV5, notify) {
     }
   };
 }
-//@ chunk-7fw14qgv.js:4336-5082 layout
+//@ chunk-yq5f910z.js:4373-5119 layout
 /**
  * 项目 MCP 批准对话框结束后的提示：选择保存失败、或工作区未被显式信任导致只对本会话生效时，返回对应的提示文本，否则 null。
  */
@@ -366,7 +365,7 @@ function mcpApprovalPersistNotice(result) {
   logFeatureOk("mcp_project_approval_dialog");
   return null;
 }
-//@ chunk-7fw14qgv.js:5082-5168 facade-exports (2.1.88 match: exitWithMessage, 0.308)
+//@ chunk-yq5f910z.js:5119-5205 facade-exports (2.1.88 match: exitWithMessage, 0.31)
 /**
  * endInkWithError：在 Ink 里显示红色错误后卸载并退出。
  */
@@ -381,13 +380,13 @@ async function endInkWithError(root, message) {
   root.unmount();
   await recordExitWithMessageCause(message);
 }
-//@ chunk-7fw14qgv.js:5168-5313 layout
+//@ chunk-yq5f910z.js:5205-5350 layout
 async function recordExitWithMessageCause(message) {
   let { setBgExitCause, setBgExitDetail } = await import("./utils/bgExitSidecars.js");
   setBgExitCause("exit_with_message");
   setBgExitDetail("exit_with_message", message);
 }
-//@ chunk-7fw14qgv.js:5313-5443 facade-exports
+//@ chunk-yq5f910z.js:5350-5480 facade-exports
 /**
  * 显示“Loading your organization's managed settings…”等待提示。
  */
@@ -403,7 +402,7 @@ function showSettingsLoadHold(root) {
     }),
   );
 }
-//@ chunk-7fw14qgv.js:5443-5531 facade-exports (2.1.88 match: exitWithError, 0.655)
+//@ chunk-yq5f910z.js:5480-5568 facade-exports (2.1.88 match: exitWithError, 0.651)
 /**
  * exitWithError：exitWithMessage 的错误色版本（可带未发送的提示）。
  */
@@ -414,7 +413,7 @@ async function exitWithError(root, message, beforeExit, unsentPrompt) {
     unsentPrompt,
   });
 }
-//@ chunk-7fw14qgv.js:5531-6114 facade-exports
+//@ chunk-yq5f910z.js:5568-6151 facade-exports
 /**
  * exitWithMessage：渲染一段（可带颜色的）文本后卸载 Ink、执行 beforeExit、优雅退出。
  */
@@ -457,7 +456,7 @@ ${options.unsentPrompt}`,
   );
   process.exit(exitCode);
 }
-//@ chunk-7fw14qgv.js:6114-6275 facade-exports (2.1.88 match: showSetupDialog, 0.644)
+//@ chunk-yq5f910z.js:6151-6312 facade-exports (2.1.88 match: showSetupDialog, 0.644)
 /**
  * showSetupDialog：在已有 Ink 根上显示一个对话框，返回其 done 回调的值。
  */
@@ -480,7 +479,7 @@ function showSetupDialog(root, renderer, options) {
     ).catch(reject);
   });
 }
-//@ chunk-7fw14qgv.js:6275-6914 facade-exports
+//@ chunk-yq5f910z.js:6312-6951 facade-exports
 /**
  * renderAndRun：把元素挂到 Ink 根，等待退出；渲染期未处理异常写入错误并退出。
  */
@@ -514,10 +513,10 @@ async function renderAndRun(root, element, host, storageV5, credentials) {
   await shutdownCoordinators.of(host.host).runBeforeInteractiveShutdown();
   await gracefulShutdown(0);
 }
-//@ chunk-7fw14qgv.js:6914-6955 layout
+//@ chunk-yq5f910z.js:6951-6992 layout
 var POST_ONBOARDING_GB_TIMEOUT_MS = 2000;
 var POST_ONBOARDING_GB_LABEL = "GB post-onboarding init";
-//@ chunk-7fw14qgv.js:6955-8171 facade-exports
+//@ chunk-yq5f910z.js:6992-8208 facade-exports
 /**
  * 显示启动前的设置屏（showSetupScreens）：工作区信任、onboarding、MCP 项目审批、Chrome 提议等，返回 onboarding 结果。
  */
@@ -625,7 +624,7 @@ async function showSetupScreens(
   );
   return setupResult;
 }
-//@ chunk-7fw14qgv.js:8171-13351 facade-exports (2.1.88 match: showSetupScreens, 0.356)
+//@ chunk-yq5f910z.js:8208-13628 facade-exports (2.1.88 match: showSetupScreens, 0.341)
 /**
  * 构造 setup 步骤序列（setupSteps）：每步是一个可能显示的对话框（信任、bypass 确认、开发通道、云默认等）。
  */
@@ -743,7 +742,20 @@ function setupSteps(
       else setImmediate(initializeTelemetryAfterTrust, storageV5);
       return shouldHoldForOnboarding(session.host, config) ? awaitGrowthBookAfterOnboarding() : null;
     },
-    async (done) => null,
+    async (done) => {
+      if (isCodeModeAllowed()) {
+        let { reviewCodeModeOptInInSetup } = await import("./utils/codeModeOptIn.js");
+        let optInResult = await reviewCodeModeOptInInSetup();
+        if (optInResult === "none") return null;
+        let { CodeModeOptIn } = await import("./components/codeMode/CodeModeOptIn.lazy.js");
+        return jsxProd_default(CodeModeOptIn, {
+          step: optInResult,
+          onStartWithout: () => done(),
+          storageV5,
+        });
+      }
+      return null;
+    },
     async (done) => {
       if (
         !(await isQualifiedForGrove(storageV5, credentials)) ||
@@ -850,7 +862,7 @@ function setupSteps(
         await Promise.all([
           import("./services/mcp/channelAllowlist.js"),
           import("./services/mcp/channelNotification.js"),
-          import("./utils/settings/settings.lazy.js"),
+          import("./utils/settings/settings.js"),
         ]);
       let finish = () => {
         let mapped = devChannels.map((devChannel) => ({
@@ -943,7 +955,7 @@ function setupSteps(
     },
   ];
 }
-//@ chunk-7fw14qgv.js:13351-13562 facade-exports
+//@ chunk-yq5f910z.js:13628-13839 facade-exports
 /**
  * 启动未完成就退出时也导出一次 3P 遥测。
  */
@@ -960,7 +972,7 @@ async function exportTelemetryWhileStartPending() {
     });
   }
 }
-//@ chunk-7fw14qgv.js:13562-13701 layout
+//@ chunk-yq5f910z.js:13839-13978 layout
 async function wrapFullPageNotice(noticePromise) {
   let [noticeElement, { FullPageNotice }] = await Promise.all([
     noticePromise,
@@ -972,7 +984,7 @@ async function wrapFullPageNotice(noticePromise) {
         children: noticeElement,
       });
 }
-//@ chunk-7fw14qgv.js:13701-13970 layout
+//@ chunk-yq5f910z.js:13978-14247 layout
 async function awaitGrowthBookAfterOnboarding() {
   let now = Date.now();
   try {
@@ -986,7 +998,7 @@ async function awaitGrowthBookAfterOnboarding() {
   }
   return null;
 }
-//@ chunk-7fw14qgv.js:13970-14183 layout
+//@ chunk-yq5f910z.js:14247-14460 layout
 function DelayedCallback(props) {
   let $ = useMemoCache(4);
   let { afterMs, onDone, children } = props;
@@ -1009,7 +1021,7 @@ function DelayedCallback(props) {
   useEffect(timerEffect, timerDeps);
   return children;
 }
-//@ chunk-7fw14qgv.js:14183-14553 layout
+//@ chunk-yq5f910z.js:14460-14830 layout
 var PROVIDER_UPGRADE_EVENTS = {
   bedrock: {
     accepted: "tengu_bedrock_upgrade_accepted",
@@ -1024,7 +1036,7 @@ var PROVIDER_UPGRADE_EVENTS = {
     relaunch: "tengu_vertex_upgrade_relaunch",
   },
 };
-//@ chunk-7fw14qgv.js:14553-16017 layout
+//@ chunk-yq5f910z.js:14830-16294 layout
 function createProviderUpgradeStep(provider, storageV5) {
   let events = PROVIDER_UPGRADE_EVENTS[provider];
   return async (done) => {
@@ -1057,7 +1069,7 @@ function createProviderUpgradeStep(provider, storageV5) {
       let filtered = candidates.filter((candidate) => declined[candidate.tier] !== upgradeKey(candidate));
       if (filtered.length === 0) return null;
       let [{ updateSettingsForSource }, { ThirdPartyModelUpgradeDialog }] = await Promise.all([
-        import("./utils/settings/settings.lazy.js"),
+        import("./utils/settings/settings.js"),
         import("./components/ThirdPartyModelUpgradeDialog.lazy.js"),
       ]);
       async function answer(candidate, accepted) {
@@ -1126,7 +1138,7 @@ function createProviderUpgradeStep(provider, storageV5) {
     }
   };
 }
-//@ chunk-7fw14qgv.js:16017-17824 layout
+//@ chunk-yq5f910z.js:16294-18101 layout
 function ProviderUpgradeDialog(props) {
   let $ = useMemoCache(27);
   let { provider, pending, answer, onDone, Dialog } = props;
@@ -1285,7 +1297,7 @@ function ProviderUpgradeDialog(props) {
   } else dialogElement = $[26];
   return dialogElement;
 }
-//@ chunk-7fw14qgv.js:17824-18587 facade-exports (2.1.88 match: getRenderContext, 0.98)
+//@ chunk-yq5f910z.js:18101-18864 facade-exports (2.1.88 match: getRenderContext, 0.98)
 /**
  * getRenderContext：构造 Ink 渲染选项、FPS 统计、帧耗时日志（CLAUDE_CODE_FRAME_TIMING_LOG）。
  */
@@ -1344,28 +1356,29 @@ function getRenderContext(exitOnCtrlC) {
     },
   };
 }
-//@ chunk-7fw14qgv.js:18587-18671 affinity
+//@ chunk-yq5f910z.js:18864-18948 affinity
 function startMemoryWatcherLazy(storageV5, credentials) {
   import("./services/memorySync/memoryWatcher.js").then((mod) =>
     mod.startMemoryWatcher(storageV5, credentials),
   );
 }
-//@ chunk-d4eg9at2.js:10206-10308 fingerprint (2.1.88 match: renderAndRun, 1)
-function renderAndRun_2(root, message, exitCode) {
+//@ chunk-0b83n7d5.js:742-818 fingerprint (2.1.88 match: renderAndRun, 1)
+/**
+ * 在 Ink 根上渲染元素并等待退出（子命令用的简化版 renderAndRun）。
+ */
+async function renderAndRun_2(root, element) {
   root.render(
     jsxProd_default(RenderOnceAndExit, {
-      children: jsxProd_default(Text, {
-        children: formatMessageLines(message),
-      }),
+      children: element,
     }),
   );
-  root.waitUntilExit().then(() => exitAfterAnalyticsFlush(exitCode));
+  await root.waitUntilExit();
 }
 export {
+  renderAndRun_2,
   showSetupDialog,
   exitWithMessage,
   renderAndRun,
-  renderAndRun_2,
   getPendingProjectMcpServers,
   adoptPersistedWorkspaceTrust,
   completeOnboarding,

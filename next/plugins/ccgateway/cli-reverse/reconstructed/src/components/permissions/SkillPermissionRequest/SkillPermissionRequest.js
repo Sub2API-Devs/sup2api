@@ -3,10 +3,10 @@
  *
  * Skill 工具权限请求：技能名与安全检查结果，允许/应用建议/拒绝。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/SkillPermissionRequest/SkillPermissionRequest.tsx
- * pieces: chunk-18hwfzwa.js (10)
- * attribution: sole-consumer 3, affinity 2, fingerprint 2, layout 1, placement 2
+ * pieces: chunk-czq1j3j2.js (10)
+ * attribution: sole-consumer 3, affinity 2, fingerprint 2, placement 2, layout 1
  */
 import {
   parseConsentSuggestions,
@@ -37,9 +37,17 @@ import { formatQuotedList } from "../../../utils/websocketSummary.js";
 import { DiffFrame } from "../../FileEditToolDiff.js";
 import { sandboxHostsSummary, formatHiddenRowsHint } from "../BashPermissionRequest/commandDisplay.js";
 import { MAX_EXPLANATION_LINES, PermissionRuleExplanation } from "../PermissionRuleExplanation.js";
-import { PermissionPrompt } from "../PermissionPrompt.js";
+import { permissionChoicePrompt } from "../PermissionPrompt.js";
 import { PermissionDialog_2 } from "../PermissionDialog.js";
 import { MONITOR } from "../../../tools/MonitorTool/constants.js";
+import {
+  init_react_production,
+  useMemo,
+  useContext,
+  useState,
+  useEffect,
+  useLayoutEffect,
+} from "../../../../vendor/react/cjs/react.production.js";
 import {
   getSkillCommandPrefix,
   resolveSkillDisplay,
@@ -58,14 +66,6 @@ import {
   SURVEY_QUESTION_LINE_CHARS,
 } from "./skillPermissionOptions.js";
 import { getOriginalCwd } from "../../../bootstrap/state.js";
-import {
-  useMemo,
-  useContext,
-  useState,
-  useEffect,
-  useLayoutEffect,
-  init_react_production,
-} from "../../../../vendor/react/cjs/react.production.js";
 import { useIsScreenReaderEnabled } from "../../../ink/components/ErrorBoundary.js";
 import { useScrollViewportSize } from "../../ScrollViewportContext.js";
 import { TerminalSizeContext } from "../../../ink/terminalModes.js";
@@ -77,7 +77,7 @@ import { formatShortcutHint } from "../../design-system/KeyboardShortcutHint.js"
 import { useDialogKeybindings } from "../../../keybindings/dialogKeyHints.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1390671-1391495 sole-consumer
+//@ chunk-czq1j3j2.js:1413440-1414264 sole-consumer
 /**
  * 从权限结果的 suggestions 生成同意行：规则类一行，addDirectories 目录（有总数上限、防御性读取）一行，多行合并。
  */
@@ -135,7 +135,7 @@ function buildSuggestionRows(payload) {
   if (firstRow === undefined) return null;
   return restRows.length === 0 ? firstRow : combineRows(firstRow, ...restRows);
 }
-//@ chunk-18hwfzwa.js:1391495-1391665 sole-consumer
+//@ chunk-czq1j3j2.js:1414264-1414434 sole-consumer
 function hasBlockingSafetyCheck(payload) {
   let decisionReason =
     payload.permissionResult.behavior === "ask" ? payload.permissionResult.decisionReason : undefined;
@@ -144,7 +144,7 @@ function hasBlockingSafetyCheck(payload) {
     payload.isAskCappedByOrg
   );
 }
-//@ chunk-18hwfzwa.js:1391665-1391836 sole-consumer
+//@ chunk-czq1j3j2.js:1414434-1414605 sole-consumer
 function isSkillInputWithheld(payload) {
   return (
     payload.command?.kind === "withheld" ||
@@ -153,11 +153,11 @@ function isSkillInputWithheld(payload) {
     (payload.command === undefined && payload.mcp === undefined && payload.ws === undefined)
   );
 }
-//@ chunk-18hwfzwa.js:1391836-1391890 affinity
+//@ chunk-czq1j3j2.js:1414605-1414659 affinity
 function displayTextOf(text) {
   return text.kind === "full" ? text.text : text.marker;
 }
-//@ chunk-18hwfzwa.js:1391890-1395417 fingerprint (2.1.88 match: SkillPermissionRequest, 0.304)
+//@ chunk-czq1j3j2.js:1414659-1418187 fingerprint (2.1.88 match: SkillPermissionRequest, 0.304)
 /**
  * Skill 权限：显示技能名、来源与安全检查，选项允许 / 应用建议规则 / 拒绝。
  */
@@ -403,7 +403,7 @@ function SkillPermissionRequest(props) {
     $[38] !== options_2 ||
     $[39] !== payload.requestSource
   ) {
-    prompt = jsxProd_default(PermissionPrompt, {
+    prompt = jsxProd_default(permissionChoicePrompt, {
       options: options_2,
       hideIndexes,
       onSelect: onSelect_2,
@@ -450,13 +450,18 @@ function SkillPermissionRequest(props) {
   } else dialog = $[49];
   return dialog;
 }
-//@ chunk-18hwfzwa.js:1409005-1409162 affinity
+//@ chunk-czq1j3j2.js:1445103-1445107 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1445103", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1448082-1448239 affinity
 function shouldOfferAlwaysAllow(payload) {
   let decisionReason = payload.permissionResult.decisionReason;
   let isUnapprovableCheck = decisionReason?.type === "safetyCheck" && !decisionReason.classifierApprovable;
   return payload.showAlwaysAllow && !isUnapprovableCheck && !payload.isAskCappedByOrg;
 }
-//@ chunk-18hwfzwa.js:1409162-1409256 fingerprint (2.1.88 match: _temp, 0.709)
+//@ chunk-czq1j3j2.js:1448239-1448333 fingerprint (2.1.88 match: _temp, 0.71)
 function shouldOfferExactSkillRule(input) {
   return (
     shouldOfferAlwaysAllow(input) &&
@@ -465,12 +470,12 @@ function shouldOfferExactSkillRule(input) {
     !input.skill.endsWith(" *")
   );
 }
-//@ chunk-18hwfzwa.js:1409256-1409319 layout
+//@ chunk-czq1j3j2.js:1448333-1448396 layout
 function shouldOfferPrefixSkillRule(payload) {
   if (!shouldOfferAlwaysAllow(payload)) return false;
   return getSkillCommandPrefix(payload.skill) !== null;
 }
-//@ chunk-18hwfzwa.js:1409319-1412968 placement
+//@ chunk-czq1j3j2.js:1448396-1452044 placement
 /**
  * skill 使用权限请求对话框。
  */
@@ -730,7 +735,7 @@ ${descriptionText}`;
             hideAskRuleHint: hasSkill && askRuleHintShown,
             onConsentDrawn: hasSkill ? setConsentDrawn : undefined,
           }),
-          jsxProd_default(PermissionPrompt, {
+          jsxProd_default(permissionChoicePrompt, {
             options,
             hideIndexes,
             onSelect,
@@ -752,9 +757,4 @@ ${descriptionText}`;
       })
     : dialog;
 }
-//@ chunk-18hwfzwa.js:1412968-1412972 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1412968", () => {
-  init_react_production();
-});
 export { SkillUsePermissionDialog, SkillPermissionRequest };

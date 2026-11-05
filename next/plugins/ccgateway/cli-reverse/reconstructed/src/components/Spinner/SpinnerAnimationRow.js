@@ -3,25 +3,26 @@
  *
  * Spinner 动画行：字形 + 文案 + 已用时间 + token 数 + 停滞（stalled）提示与宽度预算。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Spinner/SpinnerAnimationRow.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-3mec1atf.js (5), chunk-e6aww6q8.js (1)
+ * pieces: chunk-3ne3bnw4.js (1), chunk-5xgkngpb.js (1), chunk-hzenv5c0.js (5)
  * attribution: fingerprint 4, callgraph-fingerprint 1, layout 2
  */
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+  Fragment,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { fragmentTypeExport, isValidElement_default } from "../../../vendor/react/cjs/react.production.js";
+import { Text, Box } from "../../ink/components/Text.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
-import { parseRGB, roundToStep, toRGBColor, interpolateColor } from "./utils.js";
+import { interpolateColor, roundToStep, toRGBColor, parseRGB } from "./utils.js";
 import { SpinnerTimer316 } from "../Spinner.js";
 import { useResolvedTheme } from "../design-system/ThemeProvider.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { shouldShowNotice } from "../SlashCommandLink.js";
-import {
-  jsxProd_default,
-  jsxProd_default_2,
-  Fragment,
-} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { Text, Box } from "../../ink/components/Text.js";
 import { Byline } from "../design-system/Byline.js";
 import { SpinnerColumn } from "./SpinnerColumn.js";
 import { stripSuffix } from "../../utils/stringUtils.js";
@@ -43,7 +44,7 @@ import { API_ERROR_TEXT } from "./spinnerStatus.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2582458-2582541 fingerprint (2.1.88 match: THINKING_BARE_WIDTH, 1)
+//@ chunk-5xgkngpb.js:2637598-2637681 fingerprint (2.1.88 match: THINKING_BARE_WIDTH, 1)
 function THINKING_BARE_WIDTH(block, width) {
   try {
     return block.type === "thinking" ? width : undefined;
@@ -52,7 +53,24 @@ function THINKING_BARE_WIDTH(block, width) {
     return;
   }
 }
-//@ chunk-3mec1atf.js:12033-12139 callgraph-fingerprint (2.1.88 match: THINKING_INACTIVE, 0.647)
+//@ chunk-3ne3bnw4.js:417-520 fingerprint (2.1.88 match: SEP_WIDTH, 1)
+function renderBylineItem(item, index) {
+  return jsxProd_default_2(
+    fragmentTypeExport,
+    {
+      children: [
+        index > 0 &&
+          jsxProd_default(Text, {
+            dimColor: true,
+            children: " \xB7 ",
+          }),
+        item,
+      ],
+    },
+    isValidElement_default(item) ? (item.key ?? index) : index,
+  );
+}
+//@ chunk-hzenv5c0.js:12034-12140 callgraph-fingerprint (2.1.88 match: THINKING_INACTIVE, 0.646)
 var SEPARATOR_WIDTH; // deferred: uses bunStringWidth (../../ink/stringWidth.js) of its import cycle while loading; runs once the cycle is complete
 var THINKING_TEXT_WIDTH;
 var SHOW_DETAILS_AFTER_MS;
@@ -60,7 +78,7 @@ var SHIMMER_DIM_RGB;
 var SHIMMER_BRIGHT_RGB;
 var SHIMMER_START_DELAY_MS;
 var SHIMMER_PERIOD_SECONDS;
-deferInit("chunk-3mec1atf.js:12033", () => {
+deferInit("chunk-hzenv5c0.js:12034", () => {
   SEPARATOR_WIDTH = bunStringWidth(" \xB7 ");
   THINKING_TEXT_WIDTH = bunStringWidth("thinking");
   SHOW_DETAILS_AFTER_MS = 16000;
@@ -77,17 +95,19 @@ deferInit("chunk-3mec1atf.js:12033", () => {
   SHIMMER_START_DELAY_MS = 3000;
   SHIMMER_PERIOD_SECONDS = 2;
 });
-//@ chunk-3mec1atf.js:12139-12268 layout
+//@ chunk-hzenv5c0.js:12140-12269 layout
 function computeShimmerColor(time, thinkingIntensity, intensity) {
   let seconds = (time - SHIMMER_START_DELAY_MS) / 1000;
   let wave =
     time < SHIMMER_START_DELAY_MS ? 0 : (Math.sin((seconds * Math.PI * 2) / SHIMMER_PERIOD_SECONDS) + 1) / 2;
-  let color = parseRGB(SHIMMER_DIM_RGB, SHIMMER_BRIGHT_RGB, roundToStep(wave));
+  let color = interpolateColor(SHIMMER_DIM_RGB, SHIMMER_BRIGHT_RGB, roundToStep(wave));
   return toRGBColor(
-    intensity && thinkingIntensity > 0 ? parseRGB(color, intensity, roundToStep(thinkingIntensity)) : color,
+    intensity && thinkingIntensity > 0
+      ? interpolateColor(color, intensity, roundToStep(thinkingIntensity))
+      : color,
   );
 }
-//@ chunk-3mec1atf.js:12268-14823 fingerprint (2.1.88 match: SpinnerAnimationRow, 0.604)
+//@ chunk-hzenv5c0.js:12269-14824 fingerprint (2.1.88 match: SpinnerAnimationRow, 0.604)
 function SpinnerAnimationRow({
   mode,
   reducedMotion,
@@ -186,7 +206,7 @@ function SpinnerAnimationRow({
   let showTokens = wantsTimerAndTokens && totalTokens > 0 && availableSpace > usedAfterTimer + tokensWidth;
   let parenthesizeThinking =
     showThinking && statusText.kind === "thinking" && !spinnerSuffix && !showTimer && !showTokens;
-  let warningColor = thinkingIntensity > 0 ? interpolateColor(resolvedTheme.warning) : null;
+  let warningColor = thinkingIntensity > 0 ? parseRGB(resolvedTheme.warning) : null;
   let shimmerColor_2 = computeShimmerColor(time, thinkingIntensity, warningColor);
   let thinkingColor = !warningColor && thinkingIntensity > 0.5 ? "warning" : undefined;
   let intensityColor = thinkingIntensity > 0 ? "warning" : undefined;
@@ -331,7 +351,7 @@ function SpinnerAnimationRow({
     }),
   });
 }
-//@ chunk-3mec1atf.js:14823-18871 layout
+//@ chunk-hzenv5c0.js:14824-18872 layout
 /**
  * 显示 API 重试状态行：stalled 时"Waiting for API response · will retry in …"，low_priority_waiting 时显示状态栏 waitBanner 与下次重试倒计时、尝试次数，以及其他重试种类的提示。
  */
@@ -662,7 +682,7 @@ function RetryStatusRow(props) {
   } else retryRow = $[56];
   return retryRow;
 }
-//@ chunk-3mec1atf.js:18871-19261 fingerprint (2.1.88 match: SpinnerModeGlyph, 0.804)
+//@ chunk-hzenv5c0.js:18872-19262 fingerprint (2.1.88 match: SpinnerModeGlyph, 0.805)
 function SpinnerModeGlyph(props) {
   let $ = useMemoCache(2);
   let { mode } = props;
@@ -702,17 +722,4 @@ function SpinnerModeGlyph(props) {
     }
   }
 }
-//@ chunk-18hwfzwa.js:435231-435268 fingerprint (2.1.88 match: SEP_WIDTH, 1)
-var SPINNER_PADDING = 2;
-var SPINNER_INDENT = "  ";
-var SPINNER_SEPARATOR = " \xB7 ";
-var SPINNER_MAX_LINES = 8;
-export {
-  SPINNER_PADDING,
-  SPINNER_MAX_LINES,
-  SPINNER_INDENT,
-  SPINNER_SEPARATOR,
-  RetryStatusRow,
-  THINKING_BARE_WIDTH,
-  SpinnerAnimationRow,
-};
+export { THINKING_BARE_WIDTH, renderBylineItem, RetryStatusRow, SpinnerAnimationRow };

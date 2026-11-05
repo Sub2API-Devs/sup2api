@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：ListConnectors 工具
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ry7vktx8.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b13afkp1.js (4)
  * attribution: placement 4
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -30,7 +30,7 @@ import { isRemoteFirstPartySession } from "../../utils/remoteSessionEnv.js";
 import { AbortError } from "../../utils/errors.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-ry7vktx8.js:4604-4816 placement
+//@ chunk-b13afkp1.js:4688-4900 placement
 /**
  * ListConnectors 输入/输出 schema。
  */
@@ -49,7 +49,7 @@ var LIST_CONNECTORS_OUTPUT_SCHEMA = DoctorLazy(() =>
     message: stringSchema().optional(),
   }),
 );
-//@ chunk-ry7vktx8.js:4816-4902 placement
+//@ chunk-b13afkp1.js:4900-4986 placement
 /**
  * 判断名称或描述里是否含任意关键词（忽略大小写）。
  */
@@ -57,7 +57,7 @@ function matchesKeyword(text, keywords) {
   let lower = text.toLowerCase();
   return keywords.some((keyword) => lower.includes(keyword.toLowerCase()));
 }
-//@ chunk-ry7vktx8.js:4902-5070 placement
+//@ chunk-b13afkp1.js:4986-5154 placement
 /**
  * 按关键词过滤连接器（名称或描述）。
  */
@@ -69,7 +69,7 @@ function filterConnectors(connectors, keywords) {
     return typeof description === "string" && matchesKeyword(description, keywords);
   });
 }
-//@ chunk-ry7vktx8.js:5070-5962 placement
+//@ chunk-b13afkp1.js:5154-6046 placement
 /**
  * 2.1.316 新增的 ListConnectors 工具：列出用户已安装的 MCP 连接器。
  */

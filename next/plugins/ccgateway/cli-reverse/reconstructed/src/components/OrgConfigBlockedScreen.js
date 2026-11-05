@@ -3,9 +3,9 @@
  *
  * 组织配置门拦截屏幕（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6bvzpeaf.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nxfa6qj3.js (7)
  * attribution: placement 7
  */
 import {
@@ -38,21 +38,21 @@ import { AppRoot } from "./AppRoot.js";
 import { OrgConfigConsentHost } from "./OrgConfigConsentHost.js";
 import { getBaseRenderOptions } from "../utils/renderOptions.js";
 
-//@ chunk-6bvzpeaf.js:15544-15548 placement
+//@ chunk-nxfa6qj3.js:16721-16725 placement
 init_react_production();
-//@ chunk-6bvzpeaf.js:15548-15590 placement
+//@ chunk-nxfa6qj3.js:16725-16767 placement
 function withChecking(state) {
   return {
     ...state,
     checking: true,
   };
 }
-//@ chunk-6bvzpeaf.js:15590-15655 placement
+//@ chunk-nxfa6qj3.js:16767-16832 placement
 function delayWithCleanup(callback, delayMs) {
   let timer = setTimeout(callback, delayMs);
   return () => clearTimeout(timer);
 }
-//@ chunk-6bvzpeaf.js:15655-18970 placement
+//@ chunk-nxfa6qj3.js:16832-20148 placement
 /**
  * 组织配置门拦截时显示的屏幕，支持重试
  */
@@ -355,7 +355,7 @@ function OrgConfigBlockedScreen(props) {
   } else dialog = $[64];
   return dialog;
 }
-//@ chunk-6bvzpeaf.js:18970-19110 placement
+//@ chunk-nxfa6qj3.js:20148-20288 placement
 function trackRetry(tracker, runRequest) {
   let request = runRequest().then((result) => {
     tracker.latest = result;
@@ -369,7 +369,7 @@ function trackRetry(tracker, runRequest) {
     .catch(() => {});
   return request;
 }
-//@ chunk-6bvzpeaf.js:19110-19253 placement
+//@ chunk-nxfa6qj3.js:20288-20431 placement
 function renderBlockedScreen({ track, retry, onDone }) {
   return jsxProd_default(OrgConfigBlockedScreen, {
     initial: track.latest,
@@ -382,7 +382,7 @@ function renderBlockedScreen({ track, retry, onDone }) {
     },
   });
 }
-//@ chunk-6bvzpeaf.js:19253-20181 placement
+//@ chunk-nxfa6qj3.js:20431-21360 placement
 /**
  * 组织配置门拦截时显示阻断屏：先等待待处理的安全对话框，然后渲染可重试的阻断屏，重试结果写入跟踪状态，结束时回调。
  */

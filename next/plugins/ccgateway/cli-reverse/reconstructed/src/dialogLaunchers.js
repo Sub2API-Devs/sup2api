@@ -3,10 +3,10 @@
  *
  * 并入一个对话框懒加载启动器
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/dialogLaunchers.tsx
- * pieces: chunk-9s5t3vdq.js (1), chunk-agvbmc7h.js (2), chunk-kgh2tnx9.js (15)
- * attribution: placement 3, affinity 1, fingerprint 5, sole-consumer 2, callgraph-fingerprint 1, layout 6
+ * pieces: chunk-8899qs36.js (2), chunk-es82vc07.js (1), chunk-x51wp4j2.js (15)
+ * attribution: placement 5, sole-consumer 2, fingerprint 4, callgraph-fingerprint 1, layout 6
  */
 import { createStore } from "./state/store.js";
 import { toSliceStore } from "./state/sliceHelpers.js";
@@ -35,7 +35,7 @@ import { createReplMessageQueue } from "./replSessionSeat.js";
 import { onChangeAppState } from "./state/onChangeAppState.js";
 import { AppRoot } from "./components/AppRoot.js";
 
-//@ chunk-agvbmc7h.js:2409-2672 affinity
+//@ chunk-8899qs36.js:2462-2725 placement
 var SNAPSHOT_FIELD_POLICY = {
   allowed_tools: "strip",
   avoid_prompts: "strip",
@@ -49,12 +49,12 @@ var SNAPSHOT_FIELD_POLICY = {
   max_thinking_tokens: "keep",
   flag_settings: "keep",
 };
-//@ chunk-agvbmc7h.js:2672-2742 fingerprint (2.1.88 match: launchSnapshotUpdateDialog, 0.585)
-function launchSnapshotUpdateDialog(permissionLayers) {
-  if (!permissionLayers) return permissionLayers;
-  return permissionLayers.filter((done) => SNAPSHOT_FIELD_POLICY[done.kind] === "keep");
+//@ chunk-8899qs36.js:2725-2797 placement (2.1.88 match: launchSnapshotUpdateDialog, 0.583)
+function stripWideningPermissionLayers(layers) {
+  if (!layers) return layers;
+  return layers.filter((done) => SNAPSHOT_FIELD_POLICY[done.kind] === "keep");
 }
-//@ chunk-9s5t3vdq.js:231-302 placement
+//@ chunk-es82vc07.js:231-302 placement
 /**
  * 函数 adoptEngineForLauncher（为启动器接管引擎）；位于「并入一个对话框懒加载启动器」模块。
  */
@@ -63,7 +63,7 @@ function adoptEngineForLauncher(session, initialState, middleware) {
   session.engineStore.adopt(toSliceStore(store));
   return store;
 }
-//@ chunk-kgh2tnx9.js:19555-19628 sole-consumer
+//@ chunk-x51wp4j2.js:20843-20916 sole-consumer
 function isVelvetyMangoEnabled() {
   try {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_velvety_mango", true) !== false;
@@ -71,14 +71,14 @@ function isVelvetyMangoEnabled() {
     return true;
   }
 }
-//@ chunk-kgh2tnx9.js:19628-19663 sole-consumer
+//@ chunk-x51wp4j2.js:20916-20952 sole-consumer
 /**
  * 函数 keepResult（恒返回 "keep"）；位于「并入一个对话框懒加载启动器」模块。
  */
 async function keepResult(dialog, action) {
   return "keep";
 }
-//@ chunk-kgh2tnx9.js:19663-19868 fingerprint (2.1.88 match: launchInvalidSettingsDialog, 0.614)
+//@ chunk-x51wp4j2.js:20952-21158 fingerprint (2.1.88 match: launchInvalidSettingsDialog, 0.615)
 /**
  * launchInvalidSettingsDialog：设置文件校验失败时的对话框（继续/修复/退出）。
  */
@@ -93,7 +93,7 @@ async function launchInvalidSettingsDialog(root, props) {
     }),
   );
 }
-//@ chunk-kgh2tnx9.js:19868-20354 fingerprint (2.1.88 match: launchTeleportResumeWrapper, 0.397)
+//@ chunk-x51wp4j2.js:21158-21645 fingerprint (2.1.88 match: launchTeleportResumeWrapper, 0.398)
 /**
  * launchTeleportResumeWrapper：teleport 恢复会话的包装界面（含组织配置同意与设置重载）。
  */
@@ -134,7 +134,7 @@ async function launchTeleportResumeWrapper(root) {
   }
   return result;
 }
-//@ chunk-kgh2tnx9.js:20354-20583 fingerprint (2.1.88 match: launchTeleportRepoMismatchDialog, 0.826)
+//@ chunk-x51wp4j2.js:21645-21874 fingerprint (2.1.88 match: launchTeleportRepoMismatchDialog, 0.826)
 /**
  * launchTeleportRepoMismatchDialog：teleport 目标仓库与当前目录不一致时选择路径。
  */
@@ -150,7 +150,7 @@ async function launchTeleportRepoMismatchDialog(root, props) {
     }),
   );
 }
-//@ chunk-kgh2tnx9.js:20583-20797 placement
+//@ chunk-x51wp4j2.js:21874-22088 placement
 /**
  * 打开"传送目标主机未验证"对话框，返回用户是否确认继续。
  */
@@ -165,7 +165,7 @@ async function launchTeleportHostUnverifiedDialog(root, options) {
     }),
   );
 }
-//@ chunk-kgh2tnx9.js:20797-20843 placement (2.1.88 match: PluginSettingsSchema, 0.361)
+//@ chunk-x51wp4j2.js:22088-22134 placement (2.1.88 match: PluginSettingsSchema, 0.362)
 /**
  * 远程文件模式对话框的启动函数（门面导出名 launchRemoteFileModeDialog），本构建为桩，直接返回 {pick: not_now}。与插件加载无关，旧版名 PluginSettingsSchema 配错。
  */
@@ -174,7 +174,7 @@ async function PluginSettingsSchema(root, options) {
     pick: "not_now",
   };
 }
-//@ chunk-kgh2tnx9.js:20843-20988 callgraph-fingerprint (2.1.88 match: launchAssistantSessionChooser, 0.176)
+//@ chunk-x51wp4j2.js:22134-22279 callgraph-fingerprint (2.1.88 match: launchAssistantSessionChooser, 0.176)
 /**
  * launchDeviceReenrollDialog：受信设备重新注册。
  */
@@ -187,7 +187,7 @@ async function launchDeviceReenrollDialog(root, props = {}) {
     }),
   );
 }
-//@ chunk-kgh2tnx9.js:20988-21179 layout
+//@ chunk-x51wp4j2.js:22279-22470 layout
 /**
  * launchRemoteHomeSettingsDialog：首次把本机设置带入云会话的确认。
  */
@@ -202,7 +202,7 @@ async function launchRemoteHomeSettingsDialog(root, options) {
     }),
   );
 }
-//@ chunk-kgh2tnx9.js:21179-21343 layout
+//@ chunk-x51wp4j2.js:22470-22634 layout
 /**
  * launchDeviceMcpConsentDialog：设备级 MCP 服务器同意。
  */
@@ -216,7 +216,7 @@ async function launchDeviceMcpConsentDialog(root, options) {
     }),
   );
 }
-//@ chunk-kgh2tnx9.js:21343-21511 layout
+//@ chunk-x51wp4j2.js:22634-22802 layout
 /**
  * launchDeviceMcpReconsentDialog：被扣留的设备 MCP 服务器重新同意。
  */
@@ -230,7 +230,7 @@ async function launchDeviceMcpReconsentDialog(root, options) {
     }),
   );
 }
-//@ chunk-kgh2tnx9.js:21511-21657 layout
+//@ chunk-x51wp4j2.js:22802-22948 layout
 /**
  * launchUnattendedServingConsentDialog：无人值守服务模式的同意。
  */
@@ -244,7 +244,7 @@ async function launchUnattendedServingConsentDialog(root) {
     }),
   );
 }
-//@ chunk-kgh2tnx9.js:21657-23396 layout
+//@ chunk-x51wp4j2.js:22948-24747 layout
 /**
  * launchCloudCreateChecklist：云会话创建清单（加载失败/取消各自上报）。
  */
@@ -252,6 +252,7 @@ function launchCloudCreateChecklist(root, options) {
   let modulePromise = import("./components/cloud/CloudCreateChecklist.js");
   let hasPromptLine = isVelvetyMangoEnabled();
   let uploadProgress = null;
+  let home;
   let screenHandle = null;
   let cancelStartedAt = null;
   let isExiting = false;
@@ -285,6 +286,7 @@ function launchCloudCreateChecklist(root, options) {
       onCancel: () => cancelChecklist(CloudCreateChecklist),
       hasPromptLine,
       isQuestionWaiting: isWaitingForInput,
+      home,
     });
     if (screenHandle) screenHandle.update(element);
     else
@@ -386,19 +388,23 @@ ${exitExtra}`,
         if (loadedModule !== null) cancelChecklist(loadedModule.CloudCreateChecklist);
       });
     },
-    failed() {
-      logOnce(() => logFeatureBad("ccr_create_checklist", "create_failed"));
+    failed(hasTypedEarlyInputValue) {
+      logOnce(() =>
+        hasTypedEarlyInputValue === true
+          ? logFeatureSad("ccr_create_checklist", "create_refused")
+          : logFeatureBad("ccr_create_checklist", "create_failed"),
+      );
       logEarlyInputOnce(() => logFeatureSad("ccr_create_prompt_line", "create_failed"));
     },
     exitCancelled: () => (isExiting ? new Promise(() => {}) : exitCancelled(uploadProgress)),
   };
 }
-//@ chunk-kgh2tnx9.js:23396-23420 layout
+//@ chunk-x51wp4j2.js:24747-24771 layout
 /**
  * launchProviderSetupWizard：外部构建为空实现。
  */
 async function launchProviderSetupWizard(root, options) {}
-//@ chunk-kgh2tnx9.js:23420-23795 fingerprint (2.1.88 match: launchResumeChooser, 0.681)
+//@ chunk-x51wp4j2.js:24771-25146 fingerprint (2.1.88 match: launchResumeChooser, 0.682)
 /**
  * launchResumeChooser：动态导入 ResumeConversation 组件并渲染会话选择器。
  */
@@ -433,8 +439,8 @@ async function launchResumeChooser(root, appProps, worktreePathsPromise, resumeP
   );
 }
 export {
+  stripWideningPermissionLayers,
   adoptEngineForLauncher,
-  launchSnapshotUpdateDialog,
   launchCloudCreateChecklist,
   launchDeviceMcpConsentDialog,
   launchDeviceMcpReconsentDialog,

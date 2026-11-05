@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增（门面模块 WorkflowDetailDialog）。工作流详情对话框。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-axsvbsqv.js (45)
- * attribution: placement 45
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-n6w10qzg.js (46)
+ * attribution: placement 45, layout 1
  */
 import {
   BLACK_CIRCLE,
@@ -18,13 +18,14 @@ import {
   DOWN_ARROW,
 } from "../../constants/figures.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import { isEvalToolName, shownToolName } from "../../tools/REPLTool/constants.js";
 import {
   normalizeTaskText,
   MAX_TASK_DETAIL_LINES,
   MIN_TASK_ROWS,
   WorkflowTaskList,
 } from "./WorkflowTaskList.js";
-import { identity } from "../../tools/REPLTool/constants.js";
 import {
   truncateToWidth,
   splitByDisplayWidth,
@@ -32,18 +33,19 @@ import {
   formatDuration,
   formatBarElapsed,
 } from "../../utils/format.js";
+import { getFirstLine, truncateToLength, plural } from "../../utils/stringUtils.js";
 import {
   TASK_TODO_TOOL_NAMES,
   MAX_TRANSCRIPT_TOOL_RESULTS,
   readWorkflowAgentTranscript,
 } from "../../tasks/LocalWorkflowTask/workflowTranscript.js";
-import { truncateToLength, plural } from "../../utils/stringUtils.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
+import { isStopReason } from "../../tasks/LocalWorkflowTask/workflowStopReasons.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import {
   modelTransitionText,
@@ -82,12 +84,12 @@ import { Dialog } from "../design-system/Dialog.js";
 import { HintText } from "../design-system/HintText.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-axsvbsqv.js:14537-14662 placement
+//@ chunk-n6w10qzg.js:15986-16111 placement
 function getCallDisplayState(call, isLive) {
   if (call.result === null) return isLive && call.fromLastResponse ? "running" : "unanswered";
   return call.result.isError ? "error" : "ok";
 }
-//@ chunk-axsvbsqv.js:14662-15241 placement
+//@ chunk-n6w10qzg.js:16111-16755 placement
 /**
  * 渲染工作流内单个工具调用的标题行：状态符号（运行中、无结果、成功、错误）、工具名与按宽度截断的摘要。
  */
@@ -140,7 +142,9 @@ function renderWorkflowCallHeader({ call, state, width, indent }) {
       1 -
       (suffix ? bunStringWidth(suffix.text) : 0),
   );
-  let toolName = normalizeTaskText(identity(call.name));
+  if (codeModeAccepted() && isEvalToolName(call.name) && call.result !== null)
+    return errorLines(call.result, width, indent);
+  let toolName = normalizeTaskText(shownToolName(call.name));
   let remaining = max - bunStringWidth(toolName);
   let label =
     remaining < 0
@@ -160,7 +164,17 @@ function renderWorkflowCallHeader({ call, state, width, indent }) {
     ...(suffix ? [suffix] : []),
   ];
 }
-//@ chunk-axsvbsqv.js:15241-15808 placement
+//@ chunk-n6w10qzg.js:16755-16860 layout
+function errorLines(result, width, indent) {
+  let errorHead = normalizeTaskText(getFirstLine(result.head)) || "Error";
+  return [
+    {
+      text: truncateToWidth(`${indent}  ${RESPONSE_CONNECTOR}  ${errorHead}`, width),
+      color: "error",
+    },
+  ];
+}
+//@ chunk-n6w10qzg.js:16860-17462 placement
 /**
  * 渲染工具调用的完整行：标题、输入字段，以及结果（空、内容或"未记录"）。
  */
@@ -173,7 +187,11 @@ function renderWorkflowCallLines({ call, state, width, indent }) {
       indent,
     }),
   ];
-  if (TASK_TODO_TOOL_NAMES.includes(call.name)) return lines;
+  if (
+    TASK_TODO_TOOL_NAMES.includes(call.name) ||
+    (codeModeAccepted() && isEvalToolName(call.name) && call.result !== null)
+  )
+    return lines;
   let fieldIndent = `${indent}  `;
   renderCallFields(lines, call.fields, {
     indent: fieldIndent,
@@ -206,7 +224,7 @@ function renderWorkflowCallLines({ call, state, width, indent }) {
     ]);
   return lines;
 }
-//@ chunk-axsvbsqv.js:15808-16294 placement
+//@ chunk-n6w10qzg.js:17462-17948 placement
 /**
  * 按行数预算渲染调用的输入字段（键过宽时单独成行），最后汇总隐藏的行与字符数。
  */
@@ -257,7 +275,7 @@ function renderCallFields(lines, fields, { indent, width, maxLines }) {
   }
   pushHiddenSummary(lines, indent, width, hiddenLines, hiddenChars);
 }
-//@ chunk-axsvbsqv.js:16294-16901 placement
+//@ chunk-n6w10qzg.js:17948-18554 placement
 /**
  * 把文本按宽度与行数上限折行输出（首行与续行前缀不同），返回渲染行数与隐藏的行/字符数，可选追加隐藏提示。
  */
@@ -308,7 +326,7 @@ function renderWrappedText(
     hiddenChars: truncatedChars,
   };
 }
-//@ chunk-axsvbsqv.js:16901-17047 placement
+//@ chunk-n6w10qzg.js:18554-18700 placement
 function pushHiddenSummary(lines, indent, width, hiddenLines, hiddenChars) {
   let summary =
     hiddenLines > 0
@@ -324,7 +342,7 @@ function pushHiddenSummary(lines, indent, width, hiddenLines, hiddenChars) {
       },
     ]);
 }
-//@ chunk-axsvbsqv.js:17047-17146 placement
+//@ chunk-n6w10qzg.js:18700-18799 placement
 function renderStyledLine(segment, key) {
   return jsxProd_default(
     Text,
@@ -337,11 +355,11 @@ function renderStyledLine(segment, key) {
     key,
   );
 }
-//@ chunk-axsvbsqv.js:17146-17172 placement
+//@ chunk-n6w10qzg.js:18799-18825 placement
 function renderNothing() {
   return null;
 }
-//@ chunk-axsvbsqv.js:17172-17333 placement
+//@ chunk-n6w10qzg.js:18825-18986 placement
 function computeScrollWindow(scrollRow, totalRows, viewport) {
   if (totalRows <= viewport)
     return {
@@ -360,22 +378,23 @@ function computeScrollWindow(scrollRow, totalRows, viewport) {
     below: totalRows - endRow,
   };
 }
-//@ chunk-axsvbsqv.js:17333-17395 placement
+//@ chunk-n6w10qzg.js:18986-19048 placement
 function isRunningState(row) {
   return row.state === "start" || row.state === "progress";
 }
-//@ chunk-axsvbsqv.js:17395-17628 placement
+//@ chunk-n6w10qzg.js:19048-19321 placement
 function getAgentDisplayState(agent, isWorkflowActive) {
   if (agent.state === "done") return "done";
   if (agent.state === "error") {
     if (agent.skipped) return "skipped";
     if (agent.blocked) return "blocked";
+    if (!isWorkflowActive && isStopReason(agent.error)) return "interrupted";
     return "failed";
   }
   if (!isWorkflowActive) return "interrupted";
   return agent.queuedAt != null && agent.startedAt == null ? "queued" : "running";
 }
-//@ chunk-axsvbsqv.js:17628-17971 placement
+//@ chunk-n6w10qzg.js:19321-19664 placement
 /**
  * 按代理状态给出显示符号与颜色（完成、失败、跳过、阻塞、排队/中断、运行中）。
  */
@@ -414,7 +433,7 @@ function getAgentStateGlyph(agentDisplayState) {
       };
   }
 }
-//@ chunk-axsvbsqv.js:17971-18055 placement
+//@ chunk-n6w10qzg.js:19664-19748 placement
 var WORKFLOW_TASK_FILTERS = [
   "all",
   "running",
@@ -425,20 +444,20 @@ var WORKFLOW_TASK_FILTERS = [
   "blocked",
   "interrupted",
 ];
-//@ chunk-axsvbsqv.js:18055-18124 placement
+//@ chunk-n6w10qzg.js:19748-19817 placement
 function agentCountLabel(count, filterLabel) {
   return filterLabel ? `showing ${count} ${filterLabel}` : `${count} ${plural(count, "agent")}`;
 }
-//@ chunk-axsvbsqv.js:18124-18231 placement
+//@ chunk-n6w10qzg.js:19817-19924 placement
 function describeEmptyAgentList(workflow, filterLabel) {
   if (workflow.status === "not-started") return "Not started yet";
   return filterLabel ? `No ${filterLabel} agents` : "No agents";
 }
-//@ chunk-axsvbsqv.js:18231-18283 placement
+//@ chunk-n6w10qzg.js:19924-19976 placement
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
-//@ chunk-axsvbsqv.js:18283-18914 placement
+//@ chunk-n6w10qzg.js:19976-20607 placement
 /**
  * 汇总代理行的统计：模型（含回退）、隔离方式、token 数、空闲时长与状态标签，以及耗时。
  */
@@ -466,9 +485,9 @@ function getAgentRowStats(agent, now) {
     time: elapsedMs != null ? formatBarElapsed(elapsedMs) : "",
   };
 }
-//@ chunk-axsvbsqv.js:18914-18923 placement
+//@ chunk-n6w10qzg.js:20607-20616 placement
 var WORKFLOW_HEADER_ROWS = 6;
-//@ chunk-axsvbsqv.js:18923-19429 placement
+//@ chunk-n6w10qzg.js:20616-21122 placement
 /**
  * 渲染代理行右侧：模型 · 统计信息，加右对齐的耗时，按宽度依次截断统计与模型。
  */
@@ -532,10 +551,10 @@ function renderAgentRowTail(agent, width, isSelected, now) {
     },
   ];
 }
-//@ chunk-axsvbsqv.js:19429-19445 placement
+//@ chunk-n6w10qzg.js:21122-21138 placement
 var MAX_AGENT_NAME_WIDTH = 40;
 var MIN_AGENT_NAME_WIDTH = 30;
-//@ chunk-axsvbsqv.js:19445-19622 placement
+//@ chunk-n6w10qzg.js:21138-21315 placement
 function getAgentLabelWidth(agents, width) {
   let min = Math.min(
     MAX_AGENT_NAME_WIDTH,
@@ -545,7 +564,7 @@ function getAgentLabelWidth(agents, width) {
   let reduced = agents.reduce((acc, agent) => Math.max(acc, bunStringWidth(agent.label)), 0);
   return Math.min(Math.max(12, reduced), min);
 }
-//@ chunk-axsvbsqv.js:19622-19862 placement
+//@ chunk-n6w10qzg.js:21315-21555 placement
 function fitSegments(segs, width) {
   let usedWidth = 0;
   for (let idx = 0; idx < segs.length; idx++) {
@@ -572,7 +591,7 @@ function fitSegments(segs, width) {
     pad: Math.max(0, width - usedWidth),
   };
 }
-//@ chunk-axsvbsqv.js:19862-20129 placement
+//@ chunk-n6w10qzg.js:21555-21823 placement
 function SegmentLine(props) {
   let $ = useMemoCache(7);
   let { segs, width } = props;
@@ -601,7 +620,7 @@ function SegmentLine(props) {
   } else lineElement = $[6];
   return lineElement;
 }
-//@ chunk-axsvbsqv.js:20129-20530 placement
+//@ chunk-n6w10qzg.js:21823-22224 placement
 /**
  * 渲染带竖线边框的一行分段文本（超宽截断）。
  */
@@ -645,13 +664,13 @@ function BoxedSegmentLine(props) {
   } else boxedLineElement = $[6];
   return boxedLineElement;
 }
-//@ chunk-axsvbsqv.js:20530-20654 placement
+//@ chunk-n6w10qzg.js:22224-22348 placement
 function formatScrollRange(scrollWindow, totalRows) {
   let arrowUp = scrollWindow.from > 0 ? figures_default.arrowUp : " ";
   let arrowDown = scrollWindow.to < totalRows ? figures_default.arrowDown : " ";
   return `${arrowUp} ${scrollWindow.from + 1}${EN_DASH}${scrollWindow.to} of ${totalRows} ${arrowDown}`;
 }
-//@ chunk-axsvbsqv.js:20654-20887 placement
+//@ chunk-n6w10qzg.js:22348-22581 placement
 function ScrollRangeIndicator(props) {
   let $ = useMemoCache(5);
   let { win, total } = props;
@@ -675,7 +694,7 @@ function ScrollRangeIndicator(props) {
   } else indicatorElement = $[4];
   return indicatorElement;
 }
-//@ chunk-axsvbsqv.js:20887-23906 placement
+//@ chunk-n6w10qzg.js:22581-25600 placement
 /**
  * 工作流详情中的代理列表栏。
  */
@@ -999,7 +1018,7 @@ function WorkflowAgentsPane(props) {
   } else paneBox = $[52];
   return paneBox;
 }
-//@ chunk-axsvbsqv.js:23906-24523 placement
+//@ chunk-n6w10qzg.js:25600-26217 placement
 /**
  * 渲染带竖线边框的两栏行，左右各自按宽度渲染分段文本。
  */
@@ -1062,7 +1081,7 @@ function TwoColumnRow(props) {
   } else row = $[11];
   return row;
 }
-//@ chunk-axsvbsqv.js:24523-24889 placement
+//@ chunk-n6w10qzg.js:26217-26583 placement
 /**
  * 渲染分节标题线：可选标签与标签尾注，其余用横线填满宽度。
  */
@@ -1109,7 +1128,7 @@ function renderSectionRule(width, section) {
     );
   return segments;
 }
-//@ chunk-axsvbsqv.js:24889-25789 placement
+//@ chunk-n6w10qzg.js:26583-27483 placement
 function SplitPaneBorder(props) {
   let $ = useMemoCache(20);
   let { pos, leftWidth, rightWidth, leftTitle, rightTitle, leftTag, rightTag } = props;
@@ -1196,7 +1215,7 @@ function SplitPaneBorder(props) {
   } else borderLineElement = $[19];
   return borderLineElement;
 }
-//@ chunk-axsvbsqv.js:25789-26371 placement
+//@ chunk-n6w10qzg.js:27483-28065 placement
 /**
  * 渲染工作流阶段行：选中指针、状态符号（完成/失败/序号）、标题与完成进度。
  */
@@ -1246,7 +1265,7 @@ function renderPhaseRow(phase, index, selectedIndex, focus, width) {
     );
   return segments;
 }
-//@ chunk-axsvbsqv.js:26371-26696 placement
+//@ chunk-n6w10qzg.js:28065-28390 placement
 /**
  * 生成代理列表中一行的分段：选中指针、状态符号、按宽度补齐的名称，以及右侧详情分段。
  */
@@ -1279,7 +1298,7 @@ function renderAgentRow(agent, agentIndex, clampedAgent, level, rightWidth, agen
     ...renderAgentRowTail(agent, max, isSelected, now),
   ];
 }
-//@ chunk-axsvbsqv.js:26696-26933 placement
+//@ chunk-n6w10qzg.js:28390-28627 placement
 function renderCompactAgentRow(agent, agentIndex, clampedAgent, leftWidth, workflowActive) {
   let isSelected = agentIndex === clampedAgent;
   let { glyph, color } = getAgentStateGlyph(getAgentDisplayState(agent, workflowActive));
@@ -1303,7 +1322,7 @@ function renderCompactAgentRow(agent, agentIndex, clampedAgent, leftWidth, workf
     },
   ];
 }
-//@ chunk-axsvbsqv.js:26933-28627 placement
+//@ chunk-n6w10qzg.js:28627-30321 placement
 function WorkflowPhasesPane(props) {
   let $ = useMemoCache(41);
   let {
@@ -1492,20 +1511,20 @@ function WorkflowPhasesPane(props) {
   } else paneElement = $[40];
   return paneElement;
 }
-//@ chunk-axsvbsqv.js:28627-28662 placement
+//@ chunk-n6w10qzg.js:30321-30356 placement
 var WORKFLOW_INDENT_STEP; // deferred: uses MAX_TRANSCRIPT_PROMPT_CHARS (../../tasks/LocalWorkflowTask/workflowTranscript.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_AGENT_ROWS;
 var WORKFLOW_SPINNER_FRAMES;
 var REFRESH_FAST_MS;
 var REFRESH_SLOW_MS;
-deferInit("chunk-axsvbsqv.js:28627", () => {
+deferInit("chunk-n6w10qzg.js:30321", () => {
   WORKFLOW_INDENT_STEP = 2;
   MAX_AGENT_ROWS = 20;
   WORKFLOW_SPINNER_FRAMES = MAX_TRANSCRIPT_TOOL_RESULTS;
   REFRESH_FAST_MS = 100;
   REFRESH_SLOW_MS = 250;
 });
-//@ chunk-axsvbsqv.js:28662-29466 placement
+//@ chunk-n6w10qzg.js:30356-31160 placement
 function useWorkflowAgentTranscript(workflowRunId, agentIndex, lastProgressAt, promptFramed) {
   let $ = useMemoCache(13);
   let [loadedTranscript, setLoadedTranscript] = useState(null);
@@ -1595,7 +1614,7 @@ function useWorkflowAgentTranscript(workflowRunId, agentIndex, lastProgressAt, p
   }
   return loadedTranscript.transcript;
 }
-//@ chunk-axsvbsqv.js:29466-29603 placement
+//@ chunk-n6w10qzg.js:31160-31297 placement
 function wrapLines(text, maxWidth) {
   let wrappedLines = [];
   for (let line of text.split(`
@@ -1608,7 +1627,7 @@ function wrapLines(text, maxWidth) {
   }
   return wrappedLines;
 }
-//@ chunk-axsvbsqv.js:29603-30006 placement
+//@ chunk-n6w10qzg.js:31297-31700 placement
 /**
  * 渲染可折叠段：标题（超过折叠行数时显示总行数与展开提示）、正文（折叠时截取）与剩余行提示，返回隐藏行数。
  */
@@ -1645,7 +1664,7 @@ function pushCollapsibleSection({ lines, title, body, collapsedLines, expanded, 
     ]);
   return collapsedExtraLines;
 }
-//@ chunk-axsvbsqv.js:30006-30087 placement
+//@ chunk-n6w10qzg.js:31700-31781 placement
 function addPrecedingGrowth(scroll, folds) {
   let growthBefore = 0;
   for (let fold of folds) {
@@ -1654,7 +1673,7 @@ function addPrecedingGrowth(scroll, folds) {
   }
   return scroll + growthBefore;
 }
-//@ chunk-axsvbsqv.js:30087-30207 placement
+//@ chunk-n6w10qzg.js:31781-31901 placement
 function mapRowThroughGrowth(scroll, folds) {
   let growthBefore = 0;
   for (let fold of folds) {
@@ -1665,7 +1684,7 @@ function mapRowThroughGrowth(scroll, folds) {
   }
   return scroll - growthBefore;
 }
-//@ chunk-axsvbsqv.js:30207-30341 placement
+//@ chunk-n6w10qzg.js:31901-32035 placement
 var AGENT_STATE_LABELS = {
   queued: "Queued",
   running: "Running",
@@ -1675,7 +1694,7 @@ var AGENT_STATE_LABELS = {
   blocked: "Blocked",
   interrupted: "Stopped",
 };
-//@ chunk-axsvbsqv.js:30341-34482 placement
+//@ chunk-n6w10qzg.js:32035-36370 placement
 /**
  * 工作流详情中的代理卡片。
  */
@@ -1759,7 +1778,22 @@ function WorkflowAgentCard({ agent, status, transcript, expanded, width, nowMs }
   let toolCalls = status !== "queued" && loadedTranscript ? loadedTranscript.toolCalls : [];
   let isRunning = status === "running";
   let filtered = toolCalls.filter((toolCall) => getCallDisplayState(toolCall, isRunning) === "running");
-  let toolCalls_2 = toolCalls;
+  let toolCalls_2 = codeModeAccepted()
+    ? toolCalls.flatMap((toolCall) =>
+        !isEvalToolName(toolCall.name) || toolCall.result !== null
+          ? [toolCall]
+          : filtered.length === 1 && filtered[0] === toolCall && agent.lastToolName != null
+            ? [
+                {
+                  ...toolCall,
+                  name: agent.lastToolName,
+                  summary: agent.lastToolSummary ?? "",
+                  fields: [],
+                },
+              ]
+            : [],
+      )
+    : toolCalls;
   let tasks = loadedTranscript?.tasks ?? [];
   let collapsedTaskLines =
     tasks.length > 0
@@ -1845,7 +1879,12 @@ function WorkflowAgentCard({ agent, status, transcript, expanded, width, nowMs }
   if (status !== "queued") {
     let visibleToolCount = toolCalls_2.length - WORKFLOW_SPINNER_FRAMES;
     let max = Math.max(0, visibleToolCount - WORKFLOW_SPINNER_FRAMES);
-    while (false) visibleToolCount--;
+    while (
+      codeModeAccepted() &&
+      visibleToolCount > max &&
+      isEvalToolName(toolCalls_2[visibleToolCount]?.name)
+    )
+      visibleToolCount--;
     let filtered = toolCalls_2.filter(
       (toolCall, callIndex) =>
         callIndex >= visibleToolCount || getCallDisplayState(toolCall, isRunning) === "running",
@@ -1914,7 +1953,7 @@ function WorkflowAgentCard({ agent, status, transcript, expanded, width, nowMs }
       });
     } else if (agent.lastToolName != null) {
       let lastToolSummaryText = agent.lastToolSummary ? `(${agent.lastToolSummary})` : "";
-      let lastToolName = identity(agent.lastToolName);
+      let lastToolName = shownToolName(agent.lastToolName);
       lines.push([
         {
           text: truncateToWidth(`  ${lastToolName}${lastToolSummaryText}`, width),
@@ -2028,7 +2067,7 @@ function WorkflowAgentCard({ agent, status, transcript, expanded, width, nowMs }
     detailExpandable: hasActivityDetail,
   };
 }
-//@ chunk-axsvbsqv.js:34482-36147 placement
+//@ chunk-n6w10qzg.js:36370-38035 placement
 function WorkflowAgentDetailPane(props) {
   let $ = useMemoCache(42);
   let {
@@ -2218,7 +2257,7 @@ function WorkflowAgentDetailPane(props) {
   } else paneElement = $[41];
   return paneElement;
 }
-//@ chunk-axsvbsqv.js:36147-38187 placement
+//@ chunk-n6w10qzg.js:38035-40075 placement
 function WorkflowAgentDetail(props) {
   let $ = useMemoCache(43);
   let { agentLabel, position, detailLines, cardScroll, contentWidth, viewport } = props;
@@ -2423,7 +2462,7 @@ function WorkflowAgentDetail(props) {
   } else footerBox = $[42];
   return footerBox;
 }
-//@ chunk-axsvbsqv.js:38187-44815 placement
+//@ chunk-n6w10qzg.js:40075-46707 placement
 /**
  * WorkflowDetailDialog：工作流详情对话框，阶段/代理两栏，支持暂停、恢复、跳过与重试代理。
  */

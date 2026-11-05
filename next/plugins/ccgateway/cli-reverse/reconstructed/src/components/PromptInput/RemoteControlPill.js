@@ -3,17 +3,17 @@
  *
  * 2.1.316 新增：输入框底部的 Remote Control 状态。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ag5x7vhf.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hnxhr3bs.js (12)
  * attribution: placement 12
  */
+import { init_react_production, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { bridgeHostState } from "../../bridge/bridgeHostState.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { getBridgeStatus } from "../../bridge/bridgeStatusUtil.js";
-import { init_react_production, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { sequential } from "../../utils/sequential.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../state/AppState.js";
@@ -22,10 +22,15 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { Link, Text } from "../../ink/components/Text.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ag5x7vhf.js:46516-46546 placement
+//@ chunk-hnxhr3bs.js:45966-45970 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hnxhr3bs.js:45966", () => {
+  init_react_production();
+});
+//@ chunk-hnxhr3bs.js:45970-46000 placement
 var RC_ACTIVE_BADGE_KEY = "rc-active-badge";
 var MAX_VERBOSE_RC_IMPRESSIONS = 5;
-//@ chunk-ag5x7vhf.js:46546-46681 placement
+//@ chunk-hnxhr3bs.js:46000-46135 placement
 function isVerboseRcActive() {
   let hostState = bridgeHostState();
   if (hostState.verboseRcActive === undefined)
@@ -33,11 +38,11 @@ function isVerboseRcActive() {
       (getGlobalConfig().seenNotifications?.[RC_ACTIVE_BADGE_KEY] ?? 0) < MAX_VERBOSE_RC_IMPRESSIONS;
   return hostState.verboseRcActive;
 }
-//@ chunk-ag5x7vhf.js:46681-46735 placement
+//@ chunk-hnxhr3bs.js:46135-46189 placement
 function rcPillLabel(label) {
   return label === "/rc active" && !isVerboseRcActive() ? "/rc" : label;
 }
-//@ chunk-ag5x7vhf.js:46735-46840 placement
+//@ chunk-hnxhr3bs.js:46189-46294 placement
 function withFromCliParam(appState) {
   try {
     let url = new URL(appState);
@@ -47,14 +52,14 @@ function withFromCliParam(appState) {
     return appState;
   }
 }
-//@ chunk-ag5x7vhf.js:46840-46910 placement
+//@ chunk-hnxhr3bs.js:46294-46364 placement
 function logRcPillClicked(trigger, label) {
   logEvent("tengu_rc_pill_clicked", {
     trigger: fromEnum(trigger),
     label: fromEnum(label),
   });
 }
-//@ chunk-ag5x7vhf.js:46910-47101 placement
+//@ chunk-hnxhr3bs.js:46364-46555 placement
 /**
  * 输入框底部的 Remote Control 状态胶囊（/rc active）：显示连接/错误状态，点击打开会话链接。
  */
@@ -67,7 +72,7 @@ function RemoteControlPill(state) {
   });
   logRcPillClicked("keyboard", rcPillLabel(label));
 }
-//@ chunk-ag5x7vhf.js:47101-47313 placement
+//@ chunk-hnxhr3bs.js:46555-46767 placement
 function recordRcActiveImpression(storageV5) {
   let hostState = bridgeHostState();
   if (hostState.rcActiveImpressionRecorded) return;
@@ -84,20 +89,20 @@ function recordRcActiveImpression(storageV5) {
     };
   }, storageV5);
 }
-//@ chunk-ag5x7vhf.js:47313-47317 placement
+//@ chunk-hnxhr3bs.js:46767-46771 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:47313", () => {
+deferInit("chunk-hnxhr3bs.js:46767", () => {
   init_react_production();
 });
-//@ chunk-ag5x7vhf.js:47317-47364 placement (2.1.88 match: _temp4, 1)
+//@ chunk-hnxhr3bs.js:46771-46818 placement (2.1.88 match: _temp4, 1)
 function selectBridgeSessionUrl(s) {
   return s.replBridgeSessionUrl;
 }
-//@ chunk-ag5x7vhf.js:47788-47883 placement
+//@ chunk-hnxhr3bs.js:47242-47337 placement
 function shortRcLabel(label) {
   return sequential.level === 0 && label.label !== "/rc active" ? label.label.replace(/^\/rc/, "rc") : "rc";
 }
-//@ chunk-ag5x7vhf.js:47883-48674 placement
+//@ chunk-hnxhr3bs.js:47337-48128 placement
 function RemoteControlStatus(props) {
   let $ = useMemoCache(16);
   let { status, highlighted, compact } = props;
@@ -163,9 +168,4 @@ function RemoteControlStatus(props) {
   } else textElement = $[15];
   return textElement;
 }
-//@ chunk-ag5x7vhf.js:48674-48678 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ag5x7vhf.js:48674", () => {
-  init_react_production();
-});
 export { RemoteControlPill, RemoteControlStatus, shortRcLabel, rcPillLabel, logRcPillClicked };

@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/lib/tools/BetaToolRunner.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (12)
+ * pieces: chunk-vn3g7zt8.js (12)
  * attribution: esm-layout 4, esm-fingerprint 8
  */
 import { __classPrivateFieldSet, __classPrivateFieldGet } from "../../internal/tslib.mjs";
@@ -18,7 +18,7 @@ import { loggerFor } from "../../internal/utils/log.mjs";
 import { ToolError } from "./ToolError.mjs";
 import { sleepWithAbort } from "../../tools/agent-toolset/memories.mjs";
 
-//@ chunk-hwmsct5x.js:104913-106258 esm-layout
+//@ chunk-vn3g7zt8.js:105293-106638 esm-layout
 var DEFAULT_TOKEN_THRESHOLD = 1e5;
 var CONTINUATION_PROMPT = `You have been working on the task described above but have not yet completed it. Write a continuation summary that will allow you (or another instance of yourself) to resume work efficiently in a future context window where the conversation history will be replaced with this summary. Your summary should be structured, concise, and actionable. Include:
 1. Task Overview
@@ -43,7 +43,7 @@ Domain-specific details that aren't obvious
 Any promises made to the user
 Be concise but complete\u2014err on the side of including information that would prevent duplicate work or repeated mistakes. Write in a way that enables immediate resumption of the task.
 Wrap your summary in <summary></summary> tags.`;
-//@ chunk-hwmsct5x.js:106258-114576 esm-layout
+//@ chunk-vn3g7zt8.js:106638-114956 esm-layout
 var _BetaToolRunner_instances;
 var _BetaToolRunner_consumed;
 var _BetaToolRunner_mutated;
@@ -682,21 +682,21 @@ var BetaToolRunner = (() => {
   };
   return BetaToolRunner;
 })();
-//@ chunk-hwmsct5x.js:114576-114828 esm-layout
+//@ chunk-vn3g7zt8.js:114956-115208 esm-layout
 function rejectCompactionParam(params) {
   if ("compaction" in params && params.compaction != null)
     throw new AnthropicError(
       "`compaction` cannot be set on a tool runner: every request in the loop would compact again. Call `runner.compactBeforeNextTurn()` when the conversation should be compacted instead.",
     );
 }
-//@ chunk-hwmsct5x.js:114828-115114 esm-fingerprint
+//@ chunk-vn3g7zt8.js:115208-115494 esm-fingerprint
 function rejectCompactionEdit(params) {
   if (params.context_management?.edits?.some((edit) => edit.type.startsWith("compact_")))
     throw new AnthropicError(
       "`compactBeforeNextTurn()` can't be used while `context_management` has a compaction edit, because the API doesn't accept a compaction block together with one. Remove the edit first.",
     );
 }
-//@ chunk-hwmsct5x.js:115114-115485 esm-fingerprint
+//@ chunk-vn3g7zt8.js:115494-115865 esm-fingerprint
 function withoutCompactionIncompatibleParams(params) {
   let { context_management, stop_sequences, output_format, ...kept } = params;
   let withoutFormat = ({ format, ...outputConfig }) => outputConfig;
@@ -713,7 +713,7 @@ function withoutCompactionIncompatibleParams(params) {
     );
   return kept;
 }
-//@ chunk-hwmsct5x.js:115485-116121 esm-fingerprint
+//@ chunk-vn3g7zt8.js:115865-116501 esm-fingerprint
 async function generateToolResponse(runnable, available, lastMessage, requestOptions) {
   if (
     !lastMessage ||
@@ -758,11 +758,11 @@ async function generateToolResponse(runnable, available, lastMessage, requestOpt
     ),
   };
 }
-//@ chunk-hwmsct5x.js:116121-116145 esm-layout
+//@ chunk-vn3g7zt8.js:116501-116525 esm-layout
 function asContentParam(content) {
   return content;
 }
-//@ chunk-hwmsct5x.js:116145-116260 esm-fingerprint
+//@ chunk-vn3g7zt8.js:116525-116640 esm-fingerprint
 function toolNotFoundResult(toolUse) {
   return {
     type: "tool_result",
@@ -771,7 +771,7 @@ function toolNotFoundResult(toolUse) {
     is_error: true,
   };
 }
-//@ chunk-hwmsct5x.js:116260-116346 esm-fingerprint
+//@ chunk-vn3g7zt8.js:116640-116726 esm-fingerprint
 function applyToolChange(block, available) {
   switch (block.type) {
     case "tool_removal":
@@ -780,14 +780,14 @@ function applyToolChange(block, available) {
       break;
   }
 }
-//@ chunk-hwmsct5x.js:116346-116454 esm-fingerprint
+//@ chunk-vn3g7zt8.js:116726-116834 esm-fingerprint
 function applyToolReference(block, available) {
   let name = changedToolName(block.tool);
   if (name === undefined) return;
   if (block.type === "tool_removal") available.delete(name);
   else available.add(name);
 }
-//@ chunk-hwmsct5x.js:116454-116610 esm-fingerprint
+//@ chunk-vn3g7zt8.js:116834-116990 esm-fingerprint
 function changedToolName(tool) {
   switch (tool.type) {
     case "tool_reference":
@@ -798,7 +798,7 @@ function changedToolName(tool) {
       return;
   }
 }
-//@ chunk-hwmsct5x.js:116610-116886 esm-fingerprint
+//@ chunk-vn3g7zt8.js:116990-117266 esm-fingerprint
 function determineNextStepFromStopReason(stopReason) {
   if (stopReason === null) return "stop";
   switch (stopReason) {

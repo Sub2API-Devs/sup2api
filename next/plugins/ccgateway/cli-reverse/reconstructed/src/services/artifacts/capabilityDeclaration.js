@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：页面能力声明（mcp/db/user）的规范化、host grant 过滤与展示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-99h01h55.js (79)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-chhd9p2w.js (79)
  * attribution: placement 79
  */
 import {
@@ -32,9 +32,9 @@ import {
   isHostCapabilityServer,
   HOST_CAPABILITY_SERVERS,
 } from "../mcp/firstPartyServerIds.js";
-import { CLAUDE_AI, normalizeNameForMCP } from "../mcp/normalization.js";
+import { CLAUDE_AI, CLAUDEAI_SERVER_PREFIX } from "../mcp/normalization.js";
 import { firstLineOf, plural } from "../../utils/stringUtils.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, literal, array, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
@@ -57,15 +57,15 @@ import {
 } from "../../tools/ArtifactTool/artifactUrls.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-99h01h55.js:4881-4919 placement
+//@ chunk-chhd9p2w.js:4934-4972 placement
 function getUserScopes(user) {
   return arrayField(user, "scopes");
 }
-//@ chunk-99h01h55.js:4919-5011 placement
+//@ chunk-chhd9p2w.js:4972-5064 placement
 function isValidScopeList(scopes) {
   return scopes.every((scope) => typeof scope === "string" && /^[a-z][a-z0-9_-]{0,31}$/.test(scope));
 }
-//@ chunk-99h01h55.js:5011-5140 placement
+//@ chunk-chhd9p2w.js:5064-5193 placement
 function isValidUserCapability(user) {
   if (!isPlainObjectConnector(user)) return false;
   let { scopes, ...rest } = user;
@@ -74,23 +74,23 @@ function isValidUserCapability(user) {
     (scopes === undefined || (Array.isArray(scopes) && isValidScopeList(scopes)))
   );
 }
-//@ chunk-99h01h55.js:5140-5218 placement
+//@ chunk-chhd9p2w.js:5193-5271 placement
 function arrayField(obj, key) {
   if (!isPlainObjectConnector(obj)) return;
   let value = obj[key];
   return Array.isArray(value) ? value : undefined;
 }
-//@ chunk-99h01h55.js:5218-5358 placement
+//@ chunk-chhd9p2w.js:5271-5411 placement
 /**
  * 数据库规则路径正则（允许 {self} 段）与可用作用域集合（view/interact/admin/owner/self）。
  */
 var DB_RULE_PATH_REGEX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DB_RULE_SCOPES;
-deferInit("chunk-99h01h55.js:5218", () => {
+deferInit("chunk-chhd9p2w.js:5271", () => {
   DB_RULE_PATH_REGEX = /^(?:[A-Za-z0-9_.~:@+-]+|\{self\})(?:\/(?:[A-Za-z0-9_.~:@+-]+|\{self\}))*$/;
   DB_RULE_SCOPES = new Set(["view", "interact", "admin", "owner", "self"]);
 });
-//@ chunk-99h01h55.js:5358-5573 placement
+//@ chunk-chhd9p2w.js:5411-5626 placement
 function isValidDbCapability(db) {
   if (!isPlainObjectConnector(db)) return false;
   let { rules, wake, ...rest } = db;
@@ -102,7 +102,7 @@ function isValidDbCapability(db) {
         wake.every((path) => typeof path === "string" && DB_RULE_PATH_REGEX.test(path))))
   );
 }
-//@ chunk-99h01h55.js:5573-5836 placement
+//@ chunk-chhd9p2w.js:5626-5889 placement
 function isValidDbRules(rules) {
   return rules.every((rule) => {
     if (!isPlainObjectConnector(rule)) return false;
@@ -116,7 +116,7 @@ function isValidDbRules(rules) {
     );
   });
 }
-//@ chunk-99h01h55.js:5836-5895 placement
+//@ chunk-chhd9p2w.js:5889-5948 placement
 function serverConfigOrUndefined(value) {
   try {
     return isPlainObjectConnector(value) ? value : undefined;
@@ -124,23 +124,23 @@ function serverConfigOrUndefined(value) {
     return null;
   }
 }
-//@ chunk-99h01h55.js:5895-5969 placement
+//@ chunk-chhd9p2w.js:5948-6022 placement
 function isStringArray(value) {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
-//@ chunk-99h01h55.js:5969-6004 placement
+//@ chunk-chhd9p2w.js:6022-6057 placement
 function stringListOrNull(tools) {
   return isStringArray(tools) ? tools : null;
 }
-//@ chunk-99h01h55.js:6004-6056 placement
+//@ chunk-chhd9p2w.js:6057-6109 placement
 function safeIds(ids) {
   return [...ids].filter((id) => SAFE_ID_RE.test(id));
 }
-//@ chunk-99h01h55.js:6056-6108 placement
+//@ chunk-chhd9p2w.js:6109-6161 placement
 function normalizedOrLower(value) {
   return normalizeUuidOrNull(value) === null ? value : value.toLowerCase();
 }
-//@ chunk-99h01h55.js:6108-11482 placement
+//@ chunk-chhd9p2w.js:6161-11535 placement
 /**
  * 规范化页面声明的 mcp 能力（servers 列表、dynamic、改名），返回规范结果、警告与被重命名的服务器。
  */
@@ -314,7 +314,7 @@ function normalizeMcpCapability(capabilities, connectors, serverNames, options =
     else if (hostServer !== null) {
       let matchesHost = (server) =>
         sameNormalizedServer(server, hostServer) ||
-        sameNormalizedServer(firstLineOf(`${normalizeNameForMCP(server)}__`, "__"), hostServer) ||
+        sameNormalizedServer(firstLineOf(`${CLAUDEAI_SERVER_PREFIX(server)}__`, "__"), hostServer) ||
         sameNormalizedServer(normalizeConnectorName(server), hostServer);
       let localName =
         serverNames.find(matchesHost) ??
@@ -354,14 +354,14 @@ function normalizeMcpCapability(capabilities, connectors, serverNames, options =
         toolsToKeep = toolNames.map((declaredTool) => {
           if (knownTools.has(declaredTool)) return declaredTool;
           let filtered = [...knownTools].filter(
-            (candidate) => normalizeNameForMCP(candidate) === declaredTool,
+            (candidate) => CLAUDEAI_SERVER_PREFIX(candidate) === declaredTool,
           );
           if (filtered.length !== 1 || !SAFE_ID_RE.test(filtered[0])) return declaredTool;
           renamedTools.push([declaredTool, filtered[0]]);
           return filtered[0];
         });
-        let unknown = uniq(toolsToKeep.filter((tool) => !knownTools.has(tool)));
-        if (unknown.length > 0 && unknown.length === uniq(toolsToKeep).length) {
+        let unknown = normalizeCaseForComparison_2(toolsToKeep.filter((tool) => !knownTools.has(tool)));
+        if (unknown.length > 0 && unknown.length === normalizeCaseForComparison_2(toolsToKeep).length) {
           malformed.push({
             kind: "unknown_tools",
             server: serverFieldName,
@@ -407,7 +407,7 @@ function normalizeMcpCapability(capabilities, connectors, serverNames, options =
       let existing = mergedServers[slot.idx];
       mergedServers[slot.idx] = {
         ...existing,
-        tools: uniq([...existing.tools, ...entry.tools]),
+        tools: normalizeCaseForComparison_2([...existing.tools, ...entry.tools]),
       };
     }
   }
@@ -434,7 +434,7 @@ function normalizeMcpCapability(capabilities, connectors, serverNames, options =
     );
   }
   if (renamedTools.length > 0) {
-    let renames = uniq(
+    let renames = normalizeCaseForComparison_2(
       renamedTools.map(
         ([from, to]) => `"${sanitizeConnectorName(from)}" \u2192 "${sanitizeConnectorName(to)}"`,
       ),
@@ -492,7 +492,7 @@ function normalizeMcpCapability(capabilities, connectors, serverNames, options =
     renamed: [...renamedServers],
   };
 }
-//@ chunk-99h01h55.js:11482-11761 placement
+//@ chunk-chhd9p2w.js:11535-11814 placement
 function findUndeclaredMcpToolCalls(chunks, declaredTools, maxResults = 8) {
   let declared = new Set(declaredTools);
   let seen = new Set();
@@ -508,14 +508,14 @@ function findUndeclaredMcpToolCalls(chunks, declaredTools, maxResults = 8) {
     }
   return undeclared;
 }
-//@ chunk-99h01h55.js:11761-11841 placement
+//@ chunk-chhd9p2w.js:11814-11894 placement
 function foldName(server) {
   return server
     .toLowerCase()
     .replace(/[\s\p{Pd}\p{Pc}]+/gu, " ")
     .trim();
 }
-//@ chunk-99h01h55.js:11841-12342 placement
+//@ chunk-chhd9p2w.js:11894-12395 placement
 function suggestConnectorName(name, connectors) {
   let filtered = connectors.filter(isDeclarableServer);
   let folded = foldName(name);
@@ -546,13 +546,13 @@ function suggestConnectorName(name, connectors) {
   }
   return best?.server;
 }
-//@ chunk-99h01h55.js:12342-12453 placement
+//@ chunk-chhd9p2w.js:12395-12506 placement
 function findMentionedTools(texts, renamed) {
   return renamed.filter(([pair]) =>
     texts.some((text) => [`'${pair}'`, `"${pair}"`, `\`${pair}\``].some((quoted) => text.includes(quoted))),
   );
 }
-//@ chunk-99h01h55.js:12453-12566 placement
+//@ chunk-chhd9p2w.js:12506-12619 placement
 function listLocalServerDeclarations(capabilities) {
   let mcp = capabilities.mcp;
   if (!hasDeclaredServers(mcp)) return [];
@@ -560,12 +560,14 @@ function listLocalServerDeclarations(capabilities) {
     .map(getServerField)
     .filter((server) => server !== undefined && server.startsWith(CLAUDE_AI));
 }
-//@ chunk-99h01h55.js:12566-13394 placement
+//@ chunk-chhd9p2w.js:12619-13447 placement
 function findUnservedMcpServers(capabilities, connectors, referencedTools) {
   let mcp = capabilities.mcp;
   let notices = isDynamicMcp(mcp) ? [DYNAMIC_CONNECTOR_NOTICE] : [];
   if (!hasDeclaredServers(mcp)) return notices;
-  let declaredServers = uniq(mcp.servers.map(getServerField).filter((field) => field !== undefined));
+  let declaredServers = normalizeCaseForComparison_2(
+    mcp.servers.map(getServerField).filter((field) => field !== undefined),
+  );
   let isUnserved = (server) =>
     referencedTools.has(server) &&
     !HOST_CAPABILITY_SERVERS.has(server) &&
@@ -595,29 +597,33 @@ function findUnservedMcpServers(capabilities, connectors, referencedTools) {
     })
     .concat(notices);
 }
-//@ chunk-99h01h55.js:13394-13492 placement
+//@ chunk-chhd9p2w.js:13447-13545 placement
 function normalizeConnectorName(value) {
-  return normalizeNameForMCP(value).replace(/_+/g, "_").replace(/^_|_$/g, "").slice(0, 64).replace(/_+$/, "");
+  return CLAUDEAI_SERVER_PREFIX(value)
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .slice(0, 64)
+    .replace(/_+$/, "");
 }
-//@ chunk-99h01h55.js:13492-13593 placement
+//@ chunk-chhd9p2w.js:13545-13646 placement
 function getServerField(server) {
   let server_2 = server != null && typeof server === "object" ? server.server : undefined;
   return typeof server_2 === "string" ? server_2 : undefined;
 }
-//@ chunk-99h01h55.js:13593-13646 placement
+//@ chunk-chhd9p2w.js:13646-13699 placement
 function isNonEmptyObject(capabilities) {
   return isPlainObjectCapability(capabilities) && Object.keys(capabilities).length > 0;
 }
-//@ chunk-99h01h55.js:13646-13717 placement
+//@ chunk-chhd9p2w.js:13699-13770 placement
 function isPlainObjectCapability(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-99h01h55.js:13717-13761 placement
+//@ chunk-chhd9p2w.js:13770-13814 placement
 function foldSelfConfig(capability) {
   let folded = foldSelfCapability(capability);
   return isPlainObjectCapability(folded) ? folded : capability;
 }
-//@ chunk-99h01h55.js:13761-13858 placement
+//@ chunk-chhd9p2w.js:13814-13911 placement
 function defineValue(target, key, value) {
   Object.defineProperty(target, key, {
     value,
@@ -626,7 +632,7 @@ function defineValue(target, key, value) {
     configurable: true,
   });
 }
-//@ chunk-99h01h55.js:13858-14061 placement
+//@ chunk-chhd9p2w.js:13911-14114 placement
 function mergeCapabilities(below, above) {
   let folded = foldSelfConfig(below ?? {});
   let folded2 = foldSelfConfig(above ?? {});
@@ -647,55 +653,55 @@ function mergeCapabilities(below, above) {
     conflict,
   };
 }
-//@ chunk-99h01h55.js:14061-14077 placement
+//@ chunk-chhd9p2w.js:14114-14130 placement
 var UNVERSIONED_CONTRACT = "0.0.0";
-//@ chunk-99h01h55.js:14077-14100 placement
+//@ chunk-chhd9p2w.js:14130-14153 placement
 class ServedCapabilityState {
   served = undefined;
 }
-//@ chunk-99h01h55.js:14100-14126 placement
+//@ chunk-chhd9p2w.js:14153-14179 placement
 var servedCapabilitySlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-99h01h55.js:14100", () => {
+deferInit("chunk-chhd9p2w.js:14153", () => {
   servedCapabilitySlot = new SessionRootSlot(() => new ServedCapabilityState());
 });
-//@ chunk-99h01h55.js:14126-14162 placement
+//@ chunk-chhd9p2w.js:14179-14215 placement
 function setServedCapabilities(session, served) {
   servedCapabilitySlot.of(session).served = served;
 }
-//@ chunk-99h01h55.js:14162-14204 placement
+//@ chunk-chhd9p2w.js:14215-14257 placement
 function getServedCapabilities(session) {
   return servedCapabilitySlot.peek(session)?.served;
 }
-//@ chunk-99h01h55.js:14204-14243 placement
+//@ chunk-chhd9p2w.js:14257-14296 placement
 function clearServedCapabilities(rootSession) {
   servedCapabilitySlot.of(rootSession).served = undefined;
 }
-//@ chunk-99h01h55.js:14243-14258 placement
+//@ chunk-chhd9p2w.js:14296-14311 placement
 var HOST = "host";
-//@ chunk-99h01h55.js:14258-14360 placement
+//@ chunk-chhd9p2w.js:14311-14413 placement
 function hasFeatureFlag(caps, feature, on) {
   let features = caps.features;
   return (
     features !== undefined && Object.hasOwn(features, feature) && Object.hasOwn(features[feature] ?? {}, on)
   );
 }
-//@ chunk-99h01h55.js:14360-14398 placement
+//@ chunk-chhd9p2w.js:14413-14451 placement
 var HOST_GRANT_SERVER_RE = /^host:([A-Za-z0-9_-]{1,64})$/;
-//@ chunk-99h01h55.js:14398-14437 placement
+//@ chunk-chhd9p2w.js:14451-14490 placement
 function getLocalServerName(server) {
   return HOST_GRANT_SERVER_RE.exec(server)?.[1];
 }
-//@ chunk-99h01h55.js:14437-14503 placement
+//@ chunk-chhd9p2w.js:14490-14556 placement
 function describeServerKind(server) {
   return getLocalServerName(server) === undefined ? "connector" : "local server";
 }
-//@ chunk-99h01h55.js:14503-14612 placement
+//@ chunk-chhd9p2w.js:14556-14665 placement
 /**
  * CLAUDE_ARTIFACT_HOST_GRANT 环境变量的 schema：本机允许 artifact 调用的 MCP 服务器与工具。
  */
 var CLAUDE_ARTIFACT_HOST_GRANT_ENV; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var hostGrantSchema;
-deferInit("chunk-99h01h55.js:14503", () => {
+deferInit("chunk-chhd9p2w.js:14556", () => {
   CLAUDE_ARTIFACT_HOST_GRANT_ENV = "CLAUDE_ARTIFACT_HOST_GRANT";
   hostGrantSchema = DoctorLazy(() =>
     objectSchema({
@@ -709,7 +715,7 @@ deferInit("chunk-99h01h55.js:14503", () => {
     }),
   );
 });
-//@ chunk-99h01h55.js:14612-14939 placement
+//@ chunk-chhd9p2w.js:14665-14992 placement
 /**
  * 读取 CLAUDE_ARTIFACT_HOST_GRANT（本机允许 artifact 调用的本地 MCP 服务器与工具），解析失败返回 unreadable。
  */
@@ -742,14 +748,14 @@ function readHostGrant(raw) {
     tools: out,
   };
 }
-//@ chunk-99h01h55.js:14939-15014 placement
+//@ chunk-chhd9p2w.js:14992-15067 placement
 function serverNames(servers) {
   return servers.flatMap((server) => {
     let serverField = getServerField(server);
     return serverField === undefined ? [] : [serverField];
   });
 }
-//@ chunk-99h01h55.js:15014-15924 placement
+//@ chunk-chhd9p2w.js:15067-15977 placement
 /**
  * 按本机 host grant 过滤页面声明的本地 MCP 服务器，返回保留与丢弃的服务器。
  */
@@ -770,7 +776,9 @@ function applyHostGrant(caps, grant) {
       dropped: [],
       servers: serverNames(servers),
     };
-  let localServers = uniq(serverNames(servers).filter((server) => getLocalServerName(server) !== undefined));
+  let localServers = normalizeCaseForComparison_2(
+    serverNames(servers).filter((server) => getLocalServerName(server) !== undefined),
+  );
   if (localServers.length === 0)
     return {
       ok: true,
@@ -849,9 +857,9 @@ function applyHostGrant(caps, grant) {
     servers: serverNames(dropped),
   };
 }
-//@ chunk-99h01h55.js:15924-15988 placement
+//@ chunk-chhd9p2w.js:15977-16041 placement
 var CONTRACT_VERSION_REGEX = /^(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,5})$/;
-//@ chunk-99h01h55.js:15988-16162 placement
+//@ chunk-chhd9p2w.js:16041-16215 placement
 function isNewerContractVersion(version, version_2) {
   if (!CONTRACT_VERSION_REGEX.test(version) || !CONTRACT_VERSION_REGEX.test(version_2)) return false;
   let mapped = version.split(".").map(Number);
@@ -859,9 +867,9 @@ function isNewerContractVersion(version, version_2) {
   for (let i = 0; i < 3; i++) if (mapped[i] !== mapped_2[i]) return mapped[i] > mapped_2[i];
   return false;
 }
-//@ chunk-99h01h55.js:16162-16193 placement
+//@ chunk-chhd9p2w.js:16215-16246 placement
 var CAPABILITY_NAME_REGEX = /^[a-z][a-z0-9]{0,23}$/;
-//@ chunk-99h01h55.js:16193-16263 placement
+//@ chunk-chhd9p2w.js:16246-16316 placement
 function parseContractVersion(contract) {
   return typeof contract === "string" &&
     contract !== UNVERSIONED_CONTRACT &&
@@ -869,16 +877,16 @@ function parseContractVersion(contract) {
     ? contract
     : null;
 }
-//@ chunk-99h01h55.js:16263-16384 placement
+//@ chunk-chhd9p2w.js:16316-16437 placement
 function listUnknownCapabilities(caps, declared) {
   if (declared.version === UNVERSIONED_CONTRACT) return [];
   let known = new Set(declared.capabilities);
   return Object.keys(caps).filter((key) => !known.has(key));
 }
-//@ chunk-99h01h55.js:16384-16412 placement
+//@ chunk-chhd9p2w.js:16437-16465 placement
 var ARTIFACT_CAPABILITY_KEY = "artifact";
 var SELF = "self";
-//@ chunk-99h01h55.js:16412-16778 placement
+//@ chunk-chhd9p2w.js:16465-16831 placement
 function canonicalizeCapabilityValue(value) {
   let untrustedArray = readUntrustedArray(value);
   if (untrustedArray === UNREADABLE_ARRAY) return;
@@ -898,12 +906,12 @@ function canonicalizeCapabilityValue(value) {
   }
   return JSON.stringify(value) ?? "null";
 }
-//@ chunk-99h01h55.js:16778-16836 placement
+//@ chunk-chhd9p2w.js:16831-16889 placement
 function sameCapabilityValue(a, b) {
   let left = canonicalizeCapabilityValue(a);
   return left !== undefined && left === canonicalizeCapabilityValue(b);
 }
-//@ chunk-99h01h55.js:16836-17078 placement
+//@ chunk-chhd9p2w.js:16889-17131 placement
 function renameArtifactCapabilityToSelf(capabilities) {
   if (!Object.hasOwn(capabilities, ARTIFACT_CAPABILITY_KEY)) return capabilities;
   if (Object.hasOwn(capabilities, SELF)) {
@@ -918,7 +926,7 @@ function renameArtifactCapabilityToSelf(capabilities) {
     defineValue(entry, key === ARTIFACT_CAPABILITY_KEY ? SELF : key, value);
   return entry;
 }
-//@ chunk-99h01h55.js:17078-17359 placement
+//@ chunk-chhd9p2w.js:17131-17412 placement
 /**
  * 规范化能力声明：把 SELF 键改写成 artifact 能力键（两者都在且不一致时原样返回）。
  */
@@ -941,7 +949,7 @@ function foldSelfCapability(capability) {
   }
   return folded;
 }
-//@ chunk-99h01h55.js:17359-17906 placement
+//@ chunk-chhd9p2w.js:17412-17959 placement
 function reconcileSelfCapability(caps, next) {
   let hasArtifact = Object.hasOwn(caps, ARTIFACT_CAPABILITY_KEY);
   let hasSelf = Object.hasOwn(caps, SELF);
@@ -976,16 +984,16 @@ function reconcileSelfCapability(caps, next) {
     caps: out,
   };
 }
-//@ chunk-99h01h55.js:17906-17969 placement
+//@ chunk-chhd9p2w.js:17959-18022 placement
 function getDeclaredCapabilities(value) {
   return "capabilities" in value ? value.capabilities : undefined;
 }
-//@ chunk-99h01h55.js:17969-18044 placement
+//@ chunk-chhd9p2w.js:18022-18097 placement
 /**
  * artifact 能力声明的已知键（artifact/self/downloads/comments/room/db/assets/user 等）及其扩展集合 mcp/flags。
  */
 var BASIC_CAPABILITY_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-99h01h55.js:17969", () => {
+deferInit("chunk-chhd9p2w.js:18022", () => {
   BASIC_CAPABILITY_KEYS = new Set([
     ARTIFACT_CAPABILITY_KEY,
     SELF,
@@ -997,19 +1005,19 @@ deferInit("chunk-99h01h55.js:17969", () => {
     "user",
   ]);
 });
-//@ chunk-99h01h55.js:18044-18076 placement
+//@ chunk-chhd9p2w.js:18097-18129 placement
 /**
  * 导出函数 `isKnownCapabilityObject`：参数 e，返回 de(e, oe)。
  */
 function isKnownCapabilityObject(value) {
   return onlyKeysIn(value, BASIC_CAPABILITY_KEYS);
 }
-//@ chunk-99h01h55.js:18076-18134 placement
+//@ chunk-chhd9p2w.js:18129-18187 placement
 var REMOTE_CAPABILITY_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-99h01h55.js:18076", () => {
+deferInit("chunk-chhd9p2w.js:18129", () => {
   REMOTE_CAPABILITY_KEYS = new Set(["downloads", "room", "db", "assets", "user"]);
 });
-//@ chunk-99h01h55.js:18134-18413 placement
+//@ chunk-chhd9p2w.js:18187-18466 placement
 function isValidCapabilitiesObject(declaredCapabilities) {
   return (
     declaredCapabilities !== null &&
@@ -1031,37 +1039,37 @@ function isValidCapabilitiesObject(declaredCapabilities) {
     })
   );
 }
-//@ chunk-99h01h55.js:18413-18451 placement
+//@ chunk-chhd9p2w.js:18466-18504 placement
 var ALL_CAPABILITY_KEYS; // deferred: uses BASIC_CAPABILITY_KEYS of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-99h01h55.js:18413", () => {
+deferInit("chunk-chhd9p2w.js:18466", () => {
   ALL_CAPABILITY_KEYS = new Set([...BASIC_CAPABILITY_KEYS, "mcp", "flags"]);
 });
-//@ chunk-99h01h55.js:18451-18483 placement
+//@ chunk-chhd9p2w.js:18504-18536 placement
 /**
  * 导出函数 `isFullCapabilityObject`：参数 e，返回 de(e, xe)。
  */
 function isFullCapabilityObject(value) {
   return onlyKeysIn(value, ALL_CAPABILITY_KEYS);
 }
-//@ chunk-99h01h55.js:18483-18530 placement
+//@ chunk-chhd9p2w.js:18536-18583 placement
 /**
  * 导出函数 `allKnownCapabilityKeys`：参数 e，返回 e.every((n) => xe.has(n))。
  */
 function allKnownCapabilityKeys(keys) {
   return keys.every((key) => ALL_CAPABILITY_KEYS.has(key));
 }
-//@ chunk-99h01h55.js:18530-18606 placement
+//@ chunk-chhd9p2w.js:18583-18659 placement
 function onlyKeysIn(value, allowed) {
   return (
     value == null || (isPlainObjectCapability(value) && Object.keys(value).every((key) => allowed.has(key)))
   );
 }
-//@ chunk-99h01h55.js:18606-18646 placement
+//@ chunk-chhd9p2w.js:18659-18699 placement
 var regExp; // deferred: uses QUOTE_HOMOGLYPHS (../../tools/ArtifactTool/artifactUrls.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-99h01h55.js:18606", () => {
+deferInit("chunk-chhd9p2w.js:18659", () => {
   regExp = new RegExp(`^${QUOTE_HOMOGLYPHS.source}$`, "u");
 });
-//@ chunk-99h01h55.js:18646-18761 placement
+//@ chunk-chhd9p2w.js:18699-18814 placement
 function isStrippablePunctuation(char) {
   return (
     MODEL_TEXT_PUNCT_CODE_POINT.test(char) &&
@@ -1071,7 +1079,7 @@ function isStrippablePunctuation(char) {
     !ESCAPE_CHAR_RE.test(char)
   );
 }
-//@ chunk-99h01h55.js:18761-19159 placement
+//@ chunk-chhd9p2w.js:18814-19212 placement
 function maskConfusableChars(text) {
   let sliced = Array.from(text).slice(0, MAX_NAME_LENGTH + 1);
   let length = sliced.length;
@@ -1096,7 +1104,7 @@ function maskConfusableChars(text) {
   for (let j = 0; j < length; j++) if (mapped[j] && insideBefore[j] && insideAfter[j]) masked.add(j);
   return masked;
 }
-//@ chunk-99h01h55.js:19159-19415 placement
+//@ chunk-chhd9p2w.js:19212-19468 placement
 function makeMaskPredicate(text) {
   let mask = maskConfusableChars(text);
   let edgeSpaceMasker = makeEdgeSpaceMasker(text);
@@ -1126,7 +1134,7 @@ function makeMaskPredicate(text) {
     return false;
   };
 }
-//@ chunk-99h01h55.js:19415-19587 placement
+//@ chunk-chhd9p2w.js:19468-19640 placement
 /**
  * 逐字符拼接文本，需要转义的字符替换为转义串，累计长度超过上限时截断并标记 cut。
  */
@@ -1149,7 +1157,7 @@ function truncateWithEscapes(text, isMasked, limit) {
     cut: false,
   };
 }
-//@ chunk-99h01h55.js:19587-19766 placement
+//@ chunk-chhd9p2w.js:19640-19819 placement
 /**
  * 把能力/服务器名清洗成可安全展示的短文本：转义可疑字符、截断、去除标记同形字与 ;,(){}，空则为 "?"，截断时加省略号。
  */
@@ -1170,7 +1178,7 @@ function sanitizeCapabilityName(text) {
     ).trim() || "?";
   return seen ? `${out}\u2026` : out;
 }
-//@ chunk-99h01h55.js:19766-20766 placement
+//@ chunk-chhd9p2w.js:19819-20819 placement
 /**
  * 把能力声明（mcp 服务器/工具、db、user…）格式化成给用户/模型看的简短列表文本。
  */
@@ -1226,7 +1234,7 @@ function describeCapabilities(caps) {
   let list = Array.from(text);
   return ` (${list.length > 400 ? list.slice(0, 400).join("") + "\u2026" : list.join("")})`;
 }
-//@ chunk-99h01h55.js:20766-21059 placement
+//@ chunk-chhd9p2w.js:20819-21112 placement
 function describeCapabilityWidening(capabilities, declaredCapabilities) {
   let folded = foldSelfConfig(capabilities ?? {});
   let filtered = Object.keys(foldSelfConfig(declaredCapabilities ?? {})).filter(
@@ -1244,7 +1252,7 @@ function describeCapabilityWidening(capabilities, declaredCapabilities) {
   }
   return mapped;
 }
-//@ chunk-99h01h55.js:21059-21591 placement
+//@ chunk-chhd9p2w.js:21112-21644 placement
 /**
  * 页面连接器声明的文案：动态 mcp 说明、无效名与“查看者逐个批准”的提示。
  */
@@ -1254,11 +1262,11 @@ var VIEWER_APPROVED_CONNECTOR_TEXT = "any connector the viewer approves";
 var MCP_APPROVED_CONNECTOR_LABEL = `mcp (${VIEWER_APPROVED_CONNECTOR_TEXT})`;
 var DYNAMIC_CONNECTOR_NOTICE =
   "This page's connector declaration is dynamic: beyond any servers it lists, the page can ask each viewer for any connector by name at call time, and the viewer approves each at first use. Connectors and tools the page calls without listing them were not checked against this session. Tell the user which connectors and tools the page calls, and that those integrations are unverified unless one real call was made.";
-//@ chunk-99h01h55.js:21591-21633 placement
+//@ chunk-chhd9p2w.js:21644-21686 placement
 function isDynamicMcp(mcp) {
   return serverConfigOrUndefined(mcp)?.dynamic === true;
 }
-//@ chunk-99h01h55.js:21633-21981 placement
+//@ chunk-chhd9p2w.js:21686-22034 placement
 function widensMcpAccess(previous, next) {
   if (next === undefined) return false;
   let nextServers = declaredServers(next);
@@ -1282,7 +1290,7 @@ function widensMcpAccess(previous, next) {
     );
   });
 }
-//@ chunk-99h01h55.js:21981-22058 placement
+//@ chunk-chhd9p2w.js:22034-22111 placement
 function declaredServersOrUnreadable(value) {
   let config = serverConfigOrUndefined(value);
   return config === null
@@ -1291,21 +1299,21 @@ function declaredServersOrUnreadable(value) {
       ? undefined
       : readUntrustedArray(config.servers);
 }
-//@ chunk-99h01h55.js:22058-22108 placement
+//@ chunk-chhd9p2w.js:22111-22161 placement
 function declaredServers(value) {
   let config = declaredServersOrUnreadable(value);
   return config === UNREADABLE_ARRAY ? undefined : config;
 }
-//@ chunk-99h01h55.js:22108-22165 placement
+//@ chunk-chhd9p2w.js:22161-22218 placement
 function declaredServerCount(value) {
   return value === undefined || value === UNREADABLE_ARRAY ? undefined : value.length;
 }
-//@ chunk-99h01h55.js:22165-22268 placement
+//@ chunk-chhd9p2w.js:22218-22321 placement
 function capListForDisplay(list, limit, render) {
   if (list.length <= limit) return list.map(render);
   return [`[${list.length} total]`, ...list.slice(0, limit).map(render)];
 }
-//@ chunk-99h01h55.js:22268-22380 placement
+//@ chunk-chhd9p2w.js:22321-22433 placement
 function hasDeclaredServers(value) {
   return (
     value != null &&
@@ -1315,7 +1323,7 @@ function hasDeclaredServers(value) {
     value.servers.length > 0
   );
 }
-//@ chunk-99h01h55.js:22380-22594 placement
+//@ chunk-chhd9p2w.js:22433-22647 placement
 function sanitizeDisplayText(text, options) {
   if (typeof text !== "string") return "?";
   let max = options?.max ?? 64;
@@ -1328,7 +1336,7 @@ function sanitizeDisplayText(text, options) {
     .replace(/\s+/g, " ");
   return replaced.trim() === "" ? "?" : replaced;
 }
-//@ chunk-99h01h55.js:22594-22687 placement
+//@ chunk-chhd9p2w.js:22647-22740 placement
 function sanitizeDisplayTextOrUndefined(value, max) {
   let trimmed = sanitizeDisplayText(value, {
     max,
@@ -1338,17 +1346,31 @@ function sanitizeDisplayTextOrUndefined(value, max) {
   return trimmed !== "" && trimmed !== "?" ? trimmed : undefined;
 }
 export {
-  CONTRACT_VERSION_REGEX,
-  CAPABILITY_NAME_REGEX,
   parseContractVersion,
+  mergeCapabilities,
+  sanitizeDisplayText,
+  allKnownCapabilityKeys,
+  readHostGrant,
+  describeCapabilities,
+  capListForDisplay,
+  DB_RULE_PATH_REGEX,
+  DB_RULE_SCOPES,
+  getDeclaredCapabilities,
+  isValidCapabilitiesObject,
+  isFullCapabilityObject,
+  isKnownCapabilityObject,
+  isNonEmptyObject,
+  describeCapabilityWidening,
+  CONTRACT_VERSION_REGEX,
+  getServedCapabilities,
+  setServedCapabilities,
+  findUnservedMcpServers,
+  CAPABILITY_NAME_REGEX,
   getLocalServerName,
   listUnknownCapabilities,
-  capListForDisplay,
-  sanitizeDisplayText,
   isNewerContractVersion,
   reconcileSelfCapability,
   renameArtifactCapabilityToSelf,
-  isNonEmptyObject,
   sanitizeDisplayTextOrUndefined,
   normalizeMcpCapability,
   hasFeatureFlag,
@@ -1357,7 +1379,6 @@ export {
   findUndeclaredMcpToolCalls,
   findMentionedTools,
   listLocalServerDeclarations,
-  readHostGrant,
   applyHostGrant,
   CLAUDE_ARTIFACT_HOST_GRANT_ENV,
   isDynamicMcp,
@@ -1369,21 +1390,8 @@ export {
   isValidScopeList,
   isValidDbCapability,
   isValidUserCapability,
+  clearServedCapabilities,
+  truncateWithEscapes,
   arrayField,
   VIEWER_APPROVED_CONNECTOR_TEXT,
-  clearServedCapabilities,
-  allKnownCapabilityKeys,
-  describeCapabilities,
-  DB_RULE_PATH_REGEX,
-  DB_RULE_SCOPES,
-  getDeclaredCapabilities,
-  isValidCapabilitiesObject,
-  isFullCapabilityObject,
-  isKnownCapabilityObject,
-  describeCapabilityWidening,
-  getServedCapabilities,
-  setServedCapabilities,
-  findUnservedMcpServers,
-  truncateWithEscapes,
-  mergeCapabilities,
 };

@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：后台任务状态存储
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (3), chunk-y162pn60.js (91)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (3), chunk-rmd7n4gq.js (91)
  * attribution: placement 94
  */
 import { join, basename, isAbsolute, dirname, relative } from "path";
 import { lstat, readFile, rm, mkdir, readdir } from "fs/promises";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { isValidKeySegment, STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { stripIgnorables } from "../../utils/sanitization.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -71,19 +71,19 @@ import { readRoster } from "./roster.js";
 import { checkProcessLiveness } from "./processLiveness.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:834319-834357 placement
+//@ chunk-exfmq47h.js:856654-856692 placement
 /**
  * 导出函数 `jobsDir`：返回 join_11(getClaudeConfigDir(), "jobs")。
  */
 function jobsDir() {
   return join(getClaudeConfigDir(), "jobs");
 }
-//@ chunk-aepeg2w5.js:834357-834393 placement
+//@ chunk-exfmq47h.js:856692-856728 placement
 /**
  * 导出常量或表 `JOB_PARENT_TRANSCRIPT_FILE`：值为 ["parent-transcript.jsonl"]。
  */
 var JOB_PARENT_TRANSCRIPT_FILE = ["parent-transcript.jsonl"];
-//@ chunk-aepeg2w5.js:834393-834476 placement
+//@ chunk-exfmq47h.js:856728-856811 placement
 /**
  * 导出函数 `jobStorageSpace`：参数 e, n，返回 STORAGE_SPACES.job(r, n)。
  */
@@ -92,7 +92,7 @@ function jobStorageSpace(jobDirPath, channel) {
   if (!isValidKeySegment(jobId) || jobDirPath !== join(jobsDir(), jobId)) return;
   return STORAGE_SPACES.job(jobId, channel);
 }
-//@ chunk-y162pn60.js:21307-21397 placement
+//@ chunk-rmd7n4gq.js:21626-21716 placement
 /**
  * 保留的分组名（pinned/ungrouped/past 及带括号显示名）。
  */
@@ -100,21 +100,21 @@ var UNGROUPED; // deferred: has load-time effects after a deferred statement of 
 var EARLIER;
 var MAX_GROUP_NAME_CHARS;
 var RESERVED_GROUP_NAMES;
-deferInit("chunk-y162pn60.js:21307", () => {
+deferInit("chunk-rmd7n4gq.js:21626", () => {
   UNGROUPED = "(ungrouped)";
   EARLIER = "(earlier)";
   MAX_GROUP_NAME_CHARS = 64;
   RESERVED_GROUP_NAMES = new Set(["pinned", "ungrouped", UNGROUPED, "past", EARLIER]);
 });
-//@ chunk-y162pn60.js:21397-21444 placement
+//@ chunk-rmd7n4gq.js:21716-21763 placement
 function isReservedGroupName(name) {
   return RESERVED_GROUP_NAMES.has(name.toLowerCase());
 }
-//@ chunk-y162pn60.js:21444-21485 placement
+//@ chunk-rmd7n4gq.js:21763-21804 placement
 function sanitizeGroupName(name) {
   return stripIgnorables(name).slice(0, MAX_GROUP_NAME_CHARS);
 }
-//@ chunk-y162pn60.js:21485-21561 placement
+//@ chunk-rmd7n4gq.js:21804-21880 placement
 /**
  * 清洗分组名，保留名或空名返回 undefined。
  */
@@ -123,7 +123,7 @@ function sanitizeGroupOrDefault(group) {
   let rawGroup = sanitizeGroupName(group);
   return rawGroup && !isReservedGroupName(rawGroup) ? rawGroup : undefined;
 }
-//@ chunk-y162pn60.js:21561-22443 placement
+//@ chunk-rmd7n4gq.js:21880-22762 placement
 /**
  * 作业状态读取缓存（按修改时间键）及各类日志/遥测的一次性上报去重（瞬时错误、被拒、恢复、修剪、sidecar 回退）。
  */
@@ -195,15 +195,15 @@ class JobStateReadCache {
     return true;
   }
 }
-//@ chunk-y162pn60.js:22443-22468 placement
+//@ chunk-rmd7n4gq.js:22762-22787 placement
 /**
  * 按宿主保存的作业状态读取缓存。
  */
 var jobStateReadCache; // deferred: uses JobStateReadCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-y162pn60.js:22443", () => {
+deferInit("chunk-rmd7n4gq.js:22762", () => {
   jobStateReadCache = new HostScoped(() => new JobStateReadCache());
 });
-//@ chunk-y162pn60.js:22468-22505 placement
+//@ chunk-rmd7n4gq.js:22787-22824 placement
 /**
  * 按会话保存的作业 pin/draft 表。
  */
@@ -211,15 +211,15 @@ class JobPins {
   drafts = new Map();
   pins = new Map();
 }
-//@ chunk-y162pn60.js:22505-22531 placement
+//@ chunk-rmd7n4gq.js:22824-22850 placement
 /**
  * 作业 pin 状态的宿主作用域单例。
  */
 var jobPinsState; // deferred: uses JobPins of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-y162pn60.js:22505", () => {
+deferInit("chunk-rmd7n4gq.js:22824", () => {
   jobPinsState = new HostScoped(() => new JobPins());
 });
-//@ chunk-y162pn60.js:22531-22993 placement
+//@ chunk-rmd7n4gq.js:22850-23312 placement
 /**
  * 从存储读取不超过上限的文本：首次先查元数据（不存在、出错或超限时标记并可修复），读取失败清除标记；超限返回 null。
  */
@@ -259,14 +259,14 @@ async function readCappedStorageText(storage, key, { cap, screens, screenKey, he
   }
   return item.value;
 }
-//@ chunk-y162pn60.js:22993-23084 placement
+//@ chunk-rmd7n4gq.js:23312-23403 placement
 /**
  * 桥接会话 id 的正则（cse_/session_ 前缀）。
  */
 var pathStringSchema = () => stringSchema().transform(stripLongPathPrefixes);
 var SHORT_ID_RE = /^[a-f0-9]{8}$/;
 var BRIDGE_SESSION_ID_RE = /^(cse_|session_)[A-Za-z0-9_-]{1,128}$/;
-//@ chunk-y162pn60.js:23084-23213 placement
+//@ chunk-rmd7n4gq.js:23403-23532 placement
 function makeFieldValidator(field, isValid) {
   return (value) => {
     if (isValid(value)) return value;
@@ -276,14 +276,14 @@ function makeFieldValidator(field, isValid) {
     return;
   };
 }
-//@ chunk-y162pn60.js:23213-27221 placement
+//@ chunk-rmd7n4gq.js:23532-27540 placement
 /**
  * 单个作业状态文件的最大字节数（10000）。
  */
 var jobStateSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var STATE_JSON;
 var MAX_STATE_BYTES;
-deferInit("chunk-y162pn60.js:23213", () => {
+deferInit("chunk-rmd7n4gq.js:23532", () => {
   jobStateSchema = DoctorLazy(() =>
     objectSchema({
       state: stringSchema(),
@@ -486,15 +486,15 @@ deferInit("chunk-y162pn60.js:23213", () => {
   STATE_JSON = "state.json";
   MAX_STATE_BYTES = 8388608;
 });
-//@ chunk-y162pn60.js:27221-27248 placement
+//@ chunk-rmd7n4gq.js:27540-27567 placement
 function getJobsDir() {
   return jobsDir();
 }
-//@ chunk-y162pn60.js:27248-27280 placement
+//@ chunk-rmd7n4gq.js:27567-27599 placement
 function getJobDir(shortId) {
   return join(getJobsDir(), shortId);
 }
-//@ chunk-y162pn60.js:27280-27391 placement
+//@ chunk-rmd7n4gq.js:27599-27710 placement
 function getOwnJobShortId() {
   let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
   if (CLAUDE_JOB_DIR) return basename(CLAUDE_JOB_DIR);
@@ -502,22 +502,22 @@ function getOwnJobShortId() {
   if (bgTakeover) return basename(bgTakeover.jobDir);
   return getSessionId().slice(0, 8);
 }
-//@ chunk-y162pn60.js:27391-27440 placement
+//@ chunk-rmd7n4gq.js:27710-27759 placement
 /**
  * 某作业某文件的存储路径（key 不合法时返回 undefined）。
  */
 function jobStoragePath(jobId, relPath) {
   return isValidKeySegment(jobId) ? STORAGE_SPACES.job(jobId, relPath) : undefined;
 }
-//@ chunk-y162pn60.js:27440-27474 placement
+//@ chunk-rmd7n4gq.js:27759-27793 placement
 function jobKeyFor(jobId, relPath) {
   return jobStorageSpace(jobId, relPath);
 }
-//@ chunk-y162pn60.js:27474-27512 placement
+//@ chunk-rmd7n4gq.js:27793-27831 placement
 function jobStateKey(jobId) {
   return STORAGE_SPACES.job(jobId, [STATE_JSON]);
 }
-//@ chunk-y162pn60.js:27512-27821 placement
+//@ chunk-rmd7n4gq.js:27831-28140 placement
 function watchJobDirOnce(jobId, onChange) {
   let statePath = join(getJobDir(jobId), STATE_JSON);
   let stopped = false;
@@ -549,11 +549,11 @@ function watchJobDirOnce(jobId, onChange) {
   }
   return stop;
 }
-//@ chunk-y162pn60.js:27821-27869 placement
+//@ chunk-rmd7n4gq.js:28140-28188 placement
 function isOwnStateWriteInFlight() {
   return currentSessionStatusState().ownStateWriteDepth > 0;
 }
-//@ chunk-y162pn60.js:27869-28586 placement
+//@ chunk-rmd7n4gq.js:28188-28905 placement
 async function writeStateAtomic(jobDir, jobState, storageV5) {
   let hasSessionCron = jobState.inFlight?.kinds.includes("session_cron") === true;
   let withSelfWake =
@@ -611,7 +611,7 @@ async function writeStateAtomic(jobDir, jobState, storageV5) {
     invalidateJobStateCache(jobDir);
   }
 }
-//@ chunk-y162pn60.js:28586-28721 placement
+//@ chunk-rmd7n4gq.js:28905-29040 placement
 function logJobWriteError(error) {
   let errnoCode = getErrnoCode(error);
   if (errnoCode && (RESOURCE_EXHAUSTION_CODES.has(errnoCode) || errnoCode === "ENOENT")) {
@@ -622,7 +622,7 @@ function logJobWriteError(error) {
   }
   logError(error);
 }
-//@ chunk-y162pn60.js:28721-28972 placement
+//@ chunk-rmd7n4gq.js:29040-29291 placement
 function resolveBridgeHandoffIdentity(replBridgeHandle, currentSessionBridge) {
   let handle =
     currentSessionBridge !== undefined && currentSessionBridge.id === replBridgeHandle?.bridgeSessionId;
@@ -634,7 +634,7 @@ function resolveBridgeHandoffIdentity(replBridgeHandle, currentSessionBridge) {
       (currentSessionBridge !== undefined && !handle ? true : currentSessionBridge?.noHistoryBackfill),
   };
 }
-//@ chunk-y162pn60.js:28972-29441 placement
+//@ chunk-rmd7n4gq.js:29291-29760 placement
 function buildBridgeReattachEnv(bridgeSessionId, seq, outboundOnly, groupingId, bridgeHandoffIdentity) {
   if (!bridgeSessionId) return;
   let env = {
@@ -650,37 +650,37 @@ function buildBridgeReattachEnv(bridgeSessionId, seq, outboundOnly, groupingId, 
   if (outboundOnly !== false) env.CLAUDE_BRIDGE_REATTACH_OUTBOUND_ONLY = "1";
   return env;
 }
-//@ chunk-y162pn60.js:29441-29477 placement
+//@ chunk-rmd7n4gq.js:29760-29796 placement
 /**
  * 取当前宿主的作业状态读取缓存。
  */
 function getJobStateReadCache() {
   return jobStateReadCache.of(getRootSession().host);
 }
-//@ chunk-y162pn60.js:29477-29547 placement
+//@ chunk-rmd7n4gq.js:29796-29866 placement
 /**
  * 取缓存的状态对象，读失败策略为 null 时返回 null。
  */
 function stateOrNull(loaded, loadOptions) {
   return loadOptions?.onReadFailure === "null" ? null : (loaded?.state ?? null);
 }
-//@ chunk-y162pn60.js:29547-29601 placement
+//@ chunk-rmd7n4gq.js:29866-29920 placement
 /**
  * 表示“不是普通文件”的错误码集合。
  */
 var RETRY_BACKOFF_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var NON_REGULAR_ERROR_CODES;
-deferInit("chunk-y162pn60.js:29547", () => {
+deferInit("chunk-rmd7n4gq.js:29866", () => {
   RETRY_BACKOFF_MS = [15, 45];
   NON_REGULAR_ERROR_CODES = new Set(["ELOOP", "ENXIO", "EISDIR"]);
 });
-//@ chunk-y162pn60.js:29601-29768 placement
+//@ chunk-rmd7n4gq.js:29920-30087 placement
 function classifyStorageRejection(error) {
   if (error.code !== "Failed" || error.telemetryCode === undefined) return;
   if (error.telemetryCode === "EFBIG") return "oversize";
   return NON_REGULAR_ERROR_CODES.has(error.telemetryCode) ? "non-regular" : undefined;
 }
-//@ chunk-y162pn60.js:29768-29872 placement
+//@ chunk-rmd7n4gq.js:30087-30191 placement
 function isSidecarReadFailure(error) {
   return (
     error.code === "Failed" &&
@@ -689,15 +689,15 @@ function isSidecarReadFailure(error) {
     error.key.relPath[0] !== STATE_JSON
   );
 }
-//@ chunk-y162pn60.js:29872-29929 placement
+//@ chunk-rmd7n4gq.js:30191-30248 placement
 /**
  * 不计入失败统计的失败分类（invariant、permission、environment）。
  */
 var NON_COUNTED_FAILURE_CLASSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-y162pn60.js:29872", () => {
+deferInit("chunk-rmd7n4gq.js:30191", () => {
   NON_COUNTED_FAILURE_CLASSES = new Set(["invariant", "permission", "environment"]);
 });
-//@ chunk-y162pn60.js:29929-30053 placement
+//@ chunk-rmd7n4gq.js:30248-30372 placement
 function isTransientStorageError(error) {
   if (error.code === "Unavailable") return true;
   return (
@@ -707,7 +707,7 @@ function isTransientStorageError(error) {
     !isSidecarReadFailure(error)
   );
 }
-//@ chunk-y162pn60.js:30053-30301 placement
+//@ chunk-rmd7n4gq.js:30372-30620 placement
 /**
  * 对瞬时存储错误按退避重试读取；首次成功记干净读取，重试后成功记 tengu_bg_state_read_recovered（只一次）。
  */
@@ -729,7 +729,7 @@ async function retryStorageRead(jobDir, read) {
   }
   return result;
 }
-//@ chunk-y162pn60.js:30301-30508 placement
+//@ chunk-rmd7n4gq.js:30620-30827 placement
 function rejectJobState(jobDir, reasonCode, detail) {
   let cached = getJobStateReadCache().peek(jobDir);
   if (!(cached?.mtimeKey.startsWith("rejected:") && cached.state === null))
@@ -739,11 +739,11 @@ function rejectJobState(jobDir, reasonCode, detail) {
   getJobStateReadCache().noteRejected(jobDir, `rejected:${reasonCode}`);
   return null;
 }
-//@ chunk-y162pn60.js:30508-30541 placement
+//@ chunk-rmd7n4gq.js:30827-30860 placement
 function invalidateJobStateCache(jobDir) {
   getJobStateReadCache().invalidate(jobDir);
 }
-//@ chunk-y162pn60.js:30541-32339 placement
+//@ chunk-rmd7n4gq.js:30860-32658 placement
 /**
  * 从存储 v5 读取作业 state.json 及 order/stateOrder/group sidecar：检查大小与类型，瞬时失败用缓存，版本未变命中缓存，否则解析。
  */
@@ -859,7 +859,7 @@ async function readJobStateFromStorage(storage, jobDir, storage_2) {
     storage_2,
   );
 }
-//@ chunk-y162pn60.js:32339-33301 placement
+//@ chunk-rmd7n4gq.js:32658-33620 placement
 /**
  * 解析作业 state.json：schema 校验失败记 tengu_bg_state_read_rejected 并缓存拒绝；保留未知字段，合并排序与分组 sidecar，结果写入缓存；解析异常时回退缓存。
  */
@@ -935,7 +935,7 @@ function parseJobStateText(
     return stateOrNull(cached, storage);
   }
 }
-//@ chunk-y162pn60.js:33301-33364 placement
+//@ chunk-rmd7n4gq.js:33620-33683 placement
 /**
  * 记录一次“状态不存在”并返回 null。
  */
@@ -944,17 +944,17 @@ function noteStateAbsent(jobDir, options) {
   options?.onAbsent?.();
   return null;
 }
-//@ chunk-y162pn60.js:33364-33426 placement
+//@ chunk-rmd7n4gq.js:33683-33745 placement
 async function readJobStateFreshOrNull(jobDir, storage) {
   return loadJobState(jobDir, storage, {
     onReadFailure: "null",
   });
 }
-//@ chunk-y162pn60.js:33426-33471 placement
+//@ chunk-rmd7n4gq.js:33745-33790 placement
 async function readJobState(jobDir, storage) {
   return loadJobState(jobDir, storage, undefined);
 }
-//@ chunk-y162pn60.js:33471-33585 placement
+//@ chunk-rmd7n4gq.js:33790-33904 placement
 async function readJobStateOrAbsent(jobDir, storage) {
   let flag = {
     absent: false,
@@ -966,7 +966,7 @@ async function readJobStateOrAbsent(jobDir, storage) {
   });
   return flag.absent ? "absent" : jobState;
 }
-//@ chunk-y162pn60.js:33585-35825 placement
+//@ chunk-rmd7n4gq.js:33904-36144 placement
 /**
  * 读取作业状态：存储 v5 可用时走存储；否则 lstat state.json 与 sidecar（非普通文件或过大则拒绝），按修改时间命中缓存，读取并解析合并 sidecar；出错时回退缓存并记瞬时错误。
  */
@@ -1095,7 +1095,7 @@ async function loadJobState(jobDir, storage, options) {
     return stateOrNull(cached, options);
   }
 }
-//@ chunk-y162pn60.js:35825-36045 placement
+//@ chunk-rmd7n4gq.js:36144-36364 placement
 async function readJobStateAfterSettle(jobDir, storage) {
   invalidateJobStateCache(jobDir);
   let state = await readJobState(jobDir, storage).catch(() => null);
@@ -1112,19 +1112,19 @@ async function readJobStateAfterSettle(jobDir, storage) {
   }
   return state;
 }
-//@ chunk-y162pn60.js:36045-36085 placement
+//@ chunk-rmd7n4gq.js:36364-36405 placement
 /**
  * 作业 pin 文件路径（jobs/pins.json）。
  */
 function pinsFilePath() {
   return join(getJobsDir(), "pins.json");
 }
-//@ chunk-y162pn60.js:36085-36097 placement
+//@ chunk-rmd7n4gq.js:36405-36417 placement
 /**
  * pin 判定的陈旧时间（5000 毫秒）。
  */
 var PIN_STALE_MS = 5000;
-//@ chunk-y162pn60.js:36097-36358 placement (2.1.88 match: getMcpAuthCache, 1)
+//@ chunk-rmd7n4gq.js:36417-36681 placement (2.1.88 match: getMcpAuthCache, 1)
 /**
  * 读取 MCP 认证缓存（v5 存储）条目。
  */
@@ -1147,7 +1147,7 @@ async function readPinnedJobIds(storage) {
     return new Set();
   }
 }
-//@ chunk-y162pn60.js:36358-36475 placement
+//@ chunk-rmd7n4gq.js:36681-36799 placement
 async function readJobPinsFromStorage(storage) {
   let cappedStorageText = await readCappedStorageText(storage, STORAGE_SPACES.jobPins(), {
     cap: MAX_STATE_BYTES,
@@ -1157,14 +1157,14 @@ async function readJobPinsFromStorage(storage) {
   });
   return parsePinnedIds(cappedStorageText ?? undefined);
 }
-//@ chunk-y162pn60.js:36475-36518 placement
+//@ chunk-rmd7n4gq.js:36799-36842 placement
 /**
  * 取当前宿主的作业 pin 表。
  */
 function getJobPins() {
   return jobPinsState.of(getRootSession().host).pins;
 }
-//@ chunk-y162pn60.js:36518-36700 placement
+//@ chunk-rmd7n4gq.js:36842-37024 placement
 function parsePinnedIds(text) {
   if (text === undefined || text.length > MAX_STATE_BYTES) return new Set();
   let parsed;
@@ -1176,7 +1176,7 @@ function parsePinnedIds(text) {
   if (!Array.isArray(parsed)) return new Set();
   return new Set(parsed.filter((id) => typeof id === "string"));
 }
-//@ chunk-y162pn60.js:36700-36887 placement
+//@ chunk-rmd7n4gq.js:37024-37213 placement
 async function removeBadPinsFile(options) {
   let stats = await lstat(pinsFilePath()).catch(() => {
     return;
@@ -1189,7 +1189,7 @@ async function removeBadPinsFile(options) {
   }).catch(() => {});
   return true;
 }
-//@ chunk-y162pn60.js:36887-37197 placement
+//@ chunk-rmd7n4gq.js:37213-37523 placement
 async function syncJobName(shortId, name, source, storageV5, matcher) {
   let jobDir = getJobDir(shortId);
   let jobState = await readJobState(jobDir, storageV5);
@@ -1216,7 +1216,7 @@ async function syncJobName(shortId, name, source, storageV5, matcher) {
     },
   );
 }
-//@ chunk-y162pn60.js:37197-37452 placement (2.1.88 match: updateSessionActivity, 0.701)
+//@ chunk-rmd7n4gq.js:37523-37778 placement (2.1.88 match: updateSessionActivity, 0.701)
 async function syncJobColor(ownJobShortId, effectiveAgentColor, storageV5) {
   let jobDir = getJobDir(ownJobShortId);
   let jobState = await readJobState(jobDir, storageV5);
@@ -1241,11 +1241,11 @@ async function syncJobColor(ownJobShortId, effectiveAgentColor, storageV5) {
     },
   );
 }
-//@ chunk-y162pn60.js:37452-37492 placement
+//@ chunk-rmd7n4gq.js:37778-37818 placement
 function getBgRelocatedCwd() {
   return currentSessionStatusState().relocatedCwd;
 }
-//@ chunk-y162pn60.js:37492-37865 placement
+//@ chunk-rmd7n4gq.js:37818-38191 placement
 async function relocateBgSessionCwd(cwd, storageV5) {
   let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
   if (!CLAUDE_JOB_DIR || env.CLAUDE_CODE_SESSION_KIND !== "bg") return;
@@ -1269,7 +1269,7 @@ async function relocateBgSessionCwd(cwd, storageV5) {
     if (!isENOENT(error)) logJobWriteError(error);
   });
 }
-//@ chunk-y162pn60.js:37865-38208 placement
+//@ chunk-rmd7n4gq.js:38191-38534 placement
 async function syncJobResumeSessionId(sessionId, transcriptPath, storageV5) {
   let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
   if (!CLAUDE_JOB_DIR || env.CLAUDE_CODE_SESSION_KIND !== "bg") return;
@@ -1293,13 +1293,16 @@ async function syncJobResumeSessionId(sessionId, transcriptPath, storageV5) {
     if (!isENOENT(error)) logJobWriteError(error);
   });
 }
-//@ chunk-y162pn60.js:38208-38877 placement
+//@ chunk-rmd7n4gq.js:38534-39203 placement
+/**
+ * 后台任务把 in-flight 任务/种类写回 job 状态文件（仅 bg 会话、活跃期、有变化时）。
+ */
 async function syncLiveInFlightSnapshot(rows, storageV5, { includeSettled = false } = {}) {
-  let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
-  if (!CLAUDE_JOB_DIR || env.CLAUDE_CODE_SESSION_KIND !== "bg") return;
+  let jobDir = env.CLAUDE_JOB_DIR;
+  if (!jobDir || env.CLAUDE_CODE_SESSION_KIND !== "bg") return;
   await withOwnJobStateWrite(async () => {
-    invalidateJobStateCache(CLAUDE_JOB_DIR);
-    let jobState = await readJobState(CLAUDE_JOB_DIR, storageV5);
+    invalidateJobStateCache(jobDir);
+    let jobState = await readJobState(jobDir, storageV5);
     if (!jobState?.inFlight || (isSettled(jobState) && !includeSettled) || jobState.tempo === "active")
       return;
     let inFlight = jobState.inFlight;
@@ -1311,7 +1314,7 @@ async function syncLiveInFlightSnapshot(rows, storageV5, { includeSettled = fals
     )
       return;
     await writeStateAtomic(
-      CLAUDE_JOB_DIR,
+      jobDir,
       {
         ...jobState,
         inFlight: {
@@ -1334,13 +1337,13 @@ async function syncLiveInFlightSnapshot(rows, storageV5, { includeSettled = fals
     });
   });
 }
-//@ chunk-y162pn60.js:38877-39018 placement
+//@ chunk-rmd7n4gq.js:39203-39344 placement
 function isAutoOrMatchingName(state, name) {
   if (name === undefined || !state.name) return true;
   if (state.nameSource === "auto" || state.nameSource === "collision") return true;
   return name.includes(sanitizeSessionTitle(state.name));
 }
-//@ chunk-y162pn60.js:39018-39765 placement
+//@ chunk-rmd7n4gq.js:39344-40091 placement
 async function syncRespawnFlag(flagName, extraFlags, flagValue, statePatch, storageV5, draftName, filter) {
   let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
   if (!CLAUDE_JOB_DIR || env.CLAUDE_CODE_SESSION_KIND !== "bg") return;
@@ -1388,7 +1391,7 @@ async function syncRespawnFlag(flagName, extraFlags, flagValue, statePatch, stor
     });
   });
 }
-//@ chunk-y162pn60.js:39765-40207 placement
+//@ chunk-rmd7n4gq.js:40091-40533 placement
 async function appendRespawnFlag(flag, value, storageV5) {
   let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
   if (!CLAUDE_JOB_DIR || env.CLAUDE_CODE_SESSION_KIND !== "bg") return;
@@ -1414,7 +1417,7 @@ async function appendRespawnFlag(flag, value, storageV5) {
     });
   });
 }
-//@ chunk-y162pn60.js:40207-40346 placement
+//@ chunk-rmd7n4gq.js:40533-40672 placement
 async function replaceFileExclusive(path, content) {
   await rm(path, {
     force: true,
@@ -1429,7 +1432,7 @@ async function replaceFileExclusive(path, content) {
     throw error;
   }
 }
-//@ chunk-y162pn60.js:40346-40605 placement
+//@ chunk-rmd7n4gq.js:40672-40931 placement
 async function writeJobSidecarToStorage(storage, key, content) {
   let result = await storage.write(key, content, {
     parent: "mustExist",
@@ -1450,21 +1453,21 @@ async function writeJobSidecarToStorage(storage, key, content) {
     );
   }
 }
-//@ chunk-y162pn60.js:40605-40744 placement
+//@ chunk-rmd7n4gq.js:40931-41070 placement
 async function writeSortOrder(jobDir, sortOrder, storage) {
   let key = isStorageV5Enabled() && storage ? jobKeyFor(jobDir, ["order"]) : undefined;
   if (storage && key) await writeJobSidecarToStorage(storage, key, String(sortOrder));
   else await replaceFileExclusive(join(jobDir, "order"), String(sortOrder));
   invalidateJobStateCache(jobDir);
 }
-//@ chunk-y162pn60.js:40744-40893 placement
+//@ chunk-rmd7n4gq.js:41070-41219 placement
 async function writeStateSortOrder(jobDir, order, storage) {
   let key = isStorageV5Enabled() && storage ? jobKeyFor(jobDir, ["stateOrder"]) : undefined;
   if (storage && key) await writeJobSidecarToStorage(storage, key, String(order));
   else await replaceFileExclusive(join(jobDir, "stateOrder"), String(order));
   invalidateJobStateCache(jobDir);
 }
-//@ chunk-y162pn60.js:40893-41202 placement
+//@ chunk-rmd7n4gq.js:41219-41528 placement
 async function writeJobGroup(jobDir, group, storageV5) {
   let groupPath = join(jobDir, "group");
   let sanitized = sanitizeGroupOrDefault(group);
@@ -1486,7 +1489,7 @@ async function writeJobGroup(jobDir, group, storageV5) {
     });
   invalidateJobStateCache(jobDir);
 }
-//@ chunk-y162pn60.js:41202-41490 placement (2.1.88 match: immediateFlushHistory, 0.302)
+//@ chunk-rmd7n4gq.js:41528-41816 placement (2.1.88 match: immediateFlushHistory, 0.303)
 async function withSortOrderLock(fn) {
   let lockPath = join(getJobsDir(), ".order");
   await mkdir(getJobsDir(), {
@@ -1506,19 +1509,19 @@ async function withSortOrderLock(fn) {
   });
   return await fn();
 }
-//@ chunk-y162pn60.js:41490-41502 placement
+//@ chunk-rmd7n4gq.js:41816-41828 placement
 /**
  * 作业状态/pin 写入的串行队列。
  */
 var pinsWriteQueue; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-y162pn60.js:41490", () => {
+deferInit("chunk-rmd7n4gq.js:41816", () => {
   pinsWriteQueue = createKeyedQueue();
 });
-//@ chunk-y162pn60.js:41502-41552 placement
+//@ chunk-rmd7n4gq.js:41828-41878 placement
 function withOwnJobStateWrite(fn) {
   return pinsWriteQueue.run("own-state.json", fn);
 }
-//@ chunk-y162pn60.js:41552-42047 placement
+//@ chunk-rmd7n4gq.js:41878-42374 placement
 function writeJobPinned(jobId, pinned, storageV5) {
   return pinsWriteQueue.run("pins.json", async () => {
     if (isStorageV5Enabled() && storageV5) return setJobPinnedInStorage(jobId, pinned, storageV5);
@@ -1551,7 +1554,7 @@ function writeJobPinned(jobId, pinned, storageV5) {
     await writeFileAtomic(pinsPath, jsonStringify([...pinnedJobIds], null, 2));
   });
 }
-//@ chunk-y162pn60.js:42047-42973 placement
+//@ chunk-rmd7n4gq.js:42374-43302 placement
 /**
  * 在存储中更新置顶作业列表（加入或移除）；文件异常时先清理；取消置顶后删除该作业的 order sidecar 并使状态缓存失效。
  */
@@ -1611,7 +1614,7 @@ async function setJobPinnedInStorage(jobId, pinned, storage) {
     invalidateJobStateCache(getJobDir(jobId));
   }
 }
-//@ chunk-y162pn60.js:42973-43370 placement
+//@ chunk-rmd7n4gq.js:43302-43699 placement
 async function listJobs(crashed, storage, onUnavailable) {
   if (storage) return listJobsFromStorage(storage, crashed, onUnavailable);
   let entries;
@@ -1654,7 +1657,7 @@ async function listJobs(crashed, storage, onUnavailable) {
     );
   return crashed ? markCrashed(mapped, crashed) : mapped;
 }
-//@ chunk-y162pn60.js:43370-43767 placement
+//@ chunk-rmd7n4gq.js:43699-44096 placement
 /**
  * 分页列出存储中所有任务的 id。
  */
@@ -1696,7 +1699,7 @@ async function listStoredJobIds(storage) {
     ids,
   };
 }
-//@ chunk-y162pn60.js:43767-44088 placement
+//@ chunk-rmd7n4gq.js:44096-44417 placement
 /**
  * 列出存储中的全部作业及其状态，标记置顶；存储不可用时回调并返回空；需要时标记崩溃的作业。
  */
@@ -1736,7 +1739,7 @@ async function listJobsFromStorage(storage, crashed, onUnavailable) {
     );
   return crashed ? markCrashed(mapped, crashed) : mapped;
 }
-//@ chunk-y162pn60.js:44088-44319 placement
+//@ chunk-rmd7n4gq.js:44417-44648 placement
 function markCrashed(rows, crashedIds) {
   let now = Date.now();
   return rows.map((row) => {
@@ -1750,12 +1753,12 @@ function markCrashed(rows, crashedIds) {
     };
   });
 }
-//@ chunk-y162pn60.js:44319-44331 placement
+//@ chunk-rmd7n4gq.js:44648-44660 placement
 /**
  * keptBy 状态的保护时长（5000 毫秒）。
  */
 var PIN_GUARD_MS = 5000;
-//@ chunk-y162pn60.js:44331-44519 placement
+//@ chunk-rmd7n4gq.js:44660-44848 placement
 function markJobFailedOrBlocked(state) {
   if (hasOutstandingAsk(state))
     return {
@@ -1773,14 +1776,14 @@ function markJobFailedOrBlocked(state) {
     detail: stripSuffix(state.detail, "; respawning"),
   };
 }
-//@ chunk-y162pn60.js:44519-44572 placement
+//@ chunk-rmd7n4gq.js:44848-44901 placement
 var SEED_DETAIL = "starting\u2026";
 var IDLE_NEEDS = "send a prompt to start";
-//@ chunk-y162pn60.js:44572-44638 placement
+//@ chunk-rmd7n4gq.js:44901-44967 placement
 function isOverlayNeeds(row) {
   return row.needs !== undefined && row.needsOverlay === row.needs;
 }
-//@ chunk-y162pn60.js:44638-44778 placement
+//@ chunk-rmd7n4gq.js:44967-45107 placement
 /**
  * 后台服务未运行期间结束时的说明文案。
  */
@@ -1788,7 +1791,7 @@ var IDLE_DETAIL = `(idle \u2014 ${IDLE_NEEDS})`;
 var PRE_BOOT_STATES = ["starting", "resuming", "adopted", "crashed"];
 var ABANDONED_WORKER_MS = 172800000;
 var SERVICE_OFF_END_DETAIL = "ended while the background service was off";
-//@ chunk-y162pn60.js:44778-45957 placement
+//@ chunk-rmd7n4gq.js:45107-46286 placement
 function makeInitialState(seed) {
   let iso = new Date().toISOString();
   return {
@@ -1837,7 +1840,7 @@ function makeInitialState(seed) {
     backend: "daemon",
   };
 }
-//@ chunk-y162pn60.js:45957-47688 placement
+//@ chunk-rmd7n4gq.js:46286-48017 placement
 async function adoptRosterOrphans(jobs, rosterOrphans, storageV5) {
   if (rosterOrphans.length === 0) return jobs;
   let knownIds = new Set(jobs.map((job) => job.id));
@@ -1948,7 +1951,7 @@ async function adoptRosterOrphans(jobs, rosterOrphans, storageV5) {
   });
   return [...jobs, ...mapped];
 }
-//@ chunk-y162pn60.js:47688-47810 placement (2.1.88 match: fetchInstallCountsFromGitHub, 0.627)
+//@ chunk-rmd7n4gq.js:48017-48139 placement (2.1.88 match: fetchInstallCountsFromGitHub, 0.628)
 /**
  * 任务状态 done/failed/stopped → success/failure/stopped。名字配错，见 lead 建议。
  */
@@ -1958,51 +1961,51 @@ function terminalOutcome(state) {
   if (state === "stopped") return "stopped";
   return null;
 }
-//@ chunk-y162pn60.js:47810-47845 placement
+//@ chunk-rmd7n4gq.js:48139-48174 placement
 function isTerminal(state) {
   return terminalOutcome(state) !== null;
 }
-//@ chunk-y162pn60.js:47845-47899 placement
+//@ chunk-rmd7n4gq.js:48174-48228 placement
 function isSettled(state) {
   return isTerminal(state.state) && state.tempo !== "active";
 }
-//@ chunk-y162pn60.js:47899-47978 placement
+//@ chunk-rmd7n4gq.js:48228-48307 placement
 /**
  * 判断状态是否为“被保留但空闲阻塞”。
  */
 function isKeptIdleBlocked(state) {
   return state.intent === "" && state.needs === IDLE_NEEDS && state.tempo === "blocked" && !isSettled(state);
 }
-//@ chunk-y162pn60.js:47978-48047 placement
+//@ chunk-rmd7n4gq.js:48307-48376 placement
 function isExecLaunch(state) {
   return state.template === "exec" && state.respawnFlags.length === 0;
 }
-//@ chunk-y162pn60.js:48047-48098 placement
+//@ chunk-rmd7n4gq.js:48376-48427 placement
 function hasOutstandingAsk(state) {
   return state.state === "blocked" && !isExecLaunch(state);
 }
-//@ chunk-y162pn60.js:48098-48150 placement
+//@ chunk-rmd7n4gq.js:48427-48479 placement
 function isLocalDaemonAgent(state) {
   return state.backend === "daemon" && !isExecLaunch(state);
 }
-//@ chunk-y162pn60.js:48150-48266 placement
+//@ chunk-rmd7n4gq.js:48479-48595 placement
 function spawnOrigin(state) {
   let origin =
     state.originCwd || (state.cwd.match(/^(.+?)[/\\]\.claude[/\\]worktrees[/\\]/)?.[1] ?? state.cwd);
   return stripLongPathPrefixes(origin);
 }
-//@ chunk-y162pn60.js:48266-48380 placement
+//@ chunk-rmd7n4gq.js:48595-48709 placement
 function jobMatchesCwd(state, cwdFilter) {
   if (state.backend === "remote") return true;
   let rel = relative(cwdFilter, spawnOrigin(state));
   return rel.split(/[/\\]/, 1)[0] !== ".." && !isAbsolute(rel);
 }
-//@ chunk-y162pn60.js:48380-48494 placement
+//@ chunk-rmd7n4gq.js:48709-48823 placement
 function isLoopJob(state) {
   let isLoop = (text) => text?.trim().toLowerCase().startsWith("/loop") ?? false;
   return isLoop(state.intent) || isLoop(state.initialPrompt);
 }
-//@ chunk-y162pn60.js:48494-48610 placement
+//@ chunk-rmd7n4gq.js:48823-48939 placement
 function isSelfDriving(state) {
   return (
     state.routine !== undefined ||
@@ -2011,7 +2014,7 @@ function isSelfDriving(state) {
     isLoopJob(state)
   );
 }
-//@ chunk-y162pn60.js:48610-49379 placement
+//@ chunk-rmd7n4gq.js:48939-49708 placement
 function writeReapedTerminalState(shortId, kind, detail, options, storageV5) {
   let jobDir = getJobDir(shortId);
   return readJobState(jobDir, storageV5)
@@ -2069,35 +2072,35 @@ function writeReapedTerminalState(shortId, kind, detail, options, storageV5) {
 export {
   getJobDir,
   readJobState,
-  syncLiveInFlightSnapshot,
-  isSettled,
-  isExecLaunch,
   writeStateAtomic,
-  listJobs,
-  syncJobName,
-  JOB_PARENT_TRANSCRIPT_FILE,
-  buildBridgeReattachEnv,
-  resolveBridgeHandoffIdentity,
-  jobStateKey,
-  getOwnJobShortId,
-  isOwnStateWriteInFlight,
-  syncJobColor,
-  invalidateJobStateCache,
   logJobWriteError,
-  jobKeyFor,
-  relocateBgSessionCwd,
-  syncJobResumeSessionId,
-  readPinnedJobIds,
-  readJobStateFreshOrNull,
-  syncRespawnFlag,
   getJobsDir,
   readCappedStorageText,
   jobPinsState,
-  IDLE_NEEDS,
-  terminalOutcome,
-  isSelfDriving,
+  syncRespawnFlag,
+  jobsDir,
+  JOB_PARENT_TRANSCRIPT_FILE,
+  syncJobName,
+  getOwnJobShortId,
+  readPinnedJobIds,
+  readJobStateFreshOrNull,
+  isSettled,
+  syncJobColor,
   jobStorageSpace,
-  ABANDONED_WORKER_MS,
+  buildBridgeReattachEnv,
+  resolveBridgeHandoffIdentity,
+  terminalOutcome,
+  SEED_DETAIL,
+  hasOutstandingAsk,
+  invalidateJobStateCache,
+  isTerminal,
+  isExecLaunch,
+  readJobStateAfterSettle,
+  listJobs,
+  readJobStateOrAbsent,
+  writeReapedTerminalState,
+  IDLE_NEEDS,
+  isOverlayNeeds,
   writeJobPinned,
   UNGROUPED,
   EARLIER,
@@ -2106,7 +2109,7 @@ export {
   isReservedGroupName,
   isLoopJob,
   isLocalDaemonAgent,
-  SEED_DETAIL,
+  isSelfDriving,
   IDLE_DETAIL,
   adoptRosterOrphans,
   watchJobDirOnce,
@@ -2117,14 +2120,15 @@ export {
   makeInitialState,
   sanitizeGroupName,
   writeJobGroup,
-  readJobStateAfterSettle,
-  isTerminal,
-  hasOutstandingAsk,
+  syncLiveInFlightSnapshot,
+  jobStateKey,
+  isOwnStateWriteInFlight,
+  jobKeyFor,
+  ABANDONED_WORKER_MS,
+  relocateBgSessionCwd,
   PRE_BOOT_STATES,
-  readJobStateOrAbsent,
-  writeReapedTerminalState,
-  withOwnJobStateWrite,
-  isOverlayNeeds,
-  getBgRelocatedCwd,
   appendRespawnFlag,
+  getBgRelocatedCwd,
+  syncJobResumeSessionId,
+  withOwnJobStateWrite,
 };

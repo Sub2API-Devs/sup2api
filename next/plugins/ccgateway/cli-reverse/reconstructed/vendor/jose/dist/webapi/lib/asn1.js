@@ -1,14 +1,14 @@
 /**
  * jose/dist/webapi/lib/asn1.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-5h78gfwc.js (4)
+ * pieces: chunk-0f6azspv.js (4)
  * attribution: esm-fingerprint 4
  */
 import { JOSENotSupported_2 } from "../../node/esm/util/errors.js";
 import { decodeBase64 } from "./base64.js";
 
-//@ chunk-5h78gfwc.js:20113-20373 esm-fingerprint
+//@ chunk-0f6azspv.js:20113-20373 esm-fingerprint
 var bytesEqual = (a, b) => {
   if (a.byteLength !== b.length) return false;
   for (let i = 0; i < a.byteLength; i++) if (a[i] !== b[i]) return false;
@@ -29,7 +29,7 @@ var parseLength = (state) => {
   }
   return first;
 };
-//@ chunk-5h78gfwc.js:20373-20566 esm-fingerprint
+//@ chunk-0f6azspv.js:20373-20566 esm-fingerprint
 var expectTag = (state, expectedTag, errorMessage) => {
   if (state.data[state.pos++] !== expectedTag) throw Error(errorMessage);
 };
@@ -43,7 +43,7 @@ var parseAlgorithmOID = (state) => {
   let oidLen = parseLength(state);
   return getSubarray(state, oidLen);
 };
-//@ chunk-5h78gfwc.js:20566-20769 esm-fingerprint
+//@ chunk-0f6azspv.js:20566-20769 esm-fingerprint
 function parsePKCS8Header(state) {
   expectTag(state, 48, "Invalid PKCS#8 structure");
   parseLength(state);
@@ -57,7 +57,7 @@ function parsePKCS8Header(state) {
     algIdLength: algIdLen,
   };
 }
-//@ chunk-5h78gfwc.js:20769-22492 esm-fingerprint
+//@ chunk-0f6azspv.js:20769-22492 esm-fingerprint
 var parseECAlgorithmIdentifier = (state) => {
   let algOid = parseAlgorithmOID(state);
   if (bytesEqual(algOid, [43, 101, 110])) return "X25519";

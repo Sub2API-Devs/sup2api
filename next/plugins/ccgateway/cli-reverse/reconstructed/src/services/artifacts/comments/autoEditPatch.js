@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自动编辑的补丁决策解析与应用
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-eavynfj6.js (27)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0df0kb9z.js (27)
  * attribution: placement 26
  */
 import { extname } from "path";
@@ -30,13 +30,13 @@ import {
   decodeMusicalSymbols,
   decodeHtmlEscapes,
 } from "./autoEditPermissions.js";
-import { webfetchReadFile } from "../webfetchRead.js";
+import { readArtifactContent } from "../webfetchRead.js";
 import { claudeAiEnvironment } from "../../../constants/claudeAiOrigin.js";
 import { getShareEntry } from "../shareEntries.js";
 import { generateAgent } from "../../../components/agents/generateAgent.js";
 import { stripCombiningRepeated } from "../../../utils/sanitization.js";
 
-//@ chunk-eavynfj6.js:12195-12257 placement
+//@ chunk-0df0kb9z.js:13353-13415 placement
 /**
  * 自动改稿补丁的限额：最多编辑数（沿用发布上限）、替换 64 KB、新建文件 256 KB、新建合计 512 KB，以及 surrogate 转义标记。
  */
@@ -45,7 +45,7 @@ var MAX_REPLACE_BYTES = 65536;
 var MAX_CREATE_FILE_BYTES = 262144;
 var MAX_CREATE_BYTES = 524288;
 var SURROGATE_ESCAPE = "surrogate_escape";
-//@ chunk-eavynfj6.js:12257-12861 placement
+//@ chunk-0df0kb9z.js:13415-14019 placement
 function parseEditDecisionJson(text, rawText) {
   let unwrapped = unwrapCodeFence(stripBomAndTrim(text));
   let fail = (cls, key) => ({
@@ -86,9 +86,9 @@ function parseEditDecisionJson(text, rawText) {
   if (hasLoneSurrogateEscape(text_2)) return fail("bad_string", SURROGATE_ESCAPE);
   return validateEditDecision(decision, rawText, meta);
 }
-//@ chunk-eavynfj6.js:12861-12871 placement
+//@ chunk-0df0kb9z.js:14019-14029 placement
 var MAX_JSON_START_ATTEMPTS = 64;
-//@ chunk-eavynfj6.js:12871-13052 placement
+//@ chunk-0df0kb9z.js:14029-14210 placement
 /**
  * 在模型回复里找第一个能完整解析为 JSON 的 { 起点（有尝试次数上限），返回从那里开始的文本以及前面是否有多余前言。
  */
@@ -109,7 +109,7 @@ function findJsonObjectStart(text) {
     preamble: false,
   };
 }
-//@ chunk-eavynfj6.js:13052-13294 placement
+//@ chunk-0df0kb9z.js:14210-14452 placement
 /**
  * 从给定位置按括号与字符串转义配平扫描到匹配的 }，尝试 JSON 解析该片段，成功返回 true。
  */
@@ -136,7 +136,7 @@ function isParsableJsonAt(text, fromIndex) {
   }
   return false;
 }
-//@ chunk-eavynfj6.js:13294-14995 placement
+//@ chunk-0df0kb9z.js:14452-16153 placement
 function validateEditDecision(decision, sourceHtml, options) {
   let invalid = (errorClass, key) => ({
     ok: false,
@@ -217,11 +217,11 @@ function validateEditDecision(decision, sourceHtml, options) {
     },
   };
 }
-//@ chunk-eavynfj6.js:14995-15065 placement
+//@ chunk-0df0kb9z.js:16153-16223 placement
 function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-eavynfj6.js:15065-15215 placement
+//@ chunk-0df0kb9z.js:16223-16373 placement
 function readOptionalString(obj, key) {
   if (!Object.hasOwn(obj, key) || obj[key] === null)
     return {
@@ -239,17 +239,17 @@ function readOptionalString(obj, key) {
         ok: false,
       };
 }
-//@ chunk-eavynfj6.js:15215-15264 placement
+//@ chunk-0df0kb9z.js:16373-16422 placement
 function utf8Bytes(text) {
   return Buffer.byteLength(text, "utf8");
 }
-//@ chunk-eavynfj6.js:15264-15348 placement
+//@ chunk-0df0kb9z.js:16422-16506 placement
 function stripBomAndTrim(text) {
   let trimmed = text.trim();
   if (trimmed.startsWith("\uFEFF")) trimmed = trimmed.slice(1).trim();
   return trimmed;
 }
-//@ chunk-eavynfj6.js:15348-15652 placement
+//@ chunk-0df0kb9z.js:16506-16810 placement (2.1.88 match: buildSearchingPastContextSection, 0.75)
 function unwrapCodeFence(text) {
   if (!text.startsWith("```") || !text.endsWith("```") || text.length < 6)
     return {
@@ -275,7 +275,7 @@ function unwrapCodeFence(text) {
     fenced: true,
   };
 }
-//@ chunk-eavynfj6.js:15652-15982 placement
+//@ chunk-0df0kb9z.js:16810-17140 placement
 function hasLoneSurrogateEscape(text) {
   for (let i = 0; i < text.length; i++) {
     if (text[i] !== "\\") continue;
@@ -294,13 +294,13 @@ function hasLoneSurrogateEscape(text) {
   }
   return false;
 }
-//@ chunk-eavynfj6.js:15982-16097 placement
+//@ chunk-0df0kb9z.js:17140-17255 placement
 function parseHex4(text, index) {
   if (index + 4 > text.length) return;
   let sliced = text.slice(index, index + 4);
   return /^[0-9A-Fa-f]{4}$/.test(sliced) ? parseInt(sliced, 16) : undefined;
 }
-//@ chunk-eavynfj6.js:16097-16594 placement
+//@ chunk-0df0kb9z.js:17255-17752 placement
 function planPatchEdits(find, rawEdits, edits) {
   if (edits.length === 0)
     return {
@@ -353,7 +353,7 @@ function planPatchEdits(find, rawEdits, edits) {
         edit: patched.op,
       };
 }
-//@ chunk-eavynfj6.js:16594-16778 placement
+//@ chunk-0df0kb9z.js:17752-17936 placement
 /**
  * 判断补丁里的文件路径是否安全：非空、不超过 512 字节、不以 / 开头、无控制字符与反斜杠、各段不为空/./..。
  */
@@ -362,7 +362,7 @@ function isSafeRelativePath(file) {
   if (/[\x00-\x1f\x7f\\]/.test(file)) return false;
   return file.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
 }
-//@ chunk-eavynfj6.js:16778-18970 placement
+//@ chunk-0df0kb9z.js:17936-20128 placement
 var AUTO_EDIT_SYSTEM_PROMPT = `Claude composes one edit to an artifact. Claude has no tools. Claude outputs only the decision JSON object.
 
 Claude decides on one of the following and outputs exactly that JSON object: no preamble, no code fences, nothing else.
@@ -376,12 +376,12 @@ Claude hands back when doing the request properly needs something it cannot see 
 Patch rules: each "find" must be copied character-for-character from the named file (identical whitespace, entities and attribute order) and must occur exactly once in that file at the point that edit applies (the file as already modified by preceding edits); Claude includes as much surrounding text as needed to make it unique, and no more. If any find is missing or ambiguous the whole patch is refused. Later edits apply to the result of earlier ones. An empty "replace" deletes the find text. At most 64 edits.
 Edit rules: Claude sizes the change to the request: an exact request gets the smallest edit that fully satisfies it, while a vague complaint or wish gets as thorough a change as a good designer would make to really deal with it; changes only what was asked and preserves everything else; matches the artifact's existing markup, class names, design tokens and code style; the artifact must still load with no script errors; no external resources.
 `;
-//@ chunk-eavynfj6.js:18970-19051 placement
+//@ chunk-0df0kb9z.js:20128-20209 placement
 var PAGE_HTML = "page.html";
 var PAGE_HTML_DESCRIPTION = {
   page: "The artifact is a single-file web page, page.html.",
 };
-//@ chunk-eavynfj6.js:19051-19221 placement
+//@ chunk-0df0kb9z.js:20209-20379 placement
 function splitPatchPrompt(prompt) {
   let index = prompt.indexOf(`
 
@@ -393,10 +393,10 @@ function splitPatchPrompt(prompt) {
     decisionBlock: after.replace(/[ \t\n]+$/, ""),
   };
 }
-//@ chunk-eavynfj6.js:19221-19252 placement
+//@ chunk-0df0kb9z.js:20379-20410 placement
 var FILE_CLOSE_TAG = "</file>";
 var ESCAPED_FILE_CLOSE_TAG = "<\\/file>";
-//@ chunk-eavynfj6.js:19252-19508 placement
+//@ chunk-0df0kb9z.js:20410-20666 placement
 function buildPatchFilesPrompt(ctx, head, files) {
   let sorted = [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   let text = `${ctx.systemLine}
@@ -411,7 +411,7 @@ ${FILE_CLOSE_TAG}`;
   }
   return text;
 }
-//@ chunk-eavynfj6.js:19508-19575 placement
+//@ chunk-0df0kb9z.js:20666-20733 placement
 function decisionPrompt(thread, request) {
   return `${thread.decisionBlock}
 
@@ -419,7 +419,7 @@ The person asks:
 ${request}
 `;
 }
-//@ chunk-eavynfj6.js:19575-19902 placement
+//@ chunk-0df0kb9z.js:20733-21060 placement
 var PATCH_FAILURE_DESCRIPTIONS = {
   not_found: 'its "find" does not occur in that file',
   ambiguous: 'its "find" occurs more than once in that file',
@@ -428,7 +428,7 @@ var PATCH_FAILURE_DESCRIPTIONS = {
   noop: "the patch changed nothing",
   unparseable: "the reply was not a valid decision object",
 };
-//@ chunk-eavynfj6.js:19902-20115 placement
+//@ chunk-0df0kb9z.js:21060-21273 placement
 /**
  * 补丁应用失败后的重试提示：第几处编辑失败、失败原因、失败的查找文本（截断），要求重新给出决策对象。
  */
@@ -442,7 +442,7 @@ ${joined}
 Respond again with one decision object.
 `;
 }
-//@ chunk-eavynfj6.js:20115-22115 placement
+//@ chunk-0df0kb9z.js:21273-23273 placement
 /**
  * 自动改稿补丁的截止与转义解析常量：45 s 截止、最少 10 s 余量、最多 3 轮实体解析，以及 HTML 实体/反斜杠转义正则与实体名表。
  */
@@ -537,7 +537,7 @@ var ESCAPE_TARGETS_RE = /[\uFFFC\uFFFD\u2800\u115F\u1160\u3164\uFFA0\x00-\x08\x0
 var INVALID_CODE_POINT = "\uFFFD";
 var MEDIUM_EFFORT = "medium";
 var MAX_ENTITIES = 409600;
-//@ chunk-eavynfj6.js:22115-25548 placement
+//@ chunk-0df0kb9z.js:23273-26706 placement
 /**
  * 对本地 html artifact 文件执行一次自动编辑：读文件、调模型、解析补丁、应用并在截止时间内返回结果。
  */
@@ -595,7 +595,7 @@ async function runAutoEditForFile(abortSignal) {
     return ineligible("publish_would_ask", bytes);
   let nowMs = now();
   let timeoutSignal = AbortSignal.timeout(Math.max(0, deadlineMs - (nowMs - startedAt)));
-  let read = await webfetchReadFile(
+  let read = await readArtifactContent(
     {
       slug: abortSignal.slug,
       env: claudeAiEnvironment(),
@@ -771,7 +771,7 @@ async function runAutoEditForFile(abortSignal) {
     retried,
   };
 }
-//@ chunk-eavynfj6.js:25548-25822 placement
+//@ chunk-0df0kb9z.js:26706-26980 placement
 function toPatchFailureReason(reason) {
   switch (reason) {
     case "not_found":
@@ -791,7 +791,7 @@ function toPatchFailureReason(reason) {
       return "unparseable";
   }
 }
-//@ chunk-eavynfj6.js:27435-27726 placement (moved: shares a binding it assigns)
+//@ chunk-0df0kb9z.js:28593-28884 placement (moved: shares a binding it assigns)
 /**
  * 判断文本里是否藏有 harness 标签：逐轮尝试反斜杠/尖括号同形字替换、HTML 转义解码、去组合字符与同形字折叠后检测，超过轮数或膨胀过大时保守地返回结果。
  */

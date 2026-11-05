@@ -3,9 +3,9 @@
  *
  * 云认证刷新状态单例（是否进行中、输出行、错误），供 UI 显示 awsAuthRefresh/gcpAuthRefresh 进度。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/awsAuthStatusManager.ts
- * pieces: chunk-aepeg2w5.js (4)
+ * pieces: chunk-exfmq47h.js (4)
  * attribution: affinity 1, fingerprint 1, sole-consumer 2
  */
 import { createSignal } from "./signal.js";
@@ -14,14 +14,14 @@ import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:320397-320425 affinity
+//@ chunk-exfmq47h.js:330869-330897 affinity
 /**
  * 云认证状态行的最大字符数（4000）。
  */
 var AWS_AUTH_STATUS_TIMEOUTS = 15000;
 var MAX_AWS_STATUS_LINE_CHARS = 4000;
 var MAX_AWS_STATUS_LINES = 200;
-//@ chunk-aepeg2w5.js:320425-321468 fingerprint (2.1.88 match: AwsAuthStatusManager, 0.766)
+//@ chunk-exfmq47h.js:330897-331940 fingerprint (2.1.88 match: AwsAuthStatusManager, 0.766)
 /**
  * 云认证刷新状态单例：记录是否在认证中、输出行、错误，供 UI 显示 AWS/GCP 刷新进度。
  */
@@ -91,12 +91,12 @@ class AwsAuthStatusManager {
     }
   }
 }
-//@ chunk-aepeg2w5.js:321468-321493 sole-consumer
+//@ chunk-exfmq47h.js:331940-331965 sole-consumer
 var awsAuthStatusManagerByHost; // deferred: uses AwsAuthStatusManager of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:321468", () => {
+deferInit("chunk-exfmq47h.js:331940", () => {
   awsAuthStatusManagerByHost = new HostScoped(() => new AwsAuthStatusManager());
 });
-//@ chunk-aepeg2w5.js:321493-321530 sole-consumer
+//@ chunk-exfmq47h.js:331965-332002 sole-consumer
 function getAwsAuthStatusManager() {
   return awsAuthStatusManagerByHost.of(getRootSession().host);
 }

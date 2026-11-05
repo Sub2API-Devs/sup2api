@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：入门“能力课”界面与课程内容
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-19dk83fw.js (27)
- * attribution: placement 27
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-je0zymfm.js (28)
+ * attribution: placement 27, layout 1
  */
 import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
 import {
@@ -36,6 +36,7 @@ import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { TeammateDetailView } from "../teams/TeamsDialog.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
+import { stableEmptyObject } from "../../utils/stableEmptyObject.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
@@ -45,12 +46,12 @@ import { ModelSelector } from "../agents/ModelSelector.js";
 import { Pane } from "../design-system/Pane.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-19dk83fw.js:1083-1087 placement
+//@ chunk-je0zymfm.js:1119-1123 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-19dk83fw.js:1083", () => {
+deferInit("chunk-je0zymfm.js:1119", () => {
   init_react_production();
 });
-//@ chunk-19dk83fw.js:1087-1130 placement
+//@ chunk-je0zymfm.js:1123-1166 placement
 function splitSegments(text) {
   return text
     .split(
@@ -59,7 +60,7 @@ function splitSegments(text) {
     )
     .map(parseKeyChord);
 }
-//@ chunk-19dk83fw.js:1130-1193 placement
+//@ chunk-je0zymfm.js:1166-1229 placement
 function renderSegment(segment, key) {
   return jsxProd_default(
     Text,
@@ -70,7 +71,7 @@ function renderSegment(segment, key) {
     key,
   );
 }
-//@ chunk-19dk83fw.js:1193-1269 placement
+//@ chunk-je0zymfm.js:1229-1305 placement
 function renderLessonLine(line, key) {
   return jsxProd_default(
     Text,
@@ -81,15 +82,15 @@ function renderLessonLine(line, key) {
     key,
   );
 }
-//@ chunk-19dk83fw.js:1269-1292 placement
+//@ chunk-je0zymfm.js:1305-1328 placement
 function emptyLines() {
   return [];
 }
-//@ chunk-19dk83fw.js:1292-1328 placement
+//@ chunk-je0zymfm.js:1328-1362 placement
 function compareX(a, b) {
   return a.x - b.x;
 }
-//@ chunk-19dk83fw.js:1328-1529 placement
+//@ chunk-je0zymfm.js:1362-1563 placement
 function renderSparkRow(sparks, key) {
   let column = 0;
   return jsxProd_default(
@@ -117,15 +118,15 @@ function renderSparkRow(sparks, key) {
     key,
   );
 }
-//@ chunk-19dk83fw.js:1529-1565 placement
+//@ chunk-je0zymfm.js:1563-1599 placement
 function nextModeIndex(modeIndex) {
   return (modeIndex + 1) % PERMISSION_MODE_STEPS.length;
 }
-//@ chunk-19dk83fw.js:1565-1585 placement
+//@ chunk-je0zymfm.js:1599-1619 placement
 var LESSON_STEP_MS = 3000;
 var LESSON_WIDTH = 48;
 var LESSON_STEP_COUNT = 3;
-//@ chunk-19dk83fw.js:1585-2169 placement
+//@ chunk-je0zymfm.js:1619-2203 placement
 function LessonFrame(props) {
   let $ = useMemoCache(10);
   let { live, boxRef, children } = props;
@@ -177,9 +178,9 @@ function LessonFrame(props) {
   } else frameElement = $[9];
   return frameElement;
 }
-//@ chunk-19dk83fw.js:2169-2198 placement
+//@ chunk-je0zymfm.js:2203-2232 placement
 var TYPING_MARKER_RE = /\[(\w+):([^\]]*)\]/g;
-//@ chunk-19dk83fw.js:2198-2491 placement
+//@ chunk-je0zymfm.js:2232-2525 placement
 function parseKeyChord(chord) {
   let isTyping = chord.startsWith("#");
   let body = isTyping ? chord.slice(1) : chord;
@@ -209,7 +210,7 @@ function parseKeyChord(chord) {
     segments,
   };
 }
-//@ chunk-19dk83fw.js:2491-2764 placement
+//@ chunk-je0zymfm.js:2525-2798 placement
 function AnimatedFrames(props) {
   let $ = useMemoCache(4);
   let { frames } = props;
@@ -233,7 +234,7 @@ function AnimatedFrames(props) {
   } else frameElement = $[3];
   return frameElement;
 }
-//@ chunk-19dk83fw.js:2764-3087 placement
+//@ chunk-je0zymfm.js:2798-3121 placement
 var PERMISSION_MODE_STEPS; // deferred: uses BLACK_CIRCLE (../../constants/figures.js) of its import cycle while loading; runs once the cycle is complete
 var POWERUP_MAX_WIDTH;
 var POWERUP_LABEL_WIDTH;
@@ -243,7 +244,7 @@ var POWERUP_MIN_ROWS;
 var POWERUP_GLYPH_COUNT;
 var POWERUP_GLYPHS;
 var POWERUP_COLORS;
-deferInit("chunk-19dk83fw.js:2764", () => {
+deferInit("chunk-je0zymfm.js:2798", () => {
   PERMISSION_MODE_STEPS = [
     {
       label: "default",
@@ -275,10 +276,10 @@ deferInit("chunk-19dk83fw.js:2764", () => {
   POWERUP_GLYPHS = [FILLED_DIAMOND_GLYPH, DIAMOND_GLYPH, BLACK_CIRCLE, "\xB7"];
   POWERUP_COLORS = ["claude", "success", "warning", "suggestion", "autoAccept"];
 });
-//@ chunk-19dk83fw.js:3087-3258 placement
+//@ chunk-je0zymfm.js:3121-3292 placement
 function createSparks(count) {
   let sparks = [];
-  for (let i = 0; i < count; i++)
+  for (let particleIndex = 0; particleIndex < count; particleIndex++)
     sparks.push({
       x: Math.floor(Math.random() * POWERUP_GLYPH_COUNT),
       delay: Math.random() * 400,
@@ -288,7 +289,7 @@ function createSparks(count) {
     });
   return sparks;
 }
-//@ chunk-19dk83fw.js:3258-3817 placement
+//@ chunk-je0zymfm.js:3292-3852 placement
 function ModeCycleDemo(props) {
   let $ = useMemoCache(6);
   let { onDone } = props;
@@ -338,7 +339,7 @@ function ModeCycleDemo(props) {
   } else boxElement = $[5];
   return boxElement;
 }
-//@ chunk-19dk83fw.js:3817-4454 placement
+//@ chunk-je0zymfm.js:3852-4489 placement
 function TypewriterText(props) {
   let $ = useMemoCache(14);
   let { text } = props;
@@ -399,7 +400,7 @@ function TypewriterText(props) {
   } else boxElement = $[13];
   return boxElement;
 }
-//@ chunk-19dk83fw.js:5071-5203 placement
+//@ chunk-je0zymfm.js:5106-5238 placement
 function Highlight(props) {
   let $ = useMemoCache(2);
   let { children } = props;
@@ -415,7 +416,7 @@ function Highlight(props) {
   } else highlightElement = $[1];
   return highlightElement;
 }
-//@ chunk-19dk83fw.js:5203-5331 placement (2.1.88 match: EffortIndicatorSymbol, 1)
+//@ chunk-je0zymfm.js:5238-5366 placement (2.1.88 match: EffortIndicatorSymbol, 1)
 function EffortIndicatorSymbol(props) {
   let $ = useMemoCache(2);
   let { children } = props;
@@ -430,12 +431,12 @@ function EffortIndicatorSymbol(props) {
   } else symbolElement = $[1];
   return symbolElement;
 }
-//@ chunk-19dk83fw.js:5331-13826 placement
+//@ chunk-je0zymfm.js:5366-13861 placement
 /**
  * 入门“能力课”列表：@ 文件、权限模式、计划模式等，每课含标题、标语与演示内容。
  */
 var POWERUP_LESSONS; // deferred: uses Box (../../ink/components/Text.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-19dk83fw.js:5331", () => {
+deferInit("chunk-je0zymfm.js:5366", () => {
   POWERUP_LESSONS = [
     {
       id: "at-mentions",
@@ -906,40 +907,51 @@ see this session at
     },
   ];
 });
-//@ chunk-19dk83fw.js:13826-14067 placement
-function LessonsFooterHint() {
-  let $ = useMemoCache(1);
-  let hintElement;
+//@ chunk-je0zymfm.js:13861-14177 placement
+function LessonsFooterHint(props) {
+  let $ = useMemoCache(3);
+  let { hint } = props;
+  let chord;
   if ($[0] === MEMO_CACHE_SENTINEL) {
+    chord = ["up", "down"];
+    $[0] = chord;
+  } else chord = $[0];
+  let hintElement;
+  if ($[1] !== hint) {
     hintElement = jsxProd_default(Text, {
       dimColor: true,
       italic: true,
       children: jsxProd_default_2(Byline, {
         children: [
           jsxProd_default(KeyboardShortcutHint, {
-            chord: ["up", "down"],
+            chord,
             action: "select",
+            ...hint,
           }),
           jsxProd_default(KeyboardShortcutHint, {
             chord: "enter",
             action: "open",
+            ...hint,
           }),
           jsxProd_default(KeyboardShortcutHint, {
             chord: "escape",
             action: "close",
+            ...hint,
           }),
         ],
       }),
     });
-    $[0] = hintElement;
-  } else hintElement = $[0];
+    $[1] = hint;
+    $[2] = hintElement;
+  } else hintElement = $[2];
   return hintElement;
 }
-//@ chunk-19dk83fw.js:14067-14269 placement
-function LessonFooter() {
-  let $ = useMemoCache(1);
+//@ chunk-je0zymfm.js:14177-14408 placement
+function LessonFooter(props) {
+  let $ = useMemoCache(2);
+  let { hint } = props;
   let footerElement;
-  if ($[0] === MEMO_CACHE_SENTINEL) {
+  if ($[0] !== hint) {
     footerElement = jsxProd_default(Text, {
       dimColor: true,
       italic: true,
@@ -948,19 +960,22 @@ function LessonFooter() {
           jsxProd_default(KeyboardShortcutHint, {
             chord: "enter",
             action: "mark done",
+            ...hint,
           }),
           jsxProd_default(KeyboardShortcutHint, {
             chord: "escape",
             action: "back",
+            ...hint,
           }),
         ],
       }),
     });
-    $[0] = footerElement;
-  } else footerElement = $[0];
+    $[0] = hint;
+    $[1] = footerElement;
+  } else footerElement = $[1];
   return footerElement;
 }
-//@ chunk-19dk83fw.js:14269-15601 placement
+//@ chunk-je0zymfm.js:14408-15740 placement
 function ShiftTabHint() {
   let $ = useMemoCache(9);
   let introText;
@@ -1088,40 +1103,52 @@ function ShiftTabHint() {
   } else bodyColumn = $[8];
   return bodyColumn;
 }
-//@ chunk-19dk83fw.js:15601-15605 placement
+//@ chunk-je0zymfm.js:15740-15744 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-19dk83fw.js:15601", () => {
+deferInit("chunk-je0zymfm.js:15740", () => {
   init_react_production();
 });
-//@ chunk-19dk83fw.js:15605-15654 placement
+//@ chunk-je0zymfm.js:15744-15793 placement
 function isKnownPowerup(powerupId) {
   return POWERUP_LESSONS.some((lesson) => lesson.id === powerupId);
 }
-//@ chunk-19dk83fw.js:15654-15731 placement
+//@ chunk-je0zymfm.js:15793-15870 placement
 function unlockedPowerups() {
   let powerupsUnlocked = getGlobalConfig().powerupsUnlocked ?? [];
   return new Set(powerupsUnlocked.filter(isKnownPowerup));
 }
-//@ chunk-19dk83fw.js:15731-18639 placement
+//@ chunk-je0zymfm.js:15870-15893 layout
+function useRedesignOff() {
+  return false;
+}
+//@ chunk-je0zymfm.js:15893-19079 placement
 /**
  * 入门能力课界面：逐课浏览、演示与完成状态。
  */
 function PowerupLessons(props) {
-  let $ = useMemoCache(48);
+  let $ = useMemoCache(57);
   let { onExit } = props;
   let { storageV5 } = useTheme_2();
   let [unlocked, setUnlocked] = useState(unlockedPowerups);
   let [openedLesson, setOpenedLesson] = useState(null);
   let [id, setId] = useState(POWERUP_LESSONS[0].id);
   let [showDemo, setShowDemo] = useState(false);
+  let [isRedesign] = useState(useRedesignOff);
+  let hint;
+  if ($[0] !== isRedesign) {
+    hint = stableEmptyObject(isRedesign);
+    $[0] = isRedesign;
+    $[1] = hint;
+  } else hint = $[1];
+  let hint_2 = hint;
   let hideDemo;
-  if ($[0] === MEMO_CACHE_SENTINEL) {
+  if ($[2] === MEMO_CACHE_SENTINEL) {
     hideDemo = () => setShowDemo(false);
-    $[0] = hideDemo;
-  } else hideDemo = $[0];
+    $[2] = hideDemo;
+  } else hideDemo = $[2];
   let onDone = hideDemo;
   let openLesson;
-  if ($[1] !== unlocked) {
+  if ($[3] !== unlocked) {
     openLesson = function openLessonImpl(lesson) {
       setId(lesson.id);
       setOpenedLesson(lesson);
@@ -1131,12 +1158,12 @@ function PowerupLessons(props) {
         unlocked_count: unlocked.size,
       });
     };
-    $[1] = unlocked;
-    $[2] = openLesson;
-  } else openLesson = $[2];
+    $[3] = unlocked;
+    $[4] = openLesson;
+  } else openLesson = $[4];
   let openLessonStable = openLesson;
   let completeLesson;
-  if ($[3] !== storageV5 || $[4] !== unlocked) {
+  if ($[5] !== storageV5 || $[6] !== unlocked) {
     completeLesson = function completeLessonImpl(lessonId) {
       if (unlocked.has(lessonId)) {
         return;
@@ -1157,13 +1184,13 @@ function PowerupLessons(props) {
       });
       if (nextUnlocked.size === POWERUP_LESSONS.length) setShowDemo(true);
     };
-    $[3] = storageV5;
-    $[4] = unlocked;
-    $[5] = completeLesson;
-  } else completeLesson = $[5];
+    $[5] = storageV5;
+    $[6] = unlocked;
+    $[7] = completeLesson;
+  } else completeLesson = $[7];
   let completeLessonStable = completeLesson;
   let lessonOptions;
-  if ($[6] !== unlocked) {
+  if ($[8] !== unlocked) {
     lessonOptions = POWERUP_LESSONS.map((lesson) => {
       let isUnlocked = unlocked.has(lesson.id);
       let label = `${isUnlocked ? figures_default.tick : figures_default.circle} ${lesson.title}`;
@@ -1178,100 +1205,117 @@ function PowerupLessons(props) {
         description: lesson.tagline,
       };
     });
-    $[6] = unlocked;
-    $[7] = lessonOptions;
-  } else lessonOptions = $[7];
+    $[8] = unlocked;
+    $[9] = lessonOptions;
+  } else lessonOptions = $[9];
   let options = lessonOptions;
   if (openedLesson) {
     let isUnlocked;
-    if ($[8] !== unlocked || $[9] !== openedLesson.id) {
+    if ($[10] !== unlocked || $[11] !== openedLesson.id) {
       isUnlocked = unlocked.has(openedLesson.id);
-      $[8] = unlocked;
-      $[9] = openedLesson.id;
-      $[10] = isUnlocked;
-    } else isUnlocked = $[10];
+      $[10] = unlocked;
+      $[11] = openedLesson.id;
+      $[12] = isUnlocked;
+    } else isUnlocked = $[12];
     let onDone;
-    if ($[11] !== completeLessonStable || $[12] !== openedLesson.id) {
+    if ($[13] !== completeLessonStable || $[14] !== openedLesson.id) {
       onDone = () => {
         completeLessonStable(openedLesson.id);
         setOpenedLesson(null);
       };
-      $[11] = completeLessonStable;
-      $[12] = openedLesson.id;
-      $[13] = onDone;
-    } else onDone = $[13];
+      $[13] = completeLessonStable;
+      $[14] = openedLesson.id;
+      $[15] = onDone;
+    } else onDone = $[15];
     let onBack;
-    if ($[14] === MEMO_CACHE_SENTINEL) {
+    if ($[16] === MEMO_CACHE_SENTINEL) {
       onBack = () => setOpenedLesson(null);
-      $[14] = onBack;
-    } else onBack = $[14];
+      $[16] = onBack;
+    } else onBack = $[16];
     let qrCode;
-    if ($[15] !== isUnlocked || $[16] !== onDone || $[17] !== openedLesson) {
+    if (
+      $[17] !== hint_2 ||
+      $[18] !== isRedesign ||
+      $[19] !== isUnlocked ||
+      $[20] !== onDone ||
+      $[21] !== openedLesson
+    ) {
       qrCode = jsxProd_default(MobileQRCode, {
         lesson: openedLesson,
         isUnlocked,
+        isRedesign,
+        hint: hint_2,
         onDone,
         onBack,
       });
-      $[15] = isUnlocked;
-      $[16] = onDone;
-      $[17] = openedLesson;
-      $[18] = qrCode;
-    } else qrCode = $[18];
+      $[17] = hint_2;
+      $[18] = isRedesign;
+      $[19] = isUnlocked;
+      $[20] = onDone;
+      $[21] = openedLesson;
+      $[22] = qrCode;
+    } else qrCode = $[22];
     return qrCode;
   }
   let allUnlocked = unlocked.size === POWERUP_LESSONS.length;
+  let titleText = allUnlocked ? "All powered up" : "Power-ups";
   let header;
-  if ($[19] !== allUnlocked) {
-    header = allUnlocked
-      ? jsxProd_default(TypewriterText, {
-          text: "All powered up",
-        })
-      : jsxProd_default(Text, {
-          bold: true,
-          color: "claude",
-          children: "Power-ups",
-        });
-    $[19] = allUnlocked;
-    $[20] = header;
-  } else header = $[20];
+  if ($[23] !== allUnlocked || $[24] !== isRedesign || $[25] !== titleText) {
+    header =
+      !isRedesign &&
+      (allUnlocked
+        ? jsxProd_default(TypewriterText, {
+            text: titleText,
+          })
+        : jsxProd_default(Text, {
+            bold: true,
+            color: "claude",
+            children: titleText,
+          }));
+    $[23] = allUnlocked;
+    $[24] = isRedesign;
+    $[25] = titleText;
+    $[26] = header;
+  } else header = $[26];
+  const counterSpacer = !isRedesign && " ";
   let counter;
-  if ($[21] !== unlocked.size) {
+  if ($[27] !== counterSpacer || $[28] !== unlocked.size) {
     counter = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [" ", unlocked.size, "/", POWERUP_LESSONS.length, " unlocked", " "],
+      children: [counterSpacer, unlocked.size, "/", POWERUP_LESSONS.length, " unlocked", " "],
     });
-    $[21] = unlocked.size;
-    $[22] = counter;
-  } else counter = $[22];
+    $[27] = counterSpacer;
+    $[28] = unlocked.size;
+    $[29] = counter;
+  } else counter = $[29];
   const ratio = unlocked.size / POWERUP_LESSONS.length;
   let progressBar;
-  if ($[23] !== ratio) {
+  if ($[30] !== ratio) {
     progressBar = jsxProd_default(ProgressBar, {
       ratio,
       width: 16,
       fillColor: "claude",
       emptyColor: "inactive",
     });
-    $[23] = ratio;
-    $[24] = progressBar;
-  } else progressBar = $[24];
+    $[30] = ratio;
+    $[31] = progressBar;
+  } else progressBar = $[31];
   let headerBox;
-  if ($[25] !== header || $[26] !== counter || $[27] !== progressBar) {
+  if ($[32] !== progressBar || $[33] !== header || $[34] !== counter) {
     headerBox = jsxProd_default_2(Box, {
       marginBottom: 1,
       children: [header, counter, progressBar],
     });
-    $[25] = header;
-    $[26] = counter;
-    $[27] = progressBar;
-    $[28] = headerBox;
-  } else headerBox = $[28];
+    $[32] = progressBar;
+    $[33] = header;
+    $[34] = counter;
+    $[35] = headerBox;
+  } else headerBox = $[35];
   const children = allUnlocked
     ? "Now go build something."
     : "Each power-up teaches one thing Claude Code can do that most people miss. Open one, read it, try it, mark it done.";
   let introBox;
-  if ($[29] !== children) {
+  if ($[36] !== children) {
     introBox = jsxProd_default(Box, {
       marginBottom: 1,
       children: jsxProd_default(Text, {
@@ -1280,26 +1324,26 @@ function PowerupLessons(props) {
         children,
       }),
     });
-    $[29] = children;
-    $[30] = introBox;
-  } else introBox = $[30];
+    $[36] = children;
+    $[37] = introBox;
+  } else introBox = $[37];
   let onChange;
-  if ($[31] !== openLessonStable) {
+  if ($[38] !== openLessonStable) {
     onChange = (lessonId) => {
       let found = POWERUP_LESSONS.find((lesson) => lesson.id === lessonId);
       if (found) openLessonStable(found);
     };
-    $[31] = openLessonStable;
-    $[32] = onChange;
-  } else onChange = $[32];
+    $[38] = openLessonStable;
+    $[39] = onChange;
+  } else onChange = $[39];
   let onCancel;
-  if ($[33] !== onExit) {
+  if ($[40] !== onExit) {
     onCancel = () => onExit("Power-ups closed");
-    $[33] = onExit;
-    $[34] = onCancel;
-  } else onCancel = $[34];
+    $[40] = onExit;
+    $[41] = onCancel;
+  } else onCancel = $[41];
   let selector;
-  if ($[35] !== options || $[36] !== id || $[37] !== onChange || $[38] !== onCancel) {
+  if ($[42] !== options || $[43] !== id || $[44] !== onChange || $[45] !== onCancel) {
     selector = jsxProd_default(ModelSelector, {
       options,
       hideIndexes: true,
@@ -1308,45 +1352,56 @@ function PowerupLessons(props) {
       onChange,
       onCancel,
     });
-    $[35] = options;
-    $[36] = id;
-    $[37] = onChange;
-    $[38] = onCancel;
-    $[39] = selector;
-  } else selector = $[39];
+    $[42] = options;
+    $[43] = id;
+    $[44] = onChange;
+    $[45] = onCancel;
+    $[46] = selector;
+  } else selector = $[46];
   let footerHint;
-  if ($[40] === MEMO_CACHE_SENTINEL) {
+  if ($[47] !== hint_2) {
     footerHint = jsxProd_default(Box, {
       marginTop: 1,
-      children: jsxProd_default(LessonsFooterHint, {}),
+      children: jsxProd_default(LessonsFooterHint, {
+        hint: hint_2,
+      }),
     });
-    $[40] = footerHint;
-  } else footerHint = $[40];
+    $[47] = hint_2;
+    $[48] = footerHint;
+  } else footerHint = $[48];
   let demo;
-  if ($[41] !== showDemo) {
+  if ($[49] !== showDemo) {
     demo =
       showDemo &&
       jsxProd_default(ModeCycleDemo, {
         onDone,
       });
-    $[41] = showDemo;
-    $[42] = demo;
-  } else demo = $[42];
+    $[49] = showDemo;
+    $[50] = demo;
+  } else demo = $[50];
   let pane;
-  if ($[43] !== introBox || $[44] !== selector || $[45] !== demo || $[46] !== headerBox) {
+  if (
+    $[51] !== headerBox ||
+    $[52] !== introBox ||
+    $[53] !== selector ||
+    $[54] !== footerHint ||
+    $[55] !== demo
+  ) {
+    let children = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [headerBox, introBox, selector, footerHint, demo],
+    });
     pane = jsxProd_default(Pane, {
       color: "claude",
-      children: jsxProd_default_2(Box, {
-        flexDirection: "column",
-        children: [headerBox, introBox, selector, footerHint, demo],
-      }),
+      children,
     });
-    $[43] = introBox;
-    $[44] = selector;
-    $[45] = demo;
-    $[46] = headerBox;
-    $[47] = pane;
-  } else pane = $[47];
+    $[51] = headerBox;
+    $[52] = introBox;
+    $[53] = selector;
+    $[54] = footerHint;
+    $[55] = demo;
+    $[56] = pane;
+  } else pane = $[56];
   return pane;
 }
-export { PERMISSION_MODE_STEPS, nextModeIndex, LessonFrame, LessonFooter, PowerupLessons, POWERUP_LESSONS };
+export { PERMISSION_MODE_STEPS, nextModeIndex, LessonFrame, PowerupLessons, POWERUP_LESSONS, LessonFooter };

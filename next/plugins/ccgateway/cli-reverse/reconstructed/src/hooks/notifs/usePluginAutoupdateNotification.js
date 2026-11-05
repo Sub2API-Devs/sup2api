@@ -3,9 +3,9 @@
  *
  * 插件自动更新结果通知（N 个已更新、跳过的原因）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/notifs/usePluginAutoupdateNotification.tsx
- * pieces: chunk-18hwfzwa.js (2)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: fingerprint 1, file-last-pair 1
  */
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
@@ -17,7 +17,7 @@ import { refreshActivePlugins } from "../../utils/plugins/refresh.js";
 import { PluginsStateStore } from "../../utils/plugins/pluginLoadStatus.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-18hwfzwa.js:1773348-1775970 fingerprint (2.1.88 match: usePluginAutoupdateNotification, 0.325)
+//@ chunk-czq1j3j2.js:1820610-1823233 fingerprint (2.1.88 match: usePluginAutoupdateNotification, 0.325)
 var usePluginAutoupdateNotification = {
   id: "plugin-autoupdate",
   deps: (noticeState) => [noticeState.store, noticeState.storageV5, noticeState.credentials],
@@ -167,7 +167,7 @@ var usePluginAutoupdateNotification = {
     };
   },
 };
-//@ chunk-18hwfzwa.js:1775970-1776018 file-last-pair
+//@ chunk-czq1j3j2.js:1823233-1823281 file-last-pair
 function pluginErrorKey(id) {
   return `${id.type}\x00${id.source}`;
 }

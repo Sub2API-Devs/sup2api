@@ -3,10 +3,10 @@
  *
  * /commit-push-pr 提示词命令（内部）：允许的 git/gh 工具、Slack 发帖工具与提示词正文
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/commit-push-pr.ts
- * pieces: chunk-e6aww6q8.js (7)
- * attribution: affinity 2, fingerprint 3, layout 2
+ * pieces: chunk-5xgkngpb.js (8)
+ * attribution: affinity 2, fingerprint 3, layout 3
  */
 import {
   CERTIFIED_GIT_CHECKOUT_B,
@@ -35,6 +35,7 @@ import {
   GH_PR_EDIT_RESTRICTED_RULES,
   GH_PR_CREATE_BASE_RULES,
 } from "../utils/permissions/gitCommandRules.js";
+import { emptyList } from "./commit.js";
 import {
   escapeShellBangs,
   executeShellCommandsInPrompt,
@@ -55,23 +56,20 @@ import { buildSessionAttributionTexts, buildPRAttributionTrailer } from "../util
 import { isSafeRefName as isSafeRefName_2 } from "../utils/git/safeRefName.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1688101-1688129 affinity
-/**
- * getCoAuthorTrailer：构建期返回 null。
- */
-function noPrUrlTemplate(ctx) {
+//@ chunk-5xgkngpb.js:1763334-1763362 affinity
+function commitTrailerFlag(_unused) {
   return null;
 }
-//@ chunk-e6aww6q8.js:1688129-1688492 fingerprint (2.1.88 match: ALLOWED_TOOLS, 0.439)
+//@ chunk-5xgkngpb.js:1763362-1763725 fingerprint (2.1.88 match: ALLOWED_TOOLS, 0.439)
 /**
  * SLACK_POST_TOOLS：ToolSearch + slack send_message 工具。
  */
-var COMMIT_PUSH_PR_TOOLS; // deferred: uses CERTIFIED_GIT_STATUS (../tools/BashTool/certifiedCommands.js) of its import cycle while loading; runs once the cycle is complete
+var COMMIT_PUSH_PR_TOOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SLACK_POST_TOOLS;
 var COMMIT_PUSH_PR_GIT_COMMANDS;
 var buildAllowedTools;
 var COMMIT_PUSH_PR_ALLOWED_TOOLS;
-deferInit("chunk-e6aww6q8.js:1688129", () => {
+deferInit("chunk-5xgkngpb.js:1763362", () => {
   COMMIT_PUSH_PR_TOOLS = [
     CERTIFIED_GIT_CHECKOUT_B,
     CERTIFIED_GIT_ADD,
@@ -101,11 +99,16 @@ deferInit("chunk-e6aww6q8.js:1688129", () => {
     COMMIT_PUSH_PR_GIT_COMMANDS,
   );
 });
-//@ chunk-e6aww6q8.js:1688492-1688611 layout
+//@ chunk-5xgkngpb.js:1763725-1763747 layout
+function promptOverride() {
+  return;
+}
+//@ chunk-5xgkngpb.js:1763747-1763901 layout (2.1.88 match: getValueFromInput, 1)
 /**
  * getCommitPushPrAllowedTools：按 git remote 动态生成 push 规则。
  */
 async function getCommitPushPrAllowedTools() {
+  if (promptOverride()?.type === "prompt") return [];
   let gitPushRemotes = await getGitPushRemotes();
   let filtered = gitPushRemotes.map(buildCertifiedPushRule).filter((rule) => rule !== null);
   return buildAllowedTools(
@@ -113,11 +116,11 @@ async function getCommitPushPrAllowedTools() {
     [...COMMIT_PUSH_PR_GIT_COMMANDS, ...gitPushShellPatternsForRemotes(gitPushRemotes)],
   );
 }
-//@ chunk-e6aww6q8.js:1688611-1689179 layout
-var COMMIT_PUSH_PR_DISALLOWED_TOOLS; // deferred: uses toPowerShellRules (../utils/git.js) of its import cycle while loading; runs once the cycle is complete
+//@ chunk-5xgkngpb.js:1763901-1764478 layout
+var COMMIT_PUSH_PR_BASH_RULES; // deferred: uses toPowerShellRules (../utils/git.js) of its import cycle while loading; runs once the cycle is complete
 var SLACK_POST_INSTRUCTIONS;
-deferInit("chunk-e6aww6q8.js:1688611", () => {
-  COMMIT_PUSH_PR_DISALLOWED_TOOLS = [
+deferInit("chunk-5xgkngpb.js:1763901", () => {
+  COMMIT_PUSH_PR_BASH_RULES = [
     ...bashAndPowerShellRules([
       ...GIT_ADD_FORCE_RULES,
       ...GIT_COMMIT_FILE_ARG_RULES,
@@ -127,12 +130,13 @@ deferInit("chunk-e6aww6q8.js:1688611", () => {
       ...GH_PR_EDIT_RESTRICTED_RULES,
     ]),
     ...toPowerShellRules(GH_PR_CREATE_BASE_RULES),
+    ...emptyList(),
   ];
   SLACK_POST_INSTRUCTIONS = `
 
 5. After creating/updating the PR, check if the user's CLAUDE.md mentions posting to Slack channels. If it does, use ToolSearch to search for "slack send message" tools. If ToolSearch finds a Slack tool, ask the user if they'd like you to post the PR URL to the relevant Slack channel. Only post if the user confirms. If ToolSearch returns no results or errors, skip this step silently\u2014do not mention the failure, do not attempt workarounds, and do not try alternative approaches.`;
 });
-//@ chunk-e6aww6q8.js:1689179-1692593 fingerprint (2.1.88 match: getPromptContent, 0.482)
+//@ chunk-5xgkngpb.js:1764478-1767895 fingerprint (2.1.88 match: getPromptContent, 0.482)
 /**
  * getPromptContent：同旧版 commit-push-pr getPromptContent。
  */
@@ -252,20 +256,20 @@ You have the capability to call multiple tools in a single response. You MUST do
 
 Return the PR URL when you're done, so the user can see it.`;
 }
-//@ chunk-e6aww6q8.js:1692593-1693180 fingerprint (2.1.88 match: command, 0.755)
+//@ chunk-5xgkngpb.js:1767895-1768550 fingerprint (2.1.88 match: command, 0.755)
 /**
  * /commit-push-pr 命令对象（prompt）；描述：Commit, push, and open a PR。
  */
-var commitPushPrCommandDefinition; // deferred: uses COMMIT_PUSH_PR_TOOLS of its import cycle while loading; runs once the cycle is complete
-var commitPushPrCommand;
-deferInit("chunk-e6aww6q8.js:1692593", () => {
+var commitPushPrCommandDefinition; // deferred: uses COMMIT_PUSH_PR_BASH_RULES of its import cycle while loading; runs once the cycle is complete
+var internalCmdB;
+deferInit("chunk-5xgkngpb.js:1767895", () => {
   commitPushPrCommandDefinition = {
     type: "prompt",
     name: COMMIT_PUSH_PR,
     description: "Commit, push, and open a PR",
     allowedTools: COMMIT_PUSH_PR_ALLOWED_TOOLS,
     getAllowedTools: getCommitPushPrAllowedTools,
-    disallowedTools: COMMIT_PUSH_PR_DISALLOWED_TOOLS,
+    disallowedTools: COMMIT_PUSH_PR_BASH_RULES,
     get contentLength() {
       return getPromptContent("main", false, {
         commit: "",
@@ -275,6 +279,8 @@ deferInit("chunk-e6aww6q8.js:1692593", () => {
     progressMessage: "creating commit and PR",
     source: "builtin",
     async getPromptForCommand(args, context) {
+      let override = promptOverride();
+      if (override?.type === "prompt") return override.getPromptForCommand(args, context);
       logPrGuidanceRendered("commit_push_pr");
       let [defaultBranch, prAttribution, prAttributionTrailer] = await Promise.all([
         getDefaultBranch(),
@@ -284,7 +290,7 @@ deferInit("chunk-e6aww6q8.js:1692593", () => {
       let defaultBranch_2 = isSafeRefName_2(defaultBranch) ? defaultBranch : "main";
       let promptContent = getPromptContent(
         defaultBranch_2,
-        noPrUrlTemplate() !== null,
+        commitTrailerFlag() !== null,
         prAttribution,
         prAttributionTrailer,
       );
@@ -310,10 +316,10 @@ ${escapeShellBangs(trimmedArgs)}`;
       ];
     },
   };
-  commitPushPrCommand = commitPushPrCommandDefinition;
+  internalCmdB = commitPushPrCommandDefinition;
 });
-//@ chunk-e6aww6q8.js:1693180-1693236 affinity
+//@ chunk-5xgkngpb.js:1768550-1768606 affinity
 function sanitizeUsername(name) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "");
 }
-export { commitPushPrCommand };
+export { internalCmdB };

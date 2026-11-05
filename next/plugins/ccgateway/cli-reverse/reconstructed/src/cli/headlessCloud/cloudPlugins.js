@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：无头云会话的 home 设置与云插件准入报告。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fe6rs39h.js (8), chunk-z7wtv7tg.js (78)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6fv5sh2h.js (78), chunk-keyy05re.js (8)
  * attribution: placement 86
  */
 import { join, dirname } from "path";
@@ -20,7 +20,7 @@ import {
   numberSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage, isENOENT } from "../../utils/errors.js";
 import { jsonParse, jsonStringify, jsonStringifyRaw } from "../../utils/slowOperations.js";
@@ -39,7 +39,7 @@ import {
   legacyPluginIds,
   canonicalPluginId,
 } from "../../utils/plugins/pluginIdentifier.js";
-import { count, uniq } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { getSettingsSchemaForDocument, getSettingsFieldSchema } from "../../utils/settings/types.js";
 import { sortKeysDeep } from "../../utils/settings/settingsSourceTrust.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
@@ -54,6 +54,7 @@ import { INLINE_PLUGIN_MARKETPLACE, SKILLS_DIR, BUILTIN } from "../../utils/tele
 import { isPluginGitUrlValid } from "../../utils/plugins/pluginDirectoryTelemetry.js";
 import { isUnsafeRemoteUrl } from "../../utils/git/githubUrl.js";
 import { isLocalAddress, isLocalHostname } from "../../utils/localHostnames.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
@@ -99,10 +100,10 @@ import {
 } from "../../utils/teleport/containerSync.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-z7wtv7tg.js:1599-1719 placement
+//@ chunk-6fv5sh2h.js:1632-1752 placement
 var cloudPluginsConsentSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var CLOUD_PLUGINS_CONSENT;
-deferInit("chunk-z7wtv7tg.js:1599", () => {
+deferInit("chunk-6fv5sh2h.js:1632", () => {
   cloudPluginsConsentSchema = DoctorLazy(() =>
     objectSchema({
       version: literal(1),
@@ -113,18 +114,18 @@ deferInit("chunk-z7wtv7tg.js:1599", () => {
   );
   CLOUD_PLUGINS_CONSENT = "cloud-plugins-consent";
 });
-//@ chunk-z7wtv7tg.js:1719-1753 placement
+//@ chunk-6fv5sh2h.js:1752-1786 placement
 function cloudPluginsConsentStateKey() {
   return STORAGE_SPACES.state(CLOUD_PLUGINS_CONSENT);
 }
-//@ chunk-z7wtv7tg.js:1753-1805 placement
+//@ chunk-6fv5sh2h.js:1786-1838 placement
 /**
  * 云插件同意文件的路径：<claude 配置目录>/state/cloud-plugins-consent.json。
  */
 function cloudPluginsConsentFilePath() {
   return join(getClaudeConfigDir(), "state", `${CLOUD_PLUGINS_CONSENT}.json`);
 }
-//@ chunk-z7wtv7tg.js:1805-2108 placement
+//@ chunk-6fv5sh2h.js:1838-2141 placement
 /**
  * 读取云插件同意文件：不可读返回 unreadable，不存在或主机名不符返回 unset，否则返回 accepted/declined。
  */
@@ -146,18 +147,18 @@ async function readCloudPluginsConsentChoice(storage) {
     return "unset";
   }
 }
-//@ chunk-z7wtv7tg.js:2108-2181 placement
+//@ chunk-6fv5sh2h.js:2141-2214 placement
 async function readConsentChoiceAsUnset(storage) {
   let cloudPluginsConsentChoice = await readCloudPluginsConsentChoice(storage);
   return cloudPluginsConsentChoice === "unreadable" ? "unset" : cloudPluginsConsentChoice;
 }
-//@ chunk-z7wtv7tg.js:2181-2258 placement
+//@ chunk-6fv5sh2h.js:2214-2291 placement
 function effectiveConsentChoice(persisted, cloudPluginsConsentChoice) {
   return cloudPluginsConsentChoice === "declined" || (cloudPluginsConsentChoice === "unset" && persisted)
     ? "declined"
     : "accepted";
 }
-//@ chunk-z7wtv7tg.js:2258-2494 placement
+//@ chunk-6fv5sh2h.js:2291-2527 placement
 /**
  * 写入云插件同意选择（版本、选择、时间、主机名），失败时记日志返回 false。
  */
@@ -185,7 +186,7 @@ async function writeCloudPluginsConsent(choice, deps) {
     return false;
   }
 }
-//@ chunk-z7wtv7tg.js:2494-2981 placement
+//@ chunk-6fv5sh2h.js:2527-3014 placement
 /**
  * 读写 cloud-plugins 同意状态文件
  */
@@ -225,7 +226,7 @@ function readCloudPluginsConsent(storageV5) {
     hostname,
   };
 }
-//@ chunk-z7wtv7tg.js:2981-3037 placement
+//@ chunk-6fv5sh2h.js:3014-3070 placement
 /**
  * 云插件同意的空状态 {value:null, persisted:false, given:false}。
  */
@@ -236,7 +237,7 @@ function emptyConsentState() {
     given: false,
   };
 }
-//@ chunk-z7wtv7tg.js:3037-3215 placement
+//@ chunk-6fv5sh2h.js:3070-3248 placement
 /**
  * 解析云插件同意：已接受但存储位置不可信时触发回调并视为未设置。
  */
@@ -252,7 +253,7 @@ async function resolveCloudPluginsConsent(consentPin, state, untrusted) {
   safeInvokeCallback(untrusted.onUntrusted);
   return "unset";
 }
-//@ chunk-z7wtv7tg.js:3215-3666 placement
+//@ chunk-6fv5sh2h.js:3248-3699 placement
 async function cloudPluginsConsentState(pin, storage) {
   let didStart = false;
   if (pin.value === null) {
@@ -292,7 +293,7 @@ async function cloudPluginsConsentState(pin, storage) {
     given,
   };
 }
-//@ chunk-z7wtv7tg.js:3666-3770 placement
+//@ chunk-6fv5sh2h.js:3699-3803 placement
 function safeInvokeCallback(onUntrusted) {
   try {
     onUntrusted?.();
@@ -302,7 +303,7 @@ function safeInvokeCallback(onUntrusted) {
     });
   }
 }
-//@ chunk-z7wtv7tg.js:3770-4927 placement
+//@ chunk-6fv5sh2h.js:3803-4960 placement
 /**
  * 转发插件到云会话时的层级、数量与长度上限，允许的 git 协议，市场来源校验正则，以及插件被丢弃的原因列表。
  */
@@ -335,7 +336,7 @@ var DOT_DOT_SEGMENT_RE;
 var ENCODED_SEPARATOR_RE;
 var PERCENT_IN_AUTHORITY_RE;
 var PLUGIN_DROP_REASONS;
-deferInit("chunk-z7wtv7tg.js:3770", () => {
+deferInit("chunk-6fv5sh2h.js:3803", () => {
   FORWARDED_PLUGIN_TIERS = ["userSettings", "projectSettings", "localSettings", "flagSettings"];
   OWN_CHOICE_TIERS = new Set(["userSettings", "flagSettings"]);
   REVERSED_SETTING_SOURCES = SETTING_SOURCES.toReversed();
@@ -385,7 +386,7 @@ deferInit("chunk-z7wtv7tg.js:3770", () => {
     "guard_builtin_not_own_choice",
   ];
 });
-//@ chunk-z7wtv7tg.js:4927-6310 placement
+//@ chunk-6fv5sh2h.js:4960-6343 placement
 /**
  * 从设置目录读取云端插件声明，处理超读上限与 schema 拒绝
  */
@@ -466,7 +467,7 @@ function loadCloudPluginsDeclaration(snapshot) {
   };
   let counts = {
     forwarded: capped.length,
-    forwardedDisabled: count(capped, ({ value: entry }) => !entry),
+    forwardedDisabled: countWhere(capped, ({ value: entry }) => !entry),
     marketplacesDeclared: Object.keys(patch.extraKnownMarketplaces).length,
     dropped: dropCounts,
   };
@@ -508,11 +509,11 @@ function loadCloudPluginsDeclaration(snapshot) {
     counts,
   };
 }
-//@ chunk-z7wtv7tg.js:6310-6341 placement
+//@ chunk-6fv5sh2h.js:6343-6374 placement
 function canonicalJsonString(value) {
   return jsonStringify(sortKeysDeep(value));
 }
-//@ chunk-z7wtv7tg.js:6341-6536 placement
+//@ chunk-6fv5sh2h.js:6374-6569 placement
 function toPluginAdmissionTelemetry(counts) {
   return {
     forwarded: counts.forwarded,
@@ -521,7 +522,7 @@ function toPluginAdmissionTelemetry(counts) {
     ...Object.fromEntries(PLUGIN_DROP_REASONS.map((reason) => [`dropped_${reason}`, counts.dropped[reason]])),
   };
 }
-//@ chunk-z7wtv7tg.js:6536-6868 placement
+//@ chunk-6fv5sh2h.js:6569-6901 placement
 /**
  * 校验插件市场声明：github/git/url 来源分别校验，目录、文件、npm、settings 等本地来源丢弃为 local_marketplace，其余非法。
  */
@@ -553,7 +554,7 @@ function validateMarketplaceDeclaration(declaration, source) {
       };
   }
 }
-//@ chunk-z7wtv7tg.js:6868-7477 placement
+//@ chunk-6fv5sh2h.js:6901-7510 placement
 /**
  * 合并各设置层的 enabledPlugins：超过每层上限计 over_cap；非可信层不得启用仅限可信层的内置插件；非法 ID 计数；记录是否为用户本人的选择/提及。
  */
@@ -593,18 +594,18 @@ function collectEnabledPluginChoices(snapshot, dropCounts) {
   dropCounts.invalid_id += invalidIds.size;
   return choices;
 }
-//@ chunk-z7wtv7tg.js:7477-7585 placement
+//@ chunk-6fv5sh2h.js:7510-7618 placement
 function hasOverCapTier(snapshot) {
   return FORWARDED_PLUGIN_TIERS.some((tier) => {
     let entries = snapshot.enabledPluginsByTier[tier];
     return isPlainObject(entries) && Object.keys(entries).length > MAX_PLUGINS_PER_TIER;
   });
 }
-//@ chunk-z7wtv7tg.js:7585-7647 placement
+//@ chunk-6fv5sh2h.js:7618-7680 placement
 function isValidPluginIdForForwarding(pluginId) {
   return pluginId.length <= MAX_MARKETPLACE_NAME_LENGTH && PluginIdSchema().safeParse(pluginId).success;
 }
-//@ chunk-z7wtv7tg.js:7647-8131 placement
+//@ chunk-6fv5sh2h.js:7680-8164 placement
 /**
  * 判断某插件选择为何不能转发：目录加载、值非布尔、策略阻止、未知内置、市场被丢弃、本机未安装等；可转发返回 undefined。
  */
@@ -633,7 +634,7 @@ function getPluginDropReason(
     return "not_installed_here";
   return;
 }
-//@ chunk-z7wtv7tg.js:8131-8306 placement
+//@ chunk-6fv5sh2h.js:8164-8339 placement
 function getPolicyDisabledPlugins({ enabledPluginsByTier }) {
   let policySettings = enabledPluginsByTier.policySettings;
   return new Set(
@@ -645,7 +646,7 @@ function getPolicyDisabledPlugins({ enabledPluginsByTier }) {
       : [],
   );
 }
-//@ chunk-z7wtv7tg.js:8306-8455 placement
+//@ chunk-6fv5sh2h.js:8339-8488 placement
 function canonicalizePluginKey(entries, key) {
   let canonicalId = canonicalPluginId(key);
   let aliases = [canonicalId, ...legacyPluginIds(canonicalId)];
@@ -656,11 +657,11 @@ function canonicalizePluginKey(entries, key) {
     ? undefined
     : canonicalId;
 }
-//@ chunk-z7wtv7tg.js:8455-8519 placement
+//@ chunk-6fv5sh2h.js:8488-8552 placement
 function lowercaseSet(values) {
   return new Set([...values].map((value) => value.toLowerCase()));
 }
-//@ chunk-z7wtv7tg.js:8519-9095 placement
+//@ chunk-6fv5sh2h.js:8552-9128 placement
 function classifyReservedPluginName(marketplace, snapshot, reservedContext) {
   let lower = marketplace.toLowerCase();
   if (lower === BUILTIN || lower === SKILLS_DIR)
@@ -709,13 +710,13 @@ function classifyReservedPluginName(marketplace, snapshot, reservedContext) {
     };
   return validateMarketplaceDeclaration(marketplace, marketplaceSource);
 }
-//@ chunk-z7wtv7tg.js:9095-9172 placement
+//@ chunk-6fv5sh2h.js:9128-9205 placement
 function marketplaceDropReason(marketplace, snapshot) {
   return isMarketplaceUntrustedForFolder(marketplace, snapshot)
     ? "untrusted_for_folder"
     : "unknown_marketplace";
 }
-//@ chunk-z7wtv7tg.js:9172-9459 placement
+//@ chunk-6fv5sh2h.js:9205-9492 placement
 function findMarketplaceSource(marketplace, snapshot) {
   let registered = isPlainObject(snapshot.registeredMarketplaces)
     ? ownFieldOrUndefined(snapshot.registeredMarketplaces, marketplace)
@@ -730,7 +731,7 @@ function findMarketplaceSource(marketplace, snapshot) {
   }
   return;
 }
-//@ chunk-z7wtv7tg.js:9459-9555 placement
+//@ chunk-6fv5sh2h.js:9492-9588 placement
 function isMarketplaceUntrustedForFolder(marketplace, snapshot) {
   return (
     !snapshot.folderTrustedForProjectPlugins &&
@@ -739,12 +740,12 @@ function isMarketplaceUntrustedForFolder(marketplace, snapshot) {
     )
   );
 }
-//@ chunk-z7wtv7tg.js:9555-9638 placement
+//@ chunk-6fv5sh2h.js:9588-9671 placement
 function declaredMarketplaceAtTier(snapshot, tier, marketplace) {
   let declared = snapshot.declaredMarketplacesByTier[tier];
   return isPlainObject(declared) ? ownFieldOrUndefined(declared, marketplace) : undefined;
 }
-//@ chunk-z7wtv7tg.js:9638-9903 placement
+//@ chunk-6fv5sh2h.js:9671-9936 placement
 function validateGithubMarketplace(marketplace, source) {
   let repo = ownFieldOrUndefined(source, "repo");
   if (
@@ -769,7 +770,7 @@ function validateGithubMarketplace(marketplace, source) {
         ...refFields,
       });
 }
-//@ chunk-z7wtv7tg.js:9903-10231 placement
+//@ chunk-6fv5sh2h.js:9936-10264 placement
 /**
  * 校验并规整 git 类型插件市场声明：URL 合法、必须走网络、格式有效，再校验 ref/path 等字段；否则返回丢弃原因。
  */
@@ -804,7 +805,7 @@ function validateGitMarketplace(marketplace, source) {
         ...refFields,
       });
 }
-//@ chunk-z7wtv7tg.js:10231-10567 placement
+//@ chunk-6fv5sh2h.js:10264-10600 placement
 /**
  * 校验 URL 型市场：URL 非法为 invalid_marketplace，带 headers/headersHelper 为 needs_credentials，协议须为 https。
  */
@@ -835,7 +836,7 @@ function validateUrlMarketplace(marketplace, source) {
         reason: sourceKind,
       };
 }
-//@ chunk-z7wtv7tg.js:10567-10656 placement
+//@ chunk-6fv5sh2h.js:10600-10689 placement
 function safeMarketplaceUrl(url) {
   return typeof url === "string" &&
     url.length > 0 &&
@@ -844,7 +845,7 @@ function safeMarketplaceUrl(url) {
     ? url
     : undefined;
 }
-//@ chunk-z7wtv7tg.js:10656-10956 placement
+//@ chunk-6fv5sh2h.js:10689-10989 placement
 /**
  * 校验 git 市场声明的可选字段（ref、path、sparsePaths、skipLfs），全部合法时返回只含已给字段的对象。
  */
@@ -875,7 +876,7 @@ function validateGitRefFields(source) {
     }),
   };
 }
-//@ chunk-z7wtv7tg.js:10956-11048 placement
+//@ chunk-6fv5sh2h.js:10989-11081 placement
 function isSafeGitRef(oid) {
   return (
     typeof oid === "string" &&
@@ -884,11 +885,11 @@ function isSafeGitRef(oid) {
     !oid.split("/").some(isDotSegment)
   );
 }
-//@ chunk-z7wtv7tg.js:11048-11111 placement
+//@ chunk-6fv5sh2h.js:11081-11144 placement
 function isSafeMarketplacePath(value) {
   return typeof value === "string" && value.length <= MAX_PATH_LENGTH && isSafeRelativePath(value);
 }
-//@ chunk-z7wtv7tg.js:11111-11220 placement
+//@ chunk-6fv5sh2h.js:11144-11253 placement
 function isValidSparsePaths(path) {
   return (
     Array.isArray(path) &&
@@ -898,7 +899,7 @@ function isValidSparsePaths(path) {
     )
   );
 }
-//@ chunk-z7wtv7tg.js:11220-11308 placement
+//@ chunk-6fv5sh2h.js:11253-11341 placement
 function isSafeRelativePath(value) {
   return (
     SAFE_PATH_RE.test(value) &&
@@ -906,11 +907,11 @@ function isSafeRelativePath(value) {
     !value.split("/").some((segment) => segment === "..")
   );
 }
-//@ chunk-z7wtv7tg.js:11308-11348 placement
+//@ chunk-6fv5sh2h.js:11341-11381 placement
 function isDotSegment(segment) {
   return segment === "." || segment === "..";
 }
-//@ chunk-z7wtv7tg.js:11348-11506 placement
+//@ chunk-6fv5sh2h.js:11381-11539 placement
 function toMarketplaceDecision(source, source_2) {
   return getSettingsFieldSchema("extraKnownMarketplaces").safeParse({
     [source]: {
@@ -926,7 +927,7 @@ function toMarketplaceDecision(source, source_2) {
         reason: "invalid_marketplace",
       };
 }
-//@ chunk-z7wtv7tg.js:11506-11947 placement
+//@ chunk-6fv5sh2h.js:11539-11980 placement
 /**
  * 判断 git 市场地址：以 - 开头、传输助手或不安全 URL 为非法；带协议按允许协议判断；本地路径为 local_marketplace；scp 式地址校验路径，带查询为 needs_credentials，本地主机为本地。
  */
@@ -948,7 +949,7 @@ function classifyGitMarketplaceUrl(url) {
   if (/[?#]/.test(host)) return "needs_credentials";
   return isLocalHostnameOrAddress(urlMatch) ? "local_marketplace" : "network";
 }
-//@ chunk-z7wtv7tg.js:11947-12526 placement
+//@ chunk-6fv5sh2h.js:11980-12559 placement
 /**
  * 判断插件市场来源：非法、本地市场、需要凭据等
  */
@@ -981,11 +982,11 @@ function classifyMarketplaceSource(url, protocols) {
   if (DOT_DOT_SEGMENT_RE.test(url) || ENCODED_SEPARATOR_RE.test(url)) return "invalid_marketplace";
   return INSECURE_GIT_PROTOCOLS.has(parsed.protocol) ? "insecure_transport" : "network";
 }
-//@ chunk-z7wtv7tg.js:12526-12609 placement
+//@ chunk-6fv5sh2h.js:12559-12642 placement
 function isLocalHostnameOrAddress(host) {
   return isLocalAddress(host, "address") || isLocalHostname(host) || !/[.:]/.test(host.replace(/\.+$/, ""));
 }
-//@ chunk-z7wtv7tg.js:12609-12968 placement
+//@ chunk-6fv5sh2h.js:12642-13001 placement
 /**
  * 剔除名称相同（不区分大小写）但声明不同的插件市场项，计入 ambiguous_marketplace 丢弃统计。
  */
@@ -1009,7 +1010,7 @@ function dropAmbiguousMarketplaces(entries, dropCounts, dropped) {
     return false;
   });
 }
-//@ chunk-z7wtv7tg.js:12968-13425 placement
+//@ chunk-6fv5sh2h.js:13001-13458 placement
 /**
  * 限制转发的插件：只保留前若干个声明市场的插件，按"本人提及且禁用、本人提及且启用、非本人启用、非本人禁用"优先级截断到上限并排序，其余计 over_cap。
  */
@@ -1037,25 +1038,25 @@ function capForwardedPlugins(entries, dropCounts, dropped) {
     }
   return sorted;
 }
-//@ chunk-z7wtv7tg.js:13425-13644 placement
+//@ chunk-6fv5sh2h.js:13458-13677 placement
 function orderDeclaredMarketplaces(declaring) {
   let filtered = declaring.filter(({ declaration }) => declaration !== undefined);
-  let sorted = uniq(
+  let sorted = normalizeCaseForComparison_2(
     filtered.filter(({ ownMention }) => ownMention).map(({ marketplace }) => marketplace),
   ).sort();
   let ownMarketplaces = new Set(sorted);
   return [
     ...sorted,
-    ...uniq(filtered.map(({ marketplace }) => marketplace))
+    ...normalizeCaseForComparison_2(filtered.map(({ marketplace }) => marketplace))
       .filter((rest) => !ownMarketplaces.has(rest))
       .sort(),
   ];
 }
-//@ chunk-z7wtv7tg.js:13644-13683 placement
+//@ chunk-6fv5sh2h.js:13677-13716 placement
 function compareStrings(id, id_2) {
   return id < id_2 ? -1 : id > id_2 ? 1 : 0;
 }
-//@ chunk-z7wtv7tg.js:13683-14059 placement
+//@ chunk-6fv5sh2h.js:13716-14092 placement
 /**
  * 创建各类插件丢弃原因的计数器（全部为 0）。
  */
@@ -1080,11 +1081,11 @@ function emptyDropCounts() {
     guard_builtin_not_own_choice: 0,
   };
 }
-//@ chunk-z7wtv7tg.js:14059-14113 placement
+//@ chunk-6fv5sh2h.js:14092-14146 placement
 function ownFieldOrUndefined(object, key) {
   return Object.hasOwn(object, key) ? object[key] : undefined;
 }
-//@ chunk-z7wtv7tg.js:14113-19143 placement
+//@ chunk-6fv5sh2h.js:14146-19176 placement
 /**
  * 云端插件转发的主状态机：空闲/跳过/读取失败/内部错误
  */
@@ -1442,11 +1443,11 @@ function runCloudPluginsSync({
     skipped: () => (state === "skipped" ? skipReason : null),
   };
 }
-//@ chunk-z7wtv7tg.js:19143-19238 placement
+//@ chunk-6fv5sh2h.js:19176-19271 placement
 function forwardingStanding(cycle, generation) {
   return cycle.closed ? "disconnected" : cycle.handledGeneration === generation ? "current" : "superseded";
 }
-//@ chunk-z7wtv7tg.js:19238-19373 placement
+//@ chunk-6fv5sh2h.js:19271-19406 placement
 function reconcileWorkerGeneration(generation, cycle, previous) {
   if (previous === null || previous.generation === generation) return previous;
   return previous.generation === null && !cycle.workerKnownAtConnect
@@ -1456,7 +1457,7 @@ function reconcileWorkerGeneration(generation, cycle, previous) {
       }
     : null;
 }
-//@ chunk-z7wtv7tg.js:19373-19432 placement
+//@ chunk-6fv5sh2h.js:19406-19465 placement
 function runCallbackSafely(fn, noopErrorHandler) {
   try {
     return fn();
@@ -1465,9 +1466,9 @@ function runCallbackSafely(fn, noopErrorHandler) {
     return noopErrorHandler(error);
   }
 }
-//@ chunk-z7wtv7tg.js:19432-19447 placement
+//@ chunk-6fv5sh2h.js:19465-19480 placement
 function noopErrorHandler() {}
-//@ chunk-z7wtv7tg.js:19447-19581 placement
+//@ chunk-6fv5sh2h.js:19480-19614 placement
 var PLUGIN_FORWARDING_DISABLED_REASONS = [
   "not_managed_cloud_worker",
   "entrypoint",
@@ -1479,7 +1480,7 @@ var PLUGIN_FORWARDING_DISABLED_REASONS = [
   "malformed",
   "other",
 ];
-//@ chunk-z7wtv7tg.js:19581-19797 placement
+//@ chunk-6fv5sh2h.js:19614-19830 placement
 function parsePluginForwardingDisabled(error) {
   let message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
   if (message === PLUGIN_FORWARDING_DISABLED) return "other";
@@ -1488,7 +1489,7 @@ function parsePluginForwardingDisabled(error) {
   let trimmed = message.slice(prefix.length).trim();
   return PLUGIN_FORWARDING_DISABLED_REASONS.find((cause) => cause === trimmed) ?? "other";
 }
-//@ chunk-z7wtv7tg.js:19797-19901 placement
+//@ chunk-6fv5sh2h.js:19830-19934 placement
 function rejectedPost(reason) {
   let rejected = Promise.reject(reason);
   rejected.catch(noopErrorHandler);
@@ -1497,13 +1498,13 @@ function rejectedPost(reason) {
     response: rejected,
   };
 }
-//@ chunk-z7wtv7tg.js:19901-19952 placement
+//@ chunk-6fv5sh2h.js:19934-19985 placement
 function settlePostedResult(posted) {
   return posted.posted.catch(() => "failed");
 }
-//@ chunk-z7wtv7tg.js:19952-20031 placement
+//@ chunk-6fv5sh2h.js:19985-20064 placement
 var cloudPluginsAdmissionReplySchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-z7wtv7tg.js:19952", () => {
+deferInit("chunk-6fv5sh2h.js:19985", () => {
   cloudPluginsAdmissionReplySchema = DoctorLazy(() =>
     objectSchema({
       plugins: array(
@@ -1515,7 +1516,7 @@ deferInit("chunk-z7wtv7tg.js:19952", () => {
     }),
   );
 });
-//@ chunk-z7wtv7tg.js:20031-20297 placement
+//@ chunk-6fv5sh2h.js:20064-20330 placement
 function countLoadedPlugins(plan, response) {
   let parsed = cloudPluginsAdmissionReplySchema().safeParse(response);
   if (!parsed.success)
@@ -1534,7 +1535,7 @@ function countLoadedPlugins(plan, response) {
     workerErrors: parsed.data.error_count,
   };
 }
-//@ chunk-z7wtv7tg.js:20297-21601 placement
+//@ chunk-6fv5sh2h.js:20330-21634 placement
 /**
  * 收集插件转发判定所需的数据：各层 enabledPlugins 与市场声明、已注册市场、目录信任、localSettings 是否本人选择、内置与仅可信内置插件、本项目已安装插件、策略拒绝的市场与保留名冲突。
  */
@@ -1604,13 +1605,13 @@ async function collectPluginForwardingInputs(storage) {
     ]),
   };
 }
-//@ chunk-z7wtv7tg.js:21601-21619 placement
+//@ chunk-6fv5sh2h.js:21634-21652 placement
 /**
  * 云插件转发本地读取的超时 5000ms，以及提示里最多列出的原因条数 6。
  */
 var LOCAL_READ_TIMEOUT_MS = 5000;
 var MAX_LISTED_LONG_PLUGIN_REASONS = 6;
-//@ chunk-z7wtv7tg.js:21619-21987 placement
+//@ chunk-6fv5sh2h.js:21652-22020 placement
 function classifyCloudPluginsWorkerReply(notice) {
   if (notice === undefined) return;
   if (notice.refusedByWorker !== undefined) return "refused_by_worker";
@@ -1622,19 +1623,19 @@ function classifyCloudPluginsWorkerReply(notice) {
   if (notice.loaded < outcome) return notice.loaded === 0 ? "not_installed" : "some_not_installed";
   return;
 }
-//@ chunk-z7wtv7tg.js:21987-22037 placement
+//@ chunk-6fv5sh2h.js:22020-22070 placement
 function isSkippedOrFailed(state) {
   return state === "skipped" || state === "failed";
 }
-//@ chunk-z7wtv7tg.js:22037-22087 placement
+//@ chunk-6fv5sh2h.js:22070-22120 placement
 function isReadingOrPosted(state) {
   return state === "reading" || state === "posted";
 }
-//@ chunk-z7wtv7tg.js:22087-22158 placement
+//@ chunk-6fv5sh2h.js:22120-22191 placement
 function gaveUpReason(state) {
   return state === "read_failed" || state === "internal_error" ? state : undefined;
 }
-//@ chunk-z7wtv7tg.js:22158-22252 placement
+//@ chunk-6fv5sh2h.js:22191-22285 placement
 /**
  * 插件转发用的真实时钟（now / setTimeout 返回取消函数）。
  */
@@ -1645,7 +1646,7 @@ var REAL_PLUGIN_FORWARD_CLOCK = {
     return () => clearTimeout(timer);
   },
 };
-//@ chunk-z7wtv7tg.js:22252-26544 placement
+//@ chunk-6fv5sh2h.js:22285-26577 placement
 /**
  * 把本机插件选择转发到云会话：检查同意、超时、上报 tengu_cloud_plugins_admission
  */
@@ -2015,7 +2016,7 @@ function forwardCloudPlugins(options) {
     }),
   };
 }
-//@ chunk-z7wtv7tg.js:26544-27074 placement
+//@ chunk-6fv5sh2h.js:26577-27107 placement
 /**
  * 两条通知文案：Anthropic 恢复远程工具服务后插件重新发送；云会话重启后不再接收插件（保存的 Yes 被撤回）。
  */
@@ -2025,7 +2026,7 @@ var PLUGINS_RESTORED_NOTICE =
   "Remote tool serving was turned back on by Anthropic. Your plugins are sent to this cloud session again from this computer.";
 var PLUGINS_RESTARTED_WITHOUT_NOTICE =
   "This cloud session restarted without your plugins: they are no longer sent from this machine, because the saved Yes was withdrawn (a No in /cloud-plugins, or the answer was removed). Run /cloud-plugins to change that.";
-//@ chunk-z7wtv7tg.js:27074-27330 placement
+//@ chunk-6fv5sh2h.js:27107-27363 placement
 /**
  * 惰性判定同意存储是否可信（只判定一次）：提供 storeUntrusted、onUntrusted 与 withheld。
  */
@@ -2049,16 +2050,16 @@ function createUntrustedStoreJudge(reach) {
     withheld: () => withheldReason,
   };
 }
-//@ chunk-z7wtv7tg.js:27330-27810 placement
+//@ chunk-6fv5sh2h.js:27363-27843 placement
 function classifyPluginSourceRoot(reason) {
   let path = stripInvisibleChars(cloudPluginsConsentFilePath());
   return `The saved answer about your plugins is not used for this cloud session, because ${reason === "in_launch_dir" ? `the session itself can change ${path} from the folder or repository it runs in` : reason === "in_other_root" ? `the session itself can change ${path} through a folder it may write on this machine (an added directory or a settings write grant)` : `it could not be checked that the session cannot change ${path}`}; run /cloud-plugins to decide for this session.`;
 }
-//@ chunk-z7wtv7tg.js:27810-28049 placement
+//@ chunk-6fv5sh2h.js:27843-28082 placement
 function buildCloudPluginsPrompt(enabledCount, forwarded) {
   return `${enabledCount > 0 ? `Your ${enabledCount} enabled ${plural(enabledCount, "plugin")} can be used in` : `Your ${forwarded} plugin ${plural(forwarded, "choice")} can apply to`} your cloud sessions from this machine \u2014 run /cloud-plugins to decide (nothing is sent until you do).`;
 }
-//@ chunk-z7wtv7tg.js:28049-28159 placement
+//@ chunk-6fv5sh2h.js:28082-28192 placement
 function emptyPluginsStatus(stayed) {
   return {
     forwarded: 0,
@@ -2069,18 +2070,18 @@ function emptyPluginsStatus(stayed) {
     messageWentFirst: false,
   };
 }
-//@ chunk-z7wtv7tg.js:28159-28193 placement
+//@ chunk-6fv5sh2h.js:28192-28226 placement
 function forEachLine(outcome, emit) {
   notTakenNoticeLines(outcome).forEach(emit);
 }
-//@ chunk-z7wtv7tg.js:28193-28257 placement
+//@ chunk-6fv5sh2h.js:28226-28290 placement
 function notTakenNoticeLines(outcome) {
   return [
     ...formatCloudPluginsNotTakenNotice(outcome),
     ...formatPluginRejections(outcome.stayed, outcome.forwarded === 0),
   ];
 }
-//@ chunk-z7wtv7tg.js:28257-30261 placement
+//@ chunk-6fv5sh2h.js:28290-30294 placement
 /**
  * 云会话没有采用本机插件时的提示文本
  */
@@ -2135,7 +2136,7 @@ function formatCloudPluginsNotTakenNotice(outcome) {
     },
   ];
 }
-//@ chunk-z7wtv7tg.js:30261-30679 placement
+//@ chunk-6fv5sh2h.js:30294-30712 placement
 /**
  * 生成插件未转发的调试说明行：列出前若干个插件及原因，其余计数。
  */
@@ -2161,7 +2162,7 @@ function formatPluginRejections(stayed, isNoneForwarded) {
     },
   ];
 }
-//@ chunk-z7wtv7tg.js:30679-32703 placement
+//@ chunk-6fv5sh2h.js:30712-32736 placement
 /**
  * 插件被云会话拒绝的原因文本表
  */
@@ -2198,7 +2199,7 @@ var CONTAINER_REFUSAL_TEXTS = {
   malformed: "it did not accept the request",
   other: "it did not accept the request",
 };
-//@ chunk-fe6rs39h.js:125430-125645 placement
+//@ chunk-keyy05re.js:125288-125502 placement
 function cloudPluginsAdmissionReport(reason, admission, source, reattach, extraSource, message) {
   logEvent("tengu_cloud_plugins_admission", {
     admission: fromEnum(admission),
@@ -2219,7 +2220,7 @@ function cloudPluginsAdmissionReport(reason, admission, source, reattach, extraS
     }),
   };
 }
-//@ chunk-fe6rs39h.js:125645-126351 placement
+//@ chunk-keyy05re.js:125502-126208 placement
 function cloudPluginsOffMessage(reason) {
   switch (reason) {
     case "in_launch_dir":
@@ -2231,10 +2232,10 @@ function cloudPluginsOffMessage(reason) {
       return "Your plugins are not used in this cloud session: this machine could not check whether the session is able to change that saved choice from its folder, so the choice is not relied on here.";
   }
 }
-//@ chunk-fe6rs39h.js:126351-126483 placement
+//@ chunk-keyy05re.js:126208-126340 placement
 var CLOUD_PLUGINS_UNDECIDED_MESSAGE =
   "Your plugins are not used in cloud sessions from this machine yet: run /cloud-plugins in claude on this machine to decide.";
-//@ chunk-fe6rs39h.js:126483-126627 placement
+//@ chunk-keyy05re.js:126340-126484 placement
 function homeSettingsFeature(homeSeed, source) {
   return {
     feature: "settings",
@@ -2246,7 +2247,7 @@ function homeSettingsFeature(homeSeed, source) {
     },
   };
 }
-//@ chunk-fe6rs39h.js:126627-126724 placement
+//@ chunk-keyy05re.js:126484-126581 placement
 function homeSettingsOffFeature(reason, offReason) {
   return {
     feature: "settings",
@@ -2259,7 +2260,7 @@ function homeSettingsOffFeature(reason, offReason) {
     }),
   };
 }
-//@ chunk-fe6rs39h.js:126724-128051 placement
+//@ chunk-keyy05re.js:126581-127908 placement
 function createHomeSettingsFeature({ forwardHomeSettings, hostConsent }) {
   return async (session) => {
     if (session.homeSeed !== undefined)
@@ -2335,7 +2336,7 @@ function createHomeSettingsFeature({ forwardHomeSettings, hostConsent }) {
     );
   };
 }
-//@ chunk-fe6rs39h.js:128051-128283 placement
+//@ chunk-keyy05re.js:127908-128140 placement
 function isSettingsSent(outcome) {
   switch (outcome) {
     case "sent":
@@ -2353,7 +2354,7 @@ function isSettingsSent(outcome) {
       return false;
   }
 }
-//@ chunk-fe6rs39h.js:128283-128747 placement
+//@ chunk-keyy05re.js:128140-128604 placement
 function homeSettingsReport(outcome, source) {
   let base = {
     state: "forwarded",
@@ -2400,6 +2401,9 @@ function homeSettingsReport(outcome, source) {
   }
 }
 export {
+  emptyConsentState,
+  cloudPluginsConsentFilePath,
+  classifyCloudPluginsWorkerReply,
   forwardCloudPlugins,
   REAL_PLUGIN_FORWARD_CLOCK,
   cloudPluginsAdmissionReport,
@@ -2407,12 +2411,9 @@ export {
   createUntrustedStoreJudge,
   cloudPluginsOffMessage,
   CLOUD_PLUGINS_UNDECIDED_MESSAGE,
-  classifyCloudPluginsWorkerReply,
   LOCAL_READ_TIMEOUT_MS,
   resolveCloudPluginsConsent,
   createHomeSettingsFeature,
-  emptyConsentState,
-  cloudPluginsConsentFilePath,
   loadCloudPluginsDeclaration,
   collectPluginForwardingInputs,
   writeCloudPluginsConsent,

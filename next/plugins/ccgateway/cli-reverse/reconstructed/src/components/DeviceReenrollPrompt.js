@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：设备被移除后的重新注册提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-a401dt71.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-cdad6j6b.js (2)
  * attribution: placement 2
  */
 import { init_react_production, useEffect, useRef } from "../../vendor/react/cjs/react.production.js";
@@ -24,9 +24,9 @@ import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 
-//@ chunk-a401dt71.js:13676-13680 placement
+//@ chunk-cdad6j6b.js:14824-14828 placement
 init_react_production();
-//@ chunk-a401dt71.js:13680-15364 placement
+//@ chunk-cdad6j6b.js:14828-16512 placement (2.1.88 match: _temp, 0.135)
 /**
  * 设备重新注册提示（选择、取消与上报）。
  */

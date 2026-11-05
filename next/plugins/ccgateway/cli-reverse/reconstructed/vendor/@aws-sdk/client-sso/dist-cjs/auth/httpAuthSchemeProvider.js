@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/client-sso/dist-cjs/auth/httpAuthSchemeProvider.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/client-sso@3.936.0..3.940.0
- * pieces: chunk-kejz1rpb.js (5)
+ * pieces: chunk-tvcdn76c.js (5)
  * attribution: esm-layout 2, esm-fingerprint 3
  */
 import { __toESM } from "../../../../../runtime/bun-runtime.js";
@@ -22,7 +22,7 @@ import { require_client } from "../../../../@smithy/core/dist-cjs/submodules/cli
 import { require_core_2 } from "../../../core/dist-cjs/index.js";
 import { require_util_middleware } from "../../../../@smithy/util-middleware/dist-cjs/index.js";
 
-//@ chunk-kejz1rpb.js:654-791 esm-layout
+//@ chunk-tvcdn76c.js:654-791 esm-layout
 var import_middleware_host_header = __toESM(require_middleware_host_header());
 var import_middleware_logger = __toESM(require_middleware_logger());
 var import_middleware_recursion_detection = __toESM(require_middleware_recursion_detection());
@@ -34,7 +34,7 @@ var import_middleware_host_header_2 = __toESM(require_middleware_host_header_2()
 var import_middleware_endpoint = __toESM(require_middleware_endpoint());
 var import_retry_2 = __toESM(require_retry());
 var import_client_2 = __toESM(require_client());
-//@ chunk-kejz1rpb.js:791-1006 esm-layout
+//@ chunk-tvcdn76c.js:791-1006 esm-layout
 var import_core_4 = __toESM(require_core_2());
 var import_util_middleware = __toESM(require_util_middleware());
 var defaultSSOHttpAuthSchemeParametersProvider = async (config, context, input) => ({
@@ -45,7 +45,7 @@ var defaultSSOHttpAuthSchemeParametersProvider = async (config, context, input) 
       throw Error("expected `region` to be configured for `aws.auth#sigv4`");
     })(),
 });
-//@ chunk-kejz1rpb.js:1006-1181 esm-fingerprint
+//@ chunk-tvcdn76c.js:1006-1181 esm-fingerprint
 function createAwsAuthSigv4HttpAuthOption(authParameters) {
   return {
     schemeId: "aws.auth#sigv4",
@@ -61,13 +61,13 @@ function createAwsAuthSigv4HttpAuthOption(authParameters) {
     }),
   };
 }
-//@ chunk-kejz1rpb.js:1181-1232 esm-fingerprint
+//@ chunk-tvcdn76c.js:1181-1232 esm-fingerprint
 function createSmithyApiNoAuthHttpAuthOption(authParameters) {
   return {
     schemeId: "smithy.api#noAuth",
   };
 }
-//@ chunk-kejz1rpb.js:1232-1605 esm-fingerprint
+//@ chunk-tvcdn76c.js:1232-1605 esm-fingerprint
 var defaultSSOHttpAuthSchemeProvider = (authParameters) => {
   let options = [];
   switch (authParameters.operation) {

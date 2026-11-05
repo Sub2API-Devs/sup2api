@@ -3,22 +3,22 @@
  *
  * macOS 钥匙串存储相关（本段多为误配：钥匙串项缺失探测、bubblewrap 试跑、设备密钥的钥匙串后端）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/secureStorage/macOsKeychainStorage.ts
- * pieces: chunk-b29hdd5e.js (3), chunk-gwwacf44.js (2)
+ * pieces: chunk-5me9t3vk.js (3), chunk-rfqytzvf.js (2)
  * attribution: sole-consumer 1, affinity 1, fingerprint 1, placement 2
  */
 import { execFileNoThrow } from "../execFileNoThrow.js";
 import { getUsername, getMacOsKeychainStorageServiceName } from "./macOsKeychainHelpers.js";
 
-//@ chunk-gwwacf44.js:1689-1751 placement
+//@ chunk-rfqytzvf.js:1689-1751 placement
 /**
  * 在代次一致时记录钥匙串是否已持有该项。
  */
 function setKeychainHoldsItem(state, keychainHoldsItem, generation) {
   if (state.generation === generation) state.keychainHoldsItem = keychainHoldsItem;
 }
-//@ chunk-gwwacf44.js:1751-2673 placement
+//@ chunk-rfqytzvf.js:1751-2673 placement
 /**
  * 把 macOS 钥匙串命令的错误输出归类：重复项、钥匙串不可用、无默认钥匙串、找不到、不允许交互、用户取消、认证失败、已锁定或其他。
  */
@@ -52,11 +52,11 @@ function classifyKeychainError(stderr) {
   if (lower.includes("locked") || lower.includes("unlock")) return "keychain_locked";
   return "other";
 }
-//@ chunk-b29hdd5e.js:2006-2017 sole-consumer
+//@ chunk-5me9t3vk.js:2043-2054 sole-consumer
 var KEYCHAIN_PROBE_TIMEOUT_MS = 2000;
-//@ chunk-b29hdd5e.js:2017-2026 affinity
+//@ chunk-5me9t3vk.js:2054-2063 affinity
 var KEYCHAIN_ITEM_NOT_FOUND_EXIT = 44;
-//@ chunk-b29hdd5e.js:2026-2212 fingerprint (2.1.88 match: doReadAsync, 1)
+//@ chunk-5me9t3vk.js:2063-2249 fingerprint (2.1.88 match: doReadAsync, 1)
 /**
  * 用 security find-generic-password 探测钥匙串项是否不存在（退出码等于“未找到”）；出错返回 false。不是旧版的 doReadAsync。
  */
@@ -76,4 +76,4 @@ async function isKeychainItemMissing() {
     return false;
   }
 }
-export { classifyKeychainError, isKeychainItemMissing };
+export { isKeychainItemMissing, classifyKeychainError };

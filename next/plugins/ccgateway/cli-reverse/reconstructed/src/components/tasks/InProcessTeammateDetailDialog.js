@@ -3,10 +3,10 @@
  *
  * 进程内队友详情：状态、当前活动、消息。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/tasks/InProcessTeammateDetailDialog.tsx
- * pieces: chunk-18hwfzwa.js (3)
- * attribution: placement 1, layout 1, fingerprint 1
+ * pieces: chunk-czq1j3j2.js (3)
+ * attribution: placement 1, affinity 1, fingerprint 1
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -32,16 +32,16 @@ import { Dialog } from "../design-system/Dialog.js";
 import { FocusColumn } from "../design-system/FocusColumn.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:704222-704226 placement
+//@ chunk-czq1j3j2.js:702752-702756 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:704222", () => {
+deferInit("chunk-czq1j3j2.js:702752", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:704226-704283 layout
+//@ chunk-czq1j3j2.js:724966-725023 affinity
 function selectAgentDefinitionsActiveAgents_2(appState) {
   return appState.agentDefinitions.activeAgents;
 }
-//@ chunk-18hwfzwa.js:704283-708595 fingerprint (2.1.88 match: InProcessTeammateDetailDialog, 0.709)
+//@ chunk-czq1j3j2.js:725023-729338 fingerprint (2.1.88 match: InProcessTeammateDetailDialog, 0.708)
 /**
  * 进程内队友详情：状态（运行/完成/被杀）、当前活动、token、最近消息与提示。
  */

@@ -3,14 +3,15 @@
  *
  * 2.1.316 新增。同伴会话消息的审批。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (4)
  * attribution: placement 4
  */
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { useInputRefusalWindow, useRefusalTracker, settleKey } from "../CustomSelect/selectTypeahead.js";
+import { useRecentInputWithin, useRefusalTracker, settleKey } from "../CustomSelect/selectTypeahead.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -22,12 +23,16 @@ import { needsGutter } from "../../utils/permissions/approvalPayloadSerializatio
 import { ModelSelector } from "../agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "../CustomSelect/select.js";
 import { PermissionDialog_2 } from "./PermissionDialog.js";
-import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:1337116-1337131 placement
+//@ chunk-czq1j3j2.js:1359433-1359437 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:1359433", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:1359437-1359452 placement
 var DENY = "deny";
-//@ chunk-18hwfzwa.js:1337131-1338071 placement
+//@ chunk-czq1j3j2.js:1359452-1360392 placement
 function peerHoldExplanation(holdCause) {
   switch (holdCause) {
     case "mode-mismatch":
@@ -48,7 +53,7 @@ function peerHoldExplanation(holdCause) {
       return "This session's permission mode could not be determined.";
   }
 }
-//@ chunk-18hwfzwa.js:1338071-1340420 placement
+//@ chunk-czq1j3j2.js:1360392-1362741 placement
 function PeerMessageApproval(props) {
   let $ = useMemoCache(37);
   let { payload, answer } = props;
@@ -67,19 +72,19 @@ function PeerMessageApproval(props) {
     $[0] = options;
   } else options = $[0];
   let options_2 = options;
-  let inputRefusalWindow = useInputRefusalWindow();
+  let isRecentInput = useRecentInputWithin();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
   let remountKey = settleKey(epoch);
   let refuseInput;
-  if ($[1] !== inputRefusalWindow || $[2] !== noteRefused || $[3] !== refusedWithin) {
+  if ($[1] !== isRecentInput || $[2] !== noteRefused || $[3] !== refusedWithin) {
     refuseInput = function shouldRefuseInput() {
-      if (inputRefusalWindow() || refusedWithin()) {
+      if (isRecentInput() || refusedWithin()) {
         noteRefused();
         return true;
       }
       return false;
     };
-    $[1] = inputRefusalWindow;
+    $[1] = isRecentInput;
     $[2] = noteRefused;
     $[3] = refusedWithin;
     $[4] = refuseInput;
@@ -244,9 +249,4 @@ function PeerMessageApproval(props) {
   } else dialogElement = $[36];
   return dialogElement;
 }
-//@ chunk-18hwfzwa.js:1340420-1340424 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:1340420", () => {
-  init_react_production();
-});
 export { PeerMessageApproval };

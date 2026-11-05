@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：安全拒绝后的备用模型链解析、切换对话框与遥测
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hwmsct5x.js (59)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vn3g7zt8.js (59)
  * attribution: placement 59
  */
 import { isEnvDefinedFalsy, isEnvTruthy } from "../../utils/envUtils.js";
@@ -69,23 +69,23 @@ import { shortHash } from "../../utils/shortHash.js";
 import { logFeatureBad } from "../analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-hwmsct5x.js:225071-225095 placement
+//@ chunk-vn3g7zt8.js:225479-225503 placement
 function isClaudeOpus5Alias(model) {
   return false;
 }
-//@ chunk-hwmsct5x.js:225095-225141 placement
+//@ chunk-vn3g7zt8.js:225503-225549 placement
 function isHardRefusalCategory(category) {
   return category === "cyber" || category === "bio";
 }
-//@ chunk-hwmsct5x.js:225141-225210 placement
+//@ chunk-vn3g7zt8.js:225549-225618 placement
 function isExtraHardRefusalCategory(category) {
   return category === "frontier_llm" || category === "reasoning_extraction";
 }
-//@ chunk-hwmsct5x.js:225210-225257 placement
+//@ chunk-vn3g7zt8.js:225618-225665 placement
 function normalizeRefusalCategory(category) {
   return isHardRefusalCategory(category) || isExtraHardRefusalCategory(category) ? category : "other";
 }
-//@ chunk-hwmsct5x.js:225257-225562 placement
+//@ chunk-vn3g7zt8.js:225665-225970 placement
 /**
  * 安全拒绝回退的线路表：按类别（bio/cyber/frontier_llm）给出可换用的 Opus/Sonnet 模型，以及每条路线最多 3 个候选。
  */
@@ -111,7 +111,7 @@ var OPUS5_ALIAS_ROUTES = {
   bio: "claude-opus-4-8",
   cyber: "claude-opus-4-8",
 };
-//@ chunk-hwmsct5x.js:225562-225792 placement
+//@ chunk-vn3g7zt8.js:225970-226200 placement
 function refusalLineupFor(primaryModel) {
   if (isClaudeOpus5Alias(primaryModel)) return OPUS5_ALIAS_ROUTES;
   if (primaryModel === "claude-opus-5-5" || primaryModel === "claude-opus-5-5[1m]") return OPUS55_ROUTES;
@@ -120,19 +120,19 @@ function refusalLineupFor(primaryModel) {
     return SONNET55_ROUTES;
   return TWO_LANE_ROUTES;
 }
-//@ chunk-hwmsct5x.js:225792-225855 placement
+//@ chunk-vn3g7zt8.js:226200-226263 placement
 function refusalLineupModels(primaryModel) {
   return Object.values(refusalLineupFor(primaryModel)).flatMap((model) => limitRouteModels(model));
 }
-//@ chunk-hwmsct5x.js:225855-225865 placement
+//@ chunk-vn3g7zt8.js:226263-226273 placement
 var CATCH_ALL_REFUSAL_FALLBACK = false;
-//@ chunk-hwmsct5x.js:225865-225971 placement
+//@ chunk-vn3g7zt8.js:226273-226379 placement
 function isRefusalCatchAllEnabled() {
   let envClaudeCodeRefusalFallbackCatchAll = process.env.CLAUDE_CODE_REFUSAL_FALLBACK_CATCH_ALL;
   if (isEnvDefinedFalsy(envClaudeCodeRefusalFallbackCatchAll)) return false;
   return isEnvTruthy(envClaudeCodeRefusalFallbackCatchAll) || CATCH_ALL_REFUSAL_FALLBACK;
 }
-//@ chunk-hwmsct5x.js:225971-226390 placement
+//@ chunk-vn3g7zt8.js:226379-226798 placement
 function describeFallbackRoute(route, refusalFallbackCascadeHop) {
   if (refusalFallbackCascadeHop !== undefined)
     return {
@@ -161,11 +161,11 @@ function describeFallbackRoute(route, refusalFallbackCascadeHop) {
     routeMatched: null,
   };
 }
-//@ chunk-hwmsct5x.js:226390-226451 placement
+//@ chunk-vn3g7zt8.js:226798-226859 placement
 function limitRouteModels(models) {
   return (typeof models === "string" ? [models] : models).slice(0, REFUSAL_FALLBACK_ROUTES);
 }
-//@ chunk-hwmsct5x.js:226451-226628 placement
+//@ chunk-vn3g7zt8.js:226859-227036 placement
 function findFirstResolvableStage(chain, resolveStage) {
   return chain.reduce((acc, acc2, index) => {
     if (acc !== undefined) return acc;
@@ -179,7 +179,7 @@ function findFirstResolvableStage(chain, resolveStage) {
         };
   }, undefined);
 }
-//@ chunk-hwmsct5x.js:226628-227224 placement
+//@ chunk-vn3g7zt8.js:227036-227632 placement
 /**
  * 按拒绝类别（cyber/bio/frontier_llm…）查找备用模型链，返回匹配方式（category/catch_all/unmapped）与剩余链。
  */
@@ -220,7 +220,7 @@ function resolveRefusalFallbackRoute(options) {
     reason: "unmapped",
   };
 }
-//@ chunk-hwmsct5x.js:227506-227580 placement
+//@ chunk-vn3g7zt8.js:231019-231093 placement
 function getUserDialogTimeoutMs() {
   return (
     env.CLAUDE_CODE_USER_DIALOG_TIMEOUT_MS ??
@@ -228,11 +228,11 @@ function getUserDialogTimeoutMs() {
     DEFAULT_DIALOG_TIMEOUT_MS
   );
 }
-//@ chunk-hwmsct5x.js:227580-227647 placement
+//@ chunk-vn3g7zt8.js:231093-231160 placement
 function isRefusalFallbackEnabled() {
   return !env.CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK && !isNoModelFallbackEnabled();
 }
-//@ chunk-hwmsct5x.js:227647-227722 placement
+//@ chunk-vn3g7zt8.js:231160-231235 placement
 function isAutoSwitchOnFlagEnabled() {
   return (
     isRefusalFallbackEnabled() &&
@@ -241,18 +241,18 @@ function isAutoSwitchOnFlagEnabled() {
     !alwaysFalseRefusalFallback()
   );
 }
-//@ chunk-hwmsct5x.js:227722-227745 placement
+//@ chunk-vn3g7zt8.js:231235-231258 placement
 function alwaysFalseRefusalFallback() {
   return false;
 }
-//@ chunk-hwmsct5x.js:227745-227778 placement
+//@ chunk-vn3g7zt8.js:231258-231291 placement
 /**
  * 导出函数 `noRefusalFallbackOpusModel`：返回 isModelAdmittedByAvailableModels(enforcementRefusalFallbackOpusModel())。
  */
 function noRefusalFallbackOpusModel() {
   return isModelAdmittedByAvailableModels(enforcementRefusalFallbackOpusModel());
 }
-//@ chunk-hwmsct5x.js:227778-227830 placement
+//@ chunk-vn3g7zt8.js:231291-231343 placement
 /**
  * 导出函数 `everyLineupModelAdmitted`：参数 e，返回 Si(strippedCanonicalName(e)).every((n) => isModelAdmittedByAvailableModels(n))。
  */
@@ -261,7 +261,7 @@ function everyLineupModelAdmitted(primaryModel) {
     isModelAdmittedByAvailableModels(model),
   );
 }
-//@ chunk-hwmsct5x.js:227830-227891 placement
+//@ chunk-vn3g7zt8.js:231343-231404 placement
 /**
  * 导出函数 `isInRefusalLineup`：参数 e, n，返回 !isSameModel(e, n) && Si(strippedCanonicalName(e)).includes(strippedCanonicalName(n))。
  */
@@ -271,7 +271,7 @@ function isInRefusalLineup(model, model_2) {
     refusalLineupModels(strippedCanonicalName(model)).includes(strippedCanonicalName(model_2))
   );
 }
-//@ chunk-hwmsct5x.js:227891-228040 placement
+//@ chunk-vn3g7zt8.js:231404-231553 placement
 function classifyFallbackOrigin(model) {
   let canonicalName = getCanonicalName(model);
   if (
@@ -284,7 +284,7 @@ function classifyFallbackOrigin(model) {
   if (isInLoggiaRoster(model)) return "gb_listed";
   return "other";
 }
-//@ chunk-hwmsct5x.js:228040-228468 placement
+//@ chunk-vn3g7zt8.js:231553-231981 placement
 function resolveFamilyDefaultModel(canonical) {
   let family = getCatalogEntry(canonical)?.family;
   let defaults = {
@@ -305,33 +305,33 @@ function resolveFamilyDefaultModel(canonical) {
     .map((value) => value.replace(/\[1m\]$/, ""))
     .find((model) => getCanonicalName(model).replace(/\[1m\]$/, "") === canonical);
 }
-//@ chunk-hwmsct5x.js:228468-228561 placement
+//@ chunk-vn3g7zt8.js:231981-232074 placement
 function walkDownOpusLineup(model) {
   let walked = admittedFallbackModel(getRefusalFallbackChain(model), "walk_down_opus_lineup");
   if (walked === undefined) return;
   return preserve1mContextForRefusalFallback(model, walked);
 }
-//@ chunk-hwmsct5x.js:228561-228570 placement
+//@ chunk-vn3g7zt8.js:232074-232083 placement
 var DEFAULT_REFUSAL_ROUTES = 2;
-//@ chunk-hwmsct5x.js:228570-228595 placement
+//@ chunk-vn3g7zt8.js:232083-232108 placement
 /**
  * 导出函数 `refusalRouteLimit`：返回 _b。
  */
 function refusalRouteLimit() {
   return DEFAULT_REFUSAL_ROUTES;
 }
-//@ chunk-hwmsct5x.js:228595-228633 placement
+//@ chunk-vn3g7zt8.js:232108-232146 placement
 function hasRefusalFallbackTarget(model) {
   return getRefusalFallbackChain(model) !== undefined;
 }
-//@ chunk-hwmsct5x.js:228633-228677 placement
+//@ chunk-vn3g7zt8.js:232146-232190 placement
 var CLAUDE_OPUS_4_8 = "claude-opus-4-8";
 var CLAUDE_OPUS_5 = "claude-opus-5";
-//@ chunk-hwmsct5x.js:228677-228728 placement
+//@ chunk-vn3g7zt8.js:232190-232241 placement
 function setRemoteFallbackLatch(latch) {
   setAvailabilityFallbackChain(env.CLAUDE_CODE_REMOTE ? latch : undefined);
 }
-//@ chunk-hwmsct5x.js:228728-228795 placement
+//@ chunk-vn3g7zt8.js:232241-232308 placement
 function needsOpus48Fallback(model) {
   return (
     isEntitlementOverlayUnavailable() &&
@@ -339,11 +339,11 @@ function needsOpus48Fallback(model) {
     !getAvailabilityFallbackChain()?.some((model) => strip1mSuffix(model) === CLAUDE_OPUS_5)
   );
 }
-//@ chunk-hwmsct5x.js:228795-228828 placement
+//@ chunk-vn3g7zt8.js:232308-232341 placement
 function normalizeRefusalModel(model) {
   return needsOpus48Fallback(model) ? CLAUDE_OPUS_4_8 : model;
 }
-//@ chunk-hwmsct5x.js:228828-229164 placement
+//@ chunk-vn3g7zt8.js:232341-232677 placement
 /**
  * 计算当前模型被安全机制拒绝时可换用的备用模型链（受目录标志、设置与 provider 限制）。
  */
@@ -372,17 +372,17 @@ function getRefusalFallbackChain(model) {
   if (/\[1m\]/i.test(model)) return opus;
   return strip1mTag(opus);
 }
-//@ chunk-hwmsct5x.js:229164-229199 placement
+//@ chunk-vn3g7zt8.js:232677-232712 placement
 function isCatalogModelEnabled(model) {
   return !isCatalogSuppressed() && isInLoggiaRoster(model);
 }
-//@ chunk-hwmsct5x.js:229199-229255 placement
+//@ chunk-vn3g7zt8.js:232712-232768 placement
 function isCapabilityEnabled(model, capability, option) {
   return isCatalogSuppressed()
     ? modelSupportsCapability(capability, model, option) === true
     : isModelCapabilityEnabled(model, capability, option);
 }
-//@ chunk-hwmsct5x.js:229255-229412 placement
+//@ chunk-vn3g7zt8.js:232768-232925 placement
 function admittedFallbackModel(model, reason) {
   if (model === undefined) return;
   let admit = (model) =>
@@ -393,7 +393,7 @@ function admittedFallbackModel(model, reason) {
     (model) => isNonCustomOpusModel(getCanonicalName(model)) && !needsOpus48Fallback(model) && admit(model),
   );
 }
-//@ chunk-hwmsct5x.js:229412-229684 placement
+//@ chunk-vn3g7zt8.js:232925-233197 placement
 function pickFallbackModel(options) {
   let armedFallbackModel = options.armedFallbackModel;
   if (
@@ -414,7 +414,7 @@ function pickFallbackModel(options) {
     ? undefined
     : preserve1mContextForRefusalFallback(options.refusingModel, admitted);
 }
-//@ chunk-hwmsct5x.js:229684-229829 placement
+//@ chunk-vn3g7zt8.js:233197-233342 placement
 function canFallBackFrom(currentModel) {
   return (
     hasRefusalFallbackTarget(currentModel) &&
@@ -428,7 +428,7 @@ function canFallBackFrom(currentModel) {
     ) !== undefined
   );
 }
-//@ chunk-hwmsct5x.js:229829-230245 placement
+//@ chunk-vn3g7zt8.js:233342-233758 placement
 function logFallbackRouteDeclined({ model, armedFallbackModel, apiRefusalCategory, requestId, decline }) {
   logEvent("tengu_refusal_fallback_route_declined", {
     request_id: sanitizeMarkName(requestId),
@@ -447,7 +447,7 @@ function logFallbackRouteDeclined({ model, armedFallbackModel, apiRefusalCategor
     }),
   });
 }
-//@ chunk-hwmsct5x.js:230245-230541 placement
+//@ chunk-vn3g7zt8.js:233758-234054 placement
 function logSkippedChainStages({
   stages,
   chainLength,
@@ -472,7 +472,7 @@ function logSkippedChainStages({
     }),
   );
 }
-//@ chunk-hwmsct5x.js:230541-231092 placement
+//@ chunk-vn3g7zt8.js:234054-234605 placement
 function logFallbackRouteOutcome({ route, model, armedFallbackModel, apiRefusalCategory, requestId }) {
   let stage = {
     model,
@@ -517,14 +517,14 @@ function logFallbackRouteOutcome({ route, model, armedFallbackModel, apiRefusalC
       return;
   }
 }
-//@ chunk-hwmsct5x.js:231092-231152 placement
+//@ chunk-vn3g7zt8.js:234605-234665 placement
 var modelOrModelListSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hwmsct5x.js:231092", () => {
+deferInit("chunk-vn3g7zt8.js:234605", () => {
   modelOrModelListSchema = DoctorLazy(() =>
     record(stringSchema(), union([stringSchema().min(1), array(stringSchema().min(1)).min(1)])),
   );
 });
-//@ chunk-hwmsct5x.js:231152-231245 placement
+//@ chunk-vn3g7zt8.js:234665-234758 placement
 class ParsedModelCache {
   parsed = undefined;
   remember(raw, value) {
@@ -537,72 +537,72 @@ class ParsedModelCache {
     this.parsed = undefined;
   }
 }
-//@ chunk-hwmsct5x.js:231245-231259 placement
+//@ chunk-vn3g7zt8.js:234758-234772 placement
 var parsedModelCache; // deferred: uses ParsedModelCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-hwmsct5x.js:231245", () => {
+deferInit("chunk-vn3g7zt8.js:234758", () => {
   parsedModelCache = new ParsedModelCache();
 });
-//@ chunk-hwmsct5x.js:231259-231281 placement
+//@ chunk-vn3g7zt8.js:234772-234794 placement
 /**
  * 导出函数 `noopDialogHost`。
  */
 function noopDialogHost() {
   return;
 }
-//@ chunk-hwmsct5x.js:231281-231320 placement
+//@ chunk-vn3g7zt8.js:234794-234833 placement
 function isSameModel(a, b) {
   return strippedCanonicalName(a) === strippedCanonicalName(b);
 }
-//@ chunk-hwmsct5x.js:231320-231349 placement
+//@ chunk-vn3g7zt8.js:234833-234862 placement
 function canonicalModelKey(model) {
   return strippedCanonicalName(model);
 }
-//@ chunk-hwmsct5x.js:231349-231391 placement
+//@ chunk-vn3g7zt8.js:234862-234904 placement
 function triedModelIncludes(triedModels, tried) {
   return triedModels.includes(strippedCanonicalName(tried));
 }
-//@ chunk-hwmsct5x.js:231391-231556 placement
+//@ chunk-vn3g7zt8.js:234904-235069 placement
 /**
  * 安全拒绝时展示的帮助文章 URL：网络风险（cyber）专用、模型相关与通用三种。
  */
 var CYBER_SAFEGUARDS_ARTICLE_URL = "https://support.claude.com/en/articles/16049681";
 var SAFEGUARDS_MODEL_ARTICLE_URL = "https://support.claude.com/en/articles/15363606";
 var SAFEGUARDS_DEFAULT_ARTICLE_URL = "https://support.claude.com/en/articles/8106465";
-//@ chunk-hwmsct5x.js:231556-231616 placement
+//@ chunk-vn3g7zt8.js:235069-235129 placement
 function usesSecondSafeguardsArticle(model) {
   let canonicalName = getCanonicalName(model);
   return isFableModel(canonicalName) || isFableFamilyValue(model) || isPinnedFableModel(model) || false;
 }
-//@ chunk-hwmsct5x.js:231616-231681 placement
+//@ chunk-vn3g7zt8.js:235129-235194 placement
 function usesCyberSafeguardsArticle(model) {
   let canonical = strip1mTag(getCanonicalName(model));
   return canonical === "claude-opus-5" || isClaudeOpus5Alias(canonical);
 }
-//@ chunk-hwmsct5x.js:231681-231770 placement
+//@ chunk-vn3g7zt8.js:235194-235283 placement
 function getSafeguardsArticleUrl(model) {
   if (model == null) return SAFEGUARDS_DEFAULT_ARTICLE_URL;
   if (usesCyberSafeguardsArticle(model)) return CYBER_SAFEGUARDS_ARTICLE_URL;
   if (usesSecondSafeguardsArticle(model)) return SAFEGUARDS_MODEL_ARTICLE_URL;
   return SAFEGUARDS_DEFAULT_ARTICLE_URL;
 }
-//@ chunk-hwmsct5x.js:231770-231889 placement
+//@ chunk-vn3g7zt8.js:235283-235402 placement
 function buildSafeguardsLearnMore(model) {
   let safeguardsArticleUrl = getSafeguardsArticleUrl(model);
   return isFeedbackAllowed()
     ? `Send feedback with /feedback or learn more: ${safeguardsArticleUrl}`
     : `You can learn more: ${safeguardsArticleUrl}`;
 }
-//@ chunk-hwmsct5x.js:239172-239231 placement
+//@ chunk-vn3g7zt8.js:242725-242784 placement
 function canShowRefusalDialog() {
   return (
     isSdkDialogHostActive() && !(getSdkSupportedDialogKinds() ?? []).includes(REFUSAL_FALLBACK_DIALOG.kind)
   );
 }
-//@ chunk-hwmsct5x.js:239231-239296 placement
+//@ chunk-vn3g7zt8.js:242784-242849 placement
 function getSwitchModelsOnFlagSetting() {
   return Boolean(resolveSetting("switchModelsOnFlag", true).value);
 }
-//@ chunk-hwmsct5x.js:239296-239562 placement
+//@ chunk-vn3g7zt8.js:242849-243115 placement
 function getFallbackDialogSkipReason(reason) {
   if (reason.silentAttempt) return "silent_ab";
   if (!reason.isMainThread) return "subagent";
@@ -611,27 +611,28 @@ function getFallbackDialogSkipReason(reason) {
   if (reason.consumerLacksDialogCapability) return "no_consumer_capability";
   return;
 }
-//@ chunk-hwmsct5x.js:239562-239701 placement
+//@ chunk-vn3g7zt8.js:243115-243272 placement
 function shouldSilentlyDeclineFallback(options) {
   return (
-    options.isMainThread &&
-    (options.requestDialog === undefined || options.consumerLacksDialogCapability) &&
+    (options.isAgentThread ||
+      (options.isMainThread &&
+        (options.requestDialog === undefined || options.consumerLacksDialogCapability))) &&
     resolveSetting("switchModelsOnFlag", true).value === false
   );
 }
-//@ chunk-hwmsct5x.js:239701-239762 placement
+//@ chunk-vn3g7zt8.js:243272-243333 placement
 /**
  * 导出函数 `isSwitchModelsOnFlagDisabled`：返回 resolveSetting("switchModelsOnFlag", !0).value === !1。
  */
 function isSwitchModelsOnFlagDisabled() {
   return resolveSetting("switchModelsOnFlag", true).value === false;
 }
-//@ chunk-hwmsct5x.js:239762-239968 placement
+//@ chunk-vn3g7zt8.js:243333-243539 placement
 function getThirdPartyFallbackHint() {
   if (usesFirstPartyModelIds()) return;
   return "To enable automatic fallback on this provider, set `ANTHROPIC_DEFAULT_FABLE_MODEL` to your Fable model ID and `ANTHROPIC_DEFAULT_OPUS_MODEL` to your Opus 4.8 model ID.";
 }
-//@ chunk-hwmsct5x.js:239968-240048 placement
+//@ chunk-vn3g7zt8.js:243539-243619 placement
 /**
  * 导出函数 `refusalFallbackDialog`：参数 e, n，返回 e。
  */
@@ -639,7 +640,7 @@ function refusalFallbackDialog(dialog, sourceDialog) {
   if (dialog === undefined || !dialog.supportsKind(REFUSAL_FALLBACK_DIALOG.kind) || !sourceDialog()) return;
   return dialog;
 }
-//@ chunk-hwmsct5x.js:240048-240940 placement
+//@ chunk-vn3g7zt8.js:243619-244511 placement
 /**
  * 弹出（或经 Remote Control 转发）"消息被安全机制标记，是否换用备用模型/编辑重试"的对话框并等待选择，处理超时与排队取消。
  */
@@ -692,10 +693,6 @@ async function requestRefusalFallbackChoice(options) {
   return dialog.result;
 }
 export {
-  classifyFallbackOrigin,
-  getUserDialogTimeoutMs,
-  isRefusalFallbackEnabled,
-  buildSafeguardsLearnMore,
   resolveRefusalFallbackRoute,
   isSameModel,
   pickFallbackModel,
@@ -704,20 +701,15 @@ export {
   logFallbackRouteOutcome,
   describeFallbackRoute,
   hasRefusalFallbackTarget,
+  isRefusalFallbackEnabled,
   isSwitchModelsOnFlagDisabled,
-  setRemoteFallbackLatch,
-  findFirstResolvableStage,
-  logSkippedChainStages,
-  canShowRefusalDialog,
-  refusalFallbackDialog,
-  refusalRouteLimit,
-  getFallbackDialogSkipReason,
+  classifyFallbackOrigin,
+  getUserDialogTimeoutMs,
   normalizeRefusalCategory,
-  requestRefusalFallbackChoice,
-  getThirdPartyFallbackHint,
-  getSwitchModelsOnFlagSetting,
   getSafeguardsArticleUrl,
+  buildSafeguardsLearnMore,
   isHardRefusalCategory,
+  getFallbackDialogSkipReason,
   isInRefusalLineup,
   walkDownOpusLineup,
   noRefusalFallbackOpusModel,
@@ -725,6 +717,15 @@ export {
   shouldSilentlyDeclineFallback,
   canFallBackFrom,
   isAutoSwitchOnFlagEnabled,
+  setRemoteFallbackLatch,
+  getSwitchModelsOnFlagSetting,
+  findFirstResolvableStage,
+  logSkippedChainStages,
+  canShowRefusalDialog,
+  refusalFallbackDialog,
+  refusalRouteLimit,
+  requestRefusalFallbackChoice,
+  getThirdPartyFallbackHint,
   SAFEGUARDS_MODEL_ARTICLE_URL,
   SAFEGUARDS_DEFAULT_ARTICLE_URL,
   CYBER_SAFEGUARDS_ARTICLE_URL,

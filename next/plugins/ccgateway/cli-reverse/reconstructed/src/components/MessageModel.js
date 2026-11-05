@@ -3,9 +3,9 @@
  *
  * 在 verbose/transcript 下显示助手消息所用模型名。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/MessageModel.tsx
- * pieces: chunk-ag5x7vhf.js (1)
+ * pieces: chunk-hnxhr3bs.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -14,7 +14,7 @@ import { bunStringWidth } from "../ink/stringWidth.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../ink/components/Text.js";
 
-//@ chunk-ag5x7vhf.js:139092-139447 fingerprint (2.1.88 match: MessageModel, 1)
+//@ chunk-hnxhr3bs.js:143282-143637 fingerprint (2.1.88 match: MessageModel, 1)
 function MessageModel(props) {
   let $ = useMemoCache(5);
   let { message, isTranscriptMode } = props;

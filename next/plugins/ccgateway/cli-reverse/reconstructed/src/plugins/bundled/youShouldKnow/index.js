@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。内置插件 youShouldKnow 注册。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bss4k1z9.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-775n2x67.js (10)
  * attribution: placement 10
  */
 import { __commonJS, __export } from "../../../../runtime/bun-runtime.js";
@@ -194,7 +194,14 @@ import {
   urlOf,
   withoutInvisible,
 } from "./prompts.js";
-import { RECENT_NOTES_LIMIT, readRecentNotes, pushRecentNote, getUsageField, register } from "./hooks.js";
+import {
+  RECENT_NOTES_LIMIT,
+  readRecentNotes,
+  pushRecentNote,
+  getUsageField,
+  isProposalFrame,
+  register,
+} from "./hooks.js";
 import {
   CLOCK_LENGTH,
   MS_PER_SECOND,
@@ -241,14 +248,13 @@ import {
   YOU_SHOULD_KNOW_PLUGIN_TIP,
 } from "../../../services/tips/youShouldKnowTip.js";
 import { PressEnterToContinue } from "../../../components/PressEnterToContinue.js";
-import { semanticNumber } from "../../../utils/semanticNumber.js";
-import { getUserType_2 } from "../../../utils/sessionStorage.js";
+import { offerOffAvailable } from "../../../utils/sessionStorage.js";
 import { complianceTaintsSettled } from "../../../services/policyLimits/policyVerdicts.js";
 import { hasComplianceTaint } from "../../../services/policyLimits/complianceTaints.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics/growthbook.js";
 import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../builtinPlugins.js";
 
-//@ chunk-bss4k1z9.js:3576-4211 placement
+//@ chunk-775n2x67.js:3884-4519 placement
 /**
  * youShouldKnow 插件扫描清单。
  */
@@ -299,9 +305,9 @@ var YOU_SHOULD_KNOW_MANIFEST = __commonJS(function (pluginModule, pluginExports)
     files: {},
   };
 });
-//@ chunk-bss4k1z9.js:4211-4221 placement
+//@ chunk-775n2x67.js:4519-4529 placement
 var indexNamespace = {};
-//@ chunk-bss4k1z9.js:4221-8684 placement
+//@ chunk-775n2x67.js:4529-8992 placement
 __export(indexNamespace, {
   ABOUT_CLOSED: () => ABOUT_CLOSED,
   ABOUT_THIS: () => ABOUT_THIS,
@@ -445,14 +451,14 @@ __export(indexNamespace, {
   headedRows: () => headedRows,
   isAvailable: () => isAvailable,
   isBandWatched: () => isBandWatched,
-  isCheck: () => semanticNumber,
+  isCheck: () => isProposalFrame,
   isDebugOn: () => isDebugOn,
   isDeclined: () => isDeclined,
   isOffCommand: () => isOffCommand,
   isOfferDue: () => isOfferDue,
   isOnByDefault: () => isOnByDefault,
   isOpenView: () => isOpenView,
-  isOptIn: () => getUserType_2,
+  isOptIn: () => offerOffAvailable,
   isPersonsPrompt: () => isPersonsPrompt,
   isRow: () => isRow,
   isSameShowing: () => isSameShowing,
@@ -536,9 +542,9 @@ __export(indexNamespace, {
   withoutTrailingPeriod: () => withoutTrailingPeriod,
   wrapRows: () => wrapRows,
 });
-//@ chunk-bss4k1z9.js:8684-8694 placement
+//@ chunk-775n2x67.js:8992-9002 placement
 var indexNamespace2 = {};
-//@ chunk-bss4k1z9.js:8694-13009 placement
+//@ chunk-775n2x67.js:9002-13317 placement
 __export(indexNamespace2, {
   ABOUT_CLOSED: () => ABOUT_CLOSED,
   ABOUT_THIS: () => ABOUT_THIS,
@@ -677,13 +683,13 @@ __export(indexNamespace2, {
   hasOwnComposer: () => hasOwnComposer,
   headedRows: () => headedRows,
   isBandWatched: () => isBandWatched,
-  isCheck: () => semanticNumber,
+  isCheck: () => isProposalFrame,
   isDebugOn: () => isDebugOn,
   isDeclined: () => isDeclined,
   isOffCommand: () => isOffCommand,
   isOfferDue: () => isOfferDue,
   isOpenView: () => isOpenView,
-  isOptIn: () => getUserType_2,
+  isOptIn: () => offerOffAvailable,
   isPersonsPrompt: () => isPersonsPrompt,
   isRow: () => isRow,
   isSameShowing: () => isSameShowing,
@@ -766,25 +772,25 @@ __export(indexNamespace2, {
   withoutTrailingPeriod: () => withoutTrailingPeriod,
   wrapRows: () => wrapRows,
 });
-//@ chunk-bss4k1z9.js:13009-13042 placement
+//@ chunk-775n2x67.js:13317-13350 placement
 var availabilityFlag = () => "tengu_jolly_dewdrop";
-//@ chunk-bss4k1z9.js:84337-84347 placement
+//@ chunk-775n2x67.js:84664-84674 placement
 var isOnByDefault = false;
-//@ chunk-bss4k1z9.js:84347-84420 placement
+//@ chunk-775n2x67.js:84674-84747 placement
 var isAvailable = () =>
   (complianceTaintsSettled() || false) &&
   !hasComplianceTaint("hipaa") &&
   !hasComplianceTaint("zdr") &&
   !hasComplianceTaint("ldr") &&
   getFeatureValue_CACHED_MAY_BE_STALE(availabilityFlag(), isOnByDefault);
-//@ chunk-bss4k1z9.js:84420-84642 placement
+//@ chunk-775n2x67.js:84747-84969 placement
 var PLUGIN_LISTING = {
   name: CC_PLUGIN_YOU_SHOULD_KNOW,
   description:
     "You should know: a side agent watches your back while Claude works on longer tasks. It looks for things worth knowing that you might miss, and surfaces them above the prompt.",
   isAvailable,
 };
-//@ chunk-bss4k1z9.js:84642-84727 placement
+//@ chunk-775n2x67.js:84969-85054 placement
 var registerPlugin = () =>
   registerBuiltinPlugin({
     ...PLUGIN_LISTING,

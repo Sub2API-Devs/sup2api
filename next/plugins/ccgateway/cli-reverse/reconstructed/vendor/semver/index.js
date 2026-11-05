@@ -1,8 +1,8 @@
 /**
  * semver/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: semver@7.7.3..7.7.4
- * pieces: chunk-bwbq4xvm.js (1)
+ * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
@@ -50,7 +50,7 @@ import { require_intersects } from "./ranges/intersects.js";
 import { require_simplify } from "./ranges/simplify.js";
 import { require_subset } from "./ranges/subset.js";
 
-//@ chunk-bwbq4xvm.js:26792-27754 cjs-fingerprint
+//@ chunk-7kayq7nc.js:26877-27840 cjs-fingerprint
 var require_semver_3 = __commonJS(function (cjsExports, cjsModule) {
   var internalRe = require_re();
   var constants = require_constants();

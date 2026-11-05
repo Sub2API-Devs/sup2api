@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。快速路径命令（daemon、self-hosted runner、Chrome MCP）只加载必要的设置与托管策略助手，不走完整初始化。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-25mxxtgv.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-htxj5m5d.js (6)
  * attribution: placement 6
  */
 import { HostScoped } from "../utils/hostScoped.js";
@@ -30,7 +30,7 @@ import {
 } from "../utils/settings/settings.js";
 import { hasRemoteHelperState } from "../utils/settings/policyHelper/helperRemote.js";
 
-//@ chunk-25mxxtgv.js:619-822 placement
+//@ chunk-htxj5m5d.js:619-822 placement
 /**
  * 快速路径设置加载状态
  */
@@ -49,13 +49,13 @@ class FastPathSettingsState {
     return this.helperResult;
   }
 }
-//@ chunk-25mxxtgv.js:822-845 placement
+//@ chunk-htxj5m5d.js:822-845 placement
 var FAST_PATH_SETTINGS_SLOT = new HostScoped(() => new FastPathSettingsState());
-//@ chunk-25mxxtgv.js:845-880 placement
+//@ chunk-htxj5m5d.js:845-880 placement
 function fastPathSettings() {
   return FAST_PATH_SETTINGS_SLOT.of(getRootSession().host);
 }
-//@ chunk-25mxxtgv.js:880-1787 placement
+//@ chunk-htxj5m5d.js:880-1787 placement
 /**
  * 快速路径命令（daemon、self-hosted runner、Chrome MCP）只加载必要的设置与托管策略助手，不走完整初始化。
  */
@@ -108,7 +108,7 @@ async function ensureFastPathSettingsLoaded(options) {
     process.exit(1);
   }
 }
-//@ chunk-25mxxtgv.js:1787-1953 placement
+//@ chunk-htxj5m5d.js:1787-1953 placement
 async function runFastPathPolicyHelper() {
   let state = fastPathSettings();
   if (state.helperResult) return state.helperResult.error;
@@ -121,9 +121,9 @@ async function runFastPathPolicyHelper() {
   if (hasRemoteHelperState()) applySafeConfigEnvironmentVariables();
   return run.error;
 }
-//@ chunk-25mxxtgv.js:1953-2001 placement
+//@ chunk-htxj5m5d.js:1953-2001 placement
 async function loadFastPathPolicy(options) {
   await ensureFastPathSettingsLoaded(options);
   return runFastPathPolicyHelper();
 }
-export { ensureFastPathSettingsLoaded, runFastPathPolicyHelper, loadFastPathPolicy };
+export { ensureFastPathSettingsLoaded, loadFastPathPolicy, runFastPathPolicyHelper };

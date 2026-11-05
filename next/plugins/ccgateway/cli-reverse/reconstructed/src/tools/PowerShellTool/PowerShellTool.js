@@ -3,10 +3,10 @@
  *
  * PowerShell 工具定义与执行：schema、validateInput（不可见字符、沙箱、Start-Sleep）、checkPermissions（含沙箱外运行确认）、runPowerShellCommand
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/PowerShellTool.tsx
- * pieces: chunk-5ghnps9r.js (3), chunk-v0yfsee9.js (12)
- * attribution: placement 4, fingerprint 6, file-local 1, layout 4
+ * pieces: chunk-6zpsr8vx.js (12), chunk-azq8n2fy.js (3)
+ * attribution: fingerprint 6, placement 4, file-local 1, layout 4
  */
 import { dirname, basename } from "path";
 import { resolveToCanonical, hasSyncSecurityConcerns, isReadOnlyCommand } from "./readOnlyValidation.js";
@@ -99,7 +99,7 @@ import {
   stdErrAppendShellResetMessage,
   resizeShellImageOutput,
 } from "../BashTool/utils.js";
-import { FILE_READ_TOOL_NAME } from "../FileReadTool/constants.js";
+import { READ } from "../FileReadTool/constants.js";
 import {
   isInputHoldOn,
   shouldHoldForPlugin,
@@ -187,10 +187,12 @@ import { TaskOutput } from "../../utils/task/TaskOutput.js";
 import { emitTaskNotification } from "../../utils/task/taskNotifications.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { isShellToolName } from "../shared/textSearchTools.js";
-import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
-import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFlag.js";
+import {
+  parseRuleString,
+  permissionRuleValueFromString,
+} from "../../utils/permissions/permissionRuleParser.js";
 
-//@ chunk-v0yfsee9.js:89450-89734 fingerprint (2.1.88 match: PS_READ_COMMANDS, 0.818)
+//@ chunk-6zpsr8vx.js:90684-90968 fingerprint (2.1.88 match: PS_READ_COMMANDS, 0.818)
 /**
  * PowerShell 折叠显示用的命令集合：搜索（select-string/get-childitem/findstr/where.exe）、读（get-content/get-item/test-path…）、中性（write-output/write-host）。
  */
@@ -211,7 +213,7 @@ var PS_READ_COMMANDS = new Set([
   "format-hex",
 ]);
 var PS_SEMANTIC_NEUTRAL_COMMANDS = new Set(["write-output", "write-host"]);
-//@ chunk-v0yfsee9.js:89734-90162 placement (2.1.88 match: classifyMcpToolForCollapse, 1)
+//@ chunk-6zpsr8vx.js:90968-91396 placement (2.1.88 match: classifyMcpToolForCollapse, 1)
 /**
  * PowerShell 命令是否只是搜索/读取（用于结果折叠）：按 ; 和 | 拆分，跳过 write-output 等，所有段都必须是已知搜索或读取命令。
  */
@@ -257,14 +259,14 @@ function isSearchOrReadPowerShellCommand(command) {
     isRead,
   };
 }
-//@ chunk-v0yfsee9.js:90162-90209 fingerprint (2.1.88 match: DISALLOWED_AUTO_BACKGROUND_COMMANDS, 1)
+//@ chunk-6zpsr8vx.js:91396-91443 fingerprint (2.1.88 match: DISALLOWED_AUTO_BACKGROUND_COMMANDS, 1)
 /**
  * 超时后自动转后台的等待时间（1000 毫秒）。
  */
 var PROGRESS_THRESHOLD_MS = 2000;
 var AUTO_BACKGROUND_GRACE_MS = 1000;
 var DISALLOWED_AUTO_BACKGROUND_COMMANDS = ["start-sleep", "sleep"];
-//@ chunk-v0yfsee9.js:90209-90310 file-local
+//@ chunk-6zpsr8vx.js:91443-91544 file-local
 /**
  * 首个命令（按别名解析为规范 cmdlet）不是 start-sleep/sleep 时允许超时自动转后台。
  */
@@ -274,7 +276,7 @@ async function isAutobackgroundingAllowed(command) {
   let canonical = resolveToCanonical(firstWord);
   return !DISALLOWED_AUTO_BACKGROUND_COMMANDS.includes(canonical);
 }
-//@ chunk-v0yfsee9.js:90310-90646 fingerprint (2.1.88 match: detectBlockedSleepPattern, 1)
+//@ chunk-6zpsr8vx.js:91544-91880 fingerprint (2.1.88 match: detectBlockedSleepPattern, 1)
 /**
  * 检测首段为 Start-Sleep/sleep N（N≥阈值）的阻塞写法；validateInput 据此拒绝（仅在 Monitor 可用等条件下）。
  */
@@ -294,7 +296,7 @@ function detectBlockedSleepPattern(command) {
     .replace(/^[\s;|&]+/, "");
   return rest ? `Start-Sleep ${secs} followed by: ${rest}` : `standalone Start-Sleep ${secs}`;
 }
-//@ chunk-v0yfsee9.js:90646-90773 layout
+//@ chunk-6zpsr8vx.js:91880-92007 layout
 /**
  * PowerShell 版 shouldUseSandbox（shellType=powershell）。
  */
@@ -308,11 +310,11 @@ function shouldUsePowerShellSandbox(input, sandboxContext) {
     sandboxContext,
   );
 }
-//@ chunk-v0yfsee9.js:90773-90810 layout
+//@ chunk-6zpsr8vx.js:92007-92044 layout
 function isWindowsPlatform() {
   return getPlatform() === "windows";
 }
-//@ chunk-v0yfsee9.js:90810-93611 fingerprint (2.1.88 match: outputSchema, 0.54)
+//@ chunk-6zpsr8vx.js:92044-94845 fingerprint (2.1.88 match: outputSchema, 0.539)
 /**
  * PowerShell 输入/输出 schema：command（拒绝隐藏控制字符）、timeout、description、run_in_background（后台禁用时去掉）、dangerouslyDisableSandbox，Windows 上可带远程机器字段；输出含 stdout/stderr/interrupted/持久化/后台任务/gitOperation。远程执行配置 no。
  */
@@ -395,7 +397,7 @@ var outputSchema = DoctorLazy(() =>
       ),
   }),
 );
-//@ chunk-v0yfsee9.js:93611-93675 layout
+//@ chunk-6zpsr8vx.js:94845-94909 layout
 /**
  * PowerShell 只读判定：无同步安全隐患（hasSyncSecurityConcerns）且 isReadOnlyCommand。
  */
@@ -403,7 +405,7 @@ function isReadOnlyPowerShellInput(input) {
   if (hasSyncSecurityConcerns(input.command)) return false;
   return isReadOnlyCommand(input.command);
 }
-//@ chunk-v0yfsee9.js:93675-94856 layout
+//@ chunk-6zpsr8vx.js:94909-96090 layout
 function makeShellCallContext(baseContext, callOptions) {
   return {
     get session() {
@@ -489,7 +491,7 @@ function makeShellCallContext(baseContext, callOptions) {
     },
   };
 }
-//@ chunk-v0yfsee9.js:94856-105226 fingerprint (2.1.88 match: PowerShellTool, 0.461)
+//@ chunk-6zpsr8vx.js:96090-106476 fingerprint (2.1.88 match: PowerShellTool, 0.456)
 /**
  * PowerShell 工具定义（name=PowerShell，searchHint "execute Windows PowerShell commands"）。只读即并发安全；validateInput 拒绝 BOM/U+180E 不可见字符、沙箱策略拒绝、长 Start-Sleep；checkPermissions 走 powershellPermissions，dangerouslyDisableSandbox 时额外要求"在沙箱外运行"确认；call 与 Bash 类似（进度、后台化、持久化、git 操作识别、cwd 重置），版本记入遥测。
  */
@@ -646,7 +648,7 @@ var PowerShellTool = buildTool({
           subagentCapApplied,
           noOutputSeenAtTimeout: timedOutAfterMs !== undefined && !processedStdout,
           reapedAtFinalResponse: backgroundEndsWithFinalResponse,
-          readToolName: FILE_READ_TOOL_NAME,
+          readToolName: READ,
         })
       : "";
     if (backgroundTaskId && isInputHoldOn())
@@ -837,7 +839,7 @@ var PowerShellTool = buildTool({
             session: shellCallContext.session,
             preventCwdChanges,
             isMainThread,
-            subagentCapMs: getSubagentForegroundCapMs(shellCallContext),
+            subagentCapMs: getSubagentForegroundCapMs(shellCallContext, callOptions.parentMessage),
             toolUseId: shellCallContext.toolUseId,
             toolState: shellCallContext.toolState,
             agentId: shellCallContext.agentId,
@@ -1146,7 +1148,7 @@ ${ENDED_INSTEAD_OF_BACKGROUND_MESSAGE}`
     };
   },
 });
-//@ chunk-v0yfsee9.js:105226-110221 fingerprint (2.1.88 match: runPowerShellCommand, 0.565)
+//@ chunk-6zpsr8vx.js:106476-111489 fingerprint (2.1.88 match: runPowerShellCommand, 0.559)
 /**
  * 执行 PowerShell 命令的异步生成器：计算超时、检测 PowerShell 是否可用（不可用时返回 "PowerShell is not available on this system."）、exec(shell=powershell)、超时/回合中断/用户转后台、2 秒后产出进度。
  */
@@ -1504,6 +1506,7 @@ async function* runPowerShellCommand({
               agentId,
               caller,
               autoBackgroundArmed: canAutoBackground,
+              timeout: timeoutWhenPositive(timeout, effectiveTimeoutMs),
             },
             taskRegistry,
             toolUseId,
@@ -1548,7 +1551,7 @@ async function* runPowerShellCommand({
     }
   }
 }
-//@ chunk-5ghnps9r.js:562-634 placement
+//@ chunk-azq8n2fy.js:595-667 placement
 /**
  * 读取 tengu_violin_table 开关，读取异常时返回 false。
  */
@@ -1559,24 +1562,24 @@ function isViolinTableFlagOn() {
     return false;
   }
 }
-//@ chunk-5ghnps9r.js:634-707 placement
+//@ chunk-azq8n2fy.js:667-740 placement
 /**
  * 结果为 needs_approval 时返回其建议规则列表。
  */
 function needsApprovalSuggestions(envelope) {
   return envelope.outcome === "needs_approval" ? (envelope.suggestions ?? []) : [];
 }
-//@ chunk-5ghnps9r.js:707-935 placement
+//@ chunk-azq8n2fy.js:740-968 placement
 /**
  * 若规则列表只有一条该工具的前缀/通配规则（非精确匹配），返回其工具名与规则内容。
  */
 function singlePrefixRuleFor(rules, firstToolName) {
   let [ruleString, ...rest] = rules;
   if (ruleString === undefined || rest.length > 0 || !isShellToolName(firstToolName)) return;
-  let { toolName, ruleContent } = permissionRuleValueFromString(ruleString);
+  let { toolName, ruleContent } = parseRuleString(ruleString);
   return toolName === firstToolName &&
     ruleContent !== undefined &&
-    formatPermissionRule({
+    permissionRuleValueFromString({
       toolName: firstToolName,
       ruleContent,
     }) === ruleString &&
@@ -1587,4 +1590,4 @@ function singlePrefixRuleFor(rules, firstToolName) {
       }
     : undefined;
 }
-export { isViolinTableFlagOn, singlePrefixRuleFor, needsApprovalSuggestions, PowerShellTool };
+export { singlePrefixRuleFor, isViolinTableFlagOn, needsApprovalSuggestions, PowerShellTool };

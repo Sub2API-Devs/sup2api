@@ -3,16 +3,16 @@
  *
  * Read 工具提示词与去重/截断文案常量
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileReadTool/prompt.ts
- * pieces: chunk-g54kbxqw.js (6)
- * attribution: fingerprint 3, layout 3
+ * pieces: chunk-8nzbdydx.js (4)
+ * attribution: fingerprint 3, layout 1
  */
 import { leanPromptOf, leanRewriteOf } from "../../utils/model/promptBundles.js";
 import { NO_REREAD_AFTER_EDIT_NOTE } from "../../constants/promptSections.js";
 import { isNotClaude3Model } from "../../utils/model/claude3Models.js";
 
-//@ chunk-g54kbxqw.js:132415-132983 fingerprint (2.1.88 match: FILE_UNCHANGED_STUB, 0.333)
+//@ chunk-8nzbdydx.js:40874-41441 fingerprint (2.1.88 match: FILE_UNCHANGED_STUB, 0.333)
 /**
  * Read 相关提示片段：不要读回刚编辑的文件；编辑成功尾注；三种"文件未变"去重文案。
  */
@@ -24,21 +24,7 @@ var FILE_UNCHANGED_STUB =
 var FILE_UNCHANGED_WASTED_CALL_STUB =
   "Wasted call \u2014 file unchanged since your last Read. Refer to that earlier tool_result instead.";
 var ALREADY_IN_CONTEXT_PREFIX = "<system-reminder>This file is already in your context";
-//@ chunk-g54kbxqw.js:132983-133008 layout
-/**
- * 返回去重命中时的 tool_result 文案（"Wasted call — file unchanged since your last Read..."）。
- */
-function getFileUnchangedMessage() {
-  return FILE_UNCHANGED_WASTED_CALL_STUB;
-}
-//@ chunk-g54kbxqw.js:133008-133156 layout
-/**
- * 启动预置文件命中去重时的 system-reminder（"已在上下文中，见 Contents of ..."）。
- */
-function getSeededFileUnchangedMessage(filePath) {
-  return `${ALREADY_IN_CONTEXT_PREFIX} (see "Contents of ${filePath}" above) and has not changed on disk. Use that content instead of re-reading.</system-reminder>`;
-}
-//@ chunk-g54kbxqw.js:133156-133232 layout
+//@ chunk-8nzbdydx.js:41441-41517 layout
 /**
  * tool_result 文本是否以三种去重文案之一开头。
  */
@@ -49,7 +35,7 @@ function isFileUnchangedStub(content) {
     content.startsWith(ALREADY_IN_CONTEXT_PREFIX)
   );
 }
-//@ chunk-g54kbxqw.js:133232-133682 fingerprint (2.1.88 match: DESCRIPTION, 0.333)
+//@ chunk-8nzbdydx.js:41517-41966 fingerprint (2.1.88 match: DESCRIPTION, 0.333)
 /**
  * Read 提示常量：截断说明前缀、默认读取 2000 行、工具描述、cat -n 格式说明（两种）、"只读需要的部分"说明。
  */
@@ -60,7 +46,7 @@ var LINE_FORMAT_INSTRUCTION = "- Results are returned using cat -n format, with 
 var TAB_AWARE_LINE_FORMAT_INSTRUCTION = `${LINE_FORMAT_INSTRUCTION}. Each line is the line number, a single separator (a tab or \`:\`), then the verbatim file content (including any leading whitespace).`;
 var OFFSET_INSTRUCTION =
   "- When you already know which part of the file you need, only read that part. This can be important for larger files.";
-//@ chunk-g54kbxqw.js:133682-135755 fingerprint (2.1.88 match: renderPromptTemplate, 0.469)
+//@ chunk-8nzbdydx.js:41966-44034 fingerprint (2.1.88 match: renderPromptTemplate, 0.469)
 /**
  * 生成 Read 提示词：lean 模式短版；完整版说明绝对路径、默认 2000 行、图片、PDF（模型支持时，超过 10 页必须给 pages，每次最多 20 页）、notebook、目录不可读、截图。
  */
@@ -106,14 +92,12 @@ ${lineFormatInstruction}
 - If you read a file that exists but has empty contents you will receive a system reminder warning in place of file contents.${NO_REREAD_AFTER_EDIT_NOTE_2}`;
 }
 export {
-  TRUNCATED_PARTIAL_VIEW_PREFIX,
-  MAX_LINES_TO_READ,
-  isFileUnchangedStub,
   DESCRIPTION,
   renderPromptTemplate,
   TAB_AWARE_LINE_FORMAT_INSTRUCTION,
   LINE_FORMAT_INSTRUCTION,
-  getSeededFileUnchangedMessage,
-  getFileUnchangedMessage,
+  TRUNCATED_PARTIAL_VIEW_PREFIX,
+  MAX_LINES_TO_READ,
   FILE_STATE_CURRENT_SUFFIX,
+  isFileUnchangedStub,
 };

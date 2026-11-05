@@ -3,28 +3,28 @@
  *
  * 2.1.316 新增：设置遥测键
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3wek6r2k.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-hjswk319.js (5)
  * attribution: placement 5
  */
 import { catalogTelemetryFields } from "../model/servedModelCatalog.js";
 import { pickByHelper } from "../git/gitSafeEnv.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 
-//@ chunk-3wek6r2k.js:90632-90755 placement
+//@ chunk-hjswk319.js:90031-90154 placement
 function managedKeyTelemetry(kind, comparison, hourBand) {
   let fields = catalogTelemetryFields(comparison, hourBand);
   if (kind !== "managed_key") return fields;
   return pickByHelper(fields, (value) => typeof value === "boolean" || typeof value === "number");
 }
-//@ chunk-3wek6r2k.js:90755-90843 placement
+//@ chunk-hjswk319.js:90154-90242 placement
 function settingsSourceTag(outcome, catalog) {
   if (catalog === null) return fromEnum("none");
   let source = outcome.entry?.source;
   return fromEnum(source ?? "seed");
 }
-//@ chunk-3wek6r2k.js:90843-91454 placement
+//@ chunk-hjswk319.js:90242-90853 placement
 /**
  * AGENT_FRONTMATTER_KEYS：代理前置声明可用的键。
  */
@@ -77,7 +77,7 @@ var AGENT_FRONTMATTER_KEYS = (name) =>
     .replaceAll("-", "_")
     .replace(/([a-z])([A-Z])/g, "$1_$2")
     .toLowerCase();
-//@ chunk-3wek6r2k.js:91454-91584 placement
+//@ chunk-hjswk319.js:90853-90983 placement
 function frontmatterKeyFlags(declaredFields) {
   let declared = declaredFields && new Set(declaredFields.map(AGENT_FRONTMATTER_KEYS));
   return Object.fromEntries(
@@ -87,6 +87,6 @@ function frontmatterKeyFlags(declaredFields) {
     }),
   );
 }
-//@ chunk-3wek6r2k.js:91584-91593 placement
+//@ chunk-hjswk319.js:90983-90992 placement
 var MAX_TELEMETRY_KEYS = 8;
 export { settingsSourceTag, managedKeyTelemetry, MAX_TELEMETRY_KEYS, frontmatterKeyFlags };

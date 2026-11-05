@@ -3,9 +3,9 @@
  *
  * /heapdump 实现：写 JS 堆快照到桌面或家目录并报告内存
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/heapdump/heapdump.ts
- * pieces: chunk-dhgx9s0b.js (3)
+ * pieces: chunk-p4gzazpk.js (3)
  * attribution: fingerprint 1, affinity 2
  */
 import { basename } from "path";
@@ -13,7 +13,7 @@ import { performHeapDump } from "../../utils/heapDumpService.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-dhgx9s0b.js:2263-2840 fingerprint (2.1.88 match: call, 0.478)
+//@ chunk-p4gzazpk.js:2487-3064 fingerprint (2.1.88 match: call, 0.478)
 /**
  * /heapdump 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -46,7 +46,7 @@ async function call(args, context) {
 `),
   };
 }
-//@ chunk-dhgx9s0b.js:2840-3908 affinity
+//@ chunk-p4gzazpk.js:3064-4132 affinity
 function formatHeapReport(diagnostics) {
   let { memoryUsage, resourceUsage, analysis } = diagnostics;
   let leakLines = analysis.potentialLeaks.length
@@ -78,7 +78,7 @@ function formatHeapReport(diagnostics) {
   ].join(`
 `);
 }
-//@ chunk-dhgx9s0b.js:3908-3962 affinity
+//@ chunk-p4gzazpk.js:4132-4186 affinity
 function formatGigabytes(bytes) {
   return `${(bytes / 1073741824).toFixed(2)} GB`;
 }

@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.318
+import{b,f}from"./chunk-vwtpw18x.js";import{Xe,N}from"./chunk-63094ahz.js";import{W}from"./chunk-0qffyy27.js";import{g,m,c}from"./chunk-47b8txen.js";import{a}from"./chunk-my2r02mp.js";import{Ii}from"./chunk-exfmq47h.js";import{L7n}from"./chunk-yx0qwrvr.js";var n=[{kind:"ios_app",found:(t)=>t.has_ios_app_project},{kind:"android_app",found:(t)=>t.has_android_app_project}];class i{#t=0;#o=0;#e=new Map;get started(){return this.#t>0}start(){this.#t++,this.#r(!1)}conversationReset(){if(this.started)this.#t++,this.#r(!1)}directoryChanged(){if(!this.started){this.start();return}this.#r(!1)}turnStarting(){let t=this.#t;if(!this.started||this.#o===t)return;if(this.#o=t,n.some(({kind:e})=>this.#e.get(e)!==t))this.#r(!0)}#r(t){let e=this.#t;L7n({fresh:t}).then((r)=>{if(e!==this.#t||r===null)return;if(r.has_ios_app_project===null&&this.#e.get("ios_app")!==e)c("dev_intent_detect","project_unreadable",{kind:b("ios_app"),trigger:b("project_scan")});for(let{kind:o,found:s}of n)if(s(r)===!0&&this.#e.get(o)!==e)this.#e.set(o,e),this.#n(o)})}#n(t){try{Ii({type:"system",subtype:"dev_intent",kind:t,trigger:"project_scan"}),g("dev_intent_detect",{kind:f(t),trigger:b("project_scan")})}catch(e){a(Xe(N(e),"project dev intent send failed")),m("dev_intent_detect","project_send_threw",{kind:f(t),trigger:b("project_scan")})}}}var Ekt=new W(()=>new i);
+export{Ekt};

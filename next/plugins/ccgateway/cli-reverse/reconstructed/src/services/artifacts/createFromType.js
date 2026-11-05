@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：按 Artifact 类型新建 Artifact（直连或经中继，幂等重试）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-w08rdxhd.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-95pbtx8d.js (19)
  * attribution: placement 19
  */
 import { env } from "../../utils/env.js";
@@ -13,7 +13,7 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js"
 import {
   isRemoteEnvironmentAny,
   isRemoteManagedEnvironment,
-  isSelfHostedRemoteEnvironment,
+  isSelfHostedByocEnvironment,
   isByocEnvironment,
 } from "../../utils/remoteEnvironment.js";
 import {
@@ -53,9 +53,9 @@ import { artifactViewerUrl } from "./publishInstanceFiles.js";
 import { parseContractVersion } from "./capabilityDeclaration.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-w08rdxhd.js:17563-17598 placement
+//@ chunk-95pbtx8d.js:17597-17632 placement
 var TENGU_COBALT_PLINTH_LARCH = "tengu_cobalt_plinth_larch";
-//@ chunk-w08rdxhd.js:17598-17659 placement
+//@ chunk-95pbtx8d.js:17632-17693 placement
 /**
  * 导出函数 `artifactTypesEnabled`：返回 env.CLAUDE_CODE_ARTIFACT_TYPES ?? getFeatureValue_CACHED_MAY_BE_STALE(TENGU_COBALT_PLINTH_LARCH, !0)。
  */
@@ -64,16 +64,16 @@ function artifactTypesEnabled() {
     env.CLAUDE_CODE_ARTIFACT_TYPES ?? getFeatureValue_CACHED_MAY_BE_STALE(TENGU_COBALT_PLINTH_LARCH, true)
   );
 }
-//@ chunk-w08rdxhd.js:17659-17731 placement
+//@ chunk-95pbtx8d.js:17693-17765 placement
 function isTypeCloudCreateEnabled() {
   return (
     env.CLAUDE_CODE_ARTIFACT_TYPE_CLOUD_CREATE ??
     getFeatureValue_CACHED_MAY_BE_STALE(TENGU_COBALT_PLINTH_LARCH, false)
   );
 }
-//@ chunk-w08rdxhd.js:17731-17767 placement
+//@ chunk-95pbtx8d.js:17765-17801 placement
 var TENGU_COBALT_PLINTH_LINDEN = "tengu_cobalt_plinth_linden";
-//@ chunk-w08rdxhd.js:17767-17810 placement
+//@ chunk-95pbtx8d.js:17801-17844 placement
 function canCreateFromTypeInCloud() {
   return (
     isRemoteEnvironmentAny() &&
@@ -81,7 +81,7 @@ function canCreateFromTypeInCloud() {
     accountlessAgentSession()
   );
 }
-//@ chunk-w08rdxhd.js:17810-17923 placement
+//@ chunk-95pbtx8d.js:17844-17956 placement
 /**
  * 判断当前环境能否从类型创建 artifact：本地总是可以；远程时需满足相应的中继/开关条件。
  */
@@ -89,7 +89,7 @@ function canCreateFromType() {
   if (!env.CLAUDE_CODE_REMOTE) return true;
   return (
     (isRemoteManagedEnvironment() && isTypeCloudCreateEnabled()) ||
-    (isSelfHostedRemoteEnvironment() &&
+    (isSelfHostedByocEnvironment() &&
       isTypeCloudCreateEnabled() &&
       getFeatureValue_CACHED_MAY_BE_STALE(RUNNER_RELAY_FLAG, false) &&
       frameVerbRelayActive(TYPE_CREATE_RELAY_FAMILY) &&
@@ -97,10 +97,10 @@ function canCreateFromType() {
     canCreateFromTypeInCloud()
   );
 }
-//@ chunk-w08rdxhd.js:17923-18241 placement
+//@ chunk-95pbtx8d.js:17956-18274 placement
 var CREATE_FROM_TYPE_UNAVAILABLE =
   "Starting a new Artifact from a type isn't available in this cloud session right now, so nothing was created; do not retry here. If the type fits, tell the user its link so they can start it where creating is available, and offer to make it here another way instead \u2014 a skill or a file is fine for that.";
-//@ chunk-w08rdxhd.js:18241-18285 placement
+//@ chunk-95pbtx8d.js:18274-18318 placement
 /**
  * 导出函数 `isRelayUnavailableForTypeCreate`：返回 uC() && !frameVerbRelayActive(TYPE_CREATE_RELAY_FAMILY) && !ce()。
  */
@@ -109,7 +109,7 @@ function isRelayUnavailableForTypeCreate() {
     isRemoteEnvironmentAny() && !frameVerbRelayActive(TYPE_CREATE_RELAY_FAMILY) && !canCreateFromTypeInCloud()
   );
 }
-//@ chunk-w08rdxhd.js:18285-18363 placement
+//@ chunk-95pbtx8d.js:18318-18396 placement
 var RELAY_UNAVAILABLE_CREATE_RESULT = {
   ok: false,
   reason: "relay-unavailable",
@@ -117,11 +117,11 @@ var RELAY_UNAVAILABLE_CREATE_RESULT = {
   route: "relay",
   fromFrame: false,
 };
-//@ chunk-w08rdxhd.js:18363-18435 placement
+//@ chunk-95pbtx8d.js:18396-18468 placement
 function createFromTypePath(typeSlug) {
   return `/api/frame/types/${encodeURIComponent(typeSlug)}/create`;
 }
-//@ chunk-w08rdxhd.js:18435-18868 placement
+//@ chunk-95pbtx8d.js:18468-18901 placement
 /**
  * 从类型创建 artifact 的响应 schema（slug、版本、标题、契约、类型/预配/重放/读取/共享信息）、外部 id 格式正则，以及存储目标（store/project_id/file_id/node_id）schema。
  */
@@ -129,7 +129,7 @@ var MAX_CREATE_RESPONSE_BYTES; // deferred: uses DoctorLazy (../../cli/handlers/
 var CREATE_RESPONSE_SCHEMA;
 var EXTERNAL_ID_RE;
 var STORE_TARGET_SCHEMA;
-deferInit("chunk-w08rdxhd.js:18435", () => {
+deferInit("chunk-95pbtx8d.js:18468", () => {
   MAX_CREATE_RESPONSE_BYTES = 1048576;
   CREATE_RESPONSE_SCHEMA = DoctorLazy(() =>
     looseObject({
@@ -155,7 +155,7 @@ deferInit("chunk-w08rdxhd.js:18435", () => {
     }),
   );
 });
-//@ chunk-w08rdxhd.js:18868-19153 placement
+//@ chunk-95pbtx8d.js:18901-19186 placement
 /**
  * 校验并解析创建结果里的存储目标，project_id 必须与给定 slug 一致；file_id/node_id 只接受安全格式。
  */
@@ -176,13 +176,13 @@ function parseStoreTarget(provisioned, slug) {
     }),
   };
 }
-//@ chunk-w08rdxhd.js:19153-19452 placement
+//@ chunk-95pbtx8d.js:19186-19485 placement
 /**
  * 创建结果不确定时的提示（先 list 再决定是否重建），以及可重试的服务端失败消息集合。
  */
 var CREATE_OUTCOME_UNKNOWN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var RETRYABLE_CREATE_ERRORS;
-deferInit("chunk-w08rdxhd.js:19153", () => {
+deferInit("chunk-95pbtx8d.js:19186", () => {
   CREATE_OUTCOME_UNKNOWN =
     'the Artifact may or may not have been created: check with action "list" before creating again';
   RETRYABLE_CREATE_ERRORS = new Set([
@@ -193,11 +193,11 @@ deferInit("chunk-w08rdxhd.js:19153", () => {
     "provisioning refused \u2014 retry later",
   ]);
 });
-//@ chunk-w08rdxhd.js:19452-19521 placement
+//@ chunk-95pbtx8d.js:19485-19554 placement
 function isRetryableCreateFailure(status, body) {
   return status < 500 || (typeof body === "string" && RETRYABLE_CREATE_ERRORS.has(body.trim()));
 }
-//@ chunk-w08rdxhd.js:19521-19828 placement
+//@ chunk-95pbtx8d.js:19554-19861 placement
 /**
  * 从类型创建的常量：暂时不可用的重试提示、重试次数、拒绝响应头名、创建进行中错误码、类型未找到提示。
  */
@@ -207,7 +207,7 @@ var X_FRAME_REFUSAL = "x-frame-refusal";
 var CREATE_IN_FLIGHT = "create_in_flight";
 var TYPE_NOT_FOUND_MESSAGE =
   "Artifact type not found \u2014 check the link, and that this account can open the type in a browser (creating Artifacts from types may also not be available to this account yet)";
-//@ chunk-w08rdxhd.js:19828-24596 placement
+//@ chunk-95pbtx8d.js:19861-24634 placement
 /**
  * 用 Artifact 类型新建 Artifact（POST /api/frame/types/{slug}/create）：直连或经中继、幂等重试，处理 cloud_unavailable/invalid_slug 等。
  */
@@ -478,15 +478,15 @@ async function createArtifactFromType(typeSlug, options) {
     },
   };
 }
-//@ chunk-w08rdxhd.js:24596-24629 placement
+//@ chunk-95pbtx8d.js:24634-24667 placement
 function hasDbCapability(target) {
   return hasKey(target, "db");
 }
-//@ chunk-w08rdxhd.js:24629-24669 placement
+//@ chunk-95pbtx8d.js:24667-24707 placement
 function hasEndpointsCapability(target) {
   return hasKey(target, "endpoints");
 }
-//@ chunk-w08rdxhd.js:24669-24731 placement
+//@ chunk-95pbtx8d.js:24707-24769 placement
 function hasKey(target, key) {
   return typeof target === "object" && target !== null && key in target;
 }
@@ -496,8 +496,8 @@ export {
   CREATE_FROM_TYPE_UNAVAILABLE,
   createArtifactFromType,
   parseStoreTarget,
-  canCreateFromType,
   hasDbCapability,
   hasEndpointsCapability,
   TENGU_COBALT_PLINTH_LARCH,
+  canCreateFromType,
 };

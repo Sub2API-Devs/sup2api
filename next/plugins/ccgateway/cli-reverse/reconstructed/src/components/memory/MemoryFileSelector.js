@@ -3,9 +3,9 @@
  *
  * /memory 记忆文件选择器：用户/项目/本地 CLAUDE.md 与自动记忆、团队/账号记忆同步状态。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/memory/MemoryFileSelector.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-c55mbvfz.js (7), chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (1), chunk-dzt5bmy4.js (7)
  * attribution: fingerprint 3, placement 2, layout 3, callgraph-witnessed 1
  */
 import { join } from "path";
@@ -72,7 +72,7 @@ import { onGrowthBookRefresh } from "../../services/analytics/growthbook.js";
 import { readLastConsolidatedAt } from "../../services/autoDream/consolidationLock.js";
 import {
   updateSettingsForSourceWithTransform,
-  getInitialSettings_2,
+  getInitialSettings,
   updateSettingsForSource,
 } from "../../utils/settings/settings.js";
 import { toggleAutoMemoryForSession } from "../../cli/startup/startupMisc.js";
@@ -96,16 +96,16 @@ import { openPath } from "../../utils/browser.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1350609-1350685 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-5xgkngpb.js:1349778-1349854 fingerprint (2.1.88 match: _temp, 1)
 function filterAutoMemWhenDisabled(f_1) {
   if (!isMemoryRecallEnabled()) return f_1;
   return f_1.filter((entry) => entry.type !== "AutoMem");
 }
-//@ chunk-18hwfzwa.js:728716-728758 fingerprint (2.1.88 match: _temp5, 0.75)
+//@ chunk-czq1j3j2.js:749350-749392 fingerprint (2.1.88 match: _temp5, 0.751)
 function isDreamTask(t) {
   return t.type === "dream";
 }
-//@ chunk-c55mbvfz.js:31716-31816 placement
+//@ chunk-dzt5bmy4.js:32908-33008 placement
 class RowsOnce {
   promise = null;
   rowsOnce(loader) {
@@ -116,19 +116,19 @@ class RowsOnce {
     this.promise = null;
   }
 }
-//@ chunk-c55mbvfz.js:31816-31842 placement
+//@ chunk-dzt5bmy4.js:33008-33034 placement
 var memoryRowsCache; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-c55mbvfz.js:31816", () => {
+deferInit("chunk-dzt5bmy4.js:33008", () => {
   memoryRowsCache = new SessionRootSlot(() => new RowsOnce());
 });
-//@ chunk-c55mbvfz.js:31842-31854 layout
+//@ chunk-dzt5bmy4.js:33034-33046 layout
 var OPEN_FOLDER_API = null;
-//@ chunk-c55mbvfz.js:31854-31901 fingerprint (2.1.88 match: OPEN_FOLDER_PREFIX, 1)
+//@ chunk-dzt5bmy4.js:33046-33093 fingerprint (2.1.88 match: OPEN_FOLDER_PREFIX, 1)
 var ORG_PICKER_API = null;
 var MEMORY_DIALOG_API = null;
 var OPEN_FOLDER_VALUE = "__open_folder__";
 var MAX_VISIBLE_MEMORY_ROWS = 30;
-//@ chunk-c55mbvfz.js:31901-32834 layout
+//@ chunk-dzt5bmy4.js:33093-34026 layout
 /**
  * /memory 选择器里组织记忆的行：发现团队范围的记忆挂载点，按当前授权（公开/私有项目、读写权限）给每个挂载点生成说明。
  */
@@ -190,10 +190,10 @@ function loadOrgMemoryRows(cache, storageV5, signal) {
     };
   });
 }
-//@ chunk-c55mbvfz.js:32834-32905 layout
+//@ chunk-dzt5bmy4.js:34026-34097 layout
 var ORG_PICKER_VALUE = "__org_memory_project_picker__";
 var ORG_MEMORY_OFF_VALUE = "__org_memory_project_off__";
-//@ chunk-c55mbvfz.js:32905-41847 callgraph-witnessed (2.1.88 match: MemoryFileSelector, 0.159)
+//@ chunk-dzt5bmy4.js:34097-43043 callgraph-witnessed (2.1.88 match: MemoryFileSelector, 0.16)
 /**
  * /memory：列出可编辑的记忆文件（用户/项目/本地 CLAUDE.md、自动记忆目录），以及团队/账号记忆同步状态（paused/active），选择后用编辑器打开。
  */
@@ -451,7 +451,7 @@ function MemoryFileSelector({
   function setAutoDream(autoDreamOn) {
     if (!isAutoDreamAvailable || !agentDefinitions_2.toggleable) return;
     if (autoDreamOn && !autoMemoryToggleState()) return;
-    let isFirstEnable = autoDreamOn && getInitialSettings_2().autoDreamEnabled === undefined;
+    let isFirstEnable = autoDreamOn && getInitialSettings().autoDreamEnabled === undefined;
     updateSettingsForSource(
       "userSettings",
       {
@@ -832,4 +832,4 @@ function MemoryFileSelector({
     ],
   });
 }
-export { isDreamTask, memoryRowsCache, MemoryFileSelector, filterAutoMemWhenDisabled };
+export { filterAutoMemWhenDisabled, isDreamTask, memoryRowsCache, MemoryFileSelector };

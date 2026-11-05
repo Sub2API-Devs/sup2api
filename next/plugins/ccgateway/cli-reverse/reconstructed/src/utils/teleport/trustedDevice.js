@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：可信设备
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (4)
  * attribution: placement 4
  */
 import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
@@ -15,7 +15,7 @@ import { lacksAuthorizationHeader } from "../../services/oauth/sessionsBearerHoo
 import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { isAbortError } from "../errors.js";
 
-//@ chunk-e6aww6q8.js:1878366-1879795 placement
+//@ chunk-5xgkngpb.js:1957186-1958621 placement
 /**
  * 确保本机为可信设备（创建设备证明、处理令牌被拒与恢复关闭）。
  */
@@ -97,7 +97,7 @@ async function ensureTrustedDevice(provider, referral, options) {
   else logFeatureOk("cloud_create_device_proof");
   return secondResponse;
 }
-//@ chunk-e6aww6q8.js:1879795-1879940 placement
+//@ chunk-5xgkngpb.js:1958621-1958766 placement
 async function refreshBearerHeaders(provider) {
   let token = await provider.readBearer().catch(() => {
     return;
@@ -111,10 +111,10 @@ async function refreshBearerHeaders(provider) {
   }
   return provider.headers;
 }
-//@ chunk-e6aww6q8.js:1879940-1880061 placement
+//@ chunk-5xgkngpb.js:1958766-1958887 placement
 var UNTRUSTED_DEVICE_MESSAGE =
   "this computer is not a trusted device for your account yet. Sign in again with /login to enroll it, then retry";
-//@ chunk-e6aww6q8.js:1880061-1880538 placement
+//@ chunk-5xgkngpb.js:1958887-1959364 placement
 /**
  * 403 时检查是否因设备不可信被拒，返回登录登记提示。
  */

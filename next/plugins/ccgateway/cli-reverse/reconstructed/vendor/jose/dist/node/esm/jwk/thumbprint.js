@@ -1,16 +1,16 @@
 /**
  * jose/dist/node/esm/jwk/thumbprint.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (2)
+ * pieces: chunk-pd6th42n.js (2)
  * attribution: esm-fingerprint 2
  */
 import { isPlainObject } from "../../../webapi/lib/validate.js";
-import { JOSENotSupported, JWKInvalid } from "../../../webapi/lib/content_encryption.js";
+import { JOSENotSupported_3, JWKInvalid } from "../../../webapi/lib/content_encryption.js";
 import { encoder, encode } from "../../../browser/runtime/base64url.js";
 import { sha256DigestInit } from "../../../webapi/lib/buffer_utils.js";
 
-//@ chunk-2tyrgda4.js:40828-41683 esm-fingerprint
+//@ chunk-pd6th42n.js:40828-41683 esm-fingerprint
 async function thumbprint(jwk, digestAlgorithm) {
   if (!isPlainObject(jwk)) throw TypeError("JWK must be an object");
   if (!(digestAlgorithm !== null && digestAlgorithm !== undefined)) digestAlgorithm = "sha256";
@@ -55,12 +55,12 @@ async function thumbprint(jwk, digestAlgorithm) {
       };
       break;
     default:
-      throw new JOSENotSupported('"kty" (Key Type) Parameter missing or unsupported');
+      throw new JOSENotSupported_3('"kty" (Key Type) Parameter missing or unsupported');
   }
   let data = encoder.encode(JSON.stringify(components));
   return encode(await sha256DigestInit(digestAlgorithm, data));
 }
-//@ chunk-2tyrgda4.js:41683-41765 esm-fingerprint
+//@ chunk-pd6th42n.js:41683-41765 esm-fingerprint
 var check = (value, description) => {
   if (typeof value !== "string" || !value) throw new JWKInvalid(`${description} missing or invalid`);
 };

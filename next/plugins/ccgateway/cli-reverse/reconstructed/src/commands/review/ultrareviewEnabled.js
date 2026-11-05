@@ -3,12 +3,12 @@
  *
  * ultrareview 配置开关名 tengu_review_bughunter_config
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/review/ultrareviewEnabled.ts
- * pieces: chunk-s61vbvea.js (1)
+ * pieces: chunk-7jxyna5q.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-s61vbvea.js:461142-461181 fingerprint (2.1.88 match: isUltrareviewEnabled, 1)
+//@ chunk-7jxyna5q.js:378568-378607 fingerprint (2.1.88 match: isUltrareviewEnabled, 1)
 var ULTRA_REVIEW_CONFIG_FLAG = "tengu_review_bughunter_config";
 export { ULTRA_REVIEW_CONFIG_FLAG };

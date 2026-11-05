@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。执行本地命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (6)
  * attribution: placement 6
  */
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
@@ -32,7 +32,7 @@ import { escapeXml_2 as escapeXml } from "../../utils/confusables.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { commandThrowTextForTranscript } from "../../utils/processUserInput/processSlashCommand.js";
 
-//@ chunk-18hwfzwa.js:309809-310198 placement
+//@ chunk-czq1j3j2.js:319401-319790 placement
 function isCommandHookedByPlugins(wanted) {
   try {
     let filtered = getPluginRegistry().loadedModules.filter((loadedModule) => !hasLink(loadedModule));
@@ -65,7 +65,7 @@ function isCommandHookedByPlugins(wanted) {
     return false;
   }
 }
-//@ chunk-18hwfzwa.js:310198-310397 placement
+//@ chunk-czq1j3j2.js:319790-319989 placement
 async function runLocalCommandFromRepl({ command, commandName, args, context, printRows, ranAs }) {
   await runLocalCommand({
     command,
@@ -77,7 +77,7 @@ async function runLocalCommandFromRepl({ command, commandName, args, context, pr
     ranAs,
   });
 }
-//@ chunk-18hwfzwa.js:310397-311842 placement
+//@ chunk-czq1j3j2.js:319989-321434 placement
 async function runLocalCommand({ command, input, displayName, invokedAs, context, printRows, ranAs }) {
   let featureName = cmdFeature(shippedCommandNames().has(command.name) ? command.name : "custom");
   let leasedOverBridge =
@@ -174,15 +174,15 @@ async function runLocalCommand({ command, input, displayName, invokedAs, context
     ]);
   }
 }
-//@ chunk-18hwfzwa.js:311842-311914 placement
+//@ chunk-czq1j3j2.js:321434-321506 placement
 function localCommandText(action) {
   return action.type === "text" || action.type === "query" ? action.value : undefined;
 }
-//@ chunk-18hwfzwa.js:311914-311993 placement
+//@ chunk-czq1j3j2.js:321506-321585 placement
 function localCommandMetaMessages(action) {
   return action.type === "text" || action.type === "query" ? action.metaMessages : undefined;
 }
-//@ chunk-18hwfzwa.js:311993-312194 placement
+//@ chunk-czq1j3j2.js:321585-321786 placement
 /**
  * 本地命令结果补上文本或上下文 meta 消息。
  */
@@ -206,4 +206,4 @@ function withCommandText(action, { text, context }) {
         ...extra,
       };
 }
-export { runLocalCommand, runLocalCommandFromRepl };
+export { runLocalCommandFromRepl, runLocalCommand };

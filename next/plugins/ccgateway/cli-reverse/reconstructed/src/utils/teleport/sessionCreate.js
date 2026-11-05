@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：teleport/桥接云会话的创建请求体、事件 URL 与错误文案。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f25sswmp.js (23)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-vr5v4gzz.js (23)
  * attribution: placement 23
  */
 import { randomUUID } from "crypto";
@@ -17,28 +17,28 @@ import {
 } from "../../bridge/sessionIdCompat.js";
 import { isPlainObject } from "../objectUtils.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../errors.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { REMOTE_DEVICE_TOOLS } from "../../services/mcp/firstPartyServerIds.js";
 import { err, ok } from "../resultError.js";
 import { sanitizeSessionTitle } from "../stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-f25sswmp.js:19944-20228 placement
+//@ chunk-vr5v4gzz.js:20591-20875 placement
 var PENDING_PROMPT_DESCRIPTIONS = {
   refusal_fallback_prompt: "choose: retry on fallback model or edit prompt",
   auto_mode_server_fallback: "acknowledge the classifier billing notice (Enter continues in auto mode)",
   auto_mode_outside_reads: "choose: keep allowing reads outside the working directories, or block them",
 };
-//@ chunk-f25sswmp.js:20228-20305 placement
+//@ chunk-vr5v4gzz.js:20875-20952 placement
 /**
  * 取对话框事件里的来源字段。
  */
 function dialogSourceOf(kind, options) {
   return kind === ENUM_PROMPT && typeof options.source === "string" ? options.source : undefined;
 }
-//@ chunk-f25sswmp.js:20305-20338 placement
+//@ chunk-vr5v4gzz.js:20952-20985 placement
 var MCP_ELICITATION_DIALOG_TOOL = "dialog:mcp_elicitation";
-//@ chunk-f25sswmp.js:20338-20630 placement
+//@ chunk-vr5v4gzz.js:20985-21277 placement
 function dialogPermissionRequest(kind, options, requestId, toolUseId) {
   return {
     tool_name: `dialog:${kind}`,
@@ -57,7 +57,7 @@ function dialogPermissionRequest(kind, options, requestId, toolUseId) {
     },
   };
 }
-//@ chunk-f25sswmp.js:20667-20973 placement
+//@ chunk-vr5v4gzz.js:21314-21620 placement
 function sessionEventsUrl(sessionId, compatSessionId, opts, extra, deviceAttestation) {
   validateBridgeId(compatSessionId, "sessionId");
   if (!extra)
@@ -86,7 +86,7 @@ function sessionEventsUrl(sessionId, compatSessionId, opts, extra, deviceAttesta
     },
   };
 }
-//@ chunk-f25sswmp.js:21010-21102 placement
+//@ chunk-vr5v4gzz.js:21657-21749 placement
 /**
  * 云会话创建相关 GrowthBook 开关名与启用标志。
  */
@@ -94,9 +94,9 @@ var TENGU_WOVEN_HARBOR = "tengu_woven_harbor";
 var TENGU_DRIFTING_TWILIGHT = "tengu_drifting_twilight";
 var DEVICE_BINDING_CREATE_ENABLED = true;
 var TENGU_BUZZING_RIVER = "tengu_buzzing_river";
-//@ chunk-f25sswmp.js:21102-21112 placement
+//@ chunk-vr5v4gzz.js:21749-21759 placement
 var MAX_INITIAL_EVENTS = 16;
-//@ chunk-f25sswmp.js:21112-21330 placement
+//@ chunk-vr5v4gzz.js:21759-21977 placement
 function setModeControlEvent(mode, { ultraplan: options, isFromSettings: fromSettings = false } = {}) {
   return {
     type: "event",
@@ -114,16 +114,16 @@ function setModeControlEvent(mode, { ultraplan: options, isFromSettings: fromSet
     },
   };
 }
-//@ chunk-f25sswmp.js:21330-21455 placement
+//@ chunk-vr5v4gzz.js:21977-22102 placement
 function summarizeSessionCreateBody(body) {
   return {
     envVars: Object.keys(body.environmentVariables ?? {}).length > 0,
     events: body.events.filter((event) => !isPromptOrPermissionEvent(event)).map(eventKindOf),
   };
 }
-//@ chunk-f25sswmp.js:21455-21474 placement
+//@ chunk-vr5v4gzz.js:22102-22121 placement
 var REDACTED_PLACEHOLDER = "<redacted>";
-//@ chunk-f25sswmp.js:21474-21742 placement
+//@ chunk-vr5v4gzz.js:22121-22389 placement
 function redactSeedFields(body) {
   if (!isPlainObject(body)) return;
   let { seed_bundle_file_id: seedBundleFileId, environment_variables: environmentVariables } = body;
@@ -140,7 +140,7 @@ function redactSeedFields(body) {
     }),
   };
 }
-//@ chunk-f25sswmp.js:21742-21985 placement
+//@ chunk-vr5v4gzz.js:22389-22632 placement
 function redactSessionCreateBody(body) {
   let bindAttestation = body.bind_attestation;
   let seedFields = redactSeedFields(body);
@@ -165,9 +165,9 @@ function redactSessionCreateBody(body) {
     }),
   };
 }
-//@ chunk-f25sswmp.js:21985-22099 placement
+//@ chunk-vr5v4gzz.js:22632-22746 placement
 var PERMISSION_CONTROL_SUBTYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-f25sswmp.js:21985", () => {
+deferInit("chunk-vr5v4gzz.js:22632", () => {
   PERMISSION_CONTROL_SUBTYPES = new Set([
     "set_permission_mode",
     "set_mcp_permission_mode_override",
@@ -175,24 +175,24 @@ deferInit("chunk-f25sswmp.js:21985", () => {
     "mcp_toggle",
   ]);
 });
-//@ chunk-f25sswmp.js:22099-22221 placement
+//@ chunk-vr5v4gzz.js:22746-22868 placement
 function controlRequestSubtype(event) {
   let request = event.data.request;
   return event.data.type === "control_request" && typeof request?.subtype === "string"
     ? request.subtype
     : undefined;
 }
-//@ chunk-f25sswmp.js:22221-22310 placement
+//@ chunk-vr5v4gzz.js:22868-22957 placement
 function isPromptOrPermissionEvent(event) {
   if (event.data.type === "user") return true;
   let subtype = controlRequestSubtype(event);
   return subtype !== undefined && PERMISSION_CONTROL_SUBTYPES.has(subtype);
 }
-//@ chunk-f25sswmp.js:22310-22359 placement
+//@ chunk-vr5v4gzz.js:22957-23006 placement
 function eventKindOf(event) {
   return controlRequestSubtype(event) ?? String(event.data.type);
 }
-//@ chunk-f25sswmp.js:22359-24252 placement
+//@ chunk-vr5v4gzz.js:23006-24963 placement
 /**
  * 构造 teleport/桥接云会话的创建请求体：初始事件（≤上限）、设备绑定、权限模式事件、来源与标签。
  */
@@ -210,7 +210,7 @@ function buildSessionCreateBody(options) {
       "session create: too many initial events",
     );
   let environmentVariables = deviceBinding ? {} : (options.environmentVariables ?? {});
-  let disallowedTools = uniq([
+  let disallowedTools = normalizeCaseForComparison_2([
     ...(options.disallowedTools ?? []),
     ...(deviceBinding ? REMOTE_DEVICE_TOOLS : []),
   ]);
@@ -263,6 +263,9 @@ function buildSessionCreateBody(options) {
       ...(options.effortLevel && {
         effort_level: options.effortLevel,
       }),
+      ...(options.programUseCaseId && {
+        program_use_case_id: options.programUseCaseId,
+      }),
       ...(options.seedBundleFileId && {
         seed_bundle_file_id: options.seedBundleFileId,
       }),
@@ -309,14 +312,14 @@ function buildSessionCreateBody(options) {
     },
   };
 }
-//@ chunk-f25sswmp.js:24252-24277 placement
+//@ chunk-vr5v4gzz.js:24963-24988 placement
 /**
  * 记录会话创建的空实现（外部构建）。
  */
 function noopSessionTag(persistentVolume, persistentVolumeFromSessionId) {
   return;
 }
-//@ chunk-f25sswmp.js:24277-24508 placement
+//@ chunk-vr5v4gzz.js:24988-25219 placement
 function sessionIdFromCreateResponse(apiVersion, body) {
   let session = apiVersion === "v1alpha2" ? body?.session : body;
   if (typeof session?.id !== "string" || session.id === "") return err("no_session_id");
@@ -326,21 +329,21 @@ function sessionIdFromCreateResponse(apiVersion, body) {
     title: typeof session.title === "string" ? sanitizeSessionTitle(session.title) : null,
   });
 }
-//@ chunk-f25sswmp.js:24508-24548 placement
+//@ chunk-vr5v4gzz.js:25219-25259 placement
 function sessionTitleOf(body, fallbackTitle) {
   return body.title || sanitizeSessionTitle(fallbackTitle);
 }
-//@ chunk-f25sswmp.js:24548-24614 placement
+//@ chunk-vr5v4gzz.js:25259-25325 placement
 function stripUnrestrictedGitPush(body) {
   let { allow_unrestricted_git_push: allowUnrestrictedGitPush, ...rest } = body;
   return rest;
 }
-//@ chunk-f25sswmp.js:24614-24724 placement
+//@ chunk-vr5v4gzz.js:25325-25435 placement
 function loginRejectedMessage(status, message) {
   if (status === 401) return `${message || "Claude login not accepted"} \xB7 Run /login, then try again`;
   return;
 }
-//@ chunk-f25sswmp.js:24724-25264 placement
+//@ chunk-vr5v4gzz.js:25435-25975 placement
 function projectNotFoundMessage(sessionGroupingId, error) {
   if (error?.type === "not_found_error" && error.resource_type === "session_grouping")
     return `Project not found: ${sessionGroupingId}. Check the id \u2014 a Project you don't have access to looks the same as one that doesn't exist.`;
@@ -355,6 +358,8 @@ function projectNotFoundMessage(sessionGroupingId, error) {
 }
 export {
   MCP_ELICITATION_DIALOG_TOOL,
+  dialogPermissionRequest,
+  dialogSourceOf,
   setModeControlEvent,
   DEVICE_BINDING_CREATE_ENABLED,
   TENGU_DRIFTING_TWILIGHT,
@@ -369,6 +374,4 @@ export {
   noopSessionTag,
   redactSessionCreateBody,
   sessionEventsUrl,
-  dialogPermissionRequest,
-  dialogSourceOf,
 };

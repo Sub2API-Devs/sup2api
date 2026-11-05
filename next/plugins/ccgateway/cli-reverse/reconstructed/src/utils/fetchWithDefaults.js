@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：带默认值的 fetch。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-pjt9hgpa.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-6gs34xvs.js (2)
  * attribution: placement 2
  */
 
-//@ chunk-pjt9hgpa.js:319-475 placement
+//@ chunk-6gs34xvs.js:319-475 placement
 /**
  * 把 Headers、二维数组或普通对象形式的请求头转成普通对象。
  */
@@ -21,7 +21,7 @@ function headersToObject(headers) {
     ...headers,
   };
 }
-//@ chunk-pjt9hgpa.js:475-634 placement
+//@ chunk-6gs34xvs.js:475-634 placement
 /**
  * 包装 fetch，使每次请求合并默认 init（请求头逐项合并）。
  */

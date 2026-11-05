@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：排队命令显示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (18)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (18)
  * attribution: placement 18
  */
 import { extractTag, regExp_3 } from "./messages.js";
@@ -23,22 +23,22 @@ import { ARTIFACT_CHANGED, ARTIFACT_CHANGED_TITLE } from "../tools/ArtifactTool/
 import { getFirstLine, truncateToLength } from "./stringUtils.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4673725-4673745 placement
-var weakMap_14; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4673725", () => {
-  weakMap_14 = new WeakMap();
+//@ chunk-5xgkngpb.js:4782328-4782348 placement
+var weakMap_19; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xgkngpb.js:4782328", () => {
+  weakMap_19 = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:4673745-4673820 placement (2.1.88 match: _temp, 0.787)
+//@ chunk-5xgkngpb.js:4782348-4782423 placement (2.1.88 match: _temp, 0.788)
 function completedCommandSummary(msg) {
   let userPromptText = getUserPromptText(msg);
   return userPromptText?.status === "completed" ? userPromptText.summary : null;
 }
-//@ chunk-e6aww6q8.js:4673820-4673840 placement
+//@ chunk-5xgkngpb.js:4782423-4782443 placement
 var stickyTextCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:4673820", () => {
+deferInit("chunk-5xgkngpb.js:4782423", () => {
   stickyTextCache = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:4673840-4674254 placement (2.1.88 match: computeStickyPromptText, 0.8)
+//@ chunk-5xgkngpb.js:4782443-4782857 placement (2.1.88 match: computeStickyPromptText, 0.799)
 function getUserPromptText(msg) {
   let summary = stickyTextCache.get(msg);
   if (summary === undefined) {
@@ -57,12 +57,12 @@ function getUserPromptText(msg) {
   }
   return summary;
 }
-//@ chunk-e6aww6q8.js:4674254-4674453 placement
+//@ chunk-5xgkngpb.js:4782857-4783056 placement
 /**
  * 解析排队的任务通知：取出摘要（不含标签）、状态与任务类型。
  */
 function parseTaskNotification(text, origin) {
-  let inner = processQueuedCommands_3(text, origin);
+  let inner = processQueuedCommands_2(text, origin);
   if (inner === null) return null;
   let tag = extractTag(inner, SUMMARY);
   if (!tag || tag.includes("<")) return null;
@@ -73,12 +73,12 @@ function parseTaskNotification(text, origin) {
     taskType: tag_2 !== null && !tag_2.includes("<") ? tag_2 : null,
   };
 }
-//@ chunk-e6aww6q8.js:4674453-4674532 placement (2.1.88 match: processQueuedCommands, 1)
-function processQueuedCommands_3(text, origin) {
+//@ chunk-5xgkngpb.js:4783056-4783135 placement (2.1.88 match: processQueuedCommands, 1)
+function processQueuedCommands_2(text, origin) {
   if (origin && origin.kind !== "task-notification") return null;
   return bareTaskNotification(text);
 }
-//@ chunk-e6aww6q8.js:4674532-4674729 placement
+//@ chunk-5xgkngpb.js:4783135-4783333 placement (2.1.88 match: enqueueRemoteNotification, 0.173)
 function isCollapsibleNotification(summary) {
   if (summary.status !== null && summary.status !== "completed") return false;
   return (
@@ -88,9 +88,9 @@ function isCollapsibleNotification(summary) {
     (summary.taskType === ARTIFACT_CHANGED && summary.summary.startsWith(ARTIFACT_CHANGED_TITLE))
   );
 }
-//@ chunk-e6aww6q8.js:4674729-4674741 placement
+//@ chunk-5xgkngpb.js:4783333-4783345 placement
 var MAX_COLLAPSED_NOTICE_WIDTH = 160;
-//@ chunk-e6aww6q8.js:4674741-4675054 placement
+//@ chunk-5xgkngpb.js:4783345-4783657 placement
 /**
  * 生成折叠后的任务通知：首行摘要截断后加"· +N more"。
  */
@@ -105,7 +105,7 @@ function buildCollapsedNotification(summary, moreCount) {
       : replaced;
   return `<${TASK_NOTIFICATION}>${taskTypeTag}${statusTag}<${SUMMARY}>${summaryText} \xB7 +${moreCount} more</${SUMMARY}></${TASK_NOTIFICATION}>`;
 }
-//@ chunk-e6aww6q8.js:4675054-4675188 placement
+//@ chunk-5xgkngpb.js:4783657-4783792 placement
 function notificationKind(msg) {
   let summary = completedCommandSummary(msg);
   if (summary === null) return null;
@@ -113,9 +113,9 @@ function notificationKind(msg) {
   if (summary.startsWith(REMOTE_TASK_PREFIX)) return "remote";
   return null;
 }
-//@ chunk-e6aww6q8.js:4675188-4675449 placement
+//@ chunk-5xgkngpb.js:4783792-4784054 placement
 function collapsedNotificationKind(message) {
-  let count = weakMap_14.get(message);
+  let count = weakMap_19.get(message);
   if (count !== undefined)
     return {
       kind: "bash",
@@ -136,30 +136,30 @@ function collapsedNotificationKind(message) {
     };
   return null;
 }
-//@ chunk-e6aww6q8.js:4675952-4676004 placement
-var weakMap_15; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-var weakSet_8;
-var weakMap_16;
-deferInit("chunk-e6aww6q8.js:4675952", () => {
-  weakMap_15 = new WeakMap();
-  weakSet_8 = new WeakSet();
-  weakMap_16 = new WeakMap();
+//@ chunk-5xgkngpb.js:4784557-4784609 placement
+var weakMap_20; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var weakSet_9;
+var weakMap_21;
+deferInit("chunk-5xgkngpb.js:4784557", () => {
+  weakMap_20 = new WeakMap();
+  weakSet_9 = new WeakSet();
+  weakMap_21 = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:4676004-4676038 placement
+//@ chunk-5xgkngpb.js:4784609-4784643 placement
 /**
  * isWeakNotified：该消息是否在弱表里。
  */
 function isWeakNotified(message) {
-  return weakSet_8.has(message);
+  return weakSet_9.has(message);
 }
-//@ chunk-e6aww6q8.js:4676038-4676078 placement
+//@ chunk-5xgkngpb.js:4784643-4784683 placement
 /**
  * collapsedRowOf：取折叠行。
  */
 function collapsedRowOf(row) {
-  return weakMap_16.get(row) ?? null;
+  return weakMap_21.get(row) ?? null;
 }
-//@ chunk-e6aww6q8.js:4676078-4676356 placement
+//@ chunk-5xgkngpb.js:4784683-4784961 placement
 /**
  * 把连续的可折叠通知（后台命令完成、代理完成、artifact 变更）合并成一行，其余原样保留。
  */
@@ -185,21 +185,21 @@ function collapseNotificationRuns(entries, summaryOf, collapseRun) {
   }
   return out;
 }
-//@ chunk-e6aww6q8.js:4676356-4676394 placement
+//@ chunk-5xgkngpb.js:4784961-4784999 placement
 /**
  * collapseNotificationRunsIn：折叠连续通知。
  */
 function collapseNotificationRunsIn(entries) {
   return collapseNotificationRuns(entries, getUserPromptText, collapsedNotificationRow);
 }
-//@ chunk-e6aww6q8.js:4676394-4676849 placement
+//@ chunk-5xgkngpb.js:4784999-4785455 placement (2.1.88 match: buildTranscriptEntries, 0.824)
 /**
  * 生成折叠通知对应的消息行（用户消息或排队命令附件），并缓存折叠关系。
  */
 function collapsedNotificationRow(run, summary) {
   let first = run[0];
   let more = run.length - 1;
-  let cached = weakMap_15.get(first);
+  let cached = weakMap_20.get(first);
   if (cached?.more === more) return cached.row;
   let collapsedNotification = buildCollapsedNotification(summary, more);
   let row;
@@ -232,16 +232,16 @@ function collapsedNotificationRow(run, summary) {
       return null;
   }
   if (run.every((entry) => completedCommandSummary(entry)?.startsWith(BACKGROUND_COMMAND_PREFIX)))
-    weakMap_14.set(row, run.length);
-  weakMap_15.set(first, {
+    weakMap_19.set(row, run.length);
+  weakMap_20.set(first, {
     more,
     row,
   });
-  weakSet_8.add(row);
-  weakMap_16.set(row, run);
+  weakSet_9.add(row);
+  weakMap_21.set(row, run);
   return row;
 }
-//@ chunk-e6aww6q8.js:4676849-4677066 placement
+//@ chunk-5xgkngpb.js:4785455-4785672 placement
 function bareTaskNotification(text) {
   let trimmed = text.trimStart();
   if (!trimmed.startsWith(`<${TASK_NOTIFICATION}`)) return null;
@@ -253,13 +253,13 @@ function bareTaskNotification(text) {
 }
 export {
   collapsedNotificationKind,
+  isWeakNotified,
+  collapseNotificationRunsIn,
+  notificationKind,
+  weakMap_19,
   collapsedRowOf,
   parseTaskNotification,
   buildCollapsedNotification,
   collapseNotificationRuns,
-  processQueuedCommands_3,
-  isWeakNotified,
-  collapseNotificationRunsIn,
-  notificationKind,
-  weakMap_14,
+  processQueuedCommands_2,
 };

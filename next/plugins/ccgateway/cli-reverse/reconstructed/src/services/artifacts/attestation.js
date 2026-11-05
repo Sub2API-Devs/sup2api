@@ -3,22 +3,22 @@
  *
  * 2.1.316 新增：artifact 证明（attestation）类型判断与标签
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jv307fw4.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-m0ks5273.js (5)
  * attribution: placement 5
  */
 import { getLiveState } from "../liveReplica/liveReplica.js";
 
-//@ chunk-jv307fw4.js:20487-20555 placement
+//@ chunk-m0ks5273.js:20504-20572 placement
 function getAttestationKind(read) {
   return getLiveState().attestedTypeArtifacts.get(read)?.mark?.kind;
 }
-//@ chunk-jv307fw4.js:20555-20593 placement
+//@ chunk-m0ks5273.js:20572-20610 placement
 function isAttestedArtifact(read) {
   return getAttestationKind(read) !== undefined;
 }
-//@ chunk-jv307fw4.js:20593-21024 placement
+//@ chunk-m0ks5273.js:20610-21041 placement
 function describeAttestationKind(read) {
   switch (read) {
     case "first_party_type":
@@ -31,17 +31,17 @@ function describeAttestationKind(read) {
       return "a design system (an Artifact made from a template Artifact type) in the user's organization";
   }
 }
-//@ chunk-jv307fw4.js:21024-21098 placement
+//@ chunk-m0ks5273.js:21041-21115 placement
 function formatAttestationTag(slug) {
   let read = getAttestationKind(slug);
   return read === undefined ? "" : ` [attested: ${describeAttestationKind(read)}]`;
 }
-//@ chunk-jv307fw4.js:21098-21112 placement
+//@ chunk-m0ks5273.js:21115-21129 placement
 var ATTESTATION_KIND_TTL_MS = 600000;
 export {
-  getAttestationKind,
   formatAttestationTag,
+  getAttestationKind,
   describeAttestationKind,
-  ATTESTATION_KIND_TTL_MS,
   isAttestedArtifact,
+  ATTESTATION_KIND_TTL_MS,
 };

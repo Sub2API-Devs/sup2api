@@ -3,11 +3,12 @@
  *
  * 2.1.316 新增：轮询事件折叠
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (10)
  * attribution: placement 10
  */
+import { codeModeAccepted } from "../codeMode/accepted.js";
 import {
   collectEventNonces,
   envelopeNonceMatches,
@@ -42,17 +43,21 @@ import {
   escapeSystemReminderClose,
 } from "../../services/api/promptCacheBreakParts.js";
 import { POLL, isEmptyPollText } from "../../tools/PollTool/prompt.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { storedFormSymbol } from "../messageKinds.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:169498-169522 placement
+//@ chunk-5xgkngpb.js:169820-169926 placement
 function isPollEventsFoldEnabled() {
+  if (codeModeAccepted()) {
+    let { isReplSpliceWaitEnabled } = require("../codeMode/waitForNews.js");
+    return isReplSpliceWaitEnabled();
+  }
   return false;
 }
-//@ chunk-e6aww6q8.js:169522-169562 placement
+//@ chunk-5xgkngpb.js:169926-169966 placement
 var EVENT_AT_PATTERN = /^<event\b[^>]*?\bat="([^"]*)"/;
-//@ chunk-e6aww6q8.js:169562-169796 placement (2.1.88 match: sanitizeFileName, 1)
+//@ chunk-5xgkngpb.js:169966-170200 placement (2.1.88 match: sanitizeFileName, 1)
 /**
  * 把连续的附件消息段中可折叠的 task-notification 排队命令并入 poll_events 附件（与入站附件无关）。
  */
@@ -73,7 +78,7 @@ function foldQueuedNotificationsIntoPollEvents(messages, foldableUuids) {
   }
   return out;
 }
-//@ chunk-e6aww6q8.js:169796-171080 placement
+//@ chunk-5xgkngpb.js:170200-171519 placement
 /**
  * 把连续的轮询事件附件折叠为一条。
  */
@@ -143,7 +148,7 @@ function foldAttachmentRun(messages, foldableUuids) {
     } else if (message !== found && !foldableEnvelopes.has(message.uuid)) out.push(message);
   return out;
 }
-//@ chunk-e6aww6q8.js:171080-171278 placement
+//@ chunk-5xgkngpb.js:171519-171717 placement
 function mergeEnvelopesByTime(left, right) {
   let merged = [];
   let leftIndex = 0;
@@ -155,7 +160,7 @@ function mergeEnvelopesByTime(left, right) {
   }
   return merged.concat(left.slice(leftIndex), right.slice(rightIndex));
 }
-//@ chunk-e6aww6q8.js:171278-172211 placement
+//@ chunk-5xgkngpb.js:171717-172650 placement
 function toPollEventEnvelope(message) {
   if (message.type !== "attachment" || message.attachment.type !== "queued_command") return;
   let attachment = message.attachment;
@@ -208,9 +213,9 @@ function toPollEventEnvelope(message) {
     at: timestamp,
   };
 }
-//@ chunk-e6aww6q8.js:172211-172357 placement
-var TASK_NOTIFICATION_FIELD_PATTERNS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:172211", () => {
+//@ chunk-5xgkngpb.js:172650-172796 placement
+var TASK_NOTIFICATION_FIELD_PATTERNS; // deferred: uses COMMAND_NAME (../../constants/xml.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-5xgkngpb.js:172650", () => {
   TASK_NOTIFICATION_FIELD_PATTERNS = [
     ...[TASK_ID, TOOL_USE_ID, TASK_TYPE, OUTPUT_FILE, STATUS].map((tagName) => [
       tagName,
@@ -219,7 +224,7 @@ deferInit("chunk-e6aww6q8.js:172211", () => {
     [SUMMARY, new RegExp(`\\n?<${SUMMARY}>([\\s\\S]*?)</${SUMMARY}>`, "y")],
   ];
 });
-//@ chunk-e6aww6q8.js:172357-173402 placement
+//@ chunk-5xgkngpb.js:172796-173843 placement
 function foldPollEventsIntoToolResult(messages, assistantIndex, foldData) {
   if (!isPollEventsFoldEnabled() || assistantIndex + 1 !== messages.length - 1) return false;
   let assistantMessage = messages[assistantIndex];
@@ -256,7 +261,7 @@ function foldPollEventsIntoToolResult(messages, assistantIndex, foldData) {
   let envelopes = isEmptyPollText(text) ? [] : parseDeliveredPollEvents(text);
   if (envelopes === undefined && isPollEventDeliveryText(text)) return false;
   let mapped = envelopes?.map((envelope) => remintEventNonce(envelope, detectEnvelopeKind(envelope)));
-  let sorted = uniq([
+  let sorted = normalizeCaseForComparison_2([
     ...(envelopes === undefined ? [] : (parseToolsUsedBeforeSummary(text) ?? [])),
     ...(foldData.toolsUsed ?? []),
   ]).sort();
@@ -291,12 +296,12 @@ ${text}`
   };
   return true;
 }
-//@ chunk-e6aww6q8.js:173402-173422 placement
+//@ chunk-5xgkngpb.js:173843-173863 placement
 var foldedToolResults; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:173402", () => {
+deferInit("chunk-5xgkngpb.js:173843", () => {
   foldedToolResults = new WeakSet();
 });
-//@ chunk-e6aww6q8.js:173422-173536 placement (2.1.88 match: sanitizeFileName, 1)
+//@ chunk-5xgkngpb.js:173863-173977 placement (2.1.88 match: sanitizeFileName, 1)
 /**
  * 若消息带有别名记录且 uuid 相同，返回别名消息，否则原样返回。
  */
@@ -306,8 +311,8 @@ function resolveMessageAlias(message) {
   return storedMessage !== undefined && storedMessage.uuid === message.uuid ? storedMessage : message;
 }
 export {
+  resolveMessageAlias,
   isPollEventsFoldEnabled,
   foldQueuedNotificationsIntoPollEvents,
   foldPollEventsIntoToolResult,
-  resolveMessageAlias,
 };

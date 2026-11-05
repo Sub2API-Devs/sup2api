@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Windows 沙箱状态与依赖检查显示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-55w3ydvj.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-y07105e8.js (5)
  * attribution: placement 5
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -28,7 +28,7 @@ import { getErrnoCode } from "../../utils/errors.js";
 import { getSettingsFilePathForSource } from "../../utils/settings/settings.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-55w3ydvj.js:19789-20078 placement
+//@ chunk-y07105e8.js:20964-21253 placement
 function SandboxDepCheckLine(props) {
   let $ = useMemoCache(4);
   let { depCheck } = props;
@@ -56,7 +56,7 @@ function SandboxDepCheckLine(props) {
   } else statusElement = $[3];
   return statusElement;
 }
-//@ chunk-55w3ydvj.js:20078-21857 placement
+//@ chunk-y07105e8.js:21253-23032 placement
 /**
  * 显示 Windows 沙箱状态与依赖检查结果。
  */
@@ -192,16 +192,16 @@ function WindowsSandboxStatus(props) {
   } else boxElement = $[9];
   return boxElement;
 }
-//@ chunk-55w3ydvj.js:21857-21900 placement
+//@ chunk-y07105e8.js:23032-23075 placement
 var WINDOWS_SANDBOX_DENIED_ERRORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-55w3ydvj.js:21857", () => {
+deferInit("chunk-y07105e8.js:23032", () => {
   WINDOWS_SANDBOX_DENIED_ERRORS = new Set(["EACCES", "EPERM", "EROFS"]);
 });
-//@ chunk-55w3ydvj.js:21900-21932 placement
+//@ chunk-y07105e8.js:23075-23107 placement
 function describeWindowsSandboxState(state) {
   return toInlineCode(escapeControlCharsForDisplay(state));
 }
-//@ chunk-55w3ydvj.js:21932-22234 placement
+//@ chunk-y07105e8.js:23107-23409 placement
 function sandboxSettingsErrorText({ error }, fallback) {
   if (error === null) return fallback;
   let cause = error.cause instanceof Error ? error.cause : error;

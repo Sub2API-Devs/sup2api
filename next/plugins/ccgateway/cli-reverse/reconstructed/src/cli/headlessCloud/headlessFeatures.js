@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：无头特性挂接与钩子合并。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fe6rs39h.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-keyy05re.js (8)
  * attribution: placement 8
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
@@ -13,7 +13,7 @@ import { isAbortError, errorMessage } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 
-//@ chunk-fe6rs39h.js:4090-4165 placement
+//@ chunk-keyy05re.js:4211-4286 placement
 function isServedToolsHeadlessEnabled() {
   try {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_lapping", false) === true;
@@ -21,7 +21,7 @@ function isServedToolsHeadlessEnabled() {
     return false;
   }
 }
-//@ chunk-fe6rs39h.js:4165-4253 placement
+//@ chunk-keyy05re.js:4286-4374 placement
 function logHeadlessFeatureError(error) {
   if (isAbortError(error)) {
     logForDebugging("[headlessFeatures] a feature hook was aborted");
@@ -29,9 +29,9 @@ function logHeadlessFeatureError(error) {
   }
   logError(error);
 }
-//@ chunk-fe6rs39h.js:4253-4299 placement
+//@ chunk-keyy05re.js:4374-4420 placement
 var HEADLESS_FEATURE_NAMES = ["settings", "hooks", "plugins", "tools"];
-//@ chunk-fe6rs39h.js:4299-4526 placement
+//@ chunk-keyy05re.js:4420-4647 placement
 /**
  * 并发调用每个无头特性挂接函数（settings/hooks/plugins/tools），单个失败只记日志不影响其他特性。
  */
@@ -52,7 +52,7 @@ async function attachHeadlessFeatures(features, factories) {
     )
   ).flatMap((feature) => (feature === undefined ? [] : [feature]));
 }
-//@ chunk-fe6rs39h.js:4526-4736 placement
+//@ chunk-keyy05re.js:4647-4857 placement
 function mergeFeatureHooks(base, layer) {
   return layer.reduce(
     (acc, groups) =>
@@ -74,7 +74,7 @@ function mergeFeatureHooks(base, layer) {
     },
   );
 }
-//@ chunk-fe6rs39h.js:4736-6533 placement
+//@ chunk-keyy05re.js:4857-6654 placement
 /**
  * 收集各无头特性的句柄（attached），统一提供 homeSeed、报告与释放。
  */
@@ -187,7 +187,7 @@ class HeadlessFeatureHandles {
     this.each((feature) => feature.onReportChanged?.(() => runFeatureCallbackSafely(fn)));
   }
 }
-//@ chunk-fe6rs39h.js:6533-6622 placement
+//@ chunk-keyy05re.js:6654-6743 placement
 function runFeatureCallbackSafely(fn) {
   try {
     let result = fn();
@@ -196,7 +196,7 @@ function runFeatureCallbackSafely(fn) {
     logHeadlessFeatureError(error);
   }
 }
-//@ chunk-fe6rs39h.js:6622-6638 placement
+//@ chunk-keyy05re.js:6743-6759 placement
 var SERVED_TOOLS_MAX_CALLS = 20;
 var MAX_SERVED_TOOL_CALLS_LISTED = 64;
 export {

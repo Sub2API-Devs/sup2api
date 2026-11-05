@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：会话标题写回服务端的令牌桶合并器（合并、限速、退避重试）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q8z5dt8p.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a5xmtc67.js (14)
  * attribution: placement 14
  */
 import { logFeatureSad } from "../services/analytics/featureTelemetry.js";
@@ -13,7 +13,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { updateBridgeSessionTitle, getBridgeSession } from "./createSession.js";
 import { errorMessage } from "../utils/errors.js";
 
-//@ chunk-q8z5dt8p.js:337-739 placement
+//@ chunk-a5xmtc67.js:337-739 placement
 /**
  * 会话标题写回服务端的令牌桶合并器：同会话的更新合并、限速、失败退避重试，远端改名后放弃旧写入。
  */
@@ -34,7 +34,7 @@ function createTitleWriteCoalescer(options) {
     isKnownTitle: (sessionId, title) => state.entries.get(sessionId)?.knownTitles.has(title) ?? false,
   };
 }
-//@ chunk-q8z5dt8p.js:739-1014 placement
+//@ chunk-a5xmtc67.js:739-1014 placement
 function titleEntryFor(coalescer, sessionId) {
   let entry = coalescer.entries.get(sessionId);
   if (!entry) {
@@ -56,7 +56,7 @@ function titleEntryFor(coalescer, sessionId) {
   }
   return entry;
 }
-//@ chunk-q8z5dt8p.js:1014-1327 placement
+//@ chunk-a5xmtc67.js:1014-1327 placement
 function enqueueTitleWrite(coalescer, sessionId, title, options) {
   let entry = titleEntryFor(coalescer, sessionId);
   if (isTitleAlreadySent(entry, title, options)) {
@@ -80,7 +80,7 @@ function enqueueTitleWrite(coalescer, sessionId, title, options) {
     flushTitleWrite(coalescer, sessionId);
   });
 }
-//@ chunk-q8z5dt8p.js:1327-1500 placement
+//@ chunk-a5xmtc67.js:1327-1500 placement
 function refillTitleTokens(coalescer, entry, now) {
   let floored = Math.floor((now - entry.refilledAt) / coalescer.refillMs);
   if (floored > 0) {
@@ -89,7 +89,7 @@ function refillTitleTokens(coalescer, entry, now) {
   }
   if (entry.tokens === coalescer.burst) entry.refilledAt = now;
 }
-//@ chunk-q8z5dt8p.js:1500-2558 placement
+//@ chunk-a5xmtc67.js:1500-2558 placement
 function flushTitleWrite(coalescer, sessionId) {
   let entry = coalescer.entries.get(sessionId);
   if (!entry || entry.inFlight || !entry.pending) return;
@@ -155,7 +155,7 @@ function flushTitleWrite(coalescer, sessionId) {
       flushTitleWrite(coalescer, sessionId);
     });
 }
-//@ chunk-q8z5dt8p.js:2558-2624 placement
+//@ chunk-a5xmtc67.js:2558-2624 placement
 function onTitleWriteTimer(coalescer, sessionId) {
   let entry = coalescer.entries.get(sessionId);
   if (entry) {
@@ -163,7 +163,7 @@ function onTitleWriteTimer(coalescer, sessionId) {
     flushTitleWrite(coalescer, sessionId);
   }
 }
-//@ chunk-q8z5dt8p.js:2624-3361 placement
+//@ chunk-a5xmtc67.js:2624-3361 placement
 function retryTitleWrite(coalescer, sessionId, title, options) {
   let entry = coalescer.entries.get(sessionId);
   if (!entry) return;
@@ -207,7 +207,7 @@ function retryTitleWrite(coalescer, sessionId, title, options) {
     },
   );
 }
-//@ chunk-q8z5dt8p.js:3361-3485 placement
+//@ chunk-a5xmtc67.js:3361-3485 placement
 function isFailedResendCandidate(coalescer, entry, sessionId, title) {
   return (
     coalescer.entries.get(sessionId) === entry &&
@@ -218,7 +218,7 @@ function isFailedResendCandidate(coalescer, entry, sessionId, title) {
     !entry.retryTimer
   );
 }
-//@ chunk-q8z5dt8p.js:3485-3581 placement
+//@ chunk-a5xmtc67.js:3485-3581 placement
 function noteTitleSent(coalescer, sessionId, title) {
   let entry = titleEntryFor(coalescer, sessionId);
   entry.lastSentTitle = title;
@@ -227,7 +227,7 @@ function noteTitleSent(coalescer, sessionId, title) {
   clearRetryTimer(entry);
   clearPendingTitleWrite(entry);
 }
-//@ chunk-q8z5dt8p.js:3581-3696 placement
+//@ chunk-a5xmtc67.js:3581-3696 placement
 function dropTitleEntry(coalescer, sessionId) {
   let entry = coalescer.entries.get(sessionId);
   if (!entry) return;
@@ -236,25 +236,25 @@ function dropTitleEntry(coalescer, sessionId) {
   clearPendingTitleWrite(entry);
   coalescer.entries.delete(sessionId);
 }
-//@ chunk-q8z5dt8p.js:3696-3782 placement
+//@ chunk-a5xmtc67.js:3696-3782 placement
 function clearPendingTitleWrite(entry) {
   runWaiters(entry.pending?.waiters);
   entry.pending = undefined;
   entry.sendingRetry = false;
   entry.suppressed = 0;
 }
-//@ chunk-q8z5dt8p.js:3782-3859 placement
+//@ chunk-a5xmtc67.js:3782-3859 placement
 function clearRetryTimer(entry) {
   if (entry.retryTimer) {
     clearTimeout(entry.retryTimer);
     entry.retryTimer = undefined;
   }
 }
-//@ chunk-q8z5dt8p.js:3859-3896 placement
+//@ chunk-a5xmtc67.js:3859-3896 placement
 function runWaiters(waiters) {
   for (let waiter of waiters ?? []) waiter();
 }
-//@ chunk-q8z5dt8p.js:3896-4031 placement
+//@ chunk-a5xmtc67.js:3896-4031 placement
 function isTitleAlreadySent(entry, title, options) {
   if (entry.lastSentTitle !== title) return false;
   if (entry.inFlight || entry.retryTimer !== undefined) return true;

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Workflow 工具（运行确定性 JS 脚本编排子代理）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-y1shfdfm.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-kgbsr4tm.js (16)
  * attribution: placement 16
  */
 import { resolve, basename } from "path";
@@ -59,6 +59,7 @@ import {
   ensureResumeRestored,
   mirrorWorkflowScript,
 } from "../../services/workflow/resume.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import {
   isWorkflowsAvailable,
@@ -99,13 +100,13 @@ import { bunStringWidth } from "../../ink/stringWidth.js";
 import { formatOverflowHint } from "../../utils/format.js";
 import { isTaskLoopSettled } from "../../tasks/taskLoopRegistry.js";
 
-//@ chunk-y1shfdfm.js:55713-55744 placement
+//@ chunk-kgbsr4tm.js:57377-57408 placement
 /**
  * 工作流标题/描述的最大显示宽度（80）。
  */
 var MAX_WORKFLOW_TITLE_CHARS = 80;
 var STREAM_INPUT_EXEMPT_KEYS = new Set(["args"]);
-//@ chunk-y1shfdfm.js:55744-55835 placement
+//@ chunk-kgbsr4tm.js:57408-57499 placement
 /**
  * 打开工作流 world 日志并收集运行状态。
  */
@@ -113,14 +114,14 @@ async function reopenWorldJournal(runContext) {
   await openWorldJournal(runContext.session, runContext.storageV5);
   collectRunStatuses(worldStateOf(runContext.session), runContext.toolState.get(RunIndex));
 }
-//@ chunk-y1shfdfm.js:55835-55856 placement
+//@ chunk-kgbsr4tm.js:57499-57520 placement
 /**
  * 工作流脚本扩展（当前未提供，恒 undefined）。
  */
 function workflowScriptExtension() {
   return;
 }
-//@ chunk-y1shfdfm.js:55856-56048 placement
+//@ chunk-kgbsr4tm.js:57520-57712 placement
 function authoringSkillHint(input, tools) {
   return input.name === undefined &&
     (input.script !== undefined || input.scriptPath !== undefined) &&
@@ -129,14 +130,14 @@ function authoringSkillHint(input, tools) {
 Load the \`${WORKFLOW_AUTHORING}\` skill for the script reference if you have not, fix the script, and retry.`
     : "";
 }
-//@ chunk-y1shfdfm.js:56048-56071 placement
+//@ chunk-kgbsr4tm.js:57712-57735 placement
 /**
  * 返回空串的提示后缀。
  */
 function emptyPromptSuffix() {
   return "";
 }
-//@ chunk-y1shfdfm.js:56071-59571 placement
+//@ chunk-kgbsr4tm.js:57735-61235 placement
 /**
  * Workflow 工具的输入 schema（script/args 等）。
  */
@@ -237,14 +238,14 @@ var workflowOutputSchema = DoctorLazy(() =>
     ...(workflowScriptExtension()?.runOpOutputFields() ?? {}),
   }),
 );
-//@ chunk-y1shfdfm.js:59571-59650 placement
+//@ chunk-kgbsr4tm.js:61235-61314 placement
 class WorkflowInputError extends Error {
   constructor(message) {
     super(message);
     this.name = "WorkflowInputError";
   }
 }
-//@ chunk-y1shfdfm.js:59650-60381 placement
+//@ chunk-kgbsr4tm.js:61314-62045 placement
 async function loadWorkflowScript(input, runContext, storageV5) {
   if (input.scriptPath) {
     let script;
@@ -294,17 +295,17 @@ async function loadWorkflowScript(input, runContext, storageV5) {
     error: "Must provide script, name, or scriptPath",
   };
 }
-//@ chunk-y1shfdfm.js:60381-60500 placement
+//@ chunk-kgbsr4tm.js:62045-62164 placement
 var RETRACTED_DISPATCH_RESULT = {
   result: false,
   message: "Tool dispatch was retracted by a server fallback; the input may be truncated.",
   errorCode: 7,
 };
-//@ chunk-y1shfdfm.js:60500-60642 placement
+//@ chunk-kgbsr4tm.js:62164-62306 placement
 function hiddenScriptResumeNote(resumeFromRunId) {
   return `Run ${resumeFromRunId} hides its script, so its script is not shown here; the resume runs only the script the run was launched with.`;
 }
-//@ chunk-y1shfdfm.js:60642-60757 placement
+//@ chunk-kgbsr4tm.js:62306-62421 placement
 function readRunJournal(resumeFromRunId, scriptPath, runContext) {
   return readWorkflowJournal(resumeFromRunId, runContext.toolState, runContext.taskRegistry, () =>
     loadResumeJournal(
@@ -316,9 +317,9 @@ function readRunJournal(resumeFromRunId, scriptPath, runContext) {
     ),
   );
 }
-//@ chunk-y1shfdfm.js:60757-61257 placement
+//@ chunk-kgbsr4tm.js:62421-63029 placement
 function workflowRunContext(baseContext, callOptions) {
-  return {
+  let context = {
     get session() {
       return baseContext.session;
     },
@@ -361,13 +362,19 @@ function workflowRunContext(baseContext, callOptions) {
       };
     },
   };
+  if (codeModeAccepted())
+    Object.defineProperty(context, "primitiveToolGrant", {
+      get: () => baseContext.primitiveToolGrant,
+      enumerable: true,
+    });
+  return context;
 }
-//@ chunk-y1shfdfm.js:61257-61378 placement
+//@ chunk-kgbsr4tm.js:63029-63150 placement
 function requireRunEngine(runContext) {
   if (!runContext.runEngine) throw Error("Workflow: launching needs the executor (call.runEngine)");
   return runContext.runEngine;
 }
-//@ chunk-y1shfdfm.js:61378-72084 placement
+//@ chunk-kgbsr4tm.js:63150-73856 placement
 /**
  * Workflow 工具：运行确定性 JavaScript 脚本编排子代理（RunWorkflow 别名）。
  */
@@ -985,7 +992,7 @@ You will be notified when it completes. Use /workflows to watch live progress.`;
     };
   },
 });
-//@ chunk-y1shfdfm.js:72084-72309 placement
+//@ chunk-kgbsr4tm.js:73856-74079 placement
 function workflowScriptSummary(script) {
   let workflowScript = parseWorkflowScript(script);
   if (!("error" in workflowScript)) return stripFormatChars(workflowScript.meta.description);
@@ -1010,7 +1017,7 @@ function workflowScriptSummary(script) {
   let cleanTitle = stripFormatChars(title);
   return overflowHint ? `${cleanTitle} ${overflowHint}` : cleanTitle;
 }
-//@ chunk-y1shfdfm.js:72309-73217 placement
+//@ chunk-kgbsr4tm.js:74079-74987 placement
 function findWorkflowTaskByRun(resumeFromRunId, toolContext) {
   for (let [key, value] of Object.entries(toolContext.taskRegistry?.all() ?? {})) {
     if (value.type !== "local_workflow" || value.workflowRunId !== resumeFromRunId) continue;

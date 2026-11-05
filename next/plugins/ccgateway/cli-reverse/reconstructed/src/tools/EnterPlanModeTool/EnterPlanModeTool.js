@@ -3,9 +3,9 @@
  *
  * EnterPlanMode 工具：主会话切换到计划模式（必要时需用户亲自确认）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/EnterPlanModeTool/EnterPlanModeTool.ts
- * pieces: chunk-a5k9jscj.js (2)
+ * pieces: chunk-6kmb8me5.js (2)
  * attribution: sole-consumer 1, fingerprint 1
  */
 import { enterPlanModeToolPrompt } from "./prompt.js";
@@ -21,21 +21,21 @@ import { ASKUSERQUESTION } from "../AskUserQuestionTool/prompt.js";
 import { EXITPLANMODE } from "../ExitPlanModeTool/constants.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-a5k9jscj.js:31089-31115 sole-consumer
+//@ chunk-6kmb8me5.js:31505-31531 sole-consumer
 /**
  * EnterPlanMode 的 prompt（主动在非平凡实现前进入计划模式的使用说明）。
  */
 function getEnterPlanModePrompt() {
   return enterPlanModeToolPrompt();
 }
-//@ chunk-a5k9jscj.js:31115-33172 fingerprint (2.1.88 match: EnterPlanModeTool, 0.578)
+//@ chunk-6kmb8me5.js:31531-33588 fingerprint (2.1.88 match: EnterPlanModeTool, 0.582)
 /**
  * EnterPlanMode 工具（shouldDefer，只读可并发，isEnabled 跟随 ExitPlanModeV2Tool.isEnabled）。子代理不能进入计划模式；diskless 会话且当前不是 auto/plan 时需要用户亲自确认（personOnly、classifier 不可代批），否则直接允许。call 记录模式切换，把权限上下文切到 plan（prepareContextForPlanMode 保存 prePlanMode），结果附带计划模式要求：只读探索、需要时用 AskUserQuestion、完成后用 ExitPlanMode。
  */
 var enterPlanModeInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var enterPlanModeOutputSchema;
 var EnterPlanModeTool;
-deferInit("chunk-a5k9jscj.js:31115", () => {
+deferInit("chunk-6kmb8me5.js:31531", () => {
   enterPlanModeInputSchema = DoctorLazy(() => zodStrictObject({}));
   enterPlanModeOutputSchema = DoctorLazy(() =>
     objectSchema({

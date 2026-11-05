@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增："委派子代理"的成本提示段落；读取子代理引导设置（环境变量 CLAUDE_CODE_THISTLE_GREBE、客户端数据、tengu_thistle_grebe）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (16)
  * attribution: placement 16
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
@@ -15,9 +15,9 @@ import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:71810-71839 placement
+//@ chunk-exfmq47h.js:72945-72974 placement
 var TENGU_THISTLE_GREBE = "tengu_thistle_grebe";
-//@ chunk-aepeg2w5.js:71839-72011 placement
+//@ chunk-exfmq47h.js:72974-73146 placement
 class SteerSourceRegistry {
   clientData = null;
   feature = null;
@@ -32,12 +32,12 @@ class SteerSourceRegistry {
     return feature_2;
   }
 }
-//@ chunk-aepeg2w5.js:72011-72025 placement
+//@ chunk-exfmq47h.js:73146-73160 placement
 var steerSourceRegistry; // deferred: uses SteerSourceRegistry of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:72011", () => {
+deferInit("chunk-exfmq47h.js:73146", () => {
   steerSourceRegistry = new SteerSourceRegistry();
 });
-//@ chunk-aepeg2w5.js:72025-72374 placement
+//@ chunk-exfmq47h.js:73160-73509 placement
 /**
  * 子代理调度引导状态（模型下限、提示模型、锁存值）。
  */
@@ -62,48 +62,48 @@ class SubagentSteerState {
     this.promptModel = undefined;
   }
 }
-//@ chunk-aepeg2w5.js:72374-72400 placement
+//@ chunk-exfmq47h.js:73509-73535 placement
 var subagentSteerSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:72374", () => {
+deferInit("chunk-exfmq47h.js:73509", () => {
   subagentSteerSlot = new SessionRootSlot(() => new SubagentSteerState());
 });
-//@ chunk-aepeg2w5.js:72400-72432 placement
+//@ chunk-exfmq47h.js:73535-73567 placement
 function currentSubagentSteer() {
   return subagentSteerSlot.of(getRootSession());
 }
-//@ chunk-aepeg2w5.js:72432-72479 placement
+//@ chunk-exfmq47h.js:73567-73614 placement
 /**
  * 为子代理引导登记客户端数据读取器。
  */
 function registerSteerClientData(fn) {
   return steerSourceRegistry.registerClientData(fn);
 }
-//@ chunk-aepeg2w5.js:72479-72523 placement
+//@ chunk-exfmq47h.js:73614-73658 placement
 /**
  * 为子代理引导登记特性读取器。
  */
 function registerSteerFeature(getFeatureValue_CACHED_MAY_BE_STALE) {
   return steerSourceRegistry.registerFeature(getFeatureValue_CACHED_MAY_BE_STALE);
 }
-//@ chunk-aepeg2w5.js:72523-72573 placement
+//@ chunk-exfmq47h.js:73658-73708 placement
 /**
  * 登记子代理引导的模型下限。
  */
 function registerSteerModelFloor(fn) {
   return currentSubagentSteer().registerModelFloor(fn);
 }
-//@ chunk-aepeg2w5.js:72573-72615 placement
+//@ chunk-exfmq47h.js:73708-73750 placement
 /**
  * 记录子代理引导时的提示模型。
  */
 function recordSteerPromptModel(model) {
   currentSubagentSteer().recordPromptModel(model);
 }
-//@ chunk-aepeg2w5.js:72615-72698 placement
+//@ chunk-exfmq47h.js:73750-73833 placement
 function normalizeSteerMode(mode) {
   return mode === "default" || mode === "no_nudges" || mode === "counter_steer" ? mode : undefined;
 }
-//@ chunk-aepeg2w5.js:72698-73092 placement
+//@ chunk-exfmq47h.js:73833-74227 placement
 /**
  * 读取子代理引导设置（环境变量 CLAUDE_CODE_THISTLE_GREBE、客户端数据、tengu_thistle_grebe）。
  */
@@ -143,7 +143,7 @@ function readSubagentSteer(state) {
     source: "default",
   };
 }
-//@ chunk-aepeg2w5.js:73092-73280 placement
+//@ chunk-exfmq47h.js:74227-74415 placement
 /**
  * 取锁存的子代理引导值并上报一次。
  */
@@ -159,7 +159,7 @@ function getSubagentSteer() {
     });
   return steer;
 }
-//@ chunk-aepeg2w5.js:73280-73407 placement
+//@ chunk-exfmq47h.js:74415-74542 placement
 /**
  * 每个会话上报一次宿主成本引导已应用（tengu_witty_dewdrop_applied）。
  */
@@ -171,14 +171,14 @@ function logHostCostSteerApplied() {
     logEvent("tengu_witty_dewdrop_applied", {});
   }
 }
-//@ chunk-aepeg2w5.js:73407-73440 placement
+//@ chunk-exfmq47h.js:74542-74575 placement
 /**
  * 重置子代理引导的锁存状态。
  */
 function resetSteerLatch() {
   currentSubagentSteer().resetLatch();
 }
-//@ chunk-aepeg2w5.js:73440-74889 placement
+//@ chunk-exfmq47h.js:74575-76024 placement
 /**
  * "委派子代理"的成本提示段落。
  */
@@ -198,8 +198,8 @@ export {
   registerSteerModelFloor,
   recordSteerPromptModel,
   DELEGATION_GUIDANCE,
-  registerSteerClientData,
-  registerSteerFeature,
   resetSteerLatch,
   logHostCostSteerApplied,
+  registerSteerClientData,
+  registerSteerFeature,
 };

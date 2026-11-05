@@ -3,9 +3,9 @@
  *
  * 并入旧版已有路径：队友初始化。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/teammateInit.ts
- * pieces: chunk-18hwfzwa.js (3)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: placement 2, fingerprint 1
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -25,12 +25,12 @@ import { getLastApiErrorReason } from "../messages.js";
 import { errorMessage } from "../errors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:218085-218089 placement
+//@ chunk-czq1j3j2.js:223123-223127 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:218085", () => {
+deferInit("chunk-czq1j3j2.js:223123", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:218089-219727 fingerprint (2.1.88 match: initializeTeammateHooks, 0.826)
+//@ chunk-czq1j3j2.js:223127-224765 fingerprint (2.1.88 match: initializeTeammateHooks, 0.826)
 /**
  * 初始化 teammate：读团队文件，把 teamAllowedPaths 转成会话级 allow 规则（仅允许受管规则时跳过）；非 leader 注册 Stop 函数钩子：标成员不活跃并写 idle_notification 到 team-lead 的 inbox。
  */
@@ -130,7 +130,7 @@ async function initializeTeammateHooks(setAppState, hookRegistry, sessionId, tea
     },
   );
 }
-//@ chunk-18hwfzwa.js:219727-220439 placement
+//@ chunk-czq1j3j2.js:224765-225477 placement
 async function notifyLeaderOfFailedIdle(teamContext, messages, aborted, storage) {
   if (aborted || !teamContext || teamContext.isLeader) return;
   let selfAgentName = teamContext.selfAgentName;

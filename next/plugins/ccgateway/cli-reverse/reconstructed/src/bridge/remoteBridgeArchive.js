@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：重新激活（取消归档）远程桥接会话，处理 v2 接口与可信设备令牌，返回结果；归档远程桥接会话；teleport 过来的、owner 已变更、被接替或已归档的会话不归档并记录原因。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4cm44bmp.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-56msakfz.js (8)
  * attribution: placement 8
  */
 import { isTeleportedSession } from "./createSession.js";
@@ -27,7 +27,7 @@ import { isTaskLifecycleMessage } from "./remoteBridgeSettle.js";
 import { AGENT, TASK } from "../tools/AgentTool/constants.js";
 import { isInterruptionOnlyMessage, INTERRUPTION_TEXT_PREFIXES } from "../utils/messages.js";
 
-//@ chunk-4cm44bmp.js:98795-99549 placement
+//@ chunk-56msakfz.js:97836-98590 placement
 /**
  * 归档远程桥接会话；teleport 过来的、owner 已变更、被接替或已归档的会话不归档并记录原因。
  */
@@ -74,11 +74,11 @@ async function archiveRemoteBridgeSession(
   if (isFinalArchiveOutcome(outcome)) removeBridgePlaceholdersFor(sessionId, storageV5);
   return outcome;
 }
-//@ chunk-4cm44bmp.js:99549-99574 placement
+//@ chunk-56msakfz.js:98590-98615 placement
 var ARCHIVE_RETRY_ATTEMPTS = 8;
 var ARCHIVE_RETRY_BASE_MS = 5000;
 var ARCHIVE_RETRY_FLOOR_MS = 2000;
-//@ chunk-4cm44bmp.js:99574-99854 placement
+//@ chunk-56msakfz.js:98615-98895 placement
 /**
  * 重试归档被放弃的远程会话，成功或设备不受信任时停止，每次失败记日志。
  */
@@ -103,7 +103,7 @@ async function retryArchiveAbandonedSession(sessionId, archiveOnce) {
     );
   }
 }
-//@ chunk-4cm44bmp.js:99854-101108 placement
+//@ chunk-56msakfz.js:98895-100149 placement
 /**
  * 重新激活（取消归档）远程桥接会话，处理 v2 接口与可信设备令牌，返回结果。
  */
@@ -202,7 +202,7 @@ async function unarchiveRemoteBridgeSession(
   if (outcome === 401) onUnauthorized?.();
   return null;
 }
-//@ chunk-4cm44bmp.js:101108-101251 placement
+//@ chunk-56msakfz.js:100149-100292 placement
 /**
  * 只保留最后 h 条消息，但截断点落在某个分组区间内时前移到区间起点。
  */
@@ -216,7 +216,7 @@ function sliceTailKeepingGroups(messages, keepCount) {
     }
   return messages.slice(startIdx);
 }
-//@ chunk-4cm44bmp.js:101251-101399 placement
+//@ chunk-56msakfz.js:100292-100440 placement
 /**
  * 真实用户输入、不是中断消息、也不含 tool_result。
  */
@@ -225,7 +225,7 @@ function isPlainUserPrompt(message) {
   let content = message.message.content;
   return typeof content === "string" || !content.some((block) => block.type === "tool_result");
 }
-//@ chunk-4cm44bmp.js:101399-101602 placement
+//@ chunk-56msakfz.js:100440-100643 placement
 /**
  * 带 parent_tool_use_id 的子代理消息，且不是发起 Agent/Task 工具调用的助手消息。
  */
@@ -243,7 +243,7 @@ function isSubagentStreamMessage(message) {
     )
   );
 }
-//@ chunk-4cm44bmp.js:101602-101772 placement
+//@ chunk-56msakfz.js:100643-100813 placement
 /**
  * 只含中断提示文本的用户消息。
  */

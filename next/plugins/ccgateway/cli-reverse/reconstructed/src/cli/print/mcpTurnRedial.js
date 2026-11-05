@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 重试编排、下一回合重拨与宿主 OTel 事件转发
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (10)
  * attribution: placement 10
  */
 import { isDeepStrictEqual } from "util";
@@ -22,6 +22,7 @@ import {
   serverItemsOf,
   refusalStateFor,
   shouldCommitReconnect,
+  withAuthTools,
 } from "../../services/mcp/mcpReconnect.js";
 import { identityEpoch } from "../../services/mcp/identityChange.js";
 import { serverCacheKey, getConnectionTimeoutMs } from "../../services/mcp/client.js";
@@ -44,7 +45,7 @@ import { CACHED_ADOPT_SIGNAL, CACHED_DIAL_FAILED_SIGNAL } from "../../services/m
 import { getMcpPrefix, isToolFromMcpServer } from "../../services/mcp/mcpStringUtils.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { logError } from "../../utils/log.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { logForDiagnosticsNoPII, liveWeakRefs, propagateAbort } from "../../utils/diagLogs.js";
 import { identityMap } from "../../remote/tools/protocolConstants.js";
@@ -55,7 +56,7 @@ import {
 } from "../../services/analytics/featureTelemetry.js";
 import { identityId2 } from "../../types/ids.js";
 
-//@ chunk-tyg7f3ek.js:516479-516760 placement
+//@ chunk-0yw3taqg.js:556510-556791 placement
 function pickServerResultsAfterRetry(mcp, serverName, results) {
   let mcpApi = mcpClientModule();
   return {
@@ -70,7 +71,7 @@ function pickServerResultsAfterRetry(mcp, serverName, results) {
       : results.resources,
   };
 }
-//@ chunk-tyg7f3ek.js:516760-522351 placement
+//@ chunk-0yw3taqg.js:556791-562516 placement
 /**
  * print 模式 MCP 重连编排：轮次开始时对失败/需认证的服务器重拨（tengu_snug_reef 次数），保留缓存行。
  */
@@ -89,8 +90,17 @@ function createMcpRetryOrchestrator(options) {
   } = options;
   let applyReconnect = (serverName, config) => applyMcpReconnect(options, serverName, config);
   let isReusable = (entry) =>
-    entry?.type === "cached" || (keepListsOnNeedsAuth && entry?.type === "needs-auth");
-  let onCachedAdopt = (serverName, config) => {
+    entry?.type === "cached" ||
+    (entry?.type === "needs-auth" &&
+      (keepListsOnNeedsAuth || hasAuthStubTools(getAppState().mcp, entry.name)));
+  let dropIfAuthStubbed = (serverName, config) => {
+    if (!hasAuthStubTools(getAppState().mcp, serverName)) return false;
+    mcpClientModule()
+      .clearServerCache(serverName, config)
+      .catch(() => {});
+    return true;
+  };
+  let adoptCachedServer = (serverName, config) => {
     if (!ownsCachedRow(serverName)) return;
     (async () => {
       let epoch = identityEpoch();
@@ -183,15 +193,18 @@ function createMcpRetryOrchestrator(options) {
         let found = getAppState().mcp.clients.find((client) => client.name === serverName);
         if (
           (found?.type !== "cached" &&
-            !(keepListsOnNeedsAuth && (found === entry || isSameConnectedClient(found, connection)))) ||
+            !(
+              (keepListsOnNeedsAuth || entry.type === "needs-auth") &&
+              (found === entry || isSameConnectedClient(found, connection))
+            )) ||
           isRunEnding()
-        )
-          return;
-        let mcp = getAppState().mcp;
-        if (mcpApi.getToolsListErrorForResult(tools) !== undefined && hasAuthStubTools(mcp, serverName)) {
-          mcpApi.clearServerCache(serverName, config).catch(() => {});
+        ) {
+          dropIfAuthStubbed(serverName, config);
           return;
         }
+        let mcp = getAppState().mcp;
+        if (mcpApi.getToolsListErrorForResult(tools) !== undefined && dropIfAuthStubbed(serverName, config))
+          return;
         let picked = pickServerResultsAfterRetry(mcp, serverName, {
           tools,
           prompts,
@@ -226,6 +239,7 @@ function createMcpRetryOrchestrator(options) {
           ) !== "applied"
         )
           return;
+        if (entry.type === "needs-auth") mcpApi.removeMcpAuthCacheEntry(serverName, storageV5);
         mcpApi.persistLiveListing(connection, {
           tools,
           commands: prompts,
@@ -240,6 +254,7 @@ function createMcpRetryOrchestrator(options) {
             level: "warn",
           },
         );
+        dropIfAuthStubbed(serverName, config);
       }
     })();
   };
@@ -312,8 +327,7 @@ function createMcpRetryOrchestrator(options) {
     }
     if (expectedRow !== undefined && isRetryableConnectionFailure(result.client)) return "transient";
     let applied = applyReconnect(serverName, {
-      ...result,
-      tools: result.client.type === "needs-auth" ? mcpAuthToolsFor(serverName, config) : result.tools,
+      ...withAuthTools(result),
       attemptEpoch: epoch,
     });
     if (applied === "superseded" || (expectedRow !== undefined && applied !== "applied"))
@@ -386,11 +400,11 @@ function createMcpRetryOrchestrator(options) {
     if (ownStrike) strikeAfterLazyDialFailure(serverName, config);
   };
   return {
-    onCachedAdopt,
+    onCachedAdopt: adoptCachedServer,
     onCachedDialFailed,
     redialFailedRow,
     subscribe: () => {
-      let unsubscribe = CACHED_ADOPT_SIGNAL.subscribe(onCachedAdopt);
+      let unsubscribe = CACHED_ADOPT_SIGNAL.subscribe(adoptCachedServer);
       let unsubscribeDialFailed = CACHED_DIAL_FAILED_SIGNAL.subscribe((row, ownStrike) => {
         mcpClientModule().takeSettledCachedDialFailure(row.name, row.config);
         onCachedDialFailed(row, ownStrike);
@@ -426,29 +440,29 @@ function createMcpRetryOrchestrator(options) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:522351-522416 placement
+//@ chunk-0yw3taqg.js:562516-562581 placement
 function hasAuthStubTools(mcp, serverName) {
   return toolsOfServer(mcp, serverName).some((tool) => tool.mcpInfo?.isAuthStub);
 }
-//@ chunk-tyg7f3ek.js:522416-522483 placement
+//@ chunk-0yw3taqg.js:562581-562648 placement
 function toolsOfServer(mcp, serverName) {
   let mcpPrefix = getMcpPrefix(serverName);
   return mcp.tools.filter((tool) => isToolFromMcpServer(tool, serverName, mcpPrefix));
 }
-//@ chunk-tyg7f3ek.js:522483-522518 placement
+//@ chunk-0yw3taqg.js:562648-562683 placement
 var MCP_REDIAL_LIMITS = 10;
 var MCP_REDIAL_RECENT_WINDOW_MS = 30000;
 var MAX_CONCURRENT_MCP_DIALS = 20;
 var MCP_REDIAL_MAX_DELAY_MS = 600000;
-//@ chunk-tyg7f3ek.js:522518-522559 placement
+//@ chunk-0yw3taqg.js:562683-562724 placement
 function redialTimeoutMs() {
   return Math.min(2 * getConnectionTimeoutMs(), MCP_REDIAL_MAX_DELAY_MS);
 }
-//@ chunk-tyg7f3ek.js:522559-522610 placement
+//@ chunk-0yw3taqg.js:562724-562775 placement
 function isRetryableFailedRow(row) {
   return isRetryableConnectionFailure(row) && row.errorCode !== undefined;
 }
-//@ chunk-tyg7f3ek.js:522610-522741 placement
+//@ chunk-0yw3taqg.js:562775-562906 placement
 function maxTurnRedials() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_snug_reef", 0);
   return typeof featureValue_CACHED_MAY_BE_STALE === "number" &&
@@ -456,7 +470,7 @@ function maxTurnRedials() {
     ? Math.min(Math.max(Math.trunc(featureValue_CACHED_MAY_BE_STALE), 0), MCP_REDIAL_LIMITS)
     : 0;
 }
-//@ chunk-tyg7f3ek.js:522741-526560 placement
+//@ chunk-0yw3taqg.js:562906-566736 placement
 /**
  * 跨轮次记录失败 MCP 服务器并在下一轮开始时重拨（tengu_mcp_next_turn_redial）。
  */
@@ -642,13 +656,13 @@ function createNextTurnRedialer(registry) {
         0,
         Math.max(
           0,
-          MAX_CONCURRENT_MCP_DIALS - count([...states.values()], (state) => state.dial === "awaited"),
+          MAX_CONCURRENT_MCP_DIALS - countWhere([...states.values()], (state) => state.dial === "awaited"),
         ),
       );
     if (sliced.length === 0) return;
     return Promise.all(sliced.map(dial))
       .then((results) => {
-        let countOutcome = (outcome) => count(results, (result) => result.outcome === outcome);
+        let countOutcome = (outcome) => countWhere(results, (result) => result.outcome === outcome);
         let dialed = sliced.length - countOutcome("not_dialed");
         if (dialed === 0) return;
         let recovered = countOutcome("connected");
@@ -656,7 +670,7 @@ function createNextTurnRedialer(registry) {
           turnLimit,
           candidates: filtered_2.length,
           dialed,
-          firstAttempts: count(results, (result) => result.first),
+          firstAttempts: countWhere(results, (result) => result.first),
           recovered,
           connectedWithoutTools: countOutcome("degraded"),
           failedAgain: countOutcome("transient"),
@@ -688,7 +702,7 @@ function createNextTurnRedialer(registry) {
     },
   };
 }
-//@ chunk-tyg7f3ek.js:526560-526932 placement
+//@ chunk-0yw3taqg.js:566736-567108 placement
 class PendingMcpToolsByServer {
   byServer = new Map();
   get size() {

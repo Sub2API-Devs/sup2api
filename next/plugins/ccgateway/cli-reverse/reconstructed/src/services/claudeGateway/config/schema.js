@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关配置 schema
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (1)
  * attribution: placement 1
  */
 import { createPrivateKey, X509Certificate } from "crypto";
@@ -14,13 +14,13 @@ import {
   create_2,
   create_15,
   create_20,
-  create_17,
   strictCreate,
+  create_26,
+  create_17,
   create_25,
   create_16,
   create,
   create_6,
-  create_26,
   zodCoerce,
   create_3,
   create_12,
@@ -41,7 +41,7 @@ import { validateGoogleAuthTarget } from "../telemetry/googleAuth.js";
 import { isSameModel } from "../models.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-1ny7cxrt.js:1388260-1413048 placement
+//@ chunk-1hnjmk23.js:1390097-1414928 placement
 /**
  * 网关配置的完整 Zod schema（upstream、access_control、listen、admin、store 等），loadGatewayConfig 用它的 parse 校验配置文件。
  */
@@ -51,7 +51,7 @@ var UPSTREAM_MODELS_REQUIRED_MESSAGE;
 var UPSTREAM_GROUPS_MESSAGE;
 var MANTLE_MODELS_REQUIRED_MESSAGE;
 var GatewayConfigSchema;
-deferInit("chunk-1ny7cxrt.js:1388260", () => {
+deferInit("chunk-1hnjmk23.js:1390097", () => {
   GATEWAY_HEADER_NAME_REGEX = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
   HEADER_VALUE_PRINTABLE_ASCII_RE = /^[\x20-\x7e]+$/;
   UPSTREAM_MODELS_REQUIRED_MESSAGE =
@@ -101,6 +101,16 @@ deferInit("chunk-1ny7cxrt.js:1388260", () => {
         }
       })
       .optional();
+    let assumeRole = strictCreate({
+      role_arn: create_2().regex(
+        /^arn:aws(-us-gov)?:iam::\d{12}:role\/[\w+=,.@\/-]+$/,
+        "must be an IAM role ARN (arn:aws:iam::<account>:role/<name>)",
+      ),
+      external_id: create_2()
+        .regex(/^[\w+=,.@:\/-]{2,1224}$/, "must be 2 to 1224 characters of letters, digits and _+=,.@:/-")
+        .optional(),
+      session_name: create_26(["email", "sub"]).optional(),
+    }).optional();
     let upstreamSchema = create_17("provider", [
       strictCreate({
         name,
@@ -159,16 +169,7 @@ deferInit("chunk-1ny7cxrt.js:1388260", () => {
           .refine((auth) => !auth.aws_session_token || !!auth.aws_access_key_id, {
             message: "aws_session_token requires aws_access_key_id and aws_secret_access_key",
           }),
-        assume_role: strictCreate({
-          role_arn: create_2().regex(
-            /^arn:aws(-us-gov)?:iam::\d{12}:role\/[\w+=,.@\/-]+$/,
-            "must be an IAM role ARN (arn:aws:iam::<account>:role/<name>)",
-          ),
-          external_id: create_2()
-            .regex(/^[\w+=,.@:\/-]{2,1224}$/, "must be 2 to 1224 characters of letters, digits and _+=,.@:/-")
-            .optional(),
-          session_name: create_26(["email", "sub"]).optional(),
-        }).optional(),
+        assume_role: assumeRole,
       }),
       strictCreate({
         name,
@@ -201,6 +202,7 @@ deferInit("chunk-1ny7cxrt.js:1388260", () => {
           .refine((auth) => !auth.aws_session_token || !!auth.aws_access_key_id, {
             message: "aws_session_token requires aws_access_key_id and aws_secret_access_key",
           }),
+        assume_role: assumeRole,
       }),
       strictCreate({
         name,
@@ -377,7 +379,11 @@ deferInit("chunk-1ny7cxrt.js:1388260", () => {
                 message: `duplicate upstream name '${upstream.name}' \u2014 set distinct 'name:' on each`,
               });
             names.add(upstream.name);
-            if (upstream.provider === "bedrock" && upstream.assume_role && upstream.auth.aws_bearer_token)
+            if (
+              (upstream.provider === "bedrock" || upstream.provider === "mantle") &&
+              upstream.assume_role &&
+              upstream.auth.aws_bearer_token
+            )
               ctx.addIssue({
                 code: ZodIssueCode.custom,
                 message: `upstream '${upstream.name}': assume_role needs SigV4 source credentials (access keys or the ambient AWS chain, auth: {}); aws_bearer_token cannot call sts:AssumeRole`,

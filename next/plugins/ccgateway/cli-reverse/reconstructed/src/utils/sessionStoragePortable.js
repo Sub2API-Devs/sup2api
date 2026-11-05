@@ -3,10 +3,10 @@
  *
  * 会话文件的可移植读取工具（头尾读取、字节级字段扫描、压缩边界标记）；本段混有终端按键与 git 配置常量（疑似错归）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sessionStoragePortable.ts
- * pieces: chunk-dz3q485w.js (2), chunk-e6aww6q8.js (1), chunk-f9pzpnqt.js (86), chunk-g54kbxqw.js (1)
- * attribution: affinity 1, fingerprint 11, placement 77, layout 1
+ * pieces: chunk-5xgkngpb.js (2), chunk-80bdkzt1.js (86), chunk-jndyh8cy.js (2)
+ * attribution: fingerprint 11, placement 77, layout 1, affinity 1
  */
 import { createWriteStream, constants } from "fs";
 import { once } from "events";
@@ -19,28 +19,29 @@ import { readAllPages } from "./pagedRead.js";
 import { hashString31 } from "./pastedContent.js";
 import { identity } from "./pathClassification.js";
 import { isNetworkishPath } from "./networkPaths.js";
-import { getClaudeConfigDir, getProjectDirNameOverride } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
+import { getProjectDirNameOverride } from "./envUtils.js";
 import { isDiskless } from "../bootstrap/state.js";
 import { getWorktreePathsPortable } from "./getWorktreePathsPortable.js";
 import { isByteViewUnsupportedError } from "./storage/storageErrors.js";
+import { skipNuls, buffer_5 } from "./transcript/entryTypes.js";
 import {
   contentBlockTypeBucket,
-  stripCacheControl_2,
+  stripCacheControl_2_2,
   saltedHash,
   summarizeLongText,
   classifyUserText,
 } from "../services/api/promptCacheBreakParts.js";
-import { skipNuls, buffer_5 } from "./transcript/entryTypes.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-f9pzpnqt.js:1310-1366 placement
+//@ chunk-80bdkzt1.js:1310-1366 placement
 var LITE_READ_BUF_SIZE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PROGRAMMATIC_ENTRYPOINTS;
-deferInit("chunk-f9pzpnqt.js:1310", () => {
+deferInit("chunk-80bdkzt1.js:1310", () => {
   LITE_READ_BUF_SIZE = 65536;
   PROGRAMMATIC_ENTRYPOINTS = new Set(["sdk-cli", "sdk-ts", "sdk-py"]);
 });
-//@ chunk-f9pzpnqt.js:1366-1581 placement
+//@ chunk-80bdkzt1.js:1366-1582 placement
 function isHiddenFromSessionPicker(head, tail) {
   let entrypoint =
     extractJsonStringField(head, "entrypoint") ?? extractLastJsonStringField(tail, "entrypoint");
@@ -55,14 +56,14 @@ function isHiddenFromSessionPicker(head, tail) {
   let jsonStringField = extractJsonStringField(parentLine, "sessionKind");
   return jsonStringField === "daemon" || jsonStringField === "daemon-worker";
 }
-//@ chunk-f9pzpnqt.js:1581-1654 placement
+//@ chunk-80bdkzt1.js:1582-1655 placement
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-//@ chunk-f9pzpnqt.js:1654-1729 placement
+//@ chunk-80bdkzt1.js:1655-1730 placement
 function validateUuid(maybeUuid) {
   if (typeof maybeUuid !== "string") return null;
   return UUID_RE.test(maybeUuid) ? maybeUuid : null;
 }
-//@ chunk-f9pzpnqt.js:1729-1821 placement
+//@ chunk-80bdkzt1.js:1730-1822 placement
 function unescapeJsonString(raw) {
   if (!raw.includes("\\")) return raw;
   try {
@@ -71,7 +72,7 @@ function unescapeJsonString(raw) {
     return raw;
   }
 }
-//@ chunk-f9pzpnqt.js:1821-2039 placement (2.1.88 match: extractJsonStringFieldPrefix, 1)
+//@ chunk-80bdkzt1.js:1822-2040 placement (2.1.88 match: extractJsonStringFieldPrefix, 1)
 function extractJsonStringField(text, key) {
   let patterns = [`"${key}":"`, `"${key}": "`];
   for (let pattern of patterns) {
@@ -90,7 +91,7 @@ function extractJsonStringField(text, key) {
   }
   return;
 }
-//@ chunk-f9pzpnqt.js:2039-2301 placement (2.1.88 match: extractJsonStringFieldPrefix, 1)
+//@ chunk-80bdkzt1.js:2040-2303 placement (2.1.88 match: extractJsonStringFieldPrefix, 1)
 function extractLastJsonStringField(text, key) {
   let patterns = [`"${key}":"`, `"${key}": "`];
   let value;
@@ -121,11 +122,11 @@ function extractLastJsonStringField(text, key) {
   }
   return value;
 }
-//@ chunk-f9pzpnqt.js:2301-2337 placement
+//@ chunk-80bdkzt1.js:2303-2339 placement
 function extractFieldFromLastEntryOfTypeStrict(text, type, key) {
   return findLastJsonStringField(text, key, type);
 }
-//@ chunk-f9pzpnqt.js:2337-2680 placement
+//@ chunk-80bdkzt1.js:2339-2682 placement
 function findLastJsonStringField(text, key, type) {
   let typeNeedle = type === undefined ? undefined : `"type":"${type}"`;
   let keyNeedle = `"${key}":`;
@@ -150,7 +151,7 @@ function findLastJsonStringField(text, key, type) {
   }
   return;
 }
-//@ chunk-f9pzpnqt.js:2680-2942 placement
+//@ chunk-80bdkzt1.js:2682-2944 placement
 function extractFieldFromFirstEntryStrict(head, key) {
   let keyNeedle = `"${key}":`;
   let start = 0;
@@ -173,11 +174,11 @@ function extractFieldFromFirstEntryStrict(head, key) {
   }
   return;
 }
-//@ chunk-f9pzpnqt.js:2942-2974 placement
+//@ chunk-80bdkzt1.js:2944-2976 placement
 function extractFieldFromLastEntryStrict(text, key) {
   return findLastJsonStringField(text, key);
 }
-//@ chunk-f9pzpnqt.js:2974-3081 placement
+//@ chunk-80bdkzt1.js:2976-3083 placement
 function workspaceV5Of(v5State, hoverRestOn) {
   return v5State?.realWorkspacePath === undefined
     ? undefined
@@ -186,15 +187,15 @@ function workspaceV5Of(v5State, hoverRestOn) {
         realPath: v5State.realWorkspacePath,
       };
 }
-//@ chunk-f9pzpnqt.js:3081-3127 placement
+//@ chunk-80bdkzt1.js:3083-3129 placement
 async function writeEntriesToJsonlFile(path, entries, target) {
   return writeJsonlRecords(path, entries, "w", target);
 }
-//@ chunk-f9pzpnqt.js:3127-3173 placement
+//@ chunk-80bdkzt1.js:3129-3175 placement
 async function appendEntriesToJsonlFile(path, entries, target) {
   return writeJsonlRecords(path, entries, "a", target);
 }
-//@ chunk-f9pzpnqt.js:3173-3437 placement
+//@ chunk-80bdkzt1.js:3175-3439 placement
 async function writeJsonlRecords(path, entries, flags, target) {
   if (target !== undefined && target.hoverRestOn && (flags === "w" || entries.length > 0))
     return writeRecordsToBackend(target.source, entries, flags);
@@ -219,7 +220,7 @@ async function writeJsonlRecords(path, entries, flags, target) {
     throw error;
   }
 }
-//@ chunk-f9pzpnqt.js:3437-3793 placement
+//@ chunk-80bdkzt1.js:3439-3795 placement
 /**
  * 通过 v5 存储后端写转录记录：w 模式原地替换全部记录，否则追加；失败抛出带原因的错误。
  */
@@ -248,7 +249,7 @@ async function writeRecordsToBackend(source, entries, flags) {
       cause: result.error,
     });
 }
-//@ chunk-f9pzpnqt.js:3793-4316 placement (2.1.88 match: extractFirstPromptFromHead, 0.914)
+//@ chunk-80bdkzt1.js:3795-4318 placement (2.1.88 match: extractFirstPromptFromHead, 0.915)
 function extractFirstPromptFromHead(head, mode = "stored") {
   let start = 0;
   let commandFallback = {
@@ -276,7 +277,7 @@ function extractFirstPromptFromHead(head, mode = "stored") {
   }
   return commandFallback.commandFallback;
 }
-//@ chunk-f9pzpnqt.js:4316-4786 placement
+//@ chunk-80bdkzt1.js:4318-4788 placement
 function attachmentPromptLabelFromHead(head) {
   let start = 0;
   while (start < head.length) {
@@ -295,7 +296,7 @@ function attachmentPromptLabelFromHead(head) {
   }
   return "";
 }
-//@ chunk-f9pzpnqt.js:4786-4963 placement
+//@ chunk-80bdkzt1.js:4788-4965 placement
 function extractFirstPromptFromEntries(entries, mode = "stored") {
   let state = {
     commandFallback: "",
@@ -307,9 +308,9 @@ function extractFirstPromptFromEntries(entries, mode = "stored") {
   }
   return state.commandFallback;
 }
-//@ chunk-f9pzpnqt.js:4963-5006 placement
+//@ chunk-80bdkzt1.js:4965-5008 placement
 var READ_NOFOLLOW_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
-//@ chunk-f9pzpnqt.js:5006-5517 placement
+//@ chunk-80bdkzt1.js:5008-5519 placement
 async function readHeadAndTail(path, fileSize, buf, target) {
   if (target !== undefined && target.hoverRestOn) return readHeadAndTail_2(target.source);
   try {
@@ -354,7 +355,7 @@ async function readHeadAndTail(path, fileSize, buf, target) {
     };
   }
 }
-//@ chunk-f9pzpnqt.js:5517-5615 placement (2.1.88 match: readHeadAndTail, 0.802)
+//@ chunk-80bdkzt1.js:5519-5617 placement (2.1.88 match: readHeadAndTail, 0.802)
 async function readHeadAndTail_2(target) {
   let headTailV5 = await readHeadTailV5(target);
   return headTailV5 === null
@@ -367,13 +368,13 @@ async function readHeadAndTail_2(target) {
         tail: headTailV5.tail,
       };
 }
-//@ chunk-f9pzpnqt.js:5615-5680 placement
+//@ chunk-80bdkzt1.js:5617-5682 placement
 function anchorOffsetTail(tail) {
   let index = tail.indexOf(`
 `);
   return index >= 0 ? tail.slice(index + 1) : "";
 }
-//@ chunk-f9pzpnqt.js:5680-6021 placement
+//@ chunk-80bdkzt1.js:5682-6023 placement
 /**
  * 从 v5 存储后端一次读取转录的头部与尾部缓冲，返回 {head, tail, mtimeMs, totalBytes}；不存在或失败返回 null。
  */
@@ -406,15 +407,15 @@ async function readHeadTailV5(target) {
     return null;
   }
 }
-//@ chunk-f9pzpnqt.js:6021-6107 placement
+//@ chunk-80bdkzt1.js:6023-6109 placement
 function bufferToString(bytes) {
   return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("utf8");
 }
-//@ chunk-f9pzpnqt.js:6107-6158 placement
+//@ chunk-80bdkzt1.js:6109-6160 placement
 async function _(path, target) {
   return (await getTranscriptMessagesState(path, target)) !== "none";
 }
-//@ chunk-f9pzpnqt.js:6158-6602 placement
+//@ chunk-80bdkzt1.js:6160-6604 placement
 /**
  * 判断转录文件是否含 user/assistant 消息：逐行扫描，返回 has / none / unknown（v5 存储时交给后端判断）。
  */
@@ -447,24 +448,24 @@ async function getTranscriptMessagesState(path, target) {
     await handle.close().catch(() => {});
   }
 }
-//@ chunk-f9pzpnqt.js:6602-6695 placement
+//@ chunk-80bdkzt1.js:6604-6697 placement
 var TRANSCRIPT_TAIL_READ_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var TRANSCRIPT_FULL_READ_BYTES;
 var buffer;
 var buffer_2;
-deferInit("chunk-f9pzpnqt.js:6602", () => {
+deferInit("chunk-80bdkzt1.js:6604", () => {
   TRANSCRIPT_TAIL_READ_BYTES = 65536;
   TRANSCRIPT_FULL_READ_BYTES = 4194304;
   buffer = Buffer.from('"type":"user"');
   buffer_2 = Buffer.from('"type":"assistant"');
 });
-//@ chunk-f9pzpnqt.js:6695-6748 placement
+//@ chunk-80bdkzt1.js:6697-6750 placement
 function hasConversationMarker(chunk) {
   return chunk.includes(buffer) || chunk.includes(buffer_2);
 }
-//@ chunk-f9pzpnqt.js:6748-6760 placement
+//@ chunk-80bdkzt1.js:6750-6762 placement
 var MAX_LISTING_PAGES = 1e4;
-//@ chunk-f9pzpnqt.js:6760-6946 placement
+//@ chunk-80bdkzt1.js:6762-6948 placement
 function listedProjectKey(item, isKeySegment) {
   if (
     item.kind !== "scope" ||
@@ -476,7 +477,7 @@ function listedProjectKey(item, isKeySegment) {
     return;
   return item.scope.projectKey;
 }
-//@ chunk-f9pzpnqt.js:6946-7686 placement
+//@ chunk-80bdkzt1.js:6948-7688 placement
 async function transcriptMessagesStateV5(target, hasMarker = hasConversationMarker) {
   let { backend, key } = target;
   let fromSeq;
@@ -515,7 +516,7 @@ async function transcriptMessagesStateV5(target, hasMarker = hasConversationMark
     return "unknown";
   }
 }
-//@ chunk-f9pzpnqt.js:7686-8156 placement
+//@ chunk-80bdkzt1.js:7688-8158 placement
 async function quarantineJobTranscript(path, target) {
   let suffix = `orphaned-${Date.now()}-${randomUUID().slice(0, 8)}`;
   let source = target !== undefined && target.hoverRestOn ? target.source : undefined;
@@ -542,11 +543,11 @@ async function quarantineJobTranscript(path, target) {
     return false;
   }
 }
-//@ chunk-f9pzpnqt.js:8156-8207 placement (2.1.88 match: getErrorsPath, 1)
+//@ chunk-80bdkzt1.js:8158-8209 placement (2.1.88 match: getErrorsPath, 1)
 function isTranscriptFileResumeArg(value) {
   return isAbsolute(value) && value.endsWith(".jsonl");
 }
-//@ chunk-f9pzpnqt.js:8207-9391 placement
+//@ chunk-80bdkzt1.js:8209-9394 placement
 /**
  * 为恢复会话定位 transcript 文件：依次查链接路径、项目目录、计算路径，必要时跨 worktree 与全项目扫描，返回 {path, via, hasMessages, unverifiable?}。与 bridge 无关（会话存储）。
  */
@@ -646,7 +647,7 @@ async function resolveJobTranscript(sessionId, cwd, linkScanPath, options, targe
     hasMessages: false,
   };
 }
-//@ chunk-f9pzpnqt.js:9391-9553 placement
+//@ chunk-80bdkzt1.js:9394-9556 placement
 function transcriptStoreKey(path, sessionId, source) {
   let projectKey = addressableProjectKey(dirname(path), source.isKeySegment);
   if (projectKey === undefined || basename(path) !== `${sessionId}.jsonl` || !source.isKeySegment(sessionId))
@@ -656,7 +657,7 @@ function transcriptStoreKey(path, sessionId, source) {
     key: source.transcriptKey(projectKey, sessionId),
   };
 }
-//@ chunk-f9pzpnqt.js:9553-9869 placement
+//@ chunk-80bdkzt1.js:9556-9872 placement
 async function transcriptHasMessages(filePath, sessionId, target) {
   let key =
     target !== undefined && target.hoverRestOn
@@ -673,11 +674,11 @@ async function transcriptHasMessages(filePath, sessionId, target) {
   }
   return (await _(filePath)) ? "has" : "none";
 }
-//@ chunk-f9pzpnqt.js:9869-9951 placement (2.1.88 match: isConnectionError, 1)
+//@ chunk-80bdkzt1.js:9872-9954 placement (2.1.88 match: isConnectionError, 1)
 function isEnoentError(err) {
   return err !== null && typeof err === "object" && "code" in err && err.code === "ENOENT";
 }
-//@ chunk-f9pzpnqt.js:9951-10033 placement
+//@ chunk-80bdkzt1.js:9954-10036 placement
 function cursorOptions(cursor) {
   return {
     skipScopeStats: true,
@@ -687,7 +688,7 @@ function cursorOptions(cursor) {
     }),
   };
 }
-//@ chunk-f9pzpnqt.js:10033-10594 placement
+//@ chunk-80bdkzt1.js:10036-10597 placement
 function withSharedTranscriptListing(target) {
   let cache = new Map();
   let backend = new Proxy(target.backend, {
@@ -724,7 +725,7 @@ function withSharedTranscriptListing(target) {
     backend,
   };
 }
-//@ chunk-f9pzpnqt.js:10594-10969 placement
+//@ chunk-80bdkzt1.js:10597-10972 placement
 async function findSoleTranscriptWithMessagesById(sessionId, excluded = new Set(), target) {
   if (validateUuid(sessionId) === null) return null;
   if (target !== undefined && target.hoverRestOn && target.source.isKeySegment(sessionId))
@@ -747,7 +748,7 @@ async function findSoleTranscriptWithMessagesById(sessionId, excluded = new Set(
   }
   return found;
 }
-//@ chunk-f9pzpnqt.js:10969-11512 placement
+//@ chunk-80bdkzt1.js:10972-11515 placement
 /**
  * 在 v5 存储的所有项目中查找含消息的同名会话转录（跳过已排除路径）；找到唯一一个返回其路径，多个或列举未完成返回 null。
  */
@@ -801,7 +802,7 @@ async function findTranscriptInOtherProjects(sessionId, excluded, storage) {
   }
   return found;
 }
-//@ chunk-f9pzpnqt.js:11512-12042 placement (2.1.88 match: readSessionLite, 0.859)
+//@ chunk-80bdkzt1.js:11515-12045 placement (2.1.88 match: readSessionLite, 0.859)
 async function readSessionLite(filePath, target) {
   if (target !== undefined && target.hoverRestOn) return statWithHeadTail(target.source);
   try {
@@ -835,7 +836,7 @@ async function readSessionLite(filePath, target) {
     return null;
   }
 }
-//@ chunk-f9pzpnqt.js:12042-12181 placement
+//@ chunk-80bdkzt1.js:12045-12184 placement
 async function statWithHeadTail(target) {
   let headTailV5 = await readHeadTailV5(target);
   if (headTailV5 === null) return null;
@@ -846,17 +847,17 @@ async function statWithHeadTail(target) {
     tail: headTailV5.tail,
   };
 }
-//@ chunk-f9pzpnqt.js:12181-12193 placement
+//@ chunk-80bdkzt1.js:12184-12196 placement
 var MAX_SANITIZED_LENGTH = 200;
-//@ chunk-f9pzpnqt.js:12193-12245 placement
+//@ chunk-80bdkzt1.js:12196-12248 placement
 function hashPathForSuffix(str) {
   return Math.abs(hashString31(str)).toString(36);
 }
-//@ chunk-f9pzpnqt.js:12245-12297 placement
+//@ chunk-80bdkzt1.js:12248-12300 placement
 function sanitizePath_2(path) {
   return path.replace(/[^a-zA-Z0-9]/g, "-");
 }
-//@ chunk-f9pzpnqt.js:12297-12384 placement
+//@ chunk-80bdkzt1.js:12300-12387 placement
 /**
  * 把路径清洗成目录名：非字母数字替换为 '-'，超 200 字符时保留前 200 字符并追加 '-<hash36>'。
  */
@@ -865,12 +866,12 @@ function sanitizePath(path) {
   if (sanitized.length <= MAX_SANITIZED_LENGTH) return sanitized;
   return `${sanitized.slice(0, MAX_SANITIZED_LENGTH)}-${hashPathForSuffix(path)}`;
 }
-//@ chunk-f9pzpnqt.js:12384-12458 placement
+//@ chunk-80bdkzt1.js:12387-12461 placement
 function normalizePathForCwdCompare(path, foldCase) {
   let replaced = path.replaceAll("\\", "/");
   return foldCase ? replaced.toLowerCase() : replaced;
 }
-//@ chunk-f9pzpnqt.js:12458-12580 placement
+//@ chunk-80bdkzt1.js:12461-12583 placement
 function isSanitizedNameCollision(a, b, foldCase) {
   let left = identity(a);
   let right = identity(b);
@@ -878,7 +879,7 @@ function isSanitizedNameCollision(a, b, foldCase) {
   if (fold(sanitizePath_2(left)) !== fold(sanitizePath_2(right))) return false;
   return normalizePathForCwdCompare(left, foldCase) !== normalizePathForCwdCompare(right, foldCase);
 }
-//@ chunk-f9pzpnqt.js:12580-12884 placement
+//@ chunk-80bdkzt1.js:12583-12887 placement
 async function recordedCwdCollidesWithProjectResolved(
   recorded,
   projectPath,
@@ -906,7 +907,7 @@ async function recordedCwdCollidesWithProjectResolved(
   let canonical = await canonicalizePath(projectPath, realPathOptions);
   return isSanitizedNameCollision(resolved, canonical, foldCase);
 }
-//@ chunk-f9pzpnqt.js:12884-13039 placement
+//@ chunk-80bdkzt1.js:12887-13042 placement
 function recordedCwdIsWithinOwnWorktrees(recorded, worktrees, foldCase) {
   if (worktrees === undefined) return false;
   let path = normalizePathForCwdCompare(identity(recorded), foldCase);
@@ -915,44 +916,44 @@ function recordedCwdIsWithinOwnWorktrees(recorded, worktrees, foldCase) {
     return path === normalized || path.startsWith(normalized.endsWith("/") ? normalized : normalized + "/");
   });
 }
-//@ chunk-f9pzpnqt.js:13039-13063 placement
+//@ chunk-80bdkzt1.js:13042-13066 placement
 function slugCollisionGuardFoldsCase() {
   return false;
 }
-//@ chunk-f9pzpnqt.js:13063-13103 placement (2.1.88 match: getProjectsDir, 1)
+//@ chunk-80bdkzt1.js:13066-13106 placement (2.1.88 match: getProjectsDir, 1)
 /**
  * <配置目录>/projects：所有会话转录的根目录。
  */
 function getProjectsDir() {
   return join(getClaudeConfigDir(), "projects");
 }
-//@ chunk-f9pzpnqt.js:13103-13138 placement
+//@ chunk-80bdkzt1.js:13106-13141 placement
 /**
  * 项目目录名：自定义配置目录或 diskless 时可由 CLAUDE_CODE_PROJECT_DIR_NAME 覆盖，否则清洗 cwd。
  */
 function getProjectKey(path) {
   return getProjectDirNameOverride() ?? sanitizePath(path);
 }
-//@ chunk-f9pzpnqt.js:13138-13192 placement
+//@ chunk-80bdkzt1.js:13141-13195 placement
 function legacyDerivedProjectKey(path) {
   let legacyKey = sanitizePath(path);
   return legacyKey === getProjectKey(path) ? undefined : legacyKey;
 }
-//@ chunk-f9pzpnqt.js:13192-13232 placement
+//@ chunk-80bdkzt1.js:13195-13235 placement
 function getProjectDir(path, projectsDir = getProjectsDir()) {
   return join(projectsDir, getProjectKey(path));
 }
-//@ chunk-f9pzpnqt.js:13232-13292 placement
+//@ chunk-80bdkzt1.js:13235-13295 placement
 function getPinnedProjectDir() {
   let projectDirNameOverride = getProjectDirNameOverride();
   return projectDirNameOverride === undefined ? null : join(getProjectsDir(), projectDirNameOverride);
 }
-//@ chunk-f9pzpnqt.js:13292-13355 placement
+//@ chunk-80bdkzt1.js:13295-13358 placement
 function addressableProjectKey(dir, isKeySegment) {
   let key = basename(dir);
   return dirname(dir) === getProjectsDir() && isKeySegment(key) ? key : undefined;
 }
-//@ chunk-f9pzpnqt.js:13355-13526 placement
+//@ chunk-80bdkzt1.js:13358-13529 placement
 async function canonicalizePath(path, realPathOptions) {
   try {
     if (realPathOptions !== undefined && realPathOptions.hoverRestOn) {
@@ -964,11 +965,11 @@ async function canonicalizePath(path, realPathOptions) {
     return identity(path);
   }
 }
-//@ chunk-f9pzpnqt.js:13526-13554 placement
+//@ chunk-80bdkzt1.js:13529-13557 placement
 function projectPathSpellingsForRead(path, cwd) {
   return [cwd];
 }
-//@ chunk-f9pzpnqt.js:13554-13975 placement
+//@ chunk-80bdkzt1.js:13557-13978 placement
 async function dirBelongsToProject(dir, cwd, foldCase, target) {
   let source = target !== undefined && target.hoverRestOn ? target.source : undefined;
   let projectKey = source === undefined ? undefined : addressableProjectKey(dir, source.isKeySegment);
@@ -994,7 +995,7 @@ async function dirBelongsToProject(dir, cwd, foldCase, target) {
   }
   return false;
 }
-//@ chunk-f9pzpnqt.js:13975-14145 placement
+//@ chunk-80bdkzt1.js:13978-14148 placement
 function matchesSessionCwd(lite, sanitizedCwd, foldCase) {
   let recorded =
     extractFieldFromLastEntryOfTypeStrict(lite.tail, "relocated", "relocatedCwd") ??
@@ -1003,7 +1004,7 @@ function matchesSessionCwd(lite, sanitizedCwd, foldCase) {
   let sanitized = sanitizePath_2(identity(recorded));
   return foldCase ? sanitized.toLowerCase() === sanitizedCwd.toLowerCase() : sanitized === sanitizedCwd;
 }
-//@ chunk-f9pzpnqt.js:14145-14695 placement
+//@ chunk-80bdkzt1.js:14148-14698 placement
 /**
  * 在 v5 存储的某项目下逐个检查会话转录的工作目录（含重定位后的目录）是否等于给定目录；找到返回 true，列举未完成返回 undefined。
  */
@@ -1057,7 +1058,7 @@ async function hasSessionForCwd(projectKey, cwd, caseInsensitive, storage) {
   }
   return false;
 }
-//@ chunk-f9pzpnqt.js:14695-15202 placement
+//@ chunk-80bdkzt1.js:14698-15205 placement
 async function findProjectDirs(cwd, target, projectsDir = getProjectsDir()) {
   if (target !== undefined && target.hoverRestOn) return listProjectDirsForCwd(cwd, target);
   if (isDiskless()) return [];
@@ -1093,7 +1094,7 @@ async function findProjectDirs(cwd, target, projectsDir = getProjectsDir()) {
   } catch {}
   return dirs;
 }
-//@ chunk-f9pzpnqt.js:15202-15341 placement
+//@ chunk-80bdkzt1.js:15205-15344 placement
 async function listProjectDirsForCwd(cwd, target) {
   let names = await listProjectDirNamesV5(target.source);
   if (names === null) {
@@ -1102,7 +1103,7 @@ async function listProjectDirsForCwd(cwd, target) {
   }
   return projectDirsFromListedNames(cwd, names, false, target);
 }
-//@ chunk-f9pzpnqt.js:15341-15641 placement
+//@ chunk-80bdkzt1.js:15344-15644 placement
 async function listProjectDirNamesV5(source) {
   let { backend, isKeySegment } = source;
   let names = [];
@@ -1138,7 +1139,7 @@ async function listProjectDirNamesV5(source) {
   }
   return names;
 }
-//@ chunk-f9pzpnqt.js:15641-16125 placement
+//@ chunk-80bdkzt1.js:15644-16128 placement
 async function projectDirsFromListedNames(cwd, names, foldCase, target) {
   let projectKey = getProjectKey(cwd);
   let projectDir = getProjectDir(cwd);
@@ -1175,11 +1176,11 @@ async function projectDirsFromListedNames(cwd, names, foldCase, target) {
   }
   return [...(hasOwn ? [projectDir] : []), ...(legacyDir !== undefined ? [legacyDir] : []), ...dirs];
 }
-//@ chunk-f9pzpnqt.js:16125-16175 placement
+//@ chunk-80bdkzt1.js:16128-16178 placement
 async function findProjectDir(originalCwd, target) {
   return (await findProjectDirs(originalCwd, target))[0];
 }
-//@ chunk-f9pzpnqt.js:16175-16414 placement
+//@ chunk-80bdkzt1.js:16178-16417 placement
 async function findWorktreeProjectDirs(cwd, target, projectsDir = getProjectsDir()) {
   let out = [];
   for (let wt of await getWorktreePathsPortable(cwd)) {
@@ -1197,7 +1198,7 @@ async function findWorktreeProjectDirs(cwd, target, projectsDir = getProjectsDir
   }
   return out;
 }
-//@ chunk-f9pzpnqt.js:16414-17894 placement
+//@ chunk-80bdkzt1.js:16417-17897 placement
 async function resolveSessionFilePath(
   sessionId,
   projectPath,
@@ -1334,16 +1335,16 @@ async function resolveSessionFilePath(
   }
   return;
 }
-//@ chunk-f9pzpnqt.js:17894-17960 placement (2.1.88 match: compactBoundaryMarker, 1)
+//@ chunk-80bdkzt1.js:17897-17963 placement (2.1.88 match: compactBoundaryMarker, 1)
 var TRANSCRIPT_READ_CHUNK_SIZE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SKIP_PRECOMPACT_THRESHOLD;
 var COMPACT_BOUNDARY_MARKER;
-deferInit("chunk-f9pzpnqt.js:17894", () => {
+deferInit("chunk-80bdkzt1.js:17897", () => {
   TRANSCRIPT_READ_CHUNK_SIZE = 1048576;
   SKIP_PRECOMPACT_THRESHOLD = 5242880;
   COMPACT_BOUNDARY_MARKER = Buffer.from('"compact_boundary"');
 });
-//@ chunk-f9pzpnqt.js:17960-18194 fingerprint (2.1.88 match: parseBoundaryLine, 0.909)
+//@ chunk-80bdkzt1.js:17963-18197 fingerprint (2.1.88 match: parseBoundaryLine, 0.909)
 function parseBoundaryLine(line) {
   try {
     let parsed = JSON.parse(line);
@@ -1357,7 +1358,7 @@ function parseBoundaryLine(line) {
     return null;
   }
 }
-//@ chunk-f9pzpnqt.js:18194-18404 fingerprint (2.1.88 match: sinkWrite, 1)
+//@ chunk-80bdkzt1.js:18197-18407 fingerprint (2.1.88 match: sinkWrite, 1)
 function sinkWrite(s, src, start, end) {
   let n = end - start;
   if (n <= 0) return;
@@ -1369,24 +1370,24 @@ function sinkWrite(s, src, start, end) {
   src.copy(s.buf, s.len, start, end);
   s.len += n;
 }
-//@ chunk-f9pzpnqt.js:18404-18487 layout (2.1.88 match: hasPrefix, 1)
+//@ chunk-80bdkzt1.js:18407-18490 layout (2.1.88 match: hasPrefix, 1)
 function hasPrefix_2(src, prefix, at, end) {
   return end - at >= prefix.length && src.compare(prefix, 0, prefix.length, at, at + prefix.length) === 0;
 }
-//@ chunk-f9pzpnqt.js:18487-18606 fingerprint (2.1.88 match: SYSTEM_PREFIX, 0.681)
+//@ chunk-80bdkzt1.js:18490-18609 fingerprint (2.1.88 match: SYSTEM_PREFIX, 0.681)
 var ATTRIBUTION_SNAPSHOT_PREFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var buffer_3;
 var ATTRIBUTION_SNAPSHOT_PREFIX_BUFFER;
 var buffer_4;
 var ATTRIBUTION_SNAPSHOT_MARKER;
-deferInit("chunk-f9pzpnqt.js:18487", () => {
+deferInit("chunk-80bdkzt1.js:18490", () => {
   ATTRIBUTION_SNAPSHOT_PREFIX = Buffer.from('{"type":"attribution-snapshot"');
   buffer_3 = Buffer.from('{"type":"system"');
   ATTRIBUTION_SNAPSHOT_PREFIX_BUFFER = 10;
   buffer_4 = Buffer.from([ATTRIBUTION_SNAPSHOT_PREFIX_BUFFER]);
   ATTRIBUTION_SNAPSHOT_MARKER = 256;
 });
-//@ chunk-f9pzpnqt.js:18606-19241 fingerprint (2.1.88 match: processStraddle, 1)
+//@ chunk-80bdkzt1.js:18609-19244 fingerprint (2.1.88 match: processStraddle, 1)
 function processStraddle(s, chunk, bytesRead) {
   s.straddleSnapCarryLen = 0;
   s.straddleSnapTailEnd = 0;
@@ -1418,7 +1419,7 @@ function processStraddle(s, chunk, bytesRead) {
   s.carryLen = 0;
   return tailEnd;
 }
-//@ chunk-f9pzpnqt.js:19241-19778 fingerprint (2.1.88 match: scanChunkLines, 1)
+//@ chunk-80bdkzt1.js:19244-19781 fingerprint (2.1.88 match: scanChunkLines, 1)
 function scanChunkLines(s_2, buf, boundaryMarker) {
   let boundaryAt = buf.indexOf(boundaryMarker);
   let runStart = 0;
@@ -1461,7 +1462,7 @@ function scanChunkLines(s_2, buf, boundaryMarker) {
     trailStart: lineStart,
   };
 }
-//@ chunk-f9pzpnqt.js:19778-20354 fingerprint (2.1.88 match: captureSnap, 1)
+//@ chunk-80bdkzt1.js:19781-20357 fingerprint (2.1.88 match: captureSnap, 1)
 function captureSnap(s, buf, chunk, lastSnapStart, lastSnapEnd) {
   if (lastSnapStart !== -1) {
     s.lastSnapLen = lastSnapEnd - lastSnapStart;
@@ -1478,7 +1479,7 @@ function captureSnap(s, buf, chunk, lastSnapStart, lastSnapEnd) {
     s.lastSnapSrc = s.lastSnapBuf;
   }
 }
-//@ chunk-f9pzpnqt.js:20354-20539 fingerprint (2.1.88 match: captureCarry, 1)
+//@ chunk-80bdkzt1.js:20357-20542 fingerprint (2.1.88 match: captureCarry, 1)
 function captureCarry(s, buf, trailStart) {
   s.carryLen = buf.length - trailStart;
   if (s.carryLen > 0) {
@@ -1487,7 +1488,7 @@ function captureCarry(s, buf, trailStart) {
     buf.copy(s.carryBuf, 0, trailStart, buf.length);
   }
 }
-//@ chunk-f9pzpnqt.js:20539-20797 fingerprint (2.1.88 match: finalizeOutput, 1)
+//@ chunk-80bdkzt1.js:20542-20800 fingerprint (2.1.88 match: finalizeOutput, 1)
 function finalizeOutput(s) {
   if (s.carryLen > 0) {
     let cb = s.carryBuf;
@@ -1502,7 +1503,7 @@ function finalizeOutput(s) {
     sinkWrite(s.out, s.lastSnapSrc, 0, s.lastSnapLen);
   }
 }
-//@ chunk-f9pzpnqt.js:20797-21325 placement
+//@ chunk-80bdkzt1.js:20800-21328 placement
 /**
  * 按序分页读取转录记录，累计不超过字节上限，把每页拼接后的字节交给回调；游标不前进时抛错。
  */
@@ -1539,7 +1540,7 @@ async function streamTranscriptRecords(backend, key, maxBytes, onChunk) {
     fromSeq = nextSeq;
   }
 }
-//@ chunk-f9pzpnqt.js:21325-23272 placement (2.1.88 match: readTranscriptForLoad, 0.788)
+//@ chunk-80bdkzt1.js:21328-23275 placement (2.1.88 match: readTranscriptForLoad, 0.788)
 async function readTranscriptForLoad(filePath, maxBytes, target) {
   let boundaryMarker = COMPACT_BOUNDARY_MARKER;
   let CHUNK_SIZE = TRANSCRIPT_READ_CHUNK_SIZE;
@@ -1643,13 +1644,13 @@ async function readTranscriptForLoad(filePath, maxBytes, target) {
     hasPreservedSegment: scanState.hasPreservedSegment,
   };
 }
-//@ chunk-f9pzpnqt.js:23272-23319 placement
+//@ chunk-80bdkzt1.js:23275-23322 placement
 var BACKUP_FILE_NAME_PATTERN_WITH_LEGACY = /^[0-9a-f]{16}(?:[0-9a-f]{48})?@v\d+$/;
-//@ chunk-f9pzpnqt.js:23319-23355 placement
+//@ chunk-80bdkzt1.js:23322-23358 placement
 function isUuidShaped(value) {
   return validateUuid(value) !== null;
 }
-//@ chunk-f9pzpnqt.js:23355-23493 placement
+//@ chunk-80bdkzt1.js:23358-23496 placement
 function buildHistorySuppressionEntry(sessionId, cause, vetoed) {
   return {
     type: "history-suppression",
@@ -1661,10 +1662,18 @@ function buildHistorySuppressionEntry(sessionId, cause, vetoed) {
     ts: new Date().toISOString(),
   };
 }
-//@ chunk-g54kbxqw.js:54348-54510 fingerprint (2.1.88 match: sanitizePath, 0.358)
+//@ chunk-5xgkngpb.js:289119-289236 fingerprint (2.1.88 match: hasPrefix, 1)
+function hasPrefix(src, start = 0, end = src.length) {
+  let offset = skipNuls(src, start, end);
+  return (
+    end - offset >= buffer_5.length &&
+    src.compare(buffer_5, 0, buffer_5.length, offset, offset + buffer_5.length) === 0
+  );
+}
+//@ chunk-5xgkngpb.js:1551465-1551633 fingerprint (2.1.88 match: sanitizePath, 0.358)
 function sanitizePath_3(name) {
   let type = contentBlockTypeBucket(name);
-  let text = stripCacheControl_2(name);
+  let text = stripCacheControl_2_2(name);
   let hash = "text" in name ? name.text : undefined;
   return {
     type,
@@ -1673,27 +1682,18 @@ function sanitizePath_3(name) {
     prefixClass: type === "text" && typeof hash === "string" ? classifyUserText(hash) : type,
   };
 }
-//@ chunk-e6aww6q8.js:288436-288553 fingerprint (2.1.88 match: hasPrefix, 1)
-function hasPrefix(src, start = 0, end = src.length) {
-  let offset = skipNuls(src, start, end);
-  return (
-    end - offset >= buffer_5.length &&
-    src.compare(buffer_5, 0, buffer_5.length, offset, offset + buffer_5.length) === 0
-  );
-}
-//@ chunk-dz3q485w.js:15117-15133 affinity
+//@ chunk-jndyh8cy.js:15215-15231 affinity
 var MAX_PORTABLE_TRANSCRIPT_BYTES = 67108864;
-//@ chunk-dz3q485w.js:15133-15191 fingerprint (2.1.88 match: resolveSessionFilePath, 0.396)
+//@ chunk-jndyh8cy.js:15231-15289 fingerprint (2.1.88 match: resolveSessionFilePath, 0.396)
 function resolveSessionFilePath_2(log) {
   return log.fileSize !== undefined && log.fileSize <= MAX_PORTABLE_TRANSCRIPT_BYTES;
 }
 export {
-  getProjectDir,
-  findProjectDirs,
-  findSoleTranscriptWithMessagesById,
-  getProjectKey,
   getPinnedProjectDir,
+  getProjectDir,
   getProjectsDir,
+  sanitizePath_3,
+  getProjectKey,
   readSessionLite,
   LITE_READ_BUF_SIZE,
   PROGRAMMATIC_ENTRYPOINTS,
@@ -1712,6 +1712,7 @@ export {
   MAX_SANITIZED_LENGTH,
   MAX_LISTING_PAGES,
   dirBelongsToProject,
+  findProjectDirs,
   listedProjectKey,
   sanitizePath,
   normalizePathForCwdCompare,
@@ -1722,18 +1723,18 @@ export {
   extractJsonStringField,
   extractFieldFromFirstEntryStrict,
   resolveSessionFilePath_2,
+  readTranscriptForLoad,
+  findSoleTranscriptWithMessagesById,
   isTranscriptFileResumeArg,
-  extractFieldFromLastEntryStrict,
-  validateUuid,
-  sanitizePath_3,
   anchorOffsetTail,
-  BACKUP_FILE_NAME_PATTERN_WITH_LEGACY,
-  resolveJobTranscript,
-  quarantineJobTranscript,
+  extractFieldFromLastEntryStrict,
   TRANSCRIPT_READ_CHUNK_SIZE,
   COMPACT_BOUNDARY_MARKER,
-  readTranscriptForLoad,
+  BACKUP_FILE_NAME_PATTERN_WITH_LEGACY,
+  resolveJobTranscript,
+  validateUuid,
   resolveSessionFilePath,
+  quarantineJobTranscript,
   addressableProjectKey,
   attachmentPromptLabelFromHead,
   extractFirstPromptFromEntries,

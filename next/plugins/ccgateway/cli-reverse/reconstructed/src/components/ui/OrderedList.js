@@ -3,10 +3,10 @@
  *
  * 有序列表组件（自动编号上下文）；本模块混入若干无关小函数。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ui/OrderedList.tsx
- * pieces: chunk-00qhwn8e.js (1), chunk-dcmhvw5a.js (1), chunk-p8fze0jh.js (2)
- * attribution: fingerprint 3, sole-consumer 1
+ * pieces: chunk-s0v4e2v6.js (2), chunk-z20c443b.js (1)
+ * attribution: sole-consumer 1, fingerprint 2
  */
 import {
   createContext,
@@ -18,22 +18,20 @@ import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { OrderedListItem, OrderedListItemContext } from "./OrderedListItem.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box } from "../../ink/components/Text.js";
-import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
-import { stripInvisibleChars } from "../../utils/invisibleChars.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:187858-187925 fingerprint (2.1.88 match: OrderedListContext, 0.722)
+//@ chunk-z20c443b.js:187999-188066 fingerprint (2.1.88 match: OrderedListContext, 0.721)
 function OrderedListContext(items, marker) {
   return Object.freeze(items.filter((item) => item.marker === marker));
 }
-//@ chunk-p8fze0jh.js:19527-19549 sole-consumer
+//@ chunk-s0v4e2v6.js:20704-20726 sole-consumer
 var orderedListMarker; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-p8fze0jh.js:19527", () => {
+deferInit("chunk-s0v4e2v6.js:20704", () => {
   orderedListMarker = createContext({
     marker: "",
   });
 });
-//@ chunk-p8fze0jh.js:19549-20134 fingerprint (2.1.88 match: OrderedListComponent, 0.858)
+//@ chunk-s0v4e2v6.js:20726-21311 fingerprint (2.1.88 match: OrderedListComponent, 0.857)
 function OrderedListComponent(props) {
   let $ = useMemoCache(9);
   let { children } = props;
@@ -89,14 +87,4 @@ function OrderedListComponent(props) {
   } else t2 = $[8];
   return t2;
 }
-//@ chunk-00qhwn8e.js:17541-17596 fingerprint
-function renderSlashSkillItem(command) {
-  return jsxProd_default(
-    OrderedListWithItem.Item,
-    {
-      label: `/${stripInvisibleChars(command)}`,
-    },
-    command,
-  );
-}
-export { renderSlashSkillItem, OrderedListComponent, OrderedListContext };
+export { OrderedListComponent, OrderedListContext };

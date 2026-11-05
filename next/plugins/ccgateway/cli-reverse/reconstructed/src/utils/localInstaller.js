@@ -3,14 +3,14 @@
  *
  * ~/.claude/local 本地 npm 安装：检测、安装、shell 类型推断与别名
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/localInstaller.ts
- * pieces: chunk-6zvphrsz.js (7)
- * attribution: callgraph-fingerprint 1, fingerprint 6
+ * pieces: chunk-wzyv38y8.js (8)
+ * attribution: affinity 1, callgraph-fingerprint 1, fingerprint 6
  */
 import { join } from "path";
 import { writeFile, chmod, access } from "fs/promises";
-import { filterManagedDisabledPlugins } from "../commands/plugin/ManagePlugins.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { getErrnoCode } from "./errors.js";
 import { getFsImplementation } from "./fsOperations.js";
 import { jsonStringify } from "./slowOperations.js";
@@ -21,18 +21,22 @@ import { saveGlobalConfig } from "./config.js";
 import { logError } from "./log.js";
 import { env } from "./env.js";
 
-//@ chunk-6zvphrsz.js:2575-2612 callgraph-fingerprint (2.1.88 match: getLocalClaudePath, 1)
+//@ chunk-wzyv38y8.js:2605-2641 affinity (2.1.88 match: filterManagedDisabledPlugins, 1)
+function filterManagedDisabledPlugins() {
+  return join(getClaudeConfigDir(), "local");
+}
+//@ chunk-wzyv38y8.js:2641-2678 callgraph-fingerprint (2.1.88 match: getLocalClaudePath, 1)
 function getLocalClaudePath() {
   return join(filterManagedDisabledPlugins(), "claude");
 }
-//@ chunk-6zvphrsz.js:2612-2696 fingerprint (2.1.88 match: isRunningFromLocalInstallation, 1)
+//@ chunk-wzyv38y8.js:2678-2762 fingerprint (2.1.88 match: isRunningFromLocalInstallation, 1)
 /**
  * 是否从 ~/.claude/local 的本地安装运行。
  */
 function isRunningFromLocalInstallation() {
   return (process.argv[1] || "").includes("/.claude/local/node_modules/");
 }
-//@ chunk-6zvphrsz.js:2696-2830 fingerprint (2.1.88 match: writeIfMissing, 1)
+//@ chunk-wzyv38y8.js:2762-2896 fingerprint (2.1.88 match: writeIfMissing, 1)
 async function writeIfMissing(path, content, mode) {
   try {
     await writeFile(path, content, {
@@ -46,7 +50,7 @@ async function writeIfMissing(path, content, mode) {
     throw e;
   }
 }
-//@ chunk-6zvphrsz.js:2830-3181 fingerprint (2.1.88 match: ensureLocalPackageEnvironment, 0.925)
+//@ chunk-wzyv38y8.js:2896-3247 fingerprint (2.1.88 match: ensureLocalPackageEnvironment, 0.925)
 async function ensureLocalPackageEnvironment() {
   try {
     let localInstallDir = filterManagedDisabledPlugins();
@@ -81,7 +85,7 @@ exec "${localInstallDir}/node_modules/.bin/claude" "$@"`,
     return false;
   }
 }
-//@ chunk-6zvphrsz.js:3181-4276 fingerprint (2.1.88 match: installOrUpdateClaudePackage, 0.571)
+//@ chunk-wzyv38y8.js:3247-4342 fingerprint (2.1.88 match: installOrUpdateClaudePackage, 0.571)
 /**
  * installOrUpdateClaudePackage：在 ~/.claude/local 下用 npm 安装（本地安装方式）。
  */
@@ -101,10 +105,10 @@ async function installOrUpdateClaudePackage(channel, specificVersion, storageV5)
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.PACKAGE_URL
@@ -138,7 +142,7 @@ async function installOrUpdateClaudePackage(channel, specificVersion, storageV5)
     return "install_failed";
   }
 }
-//@ chunk-6zvphrsz.js:4276-4375 fingerprint (2.1.88 match: localInstallationExists, 1)
+//@ chunk-wzyv38y8.js:4342-4441 fingerprint (2.1.88 match: localInstallationExists, 1)
 /**
  * 本地安装（~/.claude/local/node_modules/.bin/claude）是否存在。
  */
@@ -150,7 +154,7 @@ async function localInstallationExists() {
     return false;
   }
 }
-//@ chunk-6zvphrsz.js:4375-4527 fingerprint (2.1.88 match: getShellType, 1)
+//@ chunk-wzyv38y8.js:4441-4593 fingerprint (2.1.88 match: getShellType, 1)
 /**
  * 从 SHELL 推断 shell 类型（zsh/bash/fish/unknown）。
  */
@@ -162,9 +166,9 @@ function getShellType() {
   return "unknown";
 }
 export {
-  getShellType,
-  getLocalClaudePath,
-  isRunningFromLocalInstallation,
   localInstallationExists,
   installOrUpdateClaudePackage,
+  getShellType,
+  isRunningFromLocalInstallation,
+  getLocalClaudePath,
 };

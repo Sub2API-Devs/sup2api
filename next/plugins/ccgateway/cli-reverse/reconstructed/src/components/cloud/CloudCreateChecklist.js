@@ -3,12 +3,24 @@
  *
  * 2.1.316 新增：云会话创建进度清单（容器准备、克隆、安装脚本、启动 CC），可取消，期间可先打字；云会话创建期间可先输入消息的提示行等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fr4xjkmb.js (10)
- * attribution: placement 10
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-v9yftdr9.js (12)
+ * attribution: placement 10, layout 2
  */
 import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
+import {
+  earlyInputFieldText,
+  isEarlyInputSeeded,
+  markEarlyInputFieldQueued,
+  openEarlyInputField,
+  isEarlyInputFieldQueued,
+  editEarlyInputField,
+  noteEarlyInputFieldKey,
+} from "../../utils/earlyInput.js";
+import { stripInvisibleChars_2 } from "../../utils/invisibleChars.js";
+import { TRUNCATE_THRESHOLD_CHARS } from "../PromptInput/inputPaste.js";
+import { skipInvisibleCharsNotice } from "../../utils/promptTextSanitize.js";
 import { stripAnsi } from "../../utils/stripAnsi.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
@@ -16,6 +28,7 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
+  Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { PromptInputModeIndicator } from "../PromptInput/PromptInputModeIndicator.js";
 import { Box, Text } from "../../ink/components/Text.js";
@@ -23,21 +36,42 @@ import { TextInput } from "../TextInput.js";
 import { setupStepLabel, createSetupProgress } from "../../services/cloudSessions/setupProgress.js";
 import { BootstrapStatusLine } from "../RemoteBootstrapProgress.js";
 import { useInterval } from "../../ink/components/Input.js";
-import { openEarlyInputField, editEarlyInputField, noteEarlyInputFieldKey } from "../../utils/earlyInput.js";
 import { uploadProgressPhase, cloudCreateTitle, teleportProgressRow } from "../TeleportProgress.js";
 import { MessageActionsKeybindings } from "../messageActions.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { Byline } from "../design-system/Byline.js";
+import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
 
-//@ chunk-fr4xjkmb.js:14268-14272 placement
+//@ chunk-v9yftdr9.js:15463-15467 placement
 init_react_production();
-//@ chunk-fr4xjkmb.js:14272-14276 placement
+//@ chunk-v9yftdr9.js:15467-15615 layout
+function queueEarlyInputFieldText() {
+  let fieldText = earlyInputFieldText();
+  let stripped = stripInvisibleChars_2(fieldText);
+  if (
+    isEarlyInputSeeded() ||
+    fieldText.length > TRUNCATE_THRESHOLD_CHARS ||
+    stripped.removedTotal > 0 ||
+    skipInvisibleCharsNotice(
+      stripped.text,
+      {
+        ...stripped,
+        textLength: fieldText.length,
+      },
+      "prompt",
+    )
+  )
+    return false;
+  markEarlyInputFieldQueued();
+  return true;
+}
+//@ chunk-v9yftdr9.js:15615-15619 placement
 init_react_production();
-//@ chunk-fr4xjkmb.js:14276-14288 placement
+//@ chunk-v9yftdr9.js:15619-15631 placement
 var CHECKLIST_WIDTH_RESERVE = 2;
 var MAX_CHECKLIST_VISIBLE_LINES = 6;
-//@ chunk-fr4xjkmb.js:14288-14391 placement (2.1.88 match: _temp18, 1)
+//@ chunk-v9yftdr9.js:15631-15734 placement (2.1.88 match: _temp18, 1)
 function sanitizePromptLine(line) {
   return stripAnsi(line)
     .replace(
@@ -48,7 +82,7 @@ function sanitizePromptLine(line) {
     .replaceAll("\t", "    ")
     .replace(/[^\P{Cc}\n]/gu, "");
 }
-//@ chunk-fr4xjkmb.js:14391-15077 placement
+//@ chunk-v9yftdr9.js:15734-16420 placement
 /**
  * 云会话创建期间可先输入消息的提示行。
  */
@@ -110,15 +144,15 @@ function CloudPromptLine(props) {
   } else row = $[7];
   return row;
 }
-//@ chunk-fr4xjkmb.js:15077-15109 placement
+//@ chunk-v9yftdr9.js:16420-16452 placement
 function nowMs() {
   return Date.now();
 }
-//@ chunk-fr4xjkmb.js:15109-15146 placement
+//@ chunk-v9yftdr9.js:16452-16489 placement
 function initialSetupStep(step) {
   return setupStepLabel(step, "new");
 }
-//@ chunk-fr4xjkmb.js:15146-15207 placement
+//@ chunk-v9yftdr9.js:16489-16550 placement
 function pendingStepLine(step) {
   return jsxProd_default(
     BootstrapStatusLine,
@@ -129,13 +163,15 @@ function pendingStepLine(step) {
     step,
   );
 }
-//@ chunk-fr4xjkmb.js:15207-17271 placement
+//@ chunk-v9yftdr9.js:16550-16561 layout
+var cloudHomeFrameModule = null;
+//@ chunk-v9yftdr9.js:16561-19444 placement
 /**
  * 云会话创建进度清单（容器准备、克隆、安装脚本、启动 CC），可取消，期间可先打字。
  */
 function CloudCreateChecklist(props) {
-  let $ = useMemoCache(40);
-  let { state, cancelling, onCancel, hasPromptLine, isQuestionWaiting } = props;
+  let $ = useMemoCache(51);
+  let { state, cancelling, onCancel, hasPromptLine, isQuestionWaiting, home } = props;
   let { columns } = useTerminalSize();
   let [now, setNow] = useState(nowMs);
   let tickNow;
@@ -153,67 +189,85 @@ function CloudCreateChecklist(props) {
   let [earlyInput, setEarlyInput] = useState(initialPrompt);
   let [isSending, setIsSending] = useState(false);
   let uploadPhase;
-  if ($[3] !== state) {
-    uploadPhase = uploadProgressPhase(state);
-    $[3] = state;
+  if ($[3] !== hasPromptLine) {
+    uploadPhase = () => hasPromptLine && isEarlyInputFieldQueued();
+    $[3] = hasPromptLine;
     $[4] = uploadPhase;
   } else uploadPhase = $[4];
-  let isCreated = uploadPhase === "created";
+  let [promptText, setPromptText] = useState(uploadPhase);
+  let isCreated;
+  if ($[5] !== state) {
+    isCreated = uploadProgressPhase(state);
+    $[5] = state;
+    $[6] = isCreated;
+  } else isCreated = $[6];
+  let isCreated_2 = isCreated === "created";
   let exitHandler;
-  if ($[5] !== onCancel || $[6] !== earlyInput) {
+  if ($[7] !== onCancel || $[8] !== earlyInput) {
     exitHandler = () => (earlyInput === "" ? onCancel() : false);
-    $[5] = onCancel;
-    $[6] = earlyInput;
-    $[7] = exitHandler;
-  } else exitHandler = $[7];
+    $[7] = onCancel;
+    $[8] = earlyInput;
+    $[9] = exitHandler;
+  } else exitHandler = $[9];
   let keymap;
-  if ($[8] !== onCancel || $[9] !== exitHandler) {
+  if ($[10] !== onCancel || $[11] !== exitHandler) {
     keymap = {
       "app:interrupt": onCancel,
       "app:exit": exitHandler,
     };
-    $[8] = onCancel;
-    $[9] = exitHandler;
-    $[10] = keymap;
-  } else keymap = $[10];
+    $[10] = onCancel;
+    $[11] = exitHandler;
+    $[12] = keymap;
+  } else keymap = $[12];
   let globalKeymap = keymap;
-  const isActive = !isCreated;
+  const isActive = !isCreated_2;
   let keymapContext;
-  if ($[11] !== isActive) {
+  if ($[13] !== isActive) {
     keymapContext = {
       context: "Global",
       isActive,
     };
-    $[11] = isActive;
-    $[12] = keymapContext;
-  } else keymapContext = $[12];
+    $[13] = isActive;
+    $[14] = keymapContext;
+  } else keymapContext = $[14];
   MessageActionsKeybindings(globalKeymap, keymapContext);
   let statusView;
-  if ($[13] === MEMO_CACHE_SENTINEL) {
+  if ($[15] === MEMO_CACHE_SENTINEL) {
     statusView = createSetupProgress(0, {
       wake: false,
     }).steps.map(initialSetupStep);
-    $[13] = statusView;
-  } else statusView = $[13];
+    $[15] = statusView;
+  } else statusView = $[15];
   let stepRows = statusView;
+  let wakeSteps = cancelling
+    ? "Cancelling\u2026"
+    : !hasPromptLine
+      ? "Typing is paused until the prompt opens"
+      : isQuestionWaiting
+        ? "A question is waiting. Pause typing to see it"
+        : promptText
+          ? "Your message will be sent once the session opens"
+          : isSending
+            ? "Not sent. You can send your message once the session opens"
+            : null;
   let children;
-  if ($[14] !== state) {
+  if ($[16] !== state) {
     children = cloudCreateTitle(state);
-    $[14] = state;
-    $[15] = children;
-  } else children = $[15];
-  let progressRows;
-  if ($[16] !== children) {
-    progressRows = jsxProd_default(Text, {
+    $[16] = state;
+    $[17] = children;
+  } else children = $[17];
+  let statusTitle;
+  if ($[18] !== children) {
+    statusTitle = jsxProd_default(Text, {
       bold: true,
       children,
     });
-    $[16] = children;
-    $[17] = progressRows;
-  } else progressRows = $[17];
-  let promptRow;
-  if ($[18] !== columns || $[19] !== now || $[20] !== state) {
-    promptRow = state.steps.map((step) =>
+    $[18] = children;
+    $[19] = statusTitle;
+  } else statusTitle = $[19];
+  let stepRowElements;
+  if ($[20] !== columns || $[21] !== now || $[22] !== state) {
+    stepRowElements = state.steps.map((step) =>
       jsxProd_default(
         ChecklistStep,
         {
@@ -225,20 +279,31 @@ function CloudCreateChecklist(props) {
         step.id,
       ),
     );
-    $[18] = columns;
-    $[19] = now;
-    $[20] = state;
-    $[21] = promptRow;
-  } else promptRow = $[21];
-  let hintText;
-  if ($[22] !== isCreated) {
-    hintText = !isCreated && stepRows.map(pendingStepLine);
-    $[22] = isCreated;
-    $[23] = hintText;
-  } else hintText = $[23];
-  let layout;
-  if ($[24] !== hasPromptLine || $[25] !== earlyInput || $[26] !== isSending) {
-    layout =
+    $[20] = columns;
+    $[21] = now;
+    $[22] = state;
+    $[23] = stepRowElements;
+  } else stepRowElements = $[23];
+  let wakeRows;
+  if ($[24] !== isCreated_2) {
+    wakeRows = !isCreated_2 && stepRows.map(pendingStepLine);
+    $[24] = isCreated_2;
+    $[25] = wakeRows;
+  } else wakeRows = $[25];
+  let bodyBox;
+  if ($[26] !== statusTitle || $[27] !== stepRowElements || $[28] !== wakeRows) {
+    bodyBox = jsxProd_default_2(Fragment, {
+      children: [statusTitle, stepRowElements, wakeRows],
+    });
+    $[26] = statusTitle;
+    $[27] = stepRowElements;
+    $[28] = wakeRows;
+    $[29] = bodyBox;
+  } else bodyBox = $[29];
+  let promptField = bodyBox;
+  let warnBox;
+  if ($[30] !== hasPromptLine || $[31] !== earlyInput || $[32] !== isSending) {
+    warnBox =
       hasPromptLine &&
       jsxProd_default(CloudPromptLine, {
         text: earlyInput,
@@ -246,47 +311,45 @@ function CloudCreateChecklist(props) {
           setEarlyInput(buffer);
           editEarlyInputField(buffer);
           setIsSending(false);
+          setPromptText(false);
         },
         onKey: noteEarlyInputFieldKey,
         onReturn: () => {
+          let queuedReturn = isEarlyInputFieldQueued();
+          if (queueEarlyInputFieldText()) {
+            setPromptText(true);
+            if (!queuedReturn) logEvent("tengu_cloud_create_prompt_queued", {});
+            return;
+          }
           if (!isSending) {
             logEvent("tengu_cloud_create_prompt_return_ignored", {});
             setIsSending(true);
           }
         },
       });
-    $[24] = hasPromptLine;
-    $[25] = earlyInput;
-    $[26] = isSending;
-    $[27] = layout;
-  } else layout = $[27];
-  let pendingRow;
-  if (
-    $[28] !== cancelling ||
-    $[29] !== isCreated ||
-    $[30] !== hasPromptLine ||
-    $[31] !== isQuestionWaiting ||
-    $[32] !== isSending
-  ) {
-    pendingRow =
-      !isCreated &&
+    $[30] = hasPromptLine;
+    $[31] = earlyInput;
+    $[32] = isSending;
+    $[33] = warnBox;
+  } else warnBox = $[33];
+  let hintRow;
+  if ($[34] !== cancelling || $[35] !== isCreated_2 || $[36] !== wakeSteps) {
+    hintRow =
+      !isCreated_2 &&
       jsxProd_default(Box, {
         marginTop: 1,
         children: jsxProd_default(Text, {
           dimColor: true,
           children: jsxProd_default_2(Byline, {
             children: [
-              jsxProd_default(Text, {
-                children: cancelling
-                  ? "Cancelling\u2026"
-                  : !hasPromptLine
-                    ? "Typing is paused until the prompt opens"
-                    : isQuestionWaiting
-                      ? "A question is waiting. Pause typing to see it"
-                      : isSending
-                        ? "Not sent. You can send your message once the session opens"
-                        : "You can send your message once the session opens",
-              }),
+              wakeSteps === null
+                ? jsxProd_default(KeyboardShortcutHint, {
+                    chord: "enter",
+                    action: "send your message once the session opens",
+                  })
+                : jsxProd_default(Text, {
+                    children: wakeSteps,
+                  }),
               jsxProd_default(ConfigurableShortcutHint, {
                 action: "app:interrupt",
                 context: "Global",
@@ -297,36 +360,66 @@ function CloudCreateChecklist(props) {
           }),
         }),
       });
-    $[28] = cancelling;
-    $[29] = isCreated;
-    $[30] = hasPromptLine;
-    $[31] = isQuestionWaiting;
-    $[32] = isSending;
-    $[33] = pendingRow;
-  } else pendingRow = $[33];
-  let inner;
-  if (
-    $[34] !== progressRows ||
-    $[35] !== promptRow ||
-    $[36] !== hintText ||
-    $[37] !== layout ||
-    $[38] !== pendingRow
-  ) {
-    inner = jsxProd_default_2(Box, {
+    $[34] = cancelling;
+    $[35] = isCreated_2;
+    $[36] = wakeSteps;
+    $[37] = hintRow;
+  } else hintRow = $[37];
+  let contentChildren;
+  if ($[38] !== warnBox || $[39] !== hintRow) {
+    contentChildren = jsxProd_default_2(Fragment, {
+      children: [warnBox, hintRow],
+    });
+    $[38] = warnBox;
+    $[39] = hintRow;
+    $[40] = contentChildren;
+  } else contentChildren = $[40];
+  let content = contentChildren;
+  if (cloudHomeFrameModule !== null && home !== undefined) {
+    let footer;
+    if ($[41] !== content) {
+      footer = jsxProd_default(Box, {
+        flexDirection: "column",
+        marginBottom: 1,
+        flexShrink: 0,
+        children: content,
+      });
+      $[41] = content;
+      $[42] = footer;
+    } else footer = $[42];
+    let footerRow;
+    if ($[43] !== home.showRoster || $[44] !== home.tabs || $[45] !== promptField || $[46] !== footer) {
+      footerRow = jsxProd_default(cloudHomeFrameModule.CloudHomeFrame, {
+        tabs: home.tabs,
+        sessionId: undefined,
+        offersNew: false,
+        showRoster: home.showRoster,
+        onMainScreen: true,
+        footer,
+        children: promptField,
+      });
+      $[43] = home.showRoster;
+      $[44] = home.tabs;
+      $[45] = promptField;
+      $[46] = footer;
+      $[47] = footerRow;
+    } else footerRow = $[47];
+    return footerRow;
+  }
+  let framed;
+  if ($[48] !== content || $[49] !== promptField) {
+    framed = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
-      children: [progressRows, promptRow, hintText, layout, pendingRow],
+      children: [promptField, content],
     });
-    $[34] = progressRows;
-    $[35] = promptRow;
-    $[36] = hintText;
-    $[37] = layout;
-    $[38] = pendingRow;
-    $[39] = inner;
-  } else inner = $[39];
-  return inner;
+    $[48] = content;
+    $[49] = promptField;
+    $[50] = framed;
+  } else framed = $[50];
+  return framed;
 }
-//@ chunk-fr4xjkmb.js:17271-17719 placement
+//@ chunk-v9yftdr9.js:19444-19892 placement
 /**
  * 清单中的一个步骤行（状态、注释、详情）。
  */

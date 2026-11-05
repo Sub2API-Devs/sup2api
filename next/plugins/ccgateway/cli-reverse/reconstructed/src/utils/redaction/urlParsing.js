@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：收集需要遮盖的 URL 区间；找出文本中的 URL 片段与主机部分等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cgr0tezp.js (24)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2jb250pa.js (24)
  * attribution: placement 24
  */
 import { tryParseUrl, decodePercentEscapes } from "../resultError.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-cgr0tezp.js:43695-43772 placement
+//@ chunk-2jb250pa.js:8763-8840 placement
 /**
  * sliceSpan：按区间切出文本与来源。
  */
@@ -21,7 +21,7 @@ function sliceSpan(span, start, end) {
     origin: span.origin.slice(start, end),
   };
 }
-//@ chunk-cgr0tezp.js:43772-44098 placement
+//@ chunk-2jb250pa.js:8840-9166 placement
 /**
  * 解析 URL 协议与是否已改写。
  */
@@ -44,7 +44,7 @@ function parseUrlScheme(text, { asRewritten = false } = {}) {
   }
   return findHostBoundary(asRewritten ? decodePercentRuns(trimmed) : trimmed, ":");
 }
-//@ chunk-cgr0tezp.js:44098-44258 placement
+//@ chunk-2jb250pa.js:9166-9326 placement
 function findBracketAndCut(text, separator) {
   let index = text.indexOf("@[");
   let bracketAt = index === -1 ? 0 : index + 1;
@@ -57,7 +57,7 @@ function findBracketAndCut(text, separator) {
     cut,
   };
 }
-//@ chunk-cgr0tezp.js:44258-44794 placement
+//@ chunk-2jb250pa.js:9326-9862 placement
 /**
  * 找出 URL 中主机部分的边界。
  */
@@ -91,7 +91,7 @@ function findHostBoundary(text, separator) {
       }
     : null;
 }
-//@ chunk-cgr0tezp.js:44794-45000 placement
+//@ chunk-2jb250pa.js:9862-10068 placement
 function userinfoSpans(text) {
   let { text: text_2, from } = decodePercentWithMap(text);
   let { close, cut } = findBracketAndCut(text_2, "/");
@@ -108,7 +108,7 @@ function userinfoSpans(text) {
   }
   return spans;
 }
-//@ chunk-cgr0tezp.js:45000-45124 placement
+//@ chunk-2jb250pa.js:10068-10191 placement
 /**
  * 解码连续的百分号编码（失败保留）。
  */
@@ -121,7 +121,7 @@ function decodePercentRuns(text) {
     }
   });
 }
-//@ chunk-cgr0tezp.js:45124-45693 placement
+//@ chunk-2jb250pa.js:10191-10759 placement
 /**
  * 百分号解码并保留位置映射。
  */
@@ -153,7 +153,7 @@ function decodePercentWithMap(text) {
     let charOffset = 0;
     for (let byteLength of byteLengths) {
       let codeUnitLength = decoded.codePointAt(charOffset) > 65535 ? 2 : 1;
-      for (let j = 0; j < codeUnitLength; j++) map.push(index);
+      for (let idx = 0; idx < codeUnitLength; idx++) map.push(index);
       charOffset += codeUnitLength;
       index += 3 * byteLength;
     }
@@ -166,7 +166,7 @@ function decodePercentWithMap(text) {
     from: (originalIndex) => map[originalIndex],
   };
 }
-//@ chunk-cgr0tezp.js:45693-45871 placement
+//@ chunk-2jb250pa.js:10759-10937 placement
 function stripPort(value) {
   let index = value.indexOf(":");
   let sliced = value.slice(index + 1);
@@ -174,7 +174,7 @@ function stripPort(value) {
   let port = Number.parseInt(sliced.trim(), 10);
   return port >= 0 && port < 65536 ? value.slice(0, index) : value;
 }
-//@ chunk-cgr0tezp.js:45871-46236 placement
+//@ chunk-2jb250pa.js:10937-11302 placement
 /**
  * URL 扫描用的正则组。
  */
@@ -193,7 +193,7 @@ var TERMINATOR_RE = /[;|&\n]/g;
 var LINE_SPAN_COST = 64;
 var MAX_SSH_USERINFO_SCAN = 2048;
 var URL_SCAN_STOP_RE = /[\s"'`]/g;
-//@ chunk-cgr0tezp.js:46236-46468 placement (2.1.88 match: ghIsDangerousCallback, 1)
+//@ chunk-2jb250pa.js:11302-11534 placement (2.1.88 match: ghIsDangerousCallback, 1)
 function findSshUrlUserinfoSpans(text) {
   let spans = [];
   let stopAt = nextMatchIndex(text, URL_SCAN_STOP_RE);
@@ -209,14 +209,14 @@ function findSshUrlUserinfoSpans(text) {
   }
   return spans;
 }
-//@ chunk-cgr0tezp.js:46468-46503 placement
+//@ chunk-2jb250pa.js:11534-11569 placement
 /**
  * urlSpans：文本中的 URL 片段。
  */
 function urlSpans(text) {
   return findUrlSpans(text).spans;
 }
-//@ chunk-cgr0tezp.js:46503-47678 placement
+//@ chunk-2jb250pa.js:11569-12754 placement
 /**
  * 找出文本中的 URL 片段与主机部分。
  */
@@ -318,7 +318,7 @@ function findUrlSpans(text) {
     hostParts,
   };
 }
-//@ chunk-cgr0tezp.js:47678-49063 placement
+//@ chunk-2jb250pa.js:12754-14135 placement
 /**
  * 收集需要遮盖的 URL 区间。
  */
@@ -438,12 +438,12 @@ function collectUrlRedactions(text, rules) {
   }
   return out.map((span) => (span.userinfo ? span : trimUnbalancedQuote(text, span)));
 }
-//@ chunk-cgr0tezp.js:49063-49082 placement
+//@ chunk-2jb250pa.js:14135-14154 placement
 var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-cgr0tezp.js:49063", () => {
+deferInit("chunk-2jb250pa.js:14135", () => {
   weakMap = new WeakMap();
 });
-//@ chunk-cgr0tezp.js:49082-49287 placement
+//@ chunk-2jb250pa.js:14154-14359 placement
 function compileSecretRegexes(rule) {
   let regexes = weakMap.get(rule);
   if (!regexes) {
@@ -457,7 +457,7 @@ function compileSecretRegexes(rule) {
   }
   return regexes;
 }
-//@ chunk-cgr0tezp.js:49287-49958 placement
+//@ chunk-2jb250pa.js:14359-15029 placement
 /**
  * 按关键词查找键值对形式的秘密。
  */
@@ -519,7 +519,7 @@ function findKeyValueSecrets(text, rules) {
     return found;
   };
 }
-//@ chunk-cgr0tezp.js:49958-50515 placement
+//@ chunk-2jb250pa.js:15029-15586 placement
 /**
  * 扩展 URL 区间（包含 userinfo）。
  */
@@ -564,7 +564,7 @@ function extendUrlSpan(text, span, context) {
         end,
       };
 }
-//@ chunk-cgr0tezp.js:50515-50799 placement
+//@ chunk-2jb250pa.js:15586-15870 placement
 function isEmailLikeSecret(text, userinfo, context) {
   if (
     text[userinfo.end] !== "@" ||
@@ -580,7 +580,7 @@ function isEmailLikeSecret(text, userinfo, context) {
     if (secrets.some((secret) => secret.valueStart === userinfo.end)) return false;
   return true;
 }
-//@ chunk-cgr0tezp.js:50799-50911 placement
+//@ chunk-2jb250pa.js:15870-15982 placement
 function quoteBoundary(text, lineEnd) {
   let quotes = nextMatchIndex(text, /["'`]/g);
   let cachedLineEnd = -1;
@@ -593,7 +593,7 @@ function quoteBoundary(text, lineEnd) {
     return boundary;
   };
 }
-//@ chunk-cgr0tezp.js:50911-51066 placement
+//@ chunk-2jb250pa.js:15982-16137 placement
 function trimUnbalancedQuote(text, span) {
   let lastChar = text[span.end - 1];
   if (lastChar === undefined || !QUOTE_RE.test(lastChar)) return span;
@@ -604,7 +604,7 @@ function trimUnbalancedQuote(text, span) {
       }
     : span;
 }
-//@ chunk-cgr0tezp.js:51066-51275 placement
+//@ chunk-2jb250pa.js:16137-16346 placement
 function mergeSpans(spans) {
   spans.sort((left, right) => left.start - right.start || right.end - left.end);
   let merged = [];
@@ -619,12 +619,12 @@ function mergeSpans(spans) {
   }
   return merged;
 }
-//@ chunk-cgr0tezp.js:51275-51338 placement
+//@ chunk-2jb250pa.js:16346-16409 placement
 function nextMatchIndex(text, pattern) {
   let exec = cachedRegexExec(text, pattern);
   return (from) => exec(from)?.index ?? text.length;
 }
-//@ chunk-cgr0tezp.js:51338-51459 placement
+//@ chunk-2jb250pa.js:16409-16530 placement
 function cachedRegexExec(text, pattern) {
   let cachedFrom = -1;
   let match = null;
@@ -637,18 +637,18 @@ function cachedRegexExec(text, pattern) {
     return match;
   };
 }
-//@ chunk-cgr0tezp.js:51459-51715 placement
+//@ chunk-2jb250pa.js:16530-16786 placement
 function lastAtBefore(text, encoded) {
   let table = null;
   return (from, to) => {
     if (table === null) {
       table = new Int32Array(text.length + 1);
       let lastAt = -1;
-      for (let j = 0; j <= text.length; j++) {
+      for (let idx = 0; idx <= text.length; idx++) {
         if (encoded) {
-          if (j >= 3 && text.startsWith("%40", j - 3)) lastAt = j - 3;
-        } else if (j >= 1 && text[j - 1] === "@") lastAt = j - 1;
-        table[j] = lastAt;
+          if (idx >= 3 && text.startsWith("%40", idx - 3)) lastAt = idx - 3;
+        } else if (idx >= 1 && text[idx - 1] === "@") lastAt = idx - 1;
+        table[idx] = lastAt;
       }
     }
     let atIndex = table[Math.min(to, text.length)];
@@ -659,8 +659,8 @@ export {
   collectUrlRedactions,
   findSshUrlUserinfoSpans,
   sliceSpan,
-  decodePercentRuns,
   parseUrlScheme,
+  decodePercentRuns,
   urlSpans,
   WEB_SCHEME_TAIL_RE,
 };

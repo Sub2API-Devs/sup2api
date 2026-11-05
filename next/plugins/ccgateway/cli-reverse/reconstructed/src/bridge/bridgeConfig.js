@@ -3,10 +3,10 @@
  *
  * 并入已有模块：桥接配置的几个小读取函数。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/bridgeConfig.ts
- * pieces: chunk-71c4j971.js (5), chunk-hqdsrzb2.js (1), chunk-wp3fcgm5.js (10)
- * attribution: placement 4, fingerprint 1, facade-exports 10, affinity 1
+ * pieces: chunk-4dkmc786.js (1), chunk-c6aqkztt.js (10), chunk-h3xdf7nq.js (5)
+ * attribution: facade-exports 10, affinity 1, placement 4, fingerprint 1
  */
 import { hostname } from "os";
 import { isGrowthBookEnabled } from "../services/analytics/growthbook.js";
@@ -35,11 +35,11 @@ import {
 } from "../utils/hostSessionsBearer.js";
 import { getOauthConfig } from "../constants/oauth.js";
 
-//@ chunk-hqdsrzb2.js:425-446 facade-exports
+//@ chunk-4dkmc786.js:425-446 facade-exports
 function getBridgeBaseUrlOverride() {
   return;
 }
-//@ chunk-71c4j971.js:2819-2899 placement
+//@ chunk-h3xdf7nq.js:2927-3007 placement
 function isGrowthBookUnavailableOnNoTelemetry() {
   return (
     !isGrowthBookEnabled() &&
@@ -48,7 +48,7 @@ function isGrowthBookUnavailableOnNoTelemetry() {
     !isFeedbackSurveyOtelOn()
   );
 }
-//@ chunk-71c4j971.js:2899-3113 placement
+//@ chunk-h3xdf7nq.js:3007-3221 placement
 function getBearerSubscriptionType() {
   let bearerPlan = getBearerPlan();
   let named = bearerPlan?.named;
@@ -58,7 +58,7 @@ function getBearerSubscriptionType() {
     ? named.subscriptionType
     : null;
 }
-//@ chunk-71c4j971.js:3113-3223 placement
+//@ chunk-h3xdf7nq.js:3221-3331 placement
 function hasFreshBearerPlan() {
   let bearerPlan = getBearerPlan();
   return (
@@ -67,11 +67,11 @@ function hasFreshBearerPlan() {
     (bearerPlan.named !== null || Date.now() - bearerPlan.answeredAtMs < BEARER_PLAN_REFRESH_MS)
   );
 }
-//@ chunk-71c4j971.js:3223-3259 placement
+//@ chunk-h3xdf7nq.js:3331-3367 placement
 function isBridgeEntitlementHintAvailable() {
   return isGrowthBookUnavailableOnNoTelemetry() && getBearerSubscriptionType() !== null;
 }
-//@ chunk-71c4j971.js:3259-3364 fingerprint (2.1.88 match: getBridgeAccessToken, 0.638)
+//@ chunk-h3xdf7nq.js:3367-3472 fingerprint (2.1.88 match: getBridgeAccessToken, 0.638)
 function getBridgeAccessToken_2() {
   try {
     let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
@@ -84,11 +84,11 @@ function getBridgeAccessToken_2() {
     return null;
   }
 }
-//@ chunk-wp3fcgm5.js:527-548 facade-exports
+//@ chunk-c6aqkztt.js:527-548 facade-exports
 function getBridgeTokenOverride() {
   return;
 }
-//@ chunk-wp3fcgm5.js:548-657 facade-exports
+//@ chunk-c6aqkztt.js:548-657 facade-exports
 function isBridgeFileLoginRefused(baseUrl = getBridgeBaseUrlOverride(), token) {
   if (getBridgeTokenOverride() !== undefined) return false;
   return (
@@ -98,14 +98,14 @@ function isBridgeFileLoginRefused(baseUrl = getBridgeBaseUrlOverride(), token) {
       isStoredLoginRefused(baseUrl, true))
   );
 }
-//@ chunk-wp3fcgm5.js:657-758 facade-exports
+//@ chunk-c6aqkztt.js:657-758 facade-exports
 function getBridgeAccessToken() {
   let bridgeTokenOverride = getBridgeTokenOverride();
   if (bridgeTokenOverride !== undefined) return bridgeTokenOverride;
   if (!isFirstPartyProvider() || !isClaudeAISubscriber()) return;
   return loginToHandOn(getClaudeAIOAuthTokens())?.accessToken;
 }
-//@ chunk-wp3fcgm5.js:758-915 facade-exports
+//@ chunk-c6aqkztt.js:758-915 facade-exports
 async function getBridgeAccessTokenAsync(credentials) {
   if (!(isStorageV5Enabled() && credentials !== undefined)) return getBridgeAccessToken();
   let bridgeTokenOverride = getBridgeTokenOverride();
@@ -113,34 +113,34 @@ async function getBridgeAccessTokenAsync(credentials) {
   if (!isFirstPartyProvider() || !(await isClaudeAISubscriberAsync(credentials))) return;
   return loginToHandOn(await getClaudeAIOAuthTokensAsync(credentials))?.accessToken;
 }
-//@ chunk-wp3fcgm5.js:915-995 facade-exports
+//@ chunk-c6aqkztt.js:915-995 facade-exports
 function getBridgeSessionsAccessToken() {
   let bridgeAccessToken = getBridgeAccessToken();
   if (bridgeAccessToken === undefined || getBridgeTokenOverride() !== undefined) return bridgeAccessToken;
   return readHostSessionsBearer() ?? bridgeAccessToken;
 }
-//@ chunk-wp3fcgm5.js:995-1094 facade-exports
+//@ chunk-c6aqkztt.js:995-1094 facade-exports
 async function getBridgeSessionsAccessTokenAsync(credentials) {
   let bridgeAccessToken = await getBridgeAccessTokenAsync(credentials);
   if (bridgeAccessToken === undefined || getBridgeTokenOverride() !== undefined) return bridgeAccessToken;
   return (await ensureHostSessionsBearer()) ?? bridgeAccessToken;
 }
-//@ chunk-wp3fcgm5.js:1094-1195 facade-exports
+//@ chunk-c6aqkztt.js:1094-1195 facade-exports
 async function bridgeSessionsAccessTokenAfter401(credentials, credentials_2, withheld = false) {
   if ((await recoverHostSessionsBearer(credentials, withheld ? "withheld" : "refused")) === "not_held")
     return;
   return getBridgeSessionsAccessTokenAsync(credentials_2);
 }
-//@ chunk-wp3fcgm5.js:1195-1240 facade-exports (2.1.88 match: getTeamMemorySyncEndpoint, 1)
+//@ chunk-c6aqkztt.js:1195-1240 facade-exports (2.1.88 match: getTeamMemorySyncEndpoint, 1)
 function getBridgeBaseUrl() {
   return getBridgeBaseUrlOverride() ?? getOauthConfig().BASE_API_URL;
 }
-//@ chunk-wp3fcgm5.js:1240-1350 facade-exports
+//@ chunk-c6aqkztt.js:1240-1350 facade-exports
 function getBridgeSessionNamePrefix() {
   let namePrefix = process.env.CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX || hostname();
   return slugifyBridgeSessionName(namePrefix) || "remote-control";
 }
-//@ chunk-wp3fcgm5.js:1350-1437 affinity
+//@ chunk-c6aqkztt.js:1350-1437 affinity
 function slugifyBridgeSessionName(name) {
   return name
     .toLowerCase()
@@ -148,19 +148,19 @@ function slugifyBridgeSessionName(name) {
     .replace(/^-+|-+$/g, "");
 }
 export {
+  getBridgeBaseUrlOverride,
+  getBridgeAccessTokenAsync,
+  getBridgeAccessToken,
+  isBridgeFileLoginRefused,
+  getBridgeTokenOverride,
+  getBridgeBaseUrl,
+  getBridgeSessionNamePrefix,
+  getBridgeSessionsAccessToken,
+  getBridgeSessionsAccessTokenAsync,
+  bridgeSessionsAccessTokenAfter401,
   isGrowthBookUnavailableOnNoTelemetry,
   getBearerSubscriptionType,
   getBridgeAccessToken_2,
   hasFreshBearerPlan,
-  getBridgeAccessTokenAsync,
-  getBridgeAccessToken,
-  getBridgeSessionNamePrefix,
-  getBridgeBaseUrl,
-  isBridgeFileLoginRefused,
-  getBridgeTokenOverride,
-  getBridgeBaseUrlOverride,
   isBridgeEntitlementHintAvailable,
-  getBridgeSessionsAccessToken,
-  getBridgeSessionsAccessTokenAsync,
-  bridgeSessionsAccessTokenAfter401,
 };

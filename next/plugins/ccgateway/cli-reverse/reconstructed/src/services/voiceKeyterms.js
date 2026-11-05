@@ -3,14 +3,13 @@
  *
  * 语音识别关键词：全局术语表与从标识符/文件名拆词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/voiceKeyterms.ts
- * pieces: chunk-a658aeqp.js (3)
- * attribution: fingerprint 2, file-local 1
+ * pieces: chunk-1vwpwerm.js (2)
+ * attribution: fingerprint 2
  */
-import { basename } from "path";
 
-//@ chunk-a658aeqp.js:18589-18730 fingerprint (2.1.88 match: GLOBAL_KEYTERMS, 1)
+//@ chunk-1vwpwerm.js:18916-19057 fingerprint (2.1.88 match: GLOBAL_KEYTERMS, 1)
 var GLOBAL_KEYTERMS = [
   "MCP",
   "symlink",
@@ -27,7 +26,7 @@ var GLOBAL_KEYTERMS = [
   "subagent",
   "worktree",
 ];
-//@ chunk-a658aeqp.js:18730-18864 fingerprint (2.1.88 match: splitIdentifier, 1)
+//@ chunk-1vwpwerm.js:19057-19191 fingerprint (2.1.88 match: splitIdentifier, 1)
 function splitIdentifier(name) {
   return name
     .replace(/([a-z])([A-Z])/g, "$1 $2")
@@ -35,9 +34,4 @@ function splitIdentifier(name) {
     .map((word) => word.trim())
     .filter((word) => word.length > 2 && word.length <= 20);
 }
-//@ chunk-a658aeqp.js:18864-18925 file-local
-function fileNameWords(filePath) {
-  let stem = basename(filePath).replace(/\.[^.]+$/, "");
-  return splitIdentifier(stem);
-}
-export { splitIdentifier, GLOBAL_KEYTERMS, fileNameWords };
+export { splitIdentifier, GLOBAL_KEYTERMS };

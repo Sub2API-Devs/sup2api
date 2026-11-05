@@ -3,9 +3,9 @@
  *
  * 托管设置文件加载（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q8cqcff6.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5fn9rb8r.js (3)
  * attribution: placement 3
  */
 import { join } from "path";
@@ -21,12 +21,12 @@ import { readWslInheritFlag } from "./types.js";
 import { getFsImplementation } from "../fsOperations.js";
 import { isManagedSettingsDropInName } from "./managedFileSettings.js";
 
-//@ chunk-q8cqcff6.js:17707-17768 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-5fn9rb8r.js:17962-18023 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isNotFoundErrno_5(realCandidate) {
   let code = getErrnoCode(realCandidate);
   return code === "ENOENT" || code === "ENOTDIR";
 }
-//@ chunk-q8cqcff6.js:17768-18852 placement
+//@ chunk-5fn9rb8r.js:18023-19110 placement
 async function loadManagedSettingsFile(store) {
   let records = [];
   let loadState = "absent";
@@ -109,7 +109,7 @@ async function loadManagedSettingsFile(store) {
     links,
   };
 }
-//@ chunk-q8cqcff6.js:18852-19122 placement
+//@ chunk-5fn9rb8r.js:19110-19380 placement
 async function hasManagedSettingsDocument(dir, store) {
   if (await managedFileHasContent(join(dir, "managed-settings.json"), store)) return true;
   let dropInDir = join(dir, "managed-settings.d");

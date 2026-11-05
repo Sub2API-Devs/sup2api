@@ -3,10 +3,10 @@
  *
  * ripgrep 调用层：内嵌/系统 rg 选择、超时与重试、输出上限、macOS 受保护目录排除、文件计数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/ripgrep.ts
- * pieces: chunk-aqdf5t3e.js (1), chunk-fq0cr76a.js (56)
- * attribution: fingerprint 11, placement 4, layout 42
+ * pieces: chunk-qg41pqt6.js (60), chunk-tsrpnscb.js (1)
+ * attribution: sole-consumer 2, placement 5, fingerprint 11, layout 43
  */
 import { StringDecoder } from "string_decoder";
 import { stat, open, readlink, access } from "fs/promises";
@@ -19,6 +19,7 @@ import { sep } from "path";
 import { constants, realpathSync, statSync } from "fs";
 import { homedir } from "os";
 import { spawn, execFile } from "child_process";
+import { readFlagWithOverride } from "../services/analytics/flagOverrides.js";
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { isEnvDefinedFalsy } from "./envUtils.js";
@@ -38,35 +39,47 @@ import {
   withTelemetryChildExitStatus,
 } from "./errors.js";
 import { getPlatform } from "./platform.js";
-import { truncateToLength, countCharInString } from "./stringUtils.js";
+import { plural, truncateToLength, countCharInString } from "./stringUtils.js";
 import { getCwd, getCwdOrNull } from "./cwd.js";
 import { SymlinkReadRefusedError } from "./fsSafety/atomicWriteStaging.js";
 import { walkPermissionCheckPaths, safeResolvePath, getFsImplementation } from "./fsOperations.js";
 import {
   pathInWorkingPath,
+  normalizeCaseForComparison_2,
   normalizePatternsToPath,
   isSearchResultRootRespellEnabled,
 } from "./permissions/filesystem.js";
 import { isUncOrDevicePath } from "./pathClassification.js";
 import { isWslUncPath, isNetworkMountPath } from "./networkPaths.js";
-import { INHERITED_FD_PATH, execFileNoThrow } from "./execFileNoThrow.js";
-import { uniq } from "./collections.js";
-import { NoProjectDirectoryError } from "../bootstrap/sessionSlices.js";
-import { isStorageV5Enabled } from "./hoverRest.js";
-import { logForDebugging } from "./debug.js";
-import { assertProgramLaunchAllowed, isDisklessSession } from "./disklessSession.js";
-import { cgroupSpawnOptions } from "./toolCgroup.js";
+import { O_NOFOLLOW_FLAG, READ_LIMITS } from "./fsBoundRead.js";
 import { logError } from "./log.js";
 import { logEvent } from "../services/analytics/index.js";
+import { lit } from "../services/analytics/safeMetadata.js";
+import { logForDebugging } from "./debug.js";
+import { INHERITED_FD_PATH, execFileNoThrow } from "./execFileNoThrow.js";
+import { NoProjectDirectoryError } from "../bootstrap/sessionSlices.js";
+import { isStorageV5Enabled } from "./hoverRest.js";
+import { assertProgramLaunchAllowed, isDisklessSession } from "./disklessSession.js";
+import { cgroupSpawnOptions } from "./toolCgroup.js";
 import { presenceStores } from "../services/artifacts/artifactPresence.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-fq0cr76a.js:877863-878480 placement
+//@ chunk-qg41pqt6.js:879572-879600 sole-consumer
+var TENGU_ZIPPY_COCOA = "tengu_zippy_cocoa";
+//@ chunk-qg41pqt6.js:879600-879639 sole-consumer
+function isZippyCocoaOn() {
+  return readFlagWithOverride(TENGU_ZIPPY_COCOA, {
+    safe: true,
+  });
+}
+//@ chunk-qg41pqt6.js:879639-880400 placement
 class RipgrepStatus {
   config = undefined;
   roundedFileCounts = new Map();
   #e = null;
   firstUseProbe = undefined;
+  heldDirectorySpawnUnavailableReported = false;
+  reopenRejectedReported = false;
   get status() {
     return this.#e;
   }
@@ -104,21 +117,23 @@ class RipgrepStatus {
     this.config = undefined;
     this.roundedFileCounts.clear();
     this.firstUseProbe = undefined;
+    this.heldDirectorySpawnUnavailableReported = false;
+    this.reopenRejectedReported = false;
   }
 }
-//@ chunk-fq0cr76a.js:878480-878506 placement
+//@ chunk-qg41pqt6.js:880400-880426 placement
 var ripgrepStatusSlot; // deferred: uses RipgrepStatus of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fq0cr76a.js:878480", () => {
+deferInit("chunk-qg41pqt6.js:880400", () => {
   ripgrepStatusSlot = new HostScoped(() => new RipgrepStatus());
 });
-//@ chunk-fq0cr76a.js:878506-878544 placement
+//@ chunk-qg41pqt6.js:880426-880464 placement
 /**
  * ripgrepStatus：当前宿主的 ripgrep 状态。
  */
 function ripgrepStatus() {
   return ripgrepStatusSlot.of(getRootSession().host);
 }
-//@ chunk-fq0cr76a.js:878582-878972 fingerprint (2.1.88 match: getRipgrepConfig, 0.659)
+//@ chunk-qg41pqt6.js:880502-880892 fingerprint (2.1.88 match: getRipgrepConfig, 0.658)
 /**
  * 决定 ripgrep 来源：USE_BUILTIN_RIPGREP 设为假值时优先系统 rg；Bun 单文件可执行时用自身（argv0=rg，内嵌）；否则系统 rg。
  */
@@ -156,15 +171,15 @@ function getRipgrepConfig_2() {
     args: [],
   };
 }
-//@ chunk-fq0cr76a.js:878972-879215 layout
+//@ chunk-qg41pqt6.js:880892-881135 layout
 var RIPGREP_NOT_FOUND_MESSAGE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SPAWN_SYSCALLS;
-deferInit("chunk-fq0cr76a.js:878972", () => {
+deferInit("chunk-qg41pqt6.js:880892", () => {
   RIPGREP_NOT_FOUND_MESSAGE =
     "ripgrep not found on PATH. Install it (brew install ripgrep / apt install ripgrep / winget install BurntSushi.ripgrep.MSVC) or use the native claude binary which embeds it.";
   SPAWN_SYSCALLS = new Set(["spawn", "spawnSync", "posix_spawn", "uv_spawn"]);
 });
-//@ chunk-fq0cr76a.js:879215-879735 layout
+//@ chunk-qg41pqt6.js:881135-881655 layout
 /**
  * 净化 spawn 错误：去掉可能含路径的 cmd/spawnargs 等字段，只保留 name/message/code/errno 与白名单 syscall。
  */
@@ -199,7 +214,7 @@ function sanitizeSpawnError(error) {
       })
     : merged;
 }
-//@ chunk-fq0cr76a.js:879735-879855 layout
+//@ chunk-qg41pqt6.js:881655-881775 layout
 function explainRipgrepNotFound(error) {
   if (error.code === "ENOENT" && ideDiffSupport().mode === "system") {
     let wrapped = Error(RIPGREP_NOT_FOUND_MESSAGE, {
@@ -210,7 +225,7 @@ function explainRipgrepNotFound(error) {
   }
   return error;
 }
-//@ chunk-fq0cr76a.js:879855-879933 fingerprint (2.1.88 match: ripgrepCommand, 1)
+//@ chunk-qg41pqt6.js:881775-881853 fingerprint (2.1.88 match: ripgrepCommand, 1)
 /**
  * 当前 ripgrep 命令（路径、前置参数、argv0）。
  */
@@ -222,13 +237,13 @@ function ripgrepCommand() {
     argv0: config.argv0,
   };
 }
-//@ chunk-fq0cr76a.js:879933-879960 layout
+//@ chunk-qg41pqt6.js:881853-881880 layout
 /**
  * ripgrep 输出收集上限 20MB 与流式块上限常量。
  */
 var MAX_RIPGREP_OUTPUT_BYTES = 20000000;
 var RIPGREP_HEAD_BYTES = 1048576;
-//@ chunk-fq0cr76a.js:879960-880437 layout
+//@ chunk-qg41pqt6.js:881880-882357 layout
 class BoundedOutputCollector {
   maxBytes;
   truncated = false;
@@ -259,11 +274,11 @@ class BoundedOutputCollector {
     this.pieces = [];
   }
 }
-//@ chunk-fq0cr76a.js:880437-880486 layout
+//@ chunk-qg41pqt6.js:882357-882406 layout
 class RipgrepOutputError extends Error {
   name = "RipgrepOutputError";
 }
-//@ chunk-fq0cr76a.js:880486-880703 layout
+//@ chunk-qg41pqt6.js:882406-882623 layout
 function toRipgrepOutputError(error) {
   return withTelemetryMessage(
     new RipgrepOutputError(
@@ -275,7 +290,7 @@ function toRipgrepOutputError(error) {
     "ripgrep output collection failed",
   );
 }
-//@ chunk-fq0cr76a.js:880703-880858 layout
+//@ chunk-qg41pqt6.js:882623-882778 layout
 function dropIncompleteLastLine(lines, stdout) {
   let last = lines.at(-1);
   if (
@@ -287,24 +302,24 @@ function dropIncompleteLastLine(lines, stdout) {
   let index = last.lastIndexOf("\x00");
   return index === -1 ? lines.slice(0, -1) : lines.with(-1, last.slice(0, index + 1));
 }
-//@ chunk-fq0cr76a.js:880858-880905 layout
+//@ chunk-qg41pqt6.js:882778-882825 layout
 var BENIGN_KILL_SIGNALS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fq0cr76a.js:880858", () => {
+deferInit("chunk-qg41pqt6.js:882778", () => {
   BENIGN_KILL_SIGNALS = new Set(["SIGHUP", "SIGINT", "SIGPIPE"]);
 });
-//@ chunk-fq0cr76a.js:880905-881001 fingerprint (2.1.88 match: isEagainError, 1)
+//@ chunk-qg41pqt6.js:882825-882921 fingerprint (2.1.88 match: isEagainError, 1)
 function isEagainError(stderr) {
   return stderr.includes("os error 11") || stderr.includes("Resource temporarily unavailable");
 }
-//@ chunk-fq0cr76a.js:881001-881055 layout
+//@ chunk-qg41pqt6.js:882921-882975 layout
 /**
  * 资源耗尽类错误码（EAGAIN/ENOMEM/EMFILE/ENFILE），遇到时以 -j 1 单线程重试。
  */
 var RESOURCE_EXHAUSTION_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fq0cr76a.js:881001", () => {
+deferInit("chunk-qg41pqt6.js:882921", () => {
   RESOURCE_EXHAUSTION_CODES = new Set(["EAGAIN", "ENOMEM", "EMFILE", "ENFILE"]);
 });
-//@ chunk-fq0cr76a.js:881055-881175 fingerprint (2.1.88 match: RipgrepTimeoutError, 0.773)
+//@ chunk-qg41pqt6.js:882975-883095 fingerprint (2.1.88 match: RipgrepTimeoutError, 0.791)
 /**
  * ripgrep 超时错误，带部分结果。
  */
@@ -316,20 +331,34 @@ class RipgrepTimeoutError extends Error {
     this.name = "RipgrepTimeoutError";
   }
 }
-//@ chunk-fq0cr76a.js:881175-881443 layout
+//@ chunk-qg41pqt6.js:883095-883195 layout
+function globTimeoutMs() {
+  let CLAUDE_CODE_GLOB_TIMEOUT_SECONDS = env.CLAUDE_CODE_GLOB_TIMEOUT_SECONDS || 0;
+  return CLAUDE_CODE_GLOB_TIMEOUT_SECONDS > 0
+    ? CLAUDE_CODE_GLOB_TIMEOUT_SECONDS * 1000
+    : getPlatform() === "wsl"
+      ? 60000
+      : 20000;
+}
+//@ chunk-qg41pqt6.js:883195-883286 layout
+function ripgrepTimeoutText() {
+  let timeoutSeconds = globTimeoutMs() / 1000;
+  return `Ripgrep search timed out after ${timeoutSeconds} ${plural(timeoutSeconds, "second")}`;
+}
+//@ chunk-qg41pqt6.js:883286-883502 layout
 /**
  * ripgrep 中断时的错误：非超时中断给 AbortError，超时给 RipgrepTimeoutError（WSL 60 秒，其它 20 秒），并建议缩小路径或模式。
  */
 function createRipgrepAbortError(signal) {
   if (signal.aborted && signal.reason?.name !== "TimeoutError") return new AbortError();
   return new RipgrepTimeoutError(
-    `Ripgrep search timed out after ${getPlatform() === "wsl" ? 60 : 20} seconds. The search may have matched files but did not complete in time. Try searching a more specific path or pattern.`,
+    `${ripgrepTimeoutText()}. The search may have matched files but did not complete in time. Try searching a more specific path or pattern.`,
     [],
   );
 }
-//@ chunk-fq0cr76a.js:881443-881948 layout
+//@ chunk-qg41pqt6.js:883502-884007 layout
 let RipgrepAbnormalExitError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (./errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fq0cr76a.js:881443", () => {
+deferInit("chunk-qg41pqt6.js:883502", () => {
   RipgrepAbnormalExitError = class RipgrepAbnormalExitError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -342,12 +371,12 @@ deferInit("chunk-fq0cr76a.js:881443", () => {
     }
   };
 });
-//@ chunk-fq0cr76a.js:881948-882081 layout
+//@ chunk-qg41pqt6.js:884007-884140 layout
 var RIPGREP_USAGE_ERROR_RE =
   /^rg: (?:regex parse error|error parsing glob|unrecognized file type|error parsing flag|compiled regex exceeds size limit)/m;
-//@ chunk-fq0cr76a.js:882081-882321 layout
+//@ chunk-qg41pqt6.js:884140-884379 layout
 let RipgrepUsageError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (./errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fq0cr76a.js:882081", () => {
+deferInit("chunk-qg41pqt6.js:884140", () => {
   RipgrepUsageError = class RipgrepUsageError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -361,12 +390,12 @@ ${truncateToLength(stderr.trim(), 2000)}`,
     }
   };
 });
-//@ chunk-fq0cr76a.js:882321-882415 layout
+//@ chunk-qg41pqt6.js:884379-884473 layout
 var NO_SHELL_SEARCH_FALLBACK =
   "Do not run a recursive search in the shell instead (for example grep -r, find or rg)";
-//@ chunk-fq0cr76a.js:882415-883111 layout
+//@ chunk-qg41pqt6.js:884473-885169 layout
 let RipgrepTargetUnreadableError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (./errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fq0cr76a.js:882415", () => {
+deferInit("chunk-qg41pqt6.js:884473", () => {
   RipgrepTargetUnreadableError = class RipgrepTargetUnreadableError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -393,7 +422,7 @@ deferInit("chunk-fq0cr76a.js:882415", () => {
     }
   };
 });
-//@ chunk-fq0cr76a.js:883111-883164 layout
+//@ chunk-qg41pqt6.js:885169-885222 layout
 var EPERM_CODE = 1;
 var ENOENT_CODE = 2;
 var EIO_CODE = 5;
@@ -402,9 +431,9 @@ var ENOTDIR_CODE = 20;
 var WIN_ERROR_FILE_NOT_FOUND = 2;
 var WIN_ERROR_PATH_NOT_FOUND = 3;
 var WIN_ERROR_ACCESS_DENIED = 5;
-//@ chunk-fq0cr76a.js:883164-883720 layout
+//@ chunk-qg41pqt6.js:885222-885778 layout
 let RipgrepOutputTooLargeError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (./errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fq0cr76a.js:883164", () => {
+deferInit("chunk-qg41pqt6.js:885222", () => {
   RipgrepOutputTooLargeError = class RipgrepOutputTooLargeError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -419,13 +448,13 @@ deferInit("chunk-fq0cr76a.js:883164", () => {
     }
   };
 });
-//@ chunk-fq0cr76a.js:883720-884378 layout
+//@ chunk-qg41pqt6.js:885778-886436 layout
 /**
  * ripgrep 启动失败的 errno → {reason, advice} 文案表（EAGAIN、ENOMEM、EMFILE、ENFILE…）。
  */
 var SPAWN_FAILURE_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var DEFAULT_SPAWN_FAILURE_REASON;
-deferInit("chunk-fq0cr76a.js:883720", () => {
+deferInit("chunk-qg41pqt6.js:885778", () => {
   SPAWN_FAILURE_REASONS = new Map([
     [
       "EAGAIN",
@@ -461,9 +490,9 @@ deferInit("chunk-fq0cr76a.js:883720", () => {
     advice: "this machine is short of a resource needed to start programs",
   };
 });
-//@ chunk-fq0cr76a.js:884378-885017 layout
+//@ chunk-qg41pqt6.js:886436-887075 layout
 let RipgrepSpawnResourceError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (./errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-fq0cr76a.js:884378", () => {
+deferInit("chunk-qg41pqt6.js:886436", () => {
   RipgrepSpawnResourceError = class RipgrepSpawnResourceError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -494,11 +523,11 @@ deferInit("chunk-fq0cr76a.js:884378", () => {
     }
   };
 });
-//@ chunk-fq0cr76a.js:885017-885068 layout
+//@ chunk-qg41pqt6.js:887075-887126 layout
 class RipgrepNullByteError extends Error {
   name = "RipgrepNullByteError";
 }
-//@ chunk-fq0cr76a.js:885068-885549 layout
+//@ chunk-qg41pqt6.js:887126-887607 layout
 /**
  * ripgrep 启动前检查 cwd、目标路径与参数里没有 \0，否则抛 RipgrepNullByteError（附遥测说明）。
  */
@@ -526,7 +555,7 @@ function assertNoNullBytesForRipgrep(args, target, spawnCwd) {
       nullByteSource.telemetry,
     );
 }
-//@ chunk-fq0cr76a.js:885549-885666 layout (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-qg41pqt6.js:887607-887724 layout (2.1.88 match: isRealPathWithinTeamDir, 1)
 async function pathExistsStat(realCandidate) {
   try {
     await stat(realCandidate);
@@ -537,7 +566,7 @@ async function pathExistsStat(realCandidate) {
     throw e;
   }
 }
-//@ chunk-fq0cr76a.js:885666-888681 layout
+//@ chunk-qg41pqt6.js:887724-892608 layout
 /**
  * 规范化 ripgrep 搜索目标：确认软链解析与权限检查时一致、PATH 上按名找到的 rg 不能搜索工作目录外（无法套用 Read 拒绝规则），返回 {lexical, canonical, spawnCwd, relativeOutput, isDirectory, recheckBeforeSpawn…}。
  */
@@ -648,6 +677,7 @@ async function resolveRipgrepTarget(realCandidate, allowedSpellings) {
       );
     throw error;
   }
+  let dirHandle;
   try {
     let stats = await handle.stat();
     let procFdPath = null;
@@ -663,7 +693,7 @@ async function resolveRipgrepTarget(realCandidate, allowedSpellings) {
       recheckPermissions();
       if (canonicalPath() !== canonicalTarget) throw refuse();
     };
-    let recheckBeforeSpawn = viaProcFd ? () => {} : checkUnchanged;
+    let recheckByPath = viaProcFd ? () => {} : checkUnchanged;
     if (stats.isDirectory())
       try {
         await access(viaProcFd ? `/proc/self/fd/${openHandle.fd}` : canonicalTarget, constants.X_OK);
@@ -672,18 +702,99 @@ async function resolveRipgrepTarget(realCandidate, allowedSpellings) {
           `Cannot search ${realCandidate}: the directory is not traversable (no execute permission).`,
         );
       }
-    if (stats.isDirectory() && pathModule_2.isAbsolute(ripgrepCommand().rgPath))
+    if (stats.isDirectory() && pathModule_2.isAbsolute(ripgrepCommand().rgPath)) {
+      if (!viaProcFd && O_NOFOLLOW_FLAG !== 0 && isZippyCocoaOn())
+        if (typeof Bun !== "undefined" && typeof Bun.ant?.withThreadWorkingDirectory === "function") {
+          try {
+            dirHandle = await open(
+              canonicalTarget,
+              constants.O_RDONLY |
+                constants.O_DIRECTORY |
+                constants.O_NONBLOCK |
+                O_NOFOLLOW_FLAG |
+                READ_LIMITS,
+            );
+          } catch (error) {
+            let errnoCode = getErrnoCode(error);
+            if (errnoCode === "ELOOP") throw refuse();
+            if (
+              errnoCode === "ENOENT" ||
+              errnoCode === "ENOTDIR" ||
+              errnoCode === "EACCES" ||
+              errnoCode === "EPERM"
+            )
+              throw new SymlinkReadRefusedError(
+                `Refusing to search ${realCandidate}: it was moved, replaced, or had its permissions changed (${errnoCode}) while the search was starting, so nothing was searched. Try again.`,
+              );
+            if (errnoCode === "EINVAL") {
+              let status = ripgrepStatus();
+              if (!status.reopenRejectedReported) {
+                status.reopenRejectedReported = true;
+                logError(
+                  Error(
+                    "Grep/Glob on macOS: opening an approved search directory with O_NOFOLLOW_ANY failed with EINVAL, so the search was refused (logged once per process)",
+                  ),
+                );
+                logEvent("tengu_darwin_thread_cwd", {
+                  outcome: lit("reopen_rejected"),
+                });
+              }
+              throw new SymlinkReadRefusedError(
+                `Refusing to search ${realCandidate}: the open that keeps symbolic links out of a search was rejected for this folder (EINVAL), so nothing was searched; other folders on the same volume may fail the same way. If this folder is on an ordinary local disk, report it with /bug.`,
+              );
+            }
+            throw error;
+          }
+          let [beforeStats, afterStats] = await Promise.all([
+            openHandle.stat({
+              bigint: true,
+            }),
+            dirHandle.stat({
+              bigint: true,
+            }),
+          ]);
+          if (afterStats.ino !== beforeStats.ino || afterStats.dev !== beforeStats.dev)
+            throw new SymlinkReadRefusedError(
+              `Refusing to search ${realCandidate}: it was moved or replaced while the search was starting, so nothing was searched. Try again.`,
+            );
+        } else {
+          let status = ripgrepStatus();
+          if (!status.heldDirectorySpawnUnavailableReported) {
+            status.heldDirectorySpawnUnavailableReported = true;
+            logForDebugging(
+              "Grep/Glob on macOS: this runtime lacks Bun.ant.withThreadWorkingDirectory, so ripgrep starts at the search directory path, re-checked just before it starts, instead of inside the open directory (noted once per process)",
+              {
+                level: "warn",
+              },
+            );
+            logEvent("tengu_darwin_thread_cwd", {
+              outcome: lit("unavailable"),
+            });
+          }
+        }
+      let openedDirHandle = dirHandle;
       return {
         lexical: realCandidate,
         canonical: canonicalTarget,
         spawnCwd: viaProcFd ? `/proc/self/fd/${openHandle.fd}` : canonicalTarget,
+        spawnDirFd: openedDirHandle?.fd,
         target: ".",
         relativeOutput: true,
         isDirectory: true,
-        recheckBeforeSpawn,
+        recheckBeforeSpawn: openedDirHandle === undefined ? recheckByPath : () => {},
         recheckByPath: checkUnchanged,
-        close: () => openHandle.close(),
+        close:
+          openedDirHandle === undefined
+            ? () => openHandle.close()
+            : async () => {
+                try {
+                  await openedDirHandle.close();
+                } finally {
+                  await openHandle.close();
+                }
+              },
       };
+    }
     if (stats.isDirectory()) {
       let ripgrepSpawnCwd = resolveRipgrepSpawnCwd(canonicalTarget, ripgrepCommand().rgPath);
       if (!pathInWorkingPath(canonicalTarget, ripgrepSpawnCwd)) refuseRelativeRg();
@@ -707,16 +818,17 @@ async function resolveRipgrepTarget(realCandidate, allowedSpellings) {
       inheritFd: viaProcFd ? openHandle.fd : undefined,
       relativeOutput: false,
       isDirectory: false,
-      recheckBeforeSpawn,
+      recheckBeforeSpawn: recheckByPath,
       recheckByPath: checkUnchanged,
       close: () => openHandle.close(),
     };
   } catch (error) {
+    await dirHandle?.close().catch(() => {});
     await handle.close().catch(() => {});
     throw error;
   }
 }
-//@ chunk-fq0cr76a.js:888681-889078 layout
+//@ chunk-qg41pqt6.js:892608-893005 layout
 /**
  * 把 ripgrep 输出的路径映射回用户给出的词法路径（处理规范化目录、相对输出）。
  */
@@ -738,7 +850,7 @@ function mapRipgrepOutputPath(outputPath, target) {
   }
   return outputPath;
 }
-//@ chunk-fq0cr76a.js:889078-889319 layout
+//@ chunk-qg41pqt6.js:893005-893246 layout
 /**
  * 搜索准备期间 Read 拒绝规则对应路径发生变化时拒绝搜索（防竞态）。
  */
@@ -752,21 +864,21 @@ function assertDenyGlobsUnchanged(patternsByRoot, target, expectedGlobs, options
       `Refusing to search ${target.lexical}: a path one of its Read deny rules is written through changed while the search was being prepared. Retry.`,
     );
 }
-//@ chunk-fq0cr76a.js:889319-889439 layout
+//@ chunk-qg41pqt6.js:893246-893366 layout
 function getRipgrepRootSpellings(target) {
-  return uniq(
+  return normalizeCaseForComparison_2(
     target.relativeOutput || target.spawnCwd === target.canonical
       ? [target.canonical, target.lexical]
       : [target.spawnCwd, safeRealpath(target.spawnCwd)],
   );
 }
-//@ chunk-fq0cr76a.js:889439-889532 layout
+//@ chunk-qg41pqt6.js:893366-893459 layout
 function getRipgrepDisplayRoot(target) {
   return target.relativeOutput || target.spawnCwd === target.canonical
     ? target.canonical
     : safeRealpath(target.spawnCwd);
 }
-//@ chunk-fq0cr76a.js:889532-889581 layout
+//@ chunk-qg41pqt6.js:893459-893508 layout
 function safeRealpath(path) {
   try {
     return realpathSync(path);
@@ -774,7 +886,7 @@ function safeRealpath(path) {
     return path;
   }
 }
-//@ chunk-fq0cr76a.js:889581-890288 layout
+//@ chunk-qg41pqt6.js:893508-894215 layout
 /**
  * 把 Read 拒绝规则转成 ripgrep 的 !glob 排除参数；规则覆盖整个搜索目标时返回 ["!**"]。
  */
@@ -827,7 +939,7 @@ function buildDenyRuleGlobs(patternsByRoot, target, options) {
     }
   return globs;
 }
-//@ chunk-fq0cr76a.js:890288-890463 layout
+//@ chunk-qg41pqt6.js:894215-894390 layout
 function hasUnsafeDenyGlob(patternsByRoot, target) {
   if (target !== undefined) {
     let ripgrepRootSpellings = getRipgrepRootSpellings(target);
@@ -839,11 +951,11 @@ function hasUnsafeDenyGlob(patternsByRoot, target) {
     for (let pattern of patterns) if (isGlobUnsafeForRipgrep(pattern)) return true;
   return false;
 }
-//@ chunk-fq0cr76a.js:890463-890534 layout
+//@ chunk-qg41pqt6.js:894390-894461 layout
 function isGlobUnsafeForRipgrep(pattern) {
   return pattern.includes("[") || pattern.includes("\\") || /\s$/.test(pattern);
 }
-//@ chunk-fq0cr76a.js:890534-890768 layout
+//@ chunk-qg41pqt6.js:894461-894695 layout
 function escapeBracesInGlob(glob) {
   let escaped = "";
   let inClass = false;
@@ -867,7 +979,7 @@ function escapeBracesInGlob(glob) {
   }
   return escaped;
 }
-//@ chunk-fq0cr76a.js:890768-891205 layout
+//@ chunk-qg41pqt6.js:894695-895132 layout
 function resolveRipgrepSpawnCwd(target, rgPath) {
   let cwdOrNull = getCwdOrNull();
   if (cwdOrNull === null) {
@@ -898,16 +1010,16 @@ function resolveRipgrepSpawnCwd(target, rgPath) {
   } catch {}
   return cwdOrNull;
 }
-//@ chunk-fq0cr76a.js:891205-891264 layout
+//@ chunk-qg41pqt6.js:895132-895191 layout
 /**
  * ripgrepStorageOverride：存储模式下 ripgrep 覆盖值。
  */
 function ripgrepStorageOverride(target) {
   return isStorageV5Enabled() && target !== undefined ? (getCwdOrNull() ?? undefined) : undefined;
 }
-//@ chunk-fq0cr76a.js:891264-891325 layout
+//@ chunk-qg41pqt6.js:895191-895252 layout
 var MACOS_PROTECTED_LIBRARY_DIRS = ["Containers", "Group Containers", "Mobile Documents"];
-//@ chunk-fq0cr76a.js:891325-891906 layout
+//@ chunk-qg41pqt6.js:895252-895833 layout
 /**
  * macOS 下搜索根包含 ~/Library/Containers 等受保护目录时追加排除，避免触发系统授权弹窗。
  */
@@ -940,7 +1052,7 @@ function addMacosProtectedDirExcludes(args, target, spawnCwd) {
     return args;
   }
 }
-//@ chunk-fq0cr76a.js:891906-891994 layout
+//@ chunk-qg41pqt6.js:895833-895921 layout
 function isStrictSubpath(relativePath) {
   return (
     relativePath !== "" &&
@@ -949,7 +1061,7 @@ function isStrictSubpath(relativePath) {
     !pathModule_2.isAbsolute(relativePath)
   );
 }
-//@ chunk-fq0cr76a.js:891994-894506 fingerprint (2.1.88 match: ripGrepRaw, 0.57)
+//@ chunk-qg41pqt6.js:895921-899047 fingerprint (2.1.88 match: ripGrepRaw, 0.448)
 /**
  * ripGrepRaw：spawn ripgrep，按字节上限收集 stdout/stderr，支持 stdin 管道与继承 fd，macOS 自动排除 ~/Library 受保护目录。
  */
@@ -963,6 +1075,7 @@ function ripGrepRaw(
   stdin,
   inheritFd,
   searchOtherAppsData = false,
+  spawnDirFd,
 ) {
   assertProgramLaunchAllowed();
   let { rgPath, rgArgs, argv0 } = ripgrepCommand();
@@ -975,38 +1088,58 @@ function ripGrepRaw(
     ...(searchOtherAppsData ? args : addMacosProtectedDirExcludes(args, target, spawnCwd)),
     target,
   ];
-  let defaultTimeoutMs = getPlatform() === "wsl" ? 60000 : 20000;
-  let CLAUDE_CODE_GLOB_TIMEOUT_SECONDS = env.CLAUDE_CODE_GLOB_TIMEOUT_SECONDS || 0;
-  let timeoutMs =
-    CLAUDE_CODE_GLOB_TIMEOUT_SECONDS > 0 ? CLAUDE_CODE_GLOB_TIMEOUT_SECONDS * 1000 : defaultTimeoutMs;
-  if (argv0 || inheritFd !== undefined) {
-    let child = spawn(rgPath, fullArgs, {
+  let timeoutMs = globTimeoutMs();
+  if (argv0 || inheritFd !== undefined || spawnDirFd !== undefined) {
+    let spawnOptions = {
       ...(argv0 && {
         argv0,
       }),
       ...(inheritFd !== undefined && {
         stdio: ["pipe", "pipe", "pipe", inheritFd],
       }),
-      cwd: spawnCwd,
+      cwd: spawnDirFd === undefined ? spawnCwd : ".",
       signal,
       windowsHide: true,
       ...cgroupSpawnOptions("helper"),
-    });
-    if (stdin && child.stdin) {
-      child.stdin.on("error", () => {});
+    };
+    let child;
+    if (spawnDirFd === undefined) child = spawn(rgPath, fullArgs, spawnOptions);
+    else {
+      if (!pathModule_2.isAbsolute(rgPath))
+        throw Error(
+          "The search did not run: ripgrep was found by name rather than at a full path, and starting it that way inside the search folder could run a program planted there. This is an internal error; report it with /bug.",
+        );
+      try {
+        if (typeof Bun !== "undefined")
+          Bun.ant?.withThreadWorkingDirectory?.(spawnDirFd, () => {
+            child = spawn(rgPath, fullArgs, spawnOptions);
+          });
+      } catch (error) {
+        child?.once("error", () => {});
+        child?.kill("SIGKILL");
+        throw error;
+      }
+      if (child === undefined)
+        throw Error(
+          "The search did not run: this build of Claude Code cannot start ripgrep inside an open directory (Bun.ant.withThreadWorkingDirectory is missing). This is an internal error; report it with /bug.",
+        );
+    }
+    let childProcess = child;
+    if (stdin && childProcess.stdin) {
+      childProcess.stdin.on("error", () => {});
       let stdinSource = stdin();
       stdinSource
         .on("error", (data) => {
-          child.kill();
-          child.emit(
+          childProcess.kill();
+          childProcess.emit(
             "error",
             Object.assign(data, {
               stdinSourceFailed: true,
             }),
           );
         })
-        .pipe(child.stdin);
-      child.once("close", () => stdinSource.destroy());
+        .pipe(childProcess.stdin);
+      childProcess.once("close", () => stdinSource.destroy());
     }
     let stdoutCollector = new BoundedOutputCollector(MAX_RIPGREP_OUTPUT_BYTES);
     let stderrCollector = new BoundedOutputCollector(MAX_RIPGREP_OUTPUT_BYTES);
@@ -1015,14 +1148,14 @@ function ripGrepRaw(
     let timedOut = false;
     let timeoutId = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
+      childProcess.kill("SIGTERM");
       killTimer = setTimeout(
         (childProcess, onGraceExpired) => {
           onGraceExpired();
           childProcess.kill("SIGKILL");
         },
         5000,
-        child,
+        childProcess,
         armGraceTimer,
       );
     }, timeoutMs);
@@ -1037,7 +1170,7 @@ function ripGrepRaw(
     };
     let killChild = () => {
       try {
-        child.kill(RIPGREP_KILL_SIGNAL);
+        childProcess.kill(RIPGREP_KILL_SIGNAL);
       } catch {}
     };
     let fail = (error) => {
@@ -1108,11 +1241,11 @@ function ripGrepRaw(
         onClose,
       );
     };
-    child.stdout?.on("data", onStdout);
-    child.stderr?.on("data", onStderr);
-    child.on("close", onClose);
-    child.on("error", onError);
-    return child;
+    childProcess.stdout?.on("data", onStdout);
+    childProcess.stderr?.on("data", onStderr);
+    childProcess.on("close", onClose);
+    childProcess.on("error", onError);
+    return childProcess;
   }
   let timeoutHandle = {};
   let settled = false;
@@ -1174,7 +1307,7 @@ function ripGrepRaw(
   }
   return child;
 }
-//@ chunk-fq0cr76a.js:894506-895018 fingerprint (2.1.88 match: ripGrepFileCount, 0.912)
+//@ chunk-qg41pqt6.js:899047-899559 fingerprint (2.1.88 match: ripGrepFileCount, 0.913)
 async function ripGrepFileCount(args, target, abortSignal) {
   assertProgramLaunchAllowed();
   let { rgPath, rgArgs, argv0 } = ripgrepCommand();
@@ -1214,10 +1347,10 @@ async function ripGrepFileCount(args, target, abortSignal) {
     });
   });
 }
-//@ chunk-fq0cr76a.js:895018-895043 layout (2.1.88 match: killCaffeinate, 0.805)
+//@ chunk-qg41pqt6.js:899559-899584 layout (2.1.88 match: killCaffeinate, 0.805)
 var RIPGREP_KILL_SIGNAL = "SIGKILL";
 var RIPGREP_KILL_GRACE_MS = 5000;
-//@ chunk-fq0cr76a.js:895043-896024 fingerprint (2.1.88 match: ripGrepStream, 0.631)
+//@ chunk-qg41pqt6.js:899584-900586 fingerprint (2.1.88 match: ripGrepStream, 0.632)
 /**
  * 流式运行 ripgrep，逐批回调输出行（SIGKILL 结束）。
  */
@@ -1291,7 +1424,7 @@ async function ripGrepStream(args, target, abortSignal, onLines) {
     });
   });
 }
-//@ chunk-fq0cr76a.js:896024-896386 layout
+//@ chunk-qg41pqt6.js:900586-900948 layout
 /**
  * 在 lexical 与 canonical 路径前缀间互换，得到同一路径的另一种拼写（deny 规则匹配用）。
  */
@@ -1310,7 +1443,7 @@ function getAlternateRootSpellings(path, target) {
     alternates.push(lexicalWithSep + path.slice(canonicalWithSep.length));
   return alternates;
 }
-//@ chunk-fq0cr76a.js:896386-899328 fingerprint (2.1.88 match: ripGrep, 0.505)
+//@ chunk-qg41pqt6.js:900948-904148 fingerprint (2.1.88 match: ripGrep, 0.499)
 /**
  * 运行 ripgrep 并返回行数组：首次使用时自检；处理超时（WSL 60s、其他 20s，可由 CLAUDE_CODE_GLOB_TIMEOUT_SECONDS 覆盖）、资源耗尽重试、输出超限。
  */
@@ -1374,6 +1507,7 @@ async function ripGrep_2(args, target, signal, options) {
             options?.stdin,
             options?.inheritFd,
             options?.searchOtherAppsData,
+            options?.spawnDirFd,
           );
         } catch (error) {
           reject(
@@ -1497,6 +1631,19 @@ async function ripGrep_2(args, target, signal, options) {
         reject(createRipgrepAbortError(signal));
         return;
       }
+      if (
+        options?.rejectOnInputError &&
+        killed &&
+        !(signal.aborted && signal.reason?.name !== "TimeoutError")
+      ) {
+        reject(
+          new RipgrepTimeoutError(
+            `${ripgrepTimeoutText()}, so its results are incomplete: more matches may exist. Try searching a more specific path or pattern.`,
+            lines,
+          ),
+        );
+        return;
+      }
       resolve(lines);
     };
     let safeHandleResult = (error, stdout, stderr, isRetry) => {
@@ -1520,20 +1667,21 @@ async function ripGrep_2(args, target, signal, options) {
         options?.stdin,
         options?.inheritFd,
         options?.searchOtherAppsData,
+        options?.spawnDirFd,
       );
     } catch (error) {
       reject(RipgrepSpawnResourceError.from(error, options?.rejectOnInputError, "thrown") ?? error);
     }
   });
 }
-//@ chunk-fq0cr76a.js:899328-899388 layout
+//@ chunk-qg41pqt6.js:904148-904208 layout
 /**
  * 统计目录文件数（四舍五入），委托给 ripgrep 状态对象。
  */
 function countFilesRounded(dirPath, abortSignal, ignorePatterns = []) {
   return ripgrepStatus().countFilesRounded(dirPath, abortSignal, ignorePatterns);
 }
-//@ chunk-fq0cr76a.js:899388-899763 fingerprint (2.1.88 match: countFilesRoundedRg, 0.852)
+//@ chunk-qg41pqt6.js:904208-904583 fingerprint (2.1.88 match: countFilesRoundedRg, 0.852)
 /**
  * 用 rg --files --hidden 统计目录文件数（家目录本身或其祖先时跳过）。
  */
@@ -1561,11 +1709,11 @@ async function countFilesRoundedRg(dirPath, abortSignal, ignorePatterns) {
       });
   }
 }
-//@ chunk-fq0cr76a.js:899763-899859 layout (2.1.88 match: getRipgrepStatus, 1)
+//@ chunk-qg41pqt6.js:904583-904679 fingerprint (2.1.88 match: getRipgrepStatus, 1)
 /**
  * ripgrep 状态：模式、路径、是否可用。
  */
-function getRipgrepStatus_2() {
+function getRipgrepStatus() {
   let config = ideDiffSupport();
   return {
     mode: config.mode,
@@ -1573,7 +1721,7 @@ function getRipgrepStatus_2() {
     working: ripgrepStatus().status?.working ?? null,
   };
 }
-//@ chunk-fq0cr76a.js:899859-900715 fingerprint (2.1.88 match: testRipgrepOnFirstUse, 0.902)
+//@ chunk-qg41pqt6.js:904679-905535 fingerprint (2.1.88 match: testRipgrepOnFirstUse, 0.902)
 /**
  * 首次使用时运行 rg --version 自检并记录可用性。
  */
@@ -1629,7 +1777,7 @@ async function testRipgrepOnFirstUse() {
     );
   }
 }
-//@ chunk-fq0cr76a.js:900715-901080 placement
+//@ chunk-qg41pqt6.js:905535-905900 placement
 function splitNulDelimitedOutput(lines, mode, separator = "nul") {
   let joined = lines.join(`
 `);
@@ -1649,22 +1797,18 @@ function splitNulDelimitedOutput(lines, mode, separator = "nul") {
   }
   return result;
 }
-//@ chunk-aqdf5t3e.js:8562-8617 fingerprint (2.1.88 match: getRipgrepStatus, 1)
+//@ chunk-tsrpnscb.js:8602-8657 placement (2.1.88 match: getRipgrepStatus, 1)
 /**
  * 订阅 ripgrep 可用状态变化。
  */
-function getRipgrepStatus(status, listener) {
+function getRipgrepStatus_2(status, listener) {
   return presenceStores.of(status).working.subscribe(listener);
 }
 export {
-  getRipgrepStatus,
   ripGrep_2,
-  resolveRipgrepSpawnCwd,
-  ripgrepCommand,
-  countFilesRounded,
-  ripGrepStream,
   ripgrepStorageOverride,
   RipgrepTimeoutError,
+  countFilesRounded,
   resolveRipgrepTarget,
   buildDenyRuleGlobs,
   getRipgrepDisplayRoot,
@@ -1673,6 +1817,10 @@ export {
   hasUnsafeDenyGlob,
   mapRipgrepOutputPath,
   getAlternateRootSpellings,
-  ripgrepStatus,
+  ripgrepCommand,
+  resolveRipgrepSpawnCwd,
   getRipgrepStatus_2,
+  ripGrepStream,
+  ripgrepStatus,
+  getRipgrepStatus,
 };

@@ -1,8 +1,8 @@
 /**
  * @azure/identity/dist/esm/credentials/environmentCredential.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @azure/identity@4.10.1
- * pieces: chunk-mrx6y2r5.js (5)
+ * pieces: chunk-b5df2wx1.js (5)
  * attribution: esm-fingerprint 5
  */
 import { credentialLogger, processEnvVars, formatSuccess, formatError } from "../util/logging.js";
@@ -16,7 +16,7 @@ import {
 import { ClientCertificateCredential } from "./clientCertificateCredential.js";
 import { tracingClient } from "../util/tracing.js";
 
-//@ chunk-mrx6y2r5.js:326641-326885 esm-fingerprint
+//@ chunk-b5df2wx1.js:326641-326885 esm-fingerprint
 var AllSupportedEnvironmentVariables = [
   "AZURE_TENANT_ID",
   "AZURE_CLIENT_ID",
@@ -28,17 +28,17 @@ var AllSupportedEnvironmentVariables = [
   "AZURE_ADDITIONALLY_ALLOWED_TENANTS",
   "AZURE_CLIENT_SEND_CERTIFICATE_CHAIN",
 ];
-//@ chunk-mrx6y2r5.js:326885-326999 esm-fingerprint
+//@ chunk-b5df2wx1.js:326885-326999 esm-fingerprint
 function getAdditionallyAllowedTenants() {
   var _a;
   return ((_a = process.env.AZURE_ADDITIONALLY_ALLOWED_TENANTS) !== null && _a !== undefined ? _a : "").split(
     ";",
   );
 }
-//@ chunk-mrx6y2r5.js:326999-327039 esm-fingerprint
+//@ chunk-b5df2wx1.js:326999-327039 esm-fingerprint
 var credentialName_2 = "EnvironmentCredential";
 var logger_9 = credentialLogger(credentialName_2);
-//@ chunk-mrx6y2r5.js:327039-327318 esm-fingerprint
+//@ chunk-b5df2wx1.js:327039-327318 esm-fingerprint
 function getSendCertificateChain() {
   var _a;
   let sendCertificateChain = (
@@ -50,7 +50,7 @@ function getSendCertificateChain() {
   );
   return result;
 }
-//@ chunk-mrx6y2r5.js:327318-329226 esm-fingerprint
+//@ chunk-b5df2wx1.js:327318-329226 esm-fingerprint
 class EnvironmentCredential {
   constructor(options) {
     this._credential = undefined;

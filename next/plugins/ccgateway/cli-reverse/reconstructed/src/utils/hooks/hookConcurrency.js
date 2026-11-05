@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：钩子并发控制
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (8)
  * attribution: placement 8
  */
 import { AsyncLocalStorage } from "async_hooks";
@@ -17,7 +17,7 @@ import { createCombinedAbortSignal } from "../combinedAbortSignal.js";
 import { MAX_TIMER_DELAY_MS } from "../timerDelayClamp.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3383683-3383722 placement
+//@ chunk-5xgkngpb.js:3471861-3471900 placement
 /**
  * 钩子并发常量：并发槽、等待上限、过期槽、最小超时秒数与定时器余量。
  */
@@ -26,38 +26,38 @@ var MAX_WAITING_HOOKS = 24;
 var MAX_OVERDUE_SLOTS = 12;
 var MIN_HOOK_TIMEOUT_S = 1;
 var TIMER_SLACK_MS = 1e4;
-//@ chunk-e6aww6q8.js:3383722-3383761 placement
+//@ chunk-5xgkngpb.js:3471900-3471939 placement
 class HookSlotState {
   slots = new KeyedSemaphore();
   holder = new AsyncLocalStorage();
 }
-//@ chunk-e6aww6q8.js:3383761-3383832 placement
+//@ chunk-5xgkngpb.js:3471939-3472010 placement
 /**
  * 宿主隔离的钩子并发槽状态注册表与两个槽键名。
  */
 var hookSlotsRegistry; // deferred: uses HookSlotState of its import cycle while loading; runs once the cycle is complete
 var WANTED_SLOT_KEY;
 var OVERDUE_SLOT_KEY;
-deferInit("chunk-e6aww6q8.js:3383761", () => {
+deferInit("chunk-5xgkngpb.js:3471939", () => {
   hookSlotsRegistry = new HostScoped(() => new HookSlotState());
   WANTED_SLOT_KEY = "model hooks";
   OVERDUE_SLOT_KEY = "overdue model hooks";
 });
-//@ chunk-e6aww6q8.js:3383832-3383890 placement
+//@ chunk-5xgkngpb.js:3472010-3472068 placement
 /**
  * 判断钩子是否为 consult 类型（prompt/agent）。
  */
 function isConsultHook(hook) {
   return hook.type === "prompt" || hook.type === "agent";
 }
-//@ chunk-e6aww6q8.js:3383890-3383955 placement
+//@ chunk-5xgkngpb.js:3472068-3472133 placement
 /**
  * 计算钩子超时毫秒数（配置秒数，最小 1 秒）。
  */
 function hookTimeoutMs(hook, defaultMs) {
   return hook.timeout ? Math.max(hook.timeout, MIN_HOOK_TIMEOUT_S) * 1000 : defaultMs;
 }
-//@ chunk-e6aww6q8.js:3383955-3384375 placement
+//@ chunk-5xgkngpb.js:3472133-3472553 placement
 /**
  * 限制并发地运行一组 hook，按完成顺序产出结果，支持中止。
  */
@@ -101,7 +101,7 @@ async function* runHooksWithConcurrencyLimit(runs, limitOf, options) {
     abortController.abort();
   }
 }
-//@ chunk-e6aww6q8.js:3384375-3384987 placement
+//@ chunk-5xgkngpb.js:3472553-3473165 placement
 /**
  * 给 hook 迭代器包上并发槽：首次取值时获取槽位，已持有时直接继续。
  */
@@ -142,7 +142,7 @@ function wrapWithConcurrencySlot(iterator, limitMs, { slots, signal, limitMs: li
   };
   return wrapped;
 }
-//@ chunk-e6aww6q8.js:3384987-3385228 placement
+//@ chunk-5xgkngpb.js:3473165-3473406 placement
 function runHoldingSlot(iterator, slots, release, limitMs) {
   if (release === undefined) return iterator.next();
   let held = {

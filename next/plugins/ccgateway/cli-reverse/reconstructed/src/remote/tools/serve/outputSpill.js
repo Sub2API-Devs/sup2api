@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：服务端工具输出截断与溢出到文件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ad2e1aj6.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nvm0wye1.js (12)
  * attribution: placement 12
  */
 import { outputTruncatedNote, SPILLEDOUTPUTBYTES } from "../protocolConstants.js";
@@ -13,7 +13,7 @@ import { outputFilterHint } from "../../../tools/shared/textSearchTools.js";
 import { urlPatternToRegex, truncateToLength } from "../../../utils/stringUtils.js";
 import { scanPreBoundaryMetadata } from "../../../utils/sessionStorage.js";
 
-//@ chunk-ad2e1aj6.js:18005-18145 placement
+//@ chunk-nvm0wye1.js:18351-18491 placement
 var DEFAULT_MAX_INLINE_BYTES = 204800;
 var DEFAULT_MAX_IMAGE_BYTES = 1048576;
 var MAX_JSON_DEPTH = 8;
@@ -23,7 +23,7 @@ var MAX_TOTAL_ENTRIES = 2000;
 var MAX_FLOOR_BYTES = 4096;
 var MAX_FLOORS_GRANTED = 4;
 var PERSISTED_OUTPUT_FIELDS = new Set(["persistedOutputPath", "persistedOutputSize", "rawOutputPath"]);
-//@ chunk-ad2e1aj6.js:18145-18475 placement
+//@ chunk-nvm0wye1.js:18491-18821 placement
 /**
  * 把远程工具结果中过大的文本/图片写入本机文件并返回替代说明（字节上限、图片上限）。
  */
@@ -59,7 +59,7 @@ function spillServedOutput({
     truncated: contentResult.truncated || outputResult.truncated,
   };
 }
-//@ chunk-ad2e1aj6.js:18475-19037 placement
+//@ chunk-nvm0wye1.js:18821-19383 placement
 function unreadableSpillNote({ targetName, shellToolName, localSpillPaths, localSpillDirs }) {
   let unreadableText = `a file on ${targetName} that cannot be read from here \u2014 the command already ran on ${targetName}, so only this part of its output is out of reach. If it is safe to repeat, re-run it there with ${outputFilterHint(shellToolName)} to see the part you need`;
   let mapped = localSpillDirs
@@ -78,7 +78,7 @@ function unreadableSpillNote({ targetName, shellToolName, localSpillPaths, local
       filtered.reduce((acc, path) => acc.replaceAll(path, () => unreadableText), text),
     );
 }
-//@ chunk-ad2e1aj6.js:19037-20146 placement
+//@ chunk-nvm0wye1.js:19383-20492 placement
 function truncateResultContent(content, rewrite, maxBytes, imageRemaining, truncatedNote, targetName) {
   if (typeof content === "string") {
     let scanned = scanPreBoundaryMetadata(rewrite(content), maxBytes, truncatedNote);
@@ -149,7 +149,7 @@ function truncateResultContent(content, rewrite, maxBytes, imageRemaining, trunc
     truncated,
   };
 }
-//@ chunk-ad2e1aj6.js:20146-20920 placement
+//@ chunk-nvm0wye1.js:20492-21266 placement
 function truncateStructuredResult(output, rewrite, maxInlineBytes, truncatedNote) {
   let budget = {
     remaining: maxInlineBytes,
@@ -196,7 +196,7 @@ function truncateStructuredResult(output, rewrite, maxInlineBytes, truncatedNote
     truncated: entries.truncated || mapped.some(([, entry]) => entry.truncated),
   };
 }
-//@ chunk-ad2e1aj6.js:20920-21092 placement
+//@ chunk-nvm0wye1.js:21266-21438 placement
 function truncateObjectEntries(entries, rewrite, budget, convert) {
   let taken = takeEntriesWithinBudget(entries, budget);
   let usedNames = new Set();
@@ -211,7 +211,7 @@ function truncateObjectEntries(entries, rewrite, budget, convert) {
     truncated: taken.length < entries.length || renamed,
   };
 }
-//@ chunk-ad2e1aj6.js:21092-21631 placement
+//@ chunk-nvm0wye1.js:21438-21977 placement
 function truncateJsonValue(value, rewrite, budget, truncatedNote, depth) {
   if (typeof value === "string") return truncateString(value, rewrite, budget, truncatedNote, 0);
   if (typeof value !== "object" || value === null) {
@@ -243,7 +243,7 @@ function truncateJsonValue(value, rewrite, budget, truncatedNote, depth) {
     truncated: entries.truncated || entries.entries.some(([, entry]) => entry.truncated),
   };
 }
-//@ chunk-ad2e1aj6.js:21631-21996 placement
+//@ chunk-nvm0wye1.js:21977-22342 placement
 function truncateString(text, rewrite, budget, truncatedNote, floorBytes) {
   let canGrantFloor = floorBytes > 0 && budget.floorsGranted < MAX_FLOORS_GRANTED;
   let allowedBytes = canGrantFloor ? Math.max(budget.remaining, floorBytes) : budget.remaining;
@@ -264,24 +264,24 @@ function truncateString(text, rewrite, budget, truncatedNote, floorBytes) {
     truncated: scanned.truncated,
   };
 }
-//@ chunk-ad2e1aj6.js:21996-22100 placement
+//@ chunk-nvm0wye1.js:22342-22446 placement
 function takeEntriesWithinBudget(entries, budget) {
   let sliced = entries.slice(0, Math.min(MAX_ENTRIES_PER_LEVEL, budget.entriesRemaining));
   budget.entriesRemaining -= sliced.length;
   return sliced;
 }
-//@ chunk-ad2e1aj6.js:22100-22179 placement
+//@ chunk-nvm0wye1.js:22446-22525 placement
 function uniqueSpillName(name, used, suffix = 1) {
   let candidate = suffix === 1 ? name : `${name} (${suffix})`;
   return used.has(candidate) ? uniqueSpillName(name, used, suffix + 1) : candidate;
 }
-//@ chunk-ad2e1aj6.js:22179-22252 placement
+//@ chunk-nvm0wye1.js:22525-22597 placement
 function spillNameWithBudget(key, rewrite, budget) {
   let clipped = truncateToLength(rewrite(key), MAX_KEY_CHARS);
   consumeBudget(budget, Buffer.byteLength(clipped));
   return clipped;
 }
-//@ chunk-ad2e1aj6.js:22252-22307 placement
+//@ chunk-nvm0wye1.js:22597-22652 placement
 function consumeBudget(budget, bytes) {
   budget.remaining = Math.max(0, budget.remaining - bytes);
 }

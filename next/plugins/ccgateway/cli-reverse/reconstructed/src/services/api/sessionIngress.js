@@ -3,9 +3,9 @@
  *
  * 会话持久化接口 session_ingress：追加转录（Last-Uuid 乐观并发、409 重试）、读取会话日志（JWT 或 OAuth）、拉取远程会话 teleport 事件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/sessionIngress.ts
- * pieces: chunk-e6aww6q8.js (11)
+ * pieces: chunk-5xgkngpb.js (11)
  * attribution: affinity 1, fingerprint 7, layout 3
  */
 import { createKeyedQueue } from "../../utils/promiseQueue.js";
@@ -28,25 +28,25 @@ import {
 } from "../../utils/teleport/api.js";
 import { logError } from "../../utils/log.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_6 } from "../../utils/isPlainObject.js";
 import { cloudErrorMessage } from "../../utils/teleport/cloudErrorMessage.js";
 import { normalizeUserToolUseResult } from "../../cli/transports/ccrMessageMapping.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:205981-206009 affinity
+//@ chunk-5xgkngpb.js:205031-205059 affinity
 /**
  * 10 次；Pdo=500ms 基础退避。
  */
 var SESSION_INGRESS_MAX_RETRIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SESSION_INGRESS_BASE_BACKOFF_MS;
 var sessionAppendLock;
-deferInit("chunk-e6aww6q8.js:205981", () => {
+deferInit("chunk-5xgkngpb.js:205031", () => {
   SESSION_INGRESS_MAX_RETRIES = 10;
   SESSION_INGRESS_BASE_BACKOFF_MS = 500;
   sessionAppendLock = createKeyedQueue();
 });
-//@ chunk-e6aww6q8.js:206009-207815 fingerprint (2.1.88 match: appendSessionLogImpl, 0.968)
+//@ chunk-5xgkngpb.js:205059-206868 fingerprint (2.1.88 match: appendSessionLogImpl, 0.968)
 /**
  * PUT 追加会话日志：带 Last-Uuid，409 时按服务器最后 uuid 修正重试，5xx/网络错误退避重试。
  */
@@ -145,7 +145,7 @@ async function appendSessionLogImpl(sessionId, entry, url, headers) {
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:207815-208094 fingerprint (2.1.88 match: appendSessionLog, 0.877)
+//@ chunk-5xgkngpb.js:206868-207147 fingerprint (2.1.88 match: appendSessionLog, 0.877)
 /**
  * 用会话 JWT 追加日志。
  */
@@ -163,7 +163,7 @@ async function appendSessionLog(sessionId, entry, url) {
   };
   return sessionAppendLock.run(sessionId, () => appendSessionLogImpl(sessionId, entry, url, headers));
 }
-//@ chunk-e6aww6q8.js:208094-208428 fingerprint (2.1.88 match: getSessionLogs, 0.831)
+//@ chunk-5xgkngpb.js:207147-207481 fingerprint (2.1.88 match: getSessionLogs, 0.831)
 /**
  * 用会话 JWT 读取日志。
  */
@@ -186,7 +186,7 @@ async function getSessionLogs(sessionId, url) {
   }
   return logs;
 }
-//@ chunk-e6aww6q8.js:208428-208643 fingerprint (2.1.88 match: getSessionLogsViaOAuth, 1)
+//@ chunk-5xgkngpb.js:207481-207696 fingerprint (2.1.88 match: getSessionLogsViaOAuth, 1)
 /**
  * 用 OAuth 读取 /v1/session_ingress/session/<id>。
  */
@@ -199,7 +199,7 @@ async function getSessionLogsViaOAuth(sessionId, accessToken, orgUUID, refusesRe
   };
   return await fetchSessionLogsFromUrl(sessionId, url, headers, refusesRedirects);
 }
-//@ chunk-e6aww6q8.js:208838-213786 fingerprint (2.1.88 match: getTeleportEvents, 0.456)
+//@ chunk-5xgkngpb.js:207891-212847 fingerprint (2.1.88 match: getTeleportEvents, 0.456)
 /**
  * 分页拉取 teleport 事件（每页 1000，最多 100 页）。
  */
@@ -282,11 +282,11 @@ async function getTeleportEvents(sessionId, url, headers, options, allowDeviceRe
       throw sessionLogsFetchError();
     }
     let body = response.data;
-    let error = isPlainObject_5(body) ? body.error : undefined;
+    let error = isPlainObject_6(body) ? body.error : undefined;
     if (
       params.from_first_event &&
       (response.status === 400 ||
-        (response.status === 403 && isPlainObject_5(error) && error.resource === "from_first_event"))
+        (response.status === 403 && isPlainObject_6(error) && error.resource === "from_first_event"))
     ) {
       logForDebugging(`[teleport] from_first_event refused for ${sessionId}`);
       fromFirstEvent = false;
@@ -377,7 +377,7 @@ async function getTeleportEvents(sessionId, url, headers, options, allowDeviceRe
     let { data, next_cursor: nextCursor } = response.data ?? {};
     let rows =
       options.subagents &&
-      isPlainObject_5(body) &&
+      isPlainObject_6(body) &&
       Object.keys(body).every((key) => key === "data" || key === "next_cursor")
         ? (data ?? [])
         : data;
@@ -413,7 +413,7 @@ async function getTeleportEvents(sessionId, url, headers, options, allowDeviceRe
   logForDebugging(`[teleport] Fetched ${events.length} events over ${pages} page(s) for ${sessionId}`);
   return events;
 }
-//@ chunk-e6aww6q8.js:213786-213921 layout
+//@ chunk-5xgkngpb.js:212847-212982 layout
 /**
  * 带 20 秒超时、<500 视为有效响应的 GET（可禁用重定向）。
  */
@@ -429,21 +429,21 @@ function getWithTimeout(url, headers, params, refusesRedirects) {
     }),
   });
 }
-//@ chunk-e6aww6q8.js:213921-213981 layout
+//@ chunk-5xgkngpb.js:212982-213042 layout
 /**
  * "Failed to fetch session logs" 错误。
  */
 function sessionLogsFetchError() {
   return Error("Failed to fetch session logs");
 }
-//@ chunk-e6aww6q8.js:213981-214006 layout
+//@ chunk-5xgkngpb.js:213042-213067 layout
 /**
  * 空操作钩子（构建裁剪后的占位）。
  */
 function noopSessionHook(refusesRedirects, status) {
   return;
 }
-//@ chunk-e6aww6q8.js:214006-215375 fingerprint (2.1.88 match: fetchSessionLogsFromUrl, 0.795)
+//@ chunk-5xgkngpb.js:213067-214436 fingerprint (2.1.88 match: fetchSessionLogsFromUrl, 0.795)
 /**
  * GET 会话日志（可 CLAUDE_AFTER_LAST_COMPACT 只取最后一次压缩之后）。
  */
@@ -508,7 +508,7 @@ async function fetchSessionLogsFromUrl(sessionId, url, headers, refusesRedirects
     return null;
   }
 }
-//@ chunk-e6aww6q8.js:215375-215483 fingerprint (2.1.88 match: findLastUuid, 1)
+//@ chunk-5xgkngpb.js:214436-214544 fingerprint (2.1.88 match: findLastUuid, 1)
 /**
  * 日志条目中最后一个 uuid。
  */
@@ -517,4 +517,4 @@ function findLastUuid(logs) {
   let entry = logs.findLast((e) => "uuid" in e && e.uuid);
   return entry && "uuid" in entry ? entry.uuid : undefined;
 }
-export { appendSessionLog, getSessionLogs, getSessionLogsViaOAuth, getTeleportEvents };
+export { appendSessionLog, getSessionLogs, getTeleportEvents, getSessionLogsViaOAuth };

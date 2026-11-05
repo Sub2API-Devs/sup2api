@@ -3,20 +3,21 @@
  *
  * /memory 实现：选择并在编辑器打开 CLAUDE.md 或记忆文件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/memory/memory.tsx
- * pieces: chunk-c55mbvfz.js (2)
+ * pieces: chunk-dzt5bmy4.js (2)
  * attribution: file-last-pair 1, fingerprint 1
  */
 import { homedir } from "os";
 import { relative } from "path";
 import { writeFile } from "fs/promises";
 import { getCwd } from "../../utils/cwd.js";
-import { getClaudeConfigDir, isSafeMode, getSafeModeExitHint } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { getFsImplementation } from "../../utils/fsOperations.js";
 import { getErrnoCode, errorMessage } from "../../utils/errors.js";
 import { openFileInExternalEditor } from "../../utils/editor.js";
 import { env } from "../../utils/env.js";
+import { isSafeMode, getSafeModeExitHint } from "../../utils/envUtils.js";
 import { logForDebugging } from "../../utils/debug.js";
 import {
   jsxProd_default,
@@ -30,7 +31,7 @@ import { WorkerBadge } from "../../components/permissions/WorkerBadge.js";
 import { MemoryFileSelector } from "../../components/memory/MemoryFileSelector.js";
 import { LearnMoreLink } from "../../components/LearnMoreLink.js";
 
-//@ chunk-c55mbvfz.js:41910-42077 file-last-pair
+//@ chunk-dzt5bmy4.js:43106-43273 file-last-pair
 function call(onDone) {
   let home = homedir();
   let cwd = getCwd();
@@ -39,7 +40,7 @@ function call(onDone) {
   if (homePath && cwdPath) return homePath.length <= cwdPath.length ? homePath : cwdPath;
   return homePath || cwdPath || onDone;
 }
-//@ chunk-c55mbvfz.js:42077-43674 fingerprint (2.1.88 match: MemoryCommand, 0.697)
+//@ chunk-dzt5bmy4.js:43273-44870 fingerprint (2.1.88 match: MemoryCommand, 0.697)
 function MemoryCommand({ session, commandContext, addedInstructionFiles, onDone }) {
   let handleSelectMemoryFile = async (memoryPath) => {
     try {

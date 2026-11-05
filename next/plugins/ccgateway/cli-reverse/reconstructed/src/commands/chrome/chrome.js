@@ -3,10 +3,10 @@
  *
  * /chrome 实现：Claude in Chrome 设置面板与连接状态提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/chrome/chrome.tsx
- * pieces: chunk-18hwfzwa.js (1), chunk-1ztfztfw.js (8), chunk-hthm3h8y.js (1), chunk-s61vbvea.js (1)
- * attribution: fingerprint 5, sole-consumer 5, affinity 1
+ * pieces: chunk-7bp1kqcq.js (8), chunk-7jxyna5q.js (1), chunk-9kwkaaet.js (1), chunk-czq1j3j2.js (1)
+ * attribution: sole-consumer 5, affinity 1, fingerprint 5
  */
 import { useIdeConnectionStatus } from "../../hooks/useIdeConnectionStatus.js";
 import {
@@ -40,6 +40,12 @@ import { ModelSelector } from "../../components/agents/ModelSelector.js";
 import { CLAUDE_IN_CHROME_MCP_SERVER_NAME, openInChrome } from "../../utils/claudeInChrome/common.js";
 import { useAppState, useAppStateSession } from "../../state/AppState.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
+import {
+  codeModeHidesToolNamesFromApi,
+  offInCodeModeToast,
+  offInCodeModeNotice,
+} from "../../utils/codeMode.js";
 import { logError } from "../../utils/log.js";
 import { getReconnectHandle } from "../../services/mcp/reconnectHandles.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
@@ -56,26 +62,26 @@ import { LearnMoreLink } from "../../components/LearnMoreLink.js";
 import { env } from "../../utils/env.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-s61vbvea.js:505261-505333 fingerprint (2.1.88 match: CHROME_EXTENSION_URL, 0.667)
+//@ chunk-7jxyna5q.js:422364-422436 fingerprint (2.1.88 match: CHROME_EXTENSION_URL, 0.667)
 var HTTPS_CLAUDE_AI_CHROME = "https://claude.ai/chrome";
 var FCOEOABGFENEJGLBFFODGKKBKCDHCGFN = "fcoeoabgfenejglbffodgkkbkcdhcgfn";
-//@ chunk-hthm3h8y.js:5518-5561 fingerprint (2.1.88 match: CHROME_PERMISSIONS_URL, 1)
+//@ chunk-9kwkaaet.js:5855-5898 fingerprint (2.1.88 match: CHROME_PERMISSIONS_URL, 1)
 var CHROME_PERMISSIONS_URL = "https://clau.de/chrome/permissions";
-//@ chunk-18hwfzwa.js:121042-121093 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:122043-122094 fingerprint (2.1.88 match: _temp, 1)
 function useIdeConnectionStatusValue(s) {
   return useIdeConnectionStatus(s.mcp.clients).status;
 }
-//@ chunk-1ztfztfw.js:14181-14185 sole-consumer
+//@ chunk-7bp1kqcq.js:15382-15386 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1ztfztfw.js:14181", () => {
+deferInit("chunk-7bp1kqcq.js:15382", () => {
   init_react_production();
 });
-//@ chunk-1ztfztfw.js:14185-14189 sole-consumer
+//@ chunk-7bp1kqcq.js:15386-15390 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1ztfztfw.js:14185", () => {
+deferInit("chunk-7bp1kqcq.js:15386", () => {
   init_react_production();
 });
-//@ chunk-1ztfztfw.js:14189-16885 sole-consumer
+//@ chunk-7bp1kqcq.js:15390-18086 sole-consumer
 /**
  * /chrome 的浏览器选择面板：列出已连接的浏览器、标记当前配对设备，选择后调用 select_browser。
  */
@@ -314,7 +320,7 @@ function BrowserPicker(props) {
   } else layout = $[40];
   return layout;
 }
-//@ chunk-1ztfztfw.js:16885-17242 sole-consumer
+//@ chunk-7bp1kqcq.js:18086-18443 sole-consumer
 /**
  * 内容下方只带一个“Back”选项的外框。
  */
@@ -355,7 +361,7 @@ function BackOnlyFrame(props) {
   } else layout = $[5];
   return layout;
 }
-//@ chunk-1ztfztfw.js:17242-17515 sole-consumer
+//@ chunk-7bp1kqcq.js:18443-18716 sole-consumer
 /**
  * Claude in Chrome MCP 服务器状态：connected/connecting/disabled/failed/absent。
  */
@@ -367,7 +373,7 @@ function getChromeMcpConnectionState(clients) {
   if (filtered.length > 0) return "failed";
   return "absent";
 }
-//@ chunk-1ztfztfw.js:17515-18155 affinity
+//@ chunk-7bp1kqcq.js:18716-19356 affinity
 var CHROME_NOT_ENABLED_NOTICE = {
   text: "Claude in Chrome is not enabled in this session, so reconnecting cannot add its browser tools. Exit and start Claude Code again with claude --chrome (add --resume to pick this conversation back up).",
   color: "warning",
@@ -380,7 +386,7 @@ var CHROME_DISABLED_IN_MCP_NOTICE = {
   text: "Claude in Chrome is turned off in /mcp. Open /mcp, select claude-in-chrome, and enable it.",
   color: "warning",
 };
-//@ chunk-1ztfztfw.js:18155-22310 fingerprint (2.1.88 match: ClaudeInChromeMenu, 0.467)
+//@ chunk-7bp1kqcq.js:19356-23615 fingerprint (2.1.88 match: ClaudeInChromeMenu, 0.467)
 function ClaudeInChromeMenu({ onDone, isExtensionInstalled, configEnabled, isClaudeAISubscriber, isWSL }) {
   let clients = useAppState((state) => state.mcp.clients);
   let { storageV5 } = useTheme_2();
@@ -390,7 +396,7 @@ function ClaudeInChromeMenu({ onDone, isExtensionInstalled, configEnabled, isCla
   let [installed, setInstalled] = useState(isExtensionInstalled);
   let [view, setView] = useState("menu");
   let wslFlag = false;
-  let isSubscriber = false;
+  let isSubscriber = codeModeAccepted() && codeModeHidesToolNamesFromApi();
   let found = clients.find(
     (client) => client.name === CLAUDE_IN_CHROME_MCP_SERVER_NAME && client.type === "connected",
   );
@@ -456,6 +462,13 @@ function ClaudeInChromeMenu({ onDone, isExtensionInstalled, configEnabled, isCla
     }
   }
   function reconnect() {
+    if (isSubscriber) {
+      setNotice({
+        text: offInCodeModeToast(),
+        color: "warning",
+      });
+      return;
+    }
     if (chromeMcpConnectionState === "disabled") {
       setNotice(CHROME_DISABLED_IN_MCP_NOTICE);
       return;
@@ -562,6 +575,7 @@ function ClaudeInChromeMenu({ onDone, isExtensionInstalled, configEnabled, isCla
       value: "toggle-default",
     },
   );
+  let isBlocked = isWSL || !isClaudeAISubscriber;
   return jsxProd_default(Dialog, {
     title: "Claude in Chrome",
     onCancel: () => onDone(),
@@ -579,13 +593,17 @@ function ClaudeInChromeMenu({ onDone, isExtensionInstalled, configEnabled, isCla
             color: "error",
             children: "Claude in Chrome is not supported in WSL at this time.",
           }),
-        false,
+        isSubscriber &&
+          jsxProd_default(Text, {
+            color: "warning",
+            children: offInCodeModeNotice(),
+          }),
         !isClaudeAISubscriber &&
           jsxProd_default(Text, {
             color: "error",
             children: "Claude in Chrome requires a claude.ai subscription.",
           }),
-        !(isWSL || !isClaudeAISubscriber) &&
+        !isBlocked &&
           jsxProd_default_2(Fragment, {
             children: [
               jsxProd_default_2(Box, {
@@ -709,7 +727,7 @@ function ClaudeInChromeMenu({ onDone, isExtensionInstalled, configEnabled, isCla
     }),
   });
 }
-//@ chunk-1ztfztfw.js:22310-22640 fingerprint (2.1.88 match: call, 0.872)
+//@ chunk-7bp1kqcq.js:23615-23945 fingerprint (2.1.88 match: call, 0.872)
 /**
  * /chrome 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
@@ -735,9 +753,9 @@ var call = async function (onDone) {
   });
 };
 export {
-  useIdeConnectionStatusValue,
   HTTPS_CLAUDE_AI_CHROME,
-  CHROME_PERMISSIONS_URL,
   FCOEOABGFENEJGLBFFODGKKBKCDHCGFN,
+  CHROME_PERMISSIONS_URL,
+  useIdeConnectionStatusValue,
   call,
 };

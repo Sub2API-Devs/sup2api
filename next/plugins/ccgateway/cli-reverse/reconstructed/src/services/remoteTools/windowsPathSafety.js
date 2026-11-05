@@ -3,13 +3,17 @@
  *
  * 2.1.316 新增。Windows 路径安全检查。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-gqez588q.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-yrtkt28g.js (10)
  * attribution: placement 10
  */
 import { win32, posix } from "path";
-import { uniq } from "../../utils/collections.js";
+import {
+  normalizeCaseForComparison_2,
+  normalizeCaseForComparison,
+  classifySuspiciousWindowsPathPattern,
+} from "../../utils/permissions/filesystem.js";
 import { getUnameSR, resolveRemotePath, normalizeWin32DrivePath, driveLetterOf } from "./pathMapping.js";
 import {
   getCanonicalPathVariants,
@@ -18,13 +22,9 @@ import {
 } from "../../utils/displayPath.js";
 import { foldCase_2 } from "../../utils/networkPaths.js";
 import { hasWin32DevicePrefixSpelling } from "../../utils/fsJunctions.js";
-import {
-  normalizeCaseForComparison,
-  classifySuspiciousWindowsPathPattern,
-} from "../../utils/permissions/filesystem.js";
 import { isReservedDeviceName } from "../../utils/windowsProfileFolders.js";
 
-//@ chunk-gqez588q.js:5881-6071 placement
+//@ chunk-yrtkt28g.js:5914-6104 placement
 var USR_MERGE_ALIASES = [
   ["/bin", "/usr/bin"],
   ["/sbin", "/usr/sbin"],
@@ -35,26 +35,28 @@ var USR_MERGE_ALIASES = [
   ["/var/run", "/run"],
   ["/var/lock", "/run/lock"],
 ];
-//@ chunk-gqez588q.js:6071-6157 placement
+//@ chunk-yrtkt28g.js:6104-6190 placement
 function usrMergeAliasesFor(path, from, to) {
   return path === from || path.startsWith(`${from}/`) ? [`${to}${path.slice(from.length)}`] : [];
 }
-//@ chunk-gqez588q.js:6157-6224 placement
+//@ chunk-yrtkt28g.js:6190-6257 placement
 function usrMergeAliasSpellings(path) {
   return USR_MERGE_ALIASES.flatMap(([from, to]) => [
     ...usrMergeAliasesFor(path, from, to),
     ...usrMergeAliasesFor(path, to, from),
   ]);
 }
-//@ chunk-gqez588q.js:6224-6387 placement
+//@ chunk-yrtkt28g.js:6257-6420 placement
 function platformPathAliases(path, platform) {
   return platform === "darwin"
     ? [path.replace(/^\/private(?=\/(?:tmp|var|etc)(?:\/|$))/i, "")].filter((alias) => alias !== path)
     : platform === "linux"
-      ? uniq(usrMergeAliasSpellings(path).flatMap((alias) => [alias, ...usrMergeAliasSpellings(alias)]))
+      ? normalizeCaseForComparison_2(
+          usrMergeAliasSpellings(path).flatMap((alias) => [alias, ...usrMergeAliasSpellings(alias)]),
+        )
       : [];
 }
-//@ chunk-gqez588q.js:6387-6941 placement
+//@ chunk-yrtkt28g.js:6420-6974 placement
 /**
  * 列出远程路径的所有等价写法（规范化变体、平台别名如 /private 与 usr-merge、缩写显示形式、大小写/NFC/NFD 变体，以及副本目录中的对应路径），用于匹配权限规则。
  */
@@ -70,7 +72,7 @@ function remotePathSpellings(path, dirFacts) {
   let normalized = unameSR.normalize(normalizeWin32DrivePath(path.trim(), unameSR));
   let flattened_2 = flattened.flatMap((variant) => abbreviatePathForDisplay(variant, dirFacts, unameSR));
   let copyOf = dirFacts.copyOf;
-  return uniq([
+  return normalizeCaseForComparison_2([
     ...[...flattened_2, ...(unameSR === win32 ? [] : flattened)]
       .flatMap((spelling) =>
         [spelling, foldCase(spelling)].flatMap((folded) =>
@@ -98,7 +100,7 @@ function remotePathSpellings(path, dirFacts) {
           .flatMap((joined) => [joined, ...remotePathSpellings(joined, copyOf)])),
   ]);
 }
-//@ chunk-gqez588q.js:6941-7399 placement
+//@ chunk-yrtkt28g.js:6974-7432 placement
 /**
  * 把绝对的 glob 路径拆分为不含通配的根目录和剩余模式（处理 Windows 长路径与 UNC 前缀）。
  */
@@ -120,7 +122,7 @@ function splitGlobRoot(pattern, dirFacts) {
     rest: globIndex === -1 ? "" : parts.slice(globIndex).join("/"),
   };
 }
-//@ chunk-gqez588q.js:7399-7515 placement
+//@ chunk-yrtkt28g.js:7432-7548 placement
 function pathCaseFolder(platform) {
   return platform === "win32"
     ? (path) => path.toUpperCase().toLowerCase()
@@ -128,11 +130,11 @@ function pathCaseFolder(platform) {
       ? (path) => foldCase_2(path.normalize("NFC"))
       : (path) => path;
 }
-//@ chunk-gqez588q.js:7515-7659 placement
+//@ chunk-yrtkt28g.js:7548-7692 placement
 var DEV_FD_PATTERN = /^\/dev\/(?:fd|stdin|stdout|stderr)(?=\/|$)/;
 var PROC_LINK_PATTERN =
   /^\/proc\/(?:self|thread-self|\d+)\/(?:task\/\d+\/)?(?:cwd|root|fd|exe|map_files)(?=\/|$)/;
-//@ chunk-gqez588q.js:7659-8721 placement
+//@ chunk-yrtkt28g.js:7692-8754 placement
 function checkWindowsPathSafety(path, dirFacts) {
   let path_2 = resolveRemotePath(path, dirFacts);
   if (dirFacts.platform !== "win32") {
@@ -183,7 +185,7 @@ function checkWindowsPathSafety(path, dirFacts) {
     ? undefined
     : suspicion;
 }
-//@ chunk-gqez588q.js:8721-9403 placement
+//@ chunk-yrtkt28g.js:8754-9436 placement
 /**
  * 远程路径不安全原因的说明文字表（设备命名空间、备用数据流、尾随点、DOS 设备名、/proc 链接、过长、主目录未知等）。
  */
@@ -200,9 +202,9 @@ var UNSAFE_PATH_REASON_TEXT = {
   home_unknown: "a path from the machine's home folder, which this session does not know",
 };
 export {
+  pathCaseFolder,
   splitGlobRoot,
   remotePathSpellings,
   checkWindowsPathSafety,
   UNSAFE_PATH_REASON_TEXT,
-  pathCaseFolder,
 };

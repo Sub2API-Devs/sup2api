@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：PostToolUse hook：推送成功后提示通过 /web-setup 在云端继续。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-m2yw48pg.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xvmbzvx3.js (6)
  * attribution: placement 6
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -24,7 +24,7 @@ import {
   listGhRepoTargets,
 } from "../../tools/BashTool/gitRemoteMutation.js";
 
-//@ chunk-m2yw48pg.js:6083-6157 placement
+//@ chunk-xvmbzvx3.js:6564-6638 placement
 /**
  * PostToolUse 事件 input 的最小 schema（command）。
  */
@@ -38,7 +38,7 @@ var toolInputSchema = DoctorLazy(() =>
     command: stringSchema(),
   }),
 );
-//@ chunk-m2yw48pg.js:6157-6657 placement
+//@ chunk-xvmbzvx3.js:6638-7138 placement
 /**
  * PostToolUse hook：推送成功后提示通过 /web-setup 在云端继续。
  */
@@ -67,7 +67,7 @@ async function webSetupPostPushHook(hookInput, toolUseId, toolName, toolInput, h
   }
   return {};
 }
-//@ chunk-m2yw48pg.js:6657-6743 placement
+//@ chunk-xvmbzvx3.js:7138-7224 placement
 /**
  * 把一次 git 操作归类成 pr_create、push 或 null。
  */
@@ -75,7 +75,7 @@ function classifyGitOperation(gitOperation) {
   if (gitOperation.pr?.action === "created") return "pr_create";
   return gitOperation.push ? "push" : null;
 }
-//@ chunk-m2yw48pg.js:6743-6876 placement
+//@ chunk-xvmbzvx3.js:7224-7357 placement
 /**
  * 判断这次 git 操作是否推向 GitHub：创建 PR 时看 PR URL 的托管方是否为 github，否则看缓存的远端主机是否是 github.com。
  */
@@ -85,7 +85,7 @@ function isGithubPushTarget(gitOperation, eventType) {
   let cachedRemoteHost = getCachedRemoteHost();
   return cachedRemoteHost !== null && isGithubDotCom(cachedRemoteHost);
 }
-//@ chunk-m2yw48pg.js:6876-7032 placement (2.1.88 match: GIT_PUSH_RE, 0.494)
+//@ chunk-xvmbzvx3.js:7357-7513 placement (2.1.88 match: GIT_PUSH_RE, 0.495)
 /**
  * 命令里的每个 git push 都不带额外选项且只推 origin 时为真；webSetupPostPushHook 用它限定只在普通推送后触发。
  */
@@ -100,7 +100,7 @@ function isPlainPushToOrigin(command) {
     )
   );
 }
-//@ chunk-m2yw48pg.js:7032-7156 placement (2.1.88 match: registerSessionFileAccessHooks, 1)
+//@ chunk-xvmbzvx3.js:7513-7637 placement (2.1.88 match: registerSessionFileAccessHooks, 1)
 function registerSessionFileAccessHooks() {
   let hook = {
     type: "callback",

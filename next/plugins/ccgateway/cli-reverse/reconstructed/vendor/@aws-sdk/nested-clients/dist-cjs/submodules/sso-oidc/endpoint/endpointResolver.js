@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/nested-clients/dist-cjs/submodules/sso-oidc/endpoint/endpointResolver.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-ddzww9ex.js (1)
+ * pieces: chunk-67qh5zdp.js (1)
  * attribution: cjs-require-graph 1
  */
 import { __commonJS } from "../../../../../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_util_endpoints } from "../../../../../util-endpoints/dist-cjs/i
 import { require_index_browser } from "../../../../../../@smithy/core/dist-cjs/submodules/endpoints/index.browser.js";
 import { require_ruleset } from "./ruleset.js";
 
-//@ chunk-ddzww9ex.js:3961-4361 cjs-require-graph
+//@ chunk-67qh5zdp.js:3961-4361 cjs-require-graph
 var require_endpointResolver = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

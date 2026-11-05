@@ -3,10 +3,10 @@
  *
  * 设置读取与合并核心：来源路径、单文件解析（带缓存与路径安全检查）、托管层组合（remote/MDM/file/HKCU/父进程）、按来源顺序 mergeWith 合并、写入 updateSettingsForSource、autoMode 规则汇总。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/settings.ts
- * pieces: chunk-4xpk3fhh.js (1), chunk-6zvepy0r.js (1), chunk-aat7wt0p.js (1), chunk-dcmhvw5a.js (15), chunk-q8cqcff6.js (175)
- * attribution: fingerprint 5, placement 175, file-local 1, layout 11, callgraph-witnessed 1
+ * pieces: chunk-5fn9rb8r.js (177), chunk-n0hwmqka.js (1), chunk-z20c443b.js (15), chunk-za46rn2f.js (1)
+ * attribution: placement 174, facade-majority 3, layout 12, fingerprint 4, file-local 1
  */
 import { sep, dirname, join, isAbsolute, parse, resolve, basename } from "path";
 import { lstatSync, readlinkSync } from "fs";
@@ -51,7 +51,7 @@ import {
 } from "../fsOperations.js";
 import { readFileSync, decodeTextBuffer, readFileChecked } from "../fileRead.js";
 import { getPlatform } from "../platform.js";
-import { uniq, count } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { isPlainObject } from "../isPlainObject.js";
 import {
   mergeExtraKnownMarketplacesByEntry,
@@ -115,6 +115,7 @@ import {
   getFlagSettingsFilePinnedContent,
   getUseCoworkPlugins,
   isWorkspaceRestricted,
+  getParentManagedSettingsInvalid,
   getOriginalCwd,
 } from "../../bootstrap/state.js";
 import { env } from "../env.js";
@@ -142,6 +143,7 @@ import { isHttpMcpServeInvocation } from "../../entrypoints/mcpServeArgs.js";
 import {
   loadStateOf,
   parentManagedTierParticipates as parentManagedTierParticipates_2,
+  parentSettingsIncluded as parentSettingsIncluded_2,
   armedHelperOutput,
   getMergedPolicySources as getMergedPolicySources_2,
   resolvePolicySettings,
@@ -171,7 +173,7 @@ import {
   errorMessage,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from "../errors.js";
-import { samePath, normalizePathForCompare, writeFileAtomic } from "../file.js";
+import { samePath, normalizePathForCompare, readJsonFile_2 } from "../file.js";
 import {
   SettingsCacheStore,
   nullIfEmptyObject,
@@ -190,15 +192,16 @@ import { firstLineOf, cleanForDisplay } from "../stringUtils.js";
 import { SETTING_ALIASES, applySettingAliases } from "./marketplaceSettingsAliases.js";
 import { isBlockingSettingsIssue } from "./validation.js";
 import { logEvent } from "../../services/analytics/index.js";
+import { countWhere } from "../collections.js";
 import { NoProjectDirectoryError } from "../../bootstrap/sessionSlices.js";
 import { createKeyedQueue } from "../promiseQueue.js";
 import { registerWriteQueueDrain } from "./writeQueues.js";
+import { addFileGlobRuleToGitignore } from "../git/gitignore.js";
+import { logFeatureOk, logFeatureSad, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { SymlinkWriteRefusedError } from "../fsSafety/atomicWriteStaging.js";
 import { coerceStringListSettings } from "./hooksValidation.js";
 import { isPathConfigDir } from "../envUtils.js";
 import { ATOMIC_WRITE_DIRNAME } from "../plugins/safeCopy.js";
-import { addFileGlobRuleToGitignore } from "../git/gitignore.js";
-import { logFeatureOk, logFeatureSad, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { getStrippingSettingsSchema, PermissionsSettingsSchema } from "./types.js";
 import { sandboxFilesystemSettingsSchema } from "./settingsSourceTrust.js";
 import { HOOK_EVENTS } from "../../entrypoints/sdk/coreSchemas.js";
@@ -210,7 +213,7 @@ import { DEFAULTS_PLACEHOLDER, replacesDefaults } from "../permissions/autoModeR
 import { settingsSourceForPathByPriority } from "./settingsReview.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aat7wt0p.js:16206-17231 fingerprint (2.1.88 match: loadManagedFileSettings, 0.344)
+//@ chunk-za46rn2f.js:16258-17283 fingerprint (2.1.88 match: loadManagedFileSettings, 0.344)
 function pathTraversesUntrustedLink(
   base,
   parts,
@@ -298,11 +301,11 @@ function pathTraversesUntrustedLink(
   }
   return false;
 }
-//@ chunk-dcmhvw5a.js:429611-429843 placement (2.1.88 match: cacheToObject, 0.679)
+//@ chunk-z20c443b.js:428073-428305 placement
 /**
  * 把设置覆盖层合并进设置对象（删除值为 undefined 的键）；误配名且归属错误。
  */
-function cacheToObject(result, answers) {
+function applyAnswerOverrides(result, answers) {
   if (answers === null) return result;
   let answered = [...answers.values];
   return {
@@ -317,7 +320,7 @@ function cacheToObject(result, answers) {
     errors: [...result.errors, ...answers.errors],
   };
 }
-//@ chunk-dcmhvw5a.js:456962-457088 placement (2.1.88 match: getEnabledSettingSources, 0.819)
+//@ chunk-z20c443b.js:455425-455551 placement (2.1.88 match: getEnabledSettingSources, 0.818)
 /**
  * 同 getEnabledSettingSources，但基于传入的设置上下文。
  */
@@ -327,20 +330,20 @@ function getEnabledSettingSources(allowed) {
   result.add("policySettings");
   return SETTING_SOURCES.filter((source) => result.has(source));
 }
-//@ chunk-dcmhvw5a.js:457088-457142 fingerprint (2.1.88 match: getManagedSettingsFilePath, 1)
+//@ chunk-z20c443b.js:455551-455605 fingerprint (2.1.88 match: getManagedSettingsFilePath, 1)
 /**
  * <托管目录>/managed-settings.json；托管目录 macOS=/Library/Application Support/ClaudeCode，Windows=C:\Program Files\ClaudeCode，其他=/etc/claude-code。
  */
 function getManagedSettingsFilePath() {
   return join(getManagedFilePath(), "managed-settings.json");
 }
-//@ chunk-dcmhvw5a.js:470468-470483 placement
+//@ chunk-z20c443b.js:469092-469107 placement
 var MAX_SETTINGS_JSON_BYTES = 2097152;
-//@ chunk-dcmhvw5a.js:470483-470784 placement
+//@ chunk-z20c443b.js:469107-469419 placement (2.1.88 match: parseSettingsFileUncached, 0.27)
 /**
  * 读取设置文件：先做路径安全检查（符号链接指向其他主机/无法核实则拒读并给 fatal 错误），按文件内容缓存解析结果，空文件视为 {}。
  */
-function parseSettingsFileUncached(path, content, pinned) {
+function parseSettingsFileUncached(path, content, pinned, onStats) {
   try {
     let text;
     if (content !== undefined) text = content;
@@ -357,6 +360,7 @@ function parseSettingsFileUncached(path, content, pinned) {
             gid: stats.gid,
             mode: stats.mode,
           };
+          onStats?.(stats);
         });
         let settingsContent = parseSettingsContent(text, path, pinned);
         return owner.owner
@@ -366,14 +370,14 @@ function parseSettingsFileUncached(path, content, pinned) {
             }
           : settingsContent;
       }
-      text = readFileSync(safe.resolvedPath, MAX_SETTINGS_JSON_BYTES);
+      text = readFileSync(safe.resolvedPath, MAX_SETTINGS_JSON_BYTES, onStats);
     }
     return parseSettingsContent(text, path, pinned);
   } catch (error) {
     return settingsReadErrorResult(error, path);
   }
 }
-//@ chunk-dcmhvw5a.js:477334-477482 placement (2.1.88 match: getRelativeSettingsFilePathForSource, 1)
+//@ chunk-z20c443b.js:475969-476117 placement (2.1.88 match: getRelativeSettingsFilePathForSource, 1)
 function getRelativeSettingsFilePathForSource(source) {
   switch (source) {
     case "projectSettings":
@@ -382,15 +386,15 @@ function getRelativeSettingsFilePathForSource(source) {
       return join(".claude", "settings.local.json");
   }
 }
-//@ chunk-dcmhvw5a.js:485208-485280 placement
+//@ chunk-z20c443b.js:483843-483915 placement
 function isAdminPolicyOrigin(origin) {
   return origin === "helper" || origin === "plist" || origin === "hklm" || origin === "file";
 }
-//@ chunk-dcmhvw5a.js:485280-485330 fingerprint (2.1.88 match: getPolicySettingsOrigin, 0.675)
+//@ chunk-z20c443b.js:483915-483965 fingerprint (2.1.88 match: getPolicySettingsOrigin, 0.676)
 function getPolicySettingsOrigin_2() {
   return getPlatform() === "macos" ? "plist" : "hklm";
 }
-//@ chunk-dcmhvw5a.js:510659-510911 placement
+//@ chunk-z20c443b.js:510125-510377 placement
 /**
  * lodash mergeWith 定制器：数组拼接去重（fallbackModel 取后者）；extraKnownMarketplaces、managedMcpServers 浅合并；modelPicker 整体替换；其余返回 undefined 交给默认深合并。
  */
@@ -398,7 +402,7 @@ function settingsMergeCustomizer(previous, next, key) {
   if (key === "modelPicker" && next !== undefined) return cloneModelPicker(next);
   if (Array.isArray(previous) && Array.isArray(next)) {
     if (key === "fallbackModel") return next;
-    return uniq([...previous, ...next]);
+    return normalizeCaseForComparison_2([...previous, ...next]);
   }
   if (
     (key === "extraKnownMarketplaces" || key === "managedMcpServers") &&
@@ -408,7 +412,7 @@ function settingsMergeCustomizer(previous, next, key) {
     return mergeExtraKnownMarketplacesByEntry(previous, next);
   return;
 }
-//@ chunk-dcmhvw5a.js:510911-511030 file-local
+//@ chunk-z20c443b.js:510377-510496 file-local
 function cloneModelPicker(picker) {
   if (!isPlainObject(picker)) return picker;
   let options = picker.options;
@@ -425,7 +429,7 @@ function cloneModelPicker(picker) {
     }),
   };
 }
-//@ chunk-dcmhvw5a.js:511030-514083 placement (2.1.88 match: loadSettingsFromDisk, 0.255)
+//@ chunk-z20c443b.js:510496-513545 placement (2.1.88 match: loadSettingsFromDisk, 0.255)
 /**
  * 按 getEnabledSettingSourcesFor 的顺序（user→project→local→flag→policy，后者覆盖前者）逐来源读取并用 settingsMergeCustomizer 合并：policy 走 loadPolicySettings；local 先合并旧位置 cwd/.claude/settings.local.json；flag 合并 --settings 文件与 SDK 内联设置。最后 policy 的 availableModels/deniedModels/modelPicker 强制覆盖，并对 allowManagedReadPathsOnly/allowManagedDomainsOnly 下被忽略的 sandbox 条目给出警告。结果缓存在 store.mergedSettings。
  */
@@ -618,7 +622,7 @@ function loadSettingsFromDisk(context) {
       error_count: errors.length,
     });
     context.store.hookedMerge.computed = mergedSettings;
-    return cacheToObject(
+    return applyAnswerOverrides(
       {
         settings: mergedSettings,
         errors,
@@ -629,21 +633,21 @@ function loadSettingsFromDisk(context) {
     context.store.isLoadingFromDisk = false;
   }
 }
-//@ chunk-dcmhvw5a.js:514083-514196 placement
-function getSettingsWithErrors(context) {
+//@ chunk-z20c443b.js:513545-513658 placement
+function getSettingsWithErrors_2(context) {
   let mergedSettings = context.store.mergedSettings;
   if (mergedSettings !== null) return mergedSettings;
   let settingsFromDisk = loadSettingsFromDisk(context);
   context.store.mergedSettings = settingsFromDisk;
   return settingsFromDisk;
 }
-//@ chunk-dcmhvw5a.js:514196-514248 placement
-function getInitialSettings(context) {
-  let { settings } = getSettingsWithErrors(context);
+//@ chunk-z20c443b.js:513658-513710 placement
+function getInitialSettings_2(context) {
+  let { settings } = getSettingsWithErrors_2(context);
   return settings || {};
 }
-//@ chunk-dcmhvw5a.js:514248-514428 placement
-function getSettingsWithSources(context) {
+//@ chunk-z20c443b.js:513710-513890 placement
+function getSettingsWithSources_2(context) {
   context.store.invalidateAll();
   let sources = [];
   for (let source of getEnabledSettingSources(context)) {
@@ -655,12 +659,12 @@ function getSettingsWithSources(context) {
       });
   }
   return {
-    effective: getInitialSettings(context),
+    effective: getInitialSettings_2(context),
     sources,
   };
 }
-//@ chunk-dcmhvw5a.js:514428-514548 placement
-function getEffectiveSettingSource(key, context) {
+//@ chunk-z20c443b.js:513890-514010 placement
+function getEffectiveSettingSource_2(key, context) {
   let enabledSettingSources = getEnabledSettingSources(context);
   for (let j = enabledSettingSources.length - 1; j >= 0; j--) {
     let source = enabledSettingSources[j];
@@ -668,16 +672,16 @@ function getEffectiveSettingSource(key, context) {
   }
   return null;
 }
-//@ chunk-q8cqcff6.js:94076-94102 placement
+//@ chunk-5fn9rb8r.js:94338-94364 placement
 var legacyLocalSettingsProbes; // deferred: uses LegacyLocalSettingsProbe (./settingsSeed.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-q8cqcff6.js:94076", () => {
+deferInit("chunk-5fn9rb8r.js:94338", () => {
   legacyLocalSettingsProbes = new HostScoped(() => new LegacyLocalSettingsProbe());
 });
-//@ chunk-q8cqcff6.js:94102-94143 placement
+//@ chunk-5fn9rb8r.js:94364-94405 placement
 function parseSettingsFile(path, store, pinned) {
   return parseSettingsFile_3(path, commandSyncNameState(), store, pinned);
 }
-//@ chunk-q8cqcff6.js:94143-94887 placement
+//@ chunk-5fn9rb8r.js:94405-95149 placement
 /**
  * 构造读取设置所需的上下文：缓存存储、cwd、项目配置目录、允许的来源、无盘标记、父进程托管设置、flag 设置、cowork 插件、MDM/HKCU/helper 读取函数等，并挂上托管文件设置加载器。
  */
@@ -714,7 +718,7 @@ function buildSettingsContext() {
   context.file = () => loadManagedFileSettings_2(context);
   return context;
 }
-//@ chunk-q8cqcff6.js:94887-95050 placement
+//@ chunk-5fn9rb8r.js:95149-95312 placement
 function isSettingsTierWithheld(source) {
   if (!isStoredLoginPinned()) return false;
   if (source !== "policySettings") return true;
@@ -726,7 +730,7 @@ function isSettingsTierWithheld(source) {
     (getRemoteManagedSettingsSyncFromCache() === null || isRemoteManagedSettingsVerified())
   );
 }
-//@ chunk-q8cqcff6.js:95050-95282 placement
+//@ chunk-5fn9rb8r.js:95312-95544 placement
 function credentialHelperKeysFrom(source) {
   if (isHttpMcpServeInvocation()) return "none";
   if (
@@ -740,39 +744,39 @@ function credentialHelperKeysFrom(source) {
   if (source !== "policySettings") return "none";
   return isSettingsTierWithheld(source) ? "machine_admin" : "as_read";
 }
-//@ chunk-q8cqcff6.js:95282-95377 placement
+//@ chunk-5fn9rb8r.js:95544-95639 placement
 function launchFolderKeysFrom(source) {
   if (!isAttachServeRepoScopedSource(source)) return "as_read";
   return source === "projectSettings" && projectSettingsAliasesUserSettings() ? "as_read" : "none";
 }
-//@ chunk-q8cqcff6.js:95377-95411 placement
+//@ chunk-5fn9rb8r.js:95639-95673 placement
 function getSettingsRootPathForSource(source) {
   return getSettingsRootPathForSource_2(source, buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:95411-95535 placement
+//@ chunk-5fn9rb8r.js:95673-95797 placement
 function localSettingsStoreRootAwaitingOwnershipProbe() {
   let settingsContext = buildSettingsContext();
   if (settingsContext.cwd === null) return;
   let root = localSettingsStoreRootBeforeOwnership(settingsContext.cwd, settingsContext.canonicalGitRoot);
   return root.decided === undefined ? root.root : undefined;
 }
-//@ chunk-q8cqcff6.js:95535-95567 placement
+//@ chunk-5fn9rb8r.js:95797-95829 facade-majority
 function getSettingsFilePathForSource(source) {
   return getSettingsFilePathForSource_3(source, buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:95567-95600 placement
+//@ chunk-5fn9rb8r.js:95829-95862 placement
 function getSettingsParseErrorsForSource(source) {
   return getSettingsParseErrorsForSource_2(source, buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:95600-95634 placement
+//@ chunk-5fn9rb8r.js:95862-95896 placement
 function getRuleAnchorRootForSource(source) {
   return getRuleAnchorRootForSource_2(source, buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:95634-95664 placement
+//@ chunk-5fn9rb8r.js:95896-95926 placement
 function getLegacyLocalSettingsFilePath() {
   return getLegacyLocalSettingsFilePath_3(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:95664-95757 placement (2.1.88 match: supportsPersistence, 0.797)
+//@ chunk-5fn9rb8r.js:95926-96019 placement (2.1.88 match: supportsPersistence, 0.796)
 function projectSettingsAliasesUserSettings() {
   let settingsFilePathForSource = getSettingsFilePathForSource("projectSettings");
   let settingsFilePathForSource_2 = getSettingsFilePathForSource("userSettings");
@@ -782,21 +786,21 @@ function projectSettingsAliasesUserSettings() {
     resolve(settingsFilePathForSource) === resolve(settingsFilePathForSource_2)
   );
 }
-//@ chunk-q8cqcff6.js:95757-95833 placement (2.1.88 match: _temp8, 1)
+//@ chunk-5fn9rb8r.js:96019-96095 placement (2.1.88 match: _temp8, 1)
 function getLocalSettingsValidationErrors() {
   let settingsFilePathForSource = getSettingsFilePathForSource("localSettings");
   if (!settingsFilePathForSource) return [];
   return parseSettingsFile(settingsFilePathForSource).errors;
 }
-//@ chunk-q8cqcff6.js:95833-95863 placement
+//@ chunk-5fn9rb8r.js:96095-96126 placement
 function parseRemoteManagedSettings() {
   return parseRemoteManagedSettings_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:95863-95894 placement
+//@ chunk-5fn9rb8r.js:96126-96157 placement
 function loadManagedFileSettings() {
   return loadManagedFileSettings_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:95894-96072 placement
+//@ chunk-5fn9rb8r.js:96157-96335 placement
 function basePolicyNamesHelper() {
   let state = commandSyncNameState();
   if (state.policy.baseNamesHelper === undefined) {
@@ -806,55 +810,55 @@ function basePolicyNamesHelper() {
   }
   return state.policy.baseNamesHelper;
 }
-//@ chunk-q8cqcff6.js:96072-96178 placement
+//@ chunk-5fn9rb8r.js:96335-96441 placement
 function getManagedFileLoadState() {
   let state = commandSyncNameState();
   state.policy.managedFileLoadState ??= loadStateOf(loadManagedFileSettings());
   return state.policy.managedFileLoadState;
 }
-//@ chunk-q8cqcff6.js:96178-96209 placement
+//@ chunk-5fn9rb8r.js:96441-96472 placement
 function getHeldOffPluginIds() {
   return heldOffPluginIds(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:96209-96243 placement
+//@ chunk-5fn9rb8r.js:96472-96506 placement
 function allowListEntriesThatVouch(strictKnownMarketplaces) {
   return allowListEntriesThatVouch_2(buildSettingsContext(), strictKnownMarketplaces);
 }
-//@ chunk-q8cqcff6.js:96243-96264 placement
+//@ chunk-5fn9rb8r.js:96506-96527 placement
 function noSettingsOverride() {
   return;
 }
-//@ chunk-q8cqcff6.js:96264-96295 placement
+//@ chunk-5fn9rb8r.js:96527-96558 placement
 function getMachineAdminPolicyEnv() {
   return getMachineAdminPolicyEnv_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:96295-96336 placement
+//@ chunk-5fn9rb8r.js:96558-96599 placement
 function machinePolicyKeepsPriorityOver(orgUuid) {
   return isMdmLoadInFlight() || machinePolicyKeepsPriority(buildSettingsContext(), orgUuid);
 }
-//@ chunk-q8cqcff6.js:96336-96375 placement (2.1.88 match: getSettingsForSource, 0)
+//@ chunk-5fn9rb8r.js:96599-96638 placement (2.1.88 match: getSettingsForSource, 0)
 /**
  * 取某来源的有效设置（来源未启用返回 null），带 perSource 缓存。
  */
 function getSettingsForSource(source) {
   return isSettingSourceEnabled(source) ? getSettingsForSourceGuarded(source) : null;
 }
-//@ chunk-q8cqcff6.js:96375-96403 placement
+//@ chunk-5fn9rb8r.js:96638-96666 placement
 function getSettingsForSourceTightenOnly(source) {
   return settingsForSourceOrGuarded(source);
 }
-//@ chunk-q8cqcff6.js:96403-96431 placement
+//@ chunk-5fn9rb8r.js:96666-96694 placement
 function getSettingsForSourceForUpkeep(source) {
   return settingsForSourceOrGuarded(source);
 }
-//@ chunk-q8cqcff6.js:96431-96479 placement
+//@ chunk-5fn9rb8r.js:96694-96742 placement
 function settingsForSourceOrGuarded(source) {
   return (
     getSettingsForSource(source) ??
     (isSettingSourceEnabled(source) ? null : getSettingsForSourceGuarded(source))
   );
 }
-//@ chunk-q8cqcff6.js:96479-96627 placement (2.1.88 match: _temp5, 1)
+//@ chunk-5fn9rb8r.js:96742-96890 placement (2.1.88 match: _temp5, 1)
 function getSettingsForSourceGuarded(a_0) {
   if (isWorkspaceRestricted() && REPO_DIR_SETTING_SOURCES.has(a_0)) return null;
   if ((a_0 === "userSettings" || REPO_DIR_SETTING_SOURCES.has(a_0)) && usesSessionAccessToken()) return null;
@@ -863,47 +867,47 @@ function getSettingsForSourceGuarded(a_0) {
     ? settingsForSourceIfRead
     : getSettingsForSource_3(a_0, buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:96627-96716 placement
+//@ chunk-5fn9rb8r.js:96890-96979 placement
 function getPairedPolicyModelOverrides() {
   let pairedModelOverrides = commandSyncNameState().policy.pairedModelOverrides;
   return pairedModelOverrides !== undefined
     ? pairedModelOverrides.value
     : getPairedPolicyModelOverrides_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:96716-96747 placement
+//@ chunk-5fn9rb8r.js:96979-97010 placement
 function getDeniedModelsPolicyOverrides() {
   return getDeniedModelsPolicyOverrides_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:96747-96778 placement
+//@ chunk-5fn9rb8r.js:97010-97041 placement
 function getHostManagedModelPricing() {
   return getHostManagedModelPricing_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:96778-96874 placement
+//@ chunk-5fn9rb8r.js:97041-97137 placement
 function getHostManagedToolSearchEnv() {
   let hostToolSearchEnv = commandSyncNameState().policy.hostToolSearchEnv;
   if (hostToolSearchEnv !== undefined) return hostToolSearchEnv.value;
   return getHostManagedToolSearchEnv_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:96874-96939 placement
+//@ chunk-5fn9rb8r.js:97137-97202 placement
 function getSettingsForSourceWriteSeed(source) {
   return getSettingsForSourceUncached(source, buildSettingsContext(), {
     includeLegacyLocalSettings: false,
   });
 }
-//@ chunk-q8cqcff6.js:96939-96952 placement
+//@ chunk-5fn9rb8r.js:97202-97215 placement
 var BACKGROUND_SETTINGS_WORK_WAIT_MS = 5000;
-//@ chunk-q8cqcff6.js:96952-97028 placement
+//@ chunk-5fn9rb8r.js:97215-97291 placement
 function settleBackgroundSettingsWork(timeoutMs = BACKGROUND_SETTINGS_WORK_WAIT_MS) {
   return withDeadline(commandSyncNameState().backgroundWorkTail, timeoutMs).then(() => {
     return;
   });
 }
-//@ chunk-q8cqcff6.js:97028-97055 placement
+//@ chunk-5fn9rb8r.js:97291-97318 placement
 var repoDirSettingsParses; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-q8cqcff6.js:97028", () => {
+deferInit("chunk-5fn9rb8r.js:97291", () => {
   repoDirSettingsParses = new HostScoped(() => new Map());
 });
-//@ chunk-q8cqcff6.js:97055-97796 placement
+//@ chunk-5fn9rb8r.js:97318-98059 placement
 function readRepoDirSettingsFresh(source) {
   let settingsContext = buildSettingsContext();
   let filtered = [
@@ -948,9 +952,9 @@ function readRepoDirSettingsFresh(source) {
         settingsOfTheOtherFile: merged,
       };
 }
-//@ chunk-q8cqcff6.js:97796-97803 placement
+//@ chunk-5fn9rb8r.js:98059-98066 placement
 var settingsMemo;
-//@ chunk-q8cqcff6.js:97803-98000 placement
+//@ chunk-5fn9rb8r.js:98066-98263 placement
 function settingsContextForRepoTier() {
   let settingsContext = buildSettingsContext();
   let memo = settingsMemo;
@@ -963,7 +967,7 @@ function settingsContextForRepoTier() {
     canonicalGitRoot: (path) => (path === memo.cwd ? memo.canonicalRoot : (canonicalGitRoot?.(path) ?? null)),
   };
 }
-//@ chunk-q8cqcff6.js:98000-98399 placement
+//@ chunk-5fn9rb8r.js:98263-98662 placement
 function repoTierFileLeadsAway(file) {
   let fsImplementation = getFsImplementation();
   try {
@@ -994,7 +998,7 @@ function repoTierFileLeadsAway(file) {
     return true;
   }
 }
-//@ chunk-q8cqcff6.js:98399-98751 placement
+//@ chunk-5fn9rb8r.js:98662-99014 placement (2.1.88 match: getSettingsForSourceLenient_FOR_EDITING_ONLY_NOT_FOR_READING, 0.304)
 /**
  * 判断路径（含解析链接后的真实路径，macOS 忽略大小写）是否就是用户设置文件之一。
  */
@@ -1025,7 +1029,7 @@ function isUserSettingsPath(settingsFilePathForSource, context) {
     ),
   );
 }
-//@ chunk-q8cqcff6.js:98751-99039 placement
+//@ chunk-5fn9rb8r.js:99014-99302 placement
 function repoTierFileSlots() {
   let context = settingsContextForRepoTier();
   let settingsFilePathForSource = getSettingsFilePathForSource_3("projectSettings", context);
@@ -1046,7 +1050,7 @@ function repoTierFileSlots() {
     }),
   };
 }
-//@ chunk-q8cqcff6.js:99039-99200 placement
+//@ chunk-5fn9rb8r.js:99302-99463 placement
 function readRepoTierFileText(filePath) {
   let cache = new Map();
   let settingsFileIfChanged = parseSettingsFileIfChanged(filePath, cache);
@@ -1057,7 +1061,7 @@ function readRepoTierFileText(filePath) {
     };
   return settingsFileIfChanged.errors.some((error) => error.severity !== "warning") ? "unreadable" : "absent";
 }
-//@ chunk-q8cqcff6.js:99200-99629 placement
+//@ chunk-5fn9rb8r.js:99463-99892 placement
 function readRepoTiersFresh(cachedFiles = new Map()) {
   let store = new SettingsCacheStore();
   for (let [path, entry] of cachedFiles) store.parsedFiles.set(path, entry);
@@ -1092,9 +1096,9 @@ function readRepoTiersFresh(cachedFiles = new Map()) {
   }
   return tiers;
 }
-//@ chunk-q8cqcff6.js:99629-99636 placement
+//@ chunk-5fn9rb8r.js:99892-99899 placement
 var rawSettingsCache;
-//@ chunk-q8cqcff6.js:99636-100184 placement
+//@ chunk-5fn9rb8r.js:99899-100447 placement
 function holdRepoTiers(options) {
   let state = commandSyncNameState();
   let began = !state.repoTierFreeze.isHeld();
@@ -1145,29 +1149,29 @@ function holdRepoTiers(options) {
     },
   };
 }
-//@ chunk-q8cqcff6.js:100184-100214 placement
+//@ chunk-5fn9rb8r.js:100447-100477 placement
 function repoTiersFrom(seeds) {
   return readRepoTiersFresh(seeds);
 }
-//@ chunk-q8cqcff6.js:100214-100290 placement
+//@ chunk-5fn9rb8r.js:100477-100553 placement
 function repoTierFolderKey() {
   let context = settingsContextForRepoTier();
   return `${context.cwd ?? ""}\x00${context.projectConfigDir ?? ""}`;
 }
-//@ chunk-q8cqcff6.js:100290-100402 placement
+//@ chunk-5fn9rb8r.js:100553-100665 placement
 function lingerRepoTiers(files, repoTiersRefresher) {
   let state = commandSyncNameState();
   if (state.repoTierFreeze.isHeld()) return;
   state.repoTierFreeze.linger(files, repoTiersRefresher);
   state.invalidateAll();
 }
-//@ chunk-q8cqcff6.js:100402-100494 placement
+//@ chunk-5fn9rb8r.js:100665-100757 placement
 function compareRepoTiersWithHeld() {
   return commandSyncNameState().repoTierFreeze.differingTiers(readRepoTiersFresh()).length === 0
     ? "same"
     : "changed";
 }
-//@ chunk-q8cqcff6.js:100494-101792 placement
+//@ chunk-5fn9rb8r.js:100757-102058 placement
 function readLocalSettingsAliases(source) {
   let repoTierFreeze = commandSyncNameState().repoTierFreeze;
   let frozen =
@@ -1263,7 +1267,7 @@ function readLocalSettingsAliases(source) {
     },
   };
 }
-//@ chunk-q8cqcff6.js:101792-101928 placement
+//@ chunk-5fn9rb8r.js:102058-102194 placement
 function withRepoTiersLive(fn) {
   let state = commandSyncNameState();
   if (!state.repoTierFreeze.isHeld()) return fn();
@@ -1273,52 +1277,56 @@ function withRepoTiersLive(fn) {
     state.invalidateAll();
   }
 }
-//@ chunk-q8cqcff6.js:101928-101979 placement
+//@ chunk-5fn9rb8r.js:102194-102245 placement
 function isRepoTierFreezeHeld() {
   return commandSyncNameState().repoTierFreeze.isHeld();
 }
-//@ chunk-q8cqcff6.js:101979-102039 placement
+//@ chunk-5fn9rb8r.js:102245-102305 placement
 function isRepoTierAnsweredByACopy(source) {
   return commandSyncNameState().repoTierFreeze.tier(source) !== undefined;
 }
-//@ chunk-q8cqcff6.js:102039-102153 placement
+//@ chunk-5fn9rb8r.js:102305-102419 placement
 function flagInlineConsentDropped() {
   let settingsContext = buildSettingsContext();
   if (!isPlainObject(settingsContext.flagInline)) return false;
   if (!hasAttributionSettings(settingsContext.flagInline)) return false;
   return parseInlineFlagSettings(settingsContext).settings === null;
 }
-//@ chunk-q8cqcff6.js:102153-102260 placement
+//@ chunk-5fn9rb8r.js:102419-102526 placement
 function flagInlineSettingDropped(key) {
   let settingsContext = buildSettingsContext();
   if (!isPlainObject(settingsContext.flagInline) || !(key in settingsContext.flagInline)) return false;
   return parseInlineFlagSettings(settingsContext).settings === null;
 }
-//@ chunk-q8cqcff6.js:102260-102291 placement
+//@ chunk-5fn9rb8r.js:102526-102557 placement
 function parentManagedTierParticipates() {
   return parentManagedTierParticipates_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:102291-102331 placement
+//@ chunk-5fn9rb8r.js:102557-102596 facade-majority
+function parentSettingsIncluded() {
+  return getParentManagedSettingsInvalid() ? false : parentSettingsIncluded_2(buildSettingsContext());
+}
+//@ chunk-5fn9rb8r.js:102596-102636 placement
 function getParsedParentManagedSettings() {
   return parseParentManagedSettings(buildSettingsContext()).settings;
 }
-//@ chunk-q8cqcff6.js:102331-102400 placement
+//@ chunk-5fn9rb8r.js:102636-102705 placement
 function parentTierWithOrganizationLocksHooks() {
   return parseParentTierWithOrganization(buildSettingsContext())?.settings?.allowManagedHooksOnly === true;
 }
-//@ chunk-q8cqcff6.js:102400-102430 placement
+//@ chunk-5fn9rb8r.js:102705-102735 placement
 function getArmedHelperOutput() {
   return armedHelperOutput(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:102430-102461 placement
+//@ chunk-5fn9rb8r.js:102735-102766 placement
 function getMergedPolicySources() {
   return getMergedPolicySources_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:102461-102513 placement
+//@ chunk-5fn9rb8r.js:102766-102818 placement
 function getShadowedPolicyHelperSources() {
   return resolvePolicySettings(buildSettingsContext()).shadowedHelperSources;
 }
-//@ chunk-q8cqcff6.js:102513-102666 placement
+//@ chunk-5fn9rb8r.js:102818-102971 placement
 function hasAttributionSettings(settings) {
   if (!isPlainObject(settings)) return false;
   let attribution = settings.attribution;
@@ -1329,7 +1337,7 @@ function hasAttributionSettings(settings) {
       ("commitTrailers" in attribution || "commit" in attribution || "pr" in attribution))
   );
 }
-//@ chunk-q8cqcff6.js:102666-102907 placement (2.1.88 match: getSettingsForSourceUncached, 0.566)
+//@ chunk-5fn9rb8r.js:102971-103212 placement (2.1.88 match: getSettingsForSourceUncached, 0.565)
 function flagFileConsentDropped() {
   let remoteSettings = buildSettingsContext();
   let path = getSettingsFilePathForSource_3("flagSettings", remoteSettings);
@@ -1343,7 +1351,7 @@ function flagFileConsentDropped() {
   }
   return fileMayDropConsent(path);
 }
-//@ chunk-q8cqcff6.js:102907-103087 placement
+//@ chunk-5fn9rb8r.js:103212-103392 placement
 function fileMayDropConsent(path, clamp = false) {
   if (isDiskless()) return false;
   let parsed;
@@ -1360,15 +1368,15 @@ function fileMayDropConsent(path, clamp = false) {
   if (!isPlainObject(parsed)) return true;
   return hasAttributionSettings(parsed);
 }
-//@ chunk-q8cqcff6.js:103087-103605 placement (2.1.88 match: getSettingsForSourceLenient_FOR_EDITING_ONLY_NOT_FOR_READING, 0.192)
+//@ chunk-5fn9rb8r.js:103392-103910 placement
 function getRawSettingFromRejectedSource(source, key) {
   let settingsContext = buildSettingsContext();
   let isRejected = (parsed) =>
     parsed.settings === null && parsed.errors.some((error) => error.severity !== "warning");
   if (source === "flagSettings" && settingsContext.flagInline && key in settingsContext.flagInline) {
-    let filePath = parseInlineFlagSettings(settingsContext);
-    if (isRejected(filePath)) return settingsContext.flagInline[key];
-    if (filePath.settings?.[key] !== undefined) return;
+    let parsed = parseInlineFlagSettings(settingsContext);
+    if (isRejected(parsed)) return settingsContext.flagInline[key];
+    if (parsed.settings?.[key] !== undefined) return;
   }
   let settingsFilePathForSource = getSettingsFilePathForSource_3(source, settingsContext);
   if (!settingsFilePathForSource) return;
@@ -1389,7 +1397,7 @@ function getRawSettingFromRejectedSource(source, key) {
   if (!isPlainObject(parsed) || !(key in parsed)) return;
   return parsed[key];
 }
-//@ chunk-q8cqcff6.js:103605-103931 placement
+//@ chunk-5fn9rb8r.js:103910-104236 placement
 async function sourceFileConsentDropped(source, storage) {
   let settingsContext = buildSettingsContext();
   let path = getSettingsFilePathForSource_3(source, settingsContext);
@@ -1415,11 +1423,11 @@ async function sourceFileConsentDropped(source, storage) {
   }
   return fileMayDropConsent(path, source === "userSettings");
 }
-//@ chunk-q8cqcff6.js:103931-103994 placement (2.1.88 match: _temp5, 1)
+//@ chunk-5fn9rb8r.js:104236-104299 placement (2.1.88 match: _temp5, 1)
 function isDefaultUserSettingsPath(a_0, filePath) {
   return a_0 === "userSettings" && basename(filePath) === USER_SETTINGS_FILE_NAMES.default;
 }
-//@ chunk-q8cqcff6.js:103994-104349 placement
+//@ chunk-5fn9rb8r.js:104299-104653 placement
 /**
  * 从存储后端读取用户设置：区分不可读、不存在、过大、空、非对象与正常对象（附原始内容）。
  */
@@ -1455,7 +1463,7 @@ async function readStoredUserSettings(storage) {
     content: text,
   };
 }
-//@ chunk-q8cqcff6.js:104349-104493 placement
+//@ chunk-5fn9rb8r.js:104653-104797 placement
 function legacyLocalConsentDropped() {
   let settingsContext = buildSettingsContext();
   let path = getLegacyLocalSettingsFilePath_3(settingsContext);
@@ -1465,7 +1473,7 @@ function legacyLocalConsentDropped() {
   if (settingsFile.errors.length === 0) return false;
   return fileMayDropConsent(path);
 }
-//@ chunk-q8cqcff6.js:104493-104670 placement
+//@ chunk-5fn9rb8r.js:104797-104974 placement
 function getLegacyLocalSettingsOverlay() {
   let settingsContext = buildSettingsContext();
   let frozen = settingsContext.store.repoTierFreeze.tier("localSettings");
@@ -1474,11 +1482,11 @@ function getLegacyLocalSettingsOverlay() {
   if (!legacyLocalSettingsFilePath) return null;
   return parseSettingsFile_3(legacyLocalSettingsFilePath, settingsContext.store).settings ?? null;
 }
-//@ chunk-q8cqcff6.js:104670-104722 placement
+//@ chunk-5fn9rb8r.js:104974-105026 placement
 function getAllPolicyTierSettings() {
   return commandSyncNameState().policy.allTiers ?? getAllPolicyTierSettings_3(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:104722-104961 placement
+//@ chunk-5fn9rb8r.js:105026-105265 placement
 function machineAdminMayPinSignInOrg() {
   try {
     if (isMdmLoadInFlight()) return true;
@@ -1492,7 +1500,7 @@ function machineAdminMayPinSignInOrg() {
     return true;
   }
 }
-//@ chunk-q8cqcff6.js:104961-105127 placement
+//@ chunk-5fn9rb8r.js:105265-105432 placement
 function machineAdminPinsSignInOrg() {
   try {
     return getMachineAdminPolicyTier()?.forceLoginOrgUUID !== undefined;
@@ -1503,68 +1511,68 @@ function machineAdminPinsSignInOrg() {
     return false;
   }
 }
-//@ chunk-q8cqcff6.js:105127-105156 placement
+//@ chunk-5fn9rb8r.js:105432-105461 placement (2.1.88 match: BARE_SUBSCRIPT_NAME_BUILTINS, 0.701)
 function machineAdminSignInKey() {
   return "unset";
 }
-//@ chunk-q8cqcff6.js:105156-105186 placement
+//@ chunk-5fn9rb8r.js:105461-105492 placement
 function getMachineAdminPolicyTier() {
   return getMachineAdminPolicyTier_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:105186-105236 placement
+//@ chunk-5fn9rb8r.js:105492-105542 placement
 function getMachineAdminDocumentTier() {
   return getMachineAdminPolicyTier_2({
     ...buildSettingsContext(),
     helper: undefined,
   });
 }
-//@ chunk-q8cqcff6.js:105236-105267 placement
+//@ chunk-5fn9rb8r.js:105542-105573 placement
 function getRemotePolicyTierWithKind() {
   return getRemotePolicyTierWithKind_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:105267-105298 placement
+//@ chunk-5fn9rb8r.js:105573-105604 placement
 function getMachineAdminPolicyTiers() {
   return getMachineAdminPolicyTiers_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:105298-105329 placement
+//@ chunk-5fn9rb8r.js:105604-105635 placement
 function getMachineAdminTierSettings() {
   return getMachineAdminTierSettings_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:105329-105360 placement
+//@ chunk-5fn9rb8r.js:105635-105666 placement
 function getEveryMachineAdminTierSettings() {
   return getEveryMachineAdminTierSettings_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:105360-105396 placement
+//@ chunk-5fn9rb8r.js:105666-105702 placement
 function getMachineAdminDocumentLoadErrors() {
   return filterFatalPolicyErrors(getMachineAdminDocumentLoadErrors_2(buildSettingsContext()));
 }
-//@ chunk-q8cqcff6.js:105396-105427 placement
+//@ chunk-5fn9rb8r.js:105702-105732 placement
 function isMachineAdminDocumentUnreadable() {
   return isMachineAdminDocumentUnreadable_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:105427-105522 placement
+//@ chunk-5fn9rb8r.js:105732-105827 placement
 function getAdminTierEnvValue(name) {
   let adminTierEnvView = commandSyncNameState().policy.adminTierEnvView;
   if (adminTierEnvView !== undefined) return adminTierEnvView[name];
   return getAdminTierEnvValue_2(buildSettingsContext(), name);
 }
-//@ chunk-q8cqcff6.js:105522-105574 placement
+//@ chunk-5fn9rb8r.js:105827-105879 placement
 function getPolicyEnvCompositionForLogging() {
   return commandSyncNameState().lastPolicyEnvComposition;
 }
-//@ chunk-q8cqcff6.js:105574-105631 placement
+//@ chunk-5fn9rb8r.js:105879-105936 placement
 function getDurablePolicyTierSettings() {
   return commandSyncNameState().policy.durableTiers ?? getDurablePolicyTierSettings_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:105631-105686 placement
+//@ chunk-5fn9rb8r.js:105936-105991 placement
 function getAdminPolicyTierSettings() {
   return commandSyncNameState().policy.adminTiers ?? getAdminPolicyTierSettings_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:105686-105717 placement
+//@ chunk-5fn9rb8r.js:105991-106022 placement
 function getAdminAuthoredPolicySettings() {
   return getAdminAuthoredPolicySettings_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:105717-105783 placement (2.1.88 match: getMcpAllowlistSettings, 0.55)
+//@ chunk-5fn9rb8r.js:106022-106088 placement
 /**
  * getMcpAllowlistSettings：{slot: policySettings, adminTiers}。
  */
@@ -1574,11 +1582,11 @@ function getMcpPolicyView() {
     adminTiers: getAdminPolicyTierSettings(),
   };
 }
-//@ chunk-q8cqcff6.js:105783-105814 placement
+//@ chunk-5fn9rb8r.js:106088-106119 placement
 function getShadowedMcpPolicySources() {
   return getShadowedMcpPolicySources_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:105814-106097 placement
+//@ chunk-5fn9rb8r.js:106119-106402 placement
 function getMcpPolicyCompositionForLogging(shadowedMcpPolicySources) {
   let mcpPolicyView = getMcpPolicyView();
   let mcpsOnly = shouldAllowManagedMcpServersOnly(mcpPolicyView);
@@ -1592,20 +1600,20 @@ function getMcpPolicyCompositionForLogging(shadowedMcpPolicySources) {
     mcpShadowedKeyCount: shadowedMcpPolicySources.reduce((acc, { keys }) => acc + keys.length, 0),
   };
 }
-//@ chunk-q8cqcff6.js:106097-106136 placement (2.1.88 match: getInitialSettings, 1)
+//@ chunk-5fn9rb8r.js:106402-106441 placement (2.1.88 match: getInitialSettings, 1)
 /**
  * 合并后的设置（getSettingsWithErrors().settings 或 {}），旧版 getInitialSettings。
  */
-function getInitialSettings_2() {
-  return getSettingsWithErrors_2().settings || {};
+function getInitialSettings() {
+  return getSettingsWithErrors().settings || {};
 }
-//@ chunk-q8cqcff6.js:106136-106146 placement (2.1.88 match: getSettings_DEPRECATED, 0)
-var getSettings_DEPRECATED = getInitialSettings_2;
-//@ chunk-q8cqcff6.js:106146-106299 placement (2.1.88 match: getSettingsWithSources, 1)
+//@ chunk-5fn9rb8r.js:106441-106451 placement (2.1.88 match: getSettings_DEPRECATED, 0)
+var getSettings_DEPRECATED = getInitialSettings;
+//@ chunk-5fn9rb8r.js:106451-106604 placement (2.1.88 match: getSettingsWithSources, 1)
 /**
  * 清缓存后返回合并结果与每个非空来源的设置，供 /status、doctor 展示。
  */
-function getSettingsWithSources_2() {
+function getSettingsWithSources() {
   invalidateCommandNames();
   let sources = [];
   for (let source of getEnabledSettingSources_2()) {
@@ -1617,15 +1625,15 @@ function getSettingsWithSources_2() {
       });
   }
   return {
-    effective: getInitialSettings_2(),
+    effective: getInitialSettings(),
     sources,
   };
 }
-//@ chunk-q8cqcff6.js:106299-106411 placement
+//@ chunk-5fn9rb8r.js:106604-106716 placement
 /**
  * 从优先级最高的来源往下找第一个定义了某键的来源，用于提示该值来自哪里。
  */
-function getEffectiveSettingSource_2(key) {
+function getEffectiveSettingSource(key) {
   let enabledSettingSources = getEnabledSettingSources_2();
   for (let j = enabledSettingSources.length - 1; j >= 0; j--) {
     let source = enabledSettingSources[j];
@@ -1633,11 +1641,11 @@ function getEffectiveSettingSource_2(key) {
   }
   return null;
 }
-//@ chunk-q8cqcff6.js:106411-106583 placement (2.1.88 match: getSettingsWithErrors, 0.574)
+//@ chunk-5fn9rb8r.js:106716-106888 placement (2.1.88 match: getSettingsWithErrors, 0.574)
 /**
  * 返回合并后的设置与全部错误，首次调用时 loadSettingsFromDisk 并缓存（启动剖析点 loadSettingsFromDisk_start/end）。
  */
-function getSettingsWithErrors_2() {
+function getSettingsWithErrors() {
   let cached = commandSyncNameState();
   let mergedSettings = cached.mergedSettings;
   if (mergedSettings !== null) return mergedSettings;
@@ -1647,7 +1655,7 @@ function getSettingsWithErrors_2() {
   cached.mergedSettings = result;
   return result;
 }
-//@ chunk-q8cqcff6.js:106583-107046 placement (2.1.88 match: getManagedFileSettingsPresence, 0.548)
+//@ chunk-5fn9rb8r.js:106888-107351 placement (2.1.88 match: getManagedFileSettingsPresence, 0.547)
 /**
  * 检查托管目录中 managed-settings.json 与 managed-settings.d/*.json 是否有内容，供 /status 显示 file / drop-ins。
  */
@@ -1685,7 +1693,7 @@ function getManagedFileSettingsPresence() {
     hasDropIns: false,
   };
 }
-//@ chunk-q8cqcff6.js:107046-107335 placement
+//@ chunk-5fn9rb8r.js:107351-107641 placement
 function getBasePolicySettings() {
   let context = {
     ...buildSettingsContext(),
@@ -1701,7 +1709,7 @@ function getBasePolicySettings() {
   let mdmPoll = startMdmPoll();
   return Object.keys(mdmPoll.settings).length > 0 ? mdmPoll.settings : null;
 }
-//@ chunk-q8cqcff6.js:107335-107410 placement
+//@ chunk-5fn9rb8r.js:107641-107716 placement
 function getBasePolicySettingsOrigin() {
   let policySettingsOrigin = getPolicySettingsOrigin_2_2({
     ...buildSettingsContext(),
@@ -1709,11 +1717,11 @@ function getBasePolicySettingsOrigin() {
   });
   return policySettingsOrigin === "helper" ? null : policySettingsOrigin;
 }
-//@ chunk-q8cqcff6.js:107410-107441 placement
+//@ chunk-5fn9rb8r.js:107716-107747 placement
 function isForceRemoteSettingsRefreshConfigured() {
   return isForceRemoteSettingsRefreshConfigured_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:107441-107563 placement
+//@ chunk-5fn9rb8r.js:107747-107869 placement
 function getPolicySettingsOrigin() {
   let state = commandSyncNameState();
   let origin = state.policy.origin;
@@ -1724,7 +1732,7 @@ function getPolicySettingsOrigin() {
   };
   return policySettingsOrigin;
 }
-//@ chunk-q8cqcff6.js:107563-107746 placement
+//@ chunk-5fn9rb8r.js:107869-108052 placement
 function getVouchedPolicyTierSettings() {
   let state = commandSyncNameState();
   let remoteVerified = isRemoteManagedSettingsVerified();
@@ -1737,7 +1745,7 @@ function getVouchedPolicyTierSettings() {
   };
   return vouchedPolicyTierSettings;
 }
-//@ chunk-q8cqcff6.js:107746-107937 placement
+//@ chunk-5fn9rb8r.js:108052-108243 placement
 function getVouchedAdminPolicyTier() {
   let state = commandSyncNameState();
   let remoteVerified = isRemoteManagedSettingsVerified();
@@ -1751,7 +1759,7 @@ function getVouchedAdminPolicyTier() {
   };
   return vouchedAdminPolicyTier;
 }
-//@ chunk-q8cqcff6.js:107937-108074 placement
+//@ chunk-5fn9rb8r.js:108243-108380 placement
 function getHostPolicyLoginPins() {
   let state = commandSyncNameState();
   let hostLoginPins = state.policy.hostLoginPins;
@@ -1762,7 +1770,7 @@ function getHostPolicyLoginPins() {
   };
   return hostPolicyLoginPins;
 }
-//@ chunk-q8cqcff6.js:108074-108451 placement
+//@ chunk-5fn9rb8r.js:108380-108757 placement
 function getMachineAdminCredentialInputs() {
   if (isMdmLoadInFlight())
     return {
@@ -1791,15 +1799,15 @@ function getMachineAdminCredentialInputs() {
   state.policy.machineCredentialInputs = inputs;
   return inputs;
 }
-//@ chunk-q8cqcff6.js:108451-108482 placement
+//@ chunk-5fn9rb8r.js:108757-108788 placement
 function getShadowedManagedSources() {
   return getShadowedManagedSources_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:108482-108513 placement
+//@ chunk-5fn9rb8r.js:108788-108819 placement
 function getManagedSourcesInEffect() {
   return getManagedSourcesInEffect_2(buildSettingsContext());
 }
-//@ chunk-q8cqcff6.js:108513-108660 placement
+//@ chunk-5fn9rb8r.js:108819-108966 placement
 function isPolicySlotAdminOrParentComposed() {
   let state = commandSyncNameState();
   let slotAdminOrParentComposed = state.policy.slotAdminOrParentComposed;
@@ -1808,7 +1816,7 @@ function isPolicySlotAdminOrParentComposed() {
   state.policy.slotAdminOrParentComposed = result;
   return result;
 }
-//@ chunk-q8cqcff6.js:108660-108885 placement
+//@ chunk-5fn9rb8r.js:108966-109192 placement
 function anyAdminPolicyTierGovernsRetention() {
   let state = commandSyncNameState();
   let adminRetentionGoverned = state.policy.adminRetentionGoverned;
@@ -1821,7 +1829,7 @@ function anyAdminPolicyTierGovernsRetention() {
   state.policy.adminRetentionGoverned = any;
   return any;
 }
-//@ chunk-q8cqcff6.js:108885-109112 placement
+//@ chunk-5fn9rb8r.js:109192-109420 placement
 function getPolicySettingsLoadErrors() {
   let state = commandSyncNameState();
   let loadErrors = state.policy.loadErrors;
@@ -1835,7 +1843,7 @@ function getPolicySettingsLoadErrors() {
   state.policy.loadErrors = errors;
   return errors;
 }
-//@ chunk-q8cqcff6.js:109112-109160 placement
+//@ chunk-5fn9rb8r.js:109420-109469 placement
 function settingsPolicyErrors() {
   return mdmPolicyErrors(
     mdmResult(),
@@ -1843,11 +1851,11 @@ function settingsPolicyErrors() {
     loadManagedFileSettings,
   );
 }
-//@ chunk-q8cqcff6.js:109160-109214 placement
+//@ chunk-5fn9rb8r.js:109469-109523 placement
 function getPolicyHelperSourceLoadErrors() {
   return [...mdmResult().errors, ...loadManagedFileSettings().errors];
 }
-//@ chunk-q8cqcff6.js:109214-109367 placement
+//@ chunk-5fn9rb8r.js:109523-109676 placement
 function policySettingUnreadable(key) {
   return getPolicySettingsLoadErrors().some((issue) => {
     if (issue.userWritable || issue.wslIgnored || issue.file === PARENT_MANAGED_SETTINGS_SOURCE_LABEL)
@@ -1856,7 +1864,7 @@ function policySettingUnreadable(key) {
     return issue.path === key && !issue.statusOnly;
   });
 }
-//@ chunk-q8cqcff6.js:109367-109553 placement
+//@ chunk-5fn9rb8r.js:109676-109863 placement
 function getAdminLoadErrors() {
   let state = commandSyncNameState();
   let adminLoadErrors = state.policy.adminLoadErrors;
@@ -1868,11 +1876,11 @@ function getAdminLoadErrors() {
   state.policy.adminLoadErrors = errors;
   return errors;
 }
-//@ chunk-q8cqcff6.js:109553-109630 placement
+//@ chunk-5fn9rb8r.js:109863-109940 placement
 function hasAdminPolicyLoadRecords() {
   return getAdminLoadErrors().some((issue) => issue.userWritable !== true && issue.wslIgnored !== true);
 }
-//@ chunk-q8cqcff6.js:109630-109890 placement
+//@ chunk-5fn9rb8r.js:109940-110200 placement
 function hasMachinePluginKeyLoadRecords() {
   let state = commandSyncNameState();
   let machinePluginKeyLoadRecords = state.policy.machinePluginKeyLoadRecords;
@@ -1887,9 +1895,9 @@ function hasMachinePluginKeyLoadRecords() {
   state.policy.machinePluginKeyLoadRecords = any;
   return any;
 }
-//@ chunk-q8cqcff6.js:109890-110059 placement
+//@ chunk-5fn9rb8r.js:110200-110369 placement
 var MACHINE_PLUGIN_KEY_PATHS; // deferred: uses SETTING_ALIASES (./marketplaceSettingsAliases.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-q8cqcff6.js:109890", () => {
+deferInit("chunk-5fn9rb8r.js:110200", () => {
   MACHINE_PLUGIN_KEY_PATHS = [
     "",
     "enabledPlugins",
@@ -1902,15 +1910,15 @@ deferInit("chunk-q8cqcff6.js:109890", () => {
     ...SETTING_ALIASES.map((alias) => alias.alias),
   ];
 });
-//@ chunk-q8cqcff6.js:110059-110091 placement
+//@ chunk-5fn9rb8r.js:110369-110401 placement
 function getFatalAdminPolicyLoadErrors() {
   return filterFatalPolicyErrors(getAdminLoadErrors());
 }
-//@ chunk-q8cqcff6.js:110091-110152 placement
+//@ chunk-5fn9rb8r.js:110401-110462 placement
 function filterFatalPolicyErrors(errors) {
   return errors.filter((error) => error.severity !== "warning");
 }
-//@ chunk-q8cqcff6.js:110152-110415 placement
+//@ chunk-5fn9rb8r.js:110462-110726 placement
 function hasSurvivingAdminPolicySource() {
   let state = commandSyncNameState();
   let adminSurvivor = state.policy.adminSurvivor;
@@ -1929,16 +1937,16 @@ function hasSurvivingAdminPolicySource() {
   state.policy.adminSurvivor = surviving;
   return surviving;
 }
-//@ chunk-q8cqcff6.js:110415-110459 placement
+//@ chunk-5fn9rb8r.js:110726-110770 placement
 function isAdminPolicyUnreadable() {
   return !hasSurvivingAdminPolicySource() && getFatalAdminPolicyLoadErrors().length > 0;
 }
-//@ chunk-q8cqcff6.js:110459-110494 placement
+//@ chunk-5fn9rb8r.js:110770-110805 placement
 var PERMISSION_DENIED_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-q8cqcff6.js:110459", () => {
+deferInit("chunk-5fn9rb8r.js:110770", () => {
   PERMISSION_DENIED_ERRNOS = new Set(["EACCES", "EPERM"]);
 });
-//@ chunk-q8cqcff6.js:110494-110580 placement
+//@ chunk-5fn9rb8r.js:110805-110891 placement
 function isPermissionDeniedPolicyError(error) {
   return (
     error.errorClass === "unreadable" &&
@@ -1946,14 +1954,14 @@ function isPermissionDeniedPolicyError(error) {
     PERMISSION_DENIED_ERRNOS.has(error.errno)
   );
 }
-//@ chunk-q8cqcff6.js:110580-110633 placement
+//@ chunk-5fn9rb8r.js:110891-110944 placement
 function adminPolicyLoadFailureRefusesLaunch() {
   return (
     !hasSurvivingAdminPolicySource() &&
     getFatalAdminPolicyLoadErrors().some((error) => !isPermissionDeniedPolicyError(error))
   );
 }
-//@ chunk-q8cqcff6.js:110633-110722 placement (2.1.88 match: _temp7, 1)
+//@ chunk-5fn9rb8r.js:110944-111033 placement (2.1.88 match: _temp7, 1)
 function policyEntryWarnings() {
   try {
     let settings = getSettingsForSource("policySettings");
@@ -1962,7 +1970,7 @@ function policyEntryWarnings() {
     return [];
   }
 }
-//@ chunk-q8cqcff6.js:110722-111545 placement
+//@ chunk-5fn9rb8r.js:111033-111856 placement
 function surfaceManagedSettingsErrorsHeadless() {
   let policySettingsLoadErrors = getPolicySettingsLoadErrors();
   let notices = [
@@ -1995,28 +2003,31 @@ ${notices.map(formatManagedSettingsError).join(`
   if (policySettingsLoadErrors.length === 0) return;
   logEvent("tengu_managed_settings_validation_errors", {
     error_count: policySettingsLoadErrors.length,
-    remote_error_count: count(policySettingsLoadErrors, (error) => error.file === "remote managed settings"),
+    remote_error_count: countWhere(
+      policySettingsLoadErrors,
+      (error) => error.file === "remote managed settings",
+    ),
     fatal: any,
   });
 }
-//@ chunk-q8cqcff6.js:111545-111642 placement
+//@ chunk-5fn9rb8r.js:111856-111953 placement
 function managedDocumentLinks() {
   getPolicySettingsLoadErrors();
   return [...commandSyncNameState().managedDocumentLinks.all(), ...(mdmResult().managedDocumentLinks ?? [])];
 }
-//@ chunk-q8cqcff6.js:111642-111721 placement
+//@ chunk-5fn9rb8r.js:111953-112032 placement
 function managedLinkWarningLines() {
   return managedDocumentLinks().flatMap((link) => {
     let line = describeLinkedPath(link);
     return line === null ? [] : [line];
   });
 }
-//@ chunk-q8cqcff6.js:111721-111781 placement
+//@ chunk-5fn9rb8r.js:112032-112092 placement
 function managedFileProtections() {
   getPolicySettingsLoadErrors();
   return commandSyncNameState().managedFileProtections.all();
 }
-//@ chunk-q8cqcff6.js:111781-111949 placement
+//@ chunk-5fn9rb8r.js:112092-112260 placement
 function getManagedFileProtectionForLogging() {
   let reasons = new Set(managedFileProtections().map(([, reason]) => reason));
   let found = CONFIG_DIR_UNSAFE_REASONS.find((reason) => reasons.has(reason));
@@ -2026,33 +2037,36 @@ function getManagedFileProtectionForLogging() {
     setsOrgPin: commandSyncNameState().managedFileProtections.setsOrgPin,
   };
 }
-//@ chunk-q8cqcff6.js:111949-112335 placement
+//@ chunk-5fn9rb8r.js:112260-112646 placement
 function logManagedDocumentLinks() {
   let links = managedDocumentLinks();
   if (links.length === 0) return;
   logEvent("tengu_managed_settings_links", {
-    inside_count: count(links, (link) => link.kind === "inside"),
-    outside_count: count(links, (link) => link.kind === "outside"),
-    unverified_count: count(links, (link) => link.kind === "unverified"),
-    outside_writable_count: count(links, (link) => link.kind === "outside" && link.targetWritable === "yes"),
-    outside_writable_unknown_count: count(
+    inside_count: countWhere(links, (link) => link.kind === "inside"),
+    outside_count: countWhere(links, (link) => link.kind === "outside"),
+    unverified_count: countWhere(links, (link) => link.kind === "unverified"),
+    outside_writable_count: countWhere(
+      links,
+      (link) => link.kind === "outside" && link.targetWritable === "yes",
+    ),
+    outside_writable_unknown_count: countWhere(
       links,
       (link) => link.kind === "outside" && link.targetWritable === "unknown",
     ),
   });
 }
-//@ chunk-q8cqcff6.js:112335-112450 placement
+//@ chunk-5fn9rb8r.js:112646-112761 placement
 function formatManagedSettingsError(issue) {
   return `  ${issue.file === undefined ? "managed settings" : cleanForDisplay(issue.file)}${issue.path ? ` (${issue.path})` : ""}: ${issue.message}`;
 }
-//@ chunk-q8cqcff6.js:112450-112494 placement
+//@ chunk-5fn9rb8r.js:112761-112805 placement
 /**
  * 写入可编辑来源（user/project/local）：读取原始文件（校验失败时保留原文以免丢失未知键），用 mergeWith 合并（undefined 表示删除键、数组整体替换），以原子写落盘（user 允许符号链接，project/local 检查父目录），写 local 时异步把 .claude/settings.local.json 加入全局 gitignore，最后刷新缓存并通知变更。storage v5 后端时写入存储记录。
  */
 function updateSettingsForSource(source, transform, options, storage) {
   return updateSettingsForSourceWithTransform(source, () => transform, options, storage);
 }
-//@ chunk-q8cqcff6.js:112494-112706 placement (2.1.88 match: getEnabledSettingSources, 0.888)
+//@ chunk-5fn9rb8r.js:112805-113017 placement (2.1.88 match: getEnabledSettingSources, 0.888)
 function updateSettingsForSourceWithTransform(source, transform, options, storage) {
   if (source === "policySettings" || source === "flagSettings")
     return Promise.resolve({
@@ -2068,22 +2082,22 @@ function updateSettingsForSourceWithTransform(source, transform, options, storag
         : refuseDisklessSettingsWrite(source),
     );
   return settingsWriteQueue.run(settingsFilePathForSource, () =>
-    updateSettingsForSource_2(source, transform, settingsFilePathForSource, options, storage),
+    writeSettingsForSource(source, transform, settingsFilePathForSource, options, storage),
   );
 }
-//@ chunk-q8cqcff6.js:112706-112718 placement
+//@ chunk-5fn9rb8r.js:113017-113029 placement
 var settingsWriteQueue; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-q8cqcff6.js:112706", () => {
+deferInit("chunk-5fn9rb8r.js:113017", () => {
   settingsWriteQueue = createKeyedQueue();
 });
-//@ chunk-q8cqcff6.js:112718-112819 placement
+//@ chunk-5fn9rb8r.js:113029-113130 placement
 function refuseDisklessSettingsWrite(source) {
   warnDisklessSettingsWrite("settings", source);
   return {
     error: Error("This session does not write settings to disk"),
   };
 }
-//@ chunk-q8cqcff6.js:112819-112900 placement
+//@ chunk-5fn9rb8r.js:113130-113211 placement
 function runInSettingsWriteQueue(key, fn) {
   return settingsWriteQueue.run(key, async () => {
     try {
@@ -2093,41 +2107,61 @@ function runInSettingsWriteQueue(key, fn) {
     }
   });
 }
-//@ chunk-q8cqcff6.js:112900-112933 placement
+//@ chunk-5fn9rb8r.js:113211-113244 placement
 function drainSettingsWrites() {
   return settingsWriteQueue.drain();
 }
-//@ chunk-q8cqcff6.js:112933-112942 layout
+//@ chunk-5fn9rb8r.js:113244-113253 layout
 // deferred: uses registerWriteQueueDrain (./writeQueues.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-q8cqcff6.js:112933", () => {
+deferInit("chunk-5fn9rb8r.js:113244", () => {
   registerWriteQueueDrain(drainSettingsWrites);
 });
-//@ chunk-q8cqcff6.js:112942-113146 layout
+//@ chunk-5fn9rb8r.js:113253-113626 facade-majority
+function queueLocalSettingsGitignoreRule() {
+  let writeTask = addFileGlobRuleToGitignore(
+    getRelativeSettingsFilePathForSource("localSettings"),
+    getProjectConfigRoot() ?? getOriginalCwd(),
+  )
+    .then((outcome) => {
+      if (!outcome.written) return;
+      if (outcome.effective) logFeatureOk("gitignore_global_rule");
+      else if (outcome.reason === "already_tracked") logFeatureSad("gitignore_global_rule", outcome.reason);
+      else logFeatureBad("gitignore_global_rule", outcome.reason ?? "write_ineffective");
+    })
+    .catch(() => {
+      return;
+    });
+  let nameState = commandSyncNameState();
+  nameState.backgroundWorkTail = Promise.all([nameState.backgroundWorkTail, writeTask]).then(() => {
+    return;
+  });
+}
+//@ chunk-5fn9rb8r.js:113626-113830 layout
 async function writeSettingsFileAtomic(path, text, options) {
   try {
-    await writeFileAtomic(path, text, options);
+    await readJsonFile_2(path, text, options);
   } catch (error) {
     if (!(error instanceof SymlinkWriteRefusedError) || !(await neverSettingsSave(path))) throw error;
     logForDebugging(`Writing settings through symlinked path ${path}`);
-    await writeFileAtomic(path, text, {
+    await readJsonFile_2(path, text, {
       ...options,
       allowSymlink: true,
       checkParentDir: false,
     });
   }
 }
-//@ chunk-q8cqcff6.js:113146-113176 layout
+//@ chunk-5fn9rb8r.js:113830-113860 layout
 async function neverSettingsSave(path) {
   return false;
 }
-//@ chunk-q8cqcff6.js:113176-113230 layout
+//@ chunk-5fn9rb8r.js:113860-113914 layout
 function sanitizeRawSettingsForWrite(raw, path) {
   let workingCopy = clone(raw);
   applySettingAliases(workingCopy, path);
   coerceStringListSettings(workingCopy);
   return workingCopy;
 }
-//@ chunk-q8cqcff6.js:113230-113295 layout
+//@ chunk-5fn9rb8r.js:113914-113979 layout
 class SettingsWriteRefusedError extends Error {
   why;
   constructor(why, message) {
@@ -2135,7 +2169,7 @@ class SettingsWriteRefusedError extends Error {
     this.why = why;
   }
 }
-//@ chunk-q8cqcff6.js:113295-113909 layout
+//@ chunk-5fn9rb8r.js:113979-114593 layout
 function decodeStoredSettingsRecord(storedUserSettings, path) {
   switch (storedUserSettings.kind) {
     case "object": {
@@ -2176,8 +2210,8 @@ function decodeStoredSettingsRecord(storedUserSettings, path) {
       );
   }
 }
-//@ chunk-q8cqcff6.js:113909-117127 callgraph-witnessed (2.1.88 match: updateSettingsForSource, 0.24)
-async function updateSettingsForSource_2(source, transform, settingsFilePathForSource, options, storage) {
+//@ chunk-5fn9rb8r.js:114593-117460 layout
+async function writeSettingsForSource(source, transform, settingsFilePathForSource, options, storage) {
   let useStorage =
     isStorageV5Enabled() &&
     storage !== undefined &&
@@ -2191,7 +2225,7 @@ async function updateSettingsForSource_2(source, transform, settingsFilePathForS
   };
   let storageHandle = useStorage && isDiskless() ? storage : undefined;
   try {
-    let filePath = readLocalSettingsAliases(source);
+    let localSettingsAliases = readLocalSettingsAliases(source);
     let usedRaw = false;
     let current = storageHandle
       ? null
@@ -2205,18 +2239,18 @@ async function updateSettingsForSource_2(source, transform, settingsFilePathForS
       );
     if (preserveOnWrite) current = null;
     if (!current && !storageHandle) {
-      let content = null;
+      let rawText = null;
       try {
         let vet =
           source === "userSettings" || isInClaudeConfigHome(settingsFilePathForSource)
             ? safeResolvePath(getFsImplementation(), settingsFilePathForSource)
             : await vetRepoSettingsPathAsync(getFsImplementation(), settingsFilePathForSource);
-        content = (await readFileChecked(vet.resolvedPath, MAX_SETTINGS_JSON_BYTES)).content;
+        rawText = (await readFileChecked(vet.resolvedPath, MAX_SETTINGS_JSON_BYTES)).content;
       } catch (error) {
         if (!isENOENT(error)) throw error;
       }
-      if (content !== null && content.trim() !== "") {
-        let parsed = safeParseJSON(content, false);
+      if (rawText !== null && rawText.trim() !== "") {
+        let parsed = safeParseJSON(rawText, false);
         if (parsed === null) {
           logForDebugging(
             `updateSettingsForSource: invalid JSON in settings file at ${settingsFilePathForSource}`,
@@ -2247,11 +2281,11 @@ async function updateSettingsForSource_2(source, transform, settingsFilePathForS
       current = decoded.settings;
       usedRaw = decoded.raw;
     }
-    filePath.before(current ?? null, usedRaw, settingsFilePathForSource);
-    let rawData = transform(current ?? null);
-    if (rawData === null) {
+    localSettingsAliases.before(current ?? null, usedRaw, settingsFilePathForSource);
+    let nextSettings = transform(current ?? null);
+    if (nextSettings === null) {
       if (source === "localSettings" && !skipRevoke) {
-        let revoked = await revokeFromLegacyLocalSettings(transform, filePath);
+        let revoked = await revokeFromLegacyLocalSettings(transform, localSettingsAliases);
         if (revoked.error)
           return {
             error: revoked.error,
@@ -2260,7 +2294,7 @@ async function updateSettingsForSource_2(source, transform, settingsFilePathForS
           if (isStorageV5Enabled() && storage !== undefined)
             release = await mirrorUserSettingsWrite(storage, settingsFilePathForSource);
           try {
-            getSettingsWithErrors_2();
+            getSettingsWithErrors();
           } catch (error) {
             logError(error);
           }
@@ -2272,18 +2306,18 @@ async function updateSettingsForSource_2(source, transform, settingsFilePathForS
       };
     }
     if (!isDiskless()) await getFsImplementation().mkdir(dirname(settingsFilePathForSource));
-    let updatedSettings = mergeWithAssigner_2(current || {}, rawData, (previous, srcValue, key, object) => {
-      if (srcValue === undefined && object && typeof key === "string") {
-        delete object[key];
+    let merged = mergeWithAssigner_2(current || {}, nextSettings, (previous, addition, value, target) => {
+      if (addition === undefined && target && typeof value === "string") {
+        delete target[value];
         return;
       }
-      if (Array.isArray(srcValue)) return srcValue;
-      if (key === "extraKnownMarketplaces" && isPlainObject(previous) && isPlainObject(srcValue))
-        return mergeExtraKnownMarketplacesByEntry(previous, srcValue);
+      if (Array.isArray(addition)) return addition;
+      if (value === "extraKnownMarketplaces" && isPlainObject(previous) && isPlainObject(addition))
+        return mergeExtraKnownMarketplacesByEntry(previous, addition);
       return;
     });
     let text =
-      jsonStringify(updatedSettings, null, 2) +
+      jsonStringify(merged, null, 2) +
       `
 `;
     if (storageHandle && Buffer.byteLength(text) > MAX_SETTINGS_JSON_BYTES)
@@ -2310,15 +2344,15 @@ async function updateSettingsForSource_2(source, transform, settingsFilePathForS
         stagingDir: join(dirname(settingsFilePathForSource), ATOMIC_WRITE_DIRNAME),
       });
     }
-    filePath.after({
+    localSettingsAliases.after({
       path: settingsFilePathForSource,
       content: text,
     });
     invalidateCommandNames();
     if (useStorage) release = seedWrittenUserSettings(settingsFilePathForSource, text);
     if (source === "localSettings" && !skipRevoke) {
-      let revoked = await revokeFromLegacyLocalSettings(transform, filePath);
-      if (revoked.error && revoked.phase !== undefined && !hasArrayOrUndefined(rawData))
+      let revoked = await revokeFromLegacyLocalSettings(transform, localSettingsAliases);
+      if (revoked.error && revoked.phase !== undefined && !hasArrayOrUndefined(nextSettings))
         logForDebugging(
           `localSettings: legacy settings.local.json could not be evaluated (${revoked.phase} failure) but this write contains no removals \u2014 canonical write succeeded, ignoring: ${revoked.error.message}`,
           {
@@ -2327,25 +2361,7 @@ async function updateSettingsForSource_2(source, transform, settingsFilePathForS
         );
       else error = revoked.error;
     }
-    if (source === "localSettings") {
-      let gitignore = addFileGlobRuleToGitignore(
-        getRelativeSettingsFilePathForSource("localSettings"),
-        getProjectConfigRoot() ?? getOriginalCwd(),
-      )
-        .then((result) => {
-          if (!result.written) return;
-          if (result.effective) logFeatureOk("gitignore_global_rule");
-          else if (result.reason === "already_tracked") logFeatureSad("gitignore_global_rule", result.reason);
-          else logFeatureBad("gitignore_global_rule", result.reason ?? "write_ineffective");
-        })
-        .catch(() => {
-          return;
-        });
-      let state = commandSyncNameState();
-      state.backgroundWorkTail = Promise.all([state.backgroundWorkTail, gitignore]).then(() => {
-        return;
-      });
-    }
+    if (source === "localSettings") queueLocalSettingsGitignoreRule();
     if (storageHandle && usedRaw) logFeatureSad("ccs_user_settings_write", "merged_into_raw_record");
     else if (storageHandle) logFeatureOk("ccs_user_settings_write");
   } catch (error) {
@@ -2375,7 +2391,7 @@ async function updateSettingsForSource_2(source, transform, settingsFilePathForS
   if (isStorageV5Enabled() && storage !== undefined && !useStorage)
     release = await mirrorUserSettingsWrite(storage, settingsFilePathForSource);
   try {
-    getSettingsWithErrors_2();
+    getSettingsWithErrors();
   } catch (error) {
     logError(error);
   }
@@ -2384,7 +2400,7 @@ async function updateSettingsForSource_2(source, transform, settingsFilePathForS
     error,
   };
 }
-//@ chunk-q8cqcff6.js:117127-117247 layout (2.1.88 match: _temp5, 1)
+//@ chunk-5fn9rb8r.js:117460-117580 layout (2.1.88 match: _temp5, 1)
 async function mirrorUserSettingsWrite(storage, writtenPath) {
   let settingsPath = getSettingsFilePathForSource("userSettings");
   if (
@@ -2395,7 +2411,7 @@ async function mirrorUserSettingsWrite(storage, writtenPath) {
     return;
   return seedProjectSettings(storage, commandSyncNameState(), settingsPath);
 }
-//@ chunk-q8cqcff6.js:117247-117483 layout
+//@ chunk-5fn9rb8r.js:117580-117816 layout
 function seedWrittenUserSettings(path, text) {
   if (Buffer.byteLength(text) > MAX_SETTINGS_JSON_BYTES) return;
   let parsed;
@@ -2409,13 +2425,13 @@ function seedWrittenUserSettings(path, text) {
   state.seedParsedFile(path, "userSettings", parsed, state.epoch);
   return state.retainLayer(path, parsed);
 }
-//@ chunk-q8cqcff6.js:117483-117614 layout
-function hasArrayOrUndefined(rawData) {
-  if (rawData === undefined || Array.isArray(rawData)) return true;
-  if (rawData === null || typeof rawData !== "object") return false;
-  return Object.values(rawData).some(hasArrayOrUndefined);
+//@ chunk-5fn9rb8r.js:117816-117947 layout
+function hasArrayOrUndefined(value) {
+  if (value === undefined || Array.isArray(value)) return true;
+  if (value === null || typeof value !== "object") return false;
+  return Object.values(value).some(hasArrayOrUndefined);
 }
-//@ chunk-q8cqcff6.js:117614-117723 layout
+//@ chunk-5fn9rb8r.js:117947-118056 layout
 function emitSettingsChanged(source) {
   try {
     commandSyncNameState().changed.emit(source);
@@ -2423,11 +2439,11 @@ function emitSettingsChanged(source) {
     for (let suberror of error instanceof AggregateError ? error.errors : [error]) logError(suberror);
   }
 }
-//@ chunk-q8cqcff6.js:117723-119159 layout
+//@ chunk-5fn9rb8r.js:118056-119492 layout
 /**
  * 对旧版 settings.local.json 应用变换但只保留删除部分（撤销授权）：读取并规范化旧文件，执行变换，内容有变化时原子写回并通知；各阶段失败返回遥测安全错误。
  */
-async function revokeFromLegacyLocalSettings(transform, filePath) {
+async function revokeFromLegacyLocalSettings(transform, localSettingsAliases) {
   let legacyPath = getLegacyLocalSettingsFilePath_3(buildSettingsContext());
   if (!legacyPath)
     return {
@@ -2459,7 +2475,7 @@ async function revokeFromLegacyLocalSettings(transform, filePath) {
       phase: "read",
     };
   }
-  filePath.noteRead({
+  localSettingsAliases.noteRead({
     path: legacyPath,
     content,
   });
@@ -2522,7 +2538,7 @@ async function revokeFromLegacyLocalSettings(transform, filePath) {
       checkParentDir: !configDir,
       stagingDir: join(dirname(legacyPath), ATOMIC_WRITE_DIRNAME),
     });
-    filePath.after({
+    localSettingsAliases.after({
       path: legacyPath,
       content: text,
     });
@@ -2545,7 +2561,7 @@ async function revokeFromLegacyLocalSettings(transform, filePath) {
     };
   }
 }
-//@ chunk-q8cqcff6.js:119159-119410 placement
+//@ chunk-5fn9rb8r.js:119492-119743 placement
 function projectRemovalsOnly(original, merged) {
   if (Array.isArray(original) && Array.isArray(merged)) {
     let mergedSet = new Set(merged.map((item) => jsonStringify(item)));
@@ -2561,7 +2577,7 @@ function projectRemovalsOnly(original, merged) {
   }
   return original;
 }
-//@ chunk-q8cqcff6.js:119410-119791 placement (2.1.88 match: getManagedSettingsKeysForLogging, 0.208)
+//@ chunk-5fn9rb8r.js:119743-120124 placement (2.1.88 match: getManagedSettingsKeysForLogging, 0.208)
 /**
  * 列出托管设置里出现的键（permissions/sandbox/hooks 展开一层），用于遥测。
  */
@@ -2585,22 +2601,22 @@ function getManagedSettingsKeysForLogging(settings) {
     } else allKeys.push(key);
   return allKeys.sort();
 }
-//@ chunk-q8cqcff6.js:119791-119924 placement
+//@ chunk-5fn9rb8r.js:120124-120257 placement
 function getSettingsAfterPluginLoad(key) {
   if (!commandSyncNameState().pluginBaseLoaded)
     logEvent("tengu_plugin_settings_premature_read", {
       key: fromEnum(key),
     });
-  let { settings } = getSettingsWithErrors_2();
+  let { settings } = getSettingsWithErrors();
   return (settings || {})[key];
 }
-//@ chunk-q8cqcff6.js:119924-119970 placement
+//@ chunk-5fn9rb8r.js:120257-120304 placement
 function getSecuritySensitiveSetting(key) {
   return getSecuritySensitiveSettingWithSources(key).map((entry) => entry.value);
 }
-//@ chunk-q8cqcff6.js:119970-120027 placement (2.1.88 match: TRUSTED_SETTING_SOURCES, 1)
+//@ chunk-5fn9rb8r.js:120304-120361 placement (2.1.88 match: TRUSTED_SETTING_SOURCES, 1)
 var SECURITY_SENSITIVE_SETTING_SOURCES = ["policySettings", "flagSettings", "userSettings"];
-//@ chunk-q8cqcff6.js:120027-120243 placement
+//@ chunk-5fn9rb8r.js:120361-120578 placement
 function getSecuritySensitiveSettingWithSources(key) {
   let values = [];
   for (let source of SECURITY_SENSITIVE_SETTING_SOURCES) {
@@ -2625,7 +2641,7 @@ function getSecuritySensitiveSettingWithSources(key) {
   }
   return values;
 }
-//@ chunk-q8cqcff6.js:120243-120489 placement (2.1.88 match: hasSkipDangerousModePermissionPrompt, 1)
+//@ chunk-5fn9rb8r.js:120578-120824 placement (2.1.88 match: hasSkipDangerousModePermissionPrompt, 1)
 /**
  * 任一来源（user/local/flag/policy，不含 project）设置了 skipDangerousModePermissionPrompt。
  */
@@ -2637,14 +2653,14 @@ function hasSkipDangerousModePermissionPrompt() {
     getSettingsForSource("policySettings")?.skipDangerousModePermissionPrompt
   );
 }
-//@ chunk-q8cqcff6.js:120489-120625 placement
+//@ chunk-5fn9rb8r.js:120824-120960 placement
 function hasVouchedSkipDangerousModePermissionPrompt() {
   return !!(
     getSettingsForSource("policySettings")?.skipDangerousModePermissionPrompt ||
     getSettingsForSource("userSettings")?.skipDangerousModePermissionPrompt
   );
 }
-//@ chunk-q8cqcff6.js:120625-120836 placement (2.1.88 match: hasSkipDangerousModePermissionPrompt, 0.81)
+//@ chunk-5fn9rb8r.js:120960-121171 placement (2.1.88 match: hasSkipDangerousModePermissionPrompt, 0.809)
 function hasSkipWorkflowUsageWarning() {
   return !!(
     getSettingsForSource("userSettings")?.skipWorkflowUsageWarning ||
@@ -2653,13 +2669,13 @@ function hasSkipWorkflowUsageWarning() {
     getSettingsForSource("policySettings")?.skipWorkflowUsageWarning
   );
 }
-//@ chunk-q8cqcff6.js:120836-120906 placement
+//@ chunk-5fn9rb8r.js:121171-121241 placement
 function hasIsolatePeerMachines() {
   return getEnabledSettingSources_2().some(
     (source) => getSettingsForSource(source)?.isolatePeerMachines === true,
   );
 }
-//@ chunk-q8cqcff6.js:120906-121033 placement
+//@ chunk-5fn9rb8r.js:121241-121368 placement
 function hasDisableClaudeAiConnectors() {
   return (
     getEnabledSettingSources_2().some(
@@ -2667,11 +2683,11 @@ function hasDisableClaudeAiConnectors() {
     ) || getDurablePolicyTierSettings().some((tier) => tier.disableClaudeAiConnectors === true)
   );
 }
-//@ chunk-q8cqcff6.js:121033-121057 placement
+//@ chunk-5fn9rb8r.js:121368-121392 placement
 function hasAutoModeOptIn() {
   return true;
 }
-//@ chunk-q8cqcff6.js:121057-121299 placement (2.1.88 match: hasSkipDangerousModePermissionPrompt, 0.763)
+//@ chunk-5fn9rb8r.js:121392-121634 placement (2.1.88 match: hasSkipDangerousModePermissionPrompt, 0.763)
 function isNotDisabledInTrustedSources(settingKey) {
   let pick = settingKey === "useAutoModeDuringPlan" ? getSettingsForSource : getSettingsForSourceTightenOnly;
   return ![
@@ -2686,39 +2702,39 @@ function isNotDisabledInTrustedSources(settingKey) {
       : null,
   ].some((settings) => settings?.[settingKey] === false);
 }
-//@ chunk-q8cqcff6.js:121299-121374 placement (2.1.88 match: _temp9, 1)
+//@ chunk-5fn9rb8r.js:121634-121709 placement (2.1.88 match: _temp9, 1)
 function isDisabledAboveWorkloadFiles(a_4) {
   return [...getVouchedPolicyTierSettings(), getSettingsForSource("flagSettings")].some(
     (settings) => settings?.[a_4] === false,
   );
 }
-//@ chunk-q8cqcff6.js:121374-121425 placement
+//@ chunk-5fn9rb8r.js:121709-121760 placement
 function getUseAutoModeDuringPlan() {
   return isNotDisabledInTrustedSources("useAutoModeDuringPlan");
 }
-//@ chunk-q8cqcff6.js:121425-121479 placement
+//@ chunk-5fn9rb8r.js:121760-121814 placement
 function getAskUserQuestionTimeout() {
   return getSecuritySensitiveSetting("askUserQuestionTimeout")[0];
 }
-//@ chunk-q8cqcff6.js:121479-121523 placement
+//@ chunk-5fn9rb8r.js:121814-121858 placement
 function getDialogExpiry() {
   return getSecuritySensitiveSetting("dialogExpiry")[0];
 }
-//@ chunk-q8cqcff6.js:121523-121581 placement
+//@ chunk-5fn9rb8r.js:121858-121916 placement
 function getModelProposedGoalsSettingParsed() {
   return getSecuritySensitiveSetting("modelProposedGoals")[0] ?? "auto";
 }
-//@ chunk-q8cqcff6.js:121581-121739 placement
+//@ chunk-5fn9rb8r.js:121916-122074 placement
 async function getModelProposedGoalsSetting(storageV5) {
   let value = getSecuritySensitiveSetting("modelProposedGoals")[0];
   if (value !== undefined) return value;
   if ((await rawSettingsKeyPresence("modelProposedGoals", storageV5)) !== "absent") return "alwaysAsk";
   return "auto";
 }
-//@ chunk-q8cqcff6.js:121739-121945 placement
+//@ chunk-5fn9rb8r.js:122074-122280 placement
 var autoModeConfigSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var AUTO_MODE_TRUSTED_SOURCES;
-deferInit("chunk-q8cqcff6.js:121739", () => {
+deferInit("chunk-5fn9rb8r.js:122074", () => {
   autoModeConfigSchema = DoctorLazy(() =>
     objectSchema({
       allow: array(stringSchema()).optional(),
@@ -2730,7 +2746,7 @@ deferInit("chunk-q8cqcff6.js:121739", () => {
   );
   AUTO_MODE_TRUSTED_SOURCES = ["userSettings", "flagSettings", "policySettings"];
 });
-//@ chunk-q8cqcff6.js:121945-123032 placement (2.1.88 match: getAutoModeConfig, 0.293)
+//@ chunk-5fn9rb8r.js:122280-123367 placement (2.1.88 match: getAutoModeConfig, 0.293)
 /**
  * 汇总 autoMode 分类器规则（allow/soft_deny/hard_deny/environment），只接受 user/flag/policy 来源；project/local 中的 autoMode 被忽略并打 tengu_settings_auto_mode_rules_untrusted_source_ignored。
  */
@@ -2797,7 +2813,7 @@ function getAutoModeConfig() {
     };
   return;
 }
-//@ chunk-q8cqcff6.js:123032-123146 placement
+//@ chunk-5fn9rb8r.js:123367-123481 placement
 function flagAllowBesideManagedAllow(flagAllow, policyAllow) {
   return flagAllow.includes(DEFAULTS_PLACEHOLDER) &&
     (replacesDefaults(policyAllow) ||
@@ -2806,17 +2822,17 @@ function flagAllowBesideManagedAllow(flagAllow, policyAllow) {
     ? flagAllow.filter((rule) => rule !== DEFAULTS_PLACEHOLDER)
     : flagAllow;
 }
-//@ chunk-q8cqcff6.js:123146-123185 placement
+//@ chunk-5fn9rb8r.js:123481-123520 placement
 function builtinAllowRulesAreOff() {
   return replacesDefaults(getAutoModeConfig()?.allow);
 }
-//@ chunk-q8cqcff6.js:123185-123277 placement
+//@ chunk-5fn9rb8r.js:123520-123612 placement
 function isAutoModeClassifyAllShellEnabled() {
   for (let source of AUTO_MODE_TRUSTED_SOURCES)
     if (getSettingsForSourceTightenOnly(source)?.autoMode?.classifyAllShell === true) return true;
   return false;
 }
-//@ chunk-q8cqcff6.js:123277-124758 placement
+//@ chunk-5fn9rb8r.js:123612-125098 placement
 async function rawSettingsKeyPresence(key, storage, options) {
   let settingsContext = buildSettingsContext();
   let enabledSettingSources = getEnabledSettingSources(settingsContext);
@@ -2914,158 +2930,155 @@ async function rawSettingsKeyPresence(key, storage, options) {
   if (unknowable) return "unknowable";
   return present ? "present" : "absent";
 }
-//@ chunk-6zvepy0r.js:10205-10335 fingerprint (2.1.88 match: rawSettingsContainsKey, 0.783)
+//@ chunk-n0hwmqka.js:10204-10334 fingerprint (2.1.88 match: rawSettingsContainsKey, 0.783)
 async function resolveSettingsWritePath(key) {
   if (settingsSourceForPathByPriority(key) === "policySettings" || isInClaudeConfigHome(key)) return key;
   let vet = await vetRepoSettingsPathAsync(getFsImplementation(), key);
   return vet.linksResolvedPath ?? vet.resolvedPath;
 }
-//@ chunk-4xpk3fhh.js:11081-11176 fingerprint (2.1.88 match: getSettingsRootPathForSource, 1)
-var TRUSTED_SETTING_SOURCES = ["policySettings", "flagSettings", "userSettings"];
-var REPO_SETTING_SOURCES = ["localSettings", "projectSettings"];
 export {
   getSettingsForSource,
+  getSecuritySensitiveSettingWithSources,
+  getSettingsFilePathForSource,
+  getInitialSettings,
   updateSettingsForSource,
-  parseSettingsFileUncached,
   getAutoModeConfig,
-  TRUSTED_SETTING_SOURCES,
+  getPolicySettingsOrigin,
+  isAdminPolicyOrigin,
+  getSettings_DEPRECATED,
+  hasDisableClaudeAiConnectors,
+  surfaceManagedSettingsErrorsHeadless,
+  getSettingsWithSources,
+  getSettingsWithErrors,
+  parentSettingsIncluded,
   getDurablePolicyTierSettings,
   isPolicySlotAdminOrParentComposed,
-  REPO_SETTING_SOURCES,
   getAllPolicyTierSettings,
   getLegacyLocalSettingsOverlay,
   projectSettingsAliasesUserSettings,
   getAdminTierEnvValue,
-  getMergedPolicySources,
-  getArmedHelperOutput,
-  getPolicySettingsOrigin,
-  getShadowedManagedSources,
-  getManagedFileSettingsPresence,
-  managedLinkWarningLines,
-  getInitialSettings_2,
-  getPairedPolicyModelOverrides,
-  isAdminPolicyOrigin,
-  getMcpPolicyView,
-  hasDisableClaudeAiConnectors,
-  getMachineAdminPolicyTier,
-  getSettingsForSourceTightenOnly,
-  getSettingsFilePathForSource,
-  getSettingsParseErrorsForSource,
+  hasSkipDangerousModePermissionPrompt,
+  machineAdminMayPinSignInOrg,
+  getPolicySettingsLoadErrors,
+  flagInlineSettingDropped,
+  getSettingsForSourceForUpkeep,
+  updateSettingsForSourceWithTransform,
   MAX_SETTINGS_JSON_BYTES,
   getManagedSettingsKeysForLogging,
-  getSettingsForSourceForUpkeep,
   getBasePolicySettings,
   getBasePolicySettingsOrigin,
   getPolicyHelperSourceLoadErrors,
   isForceRemoteSettingsRefreshConfigured,
-  getEffectiveSettingSource_2,
-  getManagedSourcesInEffect,
-  parseRemoteManagedSettings,
-  getHostPolicyLoginPins,
-  getMachineAdminDocumentTier,
-  getSettings_DEPRECATED,
-  isAdminPolicyUnreadable,
-  adminPolicyLoadFailureRefusesLaunch,
-  getFatalAdminPolicyLoadErrors,
+  getEffectiveSettingSource,
   getLegacyLocalSettingsFilePath,
   getRuleAnchorRootForSource,
+  getFatalAdminPolicyLoadErrors,
+  parentManagedTierParticipates,
+  getSettingsParseErrorsForSource,
+  hasVouchedSkipDangerousModePermissionPrompt,
+  isAutoModeClassifyAllShellEnabled,
+  getVouchedPolicyTierSettings,
+  getUseAutoModeDuringPlan,
+  isDisabledAboveWorkloadFiles,
+  getSettingsForSourceTightenOnly,
+  parseSettingsFileUncached,
+  managedLinkWarningLines,
+  rawSettingsKeyPresence,
   getSecuritySensitiveSetting,
-  updateSettingsForSourceWithTransform,
-  surfaceManagedSettingsErrorsHeadless,
-  getSettingsWithSources_2,
-  getSettingsWithErrors_2,
-  getSettingsAfterPluginLoad,
-  getSecuritySensitiveSettingWithSources,
-  getHostManagedModelPricing,
-  getAskUserQuestionTimeout,
+  anyAdminPolicyTierGovernsRetention,
+  getManagedSourcesInEffect,
+  parseRemoteManagedSettings,
+  getMergedPolicySources,
+  getArmedHelperOutput,
+  getShadowedManagedSources,
+  getManagedFileSettingsPresence,
+  drainSettingsWrites,
+  parseSettingsFile,
+  isMachineAdminDocumentUnreadable,
+  getEveryMachineAdminTierSettings,
+  getHostPolicyLoginPins,
+  getMachineAdminDocumentTier,
+  isAdminPolicyUnreadable,
+  adminPolicyLoadFailureRefusesLaunch,
+  getSettingsForSourceWriteSeed,
+  getParsedParentManagedSettings,
+  parentTierWithOrganizationLocksHooks,
+  getAdminPolicyTierSettings,
+  getAdminAuthoredPolicySettings,
+  allowListEntriesThatVouch,
+  getVouchedAdminPolicyTier,
+  getRemotePolicyTierWithKind,
+  getMachineAdminPolicyTier,
+  filterFatalPolicyErrors,
+  getMcpPolicyView,
+  settleBackgroundSettingsWork,
+  runInSettingsWriteQueue,
+  queueLocalSettingsGitignoreRule,
+  getPairedPolicyModelOverrides,
   hasIsolatePeerMachines,
+  isRepoTierFreezeHeld,
+  withRepoTiersLive,
+  isRepoTierAnsweredByACopy,
+  getRelativeSettingsFilePathForSource,
+  getHostManagedModelPricing,
+  settingsMergeCustomizer,
+  getMachineAdminTierSettings,
+  getLocalSettingsValidationErrors,
+  hasMachinePluginKeyLoadRecords,
+  getHeldOffPluginIds,
+  hasAdminPolicyLoadRecords,
+  getMachineAdminPolicyEnv,
+  isSettingsTierWithheld,
+  readRepoTierFileText,
+  localSettingsStoreRootAwaitingOwnershipProbe,
+  autoModeConfigSchema,
   basePolicyNamesHelper,
-  getPolicySettingsLoadErrors,
   getManagedFileLoadState,
+  getModelProposedGoalsSettingParsed,
+  getModelProposedGoalsSetting,
   getPolicyEnvCompositionForLogging,
   getShadowedMcpPolicySources,
   getManagedFileProtectionForLogging,
   getMcpPolicyCompositionForLogging,
   getShadowedPolicyHelperSources,
   logManagedDocumentLinks,
-  hasSkipDangerousModePermissionPrompt,
-  getModelProposedGoalsSettingParsed,
-  getModelProposedGoalsSetting,
-  hasVouchedSkipDangerousModePermissionPrompt,
-  rawSettingsKeyPresence,
-  anyAdminPolicyTierGovernsRetention,
-  parseSettingsFile,
-  AUTO_MODE_TRUSTED_SOURCES,
-  autoModeConfigSchema,
-  builtinAllowRulesAreOff,
-  filterFatalPolicyErrors,
-  parentManagedTierParticipates,
-  getMachineAdminCredentialInputs,
-  getEveryMachineAdminTierSettings,
-  isPermissionDeniedPolicyError,
-  isMachineAdminDocumentUnreadable,
-  hasSurvivingAdminPolicySource,
-  getMachineAdminDocumentLoadErrors,
-  isAutoModeClassifyAllShellEnabled,
-  getVouchedPolicyTierSettings,
-  getUseAutoModeDuringPlan,
-  isDisabledAboveWorkloadFiles,
-  getRemotePolicyTierWithKind,
+  getSettingsAfterPluginLoad,
+  getAskUserQuestionTimeout,
   policySettingUnreadable,
-  machineAdminMayPinSignInOrg,
-  isRepoTierFreezeHeld,
-  localSettingsStoreRootAwaitingOwnershipProbe,
-  repoTierFileSlots,
-  readRepoTierFileText,
-  resolveSettingsWritePath,
-  isRepoTierAnsweredByACopy,
-  pathTraversesUntrustedLink,
   getDeniedModelsPolicyOverrides,
   getMachineAdminPolicyTiers,
-  getRelativeSettingsFilePathForSource,
-  getAdminAuthoredPolicySettings,
-  getSettingsForSourceWriteSeed,
-  settleBackgroundSettingsWork,
-  getVouchedAdminPolicyTier,
-  hasMachinePluginKeyLoadRecords,
-  getHeldOffPluginIds,
-  hasAdminPolicyLoadRecords,
-  hasAutoModeOptIn,
-  getLocalSettingsValidationErrors,
-  settingsMergeCustomizer,
-  getManagedSettingsFilePath,
-  getPolicySettingsOrigin_2,
-  drainSettingsWrites,
-  withRepoTiersLive,
-  getMachineAdminTierSettings,
-  allowListEntriesThatVouch,
-  runInSettingsWriteQueue,
-  getParsedParentManagedSettings,
-  parentTierWithOrganizationLocksHooks,
-  getAdminPolicyTierSettings,
-  flagInlineSettingDropped,
-  isNotDisabledInTrustedSources,
+  isPermissionDeniedPolicyError,
+  AUTO_MODE_TRUSTED_SOURCES,
+  readRepoDirSettingsFresh,
+  builtinAllowRulesAreOff,
   repoTierFolderKey,
+  repoTierFileSlots,
   repoTierFileLeadsAway,
   repoTiersFrom,
   holdRepoTiers,
   compareRepoTiersWithHeld,
   lingerRepoTiers,
-  getDialogExpiry,
-  hasSkipWorkflowUsageWarning,
-  machineAdminPinsSignInOrg,
-  getHostManagedToolSearchEnv,
+  hasAutoModeOptIn,
   flagAllowBesideManagedAllow,
-  getMachineAdminPolicyEnv,
-  isSettingsTierWithheld,
-  readRepoDirSettingsFresh,
+  hasSurvivingAdminPolicySource,
+  getMachineAdminDocumentLoadErrors,
+  resolveSettingsWritePath,
+  getHostManagedToolSearchEnv,
+  machineAdminPinsSignInOrg,
+  isNotDisabledInTrustedSources,
+  hasSkipWorkflowUsageWarning,
+  getMachineAdminCredentialInputs,
+  getDialogExpiry,
+  getSettingsRootPathForSource,
+  getManagedSettingsFilePath,
+  getPolicySettingsOrigin_2,
+  pathTraversesUntrustedLink,
   BACKGROUND_SETTINGS_WORK_WAIT_MS,
   SECURITY_SENSITIVE_SETTING_SOURCES,
   credentialHelperKeysFrom,
   flagFileConsentDropped,
   flagInlineConsentDropped,
   getRawSettingFromRejectedSource,
-  getSettingsRootPathForSource,
   launchFolderKeysFrom,
   legacyLocalConsentDropped,
   legacyLocalSettingsProbes,
@@ -3076,10 +3089,10 @@ export {
   readRepoTiersFresh,
   repoDirSettingsParses,
   sourceFileConsentDropped,
-  getEffectiveSettingSource,
+  getEffectiveSettingSource_2,
   getEnabledSettingSources,
-  getInitialSettings,
-  getSettingsWithErrors,
-  getSettingsWithSources,
+  getInitialSettings_2,
+  getSettingsWithErrors_2,
+  getSettingsWithSources_2,
   loadSettingsFromDisk,
 };

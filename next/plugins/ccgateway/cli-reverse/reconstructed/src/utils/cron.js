@@ -3,13 +3,13 @@
  *
  * cron 表达式：5 字段解析与展开、下一次运行时间计算（含 DST 处理）、人类可读描述、间隔写法（5m/2h/1d）转换
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/cron.ts
- * pieces: chunk-93zax7h2.js (10)
+ * pieces: chunk-mk7xxmed.js (10)
  * attribution: file-local 2, fingerprint 6, layout 1, placement 1
  */
 
-//@ chunk-93zax7h2.js:754-836 file-local
+//@ chunk-mk7xxmed.js:740-822 file-local
 var FIELD_RANGES = [
   {
     min: 0,
@@ -32,7 +32,7 @@ var FIELD_RANGES = [
     max: 6,
   },
 ];
-//@ chunk-93zax7h2.js:836-1453 file-local
+//@ chunk-mk7xxmed.js:822-1439 file-local
 function expandField(field, range) {
   let { min, max } = range;
   let out = new Set();
@@ -67,7 +67,7 @@ function expandField(field, range) {
   if (out.size === 0) return null;
   return Array.from(out).sort((left, right) => left - right);
 }
-//@ chunk-93zax7h2.js:1453-1673 fingerprint (2.1.88 match: parseCronExpression, 1)
+//@ chunk-mk7xxmed.js:1439-1659 fingerprint (2.1.88 match: parseCronExpression, 1)
 /**
  * 解析 5 字段 cron 表达式（支持 *、*\/n、a-b/n、列表，星期 7 视为 0），返回各字段展开后的数组，非法返回 null。
  */
@@ -88,7 +88,7 @@ function parseCronExpression(expr) {
     dayOfWeek: expanded[4],
   };
 }
-//@ chunk-93zax7h2.js:1673-1777 layout
+//@ chunk-mk7xxmed.js:1659-1763 layout
 /**
  * 该时刻是否落在 DST 跳变的不存在时间段（setMinutes 后时间变化）。
  */
@@ -97,7 +97,7 @@ function isNonexistentLocalTime(date) {
   date_2.setMinutes(date_2.getMinutes());
   return date_2.getTime() !== date.getTime();
 }
-//@ chunk-93zax7h2.js:1777-2698 fingerprint (2.1.88 match: computeNextCronRun, 0.879)
+//@ chunk-mk7xxmed.js:1763-2684 fingerprint (2.1.88 match: computeNextCronRun, 0.88)
 /**
  * 从给定时间的下一分钟开始逐分钟/小时/天跳跃查找下一个匹配时刻（最多约一年）；日与星期都受限时按 OR 语义；oneShot 时 DST 缺口内逐分钟前进。
  */
@@ -154,16 +154,16 @@ function computeNextCronRun(fields, from, { oneShot = false } = {}) {
   }
   return null;
 }
-//@ chunk-93zax7h2.js:2698-2777 fingerprint (2.1.88 match: DAY_NAMES, 1)
+//@ chunk-mk7xxmed.js:2684-2763 fingerprint (2.1.88 match: DAY_NAMES, 1)
 var DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-//@ chunk-93zax7h2.js:2777-2885 fingerprint (2.1.88 match: formatLocalTime, 1)
+//@ chunk-mk7xxmed.js:2763-2871 fingerprint (2.1.88 match: formatLocalTime, 1)
 function formatLocalTime(minute, hour) {
   return new Date(2000, 0, 1, hour, minute).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
   });
 }
-//@ chunk-93zax7h2.js:2885-3031 fingerprint (2.1.88 match: formatUtcTimeAsLocal, 1)
+//@ chunk-mk7xxmed.js:2871-3017 fingerprint (2.1.88 match: formatUtcTimeAsLocal, 1)
 function formatUtcTimeAsLocal(minute, hour) {
   let date = new Date();
   date.setUTCHours(hour, minute, 0, 0);
@@ -173,7 +173,7 @@ function formatUtcTimeAsLocal(minute, hour) {
     timeZoneName: "short",
   });
 }
-//@ chunk-93zax7h2.js:3031-4148 fingerprint (2.1.88 match: cronToHuman, 1)
+//@ chunk-mk7xxmed.js:3017-4134 fingerprint (2.1.88 match: cronToHuman, 1)
 /**
  * cron 转人类可读文本（Every minute / Every N hours / Every day at … / Weekdays at …），无法描述时原样返回；utc 选项把 UTC 时间换算成本地显示。
  */
@@ -191,9 +191,9 @@ function cronToHuman(cron, opts) {
     }
   }
   if (minute.match(/^\d+$/) && hour === "*" && dayOfMonth === "*" && month === "*" && dayOfWeek === "*") {
-    let m = parseInt(minute, 10);
-    if (m === 0) return "Every hour";
-    return `Every hour at :${m.toString().padStart(2, "0")}`;
+    let minutePart = parseInt(minute, 10);
+    if (minutePart === 0) return "Every hour";
+    return `Every hour at :${minutePart.toString().padStart(2, "0")}`;
   }
   let everyHourMatch = hour.match(/^\*\/(\d+)$/);
   if (minute.match(/^\d+$/) && everyHourMatch && dayOfMonth === "*" && month === "*" && dayOfWeek === "*") {
@@ -203,10 +203,11 @@ function cronToHuman(cron, opts) {
     return n === 1 ? `Every hour${suffix}` : `Every ${n} hours${suffix}`;
   }
   if (!minute.match(/^\d+$/) || !hour.match(/^\d+$/)) return cron;
-  let m = parseInt(minute, 10);
+  let m_2 = parseInt(minute, 10);
   let hourNum = parseInt(hour, 10);
   let fmtTime = utc ? formatUtcTimeAsLocal : formatLocalTime;
-  if (dayOfMonth === "*" && month === "*" && dayOfWeek === "*") return `Every day at ${fmtTime(m, hourNum)}`;
+  if (dayOfMonth === "*" && month === "*" && dayOfWeek === "*")
+    return `Every day at ${fmtTime(m_2, hourNum)}`;
   if (dayOfMonth === "*" && month === "*" && dayOfWeek.match(/^\d$/)) {
     let dayIndex = parseInt(dayOfWeek, 10) % 7;
     let dayName;
@@ -214,15 +215,16 @@ function cronToHuman(cron, opts) {
       let ref = new Date();
       let daysToAdd = (dayIndex - ref.getUTCDay() + 7) % 7;
       ref.setUTCDate(ref.getUTCDate() + daysToAdd);
-      ref.setUTCHours(hourNum, m, 0, 0);
+      ref.setUTCHours(hourNum, m_2, 0, 0);
       dayName = DAY_NAMES[ref.getDay()];
     } else dayName = DAY_NAMES[dayIndex];
-    if (dayName) return `Every ${dayName} at ${fmtTime(m, hourNum)}`;
+    if (dayName) return `Every ${dayName} at ${fmtTime(m_2, hourNum)}`;
   }
-  if (dayOfMonth === "*" && month === "*" && dayOfWeek === "1-5") return `Weekdays at ${fmtTime(m, hourNum)}`;
+  if (dayOfMonth === "*" && month === "*" && dayOfWeek === "1-5")
+    return `Weekdays at ${fmtTime(m_2, hourNum)}`;
   return cron;
 }
-//@ chunk-93zax7h2.js:4148-5010 placement
+//@ chunk-mk7xxmed.js:4134-4996 placement
 /**
  * 把用户输入的间隔（5m、2h、1d，秒不允许）或合法 cron 转成 {cron, human}，否则返回 {error}。
  */
@@ -290,4 +292,4 @@ function parseScheduleInput(input) {
     error: "use an interval (5m, 2h, 1d) or 5-field cron (*/5 * * * *)",
   };
 }
-export { parseScheduleInput, cronToHuman, parseCronExpression, computeNextCronRun };
+export { parseCronExpression, cronToHuman, computeNextCronRun, parseScheduleInput };

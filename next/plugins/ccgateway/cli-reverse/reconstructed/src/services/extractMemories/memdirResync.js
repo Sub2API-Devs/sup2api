@@ -3,29 +3,31 @@
  *
  * 2.1.316 新增：记忆目录重同步：检测成功的工具调用后重新同步 memdir。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xr4xc2mq.js (39)
- * attribution: placement 39
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-70rvh5wm.js (41)
+ * attribution: placement 39, layout 2
  */
 import { expandPath } from "../../utils/path.js";
 import { logFileStateResync } from "../../utils/readFileInRange.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { errorMessage, AbortError, isAbortError } from "../../utils/errors.js";
-import { uniq, count } from "../../utils/collections.js";
-import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFlag.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
+import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
 import { getSettingSourceDisplayNameLowercase } from "../../utils/settings/constants.js";
 import { generateTaskId, createTaskStateBase } from "../../Task.js";
 import { emitTaskNotification } from "../../utils/task/taskNotifications.js";
 import { HostScoped } from "../../utils/hostScoped.js";
+import { countWhere } from "../../utils/collections.js";
+import { hasToolResultBlock, SYNTHETIC_MODEL } from "../../utils/messages.js";
+import { isLocalCommandMessage } from "../../utils/messages/localCommandTags.js";
 import { MEMORY_MUTATING_TOOLS } from "../../memdir/memoryTool.js";
 import { MEMORY_WRITE } from "../../tools/MemoryTool/memoryToolNames.js";
 import { isAutoMemPath } from "../../memdir/paths.js";
 import { isHumanTurn } from "../../utils/turnOrigin.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
-import { SYNTHETIC_MODEL } from "../../constants/messages.js";
 import { takeLastChars } from "../../utils/stringUtils.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { createCombinedAbortSignal } from "../../utils/combinedAbortSignal.js";
@@ -35,8 +37,9 @@ import { getSmallFastModel, unlessManagedDeniedModel } from "../../utils/model/s
 import { isPermittedByOrgModelPolicy } from "../../utils/model/defaultModel.js";
 import { getSideQueryThinkingSettings } from "../../utils/thinking.js";
 import {
-  tagUntrustedArtifactContent,
+  collectToolsUsedBeforeSummary,
   toolsUsedManifestText,
+  streamPrefixesPresent,
 } from "../../utils/messages/untrustedArtifactContent.js";
 import { raceWithAbortSignal } from "../../utils/sleep.js";
 import { sideQueryWithCounter } from "../../utils/sideQuery.js";
@@ -45,7 +48,7 @@ import { APIConnectionTimeoutError } from "../../../vendor/@anthropic-ai/sdk/cor
 import { resolveTaskNotificationOrigin } from "../../utils/backgroundSessionResume.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-xr4xc2mq.js:2141-2681 placement
+//@ chunk-70rvh5wm.js:2286-2826 placement
 /**
  * 后台记忆/梦境写入文件后，逐个重新同步主会话的文件读取状态（记调试日志说明是内容还是仅时间变化），把解析成功的路径作为待通知的记忆更新入队。
  */
@@ -71,22 +74,22 @@ async function resyncMemoryWrites(context, notice) {
   if (resolvedPaths.length === 0) return;
   context.enqueuePendingMemoryUpdate({
     ...notice,
-    paths: uniq(resolvedPaths),
+    paths: normalizeCaseForComparison_2(resolvedPaths),
   });
 }
-//@ chunk-xr4xc2mq.js:2740-2759 placement
+//@ chunk-70rvh5wm.js:2885-2904 placement
 var weakSet; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-xr4xc2mq.js:2740", () => {
+deferInit("chunk-70rvh5wm.js:2885", () => {
   weakSet = new WeakSet();
 });
-//@ chunk-xr4xc2mq.js:2759-2831 placement
+//@ chunk-70rvh5wm.js:2904-2976 placement
 /**
  * 把规则描述成 “the <行为> rule \"<规则>\"”。
  */
 function describeRuleBlock(block) {
-  return `the ${block.ruleBehavior} rule "${formatPermissionRule(block.ruleValue)}"`;
+  return `the ${block.ruleBehavior} rule "${permissionRuleValueFromString(block.ruleValue)}"`;
 }
-//@ chunk-xr4xc2mq.js:2831-3233 placement
+//@ chunk-70rvh5wm.js:2976-3378 placement
 /**
  * 每个上下文只提示一次：某权限规则（拒绝或需逐次批准）阻止后台向记忆目录保存，规则移除后会恢复保存。
  */
@@ -100,7 +103,7 @@ function describeMemoryRuleBlock(message, ruleBlock, autoMemPath) {
       : `${blockDescription} needs your approval for each write, and background saving can't ask`;
   return `Claude isn't saving memories to ${autoMemPath} in the background: ${effect}. Saving resumes once that rule is removed or no longer covers that folder, and may then include what was skipped.`;
 }
-//@ chunk-xr4xc2mq.js:3233-3429 placement
+//@ chunk-70rvh5wm.js:3378-3574 placement
 /**
  * 注册一个"saving memories"的回合后记忆任务（运行中、不写入记录），返回任务 id。
  */
@@ -116,7 +119,7 @@ function registerPostTurnMemoryTask(taskRegistry, abortController) {
   taskRegistry.register(task);
   return taskId;
 }
-//@ chunk-xr4xc2mq.js:3429-3658 placement
+//@ chunk-70rvh5wm.js:3574-3803 placement
 /**
  * 把运行中的记忆任务标为结束状态（completed/failed/killed），并发出不写入记录的环境型任务通知。
  */
@@ -139,7 +142,7 @@ function finishMemoryTask(taskId, taskRegistry, status) {
       ambient: true,
     });
 }
-//@ chunk-xr4xc2mq.js:3658-3825 placement
+//@ chunk-70rvh5wm.js:3803-3984 placement
 class MemoryExtractorSlots {
   extractor = null;
   drainer = async () => {};
@@ -148,18 +151,19 @@ class MemoryExtractorSlots {
   onPassEnded = null;
   onPassSkipped = null;
   savePlace = null;
+  placeNow = null;
   restoredPlace = null;
   restoredPlaceAt = null;
 }
-//@ chunk-xr4xc2mq.js:3825-3850 placement
+//@ chunk-70rvh5wm.js:3984-4008 placement
 /**
  * 按宿主保存的记忆提取器槽位。
  */
 var memoryExtractorSlots; // deferred: uses MemoryExtractorSlots of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-xr4xc2mq.js:3825", () => {
+deferInit("chunk-70rvh5wm.js:3984", () => {
   memoryExtractorSlots = new HostScoped(() => new MemoryExtractorSlots());
 });
-//@ chunk-xr4xc2mq.js:3850-4066 placement
+//@ chunk-70rvh5wm.js:4008-4224 placement
 /**
  * 判断用户文字是否算"实质内容"的常量：最少词数、按字计词的文字系统正则（汉字/假名/泰文等）、问号字符集、可忽略的结尾字符正则。
  */
@@ -167,42 +171,42 @@ var MIN_PROSE_WORDS; // deferred: has load-time effects after a deferred stateme
 var CHAR_COUNTED_SCRIPTS_RE;
 var QUESTION_MARKS;
 var TRAILING_IGNORABLE_RE;
-deferInit("chunk-xr4xc2mq.js:3850", () => {
+deferInit("chunk-70rvh5wm.js:4008", () => {
   MIN_PROSE_WORDS = 2;
   CHAR_COUNTED_SCRIPTS_RE =
     /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}\p{Script=Tibetan}]/gu;
   QUESTION_MARKS = new Set(["?", "\uFF1F", "\u061F"]);
   TRAILING_IGNORABLE_RE = /^[\s\p{P}\p{S}\p{M}]$/u;
 });
-//@ chunk-xr4xc2mq.js:4066-4114 placement
+//@ chunk-70rvh5wm.js:4224-4272 placement
 /**
  * 统计按空白切分的词数。
  */
 function countWords(text) {
-  return count(text.split(/\s+/), Boolean);
+  return countWhere(text.split(/\s+/), Boolean);
 }
-//@ chunk-xr4xc2mq.js:4114-4159 placement
+//@ chunk-70rvh5wm.js:4272-4317 placement
 /**
  * 统计按字计词文字系统（汉字、假名、泰文等）的字符数。
  */
 function countScriptChars(text) {
   return text.match(CHAR_COUNTED_SCRIPTS_RE)?.length ?? 0;
 }
-//@ chunk-xr4xc2mq.js:4159-4205 placement
+//@ chunk-70rvh5wm.js:4317-4363 placement
 /**
  * 文字是否达到要求的词数（按字计词的文字按比例折算）。
  */
 function hasEnoughProse(text, minWords) {
   return countWords(text) >= minWords || countScriptChars(text) >= minWords * MIN_PROSE_WORDS;
 }
-//@ chunk-xr4xc2mq.js:4205-4264 placement
+//@ chunk-70rvh5wm.js:4363-4422 placement
 /**
  * 文字折算成“散文词数”。
  */
 function proseWordEquivalent(text) {
   return Math.max(countWords(text), Math.floor(countScriptChars(text) / MIN_PROSE_WORDS));
 }
-//@ chunk-xr4xc2mq.js:4264-4352 placement
+//@ chunk-70rvh5wm.js:4422-4510 placement
 /**
  * 把回合数分档（0-2、3-9、10-39、40+）。
  */
@@ -212,29 +216,29 @@ function turnCountBucket(turns) {
   if (turns < 40) return "10-39";
   return "40+";
 }
-//@ chunk-xr4xc2mq.js:4352-4477 placement
+//@ chunk-70rvh5wm.js:4510-4635 placement
 function endsWithQuestion(assistantPlainText) {
   let chars = [...assistantPlainText];
-  for (let j = chars.length - 1; j >= 0; j--) {
-    let char = chars[j];
+  for (let k = chars.length - 1; k >= 0; k--) {
+    let char = chars[k];
     if (QUESTION_MARKS.has(char)) return true;
     if (!TRAILING_IGNORABLE_RE.test(char)) return false;
   }
   return false;
 }
-//@ chunk-xr4xc2mq.js:4477-4537 placement
+//@ chunk-70rvh5wm.js:4635-4695 placement
 /**
  * 判断消息是否为对话回合（user 或 assistant）。
  */
 function isConversationTurn(message) {
   return message.type === "user" || message.type === "assistant";
 }
-//@ chunk-xr4xc2mq.js:4537-4700 placement
+//@ chunk-70rvh5wm.js:4695-4858 placement
 /**
  * 统计指定消息之后的有效回合数；找不到该消息或未指定时统计全部。
  */
 function countTurnsSince(messages, sinceUuid) {
-  if (sinceUuid === null || sinceUuid === undefined) return count(messages, isConversationTurn);
+  if (sinceUuid === null || sinceUuid === undefined) return countWhere(messages, isConversationTurn);
   let found = false;
   let turnCount = 0;
   for (let message of messages) {
@@ -244,15 +248,15 @@ function countTurnsSince(messages, sinceUuid) {
     }
     if (isConversationTurn(message)) turnCount++;
   }
-  if (!found) return count(messages, isConversationTurn);
+  if (!found) return countWhere(messages, isConversationTurn);
   return turnCount;
 }
-//@ chunk-xr4xc2mq.js:4700-4709 placement
+//@ chunk-70rvh5wm.js:4858-4867 placement
 /**
  * 记忆提取前至少间隔的回合数默认值（3）。
  */
 var MIN_TURNS_SINCE = 3;
-//@ chunk-xr4xc2mq.js:4709-4797 placement
+//@ chunk-70rvh5wm.js:4867-4955 placement
 /**
  * 过滤掉 uuid 在给定集合里的消息。
  */
@@ -260,7 +264,7 @@ function messagesNotIn(messages, messages_2) {
   let excludedUuids = new Set(messages_2.map((message) => message.uuid));
   return messages.filter((message) => !excludedUuids.has(message.uuid));
 }
-//@ chunk-xr4xc2mq.js:4797-4895 placement
+//@ chunk-70rvh5wm.js:4955-5053 placement
 /**
  * 消息里是否有 max_turns_reached 附件。
  */
@@ -269,31 +273,54 @@ function hasMaxTurnsReached(messages) {
     (message) => message.type === "attachment" && message.attachment.type === "max_turns_reached",
   );
 }
-//@ chunk-xr4xc2mq.js:4895-4979 placement
+//@ chunk-70rvh5wm.js:5053-5137 placement
 /**
  * 最后一条助手消息是否为 API 错误。
  */
 function lastAssistantWasApiError(messages) {
   return messages.findLast((message) => message.type === "assistant")?.isApiErrorMessage === true;
 }
-//@ chunk-xr4xc2mq.js:4979-5520 placement (2.1.88 match: hasSuccessfulToolCall, 1)
-function hasSuccessfulToolCall(messages, sinceUuid, countMutating) {
-  let inRange = sinceUuid === undefined;
+//@ chunk-70rvh5wm.js:5137-5312 layout
+function afterAnchorMessages(messages, allMessages, anchorUuid, afterAnchorInterrupted = false) {
+  let index =
+    allMessages === undefined
+      ? -1
+      : messages.findIndex((fromInterrupt) => fromInterrupt.uuid === allMessages);
+  if (index !== -1) return keepConversationTail(messages.slice(index + 1), anchorUuid);
+  if (anchorUuid)
+    return keepConversationTail(
+      afterAnchorInterrupted ? messages.slice(lastKeptIndex(messages)) : messages,
+      true,
+    );
+  return allMessages === undefined && keepConversationTail(messages, false);
+}
+//@ chunk-70rvh5wm.js:5312-5491 layout
+function lastKeptIndex(messages) {
+  return Math.max(
+    messages.findLastIndex(
+      (message) =>
+        message.type === "user" &&
+        message.interruptedByShutdown !== true &&
+        !hasToolResultBlock(message.message.content) &&
+        !(message.promptSource === undefined && isLocalCommandMessage(message)) &&
+        getUserTurnText(message) !== undefined,
+    ),
+    0,
+  );
+}
+//@ chunk-70rvh5wm.js:5491-5961 placement
+function keepConversationTail(messages, candidateMessages) {
   let successfulWriteIds = new Set();
   for (let message of messages) {
-    if (!inRange) {
-      if (message.uuid === sinceUuid) inRange = true;
-      continue;
-    }
     if (message.type === "user") {
       let content = message.message.content;
       if (
         Array.isArray(content) &&
         content.some(
-          (block) =>
-            block.type === "tool_result" &&
-            block.is_error !== true &&
-            successfulWriteIds.has(block.tool_use_id),
+          (message) =>
+            message.type === "tool_result" &&
+            message.is_error !== true &&
+            successfulWriteIds.has(message.tool_use_id),
         )
       )
         return true;
@@ -303,7 +330,8 @@ function hasSuccessfulToolCall(messages, sinceUuid, countMutating) {
     let content = message.message.content;
     if (!Array.isArray(content)) continue;
     for (let block of content) {
-      if (countMutating && block.type === "tool_use" && MEMORY_MUTATING_TOOLS.has(block.name)) return true;
+      if (candidateMessages && block.type === "tool_use" && MEMORY_MUTATING_TOOLS.has(block.name))
+        return true;
       if (block.type === "tool_use" && block.name === MEMORY_WRITE) {
         successfulWriteIds.add(block.id);
         continue;
@@ -312,14 +340,14 @@ function hasSuccessfulToolCall(messages, sinceUuid, countMutating) {
       if (readToolFilePaths !== undefined && isAutoMemPath(readToolFilePaths)) return true;
     }
   }
-  return countMutating && !inRange && hasSuccessfulToolCall(messages, undefined, true);
+  return false;
 }
-//@ chunk-xr4xc2mq.js:5520-5529 placement
+//@ chunk-70rvh5wm.js:5961-5970 placement
 /**
  * 判定用户文字“有实质内容”的最小词数（3）。
  */
 var MIN_CONTENT_WORDS = 3;
-//@ chunk-xr4xc2mq.js:5529-5728 placement
+//@ chunk-70rvh5wm.js:5970-6169 placement
 function isSubstantialUserMessage(message) {
   if (message.type !== "user" || message.isMeta) return false;
   let content = message.message.content;
@@ -327,13 +355,13 @@ function isSubstantialUserMessage(message) {
   if (!Array.isArray(content)) return false;
   return content.some((content) => content.type === "text" && countWords(content.text) >= MIN_CONTENT_WORDS);
 }
-//@ chunk-xr4xc2mq.js:5728-6037 placement
+//@ chunk-70rvh5wm.js:6169-6478 placement
 /**
  * 从后往前找最后一个人类回合的 uuid（普通用户消息，或非元消息的队列命令附件的源 uuid），找不到时用备用消息的 uuid。
  */
 function getLastHumanTurnUuid(messages, personPrompt) {
-  for (let j = messages.length - 1; j >= 0; j--) {
-    let message = messages[j];
+  for (let k = messages.length - 1; k >= 0; k--) {
+    let message = messages[k];
     if (message === undefined || !isHumanTurn(message)) continue;
     if (message.type === "user") {
       if (!message.isMeta) return message.uuid;
@@ -347,7 +375,7 @@ function getLastHumanTurnUuid(messages, personPrompt) {
   }
   return personPrompt?.uuid;
 }
-//@ chunk-xr4xc2mq.js:6037-6173 placement
+//@ chunk-70rvh5wm.js:6478-6614 placement
 /**
  * 判断指定消息之后是否有实质性的回合；找不到该消息时检查全部。
  */
@@ -363,13 +391,13 @@ function hasSubstantialTurnSince(messages, sinceUuid) {
   if (!started) return messages.some(isSubstantialUserMessage);
   return false;
 }
-//@ chunk-xr4xc2mq.js:6173-6277 placement
+//@ chunk-70rvh5wm.js:6614-6718 placement
 function sliceAfterUuid(messages, sinceUuid) {
   if (sinceUuid === undefined) return messages;
   let index = messages.findIndex((message) => message.uuid === sinceUuid);
   return index === -1 ? messages : messages.slice(index + 1);
 }
-//@ chunk-xr4xc2mq.js:6277-6560 placement
+//@ chunk-70rvh5wm.js:6718-7001 placement
 function getUserTurnText(message) {
   if (message.type === "attachment") {
     let { attachment } = message;
@@ -382,20 +410,20 @@ function getUserTurnText(message) {
   if (Array.isArray(content) && content.every((prompt) => prompt.type === "tool_result")) return;
   return contentToText(content);
 }
-//@ chunk-xr4xc2mq.js:6560-6662 placement
+//@ chunk-70rvh5wm.js:7001-7103 placement
 function contentToText(content) {
   return typeof content === "string"
     ? content
     : content.filter((block) => block.type === "text").map((block) => block.text).join(`
 `);
 }
-//@ chunk-xr4xc2mq.js:6662-6769 placement
+//@ chunk-70rvh5wm.js:7103-7210 placement
 function getAssistantPlainText(message) {
   if (message.type !== "assistant") return;
   let content = message.message.content;
   return Array.isArray(content) ? contentToText(content) : undefined;
 }
-//@ chunk-xr4xc2mq.js:6769-6952 placement
+//@ chunk-70rvh5wm.js:7210-7393 placement
 /**
  * 判断最近一个用户回合是否值得记忆提取：窗口内有实质内容，或最后的用户文字非空且是在回答助手的提问。
  */
@@ -419,7 +447,7 @@ function isMemoryCandidateTurn(messages, minWords, minWords_2) {
     (last.text.trim() !== "" && answersAssistantQuestion(messages, last.index))
   );
 }
-//@ chunk-xr4xc2mq.js:6952-7034 placement
+//@ chunk-70rvh5wm.js:7393-7475 placement
 /**
  * 取最后 r 个用户回合的文本。
  */
@@ -427,10 +455,10 @@ function lastUserTurnText(messages, count) {
   return messages.flatMap((message) => getUserTurnText(message) ?? []).slice(-Math.max(count, 1)).join(`
 `);
 }
-//@ chunk-xr4xc2mq.js:7034-7176 placement
+//@ chunk-70rvh5wm.js:7475-7617 placement
 function answersAssistantQuestion(messages, index) {
-  for (let j = index - 1; j >= 0; j--) {
-    let message = messages[j];
+  for (let k = index - 1; k >= 0; k--) {
+    let message = messages[k];
     if (getUserTurnText(message) !== undefined) return false;
     let assistantPlainText = getAssistantPlainText(message);
     if (assistantPlainText !== undefined && assistantPlainText.trim() !== "")
@@ -438,7 +466,7 @@ function answersAssistantQuestion(messages, index) {
   }
   return false;
 }
-//@ chunk-xr4xc2mq.js:7176-7698 placement
+//@ chunk-70rvh5wm.js:7617-8139 placement
 /**
  * 统计某 uuid 之后的用户回合：总回合数、人类亲写回合数与字数、任务通知回合数、无来源标记回合数、正文词数。
  */
@@ -465,20 +493,17 @@ function summarizeUserTurns(messages, sinceUuid) {
     userTurns: turns.length,
     ownWordsTurns: ownWordsTurns.length,
     ownWordsChars: ownWordsTurns.reduce((acc, ownWordsTurn) => acc + ownWordsTurn.text.length, 0),
-    taskNotificationTurns: count(turns, (turn) => turn.origin?.kind === "task-notification"),
-    unstampedTurns: count(turns, (turn) => turn.origin === undefined),
+    taskNotificationTurns: countWhere(turns, (turn) => turn.origin?.kind === "task-notification"),
+    unstampedTurns: countWhere(turns, (turn) => turn.origin === undefined),
     proseWords: proseWordEquivalent(
       turns.map((turn) => turn.text).join(`
 `),
     ),
   };
 }
-//@ chunk-xr4xc2mq.js:7698-7895 placement (2.1.88 match: collectReadToolFilePaths, 1)
+//@ chunk-70rvh5wm.js:8139-8336 placement (2.1.88 match: collectReadToolFilePaths, 1)
 function collectReadToolFilePaths(messages) {
-  if (
-    messages.type !== "tool_use" ||
-    (messages.name !== FILE_EDIT_TOOL_NAME && messages.name !== FILE_WRITE_TOOL_NAME)
-  )
+  if (messages.type !== "tool_use" || (messages.name !== EDIT && messages.name !== FILE_WRITE_TOOL_NAME))
     return;
   let input = messages.input;
   if (typeof input === "object" && input !== null && "file_path" in input) {
@@ -487,7 +512,7 @@ function collectReadToolFilePaths(messages) {
   }
   return;
 }
-//@ chunk-xr4xc2mq.js:7895-8094 placement
+//@ chunk-70rvh5wm.js:8336-8535 placement
 /**
  * 记忆"初看"判断的常量：输出 token 上限、超时、只回答 JSON 的指令、分隔符、省略号，以及按"新/旧 × 用户/助手"排列的填充优先级。
  */
@@ -517,7 +542,7 @@ var FILL_PRIORITY = [
     user: false,
   },
 ];
-//@ chunk-xr4xc2mq.js:8094-8881 placement
+//@ chunk-70rvh5wm.js:8535-9322 placement
 /**
  * 为记忆"初看"挑选最近的对话片段：从后往前收集最多 N 个用户回合（跳过 API 错误、合成模型与任务通知），按"新的用户、新的助手、旧的用户、旧的助手"优先级装入字符预算（超出部分截取尾部），最新一条不是新消息时返回空。
  */
@@ -525,8 +550,8 @@ function buildFirstLookExchanges(messages, sinceUuid, maxUserTurns, maxChars) {
   let sinceIndex = sinceUuid === undefined ? -1 : messages.findIndex((message) => message.uuid === sinceUuid);
   let entries = [];
   let userTurnCount = 0;
-  for (let j = messages.length - 1; j >= 0; j--) {
-    let message = messages[j];
+  for (let k = messages.length - 1; k >= 0; k--) {
+    let message = messages[k];
     let body =
       message.type === "assistant"
         ? message.isApiErrorMessage || message.message.model === SYNTHETIC_MODEL
@@ -539,7 +564,7 @@ function buildFirstLookExchanges(messages, sinceUuid, maxUserTurns, maxChars) {
     let isUser = message.type !== "assistant";
     entries.push({
       user: isUser,
-      fresh: j > sinceIndex,
+      fresh: k > sinceIndex,
       body: body.trim(),
     });
     if (isUser && ++userTurnCount >= maxUserTurns) break;
@@ -575,7 +600,7 @@ function buildFirstLookExchanges(messages, sinceUuid, maxUserTurns, maxChars) {
     userTurns: userTurnCount,
   };
 }
-//@ chunk-xr4xc2mq.js:8881-10840 placement
+//@ chunk-70rvh5wm.js:9322-11328 placement
 /**
  * 用小模型做记忆提取前的"初看"：在超时内问模型最近对话是否可能需要写记忆（JSON 布尔），检查组织模型策略与托管拒绝；无法判断或出错时返回 error（不跳过本次提取）；返回判定、模型、耗时、输入长度与用户回合数。
  */
@@ -632,9 +657,15 @@ async function runMemoryFirstLook({
       return finish("error", "managed_denied");
     }
     let [thinking, thinkingBudget] = getSideQueryThinkingSettings(model);
-    let toolsUsed = tagUntrustedArtifactContent(messages, undefined, false);
+    let toolsUsed = collectToolsUsedBeforeSummary(messages, undefined, false);
     let manifestText = toolsUsed.length > 0 ? toolsUsedManifestText(toolsUsed) : "";
-    let response = await raceWithAbortSignal(
+    let joined = streamPrefixesPresent(messages)
+      .map(
+        (modelName) => `${modelName}
+`,
+      )
+      .join("");
+    let texts = await raceWithAbortSignal(
       sideQueryWithCounter({
         model,
         system: options.instruction,
@@ -642,7 +673,7 @@ async function runMemoryFirstLook({
         messages: [
           {
             role: "user",
-            content: `${manifestText}<exchanges>
+            content: `${manifestText}${joined}<exchanges>
 ${inputText}
 </exchanges>
 
@@ -674,7 +705,7 @@ ${FIRST_LOOK_ANSWER_INSTRUCTION}`,
       deadline.signal,
       () => new AbortError(),
     );
-    let found = response.content.find((block) => block.type === "text");
+    let found = texts.content.find((block) => block.type === "text");
     let parsed = found?.type === "text" ? safeParseJSON(stripJsonCodeFence(found.text), false) : null;
     let writeLikely =
       typeof parsed === "object" && parsed !== null && "write_likely" in parsed
@@ -682,7 +713,7 @@ ${FIRST_LOOK_ANSWER_INSTRUCTION}`,
         : undefined;
     if (typeof writeLikely !== "boolean") {
       logForDebugging(
-        `[extractMemories] first look: the model did not answer {"write_likely": true|false} (stop reason ${response.stop_reason}); the pass is not skipped`,
+        `[extractMemories] first look: the model did not answer {"write_likely": true|false} (stop reason ${texts.stop_reason}); the pass is not skipped`,
       );
       return finish("error", "no_boolean");
     }
@@ -701,7 +732,7 @@ ${FIRST_LOOK_ANSWER_INSTRUCTION}`,
     deadline.cleanup();
   }
 }
-//@ chunk-xr4xc2mq.js:10840-11072 placement
+//@ chunk-70rvh5wm.js:11328-11560 placement
 function isTaskNotificationTurn(message) {
   let origin =
     message.type === "attachment" && message.attachment.type === "queued_command"
@@ -716,7 +747,7 @@ export {
   MIN_TURNS_SINCE,
   memoryExtractorSlots,
   countTurnsSince,
-  hasSuccessfulToolCall,
+  afterAnchorMessages,
   summarizeUserTurns,
   isMemoryCandidateTurn,
   hasSubstantialTurnSince,

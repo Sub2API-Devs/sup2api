@@ -3,16 +3,11 @@
  *
  * 普通用户提示回显（userMessageBackground 背景，brief 模式特殊处理）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserPromptMessage.tsx
- * pieces: chunk-ah34pb7m.js (15)
+ * pieces: chunk-wjygkcr4.js (15)
  * attribution: placement 14, fingerprint 1
  */
-import {
-  init_react_production,
-  createContext,
-  useContext,
-} from "../../../vendor/react/cjs/react.production.js";
 import { env } from "../../utils/env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { isShortSiteText, splitLongTextForCollapse } from "./UserMessageSite.js";
@@ -25,6 +20,11 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { isHumanInitiatedMessage } from "../../utils/messagePredicates.js";
+import {
+  createContext,
+  useContext,
+  init_react_production,
+} from "../../../vendor/react/cjs/react.production.js";
 import { shortUuid } from "../../utils/transcriptDiagnostics.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -45,12 +45,7 @@ import { CollapsibleText } from "./CollapsedLines.js";
 import { HighlightedThinkingText } from "./HighlightedThinkingText.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:113172-113176 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:113172", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:113176-113262 placement
+//@ chunk-wjygkcr4.js:114866-114952 placement
 /**
  * 是否显示子代理历史（CLAUDE_CODE_SUBAGENT_HISTORY 或开关 tengu_rustling_crescent）。
  */
@@ -59,7 +54,7 @@ function isSubagentHistoryEnabled() {
     env.CLAUDE_CODE_SUBAGENT_HISTORY ?? getFeatureValue_CACHED_MAY_BE_STALE("tengu_rustling_crescent", false)
   );
 }
-//@ chunk-ah34pb7m.js:113262-113398 placement
+//@ chunk-wjygkcr4.js:114952-115088 placement
 /**
  * 人工输入的提示里，返回图片占位符的 id 集合（非人工来源返回空集）。
  */
@@ -71,29 +66,24 @@ function getImagePlaceholderIds(text, origin) {
       .map((state) => state.id),
   );
 }
-//@ chunk-ah34pb7m.js:113398-113402 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:113398", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:113402-113446 placement
+//@ chunk-wjygkcr4.js:115092-115136 placement
 /**
  * 导出值：PLACEHOLDER_ID_SUFFIX（图片占位 id 固定后缀）；位于「普通用户提示回显（userMessageBackground 背景，brief 模式特殊处理）」模块。
  */
 var PLACEHOLDER = "placeholder";
 var PLACEHOLDER_ID_SUFFIX = "-c1a0-4de0-8e00-";
-//@ chunk-ah34pb7m.js:113446-113521 placement
+//@ chunk-wjygkcr4.js:115136-115211 placement
 /**
  * 函数 placeholderImageId（由序号生成图片占位 id）；位于「普通用户提示回显（userMessageBackground 背景，brief 模式特殊处理）」模块。
  */
 function placeholderImageId(imageId) {
   return `${imageId.toString(16).padStart(8, "0")}${PLACEHOLDER_ID_SUFFIX}000000000000`;
 }
-//@ chunk-ah34pb7m.js:113521-113559 placement
+//@ chunk-wjygkcr4.js:115211-115249 placement
 function isImagePlaceholderId(placeholderId) {
   return placeholderId.slice(8) === PLACEHOLDER_ID_SUFFIX;
 }
-//@ chunk-ah34pb7m.js:113559-113969 placement
+//@ chunk-wjygkcr4.js:115249-115659 placement
 /**
  * 跟踪粘贴基线与挂起状态。
  */
@@ -137,15 +127,15 @@ class PasteTracker {
     return false;
   }
 }
-//@ chunk-ah34pb7m.js:113969-113986 placement
+//@ chunk-wjygkcr4.js:115659-115676 placement
 /**
  * 导出值：promptAwaitingModelSlot（等待模型的提示槽）；位于「普通用户提示回显（userMessageBackground 背景，brief 模式特殊处理）」模块。
  */
 var promptAwaitingModelSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:113969", () => {
+deferInit("chunk-wjygkcr4.js:115659", () => {
   promptAwaitingModelSlot = createContext(null);
 });
-//@ chunk-ah34pb7m.js:113986-114195 placement
+//@ chunk-wjygkcr4.js:115676-115885 placement
 function usePromptAwaitingModel(uuid) {
   let awaitingModel = useContext(promptAwaitingModelSlot);
   let shortId = shortUuid({
@@ -161,7 +151,7 @@ function usePromptAwaitingModel(uuid) {
   );
   return awaitingModel === "every" || showPlaceholder === true;
 }
-//@ chunk-ah34pb7m.js:114195-114373 placement
+//@ chunk-wjygkcr4.js:115885-116063 placement
 function getViewedAgentLabel(state) {
   let task = state.viewingAgentTaskId ? state.tasks[state.viewingAgentTaskId] : undefined;
   return task?.type !== "local_agent" || !isSubagentHistoryEnabled()
@@ -170,15 +160,15 @@ function getViewedAgentLabel(state) {
       ? "main"
       : "another agent";
 }
-//@ chunk-ah34pb7m.js:114373-114411 placement
+//@ chunk-wjygkcr4.js:116063-116101 placement
 function selectIsBriefOnly_2(state) {
   return state.isBriefOnly;
 }
-//@ chunk-ah34pb7m.js:114411-114456 placement (2.1.88 match: _temp2, 1)
+//@ chunk-wjygkcr4.js:116101-116146 placement (2.1.88 match: _temp2, 1)
 function selectViewingAgentTaskId(s_0) {
   return s_0.viewingAgentTaskId;
 }
-//@ chunk-ah34pb7m.js:114456-115862 placement
+//@ chunk-wjygkcr4.js:116146-117549 placement
 /**
  * 用户提示消息（插件提示词来源、展开）。
  */
@@ -298,7 +288,7 @@ function UserPromptText(props) {
   } else boxElement = $[27];
   return boxElement;
 }
-//@ chunk-ah34pb7m.js:115862-117725 fingerprint (2.1.88 match: UserPromptMessage, 0.706)
+//@ chunk-wjygkcr4.js:117549-119417 fingerprint (2.1.88 match: UserPromptMessage, 0.706)
 function UserPromptMessage(props) {
   let $ = useMemoCache(33);
   let {
@@ -451,12 +441,22 @@ function UserPromptMessage(props) {
   } else container = $[32];
   return container;
 }
+//@ chunk-wjygkcr4.js:150065-150069 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:150065", () => {
+  init_react_production();
+});
+//@ chunk-wjygkcr4.js:150102-150106 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:150102", () => {
+  init_react_production();
+});
 export {
   isSubagentHistoryEnabled,
-  placeholderImageId,
-  PasteTracker,
   promptAwaitingModelSlot,
   PLACEHOLDER,
+  placeholderImageId,
+  PasteTracker,
   getImagePlaceholderIds,
   UserPromptText,
 };

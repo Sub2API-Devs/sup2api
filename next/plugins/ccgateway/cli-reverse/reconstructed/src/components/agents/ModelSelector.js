@@ -3,9 +3,9 @@
  *
  * 通用模型选择组件（被 115 处引用，实际是共享的选择器组件）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/agents/ModelSelector.tsx
- * pieces: chunk-ey2qag4x.js (1)
+ * pieces: chunk-p1yqn9ds.js (1)
  * attribution: callgraph-fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -14,16 +14,13 @@ import { NO_COMMITTED_ROW, Select_2 } from "../CustomSelect/select.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Select } from "../CustomSelect/selectTypeahead.js";
 
-//@ chunk-ey2qag4x.js:43807-44614 callgraph-fingerprint (2.1.88 match: ModelSelector, 0.251)
-/**
- * 通用选择组件（Select 封装），被 115 处使用——旧版名 ModelSelector 可能是错配。
- */
+//@ chunk-p1yqn9ds.js:43398-44205 callgraph-fingerprint (2.1.88 match: ModelSelector, 0.25)
 function ModelSelector(t0) {
   let $ = useMemoCache(12);
   if (useIsScreenReaderEnabled()) {
     const defaultValue =
       t0.selectedValue === NO_COMMITTED_ROW ? t0.defaultValue : (t0.selectedValue ?? t0.defaultValue);
-    let accessibleSelect;
+    let selectElement;
     if (
       $[0] !== t0.disableSelection ||
       $[1] !== t0.hidePromptWhileDisabled ||
@@ -35,7 +32,7 @@ function ModelSelector(t0) {
       $[7] !== t0.refuseInput ||
       $[8] !== defaultValue
     ) {
-      accessibleSelect = jsxProd_default(Select, {
+      selectElement = jsxProd_default(Select, {
         options: t0.options,
         onChange: t0.onChange,
         onFocus: t0.onFocus,
@@ -55,18 +52,18 @@ function ModelSelector(t0) {
       $[6] = t0.options;
       $[7] = t0.refuseInput;
       $[8] = defaultValue;
-      $[9] = accessibleSelect;
-    } else accessibleSelect = $[9];
-    return accessibleSelect;
+      $[9] = selectElement;
+    } else selectElement = $[9];
+    return selectElement;
   }
-  let inlineSelect;
+  let selectElement;
   if ($[10] !== t0) {
-    inlineSelect = jsxProd_default(Select_2, {
+    selectElement = jsxProd_default(Select_2, {
       ...t0,
     });
     $[10] = t0;
-    $[11] = inlineSelect;
-  } else inlineSelect = $[11];
-  return inlineSelect;
+    $[11] = selectElement;
+  } else selectElement = $[11];
+  return selectElement;
 }
 export { ModelSelector };

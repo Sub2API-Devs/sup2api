@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：描述消息的诊断字段；描述转录中的位置（诊断）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ah34pb7m.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wjygkcr4.js (20)
  * attribution: placement 20
  */
 import {
@@ -31,14 +31,14 @@ import { getMarketingNameForModel } from "./model/model.js";
 import { displayModelName } from "./model/validateModel.js";
 import { normalizeEffortLevel } from "./effort.js";
 
-//@ chunk-ah34pb7m.js:9262-9316 placement
+//@ chunk-wjygkcr4.js:9278-9332 placement
 /**
  * 消息 uuid 的短形式。
  */
 function shortUuid(msg) {
   return hasStringUuid(msg) ? msg.uuid.slice(0, UUID_PREFIX_LENGTH) : undefined;
 }
-//@ chunk-ah34pb7m.js:9316-9560 placement
+//@ chunk-wjygkcr4.js:9332-9576 placement
 /**
  * 首次发现缺 uuid 的消息时上报位置。
  */
@@ -61,7 +61,7 @@ function reportMessageWithoutUuid(host, msg, reason) {
     logError(new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(description));
   } catch {}
 }
-//@ chunk-ah34pb7m.js:9560-9893 placement
+//@ chunk-wjygkcr4.js:9576-9909 placement
 /**
  * 描述转录中的位置（诊断）。
  */
@@ -79,7 +79,7 @@ function describeTranscriptPosition(msg, messageIndex, { resumed, virtualized, s
   ];
   return `${MESSAGES_ENTRY_WITHOUT_UUID_TEXT} (${details.join(" ")})`;
 }
-//@ chunk-ah34pb7m.js:9893-10377 placement
+//@ chunk-wjygkcr4.js:9909-10393 placement
 /**
  * 描述消息的诊断字段。
  */
@@ -108,7 +108,7 @@ function describeTranscriptMessage(msg) {
     return ["describe=failed"];
   }
 }
-//@ chunk-ah34pb7m.js:10377-10440 placement
+//@ chunk-wjygkcr4.js:10393-10456 placement
 function describeMessageTypeSafe(msg) {
   try {
     return describeMessageType(msg);
@@ -116,13 +116,13 @@ function describeMessageTypeSafe(msg) {
     return "describe_failed";
   }
 }
-//@ chunk-ah34pb7m.js:10440-10494 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-wjygkcr4.js:10456-10510 placement (2.1.88 match: extractErrorTypeFromData, 1)
 function describeMessageType(data) {
   return describeTypeField(readField(data, "type"), (isKnownType) =>
     KNOWN_MESSAGE_ENTRY_TYPES.has(isKnownType),
   );
 }
-//@ chunk-ah34pb7m.js:10494-10723 placement
+//@ chunk-wjygkcr4.js:10510-10739 placement
 function describeMessageContent(field) {
   if (field === undefined) return "no_message";
   let field_2 = readField(field, "content");
@@ -133,35 +133,35 @@ function describeMessageContent(field) {
     ? "empty_content"
     : describeTypeField(readField(firstBlock, "type"), isKnownContentBlockType);
 }
-//@ chunk-ah34pb7m.js:10723-10765 placement
+//@ chunk-wjygkcr4.js:10739-10781 placement
 function isKnownSubtype(subtype) {
   return Object.hasOwn(SYSTEM_SUBTYPES, subtype);
 }
-//@ chunk-ah34pb7m.js:10765-10829 placement
+//@ chunk-wjygkcr4.js:10781-10845 placement
 function isKnownAttachmentType(attachmentType) {
   return (
     Object.hasOwn(ATTACHMENT_MESSAGE_RENDERERS, attachmentType) ||
     Object.hasOwn(ATTACHMENT_TYPES, attachmentType)
   );
 }
-//@ chunk-ah34pb7m.js:10829-10943 placement
+//@ chunk-wjygkcr4.js:10845-10959 placement
 function describeTypeField(field, isKnown) {
   if (typeof field !== "string")
     return field === undefined ? "absent" : `non_string_${getReceivedType(field)}`;
   return isKnown(field) ? field : "unlisted";
 }
-//@ chunk-ah34pb7m.js:10943-11132 placement
+//@ chunk-wjygkcr4.js:10959-11148 placement
 function describeUuidField(record) {
   if (typeof record !== "object" || record === null || !("uuid" in record)) return "absent";
   let { uuid } = record;
   if (typeof uuid === "string") return uuid === "" ? "string_empty" : "string";
   return uuid === undefined ? "undefined" : getReceivedType(uuid);
 }
-//@ chunk-ah34pb7m.js:11132-11204 placement (2.1.88 match: getReceivedType, 0.776)
+//@ chunk-wjygkcr4.js:11148-11220 placement (2.1.88 match: getReceivedType, 0.777)
 function getReceivedType(value) {
   return value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
 }
-//@ chunk-ah34pb7m.js:11204-11300 placement
+//@ chunk-wjygkcr4.js:11220-11316 placement
 function describeBooleanish(field) {
   return typeof field === "boolean"
     ? String(field)
@@ -169,13 +169,13 @@ function describeBooleanish(field) {
       ? "absent"
       : `non_boolean_${getReceivedType(field)}`;
 }
-//@ chunk-ah34pb7m.js:11300-11386 placement
+//@ chunk-wjygkcr4.js:11316-11402 placement
 function readField(target, fieldName) {
   return typeof target === "object" && target !== null && fieldName in target
     ? Reflect.get(target, fieldName)
     : undefined;
 }
-//@ chunk-ah34pb7m.js:11386-11494 placement
+//@ chunk-wjygkcr4.js:11402-11510 placement
 function uptimeBucket(uptimeSeconds) {
   return uptimeSeconds < 60
     ? "lt_1m"
@@ -189,26 +189,26 @@ function uptimeBucket(uptimeSeconds) {
             ? "lt_24h"
             : "gte_24h";
 }
-//@ chunk-ah34pb7m.js:11494-11526 placement
+//@ chunk-wjygkcr4.js:11510-11542 placement
 /**
  * 协调者面板是否启用。
  */
 function isCoordinatorPanelActive() {
   return currentToolPermissionContext() && isFullscreenEnvEnabled();
 }
-//@ chunk-ah34pb7m.js:11526-11555 placement
+//@ chunk-wjygkcr4.js:11542-11571 placement
 /**
  * 订阅协调者面板可见性并强制刷新渲染。
  */
 function subscribeCoordinatorPanel() {
   return renderWithForceUpdate(isCoordinatorPanelActive);
 }
-//@ chunk-ah34pb7m.js:11555-11625 placement
+//@ chunk-wjygkcr4.js:11571-11641 placement
 function isCoordinatorPanelEnabled() {
   if (getIsNonInteractiveSession()) return false;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_coordinator_panel", true);
 }
-//@ chunk-ah34pb7m.js:11625-11723 placement
+//@ chunk-wjygkcr4.js:11641-11739 placement
 /**
  * 代理显示标签。
  */
@@ -218,7 +218,7 @@ function agentLabel(model, effort) {
   let effortLabel = effortLevelOf(effort);
   return effortLabel !== undefined ? `${modelName} (${effortLabel})` : modelName;
 }
-//@ chunk-ah34pb7m.js:11723-11803 placement
+//@ chunk-wjygkcr4.js:11739-11819 placement
 /**
  * 把值规范成努力等级（数字/undefined 原样跳过）。
  */
@@ -228,11 +228,11 @@ function effortLevelOf(effort) {
   return normalizeEffortLevel(effort);
 }
 export {
-  shortUuid,
-  reportMessageWithoutUuid,
   subscribeCoordinatorPanel,
   isCoordinatorPanelActive,
-  isCoordinatorPanelEnabled,
+  shortUuid,
+  reportMessageWithoutUuid,
   agentLabel,
+  isCoordinatorPanelEnabled,
   effortLevelOf,
 };

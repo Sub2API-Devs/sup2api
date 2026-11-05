@@ -1,16 +1,16 @@
 /**
  * @anthropic-ai/sdk/internal/detect-platform.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-3wydcdvj.js (5)
+ * pieces: chunk-gjbr82c9.js (5)
  * attribution: esm-layout 1, esm-fingerprint 4
  */
 import { VERSION } from "../version.mjs";
 
-//@ chunk-3wydcdvj.js:791-871 esm-layout
+//@ chunk-gjbr82c9.js:791-871 esm-layout
 var isRunningInBrowser = () =>
   typeof window !== "undefined" && typeof window.document !== "undefined" && typeof navigator !== "undefined";
-//@ chunk-3wydcdvj.js:871-1110 esm-fingerprint
+//@ chunk-gjbr82c9.js:871-1110 esm-fingerprint
 function getDetectedPlatform() {
   if (typeof Deno !== "undefined" && Deno.build != null) return "deno";
   if (typeof EdgeRuntime !== "undefined") return "edge";
@@ -21,7 +21,7 @@ function getDetectedPlatform() {
     return "node";
   return "unknown";
 }
-//@ chunk-3wydcdvj.js:1110-2383 esm-fingerprint
+//@ chunk-gjbr82c9.js:1110-2383 esm-fingerprint
 var getPlatformProperties = () => {
   let detectedPlatform = getDetectedPlatform();
   if (detectedPlatform === "deno")
@@ -71,7 +71,7 @@ var getPlatformProperties = () => {
     "X-Stainless-Runtime-Version": "unknown",
   };
 };
-//@ chunk-3wydcdvj.js:2383-3016 esm-fingerprint
+//@ chunk-gjbr82c9.js:2383-3016 esm-fingerprint
 function getBrowserInfo() {
   if (typeof navigator === "undefined" || !navigator) return null;
   let browserPatterns = [
@@ -114,7 +114,7 @@ function getBrowserInfo() {
   }
   return null;
 }
-//@ chunk-3wydcdvj.js:3016-3513 esm-fingerprint
+//@ chunk-gjbr82c9.js:3016-3513 esm-fingerprint
 var normalizeArch = (arch) => {
   if (arch === "x32") return "x32";
   if (arch === "x86_64" || arch === "x64") return "x64";

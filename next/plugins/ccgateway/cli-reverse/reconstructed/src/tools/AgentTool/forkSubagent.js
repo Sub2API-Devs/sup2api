@@ -3,15 +3,15 @@
  *
  * fork 子代理：FORK_AGENT 定义、继承上下文的消息构造、fork 指令样板、worktree 说明；含 coordinator worker 代理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/forkSubagent.ts
- * pieces: chunk-7jbxc8kr.js (1), chunk-e6aww6q8.js (13)
- * attribution: fingerprint 1, placement 5, facade-exports 7, layout 1
+ * pieces: chunk-5xgkngpb.js (13), chunk-8gk80pm3.js (1)
+ * attribution: placement 5, facade-exports 7, layout 1, fingerprint 1
  */
 import { randomUUID } from "crypto";
 import { getCachedClientData } from "../../utils/config.js";
 import { TENGU_BROOK_HERON, trimmedOrNull } from "../../utils/userTurnTags.js";
-import { isPlainObject as isPlainObject_4 } from "../../utils/objectUtils.js";
+import { isPlainObject as isPlainObject_5 } from "../../utils/objectUtils.js";
 import { findModelKeyedEntry, getModelKeyedValue } from "../../utils/attachments/totalTokensReminder.js";
 import { FORK_BOILERPLATE, FORK_DIRECTIVE_PREFIX, isForkBoilerplateMessage } from "../../constants/xml.js";
 import { AGENT, FORK, TASK } from "./constants.js";
@@ -28,17 +28,17 @@ import { logForDebugging } from "../../utils/debug.js";
 import { createUserMessage } from "../../utils/messages.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2237624-2237780 placement
+//@ chunk-5xgkngpb.js:2292719-2292875 placement
 function brookHeronModelValue(model, modelKey) {
   let override = getCachedClientData()?.[TENGU_BROOK_HERON];
-  if (!isPlainObject_4(override)) return trimmedOrNull(override);
+  if (!isPlainObject_5(override)) return trimmedOrNull(override);
   let modelKeyedEntry = findModelKeyedEntry(override, model);
   if (modelKeyedEntry === undefined) return null;
   let [, modelEntry] = modelKeyedEntry;
-  if (!isPlainObject_4(modelEntry)) return trimmedOrNull(modelEntry);
+  if (!isPlainObject_5(modelEntry)) return trimmedOrNull(modelEntry);
   return trimmedOrNull(getModelKeyedValue(modelEntry, modelKey));
 }
-//@ chunk-e6aww6q8.js:2237818-2238798 placement
+//@ chunk-5xgkngpb.js:2292913-2293893 placement
 function FORK_WORKER_PREAMBLE(directive, extraRule) {
   return `<${FORK_BOILERPLATE}>
 You are a worker fork. The transcript above is the parent's history \u2014 inherited reference, not your situation. You are NOT a continuation of that agent. Execute ONE directive, then stop.
@@ -56,7 +56,7 @@ Guidelines (your directive may override any of these):
 
 ${FORK_DIRECTIVE_PREFIX}${directive}`;
 }
-//@ chunk-e6aww6q8.js:2238798-2238942 placement
+//@ chunk-5xgkngpb.js:2293893-2294037 placement
 function extractForkDirective(prompt, extraRules) {
   let marker = `</${FORK_BOILERPLATE}>
 
@@ -68,10 +68,10 @@ ${FORK_DIRECTIVE_PREFIX}`;
     ? directive
     : undefined;
 }
-//@ chunk-e6aww6q8.js:2238942-2239009 placement
+//@ chunk-5xgkngpb.js:2294037-2294104 placement
 var TENGU_FORK_SUBAGENT_ENABLED = "tengu_fork_subagent_enabled";
 var TENGU_FEDERATED_ULLMAN = "tengu_federated_ullman";
-//@ chunk-e6aww6q8.js:2239009-2239421 placement
+//@ chunk-5xgkngpb.js:2294104-2294516 placement
 /**
  * 判断 fork 子代理是否启用及来源：协调者模式、宿主策略、CLAUDE_CODE_FORK_SUBAGENT=false 时禁用；非交互且 TENGU_FEDERATED_ULLMAN 开时禁用（除非 env 显式开启）；首次决定后缓存并记录 tengu_fork_subagent_enabled。
  */
@@ -95,21 +95,21 @@ function getForkSubagentEnabledSource() {
   });
   return source;
 }
-//@ chunk-e6aww6q8.js:2239421-2239462 facade-exports
+//@ chunk-5xgkngpb.js:2294516-2294557 facade-exports (2.1.88 match: AUTO_MODE_ENABLED_DEFAULT, 1)
 function isForkSubagentEnabled() {
   return getForkSubagentEnabledSource() !== "disabled";
 }
-//@ chunk-e6aww6q8.js:2239462-2239524 facade-exports
+//@ chunk-5xgkngpb.js:2294557-2294619 facade-exports
 function forkGateForcesBackground() {
   if (!isForkSubagentEnabled()) return false;
   return getForkSubagentEnabledSource() === "env" || !isPlainNonInteractive();
 }
-//@ chunk-e6aww6q8.js:2239524-2239822 facade-exports (2.1.88 match: FORK_AGENT, 0.89)
+//@ chunk-5xgkngpb.js:2294619-2294917 facade-exports (2.1.88 match: FORK_AGENT, 0.89)
 /**
  * FORK_AGENT 内建定义：agentType "fork"、tools ["*"]、maxTurns 200、model inherit、permissionMode bubble、系统提示词为空（沿用父线程）。
  */
 var FORK_AGENT; // deferred: uses AGENT (./constants.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2239524", () => {
+deferInit("chunk-5xgkngpb.js:2294619", () => {
   FORK_AGENT = {
     agentType: FORK,
     whenToUse:
@@ -123,20 +123,20 @@ deferInit("chunk-e6aww6q8.js:2239524", () => {
     getSystemPrompt: () => "",
   };
 });
-//@ chunk-e6aww6q8.js:2239822-2239857 facade-exports
+//@ chunk-5xgkngpb.js:2294917-2294952 facade-exports
 /**
  * 消息中是否已含 fork 样板标记（当前就在 fork 子代理内）。
  */
 function isInForkChild(messages) {
   return messages.some(isForkBoilerplateMessage);
 }
-//@ chunk-e6aww6q8.js:2239857-2240122 layout
+//@ chunk-5xgkngpb.js:2294952-2295217 layout
 var FORK_SELF_TOOL_RESULT = "Fork started \u2014 that fork is you.";
 var FORK_SELF_OTHER_TOOL_RESULT =
   "This call started a fork, and that fork is you. The call's other work and its result belong to the parent.";
 var FORK_PARENT_CALL_TOOL_RESULT =
   "This is the parent's call, not yours. It may not have run yet, and its result goes to the parent.";
-//@ chunk-e6aww6q8.js:2240122-2240667 facade-exports (2.1.88 match: buildForkedMessages, 1)
+//@ chunk-5xgkngpb.js:2295217-2295762 facade-exports (2.1.88 match: buildForkedMessages, 1)
 /**
  * 构造 fork 子代理的初始消息：复制父 assistant 消息，对其中每个 tool_use 生成占位 tool_result（自己那次说明"fork 就是你"，其余说明属于父代理），再附上 fork 指令文本。
  */
@@ -195,21 +195,21 @@ function buildForkedMessages(directive, assistantMessage, enclosingToolUseId) {
   });
   return [fullAssistantMessage, toolResultMessage];
 }
-//@ chunk-e6aww6q8.js:2240667-2240700 facade-exports
+//@ chunk-5xgkngpb.js:2295762-2295795 facade-exports
 /**
  * 用 fork 样板包装指令文本（只执行一条指令、不再派子代理、一次汇报）。
  */
 function buildChildMessage(directive) {
   return FORK_WORKER_PREAMBLE(directive, "");
 }
-//@ chunk-e6aww6q8.js:2240700-2241227 facade-exports (2.1.88 match: buildWorktreeNotice, 1)
+//@ chunk-5xgkngpb.js:2295795-2296322 facade-exports (2.1.88 match: buildWorktreeNotice, 1)
 /**
  * fork 在 worktree 中运行时追加的说明：继承的路径指向父目录，需要换算到 worktree 根并重新读取文件。
  */
 function buildWorktreeNotice(parentCwd, worktreeCwd) {
   return `You've inherited the conversation context above from a parent agent working in ${parentCwd}. You are operating in an isolated git worktree at ${worktreeCwd} \u2014 same repository, same relative file structure, separate working copy. Paths in the inherited context refer to the parent's working directory; translate them to your worktree root. Re-read files before editing if the parent may have modified them since they appear in the context. Your changes stay in this worktree and will not affect the parent's files.`;
 }
-//@ chunk-7jbxc8kr.js:3796-3960 fingerprint (2.1.88 match: FORK_SUBAGENT_TYPE, 1)
+//@ chunk-8gk80pm3.js:3851-4015 fingerprint (2.1.88 match: FORK_SUBAGENT_TYPE, 1)
 /**
  * 把文本前三个词转成 kebab-case 名（≤24 字符，默认 "fork"），用作后台 fork 名字提示。
  */
@@ -234,8 +234,8 @@ export {
   FORK_AGENT,
   buildForkedMessages,
   buildWorktreeNotice,
-  isInForkChild,
   slugifyForkName,
   buildChildMessage,
+  isInForkChild,
   extractForkDirective,
 };

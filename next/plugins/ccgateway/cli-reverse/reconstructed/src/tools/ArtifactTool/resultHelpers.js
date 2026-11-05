@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：结果辅助
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (12)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (12)
  * attribution: placement 12
  */
 import { ACTION_HANDLER_BY_NAME, renderAssetUploadsResult } from "./actions/uploadAsset.js";
@@ -34,7 +34,7 @@ import { isAbortError } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
 import { TYPE_FILE_UNREAD_REASONS } from "../../services/artifacts/publishSource.js";
 
-//@ chunk-8wvtd8sr.js:311415-311503 placement
+//@ chunk-xzmy9dn4.js:313686-313774 placement
 /**
  * 按 action 名取动作处理器。
  */
@@ -42,7 +42,7 @@ function actionHandlerFor(input) {
   let action = typeof input?.action === "string" ? input.action : undefined;
   return ACTION_HANDLER_BY_NAME.get(action) ?? null;
 }
-//@ chunk-8wvtd8sr.js:311503-312756 placement
+//@ chunk-xzmy9dn4.js:313774-315027 placement
 /**
  * Artifact 结果映射表：Tb 为结果 JSON 可能的顶层键；vd 为键 → [结果渲染函数, 存储时的瘦身函数] 的映射，Eb 为其 Map。
  */
@@ -118,14 +118,14 @@ var RESULT_RENDERERS = [
   ["script_result", ENDPOINT_RESULT_MAPPERS.script_result, stripScriptResult],
 ];
 var RESULT_RENDERER_BY_KEY = new Map(RESULT_RENDERERS.map(([key, renderer]) => [key, renderer]));
-//@ chunk-8wvtd8sr.js:312756-312803 placement
+//@ chunk-xzmy9dn4.js:315027-315074 placement
 /**
  * 判断结果里是否有任一可渲染键。
  */
 function hasRenderableResultKey(result) {
   return RESULT_RENDERERS.some(([key]) => key in result);
 }
-//@ chunk-8wvtd8sr.js:312803-312868 placement
+//@ chunk-xzmy9dn4.js:315074-315139 placement
 /**
  * 按结果里的第一个已知键取渲染器。
  */
@@ -133,7 +133,7 @@ function resultRendererFor(result) {
   let key = firstResultKey(result);
   return key === null ? null : (RESULT_RENDERER_BY_KEY.get(key) ?? null);
 }
-//@ chunk-8wvtd8sr.js:312868-312931 placement
+//@ chunk-xzmy9dn4.js:315139-315202 placement
 /**
  * 取结果里第一个出现的已知结果键。
  */
@@ -141,7 +141,7 @@ function firstResultKey(result) {
   for (let key of ARTIFACT_RESULT_KEYS) if (key in result) return key;
   return null;
 }
-//@ chunk-8wvtd8sr.js:312931-313045 placement
+//@ chunk-xzmy9dn4.js:315202-315316 placement
 /**
  * 根据结果中出现的键，取出保存到记录前需要执行的瘦身函数。
  */
@@ -151,7 +151,7 @@ function resultStorageStrippers(result) {
     stripper !== undefined && key in result ? [stripper] : [],
   );
 }
-//@ chunk-8wvtd8sr.js:313045-313179 placement
+//@ chunk-xzmy9dn4.js:315316-315450 placement
 /**
  * 登记协调器编辑者：撤销其他 agent 已送达的后续提示，记录编辑者并启动编辑完成监视。
  */
@@ -163,7 +163,7 @@ function registerCoordinatorEditor(slug, editor) {
   liveState.coordinatorEditors.set(slug, editor);
   liveState.editorSettleWatch ??= watchEditorSettle(liveState);
 }
-//@ chunk-8wvtd8sr.js:313179-313250 placement
+//@ chunk-xzmy9dn4.js:315450-315521 placement
 /**
  * 撤销已送达的后续提示并移除该协调器编辑者。
  */
@@ -171,7 +171,7 @@ function unregisterCoordinatorEditor(slug) {
   revokeCodeliveredFollowups(slug, "page_rehomed");
   getLiveState().coordinatorEditors.delete(slug);
 }
-//@ chunk-8wvtd8sr.js:313250-313449 placement
+//@ chunk-xzmy9dn4.js:315521-315720 placement
 function watchEditorSettle(liveState) {
   return getTaskRunState().agentSettled.subscribe((agentId, settled) => {
     if (settled === "completed") return;
@@ -183,7 +183,7 @@ function watchEditorSettle(liveState) {
     }
   });
 }
-//@ chunk-8wvtd8sr.js:314231-314335 placement
+//@ chunk-xzmy9dn4.js:316502-316606 placement
 /**
  * 单次读取类型文件的数量上限、结果字符预算，以及视为类型目录不可用的错误原因。
  */
@@ -196,14 +196,14 @@ var CATALOG_DOWN_REASONS = new Set([
   "http_5xx",
   "relay_error",
 ]);
-//@ chunk-8wvtd8sr.js:314335-314389 placement
+//@ chunk-xzmy9dn4.js:316606-316660 placement
 /**
  * 把类型文件的未知不可读原因归为 unavailable。
  */
 function typeFileUnreadReason(unread) {
   return TYPE_FILE_UNREAD_REASONS.includes(unread) ? unread : "unavailable";
 }
-//@ chunk-8wvtd8sr.js:314389-314931 placement
+//@ chunk-xzmy9dn4.js:316660-317202 placement
 /**
  * 把 Artifact 类型信息转换成结果对象：标题、type_url、描述、层级、文件列表、说明文件（已读取时附正文与字数、不可用时附原因）、能力与可创建性。
  */
@@ -242,16 +242,16 @@ function artifactTypeResult(typeInfo, instructions) {
   };
 }
 export {
-  artifactTypeResult,
-  CATALOG_DOWN_REASONS,
-  TYPE_FILES_RESULT_BUDGET,
-  MAX_TYPE_FILES_PER_READ,
   actionHandlerFor,
   resultStorageStrippers,
   resultRendererFor,
   hasRenderableResultKey,
+  artifactTypeResult,
   registerCoordinatorEditor,
   unregisterCoordinatorEditor,
   typeFileUnreadReason,
   firstResultKey,
+  CATALOG_DOWN_REASONS,
+  TYPE_FILES_RESULT_BUDGET,
+  MAX_TYPE_FILES_PER_READ,
 };

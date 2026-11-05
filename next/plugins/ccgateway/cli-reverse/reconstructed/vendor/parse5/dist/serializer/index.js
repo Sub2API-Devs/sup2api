@@ -1,14 +1,14 @@
 /**
  * parse5/dist/serializer/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: parse5@7.2.0..7.2.1
- * pieces: chunk-6ja29j2n.js (2)
+ * pieces: chunk-p9ac6cnb.js (2)
  * attribution: esm-fingerprint 1, esm-layout 1
  */
 import { TAG_NAMES } from "../../lib/common/html.js";
 import { Parser } from "../parser/index.js";
 
-//@ chunk-6ja29j2n.js:179577-179730 esm-fingerprint
+//@ chunk-p9ac6cnb.js:179577-179730 esm-fingerprint
 var VOID_ELEMENTS = new Set([
   TAG_NAMES.AREA,
   TAG_NAMES.BASE,
@@ -29,7 +29,7 @@ var VOID_ELEMENTS = new Set([
   TAG_NAMES.TRACK,
   TAG_NAMES.WBR,
 ]);
-//@ chunk-6ja29j2n.js:179730-179769 esm-layout
+//@ chunk-p9ac6cnb.js:179730-179769 esm-layout
 function parse(node, options) {
   return Parser.parse(node, options);
 }

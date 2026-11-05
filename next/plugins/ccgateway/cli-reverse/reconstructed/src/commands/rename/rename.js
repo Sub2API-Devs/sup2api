@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。执行会话改名，名字冲突时让出。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/rename/rename.ts
- * pieces: chunk-zmqmnh19.js (4)
+ * pieces: chunk-gkp5zkjf.js (4)
  * attribution: placement 4
  */
 import { escapeXmlText } from "../../utils/sanitization.js";
@@ -17,7 +17,7 @@ import { renameSession } from "../../utils/sessionTitle.js";
 import { updateStandaloneAgentContext } from "../../utils/standaloneAgent.js";
 import { getRemoteCaps } from "../../remote/remoteMode.js";
 
-//@ chunk-zmqmnh19.js:2624-2966 placement
+//@ chunk-gkp5zkjf.js:2657-2999 placement
 function renameSystemReminder(newName, requestedName = newName) {
   let escapedName = escapeXmlText(newName);
   let escapedRequested = escapeXmlText(requestedName);
@@ -27,11 +27,11 @@ function renameSystemReminder(newName, requestedName = newName) {
       : `The user asked to name this session "${escapedRequested}"; another live session on this machine already holds that name, so this session is "${escapedName}". The requested name may indicate the session's focus or intent.`,
   );
 }
-//@ chunk-zmqmnh19.js:2966-3122 placement
+//@ chunk-gkp5zkjf.js:2999-3155 placement
 function sessionNameYieldedNotice(heldName, actualName) {
   return `Another live session on this machine goes by "${sanitizeSessionTitle(heldName)}", so this session is now "${sanitizeSessionTitle(actualName)}". Use /rename to pick a different name.`;
 }
-//@ chunk-zmqmnh19.js:3122-4366 placement (2.1.88 match: call, 0.291)
+//@ chunk-gkp5zkjf.js:3155-4399 placement (2.1.88 match: call, 0.27)
 /**
  * 执行会话改名，名字冲突时让出。
  */
@@ -98,7 +98,7 @@ async function performRename(onDone, context, args) {
     isGenerated: generateName,
   };
 }
-//@ chunk-zmqmnh19.js:4366-4538 placement
+//@ chunk-gkp5zkjf.js:4399-4571 placement
 async function call(onDone, context, args) {
   let { message, newName, requestedName, isGenerated } = await performRename(args, context, true);
   onDone(message, {

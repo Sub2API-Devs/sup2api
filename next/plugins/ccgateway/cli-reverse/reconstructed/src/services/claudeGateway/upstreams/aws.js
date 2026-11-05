@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关 AWS（Bedrock/mantle）上游签名
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (5)
  * attribution: placement 5
  */
 import { createHash } from "crypto";
@@ -23,17 +23,17 @@ import { isAwsCredentialError } from "../../../utils/aws.js";
 import { errorMessage } from "../../../utils/errors.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-1ny7cxrt.js:1342433-1342465 placement
+//@ chunk-1hnjmk23.js:1343396-1343428 placement
 /**
  * 懒加载的 lodash-style memoize 模块。
  */
 var nodeHttpHandlerModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var memoizeModule;
-deferInit("chunk-1ny7cxrt.js:1342433", () => {
+deferInit("chunk-1hnjmk23.js:1343396", () => {
   nodeHttpHandlerModule = __toESM(require_node_http_handler(), 1);
   memoizeModule = __toESM(require_property_provider(), 1);
 });
-//@ chunk-1ny7cxrt.js:1342502-1342564 placement
+//@ chunk-1hnjmk23.js:1343465-1343527 placement
 /**
  * AWS 上游请求超时（10 秒）。
  */
@@ -42,7 +42,7 @@ var CREDENTIAL_REFRESH_SKEW_MS = 300000;
 var CLIENT_RECREATE_MS = 30000;
 var DEFAULT_MAX_USERS = 1e4;
 var AWS_REQUEST_TIMEOUT_MS = 1e4;
-//@ chunk-1ny7cxrt.js:1342564-1342890 placement
+//@ chunk-1hnjmk23.js:1343527-1343853 placement
 /**
  * 把用户标识编码为 AWS 角色会话名（非法字符 =HH 编码，超长截断加哈希）。
  */
@@ -60,14 +60,14 @@ function toAwsSessionName(name) {
     encoded = `${encoded.slice(0, 42)}=-${createHash("sha256").update(name).digest("hex").slice(0, 20)}`;
   return encoded.length >= 2 ? encoded : null;
 }
-//@ chunk-1ny7cxrt.js:1342890-1342974 placement
+//@ chunk-1hnjmk23.js:1343853-1343937 placement
 /**
  * 把 assumed-role ARN 里的会话名脱敏成 <session>。
  */
 function redactAwsSessionName(text) {
   return text.replace(/(assumed-role\/[^/\s]+\/)[^\s"']+/g, "$1<session>");
 }
-//@ chunk-1ny7cxrt.js:1342974-1345635 placement
+//@ chunk-1hnjmk23.js:1343937-1346598 placement
 /**
  * 为 AWS 上游（Bedrock/mantle）创建按用户的 assume-role 凭据提供者。
  */

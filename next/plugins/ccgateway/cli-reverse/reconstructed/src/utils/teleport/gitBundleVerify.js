@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：校验生成的 git bundle 文件（v2/v3 头、对象格式、pack 签名、空树）与主检出/子目录起点判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-gjx0rh1b.js (29)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-sfy2wa1e.js (29)
  * attribution: placement 29
  */
 import {
@@ -28,7 +28,7 @@ import { createReadStream, createWriteStream } from "fs";
 import { Transform } from "stream";
 import { tmpdir } from "../tempDir.js";
 import { readOnlyNoFollowFlags } from "../platformTargets.js";
-import { uniq, count } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { seenStderr } from "../git/builderGit/gitRun.js";
 import { getFirstLine, firstLineOf } from "../stringUtils.js";
 import { checkoutDirOfGitDir } from "../git/builderGit/sandboxReach.js";
@@ -42,9 +42,10 @@ import { foldName } from "../permissions/protectedDirNames.js";
 import { hasBackslash } from "../pathClassification.js";
 import { getContainerId } from "../../services/internalLogging.js";
 import { unescapeMountField, isNetworkOrForeignMount, isDrvfsMount, isAtOrUnderPath } from "../wslMounts.js";
+import { countWhere } from "../collections.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-gjx0rh1b.js:1961-2111 placement
+//@ chunk-sfy2wa1e.js:2061-2211 placement
 async function createBundleOutput(prefix, tmp = tmpdir(), name = "out.bundle") {
   let dir = await mkdtemp(join(tmp, `${prefix}-`));
   return {
@@ -56,7 +57,7 @@ async function createBundleOutput(prefix, tmp = tmpdir(), name = "out.bundle") {
       }).catch(() => {}),
   };
 }
-//@ chunk-gjx0rh1b.js:2111-2669 placement
+//@ chunk-sfy2wa1e.js:2211-2769 placement
 /**
  * 读取生成的 bundle 文件（单一普通文件、大小上限、读取中变化检测）。
  */
@@ -107,7 +108,7 @@ async function readBundleFileSafely(path, maxBytes) {
     await handle.close();
   }
 }
-//@ chunk-gjx0rh1b.js:2823-3557 placement
+//@ chunk-sfy2wa1e.js:2923-3657 placement
 /**
  * git bundle 文件头签名到对象格式的映射，以及引用行和缺失对象的正则。
  */
@@ -117,7 +118,7 @@ var MISSING_OBJECT_RE;
 var BAD_OBJECT_RE;
 var buffer;
 var PACK_HEADER_BYTES;
-deferInit("chunk-gjx0rh1b.js:2823", () => {
+deferInit("chunk-sfy2wa1e.js:2923", () => {
   BUNDLE_HEADER_SIGNATURES = new Map([
     ["# v2 git bundle", "sha1"],
     [
@@ -141,11 +142,11 @@ deferInit("chunk-gjx0rh1b.js:2823", () => {
   buffer = Buffer.from("PACK\x00\x00\x00\x02", "latin1");
   PACK_HEADER_BYTES = buffer.length;
 });
-//@ chunk-gjx0rh1b.js:3557-3757 placement
+//@ chunk-sfy2wa1e.js:3657-3857 placement
 var EMPTY_TREE_IDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var buffer_2;
 var MIN_PACK_INDEX_BYTES;
-deferInit("chunk-gjx0rh1b.js:3557", () => {
+deferInit("chunk-sfy2wa1e.js:3657", () => {
   EMPTY_TREE_IDS = {
     sha1: "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
     sha256: "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321",
@@ -153,7 +154,7 @@ deferInit("chunk-gjx0rh1b.js:3557", () => {
   buffer_2 = Buffer.from("\xFFtOc\x00\x00\x00\x02", "latin1");
   MIN_PACK_INDEX_BYTES = buffer_2.length + 1024;
 });
-//@ chunk-gjx0rh1b.js:3757-4178 placement
+//@ chunk-sfy2wa1e.js:3857-4278 placement
 /**
  * 解析 bundle 文件头：识别 v2/v3 签名、能力行与引用列表。
  */
@@ -181,7 +182,7 @@ function parseBundleHeader(data) {
         ];
   });
   return flattened.length === lines.length - index_2 &&
-    uniq(flattened.map((ref) => ref.name)).length === flattened.length
+    normalizeCaseForComparison_2(flattened.map((ref) => ref.name)).length === flattened.length
     ? {
         objectFormat,
         refs: flattened,
@@ -189,7 +190,7 @@ function parseBundleHeader(data) {
       }
     : null;
 }
-//@ chunk-gjx0rh1b.js:4178-4551 placement
+//@ chunk-sfy2wa1e.js:4278-4651 placement
 /**
  * 在 pack 索引文件中查找指定对象 id（按扇出表二分范围比较）。
  */
@@ -217,7 +218,7 @@ async function packIndexHasObject(indexPath, sha) {
       .equals(buffer),
   );
 }
-//@ chunk-gjx0rh1b.js:4551-5014 placement
+//@ chunk-sfy2wa1e.js:4651-5114 placement
 /**
  * 构造只使用临时 git 目录的环境变量，禁用替代对象库、懒抓取与替换对象。
  */
@@ -243,7 +244,7 @@ function isolatedGitDirEnv(gitDir) {
     LANGUAGE: "C",
   };
 }
-//@ chunk-gjx0rh1b.js:5014-6471 placement
+//@ chunk-sfy2wa1e.js:5114-6571 placement
 /**
  * 校验 bundle 是完整的（头、引用、pack 尾部），返回问题描述。
  */
@@ -301,7 +302,8 @@ async function verifyBundleFile(bundleBytes, { scratchRoot }, runGit) {
       };
     let walkResult = await runGit(["-C", scratchDir, "rev-list", "--objects", "--count", "--stdin"], {
       env,
-      input: `${[...uniq(bundleHeader.refs.map((ref) => ref.id)), `^${emptyTreeId}`].join(`
+      input: `${[...normalizeCaseForComparison_2(bundleHeader.refs.map((ref) => ref.id)), `^${emptyTreeId}`]
+        .join(`
 `)}
 `,
     });
@@ -343,7 +345,7 @@ async function verifyBundleFile(bundleBytes, { scratchRoot }, runGit) {
     await removeScratchGitDir(scratchDir);
   }
 }
-//@ chunk-gjx0rh1b.js:6471-6660 placement
+//@ chunk-sfy2wa1e.js:6571-6760 placement
 async function removeScratchGitDir(scratchRoot) {
   let packDir = join(scratchRoot, "objects", "pack");
   let entries = await readdir(packDir).catch(() => []);
@@ -353,7 +355,7 @@ async function removeScratchGitDir(scratchRoot) {
     force: true,
   }).catch(() => {});
 }
-//@ chunk-gjx0rh1b.js:6660-7017 placement
+//@ chunk-sfy2wa1e.js:6760-7117 placement
 /**
  * 创建临时 git 目录结构（objects/pack、refs、HEAD 等），失败返回错误文本。
  */
@@ -388,14 +390,14 @@ async function createScratchGitDir(scratchRoot, objectFormat) {
     return String(error);
   }
 }
-//@ chunk-gjx0rh1b.js:7017-7120 placement
+//@ chunk-sfy2wa1e.js:7117-7220 placement
 function gitFailureDetail(result) {
   return (
     getFirstLine(result.stderr.trim()) ||
     (result.exitCode === undefined ? "git did not finish" : `exit ${result.code}`)
   );
 }
-//@ chunk-gjx0rh1b.js:7120-7397 placement
+//@ chunk-sfy2wa1e.js:7220-7497 placement
 function classifyCheckoutStart(layout) {
   if (layout?.checkout === undefined) return "layout_not_read";
   if (layout.checkout === "main") return "main_checkout";
@@ -405,7 +407,7 @@ function classifyCheckoutStart(layout) {
     return insideCheckout ? "beneath_git_directory" : "outside_git_directory";
   return insideCheckout ? "beneath_repository" : "outside_repository";
 }
-//@ chunk-gjx0rh1b.js:7397-7905 placement
+//@ chunk-sfy2wa1e.js:7497-8005 placement
 function logBundleStartLocation(start) {
   switch (start) {
     case "main_checkout":
@@ -422,7 +424,7 @@ function logBundleStartLocation(start) {
       return logFeatureOk("teleport_git_bundle_from_layout_not_read");
   }
 }
-//@ chunk-gjx0rh1b.js:7905-8221 placement
+//@ chunk-sfy2wa1e.js:8005-8321 placement
 /**
  * 「不要在此目录运行 git」及建议文案：新克隆或保留目录的说明。
  */
@@ -431,14 +433,14 @@ var FRESH_CLONE_HINT =
   "a fresh clone from the remote (with no remote: a new folder and git init), copy your files over by hand, but not the .git folder, then";
 var KEEP_FOLDER_HINT =
   "Keep this folder: commits that you have not pushed, other branches and stashes exist only here.";
-//@ chunk-gjx0rh1b.js:8440-8575 placement
+//@ chunk-sfy2wa1e.js:8540-8675 placement
 var REFS_SEED_STASH = "refs/seed/stash";
 var REFS_SEED_ROOT = "refs/seed/root";
 var REFS_SEED = "refs/seed/";
 var SEED_REF_STALE_MS = 7200000;
 var MAX_BUNDLE_HEADER_LINE = 65536;
 var SEED_REF_RE = /^refs\/seed\/(\d+)-[0-9a-f]{16}\/(?:stash|root)$/;
-//@ chunk-gjx0rh1b.js:8575-8693 placement
+//@ chunk-sfy2wa1e.js:8675-8793 placement
 function createSeedRefNames(now = Date.now()) {
   let suffix = `${now}-${randomBytes(8).toString("hex")}`;
   return {
@@ -446,7 +448,7 @@ function createSeedRefNames(now = Date.now()) {
     root: `${REFS_SEED}${suffix}/root`,
   };
 }
-//@ chunk-gjx0rh1b.js:8693-8834 placement
+//@ chunk-sfy2wa1e.js:8793-8934 placement
 function staleSeedRefs(refs, now = Date.now()) {
   return refs.filter((ref) => {
     if (ref === REFS_SEED_STASH || ref === REFS_SEED_ROOT) return true;
@@ -454,7 +456,7 @@ function staleSeedRefs(refs, now = Date.now()) {
     return match !== null && Math.abs(now - Number(match[1])) > SEED_REF_STALE_MS;
   });
 }
-//@ chunk-gjx0rh1b.js:8834-9048 placement
+//@ chunk-sfy2wa1e.js:8934-9148 placement
 async function copyVerifiedBundle(path, labels, labels_2, signal) {
   let verifier = new BundleStreamVerifier(labels_2);
   try {
@@ -480,7 +482,7 @@ async function copyVerifiedBundle(path, labels, labels_2, signal) {
     };
   }
 }
-//@ chunk-gjx0rh1b.js:9048-10926 placement
+//@ chunk-sfy2wa1e.js:9148-11026 placement
 /**
  * 流式解析 bundle：签名、引用行、pack 头，统计输出字节。
  */
@@ -574,9 +576,9 @@ class BundleStreamVerifier extends Transform {
     return line;
   }
 }
-//@ chunk-gjx0rh1b.js:11321-11345 placement
+//@ chunk-sfy2wa1e.js:11421-11445 placement
 var GIT_DIR_NAMES = [".git", "git~1"];
-//@ chunk-gjx0rh1b.js:11345-11419 placement (2.1.88 match: execTmux, 1)
+//@ chunk-sfy2wa1e.js:11445-11519 placement (2.1.88 match: execTmux, 1)
 function isSafeRepoRelativePath(args, opts) {
   return (
     !isUnsafeRepoRelativePath(args) &&
@@ -584,7 +586,7 @@ function isSafeRepoRelativePath(args, opts) {
     !hasWindowsUnsafeSegment(args, opts)
   );
 }
-//@ chunk-gjx0rh1b.js:11419-11533 placement
+//@ chunk-sfy2wa1e.js:11519-11633 placement
 function isUnsafeRepoRelativePath(path) {
   return (
     path.includes("\x00") ||
@@ -595,7 +597,7 @@ function isUnsafeRepoRelativePath(path) {
     hasNamedForkSegment(toForwardSlashes(path))
   );
 }
-//@ chunk-gjx0rh1b.js:11533-11638 placement
+//@ chunk-sfy2wa1e.js:11633-11738 placement
 function hasWindowsUnsafeSegment(path, opts) {
   return (
     opts &&
@@ -605,9 +607,9 @@ function hasWindowsUnsafeSegment(path, opts) {
       .some((segment) => segment.includes(":") || /[. ]$/.test(segment))
   );
 }
-//@ chunk-gjx0rh1b.js:11638-11683 placement
+//@ chunk-sfy2wa1e.js:11738-11783 placement
 var DOS_SHORT_NAME_PATTERN = /^[^~.]{1,6}~[0-9]+(?:\.[^.]{1,3})?$/;
-//@ chunk-gjx0rh1b.js:11683-11827 placement (2.1.88 match: execTmux, 1)
+//@ chunk-sfy2wa1e.js:11783-11927 placement (2.1.88 match: execTmux, 1)
 function hasDosShortNameSegment(path) {
   let platform = getPlatform();
   return (
@@ -618,11 +620,11 @@ function hasDosShortNameSegment(path) {
       .some((segment) => DOS_SHORT_NAME_PATTERN.test(firstLineOf(segment, ":").replace(/[. ]+$/, "")))
   );
 }
-//@ chunk-gjx0rh1b.js:11827-11874 placement
+//@ chunk-sfy2wa1e.js:11927-11974 placement
 async function isCaseFoldingFileSystem(dir) {
   return (await detectFileSystemCaseFolding(dir)) !== "no";
 }
-//@ chunk-gjx0rh1b.js:11874-12729 placement
+//@ chunk-sfy2wa1e.js:11974-12829 placement
 async function detectFileSystemCaseFolding(dir) {
   let platform = getPlatform();
   if (platform === "windows") return "yes";
@@ -679,12 +681,12 @@ async function detectFileSystemCaseFolding(dir) {
         ? "unsure"
         : "no";
 }
-//@ chunk-gjx0rh1b.js:12729-13245 placement
+//@ chunk-sfy2wa1e.js:12829-13345 placement
 /**
  * 根据挂载点列表判断路径所在的挂载：取包含该路径的最短挂载点，存在多个根挂载或歧义时返回 unsure。
  */
 function resolveMountForPath(targetPath, mounts) {
-  if (count(mounts, (mountRecord) => mountRecord.point === "/") > 1) return "unsure";
+  if (countWhere(mounts, (mountRecord) => mountRecord.point === "/") > 1) return "unsure";
   let mountIds = new Set(mounts.map((mount) => mount.id));
   let deepestMountUnder = (candidates) => {
     let filtered = candidates.filter((candidate) => isAtOrUnderPath(targetPath, candidate.point));
@@ -713,7 +715,7 @@ function resolveMountForPath(targetPath, mounts) {
       ? "unsure"
       : walkParents(firstRoot, mounts.length);
 }
-//@ chunk-gjx0rh1b.js:13245-13308 placement
+//@ chunk-sfy2wa1e.js:13345-13408 placement
 function toForwardSlashes(path) {
   return getPlatform() === "windows" ? path.replaceAll("\\", "/") : path;
 }

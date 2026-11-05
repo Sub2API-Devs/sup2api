@@ -1,15 +1,15 @@
 /**
  * http-proxy-agent/dist/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: http-proxy-agent@7.0.2
- * pieces: chunk-mrx6y2r5.js (1)
+ * pieces: chunk-b5df2wx1.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_debug_2 } from "../../debug/src/index.js";
 import { require_agent_base } from "../../agent-base/dist/index.js";
 
-//@ chunk-mrx6y2r5.js:432-3264 cjs-fingerprint
+//@ chunk-b5df2wx1.js:432-3264 cjs-fingerprint
 var require_http_proxy_agent = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||

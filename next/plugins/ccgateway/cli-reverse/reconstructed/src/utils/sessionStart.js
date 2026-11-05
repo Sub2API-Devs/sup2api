@@ -3,9 +3,9 @@
  *
  * SessionStart / Setup hooks 的执行与结果汇总。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sessionStart.ts
- * pieces: chunk-e6aww6q8.js (15)
+ * pieces: chunk-5xgkngpb.js (15)
  * attribution: placement 13, fingerprint 2
  */
 import { createAbortController } from "./abortController.js";
@@ -18,6 +18,7 @@ import {
   stageResumeJournalSeed,
   getLastLiveMainThreadRequestAt,
   getLastMainThreadRequestAt,
+  getIsNonInteractiveSession,
 } from "../bootstrap/state.js";
 import {
   getHooksForEvent,
@@ -51,17 +52,19 @@ import {
   estimateCacheWriteCost,
   resolveMainThreadCacheTtl,
   getMainThreadCacheTtl,
+  applyFiveMinuteOverride,
+  stripModelDateSuffix,
   getMainThreadCacheTtlConfig,
 } from "../services/api/promptCacheTtl.js";
 import { getMainLoopModel } from "./model/model.js";
-import { getCacheCreationTtl } from "../services/api/promptCacheBreakDetection.js";
+import { getCacheCreationTtl, CACHE_TTL_5M_MS } from "../services/api/promptCacheBreakDetection.js";
 import { isCompactBoundaryMessage as isCompactBoundaryMessage_3 } from "../services/projects/threadRows.js";
 import { getTokenUsage } from "./tokens.js";
 import { totalTokensOf } from "./messages/usageAndStopReason.js";
 import { roughTokenCountEstimationForMessages } from "../services/tokenEstimation.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:2077254-2077366 placement
+//@ chunk-5xgkngpb.js:2133647-2133759 placement
 /**
  * 启动一次可中止的钩子执行：返回 Promise（失败时记录并给空列表）、放置位置与中止函数。
  */
@@ -76,7 +79,7 @@ function startHookRun(placement, run) {
     abort: () => abortController.abort(),
   };
 }
-//@ chunk-e6aww6q8.js:2077366-2077542 placement
+//@ chunk-5xgkngpb.js:2133759-2133935 placement
 class SessionStartState {
   pendingInitialUserMessage = undefined;
   pendingHookSessionTitle = undefined;
@@ -86,16 +89,16 @@ class SessionStartState {
   hooksDispatched = 0;
   hasDispatched = false;
 }
-//@ chunk-e6aww6q8.js:2077542-2077570 placement
+//@ chunk-5xgkngpb.js:2133935-2133963 placement
 var sessionStartStateSlot; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:2077542", () => {
+deferInit("chunk-5xgkngpb.js:2133935", () => {
   sessionStartStateSlot = new SessionRootSlot(() => new SessionStartState());
 });
-//@ chunk-e6aww6q8.js:2077570-2077604 placement
+//@ chunk-5xgkngpb.js:2133963-2133997 placement
 function sessionStartState() {
   return sessionStartStateSlot.of(getRootSession());
 }
-//@ chunk-e6aww6q8.js:2077604-2077859 placement
+//@ chunk-5xgkngpb.js:2133997-2134252 placement
 /**
  * 列出尚未运行 SessionStart 钩子的新插件，返回补跑所需的来源与筛选函数；没有则为 undefined。
  */
@@ -113,7 +116,7 @@ function owedSessionStartHooks() {
         },
       };
 }
-//@ chunk-e6aww6q8.js:2077859-2078459 placement
+//@ chunk-5xgkngpb.js:2134252-2134862 placement
 /**
  * 找出未被覆盖的插件钩子（同名插件经市场别名已覆盖的视为已运行）。
  */
@@ -158,7 +161,7 @@ function owedPluginHooks({ pluginsCovered, pluginsSucceeded }, hooks) {
     stoodFor: stoodForIds,
   };
 }
-//@ chunk-e6aww6q8.js:2078459-2078560 placement
+//@ chunk-5xgkngpb.js:2134862-2134963 placement
 /**
  * 取出并清除 SessionStart 钩子提供的初始用户消息。
  */
@@ -168,7 +171,7 @@ function takePendingInitialUserMessage() {
   state.pendingInitialUserMessage = undefined;
   return pendingInitialUserMessage;
 }
-//@ chunk-e6aww6q8.js:2078560-2078657 placement
+//@ chunk-5xgkngpb.js:2134963-2135060 placement
 /**
  * takePendingHookSessionTitle：取待定的钩子会话标题。
  */
@@ -178,7 +181,7 @@ function takePendingHookSessionTitle() {
   state.pendingHookSessionTitle = undefined;
   return pendingHookSessionTitle;
 }
-//@ chunk-e6aww6q8.js:2078657-2081951 fingerprint (2.1.88 match: processSessionStartHooks, 0.552)
+//@ chunk-5xgkngpb.js:2135060-2138357 fingerprint (2.1.88 match: processSessionStartHooks, 0.552)
 /**
  * 运行 SessionStart hooks（startup/resume/clear/compact），收集附加上下文与初始消息。
  */
@@ -350,7 +353,7 @@ async function processSessionStartHooks(
   rows.push(...createSessionStartContextAttachments(additionalContexts));
   return rows;
 }
-//@ chunk-e6aww6q8.js:2081951-2082032 placement
+//@ chunk-5xgkngpb.js:2138357-2138438 placement
 /**
  * overtakeSessionStart：接管会话启动上下文。
  */
@@ -358,7 +361,7 @@ function overtakeSessionStart(progress) {
   progress.isOvertaken = true;
   return [...progress.rows, ...createSessionStartContextAttachments(progress.additionalContexts)];
 }
-//@ chunk-e6aww6q8.js:2082032-2082189 placement
+//@ chunk-5xgkngpb.js:2138438-2138595 placement
 /**
  * 是否需等待 SessionStart 钩子的原因：托管层钩子或托管插件策略。
  */
@@ -367,7 +370,7 @@ function sessionStartWaitReason() {
   if (managed !== "none") return managed === "some" ? "managed_hooks" : "managed_hooks_unknown";
   return getPolicyAllowedSet() === null ? undefined : "managed_plugins";
 }
-//@ chunk-e6aww6q8.js:2082354-2083443 fingerprint (2.1.88 match: processSetupHooks, 0.573)
+//@ chunk-5xgkngpb.js:2138760-2139849 fingerprint (2.1.88 match: processSetupHooks, 0.572)
 /**
  * 运行 Setup hooks（safe mode 下跳过插件 hooks）。
  */
@@ -435,18 +438,19 @@ async function processSetupHooks(trigger, trigger_2, { forceSyncExecution, stora
   }
   return hookMessages;
 }
-//@ chunk-e6aww6q8.js:2083443-2084306 placement
+//@ chunk-5xgkngpb.js:2139849-2140905 placement
 /**
  * 恢复会话时统计：距上次响应秒数、上下文 token、提示缓存是否可能过期与重写费用，并记录恢复日志种子。
  */
 function resumeCacheStats(messages, model, sessionId, options) {
   let contextTokens = contextTokensOf(messages);
-  let stageSeed = (requestAt, ttlMs) => {
+  let stageSeed = (requestAt, ttlMs, ask) => {
     stageResumeJournalSeed({
       sessionId,
       contextTokens,
       requestAt,
       ttlMs,
+      ask,
     });
   };
   let lastRealAssistantMessage = findLastRealAssistantMessage(messages);
@@ -477,9 +481,22 @@ function resumeCacheStats(messages, model, sessionId, options) {
   let sinceAnchorSeconds = Number.isNaN(cacheAnchorAt)
     ? 1 / 0
     : Math.max(0, Math.round((Date.now() - cacheAnchorAt) / 1000));
+  let canUpgradeTo1h =
+    getIsNonInteractiveSession() &&
+    typeof lastRealAssistantMessage.message.model === "string" &&
+    lastRealAssistantMessage.remoteSourced !== true &&
+    !("forkedFrom" in lastRealAssistantMessage) &&
+    getCacheCreationTtl(lastRealAssistantMessage.message.usage) === "5m" &&
+    applyFiveMinuteOverride("1h") === "1h";
   stageSeed(
     Number.isNaN(cacheAnchorAt) ? null : cacheAnchorAt,
     Number.isNaN(cacheAnchorAt) ? null : ttlSeconds * 1000,
+    canUpgradeTo1h
+      ? {
+          model: stripModelDateSuffix(lastRealAssistantMessage.message.model),
+          ttlMs: CACHE_TTL_5M_MS,
+        }
+      : undefined,
   );
   stageResumeKeepalive(() =>
     postCompact &&
@@ -504,7 +521,7 @@ function resumeCacheStats(messages, model, sessionId, options) {
     estimated_cache_write_usd: writeCost.estimated_cache_write_usd,
   };
 }
-//@ chunk-e6aww6q8.js:2084306-2084641 placement
+//@ chunk-5xgkngpb.js:2140905-2141240 placement
 /**
  * 判断压缩边界之后是否有助手用量（或保留段锚点即边界）。
  */
@@ -524,7 +541,7 @@ function hasPostCompactUsage(messages) {
     compactMetadata?.preservedMessages?.anchorUuid ?? compactMetadata?.preservedSegment?.anchorUuid;
   return anchorUuid !== undefined && anchorUuid === boundary.uuid;
 }
-//@ chunk-e6aww6q8.js:2084641-2084912 placement
+//@ chunk-5xgkngpb.js:2141240-2141511 placement
 /**
  * 估算当前上下文 token：取最近一次助手用量，否则取压缩边界的 postTokens 或估算。
  */
@@ -546,13 +563,13 @@ function contextTokensOf(messages) {
   return roughTokenCountEstimationForMessages(messages);
 }
 export {
+  takePendingInitialUserMessage,
   startHookRun,
   processSessionStartHooks,
   takePendingHookSessionTitle,
-  contextTokensOf,
-  takePendingInitialUserMessage,
-  processSetupHooks,
   owedSessionStartHooks,
   sessionStartWaitReason,
   overtakeSessionStart,
+  contextTokensOf,
+  processSetupHooks,
 };

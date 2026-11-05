@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。更新模型提议判定。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (28)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (28)
  * attribution: placement 28
  */
 import { init_react_production, useEffect, createElement } from "../../vendor/react/cjs/react.production.js";
@@ -26,9 +26,9 @@ import { getDefaultMainLoopModel } from "./model/modelFallback.js";
 import { parseUserSpecifiedModel, bytesPerTokenForModel, renderModelName } from "./model/modelDisplay.js";
 import { parseModelId, compareVersion, stripAnyVersatileSuffix } from "./model/modelIds.js";
 import { CACHE_TTL_1H_MS } from "../services/api/promptCacheBreakDetection.js";
-import { SYNTHETIC_MODEL } from "../constants/messages.js";
+import { SYNTHETIC_MODEL, createSystemMessage } from "./messages.js";
 import { isFastModeSettingOn, supportsFastMode } from "./fastMode.js";
-import { getInitialSettings_2 } from "./settings/settings.js";
+import { getInitialSettings } from "./settings/settings.js";
 import { MODEL_COSTS, getModelCosts } from "./modelCost.js";
 import { EMPTY_USAGE } from "../services/api/emptyUsage.js";
 import { getGlobalConfig, saveGlobalConfig } from "./config.js";
@@ -48,7 +48,6 @@ import { isUnattendedInteractiveSession } from "./concurrentSessions.js";
 import { getMainLoopModelFromState } from "../hooks/useMainLoopModel.js";
 import { createDependencyWatcher } from "../cli/print/rewindStandIn.js";
 import { logError } from "./log.js";
-import { createSystemMessage } from "./messages.js";
 import { logFeatureOk, logFeatureSad } from "../services/analytics/featureTelemetry.js";
 import { serializeModelSwitch } from "./model/modelSwitchHooks.js";
 import {
@@ -59,14 +58,19 @@ import {
 } from "../commands/model/modelSwitch.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:348815-348819 placement
+//@ chunk-czq1j3j2.js:350721-350725 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:348815", () => {
+deferInit("chunk-czq1j3j2.js:350721", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:348819-348982 placement
+//@ chunk-czq1j3j2.js:368223-368227 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:368223", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:386541-386704 placement
 var resumeOnNewerModelDialogDef; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:348819", () => {
+deferInit("chunk-czq1j3j2.js:386541", () => {
   resumeOnNewerModelDialogDef = withHideWhile({
     kind: NEWER_MODEL_OFFER_2,
     payload: DoctorLazy(() =>
@@ -80,13 +84,13 @@ deferInit("chunk-18hwfzwa.js:348819", () => {
     hideWhile: [],
   });
 });
-//@ chunk-18hwfzwa.js:348982-349024 placement
+//@ chunk-czq1j3j2.js:386704-386746 placement
 function canonicalIdentityName(model) {
   return getCanonicalName(model, {
     identity: true,
   });
 }
-//@ chunk-18hwfzwa.js:349024-349417 placement
+//@ chunk-czq1j3j2.js:386746-387139 placement
 /**
  * 判断是否提示改用更新的模型：当前模型与基线模型同族且更新、无后缀，且对话中尚未用过基线模型、也没有发生拒绝回退时，返回保留 1M 上下文后的建议模型。
  */
@@ -119,12 +123,12 @@ function findNewerModelOffer(messages, currentModel) {
   }
   return preserve1mContextForRefusalFallback(currentModel, baselineModel);
 }
-//@ chunk-18hwfzwa.js:349417-349430 placement
+//@ chunk-czq1j3j2.js:387139-387152 placement
 var NEWER_OFFER_MIN_AGE_MS; // deferred: uses CACHE_TTL_5M_MS (../services/api/promptCacheBreakDetection.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:349417", () => {
+deferInit("chunk-czq1j3j2.js:387139", () => {
   NEWER_OFFER_MIN_AGE_MS = 2 * CACHE_TTL_1H_MS;
 });
-//@ chunk-18hwfzwa.js:349430-349677 placement
+//@ chunk-czq1j3j2.js:387152-387399 placement
 function lastAssistantModelBefore(messages) {
   let last = messages.findLast(
     (message) =>
@@ -134,9 +138,9 @@ function lastAssistantModelBefore(messages) {
   );
   return Date.now() - Date.parse(last?.timestamp ?? "") >= NEWER_OFFER_MIN_AGE_MS;
 }
-//@ chunk-18hwfzwa.js:349677-350020 placement
+//@ chunk-czq1j3j2.js:387399-387742 placement
 function fastModeCostDelta({ from, to }) {
-  let isFastModeOn = isFastModeSettingOn(getInitialSettings_2());
+  let isFastModeOn = isFastModeSettingOn(getInitialSettings());
   let lookupCosts = (model) =>
     MODEL_COSTS[canonicalIdentityName(model)] &&
     getModelCosts(model, {
@@ -154,12 +158,12 @@ function fastModeCostDelta({ from, to }) {
     (toCosts.promptCacheWrite1hTokens ?? 0) * byteRatio <= (fromCosts.promptCacheWrite1hTokens ?? 1 / 0)
   );
 }
-//@ chunk-18hwfzwa.js:350020-350060 placement
+//@ chunk-czq1j3j2.js:387742-387782 placement
 var DEFAULT_OFFER_LIMITS = {
   maxAsks: 2,
   minHoursBetween: 168,
 };
-//@ chunk-18hwfzwa.js:350060-350249 placement
+//@ chunk-czq1j3j2.js:387782-387971 placement
 function isOfferThrottled(switchInfo, limits) {
   let newerModelAsks = getGlobalConfig().newerModelAsks ?? {};
   let previousAsks = newerModelAsks[canonicalIdentityName(switchInfo.to)];
@@ -168,9 +172,9 @@ function isOfferThrottled(switchInfo, limits) {
     (previousAsks?.asks ?? 0) >= limits.maxAsks || Date.now() - max < limits.minHoursBetween * CACHE_TTL_1H_MS
   );
 }
-//@ chunk-18hwfzwa.js:350249-350433 placement
+//@ chunk-czq1j3j2.js:387971-388155 placement
 var NEWER_MODEL_OFFER_CONFIG_SCHEMA; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:350249", () => {
+deferInit("chunk-czq1j3j2.js:387971", () => {
   NEWER_MODEL_OFFER_CONFIG_SCHEMA = DoctorLazy(() =>
     objectSchema({
       enabled: booleanSchema(),
@@ -182,13 +186,13 @@ deferInit("chunk-18hwfzwa.js:350249", () => {
     }),
   );
 });
-//@ chunk-18hwfzwa.js:350433-350508 placement
+//@ chunk-czq1j3j2.js:388155-388230 placement
 function newerModelOfferConfig() {
   return NEWER_MODEL_OFFER_CONFIG_SCHEMA().safeParse(
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_hidden_volcano", null),
   ).data;
 }
-//@ chunk-18hwfzwa.js:350508-351117 placement
+//@ chunk-czq1j3j2.js:388230-388839 placement
 function shouldOfferNewerModel(messages, mainLoopModelFromState) {
   if (getGlobalConfig().resumeReturnDismissed || !isFirstPartyApiBackend()) return;
   let newerModelOffer = findNewerModelOffer(messages, mainLoopModelFromState);
@@ -232,11 +236,11 @@ function shouldOfferNewerModel(messages, mainLoopModelFromState) {
   logNewerModelSuggestion("offered", offer);
   return offer;
 }
-//@ chunk-18hwfzwa.js:351117-351149 placement
+//@ chunk-czq1j3j2.js:388839-388871 placement
 function displayModelName(modelName) {
   return renderModelName(stripAnyVersatileSuffix(modelName));
 }
-//@ chunk-18hwfzwa.js:351149-351468 placement
+//@ chunk-czq1j3j2.js:388871-389190 placement
 var NEWER_MODEL_OFFER_COPY = {
   lead: "You\u2019re resuming {an} {older} session.",
   text: "Press `{key}` to continue with `{newer}`.",
@@ -245,7 +249,7 @@ var NEWER_MODEL_OFFER_COPY = {
   decline: "Keep {older}",
   accepted: "Continuing with {newer}, your default model \xB7 /model to switch back",
 };
-//@ chunk-18hwfzwa.js:351468-351756 placement
+//@ chunk-czq1j3j2.js:389190-389478 placement
 function fillNewerModelCopy({ from, to }, shortcutDisplay = "") {
   let words = newerModelOfferConfig()?.words;
   let fillTemplate = (template) =>
@@ -262,11 +266,11 @@ function fillNewerModelCopy({ from, to }, shortcutDisplay = "") {
     declined: stayingOnModelText(from),
   };
 }
-//@ chunk-18hwfzwa.js:351756-351828 placement
+//@ chunk-czq1j3j2.js:389478-389550 placement
 function stayingOnModelText(model) {
   return `Staying on ${displayModelName(model)} \xB7 /model to switch later`;
 }
-//@ chunk-18hwfzwa.js:351828-351956 placement
+//@ chunk-czq1j3j2.js:389550-389678 placement
 function logNewerModelSuggestion(action, { from, to, form }) {
   logEvent("tengu_newer_model_suggestion", {
     action: fromEnum(action),
@@ -275,7 +279,7 @@ function logNewerModelSuggestion(action, { from, to, form }) {
     to_model: telemetrySafeModelName(to),
   });
 }
-//@ chunk-18hwfzwa.js:351956-352239 placement
+//@ chunk-czq1j3j2.js:389678-389961 placement
 function recordNewerModelAsk(action, offer, storageV5) {
   logNewerModelSuggestion(action, offer);
   if (action !== "shown" && action !== "accepted") return;
@@ -303,12 +307,7 @@ function recordNewerModelAsk(action, offer, storageV5) {
     };
   }, storageV5);
 }
-//@ chunk-18hwfzwa.js:352239-352243 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:352239", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:352243-352479 placement
+//@ chunk-czq1j3j2.js:389965-390201 placement
 function NewerModelOfferLine(props) {
   let $ = useMemoCache(5);
   let { segments, onScreen } = props;
@@ -338,11 +337,11 @@ function NewerModelOfferLine(props) {
   } else element = $[4];
   return element;
 }
-//@ chunk-18hwfzwa.js:352479-352520 placement
+//@ chunk-czq1j3j2.js:390201-390242 placement
 var NEWER_MODEL_OFFER = "newer-model-offer";
 var OFFER_TIMEOUT_MS = 60000;
 var drawnOffer;
-//@ chunk-18hwfzwa.js:352520-352554 placement
+//@ chunk-czq1j3j2.js:390242-390276 placement
 /**
  * 结束并清除当前已绘出的新模型提议。
  */
@@ -350,7 +349,7 @@ function endDrawnOffer() {
   drawnOffer?.end();
   drawnOffer = undefined;
 }
-//@ chunk-18hwfzwa.js:352554-352659 placement
+//@ chunk-czq1j3j2.js:390276-390381 placement
 /**
  * 若已绘出的新模型提议不在最近输入期间，则取走该提议并清除绘制状态，返回是否取走。
  */
@@ -362,7 +361,7 @@ function takeDrawnOffer(inputClock, windowMs) {
   take();
   return true;
 }
-//@ chunk-18hwfzwa.js:352659-352869 placement
+//@ chunk-czq1j3j2.js:390381-390591 placement
 async function useDefaultToNewerModelKey(messages, context) {
   let { store } = context;
   let shortcutDisplay = getShortcutDisplay("chat:defaultToNewerModel", "Chat", "ctrl+y");
@@ -374,7 +373,7 @@ async function useDefaultToNewerModelKey(messages, context) {
   if (offer.form === "line") offerNewerModelLine(offer, shortcutDisplay, context);
   else await showNewerModelOfferDialog(offer, context);
 }
-//@ chunk-18hwfzwa.js:352869-353523 placement
+//@ chunk-czq1j3j2.js:390591-391245 placement
 function offerNewerModelLine(offer, shortcutDisplay, context) {
   let { store, storageV5 } = context;
   let dependencyWatcher = createDependencyWatcher(
@@ -433,14 +432,14 @@ function offerNewerModelLine(offer, shortcutDisplay, context) {
     }),
   });
 }
-//@ chunk-18hwfzwa.js:353523-353608 placement
+//@ chunk-czq1j3j2.js:391245-391330 placement
 function appendOfferNotice({ transcript }, text, level = "notice") {
   transcript.apply({
     type: "append",
     messages: [createSystemMessage(text, level)],
   });
 }
-//@ chunk-18hwfzwa.js:353608-353919 placement
+//@ chunk-czq1j3j2.js:391330-391641 placement
 async function showNewerModelOfferDialog(offer, context) {
   let { storageV5 } = context;
   let choice = await context.requestDialog(resumeOnNewerModelDialogDef, offer, {
@@ -460,7 +459,7 @@ async function showNewerModelOfferDialog(offer, context) {
   }
   await confirmModelSwitchCommand(offer, context);
 }
-//@ chunk-18hwfzwa.js:353919-354486 placement
+//@ chunk-czq1j3j2.js:391641-392208 placement
 async function confirmModelSwitchCommand(offer, context) {
   let { session, store, setAppState, storageV5 } = context;
   let switchResult = await serializeModelSwitch(session, () =>

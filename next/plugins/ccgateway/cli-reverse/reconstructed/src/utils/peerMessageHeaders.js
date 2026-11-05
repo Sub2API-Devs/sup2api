@@ -3,25 +3,25 @@
  *
  * 对端消息头（from/hop-chain）（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qg0af0yq.js (26)
- * attribution: placement 26
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-gb7aq6sf.js (27)
+ * attribution: placement 26, layout 1
  */
 import { createHmac } from "crypto";
-import { firstMeaningfulLine, clipTeammateText } from "./swarm/teammateIds.js";
+import { firstMeaningfulLine, clipTeammateText, sanitizeAddressPart } from "./swarm/teammateIds.js";
 import { stripInvisibleChars as stripInvisibleChars_3 } from "./sanitization.js";
 import { truncateToWidth } from "./format.js";
 import { CROSS_SESSION_MESSAGE } from "../constants/xml.js";
 import { scrubCloseTag } from "./confusables.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-qg0af0yq.js:19143-19155 placement
+//@ chunk-gb7aq6sf.js:19168-19180 placement
 /**
  * MAX_PEER_LABEL_WIDTH：对端会话标签/首行的显示宽度上限。
  */
 var MAX_PEER_LABEL_WIDTH = 120;
-//@ chunk-qg0af0yq.js:19155-19248 placement
+//@ chunk-gb7aq6sf.js:19180-19273 placement
 /**
  * firstLineOfPeerBody：取正文首个有意义的行并截断到显示宽度。
  */
@@ -33,21 +33,21 @@ function firstLineOfPeerBody(body) {
   );
   return line === "" ? "" : truncateToWidth(line, MAX_PEER_LABEL_WIDTH);
 }
-//@ chunk-qg0af0yq.js:19248-19293 placement
+//@ chunk-gb7aq6sf.js:19273-19318 placement
 var PEER_FROM_MODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PEER_FROM_MODE_SET;
-deferInit("chunk-qg0af0yq.js:19248", () => {
+deferInit("chunk-gb7aq6sf.js:19273", () => {
   PEER_FROM_MODES = ["bypass", "prompting"];
   PEER_FROM_MODE_SET = new Set(PEER_FROM_MODES);
 });
-//@ chunk-qg0af0yq.js:19293-19326 placement
+//@ chunk-gb7aq6sf.js:19318-19351 placement
 /**
  * isPeerFromMode：判断字符串是否是合法的 from-mode。
  */
 function isPeerFromMode(mode) {
   return PEER_FROM_MODE_SET.has(mode);
 }
-//@ chunk-qg0af0yq.js:19326-19499 placement
+//@ chunk-gb7aq6sf.js:19351-19524 placement
 function percentEncodeHeaderValue(value) {
   let textEncoder = new TextEncoder();
   return value.replace(/[^A-Za-z0-9:_/.\\-]/gu, (character) =>
@@ -57,21 +57,21 @@ function percentEncodeHeaderValue(value) {
     ).join(""),
   );
 }
-//@ chunk-qg0af0yq.js:19499-19539 placement
+//@ chunk-gb7aq6sf.js:19524-19564 placement
 /**
  * bridgeAddressFromToken：把 bridge 访问令牌拼成 bridge: 前缀的地址。
  */
 function bridgeAddressFromToken(token) {
   return `bridge:${percentEncodeHeaderValue(token)}`;
 }
-//@ chunk-qg0af0yq.js:19539-19575 placement
+//@ chunk-gb7aq6sf.js:19564-19600 placement
 /**
  * udsAddressFromPath：把套接字路径拼成 uds: 前缀的地址。
  */
 function udsAddressFromPath(socketPath) {
   return `uds:${percentEncodeHeaderValue(socketPath)}`;
 }
-//@ chunk-qg0af0yq.js:19575-19638 placement
+//@ chunk-gb7aq6sf.js:19600-19663 placement
 /**
  * decodeHeaderValue：容错解码 URL 编码的消息头值。
  */
@@ -82,21 +82,21 @@ function decodeHeaderValue(value) {
     return value;
   }
 }
-//@ chunk-qg0af0yq.js:19638-19682 placement
+//@ chunk-gb7aq6sf.js:19663-19707 placement
 /**
  * PEER_SESSION_ID_PATTERN：from-session 的合法字符与长度；MAX_HOP_CHAIN_LENGTH：跳链最多保留的跳数；HOP_ID_HEX_LENGTH：单跳 id 的十六进制长度（HMAC 截断长度）（同一声明共 3 个绑定）。
  */
 var PEER_SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
 var MAX_HOP_CHAIN_LENGTH = 32;
 var HOP_ID_HEX_LENGTH = 24;
-//@ chunk-qg0af0yq.js:19682-19758 placement
+//@ chunk-gb7aq6sf.js:19707-19783 placement
 /**
  * hopIdHmac：用会话密钥对跳 id 做 HMAC 并截断。
  */
 function hopIdHmac(hopId, randomIdSecret) {
   return createHmac("sha256", randomIdSecret).update(hopId).digest("hex").slice(0, HOP_ID_HEX_LENGTH);
 }
-//@ chunk-qg0af0yq.js:19758-19909 placement
+//@ chunk-gb7aq6sf.js:19783-19934 placement
 /**
  * 对端消息头的字符集、跳链 id 与跳链格式、值长度上限及对应正则。
  */
@@ -106,7 +106,7 @@ var HOP_CHAIN_PATTERN;
 var HOP_CHAIN_REGEX;
 var MAX_HEADER_VALUE_LENGTH;
 var HEADER_VALUE_REGEX;
-deferInit("chunk-qg0af0yq.js:19758", () => {
+deferInit("chunk-gb7aq6sf.js:19783", () => {
   HEADER_VALUE_CHARS = "A-Za-z0-9%:_/.\\\\-";
   HOP_ID_PATTERN = `[0-9a-f]{${HOP_ID_HEX_LENGTH}}`;
   HOP_CHAIN_PATTERN = `${HOP_ID_PATTERN}(?:,${HOP_ID_PATTERN}){0,${MAX_HOP_CHAIN_LENGTH - 1}}`;
@@ -114,14 +114,14 @@ deferInit("chunk-qg0af0yq.js:19758", () => {
   MAX_HEADER_VALUE_LENGTH = 300;
   HEADER_VALUE_REGEX = new RegExp(`^[${HEADER_VALUE_CHARS}]{1,${MAX_HEADER_VALUE_LENGTH}}$`);
 });
-//@ chunk-qg0af0yq.js:19909-19943 placement
+//@ chunk-gb7aq6sf.js:19934-19968 placement
 /**
  * isValidHeaderValue：判断消息头值是否符合字符集与长度上限。
  */
 function isValidHeaderValue(from) {
   return HEADER_VALUE_REGEX.test(from);
 }
-//@ chunk-qg0af0yq.js:19943-20077 placement
+//@ chunk-gb7aq6sf.js:19968-20102 placement
 /**
  * 在跳链后追加本节点并保留最近若干跳。
  */
@@ -132,7 +132,7 @@ function extendHopChain(hopChain, hopId) {
   if (chain.length === 0) return;
   return chain.length > MAX_HOP_CHAIN_LENGTH ? chain.slice(chain.length - MAX_HOP_CHAIN_LENGTH) : chain;
 }
-//@ chunk-qg0af0yq.js:20077-20510 placement
+//@ chunk-gb7aq6sf.js:20102-20535 placement
 function formatPeerMessageHeader(from, fromName, fromSession, hopChain, fromMode, fromPlugin) {
   let attributes = [];
   if (from) attributes.push(`from="${from}"`);
@@ -149,12 +149,12 @@ function formatPeerMessageHeader(from, fromName, fromSession, hopChain, fromMode
   if (safePlugin) attributes.push(`from-plugin="${safePlugin}"`);
   return attributes.length > 0 ? ` ${attributes.join(" ")}` : "";
 }
-//@ chunk-qg0af0yq.js:20510-20555 placement
-var regExp_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-qg0af0yq.js:20510", () => {
+//@ chunk-gb7aq6sf.js:20535-20580 placement
+var regExp_2; // deferred: uses AGENT_NOTIFICATION_PREFIX (../constants/xml.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-gb7aq6sf.js:20535", () => {
   regExp_2 = new RegExp(`^<${CROSS_SESSION_MESSAGE} from="([^"]+)"`);
 });
-//@ chunk-qg0af0yq.js:20555-20647 placement
+//@ chunk-gb7aq6sf.js:20580-20672 placement
 /**
  * wrapPeerMessage：把正文包成 cross-session-message 标签并带上消息头。
  */
@@ -164,7 +164,7 @@ function wrapPeerMessage(from, fromName, body, fromSession, hopChain, fromMode, 
 ${scrubCloseTag(CROSS_SESSION_MESSAGE, body)}
 </${CROSS_SESSION_MESSAGE}>`;
 }
-//@ chunk-qg0af0yq.js:20647-21343 placement
+//@ chunk-gb7aq6sf.js:20672-21369 placement
 function parsePeerMessageHeader(text) {
   {
     if (typeof text !== "string") return;
@@ -205,7 +205,7 @@ function parsePeerMessageHeader(text) {
   }
   return;
 }
-//@ chunk-qg0af0yq.js:21343-21488 placement
+//@ chunk-gb7aq6sf.js:21369-21515 placement
 /**
  * 去掉对端消息头中的跳链。
  */
@@ -222,7 +222,7 @@ function dropHopChain(text) {
     peerMessageHeader.fromPlugin,
   );
 }
-//@ chunk-qg0af0yq.js:21488-21653 placement
+//@ chunk-gb7aq6sf.js:21515-21681 placement
 /**
  * 给对端消息头标注来源插件（未标注时）。
  */
@@ -240,7 +240,7 @@ function tagPeerMessagePlugin(text, plugin) {
     plugin,
   );
 }
-//@ chunk-qg0af0yq.js:21653-21735 placement
+//@ chunk-gb7aq6sf.js:21681-21764 placement
 /**
  * stripPeerMessageBody：发送者与接收者相同时去掉正文，避免回显。
  */
@@ -249,7 +249,7 @@ function stripPeerMessageBody(entry, keepBody, dropBody) {
   let { body, ...rest } = entry;
   return rest;
 }
-//@ chunk-qg0af0yq.js:21735-21994 placement
+//@ chunk-gb7aq6sf.js:21764-22024 placement
 /**
  * 从对端消息头提取发送者名、来源会话、跳链、模式与正文。
  */
@@ -273,7 +273,33 @@ function peerMessageInfo(text) {
     body: peerMessageHeader.body,
   };
 }
-//@ chunk-qg0af0yq.js:21994-22184 placement
+//@ chunk-gb7aq6sf.js:22024-22392 layout
+function peerOriginHeader(origin, meta) {
+  {
+    if (typeof origin !== "object" || origin === null || !("kind" in origin) || origin.kind !== "peer")
+      return;
+    if (!("from" in origin) || typeof origin.from !== "string" || !isValidHeaderValue(origin.from))
+      return {
+        from: "unknown",
+      };
+    let name = "name" in origin ? sanitizeAddressPart(origin.name) : undefined;
+    let body = "body" in origin ? origin.body : undefined;
+    return {
+      from: origin.from,
+      ...(name && {
+        name,
+      }),
+      ...(typeof body === "string" &&
+        stripInvisibleChars_3(body, " ").trim() !== "" &&
+        typeof meta === "string" &&
+        meta.includes(body) && {
+          body,
+        }),
+    };
+  }
+  return;
+}
+//@ chunk-gb7aq6sf.js:22392-22582 placement
 /**
  * 找到最近一条真实用户消息，若来自对端则返回其跳链。
  */
@@ -285,26 +311,26 @@ function lastPeerHopChain(messages) {
   }
   return;
 }
-//@ chunk-qg0af0yq.js:22184-22240 placement
+//@ chunk-gb7aq6sf.js:22582-22638 placement
 var regExp_3; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-qg0af0yq.js:22184", () => {
+deferInit("chunk-gb7aq6sf.js:22582", () => {
   regExp_3 = new RegExp(`^(?:uds|bridge|did):[${HEADER_VALUE_CHARS}]{1,200}$`);
 });
-//@ chunk-qg0af0yq.js:22240-22274 placement
+//@ chunk-gb7aq6sf.js:22638-22672 placement
 /**
  * isPeerAddress：判断字符串是否是 uds:/bridge:/did: 形式的对等地址。
  */
 function isPeerAddress(address) {
   return regExp_3.test(address);
 }
-//@ chunk-qg0af0yq.js:22274-22349 placement
+//@ chunk-gb7aq6sf.js:22672-22747 placement
 /**
  * UNIX_SOCKET_PATH_PATTERN：匹配以 / 结尾的 .sock 绝对路径；NAMED_PIPE_PATH_PATTERN：匹配 \\?\pipe\ 形式的 Windows 命名管道；UNIX_SOCKET_PREFIX_PATTERN：匹配 .sock 路径前缀（不要求结尾）（同一声明共 3 个绑定）。
  */
 var UNIX_SOCKET_PATH_PATTERN = /^\/\S*\.sock$/;
 var NAMED_PIPE_PATH_PATTERN = /^[\\/]{2}[.?][\\/]pipe[\\/]/i;
 var UNIX_SOCKET_PREFIX_PATTERN = /^\/\S*\.sock/;
-//@ chunk-qg0af0yq.js:22349-22383 placement
+//@ chunk-gb7aq6sf.js:22747-22781 placement
 /**
  * isUnixSocketPath：判断是否是 unix 套接字路径。
  */
@@ -312,26 +338,27 @@ function isUnixSocketPath(path) {
   return UNIX_SOCKET_PREFIX_PATTERN.test(path);
 }
 export {
-  isValidHeaderValue,
   stripPeerMessageBody,
   peerMessageInfo,
   isPeerAddress,
-  udsAddressFromPath,
-  isPeerFromMode,
+  peerOriginHeader,
   dropHopChain,
-  MAX_PEER_LABEL_WIDTH,
+  udsAddressFromPath,
+  bridgeAddressFromToken,
   MAX_HEADER_VALUE_LENGTH,
   lastPeerHopChain,
-  firstLineOfPeerBody,
-  hopIdHmac,
-  bridgeAddressFromToken,
-  MAX_HOP_CHAIN_LENGTH,
-  wrapPeerMessage,
-  extendHopChain,
-  regExp_2,
   tagPeerMessagePlugin,
-  isUnixSocketPath,
+  firstLineOfPeerBody,
+  regExp_2,
+  isValidHeaderValue,
+  MAX_PEER_LABEL_WIDTH,
   decodeHeaderValue,
   UNIX_SOCKET_PATH_PATTERN,
   NAMED_PIPE_PATH_PATTERN,
+  MAX_HOP_CHAIN_LENGTH,
+  wrapPeerMessage,
+  extendHopChain,
+  isPeerFromMode,
+  hopIdHmac,
+  isUnixSocketPath,
 };

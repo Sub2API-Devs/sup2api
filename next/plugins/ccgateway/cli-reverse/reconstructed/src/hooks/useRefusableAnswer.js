@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：可拒绝回答的 hook
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-x35ttgf3.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2nas5hra.js (2)
  * attribution: placement 2
  */
 import {
@@ -15,9 +15,9 @@ import {
   useEffect,
 } from "../../vendor/react/cjs/react.production.js";
 
-//@ chunk-x35ttgf3.js:233-237 placement
+//@ chunk-2nas5hra.js:233-237 placement
 init_react_production();
-//@ chunk-x35ttgf3.js:237-557 placement
+//@ chunk-2nas5hra.js:237-557 placement
 function useRefusableAnswer(isAnswerAccepted) {
   let [state, setState] = useState({
     attempts: 0,

@@ -3,9 +3,9 @@
  *
  * Agent 工具提示词生成：代理列表行、fork 用法、写 prompt 指南、前后台说明与示例
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/prompt.ts
- * pieces: chunk-e6aww6q8.js (7)
+ * pieces: chunk-5xgkngpb.js (7)
  * attribution: placement 2, sole-consumer 1, fingerprint 2, layout 1, callgraph-witnessed 1
  */
 import { getSubscriptionType } from "../../utils/auth.js";
@@ -43,10 +43,10 @@ import {
 import { hasEmbeddedSearchTools } from "../../utils/embeddedTools.js";
 import { isBashAvailable } from "../../utils/shell/shellToolUtils.js";
 import { GREP_TOOL_NAME } from "../GrepTool/prompt.js";
-import { FILE_READ_TOOL_NAME } from "../FileReadTool/constants.js";
+import { READ } from "../FileReadTool/constants.js";
 import { SENDMESSAGE } from "../SendMessageTool/constants.js";
 
-//@ chunk-e6aww6q8.js:1424505-1426182 placement
+//@ chunk-5xgkngpb.js:1423978-1425655 placement
 /**
  * Agent 工具提示词中“何时使用子代理”的指导文本。
  */
@@ -57,7 +57,7 @@ Reach for this when you have independent work to run in parallel, when the user 
 Do the work yourself when it is a handful of tool calls or a lookup whose target you already know; don't delegate a check you could run inline. Delegate review only when you want a read that isn't anchored on yours \u2014 then give it the code, not your conclusion. Once you've delegated something, don't also run it yourself; wait for the result. When in doubt, don't spawn.
 
 When you do spawn one, brief it like the peer it is: state the goal and what you have already ruled out, point it at the files and docs worth reading instead of retyping them, and keep the scope explicit and narrow. That brief is the only context it will have, so it is your first lever on every cost above \u2014 and if you cannot write a clear one, you do not understand the task well enough to hand it off.`;
-//@ chunk-e6aww6q8.js:3261557-3261661 placement
+//@ chunk-5xgkngpb.js:3347871-3347975 placement
 /**
  * 判断是否对宿主做成本引导（pro 订阅，或 cowork 开关打开）。
  */
@@ -67,14 +67,14 @@ function shouldSteerCostToHost() {
   logHostCostSteerApplied();
   return true;
 }
-//@ chunk-e6aww6q8.js:3265270-3265305 sole-consumer
+//@ chunk-5xgkngpb.js:3351584-3351619 sole-consumer
 /**
  * 代理列表是否改由 system-reminder 注入（远程隔离可用且非受限配置）。
  */
 function shouldInjectAgentListViaReminder() {
   return isRemoteAgentIsolationAvailable() && !isPersonalConfigRestricted();
 }
-//@ chunk-e6aww6q8.js:3265305-3265587 fingerprint (2.1.88 match: getToolsDescription, 1)
+//@ chunk-5xgkngpb.js:3351619-3351901 fingerprint (2.1.88 match: getToolsDescription, 1)
 /**
  * 把代理的 tools/disallowedTools 描述为 "All tools" / "All tools except …" / 列表 / "None"。
  */
@@ -91,7 +91,7 @@ function getToolsDescription(agent) {
   else if (hasDenylist) return `All tools except ${disallowedTools.join(", ")}`;
   return "All tools";
 }
-//@ chunk-e6aww6q8.js:3265587-3265697 fingerprint (2.1.88 match: formatAgentLine, 0.863)
+//@ chunk-5xgkngpb.js:3351901-3352011 fingerprint (2.1.88 match: formatAgentLine, 0.863)
 /**
  * 格式化一行代理说明："- 类型: whenToUse (Tools: …)"。
  */
@@ -100,13 +100,13 @@ function formatAgentLine(agent, lean) {
   let description = (lean && agent.whenToUseLean) || agent.whenToUse;
   return `- ${agent.agentType}: ${description} (Tools: ${toolsDescription})`;
 }
-//@ chunk-e6aww6q8.js:3265697-3265791 layout
+//@ chunk-5xgkngpb.js:3352011-3352105 layout
 /**
  * 提示词中"可用代理类型在 system-reminder 中列出"的句子。
  */
 var AGENT_LIST_IN_REMINDER_NOTE =
   "Available agent types are listed in <system-reminder> messages in the conversation.";
-//@ chunk-e6aww6q8.js:3265791-3286110 callgraph-witnessed (2.1.88 match: getPrompt, 0.176)
+//@ chunk-5xgkngpb.js:3352105-3372440 callgraph-witnessed (2.1.88 match: getPrompt, 0.176)
 /**
  * Agent 工具提示词生成：按 fork 可用、coordinator、lean 提示、后台默认、worktree 隔离建议、模型混用、预算说明等拼装"何时 fork / 如何写 prompt / 示例 / 不该用的情况"各段。
  */
@@ -309,7 +309,7 @@ ${subagentBudgetNote}`
     : `
 ## When not to use
 
-If the target is already known, use the direct tool: ${FILE_READ_TOOL_NAME} for a known path, ${searchToolName} for a specific symbol or string. Reserve this tool for open-ended questions that span the codebase, or tasks that match an available agent type.
+If the target is already known, use the direct tool: ${READ} for a known path, ${searchToolName} for a specific symbol or string. Reserve this tool for open-ended questions that span the codebase, or tasks that match an available agent type.
 `;
   if (leanPromptText) {
     let backgroundBullet =
@@ -439,4 +439,4 @@ ${whenNotToUse}
 
 ${canFork ? forkExamples : freshExamples}`;
 }
-export { getPrompt, formatAgentLine, AGENT_LIST_IN_REMINDER_NOTE, shouldSteerCostToHost };
+export { formatAgentLine, shouldSteerCostToHost, AGENT_LIST_IN_REMINDER_NOTE, getPrompt };

@@ -3,19 +3,19 @@
  *
  * 2.1.316 新增：/focus 命令对象：切换只显示提示、摘要和回复的专注视图（需全屏渲染器）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 2
  */
 import { setViewMode, invalidateFocusModeSection } from "../../utils/focusMode.js";
-import { getInitialSettings_2 } from "../../utils/settings/settings.js";
+import { getInitialSettings } from "../../utils/settings/settings.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import { getRemoteCaps, isRemoteControlChannelAvailable } from "../../remote/remoteMode.js";
 import { logError } from "../../utils/log.js";
 
-//@ chunk-e6aww6q8.js:2050855-2052746 placement
+//@ chunk-5xgkngpb.js:2106997-2108888 placement
 /**
  * /focus 命令对象（local-jsx）；描述：Toggle focus view: just your prompt, summary, and response。
  */
@@ -33,7 +33,7 @@ var focusCommandDefinition = {
       async call(args, context) {
         setViewMode(null);
         if (context.presentation !== "fullscreen") {
-          if (getInitialSettings_2().viewMode === "focus") {
+          if (getInitialSettings().viewMode === "focus") {
             args(
               `Focus view is set by "viewMode": "focus" in settings.json \u2014 remove it there and restart Claude Code to turn it off. ${"Focus view needs the fullscreen renderer. Run /tui fullscreen to switch (this restarts and resumes your session), or set CLAUDE_CODE_NO_FLICKER=1 and restart."}`,
               {
@@ -91,7 +91,7 @@ var focusCommandDefinition = {
             context.storageV5,
           );
         invalidateFocusModeSection();
-        let viewMode = getInitialSettings_2().viewMode;
+        let viewMode = getInitialSettings().viewMode;
         let synced = applyFocusViewToRemote(viewMode ? viewMode === "focus" : nextMode);
         args(`${nextMode ? "Focus view enabled" : "Focus view disabled"}${synced ?? ""}`, {
           display: "system",
@@ -115,7 +115,7 @@ var focusNonInteractiveCommand = {
   load: () => import("./focus.js"),
 };
 var focusCommand = focusCommandDefinition;
-//@ chunk-e6aww6q8.js:2052746-2053003 placement
+//@ chunk-5xgkngpb.js:2108888-2109145 placement
 /**
  * applyFocusViewToRemote：远程会话时通过 control request 下发 viewMode。
  */

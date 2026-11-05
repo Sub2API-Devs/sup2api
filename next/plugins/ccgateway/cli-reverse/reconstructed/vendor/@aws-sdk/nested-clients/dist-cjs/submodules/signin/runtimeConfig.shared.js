@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/nested-clients/dist-cjs/submodules/signin/runtimeConfig.shared.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/nested-clients@3.936.0
- * pieces: chunk-y366fgzk.js (1)
+ * pieces: chunk-csa0qt1j.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -16,7 +16,7 @@ import { require_util_utf8 } from "../../../../../@smithy/util-utf8/dist-cjs/ind
 import { require_httpAuthSchemeProvider } from "./auth/httpAuthSchemeProvider.js";
 import { require_endpointResolver } from "./endpoint/endpointResolver.js";
 
-//@ chunk-y366fgzk.js:4773-5894 cjs-fingerprint
+//@ chunk-csa0qt1j.js:4773-5894 cjs-fingerprint
 var require_runtimeConfig_shared = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

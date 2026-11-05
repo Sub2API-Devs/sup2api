@@ -3,9 +3,9 @@
  *
  * 并入旧版已有路径：/remote-setup 命令。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/remote-setup/remote-setup.tsx
- * pieces: chunk-ajkmgejw.js (8)
+ * pieces: chunk-jnv8pjg5.js (8)
  * attribution: sole-consumer 3, fingerprint 3, layout 1, placement 1
  */
 import {
@@ -45,9 +45,9 @@ import { Dialog } from "../../components/design-system/Dialog.js";
 import { getConnectorsSettingsUrl } from "../../services/mcp/claudeai.js";
 import { ConfirmSelect } from "../../components/design-system/ConfirmSelect.js";
 
-//@ chunk-ajkmgejw.js:14670-14674 sole-consumer
+//@ chunk-jnv8pjg5.js:15817-15821 sole-consumer
 init_react_production();
-//@ chunk-ajkmgejw.js:14674-15219 sole-consumer
+//@ chunk-jnv8pjg5.js:15821-16366 sole-consumer
 /**
  * 调 gh api --include user 读 x-oauth-scopes 头，判断 GitHub CLI 令牌是否带 workflow 权限（present/missing/unknown）。
  */
@@ -80,7 +80,7 @@ async function checkGhTokenWorkflowScope() {
   logFeatureOk("remote_setup_gh_token_scopes");
   return scopes.includes("workflow") ? "present" : "missing";
 }
-//@ chunk-ajkmgejw.js:15219-15423 sole-consumer
+//@ chunk-jnv8pjg5.js:16366-16570 sole-consumer
 function parseOAuthScopesHeader(stdout) {
   let headerBlock = stripAnsi(stdout).split(/\r?\n\r?\n/, 1)[0] ?? "";
   let match = /^x-oauth-scopes:[ \t]*(.*)$/im.exec(headerBlock);
@@ -91,7 +91,7 @@ function parseOAuthScopesHeader(stdout) {
     .filter((scope) => scope !== "");
   return filtered.length === 0 ? null : filtered;
 }
-//@ chunk-ajkmgejw.js:15423-16011 fingerprint (2.1.88 match: checkLoginState, 0.853)
+//@ chunk-jnv8pjg5.js:16570-17158 fingerprint (2.1.88 match: checkLoginState, 0.853)
 async function checkLoginState(credentials) {
   if (!(await hasValidOAuthToken(credentials)))
     return {
@@ -133,7 +133,7 @@ async function checkLoginState(credentials) {
     token: new GithubWebConnectionStatus(trimmed),
   };
 }
-//@ chunk-ajkmgejw.js:16011-16577 fingerprint (2.1.88 match: errorMessage, 0.776)
+//@ chunk-jnv8pjg5.js:17158-17724 fingerprint (2.1.88 match: errorMessage, 0.776)
 function errorMessage(err, codeUrl) {
   switch (err.kind) {
     case "not_signed_in":
@@ -152,7 +152,7 @@ function errorMessage(err, codeUrl) {
     }
   }
 }
-//@ chunk-ajkmgejw.js:16577-17082 layout
+//@ chunk-jnv8pjg5.js:17724-18229 layout
 /**
  * 提示 GitHub CLI 令牌缺少 workflow 权限的警告组件。
  */
@@ -175,7 +175,7 @@ function WorkflowScopeWarning() {
   } else warningBox = $[0];
   return warningBox;
 }
-//@ chunk-ajkmgejw.js:17082-21764 fingerprint (2.1.88 match: Web, 0.691)
+//@ chunk-jnv8pjg5.js:18229-22910 fingerprint (2.1.88 match: Web, 0.691)
 /**
  * remote-setup 的 Web 连接向导组件（Web，4.6KB）：选择/生成 Remote Control 会话名并展示连接信息。
  */
@@ -469,7 +469,7 @@ function Web(props) {
   } else dialog = $[37];
   return dialog;
 }
-//@ chunk-ajkmgejw.js:21764-21868 placement
+//@ chunk-jnv8pjg5.js:22910-23014 placement
 /**
  * /web-setup 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

@@ -1,8 +1,8 @@
 /**
  * @bufbuild/protobuf/dist/commonjs/from-json.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @bufbuild/protobuf@2.12.1
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-require-graph 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
@@ -17,7 +17,7 @@ import { require_base64_encoding } from "../cjs/wire/base64-encoding.js";
 import { require_error_4 } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
 import { require_extensions } from "./extensions.js";
 
-//@ chunk-fq0cr76a.js:456071-465470 cjs-require-graph
+//@ chunk-qg41pqt6.js:456645-466044 cjs-require-graph
 var require_from_json = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

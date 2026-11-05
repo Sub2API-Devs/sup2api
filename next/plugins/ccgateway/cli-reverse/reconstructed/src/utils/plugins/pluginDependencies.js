@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件依赖
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (60)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (60)
  * attribution: placement 60
  */
 import { readdir, mkdir, writeFile, lstat, realpath, rename, open } from "fs/promises";
@@ -110,12 +110,12 @@ import {
 } from "./marketplacePolicy.js";
 import { marketplaceNameOfId } from "./headersHelper.js";
 import { samePluginSource, sourceUrlAndRef } from "./pluginSourceUrl.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4400802-4400826 placement
+//@ chunk-5xgkngpb.js:4507419-4507443 placement
 class PluginDependencyError extends Error {}
-//@ chunk-e6aww6q8.js:4400826-4401137 placement
+//@ chunk-5xgkngpb.js:4507443-4507754 placement
 /**
  * package.json 依赖字段、锁文件标记与校验正则等常量。
  */
@@ -126,7 +126,7 @@ var PLATFORM_FIELDS = ["os", "cpu", "libc"];
 var INTEGRITY_RE = /^(sha512|sha384|sha256|sha1)-[A-Za-z0-9+/]+={0,2}$/;
 var PLUGIN_DEPENDENCIES = "plugin-dependencies";
 var PLACEHOLDER_VERSION = "0.0.0";
-//@ chunk-e6aww6q8.js:4401137-4401818 placement
+//@ chunk-5xgkngpb.js:4507754-4508435 placement
 function checkPackageLock(packageJsonText, lockText, lockfile, registry) {
   let jsonObject = parseJsonObject(packageJsonText, "package.json");
   let jsonObject_2 = parseJsonObject(lockText, lockfile);
@@ -163,7 +163,7 @@ function checkPackageLock(packageJsonText, lockText, lockfile, registry) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:4401818-4402964 placement
+//@ chunk-5xgkngpb.js:4508435-4509585 placement
 /**
  * 检查插件的 bun.lock 是否可用（JSON 格式、版本、patchedDependencies）。
  */
@@ -220,7 +220,7 @@ function checkBunLock(packageJsonText, lockText, registry) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:4402964-4403268 placement
+//@ chunk-5xgkngpb.js:4509585-4509889 placement
 /**
  * package.json 与锁文件列出的依赖须一致。
  */
@@ -239,7 +239,7 @@ function assertLockMatchesPackage(rootPackage, jsonObject, lockfileName) {
       }
     : lockDeps;
 }
-//@ chunk-e6aww6q8.js:4403268-4403504 placement
+//@ chunk-5xgkngpb.js:4509889-4510125 placement
 function omitOptionalFromDependencies(lists, extraFields = []) {
   let optionalDependencies = lists.optionalDependencies;
   if (optionalDependencies === undefined) return lists;
@@ -257,7 +257,7 @@ function omitOptionalFromDependencies(lists, extraFields = []) {
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:4403504-4404560 placement
+//@ chunk-5xgkngpb.js:4510125-4511181 placement
 /**
  * 校验 package-lock 条目：必须是 node_modules 下的包、对象、非链接/捆绑、有精确版本；名字须合法； 有 resolved 时须是合规链接且带 integrity；依赖、标志、平台、bin、peerDependenciesMeta 逐项校验。返回规范化后的条目。
  */
@@ -299,7 +299,7 @@ function validateLockEntry(entryPath, entry, lockfileName, registry) {
     result.peerDependenciesMeta = sanitizePeerDependenciesMeta(entry.peerDependenciesMeta);
   return result;
 }
-//@ chunk-e6aww6q8.js:4404560-4405476 placement
+//@ chunk-5xgkngpb.js:4511181-4512102 placement
 function validateBunLockEntry(entryPath, entry, registry) {
   let label = `its bun.lock entry "${quotedPrintable(entryPath, 120)}"`;
   if (!isPackagePath(entryPath)) throw new PluginDependencyError(`${label} is not a package path`);
@@ -334,7 +334,7 @@ function validateBunLockEntry(entryPath, entry, registry) {
   }
   return [nameAndVersion, resolved, result, assertIntegrity(integrity, label, resolved !== "")];
 }
-//@ chunk-e6aww6q8.js:4405476-4405638 placement
+//@ chunk-5xgkngpb.js:4512102-4512264 placement
 function assertDownloadLink(resolved, label, registry, kind) {
   let reason =
     typeof resolved === "string"
@@ -343,7 +343,7 @@ function assertDownloadLink(resolved, label, registry, kind) {
   if (reason !== undefined) throw new PluginDependencyError(`${label} has a download link that ${reason}`);
   return resolved;
 }
-//@ chunk-e6aww6q8.js:4405638-4405861 placement
+//@ chunk-5xgkngpb.js:4512264-4512487 placement
 function assertOptionalPeers(optionalPeers, label) {
   if (!isStringArray(optionalPeers))
     throw new PluginDependencyError(`${label} has an unreadable optionalPeers list`);
@@ -354,7 +354,7 @@ function assertOptionalPeers(optionalPeers, label) {
     );
   return optionalPeers;
 }
-//@ chunk-e6aww6q8.js:4405861-4406118 placement
+//@ chunk-5xgkngpb.js:4512487-4512744 placement
 function assertIntegrity(integrity, label, hasResolved) {
   if (integrity === "")
     throw new PluginDependencyError(
@@ -366,7 +366,7 @@ function assertIntegrity(integrity, label, hasResolved) {
     throw new PluginDependencyError(`${label} has an unreadable integrity hash`);
   return integrity;
 }
-//@ chunk-e6aww6q8.js:4406118-4406425 placement
+//@ chunk-5xgkngpb.js:4512744-4513051 placement
 /**
  * 依赖列表须为“注册表包名 → 版本范围”。
  */
@@ -385,7 +385,7 @@ function validateDependencyLists(source, fields, label) {
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:4406425-4406551 placement
+//@ chunk-5xgkngpb.js:4513051-4513177 placement
 function isRegistryVersionRange(spec) {
   if (typeof spec !== "string") return false;
   let match = /^npm:(.+)@([^@]*)$/.exec(spec);
@@ -393,7 +393,7 @@ function isRegistryVersionRange(spec) {
     ? isNpmVersionSpec(spec)
     : isValidNpmPackageNameLoose(match[1]) && isNpmVersionSpec(match[2]);
 }
-//@ chunk-e6aww6q8.js:4406551-4406659 placement
+//@ chunk-5xgkngpb.js:4513177-4513285 placement
 function isNodeModulesPath(entryPath) {
   return (
     entryPath.startsWith("node_modules/") &&
@@ -403,7 +403,7 @@ function isNodeModulesPath(entryPath) {
       .every((segment) => isValidNpmPackageNameLoose(segment))
   );
 }
-//@ chunk-e6aww6q8.js:4406659-4406828 placement
+//@ chunk-5xgkngpb.js:4513285-4513454 placement
 function isPackagePath(path) {
   let parts = path.split("/");
   let packages = [];
@@ -414,17 +414,17 @@ function isPackagePath(path) {
   }
   return packages.every((pkg) => isValidNpmPackageNameLoose(pkg));
 }
-//@ chunk-e6aww6q8.js:4406828-4406926 placement
+//@ chunk-5xgkngpb.js:4513454-4513552 placement
 function isSafePackageSubpath(subpath) {
   return (
     subpath !== "" && !subpath.startsWith("/") && !/[\\:]/.test(subpath) && !subpath.split("/").includes("..")
   );
 }
-//@ chunk-e6aww6q8.js:4406926-4406994 placement
+//@ chunk-5xgkngpb.js:4513552-4513620 placement
 function isSafePackageFileSegment(segment) {
   return segment !== "" && segment !== "." && segment !== ".." && !/[\\/:]/.test(segment);
 }
-//@ chunk-e6aww6q8.js:4406994-4407227 placement
+//@ chunk-5xgkngpb.js:4513620-4513853 placement
 function validateBinField(bin, label) {
   if (
     typeof bin === "string"
@@ -440,7 +440,7 @@ function validateBinField(bin, label) {
     `${label} has a bin link that points outside its package or has an invalid command name`,
   );
 }
-//@ chunk-e6aww6q8.js:4407227-4407342 placement
+//@ chunk-5xgkngpb.js:4513853-4513968 placement
 function sanitizePeerDependenciesMeta(peerDependenciesMeta) {
   let result = {};
   for (let [key, value] of Object.entries(peerDependenciesMeta))
@@ -450,7 +450,7 @@ function sanitizePeerDependenciesMeta(peerDependenciesMeta) {
       };
   return result;
 }
-//@ chunk-e6aww6q8.js:4407342-4407496 placement
+//@ chunk-5xgkngpb.js:4513968-4514122 placement
 function parseJsonObject(text, label) {
   let parsed;
   try {
@@ -461,7 +461,7 @@ function parseJsonObject(text, label) {
   if (!isPlainObjectLike(parsed)) throw new PluginDependencyError(`its ${label} is not a JSON object`);
   return parsed;
 }
-//@ chunk-e6aww6q8.js:4407496-4407593 placement
+//@ chunk-5xgkngpb.js:4514122-4514219 placement
 function dependencyFingerprint(lists) {
   return jsonStringify(
     DEPENDENCY_FIELDS_2.map((field) =>
@@ -471,15 +471,15 @@ function dependencyFingerprint(lists) {
     ),
   );
 }
-//@ chunk-e6aww6q8.js:4407593-4407664 placement
+//@ chunk-5xgkngpb.js:4514219-4514290 placement
 function isPlainObjectLike(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//@ chunk-e6aww6q8.js:4407664-4407739 placement
+//@ chunk-5xgkngpb.js:4514290-4514365 placement
 function isStringArray(value) {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
-//@ chunk-e6aww6q8.js:4407739-4408464 placement
+//@ chunk-5xgkngpb.js:4514365-4515090 placement
 /**
  * 安装插件依赖的常量组：rqn 安装命令超时 60 s；Rks 安装输出上限 32 MiB；sqn npm ci 参数；Eft 各 lockfile 对应的安装计划；uqn bun.lockb 不受支持的说明；cqn 各计划的 lockfile 名；fqn lockfile → 完成标记文件的映射。
  */
@@ -490,7 +490,7 @@ var LOCKFILE_INSTALL_PLANS;
 var BINARY_LOCKFILE_UNSUPPORTED_TEXT;
 var mapped_4;
 var BINARY_LOCKFILE_MESSAGES;
-deferInit("chunk-e6aww6q8.js:4407739", () => {
+deferInit("chunk-5xgkngpb.js:4514365", () => {
   MAX_DEPENDENCY_INSTALL_TIMEOUT_MS = 60000;
   MAX_DEPENDENCY_INSTALL_BYTES = 33554432;
   NPM_CI_ARGS = ["ci", "--ignore-scripts", "--workspaces=false", "--no-audit", "--no-fund"];
@@ -527,7 +527,7 @@ deferInit("chunk-e6aww6q8.js:4407739", () => {
     ),
   );
 });
-//@ chunk-e6aww6q8.js:4408464-4408939 placement
+//@ chunk-5xgkngpb.js:4515090-4515565 placement
 /**
  * 插件目录有 package.json 时按锁文件选择包管理器安装依赖；yarn/pnpm 锁文件不支持（会绕过 --ignore-scripts）； 返回 {ran, error?}。
  */
@@ -563,13 +563,13 @@ async function installPluginDependencies(pluginPath, { inPlaceAt } = {}) {
   );
   return choosePackageManager(pluginPath, lockfile, inPlaceAt);
 }
-//@ chunk-e6aww6q8.js:4408939-4409090 placement
+//@ chunk-5xgkngpb.js:4515565-4515716 placement
 function detectLockfile(names) {
   let found = LOCKFILE_INSTALL_PLANS.find((plan) => names.has(plan.lockfile));
   if (found !== undefined) return found;
   return names.has("yarn.lock") || names.has("pnpm-lock.yaml") ? "yarn-or-pnpm" : undefined;
 }
-//@ chunk-e6aww6q8.js:4409090-4409926 placement
+//@ chunk-5xgkngpb.js:4515716-4516552 placement
 async function checkLockfileSupported(pluginPath) {
   let entries;
   try {
@@ -622,9 +622,9 @@ async function checkLockfileSupported(pluginPath) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:4409926-4410006 placement
+//@ chunk-5xgkngpb.js:4516552-4516632 placement
 var DEPENDENCY_FIELDS = ["dependencies", "optionalDependencies", "peerDependencies", "workspaces"];
-//@ chunk-e6aww6q8.js:4410006-4410110 placement
+//@ chunk-5xgkngpb.js:4516632-4516736 placement
 function hasLifecycleScripts(packageFile) {
   let parsed;
   try {
@@ -635,11 +635,11 @@ function hasLifecycleScripts(packageFile) {
   if (!isPlainObjectLike(parsed)) return true;
   return DEPENDENCY_FIELDS.some((field) => hasAnyDependencyEntry(parsed[field]));
 }
-//@ chunk-e6aww6q8.js:4410110-4410192 placement
+//@ chunk-5xgkngpb.js:4516736-4516818 placement
 function hasAnyDependencyEntry(value) {
   return isPlainObjectLike(value) ? Object.keys(value).length > 0 : Array.isArray(value) && value.length > 0;
 }
-//@ chunk-e6aww6q8.js:4410192-4410967 placement
+//@ chunk-5xgkngpb.js:4516818-4517593 placement
 async function choosePackageManager(pluginPath, plan, inPlaceAt) {
   let tempSiblingName = makeTempSiblingName(stripTempSiblingSuffix(resolve_2(pluginPath)));
   try {
@@ -698,7 +698,7 @@ async function choosePackageManager(pluginPath, plan, inPlaceAt) {
     await removeDirectoryTreeNoFollow_2(tempSiblingName).catch(() => {});
   }
 }
-//@ chunk-e6aww6q8.js:4410967-4411227 placement
+//@ chunk-5xgkngpb.js:4517593-4517853 placement
 async function preparePackageManagerInputs(pluginPath, plan, tempSiblingName) {
   if (plan.lockfile === "bun.lockb") throw new PluginDependencyError(BINARY_LOCKFILE_UNSUPPORTED_TEXT);
   let packageFile = await readPackageFile(pluginPath, "package.json");
@@ -713,20 +713,20 @@ async function preparePackageManagerInputs(pluginPath, plan, tempSiblingName) {
     : undefined;
   return lockfileCompletionMatches(plan, packageFile, packageFile_2, registry);
 }
-//@ chunk-e6aww6q8.js:4411227-4411307 placement
+//@ chunk-5xgkngpb.js:4517853-4517933 placement
 function lockfileCompletionMatches(plan, packageJsonText, lockText, registry) {
   return plan.command === "npm"
     ? checkPackageLock(packageJsonText, lockText, plan.lockfile, registry)
     : checkBunLock(packageJsonText, lockText, registry);
 }
-//@ chunk-e6aww6q8.js:4411307-4411331 placement
+//@ chunk-5xgkngpb.js:4517933-4517957 placement
 class PluginDependencyCheckError extends Error {}
-//@ chunk-e6aww6q8.js:4411331-4411356 placement
+//@ chunk-5xgkngpb.js:4517957-4517982 placement
 class PluginDependencyInstallError extends Error {}
-//@ chunk-e6aww6q8.js:4411356-4411469 placement
+//@ chunk-5xgkngpb.js:4517982-4518095 placement
 var FOLDER_REPLACED_MESSAGE =
   "the plugin's folder was moved or replaced by a link during the install, so the packages were not added";
-//@ chunk-e6aww6q8.js:4411469-4411626 placement
+//@ chunk-5xgkngpb.js:4518095-4518252 placement
 async function assertFolderUnchanged(pluginPath, expectedReal) {
   let [stat, real] = await Promise.all([
     lstat(pluginPath).catch(() => {
@@ -739,7 +739,7 @@ async function assertFolderUnchanged(pluginPath, expectedReal) {
   if (stat?.isDirectory() !== true || real !== expectedReal)
     throw new PluginDependencyCheckError(FOLDER_REPLACED_MESSAGE);
 }
-//@ chunk-e6aww6q8.js:4411626-4412093 placement
+//@ chunk-5xgkngpb.js:4518252-4518719 placement
 /**
  * Linux 上经目录 fd 把 node_modules 移入插件目录。
  */
@@ -769,7 +769,7 @@ async function moveNodeModulesSafely(sourcePath, pluginReal, targetPath) {
     await handle.close();
   }
 }
-//@ chunk-e6aww6q8.js:4412093-4412181 placement
+//@ chunk-5xgkngpb.js:4518719-4518807 placement
 /**
  * hasNodeModulesDir：是否存在 node_modules 目录。
  */
@@ -779,7 +779,7 @@ async function hasNodeModulesDir(absolute) {
     () => false,
   );
 }
-//@ chunk-e6aww6q8.js:4412181-4412726 placement
+//@ chunk-5xgkngpb.js:4518807-4519352 placement
 /**
  * 把安装好的 node_modules 放进插件目录并处理失败。
  */
@@ -826,7 +826,7 @@ async function placeNodeModules(tempSiblingName, pluginPath, pluginReal) {
     throw cause;
   }
 }
-//@ chunk-e6aww6q8.js:4412726-4413150 placement
+//@ chunk-5xgkngpb.js:4519352-4519776 placement
 /**
  * 读插件目录里的 package.json/锁文件（须普通文件且 ≤32 MB）。
  */
@@ -854,7 +854,7 @@ async function readPackageFile(pluginPath, lockfile) {
     await handle.close();
   }
 }
-//@ chunk-e6aww6q8.js:4413150-4413415 placement
+//@ chunk-5xgkngpb.js:4519776-4520041 placement
 async function swapNodeModules(tempSiblingName, pluginPath) {
   let targetPath = join(pluginPath, "node_modules");
   let previousPath = join(tempSiblingName, "previous-node_modules");
@@ -872,7 +872,7 @@ async function swapNodeModules(tempSiblingName, pluginPath) {
     if (getErrnoCode(error) !== "ENOENT") throw error;
   }
 }
-//@ chunk-e6aww6q8.js:4413415-4413522 placement
+//@ chunk-5xgkngpb.js:4520041-4520148 placement
 function dependencyInstallError(command, error) {
   return {
     ran: true,
@@ -882,7 +882,7 @@ function dependencyInstallError(command, error) {
     ),
   };
 }
-//@ chunk-e6aww6q8.js:4413522-4413753 placement
+//@ chunk-5xgkngpb.js:4520148-4520379 placement
 function dependencyInstallResult(command, result, pluginPath) {
   if (result.code !== 0)
     return {
@@ -898,12 +898,12 @@ function dependencyInstallResult(command, result, pluginPath) {
     ran: true,
   };
 }
-//@ chunk-e6aww6q8.js:4413753-4413764 placement
+//@ chunk-5xgkngpb.js:4520379-4520390 placement
 /**
  * npmMarketplaceDefaultOff：npm 市场默认关闭。
  */
 var npmMarketplaceDefaultOff = false;
-//@ chunk-e6aww6q8.js:4451911-4454381 placement
+//@ chunk-5xgkngpb.js:4558575-4561048 placement
 /**
  * 清理不再被依赖的自动安装插件，设置写入失败时保留。
  */
@@ -1030,7 +1030,7 @@ async function pruneOrphanedAutoDeps(orphans, scope, projectPath, { deleteDataDi
   );
   return removedIds;
 }
-//@ chunk-e6aww6q8.js:4454381-4454578 placement (2.1.88 match: hasPendingUpdates, 0.783)
+//@ chunk-5xgkngpb.js:4561048-4561245 placement (2.1.88 match: hasPendingUpdates, 0.783)
 /**
  * 插件在该作用域的设置中被启用且对应安装路径（缓存）存在。
  */
@@ -1046,7 +1046,7 @@ async function isPluginEnabledAndCachedAtScope(pluginId, scope, storageV5) {
   if (!target) return false;
   return installPathExists(pluginId, target.installPath, storageV5);
 }
-//@ chunk-e6aww6q8.js:4454578-4455009 placement
+//@ chunk-5xgkngpb.js:4561245-4561676 placement
 async function installPathExists(pluginId, installPath, storageV5) {
   let useStorage = isStorageV5Enabled() && storageV5 !== undefined;
   let { absolute, suspect } = classifyMarketplacePath(installPath, {
@@ -1078,7 +1078,7 @@ async function installPathExists(pluginId, installPath, storageV5) {
   }
   return pathStatOk(absolute);
 }
-//@ chunk-e6aww6q8.js:4455009-4455288 placement (2.1.88 match: hasPendingUpdates, 0.783)
+//@ chunk-5xgkngpb.js:4561676-4561955 placement (2.1.88 match: hasPendingUpdates, 0.783)
 /**
  * 插件在该作用域是否有缓存仍存在的安装记录（优先当前项目的记录）。
  */
@@ -1100,7 +1100,7 @@ async function hasCachedInstallationAtScope(pluginId, scope, storageV5) {
     if (await installPathExists(pluginId, entry.installPath, storageV5)) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:4455288-4455379 placement
+//@ chunk-5xgkngpb.js:4561955-4562046 placement
 async function pathStatOk(absolute) {
   try {
     await getFsImplementation().stat(absolute);
@@ -1110,7 +1110,7 @@ async function pathStatOk(absolute) {
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:4455379-4455577 placement
+//@ chunk-5xgkngpb.js:4562046-4562244 placement
 function findBlockedMarketplace(pluginId, knownMarketplaces, options) {
   let marketplace = parsePluginIdentifier(pluginId).marketplace;
   if (!marketplace) return;
@@ -1120,7 +1120,7 @@ function findBlockedMarketplace(pluginId, knownMarketplaces, options) {
   if (source === undefined && !options?.failClosedOnUnknownSource) return;
   return isSourceDisallowedOrUnverifiable(source) ? marketplace : undefined;
 }
-//@ chunk-e6aww6q8.js:4455577-4455732 placement
+//@ chunk-5xgkngpb.js:4562244-4562399 placement
 async function pluginDirectoryUnavailableReason(pluginId) {
   {
     if (parsePluginIdentifier(pluginId).marketplace !== OFFICIAL_MARKETPLACE_NAME) return null;
@@ -1130,7 +1130,7 @@ async function pluginDirectoryUnavailableReason(pluginId) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:4455732-4455940 placement
+//@ chunk-5xgkngpb.js:4562399-4562607 placement
 /**
  * 插件（或依赖）来自不可用的插件目录时的安装失败提示。
  */
@@ -1143,7 +1143,7 @@ function formatDirectoryUnavailableMessage(pluginName, unavailableDependency) {
   }
   return "";
 }
-//@ chunk-e6aww6q8.js:4455940-4456927 placement
+//@ chunk-5xgkngpb.js:4562607-4563594 placement
 /**
  * 自动安装插件声明的依赖，跨市场或找不到时不安装。
  */
@@ -1217,7 +1217,7 @@ async function autoInstallPluginDependencies(context) {
     notFound,
   };
 }
-//@ chunk-e6aww6q8.js:4456927-4457382 placement
+//@ chunk-5xgkngpb.js:4563594-4564057 placement
 /**
  * 依赖闭包中，先确定直接应启用的插件（已有启用记录、显式启用、默认启用或根被依赖），再沿依赖关系传播启用；返回 id→是否启用。
  */
@@ -1253,7 +1253,7 @@ function computeDependencyEnablement({
   }
   return new Map(closure.map((id) => [id, enabled.has(id)]));
 }
-//@ chunk-e6aww6q8.js:4457382-4457458 placement
+//@ chunk-5xgkngpb.js:4564057-4564133 placement
 /**
  * isListingUsableForMarketplace：目录列表可用于该市场。
  */
@@ -1261,7 +1261,7 @@ async function isListingUsableForMarketplace(pluginId, entry, knownMarketplaces,
   if (!isPluginDirectoryMarketplace(pluginId, knownMarketplaces)) return false;
   return isListingBlocked(entry, await collectOrgBlockedPlugins(storageV5));
 }
-//@ chunk-e6aww6q8.js:4457458-4457634 placement
+//@ chunk-5xgkngpb.js:4564133-4564309 placement
 function isPluginDirectoryMarketplace(pluginId, knownMarketplaces) {
   let { marketplace } = parsePluginIdentifier(pluginId);
   if (marketplace === undefined) return false;
@@ -1270,7 +1270,7 @@ function isPluginDirectoryMarketplace(pluginId, knownMarketplaces) {
     ? isPluginDirectorySource(entry.source)
     : isOfficialMarketplaceSpelling(marketplace);
 }
-//@ chunk-e6aww6q8.js:4457634-4457686 placement
+//@ chunk-5xgkngpb.js:4564309-4564361 placement
 /**
  * isMarketplaceNamed：市场名是否匹配（官方名按族匹配）。
  */
@@ -1279,7 +1279,7 @@ function isMarketplaceNamed(marketplace, candidate) {
     ? isOfficialMarketplaceName_3(candidate)
     : candidate === OFFICIAL_MARKETPLACE_NAME && isOfficialMarketplaceName_3(marketplace);
 }
-//@ chunk-e6aww6q8.js:4457686-4458115 placement
+//@ chunk-5xgkngpb.js:4564361-4564795 placement
 /**
  * 来自同一来源的其他官方市场族安装。
  */
@@ -1325,7 +1325,7 @@ async function findOtherMarketplaceInstalls(pluginId, entry, knownMarketplaces, 
   }
   return [];
 }
-//@ chunk-e6aww6q8.js:4458115-4458476 placement
+//@ chunk-5xgkngpb.js:4564795-4565156 placement
 /**
  * 其他市场安装的说明（作用域、版本、被谁依赖、是否可替换）。
  */
@@ -1343,7 +1343,7 @@ async function describeOtherMarketplaceInstalls(pluginId, entry, knownMarketplac
     let reverseDependentNames = findReverseDependentNames(otherId, allPluginsCacheOnly.enabled);
     return {
       pluginId: otherId,
-      scopes: uniq(installations.map((installation) => installation.scope)),
+      scopes: normalizeCaseForComparison_2(installations.map((installation) => installation.scope)),
       version: installations[0]?.version,
       gitCommitSha: installations[0]?.gitCommitSha,
       requiredBy: reverseDependentNames,
@@ -1356,23 +1356,23 @@ async function describeOtherMarketplaceInstalls(pluginId, entry, knownMarketplac
   });
 }
 export {
-  isPluginEnabledAndCachedAtScope,
-  pruneOrphanedAutoDeps,
-  describeOtherMarketplaceInstalls,
-  formatDirectoryUnavailableMessage,
-  hasCachedInstallationAtScope,
   installPluginDependencies,
-  hasNodeModulesDir,
   checkLockfileSupported,
-  isMarketplaceNamed,
+  describeOtherMarketplaceInstalls,
   findBlockedMarketplace,
   isPluginDirectoryMarketplace,
   pluginDirectoryUnavailableReason,
   isListingUsableForMarketplace,
   computeDependencyEnablement,
   autoInstallPluginDependencies,
+  formatDirectoryUnavailableMessage,
   npmMarketplaceDefaultOff,
   mapped_4,
   BINARY_LOCKFILE_MESSAGES,
+  isPluginEnabledAndCachedAtScope,
+  hasCachedInstallationAtScope,
+  hasNodeModulesDir,
+  isMarketplaceNamed,
   findOtherMarketplaceInstalls,
+  pruneOrphanedAutoDeps,
 };

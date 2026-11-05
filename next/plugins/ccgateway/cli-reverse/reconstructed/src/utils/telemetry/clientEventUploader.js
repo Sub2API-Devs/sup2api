@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：CCR 客户端事件上传队列（批量、重试、关闭前交接、签名与载荷归一化）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (13)
  * attribution: placement 13
  */
 import { randomUUID } from "crypto";
@@ -19,7 +19,7 @@ import { lit } from "../../services/analytics/safeMetadata.js";
 import { isDisklessProcess } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:763621-763947 placement
+//@ chunk-exfmq47h.js:784309-784635 placement
 /**
  * 对客户端事件签名。
  */
@@ -56,7 +56,7 @@ async function signClientEvent(eventSigner, eventId, payload) {
     };
   }
 }
-//@ chunk-aepeg2w5.js:763947-764018 placement
+//@ chunk-exfmq47h.js:784635-784706 placement
 /**
  * JSON 往返并修复孤立代理项、规范化对象键。
  */
@@ -69,9 +69,9 @@ function normalizeJsonRoundTrip(value) {
   }
   return parsed;
 }
-//@ chunk-aepeg2w5.js:764018-764050 placement
+//@ chunk-exfmq47h.js:784706-784738 placement
 var LONE_SURROGATE_ESCAPE_RE = /\\ud[89a-f][0-9a-f]{2}/;
-//@ chunk-aepeg2w5.js:764050-764302 placement
+//@ chunk-exfmq47h.js:784738-784990 placement
 function normalizeObjectKeys(root) {
   let stack = [root];
   while (stack.length > 0) {
@@ -89,7 +89,7 @@ function normalizeObjectKeys(root) {
     });
   }
 }
-//@ chunk-aepeg2w5.js:764302-764451 placement
+//@ chunk-exfmq47h.js:784990-785139 placement
 /**
  * 签名模块加载失败时记录。
  */
@@ -100,7 +100,7 @@ function reportSignerLoadFailure(error) {
   logFeatureBad("client_event_signer", "module_load_failed");
   return;
 }
-//@ chunk-aepeg2w5.js:764451-764700 placement
+//@ chunk-exfmq47h.js:785139-785388 placement
 function noteSignFailure(signer, error) {
   logEvent("tengu_client_event_signed", {
     ok: false,
@@ -112,7 +112,7 @@ function noteSignFailure(signer, error) {
   });
   logFeatureBad("client_event_signer", "sign_failed");
 }
-//@ chunk-aepeg2w5.js:764700-764784 placement
+//@ chunk-exfmq47h.js:785388-785472 placement
 /**
  * 客户端事件上传错误基类（带 retryAfterMs）。
  */
@@ -123,15 +123,15 @@ class ClientEventUploadError extends Error {
     this.retryAfterMs = retryAfterMs;
   }
 }
-//@ chunk-aepeg2w5.js:764784-764807 placement
+//@ chunk-exfmq47h.js:785472-785495 placement
 /**
  * 批次被拒、需重发的事件上传错误。
  */
 let ClientEventBatchRejectedError; // deferred: uses ClientEventUploadError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:764784", () => {
+deferInit("chunk-exfmq47h.js:785472", () => {
   ClientEventBatchRejectedError = class ClientEventBatchRejectedError extends ClientEventUploadError {};
 });
-//@ chunk-aepeg2w5.js:764807-764887 placement
+//@ chunk-exfmq47h.js:785495-785575 placement
 /**
  * 「批次被拒，请稍后重发」错误。
  */
@@ -140,7 +140,7 @@ class ClientEventResendSoonError extends Error {
     super("batch refused: resend it in two");
   }
 }
-//@ chunk-aepeg2w5.js:764887-764963 placement
+//@ chunk-exfmq47h.js:785575-785651 placement
 /**
  * 「批次太小」上传错误（带 minBytes）。
  */
@@ -151,7 +151,7 @@ class ClientEventTooSmallError extends Error {
     this.minBytes = minBytes;
   }
 }
-//@ chunk-aepeg2w5.js:764963-765073 placement
+//@ chunk-exfmq47h.js:785651-785761 placement
 var MAX_INT32 = 2147483647;
 var URGENT_RETRIES = 4;
 var uploadStats = {
@@ -163,7 +163,7 @@ var uploadStats = {
   otherPosts: 0,
   otherRows: 0,
 };
-//@ chunk-aepeg2w5.js:765073-777777 placement
+//@ chunk-exfmq47h.js:785761-798537 placement
 /**
  * 客户端事件上传队列（紧急、重试、关闭交接）。
  */
@@ -845,6 +845,9 @@ class ClientEventUploader {
   busy() {
     return (this.draining || this.gathering) && !this.closed;
   }
+  hasHeld(predicate) {
+    return !this.closed && this.pending.slice(this.owed).some(predicate);
+  }
   holdsOnArrival(event) {
     let spec_4 = this.holdOnArrivals();
     return !this.closed && spec_4 !== undefined && !spec_4.passes?.(event);
@@ -887,7 +890,7 @@ class ClientEventUploader {
     }
   }
 }
-//@ chunk-aepeg2w5.js:777777-777841 placement
+//@ chunk-exfmq47h.js:798537-798601 placement
 function jsonByteLength(value) {
   try {
     return Buffer.byteLength(jsonStringify(value));

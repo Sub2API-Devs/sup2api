@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/otlp-transformer/build/src/metrics/internal.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/otlp-transformer@0.208.0..0.209.0
- * pieces: chunk-798ashq9.js (1)
+ * pieces: chunk-vxhm2nqe.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
@@ -12,7 +12,7 @@ import { require_internal_types } from "./internal-types.js";
 import { require_utils } from "../common/utils.js";
 import { require_internal } from "../common/internal.js";
 
-//@ chunk-798ashq9.js:247011-249557 cjs-fingerprint
+//@ chunk-vxhm2nqe.js:247011-249557 cjs-fingerprint
 var require_internal_3 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

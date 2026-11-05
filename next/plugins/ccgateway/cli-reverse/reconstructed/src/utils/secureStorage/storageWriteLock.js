@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：安全存储写锁
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-b29hdd5e.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5me9t3vk.js (8)
  * attribution: placement 8
  */
 import { AsyncLocalStorage } from "async_hooks";
@@ -19,19 +19,19 @@ import { errorMessage } from "../errors.js";
 import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-b29hdd5e.js:764-807 placement
+//@ chunk-5me9t3vk.js:801-844 placement
 var READ_FAILED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-b29hdd5e.js:764", () => {
+deferInit("chunk-5me9t3vk.js:801", () => {
   READ_FAILED = Symbol("secureStorage.READ_FAILED");
 });
-//@ chunk-b29hdd5e.js:883-915 placement
+//@ chunk-5me9t3vk.js:920-952 placement
 var secureStorageWriteContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var resolved;
-deferInit("chunk-b29hdd5e.js:883", () => {
+deferInit("chunk-5me9t3vk.js:920", () => {
   secureStorageWriteContext = new AsyncLocalStorage();
   resolved = Promise.resolve();
 });
-//@ chunk-b29hdd5e.js:915-1422 placement
+//@ chunk-5me9t3vk.js:952-1459 placement
 /**
  * 串行化安全存储的写操作（同一异步上下文可重入）。
  */
@@ -73,17 +73,17 @@ async function withStorageWriteLock(fn) {
     release();
   }
 }
-//@ chunk-b29hdd5e.js:1422-1463 placement
+//@ chunk-5me9t3vk.js:1459-1500 placement
 async function runInsideWriteLock(fn) {
   return secureStorageWriteContext.run(true, fn);
 }
-//@ chunk-b29hdd5e.js:1463-1787 placement
-function mutateSecureStorage(plainTextStorage, mutate, options) {
+//@ chunk-5me9t3vk.js:1500-1824 placement
+function mutateSecureStorage(backend, mutate, options) {
   return withStorageWriteLock(async () => {
-    plainTextStorage.invalidateCache?.();
-    let current = await (plainTextStorage.readAsyncStrict?.(options, {
+    backend.invalidateCache?.();
+    let current = await (backend.readAsyncStrict?.(options, {
       inaccessibleAs: "failureIfTransient",
-    }) ?? plainTextStorage.readAsync(options));
+    }) ?? backend.readAsync(options));
     if (current === READ_FAILED) {
       logFeatureSad("secure_storage_credentials_write", "read_failed_skip_write");
       return {
@@ -97,19 +97,19 @@ function mutateSecureStorage(plainTextStorage, mutate, options) {
       ? {
           success: true,
         }
-      : await plainTextStorage.update(next, options);
+      : await backend.update(next, options);
   });
 }
-//@ chunk-b29hdd5e.js:1787-1830 placement
+//@ chunk-5me9t3vk.js:1824-1867 placement
 var FALLBACK_LEGS_SYMBOL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-b29hdd5e.js:1787", () => {
+deferInit("chunk-5me9t3vk.js:1824", () => {
   FALLBACK_LEGS_SYMBOL = Symbol("secureStorage.fallbackLegs");
 });
-//@ chunk-b29hdd5e.js:1830-1858 placement
+//@ chunk-5me9t3vk.js:1867-1895 placement
 function storageMarker(marker) {
   return marker[FALLBACK_LEGS_SYMBOL];
 }
-//@ chunk-b29hdd5e.js:1858-2006 placement
+//@ chunk-5me9t3vk.js:1895-2043 placement
 function stripSlackBinding(value) {
   let slackTag = value?.slackTag;
   if (typeof slackTag !== "object" || slackTag === null || !("lastBinding" in slackTag)) return value;
@@ -121,9 +121,9 @@ function stripSlackBinding(value) {
 }
 export {
   READ_FAILED,
+  mutateSecureStorage,
   storageMarker,
   withStorageWriteLock,
   stripSlackBinding,
-  mutateSecureStorage,
   runInsideWriteLock,
 };

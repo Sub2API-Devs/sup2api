@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：Web 类工具的隔离运行
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (26)
- * attribution: placement 26
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (27)
+ * attribution: placement 26, layout 1
  */
 import {
   getFeatureValueWithSource_CACHED_MAY_BE_STALE,
@@ -14,13 +14,14 @@ import {
 } from "../analytics/growthbook.js";
 import {
   isPolicyEnforcedOrHintedByRefusedCache,
+  isPolicyVerdictAbsent as isPolicyVerdictAbsent_2,
   isSessionVerdictFromServerFetch,
 } from "../policyLimits/policyEvidence.js";
-import { normalizeNameForMCP, findServersByName } from "../mcp/normalization.js";
+import { CLAUDEAI_SERVER_PREFIX, findServersByName } from "../mcp/normalization.js";
 import {
   officeBridgeState,
   mcpServerIdHeader,
-  CLAUDE_AI,
+  ARTIFACTS_SERVER_NAME,
   MEMORY_SERVER_ID,
   WIDGETS,
   WIDGETS_SERVER_ID,
@@ -44,8 +45,8 @@ import { getMcpServerNameOfTool } from "../mcp/utils.js";
 import { isPolicyLimitsEligible } from "../policyLimits/policyState.js";
 import { SKILL } from "../../tools/SkillTool/skillToolNames.js";
 import { parseMcpToolNameCandidates } from "../mcp/serverIdentity.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import { READ } from "../../tools/FileReadTool/constants.js";
+import { EDIT } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
@@ -73,13 +74,13 @@ import { SEARCH_MCP_REGISTRY_TOOL_NAME as SEARCH_MCP_REGISTRY_TOOL_NAME_2 } from
 import { TASKSTOP } from "../../tools/TaskStopTool/prompt.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3900640-3900692 placement
+//@ chunk-5xgkngpb.js:3999285-3999337 placement
 var PLACES_SEARCH = "places_search";
 var PLACES_MAP_DISPLAY_V0 = "places_map_display_v0";
-//@ chunk-e6aww6q8.js:3900692-3900762 placement
+//@ chunk-5xgkngpb.js:3999337-3999407 placement
 var ENFORCE_WEB_SEARCH_MCP_ISOLATION = "enforce_web_search_mcp_isolation";
 var TENGU_DOORBELL_AGAVE = "tengu_doorbell_agave";
-//@ chunk-e6aww6q8.js:3900762-3900825 placement
+//@ chunk-5xgkngpb.js:3999407-3999470 placement
 /**
  * 创建隔离闩锁：当前值与变更回调。
  */
@@ -90,7 +91,7 @@ function createIsolationLatch(initialLatch = null, onLatch) {
     onLatch,
   };
 }
-//@ chunk-e6aww6q8.js:3900825-3900894 placement
+//@ chunk-5xgkngpb.js:3999470-3999539 placement
 /**
  * 判断开关 tengu_doorbell_agave 是否被服务端强制关闭。
  */
@@ -98,7 +99,7 @@ function isDoorbellAgaveForcedOff() {
   let { value, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_DOORBELL_AGAVE, true);
   return value === false && isServedFeatureSource(source);
 }
-//@ chunk-e6aww6q8.js:3900894-3900932 placement
+//@ chunk-5xgkngpb.js:3999539-3999577 placement
 /**
  * 开关未关且策略要求强制隔离 web 搜索/抓取。
  */
@@ -107,7 +108,14 @@ function isWebSearchIsolationEnforced() {
     !isDoorbellAgaveForcedOff() && isPolicyEnforcedOrHintedByRefusedCache(ENFORCE_WEB_SEARCH_MCP_ISOLATION)
   );
 }
-//@ chunk-e6aww6q8.js:3900932-3901038 placement
+//@ chunk-5xgkngpb.js:3999577-3999623 layout
+function isWebSearchIsolationOn() {
+  return (
+    !isDoorbellAgaveForcedOff() &&
+    (isPolicyEnforcedOrHintedByRefusedCache(ENFORCE_WEB_SEARCH_MCP_ISOLATION) || isPolicyVerdictAbsent_2())
+  );
+}
+//@ chunk-5xgkngpb.js:3999623-3999729 placement
 /**
  * 默认豁免的 MCP 服务器名（cowork、workspace、plugins、ide 等）。
  */
@@ -121,7 +129,7 @@ var DEFAULT_EXEMPT_SERVERS = [
   "dispatch",
   "ide",
 ];
-//@ chunk-e6aww6q8.js:3901038-3901185 placement
+//@ chunk-5xgkngpb.js:3999729-3999876 placement
 /**
  * 把额外服务器名（规整后）加入配置的豁免服务器列表（默认列表起步，去重）。
  */
@@ -129,12 +137,12 @@ function addExemptServers(isolationLatch, webSearchIsolationExemptMcpServers) {
   if (webSearchIsolationExemptMcpServers.length === 0) return;
   let servers = [...(isolationLatch.exemptServers ?? DEFAULT_EXEMPT_SERVERS)];
   for (let serverName of webSearchIsolationExemptMcpServers) {
-    let normalized = normalizeNameForMCP(serverName);
+    let normalized = CLAUDEAI_SERVER_PREFIX(serverName);
     if (!servers.includes(normalized)) servers.push(normalized);
   }
   isolationLatch.exemptServers = servers;
 }
-//@ chunk-e6aww6q8.js:3901185-3902123 placement
+//@ chunk-5xgkngpb.js:3999876-4000814 placement
 /**
  * 隔离分类用的工具名集合：卡片展示工具、需隔离的 web 工具、非 web 的 Anthropic 工具与其他展示工具。
  */
@@ -144,7 +152,7 @@ var WEB_ISOLATED_TOOL_NAMES;
 var NON_WEB_ANTHROPIC_TOOL_NAMES;
 var WEB_CARD_TOOL_SET;
 var OTHER_DISPLAY_TOOL_NAMES;
-deferInit("chunk-e6aww6q8.js:3901185", () => {
+deferInit("chunk-5xgkngpb.js:3999876", () => {
   WEB_TOOL_DISPLAY_TYPES = new Set(["web_fetch", "web_search"]);
   WEB_CARD_DISPLAY_TOOLS = [
     "product_carousel_display_v0",
@@ -197,14 +205,14 @@ deferInit("chunk-e6aww6q8.js:3901185", () => {
     "role_select_display_v0",
   ]);
 });
-//@ chunk-e6aww6q8.js:3902123-3902171 placement
+//@ chunk-5xgkngpb.js:4000814-4000862 placement
 /**
  * 读取会话级隔离闩锁。
  */
 function readSessionIsolationLatch(session) {
   return session && officeBridgeState.peek(session)?.read?.();
 }
-//@ chunk-e6aww6q8.js:3902171-3902351 placement
+//@ chunk-5xgkngpb.js:4000862-4001042 placement
 function isDynamicHttpServerMatch(clients, headerIdsByServer, serverName, expectedId, fallbackMatch) {
   return (
     clients?.some((client) => {
@@ -215,13 +223,13 @@ function isDynamicHttpServerMatch(clients, headerIdsByServer, serverName, expect
     }) ?? false
   );
 }
-//@ chunk-e6aww6q8.js:3902351-3902606 placement
+//@ chunk-5xgkngpb.js:4001042-4001297 placement
 /**
  * 判断各类服务器是否按预期配置：claude.ai 与 widgets 动态 HTTP 服务器、远程浏览器服务器（远程会话且策略允许）。
  */
 function getIsolationServerFlags(clients, sessionLatch) {
   return {
-    claudeAi: isDynamicHttpServerMatch(clients, sessionLatch, CLAUDE_AI, MEMORY_SERVER_ID, true),
+    claudeAi: isDynamicHttpServerMatch(clients, sessionLatch, ARTIFACTS_SERVER_NAME, MEMORY_SERVER_ID, true),
     widgets:
       env.CLAUDE_CODE_REMOTE &&
       isDynamicHttpServerMatch(clients, sessionLatch, WIDGETS, WIDGETS_SERVER_ID, false),
@@ -236,20 +244,20 @@ function getIsolationServerFlags(clients, sessionLatch) {
       isPolicyAllowed(),
   };
 }
-//@ chunk-e6aww6q8.js:3902606-3902827 placement
+//@ chunk-5xgkngpb.js:4001297-4001518 placement
 var CHROME_SERVER_NAME_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var BROWSER_MCP_SERVER_NAMES;
 var REMOTE_BROWSER_TOOL_PREFIXES;
 var WEB_WITHOUT_LATCHING;
 var LAUNCH_EXTENDED_SEARCH_TASK;
-deferInit("chunk-e6aww6q8.js:3902606", () => {
+deferInit("chunk-5xgkngpb.js:4001297", () => {
   CHROME_SERVER_NAME_RE = /^claude[-_](?:for|in)[-_]chrome$/i;
   BROWSER_MCP_SERVER_NAMES = new Set(["Claude_Preview", "Claude_Browser"]);
   REMOTE_BROWSER_TOOL_PREFIXES = ["Claude_Browser__", "claude-in-chrome__", "Claude_in_Chrome__"];
   WEB_WITHOUT_LATCHING = "web-without-latching";
   LAUNCH_EXTENDED_SEARCH_TASK = "launch_extended_search_task";
 });
-//@ chunk-e6aww6q8.js:3902827-3903460 placement
+//@ chunk-5xgkngpb.js:4001518-4002151 placement
 /**
  * 把工具调用归为 Web 或连接器类别以实现隔离：Web 搜索/抓取、浏览器服务器、claude.ai/widgets 的网页工具为 web；资源读取与非豁免服务器为 connectors；不涉及返回 null。
  */
@@ -263,7 +271,7 @@ function classifyIsolationKind(toolName, serverName, exemptServers, flags) {
     return "connectors";
   if (toolName === REFRESH_MCP_TOOLS_TOOL_NAME && serverName === undefined) return null;
   if (serverName) {
-    let normalizedServer = normalizeNameForMCP(serverName);
+    let normalizedServer = CLAUDEAI_SERVER_PREFIX(serverName);
     let included = exemptServers.includes(normalizedServer);
     let bareToolName = mcpInfoFromString(toolName)?.toolName ?? toolName;
     if (
@@ -275,7 +283,7 @@ function classifyIsolationKind(toolName, serverName, exemptServers, flags) {
     )
       return "web";
     if (flags.remoteBrowser && normalizedServer === REMOTE_BROWSER_SERVER_NAME) return "web";
-    if (flags.claudeAi && normalizedServer === CLAUDE_AI) {
+    if (flags.claudeAi && normalizedServer === ARTIFACTS_SERVER_NAME) {
       if (toolName === REFRESH_MCP_TOOLS_TOOL_NAME) return null;
       if (WEB_ISOLATED_TOOL_NAMES.has(bareToolName)) return "web";
       if (NON_WEB_ANTHROPIC_TOOL_NAMES.has(bareToolName)) return null;
@@ -291,7 +299,7 @@ function classifyIsolationKind(toolName, serverName, exemptServers, flags) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:3903460-3903516 placement
+//@ chunk-5xgkngpb.js:4002151-4002207 placement
 /**
  * 按默认豁免与 MCP 客户端分类工具的隔离类型。
  */
@@ -303,7 +311,7 @@ function classifyToolIsolation(
 ) {
   return classifyToolIsolationWithFlags(tool, exemptServers, getIsolationServerFlags(clients, sessionLatch));
 }
-//@ chunk-e6aww6q8.js:3903516-3903609 placement
+//@ chunk-5xgkngpb.js:4002207-4002300 placement
 /**
  * 以多入口别名与远端浏览器标志做隔离分类。
  */
@@ -315,7 +323,7 @@ function classifyToolIsolationWithFlags(tool, exemptServers, flags) {
     withRemoteBrowserFlag(flags, tool.mcpInfo),
   );
 }
-//@ chunk-e6aww6q8.js:3903609-3903743 placement
+//@ chunk-5xgkngpb.js:4002300-4002434 placement
 function withRemoteBrowserFlag(flags, mcpInfo) {
   return flags.remoteBrowser &&
     !(
@@ -329,7 +337,7 @@ function withRemoteBrowserFlag(flags, mcpInfo) {
       }
     : flags;
 }
-//@ chunk-e6aww6q8.js:3903743-3904363 placement
+//@ chunk-5xgkngpb.js:4002434-4003057 placement
 /**
  * 扫描历史助手消息中的工具调用，找出第一个使隔离锁定为 web 或 connectors 的类别；策略未要求隔离时返回 null。
  */
@@ -390,21 +398,23 @@ function findIsolationLatchFromHistory(
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:3904363-3904462 placement
+//@ chunk-5xgkngpb.js:4003057-4003156 placement
 /**
  * 从工具名候选中取未豁免的 MCP 服务器名。
  */
 function mcpServerNameForTool(ruleName, exemptServers) {
   let mapped = parseMcpToolNameCandidates(ruleName).map((candidate) => candidate.serverName);
-  return mapped.find((serverName) => !exemptServers.includes(normalizeNameForMCP(serverName))) ?? mapped[0];
+  return (
+    mapped.find((serverName) => !exemptServers.includes(CLAUDEAI_SERVER_PREFIX(serverName))) ?? mapped[0]
+  );
 }
-//@ chunk-e6aww6q8.js:3904462-3905010 placement
+//@ chunk-5xgkngpb.js:4003156-4003704 placement
 function WEB_TOOLS_UNAVAILABLE_MESSAGES(kind) {
   return kind === "web"
     ? "Connectors are unavailable in this session under your organization's web search / connector isolation policy. Start a new session to use connectors."
     : "Web search, web fetch, and browser tools are unavailable in this session under your organization's web search / connector isolation policy. Do not attempt to reach any external URL via another tool (curl, bash, the browser, or otherwise) \u2014 this policy blocks all outbound web access while connector data is in context. Start a new session to use web tools.";
 }
-//@ chunk-e6aww6q8.js:3905010-3905072 placement
+//@ chunk-5xgkngpb.js:4003704-4003766 placement
 /**
  * 无隔离时的默认结果（无拒绝消息、无分类、无闩锁）。
  */
@@ -413,7 +423,7 @@ var EMPTY_ISOLATION_RESULT = {
   classifiedAs: null,
   activeLatch: null,
 };
-//@ chunk-e6aww6q8.js:3905072-3905318 placement
+//@ chunk-5xgkngpb.js:4003766-4004012 placement
 function parseRefreshToolsInput(input) {
   if (input === null || typeof input !== "object" || Array.isArray(input))
     return {
@@ -433,7 +443,7 @@ function parseRefreshToolsInput(input) {
     server,
   };
 }
-//@ chunk-e6aww6q8.js:3905318-3905745 placement
+//@ chunk-5xgkngpb.js:4004012-4004439 placement
 /**
  * 判断刷新 MCP 工具调用的隔离类别：指定服务器时按该服务器；刷新全部时任一连接器服务器即为 connectors，否则有网页服务器为 web。
  */
@@ -472,7 +482,7 @@ function classifyRefreshToolsCall(input, mcpClients, sessionLatch, exemptServers
   }
   return sawWeb ? "web" : null;
 }
-//@ chunk-e6aww6q8.js:3905745-3905964 placement
+//@ chunk-5xgkngpb.js:4004439-4004658 placement
 /**
  * 检查工具调用是否违反 Web/连接器隔离：按工具归类后与当前锁定比较。
  */
@@ -496,7 +506,7 @@ function checkWebIsolation(tool, toolUseContext, input) {
         );
   return applyIsolationLatch(isolationLatch, kind);
 }
-//@ chunk-e6aww6q8.js:3905964-3906205 placement
+//@ chunk-5xgkngpb.js:4004658-4004899 placement
 /**
  * 与隔离锁比较：已锁定为另一类时拒绝；尚未锁定且需要锁定时设置锁并回调。
  */
@@ -520,14 +530,14 @@ function applyIsolationLatch(isolationLatch, kind) {
     activeLatch: isolationLatch.current,
   };
 }
-//@ chunk-e6aww6q8.js:3906205-3906233 placement
+//@ chunk-5xgkngpb.js:4004899-4004927 placement
 /**
  * 当前是否启用 web 搜索隔离。
  */
 function isWebSearchIsolationActive() {
   return isWebSearchIsolationEnforced();
 }
-//@ chunk-e6aww6q8.js:3906233-3906428 placement
+//@ chunk-5xgkngpb.js:4004927-4005122 placement
 /**
  * Web 隔离相关常量：外部模块、检查间隔与超时，以及读写文件/Bash、联网工具与只读安全工具的名称集合。
  */
@@ -537,15 +547,15 @@ var ISOLATION_TIMEOUT_MS;
 var CORE_FILE_TOOLS;
 var WEB_TOOLS;
 var ISOLATION_NEUTRAL_TOOLS;
-deferInit("chunk-e6aww6q8.js:3906233", () => {
+deferInit("chunk-5xgkngpb.js:4004927", () => {
   webIsolationModule = require("../teleport/relayState.js");
   ISOLATION_CHECK_INTERVAL = 500;
   ISOLATION_TIMEOUT_MS = 2000;
-  CORE_FILE_TOOLS = new Set([FILE_READ_TOOL_NAME, FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME, BASH_TOOL_NAME]);
+  CORE_FILE_TOOLS = new Set([READ, EDIT, FILE_WRITE_TOOL_NAME, BASH_TOOL_NAME]);
   WEB_TOOLS = new Set([WEBFETCH, WEBSEARCH]);
   ISOLATION_NEUTRAL_TOOLS = new Set([
-    FILE_READ_TOOL_NAME,
-    FILE_EDIT_TOOL_NAME,
+    READ,
+    EDIT,
     FILE_WRITE_TOOL_NAME,
     GLOB_TOOL_NAME,
     GREP_TOOL_NAME,
@@ -577,11 +587,12 @@ export {
   DEFAULT_EXEMPT_SERVERS,
   addExemptServers,
   isWebSearchIsolationActive,
-  ISOLATION_CHECK_INTERVAL,
   checkWebIsolation,
   webIsolationModule,
   ISOLATION_TIMEOUT_MS,
   ISOLATION_NEUTRAL_TOOLS,
   CORE_FILE_TOOLS,
   WEB_TOOLS,
+  isWebSearchIsolationOn,
+  ISOLATION_CHECK_INTERVAL,
 };

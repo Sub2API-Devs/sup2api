@@ -1,8 +1,8 @@
 /**
  * @aws-sdk/client-bedrock/dist-cjs/auth/httpAuthSchemeProvider.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/client-bedrock@3.936.0..3.938.0
- * pieces: chunk-0dmzgg46.js (5)
+ * pieces: chunk-gkj73j15.js (5)
  * attribution: esm-layout 2, esm-fingerprint 3
  */
 import { __toESM } from "../../../../../runtime/bun-runtime.js";
@@ -22,7 +22,7 @@ import { require_client } from "../../../../@smithy/core/dist-cjs/submodules/cli
 import { require_core_2 } from "../../../core/dist-cjs/index.js";
 import { require_util_middleware } from "../../../../@smithy/util-middleware/dist-cjs/index.js";
 
-//@ chunk-0dmzgg46.js:816-953 esm-layout
+//@ chunk-gkj73j15.js:816-953 esm-layout
 var import_middleware_host_header = __toESM(require_middleware_host_header());
 var import_middleware_logger = __toESM(require_middleware_logger());
 var import_middleware_recursion_detection = __toESM(require_middleware_recursion_detection());
@@ -34,7 +34,7 @@ var import_middleware_host_header_2 = __toESM(require_middleware_host_header_2()
 var import_middleware_endpoint = __toESM(require_middleware_endpoint());
 var import_retry = __toESM(require_retry());
 var import_client = __toESM(require_client());
-//@ chunk-0dmzgg46.js:953-1179 esm-layout
+//@ chunk-gkj73j15.js:953-1179 esm-layout
 var import_core_2 = __toESM(require_core_2());
 var import_core_3 = __toESM(require_core());
 var import_util_middleware = __toESM(require_util_middleware());
@@ -46,7 +46,7 @@ var defaultBedrockHttpAuthSchemeParametersProvider = async (config, context, inp
       throw Error("expected `region` to be configured for `aws.auth#sigv4`");
     })(),
 });
-//@ chunk-0dmzgg46.js:1179-1349 esm-fingerprint
+//@ chunk-gkj73j15.js:1179-1349 esm-fingerprint
 function createAwsAuthSigv4HttpAuthOption(authParameters) {
   return {
     schemeId: "aws.auth#sigv4",
@@ -62,7 +62,7 @@ function createAwsAuthSigv4HttpAuthOption(authParameters) {
     }),
   };
 }
-//@ chunk-0dmzgg46.js:1349-1565 esm-fingerprint
+//@ chunk-gkj73j15.js:1349-1565 esm-fingerprint
 function createSmithyApiHttpBearerAuthHttpAuthOption(authParameters) {
   return {
     schemeId: "smithy.api#httpBearerAuth",
@@ -76,7 +76,7 @@ function createSmithyApiHttpBearerAuthHttpAuthOption(authParameters) {
     }),
   };
 }
-//@ chunk-0dmzgg46.js:1565-1886 esm-fingerprint
+//@ chunk-gkj73j15.js:1565-1886 esm-fingerprint
 var defaultBedrockHttpAuthSchemeProvider = (authParameters) => {
   let options = [];
   switch (authParameters.operation) {

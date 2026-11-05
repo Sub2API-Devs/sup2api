@@ -3,9 +3,9 @@
  *
  * 钩子站点规则：tool.call/check/describe 与 requestMeta（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4121qate.js (36)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-j8f885h1.js (36)
  * attribution: placement 36
  */
 import { randomUUID } from "crypto";
@@ -35,31 +35,31 @@ import { withCeiling, isPermissionDecisionValue } from "./agentSites.js";
 import { DECISION_ORDER } from "../builtinHooksModule.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:207816-207856 placement
+//@ chunk-j8f885h1.js:189001-189041 placement
 /**
  * tool/tool_use_id/agentId
  */
 var TOOL_CALL_PINNED_KEYS = ["tool", "tool_use_id", "agentId"];
-//@ chunk-4121qate.js:207856-207875 placement
+//@ chunk-j8f885h1.js:189041-189060 placement
 /**
  * "$shadowed"
  */
 var SHADOWED_KEY = "$shadowed";
-//@ chunk-4121qate.js:207875-207897 placement
+//@ chunk-j8f885h1.js:189060-189082 placement
 var REQUESTMETA = "requestMeta";
-//@ chunk-4121qate.js:207897-207950 placement
+//@ chunk-j8f885h1.js:189082-189135 placement
 /**
  * tool.check 固定键
  */
 var TOOL_CHECK_PINNED_KEYS = ["tool", "tool_use_id", "agentId", "consent", SHADOWED_KEY];
-//@ chunk-4121qate.js:207950-208072 placement
+//@ chunk-j8f885h1.js:189135-189257 placement
 function pickShadowedToolFields(input) {
   let shadowed = {};
   for (let key of [...TOOL_CHECK_PINNED_KEYS, REQUESTMETA])
     if (Object.hasOwn(input, key)) shadowed[key] = input[key];
   return Object.keys(shadowed).length === 0 ? undefined : shadowed;
 }
-//@ chunk-4121qate.js:208072-208204 placement
+//@ chunk-j8f885h1.js:189257-189389 placement
 /**
  * 把工具输入整理成 tool.call 事件：放入 tool 与 tool_use_id，consent/agentId/requestMeta 等宿主字段收进隐藏字段。
  */
@@ -75,7 +75,7 @@ function toToolCallEvent(tool, toolUseId, input) {
     }),
   };
 }
-//@ chunk-4121qate.js:208204-208249 placement
+//@ chunk-j8f885h1.js:189389-189434 placement
 /**
  * 附上 agentId
  */
@@ -86,12 +86,12 @@ var withAgentId = (event, agentId) =>
         ...event,
         agentId,
       };
-//@ chunk-4121qate.js:208249-208271 placement
+//@ chunk-j8f885h1.js:189434-189456 placement
 /**
  * agentId/$shadowed
  */
 var AGENT_ID_KEYS = ["agentId", SHADOWED_KEY];
-//@ chunk-4121qate.js:208271-208401 placement
+//@ chunk-j8f885h1.js:189456-189586 placement
 /**
  * 把内容块数组中的文本块用分隔符拼接（非数组返回空串）。
  */
@@ -105,7 +105,7 @@ var joinTextBlocks = (content, separator) =>
         )
         .join(separator)
     : "";
-//@ chunk-4121qate.js:208401-208516 placement
+//@ chunk-j8f885h1.js:189586-189701 placement
 /**
  * 从 tool.call 事件还原工具输入：去掉 tool、tool_use_id、agentId、consent、requestMeta，并合回隐藏字段。
  */
@@ -126,17 +126,17 @@ function toolInputOf(input) {
       }
     : rest;
 }
-//@ chunk-4121qate.js:208516-208546 placement
+//@ chunk-j8f885h1.js:189701-189731 placement
 /**
  * 无 agentId 的工具事件
  */
 var toolCallEventNoAgent = (tool, input) => toToolCallEvent(tool, undefined, input);
-//@ chunk-4121qate.js:208546-208573 placement
+//@ chunk-j8f885h1.js:189731-189758 placement
 /**
  * 工具调用事件
  */
 var toolCallEvent = (tool, toolUseId, input) => toToolCallEvent(tool, toolUseId, input);
-//@ chunk-4121qate.js:208573-208629 placement
+//@ chunk-j8f885h1.js:189758-189814 placement
 /**
  * 工具输入转文本
  */
@@ -149,7 +149,7 @@ function toolInputText(content) {
 `,
       );
 }
-//@ chunk-4121qate.js:208629-208678 placement
+//@ chunk-j8f885h1.js:189814-189863 placement
 /**
  * 附请求元信息
  */
@@ -160,12 +160,12 @@ var withRequestMeta = (input, requestMeta) =>
         ...input,
         requestMeta,
       };
-//@ chunk-4121qate.js:208678-208702 placement
+//@ chunk-j8f885h1.js:189863-189887 placement
 /**
  * 校验 tool.check 固定键
  */
 var checkToolCheckPinned = (passed, received) => checkPinnedKeys(TOOL_CHECK_PINNED_KEYS, passed, received);
-//@ chunk-4121qate.js:208702-208779 placement
+//@ chunk-j8f885h1.js:189887-189964 placement
 /**
  * 归一权限决定表
  */
@@ -177,9 +177,9 @@ var normalizePermissionDecisionMap = (map) =>
           value === false && (decision === "deny" || decision === "ask" || decision === "allow"),
       )
     : map;
-//@ chunk-4121qate.js:208779-209194 placement
+//@ chunk-j8f885h1.js:189964-190379 placement
 var CLASSIC_PRE_TOOL_USE_SITE; // deferred: uses checkResultObject (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:208779", () => {
+deferInit("chunk-j8f885h1.js:189964", () => {
   CLASSIC_PRE_TOOL_USE_SITE = {
     event: "classic.PreToolUse",
     restoreArgument: (passed, received) => restoreMissingKeys_2([SHADOWED_KEY], passed, received),
@@ -202,7 +202,7 @@ deferInit("chunk-4121qate.js:208779", () => {
         : answer,
   };
 });
-//@ chunk-4121qate.js:209194-209464 placement
+//@ chunk-j8f885h1.js:190379-190649 placement
 /**
  * 保留下层结果中的只读标记（结果未变时）。
  */
@@ -222,7 +222,7 @@ function keepReadOnlyMark(answer, answers) {
       }
     : rest;
 }
-//@ chunk-4121qate.js:209464-209578 placement
+//@ chunk-j8f885h1.js:190649-190763 placement
 /**
  * 校验工具名未改动。
  */
@@ -231,7 +231,7 @@ function checkToolNameUnchanged(passed, received) {
     ? "a changed name (the tool being registered; next(e) passes it on)"
     : undefined;
 }
-//@ chunk-4121qate.js:209615-209790 placement
+//@ chunk-j8f885h1.js:190800-190975 placement
 /**
  * 工具站点用到的来源种类常量组：anthropic/sources、claude/plugins、sources-relay 等，以及请求元信息的字节上限。
  */
@@ -243,7 +243,7 @@ var RANDOM_PLUGIN_META_ID;
 var COM_ANTHROPIC_PLUGIN_META_CUT;
 var MAX_REQUEST_META_BYTES;
 var CLAUDE_OMITTED;
-deferInit("chunk-4121qate.js:209615", () => {
+deferInit("chunk-j8f885h1.js:190800", () => {
   ANTHROPIC_SOURCES = "anthropic/sources";
   EDIT_SOURCE_KINDS = ["claude/plugins", ANTHROPIC_SOURCES];
   SOURCE_KINDS = [ANTHROPIC_SOURCES];
@@ -253,14 +253,14 @@ deferInit("chunk-4121qate.js:209615", () => {
   MAX_REQUEST_META_BYTES = 262144;
   CLAUDE_OMITTED = "claude/omitted";
 });
-//@ chunk-4121qate.js:209790-209848 placement
+//@ chunk-j8f885h1.js:190975-191033 placement
 /**
  * UTF-8 字节数
  */
 function utf8Length(text) {
   return new TextEncoder().encode(text).length;
 }
-//@ chunk-4121qate.js:209848-210240 placement
+//@ chunk-j8f885h1.js:191033-191425 placement
 function checkRequestMeta(requestMeta) {
   if (requestMeta === undefined) return;
   if (!isPlainObject(requestMeta)) return "a requestMeta that is not an object";
@@ -275,7 +275,7 @@ function checkRequestMeta(requestMeta) {
     ? `a requestMeta of ${totalBytes} bytes (the most is ${MAX_REQUEST_META_BYTES})`
     : undefined;
 }
-//@ chunk-4121qate.js:210240-210391 placement
+//@ chunk-j8f885h1.js:191425-191576 placement
 /**
  * 去掉对象中宿主专用的元数据键（没有时原样返回）。
  */
@@ -286,13 +286,13 @@ function stripHostToolMeta(requestMeta) {
   for (let [key, value] of Object.entries(requestMeta)) if (!SOURCE_KINDS.includes(key)) kept[key] = value;
   return kept;
 }
-//@ chunk-4121qate.js:210391-210426 placement
+//@ chunk-j8f885h1.js:191576-191611 placement
 /**
  * 固定键 + 元信息校验
  */
 var checkToolCallPinnedAndMeta = (passed, received) =>
   checkToolCheckPinned(passed, received) ?? checkRequestMeta(passed[REQUESTMETA]);
-//@ chunk-4121qate.js:210426-210515 placement
+//@ chunk-j8f885h1.js:191611-191700 placement
 /**
  * context 归一为字符串列表
  */
@@ -307,12 +307,12 @@ function withContextList(answer) {
         context: asStringList(copy.context) ?? EMPTY_CONTEXT,
       };
 }
-//@ chunk-4121qate.js:210515-210525 placement
+//@ chunk-j8f885h1.js:191700-191710 placement
 /**
  * 空串
  */
 var EMPTY_STRING = "";
-//@ chunk-4121qate.js:210525-210788 placement
+//@ chunk-j8f885h1.js:191710-191973 placement
 /**
  * 从权限结果中挑出决定、原因、规则、钩子、设置与插件等字段。
  */
@@ -330,12 +330,12 @@ function pickToolDecision(answer) {
   if (decider === "person") picked.plugin = EMPTY_STRING;
   return picked;
 }
-//@ chunk-4121qate.js:210788-211176 placement
+//@ chunk-j8f885h1.js:191973-192361 placement
 /**
  * tool.call 站点规则：固定 tool/tool_use_id/agentId，恢复隐藏字段，结果须为 {result} 或 {deny}，校验 context 保留下层条目。
  */
 var TOOL_CALL_SITE; // deferred: uses checkResultObject (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:210788", () => {
+deferInit("chunk-j8f885h1.js:191973", () => {
   TOOL_CALL_SITE = {
     event: "tool.call",
     restoreArgument: (passed, received) =>
@@ -363,7 +363,7 @@ deferInit("chunk-4121qate.js:210788", () => {
     carry: stripErrorFlag,
   };
 });
-//@ chunk-4121qate.js:211176-211270 placement
+//@ chunk-j8f885h1.js:192361-192455 placement
 /**
  * 决定名归属插件
  */
@@ -371,12 +371,12 @@ function pluginDecisionName(decision, plugin) {
   let ownsPlugin = decision.plugins?.some((plugin_2) => plugin_2 === plugin) === true;
   return decision.isHop !== true ? decision.name : ownsPlugin ? plugin : undefined;
 }
-//@ chunk-4121qate.js:211270-211323 placement
+//@ chunk-j8f885h1.js:192455-192508 placement
 /**
  * 决定相关字段
  */
 var DECISION_FIELDS = ["decision", "reason", "rule", "hook", "setting"];
-//@ chunk-4121qate.js:211323-211613 placement
+//@ chunk-j8f885h1.js:192508-192798 placement
 function attributeAskDecision(decision, answers, facts) {
   let { plugin, ...rest } = decision;
   if (rest.decision !== "ask") return rest;
@@ -396,19 +396,19 @@ function attributeAskDecision(decision, answers, facts) {
         plugin: attributed,
       };
 }
-//@ chunk-4121qate.js:211613-211695 placement
+//@ chunk-j8f885h1.js:192798-192880 placement
 /**
  * tool.call 字段
  */
 var TOOL_CALL_FIELDS = ["tool", "input", "tool_use_id", "agentId", "ceiling", "approver", "isReadOnly"];
-//@ chunk-4121qate.js:211695-211762 placement
+//@ chunk-j8f885h1.js:192880-192947 placement
 /**
  * tool.check 字段
  */
 var TOOL_CHECK_FIELDS = ["tool_use_id", "agentId", "ceiling", "approver", "isReadOnly"];
-//@ chunk-4121qate.js:211762-212329 placement
+//@ chunk-j8f885h1.js:192947-193514 placement
 var TOOL_CHECK_SITE; // deferred: uses checkResultObject (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:211762", () => {
+deferInit("chunk-j8f885h1.js:192947", () => {
   TOOL_CHECK_SITE = {
     event: "tool.check",
     restoreArgument: (passed, received) => restoreMissingKeys_2(TOOL_CHECK_FIELDS, passed, received),
@@ -433,9 +433,9 @@ deferInit("chunk-4121qate.js:211762", () => {
     }),
   };
 });
-//@ chunk-4121qate.js:212329-213249 placement
+//@ chunk-j8f885h1.js:193514-194434 placement
 var TOOL_DESCRIBE_SITE; // deferred: uses checkResultObject (./siteRules.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:212329", () => {
+deferInit("chunk-j8f885h1.js:193514", () => {
   TOOL_DESCRIBE_SITE = {
     event: "tool.describe",
     restoreArgument: (passed, received) => restoreMissingKeys_2(["provider"], passed, received),
@@ -468,12 +468,12 @@ deferInit("chunk-4121qate.js:212329", () => {
     measure: firstLongerText("description"),
   };
 });
-//@ chunk-4121qate.js:213249-213329 placement
+//@ chunk-j8f885h1.js:194434-194514 placement
 /**
  * tool.register 站点规则
  */
 var TOOL_REGISTER_SITE; // deferred: uses valueOnlySite (./promptContextSites.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-4121qate.js:213249", () => {
+deferInit("chunk-j8f885h1.js:194434", () => {
   TOOL_REGISTER_SITE = {
     event: "tool.register",
     check: valueOnlySite("tool.register").check,
@@ -481,9 +481,24 @@ deferInit("chunk-4121qate.js:213249", () => {
   };
 });
 export {
+  joinTextBlocks,
   toolInputOf,
-  REQUESTMETA,
+  toolInputText,
   toolCallEvent,
+  COM_ANTHROPIC_PLUGIN_META_CUT,
+  EDIT_SOURCE_KINDS,
+  ANTHROPIC_SOURCES,
+  COM_ANTHROPIC_SOURCES_RELAY,
+  RANDOM_PLUGIN_META_ID,
+  CLAUDE_OMITTED,
+  utf8Length,
+  MAX_REQUEST_META_BYTES,
+  checkRequestMeta,
+  stripHostToolMeta,
+  withAgentId,
+  withRequestMeta,
+  toolCallEventNoAgent,
+  REQUESTMETA,
   CLASSIC_PRE_TOOL_USE_SITE,
   TOOL_CALL_SITE,
   TOOL_CHECK_SITE,
@@ -498,19 +513,4 @@ export {
   withContextList,
   pickToolDecision,
   normalizePermissionDecisionMap,
-  EDIT_SOURCE_KINDS,
-  MAX_REQUEST_META_BYTES,
-  COM_ANTHROPIC_SOURCES_RELAY,
-  COM_ANTHROPIC_PLUGIN_META_CUT,
-  withAgentId,
-  stripHostToolMeta,
-  joinTextBlocks,
-  toolInputText,
-  ANTHROPIC_SOURCES,
-  RANDOM_PLUGIN_META_ID,
-  CLAUDE_OMITTED,
-  utf8Length,
-  checkRequestMeta,
-  withRequestMeta,
-  toolCallEventNoAgent,
 };

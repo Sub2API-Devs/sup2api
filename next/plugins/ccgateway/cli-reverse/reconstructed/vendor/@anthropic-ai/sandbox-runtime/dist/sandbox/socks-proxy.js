@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/socks-proxy.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (9)
+ * pieces: chunk-qg41pqt6.js (9)
  * attribution: esm-layout 3, esm-fingerprint 6
  */
 import { createServer } from "../../../../@pondwader/socks5-server/dist/index.mjs";
@@ -19,12 +19,12 @@ import {
 import { isResolvedAddressDeniedError } from "./resolved-address-guard.js";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-fq0cr76a.js:698926-698968 esm-layout
+//@ chunk-qg41pqt6.js:699510-699552 esm-layout
 var SOCKS_REPLY_GENERAL_FAILURE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fq0cr76a.js:698926", () => {
+deferInit("chunk-qg41pqt6.js:699510", () => {
   SOCKS_REPLY_GENERAL_FAILURE = Buffer.from([5, 1, 0, 1, 0, 0, 0, 0, 0, 0]);
 });
-//@ chunk-fq0cr76a.js:698968-700805 esm-fingerprint
+//@ chunk-qg41pqt6.js:699552-701389 esm-fingerprint
 function createSocksProxyServer(options) {
   let socksServer = createServer();
   if (options.proxyAuthToken)
@@ -143,10 +143,10 @@ function createSocksProxyServer(options) {
     },
   };
 }
-//@ chunk-fq0cr76a.js:700805-700819 esm-layout
+//@ chunk-qg41pqt6.js:701389-701403 esm-layout
 var SOCKS_METHOD_NO_AUTH = 0;
 var SOCKS_METHOD_USERPASS = 2;
-//@ chunk-fq0cr76a.js:700819-701161 esm-fingerprint
+//@ chunk-qg41pqt6.js:701403-701745 esm-fingerprint
 function readSocksGreeting(socket, done) {
   let buf = Buffer.alloc(0);
   let onData = (chunk) => {
@@ -169,7 +169,7 @@ function readSocksGreeting(socket, done) {
   socket.on("data", onData);
   socket.once("error", () => socket.off("data", onData));
 }
-//@ chunk-fq0cr76a.js:701161-701748 esm-fingerprint
+//@ chunk-qg41pqt6.js:701745-702332 esm-fingerprint
 async function refuseUnauthenticated(socket, options) {
   socket.write(Buffer.from([5, SOCKS_METHOD_NO_AUTH]));
   let request = await readSocksConnect(socket);
@@ -201,11 +201,11 @@ async function refuseUnauthenticated(socket, options) {
   );
   socket.end(sshDisconnectPacket(reason));
 }
-//@ chunk-fq0cr76a.js:701748-701805 esm-layout
+//@ chunk-qg41pqt6.js:702332-702389 esm-layout
 function socksReply(status) {
   return Buffer.from([5, status, 0, 1, 0, 0, 0, 0, 0, 0]);
 }
-//@ chunk-fq0cr76a.js:701805-702561 esm-fingerprint
+//@ chunk-qg41pqt6.js:702389-703145 esm-fingerprint
 function readSocksConnect(socket) {
   return new Promise((resolve) => {
     let buf = Buffer.alloc(0);
@@ -254,7 +254,7 @@ function readSocksConnect(socket) {
     socket.once("close", () => finish(undefined));
   });
 }
-//@ chunk-fq0cr76a.js:702561-702857 esm-fingerprint
+//@ chunk-qg41pqt6.js:703145-703441 esm-fingerprint
 function sshDisconnectPacket(description) {
   let text = description.replace(/[\x00-\x1f\x7f-\x9f]+/g, " ").slice(0, 1000);
   let desc = Buffer.from(text, "utf8");
@@ -276,7 +276,7 @@ function sshDisconnectPacket(description) {
     Buffer.alloc(padding),
   ]);
 }
-//@ chunk-fq0cr76a.js:702857-702924 esm-fingerprint
+//@ chunk-qg41pqt6.js:703441-703508 esm-fingerprint
 function uint32(n_2) {
   let b = Buffer.alloc(4);
   b.writeUInt32BE(n_2, 0);

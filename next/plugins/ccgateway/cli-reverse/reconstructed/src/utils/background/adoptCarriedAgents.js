@@ -3,12 +3,13 @@
  *
  * 2.1.316 新增。接管随身代理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (19)
  * attribution: placement 19
  */
 import { join, dirname, basename } from "path";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { formatTaskNotification } from "../xmlTags.js";
 import { normalizeAgentIdOrNull, identityAgentId2 } from "../agentId.js";
 import { mainAgentId } from "../../bootstrap/state.js";
@@ -29,10 +30,19 @@ import {
 import { logForDebugging } from "../debug.js";
 import { emitTaskNotification } from "../task/taskNotifications.js";
 import { HiddenScriptShaCache } from "../../services/workflow/journalEntries.js";
-import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:323945-324132 placement
+//@ chunk-czq1j3j2.js:322625-322629 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:322625", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:350717-350721 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:350717", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:363429-363616 placement
 var enqueueCarriedAgentFailure = (messageQueue, payload) =>
   messageQueue.enqueuePendingNotification({
     value: formatTaskNotification({
@@ -45,14 +55,14 @@ var enqueueCarriedAgentFailure = (messageQueue, payload) =>
     skipAttachments: true,
     priority: "next",
   });
-//@ chunk-18hwfzwa.js:324132-324372 placement
+//@ chunk-czq1j3j2.js:363616-363856 placement
 var MAX_LISTED_CARRIED_AGENTS = 8;
 var CARRIED_AGENT_ID_TAIL_CHARS = 16;
 var CARRIED_NOT_RESUMED_TEXT = "was carried into this session and not resumed";
 var CARRIED_UNCONFIRMED_TEXT =
   "this session could not confirm from its own records that its owner launched it and that it is still running. If it is yours, a message to it may continue it.";
 var MAIN_OWNER_KEY = "";
-//@ chunk-18hwfzwa.js:324372-325336 placement
+//@ chunk-czq1j3j2.js:363856-364820 placement
 async function reconcileCarriedAgents(agents, fork, queue) {
   let carriedAgentsContext = createCarriedAgentsContext(fork, queue);
   let { depthOfParked } = carriedAgentsContext;
@@ -102,7 +112,7 @@ async function reconcileCarriedAgents(agents, fork, queue) {
     reported,
   };
 }
-//@ chunk-18hwfzwa.js:325336-325446 placement
+//@ chunk-czq1j3j2.js:364820-364930 placement
 var createCarriedAgentsContext = (fork, queue) => ({
   fork,
   queue,
@@ -110,7 +120,7 @@ var createCarriedAgentsContext = (fork, queue) => ({
   depthOfParked: new Map(),
   telemetryFailureCodes: new Set(),
 });
-//@ chunk-18hwfzwa.js:325446-325581 placement
+//@ chunk-czq1j3j2.js:364930-365065 placement
 async function takeUpCarriedAgentSafe(agent, parentDepth, context) {
   try {
     return await takeUpCarriedAgent(agent, parentDepth, context);
@@ -120,7 +130,7 @@ async function takeUpCarriedAgentSafe(agent, parentDepth, context) {
     return "threw";
   }
 }
-//@ chunk-18hwfzwa.js:325581-326222 placement
+//@ chunk-czq1j3j2.js:365065-365706 placement
 /**
  * 决定一个随后台会话带过来的子代理如何处理：父会话未启动过它、已完成、已停止且未复活时交还（handedBack）；元数据与父代理一致时链接其转录并接管；否则留待对账。
  */
@@ -159,7 +169,7 @@ async function takeUpCarriedAgent(agent, parentDepth, context) {
       )
     : classifyUnclaimedAgent(agentId, context);
 }
-//@ chunk-18hwfzwa.js:326222-326470 placement
+//@ chunk-czq1j3j2.js:365706-365954 placement
 async function findCarriedAgentMetaPath(agent) {
   if (agent.transcriptPath === undefined)
     return toAgentMetaPath(getAgentTranscriptPath(identityAgentId2(agent.agentId)));
@@ -175,12 +185,12 @@ async function findCarriedAgentMetaPath(agent) {
     ? toAgentMetaPath(candidatePath)
     : null;
 }
-//@ chunk-18hwfzwa.js:326470-326580 placement
+//@ chunk-czq1j3j2.js:365954-366064 placement
 async function classifyUnclaimedAgent(agentId, context) {
   let { asyncAgents } = await getOwnerLaunchPlan(undefined, context);
   return asyncAgents.has(agentId) ? "leftToReconcile" : "handedBack";
 }
-//@ chunk-18hwfzwa.js:326580-326771 placement
+//@ chunk-czq1j3j2.js:366064-366255 placement
 async function getOwnerLaunchPlan(ownerAgentId, context) {
   let ownerKey = ownerAgentId ?? MAIN_OWNER_KEY;
   let cachedPlan = context.launchesByOwner.get(ownerKey);
@@ -195,22 +205,22 @@ async function getOwnerLaunchPlan(ownerAgentId, context) {
   context.launchesByOwner.set(ownerKey, plan);
   return plan;
 }
-//@ chunk-18hwfzwa.js:326771-326885 placement
+//@ chunk-czq1j3j2.js:366255-366369 placement
 async function getOwnerMessages(ownerAgentId, fork) {
   if (ownerAgentId === undefined) return fork.initialMessages;
   return (await getAgentTranscript(identityAgentId2(ownerAgentId), fork.storageV5))?.messages ?? [];
 }
-//@ chunk-18hwfzwa.js:326885-327007 placement
+//@ chunk-czq1j3j2.js:366369-366491 placement
 var toAgentMetaPath = (path) => path.replace(/\.jsonl$/, ".meta.json");
 var carriedSpawnDepth = (parentDepth, agent) =>
   Math.max(parentDepth + 1, Number.isInteger(agent.spawnDepth) ? (agent.spawnDepth ?? 0) : 0);
-//@ chunk-18hwfzwa.js:327007-327115 placement
+//@ chunk-czq1j3j2.js:366491-366599 placement
 function carriedAgentDescription(agent) {
   return agent?.launchedByAgentTool === true || agent?.launchedByForkedSkill === true
     ? sanitizeMetadataText(agent?.description)
     : undefined;
 }
-//@ chunk-18hwfzwa.js:327115-327257 placement
+//@ chunk-czq1j3j2.js:366599-366741 placement
 var withCarriedDescription = (agent, launchPlanAgent, spawnDepth) => ({
   ...agent,
   description: carriedAgentDescription(launchPlanAgent),
@@ -220,7 +230,7 @@ var withForkedSkillName = (agent, linkResult) => ({
   ...agent,
   forkedSkillName: agent.forkedSkillName ?? linkResult.forkedSkillNameFromSidecar,
 });
-//@ chunk-18hwfzwa.js:327257-327669 placement
+//@ chunk-czq1j3j2.js:366741-367153 placement
 async function linkAdoptedAgentTranscripts(agent, launchPlanAgent, context) {
   let { taskRegistry, storageV5 } = context.fork;
   try {
@@ -245,7 +255,7 @@ async function linkAdoptedAgentTranscripts(agent, launchPlanAgent, context) {
     return silent ? "leftToReconcile" : "toldOfLink";
   }
 }
-//@ chunk-18hwfzwa.js:327669-327980 placement
+//@ chunk-czq1j3j2.js:367153-367464 placement
 function adoptFailureSummary(agentId, agentIds, queue) {
   for (let agentId of agentIds)
     emitTaskNotification(agentId, "failed", {
@@ -266,10 +276,10 @@ function adoptFailureSummary(agentId, agentIds, queue) {
     agentId,
   });
 }
-//@ chunk-18hwfzwa.js:327980-328129 placement
+//@ chunk-czq1j3j2.js:367464-367613 placement
 var CANNOT_ASK_APPROVAL_NOTE =
   " This session's permission mode cannot ask for approval, so the run will not continue in this session unless that call is already allowed.";
-//@ chunk-18hwfzwa.js:328129-328739 placement
+//@ chunk-czq1j3j2.js:367613-368223 placement
 function resumeCarriedWorkflow(workflow, context, messageQueue) {
   try {
     context.taskRegistry.remove(workflow.taskId);
@@ -300,14 +310,4 @@ function resumeCarriedWorkflow(workflow, context, messageQueue) {
     logError(error);
   }
 }
-//@ chunk-18hwfzwa.js:328739-328743 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:328739", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:328743-328747 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:328743", () => {
-  init_react_production();
-});
 export { reconcileCarriedAgents, resumeCarriedWorkflow };

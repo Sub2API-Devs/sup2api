@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：工具定义构建与运行位置变化时的权限检查守卫
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-g54kbxqw.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2c3jp4kn.js (5)
  * attribution: placement 5
  */
 import {
@@ -15,11 +15,12 @@ import {
   NATIVE_TOOL_OK,
 } from "../../remote/tools/nativeToolErrors.js";
 import { createToolUseContextView, runPermissionCheckWithReentry, TOOL_DEFAULTS } from "../../Tool.js";
+import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { withdrawablePromptScope, turnAbortControllerOf } from "../../utils/abortController.js";
 import { clearToolUsePermissionState } from "../../components/permissions/hooks.js";
 import { getCheckRunner, hasRegisteredCheck } from "../../utils/permissions/checkRegistry.js";
 
-//@ chunk-g54kbxqw.js:167050-167123 placement
+//@ chunk-2c3jp4kn.js:18863-18936 placement
 /**
  * 用全 undefined 的 Proxy 调一次 create，探测返回对象里是否有指定方法（避免为不实现 permissionCheckFailureDecision 的工具构造真实上下文）。
  */
@@ -34,7 +35,7 @@ function createReturnsMethod(create, methodName) {
   );
   return methodName in create(proxy);
 }
-//@ chunk-g54kbxqw.js:167123-170242 placement
+//@ chunk-2c3jp4kn.js:18936-22189 placement
 /**
  * 316 的工具工厂（旧版 buildTool）。定义里的 create(ctx) 返回 {validateInput, checkPermissions, call, permissionCheckFailureDecision}；工厂把它们包成统一签名，注入 call 上下文（signal、onProgress、ask、runEngine、权限阶段等），并在工具"在别处运行"（nae 判定，原生工具转发）时改走 Jo 转发或拒绝。缺省 checkPermissions 为 allow、validateInput 为通过。
  */
@@ -54,7 +55,10 @@ function buildTool(def) {
       pdfRenderSignal: options?.pdfRenderSignal,
       gitDiffRead: options?.gitDiffRead,
       outsideResultReader: options?.outsideResultReader,
-      ...false,
+      commandAsWritten: options?.commandAsWritten,
+      ...(codeModeAccepted() && {
+        enclosingToolUseId: options?.enclosingToolUseId,
+      }),
       smallResultAsked: options?.smallResultAsked,
       callerLogsSharedEvents: options?.callerLogsSharedEvents,
       timing: options?.timing,
@@ -125,6 +129,9 @@ function buildTool(def) {
       },
       get remoteCall() {
         return context.remoteCall;
+      },
+      get carriedReadBaseline() {
+        return context.carriedReadBaseline;
       },
       get keptBackgroundShells() {
         return context.keptBackgroundShells;
@@ -236,7 +243,7 @@ function buildTool(def) {
   );
   return merged;
 }
-//@ chunk-g54kbxqw.js:170242-170425 placement
+//@ chunk-2c3jp4kn.js:22189-22372 placement
 /**
  * 判断工具是否是 V2 多条目别名工具（有 underlyingV1ToolName、entryFieldName、perEntryHookInputs、reassemble），这类工具的 hook 按条目拆分。
  */
@@ -249,7 +256,7 @@ function isMultiEntryAliasTool(tool) {
     typeof candidate.reassemble === "function"
   );
 }
-//@ chunk-g54kbxqw.js:170425-170588 placement
+//@ chunk-2c3jp4kn.js:22372-22532 placement
 /**
  * 工具的 name、underlyingV1ToolName 或 familyParentToolName 任一在给定集合（Set 或数组）中即为真。延迟加载判定、REPL 过滤都用它。
  */
@@ -260,8 +267,8 @@ function toolMatchesAnyName(tool, names) {
     (tool.familyParentToolName !== undefined && collectionHas(names, tool.familyParentToolName))
   );
 }
-//@ chunk-g54kbxqw.js:170588-170644 placement
+//@ chunk-2c3jp4kn.js:22532-22587 placement
 function collectionHas(names, name) {
   return "has" in names ? names.has(name) : names.includes(name);
 }
-export { toolMatchesAnyName, buildTool, isMultiEntryAliasTool };
+export { toolMatchesAnyName, isMultiEntryAliasTool, buildTool };

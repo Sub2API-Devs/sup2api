@@ -3,9 +3,9 @@
  *
  * /model 选择器选项：Default（推荐）、各族（Fable/Opus/Sonnet/Haiku）与 1M 变体、Opus Plan、自定义模型（ANTHROPIC_CUSTOM_MODEL_OPTION、ANTHROPIC_DEFAULT_*_MODEL），按订阅类型/提供商/白名单组合与过滤。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/model/modelOptions.ts
- * pieces: chunk-aepeg2w5.js (1), chunk-d1cgs5na.js (1), chunk-hwmsct5x.js (81)
+ * pieces: chunk-exfmq47h.js (1), chunk-vn3g7zt8.js (81), chunk-wefvmrb3.js (1)
  * attribution: fingerprint 17, placement 48, layout 13, callgraph-fingerprint 1, callgraph-witnessed 3, affinity 1
  */
 import { getModelStrings, isModelAvailableOnProvider, resolveProviderModelId } from "./modelStrings.js";
@@ -111,7 +111,7 @@ import {
   getModelEntitlementDenySet,
 } from "./modelAllowlist.js";
 import { isSanitizedModelOption, getGatewayModelOptions } from "../../services/gateway/gatewayDiscovery.js";
-import { count } from "../collections.js";
+import { countWhere } from "../collections.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { logForDebugging } from "../debug.js";
 import { normalizeModelId } from "./modelCatalog/catalogEntries.js";
@@ -124,14 +124,14 @@ import { getInitialMainLoopModel } from "../../bootstrap/state.js";
 import { eligible1mSuffixTarget } from "./defaultModel.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:438212-438266 fingerprint (2.1.88 match: getSonnet46Option, 0.561)
+//@ chunk-exfmq47h.js:449603-449657 fingerprint (2.1.88 match: getSonnet46Option, 0.561)
 /**
  * 当前提供商 catalog sonnet 档的模型字符串，缺失时 sonnet46。旧版名 getSonnet46Option 为错配（不是选项）。
  */
 function getDefaultSonnetBuiltin(modelStrings = getModelStrings()) {
   return catalogFamilyDefaultKey("sonnet", modelStrings) ?? modelStrings.sonnet46;
 }
-//@ chunk-hwmsct5x.js:199615-199672 placement
+//@ chunk-vn3g7zt8.js:200005-200062 placement
 /**
  * 默认模型说明里的来源后缀（托管 enforced 等）。
  */
@@ -140,7 +140,7 @@ function getDefaultAttributionSuffix(attribution) {
     attribution !== "env" && isDefaultModelEnforced() ? "enforced" : attribution,
   );
 }
-//@ chunk-hwmsct5x.js:199672-200008 fingerprint (2.1.88 match: getDefaultOptionForUser, 0.434)
+//@ chunk-vn3g7zt8.js:200062-200398 fingerprint (2.1.88 match: getDefaultOptionForUser, 0.434)
 /**
  * Default 选项：订阅用户 "Default (recommended)" 描述当前默认；否则 "Default"/"(recommended)" 加 "Use the default model (currently …)" 与来源后缀。
  */
@@ -164,25 +164,25 @@ function getDefaultOptionForUser(fastMode) {
     description: `Use the default model (currently ${renderDefaultModelSetting(setting)})${is3P}${getDefaultAttributionSuffix(attribution)}`,
   };
 }
-//@ chunk-hwmsct5x.js:200008-200047 placement
+//@ chunk-vn3g7zt8.js:200398-200437 placement
 /**
  * 非第一方类、anthropicAws/GoogleCloud 或非直连 api.anthropic.com 时允许 ANTHROPIC_DEFAULT_*_MODEL 自定义行。
  */
 function allowsCustomTierOptions() {
   return !usesFirstPartyModelIds() || isClaudePlatformProvider() || !isFirstPartyAnthropicBaseUrl();
 }
-//@ chunk-hwmsct5x.js:200047-200077 placement
+//@ chunk-vn3g7zt8.js:200437-200467 placement
 /**
  * 默认 Opus 原生 1M。
  */
 function isDefaultOpusNative1m() {
   return modelHasNative1MContext(getDefaultOpusModel());
 }
-//@ chunk-hwmsct5x.js:200077-200107 placement
+//@ chunk-vn3g7zt8.js:200467-200497 placement
 function defaultSonnetHasNative1m() {
   return modelHasNative1MContext(getDefaultSonnetModel());
 }
-//@ chunk-hwmsct5x.js:200107-200437 placement
+//@ chunk-vn3g7zt8.js:200497-200827 placement
 /**
  * 读取内置目录中某族最新模型（latest_per_family），返回 {id, displayName, key}；目录不一致时抛错。
  */
@@ -201,14 +201,14 @@ function getLatestFamilyModel(family) {
     key,
   };
 }
-//@ chunk-hwmsct5x.js:200502-200545 placement
+//@ chunk-vn3g7zt8.js:200892-200935 placement
 /**
  * 该档当前主模型就是 catalog 的该档模型。
  */
 function isTierDefaultCatalogModel(family) {
   return getCanonicalName(getDefaultModelForFamily(family)) === getLatestFamilyModel(family).id;
 }
-//@ chunk-hwmsct5x.js:200545-200753 layout
+//@ chunk-vn3g7zt8.js:200935-201143 layout
 /**
  * 自定义档位模型的 label/description（ANTHROPIC_DEFAULT_*_MODEL_NAME/DESCRIPTION 优先）。
  */
@@ -224,7 +224,7 @@ function buildCustomTierLabel(model, tierLabel, label, description) {
         : `Custom ${tierLabel} model${is1m ? " (1M context)" : ""}`),
   };
 }
-//@ chunk-hwmsct5x.js:200753-201081 fingerprint (2.1.88 match: getCustomSonnetOption, 0.796)
+//@ chunk-vn3g7zt8.js:201143-201471 fingerprint (2.1.88 match: getCustomSonnetOption, 0.796)
 /**
  * ANTHROPIC_DEFAULT_SONNET_MODEL 设置且允许自定义行时的 Sonnet 选项（value "sonnet"）。
  */
@@ -244,14 +244,14 @@ function getCustomSonnetOption() {
     };
   }
 }
-//@ chunk-hwmsct5x.js:201081-201121 layout
+//@ chunk-vn3g7zt8.js:201471-201511 layout
 /**
  * 选项描述里的价格后缀（fast mode 时用 fast 价）。
  */
 function getModelPriceSuffix(model, fastMode) {
   return getModelPricingSuffix(isFastModeOnForModel(fastMode, model), model);
 }
-//@ chunk-hwmsct5x.js:201121-201495 placement
+//@ chunk-vn3g7zt8.js:201511-201885 placement
 /**
  * /model 选项中 Sonnet/Opus/Fable 的展示信息：标签、标语、给模型看的描述与价格后缀函数。
  */
@@ -275,7 +275,7 @@ var FAMILY_PRESENTATION = {
     suffix: usageCreditsSuffix,
   },
 };
-//@ chunk-hwmsct5x.js:201495-201735 placement (2.1.88 match: generateModelSection, 0.417)
+//@ chunk-vn3g7zt8.js:201885-202125 placement (2.1.88 match: generateModelSection, 0.418)
 /**
  * 生成模型选择器中某个模型选项：value、label、显示描述与给模型看的描述。旧版名 generateModelSection 来自 ConfigTool/prompt，实际属于模型选项。
  */
@@ -291,7 +291,7 @@ function generateModelSection(family, fastMode = false) {
     descriptionForModel: `${displayName} - ${presentation.descriptionForModel}`,
   };
 }
-//@ chunk-hwmsct5x.js:201735-201918 placement
+//@ chunk-vn3g7zt8.js:202125-202308 placement
 function getSonnet46Option() {
   return {
     value: !usesFirstPartyModelIds() ? getModelStrings().sonnet46 : "claude-sonnet-4-6",
@@ -300,7 +300,7 @@ function getSonnet46Option() {
     descriptionForModel: "Sonnet 4.6 - previous Sonnet version",
   };
 }
-//@ chunk-hwmsct5x.js:201918-202109 placement
+//@ chunk-vn3g7zt8.js:202308-202499 placement
 function getSonnet5Option() {
   return {
     value: !usesFirstPartyModelIds() ? getModelStrings().sonnet5 : "claude-sonnet-5",
@@ -309,7 +309,7 @@ function getSonnet5Option() {
     descriptionForModel: "Sonnet 5 - previous Sonnet version",
   };
 }
-//@ chunk-hwmsct5x.js:202109-202390 placement
+//@ chunk-vn3g7zt8.js:202499-202780 placement
 function getCustomFableOption() {
   let ANTHROPIC_DEFAULT_FABLE_MODEL = env.ANTHROPIC_DEFAULT_FABLE_MODEL;
   if (allowsCustomTierOptions() && ANTHROPIC_DEFAULT_FABLE_MODEL)
@@ -324,15 +324,15 @@ function getCustomFableOption() {
       descriptionForModel: `${env.ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION ?? "Custom Fable model"} (${ANTHROPIC_DEFAULT_FABLE_MODEL})`,
     };
 }
-//@ chunk-hwmsct5x.js:202390-202428 placement
+//@ chunk-vn3g7zt8.js:202780-202818 placement
 var USAGE_CREDITS_SUFFIX = " \xB7 Requires usage credits";
-//@ chunk-hwmsct5x.js:202428-202473 placement
+//@ chunk-vn3g7zt8.js:202818-202863 placement
 function usageCreditsSuffix(model) {
   return !usesPayAsYouGo() && isUsageCreditsModelBilled(parseUserSpecifiedModel(model))
     ? USAGE_CREDITS_SUFFIX
     : "";
 }
-//@ chunk-hwmsct5x.js:202473-202766 placement
+//@ chunk-vn3g7zt8.js:202863-203156 placement
 function appendFableCreditSuffix(option) {
   if (option.disabled === true || typeof option.value !== "string") return option;
   let modelConfigById = findModelConfigById(stripAnyVersatileSuffix(option.value));
@@ -351,7 +351,7 @@ function appendFableCreditSuffix(option) {
     description: `${baseDescription}${usageCreditsSuffix(option.value)}`,
   };
 }
-//@ chunk-hwmsct5x.js:202766-203001 placement
+//@ chunk-vn3g7zt8.js:203156-203391 placement
 function getFableOption(model, fastMode) {
   let displayName = fableDisplayName(model) ?? getLatestFamilyModel("fable").displayName;
   let pricing = isClaudeAISubscriber() ? "" : getModelPriceSuffix(model, fastMode);
@@ -362,7 +362,7 @@ function getFableOption(model, fastMode) {
     descriptionForModel: `${displayName} - most capable for your hardest and longest-running tasks`,
   };
 }
-//@ chunk-hwmsct5x.js:203001-203248 placement
+//@ chunk-vn3g7zt8.js:203391-203638 placement
 function getHaiku35Option(model) {
   let name =
     fableDisplayName(model) ??
@@ -379,7 +379,7 @@ function getHaiku35Option(model) {
     descriptionForModel: `${name} - most capable for your hardest and longest-running tasks`,
   };
 }
-//@ chunk-hwmsct5x.js:203248-203346 placement
+//@ chunk-vn3g7zt8.js:203638-203736 placement
 function fableDisplayName(model) {
   let catalogEntry = getCatalogEntry(
     strip1mSuffix(
@@ -390,7 +390,7 @@ function fableDisplayName(model) {
   );
   return catalogEntry?.family === "fable" ? catalogEntry.display_name : undefined;
 }
-//@ chunk-hwmsct5x.js:203346-203660 fingerprint (2.1.88 match: getCustomOpusOption, 0.793)
+//@ chunk-vn3g7zt8.js:203736-204050 fingerprint (2.1.88 match: getCustomOpusOption, 0.793)
 /**
  * ANTHROPIC_DEFAULT_OPUS_MODEL 对应的自定义 Opus 选项。
  */
@@ -410,7 +410,7 @@ function getCustomOpusOption() {
     };
   }
 }
-//@ chunk-hwmsct5x.js:203660-203800 fingerprint (2.1.88 match: getOpus41Option, 0.855)
+//@ chunk-vn3g7zt8.js:204050-204190 fingerprint (2.1.88 match: getOpus41Option, 0.855)
 /**
  * "Opus 4.1 · Legacy" 选项。
  */
@@ -422,7 +422,7 @@ function getOpus41Option() {
     descriptionForModel: "Opus 4.1 - legacy version",
   };
 }
-//@ chunk-hwmsct5x.js:203800-203971 placement (2.1.88 match: FAST_MODE_MODEL_DISPLAY, 0.334)
+//@ chunk-vn3g7zt8.js:204190-204361 placement (2.1.88 match: FAST_MODE_MODEL_DISPLAY, 0.334)
 /**
  * /model 选项 "Opus 4.6 · Legacy"。旧版名 FAST_MODE_MODEL_DISPLAY 为错配，应归 utils/model/modelOptions.ts。
  */
@@ -434,7 +434,7 @@ function getOpus46Option() {
     descriptionForModel: "Opus 4.6 - previous Opus version",
   };
 }
-//@ chunk-hwmsct5x.js:203971-204142 layout
+//@ chunk-vn3g7zt8.js:204361-204532 layout
 /**
  * /model 选项：Opus 4.7（Legacy）。
  */
@@ -446,7 +446,7 @@ function getOpus47Option() {
     descriptionForModel: "Opus 4.7 - previous Opus version",
   };
 }
-//@ chunk-hwmsct5x.js:204142-204313 layout
+//@ chunk-vn3g7zt8.js:204532-204703 layout
 /**
  * /model 选项：Opus 4.8（Legacy）。
  */
@@ -458,7 +458,7 @@ function getOpus48Option() {
     descriptionForModel: "Opus 4.8 - previous Opus version",
   };
 }
-//@ chunk-hwmsct5x.js:204313-204490 layout
+//@ chunk-vn3g7zt8.js:204703-204880 layout
 /**
  * /model 选项：Opus 5（上一代 Opus）。
  */
@@ -470,7 +470,7 @@ function getOpus5Option() {
     descriptionForModel: "Opus 5 - previous Opus version",
   };
 }
-//@ chunk-hwmsct5x.js:204490-204770 fingerprint (2.1.88 match: getSonnet46_1MOption, 0.643)
+//@ chunk-vn3g7zt8.js:204880-205160 fingerprint (2.1.88 match: getSonnet46_1MOption, 0.643)
 /**
  * "Sonnet 4.6 (1M context)" 选项。
  */
@@ -482,7 +482,7 @@ function getSonnet46_1MOption() {
     descriptionForModel: "Sonnet 4.6 with 1M context window - for long sessions with large codebases",
   };
 }
-//@ chunk-hwmsct5x.js:204770-205080 layout
+//@ chunk-vn3g7zt8.js:205160-205470 layout
 /**
  * "<Sonnet> (1M context)" 选项（sonnet[1m]）。
  */
@@ -503,7 +503,7 @@ function getSonnet1mOption() {
     description: `${displayName} for long sessions${getModelPriceSuffix(id, false)}`,
   };
 }
-//@ chunk-hwmsct5x.js:205080-205361 fingerprint (2.1.88 match: getOpus46_1MOption, 0.594)
+//@ chunk-vn3g7zt8.js:205470-205751 fingerprint (2.1.88 match: getOpus46_1MOption, 0.594)
 /**
  * "Opus 4.6 (1M context)" 选项。
  */
@@ -515,7 +515,7 @@ function getOpus46_1MOption(fastMode = false, withPricing = true) {
     descriptionForModel: "Opus 4.6 with 1M context window - for long sessions with large codebases",
   };
 }
-//@ chunk-hwmsct5x.js:205361-205635 fingerprint (2.1.88 match: getMergedOpus1MOption, 0.597)
+//@ chunk-vn3g7zt8.js:205751-206025 fingerprint (2.1.88 match: getMergedOpus1MOption, 0.597)
 /**
  * 合并后的 "Opus (1M context)" 选项（opus[1m] 或当前提供商的 Opus 字符串 + [1m]）。
  */
@@ -529,7 +529,7 @@ function getMergedOpus1MOption(fastMode = false) {
     descriptionForModel: `${displayName} with 1M context window - for long sessions with large codebases`,
   };
 }
-//@ chunk-hwmsct5x.js:205635-205916 fingerprint (2.1.88 match: getCustomHaikuOption, 0.837)
+//@ chunk-vn3g7zt8.js:206025-206306 fingerprint (2.1.88 match: getCustomHaikuOption, 0.837)
 /**
  * ANTHROPIC_DEFAULT_HAIKU_MODEL 对应的自定义 Haiku 选项。
  */
@@ -547,7 +547,7 @@ function getCustomHaikuOption() {
       descriptionForModel: `${env.ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION ?? "Custom Haiku model"} (${customHaikuModel})`,
     };
 }
-//@ chunk-hwmsct5x.js:205916-206132 fingerprint (2.1.88 match: getHaiku45Option, 0.707)
+//@ chunk-vn3g7zt8.js:206306-206522 fingerprint (2.1.88 match: getHaiku45Option, 0.708)
 /**
  * Haiku 选项（"<Haiku 显示名> · Fastest for quick answers"）。
  */
@@ -561,7 +561,7 @@ function getHaiku45Option() {
     descriptionForModel: `${displayName} - fastest for quick answers. Lower cost but less capable than Sonnet.`,
   };
 }
-//@ chunk-hwmsct5x.js:206132-206235 layout
+//@ chunk-vn3g7zt8.js:206522-206625 layout
 /**
  * Pro 订阅且 tengu_gypsum_kite 时提示 "~2× usage vs Sonnet"。
  */
@@ -570,7 +570,7 @@ function getProUsageMultiplierNote() {
     return " \xB7 ~2\xD7 usage vs Sonnet";
   return "";
 }
-//@ chunk-hwmsct5x.js:206235-206379 fingerprint (2.1.88 match: getMaxOpusOption, 0.899)
+//@ chunk-vn3g7zt8.js:206625-206769 fingerprint (2.1.88 match: getMaxOpusOption, 0.9)
 /**
  * 订阅用户的 Opus 选项（可附 Pro 用量提示）。
  */
@@ -583,7 +583,7 @@ function getMaxOpusOption(fastMode = false) {
     description: `${displayName} \xB7 ${OPUS_SLOGAN}${getProUsageMultiplierNote()}${pricing}`,
   };
 }
-//@ chunk-hwmsct5x.js:206379-206629 callgraph-fingerprint (2.1.88 match: getMaxSonnet46_1MOption, 0.248)
+//@ chunk-vn3g7zt8.js:206769-207019 callgraph-fingerprint (2.1.88 match: getMaxSonnet46_1MOption, 0.248)
 /**
  * 订阅用户的 "Sonnet 4.6 (1M context)"（可能注明耗用 usage credits）。
  */
@@ -597,7 +597,7 @@ function getMaxSonnet46_1MOption() {
     description: `Sonnet 4.6 with 1M context${creditNote}${pricing}`,
   };
 }
-//@ chunk-hwmsct5x.js:206629-206844 fingerprint (2.1.88 match: getMaxOpus46_1MOption, 0.551)
+//@ chunk-vn3g7zt8.js:207019-207234 fingerprint (2.1.88 match: getMaxOpus46_1MOption, 0.551)
 /**
  * 订阅用户的 "Opus (1M context)"。
  */
@@ -611,7 +611,7 @@ function getMaxOpus46_1MOption() {
     description: `${displayName} with 1M context${getProUsageMultiplierNote()}${creditNote}${pricing}`,
   };
 }
-//@ chunk-hwmsct5x.js:206844-207137 callgraph-witnessed (2.1.88 match: getOpus46Option, 0.392)
+//@ chunk-vn3g7zt8.js:207234-207527 callgraph-witnessed (2.1.88 match: getOpus46Option, 0.392)
 /**
  * 默认 Opus 走 1M 时的 "Opus (1M context)" 选项。旧版名 getOpus46Option 不准确。
  */
@@ -627,7 +627,7 @@ function getOpus1mDefaultOption(withPricing = false, fastMode = false) {
     descriptionForModel: `${displayName} with 1M context - best for everyday, complex tasks`,
   };
 }
-//@ chunk-hwmsct5x.js:207137-207240 fingerprint (2.1.88 match: MaxSonnet46Option, 1)
+//@ chunk-vn3g7zt8.js:207527-207630 fingerprint (2.1.88 match: MaxSonnet46Option, 1)
 /**
  * 订阅用户的 Sonnet 选项。
  */
@@ -638,7 +638,7 @@ function MaxSonnet46Option() {
     description: `${getMarketingNameForModel(stripAnyVersatileSuffix(getDefaultSonnetModel())) ?? "Sonnet"} \xB7 ${SONNET_SLOGAN}`,
   };
 }
-//@ chunk-hwmsct5x.js:207240-207336 fingerprint (2.1.88 match: MaxHaiku45Option, 1)
+//@ chunk-vn3g7zt8.js:207630-207726 fingerprint (2.1.88 match: MaxHaiku45Option, 1)
 /**
  * 订阅用户的 Haiku 选项。
  */
@@ -649,7 +649,7 @@ function MaxHaiku45Option() {
     description: `${getPublicModelDisplayName(getDefaultHaikuModel()) ?? "Haiku"} \xB7 ${HAIKU_SLOGAN}`,
   };
 }
-//@ chunk-hwmsct5x.js:207336-207452 fingerprint (2.1.88 match: getOpusPlanOption, 0.779)
+//@ chunk-vn3g7zt8.js:207726-207842 fingerprint (2.1.88 match: getOpusPlanOption, 0.779)
 /**
  * "Opus Plan Mode"：plan 模式用 Opus，其余用 Sonnet（opusplan）。
  */
@@ -660,14 +660,14 @@ function getOpusPlanOption() {
     description: "Use Opus in plan mode, Sonnet otherwise",
   };
 }
-//@ chunk-hwmsct5x.js:207452-207475 layout
+//@ chunk-vn3g7zt8.js:207842-207865 layout
 /**
  * 空实现（构建裁剪掉的选项钩子）。
  */
 function noopModelOption(option) {
   return;
 }
-//@ chunk-hwmsct5x.js:207475-207589 layout (2.1.88 match: aliasMatchesParentTier, 0.792)
+//@ chunk-vn3g7zt8.js:207865-207979 layout (2.1.88 match: aliasMatchesParentTier, 0.792)
 /**
  * 在选项列表里补上默认模型所在族与指定族的行。
  */
@@ -678,7 +678,7 @@ function ensureFamilyOptionRows(options, fastMode, tier) {
   for (let tier of tiers) ensureTierOptionPresent(options, tier, fastMode);
   return options;
 }
-//@ chunk-hwmsct5x.js:207589-207771 layout
+//@ chunk-vn3g7zt8.js:207979-208161 layout
 /**
  * /model 选项列表里没有 sonnet/opus（含 opus[1m]）时插入对应默认选项（放在“默认”项之后）。
  */
@@ -689,7 +689,7 @@ function ensureTierOptionPresent(options, tier, fastMode) {
   let option = tier === "sonnet" ? getSonnetOption() : getOpusOption(fastMode);
   options.splice(options.findIndex((option) => option.value === null) + 1, 0, option);
 }
-//@ chunk-hwmsct5x.js:207771-208021 layout
+//@ chunk-vn3g7zt8.js:208161-208411 layout
 /**
  * Sonnet 选项（catalog 默认时可能用精简行）。
  */
@@ -707,7 +707,7 @@ function getSonnetOption(withPricing = false) {
     descriptionForModel: `${displayName} - efficient for routine tasks`,
   };
 }
-//@ chunk-hwmsct5x.js:208021-208291 layout
+//@ chunk-vn3g7zt8.js:208411-208681 layout
 /**
  * Opus 选项；默认 Opus 1M optIn 时返回 "Opus (1M context)"。auto 名 getHaiku35Option 为错配。
  */
@@ -726,7 +726,7 @@ function getOpusOption(fastMode) {
     descriptionForModel: `${displayName} - best for everyday, complex tasks`,
   };
 }
-//@ chunk-hwmsct5x.js:208291-209773 callgraph-witnessed (2.1.88 match: getModelOptionsBase, 0)
+//@ chunk-vn3g7zt8.js:208681-210163 callgraph-witnessed (2.1.88 match: getModelOptionsBase, 0)
 /**
  * 内置选项列表：订阅用户（有 Opus 权限/无）、第一方类提供商、第三方提供商三套组合，按可用性加入各族及 1M 变体与自定义档位行。
  */
@@ -830,7 +830,7 @@ function getModelOptionsBase(fastMode = false) {
     filterModelOptionsByAllowlist(payg3pOptions, customFableOption ?? generateModelSection("fable"));
   return payg3pOptions;
 }
-//@ chunk-hwmsct5x.js:209773-210483 placement (2.1.88 match: getAgentModelOptions, 0.574)
+//@ chunk-vn3g7zt8.js:210163-210873 placement (2.1.88 match: getAgentModelOptions, 0.575)
 /**
  * 给任意模型 id 构造 /model 选项：有已知族时用族口号，若有更新版本提示 "Newer version available · select <族>"；未知族为 "Custom model (id)"。旧版名 getAgentModelOptions 不准确。
  */
@@ -889,7 +889,7 @@ function buildModelOptionForId(model) {
     description: `${familyInfo.slogan} (${model})`,
   };
 }
-//@ chunk-hwmsct5x.js:210483-210616 placement
+//@ chunk-vn3g7zt8.js:210873-211006 placement
 /**
  * 选项标签只是原始 id 时换成目录显示名，原标签放进描述。
  */
@@ -904,28 +904,28 @@ function relabelOptionFromCatalog(option) {
         description: `${option.description} (${option.label})`,
       };
 }
-//@ chunk-hwmsct5x.js:210616-210674 placement
+//@ chunk-vn3g7zt8.js:211006-211064 placement
 /**
  * 去掉 disabled 行的模型选项。
  */
 function getEnabledModelOptions(fastMode = false) {
   return buildModelPickerOptions(fastMode).filter((option) => !option.disabled);
 }
-//@ chunk-hwmsct5x.js:210674-210708 placement
+//@ chunk-vn3g7zt8.js:211064-211098 placement
 /**
  * 只在 claude-vscode 入口展示不可用模型行。
  */
 var VSCODE_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hwmsct5x.js:210674", () => {
+deferInit("chunk-vn3g7zt8.js:211064", () => {
   VSCODE_ENTRYPOINTS = new Set(["claude-vscode"]);
 });
-//@ chunk-hwmsct5x.js:210708-211169 placement
+//@ chunk-vn3g7zt8.js:211098-211559 placement
 /**
  * VS Code 入口、第一方直连时返回被禁用的模型行（并记 model_unavailable_gate）。
  */
 function getUnavailableModelRows(options) {
   if (!VSCODE_ENTRYPOINTS.has(env.CLAUDE_CODE_ENTRYPOINT ?? "")) return [];
-  let disabledCount = count(options, (option) => option.disabled === true);
+  let disabledCount = countWhere(options, (option) => option.disabled === true);
   let stats = {
     total: options.length,
     disabled: disabledCount,
@@ -943,14 +943,14 @@ function getUnavailableModelRows(options) {
   logFeatureOk("model_unavailable_gate", stats);
   return options.filter((option) => option.disabled === true);
 }
-//@ chunk-hwmsct5x.js:211169-211202 placement
+//@ chunk-vn3g7zt8.js:211559-211592 placement
 /**
  * 对全部选项调用 getUnavailableModelRows。
  */
 function getUnavailableModelOptions() {
   return getUnavailableModelRows(buildModelPickerOptions());
 }
-//@ chunk-hwmsct5x.js:211202-211344 placement
+//@ chunk-vn3g7zt8.js:211592-211734 placement
 /**
  * 统计被丢弃的选项及原因（entitlement_denied/managed_denied/allowlist_filtered）。
  */
@@ -965,7 +965,7 @@ function recordDroppedModelOption(stats, model, modelEntitlementDenySet) {
         : "allowlist_filtered",
   );
 }
-//@ chunk-hwmsct5x.js:211344-211393 placement
+//@ chunk-vn3g7zt8.js:211734-211783 placement
 /**
  * deniedModels 判定，出错视为未拒绝。
  */
@@ -976,7 +976,7 @@ function isModelDeniedSafe(model) {
     return false;
   }
 }
-//@ chunk-hwmsct5x.js:211393-211905 placement
+//@ chunk-vn3g7zt8.js:211783-212295 placement
 /**
  * 生成模型选项并记 model_picker_options（总数、禁用、丢弃、重复、精选行）。
  */
@@ -993,7 +993,7 @@ function getModelOptionsWithTelemetry(fastMode = false, stats) {
     let modelPickerOptions = buildModelPickerOptions(fastMode, localStats);
     logFeatureOk("model_picker_options", {
       total: modelPickerOptions.length,
-      disabled: count(modelPickerOptions, (option) => option.disabled === true),
+      disabled: countWhere(modelPickerOptions, (option) => option.disabled === true),
       dropped: localStats.dropped,
       duplicates: localStats.duplicates,
       curated_rows: localStats.curatedRows,
@@ -1008,7 +1008,7 @@ function getModelOptionsWithTelemetry(fastMode = false, stats) {
     throw error;
   }
 }
-//@ chunk-hwmsct5x.js:211905-213303 placement
+//@ chunk-vn3g7zt8.js:212295-213696 placement
 /**
  * 去重模型选项；服务端目录里不可选的行标为禁用；组织默认行加注；model-error-overrides 命中的行禁用；禁用行排到最后。
  */
@@ -1109,7 +1109,7 @@ function buildModelPickerOptions(fastMode = false, stats = null) {
   if (filtered_2.length === 0) return mapped;
   return [...mapped.filter((option) => option.disabled !== true), ...filtered_2];
 }
-//@ chunk-hwmsct5x.js:213303-213848 placement
+//@ chunk-vn3g7zt8.js:213696-214241 placement
 /**
  * 有服务端模型目录时按目录行生成选项（第三方走 X_；第一方合并档位自定义行），否则 null。
  */
@@ -1150,7 +1150,7 @@ function getCatalogDrivenModelOptions(baseContext, stats) {
   for (let option of fableTail) filterModelOptionsByAllowlist(main, option);
   return main;
 }
-//@ chunk-hwmsct5x.js:213848-213970 placement (2.1.88 match: aliasMatchesParentTier, 0.852)
+//@ chunk-vn3g7zt8.js:214241-214363 placement (2.1.88 match: aliasMatchesParentTier, 0.852)
 /**
  * ANTHROPIC_DEFAULT_{SONNET,OPUS,HAIKU,FABLE}_MODEL 对应的自定义选项。
  */
@@ -1162,7 +1162,7 @@ function getCustomTierOptions() {
     ["fable", getCustomFableOption()],
   ].flatMap(([family, option]) => (option === undefined ? [] : [[family, option]]));
 }
-//@ chunk-hwmsct5x.js:213970-214250 placement
+//@ chunk-vn3g7zt8.js:214363-214643 placement
 function toCatalogOption(entry, applyUnavailabilityFirst, stats) {
   let catalogModelOption = buildCatalogModelOption(entry);
   if (catalogModelOption === null) return null;
@@ -1182,7 +1182,7 @@ function toCatalogOption(entry, applyUnavailabilityFirst, stats) {
     );
   return option;
 }
-//@ chunk-hwmsct5x.js:214250-215482 placement
+//@ chunk-vn3g7zt8.js:214643-215875 placement
 /**
  * 用服务端目录过滤并补充内置模型选项：按模型字符串映射到目录行，可选行保留、隐藏行去掉、不可用行显示为禁用并附通知，再追加目录中其他非弃用模型。
  */
@@ -1264,7 +1264,7 @@ function mergeCatalogOptions(entries, baseContext, stats) {
   }
   return options;
 }
-//@ chunk-hwmsct5x.js:215482-215689 placement
+//@ chunk-vn3g7zt8.js:215875-216082 placement
 function applyUnavailability(catalogModelOption) {
   if (catalogModelOption.disabled === true || catalogModelOption.value === null) return catalogModelOption;
   let modelUnavailabilityReason = getModelUnavailabilityReason(catalogModelOption.value);
@@ -1280,7 +1280,7 @@ function applyUnavailability(catalogModelOption) {
       return null;
   }
 }
-//@ chunk-hwmsct5x.js:215689-216239 placement
+//@ chunk-vn3g7zt8.js:216082-216632 placement
 /**
  * 把目录行转为 /model 选项：标签取名称/营销名（保密模型遮盖代号）；不可选时显示为禁用并带通知或最低版本说明；可选时值优先用别名族。
  */
@@ -1317,11 +1317,11 @@ function buildCatalogModelOption(entry) {
     description: description || passthroughDescription(getFamilySlogan(entry.family), row),
   };
 }
-//@ chunk-hwmsct5x.js:216239-216265 placement
+//@ chunk-vn3g7zt8.js:216632-216658 placement
 function passthroughDescription(description, row) {
   return description;
 }
-//@ chunk-hwmsct5x.js:216265-216375 placement (2.1.88 match: isExcludedModel, 0.817)
+//@ chunk-vn3g7zt8.js:216658-216768 placement (2.1.88 match: isExcludedModel, 0.816)
 function isExcludedModel(entry, aliasFamily) {
   let userSpecifiedModel = parseUserSpecifiedModel(aliasFamily);
   if (usesFirstPartyModelIds()) return normalizeModelId(userSpecifiedModel) === entry.key;
@@ -1334,7 +1334,7 @@ function isExcludedModel(entry, aliasFamily) {
     ) === entry.key
   );
 }
-//@ chunk-hwmsct5x.js:216375-216506 layout (2.1.88 match: aliasMatchesParentTier, 0.852)
+//@ chunk-vn3g7zt8.js:216768-216899 layout (2.1.88 match: aliasMatchesParentTier, 0.852)
 /**
  * 族口号（Opus：Best for everyday, complex tasks 等）。
  */
@@ -1352,7 +1352,7 @@ function getFamilySlogan(alias) {
       return "";
   }
 }
-//@ chunk-hwmsct5x.js:216506-219700 fingerprint (2.1.88 match: getModelOptions, 0.541)
+//@ chunk-vn3g7zt8.js:216899-220108 fingerprint (2.1.88 match: getModelOptions, 0.542)
 /**
  * /model 选项总装：服务端目录或内置列表 → ANTHROPIC_CUSTOM_MODEL_OPTION → 网关发现模型 → 附加模型选项 → Fable 行 → availableModels 里的显式模型 → 服务端目录补行 → 白名单过滤 → 确保当前设置的模型（含 opusplan/opus/opus[1m]/自定义）在列表里。
  */
@@ -1603,7 +1603,7 @@ function getModelOptions(fastMode, stats) {
     return expandGatewayAliasOptions(options, stats);
   }
 }
-//@ chunk-hwmsct5x.js:219700-219894 placement (2.1.88 match: aliasMatchesParentTier, 0.792)
+//@ chunk-vn3g7zt8.js:220108-220302 placement (2.1.88 match: aliasMatchesParentTier, 0.792)
 /**
  * 未弃用、被允许、未缺席，别名形式需 1M 可用且不是旧模型。
  */
@@ -1625,7 +1625,7 @@ function isOfferableModel(model) {
         : true) && !isLegacyNo1mModel(canonicalName)
   );
 }
-//@ chunk-hwmsct5x.js:219894-220643 placement
+//@ chunk-vn3g7zt8.js:220302-221051 placement
 /**
  * 应用精选模型选择器：去重、过滤不可提供的模型，构建选项（不可用时禁用）；replaceBuiltInOptions 时替换内置选项，否则合并（同模型的可用项替换原项）。
  */
@@ -1675,11 +1675,11 @@ function applyCuratedPicker(options, stats) {
   }
   return merged;
 }
-//@ chunk-hwmsct5x.js:220643-220695 placement
+//@ chunk-vn3g7zt8.js:221051-221103 placement
 function isDisabledCustomModel(option) {
   return option.disabled === true && isPublishedCatalogActive() && !isFirstPartyApiBackend();
 }
-//@ chunk-hwmsct5x.js:220695-220890 placement
+//@ chunk-vn3g7zt8.js:221103-221298 placement
 function buildCuratedOption(modelId, label, description, isManaged) {
   let modelOptionForId = buildModelOptionForId(modelId);
   let label_2 = label ?? modelOptionForId?.label ?? modelId;
@@ -1692,7 +1692,7 @@ function buildCuratedOption(modelId, label, description, isManaged) {
     descriptionForModel: description ? `${description} (${modelId})` : resolvedDescription,
   };
 }
-//@ chunk-hwmsct5x.js:220890-221057 placement
+//@ chunk-vn3g7zt8.js:221298-221465 placement
 /**
  * 在选项中找到与给定模型值相同或等价的选项值。
  */
@@ -1706,7 +1706,7 @@ function findMatchingOptionValue(options, value) {
   let found = options.find((matchedOption) => optionsMatch(matchedOption, probe));
   return typeof found?.value === "string" ? found.value : undefined;
 }
-//@ chunk-hwmsct5x.js:221128-221595 placement
+//@ chunk-vn3g7zt8.js:221536-222003 placement
 /**
  * 网关环境下把别名型 /model 选项解析成具体模型 id（必要时加 [1m]）；与其他选项重复或不可用时返回 null。
  */
@@ -1761,7 +1761,7 @@ function resolveGatewayAliasOptionModel(options, option, onReject) {
   }
   return resolvedId;
 }
-//@ chunk-hwmsct5x.js:221595-221838 placement
+//@ chunk-vn3g7zt8.js:222003-222246 placement
 /**
  * 遍历 /model 选项：网关下别名选项替换成解析出的具体模型选项并去重；非网关原样返回。
  */
@@ -1782,7 +1782,7 @@ function expandGatewayAliasOptions(options, stats) {
     return [modelOptionForId];
   });
 }
-//@ chunk-hwmsct5x.js:222714-223062 placement
+//@ chunk-vn3g7zt8.js:223122-223470 placement
 /**
  * 判断两个模型选项是否指向同一模型：值相同、Fable 族键相同，或解析后的模型（含规范名回退）相同且 1M 后缀一致。
  */
@@ -1810,16 +1810,16 @@ function optionsMatch(left, right) {
     has1mSuffix_2(left.value) === has1mSuffix_2(right.value) || modelHasNative1MContext(userSpecifiedModel)
   );
 }
-//@ chunk-hwmsct5x.js:223062-223121 placement
+//@ chunk-vn3g7zt8.js:223470-223529 placement
 /**
  * 判断值是否属于 Fable 族（fable、fable[1m] 或目录中的 Fable id）。
  */
 function isFableFamilyValue(value) {
   return value === "fable" || value === "fable[1m]" || isFableModelValue(value);
 }
-//@ chunk-hwmsct5x.js:223121-223138 placement
+//@ chunk-vn3g7zt8.js:223529-223546 placement
 var FABLE_FAMILY_PREFIX = "fable:*";
-//@ chunk-hwmsct5x.js:223138-223531 placement
+//@ chunk-vn3g7zt8.js:223546-223939 placement
 /**
  * 取模型值对应的 Fable 族键：fable 别名解析默认 Fable 模型，其他值用目录中 Fable 模型 id 正则匹配。
  */
@@ -1849,7 +1849,7 @@ function getFableFamilyKey(value) {
     .exec(value)?.[1]
     ?.toLowerCase();
 }
-//@ chunk-hwmsct5x.js:223531-223942 placement
+//@ chunk-vn3g7zt8.js:223939-224350 placement
 /**
  * 对需要额外用量额度的 Fable 选项标记为禁用并加"requires usage credits"说明（按计费模式判断），记录禁用原因。
  */
@@ -1871,7 +1871,7 @@ function markFableCreditRequired(options, stats) {
     };
   });
 }
-//@ chunk-hwmsct5x.js:223942-224874 callgraph-witnessed (2.1.88 match: filterModelOptionsByAllowlist, 0.39)
+//@ chunk-vn3g7zt8.js:224350-225282 callgraph-witnessed (2.1.88 match: filterModelOptionsByAllowlist, 0.391)
 /**
  * 插入 Fable 等“置顶族”行：放在 Default 之后、与默认模型同族的行后面。
  */
@@ -1934,7 +1934,7 @@ function filterModelOptionsByAllowlist(options, option) {
   }
   options.splice(insertAt, 0, option);
 }
-//@ chunk-hwmsct5x.js:224874-225071 affinity (2.1.88 match: aliasMatchesParentTier, 0.852)
+//@ chunk-vn3g7zt8.js:225282-225479 affinity (2.1.88 match: aliasMatchesParentTier, 0.852)
 /**
  * 字符串里的族名（fable/opus/sonnet/haiku），没有为 null。
  */
@@ -1946,12 +1946,12 @@ function getModelFamilyFromString(value) {
   if (canonical.includes("haiku")) return "haiku";
   return null;
 }
-//@ chunk-d1cgs5na.js:12554-12651 fingerprint (2.1.88 match: getModelFamilyInfo, 0.437)
+//@ chunk-wefvmrb3.js:12622-12719 fingerprint (2.1.88 match: getModelFamilyInfo, 0.437)
 /**
  * sonnet-4-5、sonnet-4-0、3-7、3-5 的规范名集合。旧版名 getModelFamilyInfo 为错配。
  */
 var LEGACY_SONNET_MODELS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-d1cgs5na.js:12554", () => {
+deferInit("chunk-wefvmrb3.js:12622", () => {
   LEGACY_SONNET_MODELS = new Set([
     "claude-sonnet-4-5",
     "claude-sonnet-4-0",
@@ -1960,15 +1960,15 @@ deferInit("chunk-d1cgs5na.js:12554", () => {
   ]);
 });
 export {
-  getDefaultSonnetBuiltin,
   buildModelPickerOptions,
+  getUnavailableModelRows,
+  getDefaultSonnetBuiltin,
   getEnabledModelOptions,
-  getUnavailableModelOptions,
   getModelOptionsWithTelemetry,
   findMatchingOptionValue,
   noopModelOption,
-  getUnavailableModelRows,
-  LEGACY_SONNET_MODELS,
   isOfferableModel,
+  getUnavailableModelOptions,
+  LEGACY_SONNET_MODELS,
   isFableFamilyValue,
 };

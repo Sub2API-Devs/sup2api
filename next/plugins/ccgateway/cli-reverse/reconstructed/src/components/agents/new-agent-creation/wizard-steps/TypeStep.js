@@ -3,9 +3,9 @@
  *
  * 向导类型步骤；实际内容为区域输入（疑似匹配错误）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/agents/new-agent-creation/wizard-steps/TypeStep.tsx
- * pieces: chunk-y6fv30yg.js (2)
+ * pieces: chunk-3qyfks39.js (2)
  * attribution: placement 1, fingerprint 1
  */
 import { init_react_production, useState } from "../../../../../vendor/react/cjs/react.production.js";
@@ -26,12 +26,12 @@ import { ErrorText } from "../../../ErrorText.js";
 import { WizardDialogLayout } from "../../../wizard/WizardDialogLayout.js";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-y6fv30yg.js:14249-14253 placement
+//@ chunk-3qyfks39.js:14249-14253 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-y6fv30yg.js:14249", () => {
+deferInit("chunk-3qyfks39.js:14249", () => {
   init_react_production();
 });
-//@ chunk-y6fv30yg.js:14253-15626 fingerprint (2.1.88 match: TypeStep, 0.652)
+//@ chunk-3qyfks39.js:14253-15626 fingerprint (2.1.88 match: TypeStep, 0.651)
 function TypeStep() {
   let $ = useMemoCache(17);
   let { goBack, goNext, updateWizardData, wizardData } = useWizard();

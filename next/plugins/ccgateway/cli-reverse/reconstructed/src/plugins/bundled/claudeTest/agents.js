@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：Claude Test 的内部代理定义（规格起草、执行、探索）与权限规则
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ae5g0zb5.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mhn0amzz.js (6)
  * attribution: placement 6
  */
-//@ chunk-ae5g0zb5.js:116007-116368 placement
+//@ chunk-mhn0amzz.js:117248-117609 placement
 var HELPER_READ_RULES = Object.freeze([
   "Read(~/.config/claude-test/**)",
   "Read(~/Library/Application Support/claude-test/**)",
@@ -19,7 +19,7 @@ var HELPER_READ_RULES = Object.freeze([
   "Read(//**/claude-test/scratch/**)",
 ]);
 var HELPER_EDIT_RULES = Object.freeze(HELPER_READ_RULES.map((rule) => rule.replace(/^Read\(/, "Edit(")));
-//@ chunk-ae5g0zb5.js:116368-117398 placement
+//@ chunk-mhn0amzz.js:117609-118639 placement
 /**
  * 测试代理不得编辑的文件规则（CLAUDE.md、AGENTS.md 等）。
  */
@@ -62,7 +62,7 @@ var PROTECTED_EDIT_RULES = Object.freeze([
   "Edit(~/.zshrc)",
   "Edit(~/.zshenv)",
 ]);
-//@ chunk-ae5g0zb5.js:117398-121311 placement
+//@ chunk-mhn0amzz.js:118639-122552 placement
 /**
  * 后台起草规格文件的内部代理定义（只由 run skill 启动）。
  */
@@ -187,7 +187,7 @@ var DRAFT_AGENT_DEFINITION = Object.freeze({
     "Read(~/AppData/**)",
   ],
 });
-//@ chunk-ae5g0zb5.js:121311-122994 placement
+//@ chunk-mhn0amzz.js:122552-124235 placement
 /**
  * 在后台浏览器中执行规格的内部代理定义。
  */
@@ -235,7 +235,7 @@ var EXECUTE_AGENT_DEFINITION = Object.freeze({
     "Read(~/.claude/projects/**)",
   ],
 });
-//@ chunk-ae5g0zb5.js:122994-124068 placement
+//@ chunk-mhn0amzz.js:124235-125309 placement
 /**
  * /claude-test run skill 的描述与提示。
  */
@@ -255,7 +255,7 @@ var RUN_SKILL_DEFINITION = Object.freeze({
     "Edit(**/.claude-test/filed)",
   ],
 });
-//@ chunk-ae5g0zb5.js:124068-124247 placement
+//@ chunk-mhn0amzz.js:125309-125488 placement
 /**
  * 匹配 “run <…/.claude-test/runs/时间戳>” 形式的命令。
  */

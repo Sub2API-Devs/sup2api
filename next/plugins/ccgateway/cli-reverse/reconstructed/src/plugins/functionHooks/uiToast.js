@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件 $.ui.toast 提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (34)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (34)
  * attribution: placement 34
  */
 import { ENGINE } from "./dispatch/chain.js";
@@ -17,7 +17,7 @@ import {
   booleanSchema,
   numberSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
-import { pluginStateRegistry, stateEntryKey, writeStateValue } from "./api/state.js";
+import { stateSession, entryKeyOf, landValue } from "./api/state.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { isPolicyTier } from "./hookDispatch.js";
@@ -25,12 +25,12 @@ import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { toldRefusals, tellOnce } from "./ui/renderNotices.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:772988-773044 placement
+//@ chunk-5xgkngpb.js:784086-784142 placement
 /**
  * 从 key 取提示正文
  */
 var pluginToastText = (key) => key?.match(/^plugin-toast-[^:]*:(.*)$/s)?.[1];
-//@ chunk-e6aww6q8.js:773044-773234 placement
+//@ chunk-5xgkngpb.js:784142-784332 placement
 /**
  * 从通知队列中取出插件提示：当前显示的与等待中的（各自的 key 与时长），以及是否隐藏。
  */
@@ -49,25 +49,25 @@ function pluginToastQueueView(notifications, isHidden, defaultMs) {
     isHidden,
   };
 }
-//@ chunk-e6aww6q8.js:773234-773244 placement
+//@ chunk-5xgkngpb.js:784332-784342 placement
 /**
  * 50
  */
 var UNTOLD_TOAST_MS = 50;
-//@ chunk-e6aww6q8.js:773244-773282 placement
+//@ chunk-5xgkngpb.js:784342-784380 placement
 /**
  * 状态区提示的存盘键
  */
 var BAR_TOASTS_STATE; // deferred: uses ENGINE (./dispatch/chain.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:773244", () => {
+deferInit("chunk-5xgkngpb.js:784342", () => {
   BAR_TOASTS_STATE = {
     plugin: ENGINE,
     key: "bar-toasts",
   };
 });
-//@ chunk-e6aww6q8.js:773282-773519 placement
+//@ chunk-5xgkngpb.js:784380-784617 placement
 var barToastsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:773282", () => {
+deferInit("chunk-5xgkngpb.js:784380", () => {
   barToastsSchema = DoctorLazy(() =>
     objectSchema({
       toasts: array(
@@ -93,7 +93,7 @@ deferInit("chunk-e6aww6q8.js:773282", () => {
     }).readonly(),
   );
 });
-//@ chunk-e6aww6q8.js:773519-773595 placement
+//@ chunk-5xgkngpb.js:784617-784693 placement
 /**
  * 托管提示排前
  */
@@ -101,7 +101,7 @@ var managedFirst = (toasts) => [
   ...toasts.filter((toast) => toast.isManaged),
   ...toasts.filter((toast) => !toast.isManaged),
 ];
-//@ chunk-e6aww6q8.js:773595-773753 placement
+//@ chunk-5xgkngpb.js:784693-784851 placement
 function chargeToastTime(toast, slot, elapsedMs) {
   let isCharging = toast.key === slot.key;
   let isChargedBySlot = toast.key === (slot.shown ?? slot.key);
@@ -112,7 +112,7 @@ function chargeToastTime(toast, slot, elapsedMs) {
     lentMs: toast.lentMs + lentDelta * elapsedMs,
   };
 }
-//@ chunk-e6aww6q8.js:773753-773852 placement
+//@ chunk-5xgkngpb.js:784851-784950 placement
 /**
  * 记录提示账本
  */
@@ -124,7 +124,7 @@ var withLedger = (toasts, slot, at) => ({
   at,
   slot,
 });
-//@ chunk-e6aww6q8.js:773852-774156 placement
+//@ chunk-5xgkngpb.js:784950-785254 placement
 /**
  * 按剩余预算截短提示时间，超出部分记为丢失。
  */
@@ -160,24 +160,24 @@ function trimToastsToBudget(toasts, budgetMs) {
       })),
   };
 }
-//@ chunk-e6aww6q8.js:774156-774223 placement
+//@ chunk-5xgkngpb.js:785254-785321 placement
 var EMPTY_BAR_TOASTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:774156", () => {
+deferInit("chunk-5xgkngpb.js:785254", () => {
   EMPTY_BAR_TOASTS = Object.freeze({
     toasts: Object.freeze([]),
     at: 0,
     slot: undefined,
   });
 });
-//@ chunk-e6aww6q8.js:774223-774336 placement
+//@ chunk-5xgkngpb.js:785321-785434 placement
 /**
  * 读取持久化的通知栏插件提示账本（不合法时为空账本）。
  */
-function readBarToasts(state = pluginStateRegistry().values.getState()) {
-  let parsed = barToastsSchema().safeParse(state.get(stateEntryKey(BAR_TOASTS_STATE))?.value);
+function readBarToasts(state = stateSession().values.getState()) {
+  let parsed = barToastsSchema().safeParse(state.get(entryKeyOf(BAR_TOASTS_STATE))?.value);
   return parsed.success ? parsed.data : EMPTY_BAR_TOASTS;
 }
-//@ chunk-e6aww6q8.js:774336-774474 placement
+//@ chunk-5xgkngpb.js:785434-785572 placement
 /**
  * 判断某提示是否已显示过（或在可显示时排在首位）。
  */
@@ -188,7 +188,7 @@ function wasToastShown(barToasts, givesWay, isCutShort) {
     barToasts.toasts.some((toast) => toast.key === givesWay && toast.wasShown) || (isCutShort && isNextDrawn)
   );
 }
-//@ chunk-e6aww6q8.js:774474-774664 placement
+//@ chunk-5xgkngpb.js:785572-785762 placement
 /**
  * 保存通知栏插件提示账本（新旧都为空时跳过），失败记录错误。
  */
@@ -197,21 +197,21 @@ function saveBarToasts(ledger) {
     (ledger) => ledger.toasts.length === 0 && ledger.slot === undefined,
   );
   try {
-    if (!all) writeStateValue(stateEntryKey(BAR_TOASTS_STATE), ledger);
+    if (!all) landValue(entryKeyOf(BAR_TOASTS_STATE), ledger);
   } catch (error) {
     logForDebugging(`$.ui.toast: the bar's toasts were not kept: ${errorMessage(error)}`, {
       level: "error",
     });
   }
 }
-//@ chunk-e6aww6q8.js:774664-774764 placement
+//@ chunk-5xgkngpb.js:785762-785862 placement
 var keepLiveToasts = (previous, kept, knownKeys) =>
   previous.flatMap((toast) =>
     kept
       .filter((entry) => entry.key === toast.key)
       .filter((entry) => entry.leftMs > 0 || knownKeys.has(entry.key)),
   );
-//@ chunk-e6aww6q8.js:774764-775166 placement
+//@ chunk-5xgkngpb.js:785862-786267 placement
 /**
  * 推进提示计时：扣除已显示的时间，移除已用完的提示。
  */
@@ -234,7 +234,7 @@ function advanceToastClock(ledger, view, now) {
     })
     .filter((toast) => toast.leftMs > 0 || liveKeys.has(toast.key));
 }
-//@ chunk-e6aww6q8.js:775166-775259 placement
+//@ chunk-5xgkngpb.js:786267-786360 placement
 /**
  * key → 文本
  */
@@ -245,7 +245,7 @@ var toastTextMap = (toasts, texts) =>
       return entry === undefined ? [] : [[toast.key, entry.text]];
     }),
   );
-//@ chunk-e6aww6q8.js:775259-775333 placement
+//@ chunk-5xgkngpb.js:786360-786434 placement
 /**
  * 账本条目
  */
@@ -258,7 +258,7 @@ function toastLedgerEntry(slot, endsAt, shown) {
         shown,
       };
 }
-//@ chunk-e6aww6q8.js:775333-775509 placement
+//@ chunk-5xgkngpb.js:786434-786610 placement
 function toastForSlots(toasts, durations) {
   let mapped = toasts.map((toast, index) =>
     toasts.slice(0, index + 1).reduce((acc, prior) => acc + prior.leftMs, 0),
@@ -268,7 +268,7 @@ function toastForSlots(toasts, durations) {
     return toasts[mapped.findIndex((cumulative) => cumulative > reduced)];
   });
 }
-//@ chunk-e6aww6q8.js:775509-776028 placement
+//@ chunk-5xgkngpb.js:786610-787132 placement
 /**
  * 按通知栏剩余时间重排插件提示：推进计时、按管理优先排序、分配显示时间，返回新账本、要显示的文字与丢失时间的提示。
  */
@@ -303,7 +303,7 @@ function planBarToasts(ledger, view, now) {
     lost: trimmed.lost,
   };
 }
-//@ chunk-e6aww6q8.js:776028-776197 placement
+//@ chunk-5xgkngpb.js:787132-787301 placement
 /**
  * 把插件提示加入通知栏账本（托管层插件优先）。
  */
@@ -326,7 +326,7 @@ function enqueueBarToast(notice) {
     ],
   });
 }
-//@ chunk-e6aww6q8.js:776197-776348 placement
+//@ chunk-5xgkngpb.js:787301-787452 placement
 /**
  * 合并两个提示账本：保留旧账本中新账本没有的提示。
  */
@@ -340,7 +340,7 @@ function mergeToastLedgers(ledger, barToasts) {
         toasts: [...filtered, ...barToasts.toasts],
       };
 }
-//@ chunk-e6aww6q8.js:776348-776486 placement
+//@ chunk-5xgkngpb.js:787452-787590 placement
 /**
  * 当前显示提示的结束时间（早于槽位结束时）。
  */
@@ -350,7 +350,7 @@ function shownToastEndsAt(ledger) {
     ? ledger.at + found.leftMs
     : undefined;
 }
-//@ chunk-e6aww6q8.js:776486-776626 placement
+//@ chunk-5xgkngpb.js:787590-787730 placement
 /**
  * 记录插件提示因通知栏无剩余时间而丢失的时长。
  */
@@ -358,7 +358,7 @@ var logToastTimeLost = (lost) =>
   logForDebugging(
     `$.ui.toast (${lost.plugin}): ${lost.key} lost ${lost.leftMs} ms of its time, the notification bar having no toast time left for it`,
   );
-//@ chunk-e6aww6q8.js:776626-776721 placement
+//@ chunk-5xgkngpb.js:787730-787825 placement
 /**
  * 覆盖提示文本
  */
@@ -371,7 +371,7 @@ function applyToastText(toast, texts) {
       }
     : toast;
 }
-//@ chunk-e6aww6q8.js:776721-776878 placement
+//@ chunk-5xgkngpb.js:787825-787982 placement
 /**
  * 重写通知队列中插件提示的 key（未变时返回原队列）。
  */
@@ -387,12 +387,12 @@ function rekeyToastQueue(notifications, texts) {
         queue: mapped,
       };
 }
-//@ chunk-e6aww6q8.js:776878-776889 placement
+//@ chunk-5xgkngpb.js:787982-787993 placement
 /**
  * 提示队列最多排 50 条，再多就让最早的一条让位。
  */
 var MAX_QUEUED_TOASTS = 50;
-//@ chunk-e6aww6q8.js:776889-776979 placement
+//@ chunk-5xgkngpb.js:787993-788083 placement
 /**
  * 让位给哪个提示
  */
@@ -400,7 +400,7 @@ function toastGivesWayKey(queue, pluginName) {
   let filtered = queue.filter((entry) => pluginToastText(entry.key) === pluginName);
   return filtered.length < MAX_QUEUED_TOASTS ? undefined : filtered[0]?.key;
 }
-//@ chunk-e6aww6q8.js:776979-777078 placement
+//@ chunk-5xgkngpb.js:788083-788182 placement
 /**
  * plugin#环境
  */
@@ -411,7 +411,7 @@ var pluginToastScopeKey = (pluginName) =>
       .loadedModules.filter((loadedModule) => loadedModule.name === pluginName)
       .map((loadedModule) => loadedModule.environmentId),
   ].join("#");
-//@ chunk-e6aww6q8.js:777078-777153 placement
+//@ chunk-5xgkngpb.js:788182-788257 placement
 /**
  * 每次只提示一次让位
  */
@@ -422,14 +422,14 @@ function tellRefusalOnce(reason, plugin, tell) {
     tell();
   }
 }
-//@ chunk-e6aww6q8.js:777153-777173 placement
+//@ chunk-5xgkngpb.js:788257-788277 placement
 var IMMEDIATE = "immediate";
-//@ chunk-e6aww6q8.js:777173-777186 placement
+//@ chunk-5xgkngpb.js:788277-788290 placement
 /**
  * 提示默认显示 4000 毫秒，调用方可用 timeoutMs 覆盖。
  */
 var TOAST_DEFAULT_MS = 4000;
-//@ chunk-e6aww6q8.js:777186-777470 placement
+//@ chunk-5xgkngpb.js:788290-788574 placement
 /**
  * 记录插件提示让位（被截断或未显示），未显示时提示一次插件作者。
  */
@@ -443,12 +443,12 @@ function logToastGaveWay({ key, plugin, isCutShort }) {
       text: "$.ui.toast: a toast that waits to be shown gives way to the plugin's newer ones, unseen",
     });
 }
-//@ chunk-e6aww6q8.js:777470-777510 placement
+//@ chunk-5xgkngpb.js:788574-788614 placement
 /**
  * 提示的键 plugin-toast-<plugin>:<text>，按插件与正文区分同文提示。
  */
 var toastKeyFor = (id, pluginName) => `plugin-toast-${pluginName}:${id}`;
-//@ chunk-e6aww6q8.js:777510-777796 placement
+//@ chunk-5xgkngpb.js:788614-788900 placement
 /**
  * 判断插件新提示的排队情况：是否需等待、让位给哪个提示、当前显示的是否被截断。
  */
@@ -475,11 +475,9 @@ function toastQueueState(view, pluginName) {
   };
 }
 export {
-  MAX_QUEUED_TOASTS,
-  pluginToastScopeKey,
-  tellRefusalOnce,
-  pluginToastQueueView,
   TOAST_DEFAULT_MS,
+  pluginToastScopeKey,
+  pluginToastQueueView,
   planBarToasts,
   mergeToastLedgers,
   readBarToasts,
@@ -488,6 +486,8 @@ export {
   rekeyToastQueue,
   shownToastEndsAt,
   EMPTY_BAR_TOASTS,
+  MAX_QUEUED_TOASTS,
+  tellRefusalOnce,
   toastQueueState,
   toastKeyFor,
   logToastGaveWay,

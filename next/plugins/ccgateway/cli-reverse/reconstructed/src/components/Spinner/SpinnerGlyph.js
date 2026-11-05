@@ -3,17 +3,17 @@
  *
  * Spinner 旋转字形（按帧/停滞状态变色）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Spinner/SpinnerGlyph.tsx
- * pieces: chunk-mjyddqh1.js (2)
+ * pieces: chunk-9xvmzd8d.js (2)
  * attribution: placement 1, fingerprint 1
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useResolvedTheme } from "../design-system/ThemeProvider.js";
 import {
   cosineEase,
-  interpolateColor,
   parseRGB,
+  interpolateColor,
   roundToStep,
   toRGBColor,
   spinnerFramesForTerminal,
@@ -22,7 +22,7 @@ import { EARLY_RETURN_SENTINEL, MEMO_CACHE_SENTINEL } from "../../../runtime/bun
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 
-//@ chunk-mjyddqh1.js:425-485 placement (2.1.88 match: SETTLED_GREY, 1)
+//@ chunk-9xvmzd8d.js:425-485 placement (2.1.88 match: SETTLED_GREY, 1)
 /**
  * 导出值：同一声明里的多个绑定：GLYPH_ANIM_MS（2000）；GLYPH_ACCENT_RGB（强调色）；GLYPH_BASE_RGB（基础色）；位于「Spinner 旋转字形（按帧/停滞状态变色）」模块。
  */
@@ -38,7 +38,7 @@ var GLYPH_BASE_RGB = {
   g: 0,
   b: 0,
 };
-//@ chunk-mjyddqh1.js:485-2774 fingerprint (2.1.88 match: SpinnerGlyph, 0.763)
+//@ chunk-9xvmzd8d.js:485-2774 fingerprint (2.1.88 match: SpinnerGlyph, 0.762)
 function SpinnerGlyph(props) {
   let $ = useMemoCache(35);
   let { frame, messageColor, stalledIntensity, thinkingIntensity, reducedMotion, time } = props;
@@ -55,10 +55,10 @@ function SpinnerGlyph(props) {
     if ($[0] !== rgb || $[1] !== ease || $[2] !== thinking) {
       earlyReturn = EARLY_RETURN_SENTINEL;
       Re: {
-        let interpolated = rgb ? interpolateColor(rgb) : null;
+        let interpolated = rgb ? parseRGB(rgb) : null;
         if (interpolated) {
-          let baseRGB = parseRGB(interpolated, GLYPH_BASE_RGB, 0.5);
-          let mixedRGB = parseRGB(baseRGB, interpolated, roundToStep(ease));
+          let baseRGB = interpolateColor(interpolated, GLYPH_BASE_RGB, 0.5);
+          let mixedRGB = interpolateColor(baseRGB, interpolated, roundToStep(ease));
           const children = jsxProd_default(Text, {
             color: toRGBColor(mixedRGB),
             bold: thinking >= 0.5,
@@ -122,9 +122,9 @@ function SpinnerGlyph(props) {
     if ($[11] !== rgb || $[12] !== children || $[13] !== stalled) {
       earlyReturn = EARLY_RETURN_SENTINEL;
       Be: {
-        let interpolated = rgb ? interpolateColor(rgb) : null;
+        let interpolated = rgb ? parseRGB(rgb) : null;
         if (interpolated) {
-          let interpolated_2 = parseRGB(interpolated, GLYPH_ACCENT_RGB, roundToStep(stalled));
+          let interpolated_2 = interpolateColor(interpolated, GLYPH_ACCENT_RGB, roundToStep(stalled));
           const children_2 = jsxProd_default(Text, {
             color: toRGBColor(interpolated_2),
             children,
@@ -177,11 +177,11 @@ function SpinnerGlyph(props) {
     if ($[20] !== rgb || $[21] !== children || $[22] !== resolvedTheme.warning || $[23] !== thinking) {
       earlyReturn = EARLY_RETURN_SENTINEL;
       Ie: {
-        let interpolated = rgb ? interpolateColor(rgb) : null;
-        let warningRGB = interpolateColor(resolvedTheme.warning);
+        let interpolated = rgb ? parseRGB(rgb) : null;
+        let warningRGB = parseRGB(resolvedTheme.warning);
         bold = thinking >= 0.5;
         if (interpolated && warningRGB) {
-          let mixedRGB = parseRGB(interpolated, warningRGB, roundToStep(thinking));
+          let mixedRGB = interpolateColor(interpolated, warningRGB, roundToStep(thinking));
           const children_2 = jsxProd_default(Text, {
             bold,
             color: toRGBColor(mixedRGB),

@@ -3,9 +3,9 @@
  *
  * 首次运行连通性预检：请求 /api/hello 与 /v1/oauth/hello，失败提示无法连接 Anthropic 服务
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/preflightChecks.tsx
- * pieces: chunk-p8fze0jh.js (4)
+ * pieces: chunk-s0v4e2v6.js (4)
  * attribution: callgraph-fingerprint 1, layout 1, fingerprint 2
  */
 import { setBgExitCause } from "./bgExitSidecars.js";
@@ -26,14 +26,14 @@ import {
 import { Box, Text } from "../ink/components/Text.js";
 import { Spinner } from "../components/Spinner.js";
 
-//@ chunk-p8fze0jh.js:16221-16276 callgraph-fingerprint (2.1.88 match: _temp, 0.39)
+//@ chunk-s0v4e2v6.js:17398-17453 callgraph-fingerprint (2.1.88 match: _temp, 0.389)
 function exitPreflightFailed() {
   setBgExitCause("preflight_endpoint");
   process.exit(1);
 }
-//@ chunk-p8fze0jh.js:16276-16287 layout
+//@ chunk-s0v4e2v6.js:17453-17464 layout
 var PREFLIGHT_TIMEOUT_MS = 1e4;
-//@ chunk-p8fze0jh.js:16287-17402 fingerprint (2.1.88 match: checkEndpoints, 0.823)
+//@ chunk-s0v4e2v6.js:17464-18579 fingerprint (2.1.88 match: checkEndpoints, 0.823)
 /**
  * 启动预检：用 10 秒超时请求 <BASE_API_URL>/api/hello 与 <TOKEN_URL 源>/v1/oauth/hello（走代理设置），返回第一个失败的错误说明。
  */
@@ -106,7 +106,7 @@ async function checkEndpoints() {
     };
   }
 }
-//@ chunk-p8fze0jh.js:17402-19010 fingerprint (2.1.88 match: PreflightStep, 0.303)
+//@ chunk-s0v4e2v6.js:18579-20187 fingerprint (2.1.88 match: PreflightStep, 0.303)
 /**
  * 首次运行的连通性检查界面：显示 Checking connectivity...，失败时提示 Unable to connect to Anthropic services 并退出。
  */

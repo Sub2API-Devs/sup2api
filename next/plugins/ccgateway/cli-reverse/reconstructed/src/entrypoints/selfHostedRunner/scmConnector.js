@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：runner 的 SCM 连接器（主机改写、拨号地址、路径校验）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2cbdmxy9.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h7hgs1mf.js (9)
  * attribution: placement 9
  */
 import { readFile } from "fs/promises";
@@ -16,7 +16,7 @@ import { withBoundedTimeout } from "../../utils/boundedTimeout.js";
 import { getWebSocketProxyUrl } from "../../utils/proxy.js";
 import { getWebSocketTLSOptions } from "../../utils/mtls.js";
 
-//@ chunk-2cbdmxy9.js:12063-12360 placement
+//@ chunk-h7hgs1mf.js:12893-13190 placement
 var SCM_CONNECTOR_CONSTANTS = "/v1/code/scm-connectors/{provider}/{id}/tunnel";
 var PROXY_PORT = 4003;
 var CONNECT_TIMEOUT_MS = 30000;
@@ -32,7 +32,7 @@ var UPSTREAM_TIMEOUT_MS = 30000;
 var CONNECT_WAIT_MS = 1e4;
 var ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
 var HOP_BY_HOP_HEADERS = new Set(["host", "connection", "content-length", "transfer-encoding"]);
-//@ chunk-2cbdmxy9.js:12360-13037 placement
+//@ chunk-h7hgs1mf.js:13190-13867 placement
 function parseScmConnectorHost(value) {
   if (value.includes("://") || value.includes("/") || value.includes("@"))
     throw Error("--scm-connector-host expects a bare hostname (e.g. ghe.example.com[:443]), not a URL");
@@ -56,7 +56,7 @@ function parseScmConnectorHost(value) {
     port,
   };
 }
-//@ chunk-2cbdmxy9.js:13037-13431 placement
+//@ chunk-h7hgs1mf.js:13867-14261 placement
 function parseScmHostRewrite(value) {
   let index = value.indexOf("=");
   if (index <= 0 || index === value.length - 1)
@@ -73,7 +73,7 @@ function parseScmHostRewrite(value) {
     toPort: port,
   };
 }
-//@ chunk-2cbdmxy9.js:13431-13758 placement
+//@ chunk-h7hgs1mf.js:14261-14588 placement
 function validateScmPath(path) {
   if (typeof path !== "string" || path.length === 0) return "path must be a non-empty string";
   if (path[0] !== "/") return "path must start with /";
@@ -82,7 +82,7 @@ function validateScmPath(path) {
   if (path.includes("\\")) return "path must not contain backslash";
   return null;
 }
-//@ chunk-2cbdmxy9.js:13758-14143 placement
+//@ chunk-h7hgs1mf.js:14588-14973 placement
 function scmDialUrl(host, port, path) {
   let url = new URL("https://placeholder.invalid/");
   url.host = `${host}:${port}`;
@@ -95,7 +95,7 @@ function scmDialUrl(host, port, path) {
     throw Error("path escaped the configured origin");
   return url;
 }
-//@ chunk-2cbdmxy9.js:14143-14312 placement
+//@ chunk-h7hgs1mf.js:14973-15142 placement
 function scmConnectorWsUrl(apiUrl, connector) {
   let replaced = SCM_CONNECTOR_CONSTANTS.replace(
     "{provider}",
@@ -103,7 +103,7 @@ function scmConnectorWsUrl(apiUrl, connector) {
   ).replace("{id}", String(connector.connectorId));
   return apiUrl.replace(/^http/, "ws").replace(/\/+$/, "") + replaced;
 }
-//@ chunk-2cbdmxy9.js:14312-14417 placement
+//@ chunk-h7hgs1mf.js:15142-15247 placement
 function newScmConnectorStatus() {
   return {
     connected: false,
@@ -113,7 +113,7 @@ function newScmConnectorStatus() {
     requests_forwarded: 0,
   };
 }
-//@ chunk-2cbdmxy9.js:14417-19492 placement
+//@ chunk-h7hgs1mf.js:15247-20322 placement
 /**
  * SCM 连接器隧道：通过 /v1/code/scm-connectors/.../tunnel WebSocket 把服务器请求转发到内网 Git 主机。
  */
@@ -482,7 +482,7 @@ function startScmConnector(connector, scmConnector, context, signal) {
     stop,
   };
 }
-//@ chunk-2cbdmxy9.js:19492-19707 placement
+//@ chunk-h7hgs1mf.js:20322-20537 placement
 var RUNNER_DEFAULTS = "https://api.anthropic.com";
 var HANDSHAKE_POLL_MS = 1500;
 var DEFAULT_LISTEN_PORT = 8080;

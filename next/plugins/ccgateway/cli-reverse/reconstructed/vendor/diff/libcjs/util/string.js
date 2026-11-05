@@ -1,18 +1,18 @@
 /**
  * diff/libcjs/util/string.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: diff@9.0.0
- * pieces: chunk-7vb8p3zb.js (12)
+ * pieces: chunk-9dtasr5y.js (12)
  * attribution: esm-layout 6, esm-fingerprint 6
  */
 
-//@ chunk-7vb8p3zb.js:3027-3138 esm-layout
+//@ chunk-9dtasr5y.js:3027-3138 esm-layout
 function longestCommonPrefix(str1, str2) {
   let i;
   for (i = 0; i < str1.length && i < str2.length; i++) if (str1[i] != str2[i]) return str1.slice(0, i);
   return str1.slice(0, i);
 }
-//@ chunk-7vb8p3zb.js:3138-3322 esm-layout
+//@ chunk-9dtasr5y.js:3138-3322 esm-layout
 function longestCommonSuffix(str1, str2) {
   let i;
   if (!str1 || !str2 || str1[str1.length - 1] != str2[str2.length - 1]) return "";
@@ -20,7 +20,7 @@ function longestCommonSuffix(str1, str2) {
     if (str1[str1.length - (i + 1)] != str2[str2.length - (i + 1)]) return str1.slice(-i);
   return str1.slice(-i);
 }
-//@ chunk-7vb8p3zb.js:3322-3498 esm-fingerprint
+//@ chunk-9dtasr5y.js:3322-3498 esm-fingerprint
 function replacePrefix(string, oldPrefix, newPrefix) {
   if (string.slice(0, oldPrefix.length) != oldPrefix)
     throw Error(
@@ -28,7 +28,7 @@ function replacePrefix(string, oldPrefix, newPrefix) {
     );
   return newPrefix + string.slice(oldPrefix.length);
 }
-//@ chunk-7vb8p3zb.js:3498-3691 esm-fingerprint
+//@ chunk-9dtasr5y.js:3498-3691 esm-fingerprint
 function replaceSuffix(string, oldSuffix, newSuffix) {
   if (!oldSuffix) return string + newSuffix;
   if (string.slice(-oldSuffix.length) != oldSuffix)
@@ -37,19 +37,19 @@ function replaceSuffix(string, oldSuffix, newSuffix) {
     );
   return string.slice(0, -oldSuffix.length) + newSuffix;
 }
-//@ chunk-7vb8p3zb.js:3691-3724 esm-layout
+//@ chunk-9dtasr5y.js:3691-3724 esm-layout
 function stripPrefixOnce(string, oldPrefix) {
   return replacePrefix(string, oldPrefix, "");
 }
-//@ chunk-7vb8p3zb.js:3724-3757 esm-layout
+//@ chunk-9dtasr5y.js:3724-3757 esm-layout
 function stripSuffixOnce(string, oldSuffix) {
   return replaceSuffix(string, oldSuffix, "");
 }
-//@ chunk-7vb8p3zb.js:3757-3798 esm-layout
+//@ chunk-9dtasr5y.js:3757-3798 esm-layout
 function maximumOverlap(string1, string2) {
   return string2.slice(0, overlapCount(string1, string2));
 }
-//@ chunk-7vb8p3zb.js:3798-4128 esm-layout
+//@ chunk-9dtasr5y.js:3798-4128 esm-layout
 function overlapCount(a, b) {
   let startA = 0;
   if (a.length > b.length) startA = a.length - b.length;
@@ -71,7 +71,7 @@ function overlapCount(a, b) {
   }
   return k;
 }
-//@ chunk-7vb8p3zb.js:4128-4301 esm-fingerprint
+//@ chunk-9dtasr5y.js:4128-4301 esm-fingerprint
 function segment(string, segmenter) {
   let parts = [];
   for (let segmentObj of Array.from(segmenter.segment(string))) {
@@ -82,20 +82,20 @@ function segment(string, segmenter) {
   }
   return parts;
 }
-//@ chunk-7vb8p3zb.js:4301-4422 esm-fingerprint
+//@ chunk-9dtasr5y.js:4301-4422 esm-fingerprint
 function trailingWs(string, segmenter) {
   if (segmenter) return leadingAndTrailingWs(string, segmenter)[1];
   let i;
   for (i = string.length - 1; i >= 0; i--) if (!string[i].match(/\s/)) break;
   return string.substring(i + 1);
 }
-//@ chunk-7vb8p3zb.js:4422-4499 esm-fingerprint
+//@ chunk-9dtasr5y.js:4422-4499 esm-fingerprint
 function leadingWs(string, segmenter) {
   if (segmenter) return leadingAndTrailingWs(string, segmenter)[0];
   let match = string.match(/^\s*/);
   return match ? match[0] : "";
 }
-//@ chunk-7vb8p3zb.js:4499-4740 esm-fingerprint
+//@ chunk-9dtasr5y.js:4499-4740 esm-fingerprint
 function leadingAndTrailingWs(string, segmenter) {
   if (!segmenter) return [leadingWs(string), trailingWs(string)];
   if (segmenter.resolvedOptions().granularity != "word")

@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.318
+import{nit,iY,$I}from"./chunk-m0ks5273.js";import{RDt,hZ}from"./chunk-0v2m06bh.js";import{Om}from"./chunk-rk08ek8r.js";async function jEt(t,a,i,s){let e=await $I(t,a,i,{gatePublicRead:!1,credentials:s});if(e.err!==null){if(e.errorCode==="boot_404")return{ok:!1,reason:nit(e)?"never_published":"not_found"};if(iY(e))return{ok:!1,reason:"other_org",err:e.err};return{ok:!1,reason:"failed",err:e.err,errorCode:e.errorCode}}if(e.assetToken===void 0)return{ok:!1,reason:"public_outside_org"};let r=typeof e.data.title==="string"?e.data.title:void 0,o=r!==void 0?Om(r)??void 0:void 0,n=hZ({role:RDt(e.data.perm?.role)});return{ok:!0,...o!==void 0&&{title:o},...n!==void 0&&{owned:n}}}var d3n=15000;function c3n(t){switch(t.reason){case"public_outside_org":return"Couldn't open that artifact. It's public and from outside your organization.";case"other_org":return"Couldn't open that artifact. It's in another of your organizations.";case"never_published":return"Couldn't open that artifact. Nothing has been published to it yet.";case"not_found":return"Couldn't open that artifact. It may have been deleted, or it isn't shared with you.";case"failed":return t.errorCode===void 0||t.errorCode==="boot_request_error"?"Couldn't check that artifact, so it wasn't opened. Try again.":"Couldn't check that artifact, so it wasn't opened."}}
+export{jEt,d3n,c3n};

@@ -1,16 +1,16 @@
 /**
  * @typespec/ts-http-runtime/dist/esm/util/sanitizer.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
- * pieces: chunk-mrx6y2r5.js (3)
+ * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
 import { inspect } from "util";
 import { isErrorLike } from "./error.js";
 
-//@ chunk-mrx6y2r5.js:34990-35007 esm-layout
+//@ chunk-b5df2wx1.js:34990-35007 esm-layout
 var custom = inspect.custom;
-//@ chunk-mrx6y2r5.js:35007-35792 esm-fingerprint
+//@ chunk-b5df2wx1.js:35007-35792 esm-fingerprint
 var RedactedString = "REDACTED";
 var defaultAllowedHeaderNames = [
   "x-ms-client-request-id",
@@ -54,7 +54,7 @@ var defaultAllowedHeaderNames = [
   "WWW-Authenticate",
 ];
 var defaultAllowedQueryParameters = ["api-version"];
-//@ chunk-mrx6y2r5.js:35792-37067 esm-fingerprint
+//@ chunk-b5df2wx1.js:35792-37067 esm-fingerprint
 class Sanitizer {
   constructor({
     additionalAllowedHeaderNames: allowedHeaderNames = [],

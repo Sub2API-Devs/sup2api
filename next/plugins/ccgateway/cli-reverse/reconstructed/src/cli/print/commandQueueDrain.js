@@ -3,33 +3,34 @@
  *
  * 2.1.316 新增：命令队列排空（! 命令执行器、为人工提示让路的判定）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (16)
- * attribution: placement 16
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-0yw3taqg.js (16)
+ * attribution: placement 15, layout 1
  */
 import { withDeadline } from "../../utils/sleep.js";
 import {
   QUEUED_INTERRUPT_BUDGET_MS,
   RESUME_RESCUE_YIELD_FLAG,
   TENGU_COZY_PINWHEEL,
+  TENGU_GIGGLY_OASIS,
   isPeerHandbackPrompt,
 } from "./backgroundWait.js";
 import { ATTACHMENT_FILES_WAIT_TIMEOUT_MS } from "../../bridge/attachmentFilesWait.js";
 import { logEvent } from "../../services/analytics/index.js";
-import { fromEnum, fromEnumOpt } from "../../services/analytics/safeMetadata.js";
+import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { isClaudeAiChatRemote } from "../../utils/entrypointKinds.js";
 import { getRemoteFeatureGateState } from "../../utils/permissions/yoloClassifier.js";
-import { canBatchWith } from "../print.js";
-import { isHumanOrigin } from "../../utils/turnOrigin.js";
 import {
-  isSlashCommand_2,
-  isActiveMainAgentCommand,
+  isQueuedUserTurnCommand,
+  isSlashCommand,
+  isDrainableMainThreadCommand,
   isPollEventWakeInput,
   isPromptCapableMode,
   isMainAgentCommand,
 } from "../../utils/messageQueueManager.js";
+import { isHumanOrigin } from "../../utils/turnOrigin.js";
 import { TENGU_TENDER_MITTEN } from "../../services/api/withRetry.js";
 import { logError } from "../../utils/log.js";
 import { neverDeclaresEvents } from "../../utils/pollEvents/declarations.js";
@@ -47,16 +48,18 @@ import { env } from "../../utils/env.js";
 import { BASH_STDOUT, BASH_STDERR, BASH_EXIT_CODE } from "../../constants/xml.js";
 import { BASH_INTERRUPTED_NOTE } from "../../utils/shell/headlessBash.js";
 import { createChildAbortController, userAbortReason } from "../../utils/abortController.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-tyg7f3ek.js:115396-115976 placement
+//@ chunk-0yw3taqg.js:144997-145593 placement
 /**
  * resume 救援轮次遇到排队的人工提示时让路（tengu_cosmic_crayon），返回等待对象。
  */
 function maybeYieldToPersonPrompt({ head, messageQueue, prewaitLatch, fetchingFiles }) {
+  let yieldKind = isRescueTurn(head);
   if (
-    !isRescueTurn(head) ||
+    yieldKind === undefined ||
     prewaitLatch.stopLatched ||
-    rescueYieldMode(head) !== "on" ||
+    resumeRescueYieldGateState(yieldKind) !== "on" ||
     hasBatchablePersonPrompt(messageQueue.getCommandQueueSnapshot())
   )
     return null;
@@ -78,11 +81,12 @@ function maybeYieldToPersonPrompt({ head, messageQueue, prewaitLatch, fetchingFi
     })
     .finally(unsubscribe);
 }
-//@ chunk-tyg7f3ek.js:115976-116456 placement
+//@ chunk-0yw3taqg.js:145593-146160 placement
 function shouldYieldRescueTurn({ head, queued, stopLatched, decidedAt, promptWait }) {
-  if (!isRescueTurn(head)) return false;
+  let yieldKind = isRescueTurn(head);
+  if (yieldKind === undefined) return false;
   let promptWaiting = hasBatchablePersonPrompt(queued);
-  let switchState = rescueYieldMode(head);
+  let switchState = resumeRescueYieldGateState(yieldKind);
   let shouldYield = promptWaiting && !stopLatched && switchState === "on";
   if (shouldYield || decidedAt === "before_start") {
     logEvent("tengu_resume_rescue_yield", {
@@ -93,35 +97,48 @@ function shouldYieldRescueTurn({ head, queued, stopLatched, decidedAt, promptWai
       stop_latched: stopLatched,
       drain_only: head.drainOnly === true,
       prompt_wait: fromEnum(promptWait),
-      error_kind: fromEnumOpt(head.yieldsToPersonPrompt),
+      error_kind: fromEnum(yieldKind),
     });
     if (shouldYield) logFeatureOk("ccr_rescue_yields_to_prompt");
     else if (promptWaiting && switchState === "on")
       logFeatureSad("ccr_rescue_yields_to_prompt", "stop_latched");
+    else if (promptWaiting && !stopLatched && yieldKind === "other")
+      logFeatureSad("ccr_rescue_yields_to_prompt", "error_kind_other_switch_not_on");
   }
   return shouldYield;
 }
-//@ chunk-tyg7f3ek.js:116456-116517 placement
+//@ chunk-0yw3taqg.js:146160-146250 placement
 function isRescueTurn(head) {
-  return head.yieldsToPersonPrompt !== undefined && isClaudeAiChatRemote();
+  return head.yieldsToPersonPrompt !== undefined && isClaudeAiChatRemote()
+    ? head.yieldsToPersonPrompt
+    : undefined;
 }
-//@ chunk-tyg7f3ek.js:116517-116657 placement
-function rescueYieldMode(head) {
+//@ chunk-0yw3taqg.js:146250-146440 layout
+function resumeRescueYieldGateState(yieldKind) {
   let remoteFeatureGateState = getRemoteFeatureGateState(RESUME_RESCUE_YIELD_FLAG);
-  return remoteFeatureGateState === "on" &&
-    (head.yieldsToPersonPrompt === "server_error" || head.yieldsToPersonPrompt === "model_not_found")
-    ? getRemoteFeatureGateState(TENGU_COZY_PINWHEEL)
-    : remoteFeatureGateState;
+  if (remoteFeatureGateState !== "on") return remoteFeatureGateState;
+  switch (yieldKind) {
+    case "rate_limit":
+    case "no_request_token":
+      return remoteFeatureGateState;
+    case "server_error":
+    case "model_not_found":
+      return getRemoteFeatureGateState(TENGU_COZY_PINWHEEL);
+    case "other":
+      return getRemoteFeatureGateState(TENGU_GIGGLY_OASIS);
+  }
 }
-//@ chunk-tyg7f3ek.js:116657-116722 placement
+//@ chunk-0yw3taqg.js:146440-146505 placement
 function hasBatchablePersonPrompt(queued) {
-  return queued.some((item) => canBatchWith(item) && isHumanOrigin(item.origin) && !isSlashCommand_2(item));
+  return queued.some(
+    (item) => isQueuedUserTurnCommand(item) && isHumanOrigin(item.origin) && !isSlashCommand(item),
+  );
 }
-//@ chunk-tyg7f3ek.js:116722-116764 placement
+//@ chunk-0yw3taqg.js:146505-146547 placement
 function isActiveHandbackPrompt(item) {
   return isPeerHandbackPrompt(item) && !item.drainOnly;
 }
-//@ chunk-tyg7f3ek.js:116764-116928 placement
+//@ chunk-0yw3taqg.js:146547-146711 placement
 function makeHandbackFilter(queued) {
   let senderTaskIds = new Set(
     queued
@@ -131,7 +148,7 @@ function makeHandbackFilter(queued) {
   return (item) =>
     isActiveHandbackPrompt(item) || (item.handbackPointer === true && senderTaskIds.has(item.taskId));
 }
-//@ chunk-tyg7f3ek.js:116928-117148 placement
+//@ chunk-0yw3taqg.js:146711-146931 placement
 function shouldHandbacksStandAside({ queued, stopLatched, next }) {
   if (
     !queued.some(isActiveHandbackPrompt) ||
@@ -144,7 +161,7 @@ function shouldHandbacksStandAside({ queued, stopLatched, next }) {
     else logFeatureOk("headless_handbacks_stand_aside");
   return !stopLatched;
 }
-//@ chunk-tyg7f3ek.js:117148-120577 placement
+//@ chunk-0yw3taqg.js:146931-150360 placement
 /**
  * print 模式命令队列出队器：处理 poll-event、orphaned-permission、prompt 批量合并、延迟工具结果与停止门闩。
  */
@@ -164,8 +181,8 @@ class CommandQueueDrain {
   }
   takeHead() {
     let matchCommand = this.exceptHandbacksThatStandAside(
-      isActiveMainAgentCommand,
-      this.messageQueue.peek(isActiveMainAgentCommand),
+      isDrainableMainThreadCommand,
+      this.messageQueue.peek(isDrainableMainThreadCommand),
     );
     if (
       this.pollDispatchTarget !== undefined &&
@@ -314,28 +331,28 @@ class CommandQueueDrain {
     return (item) => matchCommand(item) && !handbackFilter(item);
   }
 }
-//@ chunk-tyg7f3ek.js:120577-120637 placement
+//@ chunk-0yw3taqg.js:150360-150420 placement
 function isOrphanedPermissionCommand(command) {
   return isMainAgentCommand(command) && command.mode === "orphaned-permission";
 }
-//@ chunk-tyg7f3ek.js:120637-120704 placement
+//@ chunk-0yw3taqg.js:150420-150487 placement
 function isNoQueryPrompt(command) {
-  return isActiveMainAgentCommand(command) && command.mode === "prompt" && command.shouldQuery === false;
+  return isDrainableMainThreadCommand(command) && command.mode === "prompt" && command.shouldQuery === false;
 }
-//@ chunk-tyg7f3ek.js:120704-120765 placement
+//@ chunk-0yw3taqg.js:150487-150548 placement
 function isPassiveQueueItem(command) {
   return (
     isNoQueryPrompt(command) || (isOrphanedPermissionCommand(command) && command.handedOffTurn === undefined)
   );
 }
-//@ chunk-tyg7f3ek.js:120834-120902 placement
+//@ chunk-0yw3taqg.js:150617-150685 placement
 var BANG_COMMAND_LIMITS = 65536;
 var BANG_COMMAND_MAX_AGE_MS = 90000;
 var BANG_COMMAND_ASYNC_WAITS = {
   ackConfirmMs: 1e4,
   interruptedAnswerMs: 1e4,
 };
-//@ chunk-tyg7f3ek.js:120902-121094 placement
+//@ chunk-0yw3taqg.js:150685-150877 placement
 function detectWorkerHosting() {
   if (isRemoteManagedEnvironment()) return "anthropic_cloud";
   if (isByocEnvironment()) return "runner";
@@ -343,19 +360,27 @@ function detectWorkerHosting() {
   if (env.CLAUDE_CODE_ENVIRONMENT_KIND === undefined && env.CLAUDE_CODE_REMOTE !== true) return "local";
   return "unknown";
 }
-//@ chunk-tyg7f3ek.js:121094-121553 placement
+//@ chunk-0yw3taqg.js:150877-151336 placement
 /**
  * `!` 命令相关常量：输出截断 200 字符、控制字符正则、机器时钟未知与应用元数据缺失两条拒绝文案，以及被打断时的固定 stdout/stderr/exit-130 结果帧。
  */
-var BANG_COMMAND_TEXT = "Ask Claude to run the command instead.";
-var MAX_BANG_COMMAND_OUTPUT_CHARS = 200;
-var CONTROL_CHARS_PATTERN = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/;
-var BANG_NO_SERVER_CLOCK_TEXT =
-  "Not run: this machine doesn't know the session service's clock yet, so it can't tell how old the command is. Send it again in a moment, or ask Claude to run it.";
-var BANG_APP_METADATA_MISSING_TEXT =
-  "Not run: the app you sent this from is missing information needed to run '!' commands safely. Update the app and try again.";
-var BANG_INTERRUPTED_RESULT_FRAME = `<${BASH_STDOUT}></${BASH_STDOUT}><${BASH_STDERR}>${BASH_INTERRUPTED_NOTE}</${BASH_STDERR}><${BASH_EXIT_CODE}>130</${BASH_EXIT_CODE}>`;
-//@ chunk-tyg7f3ek.js:121553-122542 placement
+var BANG_COMMAND_TEXT; // deferred: uses COMMAND_NAME (../../constants/xml.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_BANG_COMMAND_OUTPUT_CHARS;
+var CONTROL_CHARS_PATTERN;
+var BANG_NO_SERVER_CLOCK_TEXT;
+var BANG_APP_METADATA_MISSING_TEXT;
+var BANG_INTERRUPTED_RESULT_FRAME;
+deferInit("chunk-0yw3taqg.js:150877", () => {
+  BANG_COMMAND_TEXT = "Ask Claude to run the command instead.";
+  MAX_BANG_COMMAND_OUTPUT_CHARS = 200;
+  CONTROL_CHARS_PATTERN = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/;
+  BANG_NO_SERVER_CLOCK_TEXT =
+    "Not run: this machine doesn't know the session service's clock yet, so it can't tell how old the command is. Send it again in a moment, or ask Claude to run it.";
+  BANG_APP_METADATA_MISSING_TEXT =
+    "Not run: the app you sent this from is missing information needed to run '!' commands safely. Update the app and try again.";
+  BANG_INTERRUPTED_RESULT_FRAME = `<${BASH_STDOUT}></${BASH_STDOUT}><${BASH_STDERR}>${BASH_INTERRUPTED_NOTE}</${BASH_STDERR}><${BASH_EXIT_CODE}>130</${BASH_EXIT_CODE}>`;
+});
+//@ chunk-0yw3taqg.js:151336-152325 placement
 class BangCommandRunner {
   current = undefined;
   admitting = new Set();

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：为缺少必填字段的工具输入生成占位值；按 schema 类型生成占位值等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (3)
  * attribution: placement 3
  */
 import {
@@ -19,7 +19,7 @@ import {
 } from "../../vendor/zod/v4/classic/schemas.js";
 import { jsonStringify } from "./slowOperations.js";
 
-//@ chunk-aepeg2w5.js:76039-76138 placement
+//@ chunk-exfmq47h.js:77174-77273 placement
 /**
  * 是否为空对象。
  */
@@ -31,7 +31,7 @@ function isEmptyObject(updatedInput) {
     Object.keys(updatedInput).length === 0
   );
 }
-//@ chunk-aepeg2w5.js:76138-76644 placement
+//@ chunk-exfmq47h.js:77273-77779 placement
 /**
  * 为缺少必填字段的工具输入生成占位值。
  */
@@ -50,7 +50,7 @@ function placeholderToolInput(name, inputSchema) {
     return null;
   }
 }
-//@ chunk-aepeg2w5.js:76644-76946 placement
+//@ chunk-exfmq47h.js:77779-78081 placement
 /**
  * 按 schema 类型生成占位值。
  */

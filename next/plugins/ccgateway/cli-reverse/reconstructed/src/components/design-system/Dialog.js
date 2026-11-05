@@ -3,10 +3,10 @@
  *
  * 设计系统对话框：标题 + 内容 + 底部按键提示，Esc/confirm:no 取消、双击退出提示（被 157 处使用）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/design-system/Dialog.tsx
- * pieces: chunk-thjvqmbc.js (7)
- * attribution: sole-consumer 2, affinity 1, fingerprint 1, layout 2, placement 1
+ * pieces: chunk-zjxrz3f0.js (8)
+ * attribution: sole-consumer 2, affinity 1, fingerprint 1, layout 3, placement 1
  */
 import { stableEmptyObject } from "../../utils/stableEmptyObject.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -28,27 +28,24 @@ import { KeyboardShortcutHint } from "./KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-thjvqmbc.js:8415-8438 sole-consumer
+//@ chunk-zjxrz3f0.js:8422-8445 sole-consumer
 function returnFalse() {
   return false;
 }
-//@ chunk-thjvqmbc.js:8438-8461 sole-consumer
+//@ chunk-zjxrz3f0.js:8445-8468 sole-consumer
 function returnFalse_2() {
   return false;
 }
-//@ chunk-thjvqmbc.js:8461-8491 affinity
+//@ chunk-zjxrz3f0.js:8468-8498 affinity
 var DEFAULT_CONFIRM_CANCEL_HINTS; // deferred: uses renderConfirmCancelHints of its import cycle while loading; runs once the cycle is complete
 var READONLY_HINT_FORMAT;
 var DEFAULT_CONFIRM_CANCEL_HINTS_2;
-deferInit("chunk-thjvqmbc.js:8461", () => {
+deferInit("chunk-zjxrz3f0.js:8468", () => {
   DEFAULT_CONFIRM_CANCEL_HINTS = renderConfirmCancelHints({});
   READONLY_HINT_FORMAT = stableEmptyObject(true);
   DEFAULT_CONFIRM_CANCEL_HINTS_2 = DEFAULT_CONFIRM_CANCEL_HINTS;
 });
-//@ chunk-thjvqmbc.js:8491-11137 fingerprint (2.1.88 match: Dialog, 0.482)
-/**
- * 对话框：标题（permission 等色）、副标题、内容、底部快捷键提示（Esc 取消 / 双击退出），可选 onCancel。
- */
+//@ chunk-zjxrz3f0.js:8498-11144 fingerprint (2.1.88 match: Dialog, 0.483)
 function Dialog(props) {
   let $ = useMemoCache(48);
   let {
@@ -70,32 +67,28 @@ function Dialog(props) {
     onExit,
   } = props;
   let isSubtitleDimmed_2 = isSubtitleDimmed === undefined ? true : isSubtitleDimmed;
-  let accentColor = color === undefined ? "permission" : color;
-  let cancelActive = isCancelActive === undefined ? true : isCancelActive;
-  let exitEnabled = exitOnCtrlCD === undefined ? false : exitOnCtrlCD;
+  let borderColor = color === undefined ? "permission" : color;
+  let isEnabled = isCancelActive === undefined ? true : isCancelActive;
+  let quitsOnCtrlC = exitOnCtrlCD === undefined ? false : exitOnCtrlCD;
   let isFullPageNotice = useIsFullPageNotice();
-  let [isReadonlyFlag] = useState(returnFalse);
-  let isTerse = isFullPageNotice || isReadonlyFlag;
-  let resolvedAccentCached;
-  if ($[0] !== accentColor || $[1] !== isTerse) {
-    resolvedAccentCached = pickFirst(accentColor, isTerse);
-    $[0] = accentColor;
-    $[1] = isTerse;
-    $[2] = resolvedAccentCached;
-  } else resolvedAccentCached = $[2];
-  let resolvedAccent = resolvedAccentCached;
-  let color_2 = isFullPageNotice ? undefined : resolvedAccent;
-  let children_2 = isTerse ? DEFAULT_CONFIRM_CANCEL_HINTS_2 : DEFAULT_CONFIRM_CANCEL_HINTS;
+  let [fullPageFlag] = useState(returnFalse);
+  let isFullPage = isFullPageNotice || fullPageFlag;
+  let pickedColor;
+  if ($[0] !== borderColor || $[1] !== isFullPage) {
+    pickedColor = pickFirst(borderColor, isFullPage);
+    $[0] = borderColor;
+    $[1] = isFullPage;
+    $[2] = pickedColor;
+  } else pickedColor = $[2];
+  let dialogColor = pickedColor;
+  let color_2 = isFullPageNotice ? undefined : dialogColor;
+  let children_2 = isFullPage ? DEFAULT_CONFIRM_CANCEL_HINTS_2 : DEFAULT_CONFIRM_CANCEL_HINTS;
   let boundaryRef = useRef(null);
-  let isExiting = exitEnabled || onExit !== undefined;
-  let { entries, exitState } = useExitKeybindingEntries(
-    isExiting ? onExit : onCancel,
-    onInterrupt,
-    cancelActive,
-  );
-  let cancelBindings;
-  if ($[3] !== cancelActive || $[4] !== onCancel) {
-    cancelBindings = cancelActive
+  let usesExit = quitsOnCtrlC || onExit !== undefined;
+  let { entries, exitState } = useExitKeybindingEntries(usesExit ? onExit : onCancel, onInterrupt, isEnabled);
+  let cancelBinding;
+  if ($[3] !== isEnabled || $[4] !== onCancel) {
+    cancelBinding = isEnabled
       ? [
           {
             action: "confirm:no",
@@ -104,91 +97,91 @@ function Dialog(props) {
           },
         ]
       : [];
-    $[3] = cancelActive;
+    $[3] = isEnabled;
     $[4] = onCancel;
-    $[5] = cancelBindings;
-  } else cancelBindings = $[5];
+    $[5] = cancelBinding;
+  } else cancelBinding = $[5];
   let bindings;
-  if ($[6] !== entries || $[7] !== cancelBindings) {
-    bindings = [...cancelBindings, ...entries];
+  if ($[6] !== entries || $[7] !== cancelBinding) {
+    bindings = [...cancelBinding, ...entries];
     $[6] = entries;
-    $[7] = cancelBindings;
+    $[7] = cancelBinding;
     $[8] = bindings;
   } else bindings = $[8];
   let bindings_2 = bindings;
-  let scrollContext = useContext(scrollViewportContext);
-  let titleBoxRef = useRef(null);
-  let [headerHeight, setHeaderHeight] = useState(subtitle ? 2 : 1);
-  let measureHeader;
-  if ($[9] !== scrollContext || $[10] !== headerHeight) {
-    measureHeader = () => {
-      if (!scrollContext || !titleBoxRef.current) {
+  let outerViewport = useContext(scrollViewportContext);
+  let titleRef = useRef(null);
+  let [titleHeight, setTitleHeight] = useState(subtitle ? 2 : 1);
+  let measureTitle;
+  if ($[9] !== outerViewport || $[10] !== titleHeight) {
+    measureTitle = () => {
+      if (!outerViewport || !titleRef.current) {
         return;
       }
-      let height = measureElement(titleBoxRef.current).height;
-      if (height !== headerHeight) setHeaderHeight(height);
+      let height = measureElement(titleRef.current).height;
+      if (height !== titleHeight) setTitleHeight(height);
     };
-    $[9] = scrollContext;
-    $[10] = headerHeight;
-    $[11] = measureHeader;
-  } else measureHeader = $[11];
-  useLayoutEffect(measureHeader);
-  let chromeRows = headerHeight + 1 + (hideInputGuide ? 0 : 2);
-  let innerScrollContext;
-  if ($[12] !== scrollContext || $[13] !== chromeRows) {
-    innerScrollContext = scrollContext
+    $[9] = outerViewport;
+    $[10] = titleHeight;
+    $[11] = measureTitle;
+  } else measureTitle = $[11];
+  useLayoutEffect(measureTitle);
+  let chromeRows = titleHeight + 1 + (hideInputGuide ? 0 : 2);
+  let innerViewport;
+  if ($[12] !== outerViewport || $[13] !== chromeRows) {
+    innerViewport = outerViewport
       ? {
-          ...scrollContext,
-          rows: Math.max(0, scrollContext.rows - chromeRows),
+          ...outerViewport,
+          rows: Math.max(0, outerViewport.rows - chromeRows),
         }
       : null;
-    $[12] = scrollContext;
+    $[12] = outerViewport;
     $[13] = chromeRows;
-    $[14] = innerScrollContext;
-  } else innerScrollContext = $[14];
-  let value = innerScrollContext;
-  let inputGuideNode;
-  if ($[15] !== isExiting || $[16] !== exitState || $[17] !== inputGuide) {
-    inputGuideNode =
+    $[14] = innerViewport;
+  } else innerViewport = $[14];
+  let value = innerViewport;
+  let guideContent;
+  if ($[15] !== usesExit || $[16] !== exitState || $[17] !== inputGuide) {
+    guideContent =
       typeof inputGuide === "function"
         ? inputGuide(exitState)
         : exitState.pending
           ? jsxProd_default_2(Text, {
-              children: ["Press ", exitState.keyName, " again to ", isExiting ? "exit" : "cancel"],
+              children: ["Press ", exitState.keyName, " again to ", usesExit ? "exit" : "cancel"],
             })
           : inputGuide != null
             ? inputGuide
             : undefined;
-    $[15] = isExiting;
+    $[15] = usesExit;
     $[16] = exitState;
     $[17] = inputGuide;
-    $[18] = inputGuideNode;
-  } else inputGuideNode = $[18];
-  let children_3 = inputGuideNode;
-  let hasCustomGuide = typeof inputGuide === "function" || exitState.pending || inputGuide != null;
-  let guideElement;
+    $[18] = guideContent;
+  } else guideContent = $[18];
+  let children_3 = guideContent;
+  let hasGuideContent = typeof inputGuide === "function" || exitState.pending || inputGuide != null;
+  let guideRow;
   if (
     $[19] !== children_3 ||
     $[20] !== children_2 ||
     $[21] !== hideInputGuide ||
-    $[22] !== cancelActive ||
-    $[23] !== isTerse ||
-    $[24] !== hasCustomGuide ||
+    $[22] !== isEnabled ||
+    $[23] !== isFullPage ||
+    $[24] !== hasGuideContent ||
     $[25] !== truncateInputGuide
   ) {
-    guideElement =
+    guideRow =
       !hideInputGuide &&
       jsxProd_default(Box, {
         marginTop: 1,
         flexShrink: 0,
-        children: hasCustomGuide
+        children: hasGuideContent
           ? jsxProd_default(Text, {
               dimColor: true,
               italic: true,
               wrap: truncateInputGuide ? "truncate" : undefined,
               children: children_3,
             })
-          : !cancelActive
+          : !isEnabled
             ? jsxProd_default(Text, {
                 dimColor: true,
                 italic: true,
@@ -196,8 +189,8 @@ function Dialog(props) {
               })
             : jsxProd_default(DialogKeyHints, {
                 boundary: boundaryRef,
-                terse: isTerse,
-                format: isTerse ? READONLY_HINT_FORMAT.format : undefined,
+                terse: isFullPage,
+                format: isFullPage ? READONLY_HINT_FORMAT.format : undefined,
                 fallback: jsxProd_default(Text, {
                   dimColor: true,
                   italic: true,
@@ -208,15 +201,15 @@ function Dialog(props) {
     $[19] = children_3;
     $[20] = children_2;
     $[21] = hideInputGuide;
-    $[22] = cancelActive;
-    $[23] = isTerse;
-    $[24] = hasCustomGuide;
+    $[22] = isEnabled;
+    $[23] = isFullPage;
+    $[24] = hasGuideContent;
     $[25] = truncateInputGuide;
-    $[26] = guideElement;
-  } else guideElement = $[26];
-  let guideRow = guideElement;
+    $[26] = guideRow;
+  } else guideRow = $[26];
+  let guideElement = guideRow;
   const flexGrow = hideBorder || isFullPageNotice ? 0 : 1;
-  let titleElement;
+  let titleBox;
   if (
     $[27] !== isSubtitleDimmed_2 ||
     $[28] !== subtitle ||
@@ -225,8 +218,8 @@ function Dialog(props) {
     $[31] !== titleEnd ||
     $[32] !== titleSuffix
   ) {
-    titleElement = jsxProd_default(Box, {
-      ref: titleBoxRef,
+    titleBox = jsxProd_default(Box, {
+      ref: titleRef,
       flexDirection: "column",
       children: jsxProd_default(DialogTitle, {
         title,
@@ -243,63 +236,131 @@ function Dialog(props) {
     $[30] = color_2;
     $[31] = titleEnd;
     $[32] = titleSuffix;
-    $[33] = titleElement;
-  } else titleElement = $[33];
-  let bodyElement;
+    $[33] = titleBox;
+  } else titleBox = $[33];
+  let bodyViewport;
   if ($[34] !== value || $[35] !== children) {
-    bodyElement = jsxProd_default(scrollViewportContext, {
+    bodyViewport = jsxProd_default(scrollViewportContext, {
       value,
       children,
     });
     $[34] = value;
     $[35] = children;
-    $[36] = bodyElement;
-  } else bodyElement = $[36];
-  let contentElement;
-  if ($[37] !== titleElement || $[38] !== bodyElement) {
-    contentElement = jsxProd_default_2(Box, {
+    $[36] = bodyViewport;
+  } else bodyViewport = $[36];
+  let contentBox;
+  if ($[37] !== titleBox || $[38] !== bodyViewport) {
+    contentBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [titleElement, bodyElement],
+      children: [titleBox, bodyViewport],
     });
-    $[37] = titleElement;
-    $[38] = bodyElement;
-    $[39] = contentElement;
-  } else contentElement = $[39];
-  let dialogElement;
-  if ($[40] !== bindings_2 || $[41] !== guideRow || $[42] !== flexGrow || $[43] !== contentElement) {
-    dialogElement = jsxProd_default_2(useDialogKeybindings, {
+    $[37] = titleBox;
+    $[38] = bodyViewport;
+    $[39] = contentBox;
+  } else contentBox = $[39];
+  let dialogBox;
+  if ($[40] !== bindings_2 || $[41] !== guideElement || $[42] !== flexGrow || $[43] !== contentBox) {
+    dialogBox = jsxProd_default_2(useDialogKeybindings, {
       ref: boundaryRef,
       scope: "Confirmation",
       claimFocus: true,
       flexGrow,
       flexDirection: "column",
       bindings: bindings_2,
-      children: [contentElement, guideRow],
+      children: [contentBox, guideElement],
     });
     $[40] = bindings_2;
-    $[41] = guideRow;
+    $[41] = guideElement;
     $[42] = flexGrow;
-    $[43] = contentElement;
-    $[44] = dialogElement;
-  } else dialogElement = $[44];
-  let borderedElement = dialogElement;
+    $[43] = contentBox;
+    $[44] = dialogBox;
+  } else dialogBox = $[44];
+  let dialogElement = dialogBox;
   if (hideBorder || isFullPageNotice) {
-    return borderedElement;
+    return dialogElement;
   }
-  let paneElement;
-  if ($[45] !== borderedElement || $[46] !== resolvedAccent) {
-    paneElement = jsxProd_default(Pane, {
-      color: resolvedAccent,
-      children: borderedElement,
+  let borderedPane;
+  if ($[45] !== dialogElement || $[46] !== dialogColor) {
+    borderedPane = jsxProd_default(Pane, {
+      color: dialogColor,
+      children: dialogElement,
     });
-    $[45] = borderedElement;
-    $[46] = resolvedAccent;
-    $[47] = paneElement;
-  } else paneElement = $[47];
-  return paneElement;
+    $[45] = dialogElement;
+    $[46] = dialogColor;
+    $[47] = borderedPane;
+  } else borderedPane = $[47];
+  return borderedPane;
 }
-//@ chunk-thjvqmbc.js:11137-11811 layout
+//@ chunk-zjxrz3f0.js:11144-11891 layout
+function DialogFrame(props) {
+  let $ = useMemoCache(17);
+  let { title, titleEnd, titleSuffix, subtitle, isSubtitleDimmed, color, insetX, children } = props;
+  let borderColor = color === undefined ? "permission" : color;
+  let [fullPageFlag] = useState(returnFalse_2);
+  let pickedColor;
+  if ($[0] !== borderColor || $[1] !== fullPageFlag) {
+    pickedColor = pickFirst(borderColor, fullPageFlag);
+    $[0] = borderColor;
+    $[1] = fullPageFlag;
+    $[2] = pickedColor;
+  } else pickedColor = $[2];
+  let color_2 = pickedColor;
+  let titleBox;
+  if (
+    $[3] !== color_2 ||
+    $[4] !== isSubtitleDimmed ||
+    $[5] !== subtitle ||
+    $[6] !== title ||
+    $[7] !== titleEnd ||
+    $[8] !== titleSuffix
+  ) {
+    titleBox = jsxProd_default(Box, {
+      flexDirection: "column",
+      flexShrink: 0,
+      children: jsxProd_default(DialogTitle, {
+        title,
+        titleEnd,
+        titleSuffix,
+        subtitle,
+        isSubtitleDimmed,
+        color: color_2,
+      }),
+    });
+    $[3] = color_2;
+    $[4] = isSubtitleDimmed;
+    $[5] = subtitle;
+    $[6] = title;
+    $[7] = titleEnd;
+    $[8] = titleSuffix;
+    $[9] = titleBox;
+  } else titleBox = $[9];
+  let children_2;
+  if ($[10] !== children || $[11] !== titleBox) {
+    children_2 = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      gap: 1,
+      children: [titleBox, children],
+    });
+    $[10] = children;
+    $[11] = titleBox;
+    $[12] = children_2;
+  } else children_2 = $[12];
+  let pane;
+  if ($[13] !== color_2 || $[14] !== insetX || $[15] !== children_2) {
+    pane = jsxProd_default(Pane, {
+      color: color_2,
+      insetX,
+      children: children_2,
+    });
+    $[13] = color_2;
+    $[14] = insetX;
+    $[15] = children_2;
+    $[16] = pane;
+  } else pane = $[16];
+  return pane;
+}
+//@ chunk-zjxrz3f0.js:11891-12565 layout
 /**
  * 对话框标题行：标题、标题后缀、右侧内容与可选副标题。
  */
@@ -377,11 +438,11 @@ function DialogTitle(props) {
   } else headerGroup = $[12];
   return headerGroup;
 }
-//@ chunk-thjvqmbc.js:11811-11837 layout
+//@ chunk-zjxrz3f0.js:12565-12592 layout
 function pickFirst(first, second) {
   return first;
 }
-//@ chunk-thjvqmbc.js:11837-12013 placement (2.1.88 match: _temp, 0.712)
+//@ chunk-zjxrz3f0.js:12592-12768 placement (2.1.88 match: _temp, 0.711)
 function renderConfirmCancelHints(exitState) {
   return jsxProd_default_2(Byline, {
     children: [
@@ -400,4 +461,4 @@ function renderConfirmCancelHints(exitState) {
     ],
   });
 }
-export { Dialog };
+export { Dialog, pickFirst, DialogFrame };

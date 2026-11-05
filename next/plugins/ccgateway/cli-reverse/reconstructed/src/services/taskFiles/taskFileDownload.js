@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：任务附带文件下载
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ar2zwb92.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7ktcr4q9.js (11)
  * attribution: placement 11
  */
 import { join, parse } from "path";
@@ -40,68 +40,89 @@ import { getFileReader } from "../../utils/fileStore.js";
 import { READ_LIMITS } from "../../utils/fsBoundRead.js";
 import { NOFOLLOW_NONBLOCK_FLAGS } from "../../utils/fsFlags.js";
 import { foldName } from "../../utils/permissions/protectedDirNames.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ar2zwb92.js:1133-2850 placement
+//@ chunk-7ktcr4q9.js:1133-2850 placement
 /**
  * 任务文件下载的常量：超时、磁盘余量、重试次数、文件名长度与危险字符/扩展名。
  */
-var TASK_FILE_CONSTANTS = "task-files";
-var DOWNLOAD_TIMEOUT_MS = 60000;
-var MIN_FREE_DISK_SLACK_BYTES = 67108864;
-var MAX_DOWNLOAD_RETRIES = 20;
-var MAX_DOWNLOAD_NAME_BYTES = 200;
-var FILE_EXTENSION_REGEX = /\.[A-Za-z0-9]{1,16}$/;
-var MAX_ORIGINAL_NAME_CHARS = 1024;
-var parts = [
-  "scf url lnk pif website shs shb xnk library-ms searchconnector-ms search-ms osdx settingcontent-ms appcontent-ms",
-  "appref-ms application appinstaller vsto xbap jnlp",
-  "theme themepack deskthemepack msstyles wmz wms wmd",
-  "hta chm its scr cpl msc wsf wsh ws wsc sct vbe jse psc1 wsb gadget",
-  "diagcab diagpkg diagcfg printerexport webpnp ins isp prf ops reg",
-  "rdp ica wcx msrcincident mcl remmina vnc",
-  "iqy dqy oqy rqy slk odc udl pbids xlw xlb xll xlam xla ppam ppa wll accda accde mda mde ade adp",
-  "mad maf mag mam maq mar mas mau mav maw",
-  "webloc inetloc fileloc afploc ftploc mailloc newsloc vncloc atloc savedsearch terminal mobileconfig desktop kdelnk",
-]
-  .join(" ")
-  .split(" ");
-var regExp = new RegExp(`(?:\\.(?:${parts.join("|")})|^desktop\\.ini|^autorun\\.inf)$`, "i");
-var DANGEROUS_SPELLING_CHARS =
-  "\xA5\u20A9\u2216\u2044\u2215\u02BA\u030E\u02B9\u02BC\u02C8\u2032\u02CB\u0300\u2035\u0589\u2236\u066A\u2217\u3008\u3009\u01C0\u2223\u2758\u01C3\u02C4\u0302\u2303\u0303\u223C";
-var DASH_LIKE_CHARS = "\\-\u2010\u2013\u2014\u2015\u2212\u2500\u252C\u2534\u2550\u2564-\u2569";
-var regExp_2 = new RegExp(
-  `${NON_ASCII_NAME_CHARS_RE.source}|${CONTROL_OR_FORMAT_CHARS_RE.source}|\\p{Default_Ignorable_Code_Point}|[%\\p{Cs}\\u2018-\\u201f\\u1680\\u2800${DANGEROUS_SPELLING_CHARS}]`,
-  "u",
-);
-var VARIATION_SELECTOR_RE = /^[\u200c\u200d\ufe0e\ufe0f]$/;
-var regExp_3 = new RegExp(
-  `^(?![${DASH_LIKE_CHARS}])(?:[^\\P{L}\\p{ASCII}]|[^\\P{M}\\p{ASCII}]|[^\\P{N}\\p{ASCII}]|[^\\P{S}\\p{ASCII}])`,
-  "u",
-);
-var regExp_4 = new RegExp(`^[.${DASH_LIKE_CHARS}+@ ]+`, "u");
-var regExp_5 = new RegExp(`(\\s)[${DASH_LIKE_CHARS}+@](?=\\S)`, "gu");
-var DOWNLOAD_FAILURE_CODES = {
-  no_disk: true,
-  bad_id: true,
-  bad_size: true,
-  too_large: true,
-  egress_blocked: true,
-  essential_traffic: true,
-  policy_pending: true,
-  not_https: true,
-  no_token: true,
-  sign_in_expired: true,
-  no_room: true,
-  refused: true,
-  size_mismatch: true,
-  stalled: true,
-  canceled: true,
-  name_taken: true,
-  write_failed: true,
-  network: true,
-};
-var keys = Object.keys(DOWNLOAD_FAILURE_CODES);
-//@ chunk-ar2zwb92.js:2850-3129 placement
+var TASK_FILE_CONSTANTS; // deferred: uses basename (../../utils/filePersistence/homeFilePublish.js) of its import cycle while loading; runs once the cycle is complete
+var DOWNLOAD_TIMEOUT_MS;
+var MIN_FREE_DISK_SLACK_BYTES;
+var MAX_DOWNLOAD_RETRIES;
+var MAX_DOWNLOAD_NAME_BYTES;
+var FILE_EXTENSION_REGEX;
+var MAX_ORIGINAL_NAME_CHARS;
+var parts;
+var regExp;
+var DANGEROUS_SPELLING_CHARS;
+var DASH_LIKE_CHARS;
+var regExp_2;
+var VARIATION_SELECTOR_RE;
+var regExp_3;
+var regExp_4;
+var regExp_5;
+var DOWNLOAD_FAILURE_CODES;
+var keys;
+deferInit("chunk-7ktcr4q9.js:1133", () => {
+  TASK_FILE_CONSTANTS = "task-files";
+  DOWNLOAD_TIMEOUT_MS = 60000;
+  MIN_FREE_DISK_SLACK_BYTES = 67108864;
+  MAX_DOWNLOAD_RETRIES = 20;
+  MAX_DOWNLOAD_NAME_BYTES = 200;
+  FILE_EXTENSION_REGEX = /\.[A-Za-z0-9]{1,16}$/;
+  MAX_ORIGINAL_NAME_CHARS = 1024;
+  parts = [
+    "scf url lnk pif website shs shb xnk library-ms searchconnector-ms search-ms osdx settingcontent-ms appcontent-ms",
+    "appref-ms application appinstaller vsto xbap jnlp",
+    "theme themepack deskthemepack msstyles wmz wms wmd",
+    "hta chm its scr cpl msc wsf wsh ws wsc sct vbe jse psc1 wsb gadget",
+    "diagcab diagpkg diagcfg printerexport webpnp ins isp prf ops reg",
+    "rdp ica wcx msrcincident mcl remmina vnc",
+    "iqy dqy oqy rqy slk odc udl pbids xlw xlb xll xlam xla ppam ppa wll accda accde mda mde ade adp",
+    "mad maf mag mam maq mar mas mau mav maw",
+    "webloc inetloc fileloc afploc ftploc mailloc newsloc vncloc atloc savedsearch terminal mobileconfig desktop kdelnk",
+  ]
+    .join(" ")
+    .split(" ");
+  regExp = new RegExp(`(?:\\.(?:${parts.join("|")})|^desktop\\.ini|^autorun\\.inf)$`, "i");
+  DANGEROUS_SPELLING_CHARS =
+    "\xA5\u20A9\u2216\u2044\u2215\u02BA\u030E\u02B9\u02BC\u02C8\u2032\u02CB\u0300\u2035\u0589\u2236\u066A\u2217\u3008\u3009\u01C0\u2223\u2758\u01C3\u02C4\u0302\u2303\u0303\u223C";
+  DASH_LIKE_CHARS = "\\-\u2010\u2013\u2014\u2015\u2212\u2500\u252C\u2534\u2550\u2564-\u2569";
+  regExp_2 = new RegExp(
+    `${NON_ASCII_NAME_CHARS_RE.source}|${CONTROL_OR_FORMAT_CHARS_RE.source}|\\p{Default_Ignorable_Code_Point}|[%\\p{Cs}\\u2018-\\u201f\\u1680\\u2800${DANGEROUS_SPELLING_CHARS}]`,
+    "u",
+  );
+  VARIATION_SELECTOR_RE = /^[\u200c\u200d\ufe0e\ufe0f]$/;
+  regExp_3 = new RegExp(
+    `^(?![${DASH_LIKE_CHARS}])(?:[^\\P{L}\\p{ASCII}]|[^\\P{M}\\p{ASCII}]|[^\\P{N}\\p{ASCII}]|[^\\P{S}\\p{ASCII}])`,
+    "u",
+  );
+  regExp_4 = new RegExp(`^[.${DASH_LIKE_CHARS}+@ ]+`, "u");
+  regExp_5 = new RegExp(`(\\s)[${DASH_LIKE_CHARS}+@](?=\\S)`, "gu");
+  DOWNLOAD_FAILURE_CODES = {
+    no_disk: true,
+    bad_id: true,
+    bad_size: true,
+    too_large: true,
+    egress_blocked: true,
+    essential_traffic: true,
+    policy_pending: true,
+    not_https: true,
+    no_token: true,
+    sign_in_expired: true,
+    no_room: true,
+    refused: true,
+    size_mismatch: true,
+    stalled: true,
+    canceled: true,
+    name_taken: true,
+    write_failed: true,
+    network: true,
+  };
+  keys = Object.keys(DOWNLOAD_FAILURE_CODES);
+});
+//@ chunk-7ktcr4q9.js:2850-3128 placement
 function safeDownloadName(name, fileId) {
   let baseName =
     name.length > MAX_ORIGINAL_NAME_CHARS ? "" : (name.normalize("NFKC").split(/[/\\]/).at(-1) ?? "");
@@ -116,7 +137,7 @@ function safeDownloadName(name, fileId) {
       : cleanedName;
   return appendDownloadSuffixIfDangerous(finalName);
 }
-//@ chunk-ar2zwb92.js:3129-3585 placement
+//@ chunk-7ktcr4q9.js:3128-3585 placement
 function validateTaskFileEntry(file, signal) {
   if (!FILE_ID_RE.test(file.fileId))
     return {
@@ -160,7 +181,7 @@ function validateTaskFileEntry(file, signal) {
     };
   return;
 }
-//@ chunk-ar2zwb92.js:3585-4943 placement
+//@ chunk-7ktcr4q9.js:3585-4943 placement
 async function streamDownload(file, storageV5, signal) {
   let abortController = new AbortController();
   let progress = {
@@ -254,7 +275,7 @@ async function streamDownload(file, storageV5, signal) {
     if (!isHandedOff) cleanup();
   }
 }
-//@ chunk-ar2zwb92.js:4943-6470 placement
+//@ chunk-7ktcr4q9.js:4943-6470 placement
 /**
  * 下载任务附带的文件到本地任务目录：校验 id 与大小、避免重名、超时与磁盘检查。
  */
@@ -381,7 +402,7 @@ async function downloadTaskFile(file, dir, storageV5, signal) {
     if (partialPath !== undefined) await unlink(partialPath).catch(() => {});
   }
 }
-//@ chunk-ar2zwb92.js:6470-6619 placement
+//@ chunk-7ktcr4q9.js:6470-6619 placement
 async function hasFreeSpace(dir, neededBytes) {
   let stats = await statfs(dir, {
     bigint: true,
@@ -395,20 +416,20 @@ async function hasFreeSpace(dir, neededBytes) {
     stats.bavail * stats.bsize >= BigInt(neededBytes + MIN_FREE_DISK_SLACK_BYTES)
   );
 }
-//@ chunk-ar2zwb92.js:6619-6702 placement
+//@ chunk-7ktcr4q9.js:6619-6702 placement
 function numberedName(fileName, index) {
   if (index === 1) return fileName;
   let { name: stem, ext } = parse(fileName);
   return `${stem} (${index})${ext}`;
 }
-//@ chunk-ar2zwb92.js:6702-6755 placement
+//@ chunk-7ktcr4q9.js:6702-6755 placement
 /**
  * 危险扩展名时给文件名追加 .download。
  */
 function appendDownloadSuffixIfDangerous(fileName) {
   return regExp.test(foldName(fileName)) ? `${fileName}.download` : fileName;
 }
-//@ chunk-ar2zwb92.js:6755-6850 placement
+//@ chunk-7ktcr4q9.js:6755-6850 placement
 /**
  * 判断文件名是否不合规（含 architecture.md 特判与拼写异常除外）。
  */
@@ -416,7 +437,7 @@ function hasProblematicFileName(fileName) {
   let problem = homeFileNameProblem(fileName, true);
   return foldName(fileName) === "architecture.md" || (problem !== undefined && problem !== "odd_spelling");
 }
-//@ chunk-ar2zwb92.js:6850-7037 placement
+//@ chunk-7ktcr4q9.js:6850-7037 placement
 /**
  * 文件名清理：不安全字符替换为下划线（保留合法的变体选择符与零宽连接），压缩空格。
  */
@@ -437,7 +458,7 @@ function sanitizeDownloadName(name) {
   }
   return result.replace(regExp_5, "$1_").replace(/ {2,}/g, " ");
 }
-//@ chunk-ar2zwb92.js:7037-7304 placement
+//@ chunk-7ktcr4q9.js:7037-7304 placement
 async function* limitedChunks(source, sizeBytes, timer, progress) {
   try {
     for await (let chunk of source) {

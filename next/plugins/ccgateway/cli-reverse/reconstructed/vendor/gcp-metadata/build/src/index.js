@@ -1,8 +1,8 @@
 /**
  * gcp-metadata/build/src/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: gcp-metadata@7.0.0..8.1.2
- * pieces: chunk-na3pph4p.js (1)
+ * pieces: chunk-e8d3a8an.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
@@ -11,7 +11,7 @@ import { require_json_bigint } from "../../../json-bigint/index.js";
 import { require_gcp_residency } from "./gcp-residency.js";
 import { require_google_logging_utils } from "../../../google-logging-utils/build/src/index.js";
 
-//@ chunk-na3pph4p.js:50294-55402 cjs-fingerprint
+//@ chunk-e8d3a8an.js:50294-55402 cjs-fingerprint
 var require_gcp_metadata = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||

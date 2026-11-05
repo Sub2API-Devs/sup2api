@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sdk/lib/MessageStream.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (3)
+ * pieces: chunk-vn3g7zt8.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
 import { __classPrivateFieldSet, __classPrivateFieldGet } from "../internal/tslib.mjs";
@@ -14,7 +14,7 @@ import { sleepWithAbort } from "../tools/agent-toolset/memories.mjs";
 import { maybeParseMessage } from "./parser.mjs";
 import { JSON_BUF_PROPERTY, withLazyInput } from "../internal/message-stream-utils.mjs";
 
-//@ chunk-hwmsct5x.js:147532-147611 esm-layout
+//@ chunk-vn3g7zt8.js:147912-147991 esm-layout
 var _MessageStream_instances;
 var _MessageStream_currentMessageSnapshot;
 var _MessageStream_params;
@@ -40,11 +40,11 @@ var _MessageStream_beginRequest;
 var _MessageStream_addStreamEvent;
 var _MessageStream_endRequest;
 var _MessageStream_accumulateMessage;
-//@ chunk-hwmsct5x.js:147611-147681 esm-fingerprint
+//@ chunk-vn3g7zt8.js:147991-148061 esm-fingerprint
 function tracksToolInput_2(content) {
   return content.type === "tool_use" || content.type === "server_tool_use";
 }
-//@ chunk-hwmsct5x.js:147681-156923 esm-fingerprint
+//@ chunk-vn3g7zt8.js:148061-157303 esm-fingerprint
 var MessageStream = (() => {
   class MessageStream {
     constructor(params, opts) {

@@ -1,11 +1,11 @@
 /**
  * jose/dist/node/esm/jws/flattened/sign.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (1)
+ * pieces: chunk-pd6th42n.js (1)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
-import { JWSInvalid } from "../../../../webapi/lib/content_encryption.js";
+import { JWSInvalid_2 } from "../../../../webapi/lib/content_encryption.js";
 import { validateCrit } from "../../../../webapi/lib/validate.js";
 import { validateCritInit } from "../../../../webapi/lib/options.js";
 import { checkKeyTypeInit } from "../../lib/check_key_type.js";
@@ -13,7 +13,7 @@ import { encoder, encode, decoder } from "../../../../browser/runtime/base64url.
 import { concat } from "../../lib/buffer_utils.js";
 import { sign } from "../../../../webapi/lib/signing.js";
 
-//@ chunk-2tyrgda4.js:36891-38428 esm-fingerprint
+//@ chunk-pd6th42n.js:36891-38428 esm-fingerprint
 class FlattenedSign {
   constructor(payload) {
     if (!(payload instanceof Uint8Array)) throw TypeError("payload must be an instance of Uint8Array");
@@ -31,15 +31,17 @@ class FlattenedSign {
   }
   async sign(key, options) {
     if (!this._protectedHeader && !this._unprotectedHeader)
-      throw new JWSInvalid("either setProtectedHeader or setUnprotectedHeader must be called before #sign()");
+      throw new JWSInvalid_2(
+        "either setProtectedHeader or setUnprotectedHeader must be called before #sign()",
+      );
     if (!validateCrit(this._protectedHeader, this._unprotectedHeader))
-      throw new JWSInvalid("JWS Protected and JWS Unprotected Header Parameter names must be disjoint");
+      throw new JWSInvalid_2("JWS Protected and JWS Unprotected Header Parameter names must be disjoint");
     let joseHeader = {
       ...this._protectedHeader,
       ...this._unprotectedHeader,
     };
     let extensions = validateCritInit(
-      JWSInvalid,
+      JWSInvalid_2,
       new Map([["b64", true]]),
       options === null || options === undefined ? undefined : options.crit,
       this._protectedHeader,
@@ -49,11 +51,11 @@ class FlattenedSign {
     if (extensions.has("b64")) {
       b64 = this._protectedHeader.b64;
       if (typeof b64 !== "boolean")
-        throw new JWSInvalid('The "b64" (base64url-encode payload) Header Parameter must be a boolean');
+        throw new JWSInvalid_2('The "b64" (base64url-encode payload) Header Parameter must be a boolean');
     }
     let { alg } = joseHeader;
     if (typeof alg !== "string" || !alg)
-      throw new JWSInvalid('JWS "alg" (Algorithm) Header Parameter missing or invalid');
+      throw new JWSInvalid_2('JWS "alg" (Algorithm) Header Parameter missing or invalid');
     checkKeyTypeInit(alg, key, "sign");
     let payload = this._payload;
     if (b64) payload = encoder.encode(encode(payload));

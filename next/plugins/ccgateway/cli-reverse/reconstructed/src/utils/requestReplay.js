@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。请求重放。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (17)
  * attribution: placement 17
  */
 import { setMarkerSnapshotCapturer, ReplayMisalignmentError } from "./transcriptRequestBlobs.js";
@@ -16,19 +16,19 @@ import { getBuiltinPlugin, getBuiltinPlugins } from "../plugins/builtinPlugins.j
 import { CC_PLUGIN_TIPS } from "../services/tips/orgTips.js";
 import { isBundledModLive } from "../components/permissions/AskUserQuestionPermissionRequest/uiRenderHook.js";
 
-//@ chunk-18hwfzwa.js:1468823-1468962 placement
+//@ chunk-czq1j3j2.js:1510225-1510364 placement
 var MEMORY_SNAPSHOT_PLACEHOLDER =
   "[Request-replay record: an account-memory snapshot was sent here. It is never saved, so it is not in this record.]";
 var MIN_PROBE_LINE_LENGTH = 24;
 var MAX_PROBE_LINES = 32;
-//@ chunk-18hwfzwa.js:1468962-1468986 placement
+//@ chunk-czq1j3j2.js:1510364-1510388 placement
 /**
  * replayWithoutLaptopMemory：重放时去掉笔记本记忆段。
  */
 function replayWithoutLaptopMemory() {
   setMarkerSnapshotCapturer(withoutLaptopMemoryText);
 }
-//@ chunk-18hwfzwa.js:1468986-1470318 placement
+//@ chunk-czq1j3j2.js:1510388-1511720 placement
 function withoutLaptopMemoryText(
   memorySnapshotLines,
   messages,
@@ -109,7 +109,7 @@ function withoutLaptopMemoryText(
     },
   };
 }
-//@ chunk-18hwfzwa.js:1470318-1470954 placement
+//@ chunk-czq1j3j2.js:1511720-1512356 placement
 /**
  * 把请求内容中的账号记忆快照替换为占位说明：字符串直接对齐；数组按块处理，文本块与工具结果内容分别与去除记忆后的版本对齐，没有变化时保持原块。
  */
@@ -156,11 +156,11 @@ function replaceMemoryInContent(content, stripped, findMemory, state) {
     return block;
   });
 }
-//@ chunk-18hwfzwa.js:1470954-1471006 placement
+//@ chunk-czq1j3j2.js:1512356-1512408 placement
 function firstOrUndefined(remains) {
   return Array.isArray(remains) ? remains[0] : undefined;
 }
-//@ chunk-18hwfzwa.js:1471006-1471512 placement
+//@ chunk-czq1j3j2.js:1512408-1512914 placement
 /**
  * 逐段对齐原文与去除记忆后的文本，在被删除处插入占位说明并计数；无法对齐时抛错（该请求不记录）。
  */
@@ -205,21 +205,21 @@ function alignStrippedText(original, stripped, state) {
   if (strippedIndex < stripped.length) throw misalignedReplayError();
   return parts.join("");
 }
-//@ chunk-18hwfzwa.js:1471512-1471554 placement
+//@ chunk-czq1j3j2.js:1512914-1512956 placement
 function isHighSurrogate(code) {
   return code >= 55296 && code <= 56319;
 }
-//@ chunk-18hwfzwa.js:1471554-1471596 placement
+//@ chunk-czq1j3j2.js:1512956-1512998 placement
 function isLowSurrogate(code) {
   return code >= 56320 && code <= 57343;
 }
-//@ chunk-18hwfzwa.js:1471596-1471747 placement
+//@ chunk-czq1j3j2.js:1512998-1513149 placement
 function misalignedReplayError() {
   return new ReplayMisalignmentError(
     "request-replay: the text withoutLaptopMemoryText left does not line up with the request; this request is not recorded",
   );
 }
-//@ chunk-18hwfzwa.js:1471747-1472219 placement
+//@ chunk-czq1j3j2.js:1513149-1513621 placement
 /**
  * 确认账号记忆快照的行没有残留在模型轮次之外（除允许的工具结果），否则抛错使该请求不被记录。
  */
@@ -248,7 +248,7 @@ function assertMemoryRemoved(memorySnapshotLines, messages, maxProbeLines, findT
     }
   }
 }
-//@ chunk-18hwfzwa.js:1472219-1472811 placement
+//@ chunk-czq1j3j2.js:1513621-1514213 placement
 /**
  * 判断记忆行的出现是否全部来自对应工具结果的原文（数量一致、未被改写），用于放行。
  */
@@ -289,7 +289,7 @@ function isOnlyInToolResults(messages, serialized, line, escapedLine, findToolRe
   }
   return true;
 }
-//@ chunk-18hwfzwa.js:1472811-1473112 placement
+//@ chunk-czq1j3j2.js:1514213-1514514 placement
 /**
  * 取出纯文本内容块的文本（只含 text 块且无其他字段），否则返回 undefined。
  */
@@ -306,7 +306,7 @@ function plainTextOf(content) {
   return texts.join(`
 `);
 }
-//@ chunk-18hwfzwa.js:1473112-1473206 placement
+//@ chunk-czq1j3j2.js:1514514-1514608 placement
 function countOccurrences(haystack, needle) {
   let count = 0;
   for (
@@ -317,15 +317,15 @@ function countOccurrences(haystack, needle) {
     count++;
   return count;
 }
-//@ chunk-18hwfzwa.js:1473206-1473283 placement
+//@ chunk-czq1j3j2.js:1514608-1514685 placement
 function isTextBlock(block) {
   return block.type === "text" && "text" in block && typeof block.text === "string";
 }
-//@ chunk-18hwfzwa.js:1473283-1473329 placement
+//@ chunk-czq1j3j2.js:1514685-1514731 placement
 function isToolResultBlock(block) {
   return block.type === "tool_result";
 }
-//@ chunk-18hwfzwa.js:1473329-1473426 placement
+//@ chunk-czq1j3j2.js:1514731-1514828 placement
 /**
  * laptopMemoryTipsPluginEnabled：CC 插件技巧是否可用。
  */
@@ -334,9 +334,9 @@ var laptopMemoryTipsPluginEnabled = () =>
   getBuiltinPlugin(CC_PLUGIN_TIPS)?.isAvailable?.() === true &&
   getBuiltinPlugins().enabled.some((plugin) => plugin.name === CC_PLUGIN_TIPS) &&
   isBundledModLive(CC_PLUGIN_TIPS);
-//@ chunk-18hwfzwa.js:1473426-1473473 placement
+//@ chunk-czq1j3j2.js:1514828-1514875 placement
 /**
  * ZERO_UUID：全零 UUID。
  */
 var ZERO_UUID = "00000000-0000-0000-0000-000000000000";
-export { ZERO_UUID, laptopMemoryTipsPluginEnabled, replayWithoutLaptopMemory };
+export { laptopMemoryTipsPluginEnabled, replayWithoutLaptopMemory, ZERO_UUID };

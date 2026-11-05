@@ -1,15 +1,15 @@
 /**
  * @aws-sdk/eventstream-handler-node/dist-es/EventStreamPayloadHandler.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-sdk/eventstream-handler-node@3.936.0
- * pieces: chunk-3cddmtk7.js (1)
+ * pieces: chunk-ayc8mk37.js (1)
  * attribution: esm-fingerprint 1
  */
 import { Readable, PassThrough, pipeline } from "stream";
 import { EventStreamCodec } from "../../../@smithy/eventstream-codec/dist-es/EventStreamCodec.js";
 import { EventSigningStream } from "./EventSigningStream.js";
 
-//@ chunk-3cddmtk7.js:19174-19948 esm-fingerprint
+//@ chunk-ayc8mk37.js:19174-19948 esm-fingerprint
 class EventStreamPayloadHandler {
   messageSigner;
   eventStreamCodec;

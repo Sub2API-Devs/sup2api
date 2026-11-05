@@ -3,9 +3,9 @@
  *
  * IDE 集成：自动检测并连接 IDE（ws-ide/sse-ide），可选自动安装扩展，返回安装状态。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useIDEIntegration.tsx
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -20,7 +20,7 @@ import { initializeIdeIntegration, abortIdeSearch } from "../utils/ide.js";
 import { IDE_ONBOARDING_DIALOG } from "../screens/replDialogState.js";
 import { errorMessage } from "../utils/errors.js";
 
-//@ chunk-18hwfzwa.js:1688782-1690353 fingerprint (2.1.88 match: useIDEIntegration, 0.621)
+//@ chunk-czq1j3j2.js:1735086-1736657 fingerprint (2.1.88 match: useIDEIntegration, 0.621)
 /**
  * IDE 集成：检测可连接的 IDE（ws-ide/sse-ide），按 autoConnectIde 设置/flag 自动连接并加入动态 MCP 配置，必要时自动安装扩展，返回 {installationStatus, installExtension}。
  */

@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.318
+import{F,Up}from"./chunk-5ythzcas.js";import{on}from"./chunk-wtzc5s1n.js";import{_G,jee}from"./chunk-23ta5myf.js";import{a4}from"./chunk-t3ta3dyx.js";import{Je}from"./chunk-r4yj9pae.js";class s{#e;#t=!1;get(){return this.#e}isAssumed(){return this.#t}replace(e,t=!1){this.#e=e,this.#t=t}}var r=new Je(()=>new s);function Zdo(){return r.peek(F())?.get()}function CSr(){return(_G()&&!jee()?void 0:Zdo())??(Up()?"UTC":void 0)}function yhs(){let e=new Date,t=Zdo();if(t!==void 0){let n=new Map(a4("en-US",{timeZone:t,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(e).map((o)=>[o.type,o.value]));return`${n.get("year")}-${n.get("month")}-${n.get("day")}`}let a=e.getFullYear(),d=String(e.getMonth()+1).padStart(2,"0"),u=String(e.getDate()).padStart(2,"0");return`${a}-${d}-${u}`}function FDi(){let e=r.peek(F());return e?.get()!==void 0?e.isAssumed():on()&&new Date().getTimezoneOffset()===0&&Intl.DateTimeFormat().resolvedOptions().timeZone==="UTC"}class i{#e;get(){return this.#e??=yhs(),this.#e}clear(){this.#e=void 0}get captured(){return this.#e!==void 0}}var wDn=new Je(()=>new i);function _hs(e){return wDn.of(e).get()}function UDi(){return _hs(F())}function BDi(){return new Date().toLocaleString("en-US",{month:"long",year:"numeric"})}
+export{Zdo,CSr,yhs,FDi,wDn,_hs,UDi,BDi};

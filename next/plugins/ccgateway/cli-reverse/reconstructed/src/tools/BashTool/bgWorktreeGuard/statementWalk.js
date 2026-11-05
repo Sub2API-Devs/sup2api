@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：后台 worktree 守卫的语句遍历：按语法节点分派（赋值、heredoc、test 表达式等）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-63f0f3kd.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h2y5xkdx.js (20)
  * attribution: placement 20
  */
 import {
@@ -38,13 +38,14 @@ import {
   arithmeticEvalReason,
 } from "./wordValues.js";
 import { readFlagWithOverride } from "../../../services/analytics/flagOverrides.js";
-import { count } from "../../../utils/collections.js";
+import { countWhere } from "../../../utils/collections.js";
 import {
   isQuotedLiteral,
   analyzeCommand,
   describeGitRunner,
   INTERPRETER_RULES,
   programBaseName,
+  describeEnvValue,
   isPlainOrInertValue,
   TENGU_HOLLOW_SANDPIPER,
 } from "./commandRules.js";
@@ -76,7 +77,7 @@ import {
 } from "../../../utils/bash/ast.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-63f0f3kd.js:36615-36928 placement
+//@ chunk-h2y5xkdx.js:37019-37332 placement
 /**
  * 判断重定向是否只是把输出去向文件或 /dev/null（这类重定向不改变命令范围）。
  */
@@ -87,7 +88,7 @@ var LEADING_PLUS_FLAG_RE = /^\+(?:.*\s)?-/s;
 var DATE_REFERENCE_FLAGS = /^(?:-d|--date|-r|--reference)$/;
 var TENGU_GILDED_SUNDIAL = "tengu_gilded_sundial";
 var TENGU_FERROUS_ALMANAC = "tengu_ferrous_almanac";
-//@ chunk-63f0f3kd.js:36928-39012 placement
+//@ chunk-h2y5xkdx.js:37332-39416 placement
 /**
  * 判断命令替换体是否只是产出无害值的简单命令（date +格式、wc -l、seq、nproc、id -u、echo 数字、stat -c %Y），用于放行赋值中的命令替换。
  */
@@ -105,7 +106,7 @@ function isSafeValueCommand(children, state) {
   }
   if (statement?.type === "pipeline")
     statement = statement.children.findLast((child) => STATEMENT_NODE_TYPES.has(child.type)) ?? null;
-  let flagWithOverride = readFlagWithOverride(BOT_PROTECTED_TENGU_HUSHED_HYPHEN, {
+  let parseOk = readFlagWithOverride(BOT_PROTECTED_TENGU_HUSHED_HYPHEN, {
     safe: true,
   });
   let redirectedStatement = statement?.type === "redirected_statement" ? statement : null;
@@ -115,7 +116,7 @@ function isSafeValueCommand(children, state) {
       (child) =>
         child.type !== "heredoc_redirect" &&
         child.type !== "herestring_redirect" &&
-        !(flagWithOverride && child.type === "file_redirect" && !SAFE_REDIRECT_RE.test(child.text)),
+        !(parseOk && child.type === "file_redirect" && !SAFE_REDIRECT_RE.test(child.text)),
     )
   )
     statement = statement.children.find((child) => STATEMENT_NODE_TYPES.has(child.type)) ?? null;
@@ -139,9 +140,9 @@ function isSafeValueCommand(children, state) {
         }
       }
       return (
-        count(mapped, (text) => !!text && text.startsWith("+")) === 1 &&
+        countWhere(mapped, (text) => !!text && text.startsWith("+")) === 1 &&
         !(
-          flagWithOverride &&
+          parseOk &&
           mapped.some(
             (text, idx) =>
               LEADING_PLUS_FLAG_RE.test(text ?? "") ||
@@ -193,7 +194,7 @@ function isSafeValueCommand(children, state) {
       let index = mapped.findIndex(isNonFormat);
       return (
         mapped.length === 3 &&
-        count(mapped, isNonFormat) === 1 &&
+        countWhere(mapped, isNonFormat) === 1 &&
         (mapped[index] === null ? filtered_2[index].type === "string" : /^[^-%]/.test(mapped[index])) &&
         mapped.some((text) => /^%[YXZWsbB]$/.test(text ?? "")) &&
         mapped.some((text) => /^(?:-c|--format)$/.test(text ?? ""))
@@ -203,17 +204,17 @@ function isSafeValueCommand(children, state) {
       return false;
   }
 }
-//@ chunk-63f0f3kd.js:39012-39070 placement
+//@ chunk-h2y5xkdx.js:39416-39474 placement
 function allMatch(values, pattern) {
   return values.every((value) => value !== null && pattern.test(value));
 }
-//@ chunk-63f0f3kd.js:39070-39193 placement
+//@ chunk-h2y5xkdx.js:39474-39597 placement
 var CONTAINER_NODE_TYPES; // deferred: uses wordSet (./shellState.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-63f0f3kd.js:39070", () => {
+deferInit("chunk-h2y5xkdx.js:39474", () => {
   CONTAINER_NODE_TYPES = wordSet(`program compound_statement subshell do_group
   command_substitution process_substitution else_clause case_item`);
 });
-//@ chunk-63f0f3kd.js:39193-39450 placement
+//@ chunk-h2y5xkdx.js:39597-39854 placement
 function withStdinState(node, state, stdinFed, pipedFrom) {
   let saved = {
     stdinFed: state.stdinFed,
@@ -229,7 +230,7 @@ function withStdinState(node, state, stdinFed, pipedFrom) {
   state.pipedFrom = saved.pipedFrom;
   return reason;
 }
-//@ chunk-63f0f3kd.js:39450-42752 placement
+//@ chunk-h2y5xkdx.js:39854-43156 placement
 /**
  * 按语法节点类型分派分析：注释、赋值、声明、命令、管道、列表、重定向、子 shell、函数定义等。
  */
@@ -393,7 +394,7 @@ function analyzeStatement(node, state) {
   }
   return null;
 }
-//@ chunk-63f0f3kd.js:42752-43358 placement
+//@ chunk-h2y5xkdx.js:43156-43762 placement
 function analyzeFileRedirect(node, state) {
   if (node.type === "file_redirect") {
     let found = node.children.find((child) => WORD_NODE_TYPES.has(child.type));
@@ -422,7 +423,7 @@ function analyzeFileRedirect(node, state) {
       })
   );
 }
-//@ chunk-63f0f3kd.js:43358-43590 placement
+//@ chunk-h2y5xkdx.js:43762-43994 placement
 function isStdinRedirect(redirect) {
   let found = redirect.children.find((child) => child.type === "file_descriptor");
   return (
@@ -436,7 +437,7 @@ function isStdinRedirect(redirect) {
       redirect.children.some((child) => child.children.length === 0 && /^<(?!\()/.test(child.type)))
   );
 }
-//@ chunk-63f0f3kd.js:43590-44867 placement
+//@ chunk-h2y5xkdx.js:43994-45271 placement
 function analyzeHeredocRedirect(child, state, pendingStatements) {
   if (child.type !== "heredoc_redirect") {
     for (let child_2 of child.children) {
@@ -493,7 +494,7 @@ function analyzeHeredocRedirect(child, state, pendingStatements) {
   }
   return null;
 }
-//@ chunk-63f0f3kd.js:44867-45218 placement
+//@ chunk-h2y5xkdx.js:45271-45622 placement
 function analyzeRedirect(redirect, state) {
   if (redirect.type === "file_redirect") return analyzeFileRedirect(redirect, state);
   let found = redirect.children.find((child) => child.type === "heredoc_body");
@@ -511,7 +512,7 @@ function analyzeRedirect(redirect, state) {
     ? isPlainWordText(wordValue.text)
     : wordValue?.kind === "dynamic" && wordValue.inert);
 }
-//@ chunk-63f0f3kd.js:45218-46806 placement
+//@ chunk-h2y5xkdx.js:45622-47258 placement
 function analyzeVariableAssignment(
   assignmentNode,
   state,
@@ -590,18 +591,21 @@ function analyzeVariableAssignment(
       `export ${text}=`,
       `with a value every later program inherits (${valueResult.kind === "dynamic" ? valueResult.why : "a git command"})`,
     );
-  return environmentAssignmentReason(
-    text,
-    valueResult,
-    valueNode?.text ?? "",
-    allExported,
-    isStringExec,
-    precedesCommandName,
+  return (
+    environmentAssignmentReason(
+      text,
+      valueResult,
+      valueNode?.text ?? "",
+      allExported,
+      isStringExec,
+      precedesCommandName,
+    ) ??
+    describeEnvValue(text, valueResult, state, operatorNode.text === "+=" || nameNode.type === "subscript")
   );
 }
-//@ chunk-63f0f3kd.js:46806-46836 placement
+//@ chunk-h2y5xkdx.js:47258-47288 placement
 var TENGU_DRIFTING_LEMUR = "tengu_drifting_lemur";
-//@ chunk-63f0f3kd.js:46836-46874 placement
+//@ chunk-h2y5xkdx.js:47288-47326 placement
 /**
  * 读取 tengu_drifting_lemur 开关：LOCALE 类变量若来自路径，视为危险。
  */
@@ -610,11 +614,11 @@ function shouldTreatLocalePathAsHazard() {
     safe: true,
   });
 }
-//@ chunk-63f0f3kd.js:46874-46966 placement
+//@ chunk-h2y5xkdx.js:47326-47418 placement
 function containsSubstitution(child) {
   return /^(?:command|process)_substitution$/.test(child.type) || child.children.some(containsSubstitution);
 }
-//@ chunk-63f0f3kd.js:46966-47090 placement
+//@ chunk-h2y5xkdx.js:47418-47542 placement
 /**
  * 在文本中查找 shell 自身设置的特殊变量名（仅在相应模式开启时）。
  */
@@ -625,7 +629,7 @@ function findShellVarName(text) {
     ?.find((wordPart) => LOCALE_PATH_ENV_RE.test(wordPart));
   return found !== undefined && shouldTreatLocalePathAsHazard() ? found : undefined;
 }
-//@ chunk-63f0f3kd.js:47090-47334 placement
+//@ chunk-h2y5xkdx.js:47542-47786 placement
 /**
  * 若内建命令可把 shell 自身变量设为整数/浮点类型，返回风险说明。
  */
@@ -634,7 +638,7 @@ function describeIntegerTyping(varName) {
     ? `can make ${varName} an integer or float variable ${TOO_COMPLEX_SUFFIX}; ${varName} is a variable bash or zsh sets by itself, and with that type the shell can evaluate what it later stores there as arithmetic, so use another variable name`
     : null;
 }
-//@ chunk-63f0f3kd.js:47334-47659 placement
+//@ chunk-h2y5xkdx.js:47786-48111 placement
 /**
  * 判断通过循环或内建命令绑定的变量名是否危险（影响 shell 或程序行为、整数变量、导出后影响后续命令），危险时返回原因。
  */
@@ -650,7 +654,7 @@ function describeUnsafeBinding(text, state) {
     ? `binds ${text} through a loop or builtin ${TOO_COMPLEX_SUFFIX}; its value steers the shell or a program (or, exported, every later one) and cannot be screened there`
     : null;
 }
-//@ chunk-63f0f3kd.js:47659-48864 placement
+//@ chunk-h2y5xkdx.js:48111-49316 placement
 function environmentAssignmentReason(
   variableName,
   value,
@@ -704,7 +708,7 @@ function environmentAssignmentReason(
     );
   return null;
 }
-//@ chunk-63f0f3kd.js:48864-49768 placement
+//@ chunk-h2y5xkdx.js:49316-50220 placement
 function analyzeDeclarationCommand(node, state) {
   let text = node.children[0]?.text ?? "declare";
   let flags = {
@@ -745,7 +749,7 @@ function analyzeDeclarationCommand(node, state) {
   }
   return null;
 }
-//@ chunk-63f0f3kd.js:49768-50717 placement
+//@ chunk-h2y5xkdx.js:50220-51169 placement
 function analyzeTestExpression(node, state, isDoubleBracket) {
   if (WORD_NODE_TYPES.has(node.type)) {
     let evaluated = evaluateWord(node, state, !isDoubleBracket);

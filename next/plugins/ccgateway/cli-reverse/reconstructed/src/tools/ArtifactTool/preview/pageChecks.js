@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：页面检查
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (39)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (39)
  * attribution: placement 38, affinity 1
  */
 import { randomUUID } from "crypto";
@@ -44,7 +44,7 @@ import { logFeatureSad } from "../../../services/analytics/featureTelemetry.js";
 import { startBunRelay } from "../../../upstreamproxy/relay.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-8wvtd8sr.js:179080-179430 placement
+//@ chunk-xzmy9dn4.js:181270-181620 placement
 /**
  * 预览中以页面相对路径引用但未加载的文件：合成一条 note 问题，列出前 zf 个，提示发布后只有通过 files 传入才存在。
  */
@@ -60,7 +60,7 @@ function relativeRefsNotLoadedIssues(paths) {
     },
   ];
 }
-//@ chunk-8wvtd8sr.js:179430-179757 placement
+//@ chunk-xzmy9dn4.js:181620-181947 placement
 /**
  * 预览里 window.claude.use() 对某些能力返回 null 时，生成一条 note：依赖这些能力的代码在预览中没有运行。
  */
@@ -73,7 +73,7 @@ function missingRuntimeCapabilityIssues(missing, more) {
     },
   ];
 }
-//@ chunk-8wvtd8sr.js:179757-180238 placement
+//@ chunk-xzmy9dn4.js:181947-182428 placement
 /**
  * 同一宽度的浅色/深色两张截图完全相同时，报告页面没有深色主题样式（只截到顶部时措辞不同）。
  */
@@ -96,14 +96,14 @@ function identicalThemeRenderIssues(shots) {
   }
   return issues;
 }
-//@ chunk-8wvtd8sr.js:180238-180274 placement
+//@ chunk-xzmy9dn4.js:182428-182464 placement
 /**
  * 按视口宽度返回主题高度（<600 用 844，否则 900）。
  */
 function themeForViewportWidth(width) {
   return width < 600 ? 844 : 900;
 }
-//@ chunk-8wvtd8sr.js:180274-180717 placement
+//@ chunk-xzmy9dn4.js:182464-182907 placement
 /**
  * 把待预览页面改造成预览用 HTML：先禁用 speculationrules 脚本，再在 <html> 上设 data-theme，并在 <head> 开头插入预览脚本与 CSP、禁止 DNS 预取。
  * 页面骨架不符合预期时抛错。
@@ -124,7 +124,7 @@ function composePreviewPage(html, theme) {
     cleaned.slice(insertAt)
   );
 }
-//@ chunk-8wvtd8sr.js:180717-181033 placement
+//@ chunk-xzmy9dn4.js:182907-183223 placement
 /**
  * 把 type 为 speculationrules 的 <script> 改写成 text/x-speculationrules-off，避免预览页面预取。
  */
@@ -142,9 +142,9 @@ function disableSpeculationRules(html) {
   }
   return cursor === 0 ? html : out + html.slice(cursor);
 }
-//@ chunk-8wvtd8sr.js:181033-181054 placement
+//@ chunk-xzmy9dn4.js:183223-183244 placement
 var HTML_SPACE_REGEX = /[\t\n\f\r ]/;
-//@ chunk-8wvtd8sr.js:181054-181677 placement
+//@ chunk-xzmy9dn4.js:183244-183867 placement
 /**
  * 从标签名之后扫描属性直到 >，返回标签结束位置和第一个 type 属性（起止、值、引号）。
  */
@@ -198,14 +198,14 @@ function scanTagAttributes(html, from) {
       };
   }
 }
-//@ chunk-8wvtd8sr.js:181677-181760 placement
+//@ chunk-xzmy9dn4.js:183867-183950 placement
 /**
  * 判断属性值是否需要改写（含实体或就是 speculationrules）。
  */
 function needsSpeculationRewrite(typeValue) {
   return typeValue.includes("&") || typeValue.trim().toLowerCase() === "speculationrules";
 }
-//@ chunk-8wvtd8sr.js:181760-182375 placement
+//@ chunk-xzmy9dn4.js:183950-184565 placement
 /**
  * 按 kind+text 去重收集预览问题，记录出现于哪些渲染（标签）；超过上限计入 dropped。done() 输出问题列表，全部渲染都有的标为 "every render"。
  */
@@ -252,7 +252,7 @@ class PreviewIssueCollector {
     };
   }
 }
-//@ chunk-8wvtd8sr.js:182375-183213 placement
+//@ chunk-xzmy9dn4.js:184565-185404 placement
 /**
  * 页面静态检查：缺少或过晚的 <title>、缩略图链接问题、超过发布大小上限、只在某一主题里定义的 CSS 变量。
  */
@@ -286,12 +286,12 @@ function staticPageIssues(html, publishedBytes) {
     });
   return issues;
 }
-//@ chunk-8wvtd8sr.js:183213-183326 placement
+//@ chunk-xzmy9dn4.js:185404-185517 placement
 var MEDIA_RULE_RE = /@media/i;
 var PREFERS_DARK_RE = /prefers-color-scheme\s*:\s*dark/i;
 var PREFERS_LIGHT_RE = /prefers-color-scheme\s*:\s*light/i;
 var DATA_THEME_SELECTOR_RE = /\[data-theme/i;
-//@ chunk-8wvtd8sr.js:183326-184319 placement
+//@ chunk-xzmy9dn4.js:185517-186510 placement
 /**
  * 解析页面 <style> 中的 CSS（去注释、按花括号跟踪所处的 @media 暗/亮或 [data-theme] 块），找出只在单一主题块中定义、却被 var() 使用的自定义属性。
  */
@@ -354,7 +354,7 @@ function themeOnlyCssVariables(html) {
     .map(([openTag]) => openTag)
     .slice(0, MAX_LISTED_REFS);
 }
-//@ chunk-8wvtd8sr.js:184319-184530 placement
+//@ chunk-xzmy9dn4.js:186510-186721 placement
 function* iterateTagBodies(html, openRe, closeRe) {
   for (let match = openRe.exec(html); match !== null; match = openRe.exec(html)) {
     let bodyStart = html.indexOf(">", match.index + match[0].length) + 1;
@@ -366,7 +366,7 @@ function* iterateTagBodies(html, openRe, closeRe) {
     openRe.lastIndex = closeRe.lastIndex;
   }
 }
-//@ chunk-8wvtd8sr.js:184530-190122 placement
+//@ chunk-xzmy9dn4.js:186721-192313 placement
 /**
  * 页面内测量脚本的模板：等待字体/mermaid、检测溢出与被裁剪的 SVG 文字、收集 CSP 违规。
  */
@@ -376,7 +376,7 @@ var PAGE_PROBE_USES_SCRIPT;
 var pageProbeScriptBuilder;
 var PAGE_PROBE_ERROR_FRAME_LEFT;
 var PAGE_PROBE_ERROR_NO_ANSWER;
-deferInit("chunk-8wvtd8sr.js:184530", () => {
+deferInit("chunk-xzmy9dn4.js:186721", () => {
   PAGE_SETTLE_SCRIPT_LINES = [
     "var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms)})};",
     "var deadline=Date.now()+SETTLE;",
@@ -436,7 +436,7 @@ P.postMessage({__claudePreviewPort:1},'*',[ch.port2])})()`;
   PAGE_PROBE_ERROR_FRAME_LEFT = "the preview frame left the page";
   PAGE_PROBE_ERROR_NO_ANSWER = "the preview frame is not answering";
 });
-//@ chunk-8wvtd8sr.js:190122-190922 placement
+//@ chunk-xzmy9dn4.js:192313-193113 placement
 /**
  * 生成在预览外壳里执行的脚本：通过 window.__claudePreviewPort 向 iframe 发送 {run, args, id}，等待同 id 的应答，iframe 重新加载或超长时 reject。
  */
@@ -444,34 +444,34 @@ function previewEvalScript(run, args) {
   let requestId = jsonStringify(randomUUID());
   return `new Promise(function(res,rej){var p=window.__claudePreviewPort,el=document.getElementsByTagName('iframe')[0];if(!p||!el){rej(new Error(${jsonStringify(PAGE_PROBE_ERROR_NO_ANSWER)}));return}function done(){try{p.removeEventListener('message',h)}catch(x){}el.removeEventListener('load',left)}function left(){done();rej(new Error(${jsonStringify(PAGE_PROBE_ERROR_FRAME_LEFT)}))}function h(e){try{var d=e.data;if(!d||d.id!==${requestId})return;done();if(typeof d.v==='string')res(d.v.length>${MAX_CDP_EVENT_CHARS}?d.v.slice(0,${MAX_CDP_EVENT_CHARS + 1}):d.v);else rej(new Error(typeof d.e==='string'?d.e.slice(0,400):'the page answered without a value'))}catch(x){done();rej(new Error('the page answered unreadably'))}}p.addEventListener('message',h);el.addEventListener('load',left);try{p.postMessage({run:${jsonStringify(run)},args:${jsonStringify(args)},id:${requestId}})}catch(x){done();rej(new Error(${jsonStringify(PAGE_PROBE_ERROR_NO_ANSWER)}))}})`;
 }
-//@ chunk-8wvtd8sr.js:190922-190979 placement
+//@ chunk-xzmy9dn4.js:193113-193170 placement
 /**
  * 非空对象原样返回，否则空对象。
  */
 function asProbeRecord(value) {
   return value !== null && typeof value === "object" ? value : {};
 }
-//@ chunk-8wvtd8sr.js:190979-191026 placement
+//@ chunk-xzmy9dn4.js:193170-193217 placement
 /**
  * 字符串原样返回，否则空串。
  */
 function asProbeString(value) {
   return typeof value === "string" ? value : "";
 }
-//@ chunk-8wvtd8sr.js:191026-191134 placement
+//@ chunk-xzmy9dn4.js:193217-193325 placement
 function clampNonNegativeInt(value, max = 1e6) {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.min(Math.max(0, Math.round(value)), max)
     : 0;
 }
-//@ chunk-8wvtd8sr.js:191134-191178 placement
+//@ chunk-xzmy9dn4.js:193325-193369 placement
 /**
  * 数组原样返回，否则空数组。
  */
 function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
-//@ chunk-8wvtd8sr.js:191178-192285 placement
+//@ chunk-xzmy9dn4.js:193369-194476 placement
 /**
  * 解析页面内测量脚本返回的 JSON：视口/滚动尺寸、溢出元素、被裁剪的 SVG 文字、mermaid 渲染结果、CSP 违规、对话框、能力使用；逐项截断到上限。
  */
@@ -525,7 +525,7 @@ function parsePageMeasurement(json) {
     usesMore: data.usesMore === 1 || asArray(data.uses).length > MAX_COLLECTED_USES,
   };
 }
-//@ chunk-8wvtd8sr.js:192285-192330 placement
+//@ chunk-xzmy9dn4.js:194476-194521 placement
 /**
  * 清洗展示文本：去掉 artifact 信封标签并限制长度。
  */
@@ -536,7 +536,7 @@ function sanitizeDisplay(text, max = 80) {
     }),
   );
 }
-//@ chunk-8wvtd8sr.js:192330-193530 placement
+//@ chunk-xzmy9dn4.js:194521-195721 placement
 /**
  * 由测量结果生成布局问题：横向滚动、元素溢出、SVG 标签被裁剪、mermaid 运行时未加载或渲染失败。
  */
@@ -591,7 +591,7 @@ function layoutIssuesFromMeasurement(measurement) {
     });
   return issues;
 }
-//@ chunk-8wvtd8sr.js:193530-193816 placement
+//@ chunk-xzmy9dn4.js:195721-196007 placement
 /**
  * 把测量中的 CSP 违规按 origin 去重成问题（超过上限只计 dropped）。
  */
@@ -612,7 +612,7 @@ function cspViolationIssues(measurement, visitedOrigins, collector) {
   }
   return issues;
 }
-//@ chunk-8wvtd8sr.js:193816-194023 placement
+//@ chunk-xzmy9dn4.js:196007-196214 placement
 /**
  * 预览检查：页面加载时弹出的 JavaScript 对话框（每种只报一次）。
  */
@@ -628,7 +628,7 @@ function dialogIssues(measurement, visitedDialogs) {
   }
   return issues;
 }
-//@ chunk-8wvtd8sr.js:194023-196152 placement
+//@ chunk-xzmy9dn4.js:196214-198343 placement
 /**
  * 处理预览中被拦截的请求：页面目录内的相对引用收集到 h；弹窗、对话框、下载、目录外引用、file: 引用、只允许样式字体的源、CSP 外资源分别生成问题。
  */
@@ -713,7 +713,7 @@ function blockedRequestIssues(requests, pageBaseUrl, pageUrl, seenUrls, relative
     });
   return issues;
 }
-//@ chunk-8wvtd8sr.js:196152-196212 placement
+//@ chunk-xzmy9dn4.js:198343-198403 placement
 /**
  * 取 URL 的 origin，非法时返回原串。
  */
@@ -724,7 +724,7 @@ function originOf(url) {
     return url;
   }
 }
-//@ chunk-8wvtd8sr.js:196212-196335 placement
+//@ chunk-xzmy9dn4.js:198403-198526 placement
 function isSamePageUrl(url, pageUrl) {
   try {
     let parsed = new URL(url);
@@ -734,7 +734,7 @@ function isSamePageUrl(url, pageUrl) {
     return url === pageUrl;
   }
 }
-//@ chunk-8wvtd8sr.js:196335-196399 placement
+//@ chunk-xzmy9dn4.js:198526-198590 placement
 /**
  * 安全地 decodeURIComponent。
  */
@@ -745,7 +745,7 @@ function decodeUriSafe(value) {
     return value;
   }
 }
-//@ chunk-8wvtd8sr.js:196399-196623 placement
+//@ chunk-xzmy9dn4.js:198590-198814 placement
 function describePopupTarget(url) {
   try {
     let parsed = new URL(url);
@@ -758,7 +758,7 @@ function describePopupTarget(url) {
     return url === "" ? "about:blank" : "an unparseable URL";
   }
 }
-//@ chunk-8wvtd8sr.js:196623-196729 placement
+//@ chunk-xzmy9dn4.js:198814-198920 placement
 function originOrSelf(uri) {
   try {
     let parsed = new URL(uri);
@@ -767,7 +767,7 @@ function originOrSelf(uri) {
     return uri === "" ? "(inline)" : uri;
   }
 }
-//@ chunk-8wvtd8sr.js:196729-196960 placement
+//@ chunk-xzmy9dn4.js:198920-199151 placement
 /**
  * 预览检查：加载时的控制台错误（列出前若干条，其余计数）。
  */
@@ -784,7 +784,7 @@ function consoleErrorIssues(errors) {
     },
   ];
 }
-//@ chunk-8wvtd8sr.js:196960-197324 placement
+//@ chunk-xzmy9dn4.js:199151-199515 placement
 /**
  * 让预览步骤与超时/中断赛跑：超时抛 PreviewStepTimeout，signal 中断抛 "preview aborted"，结束后清理定时器与监听。
  */
@@ -812,12 +812,12 @@ async function raceWithStepTimeout(promise, timeoutMs, stepName, timers, signal)
     promise.catch(() => {});
   }
 }
-//@ chunk-8wvtd8sr.js:197324-197419 placement
+//@ chunk-xzmy9dn4.js:199515-199610 placement
 var PREVIEW_HTML_CONTENT_TYPE = "text/html; charset=utf-8";
 var SANDBOXED_HEADERS = {
   "content-security-policy": "sandbox; default-src 'none'",
 };
-//@ chunk-8wvtd8sr.js:197419-198514 placement
+//@ chunk-xzmy9dn4.js:199610-200705 placement
 /**
  * 在回环地址上起两组服务：一组提供各主题的 preview-*.html（及 mermaid 运行时），另一组提供嵌入它们的 top-*.html 外壳页，返回 URL 生成器与 close。
  */
@@ -883,16 +883,16 @@ async function servePreviewPages(pages, host = randomPreviewHost()) {
     },
   };
 }
-//@ chunk-8wvtd8sr.js:198514-198583 placement
+//@ chunk-xzmy9dn4.js:200705-200774 placement
 var PREVIEW_IFRAME_SANDBOX = "allow-scripts allow-same-origin allow-forms allow-downloads";
-//@ chunk-8wvtd8sr.js:198583-199085 placement
+//@ chunk-xzmy9dn4.js:200774-201276 placement
 /**
  * 生成预览外壳页 HTML：仅允许 frame 指向预览源的 CSP、no-referrer，并用带 sandbox 的全屏 iframe 嵌入页面。
  */
 function previewShellHtml(pageUrl) {
   return `<!doctype html><html><head><meta charset=utf8><meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${new URL(pageUrl).origin}; style-src 'unsafe-inline'"><meta name="referrer" content="no-referrer"><style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden}iframe{display:block;border:0;margin:0;padding:0;width:100vw;height:100vh}</style></head><body><iframe src="${pageUrl}" referrerpolicy="no-referrer" sandbox="${PREVIEW_IFRAME_SANDBOX}"></iframe></body></html>`;
 }
-//@ chunk-8wvtd8sr.js:199085-199476 affinity
+//@ chunk-xzmy9dn4.js:201276-201667 affinity
 async function serveOnLoopbackPair(
   fetchHandler,
   serve = (options) => Bun.serve(options),
@@ -931,7 +931,7 @@ async function serveOnLoopbackPair(
     }
   }
 }
-//@ chunk-8wvtd8sr.js:199622-199726 placement
+//@ chunk-xzmy9dn4.js:201813-201917 placement
 function hasIpv6Loopback() {
   try {
     return Object.values(networkInterfaces()).some((ifaces) =>

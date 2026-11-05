@@ -3,26 +3,25 @@
  *
  * 输入框光标与按宽度换行的文本模型（MeasuredText），实现移动、删除、kill ring、vim 动作
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/Cursor.ts
- * pieces: chunk-4121qate.js (1), chunk-530hfzwb.js (5), chunk-7p2hc4jn.js (8), chunk-tzghj6zv.js (11)
- * attribution: fingerprint 4, placement 19, layout 1, affinity 1
+ * pieces: chunk-18rrbwq1.js (11), chunk-42wa4pww.js (8), chunk-880p06ha.js (6), chunk-j8f885h1.js (1)
+ * attribution: placement 19, fingerprint 4, layout 2, affinity 1
  */
 import { getGraphemeSegmenter, firstGrapheme, getWordSegmenter } from "./intl.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { wrapTextRows } from "./textWrap.js";
 import { logWrapFallbackOnce } from "../hooks/useTextInput.js";
-import { truncateToWidth } from "./truncate.js";
 import { DEFAULT_TAB_WIDTH, wrapAnsi } from "../ink/wrapAnsi.js";
 import { snapToPlaceholderEnd } from "../vim/operators.js";
+import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { renderWithForceUpdate } from "../hooks/useForceRender.js";
 import { currentToolPermissionContext } from "./permissions/currentPermissionContext.js";
-import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:76332-76361 fingerprint (2.1.88 match: pushToKillRing, 0.819)
+//@ chunk-j8f885h1.js:56934-56963 fingerprint (2.1.88 match: pushToKillRing, 0.82)
 var pushToKillRing = ["prepend", "append"];
-//@ chunk-7p2hc4jn.js:19779-20193 placement
+//@ chunk-42wa4pww.js:19779-20193 placement
 /**
  * 按显示宽度逐字素换行每个逻辑行，返回行信息（起始偏移、是否换行开头/结尾）。
  */
@@ -66,7 +65,7 @@ function wrapByDisplayWidth(text, maxWidth) {
   }
   return rows;
 }
-//@ chunk-7p2hc4jn.js:20193-20518 placement
+//@ chunk-42wa4pww.js:20193-20518 placement
 /**
  * 输入框光标的单词与占位符正则：词字符、词、空白，以及粘贴/图片等占位符模式及其行首/行尾/全局正则与位置判断。
  */
@@ -78,7 +77,7 @@ var PLACEHOLDER_AT_END_RE;
 var regExp;
 var isPlaceholderAt;
 var regExp_2;
-deferInit("chunk-7p2hc4jn.js:20193", () => {
+deferInit("chunk-42wa4pww.js:20193", () => {
   WORD_CHAR_RE = /^[\p{L}\p{N}\p{M}_]+$/u;
   WORD_RE = /[\p{L}\p{N}][\p{L}\p{N}\p{M}]*/gu;
   WHITESPACE_RE = /\s/;
@@ -89,21 +88,21 @@ deferInit("chunk-7p2hc4jn.js:20193", () => {
   isPlaceholderAt = (text, offset) => text[offset] === "[" && regExp.test(text.slice(offset));
   regExp_2 = new RegExp(PLACEHOLDER_PATTERN, "g");
 });
-//@ chunk-7p2hc4jn.js:20518-20581 placement
+//@ chunk-42wa4pww.js:20518-20581 placement
 /**
  * 把匹配片段替换成等长空格（保持列宽）。
  */
 function replaceWithSpaces(text) {
   return text.replace(regExp_2, (matchText) => " ".repeat(matchText.length));
 }
-//@ chunk-7p2hc4jn.js:20581-20663 placement
+//@ chunk-42wa4pww.js:20581-20663 placement
 /**
  * 判断字符是否为词字符（字母数字下划线）。
  */
 var isWordChar = (char) => WORD_CHAR_RE.test(char);
 var isWhitespaceChar = (char) => WHITESPACE_RE.test(char);
 var isPunctuationChar = (char) => char.length > 0 && !isWhitespaceChar(char) && !isWordChar(char);
-//@ chunk-7p2hc4jn.js:20663-34257 fingerprint (2.1.88 match: Cursor, 0.818)
+//@ chunk-42wa4pww.js:20663-34257 fingerprint (2.1.88 match: Cursor, 0.818)
 /**
  * 输入框光标模型：基于按显示宽度换行的文本（MeasuredText），实现左右/上下/词移动、删除、kill ring、vim 动作等。
  */
@@ -820,7 +819,7 @@ class Cursor {
     return null;
   }
 }
-//@ chunk-7p2hc4jn.js:34257-34619 layout
+//@ chunk-42wa4pww.js:34257-34619 layout
 /**
  * 换行后的一行：原文、起始偏移、是否换行开头/结尾，以及去掉前导空白的显示文本。
  */
@@ -843,7 +842,7 @@ class MeasuredLine {
     return this.text === other.text && this.startOffset === other.startOffset;
   }
 }
-//@ chunk-7p2hc4jn.js:34619-38481 fingerprint (2.1.88 match: MeasuredText, 0.898)
+//@ chunk-42wa4pww.js:34619-38481 fingerprint (2.1.88 match: MeasuredText, 0.898)
 /**
  * 按终端宽度换行并缓存行信息的文本，提供偏移与行列互转。
  */
@@ -1061,7 +1060,7 @@ class MeasuredText {
     return boundaries[lo];
   }
 }
-//@ chunk-7p2hc4jn.js:38481-38712 affinity
+//@ chunk-42wa4pww.js:38481-38712 affinity
 function renderRowSpans(displayText, { from, to }, invert, { spans, rowStart }) {
   let cursorPos = from;
   let output = "";
@@ -1075,51 +1074,58 @@ function renderRowSpans(displayText, { from, to }, invert, { spans, rowStart }) 
   }
   return cursorPos === from || to > cursorPos ? output + invert(displayText.slice(cursorPos, to)) : output;
 }
-//@ chunk-530hfzwb.js:745-927 placement
+//@ chunk-880p06ha.js:746-928 placement
 /**
  * 光标所在逻辑行的显示列（制表符按 tab stop 计）。
  */
 function getCursorDisplayColumn(cursor, wantedColumn) {
   if (wantedColumn?.offset === cursor.offset && wantedColumn.text === cursor.text) return wantedColumn.column;
   let offset = cursor.startOfLogicalLine().offset;
-  let displayColumn = truncateToWidth(cursor.text, offset, cursor.offset);
+  let displayColumn = displayWidthBetween(cursor.text, offset, cursor.offset);
   return cursor.text[cursor.offset] === "\t"
     ? displayColumn + charDisplayWidth("\t", displayColumn) - 1
     : displayColumn;
 }
-//@ chunk-530hfzwb.js:1022-1145 placement (2.1.88 match: truncateStartToWidth, 1)
+//@ chunk-880p06ha.js:928-1023 layout
+function displayWidthBetween(text, offset, offset_2) {
+  let column = 0;
+  for (let { segment } of getGraphemeSegmenter().segment(text.slice(offset, offset_2)))
+    column += charDisplayWidth(segment, column);
+  return column;
+}
+//@ chunk-880p06ha.js:1023-1146 placement
 /**
  * 从起点累加显示宽度，超过宽度时返回该处偏移（误配名）。
  */
-function truncateStartToWidth(text, startIndex, endIndex, cursorDisplayColumn) {
-  let width = 0;
+function displayColumnToOffset(text, startIndex, endIndex, cursorDisplayColumn) {
+  let column = 0;
   for (let { segment, index } of getGraphemeSegmenter().segment(text.slice(startIndex, endIndex))) {
-    width += charDisplayWidth(segment, width);
-    if (width > cursorDisplayColumn) return startIndex + index;
+    column += charDisplayWidth(segment, column);
+    if (column > cursorDisplayColumn) return startIndex + index;
   }
   return endIndex;
 }
-//@ chunk-530hfzwb.js:1145-1194 placement
+//@ chunk-880p06ha.js:1146-1195 placement
 function charDisplayWidth(segment, column) {
   return segment === "\t" ? DEFAULT_TAB_WIDTH - (column % DEFAULT_TAB_WIDTH) : bunStringWidth(segment);
 }
-//@ chunk-530hfzwb.js:19092-19200 placement (2.1.88 match: wrapText, 1)
+//@ chunk-880p06ha.js:19097-19205 placement
 /**
  * 返回行首空白之后第一个非空白字符的偏移（误配名 wrapText）。
  */
-function wrapText(text) {
-  let currentWidth = 0;
+function firstNonBlankOffset(text) {
+  let lastIndex = 0;
   for (let { segment, index } of getGraphemeSegmenter().segment(text)) {
-    currentWidth = index;
+    lastIndex = index;
     if (segment !== " " && segment !== "\t") break;
   }
-  return currentWidth;
+  return lastIndex;
 }
-//@ chunk-530hfzwb.js:28612-28975 placement (2.1.88 match: truncatePathMiddle, 0.223)
+//@ chunk-880p06ha.js:28617-28980 placement
 /**
  * 按逻辑行移动光标并保持期望列（误配名 truncatePathMiddle，属输入框光标）。
  */
-function truncatePathMiddle(isDirForEllipsis, count, ctx) {
+function moveLogicalLinesToColumn(isDirForEllipsis, count, ctx) {
   let { cursor } = ctx;
   let text = cursor.text;
   let offset = cursor.startOfLogicalLine().offset;
@@ -1155,25 +1161,25 @@ function truncatePathMiddle(isDirForEllipsis, count, ctx) {
     offset_2,
   );
   let endIndex = index === -1 ? text.length : index;
-  let truncatedStart = truncateStartToWidth(text, offset_2, endIndex, cursorDisplayColumn);
+  let truncatedStart = displayColumnToOffset(text, offset_2, endIndex, cursorDisplayColumn);
   return {
     offset: snapToPlaceholderEnd(cursor, truncatedStart, offset_2),
     column: cursorDisplayColumn,
   };
 }
-//@ chunk-tzghj6zv.js:47769-47798 placement
+//@ chunk-18rrbwq1.js:37738-37742 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18rrbwq1.js:37738", () => {
+  init_react_production();
+});
+//@ chunk-18rrbwq1.js:47750-47779 placement
 /**
  * 是否处于“不强制重渲染”的模式。
  */
 function isNoForceUpdateRenders() {
   return !renderWithForceUpdate(currentToolPermissionContext);
 }
-//@ chunk-tzghj6zv.js:47798-47802 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tzghj6zv.js:47798", () => {
-  init_react_production();
-});
-//@ chunk-tzghj6zv.js:47802-48601 placement
+//@ chunk-18rrbwq1.js:47783-48582 placement
 /**
  * 按宽度硬换行文本，生成带起始偏移、是否换行开头/结尾的行信息，返回冻结的度量对象。
  */
@@ -1259,7 +1265,7 @@ function measureText(text, columns) {
     lines: Object.freeze(lines),
   });
 }
-//@ chunk-tzghj6zv.js:48601-48746 fingerprint (2.1.88 match: WrappedLine, 0.613)
+//@ chunk-18rrbwq1.js:48582-48727 fingerprint (2.1.88 match: WrappedLine, 0.614)
 function WrappedLine(measured, index) {
   let lineIndex = clampIndex(index, 0, Math.max(0, measured.lines.length - 1));
   return (
@@ -1271,7 +1277,7 @@ function WrappedLine(measured, index) {
     }
   );
 }
-//@ chunk-tzghj6zv.js:48746-49198 placement
+//@ chunk-18rrbwq1.js:48727-49179 placement
 /**
  * 把文本偏移换成换行后的行列位置（非换行开头的行忽略前导空白）。
  */
@@ -1288,11 +1294,11 @@ function offsetToPosition(measured, offset) {
     if (clampedOffset >= line.startOffset && (!nextLine || clampedOffset < nextLine.startOffset)) {
       let index = clampedOffset - line.startOffset;
       let column;
-      if (line.isPrecededByNewline) column = canYankPop(line.text, index);
+      if (line.isPrecededByNewline) column = getKillRingSize(line.text, index);
       else {
         let indentWidth = line.text.length - line.text.trimStart().length;
         if (index < indentWidth) column = 0;
-        else column = canYankPop(line.text.slice(indentWidth), index - indentWidth);
+        else column = getKillRingSize(line.text.slice(indentWidth), index - indentWidth);
       }
       return {
         line: idx,
@@ -1307,7 +1313,7 @@ function offsetToPosition(measured, offset) {
     column: bunStringWidth(lastLine.text),
   };
 }
-//@ chunk-tzghj6zv.js:49198-49454 placement
+//@ chunk-18rrbwq1.js:49179-49435 placement
 function positionToOffset(measured, lineIndex, column) {
   if (measured.lines.length === 0) return 0;
   let line = WrappedLine(measured, lineIndex);
@@ -1316,13 +1322,13 @@ function positionToOffset(measured, lineIndex, column) {
   let offsetInLine = getKillRingItem(line.text.slice(indentWidth), Math.max(0, column)) + indentWidth;
   return line.startOffset + offsetInLine;
 }
-//@ chunk-tzghj6zv.js:49454-49540 placement
-function canYankPop(text, index) {
+//@ chunk-18rrbwq1.js:49435-49521 placement
+function getKillRingSize(text, index) {
   if (index <= 0) return 0;
   if (index >= text.length) return bunStringWidth(text);
   return bunStringWidth(text.slice(0, index));
 }
-//@ chunk-tzghj6zv.js:49540-49669 placement
+//@ chunk-18rrbwq1.js:49521-49650 placement
 function getKillRingItem(graphemes, targetColumn) {
   if (targetColumn <= 0 || graphemes.length === 0) return 0;
   let width = 0;
@@ -1335,7 +1341,7 @@ function getKillRingItem(graphemes, targetColumn) {
   }
   return length;
 }
-//@ chunk-tzghj6zv.js:49669-49727 placement
+//@ chunk-18rrbwq1.js:49650-49708 placement
 /**
  * 判断某位置的前一个字符是否为换行（行首）。
  */
@@ -1348,14 +1354,14 @@ function isPrecededByNewline(text, offset, isFirstRow) {
 `
   );
 }
-//@ chunk-tzghj6zv.js:49727-49766 placement
+//@ chunk-18rrbwq1.js:49708-49747 placement
 /**
  * 冻结行信息对象，防止被修改。
  */
 function freezeLineInfo(line) {
   return Object.freeze(line);
 }
-//@ chunk-tzghj6zv.js:49766-49806 placement
+//@ chunk-18rrbwq1.js:49747-49787 placement
 /**
  * 把索引限制在 [min, max] 区间内。
  */
@@ -1364,20 +1370,19 @@ function clampIndex(value, min, max) {
 }
 export {
   Cursor,
-  isPlaceholderAt,
-  isNoForceUpdateRenders,
   measureText,
-  charDisplayWidth,
-  isWhitespaceChar,
-  isPunctuationChar,
-  isWordChar,
-  replaceWithSpaces,
-  truncateStartToWidth,
-  getCursorDisplayColumn,
-  wrapText,
-  truncatePathMiddle,
-  wrapByDisplayWidth,
   offsetToPosition,
   positionToOffset,
+  wrapByDisplayWidth,
+  isWordChar,
+  isWhitespaceChar,
+  isPunctuationChar,
+  replaceWithSpaces,
+  displayColumnToOffset,
+  getCursorDisplayColumn,
+  firstNonBlankOffset,
+  moveLogicalLinesToColumn,
+  isNoForceUpdateRenders,
+  isPlaceholderAt,
   pushToKillRing,
 };

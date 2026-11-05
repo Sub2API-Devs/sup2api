@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。续接时提议压缩。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: placement 3
  */
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
@@ -19,12 +19,12 @@ import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:330496-330709 placement
+//@ chunk-czq1j3j2.js:354643-354856 placement
 /**
  * 续接旧会话时提议压缩的对话框定义（compact/continue/dismiss/never）。
  */
 var RESUME_COMPACT_DIALOG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-18hwfzwa.js:330496", () => {
+deferInit("chunk-czq1j3j2.js:354643", () => {
   RESUME_COMPACT_DIALOG = withHideWhile({
     kind: RESUME_RETURN,
     payload: DoctorLazy(() =>
@@ -39,7 +39,7 @@ deferInit("chunk-18hwfzwa.js:330496", () => {
     hideWhile: [],
   });
 });
-//@ chunk-18hwfzwa.js:330709-331225 placement
+//@ chunk-czq1j3j2.js:354856-355372 placement
 function shouldOfferResumeCompact(estimate, estimateTokensWithAnchor) {
   if (
     !getFeatureValue_CACHED_MAY_BE_STALE("tengu_gleaming_fair", false) &&
@@ -64,7 +64,7 @@ function shouldOfferResumeCompact(estimate, estimateTokensWithAnchor) {
     estimatedTokens: totalTokens,
   };
 }
-//@ chunk-18hwfzwa.js:331225-331801 placement
+//@ chunk-czq1j3j2.js:355372-355948 placement
 async function runResumeCompactOffer(
   requestDialog,
   messages,
@@ -100,4 +100,4 @@ async function runResumeCompactOffer(
   if (offerLines === "compact") runCompact();
   return offerLines;
 }
-export { shouldOfferResumeCompact, runResumeCompactOffer, RESUME_COMPACT_DIALOG };
+export { RESUME_COMPACT_DIALOG, shouldOfferResumeCompact, runResumeCompactOffer };

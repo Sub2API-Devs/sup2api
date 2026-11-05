@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：后台 worktree 守卫的值求解：单词展开、参数展开、变量赋值的静态求值与风险原因。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-63f0f3kd.js (48)
- * attribution: placement 48
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h2y5xkdx.js (49)
+ * attribution: placement 47, layout 2
  */
 import { basename, posix } from "path";
 import {
@@ -71,7 +71,7 @@ import {
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics/growthbook.js";
 import { deferInit } from "../../../../runtime/deferred-init.js";
 
-//@ chunk-63f0f3kd.js:11907-15619 placement
+//@ chunk-h2y5xkdx.js:12271-15983 placement
 /**
  * 后台 worktree 守卫的值求解常量：declare 标志、参数展开运算符、带引号变量名等正则；值为命令的环境变量、启动钩子变量、可放行的解释器变量、危险 NODE_OPTIONS、locale 变量；语句/单词/重定向节点类型集合；各类拒绝原因的说明文字。
  */
@@ -96,7 +96,7 @@ var SED_PATTERN_NOTE;
 var STAT_VALUE_NOTE;
 var DATE_VALUE_NOTE;
 var GIT_TOO_COMPLEX_REASON;
-deferInit("chunk-63f0f3kd.js:11907", () => {
+deferInit("chunk-h2y5xkdx.js:12271", () => {
   DECLARE_FLAGS_RE = /^[-+][aAgilurxpfFt]*$/;
   PARAM_EXPANSION_OPERATOR_RE = /^(?::?[-+=?]|##?|%%?|\/[\/#%]?|\^\^?|,,?|@)$/;
   QUOTED_NAME_RE = /^(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1$/;
@@ -134,19 +134,19 @@ deferInit("chunk-63f0f3kd.js:11907", () => {
     " (if this value comes from date: some versions print %N and %q as a letter and others leave them unchanged, and arithmetic can read either as a variable. To pass: use date +%s, or do the sum in bc or awk)";
   GIT_TOO_COMPLEX_REASON = "names git in a form too complex to verify that it stays inside the worktree";
 });
-//@ chunk-63f0f3kd.js:15619-15722 placement
+//@ chunk-h2y5xkdx.js:15983-16086 placement
 function tooComplexReason(what) {
   return `uses ${what} ${TOO_COMPLEX_SUFFIX}, so it is too complex to verify that it stays inside the worktree`;
 }
-//@ chunk-63f0f3kd.js:15722-15813 placement
+//@ chunk-h2y5xkdx.js:16086-16177 placement
 function unverifiableRunReason(program, detail) {
   return `runs ${program} ${detail} ${TOO_COMPLEX_SUFFIX}, so what it runs cannot be shown not to be git`;
 }
-//@ chunk-63f0f3kd.js:15813-15927 placement
+//@ chunk-h2y5xkdx.js:16177-16291 placement
 function arithmeticEvalReason(text) {
   return `evaluates ${shortenForReason(text)} arithmetically ${TOO_COMPLEX_SUFFIX}, which can run a command hidden in a variable's value`;
 }
-//@ chunk-63f0f3kd.js:15927-17031 placement
+//@ chunk-h2y5xkdx.js:16291-17395 placement
 function assignmentHazardReason(text, name, state) {
   let kind = state.kinds.get(name);
   if (isStartupHazardVariable(name)) {
@@ -183,11 +183,11 @@ function assignmentHazardReason(text, name, state) {
     ? `${arithmeticEvalReason(text)}; ${name} is not trusted here because the assigned word '${shortenForReason(shellFilledWord)}' contains '${found}', the name of a variable the shell fills with text of its own`
     : arithmeticEvalReason(text);
 }
-//@ chunk-63f0f3kd.js:17031-17088 placement
+//@ chunk-h2y5xkdx.js:17395-17452 placement
 function shortenForReason(text) {
   return truncateAtWord(text.replace(/\s+/g, " ").trim(), 40);
 }
-//@ chunk-63f0f3kd.js:17088-17322 placement
+//@ chunk-h2y5xkdx.js:17452-17686 placement
 function describeWordValue(value) {
   switch (value.kind) {
     case "literal": {
@@ -204,22 +204,26 @@ function describeWordValue(value) {
       return value.detail;
   }
 }
-//@ chunk-63f0f3kd.js:17322-18442 placement
-function dynamicArgumentReason(program, option, { node, value }, cluster) {
-  let why = value.kind === "dynamic" ? value.why : describeWordValue(value);
-  let suggestion =
+//@ chunk-h2y5xkdx.js:17686-18722 layout
+function describeWordRefusal(program, { node, value }, clusterHint) {
+  let describe = value.kind === "dynamic" ? value.why : describeWordValue(value);
+  let advice =
     value.kind === "dynamic" && value.many
       ? "that find replaces with all the found paths at once when the clause ends in `{} +` (do not put `{}` right after an option that takes a value, or end the clause with `\\;` so that each run gets one path)"
       : ARRAY_REF_RE.test(node.text.replace(ARRAY_LENGTH_RE, "0"))
         ? 'that should be one element ("$1", "${a[0]}") or spelled out rather than an @-style list (several words, or none, even inside double quotes)'
         : isStaticWord(node) && hasExpansion(node)
           ? 'that is a "$*"-style join, an array length, or a bare arithmetic or special parameter, none of which is accepted (pass one element such as "$1", a plain quoted variable such as "$x", or spell the value out)'
-          : cluster
-            ? `that should be quoted whole, with ${option} written as its own word (${cluster.slice(0, -1)} ${option} "$x"): as written, it can become no word or several words`
+          : clusterHint
+            ? `that should be quoted whole, with ${program} written as its own word (${clusterHint.slice(0, -1)} ${program} "$x"): as written, it can become no word or several words`
             : `that should be one double-quoted or spelled-out word ('*.ts' for a pattern, "$x" or "$(\u2026)" for an expansion): as written, it can become no word or several words`;
-  return `a computed ${option} value${cluster ? ` in the cluster ${cluster}` : ""} (${why}) ${suggestion} where ${program} reads exactly one,`;
+  return `(${describe}) ${advice}`;
 }
-//@ chunk-63f0f3kd.js:18442-18746 placement
+//@ chunk-h2y5xkdx.js:18722-18846 layout
+function describeComputedValue(program, label, value, cluster) {
+  return `a computed ${label} value${cluster ? ` in the cluster ${cluster}` : ""} ${describeWordRefusal(label, value, cluster)} where ${program} reads exactly one,`;
+}
+//@ chunk-h2y5xkdx.js:18846-19150 placement
 function recordVariableKind(state, name, kind, isOptionSafe = false, nodeText = "") {
   let previousKind = state.kinds.get(name);
   let nextKind = previousKind === undefined || previousKind === kind ? kind : "inert";
@@ -236,7 +240,7 @@ function recordVariableKind(state, name, kind, isOptionSafe = false, nodeText = 
   );
   recordStartupHazard(state, name, kind === "other" || RISKY_NODE_OPTIONS_RE.test(nodeText));
 }
-//@ chunk-63f0f3kd.js:18746-18848 placement
+//@ chunk-h2y5xkdx.js:19150-19252 placement
 function recordStartupHazard(state, name, isHazard) {
   if (!BENIGN_INTERPRETER_ENV_RE.test(name))
     state.startupHazards.set(
@@ -244,14 +248,14 @@ function recordStartupHazard(state, name, isHazard) {
       state.startupHazards.get(name) === true || isHazard || STARTUP_HOOK_ENV_RE.test(name),
     );
 }
-//@ chunk-63f0f3kd.js:18848-18974 placement
+//@ chunk-h2y5xkdx.js:19252-19378 placement
 function isLiteralNonOption(node, state) {
   let evaluated = isStaticNode(node) ? evaluateWord(node, state, true) : null;
   return evaluated?.kind === "literal"
     ? /^[^-]/.test(evaluated.text)
     : evaluated?.kind === "dynamic" && evaluated.optionSafe;
 }
-//@ chunk-63f0f3kd.js:18974-19619 placement
+//@ chunk-h2y5xkdx.js:19378-20023 placement
 function expansionKind(node, state) {
   if (!node) return "inert";
   if (
@@ -284,7 +288,7 @@ function expansionKind(node, state) {
         ? "inert"
         : "other";
 }
-//@ chunk-63f0f3kd.js:19619-23877 placement
+//@ chunk-h2y5xkdx.js:20023-24281 placement
 /**
  * 处理变量赋值/声明节点：记录变量种类（整数、数组、导出、只读），检测影响 git 或 shell 行为的危险变量。
  */
@@ -495,11 +499,11 @@ function analyzeAssignment(node, state, isIntegerContext) {
   }
   for (let child of node.children) analyzeAssignment(child, state, isIntegerContext);
 }
-//@ chunk-63f0f3kd.js:23877-23959 placement
+//@ chunk-h2y5xkdx.js:24281-24363 placement
 function isStaticNode(node) {
   return !/expansion|substitution/.test(node.type) && node.children.every(isStaticNode);
 }
-//@ chunk-63f0f3kd.js:23959-24012 placement (2.1.88 match: toScopedConfig, 0.805)
+//@ chunk-h2y5xkdx.js:24363-24416 placement (2.1.88 match: toScopedConfig, 0.806)
 function dynamicValue(why, flags = DYNAMIC_VALUE_FLAGS) {
   return {
     kind: "dynamic",
@@ -507,7 +511,7 @@ function dynamicValue(why, flags = DYNAMIC_VALUE_FLAGS) {
     ...flags,
   };
 }
-//@ chunk-63f0f3kd.js:24012-24569 placement
+//@ chunk-h2y5xkdx.js:24416-24973 placement
 function mergeWordParts(parts) {
   let found = parts.find((part) => part.kind === "refuse");
   let filtered = parts.filter((part) => part.kind === "dynamic");
@@ -537,7 +541,7 @@ function mergeWordParts(parts) {
         written: filtered.some((part) => part.kind === "dynamic" && part.written),
       });
 }
-//@ chunk-63f0f3kd.js:24569-24738 placement
+//@ chunk-h2y5xkdx.js:24973-25142 placement
 function isOptionSafeParts(parts) {
   for (let part of parts)
     if (part.kind === "literal") {
@@ -545,7 +549,7 @@ function isOptionSafeParts(parts) {
     } else if (part.kind !== "dynamic" || !part.optionSafe || part.integer) return false;
   return true;
 }
-//@ chunk-63f0f3kd.js:24738-24808 placement
+//@ chunk-h2y5xkdx.js:25142-25212 placement
 function unescapeDoubleQuoted(text) {
   return text.replace(/\\([$`"\\\n])/g, (match, escaped) =>
     escaped ===
@@ -555,12 +559,12 @@ function unescapeDoubleQuoted(text) {
       : escaped,
   );
 }
-//@ chunk-63f0f3kd.js:24808-24850 placement
+//@ chunk-h2y5xkdx.js:25212-25254 placement
 var GIT_PROGRAM_NAMES; // deferred: uses POSIX_SHELL_NAMES (../../../utils/bash/ast.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-63f0f3kd.js:24808", () => {
+deferInit("chunk-h2y5xkdx.js:25212", () => {
   GIT_PROGRAM_NAMES = ["git", "git.exe", "git.real", ...SHELL_PROGRAM_NAMES];
 });
-//@ chunk-63f0f3kd.js:24850-25266 placement (2.1.88 match: urlPatternToRegex, 0.838)
+//@ chunk-h2y5xkdx.js:25254-25670 placement (2.1.88 match: urlPatternToRegex, 0.838)
 function urlPatternToRegex(pattern) {
   let replaced = pattern
     .slice(pattern.lastIndexOf("/") + 1)
@@ -568,12 +572,12 @@ function urlPatternToRegex(pattern) {
       /\[[:=.]/.test(bracket.slice(1)) ? "?" : bracket,
     );
   let regexSource = "";
-  for (let idx = 0; idx < replaced.length; idx++) {
-    let char = replaced[idx];
-    let closeIndex = char === "[" ? replaced.indexOf("]", idx + 2) : -1;
+  for (let k = 0; k < replaced.length; k++) {
+    let char = replaced[k];
+    let closeIndex = char === "[" ? replaced.indexOf("]", k + 2) : -1;
     if (closeIndex !== -1) {
-      regexSource += replaced.slice(idx, closeIndex + 1).replace(/^\[!/, "[^");
-      idx = closeIndex;
+      regexSource += replaced.slice(k, closeIndex + 1).replace(/^\[!/, "[^");
+      k = closeIndex;
     } else
       regexSource += char === "*" ? ".*" : char === "?" ? "." : char.replace(/[\\^$.|+(){}[\]]/g, "\\$&");
   }
@@ -584,9 +588,9 @@ function urlPatternToRegex(pattern) {
     return true;
   }
 }
-//@ chunk-63f0f3kd.js:25266-25312 placement
+//@ chunk-h2y5xkdx.js:25670-25716 placement
 var BOT_PROTECTED_TENGU_RIPPLING_JOURNAL = "bot_protected_tengu_rippling_journal";
-//@ chunk-63f0f3kd.js:25312-25475 placement
+//@ chunk-h2y5xkdx.js:25716-25879 placement
 function isRiskyGlob(pattern, fullPattern = pattern) {
   if (countCharInString(pattern, "*") > 16) return true;
   if (
@@ -603,22 +607,22 @@ function isRiskyGlob(pattern, fullPattern = pattern) {
     (pattern_2 !== fullPattern && globToRegex(fullPattern))
   );
 }
-//@ chunk-63f0f3kd.js:25475-26342 placement
+//@ chunk-h2y5xkdx.js:25879-26746 placement
 function globToRegex(pattern) {
   let index = pattern.lastIndexOf("]");
   let regexSource = "";
-  for (let idx = 0; idx < pattern.length; idx++) {
-    let char = pattern[idx];
+  for (let k = 0; k < pattern.length; k++) {
+    let char = pattern[k];
     if (char === "\\") {
-      let nextChar = pattern[idx + 1];
+      let nextChar = pattern[k + 1];
       if (nextChar === undefined) return true;
       regexSource = nextChar === "/" ? "" : regexSource + urlPatternToRegex_2(nextChar);
-      idx++;
+      k++;
       continue;
     }
     if (char === "[") {
-      let isNegated = pattern[idx + 1] === "!" || pattern[idx + 1] === "^";
-      let classStart = idx + (isNegated ? 2 : 1);
+      let isNegated = pattern[k + 1] === "!" || pattern[k + 1] === "^";
+      let classStart = k + (isNegated ? 2 : 1);
       let classChars = "";
       let isAnyChar = isNegated;
       let pos = index > classStart ? classStart : pattern.length;
@@ -641,12 +645,12 @@ function globToRegex(pattern) {
       }
       if (pos < pattern.length) {
         regexSource += isAnyChar ? "." : `[${urlPatternToRegex_2(classChars)}]`;
-        idx = pos;
+        k = pos;
         continue;
       }
       if (isNegated && pattern[classStart] === "]") {
         regexSource += ".";
-        idx = classStart;
+        k = classStart;
         continue;
       }
     }
@@ -662,9 +666,9 @@ function globToRegex(pattern) {
     return true;
   }
 }
-//@ chunk-63f0f3kd.js:26342-26444 placement
+//@ chunk-h2y5xkdx.js:26746-26848 placement
 var ANSI_C_ESCAPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-63f0f3kd.js:26342", () => {
+deferInit("chunk-h2y5xkdx.js:26746", () => {
   ANSI_C_ESCAPES = new Map(
     Object.entries({
       a: "\x07",
@@ -680,18 +684,18 @@ deferInit("chunk-63f0f3kd.js:26342", () => {
     }),
   );
 });
-//@ chunk-63f0f3kd.js:26444-26522 placement
+//@ chunk-h2y5xkdx.js:26848-26926 placement
 function hasChildWordMatching(node, pattern) {
   return node.children.some((child) => child.type === "word" && pattern.test(child.text));
 }
-//@ chunk-63f0f3kd.js:26522-26601 placement
+//@ chunk-h2y5xkdx.js:26926-27005 placement
 /**
  * 测试表达式里会被当成运算符的开头（[ 或 :字母）；值落在这里会改变语义。
  */
 var TEST_EXPRESSION_OPERAND_RE = /^(?:\[|:[A-Za-z&])/;
 var GLOB_WITH_ESCAPE_RE = /(?:^|[^\\])(?:\\\\)*[*?]/;
 var GLOB_SIMPLE_RE = /(?:^|[^\\])[*?]/;
-//@ chunk-63f0f3kd.js:26601-26666 placement
+//@ chunk-h2y5xkdx.js:27005-27070 placement
 function isBraceExpansionNode(node) {
   return (
     hasChildWordMatching(node, /^\{$/) &&
@@ -699,11 +703,11 @@ function isBraceExpansionNode(node) {
     hasChildWordMatching(node, /,|\.\./)
   );
 }
-//@ chunk-63f0f3kd.js:26666-26714 placement
+//@ chunk-h2y5xkdx.js:27070-27118 placement
 function isBracketGlobNode(node) {
   return hasChildWordMatching(node, /^\[$/) && hasChildWordMatching(node, /\]$/);
 }
-//@ chunk-63f0f3kd.js:26714-26846 placement
+//@ chunk-h2y5xkdx.js:27118-27250 placement
 /**
  * 判断展开节点的值是否用于有风险的表达式位置（如 zsh 特殊下标或测试表达式）。
  */
@@ -715,12 +719,12 @@ function isRiskyExpansionOperand(node, testExpression) {
     )
   );
 }
-//@ chunk-63f0f3kd.js:26846-26877 placement
+//@ chunk-h2y5xkdx.js:27250-27281 placement
 /**
  * 判断 $ 后面接的内容是否构成算术或测试表达式（[[、=~、^、+ 等）。
  */
 var DOLLAR_QUOTE_EDGE_RE = /^(?:[[=~^+]|#\w*[[:])/;
-//@ chunk-63f0f3kd.js:26877-26986 placement
+//@ chunk-h2y5xkdx.js:27281-27390 placement
 /**
  * 判断节点相邻处是否构成 $'...' 引号边界的特殊情况。
  */
@@ -730,9 +734,9 @@ function isDollarQuoteEdge(left, right) {
     (left.text === "$$" || (left.text.endsWith("$") && right.text.endsWith("\\'")))
   );
 }
-//@ chunk-63f0f3kd.js:26986-27015 placement
+//@ chunk-h2y5xkdx.js:27390-27419 placement
 var TENGU_JAUNTY_FOREST = "tengu_jaunty_forest";
-//@ chunk-63f0f3kd.js:27015-27053 placement
+//@ chunk-h2y5xkdx.js:27419-27457 placement
 /**
  * 读取 tengu_jaunty_forest 开关：字符串内容是否按字节精确校验（开启时更保守）。
  */
@@ -741,20 +745,19 @@ function isParameterExpansionStrictnessOn() {
     safe: true,
   });
 }
-//@ chunk-63f0f3kd.js:27053-27084 placement
+//@ chunk-h2y5xkdx.js:27457-27488 placement
 var TENGU_QUILTED_LANTERN = "tengu_quilted_lantern";
-//@ chunk-63f0f3kd.js:27084-27292 placement
+//@ chunk-h2y5xkdx.js:27488-27696 placement
 function hasProcessSubstitution(text) {
   let backslashRun = 0;
-  for (let idx = 0; idx < text.length; idx++) {
-    if ((text[idx] === "<" || text[idx] === ">") && text[idx + 1] === "(" && backslashRun % 2 === 0)
-      return true;
-    backslashRun = text[idx] === "\\" ? backslashRun + 1 : 0;
+  for (let i = 0; i < text.length; i++) {
+    if ((text[i] === "<" || text[i] === ">") && text[i + 1] === "(" && backslashRun % 2 === 0) return true;
+    backslashRun = text[i] === "\\" ? backslashRun + 1 : 0;
   }
   let firstSeparator = text.search(/[|&\s]/);
   return text.startsWith("=(") || (firstSeparator >= 0 && text.includes("=(", firstSeparator));
 }
-//@ chunk-63f0f3kd.js:27292-31903 placement
+//@ chunk-h2y5xkdx.js:27696-32307 placement
 /**
  * 把一个 shell 单词节点静态求值：literal（可确定文本）、dynamic（运行期值，附原因与属性）或 refuse（无法判断，拒绝）。
  */
@@ -1008,7 +1011,7 @@ function evaluateWord(node, state, allowGlob) {
       };
   }
 }
-//@ chunk-63f0f3kd.js:31903-32244 placement
+//@ chunk-h2y5xkdx.js:32307-32648 placement
 function hasCommandSubstitutionText(text) {
   for (let match of text.matchAll(/\\[\s\S]|[$`]/g)) {
     if (match[0].length === 2) continue;
@@ -1028,7 +1031,7 @@ function hasCommandSubstitutionText(text) {
   }
   return false;
 }
-//@ chunk-63f0f3kd.js:32244-32670 placement
+//@ chunk-h2y5xkdx.js:32648-33074 placement
 function evaluateVariableReference(state, name) {
   if (/^\d+$/.test(name)) return dynamicValue("a positional parameter");
   let kind = state.kinds.get(name);
@@ -1053,9 +1056,9 @@ function evaluateVariableReference(state, name) {
     written: kind === "other",
   });
 }
-//@ chunk-63f0f3kd.js:32670-32701 placement
+//@ chunk-h2y5xkdx.js:33074-33105 placement
 var TENGU_FOAMY_WATERFALL = "tengu_foamy_waterfall";
-//@ chunk-63f0f3kd.js:32701-32739 placement
+//@ chunk-h2y5xkdx.js:33105-33143 placement
 /**
  * 读取 tengu_foamy_waterfall 开关。
  */
@@ -1064,7 +1067,7 @@ function isShellSpecialVariableTypingEnabled() {
     safe: true,
   });
 }
-//@ chunk-63f0f3kd.js:32739-32791 placement
+//@ chunk-h2y5xkdx.js:33143-33195 placement
 /**
  * 名字是 bash/zsh 特殊变量且开关开启时返回 true（这类变量被设为整数后可被当成算术求值）。
  */
@@ -1074,7 +1077,7 @@ function isSpecialVariableTypingRisk(name) {
     isShellSpecialVariableTypingEnabled()
   );
 }
-//@ chunk-63f0f3kd.js:32791-32945 placement
+//@ chunk-h2y5xkdx.js:33195-33349 placement
 function isSafeArithmeticName(name, state) {
   let kind = state.kinds.get(name);
   return (
@@ -1087,13 +1090,13 @@ function isSafeArithmeticName(name, state) {
         (state.shellSetNameWord === null || SHELL_AUTO_VARIABLES.test(name))))
   );
 }
-//@ chunk-63f0f3kd.js:32945-33030 placement
+//@ chunk-h2y5xkdx.js:33349-33434 placement
 /**
  * 匹配 ${!prefix@}、${!prefix[*]} 这类间接名字列表展开。
  */
 var TENGU_SHIMMYING_MOCHI = "tengu_shimmying_mochi";
 var INDIRECT_NAME_LIST_RE = /^\$\{![A-Za-z_][A-Za-z0-9_]*(?:[@*]|\[[@*]\])\}$/;
-//@ chunk-63f0f3kd.js:33030-35033 placement
+//@ chunk-h2y5xkdx.js:33434-35437 placement
 function evaluateParameterExpansion(node, state) {
   let [head, ...rest] = node.children.filter((child) => child.type !== "${" && child.type !== "}");
   let refuseArithmetic = {
@@ -1199,7 +1202,7 @@ function evaluateParameterExpansion(node, state) {
   }
   return dynamicValue(`the expansion ${shortenForReason(node.text)}`);
 }
-//@ chunk-63f0f3kd.js:35033-35288 placement
+//@ chunk-h2y5xkdx.js:35437-35692 placement
 /**
  * 检查数组下标表达式是否安全：变量名必须是普通变量，下标为 @/* 或安全的算术。
  */
@@ -1213,7 +1216,7 @@ function checkSubscript(node, state) {
     null
   );
 }
-//@ chunk-63f0f3kd.js:35288-36220 placement
+//@ chunk-h2y5xkdx.js:35692-36624 placement
 /**
  * 递归检查算术上下文中的节点（数字、变量名、赋值、下标、各类表达式）：可能触发数组下标求值或赋值有害变量时返回原因，否则 null。
  */
@@ -1263,7 +1266,7 @@ function checkArithmeticNode(node, state) {
       return null;
   }
 }
-//@ chunk-63f0f3kd.js:36220-36453 placement
+//@ chunk-h2y5xkdx.js:36624-36857 placement
 /**
  * 检查算术上下文中的单词是否安全，危险时返回原因（算术求值或赋值风险）。
  */
@@ -1278,7 +1281,7 @@ function checkArithmeticWord(word, state) {
     ? arithmeticEvalReason(word.text)
     : assignmentHazardReason(word.text, varName, state);
 }
-//@ chunk-63f0f3kd.js:36453-36615 placement
+//@ chunk-h2y5xkdx.js:36857-37019 placement
 function checkArithmeticText(text, text_2, state) {
   if (!SAFE_QUOTED_TEXT_RE.test(text) || findShellVarName(text) !== undefined)
     return arithmeticEvalReason(text_2);
@@ -1323,7 +1326,8 @@ export {
   isBraceExpansionNode,
   isBracketGlobNode,
   OPTION_POSITION_NOTE,
-  dynamicArgumentReason,
+  describeComputedValue,
+  describeWordRefusal,
   OPTION_POSITION_NOTE_LONG,
   isParameterExpansionStrictnessOn,
   hasChildWordMatching,

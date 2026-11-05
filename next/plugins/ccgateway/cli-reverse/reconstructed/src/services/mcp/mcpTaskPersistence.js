@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：MCP 任务持久化
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-mzh22y2k.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q4ggn8bm.js (10)
  * attribution: placement 10
  */
 import { deleteMcpTaskMetadata, listTaskMetadata } from "./mcpTasks.js";
@@ -36,7 +36,7 @@ import { logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { isSingleShotPrintSession } from "../../bootstrap/state.js";
 import { describeErrorBrief } from "./auth.js";
 
-//@ chunk-mzh22y2k.js:12107-12214 placement
+//@ chunk-q4ggn8bm.js:13254-13361 placement
 async function removeTaskMetadataSafe(taskId, storageV5) {
   try {
     await (storageV5 ? deleteMcpTaskMetadata(taskId, storageV5) : deleteMcpTaskMetadata(taskId));
@@ -44,7 +44,7 @@ async function removeTaskMetadataSafe(taskId, storageV5) {
     logForDebugging(`removeMcpTaskMetadata failed: ${String(error)}`);
   }
 }
-//@ chunk-mzh22y2k.js:12214-12551 placement
+//@ chunk-q4ggn8bm.js:13361-13698 placement
 /**
  * MCP 任务结果内容块的 schema：二进制块、文本资源与资源链接。
  */
@@ -85,7 +85,7 @@ var resourceLinkSchema = DoctorLazy(() =>
     description: create_2().optional(),
   }),
 );
-//@ chunk-mzh22y2k.js:12551-13685 placement
+//@ chunk-q4ggn8bm.js:13698-14831 placement
 /**
  * 把 MCP 任务结果内容转成通知文本：二进制块先落盘，文本过长时截断，并把完整内容另存为文件、附上读取方法提示（行太长时建议用 python 按字符范围切片）。
  */
@@ -159,12 +159,12 @@ async function mcpContentToNotificationText(
     };
   }
 }
-//@ chunk-mzh22y2k.js:13685-13697 placement
+//@ chunk-q4ggn8bm.js:14831-14843 placement
 /**
  * 按字符切片时允许的最大跨度（80000）。
  */
 var MAX_SLICE_CHARS = 80000;
-//@ chunk-mzh22y2k.js:13697-13822 placement
+//@ chunk-q4ggn8bm.js:14843-14968 placement
 function hasReadableLines(text) {
   let lineStart = 0;
   let lineCount = 0;
@@ -180,7 +180,7 @@ function hasReadableLines(text) {
     lineStart = index + 1;
   }
 }
-//@ chunk-mzh22y2k.js:13822-15485 placement
+//@ chunk-q4ggn8bm.js:14968-16631 placement
 /**
  * 把一个 MCP 内容块转成文本：文本直接返回；文本资源与资源链接给出简述；图片/文档等 base64 数据在预算内保存成文件并返回保存说明。
  */
@@ -290,13 +290,13 @@ async function blockToNotificationText(block, budget, storageV5) {
     };
   }
 }
-//@ chunk-mzh22y2k.js:15485-15557 placement
+//@ chunk-q4ggn8bm.js:16631-16703 placement
 /**
  * 匹配控制/格式字符与变体选择符的正则。
  */
 var MAX_STATUS_MESSAGE_CHARS = 1e4;
 var CONTROL_CHARS_RE = /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\p{Variation_Selector}]+/gu;
-//@ chunk-mzh22y2k.js:15557-15712 placement
+//@ chunk-q4ggn8bm.js:16703-16857 placement
 /**
  * 规范化 MCP 任务状态消息：去控制字符、压缩空格，过长截断。
  */
@@ -308,7 +308,7 @@ function boundMcpStatusMessage(statusMessage) {
     ? `${truncateToLength(trimmed, MAX_STATUS_MESSAGE_CHARS)}\u2026 [truncated]`
     : trimmed;
 }
-//@ chunk-mzh22y2k.js:15712-16202 placement
+//@ chunk-q4ggn8bm.js:16857-17347 placement
 /**
  * 生成 MCP 任务完成/失败/取消时的任务通知（摘要与带结果或原因的正文，转义并截断）。
  */
@@ -339,7 +339,7 @@ ${escapeXmlTruncated(bodyText, getMaxMcpOutputChars() - hintText.length)}${hintT
 </result>`,
   });
 }
-//@ chunk-mzh22y2k.js:16202-17282 placement
+//@ chunk-q4ggn8bm.js:17347-18427 placement
 /**
  * 会话恢复时还原 MCP 任务：sep2663 协议的任务交给 restoreSep2663Tasks 重新绑定并继续驱动；旧版 2025-11-25 tasks 协议的恢复记录直接删除（不取消服务端任务）。
  */

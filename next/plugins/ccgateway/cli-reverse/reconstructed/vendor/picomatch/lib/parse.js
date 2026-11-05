@@ -1,15 +1,15 @@
 /**
  * picomatch/lib/parse.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: picomatch@4.0.4..4.0.7
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_constants } from "./constants.js";
 import { require_utils } from "./utils.js";
 
-//@ chunk-fq0cr76a.js:302511-317963 cjs-fingerprint
+//@ chunk-qg41pqt6.js:303068-318530 cjs-fingerprint
 var require_parse = __commonJS(function (cjsExports, cjsModule) {
   var constants = require_constants();
   var utils = require_utils();
@@ -102,10 +102,10 @@ var require_parse = __commonJS(function (cjsExports, cjsModule) {
     for (let i = 0; i < values.length; i++)
       for (let j = i + 1; j < values.length; j++) {
         let a = values[i];
-        let b_2 = values[j];
+        let b = values[j];
         let char = a[0];
-        if (!char || a !== char.repeat(a.length) || b_2 !== char.repeat(b_2.length)) continue;
-        if (a === b_2 || a.startsWith(b_2) || b_2.startsWith(a)) return true;
+        if (!char || a !== char.repeat(a.length) || b !== char.repeat(b.length)) continue;
+        if (a === b || a.startsWith(b) || b.startsWith(a)) return true;
       }
     return false;
   };

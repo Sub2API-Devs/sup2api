@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Vertex 设置向导遥测
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8nayjra0.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2c81dxgn.js (1)
  * attribution: placement 1
  */
 import { logEvent } from "../services/analytics/index.js";
@@ -13,7 +13,7 @@ import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.re
 import { ProviderSetupWizard } from "./ProviderSetupRestart.js";
 import { VertexSetupWizard } from "./vertexSetup/VertexSetupWizard.js";
 
-//@ chunk-8nayjra0.js:15259-15432 placement
+//@ chunk-2c81dxgn.js:16435-16608 placement
 /**
  * /setup-vertex 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */

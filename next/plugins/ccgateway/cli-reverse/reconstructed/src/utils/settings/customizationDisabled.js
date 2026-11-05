@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增。判断某类定制（CLAUDE.md、skills、hooks、插件等）是否被 --bare 或环境变量禁用。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2xdyp70v.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xgnymg3j.js (3)
  * attribution: placement 3
  */
 import { isDiskless, getAdditionalDirectoriesForClaudeMd } from "../../bootstrap/state.js";
 import { isSafeMode, isBareMode } from "../envUtils.js";
 import { env } from "../env.js";
 
-//@ chunk-2xdyp70v.js:303-1057 placement
+//@ chunk-xgnymg3j.js:303-1057 placement
 /**
  * 定制项开关表
  */
@@ -73,7 +73,7 @@ var CUSTOMIZATION_KINDS_COPY = {
   lspServers: false,
   keybindings: true,
 };
-//@ chunk-2xdyp70v.js:1057-1174 placement
+//@ chunk-xgnymg3j.js:1057-1174 placement
 /**
  * 判断某类定制（CLAUDE.md、skills、hooks、插件等）是否被 --bare 或环境变量禁用。
  */
@@ -83,7 +83,7 @@ function isCustomizationDisabled(kind, options) {
   if (isBareMode() && !options?.explicitlyRequested) return CUSTOMIZATION_KINDS_2[kind];
   return false;
 }
-//@ chunk-2xdyp70v.js:1174-1289 placement
+//@ chunk-xgnymg3j.js:1174-1289 placement
 function isClaudeMdLoadingDisabled() {
   return Boolean(
     env.CLAUDE_CODE_DISABLE_CLAUDE_MDS ||
@@ -92,4 +92,4 @@ function isClaudeMdLoadingDisabled() {
     }),
   );
 }
-export { isClaudeMdLoadingDisabled, isCustomizationDisabled };
+export { isCustomizationDisabled, isClaudeMdLoadingDisabled };

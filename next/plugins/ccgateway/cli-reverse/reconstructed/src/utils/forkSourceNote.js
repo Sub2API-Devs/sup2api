@@ -3,13 +3,12 @@
  *
  * 2.1.316 新增：fork 出来的会话首轮附上"本会话分叉自另一会话"的说明（来源会话名、已分叉点）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sfjpx19.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nh1pvp1m.js (6)
  * attribution: placement 6
  */
 import { basename } from "path";
-import { getSleepPreventer } from "../services/preventSleep.js";
 import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_semver_3 } from "../../vendor/semver/index.js";
 import { isCrossSessionMessagingEnabled } from "./crossSessionMessagingGate.js";
@@ -25,38 +24,18 @@ import { formatTaskNotification } from "./xmlTags.js";
 import { SENDMESSAGE } from "../tools/SendMessageTool/constants.js";
 import { mainAgentId } from "../bootstrap/state.js";
 import { getUserMessageText } from "./messages.js";
+import { getSleepPreventer } from "../services/preventSleep.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-0sfjpx19.js:49898-49928 placement
-/**
- * 获取系统休眠阻止器（acquire）。
- */
-function acquireSleepPreventer() {
-  getSleepPreventer().acquire();
-}
-//@ chunk-0sfjpx19.js:49928-49958 placement
-/**
- * 释放系统休眠阻止器。
- */
-function releaseSleepPreventer() {
-  getSleepPreventer().release();
-}
-//@ chunk-0sfjpx19.js:49958-49997 placement
-/**
- * 判断是否正持有休眠阻止器。
- */
-function isSleepPreventerHeld() {
-  return getSleepPreventer().isHolding();
-}
-//@ chunk-0sfjpx19.js:49997-50015 placement
+//@ chunk-nh1pvp1m.js:12151-12169 placement
 /**
  * fs/promises 模块引用。
  */
 var fsPromises; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-0sfjpx19.js:49997", () => {
+deferInit("chunk-nh1pvp1m.js:12151", () => {
   fsPromises = __toESM(require_semver_3(), 1);
 });
-//@ chunk-0sfjpx19.js:50096-51143 placement
+//@ chunk-nh1pvp1m.js:12250-13297 placement
 /**
  * 向 fork 会话注入 fork_source_note：说明共享历史截止时间及如何联系源会话。
  */
@@ -101,7 +80,7 @@ This session began as a fork (copy) of another session that is still running: ${
     });
   }
 }
-//@ chunk-0sfjpx19.js:51143-51318 placement (2.1.88 match: buildTranscriptEntries, 0.777)
+//@ chunk-nh1pvp1m.js:13297-13472 placement (2.1.88 match: buildTranscriptEntries, 0.902)
 /**
  * 判断消息（或 queued_command 附件的 prompt）是否包含指定文本。旧版名 buildTranscriptEntries 误配。
  */
@@ -116,10 +95,31 @@ function messageContainsText(message, text) {
   }
   return getUserMessageText(message)?.includes(text) ?? false;
 }
+//@ chunk-nh1pvp1m.js:69541-69571 placement
+/**
+ * 获取系统休眠阻止器（acquire）。
+ */
+function acquireSleepPreventer() {
+  getSleepPreventer().acquire();
+}
+//@ chunk-nh1pvp1m.js:69571-69601 placement
+/**
+ * 释放系统休眠阻止器。
+ */
+function releaseSleepPreventer() {
+  getSleepPreventer().release();
+}
+//@ chunk-nh1pvp1m.js:69601-69640 placement
+/**
+ * 判断是否正持有休眠阻止器。
+ */
+function isSleepPreventerHeld() {
+  return getSleepPreventer().isHolding();
+}
 export {
-  appendForkSourceNote,
-  fsPromises,
-  releaseSleepPreventer,
   acquireSleepPreventer,
   isSleepPreventerHeld,
+  releaseSleepPreventer,
+  appendForkSourceNote,
+  fsPromises,
 };

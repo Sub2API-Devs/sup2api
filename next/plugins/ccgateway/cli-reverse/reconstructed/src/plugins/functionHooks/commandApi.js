@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件 $.command.register/run 接口
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (20)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (20)
  * attribution: placement 20
  */
 import { randomUUID } from "crypto";
@@ -23,7 +23,7 @@ import {
   isCommandEnabled,
   findCommand,
 } from "../../commands.js";
-import { requireBoundSession, submitHoldRefusal, LATER } from "./sessionApi.js";
+import { requireBoundSession, checkPromptSubmitArgs, submitHoldRefusal, LATER } from "./sessionApi.js";
 import { currentSurfaceBinding } from "./surfaceBinding.js";
 import { loadedModuleArgs, hasModuleHookingSite } from "../hooksModules/loadedModuleFilters.js";
 import { classifyPluginOrigin } from "./panes.js";
@@ -34,7 +34,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { foldName as foldName_2 } from "../../utils/plugins/syncedItems.js";
 import { waitForCommandSettle } from "./commandRunDispatch.js";
 import { markSubmit, pruneAndMark } from "./promptSubmit.js";
-import { getCommandQueue, enqueueCommand } from "../../utils/messageQueueManager.js";
+import { getCommandQueue, enqueue } from "../../utils/messageQueueManager.js";
 import { mainAgentId } from "../../bootstrap/state.js";
 import { defaultDescribe } from "./coreHandlers.js";
 import { commandProvider } from "./providerTiers.js";
@@ -44,7 +44,7 @@ import { dropSyncedNameClashes } from "../../utils/commandPredicates.js";
 import { isLoneSecDefaultShortcut } from "./modAdmission.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3696484-3696676 placement
+//@ chunk-5xgkngpb.js:3792129-3792322 placement
 function describeCommandForPlugin(command) {
   let isPrompt = command.type === "prompt";
   let owner =
@@ -59,7 +59,7 @@ function describeCommandForPlugin(command) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3696676-3696756 placement
+//@ chunk-5xgkngpb.js:3792322-3792402 placement
 /**
  * builtin/plugin/user/MCP
  */
@@ -69,20 +69,20 @@ var COMMAND_SOURCE_LABELS = {
   user: "user's",
   mcp: "MCP server's",
 };
-//@ chunk-e6aww6q8.js:3696756-3696817 placement
+//@ chunk-5xgkngpb.js:3792402-3792463 placement
 /**
  * 列出插件可见命令
  */
 var listCommandsForPlugin = async (plugin) =>
   requireBoundSession(plugin, "$.command.list").commands().map(describeCommandForPlugin);
-//@ chunk-e6aww6q8.js:3696817-3696855 placement
+//@ chunk-5xgkngpb.js:3792463-3792501 placement
 /**
  * 刷新命令列表
  */
 function refreshCommands() {
   currentSurfaceBinding()?.refreshCommands();
 }
-//@ chunk-e6aww6q8.js:3696855-3697712 placement
+//@ chunk-5xgkngpb.js:3792501-3793362 placement
 /**
  * 插件 $.command.register：注册斜杠命令，名字已被占用时拒绝。
  */
@@ -126,7 +126,7 @@ async function commandRegisterForPlugin(spec, plugin) {
     command: spec.name,
   };
 }
-//@ chunk-e6aww6q8.js:3697750-3698378 placement
+//@ chunk-5xgkngpb.js:3793400-3794066 placement
 /**
  * 插件 $.command.run：在会话中执行一个已有的斜杠命令。
  */
@@ -145,13 +145,21 @@ function commandRunForPlugin(
     return Promise.reject(
       new HooksError(`${plugin}: $.command.run: no command named /${command} in this session`),
     );
-  let result = submitHoldRefusal(
-    {
-      plugin,
-      ...opts,
-    },
-    "$.command.run",
-  );
+  let result =
+    checkPromptSubmitArgs(
+      {
+        plugin,
+        ...opts,
+      },
+      "$.command.run",
+    ) ??
+    submitHoldRefusal(
+      {
+        plugin,
+        ...opts,
+      },
+      "$.command.run",
+    );
   if (result !== undefined) return Promise.reject(new HooksError(`${plugin}: $.command.run: ${result}`));
   let text = args === "" ? `/${command}` : `/${command} ${args}`;
   logForDebugging(`$.command.run (${plugin}): ${text.length} chars queued`);
@@ -159,7 +167,7 @@ function commandRunForPlugin(
   let extra = waitForCommandSettle(context, opts.origin);
   markSubmit(context, opts.rootEvent);
   pruneAndMark(context, opts.rootEvent, getCommandQueue());
-  enqueueCommand({
+  enqueue({
     agentId: mainAgentId(),
     mode: "prompt",
     value: text,
@@ -173,14 +181,14 @@ function commandRunForPlugin(
   });
   return extra;
 }
-//@ chunk-e6aww6q8.js:3698378-3698416 placement
+//@ chunk-5xgkngpb.js:3794066-3794104 placement
 /**
  * 清掉缓存的描述
  */
 function forgetCachedDescribe(name) {
   if (pluginCommandRegistry.forget(name)) refreshCommands();
 }
-//@ chunk-e6aww6q8.js:3698416-3698571 placement
+//@ chunk-5xgkngpb.js:3794104-3794259 placement
 /**
  * 按参数内容缓存异步描述结果（失败时清除并回退到同步默认），可整体清空。
  */
@@ -204,20 +212,20 @@ function createDescribeCache(version) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:3698571-3698591 placement
+//@ chunk-5xgkngpb.js:3794259-3794279 placement
 /**
  * 新建描述缓存
  */
 var makeDescribeCache = () => createDescribeCache(defaultDescribe);
-//@ chunk-e6aww6q8.js:3698591-3698605 placement
+//@ chunk-5xgkngpb.js:3794279-3794293 placement
 /**
  * 命令描述缓存
  */
 var describeCache; // deferred: uses makeDescribeCache of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3698591", () => {
+deferInit("chunk-5xgkngpb.js:3794279", () => {
   describeCache = makeDescribeCache();
 });
-//@ chunk-e6aww6q8.js:3698605-3698758 placement
+//@ chunk-5xgkngpb.js:3794293-3794446 placement
 var toCommandDescribeItem = (command) => ({
   command: getCommandName_2(command),
   description: command.description,
@@ -226,7 +234,7 @@ var toCommandDescribeItem = (command) => ({
   immediate: command.immediate === true,
   provider: commandProvider(command),
 });
-//@ chunk-e6aww6q8.js:3698758-3698914 placement
+//@ chunk-5xgkngpb.js:3794446-3794602 placement
 async function describeCommandWithHooks(command) {
   let commandMeta = toCommandDescribeItem(command);
   if (
@@ -241,7 +249,7 @@ async function describeCommandWithHooks(command) {
     await describeCache.of(commandMeta, () => NO_CORE_AT_CHAIN_BOTTOM("command.describe", {})(commandMeta)),
   );
 }
-//@ chunk-e6aww6q8.js:3698914-3699100 placement
+//@ chunk-5xgkngpb.js:3794602-3794788 placement
 function describeCommandLocally(command) {
   let fields = {
     description: command.description,
@@ -259,7 +267,7 @@ function describeCommandLocally(command) {
       )
     : command;
 }
-//@ chunk-e6aww6q8.js:3699100-3699357 placement
+//@ chunk-5xgkngpb.js:3794788-3795045 placement
 function applyCommandDescription(command, commandMeta, described) {
   return described.description === commandMeta.description &&
     described.argumentHint === commandMeta.argumentHint &&
@@ -275,12 +283,12 @@ function applyCommandDescription(command, commandMeta, described) {
         isHidden: described.isHidden,
       };
 }
-//@ chunk-e6aww6q8.js:3699357-3699389 placement
+//@ chunk-5xgkngpb.js:3795045-3795077 placement
 /**
  * 插件命令列表
  */
 var hookedCommands = () => pluginCommandRegistry.list().map(pluginCommandToCommand);
-//@ chunk-e6aww6q8.js:3699389-3699671 placement
+//@ chunk-5xgkngpb.js:3795077-3795359 placement
 /**
  * 命令集钩子器：把插件注册的命令并入命令列表，并在有 command.describe 钩子时改写描述。
  */
@@ -296,17 +304,17 @@ var COMMAND_SET_HOOKER = {
   },
   isHooked: () => pluginCommandRegistry.list().length > 0 || hasModuleHookingSite("command.describe"),
 };
-//@ chunk-e6aww6q8.js:3699671-3699692 placement
+//@ chunk-5xgkngpb.js:3795359-3795380 placement
 /**
  * 安装命令集合钩子器
  */
 var installCommandSetHooker = () => setCommandSetHooker(COMMAND_SET_HOOKER);
-//@ chunk-e6aww6q8.js:3699692-3699698 placement
+//@ chunk-5xgkngpb.js:3795380-3795386 placement
 // deferred: uses installCommandSetHooker of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3699692", () => {
+deferInit("chunk-5xgkngpb.js:3795380", () => {
   installCommandSetHooker();
 });
-//@ chunk-e6aww6q8.js:3699698-3699758 placement
+//@ chunk-5xgkngpb.js:3795386-3795446 placement
 /**
  * 钩子释放时清缓存
  */
@@ -314,7 +322,7 @@ function onHookReleased(turnHeld) {
   describeCache.forget();
   if (turnHeld !== "command.describe") refreshCommands();
 }
-//@ chunk-e6aww6q8.js:3699758-3699865 placement
+//@ chunk-5xgkngpb.js:3795446-3795553 placement
 /**
  * 释放所有等待指定被调插件的调用（以 undefined 结算）。
  */
@@ -328,9 +336,9 @@ var releaseWaitingCalls = (sentCalls, callee) =>
 export {
   releaseWaitingCalls,
   forgetCachedDescribe,
-  createDescribeCache,
   listCommandsForPlugin,
   commandRegisterForPlugin,
   commandRunForPlugin,
   onHookReleased,
+  createDescribeCache,
 };

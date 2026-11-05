@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。远程会话启动进度显示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-h93cnm7e.js (8)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-4b7tnq3g.js (8)
  * attribution: placement 8
  */
 import { init_react_production, useState } from "../../vendor/react/cjs/react.production.js";
@@ -33,24 +33,24 @@ import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.j
 import { Spinner } from "./Spinner.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-h93cnm7e.js:1888-1892 placement
+//@ chunk-4b7tnq3g.js:1903-1907 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-h93cnm7e.js:1888", () => {
+deferInit("chunk-4b7tnq3g.js:1903", () => {
   init_react_production();
 });
-//@ chunk-h93cnm7e.js:1892-1932 placement
+//@ chunk-4b7tnq3g.js:1907-1947 placement
 function selectRemoteBootstrap(state) {
   return state.remoteBootstrap;
 }
-//@ chunk-h93cnm7e.js:1932-1964 placement
+//@ chunk-4b7tnq3g.js:1947-1979 placement
 function nowMs() {
   return Date.now();
 }
-//@ chunk-h93cnm7e.js:1964-2006 placement
+//@ chunk-4b7tnq3g.js:1979-2021 placement
 function isFailedStatus(state) {
   return state.status === "failed";
 }
-//@ chunk-h93cnm7e.js:2006-3148 placement
+//@ chunk-4b7tnq3g.js:2021-3163 placement
 function RemoteBootstrapProgress() {
   let $ = useMemoCache(22);
   let appState = useAppState(selectRemoteBootstrap);
@@ -164,7 +164,7 @@ function RemoteBootstrapProgress() {
   } else tickIntervalElement = $[21];
   return tickIntervalElement;
 }
-//@ chunk-h93cnm7e.js:3148-4246 placement
+//@ chunk-4b7tnq3g.js:3163-4261 placement
 function BootstrapStepRow(props) {
   let $ = useMemoCache(18);
   let { step, label, hint, now, columns } = props;
@@ -263,7 +263,7 @@ function BootstrapStepRow(props) {
     }
   }
 }
-//@ chunk-h93cnm7e.js:4246-6345 placement
+//@ chunk-4b7tnq3g.js:4261-6360 placement
 function BootstrapStatusLine(props) {
   let $ = useMemoCache(42);
   let { status, label, annotation, detail, output, columns, detailOverflow } = props;
@@ -473,7 +473,7 @@ function BootstrapStatusLine(props) {
     }
   }
 }
-//@ chunk-h93cnm7e.js:6345-6706 placement (2.1.88 match: _temp, 0.696)
+//@ chunk-4b7tnq3g.js:6360-6721 placement (2.1.88 match: _temp, 0.699)
 /**
  * 按宽度截断显示的多行输出（暗色、缩进 6），无输出时不渲染；实际只被 RemoteBootstrapProgress 使用。
  */

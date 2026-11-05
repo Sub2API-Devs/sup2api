@@ -1,8 +1,8 @@
 /**
  * google-auth-library/build/src/auth/pluggable-auth-client.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: google-auth-library@10.6.2
- * pieces: chunk-na3pph4p.js (1)
+ * pieces: chunk-e8d3a8an.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
@@ -10,7 +10,7 @@ import { require_baseexternalclient } from "./baseexternalclient.js";
 import { require_executable_response } from "./executable-response.js";
 import { require_pluggable_auth_handler } from "./pluggable-auth-handler.js";
 
-//@ chunk-na3pph4p.js:132752-135197 cjs-fingerprint
+//@ chunk-e8d3a8an.js:132752-135197 cjs-fingerprint
 var require_pluggable_auth_client = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

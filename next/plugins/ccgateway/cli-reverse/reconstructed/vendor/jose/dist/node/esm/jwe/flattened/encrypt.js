@@ -1,8 +1,8 @@
 /**
  * jose/dist/node/esm/jwe/flattened/encrypt.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (3)
+ * pieces: chunk-pd6th42n.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
 import { __esm } from "../../../../../../../runtime/bun-runtime.js";
@@ -13,8 +13,8 @@ import { init_cek } from "../../lib/cek.js";
 import {
   init_content_encryption,
   init_content_encryption_2,
-  JWEInvalid,
-  JOSENotSupported,
+  JWEInvalid_3,
+  JOSENotSupported_3,
   generateIv,
 } from "../../../../webapi/lib/content_encryption.js";
 import { init_jwk_to_key } from "../../../../browser/runtime/jwk_to_key.js";
@@ -29,9 +29,9 @@ import { concat } from "../../lib/buffer_utils.js";
 import { deflate } from "../../../../browser/runtime/zlib.js";
 import { encrypt_default } from "../../../../browser/runtime/encrypt.js";
 
-//@ chunk-2tyrgda4.js:32529-32536 esm-layout
+//@ chunk-pd6th42n.js:32529-32536 esm-layout
 var encryptKeyManagement_default;
-//@ chunk-2tyrgda4.js:32536-32607 esm-layout
+//@ chunk-pd6th42n.js:32536-32607 esm-layout
 var init_encrypt_2 = __esm(() => {
   init_ecdhes();
   init_check_p2s();
@@ -45,7 +45,7 @@ var init_encrypt_2 = __esm(() => {
   init_decrypt_key_management();
   encryptKeyManagement_default = encryptKeyManagement;
 });
-//@ chunk-2tyrgda4.js:32607-36110 esm-fingerprint
+//@ chunk-pd6th42n.js:32607-36110 esm-fingerprint
 class FlattenedEncrypt {
   constructor(plaintext) {
     if (!(plaintext instanceof Uint8Array)) throw TypeError("plaintext must be an instance of Uint8Array");
@@ -87,11 +87,11 @@ class FlattenedEncrypt {
   }
   async encrypt(key, options) {
     if (!this._protectedHeader && !this._unprotectedHeader && !this._sharedUnprotectedHeader)
-      throw new JWEInvalid(
+      throw new JWEInvalid_3(
         "either setProtectedHeader, setUnprotectedHeader, or sharedUnprotectedHeader must be called before #encrypt()",
       );
     if (!validateCrit(this._protectedHeader, this._unprotectedHeader, this._sharedUnprotectedHeader))
-      throw new JWEInvalid(
+      throw new JWEInvalid_3(
         "JWE Protected, JWE Shared Unprotected and JWE Per-Recipient Header Parameter names must be disjoint",
       );
     let joseHeader = {
@@ -100,7 +100,7 @@ class FlattenedEncrypt {
       ...this._sharedUnprotectedHeader,
     };
     validateCritInit(
-      JWEInvalid,
+      JWEInvalid_3,
       new Map(),
       options === null || options === undefined ? undefined : options.crit,
       this._protectedHeader,
@@ -108,15 +108,15 @@ class FlattenedEncrypt {
     );
     if (joseHeader.zip !== undefined) {
       if (!this._protectedHeader || !this._protectedHeader.zip)
-        throw new JWEInvalid('JWE "zip" (Compression Algorithm) Header MUST be integrity protected');
+        throw new JWEInvalid_3('JWE "zip" (Compression Algorithm) Header MUST be integrity protected');
       if (joseHeader.zip !== "DEF")
-        throw new JOSENotSupported('Unsupported JWE "zip" (Compression Algorithm) Header Parameter value');
+        throw new JOSENotSupported_3('Unsupported JWE "zip" (Compression Algorithm) Header Parameter value');
     }
     let { alg, enc } = joseHeader;
     if (typeof alg !== "string" || !alg)
-      throw new JWEInvalid('JWE "alg" (Algorithm) Header Parameter missing or invalid');
+      throw new JWEInvalid_3('JWE "alg" (Algorithm) Header Parameter missing or invalid');
     if (typeof enc !== "string" || !enc)
-      throw new JWEInvalid('JWE "enc" (Encryption Algorithm) Header Parameter missing or invalid');
+      throw new JWEInvalid_3('JWE "enc" (Encryption Algorithm) Header Parameter missing or invalid');
     let encryptedKey;
     if (alg === "dir") {
       if (this._cek) throw TypeError("setContentEncryptionKey cannot be called when using Direct Encryption");

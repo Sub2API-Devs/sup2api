@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/sandbox-manager.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (92)
+ * pieces: chunk-qg41pqt6.js (92)
  * attribution: esm-fingerprint 73, esm-layout 19
  */
 import "fs";
@@ -109,7 +109,7 @@ import { buildMaskedEnvVars } from "./credential-mask-env.js";
 import { expandReadDenyGlobLinuxSteps } from "./read-deny-glob.js";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-fq0cr76a.js:703099-703511 esm-fingerprint
+//@ chunk-qg41pqt6.js:703683-704095 esm-fingerprint
 function listenInRange(server, doListen, range, exclude) {
   return new Promise((resolve, reject) => {
     let [lo, hi] = range ?? [0, 0];
@@ -140,7 +140,7 @@ function listenInRange(server, doListen, range, exclude) {
     tryNext();
   });
 }
-//@ chunk-fq0cr76a.js:817984-818075 esm-layout
+//@ chunk-qg41pqt6.js:819796-819887 esm-layout
 var config; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var configInstalls;
 var httpProxyServer;
@@ -163,14 +163,14 @@ var windowsFsRawInputs;
 var windowsWfpVerifiedFor;
 var windowsWfpVerifiedLoopback;
 var windowsCapableSrtWin;
-deferInit("chunk-fq0cr76a.js:817984", () => {
+deferInit("chunk-qg41pqt6.js:819796", () => {
   configInstalls = 0;
   cleanupRegistered = false;
   ownInstallLogged = false;
   resolvedAddressGuard = createResolvedAddressGuard();
   windowsCapableSrtWin = new Set();
 });
-//@ chunk-fq0cr76a.js:818075-818209 esm-fingerprint
+//@ chunk-qg41pqt6.js:819887-820021 esm-fingerprint
 function windowsSrtWinIdentity(srtWin) {
   let stat = "";
   try {
@@ -179,10 +179,10 @@ function windowsSrtWinIdentity(srtWin) {
   } catch {}
   return JSON.stringify([srtWin.exe, srtWin.prependArgs, stat]);
 }
-//@ chunk-fq0cr76a.js:818209-818361 esm-layout
+//@ chunk-qg41pqt6.js:820021-820173 esm-layout
 var WINDOWS_CAPABILITIES_WHY =
   "a session depends on (its read denies are written on the profile read grant's paths by srt-win, and kept grants are checked and removed there)";
-//@ chunk-fq0cr76a.js:818361-818485 esm-fingerprint
+//@ chunk-qg41pqt6.js:820173-820297 esm-fingerprint
 function assertWindowsSrtWinCapable(srtWin) {
   let id = windowsSrtWinIdentity(srtWin);
   if (windowsCapableSrtWin.has(id)) return;
@@ -194,10 +194,10 @@ function assertWindowsSrtWinCapable(srtWin) {
   if (missing !== undefined) throw windowsSrtWinOutdatedError(missing, WINDOWS_CAPABILITIES_WHY);
   windowsCapableSrtWin.add(id);
 }
-//@ chunk-fq0cr76a.js:818485-818498 esm-layout
+//@ chunk-qg41pqt6.js:820297-820310 esm-layout
 var windowsProfileRead;
 var windowsProfileReadWarnings = [];
-//@ chunk-fq0cr76a.js:818498-821106 esm-layout
+//@ chunk-qg41pqt6.js:820310-822918 esm-layout
 function windowsProfileReadWarningsOf(grant) {
   let list = (items) => items.map((i) => i.path).join(", ");
   let out = [];
@@ -269,19 +269,19 @@ function windowsProfileReadWarningsOf(grant) {
     });
   return out;
 }
-//@ chunk-fq0cr76a.js:821106-821153 esm-layout
+//@ chunk-qg41pqt6.js:822918-822965 esm-layout
 var srtWinSpawn; // deferred: uses SandboxViolationStore (./sandbox-violation-store.js) of its import cycle while loading; runs once the cycle is complete
 var sandboxViolationStore;
 var sentinelRegistry;
 var awsPairRegistry;
 var maskedFileStore;
-deferInit("chunk-fq0cr76a.js:821106", () => {
+deferInit("chunk-qg41pqt6.js:822918", () => {
   sandboxViolationStore = new SandboxViolationStore();
   sentinelRegistry = new SentinelRegistry();
   awsPairRegistry = new AwsPairRegistry();
   maskedFileStore = new MaskedFileStore();
 });
-//@ chunk-fq0cr76a.js:821153-821535 esm-fingerprint
+//@ chunk-qg41pqt6.js:822965-823347 esm-fingerprint
 function registerCleanup() {
   if (cleanupRegistered) return;
   let cleanupHandler = () => {
@@ -310,12 +310,12 @@ function registerCleanup() {
   process.once("SIGTERM", cleanupHandler);
   cleanupRegistered = true;
 }
-//@ chunk-fq0cr76a.js:821535-821604 esm-fingerprint
+//@ chunk-qg41pqt6.js:823347-823416 esm-fingerprint
 var WINDOWS_ACL_RELEASE_OK; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-fq0cr76a.js:821535", () => {
+deferInit("chunk-qg41pqt6.js:823347", () => {
   WINDOWS_ACL_RELEASE_OK = new Set(["revoked", "stillHeld", "restored", "alreadyOriginal"]);
 });
-//@ chunk-fq0cr76a.js:821604-821813 esm-fingerprint
+//@ chunk-qg41pqt6.js:823416-823625 esm-fingerprint
 function logWindowsAclOutcomes(kind, outcomes) {
   for (let e of outcomes ?? [])
     if (!WINDOWS_ACL_RELEASE_OK.has(e.status))
@@ -327,7 +327,7 @@ function logWindowsAclOutcomes(kind, outcomes) {
         },
       );
 }
-//@ chunk-fq0cr76a.js:821813-822422 esm-fingerprint
+//@ chunk-qg41pqt6.js:823625-824234 esm-fingerprint
 function windowsAclRestoreAllowed(revoke) {
   logWindowsAclOutcomes("grant revoke", revoke.outcomes);
   if (revoke.complete) return true;
@@ -344,7 +344,7 @@ function windowsAclRestoreAllowed(revoke) {
   );
   return false;
 }
-//@ chunk-fq0cr76a.js:822422-822511 esm-fingerprint
+//@ chunk-qg41pqt6.js:824234-824323 esm-fingerprint
 function releaseWindowsSessionAcls(sandboxUserSid, srtWin) {
   let o = {
     sandboxUserSid,
@@ -353,14 +353,14 @@ function releaseWindowsSessionAcls(sandboxUserSid, srtWin) {
   if (windowsAclRestoreAllowed(revokeWindowsAclChecked(o)))
     logWindowsAclOutcomes("deny restore", restoreWindowsAcl(o));
 }
-//@ chunk-fq0cr76a.js:822511-822534 esm-fingerprint
+//@ chunk-qg41pqt6.js:824323-824346 esm-fingerprint
 var MAX_COMMAND_TEXTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var commandTextsByKey;
-deferInit("chunk-fq0cr76a.js:822511", () => {
+deferInit("chunk-qg41pqt6.js:824323", () => {
   MAX_COMMAND_TEXTS = 1024;
   commandTextsByKey = new Map();
 });
-//@ chunk-fq0cr76a.js:822534-822713 esm-fingerprint
+//@ chunk-qg41pqt6.js:824346-824525 esm-fingerprint
 function registerCommandText(command, options) {
   let key = decodeSandboxedCommand(encodeSandboxedCommand(orDefault(command, options?.commandId)));
   let text = options?.commandText ?? command;
@@ -372,18 +372,18 @@ function registerCommandText(command, options) {
     commandTextsByKey.delete(oldest);
   }
 }
-//@ chunk-fq0cr76a.js:822713-822752 esm-layout
+//@ chunk-qg41pqt6.js:824525-824564 esm-layout
 function resolveCommandText(decodedKey) {
   return commandTextsByKey.get(decodedKey) ?? dedupeFingerprint(decodedKey);
 }
-//@ chunk-fq0cr76a.js:822752-822773 esm-layout
+//@ chunk-qg41pqt6.js:824564-824585 esm-layout
 var MIN_NETWORK_LISTS_COMMAND_ID_LENGTH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var commandNetworkListsByKey;
-deferInit("chunk-fq0cr76a.js:822752", () => {
+deferInit("chunk-qg41pqt6.js:824564", () => {
   MIN_NETWORK_LISTS_COMMAND_ID_LENGTH = 22;
   commandNetworkListsByKey = new Map();
 });
-//@ chunk-fq0cr76a.js:822773-823761 esm-fingerprint
+//@ chunk-qg41pqt6.js:824585-825573 esm-fingerprint
 function registerCommandNetworkLists(commandId, lists) {
   let key = typeof commandId === "string" ? decodeSandboxedCommand(encodeSandboxedCommand(commandId)) : "";
   if (key.replace(/\ufffd/g, "").length < MIN_NETWORK_LISTS_COMMAND_ID_LENGTH)
@@ -409,12 +409,12 @@ function registerCommandNetworkLists(commandId, lists) {
       },
     );
 }
-//@ chunk-fq0cr76a.js:823761-823829 esm-fingerprint
+//@ chunk-qg41pqt6.js:825573-825641 esm-fingerprint
 function unregisterCommandNetworkLists(commandId) {
   if (typeof commandId !== "string") return;
   commandNetworkListsByKey.delete(decodeSandboxedCommand(encodeSandboxedCommand(commandId)));
 }
-//@ chunk-fq0cr76a.js:823829-823983 esm-fingerprint
+//@ chunk-qg41pqt6.js:825641-825795 esm-fingerprint
 function recordProxyViolation(line, encodedCommand) {
   let command = encodedCommand ? resolveCommandText(decodeSandboxedCommand(encodedCommand)) : undefined;
   if (shouldIgnoreViolation(line, command, config?.ignoreViolations)) return;
@@ -425,33 +425,33 @@ function recordProxyViolation(line, encodedCommand) {
     timestamp: new Date(),
   });
 }
-//@ chunk-fq0cr76a.js:823983-824051 esm-fingerprint
+//@ chunk-qg41pqt6.js:825795-825863 esm-fingerprint
 function recordOutboundDeny(host, port, reason, encodedCommand) {
   recordProxyViolation(`deny network-outbound ${host}:${port} (${reason})`, encodedCommand);
 }
-//@ chunk-fq0cr76a.js:824051-824143 esm-fingerprint
+//@ chunk-qg41pqt6.js:825863-825955 esm-fingerprint
 var directLookup = (port, encodedCommand) => (hostname, options, callback) =>
   resolvedAddressGuard.lookupFor(port)(hostname, options, (err, address, family) => {
     if (isResolvedAddressDeniedError(err)) recordOutboundDeny(hostname, port, err.reason, encodedCommand);
     callback(err, address, family);
   });
-//@ chunk-fq0cr76a.js:824143-824223 esm-fingerprint
+//@ chunk-qg41pqt6.js:825955-826035 esm-fingerprint
 function redactUrlForViolation(url) {
   let cut = url.search(/[?#]/);
   return cut === -1 ? url : `${url.slice(0, cut + 1)}\u2026`;
 }
-//@ chunk-fq0cr76a.js:824223-824297 esm-fingerprint
+//@ chunk-qg41pqt6.js:826035-826109 esm-fingerprint
 function isDeclaredDenial(answer) {
   return answer === false || (typeof answer === "object" && answer !== null && answer.allow === false);
 }
-//@ chunk-fq0cr76a.js:824297-824435 esm-fingerprint
+//@ chunk-qg41pqt6.js:826109-826247 esm-fingerprint
 function denialReasonOf(answer) {
   if (typeof answer !== "object" || answer === null) return;
   let { allow, reason } = answer;
   if (allow !== false || typeof reason !== "string") return;
   return sanitizeDenialReason(reason) || undefined;
 }
-//@ chunk-fq0cr76a.js:824435-824582 esm-fingerprint
+//@ chunk-qg41pqt6.js:826247-826394 esm-fingerprint
 function deniedDomainReason(entry) {
   let reasons = config?.network.deniedDomainReasons ?? {};
   return (
@@ -459,7 +459,7 @@ function deniedDomainReason(entry) {
     "host is on the deny list"
   );
 }
-//@ chunk-fq0cr76a.js:824582-825857 esm-fingerprint
+//@ chunk-qg41pqt6.js:826394-827669 esm-fingerprint
 async function filterNetworkRequest(port, host, sandboxAskCallback, encodedCommand, explain) {
   let denied = (reason) => {
     recordOutboundDeny(host, port, reason, encodedCommand);
@@ -529,19 +529,19 @@ async function filterNetworkRequest(port, host, sandboxAskCallback, encodedComma
     return denied("permission prompt failed");
   }
 }
-//@ chunk-fq0cr76a.js:825857-825945 esm-fingerprint
+//@ chunk-qg41pqt6.js:827669-827757 esm-fingerprint
 function buildCredentialInjector() {
   if (!config?.credentials) return;
   return (headers, destHost) => {
     sentinelRegistry.substituteInHeaders(headers, destHost, matchesDomainPattern);
   };
 }
-//@ chunk-fq0cr76a.js:825945-826024 esm-fingerprint
+//@ chunk-qg41pqt6.js:827757-827836 esm-fingerprint
 function buildBodyCredentialInjector() {
   if (!config?.credentials) return;
   return (destHost) => sentinelRegistry.sentinelsForHost(destHost, matchesDomainPattern);
 }
-//@ chunk-fq0cr76a.js:826024-826125 esm-fingerprint
+//@ chunk-qg41pqt6.js:827836-827937 esm-fingerprint
 function buildSigv4Planner() {
   if (!config?.credentials) return;
   return (method, requestTarget, headers, destHost) =>
@@ -552,7 +552,7 @@ function buildSigv4Planner() {
       destHost,
     );
 }
-//@ chunk-fq0cr76a.js:826125-826318 esm-fingerprint
+//@ chunk-qg41pqt6.js:827937-828130 esm-fingerprint
 function getMitmSocketPath(host) {
   if (!config?.network.mitmProxy) return;
   let { socketPath, domains } = config.network.mitmProxy;
@@ -564,7 +564,7 @@ function getMitmSocketPath(host) {
     }
   return;
 }
-//@ chunk-fq0cr76a.js:826318-826824 esm-fingerprint
+//@ chunk-qg41pqt6.js:828130-828636 esm-fingerprint
 function shouldTerminateTLSForHost(host) {
   let excludeDomains = config?.network.tlsTerminate?.excludeDomains;
   if (!excludeDomains?.length) return true;
@@ -586,7 +586,7 @@ function shouldTerminateTLSForHost(host) {
   }
   return true;
 }
-//@ chunk-fq0cr76a.js:826824-828584 esm-fingerprint
+//@ chunk-qg41pqt6.js:828636-830254 esm-fingerprint
 async function startMuxProxyServer(sandboxAskCallback, portRange) {
   let injectCredentials = buildCredentialInjector();
   let injectBodyCredentials = buildBodyCredentialInjector();
@@ -653,20 +653,13 @@ async function startMuxProxyServer(sandboxAskCallback, portRange) {
     httpBackendPortRange: portRange,
   });
   let mux = muxProxyServer;
-  let backendPort = await mux.listenHttpBackend();
-  await listenInRange(
-    mux.server,
-    (p) => mux.server.listen(p, "127.0.0.1"),
-    portRange,
-    backendPort !== undefined ? new Set([backendPort]) : new Set(),
-  );
-  let muxPort = mux.getPort();
-  if (muxPort === undefined) throw Error("Failed to get mux proxy server port");
+  await mux.listenHttpBackend();
+  let muxPort = await mux.listenFrontEnd(portRange);
   mux.unref();
   logForDebugging_2(`Mux proxy (HTTP+SOCKS) listening on localhost:${muxPort}`);
   return muxPort;
 }
-//@ chunk-fq0cr76a.js:828584-828677 esm-layout
+//@ chunk-qg41pqt6.js:830254-830347 esm-layout
 async function initialize(runtimeConfig, sandboxAskCallback, enableLogMonitor = false, options) {
   try {
     await initializeSteps(runtimeConfig, sandboxAskCallback, enableLogMonitor, options);
@@ -676,7 +669,7 @@ async function initialize(runtimeConfig, sandboxAskCallback, enableLogMonitor = 
     throw error;
   }
 }
-//@ chunk-fq0cr76a.js:828677-834600 esm-fingerprint
+//@ chunk-qg41pqt6.js:830347-836276 esm-fingerprint
 async function initializeSteps(runtimeConfig, sandboxAskCallback, enableLogMonitor, options) {
   if (initializationPromise) {
     await initializationPromise;
@@ -961,17 +954,17 @@ async function initializeSteps(runtimeConfig, sandboxAskCallback, enableLogMonit
   })();
   await initializationPromise;
 }
-//@ chunk-fq0cr76a.js:834600-834693 esm-fingerprint
+//@ chunk-qg41pqt6.js:836276-836369 esm-fingerprint
 function isSupportedPlatform_2() {
   let platform = getPlatform_2();
   if (platform === "linux") return getWslVersion() !== "1";
   return platform === "macos" || platform === "windows";
 }
-//@ chunk-fq0cr76a.js:834693-834726 esm-layout
+//@ chunk-qg41pqt6.js:836369-836402 esm-layout
 function isSandboxingEnabled_2() {
   return config !== undefined;
 }
-//@ chunk-fq0cr76a.js:834726-835551 esm-fingerprint
+//@ chunk-qg41pqt6.js:836402-837227 esm-fingerprint
 function checkDependenciesCommon(ripgrepConfig) {
   if (!isSupportedPlatform_2())
     return {
@@ -1033,13 +1026,13 @@ function checkDependenciesCommon(ripgrepConfig) {
     },
   };
 }
-//@ chunk-fq0cr76a.js:835551-835627 esm-fingerprint
+//@ chunk-qg41pqt6.js:837227-837303 esm-fingerprint
 function checkDependencies(ripgrepConfig) {
   let common = checkDependenciesCommon(ripgrepConfig);
   if ("done" in common) return common.done;
   return checkWindowsDependencies(common.windows);
 }
-//@ chunk-fq0cr76a.js:835627-835782 esm-fingerprint
+//@ chunk-qg41pqt6.js:837303-837458 esm-fingerprint
 async function checkDependenciesAsync(ripgrepConfig) {
   if (getPlatform_2() === "linux" && !config?.seccomp?.argv0)
     await getApplySeccompBinaryPath_2(config?.seccomp?.applyPath);
@@ -1047,7 +1040,7 @@ async function checkDependenciesAsync(ripgrepConfig) {
   if ("done" in common) return common.done;
   return checkWindowsDependenciesAsync(common.windows);
 }
-//@ chunk-fq0cr76a.js:835782-836372 esm-fingerprint
+//@ chunk-qg41pqt6.js:837458-838048 esm-fingerprint
 function getCredentialRestrictions(credentials, allowedDomains) {
   if (!credentials)
     return {
@@ -1091,12 +1084,12 @@ function getCredentialRestrictions(credentials, allowedDomains) {
     degradeToDenyPaths,
   };
 }
-//@ chunk-fq0cr76a.js:836372-836474 esm-fingerprint
+//@ chunk-qg41pqt6.js:838048-838150 esm-fingerprint
 function getCredentialDenyReadPaths(credentials) {
   let files = credentials?.files ?? [];
   return [...new Set(files.filter((f) => f.mode === "deny").map((f) => f.path))];
 }
-//@ chunk-fq0cr76a.js:836474-836605 esm-fingerprint
+//@ chunk-qg41pqt6.js:838150-838281 esm-fingerprint
 function defaultWritePathsUnder({ denyRead, allowRead, credentials }) {
   let underCredentialDenies = getDefaultWritePaths(
     readRulesOf([], undefined, getCredentialDenyReadPaths(credentials)),
@@ -1105,7 +1098,7 @@ function defaultWritePathsUnder({ denyRead, allowRead, credentials }) {
     underCredentialDenies.includes(p),
   );
 }
-//@ chunk-fq0cr76a.js:836605-836793 esm-fingerprint
+//@ chunk-qg41pqt6.js:838281-838469 esm-fingerprint
 function* collectDenyPaths_2(denyRead = [], credentialRestrictions, expandGlob) {
   let listed = yield* expandDenyPaths("deny", denyRead, expandGlob);
   let credentialDenyOnly = yield* expandDenyPaths(
@@ -1121,7 +1114,7 @@ function* collectDenyPaths_2(denyRead = [], credentialRestrictions, expandGlob) 
     }),
   };
 }
-//@ chunk-fq0cr76a.js:836793-836979 esm-fingerprint
+//@ chunk-qg41pqt6.js:838469-838655 esm-fingerprint
 function* expandDenyPaths(kind, paths, expandGlob, literalPaths = []) {
   let literal = new Set(literalPaths);
   let resolved = new Set();
@@ -1133,7 +1126,7 @@ function* expandDenyPaths(kind, paths, expandGlob, literalPaths = []) {
   }
   return [...resolved];
 }
-//@ chunk-fq0cr76a.js:836979-837153 esm-fingerprint
+//@ chunk-qg41pqt6.js:838655-838829 esm-fingerprint
 function stripWriteGlobs(kind, paths) {
   return spelledOf(paths)
     .map((p) => removeTrailingGlobSuffix(p))
@@ -1145,7 +1138,7 @@ function stripWriteGlobs(kind, paths) {
       return true;
     });
 }
-//@ chunk-fq0cr76a.js:837153-837304 esm-fingerprint
+//@ chunk-qg41pqt6.js:838829-838980 esm-fingerprint
 function* expandAllowReadGlob(pattern, anchor) {
   let expanded = (yield* walkGlobPatternSteps(pattern, {
     anchor,
@@ -1155,7 +1148,7 @@ function* expandAllowReadGlob(pattern, anchor) {
   );
   return expanded;
 }
-//@ chunk-fq0cr76a.js:837304-837728 esm-fingerprint
+//@ chunk-qg41pqt6.js:838980-839404 esm-fingerprint
 function getFsReadConfig() {
   if (!config || config.filesystem.disabled)
     return {
@@ -1181,7 +1174,7 @@ function getFsReadConfig() {
     ...literalReadLists(config.filesystem.denyRead, config.filesystem.allowRead),
   };
 }
-//@ chunk-fq0cr76a.js:837728-838141 esm-fingerprint
+//@ chunk-qg41pqt6.js:839404-839817 esm-fingerprint
 function getFsWriteConfig() {
   if (!config)
     return {
@@ -1208,7 +1201,7 @@ function getFsWriteConfig() {
     ...literalWriteLists(config.filesystem.allowWrite, config.filesystem.denyWrite),
   };
 }
-//@ chunk-fq0cr76a.js:838141-838516 esm-fingerprint
+//@ chunk-qg41pqt6.js:839817-840192 esm-fingerprint
 function computeWindowsFsAccessSet(c, maskedFiles) {
   let fs = c.filesystem;
   if (fs?.disabled)
@@ -1240,14 +1233,14 @@ function computeWindowsFsAccessSet(c, maskedFiles) {
     ],
   });
 }
-//@ chunk-fq0cr76a.js:838516-838605 esm-fingerprint
+//@ chunk-qg41pqt6.js:840192-840281 esm-fingerprint
 function windowsMaskedFileDenies(credentialRestrictions) {
   return [
     ...credentialRestrictions.maskedFileBinds.map((b) => b.realPath),
     ...credentialRestrictions.degradeToDenyPaths,
   ];
 }
-//@ chunk-fq0cr76a.js:838605-838847 esm-fingerprint
+//@ chunk-qg41pqt6.js:840281-840523 esm-fingerprint
 function rawWindowsFsInputs(c) {
   return {
     disabled: c.filesystem.disabled ?? false,
@@ -1258,7 +1251,7 @@ function rawWindowsFsInputs(c) {
     credFiles: getCredentialDenyReadPaths(c.credentials),
   };
 }
-//@ chunk-fq0cr76a.js:838847-839040 esm-fingerprint
+//@ chunk-qg41pqt6.js:840523-840716 esm-fingerprint
 function sameRawWindowsFsInputs(a, b) {
   return (
     a.disabled === b.disabled &&
@@ -1269,19 +1262,19 @@ function sameRawWindowsFsInputs(a, b) {
     samePathEntries(a.credFiles, b.credFiles)
   );
 }
-//@ chunk-fq0cr76a.js:839040-839088 esm-layout
+//@ chunk-qg41pqt6.js:840716-840764 esm-layout
 function sameWindowsStampSet(newConfig) {
   return (
     windowsFsRawInputs !== undefined &&
     sameRawWindowsFsInputs(windowsFsRawInputs, rawWindowsFsInputs(newConfig))
   );
 }
-//@ chunk-fq0cr76a.js:839088-839489 esm-layout
+//@ chunk-qg41pqt6.js:840764-841165 esm-layout
 function windowsLoopbackModeChanged(wanted, verified) {
   let mode = (open) => (open ? "open" : "closed");
   return `network.allowLocalBinding asks for loopback ${mode(wanted)}, but this session verified the network fence with loopback ${mode(verified)}. On Windows the loopback mode is fixed by the install and checked at initialize(): it cannot change for one command or through updateConfig(). Call reset() then initialize() with the new value; the installed mode must match it.`;
 }
-//@ chunk-fq0cr76a.js:839489-839632 esm-fingerprint
+//@ chunk-qg41pqt6.js:841165-841308 esm-fingerprint
 function getNetworkRestrictionConfig() {
   if (!config) return {};
   let allowedHosts = config.network.allowedDomains;
@@ -1293,39 +1286,39 @@ function getNetworkRestrictionConfig() {
     }),
   };
 }
-//@ chunk-fq0cr76a.js:839632-839683 esm-fingerprint
+//@ chunk-qg41pqt6.js:841308-841359 esm-fingerprint
 function getAllowUnixSockets() {
   return config?.network?.allowUnixSockets;
 }
-//@ chunk-fq0cr76a.js:839683-839737 esm-fingerprint
+//@ chunk-qg41pqt6.js:841359-841413 esm-fingerprint
 function getAllowAllUnixSockets() {
   return config?.network?.allowAllUnixSockets;
 }
-//@ chunk-fq0cr76a.js:839737-839789 esm-fingerprint
+//@ chunk-qg41pqt6.js:841413-841465 esm-fingerprint
 function getAllowLocalBinding() {
   return config?.network?.allowLocalBinding;
 }
-//@ chunk-fq0cr76a.js:839789-839839 esm-fingerprint
+//@ chunk-qg41pqt6.js:841465-841515 esm-fingerprint
 function getAllowMachLookup() {
   return config?.network?.allowMachLookup;
 }
-//@ chunk-fq0cr76a.js:839839-839881 esm-fingerprint
+//@ chunk-qg41pqt6.js:841515-841557 esm-fingerprint
 function getIgnoreViolations() {
   return config?.ignoreViolations;
 }
-//@ chunk-fq0cr76a.js:839881-839932 esm-fingerprint
+//@ chunk-qg41pqt6.js:841557-841608 esm-fingerprint
 function getEnableWeakerNestedSandbox() {
   return config?.enableWeakerNestedSandbox;
 }
-//@ chunk-fq0cr76a.js:839932-839986 esm-fingerprint
+//@ chunk-qg41pqt6.js:841608-841662 esm-fingerprint
 function getEnableWeakerNetworkIsolation() {
   return config?.enableWeakerNetworkIsolation;
 }
-//@ chunk-fq0cr76a.js:839986-840028 esm-fingerprint
+//@ chunk-qg41pqt6.js:841662-841704 esm-fingerprint
 function getAllowAppleEvents() {
   return config?.allowAppleEvents;
 }
-//@ chunk-fq0cr76a.js:840028-840077 esm-fingerprint
+//@ chunk-qg41pqt6.js:841704-841753 esm-fingerprint
 function getRipgrepConfig() {
   return (
     config?.ripgrep ?? {
@@ -1333,43 +1326,43 @@ function getRipgrepConfig() {
     }
   );
 }
-//@ chunk-fq0cr76a.js:840077-840130 esm-fingerprint
+//@ chunk-qg41pqt6.js:841753-841806 esm-fingerprint
 function getMandatoryDenySearchDepth() {
   return config?.mandatoryDenySearchDepth ?? 3;
 }
-//@ chunk-fq0cr76a.js:840130-840186 esm-fingerprint
+//@ chunk-qg41pqt6.js:841806-841862 esm-fingerprint
 function getAllowGitConfig() {
   return config?.filesystem?.allowGitConfig ?? false;
 }
-//@ chunk-fq0cr76a.js:840186-840272 esm-fingerprint
+//@ chunk-qg41pqt6.js:841862-841948 esm-fingerprint
 function getGitSafeDirectories(customConfig) {
   return [...(config?.git?.safeDirectories ?? []), ...(customConfig?.git?.safeDirectories ?? [])];
 }
-//@ chunk-fq0cr76a.js:840272-840305 esm-fingerprint
+//@ chunk-qg41pqt6.js:841948-841981 esm-fingerprint
 function getSeccompConfig() {
   return config?.seccomp;
 }
-//@ chunk-fq0cr76a.js:840305-840329 esm-layout
+//@ chunk-qg41pqt6.js:841981-842005 esm-layout
 function getProxyAuthToken() {
   return proxyAuthToken;
 }
-//@ chunk-fq0cr76a.js:840329-840368 esm-fingerprint
+//@ chunk-qg41pqt6.js:842005-842044 esm-fingerprint
 function getProxyPort() {
   return managerContext?.httpProxyPort;
 }
-//@ chunk-fq0cr76a.js:840368-840408 esm-fingerprint
+//@ chunk-qg41pqt6.js:842044-842084 esm-fingerprint
 function getSocksProxyPort() {
   return managerContext?.socksProxyPort;
 }
-//@ chunk-fq0cr76a.js:840408-840461 esm-fingerprint
+//@ chunk-qg41pqt6.js:842084-842137 esm-fingerprint
 function getLinuxHttpSocketPath() {
   return managerContext?.linuxBridge?.httpSocketPath;
 }
-//@ chunk-fq0cr76a.js:840461-840515 esm-fingerprint
+//@ chunk-qg41pqt6.js:842137-842191 esm-fingerprint
 function getLinuxSocksSocketPath() {
   return managerContext?.linuxBridge?.socksSocketPath;
 }
-//@ chunk-fq0cr76a.js:840515-840614 esm-layout
+//@ chunk-qg41pqt6.js:842191-842290 esm-layout
 async function waitForNetworkInitialization() {
   if (!config) return false;
   if (initializationPromise)
@@ -1381,18 +1374,18 @@ async function waitForNetworkInitialization() {
     }
   return managerContext !== undefined;
 }
-//@ chunk-fq0cr76a.js:840614-840657 esm-layout
+//@ chunk-qg41pqt6.js:842290-842333 esm-layout
 var RESTARTS_IN_TURNS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var REPLACED;
 var walking;
 var waitingToWalk;
-deferInit("chunk-fq0cr76a.js:840614", () => {
+deferInit("chunk-qg41pqt6.js:842290", () => {
   RESTARTS_IN_TURNS = 2;
   REPLACED = Symbol("replaced");
   walking = false;
   waitingToWalk = [];
 });
-//@ chunk-fq0cr76a.js:840657-840963 esm-fingerprint
+//@ chunk-qg41pqt6.js:842333-842639 esm-fingerprint
 async function waitToWalk(signal) {
   if (walking) {
     signal?.throwIfAborted();
@@ -1421,11 +1414,11 @@ async function waitToWalk(signal) {
     else walking = false;
   };
 }
-//@ chunk-fq0cr76a.js:840963-841015 esm-layout
+//@ chunk-qg41pqt6.js:842639-842691 esm-layout
 async function wrapWithSandbox(command, binShell, customConfig, abortSignal, options) {
   return wrapWithSandboxAgain(0, command, binShell, customConfig, abortSignal, options);
 }
-//@ chunk-fq0cr76a.js:841015-841112 esm-layout
+//@ chunk-qg41pqt6.js:842691-842788 esm-layout
 async function wrapWithSandboxAgain(restarts, command, binShell, customConfig, abortSignal, options) {
   let walkEnded = await waitToWalk(abortSignal);
   try {
@@ -1442,7 +1435,7 @@ async function wrapWithSandboxAgain(restarts, command, binShell, customConfig, a
     walkEnded();
   }
 }
-//@ chunk-fq0cr76a.js:841112-844848 esm-fingerprint
+//@ chunk-qg41pqt6.js:842788-846536 esm-fingerprint
 async function wrapWithSandboxOnce(
   walkEnded,
   restarts,
@@ -1649,7 +1642,7 @@ async function wrapWithSandboxOnce(
       throw Error(`Sandbox configuration is not supported on platform: ${platform}`);
   }
 }
-//@ chunk-fq0cr76a.js:844848-846802 esm-fingerprint
+//@ chunk-qg41pqt6.js:846536-848497 esm-fingerprint
 async function wrapWithSandboxArgv_2(command, binShell, customConfig, abortSignal, cwd, options) {
   if (getPlatform_2() === "windows") {
     if (options?.denyAllNetwork === true) throw Error("denyAllNetwork is not supported on Windows");
@@ -1748,11 +1741,11 @@ async function wrapWithSandboxArgv_2(command, binShell, customConfig, abortSigna
     env: process.env,
   };
 }
-//@ chunk-fq0cr76a.js:846802-846826 esm-layout
+//@ chunk-qg41pqt6.js:848497-848521 esm-layout
 function getConfig() {
   return config;
 }
-//@ chunk-fq0cr76a.js:846826-847521 esm-fingerprint
+//@ chunk-qg41pqt6.js:848521-849216 esm-fingerprint
 function updateConfig(newConfig) {
   if (getPlatform_2() === "windows" && config && !sameWindowsStampSet(newConfig))
     logForDebugging_2(
@@ -1791,13 +1784,13 @@ function updateConfig(newConfig) {
   parentProxy = resolveParentProxy(newConfig.network.parentProxy);
   logForDebugging_2("Sandbox configuration updated");
 }
-//@ chunk-fq0cr76a.js:847521-847540 esm-layout
+//@ chunk-qg41pqt6.js:849216-849235 esm-layout
 function cleanupAfterCommand() {
   cleanupBwrapMountPoints();
 }
-//@ chunk-fq0cr76a.js:847540-847552 esm-fingerprint
+//@ chunk-qg41pqt6.js:849235-849247 esm-fingerprint
 var BRIDGE_EXIT_TIMEOUT_MS = 1500;
-//@ chunk-fq0cr76a.js:847552-848167 esm-fingerprint
+//@ chunk-qg41pqt6.js:849247-849862 esm-fingerprint
 function killBridgeProcess(proc, label) {
   if (!proc.pid || proc.exitCode !== null || proc.signalCode !== null) return Promise.resolve();
   try {
@@ -1836,7 +1829,7 @@ function killBridgeProcess(proc, label) {
     timer.unref?.();
   });
 }
-//@ chunk-fq0cr76a.js:848167-848409 esm-fingerprint
+//@ chunk-qg41pqt6.js:849862-850104 esm-fingerprint
 function forceCloseHttpServer(server) {
   return new Promise((resolve) => {
     if (typeof server.closeAllConnections === "function") server.closeAllConnections();
@@ -1849,7 +1842,7 @@ function forceCloseHttpServer(server) {
     });
   });
 }
-//@ chunk-fq0cr76a.js:848409-849445 esm-fingerprint
+//@ chunk-qg41pqt6.js:850104-851140 esm-fingerprint
 async function reset() {
   if (windowsFsStampedSet && windowsFsSbUserSid) releaseWindowsSessionAcls(windowsFsSbUserSid, srtWinSpawn);
   windowsFsStampedSet = undefined;
@@ -1936,11 +1929,11 @@ async function reset() {
   commandNetworkListsByKey.clear();
   maskedFileStore.dispose();
 }
-//@ chunk-fq0cr76a.js:849445-849469 esm-layout
+//@ chunk-qg41pqt6.js:851140-851164 esm-layout
 function getSandboxViolationStore() {
   return sandboxViolationStore;
 }
-//@ chunk-fq0cr76a.js:849469-849667 esm-fingerprint
+//@ chunk-qg41pqt6.js:851164-851362 esm-fingerprint
 function annotateStderrWithSandboxFailures(command, stderr) {
   if (!config) return stderr;
   let violations = sandboxViolationStore.getViolationsForCommand(command);
@@ -1951,7 +1944,7 @@ function annotateStderrWithSandboxFailures(command, stderr) {
   annotated += "</sandbox_violations>";
   return annotated;
 }
-//@ chunk-fq0cr76a.js:849667-850081 esm-fingerprint
+//@ chunk-qg41pqt6.js:851362-851776 esm-fingerprint
 function getLinuxGlobPatternWarnings() {
   if (getPlatform_2() !== "linux" || !config || config.filesystem.disabled) return [];
   let globPatterns = [];
@@ -1972,7 +1965,7 @@ function getLinuxGlobPatternWarnings() {
   }
   return globPatterns;
 }
-//@ chunk-fq0cr76a.js:850081-851013 esm-fingerprint
+//@ chunk-qg41pqt6.js:851776-852708 esm-fingerprint
 var SandboxManager_2 = {
   initialize,
   isSupportedPlatform: isSupportedPlatform_2,

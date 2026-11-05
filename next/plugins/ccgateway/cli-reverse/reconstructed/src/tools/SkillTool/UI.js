@@ -3,10 +3,10 @@
  *
  * Skill 调用/进度/结果渲染
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/SkillTool/UI.tsx
- * pieces: chunk-8ndmcarc.js (3), chunk-a5k9jscj.js (1)
- * attribution: affinity 1, fingerprint 3
+ * pieces: chunk-6kmb8me5.js (1), chunk-p5q1xrhb.js (3)
+ * attribution: fingerprint 3, affinity 1
  */
 import {
   jsxProd_default,
@@ -21,7 +21,7 @@ import { buildSubagentLookups } from "../../utils/messages.js";
 import { SubAgentProvider, OverflowHint } from "../../components/CtrlOToExpand.js";
 import { hasAutoModeBlockedToolResult } from "../../components/messages/teamMemCollapsed.js";
 
-//@ chunk-a5k9jscj.js:3304-3587 fingerprint (2.1.88 match: renderToolUseMessage, 0.607)
+//@ chunk-6kmb8me5.js:3516-3799 fingerprint (2.1.88 match: renderToolUseMessage, 0.607)
 /**
  * Skill 调用的单行显示：skill 名（旧 commands 目录来源加 /），有队友作者时附 "· by 作者"。
  */
@@ -34,12 +34,12 @@ function renderToolUseMessage({ skill }, { commands, teammateAuthorOf }) {
   let author = teammateAuthorOf?.(command?.type === "prompt" ? command.source : undefined, skillName) ?? null;
   return author ? `${displayName} \xB7 by ${author}` : displayName;
 }
-//@ chunk-8ndmcarc.js:16633-16740 affinity (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince(result) {
+//@ chunk-p5q1xrhb.js:17866-17973 affinity
+function hasToolUseBlock(result) {
   let firstBlock = result.data.message.message.content[0];
   return firstBlock?.type === "tool_use" || firstBlock?.type === "tool_result";
 }
-//@ chunk-8ndmcarc.js:16740-17181 fingerprint (2.1.88 match: renderToolResultMessage, 0.915)
+//@ chunk-p5q1xrhb.js:17973-18414 fingerprint (2.1.88 match: renderToolResultMessage, 0.915)
 /**
  * Skill 结果渲染：forked 显示 Done/Running in the background；inline 显示 "Successfully loaded skill · N tools allowed · 模型"。
  */
@@ -68,12 +68,12 @@ function renderToolResultMessage(output) {
     }),
   });
 }
-//@ chunk-8ndmcarc.js:17181-17835 fingerprint (2.1.88 match: renderToolUseProgressMessage, 0.846)
+//@ chunk-p5q1xrhb.js:18414-19068 fingerprint (2.1.88 match: renderToolUseProgressMessage, 0.862)
 /**
  * Skill/子代理进度渲染：非 verbose 只显示最近几条工具调用，折叠其余并显示隐藏数量。
  */
 function renderToolUseProgressMessage_3(progressMessages, { tools, verbose }) {
-  let progressMessages_2 = progressMessages.filter(countToolCallsSince);
+  let progressMessages_2 = progressMessages.filter(hasToolUseBlock);
   if (!progressMessages_2.length)
     return jsxProd_default(MessageResponse, {
       height: 1,

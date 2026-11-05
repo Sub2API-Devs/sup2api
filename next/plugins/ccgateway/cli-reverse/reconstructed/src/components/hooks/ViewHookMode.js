@@ -3,12 +3,11 @@
  *
  * /hooks 单个 hook 详情：命令/脚本、来源、插件、statusMessage，云会话中是否会运行。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/hooks/ViewHookMode.tsx
- * pieces: chunk-bajxb7bf.js (3), chunk-mthxbav8.js (1)
+ * pieces: chunk-5tpnqyt5.js (3), chunk-xrwmcqkn.js (1)
  * attribution: fingerprint 3, affinity 1
  */
-import { scriptHookDisplayLabel } from "../../utils/hooks/scriptHooks.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { escapeControlCharsForDisplay, escapeControlChars } from "../../utils/stringUtils.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
@@ -27,24 +26,9 @@ import { FlexDirectionRow } from "../design-system/Table.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { DiffFrame } from "../FileEditToolDiff.js";
 import { Dialog } from "../design-system/Dialog.js";
+import { hookInputKey } from "../../utils/hooks.js";
 
-//@ chunk-mthxbav8.js:4203-4469 fingerprint (2.1.88 match: getContentFieldValue, 0.677)
-function getContentFieldValue(config) {
-  switch (config.type) {
-    case "command":
-      return config.args === undefined ? config.command : [config.command, ...config.args].join(" ");
-    case "http":
-      return config.url;
-    case "prompt":
-    case "agent":
-      return config.prompt;
-    case "mcp_tool":
-      return `${config.server}/${config.tool}`;
-    case "script":
-      return config.file ?? scriptHookDisplayLabel(config.script ?? "");
-  }
-}
-//@ chunk-bajxb7bf.js:44720-46942 fingerprint (2.1.88 match: ViewHookMode, 0.41)
+//@ chunk-5tpnqyt5.js:46216-48441 fingerprint (2.1.88 match: ViewHookMode, 0.408)
 function ViewHookMode(props) {
   let $ = useMemoCache(45);
   let { selectedHook, eventSupportsMatcher, onCancel } = props;
@@ -251,7 +235,7 @@ function ViewHookMode(props) {
   } else t16 = $[44];
   return t16;
 }
-//@ chunk-bajxb7bf.js:46942-47171 affinity
+//@ chunk-5tpnqyt5.js:48441-48670 affinity
 function hookTypeLabel(config) {
   switch (config.type) {
     case "command":
@@ -268,7 +252,7 @@ function hookTypeLabel(config) {
       return "Script hook";
   }
 }
-//@ chunk-bajxb7bf.js:47988-48218 fingerprint (2.1.88 match: getContentFieldLabel, 0.684)
+//@ chunk-5tpnqyt5.js:49487-49717 fingerprint (2.1.88 match: getContentFieldLabel, 0.685)
 function getContentFieldLabel(config) {
   switch (config.type) {
     case "command":
@@ -283,6 +267,20 @@ function getContentFieldLabel(config) {
       return "MCP tool";
     case "script":
       return config.file !== undefined ? "Script file" : "Script";
+  }
+}
+//@ chunk-xrwmcqkn.js:26909-27065 fingerprint (2.1.88 match: getContentFieldValue, 0.86)
+function getContentFieldValue(config) {
+  switch (config.type) {
+    case "command":
+      return config.command;
+    case "http":
+      return config.url;
+    case "prompt":
+    case "agent":
+      return config.prompt;
+    case "mcp_tool":
+      return hookInputKey(config);
   }
 }
 export { ViewHookMode, getContentFieldValue };

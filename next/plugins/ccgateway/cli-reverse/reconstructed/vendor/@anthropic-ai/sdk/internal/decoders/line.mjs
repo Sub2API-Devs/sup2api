@@ -1,14 +1,14 @@
 /**
  * @anthropic-ai/sdk/internal/decoders/line.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (2)
+ * pieces: chunk-vn3g7zt8.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { __classPrivateFieldSet, __classPrivateFieldGet } from "../tslib.mjs";
 import { encodeUTF8, concatBytes, decodeUtf8 } from "../utils/bytes.mjs";
 
-//@ chunk-hwmsct5x.js:27813-28807 esm-layout
+//@ chunk-vn3g7zt8.js:28184-29178 esm-layout
 var _LineDecoder_buffer;
 var _LineDecoder_carriageReturnIndex;
 var LineDecoder = (() => {
@@ -104,7 +104,7 @@ var LineDecoder = (() => {
   LineDecoder.NEWLINE_REGEXP = /\r\n|[\n\r]/g;
   return LineDecoder;
 })();
-//@ chunk-hwmsct5x.js:28807-28977 esm-fingerprint
+//@ chunk-vn3g7zt8.js:29178-29348 esm-fingerprint
 function findNewlineIndex(buffer, startIndex) {
   for (let i = startIndex ?? 0; i < buffer.length; i++) {
     if (buffer[i] === 10)

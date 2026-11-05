@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Artifact 置顶（pin/unpin）、共享（org/people/公开，经云中继）与版本列表
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-easqy8j1.js (34)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fgpd7qrh.js (34)
  * attribution: placement 34
  */
 import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
@@ -44,29 +44,30 @@ import {
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { VER_SHAPE } from "./ownPublishes.js";
-import { uniq, count } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
+import { countWhere } from "../../utils/collections.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-easqy8j1.js:1957-2072 placement
+//@ chunk-fgpd7qrh.js:1956-2071 placement
 function isArtifactPinEnabled() {
   let remote = isRemoteManagedEnvironment();
   if (env.CLAUDE_CODE_REMOTE && !remote) return false;
   return (env.CLAUDE_CODE_ARTIFACT_PIN ?? true) && !(remote && isActingAsBot());
 }
-//@ chunk-easqy8j1.js:2072-2261 placement
+//@ chunk-fgpd7qrh.js:2071-2260 placement
 /**
  * 云会话里还不能置顶 artifact 时返回给模型的说明（没有改动、不要重试、用户可在 claude.ai 菜单里操作）。
  */
 var PIN_UNAVAILABLE_IN_CLOUD =
   "Pinning artifacts isn't available in this cloud session yet, so nothing changed; do not retry here. The user can pin or unpin it themselves from the artifact's menu on claude.ai.";
-//@ chunk-easqy8j1.js:2261-2295 placement
+//@ chunk-fgpd7qrh.js:2260-2294 placement
 /**
  * 导出函数 `isRelayUnavailableForPins`：返回 mn() && !frameVerbRelayActive()。
  */
 function isRelayUnavailableForPins() {
   return isRemoteManagedEnvironment() && !frameVerbRelayActive();
 }
-//@ chunk-easqy8j1.js:2295-2382 placement
+//@ chunk-fgpd7qrh.js:2294-2381 placement
 var RELAY_UNAVAILABLE_RESULT = {
   ok: false,
   reason: "relay-unavailable",
@@ -75,7 +76,7 @@ var RELAY_UNAVAILABLE_RESULT = {
   fromFrame: false,
 };
 var MAX_PINS_RESPONSE_BYTES = 65536;
-//@ chunk-easqy8j1.js:2382-2504 placement
+//@ chunk-fgpd7qrh.js:2381-2503 placement
 function getShareEventProps(share, grant, wire) {
   return {
     source: share.source === "tool" ? lit("tool") : lit("dialog"),
@@ -83,7 +84,7 @@ function getShareEventProps(share, grant, wire) {
     wire,
   };
 }
-//@ chunk-easqy8j1.js:2504-4582 placement
+//@ chunk-fgpd7qrh.js:2503-4581 placement
 /**
  * 置顶/取消置顶 Artifact（/api/frame/favorite/），云会话走中继。
  */
@@ -198,10 +199,10 @@ async function setArtifactPinned(
     err: null,
   };
 }
-//@ chunk-easqy8j1.js:4582-4626 placement
+//@ chunk-fgpd7qrh.js:4581-4625 placement
 var ACCOUNT_SETTINGS_PATH = "/api/oauth/account/settings";
 var MAX_ORG_PINS = 100;
-//@ chunk-easqy8j1.js:4626-5109 placement
+//@ chunk-fgpd7qrh.js:4625-5108 placement
 async function fetchOrgShareSettings(credentials) {
   let organizationUuid = (await getGatewayAccountInfoAsync(credentials))?.organizationUuid;
   if (!organizationUuid) return;
@@ -231,7 +232,7 @@ async function fetchOrgShareSettings(credentials) {
     requestOptions,
   );
 }
-//@ chunk-easqy8j1.js:5109-5332 placement
+//@ chunk-fgpd7qrh.js:5108-5331 placement
 /**
  * 版本标签字段的 schema：按 Unicode 码点（而非 UTF-16 长度）检查最大长度，超长时报 too_big。
  */
@@ -252,7 +253,7 @@ function versionLabelSchema() {
   };
   return stringSchema().check(maxSize);
 }
-//@ chunk-easqy8j1.js:5332-5458 placement
+//@ chunk-fgpd7qrh.js:5331-5457 placement
 /**
  * Artifact 删除是否开启：远程环境下仅特定条件允许；否则看 CLAUDE_CODE_ARTIFACT_DELETE，未设置时看 tengu_cobalt_plinth_alder 开关。
  */
@@ -262,30 +263,30 @@ function isArtifactDeleteEnabled() {
     env.CLAUDE_CODE_ARTIFACT_DELETE ?? getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth_alder", false)
   );
 }
-//@ chunk-easqy8j1.js:5458-5504 placement
+//@ chunk-fgpd7qrh.js:5457-5503 placement
 var ORG_READ_MODES = ["org", "people"];
 var ORG_ACCESS_MODES = ["view", "comment"];
-//@ chunk-easqy8j1.js:5504-5551 placement
+//@ chunk-fgpd7qrh.js:5503-5550 placement
 /**
  * 导出函数 `isOrgReadMode`：参数 e，返回 e === "org" || e === "people"。
  */
 function isOrgReadMode(mode) {
   return mode === "org" || mode === "people";
 }
-//@ chunk-easqy8j1.js:5551-5600 placement
+//@ chunk-fgpd7qrh.js:5550-5599 placement
 /**
  * 导出函数 `isOrgAccessMode`：参数 e，返回 e === "view" || e === "comment"。
  */
 function isOrgAccessMode(mode) {
   return mode === "view" || mode === "comment";
 }
-//@ chunk-easqy8j1.js:5600-5679 placement
+//@ chunk-fgpd7qrh.js:5599-5678 placement
 /**
  * 导出常量或表 `MAX_SHARE_TARGETS`：值为 50, Le = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/。
  */
 var MAX_SHARE_TARGETS = 50;
 var UUID_HEX_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-//@ chunk-easqy8j1.js:5679-5784 placement
+//@ chunk-fgpd7qrh.js:5678-5783 placement
 /**
  * 把输入去空白、转小写，符合格式时返回，否则 null（用于共享对象）。
  */
@@ -294,13 +295,13 @@ function normalizeShareEmail(userUuid) {
   let lower = userUuid.trim().toLowerCase();
   return UUID_HEX_RE.test(lower) ? lower : null;
 }
-//@ chunk-easqy8j1.js:5784-6241 placement
+//@ chunk-fgpd7qrh.js:5783-6240 placement
 /**
  * 共享授权（share grant）schema：读/写授权、评论者与查看者、组织只读级别、owner 与版本等字段。
  */
 var ShareGrantSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var shareGrantResponseSchema;
-deferInit("chunk-easqy8j1.js:5784", () => {
+deferInit("chunk-fgpd7qrh.js:5783", () => {
   ShareGrantSchema = DoctorLazy(() =>
     objectSchema({
       mode: stringSchema(),
@@ -327,22 +328,22 @@ deferInit("chunk-easqy8j1.js:5784", () => {
     }),
   );
 });
-//@ chunk-easqy8j1.js:6241-6304 placement
+//@ chunk-fgpd7qrh.js:6240-6303 placement
 function orgReadLevelFor(role) {
   return role.orgReadLevel === "view" ? "view" : "comment";
 }
-//@ chunk-easqy8j1.js:6304-6393 placement
+//@ chunk-fgpd7qrh.js:6303-6392 placement
 function sharedHashOrUndefined(hash) {
   let { shared } = hash;
   return typeof shared === "string" && (shared === "" || VER_SHAPE.test(shared)) ? shared : undefined;
 }
-//@ chunk-easqy8j1.js:6393-6655 placement
+//@ chunk-fgpd7qrh.js:6392-6654 placement
 /**
  * 无法从对话里把整个组织设为只读访问时的说明（没有改动，并给出替代做法）。
  */
 var ORG_VIEW_ONLY_UNSUPPORTED =
   "View-only access for the whole organization can't be set from chat; nothing was changed. Share with the organization without `access` (it keeps the artifact's current organization access), or the person sets view-only from the Share menu on claude.ai.";
-//@ chunk-easqy8j1.js:6655-10300 placement
+//@ chunk-fgpd7qrh.js:6654-10299 placement
 /**
  * 判断能否修改 Artifact 的共享范围（冻结、组织只读等），返回 refuse/proceed。
  */
@@ -403,13 +404,15 @@ function checkShareChange(live, grant) {
   }
   let lower = live.owner_account?.toLowerCase();
   let writeUsers = new Set((live.write?.users ?? []).map((user) => user.toLowerCase()));
-  let grantUsers = uniq(grant.userUuids.map(normalizeShareEmail).filter((normalized) => normalized !== null));
+  let grantUsers = normalizeCaseForComparison_2(
+    grant.userUuids.map(normalizeShareEmail).filter((normalized) => normalized !== null),
+  );
   if (grantUsers.length === 0)
     return refuse(
       "no_people",
       "No people were confirmed on the approval card, so nothing was shared. The host resolves the people you name to organization members; ask the person to pick them on the card, or to share from the Share menu on claude.ai.",
     );
-  let editors = count(grantUsers, (user) => writeUsers.has(user));
+  let editors = countWhere(grantUsers, (user) => writeUsers.has(user));
   let filtered = grantUsers.filter((user) => user !== lower && !writeUsers.has(user));
   if (filtered.length === 0)
     return refuse(
@@ -439,17 +442,23 @@ function checkShareChange(live, grant) {
     );
   let readViewers = isUnshared ? [] : (live.viewers ?? []).map((user) => user.toLowerCase());
   let readCommenters = isUnshared ? [] : (live.commenters ?? []).map((user) => user.toLowerCase());
-  let combinedReadUsers = uniq([...readUsers.map((user) => user.toLowerCase()), ...filtered]);
+  let combinedReadUsers = normalizeCaseForComparison_2([
+    ...readUsers.map((user) => user.toLowerCase()),
+    ...filtered,
+  ]);
   let grantViewers;
   let grantCommenters;
   if (grant.access === "view") {
-    grantViewers = uniq([...readViewers, ...filtered]);
+    grantViewers = normalizeCaseForComparison_2([...readViewers, ...filtered]);
     let filtered_2 = readCommenters.filter((user) => !filtered.includes(user));
     grantCommenters = filtered_2.length !== readCommenters.length ? filtered_2 : undefined;
   } else {
     let filtered_2 = readViewers.filter((user) => !filtered.includes(user));
     grantViewers = filtered_2.length !== readViewers.length ? filtered_2 : undefined;
-    grantCommenters = live.commentersEnabled === true ? uniq([...readCommenters, ...filtered]) : undefined;
+    grantCommenters =
+      live.commentersEnabled === true
+        ? normalizeCaseForComparison_2([...readCommenters, ...filtered])
+        : undefined;
   }
   let isSubset = (subset, superset) =>
     subset !== undefined &&
@@ -486,17 +495,17 @@ function checkShareChange(live, grant) {
     editors,
   };
 }
-//@ chunk-easqy8j1.js:10300-10508 placement
+//@ chunk-fgpd7qrh.js:10299-10507 placement
 var CLOUD_SHARE_UNAVAILABLE =
   "Sharing artifacts from this cloud session isn't available yet, so nothing was changed; do not retry here. The person can share it themselves from the Share menu on the artifact's page on claude.ai.";
-//@ chunk-easqy8j1.js:10508-10545 placement
+//@ chunk-fgpd7qrh.js:10507-10544 placement
 /**
  * 导出函数 `isRelayUnavailableForSharing`：返回 mn() && !frameVerbRelayActive(SHARING_RELAY_FAMILY)。
  */
 function isRelayUnavailableForSharing() {
   return isRemoteManagedEnvironment() && !frameVerbRelayActive(SHARING_RELAY_FAMILY);
 }
-//@ chunk-easqy8j1.js:10545-10633 placement
+//@ chunk-fgpd7qrh.js:10544-10632 placement
 var RELAY_UNAVAILABLE_SHARING_RESULT = {
   ok: false,
   reason: "relay-unavailable",
@@ -505,22 +514,22 @@ var RELAY_UNAVAILABLE_SHARING_RESULT = {
   fromFrame: false,
 };
 var MAX_SHARE_RESPONSE_BYTES = 524288;
-//@ chunk-easqy8j1.js:10633-10718 placement
+//@ chunk-fgpd7qrh.js:10632-10717 placement
 function shareRouteFacts(share) {
   return {
     route: share.route === "relay" ? lit("relay") : lit("direct"),
     mode: fromEnum(share.mode),
   };
 }
-//@ chunk-easqy8j1.js:10718-10831 placement
+//@ chunk-fgpd7qrh.js:10717-10830 placement
 function getPermissionPath(slug, orgUuid) {
   let query = orgUuid ? `?org=${encodeURIComponent(orgUuid)}` : "";
   return `/api/frame/perm/${encodeURIComponent(slug)}${query}`;
 }
-//@ chunk-easqy8j1.js:10831-10897 placement
+//@ chunk-fgpd7qrh.js:10830-10896 placement
 var X_CCR_RELAY_TOOL_USE_ID = "X-Ccr-Relay-Tool-Use-Id";
 var X_CCR_RELAY_APPROVED_INTENT = "X-Ccr-Relay-Approved-Intent";
-//@ chunk-easqy8j1.js:10897-11116 placement
+//@ chunk-fgpd7qrh.js:10896-11115 placement
 function encodeSharePeople(grant) {
   let body =
     grant.mode === "org"
@@ -531,11 +540,13 @@ function encodeSharePeople(grant) {
       : {
           mode: "people",
           access: grant.access,
-          user_uuids: uniq(grant.userUuids.map(normalizeShareEmail).filter((email) => email !== null)),
+          user_uuids: normalizeCaseForComparison_2(
+            grant.userUuids.map(normalizeShareEmail).filter((email) => email !== null),
+          ),
         };
   return Buffer.from(JSON.stringify(body), "utf8").toString("base64url");
 }
-//@ chunk-easqy8j1.js:11116-12534 placement
+//@ chunk-fgpd7qrh.js:11115-12533 placement
 function describeShareTargetMissing(error, options) {
   let serverLine = scrubServerLine(formatFrameErrorBody(error.data), 300);
   if (error.status === 404)
@@ -578,7 +589,7 @@ function describeShareTargetMissing(error, options) {
     status: error.status,
   };
 }
-//@ chunk-easqy8j1.js:12534-17219 placement
+//@ chunk-fgpd7qrh.js:12533-17218 placement
 /**
  * 执行 artifact_share：经中继或直接调用接口修改共享（约 4.7 KB）。
  */
@@ -818,11 +829,11 @@ async function shareArtifact(request) {
     route: writeResponse.route,
   };
 }
-//@ chunk-easqy8j1.js:17219-17272 placement
+//@ chunk-fgpd7qrh.js:17218-17271 placement
 function artifactVersionsEnv() {
   return env.CLAUDE_CODE_ARTIFACT_VERSIONS;
 }
-//@ chunk-easqy8j1.js:17272-17578 placement
+//@ chunk-fgpd7qrh.js:17271-17577 placement
 /**
  * 版本列表请求的大小/数量上限、RFC 3339 时间格式正则，以及版本元数据与版本历史响应的 schema。
  */
@@ -831,7 +842,7 @@ var VERSIONS_MAX_COUNT;
 var RFC3339_RE;
 var VERSION_META_SCHEMA;
 var VERSION_HISTORY_SCHEMA;
-deferInit("chunk-easqy8j1.js:17272", () => {
+deferInit("chunk-fgpd7qrh.js:17271", () => {
   VERSIONS_MAX_BYTES = 524288;
   VERSIONS_MAX_COUNT = 100;
   RFC3339_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
@@ -849,7 +860,7 @@ deferInit("chunk-easqy8j1.js:17272", () => {
     }),
   );
 });
-//@ chunk-easqy8j1.js:17578-19435 placement
+//@ chunk-fgpd7qrh.js:17577-19434 placement
 /**
  * 列出 Artifact 的版本（/api/frame/versions/）。
  */
@@ -957,14 +968,14 @@ async function listArtifactVersions(slug, versionSlug) {
     ...cut,
   };
 }
-//@ chunk-easqy8j1.js:19435-19527 placement
+//@ chunk-fgpd7qrh.js:19434-19526 placement
 function isArtifactOpenActionEnabled() {
   return (
     env.CLAUDE_CODE_ARTIFACT_OPEN_ACTION ??
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth_willow", false)
   );
 }
-//@ chunk-easqy8j1.js:19527-19583 placement
+//@ chunk-fgpd7qrh.js:19526-19582 placement
 /**
  * 导出函数 `isArtifactRoomEnabledStub`：返回 null?.isArtifactRoomEnabled() === !0; } export { j9, isArtifactPinEnabled, versionLabelSchema, listArtifactVer…。
  */
@@ -975,11 +986,16 @@ export {
   isArtifactRoomEnabledStub,
   isArtifactPinEnabled,
   versionLabelSchema,
+  setArtifactPinned,
+  ORG_READ_MODES,
+  ORG_ACCESS_MODES,
+  isArtifactDeleteEnabled,
+  isArtifactOpenActionEnabled,
+  artifactVersionsEnv,
   listArtifactVersions,
   RFC3339_RE,
   isRelayUnavailableForPins,
   PIN_UNAVAILABLE_IN_CLOUD,
-  setArtifactPinned,
   isOrgReadMode,
   isOrgAccessMode,
   normalizeShareEmail,
@@ -988,9 +1004,4 @@ export {
   CLOUD_SHARE_UNAVAILABLE,
   ORG_VIEW_ONLY_UNSUPPORTED,
   shareArtifact,
-  ORG_READ_MODES,
-  ORG_ACCESS_MODES,
-  isArtifactDeleteEnabled,
-  isArtifactOpenActionEnabled,
-  artifactVersionsEnv,
 };

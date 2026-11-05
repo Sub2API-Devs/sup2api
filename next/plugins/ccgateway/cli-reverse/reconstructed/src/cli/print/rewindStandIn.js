@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：SDK 会话回退（rewind）时在转录中找目标消息、生成替身与预填文本
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sfjpx19.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nh1pvp1m.js (17)
  * attribution: placement 17
  */
 import { isSlackLaterNotification } from "../../utils/messageQueueManager.js";
@@ -14,7 +14,7 @@ import { isProjectsRelay, isLegacyHearthRelayMessage } from "../../utils/message
 import {
   getLastAssistantMessage,
   UUID_PREFIX_LENGTH,
-  isSyntheticApiErrorMessage,
+  isNoResponseRequestedMessage as isNoResponseRequestedMessage_2,
 } from "../../utils/messages.js";
 import { limitAppliesToModelOrCanonical } from "../../services/quotaAutoResume/quotaAutoResume.js";
 import { getAPIProvider } from "../../utils/model/providers.js";
@@ -40,7 +40,7 @@ import { isInterruptMarkerMessage } from "./resumeTurnBoundaries.js";
 import { parseCommandMessage } from "../../utils/messages/apiNormalization.js";
 import { isCompactBoundaryMessage } from "../../services/projects/threadRows.js";
 
-//@ chunk-0sfjpx19.js:16045-16120 placement
+//@ chunk-nh1pvp1m.js:43711-43786 placement
 /**
  * 队列里是否有 Slack later 通知（头部或在途排空命令命中）。
  */
@@ -50,7 +50,7 @@ function hasSlackLaterNotification(messageQueue) {
     messageQueue.someInFlightDrainCommand(isSlackLaterNotification)
   );
 }
-//@ chunk-0sfjpx19.js:16120-16197 placement
+//@ chunk-nh1pvp1m.js:43786-43863 placement
 /**
  * 队列里是否有已核验的 Slack 人类回合（头部或在途命令命中）。
  */
@@ -60,7 +60,7 @@ function hasVerifiedSlackHumanTurn(messageQueue) {
     messageQueue.someInFlightDrainCommand(isVerifiedSlackHumanTurn)
   );
 }
-//@ chunk-0sfjpx19.js:16197-16325 placement
+//@ chunk-nh1pvp1m.js:43863-43991 placement
 /**
  * 查看队列下一条：优先级为 now 或普通来源时直接返回，否则优先返回满足条件的可替代项。
  */
@@ -70,7 +70,7 @@ function peekNextQueued(queue, predicate) {
     return head;
   return queue.peek((queued) => predicate(queued) && isVerifiedSlackHumanTurn(queued)) ?? head;
 }
-//@ chunk-0sfjpx19.js:16325-16408 placement
+//@ chunk-nh1pvp1m.js:43991-44074 placement
 /**
  * 从队列取出下一条可处理的排队消息（按 peekNextQueued 结果精确 dequeue）。
  */
@@ -79,9 +79,9 @@ function dequeueQueuedMessage(queue, predicate) {
   if (head === undefined) return;
   return queue.dequeue((queued) => queued === head);
 }
-//@ chunk-0sfjpx19.js:16408-16483 placement
+//@ chunk-nh1pvp1m.js:44074-44149 placement
 var USAGE_LIMIT_FIELDS = ["rateLimitType", "resetsAt", "overageDisabledReason", "overageScope"];
-//@ chunk-0sfjpx19.js:16483-16865 placement
+//@ chunk-nh1pvp1m.js:44149-44531 placement
 function isUsageLimitDenialStale(message, messages, resolveModel) {
   let usageLimitDenial = message.usageLimitDenial;
   if (usageLimitDenial === undefined) return false;
@@ -107,7 +107,7 @@ function isUsageLimitDenialStale(message, messages, resolveModel) {
     return false;
   }
 }
-//@ chunk-0sfjpx19.js:16865-16959 placement
+//@ chunk-nh1pvp1m.js:44531-44625 placement
 /**
  * 构造用量限额越限后的替代消息：不查询、重复提醒、清掉线程标记。
  */
@@ -119,12 +119,12 @@ function usageLimitStandInMessage(message) {
     stampThreadState: undefined,
   };
 }
-//@ chunk-0sfjpx19.js:16959-16983 placement
+//@ chunk-nh1pvp1m.js:44625-44649 placement
 /**
  * 判断名字是否在分析事件名集合（V_e）里。
  */
 var isAnalyticsEventName = (uuid) => submitMarks.has(uuid);
-//@ chunk-0sfjpx19.js:16983-17317 placement
+//@ chunk-nh1pvp1m.js:44649-44983 placement
 function createDependencyWatcher(sources, read, run) {
   let disposed = false;
   let queued = false;
@@ -161,7 +161,7 @@ function createDependencyWatcher(sources, read, run) {
   }
   return teardown;
 }
-//@ chunk-0sfjpx19.js:17317-17443 placement
+//@ chunk-nh1pvp1m.js:44983-45109 placement
 /**
  * 创建转录保存器：冲刷会话存储，若期间发生转录迁移则计为丢失；可查询累计丢失次数。
  */
@@ -180,7 +180,7 @@ function createTranscriptSaver() {
     lostSoFar: () => getTranscriptWriteFailureSeq() + lostCount,
   };
 }
-//@ chunk-0sfjpx19.js:17443-17661 placement
+//@ chunk-nh1pvp1m.js:45109-45327 placement
 /**
  * 按 uuid 前缀在消息中定位回退目标（用户消息、带 submitUuid 的本地命令、排队命令附件）。
  */
@@ -194,7 +194,7 @@ function findRewindTargetIndex(messages, targetUuid) {
       getMessageIdentityUuids(message).some((uuid) => uuid.slice(0, UUID_PREFIX_LENGTH) === sliced),
   );
 }
-//@ chunk-0sfjpx19.js:17661-18689 placement
+//@ chunk-nh1pvp1m.js:45327-46355 placement
 /**
  * 在消息里定位回退目标（按 uuid 前缀、允许助手消息），返回索引与预填文本。
  */
@@ -221,7 +221,7 @@ function findRewindTarget(messages, targetMessageUuid, { allowAssistantTarget = 
         return messages.some(
           (message, entryIndex) =>
             entryIndex > index &&
-            ((message.type === "assistant" && !isSyntheticApiErrorMessage(message)) ||
+            ((message.type === "assistant" && !isNoResponseRequestedMessage_2(message)) ||
               (machineOriginPromptAt(messages, entryIndex) &&
                 !(message.type === "user" && isInterruptMarkerMessage(message)))),
         )
@@ -265,7 +265,7 @@ function findRewindTarget(messages, targetMessageUuid, { allowAssistantTarget = 
     };
   return null;
 }
-//@ chunk-0sfjpx19.js:18689-18931 placement
+//@ chunk-nh1pvp1m.js:46355-46597 placement
 function findAssistantRewindTarget(messages, sliced) {
   let index = messages.findIndex(
     (message) => message.type === "assistant" && message.uuid.slice(0, UUID_PREFIX_LENGTH) === sliced,
@@ -282,7 +282,7 @@ function findAssistantRewindTarget(messages, sliced) {
       }
     : null;
 }
-//@ chunk-0sfjpx19.js:18931-19058 placement
+//@ chunk-nh1pvp1m.js:46597-46724 placement
 /**
  * 若消息是 rewind_stand_in 系统消息，返回其 source_uuid。
  */
@@ -293,7 +293,7 @@ function standInSourceUuid(message) {
     ? message.source_uuid
     : undefined;
 }
-//@ chunk-0sfjpx19.js:19058-19209 placement
+//@ chunk-nh1pvp1m.js:46724-46875 placement
 /**
  * 按 uuid 前缀找到对应的回退替身消息，返回其索引与源 uuid。
  */
@@ -311,7 +311,7 @@ function findStandInTarget(messages, targetUuid) {
         prefillText: null,
       };
 }
-//@ chunk-0sfjpx19.js:19209-19329 placement
+//@ chunk-nh1pvp1m.js:46875-46995 placement
 /**
  * 判断最后一条压缩摘要之后是否还有新的用户回合。
  */
@@ -321,7 +321,7 @@ function hasTurnAfterLastSummary(messages) {
   );
   return messages.some((message, index) => index > lastIndex && machineOriginPromptAt(messages, index));
 }
-//@ chunk-0sfjpx19.js:19329-20551 placement
+//@ chunk-nh1pvp1m.js:46995-48217 placement
 /**
  * 回退后保留行的一致性检查（摘要未列出、移动、开启新轮等）。
  */
@@ -402,15 +402,15 @@ export {
   isUsageLimitDenialStale,
   hasVerifiedSlackHumanTurn,
   hasSlackLaterNotification,
-  usageLimitStandInMessage,
-  findRewindTarget,
-  createTranscriptSaver,
-  peekNextQueued,
   dequeueQueuedMessage,
+  usageLimitStandInMessage,
   isAnalyticsEventName,
+  createTranscriptSaver,
+  findRewindTarget,
   findStandInTarget,
   hasTurnAfterLastSummary,
   findRewindTargetIndex,
   checkRewindKeptRows,
   standInSourceUuid,
+  peekNextQueued,
 };

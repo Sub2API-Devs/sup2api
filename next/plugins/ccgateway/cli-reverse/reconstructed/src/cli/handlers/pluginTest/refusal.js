@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。claude plugin test 运行前的拒绝检查：hooks 模块被关闭、开关保存失败、登录将过期等情况下给出原因。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-16wxtfnh.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wtmrah4j.js (17)
  * attribution: placement 17
  */
 import { __export } from "../../../../runtime/bun-runtime.js";
@@ -42,12 +42,12 @@ import { logForDebugging } from "../../../utils/debug.js";
 import { errorMessage } from "../../../utils/errors.js";
 import { sessionFactsRestored } from "../../../utils/auth/personProxyAuthHelper.js";
 
-//@ chunk-16wxtfnh.js:692-703 placement
+//@ chunk-wtmrah4j.js:692-703 placement
 /**
  * plugin test 拒绝原因模块的导出容器（pluginTestRefusal、SAVE_FAILURE、SIGN_IN_MARGIN_MS 等）。
  */
 var PLUGIN_TEST_REFUSAL_EXPORTS = {};
-//@ chunk-16wxtfnh.js:703-1108 placement
+//@ chunk-wtmrah4j.js:703-1108 placement
 __export(PLUGIN_TEST_REFUSAL_EXPORTS, {
   IS_WORKTREE_LAUNCH: () => IS_WORKTREE_LAUNCH,
   SAVE_FAILURE: () => SAVE_FAILURE,
@@ -66,15 +66,15 @@ __export(PLUGIN_TEST_REFUSAL_EXPORTS, {
   switchFetched: () => switchFetched,
   switchSaveSettled: () => switchSaveSettled,
 });
-//@ chunk-16wxtfnh.js:1108-1211 placement
+//@ chunk-wtmrah4j.js:1108-1211 placement
 function pluginTestFormOf(argv) {
   let isFileForm = argv[0] === "--file";
   let any = argv.some((arg) => arg.startsWith("-"));
   return isFileForm ? "file" : any ? "other" : "run";
 }
-//@ chunk-16wxtfnh.js:1211-1222 placement
+//@ chunk-wtmrah4j.js:1211-1222 placement
 var IS_WORKTREE_LAUNCH = false;
-//@ chunk-16wxtfnh.js:1222-1395 placement
+//@ chunk-wtmrah4j.js:1222-1395 placement
 async function sessionHoldsEarlyFetch() {
   let basePolicySettings = getBasePolicySettings();
   return (
@@ -86,14 +86,14 @@ async function sessionHoldsEarlyFetch() {
     )
   );
 }
-//@ chunk-16wxtfnh.js:1395-1449 placement
+//@ chunk-wtmrah4j.js:1395-1449 placement
 var earlyFetchVetoed = () =>
   Promise.resolve()
     .then(sessionHoldsEarlyFetch)
     .catch(() => true);
-//@ chunk-16wxtfnh.js:1449-1463 placement
+//@ chunk-wtmrah4j.js:1449-1463 placement
 var SIGN_IN_MARGIN_MS = 60000;
-//@ chunk-16wxtfnh.js:1463-1549 placement
+//@ chunk-wtmrah4j.js:1463-1549 placement
 async function signInNearsExpiry() {
   let claudeAIOAuthTokens = await getClaudeAIOAuthTokensAsync();
   return (
@@ -101,32 +101,32 @@ async function signInNearsExpiry() {
     isOAuthTokenExpired(claudeAIOAuthTokens.expiresAt, Date.now() + SIGN_IN_MARGIN_MS)
   );
 }
-//@ chunk-16wxtfnh.js:1549-1615 placement
+//@ chunk-wtmrah4j.js:1549-1615 placement
 var fetchRefreshesSignIn = () =>
   Promise.resolve()
     .then(() => shouldUseWIFAuth() || signInNearsExpiry())
     .catch(() => true);
-//@ chunk-16wxtfnh.js:1615-1658 placement
+//@ chunk-wtmrah4j.js:1615-1658 placement
 function flagClientQuieted() {
   if (hasGrowthBookInitializeStarted())
     initializeGrowthBook().then(stopPeriodicGrowthBookRefresh, stopPeriodicGrowthBookRefresh);
 }
-//@ chunk-16wxtfnh.js:1658-1727 placement (2.1.88 match: getFeatureValue_CACHED_MAY_BE_STALE, 1)
+//@ chunk-wtmrah4j.js:1658-1727 placement (2.1.88 match: getFeatureValue_CACHED_MAY_BE_STALE, 1)
 var savedFlags = DoctorLazy(() =>
   objectSchema({
     cachedGrowthBookFeatures: record(stringSchema(), unknown()).optional(),
   }),
 );
-//@ chunk-16wxtfnh.js:1727-1858 placement (2.1.88 match: getFeatureValue_CACHED_MAY_BE_STALE, 1)
+//@ chunk-wtmrah4j.js:1727-1858 placement (2.1.88 match: getFeatureValue_CACHED_MAY_BE_STALE, 1)
 function isSavedSwitchOf(globalConfigFromDiskOrThrow) {
   let parsed = savedFlags().safeParse(globalConfigFromDiskOrThrow);
   let flag = parsed.success ? parsed.data.cachedGrowthBookFeatures?.[PLUGIN_HOOKS_MODULES_GATE] : undefined;
   return typeof flag === "boolean" ? flag : HOOKS_MODULES_DEFAULT;
 }
-//@ chunk-16wxtfnh.js:1858-2029 placement
+//@ chunk-wtmrah4j.js:1858-2029 placement
 var SAVE_FAILURE =
   "the rollout switch was fetched, but its value could not be saved for the test files to read: the settings file is busy or cannot be written. Run the tests again";
-//@ chunk-16wxtfnh.js:2029-2130 placement
+//@ chunk-wtmrah4j.js:2029-2130 placement
 async function switchSaveSettled() {
   await withDeadline(drainConfigWrites(), EVENT_LOGGING_FLAG_WAIT_MS);
   return isServedGateSource() &&
@@ -136,7 +136,7 @@ async function switchSaveSettled() {
     ? SAVE_FAILURE
     : null;
 }
-//@ chunk-16wxtfnh.js:2130-2275 placement
+//@ chunk-wtmrah4j.js:2130-2275 placement
 var switchFetched = () =>
   waitForRolloutUnlessServed()
     .finally(flagClientQuieted)
@@ -147,7 +147,7 @@ var switchFetched = () =>
       });
       return null;
     });
-//@ chunk-16wxtfnh.js:2275-2575 placement
+//@ chunk-wtmrah4j.js:2275-2575 placement
 async function pluginTestGatesOf({ helperError, form, envPin }) {
   if (form === "file") markFollowConsumed();
   let isRunForm = helperError === null && form === "run";
@@ -168,7 +168,7 @@ async function pluginTestGatesOf({ helperError, form, envPin }) {
     canLoadUserModules: areHooksModulesActive(),
   };
 }
-//@ chunk-16wxtfnh.js:2575-3100 placement
+//@ chunk-wtmrah4j.js:2575-3100 placement
 /**
  * claude plugin test 运行前的拒绝检查：hooks 模块被关闭、开关保存失败、登录将过期等情况下给出原因。
  */

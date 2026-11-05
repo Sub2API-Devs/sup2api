@@ -1,6 +1,0 @@
-
-// @bun @bytecode
-// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
-
-// Version: 2.1.316
-import{Ebt,QHe,d2e,RNo,p6n}from"./chunk-w12gsta7.js";import"./chunk-cxyewwc3.js";import"./chunk-sdydyf7y.js";import"./chunk-kgtpkbhq.js";import"./chunk-949rqstz.js";import"./chunk-m8z86bna.js";import"./chunk-p5akk6be.js";import"./chunk-hqdsrzb2.js";import"./chunk-smzk8psk.js";import"./chunk-cbe70hjy.js";import"./chunk-kpa9nk58.js";import"./chunk-h6b7mazd.js";import"./chunk-s7k22nbx.js";import"./chunk-fnk5kvbf.js";import"./chunk-8nhse09v.js";import"./chunk-8kte1b36.js";import"./chunk-6ysndsgz.js";import"./chunk-cgr0tezp.js";import"./chunk-58wc6nbw.js";import"./chunk-m41h77x8.js";import"./chunk-j3nx1xyn.js";import"./chunk-cmr2yp8m.js";import"./chunk-ndmse9kj.js";import"./chunk-kcjh5jnz.js";import"./chunk-cgcrer2m.js";import"./chunk-aat7wt0p.js";import"./chunk-x7vma94a.js";import"./chunk-2g090z7k.js";import"./chunk-eabawhjj.js";import"./chunk-vk5xfx8n.js";import"./chunk-0wqny7vr.js";import"./chunk-0777tkjc.js";export{Ebt as INBOX_FILE_ID_PATTERN,RNo as fetchSessionInboxMessage,QHe as foldSenderDisplayBrackets,d2e as inboxSenderProvenanceCaption,p6n as renderInboxContentEnvelope};

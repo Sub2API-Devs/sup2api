@@ -3,19 +3,23 @@
  *
  * 2.1.316 新增：计算托管设置拉取结果；把认证错误信息（错误码、HTTP 状态、服务端拒绝、刷新结果）归类为遥测结果等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (15)
  * attribution: placement 15
  */
 import { isTopLevelBridgeSession } from "../../utils/remoteEnvironment.js";
-import { isReplBridgeActive, getIsInteractive, getMcpClientsFromAccessor } from "../../bootstrap/state.js";
+import {
+  isReplBridgeActive,
+  getIsInteractive,
+  getMcpClientsFromAccessorOrTenant,
+} from "../../bootstrap/state.js";
 import { hasRelaySource } from "../projectsRelay/relayConfig.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:690062-690104 placement
+//@ chunk-exfmq47h.js:702668-702710 placement
 var AUTH_SURFACE_NAMES = ["daemon_child", "sdk_host", "repl"];
-//@ chunk-aepeg2w5.js:690104-690195 placement
+//@ chunk-exfmq47h.js:702710-702801 placement
 /**
  * 导出函数 `currentAuthSurface`：返回 "daemon_child"; if (!isReplBridgeActive()) return; return getIsInteractive() ? "repl" : "sdk_host"。
  */
@@ -24,21 +28,21 @@ function currentAuthSurface() {
   if (!isReplBridgeActive()) return;
   return getIsInteractive() ? "repl" : "sdk_host";
 }
-//@ chunk-aepeg2w5.js:690195-690227 placement
+//@ chunk-exfmq47h.js:702801-702834 placement
 /**
  * 当前认证界面。
  */
 function getCurrentAuthSurface() {
-  return hasRelaySource(getMcpClientsFromAccessor());
+  return hasRelaySource(getMcpClientsFromAccessorOrTenant());
 }
-//@ chunk-aepeg2w5.js:690227-690398 placement
+//@ chunk-exfmq47h.js:702834-703005 placement
 /**
  * 认证结果遥测的来源、组织拒绝原因与 allow_* 码格式。
  */
 var AUTH_SURFACES = ["slash_command", "cli_flag", "startup", "tool", "dispatch", "cloud_session"];
 var ORG_DENIAL_REASONS = ["org_denied", "latched", "cache_miss", "route_missing"];
 var ALLOW_CODE_RE = /^allow_[a-z][a-z0-9_]{0,58}$/;
-//@ chunk-aepeg2w5.js:690398-690967 placement
+//@ chunk-exfmq47h.js:703005-703574 placement
 /**
  * 组织级拒绝错误码集合。
  */
@@ -49,7 +53,7 @@ var ACCOUNT_NOT_MEMBER_CODES;
 var OAUTH_ACCOUNT_NOT_MEMBER_CODES;
 var APPLICATION_DEACTIVATED_SERVER_CODES;
 var TOKEN_INVALID_CODES;
-deferInit("chunk-aepeg2w5.js:690398", () => {
+deferInit("chunk-exfmq47h.js:703005", () => {
   ORG_DENIAL_CODES = new Set([
     "oauth_not_allowed_for_organization",
     "organization_disabled",
@@ -68,7 +72,7 @@ deferInit("chunk-aepeg2w5.js:690398", () => {
   APPLICATION_DEACTIVATED_SERVER_CODES = new Set([...ORG_REVOKED_SERVER_CODES, "application_deactivated"]);
   TOKEN_INVALID_CODES = new Set(["token_expired", "token_revoked", "token_invalid", "credential_invalid"]);
 });
-//@ chunk-aepeg2w5.js:690967-691162 placement
+//@ chunk-exfmq47h.js:703574-703769 placement
 /**
  * 按错误码/服务端错误类型归类为组织拒绝（organization）或凭证失效（credential）。
  */
@@ -87,7 +91,7 @@ function classifyAuthDenial(orgErrorCode, serverDenial) {
     return "credential";
   return;
 }
-//@ chunk-aepeg2w5.js:691162-691478 placement
+//@ chunk-exfmq47h.js:703769-704085 placement
 /**
  * 凭据失败、刷新锁失败等错误码集合。
  */
@@ -95,7 +99,7 @@ var CREDENTIAL_FAILURE_CODES; // deferred: has load-time effects after a deferre
 var DEAD_REFRESH_TOKEN_REASONS;
 var REFRESH_TRANSPORT_FAILURES;
 var REFRESH_HEALTHY_RESULTS;
-deferInit("chunk-aepeg2w5.js:691162", () => {
+deferInit("chunk-exfmq47h.js:703769", () => {
   CREDENTIAL_FAILURE_CODES = new Set(["restricted_regime_endpoint", "oauth_scope_insufficient"]);
   DEAD_REFRESH_TOKEN_REASONS = new Set([
     "known_dead_refresh_token",
@@ -113,7 +117,7 @@ deferInit("chunk-aepeg2w5.js:691162", () => {
   ]);
   REFRESH_HEALTHY_RESULTS = new Set(["refreshed", "not_needed"]);
 });
-//@ chunk-aepeg2w5.js:691478-692739 placement
+//@ chunk-exfmq47h.js:704085-705346 placement
 /**
  * 把认证错误信息（错误码、HTTP 状态、服务端拒绝、刷新结果）归类为遥测结果。
  */
@@ -182,7 +186,7 @@ function classifyAuthOutcome(outcome) {
   }
   return "unknown";
 }
-//@ chunk-aepeg2w5.js:692739-693838 placement
+//@ chunk-exfmq47h.js:705346-706445 placement
 /**
  * 托管设置拉取结果枚举。
  */
@@ -192,7 +196,7 @@ var RESTRICTED_SERVER_CODES;
 var ORG_ON_HOLD_CODES;
 var CREDENTIAL_INVALID_SERVER_CODES;
 var NETWORK_ERROR_CODES;
-deferInit("chunk-aepeg2w5.js:692739", () => {
+deferInit("chunk-exfmq47h.js:705346", () => {
   SETTINGS_FETCH_OUTCOMES = [
     "ok",
     "not_modified",
@@ -245,7 +249,7 @@ deferInit("chunk-aepeg2w5.js:692739", () => {
     "EPIPE",
   ]);
 });
-//@ chunk-aepeg2w5.js:693838-693973 placement
+//@ chunk-exfmq47h.js:706445-706580 placement
 /**
  * 是否有服务端错误类型、错误码或认证拒绝信息。
  */
@@ -256,7 +260,7 @@ function hasServerAuthDetail(outcome) {
     outcome.serverAuthDenial !== undefined
   );
 }
-//@ chunk-aepeg2w5.js:693973-695910 placement
+//@ chunk-exfmq47h.js:706580-708517 placement
 /**
  * 计算托管设置拉取结果。
  */
@@ -332,7 +336,7 @@ function settingsFetchOutcome(outcome) {
     return "unavailable_connect";
   return "client_error";
 }
-//@ chunk-aepeg2w5.js:695910-696706 placement
+//@ chunk-exfmq47h.js:708517-709313 placement
 /**
  * 未尝试拉取托管设置的原因。
  */
@@ -366,11 +370,11 @@ function notAttemptedReason(outcome) {
       return "not_attempted_other";
   }
 }
-//@ chunk-aepeg2w5.js:696706-696752 placement
+//@ chunk-exfmq47h.js:709313-709359 placement
 function isMeaningfulErrorValue(value) {
   return value !== undefined && value !== "other";
 }
-//@ chunk-aepeg2w5.js:696752-697166 placement
+//@ chunk-exfmq47h.js:709359-709773 placement
 /**
  * 签名文档种类与验证失败原因枚举。
  */
@@ -402,7 +406,7 @@ var SIGNATURE_VERIFY_RESULTS_EXTENDED = [
   "error",
 ];
 var SIGNATURE_TRUST_STATES = ["none", "not_read", "pending", "trusted", ...SIGNATURE_VERIFY_RESULTS_EXTENDED];
-//@ chunk-aepeg2w5.js:697166-697195 placement
+//@ chunk-exfmq47h.js:709773-709802 placement
 var ENFORCEMENT_MODES = ["enforced", "shadow"];
 export {
   currentAuthSurface,
@@ -410,6 +414,7 @@ export {
   classifyAuthOutcome,
   settingsFetchOutcome,
   notAttemptedReason,
+  classifyAuthDenial,
   SIGNATURE_TRUST_STATES,
   ENFORCEMENT_MODES,
   ALLOW_CODE_RE,
@@ -419,5 +424,4 @@ export {
   SIGNED_DOCUMENT_KINDS,
   SIGNATURE_VERIFY_RESULTS,
   AUTH_SURFACE_NAMES,
-  classifyAuthDenial,
 };

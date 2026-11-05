@@ -1,12 +1,12 @@
 /**
  * @anthropic-ai/sdk/lib/internal/tracing/response.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-e6aww6q8.js (3)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: esm-fingerprint 3
  */
 
-//@ chunk-e6aww6q8.js:2799795-2801148 esm-fingerprint
+//@ chunk-5xgkngpb.js:2867791-2869144 esm-fingerprint
 /**
  * 用流里 message_delta 的 usage 更新累计 usage：正数才覆盖输入/缓存字段，其余字段非空才覆盖。
  */
@@ -63,7 +63,7 @@ function mergeUsageFromDelta(usage, partUsage) {
     fallback_credit: partUsage.fallback_credit ?? usage.fallback_credit,
   };
 }
-//@ chunk-e6aww6q8.js:2801148-2801862 esm-fingerprint
+//@ chunk-5xgkngpb.js:2869144-2869858 esm-fingerprint
 /**
  * 累加跨请求的 usage（output 细分、缓存 1h/5m 细分、fallback_credit）。
  */
@@ -96,7 +96,7 @@ function addResponseUsageAttributes(usage, usage_2) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:2801862-2802858 esm-fingerprint
+//@ chunk-5xgkngpb.js:2869858-2870854 esm-fingerprint
 /**
  * 两个 usage 逐字段相加（含缓存细分、server_tool_use）。
  */
@@ -132,4 +132,4 @@ function addUsage_2(totalUsage, messageUsage) {
     fallback_credit: messageUsage.fallback_credit ?? totalUsage.fallback_credit,
   };
 }
-export { mergeUsageFromDelta, addUsage_2, addResponseUsageAttributes };
+export { mergeUsageFromDelta, addResponseUsageAttributes, addUsage_2 };

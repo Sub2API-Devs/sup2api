@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：网关上游流式响应处理
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-1hnjmk23.js (4)
  * attribution: placement 4
  */
 import { SSE_PING_INTERVAL_MS, SSE_PING_FRAME, SSE_RESPONSE_HEADERS } from "../proxyRequest.js";
@@ -25,10 +25,10 @@ import {
   weakMap,
 } from "../upstreamErrors.js";
 import { getBetaByName } from "../../../utils/betas.js";
-import { uniq } from "../../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../../utils/permissions/filesystem.js";
 import { truncateToLength } from "../../../utils/stringUtils.js";
 
-//@ chunk-1ny7cxrt.js:1371328-1372364 placement
+//@ chunk-1hnjmk23.js:1373107-1374143 placement
 /**
  * 把 SDK 流事件转为 SSE 响应流：定时发 ping 保活、改写 message_start 的模型名、上报 guardrail trace，出错时发 error 事件。
  */
@@ -121,7 +121,7 @@ data: ${jsonStringify({
     },
   });
 }
-//@ chunk-1ny7cxrt.js:1372364-1372700 placement
+//@ chunk-1hnjmk23.js:1374143-1374479 placement
 /**
  * Bedrock 上游时把 anthropic-beta 头转成请求体 anthropic_beta 字段。
  */
@@ -147,17 +147,20 @@ function moveBetasToBody(body, betaHeader, provider) {
   return {
     body: {
       ...body,
-      anthropic_beta: uniq([...(Array.isArray(anthropicBeta) ? anthropicBeta : []), ...betas]),
+      anthropic_beta: normalizeCaseForComparison_2([
+        ...(Array.isArray(anthropicBeta) ? anthropicBeta : []),
+        ...betas,
+      ]),
     },
     betaHeader: undefined,
   };
 }
-//@ chunk-1ny7cxrt.js:1372700-1372724 placement
+//@ chunk-1hnjmk23.js:1374479-1374503 placement
 /**
  * 请求体里若出现这些键就视为带 id 的调用（workspace_id）。
  */
 var BODY_ID_KEYS = ["workspace_id"];
-//@ chunk-1ny7cxrt.js:1372724-1374403 placement
+//@ chunk-1hnjmk23.js:1374503-1376181 placement
 /**
  * 通过 SDK 客户端转发 /v1/messages（流式或非流式）与 count_tokens（Bedrock 特殊处理），把 API 错误转为网关错误响应。
  */

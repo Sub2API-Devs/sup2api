@@ -3,20 +3,20 @@
  *
  * system-reminder 标签（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bbtre4r8.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-my2r02mp.js (19)
  * attribution: placement 19
  */
 import { flattenPastedBlocks, splitPastedContentBlocks } from "./pastedContent.js";
 
-//@ chunk-bbtre4r8.js:11935-11967 placement
+//@ chunk-my2r02mp.js:12085-12117 placement
 var CHAR_CODE_A = 97;
 var CHAR_CODE_Z = 122;
 var CHAR_CODE_GT = 62;
 var CHAR_CODE_NEWLINE = 10;
 var WHITESPACE_RE = /\s/;
-//@ chunk-bbtre4r8.js:11967-12043 placement
+//@ chunk-my2r02mp.js:12117-12193 placement
 function isTagNameCharCode(charCode) {
   return (
     (charCode >= CHAR_CODE_A && charCode <= CHAR_CODE_Z) ||
@@ -26,13 +26,13 @@ function isTagNameCharCode(charCode) {
     charCode === 45
   );
 }
-//@ chunk-bbtre4r8.js:12043-12117 placement
+//@ chunk-my2r02mp.js:12193-12267 placement
 function scanTagNameEnd(text, start) {
   let endIndex = start;
   while (endIndex < text.length && isTagNameCharCode(text.charCodeAt(endIndex))) endIndex++;
   return endIndex;
 }
-//@ chunk-bbtre4r8.js:12117-12378 placement
+//@ chunk-my2r02mp.js:12267-12528 placement
 /**
  * 扫描文本中所有 "</tag>" 形式的闭标签，按标签名记录其位置列表。
  */
@@ -56,7 +56,7 @@ function indexClosingTags(text) {
   }
   return closingIndexes;
 }
-//@ chunk-bbtre4r8.js:12378-13018 placement
+//@ chunk-my2r02mp.js:12528-13168 placement
 function wrapInSystemReminder(text) {
   if (!text.includes("</")) return text;
   let closingIndexes = indexClosingTags(text);
@@ -107,25 +107,25 @@ function wrapInSystemReminder(text) {
   parts.push(text.slice(lastEnd));
   return parts.join("");
 }
-//@ chunk-bbtre4r8.js:13018-13049 placement
+//@ chunk-my2r02mp.js:13168-13199 placement
 function wrapAndTrimReminder(text) {
   return wrapInSystemReminder(flattenPastedBlocks(text));
 }
-//@ chunk-bbtre4r8.js:13049-13082 placement
+//@ chunk-my2r02mp.js:13199-13232 placement
 /**
  * 尽量解包 system-reminder，失败返回原文。
  */
 function textOrReminderWrapped(title) {
   return unwrapReminderText(title) || title;
 }
-//@ chunk-bbtre4r8.js:13082-13117 placement
+//@ chunk-my2r02mp.js:13232-13267 placement
 /**
  * 包一层 system-reminder 后 trim。
  */
 function unwrapReminderText(text) {
   return wrapAndTrimReminder(text).trim();
 }
-//@ chunk-bbtre4r8.js:13117-13204 placement
+//@ chunk-my2r02mp.js:13267-13354 placement
 /**
  * 取纯文本部分再包 reminder，用于关键词检测。
  */
@@ -135,7 +135,7 @@ function plainTextFromReminder(text) {
 `),
   );
 }
-//@ chunk-bbtre4r8.js:13204-13356 placement
+//@ chunk-my2r02mp.js:13354-13506 placement
 /**
  * system-reminder 的开/闭标签、带 id 形式的前后缀、id 长度与校验正则。
  */
@@ -147,14 +147,14 @@ var REMINDER_ID_SUFFIX = '">';
 var MAX_REMINDER_ID_CHARS = 16;
 var REMINDER_ID_RE = /^[0-9a-f]{16,32}$/;
 var REMINDER_ID_BYTES = 32;
-//@ chunk-bbtre4r8.js:13356-13410 placement
+//@ chunk-my2r02mp.js:13506-13560 placement
 /**
  * 字符串是否是合法的 reminder id（16–32 位十六进制）。
  */
 function isValidReminderId(reminderId) {
   return typeof reminderId === "string" && REMINDER_ID_RE.test(reminderId);
 }
-//@ chunk-bbtre4r8.js:13410-13598 placement
+//@ chunk-my2r02mp.js:13560-13748 placement
 /**
  * 文本以固定前缀开头时，解析其后到分隔标记前的标识并校验，合法时返回。
  */
@@ -173,30 +173,30 @@ function parseReminderHeader(text) {
     ? suffixIndex
     : undefined;
 }
-//@ chunk-bbtre4r8.js:13598-13637 placement
+//@ chunk-my2r02mp.js:13748-13787 placement
 /**
  * 文本是否以合法的 reminder 头开始。
  */
 function hasReminderHeader(text) {
   return parseReminderHeader(text) !== undefined;
 }
-//@ chunk-bbtre4r8.js:13637-13658 placement
+//@ chunk-my2r02mp.js:13787-13808 placement
 var sliced = SYSTEM_REMINDER_OPEN.slice(0, -1);
-//@ chunk-bbtre4r8.js:13658-13743 placement
+//@ chunk-my2r02mp.js:13808-13893 placement
 /**
  * 文本是否以裸的 `<system-reminder` 开头并紧跟空白。
  */
 function isBareReminderOpen(text) {
   return text.startsWith(sliced) && /[\s\x1c-\x1f\x85]/.test(text.charAt(sliced.length));
 }
-//@ chunk-bbtre4r8.js:13743-13795 placement
+//@ chunk-my2r02mp.js:13893-13945 placement
 /**
  * 把裸 reminder 开标签转义为 `&lt;`。
  */
 function escapeBareReminderOpen(text) {
   return isBareReminderOpen(text) ? `&lt;${text.slice(1)}` : text;
 }
-//@ chunk-bbtre4r8.js:13795-13945 placement
+//@ chunk-my2r02mp.js:13945-14095 placement
 /**
  * 去掉文本中所有 system-reminder 块。
  */
@@ -211,9 +211,9 @@ function stripSystemReminders(raw) {
   }
   return text;
 }
-//@ chunk-bbtre4r8.js:13945-14017 placement
+//@ chunk-my2r02mp.js:14095-14167 placement
 var IDE_CONTEXT_TAG_RE = /<(ide_opened_file|ide_selection)(?:\s[^>]*)?>[\s\S]*?<\/\1>\n?/g;
-//@ chunk-bbtre4r8.js:14017-14063 placement
+//@ chunk-my2r02mp.js:14167-14213 placement
 /**
  * 去掉 IDE 上下文的 ide_opened_file/ide_selection 标签。
  */
@@ -232,9 +232,9 @@ export {
   REMINDER_ID_OPEN_PREFIX,
   REMINDER_ID_SUFFIX,
   REMINDER_ID_CLOSE_PREFIX,
-  textOrReminderWrapped,
+  plainTextFromReminder,
   unwrapReminderText,
+  textOrReminderWrapped,
   MAX_REMINDER_ID_CHARS,
   stripSystemReminders,
-  plainTextFromReminder,
 };

@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：署名上下文附件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: placement 3
  */
 import { escapeSystemReminderTags } from "../../services/api/promptCacheBreakParts.js";
 import { SEND_USER_FILE_TOOL_NAME } from "../../tools/SendUserFileTool/prompt.js";
 
-//@ chunk-e6aww6q8.js:114018-114674 placement
+//@ chunk-5xgkngpb.js:117197-117853 placement
 /**
  * 归属提示的标题（带具体署名），用于覆盖旧版归属说明。
  */
@@ -24,7 +24,7 @@ var EMPTY_ATTRIBUTION_NOTE =
   "the user's own instructions about these lines, such as a CLAUDE.md or memory rule, take precedence over this reminder, but do not add attribution lines this reminder leaves out";
 var UNCHANGED_ATTRIBUTION_NOTE =
   "these lines are set by the user's organization's managed settings and apply even if the user's instructions say otherwise; do not add attribution lines this reminder leaves out";
-//@ chunk-e6aww6q8.js:114674-115145 placement
+//@ chunk-5xgkngpb.js:117853-118324 placement
 /**
  * 生成署名要求中关于组织托管设置的说明：commit/PR 署名哪一项由托管设置强制（即使用户指令相反也适用），两者都未强制或都强制时返回对应固定文案。
  */
@@ -36,7 +36,7 @@ function managedAttributionNote(mode, separator) {
   let [firstWord, secondWord] = commit ? ["commit", "pull request"] : ["pull request", "commit"];
   return `the ${firstWord} line is set by the user's organization's managed settings and applies even if the user's instructions say otherwise; the user's own instructions about the ${secondWord} line, such as a CLAUDE.md or memory rule, take precedence, but do not add attribution lines this reminder leaves out`;
 }
-//@ chunk-e6aww6q8.js:115145-115760 placement
+//@ chunk-5xgkngpb.js:118324-118939 placement
 /**
  * 生成提交与 PR 署名要求说明（结尾署名行，CLAUDE.md 不能覆盖）。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：自托管 runner 编排器入口
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2cbdmxy9.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h7hgs1mf.js (2)
  * attribution: placement 2
  */
 import { mkdir, readFile } from "fs/promises";
@@ -21,6 +21,7 @@ import {
   startScmConnector,
   CONNECT_RETRY_MS,
 } from "./scmConnector.js";
+import { makeHttpsAgentCloseAfterServerError } from "../../utils/mtls.js";
 import { configureGlobalAgents } from "../../utils/proxy.js";
 import { openStdioWriter } from "../../selfHostedRunner/stdioWriter.js";
 import { redactSecretsInText } from "../../utils/redactSecrets.js";
@@ -38,7 +39,7 @@ import { emptyErrorCategoryCounts } from "../../selfHostedRunner/runnerApiErrors
 import { startRunnerHealthServer, runOrchestratorLoop, fatalExitWith } from "./orchestrator.js";
 import { withBoundedTimeout } from "../../utils/boundedTimeout.js";
 
-//@ chunk-2cbdmxy9.js:44198-52374 placement
+//@ chunk-h7hgs1mf.js:45182-53364 placement
 /**
  * claude self-hosted-runner orchestrator 入口：解析参数、读取环境密钥、启动健康/指标服务与 spawn-runner 轮询循环。
  */
@@ -109,6 +110,7 @@ Debug:
   --help, -h                  Show this help message`);
     return;
   }
+  makeHttpsAgentCloseAfterServerError();
   configureGlobalAgents();
   let timestamp = () => new Date().toISOString();
   let stdioWriter = openStdioWriter({
@@ -313,7 +315,7 @@ Run 'claude self-hosted-runner orchestrator --help' for usage.`,
     process.removeListener("SIGINT", onInt);
   }
 }
-//@ chunk-2cbdmxy9.js:52374-52935 placement
+//@ chunk-h7hgs1mf.js:53364-53925 placement
 async function readPoolSecret(config, warn = (message) => console.error(message)) {
   if (config.poolSecretFile)
     return (

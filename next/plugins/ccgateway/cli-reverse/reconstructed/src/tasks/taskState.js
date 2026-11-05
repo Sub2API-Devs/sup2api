@@ -3,15 +3,15 @@
  *
  * 任务前后台状态（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cgs3vg0v.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-05hzzra9.js (4)
  * attribution: placement 4
  */
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-cgs3vg0v.js:262-506 placement
+//@ chunk-05hzzra9.js:262-506 placement
 function emptySpawnStats() {
   return {
     spawned: 0,
@@ -37,7 +37,7 @@ function emptySpawnStats() {
     },
   };
 }
-//@ chunk-cgs3vg0v.js:506-874 placement
+//@ chunk-05hzzra9.js:506-874 placement
 /**
  * 记录一次子代理生成的结局（完成、失败、被杀），每次生成只记一次，完成后取消时改记为被杀。
  */
@@ -69,7 +69,7 @@ class SpawnOutcomeRecorder {
     return true;
   }
 }
-//@ chunk-cgs3vg0v.js:874-1476 placement
+//@ chunk-05hzzra9.js:874-1476 placement
 /**
  * 子代理生成统计：生成数、请求方式、后台启动、按类型计数、最大深度、拒绝数，可快照与重置。
  */
@@ -112,12 +112,12 @@ class SpawnStatsTracker {
     this.#t.clear();
   }
 }
-//@ chunk-cgs3vg0v.js:1476-1502 placement
+//@ chunk-05hzzra9.js:1476-1502 placement
 /**
  * 按会话保存的派生统计跟踪器。
  */
 var spawnStatsSlots; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-cgs3vg0v.js:1476", () => {
+deferInit("chunk-05hzzra9.js:1476", () => {
   spawnStatsSlots = new SessionRootSlot(() => new SpawnStatsTracker());
 });
 export { spawnStatsSlots };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：附着云会话（claude --cloud <id>）主流程：预检、取令牌、建立 WS 并启动 REPL
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-edjpba11.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ptg2macw.js (6)
  * attribution: placement 6
  */
 import {
@@ -74,9 +74,9 @@ import { getSecondRootError } from "../../ink/terminal.js";
 import { showScreen } from "../../utils/runSteps.js";
 import { createSystemMessage } from "../../utils/messages.js";
 
-//@ chunk-edjpba11.js:14629-14649 placement
+//@ chunk-ptg2macw.js:15833-15853 placement
 async function noopRefresh() {}
-//@ chunk-edjpba11.js:14649-14918 placement
+//@ chunk-ptg2macw.js:15853-16122 placement
 function classifyAttachLookupError(error) {
   if (!(error instanceof TeleportOperationError)) return null;
   let formattedMessage = error.formattedMessage;
@@ -92,7 +92,7 @@ function classifyAttachLookupError(error) {
         }
       : null;
 }
-//@ chunk-edjpba11.js:14918-15220 placement
+//@ chunk-ptg2macw.js:16122-16424 placement
 function assertCloudSessionAttachable(error) {
   let refusal = classifyAttachLookupError(error);
   if (refusal === null) {
@@ -110,11 +110,11 @@ function assertCloudSessionAttachable(error) {
     refusal.reason,
   );
 }
-//@ chunk-edjpba11.js:15220-15273 placement
+//@ chunk-ptg2macw.js:16424-16477 placement
 async function attachRemoteSession(sessionId, url, options, context) {
   return runAttachRemoteSession(sessionId, url, options, context, undefined);
 }
-//@ chunk-edjpba11.js:15273-23367 placement
+//@ chunk-ptg2macw.js:16477-24577 placement
 /**
  * `claude --cloud <id>` 等附着云会话的主流程：预检会话、取令牌、建立 WS 连接并启动 REPL。
  */
@@ -136,7 +136,7 @@ async function runAttachRemoteSession(sessionId, url, options, runtime, attachCo
   ] = await Promise.all([
     import("../../utils/teleport/api.js"),
     import("../../replLauncher.js"),
-    import("../../commands.js"),
+    import("../../commands.lazy.js"),
     import("../../state/AppStateStore.js"),
     import("../../utils/debug.js"),
     import("../../services/remoteHistory/consumePrefetchedHistory.lazy.js"),
@@ -442,6 +442,7 @@ View it at ${getRemoteSessionUrl(url, undefined, {
           return;
         },
       ),
+      ...false,
       preflightCheck: attachableCheck,
       deviceNotBoundNotice: prefetch.notice,
       ...(runtime?.endProcessOnExit && {
@@ -609,7 +610,7 @@ View it at ${getRemoteSessionUrl(url, undefined, {
       else resetCurrentLimits();
   }
 }
-//@ chunk-edjpba11.js:23367-23405 placement
+//@ chunk-ptg2macw.js:24577-24615 placement
 function warningSystemMessage(text) {
   return createSystemMessage(text, "warning");
 }

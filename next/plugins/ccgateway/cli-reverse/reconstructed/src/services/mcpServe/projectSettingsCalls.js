@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：mcp serve 读取项目设置调用。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wy9dbk5f.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xrwmcqkn.js (9)
  * attribution: placement 9
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -25,7 +25,7 @@ import { EFFORT_LEVELS } from "../../utils/effort.js";
 import { import_reject, pickAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { isUndefinedAlias, isEmpty } from "./callUtils.js";
 import {
-  DEFAULT,
+  DEFAULT_2,
   clearOutputStylesCache,
   getAllOutputStylesCached,
   isBuiltInOrDefaultStyle,
@@ -36,7 +36,7 @@ import { logError } from "../../utils/log.js";
 import { isSettingSourceEnabled } from "../../utils/settings/constants.js";
 import { getSettingsFilePathForSource, parseSettingsFileUncached } from "../../utils/settings/settings.js";
 
-//@ chunk-wy9dbk5f.js:46366-48349 placement
+//@ chunk-xrwmcqkn.js:42056-44039 placement
 /**
  * ReadProjectSettings 的上限常量与输出结构（只暴露 thinking、attribution、自动压缩、effort、语言、输出风格、技能清单、token 提醒等字段），以及 attribution 文本安全检查用的正则。
  */
@@ -108,14 +108,14 @@ var HEREDOC_MARKER_RE = /EOF|^ *[\w-]{1,64} *$/m;
 var SHELL_META_CHARS_RE = /["'`$\\\u2018-\u201f]/;
 var TRAILER_EMAIL_RE = /(?<=^[\w-]+: [^<>\n]+ )<[\w.+[\]-]+@[\w.-]+>$/gm;
 var SYSTEM_REMINDER_WORD_RE = /systemreminder/i;
-//@ chunk-wy9dbk5f.js:48349-48410 placement
+//@ chunk-xrwmcqkn.js:44039-44100 placement
 /**
  * 可安全使用的 attribution 文本 schema。
  */
 function safeAttributionSchema() {
   return stringSchema().refine(isSafeAttributionText).optional().catch(undefined);
 }
-//@ chunk-wy9dbk5f.js:48410-48674 placement
+//@ chunk-xrwmcqkn.js:44100-44364 placement
 /**
  * 判断 attribution 文本可安全使用：长度/行数有限，无控制或不可见字符、引号与 shell 元字符、heredoc 标记、尖括号（允许 trailer 邮箱）、system-reminder 字样。
  */
@@ -135,7 +135,7 @@ function isSafeAttributionText(text) {
     lines.every((line) => line.length <= MAX_CLEAN_IDENTIFIER_LENGTH)
   );
 }
-//@ chunk-wy9dbk5f.js:48674-49304 placement
+//@ chunk-xrwmcqkn.js:44364-44995 placement
 /**
  * 限制 modelSettings 的数量与键长度：超出的条目把最严的 maxEffortLevel 并入顶层，其余只保留 autoCompactWindow/effortLevel。
  */
@@ -187,7 +187,7 @@ function capModelSettings(settingsFileUncached) {
     },
   };
 }
-//@ chunk-wy9dbk5f.js:49304-49424 placement
+//@ chunk-xrwmcqkn.js:44995-45115 placement
 var MAX_OUTPUT_STYLE_PROMPT = 65536;
 var servedOutputStyleSchema = DoctorLazy(() =>
   objectSchema({
@@ -198,9 +198,9 @@ var servedOutputStyleSchema = DoctorLazy(() =>
     .optional()
     .catch(undefined),
 );
-//@ chunk-wy9dbk5f.js:49424-49642 placement
+//@ chunk-xrwmcqkn.js:45115-45333 placement
 async function readServedOutputStyle(styleName, storageV5) {
-  let name = styleName || DEFAULT;
+  let name = styleName || DEFAULT_2;
   clearOutputStyleCaches();
   clearOutputStylesCache();
   let style = (
@@ -217,7 +217,7 @@ async function readServedOutputStyle(styleName, storageV5) {
         keepCodingInstructions: style.keepCodingInstructions,
       });
 }
-//@ chunk-wy9dbk5f.js:49642-49897 placement
+//@ chunk-xrwmcqkn.js:45333-45588 placement
 /**
  * 读取项目设置结果的 schema。
  */
@@ -249,7 +249,7 @@ var readProjectSettingsResultSchema = DoctorLazy(() =>
     outputStyle: servedOutputStyleSchema(),
   }),
 );
-//@ chunk-wy9dbk5f.js:49897-50181 placement
+//@ chunk-xrwmcqkn.js:45588-45872 placement
 async function serveReadProjectSettings(input, signal, context) {
   let settingsSource = readSettingsSource("projectSettings");
   let settingsSource_2 = readSettingsSource("localSettings");
@@ -266,7 +266,7 @@ async function serveReadProjectSettings(input, signal, context) {
     },
   };
 }
-//@ chunk-wy9dbk5f.js:50181-50401 placement
+//@ chunk-xrwmcqkn.js:45872-46092 placement
 function readSettingsSource(source) {
   let filePath = isSettingSourceEnabled(source) ? getSettingsFilePathForSource(source) : undefined;
   if (filePath === undefined)

@@ -1,13 +1,13 @@
 /**
  * standardwebhooks/dist/timing_safe_equal.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: standardwebhooks@1.0.0
- * pieces: chunk-hwmsct5x.js (1)
+ * pieces: chunk-vn3g7zt8.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
 
-//@ chunk-hwmsct5x.js:3818-4328 cjs-fingerprint
+//@ chunk-vn3g7zt8.js:4161-4671 cjs-fingerprint
 var require_timing_safe_equal = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

@@ -3,20 +3,37 @@
  *
  * 2.1.316 新增：目录同步
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (56), chunk-k50y1rw8.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (45), chunk-fepf8jp6.js (11), chunk-z0fny38e.js (2)
  * attribution: placement 58
  */
+import { writeSync, readdirSync, realpathSync, readlinkSync, lstatSync } from "fs";
 import { sep, join, resolve as resolve_2, parse, dirname, isAbsolute, relative as relative_2 } from "path";
 import { readdir, lstat } from "fs/promises";
 import { homedir } from "os";
-import { readdirSync, realpathSync, readlinkSync, lstatSync, writeSync } from "fs";
-import { sanitizeErrnoForTelemetry, isPathAbsent, getErrnoCode, errorMessage, toError } from "../errors.js";
+import { createSignal } from "../signal.js";
+import { toInfraSessionId } from "../../bridge/sessionIdCompat.js";
+import { env } from "../env.js";
+import { logError } from "../log.js";
+import { logForDebugging } from "../debug.js";
+import { errorMessage, toError, sanitizeErrnoForTelemetry, isPathAbsent, getErrnoCode } from "../errors.js";
+import { logEvent } from "../../services/analytics/index.js";
+import {
+  getIsInteractive,
+  getRootSession,
+  getFlagSettingsPath,
+  isDiskless,
+  getFlagAgentsFilePaths,
+  getFlagMcpConfigFilePaths,
+} from "../../bootstrap/state.js";
+import { CLEANUP_TIMEOUT_MS, registerCleanup } from "../cleanupRegistry.js";
+import { HostScoped } from "../hostScoped.js";
+import { stripControlChars } from "../settings/writeQueues.js";
 import { execFileNoThrowWithCwd } from "../execFileNoThrow.js";
 import { gitExe } from "../git.js";
 import { GIT_SAFE_GLOBAL_ARGS, IGNORE_SUBMODULES_DIRTY_FLAG } from "../git/gitSafeEnv.js";
-import { uniq } from "../collections.js";
+import { normalizeCaseForComparison_2 } from "../permissions/filesystem.js";
 import { pMap } from "../../../vendor/p-map/index.js";
 import { CHANGED_FILE_SCAN_CONCURRENCY } from "./repositoriesTrusted.js";
 import { byteBudgetedRetry } from "../fsJunctions.js";
@@ -36,17 +53,7 @@ import { hasBackslash } from "../pathClassification.js";
 import { isNetworkMountPath, isNetworkMountRoot_2, neverOtherHostMount } from "../networkPaths.js";
 import { getPathNormalizationVariants, isSensitiveNameOrVariant } from "../permissions/sensitivePaths.js";
 import { hasDosShortNameSegment } from "../windowsPathNames.js";
-import { env } from "../env.js";
-import { HostScoped } from "../hostScoped.js";
-import {
-  getRootSession,
-  getFlagSettingsPath,
-  isDiskless,
-  getFlagAgentsFilePaths,
-  getFlagMcpConfigFilePaths,
-  getIsInteractive,
-} from "../../bootstrap/state.js";
-import { permissionRuleValueFromString } from "../permissions/permissionRuleParser.js";
+import { parseRuleString } from "../permissions/permissionRuleParser.js";
 import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_picomatch_2 } from "../../../vendor/picomatch/index.js";
 import {
@@ -65,26 +72,315 @@ import { getPlatform } from "../platform.js";
 import { getClaudeConfigDirs, claudeStatePathPatterns } from "../permissions/claudeStatePaths.js";
 import { managedFileSettingsDirs, isManagedSettingsDropInName } from "../settings/managedFileSettings.js";
 import { getManagedFilePath } from "../settings/managedPath.js";
-import { logError } from "../log.js";
 import { logDirSyncHostConfig } from "./dirSyncRules.js";
-import { logForDebugging } from "../debug.js";
-import { createSignal } from "../signal.js";
-import { toInfraSessionId } from "../../bridge/sessionIdCompat.js";
-import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
-import { logEvent } from "../../services/analytics/index.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
-import { CLEANUP_TIMEOUT_MS, registerCleanup } from "../cleanupRegistry.js";
-import { stripControlChars as stripControlChars_3 } from "../settings/writeQueues.js";
 import { STORAGE_SPACES } from "../storage/storageSpaces.js";
 import { sanitizeIdSegment } from "../transcriptIds.js";
 import { validateStorageKey, DIR_SYNC_RECORD_SUFFIX } from "../storage/storageKeys.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:1882524-1882609 placement
+//@ chunk-fepf8jp6.js:83332-83700 placement
+/**
+ * 目录同步的待答复搁置表：按会话登记、关闭时通知订阅者。
+ */
+class PendingSyncHold {
+  #e = new Map();
+  #n = createSignal();
+  hold(attach) {
+    this.#e.set(attach.sessionId, attach);
+    attach.onAnswered(() => this.#n.emit(attach.sessionId));
+    this.#n.emit(attach.sessionId);
+  }
+  release(handle) {
+    if (handle.close()) this.#n.emit(handle.sessionId);
+  }
+  of(sessionId) {
+    return this.#e.get(toInfraSessionId(sessionId));
+  }
+  ready(sessionId) {
+    return this.of(sessionId)?.open() === true;
+  }
+  concerns(sessionId_2) {
+    return this.of(sessionId_2) !== undefined;
+  }
+  onChanged(close, infraSessionId) {
+    let infraSessionId_2 = toInfraSessionId(close);
+    return this.#n.subscribe((waiting) => {
+      if (waiting === infraSessionId_2) infraSessionId();
+    });
+  }
+}
+//@ chunk-fepf8jp6.js:83700-83717 placement
+var MAX_HELD_SESSIONS = 8;
+var HOLD_NOTIFY_INTERVAL_MS = 2000;
+//@ chunk-fepf8jp6.js:83717-86408 placement
+/**
+ * 目录同步会话对象。
+ */
+class DirSyncSession {
+  attachSyncs = new PendingSyncHold();
+  servedCallHolds = null;
+  #e = new Map();
+  #n = new Map();
+  #r = new Map();
+  #i = new Map();
+  #o;
+  #a = null;
+  #t = new Map();
+  #d = false;
+  #l = false;
+  #c = new Set();
+  #u = new Set();
+  register(entry, value) {
+    let infraSessionId = toInfraSessionId(entry);
+    this.#e.delete(infraSessionId);
+    this.#n.delete(infraSessionId);
+    this.#r.delete(infraSessionId);
+    oldestKeys(this.#e).forEach((infraSessionId) => {
+      let held = this.#e.get(infraSessionId);
+      this.#e.delete(infraSessionId);
+      held?.then(
+        (pending) => this.retire(pending.sessionId),
+        () => {},
+      );
+    });
+    this.#e.set(infraSessionId, value);
+  }
+  noteSilentlyNotArmed(sessionId, state) {
+    let infraSessionId = toInfraSessionId(sessionId);
+    this.#n.delete(infraSessionId);
+    oldestKeys(this.#n).forEach((key) => this.#n.delete(key));
+    this.#n.set(infraSessionId, state);
+  }
+  silentlyNotArmed(sessionId_2) {
+    return this.#n.get(toInfraSessionId(sessionId_2));
+  }
+  noteNotOptedIn(sessionId_3, state_2) {
+    let infraSessionId = toInfraSessionId(sessionId_3);
+    this.#r.delete(infraSessionId);
+    oldestKeys(this.#r).forEach((key_2) => this.#r.delete(key_2));
+    this.#r.set(infraSessionId, state_2);
+  }
+  notOptedIn(sessionId_4) {
+    return this.#r.get(toInfraSessionId(sessionId_4));
+  }
+  take(sessionId_5) {
+    let infraSessionId = toInfraSessionId(sessionId_5);
+    let entry = this.#e.get(infraSessionId);
+    this.#e.delete(infraSessionId);
+    return entry;
+  }
+  reportSendGateAnswers(sessionId_6, value) {
+    return Promise.resolve(false);
+  }
+  noteResumeCommandOnScreen(sessionId_7) {
+    this.#a = toInfraSessionId(sessionId_7);
+  }
+  hold(call, opts) {
+    let infraSessionId = toInfraSessionId(call.sessionId);
+    this.retire(infraSessionId);
+    this.#n.delete(infraSessionId);
+    this.#r.delete(infraSessionId);
+    let write = getIsInteractive()
+      ? (text, cb) => writeStderrSafely(this.#a === infraSessionId ? (cb ?? text) : text)
+      : undefined;
+    let shutDownOnce = null;
+    let shutDown = (finalWrite) =>
+      (shutDownOnce ??= (async () => {
+        await call.sync.shutdown(opts, finalWrite);
+        await call.sync.drain(CLEANUP_TIMEOUT_MS);
+      })());
+    this.#t.set(infraSessionId, {
+      unregister: registerCleanup(() => shutDown(write)),
+      shutDownOnce: shutDown,
+      sync: call.sync,
+      root: call.gitRoot,
+    });
+    this.#s(infraSessionId);
+  }
+  consentMayHaveChanged() {}
+  retire(sessionId_8) {
+    let infraSessionId = toInfraSessionId(sessionId_8);
+    let entry_2 = this.#t.get(infraSessionId);
+    if (entry_2 === undefined) return;
+    this.#t.delete(infraSessionId);
+    entry_2.unregister();
+    entry_2.sync.shutdown(0);
+    this.#s(infraSessionId);
+  }
+  async shutDown(sessionId_9) {
+    let infraSessionId = toInfraSessionId(sessionId_9);
+    let entry_3 = this.#t.get(infraSessionId);
+    if (entry_3 === undefined) return;
+    let now = Date.now();
+    let failed = await entry_3.shutDownOnce(undefined).then(
+      () => false,
+      (error) => {
+        logError(toError(error));
+        return true;
+      },
+    );
+    if (this.#t.get(infraSessionId) === entry_3) {
+      this.#t.delete(infraSessionId);
+      entry_3.unregister();
+      this.#s(infraSessionId);
+    }
+  }
+  watchState(sessionId_10, listener) {
+    let infraSessionId = toInfraSessionId(sessionId_10);
+    let state_3 = this.#i.get(infraSessionId);
+    if (state_3 === undefined) {
+      state_3 = {
+        changed: createSignal(),
+        listening: 0,
+        last: describeDirSyncState(this.stateOf(infraSessionId)),
+      };
+      this.#i.set(infraSessionId, state_3);
+    }
+    let state_4 = state_3;
+    let unsubscribe = state_4.changed.subscribe(listener);
+    state_4.listening += 1;
+    if (this.#o === undefined) {
+      this.#o = setInterval(() => {
+        [...this.#i.keys()].forEach((key) => this.#s(key));
+      }, HOLD_NOTIFY_INTERVAL_MS);
+      this.#o.unref?.();
+    }
+    let active = true;
+    return () => {
+      if (!active) return;
+      active = false;
+      unsubscribe();
+      state_4.listening -= 1;
+      if (state_4.listening === 0 && this.#i.get(infraSessionId) === state_4) this.#i.delete(infraSessionId);
+      if (this.#i.size === 0 && this.#o !== undefined) {
+        clearInterval(this.#o);
+        this.#o = undefined;
+      }
+    };
+  }
+  #s(key_3) {
+    let state_5 = this.#i.get(key_3);
+    if (state_5 === undefined) return;
+    let value_2 = this.stateOf(key_3);
+    let label = describeDirSyncState(value_2);
+    if (label === state_5.last) return;
+    state_5.last = label;
+    try {
+      state_5.changed.emit(value_2);
+    } catch (error) {
+      logError(toError(error));
+    }
+  }
+  stateOf(sessionId_11) {
+    return this.#t.get(toInfraSessionId(sessionId_11))?.sync.state();
+  }
+  syncOf(sessionId_12) {
+    return this.#t.get(toInfraSessionId(sessionId_12))?.sync;
+  }
+  servedCallFaceOf(sessionId_13) {
+    let infraSessionId = toInfraSessionId(sessionId_13);
+    return this.syncOf(infraSessionId);
+  }
+  rootOf(sessionId_14) {
+    return this.#t.get(toInfraSessionId(sessionId_14))?.root;
+  }
+  tellUnknownEngineWord() {
+    if (this.#d) return false;
+    this.#d = true;
+    return true;
+  }
+  sayUnknownEngineWord() {
+    if (this.#l) return false;
+    this.#l = true;
+    return true;
+  }
+  sayGitNotOnStartPath(word) {
+    if (this.#c.has(word)) return false;
+    this.#c.add(word);
+    return true;
+  }
+  wholeListingOutgrew(key_4) {
+    return this.#u.has(key_4);
+  }
+  noteWholeListingOutgrew(key_5) {
+    this.#u.add(key_5);
+  }
+  get heldCount() {
+    return this.#e.size;
+  }
+  get exitHookCount() {
+    return this.#t.size;
+  }
+}
+//@ chunk-fepf8jp6.js:86408-86436 placement
+function createDirSyncSession() {
+  return new DirSyncSession();
+}
+//@ chunk-fepf8jp6.js:86436-86454 placement
+/**
+ * 按宿主缓存的目录同步会话。
+ */
+var dirSyncSessionByHost; // deferred: uses createDirSyncSession of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fepf8jp6.js:86436", () => {
+  dirSyncSessionByHost = new HostScoped(createDirSyncSession);
+});
+//@ chunk-fepf8jp6.js:86454-86492 placement
+/**
+ * 取当前宿主的目录同步会话。
+ */
+function dirSyncSession() {
+  return dirSyncSessionByHost.of(getRootSession().host);
+}
+//@ chunk-fepf8jp6.js:86492-86528 placement
+/**
+ * 取出目录同步句柄。
+ */
+function takeDirSyncHandle(sessionId) {
+  return dirSyncSession().take(sessionId);
+}
+//@ chunk-fepf8jp6.js:86528-86573 placement
+function writeStderrSafely(text) {
+  try {
+    writeSync(
+      2,
+      `${stripControlChars(text)}
+`,
+    );
+  } catch {}
+}
+//@ chunk-fepf8jp6.js:86573-86641 placement
+function oldestKeys(map) {
+  return [...map.keys()].slice(0, Math.max(0, map.size + 1 - MAX_HELD_SESSIONS));
+}
+//@ chunk-fepf8jp6.js:86641-86858 placement
+function describeDirSyncState(handle) {
+  switch (handle?.state) {
+    case undefined:
+      return "none";
+    case "seeding":
+      return "seeding";
+    case "armed":
+      return `armed:${handle.engine}:${handle.direction}`;
+    case "off":
+      return `off:${handle.reason}`;
+    case "stopped":
+      return `stopped:${handle.reason}`;
+  }
+}
+//@ chunk-fepf8jp6.js:86858-86915 placement
+var gitVersionCacheByHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var gitProbeCacheByHost;
+var GIT_VERSION_PROBE_TIMEOUT_MS;
+deferInit("chunk-fepf8jp6.js:86858", () => {
+  gitVersionCacheByHost = new HostScoped(() => new Map());
+  gitProbeCacheByHost = new HostScoped(() => new Map());
+  GIT_VERSION_PROBE_TIMEOUT_MS = 15000;
+});
+//@ chunk-5xgkngpb.js:1961349-1961434 placement
 function joinAsLatin1Buffer(dir, name) {
   return Buffer.concat([Buffer.from(dir + sep), Buffer.from(name, "latin1")]);
 }
-//@ chunk-e6aww6q8.js:1882609-1883138 placement
+//@ chunk-5xgkngpb.js:1961434-1961963 placement
 /**
  * 检查目录同步目标子目录是否已有内容、为空还是无权限，并识别沿途符号链接。
  */
@@ -114,7 +410,7 @@ async function probeSyncedSubdir(dir, name) {
   if (probe !== "denied") return probe;
   return "failedWith" in deepest ? deepest : deepest.isDirectory() ? "stands" : "clear";
 }
-//@ chunk-e6aww6q8.js:1883138-1884157 placement
+//@ chunk-5xgkngpb.js:1961963-1962995 placement
 /**
  * 列出工作目录中被跟踪且有改动的文件（git 命令），没有 .git 时返回失败。
  */
@@ -152,7 +448,7 @@ async function listChangedTrackedFiles(repoRoot, env) {
           (pathMatch) => pathMatch[1] ?? "",
         )
       : [];
-  let trackedFiles = uniq([...filtered, ...status]);
+  let trackedFiles = normalizeCaseForComparison_2([...filtered, ...status]);
   if (
     trackedFiles.some(
       (path) => path.startsWith("/") || path.split(sep === "\\" ? /[\\/]/ : "/").includes(".."),
@@ -178,12 +474,12 @@ async function listChangedTrackedFiles(repoRoot, env) {
         isAssumeUnchangedListed: assumeUnchangedOut.code === 0,
       };
 }
-//@ chunk-e6aww6q8.js:1884510-1885139 placement
+//@ chunk-5xgkngpb.js:1963349-1963978 placement
 /**
  * 目录同步时排除的目录名（代理记忆、缓存、备份等）。
  */
 var DIR_SYNC_EXCLUDED_DIRS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1884510", () => {
+deferInit("chunk-5xgkngpb.js:1963349", () => {
   DIR_SYNC_EXCLUDED_DIRS = new Set([
     "agent-memory",
     "agent-memory-local",
@@ -236,16 +532,16 @@ deferInit("chunk-e6aww6q8.js:1884510", () => {
     "usage-data",
   ]);
 });
-//@ chunk-e6aww6q8.js:1885139-1885168 placement
+//@ chunk-5xgkngpb.js:1963978-1964007 placement
 var MAX_SYNC_SCAN_ENTRIES = 20000;
 var MAX_SYNC_SCAN_DEPTH = 64;
 var MAX_SYNC_SCAN_NODES = 256;
-//@ chunk-e6aww6q8.js:1885168-1885388 placement
+//@ chunk-5xgkngpb.js:1964007-1964227 placement
 var UNSUPPORTED_REALPATH_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SYNCED_STATE_DIR_NAMES;
 var SKIPPED_DEPENDENCY_DIRS;
 var UNCOVERED_ROOT;
-deferInit("chunk-e6aww6q8.js:1885168", () => {
+deferInit("chunk-5xgkngpb.js:1964007", () => {
   UNSUPPORTED_REALPATH_ERRNOS = new Set(["EINVAL", "UNKNOWN", "ENOTSUP"]);
   SYNCED_STATE_DIR_NAMES = new Set(["plugins", "cowork_plugins", "state"]);
   SKIPPED_DEPENDENCY_DIRS = new Set(["node_modules", "venv", ".venv", "__pycache__"]);
@@ -256,7 +552,7 @@ deferInit("chunk-e6aww6q8.js:1885168", () => {
     entriesExamined: 0,
   };
 });
-//@ chunk-e6aww6q8.js:1885388-1890193 placement
+//@ chunk-5xgkngpb.js:1964227-1969056 placement
 /**
  * 判断目录同步的根目录类型（网络位置、家目录内、链接根等）。
  */
@@ -290,7 +586,7 @@ function classifyDirSyncRoot(
         why: "unreadable",
       },
     };
-  let excludedRoots = uniq([
+  let excludedRoots = normalizeCaseForComparison_2([
     ...roots,
     ...mapped.flatMap(({ resolved }) => (resolved === null || resolved === "unexamined" ? [] : [resolved])),
   ]);
@@ -300,7 +596,7 @@ function classifyDirSyncRoot(
   let isSamePath = (root, candidate) => relativeTo(root, candidate) === "";
   let coveredDirs = new Set();
   let recordPassed = () => {};
-  let configHomeReal = uniq(configHomes.map((configHome) => resolve_2(configHome)));
+  let configHomeReal = normalizeCaseForComparison_2(configHomes.map((configHome) => resolve_2(configHome)));
   let firstConfigHome = configHomeReal[0];
   if (firstConfigHome !== undefined && excludedRoots.some((root) => isSamePath(firstConfigHome, root)))
     return UNCOVERED_ROOT;
@@ -309,7 +605,7 @@ function classifyDirSyncRoot(
     ground,
   });
   let homeSpellingsList = homeSpellings(home, realpathOf);
-  let peekedReal = uniq(peekedDirs.map((peekedDir) => resolve_2(peekedDir)));
+  let peekedReal = normalizeCaseForComparison_2(peekedDirs.map((peekedDir) => resolve_2(peekedDir)));
   let allowedPaths = [
     ...homeSpellingsList,
     ...excludedRoots,
@@ -595,7 +891,7 @@ function classifyDirSyncRoot(
     }
   });
   let mapped_2 = unwalkedDirs.map((unwalkedDir) => resolve_2(unwalkedDir));
-  for (let path of uniq([
+  for (let path of normalizeCaseForComparison_2([
     ...configFiles.map((configFile) => resolve_2(configFile)),
     ...mapped_2,
     ...flattened,
@@ -634,7 +930,7 @@ function classifyDirSyncRoot(
     ...{},
   };
 }
-//@ chunk-e6aww6q8.js:1890193-1890347 placement
+//@ chunk-5xgkngpb.js:1969056-1969211 placement
 function classifySyncRootPath(
   targetPath,
   cache = createRealpathCache(byteBudgetedRetry(MAX_REALPATH_WORK)),
@@ -650,11 +946,11 @@ function classifySyncRootPath(
       }
     : result;
 }
-//@ chunk-e6aww6q8.js:1890347-1890397 placement
+//@ chunk-5xgkngpb.js:1969211-1969261 placement
 function classifySyncRootFromScope(targetPath, targetPath_2, cache, isDenied) {
   return classifySyncRoot(targetPath, targetPath_2, cache, 0, [], [], isDenied);
 }
-//@ chunk-e6aww6q8.js:1890397-1891437 placement
+//@ chunk-5xgkngpb.js:1969261-1970309 placement
 /**
  * 沿根目录逐级检查目录同步根的类型：网络位置、家目录及其隐藏目录、链接根等，用于拒绝不安全的同步根。
  */
@@ -736,7 +1032,7 @@ function classifySyncRoot(targetPath, fs, isNetworkRisk, depth = 0, visited = []
     passed: passedDirs,
   };
 }
-//@ chunk-e6aww6q8.js:1891437-1891980 placement
+//@ chunk-5xgkngpb.js:1970309-1970855 placement
 /**
  * 创建带缓存的 realpath 与 lstat 查询器，避免重复访问文件系统。
  */
@@ -781,7 +1077,7 @@ function createRealpathCache(guard) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:1891980-1892302 placement
+//@ chunk-5xgkngpb.js:1970855-1971178 placement
 function classifyDirEntryForCompletion(stats, root, options, ctx) {
   if (stats.isSymbolicLink()) return "link";
   if (stats.isDirectory()) return scanDirectory_3(root, options);
@@ -800,50 +1096,50 @@ function classifyDirEntryForCompletion(stats, root, options, ctx) {
     return isUnreadableRealpathError(error) ? "other" : "unexamined";
   }
 }
-//@ chunk-e6aww6q8.js:1892302-1892338 placement (2.1.88 match: scanDirectory, 0.766)
+//@ chunk-5xgkngpb.js:1971178-1971214 placement (2.1.88 match: scanDirectory, 0.767)
 function scanDirectory_3(root, options) {
   return "directory";
 }
-//@ chunk-e6aww6q8.js:1892338-1892401 placement
+//@ chunk-5xgkngpb.js:1971214-1971277 placement
 function homeSpellings(home, cache = createRealpathCache(byteBudgetedRetry(MAX_REALPATH_WORK))) {
-  return uniq([resolve_2(home), resolveIfKnown(cache, resolve_2(home))]);
+  return normalizeCaseForComparison_2([resolve_2(home), resolveIfKnown(cache, resolve_2(home))]);
 }
-//@ chunk-e6aww6q8.js:1892401-1892468 placement
+//@ chunk-5xgkngpb.js:1971277-1971344 placement
 function resolveIfKnown(cache, path) {
   let resolved = cache(path);
   return resolved === null || resolved === "unexamined" ? path : resolved;
 }
-//@ chunk-e6aww6q8.js:1892468-1892522 placement
+//@ chunk-5xgkngpb.js:1971344-1971399 placement
 function hasNetworkAncestor(path) {
   return isUnsafeSyncRootSpelling(path) || (dirname(path) !== path && hasNetworkAncestor(dirname(path)));
 }
-//@ chunk-e6aww6q8.js:1892522-1892564 placement
+//@ chunk-5xgkngpb.js:1971399-1971442 placement
 function isUnsafeSyncRootSpelling(path) {
   return isNetworkMountPath(path) || isNetworkMountRoot_2(path) || neverOtherHostMount(path);
 }
-//@ chunk-e6aww6q8.js:1892564-1892626 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
+//@ chunk-5xgkngpb.js:1971442-1971504 placement (2.1.88 match: isRealPathWithinTeamDir, 1)
 function isNotFoundErrno(realCandidate) {
   let code = getErrnoCode(realCandidate);
   return code === "ENOENT" || code === "ENOTDIR";
 }
-//@ chunk-e6aww6q8.js:1892626-1892671 placement
+//@ chunk-5xgkngpb.js:1971504-1971550 placement
 function isUnreadableRealpathError(error) {
   return isNotFoundErrno(error) || getErrnoCode(error) === "ELOOP";
 }
-//@ chunk-e6aww6q8.js:1892671-1892771 placement
+//@ chunk-5xgkngpb.js:1971550-1971652 placement
 function relativeWithCaseFold(cwd, cwd_2, ignoreCase) {
   let relative = relative_2(cwd, cwd_2);
   if (!ignoreCase || !escapesRoot(relative)) return relative;
   let folded = relative_2(nfcLowerNfc(cwd), nfcLowerNfc(cwd_2));
   return escapesRoot(folded) ? relative : folded;
 }
-//@ chunk-e6aww6q8.js:1892771-1892835 placement
+//@ chunk-5xgkngpb.js:1971652-1971717 placement
 function escapesRoot(relative) {
   return relative === ".." || relative.startsWith(`..${sep}`) || isAbsolute(relative);
 }
-//@ chunk-e6aww6q8.js:1892835-1892860 placement
+//@ chunk-5xgkngpb.js:1971717-1971742 placement
 var ASCII_ONLY_RE = /^[\x00-\x7f]*$/;
-//@ chunk-e6aww6q8.js:1892860-1893022 placement
+//@ chunk-5xgkngpb.js:1971742-1971904 placement
 function isSensitiveSyncedPath(
   path,
   { tracked, readings = getPathNormalizationVariants(path), namesCredential = isSensitiveNameOrVariant },
@@ -856,10 +1152,10 @@ function isSensitiveSyncedPath(
     readings.some(hasDosShortNameSegment)
   );
 }
-//@ chunk-e6aww6q8.js:1893022-1893218 placement
+//@ chunk-5xgkngpb.js:1971904-1972100 placement
 var EMPTY_TYPED_TOOL_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var EMPTY_LAUNCH_PERMISSIONS;
-deferInit("chunk-e6aww6q8.js:1893022", () => {
+deferInit("chunk-5xgkngpb.js:1971904", () => {
   EMPTY_TYPED_TOOL_FLAGS = {
     disallowedTools: [],
     tools: [],
@@ -874,7 +1170,7 @@ deferInit("chunk-e6aww6q8.js:1893022", () => {
     typedToolFlags: EMPTY_TYPED_TOOL_FLAGS,
   };
 });
-//@ chunk-e6aww6q8.js:1893218-1893872 placement
+//@ chunk-5xgkngpb.js:1972100-1972754 placement
 /**
  * 启动权限快照：发布并保存会话启动时的权限规则与工具开关。
  */
@@ -908,30 +1204,30 @@ class LaunchPermissionsSnapshot {
     this.snapshot = EMPTY_LAUNCH_PERMISSIONS;
   }
 }
-//@ chunk-e6aww6q8.js:1893872-1893899 placement
+//@ chunk-5xgkngpb.js:1972754-1972781 placement
 var launchPermissionsByHost; // deferred: uses LaunchPermissionsSnapshot of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1893872", () => {
+deferInit("chunk-5xgkngpb.js:1972754", () => {
   launchPermissionsByHost = new HostScoped(() => new LaunchPermissionsSnapshot());
 });
-//@ chunk-e6aww6q8.js:1893899-1893938 placement
+//@ chunk-5xgkngpb.js:1972781-1972820 placement
 function launchPermissions() {
   return launchPermissionsByHost.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:1893938-1893972 placement
+//@ chunk-5xgkngpb.js:1972820-1972854 placement
 /**
  * 取启动权限快照。
  */
 function getLaunchPermissions() {
   return launchPermissions().get();
 }
-//@ chunk-e6aww6q8.js:1893972-1894013 placement
+//@ chunk-5xgkngpb.js:1972854-1972895 placement
 /**
  * 发布启动权限快照。
  */
 function publishLaunchPermissions(toolPermissionContext, inheritedSessionDirectories, permissionContext) {
   launchPermissions().publish(toolPermissionContext, inheritedSessionDirectories, permissionContext);
 }
-//@ chunk-e6aww6q8.js:1894013-1894170 placement
+//@ chunk-5xgkngpb.js:1972895-1973052 placement
 function launchDenyRules(launchPermissions) {
   return [
     ["cliArg", launchPermissions.denyRules],
@@ -940,22 +1236,22 @@ function launchDenyRules(launchPermissions) {
     rules.map((ruleText) => ({
       source,
       ruleBehavior: "deny",
-      ruleValue: permissionRuleValueFromString(ruleText),
+      ruleValue: parseRuleString(ruleText),
     })),
   );
 }
-//@ chunk-e6aww6q8.js:1894170-1894190 placement
+//@ chunk-5xgkngpb.js:1973052-1973072 placement
 var minimatch; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1894170", () => {
+deferInit("chunk-5xgkngpb.js:1973052", () => {
   minimatch = __toESM(require_picomatch_2(), 1);
 });
-//@ chunk-e6aww6q8.js:1894220-1894266 placement
+//@ chunk-5xgkngpb.js:1973102-1973148 placement
 var EMPTY_DIR_SYNC_RULES = {
   denies: [],
   credentials: [],
   reopens: [],
 };
-//@ chunk-e6aww6q8.js:1894266-1894390 placement
+//@ chunk-5xgkngpb.js:1973148-1973272 placement
 function normalizeRulePathSlashes(path) {
   let stripped = stripExtendedPathPrefix(path);
   return (
@@ -965,16 +1261,16 @@ function normalizeRulePathSlashes(path) {
     ) || "/"
   );
 }
-//@ chunk-e6aww6q8.js:1894390-1894424 placement
+//@ chunk-5xgkngpb.js:1973272-1973306 placement
 function normalizeRulePath(path) {
   return removeTrailingGlobSuffix(normalizeRulePathSlashes(path));
 }
-//@ chunk-e6aww6q8.js:1894424-1894514 placement
+//@ chunk-5xgkngpb.js:1973306-1973396 placement
 function globBaseDir(glob) {
   let prefix = glob.split(/[*?[\]]/)[0] ?? "";
   return prefix.slice(0, prefix.lastIndexOf("/")) || "/";
 }
-//@ chunk-e6aww6q8.js:1894514-1894607 placement
+//@ chunk-5xgkngpb.js:1973396-1973489 placement
 function expandRuleGlobBase(glob) {
   if (!containsGlobChars(glob)) return glob;
   try {
@@ -986,7 +1282,7 @@ function expandRuleGlobBase(glob) {
     return globBaseDir(glob);
   }
 }
-//@ chunk-e6aww6q8.js:1894607-1894816 placement
+//@ chunk-5xgkngpb.js:1973489-1973698 placement
 function createDenyMatcher(denies) {
   let byPrefix = new Map();
   let byGlob = new Map();
@@ -1004,7 +1300,7 @@ function createDenyMatcher(denies) {
         : path_3 === entry_3,
   };
 }
-//@ chunk-e6aww6q8.js:1894816-1894961 placement
+//@ chunk-5xgkngpb.js:1973698-1973843 placement
 function pathPrefixesBetween(from, to) {
   if (to === from) return [];
   let base = from === "/" ? "" : from;
@@ -1016,7 +1312,7 @@ function pathPrefixesBetween(from, to) {
       return acc;
     }, []);
 }
-//@ chunk-e6aww6q8.js:1894961-1895571 placement
+//@ chunk-5xgkngpb.js:1973843-1974455 placement
 /**
  * 根据 deny/credentials/reopen 规则构造上传过滤的匹配函数（含大小写折叠与 reopen 例外）。
  */
@@ -1067,20 +1363,20 @@ function createDenyFilterEntries(
     );
   };
 }
-//@ chunk-e6aww6q8.js:1895571-1895596 placement
+//@ chunk-5xgkngpb.js:1974455-1974480 placement
 function identityPath(path) {
   return path;
 }
-//@ chunk-e6aww6q8.js:1895596-1895659 placement
+//@ chunk-5xgkngpb.js:1974480-1974543 placement
 function escapeLineBreaks(text) {
   return text.replace(/[\n\r\u2028\u2029]/g, "\x01");
 }
-//@ chunk-e6aww6q8.js:1895659-1895705 placement
+//@ chunk-5xgkngpb.js:1974543-1974589 placement
 function memoizeFold(createFold) {
   let cached;
   return (value) => (cached ??= createFold())(value);
 }
-//@ chunk-e6aww6q8.js:1895705-1896125 placement
+//@ chunk-5xgkngpb.js:1974589-1975013 placement
 /**
  * 创建目录同步的拒绝过滤器：根据 deny/credentials/reopen 规则，对路径的原样、大小写折叠等多种拼写判断是否应被排除上传；没有规则时始终放行。
  */
@@ -1115,7 +1411,7 @@ function createSyncDenyFilter(launchDirSpellings, rules, platform = getPlatform(
       ].some((entries) => entries.asWritten(candidatePath) || entries.folded(candidatePath) || false);
     });
 }
-//@ chunk-e6aww6q8.js:1896125-1896990 placement
+//@ chunk-5xgkngpb.js:1975013-1975878 placement
 function checkManagedConfigFile(root, home) {
   let startTime = performance.now();
   let flagSettingsPath = getFlagSettingsPath();
@@ -1162,7 +1458,7 @@ function checkManagedConfigFile(root, home) {
   );
   return configDirs;
 }
-//@ chunk-e6aww6q8.js:1896990-1897069 placement
+//@ chunk-5xgkngpb.js:1975878-1975957 placement
 function unexaminedRoot(at) {
   return {
     ...UNCOVERED_ROOT,
@@ -1173,305 +1469,7 @@ function unexaminedRoot(at) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1912185-1912554 placement
-/**
- * 目录同步的待答复搁置表：按会话登记、关闭时通知订阅者。
- */
-class PendingSyncHold {
-  #e = new Map();
-  #t = createSignal();
-  hold(attach) {
-    this.#e.set(attach.sessionId, attach);
-    attach.onAnswered(() => this.#t.emit(attach.sessionId));
-    this.#t.emit(attach.sessionId);
-  }
-  release(handle) {
-    if (handle.close()) this.#t.emit(handle.sessionId);
-  }
-  of(sessionId) {
-    return this.#e.get(toInfraSessionId(sessionId));
-  }
-  ready(sessionId) {
-    return this.of(sessionId)?.open() === true;
-  }
-  concerns(sessionId_2) {
-    return this.of(sessionId_2) !== undefined;
-  }
-  onChanged(close, infraSessionId) {
-    let infraSessionId_2 = toInfraSessionId(close);
-    return this.#t.subscribe((waiting) => {
-      if (waiting === infraSessionId_2) infraSessionId();
-    });
-  }
-}
-//@ chunk-e6aww6q8.js:1912554-1912573 placement
-var MAX_HELD_SESSIONS = 8;
-var HOLD_NOTIFY_INTERVAL_MS = 2000;
-//@ chunk-e6aww6q8.js:1912573-1915274 placement
-/**
- * 目录同步会话对象。
- */
-class DirSyncSession {
-  attachSyncs = new PendingSyncHold();
-  servedCallHolds = null;
-  #e = new Map();
-  #t = new Map();
-  #n = new Map();
-  #o = new Map();
-  #r;
-  #i = null;
-  #s = new Map();
-  #a = false;
-  #d = false;
-  #c = new Set();
-  #l = new Set();
-  register(entry, value) {
-    let infraSessionId = toInfraSessionId(entry);
-    this.#e.delete(infraSessionId);
-    this.#t.delete(infraSessionId);
-    this.#n.delete(infraSessionId);
-    oldestKeys(this.#e).forEach((infraSessionId) => {
-      let held = this.#e.get(infraSessionId);
-      this.#e.delete(infraSessionId);
-      held?.then(
-        (pending) => this.retire(pending.sessionId),
-        () => {},
-      );
-    });
-    this.#e.set(infraSessionId, value);
-  }
-  noteSilentlyNotArmed(sessionId, state) {
-    let infraSessionId = toInfraSessionId(sessionId);
-    this.#t.delete(infraSessionId);
-    oldestKeys(this.#t).forEach((key) => this.#t.delete(key));
-    this.#t.set(infraSessionId, state);
-  }
-  silentlyNotArmed(sessionId_2) {
-    return this.#t.get(toInfraSessionId(sessionId_2));
-  }
-  noteNotOptedIn(sessionId_3, state_2) {
-    let infraSessionId = toInfraSessionId(sessionId_3);
-    this.#n.delete(infraSessionId);
-    oldestKeys(this.#n).forEach((key_2) => this.#n.delete(key_2));
-    this.#n.set(infraSessionId, state_2);
-  }
-  notOptedIn(sessionId_4) {
-    return this.#n.get(toInfraSessionId(sessionId_4));
-  }
-  take(sessionId_5) {
-    let infraSessionId = toInfraSessionId(sessionId_5);
-    let entry = this.#e.get(infraSessionId);
-    this.#e.delete(infraSessionId);
-    return entry;
-  }
-  reportSendGateAnswers(sessionId_6, value) {
-    return Promise.resolve(false);
-  }
-  noteResumeCommandOnScreen(sessionId_7) {
-    this.#i = toInfraSessionId(sessionId_7);
-  }
-  hold(call, opts) {
-    let infraSessionId = toInfraSessionId(call.sessionId);
-    this.retire(infraSessionId);
-    this.#t.delete(infraSessionId);
-    this.#n.delete(infraSessionId);
-    let write = getIsInteractive()
-      ? (text, cb) => writeStderrSafely(this.#i === infraSessionId ? (cb ?? text) : text)
-      : undefined;
-    let shutDownOnce = null;
-    let shutDown = (finalWrite) =>
-      (shutDownOnce ??= (async () => {
-        await call.sync.shutdown(opts, finalWrite);
-        await call.sync.drain(CLEANUP_TIMEOUT_MS);
-      })());
-    this.#s.set(infraSessionId, {
-      unregister: registerCleanup(() => shutDown(write)),
-      shutDownOnce: shutDown,
-      sync: call.sync,
-      root: call.gitRoot,
-    });
-    this.#u(infraSessionId);
-  }
-  consentMayHaveChanged() {}
-  retire(sessionId_8) {
-    let infraSessionId = toInfraSessionId(sessionId_8);
-    let entry_2 = this.#s.get(infraSessionId);
-    if (entry_2 === undefined) return;
-    this.#s.delete(infraSessionId);
-    entry_2.unregister();
-    entry_2.sync.shutdown(0);
-    this.#u(infraSessionId);
-  }
-  async shutDown(sessionId_9) {
-    let infraSessionId = toInfraSessionId(sessionId_9);
-    let entry_3 = this.#s.get(infraSessionId);
-    if (entry_3 === undefined) return;
-    let now = Date.now();
-    let failed = await entry_3.shutDownOnce(undefined).then(
-      () => false,
-      (error) => {
-        logError(toError(error));
-        return true;
-      },
-    );
-    if (this.#s.get(infraSessionId) === entry_3) {
-      this.#s.delete(infraSessionId);
-      entry_3.unregister();
-      this.#u(infraSessionId);
-    }
-  }
-  watchState(sessionId_10, listener) {
-    let infraSessionId = toInfraSessionId(sessionId_10);
-    let state_3 = this.#o.get(infraSessionId);
-    if (state_3 === undefined) {
-      state_3 = {
-        changed: createSignal(),
-        listening: 0,
-        last: describeDirSyncState(this.stateOf(infraSessionId)),
-      };
-      this.#o.set(infraSessionId, state_3);
-    }
-    let state_4 = state_3;
-    let unsubscribe = state_4.changed.subscribe(listener);
-    state_4.listening += 1;
-    if (this.#r === undefined) {
-      this.#r = setInterval(() => {
-        [...this.#o.keys()].forEach((key) => this.#u(key));
-      }, HOLD_NOTIFY_INTERVAL_MS);
-      this.#r.unref?.();
-    }
-    let active = true;
-    return () => {
-      if (!active) return;
-      active = false;
-      unsubscribe();
-      state_4.listening -= 1;
-      if (state_4.listening === 0 && this.#o.get(infraSessionId) === state_4) this.#o.delete(infraSessionId);
-      if (this.#o.size === 0 && this.#r !== undefined) {
-        clearInterval(this.#r);
-        this.#r = undefined;
-      }
-    };
-  }
-  #u(key_3) {
-    let state_5 = this.#o.get(key_3);
-    if (state_5 === undefined) return;
-    let value_2 = this.stateOf(key_3);
-    let label = describeDirSyncState(value_2);
-    if (label === state_5.last) return;
-    state_5.last = label;
-    try {
-      state_5.changed.emit(value_2);
-    } catch (error) {
-      logError(toError(error));
-    }
-  }
-  stateOf(sessionId_11) {
-    return this.#s.get(toInfraSessionId(sessionId_11))?.sync.state();
-  }
-  syncOf(sessionId_12) {
-    return this.#s.get(toInfraSessionId(sessionId_12))?.sync;
-  }
-  servedCallFaceOf(sessionId_13) {
-    let infraSessionId = toInfraSessionId(sessionId_13);
-    return this.syncOf(infraSessionId);
-  }
-  rootOf(sessionId_14) {
-    return this.#s.get(toInfraSessionId(sessionId_14))?.root;
-  }
-  tellUnknownEngineWord() {
-    if (this.#a) return false;
-    this.#a = true;
-    return true;
-  }
-  sayUnknownEngineWord() {
-    if (this.#d) return false;
-    this.#d = true;
-    return true;
-  }
-  sayGitNotOnStartPath(word) {
-    if (this.#c.has(word)) return false;
-    this.#c.add(word);
-    return true;
-  }
-  wholeListingOutgrew(key_4) {
-    return this.#l.has(key_4);
-  }
-  noteWholeListingOutgrew(key_5) {
-    this.#l.add(key_5);
-  }
-  get heldCount() {
-    return this.#e.size;
-  }
-  get exitHookCount() {
-    return this.#s.size;
-  }
-}
-//@ chunk-e6aww6q8.js:1915274-1915304 placement
-function createDirSyncSession() {
-  return new DirSyncSession();
-}
-//@ chunk-e6aww6q8.js:1915304-1915323 placement
-/**
- * 按宿主缓存的目录同步会话。
- */
-var dirSyncSessionByHost; // deferred: uses createDirSyncSession of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1915304", () => {
-  dirSyncSessionByHost = new HostScoped(createDirSyncSession);
-});
-//@ chunk-e6aww6q8.js:1915323-1915361 placement
-/**
- * 取当前宿主的目录同步会话。
- */
-function dirSyncSession() {
-  return dirSyncSessionByHost.of(getRootSession().host);
-}
-//@ chunk-e6aww6q8.js:1915361-1915397 placement
-/**
- * 取出目录同步句柄。
- */
-function takeDirSyncHandle(sessionId) {
-  return dirSyncSession().take(sessionId);
-}
-//@ chunk-e6aww6q8.js:1915397-1915444 placement
-function writeStderrSafely(text) {
-  try {
-    writeSync(
-      2,
-      `${stripControlChars_3(text)}
-`,
-    );
-  } catch {}
-}
-//@ chunk-e6aww6q8.js:1915444-1915514 placement
-function oldestKeys(map) {
-  return [...map.keys()].slice(0, Math.max(0, map.size + 1 - MAX_HELD_SESSIONS));
-}
-//@ chunk-e6aww6q8.js:1915514-1915732 placement
-function describeDirSyncState(handle) {
-  switch (handle?.state) {
-    case undefined:
-      return "none";
-    case "seeding":
-      return "seeding";
-    case "armed":
-      return `armed:${handle.engine}:${handle.direction}`;
-    case "off":
-      return `off:${handle.reason}`;
-    case "stopped":
-      return `stopped:${handle.reason}`;
-  }
-}
-//@ chunk-e6aww6q8.js:1915732-1915792 placement
-var gitVersionCacheByHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-var gitProbeCacheByHost;
-var GIT_VERSION_PROBE_TIMEOUT_MS;
-deferInit("chunk-e6aww6q8.js:1915732", () => {
-  gitVersionCacheByHost = new HostScoped(() => new Map());
-  gitProbeCacheByHost = new HostScoped(() => new Map());
-  GIT_VERSION_PROBE_TIMEOUT_MS = 15000;
-});
-//@ chunk-k50y1rw8.js:900-980 placement
+//@ chunk-z0fny38e.js:900-980 placement
 /**
  * 构造目录同步记录键（非法返回 undefined）。
  */
@@ -1479,7 +1477,7 @@ function dirSyncRecordKey(a, infraSessionId) {
   let recordKey = STORAGE_SPACES.dirSyncRecord(a, sanitizeIdSegment(infraSessionId));
   return validateStorageKey(recordKey) === undefined ? recordKey : undefined;
 }
-//@ chunk-k50y1rw8.js:980-1018 placement
+//@ chunk-z0fny38e.js:980-1018 placement
 /**
  * 目录同步记录文件名。
  */
@@ -1487,22 +1485,22 @@ function dirSyncRecordFileName(value) {
   return `${sanitizeIdSegment(value)}${DIR_SYNC_RECORD_SUFFIX}`;
 }
 export {
-  dirSyncSessionByHost,
-  listChangedTrackedFiles,
-  dirSyncSession,
-  publishLaunchPermissions,
   getLaunchPermissions,
-  DIR_SYNC_EXCLUDED_DIRS,
-  dirSyncRecordFileName,
-  dirSyncRecordKey,
   checkManagedConfigFile,
   createSyncDenyFilter,
   EMPTY_DIR_SYNC_RULES,
   isSensitiveSyncedPath,
   launchDenyRules,
   UNCOVERED_ROOT,
+  listChangedTrackedFiles,
+  dirSyncSessionByHost,
   gitVersionCacheByHost,
+  dirSyncSession,
   GIT_VERSION_PROBE_TIMEOUT_MS,
   gitProbeCacheByHost,
+  publishLaunchPermissions,
   takeDirSyncHandle,
+  DIR_SYNC_EXCLUDED_DIRS,
+  dirSyncRecordFileName,
+  dirSyncRecordKey,
 };

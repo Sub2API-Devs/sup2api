@@ -1,8 +1,8 @@
 /**
  * @anthropic-ai/sandbox-runtime/dist/sandbox/credential-mask-env.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
- * pieces: chunk-fq0cr76a.js (2)
+ * pieces: chunk-qg41pqt6.js (2)
  * attribution: esm-fingerprint 2
  */
 import { randomUUID } from "crypto";
@@ -10,9 +10,9 @@ import { verifyJwt, maskJwtClaims, mintFakeJwt } from "./credential-decode.js";
 import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 import { extractAndSubstitute } from "./credential-mask-files.js";
 
-//@ chunk-fq0cr76a.js:712377-712391 esm-fingerprint
+//@ chunk-qg41pqt6.js:714052-714066 esm-fingerprint
 var ENV_EXTRACT_KEY_PREFIX = "env:";
-//@ chunk-fq0cr76a.js:712391-714642 esm-fingerprint
+//@ chunk-qg41pqt6.js:714066-716317 esm-fingerprint
 function buildMaskedEnvVars(envVars, allowedDomains, registry, env = process.env) {
   let setEnvVars = {};
   let degradeToUnsetNames = [];

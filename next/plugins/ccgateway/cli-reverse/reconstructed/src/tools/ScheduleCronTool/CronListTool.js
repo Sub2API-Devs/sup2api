@@ -3,9 +3,9 @@
  *
  * CronList 工具：列出定时任务与下次触发时间
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ScheduleCronTool/CronListTool.ts
- * pieces: chunk-8985aafb.js (1)
+ * pieces: chunk-60t4wkqf.js (1)
  * attribution: fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -20,20 +20,22 @@ import {
 import {
   NEXT_FIRE_AT_DESCRIPTION,
   CRON_LIST_TOOL_NAME,
-  isKairosCronEnabled,
+  isCronManagementEnabled,
   CRON_LIST_DESCRIPTION,
   buildCronListPrompt,
   isDurableCronEnabled,
+  isKairosCronEnabled,
+  CRON_DELETE_TOOL_NAME,
 } from "./prompt.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { listAllCronTasks, nextFireTimeForTask, roundToMinute } from "../../utils/cronTasks.js";
-import { getTeammateContext } from "../../utils/teammate.js";
+import { getTeammateContext } from "../../utils/teammateContext.js";
 import { getCronJitterConfig } from "../../utils/cronJitterConfig.js";
 import { cronToHuman } from "../../utils/cron.js";
 import { formatCronFireTime } from "../../hooks/useScheduledTasks.js";
 import { truncate } from "../../utils/format.js";
 
-//@ chunk-8985aafb.js:4785-6031 fingerprint (2.1.88 match: CronListTool, 0.865)
+//@ chunk-60t4wkqf.js:4881-6259 fingerprint (2.1.88 match: CronListTool, 0.796)
 /**
  * CronList 工具（只读可并发）：列出任务（代理上下文中只列本代理的），附人类可读时间表与下次触发时间。
  */
@@ -66,7 +68,7 @@ var CronListTool = buildTool({
     return cronListOutputSchema();
   },
   isEnabled() {
-    return isKairosCronEnabled();
+    return isCronManagementEnabled();
   },
   isConcurrencySafe() {
     return true;
@@ -88,10 +90,13 @@ var CronListTool = buildTool({
         let tasks = ctx ? allTasks.filter((t) => t.agentId === ctx.agentId) : allTasks;
         let jitterConfig = getCronJitterConfig();
         let now = Date.now();
+        let kairosCronEnabled = isKairosCronEnabled();
         return {
           data: {
             jobs: tasks.map((t) => {
-              let nextFireAt = t.nextFireAt ?? nextFireTimeForTask(t, jitterConfig);
+              let nextFireAt = kairosCronEnabled
+                ? (t.nextFireAt ?? nextFireTimeForTask(t, jitterConfig))
+                : null;
               return {
                 id: t.id,
                 cron: t.cron,
@@ -119,7 +124,11 @@ var CronListTool = buildTool({
       type: "tool_result",
       content:
         output.jobs.length > 0
-          ? output.jobs.map(
+          ? (isKairosCronEnabled()
+              ? ""
+              : `Scheduled tasks are turned off in this session, so these jobs will not run here. ${CRON_DELETE_TOOL_NAME} can remove them.
+`) +
+            output.jobs.map(
               (j) =>
                 `${j.id} \u2014 ${j.humanSchedule}${j.recurring ? " (recurring)" : " (one-shot)"}${j.durable === false ? " [session-only]" : ""}${j.nextFireAt === undefined ? "" : `, next run ${formatCronFireTime(roundToMinute(j.nextFireAt))}`}: ${truncate(j.prompt, 80, true)}`,
             ).join(`

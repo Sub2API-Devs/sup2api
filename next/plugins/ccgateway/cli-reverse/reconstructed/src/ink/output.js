@@ -3,12 +3,11 @@
  *
  * Output：渲染期操作队列（write/blit/clip/clear/shift/noSelect），落到 Screen 网格；写行时调用原生 CellSegmenter
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/output.ts
- * pieces: chunk-ag5x7vhf.js (1), chunk-bfrv6ttc.js (1), chunk-bzr73sfg.js (13)
- * attribution: fingerprint 3, callgraph-fingerprint 1, sole-consumer 6, affinity 1, layout 2, file-local 2
+ * pieces: chunk-2avr6cej.js (13), chunk-hnxhr3bs.js (1)
+ * attribution: sole-consumer 6, affinity 1, fingerprint 3, layout 2, file-local 2
  */
-import { getGraphemeSegmenter } from "../utils/intl.js";
 import {
   createScreenSegmenter,
   packWord1,
@@ -36,19 +35,12 @@ import { logForDebugging } from "../utils/debug.js";
 import { LINK_END, link } from "./termio/osc.js";
 import { RESET } from "./outputReplay.js";
 
-//@ chunk-bfrv6ttc.js:567-648 callgraph-fingerprint (2.1.88 match: flushBuffer, 0.346)
-function countGraphemes(text) {
-  if (!text) return 0;
-  let count = 0;
-  for (let segment of getGraphemeSegmenter().segment(text)) count++;
-  return count;
-}
-//@ chunk-bzr73sfg.js:276084-276116 sole-consumer
+//@ chunk-2avr6cej.js:275665-275697 sole-consumer
 var RUN_SHIFT = 10;
 var WIDTH_BITS = 255;
 var TAB_FLAG = 256;
 var MAX_SGR_KEYS_BEFORE_RESET = 2048;
-//@ chunk-bzr73sfg.js:276116-279287 sole-consumer
+//@ chunk-2avr6cej.js:275697-278868 sole-consumer
 /**
  * Output 的行切分器，包装原生 Bun.ant.CellSegmenter：segment(text, reorder) 把带 ANSI 的一行切成字素格（cells：[字素下标, 宽度|制表符位|段号<<10]）与样式/链接段（runs：[sgr 键下标, uri 下标]）；width() 算显示宽度（制表位展开）；keepColumns() 只保留裁剪区内的格；paint() 调原生 paint 把格写进屏幕，字素用 charIndices() 映射到屏幕字符池、样式段用 runWords() 映射成 packWord1（SGR 键 → AnsiCode → StylePool id，链接 → 超链接池）。原生驻留表过大或样式池/chalk 换代时重建。
  */
@@ -227,21 +219,21 @@ class LineCellSegmenter {
     return codes;
   }
 }
-//@ chunk-bzr73sfg.js:279287-279359 sole-consumer
+//@ chunk-2avr6cej.js:278868-278940 sole-consumer
 var SGR_CODE_RE = /^\x1b\[(?:\d{1,3})(?:;5;\d{1,3}|;2;\d{1,3};\d{1,3};\d{1,3})?m$/;
-//@ chunk-bzr73sfg.js:279359-279505 sole-consumer
+//@ chunk-2avr6cej.js:278940-279086 sole-consumer
 function growInt32Array(array, minLength, keep) {
   if (array.length >= minLength) return array;
   let int32Array = new Int32Array(Math.max(minLength, 2 * array.length));
   if (keep > 0) int32Array.set(array.subarray(0, Math.min(keep, array.length)));
   return int32Array;
 }
-//@ chunk-bzr73sfg.js:279505-279540 affinity
+//@ chunk-2avr6cej.js:279086-279121 affinity
 var DIRECTION_MARKS = {
   ltr: "\u200E",
   rtl: "\u200F",
 };
-//@ chunk-bzr73sfg.js:279540-279648 fingerprint (2.1.88 match: intersectClip, 1)
+//@ chunk-2avr6cej.js:279121-279229 fingerprint (2.1.88 match: intersectClip, 1)
 /**
  * 两个裁剪矩形求交（未定义的边视为无限）。
  */
@@ -254,7 +246,7 @@ function intersectClip(parent, child) {
     y2: minDefined(parent.y2, child.y2),
   };
 }
-//@ chunk-bzr73sfg.js:279648-279900 layout (2.1.88 match: intersectClip, 0.795)
+//@ chunk-2avr6cej.js:279229-279481 layout (2.1.88 match: intersectClip, 0.795)
 function isClipRedundant(outerClip, clip, rect) {
   if (clip === undefined) return true;
   let x1 = maxDefined(outerClip?.x1, rect?.x) ?? -1 / 0;
@@ -269,21 +261,21 @@ function isClipRedundant(outerClip, clip, rect) {
     y2 <= (clip.y2 ?? 1 / 0)
   );
 }
-//@ chunk-bzr73sfg.js:279900-279984 file-local
+//@ chunk-2avr6cej.js:279481-279565 file-local
 function maxDefined(a, b) {
   if (a === undefined) return b;
   if (b === undefined) return a;
   return Math.max(a, b);
 }
-//@ chunk-bzr73sfg.js:279984-280068 file-local
+//@ chunk-2avr6cej.js:279565-279649 file-local
 function minDefined(a, b) {
   if (a === undefined) return b;
   if (b === undefined) return a;
   return Math.min(a, b);
 }
-//@ chunk-bzr73sfg.js:280068-280078 layout
+//@ chunk-2avr6cej.js:279649-279659 layout
 var NO_ABSOLUTE_CLEARS = [];
-//@ chunk-bzr73sfg.js:280078-285029 fingerprint (2.1.88 match: Output, 0.81)
+//@ chunk-2avr6cej.js:279659-284610 fingerprint (2.1.88 match: Output, 0.81)
 /**
  * 渲染操作缓冲：renderNodeToOutput 往里记 write/blit/shift/clear/clip/noSelect 操作，get() 依次落到屏幕：clear 只扩大 damage（绝对定位节点的清除会阻止被其覆盖的 blit）；blit 从上一帧拷贝未变子树；write 按裁剪区截断文字（Bun.sliceAnsi）后用 LineCellSegmenter 切分并 paint，同时写软换行标记；最后应用 noSelect。writeDirected 支持 RTL 文本右对齐。写入远多于拷贝时记日志。
  */
@@ -667,11 +659,11 @@ class Output {
     return screen;
   }
 }
-//@ chunk-bzr73sfg.js:285029-285068 sole-consumer
+//@ chunk-2avr6cej.js:284610-284649 sole-consumer
 function isDirectionalWrite(direction) {
   return direction !== undefined && needsBidiReorder();
 }
-//@ chunk-bzr73sfg.js:285068-285211 sole-consumer
+//@ chunk-2avr6cej.js:284649-284792 sole-consumer
 /**
  * 把一行写进屏幕：有方向时前置 LRM/RLM，交给 LineCellSegmenter 切分（必要时双向重排），按裁剪区保留列，paint 后返回结束列。
  */
@@ -681,7 +673,7 @@ function writeLineToScreen(screen, line, x, y, segmenter, direction, clip) {
   if (clip !== undefined) x = segmenter.keepColumns(x, clip.x1, clip.x2);
   return segmenter.count === 0 ? x : paintSegments(screen, x, y, segmenter);
 }
-//@ chunk-ag5x7vhf.js:17851-18348 fingerprint (2.1.88 match: writeLineToScreen, 0.806)
+//@ chunk-hnxhr3bs.js:16698-17195 fingerprint (2.1.88 match: writeLineToScreen, 0.806)
 /**
  * 把屏幕的一行转回带样式与超链接的 ANSI 字符串（跳过占位格，去掉行尾无效空格），renderToScreen 用来把离屏渲染结果变成文本行。
  */
@@ -716,4 +708,4 @@ function serializeScreenRow(screen, stylePool, row) {
   if (none !== stylePool.none) out += RESET;
   return out;
 }
-export { countGraphemes, serializeScreenRow, Output, intersectClip, isClipRedundant };
+export { intersectClip, isClipRedundant, Output, serializeScreenRow };

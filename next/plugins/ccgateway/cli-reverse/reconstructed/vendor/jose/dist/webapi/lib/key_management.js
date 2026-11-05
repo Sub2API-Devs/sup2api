@@ -1,9 +1,9 @@
 /**
  * jose/dist/webapi/lib/key_management.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (2), chunk-5h78gfwc.js (14)
- * attribution: esm-layout 3, esm-fingerprint 13
+ * pieces: chunk-0f6azspv.js (14), chunk-pd6th42n.js (2)
+ * attribution: esm-fingerprint 13, esm-layout 3
  */
 import { checkEncCryptoKey } from "./crypto_key.js";
 import { deriveKey_2 } from "./pbes2kw.js";
@@ -16,7 +16,7 @@ import {
   generateCek_2,
   init_content_encryption_3,
   init_content_encryption,
-  JOSENotSupported,
+  JOSENotSupported_3,
 } from "./content_encryption.js";
 import { isObject } from "./type_checks.js";
 import { tag } from "./key.js";
@@ -33,18 +33,18 @@ import { init_buffer_utils } from "./buffer_utils.js";
 import { noop } from "../../node/esm/lib/invalid_key_input.js";
 import { noopInit, init_is_key_like } from "../../browser/runtime/is_key_like.js";
 
-//@ chunk-5h78gfwc.js:12131-12248 esm-fingerprint
+//@ chunk-0f6azspv.js:12131-12248 esm-fingerprint
 function checkKeySize(key, alg) {
   if (key.algorithm.length !== parseInt(alg.slice(1, 4), 10))
     throw TypeError(`Invalid key size for alg: ${alg}`);
 }
-//@ chunk-5h78gfwc.js:12248-12368 esm-fingerprint
+//@ chunk-0f6azspv.js:12248-12368 esm-fingerprint
 function aeskwCryptoKey(key, alg, usage) {
   if (key instanceof Uint8Array) return crypto.subtle.importKey("raw", key, "AES-KW", true, [usage]);
   checkEncCryptoKey(key, alg, usage);
   return key;
 }
-//@ chunk-5h78gfwc.js:12368-12588 esm-fingerprint
+//@ chunk-0f6azspv.js:12368-12588 esm-fingerprint
 async function aeskwWrap(alg, key, cek) {
   let cryptoKey = await aeskwCryptoKey(key, alg, "wrapKey");
   checkKeySize(cryptoKey, alg);
@@ -60,7 +60,7 @@ async function aeskwWrap(alg, key, cek) {
   );
   return new Uint8Array(await crypto.subtle.wrapKey("raw", cryptoKeyCek, cryptoKey, "AES-KW"));
 }
-//@ chunk-5h78gfwc.js:12588-12812 esm-fingerprint
+//@ chunk-0f6azspv.js:12588-12812 esm-fingerprint
 async function aeskwUnwrap(alg, key, encryptedKey) {
   let cryptoKey = await aeskwCryptoKey(key, alg, "unwrapKey");
   checkKeySize(cryptoKey, alg);
@@ -78,7 +78,7 @@ async function aeskwUnwrap(alg, key, encryptedKey) {
   );
   return new Uint8Array(await crypto.subtle.exportKey("raw", cryptoKeyCek));
 }
-//@ chunk-5h78gfwc.js:14141-14304 esm-fingerprint
+//@ chunk-0f6azspv.js:14141-14304 esm-fingerprint
 async function pbes2KwEncrypt(
   alg,
   key,
@@ -93,12 +93,12 @@ async function pbes2KwEncrypt(
     p2s: encode_2(p2s),
   };
 }
-//@ chunk-5h78gfwc.js:14304-14384 esm-layout
+//@ chunk-0f6azspv.js:14304-14384 esm-layout
 async function pbes2KwDecrypt(alg, key, encryptedKey, p2c, joseHeader) {
   let key_2 = await deriveKey_2(joseHeader, alg, p2c, key);
   return aeskwUnwrap(alg.slice(-6), key_2, encryptedKey);
 }
-//@ chunk-5h78gfwc.js:15709-15914 esm-fingerprint
+//@ chunk-0f6azspv.js:15709-15914 esm-fingerprint
 var subtleAlgorithm_2 = (alg) => {
   switch (alg) {
     case "RSA-OAEP":
@@ -110,30 +110,30 @@ var subtleAlgorithm_2 = (alg) => {
       throw new JOSENotSupported_2(`alg ${alg} is not supported either by JOSE or your javascript runtime`);
   }
 };
-//@ chunk-5h78gfwc.js:15914-16026 esm-fingerprint
+//@ chunk-0f6azspv.js:15914-16026 esm-fingerprint
 async function rsaesEncrypt(alg, key, cek) {
   checkEncCryptoKey(key, alg, "encrypt");
   checkKeyLength(alg, key);
   return new Uint8Array(await crypto.subtle.encrypt(subtleAlgorithm_2(alg), key, cek));
 }
-//@ chunk-5h78gfwc.js:16026-16138 esm-fingerprint
+//@ chunk-0f6azspv.js:16026-16138 esm-fingerprint
 async function rsaesDecrypt(alg, key, encryptedKey) {
   checkEncCryptoKey(key, alg, "decrypt");
   checkKeyLength(alg, key);
   return new Uint8Array(await crypto.subtle.decrypt(subtleAlgorithm_2(alg), key, encryptedKey));
 }
-//@ chunk-5h78gfwc.js:23984-24068 esm-layout
+//@ chunk-0f6azspv.js:23984-24068 esm-layout
 async function aesGcmKwDecrypt(alg, key, ciphertext, iv, tag) {
   let sliced = alg.slice(0, 7);
   return decrypt(sliced, key, ciphertext, iv, tag, new Uint8Array());
 }
-//@ chunk-5h78gfwc.js:24068-24135 esm-fingerprint
+//@ chunk-0f6azspv.js:24068-24135 esm-fingerprint
 var unsupportedAlgHeader = 'Invalid or unsupported "alg" (JWE Algorithm) header value';
-//@ chunk-5h78gfwc.js:24135-24205 esm-fingerprint
+//@ chunk-0f6azspv.js:24135-24205 esm-fingerprint
 function assertEncryptedKey(encryptedKey) {
   if (encryptedKey === undefined) throw new JWEInvalid_2("JWE Encrypted Key missing");
 }
-//@ chunk-5h78gfwc.js:24205-26082 esm-fingerprint
+//@ chunk-0f6azspv.js:24205-26082 esm-fingerprint
 async function decryptKeyManagement(alg, key, encryptedKey, joseHeader, options) {
   switch (alg) {
     case "dir": {
@@ -223,7 +223,7 @@ async function decryptKeyManagement(alg, key, encryptedKey, joseHeader, options)
       throw new JOSENotSupported_2(unsupportedAlgHeader);
   }
 }
-//@ chunk-5h78gfwc.js:26082-27290 esm-fingerprint
+//@ chunk-0f6azspv.js:26082-27290 esm-fingerprint
 async function encryptKeyManagement(alg, enc, key, providedCek, providedParameters = {}) {
   let encryptedKey;
   let parameters;
@@ -315,7 +315,7 @@ async function encryptKeyManagement(alg, enc, key, providedCek, providedParamete
     parameters,
   };
 }
-//@ chunk-2tyrgda4.js:12407-12463 esm-layout
+//@ chunk-pd6th42n.js:12407-12463 esm-layout
 var init_key_management = __esm(() => {
   init_content_encryption_3();
   init_base64url();
@@ -327,7 +327,7 @@ var init_key_management = __esm(() => {
   noopInit();
   init_is_key_like();
 });
-//@ chunk-2tyrgda4.js:12463-12669 esm-fingerprint
+//@ chunk-pd6th42n.js:12463-12669 esm-fingerprint
 function jweAlgorithmFor(alg) {
   switch (alg) {
     case "RSA-OAEP":
@@ -336,7 +336,7 @@ function jweAlgorithmFor(alg) {
     case "RSA-OAEP-512":
       return "RSA-OAEP";
     default:
-      throw new JOSENotSupported(`alg ${alg} is not supported either by JOSE or your javascript runtime`);
+      throw new JOSENotSupported_3(`alg ${alg} is not supported either by JOSE or your javascript runtime`);
   }
 }
-export { jweAlgorithmFor, init_key_management, decryptKeyManagement, encryptKeyManagement };
+export { init_key_management, decryptKeyManagement, encryptKeyManagement, jweAlgorithmFor };

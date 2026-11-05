@@ -3,9 +3,9 @@
  *
  * 工作流日志条目（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0djyfj7x.js (4), chunk-41w44bgm.js (10)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-bb967bhs.js (4), chunk-kd2wbncj.js (10)
  * attribution: placement 14
  */
 import { createHash } from "crypto";
@@ -20,14 +20,14 @@ import {
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0djyfj7x.js:227-262 placement
+//@ chunk-bb967bhs.js:227-262 placement
 /**
  * 按工作流运行 id 缓存隐藏脚本的 sha256。
  */
 class HiddenScriptShaCache {
   scriptSha256ById = new Map();
 }
-//@ chunk-0djyfj7x.js:262-527 placement
+//@ chunk-bb967bhs.js:262-527 placement
 /**
  * 取隐藏脚本的工作流运行的脚本 sha256：先查缓存，再在任务列表中找对应运行并计算脚本哈希。
  */
@@ -43,13 +43,13 @@ function hiddenScriptSha(workflowRunId, slot, runs) {
   if (found === undefined) return;
   return found.script === "" ? "" : computeContentHash(found.script);
 }
-//@ chunk-0djyfj7x.js:527-688 placement
+//@ chunk-bb967bhs.js:527-688 placement
 /**
  * 隐藏脚本的工作流运行无法在未加载脚本的会话中恢复时的拒绝文案。
  */
 var HIDDEN_SCRIPT_RESUME_REFUSAL =
   "This workflow run hides its script, and this session has not loaded that script, so it cannot resume the run. Start a new run without resumeFromRunId.";
-//@ chunk-0djyfj7x.js:688-1427 placement
+//@ chunk-bb967bhs.js:688-1427 placement
 async function readWorkflowJournal(workflowRunId, slot, runs, readRun) {
   let sha = hiddenScriptSha(workflowRunId, slot, runs);
   if (sha === "")
@@ -83,7 +83,7 @@ async function readWorkflowJournal(workflowRunId, slot, runs, readRun) {
     kind: "shared",
   };
 }
-//@ chunk-41w44bgm.js:28151-28243 placement
+//@ chunk-kd2wbncj.js:20426-20518 placement
 /**
  * 判断 agent 结构化输出审查是否生效（开关打开且当前角色为 arbiter）。
  */
@@ -97,7 +97,7 @@ function isArbiterStructuredOutputReviewOn(mode) {
     }) === "arbiter"
   );
 }
-//@ chunk-41w44bgm.js:28243-28418 placement
+//@ chunk-kd2wbncj.js:20518-20693 placement
 /**
  * 对 agent 结构化输出做服务端审查判定：被标记时返回原因，否则返回未标记；非判定结果返回 undefined。
  */
@@ -116,7 +116,7 @@ async function structuredOutputVerdict(assistantMessage, options) {
         flagged: false,
       };
 }
-//@ chunk-41w44bgm.js:28578-28714 placement
+//@ chunk-kd2wbncj.js:20853-20989 placement
 /**
  * 工作流日志的固定行：键版本 v2，restoring/restored/resumed 标记行，launched 行前缀，以及不可读标记。
  */
@@ -126,7 +126,7 @@ var RESTORED_LINE;
 var RESUMED_LINE;
 var sliced;
 var UNREADABLE;
-deferInit("chunk-41w44bgm.js:28578", () => {
+deferInit("chunk-kd2wbncj.js:20853", () => {
   JOURNAL_KEY_VERSION = "v2";
   RESTORING_LINE = jsonStringify({
     type: "restoring",
@@ -142,7 +142,7 @@ deferInit("chunk-41w44bgm.js:28578", () => {
   }).slice(0, -1);
   UNREADABLE = "unreadable";
 });
-//@ chunk-41w44bgm.js:28714-28794 placement
+//@ chunk-kd2wbncj.js:20989-21069 placement
 /**
  * 合法文本原样返回，否则返回 unreadable 标记。
  */
@@ -150,7 +150,7 @@ function textOrUnreadable(value) {
   if (value === undefined) return;
   return typeof value === "string" && SHA256_HEX_RE.test(value) ? value : UNREADABLE;
 }
-//@ chunk-41w44bgm.js:28794-28964 placement
+//@ chunk-kd2wbncj.js:21069-21239 placement
 /**
  * 判断文本中是否包含 launched 日志行（含被截断在末尾的部分前缀）。
  */
@@ -162,7 +162,7 @@ function containsLaunchedLine(text) {
   }
   return false;
 }
-//@ chunk-41w44bgm.js:28964-29484 placement
+//@ chunk-kd2wbncj.js:21239-21759 placement
 /**
  * 索引工作流 journal 条目：按 key 汇总最终结果、开始记录、失败、被降级（结果后又开始）与被替换的 key，并取 launched 中的隐藏脚本哈希。
  */
@@ -199,7 +199,7 @@ function indexJournalEntries(entries) {
     }),
   };
 }
-//@ chunk-41w44bgm.js:29484-30000 placement
+//@ chunk-kd2wbncj.js:21759-22275 placement
 /**
  * 生成 agent 调用选项的稳定键：只取 schema/model/effort/isolation/agentType/disallowedTools/bashCommandClamp，递归按键排序（跳过函数与 __proto__）后序列化。
  */
@@ -241,7 +241,7 @@ function agentOptionsKey(options) {
   };
   return jsonStringify(canonicalize(picked));
 }
-//@ chunk-41w44bgm.js:30000-30135 placement
+//@ chunk-kd2wbncj.js:22275-22410 placement
 /**
  * 计算 agent() 调用的日志键：对调用点、提示词与稳定化后的选项做 sha256，并加版本前缀。
  */
@@ -255,7 +255,7 @@ function agentCallKey(prompt, options, prev) {
     .digest("hex");
   return `${JOURNAL_KEY_VERSION}:${hash}`;
 }
-//@ chunk-41w44bgm.js:30135-30391 placement
+//@ chunk-kd2wbncj.js:22410-22666 placement
 /**
  * 计算子调用的日志键：父键与名称加上槽位号、fork 或 join 成员列表后做 sha256。
  */
@@ -269,7 +269,7 @@ function childCallKey(prev, target, slot) {
   }
   return hash.digest("hex");
 }
-//@ chunk-41w44bgm.js:30391-30489 placement
+//@ chunk-kd2wbncj.js:22666-22764 placement
 /**
  * 计算「旧内容 → 新内容」替换后的 sha256。
  */

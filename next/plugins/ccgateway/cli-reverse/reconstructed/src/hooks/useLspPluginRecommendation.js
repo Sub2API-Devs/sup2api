@@ -3,9 +3,9 @@
  *
  * 打开特定语言文件时推荐安装对应 LSP 插件并处理用户选择。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useLspPluginRecommendation.tsx
- * pieces: chunk-18hwfzwa.js (3)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: fingerprint 2, layout 1
  */
 import { extname } from "path";
@@ -37,11 +37,11 @@ import { marketplaceSourceOfEntry } from "../utils/plugins/headersHelper.js";
 import { updateSettingsForSourceWithTransform } from "../utils/settings/settings.js";
 import { saveGlobalConfig } from "../utils/config.js";
 
-//@ chunk-18hwfzwa.js:1802617-1802669 fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:1850596-1850648 fingerprint (2.1.88 match: _temp, 1)
 function selectFileHistoryTrackedFiles(s) {
   return s.fileHistory.trackedFiles;
 }
-//@ chunk-18hwfzwa.js:1802669-1803844 layout
+//@ chunk-czq1j3j2.js:1850648-1851823 layout
 /**
  * 文件历史里出现新的被跟踪文件时，查找匹配该扩展名的 LSP 插件，弹出推荐对话框；用户取消时把未检查的文件放回，接受/拒绝后本会话不再推荐。
  */
@@ -139,7 +139,7 @@ function useLspRecommendationWatcher(requestDialog, schedule) {
   }
   useEffect(watchEffect, watchDeps);
 }
-//@ chunk-18hwfzwa.js:1803844-1804920 fingerprint (2.1.88 match: useLspPluginRecommendation, 0.614)
+//@ chunk-czq1j3j2.js:1851823-1852899 fingerprint (2.1.88 match: useLspPluginRecommendation, 0.615)
 function useLspPluginRecommendation({ pluginId, pluginName }, response, addNotification, storageV5) {
   switch (
     (logForDebugging(`[useLspPluginRecommendation] User response: ${response} for ${pluginName}`), response)

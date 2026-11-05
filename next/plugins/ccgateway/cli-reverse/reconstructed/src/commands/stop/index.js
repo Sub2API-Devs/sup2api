@@ -3,15 +3,15 @@
  *
  * 2.1.316 新增：非交互后台会话的 /stop 命令
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-adzz9hc5.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fbdrnep1.js (1)
  * attribution: placement 1
  */
 import { isBgSession } from "../../utils/concurrentSessions.js";
 import { getRootSessionOverride } from "../../context/replRootContext.js";
 
-//@ chunk-adzz9hc5.js:3344-3692 placement
+//@ chunk-fbdrnep1.js:3652-4000 placement
 /**
  * /stop 命令对象（local-jsx）；描述：Stop this background session; transcript and worktree are kept；isEnabled: ()=>Ft()||hkt()!==null；实现 chunk-t85zxbmt.js 的 cho。
  */

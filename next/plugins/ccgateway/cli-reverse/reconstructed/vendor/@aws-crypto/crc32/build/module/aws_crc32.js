@@ -1,8 +1,8 @@
 /**
  * @aws-crypto/crc32/build/module/aws_crc32.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-crypto/crc32@5.2.0
- * pieces: chunk-3cddmtk7.js (2)
+ * pieces: chunk-ayc8mk37.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { __toESM } from "../../../../../runtime/bun-runtime.js";
@@ -15,12 +15,12 @@ import { isEmptyString, numToUint8 } from "../../../util/build/module/numToUint8
 import { convertToBuffer } from "../../../util/build/convertToBuffer.js";
 import { __awaiter, __generator } from "../../../../tslib/tslib.es6.mjs";
 
-//@ chunk-3cddmtk7.js:1049-1103 esm-layout
+//@ chunk-ayc8mk37.js:1049-1103 esm-layout
 var import_middleware_host_header = __toESM(require_middleware_host_header());
 var import_middleware_logger = __toESM(require_middleware_logger());
 var import_middleware_recursion_detection = __toESM(require_middleware_recursion_detection());
 var import_middleware_user_agent = __toESM(require_middleware_user_agent());
-//@ chunk-3cddmtk7.js:1103-1424 esm-fingerprint
+//@ chunk-ayc8mk37.js:1103-1424 esm-fingerprint
 var AwsCrc32 = (function () {
   function AwsCrc32() {
     this.crc32 = new Crc32();

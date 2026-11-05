@@ -3,9 +3,9 @@
  *
  * StructuredOutput 工具（SDK 结构化输出）：按 JSON schema（Ajv 编译、严格 schema 派生、不可满足检查）校验模型给出的最终结果并结束回合
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/SyntheticOutputTool/SyntheticOutputTool.ts
- * pieces: chunk-22r83hv0.js (10), chunk-ae5g0zb5.js (1)
+ * pieces: chunk-8nzbdydx.js (10), chunk-mhn0amzz.js (1)
  * attribution: fingerprint 3, layout 6, file-local 1, callgraph-fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -29,28 +29,28 @@ import { isClaudeTestPluginEnabled } from "../../plugins/bundled/claudeTest/brow
 import { hasPluginSkill } from "../../components/skills/SkillsMenu.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-22r83hv0.js:24633-24745 fingerprint (2.1.88 match: outputSchema, 0.607)
+//@ chunk-8nzbdydx.js:53826-53938 fingerprint (2.1.88 match: outputSchema, 0.607)
 var structuredOutputInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var structuredOutputOutputSchema;
 var STRUCTUREDOUTPUT;
-deferInit("chunk-22r83hv0.js:24633", () => {
+deferInit("chunk-8nzbdydx.js:53826", () => {
   structuredOutputInputSchema = DoctorLazy(() => objectSchema({}).passthrough());
   structuredOutputOutputSchema = DoctorLazy(() => stringSchema().describe("Structured output tool result"));
   STRUCTUREDOUTPUT = "StructuredOutput";
 });
-//@ chunk-22r83hv0.js:24745-24814 layout
+//@ chunk-8nzbdydx.js:53938-54007 layout
 function isNonInteractiveOrBgSession(toolContext) {
   return toolContext.isNonInteractiveSession || toolContext.isBgSession === true;
 }
-//@ chunk-22r83hv0.js:24814-25041 layout (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince_2(messages, sinceUuid) {
-  if (messages?.type !== "tool_use" || messages.name !== STRUCTUREDOUTPUT) return null;
-  if (messages.id !== undefined && sinceUuid.has(messages.id)) return null;
-  let input = messages.input;
+//@ chunk-8nzbdydx.js:54007-54234 layout
+function structuredOutputText(message, seenIds) {
+  if (message?.type !== "tool_use" || message.name !== STRUCTUREDOUTPUT) return null;
+  if (message.id !== undefined && seenIds.has(message.id)) return null;
+  let input = message.input;
   let text = input !== null && typeof input === "object" && "text" in input ? input.text : undefined;
   return typeof text === "string" && text.length > 0 ? text : null;
 }
-//@ chunk-22r83hv0.js:25041-26067 fingerprint (2.1.88 match: SyntheticOutputTool, 0.815)
+//@ chunk-8nzbdydx.js:54234-55260 fingerprint (2.1.88 match: SyntheticOutputTool, 0.815)
 /**
  * StructuredOutput 工具（SDK --json-schema 用）：输入是任意对象，call 时用 Ajv 校验后作为 structured_output 返回并结束回合；总是内联、只读、并发安全。
  */
@@ -113,14 +113,14 @@ function SyntheticOutputTool(overrides = {}, handleInput = () => {}) {
     },
   });
 }
-//@ chunk-22r83hv0.js:26067-26095 layout
+//@ chunk-8nzbdydx.js:55260-55288 layout
 var DEFAULT_SYNTHETIC_OUTPUT_TOOL; // deferred: uses SyntheticOutputTool of its import cycle while loading; runs once the cycle is complete
 var syntheticOutputToolCache;
-deferInit("chunk-22r83hv0.js:26067", () => {
+deferInit("chunk-8nzbdydx.js:55260", () => {
   DEFAULT_SYNTHETIC_OUTPUT_TOOL = SyntheticOutputTool();
   syntheticOutputToolCache = new WeakMap();
 });
-//@ chunk-22r83hv0.js:26095-26174 file-local
+//@ chunk-8nzbdydx.js:55288-55367 file-local
 /**
  * 按 JSON schema 缓存构造的 StructuredOutput 工具。
  */
@@ -131,17 +131,17 @@ function createSyntheticOutputTool(jsonSchema) {
   syntheticOutputToolCache.set(jsonSchema, result);
   return result;
 }
-//@ chunk-22r83hv0.js:26174-26193 layout
+//@ chunk-8nzbdydx.js:55367-55386 layout
 var MAX_SCHEMA_NODES_2 = 1e5;
 var MAX_SCHEMA_DEPTH_2 = 1e4;
-//@ chunk-22r83hv0.js:26193-26343 layout
+//@ chunk-8nzbdydx.js:55386-55536 layout
 function isSchemaTooLarge(node, budget, depth) {
   if (--budget.n < 0 || depth > MAX_SCHEMA_DEPTH_2) return true;
   if (typeof node !== "object" || node === null) return false;
   for (let child of Object.values(node)) if (isSchemaTooLarge(child, budget, depth + 1)) return true;
   return false;
 }
-//@ chunk-22r83hv0.js:26343-26910 layout
+//@ chunk-8nzbdydx.js:55536-56103 layout
 function compileOutputSchemaValidator(node) {
   try {
     if (
@@ -191,7 +191,7 @@ function compileOutputSchemaValidator(node) {
     };
   }
 }
-//@ chunk-22r83hv0.js:26910-27797 callgraph-fingerprint (2.1.88 match: buildSyntheticOutputTool, 0.281)
+//@ chunk-8nzbdydx.js:56103-56990 callgraph-fingerprint (2.1.88 match: buildSyntheticOutputTool, 0.281)
 /**
  * 构造带 schema 校验的 StructuredOutput 工具：先编译 Ajv 校验器（拒绝过大或 $async schema），尝试派生严格模式 schema，检查 schema 是否不可满足，再返回 {tool, unsatisfiable?} 或 {error}。
  */
@@ -254,7 +254,7 @@ function buildSyntheticOutputTool(jsonSchema) {
     };
   }
 }
-//@ chunk-ae5g0zb5.js:106792-106956 fingerprint (2.1.88 match: isSyntheticOutputToolEnabled, 0.699)
+//@ chunk-mhn0amzz.js:108034-108198 fingerprint (2.1.88 match: isSyntheticOutputToolEnabled, 0.699)
 /**
  * （旧版名 isSyntheticOutputToolEnabled，存疑）交互式、主线程、非远程会话且若干特性开启时为真；与 StructuredOutput 的关系待确认。
  */
@@ -272,10 +272,10 @@ function isSyntheticOutputToolEnabled(opts) {
 }
 export {
   STRUCTUREDOUTPUT,
-  countToolCallsSince_2,
   createSyntheticOutputTool,
+  DEFAULT_SYNTHETIC_OUTPUT_TOOL,
   isNonInteractiveOrBgSession,
+  structuredOutputText,
   MAX_SCHEMA_NODES_2,
   isSyntheticOutputToolEnabled,
-  DEFAULT_SYNTHETIC_OUTPUT_TOOL,
 };

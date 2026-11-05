@@ -3,21 +3,21 @@
  *
  * 语音输入录音：原生 audio-capture-napi、arecord、SoX rec 三种后端的探测与启动停止，依赖检查与安装提示
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/voice.ts
- * pieces: chunk-g4k0hvs5.js (1), chunk-ga5txjrx.js (18), chunk-jx4rgw65.js (1)
- * attribution: fingerprint 13, sole-consumer 4, affinity 2, layout 1
+ * pieces: chunk-empn5226.js (18), chunk-gw6tgnv9.js (1), chunk-hb44av3w.js (1)
+ * attribution: sole-consumer 4, affinity 2, fingerprint 13, layout 1
  */
 import { join } from "path";
 import { homedir } from "os";
 import { spawn } from "child_process";
 import { readFile } from "fs/promises";
-import { getPlatform } from "../utils/platform.js";
 import { HostScoped } from "../utils/hostScoped.js";
 import { logForDebugging } from "../utils/debug.js";
 import { execFileNoThrow } from "../utils/execFileNoThrow.js";
 import { isAntBuild } from "../utils/envUtils.js";
 import { env } from "../utils/env.js";
+import { getPlatform } from "../utils/platform.js";
 import { cgroupSpawnOptions } from "../utils/toolCgroup.js";
 import { resetLocalSettingsGitTrackedCache, isLocalSettingsGitTracked } from "../utils/config.js";
 import { whichOnPath } from "../utils/which.js";
@@ -26,27 +26,29 @@ import { safeExecFileSync } from "../utils/safeSpawn.js";
 import { SETTINGS_FREEZE_MIN_REFRESH_MS } from "../remote/tools/serve/servedSettingsFreeze.js";
 import { logError } from "../utils/log.js";
 import { toError } from "../utils/errors.js";
-import { deferInit, beginDeferredInits, runDeferredInits } from "../../runtime/deferred-init.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
-// This module is the first evaluated of an import cycle of 2 modules closed by ../remote/tools/serve/servedSettingsFreeze.js;
-// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
-beginDeferredInits("src/remote/tools/serve/servedSettingsFreeze.js");
-//@ chunk-jx4rgw65.js:7408-7501 fingerprint (2.1.88 match: stopRecording, 0.781)
-function killChildWithSignal(signal, child, handle) {
-  if (signal === "SIGTERM" && getPlatform() === "windows") {
-    handle.close();
-    return true;
-  }
-  child.kill(signal);
-  return false;
+//@ chunk-hb44av3w.js:14569-14637 fingerprint (2.1.88 match: stopRecording, 0.781)
+/**
+ * 向进程组（-pid）发 SIGTERM；pid ≤ 1 时不做，错误忽略。旧版名 stopRecording 是错配。
+ */
+function killProcessGroup(pid) {
+  if (pid <= 1) return;
+  try {
+    process.kill(-pid, "SIGTERM");
+  } catch {}
 }
-//@ chunk-ga5txjrx.js:1161-1244 sole-consumer
+//@ chunk-empn5226.js:1245-1328 sole-consumer
 /**
  * 录音程序使用的本地端口与令牌文件路径。
  */
-var VOICE_PORT_FILE = join(homedir(), ".cache", "coder-audio", "port");
-var VOICE_TOKEN_FILE = join(homedir(), ".cache", "coder-audio", "token");
-//@ chunk-ga5txjrx.js:1244-1431 sole-consumer
+var VOICE_PORT_FILE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var VOICE_TOKEN_FILE;
+deferInit("chunk-empn5226.js:1245", () => {
+  VOICE_PORT_FILE = join(homedir(), ".cache", "coder-audio", "port");
+  VOICE_TOKEN_FILE = join(homedir(), ".cache", "coder-audio", "token");
+});
+//@ chunk-empn5226.js:1328-1515 sole-consumer
 /**
  * 每宿主的录音状态：napi 模块、探测缓存、当前录音进程、原生录音标记。
  */
@@ -60,23 +62,23 @@ class VoiceRecorderState {
   forwardedStartGeneration = 0;
   nativeRecordingActive = false;
 }
-//@ chunk-ga5txjrx.js:1431-1454 sole-consumer
+//@ chunk-empn5226.js:1515-1538 sole-consumer
 var voiceRecorderStates; // deferred: uses VoiceRecorderState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-ga5txjrx.js:1431", () => {
+deferInit("chunk-empn5226.js:1515", () => {
   voiceRecorderStates = new HostScoped(() => new VoiceRecorderState());
 });
-//@ chunk-ga5txjrx.js:1454-1473 sole-consumer
+//@ chunk-empn5226.js:1538-1557 sole-consumer
 var RECORDING_STARTED = {
   started: true,
 };
-//@ chunk-ga5txjrx.js:1473-1528 affinity
+//@ chunk-empn5226.js:1557-1612 affinity
 var RECORDING_NOT_STARTED = {
   started: false,
   superseded: false,
   hint: null,
   expected: false,
 };
-//@ chunk-ga5txjrx.js:1528-1769 fingerprint (2.1.88 match: loadAudioNapi, 0.594)
+//@ chunk-empn5226.js:1612-1853 fingerprint (2.1.88 match: loadAudioNapi, 0.594)
 /**
  * 懒加载 audio-capture-napi 原生模块并记录耗时。
  */
@@ -91,7 +93,7 @@ function loadAudioNapi(napi) {
   })();
   return napi.audioNapiPromise;
 }
-//@ chunk-ga5txjrx.js:1769-1800 fingerprint (2.1.88 match: SILENCE_DURATION_SECS, 1)
+//@ chunk-empn5226.js:1853-1884 fingerprint (2.1.88 match: SILENCE_DURATION_SECS, 1)
 /**
  * 录音参数：16kHz、单声道、静音判停 2.0 秒、阈值 3%。
  */
@@ -99,7 +101,7 @@ var SAMPLE_RATE = 16000;
 var CHANNELS = 1;
 var SILENCE_DURATION_SECS = "2.0";
 var SILENCE_THRESHOLD = "3%";
-//@ chunk-ga5txjrx.js:1800-1888 layout
+//@ chunk-empn5226.js:1884-1972 layout
 async function commandExists(cmd) {
   return (
     (
@@ -110,7 +112,7 @@ async function commandExists(cmd) {
     ).code === 0
   );
 }
-//@ chunk-ga5txjrx.js:1888-2376 fingerprint (2.1.88 match: probeArecord, 0.95)
+//@ chunk-empn5226.js:1972-2460 fingerprint (2.1.88 match: probeArecord, 0.95)
 /**
  * 试跑 arecord 150ms 判断能否录音（结果缓存）。
  */
@@ -157,7 +159,7 @@ function probeArecord(state) {
   });
   return state.arecordProbe;
 }
-//@ chunk-ga5txjrx.js:2376-2553 fingerprint (2.1.88 match: linuxHasAlsaCards, 0.886)
+//@ chunk-empn5226.js:2460-2637 fingerprint (2.1.88 match: linuxHasAlsaCards, 0.886)
 function linuxHasAlsaCards(napi) {
   napi.linuxAlsaCardsProbe ??= readFile("/proc/asound/cards", "utf8").then(
     (cards) => {
@@ -168,7 +170,7 @@ function linuxHasAlsaCards(napi) {
   );
   return napi.linuxAlsaCardsProbe;
 }
-//@ chunk-ga5txjrx.js:2553-2931 fingerprint (2.1.88 match: detectPackageManager, 0.895)
+//@ chunk-empn5226.js:2637-3015 fingerprint (2.1.88 match: detectPackageManager, 0.895)
 /**
  * 探测 apt-get/dnf/pacman，给出安装 SoX 的命令。
  */
@@ -193,7 +195,7 @@ async function detectPackageManager() {
     };
   return null;
 }
-//@ chunk-ga5txjrx.js:2931-3313 fingerprint (2.1.88 match: checkVoiceDependencies, 0.721)
+//@ chunk-empn5226.js:3015-3397 fingerprint (2.1.88 match: checkVoiceDependencies, 0.721)
 async function checkVoiceDependencies(host) {
   let napi = voiceRecorderStates.of(host);
   if ((await loadAudioNapi(napi)).isNativeAudioAvailable() && (await linuxHasAlsaCards(napi)))
@@ -217,7 +219,7 @@ async function checkVoiceDependencies(host) {
     installCommand: pm?.displayCommand ?? null,
   };
 }
-//@ chunk-ga5txjrx.js:3313-3476 fingerprint (2.1.88 match: requestMicrophonePermission, 0.851)
+//@ chunk-empn5226.js:3397-3560 fingerprint (2.1.88 match: requestMicrophonePermission, 0.852)
 /**
  * 原生录音可用时试启动一次录音以触发系统麦克风授权。
  */
@@ -240,7 +242,7 @@ async function requestMicrophonePermission(host) {
   }
   return false;
 }
-//@ chunk-ga5txjrx.js:3476-4952 fingerprint (2.1.88 match: checkRecordingAvailability, 0.714)
+//@ chunk-empn5226.js:3560-5036 fingerprint (2.1.88 match: checkRecordingAvailability, 0.714)
 /**
  * 判断能否录音：远程/云环境不可用；原生 napi+ALSA、arecord、SoX rec 依次尝试；WSL 与缺 SoX 时给出具体安装说明。
  */
@@ -305,7 +307,7 @@ To use voice mode, run Claude Code locally instead.`,
 This usually means the host has no microphone (for example, a remote server). Run Claude Code on a machine with a microphone to use voice input.`,
   };
 }
-//@ chunk-ga5txjrx.js:4952-5435 fingerprint (2.1.88 match: startRecording, 0.704)
+//@ chunk-empn5226.js:5036-5519 fingerprint (2.1.88 match: startRecording, 0.704)
 /**
  * 开始录音：优先原生录音，其次 arecord，最后 SoX rec；数据回调 onData，结束回调 onEnd。
  */
@@ -341,7 +343,7 @@ async function startRecording(host, onData, onEnd, options) {
     return startArecordRecording(state, onData, onEnd) ? RECORDING_STARTED : RECORDING_NOT_STARTED;
   return startSoxRecording(state, onData, onEnd, options) ? RECORDING_STARTED : RECORDING_NOT_STARTED;
 }
-//@ chunk-ga5txjrx.js:5435-5980 fingerprint (2.1.88 match: startSoxRecording, 0.878)
+//@ chunk-empn5226.js:5519-6064 fingerprint (2.1.88 match: startSoxRecording, 0.878)
 /**
  * 用 SoX rec 录原始 16-bit PCM，开启静音判停时追加 silence 参数。
  */
@@ -388,7 +390,7 @@ function startSoxRecording(state, onData, onEnd, options) {
   });
   return true;
 }
-//@ chunk-ga5txjrx.js:5980-6396 fingerprint (2.1.88 match: startArecordRecording, 0.791)
+//@ chunk-empn5226.js:6064-6480 fingerprint (2.1.88 match: startArecordRecording, 0.791)
 function startArecordRecording(state, onData, onEnd) {
   let args = ["-f", "S16_LE", "-r", String(SAMPLE_RATE), "-c", String(CHANNELS), "-t", "raw", "-q", "-"];
   let child = spawn("arecord", args, {
@@ -414,7 +416,7 @@ function startArecordRecording(state, onData, onEnd) {
   });
   return true;
 }
-//@ chunk-ga5txjrx.js:6396-6608 affinity
+//@ chunk-empn5226.js:6480-6692 affinity
 /**
  * 停止录音（原生或子进程 SIGTERM）。
  */
@@ -430,7 +432,7 @@ function stopRecording(host) {
     state.activeRecorder = null;
   }
 }
-//@ chunk-g4k0hvs5.js:1135-1437 fingerprint (2.1.88 match: hasCommand, 0.375)
+//@ chunk-gw6tgnv9.js:1135-1437 fingerprint (2.1.88 match: hasCommand, 0.375)
 function hasCommand() {
   try {
     resetLocalSettingsGitTrackedCache();
@@ -451,13 +453,9 @@ function hasCommand() {
     return false;
   }
 }
-
-// The import cycle this module closes (2 modules) is complete: run the load-time work its statements
-// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
-runDeferredInits("src/services/voice.js");
 export {
+  killProcessGroup,
   hasCommand,
-  killChildWithSignal,
   checkRecordingAvailability,
   checkVoiceDependencies,
   requestMicrophonePermission,

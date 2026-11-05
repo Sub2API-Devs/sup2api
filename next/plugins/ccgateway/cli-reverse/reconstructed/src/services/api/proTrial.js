@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。Pro 试用接口。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-73yknwsx.js (9), chunk-aepeg2w5.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (1), chunk-t1peve9y.js (9)
  * attribution: placement 10
  */
 import { getOauthAccountInfo, getSubscriptionType } from "../../utils/auth.js";
@@ -16,7 +16,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { logError } from "../../utils/log.js";
 
-//@ chunk-aepeg2w5.js:288982-289234 placement (2.1.88 match: initializationState, 0.51)
+//@ chunk-exfmq47h.js:298605-298857 placement (2.1.88 match: initializationState, 0.555)
 /**
  * （匹配存疑）恒返回 null 的死代码函数，后面是按 "not-started"/"expired"/数字算 endsAt 的不可达分支；与 LSP 无关。
  */
@@ -41,24 +41,24 @@ function initializationState() {
     }
   }
 }
-//@ chunk-73yknwsx.js:353-362 placement
+//@ chunk-t1peve9y.js:353-362 placement
 /**
  * Pro 试用默认 14 天（本地初始化试用结束时间用）。
  */
 var DEFAULT_TRIAL_DAYS = 14;
-//@ chunk-73yknwsx.js:362-424 placement
+//@ chunk-t1peve9y.js:362-424 placement
 /**
  * 导出函数 `trialDurationDays`：返回 getOauthAccountInfo()?.claudeCodeTrialDurationDays ?? null。
  */
 function trialDurationDays() {
   return getOauthAccountInfo()?.claudeCodeTrialDurationDays ?? null;
 }
-//@ chunk-73yknwsx.js:424-471 placement
+//@ chunk-t1peve9y.js:424-471 placement
 var INELIGIBLE_TRIAL_STATUS = {
   status: "ineligible",
   daysRemaining: null,
 };
-//@ chunk-73yknwsx.js:471-643 placement
+//@ chunk-t1peve9y.js:471-643 placement
 /**
  * 读取 Pro 试用状态：本地已初始化则按其结束时间；否则仅 pro 订阅且具备试用标志时按账号的试用结束时间计算。
  */
@@ -70,7 +70,7 @@ function getProTrialStatus() {
   let onboarding = oauthAccountInfo.ccOnboardingFlags?.e10 === true;
   return trialStatusFrom(onboarding, oauthAccountInfo.claudeCodeTrialEndsAt ?? null);
 }
-//@ chunk-73yknwsx.js:643-1109 placement
+//@ chunk-t1peve9y.js:643-1109 placement
 /**
  * 开始 Pro 试用：本地模拟模式直接生成结束时间，否则调用组织 pro_trial 接口并保存结束时间，返回试用状态。
  */
@@ -102,7 +102,7 @@ async function startProTrial(storage, credentials) {
     return trialStatusFrom(true, response.data.ends_at);
   });
 }
-//@ chunk-73yknwsx.js:1109-1211 placement
+//@ chunk-t1peve9y.js:1109-1211 placement
 /**
  * 判断 Pro 试用已过期且额外用量被禁用。
  */
@@ -110,7 +110,7 @@ function isProTrialExpiredWithDisabledCredits() {
   if (getProTrialStatus().status !== "expired") return false;
   return getGlobalConfig().cachedExtraUsageDisabledReason !== null;
 }
-//@ chunk-73yknwsx.js:1211-1414 placement
+//@ chunk-t1peve9y.js:1211-1414 placement
 /**
  * 生成试用徽标文字：进行中显示剩余天数，过期显示 Usage credits，其他不显示。
  */
@@ -127,7 +127,7 @@ function proTrialBadgeText(daysLeft) {
       return null;
   }
 }
-//@ chunk-73yknwsx.js:1414-1745 placement
+//@ chunk-t1peve9y.js:1414-1745 placement
 /**
  * 由是否有资格和结束时间计算试用状态（未开始、进行中及剩余天数、已过期）。
  */
@@ -154,7 +154,7 @@ function trialStatusFrom(eligible, endsAt) {
     daysRemaining: Math.ceil(msUntil / 86400000),
   };
 }
-//@ chunk-73yknwsx.js:1745-1914 placement
+//@ chunk-t1peve9y.js:1745-1914 placement
 function saveTrialEndsAt(endsAt, storage) {
   saveGlobalConfig((config) => {
     if (!config.oauthAccount || config.oauthAccount.claudeCodeTrialEndsAt === endsAt) return config;
@@ -168,9 +168,9 @@ function saveTrialEndsAt(endsAt, storage) {
   }, storage);
 }
 export {
-  isProTrialExpiredWithDisabledCredits,
   getProTrialStatus,
+  isProTrialExpiredWithDisabledCredits,
+  proTrialBadgeText,
   startProTrial,
   trialDurationDays,
-  proTrialBadgeText,
 };

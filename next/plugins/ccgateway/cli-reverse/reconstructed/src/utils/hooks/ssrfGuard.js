@@ -3,9 +3,9 @@
  *
  * HTTP 钩子的 SSRF 防护：私有/链路本地地址判定与带检查的 DNS lookup。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/ssrfGuard.ts
- * pieces: chunk-e6aww6q8.js (13)
+ * pieces: chunk-5xgkngpb.js (13)
  * attribution: placement 6, callgraph-witnessed 1, layout 2, fingerprint 4
  */
 import { randomBytes } from "crypto";
@@ -15,16 +15,16 @@ import { matchRuleSegments, matchWildcard } from "../permissions/permissionRuleP
 import { firstLineOf } from "../stringUtils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:3401980-3402131 placement
+//@ chunk-5xgkngpb.js:3490254-3490405 placement
 var WILDCARD_PLACEHOLDER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PUNYCODE_PLACEHOLDER;
 var URL_PROTOCOLS_WITH_HOST;
-deferInit("chunk-e6aww6q8.js:3401980", () => {
+deferInit("chunk-5xgkngpb.js:3490254", () => {
   WILDCARD_PLACEHOLDER = `zzwildcard${randomBytes(8).toString("hex")}zz`;
   PUNYCODE_PLACEHOLDER = `zzpunycode${randomBytes(8).toString("hex")}zz`;
   URL_PROTOCOLS_WITH_HOST = new Set(["http:", "https:", "ws:", "wss:", "ftp:", "file:"]);
 });
-//@ chunk-e6aww6q8.js:3402131-3402571 placement
+//@ chunk-5xgkngpb.js:3490405-3490845 placement
 /**
  * 解析主机模式（支持通配符和端口），无法解析时返回 null。
  */
@@ -58,7 +58,7 @@ function parseHostPattern(expanded, portPlaceholder) {
     hash: unmark(parsedUrl.hash),
   };
 }
-//@ chunk-e6aww6q8.js:3402571-3403333 placement
+//@ chunk-5xgkngpb.js:3490845-3491606 placement
 function buildHostPatternRegex(url, pattern) {
   if (pattern === "*") return true;
   let parsedUrl;
@@ -106,7 +106,7 @@ function buildHostPatternRegex(url, pattern) {
   );
   return matchWildcard(replaced_2, parsedUrl.pathname + parsedUrl.search);
 }
-//@ chunk-e6aww6q8.js:3403333-3403450 placement
+//@ chunk-5xgkngpb.js:3491606-3491723 placement
 function markPunycodeLabels(hostText, portPlaceholder) {
   return hostText.replace(/[a-z0-9-]+/gi, (label) =>
     /^xn--/i.test(label) &&
@@ -115,11 +115,11 @@ function markPunycodeLabels(hostText, portPlaceholder) {
       : label,
   );
 }
-//@ chunk-e6aww6q8.js:3403450-3403494 placement
+//@ chunk-5xgkngpb.js:3491723-3491767 placement
 function stripPunycodePlaceholder(text) {
   return text.replaceAll(PUNYCODE_PLACEHOLDER, "");
 }
-//@ chunk-e6aww6q8.js:3403494-3403630 placement
+//@ chunk-5xgkngpb.js:3491767-3491903 placement
 function hasWildcardPunycodeLabel(parsedUrl, portPlaceholder) {
   return (
     URL_PROTOCOLS_WITH_HOST.has(parsedUrl.protocol) &&
@@ -132,7 +132,7 @@ function hasWildcardPunycodeLabel(parsedUrl, portPlaceholder) {
       )
   );
 }
-//@ chunk-e6aww6q8.js:3403690-3403774 callgraph-witnessed (2.1.88 match: isBlockedAddress, 0)
+//@ chunk-5xgkngpb.js:3491963-3492047 callgraph-witnessed (2.1.88 match: isBlockedAddress, 0)
 /**
  * 判断 IP 是否属于 HTTP 钩子禁止访问的私有/链路本地地址（回环 127.0.0.1、::1 允许）。
  */
@@ -142,7 +142,7 @@ function isBlockedAddress(address) {
   if (v === 6) return isBlockedV6(address);
   return false;
 }
-//@ chunk-e6aww6q8.js:3403774-3404101 layout
+//@ chunk-5xgkngpb.js:3492047-3492374 layout
 function isBlockedV4(address) {
   let parts = address.split(".").map(Number);
   let [firstOctet, secondOctet] = parts;
@@ -162,7 +162,7 @@ function isBlockedV4(address) {
   if (firstOctet === 192 && secondOctet === 168) return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:3404101-3404347 fingerprint (2.1.88 match: isBlockedV6, 1)
+//@ chunk-5xgkngpb.js:3492374-3492620 fingerprint (2.1.88 match: isBlockedV6, 1)
 function isBlockedV6(address) {
   let lower = address.toLowerCase();
   if (lower === "::1") return false;
@@ -174,7 +174,7 @@ function isBlockedV6(address) {
   if (firstHextet && firstHextet.length === 4 && firstHextet >= "fe80" && firstHextet <= "febf") return true;
   return false;
 }
-//@ chunk-e6aww6q8.js:3404347-3404949 fingerprint (2.1.88 match: expandIPv6Groups, 1)
+//@ chunk-5xgkngpb.js:3492620-3493229 fingerprint (2.1.88 match: expandIPv6Groups, 1)
 function expandIPv6Groups(addr) {
   let tailHextets = [];
   if (addr.includes(".")) {
@@ -204,7 +204,7 @@ function expandIPv6Groups(addr) {
   nums.push(...tailHextets);
   return nums.length === 8 ? nums : null;
 }
-//@ chunk-e6aww6q8.js:3404949-3405135 layout
+//@ chunk-5xgkngpb.js:3493229-3493415 layout
 function extractMappedIPv4(addr) {
   let groups = expandIPv6Groups(addr);
   if (!groups) return null;
@@ -222,7 +222,7 @@ function extractMappedIPv4(addr) {
   }
   return null;
 }
-//@ chunk-e6aww6q8.js:3405135-3405632 fingerprint (2.1.88 match: ssrfGuardedLookup, 1)
+//@ chunk-5xgkngpb.js:3493415-3493912 fingerprint (2.1.88 match: ssrfGuardedLookup, 1)
 /**
  * HTTP 钩子的 DNS lookup：解析出的任一地址被禁止就报 ERR_HTTP_HOOK_BLOCKED_ADDRESS。
  */
@@ -284,7 +284,7 @@ function ssrfGuardedLookup(hostname, options, callback) {
     },
   );
 }
-//@ chunk-e6aww6q8.js:3405632-3405872 fingerprint (2.1.88 match: ssrfError, 1)
+//@ chunk-5xgkngpb.js:3493912-3494152 fingerprint (2.1.88 match: ssrfError, 1)
 function ssrfError(hostname, address) {
   let err = Error(
     `HTTP hook blocked: ${hostname} resolves to ${address} (private/link-local address). Loopback (127.0.0.1, ::1) is allowed for local dev.`,
@@ -295,4 +295,4 @@ function ssrfError(hostname, address) {
     address,
   });
 }
-export { parseHostPattern, buildHostPatternRegex, isBlockedAddress, ssrfGuardedLookup };
+export { parseHostPattern, buildHostPatternRegex, ssrfGuardedLookup, isBlockedAddress };

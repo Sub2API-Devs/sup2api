@@ -3,9 +3,9 @@
  *
  * 自动模式分类器的 Artifact 上下文（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-3jhw7vrg.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fnsx7q86.js (5)
  * attribution: placement 5
  */
 import { isArtifactToolRegistered, isArtifactToolsetSplit } from "./artifactToolGates.js";
@@ -38,7 +38,7 @@ import { isInheritedTypeGrantEnabled } from "../../tools/ArtifactTool/permission
 import { isAutoReactEnabled } from "./comments/postReply.js";
 import { getAttestationKind } from "./attestation.js";
 
-//@ chunk-3jhw7vrg.js:13405-13435 placement
+//@ chunk-fnsx7q86.js:14580-14610 placement
 /**
  * 自动模式分类器的 Artifact 上下文占位（handlers/room_client 恒 false）与路径/房间/连接器信息。
  */
@@ -46,7 +46,7 @@ var NO_CLIENT = false;
 var classifierWorkingCopy = null;
 var classifierLiveGates = null;
 var classifierConnectors = null;
-//@ chunk-3jhw7vrg.js:13435-15671 placement
+//@ chunk-fnsx7q86.js:14610-16846 placement
 /**
  * 为自动模式分类器构造 Artifact 相关上下文（路径、房间）
  */
@@ -185,7 +185,7 @@ function buildArtifactClassifierContext({ tools } = {}) {
     }),
   });
 }
-//@ chunk-3jhw7vrg.js:15671-15985 placement
+//@ chunk-fnsx7q86.js:16846-17160 placement
 /**
  * 给自动模式分类器的 Artifact 全局开关快照：工具集是否拆分、实时编辑/文档流、live_paths、copy_from、数据库 str_replace、类型目录、监听通道、自动回复等。
  */
@@ -206,7 +206,7 @@ function getArtifactGateContext() {
     auto_react: isAutoReactEnabled(),
   };
 }
-//@ chunk-3jhw7vrg.js:15985-16943 placement
+//@ chunk-fnsx7q86.js:17160-18117 placement
 /**
  * 给自动模式分类器的单个 artifact 上下文：模式、是否共享实时、角色、探测情况、协作/外部写者、类型与类型锁、实时路径、能力声明、授权观察结果、端点连接器名等。
  */
@@ -266,7 +266,7 @@ function getArtifactEntryContext(entry) {
       }),
   };
 }
-//@ chunk-3jhw7vrg.js:16943-17018 placement
+//@ chunk-fnsx7q86.js:18117-18192 placement
 function scratchpadDirPosix() {
   if (!isScratchpadEnabled()) return null;
   let scratchpadDir = getScratchpadDir(getSessionId());

@@ -3,16 +3,16 @@
  *
  * 主循环并发守卫（idle/dispatching/running），保证同一时刻只有一个查询轮次。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/QueryGuard.ts
- * pieces: chunk-18hwfzwa.js (1)
+ * pieces: chunk-czq1j3j2.js (1)
  * attribution: fingerprint 1
  */
 import { createSignal } from "./signal.js";
 import { setMainLoopStatus } from "../bootstrap/state.js";
 import { setForegroundTurnBusy } from "./plugins/hooksModulesLoadGate.js";
 
-//@ chunk-18hwfzwa.js:1495627-1496841 fingerprint (2.1.88 match: QueryGuard, 0.807)
+//@ chunk-czq1j3j2.js:1537122-1538336 fingerprint (2.1.88 match: QueryGuard, 0.807)
 /**
  * 查询并发守卫：idle → dispatching → running 状态机，保证同一时刻只有一个主循环轮次。
  */

@@ -1,11 +1,11 @@
 /**
  * @aws-crypto/sha256-js/build/module/constants.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @aws-crypto/sha256-js@5.2.0
- * pieces: chunk-cdckcchh.js (1)
+ * pieces: chunk-er1d5ga0.js (1)
  * attribution: esm-fingerprint 1
  */
-//@ chunk-cdckcchh.js:273-1106 esm-fingerprint
+//@ chunk-er1d5ga0.js:273-1106 esm-fingerprint
 /**
  * 第三方 SHA-256 实现（@aws-crypto/sha256-js 风格）的常量：块大小 64、摘要 32、轮常量表、初始哈希。旧版名 getRetryDelay 为错配；应归 vendor。
  */

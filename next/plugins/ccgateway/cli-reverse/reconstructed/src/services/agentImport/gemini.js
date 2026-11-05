@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：从 Google Gemini CLI（~/.gemini/settings.json、GEMINI.md、commands/*.toml）导入，并汇总检测到的来源
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hddjmtjj.js (13)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ndr12bqk.js (13)
  * attribution: placement 13
  */
 import { join, basename } from "path";
@@ -31,7 +31,7 @@ import { isENOENT, errorMessage } from "../../utils/errors.js";
 import { parseJsonc_2 } from "../../utils/json.js";
 import { getSemverPart } from "../../hooks/useUpdateNotification.js";
 import { userScopeMcpServerExists, addMcpConfig } from "../mcp/config.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getClaudeConfigDir } from "../../utils/markdownConfigLoader.js";
 import { readTomlConfig, CODEX_IMPORT_SOURCE } from "./codex.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
@@ -41,7 +41,7 @@ import { CURSOR_IMPORT_SOURCE } from "./cursor.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logEvent } from "../analytics/index.js";
 
-//@ chunk-hddjmtjj.js:53634-53940 placement
+//@ chunk-ndr12bqk.js:53667-53973 placement
 /**
  * Gemini MCP 服务器配置转为 Claude Code 配置（http/sse/stdio，含超时）。
  */
@@ -74,7 +74,7 @@ function convertGeminiMcpServer(server) {
     ...timeoutOpt,
   };
 }
-//@ chunk-hddjmtjj.js:53940-54092 placement
+//@ chunk-ndr12bqk.js:53973-54125 placement
 var GEMINI_SETTINGS_SCHEMA = DoctorLazy(() =>
   objectSchema({
     mcpServers: unknown().optional(),
@@ -87,11 +87,11 @@ var GEMINI_COMMAND_SCHEMA = DoctorLazy(() =>
     description: stringSchema().optional(),
   }),
 );
-//@ chunk-hddjmtjj.js:54092-54143 placement
+//@ chunk-ndr12bqk.js:54125-54176 placement
 function geminiHomeDir(options) {
   return options.homeDir ?? join(homedir(), ".gemini");
 }
-//@ chunk-hddjmtjj.js:54143-56805 placement
+//@ chunk-ndr12bqk.js:54176-56838 placement
 /**
  * 把 Gemini 命令正文（{{args}}、!{…}、@{…}）翻译为 Claude Code 语法，标出无法安全翻译的情况。
  */
@@ -196,7 +196,7 @@ function translateGeminiCommandBody(prompt) {
     hasShellExec: filtered.length > 0,
   };
 }
-//@ chunk-hddjmtjj.js:56805-58407 placement
+//@ chunk-ndr12bqk.js:56838-58440 placement
 async function importGeminiMcpServers(homeDir, scope, warnings) {
   let settingsPath = join(homeDir, "settings.json");
   let text;
@@ -275,7 +275,7 @@ async function importGeminiMcpServers(homeDir, scope, warnings) {
       reason: "No direct Claude Code equivalent, or cosmetic. Review manually if you relied on them.",
     });
 }
-//@ chunk-hddjmtjj.js:58407-60214 placement
+//@ chunk-ndr12bqk.js:58440-60247 placement
 async function importGeminiCommands(homeDir, scope, plan) {
   let commandsDir = join(homeDir, "commands");
   let entries = await readdir(commandsDir, {
@@ -379,7 +379,7 @@ ${serializeFrontmatter(warning)}---
     });
   }
 }
-//@ chunk-hddjmtjj.js:60214-61303 placement
+//@ chunk-ndr12bqk.js:60247-61336 placement
 async function importGeminiInstructions(homeDir, scope, scope_2, projectRoot, plan) {
   let claudeConfigDir = getClaudeConfigDir();
   let candidates = [
@@ -447,7 +447,7 @@ async function importGeminiInstructions(homeDir, scope, scope_2, projectRoot, pl
       reason: "Gemini extensions map to Claude Code plugins. Not auto-converted yet.",
     });
 }
-//@ chunk-hddjmtjj.js:61303-62358 placement
+//@ chunk-ndr12bqk.js:61336-62391 placement
 var GEMINI_IMPORT_SOURCE = {
   id: "gemini",
   displayName: "Google Gemini CLI",
@@ -503,24 +503,24 @@ var GEMINI_IMPORT_SOURCE = {
     };
   },
 };
-//@ chunk-hddjmtjj.js:62358-62376 placement
+//@ chunk-ndr12bqk.js:62391-62409 placement
 var IMPORT_SOURCES = [CODEX_IMPORT_SOURCE, GEMINI_IMPORT_SOURCE, CURSOR_IMPORT_SOURCE];
-//@ chunk-hddjmtjj.js:62376-62421 placement
+//@ chunk-ndr12bqk.js:62409-62454 placement
 function importSourceById(from) {
   return IMPORT_SOURCES.find((source) => source.id === from);
 }
-//@ chunk-hddjmtjj.js:62421-62507 placement
+//@ chunk-ndr12bqk.js:62454-62540 placement
 async function detectImportSources(input) {
   let detected = [];
   for (let source of IMPORT_SOURCES) if (await source.detect(input)) detected.push(source);
   return detected;
 }
-//@ chunk-hddjmtjj.js:62507-62592 placement
+//@ chunk-ndr12bqk.js:62540-62625 placement
 function normalizeImportScope(scope) {
   if (getProjectConfigRoot() !== null) return "user";
   return scope === "user" || scope === "project" ? scope : undefined;
 }
-//@ chunk-hddjmtjj.js:62592-63685 placement
+//@ chunk-ndr12bqk.js:62625-63718 placement
 /**
  * 扫描指定或全部已检测的导入源（Codex/Cursor/Gemini），返回各自的可导入项与无法映射项。
  */

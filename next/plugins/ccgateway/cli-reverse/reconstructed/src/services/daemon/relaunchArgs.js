@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：后台会话重启参数
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-y162pn60.js (19)
- * attribution: placement 19
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rmd7n4gq.js (20)
+ * attribution: placement 19, layout 1
  */
 import {
   getMainLoopModelOverride,
@@ -30,7 +30,7 @@ import { earlyArgsToArgv, parseEarlyArgs } from "../../cli/earlyArgs.js";
 import { appliedSettingSourcesFlagValue } from "../../utils/settings/constants.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
-//@ chunk-y162pn60.js:18205-18391 placement
+//@ chunk-rmd7n4gq.js:18413-18599 placement
 /**
  * 重启时要携带的主模型：无覆盖或 mantle 时不带；null 为 default；已重映射/退役、等于拒绝回退模型或无法在命令行表示的不带。
  */
@@ -44,7 +44,7 @@ function getRelaunchModel() {
   if (!isAcceptableModelArg(mainLoopModelOverride)) return;
   return mainLoopModelOverride;
 }
-//@ chunk-y162pn60.js:18391-18464 placement
+//@ chunk-rmd7n4gq.js:18599-18672 placement
 /**
  * 判断模型参数是否合法（"default" 或已知模型）。
  */
@@ -52,14 +52,14 @@ function isValidModelArg(value) {
   let lower = value.trim().toLowerCase();
   return lower === "default" || isModelKeyAliasOrResolved(lower);
 }
-//@ chunk-y162pn60.js:18464-18516 placement
+//@ chunk-rmd7n4gq.js:18672-18724 placement
 /**
  * 当前启动是否带 --restricted。
  */
 function isRestrictedLaunch() {
   return getReplConfigArgv().includes("--restricted");
 }
-//@ chunk-y162pn60.js:18516-19325 placement
+//@ chunk-rmd7n4gq.js:18724-19533 placement (2.1.88 match: getChromeFlag, 0.3)
 /**
  * 生成后台会话重启的 CLI 参数：保留原始参数（去掉 --add-dir，必要时过滤 --fallback-model），加上 Chrome、绕过权限、附加目录、模型、effort、快速模式与当前权限模式。
  */
@@ -103,14 +103,14 @@ function buildRelaunchArgs(permissionContext, effort, { carryModel = true } = {}
     permissionContext.mode,
   ];
 }
-//@ chunk-y162pn60.js:19325-19457 placement
+//@ chunk-rmd7n4gq.js:19533-19665 placement
 function getFastModeFlag() {
   let flagValue = eagerParseCliFlag("--fast-mode");
   if (flagValue !== "on" && flagValue !== "off") return;
   let fastMode = getFlagSettingsInline()?.fastMode;
   return typeof fastMode === "boolean" ? (fastMode ? "on" : "off") : flagValue;
 }
-//@ chunk-y162pn60.js:19457-19525 placement
+//@ chunk-rmd7n4gq.js:19665-19733 placement
 /**
  * 判断一条权限规则能否原样写进重启命令行。
  */
@@ -118,7 +118,12 @@ function isCarriableRule(rule) {
   let parts = splitRuleList([rule]);
   return parts.length === 1 && parts[0] === rule && isAcceptableModelArg(rule);
 }
-//@ chunk-y162pn60.js:19525-20095 placement
+//@ chunk-rmd7n4gq.js:19733-19845 layout (2.1.88 match: updateAgentFile, 1)
+function updateAgentFile(value, activeAgents) {
+  let found = activeAgents.find((record) => record.agentType === value);
+  return found?.source === "built-in" && found.tools?.includes("*") === true;
+}
+//@ chunk-rmd7n4gq.js:19845-20414 placement
 /**
  * 列出重启时命令行无法完整携带的设置：受限启动标志、仅会话的规则、cliArg 的 ask 规则、无法表示的规则与附加目录。
  */
@@ -145,7 +150,7 @@ function listUncarriedLaunchSettings(permissionContext, hasRestrictedFlags) {
       : []),
   ];
 }
-//@ chunk-y162pn60.js:20095-20432 placement
+//@ chunk-rmd7n4gq.js:20414-20751 placement
 /**
  * 把 cliArg 的 allow/deny 规则与 agent、agents、追加系统提示、系统提示快照转为命令行参数。
  */
@@ -159,7 +164,7 @@ function buildPermissionAndAgentArgs(toolPermissionContext, forkReplayLaunchConf
     ...flagArgs("--system-prompt-snapshot", onOffFlagValue(forkReplayLaunchConfig.systemPromptSnapshot)),
   ];
 }
-//@ chunk-y162pn60.js:20432-20498 placement
+//@ chunk-rmd7n4gq.js:20751-20817 placement
 /**
  * 把标志与值拼成 argv 片段（含空格的值拆成两个参数）。
  */
@@ -167,21 +172,21 @@ function flagArgs(name, value) {
   if (!value) return [];
   return isAcceptableModelArg(value) ? [name, value] : [`${name}=${value}`];
 }
-//@ chunk-y162pn60.js:20498-20552 placement
+//@ chunk-rmd7n4gq.js:20817-20871 placement
 /**
  * 布尔值转 "on"/"off"（undefined 原样返回）。
  */
 function onOffFlagValue(enabled) {
   return enabled === undefined ? undefined : enabled ? "on" : "off";
 }
-//@ chunk-y162pn60.js:20552-20675 placement
+//@ chunk-rmd7n4gq.js:20871-20994 placement
 function getDirsFromSources(dirsByKey, sources) {
   return Array.from(dirsByKey.values())
     .filter((dirEntry) => sources.includes(dirEntry.source))
     .filter((dirEntry) => !isNonWslUncPath(dirEntry.path))
     .map((dirEntry) => dirEntry.path);
 }
-//@ chunk-y162pn60.js:20675-20759 placement
+//@ chunk-rmd7n4gq.js:20994-21078 placement
 /**
  * 生成重启时要保留的早期参数 argv。
  */
@@ -192,14 +197,14 @@ function earlyArgsArgv(dirs) {
     settingSources: appliedSettingSourcesFlagValue(),
   });
 }
-//@ chunk-y162pn60.js:20759-20833 placement
+//@ chunk-rmd7n4gq.js:21078-21152 placement
 /**
  * 去掉旧的 --add-dir 参数后加上新的附加目录。
  */
 function replaceAddDirArgs(args, dirs) {
   return [...stripAddDirArgs(args), ...cliAddDirs(dirs).flatMap((dir) => ["--add-dir", dir])];
 }
-//@ chunk-y162pn60.js:20833-20940 placement
+//@ chunk-rmd7n4gq.js:21152-21259 placement
 function stripAddDirArgs(args) {
   let kept = [];
   let skipNext = false;
@@ -209,23 +214,23 @@ function stripAddDirArgs(args) {
     else kept.push(arg);
   return kept;
 }
-//@ chunk-y162pn60.js:20940-20991 placement
+//@ chunk-rmd7n4gq.js:21259-21310 placement
 /**
  * 取命令行来源的附加目录（过滤非法路径）。
  */
 function cliAddDirs(dirs) {
   return getDirsFromSources(dirs, ["cliArg"]).filter(isAcceptableModelArg);
 }
-//@ chunk-y162pn60.js:20991-21044 placement
+//@ chunk-rmd7n4gq.js:21310-21363 placement
 /**
  * 取会话来源的附加目录。
  */
 function sessionAddDirs(dirs) {
   return getDirsFromSources(dirs, ["session"]).filter(isAcceptableModelArg);
 }
-//@ chunk-y162pn60.js:21044-21087 placement
+//@ chunk-rmd7n4gq.js:21363-21406 placement
 var CLAUDE_RELAUNCH_SESSION_ADD_DIRS = "CLAUDE_RELAUNCH_SESSION_ADD_DIRS";
-//@ chunk-y162pn60.js:21087-21150 placement
+//@ chunk-rmd7n4gq.js:21406-21469 placement
 /**
  * 把会话附加目录写进重启环境变量。
  */
@@ -237,7 +242,7 @@ function sessionAddDirsEnv(additionalWorkingDirectories) {
       }
     : {};
 }
-//@ chunk-y162pn60.js:21150-21307 placement
+//@ chunk-rmd7n4gq.js:21469-21626 placement
 /**
  * 从参数中去掉 --channels 及其值。
  */
@@ -256,17 +261,18 @@ function stripChannelsArgs(args) {
 }
 export {
   earlyArgsArgv,
+  isRestrictedLaunch,
+  listUncarriedLaunchSettings,
+  buildRelaunchArgs,
+  buildPermissionAndAgentArgs,
+  sessionAddDirsEnv,
+  updateAgentFile,
+  flagArgs,
   getRelaunchModel,
   sessionAddDirs,
   isCarriableRule,
   replaceAddDirArgs,
   stripChannelsArgs,
-  flagArgs,
   onOffFlagValue,
-  buildRelaunchArgs,
-  buildPermissionAndAgentArgs,
-  sessionAddDirsEnv,
-  listUncarriedLaunchSettings,
-  isRestrictedLaunch,
   CLAUDE_RELAUNCH_SESSION_ADD_DIRS,
 };

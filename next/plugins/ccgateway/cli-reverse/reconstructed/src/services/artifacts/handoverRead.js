@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。描述 artifact 交接来源；本模块负责交接读取的覆盖检查与副本管理。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q84dhc5d.js (30)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wtq2g0re.js (30)
  * attribution: placement 30
  */
 import { createHash } from "crypto";
@@ -22,11 +22,12 @@ import { getFileModificationTimeAsync } from "../../utils/file.js";
 import { getLiveState, replicaKey } from "../liveReplica/liveReplica.js";
 import { isENOENT } from "../../utils/errors.js";
 import { forgetSavedFilePath } from "../../utils/mcpOutputStorage.js";
+import { forgetSavedArtifactCopy } from "./framedCopies.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { logError } from "../../utils/log.js";
 import { compareNumericPrefix } from "../../utils/textNormalize.js";
 
-//@ chunk-q84dhc5d.js:806-897 placement
+//@ chunk-wtq2g0re.js:843-934 placement
 function versionHeldBy(artifactReadObservation, version, agentId) {
   return (
     artifactReadObservation.ver === version &&
@@ -34,21 +35,21 @@ function versionHeldBy(artifactReadObservation, version, agentId) {
       Object.hasOwn(artifactReadObservation.observers, agentId))
   );
 }
-//@ chunk-q84dhc5d.js:897-1000 placement
+//@ chunk-wtq2g0re.js:934-1037 placement
 function isVersionHeldWithSource(agentId, slug, ver) {
   return (
     versionHeldBy(agentId.getArtifactReadObservation(slug), ver, agentId.agentId ?? "main") &&
     !observedWithoutSource(agentId.agentId, slug, ver)
   );
 }
-//@ chunk-q84dhc5d.js:1000-1070 placement (2.1.88 match: validateContentTokens, 0.63)
+//@ chunk-wtq2g0re.js:1037-1107 placement (2.1.88 match: validateContentTokens, 0.632)
 /**
  * 取有效的 Read token 上限：调用上下文的 fileReadingLimits.maxTokens，否则默认值。
  */
 function readableLineChars(context) {
   return context.fileReadingLimits?.maxTokens ?? getDefaultFileReadingLimits().maxTokens;
 }
-//@ chunk-q84dhc5d.js:1070-1306 placement
+//@ chunk-wtq2g0re.js:1107-1343 placement
 function sourceShape(html, context) {
   let chars = readableLineChars(context);
   let out = [];
@@ -77,11 +78,11 @@ function sourceShape(html, context) {
     overlong: out,
   };
 }
-//@ chunk-q84dhc5d.js:1306-1323 placement
+//@ chunk-wtq2g0re.js:1343-1360 placement
 var MAX_LISTED_ITEMS = 3;
 var MAX_OTHER_ITEMS = 8;
 var MAX_OVERLONG_LINES = 32;
-//@ chunk-q84dhc5d.js:1323-2865 placement
+//@ chunk-wtq2g0re.js:1360-2902 placement
 /**
  * 描述 artifact 交接来源；本模块负责交接读取的覆盖检查与副本管理。
  */
@@ -144,7 +145,7 @@ function describeHandoverSource({ html, ver, shape, sent, recorded, lineCount = 
       : "")
   );
 }
-//@ chunk-q84dhc5d.js:2865-4099 placement
+//@ chunk-wtq2g0re.js:2902-4136 placement
 async function registerHandoverRead(
   { filepath, persistId, html, slug, ver, confirmsResend, batch, heldSkipsRead },
   context,
@@ -213,7 +214,7 @@ async function registerHandoverRead(
   });
   return verification ? "held" : carriedUnrecordable.has(agentId) ? "unverifiable" : "pending";
 }
-//@ chunk-q84dhc5d.js:4099-4366 placement
+//@ chunk-wtq2g0re.js:4136-4403 placement
 async function handoverPersistTarget(ver, ver_2, artifactPersistId) {
   for (let [path, entry] of getLiveState().pendingHandoverReads)
     if (entry.slug === ver && entry.ver === ver_2) {
@@ -233,7 +234,7 @@ async function handoverPersistTarget(ver, ver_2, artifactPersistId) {
     persistId: artifactPersistId,
   };
 }
-//@ chunk-q84dhc5d.js:4366-4601 placement
+//@ chunk-wtq2g0re.js:4403-4638 placement
 async function refreshHandoverCopy(filepath, html) {
   let filePath = expandPath(filepath);
   let pendingHandoverReads = getLiveState().pendingHandoverReads;
@@ -248,7 +249,7 @@ async function refreshHandoverCopy(filepath, html) {
   });
   if (mtime !== undefined) item.mtimeMs = mtime;
 }
-//@ chunk-q84dhc5d.js:4601-4786 placement
+//@ chunk-wtq2g0re.js:4638-4823 placement
 /**
  * 找待完成的交接读取
  */
@@ -264,11 +265,11 @@ function findPendingHandoverRead(context, slug, ver) {
       return [key, entry];
   return;
 }
-//@ chunk-q84dhc5d.js:4786-4839 placement
+//@ chunk-wtq2g0re.js:4823-4876 placement
 function readPendingFor(agentId, slug, ver) {
   return findPendingHandoverRead(agentId ?? "main", slug, ver) !== undefined;
 }
-//@ chunk-q84dhc5d.js:4839-4970 placement
+//@ chunk-wtq2g0re.js:4876-5007 placement
 function findHandoverRead(context, slug, ver, ignoreHold = false) {
   let agentId = context.agentId ?? "main";
   let pendingHandoverRead = findPendingHandoverRead(agentId, slug, ver);
@@ -279,14 +280,14 @@ function findHandoverRead(context, slug, ver, ignoreHold = false) {
     ? undefined
     : pendingHandoverRead;
 }
-//@ chunk-q84dhc5d.js:4970-5076 placement
+//@ chunk-wtq2g0re.js:5007-5113 placement
 function handoverCoverage(context, slug, ver, { ignoreHold = false } = {}) {
   let handoverRead = findHandoverRead(context, slug, ver, ignoreHold);
   return handoverRead === undefined
     ? undefined
     : handoverCoverageOf(handoverRead[0], handoverRead[1], context.agentId);
 }
-//@ chunk-q84dhc5d.js:5076-5271 placement
+//@ chunk-wtq2g0re.js:5113-5308 placement
 async function checkedHandoverCoverage(context, slug, live) {
   let handoverRead = findHandoverRead(context, slug, live);
   if (handoverRead === undefined) return;
@@ -302,7 +303,7 @@ async function checkedHandoverCoverage(context, slug, live) {
     file: result,
   };
 }
-//@ chunk-q84dhc5d.js:5271-5437 placement
+//@ chunk-wtq2g0re.js:5308-5474 placement
 /**
  * 交接读取覆盖情况
  */
@@ -319,7 +320,7 @@ function handoverCoverageOf(path, agentId, agentId_2) {
     ),
   };
 }
-//@ chunk-q84dhc5d.js:5437-5536 placement
+//@ chunk-wtq2g0re.js:5474-5573 placement
 function handoverReadConfirmsResend(context, slug, live) {
   let handoverRead = findHandoverRead(context, slug, live);
   return (
@@ -327,11 +328,11 @@ function handoverReadConfirmsResend(context, slug, live) {
     refusedBodyFor(handoverRead[1], context.agentId, context.agentId ?? "main") === undefined
   );
 }
-//@ chunk-q84dhc5d.js:5536-5615 placement
+//@ chunk-wtq2g0re.js:5573-5652 placement
 function vouchHandoverReadConfirmsResend(context, slug, live, response) {
   findHandoverRead(context, slug, live)?.[1].confirmsResendFor.set(context.agentId ?? "main", response);
 }
-//@ chunk-q84dhc5d.js:5615-5969 placement
+//@ chunk-wtq2g0re.js:5652-6006 placement
 function describeHandoverCoverage({ lines, unterminated, unread }) {
   let reduced = unread.reduce((acc, [start, end]) => acc + end - start + 1, 0);
   return (
@@ -344,12 +345,12 @@ function describeHandoverCoverage({ lines, unterminated, unread }) {
       : "")
   );
 }
-//@ chunk-q84dhc5d.js:5969-6046 placement
+//@ chunk-wtq2g0re.js:6006-6083 placement
 function handoverCoverageNote(context, slug, ver, options) {
   let coverage = handoverCoverage(context, slug, ver, options);
   return coverage === undefined ? "" : ` (${describeHandoverCoverage(coverage)})`;
 }
-//@ chunk-q84dhc5d.js:6046-6193 placement
+//@ chunk-wtq2g0re.js:6083-6230 placement
 function getUncoveredLineRanges(read, requiredLines) {
   let out = [];
   let cursor = 0;
@@ -361,14 +362,18 @@ function getUncoveredLineRanges(read, requiredLines) {
   if (cursor < requiredLines) out.push([cursor + 1, requiredLines]);
   return out;
 }
-//@ chunk-q84dhc5d.js:6193-6326 placement
-async function discardHandoverCopy(filePath, savedFiles) {
-  getLiveState().pendingHandoverReads.delete(expandPath(filePath));
-  forgetSavedFilePath(savedFiles, filePath);
+//@ chunk-wtq2g0re.js:6230-6373 placement
+async function discardHandoverCopy(filepath, savedFiles) {
+  getLiveState().pendingHandoverReads.delete(expandPath(filepath));
+  forgetSavedFilePath(savedFiles, filepath);
   if (isDiskless()) reportOnce("handover_discard");
-  else await unlink(filePath).catch(() => {});
+  else
+    await unlink(filepath).then(
+      () => forgetSavedArtifactCopy(filepath),
+      () => {},
+    );
 }
-//@ chunk-q84dhc5d.js:6326-6391 placement
+//@ chunk-wtq2g0re.js:6373-6438 placement
 var EMPTY_HANDOVER_READ = {
   artifactRead: undefined,
   remaining: undefined,
@@ -376,7 +381,7 @@ var EMPTY_HANDOVER_READ = {
     return;
   },
 };
-//@ chunk-q84dhc5d.js:6391-7811 placement
+//@ chunk-wtq2g0re.js:6438-7858 placement
 async function prepareHandoverRead(artifactKey, context, messageId, range) {
   try {
     let pendingHandoverReads = getLiveState().pendingHandoverReads;
@@ -474,12 +479,12 @@ async function prepareHandoverRead(artifactKey, context, messageId, range) {
     return EMPTY_HANDOVER_READ;
   }
 }
-//@ chunk-q84dhc5d.js:7811-7923 placement
+//@ chunk-wtq2g0re.js:7858-7970 placement
 function isHandoverSuperseded(context, slug) {
   let ver = slug.getArtifactReadObservation(context.slug).ver;
   return ver !== undefined && ver !== context.ver && (compareNumericPrefix(ver, context.ver) ?? 0) > 0;
 }
-//@ chunk-q84dhc5d.js:7923-8047 placement
+//@ chunk-wtq2g0re.js:7970-8094 placement
 function dropSupersededHandover(context, slug, ver) {
   if (isHandoverSuperseded(context, ver)) {
     getLiveState().pendingHandoverReads.delete(slug);
@@ -488,7 +493,7 @@ function dropSupersededHandover(context, slug, ver) {
   }
   return false;
 }
-//@ chunk-q84dhc5d.js:8047-8225 placement
+//@ chunk-wtq2g0re.js:8094-8272 placement
 /**
  * 合并重叠的行区间
  */
@@ -502,12 +507,12 @@ function mergeLineRanges(ranges) {
   }
   return out;
 }
-//@ chunk-q84dhc5d.js:8225-8288 placement
+//@ chunk-wtq2g0re.js:8272-8335 placement
 function coversRequiredLines(range, requiredLines) {
   let start = range[0];
   return start !== undefined && start[0] <= 0 && start[1] >= requiredLines;
 }
-//@ chunk-q84dhc5d.js:8288-8439 placement
+//@ chunk-wtq2g0re.js:8335-8486 placement
 /**
  * 取被拒绝的发布正文记录
  */
@@ -516,7 +521,7 @@ function refusedBodyFor(refusal, agentId, slug) {
   let confirms = refusal.confirmsResendFor.get(slug);
   return confirms !== undefined && (body === undefined || body.batch !== confirms) ? undefined : body;
 }
-//@ chunk-q84dhc5d.js:8439-8836 placement
+//@ chunk-wtq2g0re.js:8486-8883 placement
 /**
  * 记录交接读取的版本
  */
@@ -539,7 +544,7 @@ function recordHandoverReadVersion(context, slug, ver, msgId, slug_2) {
   logFeatureSad("artifact_handover_read", "seed_not_persisted");
   return false;
 }
-//@ chunk-q84dhc5d.js:8836-9005 placement
+//@ chunk-wtq2g0re.js:8883-9052 placement
 /**
  * 核对交接副本大小与哈希是否不变
  */
@@ -557,6 +562,7 @@ async function checkHandoverCopy(path, bytes, contentHash) {
 }
 export {
   versionHeldBy,
+  handoverCoverageNote,
   handoverPersistTarget,
   discardHandoverCopy,
   readableLineChars,
@@ -564,12 +570,11 @@ export {
   sourceShape,
   describeHandoverSource,
   registerHandoverRead,
-  handoverCoverageNote,
+  handoverCoverage,
+  readPendingFor,
   checkedHandoverCoverage,
   vouchHandoverReadConfirmsResend,
   handoverReadConfirmsResend,
   describeHandoverCoverage,
-  handoverCoverage,
-  readPendingFor,
   prepareHandoverRead,
 };

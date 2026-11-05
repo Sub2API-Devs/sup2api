@@ -3,36 +3,46 @@
  *
  * 2.1.316 新增：MCP 服务器标识的长度限制、命名空间 UUID 与已知哈希集合；重建服务器/工具的线上名称映射等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-6mwt0myy.js (67)
- * attribution: placement 67
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-evj8g37g.js (81)
+ * attribution: affinity 1, placement 63, layout 17
  */
 import { isIPv6 } from "net";
 import { randomUUID } from "crypto";
-import { BASE58 } from "../../skills/bundled/scheduleRemoteAgents.js";
 import { hashAgentId } from "../../utils/agentId.js";
-import { isWellFormedString, firstLineOf } from "../../utils/stringUtils.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
-import { jsonStringify } from "../../utils/slowOperations.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { onProcessRootHost, getRootSession } from "../../bootstrap/state.js";
 import { MAX_WIRE_TOOL_NAME_BYTES } from "../../utils/taggedId.js";
-import { uniq } from "../../utils/collections.js";
-import { normalizeNameForMCP } from "./normalization.js";
+import { firstLineOf } from "../../utils/stringUtils.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
+import { CLAUDEAI_SERVER_PREFIX } from "./normalization.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import {
   mcpInfoFromString,
   MCP_TOOL_PREFIX,
+  getPrefixServerKey,
   getToolNameForPermissionCheck,
   getMcpToolAliasNames,
 } from "./mcpStringUtils.js";
 import { hasWildcard, wildcardRuleRegex } from "../../utils/permissions/permissionRuleParser.js";
-import { getPrefixServerKey } from "../../components/agents/ToolSelector.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-6mwt0myy.js:1694-1995 placement
+//@ chunk-evj8g37g.js:1496-1689 affinity
+function standardKeyOf(encoded) {
+  if (encoded.length !== 22) return;
+  let radix = BigInt(58);
+  let value = 0n;
+  for (let char of encoded) {
+    let index = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".indexOf(char);
+    if (index < 0) return;
+    value = value * radix + BigInt(index);
+  }
+  return value;
+}
+//@ chunk-evj8g37g.js:1689-1990 placement
 /**
  * 从带前缀的 base58 id 中解出 UUID。
  */
@@ -41,52 +51,46 @@ function decodeTaggedUuid(tag) {
   if (index < 0) return;
   let sliced = tag.slice(index + 1);
   if (!sliced.startsWith("01")) return;
-  let decoded = BASE58(sliced.slice(2));
+  let decoded = standardKeyOf(sliced.slice(2));
   if (decoded === undefined) return;
   let padded = decoded.toString(16).padStart(32, "0");
   if (padded.length !== 32) return;
   return `${padded.slice(0, 8)}-${padded.slice(8, 12)}-${padded.slice(12, 16)}-${padded.slice(16, 20)}-${padded.slice(20, 32)}`;
 }
-//@ chunk-6mwt0myy.js:2024-5798 placement
+//@ chunk-evj8g37g.js:2019-5731 placement
 /**
  * 匹配纯数字或 0x 开头标签的正则（避免 IP 形态）。
  */
-var MCP_SERVER_ID_LIMITS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-var MAX_NAME_WITH_SUFFIX_CHARS;
+var MAX_NAME_WITH_SUFFIX_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MAX_WIRE_NAME_CHARS;
 var NAME_PREFIX_CHARS;
 var HASH_SUFFIX_CHARS;
 var SHORT_HASH_CHARS;
-var MAX_PORT;
 var CLAUDE_AI_NAMESPACE_UUID;
 var RESERVED_TOOL_HASHES;
 var RESERVED_HOST_HASHES;
-var URL_PARTS_RE;
-var UNSAFE_URL_CHARS_RE;
-var SAFE_URL_CHARS_RE;
-var BAD_PERCENT_RE;
 var HOST_PORT_RE;
 var BRACKETED_HOST_RE;
-var PORT_RE;
 var HOSTNAME_LABEL_RE;
 var NUMERIC_LABEL_RE;
+var HEX_ID_RE;
 var ORG_CONNECTOR;
-deferInit("chunk-6mwt0myy.js:2024", () => {
-  MCP_SERVER_ID_LIMITS = 2048;
+deferInit("chunk-evj8g37g.js:2019", () => {
   MAX_NAME_WITH_SUFFIX_CHARS = 54;
   MAX_WIRE_NAME_CHARS = 253;
   NAME_PREFIX_CHARS = 21;
   HASH_SUFFIX_CHARS = 32;
   SHORT_HASH_CHARS = 8;
-  MAX_PORT = 65535;
   CLAUDE_AI_NAMESPACE_UUID = "6ba7b811-9dad-11d1-80b4-00c04fd430c8";
   RESERVED_TOOL_HASHES = new Set([
     "001d7d58914b066125876ce23d2d6d112d8289118e9a57f569a430c38d8faa3c",
     "058c32f177ce90792b36d516790f6443d632f83c6119d72ef32b1a815be6ee87",
     "08c07051187ca5d47aa75782fc2060a206e136d85cb398778a9f54e3db2caa47",
+    "0c3f27c51e8b8915edf0f99b20a24644f301d475247d6f6f08374b46bdd81b7c",
     "0ebe1e8065774e27792b7880d5caf63a366a8f4c135e5a42e15ba58769ae20f9",
     "0ff9d8927e9828d185f11126acb1b8da2e92a15012de9ed113b3d1a04a73f407",
     "10be6beef496b89dae799c37bd04e5eba2a6264a0a4d605f5661b50d7dc4d1ea",
+    "132d17d1cd7966dd9d7519bf995a5f2af9e76abd489eb1cdde6cd6066cce4cb5",
     "1360816558a23fd518959284a182f4d9e1cb362f47e472cff3b455babcba3144",
     "1e5fb8ca7bc55583e22e442dbd431ba55b70a579c5d1e7429ec9c91d4d9cf008",
     "1f100a7fa106825b9587fc9102815e07bc345e84c6ef109b39ce776af439ce7f",
@@ -100,6 +104,7 @@ deferInit("chunk-6mwt0myy.js:2024", () => {
     "3d8c0d8ccdf38a6d9103dbda04b18dade7588e32db531e85b051a2bc07c55fe6",
     "4b75867727276e96a05d681ede545d314c7c7106b3fa9fbd5643c2dc1662cb94",
     "585b9501131729a7b00bd745e8fe7ab9687ffdaaf91e4c6408d94b7fc15e8f2b",
+    "5c64a05e1995976045ec40d500cc0e173639525b7aac994a8cf2e5b152966c58",
     "66b8245886077eaaa79f378369261e020fb19d2c6ae53f94dfd8dfbc0282d029",
     "750bd39768d2b52a276a0f16e37e8d89cc51808ed2aee34292a613728c215aec",
     "7b1694f99542e733abaa2b776ab1261a98fc697118538d53d3b0242ffed329d3",
@@ -132,26 +137,21 @@ deferInit("chunk-6mwt0myy.js:2024", () => {
     "d470ff28ce01e69add79d828d4085e3ec719a6536712b5d60afcf1a10976e451",
     "eff8e7ca506627fe15dda5e0e512fcaad70b6d520f37cc76597fdb4f2d83a1a3",
   ]);
-  URL_PARTS_RE = /^(?:([^:/?#]+):)?(?:\/\/([^/?#]*))?([^?#]*)(?:\?[^#]*)?(?:#(.*))?$/;
-  UNSAFE_URL_CHARS_RE =
-    /[\u0000-\u0020\u007f\\\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/;
-  SAFE_URL_CHARS_RE = /^(?:[A-Za-z0-9\-._~!$&'()*+,;=:@/]|%[0-9A-Fa-f]{2})*$/;
-  BAD_PERCENT_RE = /%(?![0-9A-Fa-f]{2})/;
-  HOST_PORT_RE = /^([A-Za-z0-9._-]+)(?::(.*))?$/;
-  BRACKETED_HOST_RE = /^\[([0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*)\](?::(.*))?$/;
-  PORT_RE = /^[0-9]{1,5}$/;
+  HOST_PORT_RE = /^([A-Za-z0-9._-]+)(?::[0-9]*)?$/;
+  BRACKETED_HOST_RE = /^\[([0-9A-Fa-f:.]+)\](?::[0-9]*)?$/;
   HOSTNAME_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
   NUMERIC_LABEL_RE = /^(?:[0-9]+|0x[0-9a-f]*)$/;
+  HEX_ID_RE = /^(?:0x)?[0-9a-f_]+$/;
   ORG_CONNECTOR = "org-connector-";
 });
-//@ chunk-6mwt0myy.js:5798-5867 placement
+//@ chunk-evj8g37g.js:5731-5801 placement
 /**
  * 由服务器名生成 claude.ai 侧名的哈希。
  */
 function claudeAiServerUuid(serverName) {
   return hashAgentId(`mcp://claude.ai/client-integration/${serverName}`, CLAUDE_AI_NAMESPACE_UUID);
 }
-//@ chunk-6mwt0myy.js:5867-5972 placement
+//@ chunk-evj8g37g.js:5801-5906 placement
 function isSafeKeySegment(segment) {
   return (
     /^[A-Za-z0-9_-]+$/.test(segment) &&
@@ -160,52 +160,21 @@ function isSafeKeySegment(segment) {
     !segment.endsWith("_")
   );
 }
-//@ chunk-6mwt0myy.js:5972-6045 placement
-/**
- * 判断字符串是否为合法端口号。
- */
-function isValidPortString(port) {
-  return port === undefined || (PORT_RE.test(port) && Number(port) >= 1 && Number(port) <= MAX_PORT);
-}
-//@ chunk-6mwt0myy.js:6045-6122 placement
-/**
- * 判断路径是否安全（无 . 或 .. 段）。
- */
-function isSafeUrlPath(path) {
-  return (
-    SAFE_URL_CHARS_RE.test(path) && !path.split("/").some((segment) => segment === "." || segment === "..")
-  );
-}
-//@ chunk-6mwt0myy.js:6122-6505 placement (2.1.88 match: parseGitRemote, 0.781)
+//@ chunk-evj8g37g.js:5906-6316 placement
 /**
  * 解析服务器 URL 为身份（协议、主机、路径）。
  */
-function parseServerUrlIdentity(input) {
-  if (
-    input === "" ||
-    Array.from(input).length > MCP_SERVER_ID_LIMITS ||
-    !isWellFormedString(input) ||
-    UNSAFE_URL_CHARS_RE.test(input)
-  )
-    return;
-  let [, scheme, authority, path, suffix] = URL_PARTS_RE.exec(input) ?? [];
-  let lower = scheme?.toLowerCase();
-  if (
-    (lower !== "http" && lower !== "https") ||
-    !authority ||
-    path === undefined ||
-    !isSafeUrlPath(path) ||
-    BAD_PERCENT_RE.test(suffix ?? "")
-  )
-    return;
-  let hostWithoutPort = HOST_PORT_RE.exec(authority) ?? BRACKETED_HOST_RE.exec(authority);
-  if (
-    !hostWithoutPort?.[1] ||
-    !isValidPortString(hostWithoutPort[2]) ||
-    (hostWithoutPort[1].includes(":") && !isIPv6(hostWithoutPort[1]))
-  )
-    return;
-  let replaced = hostWithoutPort[1].toLowerCase().replace(/\.$/, "");
+function parseServerUrlIdentity(url) {
+  let trimmed = trimSpaces(url.replace(/[\t\r\n]/g, ""));
+  let index = trimmed.indexOf("://");
+  let lower = trimmed.slice(0, index).toLowerCase();
+  if (index < 0 || (lower !== "http" && lower !== "https")) return;
+  let [authorityWithUserinfo = ""] = trimmed.slice(index + 3).split(/[/?#]/, 1);
+  if (authorityWithUserinfo.includes("\\")) return;
+  let authority = authorityWithUserinfo.slice(authorityWithUserinfo.lastIndexOf("@") + 1);
+  let hostMatch = HOST_PORT_RE.exec(authority) ?? BRACKETED_HOST_RE.exec(authority);
+  if (!hostMatch?.[1] || (authority.startsWith("[") && !isIPv6(hostMatch[1]))) return;
+  let replaced = hostMatch[1].toLowerCase().replace(/\.$/, "");
   return replaced === "" || RESERVED_HOST_HASHES.has(computeContentHash(replaced))
     ? undefined
     : {
@@ -213,7 +182,15 @@ function parseServerUrlIdentity(input) {
         host: replaced,
       };
 }
-//@ chunk-6mwt0myy.js:6505-6593 placement
+//@ chunk-evj8g37g.js:6316-6442 layout
+function trimSpaces(text) {
+  let from = 0;
+  let to = text.length;
+  while (from < to && text.charCodeAt(from) <= 32) from++;
+  while (to > from && text.charCodeAt(to - 1) <= 32) to--;
+  return text.slice(from, to);
+}
+//@ chunk-evj8g37g.js:6442-6531 placement
 /**
  * 判断名称的某个前缀哈希是否命中保留集合。
  */
@@ -222,7 +199,7 @@ function hasReservedPrefixHash(name) {
     if (RESERVED_TOOL_HASHES.has(computeContentHash(name.slice(0, i)))) return true;
   return false;
 }
-//@ chunk-6mwt0myy.js:6593-6786 placement
+//@ chunk-evj8g37g.js:6531-6769 placement
 function hostStandardKey(scheme, host) {
   let parts = host.split(".");
   let tld = parts.at(-1) ?? "";
@@ -231,21 +208,27 @@ function hostStandardKey(scheme, host) {
     host.length > MAX_WIRE_NAME_CHARS ||
     parts.length < 2 ||
     tld.includes("-") ||
+    parts.some((label) => label.startsWith("sk-ant-")) ||
     NUMERIC_LABEL_RE.test(tld) ||
     !parts.every((label) => HOSTNAME_LABEL_RE.test(label))
   )
     return;
   let name = parts.join("_");
-  return hasReservedPrefixHash(name) ? undefined : name;
+  return hasReservedPrefixHash(name) || isHexKey(name) ? undefined : name;
 }
-//@ chunk-6mwt0myy.js:6786-6852 placement
+//@ chunk-evj8g37g.js:6769-6860 layout
+function isHexKey(value) {
+  let replaced = value.replaceAll("-", "");
+  return (replaced.length === 32 || replaced.length === 23) && HEX_ID_RE.test(replaced);
+}
+//@ chunk-evj8g37g.js:6860-6926 placement
 /**
  * 判断键是否为组织连接器键。
  */
 function isOrgConnectorKey(key) {
   return `${key}-`.replace(/[_-]+/g, "-").startsWith(ORG_CONNECTOR);
 }
-//@ chunk-6mwt0myy.js:6852-7119 placement (2.1.88 match: ghIsDangerousCallback, 0.773)
+//@ chunk-evj8g37g.js:6926-7193 placement (2.1.88 match: ghIsDangerousCallback, 0.773)
 function ghIsDangerousCallback(input) {
   let serverUrlIdentity = parseServerUrlIdentity(input);
   if (serverUrlIdentity === undefined) return;
@@ -263,17 +246,7 @@ function ghIsDangerousCallback(input) {
   let safeKey = isOrgConnectorKey(key) ? hashedKey : key;
   return isSafeKeySegment(safeKey) ? safeKey : undefined;
 }
-//@ chunk-6mwt0myy.js:7119-7217 placement
-/**
- * 生成 stdio 服务器的本地身份键（命令+参数的哈希）。
- */
-function stdioLocalIdentity(command, args) {
-  let parts = [command, ...args];
-  return command !== "" && parts.every(isWellFormedString)
-    ? `local-${computeContentHash(jsonStringify(parts)).slice(0, HASH_SUFFIX_CHARS)}`
-    : undefined;
-}
-//@ chunk-6mwt0myy.js:7217-7380 placement
+//@ chunk-evj8g37g.js:7193-7356 placement
 /**
  * stdio 服务器命令/参数是否变化。
  */
@@ -288,14 +261,14 @@ function stdioIdentityDiff(original, expanded) {
         args,
       };
 }
-//@ chunk-6mwt0myy.js:7380-7430 placement
+//@ chunk-evj8g37g.js:7356-7406 placement
 /**
  * 给键加上短哈希后缀，避免冲突。
  */
 function suffixedKey(key, id) {
   return `${key}-a${computeContentHash(id).slice(0, SHORT_HASH_CHARS)}`;
 }
-//@ chunk-6mwt0myy.js:7430-7788 placement
+//@ chunk-evj8g37g.js:7406-7764 placement
 /**
  * 为服务器分配不冲突的标准键（固定优先）。
  */
@@ -326,7 +299,7 @@ function assignStandardKeys(entries) {
   for (let [key, ids] of byKey) for (let id of ids) result.set(id, ids.size > 1 ? suffixedKey(key, id) : key);
   return result;
 }
-//@ chunk-6mwt0myy.js:7788-7882 placement
+//@ chunk-evj8g37g.js:7764-7858 placement
 /**
  * 内部工具名前缀 mcp__。
  */
@@ -335,13 +308,14 @@ var EMPTY_NAME_LIST = [];
 var MCP_RETIRED = "mcp__retired-";
 var RETIRED_KEY_RE = /-a[0-9a-f]{8}(?:__|$)/;
 var TRAILING_SUFFIX_RE = /^(.*[^_])-a[0-9a-f]{8}$/;
-//@ chunk-6mwt0myy.js:7882-8406 placement
+//@ chunk-evj8g37g.js:7858-8466 placement
 /**
  * 创建 MCP 服务器身份状态（遗留键、线名映射等）。
  */
 function createServerIdentityState() {
   return {
     active: false,
+    enforcesGrants: false,
     readLegacyKeyOwner: () => {
       return;
     },
@@ -351,6 +325,8 @@ function createServerIdentityState() {
     legacyKeyOwners: new Map(),
     unsavedLegacyKeys: new Set(),
     refusedLegacyKeys: new Map(),
+    claimedMayNotOwn: new Set(),
+    notedMayNotOwn: new Set(),
     needsRebuild: false,
     servers: new Map(),
     tools: new Map(),
@@ -359,6 +335,7 @@ function createServerIdentityState() {
     wireKeyByInternalKey: new Map(),
     internalKeyByWireKey: new Map(),
     keptLegacyNames: 0,
+    serverKeyMoved: false,
     sessionKeyById: new Map(),
     formerKeys: new Map(),
     formerSessionKeys: new Map(),
@@ -369,21 +346,21 @@ function createServerIdentityState() {
     sentWires: new Map(),
   };
 }
-//@ chunk-6mwt0myy.js:8406-8455 placement
+//@ chunk-evj8g37g.js:8466-8515 placement
 /**
  * 独立的服务器身份状态（无宿主作用域时使用）。
  */
 var serverIdentitySlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
 var identitySlotHostState;
 var standaloneIdentityState;
-deferInit("chunk-6mwt0myy.js:8406", () => {
+deferInit("chunk-evj8g37g.js:8466", () => {
   serverIdentitySlot = new SessionRootSlot(createServerIdentityState);
   identitySlotHostState = new HostScoped(() => ({
     used: false,
   }));
   standaloneIdentityState = createServerIdentityState();
 });
-//@ chunk-6mwt0myy.js:8455-8500 placement
+//@ chunk-evj8g37g.js:8515-8560 placement
 /**
  * 取当前有效的服务器身份状态。
  */
@@ -392,7 +369,7 @@ function getServerIdentityState() {
     ? serverIdentitySlot.of(getRootSession())
     : standaloneIdentityState;
 }
-//@ chunk-6mwt0myy.js:8500-8610 placement
+//@ chunk-evj8g37g.js:8560-8704 placement
 /**
  * 启用服务器身份映射，并接入旧键归属的读取与认领函数。
  */
@@ -400,30 +377,60 @@ function activateServerIdentity(handler) {
   onProcessRootHost(identitySlotHostState).used = true;
   let serverIdentityState = getServerIdentityState();
   serverIdentityState.active = true;
+  serverIdentityState.enforcesGrants = handler.enforcesGrants;
   serverIdentityState.readLegacyKeyOwner = handler.read;
   serverIdentityState.claimLegacyKeyOwner = handler.claim;
 }
-//@ chunk-6mwt0myy.js:8610-8642 placement
+//@ chunk-evj8g37g.js:8704-8736 placement
 /**
  * 服务器身份映射是否启用。
  */
 function isServerIdentityActive() {
   return getServerIdentityState().active;
 }
-//@ chunk-6mwt0myy.js:8642-8684 placement
+//@ chunk-evj8g37g.js:8736-8777 layout
+function serverKeyMoved() {
+  return getServerIdentityState().serverKeyMoved;
+}
+//@ chunk-evj8g37g.js:8777-8918 layout
+function untrackedWiredTools() {
+  let { tools, wireByInternal, sessionKeyById } = getServerIdentityState();
+  return [...tools]
+    .filter(
+      ([internalName, { serverId }]) => !wireByInternal.has(internalName) && sessionKeyById.has(serverId),
+    )
+    .map(([internalName]) => internalName);
+}
+//@ chunk-evj8g37g.js:8918-8999 layout
+function internalNameOf(name) {
+  let { wireByInternal, sentWires } = getServerIdentityState();
+  return wireByInternal.has(name) && !sentWires.has(name);
+}
+//@ chunk-evj8g37g.js:8999-9128 layout
+function isWiredUnsent() {
+  let flattened = [...getServerIdentityState().servers.values()].flatMap(({ standardKey }) =>
+    standardKey === undefined ? [] : [standardKey.key],
+  );
+  return new Set(flattened).size < flattened.length;
+}
+//@ chunk-evj8g37g.js:9128-9169 layout
+function enforcesGrants() {
+  return getServerIdentityState().enforcesGrants;
+}
+//@ chunk-evj8g37g.js:9169-9211 placement
 /**
  * 取保留的旧服务器名集合。
  */
 function getKeptLegacyNames() {
   return getServerIdentityState().keptLegacyNames;
 }
-//@ chunk-6mwt0myy.js:8684-8792 placement
+//@ chunk-evj8g37g.js:9211-9319 placement
 function ownerIdOf(mcpInfo) {
   return mcpInfo.serverType === "claudeai-proxy" && mcpInfo.serverId
     ? (decodeTaggedUuid(mcpInfo.serverId) ?? mcpInfo.serverId)
     : claudeAiServerUuid(mcpInfo.serverName);
 }
-//@ chunk-6mwt0myy.js:8792-9124 placement
+//@ chunk-evj8g37g.js:9319-9651 placement
 /**
  * 为工具重新分配键。
  */
@@ -440,18 +447,20 @@ function reassignToolKey(state, internalKey, reserved, assigned) {
   }
   return;
 }
-//@ chunk-6mwt0myy.js:9124-9248 placement
+//@ chunk-evj8g37g.js:9651-9819 placement
 function shouldRecordRename(state, standardKeys, previousId, nextId) {
+  let nextServer = state.servers.get(nextId);
   return (
     previousId !== nextId &&
+    nextServer?.standardKey?.key !== nextServer?.legacyKey &&
     !(
       standardKeys.has(previousId) &&
       state.servers.get(previousId)?.mayRecordOwner === false &&
-      state.servers.get(nextId)?.mayRecordOwner !== false
+      nextServer?.mayRecordOwner !== false
     )
   );
 }
-//@ chunk-6mwt0myy.js:9248-11960 placement
+//@ chunk-evj8g37g.js:9819-12647 placement
 /**
  * 重建服务器/工具的线上名称映射。
  */
@@ -498,8 +507,8 @@ function rebuildWireNames(state) {
   state.keptLegacyNames = 0;
   for (let { id, legacyKey } of servers) {
     let standardKey = standardKeyById.get(id);
-    if (standardKey !== undefined && standardKey !== legacyKey) {
-      state.internalKeyByWireKey.set(standardKey, legacyKey);
+    if (standardKey !== undefined) {
+      if (standardKey !== legacyKey) state.internalKeyByWireKey.set(standardKey, legacyKey);
       if (legacyCounts.get(legacyKey) === 1) state.wireKeyByInternalKey.set(legacyKey, standardKey);
     }
   }
@@ -526,7 +535,15 @@ function rebuildWireNames(state) {
       let any = [...(state.spelledKeys.get(standardKey.key) ?? [])].some((otherId) =>
         shouldRecordRename(state, standardKeyById, otherId, toolRecord.serverId),
       );
-      if (found !== undefined && !(found === standardKey.key && any)) {
+      let spelledKeys =
+        serverRecord.mayRecordOwner === false &&
+        [...state.servers.values()].some(
+          (server) =>
+            server.id !== serverRecord.id &&
+            server.mayRecordOwner !== false &&
+            ownsKey(state, server, standardKey.key),
+        );
+      if (found !== undefined && !(found === standardKey.key && (any || spelledKeys))) {
         wireByInternal.set(internalKey, sentWire);
         state.internalKeyByWireKey.set(found, serverRecord.legacyKey);
         if (state.wireKeyByInternalKey.has(serverRecord.legacyKey))
@@ -575,7 +592,7 @@ function rebuildWireNames(state) {
   state.otherDenyOrAskNames = new Map();
   for (let [internalKey, { serverId, toolPart }] of state.tools) {
     let wireName = wireByInternal.get(internalKey);
-    let filtered = uniq([
+    let filtered = normalizeCaseForComparison_2([
       ...[
         standardKeyById.get(serverId),
         state.servers.get(serverId)?.standardKey?.key,
@@ -589,56 +606,91 @@ function rebuildWireNames(state) {
     if (filtered.length > 0) state.otherDenyOrAskNames.set(internalKey, filtered);
   }
 }
-//@ chunk-6mwt0myy.js:11960-12184 placement
+//@ chunk-evj8g37g.js:12647-12978 placement
 /**
  * 判断并记录某服务器的旧权限键是否被拒用（有争议或被强制拒绝时记入拒用集合）。
  */
 async function isLegacyKeyRefused(mcpInfo, forceContested = false, mayClaim = true) {
   let serverIdentityState = getServerIdentityState();
   if (!serverIdentityState.active) return false;
-  let legacyKey = normalizeNameForMCP(mcpInfo.serverName);
+  let legacyKey = CLAUDEAI_SERVER_PREFIX(mcpInfo.serverName);
   let ownerId = ownerIdOf(mcpInfo);
+  if (mayClaim) serverIdentityState.claimedMayNotOwn.delete(ownerId);
+  else serverIdentityState.claimedMayNotOwn.add(ownerId);
   let contested =
-    forceContested || (await isLegacyKeyContested(serverIdentityState, legacyKey, ownerId, mayClaim));
+    forceContested ||
+    ((await isLegacyKeyContested(serverIdentityState, legacyKey, ownerId, mayClaim)) &&
+      (serverIdentityState.enforcesGrants ||
+        (!mayClaim && legacyKeyHeldByOther(serverIdentityState, legacyKey, false, true))));
   let refusers = serverIdentityState.refusedLegacyKeys.get(legacyKey) ?? new Set();
   serverIdentityState.refusedLegacyKeys.set(legacyKey, refusers);
   if (contested) refusers.add(ownerId);
   else refusers.delete(ownerId);
   return contested;
 }
-//@ chunk-6mwt0myy.js:12184-12417 placement
-function isKeyHeldByOther(serverIdentityState, key, mayClaim) {
-  return [...serverIdentityState.servers.values()].some(
-    (server) =>
-      server.legacyKey !== key &&
-      !(mayClaim && server.mayRecordOwner === false) &&
-      (server.standardKey?.key === key ||
-        serverIdentityState.sessionKeyById.get(server.id) === key ||
-        serverIdentityState.formerKeys.get(server.id)?.has(key) ||
-        serverIdentityState.formerSessionKeys.get(server.id)?.has(key)),
+//@ chunk-evj8g37g.js:12978-13096 layout
+function legacyKeyCandidates(legacyKey) {
+  let padded = `${legacyKey}__`;
+  let candidates = [legacyKey];
+  for (let index = padded.indexOf("__"); index >= 0; index = padded.indexOf("__", index + 1))
+    candidates.push(padded.slice(0, index));
+  return candidates;
+}
+//@ chunk-evj8g37g.js:13096-13257 layout
+function ownsKey(state, server, key) {
+  return (
+    server.standardKey?.key === key ||
+    state.sessionKeyById.get(server.id) === key ||
+    state.formerKeys.get(server.id)?.has(key) === true ||
+    state.formerSessionKeys.get(server.id)?.has(key) === true
   );
 }
-//@ chunk-6mwt0myy.js:12417-12523 placement
+//@ chunk-evj8g37g.js:13257-13474 layout
+function legacyKeyHeldByOther(state, legacyKey, ignoreOwnerFlag, requireOwner = false) {
+  let candidates = legacyKeyCandidates(legacyKey);
+  return [...state.servers.values()].some((server) => {
+    let mayOwn = !ignoreOwnerFlag && server.mayRecordOwner !== false;
+    return (
+      server.legacyKey !== legacyKey &&
+      !((ignoreOwnerFlag || requireOwner) && server.mayRecordOwner === false) &&
+      (mayOwn ? candidates : [legacyKey]).some(
+        (candidate) => (mayOwn && server.legacyKey === candidate) || ownsKey(state, server, candidate),
+      )
+    );
+  });
+}
+//@ chunk-evj8g37g.js:13474-13601 layout
+function mayNotOwn(state, serverId) {
+  let mayRecordOwner = state.servers.get(serverId)?.mayRecordOwner;
+  return mayRecordOwner === undefined
+    ? state.claimedMayNotOwn.has(serverId) || state.notedMayNotOwn.has(serverId)
+    : !mayRecordOwner;
+}
+//@ chunk-evj8g37g.js:13601-13683 placement
 /**
  * 是否可记录服务器键的所有者。
  */
 function mayRecordServerOwner(mcpInfo) {
   let serverIdentityState = getServerIdentityState();
-  return (
-    serverIdentityState.active &&
-    isKeyHeldByOther(
-      serverIdentityState,
-      normalizeNameForMCP(mcpInfo.serverName),
-      serverIdentityState.servers.get(ownerIdOf(mcpInfo))?.mayRecordOwner !== false,
-    )
+  if (!serverIdentityState.active) return false;
+  return legacyKeyConflicts(
+    serverIdentityState,
+    ownerIdOf(mcpInfo),
+    CLAUDEAI_SERVER_PREFIX(mcpInfo.serverName),
   );
 }
-//@ chunk-6mwt0myy.js:12523-12950 placement
+//@ chunk-evj8g37g.js:13683-13761 layout
+function legacyKeyConflicts(state, serverId, legacyKey) {
+  return state.enforcesGrants
+    ? legacyKeyHeldByOther(state, legacyKey, !mayNotOwn(state, serverId))
+    : mayNotOwn(state, serverId) && legacyKeyHeldByOther(state, legacyKey, false, true);
+}
+//@ chunk-evj8g37g.js:13761-14188 placement
 /**
  * 遗留键是否被其他服务器占用。
  */
 async function isLegacyKeyContested(serverIdentityState, legacyKey, ownerId, mayClaim) {
-  if (isKeyHeldByOther(serverIdentityState, legacyKey, mayClaim)) return true;
+  if (legacyKeyHeldByOther(serverIdentityState, legacyKey, mayClaim)) return true;
   let persistedOwner = serverIdentityState.unsavedLegacyKeys.has(legacyKey)
     ? undefined
     : serverIdentityState.readLegacyKeyOwner(legacyKey);
@@ -654,15 +706,15 @@ async function isLegacyKeyContested(serverIdentityState, legacyKey, ownerId, may
   serverIdentityState.legacyKeyOwners.set(legacyKey, resolvedOwner);
   return resolvedOwner !== ownerId;
 }
-//@ chunk-6mwt0myy.js:12950-13294 placement
+//@ chunk-evj8g37g.js:14188-14532 placement
 /**
  * 认领遗留键。
  */
 async function claimLegacyKey(mcpInfo) {
   let serverIdentityState = getServerIdentityState();
   if (!serverIdentityState.active) return false;
-  let legacyKey = normalizeNameForMCP(mcpInfo.serverName);
-  if (isKeyHeldByOther(serverIdentityState, legacyKey, true)) return false;
+  let legacyKey = CLAUDEAI_SERVER_PREFIX(mcpInfo.serverName);
+  if (legacyKeyHeldByOther(serverIdentityState, legacyKey, true)) return false;
   let ownerId = ownerIdOf(mcpInfo);
   let knownOwner = legacyKeyOwnerOf(serverIdentityState, legacyKey);
   if (knownOwner !== undefined) serverIdentityState.legacyKeyOwners.set(legacyKey, knownOwner);
@@ -673,53 +725,58 @@ async function claimLegacyKey(mcpInfo) {
   serverIdentityState.refusedLegacyKeys.get(legacyKey)?.delete(ownerId);
   return true;
 }
-//@ chunk-6mwt0myy.js:13294-13498 placement
+//@ chunk-evj8g37g.js:14532-14736 placement
 /**
  * 判断某服务器的旧键是否已被另一身份的服务器持有。
  */
 function isLegacyKeyOwnedElsewhere(mcpInfo) {
   let serverIdentityState = getServerIdentityState();
-  let legacyKey = normalizeNameForMCP(mcpInfo.serverName);
+  let legacyKey = CLAUDEAI_SERVER_PREFIX(mcpInfo.serverName);
   let owner =
     serverIdentityState.legacyKeyOwners.get(legacyKey) ?? serverIdentityState.readLegacyKeyOwner(legacyKey);
   return (
     serverIdentityState.active &&
     (!serverIdentityState.unsavedLegacyKeys.has(legacyKey) ||
       serverIdentityState.legacyKeyOwners.has(legacyKey)) &&
-    !isKeyHeldByOther(serverIdentityState, legacyKey, true) &&
+    !legacyKeyHeldByOther(serverIdentityState, legacyKey, true) &&
     owner !== undefined &&
     owner !== ownerIdOf(mcpInfo)
   );
 }
-//@ chunk-6mwt0myy.js:13498-13603 placement
+//@ chunk-evj8g37g.js:14736-14841 placement
 /**
  * 是否拥有遗留键。
  */
 function ownsLegacyKey(mcpInfo) {
   let serverIdentityState = getServerIdentityState();
-  let legacyKey = normalizeNameForMCP(mcpInfo.serverName);
+  let legacyKey = CLAUDEAI_SERVER_PREFIX(mcpInfo.serverName);
   let ownerId = ownerIdOf(mcpInfo);
   return (
     legacyKeyOwnerOf(serverIdentityState, legacyKey) === ownerId &&
     (serverIdentityState.legacyKeyOwners.get(legacyKey) ?? ownerId) === ownerId
   );
 }
-//@ chunk-6mwt0myy.js:13603-13723 placement
+//@ chunk-evj8g37g.js:14841-14893 placement
 /**
  * 判断某服务器的旧键是否尚未被本服务器认领（未保存或归属他人）。
  */
 function isLegacyKeyUnclaimed(mcpInfo) {
-  let serverIdentityState = getServerIdentityState();
-  let legacyKey = normalizeNameForMCP(mcpInfo.serverName);
+  return refusedLegacyKey(
+    getServerIdentityState(),
+    CLAUDEAI_SERVER_PREFIX(mcpInfo.serverName),
+    ownerIdOf(mcpInfo),
+  );
+}
+//@ chunk-evj8g37g.js:14893-15005 layout
+function refusedLegacyKey(serverIdentityState, legacyKey, serverId) {
   let owner = legacyKeyOwnerOf(serverIdentityState, legacyKey);
   return (
     serverIdentityState.active &&
-    (owner === undefined
-      ? serverIdentityState.unsavedLegacyKeys.has(legacyKey)
-      : owner !== ownerIdOf(mcpInfo))
+    serverIdentityState.enforcesGrants &&
+    (owner === undefined ? serverIdentityState.unsavedLegacyKeys.has(legacyKey) : owner !== serverId)
   );
 }
-//@ chunk-6mwt0myy.js:13723-13831 placement
+//@ chunk-evj8g37g.js:15005-15113 placement
 function legacyKeyOwnerOf(serverIdentityState, legacyKey) {
   return (
     (serverIdentityState.unsavedLegacyKeys.has(legacyKey)
@@ -728,13 +785,13 @@ function legacyKeyOwnerOf(serverIdentityState, legacyKey) {
     serverIdentityState.legacyKeyOwners.get(legacyKey)
   );
 }
-//@ chunk-6mwt0myy.js:13831-14442 placement
+//@ chunk-evj8g37g.js:15113-15774 placement
 /**
  * 更新服务器身份记录。
  */
 function updateServerIdentity(serverIdentityState, { server, standardKey, denyKey, mayRecordOwner }) {
   let ownerId = ownerIdOf(server);
-  let legacyKey = normalizeNameForMCP(server.serverName);
+  let legacyKey = CLAUDEAI_SERVER_PREFIX(server.serverName);
   let existing = serverIdentityState.servers.get(ownerId);
   let standardKey_2 = existing?.standardKey;
   let nextStandardKey = standardKey ?? standardKey_2;
@@ -748,6 +805,8 @@ function updateServerIdentity(serverIdentityState, { server, standardKey, denyKe
     existing.denyKey !== nextDenyKey ||
     existing.mayRecordOwner !== nextMayRecordOwner
   ) {
+    if (standardKey_2 !== undefined && standardKey_2.key !== nextStandardKey?.key)
+      serverIdentityState.serverKeyMoved = true;
     if (standardKey_2 !== undefined && !standardKey_2.pinned && standardKey_2.key !== nextStandardKey?.key) {
       serverIdentityState.formerKeys.set(
         ownerId,
@@ -771,7 +830,7 @@ function updateServerIdentity(serverIdentityState, { server, standardKey, denyKe
   }
   return ownerId;
 }
-//@ chunk-6mwt0myy.js:14442-14554 placement
+//@ chunk-evj8g37g.js:15774-15886 placement
 function rebuildIfNeeded(state) {
   if (state.needsRebuild) {
     let snapshot = {
@@ -786,7 +845,7 @@ function rebuildIfNeeded(state) {
     }
   }
 }
-//@ chunk-6mwt0myy.js:14554-14627 placement
+//@ chunk-evj8g37g.js:15886-15959 placement
 /**
  * 登记一批工具的身份，必要时标记重建线上名。
  */
@@ -796,7 +855,7 @@ function registerToolIdentities(servers) {
   for (let server of servers) updateServerIdentity(serverIdentityState, server);
   rebuildIfNeeded(serverIdentityState);
 }
-//@ chunk-6mwt0myy.js:14627-14864 placement
+//@ chunk-evj8g37g.js:15959-16196 placement
 /**
  * 登记工具到服务器身份的映射，有变化时标记需要重建线上名。
  */
@@ -805,7 +864,7 @@ function registerToolIdentities_2(tools) {
   if (!serverIdentityState.active) return;
   for (let tool of tools) {
     let serverId = updateServerIdentity(serverIdentityState, tool);
-    let legacyKey = normalizeNameForMCP(tool.server.serverName);
+    let legacyKey = CLAUDEAI_SERVER_PREFIX(tool.server.serverName);
     if (serverIdentityState.tools.get(tool.name)?.serverId !== serverId) {
       serverIdentityState.needsRebuild = true;
       serverIdentityState.tools.set(tool.name, {
@@ -816,7 +875,7 @@ function registerToolIdentities_2(tools) {
   }
   rebuildIfNeeded(serverIdentityState);
 }
-//@ chunk-6mwt0myy.js:14864-14989 placement
+//@ chunk-evj8g37g.js:16196-16321 placement
 /**
  * 记录已发送给模型的工具线上名。
  */
@@ -828,40 +887,51 @@ function noteSentWireNames(internalKeys) {
       if (wireName !== undefined) sentWires.set(internalKey, wireName);
     }
 }
-//@ chunk-6mwt0myy.js:14989-15041 placement
+//@ chunk-evj8g37g.js:16321-16372 placement
 /**
  * 内部名对应的线上名。
  */
 function wireName(internalKey) {
   return getServerIdentityState().wireByInternal.get(internalKey) ?? internalKey;
 }
-//@ chunk-6mwt0myy.js:15041-15147 placement
+//@ chunk-evj8g37g.js:16372-16477 placement
 /**
  * 把线上工具名换回内部名（含已退役的线上名）。
  */
-function internalToolNameFor(name) {
+function internalToolNameFor(clientWireName) {
   return (
-    (name.startsWith(MCP_RETIRED)
-      ? [...getServerIdentityState().retiredWireNames].find(([, retiredName]) => retiredName === name)
-      : undefined)?.[0] ?? wireName(name)
+    (clientWireName.startsWith(MCP_RETIRED)
+      ? [...getServerIdentityState().retiredWireNames].find(
+          ([, retiredName]) => retiredName === clientWireName,
+        )
+      : undefined)?.[0] ?? wireName(clientWireName)
   );
 }
-//@ chunk-6mwt0myy.js:15147-15237 placement
+//@ chunk-evj8g37g.js:16477-16570 layout
+function internalAndLegacyNames(wireName) {
+  let internal = internalToolNameFor(wireName);
+  return internal === wireName &&
+    wireName.startsWith(MCP_PREFIX) &&
+    !getServerIdentityState().tools.has(wireName)
+    ? [wireName, matchLegacyRule(wireName)]
+    : [internal];
+}
+//@ chunk-evj8g37g.js:16570-16660 placement
 /**
  * 线上名对应的内部名。
  */
-function internalName(name) {
+function internalName(wireName) {
   let { internalByWire, retiredWireNames } = getServerIdentityState();
-  return internalByWire.get(name) ?? retiredWireNames.get(name) ?? name;
+  return internalByWire.get(wireName) ?? retiredWireNames.get(wireName) ?? wireName;
 }
-//@ chunk-6mwt0myy.js:15237-15295 placement
+//@ chunk-evj8g37g.js:16660-16718 placement
 /**
  * 线上键对应的内部键。
  */
 function internalKey(wireKey) {
   return getServerIdentityState().internalKeyByWireKey.get(wireKey) ?? wireKey;
 }
-//@ chunk-6mwt0myy.js:15295-15449 placement
+//@ chunk-evj8g37g.js:16718-16872 placement
 function mapServerSegment(toolName, mapKey) {
   if (!toolName.startsWith(MCP_PREFIX)) return toolName;
   let sliced = toolName.slice(MCP_PREFIX.length);
@@ -869,43 +939,65 @@ function mapServerSegment(toolName, mapKey) {
   let serverKey = index === -1 ? sliced : sliced.slice(0, index);
   return `${MCP_PREFIX}${mapKey(serverKey)}${index === -1 ? "" : sliced.slice(index)}`;
 }
-//@ chunk-6mwt0myy.js:15449-15481 placement
+//@ chunk-evj8g37g.js:16872-16904 placement
 /**
  * 把 mcp__ 前缀名转为内部键。
  */
 function toInternalToolName(toolName) {
   return mapServerSegment(toolName, internalKey);
 }
-//@ chunk-6mwt0myy.js:15481-15814 placement
+//@ chunk-evj8g37g.js:16904-17074 placement
 /**
  * 规则是否引用了遗留键。
  */
 function matchLegacyRule(ruleName, behavior) {
-  let { wireKeyByInternalKey, refusedLegacyKeys } = getServerIdentityState();
-  let match;
-  for (let [legacyKey, wireKey] of wireKeyByInternalKey) {
-    let prefix = `${MCP_PREFIX}${legacyKey}`;
-    if (
-      (ruleName === prefix || ruleName.startsWith(`${prefix}__`) || ruleName.startsWith(`${prefix}(`)) &&
-      legacyKey.length > (match?.legacy.length ?? -1)
-    )
-      match = {
-        legacy: legacyKey,
-        wire: wireKey,
-      };
-  }
+  let { refusedLegacyKeys } = getServerIdentityState();
+  let match = longestLegacyRule(ruleName);
   return match === undefined || (behavior === "allow" && (refusedLegacyKeys.get(match.legacy)?.size ?? 0) > 0)
     ? ruleName
     : `${MCP_PREFIX}${match.wire}${ruleName.slice(MCP_PREFIX.length + match.legacy.length)}`;
 }
-//@ chunk-6mwt0myy.js:15814-15872 placement
+//@ chunk-evj8g37g.js:17074-17361 layout
+function legacyRuleMatcher() {
+  let serverIdentityState = getServerIdentityState();
+  let mapped = [...serverIdentityState.servers.values()]
+    .filter(
+      (server) =>
+        (serverIdentityState.refusedLegacyKeys.get(server.legacyKey)?.size ?? 0) > 0 ||
+        refusedLegacyKey(serverIdentityState, server.legacyKey, server.id) ||
+        legacyKeyConflicts(serverIdentityState, server.id, server.legacyKey),
+    )
+    .flatMap((server) => legacyKeyCandidates(server.legacyKey))
+    .map((server) => `${MCP_PREFIX}${server}`);
+  return (key) =>
+    mapped.some((prefix) => key === prefix || key.startsWith(`${prefix}__`) || key.startsWith(`${prefix}(`));
+}
+//@ chunk-evj8g37g.js:17361-17560 layout
+function longestLegacyRule(ruleName) {
+  let best;
+  for (let [internalKey, wireKey] of getServerIdentityState().wireKeyByInternalKey) {
+    let candidate = `${MCP_PREFIX}${internalKey}`;
+    if (
+      (ruleName === candidate ||
+        ruleName.startsWith(`${candidate}__`) ||
+        ruleName.startsWith(`${candidate}(`)) &&
+      internalKey.length > (best?.legacy.length ?? -1)
+    )
+      best = {
+        legacy: internalKey,
+        wire: wireKey,
+      };
+  }
+  return best;
+}
+//@ chunk-evj8g37g.js:17560-17618 placement
 /**
  * 取某服务器在拒绝/询问名称表里的别名。
  */
 function denyOrAskNamesFor(toolName) {
   return getServerIdentityState().otherDenyOrAskNames.get(toolName) ?? EMPTY_NAME_LIST;
 }
-//@ chunk-6mwt0myy.js:15872-15980 placement
+//@ chunk-evj8g37g.js:17618-17726 placement
 /**
  * 把权限规则中的服务器名规范化（去掉身份后缀），未变化时返回 undefined。
  */
@@ -917,7 +1009,7 @@ function ruleWithNormalizedServer(ruleName) {
   );
   return normalized === ruleName ? undefined : normalized;
 }
-//@ chunk-6mwt0myy.js:15980-16242 placement
+//@ chunk-evj8g37g.js:17726-17988 placement
 /**
  * 为权限规则生成按标准键表示的工具行，供规则匹配使用。
  */
@@ -934,14 +1026,14 @@ function standardKeyRuleRow(ruleName, toolNameForPermissionCheck) {
         row: `${MCP_PREFIX}${key}__${toolRecord.toolPart}`,
       };
 }
-//@ chunk-6mwt0myy.js:16242-16318 placement
+//@ chunk-evj8g37g.js:17988-18064 placement
 /**
  * 正整数原样返回，否则 undefined。
  */
 function positiveIntOrUndefined(timeout) {
   return typeof timeout === "number" && Number.isInteger(timeout) && timeout > 0 ? timeout : undefined;
 }
-//@ chunk-6mwt0myy.js:16318-16372 placement
+//@ chunk-evj8g37g.js:18064-18118 placement
 /**
  * 合法的工具策略取值（always_allow/ask/deny）。
  */
@@ -950,14 +1042,14 @@ var TOOL_POLICY_VALUES = {
   always_ask: true,
   always_deny: true,
 };
-//@ chunk-6mwt0myy.js:16372-16435 placement
+//@ chunk-evj8g37g.js:18118-18181 placement
 /**
  * 判断是否为合法工具策略取值。
  */
 function isToolPolicyValue(permissionPolicy) {
   return typeof permissionPolicy === "string" && Object.hasOwn(TOOL_POLICY_VALUES, permissionPolicy);
 }
-//@ chunk-6mwt0myy.js:16435-16704 placement
+//@ chunk-evj8g37g.js:18181-18450 placement
 /**
  * 解析服务器工具策略条目：合法策略原样保留，不认识的策略改写为 always_ask。
  */
@@ -987,7 +1079,7 @@ function parseToolPolicyEntry(tool) {
         rewritten: true,
       };
 }
-//@ chunk-6mwt0myy.js:16704-16872 placement
+//@ chunk-evj8g37g.js:18450-18618 placement
 /**
  * 比较两组工具策略列表是否相同。
  */
@@ -1001,7 +1093,7 @@ function sameToolPolicies(tools, tools_2) {
     )
   );
 }
-//@ chunk-6mwt0myy.js:16872-17376 placement
+//@ chunk-evj8g37g.js:18618-19122 placement
 /**
  * 解析服务器的附加设置（timeout、disableAutoBackground、tools、connectorId）。
  */
@@ -1039,7 +1131,7 @@ function parseMcpServerSettings(value) {
     ignored,
   };
 }
-//@ chunk-6mwt0myy.js:17376-17644 placement
+//@ chunk-evj8g37g.js:19122-19390 placement
 /**
  * 检查 tools[] 条目（丢弃、改写数量）。
  */
@@ -1066,7 +1158,7 @@ function inspectToolsList(value) {
       }
     : undefined;
 }
-//@ chunk-6mwt0myy.js:17644-18029 placement
+//@ chunk-evj8g37g.js:19390-19775 placement
 /**
  * 描述 tools[] 的问题。
  */
@@ -1081,7 +1173,7 @@ function describeToolsListIssues(issue) {
     );
   return `${parts.join(", ")}; kept ${issue.kept}`;
 }
-//@ chunk-6mwt0myy.js:18029-18150 placement
+//@ chunk-evj8g37g.js:19775-19896 placement
 function parseToolPolicies(tools) {
   if (!Array.isArray(tools)) return;
   let policies = [];
@@ -1091,11 +1183,20 @@ function parseToolPolicies(tools) {
   }
   return policies;
 }
-//@ chunk-6mwt0myy.js:21160-21199 placement
+//@ chunk-evj8g37g.js:23037-23076 placement
 function mcpRuleMatchesToolName(ruleName, toolNameForPermissionCheck) {
   return compileMcpRuleMatcher(ruleName)(mcpInfoFromString(toolNameForPermissionCheck));
 }
-//@ chunk-6mwt0myy.js:21199-21467 placement
+//@ chunk-evj8g37g.js:23076-23172 layout
+function rulesMatchingTool(ruleName) {
+  let matches = compileMcpRuleMatcher(ruleName);
+  return untrackedWiredTools().filter((wireName) =>
+    [wireName, ...denyOrAskNamesFor(wireName)].some(
+      (candidate) => candidate === ruleName || matches(mcpInfoFromString(candidate)),
+    ),
+  );
+}
+//@ chunk-evj8g37g.js:23172-23440 placement
 /**
  * compileMcpRuleMatcher：把 mcp__server、mcp__server__*、mcp__server__<通配> 规则编译成对 {serverName, toolName} 的谓词。
  */
@@ -1113,7 +1214,7 @@ function compileMcpRuleMatcher(ruleName) {
         toolName !== undefined &&
         (wildcardMatcher ??= wildcardRuleRegex(toolName))(candidate.toolName)));
 }
-//@ chunk-6mwt0myy.js:21467-21719 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
+//@ chunk-evj8g37g.js:23440-23692 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 /**
  * 工具对应的 mcp__ 规则前缀。
  */
@@ -1121,7 +1222,7 @@ function getMcpServerRulePrefixes(tool) {
   if (tool.mcpInfo) {
     let { serverName } = tool.mcpInfo;
     return [
-      `${MCP_TOOL_PREFIX}${normalizeNameForMCP(serverName)}`,
+      `${MCP_TOOL_PREFIX}${CLAUDEAI_SERVER_PREFIX(serverName)}`,
       `${MCP_TOOL_PREFIX}${getPrefixServerKey(serverName)}`,
     ];
   }
@@ -1135,7 +1236,7 @@ function getMcpServerRulePrefixes(tool) {
     prefixes.push(tool.name.slice(0, index));
   return prefixes;
 }
-//@ chunk-6mwt0myy.js:21719-21897 placement
+//@ chunk-evj8g37g.js:23692-23870 placement
 /**
  * parseMcpToolNameCandidates：工具名在 __ 处的各种可能切分（服务器名本身含 __ 时）。
  */
@@ -1149,15 +1250,15 @@ function parseMcpToolNameCandidates(ruleName) {
     toolName: ruleName.slice(prefix.length + 2),
   }));
 }
-//@ chunk-6mwt0myy.js:21897-22019 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
+//@ chunk-evj8g37g.js:23870-23992 placement (2.1.88 match: getToolNameForPermissionCheck, 1)
 function ruleWithinServerPrefix(ruleName, tool) {
   return (
     tool.mcpInfo
-      ? [`${MCP_TOOL_PREFIX}${normalizeNameForMCP(tool.mcpInfo.serverName)}`]
+      ? [`${MCP_TOOL_PREFIX}${CLAUDEAI_SERVER_PREFIX(tool.mcpInfo.serverName)}`]
       : getMcpServerRulePrefixes(tool)
   ).every((prefix) => ruleName === prefix || ruleName.startsWith(`${prefix}__`));
 }
-//@ chunk-6mwt0myy.js:22019-22067 placement
+//@ chunk-evj8g37g.js:23992-24040 placement
 /**
  * 规则是否匹配 MCP 工具。
  */
@@ -1167,7 +1268,7 @@ function mcpRuleMatchesTool(ruleName, tool) {
     ruleWithinServerPrefix(ruleName, tool)
   );
 }
-//@ chunk-6mwt0myy.js:22067-22198 placement
+//@ chunk-evj8g37g.js:24040-24171 placement
 function mcpRuleMatchesToolAlias(ruleName, tool) {
   if (!tool.mcpInfo || !isServerIdentityActive()) return false;
   let standardRow = standardKeyRuleRow(ruleName, getToolNameForPermissionCheck(tool));
@@ -1177,7 +1278,7 @@ function mcpRuleMatchesToolAlias(ruleName, tool) {
     mcpRuleMatchesToolAny(ruleName, tool)
   );
 }
-//@ chunk-6mwt0myy.js:22198-22383 placement
+//@ chunk-evj8g37g.js:24171-24356 placement
 /**
  * mcpRuleMatchesToolAny：规则通过工具名、别名、服务器前缀任一方式匹配该工具。
  */
@@ -1200,42 +1301,49 @@ function mcpRuleMatchesToolAny(ruleName, tool) {
   );
 }
 export {
-  isServerIdentityActive,
   standardKeyRuleRow,
   ruleWithinServerPrefix,
   compileMcpRuleMatcher,
   getMcpServerRulePrefixes,
   ruleWithNormalizedServer,
+  isServerIdentityActive,
   toInternalToolName,
   mcpRuleMatchesToolAlias,
-  mcpRuleMatchesTool,
-  mcpRuleMatchesToolName,
-  stdioIdentityDiff,
-  parseToolPolicyEntry,
-  ownsLegacyKey,
-  isLegacyKeyUnclaimed,
+  internalName,
+  activateServerIdentity,
+  ghIsDangerousCallback,
   mayRecordServerOwner,
-  isLegacyKeyRefused,
-  isLegacyKeyOwnedElsewhere,
+  ownsLegacyKey,
+  claimLegacyKey,
+  registerToolIdentities,
+  wireName,
+  internalToolNameFor,
+  serverKeyMoved,
+  getKeptLegacyNames,
+  isWiredUnsent,
+  internalNameOf,
+  registerToolIdentities_2,
+  noteSentWireNames,
+  enforcesGrants,
+  isLegacyKeyUnclaimed,
   parseMcpServerSettings,
   inspectToolsList,
   describeToolsListIssues,
   sameToolPolicies,
-  decodeTaggedUuid,
-  internalName,
-  denyOrAskNamesFor,
+  isLegacyKeyRefused,
+  isLegacyKeyOwnedElsewhere,
+  parseToolPolicyEntry,
   mcpRuleMatchesToolAny,
+  decodeTaggedUuid,
+  untrackedWiredTools,
+  rulesMatchingTool,
+  mcpRuleMatchesTool,
+  mcpRuleMatchesToolName,
+  internalAndLegacyNames,
+  stdioIdentityDiff,
+  denyOrAskNamesFor,
   internalKey,
-  activateServerIdentity,
-  ghIsDangerousCallback,
-  claimLegacyKey,
-  registerToolIdentities,
-  stdioLocalIdentity,
-  wireName,
-  internalToolNameFor,
-  getKeptLegacyNames,
-  registerToolIdentities_2,
-  noteSentWireNames,
   parseMcpToolNameCandidates,
   matchLegacyRule,
+  legacyRuleMatcher,
 };

@@ -73,3 +73,7 @@
 | CCGateway 的设计文档（Worker、请求模式、注入等级等） | 属于 sup2api 产品 |
 
 官方各版本的二进制（2.1.304、2.1.310、2.1.312）复制到了 `artifacts/official/<版本>/`。二进制本身不入库，`official-manifest.json` 入库。缺失时用 `node tools/extract/acquire.mjs <版本>` 下载并校验。
+
+## 补充（2026-11-05）
+
+- [`versions/CLAUDE-CODE-2.1.318-CHANGES.md`](versions/CLAUDE-CODE-2.1.318-CHANGES.md)：2.1.316 → 2.1.318 的官方变化清单，cli-reverse 升级到 318 时整理，不是从 sup2api 复制来的。文中的名字是 2.1.318 阅读树名，或 318 构建里的压缩名。sup2api 的定制 CLI 迁移记录在 sup2api 的 `next/plugins/ccgateway/docs/CLAUDE-CODE-2.1.318-MIGRATION.md`。

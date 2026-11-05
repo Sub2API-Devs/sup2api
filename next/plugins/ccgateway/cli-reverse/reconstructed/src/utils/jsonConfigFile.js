@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：读取 JSON 配置文件（大小上限、非常规文件拒绝、schema 校验）；从存储后端读取配置文本。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-g3mpnrhd.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-s24mfyjz.js (5)
  * attribution: placement 5
  */
 import { stat } from "fs/promises";
@@ -20,13 +20,13 @@ import { MAX_DAEMON_CONFIG_BYTES, readDaemonConfigFromStorage } from "../daemon/
 import { getFileReader } from "./fileStore.js";
 import { safeParseJSON } from "./json.js";
 
-//@ chunk-g3mpnrhd.js:766-864 placement
+//@ chunk-s24mfyjz.js:799-897 placement
 function schemaList(itemSchema) {
   return union([itemSchema, array(itemSchema)])
     .optional()
     .transform((value) => (value === undefined ? [] : Array.isArray(value) ? value : [value]));
 }
-//@ chunk-g3mpnrhd.js:864-952 placement
+//@ chunk-s24mfyjz.js:897-985 placement
 var workerKindsConfigSchema = DoctorLazy(() => {
   let workerKindSchemas = import_mapValues(WORKER_KINDS, (workerKind) => schemaList(workerKind.schema()));
   return objectSchema({
@@ -34,14 +34,14 @@ var workerKindsConfigSchema = DoctorLazy(() => {
     ...workerKindSchemas,
   });
 });
-//@ chunk-g3mpnrhd.js:952-988 placement
+//@ chunk-s24mfyjz.js:985-1021 placement
 /**
  * 解析空的 JSON 配置，得到带默认值的对象。
  */
 function defaultWorkerKindsConfig() {
   return workerKindsConfigSchema().parse({});
 }
-//@ chunk-g3mpnrhd.js:988-1753 placement
+//@ chunk-s24mfyjz.js:1021-1786 placement
 /**
  * 读取 JSON 配置文件（大小上限、非常规文件拒绝、schema 校验）。
  */
@@ -97,7 +97,7 @@ async function readJsonConfigFile(jsonPath, storage) {
     unknownKeys,
   };
 }
-//@ chunk-g3mpnrhd.js:1753-2183 placement
+//@ chunk-s24mfyjz.js:1786-2216 placement
 /**
  * 从存储后端读取配置文本。
  */

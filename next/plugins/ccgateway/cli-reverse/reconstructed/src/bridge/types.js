@@ -3,12 +3,12 @@
  *
  * Remote Control 文案与常量（登录要求、folder 已被占用、断开、各种账号/签名问题提示）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/types.ts
- * pieces: chunk-jbgqd2rg.js (1)
+ * pieces: chunk-haf3j06y.js (1)
  * attribution: facade-majority 1
  */
-//@ chunk-jbgqd2rg.js:191-1518 facade-majority (2.1.88 match: BRIDGE_LOGIN_INSTRUCTION, 0.138)
+//@ chunk-haf3j06y.js:191-1518 facade-majority (2.1.88 match: BRIDGE_LOGIN_INSTRUCTION, 0.139)
 /**
  * Remote Control 的用户提示文字集合：需要 claude.ai 订阅、未登录、沙箱设置提示、文件夹已被服务（bridge_folder_already_served）、排队等。
  */
@@ -36,18 +36,18 @@ var BRIDGE_REATTACH_UNAVAILABLE_HINT =
   "Previous session is unavailable \u2014 run /remote-control to start a new one";
 var WORK_STATE_QUEUED = "queued";
 export {
-  BRIDGE_SIGNATURE_WANTED_HINT,
   BRIDGE_LOGIN_INSTRUCTION,
+  BRIDGE_LOGIN_HINT,
+  BRIDGE_SIGNATURE_WANTED_HINT,
+  REMOTE_CONTROL_DISCONNECTED_MSG,
+  BRIDGE_REATTACH_UNAVAILABLE_HINT,
   WORK_STATE_QUEUED,
   SANDBOX_SETTING_HINT,
   BRIDGE_LOGIN_ERROR,
-  REMOTE_CONTROL_DISCONNECTED_MSG,
-  BRIDGE_REATTACH_UNAVAILABLE_HINT,
   BRIDGE_MALFORMED_RESPONSE_HINT,
-  BRIDGE_ACCOUNT_UNVERIFIED_HINT,
-  BRIDGE_LOGIN_HINT,
   BRIDGE_HOST_SIGNED_OUT_HINT,
   BRIDGE_HOST_ACCOUNT_CHANGED_HINT,
   BRIDGE_OWNER_CHANGED_HINT,
+  BRIDGE_ACCOUNT_UNVERIFIED_HINT,
   FOLDER_ALREADY_SERVED_ERROR_TYPE,
 };

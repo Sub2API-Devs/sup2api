@@ -3,10 +3,10 @@
  *
  * 并入已有模块：是否以 ./ 开头的相对来源。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/schemas.ts
- * pieces: chunk-bfnfj4kx.js (1), chunk-dcmhvw5a.js (109), chunk-yf5m6p65.js (1)
- * attribution: fingerprint 16, placement 2, layout 89, callgraph-witnessed 2, file-local 2
+ * pieces: chunk-6sf70a86.js (1), chunk-90nja2dk.js (1), chunk-z20c443b.js (111)
+ * attribution: fingerprint 16, placement 2, layout 91, callgraph-witnessed 2, file-local 2
  */
 import { posix, win32 } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -52,50 +52,50 @@ import { printableName } from "../printableName.js";
 import { getPluginRegistry } from "./pluginLoadState.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:71850-71894 placement
+//@ chunk-z20c443b.js:71958-72002 placement
 /**
  * McpJsonConfigSchema：{mcpServers: Record<string, McpServerConfig>}。
  */
 var McpJsonConfigSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:71850", () => {
+deferInit("chunk-z20c443b.js:71958", () => {
   McpJsonConfigSchema = DoctorLazy(() =>
     objectSchema({
       mcpServers: record(stringSchema(), McpServerConfigSchema()),
     }),
   );
 });
-//@ chunk-dcmhvw5a.js:75983-76003 fingerprint (2.1.88 match: OFFICIAL_GITHUB_ORG, 1)
+//@ chunk-z20c443b.js:76092-76112 fingerprint (2.1.88 match: OFFICIAL_GITHUB_ORG, 1)
 var OFFICIAL_GITHUB_ORG = "anthropics";
-//@ chunk-dcmhvw5a.js:76003-76060 layout
+//@ chunk-z20c443b.js:76112-76169 layout
 /**
  * 判断来源是否指向 github.com/anthropics/ 组织下的仓库（官方保留市场名的校验依据）。
  */
 function isAnthropicsGithubRepo(spec) {
   return normalizeGithubRepoSlug(spec)?.startsWith(`${OFFICIAL_GITHUB_ORG}/`) === true;
 }
-//@ chunk-dcmhvw5a.js:76060-76177 layout
+//@ chunk-z20c443b.js:76169-76286 layout
 var GIT_URL_PROTOCOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SSH_URL_PROTOCOLS;
-deferInit("chunk-dcmhvw5a.js:76060", () => {
+deferInit("chunk-z20c443b.js:76169", () => {
   GIT_URL_PROTOCOLS = new Set(["https:", "http:", "git:", "git+https:", "git+http:", "git+ssh:", "ssh:"]);
   SSH_URL_PROTOCOLS = new Set(["ssh:", "git+ssh:"]);
 });
-//@ chunk-dcmhvw5a.js:76177-76230 layout
+//@ chunk-z20c443b.js:76286-76339 layout
 function isGithubOrSshGithubHost(host) {
   return isGithubDotCom(host) || isHost(host, "ssh.github.com");
 }
-//@ chunk-dcmhvw5a.js:76230-76250 layout
+//@ chunk-z20c443b.js:76339-76359 layout
 var GITLAB_COM = "gitlab.com";
-//@ chunk-dcmhvw5a.js:76250-76282 layout
+//@ chunk-z20c443b.js:76359-76391 layout
 /**
  * 主机是否为 gitlab.com。
  */
 function isGitlabHost(hostname) {
   return isHost(hostname, GITLAB_COM);
 }
-//@ chunk-dcmhvw5a.js:76282-76292 layout
+//@ chunk-z20c443b.js:76391-76401 layout
 var SCHEMA_CACHE_MAX_ENTRIES = 64;
-//@ chunk-dcmhvw5a.js:76292-77849 layout
+//@ chunk-z20c443b.js:76401-77958 layout
 /**
  * 按字段惰性构建的 zod 对象 schema：`whole()` 是全字段 passthrough；`forDocument(doc, mode)` 只取文档里出现的键（加 activeWhenAbsent）构建 schema 并 LRU 缓存（64 项），strip 模式会对“本 schema 有但文档没有”的键报 issue。用于插件 manifest 的分字段宽容解析。
  */
@@ -184,25 +184,25 @@ ${filtered.join(`
     return shape;
   }
 }
-//@ chunk-dcmhvw5a.js:77849-77860 layout
+//@ chunk-z20c443b.js:77958-77969 layout
 var COMMAND_SOURCE_MAX_TIMEOUT_SECONDS = 600;
-//@ chunk-dcmhvw5a.js:77860-77879 layout
+//@ chunk-z20c443b.js:77969-77988 layout
 var MAX_CONSENT_COMMAND_LENGTH = 500;
 var MAX_PREVIOUS_PRODUCER_PATHS = 32;
-//@ chunk-dcmhvw5a.js:77879-78000 layout
+//@ chunk-z20c443b.js:77988-78109 layout
 function claudeaiInstallFields() {
   return {
     claudeaiPluginId: stringSchema().max(128).optional().catch(undefined),
     archiveSha256: Sha256HexSchema().optional().catch(undefined),
   };
 }
-//@ chunk-dcmhvw5a.js:78000-78084 layout
+//@ chunk-z20c443b.js:78109-78193 layout
 function directoryInstallFields() {
   return {
     directoryRepositoryKey: stringSchema().max(4096).optional().catch(undefined),
   };
 }
-//@ chunk-dcmhvw5a.js:78084-78223 layout
+//@ chunk-z20c443b.js:78193-78332 layout
 /**
  * 判断字符串是 http(s) URL。
  */
@@ -215,7 +215,7 @@ function isHttpUrl(url) {
     return false;
   }
 }
-//@ chunk-dcmhvw5a.js:78223-78463 layout
+//@ chunk-z20c443b.js:78332-78572 layout
 function npmInstallFields() {
   return {
     npmVersionSpec: stringSchema().max(256).optional().catch(undefined),
@@ -224,7 +224,7 @@ function npmInstallFields() {
     npmRegistry: stringSchema().max(2048).refine(isHttpUrl).optional().catch(undefined),
   };
 }
-//@ chunk-dcmhvw5a.js:78463-79637 layout
+//@ chunk-z20c443b.js:78572-79746 layout
 /**
  * installed_plugins 条目里 command 来源插件的字段：用户同意过的 sourceCommand、最近一次解析出的 sourceProducerPath、之前的 producer 目录（最多 32 个，供沙箱继续写保护）。
  */
@@ -262,13 +262,13 @@ function commandSourceInstallFields() {
       ),
   };
 }
-//@ chunk-dcmhvw5a.js:79637-79694 layout
+//@ chunk-z20c443b.js:79746-79803 layout
 function isAbsolutePathAnyPlatform(path) {
   return posix.isAbsolute(path) || win32.isAbsolute(path);
 }
-//@ chunk-dcmhvw5a.js:79694-79722 layout
+//@ chunk-z20c443b.js:79803-79831 layout
 var UNPRINTABLE_OR_WIDE_SPACE_RE = /[^\x20-\x7E]| {4,}/;
-//@ chunk-dcmhvw5a.js:79722-79995 layout
+//@ chunk-z20c443b.js:79831-80104 layout
 function HeadersHelperCommandSchema() {
   return stringSchema()
     .max(MAX_CONSENT_COMMAND_LENGTH, {
@@ -279,7 +279,7 @@ function HeadersHelperCommandSchema() {
         "headersHelper must be printable ASCII (letters, digits, punctuation, single spaces) with no runs of 4 or more spaces",
     });
 }
-//@ chunk-dcmhvw5a.js:79995-80535 fingerprint (2.1.88 match: ALLOWED_OFFICIAL_MARKETPLACE_NAMES, 0.589)
+//@ chunk-z20c443b.js:80104-80644 fingerprint (2.1.88 match: ALLOWED_OFFICIAL_MARKETPLACE_NAMES, 0.589)
 /**
  * 官方市场保留名清单：官方（claude-plugins-official 等 14 个）、社区（claude-community…）、插件目录（anthropic-plugin-directory）；并集 RESERVED_MARKETPLACE_NAMES 只能由 anthropics/* 的 GitHub 来源使用。
  */
@@ -289,7 +289,7 @@ var COMMUNITY_MARKETPLACE_NAMES;
 var ALLOWED_OFFICIAL_MARKETPLACE_NAMES;
 var PLUGIN_DIRECTORY_MARKETPLACE_NAMES;
 var RESERVED_MARKETPLACE_NAMES;
-deferInit("chunk-dcmhvw5a.js:79995", () => {
+deferInit("chunk-z20c443b.js:80104", () => {
   ANTHROPIC_PLUGIN_DIRECTORY = "anthropic-plugin-directory";
   OFFICIAL_VERTICAL_MARKETPLACE_NAMES = ["healthcare"];
   COMMUNITY_MARKETPLACE_NAMES = new Set([
@@ -320,7 +320,7 @@ deferInit("chunk-dcmhvw5a.js:79995", () => {
     ...PLUGIN_DIRECTORY_MARKETPLACE_NAMES,
   ]);
 });
-//@ chunk-dcmhvw5a.js:80535-80607 layout
+//@ chunk-z20c443b.js:80644-80716 layout
 /**
  * 市场名（忽略大小写）是否在官方允许名单 ALLOWED_OFFICIAL_MARKETPLACE_NAMES 或 healthcare 中。
  */
@@ -331,12 +331,12 @@ function isOfficialMarketplaceName(marketplaceName) {
     OFFICIAL_VERTICAL_MARKETPLACE_NAMES.includes(normalizedName)
   );
 }
-//@ chunk-dcmhvw5a.js:80607-80672 fingerprint (2.1.88 match: NO_AUTO_UPDATE_OFFICIAL_MARKETPLACES, 0.667)
+//@ chunk-z20c443b.js:80716-80781 fingerprint (2.1.88 match: NO_AUTO_UPDATE_OFFICIAL_MARKETPLACES, 0.667)
 var NO_AUTO_UPDATE_OFFICIAL_MARKETPLACES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dcmhvw5a.js:80607", () => {
+deferInit("chunk-z20c443b.js:80716", () => {
   NO_AUTO_UPDATE_OFFICIAL_MARKETPLACES = new Set(["knowledge-work-plugins", "first-party-plugins"]);
 });
-//@ chunk-dcmhvw5a.js:80672-80903 callgraph-witnessed (2.1.88 match: isMarketplaceAutoUpdate, 0.377)
+//@ chunk-z20c443b.js:80781-81012 callgraph-witnessed (2.1.88 match: isMarketplaceAutoUpdate, 0.378)
 /**
  * 市场是否自动更新：显式参数 > 条目 autoUpdate > claudeai/pluginDirectory 来源默认开 > 官方名（knowledge-work-plugins、first-party-plugins 除外）默认开。
  */
@@ -351,44 +351,44 @@ function isMarketplaceAutoUpdate(name, entry, marketplaceAutoUpdate) {
     !NO_AUTO_UPDATE_OFFICIAL_MARKETPLACES.has(normalizedName)
   );
 }
-//@ chunk-dcmhvw5a.js:80903-80947 layout
+//@ chunk-z20c443b.js:81012-81056 layout
 var OFFICIAL_NAME_SUFFIXES = ["marketplace", "plugins", "official"];
-//@ chunk-dcmhvw5a.js:80947-81001 layout
+//@ chunk-z20c443b.js:81056-81110 layout
 function getOfficialNameSuffixes() {
   return [...OFFICIAL_NAME_SUFFIXES, "directory", "directories"];
 }
-//@ chunk-dcmhvw5a.js:81001-81109 layout
+//@ chunk-z20c443b.js:81110-81218 layout
 var OFFICIAL_NAME_PATTERN_SOURCE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var OFFICIAL_NAME_RE;
-deferInit("chunk-dcmhvw5a.js:81001", () => {
+deferInit("chunk-z20c443b.js:81110", () => {
   OFFICIAL_NAME_PATTERN_SOURCE =
     "official[^a-z0-9]*(anthropic|claude)|(?:anthropic|claude)[^a-z0-9]*official";
   OFFICIAL_NAME_RE = new RegExp(OFFICIAL_NAME_PATTERN_SOURCE, "i");
 });
-//@ chunk-dcmhvw5a.js:81109-81207 layout
+//@ chunk-z20c443b.js:81218-81316 layout
 function buildOfficialNameRegex(suffixes) {
   return new RegExp(
     `(?:${OFFICIAL_NAME_PATTERN_SOURCE}|^(?:anthropic|claude)[^a-z0-9]*(${suffixes.join("|")}))`,
     "i",
   );
 }
-//@ chunk-dcmhvw5a.js:81207-81256 layout
+//@ chunk-z20c443b.js:81316-81365 layout
 var LOOKALIKE_OFFICIAL_NAME_RE; // deferred: uses buildOfficialNameRegex of its import cycle while loading; runs once the cycle is complete
 var BLOCKED_OFFICIAL_NAME_PATTERN;
 var NON_ASCII_PATTERN;
-deferInit("chunk-dcmhvw5a.js:81207", () => {
+deferInit("chunk-z20c443b.js:81316", () => {
   LOOKALIKE_OFFICIAL_NAME_RE = buildOfficialNameRegex(getOfficialNameSuffixes());
   BLOCKED_OFFICIAL_NAME_PATTERN = buildOfficialNameRegex(OFFICIAL_NAME_SUFFIXES);
   NON_ASCII_PATTERN = /[^\u0020-\u007E]/;
 });
-//@ chunk-dcmhvw5a.js:81256-81322 layout
+//@ chunk-z20c443b.js:81365-81431 layout
 /**
  * 按非字母数字切分单词。
  */
 function splitAlnumWords(name) {
   return name.split(/[^a-z0-9]+/i).filter((word) => word !== "");
 }
-//@ chunk-dcmhvw5a.js:81322-81450 layout
+//@ chunk-z20c443b.js:81431-81559 layout
 /**
  * 逐步拼接单词前缀（用于检测 anthropic+official 拼写变体）。
  */
@@ -404,7 +404,7 @@ function* iterJoinedWordPrefixes(name, maxLength) {
     if (joined.length > maxLength) return;
   }
 }
-//@ chunk-dcmhvw5a.js:81450-81877 layout
+//@ chunk-z20c443b.js:81559-81986 layout
 /**
  * 判断市场名是否仿冒官方（anthropic/claude + official/marketplace/plugins 等组合、去分隔符后匹配、前缀拼接）；保留名本身返回 false。
  */
@@ -424,14 +424,14 @@ function isImpersonatingOfficialName(name) {
   }
   return false;
 }
-//@ chunk-dcmhvw5a.js:81877-81920 layout
+//@ chunk-z20c443b.js:81986-82030 layout
 /**
  * 仿冒官方市场名且全部为 ASCII（非 ASCII 另由 isBlockedOfficialName 处理）。
  */
 function isAsciiImpersonatingOfficialName(name) {
   return isImpersonatingOfficialName(name) && !NON_ASCII_PATTERN.test(name);
 }
-//@ chunk-dcmhvw5a.js:81920-81994 file-local
+//@ chunk-z20c443b.js:82030-82104 file-local
 /**
  * 保留名之外，含非 ASCII 或匹配 BLOCKED_OFFICIAL_NAME_PATTERN 的市场名一律禁止。
  */
@@ -441,12 +441,12 @@ function isBlockedOfficialName(name) {
     (NON_ASCII_PATTERN.test(name) || BLOCKED_OFFICIAL_NAME_PATTERN.test(name))
   );
 }
-//@ chunk-dcmhvw5a.js:81994-82055 layout
+//@ chunk-z20c443b.js:82104-82165 layout
 function isAnthropicsGitUrl(url) {
   let trimmed = url.trim();
   return trimmed.includes(":") && isAnthropicsGithubRepo(trimmed);
 }
-//@ chunk-dcmhvw5a.js:82055-82472 fingerprint (2.1.88 match: validateOfficialNameSource, 0.975)
+//@ chunk-z20c443b.js:82165-82582 fingerprint (2.1.88 match: validateOfficialNameSource, 0.975)
 /**
  * 保留市场名只允许 github/git 来源且仓库在 anthropics/ 下；违反时返回错误文案，否则 null。
  */
@@ -459,7 +459,7 @@ function validateOfficialNameSource(name, source) {
   }
   return `The name '${name}' is reserved for official Anthropic marketplaces and can only be used with GitHub sources from the '${OFFICIAL_GITHUB_ORG}' organization.`;
 }
-//@ chunk-dcmhvw5a.js:82472-82611 layout
+//@ chunk-z20c443b.js:82582-82721 layout
 /**
  * 市场来源是否为 anthropics/ 组织下的 GitHub/git 仓库。
  */
@@ -470,7 +470,7 @@ function isAnthropicsMarketplaceSource(source) {
   }
   return source.source === "git" && source.url !== undefined && isAnthropicsGitUrl(source.url);
 }
-//@ chunk-dcmhvw5a.js:82611-83957 fingerprint (2.1.88 match: McpbPath, 0.36)
+//@ chunk-z20c443b.js:82721-84067 fingerprint (2.1.88 match: McpbPath, 0.36)
 /**
  * 插件 manifest 路径类基础 schema（RelativePath 必须以 ./ 开头，JSON/Markdown/MCPB 路径变体）和保留市场名表：inline、builtin、skills-dir、synced、claude-plugin-test、npm 以及预留的 pip/uv/cargo/github/gh。
  */
@@ -483,7 +483,7 @@ var RelativeCommandPath;
 var RESERVED_MARKETPLACE_NAME_PURPOSES;
 var pluginManifestPathSchemas;
 var UNAVAILABLE_PACKAGE_MARKETPLACES;
-deferInit("chunk-dcmhvw5a.js:82611", () => {
+deferInit("chunk-z20c443b.js:82721", () => {
   RelativePath = DoctorLazy(() => stringSchema().startsWith("./"));
   RelativeJSONPath = DoctorLazy(() => RelativePath().endsWith(".json"));
   RelativeSkillDirPath = DoctorLazy(() => union([literal("."), RelativePath()]));
@@ -521,40 +521,40 @@ deferInit("chunk-dcmhvw5a.js:82611", () => {
   pluginManifestPathSchemas = "npm";
   UNAVAILABLE_PACKAGE_MARKETPLACES = ["pip", "uv", "cargo", "github", "gh"];
 });
-//@ chunk-dcmhvw5a.js:83957-84007 layout
+//@ chunk-z20c443b.js:84067-84117 layout
 /**
  * 是否为尚未开放的包市场（pip/uv/cargo/github/gh）。
  */
 function isUnavailablePackageMarketplace(name) {
   return name !== undefined && UNAVAILABLE_PACKAGE_MARKETPLACES.includes(name);
 }
-//@ chunk-dcmhvw5a.js:84007-84103 layout
+//@ chunk-z20c443b.js:84117-84213 layout
 /**
  * “从 X 安装插件尚未开放”的提示。
  */
 function formatPackageMarketplaceUnavailable(name) {
   return `Installing plugins from ${name} (\`<package>@${name}\`) is not available yet.`;
 }
-//@ chunk-dcmhvw5a.js:84103-84145 layout
+//@ chunk-z20c443b.js:84213-84255 layout
 /**
  * 名字是否为特殊来源保留的市场名（inline、builtin、skills-dir、synced、npm 等）。
  */
 function isReservedMarketplaceName(name) {
   return Object.hasOwn(RESERVED_MARKETPLACE_NAME_PURPOSES, name);
 }
-//@ chunk-dcmhvw5a.js:84145-84163 layout
+//@ chunk-z20c443b.js:84255-84273 layout
 var PACKAGE_MARKETPLACE_NAMES; // deferred: uses RelativePath of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:84145", () => {
+deferInit("chunk-z20c443b.js:84255", () => {
   PACKAGE_MARKETPLACE_NAMES = [pluginManifestPathSchemas, ...UNAVAILABLE_PACKAGE_MARKETPLACES];
 });
-//@ chunk-dcmhvw5a.js:84163-84215 layout
+//@ chunk-z20c443b.js:84273-84325 layout
 /**
  * 名字是否为包市场名（npm/pip/uv/cargo/github/gh）。
  */
 function isPackageMarketplaceName(name) {
   return PACKAGE_MARKETPLACE_NAMES.includes(name.toLowerCase());
 }
-//@ chunk-dcmhvw5a.js:84215-84358 layout
+//@ chunk-z20c443b.js:84325-84468 layout
 function refineNotPackageMarketplaceName(name, context) {
   let name_2 = name.toLowerCase();
   if (isPackageMarketplaceName(name_2) && isReservedMarketplaceName(name_2))
@@ -563,7 +563,7 @@ function refineNotPackageMarketplaceName(name, context) {
       message: `Marketplace name "${name_2}" is reserved for ${RESERVED_MARKETPLACE_NAME_PURPOSES[name_2]}`,
     });
 }
-//@ chunk-dcmhvw5a.js:84358-85131 fingerprint (2.1.88 match: MarketplaceNameSchema, 0.598)
+//@ chunk-z20c443b.js:84468-85241 fingerprint (2.1.88 match: MarketplaceNameSchema, 0.598)
 /**
  * 市场名 schema 工厂：非空、无空格、无控制/双向字符、无路径分隔符与 ..、不仿冒官方（检测函数由参数给出）、不占用保留名。
  */
@@ -571,7 +571,7 @@ var IMPERSONATION_ERROR_MESSAGE; // deferred: uses DoctorLazy (../../cli/handler
 var buildMarketplaceNameSchema;
 var MarketplaceNameSchema;
 var LenientMarketplaceNameSchema;
-deferInit("chunk-dcmhvw5a.js:84358", () => {
+deferInit("chunk-z20c443b.js:84468", () => {
   IMPERSONATION_ERROR_MESSAGE = "Marketplace name impersonates an official Anthropic/Claude marketplace";
   buildMarketplaceNameSchema = (isImpersonating) =>
     stringSchema()
@@ -599,11 +599,11 @@ deferInit("chunk-dcmhvw5a.js:84358", () => {
   MarketplaceNameSchema = DoctorLazy(() => buildMarketplaceNameSchema(isImpersonatingOfficialName));
   LenientMarketplaceNameSchema = DoctorLazy(() => buildMarketplaceNameSchema(() => false));
 });
-//@ chunk-dcmhvw5a.js:85131-85175 layout
+//@ chunk-z20c443b.js:85241-85285 layout
 function MarketplaceNameStrictSchema(isImpersonating) {
   return buildMarketplaceNameSchema(isImpersonating).superRefine(refineNotPackageMarketplaceName);
 }
-//@ chunk-dcmhvw5a.js:85175-101864 callgraph-witnessed (2.1.88 match: LspServerConfigSchema, 0.255)
+//@ chunk-z20c443b.js:85285-101974 callgraph-witnessed (2.1.88 match: LspServerConfigSchema, 0.255)
 /**
  * 插件 manifest（.claude-plugin/plugin.json）各组成部分的 zod schema：元数据、hooks、commands、agents、skills、outputStyles、themes、workflows、mcpServers、userConfig、channels、LSP 服务器、monitors（后台监视命令）等；都用 lazySchema 包裹。
  */
@@ -639,7 +639,7 @@ var PluginManifestLspServerSchema;
 var SCOPED_NPM_NAME_RE;
 var UNSCOPED_NPM_NAME_RE;
 var NPM_SCOPE_WILDCARD_RE;
-deferInit("chunk-dcmhvw5a.js:85175", () => {
+deferInit("chunk-z20c443b.js:85285", () => {
   PluginNameSchema = DoctorLazy(() =>
     stringSchema()
       .min(1, "Plugin name cannot be empty")
@@ -1164,7 +1164,7 @@ deferInit("chunk-dcmhvw5a.js:85175", () => {
   UNSCOPED_NPM_NAME_RE = /^[a-z0-9][a-z0-9-._]*$/;
   NPM_SCOPE_WILDCARD_RE = /^@[a-z0-9][a-z0-9-._]*\/\*$/;
 });
-//@ chunk-dcmhvw5a.js:101864-101949 layout
+//@ chunk-z20c443b.js:101974-102059 layout
 /**
  * npm 包名是否合法（作用域 @scope/name 或普通名，不含 .. 与 //）。
  */
@@ -1175,7 +1175,7 @@ function isValidNpmPackageName(name) {
     (SCOPED_NPM_NAME_RE.test(name) || UNSCOPED_NPM_NAME_RE.test(name))
   );
 }
-//@ chunk-dcmhvw5a.js:101949-102252 fingerprint (2.1.88 match: NpmPackageNameSchema, 0.835)
+//@ chunk-z20c443b.js:102059-102362 fingerprint (2.1.88 match: NpmPackageNameSchema, 0.836)
 /**
  * npm 包名 schema（禁止 `..` 与 `//`、须为合法 npm 名）及同一语句里的插件二进制相关常量：二进制文件名正则、sha256 正则、下载并发 16、单插件最多 64 个二进制、1 MiB 常量、二进制 pin schema。
  */
@@ -1186,7 +1186,7 @@ var BINARY_FETCH_CONCURRENCY;
 var MAX_PLUGIN_BINARIES;
 var ONE_MIB;
 var BinaryPinSchema;
-deferInit("chunk-dcmhvw5a.js:101949", () => {
+deferInit("chunk-z20c443b.js:102059", () => {
   NpmPackageNameSchema = DoctorLazy(() =>
     stringSchema()
       .refine(
@@ -1206,7 +1206,7 @@ deferInit("chunk-dcmhvw5a.js:101949", () => {
     }),
   );
 });
-//@ chunk-dcmhvw5a.js:102252-102492 layout
+//@ chunk-z20c443b.js:102362-102602 layout
 /**
  * 宽容解析 manifest 的 binaries：只保留 basename 合法且 {sha256} 合法的项，最多 64 个；无有效项返回 undefined。
  */
@@ -1225,12 +1225,12 @@ function parsePluginBinaries(binaries) {
   }
   return count > 0 ? validBinaries : undefined;
 }
-//@ chunk-dcmhvw5a.js:102492-104275 layout
+//@ chunk-z20c443b.js:102602-104385 layout
 var PluginManifestBinariesSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var PluginManifestSettingsSchema;
 var PluginManifestTypesSchema;
 var PluginManifestExperimentalSchema;
-deferInit("chunk-dcmhvw5a.js:102492", () => {
+deferInit("chunk-z20c443b.js:102602", () => {
   PluginManifestBinariesSchema = DoctorLazy(() =>
     objectSchema({
       binaries: unknown()
@@ -1288,13 +1288,13 @@ deferInit("chunk-dcmhvw5a.js:102492", () => {
     }),
   );
 });
-//@ chunk-dcmhvw5a.js:104275-105852 file-local
+//@ chunk-z20c443b.js:104385-105962 file-local
 /**
  * PluginManifestSchema：把元数据与全部组件 schema 合并成完整 plugin.json schema；PluginManifestFieldSchemas 是同样字段的 PerKeyLazySchema 版本（name 必选），用于只校验文档里出现的字段。
  */
 var PluginManifestSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var PluginManifestFieldSchemas;
-deferInit("chunk-dcmhvw5a.js:104275", () => {
+deferInit("chunk-z20c443b.js:104385", () => {
   PluginManifestSchema = DoctorLazy(() =>
     objectSchema({
       ...PluginManifestMetadataSchema().shape,
@@ -1354,16 +1354,20 @@ deferInit("chunk-dcmhvw5a.js:104275", () => {
       ),
   );
 });
-//@ chunk-dcmhvw5a.js:105852-105903 layout
+//@ chunk-z20c443b.js:105962-106013 layout
 /**
  * 为一个 plugin.json 文档取“只含其出现字段”的 strip 模式 manifest schema。
  */
 function getManifestSchemaForDocument(rawDocument) {
   return PluginManifestFieldSchemas().forDocument(rawDocument, "strip");
 }
-//@ chunk-dcmhvw5a.js:105903-106019 layout
+//@ chunk-z20c443b.js:106013-106048 layout
+function hasManifestFieldSchema(field) {
+  return PluginManifestFieldSchemas().has(field);
+}
+//@ chunk-z20c443b.js:106048-106164 layout
 var POLICY_SOURCE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dcmhvw5a.js:105903", () => {
+deferInit("chunk-z20c443b.js:106048", () => {
   POLICY_SOURCE_TYPES = new Set([
     "url",
     "github",
@@ -1377,7 +1381,7 @@ deferInit("chunk-dcmhvw5a.js:105903", () => {
     "settings",
   ]);
 });
-//@ chunk-dcmhvw5a.js:106019-106079 layout
+//@ chunk-z20c443b.js:106164-106224 layout
 /**
  * 字符串能否编译为正则。
  */
@@ -1389,20 +1393,20 @@ function isValidRegex(source) {
     return false;
   }
 }
-//@ chunk-dcmhvw5a.js:106079-106115 layout
+//@ chunk-z20c443b.js:106224-106260 layout
 /**
  * git URL 是否危险（命令注入形态或本地协议）。
  */
 function isUnsafeGitUrl(url) {
   return hasBackslashInUrlAuthority(url) || describeUrlScheme(url);
 }
-//@ chunk-dcmhvw5a.js:106115-106140 layout
+//@ chunk-z20c443b.js:106260-106285 layout
 var SSH_GITHUB_COM = "ssh.github.com";
-//@ chunk-dcmhvw5a.js:106140-106181 layout
+//@ chunk-z20c443b.js:106285-106326 layout
 function isGithubHost(host) {
   return isGithubDotCom(host) || normalizeHost(host) === SSH_GITHUB_COM;
 }
-//@ chunk-dcmhvw5a.js:106181-106470 layout
+//@ chunk-z20c443b.js:106326-106615 layout
 /**
  * 从 git URL 解析 GitHub 的 owner/repo（规范化路径、去 .git），非 GitHub 返回 null。
  */
@@ -1421,16 +1425,16 @@ function parseGithubOwnerRepo(url) {
   if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
   return repoPath;
 }
-//@ chunk-dcmhvw5a.js:106470-106498 layout
+//@ chunk-z20c443b.js:106615-106643 layout
 var GITHUB_NAME_SEGMENT_RE = /^[A-Za-z0-9._-]+$/;
-//@ chunk-dcmhvw5a.js:106498-106572 layout
+//@ chunk-z20c443b.js:106643-106717 layout
 /**
  * GitHub owner/repo 段是否合法。
  */
 function isValidGithubOwner(owner) {
   return GITHUB_NAME_SEGMENT_RE.test(owner) && !owner.startsWith("-") && owner !== "." && owner !== "..";
 }
-//@ chunk-dcmhvw5a.js:106572-106662 layout
+//@ chunk-z20c443b.js:106717-106807 layout
 /**
  * 解析策略条目里的 "owner/*" 通配，返回 owner；不合法返回 null。
  */
@@ -1439,7 +1443,7 @@ function parseGithubOwnerWildcard(pattern) {
   let sliced = pattern.slice(0, -2);
   return isValidGithubOwner(sliced) ? sliced : null;
 }
-//@ chunk-dcmhvw5a.js:106662-106746 layout
+//@ chunk-z20c443b.js:106807-106891 layout
 /**
  * 规范化仓库路径（URL 解码、折叠 ./..、去尾斜杠与 .git）。
  */
@@ -1451,7 +1455,7 @@ function normalizeRepoPath(path) {
   let collapsed = collapseDotSegments(decoded);
   return stripTrailingSlashAndDotGit(collapsed);
 }
-//@ chunk-dcmhvw5a.js:106746-106896 layout
+//@ chunk-z20c443b.js:106891-107041 layout
 function collapseDotSegments(path) {
   let segments = [];
   for (let segment of path.split("/")) {
@@ -1464,7 +1468,7 @@ function collapseDotSegments(path) {
   }
   return segments.filter((segment) => segment !== "").join("/");
 }
-//@ chunk-dcmhvw5a.js:106896-107068 layout
+//@ chunk-z20c443b.js:107041-107213 layout
 function stripTrailingSlashAndDotGit(path) {
   let end = path.length;
   for (;;) {
@@ -1475,12 +1479,12 @@ function stripTrailingSlashAndDotGit(path) {
     end = trimmed;
   }
 }
-//@ chunk-dcmhvw5a.js:107068-107116 layout
+//@ chunk-z20c443b.js:107213-107261 layout
 function canonicalGitHost(host) {
   let normalized = normalizeGitHost(host);
   return normalized === SSH_GITHUB_COM ? GITHUB_HOST : normalized;
 }
-//@ chunk-dcmhvw5a.js:107116-107462 layout
+//@ chunk-z20c443b.js:107261-107607 layout
 /**
  * 规范化 git URL 用于比较：主机规范化（ssh.github.com→github.com）、去凭据/查询/片段、折叠 ./..，可选去掉 .git。
  */
@@ -1506,12 +1510,12 @@ function normalizeGitUrlForComparison(url, options) {
   let urlScheme = parseUrlScheme(url);
   return urlScheme ? `${canonicalGitHost(urlScheme.host)}:${urlScheme.path}` : url;
 }
-//@ chunk-dcmhvw5a.js:107462-107529 layout
+//@ chunk-z20c443b.js:107607-107674 layout
 var CREDENTIAL_STRIP_PROTOCOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dcmhvw5a.js:107462", () => {
+deferInit("chunk-z20c443b.js:107607", () => {
   CREDENTIAL_STRIP_PROTOCOLS = new Set(["http:", "https:", "git:", "git+http:", "git+https:"]);
 });
-//@ chunk-dcmhvw5a.js:107529-107865 layout
+//@ chunk-z20c443b.js:107674-108010 layout
 /**
  * git URL 主机规范化，http(s)/git 协议与 GitHub 主机去掉凭据；scp 形式 GitHub 转 github.com:path。
  */
@@ -1536,7 +1540,7 @@ function normalizeGitUrlHost(url) {
     ? `${GITHUB_HOST}:${scpLikeUrl.path}`
     : `${scpLikeUrl.user}@${replaced}:${scpLikeUrl.path}`;
 }
-//@ chunk-dcmhvw5a.js:107865-108311 layout
+//@ chunk-z20c443b.js:108010-108456 layout
 /**
  * GitHub 来源的仓库路径是否含 * 通配（策略条目用）。
  */
@@ -1572,7 +1576,7 @@ function hasGithubWildcard(url) {
   } catch {}
   return path_2.includes("*");
 }
-//@ chunk-dcmhvw5a.js:108311-115001 fingerprint (2.1.88 match: MarketplaceSourceSchema, 0.644)
+//@ chunk-z20c443b.js:108456-115146 fingerprint (2.1.88 match: MarketplaceSourceSchema, 0.644)
 /**
  * 市场来源（marketplace source）的判别联合 schema：url、github、git、npm、file、directory、skills-dir（策略哨兵）、hostPattern、pathPattern、settings（settings.json 内联市场）。参数为 true 时 settings 名字只做宽松校验（读 known_marketplaces.json 用）。
  */
@@ -1705,12 +1709,12 @@ function MarketplaceSourceSchema(lenient) {
     ),
   ]);
 }
-//@ chunk-dcmhvw5a.js:115001-115023 layout
+//@ chunk-z20c443b.js:115146-115168 layout
 var MarketplaceSourceStrictSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:115001", () => {
+deferInit("chunk-z20c443b.js:115146", () => {
   MarketplaceSourceStrictSchema = DoctorLazy(() => MarketplaceSourceSchema(false));
 });
-//@ chunk-dcmhvw5a.js:115023-115092 layout
+//@ chunk-z20c443b.js:115168-115237 layout
 /**
  * 返回去掉 headers/headersHelper、URL 用户名口令的市场来源副本；遇到 command 来源或无法安全清洗的 URL（带 query/hash、用户@ 形态）返回 null。
  */
@@ -1721,7 +1725,7 @@ function redactMarketplaceSource(source) {
   let redacted = redactMarketplaceSourceInto(source, state);
   return state.refused ? null : redacted;
 }
-//@ chunk-dcmhvw5a.js:115092-115807 layout
+//@ chunk-z20c443b.js:115237-115952 layout
 function redactMarketplaceSourceInto(source, state) {
   switch (source.source) {
     case "url": {
@@ -1780,7 +1784,7 @@ function redactMarketplaceSourceInto(source, state) {
       return source;
   }
 }
-//@ chunk-dcmhvw5a.js:115807-116319 layout
+//@ chunk-z20c443b.js:115952-116464 layout
 function redactSourceUrl(spec, state, isPackage = false) {
   if (hasBackslashInUrlAuthority(spec)) return redactNonUrlSpec(spec, state, isPackage);
   let parsed;
@@ -1815,7 +1819,7 @@ function redactSourceUrl(spec, state, isPackage = false) {
   parsed.password = "";
   return parsed.toString();
 }
-//@ chunk-dcmhvw5a.js:116319-116676 layout
+//@ chunk-z20c443b.js:116464-116821 layout
 function urlPathWasNormalized(url, parsed) {
   let replaced = url.replace(/^[\x00-\x20]+|[\x00-\x20]+$/g, "").replace(/[\t\n\r]/g, "");
   let isWebScheme = WEB_URL_SCHEMES.has(parsed.protocol.slice(0, -1));
@@ -1827,7 +1831,7 @@ function urlPathWasNormalized(url, parsed) {
   if (pathPart === "") return parsed.pathname !== "/" && parsed.pathname !== "";
   return pathPart !== parsed.pathname;
 }
-//@ chunk-dcmhvw5a.js:116676-116998 layout
+//@ chunk-z20c443b.js:116821-117143 layout
 function redactNonUrlSpec(spec, state, isPackage) {
   let replaced = spec.replace(/[\t\n\r]/g, "");
   if (replaced.includes("?")) {
@@ -1845,13 +1849,13 @@ function redactNonUrlSpec(spec, state, isPackage) {
     state.refused = true;
   return spec;
 }
-//@ chunk-dcmhvw5a.js:116998-117317 layout
+//@ chunk-z20c443b.js:117143-117462 layout
 var URL_FRAGMENT_CHAR_CLASS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SAFE_FRAGMENT_RE;
 var SCP_LIKE_GIT_URL_RE;
 var HOSTED_GIT_SHORTHAND_RE;
 var HTTP_LIKE_PROTOCOLS;
-deferInit("chunk-dcmhvw5a.js:116998", () => {
+deferInit("chunk-z20c443b.js:117143", () => {
   URL_FRAGMENT_CHAR_CLASS = String.raw`[\w./+-]`;
   SAFE_FRAGMENT_RE = new RegExp(`^(?:#${URL_FRAGMENT_CHAR_CLASS}*)?$`);
   SCP_LIKE_GIT_URL_RE = new RegExp(
@@ -1862,7 +1866,7 @@ deferInit("chunk-dcmhvw5a.js:116998", () => {
   );
   HTTP_LIKE_PROTOCOLS = new Set(["http:", "https:", "git+http:", "git+https:"]);
 });
-//@ chunk-dcmhvw5a.js:117317-117658 layout
+//@ chunk-z20c443b.js:117462-117803 layout
 /**
  * npm tarball URL 去掉凭据、查询和片段；非 http(s) 返回 null。
  */
@@ -1886,16 +1890,16 @@ function redactNpmTarball(npmResolution) {
     tarballUrl: parsed.toString(),
   };
 }
-//@ chunk-dcmhvw5a.js:117658-117679 layout
+//@ chunk-z20c443b.js:117803-117824 layout
 var MarketplaceSourceLenientSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dcmhvw5a.js:117658", () => {
+deferInit("chunk-z20c443b.js:117803", () => {
   MarketplaceSourceLenientSchema = DoctorLazy(() => MarketplaceSourceSchema(true));
 });
-//@ chunk-dcmhvw5a.js:117679-117705 layout
+//@ chunk-z20c443b.js:117824-117850 layout
 function getKnownMarketplaceSourceSchema() {
   return MarketplaceSourceLenientSchema();
 }
-//@ chunk-dcmhvw5a.js:117705-118445 fingerprint (2.1.88 match: gitSha, 0.34)
+//@ chunk-z20c443b.js:117850-118590 fingerprint (2.1.88 match: gitSha, 0.34)
 /**
  * 市场来源相关 schema：策略名单用的来源 schema（额外支持 pluginDirectory 哨兵）、已知市场来源 schema、40 位 git SHA schema、sha256 十六进制 schema，以及 archive URL 必须 https 且不得指向回环/链路本地/云元数据地址的错误文案。
  */
@@ -1904,7 +1908,7 @@ var MarketplaceSourceSchemaLazy;
 var gitSha;
 var Sha256HexSchema;
 var ARCHIVE_URL_ERROR;
-deferInit("chunk-dcmhvw5a.js:117705", () => {
+deferInit("chunk-z20c443b.js:117850", () => {
   MarketplacePolicySourceSchema = DoctorLazy(() => {
     let knownMarketplaceSourceSchema = getKnownMarketplaceSourceSchema();
     return discriminatedUnion("source", [
@@ -1928,7 +1932,7 @@ deferInit("chunk-dcmhvw5a.js:117705", () => {
   ARCHIVE_URL_ERROR =
     "Archive URLs must use https:// and must not point at a loopback, link-local, or cloud-metadata host";
 });
-//@ chunk-dcmhvw5a.js:118445-118545 layout
+//@ chunk-z20c443b.js:118590-118690 layout
 /**
  * archive 来源 URL 是否安全：必须 https，且主机不是回环/链路本地/云元数据地址。
  */
@@ -1940,14 +1944,14 @@ function isSafeArchiveUrl(url) {
     return false;
   }
 }
-//@ chunk-dcmhvw5a.js:118545-125707 fingerprint (2.1.88 match: PluginSourceSchema, 0.467)
+//@ chunk-z20c443b.js:118690-125852 fingerprint (2.1.88 match: PluginSourceSchema, 0.467)
 /**
  * 插件来源 schema：相对路径（相对市场根）、npm、url（git）、github、git-subdir（稀疏检出子目录）、archive（https zip + sha256）、command（本地命令打印插件目录，copy/link 模式）、unsupported（解析失败占位）。SettingsMarketplacePluginSchema 是 settings 内联市场的插件条目，只允许远程来源。
  */
 var ArchivePluginSourceSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var PluginSourceSchema;
 var SettingsMarketplacePluginSchema;
-deferInit("chunk-dcmhvw5a.js:118545", () => {
+deferInit("chunk-z20c443b.js:118690", () => {
   ArchivePluginSourceSchema = DoctorLazy(() =>
     objectSchema({
       source: literal("archive"),
@@ -2110,14 +2114,21 @@ deferInit("chunk-dcmhvw5a.js:118545", () => {
       }),
   );
 });
-//@ chunk-dcmhvw5a.js:125707-125770 placement
+//@ chunk-z20c443b.js:125852-125915 placement
 /**
  * 是否以 ./ 开头的相对来源。
  */
 function isRelativeSourcePath(source) {
   return typeof source === "string" && source.startsWith("./");
 }
-//@ chunk-dcmhvw5a.js:125834-129217 fingerprint (2.1.88 match: PluginMarketplaceEntrySchema, 0.392)
+//@ chunk-z20c443b.js:125915-125979 layout (2.1.88 match: normalizeSource, 1)
+/**
+ * 来源是否为本地（file 或 directory）。旧版名 normalizeSource 名不副实，见 lead 建议。
+ */
+function isLocalMarketplaceSource(source) {
+  return source.source === "file" || source.source === "directory";
+}
+//@ chunk-z20c443b.js:125979-129362 fingerprint (2.1.88 match: PluginMarketplaceEntrySchema, 0.392)
 /**
  * marketplace.json 中一个插件条目：manifest 字段全部可选 + name/source/headers/headersHelper/category/tags/strict（默认 true）/relevance（topic + signals：cli、hosts、filesRead、manifestDeps、cwd，用于“Working with X?”提示与推荐）。
  */
@@ -2125,7 +2136,7 @@ var PluginRelevanceSignalsSchema; // deferred: uses DoctorLazy (../../cli/handle
 var PluginRelevanceSchema;
 var PluginMarketplaceEntrySchema;
 var PluginEntryNameOnlySchema;
-deferInit("chunk-dcmhvw5a.js:125834", () => {
+deferInit("chunk-z20c443b.js:125979", () => {
   PluginRelevanceSignalsSchema = DoctorLazy(() =>
     objectSchema({
       cli: array(stringSchema().max(64))
@@ -2222,7 +2233,7 @@ deferInit("chunk-dcmhvw5a.js:125834", () => {
     }),
   );
 });
-//@ chunk-dcmhvw5a.js:129217-129907 layout
+//@ chunk-z20c443b.js:129362-130052 layout
 /**
  * 逐条解析 marketplace.plugins：成功的保留；有名字但失败的改写成 source:{source:"unsupported",error} 占位（避免被当成下架）；连名字都没有的丢弃并记 warn 日志。
  */
@@ -2273,9 +2284,9 @@ function parseMarketplacePluginEntries(entries) {
     return [];
   });
 }
-//@ chunk-dcmhvw5a.js:129907-129993 layout
+//@ chunk-z20c443b.js:130052-130138 layout
 var KNOWN_REMOTE_PLUGIN_SOURCE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dcmhvw5a.js:129907", () => {
+deferInit("chunk-z20c443b.js:130052", () => {
   KNOWN_REMOTE_PLUGIN_SOURCE_TYPES = new Set([
     "npm",
     "url",
@@ -2286,7 +2297,7 @@ deferInit("chunk-dcmhvw5a.js:129907", () => {
     "unsupported",
   ]);
 });
-//@ chunk-dcmhvw5a.js:129993-130149 layout
+//@ chunk-z20c443b.js:130138-130294 layout
 /**
  * 条目的 source.source 是否为本版本不认识的类型。
  */
@@ -2297,7 +2308,7 @@ function hasUnknownSourceType(entry) {
   let source_2 = source.source;
   return typeof source_2 === "string" && !KNOWN_REMOTE_PLUGIN_SOURCE_TYPES.has(source_2);
 }
-//@ chunk-dcmhvw5a.js:130149-130453 layout
+//@ chunk-z20c443b.js:130294-130598 layout
 function describeSourceUnionError(issues) {
   let found = issues.find((issue) => issue.path.length === 1 && issue.path[0] === "source");
   if (!found || found.code !== "invalid_union") return;
@@ -2315,19 +2326,19 @@ function describeSourceUnionError(issues) {
     })),
   );
 }
-//@ chunk-dcmhvw5a.js:130453-130486 layout
+//@ chunk-z20c443b.js:130598-130631 layout
 var SAFE_ISSUE_KEY_RE = /^[A-Za-z0-9_$.-]{1,40}$/;
-//@ chunk-dcmhvw5a.js:130486-130529 layout
+//@ chunk-z20c443b.js:130631-130674 layout
 /**
  * issue 路径键安全化（不合规显示 <key>）。
  */
 function redactIssuePathKey(key) {
   return SAFE_ISSUE_KEY_RE.test(key) ? key : "<key>";
 }
-//@ chunk-dcmhvw5a.js:130529-130545 layout
+//@ chunk-z20c443b.js:130674-130690 layout
 var MAX_REPORTED_ISSUES = 3;
 var MAX_ISSUE_MESSAGE_LENGTH = 160;
-//@ chunk-dcmhvw5a.js:130545-130873 layout
+//@ chunk-z20c443b.js:130690-131018 layout
 /**
  * 把 zod issues 压成一行简短错误（最多 3 条，每条截断 160 字符，键名不安全时显示 <key>）。
  */
@@ -2346,18 +2357,18 @@ function formatZodIssuesBrief(issues) {
   let remaining = issues.length - mapped.length;
   return remaining > 0 ? `${mapped.join(", ")} (+${remaining} more)` : mapped.join(", ");
 }
-//@ chunk-dcmhvw5a.js:130873-131135 layout
+//@ chunk-z20c443b.js:131018-131280 layout
 var BARE_SOURCE_NAME_RE = /^[A-Za-z0-9][-A-Za-z0-9._]*$/;
 var BARE_SOURCE_WITHOUT_PLUGIN_ROOT_ERROR =
   'Bare source names resolve under metadata.pluginRoot, which this marketplace does not set (or sets to a path outside the marketplace root). Use a "./relative/path" source, or set metadata.pluginRoot to allow bare names.';
-//@ chunk-dcmhvw5a.js:131135-131209 layout
+//@ chunk-z20c443b.js:131280-131354 layout
 /**
  * 是否为裸来源名（不带 ./ 的单段名）。
  */
 function isBareSourceName(source) {
   return typeof source === "string" && BARE_SOURCE_NAME_RE.test(source) && !source.includes("..");
 }
-//@ chunk-dcmhvw5a.js:131209-131462 layout
+//@ chunk-z20c443b.js:131354-131607 layout
 /**
  * 规范化 marketplace.json 的 metadata.pluginRoot（相对、无 ..、无冒号/反斜杠），非法返回 undefined。
  */
@@ -2375,7 +2386,7 @@ function normalizePluginRoot(pluginRoot) {
   if (replaced.split("/").some((segment) => segment === "" || segment === "." || segment === "..")) return;
   return replaced;
 }
-//@ chunk-dcmhvw5a.js:131462-131599 layout
+//@ chunk-z20c443b.js:131607-131744 layout
 /**
  * 把裸来源名改写到 pluginRoot 下（./<root>/<name>）。
  */
@@ -2387,7 +2398,7 @@ function resolveBareSourceUnderPluginRoot(entry, pluginRoot) {
     source,
   };
 }
-//@ chunk-dcmhvw5a.js:131599-131787 layout
+//@ chunk-z20c443b.js:131744-131932 layout
 /**
  * 预处理 marketplace.json：metadata.pluginRoot 合法时把裸名来源（"formatter"）改写成 ./<pluginRoot>/formatter。
  */
@@ -2402,13 +2413,13 @@ function applyMarketplacePluginRoot(marketplace) {
     plugins: marketplace.plugins.map((plugin) => resolveBareSourceUnderPluginRoot(plugin, pluginRoot)),
   };
 }
-//@ chunk-dcmhvw5a.js:131787-133304 fingerprint (2.1.88 match: PluginMarketplaceSchema, 0.71)
+//@ chunk-z20c443b.js:131932-133449 fingerprint (2.1.88 match: PluginMarketplaceSchema, 0.71)
 /**
  * marketplace.json schema：name、version、description、owner、plugins（逐条宽容解析）、forceRemoveDeletedPlugins、metadata.pluginRoot、allowCrossMarketplaceDependenciesOn、renames（旧名→新名/null）。
  */
 var PluginMarketplaceSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var PluginMarketplaceFileSchema;
-deferInit("chunk-dcmhvw5a.js:131787", () => {
+deferInit("chunk-z20c443b.js:131932", () => {
   PluginMarketplaceSchema = DoctorLazy(() =>
     objectSchema({
       $schema: stringSchema()
@@ -2454,14 +2465,14 @@ deferInit("chunk-dcmhvw5a.js:131787", () => {
     preprocess(applyMarketplacePluginRoot, PluginMarketplaceSchema()),
   );
 });
-//@ chunk-dcmhvw5a.js:133304-133342 layout
+//@ chunk-z20c443b.js:133449-133487 layout
 /**
  * 名字像官方但未被直接禁止。
  */
 function isLookalikeButNotBlockedName(name) {
   return isImpersonatingOfficialName(name) && !isBlockedOfficialName(name);
 }
-//@ chunk-dcmhvw5a.js:133342-133476 layout
+//@ chunk-z20c443b.js:133487-133621 layout
 /**
  * 针对某个市场自身名字返回放宽同名检测的市场名 schema。
  */
@@ -2474,7 +2485,7 @@ function getMarketplaceNameSchemaFor(existingName) {
   }
   return PluginMarketplaceSchema().shape.name;
 }
-//@ chunk-dcmhvw5a.js:133476-133570 layout
+//@ chunk-z20c443b.js:133621-133715 layout
 /**
  * 返回解析某个市场 marketplace.json 用的 schema；该市场名本身像官方（但未被禁止）时只对“不同于自己”的名字做仿冒检测。
  */
@@ -2488,28 +2499,28 @@ function getPluginMarketplaceSchemaFor(existingName) {
     );
   return PluginMarketplaceFileSchema();
 }
-//@ chunk-dcmhvw5a.js:133570-133631 layout
+//@ chunk-z20c443b.js:133715-133776 layout
 var PLUGIN_ID_SEGMENT_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var PLUGIN_ID_SEGMENT_RE;
-deferInit("chunk-dcmhvw5a.js:133570", () => {
+deferInit("chunk-z20c443b.js:133715", () => {
   PLUGIN_ID_SEGMENT_PATTERN = "[A-Za-z0-9][-A-Za-z0-9._]*";
   PLUGIN_ID_SEGMENT_RE = new RegExp(`^${PLUGIN_ID_SEGMENT_PATTERN}$`);
 });
-//@ chunk-dcmhvw5a.js:133631-133664 layout
+//@ chunk-z20c443b.js:133776-133809 layout
 /**
  * 插件 ID 片段（名字或市场名）是否合法：字母数字开头，后接 -._ 与字母数字。
  */
 function isValidPluginIdSegment(segment) {
   return PLUGIN_ID_SEGMENT_RE.test(segment);
 }
-//@ chunk-dcmhvw5a.js:133664-133711 layout
+//@ chunk-z20c443b.js:133809-133856 layout
 var PLUGIN_ID_RE; // deferred: uses RelativePath of its import cycle while loading; runs once the cycle is complete
 var NPM_MARKETPLACE_SUFFIX;
-deferInit("chunk-dcmhvw5a.js:133664", () => {
+deferInit("chunk-z20c443b.js:133809", () => {
   PLUGIN_ID_RE = new RegExp(`^${PLUGIN_ID_SEGMENT_PATTERN}@${PLUGIN_ID_SEGMENT_PATTERN}$`);
   NPM_MARKETPLACE_SUFFIX = `@${pluginManifestPathSchemas}`;
 });
-//@ chunk-dcmhvw5a.js:133711-133777 layout
+//@ chunk-z20c443b.js:133856-133922 layout
 /**
  * 是否为 <npm包名>@npm 形式的插件 ID。
  */
@@ -2519,7 +2530,7 @@ function isNpmPluginId(pluginId) {
     isValidNpmPackageName(pluginId.slice(0, -NPM_MARKETPLACE_SUFFIX.length))
   );
 }
-//@ chunk-dcmhvw5a.js:133777-136457 fingerprint (2.1.88 match: PluginInstallationEntrySchema, 0.508)
+//@ chunk-z20c443b.js:133922-136602 fingerprint (2.1.88 match: PluginInstallationEntrySchema, 0.508)
 /**
  * 插件 ID（name@marketplace 或 <package>@npm）、依赖引用（名字[@市场][@^版本]或 {name,marketplace}）以及 installed_plugins.json 的 V1/V2 schema；V2 每个插件 ID 对应一组安装条目（scope、projectPath、installPath、version、gitCommitSha、auto…）。
  */
@@ -2535,7 +2546,7 @@ var PluginScopeSchema;
 var PluginInstallationEntrySchema;
 var InstalledPluginsFileSchemaV2;
 var InstalledPluginsFileShapeV2;
-deferInit("chunk-dcmhvw5a.js:133777", () => {
+deferInit("chunk-z20c443b.js:133922", () => {
   PluginIdSchema = DoctorLazy(() =>
     stringSchema().refine(
       (pluginId) => PLUGIN_ID_RE.test(pluginId) || isNpmPluginId(pluginId),
@@ -2632,7 +2643,7 @@ deferInit("chunk-dcmhvw5a.js:133777", () => {
     }),
   );
 });
-//@ chunk-dcmhvw5a.js:136457-136838 layout
+//@ chunk-z20c443b.js:136602-136983 layout
 /**
  * 宽容解析 installed_plugins.json V2：ID 非法的放进 setAside、条目非法的放进 keptRaw（原样保留回写），返回合法部分与第一个错误。
  */
@@ -2670,7 +2681,7 @@ function parseInstalledPluginsV2Leniently(file) {
     firstUnparseableError,
   };
 }
-//@ chunk-dcmhvw5a.js:136838-137274 fingerprint (2.1.88 match: KnownMarketplaceSchema, 0.763)
+//@ chunk-z20c443b.js:136983-137419 fingerprint (2.1.88 match: KnownMarketplaceSchema, 0.764)
 /**
  * known_marketplaces.json：市场名 → {source, installLocation, lastUpdated, autoUpdate}。claude.ai 同步的市场名以 claudeai- 开头（org/default/account）。
  */
@@ -2678,7 +2689,7 @@ var KnownMarketplaceSchema; // deferred: uses DoctorLazy (../../cli/handlers/uti
 var KnownMarketplacesFileSchema;
 var CLAUDEAI_MARKETPLACE_PREFIX;
 var CLAUDEAI_MARKETPLACE_KINDS;
-deferInit("chunk-dcmhvw5a.js:136838", () => {
+deferInit("chunk-z20c443b.js:136983", () => {
   KnownMarketplaceSchema = DoctorLazy(() =>
     objectSchema({
       source: MarketplaceSourceLenientSchema().describe("Where to fetch the marketplace from"),
@@ -2693,112 +2704,114 @@ deferInit("chunk-dcmhvw5a.js:136838", () => {
   CLAUDEAI_MARKETPLACE_PREFIX = "claudeai-";
   CLAUDEAI_MARKETPLACE_KINDS = ["org", "default", "account"];
 });
-//@ chunk-yf5m6p65.js:4323-4363 fingerprint (2.1.88 match: PluginManifestOutputStylesSchema, 0.375)
+//@ chunk-90nja2dk.js:4343-4383 fingerprint (2.1.88 match: PluginManifestOutputStylesSchema, 0.375)
 /**
  * 清掉全局缓存的输出样式（名字配错）。
  */
 function clearCachedOutputStyles() {
   getPluginRegistry().outputStyles = undefined;
 }
-//@ chunk-bfnfj4kx.js:4629-4766 fingerprint (2.1.88 match: PluginManifestSchema, 0.355)
+//@ chunk-6sf70a86.js:4671-4808 fingerprint (2.1.88 match: PluginManifestSchema, 0.356)
 function PluginManifestSchema_2(cell, prior) {
   if (cell.shape === undefined) return prior === undefined ? cell.initial : prior;
   let current = prior;
   return current?.shape === cell.shape && current.value !== undefined ? current.value : cell.initial;
 }
 export {
-  isMarketplaceAutoUpdate,
-  MAX_CONSENT_COMMAND_LENGTH,
-  PluginManifestSchema,
-  isReservedMarketplaceName,
-  isUnavailablePackageMarketplace,
-  formatPackageMarketplaceUnavailable,
-  isAsciiImpersonatingOfficialName,
-  IMPERSONATION_ERROR_MESSAGE,
-  pluginManifestPathSchemas,
-  isHttpUrl,
-  isSafeArchiveUrl,
-  ARCHIVE_URL_ERROR,
-  PluginHooksSchema,
-  PluginMonitorsArraySchema,
-  redactNpmTarball,
-  PluginIdSchema,
-  redactMarketplaceSource,
-  isNpmPluginId,
-  gitSha,
-  PLUGIN_NAME_FORBIDDEN_CHARS_RE,
-  INVISIBLE_CHARS_RE,
-  ALLOWED_OFFICIAL_MARKETPLACE_NAMES,
-  ONE_MIB,
-  MarketplaceSourceStrictSchema,
-  MarketplaceSourceSchemaLazy,
-  MarketplacePolicySourceSchema,
-  PerKeyLazySchema,
-  isValidRegex,
-  parseGithubOwnerWildcard,
-  hasGithubWildcard,
+  isValidPluginIdSegment,
   PluginMarketplaceFileSchema,
+  PluginManifestSchema,
   parsePluginBinaries,
   BINARY_BASENAME_RE,
   SHA256_HEX_RE,
   MAX_PLUGIN_BINARIES,
   BINARY_FETCH_CONCURRENCY,
-  isValidPluginIdSegment,
+  PLUGIN_NAME_FORBIDDEN_CHARS_RE,
   normalizePluginRoot,
   isOfficialMarketplaceName,
   isBareSourceName,
   PluginRelevanceSchema,
   PluginRelevanceSignalsSchema,
+  isValidRegex,
   PluginMarketplaceEntrySchema,
   PluginMarketplaceSchema,
   applyMarketplacePluginRoot,
+  PluginIdSchema,
   resolveBareSourceUnderPluginRoot,
   isRelativeSourcePath,
-  LspServerConfigSchema,
-  ANTHROPIC_PLUGIN_DIRECTORY,
-  isAnthropicsGithubRepo,
-  CONTROL_OR_BIDI_CHARS_RE,
-  CLAUDEAI_MARKETPLACE_KINDS,
-  CommandMetadataSchema,
-  CLAUDEAI_MARKETPLACE_PREFIX,
-  COMMUNITY_MARKETPLACE_NAMES,
-  RESERVED_MARKETPLACE_NAMES,
-  PluginManifestSchema_2,
-  isGitlabHost,
-  GIT_URL_PROTOCOLS,
-  SSH_URL_PROTOCOLS,
-  isGithubOrSshGithubHost,
-  isValidNpmPackageName,
+  ONE_MIB,
+  PluginHooksSchema,
+  hasManifestFieldSchema,
+  pluginManifestPathSchemas,
+  PluginMonitorsArraySchema,
+  redactNpmTarball,
+  isAsciiImpersonatingOfficialName,
+  redactMarketplaceSource,
+  isLocalMarketplaceSource,
+  isNpmPluginId,
+  gitSha,
+  INVISIBLE_CHARS_RE,
+  ALLOWED_OFFICIAL_MARKETPLACE_NAMES,
+  isReservedMarketplaceName,
   KnownMarketplacesFileSchema,
+  MAX_CONSENT_COMMAND_LENGTH,
+  isSafeArchiveUrl,
+  ARCHIVE_URL_ERROR,
+  clearCachedOutputStyles,
+  CLAUDEAI_MARKETPLACE_PREFIX,
   getMarketplaceNameSchemaFor,
   getPluginMarketplaceSchemaFor,
   validateOfficialNameSource,
   PLUGIN_DIRECTORY_MARKETPLACE_NAMES,
+  RESERVED_MARKETPLACE_NAMES,
   isImpersonatingOfficialName,
+  IMPERSONATION_ERROR_MESSAGE,
   isLookalikeButNotBlockedName,
-  hasUnknownSourceType,
-  POLICY_SOURCE_TYPES,
-  formatZodIssuesBrief,
-  redactIssuePathKey,
-  isPackageMarketplaceName,
-  MarketplaceNameSchema,
-  normalizeGitUrlHost,
   isUnsafeGitUrl,
-  SSH_GITHUB_COM,
-  parseGithubOwnerRepo,
-  normalizeGitUrlForComparison,
-  getManifestSchemaForDocument,
-  clearCachedOutputStyles,
-  InstalledPluginsFileSchemaV1,
-  parseInstalledPluginsV2Leniently,
-  MAX_PREVIOUS_PRODUCER_PATHS,
+  isValidNpmPackageName,
   isAnthropicsMarketplaceSource,
   isValidGithubOwner,
   normalizeRepoPath,
+  parseGithubOwnerWildcard,
   GITHUB_NAME_SEGMENT_RE,
-  EvalsPathSchema,
+  normalizeGitUrlHost,
+  SSH_GITHUB_COM,
+  parseGithubOwnerRepo,
+  normalizeGitUrlForComparison,
+  LspServerConfigSchema,
+  CONTROL_OR_BIDI_CHARS_RE,
+  CLAUDEAI_MARKETPLACE_KINDS,
+  isPackageMarketplaceName,
+  MarketplaceNameSchema,
+  isMarketplaceAutoUpdate,
+  getManifestSchemaForDocument,
+  InstalledPluginsFileSchemaV1,
+  parseInstalledPluginsV2Leniently,
+  MAX_PREVIOUS_PRODUCER_PATHS,
+  isHttpUrl,
+  isUnavailablePackageMarketplace,
+  formatPackageMarketplaceUnavailable,
   splitAlnumWords,
   NON_ASCII_PATTERN,
   iterJoinedWordPrefixes,
   OFFICIAL_NAME_RE,
+  PluginManifestSchema_2,
+  isAnthropicsGithubRepo,
+  EvalsPathSchema,
+  MarketplaceSourceStrictSchema,
+  CommandMetadataSchema,
+  COMMUNITY_MARKETPLACE_NAMES,
+  ANTHROPIC_PLUGIN_DIRECTORY,
+  isGitlabHost,
+  GIT_URL_PROTOCOLS,
+  SSH_URL_PROTOCOLS,
+  isGithubOrSshGithubHost,
+  MarketplaceSourceSchemaLazy,
+  MarketplacePolicySourceSchema,
+  PerKeyLazySchema,
+  hasGithubWildcard,
+  hasUnknownSourceType,
+  POLICY_SOURCE_TYPES,
+  formatZodIssuesBrief,
+  redactIssuePathKey,
 };

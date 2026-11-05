@@ -1,13 +1,13 @@
 /**
  * ms/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: ms@2.1.3
- * pieces: chunk-h6b7mazd.js (1)
+ * pieces: chunk-ww9agm6g.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 
-//@ chunk-h6b7mazd.js:27156-28648 cjs-fingerprint
+//@ chunk-ww9agm6g.js:27156-28648 cjs-fingerprint
 var require_ms = __commonJS(function (cjsExports, cjsModule) {
   var s = 1000;
   var m = s * 60;

@@ -3,10 +3,10 @@
  *
  * /remote-control（Remote Control/bridge）对话框：显示连接状态、会话 URL 二维码、环境/会话 ID，可断开或重连。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/BridgeDialog.tsx
- * pieces: chunk-18hwfzwa.js (15), chunk-hny2rpzz.js (1)
- * attribution: fingerprint 7, layout 7, callgraph-fingerprint 1, file-local 1
+ * pieces: chunk-163scjsz.js (3), chunk-czq1j3j2.js (20), chunk-w7hwdb2a.js (1)
+ * attribution: fingerprint 7, layout 8, sole-consumer 6, affinity 1, callgraph-fingerprint 1, file-local 1
  */
 import { basename } from "path";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -19,13 +19,6 @@ import { Text, Box } from "../ink/components/Text.js";
 import { useRegisterOverlay } from "../context/overlayContext.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { useAppState, useSetAppState } from "../state/AppState.js";
-import {
-  selectBridgeConnected_2,
-  selectBridgeSessionActive_2,
-  selectBridgeConnectUrl_2,
-  selectBridgeSessionUrl_2,
-  selectBridgeEnabled_2,
-} from "../commands/bridge/bridge.js";
 import { useNotifications } from "../context/notifications.js";
 import { useState, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { useProject } from "../context/session.js";
@@ -50,7 +43,7 @@ import { useLatchedBridgeNotice } from "./PromptInput/Notifications.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { Byline } from "./design-system/Byline.js";
 
-//@ chunk-hny2rpzz.js:2423-2645 fingerprint (2.1.88 match: _temp0, 0.616)
+//@ chunk-w7hwdb2a.js:2423-2645 fingerprint (2.1.88 match: _temp0, 0.616)
 /**
  * MCP 工具结果中的文本条目，用 OutputLine 渲染。
  */
@@ -73,45 +66,65 @@ function McpTextOutputItem(s_8) {
   } else props = $[2];
   return props;
 }
-//@ chunk-18hwfzwa.js:643839-643889 fingerprint (2.1.88 match: _temp3, 1)
+//@ chunk-czq1j3j2.js:664422-664469 sole-consumer (2.1.88 match: _temp, 1)
+function selectBridgeConnected_2(s) {
+  return s.replBridgeConnected;
+}
+//@ chunk-czq1j3j2.js:664469-664520 sole-consumer (2.1.88 match: _temp6, 1)
+function selectBridgeSessionActive_2(s_1) {
+  return s_1.replBridgeSessionActive;
+}
+//@ chunk-czq1j3j2.js:664520-664570 sole-consumer (2.1.88 match: _temp3, 1)
 function selectReplBridgeReconnecting(s_1) {
   return s_1.replBridgeReconnecting;
 }
-//@ chunk-18hwfzwa.js:643985-644028 fingerprint (2.1.88 match: _temp6, 1)
+//@ chunk-czq1j3j2.js:664570-664618 sole-consumer (2.1.88 match: _temp5, 1)
+function selectBridgeConnectUrl_2(s_0) {
+  return s_0.replBridgeConnectUrl;
+}
+//@ chunk-czq1j3j2.js:664618-664666 sole-consumer (2.1.88 match: _temp4, 1)
+function selectBridgeSessionUrl_2(s) {
+  return s.replBridgeSessionUrl;
+}
+//@ chunk-czq1j3j2.js:664666-664709 sole-consumer (2.1.88 match: _temp6, 1)
 function selectReplBridgeError(s_4) {
   return s_4.replBridgeError;
 }
-//@ chunk-18hwfzwa.js:644028-644075 layout
+//@ chunk-czq1j3j2.js:664709-664756 affinity
 function selectReplBridgeErrorKind(state) {
   return state.replBridgeErrorKind;
 }
-//@ chunk-18hwfzwa.js:644075-644121 fingerprint (2.1.88 match: _temp7, 1)
+//@ chunk-czq1j3j2.js:664756-664802 fingerprint (2.1.88 match: _temp7, 1)
 function selectReplBridgeExplicit(s_5) {
   return s_5.replBridgeExplicit;
 }
-//@ chunk-18hwfzwa.js:644166-644217 fingerprint (2.1.88 match: _temp8, 1)
+//@ chunk-czq1j3j2.js:664802-664847 layout (2.1.88 match: _temp2, 1)
+function selectBridgeEnabled_2(s_0) {
+  return s_0.replBridgeEnabled;
+}
+//@ chunk-czq1j3j2.js:664847-664898 fingerprint (2.1.88 match: _temp8, 1)
 function selectReplBridgeEnvironmentId(s_6) {
   return s_6.replBridgeEnvironmentId;
 }
-//@ chunk-18hwfzwa.js:644217-644264 fingerprint (2.1.88 match: _temp9, 1)
+//@ chunk-czq1j3j2.js:664898-664945 fingerprint (2.1.88 match: _temp9, 1)
 function selectReplBridgeSessionId(s_7) {
   return s_7.replBridgeSessionId;
 }
-//@ chunk-18hwfzwa.js:644264-644299 layout
+//@ chunk-czq1j3j2.js:664945-664980 layout
 function selectVerbose(s_8) {
   return s_8.verbose;
 }
-//@ chunk-18hwfzwa.js:644299-644338 layout
+//@ chunk-czq1j3j2.js:664980-665019 layout
 function selectOriginalCwd(state) {
   return state.originalCwd;
 }
-//@ chunk-18hwfzwa.js:644338-644354 layout
+//@ chunk-czq1j3j2.js:665019-665035 layout
 function noop_2() {}
-//@ chunk-18hwfzwa.js:644354-644381 layout
+//@ chunk-czq1j3j2.js:665035-665062 layout
 function negate(value) {
   return !value;
 }
-//@ chunk-18hwfzwa.js:644381-644583 layout
+//@ chunk-czq1j3j2.js:665062-665264 layout
 function disableReplBridgeState(prev) {
   if (!prev.replBridgeEnabled && prev.replBridgeError === undefined) {
     return prev;
@@ -124,7 +137,7 @@ function disableReplBridgeState(prev) {
     replBridgeSessionGroupingId: undefined,
   };
 }
-//@ chunk-18hwfzwa.js:644583-644771 callgraph-fingerprint (2.1.88 match: _temp12, 0.368)
+//@ chunk-czq1j3j2.js:665264-665452 callgraph-fingerprint (2.1.88 match: _temp12, 0.37)
 function enableReplBridgeState(prev) {
   if (prev.replBridgeEnabled || prev.replBridgeError === undefined) {
     return prev;
@@ -137,11 +150,11 @@ function enableReplBridgeState(prev) {
     replBridgeExplicit: true,
   };
 }
-//@ chunk-18hwfzwa.js:644771-644807 file-local
+//@ chunk-czq1j3j2.js:665452-665488 file-local
 function isNonEmptyLine_2(l) {
   return l.length > 0;
 }
-//@ chunk-18hwfzwa.js:644807-644856 layout
+//@ chunk-czq1j3j2.js:665488-665537 layout
 function renderTextLine_4(children, key) {
   return jsxProd_default(
     Text,
@@ -151,7 +164,7 @@ function renderTextLine_4(children, key) {
     key,
   );
 }
-//@ chunk-18hwfzwa.js:644856-649982 fingerprint (2.1.88 match: BridgeDialog, 0.557)
+//@ chunk-czq1j3j2.js:665537-670663 fingerprint (2.1.88 match: BridgeDialog, 0.557)
 /**
  * Remote Control 对话框：显示连接/会话状态与 URL（可切换二维码），d 键断开并关闭启动时自动连接，重试错误状态，显示 cwd 与分支。
  */
@@ -630,4 +643,16 @@ function BridgeDialog(props) {
   } else t21 = $[111];
   return t21;
 }
-export { BridgeDialog, McpTextOutputItem };
+//@ chunk-163scjsz.js:19659-19708 fingerprint (2.1.88 match: _temp3, 1)
+function reconnecting(s_1) {
+  return s_1.replBridgeReconnecting;
+}
+//@ chunk-163scjsz.js:19708-19752 layout (2.1.88 match: _temp2, 1)
+function enabled(s_0) {
+  return s_0.replBridgeEnabled;
+}
+//@ chunk-163scjsz.js:19752-19794 fingerprint (2.1.88 match: _temp6, 1)
+function error(s_4) {
+  return s_4.replBridgeError;
+}
+export { reconnecting, enabled, error, McpTextOutputItem, BridgeDialog };

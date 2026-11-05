@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：重启时通过 CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE 传递终端尺寸
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1k64h7rw.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-a04avcpz.js (3)
  * attribution: placement 3
  */
 import { env } from "./env.js";
 
-//@ chunk-1k64h7rw.js:226-271 placement
+//@ chunk-a04avcpz.js:226-271 placement
 var CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE = "CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE";
-//@ chunk-1k64h7rw.js:271-368 placement
+//@ chunk-a04avcpz.js:271-368 placement
 function getRelaunchTerminalSizeEnv() {
   let { columns, rows } = process.stdout;
   if (!columns || !rows) return {};
@@ -20,7 +20,7 @@ function getRelaunchTerminalSizeEnv() {
     [CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE]: `${columns}x${rows}`,
   };
 }
-//@ chunk-1k64h7rw.js:368-628 placement
+//@ chunk-a04avcpz.js:368-628 placement
 function applyRelaunchTerminalSize() {
   let CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE_2 = env.CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE;
   delete process.env[CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE];
@@ -30,4 +30,4 @@ function applyRelaunchTerminalSize() {
   process.stdout.columns ||= Number(match[1]);
   process.stdout.rows ||= Number(match[2]);
 }
-export { CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE, getRelaunchTerminalSizeEnv, applyRelaunchTerminalSize };
+export { applyRelaunchTerminalSize, CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE, getRelaunchTerminalSizeEnv };

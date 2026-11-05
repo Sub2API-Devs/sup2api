@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：会话形态（入口、交互、子会话等）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-7dqf31r1.js (30)
- * attribution: placement 30
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9ys74nhz.js (31)
+ * attribution: placement 30, layout 1
  */
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession, getTeammateAgentId, getIsNonInteractiveSession } from "../bootstrap/state.js";
@@ -22,7 +22,7 @@ import { env, isSpawnedByServer } from "./env.js";
 import { REMOTE_COWORK_SOURCE_KINDS } from "./remoteCoworkSources.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-7dqf31r1.js:4729-6138 placement
+//@ chunk-9ys74nhz.js:4739-6233 placement
 /**
  * 会话形态：入口类型、是否交互、子会话、远程控制、桌面相关开关等启动信息。
  */
@@ -33,6 +33,7 @@ class SessionShape {
   childSession = false;
   hasRemoteSessionOrContainerId = false;
   claudecode = false;
+  hostManagedRunnerChild = false;
   coworkFrameArtifacts = false;
   hostScheduledRun = false;
   desktopSkillSwitches = false;
@@ -63,6 +64,9 @@ class SessionShape {
   }
   setClaudecode(claudecode) {
     this.claudecode = claudecode;
+  }
+  setHostManagedRunnerChild(hostManagedRunnerChild) {
+    this.hostManagedRunnerChild = hostManagedRunnerChild;
   }
   setCoworkFrameArtifacts(coworkFrameArtifacts) {
     this.coworkFrameArtifacts = coworkFrameArtifacts;
@@ -104,26 +108,26 @@ class SessionShape {
     this.hostAssignedGroup = hostAssignedGroup;
   }
 }
-//@ chunk-7dqf31r1.js:6138-6161 placement
+//@ chunk-9ys74nhz.js:6233-6256 placement
 var sessionShapeSlot; // deferred: uses SessionShape of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-7dqf31r1.js:6138", () => {
+deferInit("chunk-9ys74nhz.js:6233", () => {
   sessionShapeSlot = new HostScoped(() => new SessionShape());
 });
-//@ chunk-7dqf31r1.js:6161-6196 placement
+//@ chunk-9ys74nhz.js:6256-6291 placement
 function sessionShape() {
   return sessionShapeSlot.of(getRootSession().host);
 }
-//@ chunk-7dqf31r1.js:6196-6232 placement
+//@ chunk-9ys74nhz.js:6291-6327 placement
 function getSessionEntrypoint() {
   return sessionShape().entrypoint;
 }
-//@ chunk-7dqf31r1.js:6232-6550 placement
+//@ chunk-9ys74nhz.js:6327-6645 placement
 /**
  * NON_TERMINAL_ENTRYPOINTS：非终端入口点集合。
  */
 var NON_TERMINAL_ENTRYPOINTS_2; // deferred: uses startsWithRemote (./entrypointKinds.js) of its import cycle while loading; runs once the cycle is complete
 var NON_TERMINAL_ENTRYPOINTS;
-deferInit("chunk-7dqf31r1.js:6232", () => {
+deferInit("chunk-9ys74nhz.js:6327", () => {
   NON_TERMINAL_ENTRYPOINTS_2 = new Set([
     "claude-vscode",
     "claude-desktop",
@@ -144,7 +148,7 @@ deferInit("chunk-7dqf31r1.js:6232", () => {
   ]);
   NON_TERMINAL_ENTRYPOINTS = new Set([...NON_TERMINAL_ENTRYPOINTS_2].filter(startsWithRemote));
 });
-//@ chunk-7dqf31r1.js:6550-6770 placement (2.1.88 match: envSessionKind, 0.758)
+//@ chunk-9ys74nhz.js:6645-6865 placement (2.1.88 match: envSessionKind, 0.759)
 function envSessionKind() {
   let k = env.CLAUDE_CODE_SESSION_KIND;
   if (k === "bg" || k === "daemon" || k === "daemon-worker" || getTeammateAgentId() !== undefined)
@@ -155,19 +159,19 @@ function envSessionKind() {
     !shape.childSession && shape.entrypoint !== undefined && NON_TERMINAL_ENTRYPOINTS_2.has(shape.entrypoint)
   );
 }
-//@ chunk-7dqf31r1.js:6770-6826 placement
+//@ chunk-9ys74nhz.js:6865-6921 placement
 function isSpawnedByAttendedSession() {
   return sessionShape().spawnedByAttendedSession === true;
 }
-//@ chunk-7dqf31r1.js:6826-6864 placement
+//@ chunk-9ys74nhz.js:6921-6959 placement
 function isChildSession() {
   return sessionShape().childSession;
 }
-//@ chunk-7dqf31r1.js:6864-6910 placement
+//@ chunk-9ys74nhz.js:6959-7005 placement
 function isTopHostSession() {
   return isHostSessionEntrypoint() && !sessionShape().childSession;
 }
-//@ chunk-7dqf31r1.js:6910-7009 placement
+//@ chunk-9ys74nhz.js:7005-7104 placement
 function isLocalAgentTopSession() {
   let shape = sessionShape();
   return (
@@ -175,13 +179,13 @@ function isLocalAgentTopSession() {
     (shape.entrypoint !== undefined && COWORK_ENTRYPOINTS.has(shape.entrypoint) && !shape.childSession)
   );
 }
-//@ chunk-7dqf31r1.js:7009-7043 placement
+//@ chunk-9ys74nhz.js:7104-7138 placement
 function isCoworkWithRemote() {
   return isCoworkSession() && hasRemoteSessionOrControl();
 }
-//@ chunk-7dqf31r1.js:7043-7144 placement
+//@ chunk-9ys74nhz.js:7138-7239 placement
 var REMOTE_ENTRYPOINTS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-7dqf31r1.js:7043", () => {
+deferInit("chunk-9ys74nhz.js:7138", () => {
   REMOTE_ENTRYPOINTS_2 = new Set([
     ...REMOTE_COWORK_SOURCE_KINDS,
     "remote",
@@ -191,7 +195,7 @@ deferInit("chunk-7dqf31r1.js:7043", () => {
     "remote_trigger",
   ]);
 });
-//@ chunk-7dqf31r1.js:7144-7310 placement
+//@ chunk-9ys74nhz.js:7239-7405 placement
 function hasRemoteSessionOrControl() {
   let shape = sessionShape();
   return (
@@ -202,14 +206,14 @@ function hasRemoteSessionOrControl() {
     env.CLAUDE_CODE_ENVIRONMENT_KIND === undefined
   );
 }
-//@ chunk-7dqf31r1.js:7310-7419 placement
+//@ chunk-9ys74nhz.js:7405-7514 placement
 function isLocalAgentSession() {
   let shape = sessionShape();
   return (shape.entrypoint === "local-agent" || shape.entrypoint === "local_agent") && !shape.childSession;
 }
-//@ chunk-7dqf31r1.js:7419-7509 placement
+//@ chunk-9ys74nhz.js:7514-7604 placement
 var REMOTE_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-7dqf31r1.js:7419", () => {
+deferInit("chunk-9ys74nhz.js:7514", () => {
   REMOTE_ENTRYPOINTS = new Set([
     "remote",
     "remote_projects",
@@ -218,7 +222,7 @@ deferInit("chunk-7dqf31r1.js:7419", () => {
     "ssh-remote",
   ]);
 });
-//@ chunk-7dqf31r1.js:7509-7616 placement
+//@ chunk-9ys74nhz.js:7604-7711 placement
 function isDesktopTopNonClaudecode() {
   let shape = sessionShape();
   return (
@@ -228,7 +232,7 @@ function isDesktopTopNonClaudecode() {
     !shape.claudecode
   );
 }
-//@ chunk-7dqf31r1.js:7616-7748 placement
+//@ chunk-9ys74nhz.js:7711-7843 placement
 function isRemoteRelayed() {
   let shape = sessionShape();
   return (
@@ -238,7 +242,7 @@ function isRemoteRelayed() {
     isSpawnedByServer()
   );
 }
-//@ chunk-7dqf31r1.js:7748-7859 placement
+//@ chunk-9ys74nhz.js:7843-7954 placement
 function isHeadlessHostSession() {
   let { entrypoint, interactive } = sessionShape();
   return (
@@ -247,81 +251,92 @@ function isHeadlessHostSession() {
     (HEADLESS_HOST_ENTRYPOINTS.has(entrypoint) || entrypoint.startsWith("remote"))
   );
 }
-//@ chunk-7dqf31r1.js:7859-7892 placement
+//@ chunk-9ys74nhz.js:7954-7987 placement
 function isVsCodeOrDesktop() {
   return isVsCodeTopSession() || isDesktopNonClaudecode();
 }
-//@ chunk-7dqf31r1.js:7892-7986 placement
+//@ chunk-9ys74nhz.js:7987-8081 placement
 function isVsCodeTopSession() {
   let shape = sessionShape();
   return shape.entrypoint === "claude-vscode" && !shape.childSession && !shape.claudecode;
 }
-//@ chunk-7dqf31r1.js:7986-8054 placement
+//@ chunk-9ys74nhz.js:8081-8229 layout
+function isSdkOwnedHostedTurn() {
+  let shape = sessionShape();
+  return (
+    (shape.entrypoint === "sdk-ts" || shape.entrypoint === "sdk-py" || shape.entrypoint === "sdk-cli") &&
+    !shape.childSession &&
+    !shape.claudecode &&
+    !isRemoteRelayed()
+  );
+}
+//@ chunk-9ys74nhz.js:8229-8297 placement
 function isPlainNonInteractive(nonInteractive = getIsNonInteractiveSession()) {
   let topHost = isTopHostSession() && !sessionShape().claudecode;
   return nonInteractive && !topHost && !isVsCodeTopSession();
 }
-//@ chunk-7dqf31r1.js:8054-8090 placement
+//@ chunk-9ys74nhz.js:8297-8333 placement
 function isClaudecodeSession() {
   return sessionShape().claudecode;
 }
-//@ chunk-7dqf31r1.js:8090-8137 placement
+//@ chunk-9ys74nhz.js:8333-8380 placement
 function coworkFrameArtifacts() {
   return sessionShape().coworkFrameArtifacts;
 }
-//@ chunk-7dqf31r1.js:8137-8179 placement
+//@ chunk-9ys74nhz.js:8380-8423 placement
 function hostScheduledRun() {
   return sessionShape().hostScheduledRun;
 }
-//@ chunk-7dqf31r1.js:8179-8226 placement
+//@ chunk-9ys74nhz.js:8423-8470 placement
 function desktopSkillSwitches() {
   return sessionShape().desktopSkillSwitches;
 }
-//@ chunk-7dqf31r1.js:8226-8274 placement
+//@ chunk-9ys74nhz.js:8470-8518 placement
 function desktopConnectorNames() {
   return sessionShape().desktopConnectorNames;
 }
-//@ chunk-7dqf31r1.js:8274-8320 placement
+//@ chunk-9ys74nhz.js:8518-8564 placement
 function hostUnattendedGrant() {
   return sessionShape().hostUnattendedGrant;
 }
-//@ chunk-7dqf31r1.js:8320-8364 placement
+//@ chunk-9ys74nhz.js:8564-8608 placement
 function chromeTabGroupKey() {
   return sessionShape().chromeTabGroupKey;
 }
-//@ chunk-7dqf31r1.js:8364-8407 placement
+//@ chunk-9ys74nhz.js:8608-8651 placement
 function hostSkillCatalog() {
   return sessionShape().hostSkillCatalog;
 }
-//@ chunk-7dqf31r1.js:8407-8456 placement
+//@ chunk-9ys74nhz.js:8651-8700 placement
 function desktopSkillsPluginDir() {
   return sessionShape().desktopSkillsPluginDir;
 }
 export {
-  getSessionEntrypoint,
   isTopHostSession,
+  getSessionEntrypoint,
+  isVsCodeTopSession,
+  isVsCodeOrDesktop,
   isClaudecodeSession,
   coworkFrameArtifacts,
   isLocalAgentTopSession,
-  isVsCodeTopSession,
+  envSessionKind,
+  hostScheduledRun,
+  desktopSkillsPluginDir,
+  isChildSession,
   sessionShape,
   isCoworkWithRemote,
-  isVsCodeOrDesktop,
-  isChildSession,
-  hostScheduledRun,
   isPlainNonInteractive,
+  hostSkillCatalog,
+  isSdkOwnedHostedTurn,
   chromeTabGroupKey,
-  isLocalAgentSession,
-  desktopSkillsPluginDir,
+  isDesktopTopNonClaudecode,
   isHeadlessHostSession,
-  envSessionKind,
+  desktopSkillSwitches,
+  isSpawnedByAttendedSession,
+  isLocalAgentSession,
   desktopConnectorNames,
   hostUnattendedGrant,
-  hostSkillCatalog,
-  desktopSkillSwitches,
-  isDesktopTopNonClaudecode,
-  NON_TERMINAL_ENTRYPOINTS,
   hasRemoteSessionOrControl,
-  isSpawnedByAttendedSession,
   isRemoteRelayed,
+  NON_TERMINAL_ENTRYPOINTS,
 };

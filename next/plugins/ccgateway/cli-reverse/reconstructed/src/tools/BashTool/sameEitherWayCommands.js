@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：沙箱内外效果相同的命令
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (7)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (7)
  * attribution: placement 7
  */
 import { stripLiteralQuotedRegions } from "../../utils/bash/ast.js";
@@ -13,12 +13,13 @@ import { SPLIT_MAX_LEN } from "../../utils/bash/commands.js";
 import { getParserModule } from "../../utils/bash/bashParser.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-e6aww6q8.js:4817273-4817715 placement
+//@ chunk-5xgkngpb.js:4955904-4956418 placement
 /**
  * 沙箱内外差异检测用常量：zsh nomatch/等号错误、PIPESTATUS 使用、分词相关赋值、zsh 模拟模式、列表值、节点类型集合与"内外效果相同"的命令。
  */
 var ZSH_NOMATCH_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ZSH_EQUALS_ERROR_RE;
+var ZSH_EQUALS_NOT_FOUND_RE;
 var PIPESTATUS_RE;
 var WORD_SPLIT_HINT_RE;
 var SHWORDSPLIT_RE;
@@ -27,9 +28,10 @@ var SPLIT_CONTEXT_TYPES;
 var FOR_BODY_TYPES;
 var SAME_EITHER_WAY_COMMANDS;
 var SAME_EITHER_WAY_FEATURE;
-deferInit("chunk-e6aww6q8.js:4817273", () => {
+deferInit("chunk-5xgkngpb.js:4955904", () => {
   ZSH_NOMATCH_RE = /^(?:\(eval\)|[A-Za-z_][\w-]*)(?::\d+)?: no matches found: /m;
   ZSH_EQUALS_ERROR_RE = /^\(eval\):\d+: \S+ not found$/m;
+  ZSH_EQUALS_NOT_FOUND_RE = /^(?:\(eval\)|[A-Za-z_][\w-]*)(?::\d+)?: command not found: =\S+$/m;
   PIPESTATUS_RE = /\$\{?PIPESTATUS\b/;
   WORD_SPLIT_HINT_RE = /=["'$`]|\b(?:for|select)\s/;
   SHWORDSPLIT_RE = /sh_?word_?split|\bemulate\s+(?:-\w+\s+)*(?:sh|ksh|bash)\b/i;
@@ -46,7 +48,7 @@ deferInit("chunk-e6aww6q8.js:4817273", () => {
   SAME_EITHER_WAY_COMMANDS = new Set(["echo", "print", "eval"]);
   SAME_EITHER_WAY_FEATURE = "same_either_way_command";
 });
-//@ chunk-e6aww6q8.js:4817715-4817890 placement
+//@ chunk-5xgkngpb.js:4956418-4956633 placement
 /**
  * 检测命令与输出中的 shell 方言问题：zsh nomatch/等号错误、使用 PIPESTATUS、依赖 bash 分词。
  */
@@ -54,12 +56,13 @@ function detectShellDialectIssues(command, output) {
   return {
     zsh_nomatch_error: ZSH_NOMATCH_RE.test(output),
     zsh_equals_error: ZSH_EQUALS_ERROR_RE.test(output),
+    zsh_equals_as_command_error: ZSH_EQUALS_NOT_FOUND_RE.test(output),
     bash_pipestatus_use:
       command.includes("PIPESTATUS") && PIPESTATUS_RE.test(stripLiteralQuotedRegions(command)),
     bash_word_split_use: usesBashWordSplitting(command),
   };
 }
-//@ chunk-e6aww6q8.js:4817890-4818181 placement
+//@ chunk-5xgkngpb.js:4956633-4956924 placement
 function usesBashWordSplitting(command) {
   if (
     !command.includes("$") ||
@@ -82,7 +85,7 @@ function usesBashWordSplitting(command) {
     [...uses.iterated].some((name) => uses.captured.has(name))
   );
 }
-//@ chunk-e6aww6q8.js:4818181-4819130 placement
+//@ chunk-5xgkngpb.js:4956924-4957873 placement
 /**
  * 遍历语法树收集分词相关信息：被展开到会分词位置的变量、赋值为多词字符串或数组的变量、捕获命令输出的变量、for 循环迭代的变量。
  */
@@ -134,7 +137,7 @@ function collectWordSplitUses(node, contextType, uses) {
   }
   for (let child of node.children) collectWordSplitUses(child, effectiveContext, uses);
 }
-//@ chunk-e6aww6q8.js:4819130-4819293 placement
+//@ chunk-5xgkngpb.js:4957873-4958036 placement
 function getExpansionVariable(node) {
   let expectedLength = node.type === "simple_expansion" ? 2 : node.type === "expansion" ? 3 : 0;
   let nameNode = node.children[1];
@@ -142,7 +145,7 @@ function getExpansionVariable(node) {
     ? nameNode.text
     : undefined;
 }
-//@ chunk-e6aww6q8.js:4819293-4819370 placement
+//@ chunk-5xgkngpb.js:4958036-4958113 placement
 /**
  * 若某段单词只有一个变量引用，把该变量名记入“被迭代变量”集合，用于判断循环里读环境变量。
  */
@@ -150,7 +153,7 @@ function recordSingleVariable(nodes, iterated) {
   let name = nodes[0] && getExpansionVariable(nodes[0]);
   if (nodes.length === 1 && name !== undefined) iterated.add(name);
 }
-//@ chunk-e6aww6q8.js:4819370-4819586 placement
+//@ chunk-5xgkngpb.js:4958113-4958329 placement
 function isMultiWordString(node, isAppend) {
   if (node.type !== "string" && node.type !== "raw_string") return false;
   let sliced = node.text.slice(1, -1);

@@ -3,10 +3,10 @@
  *
  * 定时任务/循环（/loop、schedule_wakeup）触发：到点把提示入队，格式化 cron 触发时间。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useScheduledTasks.ts
- * pieces: chunk-4m1yk02k.js (9), chunk-k8enqm3s.js (1)
- * attribution: sole-consumer 7, affinity 1, fingerprint 2
+ * pieces: chunk-1wakzgxk.js (1), chunk-zdhbhsv3.js (9)
+ * attribution: fingerprint 2, sole-consumer 7, affinity 1
  */
 import { randomUUID } from "crypto";
 import { effectiveSessionTimeZone } from "../utils/sessionTimeZone.js";
@@ -22,8 +22,8 @@ import { plural } from "../utils/stringUtils.js";
 import { logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { useCommandQueueOrDefault } from "../context/QueuedMessageContext.js";
 import { useSession } from "../context/session.js";
-import { useAppStoreDirect, useSetAppState } from "../state/AppState.js";
-import { useSetVoiceState } from "../context/voice.js";
+import { useAppStoreDirect } from "../state/AppState.js";
+import { useTaskFramework } from "../context/voice.js";
 import { isKairosCronEnabled } from "../tools/ScheduleCronTool/prompt.js";
 import { getRemoteCaps } from "../remote/remoteMode.js";
 import {
@@ -55,7 +55,7 @@ import { getSessionProject } from "../bootstrap/sessionSlices.js";
 import { SerialWriteQueue } from "../utils/errorLogSink.js";
 import { loopKeepaliveSetting, hasLoopTask, scheduleKeepaliveWakeup } from "../utils/loop/loopWakeups.js";
 
-//@ chunk-k8enqm3s.js:228-481 fingerprint (2.1.88 match: formatCronFireTime, 0.874)
+//@ chunk-1wakzgxk.js:228-481 fingerprint (2.1.88 match: formatCronFireTime, 0.874)
 function formatCronFireTime(date, options) {
   return date
     .toLocaleString("en-US", {
@@ -71,21 +71,21 @@ function formatCronFireTime(date, options) {
     .replace(/,? at |, (?=\d{1,2}:)/, " ")
     .replace(/[ \u202f]([AP]M)/i, (ampm, ampm_2) => ampm_2.toLowerCase());
 }
-//@ chunk-4m1yk02k.js:12639-12643 sole-consumer
+//@ chunk-zdhbhsv3.js:13784-13788 sole-consumer
 init_react_production();
-//@ chunk-4m1yk02k.js:12679-12774 sole-consumer
+//@ chunk-zdhbhsv3.js:13824-13919 sole-consumer
 function isLoopCronFire(message) {
   return (
     message.type === "system" && message.subtype === "scheduled_task_fire" && message.cronKind === "loop"
   );
 }
-//@ chunk-4m1yk02k.js:12774-12905 sole-consumer
+//@ chunk-zdhbhsv3.js:13919-14050 sole-consumer
 function isBlockingSystemMessage(message) {
   if (message.type !== "system") return false;
   if (message.subtype === "scheduled_task_fire" || message.subtype === "compact_boundary") return true;
   return false;
 }
-//@ chunk-4m1yk02k.js:12905-14200 sole-consumer
+//@ chunk-zdhbhsv3.js:14050-15345 sole-consumer
 /**
  * 判断最近一次 /loop 唤醒是否可以折叠为 no-op：唤醒后只有 schedule_wakeup(noop) 且无用户输入、拒绝、排队命令、拆开的工具对等，否则给出否决原因。
  */
@@ -174,7 +174,7 @@ function analyzeLoopNoOpFold(messages) {
     toolUseCount: toolUseIds.size,
   };
 }
-//@ chunk-4m1yk02k.js:14200-14347 sole-consumer
+//@ chunk-zdhbhsv3.js:15345-15492 sole-consumer
 function createLoopHealthyNote(wakeupCount) {
   return {
     ...createUserMessage({
@@ -184,7 +184,7 @@ function createLoopHealthyNote(wakeupCount) {
     turnCompanion: true,
   };
 }
-//@ chunk-4m1yk02k.js:14347-14919 sole-consumer
+//@ chunk-zdhbhsv3.js:15492-16064 sole-consumer
 /**
  * 追加 /loop 唤醒消息：可折叠时合并为 "N no-op ticks since …" 并记录折叠的 uuid 与连续计数，否则追加普通唤醒消息。
  */
@@ -232,25 +232,24 @@ function appendLoopWakeup(messages, isLoop, task, uuid) {
     createLoopHealthyNote(streak),
   ];
 }
-//@ chunk-4m1yk02k.js:14919-15052 sole-consumer
+//@ chunk-zdhbhsv3.js:16064-16197 sole-consumer
 function getSpanDurationSeconds(messages, fireIdx) {
   let timestamp = messages[fireIdx]?.timestamp;
   let timestamp_2 = messages.at(-1)?.timestamp;
   if (!timestamp || !timestamp_2) return 0;
   return Math.round((Date.parse(timestamp_2) - Date.parse(timestamp)) / 1000);
 }
-//@ chunk-4m1yk02k.js:15052-15096 affinity
+//@ chunk-zdhbhsv3.js:16197-16241 affinity
 var scheduledTasksModule = require("../utils/loop/LOOP_FILE_DYNAMIC_SENTINEL.lazy.js");
 var SCHEDULED_TASKS_PLACEHOLDER = null;
-//@ chunk-4m1yk02k.js:15096-17139 fingerprint (2.1.88 match: useScheduledTasks, 0.512)
+//@ chunk-zdhbhsv3.js:16241-18277 fingerprint (2.1.88 match: useScheduledTasks, 0.512)
 function useScheduledTasks({ isLoading, assistantMode, transcript, storageV5, disabled = false }) {
   let commandQueueOrDefault = useCommandQueueOrDefault();
   let isLoadingRef = useEffectEvent(() => isLoading);
   let schedulerRef = useRef(null);
   let store = useSession();
   let setAppState = useAppStoreDirect();
-  let setAppState_2 = useSetAppState();
-  let taskRegistry = useSetVoiceState();
+  let taskRegistry = useTaskFramework();
   useEffect(() => {
     if (disabled || !isKairosCronEnabled() || getRemoteCaps() !== null) return;
     let buildScheduledPrompt = (prompt, wakeupSource, fireMeta) => ({

@@ -3,13 +3,25 @@
  *
  * 工作区/分支 diff 统计（shortstat/numstat/raw 解析、50 文件上限、未跟踪文件、会话前文件标记、合并/变基中跳过）与单文件 diff
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/gitDiff.ts
- * pieces: chunk-6vnxsn99.js (55), chunk-wyqg6m3h.js (1)
- * attribution: fingerprint 11, layout 38, placement 7
+ * pieces: chunk-01kgd7xg.js (57), chunk-c7hntn0y.js (1)
+ * attribution: placement 8, fingerprint 11, layout 39
  */
+import { isAbsolute, join, win32, dirname, relative, sep, basename } from "path";
 import { lstat, access, realpath, readFile } from "fs/promises";
-import { join, isAbsolute, win32, dirname, relative, sep, basename } from "path";
+import { SandboxManager } from "./sandbox/sandbox-adapter.js";
+import { logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
+import { effectiveEnvSnapshot } from "./settings/envSources.js";
+import {
+  getEnvVarCaseInsensitiveOnWindows,
+  buildGitConfigEnv,
+  getGitSafetyConfigPairs,
+  CLAUDE_CODE_FOUND_REPOSITORY_GIT,
+  GitStartFolderError,
+} from "./gitSafeExec.js";
+import { gitConfigEnvOf, gitReadInOwnWorkTree, GIT_FILES_REF_BACKEND_ENV } from "./git/gitLanes.js";
+import { writeFileAtomically } from "./plugins/safeCopy.js";
 import {
   PLAIN_PATCH_FLAGS,
   gitExe,
@@ -24,18 +36,15 @@ import { IGNORE_SUBMODULES_DIRTY_FLAG } from "./git/gitSafeEnv.js";
 import { getSessionStartTime, getOriginalCwd } from "../bootstrap/state.js";
 import { execFileNoThrow, execFileNoThrowWithCwd } from "./execFileNoThrow.js";
 import { readWorkTreeDiffViaIndex, ISOLATED_GIT_CONFIG_ENV } from "./git/gitIndexReader.js";
-import { hasRunnerDeclaredNestedRepoDiff, isBridgeEnvironment } from "./remoteEnvironment.js";
-import { gitReadInOwnWorkTree, GIT_FILES_REF_BACKEND_ENV } from "./git/gitLanes.js";
+import {
+  hasRunnerDeclaredNestedRepoDiff,
+  isBridgeEnvironment,
+  isSelfHostedRemoteEnvironment,
+} from "./remoteEnvironment.js";
 import { getFsImplementation } from "./fsOperations.js";
 import { resolveGitDirs, NOT_A_GIT_REPO_PATH } from "./git/gitDirResolution.js";
 import { getRemoteHostSessionCount } from "../commands/insights.js";
 import { subprocessEnv } from "./subprocessEnv.js";
-import {
-  buildGitConfigEnv,
-  getGitSafetyConfigPairs,
-  CLAUDE_CODE_FOUND_REPOSITORY_GIT,
-  GitStartFolderError,
-} from "./gitSafeExec.js";
 import { getGitRepoCache } from "./git/gitRepoCache.js";
 import { countCharInString } from "./stringUtils.js";
 import { hasUnsafePathGlyphsOrSurrogate } from "./unsafePathGlyphs.js";
@@ -44,7 +53,6 @@ import { INVISIBLE_CHAR_CLASS_SOURCE } from "./sanitization.js";
 import { findExistingRefs, SEQUENCER_STATE_FILES } from "./git/gitConfigFilters.js";
 import { logForDebugging } from "./debug.js";
 import { HostScoped } from "./hostScoped.js";
-import { logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { env } from "./env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
@@ -58,7 +66,79 @@ import { getCachedRepository } from "./detectRepository.js";
 import { isFileWithinSizeBound } from "./file.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-6vnxsn99.js:44679-44798 fingerprint (2.1.88 match: fetchGitDiffHunks, 0.599)
+//@ chunk-01kgd7xg.js:26049-27072 placement
+async function absoluteFilePath(absoluteFilePath, gitPath, content, runGit) {
+  if (SandboxManager.isSandboxingEnabled()) {
+    logFeatureSad("self_hosted_diff_ignore_check", "sandbox_on");
+    return null;
+  }
+  let envSnapshot = effectiveEnvSnapshot();
+  let envVarCaseInsensitiveOnWindows = getEnvVarCaseInsensitiveOnWindows(
+    envSnapshot,
+    "GIT_CONFIG_PARAMETERS",
+  );
+  let configEnv = {
+    ...gitConfigEnvOf(envSnapshot).env,
+    ...(envVarCaseInsensitiveOnWindows !== undefined && {
+      GIT_CONFIG_PARAMETERS: envVarCaseInsensitiveOnWindows,
+    }),
+  };
+  if (
+    [configEnv.GIT_CONFIG_GLOBAL, configEnv.GIT_CONFIG_SYSTEM].some(
+      (configPath) => configPath !== undefined && configPath !== "" && !isAbsolute(configPath),
+    )
+  ) {
+    logFeatureSad("self_hosted_diff_ignore_check", "relative_operator_config");
+    return null;
+  }
+  let overrideEnv = {
+    GIT_CONFIG_NOSYSTEM: getEnvVarCaseInsensitiveOnWindows(envSnapshot, "GIT_CONFIG_NOSYSTEM") ?? "0",
+  };
+  for (let config of Object.keys(configEnv).length > 0
+    ? [
+        overrideEnv,
+        {
+          ...configEnv,
+          ...overrideEnv,
+        },
+      ]
+    : [overrideEnv]) {
+    let { exitCode, stdout, stderr } = await runGit(
+      [
+        "--literal-pathspecs",
+        "--no-optional-locks",
+        "ls-files",
+        "--others",
+        "--exclude-standard",
+        "-z",
+        "--",
+        gitPath,
+      ],
+      {
+        config,
+      },
+    );
+    if (
+      exitCode !== 0 ||
+      (stdout !== "" && stdout !== `${gitPath}\x00`) ||
+      /^warning: (?:unable to access |ignoring excessively large pattern )/m.test(stderr)
+    ) {
+      logFeatureSad("self_hosted_diff_ignore_check", "no_answer");
+      return null;
+    }
+    if (stdout === "") {
+      logFeatureOk("self_hosted_diff_ignore_check");
+      return null;
+    }
+  }
+  let writtenPath = await writeFileAtomically(absoluteFilePath, content, {
+    oneName: true,
+  });
+  if (writtenPath === null) logFeatureSad("self_hosted_diff_ignore_check", "file_not_read");
+  else logFeatureOk("self_hosted_diff_ignore_check");
+  return writtenPath;
+}
+//@ chunk-01kgd7xg.js:45560-45678 fingerprint (2.1.88 match: fetchGitDiffHunks, 0.598)
 /**
  * git diff 的固定参数与限制常量：单次超时 5000ms、按文件统计上限 50 个、超过 500 个文件只给总计、单文件 1MB 等。
  */
@@ -69,7 +149,7 @@ var MAX_TOTAL_FILES_FOR_PER_FILE_STATS;
 var MAX_SINGLE_FILE_DIFF_BYTES;
 var MAX_HUNK_LINE_COUNT;
 var MAX_FILES_FOR_STATS;
-deferInit("chunk-6vnxsn99.js:44679", () => {
+deferInit("chunk-01kgd7xg.js:45560", () => {
   GIT_DIFF_BASE_ARGS = [
     "--no-optional-locks",
     "-c",
@@ -85,19 +165,25 @@ deferInit("chunk-6vnxsn99.js:44679", () => {
   MAX_HUNK_LINE_COUNT = 400;
   MAX_FILES_FOR_STATS = 500;
 });
-//@ chunk-6vnxsn99.js:44798-45605 layout
+//@ chunk-01kgd7xg.js:45678-46623 layout
 /**
  * 按模式（auto/branch）计算 diff：working-tree 对 HEAD，或分支相对默认分支 merge-base 的变更；无 HEAD 时走新仓库路径。
  */
-async function fetchGitDiff(cwd, abortSignal, ref = "auto", repoDir, diffOptions) {
-  if (repoDir === undefined && !isDiffCwdInRepoCached()) return null;
-  if (await isInTransientGitOperation(abortSignal, repoDir, diffOptions)) return null;
+async function fetchGitDiff(cwd, abortSignal, ref = "auto", repoDir, diffOptions, onFailure) {
+  if (repoDir === undefined && !isDiffCwdInRepoCached()) return failReason("no-repository", onFailure);
+  if (await isInTransientGitOperation(abortSignal, repoDir, diffOptions))
+    return failReason("repository-busy", onFailure);
   if (ref === "branch") {
     let branchDiff = await fetchBranchDiff(cwd, abortSignal, true, repoDir, undefined, diffOptions);
-    return branchDiff === "base-stats-failed" ? null : branchDiff;
+    return branchDiff === null || branchDiff === "base-stats-failed"
+      ? failReason("diff-failed", onFailure)
+      : branchDiff;
   }
   let diffStats = await fetchDiffStats("HEAD", abortSignal, repoDir, diffOptions);
-  if (diffStats === null) return fetchDiffWithoutHead(abortSignal, repoDir, diffOptions);
+  if (diffStats === null)
+    return (
+      (await fetchDiffWithoutHead(abortSignal, repoDir, diffOptions)) ?? failReason("diff-failed", onFailure)
+    );
   if (diffStats.stats.filesCount > MAX_FILES_FOR_STATS)
     return {
       ...diffStats,
@@ -127,7 +213,11 @@ async function fetchGitDiff(cwd, abortSignal, ref = "auto", repoDir, diffOptions
     false,
     diffOptions,
   );
-  if (ref === "branch-point") return fetchDiffAgainstBase(cwd, abortSignal, diffStats, repoDir, diffOptions);
+  if (ref === "branch-point")
+    return (
+      (await fetchDiffAgainstBase(cwd, abortSignal, diffStats, repoDir, diffOptions)) ??
+      failReason("diff-failed", onFailure)
+    );
   if (ref === "uncommitted" || diffStats.stats.filesCount > 0)
     return {
       ...diffStats,
@@ -144,15 +234,21 @@ async function fetchGitDiff(cwd, abortSignal, ref = "auto", repoDir, diffOptions
       kind: "working-tree",
     },
   };
-  if (branchDiff === "base-stats-failed") return nonEmptyDiffOrNull(workingTreeDiff, repoDir);
+  if (branchDiff === "base-stats-failed")
+    return nonEmptyDiffOrNull(workingTreeDiff, repoDir) ?? failReason("diff-failed", onFailure);
   if (branchDiff === null || branchDiff.stats.filesCount === 0) return workingTreeDiff;
   return branchDiff;
 }
-//@ chunk-6vnxsn99.js:45605-45669 layout
+//@ chunk-01kgd7xg.js:46623-46659 layout
+function failReason(reason, onFailure) {
+  onFailure?.(reason);
+  return null;
+}
+//@ chunk-01kgd7xg.js:46659-46723 layout
 function nonEmptyDiffOrNull(diffStats, repoDir) {
   return repoDir === undefined || diffStats.stats.filesCount > 0 ? diffStats : null;
 }
-//@ chunk-6vnxsn99.js:45669-46207 layout
+//@ chunk-01kgd7xg.js:46723-47261 layout
 async function fetchBranchDiff(cwd, abortSignal, allowHeadFallback, repoDir, untracked, diffOptions) {
   let diffBaseLogged = await resolveDiffBaseLogged(cwd, abortSignal, repoDir, undefined, diffOptions);
   if (diffBaseLogged.kind === "error")
@@ -192,7 +288,7 @@ async function fetchBranchDiff(cwd, abortSignal, allowHeadFallback, repoDir, unt
     source,
   };
 }
-//@ chunk-6vnxsn99.js:46207-46962 layout
+//@ chunk-01kgd7xg.js:47261-48016 layout
 async function fetchDiffAgainstBase(cwd, abortSignal, diffStats, repoDir, diffOptions) {
   let workingTreeDiff = {
     ...diffStats,
@@ -247,7 +343,7 @@ async function fetchDiffAgainstBase(cwd, abortSignal, diffStats, repoDir, diffOp
     },
   };
 }
-//@ chunk-6vnxsn99.js:46962-47191 layout
+//@ chunk-01kgd7xg.js:48016-48245 layout
 /**
  * 把 mtime/ctime 早于会话开始的文件标记为 preSession（会话前就有的改动）。
  */
@@ -264,7 +360,7 @@ async function markPreSessionFiles(diffStats, repoDir) {
     }),
   );
 }
-//@ chunk-6vnxsn99.js:47191-47425 layout
+//@ chunk-01kgd7xg.js:48245-48479 layout
 async function appendUntrackedToDiffStats(
   diffStats,
   abortSignal,
@@ -287,7 +383,7 @@ async function appendUntrackedToDiffStats(
     }
   return untracked;
 }
-//@ chunk-6vnxsn99.js:47425-47963 layout
+//@ chunk-01kgd7xg.js:48479-49016 layout
 async function fetchDiffWithoutHead(abortSignal, repoDir, diffOptions) {
   if (
     (
@@ -324,7 +420,7 @@ async function fetchDiffWithoutHead(abortSignal, repoDir, diffOptions) {
   await appendUntrackedToDiffStats(diff, abortSignal, repoDir, undefined, false, diffOptions);
   return diff;
 }
-//@ chunk-6vnxsn99.js:47963-48319 fingerprint (2.1.88 match: parseGitNumstat, 0.756)
+//@ chunk-01kgd7xg.js:49016-49372 fingerprint (2.1.88 match: parseGitNumstat, 0.756)
 /**
  * 解析 git diff --numstat 输出为 {path: {added, removed, isBinary}}。
  */
@@ -348,7 +444,7 @@ async function parseGitNumstat(diffStats, abortSignal, repoDir, diffOptions) {
     });
   }
 }
-//@ chunk-6vnxsn99.js:48319-48731 layout
+//@ chunk-01kgd7xg.js:49372-49782 layout
 async function fetchWorkingTreeNumstat(signal, repoDir, diffOptions) {
   if (isStorageDiffMode(diffOptions)) {
     let raw =
@@ -382,11 +478,11 @@ async function fetchWorkingTreeNumstat(signal, repoDir, diffOptions) {
     diffOptions === undefined ? "all" : "within-root",
   );
 }
-//@ chunk-6vnxsn99.js:48731-48771 layout
+//@ chunk-01kgd7xg.js:49782-49822 layout
 function isStorageDiffMode(diffOptions) {
   return diffOptions !== undefined && hasRunnerDeclaredNestedRepoDiff();
 }
-//@ chunk-6vnxsn99.js:48771-49351 layout
+//@ chunk-01kgd7xg.js:49822-50401 layout
 /**
  * 对指定基准运行 git diff --shortstat/--numstat，返回总计与逐文件统计（文件过多时只给总计）。
  */
@@ -443,7 +539,7 @@ async function fetchDiffStats(rev, abortSignal, repoDir, diffOptions, maxFiles =
     };
   return rawNumstat;
 }
-//@ chunk-6vnxsn99.js:49351-49547 placement (2.1.88 match: execFileNoThrow, 0.676)
+//@ chunk-01kgd7xg.js:50401-50596 placement (2.1.88 match: execFileNoThrow, 0.676)
 /**
  * 运行 git diff 系列命令（不抛异常），给定 cwd 时附带额外环境。切分上属 utils/gitDiff。
  */
@@ -463,14 +559,14 @@ function execGitDiffNoThrow(args, abortSignal, repoDir, diffOptions) {
     });
   return gitReadInOwnWorkTree(getFsImplementation().cwd(), fullArgs, {}, execOptions);
 }
-//@ chunk-6vnxsn99.js:49547-49651 placement
+//@ chunk-01kgd7xg.js:50596-50700 placement
 function standardRepoLayout(repoRoot) {
   let gitDirs = resolveGitDirs(repoRoot);
   return gitDirs !== null && gitDirs.workTree !== null && gitDirs.gitDir === join(gitDirs.workTree, ".git")
     ? gitDirs
     : null;
 }
-//@ chunk-6vnxsn99.js:49651-49841 placement
+//@ chunk-01kgd7xg.js:50700-50890 placement
 function getRepoGitEnv(repoRoot) {
   return {
     env: {
@@ -490,7 +586,7 @@ function getRepoGitEnv(repoRoot) {
     gitStartsIn: GitStartFolderError.filesystemRoot(),
   };
 }
-//@ chunk-6vnxsn99.js:49841-50003 placement
+//@ chunk-01kgd7xg.js:50890-51052 placement
 function getNonRepoGitEnv(workTree) {
   return {
     env: {
@@ -509,7 +605,7 @@ function getNonRepoGitEnv(workTree) {
     gitStartsIn: GitStartFolderError.filesystemRoot(),
   };
 }
-//@ chunk-6vnxsn99.js:50003-50106 placement
+//@ chunk-01kgd7xg.js:51052-51155 placement
 function resolveGitEnv(repoDir, userLocale, { userLocale: userLocale_2 } = {}) {
   if (repoDir === undefined)
     return {
@@ -519,12 +615,12 @@ function resolveGitEnv(repoDir, userLocale, { userLocale: userLocale_2 } = {}) {
     };
   return userLocale ?? getNonRepoGitEnv(repoDir);
 }
-//@ chunk-6vnxsn99.js:50106-50210 placement
+//@ chunk-01kgd7xg.js:51155-51259 placement
 function diffBaseRef(result) {
   if (result.noCommits) return "--cached";
   return result.source.kind === "branch" ? result.source.baseRef : "HEAD";
 }
-//@ chunk-6vnxsn99.js:50210-50701 fingerprint (2.1.88 match: fetchGitDiff, 0.559)
+//@ chunk-01kgd7xg.js:51259-51750 fingerprint (2.1.88 match: fetchGitDiff, 0.558)
 /**
  * /diff 等用的工作区 diff 统计入口：合并/变基中返回 null；先 --shortstat 判断规模（超过 500 文件只给总数），再 --numstat 取最多 50 个文件的增删行，并补充未跟踪文件。
  */
@@ -560,11 +656,11 @@ async function fetchGitDiff_2(abortSignal, rev = "HEAD") {
   }
   return quickStats;
 }
-//@ chunk-6vnxsn99.js:50701-50734 layout
+//@ chunk-01kgd7xg.js:51750-51783 layout
 function getDiffCwd() {
   return getFsImplementation().cwd();
 }
-//@ chunk-6vnxsn99.js:50734-50860 layout
+//@ chunk-01kgd7xg.js:51783-51909 layout
 function isDiffCwdInRepoCached() {
   let diffCwd = getDiffCwd();
   let diffCheckoutIsRepo = getGitRepoCache().diffCheckoutIsRepo;
@@ -574,12 +670,12 @@ function isDiffCwdInRepoCached() {
   diffCheckoutIsRepo.set(diffCwd, isRepo);
   return isRepo;
 }
-//@ chunk-6vnxsn99.js:50860-50903 layout
+//@ chunk-01kgd7xg.js:51909-51952 layout
 function getDiffRepoRoot() {
   let diffCwd = getDiffCwd();
   return findGitRoot(diffCwd) ?? diffCwd;
 }
-//@ chunk-6vnxsn99.js:50903-51159 layout
+//@ chunk-01kgd7xg.js:51952-52207 layout
 async function getRepoTopLevel(abortSignal, repoDir) {
   let { stdout, code } = await execFileNoThrow(
     gitExe(),
@@ -599,7 +695,7 @@ async function getRepoTopLevel(abortSignal, repoDir) {
   if (code !== 0 || stdout.trim() === "") return null;
   return stdout.trim();
 }
-//@ chunk-6vnxsn99.js:51159-52096 layout
+//@ chunk-01kgd7xg.js:52207-53144 layout
 /**
  * 解析 git diff --raw --numstat 组合输出：raw 行给状态与路径（含重命名），numstat 行给行数。
  */
@@ -675,7 +771,7 @@ function parseRawNumstat(stdout, maxFiles = MAX_DIFF_FILES, pathMode = "all") {
     perFileStats,
   };
 }
-//@ chunk-6vnxsn99.js:52096-52545 layout
+//@ chunk-01kgd7xg.js:53144-53593 layout
 function formatRenamePath(oldPath, newPath) {
   if (oldPath.startsWith('"') || newPath.startsWith('"')) return `${oldPath} => ${newPath}`;
   let commonPrefix = 0;
@@ -696,14 +792,14 @@ function formatRenamePath(oldPath, newPath) {
   let sliced_4 = newPath.slice(commonPrefix, Math.max(commonPrefix, newPath.length - commonSuffix));
   return `${sliced}{${sliced_3} => ${sliced_4}}${sliced_2}`;
 }
-//@ chunk-6vnxsn99.js:52545-52599 layout
+//@ chunk-01kgd7xg.js:53593-53647 layout
 var DIFF_STATUS_NAMES = {
   A: "added",
   D: "removed",
   R: "renamed",
   C: "copied",
 };
-//@ chunk-6vnxsn99.js:52599-52889 layout
+//@ chunk-01kgd7xg.js:53647-53937 layout
 function parseRawDiffLine(line, keepStatusOnly) {
   let [meta, oldPath, newPath] = line.split("\t");
   let statusLetter = meta.slice(meta.lastIndexOf(" ") + 1)[0];
@@ -733,7 +829,7 @@ function parseRawDiffLine(line, keepStatusOnly) {
         newPath: safeNewPath,
       };
 }
-//@ chunk-6vnxsn99.js:52889-53064 layout
+//@ chunk-01kgd7xg.js:53937-54112 layout
 function sanitizeDiffPath(rawPath) {
   let path = rawPath.startsWith('"') ? unquoteGitPathBytes(rawPath.slice(1, -1)) : rawPath;
   return !hasUnsafePathGlyphsOrSurrogate(path) &&
@@ -744,7 +840,7 @@ function sanitizeDiffPath(rawPath) {
     ? path
     : undefined;
 }
-//@ chunk-6vnxsn99.js:53064-53217 layout
+//@ chunk-01kgd7xg.js:54112-54265 layout
 function isSafeRelativeDiffPath(pathText) {
   let diffPathPair = parseDiffPathPair(pathText);
   return (
@@ -758,7 +854,7 @@ function isSafeRelativeDiffPath(pathText) {
     )
   );
 }
-//@ chunk-6vnxsn99.js:53217-54055 layout
+//@ chunk-01kgd7xg.js:54265-55103 layout
 function parseDiffPathPair(value) {
   if (value.startsWith('"')) {
     let closingQuote = findClosingQuote(value);
@@ -798,19 +894,19 @@ function parseDiffPathPair(value) {
   }
   return paths;
 }
-//@ chunk-6vnxsn99.js:54055-54153 layout
+//@ chunk-01kgd7xg.js:55103-55201 layout
 function findClosingQuote(text) {
   for (let j = 1; j < text.length; j++)
     if (text[j] === "\\") j++;
     else if (text[j] === '"') return j;
   return -1;
 }
-//@ chunk-6vnxsn99.js:54153-54194 layout
-var UNSAFE_PATH_CHAR_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-6vnxsn99.js:54153", () => {
+//@ chunk-01kgd7xg.js:55201-55242 layout
+var UNSAFE_PATH_CHAR_PATTERN; // deferred: uses INVISIBLE_CHAR_CLASSES (./sanitization.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-01kgd7xg.js:55201", () => {
   UNSAFE_PATH_CHAR_PATTERN = new RegExp(`[${INVISIBLE_CHAR_CLASS_SOURCE}\\uFFFD]`, "u");
 });
-//@ chunk-6vnxsn99.js:54194-54582 layout
+//@ chunk-01kgd7xg.js:55242-55630 layout
 /**
  * 还原 git 带引号路径中的反斜杠转义（八进制字节、\t 等）为 UTF-8 字符串。
  */
@@ -848,7 +944,7 @@ function unquoteGitPathBytes(text) {
   }
   return Buffer.from(bytes).toString("utf8");
 }
-//@ chunk-6vnxsn99.js:54582-55767 fingerprint (2.1.88 match: parseGitDiff, 0.959)
+//@ chunk-01kgd7xg.js:55630-56815 fingerprint (2.1.88 match: parseGitDiff, 0.959)
 /**
  * 把统一 diff 文本解析成按文件的 hunk 列表。
  */
@@ -927,7 +1023,7 @@ function parseGitDiff(stdout) {
     skippedLarge,
   };
 }
-//@ chunk-6vnxsn99.js:55767-56289 layout
+//@ chunk-01kgd7xg.js:56815-57337 layout
 /**
  * git 是否处于临时操作中（MERGE_HEAD、REBASE_HEAD、CHERRY_PICK_HEAD、REVERT_HEAD、rebase-merge 等存在），此时跳过 diff。
  */
@@ -968,7 +1064,7 @@ async function isInTransientGitOperation(abortSignal, repoDir, diffOptions) {
   );
   return existingRefs !== null && existingRefs.size > 0;
 }
-//@ chunk-6vnxsn99.js:56289-56469 layout
+//@ chunk-01kgd7xg.js:57337-57517 layout
 class DiffBaseLogState {
   #e = false;
   #t = false;
@@ -985,12 +1081,12 @@ class DiffBaseLogState {
     this.#t = true;
   }
 }
-//@ chunk-6vnxsn99.js:56469-56494 layout
+//@ chunk-01kgd7xg.js:57517-57542 layout
 var diffBaseLogRegistry; // deferred: uses DiffBaseLogState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-6vnxsn99.js:56469", () => {
+deferInit("chunk-01kgd7xg.js:57517", () => {
   diffBaseLogRegistry = new HostScoped(() => new DiffBaseLogState());
 });
-//@ chunk-6vnxsn99.js:56494-56778 layout
+//@ chunk-01kgd7xg.js:57542-57826 layout
 async function resolveDiffBaseLogged(cwd, abortSignal, abortSignal_2, repoDir, baseRef) {
   let logState = diffBaseLogRegistry.of(cwd);
   let diffBase = await resolveDiffBase(abortSignal, abortSignal_2, repoDir, baseRef);
@@ -1007,7 +1103,7 @@ async function resolveDiffBaseLogged(cwd, abortSignal, abortSignal_2, repoDir, b
   }
   return diffBase;
 }
-//@ chunk-6vnxsn99.js:56778-57702 layout
+//@ chunk-01kgd7xg.js:57826-58749 layout
 /**
  * 解析 diff 基准：当前分支与默认分支（或 CLAUDE_CODE_BASE_REF）的 merge-base；ref 名含危险字符时返回 none。
  */
@@ -1082,7 +1178,7 @@ async function resolveDiffBase(abortSignal, repoDir, baseRef, diffOptions) {
   }
   return classifyMergeBase(mergeBase, baseBranch, runOptions);
 }
-//@ chunk-6vnxsn99.js:57702-57974 layout
+//@ chunk-01kgd7xg.js:58749-59021 layout
 async function classifyMergeBase(mergeBase, baseBranch, runOptions) {
   let headResult = await execFileNoThrow(gitExe(), ["--no-optional-locks", "rev-parse", "HEAD"], runOptions);
   if (headResult.code !== 0)
@@ -1101,7 +1197,7 @@ async function classifyMergeBase(mergeBase, baseBranch, runOptions) {
     baseBranch,
   };
 }
-//@ chunk-6vnxsn99.js:57974-58839 fingerprint (2.1.88 match: fetchUntrackedFiles, 0.717)
+//@ chunk-01kgd7xg.js:59021-59885 fingerprint (2.1.88 match: fetchUntrackedFiles, 0.714)
 /**
  * 列出未跟踪文件并估算行数，补进 diff 统计。
  */
@@ -1165,7 +1261,7 @@ async function fetchUntrackedFiles(maxFiles, abortSignal, repoDir, includePreSes
   }
   return perFileStats;
 }
-//@ chunk-6vnxsn99.js:58839-59093 fingerprint (2.1.88 match: parseShortstat, 1)
+//@ chunk-01kgd7xg.js:59885-60139 fingerprint (2.1.88 match: parseShortstat, 1)
 /**
  * 解析 `N files changed, X insertions, Y deletions`。
  */
@@ -1180,29 +1276,29 @@ function parseShortstat(stdout) {
     linesRemoved: parseInt(match[3] ?? "0", 10),
   };
 }
-//@ chunk-6vnxsn99.js:59093-59105 layout
+//@ chunk-01kgd7xg.js:60139-60151 layout
 var GIT_EXPLICIT_DIR_TIMEOUT_MS = 3000;
-//@ chunk-6vnxsn99.js:59105-59233 layout
+//@ chunk-01kgd7xg.js:60151-60279 layout
 function shouldSendToolDiff({ gitDiffRead }) {
   if (!gitDiffRead) return false;
   if (env.CLAUDE_CODE_REMOTE) return true;
   return isBridgeEnvironment() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_bridge_child_tool_diff", true);
 }
-//@ chunk-6vnxsn99.js:59233-59246 layout
+//@ chunk-01kgd7xg.js:60279-60292 layout
 var MAX_TOOL_DIFF_PATCH_BYTES = 65536;
-//@ chunk-6vnxsn99.js:59246-59338 layout
+//@ chunk-01kgd7xg.js:60292-60384 layout
 function isPatchWithinSizeLimit(singleFileGitDiff) {
   return (
     Boolean(env.CLAUDE_CODE_REMOTE) ||
     Buffer.byteLength(singleFileGitDiff.patch, "utf8") <= MAX_TOOL_DIFF_PATCH_BYTES
   );
 }
-//@ chunk-6vnxsn99.js:59338-60133 fingerprint (2.1.88 match: fetchSingleFileGitDiff, 0.753)
+//@ chunk-01kgd7xg.js:60384-61259 fingerprint (2.1.88 match: fetchSingleFileGitDiff, 0.753)
 /**
  * 取单个文件相对基准的 diff（工具调用后展示/上报用）。
  */
-async function fetchSingleFileGitDiff(absoluteFilePath) {
-  let gitRoot = findGitRoot(dirname(absoluteFilePath));
+async function fetchSingleFileGitDiff(absoluteFilePath_2) {
+  let gitRoot = findGitRoot(dirname(absoluteFilePath_2));
   if (!gitRoot) return null;
   let realRoot = await realpath(gitRoot).catch(() => null);
   if (realRoot === null) return null;
@@ -1232,7 +1328,7 @@ async function fetchSingleFileGitDiff(absoluteFilePath) {
     gitDir: matchedGitDir,
     workTree: realRoot,
   };
-  let gitPath = relative(gitRoot, absoluteFilePath).split(sep).join("/");
+  let gitPath = relative(gitRoot, absoluteFilePath_2).split(sep).join("/");
   let repository = getCachedRepository();
   let { code: lsFilesCode } = await runGitWithExplicitDirs(dirs, [
     "--no-optional-locks",
@@ -1257,14 +1353,20 @@ async function fetchSingleFileGitDiff(absoluteFilePath) {
       repository,
     };
   }
-  let syntheticDiff = await generateSyntheticDiff(gitPath, absoluteFilePath);
+  let ignoredPath = isSelfHostedRemoteEnvironment()
+    ? await absoluteFilePath(absoluteFilePath_2, gitPath, MAX_SINGLE_FILE_DIFF_BYTES, (args, config) =>
+        runGitWithExplicitDirs(dirs, args, config),
+      )
+    : undefined;
+  if (ignoredPath === null) return null;
+  let syntheticDiff = await generateSyntheticDiff(gitPath, absoluteFilePath_2, ignoredPath);
   if (!syntheticDiff) return null;
   return {
     ...syntheticDiff,
     repository,
   };
 }
-//@ chunk-6vnxsn99.js:60133-60430 fingerprint (2.1.88 match: parseRawDiffToToolUseDiff, 1)
+//@ chunk-01kgd7xg.js:61259-61556 fingerprint (2.1.88 match: parseRawDiffToToolUseDiff, 1)
 function parseRawDiffToToolUseDiff(filename, rawDiff, status) {
   let lines = rawDiff.split(`
 `);
@@ -1290,7 +1392,7 @@ function parseRawDiffToToolUseDiff(filename, rawDiff, status) {
 `),
   };
 }
-//@ chunk-6vnxsn99.js:60430-60751 layout
+//@ chunk-01kgd7xg.js:61556-61877 layout
 async function findMergeBase(baseBranch, runGit) {
   let candidates = [];
   for (let refName of [`origin/${baseBranch}`, baseBranch]) {
@@ -1309,12 +1411,12 @@ async function findMergeBase(baseBranch, runGit) {
   ]);
   return code === 0 ? localMergeBase : originMergeBase;
 }
-//@ chunk-6vnxsn99.js:60751-60833 layout
+//@ chunk-01kgd7xg.js:61877-61960 layout
 async function realpathGitDir(startPath) {
   let gitDir = await getGitDir(startPath);
   return gitDir === null ? null : realpath(gitDir).catch(() => null);
 }
-//@ chunk-6vnxsn99.js:60833-60939 placement (2.1.88 match: detectWorktreeMainRepoPath, 0.742)
+//@ chunk-01kgd7xg.js:61960-62066 placement (2.1.88 match: detectWorktreeMainRepoPath, 0.742)
 /**
  * 若 cwd 是 <repo>.git/worktrees/<name> 形式则返回主仓库 .git 路径，否则原样返回（切分上属 utils/gitDiff 一带）。
  */
@@ -1327,17 +1429,17 @@ function detectWorktreeMainRepoPath(cwd) {
     ? gitDirName
     : cwd;
 }
-//@ chunk-6vnxsn99.js:60939-61102 layout
-function runGitWithExplicitDirs({ gitDir, workTree }, args, { userLocale } = {}) {
+//@ chunk-01kgd7xg.js:62066-62233 layout
+function runGitWithExplicitDirs({ gitDir, workTree }, args, { userLocale, config } = {}) {
   return execFileNoThrowWithCwd(gitExe(), [`--git-dir=${gitDir}`, `--work-tree=${workTree}`, ...args], {
     cwd: workTree,
     timeout: GIT_EXPLICIT_DIR_TIMEOUT_MS,
-    env: getRemoteHostSessionCount(undefined, {
+    env: getRemoteHostSessionCount(config, {
       userLocale,
     }),
   });
 }
-//@ chunk-6vnxsn99.js:61102-61233 layout
+//@ chunk-01kgd7xg.js:62233-62364 layout
 function getDiffBaseRef(checkoutPath) {
   let checkoutName = checkoutNameForPath(checkoutPath);
   let baseRef =
@@ -1346,7 +1448,7 @@ function getDiffBaseRef(checkoutPath) {
   if (!baseRef) return;
   return baseRef.startsWith("-") ? null : baseRef;
 }
-//@ chunk-6vnxsn99.js:61233-61524 fingerprint (2.1.88 match: getDiffRef, 0.888)
+//@ chunk-01kgd7xg.js:62364-62655 fingerprint (2.1.88 match: getDiffRef, 0.887)
 async function getDiffRef(dirs, checkoutPath) {
   let diffBaseRef = getDiffBaseRef(checkoutPath);
   function runGit(args) {
@@ -1361,11 +1463,12 @@ async function getDiffRef(dirs, checkoutPath) {
   if (code === 0 && stdout.trim()) return stdout.trim();
   return "HEAD";
 }
-//@ chunk-6vnxsn99.js:61524-61830 fingerprint (2.1.88 match: generateSyntheticDiff, 1)
-async function generateSyntheticDiff(gitPath, absoluteFilePath) {
+//@ chunk-01kgd7xg.js:62655-62978 fingerprint (2.1.88 match: generateSyntheticDiff, 1)
+async function generateSyntheticDiff(gitPath, absoluteFilePath, content) {
   try {
-    if (!(await isFileWithinSizeBound(absoluteFilePath, MAX_SINGLE_FILE_DIFF_BYTES))) return null;
-    let lines = (await readFile(absoluteFilePath, "utf-8")).split(`
+    if (content === undefined && !(await isFileWithinSizeBound(absoluteFilePath, MAX_SINGLE_FILE_DIFF_BYTES)))
+      return null;
+    let lines = (content ?? (await readFile(absoluteFilePath, "utf-8"))).split(`
 `);
     if (lines.length > 0 && lines.at(-1) === "") lines.pop();
     let lineCount = lines.length;
@@ -1385,28 +1488,28 @@ ${addedLines}`;
     return null;
   }
 }
-//@ chunk-wyqg6m3h.js:19052-19107 fingerprint (2.1.88 match: isInTransientGitState, 0.849)
+//@ chunk-c7hntn0y.js:19416-19471 fingerprint (2.1.88 match: isInTransientGitState, 0.849)
 var TRANSIENT_STATE_FILES = ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"];
 export {
-  getDiffRepoRoot,
-  getDiffCwd,
-  fetchGitDiff,
-  fetchGitDiff_2,
-  diffBaseRef,
-  isDiffCwdInRepoCached,
-  getRepoTopLevel,
-  standardRepoLayout,
+  parseShortstat,
+  parseRawNumstat,
   shouldSendToolDiff,
   fetchSingleFileGitDiff,
   isPatchWithinSizeLimit,
   unquoteGitPathBytes,
   parseGitDiff,
   MAX_HUNK_LINE_COUNT,
+  standardRepoLayout,
   GIT_DIFF_TIMEOUT_MS,
+  getDiffCwd,
   isSafeRelativeDiffPath,
   UNSAFE_PATH_CHAR_PATTERN,
+  fetchGitDiff,
+  getRepoTopLevel,
+  diffBaseRef,
   MAX_SINGLE_FILE_DIFF_BYTES,
-  parseShortstat,
-  parseRawNumstat,
   TRANSIENT_STATE_FILES,
+  getDiffRepoRoot,
+  fetchGitDiff_2,
+  isDiffCwdInRepoCached,
 };

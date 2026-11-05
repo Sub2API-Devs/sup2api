@@ -3,14 +3,15 @@
  *
  * 2.1.316 新增。Remote Control 分叉会话上传显示历史，失败时发通知并归档。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vx1xamz5.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-d5faqh9k.js (5)
  * attribution: placement 5
  */
 import { randomUUID } from "crypto";
 import { sliceTailKeepingGroups } from "./remoteBridgeArchive.js";
-import { isEligibleBridgeMessage } from "./bridgeMessaging.js";
+import { isBridgeableMessage } from "./bridgeMessaging.js";
+import { codeModeAccepted } from "../utils/codeMode/accepted.js";
 import { createRemoteBridgeRedactor } from "./remoteBridgeSettle.js";
 import { strayDropMode } from "./remoteBridgeCloseCodes.js";
 import { createMemoryServerVerifier } from "../services/mcp/memoryServerVerification.js";
@@ -26,15 +27,18 @@ import { archiveCodeSession } from "./codeSessionApi.js";
 import { getOauthConfig } from "../constants/oauth.js";
 import { isCcrV2SessionCrudEnabled } from "./bridgeGates.js";
 
-//@ chunk-vx1xamz5.js:716-726 placement
+//@ chunk-d5faqh9k.js:752-762 placement
 var MAX_FORK_HISTORY_MESSAGES = 200;
-//@ chunk-vx1xamz5.js:726-1320 placement
+//@ chunk-d5faqh9k.js:762-1419 placement
 /**
  * Remote Control 分叉会话上传显示历史，失败时发通知并归档。
  */
 async function uploadForkDisplayHistory(sessionId, messages, credentials, featureName, host, tools) {
-  let tail = sliceTailKeepingGroups(messages.filter(isEligibleBridgeMessage), MAX_FORK_HISTORY_MESSAGES);
-  let redactor = undefined;
+  let tail = sliceTailKeepingGroups(messages.filter(isBridgeableMessage), MAX_FORK_HISTORY_MESSAGES);
+  let redactor =
+    codeModeAccepted() && tools !== undefined
+      ? require("../remote/tools/forkHistoryTools.lazy.js").forkHistoryTools(tools)
+      : undefined;
   let remoteBridgeRedactor = createRemoteBridgeRedactor({
     mode: strayDropMode,
     placeAccountMemoryTool: createMemoryServerVerifier(() => tools),
@@ -42,7 +46,7 @@ async function uploadForkDisplayHistory(sessionId, messages, credentials, featur
   });
   remoteBridgeRedactor.note(messages);
   let events = remoteBridgeRedactor
-    .redact(toSDKMessages(remoteBridgeRedactor.withoutMemoryCallAttachments(tail), undefined))
+    .redact(toSDKMessages(remoteBridgeRedactor.withoutMemoryCallAttachments(tail), redactor))
     .flatMap((message) =>
       typeof message.uuid === "string"
         ? [
@@ -69,10 +73,10 @@ async function uploadForkDisplayHistory(sessionId, messages, credentials, featur
   if (result.droppedEvents > 0) logFeatureSad(featureName, "history_events_dropped");
   return null;
 }
-//@ chunk-vx1xamz5.js:1320-1408 placement
+//@ chunk-d5faqh9k.js:1419-1507 placement
 var FORK_FAILED_NOTICE_TEXT =
   "This forked session could not be started. Fork the conversation again to retry.";
-//@ chunk-vx1xamz5.js:1408-1785 placement
+//@ chunk-d5faqh9k.js:1507-1884 placement
 async function postForkFailureNotice(sessionId, credentials) {
   try {
     let result = await sendSessionHistoryEvents(
@@ -103,7 +107,7 @@ async function postForkFailureNotice(sessionId, credentials) {
     });
   }
 }
-//@ chunk-vx1xamz5.js:1785-2171 placement (2.1.88 match: fetchReferralRedemptions, 0.233)
+//@ chunk-d5faqh9k.js:1884-2270 placement (2.1.88 match: fetchReferralRedemptions, 0.233)
 /**
  * 远程控制分叉时尝试登记推荐兑换。
  */

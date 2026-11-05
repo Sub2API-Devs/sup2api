@@ -3,9 +3,9 @@
  *
  * forked 技能标记文件（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jb5bg5s7.js (21)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-h3fdrpaq.js (21)
  * attribution: placement 20, layout 1
  */
 import { dirname, basename, join, sep } from "path";
@@ -29,12 +29,12 @@ import { writeFileAtomic } from "../utils/atomicPublishWrite.js";
 import { isENOENT, getErrnoCode } from "../utils/errors.js";
 import { FORKED_SKILL_SCOPING_SCHEMA, FORKED_SKILL_MARKER_SCHEMA } from "../types/ids.js";
 
-//@ chunk-jb5bg5s7.js:781-794 placement
+//@ chunk-h3fdrpaq.js:781-794 placement
 /**
  * forked 技能侧车文件的大小上限。
  */
 var FORKED_SKILL_SIDECAR_MAX_BYTES = 524288;
-//@ chunk-jb5bg5s7.js:794-936 placement
+//@ chunk-h3fdrpaq.js:794-936 placement
 /**
  * 由 transcript 路径得到 forked 技能的 scoping 与 marker 文件路径。
  */
@@ -44,14 +44,14 @@ function forkedSkillSidecarPaths(transcriptPath) {
     provenanceMarker: transcriptPath.replace(/\.jsonl$/, ".forked-skill.marker.json"),
   };
 }
-//@ chunk-jb5bg5s7.js:936-968 placement
+//@ chunk-h3fdrpaq.js:936-968 placement
 /**
  * 由代理 id 得到 forked 技能的两个侧车文件路径。
  */
 function sidecarPathsForAgent(agentId) {
   return forkedSkillSidecarPaths(getAgentTranscriptPath(agentId));
 }
-//@ chunk-jb5bg5s7.js:968-1142 placement
+//@ chunk-h3fdrpaq.js:968-1142 placement
 /**
  * 定位 forked 技能侧车文件（两者都找到才返回）。
  */
@@ -66,7 +66,7 @@ function locateForkedSkillSidecars(agentId) {
       }
     : undefined;
 }
-//@ chunk-jb5bg5s7.js:1142-1212 placement
+//@ chunk-h3fdrpaq.js:1142-1212 placement
 /**
  * 序列化 forked 技能的来源标记 JSON。
  */
@@ -78,7 +78,7 @@ function forkedSkillMarkerJson(skillName) {
     }),
   });
 }
-//@ chunk-jb5bg5s7.js:1212-1761 placement
+//@ chunk-h3fdrpaq.js:1212-1761 placement
 function readForkedSkillMarker(agentId) {
   let projectDir = locateSessionProjectDir();
   if (typeof projectDir !== "string") {
@@ -115,7 +115,7 @@ function readForkedSkillMarker(agentId) {
       }
     : undefined;
 }
-//@ chunk-jb5bg5s7.js:1761-1872 placement
+//@ chunk-h3fdrpaq.js:1761-1872 placement
 /**
  * 侧车路径转为存储键。
  */
@@ -129,7 +129,7 @@ function toSidecarStorageKeys(paths) {
       }
     : undefined;
 }
-//@ chunk-jb5bg5s7.js:1872-2234 placement
+//@ chunk-h3fdrpaq.js:1872-2234 placement
 /**
  * 经存储后端读取侧车文本（absent/unusable/text）。
  */
@@ -164,7 +164,7 @@ async function readSidecarText(storage, key) {
         kind: "absent",
       };
 }
-//@ chunk-jb5bg5s7.js:2234-2382 placement
+//@ chunk-h3fdrpaq.js:2234-2382 placement
 /**
  * 侧车是否存在（读取失败视为存在）。
  */
@@ -183,7 +183,7 @@ async function sidecarPresent(storage, provenanceMarker) {
         ...unavailableFlag(metaResult.error),
       };
 }
-//@ chunk-jb5bg5s7.js:2382-2432 placement
+//@ chunk-h3fdrpaq.js:2382-2432 placement
 function transientReadFlag(flag) {
   return flag === true
     ? {
@@ -191,11 +191,11 @@ function transientReadFlag(flag) {
       }
     : {};
 }
-//@ chunk-jb5bg5s7.js:2432-2463 placement
+//@ chunk-h3fdrpaq.js:2432-2463 placement
 function unavailableFlag(error) {
   return transientReadFlag(isUnavailableError(error));
 }
-//@ chunk-jb5bg5s7.js:2463-2670 placement
+//@ chunk-h3fdrpaq.js:2463-2670 placement
 /**
  * 经存储后端写侧车文件，失败抛错。
  */
@@ -208,7 +208,7 @@ async function writeSidecar(storage, key, skillName) {
     throw Error("forked-skill provenance marker write failed");
   }
 }
-//@ chunk-jb5bg5s7.js:2670-2802 placement
+//@ chunk-h3fdrpaq.js:2670-2802 placement
 /**
  * 无盘会话禁止写侧车。
  */
@@ -218,7 +218,7 @@ function assertNotDiskless() {
       "forked-skill sidecar write refused: diskless session with no storage backend or key for the path",
     );
 }
-//@ chunk-jb5bg5s7.js:2802-2899 placement
+//@ chunk-h3fdrpaq.js:2802-2899 placement
 /**
  * 写入 forked 技能标记：有存储后端时写存储，否则原子写文件。
  */
@@ -228,7 +228,7 @@ async function writeForkedSkillMarker(provenanceMarker, skillName, storageV5) {
   assertNotDiskless();
   await writeFileAtomic(provenanceMarker, forkedSkillMarkerJson(skillName));
 }
-//@ chunk-jb5bg5s7.js:2899-3305 placement
+//@ chunk-h3fdrpaq.js:2899-3305 placement
 async function writeForkedSkillScoping(agentId, scoping, storage) {
   let paths = isStorageV5Enabled() && storage ? readForkedSkillMarker(agentId) : undefined;
   if (storage && paths) {
@@ -250,7 +250,7 @@ async function writeForkedSkillScoping(agentId, scoping, storage) {
   await writeForkedSkillMarker(sidecarPaths.provenanceMarker, scoping.skillName);
   await writeFileAtomic(sidecarPaths.scoping, jsonStringify(scoping));
 }
-//@ chunk-jb5bg5s7.js:3305-3437 placement
+//@ chunk-h3fdrpaq.js:3305-3437 placement
 /**
  * 读取某代理的 forked 技能 scoping（存储后端或本地文件）。
  */
@@ -264,7 +264,7 @@ async function readForkedSkillScoping(agentId, storageV5) {
       }
     : readScopingFromFiles(filePaths);
 }
-//@ chunk-jb5bg5s7.js:3437-3794 placement
+//@ chunk-h3fdrpaq.js:3437-3794 placement
 /**
  * 从本地文件读取 scoping；不存在时检查 marker 判断 absent-but-marked。
  */
@@ -294,7 +294,7 @@ async function readScopingFromFiles(paths, storageV5) {
   }
   return parseSkillScoping(text);
 }
-//@ chunk-jb5bg5s7.js:3794-3954 placement (2.1.88 match: _temp9, 0.56)
+//@ chunk-h3fdrpaq.js:3794-3954 placement (2.1.88 match: _temp9, 0.561)
 function parseSkillScoping(v_0) {
   let parsed;
   try {
@@ -314,7 +314,7 @@ function parseSkillScoping(v_0) {
         status: "malformed",
       };
 }
-//@ chunk-jb5bg5s7.js:3954-4248 layout
+//@ chunk-h3fdrpaq.js:3954-4248 layout
 /**
  * 经存储后端读取 scoping。
  */
@@ -341,7 +341,7 @@ async function readScopingViaStorage(storage, keys) {
     }
   }
 }
-//@ chunk-jb5bg5s7.js:4248-4403 placement
+//@ chunk-h3fdrpaq.js:4248-4403 placement
 /**
  * 只有 marker 文件时返回 absent-but-marked。
  */
@@ -362,7 +362,7 @@ async function checkMarkerFile(markerPath) {
         };
   }
 }
-//@ chunk-jb5bg5s7.js:4403-4772 placement
+//@ chunk-h3fdrpaq.js:4403-4772 placement
 /**
  * 从 provenance marker 读出 forked 技能名。
  */
@@ -394,10 +394,10 @@ async function readForkedSkillName(agentId, storageV5) {
   return validated.success ? validated.data.skillName : undefined;
 }
 export {
-  writeForkedSkillScoping,
   readForkedSkillScoping,
   readForkedSkillName,
   forkedSkillSidecarPaths,
   readScopingFromFiles,
   writeForkedSkillMarker,
+  writeForkedSkillScoping,
 };

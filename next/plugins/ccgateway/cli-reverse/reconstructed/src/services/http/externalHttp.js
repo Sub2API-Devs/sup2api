@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：外部 HTTP 客户端守卫（禁止指向 Anthropic 主机）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bwbq4xvm.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-7kayq7nc.js (4)
  * attribution: placement 4
  */
 import { isAxiosError, axios_default } from "../../../vendor/axios/dist/esm/axios.js";
@@ -13,9 +13,9 @@ import { isAnthropicHost } from "../../utils/anthropicHosts.js";
 import { noteExternalHttpUse } from "../../utils/testNetworkGuard.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-bwbq4xvm.js:162612-162897 placement
+//@ chunk-7kayq7nc.js:161861-162146 placement
 var AXIOS_NON_TRANSPORT_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-bwbq4xvm.js:162612", () => {
+deferInit("chunk-7kayq7nc.js:161861", () => {
   AXIOS_NON_TRANSPORT_CODES = new Set([
     "ERR_BAD_OPTION",
     "ERR_BAD_OPTION_VALUE",
@@ -31,13 +31,13 @@ deferInit("chunk-bwbq4xvm.js:162612", () => {
     "ERR_STREAM_WRITE_AFTER_END",
   ]);
 });
-//@ chunk-bwbq4xvm.js:162897-162967 placement
+//@ chunk-7kayq7nc.js:162146-162216 placement
 function isTransportError(error) {
   return (
     isAxiosError(error) && error.response === undefined && !AXIOS_NON_TRANSPORT_CODES.has(error.code ?? "")
   );
 }
-//@ chunk-bwbq4xvm.js:162967-163183 placement
+//@ chunk-7kayq7nc.js:162216-162432 placement
 /**
  * externalHttp 的守卫：目标或 baseURL 是 Anthropic 自营域名时抛错，要求改用 firstPartyApi。
  */
@@ -49,7 +49,7 @@ function assertNotAnthropicHost(baseUrl, options) {
           "src/services/http/firstParty \u2014 it enforces the 3P data-residency gate.",
       );
 }
-//@ chunk-bwbq4xvm.js:163183-163476 placement
+//@ chunk-7kayq7nc.js:162432-162725 placement
 /**
  * externalHttp：给第三方地址用的 axios 门面（get/head/post/put/delete…），每次调用先拒绝 Anthropic 自营域名。
  */
@@ -85,4 +85,4 @@ var externalHttp = {
     return axios_default.delete(url, config);
   },
 };
-export { isTransportError, externalHttp };
+export { externalHttp, isTransportError };

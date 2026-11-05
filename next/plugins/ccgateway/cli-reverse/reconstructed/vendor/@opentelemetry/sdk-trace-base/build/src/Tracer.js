@@ -1,8 +1,8 @@
 /**
  * @opentelemetry/sdk-trace-base/build/src/Tracer.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @opentelemetry/sdk-trace-base@2.2.0
- * pieces: chunk-9vvvg0d3.js (1)
+ * pieces: chunk-3wgj3rdg.js (1)
  * attribution: esm-fingerprint 1
  */
 import { mergeConfig } from "../esm/utility.js";
@@ -10,7 +10,7 @@ import { RandomIdGenerator } from "../esm/platform/node/RandomIdGenerator.js";
 import { import_api_2, import_core_4 } from "../esm/enums.js";
 import { SpanImpl } from "./Span.js";
 
-//@ chunk-9vvvg0d3.js:19579-21506 esm-fingerprint
+//@ chunk-3wgj3rdg.js:19951-21878 esm-fingerprint
 class Tracer {
   _sampler;
   _generalLimits;

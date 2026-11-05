@@ -1,8 +1,8 @@
 /**
  * @bufbuild/protobuf/dist/commonjs/equals.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @bufbuild/protobuf@2.12.1
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
@@ -12,7 +12,7 @@ import { require_descriptors } from "../cjs/descriptors.js";
 import { require_error_4 } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
 import { require_extensions } from "./extensions.js";
 
-//@ chunk-fq0cr76a.js:443249-445879 cjs-fingerprint
+//@ chunk-qg41pqt6.js:443819-446449 cjs-fingerprint
 var require_equals = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
@@ -47,19 +47,19 @@ var require_equals = __commonJS(function (cjsExports) {
       return false;
     return true;
   }
-  function fieldEquals(f, a, b_2, opts) {
-    if (!a.isSet(f) && !b_2.isSet(f)) return true;
-    if (!a.isSet(f) || !b_2.isSet(f)) return false;
+  function fieldEquals(f, a, b, opts) {
+    if (!a.isSet(f) && !b.isSet(f)) return true;
+    if (!a.isSet(f) || !b.isSet(f)) return false;
     switch (f.fieldKind) {
       case "scalar":
-        return scalar_js_1.scalarEquals(f.scalar, a.get(f), b_2.get(f));
+        return scalar_js_1.scalarEquals(f.scalar, a.get(f), b.get(f));
       case "enum":
-        return a.get(f) === b_2.get(f);
+        return a.get(f) === b.get(f);
       case "message":
-        return reflectEquals(a.get(f), b_2.get(f), opts);
+        return reflectEquals(a.get(f), b.get(f), opts);
       case "map": {
         let mapA = a.get(f);
-        let mapB = b_2.get(f);
+        let mapB = b.get(f);
         let keys = [];
         for (let k of mapA.keys()) {
           if (!mapB.has(k)) return false;
@@ -85,7 +85,7 @@ var require_equals = __commonJS(function (cjsExports) {
       }
       case "list": {
         let listA = a.get(f);
-        let listB = b_2.get(f);
+        let listB = b.get(f);
         if (listA.size != listB.size) return false;
         for (let i = 0; i < listA.size; i++) {
           let va = listA.get(i);
@@ -135,7 +135,7 @@ var require_equals = __commonJS(function (cjsExports) {
     }
     return true;
   }
-  function extensionsEquals(a, b_2, opts) {
+  function extensionsEquals(a, b, opts) {
     function getSetExtensions(msg, registry) {
       var _a;
       return ((_a = msg.getUnknown()) !== null && _a !== undefined ? _a : [])
@@ -144,7 +144,7 @@ var require_equals = __commonJS(function (cjsExports) {
         .filter((e, index, arr) => arr.indexOf(e) === index);
     }
     let extensionsA = getSetExtensions(a, opts.registry);
-    let extensionsB = getSetExtensions(b_2, opts.registry);
+    let extensionsB = getSetExtensions(b, opts.registry);
     if (extensionsA.length != extensionsB.length || extensionsA.some((e) => !extensionsB.includes(e)))
       return false;
     for (let extension of extensionsA) {
@@ -154,7 +154,7 @@ var require_equals = __commonJS(function (cjsExports) {
       );
       let [containerB] = extensions_js_1.createExtensionContainer(
         extension,
-        extensions_js_1.getExtension(b_2.message, extension),
+        extensions_js_1.getExtension(b.message, extension),
       );
       if (!fieldEquals(field, containerA, containerB, opts)) return false;
     }

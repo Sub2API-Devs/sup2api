@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：询问是否把本机 MCP 服务器共享给云会话（首次/重新同意），记录 tengu_device_mcp_host_consent。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8fq1kyxh.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-c8kx2jjn.js (1)
  * attribution: placement 1
  */
 import { hostname } from "os";
@@ -47,7 +47,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { isAbortError, errorMessage } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
 
-//@ chunk-8fq1kyxh.js:12735-15635 placement
+//@ chunk-c8kx2jjn.js:13939-16839 placement
 /**
  * 询问是否把本机 MCP 服务器共享给云会话（首次/重新同意），记录 tengu_device_mcp_host_consent。
  */

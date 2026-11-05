@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：刷新 MCP 服务器工具 schema。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kxyd0g16.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fmnbrxwy.js (1)
  * attribution: placement 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -26,19 +26,20 @@ import { getMcpClientsFromAccessor, swapMcpServerTools } from "../../bootstrap/s
 import { checkWebIsolation } from "../../services/tools/webToolIsolation.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../utils/errors.js";
 import { findServersByName } from "../../services/mcp/normalization.js";
+import { renderToolUseMessage_3 } from "../ListMcpResourcesTool/UI.js";
 import { getMcpPrefix, isToolFromMcpServer } from "../../services/mcp/mcpStringUtils.js";
 import { refreshMcpServerTools } from "../../services/mcp/client.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-kxyd0g16.js:114110-117273 placement
+//@ chunk-fmnbrxwy.js:128824-131997 placement
 /**
  * RefreshMcpServers 的输出 schema（每个服务器的刷新状态）。
  */
 var RefreshMcpServersSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var refreshMcpServersOutputSchema;
 var RefreshMcpServersTool;
-deferInit("chunk-kxyd0g16.js:114110", () => {
+deferInit("chunk-fmnbrxwy.js:128824", () => {
   RefreshMcpServersSchema = DoctorLazy(() =>
     objectSchema({
       server: stringSchema()
@@ -109,9 +110,11 @@ deferInit("chunk-kxyd0g16.js:114110", () => {
             );
           let { turnMcpClients, tools } = toolContext;
           let { server } = input;
-          let targetClients = server ? findServersByName(turnMcpClients, server) : turnMcpClients;
           let { filterToolsByDenyRules } = await import("../../utils/permissions/filterToolsByDenyRules.js");
           let permissions = toolContext.permissions();
+          let targetClients = server
+            ? findServersByName(turnMcpClients, server)
+            : renderToolUseMessage_3(turnMcpClients, REFRESH_MCP_TOOLS_TOOL_NAME, permissions);
           if (server && targetClients.length === 0)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
               `Server "${server}" not found. Available servers: ${turnMcpClients.map((turnMcpClient) => turnMcpClient.name).join(", ")}`,

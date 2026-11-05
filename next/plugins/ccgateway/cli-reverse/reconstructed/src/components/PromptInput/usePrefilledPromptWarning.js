@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：有预填或来自外部链接的提示词时显示一条固定警告通知，提醒按回车前先检查。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (3)
  * attribution: placement 3
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -14,9 +14,9 @@ import { useNotifications } from "../../context/notifications.js";
 import { useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { LONG_PREFILL_CHARS } from "../../utils/deepLink/banner.js";
 
-//@ chunk-18hwfzwa.js:772584-772615 placement
+//@ chunk-czq1j3j2.js:805009-805040 placement
 var LAUNCH_PROMPT_WARNING = "launch-prompt-warning";
-//@ chunk-18hwfzwa.js:772615-772919 placement (2.1.88 match: useBuddyNotification, 0.7)
+//@ chunk-czq1j3j2.js:805040-805344 placement (2.1.88 match: useBuddyNotification, 0.7)
 /**
  * 有预填或来自外部链接的提示词时，显示一条固定的警告通知，提醒按回车前先检查。
  */
@@ -52,7 +52,7 @@ function usePrefilledPromptWarning() {
   }
   useEffect(warnEffect, t1);
 }
-//@ chunk-18hwfzwa.js:772919-773225 placement
+//@ chunk-czq1j3j2.js:805344-805650 placement
 function formatPrefillWarningSegments(prefill) {
   let title = prefill.type === "deep-link" ? "Prompt from an external link" : "Pre-filled prompt";
   let isLongPrefill = prefill.prefillLength > LONG_PREFILL_CHARS;

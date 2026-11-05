@@ -3,9 +3,9 @@
  *
  * 钩子事件集合（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-nsfjm4vg.js (1), chunk-s61vbvea.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-23ta5myf.js (1), chunk-7jxyna5q.js (15)
  * attribution: placement 16
  */
 import { liveWeakRefs, getDiagLiveRefs } from "../diagLogs.js";
@@ -15,7 +15,7 @@ import { getRootRegisteredHooks, getRootMainThreadAgentHooks } from "../../boots
 import { canonicalToolName, aliasesFor, toolNameVariants } from "../permissions/permissionRuleParser.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-nsfjm4vg.js:815-1006 placement
+//@ chunk-23ta5myf.js:814-1005 placement
 /**
  * 收集存活会话的已注册钩子。
  */
@@ -30,9 +30,9 @@ function collectHookRegistries() {
   }
   return registries;
 }
-//@ chunk-s61vbvea.js:305918-306236 placement
+//@ chunk-7jxyna5q.js:229345-229663 placement
 var HOOK_EVENT_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-s61vbvea.js:305918", () => {
+deferInit("chunk-7jxyna5q.js:229345", () => {
   HOOK_EVENT_NAMES = new Set([
     "Notification",
     "SessionStart",
@@ -55,14 +55,14 @@ deferInit("chunk-s61vbvea.js:305918", () => {
     "FileSuggestion",
   ]);
 });
-//@ chunk-s61vbvea.js:306236-306285 placement
+//@ chunk-7jxyna5q.js:229663-229712 placement
 /**
  * 某钩子事件的设置对象（hooks 分节），非事件返回空对象。
  */
 function hooksSettingForEvent(hookEvent) {
   return HOOK_EVENT_NAMES.has(hookEvent) ? cgroupSpawnOptions("hooks") : {};
 }
-//@ chunk-s61vbvea.js:306285-306347 placement
+//@ chunk-7jxyna5q.js:229712-229774 placement
 /**
  * 依次产出所有钩子配置快照（进程配置、根注册、主线程 agent、各注册表）。
  */
@@ -72,14 +72,14 @@ function* collectAllHookSnapshots() {
   yield getRootMainThreadAgentHooks();
   yield* collectHookRegistries();
 }
-//@ chunk-s61vbvea.js:324324-325161 placement
+//@ chunk-7jxyna5q.js:248901-249738 placement
 /**
  * 带 matcher 的钩子事件列表，以及各事件的转发类别（runs_locally/later/low_value/container_internal）。
  */
 var TOOL_HOOK_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var MATCHER_TOOL_HOOK_EVENTS;
 var HOOK_EVENT_FORWARDING_KIND;
-deferInit("chunk-s61vbvea.js:324324", () => {
+deferInit("chunk-7jxyna5q.js:248901", () => {
   TOOL_HOOK_EVENTS = [
     "PreToolUse",
     "PostToolUse",
@@ -119,28 +119,28 @@ deferInit("chunk-s61vbvea.js:324324", () => {
     MessageDisplay: "container_internal",
   };
 });
-//@ chunk-s61vbvea.js:325161-325194 placement
+//@ chunk-7jxyna5q.js:249738-249771 placement
 /**
  * 判断事件是否为带 matcher 的事件。
  */
 function isMatcherEvent(event) {
   return MATCHER_TOOL_HOOK_EVENTS.has(event);
 }
-//@ chunk-s61vbvea.js:325194-325235 placement
+//@ chunk-7jxyna5q.js:249771-249812 placement
 /**
  * 取非 matcher 事件的转发类别。
  */
 function hookEventForwardingKind(event) {
   return isMatcherEvent(event) ? null : HOOK_EVENT_FORWARDING_KIND[event];
 }
-//@ chunk-s61vbvea.js:325235-325301 placement (2.1.88 match: CODE_EDITING_TOOLS, 0.839)
+//@ chunk-7jxyna5q.js:249812-249878 placement (2.1.88 match: CODE_EDITING_TOOLS, 0.838)
 var CODE_EDITING_TOOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var CODE_EDITING_TOOL_SET;
-deferInit("chunk-s61vbvea.js:325235", () => {
+deferInit("chunk-7jxyna5q.js:249812", () => {
   CODE_EDITING_TOOLS = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
   CODE_EDITING_TOOL_SET = new Set(CODE_EDITING_TOOLS);
 });
-//@ chunk-s61vbvea.js:325301-325404 placement
+//@ chunk-7jxyna5q.js:249878-249981 placement
 function isCodeEditingTool(toolName, toolName_2) {
   if (toolName === undefined) return false;
   let canonical = canonicalToolName(toolName);
@@ -149,7 +149,7 @@ function isCodeEditingTool(toolName, toolName_2) {
     aliasesFor(canonical, toolName_2).some((alias) => CODE_EDITING_TOOL_SET.has(canonicalToolName(alias)))
   );
 }
-//@ chunk-s61vbvea.js:325404-325608 placement
+//@ chunk-7jxyna5q.js:249981-250185 placement
 /**
  * 判断 PostToolUse 类钩子载荷是否涉及代码编辑工具。
  */
@@ -164,12 +164,12 @@ function isCodeEditingHookPayload(input, aliases) {
       return false;
   }
 }
-//@ chunk-s61vbvea.js:325608-325638 placement
+//@ chunk-7jxyna5q.js:250185-250215 placement
 /**
  * 合法 matcher 名正则。
  */
 var MATCHER_NAME_RE = /^[a-zA-Z0-9_|, -]+$/;
-//@ chunk-s61vbvea.js:325638-325807 placement
+//@ chunk-7jxyna5q.js:250215-250384 placement
 /**
  * 判断 matcher 是否只覆盖代码编辑工具。
  */
@@ -179,7 +179,7 @@ function isCodeEditingMatcherOnly(event, matcher, aliases) {
   let names = expandMatcherToolNames(matcher, aliases);
   return names.length > 0 && names.every((name) => isCodeEditingTool(name, aliases));
 }
-//@ chunk-s61vbvea.js:325807-325988 placement
+//@ chunk-7jxyna5q.js:250384-250565 placement
 /**
  * 判断某事件/matcher 是否可能触达代码编辑工具。
  */
@@ -189,7 +189,7 @@ function mayTouchCodeEditingTool(event, matcher) {
   if (matcher === undefined || isWildcardMatcher(matcher) || !MATCHER_NAME_RE.test(matcher)) return true;
   return expandMatcherToolNames(matcher).some((name) => isCodeEditingTool(name));
 }
-//@ chunk-s61vbvea.js:325988-326090 placement
+//@ chunk-7jxyna5q.js:250565-250667 placement
 function expandMatcherToolNames(matcher, aliases) {
   return matcher
     .split(/[|,]/)
@@ -197,14 +197,14 @@ function expandMatcherToolNames(matcher, aliases) {
     .filter(Boolean)
     .flatMap((part) => toolNameVariants(canonicalToolName(part), aliases));
 }
-//@ chunk-s61vbvea.js:326090-326134 placement
+//@ chunk-7jxyna5q.js:250667-250711 placement
 /**
  * 判断 matcher 是否为通配（空、*、.*）。
  */
 function isWildcardMatcher(matcher) {
   return !matcher || matcher === "*" || matcher === ".*";
 }
-//@ chunk-s61vbvea.js:326134-326399 placement
+//@ chunk-7jxyna5q.js:250711-250976 placement
 function isMatcherSubset(matcher, matcher_2) {
   if (matcher === undefined || isWildcardMatcher(matcher)) return true;
   if (isWildcardMatcher(matcher_2) || !MATCHER_NAME_RE.test(matcher_2) || !MATCHER_NAME_RE.test(matcher))
@@ -222,15 +222,15 @@ function isMatcherSubset(matcher, matcher_2) {
   return filtered.length > 0 && filtered.every((name) => wanted.has(name));
 }
 export {
-  HOOK_EVENT_NAMES,
-  hooksSettingForEvent,
   isMatcherEvent,
-  MATCHER_NAME_RE,
-  mayTouchCodeEditingTool,
-  collectAllHookSnapshots,
-  isCodeEditingHookPayload,
   hookEventForwardingKind,
   isCodeEditingMatcherOnly,
   isWildcardMatcher,
+  MATCHER_NAME_RE,
   isMatcherSubset,
+  mayTouchCodeEditingTool,
+  hooksSettingForEvent,
+  HOOK_EVENT_NAMES,
+  collectAllHookSnapshots,
+  isCodeEditingHookPayload,
 };

@@ -3,9 +3,9 @@
  *
  * 输入撤销缓冲：防抖记录输入快照，支持撤销（ctrl+_）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useInputBuffer.ts
- * pieces: chunk-18hwfzwa.js (2)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: placement 1, fingerprint 1
  */
 import {
@@ -17,12 +17,12 @@ import {
 import { useClock } from "../ink/components/ClockContext.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:864032-864036 placement
+//@ chunk-czq1j3j2.js:884668-884672 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:864032", () => {
+deferInit("chunk-czq1j3j2.js:884668", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:864036-865011 fingerprint (2.1.88 match: useInputBuffer, 0.92)
+//@ chunk-czq1j3j2.js:896920-897895 fingerprint (2.1.88 match: useInputBuffer, 0.92)
 /**
  * 撤销缓冲：pushToBuffer 防抖记录 {text, cursorOffset, pastedContents}，undo 回到上一个快照，clearBuffer 清空；最多 maxBufferSize 条。
  */

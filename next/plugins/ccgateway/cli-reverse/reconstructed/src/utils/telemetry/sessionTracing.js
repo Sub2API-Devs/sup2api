@@ -3,10 +3,10 @@
  *
  * 会话追踪 span：claude_code.interaction / llm_request / tool / tool.execution / hook / subagent.spawn，属性脱敏与 gen_ai.* 语义。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/telemetry/sessionTracing.ts
- * pieces: chunk-a9ek44g8.js (83), chunk-aepeg2w5.js (1)
- * attribution: placement 8, sole-consumer 12, fingerprint 15, layout 43, callgraph-fingerprint 1, file-local 4, callgraph-witnessed 1
+ * pieces: chunk-4qbrxszq.js (83), chunk-exfmq47h.js (1), chunk-n51jggtb.js (1)
+ * attribution: placement 8, sole-consumer 12, fingerprint 16, layout 44, file-local 4, callgraph-witnessed 1
  */
 import { isEnvTruthy, isEnvDefinedFalsy } from "../envUtils.js";
 import { hasManagedPlugins } from "../plugins/managedPlugins.js";
@@ -58,13 +58,15 @@ import { redactAccountMemoryText, accountMemoryRedactionKeys } from "./accountMe
 import { stripAnyVersatileSuffix } from "../model/modelIds.js";
 import { extractMcpToolDetails, isToolDetailsLoggingEnabled } from "../../services/analytics/metadata.js";
 import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { startStepClock } from "../../tools/REPLTool/stepBudget.js";
+import { replClockHeartbeatMs } from "../codeMode.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:857456-857516 fingerprint (2.1.88 match: isToolContentLoggingEnabled, 1)
+//@ chunk-exfmq47h.js:880112-880172 fingerprint (2.1.88 match: isToolContentLoggingEnabled, 1)
 function isToolContentLoggingEnabled() {
   return isEnvTruthy(process.env.OTEL_LOG_TOOL_CONTENT);
 }
-//@ chunk-a9ek44g8.js:1088-1148 placement
+//@ chunk-4qbrxszq.js:1154-1214 placement
 /**
  * 是否有托管插件（出错按 true 处理）。
  */
@@ -76,7 +78,7 @@ function hasManagedPluginsSafe() {
     return true;
   }
 }
-//@ chunk-a9ek44g8.js:1148-1262 placement
+//@ chunk-4qbrxszq.js:1214-1328 placement
 function hasCommandRunHooks() {
   try {
     return getPluginRegistry().loadedModules.some(
@@ -87,7 +89,7 @@ function hasCommandRunHooks() {
     return true;
   }
 }
-//@ chunk-a9ek44g8.js:1262-1503 placement
+//@ chunk-4qbrxszq.js:1328-1569 placement
 /**
  * 是否有影响提示提交的插件钩子（prompt.submit/session.append）。
  */
@@ -113,20 +115,20 @@ function hasPromptHooks(submitPath) {
     return true;
   }
 }
-//@ chunk-a9ek44g8.js:1503-1539 placement
+//@ chunk-4qbrxszq.js:1569-1605 placement
 function isPromptHookObserved(submitPath) {
   return hasPromptHooks(submitPath) || hasManagedPluginsSafe();
 }
-//@ chunk-a9ek44g8.js:1539-1570 placement
+//@ chunk-4qbrxszq.js:1605-1636 placement
 var otelApi_4; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var otelCore_3;
-deferInit("chunk-a9ek44g8.js:1539", () => {
+deferInit("chunk-4qbrxszq.js:1605", () => {
   otelApi_4 = __toESM(require_api(), 1);
   otelCore_3 = __toESM(require_core(), 1);
 });
-//@ chunk-a9ek44g8.js:1607-1620 placement
+//@ chunk-4qbrxszq.js:1673-1686 placement
 var MAX_OTEL_CONTENT_CHARS = 61440;
-//@ chunk-a9ek44g8.js:1620-1831 placement
+//@ chunk-4qbrxszq.js:1686-1897 placement
 function otelContentMaxLength() {
   return Math.min(
     env.CLAUDE_CODE_OTEL_CONTENT_MAX_LENGTH ?? MAX_OTEL_CONTENT_CHARS,
@@ -135,7 +137,7 @@ function otelContentMaxLength() {
     env.OTEL_SPAN_ATTRIBUTE_VALUE_LENGTH_LIMIT ?? 1 / 0,
   );
 }
-//@ chunk-a9ek44g8.js:1831-2113 placement
+//@ chunk-4qbrxszq.js:1897-2179 placement
 function truncateContentForTelemetry(text) {
   let maxLength = otelContentMaxLength();
   if (text.length <= maxLength)
@@ -156,61 +158,61 @@ function truncateContentForTelemetry(text) {
     truncated: true,
   };
 }
-//@ chunk-a9ek44g8.js:7527-7599 sole-consumer
+//@ chunk-4qbrxszq.js:7593-7665 sole-consumer
 function perfettoStartLlmRequest(request) {
   let recorder = perfettoRecorder();
   if (!recorder) return "";
   return recorder.startLLMRequestSpan(request);
 }
-//@ chunk-a9ek44g8.js:7599-7668 sole-consumer
+//@ chunk-4qbrxszq.js:7665-7734 sole-consumer
 function endPerfettoLlmSpan(perfettoSpanId, metadata) {
   let recorder = perfettoRecorder();
   if (!recorder || !perfettoSpanId) return;
   recorder.endLLMRequestSpan(perfettoSpanId, metadata);
 }
-//@ chunk-a9ek44g8.js:7668-7738 sole-consumer
+//@ chunk-4qbrxszq.js:7734-7804 sole-consumer
 function startPerfettoToolSpan(toolName, metadata) {
   let recorder = perfettoRecorder();
   if (!recorder) return "";
   return recorder.startToolSpan(toolName, metadata);
 }
-//@ chunk-a9ek44g8.js:7738-7801 sole-consumer
+//@ chunk-4qbrxszq.js:7804-7867 sole-consumer
 function endPerfettoToolSpan(perfettoSpanId, metadata) {
   let recorder = perfettoRecorder();
   if (!recorder || !perfettoSpanId) return;
   recorder.endToolSpan(perfettoSpanId, metadata);
 }
-//@ chunk-a9ek44g8.js:7801-7872 sole-consumer
+//@ chunk-4qbrxszq.js:7867-7938 sole-consumer
 function startPerfettoUserInputSpan(input) {
   let recorder = perfettoRecorder();
   if (!recorder) return "";
   return recorder.startUserInputSpan(input);
 }
-//@ chunk-a9ek44g8.js:7872-7940 sole-consumer
+//@ chunk-4qbrxszq.js:7938-8006 sole-consumer
 function endPerfettoUserInputSpan(perfettoSpanId, metadata) {
   let recorder = perfettoRecorder();
   if (!recorder || !perfettoSpanId) return;
   recorder.endUserInputSpan(perfettoSpanId, metadata);
 }
-//@ chunk-a9ek44g8.js:7940-8003 sole-consumer
+//@ chunk-4qbrxszq.js:8006-8069 sole-consumer
 function perfettoEmitInstant(name, categories, attributes) {
   let recorder = perfettoRecorder();
   if (!recorder) return;
   recorder.emitInstant(name, categories, attributes);
 }
-//@ chunk-a9ek44g8.js:8003-8076 sole-consumer
+//@ chunk-4qbrxszq.js:8069-8142 sole-consumer
 function startPerfettoInteractionSpan(prompt) {
   let recorder = perfettoRecorder();
   if (!recorder) return "";
   return recorder.startInteractionSpan(prompt);
 }
-//@ chunk-a9ek44g8.js:8076-8142 sole-consumer
+//@ chunk-4qbrxszq.js:8142-8208 sole-consumer
 function endPerfettoInteractionSpan(perfettoSpanId) {
   let recorder = perfettoRecorder();
   if (!recorder || !perfettoSpanId) return;
   recorder.endInteractionSpan(perfettoSpanId);
 }
-//@ chunk-a9ek44g8.js:8142-8418 sole-consumer
+//@ chunk-4qbrxszq.js:8208-8484 sole-consumer
 /**
  * 会话追踪的 OTel 上下文键：cc.interaction_state、cc.tool_state、cc.blocked_state、cc.execution_state、cc.subagent_state、cc.turn_trace_contexts。
  */
@@ -221,7 +223,7 @@ var BLOCKED_STATE_KEY;
 var EXECUTION_STATE_KEY;
 var SUBAGENT_STATE_KEY;
 var TURN_TRACE_CONTEXTS_KEY;
-deferInit("chunk-a9ek44g8.js:8142", () => {
+deferInit("chunk-4qbrxszq.js:8208", () => {
   spanAttributesByContext = new WeakMap();
   INTERACTION_STATE_KEY = otelApi_4.createContextKey("cc.interaction_state");
   TOOL_STATE_KEY = otelApi_4.createContextKey("cc.tool_state");
@@ -230,16 +232,16 @@ deferInit("chunk-a9ek44g8.js:8142", () => {
   SUBAGENT_STATE_KEY = otelApi_4.createContextKey("cc.subagent_state");
   TURN_TRACE_CONTEXTS_KEY = otelApi_4.createContextKey("cc.turn_trace_contexts");
 });
-//@ chunk-a9ek44g8.js:8418-8442 sole-consumer
+//@ chunk-4qbrxszq.js:8484-8508 sole-consumer
 class InteractionSequenceState {
   lastSequence = 0;
 }
-//@ chunk-a9ek44g8.js:8442-8467 sole-consumer
+//@ chunk-4qbrxszq.js:8508-8533 sole-consumer
 var interactionSequenceByHost; // deferred: uses InteractionSequenceState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-a9ek44g8.js:8442", () => {
+deferInit("chunk-4qbrxszq.js:8508", () => {
   interactionSequenceByHost = new HostScoped(() => new InteractionSequenceState());
 });
-//@ chunk-a9ek44g8.js:8467-8625 fingerprint (2.1.88 match: isEnhancedTelemetryEnabled, 0.624)
+//@ chunk-4qbrxszq.js:8533-8691 fingerprint (2.1.88 match: isEnhancedTelemetryEnabled, 0.624)
 /**
  * CLAUDE_CODE_ENHANCED_TELEMETRY_BETA（或 ENABLE_ENHANCED_TELEMETRY_BETA）为真时启用会话追踪 span。
  */
@@ -249,35 +251,35 @@ function isEnhancedTelemetryEnabled() {
   if (isEnvDefinedFalsy(env)) return false;
   return false;
 }
-//@ chunk-a9ek44g8.js:8625-8658 layout
+//@ chunk-4qbrxszq.js:8691-8724 layout
 /**
  * 会话追踪是否启用：增强遥测或 beta 追踪任一开启。
  */
 function isSessionTracingEnabled() {
   return isEnhancedTelemetryEnabled() || isBetaTracingEnabled();
 }
-//@ chunk-a9ek44g8.js:8658-8682 layout
+//@ chunk-4qbrxszq.js:8724-8748 layout
 function isPerfettoTracingEnabled() {
   return false;
 }
-//@ chunk-a9ek44g8.js:8682-8707 layout
+//@ chunk-4qbrxszq.js:8748-8773 layout
 /**
  * 已弃用的工具执行 span 结束空实现。
  */
 function noopEndToolExecutionSpan(span, error) {
   return;
 }
-//@ chunk-a9ek44g8.js:8707-8743 layout
+//@ chunk-4qbrxszq.js:8773-8809 layout
 function setSpanError(span, error) {
   span.setStatus(buildErrorSpanStatus(error));
 }
-//@ chunk-a9ek44g8.js:8743-8845 layout
+//@ chunk-4qbrxszq.js:8809-8911 layout
 function setToolUseIdAttributes(span, toolUseId) {
   if (!toolUseId) return;
   span.setAttribute("tool_use_id", toolUseId);
   span.setAttribute("gen_ai.tool.call.id", toolUseId);
 }
-//@ chunk-a9ek44g8.js:8845-9062 layout
+//@ chunk-4qbrxszq.js:8911-9128 layout
 /**
  * 把 API 提供方映射成 gen_ai.provider.name（aws.bedrock、gcp.vertex_ai、anthropic）。
  */
@@ -296,11 +298,11 @@ function getGenAiProviderName(apiProvider) {
       return "anthropic";
   }
 }
-//@ chunk-a9ek44g8.js:9062-9089 layout
+//@ chunk-4qbrxszq.js:9128-9155 layout
 function isTracingRedacted() {
   return isTracesRelayed();
 }
-//@ chunk-a9ek44g8.js:9089-9243 layout
+//@ chunk-4qbrxszq.js:9155-9309 layout
 function getRedactedSessionAttributes() {
   let attributes = {};
   let sessionId = getSessionId();
@@ -313,18 +315,18 @@ function getRedactedSessionAttributes() {
     attributes["ccr.session.id"] = CLAUDE_CODE_REMOTE_SESSION_ID;
   return attributes;
 }
-//@ chunk-a9ek44g8.js:9243-9316 layout
+//@ chunk-4qbrxszq.js:9309-9382 layout
 function getSpanBaseAttributes() {
   return {
     ...(isTracingRedacted() ? getRedactedSessionAttributes() : getTelemetryAttributes()),
     "gen_ai.provider.name": getGenAiProviderName(getAPIProvider()),
   };
 }
-//@ chunk-a9ek44g8.js:9316-9493 layout
+//@ chunk-4qbrxszq.js:9382-9559 layout
 var SPAN_SAFE_ATTRIBUTE_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var SAFE_ATTRIBUTE_VALUE_RE;
 var ATTRIBUTE_VALUE_PATTERNS;
-deferInit("chunk-a9ek44g8.js:9316", () => {
+deferInit("chunk-4qbrxszq.js:9382", () => {
   SPAN_SAFE_ATTRIBUTE_NAMES = new Set(["rpc.service", "mcp_tool"]);
   SAFE_ATTRIBUTE_VALUE_RE = /^[A-Za-z0-9_.-]{1,64}$/;
   ATTRIBUTE_VALUE_PATTERNS = {
@@ -333,7 +335,7 @@ deferInit("chunk-a9ek44g8.js:9316", () => {
     playwright: /^browser_[a-z_]{1,40}$/,
   };
 });
-//@ chunk-a9ek44g8.js:9493-9718 layout
+//@ chunk-4qbrxszq.js:9559-9784 layout
 /**
  * span 中的工具名脱敏：只放行白名单内的 MCP 工具名，其余 MCP 记 mcp_other，带 __ 的记 other。
  */
@@ -352,14 +354,14 @@ function sanitizeToolNameForSpan(toolName) {
   }
   return !toolName.includes("__") && SAFE_ATTRIBUTE_VALUE_RE.test(toolName) ? toolName : "other";
 }
-//@ chunk-a9ek44g8.js:9718-9805 layout
+//@ chunk-4qbrxszq.js:9784-9871 layout
 function safeQuerySourceName(querySource) {
   let replaced = normalizeAgentQuerySource(querySource)?.replaceAll(":", ".");
   return replaced !== undefined && SAFE_ATTRIBUTE_VALUE_RE.test(replaced) ? replaced : undefined;
 }
-//@ chunk-a9ek44g8.js:9805-9843 layout
+//@ chunk-4qbrxszq.js:9871-9909 layout
 var ERROR_CLASS_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,47}$/;
-//@ chunk-a9ek44g8.js:9843-9982 layout
+//@ chunk-4qbrxszq.js:9909-10048 layout
 function buildSpanErrorAttributes(error, errorClass) {
   let replaced = errorClass?.replace(/[^A-Za-z0-9_]/g, "_");
   return {
@@ -373,11 +375,11 @@ function buildSpanErrorAttributes(error, errorClass) {
       }),
   };
 }
-//@ chunk-a9ek44g8.js:9982-10063 layout
+//@ chunk-4qbrxszq.js:10048-10129 layout
 function describeErrorWithoutText(error) {
   return `${error.name} (${error.message.length} chars; text not recorded)`;
 }
-//@ chunk-a9ek44g8.js:10063-10138 layout
+//@ chunk-4qbrxszq.js:10129-10204 layout
 function buildErrorSpanStatus(error) {
   return {
     code: otelApi_4.SpanStatusCode.ERROR,
@@ -387,21 +389,21 @@ function buildErrorSpanStatus(error) {
       }),
   };
 }
-//@ chunk-a9ek44g8.js:10138-10221 fingerprint (2.1.88 match: getTracer, 0.932)
+//@ chunk-4qbrxszq.js:10204-10287 fingerprint (2.1.88 match: getTracer, 0.932)
 function getTracer() {
   return otelApi_4.trace.getTracer("com.anthropic.claude_code.tracing", "1.0.0");
 }
-//@ chunk-a9ek44g8.js:10221-10247 layout
+//@ chunk-4qbrxszq.js:10287-10313 layout
 function getActiveContext() {
   return activeOtelContext();
 }
-//@ chunk-a9ek44g8.js:10247-10311 layout
+//@ chunk-4qbrxszq.js:10313-10377 layout
 function getLiveSpanState(stateKey) {
   let state = getActiveContext().getValue(stateKey);
   return state && !state.ended ? state : undefined;
 }
-//@ chunk-a9ek44g8.js:10311-10435 callgraph-fingerprint (2.1.88 match: ensureCleanupInterval, 0.174)
-function ensureCleanupInterval(stateKey, spanState) {
+//@ chunk-4qbrxszq.js:10377-10501 file-local
+function getCurrentSpan(stateKey, spanState) {
   spanAttributesByContext.set(spanState.span, spanState);
   let nextContext = otelApi_4.trace
     .setSpan(spanState.priorContext, spanState.span)
@@ -409,7 +411,7 @@ function ensureCleanupInterval(stateKey, spanState) {
   otelContextManager.enterWith(nextContext);
   if (stateKey === INTERACTION_STATE_KEY) setHostOtelContext(nextContext);
 }
-//@ chunk-a9ek44g8.js:10435-10560 layout
+//@ chunk-4qbrxszq.js:10501-10626 layout
 function endSpanState(stateKey, spanState) {
   spanState.ended = true;
   if (stateKey === INTERACTION_STATE_KEY && getHostOtelContext()?.getValue(stateKey) === spanState)
@@ -417,7 +419,7 @@ function endSpanState(stateKey, spanState) {
   if (getActiveContext().getValue(stateKey) === spanState)
     otelContextManager.enterWith(spanState.priorContext);
 }
-//@ chunk-a9ek44g8.js:10560-10614 fingerprint (2.1.88 match: createSpanAttributes, 1)
+//@ chunk-4qbrxszq.js:10626-10680 fingerprint (2.1.88 match: createSpanAttributes, 1)
 function createSpanAttributes(spanType, customAttributes = {}) {
   return {
     ...getSpanBaseAttributes(),
@@ -425,7 +427,7 @@ function createSpanAttributes(spanType, customAttributes = {}) {
     ...customAttributes,
   };
 }
-//@ chunk-a9ek44g8.js:10614-10767 layout
+//@ chunk-4qbrxszq.js:10680-10833 layout
 function queuedSendLinks(traceContexts) {
   if (!traceContexts) return [];
   return traceContexts.linked.flatMap(({ traceparent }) => {
@@ -442,18 +444,18 @@ function queuedSendLinks(traceContexts) {
       : [];
   });
 }
-//@ chunk-a9ek44g8.js:10767-10805 layout
+//@ chunk-4qbrxszq.js:10833-10871 layout
 function getTurnTraceContexts() {
   return getActiveContext().getValue(TURN_TRACE_CONTEXTS_KEY);
 }
-//@ chunk-a9ek44g8.js:10805-10842 layout
+//@ chunk-4qbrxszq.js:10871-10908 layout
 /**
  * 取当前回合的追踪上下文数组。
  */
 function turnTraceContextsOf() {
   return getTurnTraceContexts()?.contexts;
 }
-//@ chunk-a9ek44g8.js:10842-10978 layout
+//@ chunk-4qbrxszq.js:10908-11044 layout
 function getUpstreamTraceparent() {
   let turnTraceContexts = getTurnTraceContexts();
   return isCcsTenant() &&
@@ -463,7 +465,7 @@ function getUpstreamTraceparent() {
     ? (turnTraceContexts?.contexts?.parent?.traceparent ?? turnTraceContexts?.fallbackTraceparent)
     : undefined;
 }
-//@ chunk-a9ek44g8.js:10978-11027 layout
+//@ chunk-4qbrxszq.js:11044-11093 layout
 /**
  * 清空当前回合追踪上下文。
  */
@@ -471,7 +473,7 @@ function clearTurnTraceContexts() {
   let turnTraceContexts = getTurnTraceContexts();
   if (turnTraceContexts) turnTraceContexts.contexts = undefined;
 }
-//@ chunk-a9ek44g8.js:11027-11259 layout
+//@ chunk-4qbrxszq.js:11093-11325 layout
 function setAgentIdAttributes(span, agentContext) {
   if (isMainAgent(agentContext)) return;
   let agentId = agentContext.agentId !== undefined ? relayedId(agentContext.agentId) : undefined;
@@ -480,7 +482,7 @@ function setAgentIdAttributes(span, agentContext) {
     agentContext.parentAgentId !== undefined ? relayedId(agentContext.parentAgentId) : undefined;
   if (parentAgentId !== undefined) span.setAttribute("parent_agent_id", parentAgentId);
 }
-//@ chunk-a9ek44g8.js:11259-11337 layout
+//@ chunk-4qbrxszq.js:11325-11403 layout
 function getMainConversationIdAttributes() {
   let sessionId = getSessionId();
   return !isTracingRedacted() || SAFE_ATTRIBUTE_VALUE_RE.test(sessionId)
@@ -489,7 +491,7 @@ function getMainConversationIdAttributes() {
       }
     : {};
 }
-//@ chunk-a9ek44g8.js:11337-11535 layout
+//@ chunk-4qbrxszq.js:11403-11601 layout
 function getConversationIdAttributes(agentContext) {
   switch (agentContext.agentType) {
     case "main":
@@ -507,7 +509,7 @@ function getConversationIdAttributes(agentContext) {
       return {};
   }
 }
-//@ chunk-a9ek44g8.js:11535-12593 fingerprint (2.1.88 match: startInteractionSpan, 0.527)
+//@ chunk-4qbrxszq.js:11601-12659 fingerprint (2.1.88 match: startInteractionSpan, 0.527)
 /**
  * 开始一次用户交互的 claude_code.interaction span。
  */
@@ -517,7 +519,7 @@ function startInteractionSpan(prompt, traceContexts) {
   if (!isSessionTracingEnabled()) {
     if (perfettoSpanId) {
       let dummySpan = otelApi_4.trace.getActiveSpan() || getTracer().startSpan("dummy");
-      ensureCleanupInterval(INTERACTION_STATE_KEY, {
+      getCurrentSpan(INTERACTION_STATE_KEY, {
         span: dummySpan,
         startTime: performance.now(),
         attributes: {
@@ -572,7 +574,7 @@ function startInteractionSpan(prompt, traceContexts) {
     parentContext,
   );
   if (!isTracingRedacted() && !tracer_2) addBetaInteractionAttributes(span, prompt);
-  ensureCleanupInterval(INTERACTION_STATE_KEY, {
+  getCurrentSpan(INTERACTION_STATE_KEY, {
     span,
     startTime: performance.now(),
     attributes,
@@ -583,21 +585,21 @@ function startInteractionSpan(prompt, traceContexts) {
   });
   return span;
 }
-//@ chunk-a9ek44g8.js:12593-12691 layout (2.1.88 match: redactIfDisabled, 0.778)
+//@ chunk-4qbrxszq.js:12659-12757 layout (2.1.88 match: redactIfDisabled, 0.778)
 function redactIfDisabled(content) {
   return env.OTEL_LOG_USER_PROMPTS && !isTracingRedacted()
     ? redactAccountMemoryText(() => accountMemoryRedactionKeys(getRootSession().host), undefined, content)
     : "<REDACTED>";
 }
-//@ chunk-a9ek44g8.js:12691-12732 layout
+//@ chunk-4qbrxszq.js:12757-12798 layout
 /**
  * 取当前交互 span 的提示句柄。
  */
 function currentPromptHandle() {
   return getLiveSpanState(INTERACTION_STATE_KEY)?.promptHandle;
 }
-//@ chunk-a9ek44g8.js:12732-12992 file-local
-function getCurrentSpan(prompt, previousContent, content) {
+//@ chunk-4qbrxszq.js:12798-13058 layout
+function notePromptContent(prompt, previousContent, content) {
   let liveSpanState = getLiveSpanState(INTERACTION_STATE_KEY);
   if (
     prompt === undefined ||
@@ -612,7 +614,7 @@ function getCurrentSpan(prompt, previousContent, content) {
   });
   if (!isTracingRedacted()) addBetaInteractionAttributes(liveSpanState.span, content ?? "<REDACTED>");
 }
-//@ chunk-a9ek44g8.js:12992-13169 layout
+//@ chunk-4qbrxszq.js:13058-13235 layout
 function withInteractionSpan(prompt, contextsOrHandler, handler) {
   let [contexts, handler_2] =
     typeof contextsOrHandler === "function" ? [undefined, contextsOrHandler] : [contextsOrHandler, handler];
@@ -627,7 +629,7 @@ function withInteractionSpan(prompt, contextsOrHandler, handler) {
     }
   });
 }
-//@ chunk-a9ek44g8.js:13169-13267 layout
+//@ chunk-4qbrxszq.js:13235-13333 layout
 function withTurnTraceContexts(contexts, handler, fallbackTraceparent) {
   let traceState = {
     contexts,
@@ -635,7 +637,7 @@ function withTurnTraceContexts(contexts, handler, fallbackTraceparent) {
   };
   return otelContextManager.with(getActiveContext().setValue(TURN_TRACE_CONTEXTS_KEY, traceState), handler);
 }
-//@ chunk-a9ek44g8.js:13267-13503 fingerprint (2.1.88 match: endInteractionSpan, 0.841)
+//@ chunk-4qbrxszq.js:13333-13569 fingerprint (2.1.88 match: endInteractionSpan, 0.842)
 function endInteractionSpan() {
   let spanContext = getLiveSpanState(INTERACTION_STATE_KEY);
   if (!spanContext) return;
@@ -651,7 +653,7 @@ function endInteractionSpan() {
   spanContext.span.end();
   endSpanState(INTERACTION_STATE_KEY, spanContext);
 }
-//@ chunk-a9ek44g8.js:13503-14459 fingerprint (2.1.88 match: startLLMRequestSpan, 0.751)
+//@ chunk-4qbrxszq.js:13569-14525 fingerprint (2.1.88 match: startLLMRequestSpan, 0.751)
 function startLLMRequestSpan(
   model,
   agentContext,
@@ -726,7 +728,7 @@ function startLLMRequestSpan(
   });
   return span;
 }
-//@ chunk-a9ek44g8.js:14459-14643 layout
+//@ chunk-4qbrxszq.js:14525-14709 layout
 function recordLlmRequestAttempt(span, { attempt, clientRequestId }) {
   let eventAttributes = {
     attempt,
@@ -735,12 +737,12 @@ function recordLlmRequestAttempt(span, { attempt, clientRequestId }) {
   if (span && isSessionTracingEnabled()) span.addEvent("gen_ai.request.attempt", eventAttributes);
   perfettoEmitInstant("LLM Attempt", "api,attempt", eventAttributes);
 }
-//@ chunk-a9ek44g8.js:14643-14682 layout
+//@ chunk-4qbrxszq.js:14709-14748 layout
 var traceContextPropagator; // deferred: uses otelApi_4 of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-a9ek44g8.js:14643", () => {
+deferInit("chunk-4qbrxszq.js:14709", () => {
   traceContextPropagator = new otelCore_3.W3CTraceContextPropagator();
 });
-//@ chunk-a9ek44g8.js:14682-14801 layout
+//@ chunk-4qbrxszq.js:14748-14867 layout
 /**
  * 解析 W3C traceparent 字符串为 SpanContext。
  */
@@ -754,7 +756,7 @@ function parseTraceparent(traceparent) {
   );
   return otelApi_4.trace.getSpanContext(traceContext);
 }
-//@ chunk-a9ek44g8.js:14801-16622 fingerprint (2.1.88 match: endLLMRequestSpan, 0.561)
+//@ chunk-4qbrxszq.js:14867-16688 fingerprint (2.1.88 match: endLLMRequestSpan, 0.561)
 function endLLMRequestSpan(span, metadata) {
   if (!span) return;
   let spanState = spanAttributesByContext.get(span);
@@ -828,14 +830,14 @@ function endLLMRequestSpan(span, metadata) {
   }
   spanState.span.end();
 }
-//@ chunk-a9ek44g8.js:16622-17392 fingerprint (2.1.88 match: startToolSpan, 0.573)
+//@ chunk-4qbrxszq.js:16688-17458 fingerprint (2.1.88 match: startToolSpan, 0.573)
 function startToolSpan(toolName, agentContext, extraAttributes, toolInput, toolUseId, notRecorded = false) {
   let perfettoSpanId = isPerfettoRecording() ? startPerfettoToolSpan(toolName, extraAttributes) : undefined;
   let activeContext = getActiveContext();
   if (!isSessionTracingEnabled()) {
     if (perfettoSpanId) {
       let dummySpan = otelApi_4.trace.getActiveSpan() || getTracer().startSpan("dummy");
-      ensureCleanupInterval(TOOL_STATE_KEY, {
+      getCurrentSpan(TOOL_STATE_KEY, {
         span: dummySpan,
         startTime: performance.now(),
         attributes: {
@@ -877,7 +879,7 @@ function startToolSpan(toolName, agentContext, extraAttributes, toolInput, toolU
   }
   setToolUseIdAttributes(span, toolUseId);
   if (toolInput && !isTracingRedacted()) addBetaToolInputAttributes(span, toolName, toolInput, notRecorded);
-  ensureCleanupInterval(TOOL_STATE_KEY, {
+  getCurrentSpan(TOOL_STATE_KEY, {
     span,
     startTime: performance.now(),
     attributes,
@@ -886,14 +888,14 @@ function startToolSpan(toolName, agentContext, extraAttributes, toolInput, toolU
   });
   return span;
 }
-//@ chunk-a9ek44g8.js:17392-17917 fingerprint (2.1.88 match: startToolBlockedOnUserSpan, 0.886)
+//@ chunk-4qbrxszq.js:17458-17983 fingerprint (2.1.88 match: startToolBlockedOnUserSpan, 0.887)
 function startToolBlockedOnUserSpan(agentContext) {
   let perfettoSpanId = isPerfettoRecording() ? startPerfettoUserInputSpan("tool_permission") : undefined;
   let activeContext = getActiveContext();
   if (!isSessionTracingEnabled()) {
     if (perfettoSpanId) {
       let dummySpan = otelApi_4.trace.getActiveSpan() || getTracer().startSpan("dummy");
-      ensureCleanupInterval(BLOCKED_STATE_KEY, {
+      getCurrentSpan(BLOCKED_STATE_KEY, {
         span: dummySpan,
         startTime: performance.now(),
         attributes: {
@@ -915,7 +917,7 @@ function startToolBlockedOnUserSpan(agentContext) {
     },
     activeContext,
   );
-  ensureCleanupInterval(BLOCKED_STATE_KEY, {
+  getCurrentSpan(BLOCKED_STATE_KEY, {
     span,
     startTime: performance.now(),
     attributes,
@@ -924,7 +926,7 @@ function startToolBlockedOnUserSpan(agentContext) {
   });
   return span;
 }
-//@ chunk-a9ek44g8.js:17917-18198 file-local
+//@ chunk-4qbrxszq.js:17983-18264 file-local
 function endToolBlockedOnUserSpan(decision, source) {
   let blockedSpanContext = getLiveSpanState(BLOCKED_STATE_KEY);
   if (!blockedSpanContext) return;
@@ -946,7 +948,7 @@ function endToolBlockedOnUserSpan(decision, source) {
   blockedSpanContext.span.end();
   endSpanState(BLOCKED_STATE_KEY, blockedSpanContext);
 }
-//@ chunk-a9ek44g8.js:18198-18475 fingerprint (2.1.88 match: startToolExecutionSpan, 0.831)
+//@ chunk-4qbrxszq.js:18264-18541 fingerprint (2.1.88 match: startToolExecutionSpan, 0.831)
 function startToolExecutionSpan(agentContext, toolUseId) {
   let tracer = getActiveContext();
   if (!isSessionTracingEnabled()) return otelApi_4.trace.getActiveSpan() || getTracer().startSpan("dummy");
@@ -960,7 +962,7 @@ function startToolExecutionSpan(agentContext, toolUseId) {
     tracer,
   );
   setToolUseIdAttributes(span, toolUseId);
-  ensureCleanupInterval(EXECUTION_STATE_KEY, {
+  getCurrentSpan(EXECUTION_STATE_KEY, {
     span,
     startTime: performance.now(),
     attributes,
@@ -968,7 +970,7 @@ function startToolExecutionSpan(agentContext, toolUseId) {
   });
   return span;
 }
-//@ chunk-a9ek44g8.js:18475-18850 layout
+//@ chunk-4qbrxszq.js:18541-18916 layout
 /**
  * 结束工具执行 span（耗时、成功、错误）。
  */
@@ -989,7 +991,7 @@ function endToolExecutionSpan(metadata) {
   liveSpanState.span.end();
   endSpanState(EXECUTION_STATE_KEY, liveSpanState);
 }
-//@ chunk-a9ek44g8.js:18850-19231 fingerprint (2.1.88 match: endToolSpan, 0.787)
+//@ chunk-4qbrxszq.js:18916-19297 fingerprint (2.1.88 match: endToolSpan, 0.788)
 function endToolSpan(toolUseId, toolContent, resultTokens, notRecorded = false) {
   let toolSpanContext = toolUseId ? spanAttributesByContext.get(toolUseId) : getLiveSpanState(TOOL_STATE_KEY);
   if (!toolSpanContext || toolSpanContext.ended) return;
@@ -1014,13 +1016,13 @@ function endToolSpan(toolUseId, toolContent, resultTokens, notRecorded = false) 
   toolSpanContext.span.end();
   endSpanState(TOOL_STATE_KEY, toolSpanContext);
 }
-//@ chunk-a9ek44g8.js:19231-19290 layout
+//@ chunk-4qbrxszq.js:19297-19356 layout
 function shouldRecordToolContent(span) {
   return (
     isSessionTracingEnabled() && isToolContentLoggingEnabled() && !isTracingRedacted() && span.isRecording()
   );
 }
-//@ chunk-a9ek44g8.js:19290-19463 layout
+//@ chunk-4qbrxszq.js:19356-19529 layout
 function stringifyToolContentForSpan(content) {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
@@ -1029,7 +1031,7 @@ function stringifyToolContentForSpan(content) {
   ).join(`
 `);
 }
-//@ chunk-a9ek44g8.js:19463-19740 fingerprint (2.1.88 match: addToolContentEvent, 0.901)
+//@ chunk-4qbrxszq.js:19529-19806 fingerprint (2.1.88 match: addToolContentEvent, 0.903)
 function addToolContentEvent(span, eventName, attributes) {
   if (!shouldRecordToolContent(span)) return;
   let currentSpanCtx = spanAttributesByContext.get(span);
@@ -1046,7 +1048,7 @@ function addToolContentEvent(span, eventName, attributes) {
     } else processedAttributes[key] = value;
   currentSpanCtx.span.addEvent(eventName, processedAttributes);
 }
-//@ chunk-a9ek44g8.js:19740-19970 file-local
+//@ chunk-4qbrxszq.js:19806-20036 file-local
 function getSpanId(span) {
   if (!isSessionTracingEnabled()) return;
   let spanContext = span.spanContext();
@@ -1056,14 +1058,14 @@ function getSpanId(span) {
   traceContextPropagator.inject(contextWithSpan, carrier, otelApi_4.defaultTextMapSetter);
   return carrier.traceparent;
 }
-//@ chunk-a9ek44g8.js:19970-20055 layout
+//@ chunk-4qbrxszq.js:20036-20121 layout
 function getActiveSpanId() {
   if (!isSessionTracingEnabled()) return;
   let span = otelApi_4.trace.getSpan(getActiveContext());
   if (!span) return;
   return getSpanId(span);
 }
-//@ chunk-a9ek44g8.js:20055-20177 layout
+//@ chunk-4qbrxszq.js:20121-20243 layout
 /**
  * 由 traceparent 提取上下文。
  */
@@ -1079,13 +1081,13 @@ function extractTraceparentContext(traceparent) {
   );
   return extractedContext === activeContext ? undefined : extractedContext;
 }
-//@ chunk-a9ek44g8.js:20177-20231 layout
+//@ chunk-4qbrxszq.js:20243-20297 layout
 function runInContext(traceparentContext, callback) {
   return traceparentContext === undefined
     ? callback()
     : otelContextManager.with(traceparentContext, callback);
 }
-//@ chunk-a9ek44g8.js:20231-20414 file-local
+//@ chunk-4qbrxszq.js:20297-20480 file-local
 function endToolExecutionSpan_2(name, options) {
   if (!isPerfettoTracingEnabled()) return;
   return getTracer().startSpan(
@@ -1103,7 +1105,7 @@ function endToolExecutionSpan_2(name, options) {
     getActiveContext(),
   );
 }
-//@ chunk-a9ek44g8.js:20414-20822 layout
+//@ chunk-4qbrxszq.js:20480-20888 layout
 async function withToolExecutionSpan(name, options, run) {
   let span = endToolExecutionSpan_2(name, options);
   if (!span) return run(undefined);
@@ -1134,7 +1136,7 @@ async function withToolExecutionSpan(name, options, run) {
     }
   });
 }
-//@ chunk-a9ek44g8.js:20822-21218 callgraph-witnessed (2.1.88 match: executeInSpan, 0.244)
+//@ chunk-4qbrxszq.js:20888-21284 callgraph-witnessed (2.1.88 match: executeInSpan, 0.244)
 function executeInSpan(agentContext) {
   if (!isPerfettoTracingEnabled()) return;
   let tracer = getActiveContext();
@@ -1156,7 +1158,7 @@ function executeInSpan(agentContext) {
     },
     tracer,
   );
-  ensureCleanupInterval(SUBAGENT_STATE_KEY, {
+  getCurrentSpan(SUBAGENT_STATE_KEY, {
     span,
     startTime: performance.now(),
     attributes,
@@ -1164,7 +1166,7 @@ function executeInSpan(agentContext) {
   });
   return span;
 }
-//@ chunk-a9ek44g8.js:21218-21430 layout
+//@ chunk-4qbrxszq.js:21284-21496 layout
 /**
  * 结束子代理 span。
  */
@@ -1180,11 +1182,11 @@ function endSubagentSpan(span, metadata) {
   span.end();
   endSpanState(SUBAGENT_STATE_KEY, spanState);
 }
-//@ chunk-a9ek44g8.js:21430-21463 layout
+//@ chunk-4qbrxszq.js:21496-21529 layout
 function isAnyBetaTracingEnabled() {
   return isBetaTracingEnabled() || isPerfettoTracingEnabled();
 }
-//@ chunk-a9ek44g8.js:21463-21822 fingerprint (2.1.88 match: startHookSpan, 0.866)
+//@ chunk-4qbrxszq.js:21529-21888 fingerprint (2.1.88 match: startHookSpan, 0.866)
 function startHookSpan(hookEvent, hookNameForTelemetry, numHooks, hookDefinitionsJson, agentContext) {
   if (!isAnyBetaTracingEnabled()) return otelApi_4.trace.getActiveSpan() || getTracer().startSpan("dummy");
   let tracer = getTracer();
@@ -1215,7 +1217,7 @@ function startHookSpan(hookEvent, hookNameForTelemetry, numHooks, hookDefinition
   });
   return span;
 }
-//@ chunk-a9ek44g8.js:21822-22365 fingerprint (2.1.88 match: endHookSpan, 0.837)
+//@ chunk-4qbrxszq.js:21888-22431 fingerprint (2.1.88 match: endHookSpan, 0.837)
 function endHookSpan(span, metadata) {
   if (!isAnyBetaTracingEnabled()) return;
   let spanState = spanAttributesByContext.get(span);
@@ -1236,36 +1238,48 @@ function endHookSpan(span, metadata) {
     spanState.span.setStatus(buildErrorSpanStatus(`${metadata.numNonBlockingError} hook(s) failed`));
   spanState.span.end();
 }
+//@ chunk-n51jggtb.js:157910-158043 fingerprint (2.1.88 match: ensureCleanupInterval, 0.376)
+function ensureCleanupInterval(planner, state) {
+  if (state.ended) return;
+  state.clockHeartbeat ??= setInterval(
+    (tick) => {
+      try {
+        startStepClock(tick);
+      } catch {}
+    },
+    replClockHeartbeatMs(),
+    planner.steps,
+  );
+  state.clockHeartbeat.unref?.();
+}
 export {
-  extractTraceparentContext,
-  runInContext,
-  executeInSpan,
-  endSubagentSpan,
-  isSessionTracingEnabled,
-  isPromptHookObserved,
+  getSpanId,
+  getUpstreamTraceparent,
+  recordLlmRequestAttempt,
+  startLLMRequestSpan,
+  withInteractionSpan,
+  endInteractionSpan,
   getActiveSpanId,
   turnTraceContextsOf,
   isPerfettoTracingEnabled,
   truncateContentForTelemetry,
   withToolExecutionSpan,
-  withInteractionSpan,
-  endInteractionSpan,
-  currentPromptHandle,
   clearTurnTraceContexts,
-  getSpanId,
-  getUpstreamTraceparent,
-  recordLlmRequestAttempt,
-  startLLMRequestSpan,
-  hasPromptHooks,
-  startHookSpan,
-  endHookSpan,
-  hasManagedPluginsSafe,
-  isEnhancedTelemetryEnabled,
+  currentPromptHandle,
+  isSessionTracingEnabled,
   isToolContentLoggingEnabled,
+  isEnhancedTelemetryEnabled,
   endToolExecutionSpan_2,
+  isTracingRedacted,
   noopEndToolExecutionSpan,
   setSpanError,
-  isTracingRedacted,
+  endToolBlockedOnUserSpan,
+  isPromptHookObserved,
+  startHookSpan,
+  endHookSpan,
+  endLLMRequestSpan,
+  extractTraceparentContext,
+  runInContext,
   startToolSpan,
   startToolBlockedOnUserSpan,
   endToolSpan,
@@ -1275,7 +1289,10 @@ export {
   shouldRecordToolContent,
   stringifyToolContentForSpan,
   describeErrorWithoutText,
-  endToolBlockedOnUserSpan,
-  endLLMRequestSpan,
-  getCurrentSpan,
+  hasManagedPluginsSafe,
+  executeInSpan,
+  endSubagentSpan,
+  hasPromptHooks,
+  ensureCleanupInterval,
+  notePromptContent,
 };

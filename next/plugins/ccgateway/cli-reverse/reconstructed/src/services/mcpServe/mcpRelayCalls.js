@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：mcp serve 转发调用：列出项目 MCP 服务器、把 JSON-RPC 转发给本机已连接服务器、关闭。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-wy9dbk5f.js (31)
- * attribution: placement 31
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-m2gb6h8m.js (23), chunk-xrwmcqkn.js (9)
+ * attribution: placement 31, layout 1
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { createKeyedQueue } from "../../utils/promiseQueue.js";
@@ -33,7 +33,7 @@ import { sleep } from "../../utils/sleep.js";
 import { SetMcpServerEnabledInputSchema } from "../mcp/utils.js";
 import {
   isOrgConnectorName,
-  normalizeNameForMCP,
+  CLAUDEAI_SERVER_PREFIX,
   ORG_CONNECTOR,
   MAX_SERVER_NAME_CHARS,
 } from "../mcp/normalization.js";
@@ -58,106 +58,129 @@ import { refreshPluginCaches } from "../../utils/plugins/cacheUtils.js";
 import { getStrictMcpConfig } from "../../bootstrap/state.js";
 import { isBareMode } from "../../utils/envUtils.js";
 import { startedServerKeys, MAX_STARTED_SERVER_KEYS } from "../mcp/startedServers.js";
-import { isPlainObject as isPlainObject_2 } from "../../utils/isPlainObject.js";
+import { isPlainObject } from "../../utils/isPlainObject.js";
 import { errorMessage } from "../../utils/errors.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { mcpInfoFromString, getMcpPrefix } from "../mcp/mcpStringUtils.js";
-import { getDenyRules, toolMatchesRule } from "../../utils/permissions/permissions.js";
+import { deniedBashRules, toolMatchesRule } from "../../utils/permissions/permissions.js";
 import { pluginInstallTimeoutMs } from "../../utils/claudeAiSync/skillsSync.js";
 import { marketplaceSuffix } from "../../utils/plugins/pluginIdentifier.js";
 import { SYNCED } from "../../utils/telemetry/pluginTelemetry.js";
 import { parsePluginServerName } from "../../utils/plugins/lspPluginIntegration.js";
 import { logFeatureSad } from "../analytics/featureTelemetry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-wy9dbk5f.js:34460-35627 placement
+//@ chunk-m2gb6h8m.js:2239-3481 placement
 /**
  * 转发消息结果的 schema。
  */
-var LISTPROJECTMCPSERVERS = "ListProjectMcpServers";
-var RELAYPROJECTMCPMESSAGE = "RelayProjectMcpMessage";
-var CLOSEPROJECTMCPSERVERS = "CloseProjectMcpServers";
-var SETPROJECTMCPSERVERENABLED = "SetProjectMcpServerEnabled";
-var MAX_SERVERS_PER_LISTING = 100;
-var MAX_TOOLS_PER_SERVER = 1000;
-var MAX_RELAY_LISTING_BYTES = 8388608;
-var MAX_RELAY_ANSWER_BYTES = 8388608;
-var MAX_RELAY_FIELDS = 65280;
-var MAX_RELAY_VALUES = 32768;
-var MAX_RELAY_DEPTH = 122;
-var RELAYABLE_METHODS_RE = /^(ping|tools\/call|resources\/(list|read|templates\/list)|prompts\/(list|get))$/;
-var HTTP_STATUS_IN_TEXT_RE = /(?<=^|HTTP )[1-5]\d\d\b/;
-var relayStateSlot = new SessionRootSlot(() => {
-  let keyedQueue = createKeyedQueue();
-  return {
-    listed: {
-      project: new Map(),
-      plugins: new Map(),
-      orgConnectors: new Map(),
-    },
-    round: {},
-    list: (kind, ...args) =>
-      keyedQueue.run(kind === "orgConnectors" ? kind : "", () => listMcpServers(kind, ...args)),
-    setEnabled: (...args) => keyedQueue.run("", () => closeProjectMcpServers(...args)),
-    closed: false,
-  };
-});
-var listProjectMcpServersResultSchema = DoctorLazy(() =>
-  objectSchema({
-    servers: array(
-      objectSchema({
-        name: stringSchema(),
-        status: _enum(["connected", "failed", "needs-auth", "pending", "disabled"]),
-        error: stringSchema().optional(),
-        initializeResult: record(stringSchema(), unknown()).optional(),
-        toolsListResult: record(stringSchema(), unknown()).optional(),
-        toolPermissions: record(stringSchema(), ToolPermissionValueSchema()).optional(),
+var LISTPROJECTMCPSERVERS; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var RELAYPROJECTMCPMESSAGE;
+var CLOSEPROJECTMCPSERVERS;
+var SETPROJECTMCPSERVERENABLED;
+var MAX_SERVERS_PER_LISTING;
+var MAX_TOOLS_PER_SERVER;
+var MAX_RELAY_LISTING_BYTES;
+var MAX_RELAY_ANSWER_BYTES;
+var MAX_RELAY_FIELDS;
+var MAX_RELAY_VALUES;
+var MAX_RELAY_DEPTH;
+var RELAYABLE_METHODS_RE;
+var HTTP_STATUS_IN_TEXT_RE;
+var relayStateSlot;
+var listProjectMcpServersResultSchema;
+var relayOptionsSchema;
+var relayResultSchema;
+var relayMessageResultSchema;
+deferInit("chunk-m2gb6h8m.js:2239", () => {
+  LISTPROJECTMCPSERVERS = "ListProjectMcpServers";
+  RELAYPROJECTMCPMESSAGE = "RelayProjectMcpMessage";
+  CLOSEPROJECTMCPSERVERS = "CloseProjectMcpServers";
+  SETPROJECTMCPSERVERENABLED = "SetProjectMcpServerEnabled";
+  MAX_SERVERS_PER_LISTING = 100;
+  MAX_TOOLS_PER_SERVER = 1000;
+  MAX_RELAY_LISTING_BYTES = 8388608;
+  MAX_RELAY_ANSWER_BYTES = 8388608;
+  MAX_RELAY_FIELDS = 65280;
+  MAX_RELAY_VALUES = 32768;
+  MAX_RELAY_DEPTH = 122;
+  RELAYABLE_METHODS_RE = /^(ping|tools\/call|resources\/(list|read|templates\/list)|prompts\/(list|get))$/;
+  HTTP_STATUS_IN_TEXT_RE = /(?<=^|HTTP )[1-5]\d\d\b/;
+  relayStateSlot = new SessionRootSlot(() => {
+    let keyedQueue = createKeyedQueue();
+    return {
+      listed: {
+        project: new Map(),
+        plugins: new Map(),
+        orgConnectors: new Map(),
+      },
+      round: {},
+      repoRoundStarted: Promise.withResolvers(),
+      list: (kind, ...args) =>
+        keyedQueue.run(kind === "orgConnectors" ? kind : "", () => listMcpServers(kind, ...args)),
+      setEnabled: (...args) => keyedQueue.run("", () => closeProjectMcpServers(...args)),
+      closed: false,
+    };
+  });
+  listProjectMcpServersResultSchema = DoctorLazy(() =>
+    objectSchema({
+      servers: array(
+        objectSchema({
+          name: stringSchema(),
+          status: _enum(["connected", "failed", "needs-auth", "pending", "disabled"]),
+          error: stringSchema().optional(),
+          initializeResult: record(stringSchema(), unknown()).optional(),
+          toolsListResult: record(stringSchema(), unknown()).optional(),
+          toolPermissions: record(stringSchema(), ToolPermissionValueSchema()).optional(),
+        }),
+      ).max(MAX_SERVERS_PER_LISTING),
+      cut: booleanSchema(),
+      hooksChecked: booleanSchema().optional(),
+    }),
+  );
+  relayOptionsSchema = DoctorLazy(() =>
+    objectSchema({
+      plugins: booleanSchema().optional(),
+      waitMs: numberSchema().optional(),
+      only: array(stringSchema()).optional(),
+      unlessListed: booleanSchema().optional(),
+    }),
+  );
+  relayResultSchema = DoctorLazy(() =>
+    objectSchema({
+      server: stringSchema(),
+      message: objectSchema({
+        jsonrpc: literal("2.0"),
+        id: union([stringSchema(), numberSchema()]),
+        method: stringSchema(),
+        params: record(stringSchema(), unknown()).optional(),
       }),
-    ).max(MAX_SERVERS_PER_LISTING),
-    cut: booleanSchema(),
-    hooksChecked: booleanSchema().optional(),
-  }),
-);
-var relayOptionsSchema = DoctorLazy(() =>
-  objectSchema({
-    plugins: booleanSchema().optional(),
-    waitMs: numberSchema().optional(),
-    only: array(stringSchema()).optional(),
-  }),
-);
-var relayResultSchema = DoctorLazy(() =>
-  objectSchema({
-    server: stringSchema(),
-    message: objectSchema({
-      jsonrpc: literal("2.0"),
-      id: union([stringSchema(), numberSchema()]),
-      method: stringSchema(),
-      params: record(stringSchema(), unknown()).optional(),
     }),
-  }),
-);
-var relayMessageResultSchema = DoctorLazy(() =>
-  objectSchema({
-    response: objectSchema({
-      jsonrpc: literal("2.0"),
-      id: union([stringSchema(), numberSchema()]),
-      result: record(stringSchema(), unknown()).optional(),
-      error: objectSchema({
-        code: numberSchema(),
-        message: stringSchema(),
-        data: unknown().optional(),
-      }).optional(),
+  );
+  relayMessageResultSchema = DoctorLazy(() =>
+    objectSchema({
+      response: objectSchema({
+        jsonrpc: literal("2.0"),
+        id: union([stringSchema(), numberSchema()]),
+        result: record(stringSchema(), unknown()).optional(),
+        error: objectSchema({
+          code: numberSchema(),
+          message: stringSchema(),
+          data: unknown().optional(),
+        }).optional(),
+      }),
     }),
-  }),
-);
-//@ chunk-wy9dbk5f.js:35627-35679 placement
+  );
+});
+//@ chunk-m2gb6h8m.js:3481-3532 placement
 function mcpClientModule() {
   return require("../mcp/emitTripwireEvent.lazy.js");
 }
-//@ chunk-wy9dbk5f.js:35679-35754 placement
+//@ chunk-m2gb6h8m.js:3532-3607 placement
 function toolPermissionsOf({ config }) {
   return ("toolPermissions" in config && config.toolPermissions) || {};
 }
-//@ chunk-wy9dbk5f.js:35754-35901 placement
+//@ chunk-m2gb6h8m.js:3607-3754 placement
 function initializeResultOf(client) {
   return {
     protocolVersion: client.negotiatedProtocolVersion,
@@ -166,7 +189,7 @@ function initializeResultOf(client) {
     instructions: client.instructions,
   };
 }
-//@ chunk-wy9dbk5f.js:35901-36477 placement
+//@ chunk-m2gb6h8m.js:3754-4329 placement
 async function describeProjectMcpServer(client) {
   let { name } = client;
   if (!isConnectedOrCached(client)) {
@@ -217,7 +240,7 @@ async function describeProjectMcpServer(client) {
     live: connected,
   };
 }
-//@ chunk-wy9dbk5f.js:36477-36722 placement
+//@ chunk-m2gb6h8m.js:4329-4575 placement
 async function serveListProjectMcpServers(input, signal, context) {
   let { list, round } = relayStateSlot.of(context.session);
   let options = relayOptionsSchema().safeParse(input ?? {}).data ?? {};
@@ -231,12 +254,12 @@ async function serveListProjectMcpServers(input, signal, context) {
   let listServers = options.plugins ? listRelayablePluginServers : listProjectScopedServers;
   return list("project", listServers, signal, context, false, options);
 }
-//@ chunk-wy9dbk5f.js:36722-36800 placement
+//@ chunk-m2gb6h8m.js:4575-4654 placement
 function listProjectMcpServers(input, signal, context) {
   let { list } = relayStateSlot.of(context.session);
   return list("project", listRelayablePluginServers, signal, context, true);
 }
-//@ chunk-wy9dbk5f.js:36875-37139 placement
+//@ chunk-m2gb6h8m.js:4729-4995 placement
 /**
  * handleSetMcpServerEnabled：控制协议中 "启用/禁用 MCP 服务器" 请求的处理（校验 {server, enabled, requestId}）。
  */
@@ -250,7 +273,7 @@ function handleSetMcpServerEnabled(input, signal, context) {
   let { setEnabled } = relayStateSlot.of(context.session);
   return setEnabled(server, enabled, requestId, signal, context);
 }
-//@ chunk-wy9dbk5f.js:37139-37911 placement
+//@ chunk-m2gb6h8m.js:4995-5766 placement
 async function closeProjectMcpServers(serverName, enabled, requestId, signal, context) {
   let state = relayStateSlot.of(context.session);
   if (state.closed) throw Error("The repo's MCP servers have been closed");
@@ -292,7 +315,7 @@ async function closeProjectMcpServers(serverName, enabled, requestId, signal, co
   }
   return result;
 }
-//@ chunk-wy9dbk5f.js:37911-38048 placement
+//@ chunk-m2gb6h8m.js:5766-5904 placement
 async function listProjectScopedServers(context, callerContext) {
   let entries = Object.entries(await loadServableMcpConfigs(callerContext));
   return Object.fromEntries(
@@ -301,7 +324,7 @@ async function listProjectScopedServers(context, callerContext) {
     }),
   );
 }
-//@ chunk-wy9dbk5f.js:38048-38375 placement
+//@ chunk-m2gb6h8m.js:5904-6231 placement
 /**
  * 列出可中继的 MCP 服务器：项目作用域服务器，以及非内置、非受限的插件服务器。
  */
@@ -325,7 +348,7 @@ async function listRelayablePluginServers(context, callContext) {
     }),
   );
 }
-//@ chunk-wy9dbk5f.js:38375-38552 placement
+//@ chunk-m2gb6h8m.js:6231-6409 placement
 async function loadServableMcpConfigs(context) {
   let { storageV5, credentials } = context.toolUseContext();
   await awaitPolicyColdStartWaiter();
@@ -345,7 +368,7 @@ async function loadServableMcpConfigs(context) {
         )
   ).servers;
 }
-//@ chunk-wy9dbk5f.js:38552-39463 placement
+//@ chunk-m2gb6h8m.js:6409-7318 placement
 /**
  * 开始列出可转发的 MCP 服务器：过滤被拒绝或不可中继的条目（最多 N 个），记录本地服务器，异步连接并收集每台服务器的描述，返回带 rows/settled/ended 的列表状态。
  */
@@ -415,7 +438,7 @@ function startServerListing(kind, entries, context) {
   };
   return listing;
 }
-//@ chunk-wy9dbk5f.js:39463-39643 placement
+//@ chunk-m2gb6h8m.js:7318-7497 placement
 async function clearRemovedServerCaches(nextRows, previousRows) {
   let keptKeys = new Set();
   for (let { name, config } of nextRows) keptKeys.add(serverCacheKey(name, config));
@@ -423,10 +446,25 @@ async function clearRemovedServerCaches(nextRows, previousRows) {
     if (!keptKeys.has(serverCacheKey(name, config)))
       await mcpClientModule().mcpClientModule().clearServerCache(name, config);
 }
-//@ chunk-wy9dbk5f.js:39643-41383 placement
-async function listMcpServers(kind, loadConfigs, signal, context, forceClose = false, { waitMs, only } = {}) {
+//@ chunk-m2gb6h8m.js:7497-9505 placement
+async function listMcpServers(
+  kind,
+  loadConfigs,
+  signal,
+  context,
+  forceClose = false,
+  { waitMs, only, unlessListed } = {},
+) {
   let state = relayStateSlot.of(context.session);
   let currentRound = state.round[kind];
+  if (unlessListed && currentRound !== undefined)
+    return {
+      summary: "already listed",
+      output: {
+        servers: [],
+        cut: false,
+      },
+    };
   let reuseRound =
     only ||
     (waitMs !== undefined &&
@@ -449,6 +487,7 @@ async function listMcpServers(kind, loadConfigs, signal, context, forceClose = f
           hasEnded: true,
         }
       : startServerListing(kind, Object.entries(await loadConfigs(signal, context)), context);
+    if (kind === "project") state.repoRoundStarted.resolve(true);
   }
   let wait =
     waitMs !== undefined &&
@@ -512,6 +551,17 @@ async function listMcpServers(kind, loadConfigs, signal, context, forceClose = f
       totalBytes + bytes > MAX_RELAY_LISTING_BYTES
     ) {
       cut = true;
+      if (live)
+        round.settled.set(serverCopy.name, {
+          server,
+        });
+      else if (server.status === "pending")
+        round.settled.set(serverCopy.name, {
+          server: {
+            ...server,
+            status: "disabled",
+          },
+        });
       continue;
     }
     totalBytes += bytes;
@@ -533,11 +583,11 @@ async function listMcpServers(kind, loadConfigs, signal, context, forceClose = f
     },
   };
 }
-//@ chunk-wy9dbk5f.js:41383-41429 placement
+//@ chunk-m2gb6h8m.js:9505-9553 placement
 function relayProjectMcpMessage(input, rawInput, context) {
   return relayMcpMessage("project", input, rawInput, context);
 }
-//@ chunk-wy9dbk5f.js:41429-41939 placement
+//@ chunk-m2gb6h8m.js:9553-10065 placement
 /**
  * 把调用方的一条 JSON-RPC 请求转发给本机已连接的 MCP 服务器（项目/组织连接器/插件），检查启动权限、限制答复大小。
  */
@@ -562,7 +612,7 @@ async function relayMcpMessage(kind, input, signal, context) {
     },
   };
 }
-//@ chunk-wy9dbk5f.js:41939-43227 placement
+//@ chunk-m2gb6h8m.js:10065-11119 placement
 async function relayJsonRpc({ method, params }, live, signal, context) {
   if (method === "initialize") {
     let protocolVersion = params?.protocolVersion;
@@ -604,7 +654,7 @@ async function relayJsonRpc({ method, params }, live, signal, context) {
         client,
         {
           method,
-          params: isPlainObject_2(_meta)
+          params: isPlainObject(_meta)
             ? {
                 ...params,
                 _meta: {
@@ -632,15 +682,9 @@ async function relayJsonRpc({ method, params }, live, signal, context) {
     signal.throwIfAborted();
     if (mcpClientModule().mcpIsListAuthErrorModule().isListAuthError(error))
       await mcpClient.clearServerCache(live.name, live.config);
-    let { code, data } = Object(error);
-    let { getMcpErrorCode } = mcpClientModule().mcpSdkErrorClassificationModule();
-    let errorCode = code === "REQUEST_TIMEOUT" ? -32001 : getMcpErrorCode(error);
-    let { status = code } = Object(data);
-    let replaced = errorMessage(error).replace(/^MCP error -?\d+: /, "");
-    let [statusMatch] = HTTP_STATUS_IN_TEXT_RE.exec(`${status} ${replaced}`) ?? [];
-    let message = statusMatch ? `Server answered HTTP ${statusMatch}` : "Connection error";
+    let { code, message, data: relayedAnswer } = toRpcError(error);
     answer =
-      errorCode === undefined
+      code === undefined
         ? {
             error: {
               code: -32603,
@@ -649,15 +693,30 @@ async function relayJsonRpc({ method, params }, live, signal, context) {
           }
         : {
             error: {
-              code: errorCode,
-              message: replaced,
-              data,
+              code,
+              message,
+              data: relayedAnswer,
             },
           };
   }
   return capRelayAnswer(method, answer);
 }
-//@ chunk-wy9dbk5f.js:43227-43439 placement
+//@ chunk-m2gb6h8m.js:11119-11446 layout
+function toRpcError(error) {
+  let { code, data } = Object(error);
+  let { getMcpErrorCode } = mcpClientModule().mcpSdkErrorClassificationModule();
+  let mcpCode = code === "REQUEST_TIMEOUT" ? -32001 : getMcpErrorCode(error);
+  let { status = code } = Object(data);
+  let replaced = errorMessage(error).replace(/^MCP error -?\d+: /, "");
+  let [httpStatus] = HTTP_STATUS_IN_TEXT_RE.exec(`${status} ${replaced}`) ?? [];
+  let fallbackText = httpStatus ? `Server answered HTTP ${httpStatus}` : "Connection error";
+  return {
+    code: mcpCode,
+    message: mcpCode === undefined ? fallbackText : replaced,
+    data,
+  };
+}
+//@ chunk-m2gb6h8m.js:11446-11656 placement
 function capRelayAnswer(method, answer) {
   let { bytes, values, depth } = measureJson(answer);
   if (bytes > MAX_RELAY_ANSWER_BYTES || values > MAX_RELAY_VALUES || depth > MAX_RELAY_DEPTH)
@@ -669,7 +728,7 @@ function capRelayAnswer(method, answer) {
     };
   return answer;
 }
-//@ chunk-wy9dbk5f.js:43439-43715 placement
+//@ chunk-m2gb6h8m.js:11656-11932 placement
 function measureJson(value) {
   let valueCount = 0;
   let maxDepth = 0;
@@ -697,10 +756,10 @@ function measureJson(value) {
     };
   }
 }
-//@ chunk-wy9dbk5f.js:43715-43952 placement
+//@ chunk-m2gb6h8m.js:11932-12168 placement
 function isServerDeniedOrInvalid({ launchPermissionContext }, serverKey, toolName) {
   let serverName = mcpInfoFromString(getMcpPrefix(serverKey))?.serverName;
-  if (typeof toolName !== "string" || serverName !== normalizeNameForMCP(serverKey)) return true;
+  if (typeof toolName !== "string" || serverName !== CLAUDEAI_SERVER_PREFIX(serverKey)) return true;
   if (launchPermissionContext === undefined) return false;
   let ruleInput = {
     name: toolName,
@@ -709,11 +768,11 @@ function isServerDeniedOrInvalid({ launchPermissionContext }, serverKey, toolNam
       toolName,
     },
   };
-  return getDenyRules(launchPermissionContext).some(function (rule) {
+  return deniedBashRules(launchPermissionContext).some(function (rule) {
     return toolMatchesRule(launchPermissionContext, ruleInput, rule);
   });
 }
-//@ chunk-wy9dbk5f.js:43952-44086 placement
+//@ chunk-m2gb6h8m.js:12168-12302 placement
 function formatEnabledChoiceResult(enabled, saved) {
   if (!saved) throw Error("The choice could not be saved");
   return {
@@ -723,27 +782,32 @@ function formatEnabledChoiceResult(enabled, saved) {
     },
   };
 }
-//@ chunk-wy9dbk5f.js:44086-44357 placement
+//@ chunk-xrwmcqkn.js:39770-40042 placement
 /**
  * 组织连接器服务器表的 schema。
  */
-var LISTORGCONNECTORMCPSERVERS = "ListOrgConnectorMcpServers";
-var RELAYORGCONNECTORMCPMESSAGE = "RelayOrgConnectorMcpMessage";
-var orgConnectorServersSchema = DoctorLazy(() =>
-  record(
-    stringSchema()
-      .startsWith(ORG_CONNECTOR)
-      .regex(/^(?!.*[._]{2})[A-Za-z0-9._-]+[A-Za-z0-9]$/)
-      .max(MAX_SERVER_NAME_CHARS),
-    zodStrictObject({
-      type: _enum(["http", "sse"]),
-      url: urlSchema({
-        protocol: /^https$/,
-      }).max(4096),
-    }),
-  ).refine((servers) => Object.keys(servers).length <= MAX_SERVERS_PER_LISTING),
-);
-//@ chunk-wy9dbk5f.js:44357-44967 placement
+var LISTORGCONNECTORMCPSERVERS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var RELAYORGCONNECTORMCPMESSAGE;
+var orgConnectorServersSchema;
+deferInit("chunk-xrwmcqkn.js:39770", () => {
+  LISTORGCONNECTORMCPSERVERS = "ListOrgConnectorMcpServers";
+  RELAYORGCONNECTORMCPMESSAGE = "RelayOrgConnectorMcpMessage";
+  orgConnectorServersSchema = DoctorLazy(() =>
+    record(
+      stringSchema()
+        .startsWith(ORG_CONNECTOR)
+        .regex(/^(?!.*[._]{2})[A-Za-z0-9._-]+[A-Za-z0-9]$/)
+        .max(MAX_SERVER_NAME_CHARS),
+      zodStrictObject({
+        type: _enum(["http", "sse"]),
+        url: urlSchema({
+          protocol: /^https$/,
+        }).max(4096),
+      }),
+    ).refine((servers) => Object.keys(servers).length <= MAX_SERVERS_PER_LISTING),
+  );
+});
+//@ chunk-xrwmcqkn.js:40042-40653 placement
 function serveListOrgConnectorServers(input, signal, context) {
   let parsed = orgConnectorServersSchema().safeParse(Object(input).servers);
   if (!parsed.success)
@@ -776,28 +840,33 @@ function serveListOrgConnectorServers(input, signal, context) {
     context,
   );
 }
-//@ chunk-wy9dbk5f.js:44967-45019 placement
+//@ chunk-xrwmcqkn.js:40653-40706 placement
 function relayOrgConnectorMessage(input, rawInput, context) {
   return relayMcpMessage("orgConnectors", input, rawInput, context);
 }
-//@ chunk-wy9dbk5f.js:45019-45235 placement
+//@ chunk-xrwmcqkn.js:40706-40922 placement
 /**
  * 列出插件服务器的输入 schema。
  */
-var LISTPLUGINMCPSERVERS = "ListPluginMcpServers";
-var RELAYPLUGINMCPMESSAGE = "RelayPluginMcpMessage";
-var listPluginServersInputSchema = DoctorLazy(() =>
-  objectSchema({
-    waitMs: numberSchema().int().positive().optional().catch(undefined),
-    resync: booleanSchema().optional().catch(undefined),
-    registeredHooks: record(stringSchema(), registeredHooksListSchema()).optional().catch(undefined),
-  }),
-);
-//@ chunk-wy9dbk5f.js:45235-45319 placement (2.1.88 match: getServerCommandArray, 1)
+var LISTPLUGINMCPSERVERS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var RELAYPLUGINMCPMESSAGE;
+var listPluginServersInputSchema;
+deferInit("chunk-xrwmcqkn.js:40706", () => {
+  LISTPLUGINMCPSERVERS = "ListPluginMcpServers";
+  RELAYPLUGINMCPMESSAGE = "RelayPluginMcpMessage";
+  listPluginServersInputSchema = DoctorLazy(() =>
+    objectSchema({
+      waitMs: numberSchema().int().positive().optional().catch(undefined),
+      resync: booleanSchema().optional().catch(undefined),
+      registeredHooks: record(stringSchema(), registeredHooksListSchema()).optional().catch(undefined),
+    }),
+  );
+});
+//@ chunk-xrwmcqkn.js:40922-41006 placement (2.1.88 match: getServerCommandArray, 1)
 function getServerCommandArray({ type, command }) {
   return type === "stdio" || (type === undefined && typeof command === "string");
 }
-//@ chunk-wy9dbk5f.js:45319-45406 placement
+//@ chunk-xrwmcqkn.js:41006-41093 placement
 /**
  * 生成插件服务器的键（plugin:<文件夹>:<服务器>）。
  */
@@ -805,11 +874,11 @@ function pluginServerKey(folder, serverName) {
   let index = folder.lastIndexOf("@");
   return `plugin:${index === -1 ? folder : folder.slice(0, index)}:${serverName}`;
 }
-//@ chunk-wy9dbk5f.js:45406-45452 placement
+//@ chunk-xrwmcqkn.js:41093-41140 placement
 function relayPluginMcpMessage(input, rawInput, context) {
   return relayMcpMessage("plugins", input, rawInput, context);
 }
-//@ chunk-wy9dbk5f.js:45452-45621 placement
+//@ chunk-xrwmcqkn.js:41140-41310 placement
 async function serveListPluginMcpServers(input, signal, context) {
   let parsed = listPluginServersInputSchema().safeParse(input ?? {}).data;
   let { list } = relayStateSlot.of(context.session);
@@ -822,7 +891,7 @@ async function serveListPluginMcpServers(input, signal, context) {
     },
   };
 }
-//@ chunk-wy9dbk5f.js:45621-46366 placement
+//@ chunk-xrwmcqkn.js:41310-42056 placement
 /**
  * 生成读取已同步插件 MCP 服务器的函数：等待插件同步（有时限）、加载配置，只保留来自同步市场、清单命名一致且钩子未改变的服务器。
  */
@@ -879,8 +948,10 @@ function createSyncedPluginServerLoader({ waitMs = 1 / 0, resync = false, regist
   };
 }
 export {
-  LISTPROJECTMCPSERVERS,
+  relayStateSlot,
   serveListProjectMcpServers,
+  toRpcError,
+  LISTPROJECTMCPSERVERS,
   LISTPLUGINMCPSERVERS,
   serveListPluginMcpServers,
   RELAYPLUGINMCPMESSAGE,

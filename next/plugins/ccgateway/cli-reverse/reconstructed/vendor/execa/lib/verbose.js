@@ -1,14 +1,14 @@
 /**
  * execa/lib/verbose.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: execa@8.0.1
- * pieces: chunk-m4p5zn6n.js (1)
+ * pieces: chunk-t889g22j.js (1)
  * attribution: esm-fingerprint 1
  */
 import { debuglog } from "util";
-import { default as Mr } from "process";
+import { default as Fo } from "process";
 
-//@ chunk-m4p5zn6n.js:27567-27831 esm-fingerprint
+//@ chunk-t889g22j.js:27566-27830 esm-fingerprint
 var verboseDefault = debuglog("execa").enabled;
 var padField = (field, padding) => String(field).padStart(padding, "0");
 var getTimestamp = () => {
@@ -17,7 +17,7 @@ var getTimestamp = () => {
 };
 var logCommand = (escapedCommand, { verbose }) => {
   if (!verbose) return;
-  Mr.stderr.write(`[${getTimestamp()}] ${escapedCommand}
+  Fo.stderr.write(`[${getTimestamp()}] ${escapedCommand}
 `);
 };
 export { verboseDefault, logCommand };

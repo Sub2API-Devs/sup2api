@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：ProposeSkills 工具
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2rkp9ne9.js (65), chunk-3e7edr38.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-mer7cb3z.js (1), chunk-zata70pr.js (65)
  * attribution: placement 66
  */
 import { resolve, join } from "path";
@@ -13,7 +13,10 @@ import { stripSyncedSkillPrefix } from "../../skills/syncedSkills.js";
 import { listedSkillOwnershipOf } from "../../services/skillsSync/listedSkillOwnership.js";
 import { skillNameMatches, stripSkillNamespacePrefix } from "../../utils/plugins/loadPluginCommands.js";
 import { findCommand, withNamedFolderYieldsRestored, getCommands, getCommandName } from "../../commands.js";
-import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
+import {
+  getFeatureValue_CACHED_MAY_BE_STALE,
+  getFeatureValue_SESSION_PINNED,
+} from "../../services/analytics/growthbook.js";
 import { isSyncedSkill, isHostCatalogSkill } from "../../utils/commandPredicates.js";
 import { isWellFormedString, plural, countCharInString } from "../../utils/stringUtils.js";
 import { MAX_SCOPE_RESPONSE_BYTES } from "../../services/plugins/accountSync/pluginsScopeGate.js";
@@ -34,7 +37,7 @@ import {
   AbortError,
 } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
-import { count, uniq } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { stripLineNumberPrefix, addLineNumbers, getFileModificationTimeAsync } from "../../utils/file.js";
 import { isObjectBlock } from "../../utils/toolResultStorage.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -63,7 +66,9 @@ import { onceExport } from "../../../vendor/lodash-es/once.js";
 import { areSkillsConvertedAsPlugins } from "../../utils/permissions/permissionRulePayload.js";
 import { marketplaceSuffix } from "../../utils/plugins/pluginIdentifier.js";
 import { SYNCED } from "../../utils/telemetry/pluginTelemetry.js";
+import { MAX_RESULT_BYTES } from "../../constants/outputLimits.js";
 import { normalizeLineBreaks } from "../../utils/messages/forwardedTurnSanitize.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { indexOfKmp } from "../../utils/hooks/hookHelpers.js";
 import { raceWithAbortSignal, withDeadline } from "../../utils/sleep.js";
 import { expandPath } from "../../utils/path.js";
@@ -76,7 +81,7 @@ import {
 import { getFsImplementation } from "../../utils/fsOperations.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-3e7edr38.js:231-1609 placement
+//@ chunk-mer7cb3z.js:1300-2678 placement
 /**
  * ProposeSkills 工具的一句话描述。
  */
@@ -88,14 +93,14 @@ var PROPOSE_SKILLS_PROMPT = `Surface recurring multi-step procedures from this s
 Call once with all proposals (max 3). Use it when the user asks to turn a workflow or procedure into a skill, or when the same multi-step procedure has recurred and a skill would clearly save future work. Do not call it for one-off tasks, and do not re-propose skills the user has already seen.
 
 An improvement can only update one of the user's own skills, including one of theirs that this session lists as a plugin skill because they uploaded it to claude.ai; the tool tells you when a target is not theirs. Another plugin's skill or a built-in one can't be updated from the card. To customize one of those with this tool, propose it as a new skill under a name of its own \u2014 not the original's name, even without its plugin prefix \u2014 with a description that says when to use it instead of the original: both stay listed, and the description decides which one is used.`;
-//@ chunk-2rkp9ne9.js:12369-12420 placement
+//@ chunk-zata70pr.js:13529-13580 placement
 /**
  * 技能展示名：取未限定名，没有时去掉同步前缀。
  */
 function skillDisplayName(skill) {
   return skill.unqualifiedName ?? stripSyncedSkillPrefix(skill.name);
 }
-//@ chunk-2rkp9ne9.js:12420-12510 placement
+//@ chunk-zata70pr.js:13580-13670 placement
 /**
  * 判断技能名是否匹配给定名字（考虑展示名与源码来源）。
  */
@@ -108,7 +113,7 @@ function isSkillNameMatch(skill, targetName) {
     ownership?.savedFromAChat ?? true,
   );
 }
-//@ chunk-2rkp9ne9.js:12510-12635 placement
+//@ chunk-zata70pr.js:13670-13795 placement
 function findSkillsByName(target, commands) {
   let command = findCommand(target, commands);
   let targetName = stripSkillNamespacePrefix(target);
@@ -120,20 +125,20 @@ function findSkillsByName(target, commands) {
     foundByLookup: filtered.some((skillCommand) => skillCommand === command),
   };
 }
-//@ chunk-2rkp9ne9.js:12635-12746 placement
+//@ chunk-zata70pr.js:13795-13906 placement
 function findOwnSkillsByName(targetName, commands) {
   return getValueFromInput(commands).filter((command) => {
     let ownership = listedSkillOwnershipOf(skillDisplayName(command))?.ownership;
     return (ownership === undefined || ownership === "own") && isSkillNameMatch(command, targetName);
   });
 }
-//@ chunk-2rkp9ne9.js:12746-12853 placement
+//@ chunk-zata70pr.js:13906-14013 placement
 var SKILL_OWNERSHIP_DESCRIPTIONS = {
   anthropic: "built in",
   org: "one of the organization's skills",
   shared: "a skill shared with the user",
 };
-//@ chunk-2rkp9ne9.js:12853-13049 placement
+//@ chunk-zata70pr.js:14013-14209 placement
 function findNotOwnedSkill(target, commands) {
   let firstOwnedElsewhere;
   for (let skill of findSkillsByName(target, commands).skills) {
@@ -150,17 +155,17 @@ function findNotOwnedSkill(target, commands) {
     ? firstOwnedElsewhere
     : undefined;
 }
-//@ chunk-2rkp9ne9.js:13049-13119 placement (2.1.88 match: getValueFromInput, 1)
+//@ chunk-zata70pr.js:14209-14279 placement (2.1.88 match: getValueFromInput, 1)
 function getValueFromInput(input) {
   return input.flatMap((command) => (command.type === "prompt" && isSyncedSkill(command) ? [command] : []));
 }
-//@ chunk-2rkp9ne9.js:13119-13170 placement
+//@ chunk-zata70pr.js:14279-14330 placement
 /**
  * 需要检测的不可见字符（零宽空格、BOM、行/段分隔符）。
  */
 var INVISIBLE_CHARS = ["\u200B", "\uFEFF", "\u2028", "\u2029"];
 var MIN_KEPT_PERCENT = 90;
-//@ chunk-2rkp9ne9.js:13170-14190 placement
+//@ chunk-zata70pr.js:14330-15350 placement
 /**
  * 比较现有 SKILL.md 与提议版本：统计正文行数/字节数中被保留的部分、是否有 frontmatter、换行符与不可见字符、占位符是否被删、是否新增技能加载头行、描述是否一致，并给出分档值供遥测与保留检查使用。
  */
@@ -223,7 +228,7 @@ function compareSkillLines(current, proposed, description) {
         : -1,
   };
 }
-//@ chunk-2rkp9ne9.js:14190-14350 placement
+//@ chunk-zata70pr.js:15350-15510 placement
 function droppedSkillLines(current, proposed) {
   let counts = new Map();
   for (let line of splitMeaningfulLines(splitFrontmatter(proposed).body))
@@ -234,14 +239,14 @@ function droppedSkillLines(current, proposed) {
     return remaining <= 0;
   });
 }
-//@ chunk-2rkp9ne9.js:14350-14427 placement
+//@ chunk-zata70pr.js:15510-15587 placement
 /**
  * 判断数值是否为 50 到 100 的整数（保留比例阈值）。
  */
 function isValidKeptPercent(percent) {
   return typeof percent === "number" && Number.isInteger(percent) && percent >= 50 && percent <= 100;
 }
-//@ chunk-2rkp9ne9.js:14427-14694 placement
+//@ chunk-zata70pr.js:15587-15854 placement
 function passesKeptLinesCheck(lines, minKeptPercent) {
   let { total, totalBytes, kept, keptBytes, proposedLines } = lines;
   if (
@@ -260,7 +265,7 @@ function passesKeptLinesCheck(lines, minKeptPercent) {
     !lines.proposalAddsLoadLine
   );
 }
-//@ chunk-2rkp9ne9.js:14694-14814 placement
+//@ chunk-zata70pr.js:15854-15974 placement
 function hasDynamicSkillSyntax(line) {
   return (
     line.includes("$") ||
@@ -270,7 +275,7 @@ function hasDynamicSkillSyntax(line) {
     line.includes("\uFFFF")
   );
 }
-//@ chunk-2rkp9ne9.js:14814-15002 placement
+//@ chunk-zata70pr.js:15974-16162 placement
 function isSkillLoadHeaderLine(line) {
   let startIndex = 0;
   while (startIndex < line.length && UNICODE_SPACE_CHARS.includes(line[startIndex])) startIndex++;
@@ -280,10 +285,10 @@ function isSkillLoadHeaderLine(line) {
     line.startsWith("Skill arguments: ", startIndex)
   );
 }
-//@ chunk-2rkp9ne9.js:15002-15117 placement
+//@ chunk-zata70pr.js:16162-16277 placement
 var UNICODE_SPACE_CHARS =
   "\t\v\f \x85\xA0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000";
-//@ chunk-2rkp9ne9.js:15117-15230 placement
+//@ chunk-zata70pr.js:16277-16390 placement
 function splitLines(text) {
   return (text.startsWith("\uFEFF") ? text.slice(1) : text)
     .replaceAll(
@@ -299,7 +304,7 @@ function splitLines(text) {
     ).split(`
 `);
 }
-//@ chunk-2rkp9ne9.js:15230-15325 placement
+//@ chunk-zata70pr.js:16390-16485 placement
 /**
  * 去掉行尾空格与制表符。
  */
@@ -308,21 +313,21 @@ function rtrimLine(line) {
   while (endIndex > 0 && (line[endIndex - 1] === " " || line[endIndex - 1] === "\t")) endIndex--;
   return line.slice(0, endIndex);
 }
-//@ chunk-2rkp9ne9.js:15325-15376 placement
+//@ chunk-zata70pr.js:16485-16536 placement
 /**
  * 去掉空行后的行列表，用于比较现有与提议的技能正文。
  */
 function splitMeaningfulLines(body) {
   return body.map(rtrimLine).filter((line) => line !== "");
 }
-//@ chunk-2rkp9ne9.js:15376-15406 placement
+//@ chunk-zata70pr.js:16536-16566 placement
 /**
  * 取文本正文的规范化行集合。
  */
 function bodyLines(text) {
   return splitMeaningfulLines(splitLines(text));
 }
-//@ chunk-2rkp9ne9.js:15406-15694 placement
+//@ chunk-zata70pr.js:16566-16854 placement
 function splitFrontmatter(text) {
   let lines = splitLines(text);
   let index = lines.findIndex((line) => rtrimLine(line) !== "");
@@ -345,7 +350,7 @@ function splitFrontmatter(text) {
     body: lines.slice(closingIndex + 1),
   };
 }
-//@ chunk-2rkp9ne9.js:15694-15779 placement
+//@ chunk-zata70pr.js:16854-16939 placement
 /**
  * 把保留比例映射到分档值（100/95/90/75/50/25/0）。
  */
@@ -353,14 +358,14 @@ function keptPercentBand(kept, total) {
   if (kept === total) return 100;
   return [95, 90, 75, 50, 25].find((band) => kept * 100 >= band * total) ?? 0;
 }
-//@ chunk-2rkp9ne9.js:15779-15826 placement
+//@ chunk-zata70pr.js:16939-16986 placement
 /**
  * 把缺失行数映射到分档值。
  */
 function missingCountBand(missingCount) {
   return missingCount <= 1 ? missingCount : missingCount <= 5 ? 2 : missingCount <= 20 ? 6 : 21;
 }
-//@ chunk-2rkp9ne9.js:15826-15910 placement
+//@ chunk-zata70pr.js:16986-17070 placement
 /**
  * 把体积比映射到分档值，供遥测与保留检查使用。
  */
@@ -376,7 +381,7 @@ function sizeRatioBand(proposedLines, currentLines) {
           ? 111
           : 201;
 }
-//@ chunk-2rkp9ne9.js:15910-16183 placement
+//@ chunk-zata70pr.js:17070-17343 placement
 function describeDescriptionState(frontmatter, description) {
   let replaced = description.replace(/[\t\n\v\f\r ]/g, " ").replace(/^ +| +$/g, "");
   let replaced_2 = replaced.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
@@ -385,7 +390,7 @@ function describeDescriptionState(frontmatter, description) {
     return 0;
   return mapped.some((line) => line.startsWith("description:")) ? 1 : 2;
 }
-//@ chunk-2rkp9ne9.js:16183-16266 placement
+//@ chunk-zata70pr.js:17343-17426 placement
 /**
  * 读取 tengu_glittery_fern 的保留比例阈值，无效时返回 0。
  */
@@ -397,7 +402,7 @@ function readKeptPercentSetting() {
     return 0;
   }
 }
-//@ chunk-2rkp9ne9.js:16266-17009 placement
+//@ chunk-zata70pr.js:17426-18169 placement
 /**
  * 汇总一次提议的"保留行"检查：根据读取状态（read/stale/未读）、是否读到其他字节、保留比例阈值得出 arm（passed/failed/stale/…）与 verdict，并附带行统计。
  */
@@ -463,7 +468,7 @@ function evaluateKeptLines({
     lines,
   };
 }
-//@ chunk-2rkp9ne9.js:17009-17963 placement
+//@ chunk-zata70pr.js:18169-19123 placement
 /**
  * 为每个保留行检查结果上报 tengu_propose_skills_kept_lines 遥测。
  */
@@ -503,7 +508,7 @@ function logKeptLinesEvents(entries, phase) {
     logForDebugging(`propose_skills: some kept-lines events not sent: ${errorMessage(error)}`);
   }
 }
-//@ chunk-2rkp9ne9.js:17963-18278 placement
+//@ chunk-zata70pr.js:19123-19438 placement
 /**
  * 保留行统计的空结果。
  */
@@ -527,7 +532,7 @@ var EMPTY_KEPT_LINES_STATS = {
   sizeBand: -1,
   descriptionState: -1,
 };
-//@ chunk-2rkp9ne9.js:18278-18431 placement
+//@ chunk-zata70pr.js:19438-19591 placement
 function compareSkillLinesSafe(current, { skillMd, description }) {
   try {
     return compareSkillLines(current ?? "", skillMd, description);
@@ -537,7 +542,7 @@ function compareSkillLinesSafe(current, { skillMd, description }) {
     return EMPTY_KEPT_LINES_STATS;
   }
 }
-//@ chunk-2rkp9ne9.js:18431-18767 placement
+//@ chunk-zata70pr.js:19591-19927 placement
 /**
  * 计算提议中缺失且未被看到的行数区间；无法读取时返回 -1。
  */
@@ -548,7 +553,7 @@ function unseenMissingLinesBand(current, skillMd, heldLines) {
     let held = heldLines();
     if (held === undefined) return -1;
     let bodySet = new Set(bodyLines(skillMd));
-    return missingCountBand(count(dropped, (line) => !held.has(line) && !bodySet.has(line)));
+    return missingCountBand(countWhere(dropped, (line) => !held.has(line) && !bodySet.has(line)));
   } catch (error) {
     logForDebugging(
       `propose_skills: could not count the dropped lines missing from the conversation, so unseen_missing_band is logged as -1; the verdict stands: ${errorMessage(error)}`,
@@ -557,7 +562,7 @@ function unseenMissingLinesBand(current, skillMd, heldLines) {
     return -1;
   }
 }
-//@ chunk-2rkp9ne9.js:18767-19017 placement
+//@ chunk-zata70pr.js:19927-20177 placement
 function collectConversationLines(messages) {
   let lines = new Set();
   for (let message of messages) {
@@ -575,7 +580,7 @@ function collectConversationLines(messages) {
   }
   return lines;
 }
-//@ chunk-2rkp9ne9.js:19017-19341 placement
+//@ chunk-zata70pr.js:20177-20501 placement
 /**
  * 把消息内容（字符串或内容块数组）提取为字符串列表。
  */
@@ -596,20 +601,20 @@ function contentToStrings(content) {
     }
   });
 }
-//@ chunk-2rkp9ne9.js:19341-19467 placement
+//@ chunk-zata70pr.js:20501-20627 placement
 function collectInputStrings(value) {
   if (typeof value === "string") return [value];
   if (typeof value !== "object" || value === null) return [];
   return Object.values(value).flatMap(collectInputStrings);
 }
-//@ chunk-2rkp9ne9.js:19467-19521 placement
+//@ chunk-zata70pr.js:20627-20681 placement
 /**
  * 技能描述的最大字符数（1024）。
  */
 var MAX_SKILL_DESCRIPTION_CHARS = 1024;
 var OPEN_ANGLE_BRACKET_RE = /[<\uFE64\uFF1C]/;
 var CLOSE_ANGLE_BRACKET_RE = /[>\uFE65\uFF1E]/;
-//@ chunk-2rkp9ne9.js:19521-19592 placement
+//@ chunk-zata70pr.js:20681-20752 placement
 /**
  * 判断描述里是否出现 <...> 形式的标签。
  */
@@ -617,12 +622,12 @@ function hasTagLikeMarkup(text) {
   let openIndex = text.search(OPEN_ANGLE_BRACKET_RE);
   return openIndex !== -1 && CLOSE_ANGLE_BRACKET_RE.test(text.slice(openIndex + 2));
 }
-//@ chunk-2rkp9ne9.js:19592-19681 placement
+//@ chunk-zata70pr.js:20752-20841 placement
 /**
  * 匹配 SKILL.md 的 YAML frontmatter 块。
  */
 var YAML_FRONTMATTER_RE = /^(\uFEFF?(?:[ \t]*\r?\n)*---[ \t]*\r?\n)([\s\S]*?)(?=\r?\n---[ \t]*(?:\r?\n|$))/;
-//@ chunk-2rkp9ne9.js:19681-19840 placement
+//@ chunk-zata70pr.js:20841-21000 placement
 function hasSkillInstructions(markdown) {
   let match = YAML_FRONTMATTER_RE.exec(markdown);
   return (
@@ -630,7 +635,7 @@ function hasSkillInstructions(markdown) {
     markdown.replace(/^---\n[\s\S]*?\n---\n+/, "").trim() !== ""
   );
 }
-//@ chunk-2rkp9ne9.js:19840-26874 placement
+//@ chunk-zata70pr.js:21000-28080 placement
 /**
  * propose_skills 工具：从反复出现的流程中提出新技能或改进已有技能，交给用户在审核卡片上保存；只在远程 cowork/技能同步等环境启用；校验名称、描述与 SKILL.md，改进已有技能前要求先完整读过其 SKILL.md。
  */
@@ -639,7 +644,7 @@ var RESERVED_SKILL_NAME_WORDS;
 var proposeSkillsInputSchema;
 var proposeSkillsOutputSchema;
 var ProposeSkillsTool;
-deferInit("chunk-2rkp9ne9.js:19840", () => {
+deferInit("chunk-zata70pr.js:21000", () => {
   MAX_SKILL_NAME_CHARS = 64;
   RESERVED_SKILL_NAME_WORDS = ["claude", "anthropic"];
   proposeSkillsInputSchema = DoctorLazy(() =>
@@ -727,7 +732,12 @@ deferInit("chunk-2rkp9ne9.js:19840", () => {
     isEnabled() {
       if (isSpawnedByClaudeCodeSession()) return false;
       if (isCcsRemoteCowork()) return env.CLAUDE_CODE_SYNC_SKILLS && !getSkillsSyncVetoed();
-      if (!isRemoteCowork() && !env.CLAUDE_CODE_SKILL_PROPOSALS) return false;
+      if (
+        !isRemoteCowork() &&
+        !env.CLAUDE_CODE_SKILL_PROPOSALS &&
+        !(isClaudeAiChatCowork() && getFeatureValue_SESSION_PINNED("tengu_parallel_backus", false) === true)
+      )
+        return false;
       if (
         !env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE &&
         !(isCcsTenant() && env.CLAUDE_CODE_SKILL_PROPOSALS && env.CLAUDE_CODE_SYNC_SKILLS)
@@ -943,7 +953,7 @@ deferInit("chunk-2rkp9ne9.js:19840", () => {
             );
           logEvent("tengu_propose_skills", {
             proposal_count: proposals.length,
-            improvement_count: count(proposals, (proposal) => proposal.kind === "improvement"),
+            improvement_count: countWhere(proposals, (proposal) => proposal.kind === "improvement"),
           });
           return {
             data: {
@@ -965,14 +975,14 @@ deferInit("chunk-2rkp9ne9.js:19840", () => {
     },
   });
 });
-//@ chunk-2rkp9ne9.js:26874-26925 placement
+//@ chunk-zata70pr.js:28080-28131 placement
 /**
  * 取名字最后一段冒号后的部分（去掉命名空间前缀）。
  */
 function afterLastColon(name) {
   return name.slice(name.lastIndexOf(":") + 1);
 }
-//@ chunk-2rkp9ne9.js:26925-27014 placement (2.1.88 match: getValueFromInput, 1)
+//@ chunk-zata70pr.js:28131-28220 placement (2.1.88 match: getValueFromInput, 1)
 function getValueFromInput_2(target, commands) {
   return commands.some(
     (command) =>
@@ -981,12 +991,12 @@ function getValueFromInput_2(target, commands) {
       (skillDisplayName(command) === target || stripSyncedSkillPrefix(getCommandName(command)) === target),
   );
 }
-//@ chunk-2rkp9ne9.js:27014-27061 placement (2.1.88 match: ADMIN_TRUSTED_SOURCES, 0.758)
+//@ chunk-zata70pr.js:28220-28267 placement (2.1.88 match: ADMIN_TRUSTED_SOURCES, 0.759)
 var ADMIN_TRUSTED_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-2rkp9ne9.js:27014", () => {
+deferInit("chunk-zata70pr.js:28220", () => {
   ADMIN_TRUSTED_SOURCES = new Set(["plugin", "bundled", "builtin"]);
 });
-//@ chunk-2rkp9ne9.js:27061-27377 placement
+//@ chunk-zata70pr.js:28267-28583 placement
 /**
  * 查找用户自己上传的、与目标名匹配的插件技能。
  */
@@ -1006,13 +1016,13 @@ function findOwnUploadedPluginSkills(target, commands) {
       : [],
   );
 }
-//@ chunk-2rkp9ne9.js:27377-27505 placement
+//@ chunk-zata70pr.js:28583-28711 placement
 function isStaleSyncedPluginSkill(command) {
   if (command.pluginSource === undefined || !hasRegisteredSyncedPluginDirs()) return false;
   let pluginPath = resolve(command.pluginSource.pluginPath);
   return !getSyncedPluginDirs().some((dir) => resolve(dir) === pluginPath);
 }
-//@ chunk-2rkp9ne9.js:27505-27805 placement
+//@ chunk-zata70pr.js:28711-29011 placement
 /**
  * 生成拒绝更新非用户自有技能的说明，建议改为以新名字提议 new 类型。
  */
@@ -1020,7 +1030,7 @@ function notOwnSkillRefusal(target, name, ownership, displayName) {
   let nameSuffix = name === target ? "" : ` (${name})`;
   return `${target}${nameSuffix} is ${ownership}, not one of the user's own skills, so the review card cannot update it. To customize it for the user, propose kind "new" under a name of its own \u2014 not ${displayName} \u2014 with a description that says when to use it instead of ${name}.`;
 }
-//@ chunk-2rkp9ne9.js:27805-29840 placement
+//@ chunk-zata70pr.js:29011-31046 placement
 /**
  * 为每个提议生成拒绝理由：改进的目标是插件交付的自有技能（无盘会话不能更新、副本过期）、内置/组织/共享技能（应改提新技能）；新技能名与自有技能或插件技能重名等。
  */
@@ -1098,7 +1108,7 @@ function collectProposalRefusals(proposals, commands) {
     }
   return refusals.length === 0 ? undefined : refusals.join(" ");
 }
-//@ chunk-2rkp9ne9.js:29840-29962 placement
+//@ chunk-zata70pr.js:31046-31168 placement
 function createReadCheckState() {
   return {
     unread: [],
@@ -1109,7 +1119,7 @@ function createReadCheckState() {
     refusedNewNames: new Set(),
   };
 }
-//@ chunk-2rkp9ne9.js:29962-30249 placement
+//@ chunk-zata70pr.js:31168-31455 placement
 function createProposalTargetCounts() {
   return {
     update_targets: 0,
@@ -1123,7 +1133,7 @@ function createProposalTargetCounts() {
     failed: false,
   };
 }
-//@ chunk-2rkp9ne9.js:30249-31025 placement
+//@ chunk-zata70pr.js:31455-32231 placement
 /**
  * 把提议展开为要检查的目标：improvement 按目标名找到已有技能（含用户上传的插件技能），new 找到会被同名覆盖的自有/未知技能；同时累计各类目标计数。
  */
@@ -1173,7 +1183,7 @@ function resolveProposalTargets(proposals, commands, proposalTargetCounts) {
     }));
   });
 }
-//@ chunk-2rkp9ne9.js:31025-31838 placement
+//@ chunk-zata70pr.js:32231-33044 placement
 /**
  * 从会话消息中收集先前对同名技能的提议，供比较与去重。
  */
@@ -1231,7 +1241,7 @@ function collectEarlierProposals(proposalTargets, toolContext, commands) {
   }
   return earlier;
 }
-//@ chunk-2rkp9ne9.js:31838-32026 placement
+//@ chunk-zata70pr.js:33044-33232 placement
 function collectConversationLinesSafe(messages) {
   try {
     return collectConversationLines(messages());
@@ -1243,7 +1253,7 @@ function collectConversationLinesSafe(messages) {
     return;
   }
 }
-//@ chunk-2rkp9ne9.js:32026-32668 placement
+//@ chunk-zata70pr.js:33232-33874 placement
 /**
  * 记录未读完或磁盘已更新的目标技能：分别记入被拒更新或被拒新名，并生成原因。
  */
@@ -1260,11 +1270,11 @@ function recordUnreadOrStaleTarget(state, outcome, path, status) {
     `The new proposal ${outcome.written} would be saved under the name of the listed skill ${outcome.skill.name} (${path}), whose SKILL.md ${statusText}. If that skill is the user's own, saving this proposal replaces its SKILL.md entirely. Read that whole file ${status === "unread" ? "first" : "again"}, then call again with a complete SKILL.md that keeps everything worth keeping, or call again under a different name.`,
   );
 }
-//@ chunk-2rkp9ne9.js:32668-32770 placement
-var MAX_SKILL_TEXT_CHARS = 50000;
+//@ chunk-zata70pr.js:33874-33978 placement
+var MAX_SKILL_TEXT_CHARS = (MAX_RESULT_BYTES * 3) / 4;
 var NEW_SKILL_NAME_HINT =
   "Tell the user; propose it as a new skill under another name only if they want that.";
-//@ chunk-2rkp9ne9.js:32770-35187 placement
+//@ chunk-zata70pr.js:33978-36547 placement
 async function resolveSkillProposals(
   state,
   proposals,
@@ -1282,10 +1292,12 @@ async function resolveSkillProposals(
     if (kind === "improvement" && target && !updatedTargets.has(target)) {
       state.refusedUpdates.add(target);
       state.keptElsewhere.push(
-        `${collapseLineBreaks(normalizeLineBreaks(target))} is not among the user's skills that this session lists right now, so it cannot be updated yet. Call again once; if it is still not listed, tell the user, and propose it as a new skill under another name only if they want that.`,
+        `${collapseLineBreaks(normalizeLineBreaks(target))} is not among the user's skills that this session lists right now, so it cannot be updated yet. If you proposed it as a new skill earlier in this conversation and the user has not saved it, call again with kind "new" under the same name. Otherwise call again once; if it is still not listed, tell the user, and propose it as a new skill under another name only if they want that.`,
       );
     }
-  let displayNames = uniq(proposalTargets.map((target) => skillDisplayName(target.skill)));
+  let displayNames = normalizeCaseForComparison_2(
+    proposalTargets.map((target) => skillDisplayName(target.skill)),
+  );
   let currentByDisplayName = new Map(
     await Promise.all(
       displayNames.map(async (displayName) => [
@@ -1354,14 +1366,14 @@ async function resolveSkillProposals(
     }
   }
 }
-//@ chunk-2rkp9ne9.js:35187-35217 placement
+//@ chunk-zata70pr.js:36547-36577 placement
 /**
  * <current_skill_md> 开标签。
  */
 var CURRENT_SKILL_MD_OPEN_TAG = `
 <current_skill_md>
 `;
-//@ chunk-2rkp9ne9.js:35217-35311 placement (2.1.88 match: getSnippetForPatch, 0.297)
+//@ chunk-zata70pr.js:36577-36671 placement (2.1.88 match: getSnippetForPatch, 0.296)
 /**
  * 把 SKILL.md 内容加行号并包进 <current_skill_md> 标签（技能同步提示用；归属疑似错误）。
  */
@@ -1374,7 +1386,7 @@ function formatCurrentSkillMd(skillMd) {
 </current_skill_md>
 `;
 }
-//@ chunk-2rkp9ne9.js:35311-35634 placement
+//@ chunk-zata70pr.js:36671-36994 placement
 function conversationToolResultsInclude(messages, needle) {
   return messages.some(
     (message) =>
@@ -1397,7 +1409,7 @@ function conversationToolResultsInclude(messages, needle) {
       ),
   );
 }
-//@ chunk-2rkp9ne9.js:35634-35721 placement
+//@ chunk-zata70pr.js:36994-37081 placement
 /**
  * 等技能下载完成后再读取文件，失败时静默。
  */
@@ -1407,7 +1419,7 @@ async function downloadAndReadSkillFile(displayName, signal) {
   });
   return listedSkillText(displayName);
 }
-//@ chunk-2rkp9ne9.js:35721-36249 placement
+//@ chunk-zata70pr.js:37081-37609 placement
 /**
  * 根据未读、过期、保存在别处等检查结果组装给模型的提示消息。
  */
@@ -1424,7 +1436,7 @@ function buildReadCheckMessages({ unread, stale, keptElsewhere, replacedByNew })
     ...replacedByNew,
   ];
 }
-//@ chunk-2rkp9ne9.js:36249-36513 placement
+//@ chunk-zata70pr.js:37609-37873 placement
 function getSkillFileForReadCheck(command) {
   if (isDiskless()) return;
   if (command.loadedFrom === "plugin")
@@ -1440,12 +1452,12 @@ function getSkillFileForReadCheck(command) {
     contentLength: command.contentLength,
   };
 }
-//@ chunk-2rkp9ne9.js:36513-36525 placement
+//@ chunk-zata70pr.js:37873-37885 placement
 /**
  * 技能下载等待的超时时间（5 秒）。
  */
 var SKILL_DOWNLOAD_TIMEOUT_MS = 5000;
-//@ chunk-2rkp9ne9.js:36525-36809 placement
+//@ chunk-zata70pr.js:37885-38169 placement
 /**
  * 占位同步技能先启动下载并等待，再读取其文件内容。
  */
@@ -1473,7 +1485,7 @@ async function readSkillFileAfterDownload(command, storageV5, signal) {
   );
   return command_2?.type === "prompt" ? getSkillFileForReadCheck(command_2) : undefined;
 }
-//@ chunk-2rkp9ne9.js:36809-37052 placement
+//@ chunk-zata70pr.js:38169-38412 placement
 function isSkillReadIncomplete(readState, contentLength, toolContext) {
   if (readState === undefined || readState.contentNotInModelContext || readState.isPartialView) return true;
   if ((readState.offset ?? 1) <= 1) return false;
@@ -1482,7 +1494,7 @@ function isSkillReadIncomplete(readState, contentLength, toolContext) {
   let maxSizeBytes = toolContext.fileReadingLimits?.maxSizeBytes ?? defaultFileReadingLimits.maxSizeBytes;
   return contentLength <= maxTokens && contentLength <= maxSizeBytes;
 }
-//@ chunk-2rkp9ne9.js:37052-37418 placement
+//@ chunk-zata70pr.js:38412-38778 placement
 /**
  * 判断技能文件的读取状态：未读、已读或已过期（磁盘内容比读到的新）。
  */
@@ -1517,7 +1529,7 @@ async function classifySkillReadStatus(
       readState.limit;
   return !modified && coversWholeFile ? "read" : "unread";
 }
-//@ chunk-2rkp9ne9.js:37418-37543 placement
+//@ chunk-zata70pr.js:38778-38903 placement
 async function isFileModifiedSince(path, readState) {
   try {
     return (await getFileModificationTimeAsync(path)) > readState.timestamp;
@@ -1526,7 +1538,7 @@ async function isFileModifiedSince(path, readState) {
     return false;
   }
 }
-//@ chunk-2rkp9ne9.js:37543-37737 placement
+//@ chunk-zata70pr.js:38903-39097 placement
 async function readSkillFileWhole(path) {
   try {
     let fileBytes = await getFsImplementation().readFileBytes(path, MAX_SCOPE_RESPONSE_BYTES + 1);

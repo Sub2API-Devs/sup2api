@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：GitHub App 安装向导的可选 Actions 配置步骤与 OAuth 状态面板
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-4v9zy7gn.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-2xbvbqx2.js (2)
  * attribution: placement 2
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -17,11 +17,11 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { WorkerBadge } from "../../components/permissions/WorkerBadge.js";
 import { Box, Text } from "../../ink/components/Text.js";
-import { PASTE_HERE_MSG_2 } from "./OAuthFlowStep.js";
+import { PASTE_HERE_MSG } from "./OAuthFlowStep.js";
 import { TextInput } from "../../components/TextInput.js";
 import { ModelSelector } from "../../components/agents/ModelSelector.js";
 
-//@ chunk-4v9zy7gn.js:37793-39822 placement
+//@ chunk-2xbvbqx2.js:38836-40865 placement
 function OAuthStatusPanel(props) {
   let $ = useMemoCache(26);
   let {
@@ -74,7 +74,7 @@ function OAuthStatusPanel(props) {
           jsxProd_default_2(Box, {
             children: [
               jsxProd_default(Text, {
-                children: PASTE_HERE_MSG_2,
+                children: PASTE_HERE_MSG,
               }),
               jsxProd_default(TextInput, {
                 value: pastedCode,
@@ -201,7 +201,7 @@ function OAuthStatusPanel(props) {
     }
   }
 }
-//@ chunk-4v9zy7gn.js:39822-40689 placement
+//@ chunk-2xbvbqx2.js:40865-41732 placement
 function OptionalActionsSetupStep(props) {
   let $ = useMemoCache(8);
   let { onSelect, onCancel } = props;

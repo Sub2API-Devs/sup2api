@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：plugin eval 报告：with/without 对比表（CASE/RUNS/COST/SCORE/PASS%）、结果 JSON 字段与汇总行
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-qv1jytq6.js (19)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-fn6fh7dj.js (19)
  * attribution: placement 19
  */
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { replaceControlChars } from "../../utils/resultError.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { repeatString } from "../../utils/stringUtils.js";
@@ -25,7 +25,7 @@ import {
 } from "../../../vendor/zod/lib/index.mjs";
 import { normalizeKeyIndex } from "../../utils/objectUtils.js";
 
-//@ chunk-qv1jytq6.js:431-539 placement
+//@ chunk-fn6fh7dj.js:431-539 placement
 var PLUGIN_LOAD_PROBLEMS = [
   "manifest_invalid",
   "disabled_by_default",
@@ -33,7 +33,7 @@ var PLUGIN_LOAD_PROBLEMS = [
   "archive_not_probed",
   "will_not_load",
 ];
-//@ chunk-qv1jytq6.js:539-660 placement
+//@ chunk-fn6fh7dj.js:539-660 placement
 /**
  * 计算加权得分：通过项权重之和除以总权重（跳过 with_only 项）。
  */
@@ -47,7 +47,7 @@ function computeWeightedScore(results) {
   }
   return totalWeight > 0 ? weightedScore / totalWeight : 0;
 }
-//@ chunk-qv1jytq6.js:660-822 placement
+//@ chunk-fn6fh7dj.js:660-822 placement
 /**
  * 汇总多次运行的平均得分与通过率。
  */
@@ -58,13 +58,13 @@ function aggregateRunScores(scores) {
       passRate: 0,
     };
   let score = scores.reduce((acc, run) => acc + run.score, 0) / scores.length;
-  let passRate = count(scores, (run) => run.score >= 1) / scores.length;
+  let passRate = countWhere(scores, (run) => run.score >= 1) / scores.length;
   return {
     score,
     passRate,
   };
 }
-//@ chunk-qv1jytq6.js:822-2149 placement
+//@ chunk-fn6fh7dj.js:822-2149 placement
 /**
  * 生成 with/without 插件对比的用例结果表。
  */
@@ -148,11 +148,11 @@ function formatEvalReportTable(report) {
   return lines.join(`
 `);
 }
-//@ chunk-qv1jytq6.js:2149-2200 placement
+//@ chunk-fn6fh7dj.js:2149-2200 placement
 function _(delta) {
   return `${delta > 0 ? "+" : ""}${delta.toFixed(2)}`;
 }
-//@ chunk-qv1jytq6.js:2200-2553 placement
+//@ chunk-fn6fh7dj.js:2200-2553 placement
 /**
  * 给出用例失败的一行原因：运行出错取错误；否则取权重最高的未通过评分器（若所有运行都未通过且有提示则用提示）。
  */
@@ -173,7 +173,7 @@ function summarizeCaseFailure(caseReport) {
   }
   return worstGrader ? replaceControlChars(`${worstGrader.name}: ${worstGrader.explanation}`) : null;
 }
-//@ chunk-qv1jytq6.js:2553-2614 placement
+//@ chunk-fn6fh7dj.js:2553-2614 placement
 /**
  * 把文本补齐到指定显示宽度（超出时加一个空格）。
  */
@@ -181,7 +181,7 @@ function padColumn(text, width) {
   let textWidth = bunStringWidth(text);
   return textWidth > width ? `${text} ` : text + repeatString(" ", width - textWidth);
 }
-//@ chunk-qv1jytq6.js:2614-2994 placement
+//@ chunk-fn6fh7dj.js:2614-2994 placement
 /**
  * 组装套件报告 JSON：schema 版本、Claude 版本、起始时间与时长、总花费（含 without 组）、是否部分完成、并发、插件与各用例报告。
  */
@@ -206,18 +206,18 @@ function buildSuiteReport(results, date, partialReason, claudeVersion, plugins, 
     cases: results.map((result) => result.report),
   };
 }
-//@ chunk-qv1jytq6.js:2994-3105 placement
+//@ chunk-fn6fh7dj.js:2994-3105 placement
 var PARTIAL_REASON_LABELS = {
   interrupted: "interrupted",
   cost_ceiling: "cost ceiling hit",
   auth_failed: "stopped: authentication failed",
 };
-//@ chunk-qv1jytq6.js:3105-3113 placement
+//@ chunk-fn6fh7dj.js:3105-3113 placement
 /**
  * 套件报告 schema 版本（1）。
  */
 var REPORT_SCHEMA_VERSION = 1;
-//@ chunk-qv1jytq6.js:3113-3907 placement
+//@ chunk-fn6fh7dj.js:3113-3907 placement
 function describeMockMode() {
   return create({
     score: create_3(),
@@ -281,7 +281,7 @@ function describeMockMode() {
     ),
   });
 }
-//@ chunk-qv1jytq6.js:3907-4366 placement
+//@ chunk-fn6fh7dj.js:3907-4366 placement
 /**
  * 用例报告的 zod 结构：名称、目录、提示词、模型、次数/超时/轮次、评分器、with/without 组的模拟模式、提示与汇总分数。
  */
@@ -318,14 +318,14 @@ function caseReportSchema() {
     }),
   });
 }
-//@ chunk-qv1jytq6.js:4366-4408 placement
+//@ chunk-fn6fh7dj.js:4366-4408 placement
 /**
  * 运行中止原因的可选 schema。
  */
 function optionalRunStopSchema() {
   return describeRunStop(create_26(PLUGIN_LOAD_PROBLEMS).optional());
 }
-//@ chunk-qv1jytq6.js:4408-5070 placement
+//@ chunk-fn6fh7dj.js:4408-5070 placement
 function describeRunStop(problem) {
   return create({
     schemaVersion: create_25(REPORT_SCHEMA_VERSION),
@@ -364,7 +364,7 @@ function describeRunStop(problem) {
     }),
   });
 }
-//@ chunk-qv1jytq6.js:5070-6014 placement
+//@ chunk-fn6fh7dj.js:5070-6014 placement
 /**
  * 上述键的集合。
  */
@@ -454,7 +454,7 @@ var EVAL_RESULT_KEYS = [
 var RUN_STOP_KEYS = ["config"];
 var CONFIG_ONLY_KEYS = normalizeKeyIndex(EVAL_RESULT_KEYS);
 var CONFIG_ONLY_KEY_SET = new Set(RUN_STOP_KEYS);
-//@ chunk-qv1jytq6.js:6014-6542 placement
+//@ chunk-fn6fh7dj.js:6014-6542 placement
 /**
  * 把一次运行结果从 snake_case 转为报告结构：分数、轮次、费用、时长、错误、trace 路径、中止与模拟信息、各评分器结果。
  */
@@ -488,7 +488,7 @@ function toRunReport(runReport) {
     })),
   };
 }
-//@ chunk-qv1jytq6.js:6542-7177 placement
+//@ chunk-fn6fh7dj.js:6542-7177 placement
 function formatBaselineLine(case_, report) {
   return {
     name: report.name,
@@ -525,7 +525,7 @@ function formatBaselineLine(case_, report) {
     },
   };
 }
-//@ chunk-qv1jytq6.js:7177-8088 placement
+//@ chunk-fn6fh7dj.js:7177-8088 placement
 function formatEvalSummary(summaryInput) {
   let {
     aggregate,
@@ -573,14 +573,14 @@ function formatEvalSummary(summaryInput) {
     cases: mapped,
     aggregates: {
       casesTotal: mapped.length,
-      casesPassed: count(mapped, (caseLine) => caseLine.aggregates.score >= threshold),
+      casesPassed: countWhere(mapped, (caseLine) => caseLine.aggregates.score >= threshold),
       overallScore: mean(mapped.map((caseLine) => caseLine.aggregates.score)),
       overallPassRate: mean(mapped.map((caseLine) => caseLine.aggregates.passRate)),
       meanDelta: filtered.length > 0 ? mean(filtered) : undefined,
     },
   };
 }
-//@ chunk-qv1jytq6.js:8088-8158 placement
+//@ chunk-fn6fh7dj.js:8088-8158 placement
 /**
  * 求平均值（空数组为 0）。
  */
@@ -588,11 +588,11 @@ function mean(values) {
   return values.length === 0 ? 0 : values.reduce((acc, value) => acc + value, 0) / values.length;
 }
 export {
-  mean,
   buildSuiteReport,
   aggregateRunScores,
   computeWeightedScore,
   formatEvalReportTable,
   formatEvalSummary,
   optionalRunStopSchema,
+  mean,
 };

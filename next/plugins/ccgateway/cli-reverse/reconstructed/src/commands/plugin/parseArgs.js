@@ -3,14 +3,14 @@
  *
  * 并入已有模块：/plugin 参数解析（marketplace 安装参数）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/parseArgs.ts
- * pieces: chunk-bppzggd7.js (5)
+ * pieces: chunk-agxasdfa.js (5)
  * attribution: fingerprint 1, placement 4
  */
 import { lanternPrismEnabled, isPluginDirectoryModeOn } from "../../utils/plugins/pluginGates.js";
 
-//@ chunk-bppzggd7.js:230-2263 fingerprint (2.1.88 match: parsePluginArgs, 0.683)
+//@ chunk-agxasdfa.js:230-2263 fingerprint (2.1.88 match: parsePluginArgs, 0.684)
 function parsePluginArgs(args) {
   if (!args)
     return {
@@ -184,9 +184,9 @@ function parsePluginArgs(args) {
       };
   }
 }
-//@ chunk-bppzggd7.js:2263-2319 placement
+//@ chunk-agxasdfa.js:2263-2319 placement
 var PLUGIN_INSTALL_USAGE_TEXT = "/plugin install <plugin> --marketplace <source>";
-//@ chunk-bppzggd7.js:2319-2665 placement
+//@ chunk-agxasdfa.js:2319-2665 placement
 function parseMarketplaceFlag(argv) {
   let index = argv.findIndex((arg) => arg === "--marketplace" || arg.startsWith("--marketplace="));
   if (index === -1) return;
@@ -207,7 +207,7 @@ function parseMarketplaceFlag(argv) {
         ...result,
       };
 }
-//@ chunk-bppzggd7.js:2665-3116 placement
+//@ chunk-agxasdfa.js:2665-3116 placement
 function validateMarketplaceInstallArgs({ plugins, marketplaceSource, commandLine }) {
   if (!marketplaceSource || marketplaceSource.startsWith("-"))
     return {
@@ -227,8 +227,8 @@ function validateMarketplaceInstallArgs({ plugins, marketplaceSource, commandLin
     marketplaceSource,
   };
 }
-//@ chunk-bppzggd7.js:3116-3209 placement
+//@ chunk-agxasdfa.js:3116-3209 placement
 function formatMarketplaceInstallCommand({ plugin, marketplaceSource }) {
   return `/plugin install ${plugin} --marketplace ${marketplaceSource}`;
 }
-export { parsePluginArgs, formatMarketplaceInstallCommand, validateMarketplaceInstallArgs };
+export { parsePluginArgs, validateMarketplaceInstallArgs, formatMarketplaceInstallCommand };

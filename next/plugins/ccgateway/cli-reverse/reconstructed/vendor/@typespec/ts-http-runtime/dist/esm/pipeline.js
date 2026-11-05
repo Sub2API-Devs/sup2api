@@ -1,19 +1,19 @@
 /**
  * @typespec/ts-http-runtime/dist/esm/pipeline.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
- * pieces: chunk-mrx6y2r5.js (4)
+ * pieces: chunk-b5df2wx1.js (4)
  * attribution: esm-layout 2, esm-fingerprint 2
  */
 import { PipelineRequestImpl } from "./pipelineRequest.js";
 
-//@ chunk-mrx6y2r5.js:32039-32071 esm-layout
+//@ chunk-b5df2wx1.js:32039-32071 esm-layout
 function createEmptyPipeline(options) {
   return new PipelineRequestImpl(options);
 }
-//@ chunk-mrx6y2r5.js:32071-32130 esm-fingerprint
+//@ chunk-b5df2wx1.js:32071-32130 esm-fingerprint
 var ValidPhaseNames = new Set(["Deserialize", "Serialize", "Retry", "Sign"]);
-//@ chunk-mrx6y2r5.js:32130-34701 esm-fingerprint
+//@ chunk-b5df2wx1.js:32130-34701 esm-fingerprint
 class HttpPipeline {
   constructor(policies) {
     var _a;
@@ -163,7 +163,7 @@ class HttpPipeline {
     return result;
   }
 }
-//@ chunk-mrx6y2r5.js:34701-34734 esm-layout
+//@ chunk-b5df2wx1.js:34701-34734 esm-layout
 function createEmptyPipeline_2() {
   return HttpPipeline.create();
 }

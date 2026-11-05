@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：远程工具服务套件（工具定义、输入结构、分组提供者）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ad2e1aj6.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-nvm0wye1.js (14)
  * attribution: placement 14
  */
 import { randomUUID } from "crypto";
@@ -78,7 +78,7 @@ import {
   array,
 } from "../../../../vendor/zod/v4/classic/schemas.js";
 
-//@ chunk-ad2e1aj6.js:80196-81783 placement
+//@ chunk-nvm0wye1.js:82346-83935 placement
 function remoteToolServingGroupProvider(options = {}) {
   let tools = options.tools ?? getAllBaseTools;
   let policy = options.policy ?? resolveServingPolicy;
@@ -196,7 +196,7 @@ function remoteToolServingGroupProvider(options = {}) {
     }
   };
 }
-//@ chunk-ad2e1aj6.js:81783-82732 placement
+//@ chunk-nvm0wye1.js:83935-84884 placement
 function servingKitFor(ctx, options = {}) {
   let current = ctx.servingKit.current;
   if (current !== undefined) {
@@ -254,9 +254,9 @@ function servingKitFor(ctx, options = {}) {
   };
   return kit;
 }
-//@ chunk-ad2e1aj6.js:82732-82744 placement
+//@ chunk-nvm0wye1.js:84884-84896 placement
 var PRE_EXIT_FLUSH_TIMEOUT_MS = 1000;
-//@ chunk-ad2e1aj6.js:82744-86452 placement
+//@ chunk-nvm0wye1.js:84896-88607 placement
 function createServingKit(options) {
   let { limiter, onNotice, sessionId } = options;
   let execution = options.execution ?? {
@@ -569,19 +569,19 @@ function createServingKit(options) {
     throw error;
   }
 }
-//@ chunk-ad2e1aj6.js:86452-86500 placement
+//@ chunk-nvm0wye1.js:88607-88655 placement
 function syncReadyAtAttach(sessionId) {
   return dirSyncSession().attachSyncs.ready(sessionId);
 }
-//@ chunk-ad2e1aj6.js:86500-86542 placement
+//@ chunk-nvm0wye1.js:88655-88697 placement
 function projectSyncDirectionOf(sessionId) {
   return projectSyncDirection(dirSyncSession().stateOf(sessionId));
 }
-//@ chunk-ad2e1aj6.js:86542-86587 placement
+//@ chunk-nvm0wye1.js:88697-88742 placement
 function watchProjectSyncState(sessionId, onChange) {
   return dirSyncSession().watchState(sessionId, onChange);
 }
-//@ chunk-ad2e1aj6.js:86587-86763 placement
+//@ chunk-nvm0wye1.js:88742-88918 placement
 function projectSyncDirection(state) {
   switch (state?.state) {
     case "armed":
@@ -594,13 +594,13 @@ function projectSyncDirection(state) {
       return "unknown";
   }
 }
-//@ chunk-ad2e1aj6.js:86763-86894 placement
+//@ chunk-nvm0wye1.js:88918-89049 placement
 function getRefusedInputFields(policy, tool) {
   if (policy.refusedInputFields) return policy.refusedInputFields(tool);
   let toolRemoteExecution = getToolRemoteExecution(tool);
   return toolRemoteExecution.supported ? (toolRemoteExecution.refusedInputFields ?? []) : [];
 }
-//@ chunk-ad2e1aj6.js:86894-87204 placement
+//@ chunk-nvm0wye1.js:89049-89359 placement
 function servedToolDefinition(tool, deps, description) {
   let refusedInputFields = getRefusedInputFields(deps.policy, tool);
   return {
@@ -623,7 +623,7 @@ function servedToolDefinition(tool, deps, description) {
     call: (toolInput, ctx) => admitServedCall(tool.name, toolInput, ctx, deps, "bridge"),
   };
 }
-//@ chunk-ad2e1aj6.js:87204-87359 placement
+//@ chunk-nvm0wye1.js:89359-89514 placement
 function announcedToolFor(tool, deps, description) {
   let refusedInputFields = getRefusedInputFields(deps.policy, tool);
   return {
@@ -634,11 +634,11 @@ function announcedToolFor(tool, deps, description) {
     input_schema: servedInputSchema(tool, [...refusedInputFields, HOST_TOOL_INPUT_FIELD]),
   };
 }
-//@ chunk-ad2e1aj6.js:87359-87507 placement
+//@ chunk-nvm0wye1.js:89514-89662 placement
 function servedToolDescription(tool, description) {
   return `Claude Code ${tool.name} served by ${description.name} for its bound cloud session; called by that session's own routing, not directly.`;
 }
-//@ chunk-ad2e1aj6.js:87507-87777 placement
+//@ chunk-nvm0wye1.js:89662-89932 placement
 function servedInputSchema(tool, refusedFields) {
   let parsed = toolInputJsonSchemaValidator().safeParse(toolInputJsonSchema(tool.inputSchema));
   if (!parsed.success) throw Error("a served tool must have an object input schema");
@@ -652,7 +652,7 @@ function servedInputSchema(tool, refusedFields) {
     }),
   };
 }
-//@ chunk-ad2e1aj6.js:87777-87873 placement
+//@ chunk-nvm0wye1.js:89932-90028 placement
 var toolInputJsonSchemaValidator = DoctorLazy(() =>
   looseObject({
     type: literal("object"),

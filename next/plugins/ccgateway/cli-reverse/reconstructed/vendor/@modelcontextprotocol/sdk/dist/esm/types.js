@@ -1,8 +1,8 @@
 /**
  * @modelcontextprotocol/sdk/dist/esm/types.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/sdk@1.29.0
- * pieces: chunk-x4hefdgz.js (12)
+ * pieces: chunk-c8yxp647.js (12)
  * attribution: esm-fingerprint 10, esm-layout 2
  */
 import {
@@ -27,7 +27,7 @@ import {
 import { parseToolOutputSchema } from "../../../../../src/services/mcp/schemaParse.js";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-x4hefdgz.js:305-1188 esm-fingerprint
+//@ chunk-c8yxp647.js:305-1188 esm-fingerprint
 var LATEST_PROTOCOL_VERSION; // deferred: uses custom (../../../../zod/v4/classic/schemas.js) of its import cycle while loading; runs once the cycle is complete
 var DEFAULT_NEGOTIATED_PROTOCOL_VERSION;
 var SUPPORTED_PROTOCOL_VERSIONS;
@@ -54,7 +54,7 @@ var JSONRPCNotificationSchema;
 var isJSONRPCNotification;
 var JSONRPCResultResponseSchema;
 var isJSONRPCResultResponse;
-deferInit("chunk-x4hefdgz.js:305", () => {
+deferInit("chunk-c8yxp647.js:305", () => {
   LATEST_PROTOCOL_VERSION = "2025-11-25";
   DEFAULT_NEGOTIATED_PROTOCOL_VERSION = "2025-03-26";
   SUPPORTED_PROTOCOL_VERSIONS = [
@@ -123,11 +123,11 @@ deferInit("chunk-x4hefdgz.js:305", () => {
   }).strict();
   isJSONRPCResultResponse = (value) => JSONRPCResultResponseSchema.safeParse(value).success;
 });
-//@ chunk-x4hefdgz.js:1188-1195 esm-layout
+//@ chunk-c8yxp647.js:1188-1195 esm-layout
 var ErrorCode;
-//@ chunk-x4hefdgz.js:1195-1583 esm-fingerprint
+//@ chunk-c8yxp647.js:1195-1583 esm-fingerprint
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-x4hefdgz.js:1195", () => {
+deferInit("chunk-c8yxp647.js:1195", () => {
   (function (ErrorCode) {
     ErrorCode[(ErrorCode.ConnectionClosed = -32000)] = "ConnectionClosed";
     ErrorCode[(ErrorCode.RequestTimeout = -32001)] = "RequestTimeout";
@@ -139,9 +139,9 @@ deferInit("chunk-x4hefdgz.js:1195", () => {
     ErrorCode[(ErrorCode.UrlElicitationRequired = -32042)] = "UrlElicitationRequired";
   })(ErrorCode || (ErrorCode = {}));
 });
-//@ chunk-x4hefdgz.js:1583-1691 esm-fingerprint
+//@ chunk-c8yxp647.js:1583-1691 esm-fingerprint
 var JSONRPCErrorResponseSchema; // deferred: uses objectSchema (../../../../zod/v4/classic/schemas.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-x4hefdgz.js:1583", () => {
+deferInit("chunk-c8yxp647.js:1583", () => {
   JSONRPCErrorResponseSchema = objectSchema({
     jsonrpc: literal(JSONRPC_VERSION),
     id: RequestIdSchema.optional(),
@@ -152,9 +152,9 @@ deferInit("chunk-x4hefdgz.js:1583", () => {
     }),
   }).strict();
 });
-//@ chunk-x4hefdgz.js:1691-1727 esm-fingerprint
+//@ chunk-c8yxp647.js:1691-1727 esm-fingerprint
 var isJSONRPCErrorResponse = (value) => JSONRPCErrorResponseSchema.safeParse(value).success;
-//@ chunk-x4hefdgz.js:1727-11145 esm-layout
+//@ chunk-c8yxp647.js:1727-11146 esm-layout
 var JSONRPCMessageSchema; // deferred: uses union (../../../../zod/v4/classic/schemas.js) of its import cycle while loading; runs once the cycle is complete
 var JSONRPCResponseSchema;
 var EmptyResultSchema;
@@ -282,7 +282,7 @@ var ElicitationCompleteNotificationParamsSchema;
 var ElicitationCompleteNotificationSchema;
 var ElicitResultSchema;
 var ResourceTemplateReferenceSchema;
-deferInit("chunk-x4hefdgz.js:1727", () => {
+deferInit("chunk-c8yxp647.js:1727", () => {
   JSONRPCMessageSchema = union([
     JSONRPCRequestSchema,
     JSONRPCNotificationSchema,
@@ -961,11 +961,11 @@ deferInit("chunk-x4hefdgz.js:1727", () => {
     uri: stringSchema(),
   });
 });
-//@ chunk-x4hefdgz.js:11145-11366 esm-fingerprint
+//@ chunk-c8yxp647.js:11146-11367 esm-fingerprint
 var PromptReferenceSchema; // deferred: uses objectSchema (../../../../zod/v4/classic/schemas.js) of its import cycle while loading; runs once the cycle is complete
 var CompleteRequestParamsSchema;
 var CompleteRequestSchema;
-deferInit("chunk-x4hefdgz.js:11145", () => {
+deferInit("chunk-c8yxp647.js:11146", () => {
   PromptReferenceSchema = objectSchema({
     type: literal("ref/prompt"),
     name: stringSchema(),
@@ -985,17 +985,17 @@ deferInit("chunk-x4hefdgz.js:11145", () => {
     params: CompleteRequestParamsSchema,
   });
 });
-//@ chunk-x4hefdgz.js:11366-11498 esm-fingerprint
+//@ chunk-c8yxp647.js:11367-11499 esm-fingerprint
 function assertCompleteRequestPrompt(request) {
   if (request.params.ref.type !== "ref/prompt")
     throw TypeError(`Expected CompleteRequestPrompt, but got ${request.params.ref.type}`);
 }
-//@ chunk-x4hefdgz.js:11498-11642 esm-fingerprint
+//@ chunk-c8yxp647.js:11499-11643 esm-fingerprint
 function assertCompleteRequestResourceTemplate(request) {
   if (request.params.ref.type !== "ref/resource")
     throw TypeError(`Expected CompleteRequestResourceTemplate, but got ${request.params.ref.type}`);
 }
-//@ chunk-x4hefdgz.js:11642-12281 esm-fingerprint
+//@ chunk-c8yxp647.js:11643-12283 esm-fingerprint
 var CompleteResultSchema; // deferred: uses LATEST_PROTOCOL_VERSION of its import cycle while loading; runs once the cycle is complete
 var RootSchema;
 var ListRootsRequestSchema;
@@ -1007,7 +1007,7 @@ var ClientResultSchema;
 var ServerRequestSchema;
 var ServerNotificationSchema;
 var ServerResultSchema;
-deferInit("chunk-x4hefdgz.js:11642", () => {
+deferInit("chunk-c8yxp647.js:11643", () => {
   CompleteResultSchema = ResultSchema.extend({
     completion: looseObject({
       values: array(stringSchema()).max(100),
@@ -1104,7 +1104,7 @@ deferInit("chunk-x4hefdgz.js:11642", () => {
     CreateTaskResultSchema,
   ]);
 });
-//@ chunk-x4hefdgz.js:12281-12538 esm-fingerprint
+//@ chunk-c8yxp647.js:12283-12540 esm-fingerprint
 class McpError extends Error {
   constructor(code, message, data) {
     super(`MCP error ${code}: ${message}`);
@@ -1120,9 +1120,9 @@ class McpError extends Error {
     return new McpError(code, message, data);
   }
 }
-//@ chunk-x4hefdgz.js:12538-12728 esm-fingerprint
+//@ chunk-c8yxp647.js:12540-12730 esm-fingerprint
 let UrlElicitationRequiredError; // deferred: uses McpError of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-x4hefdgz.js:12538", () => {
+deferInit("chunk-c8yxp647.js:12540", () => {
   UrlElicitationRequiredError = class UrlElicitationRequiredError extends McpError {
     constructor(elicitations, message = `URL elicitation${elicitations.length > 1 ? "s" : ""} required`) {
       super(ErrorCode.UrlElicitationRequired, message, {
@@ -1150,17 +1150,19 @@ export {
   ResourceTemplateSchema,
   CompatibilityCallToolResultSchema,
   CallToolResultSchema,
-  ListToolsRequestSchema,
-  CallToolRequestSchema,
+  RelatedTaskMetadataSchema,
+  RELATED_TASK_META_KEY,
+  ElicitationCompleteNotificationSchema,
   isInitializeRequest,
   isJSONRPCRequest,
   DEFAULT_NEGOTIATED_PROTOCOL_VERSION,
   SUPPORTED_PROTOCOL_VERSIONS,
   isJSONRPCResultResponse,
+  ListToolsRequestSchema,
+  CallToolRequestSchema,
+  ListResourcesResultSchema,
   LATEST_PROTOCOL_VERSION,
-  RelatedTaskMetadataSchema,
-  RELATED_TASK_META_KEY,
-  ElicitationCompleteNotificationSchema,
+  isInitializedNotification,
   CreateMessageResultSchema,
   ElicitResultSchema,
   LoggingLevelSchema,
@@ -1171,8 +1173,19 @@ export {
   EmptyResultSchema,
   CreateMessageResultWithToolsSchema,
   ListRootsResultSchema,
-  ListResourcesResultSchema,
-  isInitializedNotification,
+  CancelledNotificationSchema,
+  ProgressNotificationSchema,
+  PingRequestSchema,
+  GetTaskRequestSchema,
+  GetTaskPayloadRequestSchema,
+  ListTasksRequestSchema,
+  CancelTaskRequestSchema,
+  isJSONRPCNotification,
+  isTaskAugmentedRequestParams,
+  GetTaskResultSchema,
+  ListTasksResultSchema,
+  CancelTaskResultSchema,
+  TaskStatusNotificationSchema,
   ToolListChangedNotificationSchema,
   PromptListChangedNotificationSchema,
   ResourceListChangedNotificationSchema,
@@ -1185,19 +1198,6 @@ export {
   ReadResourceResultSchema,
   ListToolsResultSchema,
   ListChangedOptionsBaseSchema,
-  isJSONRPCNotification,
-  CancelledNotificationSchema,
-  ProgressNotificationSchema,
-  PingRequestSchema,
-  GetTaskRequestSchema,
-  GetTaskPayloadRequestSchema,
-  ListTasksRequestSchema,
-  CancelTaskRequestSchema,
-  isTaskAugmentedRequestParams,
-  GetTaskResultSchema,
-  ListTasksResultSchema,
-  CancelTaskResultSchema,
-  TaskStatusNotificationSchema,
   CompleteRequestSchema,
   GetPromptRequestSchema,
   ListPromptsRequestSchema,

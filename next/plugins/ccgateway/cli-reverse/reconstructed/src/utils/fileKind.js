@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增：文件类型判定
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-enbs5qcy.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xjqmedef.js (1)
  * attribution: placement 1
  */
 import { lstat } from "fs/promises";
 
-//@ chunk-enbs5qcy.js:227-553 placement
+//@ chunk-xjqmedef.js:227-553 placement
 /**
  * 由 Dirent/Stats 判断文件类型（dir、symlink、file、other）；类型未知时再 lstat 一次，失败返回给定默认值。
  */

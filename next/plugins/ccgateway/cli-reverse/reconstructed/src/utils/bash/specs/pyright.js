@@ -3,13 +3,13 @@
  *
  * pyright 命令的内置 Fig spec（选项表）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/bash/specs/pyright.ts
- * pieces: chunk-e6aww6q8.js (1)
+ * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
  */
 
-//@ chunk-e6aww6q8.js:3037573-3039519 fingerprint (2.1.88 match: default, 1)
+//@ chunk-5xgkngpb.js:3121664-3123610 fingerprint (2.1.88 match: default, 1)
 /**
  * pyright 的命令规格（选项及哪些带参数），供命令前缀提取使用。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：发布结果
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (9)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (9)
  * attribution: placement 9
  */
 import { getLiveState } from "../../services/liveReplica/liveReplica.js";
@@ -26,7 +26,7 @@ import { MERGED_CHANGED_KEEP } from "../../services/artifacts/pagePreparation.js
 import { shortPathList, formatPathList } from "../../services/artifacts/artifactTypeRelease.js";
 import { MERGED_OVER_SCHEMA } from "../../services/artifacts/publishSource.js";
 
-//@ chunk-8wvtd8sr.js:329132-329873 placement
+//@ chunk-xzmy9dn4.js:331404-332145 placement
 /**
  * 首次发布本地 .html 页面而本会话未加载 artifact-design 技能时拦截一次（tengu_cobalt_plinth_sorb 开启、可调用 Skill 工具、非协调者子代理），返回 errorCode 21 要求先加载技能。
  */
@@ -62,7 +62,7 @@ function designSkillGuard(input, context) {
     errorCode: 21,
   };
 }
-//@ chunk-8wvtd8sr.js:329873-330105 placement
+//@ chunk-xzmy9dn4.js:332145-332377 placement
 /**
  * 发布结果中的版本后缀：版本号和/或版本 id。
  */
@@ -73,7 +73,7 @@ function versionSuffix(seq, version) {
     parts.push(parts.length > 0 ? `version id ${version}` : `version ${version}`);
   return parts.length > 0 ? ` (${parts.join(", ")})` : "";
 }
-//@ chunk-8wvtd8sr.js:330105-330515 placement
+//@ chunk-xzmy9dn4.js:332377-332787 placement
 /**
  * 发布结果中关于截止时间的附注：内容未变未生成新版本、旧打开视图何时切换到新版本、服务端或代理不接受截止时间时说明已不带截止发布。
  */
@@ -97,12 +97,12 @@ ${lines.join(`
 `)}`
     : "";
 }
-//@ chunk-8wvtd8sr.js:330515-330528 placement
+//@ chunk-xzmy9dn4.js:332787-332800 placement
 /**
  * 发布截止时间的默认值。
  */
 var PUBLISH_DEADLINE_DEFAULT_MS = 60000;
-//@ chunk-8wvtd8sr.js:330528-330672 placement
+//@ chunk-xzmy9dn4.js:332800-332944 placement
 function deadlineUntil(deadline) {
   if (deadline === null || typeof deadline !== "object") return;
   let { until } = deadline;
@@ -110,14 +110,14 @@ function deadlineUntil(deadline) {
     ? until
     : undefined;
 }
-//@ chunk-8wvtd8sr.js:330672-330827 placement
+//@ chunk-xzmy9dn4.js:332944-333099 placement
 function formatUtcTime(epochMs, now) {
   let iso = new Date(epochMs).toISOString();
   let sliced = new Date(now).toISOString().slice(0, 10);
   let sliced_2 = iso.slice(0, 10);
   return `${iso.slice(11, 16)} UTC${sliced_2 === sliced ? "" : `, ${sliced_2}`}`;
 }
-//@ chunk-8wvtd8sr.js:330827-331050 placement
+//@ chunk-xzmy9dn4.js:333099-333322 placement
 /**
  * 发布结果中的 merged_over 字段：基线版本、线上版本与变更列表（超出部分只计数）。
  */
@@ -140,7 +140,7 @@ function mergedOverField(mergedOver) {
     },
   };
 }
-//@ chunk-8wvtd8sr.js:331050-331139 placement
+//@ chunk-xzmy9dn4.js:333322-333411 placement
 /**
  * 取出结果里缺少 sha256 的文件路径。
  */
@@ -149,7 +149,7 @@ function missingPublishFilePaths(mergedOver) {
     (mergedOver.changed ?? []).filter((change) => change.sha256 === null).map((change) => change.path),
   );
 }
-//@ chunk-8wvtd8sr.js:331139-332624 placement
+//@ chunk-xzmy9dn4.js:333411-334896 placement
 /**
  * 发布被合并到更新版本之上时的说明：基于哪个版本、期间哪些其他文件被改（或删除）并被保留、需要重新读取哪些文件；无法列出时提示列出并重读。
  */

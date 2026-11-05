@@ -3,12 +3,19 @@
  *
  * 计划文件（<计划目录>/<slug>.md）的读取、缓存、resume/fork 复制与从消息中恢复。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plans.ts
- * pieces: chunk-82kqcve8.js (50), chunk-e6aww6q8.js (5), chunk-q8cqcff6.js (1)
- * attribution: placement 4, layout 21, facade-exports 21, sole-consumer 2, fingerprint 6, affinity 2
+ * pieces: chunk-5fn9rb8r.js (1), chunk-5xgkngpb.js (5), chunk-a2q0x549.js (50)
+ * attribution: fingerprint 6, placement 4, affinity 2, layout 21, facade-exports 21, sole-consumer 2
  */
-import { resolve, dirname, basename, join, sep, normalize } from "path";
+import {
+  resolve,
+  dirname as dirname_2,
+  basename,
+  join as join_2,
+  sep as sep_2,
+  normalize as normalize_2,
+} from "path";
 import { readdir, lstat } from "fs/promises";
 import { randomUUID } from "crypto";
 import { getPlatform } from "./platform.js";
@@ -39,11 +46,11 @@ import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from "./errors.js";
 import { logError } from "./log.js";
-import { getClaudeConfigDir } from "./envUtils.js";
+import { getClaudeConfigDir } from "./markdownConfigLoader.js";
 import { STORAGE_SPACES } from "./storage/storageSpaces.js";
 import { WINDOWS_RESERVED_NAME_RE, truncateWithCount, CONTROL_CHARS_EXCEPT_WS_RE } from "./stringUtils.js";
 import { jsonStringify } from "./slowOperations.js";
-import { getInitialSettings_2 } from "./settings/settings.js";
+import { getInitialSettings } from "./settings/settings.js";
 import { getCwd } from "./cwd.js";
 import { hasBackslash } from "./pathClassification.js";
 import { nativeRealpathLong } from "./windowsUncPaths.js";
@@ -56,7 +63,7 @@ import { recordTranscript } from "./sessionStorage.js";
 import { getInstalledPluginsFilePath, parseInstalledPluginsJson } from "./plugins/installedPluginsManager.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-q8cqcff6.js:21468-21656 fingerprint (2.1.88 match: getPlanSlug, 0.574)
+//@ chunk-5fn9rb8r.js:21727-21915 fingerprint (2.1.88 match: getPlanSlug, 0.574)
 function getPlanSlug_2() {
   if (getPlatform() !== "windows") return null;
   for (let candidate of POWERSHELL_EXE_CANDIDATES) {
@@ -69,13 +76,13 @@ function getPlanSlug_2() {
   }
   return null;
 }
-//@ chunk-82kqcve8.js:178775-178835 placement
+//@ chunk-a2q0x549.js:176944-177004 placement
 var MAX_PLAN_SLUG_ATTEMPTS = 10;
 var PLAN_LISTING_WAIT_CAP_MS = 2000;
 var MAX_PLAN_WATCHES_PER_SLUG = 8;
 var PLAN_SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 var MAX_PLAN_SLUG_LENGTH = 100;
-//@ chunk-82kqcve8.js:178835-186934 placement
+//@ chunk-a2q0x549.js:177004-185103 placement
 /**
  * 计划文件（plans/*.md）的存储与监听
  */
@@ -95,7 +102,7 @@ class PlansStore {
   planFileCacheKeyFor(filePath) {
     if (this.planFileCache === null) return null;
     let resolvedPath = resolve(filePath);
-    if (dirname(resolvedPath) !== globalPlansDirectory()) return null;
+    if (dirname_2(resolvedPath) !== globalPlansDirectory()) return null;
     return basename(resolvedPath);
   }
   notePlanFileWritten(filePath, entry) {
@@ -150,7 +157,7 @@ class PlansStore {
   noteEarly(filePath, entry) {
     if (!isStorageV5Enabled()) return;
     let resolvedPath = resolve(filePath);
-    if (dirname(resolvedPath) !== globalPlansDirectory()) return;
+    if (dirname_2(resolvedPath) !== globalPlansDirectory()) return;
     this.earlyGeneration++;
     if (entry === undefined) this.earlyObserved.delete(basename(resolvedPath));
     else this.earlyObserved.set(basename(resolvedPath), entry);
@@ -483,32 +490,32 @@ class PlansStore {
     this.snapshotChain = Promise.resolve();
   }
 }
-//@ chunk-82kqcve8.js:186934-186959 layout
+//@ chunk-a2q0x549.js:185103-185128 layout
 var plansStoreSlot; // deferred: uses PlansStore of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-82kqcve8.js:186934", () => {
+deferInit("chunk-a2q0x549.js:185103", () => {
   plansStoreSlot = new HostScoped(() => new PlansStore());
 });
-//@ chunk-82kqcve8.js:186959-186989 layout
+//@ chunk-a2q0x549.js:185128-185158 layout
 function rootSessionHost() {
   return getRootSession().host;
 }
-//@ chunk-82kqcve8.js:186989-187022 facade-exports
+//@ chunk-a2q0x549.js:185158-185191 facade-exports
 function planFiles() {
   return plansStoreSlot.of(rootSessionHost());
 }
-//@ chunk-82kqcve8.js:187022-187070 facade-exports
+//@ chunk-a2q0x549.js:185191-185239 facade-exports
 function notePlanFileWritten(filePath, entry) {
   planFiles().notePlanFileWritten(filePath, entry);
 }
-//@ chunk-82kqcve8.js:187070-187115 facade-exports
+//@ chunk-a2q0x549.js:185239-185284 facade-exports
 function notePlanFileForgotten(filePath) {
   planFiles().notePlanFileForgotten(filePath);
 }
-//@ chunk-82kqcve8.js:187115-187165 facade-exports
+//@ chunk-a2q0x549.js:185284-185334 facade-exports
 function resetPlanFileCacheToUnknown() {
   planFiles().resetPlanFileCacheToUnknown();
 }
-//@ chunk-82kqcve8.js:187165-187684 sole-consumer
+//@ chunk-a2q0x549.js:185334-185853 sole-consumer
 /**
  * 分页列出 v5 存储中 plan 命名空间下的所有键，转成 "<名称>.md" 列表；列表出错、超过页数上限或抛异常时记日志并返回 null。
  */
@@ -548,7 +555,7 @@ async function listPlanSlugsFromStore(storageBackend) {
     return null;
   }
 }
-//@ chunk-82kqcve8.js:187684-187814 sole-consumer
+//@ chunk-a2q0x549.js:185853-185983 sole-consumer
 async function primePlanSlugCollisions_2(storageBackend, dir) {
   let fileNames = await listPlanSlugsFromStore(storageBackend);
   if (dir !== plansDirectoryForSession()) return;
@@ -557,12 +564,12 @@ async function primePlanSlugCollisions_2(storageBackend, dir) {
     planFiles().commitPlanListing(dir, fileNames);
   }
 }
-//@ chunk-82kqcve8.js:187944-188040 facade-exports
+//@ chunk-a2q0x549.js:186113-186209 facade-exports
 async function settlePlanFileCachePrime() {
   let store = planFiles();
   if (store.primeInFlight !== null) await raceWithTimeout(store.primeInFlight, store.waitCapMs);
 }
-//@ chunk-82kqcve8.js:188040-188399 facade-exports
+//@ chunk-a2q0x549.js:186209-186568 facade-exports
 async function primePlanSlugCollisions(storageBackend) {
   let dir = plansDirectoryForSession();
   if (storageBackend && dir === globalPlansDirectory()) {
@@ -590,38 +597,38 @@ async function primePlanSlugCollisions(storageBackend) {
     if (isENOENT(error)) planFiles().commitPlanListing(dir, []);
   }
 }
-//@ chunk-82kqcve8.js:188399-188454 layout
+//@ chunk-a2q0x549.js:186568-186623 layout
 function plansDirectoryForSession() {
   if (!getIsNonInteractiveSession() && !getSessionTrustAccepted()) return globalPlansDirectory();
   return getPlansDirectory();
 }
-//@ chunk-82kqcve8.js:188454-188492 layout
+//@ chunk-a2q0x549.js:186623-186661 layout
 function globalPlansDirectory() {
-  return join(getClaudeConfigDir(), "plans");
+  return join_2(getClaudeConfigDir(), "plans");
 }
-//@ chunk-82kqcve8.js:188492-188525 layout
+//@ chunk-a2q0x549.js:186661-186694 layout
 function planStorageSpace(planName) {
   return STORAGE_SPACES.plan(planName);
 }
-//@ chunk-82kqcve8.js:188525-188581 layout (2.1.88 match: isSessionPlanFile, 1)
+//@ chunk-a2q0x549.js:186694-186750 layout (2.1.88 match: isSessionPlanFile, 1)
 /**
  * 去掉文件名末尾的 .md（plans 用）。
  */
 function stripMdExtension(fileName) {
   return fileName.endsWith(".md") ? fileName.slice(0, -3) : fileName;
 }
-//@ chunk-82kqcve8.js:188581-188618 layout
+//@ chunk-a2q0x549.js:186750-186787 layout
 var DEFAULT_PLAN_FILE_STATE = {
   publishDiscipline: "inPlace",
 };
-//@ chunk-82kqcve8.js:188618-188742 layout (2.1.88 match: isSessionPlanFile, 1)
+//@ chunk-a2q0x549.js:186787-186911 layout (2.1.88 match: isSessionPlanFile, 1)
 /**
  * lstat 计划目录下 <name>.md，返回 {publishDiscipline:"inPlace", mode}（低 9 位权限）；文件不存在或远程模式返回默认状态。
  */
 async function getPlanFileState(planName) {
   if (isDiskless()) return DEFAULT_PLAN_FILE_STATE;
   try {
-    let stat = await lstat(join(getPlansDirectory(), `${planName}.md`));
+    let stat = await lstat(join_2(getPlansDirectory(), `${planName}.md`));
     return {
       ...DEFAULT_PLAN_FILE_STATE,
       mode: stat.mode & 511,
@@ -630,19 +637,19 @@ async function getPlanFileState(planName) {
     return DEFAULT_PLAN_FILE_STATE;
   }
 }
-//@ chunk-82kqcve8.js:188742-188775 layout
+//@ chunk-a2q0x549.js:186911-186944 layout
 function isUsingGlobalPlansDir() {
   return getPlansDirectory() === globalPlansDirectory();
 }
-//@ chunk-82kqcve8.js:188775-188827 facade-exports
+//@ chunk-a2q0x549.js:186944-186996 facade-exports
 function getPlanSlug(sessionId, seed) {
   return planFiles().getPlanSlug(sessionId ?? getSessionId(), seed);
 }
-//@ chunk-82kqcve8.js:188827-188868 facade-exports
+//@ chunk-a2q0x549.js:186996-187037 facade-exports
 function peekPlanSlug(sessionId) {
   return getPlanSlugCache().get(sessionId ?? getSessionId());
 }
-//@ chunk-82kqcve8.js:188868-188950 layout
+//@ chunk-a2q0x549.js:187037-187119 layout
 function isValidPlanFileName(slug) {
   return (
     typeof slug === "string" &&
@@ -651,7 +658,7 @@ function isValidPlanFileName(slug) {
     !WINDOWS_RESERVED_NAME_RE.test(slug)
   );
 }
-//@ chunk-82kqcve8.js:188950-189119 layout
+//@ chunk-a2q0x549.js:187119-187288 layout
 function logInvalidPlanSlug(context, slug) {
   let slugText =
     typeof slug === "string"
@@ -661,7 +668,7 @@ function logInvalidPlanSlug(context, slug) {
     level: "error",
   });
 }
-//@ chunk-82kqcve8.js:189119-189227 facade-exports
+//@ chunk-a2q0x549.js:187288-187396 facade-exports
 function setPlanSlug(sessionId, slug) {
   if (!isValidPlanFileName(slug)) {
     logInvalidPlanSlug("setPlanSlug", slug);
@@ -670,11 +677,11 @@ function setPlanSlug(sessionId, slug) {
   getPlanSlugCache().set(sessionId, slug);
   planFiles().exemptSlugFromRevalidation(sessionId, slug);
 }
-//@ chunk-82kqcve8.js:189227-189267 facade-exports
+//@ chunk-a2q0x549.js:187396-187436 facade-exports
 function clearAllPlanSlugs() {
   planFiles().clearAllPlanSlugs();
 }
-//@ chunk-82kqcve8.js:189267-189579 layout
+//@ chunk-a2q0x549.js:187436-187748 layout
 /**
  * 计划目录解析器：缓存结果；无盘模式或未配置时用默认目录；配置的 plansDirectory 必须位于项目根内，否则记错误并回退默认目录。
  */
@@ -686,7 +693,7 @@ class PlansDirectoryResolver {
   }
   #t() {
     if (isDiskless()) return globalPlansDirectory();
-    let plansDirectory = getInitialSettings_2().plansDirectory;
+    let plansDirectory = getInitialSettings().plansDirectory;
     if (plansDirectory) {
       let cwd = getCwd();
       let resolvedDir = resolve(cwd, plansDirectory);
@@ -704,10 +711,10 @@ class PlansDirectoryResolver {
     this.#e = undefined;
   }
 }
-//@ chunk-82kqcve8.js:189579-189704 facade-exports (2.1.88 match: reset, 0.777)
+//@ chunk-a2q0x549.js:187748-187873 facade-exports (2.1.88 match: reset, 0.778)
 var PLANS_DIRECTORY_PER_HOST; // deferred: uses PlansDirectoryResolver of its import cycle while loading; runs once the cycle is complete
 var getPlansDirectory;
-deferInit("chunk-82kqcve8.js:189579", () => {
+deferInit("chunk-a2q0x549.js:187748", () => {
   PLANS_DIRECTORY_PER_HOST = new HostScoped(() => new PlansDirectoryResolver());
   getPlansDirectory = Object.assign(
     function () {
@@ -722,12 +729,12 @@ deferInit("chunk-82kqcve8.js:189579", () => {
     },
   );
 });
-//@ chunk-82kqcve8.js:189704-189951 layout
+//@ chunk-a2q0x549.js:187873-188120 layout
 /**
  * 判断路径位于项目根之内：前缀匹配、不含危险形式、不经过 UNC 连接点，并逐级向上找到真实路径确认仍在根的真实路径之下。
  */
 function isPathWithinProjectRoot(candidatePath, cwd) {
-  if (candidatePath !== cwd && !candidatePath.startsWith(cwd + sep)) return false;
+  if (candidatePath !== cwd && !candidatePath.startsWith(cwd + sep_2)) return false;
   if (hasBackslash(candidatePath)) return false;
   if (findIntermediateUncJunction(getFsImplementation(), candidatePath) !== undefined) return false;
   let rootReal = nativeRealpathLong(cwd);
@@ -735,13 +742,13 @@ function isPathWithinProjectRoot(candidatePath, cwd) {
   let current = candidatePath;
   for (;;) {
     let currentReal = nativeRealpathLong(current);
-    if (currentReal !== null) return currentReal === rootReal || currentReal.startsWith(rootReal + sep);
-    let parent = dirname(current);
+    if (currentReal !== null) return currentReal === rootReal || currentReal.startsWith(rootReal + sep_2);
+    let parent = dirname_2(current);
     if (parent === current) return false;
     current = parent;
   }
 }
-//@ chunk-82kqcve8.js:189951-190106 layout
+//@ chunk-a2q0x549.js:188120-188275 layout
 async function ensurePlansDirectory(storageBackend) {
   let plansDirectory = getPlansDirectory();
   if (isDiskless()) return plansDirectory;
@@ -754,11 +761,11 @@ async function ensurePlansDirectory(storageBackend) {
   }
   return plansDirectory;
 }
-//@ chunk-82kqcve8.js:190106-190541 facade-exports
+//@ chunk-a2q0x549.js:188275-188710 facade-exports
 async function saveRejectedUltraplan(planText, storageV5) {
   if (storageV5 && isUsingGlobalPlansDir()) {
     let slug = `${generateWordSlug()}-ultraplan`;
-    let filePath = join(await ensurePlansDirectory(storageV5), `${slug}.md`);
+    let filePath = join_2(await ensurePlansDirectory(storageV5), `${slug}.md`);
     let writeResult = await storageV5.write(planStorageSpace(slug), planText, DEFAULT_PLAN_FILE_STATE);
     if (!writeResult.ok)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -773,24 +780,24 @@ async function saveRejectedUltraplan(planText, storageV5) {
       "Cannot save the plan: this session does not write to disk",
     );
   }
-  let filePath = join(await ensurePlansDirectory(), `${generateWordSlug()}-ultraplan.md`);
+  let filePath = join_2(await ensurePlansDirectory(), `${generateWordSlug()}-ultraplan.md`);
   await getFileReader().write(filePath, planText);
   return filePath;
 }
-//@ chunk-82kqcve8.js:190541-190888 facade-exports
-async function persistPlanEdit(filePath, inputPlan, storageV5) {
+//@ chunk-a2q0x549.js:188710-189057 facade-exports
+async function persistPlanEdit(filePath, targetMode, storageV5) {
   try {
     await ensurePlansDirectory(storageV5);
     let planName = basename(filePath, ".md");
     let storageKey =
       storageV5 !== undefined &&
       isUsingGlobalPlansDir() &&
-      dirname(filePath) === getPlansDirectory() &&
+      dirname_2(filePath) === getPlansDirectory() &&
       validateStorageKey(planStorageSpace(planName)) === undefined
         ? planStorageSpace(planName)
         : undefined;
     if (storageV5 !== undefined && storageKey !== undefined) {
-      let writeResult = await storageV5.write(storageKey, inputPlan, DEFAULT_PLAN_FILE_STATE);
+      let writeResult = await storageV5.write(storageKey, targetMode, DEFAULT_PLAN_FILE_STATE);
       if (!writeResult.ok) {
         reportPlanPersistFailure(filePath, writeResult.error.code);
         return;
@@ -798,28 +805,28 @@ async function persistPlanEdit(filePath, inputPlan, storageV5) {
     } else if (isDiskless()) {
       warnDisklessSettingsWrite("plan_edit", filePath);
       return;
-    } else await getFileReader().write(filePath, inputPlan);
-    notePlanFileWritten(filePath, inputPlan);
+    } else await getFileReader().write(filePath, targetMode);
+    notePlanFileWritten(filePath, targetMode);
   } catch (error) {
     reportPlanPersistFailure(filePath, error instanceof Error ? error.message : String(error));
   }
 }
-//@ chunk-82kqcve8.js:190888-190969 layout
+//@ chunk-a2q0x549.js:189057-189138 layout
 function reportPlanPersistFailure(filePath, reason) {
   notePlanFileForgotten(filePath);
   logForDebugging(`Failed to persist plan to ${filePath}: ${reason}`, {
     level: "error",
   });
 }
-//@ chunk-82kqcve8.js:190969-191099 facade-exports (2.1.88 match: getPlanFilePath, 0.856)
+//@ chunk-a2q0x549.js:189138-189268 facade-exports (2.1.88 match: getPlanFilePath, 0.856)
 function getPlanFilePath(agentId) {
   let sessionId = getSessionId();
   let planSlug = getPlanSlug(sessionId);
   planFiles().markPlanPathServed(sessionId);
-  if (!agentId) return join(getPlansDirectory(), `${planSlug}.md`);
-  return join(getPlansDirectory(), `${planSlug}-agent-${agentId}.md`);
+  if (!agentId) return join_2(getPlansDirectory(), `${planSlug}.md`);
+  return join_2(getPlansDirectory(), `${planSlug}-agent-${agentId}.md`);
 }
-//@ chunk-82kqcve8.js:191099-191298 layout
+//@ chunk-a2q0x549.js:189268-189467 layout
 async function readPlanViaStorage(storageV5, planName, context) {
   let readResult = await storageV5.read([planStorageSpace(planName)]);
   if (!readResult.ok) {
@@ -829,7 +836,7 @@ async function readPlanViaStorage(storageV5, planName, context) {
   let item = readResult.value.items[0];
   return item.found ? Buffer.from(item.value).toString("utf-8") : null;
 }
-//@ chunk-82kqcve8.js:191298-191465 facade-exports
+//@ chunk-a2q0x549.js:189467-189634 facade-exports
 function getPlan(agentId) {
   let planFilePath = getPlanFilePath(agentId);
   let planFileCache = planFiles().planFileCache;
@@ -840,7 +847,7 @@ function getPlan(agentId) {
   }
   return readPlanFileSync(planFilePath);
 }
-//@ chunk-82kqcve8.js:191465-191649 facade-exports
+//@ chunk-a2q0x549.js:189634-189818 facade-exports
 async function getPlanAsync(agentId, storageV5) {
   if (storageV5 === undefined || !isUsingGlobalPlansDir()) return getPlan(agentId);
   let planFileName = getPlanFileName(agentId);
@@ -849,7 +856,7 @@ async function getPlanAsync(agentId, storageV5) {
   if (cachedPlan !== undefined) return cachedPlan;
   return readPlanViaStorage(storageV5, stripMdExtension(planFileName), "getPlan");
 }
-//@ chunk-82kqcve8.js:191649-191758 layout
+//@ chunk-a2q0x549.js:189818-189927 layout
 function getPlanFileName(agentId) {
   let fileName = basename(getPlanFilePath(agentId));
   let store = planFiles();
@@ -857,7 +864,7 @@ function getPlanFileName(agentId) {
     store.watchAgentPlanFile(getPlanSlug(getSessionId()), fileName);
   return fileName;
 }
-//@ chunk-82kqcve8.js:191758-191966 facade-exports
+//@ chunk-a2q0x549.js:189927-190135 facade-exports
 async function planExistsAsync(agentId, storageV5) {
   if (storageV5 === undefined || !isUsingGlobalPlansDir()) return getPlan(agentId) !== null;
   let planFileName = getPlanFileName(agentId);
@@ -866,7 +873,7 @@ async function planExistsAsync(agentId, storageV5) {
   if (cachedPlan !== undefined) return cachedPlan !== null;
   return (await storageV5.statMeta(planStorageSpace(stripMdExtension(planFileName)))).ok;
 }
-//@ chunk-82kqcve8.js:191966-192261 facade-exports
+//@ chunk-a2q0x549.js:190135-190430 facade-exports
 async function readPlanFileFresh(storageV5) {
   let planFilePath = getPlanFilePath();
   if (isStorageV5Enabled() && storageV5 !== undefined && isUsingGlobalPlansDir()) {
@@ -883,7 +890,7 @@ async function readPlanFileFresh(storageV5) {
   }
   return readPlanFileSync(planFilePath);
 }
-//@ chunk-82kqcve8.js:192261-192455 layout
+//@ chunk-a2q0x549.js:190430-190624 layout
 function readPlanFileSync(planFilePath) {
   if (isDiskless()) return null;
   try {
@@ -900,7 +907,7 @@ function readPlanFileSync(planFilePath) {
     return null;
   }
 }
-//@ chunk-82kqcve8.js:192455-192620 layout
+//@ chunk-a2q0x549.js:190624-190789 layout
 function getSlugFromLog(log) {
   let validSlug;
   let invalidSlug;
@@ -913,7 +920,7 @@ function getSlugFromLog(log) {
   if (validSlug === undefined && invalidSlug !== undefined) logInvalidPlanSlug("getSlugFromLog", invalidSlug);
   return validSlug;
 }
-//@ chunk-82kqcve8.js:192620-193494 facade-exports (2.1.88 match: copyPlanForResume, 0.822)
+//@ chunk-a2q0x549.js:190789-191663 facade-exports (2.1.88 match: copyPlanForResume, 0.822)
 /**
  * resume 时把原会话的计划文件复制到新会话 slug 下，缺失时从消息中恢复。
  */
@@ -927,7 +934,7 @@ async function copyPlanForResume(log, targetSessionId, storageV5) {
       logError(error);
       return false;
     });
-  let planPath = join(getPlansDirectory(), `${slug}.md`);
+  let planPath = join_2(getPlansDirectory(), `${slug}.md`);
   if (isDiskless()) return false;
   try {
     await getFileReader().read(planPath);
@@ -976,7 +983,7 @@ async function copyPlanForResume(log, targetSessionId, storageV5) {
     return false;
   }
 }
-//@ chunk-82kqcve8.js:193494-194413 layout (2.1.88 match: copyPlanForResume, 0.785)
+//@ chunk-a2q0x549.js:191663-192582 layout (2.1.88 match: copyPlanForResume, 0.785)
 async function copyPlanForResume_2(storageV5, log, slug) {
   let fileName = `${slug}.md`;
   let observation = planFiles().observePlanFile(fileName);
@@ -1009,7 +1016,7 @@ async function copyPlanForResume_2(storageV5, log, slug) {
       });
   }
   if (recovered) {
-    let filePath = join(getPlansDirectory(), fileName);
+    let filePath = join_2(getPlansDirectory(), fileName);
     let wrotePlan = false;
     try {
       await ensurePlansDirectory(storageV5);
@@ -1028,14 +1035,14 @@ async function copyPlanForResume_2(storageV5, log, slug) {
   logForDebugging("Plan file recovery failed: no file snapshot or plan content found in message history");
   return false;
 }
-//@ chunk-82kqcve8.js:194413-194795 facade-exports
+//@ chunk-a2q0x549.js:192582-192964 facade-exports
 async function copyPlanForFork(log, targetSessionId, storageV5) {
   let originalSlug = getSlugFromLog(log);
   if (!originalSlug) return false;
   let plansDir = getPlansDirectory();
-  let sourcePath = join(plansDir, `${originalSlug}.md`);
+  let sourcePath = join_2(plansDir, `${originalSlug}.md`);
   let planSlug = getPlanSlug(targetSessionId);
-  let targetPath = join(plansDir, `${planSlug}.md`);
+  let targetPath = join_2(plansDir, `${planSlug}.md`);
   planFiles().exemptSlugFromRevalidation(targetSessionId, planSlug);
   if (storageV5 && isUsingGlobalPlansDir())
     return copyPlanForForkViaStorage(storageV5, originalSlug, planSlug).catch((error) => {
@@ -1059,9 +1066,9 @@ async function copyPlanForFork(log, targetSessionId, storageV5) {
     notePlanFileForgotten(targetPath);
   }
 }
-//@ chunk-82kqcve8.js:194795-195246 layout
+//@ chunk-a2q0x549.js:192964-193415 layout
 async function copyPlanForForkViaStorage(storageV5, planName, planSlug) {
-  let targetPath = join(getPlansDirectory(), `${planSlug}.md`);
+  let targetPath = join_2(getPlansDirectory(), `${planSlug}.md`);
   let writtenContent;
   try {
     await ensurePlansDirectory(storageV5);
@@ -1088,7 +1095,7 @@ async function copyPlanForForkViaStorage(storageV5, planName, planSlug) {
     else notePlanFileForgotten(targetPath);
   }
 }
-//@ chunk-82kqcve8.js:195246-195811 fingerprint (2.1.88 match: recoverPlanFromMessages, 1)
+//@ chunk-a2q0x549.js:193415-193980 fingerprint (2.1.88 match: recoverPlanFromMessages, 1)
 /**
  * 从 ExitPlanMode 工具调用或计划附件中恢复计划内容。
  */
@@ -1126,7 +1133,7 @@ function recoverPlanFromMessages(log) {
   }
   return null;
 }
-//@ chunk-82kqcve8.js:195811-196201 fingerprint (2.1.88 match: findFileSnapshotEntry, 0.924)
+//@ chunk-a2q0x549.js:193980-194370 fingerprint (2.1.88 match: findFileSnapshotEntry, 0.926)
 function findFileSnapshotEntry(messages, key) {
   let entries = [...messages.messages, ...(messages.fileSnapshots ?? [])];
   for (let i = entries.length - 1; i >= 0; i--) {
@@ -1152,32 +1159,32 @@ function findFileSnapshotEntry(messages, key) {
   }
   return;
 }
-//@ chunk-82kqcve8.js:196201-196217 facade-exports
+//@ chunk-a2q0x549.js:194370-194386 facade-exports
 var PLAN_SNAPSHOT_MAX_CHARS = 2000000;
-//@ chunk-82kqcve8.js:196217-196286 affinity
+//@ chunk-a2q0x549.js:194386-194455 affinity
 function isValidPlanContent(content) {
   return typeof content === "string" && content.length > 0 && content.length <= PLAN_SNAPSHOT_MAX_CHARS;
 }
-//@ chunk-82kqcve8.js:237342-237506 fingerprint (2.1.88 match: getPlanFilePath, 1)
+//@ chunk-a2q0x549.js:236291-236455 fingerprint (2.1.88 match: getPlanFilePath, 1)
 /**
  * 计划文件路径：<计划目录>/<slug>.md，子代理为 <slug>-agent-<id>.md。
  */
 function getPlanFilePath_2(agentId) {
   let slug = peekPlanSlug();
   if (!slug) return false;
-  let planSlug = normalize(agentId);
-  if (dirname(planSlug) !== normalize(getPlansDirectory())) return false;
+  let planSlug = normalize_2(agentId);
+  if (dirname_2(planSlug) !== normalize_2(getPlansDirectory())) return false;
   let fileName = basename(planSlug);
   return fileName === `${slug}.md` || (fileName.startsWith(`${slug}-agent-`) && fileName.endsWith(".md"));
 }
-//@ chunk-e6aww6q8.js:861063-861089 placement
+//@ chunk-5xgkngpb.js:868543-868569 placement
 /**
  * isDisklessSession：是否无盘会话。
  */
 function isDisklessSession() {
   return isDiskless();
 }
-//@ chunk-e6aww6q8.js:861089-861172 placement
+//@ chunk-5xgkngpb.js:868569-868652 placement
 /**
  * hostOwnedInputFieldSet：取某工具需要剔除的宿主专属输入字段。
  */
@@ -1186,7 +1193,7 @@ function hostOwnedInputFieldSet(toolName, input) {
     ? undefined
     : API_STRIPPED_INPUT_FIELDS.get(toolName);
 }
-//@ chunk-e6aww6q8.js:1501827-1502265 fingerprint (2.1.88 match: persistFileSnapshotIfRemote, 0.807)
+//@ chunk-5xgkngpb.js:1503482-1503920 fingerprint (2.1.88 match: persistFileSnapshotIfRemote, 0.807)
 async function persistFileSnapshotIfRemote(storageV5) {
   if (getEnvironmentKind() === null) return;
   try {
@@ -1216,7 +1223,7 @@ async function persistFileSnapshotIfRemote(storageV5) {
     logError(error);
   }
 }
-//@ chunk-e6aww6q8.js:1502265-1502377 affinity
+//@ chunk-5xgkngpb.js:1503920-1504032 affinity
 function getPlanWithPath(agentId) {
   if (isDisklessSession()) return null;
   let planFilePath = getPlanFilePath(agentId);
@@ -1229,7 +1236,7 @@ function getPlanWithPath(agentId) {
       }
     : null;
 }
-//@ chunk-e6aww6q8.js:4329866-4330013 fingerprint (2.1.88 match: getPlan, 1)
+//@ chunk-5xgkngpb.js:4436435-4436582 fingerprint (2.1.88 match: getPlan, 1)
 function getPlan_2() {
   if (isDiskless()) return null;
   let fsImplementation = getFsImplementation();
@@ -1246,32 +1253,32 @@ function getPlan_2() {
   return parseInstalledPluginsJson(rawPluginsJson);
 }
 export {
-  getPlansDirectory,
   primePlanSlugCollisions,
-  isDisklessSession,
-  notePlanFileForgotten,
+  peekPlanSlug,
   getPlanFilePath,
-  getPlan,
+  notePlanFileForgotten,
+  getPlanAsync,
+  getPlansDirectory,
   copyPlanForResume,
   getPlanFilePath_2,
-  copyPlanForFork,
-  peekPlanSlug,
-  setPlanSlug,
-  saveRejectedUltraplan,
-  clearAllPlanSlugs,
-  resetPlanFileCacheToUnknown,
-  getPlanAsync,
-  planExistsAsync,
   settlePlanFileCachePrime,
   getPlanSlug,
+  getPlan,
+  resetPlanFileCacheToUnknown,
+  getPlanSlug_2,
   planFiles,
   persistFileSnapshotIfRemote,
   getPlanWithPath,
   hostOwnedInputFieldSet,
   notePlanFileWritten,
+  planExistsAsync,
+  saveRejectedUltraplan,
   getPlan_2,
+  isDisklessSession,
+  copyPlanForFork,
+  setPlanSlug,
   persistPlanEdit,
-  getPlanSlug_2,
+  clearAllPlanSlugs,
   PLAN_SNAPSHOT_MAX_CHARS,
   readPlanFileFresh,
 };

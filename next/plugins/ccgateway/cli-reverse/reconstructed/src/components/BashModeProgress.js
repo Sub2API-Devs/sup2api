@@ -3,9 +3,9 @@
  *
  * ! bash 模式命令执行中的进度：回显 <bash-input> 与工具进度消息。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/BashModeProgress.tsx
- * pieces: chunk-18hwfzwa.js (2)
+ * pieces: chunk-czq1j3j2.js (2)
  * attribution: affinity 1, fingerprint 1
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
@@ -22,11 +22,11 @@ import { mcpRenderOverrideFor } from "./Message.js";
 import { BashTool } from "../tools/BashTool/BashTool.js";
 import { textSignal, Box } from "../ink/components/Text.js";
 
-//@ chunk-18hwfzwa.js:1667009-1667036 affinity
+//@ chunk-czq1j3j2.js:1713046-1713073 affinity
 function negate_2(value) {
   return !value;
 }
-//@ chunk-18hwfzwa.js:1667036-1668638 fingerprint (2.1.88 match: BashModeProgress, 0.63)
+//@ chunk-czq1j3j2.js:1713073-1714675 fingerprint (2.1.88 match: BashModeProgress, 0.629)
 function BashModeProgress(props) {
   let $ = useMemoCache(29);
   let { input, progress, verbose } = props;

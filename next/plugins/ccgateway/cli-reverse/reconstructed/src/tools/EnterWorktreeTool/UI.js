@@ -3,9 +3,9 @@
  *
  * 误归代码：按进度消息同步已保存的 worktree 会话元数据
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/EnterWorktreeTool/UI.tsx
- * pieces: chunk-ah34pb7m.js (1)
+ * pieces: chunk-wjygkcr4.js (1)
  * attribution: placement 1
  */
 import {
@@ -15,7 +15,7 @@ import {
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
-//@ chunk-ah34pb7m.js:30616-30882 placement
+//@ chunk-wjygkcr4.js:31580-31846 placement
 /**
  * “Switched to worktree（on branch …）” 结果消息。
  */

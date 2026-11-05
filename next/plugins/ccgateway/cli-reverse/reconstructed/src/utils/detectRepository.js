@@ -3,9 +3,9 @@
  *
  * 从 origin 远程 URL 解析当前仓库 host/owner/name（GitHub、GitLab MR 引用解析），按 cwd 缓存
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/detectRepository.ts
- * pieces: chunk-vkh471k3.js (31)
+ * pieces: chunk-s06bcw1p.js (31)
  * attribution: placement 3, layout 7, facade-majority 20, callgraph-witnessed 1
  */
 import { execFileNoThrowWithCwd } from "./execFileNoThrow.js";
@@ -24,7 +24,7 @@ import { describeUrlScheme } from "./resultError.js";
 import { isSuspiciousUrl } from "./fsBoundRead.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-vkh471k3.js:611-1012 placement
+//@ chunk-s06bcw1p.js:645-1046 placement
 /**
  * 主机名正则片段（标签由字母数字与连字符组成）。
  */
@@ -35,7 +35,7 @@ var GOOGLESOURCE_HOST_PATTERN;
 var regExp;
 var regExp_2;
 var MAX_REPO_URL_CHARS;
-deferInit("chunk-vkh471k3.js:611", () => {
+deferInit("chunk-s06bcw1p.js:645", () => {
   REPO_NAME_PATTERN = String.raw`(?!\.{1,2}(?:/|$))[A-Za-z0-9_.][\w.-]*`;
   HOSTNAME_PATTERN = String.raw`[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*`;
   GITLAB_MR_PATH_PATTERN = `(?:${REPO_NAME_PATTERN}/)+${REPO_NAME_PATTERN}/-/merge_requests`;
@@ -46,16 +46,16 @@ deferInit("chunk-vkh471k3.js:611", () => {
   regExp_2 = new RegExp(`^https?://${HOSTNAME_PATTERN}(?::\\d{1,5})?/${GITLAB_MR_PATH_PATTERN}/\\d+$`);
   MAX_REPO_URL_CHARS = 2048;
 });
-//@ chunk-vkh471k3.js:1012-1068 placement
+//@ chunk-s06bcw1p.js:1046-1102 placement
 /**
  * 判断 URL 是否含 “/-/merge_requests/数字” 路径。
  */
 function isGitLabMergeRequestUrl(url) {
   return /\/-\/merge_requests\/\d/.test(url);
 }
-//@ chunk-vkh471k3.js:1068-1083 layout
+//@ chunk-s06bcw1p.js:1102-1117 layout
 var DEFAULT_INVOCATION_ENCODING = undefined;
-//@ chunk-vkh471k3.js:1083-1199 placement (2.1.88 match: readFileLines, 0.607)
+//@ chunk-s06bcw1p.js:1117-1233 placement (2.1.88 match: readFileLines, 0.606)
 /**
  * 按 {file, args, cwd, env} 执行一次调用（不继承环境、默认编码），属于外部命令调用工具，误归 shellConfig（旧版名 readFileLines 错配）。
  */
@@ -68,42 +68,42 @@ function runInvocation({ file, args, cwd, env }, options) {
     extendEnv: false,
   });
 }
-//@ chunk-vkh471k3.js:1199-1208 layout
+//@ chunk-s06bcw1p.js:1233-1242 layout
 /**
  * 仓库路径段数的上限（21）。
  */
 var MAX_REPO_PATH_SEGMENTS = 21;
-//@ chunk-vkh471k3.js:1208-1252 facade-majority
+//@ chunk-s06bcw1p.js:1242-1286 facade-majority
 function isNestedGitLabProject(repo) {
   return repo.owner.includes("/");
 }
-//@ chunk-vkh471k3.js:1252-1325 facade-majority
+//@ chunk-s06bcw1p.js:1286-1359 facade-majority
 function clearRepositoryCaches() {
   getGitRepoCache().repositoryByCwd.clear();
   getGitRepoCache().remoteHostByCwd.clear();
 }
-//@ chunk-vkh471k3.js:1325-1403 facade-majority
+//@ chunk-s06bcw1p.js:1359-1437 facade-majority
 function primeCurrentRepository() {
   let cwdOrNull = getCwdOrNull();
   if (cwdOrNull === null) return;
   if (env.GIT_DIR || findGitRoot(cwdOrNull) !== null) detectCurrentRepositoryWithHost(cwdOrNull);
 }
-//@ chunk-vkh471k3.js:1403-1515 facade-majority (2.1.88 match: detectCurrentRepository, 0.395)
+//@ chunk-s06bcw1p.js:1437-1549 facade-majority (2.1.88 match: detectCurrentRepository, 0.391)
 async function detectCurrentRepository() {
   let result = await detectCurrentRepositoryWithHost();
   if (!result) return null;
   if (!isGithubDotCom(result.host)) return null;
   return `${result.owner}/${result.name}`;
 }
-//@ chunk-vkh471k3.js:1515-1554 facade-majority
+//@ chunk-s06bcw1p.js:1549-1588 facade-majority
 function repoDetectionGuards() {
   return trustGuardRegistry.of(getRootSession().host);
 }
-//@ chunk-vkh471k3.js:1554-1589 facade-majority
+//@ chunk-s06bcw1p.js:1588-1623 facade-majority
 function setRepoDetectionGuards(guards) {
   repoDetectionGuards().setGuards(guards);
 }
-//@ chunk-vkh471k3.js:1589-2094 facade-majority
+//@ chunk-s06bcw1p.js:1623-2128 facade-majority
 async function resolveRemote(cwd, gitTool) {
   if (repoDetectionGuards().blocked()) return null;
   let exe = gitTool ?? gitExe();
@@ -143,15 +143,15 @@ async function resolveRemote(cwd, gitTool) {
     url,
   };
 }
-//@ chunk-vkh471k3.js:2094-2148 facade-majority
+//@ chunk-s06bcw1p.js:2128-2182 facade-majority
 async function resolveRemoteUrl(cwd) {
   return (await resolveRemote(cwd))?.url ?? null;
 }
-//@ chunk-vkh471k3.js:2148-2193 facade-majority
+//@ chunk-s06bcw1p.js:2182-2227 facade-majority
 async function resolvePushRemoteUrl(cwd) {
   return (await getOriginPushUrl(cwd)).url;
 }
-//@ chunk-vkh471k3.js:2193-2453 layout
+//@ chunk-s06bcw1p.js:2227-2487 layout
 async function getOriginPushUrl(cwd) {
   if (repoDetectionGuards().blocked())
     return {
@@ -172,7 +172,7 @@ async function getOriginPushUrl(cwd) {
     answered: url !== null || exitCode === 2,
   };
 }
-//@ chunk-vkh471k3.js:2453-3470 facade-majority (2.1.88 match: detectCurrentRepositoryWithHost, 0.702)
+//@ chunk-s06bcw1p.js:2487-3504 facade-majority (2.1.88 match: detectCurrentRepositoryWithHost, 0.702)
 /**
  * 从 origin URL 解析当前仓库 {host, owner, name}，按 cwd 缓存。
  */
@@ -253,44 +253,44 @@ async function detectCurrentRepositoryWithHost(cwd, options) {
     return null;
   }
 }
-//@ chunk-vkh471k3.js:3470-3582 facade-majority (2.1.88 match: getCachedRepository, 0.302)
+//@ chunk-s06bcw1p.js:3504-3616 facade-majority (2.1.88 match: getCachedRepository, 0.299)
 function getCachedRepository() {
   let parsed = getGitRepoCache().repositoryByCwd.get(getCwd());
   if (!parsed || !isGithubDotCom(parsed.host)) return null;
   return `${parsed.owner}/${parsed.name}`;
 }
-//@ chunk-vkh471k3.js:3582-3647 facade-majority
+//@ chunk-s06bcw1p.js:3616-3681 facade-majority
 function getCachedRepositoryHost() {
   return getGitRepoCache().repositoryByCwd.get(getCwd())?.host ?? null;
 }
-//@ chunk-vkh471k3.js:3647-3782 facade-majority
+//@ chunk-s06bcw1p.js:3681-3816 facade-majority
 function isGitLabMrTarget(target) {
   if (isGitLabMergeRequestUrl(target) || /^!\d+$/.test(target)) return true;
   if (/^https?:\/\//i.test(target)) return false;
   let cachedRepositoryHost = getCachedRepositoryHost();
   return cachedRepositoryHost !== null && getGitHostKind(cachedRepositoryHost) === "gitlab";
 }
-//@ chunk-vkh471k3.js:3782-3926 facade-majority
+//@ chunk-s06bcw1p.js:3816-3960 facade-majority
 function glabMrId(target) {
   let mrId = /\/-\/merge_requests\/(\d+)/.exec(target)?.[1] ?? target.replace(/^!(\d+)$/, "$1");
   return /^[A-Za-z0-9][A-Za-z0-9._\/-]*$/.test(mrId) ? mrId : "";
 }
-//@ chunk-vkh471k3.js:3926-4017 layout
+//@ chunk-s06bcw1p.js:3960-4051 layout
 var GITLAB_MR_URL_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-vkh471k3.js:3926", () => {
+deferInit("chunk-s06bcw1p.js:3960", () => {
   GITLAB_MR_URL_PATTERN = new RegExp(
     `^(https?://${HOSTNAME_PATTERN}(?::\\d{1,5})?/(?:${REPO_NAME_PATTERN}/)+${REPO_NAME_PATTERN})/-/merge_requests/\\d`,
   );
 });
-//@ chunk-vkh471k3.js:4017-4061 facade-majority
+//@ chunk-s06bcw1p.js:4051-4095 facade-majority
 function glabMrProjectUrl(target) {
   return GITLAB_MR_URL_PATTERN.exec(target)?.[1] ?? null;
 }
-//@ chunk-vkh471k3.js:4061-4120 facade-majority
+//@ chunk-s06bcw1p.js:4095-4154 facade-majority
 function getCachedRemoteHost() {
   return getGitRepoCache().remoteHostByCwd.get(getCwd()) ?? null;
 }
-//@ chunk-vkh471k3.js:4120-4226 facade-majority
+//@ chunk-s06bcw1p.js:4154-4260 facade-majority
 function isCachedGitHubRepo() {
   let cwd = getCwd();
   let repositoryByCwd = getGitRepoCache().repositoryByCwd;
@@ -298,7 +298,7 @@ function isCachedGitHubRepo() {
   let cached = repositoryByCwd.get(cwd);
   return !!cached && isGithubDotCom(cached.host);
 }
-//@ chunk-vkh471k3.js:4226-4771 facade-majority (2.1.88 match: parseGitRemote, 1)
+//@ chunk-s06bcw1p.js:4260-4806 facade-majority (2.1.88 match: parseGitRemote, 1)
 /**
  * 解析 git 远程 URL（ssh/https/git 协议）为 host/owner/name。
  */
@@ -333,7 +333,7 @@ function parseGitRemote(input) {
   }
   return parseGitRemote_2(trimmed);
 }
-//@ chunk-vkh471k3.js:4771-5243 layout (2.1.88 match: parseGitRemote, 0.793)
+//@ chunk-s06bcw1p.js:4806-5278 layout (2.1.88 match: parseGitRemote, 0.793)
 function parseGitRemote_2(input) {
   let protocol;
   let hostPart;
@@ -362,7 +362,7 @@ function parseGitRemote_2(input) {
     name: parts.at(-1),
   };
 }
-//@ chunk-vkh471k3.js:5243-5480 facade-majority
+//@ chunk-s06bcw1p.js:5278-5515 facade-majority
 /**
  * 从任意远程 URL 末尾提取 owner/name（去掉 .git），校验段名合法。
  */
@@ -379,7 +379,7 @@ function parseRepoSlug(input) {
     name: match[2],
   };
 }
-//@ chunk-vkh471k3.js:5480-5827 facade-majority (2.1.88 match: parseGitHubRepository, 0.809)
+//@ chunk-s06bcw1p.js:5515-5862 facade-majority (2.1.88 match: parseGitHubRepository, 0.809)
 function parseGitHubRepository(input) {
   let trimmed = input.trim();
   let parsed = parseGitRemote(trimmed);
@@ -398,13 +398,13 @@ function parseGitHubRepository(input) {
   logForDebugging(`Could not parse repository from: ${trimmed}`);
   return null;
 }
-//@ chunk-vkh471k3.js:5827-5853 layout
+//@ chunk-s06bcw1p.js:5862-5888 layout
 var REPO_SEGMENT_PATTERN = /^[A-Za-z0-9._-]+$/;
-//@ chunk-vkh471k3.js:5853-5923 layout
+//@ chunk-s06bcw1p.js:5888-5958 layout
 function isValidRepoSegment(repo) {
   return REPO_SEGMENT_PATTERN.test(repo) && !repo.startsWith("-") && repo !== "." && repo !== "..";
 }
-//@ chunk-vkh471k3.js:5923-6082 callgraph-witnessed (2.1.88 match: looksLikeRealHostname, 1)
+//@ chunk-s06bcw1p.js:5958-6117 callgraph-witnessed (2.1.88 match: looksLikeRealHostname, 1)
 function looksLikeRealHostname(host) {
   if (!/^[A-Za-z0-9.-]+$/.test(host) || host.startsWith("-") || !host.includes(".")) return false;
   let lastSegment = host.split(".").pop();
@@ -412,34 +412,34 @@ function looksLikeRealHostname(host) {
   return /^[a-zA-Z]+$/.test(lastSegment);
 }
 export {
-  detectCurrentRepository,
+  runInvocation,
+  getCachedRepository,
   parseGitHubRepository,
   isCachedGitHubRepo,
-  MAX_REPO_URL_CHARS,
   isGitLabMergeRequestUrl,
-  parseGitRemote,
+  detectCurrentRepository,
   detectCurrentRepositoryWithHost,
   isNestedGitLabProject,
   resolveRemoteUrl,
+  parseGitRemote,
+  getCachedRemoteHost,
   parseRepoSlug,
   resolvePushRemoteUrl,
   resolveRemote,
   repoDetectionGuards,
-  clearRepositoryCaches,
-  getCachedRemoteHost,
-  runInvocation,
-  getCachedRepository,
   setRepoDetectionGuards,
-  primeCurrentRepository,
-  glabMrId,
-  glabMrProjectUrl,
-  isGitLabMrTarget,
-  DEFAULT_INVOCATION_ENCODING,
+  MAX_REPO_URL_CHARS,
   regExp_2,
   regExp,
   REPO_NAME_PATTERN,
   GOOGLESOURCE_HOST_PATTERN,
   HOSTNAME_PATTERN,
   GITLAB_MR_PATH_PATTERN,
+  clearRepositoryCaches,
+  primeCurrentRepository,
+  DEFAULT_INVOCATION_ENCODING,
+  glabMrId,
+  glabMrProjectUrl,
+  isGitLabMrTarget,
   getCachedRepositoryHost,
 };

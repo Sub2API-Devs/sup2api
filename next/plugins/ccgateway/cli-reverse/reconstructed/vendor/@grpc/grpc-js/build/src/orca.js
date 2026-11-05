@@ -1,8 +1,8 @@
 /**
  * @grpc/grpc-js/build/src/orca.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @grpc/grpc-js@1.14.4
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
@@ -15,7 +15,7 @@ import { require_backoff_timeout } from "./backoff-timeout.js";
 import { require_connectivity_state } from "./connectivity-state.js";
 import { require_proto_loader } from "../../../proto-loader/build/src/index.js";
 
-//@ chunk-pwh5dx3n.js:288349-293534 cjs-fingerprint
+//@ chunk-3k21nfa0.js:288349-293534 cjs-fingerprint
 var require_orca = __commonJS(function (cjsExports) {
   var __dirname_2 =
     "/home/runner/work/claude-cli-internal/claude-cli-internal/node_modules/@grpc/grpc-js/build/src";

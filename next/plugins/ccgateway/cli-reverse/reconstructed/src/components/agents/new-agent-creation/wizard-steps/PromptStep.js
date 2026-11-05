@@ -3,9 +3,9 @@
  *
  * 向导提示步骤；实际内容为路径输入（疑似匹配错误）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/agents/new-agent-creation/wizard-steps/PromptStep.tsx
- * pieces: chunk-y6fv30yg.js (2)
+ * pieces: chunk-3qyfks39.js (2)
  * attribution: placement 1, callgraph-fingerprint 1
  */
 import { join } from "path";
@@ -29,12 +29,12 @@ import { ErrorText } from "../../../ErrorText.js";
 import { WizardDialogLayout } from "../../../wizard/WizardDialogLayout.js";
 import { deferInit } from "../../../../../runtime/deferred-init.js";
 
-//@ chunk-y6fv30yg.js:15626-15630 placement
+//@ chunk-3qyfks39.js:15626-15630 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-y6fv30yg.js:15626", () => {
+deferInit("chunk-3qyfks39.js:15626", () => {
   init_react_production();
 });
-//@ chunk-y6fv30yg.js:15689-17115 callgraph-fingerprint (2.1.88 match: PromptStep, 0.516)
+//@ chunk-3qyfks39.js:15689-17115 callgraph-fingerprint (2.1.88 match: PromptStep, 0.516)
 function PromptStep() {
   let $ = useMemoCache(17);
   let { goBack, goToStep, updateWizardData, wizardData } = useWizard();

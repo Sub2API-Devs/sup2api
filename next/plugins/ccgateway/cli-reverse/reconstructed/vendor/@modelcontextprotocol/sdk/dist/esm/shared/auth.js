@@ -1,8 +1,8 @@
 /**
  * @modelcontextprotocol/sdk/dist/esm/shared/auth.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/sdk@1.29.0
- * pieces: chunk-9z4e25ww.js (1)
+ * pieces: chunk-6dff51n3.js (1)
  * attribution: esm-fingerprint 1
  */
 import {
@@ -20,7 +20,7 @@ import { ZodIssueCode, coerceNumber } from "../../../../../zod/v4/classic/compat
 import { INVALID } from "../../../../../zod/v4/core/core.js";
 import { deferInit } from "../../../../../../runtime/deferred-init.js";
 
-//@ chunk-9z4e25ww.js:397-4730 esm-fingerprint
+//@ chunk-6dff51n3.js:397-4730 esm-fingerprint
 var SafeUrlSchema; // deferred: uses urlSchema (../../../../../zod/v4/classic/schemas.js) of its import cycle while loading; runs once the cycle is complete
 var OAuthProtectedResourceMetadataSchema;
 var OAuthMetadataSchema;
@@ -34,7 +34,7 @@ var OAuthClientInformationSchema;
 var OAuthClientInformationFullSchema;
 var OAuthClientRegistrationErrorSchema;
 var OAuthTokenRevocationRequestSchema;
-deferInit("chunk-9z4e25ww.js:397", () => {
+deferInit("chunk-6dff51n3.js:397", () => {
   SafeUrlSchema = urlSchema()
     .superRefine((val, ctx) => {
       if (!URL.canParse(val)) {
@@ -189,10 +189,10 @@ deferInit("chunk-9z4e25ww.js:397", () => {
   }).strip();
 });
 export {
-  OAuthTokensSchema,
-  OAuthErrorResponseSchema,
-  OAuthMetadataSchema,
   OpenIdProviderDiscoveryMetadataSchema,
+  OAuthErrorResponseSchema,
   OAuthProtectedResourceMetadataSchema,
+  OAuthMetadataSchema,
+  OAuthTokensSchema,
   OAuthClientInformationFullSchema,
 };

@@ -3,10 +3,10 @@
  *
  * 并入已有模块：内置插件注册。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/plugins/builtinPlugins.ts
- * pieces: chunk-7pze86xc.js (1), chunk-bfnfj4kx.js (13), chunk-e6aww6q8.js (1)
- * attribution: placement 13, fingerprint 2
+ * pieces: chunk-5xgkngpb.js (1), chunk-6sf70a86.js (13), chunk-gkq1vt4f.js (1)
+ * attribution: fingerprint 2, placement 13
  */
 import { join } from "path";
 import { isStandaloneExecutable } from "../utils/slowOperations.js";
@@ -34,7 +34,7 @@ import { isRemoteEntrypoint } from "../utils/entrypointKinds.js";
 import { getSessionEntrypoint } from "../utils/sessionShape.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-bfnfj4kx.js:75190-75243 placement
+//@ chunk-6sf70a86.js:75236-75289 placement
 /**
  * 生成内置插件的 hooks 模块引用（打包模式下指向内嵌模块）。
  */
@@ -45,7 +45,7 @@ var builtinHooksModuleRef = (pluginName, mod, loader) =>
         module: mod,
         folder: pluginName,
       };
-//@ chunk-bfnfj4kx.js:75272-75378 placement
+//@ chunk-6sf70a86.js:75318-75424 placement
 function builtinPluginLocation(path, hooksModule) {
   return "folder" in hooksModule
     ? {
@@ -57,12 +57,12 @@ function builtinPluginLocation(path, hooksModule) {
         modulePath: builtinHookKey(path),
       };
 }
-//@ chunk-bfnfj4kx.js:75407-75434 placement
+//@ chunk-6sf70a86.js:75453-75480 placement
 /**
  * mods 目录下某路径。
  */
 var getModsFolderPath = (name) => join(repoRoot(), MODS, name);
-//@ chunk-bfnfj4kx.js:75434-75576 placement
+//@ chunk-6sf70a86.js:75480-75622 placement
 function describeModuleShape(value) {
   return value === null || value === undefined
     ? String(value)
@@ -70,7 +70,7 @@ function describeModuleShape(value) {
       ? `an object with keys [${Object.keys(value).join(", ")}]`
       : `a ${typeof value}`;
 }
-//@ chunk-bfnfj4kx.js:75576-75818 placement
+//@ chunk-6sf70a86.js:75622-75864 placement
 function assertBuiltinModuleShape(builtinModule) {
   if (
     typeof builtinModule === "object" &&
@@ -84,7 +84,7 @@ function assertBuiltinModuleShape(builtinModule) {
     "a built-in module has no registerPlugin function",
   );
 }
-//@ chunk-bfnfj4kx.js:75818-76018 placement
+//@ chunk-6sf70a86.js:75864-76064 placement
 /**
  * 加载并注册一个内置插件模块：require 失败、缺 registerPlugin、注册抛错时分别按阶段记录失败（注册失败还会移除）。
  */
@@ -110,7 +110,7 @@ function loadBuiltinPlugin(name, loader) {
     recordBuiltinPluginFailure(name, "register", error);
   }
 }
-//@ chunk-bfnfj4kx.js:76018-76167 placement
+//@ chunk-6sf70a86.js:76064-76213 placement
 function recordBuiltinPluginFailure(name, phase, error) {
   let builtinPluginFailures = getHostState().builtinPluginFailures;
   if (builtinPluginFailures.has(name)) return;
@@ -122,7 +122,7 @@ function recordBuiltinPluginFailure(name, phase, error) {
   logError(toError(error));
   logFeatureBad("plugin_bundled_register", phase);
 }
-//@ chunk-bfnfj4kx.js:76167-76380 placement
+//@ chunk-6sf70a86.js:76213-76426 placement
 /**
  * 内置插件是否可用（注册过、未失败、isAvailable 为真）。
  */
@@ -138,7 +138,7 @@ function isBuiltinPluginAvailable(name) {
     return false;
   }
 }
-//@ chunk-bfnfj4kx.js:76380-76576 placement
+//@ chunk-6sf70a86.js:76426-76622 placement
 /**
  * 注册内置插件，并登记其 hooks 模块（扫描或预构建）。
  */
@@ -150,26 +150,26 @@ function registerBuiltinPlugin(plugin) {
   if ("scan" in hooksModule) builtinSourceRegistry.registerScan(hookKey, hooksModule.scan);
   else if ("shipped" in hooksModule) builtinSourceRegistry.register(hookKey, hooksModule.shipped);
 }
-//@ chunk-bfnfj4kx.js:76576-76619 placement
+//@ chunk-6sf70a86.js:76622-76665 placement
 /**
  * 插件 id 是否以 @builtin 结尾。
  */
 function isBuiltinPluginId(pluginId) {
   return pluginId.endsWith(`@${BUILTIN}`);
 }
-//@ chunk-bfnfj4kx.js:76619-76663 placement
+//@ chunk-6sf70a86.js:76665-76709 placement
 /**
  * 列出已注册内置插件的名字。
  */
 var getBuiltinPluginNames = () => [...getHostState().builtinPlugins.keys()];
-//@ chunk-bfnfj4kx.js:76663-76712 placement
+//@ chunk-6sf70a86.js:76709-76758 placement
 /**
  * 按名字取内置插件定义。
  */
 function getBuiltinPlugin(name) {
   return getHostState().builtinPlugins.get(name);
 }
-//@ chunk-bfnfj4kx.js:76712-77383 fingerprint (2.1.88 match: getBuiltinPlugins, 0.708)
+//@ chunk-6sf70a86.js:76758-77429 fingerprint (2.1.88 match: getBuiltinPlugins, 0.709)
 /**
  * 列出内置插件（随 CLI 发布、名字为 <name>@builtin）：按可用性开关过滤，根据 settings.enabledPlugins 与默认启用状态分成 enabled/disabled。
  */
@@ -223,13 +223,13 @@ function getBuiltinPlugins() {
     disabled,
   };
 }
-//@ chunk-e6aww6q8.js:956875-956944 fingerprint (2.1.88 match: getBuiltinPluginSkillCommands, 0.669)
+//@ chunk-5xgkngpb.js:968657-968726 fingerprint (2.1.88 match: getBuiltinPluginSkillCommands, 0.669)
 /**
  * 内置插件清单里 skills 数组的运行期校验边界：至少 1 项、最多 64 项（MAX_SKILLS_PER_PLUGIN）。
  */
 var MAX_SKILLS_PER_PLUGIN; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var builtinSkillsSchema;
-deferInit("chunk-e6aww6q8.js:956875", () => {
+deferInit("chunk-5xgkngpb.js:968657", () => {
   MAX_SKILLS_PER_PLUGIN = 64;
   builtinSkillsSchema = DoctorLazy(() =>
     objectSchema({
@@ -237,7 +237,7 @@ deferInit("chunk-e6aww6q8.js:956875", () => {
     }),
   );
 });
-//@ chunk-7pze86xc.js:339-1469 placement
+//@ chunk-gkq1vt4f.js:339-1529 placement
 /**
  * 首次调用时加载所有内置插件：sec-default、agents-md、telemetry 总是加载；非 local-agent 入口再加 plugin-authoring、mods-guide（非远程还有 tips、mermaid）；responsive-mode、diff、you-should-know、easel、claude-platform、claude-test 按入口类型加载。
  */
@@ -248,6 +248,7 @@ function initBuiltinPlugins() {
   loadBuiltinPlugin("cc-plugin-sec-default", () => require("./functionHooks/ADMISSION_OPTIONS.lazy.js"));
   loadBuiltinPlugin("cc-plugin-agents-md", () => require("./bundled/agentsMd/PLUGIN_DESCRIPTION.lazy.js"));
   loadBuiltinPlugin("cc-plugin-telemetry", () => require("../services/analytics/MOD_FOLDER.lazy.js"));
+  loadBuiltinPlugin("cc-plugin-privacy", () => require("./hooksModules/PLUGIN_NAME.lazy.js"));
   if (env.CLAUDE_CODE_ENTRYPOINT !== "local-agent") {
     loadBuiltinPlugin("cc-plugin-plugin-authoring", () =>
       require("../skills/bundled/pluginAuthoring/CLOUD_SURFACE.lazy.js"),
@@ -277,15 +278,15 @@ function initBuiltinPlugins() {
   }
 }
 export {
-  registerBuiltinPlugin,
-  builtinHooksModuleRef,
   getBuiltinPlugin,
   getBuiltinPlugins,
-  isBuiltinPluginId,
-  initBuiltinPlugins,
+  registerBuiltinPlugin,
+  builtinHooksModuleRef,
   getModsFolderPath,
-  MAX_SKILLS_PER_PLUGIN,
+  initBuiltinPlugins,
+  isBuiltinPluginId,
   isBuiltinPluginAvailable,
   getBuiltinPluginNames,
   builtinSkillsSchema,
+  MAX_SKILLS_PER_PLUGIN,
 };

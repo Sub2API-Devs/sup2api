@@ -3,9 +3,9 @@
  *
  * 设置种子（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-q8cqcff6.js (15)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5fn9rb8r.js (15)
  * attribution: placement 15
  */
 import { STORAGE_SPACES } from "../storage/storageSpaces.js";
@@ -32,7 +32,7 @@ import { isManagedSettingsDropInName } from "./managedFileSettings.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 
-//@ chunk-q8cqcff6.js:90356-90809 placement
+//@ chunk-5fn9rb8r.js:90621-91073 placement
 async function readSettingsSeed(backend, settingsPath, previous) {
   let readResult = await backend.read([
     {
@@ -65,7 +65,7 @@ async function readSettingsSeed(backend, settingsPath, previous) {
     parsed,
   };
 }
-//@ chunk-q8cqcff6.js:90809-91049 placement
+//@ chunk-5fn9rb8r.js:91073-91313 placement
 async function statHomeSpace(hostFiles, settingsPath) {
   let statResult;
   try {
@@ -91,7 +91,7 @@ async function statHomeSpace(hostFiles, settingsPath) {
       }
     : failingReadDescriptor(statResult.error);
 }
-//@ chunk-q8cqcff6.js:91049-91715 placement
+//@ chunk-5fn9rb8r.js:91313-91979 placement
 async function seedUserSettings(store, read) {
   if (!isStorageV5Enabled()) return;
   let epoch = store.epoch;
@@ -126,7 +126,7 @@ async function seedUserSettings(store, read) {
     return;
   }
 }
-//@ chunk-q8cqcff6.js:91715-91835 placement
+//@ chunk-5fn9rb8r.js:91979-92099 placement
 /**
  * 构造用户设置的预读描述（来源、路径、读取函数、缺省处理）。
  */
@@ -139,7 +139,7 @@ function userSettingsSeedRead(backend, settingsPath) {
     whenAbsent: "seedAbsence",
   };
 }
-//@ chunk-q8cqcff6.js:91835-92019 placement
+//@ chunk-5fn9rb8r.js:92099-92283 placement
 async function readUserNamedSeed(hostFiles, settingsPath) {
   if (!hostFiles.serves("userNamed"))
     return {
@@ -157,7 +157,7 @@ async function readUserNamedSeed(hostFiles, settingsPath) {
     }
   return readSeedFile(hostFiles, PathSpace.userNamed(settingsPath), settingsPath, false);
 }
-//@ chunk-q8cqcff6.js:92019-92281 placement
+//@ chunk-5fn9rb8r.js:92283-92544 placement
 async function readSystemSeed(backend, settingsPath, previous) {
   let seedBytes = await readSeedBytes(backend, PathSpace.system(settingsPath));
   if (seedBytes.kind !== "bytes") return seedBytes;
@@ -176,7 +176,7 @@ async function readSystemSeed(backend, settingsPath, previous) {
           },
   };
 }
-//@ chunk-q8cqcff6.js:92281-92445 placement
+//@ chunk-5fn9rb8r.js:92544-92707 placement
 async function readSeedFile(backend, space, settingsPath, isSystemSpace) {
   let seedBytes = await readSeedBytes(backend, space);
   if (seedBytes.kind !== "bytes") return seedBytes;
@@ -187,7 +187,7 @@ async function readSeedFile(backend, space, settingsPath, isSystemSpace) {
     parsed: parseSettingsContent(decodeTextBuffer(seedBytes.bytes), settingsPath, isSystemSpace),
   };
 }
-//@ chunk-q8cqcff6.js:92445-92991 placement
+//@ chunk-5fn9rb8r.js:92707-93253 placement
 /**
  * 经存储后端读取设置文件字节：检查存在、类型与大小上限，返回内容、哈希、大小与属主信息，或 absent/oversize/failing。
  */
@@ -232,7 +232,7 @@ async function readSeedBytes(backend, space) {
           },
   };
 }
-//@ chunk-q8cqcff6.js:92991-93354 placement
+//@ chunk-5fn9rb8r.js:93253-93616 placement
 /**
  * 经存储后端列出托管设置 drop-in 目录中的设置文件名（排序），目录不存在或不是目录时为空列表。
  */
@@ -262,7 +262,7 @@ async function listManagedDropIns(hostFiles, dropInDir) {
       .sort(),
   };
 }
-//@ chunk-q8cqcff6.js:93354-93499 placement
+//@ chunk-5fn9rb8r.js:93616-93761 placement
 /**
  * 把设置预读结果转为日志用的标签。
  */
@@ -272,7 +272,7 @@ function seedOutcomeLabel(outcome) {
     ? "the backend does not serve this space"
     : `backend read failed: ${outcome.code}`;
 }
-//@ chunk-q8cqcff6.js:93499-93594 placement
+//@ chunk-5fn9rb8r.js:93761-93856 placement
 function failingReadDescriptor(error) {
   return {
     kind: "failing",
@@ -280,7 +280,7 @@ function failingReadDescriptor(error) {
     failureClass: error.failureClass,
   };
 }
-//@ chunk-q8cqcff6.js:93594-93700 placement
+//@ chunk-5fn9rb8r.js:93856-93962 placement
 /**
  * 构造项目设置的预读描述。
  */
@@ -293,7 +293,7 @@ function projectSettingsSeedRead(context, source, settingsPath, label) {
     whenAbsent: "seedAbsence",
   };
 }
-//@ chunk-q8cqcff6.js:93700-93846 placement
+//@ chunk-5fn9rb8r.js:93962-94108 placement
 /**
  * 构造托管设置文件的预读描述（可复用已读内容）。
  */
@@ -306,14 +306,14 @@ function managedSettingsSeedRead(context, settingsPath, label, store) {
     whenAbsent: "fileServes",
   };
 }
-//@ chunk-q8cqcff6.js:93846-93895 placement
+//@ chunk-5fn9rb8r.js:94108-94157 placement
 /**
  * seedProjectSettings：预热项目设置读取。
  */
 async function seedProjectSettings(context, store, settingsPath) {
   return seedUserSettings(store, userSettingsSeedRead(context, settingsPath));
 }
-//@ chunk-q8cqcff6.js:93895-94076 placement
+//@ chunk-5fn9rb8r.js:94157-94338 placement
 class LegacyLocalSettingsProbe {
   firedSites = new Set();
   fire(site) {
@@ -328,8 +328,8 @@ class LegacyLocalSettingsProbe {
   }
 }
 export {
-  LegacyLocalSettingsProbe,
   seedProjectSettings,
+  LegacyLocalSettingsProbe,
   readSettingsSeed,
   seedOutcomeLabel,
   seedUserSettings,

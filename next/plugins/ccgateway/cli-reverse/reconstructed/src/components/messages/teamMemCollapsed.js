@@ -3,18 +3,18 @@
  *
  * 团队记忆读写操作的折叠计数文案（Recalling/Recalled N team memories）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/teamMemCollapsed.tsx
- * pieces: chunk-ah34pb7m.js (13)
+ * pieces: chunk-wjygkcr4.js (13)
  * attribution: placement 11, fingerprint 2
  */
+import { useClock } from "../../ink/components/ClockContext.js";
 import {
-  init_react_production,
   useState,
   useRef,
   useEffect,
+  init_react_production,
 } from "../../../vendor/react/cjs/react.production.js";
-import { useClock } from "../../ink/components/ClockContext.js";
 import { memoizeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { urlPatternToRegex } from "../../utils/stringUtils.js";
 import { SERVER_CLASSIFIER_LABEL } from "../../utils/permissions/serverClassifier/arbiter.js";
@@ -28,7 +28,7 @@ import {
   isClassifierDenial,
   isWellFormedClassifierDenial,
 } from "../../utils/messages.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { isStandardVersion, parseModelId, hasReservedTag } from "../../utils/model/modelIds.js";
 import { stripAnsiPerLine } from "../../utils/stripAnsi.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
@@ -42,17 +42,7 @@ import { Text } from "../../ink/components/Text.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:148396-148400 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:148396", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:148433-148437 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:148433", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:148437-148673 placement
+//@ chunk-wjygkcr4.js:150106-150342 placement
 /**
  * 值变为 undefined 后，保持旧值至少 d 毫秒再清除。
  */
@@ -75,34 +65,34 @@ function useLingeringValue(value, lingerMs) {
   }, [value, lingerMs, clock]);
   return shown;
 }
-//@ chunk-ah34pb7m.js:148673-148677 placement
+//@ chunk-wjygkcr4.js:150342-150346 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:148673", () => {
+deferInit("chunk-wjygkcr4.js:150342", () => {
   init_react_production();
 });
-//@ chunk-ah34pb7m.js:148677-148875 placement
+//@ chunk-wjygkcr4.js:150346-150544 placement
 /**
  * 节流值更新：距上次更新不足 d 毫秒时延后到期再更新。
  */
-function useThrottledValue(latestDisplayHint, delayMs) {
+function useThrottledValue(value, delayMs) {
   let clock = useClock();
-  let [throttledValue, setThrottledValue] = useState(latestDisplayHint);
+  let [throttledValue, setThrottledValue] = useState(value);
   let timerRef = useRef(0);
   useEffect(() => {
     let latestRef = Date.now() - timerRef.current;
     if (latestRef >= delayMs) {
       timerRef.current = Date.now();
-      setThrottledValue(latestDisplayHint);
+      setThrottledValue(value);
       return;
     }
     return clock.setTimeout(() => {
       timerRef.current = Date.now();
-      setThrottledValue(latestDisplayHint);
+      setThrottledValue(value);
     }, delayMs - latestRef);
-  }, [latestDisplayHint, delayMs, clock]);
+  }, [value, delayMs, clock]);
   return throttledValue;
 }
-//@ chunk-ah34pb7m.js:148875-150521 placement
+//@ chunk-wjygkcr4.js:150544-152190 placement
 /**
  * 团队记忆折叠显示使用的私有区标记字符与重试/时长描述表。
  */
@@ -115,7 +105,7 @@ var ELAPSED_WORD_BUCKETS;
 var HANDOFF_FLAGS;
 var SERVER_SKIP_REASONS;
 var TEAM_MEM_EVENT_RE;
-deferInit("chunk-ah34pb7m.js:148875", () => {
+deferInit("chunk-wjygkcr4.js:150544", () => {
   TEAM_MEM_MARKERS = "\uE000";
   TEAM_MEM_MARKER_2 = "\uE001";
   TEAM_MEM_MARKER_3 = "\uE002";
@@ -188,7 +178,7 @@ deferInit("chunk-ah34pb7m.js:148875", () => {
           urlPatternToRegex(messagePattern).replace(`HTTP ${TEAM_MEM_RETRY_STATUS}`, "HTTP \\d{3}"),
         ),
       );
-      let regexSource = `(?:${uniq(flattened).join("|")})`;
+      let regexSource = `(?:${normalizeCaseForComparison_2(flattened).join("|")})`;
       for (let { ms, words } of ELAPSED_WORD_BUCKETS)
         for (let { handedOff, skippable } of HANDOFF_FLAGS) {
           let matcher = urlPatternToRegex(
@@ -225,7 +215,7 @@ deferInit("chunk-ah34pb7m.js:148875", () => {
     return [...namePattern].map((pattern) => new RegExp(`^${pattern}$`));
   });
 });
-//@ chunk-ah34pb7m.js:150521-150653 placement
+//@ chunk-wjygkcr4.js:152190-152322 placement
 /**
  * 判断拒绝文本是否属于"模型不可用"类（匹配模式里的 model 组是指定模型或已知不可用模型）。
  */
@@ -239,7 +229,7 @@ function isModelUnavailableDenial(message) {
     );
   });
 }
-//@ chunk-ah34pb7m.js:150653-150833 placement
+//@ chunk-wjygkcr4.js:152322-152502 placement
 /**
  * 工具结果是否为自动模式分类器拦截：本地拒绝看 toolDenialKind，远程拒绝要求格式完整的分类器拒绝文本。
  */
@@ -251,7 +241,7 @@ function isAutoModeBlockedResult(content, { toolDenialKind, remoteToolDenialKind
         stripAnsiPerLine(content) === content &&
         isWellFormedClassifierDenial(content);
 }
-//@ chunk-ah34pb7m.js:150833-150964 placement
+//@ chunk-wjygkcr4.js:152502-152633 placement
 /**
  * 远程拒绝种类为 automode-unavailable 且文本为模型不可用类时为真。
  */
@@ -263,7 +253,7 @@ function isAutoModeUnavailableResult(message, { toolDenialKind, remoteToolDenial
     isModelUnavailableDenial(message)
   );
 }
-//@ chunk-ah34pb7m.js:150964-151107 placement
+//@ chunk-wjygkcr4.js:152633-152776 placement
 /**
  * 用户消息里是否有被自动模式拦截的 tool_result。
  */
@@ -276,7 +266,7 @@ function hasAutoModeBlockedToolResult(message) {
     )
   );
 }
-//@ chunk-ah34pb7m.js:151107-151298 placement
+//@ chunk-wjygkcr4.js:152776-152967 placement
 /**
  * 以引用块显示拒绝标签与原因。
  */
@@ -299,7 +289,7 @@ function DenialReasonQuote(props) {
   } else quoteElement = $[2];
   return quoteElement;
 }
-//@ chunk-ah34pb7m.js:151298-151411 fingerprint (2.1.88 match: checkHasTeamMemOps, 1)
+//@ chunk-wjygkcr4.js:152967-153080 fingerprint (2.1.88 match: checkHasTeamMemOps, 1)
 function checkHasTeamMemOps(message) {
   return (
     (message.teamMemorySearchCount ?? 0) > 0 ||
@@ -307,7 +297,7 @@ function checkHasTeamMemOps(message) {
     (message.teamMemoryWriteCount ?? 0) > 0
   );
 }
-//@ chunk-ah34pb7m.js:151411-152699 fingerprint (2.1.88 match: TeamMemCountParts, 0.95)
+//@ chunk-wjygkcr4.js:153080-154369 fingerprint (2.1.88 match: TeamMemCountParts, 0.95)
 function TeamMemCountParts(props) {
   let $ = useMemoCache(15);
   let { message, isActiveGroup, hasPrecedingParts } = props;
@@ -457,6 +447,16 @@ function TeamMemCountParts(props) {
   } else t1 = $[5];
   return t1;
 }
+//@ chunk-wjygkcr4.js:194215-194219 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:194215", () => {
+  init_react_production();
+});
+//@ chunk-wjygkcr4.js:194219-194223 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:194219", () => {
+  init_react_production();
+});
 export {
   hasAutoModeBlockedToolResult,
   DenialReasonQuote,

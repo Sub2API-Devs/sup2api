@@ -3,12 +3,12 @@
  *
  * TaskStop 名字、别名与提示词
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TaskStopTool/prompt.ts
- * pieces: chunk-yt6b774j.js (1)
+ * pieces: chunk-f5f3fs7w.js (1)
  * attribution: fingerprint 1
  */
-//@ chunk-yt6b774j.js:560-978 fingerprint (2.1.88 match: TASK_STOP_TOOL_NAME, 0.369)
+//@ chunk-f5f3fs7w.js:560-978 fingerprint (2.1.88 match: TASK_STOP_TOOL_NAME, 0.364)
 /**
  * TaskStop 名字 "TaskStop"、别名 ["KillShell","KillBash"] 与提示词。
  */

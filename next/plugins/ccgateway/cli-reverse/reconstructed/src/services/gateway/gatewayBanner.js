@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：claude gateway 启动横幅：监听地址、遥测导出、客户端 IP 来源、OIDC 与客户路由推理配置
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-2f906bwf.js (6)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-b9mhcvry.js (6)
  * attribution: placement 6
  */
 import { isIP } from "net";
@@ -13,7 +13,7 @@ import { env } from "../../utils/env.js";
 import { LEVEL_ORDER } from "../../utils/debug.js";
 import { getUsableProxyUrl, shouldBypassProxy } from "../../utils/proxy.js";
 
-//@ chunk-2f906bwf.js:330-420 placement
+//@ chunk-b9mhcvry.js:330-420 placement
 /**
  * 网关日志级别：CLAUDE_GATEWAY_LOG_LEVEL（debug/info/warn/error），默认 info。
  */
@@ -21,7 +21,7 @@ function getGatewayLogLevel() {
   let lower = env.CLAUDE_GATEWAY_LOG_LEVEL?.toLowerCase();
   return lower && lower in LEVEL_ORDER ? LEVEL_ORDER[lower] : LEVEL_ORDER.info;
 }
-//@ chunk-2f906bwf.js:420-461 placement
+//@ chunk-b9mhcvry.js:420-461 placement
 /**
  * 控制字符的简写转义表（\n、\r、\t）。
  */
@@ -30,14 +30,14 @@ var CONTROL_CHAR_ESCAPES = {
   "\r": "\\r",
   "\t": "\\t",
 };
-//@ chunk-2f906bwf.js:461-601 placement
+//@ chunk-b9mhcvry.js:461-601 placement
 function escapeControlChars(text) {
   return text.replace(
     /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g,
     (char) => CONTROL_CHAR_ESCAPES[char] ?? `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,
   );
 }
-//@ chunk-2f906bwf.js:601-713 placement
+//@ chunk-b9mhcvry.js:601-713 placement
 /**
  * 按级别写 [gateway] 日志到 stderr。
  */
@@ -46,7 +46,7 @@ function gatewayLog(level, message) {
   process.stderr.write(`[gateway] ${new Date().toISOString()} ${level} ${escapeControlChars(message)}
 `);
 }
-//@ chunk-2f906bwf.js:713-815 placement
+//@ chunk-b9mhcvry.js:713-815 placement
 /**
  * 以 JSON 行写结构化网关事件到 stderr。
  */
@@ -58,7 +58,7 @@ function gatewayJsonLog(evt, fields) {
   })}
 `);
 }
-//@ chunk-2f906bwf.js:815-3615 placement
+//@ chunk-b9mhcvry.js:815-3615 placement
 /**
  * 打印 claude gateway 启动横幅：监听地址、遥测导出、客户端 IP 来源、OIDC、客户路由推理与策略 webhook。
  */

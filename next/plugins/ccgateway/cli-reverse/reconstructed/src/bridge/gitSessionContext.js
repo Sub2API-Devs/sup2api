@@ -3,14 +3,14 @@
  *
  * 2.1.316 新增。构造会话的 git 上下文（来源仓库、分支）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-sn0v73kq.js (2)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-ahbsrpnq.js (2)
  * attribution: placement 2
  */
 import { GITHUB_HOST } from "../utils/git/githubUrl.js";
 
-//@ chunk-sn0v73kq.js:227-476 placement
+//@ chunk-ahbsrpnq.js:227-476 placement
 async function parseGitSourceRepository(url) {
   let { isNestedGitLabProject, parseGitRemote, parseGitHubRepository } =
     await import("../utils/detectRepository.js");
@@ -28,7 +28,7 @@ async function parseGitSourceRepository(url) {
   }
   return null;
 }
-//@ chunk-sn0v73kq.js:476-1566 placement
+//@ chunk-ahbsrpnq.js:476-1566 placement
 /**
  * 构造会话的 git 上下文（来源仓库、分支）。
  */
@@ -95,4 +95,4 @@ async function buildGitSessionContext(url, branch, defaultBranch) {
     report,
   };
 }
-export { buildGitSessionContext, parseGitSourceRepository };
+export { parseGitSourceRepository, buildGitSessionContext };

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：/resume 打开运行中的后台会话。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-47mye09a.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-pjbnxxq2.js (5)
  * attribution: placement 5
  */
 import { isAbsolute, win32, resolve } from "path";
@@ -23,7 +23,7 @@ import { isUncOrDevicePath, isDevicePrefixPath, hasDotSegment } from "../../util
 import { isNetworkRelatedPath } from "../../utils/networkPaths.js";
 import { logForDebugging } from "../../utils/debug.js";
 
-//@ chunk-47mye09a.js:4554-4680 placement
+//@ chunk-pjbnxxq2.js:4557-4683 placement
 /**
  * 可直接打开的运行中后台会话 jobId。
  */
@@ -35,7 +35,7 @@ function liveBackgroundJobId(holder, { replacesProcess }) {
     ? holder.jobId
     : undefined;
 }
-//@ chunk-47mye09a.js:4680-4799 placement
+//@ chunk-pjbnxxq2.js:4683-4802 placement
 /**
  * 尝试打开运行中的后台会话并上报原因。
  */
@@ -46,7 +46,7 @@ async function tryOpenLiveBackground(options) {
   });
   return liveBackground;
 }
-//@ chunk-47mye09a.js:4799-6113 placement
+//@ chunk-pjbnxxq2.js:4802-6116 placement
 /**
  * 打开运行中的后台会话：校验终端与启动器，可先发送提示。
  */
@@ -122,7 +122,7 @@ async function openLiveBackground({ holder, entrypoint, prompt, storageV5 }) {
     };
   }
 }
-//@ chunk-47mye09a.js:6113-6421 placement
+//@ chunk-pjbnxxq2.js:6116-6424 placement
 /**
  * 重启为 attach 后台会话（打印提示）。
  */
@@ -148,7 +148,7 @@ async function attachToBackgroundSession(jobId, entrypoint, storageV5, { promptS
     storageV5,
   );
 }
-//@ chunk-47mye09a.js:6479-6852 placement
+//@ chunk-pjbnxxq2.js:6482-6856 placement
 /**
  * 会话报告的工作目录可否采用（拒绝网络路径）。
  */
@@ -178,4 +178,4 @@ async function isAdoptableSessionCwd(cwd, label, fsOperations = NodeFsOperations
   }
   return true;
 }
-export { tryOpenLiveBackground, isAdoptableSessionCwd, liveBackgroundJobId, attachToBackgroundSession };
+export { tryOpenLiveBackground, liveBackgroundJobId, attachToBackgroundSession, isAdoptableSessionCwd };

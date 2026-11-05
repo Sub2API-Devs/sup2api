@@ -1,15 +1,15 @@
 /**
  * proper-lockfile/index.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: proper-lockfile@4.1.2
- * pieces: chunk-bmbhxpfm.js (1)
+ * pieces: chunk-3c7mkwg0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_lockfile } from "./lib/lockfile.js";
 import { properLockfileAdapter } from "./lib/adapter.js";
 
-//@ chunk-bmbhxpfm.js:21622-22139 cjs-fingerprint
+//@ chunk-3c7mkwg0.js:21622-22139 cjs-fingerprint
 var properLockfileIndex = __commonJS(function (cjsExports, cjsModule) {
   var lockfile = require_lockfile();
   var { toPromise, toSync, toSyncOptions } = properLockfileAdapter();

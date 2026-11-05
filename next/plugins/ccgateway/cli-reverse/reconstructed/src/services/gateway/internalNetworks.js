@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：通过代理或直连检查网关地址；判定网关可信依据（已列出、内网、担保）等。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (32)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-exfmq47h.js (32)
  * attribution: placement 32
  */
 import { isIPv4, isIPv6 } from "net";
@@ -25,7 +25,7 @@ import {
 } from "../../utils/errors.js";
 import { UNREADABLE_SETTING_MARKER } from "../../utils/settings/types.js";
 import { firstLineOf } from "../../utils/stringUtils.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import { getCACertificates } from "../../utils/caCerts.js";
 import { PEM_CERT_BLOCK_RE } from "../../utils/mtls.js";
@@ -38,7 +38,7 @@ import { GatewayHostCheckError, GatewayHostCheckRetryableError, queryGatewayHost
 import { getHttpsHostname } from "../../tools/WebFetchTool/utils.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:238905-239215 placement
+//@ chunk-exfmq47h.js:248419-248729 placement
 /**
  * 地址是否为内网或回环（含 IPv4 映射）
  */
@@ -52,12 +52,12 @@ function isInternalAddress(address) {
   let range = parseInt(/^([0-9a-f]{1,4}):/.exec(lower)?.[1] ?? "0", 16);
   return (range >= 65152 && range <= 65215) || (range >= 64512 && range <= 65023);
 }
-//@ chunk-aepeg2w5.js:239215-239294 placement
+//@ chunk-exfmq47h.js:248729-248808 placement
 /**
  * 网关内部网络列表非法时的错误（带未解析的类型）。
  */
 let GatewayInternalNetworksError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:239215", () => {
+deferInit("chunk-exfmq47h.js:248729", () => {
   GatewayInternalNetworksError = class GatewayInternalNetworksError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -68,33 +68,33 @@ deferInit("chunk-aepeg2w5.js:239215", () => {
     }
   };
 });
-//@ chunk-aepeg2w5.js:239294-239314 placement
+//@ chunk-exfmq47h.js:248808-248828 placement
 /**
  * 网关设置/信任相关的通用错误类型。
  */
 let GatewayTrustError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:239294", () => {
+deferInit("chunk-exfmq47h.js:248808", () => {
   GatewayTrustError = class GatewayTrustError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {};
 });
-//@ chunk-aepeg2w5.js:239314-239334 placement
+//@ chunk-exfmq47h.js:248828-248848 placement
 /**
  * 网关客户允许列表相关的错误类型。
  */
 let GatewayAllowlistError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-aepeg2w5.js:239314", () => {
+deferInit("chunk-exfmq47h.js:248828", () => {
   GatewayAllowlistError = class GatewayAllowlistError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {};
 });
-//@ chunk-aepeg2w5.js:239334-239348 placement
+//@ chunk-exfmq47h.js:248848-248862 placement
 /**
  * 网关内部网络的校验常量：of 是允许的最短 CIDR 前缀 8（/8 到 /32）；ES 是最多接受的块数 4。
  */
 var MIN_CIDR_PREFIX = 8;
 var MAX_INTERNAL_BLOCKS = 4;
-//@ chunk-aepeg2w5.js:239348-240670 placement
+//@ chunk-exfmq47h.js:248862-250184 placement
 /**
  * 解析托管设置 gatewayInternalNetworks（CIDR 列表，拒绝私有/保留/文档地址）。
  */
@@ -137,7 +137,7 @@ function parseInternalNetworks(rawEntries) {
       );
     return normalized;
   });
-  let blocks = uniq(mapped);
+  let blocks = normalizeCaseForComparison_2(mapped);
   if (blocks.length > MAX_INTERNAL_BLOCKS)
     throw invalid(`lists ${blocks.length} blocks; at most ${MAX_INTERNAL_BLOCKS} are accepted`);
   for (let [index, block] of blocks.entries()) {
@@ -150,7 +150,7 @@ function parseInternalNetworks(rawEntries) {
   }
   return blocks;
 }
-//@ chunk-aepeg2w5.js:240670-241318 placement
+//@ chunk-exfmq47h.js:250184-250832 placement
 /**
  * 检查网关实际连接地址在声明的内网中。
  */
@@ -169,37 +169,37 @@ function checkAddressInNetwork(network, address, localAddress, localAddr) {
     );
   return;
 }
-//@ chunk-aepeg2w5.js:241318-241399 placement
+//@ chunk-exfmq47h.js:250832-250913 placement
 /**
  * 受信主机名集合。
  */
 var VOUCHED_HOSTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var vouchedHostSet;
-deferInit("chunk-aepeg2w5.js:241318", () => {
+deferInit("chunk-exfmq47h.js:250832", () => {
   VOUCHED_HOSTS = ["claude.fedstart.com", "claude.palantirfedstart.com"];
   vouchedHostSet = new Set([...VOUCHED_HOSTS]);
 });
-//@ chunk-aepeg2w5.js:241399-241436 placement
+//@ chunk-exfmq47h.js:250913-250950 placement
 /**
  * 判断主机名是否属于内置受信列表。
  */
 function isVouchedHost(host) {
   return VOUCHED_HOSTS.includes(host);
 }
-//@ chunk-aepeg2w5.js:241436-241469 placement
+//@ chunk-exfmq47h.js:250950-250983 placement
 /**
  * 判断主机名是否在受信集合中。
  */
 function isVouchedHostSetMember(host) {
   return vouchedHostSet.has(host);
 }
-//@ chunk-aepeg2w5.js:241469-241549 placement
+//@ chunk-exfmq47h.js:250983-251063 placement
 /**
  * 当前日期有效的客户允许列表条目（副本，为空表示未配置）。
  */
 var ALLOWLIST_HMAC_KEY = "fa1b59ed47a63ea89b36bbb033a12fbfc68878f4eba30bf33d02ae50c0078d10";
 var customerAllowlistEntries = [];
-//@ chunk-aepeg2w5.js:241549-242209 placement
+//@ chunk-exfmq47h.js:251063-251723 placement
 /**
  * 当前日期有效的客户允许列表条目。
  */
@@ -211,10 +211,10 @@ function activeAllowlistEntries(
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.BUILD_TIME,
@@ -225,7 +225,7 @@ function activeAllowlistEntries(
     return nowMs < notAfterMs && notAfterMs <= buildTimeMs + 31622400000;
   });
 }
-//@ chunk-aepeg2w5.js:242209-242264 placement
+//@ chunk-exfmq47h.js:251723-251778 placement
 /**
  * 取主机事实集合的哈希，用于允许列表判断。
  */
@@ -235,14 +235,14 @@ function allowlistFactsHash(trust) {
 `),
   );
 }
-//@ chunk-aepeg2w5.js:242264-242326 placement
+//@ chunk-exfmq47h.js:251778-251840 placement
 /**
  * 对单条主机事实做 HMAC。
  */
 function allowlistFactHmac(fact) {
   return createHmac("sha256", ALLOWLIST_HMAC_KEY).update(fact).digest("hex");
 }
-//@ chunk-aepeg2w5.js:242326-242445 placement
+//@ chunk-exfmq47h.js:251840-251959 placement
 function caPublicKeyFact(pem) {
   try {
     let publicKey = new X509Certificate(pem).publicKey;
@@ -256,7 +256,7 @@ function caPublicKeyFact(pem) {
     return "ca:";
   }
 }
-//@ chunk-aepeg2w5.js:242445-243172 placement
+//@ chunk-exfmq47h.js:251959-252686 placement
 /**
  * 判断证书是否来自公共 CA。
  */
@@ -283,7 +283,7 @@ function describeCertificateIssuer(pem, roots = rootCertificates) {
     return "it is not a certificate, or its key is of a kind this runtime cannot read";
   }
 }
-//@ chunk-aepeg2w5.js:243172-243464 placement
+//@ chunk-exfmq47h.js:252686-252978 placement
 function findListedRoots(entries) {
   let listedFacts = new Set(entries.flatMap((entry) => entry.facts));
   return (getCACertificates() ?? [])
@@ -300,7 +300,7 @@ function findListedRoots(entries) {
       return problem === undefined;
     });
 }
-//@ chunk-aepeg2w5.js:243464-243708 placement
+//@ chunk-exfmq47h.js:252978-253222 placement
 function ipCidrFacts(remoteAddress = "") {
   let replaced = remoteAddress.replace(/^::ffff:/, "");
   if (!isIPv4(replaced)) return [];
@@ -315,7 +315,7 @@ function ipCidrFacts(remoteAddress = "") {
     },
   );
 }
-//@ chunk-aepeg2w5.js:243708-244489 placement
+//@ chunk-exfmq47h.js:253222-254003 placement
 /**
  * 用客户允许列表核对网关。
  */
@@ -353,14 +353,14 @@ async function checkCustomerAllowlist(gatewayUrl) {
   }
   return;
 }
-//@ chunk-aepeg2w5.js:244489-244545 placement
+//@ chunk-exfmq47h.js:254003-254059 placement
 /**
  * 取 URL 主机名（去掉 IPv6 方括号）。
  */
 function hostOf(url) {
   return url.hostname.replace(/^\[|\]$/g, "");
 }
-//@ chunk-aepeg2w5.js:244545-244587 placement
+//@ chunk-exfmq47h.js:254059-254101 placement
 /**
  * 主机是否受信（走内置列表）。
  */
@@ -368,7 +368,7 @@ function isHostVouched(host) {
   if (isVouchedHost(host)) return true;
   return false;
 }
-//@ chunk-aepeg2w5.js:244587-244858 placement
+//@ chunk-exfmq47h.js:254101-254372 placement
 var VOUCH_TIMEOUT_MS = 5000;
 var LOOKUP_TIMEOUT_MS = 3000;
 var TOTAL_TIMEOUT_MS = 6000;
@@ -376,7 +376,7 @@ var VOUCH_TIMEOUT_MESSAGE = "gateway vouching did not finish in time";
 var LOOKUP_TIMEOUT_MESSAGE = "gateway lookups did not finish in time";
 var VOUCH_FAILED_MESSAGE = "gateway login: could not confirm the host with its vouching gateway";
 var NOT_SERVED_MESSAGE = "when asked, it did not name a recognized Claude gateway host that serves it";
-//@ chunk-aepeg2w5.js:244858-245252 placement
+//@ chunk-exfmq47h.js:254372-254766 placement
 /**
  * 可暂停的计时器（等待 helper 时不计时）。
  */
@@ -432,17 +432,17 @@ function createPausableClock() {
     },
   };
 }
-//@ chunk-aepeg2w5.js:245252-245370 placement
+//@ chunk-exfmq47h.js:254766-254884 placement
 var PROXY_NO_CREDENTIALS_MESSAGE =
   "Claude Code has no credentials this proxy accepts: configure them in the proxy address or a proxyAuthHelper.";
-//@ chunk-aepeg2w5.js:245370-245499 placement
+//@ chunk-exfmq47h.js:254884-255013 placement
 function isValidHostname(hostname) {
   return (
     hostname.length <= 253 &&
     /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(hostname)
   );
 }
-//@ chunk-aepeg2w5.js:245499-245581 placement
+//@ chunk-exfmq47h.js:255013-255095 placement
 /**
  * 是否是可信任的 https 主机（无端口、非 IP、主机名合法）。
  */
@@ -451,7 +451,7 @@ function isVouchableHttpsHost(url, host) {
     url.protocol === "https:" && url.port === "" && !isIPv4(host) && !isIPv6(host) && isValidHostname(host)
   );
 }
-//@ chunk-aepeg2w5.js:245581-245777 placement
+//@ chunk-exfmq47h.js:255095-255291 placement
 /**
  * 判定网关可信依据，管理员可退回客户允许列表。
  */
@@ -470,7 +470,7 @@ async function resolveGatewayTrustBasis(url, internalNetworkEntries = [], namedB
     };
   }
 }
-//@ chunk-aepeg2w5.js:245777-247322 placement
+//@ chunk-exfmq47h.js:255291-256836 placement
 /**
  * 判定网关可信依据（已列出、内网、担保）。
  */
@@ -572,7 +572,7 @@ async function resolveGatewayBasis(
     };
   }
 }
-//@ chunk-aepeg2w5.js:247322-249760 placement
+//@ chunk-exfmq47h.js:256836-259274 placement
 /**
  * 通过代理或直连检查网关地址。
  */
@@ -681,9 +681,9 @@ async function checkGatewayReachability(
     );
   return found;
 }
-//@ chunk-aepeg2w5.js:249760-249784 placement
+//@ chunk-exfmq47h.js:259274-259298 placement
 var HTTP_LOOPBACK = "http-loopback";
-//@ chunk-aepeg2w5.js:249784-250013 placement
+//@ chunk-exfmq47h.js:259298-259527 placement
 function hostCheckRetryHint(error, hostError) {
   if (error instanceof GatewayHostCheckError) return "Try again in a few minutes.";
   switch (error instanceof GatewayHostCheckRetryableError ? error.kind : undefined) {
@@ -696,7 +696,7 @@ function hostCheckRetryHint(error, hostError) {
       return hostError;
   }
 }
-//@ chunk-aepeg2w5.js:250013-251114 placement
+//@ chunk-exfmq47h.js:259527-260628 placement
 /**
  * 获取主机检查结果（可用担保方）。
  */
@@ -773,7 +773,6 @@ export {
   activeAllowlistEntries,
   allowlistFactsHash,
   HTTP_LOOPBACK,
-  resolveGatewayTrustBasis,
   isHostVouched,
   NOT_SERVED_MESSAGE,
   GatewayInternalNetworksError,
@@ -787,4 +786,5 @@ export {
   TOTAL_TIMEOUT_MS,
   checkAddressInNetwork,
   isInternalAddress,
+  resolveGatewayTrustBasis,
 };

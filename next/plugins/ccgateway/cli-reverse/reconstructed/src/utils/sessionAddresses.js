@@ -3,9 +3,9 @@
  *
  * 会话地址（2.1.316 新增）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e7z1g8a9.js (57)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-p21mddyh.js (57)
  * attribution: placement 57
  */
 import { mkdir, unlink, readdir } from "fs/promises";
@@ -49,19 +49,19 @@ import { sessionIdBody } from "../bridge/sessionIdCompat.js";
 import { formatDuration } from "./format.js";
 import { isValidPipeOrPath, parseAddress, mayBeSamePath } from "./peerAddress.js";
 import { isUnixSocketPath } from "./peerMessageHeaders.js";
-import { uniq } from "./collections.js";
+import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";
 import { shortHash } from "./shortHash.js";
 import { udsEnv } from "./env.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-e7z1g8a9.js:4406-4556 placement
+//@ chunk-p21mddyh.js:4408-4558 placement
 function getMessagingKeyName(pid, socketPath) {
   let hash = hashCanonicalSocketPath(socketPath);
   if (hash === undefined)
     throw Error("refusing to derive a messaging key name for a non-canonical socket path");
   return `${pid}.${hash}.key`;
 }
-//@ chunk-e7z1g8a9.js:4556-4831 placement (2.1.88 match: recordConsolidation, 0.434)
+//@ chunk-p21mddyh.js:4558-4833 placement (2.1.88 match: recordConsolidation, 0.434)
 async function writeSessionPeerRecord(socketPath, peerToken, store, { sweepPermitted }) {
   if (isStorageV5Enabled() && store !== undefined) return ensureMessagingKeyDir(store, socketPath, peerToken);
   let sessionsDir = getSessionsDir();
@@ -85,7 +85,7 @@ async function writeSessionPeerRecord(socketPath, peerToken, store, { sweepPermi
   );
   return keyPath;
 }
-//@ chunk-e7z1g8a9.js:4831-5393 placement
+//@ chunk-p21mddyh.js:4833-5395 placement
 async function ensureMessagingKeyDir(store, socketPath, peerToken) {
   let messagingKeyName = getMessagingKeyName(process.pid, socketPath);
   let scope = await store.ensureScope({
@@ -117,7 +117,7 @@ async function ensureMessagingKeyDir(store, socketPath, peerToken) {
   }
   return join(getSessionsDir(), messagingKeyName);
 }
-//@ chunk-e7z1g8a9.js:5393-5540 placement
+//@ chunk-p21mddyh.js:5395-5542 placement
 /**
  * 读取会话地址记录中的 pidDomain 字段（失败返回 undefined）。
  */
@@ -131,7 +131,7 @@ async function readRecordPidDomain(path) {
     return;
   }
 }
-//@ chunk-e7z1g8a9.js:5540-5801 placement
+//@ chunk-p21mddyh.js:5542-5803 placement
 async function pruneDeadSessionRecords(sessionsDir, sweepPermitted) {
   if (!sweepPermitted) return;
   let files;
@@ -153,7 +153,7 @@ async function pruneDeadSessionRecords(sessionsDir, sweepPermitted) {
     }),
   );
 }
-//@ chunk-e7z1g8a9.js:5801-5920 placement
+//@ chunk-p21mddyh.js:5803-5922 placement
 /**
  * 删除会话地址记录（存储 v5 时删除存储项，否则删除文件），错误忽略。
  */
@@ -168,7 +168,7 @@ async function deleteSessionRecord(activeKeyFile, store) {
     await unlink(activeKeyFile);
   } catch {}
 }
-//@ chunk-e7z1g8a9.js:5920-7262 placement
+//@ chunk-p21mddyh.js:5922-7264 placement
 async function classifySessionAddress(socketPath, store, options) {
   let sessionsDir = getSessionsDir();
   let files;
@@ -291,7 +291,7 @@ async function classifySessionAddress(socketPath, store, options) {
     token: best.peerToken,
   };
 }
-//@ chunk-e7z1g8a9.js:7262-7473 placement
+//@ chunk-p21mddyh.js:7264-7475 placement
 async function readSessionRecord(store, key) {
   try {
     let text = await store.readText([
@@ -309,7 +309,7 @@ async function readSessionRecord(store, key) {
     return null;
   }
 }
-//@ chunk-e7z1g8a9.js:7473-7520 placement
+//@ chunk-p21mddyh.js:7475-7522 placement
 /**
  * authHandshakeJson：构造带尾随空格的认证握手 JSON。
  */
@@ -323,22 +323,22 @@ function authHandshakeJson(token) {
 `
   );
 }
-//@ chunk-e7z1g8a9.js:7520-7556 placement
+//@ chunk-p21mddyh.js:7522-7558 placement
 /**
  * AUTH_HANDSHAKE_LENGTH：认证握手 JSON 的长度。
  */
 var AUTH_HANDSHAKE_LENGTH; // deferred: uses authHandshakeJson of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e7z1g8a9.js:7520", () => {
+deferInit("chunk-p21mddyh.js:7522", () => {
   AUTH_HANDSHAKE_LENGTH = authHandshakeJson("0".repeat(PEER_TOKEN_BYTES * 2)).length;
 });
-//@ chunk-e7z1g8a9.js:7556-7633 placement (2.1.88 match: extractErrorTypeFromData, 1)
+//@ chunk-p21mddyh.js:7558-7635 placement (2.1.88 match: extractErrorTypeFromData, 1)
 /**
  * 是否是指定 type 的对象。
  */
 function isAuthItem(data) {
   return typeof data === "object" && data !== null && "type" in data && data.type === AUTH;
 }
-//@ chunk-e7z1g8a9.js:7633-7749 placement
+//@ chunk-p21mddyh.js:7635-7751 placement
 /**
  * 用常量时间比较判断令牌是对等令牌还是子会话令牌。
  */
@@ -348,7 +348,7 @@ function tokenRole(token, activeTokens) {
   if (timingSafeEqualStrings(token, activeTokens.childToken)) return "child";
   return;
 }
-//@ chunk-e7z1g8a9.js:7749-7897 placement
+//@ chunk-p21mddyh.js:7751-7899 placement
 /**
  * 读取会话稳定地址功能开关（tengu_session_stable_address），出错视为关闭。
  */
@@ -360,30 +360,30 @@ function isStableAddressEnabled() {
     return false;
   }
 }
-//@ chunk-e7z1g8a9.js:7897-7911 placement
+//@ chunk-p21mddyh.js:7899-7913 placement
 var STABLE_SESSION_ID_PREFIX = "sid:";
-//@ chunk-e7z1g8a9.js:7911-7945 placement
+//@ chunk-p21mddyh.js:7913-7947 placement
 /**
  * stableSessionAddress：由会话 id 生成 sid: 地址。
  */
 function stableSessionAddress(sessionId) {
   return `${STABLE_SESSION_ID_PREFIX}${sessionId}`;
 }
-//@ chunk-e7z1g8a9.js:7945-7985 placement
+//@ chunk-p21mddyh.js:7947-7987 placement
 /**
  * isStableSessionAddress：是否为 sid: 地址。
  */
 function isStableSessionAddress(address) {
   return address.startsWith(STABLE_SESSION_ID_PREFIX);
 }
-//@ chunk-e7z1g8a9.js:7985-8020 placement
+//@ chunk-p21mddyh.js:7987-8022 placement
 /**
  * isNotStableAddress：地址不是稳定形式。
  */
 function isNotStableAddress(session) {
   return !isStableSessionAddress(session.sock);
 }
-//@ chunk-e7z1g8a9.js:8020-8158 placement
+//@ chunk-p21mddyh.js:8022-8160 placement
 /**
  * 判断会话名是否等同于未命名（空、规范化后为空或为 untitled session）。
  */
@@ -394,21 +394,21 @@ function isUntitledName(title) {
     !text || !normalized || (normalized === "untitled session" && text.toLowerCase() !== "untitled session")
   );
 }
-//@ chunk-e7z1g8a9.js:8158-8238 placement
+//@ chunk-p21mddyh.js:8160-8240 placement
 /**
  * hasEnvironmentKindOtherThanBridge：环境种类非 bridge。
  */
 function hasEnvironmentKindOtherThanBridge(bridge) {
   return bridge.environmentKind !== undefined && bridge.environmentKind !== "bridge";
 }
-//@ chunk-e7z1g8a9.js:8238-8286 placement
+//@ chunk-p21mddyh.js:8240-8288 placement
 /**
  * isDisconnectedNonBridge：非 bridge 且未连接。
  */
 function isDisconnectedNonBridge(bridge) {
   return !hasEnvironmentKindOtherThanBridge(bridge) && bridge.connected === false;
 }
-//@ chunk-e7z1g8a9.js:8286-8426 placement
+//@ chunk-p21mddyh.js:8288-8428 placement
 /**
  * 把会话名规范化为地址用的 slug（NFKC、去控制字符、小写、空白转连字符）。
  */
@@ -420,28 +420,28 @@ function slugifySessionName(name) {
     .toLowerCase()
     .replace(/\s+/g, "-");
 }
-//@ chunk-e7z1g8a9.js:8426-8466 placement
+//@ chunk-p21mddyh.js:8428-8468 placement
 /**
  * isAddressableSlug：会话名 slug 可寻址。
  */
 function isAddressableSlug(recipient) {
   return normalizeAgentIdOrNull(slugifySessionName(recipient)) !== null;
 }
-//@ chunk-e7z1g8a9.js:8466-8516 placement
+//@ chunk-p21mddyh.js:8468-8518 placement
 /**
  * isReservedOrInvalidName：名字无效或为保留名。
  */
 function isReservedOrInvalidName(name) {
   return typeof name !== "string" || isReservedSessionName(name);
 }
-//@ chunk-e7z1g8a9.js:8516-8580 placement
+//@ chunk-p21mddyh.js:8518-8582 placement
 /**
  * isLocalTeamLead：本会话是该团队的领导。
  */
 function isLocalTeamLead(member, leadAgentId) {
   return member.name === TEAM_LEAD && leadAgentId !== undefined && member.agentId === leadAgentId;
 }
-//@ chunk-e7z1g8a9.js:8580-8709 placement
+//@ chunk-p21mddyh.js:8582-8711 placement
 /**
  * 取团队领导的地址：本会话是领导时用其 agent id，否则由团队名推出。
  */
@@ -451,7 +451,7 @@ function teamLeadAddress(state) {
   let teamName = getTeamName(teamContext);
   return teamName ? agentAddress(TEAM_LEAD, teamName) : undefined;
 }
-//@ chunk-e7z1g8a9.js:8709-8780 placement
+//@ chunk-p21mddyh.js:8711-8782 placement
 /**
  * addressableTeamMembers：团队里可寻址的成员。
  */
@@ -460,7 +460,7 @@ function addressableTeamMembers(teamFile, leadAgentId) {
     (member) => isLocalTeamLead(member, leadAgentId) || !isReservedOrInvalidName(member.name),
   );
 }
-//@ chunk-e7z1g8a9.js:8780-8861 placement
+//@ chunk-p21mddyh.js:8782-8863 placement
 /**
  * isReservedSessionName：名字是保留名（main/team-lead/user/system）。
  */
@@ -474,7 +474,7 @@ function isReservedSessionName(name) {
     normalizeAgentIdOrNull(slug) !== null
   );
 }
-//@ chunk-e7z1g8a9.js:8861-8949 placement
+//@ chunk-p21mddyh.js:8863-8951 placement
 /**
  * MIN_ADDRESS_REF_LENGTH：地址 ref 的最短长度；MAX_ADDRESS_REF_LENGTH：地址 ref 的最长长度；ADDRESS_REF_PATTERN：地址 ref 的十六进制模式（同一声明共 3 个绑定）。
  */
@@ -482,13 +482,13 @@ var MIN_ADDRESS_REF_LENGTH; // deferred: has load-time effects after a deferred 
 var MAX_ADDRESS_REF_LENGTH;
 var ADDRESS_REF_PATTERN;
 var regExp_2;
-deferInit("chunk-e7z1g8a9.js:8861", () => {
+deferInit("chunk-p21mddyh.js:8863", () => {
   MIN_ADDRESS_REF_LENGTH = 6;
   MAX_ADDRESS_REF_LENGTH = 12;
   ADDRESS_REF_PATTERN = `[0-9a-f]{${MIN_ADDRESS_REF_LENGTH},${MAX_ADDRESS_REF_LENGTH}}`;
   regExp_2 = new RegExp(`^(.*\\S)\\s*\\[(${ADDRESS_REF_PATTERN})\\]$`);
 });
-//@ chunk-e7z1g8a9.js:8949-9023 placement
+//@ chunk-p21mddyh.js:8951-9025 placement
 /**
  * parseNameWithRef：解析 “名字 [ref]” 形式的地址。
  */
@@ -501,7 +501,7 @@ function parseNameWithRef(text) {
       }
     : null;
 }
-//@ chunk-e7z1g8a9.js:9023-11961 placement
+//@ chunk-p21mddyh.js:9025-11963 placement
 /**
  * 生成代理/会话地址的显示描述（main、in-process、teammate、local_agent）
  */
@@ -707,7 +707,7 @@ function describeAgentAddress(state, sources) {
     remoteNamesClaimedLocally: remoteNames,
   };
 }
-//@ chunk-e7z1g8a9.js:11961-12173 placement
+//@ chunk-p21mddyh.js:11963-12175 placement
 /**
  * 在按名称分组的候选中解析唯一目标：同进程的直接返回，否则视为有歧义。
  */
@@ -725,14 +725,14 @@ function resolveUniqueCandidate(byName, name, ref) {
     kind: "ambiguous",
   };
 }
-//@ chunk-e7z1g8a9.js:12173-12218 placement
+//@ chunk-p21mddyh.js:12175-12220 placement
 /**
  * formatNameWithRef：拼成 “名字 [ref]”。
  */
 function formatNameWithRef(entry) {
   return `${entry.name} [${entry.ref}]`;
 }
-//@ chunk-e7z1g8a9.js:12218-12290 placement
+//@ chunk-p21mddyh.js:12220-12292 placement
 /**
  * describeLocationWithRemoteControl：远程位置补 “(Remote Control)”。
  */
@@ -741,7 +741,7 @@ function describeLocationWithRemoteControl(where) {
     ? `${describeSessionLocation(where)} (Remote Control)`
     : describeSessionLocation(where);
 }
-//@ chunk-e7z1g8a9.js:12290-12474 placement
+//@ chunk-p21mddyh.js:12292-12476 placement
 /**
  * 会话位置的文字描述（本会话、云端、其他机器、本机）。
  */
@@ -757,7 +757,7 @@ function describeSessionLocation(where) {
       return "on this machine";
   }
 }
-//@ chunk-e7z1g8a9.js:12474-12821 placement
+//@ chunk-p21mddyh.js:12476-12823 placement
 function agentAddressLabel(entry, now) {
   let kindLabel =
     entry.kind === "main"
@@ -777,9 +777,9 @@ function agentAddressLabel(entry, now) {
         )} ago`;
   return `${formatNameWithRef(entry)} \u2014 ${kindLabel}, ${whereLabel}${activeText}`;
 }
-//@ chunk-e7z1g8a9.js:12821-12831 placement
+//@ chunk-p21mddyh.js:12823-12833 placement
 var MAX_SESSION_TITLE_LENGTH = MAX_SEED_NAME_CHARS;
-//@ chunk-e7z1g8a9.js:12831-13027 placement
+//@ chunk-p21mddyh.js:12833-13029 placement
 /**
  * 规范化会话标题：去控制字符、合并空白、截断长度，空时为 untitled session。
  */
@@ -797,7 +797,7 @@ function normalizeSessionTitle(title) {
       .trim() || "untitled session"
   );
 }
-//@ chunk-e7z1g8a9.js:13027-13106 placement
+//@ chunk-p21mddyh.js:13029-13108 placement
 /**
  * findSessionByName：按名字或规范名查找会话。
  */
@@ -807,7 +807,7 @@ function findSessionByName(sessions, name) {
     sessions.find((session) => normalizeSessionTitle(session.name) === name)
   );
 }
-//@ chunk-e7z1g8a9.js:13106-13174 placement
+//@ chunk-p21mddyh.js:13108-13176 placement
 /**
  * addressableSessionTitle：可作为地址的会话标题。
  */
@@ -817,7 +817,7 @@ function addressableSessionTitle(title) {
     ? normalized
     : null;
 }
-//@ chunk-e7z1g8a9.js:13174-13240 placement
+//@ chunk-p21mddyh.js:13176-13242 placement
 /**
  * plainSessionName：普通（非保留、非地址形式）会话名。
  */
@@ -827,11 +827,11 @@ function plainSessionName(name) {
     ? normalized
     : null;
 }
-//@ chunk-e7z1g8a9.js:13240-13302 placement
+//@ chunk-p21mddyh.js:13242-13304 placement
 function isPlainAddressableName(name) {
   return !looksLikeAddress(name) && isValidPipeOrPath(name) && !name.includes("@") && name !== "*";
 }
-//@ chunk-e7z1g8a9.js:13302-13400 placement
+//@ chunk-p21mddyh.js:13304-13402 placement
 /**
  * looksLikeAddress：名字像地址（任一变体）。
  */
@@ -844,14 +844,14 @@ function looksLikeAddress(name) {
     isUnixSocketPath(slug)
   );
 }
-//@ chunk-e7z1g8a9.js:13400-13729 placement
+//@ chunk-p21mddyh.js:13402-13731 placement
 /**
  * 为会话地址列表分配最短可区分前缀 ref：与相邻（排序后）地址比较公共前缀长度，ref 长度至少 M。
  */
 function assignShortRefs(entries) {
   let mapped = entries.map((entry) => addressHashKey(entry.kind, stableSessionKey(entry)));
   let mapped_2 = messagingSocketAddresses().map((sock) => addressHashKey("session", sock));
-  let sorted = uniq([...mapped, ...mapped_2]).sort();
+  let sorted = normalizeCaseForComparison_2([...mapped, ...mapped_2]).sort();
   let refLengths = new Map();
   for (let k = 0; k < sorted.length; k++) {
     let key = sorted[k];
@@ -869,48 +869,48 @@ function assignShortRefs(entries) {
     };
   });
 }
-//@ chunk-e7z1g8a9.js:13729-13809 placement
+//@ chunk-p21mddyh.js:13731-13811 placement
 function commonPrefixLength(a, b) {
   let length = 0;
   while (length < a.length && length < b.length && a[length] === b[length]) length++;
   return length;
 }
-//@ chunk-e7z1g8a9.js:13809-13856 placement
+//@ chunk-p21mddyh.js:13811-13858 placement
 function addressHashKey(kind, key) {
   return String(shortHash(`${kind}:${key}`));
 }
-//@ chunk-e7z1g8a9.js:13856-13896 placement
+//@ chunk-p21mddyh.js:13858-13898 placement
 /**
  * stableSessionKey：会话的稳定 id 或 id。
  */
 function stableSessionKey(entry) {
   return entry.stableId ?? entry.id;
 }
-//@ chunk-e7z1g8a9.js:13896-13975 placement
+//@ chunk-p21mddyh.js:13898-13977 placement
 function messagingSocketAddresses() {
   let CLAUDE_CODE_MESSAGING_SOCKET = udsEnv.CLAUDE_CODE_MESSAGING_SOCKET;
   return CLAUDE_CODE_MESSAGING_SOCKET === undefined ? [] : addressVariants(CLAUDE_CODE_MESSAGING_SOCKET);
 }
-//@ chunk-e7z1g8a9.js:13975-14015 placement
+//@ chunk-p21mddyh.js:13977-14017 placement
 /**
  * stableAddressWhenEnabled：稳定地址开启时用 sid: 形式。
  */
 function stableAddressWhenEnabled(address) {
   return isStableAddressEnabled() ? stableSessionAddress(getSessionId()) : address;
 }
-//@ chunk-e7z1g8a9.js:14015-14066 placement
+//@ chunk-p21mddyh.js:14017-14068 placement
 function addressVariants(address) {
   let stable = stableAddressWhenEnabled(address);
   return stable === address ? [address] : [stable, address];
 }
-//@ chunk-e7z1g8a9.js:14066-14126 placement
+//@ chunk-p21mddyh.js:14068-14128 placement (2.1.88 match: isIt2CliAvailable, 0.651)
 /**
  * isSessionAddressUnder：地址组里是否含该会话地址。
  */
 function isSessionAddressUnder(ref, address) {
   return addressVariants(address).some((variant) => refMatchesAddress(ref, "session", variant));
 }
-//@ chunk-e7z1g8a9.js:14126-14522 placement
+//@ chunk-p21mddyh.js:14128-14524 placement
 /**
  * 按 socket 路径把会话地址记录分组：可能同一路径的记录合并为一组并汇总声明的会话 id，返回记录 → 组的映射。
  */
@@ -937,7 +937,7 @@ function groupBySocket(sessions) {
   for (let group of groups) for (let record of group.records) byRecord.set(record, group);
   return byRecord;
 }
-//@ chunk-e7z1g8a9.js:14522-14774 placement
+//@ chunk-p21mddyh.js:14524-14776 placement
 function ambiguousSessionIds(selfId, sessions, byRecord) {
   let seen = new Set([selfId]);
   let ambiguous = new Set();
@@ -950,7 +950,7 @@ function ambiguousSessionIds(selfId, sessions, byRecord) {
     if (group.records.length > 1) for (let claim of group.claims) ambiguous.add(claim);
   return ambiguous;
 }
-//@ chunk-e7z1g8a9.js:14774-14914 placement
+//@ chunk-p21mddyh.js:14776-14916 placement
 /**
  * 判断本会话 id 在会话地址记录中是否存在歧义（多个 socket 声明同一会话）。
  */
@@ -966,18 +966,18 @@ function isOwnSessionIdAmbiguous(sessions, sock, forced) {
   let byRecord = groupBySocket(sessions_2);
   return ambiguousSessionIds("", sessions_2, byRecord).has(sessionId);
 }
-//@ chunk-e7z1g8a9.js:14914-14957 placement
+//@ chunk-p21mddyh.js:14916-14959 placement
 /**
  * addressRef：取地址的前缀 ref。
  */
 function addressRef(kind, addressId) {
   return addressHashKey(kind, addressId).slice(0, MIN_ADDRESS_REF_LENGTH);
 }
-//@ chunk-e7z1g8a9.js:14957-15017 placement
+//@ chunk-p21mddyh.js:14959-15019 placement
 function refMatchesAddress(ref, kind, key) {
   return ref.length >= MIN_ADDRESS_REF_LENGTH && addressHashKey(kind, key).startsWith(ref);
 }
-//@ chunk-e7z1g8a9.js:15017-15110 placement
+//@ chunk-p21mddyh.js:15019-15112 placement
 /**
  * bridgeSessionIds：记录中出现的桥接会话 id。
  */
@@ -986,7 +986,7 @@ function bridgeSessionIds(sessions) {
     sessions.flatMap((session) => (session.bridgeSessionId ? [sessionIdBody(session.bridgeSessionId)] : [])),
   );
 }
-//@ chunk-e7z1g8a9.js:15110-15214 placement
+//@ chunk-p21mddyh.js:15112-15216 placement
 /**
  * 判断地址记录中是否有与给定 id 对应的桥接会话 id。
  */
@@ -997,47 +997,47 @@ function hasBridgeSessionId(sessions, id) {
   );
 }
 export {
-  slugifySessionName,
-  isAuthItem,
-  tokenRole,
-  deleteSessionRecord,
-  writeSessionPeerRecord,
-  isReservedSessionName,
-  MAX_ADDRESS_REF_LENGTH,
-  addressableTeamMembers,
-  teamLeadAddress,
-  findSessionByName,
-  isAddressableSlug,
-  parseNameWithRef,
-  formatNameWithRef,
-  agentAddressLabel,
-  describeSessionLocation,
   isStableAddressEnabled,
-  ADDRESS_REF_PATTERN,
-  describeAgentAddress,
-  resolveUniqueCandidate,
-  addressRef,
+  slugifySessionName,
   hasBridgeSessionId,
   plainSessionName,
+  addressRef,
   stableAddressWhenEnabled,
   isOwnSessionIdAmbiguous,
+  describeAgentAddress,
+  teamLeadAddress,
   isLocalTeamLead,
   isReservedOrInvalidName,
   normalizeSessionTitle,
+  formatNameWithRef,
   addressableSessionTitle,
   looksLikeAddress,
   hasEnvironmentKindOtherThanBridge,
   isDisconnectedNonBridge,
+  readRecordPidDomain,
+  isReservedSessionName,
+  MAX_ADDRESS_REF_LENGTH,
+  addressableTeamMembers,
+  findSessionByName,
+  isAddressableSlug,
+  parseNameWithRef,
+  agentAddressLabel,
+  describeSessionLocation,
+  ADDRESS_REF_PATTERN,
+  isUntitledName,
+  describeLocationWithRemoteControl,
+  resolveUniqueCandidate,
   AUTH_HANDSHAKE_LENGTH,
   classifySessionAddress,
   authHandshakeJson,
   isNotStableAddress,
-  readRecordPidDomain,
-  isUntitledName,
-  describeLocationWithRemoteControl,
-  isSessionAddressUnder,
+  isAuthItem,
+  tokenRole,
+  deleteSessionRecord,
+  writeSessionPeerRecord,
   isStableSessionAddress,
   stableSessionAddress,
   bridgeSessionIds,
   stableSessionKey,
+  isSessionAddressUnder,
 };

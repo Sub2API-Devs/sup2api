@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：读取类型文件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (17)
  * attribution: placement 17
  */
 import {
@@ -24,7 +24,7 @@ import {
 import { limitConcurrency } from "../../../utils/concurrencyLimit.js";
 import { FILE_READ_CONCURRENCY } from "../../../services/artifacts/publishedFiles.js";
 import { AbortError } from "../../../utils/errors.js";
-import { count } from "../../../utils/collections.js";
+import { countWhere } from "../../../utils/collections.js";
 import { safeJsonQuote } from "../../../services/artifacts/contentTypes.js";
 import { truncateToLength } from "../../../utils/stringUtils.js";
 import { MAX_PUBLISHED_PATH_LENGTH } from "../../../services/artifacts/artifactUrl.js";
@@ -46,12 +46,12 @@ import {
   clipGuideText,
   sanitizeBracketText,
 } from "../../../services/artifacts/designSystemGuide.js";
-import { readArtifactFileViaWebFetch } from "../../../services/artifacts/webfetchRead.js";
+import { readArtifactFile } from "../../../services/artifacts/webfetchRead.js";
 import { objectSchema } from "../../../../vendor/zod/v4/classic/schemas.js";
 import { initReferencesSchema } from "../startKitSchemas.js";
 import { fileInlineEnvelope } from "../../../services/artifacts/readArtifactForModel.js";
 
-//@ chunk-8wvtd8sr.js:314931-315141 placement
+//@ chunk-xzmy9dn4.js:317202-317412 placement
 /**
  * read 一个 Artifact 类型链接（而非实例）时：读取类型自带说明文件（如有），返回 {artifact_type, read_of_type_link}。
  */
@@ -73,7 +73,7 @@ async function readTypeLinkDescription(artifactUrl, firstPartyTypeDetail, contex
     read_of_type_link: true,
   };
 }
-//@ chunk-8wvtd8sr.js:315141-315604 placement
+//@ chunk-xzmy9dn4.js:317412-317875 placement
 /**
  * 读取类型的单个文件（NFC 规范化路径）：成功返回内容/字数，否则给出 unread 原因（未列出/扣留/非文本/过大/不可用），并标记目录服务是否不可用。
  */
@@ -111,7 +111,7 @@ async function readOneTypeFile(typeRef, typeInfo, path, context) {
     catalogDown: artifactTypeFile.kind === "unavailable" && CATALOG_DOWN_REASONS.has(artifactTypeFile.reason),
   };
 }
-//@ chunk-8wvtd8sr.js:315604-315844 placement
+//@ chunk-xzmy9dn4.js:317875-318115 placement
 /**
  * 读取 Artifact 类型链接指向的类型文件，记埋点，返回类型信息与类型文件结果。
  */
@@ -131,7 +131,7 @@ async function readTypeLinkFile(typeRef, typeInfo, path, context) {
     type_file: typeFile,
   };
 }
-//@ chunk-8wvtd8sr.js:315844-316694 placement
+//@ chunk-xzmy9dn4.js:318115-318965 placement
 /**
  * 按 paths 读取类型的多个文件（数量与结果字符预算有上限）：已有目录不可用时后续路径直接标记 unavailable，超出预算的标 result_full，记 artifact_type_link_read 埋点。
  */
@@ -193,7 +193,7 @@ async function readTypeLinkFiles(typeRef, typeInfo, paths, context, renderFile) 
   let stats = {
     path: true,
     paths: mapped.length,
-    read: count(mapped, (typeFile) => typeFile.unread === undefined),
+    read: countWhere(mapped, (typeFile) => typeFile.unread === undefined),
     skipped_catalog_down: skippedCount,
   };
   if (stats.read > 0) logFeatureOk("artifact_type_link_read", stats);
@@ -203,7 +203,7 @@ async function readTypeLinkFiles(typeRef, typeInfo, paths, context, renderFile) 
     type_files_read: mapped,
   };
 }
-//@ chunk-8wvtd8sr.js:316694-316827 placement
+//@ chunk-xzmy9dn4.js:318965-319098 placement
 function countFittingFiles(typeFiles, renderFile) {
   let budgetLeft = TYPE_FILES_RESULT_BUDGET;
   let count = 0;
@@ -215,7 +215,7 @@ function countFittingFiles(typeFiles, renderFile) {
   }
   return count;
 }
-//@ chunk-8wvtd8sr.js:316827-317007 placement
+//@ chunk-xzmy9dn4.js:319098-319278 placement
 /**
  * url 指向 Artifact 类型本身（而非由它创建的 Artifact）时的读取说明前缀。
  */
@@ -224,7 +224,7 @@ function typeLinkReadPrefix(title) {
 
 `;
 }
-//@ chunk-8wvtd8sr.js:317007-317231 placement
+//@ chunk-xzmy9dn4.js:319278-319502 placement
 /**
  * 读取类型文件的结果标题：文件为空或显示了多少字符（不写入磁盘）。
  */
@@ -233,7 +233,7 @@ function typeFileReadHeader(path, chars, typeTitle, isEmpty) {
     ? `Read ${safeJsonQuote(path)} from the ${jsonTitleOrDefault(typeTitle)} Artifact type: the file is empty; nothing was saved to disk.`
     : `Read ${safeJsonQuote(path)} (${chars} characters) from the ${jsonTitleOrDefault(typeTitle)} Artifact type; shown below, not saved to disk.`;
 }
-//@ chunk-8wvtd8sr.js:317231-317358 placement
+//@ chunk-xzmy9dn4.js:319502-319629 placement
 /**
  * 渲染读到的多个类型文件：预算内的逐个显示，其余只列路径。
  */
@@ -246,7 +246,7 @@ function renderTypeFilesRead(typeFiles, renderFile) {
 
 `);
 }
-//@ chunk-8wvtd8sr.js:317358-317653 placement
+//@ chunk-xzmy9dn4.js:319629-319923 placement
 function notReadPathsNote(typeFiles) {
   let firstPath = safeJsonQuote(truncateToLength(typeFiles[0] ?? "", MAX_PUBLISHED_PATH_LENGTH));
   let [restNote, themWord] =
@@ -255,7 +255,7 @@ function notReadPathsNote(typeFiles) {
       : [` and the ${typeFiles.length === 2 ? "one" : typeFiles.length - 1} after it in \`paths\``, "them"];
   return `Not read: ${firstPath}${restNote}. One read of a type's files shows at most ${MAX_TYPE_FILES_PER_READ} files and about ${TYPE_FILES_RESULT_BUDGET} characters; to read ${themWord}, pass ${themWord} in another call.`;
 }
-//@ chunk-8wvtd8sr.js:317653-318756 placement
+//@ chunk-xzmy9dn4.js:319923-321026 placement
 /**
  * 类型文件未读时给模型的说明：扣留、不在文件列表、非文本、过大、目录不可用或结果已满；可读时提示用由该类型创建的 Artifact 的 url 去读。
  */
@@ -280,14 +280,14 @@ function typeFileUnreadMessage(file, typeInfo, creatingFromType) {
       return notReadPathsNote([file.path]);
   }
 }
-//@ chunk-8wvtd8sr.js:318756-318799 placement
+//@ chunk-xzmy9dn4.js:321026-321069 placement
 /**
  * 把标题 JSON 化，空标题回退 Untitled。
  */
 function jsonTitleOrDefault(title) {
   return jsonStringify(sanitizeDisplayTitle(title) ?? "Untitled");
 }
-//@ chunk-8wvtd8sr.js:318799-318868 placement
+//@ chunk-xzmy9dn4.js:321069-321138 placement
 /**
  * 创建第一方类型时预取参考页面：类型到地址的映射、超时与条数上限。
  */
@@ -296,7 +296,7 @@ var TYPE_REFERENCE_URL_BY_TYPE = new Map(
 );
 var INIT_REFERENCE_FETCH_TIMEOUT_MS = 24000;
 var INIT_REFERENCE_MAX_DOCS = 200;
-//@ chunk-8wvtd8sr.js:318868-320333 placement
+//@ chunk-xzmy9dn4.js:321138-322603 placement
 /**
  * 第一方类型创建后预取其说明文件要求先读的参考页面（按说明类型查表、排除已在磁盘的）：受权限规则约束的交给模型自己读，其余在超时内拉取，记 artifact_init_bundle 埋点。
  */
@@ -338,25 +338,25 @@ async function fetchInitReferences(target, options) {
               why: "a permission rule governs reading it \u2014 read it yourself and that rule decides",
             })
           : raceWithDeadline(
-              readArtifactFileViaWebFetch(
+              readArtifactFile(
                 target,
                 url,
                 combinedAbortSignal.signal,
                 context.credentials,
                 "artifact_type_reference_read",
-              ).then((artifactFileViaWebFetch) => {
-                if (artifactFileViaWebFetch.err === null)
+              ).then((artifactFile) => {
+                if (artifactFile.err === null)
                   return {
                     path: url,
-                    text: artifactFileViaWebFetch.html,
+                    text: artifactFile.html,
                   };
                 return {
                   path: url,
-                  ...(artifactFileViaWebFetch.missingFile !== true && {
+                  ...(artifactFile.missingFile !== true && {
                     fetchFailed: true,
                   }),
                   why:
-                    artifactFileViaWebFetch.missingFile === true
+                    artifactFile.missingFile === true
                       ? "not among the files of this release"
                       : "it could not be fetched \u2014 read it yourself",
                 };
@@ -385,7 +385,10 @@ async function fetchInitReferences(target, options) {
           ]
         : [],
     );
-    let fetchFailedCount = count(results, (result) => "fetchFailed" in result && result.fetchFailed === true);
+    let fetchFailedCount = countWhere(
+      results,
+      (result) => "fetchFailed" in result && result.fetchFailed === true,
+    );
     if (flattened.length === 0 && fetchFailedCount > 0)
       logFeatureSad("artifact_init_bundle", "references_unread");
     else
@@ -406,12 +409,12 @@ async function fetchInitReferences(target, options) {
     combinedAbortSignal.cleanup();
   }
 }
-//@ chunk-8wvtd8sr.js:320333-320412 placement
+//@ chunk-xzmy9dn4.js:322603-322682 placement
 /**
  * 「仅配设计系统使用，而此账号未列出」的说明。
  */
 var NO_DESIGN_SYSTEM_NOTE = "only of use with a design system, and none is listed for this account";
-//@ chunk-8wvtd8sr.js:320412-320761 placement
+//@ chunk-xzmy9dn4.js:322682-323031 placement
 /**
  * 扣留已在类型文件中的初始参考页：把这些页从 init_references.docs 移到 unavailable（附原因）并记埋点；无重叠时原样返回。
  */
@@ -437,12 +440,12 @@ function withholdInitReferences(result, typeKey, loadedNone) {
     },
   };
 }
-//@ chunk-8wvtd8sr.js:320761-320819 placement
+//@ chunk-xzmy9dn4.js:323031-323089 placement
 /**
  * 类型参考页 id 的合法格式。
  */
 var ARTIFACT_TYPE_REFERENCE_ID_REGEX = /^artifact-type\/reference\/[A-Za-z0-9_.-]{1,80}$/;
-//@ chunk-8wvtd8sr.js:320819-321931 placement
+//@ chunk-xzmy9dn4.js:323089-324201 placement
 /**
  * 把 init_references 渲染成结果尾部：附上参考页面内容（注明不要再取），以及未能附上的页面及原因。
  */

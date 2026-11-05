@@ -3,11 +3,21 @@
  *
  * 2.1.316 新增：Claude in Chrome 权限
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-29pqxdaf.js (17)
- * attribution: placement 17
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-323717f6.js (9), chunk-d6nykaks.js (11)
+ * attribution: placement 17, layout 3
  */
+import {
+  hostWithoutPort,
+  collectChromeSiteRules,
+  chromeSiteDenyDecision,
+  isBackOrForward,
+  parseSiteActionUrl,
+  normalizeChromeSite,
+} from "./chromePermissionRules.js";
+import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
+import { claudeInChromeSession } from "../../commands/mobile/mobile.js";
 import {
   CLAUDE_IN_CHROME_MCP_SERVER_NAME,
   CLAUDE_IN_CHROME_DOMAIN_RULE_TOOL,
@@ -19,14 +29,6 @@ import {
 } from "./common.js";
 import { isClaudeAiProxyServer } from "../../services/mcp/builtinServerNames.js";
 import { isPlainObject } from "../isPlainObject.js";
-import {
-  collectChromeSiteRules,
-  chromeSiteDenyDecision,
-  isBackOrForward,
-  parseSiteActionUrl,
-  normalizeChromeSite,
-  hostWithoutPort,
-} from "./chromePermissionRules.js";
 import { isHookOrPluginSteered } from "../agentContext.js";
 import { BROWSER_TOOLS, CHROME_INPUT_APPROVED_TOOL_NAMES } from "./browserToolSchemas.js";
 import { logChromeToolAttempted } from "./telemetry.js";
@@ -51,22 +53,41 @@ import { McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../..
 import { CCR_NEEDS_APPROVAL_CODE } from "../../services/mcp/mcpResultErrors.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-29pqxdaf.js:10535-10616 placement
+//@ chunk-d6nykaks.js:465-580 placement
 /**
  * Chrome 站点名的最大长度（253）。
  */
 var CLAUDECODE_CHROMESITE = "claudecode/chromeSite";
+var CLAUDECODE_CHROMELATECARDSITE = "claudecode/chromeLateCardSite";
 var MAX_CHROME_SITE_CHARS = 253;
 var CHROME_SITE_RE = /^[a-z0-9._-]+$/;
 var CHROME_SITE_IPV6_RE = /^\[[0-9a-f:.]+\]$/;
-//@ chunk-29pqxdaf.js:10616-10661 placement
+//@ chunk-d6nykaks.js:580-626 placement
 /**
  * 判断站点名格式是否可用。
  */
 function isUsableChromeSite(site) {
   return site.length <= MAX_CHROME_SITE_CHARS && CHROME_SITE_RE.test(site);
 }
-//@ chunk-29pqxdaf.js:10661-11070 placement
+//@ chunk-d6nykaks.js:626-734 layout
+function isUsableChromeSiteWithPort(site) {
+  if (typeof site !== "string") return false;
+  let host = hostWithoutPort(site);
+  return isUsableChromeSite(host) && (host === site || isPortString(site.slice(host.length + 1)));
+}
+//@ chunk-d6nykaks.js:734-762 layout
+var resolvedHostByToolUseIdSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-d6nykaks.js:734", () => {
+  resolvedHostByToolUseIdSlot = new SessionRootSlot(() => new Map());
+});
+//@ chunk-d6nykaks.js:762-835 layout
+function rememberResolvedHost(toolUseId, site) {
+  if (isUsableChromeSiteWithPort(site))
+    claudeInChromeSession().resolvedHostByToolUseId.set(toolUseId, {
+      host: site,
+    });
+}
+//@ chunk-d6nykaks.js:835-1240 placement
 /**
  * 从 Claude in Chrome 工具的错误数据中读出操作的站点（chrome_site/端口），校验格式；无法读出返回 unreadable，非该服务器返回 undefined。
  */
@@ -98,7 +119,7 @@ function chromeSiteFromError(client, errorInfo) {
       errorInfo.chrome_offers_site_grant === "true",
   };
 }
-//@ chunk-29pqxdaf.js:11070-11495 placement
+//@ chunk-d6nykaks.js:1240-1665 placement
 /**
  * 询问前检查 Chrome 站点拒绝规则：能识别站点时按拒绝列表判断；识别不了站点且存在拒绝规则时直接拒绝（安全检查，不可被分类器批准）。
  */
@@ -126,7 +147,7 @@ function chromeSiteDenyCheck(chromeSite, toolPermissionContext) {
     decideLocation: "pre-ask",
   };
 }
-//@ chunk-29pqxdaf.js:11495-11997 placement
+//@ chunk-d6nykaks.js:1665-2165 placement
 /**
  * 为命名站点生成询问：若 navigate 目标可能离开该站点则注明；可授权时附带"本会话允许该站点"的规则建议，否则禁止"总是允许"。
  */
@@ -169,16 +190,16 @@ function chromeSiteAsk(chromeSite, toolName, input, toolUseContext) {
         }),
   };
 }
-//@ chunk-29pqxdaf.js:11997-12104 placement
-function isPortString(chromeSitePort) {
+//@ chunk-d6nykaks.js:2165-2271 placement
+function isPortString(port) {
   return (
-    typeof chromeSitePort === "string" &&
-    /^[0-9]{1,5}$/.test(chromeSitePort) &&
-    String(Number(chromeSitePort)) === chromeSitePort &&
-    Number(chromeSitePort) <= 65535
+    typeof port === "string" &&
+    /^[0-9]{1,5}$/.test(port) &&
+    String(Number(port)) === port &&
+    Number(port) <= 65535
   );
 }
-//@ chunk-29pqxdaf.js:12104-12191 placement
+//@ chunk-d6nykaks.js:2271-2357 placement
 /**
  * 把动作 URL 规范成 Chrome 站点名。
  */
@@ -187,7 +208,7 @@ function siteOfActionUrl(url) {
   let siteActionUrl = parseSiteActionUrl(url);
   return siteActionUrl && normalizeChromeSite(siteActionUrl.host);
 }
-//@ chunk-29pqxdaf.js:12191-12391 placement
+//@ chunk-d6nykaks.js:2357-2556 placement
 function navigateTargets(toolName, input) {
   if (toolName === "navigate") return [input.url];
   if (toolName !== "browser_batch" || !Array.isArray(input.actions)) return [];
@@ -197,7 +218,7 @@ function navigateTargets(toolName, input) {
       : [],
   );
 }
-//@ chunk-29pqxdaf.js:12391-12690 placement
+//@ chunk-323717f6.js:13196-13495 placement
 var CHROME_TOOL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var ANTHROPIC_CHROMEWORKERDECIDES;
 var CLAUDECODE_CHROMEJUDGEDSITE;
@@ -206,7 +227,7 @@ var PAGE_READ_TOOLS;
 var TABS_CONTEXT_MCP;
 var MAX_SITE_LENGTH;
 var TAB_READ_TIMEOUT_MS;
-deferInit("chunk-29pqxdaf.js:12391", () => {
+deferInit("chunk-323717f6.js:13196", () => {
   CHROME_TOOL_NAMES = new Set(BROWSER_TOOLS.map((tool) => tool.name));
   ANTHROPIC_CHROMEWORKERDECIDES = "anthropic/chromeWorkerDecides";
   CLAUDECODE_CHROMEJUDGEDSITE = "claudecode/chromeJudgedSite";
@@ -224,7 +245,7 @@ deferInit("chunk-29pqxdaf.js:12391", () => {
   MAX_SITE_LENGTH = 259;
   TAB_READ_TIMEOUT_MS = 5000;
 });
-//@ chunk-29pqxdaf.js:12690-18137 placement
+//@ chunk-323717f6.js:13495-19007 placement
 /**
  * Claude in Chrome 的工具权限处理器（按会话与客户端平台判定、记录已允许站点）。
  */
@@ -554,14 +575,16 @@ function createChromePermissionHandler(toolName, gateConfig, readTabUrl) {
     suggestedAllowRule: (rule, input) =>
       rule.toolName === CLAUDE_IN_CHROME_DOMAIN_RULE_TOOL &&
       rule.ruleContent !== undefined &&
-      rule.ruleContent === weakMap.get(input),
+      (input === "late"
+        ? isUsableChromeSite(rule.ruleContent.replace(/:[0-9]{1,5}$/, ""))
+        : rule.ruleContent === weakMap.get(input)),
     suppressesAlwaysAllowRule: () => true,
     ignoresWholeToolAllowRule: () => true,
     excludedFromAutoModeAllowlist: () => true,
     excludedFromModeBypassAllow: () => true,
   };
 }
-//@ chunk-29pqxdaf.js:18137-18970 placement
+//@ chunk-323717f6.js:19007-19840 placement
 /**
  * 调用 tabs_context_mcp 读取指定 tabId 的 URL（带超时）；读不到时按原因（未列出、超时、无标签组、非 JSON、需批准等）记 chrome_permission_prompt 埋点。
  */
@@ -608,7 +631,7 @@ async function readTabUrl(callTool, tabId, signal) {
   }
   return;
 }
-//@ chunk-29pqxdaf.js:18970-19073 placement
+//@ chunk-323717f6.js:19840-19944 placement
 function siteJudgementNote(host, leftToClassifier, session = []) {
   return {
     site: host,
@@ -617,11 +640,19 @@ function siteJudgementNote(host, leftToClassifier, session = []) {
       (leftToClassifier && sessionAllowedSites(session).has(normalizeChromeSite(host))),
   };
 }
-//@ chunk-29pqxdaf.js:19073-19350 placement
+//@ chunk-323717f6.js:19944-20327 placement
 /**
  * 若本次调用由用户（或用户交给分类器）批准，返回权限阶段记录的站点信息用作结果元数据。
  */
-function judgedSiteMeta({ permissionPhase, toolUseId, allowGivenBy }) {
+function judgedSiteMeta({ permissionPhase, toolUseId, allowGivenBy, session }) {
+  let cardSite =
+    permissionPhase?.pipeline === undefined && toolUseId !== undefined
+      ? resolvedHostByToolUseIdSlot.peek(session)?.get(toolUseId)
+      : undefined;
+  if (cardSite !== undefined)
+    return {
+      [CLAUDECODE_CHROMELATECARDSITE]: cardSite,
+    };
   let note = permissionPhase?.pipeline !== undefined ? permissionPhase.checked?.note : undefined;
   let approver = allowGivenBy?.toolUseId === toolUseId ? allowGivenBy?.approver : undefined;
   return isPlainObject(note) &&
@@ -632,7 +663,7 @@ function judgedSiteMeta({ permissionPhase, toolUseId, allowGivenBy }) {
       }
     : undefined;
 }
-//@ chunk-29pqxdaf.js:19350-19437 placement
+//@ chunk-323717f6.js:20327-20415 placement
 /**
  * 取出会话级允许的 Chrome 站点集合。
  */
@@ -644,7 +675,7 @@ function sessionAllowedSites(session = []) {
     alwaysDenyRules: {},
   }).allowed;
 }
-//@ chunk-29pqxdaf.js:19437-19608 placement
+//@ chunk-323717f6.js:20415-20586 placement
 function fileUploadDeny(message) {
   return {
     behavior: "deny",
@@ -656,7 +687,7 @@ function fileUploadDeny(message) {
     },
   };
 }
-//@ chunk-29pqxdaf.js:19608-19719 placement
+//@ chunk-323717f6.js:20586-20697 placement
 function isChromeToolAutoAllowed(toolName, toolPermissionContext) {
   return (
     isAutoAllowedInMode(
@@ -671,7 +702,7 @@ function isChromeToolAutoAllowed(toolName, toolPermissionContext) {
     ) === "auto"
   );
 }
-//@ chunk-29pqxdaf.js:19719-19995 placement
+//@ chunk-323717f6.js:20697-20973 placement
 function unjudgeableChromeInputDeny(reason) {
   logFeatureBad("chrome_permission_prompt", "unjudgeable_chrome_input");
   return {
@@ -692,4 +723,6 @@ export {
   chromeSiteDenyCheck,
   chromeSiteAsk,
   CLAUDECODE_CHROMESITE,
+  isUsableChromeSiteWithPort,
+  rememberResolvedHost,
 };

@@ -3,12 +3,14 @@
  *
  * 2.1.316 新增。Bash 遥测。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-fym4r1th.js (9)
- * attribution: placement 9
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-wrq65rh8.js (11)
+ * attribution: placement 9, layout 2
  */
 import { stripAnsiPerLine } from "../../utils/stripAnsi.js";
+import { getParserModule } from "../../utils/bash/bashParser.js";
+import { countCharInString } from "../../utils/stringUtils.js";
 import { classifyBashCommand } from "./commandClassification.js";
 import { fromEnumOpt } from "../../services/analytics/safeMetadata.js";
 import { getVerifiedTaskOutputTail } from "../../utils/task/diskOutput.js";
@@ -17,12 +19,12 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
 
-//@ chunk-fym4r1th.js:46066-46115 placement
+//@ chunk-wrq65rh8.js:46658-46707 placement
 /**
  * 需要给出原因的允许来源（user、classifier、auto_mode、hook）；getApprovalSource 用它在结果里附带来源。
  */
 var APPROVAL_SOURCES_WITH_REASON = ["user", "classifier", "auto_mode", "hook"];
-//@ chunk-fym4r1th.js:46115-46479 placement
+//@ chunk-wrq65rh8.js:46707-47071 placement
 /**
  * 判断 Bash 命令被允许的来源：用户确认、自动模式分类器、auto 模式或钩子；其他情况返回 undefined。
  */
@@ -48,7 +50,7 @@ function getApprovalSource(permissionDecision) {
       return;
   }
 }
-//@ chunk-fym4r1th.js:46479-46977 placement
+//@ chunk-wrq65rh8.js:47071-47569 placement
 /**
  * 生成 Bash 命令计时遥测字段：墙钟时长、用户/系统 CPU、是否留有进程、/proc CPU 与 cgroup CPU（及是否共享）。
  */
@@ -71,7 +73,7 @@ function buildCommandTimingFields(shellUsage) {
     }),
   };
 }
-//@ chunk-fym4r1th.js:46977-49092 placement
+//@ chunk-wrq65rh8.js:47569-49684 placement
 /**
  * 各测试框架的失败/通过输出正则对（pytest、RSpec、Jest、vitest、Go、Cargo、tap 等）；classifyTestOutcome 据此判断命令输出是测试失败还是通过。
  */
@@ -123,7 +125,7 @@ var TEST_OUTPUT_PATTERNS = [
   ],
   [/^(?:FAILURES|ERRORS)!$/m, /^OK \(\d+ tests?, \d+ assertions?\)/m],
 ];
-//@ chunk-fym4r1th.js:49092-49281 placement
+//@ chunk-wrq65rh8.js:49684-49873 placement
 function detectTestOutcome(output) {
   let tailStart = output.length - BASH_TEST_PATTERNS;
   let tail = stripAnsiPerLine(
@@ -144,11 +146,52 @@ function detectTestOutcome(output) {
     ? "passed"
     : "unknown";
 }
-//@ chunk-fym4r1th.js:49281-49640 placement
+//@ chunk-wrq65rh8.js:49873-49952 layout
+var HEAD_TAIL_RE = /^head(?:[ \t]+-(?:n[ \t]*)?([1-9]\d{0,8}))?(?:[ \t]+[\w./][\w./-]*)*$/;
+//@ chunk-wrq65rh8.js:49952-50444 layout
+function headTailIsFaithful(command, output) {
+  let ast;
+  try {
+    ast = getParserModule()?.parse(command);
+  } catch {
+    return false;
+  }
+  let headCount = 0;
+  let lineCap = 1 / 0;
+  let stack = ast ? [[ast, true]] : [];
+  for (let frame = stack.pop(); frame; frame = stack.pop()) {
+    let [node, topLevel] = frame;
+    if (node.type === "ERROR" || node.text === "" || node.type === "&") return false;
+    let headMatch = topLevel && node.type === "command" ? HEAD_TAIL_RE.exec(node.text) : null;
+    if (headMatch) {
+      headCount++;
+      lineCap = Math.min(lineCap, Number(headMatch[1] ?? 10));
+    }
+    for (let child of node.children)
+      stack.push([
+        child,
+        topLevel &&
+          (node.type === "program" ||
+            node.type === "list" ||
+            node.type === "subshell" ||
+            (node.type === "pipeline" && child === node.children.at(-1))),
+      ]);
+  }
+  return (
+    headCount === command.match(/\bhead\b/g)?.length &&
+    countCharInString(
+      output,
+      `
+`,
+    ) < lineCap &&
+    !/^head: /m.test(output)
+  );
+}
+//@ chunk-wrq65rh8.js:50444-50876 placement
 /**
  * 根据输出判断测试命令的结果；若输出显示通过但退出码非零、被中断、超时或输出被截断，则记为 unknown。
  */
-function classifyTestOutcome(commandClass, output, result) {
+function classifyTestOutcome(commandClass, output, result, capturedOutput) {
   if (
     commandClass.bash_test_scope === undefined ||
     commandClass.bash_test_scope === "runs_no_tests" ||
@@ -163,12 +206,16 @@ function classifyTestOutcome(commandClass, output, result) {
     (result.code !== 0 ||
       result.interrupted ||
       result.timedOut === true ||
-      parts.includes("head") ||
-      parts.includes("incomplete"))
+      parts.includes("incomplete") ||
+      (parts.includes("head") &&
+        (parts.includes("exec") ||
+          capturedOutput === undefined ||
+          result.outputFilePath !== undefined ||
+          !headTailIsFaithful(capturedOutput, output))))
     ? "unknown"
     : testOutcome;
 }
-//@ chunk-fym4r1th.js:49640-50162 placement
+//@ chunk-wrq65rh8.js:50876-51472 placement
 /**
  * 后台命令结束时计算命令分类与测试结果（从输出或任务输出尾部异步读取），异常时返回空结果。
  */
@@ -177,6 +224,7 @@ function classifyBackgroundCommand(input, taskOutput, result, interrupted, outpu
     let commandClass = classifyBashCommand(input);
     if (
       commandClass.bash_test_scope === undefined ||
+      commandClass.bash_test_scope === "runs_no_tests" ||
       result === undefined ||
       result.outputFileSize !== undefined
     )
@@ -194,10 +242,19 @@ function classifyBackgroundCommand(input, taskOutput, result, interrupted, outpu
       commandClass,
       testOutcome:
         tail !== undefined
-          ? fromEnumOpt(classifyTestOutcome(commandClass, tail, classifyInput))
+          ? fromEnumOpt(
+              classifyTestOutcome(
+                commandClass,
+                tail,
+                classifyInput,
+                taskOutput.outputFileRedundant ? input : undefined,
+              ),
+            )
           : getVerifiedTaskOutputTail(taskOutput.taskId, MAX_TASK_OUTPUT_BYTES)
               .then((verifiedTaskOutputTail) =>
-                fromEnumOpt(classifyTestOutcome(commandClass, verifiedTaskOutputTail.content, classifyInput)),
+                fromEnumOpt(
+                  classifyTestOutcome(commandClass, verifiedTaskOutputTail.content, classifyInput, undefined),
+                ),
               )
               .catch((error) => {
                 logForDebugging(
@@ -214,7 +271,7 @@ function classifyBackgroundCommand(input, taskOutput, result, interrupted, outpu
     };
   }
 }
-//@ chunk-fym4r1th.js:50162-50244 placement
+//@ chunk-wrq65rh8.js:51472-51554 placement
 /**
  * 若值是 Promise 就 then 回调，否则同步调用；错误统一写日志。用于把同步/异步结果交给同一回调。
  */
@@ -222,7 +279,7 @@ function thenIfPromise(testOutcome, handler) {
   if (testOutcome instanceof Promise) testOutcome.then(handler).catch((error) => logError(toError(error)));
   else handler(testOutcome);
 }
-//@ chunk-fym4r1th.js:50244-50436 placement
+//@ chunk-wrq65rh8.js:51554-51746 placement
 /**
  * 后台命令卡住检测常量：检测间隔、停滞阈值、尾部字节数，以及识别交互提示（y/n、Press Enter、Continue? 等）的正则。
  */
@@ -239,14 +296,14 @@ var INTERACTIVE_PROMPT_PATTERNS = [
   /Overwrite\?/i,
 ];
 export {
+  APPROVAL_SOURCES_WITH_REASON,
+  classifyTestOutcome,
+  buildCommandTimingFields,
   STALL_THRESHOLD_MS,
   STALL_TAIL_BYTES,
   STALL_CHECK_INTERVAL_MS,
   getApprovalSource,
-  classifyTestOutcome,
-  buildCommandTimingFields,
   thenIfPromise,
   INTERACTIVE_PROMPT_PATTERNS,
   classifyBackgroundCommand,
-  APPROVAL_SOURCES_WITH_REASON,
 };

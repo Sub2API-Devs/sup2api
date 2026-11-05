@@ -3,9 +3,9 @@
  *
  * /context 统计：分别计算系统提示、工具、MCP、agent、记忆文件、技能、命令、消息的 token 与剩余空间
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/analyzeContext.ts
- * pieces: chunk-e6aww6q8.js (25)
+ * pieces: chunk-5xgkngpb.js (25)
  * attribution: fingerprint 15, layout 7, placement 2, file-local 1
  */
 import { isAbsolute } from "path";
@@ -28,7 +28,7 @@ import { getModelBetas } from "./betas.js";
 import { computeContentHash } from "./commitAttribution.js";
 import { getNonDeferrableBuiltins } from "./toolSearch.js";
 import { toolToApiDefinition, isStellarDriftEnabled } from "./api.js";
-import { toolMatchesName, findToolByName } from "../Tool.js";
+import { matchesToolName, findToolByName } from "../Tool.js";
 import { STRUCTUREDOUTPUT } from "../tools/SyntheticOutputTool/SyntheticOutputTool.js";
 import { getCachedSystemContext, mergeByPath, getNonMemoryInstructionFiles } from "../context.js";
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../entrypoints/sdk/coreSchemas.js";
@@ -36,7 +36,7 @@ import { isClaudeMdLoadingDisabled } from "./settings/customizationDisabled.js";
 import { filterAutoMemWhenDisabled } from "../components/memory/MemoryFileSelector.js";
 import { getMemoryFilesCached } from "./claudemd.js";
 import { hideAliasedV1Tools } from "../services/tools/batchTools.js";
-import { identityValue as identityValue_2 } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { hideCodeModeOnlyTools } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { countToolTokensPerItem } from "./settings/mdm/constants.js";
 import { SKILL } from "../tools/SkillTool/skillToolNames.js";
 import { getSkillToolInfo, mergedSkillListing, skillListingTokenCounts } from "../tools/SkillTool/prompt.js";
@@ -69,14 +69,14 @@ import {
   MAX_WINDOW_TOKENS,
 } from "../services/compact/autoCompactWindow.js";
 
-//@ chunk-e6aww6q8.js:2371933-2371999 fingerprint (2.1.88 match: MANUAL_COMPACT_BUFFER_NAME, 0.536)
+//@ chunk-5xgkngpb.js:2427293-2427359 fingerprint (2.1.88 match: MANUAL_COMPACT_BUFFER_NAME, 0.536)
 /**
  * /context 分类里的 “Compact buffer” 名称。
  */
 var AUTOCOMPACT_BUFFER_LABEL = "Autocompact buffer";
 var COMPACT_BUFFER_LABEL = "Compact buffer";
 var FREE_SPACE_LABEL = "Free space";
-//@ chunk-e6aww6q8.js:2371999-2372134 layout
+//@ chunk-5xgkngpb.js:2427359-2427494 layout
 /**
  * /context 分类的种类：Free space、Autocompact/Compact buffer、延迟加载项、已使用。
  */
@@ -86,9 +86,9 @@ function getContextCategoryKind(category) {
   if (category.isDeferred) return "deferred";
   return "used";
 }
-//@ chunk-e6aww6q8.js:2372134-2372145 layout
+//@ chunk-5xgkngpb.js:2427494-2427505 layout
 var TOOL_DEFINITION_TOKEN_OVERHEAD = 500;
-//@ chunk-e6aww6q8.js:2372145-2372385 layout
+//@ chunk-5xgkngpb.js:2427505-2427745 layout
 /**
  * 按权重把整数总量分配到各项（最大余数法），用于把 token 换算成网格格子数。
  */
@@ -107,7 +107,7 @@ function distributeProportionally(total, weights) {
   }
   return mapped_2;
 }
-//@ chunk-e6aww6q8.js:2372385-2372766 layout
+//@ chunk-5xgkngpb.js:2427745-2428126 layout
 function createCountEach(count, useBulk) {
   return async (texts) => {
     if (!useBulk || texts.length < 2)
@@ -150,7 +150,7 @@ function createCountEach(count, useBulk) {
     return mapped;
   };
 }
-//@ chunk-e6aww6q8.js:2372766-2372966 fingerprint (2.1.88 match: countTokensWithFallback, 0.652)
+//@ chunk-5xgkngpb.js:2428126-2428326 fingerprint (2.1.88 match: countTokensWithFallback, 0.653)
 /**
  * 计 token：count_tokens 不可用时退回本地估算。
  */
@@ -166,7 +166,7 @@ function countTokensWithFallback(messages, tools) {
     return tools(mappedMessages, apiTools);
   };
 }
-//@ chunk-e6aww6q8.js:2372966-2373102 layout
+//@ chunk-5xgkngpb.js:2428326-2428462 layout
 /**
  * 创建 token 计数器；full 模式且 tengu_context_usage_bulk_counts 打开时，把多段文本放进一次 count_tokens 请求批量计数。
  */
@@ -180,7 +180,7 @@ function createTokenCounter(detailLevel, host, credentials) {
     bulk: bulkCountsEnabled,
   };
 }
-//@ chunk-e6aww6q8.js:2373102-2373477 placement
+//@ chunk-5xgkngpb.js:2428462-2428843 placement
 /**
  * 构造 /context 用的 token 计数器：summary 模式用按字节比例的粗估；否则调用计数 API（按宿主对 401 去重并按内容缓存），失败时回退到粗估。
  */
@@ -221,7 +221,7 @@ function createContextTokenCounter(detailLevel, host, credentials) {
     countTranscript: countTokensWithFallback(messages, tools),
   };
 }
-//@ chunk-e6aww6q8.js:2373477-2373815 placement
+//@ chunk-5xgkngpb.js:2428843-2429181 placement
 /**
  * 把工具列表转成 API 工具定义（标记延迟/列出、带记录的描述与条目），用于上下文分析。
  */
@@ -244,12 +244,12 @@ async function toolsToApiDefinitions(
         model,
         enginePlacement: isDeferredToolByEngine(tool, nonDeferrableBuiltins) ? "deferred" : "listed",
         recordedDescription: toolDescriptions?.get(tool.name),
-        recordedEntry: toolMatchesName(tool, STRUCTUREDOUTPUT) ? undefined : toolEntries?.get(tool.name),
+        recordedEntry: matchesToolName(tool, STRUCTUREDOUTPUT) ? undefined : toolEntries?.get(tool.name),
       }),
     ),
   );
 }
-//@ chunk-e6aww6q8.js:2374050-2374347 fingerprint (2.1.88 match: countToolDefinitionTokens, 0.863)
+//@ chunk-5xgkngpb.js:2429416-2429715 fingerprint (2.1.88 match: countToolDefinitionTokens, 0.863)
 /**
  * 计算一组工具定义的 token 数（走 count_tokens，失败时本地估算），扣除固定开销。
  */
@@ -283,7 +283,7 @@ async function countToolDefinitionTokens(
   }
   return result ?? 0;
 }
-//@ chunk-e6aww6q8.js:2374347-2374513 file-local
+//@ chunk-5xgkngpb.js:2429715-2429881 file-local
 function extractSectionName(content) {
   let headingMatch = content.match(/^#+\s+(.+)$/m);
   if (headingMatch) return headingMatch[1].trim();
@@ -296,7 +296,7 @@ function extractSectionName(content) {
       .find((line) => line.trim().length > 0) ?? "";
   return firstLine.length > 40 ? firstLine.slice(0, 40) + "\u2026" : firstLine;
 }
-//@ chunk-e6aww6q8.js:2374513-2375019 fingerprint (2.1.88 match: countSystemTokens, 0.767)
+//@ chunk-5xgkngpb.js:2429881-2430403 fingerprint (2.1.88 match: countSystemTokens, 0.768)
 async function countSystemTokens(session, systemPrompt, skipSystemContext, count, countEach) {
   let systemContext = skipSystemContext ? {} : await getCachedSystemContext(session);
   let namedEntries = [
@@ -331,7 +331,7 @@ async function countSystemTokens(session, systemPrompt, skipSystemContext, count
     redirectedContextTokens: 0,
   };
 }
-//@ chunk-e6aww6q8.js:2375019-2375386 fingerprint (2.1.88 match: countMemoryFileTokens, 0.796)
+//@ chunk-5xgkngpb.js:2430403-2430770 fingerprint (2.1.88 match: countMemoryFileTokens, 0.796)
 async function countMemoryFileTokens(session, storageV5, countEach) {
   if (isClaudeMdLoadingDisabled())
     return {
@@ -364,7 +364,7 @@ async function countMemoryFileTokens(session, storageV5, countEach) {
     memoryFileDetails,
   };
 }
-//@ chunk-e6aww6q8.js:2375386-2376771 fingerprint (2.1.88 match: countBuiltInToolTokens, 0.727)
+//@ chunk-5xgkngpb.js:2430770-2432159 fingerprint (2.1.88 match: countBuiltInToolTokens, 0.711)
 async function countBuiltInToolTokens(
   tools,
   getToolPermissionContext,
@@ -378,7 +378,7 @@ async function countBuiltInToolTokens(
   counter,
   batch,
 ) {
-  let builtInTools = hideAliasedV1Tools(identityValue_2(tools).filter((tool) => !tool.isMcp));
+  let builtInTools = hideAliasedV1Tools(hideCodeModeOnlyTools(tools).filter((tool) => !tool.isMcp));
   if (builtInTools.length < 1)
     return {
       builtInToolTokens: 0,
@@ -488,11 +488,11 @@ async function countBuiltInToolTokens(
     systemToolDetails,
   };
 }
-//@ chunk-e6aww6q8.js:2376771-2376803 layout
+//@ chunk-5xgkngpb.js:2432159-2432191 layout
 function findSkillTool(tools) {
   return findToolByName(tools, SKILL);
 }
-//@ chunk-e6aww6q8.js:2376803-2377107 fingerprint (2.1.88 match: countSlashCommandTokens, 1)
+//@ chunk-5xgkngpb.js:2432191-2432495 fingerprint (2.1.88 match: countSlashCommandTokens, 1)
 async function countSlashCommandTokens(
   tools,
   getToolPermissionContext,
@@ -534,7 +534,7 @@ async function countSlashCommandTokens(
     },
   };
 }
-//@ chunk-e6aww6q8.js:2377107-2377953 fingerprint (2.1.88 match: countSkillTokens, 0.611)
+//@ chunk-5xgkngpb.js:2432495-2433344 fingerprint (2.1.88 match: countSkillTokens, 0.611)
 async function countSkillTokens(
   tools,
   getToolPermissionContext,
@@ -612,7 +612,7 @@ async function countSkillTokens(
     };
   }
 }
-//@ chunk-e6aww6q8.js:2377953-2379476 fingerprint (2.1.88 match: countMcpToolTokens, 0.832)
+//@ chunk-5xgkngpb.js:2433344-2434873 fingerprint (2.1.88 match: countMcpToolTokens, 0.823)
 async function countMcpToolTokens(
   tools,
   getToolPermissionContext,
@@ -669,7 +669,7 @@ async function countMcpToolTokens(
     credentials,
     toolDescriptions,
   );
-  let aliasedTools = identityValue_2(tools);
+  let aliasedTools = hideCodeModeOnlyTools(tools);
   let droppedToolNames =
     aliasedTools === tools
       ? new Set()
@@ -727,7 +727,7 @@ async function countMcpToolTokens(
     loadedMcpToolNames,
   };
 }
-//@ chunk-e6aww6q8.js:2379476-2380044 layout
+//@ chunk-5xgkngpb.js:2434873-2435441 layout
 /**
  * MCP 服务器 instructions 占用的 token；CLAUDE_CODE_DISABLE_ATTACHMENTS 或 CLAUDE_CODE_SIMPLE 时为 0。
  */
@@ -778,7 +778,7 @@ async function countMcpInstructionsTokens(mcpClients, count) {
     })),
   };
 }
-//@ chunk-e6aww6q8.js:2380044-2380450 fingerprint (2.1.88 match: countCustomAgentTokens, 0.812)
+//@ chunk-5xgkngpb.js:2435441-2435847 fingerprint (2.1.88 match: countCustomAgentTokens, 0.812)
 async function countCustomAgentTokens(agentDefinitions, countEach, localPaths) {
   let customAgents = agentDefinitions.activeAgents.filter((activeAgent) => activeAgent.source !== "built-in");
   let agentDetails = [];
@@ -809,7 +809,7 @@ async function countCustomAgentTokens(agentDefinitions, countEach, localPaths) {
     agentDetails,
   };
 }
-//@ chunk-e6aww6q8.js:2380450-2380710 fingerprint (2.1.88 match: processAssistantMessage, 1)
+//@ chunk-5xgkngpb.js:2435847-2436107 fingerprint (2.1.88 match: processAssistantMessage, 1)
 function processAssistantMessage(msg, breakdown) {
   for (let block of msg.message.content) {
     let blockStr = jsonStringify(block);
@@ -821,7 +821,7 @@ function processAssistantMessage(msg, breakdown) {
     } else breakdown.assistantMessageTokens += blockTokens;
   }
 }
-//@ chunk-e6aww6q8.js:2380710-2381108 fingerprint (2.1.88 match: processUserMessage, 1)
+//@ chunk-5xgkngpb.js:2436107-2436505 fingerprint (2.1.88 match: processUserMessage, 1)
 function processUserMessage(msg, breakdown, toolUseIdToName) {
   if (typeof msg.message.content === "string") {
     let tokens = roughTokenCountEstimation(msg.message.content);
@@ -842,7 +842,7 @@ function processUserMessage(msg, breakdown, toolUseIdToName) {
     } else breakdown.userMessageTokens += blockTokens;
   }
 }
-//@ chunk-e6aww6q8.js:2381108-2381268 fingerprint (2.1.88 match: processAttachment, 1)
+//@ chunk-5xgkngpb.js:2436505-2436665 fingerprint (2.1.88 match: processAttachment, 1)
 function processAttachment(msg, breakdown) {
   let contentStr = roughTokenCountEstimationForObject(msg.attachment);
   breakdown.attachmentTokens += contentStr;
@@ -852,7 +852,7 @@ function processAttachment(msg, breakdown) {
     (breakdown.attachmentsByType.get(attachType) || 0) + contentStr,
   );
 }
-//@ chunk-e6aww6q8.js:2381268-2382161 fingerprint (2.1.88 match: approximateMessageTokens, 0.831)
+//@ chunk-5xgkngpb.js:2436665-2437558 fingerprint (2.1.88 match: approximateMessageTokens, 0.819)
 /**
  * 按消息类型（assistant 工具调用、user 工具结果、附件）累计估算 token，并按工具名分类。
  */
@@ -913,7 +913,7 @@ async function approximateMessageTokens(messages, skipTranscriptCount, countTran
   breakdown.totalTokens = approximateMessageTokens ?? 0;
   return breakdown;
 }
-//@ chunk-e6aww6q8.js:2382161-2388424 fingerprint (2.1.88 match: analyzeContextUsage, 0.756)
+//@ chunk-5xgkngpb.js:2437558-2443824 fingerprint (2.1.88 match: analyzeContextUsage, 0.758)
 /**
  * /context 的统计：分别计算系统提示、工具定义、MCP 工具、自定义 agent、记忆文件、技能、斜杠命令、消息与附件的 token，加上自动压缩缓冲与剩余空间，生成分类数据和网格。
  */
@@ -1356,9 +1356,9 @@ async function analyzeContextUsage(
 }
 export {
   getContextCategoryKind,
-  analyzeContextUsage,
   countToolDefinitionTokens,
   TOOL_DEFINITION_TOKEN_OVERHEAD,
   toolsToApiDefinitions,
   distributeProportionally,
+  analyzeContextUsage,
 };

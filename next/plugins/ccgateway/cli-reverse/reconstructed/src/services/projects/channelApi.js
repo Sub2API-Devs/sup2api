@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Projects channels API
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dz3q485w.js (35)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-jndyh8cy.js (35)
  * attribution: placement 35
  */
 import { randomUUID } from "crypto";
@@ -20,7 +20,7 @@ import { apiClient } from "../routines/routinesApi.js";
 import { logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-dz3q485w.js:2341-2380 placement
+//@ chunk-jndyh8cy.js:2438-2477 placement
 /**
  * 项目频道 API 的各步超时与分页大小。
  */
@@ -28,11 +28,11 @@ var CHANNEL_REQUEST_TIMEOUT_MS = 15000;
 var CHANNEL_WAIT_FOR_SESSION_TIMEOUT_MS = 120000;
 var CHANNEL_RPC_TIMEOUT_MS = 30000;
 var CHANNEL_LIST_PAGE_SIZE = 50;
-//@ chunk-dz3q485w.js:2380-2439 placement
+//@ chunk-jndyh8cy.js:2477-2536 placement
 function parseVisibility(visibility) {
   return visibility === "public" || visibility === "private" ? visibility : undefined;
 }
-//@ chunk-dz3q485w.js:2439-2866 placement
+//@ chunk-jndyh8cy.js:2536-2963 placement
 /**
  * 判断项目是否不能作为发送目标：已暂停/归档、共享项目或可见性未知时返回原因，个人私有项目返回 null。
  */
@@ -44,9 +44,9 @@ function projectNotTargetReason(channel) {
     ? "that project is shared. Pick one of your personal projects, or create a new one"
     : "the server did not say whether that project is personal. Pick one of your personal projects, or create a new one";
 }
-//@ chunk-dz3q485w.js:2866-3124 placement
+//@ chunk-jndyh8cy.js:2963-3221 placement
 let ChannelApiError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-dz3q485w.js:2866", () => {
+deferInit("chunk-jndyh8cy.js:2963", () => {
   ChannelApiError = class ChannelApiError extends (
     TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
   ) {
@@ -64,7 +64,7 @@ deferInit("chunk-dz3q485w.js:2866", () => {
     }
   };
 });
-//@ chunk-dz3q485w.js:3124-3266 placement
+//@ chunk-jndyh8cy.js:3221-3363 placement
 /**
  * 判断 Projects 频道 API 错误是否可重试：非 ChannelApiError，或请求失败且状态为空、5xx、408、429。
  */
@@ -75,9 +75,9 @@ function isRetryableChannelError(error) {
       (error.status === null || error.status >= 500 || error.status === 408 || error.status === 429))
   );
 }
-//@ chunk-dz3q485w.js:3266-3387 placement
+//@ chunk-jndyh8cy.js:3363-3484 placement
 var NETWORK_UNREACHABLE_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-dz3q485w.js:3266", () => {
+deferInit("chunk-jndyh8cy.js:3363", () => {
   NETWORK_UNREACHABLE_CODES = new Set([
     "ECONNREFUSED",
     "ENOTFOUND",
@@ -88,11 +88,11 @@ deferInit("chunk-dz3q485w.js:3266", () => {
     "ERR_PROXY_TUNNEL",
   ]);
 });
-//@ chunk-dz3q485w.js:3387-3443 placement
+//@ chunk-jndyh8cy.js:3484-3540 placement
 function isNetworkOrAccessError(error) {
   return error instanceof CloudSessionAccessError || NETWORK_UNREACHABLE_CODES.has(getErrnoCode(error) ?? "");
 }
-//@ chunk-dz3q485w.js:3443-3790 placement
+//@ chunk-jndyh8cy.js:3540-3887 placement
 /**
  * 判断发送失败时消息是否确定没有发出：网络不可达、策略关闭、输入无效、目标不对，或 4xx（除 408/429）错误。
  */
@@ -113,7 +113,7 @@ function isDefinitelyNotSent(error) {
         : error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429;
   }
 }
-//@ chunk-dz3q485w.js:3790-4145 placement
+//@ chunk-jndyh8cy.js:3887-4242 placement
 /**
  * Projects 不可用时的原因文案：数据驻留（非一方提供方）、仅必要流量、未登录 claude.ai。
  */
@@ -127,19 +127,19 @@ function policyRefusalText(refusal) {
       return `${refusal.detail}. Projects require a Claude.ai login (/login).`;
   }
 }
-//@ chunk-dz3q485w.js:4145-4222 placement
+//@ chunk-jndyh8cy.js:4242-4319 placement
 /**
  * 频道 id 与会话 id 的格式正则。
  */
 var CHANNEL_ID_REGEX = /^chan_[A-Za-z0-9_-]{1,120}$/;
 var SESSION_ID_REGEX = /^[a-z]{2,12}_[A-Za-z0-9_-]{1,120}$/;
-//@ chunk-dz3q485w.js:4222-4389 placement
+//@ chunk-jndyh8cy.js:4319-4486 placement
 function channelPath(channelId, suffix, action) {
   if (!CHANNEL_ID_REGEX.test(channelId))
     throw new ChannelApiError(action, null, "the project id has an unexpected shape", "invalid_input");
   return `/v1/code/channels/${encodeURIComponent(channelId)}${suffix}`;
 }
-//@ chunk-dz3q485w.js:4389-4519 placement
+//@ chunk-jndyh8cy.js:4486-4616 placement
 function apiErrorBody(body) {
   let parsed = body;
   if (typeof parsed === "string")
@@ -151,16 +151,16 @@ function apiErrorBody(body) {
   let error = parsed?.error;
   return typeof error === "object" && error !== null ? error : null;
 }
-//@ chunk-dz3q485w.js:4519-4604 placement
+//@ chunk-jndyh8cy.js:4616-4701 placement
 function normalizeApiCode(code) {
   return typeof code === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(code) ? code : undefined;
 }
-//@ chunk-dz3q485w.js:4604-4669 placement
+//@ chunk-jndyh8cy.js:4701-4766 placement
 function apiErrorResourceOrReason(body) {
   let error = apiErrorBody(body);
   return normalizeApiCode(error?.resource) ?? normalizeApiCode(error?.reason);
 }
-//@ chunk-dz3q485w.js:4669-4741 placement
+//@ chunk-jndyh8cy.js:4766-4838 placement
 async function withTrustedDeviceHeaders(headers) {
   return {
     headers: {
@@ -170,7 +170,7 @@ async function withTrustedDeviceHeaders(headers) {
     maxRedirects: 0,
   };
 }
-//@ chunk-dz3q485w.js:4741-4937 placement
+//@ chunk-jndyh8cy.js:4838-5034 placement
 function clearStaleTrustedDevice(status, body) {
   let code = status === 403 ? apiErrorResourceOrReason(body) : undefined;
   if (code !== "untrusted_device" && code !== "session_stale_relogin") return;
@@ -178,14 +178,14 @@ function clearStaleTrustedDevice(status, body) {
     .then(({ clearTrustedDeviceTokenCache }) => clearTrustedDeviceTokenCache())
     .catch(() => {});
 }
-//@ chunk-dz3q485w.js:4937-5060 placement
+//@ chunk-jndyh8cy.js:5034-5157 placement
 function channelErrorMessage(status, body, maxChars) {
   let message = apiErrorBody(body)?.message;
   return typeof message === "string" && message !== ""
     ? printableName(message, maxChars)
     : `the server responded with status ${status}`;
 }
-//@ chunk-dz3q485w.js:5060-5362 placement
+//@ chunk-jndyh8cy.js:5157-5459 placement
 /**
  * 校验 Projects 频道 API 响应：未发出请求抛策略/认证错误，3xx 以上抛带状态码与服务端消息的 ChannelApiError（403 时清理受信设备令牌），否则返回状态与数据。
  */
@@ -212,13 +212,13 @@ function checkChannelResponse(response, action) {
     data: response.data,
   };
 }
-//@ chunk-dz3q485w.js:5362-5462 placement
+//@ chunk-jndyh8cy.js:5459-5559 placement
 function parseTimestampMs(lastMessageAt) {
   if (typeof lastMessageAt !== "string") return null;
   let timestamp = Date.parse(lastMessageAt);
   return Number.isNaN(timestamp) ? null : timestamp;
 }
-//@ chunk-dz3q485w.js:5462-5880 placement
+//@ chunk-jndyh8cy.js:5559-5977 placement
 /**
  * 解析频道列表响应：保留有 id 与名称的频道（最后消息时间、协调会话 id、可见性、是否关闭）与下一页游标。
  */
@@ -248,7 +248,7 @@ function parseChannelList(payload) {
         : null,
   };
 }
-//@ chunk-dz3q485w.js:5880-6166 placement
+//@ chunk-jndyh8cy.js:5977-6263 placement
 /**
  * 获取已加入的 Projects 频道列表的一页（GET /v1/code/channels?scope=joined）。
  */
@@ -270,7 +270,7 @@ async function listChannelsPage(cursor, signal, credentials) {
   });
   return parseChannelList(checkChannelResponse(response, "list your Projects").data);
 }
-//@ chunk-dz3q485w.js:6166-6305 placement
+//@ chunk-jndyh8cy.js:6263-6402 placement
 /**
  * 规范化项目名用于匹配：去除默认忽略字符与控制字符、NFKC、压缩空格并转小写。
  */
@@ -280,7 +280,7 @@ function normalizeProjectName(name) {
     .trim()
     .toLowerCase();
 }
-//@ chunk-dz3q485w.js:6305-7069 placement
+//@ chunk-jndyh8cy.js:6402-7166 placement
 /**
  * 向项目频道发送一条消息（POST /v1/code/channels/:id/messages，带客户端消息 id 与可选回复对象），返回消息 id 与线程根 id，并记录特性状态。
  */
@@ -329,7 +329,7 @@ async function postChannelMessage(channelId, message, signal, credentials) {
     throw error;
   }
 }
-//@ chunk-dz3q485w.js:7069-7253 placement
+//@ chunk-jndyh8cy.js:7166-7350 placement
 function parseChannelSummary(payload) {
   let rawChannel = payload;
   let channel = rawChannel?.channel ?? rawChannel;
@@ -340,13 +340,13 @@ function parseChannelSummary(payload) {
     coordinatorSessionId: coordinatorSessionIdOf(channel),
   };
 }
-//@ chunk-dz3q485w.js:7253-7375 placement
+//@ chunk-jndyh8cy.js:7350-7472 placement
 function coordinatorSessionIdOf(channel) {
   let validSessionId = (candidate) =>
     typeof candidate === "string" && SESSION_ID_REGEX.test(candidate) ? candidate : null;
   return validSessionId(channel.channel_session_id) ?? validSessionId(channel.overview_session_id);
 }
-//@ chunk-dz3q485w.js:7375-8251 placement
+//@ chunk-jndyh8cy.js:7472-8348 placement
 /**
  * 创建私有 Projects 频道（名称、图标、颜色、主题、说明、默认环境），返回频道摘要并记录特性状态。
  */
@@ -407,17 +407,17 @@ async function createProjectChannel(spec, signal, credentials) {
     throw error;
   }
 }
-//@ chunk-dz3q485w.js:8251-8317 placement
+//@ chunk-jndyh8cy.js:8348-8414 placement
 /**
  * 取某个所有者对应的项目频道。
  */
 async function getOwnerProjectChannel(channelId, signal, credentials) {
   return (await getProjectChannel(channelId, "owner", signal, credentials)).channel;
 }
-//@ chunk-dz3q485w.js:8317-8416 placement
+//@ chunk-jndyh8cy.js:8414-8513 placement
 var PROJECT_NOT_FOUND_MESSAGE =
   "that project was not found, or this login is not a member of it: join it on the web first";
-//@ chunk-dz3q485w.js:8416-10120 placement
+//@ chunk-jndyh8cy.js:8513-10217 placement
 /**
  * 获取 Projects 频道信息并校验调用者关系：要求 owner 时检查拥有者、私有且未关闭，要求 member 时检查成员、未归档、未被套餐禁用，失败抛 ChannelApiError，并记录特性状态。
  */
@@ -504,7 +504,7 @@ async function getProjectChannel(channelId, requiredRole, signal, credentials, i
     throw error;
   }
 }
-//@ chunk-dz3q485w.js:10120-10410 placement
+//@ chunk-jndyh8cy.js:10217-10507 placement
 function parseChannelConfig(payload) {
   let rawConfig = payload;
   let config = rawConfig?.config ?? rawConfig;
@@ -521,7 +521,7 @@ function parseChannelConfig(payload) {
       : [],
   };
 }
-//@ chunk-dz3q485w.js:10410-10884 placement
+//@ chunk-jndyh8cy.js:10507-10981 placement
 /**
  * 更新项目频道配置（默认来源 URL 列表），返回解析后的默认模型与来源 URL。
  */
@@ -556,9 +556,9 @@ async function updateChannelConfig(channelId, update, signal, credentials) {
     throw error;
   }
 }
-//@ chunk-dz3q485w.js:10884-10893 placement
+//@ chunk-jndyh8cy.js:10981-10990 placement
 var JSON_RPC_REQUEST_ID = 1;
-//@ chunk-dz3q485w.js:10893-11996 placement
+//@ chunk-jndyh8cy.js:10990-12093 placement
 /**
  * 解析 /v1/code/mcp/meta 的回复（JSON 或 SSE 文本）：找到与请求 id 对应的 JSON-RPC 响应，RPC 错误或工具 isError 时抛错，否则返回拼接后的文本内容。
  */
@@ -637,7 +637,7 @@ function parseRpcToolText(body, action) {
     );
   return text;
 }
-//@ chunk-dz3q485w.js:11996-12564 placement
+//@ chunk-jndyh8cy.js:12093-12661 placement
 /**
  * 通过 /v1/code/mcp/meta 调用 send_message 工具，把交接摘要立即发给项目协调会话，并解析 JSON-RPC 回复。
  */
@@ -682,19 +682,19 @@ async function handOffToCoordinator(sessionId, message, signal, credentials) {
     throw error;
   }
 }
-//@ chunk-dz3q485w.js:12564-12590 placement
+//@ chunk-jndyh8cy.js:12661-12687 placement
 function newRequestId() {
   return randomUUID();
 }
 export {
+  ChannelApiError,
+  isRetryableChannelError,
   CHANNEL_ID_REGEX,
+  getOwnerProjectChannel,
   normalizeProjectName,
   CHANNEL_LIST_PAGE_SIZE,
   listChannelsPage,
   projectNotTargetReason,
-  getOwnerProjectChannel,
-  ChannelApiError,
-  isRetryableChannelError,
   withTrustedDeviceHeaders,
   checkChannelResponse,
   channelPath,

@@ -3,10 +3,10 @@
  *
  * 标签页组件：Tabs/Tab，tabs:next/previous 切换、标题聚焦管理（useTabHeaderFocus）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/design-system/Tabs.tsx
- * pieces: chunk-1dkfja46.js (14)
- * attribution: placement 2, callgraph-fingerprint 1, layout 6, fingerprint 4, file-local 1
+ * pieces: chunk-02a2ds78.js (12)
+ * attribution: placement 2, callgraph-fingerprint 1, layout 5, fingerprint 4
  */
 import {
   init_react_production,
@@ -17,9 +17,7 @@ import {
   useLayoutEffect,
   useReducer,
 } from "../../../vendor/react/cjs/react.production.js";
-import { bunStringWidth } from "../../ink/stringWidth.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
-import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import {
   scrollViewportContext,
   useScrollViewportHandle,
@@ -29,7 +27,7 @@ import {
 } from "../ScrollViewportContext.js";
 import { measureElement } from "../../ink/hooks/useTerminalHooks.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { useFocus, useHasFocus } from "../../ink/components/Input.js";
+import { useFocus, isFocusedIn } from "../../ink/components/Input.js";
 import { isDescendantOf } from "../../ink/focus.js";
 import { MessageActionsKeybindings } from "../messageActions.js";
 import { Box, Text } from "../../ink/components/Text.js";
@@ -44,38 +42,32 @@ import { sequential } from "../../utils/sequential.js";
 import { TagTabs } from "../TagTabs.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-1dkfja46.js:743-747 placement
+//@ chunk-02a2ds78.js:704-708 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1dkfja46.js:743", () => {
+deferInit("chunk-02a2ds78.js:704", () => {
   init_react_production();
 });
-//@ chunk-1dkfja46.js:747-814 callgraph-fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-02a2ds78.js:708-775 callgraph-fingerprint (2.1.88 match: _temp, 1)
 function tabEntry(child) {
   return [child.props.id ?? child.props.title, child.props.title];
 }
-//@ chunk-1dkfja46.js:814-842 layout
+//@ chunk-02a2ds78.js:775-803 layout
 function increment_3(index) {
   return index + 1;
 }
-//@ chunk-1dkfja46.js:842-899 layout
-function tabWidthSum(sum, t0) {
-  let [, tabTitle] = t0;
-  return sum + (tabTitle ? bunStringWidth(tabTitle) : 0) + 2 + 1;
-}
-//@ chunk-1dkfja46.js:899-925 layout
+//@ chunk-02a2ds78.js:803-829 layout
 function increment_4(index) {
   return index + 1;
 }
-//@ chunk-1dkfja46.js:925-951 layout
+//@ chunk-02a2ds78.js:829-855 layout
 function decrement(index) {
   return index - 1;
 }
-//@ chunk-1dkfja46.js:951-1109 fingerprint (2.1.88 match: TabsContext, 0.9)
+//@ chunk-02a2ds78.js:855-1000 fingerprint (2.1.88 match: TabsContext, 0.9)
 var TabsContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-1dkfja46.js:951", () => {
+deferInit("chunk-02a2ds78.js:855", () => {
   TabsContext = createContext({
     selectedTab: undefined,
-    width: undefined,
     headerFocused: false,
     focusHeader: () => {},
     blurHeader: () => {},
@@ -83,19 +75,18 @@ deferInit("chunk-1dkfja46.js:951", () => {
     registerNavigationOwner: () => () => {},
   });
 });
-//@ chunk-1dkfja46.js:1109-5871 fingerprint (2.1.88 match: Tabs, 0.674)
+//@ chunk-02a2ds78.js:1000-5555 fingerprint (2.1.88 match: Tabs, 0.657)
 /**
  * 标签页：标题行（可聚焦）+ 当前标签内容，左右/tab 切换，down 把焦点移入内容；Tab 子组件声明标题。
  */
 function Tabs(props) {
-  let $ = useMemoCache(52);
+  let $ = useMemoCache(51);
   let {
     title,
     color,
     defaultTab,
     children,
     hidden,
-    useFullWidth,
     selectedTab: controlledSelectedTab,
     onTabChange,
     banner,
@@ -107,8 +98,7 @@ function Tabs(props) {
   } = props;
   let headerFocusedInitially = initialHeaderFocused === undefined ? true : initialHeaderFocused;
   let useStableHeight = stableHeight === undefined ? false : stableHeight;
-  let navFromContent_2 = navFromContent === undefined ? false : navFromContent;
-  let { columns: terminalWidth } = useTerminalSize();
+  let navigatesFromContent = navFromContent === undefined ? false : navFromContent;
   let tabs = children.map(tabEntry);
   let defaultTabIndex = defaultTab ? tabs.findIndex((tab) => defaultTab === tab[0]) : 0;
   let isControlled = controlledSelectedTab !== undefined;
@@ -231,8 +221,8 @@ function Tabs(props) {
   let navigationLocked = disableNavigation || isNavigationLocked;
   let navigationEnabled = isHeaderFocused || !isNavigating;
   let containerRef = useRef(null);
-  let hasFocus = useHasFocus(containerRef);
-  let headerHasFocus = true && !isNavigating ? !hasFocus : navigationEnabled;
+  let isClipped = isFocusedIn(containerRef);
+  let headerHasFocus = true && !isNavigating ? !isClipped : navigationEnabled;
   let [stateEpoch, bumpEpoch] = useReducer(increment_3, 0);
   let lastSelectionRef = useRef(null);
   let resetSelectionEffect;
@@ -265,23 +255,23 @@ function Tabs(props) {
     selectTab((currentIndex + tabs.length + step) % tabs.length, shouldSkipFocus);
   };
   const isActive = !hidden && !navigationLocked && navigationEnabled;
-  let t7;
+  let headerKeybindings;
   if ($[18] !== isActive) {
-    t7 = {
+    headerKeybindings = {
       context: "Tabs",
       isActive,
     };
     $[18] = isActive;
-    $[19] = t7;
-  } else t7 = $[19];
+    $[19] = headerKeybindings;
+  } else headerKeybindings = $[19];
   MessageActionsKeybindings(
     {
       "tabs:next": () => stepTab(1),
       "tabs:previous": () => stepTab(-1),
     },
-    t7,
+    headerKeybindings,
   );
-  let t8;
+  let onHeaderKeyDown;
   if (
     $[20] !== navigationLocked ||
     $[21] !== focusDirection ||
@@ -289,7 +279,7 @@ function Tabs(props) {
     $[23] !== hidden ||
     $[24] !== isNavigating
   ) {
-    t8 = (event) => {
+    onHeaderKeyDown = (event) => {
       if (hidden || navigationLocked) {
         return;
       }
@@ -315,34 +305,28 @@ function Tabs(props) {
     $[22] = isHeaderFocused;
     $[23] = hidden;
     $[24] = isNavigating;
-    $[25] = t8;
-  } else t8 = $[25];
-  let headerKeyDown = t8;
-  const isActive_2 = navFromContent_2 && !isHeaderFocused && isNavigating && !hidden && !navigationLocked;
-  let t10;
+    $[25] = onHeaderKeyDown;
+  } else onHeaderKeyDown = $[25];
+  let headerKeyDown = onHeaderKeyDown;
+  const isActive_2 = navigatesFromContent && !isHeaderFocused && isNavigating && !hidden && !navigationLocked;
+  let contentKeybindings;
   if ($[26] !== isActive_2) {
-    t10 = {
+    contentKeybindings = {
       context: "Tabs",
       isActive: isActive_2,
     };
     $[26] = isActive_2;
-    $[27] = t10;
-  } else t10 = $[27];
+    $[27] = contentKeybindings;
+  } else contentKeybindings = $[27];
   MessageActionsKeybindings(
     {
       "tabs:next": () => stepTab(1, true),
       "tabs:previous": () => stepTab(-1, true),
     },
-    t10,
+    contentKeybindings,
   );
-  let titleWidth = title ? bunStringWidth(title) + 1 : 0;
-  let tabsWidth = tabs.reduce(tabWidthSum, 0);
-  let usedWidth = titleWidth + tabsWidth;
-  let spacerWidth = useFullWidth ? Math.max(0, terminalWidth - usedWidth) : 0;
-  let width = useFullWidth ? terminalWidth : undefined;
   const value_2 = {
     selectedTab: tabs[selectedIndex][0],
-    width,
     headerFocused: isHeaderFocused,
     focusHeader,
     blurHeader,
@@ -369,7 +353,7 @@ function Tabs(props) {
       flexWrap: "wrap",
       columnGap: 1,
       flexShrink: modalScrollRef ? 0 : undefined,
-      alignSelf: true && !useFullWidth ? "flex-start" : undefined,
+      alignSelf: true ? "flex-start" : undefined,
       children: [
         title !== null &&
           jsxProd_default(Box, {
@@ -394,10 +378,6 @@ function Tabs(props) {
             id,
           );
         }),
-        spacerWidth > 0 &&
-          jsxProd_default(Text, {
-            children: " ".repeat(spacerWidth),
-          }),
       ],
     });
   let bannerElement;
@@ -419,18 +399,16 @@ function Tabs(props) {
     $[31] !== value ||
     $[32] !== children ||
     $[33] !== contentHeight ||
-    $[34] !== width ||
-    $[35] !== hidden ||
-    $[36] !== modalScrollRef ||
-    $[37] !== usesModalScroll ||
-    $[38] !== contentRows ||
-    $[39] !== selectedIndex ||
-    $[40] !== useStableHeight
+    $[34] !== hidden ||
+    $[35] !== modalScrollRef ||
+    $[36] !== usesModalScroll ||
+    $[37] !== contentRows ||
+    $[38] !== selectedIndex ||
+    $[39] !== useStableHeight
   ) {
     contentElement = usesModalScroll
       ? jsxProd_default(Box, {
           ref: containerRef,
-          width,
           marginTop: hidden ? 0 : 1,
           flexShrink: 0,
           children: jsxProd_default(
@@ -452,7 +430,6 @@ function Tabs(props) {
         })
       : jsxProd_default(Box, {
           ref: containerRef,
-          width,
           marginTop: hidden ? 0 : 1,
           height: useStableHeight ? undefined : contentHeight,
           minHeight: useStableHeight ? contentHeight : undefined,
@@ -464,26 +441,25 @@ function Tabs(props) {
     $[31] = value;
     $[32] = children;
     $[33] = contentHeight;
-    $[34] = width;
-    $[35] = hidden;
-    $[36] = modalScrollRef;
-    $[37] = usesModalScroll;
-    $[38] = contentRows;
-    $[39] = selectedIndex;
-    $[40] = useStableHeight;
-    $[41] = contentElement;
-  } else contentElement = $[41];
+    $[34] = hidden;
+    $[35] = modalScrollRef;
+    $[36] = usesModalScroll;
+    $[37] = contentRows;
+    $[38] = selectedIndex;
+    $[39] = useStableHeight;
+    $[40] = contentElement;
+  } else contentElement = $[40];
   let children_2;
   if (
-    $[42] !== BoxComponent ||
-    $[43] !== ref_2 ||
-    $[44] !== tabIndex ||
-    $[45] !== autoFocus ||
-    $[46] !== onKeyDown ||
-    $[47] !== flexShrink ||
-    $[48] !== headerRowElement ||
-    $[49] !== bannerElement ||
-    $[50] !== contentElement
+    $[41] !== BoxComponent ||
+    $[42] !== ref_2 ||
+    $[43] !== tabIndex ||
+    $[44] !== autoFocus ||
+    $[45] !== onKeyDown ||
+    $[46] !== flexShrink ||
+    $[47] !== headerRowElement ||
+    $[48] !== bannerElement ||
+    $[49] !== contentElement
   ) {
     children_2 = jsxProd_default_2(BoxComponent, {
       ref: ref_2,
@@ -494,23 +470,23 @@ function Tabs(props) {
       flexShrink,
       children: [headerRowElement, bannerElement, contentElement],
     });
-    $[42] = BoxComponent;
-    $[43] = ref_2;
-    $[44] = tabIndex;
-    $[45] = autoFocus;
-    $[46] = onKeyDown;
-    $[47] = flexShrink;
-    $[48] = headerRowElement;
-    $[49] = bannerElement;
-    $[50] = contentElement;
-    $[51] = children_2;
-  } else children_2 = $[51];
+    $[41] = BoxComponent;
+    $[42] = ref_2;
+    $[43] = tabIndex;
+    $[44] = autoFocus;
+    $[45] = onKeyDown;
+    $[46] = flexShrink;
+    $[47] = headerRowElement;
+    $[48] = bannerElement;
+    $[49] = contentElement;
+    $[50] = children_2;
+  } else children_2 = $[50];
   return jsxProd_default(TabsContext.Provider, {
     value: value_2,
     children: children_2,
   });
 }
-//@ chunk-1dkfja46.js:5871-6745 layout
+//@ chunk-02a2ds78.js:5555-6441 layout
 /**
  * 单个标签页标题：当前页反色加粗，标题聚焦且有颜色时用彩色标签样式；支持点击（防误触）与悬停下划线，并声明光标位置。
  */
@@ -607,36 +583,29 @@ function TabHeader(props) {
   } else headerElement = $[17];
   return headerElement;
 }
-//@ chunk-1dkfja46.js:6745-7010 fingerprint (2.1.88 match: Tab, 1)
+//@ chunk-02a2ds78.js:6441-6673 fingerprint (2.1.88 match: Tab, 1)
 function Tab(props) {
-  let $ = useMemoCache(4);
+  let $ = useMemoCache(3);
   let { title, id, children } = props;
-  let { selectedTab, width } = useContext(TabsContext);
+  let { selectedTab } = useContext(TabsContext);
   let insideModal = useHasScrollViewport();
   if (selectedTab !== (id ?? title)) {
     return null;
   }
   const flexShrink = insideModal ? 0 : undefined;
   let t2;
-  if ($[0] !== children || $[1] !== flexShrink || $[2] !== width) {
+  if ($[0] !== children || $[1] !== flexShrink) {
     t2 = jsxProd_default(Box, {
-      width,
       flexShrink,
       children,
     });
     $[0] = children;
     $[1] = flexShrink;
-    $[2] = width;
-    $[3] = t2;
-  } else t2 = $[3];
+    $[2] = t2;
+  } else t2 = $[2];
   return t2;
 }
-//@ chunk-1dkfja46.js:7010-7053 file-local
-function useTabsWidth() {
-  let { width } = useContext(TabsContext);
-  return width;
-}
-//@ chunk-1dkfja46.js:7053-7333 fingerprint (2.1.88 match: useTabHeaderFocus, 1)
+//@ chunk-02a2ds78.js:6673-6953 fingerprint (2.1.88 match: useTabHeaderFocus, 1)
 function useTabHeaderFocus() {
   let $ = useMemoCache(6);
   let { headerFocused, focusHeader, blurHeader, registerOptIn } = useContext(TabsContext);
@@ -661,7 +630,7 @@ function useTabHeaderFocus() {
   } else t1 = $[5];
   return t1;
 }
-//@ chunk-1dkfja46.js:7333-7507 layout
+//@ chunk-02a2ds78.js:6953-7126 layout
 function useNavigationHold() {
   let $ = useMemoCache(3);
   let [holdCount, setHoldCount] = useState(0);
@@ -683,7 +652,7 @@ function useNavigationHold() {
   } else holdResult = $[2];
   return holdResult;
 }
-//@ chunk-1dkfja46.js:7507-7621 placement
+//@ chunk-02a2ds78.js:7126-7240 placement
 function useRegisterTabsNavigationOwner() {
   let $ = useMemoCache(2);
   let { registerNavigationOwner } = useContext(TabsContext);
@@ -695,4 +664,4 @@ function useRegisterTabsNavigationOwner() {
   } else registerDeps = $[1];
   useLayoutEffect(registerNavigationOwner, registerDeps);
 }
-export { useTabsWidth, useTabHeaderFocus, Tab, Tabs, useRegisterTabsNavigationOwner };
+export { Tab, Tabs, useRegisterTabsNavigationOwner, useTabHeaderFocus };

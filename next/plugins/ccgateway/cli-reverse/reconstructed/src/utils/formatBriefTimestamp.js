@@ -3,10 +3,10 @@
  *
  * brief 模式的时间戳格式（今天只显示时刻，否则带日期）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/formatBriefTimestamp.ts
- * pieces: chunk-18hwfzwa.js (1), chunk-hzbq5ybv.js (2), chunk-j64mp9kq.js (4)
- * attribution: fingerprint 3, affinity 1, placement 3
+ * pieces: chunk-6s14nyc9.js (2), chunk-czq1j3j2.js (1), chunk-pnx1prpt.js (4)
+ * attribution: affinity 1, fingerprint 3, placement 3
  */
 import { env } from "./env.js";
 import {
@@ -20,12 +20,12 @@ import { deliveredBy, useUserMessageSite, startOfDayMs } from "../components/mes
 import { getDateTimeFormat, withTimeZone } from "./intl.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-hzbq5ybv.js:384-398 affinity
+//@ chunk-6s14nyc9.js:383-397 affinity
 var timestampCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-hzbq5ybv.js:384", () => {
+deferInit("chunk-6s14nyc9.js:383", () => {
   timestampCache = new Map();
 });
-//@ chunk-hzbq5ybv.js:398-510 fingerprint (2.1.88 match: getLocale, 0.668)
+//@ chunk-6s14nyc9.js:397-509 fingerprint (2.1.88 match: getLocale, 0.668)
 function getLocale() {
   let raw = env.LC_ALL || env.LC_TIME || env.LANG || "";
   if (timestampCache.has(raw)) return timestampCache.get(raw);
@@ -33,21 +33,21 @@ function getLocale() {
   timestampCache.set(raw, locale);
   return locale;
 }
-//@ chunk-j64mp9kq.js:959-969 placement
+//@ chunk-pnx1prpt.js:959-969 placement
 /**
  * 简短时间戳命名空间对象（内部缓存的挂载点）。
  */
 var BriefTimestampNamespace = {};
-//@ chunk-j64mp9kq.js:969-1038 placement
+//@ chunk-pnx1prpt.js:969-1038 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-j64mp9kq.js:969", () => {
+deferInit("chunk-pnx1prpt.js:969", () => {
   __export(BriefTimestampNamespace, {
     default: () => BriefTimestampNamespace,
     deliveredBy: () => deliveredBy,
     useUserMessageSite: () => useUserMessageSite,
   });
 });
-//@ chunk-j64mp9kq.js:1038-1424 placement
+//@ chunk-pnx1prpt.js:1038-1424 placement
 /**
  * brief 模式的时间戳格式：今天只显示时刻，一周内显示星期加时刻，更早显示日期；支持预设或自定义时间格式与会话时区。
  */
@@ -69,7 +69,7 @@ function formatBriefTimestamp(timestamp, now = new Date()) {
   let dateText = getDateTimeFormat(locale, withTimeZone(DATE_PART_FORMATS[bucket], timeZone)).format(date);
   return bucket === "week" ? `${dateText} ${timeText}` : `${dateText}, ${timeText}`;
 }
-//@ chunk-j64mp9kq.js:1424-1688 fingerprint (2.1.88 match: formatBriefTimestamp, 0.766)
+//@ chunk-pnx1prpt.js:1424-1688 fingerprint (2.1.88 match: formatBriefTimestamp, 0.766)
 var TIMESTAMP_FORMATS = {
   today: {
     hour: "numeric",
@@ -98,9 +98,9 @@ var DATE_PART_FORMATS = {
     day: "numeric",
   },
 };
-//@ chunk-18hwfzwa.js:1146536-1146666 fingerprint (2.1.88 match: startOfDay, 1)
+//@ chunk-czq1j3j2.js:1177318-1177448 fingerprint (2.1.88 match: startOfDay, 1)
 function startOfDay(startDate, endDate) {
   let toDayStartMs = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   return Math.round((toDayStartMs(endDate) - toDayStartMs(startDate)) / 86400000);
 }
-export { formatBriefTimestamp, startOfDay, getLocale, BriefTimestampNamespace };
+export { getLocale, startOfDay, formatBriefTimestamp, BriefTimestampNamespace };

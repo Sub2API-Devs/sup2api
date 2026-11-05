@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。解析用户意图类设置（主题、编辑模式等），兼顾旧的全局配置。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-r5n7tcxe.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9yhyzdpp.js (3)
  * attribution: placement 3
  */
 import { getEnabledSettingSources } from "./constants.js";
@@ -21,7 +21,7 @@ import {
   validateConfigValue,
 } from "../config/globalConfigValidation.js";
 
-//@ chunk-r5n7tcxe.js:320-657 placement
+//@ chunk-9yhyzdpp.js:320-657 placement
 var USER_INTENT_SETTING_KEYS = [
   "theme",
   "editorMode",
@@ -40,7 +40,7 @@ var USER_INTENT_SETTING_KEYS = [
   "inputNeededNotifEnabled",
   "agentPushNotifEnabled",
 ];
-//@ chunk-r5n7tcxe.js:657-1043 placement
+//@ chunk-9yhyzdpp.js:657-1043 placement
 /**
  * 解析用户意图类设置（主题、编辑模式等），兼顾旧的全局配置。
  */
@@ -80,7 +80,7 @@ function resolveSetting(key, value) {
     source: "default",
   };
 }
-//@ chunk-r5n7tcxe.js:1043-1098 placement (2.1.88 match: _temp5, 1)
+//@ chunk-9yhyzdpp.js:1043-1098 placement (2.1.88 match: _temp5, 1)
 function saveUserIntentSetting(key, value, storageV5) {
   updateSettingsForSource(
     "userSettings",

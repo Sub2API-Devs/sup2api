@@ -1,13 +1,13 @@
 /**
  * @modelcontextprotocol/sdk/dist/esm/experimental/tasks/client.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @modelcontextprotocol/sdk@1.29.0
- * pieces: chunk-z1n5m6nf.js (1)
+ * pieces: chunk-h44h5gdv.js (1)
  * attribution: esm-fingerprint 1
  */
 import { CallToolResultSchema, McpError, ErrorCode } from "../../types.js";
 
-//@ chunk-z1n5m6nf.js:16536-17770 esm-fingerprint
+//@ chunk-h44h5gdv.js:17952-19186 esm-fingerprint
 class ExperimentalClientTasks {
   constructor(_client) {
     this._client = _client;

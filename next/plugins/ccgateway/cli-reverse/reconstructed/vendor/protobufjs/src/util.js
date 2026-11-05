@@ -1,8 +1,8 @@
 /**
  * protobufjs/src/util.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: protobufjs@7.6.0
- * pieces: chunk-pwh5dx3n.js (1)
+ * pieces: chunk-3k21nfa0.js (1)
  * attribution: cjs-fingerprint 1
  */
 import { __commonJS } from "../../../runtime/bun-runtime.js";
@@ -16,7 +16,7 @@ import { require_type } from "./type.js";
 import { require_enum } from "./enum.js";
 import { require_root } from "./root.js";
 
-//@ chunk-pwh5dx3n.js:112807-114753 cjs-fingerprint
+//@ chunk-3k21nfa0.js:112807-114753 cjs-fingerprint
 var require_util_2 = __commonJS(function (cjsExports, cjsModule) {
   var util = (cjsModule.exports = require_minimal());
   var roots = require_roots();

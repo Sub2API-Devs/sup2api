@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。检查 Bedrock 默认模型可用性并找升级候选。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-cnamfjf8.js (16)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-v357btam.js (16)
  * attribution: placement 16
  */
 import {
@@ -31,7 +31,7 @@ import { resolveAwsRegion } from "../awsRegion.js";
 import { catalogEntriesByFirstPartyId } from "./modelCatalog.js";
 import { logForDebugging } from "../debug.js";
 import { telemetrySafeModelName } from "./telemetryModelName.js";
-import { getInitialSettings_2 } from "../settings/settings.js";
+import { getInitialSettings } from "../settings/settings.js";
 import {
   markModelRefused,
   modelNotAvailableError,
@@ -68,11 +68,11 @@ import {
 } from "../auth.js";
 import { sendStartupModelCheck } from "./modelAccessCheck.js";
 
-//@ chunk-cnamfjf8.js:782-811 placement
+//@ chunk-v357btam.js:782-811 placement
 function defaultBedrockOpusTier() {
   return tierConfig(DEFAULT_BEDROCK_OPUS_KEY);
 }
-//@ chunk-cnamfjf8.js:811-1829 placement
+//@ chunk-v357btam.js:811-1829 placement
 async function findBedrockUpgradeCandidates() {
   if (getAPIProvider() !== "bedrock") return [];
   if (env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST) return [];
@@ -135,11 +135,11 @@ async function findBedrockUpgradeCandidates() {
   logForDebugging(`[bedrock-upgrade] tiersWithPin=${stalePins.length} candidates=${filtered.length}`);
   return filtered;
 }
-//@ chunk-cnamfjf8.js:1829-1863 placement
+//@ chunk-v357btam.js:1829-1863 placement
 function seedEnvDefaultForUserPin(value) {
   return seedEnvDefaultForUserPin_2(value, defaultBedrockOpusTier());
 }
-//@ chunk-cnamfjf8.js:1863-3580 placement
+//@ chunk-v357btam.js:1863-3580 placement
 /**
  * 检查 Bedrock 默认模型可用性并找升级候选。
  */
@@ -147,7 +147,7 @@ async function checkBedrockDefaultAvailability() {
   if (getAPIProvider() !== "bedrock") return [];
   if (env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST) return [];
   let roundStart = lastLiveRoundStart(Date.now());
-  let modelOverrides = getInitialSettings_2().modelOverrides;
+  let modelOverrides = getInitialSettings().modelOverrides;
   let region = documentMayMoveTiers() ? await resolveAwsRegion() : undefined;
   let documentTiers = defaultBedrockOpusTier();
   let unpinnedTiers = collectUnpinnedTiers(documentTiers, modelOverrides);
@@ -269,7 +269,7 @@ async function checkBedrockDefaultAvailability() {
   logForDebugging(`[bedrock-fallback] unpinnedTiers=${unpinnedTiers.length} fallbacks=${fallbacks.length}`);
   return fallbacks;
 }
-//@ chunk-cnamfjf8.js:3580-4056 placement
+//@ chunk-v357btam.js:3580-4056 placement
 async function checkBedrockDocumentDefaults() {
   if (
     getAPIProvider() !== "bedrock" ||
@@ -296,11 +296,11 @@ async function checkBedrockDocumentDefaults() {
       accessible,
     });
     return accessible || probeState.verdict === "temporary";
-  }, getInitialSettings_2().modelOverrides);
+  }, getInitialSettings().modelOverrides);
   logForDebugging(`[bedrock-fallback] refutedDocumentDefaults=${refuted.length}`);
   return refuted;
 }
-//@ chunk-cnamfjf8.js:4056-4884 placement
+//@ chunk-v357btam.js:4056-4884 placement
 /**
  * 检查 Bedrock 默认模型可用性
  */
@@ -380,7 +380,7 @@ async function checkDefaultsUnchecked(
     }),
   ).catch(() => {});
 }
-//@ chunk-cnamfjf8.js:4884-5002 placement
+//@ chunk-v357btam.js:4884-5002 placement
 function resolveBedrockModelId(key, profiles, regionPrefix) {
   let catalogEntry = catalogEntriesByFirstPartyId[key];
   let firstMatch = findFirstMatch(profiles, catalogEntry.firstParty, regionPrefix);
@@ -388,7 +388,7 @@ function resolveBedrockModelId(key, profiles, regionPrefix) {
   if (!catalogEntry.bedrock) return null;
   return withBedrockRegionPrefix(catalogEntry.bedrock, regionPrefix);
 }
-//@ chunk-cnamfjf8.js:5002-5073 placement
+//@ chunk-v357btam.js:5002-5073 placement
 function tailorBedrockModelId(modelId, profiles, regionPrefix) {
   let foundationModelId = toBedrockFoundationModelId(modelId);
   return (
@@ -397,7 +397,7 @@ function tailorBedrockModelId(modelId, profiles, regionPrefix) {
       : pickProfileForFoundationModel(foundationModelId, profiles, regionPrefix)) ?? modelId
   );
 }
-//@ chunk-cnamfjf8.js:5073-6206 placement
+//@ chunk-v357btam.js:5073-6206 placement
 /**
  * 找 Bedrock 升级候选
  */
@@ -498,7 +498,7 @@ async function findUpgradeCandidatesUnchecked(
     }),
   };
 }
-//@ chunk-cnamfjf8.js:6206-6370 placement
+//@ chunk-v357btam.js:6206-6370 placement
 async function probeBedrockModel(modelId, tier, options) {
   let bedrockRegionForTier = await getBedrockRegionForTier(tier);
   if (bedrockRegionForTier === undefined) {
@@ -515,7 +515,7 @@ async function probeBedrockModel(modelId, tier, options) {
     )) === "accessible"
   );
 }
-//@ chunk-cnamfjf8.js:6370-6516 placement
+//@ chunk-v357btam.js:6370-6516 placement
 async function rememberBedrockModelAccess(modelId, tier, verdict) {
   try {
     let bedrockRegionForTier = await getBedrockRegionForTier(tier);
@@ -525,7 +525,7 @@ async function rememberBedrockModelAccess(modelId, tier, verdict) {
     logForDebugging(`[3p-model-memory] bedrock record failed: ${error}`);
   }
 }
-//@ chunk-cnamfjf8.js:6516-6631 placement
+//@ chunk-v357btam.js:6516-6631 placement
 async function getBedrockRegionForTier(tier) {
   try {
     return (
@@ -536,7 +536,7 @@ async function getBedrockRegionForTier(tier) {
     return;
   }
 }
-//@ chunk-cnamfjf8.js:6631-6770 placement
+//@ chunk-v357btam.js:6631-6770 placement
 function getBedrockClientCacheKey(bedrockRegionForTier) {
   return PACKAGE_INFO("bedrock", () => [
     bedrockRegionForTier,
@@ -546,15 +546,15 @@ function getBedrockClientCacheKey(bedrockRegionForTier) {
     getCustomHeaders(),
   ]);
 }
-//@ chunk-cnamfjf8.js:6770-6850 placement
+//@ chunk-v357btam.js:6770-6850 placement
 async function rememberedBedrockAccess(modelId, tier) {
   let bedrockRegionForTier = await getBedrockRegionForTier(tier);
   let cacheKey = bedrockRegionForTier && (await getBedrockClientCacheKey(bedrockRegionForTier));
   return cacheKey ? rememberedAccess(cacheKey, modelId) : undefined;
 }
-//@ chunk-cnamfjf8.js:6850-7128 placement
+//@ chunk-v357btam.js:6850-7128 placement
 function awsCredentialSelectors() {
-  let initialSettings = getInitialSettings_2();
+  let initialSettings = getInitialSettings();
   return [
     env.AWS_PROFILE,
     env.AWS_CONFIG_FILE,
@@ -568,7 +568,7 @@ function awsCredentialSelectors() {
     initialSettings.awsAuthRefresh,
   ];
 }
-//@ chunk-cnamfjf8.js:7128-8356 placement
+//@ chunk-v357btam.js:7128-8356 placement
 /**
  * 用 Bedrock 客户端探测模型
  */

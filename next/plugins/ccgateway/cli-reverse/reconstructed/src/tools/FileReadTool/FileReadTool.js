@@ -3,10 +3,10 @@
  *
  * Read 工具：文本/图片/PDF/notebook 读取、token 与字节上限、allow_large、去重、设备文件拦截
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileReadTool/FileReadTool.ts
- * pieces: chunk-847rdpmn.js (1), chunk-e6aww6q8.js (47), chunk-mvvq2nx1.js (1), chunk-q7gky7a4.js (1), chunk-qg0af0yq.js (3)
- * attribution: placement 9, layout 28, fingerprint 8, file-local 2, facade-exports 6
+ * pieces: chunk-0fzr619q.js (1), chunk-5xgkngpb.js (52), chunk-cz93r0jz.js (1), chunk-gb7aq6sf.js (3), chunk-nw81sbzb.js (1)
+ * attribution: placement 9, layout 31, fingerprint 8, file-local 2, facade-exports 8
  */
 import "path";
 import * as pathModule_2 from "path";
@@ -33,12 +33,7 @@ import {
   MAX_PDF_PAGES_PER_TURN,
   imageTileCount,
 } from "../../utils/mediaLimits.js";
-import {
-  FILE_READ_TOOL_NAME,
-  isImageOrPdfExtension,
-  IMAGE_EXTENSIONS,
-  ALLOW_LARGE_PARAM,
-} from "./constants.js";
+import { READ, isImageOrPdfExtension, IMAGE_EXTENSIONS, ALLOW_LARGE_PARAM } from "./constants.js";
 import { isDocumentExtension, isNotClaude3Model } from "../../utils/model/claude3Models.js";
 import { parsePDFPageRange } from "../../utils/pdfUtils.js";
 import {
@@ -80,8 +75,6 @@ import {
   renderPromptTemplate,
   TAB_AWARE_LINE_FORMAT_INSTRUCTION,
   LINE_FORMAT_INSTRUCTION,
-  getSeededFileUnchangedMessage,
-  getFileUnchangedMessage,
   TRUNCATED_PARTIAL_VIEW_PREFIX,
 } from "./prompt.js";
 import {
@@ -135,7 +128,6 @@ import { formatFileSize } from "../../utils/format.js";
 import {
   addLineNumbers,
   formatNumberedLine,
-  getFileModificationTimeAsync,
   findSimilarFile,
   normalizePathForComparison,
   FILE_NOT_FOUND_CWD_NOTE,
@@ -150,17 +142,12 @@ import {
 } from "../../utils/errors.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit as lit_2, fromEnum } from "../../services/analytics/safeMetadata.js";
-import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { discoverSkillsForPath } from "../../skills/loadSkillsDir.js";
-import { getLiveState } from "../../services/liveReplica/liveReplica.js";
-import { getFileExtensionForAnalytics } from "../../services/analytics/metadata.js";
 import { separateCopyHint } from "../../utils/remoteTools/folderSync.js";
 import { memoryFreshnessNote } from "../../memdir/memoryAge.js";
-import { isStorageV5Enabled } from "../../utils/hoverRest.js";
-import { statViaStorage, classifySavedOutputPath } from "./savedOutputPaths.js";
 import {
-  getTokenCountFromUsage as getTokenCountFromUsage_5,
-  getTokenCountFromUsage_2 as getTokenCountFromUsage_2_2,
+  getTokenCountFromUsage_2,
+  getTokenCountFromUsage_3,
 } from "../../utils/messages/usageAndStopReason.js";
 import { getModelContextInfo } from "../../utils/model/modelContextInfo.js";
 import {
@@ -174,6 +161,7 @@ import {
 } from "../../services/tokenEstimation.js";
 import { timeAttachment } from "../../utils/attachments/attachmentTiming.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import {
   isPdftoppmAvailable,
   extractPDFPages,
@@ -187,12 +175,15 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { logFileOperation } from "../../utils/fileOperationAnalytics.js";
 import { imageLimitsForModel } from "../../utils/attachmentMedia.js";
 import { readPdfExtractedPages } from "./pdfPages.js";
+import { getFileExtensionForAnalytics } from "../../services/analytics/metadata.js";
 import { isLocalShellTask } from "../../tasks/LocalShellTask/guards.js";
 import { consumeClaudeCodeHints } from "../../utils/claudeCodeHints.js";
 import { GREP_TOOL_NAME } from "../GrepTool/prompt.js";
+import { hasLiveState, getLiveState } from "../../services/liveReplica/liveReplica.js";
 import { isAutoMemFilePath } from "../../utils/memoryFileDetection.js";
 import { fileReadEncodingNote } from "../FileEditTool/fileStateErrors.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
+import { classifySavedOutputPath } from "./savedOutputPaths.js";
 import { MAX_CHROME_UPLOAD_BYTES } from "../../utils/claudeInChrome/fileUpload.js";
 import { readHandleBounded } from "../../utils/fsSafety/boundOpen.js";
 import { READ_LIMITS } from "../../utils/fsBoundRead.js";
@@ -204,7 +195,7 @@ import { logError } from "../../utils/log.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-847rdpmn.js:4662-4810 placement
+//@ chunk-0fzr619q.js:4695-4843 placement
 /**
  * 读取权限检查时记录的路径拼写（无记录时重新遍历），并标出是否有未解析的路径。
  */
@@ -221,7 +212,7 @@ function readPermissionSpellings(session, filePath) {
     unresolved: walkResult.unresolved,
   };
 }
-//@ chunk-qg0af0yq.js:8349-8629 placement
+//@ chunk-gb7aq6sf.js:8378-8658 placement
 /**
  * 任一路径拼写是设备/进程文件（/dev/zero、/proc/*\/environ 等）时返回拒绝文案；无法解析路径时也拒绝。
  */
@@ -232,7 +223,7 @@ function getDevicePathRefusal(filePath, spellingsInfo) {
     ? `${unresolvablePathMessage(filePath)}, so it cannot be told apart from a device or process file that this tool does not read.`
     : undefined;
 }
-//@ chunk-qg0af0yq.js:8629-9202 fingerprint (2.1.88 match: BLOCKED_DEVICE_PATHS, 0.808)
+//@ chunk-gb7aq6sf.js:8658-9231 fingerprint (2.1.88 match: BLOCKED_DEVICE_PATHS, 0.808)
 /**
  * 被拒读的设备路径集合（/dev/zero、/dev/random、/dev/stdin、/dev/tty、/proc/kmsg、/dev/fd/0-2 等）及相关正则。
  */
@@ -244,7 +235,7 @@ var PROC_FD_TRAVERSAL_RE;
 var OTHER_PROCESS_FD_RE;
 var TTY_DEVICE_RE;
 var MAX_PROC_PREFIX_STRIP_ROUNDS;
-deferInit("chunk-qg0af0yq.js:8629", () => {
+deferInit("chunk-gb7aq6sf.js:8658", () => {
   BLOCKED_DEVICE_PATHS = new Set([
     "/dev/zero",
     "/dev/random",
@@ -269,7 +260,7 @@ deferInit("chunk-qg0af0yq.js:8629", () => {
   TTY_DEVICE_RE = /^\/dev\/(?:pts\/(?:\d+|ptmx)|ptmx|tty[^/]*)$/;
   MAX_PROC_PREFIX_STRIP_ROUNDS = 8;
 });
-//@ chunk-qg0af0yq.js:9202-9673 fingerprint (2.1.88 match: isBlockedDevicePath, 0.964)
+//@ chunk-gb7aq6sf.js:9231-9702 fingerprint (2.1.88 match: isBlockedDevicePath, 0.964)
 /**
  * 路径是否为会阻塞或泄露的设备/进程文件：规范化后匹配黑名单、tty、fd 穿越、其他进程 fd、/proc/<pid>/(environ|cmdline|mem|...)，并剥离 /proc/<pid>/root、task 前缀循环判断（最多 8 轮）。
  */
@@ -296,7 +287,7 @@ function isBlockedDevicePath(filePath) {
     normalized = replaced;
   }
 }
-//@ chunk-q7gky7a4.js:813-1174 facade-exports (2.1.88 match: MaxFileReadTokenExceededError, 0.91)
+//@ chunk-cz93r0jz.js:813-1174 facade-exports (2.1.88 match: MaxFileReadTokenExceededError, 0.91)
 /**
  * 文件内容 token 数超过上限的错误（带 tokenCount/maxTokens，消息建议用 offset/limit 或搜索）。
  */
@@ -312,7 +303,7 @@ class MaxFileReadTokenExceededError extends Error {
     this.name = "MaxFileReadTokenExceededError";
   }
 }
-//@ chunk-mvvq2nx1.js:7393-7497 fingerprint (2.1.88 match: IMAGE_EXTENSIONS, 0.878)
+//@ chunk-nw81sbzb.js:7403-7507 fingerprint (2.1.88 match: IMAGE_EXTENSIONS, 0.88)
 /**
  * 把图片格式映射为编码输出格式：jpg/jpeg 为 jpeg、webp 为 webp、其余为 png。
  */
@@ -327,7 +318,7 @@ function toEncoderFormat(mimeSubtype) {
       return "png";
   }
 }
-//@ chunk-e6aww6q8.js:3155422-3155659 placement
+//@ chunk-5xgkngpb.js:3242041-3242278 placement
 function buildNotebookToolResult(cells, toolUseId) {
   let flattened = cells.flatMap(getToolResultFromCell);
   return {
@@ -347,14 +338,14 @@ function buildNotebookToolResult(cells, toolUseId) {
     }, []),
   };
 }
-//@ chunk-e6aww6q8.js:3158356-3158427 placement
+//@ chunk-5xgkngpb.js:3243414-3243485 placement
 /**
  * 启用 PDF 页数限制的消息 token 阈值（167000）与每轮默认页数上限 300。
  */
 var PDF_MAX_TOKENS_THRESHOLD; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
 var DEFAULT_MAX_PDF_PAGES_PER_TURN;
 var pdfPageStateByRoot;
-deferInit("chunk-e6aww6q8.js:3158356", () => {
+deferInit("chunk-5xgkngpb.js:3243414", () => {
   PDF_MAX_TOKENS_THRESHOLD = 167000;
   DEFAULT_MAX_PDF_PAGES_PER_TURN = 300;
   pdfPageStateByRoot = new SessionRootSlot(() => ({
@@ -362,14 +353,14 @@ deferInit("chunk-e6aww6q8.js:3158356", () => {
     pagesThisTurn: 0,
   }));
 });
-//@ chunk-e6aww6q8.js:3158427-3158462 placement
+//@ chunk-5xgkngpb.js:3243485-3243520 placement
 /**
  * 记录最近一次 PDF 页数限制，供本轮页数统计使用。
  */
 function rememberPdfPageLimits(session, last) {
   pdfPageStateByRoot.of(session).last = last;
 }
-//@ chunk-e6aww6q8.js:3158462-3158528 placement
+//@ chunk-5xgkngpb.js:3243520-3243586 placement
 /**
  * 把本轮已读 PDF 页数清零（新回合开始时）。
  */
@@ -377,7 +368,7 @@ function resetPdfPagesThisTurn(session) {
   let pdfState = pdfPageStateByRoot.peek(session);
   if (pdfState !== undefined) pdfState.pagesThisTurn = 0;
 }
-//@ chunk-e6aww6q8.js:3158528-3158597 placement
+//@ chunk-5xgkngpb.js:3243586-3243655 placement
 /**
  * 把本次读取的 PDF 页数累加到本轮计数。
  */
@@ -385,7 +376,7 @@ function addPdfPagesThisTurn(session, pageCount) {
   let pdfState = pdfPageStateByRoot.peek(session);
   if (pdfState !== undefined) pdfState.pagesThisTurn += pageCount;
 }
-//@ chunk-e6aww6q8.js:3158597-3158953 placement
+//@ chunk-5xgkngpb.js:3243655-3244011 placement
 /**
  * PDF 每条消息页数限制启用时返回每消息/每轮的页数上限与已用页数，否则 undefined。
  */
@@ -409,7 +400,7 @@ function getPdfPageLimits(session, messages) {
     pagesThisTurn: pdfState.pagesThisTurn,
   };
 }
-//@ chunk-e6aww6q8.js:3158953-3159330 placement
+//@ chunk-5xgkngpb.js:3244011-3244388 placement
 /**
  * 统计消息中 Read 工具读取 PDF 指定页的总页数（不超过上限时累加）。
  */
@@ -417,7 +408,7 @@ function countPdfPagesInMessages(messages, limit) {
   let pages = 0;
   for (let message of messages ?? [])
     for (let block of message.message.content) {
-      if (block.type !== "tool_use" || block.name !== FILE_READ_TOOL_NAME) continue;
+      if (block.type !== "tool_use" || block.name !== READ) continue;
       let input = block.input;
       if (
         typeof input !== "object" ||
@@ -435,7 +426,7 @@ function countPdfPagesInMessages(messages, limit) {
     }
   return pages;
 }
-//@ chunk-e6aww6q8.js:3159330-3159937 layout
+//@ chunk-5xgkngpb.js:3244388-3244995 layout
 /**
  * restoreTransientForRemap：重映射结果时把旧结果里的 PDF 页图/base64 等瞬态字段补回新结果。
  */
@@ -478,7 +469,7 @@ function restoreTransientPdfFields(previous, next) {
   }
   return next;
 }
-//@ chunk-e6aww6q8.js:3159937-3160092 layout
+//@ chunk-5xgkngpb.js:3244995-3245150 layout
 /**
  * 取文件身份；文件名形如截图（"... AM.png"）时同时取备用拼写的身份。
  */
@@ -499,7 +490,7 @@ async function getScreenshotPathIdentities(filePath, spellings) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:3160092-3160175 fingerprint (2.1.88 match: getAlternateScreenshotPath, 0.702)
+//@ chunk-5xgkngpb.js:3245150-3245233 fingerprint (2.1.88 match: getAlternateScreenshotPath, 0.703)
 /**
  * 把每个已批准的路径拼写换成备用截图文件名（同目录）。
  */
@@ -507,12 +498,12 @@ function mapSpellingsToAlternatePath(spellings, alternateScreenshotPath) {
   let filename = pathModule_2.basename(alternateScreenshotPath);
   return spellings.map((spelling) => pathModule_2.join(pathModule_2.dirname(spelling), filename));
 }
-//@ chunk-e6aww6q8.js:3160175-3160209 file-local
+//@ chunk-5xgkngpb.js:3245233-3245267 file-local
 var THIN_SPACE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3160175", () => {
+deferInit("chunk-5xgkngpb.js:3245233", () => {
   THIN_SPACE = String.fromCharCode(8239);
 });
-//@ chunk-e6aww6q8.js:3160209-3160397 layout
+//@ chunk-5xgkngpb.js:3245267-3245455 layout
 /**
  * macOS 截图文件名在 "AM/PM.png" 前用普通空格或 U+202F 窄空格，返回另一种空格的路径；不匹配返回 undefined。
  */
@@ -525,7 +516,7 @@ function getAlternateScreenshotPath(filePath) {
   let alternateSpace = currentSpace === " " ? THIN_SPACE : " ";
   return filePath.replace(`${currentSpace}${match[3]}${match[4]}`, `${alternateSpace}${match[3]}${match[4]}`);
 }
-//@ chunk-e6aww6q8.js:3160397-3160592 fingerprint (2.1.88 match: detectSessionFileType, 0.899)
+//@ chunk-5xgkngpb.js:3245455-3245650 fingerprint (2.1.88 match: detectSessionFileType, 0.899)
 /**
  * 配置目录下 projects/**.jsonl 判为 "session_transcript"（读会话记录的统计）。
  */
@@ -536,7 +527,7 @@ function detectSessionFileType(filePath) {
   if (normalizedPath.includes("/projects/") && normalizedPath.endsWith(".jsonl")) return "session_transcript";
   return null;
 }
-//@ chunk-e6aww6q8.js:3161562-3164693 fingerprint (2.1.88 match: outputSchema, 0.761)
+//@ chunk-5xgkngpb.js:3246620-3249508 fingerprint (2.1.88 match: outputSchema, 0.766)
 function makeFileReadOutputSchema(cells) {
   let imageMediaTypes = imageMediaTypeSchema();
   return discriminatedUnion("type", [
@@ -632,25 +623,14 @@ function makeFileReadOutputSchema(cells) {
           "Extracted page images, in page order. Present only transiently in-process: the page image bytes are delivered solely as image blocks in the model-facing tool_result content and are not retained on the tool_use_result, so this key is absent on the emitted/persisted result",
         ),
     }),
-    objectSchema({
-      type: literal("file_unchanged"),
-      file: objectSchema({
-        filePath: stringSchema().describe("The path to the file"),
-      }),
-      source: literal("seeded")
-        .optional()
-        .describe(
-          "Set when the dedup matched a startup-seeded entry (CLAUDE.md / nested memory) rather than a prior Read tool_result",
-        ),
-    }),
   ]);
 }
-//@ chunk-e6aww6q8.js:3164693-3164860 layout
+//@ chunk-5xgkngpb.js:3249508-3249675 layout
 var fileReadOutputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var PRIMITIVE_TYPEOF_NAMES;
 var BASE64_PREFIX_RE;
 var MAX_NOTEBOOK_FIELD_LENGTH;
-deferInit("chunk-e6aww6q8.js:3164693", () => {
+deferInit("chunk-5xgkngpb.js:3249508", () => {
   fileReadOutputSchema = DoctorLazy(() =>
     makeFileReadOutputSchema(array(anySchema()).describe("Array of notebook cells")),
   );
@@ -658,7 +638,7 @@ deferInit("chunk-e6aww6q8.js:3164693", () => {
   BASE64_PREFIX_RE = /^(?:[^A-Za-z0-9+/_=-]*[A-Za-z0-9+/_=-]){0,16}/;
   MAX_NOTEBOOK_FIELD_LENGTH = 64;
 });
-//@ chunk-e6aww6q8.js:3164860-3165052 layout
+//@ chunk-5xgkngpb.js:3249675-3249867 layout
 function flattenToCommaString(value) {
   let parts = [];
   let stack = [value];
@@ -670,10 +650,10 @@ function flattenToCommaString(value) {
   }
   return parts.join(",");
 }
-//@ chunk-e6aww6q8.js:3165052-3165853 layout
+//@ chunk-5xgkngpb.js:3249867-3250629 layout
 var crossProcessNotebookCellsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var fileReadOutputSchemaAcrossProcesses;
-deferInit("chunk-e6aww6q8.js:3165052", () => {
+deferInit("chunk-5xgkngpb.js:3249867", () => {
   crossProcessNotebookCellsSchema = DoctorLazy(() => {
     let textField = unknown().transform((value, ctx) => {
       if (value === null || PRIMITIVE_TYPEOF_NAMES.has(typeof value)) return value;
@@ -717,12 +697,12 @@ deferInit("chunk-e6aww6q8.js:3165052", () => {
     );
   });
   fileReadOutputSchemaAcrossProcesses = DoctorLazy(() =>
-    makeFileReadOutputSchema(crossProcessNotebookCellsSchema())
-      .refine((output) => output.type !== "file_unchanged")
-      .transform((output) => (output.type === "text" ? omitAlias(output, ["artifactRead"]) : output)),
+    makeFileReadOutputSchema(crossProcessNotebookCellsSchema()).transform((output) =>
+      output.type === "text" ? omitAlias(output, ["artifactRead"]) : output,
+    ),
   );
 });
-//@ chunk-e6aww6q8.js:3165853-3165961 layout
+//@ chunk-5xgkngpb.js:3250629-3250737 layout
 function withResultFilePath(result, filePath) {
   return typeof result.file === "object" && "filePath" in result.file
     ? {
@@ -734,7 +714,7 @@ function withResultFilePath(result, filePath) {
       }
     : result;
 }
-//@ chunk-e6aww6q8.js:3165961-3166167 layout
+//@ chunk-5xgkngpb.js:3250737-3250943 layout
 function sanitizePartsResultFromAnotherProcess(result) {
   if (result.type !== "parts") return result;
   let sanitizeText = (text) => escapeXmlInline(clipText(text, 2000));
@@ -752,14 +732,14 @@ function sanitizePartsResultFromAnotherProcess(result) {
     })),
   };
 }
-//@ chunk-e6aww6q8.js:3166167-3166290 layout
+//@ chunk-5xgkngpb.js:3250943-3251066 layout
 function stripPdfPageImages(output) {
   if (typeof output !== "object" || output === null || output.type !== "parts" || output.pages === undefined)
     return output;
   let { pages, ...rest } = output;
   return rest;
 }
-//@ chunk-e6aww6q8.js:3166290-3167545 layout
+//@ chunk-5xgkngpb.js:3251066-3252321 layout
 /**
  * 解析并检查 pages 参数：只接受单页或单区间；上下文满过一次后按每消息/每轮 PDF 页数预算拒绝（错误码 17/18）；超过每请求 20 页拒绝（8）。
  */
@@ -786,7 +766,7 @@ function validatePdfPagesParam(pagesParam, pdfLimits) {
     if (pagesThisMessage + requestedPageCount > pagesPerMessage)
       return {
         ok: false,
-        message: `The context has filled up once already. Until you give your answer, each of your messages can read at most ${pagesPerMessage} PDF ${plural(pagesPerMessage, "page")}, counting all of its ${FILE_READ_TOOL_NAME} calls. "${pagesParam}" was not read. Ask for it in later messages, at most ${pagesPerMessage} ${plural(pagesPerMessage, "page")} in each. You need not wait for the user between messages.`,
+        message: `The context has filled up once already. Until you give your answer, each of your messages can read at most ${pagesPerMessage} PDF ${plural(pagesPerMessage, "page")}, counting all of its ${READ} calls. "${pagesParam}" was not read. Ask for it in later messages, at most ${pagesPerMessage} ${plural(pagesPerMessage, "page")} in each. You need not wait for the user between messages.`,
         errorCode: 17,
       };
   }
@@ -801,7 +781,7 @@ function validatePdfPagesParam(pagesParam, pdfLimits) {
     range: pageRange,
   };
 }
-//@ chunk-e6aww6q8.js:3167545-3168667 layout
+//@ chunk-5xgkngpb.js:3252321-3253387 layout
 /**
  * 把工具上下文与单次调用信息合成一个只读 getter 对象（session、readFileState、contextRoom、signal、fileReadingLimits 等）。
  */
@@ -827,9 +807,6 @@ function createReadCallContext(toolContext, callInfo) {
     },
     get readFileState() {
       return toolContext.readFileState;
-    },
-    get dedupUnchangedReads() {
-      return toolContext.dedupUnchangedReads;
     },
     get dynamicSkillDirTriggers() {
       return toolContext.dynamicSkillDirTriggers;
@@ -881,7 +858,7 @@ function createReadCallContext(toolContext, callInfo) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:3168667-3168772 layout
+//@ chunk-5xgkngpb.js:3253387-3253492 layout
 /**
  * 本地调用且上下文已压缩过时返回本轮 PDF 页数预算，否则 undefined。
  */
@@ -890,14 +867,14 @@ function getPdfPageBudget(context) {
     ? getPdfPageLimits(context.session, context.sameTurnToolUses)
     : undefined;
 }
-//@ chunk-e6aww6q8.js:3168772-3174590 facade-exports (2.1.88 match: FileReadTool, 0.519)
+//@ chunk-5xgkngpb.js:3253492-3259676 facade-exports (2.1.88 match: FileReadTool, 0.507)
 /**
  * Read 工具定义（name "Read"）。读文本/图片/PDF/notebook；validateInput 查空字节、不稳定路径、pages 合法性与预算、Read deny、二进制扩展名、设备文件、远程 PDF 预算；checkPermissions 走 checkReadPermissionForTool 并在 macOS 暂存截图备用路径身份；maxResultSizeChars 为 Infinity。
  */
 var FileReadTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:3168772", () => {
+deferInit("chunk-5xgkngpb.js:3253492", () => {
   FileReadTool = buildTool({
-    name: FILE_READ_TOOL_NAME,
+    name: READ,
     ruleContentField: "file_path",
     searchHint: "read files, images, PDFs, notebooks",
     remoteExecution: {
@@ -910,12 +887,12 @@ deferInit("chunk-e6aww6q8.js:3168772", () => {
     async description() {
       return DESCRIPTION;
     },
-    async prompt({ model, leanPrompt, leanRewrite }) {
+    async prompt({ model: input, leanPrompt: callInfo, leanRewrite: toolContext }) {
       return renderPromptTemplate(
-        model,
+        input,
         isTabReadSeparationEnabled() ? TAB_AWARE_LINE_FORMAT_INSTRUCTION : LINE_FORMAT_INSTRUCTION,
-        leanPrompt,
-        leanRewrite,
+        callInfo,
+        toolContext,
       );
     },
     get inputSchema() {
@@ -951,8 +928,8 @@ deferInit("chunk-e6aww6q8.js:3168772", () => {
     userFacingName: userFacingName_3,
     getToolUseSummary: getToolUseSummary_5,
     getActivityDescription(input) {
-      let toolUseSummary = getToolUseSummary_5(input);
-      return toolUseSummary ? `Reading ${toolUseSummary}` : "Reading file";
+      let callContext = getToolUseSummary_5(input);
+      return callContext ? `Reading ${callContext}` : "Reading file";
     },
     isConcurrencySafe() {
       return true;
@@ -979,21 +956,21 @@ deferInit("chunk-e6aww6q8.js:3168772", () => {
         isRead: true,
       };
     },
-    getPath({ file_path: filePath }) {
-      return filePath || (isRemoteOnlyCheck(FILE_READ_TOOL_NAME) ? "" : getCwd());
+    getPath({ file_path: input }) {
+      return input || (isRemoteOnlyCheck(READ) ? "" : getCwd());
     },
     backfillObservableInput(input) {
-      if (typeof input.file_path === "string" && !isRemoteOnlyCheck(FILE_READ_TOOL_NAME))
+      if (typeof input.file_path === "string" && !isRemoteOnlyCheck(READ))
         input.file_path = expandStablePath(input.file_path);
     },
-    async preparePermissionMatcher({ file_path }) {
-      return (pattern) => matchesPathRule(pattern, file_path);
+    async preparePermissionMatcher({ file_path: input }) {
+      return (callInfo) => matchesPathRule(callInfo, input);
     },
     extractSearchText() {
       return "";
     },
     stripForCreation: stripPdfPageImages,
-    restoreTransientForRemap: restoreTransientPdfFields,
+    restoreTransientForRemap: restoreFramingOnRemap,
     stripForStorage(output) {
       if (typeof output !== "object" || output === null) return output;
       if (output.type === "parts") return stripPdfPageImages(output);
@@ -1027,13 +1004,14 @@ deferInit("chunk-e6aww6q8.js:3168772", () => {
             },
           };
         case "notebook": {
-          let { cells } = output.file;
-          if (!Array.isArray(cells) || cells.length === 0 || cells[0] == null) return output;
+          let { cells: absolutePath } = output.file;
+          if (!Array.isArray(absolutePath) || absolutePath.length === 0 || absolutePath[0] == null)
+            return output;
           return {
             ...output,
             file: {
               ...output.file,
-              cells: Array(cells.length),
+              cells: Array(absolutePath.length),
             },
           };
         }
@@ -1043,43 +1021,44 @@ deferInit("chunk-e6aww6q8.js:3168772", () => {
     },
     create(toolContext) {
       return {
-        async checkPermissions(input, callInfo) {
-          let callContext = createReadCallContext(toolContext, callInfo);
+        async checkPermissions(input, pages) {
+          let callContext = createReadCallContext(toolContext, pages);
           let stablePath = expandStablePath(input.file_path);
           let pathSpellings = walkPermissionCheckPaths(stablePath);
-          let spellings = pathSpellings.spellings;
+          let pagesValidation = pathSpellings.spellings;
           callContext.session.writePermissionStash.stash(
             callContext.toolUseId,
             stablePath,
-            spellings,
+            pagesValidation,
             "read",
           );
           if (getPlatform() === "macos" && callContext.toolUseId !== undefined) {
-            let { own, alt } = await getScreenshotPathIdentities(stablePath, spellings);
-            let writePermissionStash = callContext.session.writePermissionStash;
-            writePermissionStash.stashIdentity(callContext.toolUseId, stablePath, own);
-            if (alt) writePermissionStash.stashIdentity(callContext.toolUseId, alt.path, alt.identity);
+            let { own: denyRule, alt: lower } = await getScreenshotPathIdentities(
+              stablePath,
+              pagesValidation,
+            );
+            let deviceRefusal = callContext.session.writePermissionStash;
+            deviceRefusal.stashIdentity(callContext.toolUseId, stablePath, denyRule);
+            if (lower) deviceRefusal.stashIdentity(callContext.toolUseId, lower.path, lower.identity);
           }
           return checkReadPermissionForTool(FileReadTool, input, callContext.permissions(), pathSpellings);
         },
         async validateInput(input, callInfo) {
           let context = createReadCallContext(toolContext, callInfo);
-          let { file_path: filePath, pages } = input;
+          let { file_path: filePath, pages: pathModule } = input;
           if (canRunToolsOnThisMachine() && hasHostField(input))
             return {
               result: false,
               message: hostFieldNotForwardedMessage(),
               errorCode: 14,
             };
-          let nullByteRefusal = rejectNullBytes(FILE_READ_TOOL_NAME, [["file_path", filePath]]);
+          let nullByteRefusal = rejectNullBytes(READ, [["file_path", filePath]]);
           if (nullByteRefusal) return nullByteRefusal;
-          let trailingWhitespaceRefusal = rejectTrailingWhitespace(FILE_READ_TOOL_NAME, [
-            ["file_path", filePath],
-          ]);
+          let trailingWhitespaceRefusal = rejectTrailingWhitespace(READ, [["file_path", filePath]]);
           if (trailingWhitespaceRefusal) return trailingWhitespaceRefusal;
-          if (pages !== undefined) {
+          if (pathModule !== undefined) {
             let pagesValidation = validatePdfPagesParam(
-              pages,
+              pathModule,
               isDocumentExtension(pathModule_2.extname(filePath)) ? getPdfPageBudget(context) : undefined,
             );
             if (!pagesValidation.ok)
@@ -1103,35 +1082,35 @@ deferInit("chunk-e6aww6q8.js:3168772", () => {
             return {
               result: true,
             };
-          let lower = pathModule_2.extname(absolutePath).toLowerCase();
+          let readCallContext = pathModule_2.extname(absolutePath).toLowerCase();
           if (hasBinaryExtension(absolutePath) && !isImageOrPdfExtension(absolutePath))
             return {
               result: false,
-              message: `This tool cannot read binary files. The file appears to be a binary ${lower} file. Use a skill for this file type if one is available, or a shell command or script that can read the format.`,
+              message: `This tool cannot read binary files. The file appears to be a binary ${readCallContext} file. Use a skill for this file type if one is available, or a shell command or script that can read the format.`,
               errorCode: 4,
             };
-          let devicePathRefusal = getDevicePathRefusal(filePath, {
+          let savedFraming = getDevicePathRefusal(filePath, {
             spellings: [absolutePath],
             unresolved: false,
           });
-          if (devicePathRefusal !== undefined)
+          if (savedFraming !== undefined)
             return {
               result: false,
-              message: devicePathRefusal,
+              message: savedFraming,
               errorCode: 9,
             };
-          if (context.remoteCall !== undefined && isDocumentExtension(lower)) {
+          if (context.remoteCall !== undefined && isDocumentExtension(readCallContext)) {
             let mediaLimits = mediaLimitsForRoute(context.remoteCall.origin.transport);
-            let pagesValidation = pages === undefined ? undefined : validatePdfPagesParam(pages);
+            let pagesValidation = pathModule === undefined ? undefined : validatePdfPagesParam(pathModule);
             let requestedPageCount =
               pagesValidation !== undefined && pagesValidation.ok
                 ? pagesValidation.range.lastPage - pagesValidation.range.firstPage + 1
                 : 0;
-            let wholePdfRefused = pages === undefined && mediaLimits.wholePdfMaxRawBytes === 0;
+            let wholePdfRefused = pathModule === undefined && mediaLimits.wholePdfMaxRawBytes === 0;
             if (wholePdfRefused || requestedPageCount > mediaLimits.pdfMaxPagesPerRead)
               return {
                 result: false,
-                message: `${wholePdfRefused ? "A whole PDF cannot be returned from this machine to the calling session" : `${pages} is too many pages to return from this machine in one call`}. Use the pages parameter with at most ${mediaLimits.pdfMaxPagesPerRead} pages per call (for example pages: 1-3, which come back as images), or read the file where the session runs.`,
+                message: `${wholePdfRefused ? "A whole PDF cannot be returned from this machine to the calling session" : `${pathModule} is too many pages to return from this machine in one call`}. Use the pages parameter with at most ${mediaLimits.pdfMaxPagesPerRead} pages per call (for example pages: 1-3, which come back as images), or read the file where the session runs.`,
                 errorCode: 16,
               };
           }
@@ -1139,16 +1118,26 @@ deferInit("chunk-e6aww6q8.js:3168772", () => {
             result: true,
           };
         },
-        async call(input, callInfo) {
-          let context = createReadCallContext(toolContext, callInfo);
-          return readFileToolCall(input, context, callInfo.parentMessage);
+        async call(callInput, callInfo) {
+          let readCallContext = createReadCallContext(toolContext, callInfo);
+          let filePath = expandStablePath(callInput.file_path);
+          let framingModule = readCallContext.remoteCall === undefined ? savedCopyFramingModule() : null;
+          let savedFraming = framingModule?.savedCopyFramingForRead(filePath);
+          let result = await readFileForTool(callInput, readCallContext, callInfo.parentMessage);
+          if (framingModule !== null && savedFraming !== undefined) {
+            let strongerFraming = await framingModule.savedCopyFramingForRead(
+              weakMap_15.get(result.data) ?? filePath,
+            );
+            weakMap_14.set(result.data, framingModule.strongerFraming(await savedFraming, strongerFraming));
+          }
+          return result;
         },
       };
     },
     mapToolResultToToolResultBlockParam(output, toolUseId) {
       switch (output.type) {
         case "image":
-          return {
+          return applySavedCopyFraming(output, {
             tool_use_id: toolUseId,
             type: "tool_result",
             content: [
@@ -1161,31 +1150,35 @@ deferInit("chunk-e6aww6q8.js:3168772", () => {
                 },
               },
             ],
-          };
+          });
         case "notebook":
-          return buildNotebookToolResult(output.file.cells, toolUseId);
+          return applySavedCopyFraming(output, buildNotebookToolResult(output.file.cells, toolUseId));
         case "pdf": {
           let headerText = `PDF file read: ${output.file.filePath} (${formatFileSize(output.file.originalSize)})`;
-          return {
-            tool_use_id: toolUseId,
-            type: "tool_result",
-            content: output.file.base64
-              ? [
-                  {
-                    type: "text",
-                    text: headerText,
-                  },
-                  {
-                    type: "document",
-                    source: {
-                      type: "base64",
-                      media_type: "application/pdf",
-                      data: output.file.base64,
+          return applySavedCopyFraming(
+            output,
+            {
+              tool_use_id: toolUseId,
+              type: "tool_result",
+              content: output.file.base64
+                ? [
+                    {
+                      type: "text",
+                      text: headerText,
                     },
-                  },
-                ]
-              : headerText,
-          };
+                    {
+                      type: "document",
+                      source: {
+                        type: "base64",
+                        media_type: "application/pdf",
+                        data: output.file.base64,
+                      },
+                    },
+                  ]
+                : headerText,
+            },
+            true,
+          );
         }
         case "parts": {
           let headerText =
@@ -1195,53 +1188,60 @@ deferInit("chunk-e6aww6q8.js:3168772", () => {
               : `. This PDF has ${output.totalPages} pages. These are pages 1-${output.file.count}. Use the pages parameter to read other pages (e.g., pages: "${output.file.count + 1}-${Math.min(2 * output.file.count, output.totalPages)}").`);
           let pages = output.pages ?? [];
           let firstPage = output.firstPage ?? 1;
-          return {
-            tool_use_id: toolUseId,
-            type: "tool_result",
-            content: pages.length
-              ? [
-                  {
-                    type: "text",
-                    text: headerText,
-                  },
-                  ...pages.map((page, pageIndex) =>
-                    page.base64
-                      ? {
-                          type: "image",
-                          source: {
-                            type: "base64",
-                            data: page.base64,
-                            media_type: page.mediaType,
+          return applySavedCopyFraming(
+            output,
+            {
+              tool_use_id: toolUseId,
+              type: "tool_result",
+              content: pages.length
+                ? [
+                    {
+                      type: "text",
+                      text: headerText,
+                    },
+                    ...pages.map((page, pageIndex) =>
+                      page.base64
+                        ? {
+                            type: "image",
+                            source: {
+                              type: "base64",
+                              data: page.base64,
+                              media_type: page.mediaType,
+                            },
+                          }
+                        : {
+                            type: "text",
+                            text: `[Page ${firstPage + pageIndex} could not be processed as an image${page.error ? `: ${page.error}` : ""}]`,
                           },
-                        }
-                      : {
-                          type: "text",
-                          text: `[Page ${firstPage + pageIndex} could not be processed as an image${page.error ? `: ${page.error}` : ""}]`,
-                        },
-                  ),
-                ]
-              : headerText,
-          };
+                    ),
+                  ]
+                : headerText,
+            },
+            true,
+          );
         }
-        case "file_unchanged":
-          return {
-            tool_use_id: toolUseId,
-            type: "tool_result",
-            content:
-              output.source === "seeded"
-                ? getSeededFileUnchangedMessage(output.file.filePath)
-                : getFileUnchangedMessage(),
-          };
         case "text": {
           let content;
-          if (output.file.content)
+          if (output.file.content) {
+            let framingModule = savedCopyFramingModule();
+            let storedFraming =
+              framingModule === null
+                ? undefined
+                : (weakMap_14.get(output) ?? framingModule.savedCopyFraming(output.file.filePath));
+            let enveloped = addLineNumbers({
+              ...output.file,
+              ...(storedFraming?.enveloped === true &&
+                framingModule !== null && {
+                  content: framingModule.neutralizeEnvelopeTags(output.file.content),
+                }),
+              tabAwareSeparator: isTabReadSeparationEnabled(),
+            });
             content =
               memoryFileFreshnessPrefix(output) +
-              addLineNumbers({
-                ...output.file,
-                tabAwareSeparator: isTabReadSeparationEnabled(),
-              });
-          else if (output.file.numLines >= 1 && output.file.totalLines > 1)
+              (storedFraming?.enveloped === true
+                ? `${storedFraming.notice}${storedFraming.lead}${enveloped}${storedFraming.tail}`
+                : enveloped);
+          } else if (output.file.numLines >= 1 && output.file.totalLines > 1)
             content = memoryFileFreshnessPrefix(output) + formatNumberedLine("", output.file.startLine, "\t");
           else if (output.file.numLines >= 1 || output.file.totalLines === 0)
             content =
@@ -1258,206 +1258,131 @@ deferInit("chunk-e6aww6q8.js:3168772", () => {
     },
   });
 });
-//@ chunk-e6aww6q8.js:3174590-3177290 layout
-/**
- * Read 的 call 实现：设备守卫、文件身份、读取上限（env/fileReadingLimits/allow_large 放宽），去重（未变文件返回 file_unchanged，可由 tengu_read_dedup_killswitch 关闭），触发动态技能目录，ENOENT 时尝试截图备用路径并给出 Did you mean 提示。
- */
-async function readFileToolCall(
-  { file_path: filePath, offset = 1, limit = undefined, pages, allow_large: allowLarge },
-  context,
-  parentMessage,
+//@ chunk-5xgkngpb.js:3259676-3261493 layout
+async function readFileForTool(
+  { file_path: input, offset: context = 1, limit: parentMessage = undefined, pages, allow_large: allowLarge },
+  readCallContext,
+  parentMessage_2,
 ) {
-  let { readFileState, fileReadingLimits } = context;
-  let filePath_2 = expandStablePath(filePath);
-  let writePermissionStash = context.session.writePermissionStash;
-  let hasStashedRead = writePermissionStash.holds(context.toolUseId, filePath_2, "read");
-  let checkedIdentity = writePermissionStash.takeIdentity(context.toolUseId, filePath_2);
-  let alternateScreenshotPath = getAlternateScreenshotPath(filePath_2);
-  let checkedIdentity_2 =
-    alternateScreenshotPath === undefined
+  let { readFileState, fileReadingLimits: writePermissionStash } = readCallContext;
+  let checkedIdentity = expandStablePath(input);
+  let screenshotPath = readCallContext.session.writePermissionStash;
+  let readHeld = screenshotPath.holds(readCallContext.toolUseId, checkedIdentity, "read");
+  let checkedScreenshotIdentity = screenshotPath.takeIdentity(readCallContext.toolUseId, checkedIdentity);
+  let permissionSpellings = getAlternateScreenshotPath(checkedIdentity);
+  let spellings =
+    permissionSpellings === undefined
       ? undefined
-      : writePermissionStash.takeIdentity(context.toolUseId, alternateScreenshotPath);
-  let permissionSpellings = readPermissionSpellings(context, filePath_2);
-  let spellings = permissionSpellings.spellings;
-  let devicePathRefusal = getDevicePathRefusal(filePath, permissionSpellings);
-  if (devicePathRefusal !== undefined)
+      : screenshotPath.takeIdentity(readCallContext.toolUseId, permissionSpellings);
+  let deviceRefusal = readPermissionSpellings(readCallContext, checkedIdentity);
+  let defaultLimits = deviceRefusal.spellings;
+  let maxSizeBytes = getDevicePathRefusal(input, deviceRefusal);
+  if (maxSizeBytes !== undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      devicePathRefusal,
+      maxSizeBytes,
       "Read refused by the device guard",
     );
-  if (!hasStashedRead && getPlatform() === "macos") {
-    let { own, alt } = await getScreenshotPathIdentities(filePath_2, spellings);
-    checkedIdentity = own;
-    checkedIdentity_2 = alt?.identity;
+  if (!readHeld && getPlatform() === "macos") {
+    let { own: maxTokens, alt: allowLargeCheck } = await getScreenshotPathIdentities(
+      checkedIdentity,
+      defaultLimits,
+    );
+    checkedScreenshotIdentity = maxTokens;
+    spellings = allowLargeCheck?.identity;
   }
-  let defaultFileReadingLimits = getDefaultFileReadingLimits();
-  let maxSizeBytes = fileReadingLimits?.maxSizeBytes ?? defaultFileReadingLimits.maxSizeBytes;
-  let maxTokens = fileReadingLimits?.maxTokens ?? defaultFileReadingLimits.maxTokens;
-  let roomInfo = () =>
-    computeAllowLargeRoom(context, parentMessage, {
-      maxSizeBytes,
-      maxTokens,
+  let ext = getDefaultFileReadingLimits();
+  let nestedTriggers = writePermissionStash?.maxSizeBytes ?? ext.maxSizeBytes;
+  let inputEcho = writePermissionStash?.maxTokens ?? ext.maxTokens;
+  let allowLargeLimits = () =>
+    computeAllowLargeRoom(readCallContext, parentMessage_2, {
+      maxSizeBytes: nestedTriggers,
+      maxTokens: inputEcho,
     });
-  let allowLarge_2 = allowLarge ? roomInfo() : undefined;
-  if (fileReadingLimits !== undefined)
+  let offset = allowLarge ? allowLargeLimits() : undefined;
+  if (writePermissionStash !== undefined)
     logEvent("tengu_file_read_limits_override", {
-      hasMaxTokens: fileReadingLimits.maxTokens !== undefined,
-      hasMaxSizeBytes: fileReadingLimits.maxSizeBytes !== undefined,
+      hasMaxTokens: writePermissionStash.maxTokens !== undefined,
+      hasMaxSizeBytes: writePermissionStash.maxSizeBytes !== undefined,
     });
-  let ext = pathModule_2.extname(filePath).toLowerCase().slice(1);
-  let fullFilePath = expandStablePath(filePath);
-  if (isNotebookPath(fullFilePath)) {
-    offset = 1;
-    limit = undefined;
+  let limit = pathModule_2.extname(input).toLowerCase().slice(1);
+  let resolvedPath = expandStablePath(input);
+  if (isNotebookPath(resolvedPath)) {
+    context = 1;
+    parentMessage = undefined;
   }
-  let previousReadEntry = readFileState.get(fullFilePath);
-  if (previousReadEntry)
+  let previousRead = readFileState.get(resolvedPath);
+  if (previousRead)
     logEvent("tengu_file_read_reread", {
       priorOp: lit_2(
-        previousReadEntry.seededFromContext
-          ? "seeded"
-          : previousReadEntry.offset === undefined
-            ? "edit_write"
-            : "read",
+        previousRead.seededFromContext ? "seeded" : previousRead.offset === undefined ? "edit_write" : "read",
       ),
     });
-  let dedupEntry =
-    getFeatureValue_CACHED_MAY_BE_STALE("tengu_read_dedup_killswitch", false) ||
-    context.remoteCall !== undefined ||
-    context.dedupUnchangedReads === false
-      ? undefined
-      : readFileState.get(fullFilePath);
-  if (!env.CLAUDE_CODE_SIMPLE && context.remoteCall === undefined)
+  if (!env.CLAUDE_CODE_SIMPLE && readCallContext.remoteCall === undefined)
     await discoverSkillsForPath(
-      context.session.host,
-      fullFilePath,
-      context.dynamicSkillDirTriggers,
-      context.storageV5,
+      readCallContext.session.host,
+      resolvedPath,
+      readCallContext.dynamicSkillDirTriggers,
+      readCallContext.storageV5,
     );
-  let nestedMemoryAttachmentTriggers = context.nestedMemoryAttachmentTriggers;
-  if (nestedMemoryAttachmentTriggers && !nestedMemoryAttachmentTriggers.includes(fullFilePath))
-    nestedMemoryAttachmentTriggers.push(fullFilePath);
-  let pendingHandoverRead =
-    context.remoteCall === undefined ? getLiveState().pendingHandoverReads.get(fullFilePath) : undefined;
-  let isHandoverCopy = (mtimeMs) => {
-    let agentId = context.agentId ?? "main";
-    return (
-      pendingHandoverRead !== undefined &&
-      !pendingHandoverRead.completedBy.has(agentId) &&
-      !pendingHandoverRead.unrecordableBy.has(agentId) &&
-      Math.floor(mtimeMs) === pendingHandoverRead.mtimeMs
-    );
-  };
-  if (
-    dedupEntry &&
-    dedupEntry.seededFromContext &&
-    !dedupEntry.isPartialView &&
-    offset === 1 &&
-    limit === undefined
-  )
-    try {
-      let mtimeMs = await getSeededFileMtime(fullFilePath, context.storageV5);
-      if (mtimeMs === dedupEntry.timestamp && !isHandoverCopy(mtimeMs)) {
-        let fileExtensionForAnalytics = getFileExtensionForAnalytics(fullFilePath);
-        logEvent("tengu_file_read_dedup", {
-          source: lit_2("seeded"),
-          ...(fileExtensionForAnalytics !== undefined && {
-            ext: fileExtensionForAnalytics,
-          }),
-        });
-        return {
-          data: {
-            type: "file_unchanged",
-            file: {
-              filePath: fullFilePath,
-            },
-            source: "seeded",
-          },
-        };
-      }
-    } catch {}
-  if (
-    dedupEntry &&
-    !dedupEntry.isPartialView &&
-    !dedupEntry.contentNotInModelContext &&
-    dedupEntry.offset !== undefined
-  ) {
-    if (dedupEntry.offset === offset && dedupEntry.limit === limit)
-      try {
-        let mtimeMs = await getFileModificationTimeAsync(fullFilePath);
-        if (mtimeMs === dedupEntry.timestamp && !isHandoverCopy(mtimeMs)) {
-          let fileExtensionForAnalytics = getFileExtensionForAnalytics(fullFilePath);
-          logEvent("tengu_file_read_dedup", {
-            ...(fileExtensionForAnalytics !== undefined && {
-              ext: fileExtensionForAnalytics,
-            }),
-          });
-          return {
-            data: {
-              type: "file_unchanged",
-              file: {
-                filePath,
-              },
-            },
-          };
-        }
-      } catch {}
-  }
-  let readRequest = {
-    file_path: filePath,
-    fullFilePath,
-    ext,
-    offset,
-    limit,
+  let result = readCallContext.nestedMemoryAttachmentTriggers;
+  if (result && !result.includes(resolvedPath)) result.push(resolvedPath);
+  let readEcho = {
+    file_path: input,
+    fullFilePath: resolvedPath,
+    ext: limit,
+    offset: context,
+    limit: parentMessage,
     pages,
-    maxSizeBytes,
-    maxTokens,
-    room: roomInfo,
-    allowLarge: allowLarge_2,
-    context,
-    messageId: parentMessage?.message.id,
-    approvedPaths: spellings,
-    checkedIdentity,
+    maxSizeBytes: nestedTriggers,
+    maxTokens: inputEcho,
+    room: allowLargeLimits,
+    allowLarge: offset,
+    context: readCallContext,
+    messageId: parentMessage_2?.message.id,
+    approvedPaths: defaultLimits,
+    checkedIdentity: checkedScreenshotIdentity,
   };
   try {
     return await callInnerWithFileHandle({
-      ...readRequest,
-      resolvedFilePath: fullFilePath,
+      ...readEcho,
+      resolvedFilePath: resolvedPath,
     });
   } catch (error) {
     if (getErrnoCode(error) === "ENOENT") {
-      let alternateScreenshotPath = getAlternateScreenshotPath(fullFilePath);
+      let alternateScreenshotPath = getAlternateScreenshotPath(resolvedPath);
       if (alternateScreenshotPath)
         try {
-          return await callInnerWithFileHandle({
-            ...readRequest,
+          let fallbackPath = await callInnerWithFileHandle({
+            ...readEcho,
             resolvedFilePath: alternateScreenshotPath,
-            approvedPaths: mapSpellingsToAlternatePath(spellings, alternateScreenshotPath),
-            checkedIdentity: checkedIdentity_2,
+            approvedPaths: mapSpellingsToAlternatePath(defaultLimits, alternateScreenshotPath),
+            checkedIdentity: spellings,
           });
+          weakMap_15.set(fallbackPath.data, alternateScreenshotPath);
+          return fallbackPath;
         } catch (error) {
           if (!isENOENT(error)) throw error;
         }
-      let similarFile = await findSimilarFile(fullFilePath);
-      let normalizedPath = await normalizePathForComparison(fullFilePath);
-      let notFoundMessage = `File does not exist. ${FILE_NOT_FOUND_CWD_NOTE} ${getCwd()}.`;
-      if (normalizedPath) notFoundMessage += ` Did you mean ${normalizedPath}?`;
-      else if (similarFile) notFoundMessage += ` Did you mean ${similarFile}?`;
-      notFoundMessage += separateCopyHint(FileReadTool, fullFilePath, context);
+      let similarFile = await findSimilarFile(resolvedPath);
+      let fileSize = await normalizePathForComparison(resolvedPath);
+      let missingText = `File does not exist. ${FILE_NOT_FOUND_CWD_NOTE} ${getCwd()}.`;
+      if (fileSize) missingText += ` Did you mean ${fileSize}?`;
+      else if (similarFile) missingText += ` Did you mean ${similarFile}?`;
+      missingText += separateCopyHint(FileReadTool, resolvedPath, readCallContext);
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        encodeControlChars(notFoundMessage),
+        encodeControlChars(missingText),
         "File does not exist",
       );
     }
     throw error;
   }
 }
-//@ chunk-e6aww6q8.js:3177290-3177310 layout
+//@ chunk-5xgkngpb.js:3261493-3261513 layout
 var memoryFileMtimeByResult; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:3177290", () => {
+deferInit("chunk-5xgkngpb.js:3261493", () => {
   memoryFileMtimeByResult = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:3177310-3177380 file-local
+//@ chunk-5xgkngpb.js:3261513-3261583 file-local
 /**
  * 结果是记忆文件时返回基于 mtime 的新鲜度说明前缀。
  */
@@ -1466,14 +1391,74 @@ function memoryFileFreshnessPrefix(data) {
   if (mtimeMs === undefined) return "";
   return memoryFreshnessNote(mtimeMs);
 }
-//@ chunk-e6aww6q8.js:3177380-3177416 layout
+//@ chunk-5xgkngpb.js:3261583-3261618 layout
+var weakMap_14; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var weakMap_15;
+deferInit("chunk-5xgkngpb.js:3261583", () => {
+  weakMap_14 = new WeakMap();
+  weakMap_15 = new WeakMap();
+});
+//@ chunk-5xgkngpb.js:3261618-3261651 facade-exports
+function readResultFraming(result) {
+  return weakMap_14.get(result);
+}
+//@ chunk-5xgkngpb.js:3261651-3261704 facade-exports
+function withReadFraming(content, savedCopyFraming) {
+  if (savedCopyFraming !== undefined) weakMap_14.set(content, savedCopyFraming);
+  return content;
+}
+//@ chunk-5xgkngpb.js:3261704-3261757 layout
+function savedCopyFramingModule() {
+  return require("../../services/artifacts/FILE_ENVELOPE_LEAD.lazy.js");
+}
+//@ chunk-5xgkngpb.js:3261757-3261837 layout
+function restoreFramingOnRemap(previous, restoreInfo) {
+  let restored = restoreTransientPdfFields(previous, restoreInfo);
+  let framing = weakMap_14.get(previous);
+  if (framing !== undefined) weakMap_14.set(restored, framing);
+  return restored;
+}
+//@ chunk-5xgkngpb.js:3261837-3262236 layout
+function applySavedCopyFraming(output, message, afterFirst = false) {
+  let savedCopyModule = savedCopyFramingModule();
+  let framing =
+    weakMap_14.get(output) ??
+    ("filePath" in output.file ? savedCopyModule?.savedCopyFraming(output.file.filePath) : undefined);
+  if (savedCopyModule === null || framing?.enveloped !== true || !Array.isArray(message.content))
+    return message;
+  let mapped = message.content.map((block) =>
+    block.type === "text"
+      ? {
+          ...block,
+          text: savedCopyModule.neutralizeEnvelopeTags(block.text),
+        }
+      : block,
+  );
+  let insertAt = afterFirst ? 1 : 0;
+  return {
+    ...message,
+    content: [
+      ...mapped.slice(0, insertAt),
+      {
+        type: "text",
+        text: `${framing.notice}${framing.lead}`,
+      },
+      ...mapped.slice(insertAt),
+      {
+        type: "text",
+        text: framing.tail,
+      },
+    ],
+  };
+}
+//@ chunk-5xgkngpb.js:3262236-3262272 layout
 var artifactCoverageNoteByResult; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var notTextNoteByResult;
-deferInit("chunk-e6aww6q8.js:3177380", () => {
+deferInit("chunk-5xgkngpb.js:3262236", () => {
   artifactCoverageNoteByResult = new WeakMap();
   notTextNoteByResult = new WeakMap();
 });
-//@ chunk-e6aww6q8.js:3177416-3177514 layout
+//@ chunk-5xgkngpb.js:3262272-3262370 layout
 /**
  * 把非文本说明、artifact 覆盖说明附加到文本结果末尾。
  */
@@ -1487,24 +1472,11 @@ ${note}`,
     )
     .join("");
 }
-//@ chunk-e6aww6q8.js:3177514-3177761 layout
-/**
- * 取启动预置文件（CLAUDE.md 等）的 mtime；storageV5 下经存储接口 stat。
- */
-async function getSeededFileMtime(filePath, storage) {
-  if (isRemoteOnlyCheck(FILE_READ_TOOL_NAME)) throw Error("seeded file not on this machine");
-  if (isStorageV5Enabled() && storage !== undefined) {
-    let statResult = await statViaStorage(filePath, storage);
-    if (statResult === undefined) throw Error("seeded file not stat-able through the storage interface");
-    if (statResult !== "unserved") return statResult;
-  }
-  return getFileModificationTimeAsync(filePath);
-}
-//@ chunk-e6aww6q8.js:3177761-3177785 layout
+//@ chunk-5xgkngpb.js:3262370-3262394 layout
 var CONTEXT_ROOM_SAFETY_FACTOR = 0.7;
 var MIN_BYTES_PER_TOKEN = 2;
 var ALLOW_LARGE_BYTES_PER_TOKEN_FACTOR = 3;
-//@ chunk-e6aww6q8.js:3177785-3177893 facade-exports
+//@ chunk-5xgkngpb.js:3262394-3262502 facade-exports
 /**
  * 本轮剩余可用上下文 token：(阈值 - max(当前用量, held) - claimed) × 0.7，不小于 0。
  */
@@ -1512,22 +1484,26 @@ function allowLargeRoomTokens(room, usedTokens) {
   let occupiedTokens = Math.max(usedTokens, room.held()) + room.claimed();
   return Math.max(0, Math.floor((room.threshold - occupiedTokens) * CONTEXT_ROOM_SAFETY_FACTOR));
 }
-//@ chunk-e6aww6q8.js:3177893-3178311 layout
+//@ chunk-5xgkngpb.js:3262502-3262918 layout
 /**
  * allow_large 时计算放宽额度：本地且有 contextRoom 时，若剩余 token 大于默认上限，则提高 maxTokens 与 maxSizeBytes（按每 token 字节数 ×3）。
  */
-function computeAllowLargeRoom(context, parentMessage, limits) {
-  let room = context.contextRoom();
-  if (room === undefined || context.remoteCall !== undefined || context.inputFromAnotherMachine === true)
+function computeAllowLargeRoom(toolContext, parentMessage, limits) {
+  let room = toolContext.contextRoom();
+  if (
+    room === undefined ||
+    toolContext.remoteCall !== undefined ||
+    toolContext.inputFromAnotherMachine === true
+  )
     return {
       roomTokens: undefined,
       raised: undefined,
     };
   let usage = parentMessage?.message.usage;
-  let usageTokens = usage ? getTokenCountFromUsage_5(usage) : undefined;
+  let usageTokens = usage ? getTokenCountFromUsage_2(usage) : undefined;
   let usedTokens =
-    usageTokens && getTokenCountFromUsage_2_2(usageTokens) > 0
-      ? getTokenCountFromUsage_2_2(usageTokens) + usageTokens.output_tokens
+    usageTokens && getTokenCountFromUsage_3(usageTokens) > 0
+      ? getTokenCountFromUsage_3(usageTokens) + usageTokens.output_tokens
       : 0;
   let roomTokens = allowLargeRoomTokens(room, usedTokens);
   if (roomTokens <= limits.maxTokens)
@@ -1535,7 +1511,7 @@ function computeAllowLargeRoom(context, parentMessage, limits) {
       roomTokens,
       raised: undefined,
     };
-  let { bytesPerToken } = getModelContextInfo(context.model());
+  let { bytesPerToken } = getModelContextInfo(toolContext.model());
   return {
     roomTokens,
     raised: {
@@ -1547,7 +1523,7 @@ function computeAllowLargeRoom(context, parentMessage, limits) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:3178311-3178483 layout
+//@ chunk-5xgkngpb.js:3262918-3263090 layout
 /**
  * 记 tengu_file_read_allow_large 事件（结果、是否放宽、roomTokens、扩展名）。
  */
@@ -1564,7 +1540,7 @@ function logAllowLargeOutcome(room, outcome, sizeFields, ext) {
     }),
   });
 }
-//@ chunk-e6aww6q8.js:3178483-3178695 layout
+//@ chunk-5xgkngpb.js:3263090-3263302 layout
 /**
  * 根据剩余上下文与是否已用 allow_large，选择附在超限错误后的提示（可用 allow_large 重试/即使放宽也放不下/此处不可用）。
  */
@@ -1576,7 +1552,7 @@ function getAllowLargeHint(room, optedIn, size) {
     ? ALLOW_LARGE_RETRY_HINT
     : ALLOW_LARGE_NO_ROOM_HINT;
 }
-//@ chunk-e6aww6q8.js:3178695-3179273 layout
+//@ chunk-5xgkngpb.js:3263302-3263880 layout
 /**
  * 把文件过大、选区过大、token 超限三类错误重建为附带 allow_large 提示的同类错误，并在已 opt-in 时记事件。
  */
@@ -1627,7 +1603,7 @@ function attachAllowLargeHintToSizeError(error, { room, optedIn, readMaxSizeByte
   }
   return enrichedError;
 }
-//@ chunk-e6aww6q8.js:3179273-3179557 facade-exports
+//@ chunk-5xgkngpb.js:3263880-3264164 facade-exports
 /**
  * 校验内容 token 数：粗估不超过上限 1/4 直接通过；字符数超过上限×128 直接抛 MaxFileReadTokenExceededError；否则调用 token 计数 API，超限抛错。
  */
@@ -1654,7 +1630,7 @@ async function validateContentTokens(
   if (exactTokens > maxTokens_2) throw new MaxFileReadTokenExceededError(exactTokens, maxTokens_2);
   return exactTokens;
 }
-//@ chunk-e6aww6q8.js:3179557-3179681 fingerprint (2.1.88 match: createImageResponse, 1)
+//@ chunk-5xgkngpb.js:3264164-3264288 fingerprint (2.1.88 match: createImageResponse, 1)
 /**
  * 构造 image 类型的 Read 结果（base64、image/<type>、原始大小、尺寸）。
  */
@@ -1669,7 +1645,7 @@ function createImageResponse(buffer, mediaType, originalSize, dimensions) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:3179681-3179887 layout
+//@ chunk-5xgkngpb.js:3264288-3264494 layout
 /**
  * 记 cli_pdf_read 诊断日志（请求方式、渲染结果、文件字节、页数、耗时）。
  */
@@ -1684,7 +1660,7 @@ function logPdfReadDiagnostics(startedAtMs, diagnostics) {
     duration_ms: Date.now() - startedAtMs,
   });
 }
-//@ chunk-e6aww6q8.js:3179887-3180093 facade-exports
+//@ chunk-5xgkngpb.js:3264494-3264700 facade-exports
 /**
  * 页数未知的 PDF 是否要求 pages：文件大于 GrowthBook tengu_immutable_tide 阈值、pdfinfo 不是因退出码失败、且 pdftoppm 可用。
  */
@@ -1704,7 +1680,7 @@ async function isUncountedPDFOverWholeReadCap(pdfByteSize, pdfinfoFailure) {
     return false;
   return isPdftoppmAvailable();
 }
-//@ chunk-e6aww6q8.js:3180093-3180353 layout
+//@ chunk-5xgkngpb.js:3264700-3264960 layout
 /**
  * 把 PDF 读取错误转成 TelemetrySafeError（unknown 原因附站点/退出码/分类）。
  */
@@ -1722,7 +1698,7 @@ function toPdfExtractionError(error) {
         `pdf unknown (site=${error.site}, exit=${error.exitCode ?? "none"}, category=${error.category})`,
       );
 }
-//@ chunk-e6aww6q8.js:3180353-3180791 layout
+//@ chunk-5xgkngpb.js:3264960-3265398 layout
 /**
  * 惰性打开要读的文件（任务输出目录走专用打开，否则经设备守卫与身份校验），把句柄交给 callInner，结束时关闭。
  */
@@ -1762,7 +1738,7 @@ async function callInnerWithFileHandle(readArgs) {
     else await closePromise;
   }
 }
-//@ chunk-e6aww6q8.js:3180791-3190604 fingerprint (2.1.88 match: callInner, 0.38)
+//@ chunk-5xgkngpb.js:3265398-3275231 fingerprint (2.1.88 match: callInner, 0.378)
 /**
  * 按类型读取：.ipynb 读 notebook 单元；图片扩展名或无扩展名但魔数是图片走 readImageWithTokenBudget；PDF 做页提取或整份读取；其他用 readFileInRange 读文本，token 超限时整文件读取自动分页并附 [Truncated: PARTIAL view] 说明，最后写 readFileState。
  */
@@ -2208,9 +2184,9 @@ async function callInner(readArgs) {
       truncationBanner =
         !truncated && numLines < totalLines
           ? TRUNCATED_PARTIAL_VIEW_PREFIX +
-            `${fullFilePath}: showing lines 1-${numLines} of ${totalLines} total (${error.tokenCount} tokens, ${sizeDescription}). Call ${FILE_READ_TOOL_NAME} with offset=${numLines + 1} limit=${numLines} for the next page, or ${GREP_TOOL_NAME} to find a specific section.${allowLargeHint} Do NOT answer from this page alone if the answer may be further in the file.]`
+            `${fullFilePath}: showing lines 1-${numLines} of ${totalLines} total (${error.tokenCount} tokens, ${sizeDescription}). Call ${READ} with offset=${numLines + 1} limit=${numLines} for the next page, or ${GREP_TOOL_NAME} to find a specific section.${allowLargeHint} Do NOT answer from this page alone if the answer may be further in the file.]`
           : TRUNCATED_PARTIAL_VIEW_PREFIX +
-            `${fullFilePath}: showing the first ${text.length} of ${textContent.length} characters (${error.tokenCount} tokens, ${sizeDescription}); this file has very long lines and cannot be paginated by line. Use ${GREP_TOOL_NAME} to find a specific section, or ${FILE_READ_TOOL_NAME} with offset/limit to page through it.${allowLargeHint} Do NOT answer from this excerpt alone if the answer may be elsewhere in the file.]`;
+            `${fullFilePath}: showing the first ${text.length} of ${textContent.length} characters (${error.tokenCount} tokens, ${sizeDescription}); this file has very long lines and cannot be paginated by line. Use ${GREP_TOOL_NAME} to find a specific section, or ${READ} with offset/limit to page through it.${allowLargeHint} Do NOT answer from this excerpt alone if the answer may be elsewhere in the file.]`;
     } else throw attachAllowLargeHintToSizeError(error, allowLargeContext);
   }
   readFileState.set(fullFilePath, {
@@ -2228,7 +2204,11 @@ async function callInner(readArgs) {
   let artifactRead;
   let artifactCoverageNote;
   let commitHandoverRead;
-  if (context.remoteCall === undefined && getLiveState().pendingHandoverReads.has(fullFilePath)) {
+  if (
+    context.remoteCall === undefined &&
+    hasLiveState() &&
+    getLiveState().pendingHandoverReads.has(fullFilePath)
+  ) {
     let { prepareHandoverRead, describeHandoverCoverage } =
       await import("../../services/artifacts/handoverRead.js");
     let handoverRead = await prepareHandoverRead(fullFilePath, context, messageId, {
@@ -2316,10 +2296,10 @@ async function callInner(readArgs) {
     }),
   };
 }
-//@ chunk-e6aww6q8.js:3190604-3190625 layout
+//@ chunk-5xgkngpb.js:3275231-3275252 layout
 var MAX_IMAGE_READ_BYTES = MAX_CHROME_UPLOAD_BYTES;
 var IMAGE_STREAM_CHUNK_BYTES = 65536;
-//@ chunk-e6aww6q8.js:3190625-3190936 layout
+//@ chunk-5xgkngpb.js:3275252-3275563 layout
 /**
  * 读取图片字节：句柄或路径，可指定最大字节数。
  */
@@ -2335,7 +2315,7 @@ async function readImageBytes(source, maxBytes, signal) {
   await using fileHandle = await open(source, constants.O_RDONLY | READ_LIMITS);
   return await readImageBytesFromHandle(fileHandle, source, undefined);
 }
-//@ chunk-e6aww6q8.js:3190936-3191756 layout
+//@ chunk-5xgkngpb.js:3275563-3276383 layout
 /**
  * 从句柄读图片：普通文件超过上限直接拒绝；管道/设备按块读取到上限，超过则报错。
  */
@@ -2381,7 +2361,7 @@ async function readImageBytesFromHandle(handle, ioPath, signal) {
     );
   return Buffer.concat(chunks, totalBytes);
 }
-//@ chunk-e6aww6q8.js:3191756-3193372 facade-exports (2.1.88 match: readImageWithTokenBudget, 0.561)
+//@ chunk-5xgkngpb.js:3276383-3278003 facade-exports (2.1.88 match: readImageWithTokenBudget, 0.56)
 /**
  * 按 token 预算读取图片：校验非空与魔数，按模型限制缩放/重编码，超出字节上限再压缩；估算 token 超出上限时压缩到 token 限制，失败则降为 400x400 JPEG。
  */
@@ -2501,14 +2481,16 @@ async function readImageWithTokenBudget(
   return result;
 }
 export {
-  FileReadTool,
   resetPdfPagesThisTurn,
-  getDevicePathRefusal,
-  MaxFileReadTokenExceededError,
+  FileReadTool,
+  withReadFraming,
+  rememberPdfPageLimits,
   validateContentTokens,
+  MaxFileReadTokenExceededError,
   allowLargeRoomTokens,
+  readResultFraming,
   readImageWithTokenBudget,
   isUncountedPDFOverWholeReadCap,
+  getDevicePathRefusal,
   toEncoderFormat,
-  rememberPdfPageLimits,
 };

@@ -3,9 +3,9 @@
  *
  * Bash 结果渲染组件：剥离沙箱违规块与 cwd 重置提示，显示 stdout/stderr、编辑 diff、后台运行或空输出说明
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/BashToolResultMessage.tsx
- * pieces: chunk-femza1ss.js (8)
+ * pieces: chunk-vaywhf0g.js (8)
  * attribution: sole-consumer 5, fingerprint 3
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
@@ -18,7 +18,7 @@ import {
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { getDisplayPath } from "../../utils/file.js";
-import { count } from "../../utils/collections.js";
+import { countWhere } from "../../utils/collections.js";
 import { StructuredDiffList } from "../../components/StructuredDiffList.js";
 import { CtrlOToExpand } from "../../components/CtrlOToExpand.js";
 import { stripSandboxViolations } from "../../components/FallbackToolUseErrorMessage.js";
@@ -31,12 +31,12 @@ import { KeyboardShortcutHint } from "../../components/design-system/KeyboardSho
 import { ShellTimeDisplay } from "../../components/shell/ShellTimeDisplay.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-femza1ss.js:778-782 sole-consumer
+//@ chunk-vaywhf0g.js:779-783 sole-consumer
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-femza1ss.js:778", () => {
+deferInit("chunk-vaywhf0g.js:779", () => {
   init_react_production();
 });
-//@ chunk-femza1ss.js:782-1015 sole-consumer
+//@ chunk-vaywhf0g.js:783-1016 sole-consumer
 /**
  * Bash 编辑 diff 显示用常量：预览行数、并发命令提示、git 步骤可能移动工作树的提示、首个 diff（用于只显示一次说明）。
  */
@@ -46,7 +46,7 @@ var SHARED_DIFF_NOTE =
 var TREE_MOVED_NOTE =
   "(a git step in this command can move the working tree, so these may be its changes, not edits)";
 var firstShownDiff = null;
-//@ chunk-femza1ss.js:1015-2864 sole-consumer
+//@ chunk-vaywhf0g.js:1016-2866 sole-consumer
 /**
  * 显示 Bash 命令期间文件变化：每个文件的创建/删除/更新与增删行数、diff（非 verbose 时截断）、更多文件、树移动与并发提示；跳过或不可用时显示说明。
  */
@@ -105,9 +105,9 @@ function BashEditDiff({ diff, verbose, style, treeMoved }) {
                       dimColor: true,
                       children: [
                         "(+",
-                        count(flattened, (line) => line.startsWith("+")),
+                        countWhere(flattened, (line) => line.startsWith("+")),
                         " -",
-                        count(flattened, (line) => line.startsWith("-")),
+                        countWhere(flattened, (line) => line.startsWith("-")),
                         ")",
                       ],
                     }),
@@ -181,14 +181,14 @@ function BashEditDiff({ diff, verbose, style, treeMoved }) {
     ],
   });
 }
-//@ chunk-femza1ss.js:2864-2915 sole-consumer
+//@ chunk-vaywhf0g.js:2866-2917 sole-consumer
 /**
  * 把数字拼成 “N file(s)”，用于提示命令运行期间有多少文件发生变化。
  */
 function pluralizeFiles(moreFiles) {
   return `${moreFiles} ${moreFiles === 1 ? "file" : "files"}`;
 }
-//@ chunk-femza1ss.js:2915-3154 sole-consumer
+//@ chunk-vaywhf0g.js:2917-3156 sole-consumer
 function truncateHunks(hunks, maxLines) {
   let shownHunks = [];
   let shownLineCount = 0;
@@ -213,7 +213,7 @@ function truncateHunks(hunks, maxLines) {
     hiddenLines: hiddenLineCount,
   };
 }
-//@ chunk-femza1ss.js:3154-3296 fingerprint (2.1.88 match: extractSandboxViolations, 1)
+//@ chunk-vaywhf0g.js:3156-3298 fingerprint (2.1.88 match: extractSandboxViolations, 1)
 /**
  * 从 stderr 去掉 <sandbox_violations> 块，返回 cleanedStderr。
  */
@@ -226,7 +226,7 @@ function extractSandboxViolations(stderr) {
     cleanedStderr: stripSandboxViolations(stderr).trim(),
   };
 }
-//@ chunk-femza1ss.js:3296-3462 fingerprint (2.1.88 match: extractCwdResetWarning, 1)
+//@ chunk-vaywhf0g.js:3298-3464 fingerprint (2.1.88 match: extractCwdResetWarning, 1)
 /**
  * 从 stderr 提取末尾 "Shell cwd was reset to …" 行，返回去掉该行的 stderr 和警告文本。
  */
@@ -243,7 +243,7 @@ function extractCwdResetWarning(stderr) {
     cwdResetWarning,
   };
 }
-//@ chunk-femza1ss.js:3462-5404 fingerprint (2.1.88 match: BashToolResultMessage, 0.657)
+//@ chunk-vaywhf0g.js:3464-5402 fingerprint (2.1.88 match: BashToolResultMessage, 0.657)
 /**
  * Bash 结果渲染：剥离 <sandbox_violations> 和 "Shell cwd was reset" 行，分别显示 stdout/stderr、cwd 提示、编辑 diff，空输出显示 returnCodeInterpretation / Done / (No output)，后台任务显示 "Running in the background"。
  */
@@ -278,7 +278,7 @@ function BashToolResultMessage(props) {
   let earlyReturn;
   if ($[3] !== isImage || $[4] !== stdErrWithViolations || $[5] !== stdout_2 || $[6] !== verbose) {
     earlyReturn = EARLY_RETURN_SENTINEL;
-    Fe: {
+    Le: {
       let { cleanedStderr: stderrWithoutViolations } = extractSandboxViolations(stdErrWithViolations);
       ({ cleanedStderr: stderr_2, cwdResetWarning } = extractCwdResetWarning(stderrWithoutViolations));
       if (isImage) {
@@ -294,7 +294,7 @@ function BashToolResultMessage(props) {
           $[14] = t8;
         } else t8 = $[14];
         earlyReturn = t8;
-        break Fe;
+        break Le;
       }
       Container = Box;
       flexDirection = "column";

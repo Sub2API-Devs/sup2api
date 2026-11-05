@@ -3,9 +3,9 @@
  *
  * Node 进程 warning 处理：initializeWarningHandler 屏蔽已知噪声、限次记录；isRunningFromBuildDirectory 判断开发构建
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/warningHandler.ts
- * pieces: chunk-shkzs7rp.js (4)
+ * pieces: chunk-nhaxap13.js (4)
  * attribution: affinity 1, fingerprint 2, layout 1
  */
 import { win32, posix } from "path";
@@ -18,9 +18,9 @@ import { lit } from "../services/analytics/safeMetadata.js";
 import { env } from "./env.js";
 import { logForDebugging } from "./debug.js";
 
-//@ chunk-shkzs7rp.js:26694-26706 affinity
+//@ chunk-nhaxap13.js:28175-28187 affinity
 var MAX_WARNING_KEYS = 1000;
-//@ chunk-shkzs7rp.js:26706-27010 fingerprint (2.1.88 match: isRunningFromBuildDirectory, 1)
+//@ chunk-nhaxap13.js:28187-28491 fingerprint (2.1.88 match: isRunningFromBuildDirectory, 1)
 /**
  * 是否从开发构建目录运行（argv[1]/execPath 含 /build-ant/、/build-external/ 等）。
  */
@@ -35,12 +35,12 @@ function isRunningFromBuildDirectory() {
   let buildDirs = ["/build-ant/", "/build-external/", "/build-external-native/", "/build-ant-native/"];
   return pathsToCheck.some((path) => buildDirs.some((dir) => path.includes(dir)));
 }
-//@ chunk-shkzs7rp.js:27010-27105 layout
+//@ chunk-nhaxap13.js:28491-28586 layout
 var IGNORED_WARNING_PATTERNS = [
   /MaxListenersExceededWarning.*AbortSignal/,
   /MaxListenersExceededWarning.*EventTarget/,
 ];
-//@ chunk-shkzs7rp.js:27105-27853 fingerprint (2.1.88 match: initializeWarningHandler, 0.629)
+//@ chunk-nhaxap13.js:28586-29337 fingerprint (2.1.88 match: initializeWarningHandler, 0.63)
 /**
  * 接管 process 'warning' 事件：非开发构建时移除默认监听并禁止默认输出，按名称去重上报 tengu_node_warning，忽略 MaxListenersExceededWarning（AbortSignal/EventTarget）。
  */

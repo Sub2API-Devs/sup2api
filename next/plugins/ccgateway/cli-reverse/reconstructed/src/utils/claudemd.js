@@ -3,10 +3,10 @@
  *
  * CLAUDE.md 指令文件的发现与加载：托管/用户/项目/本地层级、.claude/rules 条件规则、@include 递归、排除规则、外部引用审批与缓存。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/claudemd.ts
- * pieces: chunk-4121qate.js (2), chunk-cjydagjy.js (1), chunk-e6aww6q8.js (101)
- * attribution: fingerprint 20, callgraph-fingerprint 3, placement 44, layout 29, callgraph-witnessed 1, affinity 4, file-local 3
+ * pieces: chunk-5xgkngpb.js (101), chunk-h61dq9nz.js (1), chunk-j8f885h1.js (2)
+ * attribution: placement 44, layout 29, fingerprint 20, callgraph-witnessed 1, affinity 4, callgraph-fingerprint 3, file-local 3
  */
 import {
   isAbsolute,
@@ -100,7 +100,7 @@ import {
   isNetworkMountRoot_2,
   isNetworkishPath,
 } from "./networkPaths.js";
-import { getInitialSettings_2, getSettingsForSource } from "./settings/settings.js";
+import { getInitialSettings, getSettingsForSource } from "./settings/settings.js";
 import { normalizePathForCompare } from "./file.js";
 import { getDevicePathRefusal } from "../tools/FileReadTool/FileReadTool.js";
 import {
@@ -119,7 +119,7 @@ import { isRemoteSessionAvailable } from "../remote/remoteMode.js";
 import { logForDiagnosticsNoPII } from "./diagLogs.js";
 import { getManagedFilePath } from "./settings/managedPath.js";
 import { remoteClaudeMd } from "./settings/policyHelper/helperRemote.js";
-import { count } from "./collections.js";
+import { countWhere } from "./collections.js";
 import { hasInstructionsLoadedHook, executeInstructionsLoadedHooks } from "./hooks.js";
 import { isInstructionsMemoryType } from "../entrypoints/sdk/coreSchemas.js";
 import { notifySetupGuideLoaded } from "./commandPredicates.js";
@@ -130,13 +130,13 @@ import { filterUsableIgnorePatterns } from "./ignorePatterns.js";
 import { isClaudeMdLoadingDisabled } from "./settings/customizationDisabled.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-4121qate.js:104278-104481 fingerprint (2.1.88 match: MEMORY_INSTRUCTION_PROMPT, 1)
+//@ chunk-j8f885h1.js:84884-85087 fingerprint (2.1.88 match: MEMORY_INSTRUCTION_PROMPT, 1)
 /**
  * 注入 CLAUDE.md 内容前的固定前言（These instructions OVERRIDE any default behavior）。
  */
 var MEMORY_INSTRUCTION_PROMPT =
   "Codebase and user instructions are shown below. Be sure to adhere to these instructions. IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.";
-//@ chunk-4121qate.js:104481-104870 fingerprint (2.1.88 match: getClaudeMds, 0.745)
+//@ chunk-j8f885h1.js:85087-85476 fingerprint (2.1.88 match: getClaudeMds, 0.745)
 /**
  * 记忆类型 → 系统提示里文件标题后的说明（project instructions / user's private global instructions 等）。
  */
@@ -154,15 +154,15 @@ function getClaudeMds(type) {
       return " (user's private global instructions for all projects)";
   }
 }
-//@ chunk-e6aww6q8.js:1310416-1310436 placement
+//@ chunk-5xgkngpb.js:1309562-1309582 placement
 /**
  * 惰性加载的 minimatch 模块（用于规则 glob 匹配）。
  */
 var minimatchModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1310416", () => {
+deferInit("chunk-5xgkngpb.js:1309562", () => {
   minimatchModule = __toESM(require_ignore(), 1);
 });
-//@ chunk-e6aww6q8.js:1310436-1310627 placement
+//@ chunk-5xgkngpb.js:1309582-1309773 placement
 /**
  * 多行模式匹配 Setext 下划线。
  */
@@ -170,9 +170,9 @@ var SETEXT_UNDERLINE_RE = /^ {0,3}(?:=+|-+) *$/;
 var SETEXT_UNDERLINE_MULTILINE_RE = /^ {0,3}(?:=+|-+) *$/m;
 var MARKDOWN_BLOCK_START_RE =
   /^(?:\s*$|(?:[*+-]|\d{1,9}[.)]) |(?: {4}| {0,3}\t)| {0,3}(?:`{3,}|~{3,})| {0,3}>| {0,3}#{1,6}| {0,3}<[^\n>]+>$|.*[\u2028\u2029])/;
-//@ chunk-e6aww6q8.js:1310627-1310801 placement
+//@ chunk-5xgkngpb.js:1309773-1309947 placement
 let ClaudeMdTokenizer; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1310627", () => {
+deferInit("chunk-5xgkngpb.js:1309773", () => {
   ClaudeMdTokenizer = class ClaudeMdTokenizer extends _Tokenizer {
     lexed = [];
     lheading(line) {
@@ -189,9 +189,9 @@ deferInit("chunk-e6aww6q8.js:1310627", () => {
     }
   };
 });
-//@ chunk-e6aww6q8.js:1310801-1311190 placement
+//@ chunk-5xgkngpb.js:1309947-1310336 placement
 let ClaudeMdLexer; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1310801", () => {
+deferInit("chunk-5xgkngpb.js:1309947", () => {
   ClaudeMdLexer = class ClaudeMdLexer extends _Lexer {
     #e;
     constructor() {
@@ -232,14 +232,14 @@ deferInit("chunk-e6aww6q8.js:1310801", () => {
     }
   };
 });
-//@ chunk-e6aww6q8.js:1311190-1311230 layout
+//@ chunk-5xgkngpb.js:1310336-1310376 layout
 /**
  * 用定制 marked 词法器（gfm 关闭）把 markdown 切成 token，供 HTML 注释剥离与 @include 提取使用。
  */
 function lexMarkdown(text) {
   return new ClaudeMdLexer().lex(text);
 }
-//@ chunk-e6aww6q8.js:1311230-1311318 fingerprint (2.1.88 match: stripHtmlComments, 0.722)
+//@ chunk-5xgkngpb.js:1310376-1310464 fingerprint (2.1.88 match: stripHtmlComments, 0.722)
 /**
  * 去掉 markdown 中的 HTML 注释（不进入代码块）。
  */
@@ -251,7 +251,7 @@ function stripHtmlComments(content) {
     };
   return stripHtmlCommentsFromTokens(lexMarkdown(content));
 }
-//@ chunk-e6aww6q8.js:1311318-1311578 fingerprint (2.1.88 match: stripHtmlCommentsFromTokens, 1)
+//@ chunk-5xgkngpb.js:1310464-1310724 fingerprint (2.1.88 match: stripHtmlCommentsFromTokens, 1)
 function stripHtmlCommentsFromTokens(tokens) {
   let result = "";
   let stripped = false;
@@ -273,21 +273,21 @@ function stripHtmlCommentsFromTokens(tokens) {
     stripped,
   };
 }
-//@ chunk-e6aww6q8.js:1311578-1311598 placement
+//@ chunk-5xgkngpb.js:1310724-1310744 placement
 /**
  * 惰性加载的 picomatch 模块。
  */
 var picomatchModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1311578", () => {
+deferInit("chunk-5xgkngpb.js:1310724", () => {
   picomatchModule = __toESM(require_picomatch_2(), 1);
 });
-//@ chunk-e6aww6q8.js:1311919-1311938 placement
+//@ chunk-5xgkngpb.js:1311065-1311084 placement
 /**
  * 记忆文件占上下文窗口的预警比例（0.8）。
  */
 var MEMORY_SIZE_WARN_RATIO = 0.8;
 var MEMORY_SIZE_SOFT_RATIO = 0.7;
-//@ chunk-e6aww6q8.js:1316725-1316940 placement
+//@ chunk-5xgkngpb.js:1315871-1316086 placement
 function ensureMemoryIndexBackfill(host, memoryDir) {
   let state = backfillState.of(host);
   let existing = state.get(memoryDir);
@@ -308,7 +308,7 @@ function ensureMemoryIndexBackfill(host, memoryDir) {
   resolve();
   return promise;
 }
-//@ chunk-e6aww6q8.js:1317030-1317127 placement
+//@ chunk-5xgkngpb.js:1316176-1316273 placement
 /**
  * 记忆文件路径跟踪的上限（2000）。
  */
@@ -320,7 +320,7 @@ var EMPTY_ACCESS_STATE = {
   written: false,
   injection: "none",
 };
-//@ chunk-e6aww6q8.js:1317127-1318890 placement
+//@ chunk-5xgkngpb.js:1316273-1318036 placement
 /**
  * 跟踪本会话中 CLAUDE.md 等指令文件的读写情况。
  */
@@ -422,7 +422,7 @@ class ClaudeMdAccessTracker {
     };
   }
 }
-//@ chunk-e6aww6q8.js:1330061-1330105 placement
+//@ chunk-5xgkngpb.js:1329213-1329257 placement
 /**
  * 去掉 alwaysDenyRules 后合并持久化拒绝规则。
  */
@@ -431,7 +431,7 @@ var withNoDenyRules = (toolPermissionContext) =>
     ...toolPermissionContext,
     alwaysDenyRules: {},
   });
-//@ chunk-e6aww6q8.js:1330105-1330211 placement
+//@ chunk-5xgkngpb.js:1329257-1329363 placement
 /**
  * 判断某设置来源的指令文件是否可读（来源已启用，或工作区限制下仍保留指令文件）。
  */
@@ -444,7 +444,7 @@ function isInstructionSourceEnabled(source) {
     getAllowedSettingSourcesAsConfigured().includes(source)
   );
 }
-//@ chunk-e6aww6q8.js:1330211-1330311 placement (2.1.88 match: _temp8, 1)
+//@ chunk-5xgkngpb.js:1329363-1329463 placement (2.1.88 match: _temp8, 1)
 /**
  * 判断本地设置来源是否可读（已启用或工作区限制允许）。
  */
@@ -454,13 +454,13 @@ function isLocalSettingsReadable() {
     getWorkspaceRestriction() !== null && getAllowedSettingSourcesAsConfigured().includes("localSettings")
   );
 }
-//@ chunk-e6aww6q8.js:1330311-1330519 placement
+//@ chunk-5xgkngpb.js:1329463-1329671 placement
 /**
  * CLAUDE.md 加载的会话状态（加载/迁移缓存、下次加载原因、钩子开关等）与附加状态。
  */
 var claudeMdSessionState_2; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
 var claudeMdExtraState;
-deferInit("chunk-e6aww6q8.js:1330311", () => {
+deferInit("chunk-5xgkngpb.js:1329463", () => {
   claudeMdSessionState_2 = new SessionRootSlot(() => ({
     memo: {
       loads: new Map(),
@@ -475,21 +475,21 @@ deferInit("chunk-e6aww6q8.js:1330311", () => {
   }));
   claudeMdExtraState = new SessionRootSlot(() => ({}));
 });
-//@ chunk-e6aww6q8.js:1330519-1330551 placement
+//@ chunk-5xgkngpb.js:1329671-1329703 placement
 /**
  * 取某会话的 CLAUDE.md 装载状态。
  */
 function claudeMdSessionState(session) {
   return claudeMdSessionState_2.of(session);
 }
-//@ chunk-e6aww6q8.js:1330551-1330586 placement
+//@ chunk-5xgkngpb.js:1329703-1329738 placement
 /**
  * 记录 CLAUDE.md 判定的来源。
  */
 function setClaudeMdJudgedBy(session, judgedBy) {
   claudeMdSessionState(session).judgedBy = judgedBy;
 }
-//@ chunk-e6aww6q8.js:1330586-1330804 placement
+//@ chunk-5xgkngpb.js:1329738-1329956 placement
 /**
  * 创建"被扣留路径"跟踪器：判断路径是否应扣留，并列出已扣留与已加载的路径。
  */
@@ -515,7 +515,7 @@ function createHeldPathTracker(session) {
     loaded: () => Array.from(heldPaths).flatMap(([path, reason]) => (reason === undefined ? [path] : [])),
   };
 }
-//@ chunk-e6aww6q8.js:1330804-1330943 placement
+//@ chunk-5xgkngpb.js:1329956-1330095 placement
 /**
  * 开始工作目录迁移时的扣留跟踪，keep 时记录被扣留的指令文件。
  */
@@ -531,7 +531,7 @@ function beginCwdRelocationHold(session) {
     },
   };
 }
-//@ chunk-e6aww6q8.js:1330943-1331160 placement
+//@ chunk-5xgkngpb.js:1330095-1330312 placement
 function buildHeldOutsideChecker(session, denyRules) {
   let mergedRules = mergePersistedDenyRules(
     session.engineStore.current?.getState().toolPermissionContext ??
@@ -556,7 +556,7 @@ function buildHeldOutsideChecker(session, denyRules) {
       )
     : undefined;
 }
-//@ chunk-e6aww6q8.js:1331160-1331351 placement
+//@ chunk-5xgkngpb.js:1330312-1330503 placement
 /**
  * 列出当前工作目录下被扣留的指令文件（去重）。
  */
@@ -569,26 +569,26 @@ function getWithheldInstructionFiles(sessionContext) {
     .concat(originalCwdOrNull === null ? [] : (memo.moves.get(originalCwdOrNull) ?? []))
     .filter(({ path }) => !heldPaths.has(path) && heldPaths.add(path));
 }
-//@ chunk-e6aww6q8.js:1331351-1331380 placement
+//@ chunk-5xgkngpb.js:1330503-1330532 placement
 /**
  * 托管设置在记忆文件列表里的虚拟路径标签。
  */
 var MANAGED_SETTINGS_LABEL = "<managed-settings>";
-//@ chunk-e6aww6q8.js:1331380-1331420 placement
+//@ chunk-5xgkngpb.js:1330532-1330572 placement
 /**
  * 判断路径是否为托管设置或虚拟路径。
  */
 function isManagedOrVirtualPath(path) {
   return path === POLICY_HELPER_TAG || path === MANAGED_SETTINGS_LABEL;
 }
-//@ chunk-e6aww6q8.js:1331420-1331454 placement
+//@ chunk-5xgkngpb.js:1330572-1330606 placement
 /**
  * 单个记忆文件占模型上下文窗口的比例（0.05）。
  */
 var MEMORY_CONTEXT_RATIO = 0.05;
 var MAX_MEMORY_FILE_READ_BYTES = 4194304;
 var MIN_MEMORY_FILE_CHARS = 40000;
-//@ chunk-e6aww6q8.js:1331454-1331569 placement
+//@ chunk-5xgkngpb.js:1330606-1330721 placement
 /**
  * 按模型上下文窗口计算单个记忆文件的最大字符数。
  */
@@ -600,21 +600,21 @@ function getMaxMemoryFileChars(modelName = getMainLoopModel()) {
     Math.round(result * MEMORY_CONTEXT_RATIO * bytesPerTokenForModel(modelName)),
   );
 }
-//@ chunk-e6aww6q8.js:1331569-1331584 placement
+//@ chunk-5xgkngpb.js:1330721-1330736 placement
 /**
  * 记忆文件字符数的绝对下限（120000）。
  */
 var ABSOLUTE_MAX_MEMORY_FILE_CHARS = 120000;
-//@ chunk-e6aww6q8.js:1331584-1331628 placement
+//@ chunk-5xgkngpb.js:1330736-1330780 placement
 /**
  * 取记忆文件字符上限（不低于绝对下限）。
  */
 function maxMemoryFileChars(type) {
   return Math.max(ABSOLUTE_MAX_MEMORY_FILE_CHARS, getMaxMemoryFileChars(type));
 }
-//@ chunk-e6aww6q8.js:1331628-1332435 fingerprint (2.1.88 match: TEXT_FILE_EXTENSIONS, 1)
+//@ chunk-5xgkngpb.js:1330780-1331587 fingerprint (2.1.88 match: TEXT_FILE_EXTENSIONS, 1)
 var TEXT_FILE_EXTENSIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-e6aww6q8.js:1331628", () => {
+deferInit("chunk-5xgkngpb.js:1330780", () => {
   TEXT_FILE_EXTENSIONS = new Set([
     ".md",
     ".txt",
@@ -725,11 +725,11 @@ deferInit("chunk-e6aww6q8.js:1331628", () => {
     ".patch",
   ]);
 });
-//@ chunk-e6aww6q8.js:1332435-1332468 layout
+//@ chunk-5xgkngpb.js:1331587-1331620 layout
 function isWithinOriginalCwd(path) {
   return pathInWorkingPath(path, getOriginalCwd());
 }
-//@ chunk-e6aww6q8.js:1332468-1332720 fingerprint (2.1.88 match: parseFrontmatterPaths, 1)
+//@ chunk-5xgkngpb.js:1331620-1331872 fingerprint (2.1.88 match: parseFrontmatterPaths, 1)
 /**
  * 从 frontmatter 读 paths: glob 列表（去掉结尾 /**，全是 ** 视为无条件），返回正文和 paths。
  */
@@ -751,7 +751,7 @@ function parseFrontmatterPaths(rawContent) {
     paths: patterns,
   };
 }
-//@ chunk-e6aww6q8.js:1332720-1333193 fingerprint (2.1.88 match: parseMemoryFileContent, 0.919)
+//@ chunk-5xgkngpb.js:1331872-1332347 fingerprint (2.1.88 match: parseMemoryFileContent, 0.919)
 /**
  * 解析记忆文件内容：非文本扩展名跳过；剥离 frontmatter（paths: 作为条件规则 glob）；去 HTML 注释；提取 @include 路径；AutoMem 类型按 200 行/25000 字节截断。
  */
@@ -788,12 +788,12 @@ function parseMemoryFileContent(rawContent, filePath, type, includeBasePath) {
     includePaths,
   };
 }
-//@ chunk-e6aww6q8.js:1333193-1333275 fingerprint (2.1.88 match: processMemoryFile, 0.418)
+//@ chunk-5xgkngpb.js:1332347-1332429 fingerprint (2.1.88 match: processMemoryFile, 0.418)
 function processMemoryFile(rawContent, name, type) {
   if (!rawContent.includes("@")) return [];
   return parseMemoryFileContent(rawContent, name, type, name).includePaths;
 }
-//@ chunk-e6aww6q8.js:1333275-1333395 layout
+//@ chunk-5xgkngpb.js:1332429-1332549 layout
 function buildInjectedAutoMemFile(coworkMemoryIndexContent) {
   let { content } = truncateEntrypointContent(coworkMemoryIndexContent);
   return {
@@ -804,14 +804,14 @@ function buildInjectedAutoMemFile(coworkMemoryIndexContent) {
     rawContent: coworkMemoryIndexContent,
   };
 }
-//@ chunk-e6aww6q8.js:1333395-1333464 layout
+//@ chunk-5xgkngpb.js:1332549-1332618 layout
 /**
  * CLAUDE_COWORK_MEMORY_INDEX_CONTENT：由宿主直接提供的 MEMORY.md 内容。
  */
 function getCoworkMemoryIndexContent() {
   return process.env.CLAUDE_COWORK_MEMORY_INDEX_CONTENT;
 }
-//@ chunk-e6aww6q8.js:1333464-1333594 layout
+//@ chunk-5xgkngpb.js:1332618-1332749 layout
 function isAutoMemPathWithinAutoMemDir(autoMemEntrypoint) {
   if (!isReadBlockOn()) return true;
   let mapped = getPathsForPermissionCheck(getAutoMemPath()).map((autoMemPath) =>
@@ -821,7 +821,7 @@ function isAutoMemPathWithinAutoMemDir(autoMemEntrypoint) {
     mapped.some((safePath) => isAutoMemPathSafeForCarveout(entryPoint, safePath)),
   );
 }
-//@ chunk-e6aww6q8.js:1333594-1333685 layout
+//@ chunk-5xgkngpb.js:1332749-1332840 layout
 class ClaudeMdLoadState {
   memoryReadEacces = false;
   memoryReadFailed = false;
@@ -829,16 +829,16 @@ class ClaudeMdLoadState {
   rulesWalk = false;
   announcedFileCut = false;
 }
-//@ chunk-e6aww6q8.js:1333685-1333712 layout
+//@ chunk-5xgkngpb.js:1332840-1332867 layout
 var claudeMdLoadStateByHost; // deferred: uses ClaudeMdLoadState of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1333685", () => {
+deferInit("chunk-5xgkngpb.js:1332840", () => {
   claudeMdLoadStateByHost = new HostScoped(() => new ClaudeMdLoadState());
 });
-//@ chunk-e6aww6q8.js:1333712-1333751 layout
+//@ chunk-5xgkngpb.js:1332867-1332906 layout
 function getClaudeMdLoadState() {
   return claudeMdLoadStateByHost.of(getRootSession().host);
 }
-//@ chunk-e6aww6q8.js:1333751-1333862 layout
+//@ chunk-5xgkngpb.js:1332906-1333017 layout
 function reportSkippedSpecialMemoryFile() {
   let claudeMdLoadState = getClaudeMdLoadState();
   if (!claudeMdLoadState.skip) {
@@ -846,20 +846,20 @@ function reportSkippedSpecialMemoryFile() {
     logFeatureSad("context_claude_md_load", "file_skipped_special_or_oversize");
   }
 }
-//@ chunk-e6aww6q8.js:1333862-1333924 layout
+//@ chunk-5xgkngpb.js:1333017-1333079 layout
 function countConfigDirMentions(text) {
   let claudeConfigDirOrNull = getClaudeConfigDirOrNull();
   return claudeConfigDirOrNull !== null && text.includes(claudeConfigDirOrNull) ? 1 : 0;
 }
-//@ chunk-e6aww6q8.js:1333924-1333961 layout
+//@ chunk-5xgkngpb.js:1333079-1333116 layout
 function getUserRulesDirOrNull() {
   return isDiskless() ? null : getUserClaudeRulesDir();
 }
-//@ chunk-e6aww6q8.js:1333961-1333991 layout
+//@ chunk-5xgkngpb.js:1333116-1333146 layout
 function handleMemoryFileReadErrno(error, filePath) {
   handleMemoryFileReadError(getErrnoCode(error), filePath);
 }
-//@ chunk-e6aww6q8.js:1333991-1334363 fingerprint (2.1.88 match: handleMemoryFileReadError, 0.616)
+//@ chunk-5xgkngpb.js:1333146-1333518 fingerprint (2.1.88 match: handleMemoryFileReadError, 0.616)
 /**
  * 记忆文件读取错误处理：ENOENT/EISDIR/ENOTDIR 静默，EACCES 记录并打标。
  */
@@ -881,7 +881,7 @@ function handleMemoryFileReadError(error, filePath) {
     logFeatureSad("context_claude_md_load", "read_failed");
   }
 }
-//@ chunk-e6aww6q8.js:1334363-1334902 layout
+//@ chunk-5xgkngpb.js:1333518-1334057 layout
 async function readMemoryFileFromStorage({ backend, key }) {
   let readResult = await backend.read([
     {
@@ -924,7 +924,7 @@ async function readMemoryFileFromStorage({ backend, key }) {
     content: Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("utf8"),
   };
 }
-//@ chunk-e6aww6q8.js:1334902-1335528 callgraph-witnessed (2.1.88 match: safelyReadMemoryFileAsync, 0.249)
+//@ chunk-5xgkngpb.js:1334057-1334683 callgraph-witnessed (2.1.88 match: safelyReadMemoryFileAsync, 0.249)
 /**
  * 安全读取记忆文件（storage v5 或 fs），区分 absent/error/skipped/content，ENOENT 等静默，EACCES 记录一次。
  */
@@ -988,7 +988,7 @@ async function safelyReadMemoryFileAsync(filePath, type, includeBasePath, storag
     };
   }
 }
-//@ chunk-e6aww6q8.js:1335528-1336300 fingerprint (2.1.88 match: extractIncludePathsFromTokens, 1)
+//@ chunk-5xgkngpb.js:1334683-1335457 fingerprint (2.1.88 match: extractIncludePathsFromTokens, 1)
 /**
  * 在 markdown token 中查找 @path 引用（跳过 code/codespan，HTML 注释外的残留文本仍扫描）；接受 ./、~/、绝对路径和普通相对名，去掉 #片段，按文件所在目录解析为绝对路径。
  */
@@ -1039,22 +1039,22 @@ function extractIncludePathsFromTokens(tokens, basePath) {
   processElements(tokens);
   return [...absolutePaths];
 }
-//@ chunk-e6aww6q8.js:1336300-1336310 layout
+//@ chunk-5xgkngpb.js:1335457-1335467 layout
 /**
  * @include 最大递归深度 5。
  */
 var MAX_INCLUDE_DEPTH = 5;
-//@ chunk-e6aww6q8.js:1336310-1336402 layout
+//@ chunk-5xgkngpb.js:1335467-1335559 layout
 function isNonCanonicalSymlink(filePath, info) {
   if (!info.isSymlink || info.isCanonical) return false;
   return !(info.resolvedPath === filePath && isUnderNetworkDirCached(filePath));
 }
-//@ chunk-e6aww6q8.js:1336402-1336660 fingerprint (2.1.88 match: isClaudeMdExcluded, 0.933)
+//@ chunk-5xgkngpb.js:1335559-1335817 fingerprint (2.1.88 match: isClaudeMdExcluded, 0.933)
 /**
  * 按设置 claudeMdExcludes（picomatch，dot:true）构建排除匹配器，只作用于 User/Project/Local 类型。
  */
 function isClaudeMdExcluded() {
-  let patterns = getInitialSettings_2().claudeMdExcludes;
+  let patterns = getInitialSettings().claudeMdExcludes;
   if (!patterns || patterns.length === 0) return () => false;
   let expandedPatterns = isDuplicatePath_2(getFsImplementation(), patterns).filter(
     (pattern) => pattern.length > 0,
@@ -1066,12 +1066,12 @@ function isClaudeMdExcluded() {
   return (path, type) =>
     (type === "User" || type === "Project" || type === "Local") && matcher(path.replaceAll("\\", "/"));
 }
-//@ chunk-e6aww6q8.js:1336660-1336711 affinity
+//@ chunk-5xgkngpb.js:1335817-1335868 affinity
 function createClaudeMdExcludeMatcher() {
   let matcher;
   return (path, type) => (matcher ??= isClaudeMdExcluded())(path, type);
 }
-//@ chunk-e6aww6q8.js:1336711-1336804 affinity
+//@ chunk-5xgkngpb.js:1335868-1335961 affinity
 /**
  * User/Project/Local 类型文件是否被 claudeMdExcludes 排除（托管与 AutoMem 不受影响）。
  */
@@ -1079,7 +1079,7 @@ function isExcludedByClaudeMdExcludes(path, type, matcher) {
   if (type !== "User" && type !== "Project" && type !== "Local") return false;
   return (matcher ?? isClaudeMdExcluded())(path, type);
 }
-//@ chunk-e6aww6q8.js:1336804-1337160 affinity
+//@ chunk-5xgkngpb.js:1335961-1336317 affinity
 function applyClaudeMdExcludesToInjected(files, claudeMdExcludeMatcher = createClaudeMdExcludeMatcher()) {
   let byPath = new Map();
   for (let file of files) byPath.set(file.path, file);
@@ -1109,7 +1109,7 @@ function applyClaudeMdExcludesToInjected(files, claudeMdExcludeMatcher = createC
   }
   return kept;
 }
-//@ chunk-e6aww6q8.js:1337480-1337589 affinity
+//@ chunk-5xgkngpb.js:1336637-1336746 affinity
 /**
  * 记忆文件准入检查：已处理过、include 深度达到 5、被 claudeMdExcludes 排除或为特殊路径时返回 undefined，否则返回规范化路径。
  */
@@ -1120,7 +1120,7 @@ function checkMemoryFileAdmissible(filePath, type, processedPaths, depth, exclud
   if (isSpecialOrUnsafePath(filePath)) return;
   return normalizedPath;
 }
-//@ chunk-e6aww6q8.js:1337589-1338550 callgraph-fingerprint (2.1.88 match: isInstructionsMemoryType, 0.28)
+//@ chunk-5xgkngpb.js:1336746-1337710 callgraph-fingerprint (2.1.88 match: isInstructionsMemoryType, 0.281)
 /**
  * 读取一个指令文件并递归展开其中的 @include：检查排除、深度（最多 5 层）、设备/特殊路径与符号链接；外部（cwd 外）include 需 hasClaudeMdExternalIncludesApproved；User 类型拒绝顶层符号链接与多硬链接文件。返回该文件及其 include 的列表。
  */
@@ -1189,7 +1189,7 @@ async function isInstructionsMemoryType_3(
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:1338550-1340876 fingerprint (2.1.88 match: processMdRules, 0.587)
+//@ chunk-5xgkngpb.js:1337710-1340041 fingerprint (2.1.88 match: processMdRules, 0.587)
 /**
  * 遍历 .claude/rules 目录（递归、防环、跟随安全的符号链接）读取 *.md 规则；conditionalRule 控制只取带 paths: 的条件规则还是无条件规则。
  */
@@ -1362,13 +1362,13 @@ async function processMdRules({
     return [];
   }
 }
-//@ chunk-e6aww6q8.js:1340876-1340960 layout
+//@ chunk-5xgkngpb.js:1340041-1340125 layout
 function isWithinWorkspaceOrAddDirs(path) {
   if (pathInWorkingPath(getOriginalCwd(), path)) return true;
   let normalizedPath = normalizePathForCompare(path);
   return getAdditionalClaudeMdDirs().some((dir) => normalizePathForCompare(dir) === normalizedPath);
 }
-//@ chunk-e6aww6q8.js:1340960-1341047 layout
+//@ chunk-5xgkngpb.js:1340125-1340212 layout
 /**
  * 返回需要加载 CLAUDE.md 的额外目录（--add-dir），需开关 CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD 或对应设置。
  */
@@ -1378,7 +1378,7 @@ function getAdditionalClaudeMdDirs() {
     ? getAdditionalDirectoriesForClaudeMd()
     : [];
 }
-//@ chunk-e6aww6q8.js:1341047-1341137 layout
+//@ chunk-5xgkngpb.js:1340212-1340302 layout
 function hostFileScopeForMemoryType(type, path) {
   return type === "Managed"
     ? PathSpace.system(path)
@@ -1386,7 +1386,7 @@ function hostFileScopeForMemoryType(type, path) {
       ? PathSpace.home(path)
       : PathSpace.workspace(path);
 }
-//@ chunk-e6aww6q8.js:1341137-1341805 layout
+//@ chunk-5xgkngpb.js:1340302-1340970 layout
 async function listRulesDirEntries(fsImpl, dir, type, storageV5, v5Descent) {
   if (isStorageV5Enabled() && storageV5 !== undefined) {
     let statResult =
@@ -1426,7 +1426,7 @@ async function listRulesDirEntries(fsImpl, dir, type, storageV5, v5Descent) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:1341805-1342542 layout
+//@ chunk-5xgkngpb.js:1340970-1341707 layout
 async function statRulesEntry(fsImpl, path, type, storageV5) {
   if (isStorageV5Enabled() && storageV5 !== undefined) {
     let statResult = await storageV5.hostFiles.stat(hostFileScopeForMemoryType(type, path)).catch(() => {
@@ -1463,7 +1463,7 @@ async function statRulesEntry(fsImpl, path, type, storageV5) {
   }
   return fsImpl.stat(path);
 }
-//@ chunk-e6aww6q8.js:1342542-1342665 layout
+//@ chunk-5xgkngpb.js:1341707-1341830 layout
 /**
  * cwd 位于 git worktree 时返回 worktree 根与主仓库根，用于跳过主仓库中位于 worktree 之外的层。
  */
@@ -1480,7 +1480,7 @@ function getWorktreeRoots(startDir) {
       }
     : null;
 }
-//@ chunk-e6aww6q8.js:1342665-1342744 layout
+//@ chunk-5xgkngpb.js:1341830-1341909 layout
 function isInMainRepoOutsideWorktree(path, worktreeRoots) {
   return (
     worktreeRoots !== null &&
@@ -1488,7 +1488,7 @@ function isInMainRepoOutsideWorktree(path, worktreeRoots) {
     !pathInWorkingPath(path, worktreeRoots.worktreeRoot)
   );
 }
-//@ chunk-e6aww6q8.js:1342744-1342822 layout
+//@ chunk-5xgkngpb.js:1341909-1341987 layout
 function isSpecialOrUnsafePath(path) {
   return (
     (isUncOrDevicePath(path) && !isWslUncPath(path)) ||
@@ -1500,7 +1500,7 @@ function isSpecialOrUnsafePath(path) {
     isMacSpecialPath(path)
   );
 }
-//@ chunk-e6aww6q8.js:1342822-1343028 layout
+//@ chunk-5xgkngpb.js:1341987-1342193 layout
 /**
  * 检查目录下是否有 AGENTS.md（仅用于统计 agents_md_count，316 不加载 AGENTS.md 内容）。
  */
@@ -1518,11 +1518,11 @@ async function hasAgentsMd(dir) {
     return false;
   }
 }
-//@ chunk-e6aww6q8.js:1343028-1343071 layout
+//@ chunk-5xgkngpb.js:1342193-1342236 layout
 function allowsUserExternalIncludes() {
   return getSessionEntrypoint() !== "local-agent";
 }
-//@ chunk-e6aww6q8.js:1343071-1343365 layout
+//@ chunk-5xgkngpb.js:1342236-1342530 layout
 /**
  * 按宿主缓存 getMemoryFiles 的结果 promise（键为是否 forced），hold 改变时整体失效。
  */
@@ -1554,7 +1554,7 @@ function getMemoryFilesCached(session, includeExternal = false, storageV5, crede
   sessionState.memo.loads.set(includeExternal, loadEntry);
   return loadEntry.files;
 }
-//@ chunk-e6aww6q8.js:1343365-1343673 layout
+//@ chunk-5xgkngpb.js:1342530-1342838 layout
 function findSymlinkedMemoryPaths(fsImpl, files) {
   let symlinked = new Set();
   for (let { base, path } of files) {
@@ -1575,7 +1575,7 @@ function findSymlinkedMemoryPaths(fsImpl, files) {
   }
   return symlinked;
 }
-//@ chunk-e6aww6q8.js:1343673-1343920 file-local
+//@ chunk-5xgkngpb.js:1342838-1343085 file-local
 function resolveExcludePatterns(originalCwd, dir) {
   if (!isAbsolute(dir) || dir !== resolve_2(dir) || isUnsafeClaudeMdDir(dir)) return false;
   if (
@@ -1594,7 +1594,7 @@ function resolveExcludePatterns(originalCwd, dir) {
   }
   return !isUnsafeClaudeMdDir(resolvedDir);
 }
-//@ chunk-e6aww6q8.js:1343920-1344001 layout
+//@ chunk-5xgkngpb.js:1343085-1343166 layout
 function isUnsafeClaudeMdDir(dir) {
   let claudeMdPath = join(dir, "CLAUDE.md");
   return (
@@ -1605,7 +1605,7 @@ function isUnsafeClaudeMdDir(dir) {
     isNetworkMountRoot_2(dir)
   );
 }
-//@ chunk-e6aww6q8.js:1344001-1344211 layout
+//@ chunk-5xgkngpb.js:1343166-1343376 layout
 function classifyRulesPath(fsImpl, path) {
   if (isUncOrDevicePath(path) || isNetworkishPath(path)) return "other";
   try {
@@ -1616,13 +1616,13 @@ function classifyRulesPath(fsImpl, path) {
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "absent" : "other";
   }
 }
-//@ chunk-e6aww6q8.js:1344211-1344286 file-local
+//@ chunk-5xgkngpb.js:1343376-1343451 file-local
 function getAllMemoryFilePaths(filePath, type, processedPaths, excludeMatcher) {
   let normalizedPath = checkMemoryFileAdmissible(filePath, type, processedPaths, 0, excludeMatcher);
   if (normalizedPath !== undefined) processedPaths.add(normalizedPath);
   return [];
 }
-//@ chunk-e6aww6q8.js:1344286-1349223 fingerprint (2.1.88 match: getMemoryFiles, 0.756)
+//@ chunk-5xgkngpb.js:1343451-1348392 fingerprint (2.1.88 match: getMemoryFiles, 0.756)
 /**
  * 发现并读取全部指令记忆文件：托管 CLAUDE.md→托管 claudeMd 设置→托管 .claude/rules→用户 <配置目录>/CLAUDE.md 与 rules→从文件系统根到 cwd 每层的 CLAUDE.md、.claude/CLAUDE.md、.claude/rules/*.md、CLAUDE.local.md→--add-dir 目录（需 CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD）→自动记忆 MEMORY.md。按 claudeMdExcludes 排除，首次加载打 tengu_claudemd__initial_load 并触发 InstructionsLoaded hook。
  */
@@ -1955,7 +1955,7 @@ async function getMemoryFiles(root, host, session, skipRecord, storageV5, creden
   for (let file of memoryFiles) typeCounts[file.type] = (typeCounts[file.type] ?? 0) + 1;
   if (!skipRecord && !host.hasLoggedInitialLoad && !isStale) {
     host.hasLoggedInitialLoad = true;
-    let agentsMdCount = countAgentsMd ? count(results, Boolean) : undefined;
+    let agentsMdCount = countAgentsMd ? countWhere(results, Boolean) : undefined;
     let sizeSummary = memoryFileSizeSummary(memoryFiles);
     logEvent("tengu_claudemd__initial_load", {
       file_count: memoryFiles.length,
@@ -1998,7 +1998,7 @@ async function getMemoryFiles(root, host, session, skipRecord, storageV5, creden
     root: userClaudeRulesDir,
   };
 }
-//@ chunk-e6aww6q8.js:1349300-1349439 callgraph-fingerprint (2.1.88 match: consumeNextEagerLoadReason, 0.605)
+//@ chunk-5xgkngpb.js:1348469-1348608 callgraph-fingerprint (2.1.88 match: consumeNextEagerLoadReason, 0.605)
 function consumeNextEagerLoadReason(session) {
   if (!session.shouldFireHook) return;
   session.shouldFireHook = false;
@@ -2006,11 +2006,11 @@ function consumeNextEagerLoadReason(session) {
   session.nextEagerLoadReason = "session_start";
   return nextEagerLoadReason;
 }
-//@ chunk-e6aww6q8.js:1349495-1349518 placement
+//@ chunk-5xgkngpb.js:1348664-1348687 placement
 function clearMemoryFilesCacheForHost() {
   clearMemoryFilesCache(getRootSession());
 }
-//@ chunk-e6aww6q8.js:1349518-1349628 file-local
+//@ chunk-5xgkngpb.js:1348687-1348797 file-local
 /**
  * 重置记忆文件缓存并记录下一次加载原因（默认 session_start），供 InstructionsLoaded hook。
  */
@@ -2021,32 +2021,32 @@ function resetGetMemoryFilesCache(session, nextEagerLoadReason = "session_start"
   sessionState.walkEpoch++;
   clearMemoryFilesCache(session);
 }
-//@ chunk-e6aww6q8.js:1349628-1349671 fingerprint (2.1.88 match: nextEagerLoadReason, 1)
+//@ chunk-5xgkngpb.js:1348797-1348840 fingerprint (2.1.88 match: nextEagerLoadReason, 1)
 function nextEagerLoadReason(nextEagerLoadReason = "session_start") {
   resetGetMemoryFilesCache(getRootSession(), nextEagerLoadReason);
 }
-//@ chunk-e6aww6q8.js:1349671-1349717 placement
+//@ chunk-5xgkngpb.js:1348840-1348886 placement
 /**
  * 重置“首次加载已记录”标记。
  */
 function resetInitialLoadLogged(host) {
   claudeMdSessionState(host).hasLoggedInitialLoad = false;
 }
-//@ chunk-e6aww6q8.js:1349717-1349763 placement
+//@ chunk-5xgkngpb.js:1348886-1348932 placement
 /**
  * 标记“首次加载已记录”。
  */
 function markInitialLoadLogged(session) {
   claudeMdSessionState(session).hasLoggedInitialLoad = true;
 }
-//@ chunk-e6aww6q8.js:1349763-1349807 placement
+//@ chunk-5xgkngpb.js:1348932-1348976 placement
 /**
  * 关闭安装向导的上报。
  */
 function disableSetupGuideReports(session) {
   claudeMdSessionState(session).reportsSetupGuides = false;
 }
-//@ chunk-e6aww6q8.js:1349807-1349903 placement
+//@ chunk-5xgkngpb.js:1348976-1349072 placement
 function getLargeMemoryFiles(files) {
   let maxMemoryFileChars = getMaxMemoryFileChars();
   return files.filter(
@@ -2056,7 +2056,7 @@ function getLargeMemoryFiles(files) {
       file.content.length > maxMemoryFileChars,
   );
 }
-//@ chunk-e6aww6q8.js:1349903-1349972 placement
+//@ chunk-5xgkngpb.js:1349072-1349141 placement
 /**
  * 过滤出指令类（非托管）的记忆文件。
  */
@@ -2065,7 +2065,7 @@ function instructionMemoryFiles(memoryFiles) {
     (file) => !isManagedOrVirtualPath(file.path) && isInstructionsMemoryType(file.type),
   );
 }
-//@ chunk-e6aww6q8.js:1349972-1350121 placement
+//@ chunk-5xgkngpb.js:1349141-1349290 placement
 function summarizeMemoryFileSizes(memoryFiles) {
   let totalChars = 0;
   let total = 0;
@@ -2079,14 +2079,14 @@ function summarizeMemoryFileSizes(memoryFiles) {
     largestChars: total,
   };
 }
-//@ chunk-e6aww6q8.js:1350121-1350156 placement
+//@ chunk-5xgkngpb.js:1349290-1349325 placement
 /**
  * 汇总记忆文件的大小。
  */
 function memoryFileSizeSummary(memoryFiles) {
   return summarizeMemoryFileSizes(instructionMemoryFiles(memoryFiles));
 }
-//@ chunk-e6aww6q8.js:1350156-1350323 placement
+//@ chunk-5xgkngpb.js:1349325-1349492 placement
 function getMemoryFileLimits(memoryFiles, type) {
   let maxMemoryFileChars_2 = getMaxMemoryFileChars(type);
   let maxChars = maxMemoryFileChars(type);
@@ -2095,18 +2095,18 @@ function getMemoryFileLimits(memoryFiles, type) {
     limitChars: maxMemoryFileChars_2,
     totalLimitChars: maxChars,
     ...sizeSummary,
-    filesOverLimit: count(memoryFiles, (file) => file.content.length > maxMemoryFileChars_2),
+    filesOverLimit: countWhere(memoryFiles, (file) => file.content.length > maxMemoryFileChars_2),
     totalOverLimit: sizeSummary.totalChars > maxChars,
   };
 }
-//@ chunk-e6aww6q8.js:1350323-1350362 placement
+//@ chunk-5xgkngpb.js:1349492-1349531 placement
 /**
  * 计算记忆文件的大小上限统计。
  */
 function memoryFileLimits(memoryFiles, type) {
   return getMemoryFileLimits(instructionMemoryFiles(memoryFiles), type);
 }
-//@ chunk-e6aww6q8.js:1350362-1350609 placement
+//@ chunk-5xgkngpb.js:1349531-1349778 placement
 /**
  * 记忆文件总量超过上限时返回统计与最大的三个文件，否则 null。
  */
@@ -2128,7 +2128,7 @@ function getOversizedMemoryWarning(memoryFiles) {
     largest,
   };
 }
-//@ chunk-e6aww6q8.js:1350685-1350851 placement
+//@ chunk-5xgkngpb.js:1349854-1350020 placement
 /**
  * 判断记忆文件是否注入上下文（自动记忆开启召回时、项目文件被开关关闭时或内容为空时不注入）。
  */
@@ -2142,7 +2142,7 @@ function shouldInjectMemoryFile(file) {
   if (!file.content) return false;
   return true;
 }
-//@ chunk-e6aww6q8.js:1350851-1351029 placement
+//@ chunk-5xgkngpb.js:1350020-1350198 placement
 function recordMemoryContextBuild(session, memoryFiles) {
   let filtered = memoryFiles.filter((file) => file.type === "AutoMem" && shouldInjectMemoryFile(file));
   session.recordContextBuild({
@@ -2151,12 +2151,12 @@ function recordMemoryContextBuild(session, memoryFiles) {
     indexContents: filtered.map((file) => file.content),
   });
 }
-//@ chunk-e6aww6q8.js:1351029-1351058 placement
+//@ chunk-5xgkngpb.js:1350198-1350227 placement
 /**
  * 记忆文件超限时的预警（统计与最大三个文件）。
  */
 var oversizedMemoryWarning = (file, type) => formatMemoryInstruction(includedMemoryFiles(file, type));
-//@ chunk-e6aww6q8.js:1351058-1351122 placement
+//@ chunk-5xgkngpb.js:1350227-1350291 placement
 /**
  * 过滤出应包含且在指定类型内的记忆文件。
  */
@@ -2165,7 +2165,7 @@ function includedMemoryFiles(memoryFiles, typeFilter) {
     (file) => (!typeFilter || typeFilter(file.type)) && shouldIncludeMemoryFile(file),
   );
 }
-//@ chunk-e6aww6q8.js:1351244-1351476 fingerprint (2.1.88 match: getManagedAndUserConditionalRules, 0.896)
+//@ chunk-5xgkngpb.js:1350413-1350645 fingerprint (2.1.88 match: getManagedAndUserConditionalRules, 0.896)
 /**
  * 取托管与用户 rules 中的条件规则（带 paths: frontmatter）。
  */
@@ -2197,7 +2197,7 @@ async function getManagedAndUserConditionalRules(targetPath, processedPaths, exc
     );
   return result;
 }
-//@ chunk-e6aww6q8.js:1351476-1352178 fingerprint (2.1.88 match: getMemoryFilesForNestedDirectory, 0.919)
+//@ chunk-5xgkngpb.js:1350645-1351347 fingerprint (2.1.88 match: getMemoryFilesForNestedDirectory, 0.919)
 /**
  * 访问嵌套目录（cwd 以下）时补加载该目录的 CLAUDE.md、.claude/CLAUDE.md、CLAUDE.local.md 与 rules；CLAUDE_CODE_DISABLE_CLAUDE_MDS 或 diskless 时为空。
  */
@@ -2285,7 +2285,7 @@ async function getMemoryFilesForNestedDirectory(
   }
   return result;
 }
-//@ chunk-e6aww6q8.js:1352178-1352361 fingerprint (2.1.88 match: getConditionalRulesForCwdLevelDirectory, 0.799)
+//@ chunk-5xgkngpb.js:1351347-1351530 fingerprint (2.1.88 match: getConditionalRulesForCwdLevelDirectory, 0.8)
 async function getConditionalRulesForCwdLevelDirectory(dir, targetPath, processedPaths, excludeMatcher) {
   if (env.CLAUDE_CODE_DISABLE_CLAUDE_MDS || !isInstructionSourceEnabled("projectSettings")) return [];
   if (isDiskless()) return [];
@@ -2300,7 +2300,7 @@ async function getConditionalRulesForCwdLevelDirectory(dir, targetPath, processe
     excludeMatcher,
   );
 }
-//@ chunk-e6aww6q8.js:1352361-1352863 fingerprint (2.1.88 match: processConditionedMdRules, 0.808)
+//@ chunk-5xgkngpb.js:1351530-1352035 fingerprint (2.1.88 match: processConditionedMdRules, 0.809)
 /**
  * 按目标文件路径匹配条件规则的 paths glob，命中则加载（claudemd_rule_globs）。
  */
@@ -2340,7 +2340,7 @@ async function processConditionedMdRules(
       .ignores(relPath);
   });
 }
-//@ chunk-e6aww6q8.js:1352863-1353090 fingerprint (2.1.88 match: getExternalClaudeMdIncludes, 0.793)
+//@ chunk-5xgkngpb.js:1352035-1352262 fingerprint (2.1.88 match: getExternalClaudeMdIncludes, 0.793)
 /**
  * 从已加载文件中挑出 cwd 外的 include（parent 存在且非 User 类型），用于提示用户审批。
  */
@@ -2360,30 +2360,30 @@ function getExternalClaudeMdIncludes(files) {
   }
   return externals;
 }
-//@ chunk-e6aww6q8.js:1353090-1353129 placement
+//@ chunk-5xgkngpb.js:1352262-1352301 placement
 function hasExternalClaudeMdIncludes(files) {
   return getExternalClaudeMdIncludes(files).length > 0;
 }
-//@ chunk-e6aww6q8.js:1353286-1353294 placement
+//@ chunk-5xgkngpb.js:1352458-1352466 placement
 /**
  * 可替换的 Markdown 词法分析器实现。
  */
 var markdownLexerOverride;
-//@ chunk-e6aww6q8.js:1353294-1353316 placement
+//@ chunk-5xgkngpb.js:1352466-1352488 placement
 /**
  * 注册 Markdown 词法分析器。
  */
 function setMarkdownLexer(getUserContextInstructionFiles) {
   markdownLexerOverride = getUserContextInstructionFiles;
 }
-//@ chunk-e6aww6q8.js:1353316-1353381 placement
+//@ chunk-5xgkngpb.js:1352488-1352553 placement
 /**
  * 调用注册的 Markdown 词法分析器（未注册时返回空的 Promise）。
  */
 function lexMarkdownWith(session, text, options) {
   return markdownLexerOverride?.(session, text, options) ?? Promise.resolve(undefined);
 }
-//@ chunk-e6aww6q8.js:3155916-3156204 fingerprint (2.1.88 match: isMemoryFilePath, 0.962)
+//@ chunk-5xgkngpb.js:3346657-3346945 fingerprint (2.1.88 match: isMemoryFilePath, 0.962)
 /**
  * 判断路径是否为指令文件（CLAUDE.md、CLAUDE.local.md 或 .claude/rules/*.md），返回其所属项目目录。
  */
@@ -2398,7 +2398,7 @@ function isMemoryFilePath(filePath) {
   }
   return options !== undefined && options !== parse(options).root ? options : undefined;
 }
-//@ chunk-cjydagjy.js:15359-15659 callgraph-fingerprint (2.1.88 match: shouldShowClaudeMdExternalIncludesWarning, 0.207)
+//@ chunk-h61dq9nz.js:15536-15837 callgraph-fingerprint (2.1.88 match: shouldShowClaudeMdExternalIncludesWarning, 0.207)
 /**
  * 列出托管 CLAUDE.md/rules 中引用了外部文件的 include，供外部引用审批对话框使用。
  */
@@ -2424,56 +2424,56 @@ async function shouldShowClaudeMdExternalIncludesWarning() {
   ].map((memoryFile) => [memoryFile.path, memoryFile.content, memoryFile.unverified]);
 }
 export {
-  getMemoryFilesCached,
-  getLargeMemoryFiles,
-  getOversizedMemoryWarning,
-  getMaxMemoryFileChars,
-  getWithheldInstructionFiles,
-  clearMemoryFilesCacheForHost,
-  isLocalSettingsReadable,
-  shouldShowClaudeMdExternalIncludesWarning,
-  isManagedOrVirtualPath,
-  shouldInjectMemoryFile,
-  setClaudeMdJudgedBy,
-  getWorktreeRoots,
-  beginCwdRelocationHold,
-  getMemoryFilesForNestedDirectory,
-  isInMainRepoOutsideWorktree,
-  oversizedMemoryWarning,
-  resetGetMemoryFilesCache,
-  resetInitialLoadLogged,
   getExternalClaudeMdIncludes,
-  getClaudeMds,
-  MEMORY_INSTRUCTION_PROMPT,
-  hasExternalClaudeMdIncludes,
-  withNoDenyRules,
-  isInstructionsMemoryType_3,
-  MAX_INCLUDE_DEPTH,
-  processMdRules,
-  claudeMdSessionState,
-  isSpecialOrUnsafePath,
-  isNonCanonicalSymlink,
-  lexMarkdown,
+  getMemoryFilesCached,
+  memoryFileLimits,
+  shouldShowClaudeMdExternalIncludesWarning,
   claudeMdExtraState,
+  getWorktreeRoots,
+  isInMainRepoOutsideWorktree,
   getAdditionalClaudeMdDirs,
+  getMaxMemoryFileChars,
   lexMarkdownWith,
   getManagedAndUserConditionalRules,
+  getMemoryFilesForNestedDirectory,
   getConditionalRulesForCwdLevelDirectory,
+  getWithheldInstructionFiles,
   applyClaudeMdExcludesToInjected,
+  isSpecialOrUnsafePath,
+  isNonCanonicalSymlink,
+  clearMemoryFilesCacheForHost,
+  withNoDenyRules,
+  getLargeMemoryFiles,
+  getOversizedMemoryWarning,
+  isLocalSettingsReadable,
   MEMORY_SIZE_SOFT_RATIO,
   MEMORY_SIZE_WARN_RATIO,
   ClaudeMdAccessTracker,
   MD_LINK_RE,
+  claudeMdSessionState,
+  hasExternalClaudeMdIncludes,
   setMarkdownLexer,
   includedMemoryFiles,
   stripHtmlComments,
   nextEagerLoadReason,
   isMemoryFilePath,
+  isInstructionsMemoryType_3,
+  MAX_INCLUDE_DEPTH,
+  processMdRules,
   isInstructionSourceEnabled,
   createHeldPathTracker,
-  claudeMdLoadStateByHost,
-  memoryFileLimits,
   processMemoryFile,
+  isManagedOrVirtualPath,
+  resetGetMemoryFilesCache,
+  setClaudeMdJudgedBy,
+  lexMarkdown,
+  shouldInjectMemoryFile,
+  beginCwdRelocationHold,
+  oversizedMemoryWarning,
+  resetInitialLoadLogged,
+  getClaudeMds,
+  MEMORY_INSTRUCTION_PROMPT,
+  claudeMdLoadStateByHost,
   disableSetupGuideReports,
   markInitialLoadLogged,
 };

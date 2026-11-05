@@ -3,12 +3,12 @@
  *
  * 2.1.316 新增：字符画布网格与宽字符/框线方向位（mermaid 渲染用）
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-yb0ajcmt.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-q80fh8vc.js (14)
  * attribution: placement 14
  */
-//@ chunk-yb0ajcmt.js:4703-6609 placement
+//@ chunk-q80fh8vc.js:5011-6917 placement
 /**
  * 字素宽度判定用的字符类：双宽字符、零宽/组合字符、亚太多数传统终端按窄算的字符，以及区域指示符（国旗）。
  */
@@ -19,23 +19,23 @@ var ZERO_WIDTH_CHAR_REGEX =
 var AMBIGUOUS_WIDTH_CHAR_REGEX =
   /[\p{Mn}\p{Me}\p{Cf}\p{Cn}\p{Co}\u1160-\u11FF\uD7B0-\uD7FF\u2630-\u2637\u268A-\u268F\u302A-\u302D\u3099\u309A\u31E4\u31E5\u4DC0-\u4DFF\u{16FE4}\u{16FF2}-\u{16FF6}\u{187F8}-\u{187FF}\u{18CFF}\u{18D09}-\u{18DF2}\u{1D300}-\u{1D376}\u{1F6D8}\u{1FA89}-\u{1FA8F}\u{1FABE}\u{1FAC6}-\u{1FACD}\u{1FADC}-\u{1FADF}\u{1FAE9}-\u{1FAEF}]/u;
 var REGIONAL_INDICATOR_REGEX = /[\u{1F1E6}-\u{1F1FF}]/u;
-//@ chunk-yb0ajcmt.js:6609-6667 placement
+//@ chunk-q80fh8vc.js:6917-6975 placement
 /**
  * ZWJ 与肤色修饰符
  */
 var ZWJ_OR_SKIN_TONE_REGEX = /[\u200D\u{1F3FB}-\u{1F3FF}]/u;
 var VARIATION_SELECTOR_RE = /[\uFE0E\uFE0F]/;
-//@ chunk-yb0ajcmt.js:6667-6800 placement
+//@ chunk-q80fh8vc.js:6975-7108 placement
 var EMOJI_RE = /\p{Emoji}/u;
 var NARROW_SAFE_RE = /^[\u0020-\u007E\u00A0-\u00AC\u00AE-\u02FF\u2190-\u22FF\u2500-\u25FC]*$/;
 var BR_TAG_RE = /<br\s*\/?>/i;
 var WORD_CHAR_RE = /[\p{L}\p{N}_]/u;
-//@ chunk-yb0ajcmt.js:6800-6811 placement
+//@ chunk-q80fh8vc.js:7108-7119 placement
 /**
  * 单个字素允许的最大显示宽度（超过按 128 处理）。
  */
 var MAX_CELL_WIDTH = 128;
-//@ chunk-yb0ajcmt.js:6811-7310 placement (2.1.88 match: getGraphemeSegmenter, 0.781)
+//@ chunk-q80fh8vc.js:7119-7618 placement (2.1.88 match: getGraphemeSegmenter, 0.781)
 /**
  * 按字素切分字符串并给出每段显示宽度（处理 emoji、组合字符、全角）。
  */
@@ -72,21 +72,21 @@ function segmentGraphemesWithWidth(text) {
     };
   });
 }
-//@ chunk-yb0ajcmt.js:7310-7385 placement
+//@ chunk-q80fh8vc.js:7618-7693 placement
 /**
  * 每段都有确定宽度
  */
 function isAllNarrowSafe(text) {
   return NARROW_SAFE_RE.test(text) || Array.from(text).every((char) => graphemeCellWidth(char) !== undefined);
 }
-//@ chunk-yb0ajcmt.js:7385-7439 placement
+//@ chunk-q80fh8vc.js:7693-7747 placement
 /**
  * 字符串显示宽度合计
  */
 function textDisplayWidth(text) {
   return segmentGraphemesWithWidth(text).reduce((acc, grapheme) => acc + grapheme.width, 0);
 }
-//@ chunk-yb0ajcmt.js:7439-7673 placement
+//@ chunk-q80fh8vc.js:7747-7981 placement
 function parseLabelLines(label) {
   let trimmed = label.trim();
   return (
@@ -103,7 +103,7 @@ function parseLabelLines(label) {
       return cleaned.trim();
     });
 }
-//@ chunk-yb0ajcmt.js:7673-7813 placement
+//@ chunk-q80fh8vc.js:7981-8121 placement
 function identifierWidth(word, tokens) {
   if (tokens.length === 1 && tokens[0] === word) return 0;
   let width = textDisplayWidth(word);
@@ -111,7 +111,7 @@ function identifierWidth(word, tokens) {
     ? width
     : Number.POSITIVE_INFINITY;
 }
-//@ chunk-yb0ajcmt.js:7813-8003 placement
+//@ chunk-q80fh8vc.js:8121-8311 placement
 function graphemeCellWidth(char) {
   let codePoint = char.codePointAt(0) ?? 0;
   let lowBits = codePoint & 127;
@@ -128,7 +128,7 @@ function graphemeCellWidth(char) {
     return 0;
   return AMBIGUOUS_WIDTH_CHAR_REGEX.test(char) ? undefined : WIDE_CHAR_REGEX.test(char) ? 2 : 1;
 }
-//@ chunk-yb0ajcmt.js:8003-8392 placement
+//@ chunk-q80fh8vc.js:8311-8700 placement
 /**
  * 字符画布用的框线方向位（上/左/右与本位）、16 种直线组合的字符表、圆角变体、实线/点线/粗线三套样式，以及画布单元格上限。
  */
@@ -176,7 +176,7 @@ var BOX_STYLE_GLYPHS = {
 };
 var BOX_STYLES = ["solid", "dotted", "thick"];
 var MAX_CANVAS_CELLS = 400000;
-//@ chunk-yb0ajcmt.js:8549-8942 placement
+//@ chunk-q80fh8vc.js:8857-9250 placement
 function linkCells(canvas, from, to, style = "solid") {
   let inBounds =
     Math.min(from.x, to.x) >= 0 &&
@@ -211,7 +211,7 @@ function linkCells(canvas, from, to, style = "solid") {
     canvas.styles[index_2] = Math.max(canvas.styles[index_2] ?? 0, index);
   }
 }
-//@ chunk-yb0ajcmt.js:8942-9047 placement (2.1.88 match: diff, 0.775)
+//@ chunk-q80fh8vc.js:9250-9355 placement (2.1.88 match: diff, 0.775)
 function unlinkCell(boxCanvas, toward, cell) {
   let bits =
     cell.x > toward.x
@@ -224,7 +224,7 @@ function unlinkCell(boxCanvas, toward, cell) {
   let index = toward.y * boxCanvas.width + toward.x;
   boxCanvas.links[index] = (boxCanvas.links[index] ?? 0) & ~bits;
 }
-//@ chunk-yb0ajcmt.js:9047-9141 placement
+//@ chunk-q80fh8vc.js:9355-9449 placement
 function linkPath(boxCanvas, points, line = "solid") {
   for (let k = 1; k < points.length; k++) {
     let previous = points[k - 1];

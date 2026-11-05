@@ -1,8 +1,8 @@
 /**
  * chokidar/runtime.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: chokidar@6.0.0
- * pieces: chunk-3gvas51j.js (5)
+ * pieces: chunk-k7sq4jmf.js (5)
  * attribution: esm-layout 1, esm-fingerprint 1, affinity 3
  */
 import { type as St } from "os";
@@ -11,12 +11,12 @@ import "path";
 import * as pathModule_2 from "path";
 import { watch as watch_2, unwatchFile, watchFile } from "fs";
 
-//@ chunk-3gvas51j.js:4308-4350 esm-layout
+//@ chunk-k7sq4jmf.js:4308-4350 esm-layout
 var DATA = "data";
 var END = "end";
 var CLOSE = "close";
 var noop = () => {};
-//@ chunk-3gvas51j.js:4350-6739 esm-fingerprint
+//@ chunk-k7sq4jmf.js:4350-6739 esm-fingerprint
 var LINUX = "linux";
 var isWindows = LINUX === "win32";
 var isMacos = LINUX === "darwin";
@@ -329,7 +329,7 @@ var deleteFromSet = (map, key, value) => {
 };
 var isEmptySet = (listeners) => (listeners instanceof Set ? listeners.size === 0 : !listeners);
 var EVENT_QUEUES = new Map();
-//@ chunk-3gvas51j.js:6739-6916 affinity
+//@ chunk-k7sq4jmf.js:6739-6916 affinity
 function runThrottledEvent(watchedPath, eventType, clearThrottle, errHandler, emitEvent) {
   let onThrottled = (error, stats) => {
     clearThrottle(watchedPath);
@@ -356,7 +356,7 @@ function runThrottledEvent(watchedPath, eventType, clearThrottle, errHandler, em
     return;
   }
 }
-//@ chunk-3gvas51j.js:6916-8809 affinity
+//@ chunk-k7sq4jmf.js:6916-8809 affinity
 var delegateToSubscribers = (watchedPath, kind, eventName, path, stats) => {
   let entry = EVENT_QUEUES.get(watchedPath);
   if (!entry) return;
@@ -506,7 +506,7 @@ var refreshFolderStamp = async (path, entry) => {
     entry.notify(stats);
   }
 };
-//@ chunk-3gvas51j.js:8809-13067 affinity
+//@ chunk-k7sq4jmf.js:8809-13067 affinity
 class NodeFsHandler {
   constructor(fsw) {
     this.fsw = fsw;

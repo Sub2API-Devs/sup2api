@@ -3,13 +3,13 @@
  *
  * 2.1.316 新增：所有权上下文
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (17)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-xzmy9dn4.js (17)
  * attribution: placement 17
  */
 import { getLiveState } from "../../services/liveReplica/liveReplica.js";
-import { isWriterRole } from "../../services/artifacts/audience.js";
+import { isPublishingRole } from "../../services/artifacts/audience.js";
 import { fitsContextLimits } from "../../utils/permissions/serverClassifier/context.js";
 import {
   shareFactsWithheld,
@@ -30,13 +30,13 @@ import { expandPath } from "../../utils/path.js";
 import { toPosixPath } from "../../utils/permissions/filesystem.js";
 import { resolveVerifyTarget } from "./permissions/consentStamps.js";
 
-//@ chunk-8wvtd8sr.js:323933-323960 placement
+//@ chunk-xzmy9dn4.js:326203-326230 placement
 /**
  * 处理器模块的注入槽（未注入时为 null）。
  */
 var artifactHandlersModule = null;
 var weakMap_2 = new WeakMap();
-//@ chunk-8wvtd8sr.js:323960-324126 placement
+//@ chunk-xzmy9dn4.js:326230-326396 placement
 function rememberFirstContext(slug, snapshot, agentId, facet) {
   let liveState = getLiveState();
   let byKey = weakMap_2.get(liveState);
@@ -52,20 +52,20 @@ function rememberFirstContext(slug, snapshot, agentId, facet) {
   }
   return existing === snapshot;
 }
-//@ chunk-8wvtd8sr.js:324126-324180 placement
+//@ chunk-xzmy9dn4.js:326396-326450 placement
 /**
  * 判断归属记录是否为可写角色。
  */
 function isWriterOwnership(shareEntry) {
-  return shareEntry.probeFailed !== true && isWriterRole(shareEntry.role);
+  return shareEntry.probeFailed !== true && isPublishingRole(shareEntry.role);
 }
-//@ chunk-8wvtd8sr.js:324180-324291 placement
+//@ chunk-xzmy9dn4.js:326450-326561 placement
 function ownershipRank(shareEntry) {
   if (shareEntry.probeFailed === true || shareEntry.role === undefined || shareEntry.role === "unknown")
     return 1;
   return shareEntry.role === "owner" ? 0 : 2;
 }
-//@ chunk-8wvtd8sr.js:324291-324346 placement
+//@ chunk-xzmy9dn4.js:326561-326616 placement
 /**
  * 可见范围到排序权重的映射。
  */
@@ -76,14 +76,14 @@ var AUDIENCE_RANK = {
   org: 2,
   public: 3,
 };
-//@ chunk-8wvtd8sr.js:324346-324405 placement
+//@ chunk-xzmy9dn4.js:326616-326675 placement
 /**
  * 取可见范围权重，探测失败返回 undefined。
  */
 function audienceRankOf(shareEntry) {
   return shareEntry.probeFailed === true ? undefined : AUDIENCE_RANK[shareEntry.mode];
 }
-//@ chunk-8wvtd8sr.js:324405-324537 placement
+//@ chunk-xzmy9dn4.js:326675-326807 placement
 function audienceWidened(snapshotEntry, current) {
   let snapshotRank = audienceRankOf(snapshotEntry);
   let currentRank = audienceRankOf(current);
@@ -91,14 +91,14 @@ function audienceWidened(snapshotEntry, current) {
   if (snapshotRank === undefined) return currentRank > 0;
   return currentRank !== 0 && current.mode !== snapshotEntry.mode && !(currentRank < snapshotRank);
 }
-//@ chunk-8wvtd8sr.js:324537-324598 placement
+//@ chunk-xzmy9dn4.js:326807-326868 placement
 /**
  * 共享 live 的可见性增量。
  */
 function sharedLiveRank(shareEntry) {
   return shareEntry.probeFailed === true || shareEntry.isSharedLive ? 1 : 0;
 }
-//@ chunk-8wvtd8sr.js:324598-324909 placement
+//@ chunk-xzmy9dn4.js:326868-327179 placement
 /**
  * 判断这次发布声明的连接器是否比之前存储的更多（按连接器名计数比较）；之前未知时只要声明了不在默认集合内的连接器即视为扩大。
  */
@@ -122,7 +122,7 @@ function connectorsWidened(snapshotConnectors, endpointConnectors) {
     return remaining <= 0;
   });
 }
-//@ chunk-8wvtd8sr.js:324909-325085 placement
+//@ chunk-xzmy9dn4.js:327179-327355 placement
 function shareFactsFromSnapshot(share) {
   return {
     mode: share.mode,
@@ -138,7 +138,7 @@ function shareFactsFromSnapshot(share) {
     }),
   };
 }
-//@ chunk-8wvtd8sr.js:325085-326329 placement
+//@ chunk-xzmy9dn4.js:327355-328598 placement
 /**
  * 比较分类器上下文快照与当前分享记录，列出某 slug 已过期的方面：归属、受众、共享 live、共写、连接器、第一方类型认证、类型声明、监视停止状态。
  */
@@ -199,7 +199,7 @@ function staleOwnershipFacets(slug, snapshot, includeWatch = false, agentId, che
   }
   return stale;
 }
-//@ chunk-8wvtd8sr.js:326329-326943 placement
+//@ chunk-xzmy9dn4.js:328598-329212 placement
 /**
  * 收集一次 Artifact 调用涉及的全部 slug：url、from_url、files 中的复制来源；无 url 的发布按 file_path 找已关联的 slug，verify 动作取其目标。
  */
@@ -236,7 +236,7 @@ function requestArtifactSlugs(input, snapshot) {
   }
   return [...slugs];
 }
-//@ chunk-8wvtd8sr.js:326943-327047 placement
+//@ chunk-xzmy9dn4.js:329212-329316 placement
 function isOwnershipFacet(facet) {
   return (
     facet === "ownership" ||
@@ -246,7 +246,7 @@ function isOwnershipFacet(facet) {
     facet === "watch"
   );
 }
-//@ chunk-8wvtd8sr.js:327047-327633 placement
+//@ chunk-xzmy9dn4.js:329316-329902 placement
 /**
  * 用自然语言描述 Artifact 的归属与共享情况：自己的/他人的（可否编辑）/归属未确认，未共享或共享对象，跨组织、实时共享、他人写入过、watch 已停止等。
  */
@@ -255,7 +255,7 @@ function describeOwnershipWords(share, actions) {
     ownedByUser(share)
       ? "the user's own artifact"
       : isSomeoneElses(share)
-        ? isWriterRole(share.role)
+        ? isPublishingRole(share.role)
           ? "someone else's artifact that the user can edit"
           : "someone else's artifact"
         : "an artifact whose owner could not be confirmed",
@@ -270,7 +270,7 @@ function describeOwnershipWords(share, actions) {
   if (actions.includes("watch")) words.push("its watch has since been stopped");
   return words.join(", ");
 }
-//@ chunk-8wvtd8sr.js:327633-328893 placement
+//@ chunk-xzmy9dn4.js:329902-331165 placement
 /**
  * ArtifactTool.staleServerClassifierContext 的实现：判断服务端分类器看到的归属/受众等事实是否已过期，汇总需要说明的 slug 文案、探测失败信息与连接器变化，返回给分类器的补充上下文。
  */
@@ -359,25 +359,25 @@ function staleServerClassifierContext(input, snapshot, agentId) {
     cause,
   };
 }
-//@ chunk-8wvtd8sr.js:328893-329066 placement (2.1.88 match: countToolCallsSince, 1)
-function countToolCallsSince(messages, sinceUuid) {
+//@ chunk-xzmy9dn4.js:331165-331338 placement
+function isDelegatedObservation(toolUseId, context) {
   return (
-    messages !== undefined &&
-    sinceUuid.messages.some(
+    toolUseId !== undefined &&
+    context.messages.some(
       (message) =>
         message.type === "assistant" &&
         Array.isArray(message.message.content) &&
-        message.message.content.some((block) => block.type === "tool_use" && block.id === messages),
+        message.message.content.some((message) => message.type === "tool_use" && message.id === toolUseId),
     )
   );
 }
-//@ chunk-8wvtd8sr.js:329066-329132 placement
+//@ chunk-xzmy9dn4.js:331338-331404 placement
 /**
  * 判断是否有更新的上下文（带 agentId 或此后有工具调用）。
  */
-function hasNewerToolCalls(messages, sinceUuid) {
+function hasNewerToolCalls(toolUseId, context) {
   return (
-    messages !== undefined && (sinceUuid.agentId !== undefined || countToolCallsSince(messages, sinceUuid))
+    toolUseId !== undefined && (context.agentId !== undefined || isDelegatedObservation(toolUseId, context))
   );
 }
-export { hasNewerToolCalls, staleServerClassifierContext, countToolCallsSince };
+export { staleServerClassifierContext, isDelegatedObservation, hasNewerToolCalls };

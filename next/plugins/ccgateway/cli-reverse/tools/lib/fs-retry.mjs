@@ -2,13 +2,14 @@
 // scanner, the editor's file watcher) holds a freshly written file open: EPERM / EBUSY / EACCES /
 // UNKNOWN on rename, open and unlink. Loaded by tools/pipeline.sh for every stage:
 //   node --import ./tools/lib/fs-retry.mjs <tool>
-// A real permission problem still fails, after about 5 seconds of retries. No effect on other platforms.
+// A real permission problem still fails, after about 30 seconds of retries. No effect on other platforms.
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 
 if (process.platform === 'win32') {
   const TRANSIENT = new Set(['EPERM', 'EBUSY', 'EACCES', 'UNKNOWN']);
-  const TRIES = 50, DELAY_MS = 100;
+  // 2026-11-05: 5 s was not enough while the CodeGraph indexer watched the repository (domains.json, modules.json)
+  const TRIES = 300, DELAY_MS = 100;
   const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
   const retrySync = (fn) => function (...args) {
     for (let i = 1; ; i++) {

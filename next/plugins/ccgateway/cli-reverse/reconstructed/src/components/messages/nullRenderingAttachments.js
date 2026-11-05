@@ -3,12 +3,12 @@
  *
  * 不渲染的附件类型集合与判定；本模块混入大量消息转发/归属判定代码（切分误归）。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/nullRenderingAttachments.ts
- * pieces: chunk-ag5x7vhf.js (2)
- * attribution: fingerprint 1, placement 1
+ * pieces: chunk-0wbdaeqh.js (2), chunk-hnxhr3bs.js (2)
+ * attribution: placement 2, fingerprint 2
  */
-//@ chunk-ag5x7vhf.js:22436-24025 fingerprint (2.1.88 match: NULL_RENDERING_TYPES, 0.472)
+//@ chunk-hnxhr3bs.js:21283-22930 fingerprint (2.1.88 match: NULL_RENDERING_TYPES, 0.459)
 /**
  * 不在界面渲染的附件类型清单（钩子上下文、各类提醒、delta、环境/模型/语言、提示快照等），XT 为其 Set。
  */
@@ -16,6 +16,7 @@ var NULL_RENDERING_ATTACHMENT_TYPES = [
   "hook_success",
   "hook_additional_context",
   "inlined_image_paths",
+  "widget_context_hint",
   "command_permissions",
   "agent_mention",
   "peer_mention",
@@ -53,7 +54,7 @@ var NULL_RENDERING_ATTACHMENT_TYPES = [
   "secondary_reminder",
   "secondary_reminder_sent",
   "ultrathink_effort",
-  ...[],
+  "repl_mcp_needs_auth",
   "max_turns_reached",
   "poll_events",
   "task_reminder",
@@ -80,6 +81,7 @@ var NULL_RENDERING_ATTACHMENT_TYPES = [
   "coordinator_context",
   "context_sections",
   "project_doc_reads",
+  "message_pdf_reads",
   "date",
   "instructions",
   "prompt_snapshot",
@@ -96,7 +98,7 @@ var NULL_RENDERING_ATTACHMENT_TYPES = [
   "advisor_tool",
 ];
 var NULL_RENDERING_ATTACHMENT_TYPE_SET = new Set(NULL_RENDERING_ATTACHMENT_TYPES);
-//@ chunk-ag5x7vhf.js:24025-24486 placement
+//@ chunk-hnxhr3bs.js:22930-23518 placement
 /**
  * 不渲染的附件消息判定
  */
@@ -115,6 +117,24 @@ function isHiddenAttachmentMessage(message) {
         (line) => typeof line === "string" && line.trim() !== "",
       )
     );
+  if (message.attachment.type === "invoked_skills") {
+    let skills = message.attachment.skills;
+    return !Array.isArray(skills) || skills.length === 0 || skills.some((skill) => skill == null);
+  }
   return NULL_RENDERING_ATTACHMENT_TYPE_SET.has(message.attachment.type);
 }
-export { isHiddenAttachmentMessage };
+//@ chunk-0wbdaeqh.js:227-342 placement
+/**
+ * 不在界面渲染的四个 hook 附件类型集合；components/messages/nullRenderingAttachments 用它判定附件是否渲染。
+ */
+var HOOK_CONTEXT_ATTACHMENT_TYPES = new Set([
+  "hook_blocking_error",
+  "hook_additional_context",
+  "hook_stopped_continuation",
+  "hook_system_message",
+]);
+//@ chunk-0wbdaeqh.js:399-470 fingerprint (2.1.88 match: isNullRenderingAttachment, 1)
+function isNullRenderingAttachment(msg) {
+  return msg.type === "attachment" && HOOK_CONTEXT_ATTACHMENT_TYPES.has(msg.attachment.type);
+}
+export { isHiddenAttachmentMessage, isNullRenderingAttachment };

@@ -3,12 +3,11 @@
  *
  * 队友消息（<teammate-message>）解析与显示，含 task_completed/teammate_terminated。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserTeammateMessage.tsx
- * pieces: chunk-ah34pb7m.js (17), chunk-q7z2h94h.js (1)
+ * pieces: chunk-wjygkcr4.js (17), chunk-wms6svby.js (1)
  * attribution: placement 16, fingerprint 2
  */
-import { init_react_production, fragmentTypeExport } from "../../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -36,6 +35,7 @@ import { toInkColor } from "../../utils/ink.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { renderTaskRelatedMessage, TaskAssignmentMessage } from "./TaskAssignmentMessage.js";
+import { fragmentTypeExport, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { TeammateResultMessage } from "./TeammateResultMessage.js";
 import { BriefTimestampNamespace } from "../../utils/formatBriefTimestamp.js";
 import { CollapsibleText } from "./CollapsedLines.js";
@@ -43,7 +43,7 @@ import { MarkdownText_2 } from "../pluginUi/render/MarkdownBlock.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-q7z2h94h.js:1585-1737 fingerprint (2.1.88 match: parseTeammateMessages, 0.361)
+//@ chunk-wms6svby.js:1588-1740 fingerprint (2.1.88 match: parseTeammateMessages, 0.362)
 var parseTeammateMessages_2 = (text) => ({
   started: ({ agentId, model, teammateId }) =>
     text.done({
@@ -55,21 +55,11 @@ var parseTeammateMessages_2 = (text) => ({
     }),
   [Symbol.dispose]: text[Symbol.dispose],
 });
-//@ chunk-ah34pb7m.js:88531-88535 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:88531", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:88535-88539 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-ah34pb7m.js:88535", () => {
-  init_react_production();
-});
-//@ chunk-ah34pb7m.js:88539-88581 placement
+//@ chunk-wjygkcr4.js:90343-90385 placement
 function selectAgentNameRegistry(state) {
   return state.agentNameRegistry;
 }
-//@ chunk-ah34pb7m.js:88581-88739 placement
+//@ chunk-wjygkcr4.js:90385-90543 placement
 function renderTeammateMessageItem(item, key) {
   return item.kind === "panel"
     ? item.node
@@ -84,15 +74,18 @@ function renderTeammateMessageItem(item, key) {
         key,
       );
 }
-//@ chunk-ah34pb7m.js:88739-88759 placement
+//@ chunk-wjygkcr4.js:90543-90563 placement
 var UNVERIFIED = "unverified";
-//@ chunk-ah34pb7m.js:88759-88795 placement
+//@ chunk-wjygkcr4.js:90563-90599 placement
 function unverifiedSenderLabel(senderName) {
   return `${senderName} (${UNVERIFIED})`;
 }
-//@ chunk-ah34pb7m.js:88795-88813 placement
-var TEAMMATE_MESSAGE_CLOSE_TAG = `</${TEAMMATE_MESSAGE}>`;
-//@ chunk-ah34pb7m.js:88813-89659 placement
+//@ chunk-wjygkcr4.js:90599-90617 placement
+var TEAMMATE_MESSAGE_CLOSE_TAG; // deferred: uses AGENT_NOTIFICATION_PREFIX (../../constants/xml.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-wjygkcr4.js:90599", () => {
+  TEAMMATE_MESSAGE_CLOSE_TAG = `</${TEAMMATE_MESSAGE}>`;
+});
+//@ chunk-wjygkcr4.js:90617-91463 placement
 /**
  * 从文本中解析 teammate-message 标签列表与剩余文本。
  */
@@ -156,7 +149,7 @@ function parseTeammateMessages(text) {
     unparsed: "",
   };
 }
-//@ chunk-ah34pb7m.js:89659-90115 placement
+//@ chunk-wjygkcr4.js:91463-91919 placement
 /**
  * 收集进程内队友的显示颜色。
  */
@@ -191,7 +184,7 @@ function useTeammateColors() {
   } else resolveName = $[6];
   return resolveName;
 }
-//@ chunk-ah34pb7m.js:90115-90405 placement
+//@ chunk-wjygkcr4.js:91919-92209 placement
 /**
  * 合并相邻的同名队友消息为计数项（panel 项保留不合并）。
  */
@@ -215,7 +208,7 @@ function coalesceTeammateMessages(messages) {
   }
   return coalesced;
 }
-//@ chunk-ah34pb7m.js:90405-90545 placement
+//@ chunk-wjygkcr4.js:92209-92349 placement
 function filterDisplayableTeammateMessages(messages) {
   return messages.filter((message) => {
     if (message.summary?.trim()) return true;
@@ -224,18 +217,18 @@ function filterDisplayableTeammateMessages(messages) {
     return true;
   });
 }
-//@ chunk-ah34pb7m.js:90545-90628 placement
+//@ chunk-wjygkcr4.js:92349-92432 placement
 function hasNoDisplayableTeammateMessage(content) {
   let { messages, unparsed } = parseTeammateMessages(content);
   return filterDisplayableTeammateMessages(messages).length === 0 && !unparsed.trim();
 }
-//@ chunk-ah34pb7m.js:90628-90707 placement
+//@ chunk-wjygkcr4.js:92432-92511 placement
 function capTeammateText(summary, transcriptMode) {
   if (transcriptMode) return summary;
   let summaryValue = capFrameFieldForDisplay(summary);
   return summaryValue === summary.trim() ? summaryValue : `${summaryValue}\u2026`;
 }
-//@ chunk-ah34pb7m.js:90707-91432 placement
+//@ chunk-wjygkcr4.js:92511-93236 placement
 /**
  * 渲染用户回合中的队友消息。
  */
@@ -291,7 +284,7 @@ function UserTeammateMessage(props) {
   } else teammateMessageListElement = $[11];
   return teammateMessageListElement;
 }
-//@ chunk-ah34pb7m.js:91432-93961 placement
+//@ chunk-wjygkcr4.js:93236-95770 placement
 /**
  * 队友消息列表（标签视图、展开）。
  */
@@ -542,7 +535,7 @@ function TeammateMessageList(props) {
   } else siteProps = $[29];
   return BriefTimestampNamespace.useUserMessageSite(siteProps);
 }
-//@ chunk-ah34pb7m.js:93961-94605 placement
+//@ chunk-wjygkcr4.js:95770-96414 placement
 /**
  * 队友消息条目渲染。
  */
@@ -607,7 +600,7 @@ function TeammateMessageItems(props) {
   } else boxElement = $[10];
   return boxElement;
 }
-//@ chunk-ah34pb7m.js:94605-95673 fingerprint (2.1.88 match: TeammateMessageContent, 0.583)
+//@ chunk-wjygkcr4.js:96414-97482 fingerprint (2.1.88 match: TeammateMessageContent, 0.583)
 function TeammateMessageContent(props) {
   let $ = useMemoCache(23);
   let { displayName, inkColor, content, summary, labelView, headerless } = props;
@@ -715,6 +708,16 @@ function TeammateMessageContent(props) {
   } else t6 = $[22];
   return t6;
 }
+//@ chunk-wjygkcr4.js:99354-99358 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:99354", () => {
+  init_react_production();
+});
+//@ chunk-wjygkcr4.js:99400-99404 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wjygkcr4.js:99400", () => {
+  init_react_production();
+});
 export {
   unverifiedSenderLabel,
   coalesceTeammateMessages,

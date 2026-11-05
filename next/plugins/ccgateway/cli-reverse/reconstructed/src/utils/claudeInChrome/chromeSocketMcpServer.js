@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：Claude in Chrome 的 socket 客户端与 MCP 服务器创建。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-t8hkp4g3.js (4)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-rw68crcf.js (4)
  * attribution: placement 4
  */
 import { createChromeBridgeClient, createLocalChromeBridgePool } from "./bridgeClient.js";
@@ -17,12 +17,12 @@ import { BROWSER_TOOLS, browserSelectionNote } from "./browserToolSchemas.js";
 import { withFeatureTelemetry } from "../../services/analytics/featureTelemetry.js";
 import { createLinkedTransportPair } from "../../services/mcp/InProcessTransport.js";
 
-//@ chunk-t8hkp4g3.js:912-959 placement
+//@ chunk-rw68crcf.js:996-1043 placement
 /**
  * 回显给客户端的 MCP 协议版本列表（新到旧）。
  */
 var ECHOED_PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26"];
-//@ chunk-t8hkp4g3.js:959-1033 placement
+//@ chunk-rw68crcf.js:1043-1117 placement
 function createChromeSocketClient(options) {
   return options.bridgeConfig
     ? createChromeBridgeClient(options)
@@ -30,11 +30,11 @@ function createChromeSocketClient(options) {
       ? createLocalChromeBridgePool(options)
       : createChromeSocketClient_2(options);
 }
-//@ chunk-t8hkp4g3.js:1033-1067 placement
+//@ chunk-rw68crcf.js:1117-1151 placement
 function createClaudeForChromeMcpServer(context, socketClient) {
   return new ChromeSocketMcpBridge(context, socketClient);
 }
-//@ chunk-t8hkp4g3.js:1067-3861 placement
+//@ chunk-rw68crcf.js:1151-3945 placement
 /**
  * 本地 MCP 客户端与 Chrome 扩展 socket 之间的桥：自行处理 initialize 握手等少数请求，其余转交按需创建的包内 MCP 服务器；把扩展的通知转发给客户端，关闭时一并关闭包服务器。
  */

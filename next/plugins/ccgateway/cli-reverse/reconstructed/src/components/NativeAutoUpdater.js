@@ -3,9 +3,9 @@
  *
  * 原生安装的自动更新器：下载、签名/校验和验证、错误分类与 /restart 提示。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/NativeAutoUpdater.tsx
- * pieces: chunk-tzghj6zv.js (8)
+ * pieces: chunk-18rrbwq1.js (8)
  * attribution: placement 1, fingerprint 2, layout 5
  */
 import {
@@ -52,12 +52,12 @@ import { Box, Text } from "../ink/components/Text.js";
 import { StatusIcon } from "./design-system/StatusIcon.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-tzghj6zv.js:31073-31077 placement
+//@ chunk-18rrbwq1.js:21756-21760 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-tzghj6zv.js:31073", () => {
+deferInit("chunk-18rrbwq1.js:21756", () => {
   init_react_production();
 });
-//@ chunk-tzghj6zv.js:31077-32357 fingerprint (2.1.88 match: getErrorType, 0.508)
+//@ chunk-18rrbwq1.js:31075-32355 fingerprint (2.1.88 match: getErrorType, 0.508)
 /**
  * 把更新错误分类（signature_verification、checksum_mismatch、超时、网络等）。
  */
@@ -110,13 +110,13 @@ function getErrorType(errorMessage) {
     return "swap_failure";
   return "unknown";
 }
-//@ chunk-tzghj6zv.js:32357-32566 layout
+//@ chunk-18rrbwq1.js:32355-32564 layout
 function getAutoUpdaterResultEvent(result) {
   if (result.wasUpdated) return "tengu_native_auto_updater_success";
   if (result.skippedUnverifiedRelease) return "tengu_native_auto_updater_skipped_unverified_release";
   return "tengu_native_auto_updater_up_to_date";
 }
-//@ chunk-tzghj6zv.js:32566-32643 layout
+//@ chunk-18rrbwq1.js:32564-32641 layout
 function shouldOfferNativeUpdate() {
   return (
     isRunningFromVersionsDir_2() &&
@@ -125,20 +125,20 @@ function shouldOfferNativeUpdate() {
     canRestartCommandRun()
   );
 }
-//@ chunk-tzghj6zv.js:32643-32756 layout
+//@ chunk-18rrbwq1.js:32641-32754 layout
 function getRestartToApplyText() {
   let offer = getFeatureValue_CACHED_MAY_BE_STALE("tengu_fancy_wand_copy", {}).offer;
   return typeof offer === "string" && offer !== "" ? offer : "/restart to apply";
 }
-//@ chunk-tzghj6zv.js:32756-32807 layout
+//@ chunk-18rrbwq1.js:32754-32805 layout
 function updateButtonLabel() {
   return shouldOfferNativeUpdate() ? getRestartToApplyText() : "Restart to update";
 }
-//@ chunk-tzghj6zv.js:32807-32835 layout
+//@ chunk-18rrbwq1.js:32805-32833 layout
 function measureUpdateLabel() {
   return renderWithForceUpdate(updateButtonLabel);
 }
-//@ chunk-tzghj6zv.js:32835-37733 fingerprint (2.1.88 match: NativeAutoUpdater, 0.553)
+//@ chunk-18rrbwq1.js:32833-37738 fingerprint (2.1.88 match: NativeAutoUpdater, 0.553)
 /**
  * 原生安装的自动更新：下载新版本、验证签名与校验和、失败按类型（超时/校验失败/网络）记录，成功提示 /restart。
  */
@@ -158,10 +158,10 @@ function NativeAutoUpdater({
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
       README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
+      VERSION: "2.1.318",
       FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      BUILD_TIME: "2026-11-03T18:52:53Z",
+      GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
@@ -181,10 +181,10 @@ function NativeAutoUpdater({
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
           README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
+          VERSION: "2.1.318",
           FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          BUILD_TIME: "2026-11-03T18:52:53Z",
+          GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
@@ -204,10 +204,10 @@ function NativeAutoUpdater({
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
         README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
+        VERSION: "2.1.318",
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        BUILD_TIME: "2026-11-03T18:52:53Z",
+        GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION;
@@ -272,10 +272,10 @@ function NativeAutoUpdater({
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
             README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
+            VERSION: "2.1.318",
             FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            BUILD_TIME: "2026-11-03T18:52:53Z",
+            GIT_SHA: "ca1fa9dea62c1027756786c841c548788644560d",
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION,

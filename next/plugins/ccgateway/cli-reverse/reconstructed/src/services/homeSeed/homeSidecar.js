@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：home seed 附带文件
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-twq47pff.js (11)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-9x09krra.js (11)
  * attribution: placement 11
  */
 import {
@@ -34,10 +34,10 @@ import {
 } from "./portableSettings.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { uniq } from "../../utils/collections.js";
+import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-twq47pff.js:12711-12973 placement
+//@ chunk-9x09krra.js:13856-14118 placement
 /**
  * home seed 附带文件（记录已写入文件摘要、设置摘要与包 etag）的版本、上限与 schema。
  */
@@ -46,7 +46,7 @@ var SIDECAR_ENTRY_FACTOR;
 var MAX_SIDECAR_ENTRIES;
 var MAX_SIDECAR_BYTES;
 var homeSidecarSchema;
-deferInit("chunk-twq47pff.js:12711", () => {
+deferInit("chunk-9x09krra.js:13856", () => {
   SIDECAR_VERSION = 1;
   SIDECAR_ENTRY_FACTOR = 4;
   MAX_SIDECAR_ENTRIES = MAX_WORKING_PATH_CHARS * SIDECAR_ENTRY_FACTOR;
@@ -67,7 +67,7 @@ deferInit("chunk-twq47pff.js:12711", () => {
     }),
   );
 });
-//@ chunk-twq47pff.js:12973-13166 placement
+//@ chunk-9x09krra.js:14118-14311 placement
 function parseHomeSidecar(content) {
   if (content.length > MAX_SIDECAR_BYTES) return null;
   let rawContent = tryJsonParse(content.toString("utf8"));
@@ -79,7 +79,7 @@ function parseHomeSidecar(content) {
   let parsed = homeSidecarSchema().safeParse(rawContent);
   return parsed.success ? parsed.data : null;
 }
-//@ chunk-twq47pff.js:13166-13407 placement
+//@ chunk-9x09krra.js:14311-14552 placement
 function encodeHomeSidecar(seed) {
   let incomingSeed = homeSidecarSchema().safeParse({
     ...seed,
@@ -90,7 +90,7 @@ function encodeHomeSidecar(seed) {
   if (buffer.length > MAX_SIDECAR_BYTES) throw Error("home sidecar exceeds its byte bound");
   return buffer;
 }
-//@ chunk-twq47pff.js:13407-13478 placement
+//@ chunk-9x09krra.js:14552-14623 placement
 /**
  * 生成侧车计划（文档、渲染文本与哈希）。
  */
@@ -102,30 +102,30 @@ function renderSidecarPlan(settingsDoc) {
     sha256: computeContentHash(rendered),
   };
 }
-//@ chunk-twq47pff.js:13478-13516 placement
+//@ chunk-9x09krra.js:14623-14661 placement
 /**
  * 渲染后 settings 的字节上限（1 MiB）。
  */
 var permissionsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var MAX_RENDERED_SETTINGS_BYTES;
-deferInit("chunk-twq47pff.js:13478", () => {
+deferInit("chunk-9x09krra.js:14623", () => {
   permissionsSchema = DoctorLazy(() => record(stringSchema(), unknown()));
   MAX_RENDERED_SETTINGS_BYTES = 1048576;
 });
-//@ chunk-twq47pff.js:13516-13618 placement
+//@ chunk-9x09krra.js:14661-14763 placement
 function toStringArray(value) {
   let parsed = array(unknown()).safeParse(value);
   return parsed.success ? parsed.data.filter((item) => typeof item === "string") : [];
 }
-//@ chunk-twq47pff.js:13618-13696 placement
+//@ chunk-9x09krra.js:14763-14841 placement
 /**
  * 合并两个规则列表并去重（保持前者顺序）。
  */
 function mergeRuleLists(stringArray, incoming) {
   let seen = new Set(stringArray);
-  return [...stringArray, ...uniq(incoming).filter((entry) => !seen.has(entry))];
+  return [...stringArray, ...normalizeCaseForComparison_2(incoming).filter((entry) => !seen.has(entry))];
 }
-//@ chunk-twq47pff.js:13696-14335 placement
+//@ chunk-9x09krra.js:14841-15480 placement
 /**
  * 把包里的 deny/ask 规则合并进云端现有 settings.json：恢复模式按记录合并，否则与现有规则去重；无规则返回 null，超过大小上限或无法读取返回 unreadable。
  */
@@ -141,7 +141,7 @@ function renderRestrictiveSettings(plan, existingSettings, mode) {
     let incoming = plan?.document.permissions?.[ruleKind] ?? [];
     return mode === "restore"
       ? mergeRuleLists(stringArray, incoming)
-      : uniq([...stringArray, ...incoming].toReversed()).toReversed();
+      : normalizeCaseForComparison_2([...stringArray, ...incoming].toReversed()).toReversed();
   };
   let deny = mergeRules("deny");
   let ask = mergeRules("ask");
@@ -179,7 +179,7 @@ function renderRestrictiveSettings(plan, existingSettings, mode) {
         sha256: computeContentHash(rendered),
       };
 }
-//@ chunk-twq47pff.js:14335-15344 placement
+//@ chunk-9x09krra.js:15480-16489 placement
 /**
  * 规划在云会话应用 home seed 包：generation 不新于已应用时返回 stale_generation；否则按附带文件算写入、需删除的旧文件，过滤像凭证的文件与设置，返回计划与计数。
  */
@@ -242,7 +242,7 @@ function planHomeSeedApply({
     },
   };
 }
-//@ chunk-twq47pff.js:15344-15412 placement
+//@ chunk-9x09krra.js:16489-16557 placement
 /**
  * 把工作文件条目归类成可写入项。
  */
@@ -257,7 +257,7 @@ function classifyWorkingFileWrite(write) {
         },
       ];
 }
-//@ chunk-twq47pff.js:15412-16188 placement
+//@ chunk-9x09krra.js:16557-17333 placement
 /**
  * 在云端重新筛选包里的设置：统计被去掉的键与凭证；不允许权限时去掉 allow，返回设置计划与计数。
  */

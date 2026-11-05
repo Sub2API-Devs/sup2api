@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增。拼写检查。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (8), chunk-dcmhvw5a.js (14)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-czq1j3j2.js (8), chunk-z20c443b.js (14)
  * attribution: placement 22
  */
 import { homedir } from "os";
@@ -30,49 +30,50 @@ import {
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { lit as lit_2, fromEnum } from "../services/analytics/safeMetadata.js";
 import { Text, Box } from "../ink/components/Text.js";
-import { env } from "./env.js";
 import { logEvent } from "../services/analytics/index.js";
+import { env } from "./env.js";
 import { logError } from "./log.js";
+import { logFeatureSad, logFeatureBad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import {
   errorMessage,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   getErrnoCode,
 } from "./errors.js";
-import { logFeatureBad, logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useState, useEffect, useRef } from "../../vendor/react/cjs/react.production.js";
+import { getPlatform } from "./platform.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { jsonStringify } from "./slowOperations.js";
 import { safeSpawn } from "./safeSpawn.js";
 import { subprocessEnv } from "./subprocessEnv.js";
 import { registerCleanup } from "./cleanupRegistry.js";
-import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
-import { truncateToLength, stripSuffix } from "./stringUtils.js";
+import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
+import { truncateToLength, stripSuffix, plural } from "./stringUtils.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-dcmhvw5a.js:209359-209393 placement
+//@ chunk-z20c443b.js:203485-203519 placement
 /**
  * 取主题颜色。
  */
 function themeColorOf(theme) {
   return getModeConfig(theme).color;
 }
-//@ chunk-dcmhvw5a.js:209393-209428 placement
+//@ chunk-z20c443b.js:203519-203554 placement
 /**
  * 接受 true/false 字符串的布尔 schema。
  */
 function booleanishSchema(schema = booleanSchema()) {
   return preprocess(coerceBooleanString, schema);
 }
-//@ chunk-dcmhvw5a.js:209428-209481 placement
+//@ chunk-z20c443b.js:203554-203607 placement
 /**
  * 把 true/false 字符串转为布尔。
  */
 function coerceBooleanString(value) {
   return value === "true" ? true : value === "false" ? false : value;
 }
-//@ chunk-dcmhvw5a.js:209481-209566 placement
+//@ chunk-z20c443b.js:203607-203692 placement
 /**
  * 拼写检查程序列表与词格式。
  */
@@ -80,14 +81,14 @@ var SPELLCHECK_PROGRAMS = ["aspell", "hunspell", "ispell"];
 var ISPELL_SESSION_END_MARKER = `!
 `;
 var SPELLCHECK_LANG_RE = /^[A-Za-z][A-Za-z0-9_.,-]{0,63}$/;
-//@ chunk-dcmhvw5a.js:209566-209600 placement
+//@ chunk-z20c443b.js:203692-203726 placement
 /**
  * 语言标识是否合法（字母开头、允许 . , _ -）。
  */
 function isValidLanguageTag(tag) {
   return SPELLCHECK_LANG_RE.test(tag);
 }
-//@ chunk-dcmhvw5a.js:209600-209852 placement
+//@ chunk-z20c443b.js:203726-203978 placement
 /**
  * 拼写检查程序的管道模式参数。
  */
@@ -102,7 +103,7 @@ function spellCheckerArgs(program, language) {
       return ["-a", ...(lang ? ["-d", lang] : [])];
   }
 }
-//@ chunk-dcmhvw5a.js:209852-210039 placement
+//@ chunk-z20c443b.js:203978-204165 placement
 /**
  * 从 ispell 版本行判断实际是 aspell/hunspell/ispell。
  */
@@ -112,7 +113,7 @@ function detectSpellCheckerFlavor(banner) {
   if (/but really Hunspell/i.test(banner)) return "hunspell";
   return "ispell";
 }
-//@ chunk-dcmhvw5a.js:210039-210080 placement
+//@ chunk-z20c443b.js:204165-204206 placement
 /**
  * 生成向 ispell 管道查询的 `^word …` 行。
  */
@@ -120,7 +121,7 @@ function buildWordQueryLine(words) {
   return `^${words.join(" ")}
 `;
 }
-//@ chunk-dcmhvw5a.js:210080-210436 placement
+//@ chunk-z20c443b.js:204206-204562 placement
 /**
  * 解析 ispell 管道输出行。
  */
@@ -165,9 +166,9 @@ function parseIspellLine(line) {
       };
   }
 }
-//@ chunk-dcmhvw5a.js:210436-210502 placement
+//@ chunk-z20c443b.js:204562-204628 placement
 var SETTINGS_FEATURE_ORDER = ["autoMode", "deepLink", "voice", "briefView", "screenReader"];
-//@ chunk-dcmhvw5a.js:210502-212817 placement
+//@ chunk-z20c443b.js:204628-206943 placement
 /**
  * 按特性分组的设置 schema（构建开关、形状）。
  */
@@ -248,14 +249,14 @@ var SETTINGS_FEATURE_GROUPS = {
     }),
   },
 };
-//@ chunk-dcmhvw5a.js:212817-212873 placement
+//@ chunk-z20c443b.js:206943-206999 placement
 /**
  * 返回构建开关打开的设置特性组名。
  */
 function enabledSettingsFeatureGroups() {
   return SETTINGS_FEATURE_ORDER.filter((group) => SETTINGS_FEATURE_GROUPS[group].buildGate());
 }
-//@ chunk-dcmhvw5a.js:212873-212947 placement
+//@ chunk-z20c443b.js:206999-207073 placement
 function buildSettingsShapeForGroups(groups) {
   let shape = {};
   for (let group of groups)
@@ -265,13 +266,13 @@ function buildSettingsShapeForGroups(groups) {
     };
   return shape;
 }
-//@ chunk-dcmhvw5a.js:212947-213036 placement
+//@ chunk-z20c443b.js:207073-207162 placement
 function buildPermissionModesForGroups(groups) {
   let modes = [];
   for (let group of groups) modes.push(...(SETTINGS_FEATURE_GROUPS[group].permissionModes?.() ?? []));
   return modes;
 }
-//@ chunk-18hwfzwa.js:865347-865735 placement
+//@ chunk-czq1j3j2.js:898231-898619 placement
 async function findSpellChecker(program, language) {
   let programsToTry =
     program !== "auto" && SPELLCHECK_PROGRAMS.includes(program) ? [program] : SPELLCHECK_PROGRAMS;
@@ -292,15 +293,15 @@ async function findSpellChecker(program, language) {
   );
   return null;
 }
-//@ chunk-18hwfzwa.js:865735-865784 placement
+//@ chunk-czq1j3j2.js:898619-898668 placement
 var spellCheckerByHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:865735", () => {
+deferInit("chunk-czq1j3j2.js:898619", () => {
   spellCheckerByHost = new HostScoped(() => ({
     key: undefined,
     checker: undefined,
   }));
 });
-//@ chunk-18hwfzwa.js:865784-865960 placement
+//@ chunk-czq1j3j2.js:898668-898844 placement
 /**
  * 按程序与语言复用或新建拼写检查器。
  */
@@ -313,14 +314,14 @@ function getSpellChecker(host, program, language) {
   slot.checker = new SpellChecker(() => findSpellChecker(program, language));
   return slot.checker;
 }
-//@ chunk-18hwfzwa.js:865960-866043 placement
+//@ chunk-czq1j3j2.js:898844-898927 placement
 function disposeSpellChecker(host) {
   let slot = spellCheckerByHost.of(host);
   slot.checker?.dispose();
   slot.key = undefined;
   slot.checker = undefined;
 }
-//@ chunk-18hwfzwa.js:866043-866194 placement
+//@ chunk-czq1j3j2.js:898927-899078 placement
 /**
  * 拼写检查器的时间与大小常量。
  */
@@ -341,7 +342,7 @@ var MAX_REQUEST_BYTES = 4096;
 var MAX_OUTPUT_LINE_CHARS = 65536;
 var MAX_CACHED_VERDICTS = 1e4;
 var MAX_LOGGED_LINE_CHARS = 80;
-//@ chunk-18hwfzwa.js:866194-871660 placement
+//@ chunk-czq1j3j2.js:899078-904540 placement
 /**
  * 拼写检查器：在 PATH 中找 aspell/hunspell/ispell，以 -a 管道模式常驻子进程查询单词，带响应超时与状态机（resolving/starting/ready/unavailable）。
  */
@@ -353,16 +354,16 @@ class SpellChecker {
   };
   #o = false;
   #n = 0;
-  #s = 0;
   #r = 0;
-  #c = false;
+  #s = 0;
+  #l = false;
   #i = false;
   #a = "";
-  #l = new Map();
+  #c = new Map();
   #d = new Set();
-  #m = null;
+  #u = null;
   #p = new Set();
-  #u = "";
+  #m = "";
   #f = undefined;
   #S = undefined;
   #h;
@@ -375,19 +376,19 @@ class SpellChecker {
     return this.#e;
   }
   isMisspelled(word) {
-    return this.#l.get(word);
+    return this.#c.get(word);
   }
   #b() {
     return {
-      isMisspelled: (word) => this.#l.get(word),
+      isMisspelled: (word) => this.#c.get(word),
     };
   }
   request(words) {
     if (this.#o || this.#t.status === "unavailable") return;
     for (let word of words)
       if (
-        !this.#l.has(word) &&
-        !this.#m?.has(word) &&
+        !this.#c.has(word) &&
+        !this.#u?.has(word) &&
         word.length > 0 &&
         word.length <= MAX_WORD_CHARS &&
         !WHITESPACE_OR_CONTROL_RE.test(word)
@@ -409,7 +410,7 @@ class SpellChecker {
     });
   }
   async #v() {
-    if (this.#o || this.#c || this.#d.size === 0 || this.#m) return;
+    if (this.#o || this.#l || this.#d.size === 0 || this.#u) return;
     switch (this.#t.status) {
       case "unavailable":
       case "resolving":
@@ -431,7 +432,7 @@ class SpellChecker {
       requestBytes += wordBytes;
     }
     for (let word of batch) this.#d.delete(word);
-    this.#m = new Set(batch);
+    this.#u = new Set(batch);
     this.#p.clear();
     this.#M(this.#y, "response timeout");
     this.#t.process.stdin?.write(buildWordQueryLine(batch));
@@ -527,22 +528,22 @@ class SpellChecker {
     return (this.#t.status === "starting" || this.#t.status === "ready") && this.#t.process === process_2;
   }
   #T(chunk) {
-    this.#u += chunk;
-    let index = this.#u.indexOf(`
+    this.#m += chunk;
+    let index = this.#m.indexOf(`
 `);
     while (index !== -1) {
-      let line = stripSuffix(this.#u.slice(0, index), "\r");
-      this.#u = this.#u.slice(index + 1);
+      let line = stripSuffix(this.#m.slice(0, index), "\r");
+      this.#m = this.#m.slice(index + 1);
       this.#x(line);
       if (this.#t.status !== "starting" && this.#t.status !== "ready") return;
-      index = this.#u.indexOf(`
+      index = this.#m.indexOf(`
 `);
     }
-    if (this.#u.length > MAX_OUTPUT_LINE_CHARS) {
+    if (this.#m.length > MAX_OUTPUT_LINE_CHARS) {
       this.#_("output line too long", "checker_protocol_error");
       return;
     }
-    if (this.#t.status === "ready" && !this.#m) this.#g();
+    if (this.#t.status === "ready" && !this.#u) this.#g();
   }
   #x(line) {
     if (this.#t.status === "starting") {
@@ -570,7 +571,7 @@ class SpellChecker {
       logForDebugging(`[spellcheck] ${spellCheckerFlavor} ready`);
       return;
     }
-    if (!this.#m) {
+    if (!this.#u) {
       this.#_(
         `unexpected output: ${truncateToLength(line, MAX_LOGGED_LINE_CHARS)}`,
         "checker_protocol_error",
@@ -591,19 +592,19 @@ class SpellChecker {
         );
         return;
       case "end": {
-        if (this.#u !== "") {
+        if (this.#m !== "") {
           this.#_("output past the end of a response", "checker_protocol_error");
           return;
         }
         clearTimeout(this.#f);
-        this.#k(this.#m, this.#p);
-        this.#m = null;
+        this.#k(this.#u, this.#p);
+        this.#u = null;
         this.#p.clear();
-        this.#r++;
-        if (this.#r >= RESET_COUNTERS_EVERY_RESPONSES) {
-          this.#r = 0;
-          this.#n = 0;
+        this.#s++;
+        if (this.#s >= RESET_COUNTERS_EVERY_RESPONSES) {
           this.#s = 0;
+          this.#n = 0;
+          this.#r = 0;
         }
         this.#g();
         return;
@@ -611,14 +612,14 @@ class SpellChecker {
     }
   }
   #k(words, verdicts) {
-    if (this.#l.size + words.size > MAX_CACHED_VERDICTS) {
-      let remainingToDrop = Math.ceil(this.#l.size / 2);
-      for (let key of this.#l.keys()) {
+    if (this.#c.size + words.size > MAX_CACHED_VERDICTS) {
+      let remainingToDrop = Math.ceil(this.#c.size / 2);
+      for (let key of this.#c.keys()) {
         if (remainingToDrop-- <= 0) break;
-        this.#l.delete(key);
+        this.#c.delete(key);
       }
     }
-    for (let word of words) this.#l.set(word, verdicts.has(word));
+    for (let word of words) this.#c.set(word, verdicts.has(word));
     this.#e = this.#b();
     this.changed.emit();
   }
@@ -628,24 +629,24 @@ class SpellChecker {
     this.#f.unref?.();
   }
   #R(reason) {
-    if (this.#t.status !== "ready" || !this.#m) {
+    if (this.#t.status !== "ready" || !this.#u) {
       this.#_(reason, "checker_failed_to_start");
       return;
     }
-    this.#s++;
-    this.#r = 0;
+    this.#r++;
+    this.#s = 0;
     logForDebugging(
-      `[spellcheck] no answer for ${this.#m.size} words within ${this.#y}ms; skipping them (${this.#s}/${MAX_TIMEOUTS_BEFORE_ABANDON})`,
+      `[spellcheck] no answer for ${this.#u.size} words within ${this.#y}ms; skipping them (${this.#r}/${MAX_TIMEOUTS_BEFORE_ABANDON})`,
       {
         level: "warn",
       },
     );
-    let pendingWords = this.#m;
+    let pendingWords = this.#u;
     let validWords = new Set(this.#p);
-    this.#m = null;
+    this.#u = null;
     this.#p.clear();
     this.#k(pendingWords, validWords);
-    if (this.#s >= MAX_TIMEOUTS_BEFORE_ABANDON) {
+    if (this.#r >= MAX_TIMEOUTS_BEFORE_ABANDON) {
       this.#A(reason, "checker_too_slow");
       return;
     }
@@ -654,17 +655,17 @@ class SpellChecker {
   }
   #P() {
     clearTimeout(this.#f);
-    this.#c = false;
+    this.#l = false;
     this.#S?.();
     this.#S = undefined;
     let previousState = this.#t;
     this.#t = {
       status: "idle",
     };
-    this.#u = "";
-    if (this.#m) {
-      for (let word of this.#m) this.#d.add(word);
-      this.#m = null;
+    this.#m = "";
+    if (this.#u) {
+      for (let word of this.#u) this.#d.add(word);
+      this.#u = null;
       this.#p.clear();
     }
     if (previousState.status === "starting" || previousState.status === "ready")
@@ -673,15 +674,15 @@ class SpellChecker {
   #_(message, featureReason) {
     if (this.#o || this.#t.status === "unavailable") return;
     this.#P();
-    this.#r = 0;
+    this.#s = 0;
     if (this.#n < MAX_CHECKER_RESTARTS) {
       this.#n++;
       logForDebugging(`[spellcheck] ${message}; restarting once`, {
         level: "warn",
       });
-      this.#c = true;
+      this.#l = true;
       this.#f = setTimeout(() => {
-        this.#c = false;
+        this.#l = false;
         this.#g();
       }, RETRY_DELAY_MS);
       this.#f.unref?.();
@@ -701,7 +702,7 @@ class SpellChecker {
     this.#d.clear();
   }
 }
-//@ chunk-18hwfzwa.js:871660-871761 placement
+//@ chunk-czq1j3j2.js:904540-904641 placement
 /**
  * 对可 unref 的对象调用 unref。
  */
@@ -714,7 +715,7 @@ function unrefHandle(handle) {
   )
     handle.unref();
 }
-//@ chunk-18hwfzwa.js:871761-871872 placement
+//@ chunk-czq1j3j2.js:904641-904752 placement
 /**
  * 关闭子进程 stdin，仍在运行时 kill。
  */
@@ -725,13 +726,13 @@ function stopChildProcess(childProcess) {
 }
 export {
   themeColorOf,
+  enabledSettingsFeatureGroups,
+  coerceBooleanString,
+  booleanishSchema,
   SPELLCHECK_PROGRAMS,
   isValidLanguageTag,
   getSpellChecker,
   disposeSpellChecker,
-  booleanishSchema,
-  coerceBooleanString,
-  enabledSettingsFeatureGroups,
   buildPermissionModesForGroups,
   buildSettingsShapeForGroups,
 };

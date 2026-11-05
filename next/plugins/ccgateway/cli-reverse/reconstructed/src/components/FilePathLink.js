@@ -3,9 +3,9 @@
  *
  * 文件路径超链接（file:// OSC 8）组件。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FilePathLink.tsx
- * pieces: chunk-qwh6zcf0.js (3)
+ * pieces: chunk-e2r2f340.js (3)
  * attribution: callgraph-witnessed 1, sole-consumer 2
  */
 import { isAbsolute, sep } from "path";
@@ -21,7 +21,7 @@ import { truncatePathMiddle } from "../utils/format.js";
 import { toSafeFileUrl } from "../services/mcp/xaa.js";
 import { hasControlChars } from "../services/policyLimits/complianceTaints.js";
 
-//@ chunk-qwh6zcf0.js:8508-8990 callgraph-witnessed (2.1.88 match: FilePathLink, 0.654)
+//@ chunk-e2r2f340.js:8508-8990 callgraph-witnessed (2.1.88 match: FilePathLink, 0.655)
 function FilePathLink(props) {
   let $ = useMemoCache(9);
   let { filePath, children } = props;
@@ -70,12 +70,12 @@ function FilePathLink(props) {
   } else element = $[8];
   return element;
 }
-//@ chunk-qwh6zcf0.js:8990-9043 sole-consumer
+//@ chunk-e2r2f340.js:8990-9043 sole-consumer
 function filePathToLink(path) {
   let expandedPath = expandHomePath(path);
   return isAbsolute(expandedPath) ? filePathToUrl(expandedPath) : hasControlChars(expandedPath);
 }
-//@ chunk-qwh6zcf0.js:9043-9127 sole-consumer
+//@ chunk-e2r2f340.js:9043-9127 sole-consumer
 function expandHomePath(path) {
   if (path === "~") return homedir();
   return path.startsWith("~" + sep) ? homedir() + path.slice(1) : path;

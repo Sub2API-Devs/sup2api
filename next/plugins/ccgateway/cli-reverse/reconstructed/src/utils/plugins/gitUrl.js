@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：插件 git URL 解析
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9qwbw2qr.js (5)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-d2msvdm6.js (5)
  * attribution: placement 5
  */
 import { REDACTED_URL, redactUrlQuery, COLON_RE } from "../redaction/urlRedaction.js";
@@ -16,7 +16,7 @@ import { hasBackslashInUrlAuthority } from "../git/githubUrl.js";
 import { hasDotSegmentAlias } from "../pathClassification.js";
 import { isUntrustedLinkPath } from "../pathResolution.js";
 
-//@ chunk-9qwbw2qr.js:901-1225 placement
+//@ chunk-d2msvdm6.js:901-1225 placement
 /**
  * 支持的 git URL 形式说明与 scp/主机名正则。
  */
@@ -25,12 +25,12 @@ var SUPPORTED_GIT_URL_FORMS =
 var SCP_LIKE_GIT_URL_RE = /^(?!-)[A-Za-z0-9._-]+@(?:(?!-)[A-Za-z0-9._-]+|\[[0-9A-Fa-f:.]+\]):(?!\/\/)/;
 var GIT_HOST_RE = /^(?:(?!-)[A-Za-z0-9._-]+|\[[0-9A-Fa-f:.]+\])$/;
 var GIT_USER_RE = /^(?!-)[A-Za-z0-9._-]+$/;
-//@ chunk-9qwbw2qr.js:1225-1295 placement
+//@ chunk-d2msvdm6.js:1225-1295 placement
 function printableUrlLabel(url) {
   if (url === REDACTED_URL) return url;
   return printableLabel(printableName(url, 200)) || "\u201C\u201D";
 }
-//@ chunk-9qwbw2qr.js:1295-4793 placement
+//@ chunk-d2msvdm6.js:1295-4793 placement
 /**
  * 校验并解析插件 git URL（拒绝控制字符、不安全协议等）。
  */
@@ -144,7 +144,7 @@ function parsePluginGitUrl(rawUrl) {
     );
   return rawUrl;
 }
-//@ chunk-9qwbw2qr.js:4793-4912 placement
+//@ chunk-d2msvdm6.js:4793-4912 placement
 function decodeFileUrlPath(url) {
   try {
     return decodeURIComponent(url.replace(/^file:\/\//i, ""));
@@ -152,7 +152,7 @@ function decodeFileUrlPath(url) {
     return "/../malformed-percent-encoding";
   }
 }
-//@ chunk-9qwbw2qr.js:4912-5013 placement
+//@ chunk-d2msvdm6.js:4912-5013 placement
 function decodeUrlPathname(url) {
   try {
     return decodeURIComponent(url.pathname);

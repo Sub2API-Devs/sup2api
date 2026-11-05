@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：同步条目（技能、插件）路径与名称安全处理、按组织分桶。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f3qhjfah.js (45)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5s0qaz1x.js (45)
  * attribution: placement 45
  */
 import { join, relative, isAbsolute, sep, basename } from "path";
@@ -20,25 +20,25 @@ import { env } from "../env.js";
 import { getStoredOauthAccountInfo, getClaudeAIOAuthTokenOriginAsync, getAuthTokenSource } from "../auth.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-f3qhjfah.js:39940-40016 placement
+//@ chunk-5s0qaz1x.js:40202-40278 placement
 /**
  * MARKETPLACES_JSON_FILE：同步目录里的市场文件；MARKETPLACE_ID_RE：市场 id 格式（同一声明共 2 个绑定）。
  */
 var SYNCED_MANIFEST_FILE = "manifest.json";
 var MARKETPLACES_JSON_FILE = ".marketplaces.json";
 var MARKETPLACE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
-//@ chunk-f3qhjfah.js:40016-40050 placement
+//@ chunk-5s0qaz1x.js:40278-40312 placement
 function isTaggedMarketplaceId(marketplaceId) {
   return MARKETPLACE_ID_RE.test(marketplaceId);
 }
-//@ chunk-f3qhjfah.js:40050-40073 placement
+//@ chunk-5s0qaz1x.js:40312-40335 placement
 var MARKETPLACE_DIR_PREFIX = ".marketplace-";
-//@ chunk-f3qhjfah.js:40073-40182 placement
+//@ chunk-5s0qaz1x.js:40335-40444 placement
 function claudeAiMarketplaceFile(id) {
   if (!isTaggedMarketplaceId(id)) throw Error("claude.ai marketplace id is not a tagged id");
   return `${MARKETPLACE_DIR_PREFIX}${id}.json`;
 }
-//@ chunk-f3qhjfah.js:40182-40271 placement
+//@ chunk-5s0qaz1x.js:40444-40533 placement
 function isClaudeAiMarketplaceFile(name) {
   return (
     name.startsWith(MARKETPLACE_DIR_PREFIX) &&
@@ -46,9 +46,9 @@ function isClaudeAiMarketplaceFile(name) {
     isTaggedMarketplaceId(name.slice(MARKETPLACE_DIR_PREFIX.length, -5))
   );
 }
-//@ chunk-f3qhjfah.js:40271-40302 placement
+//@ chunk-5s0qaz1x.js:40533-40564 placement
 var LAST_COMPLETE_ROUND_FILE = ".last-complete-round";
-//@ chunk-f3qhjfah.js:40302-40396 placement
+//@ chunk-5s0qaz1x.js:40564-40658 placement
 /**
  * syncKeyOf：pid:procStart/路径 形式的同步键。
  */
@@ -61,7 +61,7 @@ function syncKeyOf(
 ) {
   return `${owner.pid}:${owner.procStart ?? ""}/${itemName}`;
 }
-//@ chunk-f3qhjfah.js:40396-40687 placement
+//@ chunk-5s0qaz1x.js:40658-40949 placement
 /**
  * 解析 pid:procStart/名字 形式的认领。
  */
@@ -84,14 +84,14 @@ function parsePendingClaim(key) {
     ownerProcStart: procStart || undefined,
   };
 }
-//@ chunk-f3qhjfah.js:40687-40829 placement
+//@ chunk-5s0qaz1x.js:40949-41091 placement
 class LegacyReservedSpellingError extends Error {
   constructor() {
     super("synced item name is a legacy alias of a reserved path");
     this.name = "LegacyReservedSpellingError";
   }
 }
-//@ chunk-f3qhjfah.js:40829-40938 placement
+//@ chunk-5s0qaz1x.js:41091-41200 placement
 /**
  * SYNCED_SUBDIR：同步根下的 synced 目录名；TRASH_SUBDIR：回收站目录名；UNBOUND_BUCKET：未绑定桶的占位名（同一声明共 3 个绑定）。
  */
@@ -100,18 +100,18 @@ var SYNCED_SUBDIR = ".trash";
 var TRASH_SUBDIR = ".staging";
 var UNBOUND = "unbound";
 var UNBOUND_BUCKET = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
-//@ chunk-f3qhjfah.js:40938-40972 placement
+//@ chunk-5s0qaz1x.js:41200-41234 placement
 /**
  * isUuid：是否为 UUID。
  */
 function isUuid(value) {
   return UNBOUND_BUCKET.test(value);
 }
-//@ chunk-f3qhjfah.js:40972-41039 placement
+//@ chunk-5s0qaz1x.js:41234-41301 placement
 function syncBucketKey(org, account) {
   return `${org.toLowerCase()}_${account?.toLowerCase() ?? UNBOUND}`;
 }
-//@ chunk-f3qhjfah.js:41039-41183 placement
+//@ chunk-5s0qaz1x.js:41301-41445 placement
 function parseSyncBucketName(name) {
   let [org, account, ...rest] = name.split("_");
   if (
@@ -127,30 +127,30 @@ function parseSyncBucketName(name) {
     account,
   };
 }
-//@ chunk-f3qhjfah.js:41183-41219 placement
+//@ chunk-5s0qaz1x.js:41445-41481 placement
 /**
  * isSyncBucketName：是否为同步桶名。
  */
 function isSyncBucketName(name) {
   return parseSyncBucketName(name) !== null;
 }
-//@ chunk-f3qhjfah.js:41219-41259 placement
+//@ chunk-5s0qaz1x.js:41481-41521 placement
 /**
  * bucketOrg：桶名对应的组织。
  */
 function bucketOrg(name) {
   return parseSyncBucketName(name)?.org ?? null;
 }
-//@ chunk-f3qhjfah.js:41259-41277 placement
+//@ chunk-5s0qaz1x.js:41521-41539 placement
 var BUCKET_DIR_PREFIX = ".bucket-";
-//@ chunk-f3qhjfah.js:41277-41319 placement
+//@ chunk-5s0qaz1x.js:41539-41581 placement
 /**
  * bucketDirPath：桶目录路径。
  */
 function bucketDirPath(root, bucketName) {
   return join(root, `${BUCKET_DIR_PREFIX}${bucketName}`);
 }
-//@ chunk-f3qhjfah.js:41319-41427 placement
+//@ chunk-5s0qaz1x.js:41581-41689 placement
 /**
  * 桶名的脱敏形状。
  */
@@ -159,26 +159,26 @@ function syncBucketShape(name) {
   if (syncBucketName === null) return null;
   return syncBucketName.account === UNBOUND ? "<org>_unbound" : "<org>_<account>";
 }
-//@ chunk-f3qhjfah.js:41427-41458 placement
+//@ chunk-5s0qaz1x.js:41689-41720 placement
 var GENERATION_SUFFIX_RE = /~g(?:[2-9]|[1-9]\d+)$/;
-//@ chunk-f3qhjfah.js:41458-41498 placement
+//@ chunk-5s0qaz1x.js:41720-41760 placement
 /**
  * stripGenerationSuffix：去掉代次后缀。
  */
 function stripGenerationSuffix(name) {
   return name.replace(GENERATION_SUFFIX_RE, "");
 }
-//@ chunk-f3qhjfah.js:41498-41544 placement
+//@ chunk-5s0qaz1x.js:41760-41806 placement
 function trimTrailingDotsSpaces(name) {
   return name.replace(/[. ]+$/, "");
 }
-//@ chunk-f3qhjfah.js:41544-41670 placement
+//@ chunk-5s0qaz1x.js:41806-41932 placement
 function sanitizeSyncedItemName(name) {
   let sanitized = trimTrailingDotsSpaces(name.replace(/[<>:"|?*\\/]/g, "_"));
   if (!sanitized) throw Error("synced item name resolves to sync root");
   return sanitized;
 }
-//@ chunk-f3qhjfah.js:41670-41821 placement
+//@ chunk-5s0qaz1x.js:41932-42083 placement
 function joinInsideSyncRoot(name, root) {
   let fullPath = join(root, name);
   let rel = relative(root, fullPath);
@@ -186,7 +186,7 @@ function joinInsideSyncRoot(name, root) {
     throw Error("synced item name escapes the sync root");
   return fullPath;
 }
-//@ chunk-f3qhjfah.js:41821-41979 placement
+//@ chunk-5s0qaz1x.js:42083-42241 placement
 function stripInvisibleChars(name) {
   return name
     .replace(/[\u200c-\u200f\u202a-\u202e\u206a-\u206f\ufeff]/g, "")
@@ -195,7 +195,7 @@ function stripInvisibleChars(name) {
     .toUpperCase()
     .toLowerCase();
 }
-//@ chunk-f3qhjfah.js:41979-42026 placement
+//@ chunk-5s0qaz1x.js:42241-42288 placement
 /**
  * PRINTABLE_NAME_RE：可打印名字（无空格）；MIN_FOLDABLE_NAME_LENGTH：需要折叠的名字最短长度；MAX_FOLDABLE_NAME_LENGTH：需要折叠的名字最长长度（同一声明共 5 个绑定）。
  */
@@ -204,7 +204,7 @@ var MIN_FOLDABLE_NAME_LENGTH = 32;
 var MAX_FOLDABLE_NAME_LENGTH = 512;
 var FOLD_CACHE_MAX_BYTES = 16777216;
 var foldNameCache;
-//@ chunk-f3qhjfah.js:42026-42264 placement
+//@ chunk-5s0qaz1x.js:42288-42526 placement (2.1.88 match: FileStateCache, 0.529)
 /**
  * 名字折叠（NFKC、去不可见字符、统一连字符与冒号；带缓存）。
  */
@@ -226,7 +226,7 @@ function foldName(name) {
   }
   return folded;
 }
-//@ chunk-f3qhjfah.js:42264-42460 placement
+//@ chunk-5s0qaz1x.js:42526-42722 placement
 function foldNameUncached(name) {
   return stripInvisibleChars(
     reorderLongCombiningRuns(
@@ -237,25 +237,25 @@ function foldNameUncached(name) {
     ),
   );
 }
-//@ chunk-f3qhjfah.js:42460-42504 placement
+//@ chunk-5s0qaz1x.js:42722-42766 placement
 /**
  * isHiddenFoldName：折叠后以点开头。
  */
 function isHiddenFoldName(name) {
   return foldName_2(name).startsWith(".");
 }
-//@ chunk-f3qhjfah.js:42504-42542 placement
+//@ chunk-5s0qaz1x.js:42766-42804 placement
 function isGitDirName(name) {
   return foldName_2(name) === ".git";
 }
-//@ chunk-f3qhjfah.js:42542-42580 placement
+//@ chunk-5s0qaz1x.js:42804-42842 placement
 /**
  * isSyncedDirName：名称为 synced 目录。
  */
 function isSyncedDirName(name) {
   return stripInvisibleChars(trimTrailingDotsSpaces(name)) === SYNCED_DIR;
 }
-//@ chunk-f3qhjfah.js:42580-43001 placement
+//@ chunk-5s0qaz1x.js:42842-43263 placement
 /**
  * 由同步条目名得到 synced 根下的路径：去除不可见/显示危险字符，拒绝逃逸同步根与保留名。
  */
@@ -272,7 +272,7 @@ function syncedItemPath(name, root) {
     throw Error("synced item name resolves to reserved path");
   return syncedItemPath_2(name, root);
 }
-//@ chunk-f3qhjfah.js:43001-43071 placement
+//@ chunk-5s0qaz1x.js:43263-43333 placement
 /**
  * syncedItemPathForGeneration：带代次后缀的同步条目路径。
  */
@@ -280,7 +280,7 @@ function syncedItemPathForGeneration(name, generation, root) {
   let basePath = syncedItemPath(name, root);
   return generation <= 1 ? basePath : join(root, `${basename(basePath)}~g${generation}`);
 }
-//@ chunk-f3qhjfah.js:43071-43366 placement
+//@ chunk-5s0qaz1x.js:43333-43628 placement
 /**
  * 同步条目路径（拒绝保留名与旧保留写法）。
  */
@@ -300,12 +300,12 @@ function syncedItemPath_2(name, root) {
   }
   return joinInsideSyncRoot(sanitized, root);
 }
-//@ chunk-f3qhjfah.js:43366-43448 placement
+//@ chunk-5s0qaz1x.js:43628-43710 placement
 function isReservedGeneratedName(name) {
   let replaced = firstLineOf(name, ".").replace(/ +$/, "");
   return /~\d/.test(name) || WINDOWS_RESERVED_NAME_RE.test(replaced);
 }
-//@ chunk-f3qhjfah.js:43448-44023 placement
+//@ chunk-5s0qaz1x.js:43710-44285 placement
 /**
  * 读技能同步清单，返回被认领的名字集合或 claim-all。
  */
@@ -334,7 +334,7 @@ function parseSkillsSyncManifest(text, root) {
     }
   return names;
 }
-//@ chunk-f3qhjfah.js:44023-44101 placement
+//@ chunk-5s0qaz1x.js:44285-44363 placement
 function foldedNameCandidates(name, root) {
   let candidates = [foldNameForSync(name)];
   try {
@@ -342,14 +342,14 @@ function foldedNameCandidates(name, root) {
   } catch {}
   return candidates;
 }
-//@ chunk-f3qhjfah.js:44101-44134 placement
+//@ chunk-5s0qaz1x.js:44363-44396 placement
 /**
  * foldNameForSync：去掉不可见字符后折叠。
  */
 function foldNameForSync(name) {
   return stripInvisibleChars(foldName_2(name));
 }
-//@ chunk-f3qhjfah.js:44134-44264 placement
+//@ chunk-5s0qaz1x.js:44396-44526 placement
 /**
  * SKILLS_SYNC_DIR：技能同步目录；SKILLS_TRASH_DIR：技能回收站目录；SKILLS_STAGING_DIR：技能暂存目录（同一声明共 6 个绑定）。
  */
@@ -360,7 +360,7 @@ var SKILLS_STAGING_DIR;
 var SKILLS_SYNCED_STAGING;
 var PLUGINS_SYNC_DIR;
 var PLUGINS_STAGING_DIR;
-deferInit("chunk-f3qhjfah.js:44134", () => {
+deferInit("chunk-5s0qaz1x.js:44396", () => {
   SKILLS_SYNC_DIR_2 = join("skills", SYNCED_DIR);
   SKILLS_SYNC_DIR = join("skills", SYNCED_SUBDIR);
   SKILLS_TRASH_DIR = join("skills", TRASH_SUBDIR);
@@ -369,19 +369,19 @@ deferInit("chunk-f3qhjfah.js:44134", () => {
   PLUGINS_SYNC_DIR = join("plugins", SYNCED_SUBDIR);
   PLUGINS_STAGING_DIR = join(SKILLS_SYNCED_STAGING, TRASH_SUBDIR);
 });
-//@ chunk-f3qhjfah.js:44264-44311 placement
-function _(value) {
+//@ chunk-5s0qaz1x.js:44526-44573 placement
+function asUuidOrNull(value) {
   return value !== undefined && isUuid(value) ? value : null;
 }
-//@ chunk-f3qhjfah.js:44311-44391 placement
+//@ chunk-5s0qaz1x.js:44573-44653 placement
 function orgUuidFromEnvOrAccount() {
-  return _(env.CLAUDE_CODE_ORGANIZATION_UUID ?? getStoredOauthAccountInfo()?.organizationUuid);
+  return asUuidOrNull(env.CLAUDE_CODE_ORGANIZATION_UUID ?? getStoredOauthAccountInfo()?.organizationUuid);
 }
-//@ chunk-f3qhjfah.js:44391-44438 placement
+//@ chunk-5s0qaz1x.js:44653-44700 placement
 function currentOrgUuid() {
-  return _(getStoredOauthAccountInfo()?.organizationUuid);
+  return asUuidOrNull(getStoredOauthAccountInfo()?.organizationUuid);
 }
-//@ chunk-f3qhjfah.js:44438-44711 placement
+//@ chunk-5s0qaz1x.js:44700-44973 placement
 /**
  * 当前账号的同步桶（按 OAuth 令牌来源）。
  */
@@ -393,30 +393,30 @@ async function getSyncBucket(credentials) {
       return getStoredAccountBucket();
     case "none":
       if (getAuthTokenSource().source === "claude.ai") return null;
-      return syncBucketKey(orgUuid, _(env.CLAUDE_CODE_ACCOUNT_UUID) ?? undefined);
+      return syncBucketKey(orgUuid, asUuidOrNull(env.CLAUDE_CODE_ACCOUNT_UUID) ?? undefined);
     case "env":
     case "fd":
-      return syncBucketKey(orgUuid, _(env.CLAUDE_CODE_ACCOUNT_UUID) ?? undefined);
+      return syncBucketKey(orgUuid, asUuidOrNull(env.CLAUDE_CODE_ACCOUNT_UUID) ?? undefined);
   }
 }
-//@ chunk-f3qhjfah.js:44711-44853 placement
+//@ chunk-5s0qaz1x.js:44973-45115 placement
 /**
  * 由已存账号信息得到同步桶。
  */
 function getStoredAccountBucket() {
   let storedOauthAccountInfo = getStoredOauthAccountInfo();
-  let orgUuid = _(env.CLAUDE_CODE_ORGANIZATION_UUID ?? storedOauthAccountInfo?.organizationUuid);
-  let accountUuid = _(storedOauthAccountInfo?.accountUuid);
+  let orgUuid = asUuidOrNull(env.CLAUDE_CODE_ORGANIZATION_UUID ?? storedOauthAccountInfo?.organizationUuid);
+  let accountUuid = asUuidOrNull(storedOauthAccountInfo?.accountUuid);
   return orgUuid === null || accountUuid === null ? null : syncBucketKey(orgUuid, accountUuid);
 }
-//@ chunk-f3qhjfah.js:44853-44912 placement
+//@ chunk-5s0qaz1x.js:45115-45174 placement
 /**
  * accountBucket：claude.ai 登录时的账号桶。
  */
 function accountBucket() {
   return getAuthTokenSource().source === "claude.ai" ? getStoredAccountBucket() : null;
 }
-//@ chunk-f3qhjfah.js:44912-45056 placement
+//@ chunk-5s0qaz1x.js:45174-45318 placement
 /**
  * 组织 uuid_账号 uuid 缓存键。
  */
@@ -425,46 +425,46 @@ function getAccountCacheKey() {
   return `${env.CLAUDE_CODE_ORGANIZATION_UUID ?? storedOauthAccountInfo?.organizationUuid ?? ""}_${storedOauthAccountInfo?.accountUuid ?? env.CLAUDE_CODE_ACCOUNT_UUID ?? ""}`;
 }
 export {
-  syncedItemPath,
   foldName,
-  trimTrailingDotsSpaces,
+  syncedItemPath,
+  getSyncBucket,
+  SKILLS_SYNC_DIR_2,
+  stripGenerationSuffix,
   isSyncedDirName,
   isHiddenFoldName,
-  SYNCED_DIR,
-  SYNCED_SUBDIR,
+  getAccountCacheKey,
   SKILLS_TRASH_DIR,
   SKILLS_STAGING_DIR,
-  SKILLS_SYNC_DIR_2,
   isSyncBucketName,
   TRASH_SUBDIR,
   SKILLS_SYNC_DIR,
   PLUGINS_SYNC_DIR,
-  getSyncBucket,
   getStoredAccountBucket,
   SYNCED_MANIFEST_FILE,
   SKILLS_SYNCED_STAGING,
   PLUGINS_STAGING_DIR,
-  stripGenerationSuffix,
-  bucketOrg,
-  MARKETPLACES_JSON_FILE,
-  stripInvisibleChars,
+  SYNCED_SUBDIR,
+  SYNCED_DIR,
+  currentOrgUuid,
   isGitDirName,
+  stripInvisibleChars,
   syncBucketShape,
   bucketDirPath,
   LAST_COMPLETE_ROUND_FILE,
   syncedItemPathForGeneration,
   syncedItemPath_2,
   LegacyReservedSpellingError,
+  MARKETPLACES_JSON_FILE,
   isClaudeAiMarketplaceFile,
   isTaggedMarketplaceId,
-  getAccountCacheKey,
+  bucketOrg,
   claudeAiMarketplaceFile,
   isUuid,
   parseSkillsSyncManifest,
   foldNameForSync,
   MAX_FOLDABLE_NAME_LENGTH,
-  currentOrgUuid,
-  accountBucket,
+  trimTrailingDotsSpaces,
   parsePendingClaim,
   syncKeyOf,
+  accountBucket,
 };

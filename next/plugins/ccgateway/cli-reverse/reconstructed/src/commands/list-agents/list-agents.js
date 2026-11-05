@@ -3,16 +3,16 @@
  *
  * 2.1.316 新增：/list-agents 命令：列出可发消息的子代理、队友与其他 Claude 会话。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-kq21a1r9.js (1)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-g26rcen4.js (1)
  * attribution: placement 1
  */
 import { listAllPeers, buildSubagentExtras, formatForUser } from "../../utils/peerSessions/listAgents.js";
 import { isTeammateOrSubagentContext } from "../../tools/SendMessageTool/selfTarget.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 
-//@ chunk-kq21a1r9.js:4004-4404 placement
+//@ chunk-g26rcen4.js:4312-4712 placement
 /**
  * /list-agents 命令：列出可发消息的子代理、队友与其他 Claude 会话。
  */

@@ -3,9 +3,9 @@
  *
  * 2.1.316 新增：旧模型名
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (3)
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5xgkngpb.js (3)
  * attribution: placement 3
  */
 import { TODO_WRITE_TOOL_NAME } from "../../tools/TodoWriteTool/constants.js";
@@ -14,7 +14,7 @@ import { TASK_GET_TOOL_NAME } from "../../tools/TaskGetTool/constants.js";
 import { TASK_UPDATE_TOOL_NAME } from "../../tools/TaskUpdateTool/constants.js";
 import { TASK_LIST_TOOL_NAME } from "../../tools/TaskListTool/constants.js";
 
-//@ chunk-e6aww6q8.js:3232364-3232683 placement (2.1.88 match: firstPartyNameToCanonical, 0.821)
+//@ chunk-5xgkngpb.js:3317003-3317322 placement (2.1.88 match: firstPartyNameToCanonical, 0.821)
 /**
  * TodoWrite、TaskCreate、TaskGet、TaskUpdate、TaskList（工具名列表，用于折叠显示判断）。
  */
@@ -42,14 +42,14 @@ var TODO_TOOL_NAMES = [
   TASK_UPDATE_TOOL_NAME,
   TASK_LIST_TOOL_NAME,
 ];
-//@ chunk-e6aww6q8.js:3232683-3232717 placement
+//@ chunk-5xgkngpb.js:3317322-3317356 placement
 /**
  * 模型是否在 TODO_TOOL_LEGACY_MODELS 中。
  */
 function isTodoToolLegacyModel(modelId) {
   return TODO_TOOL_LEGACY_MODELS.has(modelId);
 }
-//@ chunk-e6aww6q8.js:3232717-3232784 placement
+//@ chunk-5xgkngpb.js:3317356-3317423 placement
 /**
  * 判断模型 id 是否为推理配置（application-inference-profile）。
  */

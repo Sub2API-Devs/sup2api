@@ -3,10 +3,10 @@
  *
  * 2.1.316 新增：marketplace 来源策略：组织策略担保、阻止名单匹配、npm 解析与 headersHelper 拒绝。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
- * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-f3qhjfah.js (52)
- * attribution: placement 52
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
+ * new in 2.1.318 (2.1.88 has no file at this path)
+ * pieces: chunk-5s0qaz1x.js (53)
+ * attribution: placement 52, affinity 1
  */
 import {
   getSettingsForSource,
@@ -30,7 +30,6 @@ import {
   extractHostFromSource_2,
   doesSourceMatchPathPattern,
   areSourcesEquivalentForBlocklist,
-  isSafeRelativePath,
 } from "./marketplaceHelpers.js";
 import {
   marketplaceNameAnswerState,
@@ -61,11 +60,11 @@ import { isIpv4MappedOrTranslatedIpv6 } from "../network/privateHostCheck.js";
 import { logForDebugging } from "../debug.js";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-f3qhjfah.js:45056-45090 placement
+//@ chunk-5s0qaz1x.js:45318-45352 placement
 var PLUGIN_DIRECTORY_SOURCE = {
   source: "pluginDirectory",
 };
-//@ chunk-f3qhjfah.js:45090-45192 placement (2.1.88 match: getManagedPluginNames, 1)
+//@ chunk-5s0qaz1x.js:45352-45454 placement (2.1.88 match: getManagedPluginNames, 1)
 /**
  * 插件是否被托管策略显式禁用（policySettings.enabledPlugins 中为 false，含别名）。
  */
@@ -75,7 +74,7 @@ function isPluginBlockedByPolicy(pluginId) {
     (candidateId) => lookupByPluginAliases(enabledPlugins, candidateId) === false,
   );
 }
-//@ chunk-f3qhjfah.js:45192-45309 placement (2.1.88 match: getStrictKnownMarketplaces, 1)
+//@ chunk-5s0qaz1x.js:45454-45571 placement (2.1.88 match: getStrictKnownMarketplaces, 1)
 /**
  * 读托管策略 policySettings.strictKnownMarketplaces（允许名单），未设返回 null。
  */
@@ -84,7 +83,7 @@ function getStrictKnownMarketplaces() {
   if (!policySettings?.strictKnownMarketplaces) return null;
   return policySettings.strictKnownMarketplaces;
 }
-//@ chunk-f3qhjfah.js:45309-45441 placement
+//@ chunk-5s0qaz1x.js:45571-45703 placement
 /**
  * ~/.claude/skills/ 自动加载为 @skills-dir 插件是否被允许：blockedMarketplaces 含 {source:"skills-dir"} 则否；有 strictKnownMarketplaces 时需显式列出 skills-dir。
  */
@@ -96,21 +95,21 @@ function areLocalPluginDirsAllowedByPolicy() {
     strictKnownMarketplaces.some((strictKnownMarketplace) => strictKnownMarketplace.source === "skills-dir")
   );
 }
-//@ chunk-f3qhjfah.js:45441-45707 placement
+//@ chunk-5s0qaz1x.js:45703-45969 placement
 /**
  * skills-dir 插件被策略阻止时的提示（如何在 strictKnownMarketplaces 中放行）。
  */
 function localPluginDirsBlockedMessage(dir) {
   return `Plugins from ${dir}/ are blocked by your organization's managed settings (strictKnownMarketplaces or blockedMarketplaces). Ask your administrator to add {"source":"skills-dir"} to strictKnownMarketplaces, or remove it from blockedMarketplaces.`;
 }
-//@ chunk-f3qhjfah.js:45707-45776 placement
+//@ chunk-5s0qaz1x.js:45969-46038 placement
 /**
  * 托管策略 disableSideloadFlags 是否开启（禁用 --plugin-dir/--plugin-url 等会话侧载）。
  */
 function areSideloadFlagsDisabledByPolicy() {
   return getSettingsForSource("policySettings")?.disableSideloadFlags === true;
 }
-//@ chunk-f3qhjfah.js:45776-45835 placement
+//@ chunk-5s0qaz1x.js:46038-46097 placement
 /**
  * command 来源插件是否不可运行：组织设置尚未读到（unanswered）时一律视为禁用，否则看托管策略。
  */
@@ -118,7 +117,7 @@ function areCommandPluginSourcesDisabledByPolicy() {
   if (marketplaceNameAnswerState() === "unanswered") return true;
   return commandPluginSourcesDisabledBySettings();
 }
-//@ chunk-f3qhjfah.js:45835-46135 placement
+//@ chunk-5s0qaz1x.js:46097-46397 placement
 /**
  * 托管策略是否禁用 command 来源插件：显式 disableCommandPluginSources 优先；否则 allowManagedHooksOnly 开启时（除少数例外）视为禁用。
  */
@@ -135,7 +134,7 @@ function commandPluginSourcesDisabledBySettings() {
     !getAdminPolicyTierSettings().some((tier) => tier.allowManagedHooksOnly === true)
   );
 }
-//@ chunk-f3qhjfah.js:46135-46237 placement
+//@ chunk-5s0qaz1x.js:46397-46499 placement
 /**
  * 托管策略 disablePluginDirectory 是否禁用内置插件目录市场（anthropic-plugin-directory）。
  */
@@ -146,7 +145,7 @@ function isPluginDirectoryDisabledByPolicy() {
   }
   return false;
 }
-//@ chunk-f3qhjfah.js:46237-46456 placement
+//@ chunk-5s0qaz1x.js:46499-46718 placement
 /**
  * 插件目录市场不可用的原因：managed_setting（disablePluginDirectory）、blocklist、allowlist（未列入 strictKnownMarketplaces）、policy_limit（组织策略 allow_plugin_directory_search）；可用返回 null。
  */
@@ -160,7 +159,7 @@ function pluginDirectoryPolicyBlock() {
   }
   return null;
 }
-//@ chunk-f3qhjfah.js:46456-46506 placement
+//@ chunk-5s0qaz1x.js:46718-46768 placement
 /**
  * 插件目录不可用原因对应的一句提示文本（可用时为空串）。
  */
@@ -168,7 +167,7 @@ function pluginDirectoryPolicyBlockHint() {
   let block = pluginDirectoryPolicyBlock();
   return block === null ? "" : policyBlockReason(block);
 }
-//@ chunk-f3qhjfah.js:46506-46892 placement
+//@ chunk-5s0qaz1x.js:46768-47154 placement
 /**
  * git URL 是否被 hostPattern 类托管策略限制（blockedMarketplaces/strictKnownMarketplaces 中有 hostPattern 时，按主机匹配判断）。
  */
@@ -206,21 +205,21 @@ function isListingRepositoryBlockedByHostPolicy(url) {
     !(matches && host !== "" && filtered_2.some((entry) => fullMatchesRegex(host, entry.hostPattern)))
   );
 }
-//@ chunk-f3qhjfah.js:46892-46937 placement
+//@ chunk-5s0qaz1x.js:47154-47199 placement
 /**
  * 远程托管设置是否已获同意（非远程来源视为已同意）。
  */
 function policyTierCommandsMayRun() {
   return getPolicySettingsOrigin() !== "remote" || isRemoteManagedSettingsVerifiedAndApprovedForSession();
 }
-//@ chunk-f3qhjfah.js:46937-46964 placement
+//@ chunk-5s0qaz1x.js:47199-47226 placement
 function canPolicyDeclarationExemptHelper() {
   return !managedMarketplaceAnswerFlag();
 }
-//@ chunk-f3qhjfah.js:46964-47281 placement
+//@ chunk-5s0qaz1x.js:47226-47543 placement
 var REMOTE_POLICY_NOT_APPROVED_MESSAGE =
   "it is declared by remotely managed settings that this session could not verify with the server, or that have not been approved on this machine yet \u2014 make sure Claude Code can reach your managed-settings server, and approve the managed-settings dialog once in an interactive session (or ask your admin)";
-//@ chunk-f3qhjfah.js:47281-47698 placement
+//@ chunk-5s0qaz1x.js:47543-47960 placement
 /**
  * 市场在托管锁定下不能更新的原因：组织设置未读到 → organization_unanswered；command 来源禁用时，不在 policySettings.extraKnownMarketplaces 中声明的市场 → lockdown；远程策略未同意 → remote_policy_unconsented。
  */
@@ -243,14 +242,14 @@ function headersHelperPolicyRefusal(source, marketplaceName) {
     ? null
     : "lockdown";
 }
-//@ chunk-f3qhjfah.js:47698-47739 placement
+//@ chunk-5s0qaz1x.js:47960-48001 placement
 /**
  * 市场是否处于托管锁定（getMarketplaceLockdownReason 非空）。
  */
 function isHeadersHelperDisabledByPolicy(source, marketplaceName) {
   return headersHelperPolicyRefusal(source, marketplaceName) !== null;
 }
-//@ chunk-f3qhjfah.js:47739-47980 placement
+//@ chunk-5s0qaz1x.js:48001-48242 placement
 /**
  * 生成“N 个市场未更新（托管策略/等待组织设置）”的提示文本。
  */
@@ -262,10 +261,10 @@ function marketplacesRefusedByPolicyClause(count, names = []) {
       : "(managed policy) \u2014 ask your admin";
   return `${count} ${plural(count, "marketplace")} not updated ${reason}${namesText}`;
 }
-//@ chunk-f3qhjfah.js:47980-48190 placement
+//@ chunk-5s0qaz1x.js:48242-48452 placement
 var COMMAND_SOURCES_DISABLED_MESSAGE =
   "Command-sourced plugins are disabled by your organization's managed settings (disableCommandPluginSources / allowManagedHooksOnly). The plugin was not installed or updated and its command was not run.";
-//@ chunk-f3qhjfah.js:48190-48317 placement
+//@ chunk-5s0qaz1x.js:48452-48579 placement
 /**
  * 组织设置未读到时，在全局 organizationAsk 中记下有 command 来源插件/市场被暂缓，供之后提示。
  */
@@ -276,7 +275,7 @@ function noteHeldForTheAnswer(kind) {
     organizationAsk.isMarketplaceHeld ||= kind === "marketplace";
   }
 }
-//@ chunk-f3qhjfah.js:48317-48658 placement
+//@ chunk-5s0qaz1x.js:48579-48920 placement
 /**
  * command 来源插件被拒绝时给用户的说明（区分“组织设置还没读到”和“策略禁用”）。
  */
@@ -285,16 +284,16 @@ function commandPluginSourcesDisabledMessage() {
     ? "Command-sourced plugins aren't running in this session yet. Your organization's settings haven't been read, so it isn't known whether it allows them. The plugin was not installed or updated and its command was not run. They'll run once your organization's settings are read, if it allows them."
     : COMMAND_SOURCES_DISABLED_MESSAGE;
 }
-//@ chunk-f3qhjfah.js:48658-48740 placement
+//@ chunk-5s0qaz1x.js:48920-49002 placement
 var SIDELOAD_FLAGS_BLOCKED_PHRASE = "disabled by your organization's managed settings (disableSideloadFlags)";
-//@ chunk-f3qhjfah.js:48740-49053 placement
+//@ chunk-5s0qaz1x.js:49002-49315 placement
 /**
  * --plugin-dir 等会话侧载参数被 disableSideloadFlags 禁用时的错误文本。
  */
 function sideloadFlagsBlockedMessage(flags) {
   return `${flags.join(", ")} ${flags.length === 1 ? "is" : "are"} ${SIDELOAD_FLAGS_BLOCKED_PHRASE}. Plugins, custom agents, and MCP servers can only be loaded from sources your administrator has approved. Ask your administrator to remove disableSideloadFlags from managed settings, or use an approved marketplace / settings file instead.`;
 }
-//@ chunk-f3qhjfah.js:49161-49283 placement
+//@ chunk-5s0qaz1x.js:49423-49545 placement
 /**
  * 托管策略是否对市场来源有限制（设置了 strictKnownMarketplaces，或 blockedMarketplaces 中有 skills-dir/pluginDirectory 之外的条目）。
  */
@@ -309,25 +308,25 @@ function isMarketplaceRestrictionPolicyActive() {
       ))
   );
 }
-//@ chunk-f3qhjfah.js:49283-49329 placement
+//@ chunk-5s0qaz1x.js:49545-49591 placement
 /**
  * 无参数时同 hasMarketplaceSourcePolicy；给定来源时判断该来源是否不被策略允许。
  */
 function isSourceDisallowedOrUnverifiable(source) {
   return source === undefined ? isMarketplaceRestrictionPolicyActive() : !isSourceAllowedByPolicy(source);
 }
-//@ chunk-f3qhjfah.js:49329-49392 placement (2.1.88 match: getPluginTrustMessage, 1)
+//@ chunk-5s0qaz1x.js:49591-49654 placement (2.1.88 match: getPluginTrustMessage, 1)
 /**
  * 读托管策略 pluginTrustMessage（安装插件信任提示里附加的组织说明）。
  */
 function getPluginTrustMessage() {
   return getSettingsForSource("policySettings")?.pluginTrustMessage;
 }
-//@ chunk-f3qhjfah.js:49392-49469 placement
+//@ chunk-5s0qaz1x.js:49654-49731 placement
 function getPluginSuggestionMarketplaces() {
   return getSettingsForSource("policySettings")?.pluginSuggestionMarketplaces ?? [];
 }
-//@ chunk-f3qhjfah.js:49469-49625 placement
+//@ chunk-5s0qaz1x.js:49731-49887 placement
 function isMarketplaceSourceDeclaredByPolicy(name, source) {
   let adminAuthoredPolicySettings = getAdminAuthoredPolicySettings();
   let source_2 = adminAuthoredPolicySettings?.extraKnownMarketplaces?.[name]?.source;
@@ -338,12 +337,12 @@ function isMarketplaceSourceDeclaredByPolicy(name, source) {
     ) ?? false
   );
 }
-//@ chunk-f3qhjfah.js:49625-49726 placement
+//@ chunk-5s0qaz1x.js:49887-49988 placement (2.1.88 match: removeExtraMarketplace, 0.702)
 function isMarketplaceNameDeclaredByPolicy(name, settings) {
   let lowerName = nfcLower(name);
   return Object.keys(settings?.extraKnownMarketplaces ?? {}).some((key) => nfcLower(key) === lowerName);
 }
-//@ chunk-f3qhjfah.js:49726-50820 placement
+//@ chunk-5s0qaz1x.js:49988-51082 placement
 function isMarketplaceSourceVouchedByPolicy(marketplaceSource, home, options) {
   if (marketplaceSource.source === "claudeai") {
     let orgUuid = currentOrgUuid();
@@ -420,7 +419,7 @@ function isMarketplaceSourceVouchedByPolicy(marketplaceSource, home, options) {
     }) ?? false
   );
 }
-//@ chunk-f3qhjfah.js:50820-50998 placement (2.1.88 match: installVersion, 0.793)
+//@ chunk-5s0qaz1x.js:51082-51260 placement (2.1.88 match: installVersion, 0.793)
 function installVersion(candidate, declared) {
   if (candidate.source !== "npm") return true;
   if (declared.source !== "npm" || candidate.registry === undefined || declared.registry === undefined)
@@ -429,7 +428,7 @@ function installVersion(candidate, declared) {
   let right = normalizeBaseUrl(declared.registry);
   return left !== null && left === right;
 }
-//@ chunk-f3qhjfah.js:50998-51158 placement (2.1.88 match: isPreapprovedUrl, 1)
+//@ chunk-5s0qaz1x.js:51260-51420 placement (2.1.88 match: isPreapprovedUrl, 1)
 /**
  * 规范化基础 URL：主机名规范化、路径补尾部 /（安装器使用）。
  */
@@ -444,7 +443,7 @@ function normalizeBaseUrl(url) {
   if (!parsed.pathname.endsWith("/")) parsed.pathname = `${parsed.pathname}/`;
   return parsed.toString();
 }
-//@ chunk-f3qhjfah.js:51158-51404 placement
+//@ chunk-5s0qaz1x.js:51420-51666 placement
 function isNpmResolutionVouchedByPolicy(npmResolution) {
   let entries = allowListEntriesThatVouch(getAdminAuthoredPolicySettings()?.strictKnownMarketplaces);
   if (!entries) return false;
@@ -463,7 +462,7 @@ function isNpmResolutionVouchedByPolicy(npmResolution) {
       matchesNpmPolicyEntry(entry, npmResolution.packageName, tarballUrl, pathname, "allow"),
   );
 }
-//@ chunk-f3qhjfah.js:51404-51701 placement
+//@ chunk-5s0qaz1x.js:51666-51963 placement
 function isOfficialMarketplaceSourceVouched(source) {
   if (source.source !== "github" && source.source !== "git") return false;
   if (source.source === "git") {
@@ -483,12 +482,12 @@ function isOfficialMarketplaceSourceVouched(source) {
     (source.path || undefined) === undefined
   );
 }
-//@ chunk-f3qhjfah.js:51701-51759 placement
+//@ chunk-5s0qaz1x.js:51963-52021 placement
 var GIT_SOURCE_PROTOCOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-f3qhjfah.js:51701", () => {
+deferInit("chunk-5s0qaz1x.js:51963", () => {
   GIT_SOURCE_PROTOCOLS = new Set(["https:", "ssh:", "git+https:", "git+ssh:"]);
 });
-//@ chunk-f3qhjfah.js:52373-52429 placement
+//@ chunk-5s0qaz1x.js:52635-52691 placement
 /**
  * 从市场来源取规范化主机名（IP 字面量返回 null）。
  */
@@ -496,26 +495,26 @@ function extractHostFromSource(source) {
   let nonIpHostFromSource = getNonIpHostFromSource(source);
   return nonIpHostFromSource === null ? null : normalizeGitHost(nonIpHostFromSource);
 }
-//@ chunk-f3qhjfah.js:52429-52486 placement
+//@ chunk-5s0qaz1x.js:52691-52748 placement
 function getNonIpHostFromSource(source) {
   let host = extractHostFromSource_2(source);
   return host !== null && isBracketedIpv6Host(host) ? null : host;
 }
-//@ chunk-f3qhjfah.js:52486-52563 placement
+//@ chunk-5s0qaz1x.js:52748-52825 placement
 /**
  * 主机是否为 [IPv6] 字面量。
  */
 function isBracketedIpv6Host(host) {
   return host.startsWith("[") && host.endsWith("]") && isIpv4MappedOrTranslatedIpv6(host.slice(1, -1));
 }
-//@ chunk-f3qhjfah.js:52563-52590 placement
+//@ chunk-5s0qaz1x.js:52825-52853 placement
 /**
  * isSuspiciousMarketplaceUrl：可疑的市场 URL。
  */
 function isSuspiciousMarketplaceUrl(url) {
   return isSuspiciousUrl(url);
 }
-//@ chunk-f3qhjfah.js:53710-53795 placement (2.1.88 match: doesSourceMatchHostPattern, 1)
+//@ chunk-5s0qaz1x.js:53973-54058 placement (2.1.88 match: doesSourceMatchHostPattern, 1)
 /**
  * strictKnownMarketplaces 中所有 hostPattern 字符串。
  */
@@ -524,7 +523,7 @@ function getHostPatternsFromAllowlist() {
   if (!allowlist) return [];
   return allowlist.filter(isHostPatternEntry).map((entry) => entry.hostPattern);
 }
-//@ chunk-f3qhjfah.js:54124-54224 placement
+//@ chunk-5s0qaz1x.js:54387-54487 placement
 /**
  * URL 主机名规范化后返回（解析失败原样）。
  */
@@ -537,7 +536,7 @@ function canonicalFetchSourceUrl(url) {
     return url;
   }
 }
-//@ chunk-f3qhjfah.js:54224-54362 placement
+//@ chunk-5s0qaz1x.js:54487-54625 placement
 /**
  * owner/repo 是否属于给定 owner。
  */
@@ -554,7 +553,7 @@ function isRepoUnderOwner(repo, githubOwnerWildcard) {
     return false;
   return owner === githubOwnerWildcard;
 }
-//@ chunk-f3qhjfah.js:54362-54786 placement
+//@ chunk-5s0qaz1x.js:54625-55049 placement
 function doesRepoMatchBlocklistEntry(repoPath, candidate) {
   let normalized = normalizeRepoPath(candidate);
   let githubOwnerWildcard = parseGithubOwnerWildcard(repoPath);
@@ -580,7 +579,15 @@ function doesRepoMatchBlocklistEntry(repoPath, candidate) {
     return false;
   return owner.toLowerCase() === githubOwnerWildcard.toLowerCase();
 }
-//@ chunk-f3qhjfah.js:55910-56104 placement (2.1.88 match: isSourceAllowedByPolicy, 0.876)
+//@ chunk-5s0qaz1x.js:55049-55180 affinity
+/**
+ * 判断路径是相对路径且不含 .. 段。
+ */
+function isSafeRelativePath(path) {
+  if (path.startsWith("/") || path.startsWith("\\") || /^[A-Za-z]:/.test(path)) return false;
+  return !path.split(/[\\/]/).some((segment) => segment === "..");
+}
+//@ chunk-5s0qaz1x.js:56173-56367 placement (2.1.88 match: isSourceAllowedByPolicy, 0.876)
 /**
  * 来源是否命中托管策略 blockedMarketplaces（hostPattern、pathPattern 或来源等价比较）。
  */
@@ -596,7 +603,7 @@ function isSourceInBlocklist(source) {
     return areSourcesEquivalentForBlocklist(source, allowed);
   });
 }
-//@ chunk-f3qhjfah.js:56104-56353 placement
+//@ chunk-5s0qaz1x.js:56367-56616 placement
 function isSourceAllowedByPolicy(source) {
   if (
     source.source === "git" &&
@@ -614,7 +621,7 @@ function isSourceAllowedByPolicy(source) {
     matchesStrictMarketplaceEntry(source, strictKnownMarketplace),
   );
 }
-//@ chunk-f3qhjfah.js:56353-57846 placement
+//@ chunk-5s0qaz1x.js:56616-58109 placement
 function npmResolutionPolicyRefusal(resolution) {
   let blockedMarketplaces = getBlockedMarketplaces();
   let strictKnownMarketplaces = getStrictKnownMarketplaces();
@@ -660,7 +667,7 @@ function npmResolutionPolicyRefusal(resolution) {
     return `${packageLabel} cannot be used: it resolves to ${hostWithPort}, which is not among the plugin sources your organization allows (strictKnownMarketplaces). Ask your administrator to add an npm or hostPattern entry for it.`;
   return null;
 }
-//@ chunk-f3qhjfah.js:57846-57950 placement
+//@ chunk-5s0qaz1x.js:58109-58213 placement
 function matchesNpmPolicyEntry(entry, packageName, tarballUrl, pathname, mode) {
   return (
     matchesNpmPackagePattern(entry.package, packageName) &&
@@ -668,12 +675,12 @@ function matchesNpmPolicyEntry(entry, packageName, tarballUrl, pathname, mode) {
       (isUnderRegistryUrl(tarballUrl, pathname, entry.registry) ?? mode === "block"))
   );
 }
-//@ chunk-f3qhjfah.js:57950-58054 placement
+//@ chunk-5s0qaz1x.js:58213-58317 placement
 function matchesNpmPackagePattern(pattern, packageName) {
   if (pattern.endsWith("/*") && pattern.startsWith("@")) return packageName.startsWith(pattern.slice(0, -1));
   return pattern === packageName;
 }
-//@ chunk-f3qhjfah.js:58054-58200 placement
+//@ chunk-5s0qaz1x.js:58317-58463 placement
 function decodeSafeUrlPath(url) {
   let pathname;
   try {
@@ -684,7 +691,7 @@ function decodeSafeUrlPath(url) {
   if (pathname.includes("\\") || /(^|\/)\.\.?(\/|$)/.test(pathname)) return null;
   return pathname;
 }
-//@ chunk-f3qhjfah.js:58200-58498 placement
+//@ chunk-5s0qaz1x.js:58463-58761 placement
 function isUnderRegistryUrl(tarballUrl, pathname, registry) {
   let registryUrl;
   try {
@@ -708,11 +715,11 @@ function isUnderRegistryUrl(tarballUrl, pathname, registry) {
   if (!registryPath.endsWith("/")) registryPath = `${registryPath}/`;
   return pathname.startsWith(registryPath);
 }
-//@ chunk-f3qhjfah.js:58498-58559 placement
+//@ chunk-5s0qaz1x.js:58761-58822 placement
 function defaultPortForScheme(protocol) {
   return protocol === "https:" ? "443" : protocol === "http:" ? "80" : "";
 }
-//@ chunk-f3qhjfah.js:58559-59319 placement
+//@ chunk-5s0qaz1x.js:58822-59582 placement
 /**
  * 判断市场来源是否匹配策略中的一条 strictKnownMarketplaces：git 源先排除不安全 URL；hostPattern/pathPattern 按模式匹配； github 支持 owner/* 通配（ref/path 也要一致）；其余比较来源是否相同。
  */
@@ -752,42 +759,42 @@ function matchesStrictMarketplaceEntry(source, pattern) {
   return areSourcesEqual(source, pattern);
 }
 export {
-  isSourceAllowedByPolicy,
-  areCommandPluginSourcesDisabledByPolicy,
-  policyTierCommandsMayRun,
-  isSourceDisallowedOrUnverifiable,
-  isPluginBlockedByPolicy,
-  commandPluginSourcesDisabledMessage,
   areSideloadFlagsDisabledByPolicy,
-  sideloadFlagsBlockedMessage,
-  pluginDirectoryPolicyBlockHint,
-  areLocalPluginDirsAllowedByPolicy,
-  localPluginDirsBlockedMessage,
+  npmResolutionPolicyRefusal,
+  isMarketplaceRestrictionPolicyActive,
+  getStrictKnownMarketplaces,
+  isSourceDisallowedOrUnverifiable,
   pluginDirectoryPolicyBlock,
-  headersHelperPolicyRefusal,
-  isHeadersHelperDisabledByPolicy,
+  isSourceAllowedByPolicy,
+  isSourceInBlocklist,
+  isPluginDirectoryDisabledByPolicy,
+  areCommandPluginSourcesDisabledByPolicy,
   noteHeldForTheAnswer,
+  commandPluginSourcesDisabledMessage,
+  isOfficialMarketplaceSourceVouched,
+  sideloadFlagsBlockedMessage,
+  isPluginBlockedByPolicy,
   canonicalFetchSourceUrl,
   REMOTE_POLICY_NOT_APPROVED_MESSAGE,
   canPolicyDeclarationExemptHelper,
-  getStrictKnownMarketplaces,
-  npmResolutionPolicyRefusal,
-  isMarketplaceRestrictionPolicyActive,
-  isSourceInBlocklist,
-  isPluginDirectoryDisabledByPolicy,
-  isOfficialMarketplaceSourceVouched,
-  getPluginSuggestionMarketplaces,
-  isMarketplaceSourceDeclaredByPolicy,
-  isNpmResolutionVouchedByPolicy,
-  isMarketplaceSourceVouchedByPolicy,
-  isMarketplaceNameDeclaredByPolicy,
-  marketplacesRefusedByPolicyClause,
-  isListingRepositoryBlockedByHostPolicy,
+  policyTierCommandsMayRun,
+  headersHelperPolicyRefusal,
   extractHostFromSource,
   getHostPatternsFromAllowlist,
+  isListingRepositoryBlockedByHostPolicy,
+  pluginDirectoryPolicyBlockHint,
   isSuspiciousMarketplaceUrl,
   doesRepoMatchBlocklistEntry,
+  areLocalPluginDirsAllowedByPolicy,
+  getPluginSuggestionMarketplaces,
+  isMarketplaceSourceDeclaredByPolicy,
   commandPluginSourcesDisabledBySettings,
+  marketplacesRefusedByPolicyClause,
+  localPluginDirsBlockedMessage,
+  isHeadersHelperDisabledByPolicy,
+  isMarketplaceSourceVouchedByPolicy,
+  isMarketplaceNameDeclaredByPolicy,
+  isNpmResolutionVouchedByPolicy,
   SIDELOAD_FLAGS_BLOCKED_PHRASE,
   getPluginTrustMessage,
 };

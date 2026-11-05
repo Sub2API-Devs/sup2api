@@ -3,10 +3,10 @@
  *
  * API 错误的识别与文案：一批按状态码/消息片段识别错误的判定函数（beta 被拒、thinking/effort/advisor/媒体/工具配对等），getAssistantMessageFromError 把异常转成面向用户的 assistant 错误消息，classifyAPIError 给遥测分类，以及提示词过长/额度/拒答提示文案。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/errors.ts
- * pieces: chunk-8t8n4kdh.js (1), chunk-e6aww6q8.js (149), chunk-gr2vfhah.js (21), chunk-s61vbvea.js (2)
- * attribution: fingerprint 18, placement 63, layout 90, callgraph-witnessed 1, callgraph-fingerprint 1
+ * pieces: chunk-5xgkngpb.js (155), chunk-7jxyna5q.js (2), chunk-bc4jcw5z.js (2), chunk-k1t1w9mg.js (25), chunk-sywnjtqb.js (1)
+ * attribution: fingerprint 19, placement 68, layout 93, affinity 1, sole-consumer 1, callgraph-witnessed 1, shared-adjacent 1, callgraph-fingerprint 1
  */
 import { isAbsolute, basename } from "path";
 import {
@@ -45,6 +45,13 @@ import {
   TRANSIENT_SOCKET_CODES,
   UNREACHABLE_ERROR_CODES,
 } from "./errorUtils.js";
+import {
+  getAllowedEffortLevels,
+  modelSupportsEffortLevel,
+  effortRank,
+  isEffortWithinCap,
+  modelSupportsMaxEffort,
+} from "../../utils/effort.js";
 import { parseAdvisorResult } from "../../utils/advisor.js";
 import { MAX_PDF_PAGES, MAX_PDF_BYTES } from "../../utils/mediaLimits.js";
 import { formatFileSize, formatDurationCoarse } from "../../utils/format.js";
@@ -75,7 +82,14 @@ import { isFeedbackAllowed } from "../../commands/feedback/feedbackPolicy.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";
 import { tildify } from "../../utils/path.js";
 import { isAwsCredentialsProviderError } from "../../utils/aws.js";
-import { createApiErrorMessage, getAssistantMessageText } from "../../utils/messages.js";
+import { findInCauseChain, errorMessage } from "../../utils/errors.js";
+import { isOfficialFirstPartyEndpoint, getApiBaseUrl } from "../../utils/model/firstPartyBaseUrl.js";
+import { readRequestIdSource } from "./requestIdSource.js";
+import {
+  createApiErrorMessage,
+  getAssistantMessageText,
+  NO_RESPONSE_REQUESTED,
+} from "../../utils/messages.js";
 import { MESSAGE_MARK_SYMBOLS_2 } from "../../utils/messageKinds.js";
 import { classifyMediaError, buildMediaRemovedError } from "./mediaErrors.js";
 import {
@@ -93,26 +107,11 @@ import {
   isContextWindowError,
 } from "./badRequestClassifier.js";
 import { isArtifactMountMode } from "../artifacts/artifactMount.js";
-import {
-  getSubscriptionType,
-  isClaudeAISubscriber,
-  getUsageCreditsCommand,
-  getTurnOnUsageCreditsStep,
-  getAnthropicApiKeyWithSource,
-  hasStoredOAuthToken,
-  isApiKeyHelperTheActiveCredential,
-  getApiKeyHelperLastFailure,
-  isAwsAuthRefreshFromProjectSettings,
-  getConfiguredAwsAuthRefresh,
-  isHostManagedProviderAuth,
-  isGcpAuthRefreshFromProjectSettings,
-  getConfiguredGcpAuthRefresh,
-  HostManagedNoCredsError,
-  isExtraUsageAllowed,
-} from "../../utils/auth.js";
-import { SUBSCRIPTION_PAYMENT_ISSUE_MESSAGE } from "../sessionStatus/sessionStateClassifier.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
-import { isKnownContentBlockType, InvalidRequestHeaderValueError } from "./requestHeaders.js";
+import {
+  isKnownContentBlockType as isKnownContentBlockType_2,
+  InvalidRequestHeaderValueError,
+} from "./requestHeaders.js";
 import { logEvent } from "../analytics/index.js";
 import {
   BETA_AFK_MODE,
@@ -120,6 +119,7 @@ import {
   BETA_MESSAGE_THREADS,
   BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT,
   BETA_ADVISOR_TOOL,
+  BETA_PROGRAM_USE_CASE_IDS,
   BETA_CACHE_KEEPALIVE,
   BETA_THINKING_RESUMPTION,
   BETA_THINKING_BINDING_CONTROLS,
@@ -129,6 +129,7 @@ import {
   BETA_PROMPT_CACHING_EVICT,
   BETA_THINKING_DISPLAY_UPDATES,
   BETA_THINKING_TOKEN_COUNT,
+  BETA_CCR_TOOL_PROVENANCE,
   BETA_INLINE_TOOLS,
   BETA_MID_CONV_TOOL_CHANGE,
   BETA_TOOL_SEARCH_ADVANCED,
@@ -158,13 +159,30 @@ import {
   USAGE_SETTINGS_URL,
 } from "../claudeAiLimits.js";
 import {
+  isClaudeAISubscriber,
+  getUsageCreditsCommand,
+  getTurnOnUsageCreditsStep,
+  getAnthropicApiKeyWithSource,
+  hasStoredOAuthToken,
+  isApiKeyHelperTheActiveCredential,
+  getApiKeyHelperLastFailure,
+  getSubscriptionUnavailableMessage,
+  isAwsAuthRefreshFromProjectSettings,
+  getConfiguredAwsAuthRefresh,
+  isHostManagedProviderAuth,
+  isGcpAuthRefreshFromProjectSettings,
+  getConfiguredGcpAuthRefresh,
+  HostManagedNoCredsError,
+  getSubscriptionType,
+  isExtraUsageAllowed,
+} from "../../utils/auth.js";
+import {
   isUsageCreditsOnlyModel,
   renderUsageCreditsOnlyModelName,
   renderModelName,
 } from "../../utils/model/modelDisplay.js";
 import { getRateLimitErrorMessage, isRateLimitErrorMessage } from "../rateLimitMessages.js";
 import { applyMockHeaders } from "../mockRateLimits.js";
-import { NO_RESPONSE_REQUESTED } from "../../constants/messages.js";
 import { getGlobalConfig, isProjectScopeTrustAccepted } from "../../utils/config.js";
 import { jsonParse } from "../../utils/slowOperations.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
@@ -179,7 +197,6 @@ import {
   requestTooLargeText,
   measureRejectedRequest,
 } from "./requestTooLarge.js";
-import { isOfficialFirstPartyEndpoint, getApiBaseUrl } from "../../utils/model/firstPartyBaseUrl.js";
 import { isNonCustomOpusModel } from "../../utils/model/smallFastModel.js";
 import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
 import { OAuthRefreshDeadError, OAuthRefreshLockTimeoutError } from "../oauth/errors.js";
@@ -191,7 +208,6 @@ import {
 } from "../../../vendor/@anthropic-ai/sdk/lib/credentials/types.mjs";
 import { isWIFUserOAuthDeadError, wouldWIFProfileYieldToClaudeAILogin } from "../../utils/wifProfile.js";
 import { printableName } from "../../utils/printableName.js";
-import { errorMessage } from "../../utils/errors.js";
 import { findStreamNoResponseError, StreamNoEventsError } from "./streamErrors.js";
 import { getProxyUrlWithSource, shouldBypassProxy as shouldBypassProxy_2 } from "../../utils/proxy.js";
 import { FoundryCapabilityError } from "./foundryCapabilities.js";
@@ -211,7 +227,7 @@ import {
   SAFEGUARD_CATEGORY_LEADS,
   CYBER_SAFEGUARDS_URL,
   SAFEGUARDS_BROAD_NOTE,
-  formatRefusalDetails,
+  formatErrorDetails,
 } from "./safeguardMessages.js";
 import { firstWord } from "../../utils/model/thirdPartyModelDefaults.js";
 import { isConsumerPlan } from "../../utils/planTiers.js";
@@ -220,14 +236,14 @@ import { getConnectionTimeoutMs } from "../mcp/client.js";
 import { SdkError, SdkErrorCode } from "../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs";
 import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-gr2vfhah.js:1029-1081 fingerprint (2.1.88 match: API_ERROR_MESSAGE_PREFIX, 0.667)
+//@ chunk-k1t1w9mg.js:2336-2388 fingerprint (2.1.88 match: API_ERROR_MESSAGE_PREFIX, 0.667)
 /**
  * "API Error"；TBe=1000；d$="Prompt is too long"。
  */
 var API_ERROR_MESSAGE_PREFIX = "API Error";
 var API_ERROR_CONST_1000 = 1000;
 var PROMPT_TOO_LONG_ERROR_MESSAGE = "Prompt is too long";
-//@ chunk-gr2vfhah.js:1081-1242 callgraph-fingerprint (2.1.88 match: isPromptTooLongMessage, 1)
+//@ chunk-k1t1w9mg.js:2388-2549 callgraph-fingerprint (2.1.88 match: isPromptTooLongMessage, 1)
 /**
  * assistant API 错误消息的文本以 "Prompt is too long" 开头。
  */
@@ -239,32 +255,32 @@ function isPromptTooLongMessage_2(msg) {
     (block) => block.type === "text" && block.text.startsWith(PROMPT_TOO_LONG_ERROR_MESSAGE),
   );
 }
-//@ chunk-gr2vfhah.js:2086-2183 placement
+//@ chunk-k1t1w9mg.js:3456-3553 placement
 function isHeaderlessDecline503(error) {
   return (
     error instanceof APIError && error.status === 503 && error.headers?.get("x-should-retry") === "false"
   );
 }
-//@ chunk-gr2vfhah.js:2183-2265 placement
+//@ chunk-k1t1w9mg.js:3553-3635 placement
 /**
  * 导出函数 `headerlessDeclineKind`：参数 e，返回 d(e) ? lit("headerless_decline") : lit("headerless_retryable_503")。
  */
 function headerlessDeclineKind(error) {
   return isHeaderlessDecline503(error) ? lit("headerless_decline") : lit("headerless_retryable_503");
 }
-//@ chunk-gr2vfhah.js:2265-2301 placement
+//@ chunk-k1t1w9mg.js:3635-3671 placement
 /**
  * 导出函数 `headerlessDeclineRetryDelay`：参数 e，返回 d(e) ? 0 : getRetryDelay(1)。
  */
 function headerlessDeclineRetryDelay(error) {
   return isHeaderlessDecline503(error) ? 0 : getRetryDelay(1);
 }
-//@ chunk-gr2vfhah.js:2301-2424 placement
+//@ chunk-k1t1w9mg.js:3671-3794 placement
 function isRateLimitError(error) {
   if (!(error instanceof APIError)) return false;
   return error.status === 429 || (error.message?.includes('"type":"rate_limit_error"') ?? false);
 }
-//@ chunk-gr2vfhah.js:2424-2506 placement
+//@ chunk-k1t1w9mg.js:3794-3876 placement
 /**
  * 导出函数 `isNonRetryable4xx`：参数 e，返回 e >= 400 && e < 500 && e !== 401 && e !== 408 && e !== 409 && e !== 429 && e !== 451。
  */
@@ -279,25 +295,31 @@ function isNonRetryable4xx(status) {
     status !== 451
   );
 }
-//@ chunk-gr2vfhah.js:2506-2535 placement
+//@ chunk-k1t1w9mg.js:3876-3905 placement
 var DLP_REQUEST_DENIED = "dlp_request_denied";
-//@ chunk-gr2vfhah.js:2535-2571 placement
+//@ chunk-k1t1w9mg.js:3905-3941 placement
 /**
  * 导出函数 `isDlpRequestDenied`：参数 e，返回 getApiErrorCode(e) === DLP_REQUEST_DENIED。
  */
 function isDlpRequestDenied(error) {
   return getApiErrorCode(error) === DLP_REQUEST_DENIED;
 }
-//@ chunk-gr2vfhah.js:2571-2606 placement
+//@ chunk-k1t1w9mg.js:3941-3976 placement
 var EXTRA_USAGE_OUT_OF_CREDITS = "extra_usage_out_of_credits";
-//@ chunk-gr2vfhah.js:2606-2640 placement
+//@ chunk-k1t1w9mg.js:3976-4010 placement
 /**
  * 导出函数 `isExtraUsageOutOfCredits`：参数 e，返回 getApiErrorCode(e) === EXTRA_USAGE_OUT_OF_CREDITS。
  */
 function isExtraUsageOutOfCredits(error) {
   return getApiErrorCode(error) === EXTRA_USAGE_OUT_OF_CREDITS;
 }
-//@ chunk-gr2vfhah.js:2640-2757 placement
+//@ chunk-k1t1w9mg.js:4010-4041 layout
+var TOOL_USE_BLOCK_CUT_OFF = "tool_use_block_cut_off";
+//@ chunk-k1t1w9mg.js:4041-4075 layout
+function isToolUseBlockCutOffError(error) {
+  return getApiErrorCode(error) === TOOL_USE_BLOCK_CUT_OFF;
+}
+//@ chunk-k1t1w9mg.js:4075-4192 placement
 /**
  * 判断错误是否为 400 policy_blocked。
  */
@@ -305,19 +327,19 @@ function isPolicyBlockedError(error) {
   if (!(error instanceof APIError) || error.status !== 400 || !hasNestedError(error)) return false;
   return error.error?.error?.type === "policy_blocked";
 }
-//@ chunk-gr2vfhah.js:2757-2795 placement
+//@ chunk-k1t1w9mg.js:4192-4230 placement
 var CLAUDE_CODE_VERSION_TOO_OLD = "claude_code_version_too_old";
-//@ chunk-gr2vfhah.js:2795-2831 placement
+//@ chunk-k1t1w9mg.js:4230-4266 placement
 /**
  * 导出函数 `isClaudeCodeVersionTooOld`：参数 e，返回 getApiErrorCode(e) === CLAUDE_CODE_VERSION_TOO_OLD。
  */
 function isClaudeCodeVersionTooOld(error) {
   return getApiErrorCode(error) === CLAUDE_CODE_VERSION_TOO_OLD;
 }
-//@ chunk-gr2vfhah.js:2831-2996 placement
+//@ chunk-k1t1w9mg.js:4266-4431 placement
 var VERSION_TOO_OLD_PATTERN =
   /\bClaude Code \S+ (?:does not support this model; version \S+ or newer is required|is older than the minimum version required by your organization's policy)/;
-//@ chunk-gr2vfhah.js:2996-3111 placement
+//@ chunk-k1t1w9mg.js:4431-4546 placement
 /**
  * 判断错误是否为客户端版本被拒绝（400 且消息匹配版本过旧）。
  */
@@ -326,24 +348,32 @@ function isClientVersionRejected(error) {
   if (!(error instanceof APIError) || error.status !== 400) return false;
   return VERSION_TOO_OLD_PATTERN.test(extractNestedErrorMessage(error) ?? error.message);
 }
-//@ chunk-gr2vfhah.js:3111-3171 placement
+//@ chunk-k1t1w9mg.js:4546-4580 layout
+var PROGRAM_USE_CASE_NOT_HELD = "program_use_case_not_held";
+//@ chunk-k1t1w9mg.js:4580-4647 layout
+function isProgramUseCaseNotHeldError(error) {
+  return (
+    error instanceof APIError && error.status === 400 && getApiErrorCode(error) === PROGRAM_USE_CASE_NOT_HELD
+  );
+}
+//@ chunk-k1t1w9mg.js:4647-4707 placement
 var SAFETY_MONITOR_BLOCKED = "safety_monitor_blocked";
 var CCS_NO_REQUEST_TOKEN = "ccs_no_request_token";
-//@ chunk-gr2vfhah.js:3171-3196 placement
+//@ chunk-k1t1w9mg.js:4707-4732 placement
 /**
  * 导出函数 `alwaysFalseErrors`：参数 e，返回 !1。
  */
-function alwaysFalseErrors(e) {
+function alwaysFalseErrors(error) {
   return false;
 }
-//@ chunk-gr2vfhah.js:3196-3221 placement
+//@ chunk-k1t1w9mg.js:4732-4757 placement
 /**
  * 导出函数 `alwaysFalseB`：参数 e，返回 !1。
  */
 function alwaysFalseB(error) {
   return false;
 }
-//@ chunk-gr2vfhah.js:3221-3336 placement
+//@ chunk-k1t1w9mg.js:4757-4872 placement
 function isHipaaFeatureError(error) {
   return (
     isInvalidRequestStartingWith(error, "The requested features are not available for HIPAA-") &&
@@ -351,7 +381,7 @@ function isHipaaFeatureError(error) {
     getApiErrorCode(error) === undefined
   );
 }
-//@ chunk-gr2vfhah.js:3336-3506 placement
+//@ chunk-k1t1w9mg.js:4872-5042 placement
 function isInvalidRequestStartingWith(error, prefix) {
   if (!(error instanceof APIError) || !hasNestedError(error)) return false;
   let error_2 = error.error?.error;
@@ -361,7 +391,31 @@ function isInvalidRequestStartingWith(error, prefix) {
     error_2.message.startsWith(prefix)
   );
 }
-//@ chunk-s61vbvea.js:54508-54639 placement (2.1.88 match: detectPromptTooLong, 0.667)
+//@ chunk-bc4jcw5z.js:21578-21705 shared-adjacent (2.1.88 match: getRequestTooLargeErrorMessage, 0.801)
+/**
+ * 在模型可用 effort 级别中找比当前高(1)/低一级的级别。应归 utils/effort.ts。
+ */
+function findAdjacentEffortLevel(model, level, direction) {
+  let filtered = getAllowedEffortLevels(model).filter(
+    (level) => level !== "max" && modelSupportsEffortLevel(model, level),
+  );
+  return direction === 1
+    ? filtered.find((level_2) => effortRank(level_2) > effortRank(level))
+    : filtered.findLast((level_2) => effortRank(level_2) < effortRank(level));
+}
+//@ chunk-bc4jcw5z.js:21705-21783 fingerprint (2.1.88 match: getRequestTooLargeErrorMessage, 1)
+/**
+ * 当前之上只剩 max 且模型支持 max。应归 utils/effort.ts。
+ */
+function isOnlyMaxAboveEffort(model, level) {
+  return (
+    level !== "max" &&
+    findAdjacentEffortLevel(model, level, 1) === undefined &&
+    isEffortWithinCap("max", model) &&
+    modelSupportsMaxEffort(model)
+  );
+}
+//@ chunk-7jxyna5q.js:53447-53578 placement (2.1.88 match: detectPromptTooLong, 0.667)
 /**
  * 判断错误消息是否为“提示词过长”（prompt is too long / input is too long for requested model）。
  */
@@ -369,14 +423,14 @@ function isPromptTooLongMessage(message) {
   let lower = message.toLowerCase();
   return lower.includes("prompt is too long") || lower.includes("input is too long for requested model");
 }
-//@ chunk-s61vbvea.js:59778-59820 fingerprint (2.1.88 match: getErrorMessageIfRefusal, 0.333)
+//@ chunk-7jxyna5q.js:58717-58759 fingerprint (2.1.88 match: getErrorMessageIfRefusal, 0.332)
 /**
  * stop_reason 为 refusal。
  */
 function getErrorMessageIfRefusal(block) {
   return parseAdvisorResult(block) === "refusal";
 }
-//@ chunk-e6aww6q8.js:123593-123865 fingerprint (2.1.88 match: getPdfTooLargeErrorMessage, 1)
+//@ chunk-5xgkngpb.js:130344-130616 fingerprint (2.1.88 match: getPdfTooLargeErrorMessage, 1)
 /**
  * PDF 过大提示（页数/字节上限）；SDK/非交互与交互模式文案不同。
  */
@@ -386,7 +440,7 @@ function getPdfTooLargeErrorMessage() {
     ? `PDF too large (${limits}). Try reading the file a different way (e.g., extract text with pdftotext).`
     : `PDF too large (${limits}). Double press esc to go back and try again, or use pdftotext to convert to text first.`;
 }
-//@ chunk-e6aww6q8.js:123865-124062 fingerprint (2.1.88 match: getPdfPasswordProtectedErrorMessage, 1)
+//@ chunk-5xgkngpb.js:130616-130813 fingerprint (2.1.88 match: getPdfPasswordProtectedErrorMessage, 1)
 /**
  * PDF 有密码保护提示。
  */
@@ -395,7 +449,7 @@ function getPdfPasswordProtectedErrorMessage() {
     ? "PDF is password protected. Try using a CLI tool to extract or convert the PDF."
     : "PDF is password protected. Please double press esc to edit your message and try again.";
 }
-//@ chunk-e6aww6q8.js:124062-124265 fingerprint (2.1.88 match: getPdfInvalidErrorMessage, 1)
+//@ chunk-5xgkngpb.js:130813-131016 fingerprint (2.1.88 match: getPdfInvalidErrorMessage, 1)
 /**
  * PDF 无效提示。
  */
@@ -404,7 +458,7 @@ function getPdfInvalidErrorMessage() {
     ? "The PDF file was not valid. Try converting it to text first (e.g., pdftotext)."
     : "The PDF file was not valid. Double press esc to go back and try again with a different file.";
 }
-//@ chunk-e6aww6q8.js:124265-124455 fingerprint (2.1.88 match: getImageTooLargeErrorMessage, 1)
+//@ chunk-5xgkngpb.js:131016-131206 fingerprint (2.1.88 match: getImageTooLargeErrorMessage, 1)
 /**
  * 图片过大提示。
  */
@@ -413,7 +467,7 @@ function getImageTooLargeErrorMessage() {
     ? "Image was too large. Try resizing the image or using a different approach."
     : "Image was too large. Double press esc to go back and try again with a smaller image.";
 }
-//@ chunk-e6aww6q8.js:1554437-1555950 placement
+//@ chunk-5xgkngpb.js:1619962-1621475 placement
 /**
  * 生成组织支出上限已达或组织被停用时的错误文案。
  */
@@ -491,9 +545,9 @@ function formatOrgSpendCapError(
     }),
   };
 }
-//@ chunk-e6aww6q8.js:1555950-1555984 placement
+//@ chunk-5xgkngpb.js:1621475-1621509 placement
 var MODEL_FAMILY_ORDER = ["fable", "opus", "sonnet"];
-//@ chunk-e6aww6q8.js:1555984-1556162 placement
+//@ chunk-5xgkngpb.js:1621509-1621687 placement
 function compareVersionParts(leftVersion, rightVersion) {
   let mapped = leftVersion.split("-").map(Number);
   let mapped_2 = rightVersion.split("-").map(Number);
@@ -503,7 +557,7 @@ function compareVersionParts(leftVersion, rightVersion) {
   }
   return 0;
 }
-//@ chunk-e6aww6q8.js:1556162-1556635 placement
+//@ chunk-5xgkngpb.js:1621687-1622160 placement
 /**
  * 列出有 3P 回退 id 的模型目录条目，按家族顺序与版本号排序，返回用于在错误文本中匹配的 needle 与回退 id。
  */
@@ -539,13 +593,13 @@ function thirdPartyFallbackModels() {
       };
     });
 }
-//@ chunk-e6aww6q8.js:1556635-1556748 placement
+//@ chunk-5xgkngpb.js:1622160-1622273 placement
 function providerModelString(fallbackId) {
   let firstParty = getCatalogEntry_2(fallbackId)?.provider_ids.first_party;
   let modelKey = firstParty !== undefined ? MODEL_KEY_BY_FIRST_PARTY_ID[firstParty] : undefined;
   return modelKey !== undefined ? getModelStrings()[modelKey] : undefined;
 }
-//@ chunk-e6aww6q8.js:1556748-1557033 placement
+//@ chunk-5xgkngpb.js:1622273-1622558 placement
 /**
  * 非第一方模型 id 环境下，从错误文本中识别出被拒的模型，返回当前提供方对应的可用模型 id（Fable 回退到 Opus 时优先 ANTHROPIC_DEFAULT_OPUS_MODEL）。
  */
@@ -560,21 +614,21 @@ function suggestThirdPartyModel(errorText) {
     return env.ANTHROPIC_DEFAULT_OPUS_MODEL ?? providerModelString(found.fallbackId);
   return providerModelString(found.fallbackId);
 }
-//@ chunk-e6aww6q8.js:1557033-1557102 placement
+//@ chunk-5xgkngpb.js:1622558-1622627 placement
 var ADVISOR_20260301; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var replaced;
-deferInit("chunk-e6aww6q8.js:1557033", () => {
+deferInit("chunk-5xgkngpb.js:1622558", () => {
   ADVISOR_20260301 = "advisor_20260301";
   replaced = "advisor_20260301".replace(/\d+$/, "");
 });
-//@ chunk-e6aww6q8.js:1557102-1557476 placement
+//@ chunk-5xgkngpb.js:1622627-1623001 placement
 /**
  * 网络安全拦截的申诉链接、访问层级名称，以及 cyber_verification 错误详情的结构。
  */
 var CYBER_APPEAL_URL; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
 var CYBER_ACCESS_TIERS;
 var CYBER_VERIFICATION_SCHEMA;
-deferInit("chunk-e6aww6q8.js:1557102", () => {
+deferInit("chunk-5xgkngpb.js:1622627", () => {
   CYBER_APPEAL_URL = "https://claude.com/form/cyber-block-false-positive-report-cvp-rejection-appeal";
   CYBER_ACCESS_TIERS = {
     a: "Specialized Access",
@@ -597,7 +651,11 @@ deferInit("chunk-e6aww6q8.js:1557102", () => {
     }),
   );
 });
-//@ chunk-e6aww6q8.js:1557476-1558563 placement
+//@ chunk-5xgkngpb.js:1623001-1623057 layout
+function isCyberVerificationStop(stopDetails) {
+  return usesFirstPartyModelIds() && CYBER_VERIFICATION_SCHEMA().safeParse(stopDetails).success;
+}
+//@ chunk-5xgkngpb.js:1623057-1624144 placement
 /**
  * 生成网络安全验证计划相关的拒绝文案，并引导用户反馈。
  */
@@ -624,13 +682,13 @@ function formatCyberVerificationRefusal(learnMore, articleUrl, details) {
       }
   }
 }
-//@ chunk-e6aww6q8.js:1558563-1558616 placement
+//@ chunk-5xgkngpb.js:1624144-1624197 placement
 /**
  * 遥测用的安全键/路径键正则（小写字母数字下划线，路径版允许斜杠）与对应脱敏函数。
  */
 var SAFE_EVENT_KEY_RE = /^[a-z0-9_]{1,48}$/;
 var SAFE_PATH_KEY_RE = /^[a-z0-9_/]{1,48}$/;
-//@ chunk-e6aww6q8.js:1558616-1558691 placement
+//@ chunk-5xgkngpb.js:1624197-1624272 placement
 /**
  * 导出函数 `sanitizeEventKey`：参数 e，返回 typeof e === "string" && x6o.test(e) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e) : lit_2("unknown")。
  */
@@ -639,29 +697,29 @@ function sanitizeEventKey(key) {
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(key)
     : lit("unknown");
 }
-//@ chunk-e6aww6q8.js:1558691-1558738 placement
+//@ chunk-5xgkngpb.js:1624272-1624319 placement
 /**
  * 导出函数 `asSafePathKey`：参数 e，返回 P6o.test(e) ? e : "unknown"。
  */
 function asSafePathKey(path) {
   return SAFE_PATH_KEY_RE.test(path) ? path : "unknown";
 }
-//@ chunk-e6aww6q8.js:1558790-1558827 placement
+//@ chunk-5xgkngpb.js:1624371-1624408 placement
 var CLAUDE_BG_GATEWAY_WITHHELD = "CLAUDE_BG_GATEWAY_WITHHELD";
-//@ chunk-e6aww6q8.js:1558827-1558916 placement
+//@ chunk-5xgkngpb.js:1624408-1624497 placement
 /**
  * 导出函数 `isWithheldGatewayBgSession`：返回 isBgSession() && Boolean(env.CLAUDE_BG_GATEWAY_WITHHELD) && !env.ANTHROPIC_BASE_URL。
  */
 function isWithheldGatewayBgSession() {
   return isBgSession() && Boolean(env.CLAUDE_BG_GATEWAY_WITHHELD) && !env.ANTHROPIC_BASE_URL;
 }
-//@ chunk-e6aww6q8.js:1558916-1558969 placement
+//@ chunk-5xgkngpb.js:1624497-1624550 placement
 /**
  * 后台网关被扣留时的环境变量值长度上限与安全字符集校验。
  */
 var MAX_WITHHELD_GATEWAY_CHARS = 1024;
 var SAFE_GATEWAY_VALUE_RE = /^[\p{L}\p{M}\p{N}/\\._~+@,:=-]+$/u;
-//@ chunk-e6aww6q8.js:1558969-1559077 placement
+//@ chunk-5xgkngpb.js:1624550-1624658 placement
 function withheldGatewayFolder() {
   let CLAUDE_BG_GATEWAY_WITHHELD = env.CLAUDE_BG_GATEWAY_WITHHELD;
   return CLAUDE_BG_GATEWAY_WITHHELD &&
@@ -671,36 +729,46 @@ function withheldGatewayFolder() {
     ? tildify(CLAUDE_BG_GATEWAY_WITHHELD)
     : undefined;
 }
-//@ chunk-e6aww6q8.js:1559077-1559261 placement
+//@ chunk-5xgkngpb.js:1624658-1624842 placement
 function respawnCommandHint() {
   let jobId = env.CLAUDE_JOB_DIR && basename(env.CLAUDE_JOB_DIR);
   return jobId && /^[A-Za-z0-9_-]{1,64}$/.test(jobId)
     ? `\`claude respawn ${jobId}\``
     : "`claude respawn <id>` (the id is in the agents view)";
 }
-//@ chunk-e6aww6q8.js:1559261-1559369 placement
+//@ chunk-5xgkngpb.js:1624842-1624950 placement
 var NO_GATEWAY_MESSAGE =
   "No LLM gateway: a gateway set in your shell isn't passed to a session opened from another folder.";
-//@ chunk-e6aww6q8.js:1559369-1559601 placement
+//@ chunk-5xgkngpb.js:1624950-1625182 placement
 function noGatewayErrorMessage() {
   let folder = withheldGatewayFolder() ?? "this session's own folder";
   return `${NO_GATEWAY_MESSAGE} To fix, run ${respawnCommandHint()} from ${folder} in another terminal where your gateway is set, or set ANTHROPIC_BASE_URL and its API key or token in a settings file's env block.`;
 }
-//@ chunk-e6aww6q8.js:1559601-1559660 placement
+//@ chunk-5xgkngpb.js:1625182-1625241 placement
 /**
  * 导出函数 `isNoGatewayHint`：参数 e，返回 e.startsWith(`${NO_GATEWAY_MESSAGE} To fix, run `)。
  */
 function isNoGatewayHint(text) {
   return text.startsWith(`${NO_GATEWAY_MESSAGE} To fix, run `);
 }
-//@ chunk-e6aww6q8.js:1559660-1559771 placement
+//@ chunk-5xgkngpb.js:1625241-1625352 placement
 /**
  * 生成"未使用 LLM 网关：从其他目录打开"的提示文字。
  */
 function noGatewayNotice() {
   return `No LLM gateway: opened from another folder \xB7 respawn from ${withheldGatewayFolder() ?? "its own folder"}`;
 }
-//@ chunk-e6aww6q8.js:1571107-1571244 placement
+//@ chunk-5xgkngpb.js:1636701-1636832 affinity
+var FOUNDRY_CREDENTIAL_ERROR_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xgkngpb.js:1636701", () => {
+  FOUNDRY_CREDENTIAL_ERROR_NAMES = new Set([
+    "CredentialUnavailableError",
+    "AuthenticationError",
+    "AggregateAuthenticationError",
+    "AuthenticationRequiredError",
+  ]);
+});
+//@ chunk-5xgkngpb.js:1636832-1637049 placement
 /**
  * 非 HTTP 错误中的云凭证错误归属：AWS 或 Google Cloud，否则 null。
  */
@@ -708,9 +776,30 @@ function getCloudCredentialErrorProvider(error) {
   if (error instanceof APIError && error.status !== undefined) return null;
   if (isAwsCredentialsProviderError(error)) return "AWS";
   if (isGoogleCloudProvider() && isGoogleCredentialLoadError(error)) return "Google Cloud";
+  if (
+    env.CLAUDE_CODE_USE_FOUNDRY &&
+    findInCauseChain(error, (cause) => FOUNDRY_CREDENTIAL_ERROR_NAMES.has(cause.name)) !== undefined
+  )
+    return "Azure";
   return null;
 }
-//@ chunk-e6aww6q8.js:1571244-1571519 placement
+//@ chunk-5xgkngpb.js:1637049-1637266 layout
+function isNetworkEdgeBlockedError(error) {
+  if (
+    !(error instanceof APIError) ||
+    error.status !== 403 ||
+    !(error.headers instanceof Headers) ||
+    !isOfficialFirstPartyEndpoint()
+  )
+    return false;
+  let headers = error.headers;
+  return (
+    error.type === "forbidden" &&
+    !(error.error && "type" in error.error) &&
+    readRequestIdSource((headerName) => headers.get(headerName)) === "nonorigin_cf"
+  );
+}
+//@ chunk-5xgkngpb.js:1637266-1637541 placement
 class OAuthRefreshDiskFullError extends Error {
   constructor() {
     super(
@@ -719,7 +808,7 @@ class OAuthRefreshDiskFullError extends Error {
     this.name = "OAuthRefreshDiskFullError";
   }
 }
-//@ chunk-e6aww6q8.js:1571519-1571867 placement
+//@ chunk-5xgkngpb.js:1637541-1637889 placement
 /**
  * 各云提供方（AWS、Google Cloud、Microsoft Foundry、网关）认证失败的错误前缀，以及凭证由环境管理时的附加说明。
  */
@@ -731,7 +820,7 @@ var FOUNDRY_AUTH_FAILED = "Microsoft Foundry authentication failed";
 var GATEWAY_REFUSED = "Gateway refused the request";
 var MANAGED_CREDENTIALS_SUFFIX =
   " \xB7 credentials are managed by this environment \u2014 retry, or contact your administrator";
-//@ chunk-e6aww6q8.js:1571867-1571945 placement
+//@ chunk-5xgkngpb.js:1637889-1637967 placement
 /**
  * 导出函数 `hasInvalidCredentialPrefix`：参数 e，返回 [ INVALID_API_KEY_MESSAGE, INVALID_AUTH_TOKEN_MESSAGE, INVALID_CUSTOM_HEADERS_MESSAGE, INVALID_ENV_HEADER_MESS…。
  */
@@ -743,7 +832,7 @@ function hasInvalidCredentialPrefix(text) {
     INVALID_ENV_HEADER_MESSAGE,
   ].some((prefix) => text.startsWith(`${prefix} \xB7 `));
 }
-//@ chunk-e6aww6q8.js:1571945-1572145 fingerprint (2.1.88 match: startsWithApiErrorPrefix, 1)
+//@ chunk-5xgkngpb.js:1637967-1638167 fingerprint (2.1.88 match: startsWithApiErrorPrefix, 1)
 /**
  * 文本以 "API Error"、"Please run /login · API Error" 或 AWS/Google Cloud 凭证错误前缀开头。
  */
@@ -759,7 +848,9 @@ function startsWithApiErrorPrefix(text) {
     text.startsWith(GATEWAY_REFUSED)
   );
 }
-//@ chunk-e6aww6q8.js:1572145-1572319 fingerprint (2.1.88 match: parsePromptTooLongTokenCounts, 1)
+//@ chunk-5xgkngpb.js:1638167-1638513 layout
+var NETWORK_EDGE_BLOCKED_MESSAGE = `${API_ERROR_MESSAGE_PREFIX}: Request blocked before it reached Anthropic's API (HTTP 403) \xB7 the network this request came from isn't allowed: usually an unsupported region, or a VPN, proxy or hosting network \xB7 signing in again won't change this \xB7 check your VPN or network and retry \xB7 supported regions: https://anthropic.com/supported-countries`;
+//@ chunk-5xgkngpb.js:1638513-1638687 fingerprint (2.1.88 match: parsePromptTooLongTokenCounts, 1)
 /**
  * 从 "prompt is too long: N tokens > M" 解析实际与上限 token 数。
  */
@@ -770,7 +861,7 @@ function parsePromptTooLongTokenCounts(rawMessage) {
     limitTokens: match ? parseInt(match[2], 10) : undefined,
   };
 }
-//@ chunk-e6aww6q8.js:1572319-1572501 fingerprint (2.1.88 match: getPromptTooLongTokenGap, 0.781)
+//@ chunk-5xgkngpb.js:1638687-1638869 fingerprint (2.1.88 match: getPromptTooLongTokenGap, 0.781)
 /**
  * 提示词过长错误消息的超出量 {gap, actual}。
  */
@@ -786,19 +877,19 @@ function getPromptTooLongTokenGap(msg) {
       }
     : undefined;
 }
-//@ chunk-e6aww6q8.js:1572501-1572536 layout
+//@ chunk-5xgkngpb.js:1638869-1638904 layout
 /**
  * 提示词过长超出的 token 数。
  */
 function getPromptTooLongGap(msg) {
   return getPromptTooLongTokenGap(msg)?.gap;
 }
-//@ chunk-e6aww6q8.js:1572536-1572548 layout
+//@ chunk-5xgkngpb.js:1638904-1638916 layout
 /**
  * 0.8：会话内容占请求 80% 以上时提示"本会话内容占大头"。
  */
 var SINGLE_EXCHANGE_CONTENT_RATIO = 0.8;
-//@ chunk-e6aww6q8.js:1572548-1573355 layout
+//@ chunk-5xgkngpb.js:1638916-1639723 layout
 /**
  * 单轮会话无法压缩时的提示词过长文案：区分无法解析、会话内容占大头、系统提示词/工具/附件占大头三种情况。
  */
@@ -817,7 +908,7 @@ function formatSingleExchangePromptTooLong(stats) {
     "tool definitions, and attachment content. A single-exchange conversation cannot be compacted; reduce attached files/tools or start with less context."
   );
 }
-//@ chunk-e6aww6q8.js:1573355-1573675 layout
+//@ chunk-5xgkngpb.js:1639723-1640110 layout
 /**
  * 用新文案重建 API 错误消息，保留 requestId、apiErrorStatus/Code 等元数据。
  */
@@ -837,19 +928,22 @@ function rebuildApiErrorMessage(message, content, deps) {
     ...(message.apiErrorCode !== undefined && {
       apiErrorCode: message.apiErrorCode,
     }),
+    ...(message.failedResponseHadNoToolCall && {
+      failedResponseHadNoToolCall: true,
+    }),
     ...(message[MESSAGE_MARK_SYMBOLS_2] !== undefined && {
       [MESSAGE_MARK_SYMBOLS_2]: message[MESSAGE_MARK_SYMBOLS_2],
     }),
   };
 }
-//@ chunk-e6aww6q8.js:1573675-1573747 layout
+//@ chunk-5xgkngpb.js:1640110-1640182 layout
 /**
  * 错误详情含 request_too_large 或可识别的媒体错误。
  */
 function isRequestTooLargeOrMediaDetail(errorDetails) {
   return errorDetails.includes("request_too_large") || classifyMediaError(errorDetails) !== undefined;
 }
-//@ chunk-e6aww6q8.js:1573747-1573830 layout
+//@ chunk-5xgkngpb.js:1640182-1640265 layout
 /**
  * 400 错误里的媒体错误位置/类型（classifyMediaError）。
  */
@@ -857,7 +951,7 @@ function getMediaErrorFromApiError(error) {
   if (!(error instanceof APIError) || error.status !== 400) return;
   return classifyMediaError(error.message);
 }
-//@ chunk-e6aww6q8.js:1573830-1573924 fingerprint (2.1.88 match: isMediaSizeErrorMessage, 1)
+//@ chunk-5xgkngpb.js:1640265-1640359 fingerprint (2.1.88 match: isMediaSizeErrorMessage, 1)
 /**
  * API 错误消息的详情是请求过大或媒体错误。
  */
@@ -868,36 +962,36 @@ function isMediaSizeErrorMessage(msg) {
     isRequestTooLargeOrMediaDetail(msg.errorDetails)
   );
 }
-//@ chunk-e6aww6q8.js:1573924-1573960 fingerprint (2.1.88 match: CREDIT_BALANCE_TOO_LOW_ERROR_MESSAGE, 1)
+//@ chunk-5xgkngpb.js:1640359-1640395 fingerprint (2.1.88 match: CREDIT_BALANCE_TOO_LOW_ERROR_MESSAGE, 1)
 /**
  * "Credit balance is too low"。
  */
 var CREDIT_BALANCE_TOO_LOW_ERROR_MESSAGE = "Credit balance is too low";
-//@ chunk-e6aww6q8.js:1573960-1574064 placement
+//@ chunk-5xgkngpb.js:1640395-1640499 placement
 function isPromptTooLongError(error) {
   if (!(error instanceof Error)) return false;
   return isPromptTooLongMessage(error.message) || includesWholeWord(error.message, "prompt_too_long");
 }
-//@ chunk-e6aww6q8.js:1574064-1574168 placement
+//@ chunk-5xgkngpb.js:1640499-1640603 placement
 function isMaxTokensContextOverflow(error) {
   return (
     error instanceof Error &&
     (isContextLimitExceeded(error.message) || includesWholeWord(error.message, "max_tokens_context_overflow"))
   );
 }
-//@ chunk-e6aww6q8.js:1574168-1574221 placement
+//@ chunk-5xgkngpb.js:1640603-1640656 placement
 var CONTENT_FILTER_MESSAGE = "Output blocked by content filtering policy";
-//@ chunk-e6aww6q8.js:1574221-1574433 placement
+//@ chunk-5xgkngpb.js:1640656-1640868 placement
 function isRequestTooLargeError_2(error) {
   if (!(error instanceof Error) || !error.message.includes(CONTENT_FILTER_MESSAGE)) return false;
   let inner = "originalError" in error && error.originalError instanceof Error ? error.originalError : error;
   let status = inner instanceof APIError ? effectiveErrorStatus(inner) : undefined;
   return status === undefined || status === 400;
 }
-//@ chunk-e6aww6q8.js:1574433-1574548 placement
+//@ chunk-5xgkngpb.js:1640868-1640983 placement
 var UNPROCESSABLE_REQUEST_MESSAGE =
   "Request rejected as unprocessable by the model (too many or oversized images, or unsupported parameters)";
-//@ chunk-e6aww6q8.js:1574548-1574657 placement
+//@ chunk-5xgkngpb.js:1640983-1641093 placement
 function isUnprocessableRequest(error) {
   if (!(error instanceof APIError)) return false;
   let status = effectiveErrorStatus(error);
@@ -906,15 +1000,15 @@ function isUnprocessableRequest(error) {
     getApiErrorFirstLine(error).includes(UNPROCESSABLE_REQUEST_MESSAGE)
   );
 }
-//@ chunk-e6aww6q8.js:1574657-1574761 placement
+//@ chunk-5xgkngpb.js:1641093-1641198 placement
 function isCreditBalanceTooLow(error) {
   return error instanceof Error && error.message.toLowerCase().includes("credit balance is too low");
 }
-//@ chunk-e6aww6q8.js:1574761-1574871 placement
+//@ chunk-5xgkngpb.js:1641198-1641308 placement
 function isOrganizationDisabled(error) {
   return error instanceof Error && error.message.toLowerCase().includes("organization has been disabled");
 }
-//@ chunk-e6aww6q8.js:1574871-1574972 placement (2.1.88 match: _temp2, 1)
+//@ chunk-5xgkngpb.js:1641308-1641409 placement (2.1.88 match: _temp2, 1)
 /**
  * 判断错误是超时类：特定超时错误类型，或消息里含 timeout 的另一类错误。
  */
@@ -924,28 +1018,28 @@ function isTimeoutError(res) {
     (res instanceof APIConnectionError && res.message.toLowerCase().includes("timeout"))
   );
 }
-//@ chunk-e6aww6q8.js:1574972-1575039 layout
+//@ chunk-5xgkngpb.js:1641409-1641476 layout
 /**
  * 错误消息含重复 529 提示（Ike）。
  */
 function isRepeated529Error(error) {
   return error instanceof Error && error.message.includes(REPEATED_529_MESSAGE);
 }
-//@ chunk-e6aww6q8.js:1575039-1575125 layout
+//@ chunk-5xgkngpb.js:1641476-1641562 layout
 /**
  * "maximum of N PDF pages"。
  */
 function isPdfPageLimitError(error) {
   return error instanceof Error && /maximum of \d+ PDF pages/.test(error.message);
 }
-//@ chunk-e6aww6q8.js:1575125-1575230 layout
+//@ chunk-5xgkngpb.js:1641562-1641667 layout
 /**
  * "The PDF specified is password protected"。
  */
 function isPdfPasswordProtectedError(error) {
   return error instanceof Error && error.message.includes("The PDF specified is password protected");
 }
-//@ chunk-e6aww6q8.js:1575230-1575353 layout
+//@ chunk-5xgkngpb.js:1641667-1641790 layout
 /**
  * 400 "image exceeds ... maximum"。
  */
@@ -957,7 +1051,7 @@ function isImageTooLargeError(error) {
     error.message.includes("maximum")
   );
 }
-//@ chunk-e6aww6q8.js:1575353-1575489 fingerprint (2.1.88 match: isMediaSizeError, 0.692)
+//@ chunk-5xgkngpb.js:1641790-1641926 fingerprint (2.1.88 match: isMediaSizeError, 0.692)
 /**
  * 400 多图模式下尺寸超限。旧版名 isMediaSizeError 近似。
  */
@@ -969,14 +1063,14 @@ function isManyImageDimensionError(raw) {
     raw.message.includes("many-image")
   );
 }
-//@ chunk-e6aww6q8.js:1575489-1575544 layout
+//@ chunk-5xgkngpb.js:1641926-1641981 layout
 /**
  * HTTP 413。
  */
 function isRequestTooLargeError(error) {
   return error instanceof APIError && error.status === 413;
 }
-//@ chunk-e6aww6q8.js:1575544-1575640 layout
+//@ chunk-5xgkngpb.js:1641981-1642077 layout
 /**
  * 400 消息为 "input is too long"（G7s 判定）。
  */
@@ -987,7 +1081,7 @@ function isInputTooLongError(error) {
     isPlainInputTooLong(error.message)
   );
 }
-//@ chunk-e6aww6q8.js:1575640-1575791 layout
+//@ chunk-5xgkngpb.js:1642077-1642228 layout
 /**
  * 400 "`tool_use` ids were found without `tool_result` blocks immediately after"。
  */
@@ -998,7 +1092,7 @@ function isToolUseWithoutResultError(error) {
     error.message.includes("`tool_use` ids were found without `tool_result` blocks immediately after")
   );
 }
-//@ chunk-e6aww6q8.js:1575791-1575917 layout
+//@ chunk-5xgkngpb.js:1642228-1642354 layout
 /**
  * 400 "unexpected `tool_use_id` found in `tool_result`"。
  */
@@ -1009,7 +1103,7 @@ function isUnexpectedToolResultError(error) {
     error.message.includes("unexpected `tool_use_id` found in `tool_result`")
   );
 }
-//@ chunk-e6aww6q8.js:1575917-1576025 layout
+//@ chunk-5xgkngpb.js:1642354-1642462 layout
 /**
  * 400 "`tool_use` ids must be unique"。
  */
@@ -1020,7 +1114,7 @@ function isDuplicateToolUseIdError(error) {
     error.message.includes("`tool_use` ids must be unique")
   );
 }
-//@ chunk-e6aww6q8.js:1576025-1576136 layout
+//@ chunk-5xgkngpb.js:1642462-1642573 layout
 /**
  * 400 "invalid model name"。
  */
@@ -1031,14 +1125,14 @@ function isInvalidModelNameError(error) {
     error.message.toLowerCase().includes("invalid model name")
   );
 }
-//@ chunk-e6aww6q8.js:1576136-1576225 layout
+//@ chunk-5xgkngpb.js:1642573-1642662 layout
 /**
  * 消息提到 x-api-key。
  */
 function isApiKeyHeaderError(error) {
   return error instanceof Error && error.message.toLowerCase().includes("x-api-key");
 }
-//@ chunk-e6aww6q8.js:1576225-1576389 layout
+//@ chunk-5xgkngpb.js:1642662-1642826 layout
 /**
  * 401/403 "OAuth authentication is currently not allowed for this organization"。
  */
@@ -1049,7 +1143,7 @@ function isOAuthOrgNotAllowedError(error) {
     error.message.includes("OAuth authentication is currently not allowed for this organization")
   );
 }
-//@ chunk-e6aww6q8.js:1576389-1576495 layout
+//@ chunk-5xgkngpb.js:1642826-1642932 layout
 /**
  * Bedrock 上消息含 "model id"。
  */
@@ -1060,12 +1154,12 @@ function isBedrockModelIdError(error) {
     error.message.toLowerCase().includes("model id")
   );
 }
-//@ chunk-e6aww6q8.js:1576495-1576542 fingerprint (2.1.88 match: INVALID_API_KEY_ERROR_MESSAGE, 1)
+//@ chunk-5xgkngpb.js:1642932-1642979 fingerprint (2.1.88 match: INVALID_API_KEY_ERROR_MESSAGE, 1)
 /**
  * "Not logged in · Please run /login"。
  */
 var INVALID_API_KEY_ERROR_MESSAGE = "Not logged in \xB7 Please run /login";
-//@ chunk-e6aww6q8.js:1576542-1579306 layout
+//@ chunk-5xgkngpb.js:1642979-1646105 placement
 /**
  * 认证与过载类面向用户的错误文案常量组（以下同组）。
  */
@@ -1090,7 +1184,12 @@ var API_KEY_AUTH_DISABLED_LOGIN_MESSAGE =
 var API_KEY_AUTH_DISABLED_SIGN_IN_MESSAGE =
   "Your organization has disabled API key authentication \xB7 Sign in again with your claude.ai account";
 var TOKEN_REVOKED_MESSAGE = "OAuth token revoked \xB7 Please run /login";
-var LOGIN_EXPIRED_MESSAGE = "Login expired \xB7 Please run /login";
+var LOGIN_EXPIRED_RUN_LOGIN_MESSAGE = "Login expired \xB7 Please run /login";
+var LOGIN_EXPIRED_MESSAGE = "Login reached its time limit \xB7 Please run /login";
+var LOGIN_TIME_LIMIT_UNRENEWABLE_MESSAGE =
+  "Failed to authenticate: this login reached its time limit and cannot be renewed. Run `claude auth login` to sign in again, or use `claude setup-token` and set CLAUDE_CODE_OAUTH_TOKEN for unattended jobs";
+var LOGIN_TIME_LIMIT_SIGN_IN_MESSAGE =
+  "Failed to authenticate: this login reached its time limit \xB7 Sign in again to continue";
 var OAUTH_REFRESH_LOCK_TIMEOUT_MESSAGE =
   "Could not refresh your login because another Claude Code process is refreshing it (or exited mid-refresh) \xB7 Try again in a minute; if it keeps happening, close other Claude Code windows or sign in again with /login";
 var OAUTH_REFRESH_DISK_FULL_MESSAGE =
@@ -1113,7 +1212,7 @@ var OPUS_HIGH_LOAD_SHORT_MESSAGE = "Opus is experiencing high load. Switch to So
 var FABLE_HIGH_LOAD_SHORT_MESSAGE = "Fable is experiencing high load. Switch to Sonnet.";
 var SERVER_RATE_LIMITED_MESSAGE = "Server is temporarily limiting requests (not your usage limit)";
 var REQUEST_TIMED_OUT_MESSAGE = "Request timed out";
-//@ chunk-e6aww6q8.js:1579306-1579735 layout
+//@ chunk-5xgkngpb.js:1646105-1646534 placement
 /**
  * 错误后缀 "If it persists, check …"：官方 API/AnthropicAws 指向 status.claude.com，自定义网关指向其主机，其余提供商指向对应服务状态。
  */
@@ -1129,13 +1228,13 @@ function getStatusPageHint() {
     return ` If it persists, check ${HTTPS_STATUS_CLAUDE_COM} and Google Cloud's status page.`;
   return ` If it persists, check your ${THIRD_PARTY_PROVIDER_LABELS[apiProvider]} service status.`;
 }
-//@ chunk-e6aww6q8.js:1579735-1579893 layout
+//@ chunk-5xgkngpb.js:1646534-1646692 placement
 /**
  * 组织禁用了 Claude 订阅访问 Claude Code 的提示。
  */
 var SUBSCRIPTION_ACCESS_DISABLED_MESSAGE =
   "Your organization has disabled Claude subscription access for Claude Code \xB7 Use an Anthropic API key instead, or ask your admin to enable access";
-//@ chunk-e6aww6q8.js:1579893-1580022 layout
+//@ chunk-5xgkngpb.js:1646692-1646821 placement
 /**
  * OAuth 令牌被吊销的提示（交互/非交互不同文案）。
  */
@@ -1144,30 +1243,21 @@ function getTokenRevokedMessage() {
     ? "Failed to authenticate: OAuth token revoked. Please log in again or contact your administrator."
     : TOKEN_REVOKED_MESSAGE;
 }
-//@ chunk-e6aww6q8.js:1580022-1580057 layout
+//@ chunk-5xgkngpb.js:1646821-1646856 placement
 /**
  * 需要重新登录（某些托管登录场景）或 "Not logged in · Please run /login"。
  */
 function getNotLoggedInMessage() {
   return isArtifactMountMode() ? AUTH_REQUIRED_MESSAGE : INVALID_API_KEY_ERROR_MESSAGE;
 }
-//@ chunk-e6aww6q8.js:1580057-1580129 layout (2.1.88 match: isConsumerPlan, 1)
-/**
- * pro/max 用户为付款问题提示，其他为组织禁用提示。旧版名 isConsumerPlan 为错配。
- */
-function getSubscriptionUnavailableMessage() {
-  let subscriptionType = getSubscriptionType();
-  if (subscriptionType === "pro" || subscriptionType === "max") return SUBSCRIPTION_PAYMENT_ISSUE_MESSAGE;
-  return SUBSCRIPTION_ACCESS_DISABLED_MESSAGE;
-}
-//@ chunk-e6aww6q8.js:1580129-1580172 layout
+//@ chunk-5xgkngpb.js:1646928-1646971 sole-consumer
 /**
  * CLAUDE_CODE_REMOTE。
  */
 function isRemoteSession() {
   return env.CLAUDE_CODE_REMOTE;
 }
-//@ chunk-e6aww6q8.js:1580172-1582680 fingerprint (2.1.88 match: logToolUseToolResultMismatch, 0.791)
+//@ chunk-5xgkngpb.js:1646971-1649482 fingerprint (2.1.88 match: logToolUseToolResultMismatch, 0.781)
 /**
  * tool_use/tool_result 不匹配错误时，定位该 tool_use 在规范化前后消息中的位置并记录遥测（只记角色/块类型摘要）。
  */
@@ -1223,7 +1313,7 @@ function logToolUseToolResultMismatch(toolUseId, messages, messagesForAPI) {
               ? blockTag("tool_use", block.id)
               : block.type === "tool_result" && "tool_use_id" in block
                 ? blockTag("tool_result", block.tool_use_id)
-                : isKnownContentBlockType(block.type)
+                : isKnownContentBlockType_2(block.type)
                   ? fromEnum(block.type)
                   : lit("unknown"),
         ),
@@ -1269,7 +1359,7 @@ function logToolUseToolResultMismatch(toolUseId, messages, messagesForAPI) {
             ? blockTag("tool_use", block.id)
             : block.type === "tool_result"
               ? blockTag("tool_result", block.tool_use_id)
-              : isKnownContentBlockType(block.type)
+              : isKnownContentBlockType_2(block.type)
                 ? fromEnum(block.type)
                 : lit("unknown"),
       );
@@ -1302,7 +1392,7 @@ function logToolUseToolResultMismatch(toolUseId, messages, messagesForAPI) {
     });
   } catch (error) {}
 }
-//@ chunk-e6aww6q8.js:1582680-1582854 fingerprint (2.1.88 match: isValidAPIMessage, 1)
+//@ chunk-5xgkngpb.js:1649482-1649656 fingerprint (2.1.88 match: isValidAPIMessage, 1)
 /**
  * 对象形如 API Message（content 数组、model 字符串、usage 对象）。
  */
@@ -1318,7 +1408,7 @@ function isValidAPIMessage(value) {
     typeof value.usage === "object"
   );
 }
-//@ chunk-e6aww6q8.js:1582854-1582932 layout
+//@ chunk-5xgkngpb.js:1649656-1649734 layout
 /**
  * 400 拒绝 auto 模式的 afk-mode beta。
  */
@@ -1330,12 +1420,12 @@ function isAfkModeBetaRejected(error) {
     messageMentionsBeta(error.message, BETA_AFK_MODE)
   );
 }
-//@ chunk-e6aww6q8.js:1582932-1582995 layout
+//@ chunk-5xgkngpb.js:1649734-1649797 layout
 /**
  * safeguards 字段路径正则（messages.N.content.M…safeguards），用于区分内容块里的 safeguards 与顶层字段。
  */
 var SAFEGUARDS_CONTENT_PATH_REGEX = /^messages\.\d+\.content\.\d+(?:\.\w+)*\.safeguards\b/;
-//@ chunk-e6aww6q8.js:1582995-1583142 layout
+//@ chunk-5xgkngpb.js:1649797-1649945 layout
 /**
  * 取错误消息（优先 error.error.message）去掉状态码前缀后的第一行。
  */
@@ -1346,7 +1436,7 @@ function getApiErrorFirstLine(error) {
 `);
   return index === -1 ? text : text.slice(0, index);
 }
-//@ chunk-e6aww6q8.js:1583142-1583266 layout
+//@ chunk-5xgkngpb.js:1649945-1650069 layout
 /**
  * 422 错误转成等价的 400 错误对象（统一走 400 判定）。
  */
@@ -1355,7 +1445,7 @@ function normalize422To400(error) {
     ? new APIError(400, error.error, error.message.replace(/^422 /, ""), error.headers, error.type)
     : error;
 }
-//@ chunk-e6aww6q8.js:1583266-1583393 layout
+//@ chunk-5xgkngpb.js:1650069-1650197 layout
 /**
  * 400 拒绝 safeguards 字段/对应 beta。
  */
@@ -1368,7 +1458,7 @@ function isSafeguardsRejected(error) {
         !SAFEGUARDS_CONTENT_PATH_REGEX.test(getApiErrorFirstLine(error))))
   );
 }
-//@ chunk-e6aww6q8.js:1583393-1583471 layout
+//@ chunk-5xgkngpb.js:1650197-1650275 layout
 /**
  * 400 拒绝 PG（tether/thread）beta。
  */
@@ -1380,13 +1470,13 @@ function isTetherBetaRejected(error) {
     messageMentionsBeta(error.message, BETA_MESSAGE_THREADS)
   );
 }
-//@ chunk-e6aww6q8.js:1583471-1583605 layout
+//@ chunk-5xgkngpb.js:1650275-1650409 layout
 /**
  * 中途 system 消息 / clear_at 被拒的消息路径正则。
  */
 var TURN_SCOPED_SYSTEM_REGEX =
   /^messages\.\d+(?:\.content\.\d+)?(?:\.clear_at:|: .*(?:turn-scoped system message|\(clear_at: |clear_at is only permitted))/;
-//@ chunk-e6aww6q8.js:1583605-1583755 layout
+//@ chunk-5xgkngpb.js:1650409-1650560 layout
 /**
  * 400 拒绝 clear_at 或 turn-scoped system 消息。
  */
@@ -1399,7 +1489,7 @@ function isKeptReminderClearAtRejected(error) {
     TURN_SCOPED_SYSTEM_REGEX.test(apiErrorFirstLine)
   );
 }
-//@ chunk-e6aww6q8.js:1583755-1583945 layout
+//@ chunk-5xgkngpb.js:1650560-1650750 layout
 /**
  * 400 advisor_tool_result 内容无法处理。
  */
@@ -1411,7 +1501,7 @@ function isAdvisorResultUnprocessable(error) {
       error.message.includes("found in advisor_tool_result blocks"))
   );
 }
-//@ chunk-e6aww6q8.js:1583945-1584164 layout
+//@ chunk-5xgkngpb.js:1650750-1650969 layout
 /**
  * 历史中 web search 加密内容无法解密的错误片段；a3o 为代码执行结果加密错误。
  */
@@ -1421,14 +1511,14 @@ var WEB_SEARCH_DECRYPT_ERRORS = [
   "failed to decrypt web search result content",
 ];
 var CODE_EXECUTION_DECRYPT_ERROR = "invalid encrypted_stdout in encrypted_code_execution_result block";
-//@ chunk-e6aww6q8.js:1584164-1584222 layout
+//@ chunk-5xgkngpb.js:1650969-1651027 layout
 /**
  * 小写并去反引号。
  */
 function normalizeErrorText(message) {
   return message.toLowerCase().replaceAll("`", "");
 }
-//@ chunk-e6aww6q8.js:1584222-1584341 layout
+//@ chunk-5xgkngpb.js:1651027-1651146 layout
 /**
  * 400 历史 web search 内容解密失败（触发 retry:web-search-strip）。
  */
@@ -1437,7 +1527,7 @@ function isWebSearchContentRejected(error) {
   let text = normalizeErrorText(error.message);
   return WEB_SEARCH_DECRYPT_ERRORS.some((phrase) => text.includes(phrase));
 }
-//@ chunk-e6aww6q8.js:1584341-1584425 layout
+//@ chunk-5xgkngpb.js:1651146-1651230 layout
 /**
  * 400 历史中代码执行结果加密内容无法解密。
  */
@@ -1448,12 +1538,12 @@ function isCodeExecutionOutputRejected(error) {
     normalizeErrorText(error.message).includes(CODE_EXECUTION_DECRYPT_ERROR)
   );
 }
-//@ chunk-e6aww6q8.js:1584425-1584490 layout
+//@ chunk-5xgkngpb.js:1651230-1651295 layout
 /**
  * advisor 模型与请求模型不匹配的错误片段。
  */
 var ADVISOR_MODEL_MISMATCH_MESSAGE = "cannot be used as an advisor when the request model is";
-//@ chunk-e6aww6q8.js:1584490-1584569 layout
+//@ chunk-5xgkngpb.js:1651295-1651375 layout
 /**
  * 400 advisor 模型不能为当前请求模型提供建议。
  */
@@ -1464,7 +1554,7 @@ function isAdvisorModelMismatchError(error) {
     error.message.includes(ADVISOR_MODEL_MISMATCH_MESSAGE)
   );
 }
-//@ chunk-e6aww6q8.js:1584569-1584850 layout
+//@ chunk-5xgkngpb.js:1651375-1651656 layout
 /**
  * advisor 工具不可用/模型不能做 advisor/advisor beta 被拒。
  */
@@ -1480,7 +1570,7 @@ function isAdvisorUnavailableError(error) {
     );
   return error.status === 422 && isAdvisorBlockTypeUnknown(error.message);
 }
-//@ chunk-e6aww6q8.js:1584850-1584924 layout
+//@ chunk-5xgkngpb.js:1651656-1651730 layout
 /**
  * 400 拒绝 advisor beta。
  */
@@ -1489,14 +1579,14 @@ function isAdvisorBetaRejected(error) {
     error instanceof APIError && error.status === 400 && messageMentionsBeta(error.message, BETA_ADVISOR_TOOL)
   );
 }
-//@ chunk-e6aww6q8.js:1584924-1584957 layout
+//@ chunk-5xgkngpb.js:1651730-1651764 layout
 /**
  * 错误里的 Input tag 是 advisor 引入的块类型（服务端不认识）。
  */
 function isAdvisorBlockTypeUnknown(message) {
   return hasRejectedInputTag(BETA_ADVISOR_TOOL, message);
 }
-//@ chunk-e6aww6q8.js:1584957-1585102 layout
+//@ chunk-5xgkngpb.js:1651764-1651909 layout
 /**
  * advisor 被拒的范围：组织不可用→process，block 类型未知/beta 拒→host，否则 conversation。
  */
@@ -1504,7 +1594,15 @@ function getAdvisorRefusalScope(error) {
   if (error.message.includes("not available for this organization")) return "process";
   return isAdvisorBlockTypeUnknown(error.message) || isAdvisorBetaRejected(error) ? "host" : "conversation";
 }
-//@ chunk-e6aww6q8.js:1585102-1585175 layout
+//@ chunk-5xgkngpb.js:1651909-1651981 layout
+function isProgramUseCaseBetaRejected(error) {
+  return (
+    error instanceof APIError &&
+    error.status === 400 &&
+    messageMentionsBeta(error.message, BETA_PROGRAM_USE_CASE_IDS)
+  );
+}
+//@ chunk-5xgkngpb.js:1651981-1652054 layout
 /**
  * 400 拒绝 DO（缓存保活）beta。
  */
@@ -1515,7 +1613,7 @@ function isCacheKeepaliveBetaRejected(error) {
     messageMentionsBeta(error.message, BETA_CACHE_KEEPALIVE)
   );
 }
-//@ chunk-e6aww6q8.js:1585175-1585249 layout
+//@ chunk-5xgkngpb.js:1652054-1652128 layout
 /**
  * 400 拒绝 l3e beta。
  */
@@ -1526,12 +1624,12 @@ function isThinkingResumptionBetaRejected(error) {
     messageMentionsBeta(error.message, BETA_THINKING_RESUMPTION)
   );
 }
-//@ chunk-e6aww6q8.js:1585249-1585315 layout
+//@ chunk-5xgkngpb.js:1652128-1652194 layout
 /**
  * thinking.display 输入校验失败的正则。
  */
 var THINKING_DISPLAY_INPUT_REGEX = /thinking\.(adaptive|enabled)\.display: Input should be /;
-//@ chunk-e6aww6q8.js:1585315-1585391 layout
+//@ chunk-5xgkngpb.js:1652194-1652270 layout
 /**
  * 400 "thinking.(adaptive|enabled).display: Input should be"。
  */
@@ -1540,7 +1638,7 @@ function isThinkingDisplayRejected(error) {
     error instanceof APIError && error.status === 400 && THINKING_DISPLAY_INPUT_REGEX.test(error.message)
   );
 }
-//@ chunk-e6aww6q8.js:1585391-1585606 layout
+//@ chunk-5xgkngpb.js:1652270-1652485 layout
 /**
  * 400 拒绝 thinking-binding-controls beta 或 block_binding 字段。
  */
@@ -1556,7 +1654,7 @@ function isThinkingBindingRejected(error) {
       ))
   );
 }
-//@ chunk-e6aww6q8.js:1585606-1585708 layout
+//@ chunk-5xgkngpb.js:1652485-1652587 layout
 /**
  * 400 消息提到 thinking-binding-controls beta 头。
  */
@@ -1569,7 +1667,7 @@ function mentionsThinkingBindingBeta(error) {
     error.message.includes(BETA_THINKING_BINDING_CONTROLS.header)
   );
 }
-//@ chunk-e6aww6q8.js:1585708-1585817 layout
+//@ chunk-5xgkngpb.js:1652587-1652696 layout
 /**
  * 400 "invalid beta flag"。
  */
@@ -1580,7 +1678,7 @@ function isInvalidBetaFlagError(error) {
     error.message.toLowerCase().includes("invalid beta flag")
   );
 }
-//@ chunk-e6aww6q8.js:1585817-1585946 layout
+//@ chunk-5xgkngpb.js:1652696-1652825 layout
 /**
  * 400 提到 1M 上下文 beta 或 long context beta。
  */
@@ -1591,20 +1689,39 @@ function isContext1mBetaRejected(error) {
     (error.message.includes(BETA_LONG_CONTEXT.header) || error.message.includes("long context beta"))
   );
 }
-//@ chunk-e6aww6q8.js:1585946-1586365 layout
+//@ chunk-5xgkngpb.js:1652825-1653098 layout
+function isOwnershipMetadataPathError(message) {
+  let [beforeSchema = ""] = message.split(/schema/i, 1);
+  return /(?:^(?:\d{3} )?|"message":\s*")(?:(?:body\.)?(?:tools\.\d+\.(?:custom\.)?|messages\.\d+\.(?:\w+\.)*tool\.definition\.)ownership_metadata(?:\.\w+)?: |(?:Value error, )?on the (?:ccr_)?tool[_ ]provenance path, )/.test(
+    beforeSchema,
+  );
+}
+//@ chunk-5xgkngpb.js:1653098-1653219 layout
+function isToolProvenanceServerUrlError(error) {
+  return (
+    error instanceof APIError &&
+    error.status === 400 &&
+    !isConversationBindingError(error) &&
+    !isInvalidThinkingSignatureError(error) &&
+    error.message.includes("server_url") &&
+    isOwnershipMetadataPathError(error.message)
+  );
+}
+//@ chunk-5xgkngpb.js:1653219-1653647 layout
 /**
  * beta → 400 消息匹配器（context_management、evict_on_complete、thinking display、thinking-token-count 等）；OJt 是其键列表，d3o 是 beta → 输入标签名正则。
  */
 var BETA_REJECTION_MATCHERS; // deferred: uses BETA_CLAUDE_CODE (../../utils/betas.js) of its import cycle while loading; runs once the cycle is complete
 var BETA_REJECTION_MATCHER_KEYS;
 var BETA_INPUT_TAG_PATTERNS;
-deferInit("chunk-e6aww6q8.js:1585946", () => {
+deferInit("chunk-5xgkngpb.js:1653219", () => {
   BETA_REJECTION_MATCHERS = new Map([
     [BETA_CACHE_DIAGNOSIS, null],
     [BETA_CONTEXT_MANAGEMENT, (text) => text.includes("context_management: Extra inputs are not permitted")],
     [BETA_PROMPT_CACHING_EVICT, (text) => text.includes("evict_on_complete") && text.includes("beta")],
     [BETA_THINKING_DISPLAY_UPDATES, (text) => THINKING_DISPLAY_INPUT_REGEX.test(text)],
     [BETA_THINKING_TOKEN_COUNT, null],
+    [BETA_CCR_TOOL_PROVENANCE, isOwnershipMetadataPathError],
   ]);
   BETA_REJECTION_MATCHER_KEYS = [...BETA_REJECTION_MATCHERS.keys()];
   BETA_INPUT_TAG_PATTERNS = new Map([
@@ -1616,7 +1733,7 @@ deferInit("chunk-e6aww6q8.js:1585946", () => {
     [BETA_TOOL_SEARCH, /^tool_reference$/],
   ]);
 });
-//@ chunk-e6aww6q8.js:1586365-1586484 layout
+//@ chunk-5xgkngpb.js:1653647-1653767 layout
 /**
  * 消息里的 "Input tag 'x'" 是否属于该 beta 引入的块类型。
  */
@@ -1627,7 +1744,7 @@ function hasRejectedInputTag(beta, message) {
     [...message.matchAll(/Input tag '([\w.-]+)'/g)].some(([, tag]) => pattern.test(tag))
   );
 }
-//@ chunk-e6aww6q8.js:1586484-1586584 layout
+//@ chunk-5xgkngpb.js:1653767-1653869 layout
 /**
  * 错误首行以被拒的 Input tag 开头。
  */
@@ -1635,12 +1752,12 @@ function errorStartsWithRejectedInputTag(beta, error) {
   let match = /^(?:[\w.]+: )?Input tag '[\w.-]+'/.exec(getApiErrorFirstLine(error));
   return match !== null && hasRejectedInputTag(beta, match[0]);
 }
-//@ chunk-e6aww6q8.js:1586584-1586666 layout
+//@ chunk-5xgkngpb.js:1653869-1653951 layout
 /**
  * "Unexpected value(s) `a`, `b` for the `anthropic-beta`"。
  */
 var UNEXPECTED_BETA_VALUES_REGEX = /Unexpected value\(s\) ((?:`[^`]+`(?:, )?)+) for the `anthropic[-_]beta`/;
-//@ chunk-e6aww6q8.js:1586666-1586870 layout
+//@ chunk-5xgkngpb.js:1653951-1654155 layout
 /**
  * 400 中被拒的、本次发送了的 beta 列表（排除思考签名/会话绑定错误）。
  */
@@ -1663,7 +1780,7 @@ function getRejectedBetas(error, knownHeaders) {
           messageMentionsBeta(error.message, beta))),
   );
 }
-//@ chunk-e6aww6q8.js:1586870-1587017 layout
+//@ chunk-5xgkngpb.js:1654155-1654302 layout
 /**
  * 该 beta 出现在 "Unexpected value(s) ... for the anthropic-beta" 列表中。
  */
@@ -1675,7 +1792,7 @@ function isBetaListedAsUnexpected(error, beta) {
     UNEXPECTED_BETA_VALUES_REGEX.exec(error.message)?.[1]?.includes(`\`${beta.header}\``) === true
   );
 }
-//@ chunk-e6aww6q8.js:1587017-1587169 layout
+//@ chunk-5xgkngpb.js:1654302-1654454 layout
 /**
  * 错误是否指向该 beta 被拒。
  */
@@ -1689,7 +1806,7 @@ function isBetaRejected(error, beta) {
       ((error.status === 400 || error.status === 422) && hasRejectedInputTag(beta, error.message)))
   );
 }
-//@ chunk-e6aww6q8.js:1587169-1587297 layout
+//@ chunk-5xgkngpb.js:1654454-1654582 layout
 /**
  * beta 被拒：首行 Unexpected value(s) 列出该头、或 beta 专属匹配器命中、或 Input tag 属于该 beta。
  */
@@ -1701,7 +1818,7 @@ function isBetaHeaderRejected(error, beta) {
     errorStartsWithRejectedInputTag(beta, error)
   );
 }
-//@ chunk-e6aww6q8.js:1587297-1587424 layout
+//@ chunk-5xgkngpb.js:1654582-1654710 layout
 /**
  * 错误首行 Unexpected value(s) 列出该头，或带 beta_header:<名> 诊断标记。
  */
@@ -1712,7 +1829,7 @@ function isBetaNamedInUnexpectedValues(error, header) {
     includesWholeWord(error.message, `beta_header:${header}`)
   );
 }
-//@ chunk-e6aww6q8.js:1587424-1588623 layout
+//@ chunk-5xgkngpb.js:1654710-1655909 layout
 /**
  * 服务端拒答回退（fallbacks 参数/beta）相关 400 的子类：category_beta_header/beta_header/default_unconfigured/unsupported_primary/invalid_target/param_shape…
  */
@@ -1743,7 +1860,7 @@ function classifyServerFallbackError(error) {
     return "extra_forbidden";
   return;
 }
-//@ chunk-e6aww6q8.js:1588623-1589365 layout
+//@ chunk-5xgkngpb.js:1655909-1656651 layout
 /**
  * fallback_credit_token 相关 400 子类：credit_beta_header/malformed/wrong_org/expired/invalid_model/extra_forbidden/other。
  */
@@ -1765,14 +1882,14 @@ function classifyFallbackCreditError(error) {
   if (/\bfallback_credit_token\s*:/.test(message)) return "credit_other";
   return;
 }
-//@ chunk-e6aww6q8.js:1589365-1589405 layout
+//@ chunk-5xgkngpb.js:1656651-1656691 layout
 /**
  * 消息是否提到该 beta 头。
  */
 function messageMentionsBeta(message, beta) {
   return isBetaHeaderNamed(message, beta.header);
 }
-//@ chunk-e6aww6q8.js:1589405-1589646 layout
+//@ chunk-5xgkngpb.js:1656691-1656932 layout
 /**
  * 400/422 拒绝对话中途的 system 消息（mid_conv_system）。
  */
@@ -1792,7 +1909,7 @@ function isMidConversationSystemRejected(error) {
     includesWholeWord(error.message, `beta_header:${MID_CONVERSATION_SYSTEM_2026_04_07}`)
   );
 }
-//@ chunk-e6aww6q8.js:1589646-1589732 layout
+//@ chunk-5xgkngpb.js:1656932-1657018 layout
 /**
  * 中途 system 消息被拒时解析出的具体原因。
  */
@@ -1800,21 +1917,21 @@ function getMidConvSystemRejection(error) {
   if (!(error instanceof APIError) || !isMidConversationSystemRejected(error)) return null;
   return parseMidConvSystemRejection(error.message) ?? null;
 }
-//@ chunk-e6aww6q8.js:1589732-1589771 layout
+//@ chunk-5xgkngpb.js:1657018-1657057 layout
 /**
  * tool_addition/removal 被拒（classifyToolChangeError 有结果）。
  */
 function isToolChangeRejected(error) {
   return classifyToolChangeError(error) !== undefined;
 }
-//@ chunk-e6aww6q8.js:1589771-1589810 layout
+//@ chunk-5xgkngpb.js:1657057-1657096 layout
 /**
  * 消息内工具定义被拒（classifyInlineToolDefinitionError 有结果）。
  */
 function isInlineToolDefinitionRejected(error) {
   return classifyInlineToolDefinitionError(error) !== undefined;
 }
-//@ chunk-e6aww6q8.js:1589810-1590322 layout
+//@ chunk-5xgkngpb.js:1657096-1657609 layout
 /**
  * 消息内工具定义（tool_definition）被拒原因：unsupported_on_platform/header_rejected/kind_not_enabled/name_conflict。
  */
@@ -1835,7 +1952,7 @@ function classifyInlineToolDefinitionError(error) {
     return "name_conflict";
   return;
 }
-//@ chunk-e6aww6q8.js:1590322-1590947 layout
+//@ chunk-5xgkngpb.js:1657609-1658235 layout
 /**
  * tool_addition/removal 块被拒原因：block_type_unknown/header_rejected/after_paused_turn/model_unsupported/too_many_definitions/pfc_only/unknown_tool_reference/other。
  */
@@ -1858,7 +1975,7 @@ function classifyToolChangeError(error) {
   if (message.includes("references") || message.includes("names a declared")) return "unknown_tool_reference";
   return "other";
 }
-//@ chunk-e6aww6q8.js:1590947-1591069 layout
+//@ chunk-5xgkngpb.js:1658235-1658357 layout
 /**
  * 400 拒绝某处 cache_control 字段。
  */
@@ -1866,7 +1983,7 @@ function isCacheControlFieldRejected(error) {
   if (!(error instanceof APIError) || error.status !== 400) return false;
   return isCacheControlError(error.message) || includesWholeWord(error.message, "cache_control_field");
 }
-//@ chunk-e6aww6q8.js:1591069-1591398 layout
+//@ chunk-5xgkngpb.js:1658357-1658686 layout
 /**
  * 400 拒绝 output_config（除 timing、结构化输出、effort 与 thinking 冲突等已单独处理的情况）。
  */
@@ -1886,7 +2003,7 @@ function isOutputConfigRejected(error) {
     includesWholeWord(message, "effort_unsupported")
   );
 }
-//@ chunk-e6aww6q8.js:1591398-1591607 layout
+//@ chunk-5xgkngpb.js:1658686-1658895 layout
 /**
  * 400 拒绝按轮 effort（per-turn effort）。
  */
@@ -1899,7 +2016,7 @@ function isPerTurnEffortRejected(error) {
       /messages\.\d+\.output_config: Extra inputs are not permitted/.test(error.message))
   );
 }
-//@ chunk-e6aww6q8.js:1591607-1591726 layout
+//@ chunk-5xgkngpb.js:1658895-1659014 layout
 /**
  * 400 拒绝 per-turn timing beta 或 output_config.timing。
  */
@@ -1911,7 +2028,7 @@ function isOutputTimingRejected(error) {
       error.message.includes("output_config.timing"))
   );
 }
-//@ chunk-e6aww6q8.js:1591726-1592075 layout
+//@ chunk-5xgkngpb.js:1659014-1659363 layout
 /**
  * 400 模型不支持 effort（effort parameter not supported / output_config.effort extra inputs）。
  */
@@ -1928,7 +2045,7 @@ function isEffortUnsupportedError(error) {
     return true;
   return includesWholeWord(error.message, "effort_unsupported") || isBetaHeaderRejected(error, BETA_EFFORT);
 }
-//@ chunk-e6aww6q8.js:1592075-1592216 layout
+//@ chunk-5xgkngpb.js:1659363-1659504 layout
 /**
  * 400 模型不支持结构化输出（output_config.format）。
  */
@@ -1942,7 +2059,7 @@ function isStructuredOutputsUnsupported(error) {
       isBetaListedAsUnexpected(error, BETA_STRUCTURED_OUTPUTS))
   );
 }
-//@ chunk-e6aww6q8.js:1592216-1592411 layout
+//@ chunk-5xgkngpb.js:1659504-1659699 layout
 /**
  * 400 "not created in this conversation"/"bound to a different conversation"（思考签名或缓存锚点绑定错误）。
  */
@@ -1953,7 +2070,7 @@ function isConversationBindingError(error) {
     lower.includes("not created in this conversation") || lower.includes("bound to a different conversation")
   );
 }
-//@ chunk-e6aww6q8.js:1592411-1592472 layout
+//@ chunk-5xgkngpb.js:1659699-1659760 layout
 /**
  * 给错误打 prefixLockHealDeclined 标记（前缀锁自愈被放弃）。
  */
@@ -1962,7 +2079,7 @@ function markPrefixLockHealDeclined(error) {
     prefixLockHealDeclined: true,
   });
 }
-//@ chunk-e6aww6q8.js:1592472-1592572 layout
+//@ chunk-5xgkngpb.js:1659760-1659860 layout
 /**
  * 错误带 prefixLockHealDeclined 标记。
  */
@@ -1971,7 +2088,7 @@ function isPrefixLockHealDeclined(error) {
     error instanceof APIError && "prefixLockHealDeclined" in error && error.prefixLockHealDeclined === true
   );
 }
-//@ chunk-e6aww6q8.js:1592572-1593149 layout
+//@ chunk-5xgkngpb.js:1659860-1660437 layout
 /**
  * 解析 anthropic-thinking-prefix-mismatch 响应头为 {block:{messageIndex,blockIndex}, kind}。
  */
@@ -2005,7 +2122,7 @@ function parseThinkingPrefixMismatchHeader(error) {
     kind,
   };
 }
-//@ chunk-e6aww6q8.js:1593149-1593269 layout
+//@ chunk-5xgkngpb.js:1660437-1660557 layout
 /**
  * 400 thinking 块签名无效（触发 retry:thinking-signature-strip）。
  */
@@ -2013,7 +2130,7 @@ function isInvalidThinkingSignatureError(error) {
   if (!(error instanceof APIError) || error.status !== 400) return false;
   return isThinkingSignatureError(error.message) || includesWholeWord(error.message, "thinking_signature");
 }
-//@ chunk-e6aww6q8.js:1593269-1593498 layout
+//@ chunk-5xgkngpb.js:1660557-1660786 layout
 /**
  * 400 拒绝的 thinking 类型（enabled/adaptive）。
  */
@@ -2025,7 +2142,7 @@ function getRejectedThinkingType(error) {
   if (includesWholeWord(error.message, "thinking_type:adaptive")) return "adaptive";
   return null;
 }
-//@ chunk-e6aww6q8.js:1593498-1593661 layout
+//@ chunk-5xgkngpb.js:1660786-1660949 layout
 /**
  * 400 "effort 'x' is not supported when thinking is disabled" 中的 effort。
  */
@@ -2033,7 +2150,7 @@ function getEffortRejectedWithoutThinking(error) {
   if (!(error instanceof APIError) || error.status !== 400) return null;
   return /effort '([a-z]+)' is not supported when thinking is disabled/i.exec(error.message)?.[1] ?? null;
 }
-//@ chunk-e6aww6q8.js:1593661-1594198 layout
+//@ chunk-5xgkngpb.js:1660949-1661487 layout
 /**
  * getAssistantMessageFromError 的包装：补 apiErrorStatus、requestId、apiErrorCode 与额外标注。
  */
@@ -2068,14 +2185,14 @@ ${assistantMessageFromError.errorDetails ?? ""}`,
   if (firstPartyClass !== undefined) assistantMessageFromError[MESSAGE_MARK_SYMBOLS_2] = firstPartyClass;
   return assistantMessageFromError;
 }
-//@ chunk-e6aww6q8.js:1594198-1594272 layout
+//@ chunk-5xgkngpb.js:1661487-1661561 layout
 /**
  * 交互模式下附加 " Run /rewind to recover the conversation."。
  */
 function getRewindHint() {
   return getIsNonInteractiveSession() ? "" : " Run /rewind to recover the conversation.";
 }
-//@ chunk-e6aww6q8.js:1594272-1610377 callgraph-witnessed (2.1.88 match: getAssistantMessageFromError, 0.242)
+//@ chunk-5xgkngpb.js:1661561-1678035 callgraph-witnessed (2.1.88 match: getAssistantMessageFromError, 0.22)
 /**
  * 把任意 API 异常转成 assistant 错误消息（Fs）：超时、图片/PDF、DLP、off-switch、额度与用量信用、1M 上下文需信用、提示词过长（可压缩时提示 /compact）、媒体、effort 与 thinking 冲突、工具配对错误、Opus 不可用、余额不足、各类认证（API key、OAuth 吊销、组织禁用、云凭证、网关）、模型不存在等，error 字段取 server_error/invalid_request/rate_limit/billing_error/authentication_failed/model_not_found/… 。
  */
@@ -2096,6 +2213,12 @@ function getAssistantMessageFromError(error, model, options) {
       content: `${API_ERROR_MESSAGE_PREFIX}: ${formatAPIError(error)}`,
       error: "invalid_request",
       apiError: DLP_REQUEST_DENIED,
+    });
+  if (isToolUseBlockCutOffError(error))
+    return createApiErrorMessage({
+      content: `${API_ERROR_MESSAGE_PREFIX}: ${formatAPIError(error)} Try again.`,
+      apiError: "max_output_tokens",
+      error: "max_output_tokens",
     });
   if (isClaudeCodeVersionTooOld(error))
     return createApiErrorMessage({
@@ -2228,9 +2351,9 @@ function getAssistantMessageFromError(error, model, options) {
       });
     }
     let headline = showLimits ? SERVER_RATE_LIMITED_MESSAGE : "Request rejected (429)";
-    let baseMessage = `this may be a temporary capacity issue.${getStatusPageHint()}`;
+    let overloadedMessage = `this may be a temporary capacity issue.${getStatusPageHint()}`;
     return createApiErrorMessage({
-      content: `${API_ERROR_MESSAGE_PREFIX}: ${headline} \xB7 ${detail || baseMessage}`,
+      content: `${API_ERROR_MESSAGE_PREFIX}: ${headline} \xB7 ${detail || overloadedMessage}`,
       error: "rate_limit",
       apiErrorIsTransient: showLimits,
     });
@@ -2267,15 +2390,18 @@ function getAssistantMessageFromError(error, model, options) {
       error: "invalid_request",
       errorDetails: error.message,
     });
-  if (isManyImageDimensionError(error))
+  if (isManyImageDimensionError(error)) {
+    let innerMessage = /many-image requests: (\d+) pixels/.exec(error.message)?.[1];
+    let pixelLimit = `An image in the conversation exceeds the dimension limit for many-image requests${innerMessage ? ` (${innerMessage}px)` : ""}.`;
     return createApiErrorMessage({
       content:
         canSuggestSlashCommands() && !isEnvTruthy(process.env.DISABLE_COMPACT)
-          ? "An image in the conversation exceeds the dimension limit for many-image requests (2000px). Run /compact to remove old images from context, or start a new session."
-          : "An image in the conversation exceeds the dimension limit for many-image requests (2000px). Start a new session with fewer images.",
+          ? `${pixelLimit} Run /compact to remove old images from context, or start a new session.`
+          : `${pixelLimit} Start a new session with fewer images.`,
       error: "invalid_request",
       errorDetails: error.message,
     });
+  }
   {
     let effortRejectedWithoutThinking = getEffortRejectedWithoutThinking(error);
     if (effortRejectedWithoutThinking !== null && error instanceof Error) {
@@ -2366,8 +2492,8 @@ function getAssistantMessageFromError(error, model, options) {
   }
   if (isToolUseWithoutResultError(error)) {
     if (options?.messages && options?.messagesForAPI) {
-      let match = error.message.match(/toolu_[A-Za-z0-9_]+/);
-      let toolUseId = match ? match[0] : null;
+      let toolUseIdMatch = error.message.match(/toolu_[A-Za-z0-9_]+/);
+      let toolUseId = toolUseIdMatch ? toolUseIdMatch[0] : null;
       if (toolUseId) logToolUseToolResultMismatch(toolUseId, options.messages, options.messagesForAPI);
     }
     return createApiErrorMessage({
@@ -2474,13 +2600,21 @@ function getAssistantMessageFromError(error, model, options) {
           : getNotLoggedInMessage(),
     });
   }
-  if (error instanceof OAuthRefreshDeadError)
+  if (error instanceof OAuthRefreshDeadError) {
+    let apiKeySource = isArtifactMountMode()
+      ? LOGIN_TIME_LIMIT_SIGN_IN_MESSAGE
+      : LOGIN_TIME_LIMIT_UNRENEWABLE_MESSAGE;
     return createApiErrorMessage({
       error: "authentication_failed",
       content: getIsNonInteractiveSession()
-        ? "Failed to authenticate: OAuth session expired and could not be refreshed"
-        : LOGIN_EXPIRED_MESSAGE,
+        ? error.reachedTimeLimit
+          ? apiKeySource
+          : "Failed to authenticate: OAuth session expired and could not be refreshed"
+        : error.reachedTimeLimit
+          ? LOGIN_EXPIRED_MESSAGE
+          : LOGIN_EXPIRED_RUN_LOGIN_MESSAGE,
     });
+  }
   if (error instanceof OAuthRefreshLockTimeoutError)
     return createApiErrorMessage({
       error: "server_error",
@@ -2556,6 +2690,12 @@ function getAssistantMessageFromError(error, model, options) {
           : API_KEY_AUTH_DISABLED_LOGIN_MESSAGE,
       });
   }
+  if (isNetworkEdgeBlockedError(error) && !isRemoteSession())
+    return createApiErrorMessage({
+      error: "invalid_request",
+      apiError: "network_edge_blocked",
+      content: NETWORK_EDGE_BLOCKED_MESSAGE,
+    });
   if (error instanceof APIError && (error.status === 401 || error.status === 403)) {
     if (isRemoteSession()) {
       let nestedMessage = error.status === 403 ? extractNestedErrorMessage(error) : null;
@@ -2700,6 +2840,11 @@ function getAssistantMessageFromError(error, model, options) {
     });
   if (error instanceof APIError && typeof error.status === "number" && error.status >= 500) {
     let replaced = formatAPIError(error).replace(/[.!?\u2026]+$/, "");
+    if (getApiErrorCode(error) === CCS_NO_REQUEST_TOKEN)
+      return createApiErrorMessage({
+        content: `${API_ERROR_MESSAGE_PREFIX}: ${replaced}.`,
+        error: "server_error",
+      });
     return createApiErrorMessage({
       content: `${API_ERROR_MESSAGE_PREFIX}: ${replaced}. This is a server-side issue, usually temporary \u2014 try again in a moment.${statusPageHint}`,
       error: "server_error",
@@ -2709,7 +2854,7 @@ function getAssistantMessageFromError(error, model, options) {
   if (cloudCredentialErrorProvider !== null) {
     let replaced = (error instanceof APIError ? formatAPIError(error) : errorMessage(error))
       .trimEnd()
-      .replace(/[.!?\u2026]+$/, "");
+      .replace(/[.,!?\u2026]+$/, "");
     return createApiErrorMessage({
       content: `${API_ERROR_MESSAGE_PREFIX}: Could not load ${cloudCredentialErrorProvider} credentials \xB7 ${replaced}. Check or refresh your ${cloudCredentialErrorProvider} credentials and try again.`,
       error: "cloud_credential_error",
@@ -2818,14 +2963,14 @@ function getAssistantMessageFromError(error, model, options) {
     error: "unknown",
   });
 }
-//@ chunk-e6aww6q8.js:1610377-1610419 layout
+//@ chunk-5xgkngpb.js:1678035-1678077 layout
 /**
  * 交互或允许斜杠命令时可提示 /compact 等。
  */
 function canSuggestSlashCommands() {
   return (!getIsNonInteractiveSession() || isArtifactMountMode()) && !getDisableSlashCommands();
 }
-//@ chunk-e6aww6q8.js:1610419-1610598 layout
+//@ chunk-5xgkngpb.js:1678077-1678256 layout
 /**
  * 413 request_too_large 时尝试测量被拒会话大小，失败记日志。
  */
@@ -2842,7 +2987,7 @@ function measureRejectedConversation(options) {
     return;
   }
 }
-//@ chunk-e6aww6q8.js:1610598-1610765 layout
+//@ chunk-5xgkngpb.js:1678256-1678423 layout
 /**
  * 换模型提示用 /model 或 --model（SDK/GitHub Action 场景）。
  */
@@ -2853,7 +2998,7 @@ function getModelSwitchHint() {
   if (isHostEntrypoint() && !isArtifactMountMode()) return "--model";
   return;
 }
-//@ chunk-e6aww6q8.js:1610765-1610844 layout
+//@ chunk-5xgkngpb.js:1678423-1678502 layout
 /**
  * "Not sent: no API attempts left"：本轮 API 尝试预算耗尽。
  */
@@ -2862,7 +3007,7 @@ class NoApiAttemptsLeftError extends Error {
     super("Not sent: no API attempts left");
   }
 }
-//@ chunk-e6aww6q8.js:1610844-1615671 fingerprint (2.1.88 match: classifyAPIError, 0.405)
+//@ chunk-5xgkngpb.js:1678502-1683369 fingerprint (2.1.88 match: classifyAPIError, 0.402)
 /**
  * 遥测用 API 错误分类：aborted/api_timeout/repeated_529/rate_limit/server_overload/prompt_too_long/pdf_*\/image_*\/tool_use_mismatch/invalid_model/credit_balance_low/invalid_api_key/token_revoked/auth_error/ssl_cert_error/connection_error/unknown 等约 60 类。
  */
@@ -2976,6 +3121,7 @@ function classifyAPIError(error) {
     return "invalid_api_key";
   if (isOAuthTokenRevokedError(error)) return "token_revoked";
   if (isOAuthOrgNotAllowedError(error)) return "oauth_org_not_allowed";
+  if (isNetworkEdgeBlockedError(error)) return "network_edge_blocked";
   if (error instanceof APIError && (error.status === 401 || error.status === 403)) return "auth_error";
   if (isBedrockModelIdError(error)) return "bedrock_model_access";
   if (isRequestTooLargeError_2(error)) return "output_content_filtered";
@@ -3033,7 +3179,7 @@ function classifyAPIError(error) {
     return "connection_error";
   return "unknown";
 }
-//@ chunk-e6aww6q8.js:1615671-1616007 fingerprint (2.1.88 match: categorizeRetryableAPIError, 0.752)
+//@ chunk-5xgkngpb.js:1683369-1683705 fingerprint (2.1.88 match: categorizeRetryableAPIError, 0.752)
 /**
  * 可重试错误的粗分类：overloaded/rate_limit/authentication_failed/server_error/cloud_credential_error/unknown。
  */
@@ -3045,7 +3191,7 @@ function categorizeRetryableAPIError(error) {
   if (error.isCloudCredentialError) return "cloud_credential_error";
   return "unknown";
 }
-//@ chunk-e6aww6q8.js:1616007-1617851 placement
+//@ chunk-5xgkngpb.js:1683705-1685551 placement
 /**
  * stop_reason=refusal 时生成拒答提示消息（安全策略链接、类别说明、换模型提示），记 tengu_refusal_api_response。
  */
@@ -3118,7 +3264,7 @@ ${cyberNote}`;
 ${learnMore}`;
     }
   }
-  let categoryNote = formatRefusalDetails(details?.category);
+  let categoryNote = formatErrorDetails(details?.category);
   let requestIdText = sanitizeRequestId(requestId);
   let messageIdText = sanitizeRequestId(requestId_2);
   let idsNote =
@@ -3142,7 +3288,7 @@ Message ID: ${messageIdText}`
   apiErrorMessage.message.stop_details = details ?? null;
   return apiErrorMessage;
 }
-//@ chunk-e6aww6q8.js:1617851-1619647 placement
+//@ chunk-5xgkngpb.js:1685551-1687347 placement
 /**
  * 需要用量信用/达到消费上限时的文案（Fable 限额、组织/频道/团队预算），SDK 与交互模式不同。
  */
@@ -3205,7 +3351,7 @@ function getUsageCreditsRequiredMessage(reason, isFable, modelLabel, overageScop
         : `${limitText} /model to switch models.`;
   }
 }
-//@ chunk-e6aww6q8.js:1619647-1619784 placement
+//@ chunk-5xgkngpb.js:1687347-1687484 placement
 /**
  * "Usage credits are required for long context"。
  */
@@ -3215,7 +3361,7 @@ function isLongContextCreditsRequired(message) {
     message.includes("Usage credits are required for long context")
   );
 }
-//@ chunk-e6aww6q8.js:1619784-1619885 placement (2.1.88 match: isMediaSizeErrorMessage, 1)
+//@ chunk-5xgkngpb.js:1687484-1687585 placement (2.1.88 match: isMediaSizeErrorMessage, 1)
 /**
  * API 错误消息详情是长上下文需信用。旧版名错配。
  */
@@ -3227,19 +3373,19 @@ function isLongContextCreditsRequiredMessage(msg) {
     isLongContextCreditsRequired(msg.errorDetails)
   );
 }
-//@ chunk-e6aww6q8.js:1619885-1619959 placement
+//@ chunk-5xgkngpb.js:1687585-1687659 placement
 /**
  * 只接受 [A-Za-z0-9_-]{1,255}。
  */
 function sanitizeRequestId(requestId) {
   return requestId != null && /^[A-Za-z0-9_-]{1,255}$/.test(requestId) ? requestId : undefined;
 }
-//@ chunk-e6aww6q8.js:1619959-1619976 placement
+//@ chunk-5xgkngpb.js:1687659-1687676 placement
 /**
  * 导出常量或表 `RATE_LIMIT_RESET_MAX_MS`：值为 86400000。
  */
 var RATE_LIMIT_RESET_MAX_MS = 86400000;
-//@ chunk-e6aww6q8.js:1619976-1620114 placement
+//@ chunk-5xgkngpb.js:1687676-1687814 placement
 /**
  * 判断限流状态是否可自动恢复：已拒绝、有有效重置时间且未在使用超额。
  */
@@ -3252,7 +3398,7 @@ function isAutoResumableLimit(limits) {
     limits.overageInUse !== true
   );
 }
-//@ chunk-e6aww6q8.js:1620114-1620226 placement
+//@ chunk-5xgkngpb.js:1687814-1687926 placement
 class IntentProvider {
   #e = null;
   get provided() {
@@ -3265,15 +3411,15 @@ class IntentProvider {
     return this.#e?.() ?? false;
   }
 }
-//@ chunk-e6aww6q8.js:1620226-1620253 placement
+//@ chunk-5xgkngpb.js:1687926-1687953 placement
 /**
  * 导出函数 `intentProviderSlot`。
  */
 var intentProviderSlot; // deferred: uses IntentProvider of its import cycle while loading; runs once the cycle is complete
-deferInit("chunk-e6aww6q8.js:1620226", () => {
+deferInit("chunk-5xgkngpb.js:1687926", () => {
   intentProviderSlot = new HostScoped(() => new IntentProvider());
 });
-//@ chunk-8t8n4kdh.js:79910-80092 fingerprint (2.1.88 match: API_TIMEOUT_ERROR_MESSAGE, 0.717)
+//@ chunk-sywnjtqb.js:80016-80198 fingerprint (2.1.88 match: API_TIMEOUT_ERROR_MESSAGE, 0.717)
 /**
  * 给请求 promise 挂超时：到时用 RequestTimeout 错误中止控制器，完成后清计时器。旧版名 API_TIMEOUT_ERROR_MESSAGE 为错配；疑似第三方/其他 HTTP 客户端代码。
  */
@@ -3297,21 +3443,7 @@ function armRequestTimeout(promise, abortController) {
   );
 }
 export {
-  getErrorMessageIfRefusal,
-  getPdfTooLargeErrorMessage,
-  getPdfPasswordProtectedErrorMessage,
-  getPdfInvalidErrorMessage,
-  getImageTooLargeErrorMessage,
   SAFETY_MONITOR_BLOCKED,
-  asSafePathKey,
-  API_ERROR_MESSAGE_PREFIX,
-  formatOrgSpendCapError,
-  isExtraUsageOutOfCredits,
-  categorizeRetryableAPIError,
-  isWithheldGatewayBgSession,
-  noGatewayNotice,
-  armRequestTimeout,
-  isAutoResumableLimit,
   isValidAPIMessage,
   classifyAPIError,
   getAssistantMessageFromApiError,
@@ -3342,6 +3474,8 @@ export {
   getRejectedBetas,
   BETA_REJECTION_MATCHER_KEYS,
   isCacheKeepaliveBetaRejected,
+  isProgramUseCaseBetaRejected,
+  isProgramUseCaseNotHeldError,
   isThinkingResumptionBetaRejected,
   isThinkingBindingRejected,
   getRejectedThinkingType,
@@ -3361,34 +3495,38 @@ export {
   getMidConvSystemRejection,
   isPerTurnEffortRejected,
   mentionsThinkingBindingBeta,
+  isToolProvenanceServerUrlError,
   isBetaListedAsUnexpected,
   isContext1mBetaRejected,
   isConversationBindingError,
   parseThinkingPrefixMismatchHeader,
   markPrefixLockHealDeclined,
   getRefusalMessage,
+  isToolUseBlockCutOffError,
   isDlpRequestDenied,
   alwaysFalseErrors,
   isRequestTooLargeError_2,
+  API_ERROR_MESSAGE_PREFIX,
   DLP_REQUEST_DENIED,
-  alwaysFalseB,
+  isAutoResumableLimit,
+  armRequestTimeout,
+  formatOrgSpendCapError,
+  getErrorMessageIfRefusal,
+  getPdfTooLargeErrorMessage,
+  getPdfPasswordProtectedErrorMessage,
+  getPdfInvalidErrorMessage,
+  getImageTooLargeErrorMessage,
+  asSafePathKey,
+  SUBSCRIPTION_ACCESS_DISABLED_MESSAGE,
   isPromptTooLongError,
+  isCreditBalanceTooLow,
+  isHipaaFeatureError,
+  alwaysFalseB,
   isMaxTokensContextOverflow,
   parsePromptTooLongTokenCounts,
-  PROMPT_TOO_LONG_ERROR_MESSAGE,
-  isPromptTooLongMessage_2,
-  rebuildApiErrorMessage,
-  formatSingleExchangePromptTooLong,
-  getPromptTooLongTokenGap,
-  getStatusPageHint,
-  intentProviderSlot,
-  RATE_LIMIT_RESET_MAX_MS,
-  startsWithApiErrorPrefix,
-  isRateLimitError,
-  API_ERROR_CONST_1000,
+  CLAUDE_CODE_VERSION_TOO_OLD,
   isPrefixLockHealDeclined,
   isInputTooLongError,
-  isCreditBalanceTooLow,
   isOrganizationDisabled,
   isPolicyBlockedError,
   NoApiAttemptsLeftError,
@@ -3396,9 +3534,34 @@ export {
   REPEATED_529_MESSAGE,
   getCloudCredentialErrorProvider,
   isNonRetryable4xx,
-  suggestThirdPartyModel,
   getPromptTooLongGap,
+  PROMPT_TOO_LONG_ERROR_MESSAGE,
+  startsWithApiErrorPrefix,
+  CCS_NO_REQUEST_TOKEN,
+  isPromptTooLongMessage_2,
+  isLongContextCreditsRequiredMessage,
+  isMediaSizeErrorMessage,
+  REQUEST_TIMED_OUT_MESSAGE,
+  intentProviderSlot,
+  findAdjacentEffortLevel,
+  categorizeRetryableAPIError,
+  isPromptTooLongMessage,
+  isRateLimitError,
+  isExtraUsageOutOfCredits,
+  suggestThirdPartyModel,
+  isWithheldGatewayBgSession,
+  noGatewayNotice,
+  isOnlyMaxAboveEffort,
+  RATE_LIMIT_RESET_MAX_MS,
+  API_ERROR_CONST_1000,
+  isCyberVerificationStop,
+  CLAUDE_BG_GATEWAY_WITHHELD,
   sanitizeEventKey,
+  getStatusPageHint,
+  rebuildApiErrorMessage,
+  formatSingleExchangePromptTooLong,
+  getPromptTooLongTokenGap,
+  canSuggestSlashCommands,
   INVALID_API_KEY_MESSAGE,
   DISABLED_ORG_API_KEY_MESSAGE,
   DISABLED_ORG_API_KEY_WITH_SUBSCRIPTION_MESSAGE,
@@ -3406,15 +3569,6 @@ export {
   TOKEN_REVOKED_MESSAGE,
   INVALID_API_KEY_ERROR_MESSAGE,
   CREDIT_BALANCE_TOO_LOW_ERROR_MESSAGE,
-  REQUEST_TIMED_OUT_MESSAGE,
   hasInvalidCredentialPrefix,
   isNoGatewayHint,
-  CLAUDE_BG_GATEWAY_WITHHELD,
-  isHipaaFeatureError,
-  CLAUDE_CODE_VERSION_TOO_OLD,
-  CCS_NO_REQUEST_TOKEN,
-  isLongContextCreditsRequiredMessage,
-  isMediaSizeErrorMessage,
-  canSuggestSlashCommands,
-  isPromptTooLongMessage,
 };

@@ -1,16 +1,16 @@
 /**
  * @anthropic-ai/sdk/tools/agent-toolset/sync-interval.mjs
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @anthropic-ai/sdk@0.128.0
- * pieces: chunk-hwmsct5x.js (2)
+ * pieces: chunk-vn3g7zt8.js (2)
  * attribution: esm-fingerprint 2
  */
 import { AnthropicError } from "../../core/error.mjs";
 
-//@ chunk-hwmsct5x.js:71076-71098 esm-fingerprint
+//@ chunk-vn3g7zt8.js:71447-71469 esm-fingerprint
 var DEFAULT_MEMORY_SYNC_INTERVAL_MS = 15000;
 var MIN_MEMORY_SYNC_INTERVAL_MS = 5000;
-//@ chunk-hwmsct5x.js:71098-71272 esm-fingerprint
+//@ chunk-vn3g7zt8.js:71469-71643 esm-fingerprint
 function checkMemorySyncInterval(ms, option) {
   if (!(ms >= MIN_MEMORY_SYNC_INTERVAL_MS))
     throw new AnthropicError(

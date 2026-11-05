@@ -1,14 +1,14 @@
 /**
  * @bufbuild/protobuf/dist/cjs/reflect/unsafe.js
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * third-party: @bufbuild/protobuf@2.12.1
- * pieces: chunk-fq0cr76a.js (1)
+ * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-require-graph 1
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_scalar } from "../../commonjs/reflect/scalar.js";
 
-//@ chunk-fq0cr76a.js:329308-330751 cjs-require-graph
+//@ chunk-qg41pqt6.js:329875-331318 cjs-require-graph
 var require_unsafe = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

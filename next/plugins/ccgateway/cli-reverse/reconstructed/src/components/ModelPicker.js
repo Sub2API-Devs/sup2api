@@ -3,10 +3,10 @@
  *
  * /model 选择器：模型列表（含 1M 上下文、Fast 等变体）、effort 等级调节与默认值、搜索。
  *
- * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * Reconstructed from the official Claude Code 2.1.318 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ModelPicker.tsx
- * pieces: chunk-18hwfzwa.js (21)
- * attribution: sole-consumer 8, fingerprint 4, layout 3, callgraph-fingerprint 2, placement 3, affinity 1
+ * pieces: chunk-bc4jcw5z.js (1), chunk-czq1j3j2.js (18)
+ * attribution: fingerprint 4, placement 5, sole-consumer 5, layout 3, callgraph-fingerprint 2
  */
 import {
   init_react_production,
@@ -84,21 +84,29 @@ import { getDefaultMainLoopModel } from "../utils/model/modelFallback.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { effortLevelToSymbol } from "./EffortIndicator.js";
 import { stripAnsi } from "../utils/stripAnsi.js";
-import { usePluginInstallationStatus } from "../hooks/notifs/usePluginInstallationStatus.js";
-import { PinnedBridgeNotice } from "./StatusNotices.js";
 import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-18hwfzwa.js:666845-666849 sole-consumer
+//@ chunk-bc4jcw5z.js:20069-20084 fingerprint (2.1.88 match: getDefaultEffortLevelForOption, 1)
+/**
+ * "high"：thinking 关闭时部分模型的 effort 上限（claude.ts 里 clamp 用）。
+ */
+var THINKING_DISABLED_EFFORT_CAP = "high";
+//@ chunk-czq1j3j2.js:664228-664232 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:666845", () => {
+deferInit("chunk-czq1j3j2.js:664228", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:666849-666853 sole-consumer
+//@ chunk-czq1j3j2.js:670663-670667 placement
 // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:666849", () => {
+deferInit("chunk-czq1j3j2.js:670663", () => {
   init_react_production();
 });
-//@ chunk-18hwfzwa.js:666853-667539 sole-consumer
+//@ chunk-czq1j3j2.js:675315-675319 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czq1j3j2.js:675315", () => {
+  init_react_production();
+});
+//@ chunk-czq1j3j2.js:687557-688267 sole-consumer
 /**
  * 设置类列表的搜索模式钩子：按 / 进入搜索（settings:search 键绑定），Ctrl+N 或空串退格退出；返回 isSearchMode、query、光标与键盘/粘贴处理函数。
  */
@@ -110,7 +118,7 @@ function useSettingsSearchMode({ canEnter, startInSearchMode = false }) {
     searchModeRef.current = false;
     setSearchMode(false);
   };
-  let { query, cursorOffset, handleKeyDown, handlePaste } = useSearchInput({
+  let { query, setQuery, cursorOffset, handleKeyDown, handlePaste } = useSearchInput({
     isActive: true,
     backspaceExitsOnEmpty: !initialSearchMode,
     onExit: exitSearchMode,
@@ -134,6 +142,7 @@ function useSettingsSearchMode({ canEnter, startInSearchMode = false }) {
   return {
     isSearchMode,
     query,
+    setQuery,
     cursorOffset,
     handleKeyDown: (event) => {
       if (event.defaultPrevented) return;
@@ -158,7 +167,7 @@ function useSettingsSearchMode({ canEnter, startInSearchMode = false }) {
     enterSearchMode,
   };
 }
-//@ chunk-18hwfzwa.js:667539-667752 sole-consumer
+//@ chunk-czq1j3j2.js:688267-688480 sole-consumer
 function getModelNotices() {
   let modelNotices = getCachedClientData()?.model_notices;
   if (typeof modelNotices !== "object" || modelNotices === null || Array.isArray(modelNotices)) return {};
@@ -167,7 +176,7 @@ function getModelNotices() {
     if (key.trim().length > 0 && typeof value === "string" && value.length > 0) sanitizedNotices[key] = value;
   return sanitizedNotices;
 }
-//@ chunk-18hwfzwa.js:667752-668017 sole-consumer
+//@ chunk-czq1j3j2.js:688480-688745 sole-consumer
 /**
  * 在服务端下发的 model_notices 里查找与给定模型匹配的提示（按原名、解析后名、规范名或包含关系，忽略大小写）。
  */
@@ -186,19 +195,19 @@ function findModelNotice(modelOptionValue) {
   }
   return;
 }
-//@ chunk-18hwfzwa.js:668017-668043 sole-consumer
+//@ chunk-czq1j3j2.js:688745-688771 sole-consumer
 function getFilledCircleGlyph() {
   return FILLED_CIRCLE;
 }
-//@ chunk-18hwfzwa.js:668043-668074 sole-consumer
+//@ chunk-czq1j3j2.js:688771-688802 sole-consumer
 function getLeadingWhiteCircleGlyph() {
   return ` ${WHITE_CIRCLE}`;
 }
-//@ chunk-18hwfzwa.js:668074-668101 fingerprint (2.1.88 match: NO_PREFERENCE, 1)
+//@ chunk-czq1j3j2.js:688802-688829 fingerprint (2.1.88 match: NO_PREFERENCE, 1)
 var NO_PREFERENCE = "__NO_PREFERENCE__";
-//@ chunk-18hwfzwa.js:668101-668112 layout
+//@ chunk-czq1j3j2.js:688829-688840 layout
 var MODEL_PICKER_CHROME_ROWS = 14;
-//@ chunk-18hwfzwa.js:668112-674941 fingerprint (2.1.88 match: ModelPicker, 0.441)
+//@ chunk-czq1j3j2.js:688840-695670 fingerprint (2.1.88 match: ModelPicker, 0.441)
 /**
  * /model 选择器：列出可用模型选项（默认/Opus/Sonnet/Haiku 及 1M、Fast 变体），左右键调节 effort（low/medium/high/xhigh/max），显示当前模型与基础模型，支持搜索。
  */
@@ -758,14 +767,14 @@ function ModelPicker({
     children: content,
   });
 }
-//@ chunk-18hwfzwa.js:674941-675008 layout
+//@ chunk-czq1j3j2.js:695670-695737 layout
 function resolveModelOptionValue(value) {
   if (!value) return;
   return value === NO_PREFERENCE
     ? getDefaultMainLoopModel()
     : parseUserSpecifiedModel(noopModelOption(value)?.lead ?? value);
 }
-//@ chunk-18hwfzwa.js:675008-675259 fingerprint (2.1.88 match: EffortLevelIndicator, 1)
+//@ chunk-czq1j3j2.js:695737-695988 fingerprint (2.1.88 match: EffortLevelIndicator, 1)
 function EffortLevelIndicator(props) {
   let $ = useMemoCache(5);
   let { effort } = props;
@@ -789,13 +798,13 @@ function EffortLevelIndicator(props) {
   } else t4 = $[4];
   return t4;
 }
-//@ chunk-18hwfzwa.js:675259-675334 layout
+//@ chunk-czq1j3j2.js:695988-696063 layout
 function filterSupportedEffortLevels(includeMax, supportsMax, supportsXHigh) {
   return includeMax.filter(
     (level) => (level !== "max" || supportsMax) && (level !== "xhigh" || supportsXHigh),
   );
 }
-//@ chunk-18hwfzwa.js:675334-675552 callgraph-fingerprint (2.1.88 match: cycleEffortLevel, 0.647)
+//@ chunk-czq1j3j2.js:696063-696281 callgraph-fingerprint (2.1.88 match: cycleEffortLevel, 0.646)
 function cycleEffortLevel(currentLevel, direction, includeMax, supportsMax, supportsXHigh) {
   let levels = filterSupportedEffortLevels(includeMax, supportsMax, supportsXHigh);
   let effectiveLevel =
@@ -807,12 +816,12 @@ function cycleEffortLevel(currentLevel, direction, includeMax, supportsMax, supp
   if (direction === "right") return levels[Math.min(currentIndex + 1, levels.length - 1)];
   else return levels[Math.max(currentIndex - 1, 0)];
 }
-//@ chunk-18hwfzwa.js:675552-675600 placement
+//@ chunk-czq1j3j2.js:696281-696329 placement
 function defaultEffortForModel(model) {
   let modelValue = resolveModelOptionValue(model) ?? getDefaultMainLoopModel();
   return getDefaultEffortLevel(modelValue);
 }
-//@ chunk-18hwfzwa.js:675889-676080 placement
+//@ chunk-czq1j3j2.js:696618-696809 placement
 function filterModelOptions(options, query) {
   if (!query) return options;
   let lower = query.toLowerCase();
@@ -824,39 +833,14 @@ function filterModelOptions(options, query) {
         .includes(lower),
   );
 }
-//@ chunk-18hwfzwa.js:676080-676084 placement
-// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
-deferInit("chunk-18hwfzwa.js:676080", () => {
-  init_react_production();
-});
-//@ chunk-18hwfzwa.js:773225-773250 sole-consumer
-function selectFalseAppState(state) {
-  return false;
-}
-//@ chunk-18hwfzwa.js:773250-773287 affinity
-var LIVE_PREVIEW = "live-preview";
-var LIVE_PREVIEW_WRAP_OPTIONS = {
-  wrap: true,
-};
-//@ chunk-18hwfzwa.js:773287-773347 fingerprint (2.1.88 match: getDefaultEffortLevelForOption, 1)
-function getDefaultEffortLevelForOption() {
-  let defaultValue = useAppState(selectFalseAppState);
-  usePluginInstallationStatus(
-    LIVE_PREVIEW,
-    "high",
-    defaultValue ? true : null,
-    PinnedBridgeNotice,
-    LIVE_PREVIEW_WRAP_OPTIONS,
-  );
-}
-//@ chunk-18hwfzwa.js:929532-929578 callgraph-fingerprint (2.1.88 match: _temp, 1)
+//@ chunk-czq1j3j2.js:962484-962530 callgraph-fingerprint (2.1.88 match: _temp, 1)
 function selectIsFastModeOn(s) {
   return isFastModeEnabled() ? s.fastMode : false;
 }
 export {
-  selectIsFastModeOn,
-  ModelPicker,
+  THINKING_DISABLED_EFFORT_CAP,
   resolveModelOptionValue,
   defaultEffortForModel,
-  getDefaultEffortLevelForOption,
+  selectIsFastModeOn,
+  ModelPicker,
 };
